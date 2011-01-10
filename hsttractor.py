@@ -8,9 +8,24 @@ class Flux(float):
 	def copy(self):
 		return Flux(self)
 
-class PixPos(tuple):
+#class PixPos(tuple):
+
+class PixPos(list):
 	def copy(self):
-		return PixPos(self[0],self[1])
+		return PixPos([self[0],self[1]])
+
+	def dimension(self):
+		return 2
+	def getFitStepSizes(self, img):
+		return [0.1, 0.1]
+
+	def __hash__(self):
+		# convert to tuple
+		return hash((self[0], self[1]))
+
+	def __iadd__(self, X):
+		self[0] += X[0]
+		self[1] += X[1]
 
 
 class HSTTractor(Tractor):
@@ -18,13 +33,12 @@ class HSTTractor(Tractor):
 	def createNewSource(self, img, x, y, ht):
 		# "ht" is the peak height (difference between image and model)
 		# convert to total flux by normalizing by my patch's peak pixel value.
-		x0,y0,patch = img.getPsf().getPointSourcePatch(x, y)
+		#patch = img.getPsf().getPointSourcePatch(x, y)
 		#print 'psf patch:', patch.shape
 		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
 		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
 		#ht /= patch.max()
 		return PointSource(PixPos([x,y]), Flux(ht))
-
 
 
 def measure_sky_variance(img):
@@ -131,7 +145,11 @@ if __name__ == '__main__':
 	# We'll start by working in pixel coords
 	wcs = NullWCS()
 
-	data = Image(data=img, invvar=invvar, psf=psf, wcs=wcs, sky=skymed)
+	# And counts
+	photocal = NullPhotoCal()
+
+	data = Image(data=img, invvar=invvar, psf=psf, wcs=wcs, sky=skymed,
+				 photocal=photocal)
 	
 	tractor = HSTTractor([data])
 
