@@ -8,24 +8,48 @@ class Flux(float):
 	def copy(self):
 		return Flux(self)
 
+	def numberOfFitParams(self):
+		return 1
+	def getFitStepSizes(self, img):
+		return [0.1]
+	def stepParam(self, parami, delta):
+		assert(parami == 0)
+		self *= exp(delta)
+		print 'Flux: stepping by', delta
+		#self += delta
+	def stepParams(self, params):
+		assert(len(params) == self.numberOfFitParams())
+		for i in range(len(params)):
+			self.stepParam(i, params[i])
+
+
 #class PixPos(tuple):
 
 class PixPos(list):
 	def copy(self):
 		return PixPos([self[0],self[1]])
 
-	def dimension(self):
+	def getDimension(self):
 		return 2
 	def getFitStepSizes(self, img):
 		return [0.1, 0.1]
+	def stepParam(self, parami, delta):
+		assert(parami >= 0)
+		assert(parami <= 1)
+		self[parami] += delta
+	def stepParams(self, params):
+		assert(len(params) == self.getDimension())
+		for i in range(len(params)):
+			self[i] += params[i]
+		print 'PixPos: stepping by', params
 
 	def __hash__(self):
 		# convert to tuple
 		return hash((self[0], self[1]))
 
-	def __iadd__(self, X):
-		self[0] += X[0]
-		self[1] += X[1]
+	#def __iadd__(self, X):
+	#  	self[0] += X[0]
+	#	self[1] += X[1]
 
 
 class HSTTractor(Tractor):

@@ -124,45 +124,58 @@ class PointSource(Source):
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		return patch * counts
 
-	# [pos], flux
+	# [pos], [flux]
 	def numberOfFitParams(self):
-		return self.pos.dimension() + 1
-
-	fluxstep = 0.1
+		return self.pos.getDimension() + self.flux.numberOfFitParams()
+	
+	#fluxstep = 0.1
 
 	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
 	def getFitParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		steps = pos0.getFitStepSizes(img)
+		psteps = pos0.getFitStepSizes(img)
 
 		(px,py) = img.getWcs().positionToPixel(pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px, py)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 
 		derivs = []
-		for i in range(len(steps)):
+		for i in range(len(psteps)):
 			posx = pos0.copy()
-			posx[i] += steps[i]
+			#posx[i] += steps[i]
+			posx.stepParam(i, psteps[i])
 			(px,py) = img.getWcs().positionToPixel(posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
 			dx = (patchx - patch0) * counts
 			derivs.append(dx)
-			
-		df = (patch0 * counts) * PointSource.fluxstep
-		derivs.append(df)
+
+		fsteps = self.flux.getFitStepSizes(img)
+		for i in range(len(fsteps)):
+			fi = self.flux.copy()
+
+			fi.stepParam(i, fsteps[i])
+			countsi = img.getPhotoCal().fluxToCounts(fi)
+			df = patch0 * (countsi - counts)
+			# FIXME -- who should know how to take this derivative?!
+			#df = (patch0 * counts) * fsteps[i]
+			derivs.append(df)
+
 		return derivs
 
-	# update parameters in this direction with this step size.
-	def stepParams(self, dparams, alpha, img):
+	# update parameters in this direction
+	def stepParams(self, dparams):
 		pos = self.getPosition()
-		assert(len(dparams) == (pos.dimension() + 1))
-		pos += (dparams[:-1] * alpha)
-		# for i,dp in dparams:
-		#		pos[i] += dp * alpha
-
-		dc = dparams[-1]
-		newcounts = exp(PointSource.fluxstep * dc)
-		self.flux = img.getPhotoCal().countsToFlux(newcounts)
+		np = pos.getDimension()
+		nf = self.flux.numberOfFitParams()
+		assert(len(dparams) == (np + nf))
+		#pos += dparams[:-1]
+		dp = dparams[:np]
+		pos.stepParams(dp)
+			
+		df = dparams[np:]
+		self.flux.stepParams(df)
+		#newcounts = exp(PointSource.fluxstep * dc)
+		#self.flux = img.getPhotoCal().countsToFlux(newcounts)
 
 
 def randomint():
@@ -213,11 +226,26 @@ class PhotoCal(object):
 	def countsToFlux(self, counts):
 		pass
 
+	#def getDimension(self):
+	#	return 0
+	def numberOfFitParams(self):
+		return 0
+	def getFitStepSizes(self, img):
+		return []
+
 class NullPhotoCal(object):
 	def fluxToCounts(self, flux):
 		return flux
 	def countsToFlux(self, counts):
 		return counts
+
+	def numberOfFitParams(self):
+		return 0
+	#def getDimension(self):
+	#	return 0
+	def getFitStepSizes(self, img):
+		return []
+	
 
 class WCS(object):
 	def positionToPixel(self, pos):
@@ -376,7 +404,6 @@ class Tractor(object):
 		# need all derivatives  dChi / dparam
 		# for each pixel in each image
 		#  and each parameter in each source
-
 		nparams = [src.numberOfFitParams() for src in self.catalog]
 		row0 = np.cumsum([0] + nparams)
 
@@ -448,14 +475,14 @@ class Tractor(object):
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
-		 arnorm, xnorm, var) = lsqr(A, b, show=not quiet, **lsqropts)
+		 arnorm, xnorm, var) = lsqr(A, b, show=True, **lsqropts)
 
 		# Unpack.
 
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
 
-		for alpha in [2.**-np.arange(5)]:
+		for alpha in 2.**-np.arange(5):
 			print 'Stepping with alpha =', alpha
 
 			oldcat = self.catalog.deepcopy()
@@ -464,7 +491,7 @@ class Tractor(object):
 			for j,src in enumerate(self.catalog):
 				dparams = X[row0[j] : row0[j] + nparams[j]]
 				assert(len(dparams) == nparams[j])
-				src.stepParams(dparams, alpha)
+				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
 			print 'log-prob after:', pAfter
