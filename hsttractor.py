@@ -217,8 +217,12 @@ if __name__ == '__main__':
 		plt.colorbar()
 		plt.savefig('chi3.png')
 
-	Nsrc = 50
-	for i in range(Nsrc+1):
+	Nsrc = 20
+	steps = (['source']*Nsrc + ['psf'])*3 + ['break']
+
+	chiArange = None
+
+	for i,step in enumerate(steps):
 		mods = tractor.getModelImages()
 		mod = mods[0]
 
@@ -244,8 +248,12 @@ if __name__ == '__main__':
 		chis = tractor.getChiImages()
 		chi = chis[0]
 
+		if chiArange is None:
+			chiArange = (chi.min(), chi.max())
+
 		plt.clf()
-		plt.imshow(chi, interpolation='nearest', origin='lower')
+		plt.imshow(chi, interpolation='nearest', origin='lower',
+				   vmin=chiArange[0], vmax=chiArange[1])
 		plt.hot()
 		plt.colorbar()
 		plt.savefig('chiA-%02i.png' % i)
@@ -257,18 +265,31 @@ if __name__ == '__main__':
 		plt.colorbar()
 		plt.savefig('chiB-%02i.png' % i)
 
-		if i == Nsrc:
+		if step == 'break':
 			break
 
-		print
-		print 'Before createSource, catalog is:', #tractor.getCatalog()
-		tractor.getCatalog().printLong()
-		print
+		elif step == 'source':
+			print
+			print 'Before createSource, catalog is:', #tractor.getCatalog()
+			tractor.getCatalog().printLong()
+			print
+			rtn = tractor.createSource()
+			print
+			print 'After  createSource, catalog is:', #tractor.getCatalog()
+			tractor.getCatalog().printLong()
+			print
 
-		tractor.createSource()
+			(sm,tryxy) = rtn[0]
+			plt.clf()
+			plt.imshow(sm, interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.colorbar()
+			ax = plt.axis()
+			plt.plot([x for x,y in tryxy], [y for x,y in tryxy], 'b+')
+			plt.axis(ax)
+			plt.savefig('create-%02i.png' % i)
+				
 
-		print
-		print 'After  createSource, catalog is:', #tractor.getCatalog()
-		tractor.getCatalog().printLong()
-		print
+		elif step == 'psf':
+			tractor.optimizeAllPsfAtFixedComplexityStep()
 

@@ -113,7 +113,7 @@ class PointSource(Source):
 		return PointSource(self.pos.copy(), self.flux.copy())
 
 	def __hash__(self):
-		return (self.pos, self.flux).__hash__()
+		return hash((self.pos, self.flux))
 	def __eq__(self, other):
 		return hash(self) == hash(other)
 
@@ -192,14 +192,23 @@ class Image(object):
 		self.wcs = wcs
 		self.photocal = photocal
 
+	def setPsf(self, psf):
+		self.psf = psf
+
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.data.shape
 
+	def __hash__(self):
+		return hash((id(self.data), id(self.invvar), hash(self.psf),
+					 hash(self.sky), hash(self.wcs), hash(self.photocal)))
+		#return hash((hash(self.data), hash(self.invvar), hash(self.psf),
+		#			 hash(self.sky), hash(self.wcs), hash(self.photocal)))
+
 	# Any time an attribute is changed, update the "version" number to a random value.
+	# FIXME -- should probably hash all my members instead!
 	def __setattr__(self, name, val):
 		object.__setattr__(self, name, val)
-		#object.__setattr__(self, 'version', randomint())
 		self.setversion(randomint())
 	def setversion(self, ver):
 		object.__setattr__(self, 'version', ver)
@@ -382,6 +391,26 @@ class PSF(object):
 	def getPointSourcePatch(self, px, py):
 		pass
 
+	def copy(self):
+		return PSF()
+
+	def __hash__(self):
+		return hash(self.hashkey())
+
+	def hashkey(self):
+		return ('PSF')
+
+	def numberOfFitParams(self):
+		return 0
+	def getFitStepSizes(self, img):
+		return []
+	def stepParam(self, parami, delta):
+		pass
+	def stepParams(self, dparams):
+		assert(len(dparams) == self.numberOfFitParams())
+		for i,dp in enumerate(dparams):
+			self.stepParam(i, dp)
+	
 class NGaussianPSF(PSF):
 	def __init__(self, sigmas, weights):
 		'''
@@ -396,8 +425,31 @@ class NGaussianPSF(PSF):
 
 		eg,   NGaussianPSF([1.5, 4.0], [0.8, 0.2])
 		'''
+		assert(len(sigmas) == len(weights))
 		self.sigmas = sigmas
 		self.weights = weights
+
+	def numberOfFitParams(self):
+		return 2 * len(self.sigmas)
+	def getFitStepSizes(self, img):
+		return [0.1]*len(self.sigmas) + [0.1]*len(self.weights)
+	def stepParam(self, parami, delta):
+		assert(parami >= 0)
+		assert(parami < 2*len(self.sigmas))
+		NS = len(self.sigmas)
+		if parami < NS:
+			self.sigmas[parami] += delta
+			print 'NGaussianPSF: setting sigma', parami, 'to', self.sigmas[parami]
+		else:
+			self.weights[parami - NS] += delta
+			print 'NGaussianPSF: setting weight', (parami-NS), 'to', self.weights[parami-NS]
+
+	def hashkey(self):
+		return ('NGaussianPSF', tuple(self.sigmas), tuple(self.weights))
+	
+	def copy(self):
+		return NGaussianPSF(list([s for s in self.sigmas]),
+							list([w for w in self.weights]))
 
 	def applyTo(self, image):
 		from scipy.ndimage.filters import gaussian_filter
@@ -443,8 +495,8 @@ class Catalog(list):
 
 	def printLong(self):
 		print 'Catalog:'
-		for x in self:
-			print '  ', x
+		for i,x in enumerate(self):
+			print '  %i:' % i, x
 
 class Tractor(object):
 
@@ -476,6 +528,134 @@ class Tractor(object):
 		elif paramtype == Tractor.LOG:
 			return ()
 	'''
+
+	def optimizePsfAtFixedComplexityStep(self, imagei):
+		print 'Optimizing PSF in image', imagei, 'at fixed complexity'
+		img = self.getImage(imagei)
+		psf = img.getPsf()
+		nparams = psf.numberOfFitParams()
+		npixels = img.numberOfPixels()
+
+		if nparams == 0:
+			raise RuntimeError('No PSF parameters to optimize')
+
+		# For the PSF model, we render out the whole image.
+		mod0 = self.getModelImage(img)
+
+		steps = psf.getFitStepSizes(img)
+		assert(len(steps) == nparams)
+		derivs = []
+		for k,s in enumerate(steps):
+			psfk = psf.copy()
+			psfk.stepParam(k, s)
+			img.setPsf(psfk)
+			modk = self.getModelImage(img)
+			img.setPsf(psf)
+			# to reuse code, wrap this in a Patch...
+			dk = Patch(0, 0, (modk - mod0) / s)
+			derivs.append(dk)
+
+		assert(len(derivs) == nparams)
+		inverrs = img.getInvError()
+
+		# Build the sparse matrix of derivatives:
+		sprows = []
+		spcols = []
+		spvals = []
+
+		#activeParams = []
+
+		for p,deriv in enumerate(derivs):
+			(H,W) = img.shape
+			deriv.clipTo(W, H)
+			pix = deriv.getPixelIndices(img)
+			assert(all(pix < npixels))
+			# (grab non-zero indices)
+			dimg = deriv.getImage()
+			nz = np.flatnonzero(dimg)
+			print '  psf derivative', p, 'has', len(nz), 'non-zero entries'
+			if len(nz) == 0:
+				continue
+			#activeParams.append(p)
+			rows = pix[nz]
+			cols = np.zeros_like(rows) + p
+			vals = dimg.ravel()[nz]
+			w = inverrs[deriv.getSlice()].ravel()[nz]
+			assert(vals.shape == w.shape)
+			sprows.append(rows)
+			spcols.append(cols)
+			spvals.append(vals * w)
+
+		# ensure the sparse matrix is full up to the number of columns we expect
+		spcols.append([nparams-1])
+		sprows.append([0])
+		spvals.append([0])
+
+		sprows = np.hstack(sprows)
+		spcols = np.hstack(spcols)
+		spvals = np.hstack(spvals)
+
+		print 'Number of sparse matrix elements:', len(sprows)
+		urows = np.unique(sprows)
+		print 'Unique rows (pixels):', len(urows)
+		print 'Max row:', max(sprows)
+		ucols = np.unique(spcols)
+		print 'Unique columns (params):', len(ucols)
+
+		# Build sparse matrix
+		A = csr_matrix((spvals, (sprows, spcols)))
+
+		# b = -weighted residuals
+		NP = img.numberOfPixels()
+		data = img.getImage()
+		inverr = img.getInvError()
+		mod = mod0
+		assert(np.product(mod.shape) == NP)
+		assert(mod.shape == data.shape)
+		assert(mod.shape == inverr.shape)
+		b = ((data - mod) * inverr).ravel()
+		b = b[:urows.max() + 1]
+		
+		lsqropts = {}
+
+		# Run lsqr()
+		(X, istop, niters, r1norm, r2norm, anorm, acond,
+		 arnorm, xnorm, var) = lsqr(A, b, show=True, **lsqropts)
+
+		# Unpack.
+
+		pBefore = self.getLogProb()
+		print 'log-prob before:', pBefore
+
+		for alpha in 2.**-np.arange(5):
+			print 'Stepping with alpha =', alpha
+
+			oldpsf = psf.copy()
+			self.pushCache()
+
+			dparams = X
+			assert(len(dparams) == nparams)
+			psf.stepParams(dparams * alpha)
+
+			pAfter = self.getLogProb()
+			print 'log-prob before:', pBefore
+			print 'log-prob after :', pAfter
+
+			if pAfter > pBefore:
+				print 'Accepting step!'
+				self.mergeCache()
+				break
+
+			print 'Rejecting step!'
+			self.popCache()
+			# revert
+			self.psf = oldpsf
+
+		# if we get here, this step was rejected.
+
+	def optimizeAllPsfAtFixedComplexityStep(self):
+		for i in range(len(self.images)):
+			self.optimizePsfAtFixedComplexityStep(i)
 
 	def optimizeCatalogAtFixedComplexityStep(self):
 		'''
@@ -556,6 +736,11 @@ class Tractor(object):
 					sprows.append(rows)
 					spcols.append(cols)
 					spvals.append(vals * w)
+
+		# ensure the sparse matrix is full up to the number of columns we expect
+		spcols.append([np.sum(nparams) - 1])
+		sprows.append([0])
+		spvals.append([0])
 
 		sprows = np.hstack(sprows)
 		spcols = np.hstack(spcols)
@@ -650,7 +835,8 @@ class Tractor(object):
 		# dependencies of this model image:
 		# img.sky, img.psf, img.wcs, sources that overlap.
 		#deps = hash((img.getVersion(), hash(self.catalog)))
-		deps = (img.getVersion(), hash(self.catalog))
+		#deps = (img.getVersion(), hash(self.catalog))
+		deps = (hash(img), hash(self.catalog))
 		#print 'Model image:'
 		#print '  catalog', self.catalog
 		#print '  -> deps', deps
@@ -714,6 +900,9 @@ class Tractor(object):
 		-instantiate new source (Position, flux, PSFType)
 		-local optimizeAtFixedComplexity
 		'''
+
+		rtn = []
+		
 		for i,chi in enumerate(self.getChiImages()):
 			img = self.images[i]
 
@@ -734,8 +923,10 @@ class Tractor(object):
 			# Try to create sources in the highest-value pixels.
 			II = np.argsort(-sm.ravel())
 
+			tryxy = []
+
 			# MAGIC: number of pixels to try.
-			for I in II[:10]:
+			for ii,I in enumerate(II[:10]):
 				# find peak pixel, create source
 				#I = np.argmax(sm)
 				(H,W) = sm.shape
@@ -746,6 +937,8 @@ class Tractor(object):
 				print 'creating new source at x,y', (ix,iy)
 				src = self.createNewSource(img, ix, iy, ht)
 
+				tryxy.append((ix,iy))
+
 				# try adding the new source...
 				pBefore = self.getLogProb()
 				print 'log-prob before:', pBefore
@@ -754,8 +947,8 @@ class Tractor(object):
 				oldcat = self.catalog.deepcopy()
 
 				self.catalog.append(src)
-				print 'added source, catalog is:'
-				print self.catalog
+				#print 'added source, catalog is:'
+				#print self.catalog
 				self.optimizeCatalogAtFixedComplexityStep()
 
 				pAfter = self.getLogProb()
@@ -774,9 +967,12 @@ class Tractor(object):
 					# revert the catalog
 					self.catalog = oldcat
 
+			rtn.append((sm, tryxy))
+
 			pEnd = self.getLogProb()
 			print 'log-prob at finish:', pEnd
 
+		return rtn
 
 	def modifyComplexity(self):
 		'''
