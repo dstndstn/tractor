@@ -6,6 +6,8 @@ import random
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
+from astrometry.util.miscutils import get_overlapping_region
+
 '''
 Duck types:
 
@@ -127,8 +129,6 @@ class PointSource(Source):
 	# [pos], [flux]
 	def numberOfFitParams(self):
 		return self.pos.getDimension() + self.flux.numberOfFitParams()
-	
-	#fluxstep = 0.1
 
 	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
 	def getFitParamDerivatives(self, img):
@@ -146,18 +146,19 @@ class PointSource(Source):
 			posx.stepParam(i, psteps[i])
 			(px,py) = img.getWcs().positionToPixel(posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
-			dx = (patchx - patch0) * counts
+			dx = (patchx - patch0) * (counts / psteps[i])
 			derivs.append(dx)
 
 		fsteps = self.flux.getFitStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
-
 			fi.stepParam(i, fsteps[i])
+			#print 'stepped flux from', self.flux, 'to', fi
 			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * (countsi - counts)
-			# FIXME -- who should know how to take this derivative?!
-			#df = (patch0 * counts) * fsteps[i]
+			#print '-> counts from', counts, 'to', countsi
+			df = patch0 * ((countsi - counts) / fsteps[i])
+			#print 'df', df
+			#print 'df range', df.getImage().min(), df.getImage().max()
 			derivs.append(df)
 
 		return derivs
@@ -209,7 +210,7 @@ class Image(object):
 		(H,W) = self.data.shape
 		return W*H
 		
-	def getError(self):
+	def getInvError(self):
 		return np.sqrt(self.invvar)
 	def getImage(self):
 		return self.data
@@ -235,9 +236,9 @@ class PhotoCal(object):
 
 class NullPhotoCal(object):
 	def fluxToCounts(self, flux):
-		return flux
+		return flux.getValue()
 	def countsToFlux(self, counts):
-		return counts
+		return counts.getValue()
 
 	def numberOfFitParams(self):
 		return 0
@@ -272,8 +273,49 @@ class Patch(object):
 	def getY0(self):
 		return self.y0
 
-	def getSlice(self):
+	def clipTo(self, W, H):
+		if self.x0 < 0:
+			self.patch = self.patch[:, -self.x0:]
+			self.x0 = 0
+		if self.y0 < 0:
+			self.patch = self.patch[-self.y0:, :]
+			self.y0 = 0
+		(h,w) = self.shape
+		if (self.x0 + w) > W:
+			self.patch = self.patch[:, :(W - self.x0)]
+		if (self.y0 + h) > H:
+			self.patch = self.patch[:(H - self.y0), :]
+
+		assert(self.x0 >= 0)
+		assert(self.y0 >= 0)
+		(h,w) = self.shape
+		assert(w <= W)
+		assert(h <= H)
+		assert(self.shape == self.patch.shape)
+
+	'''
+	def clipTo(self, x0, y0, W, H):
+		(h,w) = self.shape
+		newx0 = self.x0
+		if x0 > self.x0:
+			self.patch = self.patch[:, x0 - self.x0:]
+			newx0 = x0
+		newy0 = self.y0
+		if y0 > self.y0:
+			self.patch = self.patch[y0 - self.y0:, :]
+			newy0 = y0
+		newx1 = self.x0 + w
+		if W < newx1:
+			self.patch = self.patch
+		newy1 = self.
+	'''		
+
+	def getSlice(self, parent=None):
 		(ph,pw) = self.patch.shape
+		if parent is not None:
+			(H,W) = parent.shape
+			return (slice(np.clip(self.y0, 0, H), np.clip(self.y0+ph, 0, H)),
+					slice(np.clip(self.x0, 0, W), np.clip(self.x0+pw, 0, W)))
 		return (slice(self.y0, self.y0+ph),
 				slice(self.x0, self.x0+pw))
 
@@ -284,8 +326,18 @@ class Patch(object):
 		return (Y.ravel() + self.y0) * W + X.ravel()
 
 	def addTo(self, img, scale=1.):
+		(ih,iw) = img.shape
 		(ph,pw) = self.patch.shape
-		img[self.y0:self.y0+ph, self.x0:self.x0+pw] += self.getImage() * scale
+
+		(outx, inx) = get_overlapping_region(self.x0, self.x0+pw-1, 0, iw-1)
+		(outy, iny) = get_overlapping_region(self.y0, self.y0+ph-1, 0, ih-1)
+		if inx == [] or iny == []:
+			return
+		x0 = outx.start
+		y0 = outy.start
+		p = self.patch[iny,inx]
+		img[outy, outx] += self.getImage()[iny, inx] * scale
+		#img[self.y0:self.y0+ph, self.x0:self.x0+pw] += self.getImage() * scale
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -296,10 +348,29 @@ class Patch(object):
 
 	def __sub__(self, other):
 		assert(isinstance(other, Patch))
-		assert(self.x0 == other.getX0())
-		assert(self.y0 == other.getY0())
-		assert(self.shape == other.shape)
-		return Patch(self.x0, self.y0, self.patch - other.patch)
+		if (self.x0 == other.getX0() and self.y0 == other.getY0() and
+			self.shape == other.shape):
+			assert(self.x0 == other.getX0())
+			assert(self.y0 == other.getY0())
+			assert(self.shape == other.shape)
+			return Patch(self.x0, self.y0, self.patch - other.patch)
+
+		(ph,pw) = self.patch.shape
+		(ox0,oy0) = other.getX0(), other.getY0()
+		(oh,ow) = other.shape
+
+		# Find the union of the regions.
+		ux0 = min(ox0, self.x0)
+		uy0 = min(oy0, self.y0)
+		ux1 = max(ox0 + ow, self.x0 + pw)
+		uy1 = max(oy0 + oh, self.y0 + ph)
+
+		p = np.zeros((uy1 - uy0, ux1 - ux0))
+		p[self.y0 - uy0 : self.y0 - uy0 + ph,
+		  self.x0 - ux0 : self.x0 - ux0 + pw] = self.patch
+		p[oy0 - uy0 : oy0 - uy0 + oh,
+		  ox0 - ux0 : ox0 - ux0 + ow] -= other.getImage()
+		return Patch(ux0, uy0, p)
 
 
 class PSF(object):
@@ -348,7 +419,7 @@ class NGaussianPSF(PSF):
 		# HACK - MAGIC -- N sigma for rendering patches
 		rad = int(ceil(max(self.sigmas) * 5.))
 		sz = 2*rad + 1
-		X,Y = np.meshgrid(np.arange(sz), np.arange(sz))
+		X,Y = np.meshgrid(np.arange(sz).astype(float), np.arange(sz).astype(float))
 		X -= dx + rad
 		Y -= dy + rad
 		patch = np.zeros((sz,sz))
@@ -356,9 +427,9 @@ class NGaussianPSF(PSF):
 		y0 = iy - rad
 		R2 = (X**2 + Y**2)
 		for s,w in zip(self.sigmas, self.weights):
-			patch += w / (2.*pi*s**2) * np.exp(-0.5 * R2 / s**2)
+			patch += w / (2.*pi*s**2) * np.exp(-0.5 * R2 / (s**2))
 		patch /= sum(self.weights)
-		print 'sum of PSF patch:', patch.sum()
+		#print 'sum of PSF patch:', patch.sum()
 		return Patch(x0, y0, patch)
 
 class Cache(dict):
@@ -370,6 +441,10 @@ class Catalog(list):
 	def deepcopy(self):
 		return Catalog([x.copy() for x in self])
 
+	def printLong(self):
+		print 'Catalog:'
+		for x in self:
+			print '  ', x
 
 class Tractor(object):
 
@@ -384,8 +459,23 @@ class Tractor(object):
 		self.cache = Cache()
 		self.cachestack = []
 
-	#def getImage(self, imgi):
-	#eturn self.images[imgi]
+	def getImage(self, imgi):
+		return self.images[imgi]
+
+	def getCatalog(self):
+		return self.catalog
+
+	'''
+	LINEAR = 'linear'
+	LOG = 'log'
+
+	@staticmethod
+	def getDerivative(paramtype, stepsize, img0, img1):
+		if paramtype == Tractor.LINEAR:
+			return (img1 - img0) / stepsize
+		elif paramtype == Tractor.LOG:
+			return ()
+	'''
 
 	def optimizeCatalogAtFixedComplexityStep(self):
 		'''
@@ -405,10 +495,10 @@ class Tractor(object):
 		# for each pixel in each image
 		#  and each parameter in each source
 		nparams = [src.numberOfFitParams() for src in self.catalog]
-		row0 = np.cumsum([0] + nparams)
+		col0 = np.cumsum([0] + nparams)
 
 		npixels = [img.numberOfPixels() for img in self.images]
-		col0 = np.cumsum([0] + npixels)
+		row0 = np.cumsum([0] + npixels)
 		# [ 0, (W0*H0), (W0*H0 + W1*H1), ... ]
 
 		sprows = []
@@ -431,25 +521,36 @@ class Tractor(object):
 				# derivs = [ Patch, Patch, ... ] (list of length len(params))
 				assert(len(derivs) == nparams[j])
 
-				print 'Got derivatives:', derivs
+				#print 'Got derivatives:', derivs
 
-				errs = img.getError()
+				inverrs = img.getInvError()
 
 				# Add to the sparse matrix of derivatives:
-				#cols = col0[i] + pix
 				for p,deriv in enumerate(derivs):
+					(H,W) = img.shape
+					#print 'Before clipping:'
+					#print 'deriv shape is', deriv.shape
+					#print 'deriv slice is', deriv.getSlice()
+					deriv.clipTo(W, H)
 					pix = deriv.getPixelIndices(img)
+					#print 'After clipping:'
+					#print 'deriv shape is', deriv.shape
+					#print 'deriv slice is', deriv.getSlice()
+					#print 'image shape is', img.shape
+					#print 'parent pix', (W*H), npixels[i]
+					#print 'pix range:', pix.min(), pix.max()
 					# (in the parent image)
 					assert(all(pix < npixels[i]))
-
 					# (grab non-zero indices)
 					dimg = deriv.getImage()
 					nz = np.flatnonzero(dimg)
-					cols = col0[i] + pix[nz]
-					rows = np.zeros_like(cols) + row0[j] + p
+					print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+					rows = row0[i] + pix[nz]
+					cols = np.zeros_like(rows) + col0[j] + p
 					#rows = np.zeros(len(cols), int) + row0[j] + p
 					vals = dimg.ravel()[nz]
-					w = errs[deriv.getSlice()].ravel()[nz]
+					#print 'inverrs shape is', inverrs.shape
+					w = inverrs[deriv.getSlice()].ravel()[nz]
 					assert(vals.shape == w.shape)
 
 					sprows.append(rows)
@@ -460,17 +561,33 @@ class Tractor(object):
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
 
-		print 'Matrix elements:', len(sprows)
+		print 'Number of sparse matrix elements:', len(sprows)
 		urows = np.unique(sprows)
-		print 'Unique rows:', len(urows)
+		print 'Unique rows (pixels):', len(urows)
+		print 'Max row:', max(sprows)
+		ucols = np.unique(spcols)
+		print 'Unique columns (params):', len(ucols)
 
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))
 
 		# b = -weighted residuals
-		#b = ((data - image) * sqrt(invvar)).ravel()
-		b = np.zeros(np.max(spcols))
-
+		b = np.zeros(np.sum(npixels))
+		for i,img in enumerate(self.images):
+			NP = img.numberOfPixels()
+			mod = self.getModelImage(img)
+			data = img.getImage()
+			inverr = img.getInvError()
+			assert(np.product(mod.shape) == NP)
+			assert(mod.shape == data.shape)
+			assert(mod.shape == inverr.shape)
+			b[col0[i] : col0[i] + NP] = ((data - mod) * inverr).ravel()
+		#print 'b shape', b.shape
+		b = b[:urows.max() + 1]
+		#b = b[ucols]
+		#b2 = np.zeros(ucols.max() + 1)
+		#print 'b shape', b.shape
+		
 		lsqropts = {}
 
 		# Run lsqr()
@@ -489,12 +606,14 @@ class Tractor(object):
 			self.pushCache()
 
 			for j,src in enumerate(self.catalog):
-				dparams = X[row0[j] : row0[j] + nparams[j]]
+				dparams = X[col0[j] : col0[j] + nparams[j]]
 				assert(len(dparams) == nparams[j])
+				#print 'Applying parameter update', dparams, 'to source', src
 				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
-			print 'log-prob after:', pAfter
+			print 'log-prob before:', pBefore
+			print 'log-prob after :', pAfter
 
 			if pAfter > pBefore:
 				print 'Accepting step!'
@@ -532,15 +651,16 @@ class Tractor(object):
 		# img.sky, img.psf, img.wcs, sources that overlap.
 		#deps = hash((img.getVersion(), hash(self.catalog)))
 		deps = (img.getVersion(), hash(self.catalog))
-		print 'Model image:'
-		print '  catalog', self.catalog
-		print '  -> deps', deps
+		#print 'Model image:'
+		#print '  catalog', self.catalog
+		#print '  -> deps', deps
 		mod = self.cache.get(deps, None)
 		if mod is not None:
-			print '  Cache hit!'
+			#print '  Cache hit!'
+			pass
 		else:
 			mod = self.getModelImageNoCache(img)
-			print 'Caching model image'
+			#print 'Caching model image'
 			self.cache[deps] = mod
 		return mod
 
@@ -555,7 +675,7 @@ class Tractor(object):
 		mods = self.getModelImages()
 		chis = []
 		for img,mod in zip(self.images, mods):
-			chis.append((img.getImage() - mod) * img.getError())
+			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
 	#def findPeaks(self, img, thresh):
@@ -584,68 +704,79 @@ class Tractor(object):
 	#def startTryUpdate(self):
 
 	def createSource(self):
+		print
+		print 'Tractor.createSource'
 		'''
 		-synthesize images
 		-look for "promising" Positions with "positive" residuals
+		- (not near existing sources)
 		---chi image, PSF smooth, propose positions?
 		-instantiate new source (Position, flux, PSFType)
 		-local optimizeAtFixedComplexity
 		'''
 		for i,chi in enumerate(self.getChiImages()):
 			img = self.images[i]
+
+			# block out regions around existing Sources.
+			for j,src in enumerate(self.catalog):
+				patch = self.getModelPatch(self.images[i], src)
+				(H,W) = img.shape
+				patch.clipTo(W, H)
+				chi[patch.getSlice()] = 0.
+
 			# PSF-correlate
 			sm = img.getPsf().applyTo(chi)
 			# find peaks, create sources
-			#return sm
 
 			# HACK -- magic value 10
 			#pks = self.findPeaks(sm, 10)
 
-			# find single peak pixel, create source
-			I = np.argmax(sm)
-			(H,W) = sm.shape
-			ix = I%W
-			iy = I/W
-			# this is just the peak pixel height...
-			#ht = img.getImage()[iy,ix] - img.getSky()
-			ht = (img.getImage() - self.getModelImage(img))[iy,ix]
-			#ht = img.getImage()[iy,ix] - img.getSky()
-			src = self.createNewSource(img, ix, iy, ht)
+			# Try to create sources in the highest-value pixels.
+			II = np.argsort(-sm.ravel())
 
-			# try adding the new source...
-			#self.startTryUpdate()
-			#self.catalog.append(src)
-			#self.finishTryUpdate()
+			# MAGIC: number of pixels to try.
+			for I in II[:10]:
+				# find peak pixel, create source
+				#I = np.argmax(sm)
+				(H,W) = sm.shape
+				ix = I%W
+				iy = I/W
+				# this is just the peak pixel height...
+				ht = (img.getImage() - self.getModelImage(img))[iy,ix]
+				print 'creating new source at x,y', (ix,iy)
+				src = self.createNewSource(img, ix, iy, ht)
 
-			pBefore = self.getLogProb()
-			print 'log-prob before:', pBefore
+				# try adding the new source...
+				pBefore = self.getLogProb()
+				print 'log-prob before:', pBefore
 
-			self.pushCache()
-			oldcat = self.catalog.deepcopy()
+				self.pushCache()
+				oldcat = self.catalog.deepcopy()
 
-			self.catalog.append(src)
-			self.optimizeCatalogAtFixedComplexityStep()
+				self.catalog.append(src)
+				print 'added source, catalog is:'
+				print self.catalog
+				self.optimizeCatalogAtFixedComplexityStep()
 
-			pAfter = self.getLogProb()
-			print 'log-prob after:', pAfter
+				pAfter = self.getLogProb()
+				print 'log-prob before:', pBefore
+				print 'log-prob after :', pAfter
+				print 'd log-prob:', (pAfter - pBefore)
 
-			if pAfter > pBefore:
-				print 'Keeping new source'
-				self.mergeCache()
-				
-			else:
-				print 'Rejecting new source'
-				self.popCache()
-				# revert the catalog
-				self.catalog = oldcat
+				if pAfter > pBefore:
+					print 'Keeping new source'
+					self.mergeCache()
+					break
+
+				else:
+					print 'Rejecting new source'
+					self.popCache()
+					# revert the catalog
+					self.catalog = oldcat
 
 			pEnd = self.getLogProb()
 			print 'log-prob at finish:', pEnd
 
-
-		#ims = self.getSyntheticImages()
-		#for model,data in zip(ims, self.images):
-		#		chi
 
 	def modifyComplexity(self):
 		'''

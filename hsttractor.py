@@ -4,23 +4,37 @@ from tractor import *
 import numpy as np
 from math import pi
 
-class Flux(float):
+class Flux(object):
+	def __init__(self, val):
+		self.val = val
+
+	def __repr__(self):
+		return 'Flux(%g)' % self.val
+	def __str__(self):
+		return 'Flux: %g' % self.val
+
+	def getValue(self):
+		return self.val
+
 	def copy(self):
-		return Flux(self)
+		return Flux(self.val)
 
 	def numberOfFitParams(self):
 		return 1
 	def getFitStepSizes(self, img):
+		#return [(Tractor.LOG, 0.1)]
 		return [0.1]
 	def stepParam(self, parami, delta):
 		assert(parami == 0)
-		self *= exp(delta)
-		print 'Flux: stepping by', delta
+		#self *= exp(delta)
+		self.val += delta
+		#print 'Flux: stepping by', delta
 		#self += delta
 	def stepParams(self, params):
 		assert(len(params) == self.numberOfFitParams())
 		for i in range(len(params)):
 			self.stepParam(i, params[i])
+
 
 
 #class PixPos(tuple):
@@ -32,6 +46,7 @@ class PixPos(list):
 	def getDimension(self):
 		return 2
 	def getFitStepSizes(self, img):
+		#return [(Tractor.LINEAR, 0.1), (Tractor.LINEAR, 0.1)]
 		return [0.1, 0.1]
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
@@ -41,7 +56,7 @@ class PixPos(list):
 		assert(len(params) == self.getDimension())
 		for i in range(len(params)):
 			self[i] += params[i]
-		print 'PixPos: stepping by', params
+		#print 'PixPos: stepping by', params
 
 	def __hash__(self):
 		# convert to tuple
@@ -81,7 +96,7 @@ if __name__ == '__main__':
 
 	import matplotlib
 	matplotlib.use('Agg')
-	import pylab as pl
+	import pylab as plt
 
 	if True:
 		P = pyfits.open('jbf108bzq_flt.fits')
@@ -130,41 +145,57 @@ if __name__ == '__main__':
 		invvar = invvar / (1.0 + invvar * srcvar)
 
 
-	pl.clf()
-	pl.hist(img.ravel(), bins=np.linspace(zrange[0], zrange[1], 100))
-	pl.savefig('hist.png')
+	plt.clf()
+	plt.hist(img.ravel(), bins=np.linspace(zrange[0], zrange[1], 100))
+	plt.savefig('hist.png')
 
-	pl.clf()
-	pl.imshow(img, interpolation='nearest', origin='lower',
+	plt.clf()
+	plt.imshow(img, interpolation='nearest', origin='lower',
 			  vmin=zrange[0], vmax=zrange[1]) #vmin=50, vmax=500)
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('img.png')
+	plt.hot()
+	plt.colorbar()
+	plt.savefig('img.png')
 	
-	pl.clf()
-	pl.imshow(invvar, interpolation='nearest', origin='lower',
+	plt.clf()
+	plt.imshow(invvar, interpolation='nearest', origin='lower',
 			  vmin=0., vmax=2./(skysig**2))
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('invvar.png')
+	plt.hot()
+	plt.colorbar()
+	plt.savefig('invvar.png')
 	
-	pl.clf()
-	pl.imshow((img-skymed) * np.sqrt(invvar), interpolation='nearest', origin='lower')
+	plt.clf()
+	plt.imshow((img-skymed) * np.sqrt(invvar), interpolation='nearest', origin='lower')
 	#vmin=-3, vmax=10.)
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('chi.png')
+	plt.hot()
+	plt.colorbar()
+	plt.savefig('chi.png')
 
-	pl.clf()
-	pl.imshow((img-skymed) * np.sqrt(invvar), interpolation='nearest', origin='lower',
+	plt.clf()
+	plt.imshow((img-skymed) * np.sqrt(invvar), interpolation='nearest', origin='lower',
 			  vmin=-3, vmax=10.)
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('chi2.png')
+	plt.hot()
+	plt.colorbar()
+	plt.savefig('chi2.png')
 
 
 	# Initialize with a totally bogus Gaussian PSF model.
 	psf = NGaussianPSF([2.0], [1.0])
+
+	# test it...
+	if False:
+		for i,x in enumerate(np.arange(17, 18.7, 0.1)):
+			p = psf.getPointSourcePatch(x, x)
+			img = p.getImage()
+			print 'x', x, '-> sum', img.sum()
+			plt.clf()
+			x0,y0 = p.getX0(),p.getY0()
+			h,w = img.shape
+			plt.imshow(img, extent=[x0, x0+w, y0, y0+h],
+					   origin='lower', interpolation='nearest')
+			plt.axis([10,25,10,25])
+			plt.title('x=%.1f' % x)
+			plt.savefig('psf-%02i.png' % i)
+
 
 	# We'll start by working in pixel coords
 	wcs = NullWCS()
@@ -180,30 +211,64 @@ if __name__ == '__main__':
 	if False:
 		X = tractor.getChiImages()
 		chi = X[0]
-		pl.clf()
-		pl.imshow(chi, interpolation='nearest', origin='lower')
-		pl.hot()
-		pl.colorbar()
-		pl.savefig('chi3.png')
+		plt.clf()
+		plt.imshow(chi, interpolation='nearest', origin='lower')
+		plt.hot()
+		plt.colorbar()
+		plt.savefig('chi3.png')
 
-	mods = tractor.getModelImages()
-	mod = mods[0]
+	Nsrc = 50
+	for i in range(Nsrc+1):
+		mods = tractor.getModelImages()
+		mod = mods[0]
 
-	pl.clf()
-	pl.imshow(mod, interpolation='nearest', origin='lower',
-			  vmin=zrange[0], vmax=zrange[1])
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('mod0.png')
+		plt.clf()
+		plt.imshow(mod, interpolation='nearest', origin='lower',
+				   vmin=zrange[0], vmax=zrange[1])
+		plt.hot()
+		plt.colorbar()
+		ax = plt.axis()
+		img = tractor.getImage(0)
+		wcs = img.getWcs()
+		x = []
+		y = []
+		for src in tractor.getCatalog():
+			pos = src.getPosition()
+			px,py = wcs.positionToPixel(pos)
+			x.append(px)
+			y.append(py)
+		plt.plot(x, y, 'b+')
+		plt.axis(ax)
+		plt.savefig('mod-%02i.png' % i)
 
-	tractor.createSource()
+		chis = tractor.getChiImages()
+		chi = chis[0]
 
-	mods = tractor.getModelImages()
-	mod = mods[0]
+		plt.clf()
+		plt.imshow(chi, interpolation='nearest', origin='lower')
+		plt.hot()
+		plt.colorbar()
+		plt.savefig('chiA-%02i.png' % i)
 
-	pl.clf()
-	pl.imshow(mod, interpolation='nearest', origin='lower',
-			  vmin=zrange[0], vmax=zrange[1])
-	pl.hot()
-	pl.colorbar()
-	pl.savefig('mod1.png')
+		plt.clf()
+		plt.imshow(chi, interpolation='nearest', origin='lower',
+				   vmin=-3, vmax=10.)
+		plt.hot()
+		plt.colorbar()
+		plt.savefig('chiB-%02i.png' % i)
+
+		if i == Nsrc:
+			break
+
+		print
+		print 'Before createSource, catalog is:', #tractor.getCatalog()
+		tractor.getCatalog().printLong()
+		print
+
+		tractor.createSource()
+
+		print
+		print 'After  createSource, catalog is:', #tractor.getCatalog()
+		tractor.getCatalog().printLong()
+		print
+
