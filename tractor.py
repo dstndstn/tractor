@@ -85,6 +85,11 @@ class Source(object):
 	http://docs.python.org/glossary.html#term-hashable
 	'''
 
+	def __hash__(self):
+		return hash(self.hashkey())
+	def hashkey(self):
+		return ('Source',)
+
 	def getPosition(self):
 		pass
 	def getModelPatch(self, img):
@@ -112,8 +117,11 @@ class PointSource(Source):
 	def copy(self):
 		return PointSource(self.pos.copy(), self.flux.copy())
 
-	def __hash__(self):
-		return hash((self.pos, self.flux))
+	#def __hash__(self):
+	#	return hash((self.pos, self.flux))
+	def hashkey(self):
+		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
+
 	def __eq__(self, other):
 		return hash(self) == hash(other)
 
@@ -200,10 +208,13 @@ class Image(object):
 			return self.data.shape
 
 	def __hash__(self):
-		return hash((id(self.data), id(self.invvar), hash(self.psf),
-					 hash(self.sky), hash(self.wcs), hash(self.photocal)))
-		#return hash((hash(self.data), hash(self.invvar), hash(self.psf),
-		#			 hash(self.sky), hash(self.wcs), hash(self.photocal)))
+		return hash(self.hashkey())
+
+	def hashkey(self):
+		#return (id(self.data), id(self.invvar), hash(self.psf),
+		#		hash(self.sky), hash(self.wcs), hash(self.photocal))
+		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
+				hash(self.sky), hash(self.wcs), hash(self.photocal))
 
 	# Any time an attribute is changed, update the "version" number to a random value.
 	# FIXME -- should probably hash all my members instead!
@@ -271,6 +282,10 @@ class Patch(object):
 		self.x0 = x0
 		self.y0 = y0
 		self.patch = patch
+
+	def copy(self):
+		return Patch(self.x0, self.y0, self.patch.copy())
+
 	def getOrigin(self):
 		return (self.x0,self.y0)
 	def getPatch(self):
@@ -346,7 +361,6 @@ class Patch(object):
 		y0 = outy.start
 		p = self.patch[iny,inx]
 		img[outy, outx] += self.getImage()[iny, inx] * scale
-		#img[self.y0:self.y0+ph, self.x0:self.x0+pw] += self.getImage() * scale
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -398,8 +412,12 @@ class PSF(object):
 		return hash(self.hashkey())
 
 	def hashkey(self):
-		return ('PSF')
+		return ('PSF',)
 
+	# Returns a new PSF object that is a more complex version of self.
+	def proposeIncreasedComplexity(self, img):
+		return PSF()
+	
 	def numberOfFitParams(self):
 		return 0
 	def getFitStepSizes(self, img):
@@ -410,7 +428,9 @@ class PSF(object):
 		assert(len(dparams) == self.numberOfFitParams())
 		for i,dp in enumerate(dparams):
 			self.stepParam(i, dp)
-	
+	def isValidParamStep(self, dparam):
+		return True
+		
 class NGaussianPSF(PSF):
 	def __init__(self, sigmas, weights):
 		'''
@@ -429,6 +449,26 @@ class NGaussianPSF(PSF):
 		self.sigmas = sigmas
 		self.weights = weights
 
+	def __str__(self):
+		return ('NGaussianPSF: sigmas [ ' +
+				', '.join(['%.3f'%s for s in self.sigmas]) +
+				' ], weights [ ' +
+				', '.join(['%.3f'%w for w in self.weights]) +
+				' ]')
+
+	def __repr__(self):
+		return ('NGaussianPSF: sigmas [ ' +
+				', '.join(['%.3f'%s for s in self.sigmas]) +
+				' ], weights [ ' +
+				', '.join(['%.3f'%w for w in self.weights]) +
+				' ]')
+
+	def proposeIncreasedComplexity(self, img):
+		maxs = np.max(self.sigmas)
+		# MAGIC
+		news = self.sigmas + [maxs + 1.]
+		return NGaussianPSF(news, self.weights + [0.05])
+
 	def numberOfFitParams(self):
 		return 2 * len(self.sigmas)
 	def getFitStepSizes(self, img):
@@ -439,10 +479,22 @@ class NGaussianPSF(PSF):
 		NS = len(self.sigmas)
 		if parami < NS:
 			self.sigmas[parami] += delta
-			print 'NGaussianPSF: setting sigma', parami, 'to', self.sigmas[parami]
+			#print 'NGaussianPSF: setting sigma', parami, 'to', self.sigmas[parami]
 		else:
 			self.weights[parami - NS] += delta
-			print 'NGaussianPSF: setting weight', (parami-NS), 'to', self.weights[parami-NS]
+			#print 'NGaussianPSF: setting weight', (parami-NS), 'to', self.weights[parami-NS]
+
+	def isValidParamStep(self, dparam):
+		NS = len(self.sigmas)
+		assert(len(dparam) == 2*NS)
+		dsig = dparam[:NS]
+		dw = dparam[NS:]
+		# MAGIC
+		return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
+
+	def normalize(self):
+		mx = max(self.weights)
+		self.weights = [w/mx for w in self.weights]
 
 	def hashkey(self):
 		return ('NGaussianPSF', tuple(self.sigmas), tuple(self.weights))
@@ -489,7 +541,11 @@ class Cache(dict):
 
 class Catalog(list):
 	def __hash__(self):
-		return hash(tuple([hash(x) for x in self]))
+		return hash(self.hashkey())
+	def hashkey(self):
+		#return tuple([hash(x) for x in self])
+		return tuple([x.hashkey() for x in self])
+
 	def deepcopy(self):
 		return Catalog([x.copy() for x in self])
 
@@ -529,7 +585,50 @@ class Tractor(object):
 			return ()
 	'''
 
-	def optimizePsfAtFixedComplexityStep(self, imagei):
+	def increasePsfComplexity(self, imagei):
+		print 'Increasing complexity of PSF in image', imagei
+		img = self.getImage(imagei)
+		psf = img.getPsf()
+		#npixels = img.numberOfPixels()
+		# For the PSF model, we render out the whole image.
+		#mod0 = self.getModelImage(img)
+		pBefore = self.getLogProb()
+
+		psfk = psf.proposeIncreasedComplexity(img)
+
+		print 'Trying to increase PSF complexity'
+		print 'from:', psf
+		print 'to  :', psfk
+
+		img.setPsf(psfk)
+		#modk = self.getModelImage(img)
+		pAfter = self.getLogProb()
+
+		print 'Before increasing PSF complexity: log-prob', pBefore
+		print 'After  increasing PSF complexity: log-prob', pAfter
+
+		self.optimizePsfAtFixedComplexityStep(imagei)
+
+		pAfter2 = self.getLogProb()
+
+		print 'Before increasing PSF complexity: log-prob', pBefore
+		print 'After  increasing PSF complexity: log-prob', pAfter
+		print 'After  tuning:                    log-prob', pAfter2
+
+		if pAfter2 > pBefore:
+			print 'Accepting PSF change!'
+		else:
+			print 'Rejecting PSF change!'
+			img.setPsf(psf)
+
+		print 'PSF is', img.getPsf()
+
+	def increaseAllPsfComplexity(self):
+		for i in range(len(self.images)):
+			self.increasePsfComplexity(i)
+
+	def optimizePsfAtFixedComplexityStep(self, imagei,
+										 derivCallback=None):
 		print 'Optimizing PSF in image', imagei, 'at fixed complexity'
 		img = self.getImage(imagei)
 		psf = img.getPsf()
@@ -545,25 +644,30 @@ class Tractor(object):
 		steps = psf.getFitStepSizes(img)
 		assert(len(steps) == nparams)
 		derivs = []
+		print 'Computing PSF derivatives around PSF:', psf
 		for k,s in enumerate(steps):
 			psfk = psf.copy()
 			psfk.stepParam(k, s)
+			print '  step param', k, 'by', s, 'to get', psfk
 			img.setPsf(psfk)
 			modk = self.getModelImage(img)
-			img.setPsf(psf)
 			# to reuse code, wrap this in a Patch...
 			dk = Patch(0, 0, (modk - mod0) / s)
 			derivs.append(dk)
+		img.setPsf(psf)
 
 		assert(len(derivs) == nparams)
+
+		if derivCallback:
+			(func, baton) = derivCallback
+			func(self, imagei, img, psf, steps, mod0, derivs, baton)
+
 		inverrs = img.getInvError()
 
 		# Build the sparse matrix of derivatives:
 		sprows = []
 		spcols = []
 		spvals = []
-
-		#activeParams = []
 
 		for p,deriv in enumerate(derivs):
 			(H,W) = img.shape
@@ -576,7 +680,6 @@ class Tractor(object):
 			print '  psf derivative', p, 'has', len(nz), 'non-zero entries'
 			if len(nz) == 0:
 				continue
-			#activeParams.append(p)
 			rows = pix[nz]
 			cols = np.zeros_like(rows) + p
 			vals = dimg.ravel()[nz]
@@ -616,26 +719,33 @@ class Tractor(object):
 		b = ((data - mod) * inverr).ravel()
 		b = b[:urows.max() + 1]
 		
-		lsqropts = {}
+		lsqropts = dict(show=False)
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
-		 arnorm, xnorm, var) = lsqr(A, b, show=True, **lsqropts)
+		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		# Unpack.
+
+		print 'Parameter changes:', X
 
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
 
-		for alpha in 2.**-np.arange(5):
+		for alpha in 2.**-np.arange(10):
 			print 'Stepping with alpha =', alpha
-
-			oldpsf = psf.copy()
-			self.pushCache()
-
 			dparams = X
 			assert(len(dparams) == nparams)
-			psf.stepParams(dparams * alpha)
+			if not psf.isValidParamStep(dparams * alpha):
+				print 'Changing PSF params by', (dparams*alpha), 'is not valid!'
+				continue
+
+			self.pushCache()
+
+			newpsf = psf.copy()
+			newpsf.stepParams(dparams * alpha)
+			print 'Stepped to', newpsf
+			img.setPsf(newpsf)
 
 			pAfter = self.getLogProb()
 			print 'log-prob before:', pBefore
@@ -643,19 +753,20 @@ class Tractor(object):
 
 			if pAfter > pBefore:
 				print 'Accepting step!'
+				newpsf.normalize()
 				self.mergeCache()
 				break
 
 			print 'Rejecting step!'
 			self.popCache()
 			# revert
-			self.psf = oldpsf
+			img.setPsf(psf)
 
 		# if we get here, this step was rejected.
 
-	def optimizeAllPsfAtFixedComplexityStep(self):
+	def optimizeAllPsfAtFixedComplexityStep(self, **kwargs):
 		for i in range(len(self.images)):
-			self.optimizePsfAtFixedComplexityStep(i)
+			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
 	def optimizeCatalogAtFixedComplexityStep(self):
 		'''
@@ -773,11 +884,11 @@ class Tractor(object):
 		#b2 = np.zeros(ucols.max() + 1)
 		#print 'b shape', b.shape
 		
-		lsqropts = {}
+		lsqropts = dict(show=False)
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
-		 arnorm, xnorm, var) = lsqr(A, b, show=True, **lsqropts)
+		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		# Unpack.
 
@@ -812,10 +923,21 @@ class Tractor(object):
 
 		# if we get here, this step was rejected.
 
+	def getModelPatchNoCache(self, img, src):
+		return src.getModelPatch(img)
 
 	def getModelPatch(self, img, src):
-		#pixpos = img.getWcs().positionToPixel(src.getPosition())
-		return src.getModelPatch(img)#, pixpos)
+		deps = (img.hashkey(), src.hashkey())
+		deps = hash(deps)
+		mod = self.cache.get(deps, None)
+		if mod is not None:
+			#print '  Cache hit!'
+			pass
+		else:
+			mod = self.getModelPatchNoCache(img, src)
+			#print 'Caching model image'
+			self.cache[deps] = mod
+		return mod
 
 	# ??
 	def getModelImageNoCache(self, img):
@@ -836,14 +958,19 @@ class Tractor(object):
 		# img.sky, img.psf, img.wcs, sources that overlap.
 		#deps = hash((img.getVersion(), hash(self.catalog)))
 		#deps = (img.getVersion(), hash(self.catalog))
-		deps = (hash(img), hash(self.catalog))
+
+		#deps = (hash(img), hash(self.catalog))
+		deps = (img.hashkey(), self.catalog.hashkey())
+		#print 'deps:', deps
+		deps = hash(deps)
+
 		#print 'Model image:'
 		#print '  catalog', self.catalog
 		#print '  -> deps', deps
 		mod = self.cache.get(deps, None)
 		if mod is not None:
 			#print '  Cache hit!'
-			pass
+			mod = mod.copy()
 		else:
 			mod = self.getModelImageNoCache(img)
 			#print 'Caching model image'
