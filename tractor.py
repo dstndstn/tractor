@@ -472,7 +472,8 @@ class NGaussianPSF(PSF):
 	def numberOfFitParams(self):
 		return 2 * len(self.sigmas)
 	def getFitStepSizes(self, img):
-		return [0.1]*len(self.sigmas) + [0.1]*len(self.weights)
+		#return [0.1]*len(self.sigmas) + [0.1]*len(self.weights)
+		return [0.01]*len(self.sigmas) + [0.01]*len(self.weights)
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
 		assert(parami < 2*len(self.sigmas))
@@ -489,8 +490,15 @@ class NGaussianPSF(PSF):
 		assert(len(dparam) == 2*NS)
 		dsig = dparam[:NS]
 		dw = dparam[NS:]
-		# MAGIC
-		return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
+		for s,ds in zip(self.sigmas, dsig):
+			# MAGIC
+			if s + ds < 0.1:
+				return False
+		for w,dw in zip(self.weights, dw):
+			if w + dw < 0:
+				return False
+		return True
+		#return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
 
 	def normalize(self):
 		mx = max(self.weights)
@@ -646,13 +654,28 @@ class Tractor(object):
 		derivs = []
 		print 'Computing PSF derivatives around PSF:', psf
 		for k,s in enumerate(steps):
-			psfk = psf.copy()
-			psfk.stepParam(k, s)
-			print '  step param', k, 'by', s, 'to get', psfk
-			img.setPsf(psfk)
-			modk = self.getModelImage(img)
-			# to reuse code, wrap this in a Patch...
-			dk = Patch(0, 0, (modk - mod0) / s)
+			if False:
+				psfk = psf.copy()
+				psfk.stepParam(k, s)
+				print '  step param', k, 'by', s, 'to get', psfk
+				img.setPsf(psfk)
+				modk = self.getModelImage(img)
+				# to reuse code, wrap this in a Patch...
+				dk = Patch(0, 0, (modk - mod0) / s)
+			else:
+				# symmetric finite differences
+				psfk1 = psf.copy()
+				psfk2 = psf.copy()
+				psfk1.stepParam(k, -s)
+				psfk2.stepParam(k, +s)
+				print '  step param', k, 'by', -s, 'to get', psfk1
+				print '  step param', k, 'by',  s, 'to get', psfk2
+				img.setPsf(psfk1)
+				modk1 = self.getModelImage(img)
+				img.setPsf(psfk2)
+				modk2 = self.getModelImage(img)
+				dk = Patch(0, 0, (modk2 - modk1) / (s*2))
+
 			derivs.append(dk)
 		img.setPsf(psf)
 
@@ -677,7 +700,7 @@ class Tractor(object):
 			# (grab non-zero indices)
 			dimg = deriv.getImage()
 			nz = np.flatnonzero(dimg)
-			print '  psf derivative', p, 'has', len(nz), 'non-zero entries'
+			#print '  psf derivative', p, 'has', len(nz), 'non-zero entries'
 			if len(nz) == 0:
 				continue
 			rows = pix[nz]
@@ -719,11 +742,13 @@ class Tractor(object):
 		b = ((data - mod) * inverr).ravel()
 		b = b[:urows.max() + 1]
 		
-		lsqropts = dict(show=False)
+		lsqropts = dict(show=True)
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+		# (PSF)
+		print 'lsqr stopped for reason', istop, 'after', niters, 'iterations'
 
 		# Unpack.
 
@@ -835,7 +860,7 @@ class Tractor(object):
 					# (grab non-zero indices)
 					dimg = deriv.getImage()
 					nz = np.flatnonzero(dimg)
-					print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+					#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
 					rows = row0[i] + pix[nz]
 					cols = np.zeros_like(rows) + col0[j] + p
 					#rows = np.zeros(len(cols), int) + row0[j] + p
