@@ -103,8 +103,11 @@ class Source(object):
 	# update parameters in this direction with this step size.
 	def stepParams(self, dparams, alpha):
 		pass
+	def getParams(self):
+		return []
+	def setParams(self, p):
+		pass
 	
-
 class PointSource(Source):
 	def __init__(self, pos, flux):
 		self.pos = pos
@@ -155,6 +158,7 @@ class PointSource(Source):
 			(px,py) = img.getWcs().positionToPixel(posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
 			dx = (patchx - patch0) * (counts / psteps[i])
+			dx.setName('d(src)/d(pos%i)' % i)
 			derivs.append(dx)
 
 		fsteps = self.flux.getFitStepSizes(img)
@@ -167,6 +171,7 @@ class PointSource(Source):
 			df = patch0 * ((countsi - counts) / fsteps[i])
 			#print 'df', df
 			#print 'df range', df.getImage().min(), df.getImage().max()
+			df.setName('d(src)/d(flux%i)' % i)
 			derivs.append(df)
 
 		return derivs
@@ -177,14 +182,29 @@ class PointSource(Source):
 		np = pos.getDimension()
 		nf = self.flux.numberOfFitParams()
 		assert(len(dparams) == (np + nf))
-		#pos += dparams[:-1]
 		dp = dparams[:np]
 		pos.stepParams(dp)
-			
 		df = dparams[np:]
 		self.flux.stepParams(df)
-		#newcounts = exp(PointSource.fluxstep * dc)
-		#self.flux = img.getPhotoCal().countsToFlux(newcounts)
+
+	def getParams(self):
+		pp = self.getPosition().getParams()
+		pf = self.flux.getParams()
+		np = self.getPosition().getDimension()
+		assert(len(pp) == np)
+		p = pp + pf
+		assert(len(p) == (len(pp) + len(pf)))
+		return p
+
+	def setParams(self, p):
+		pos = self.getPosition()
+		np = pos.getDimension()
+		nf = self.flux.numberOfFitParams()
+		assert(len(p) == (np + nf))
+		pp = p[:np]
+		pos.setParams(pp)
+		pf = p[np:]
+		self.flux.setParams(pf)
 
 
 def randomint():
@@ -300,6 +320,11 @@ class Flux(object):
 		assert(len(params) == self.numberOfFitParams())
 		for i in range(len(params)):
 			self.stepParam(i, params[i])
+	def getParams(self):
+		return [self.val]
+	def setParams(self, p):
+		assert(len(p) == 1)
+		self.val = p[0]
 
 
 class WCS(object):
@@ -333,6 +358,13 @@ class PixPos(list):
 			self[i] += params[i]
 		#print 'PixPos: stepping by', params
 
+	def getParams(self):
+		return [self[0], self[1]]
+	def setParams(self, p):
+		assert(len(p) == len(self))
+		for i,pval in enumerate(p):
+			self[i] = pval
+
 	def __hash__(self):
 		# convert to tuple
 		return hash((self[0], self[1]))
@@ -347,7 +379,14 @@ class Patch(object):
 		self.y0 = y0
 		self.patch = patch
 
+	def setName(self, name):
+		self.name = name
+	def getName(self):
+		return self.name
+
 	def copy(self):
+		if self.patch is None:
+			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch.copy())
 
 	def getOrigin(self):
@@ -362,12 +401,21 @@ class Patch(object):
 		return self.y0
 
 	def clipTo(self, W, H):
+		if self.patch is None:
+			return False
 		if self.x0 < 0:
 			self.patch = self.patch[:, -self.x0:]
 			self.x0 = 0
 		if self.y0 < 0:
 			self.patch = self.patch[-self.y0:, :]
 			self.y0 = 0
+		if self.x0 >= W:
+			# empty
+			self.patch = None
+			return False
+		if self.y0 >= H:
+			self.patch = None
+			return False
 		(h,w) = self.shape
 		if (self.x0 + w) > W:
 			self.patch = self.patch[:, :(W - self.x0)]
@@ -380,6 +428,7 @@ class Patch(object):
 		assert(w <= W)
 		assert(h <= H)
 		assert(self.shape == self.patch.shape)
+		return True
 
 	'''
 	def clipTo(self, x0, y0, W, H):
@@ -399,6 +448,8 @@ class Patch(object):
 	'''		
 
 	def getSlice(self, parent=None):
+		if self.patch is None:
+			return ([],[])
 		(ph,pw) = self.patch.shape
 		if parent is not None:
 			(H,W) = parent.shape
@@ -408,12 +459,16 @@ class Patch(object):
 				slice(self.x0, self.x0+pw))
 
 	def getPixelIndices(self, parent):
+		if self.patch is None:
+			return np.array([])
 		(h,w) = self.shape
 		(H,W) = parent.shape
 		X,Y = np.meshgrid(np.arange(w), np.arange(h))
-		return (Y.ravel() + self.y0) * W + X.ravel()
+		return (Y.ravel() + self.y0) * W + (X.ravel() + self.x0)
 
 	def addTo(self, img, scale=1.):
+		if self.patch is None:
+			return
 		(ih,iw) = img.shape
 		(ph,pw) = self.patch.shape
 
@@ -428,9 +483,13 @@ class Patch(object):
 
 	def __getattr__(self, name):
 		if name == 'shape':
+			if self.patch is None:
+				return (0,0)
 			return self.patch.shape
 
 	def __mul__(self, flux):
+		if self.patch is None:
+			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch * flux)
 
 	def __sub__(self, other):
@@ -776,6 +835,10 @@ class Tractor(object):
 			spcols.append(cols)
 			spvals.append(vals * w)
 
+		########################### FIXME
+		######### see the other lsqr() call to make sure the params are right
+		# here.
+
 		# ensure the sparse matrix is full up to the number of columns we expect
 		spcols.append([nparams-1])
 		sprows.append([0])
@@ -857,7 +920,7 @@ class Tractor(object):
 		for i in range(len(self.images)):
 			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
-	def optimizeCatalogAtFixedComplexityStep(self):
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
 		'''
 		-synthesize images
 
@@ -869,12 +932,14 @@ class Tractor(object):
 		-take step (try full step, back off)
 		'''
 		print 'Optimizing at fixed complexity'
-		mods = self.getModelImages()
- 
+
+ 		if srcs is None:
+			srcs = self.catalog
+
 		# need all derivatives  dChi / dparam
 		# for each pixel in each image
 		#  and each parameter in each source
-		nparams = [src.numberOfFitParams() for src in self.catalog]
+		nparams = [src.numberOfFitParams() for src in srcs]
 		col0 = np.cumsum([0] + nparams)
 
 		npixels = [img.numberOfPixels() for img in self.images]
@@ -885,7 +950,7 @@ class Tractor(object):
 		spcols = []
 		spvals = []
 
-		for j,src in enumerate(self.catalog):
+		for j,src in enumerate(srcs):
 			#params = src.getFitParams()
 			#assert(len(params) == nparams[j])
 
@@ -902,7 +967,6 @@ class Tractor(object):
 				assert(len(derivs) == nparams[j])
 
 				#print 'Got derivatives:', derivs
-
 				inverrs = img.getInvError()
 
 				# Add to the sparse matrix of derivatives:
@@ -920,6 +984,16 @@ class Tractor(object):
 					#print 'parent pix', (W*H), npixels[i]
 					#print 'pix range:', pix.min(), pix.max()
 					# (in the parent image)
+					if len(pix) == 0:
+						print 'This source does not influence this image!'
+						continue
+					
+					if pix.max() >= npixels[i]:
+						print 'maximum pixel index:', pix.max()
+						print 'number of pixels in this image:', npixels[i]
+						print 'W,H', (W,H)
+						print 'patch origin', deriv.getOrigin()
+						print 'patch shape', deriv.shape
 					assert(all(pix < npixels[i]))
 					# (grab non-zero indices)
 					dimg = deriv.getImage()
@@ -930,8 +1004,19 @@ class Tractor(object):
 					#rows = np.zeros(len(cols), int) + row0[j] + p
 					vals = dimg.ravel()[nz]
 					#print 'inverrs shape is', inverrs.shape
-					w = inverrs[deriv.getSlice()].ravel()[nz]
+					w = inverrs[deriv.getSlice(img)].ravel()[nz]
 					assert(vals.shape == w.shape)
+
+					# We want to minimize:
+					#   || chi + (d(chi)/d(params)) * dparams ||
+					# So  b = chi
+					#     A = -d(chi)/d(params)
+					#     x = dparams
+					#
+					# chi = (data - model) / std = (data - model) * inverr
+					# derivs = d(model)/d(param)
+					# A matrix = -d(chi)/d(param)
+					#          = + (derivs) * inverr
 
 					sprows.append(rows)
 					spcols.append(cols)
@@ -956,21 +1041,19 @@ class Tractor(object):
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))
 
-		# b = -weighted residuals
+		# b = chi
 		b = np.zeros(np.sum(npixels))
 		for i,img in enumerate(self.images):
-			NP = img.numberOfPixels()
+			NP = npixels[i]
 			mod = self.getModelImage(img)
 			data = img.getImage()
 			inverr = img.getInvError()
 			assert(np.product(mod.shape) == NP)
 			assert(mod.shape == data.shape)
 			assert(mod.shape == inverr.shape)
-			b[col0[i] : col0[i] + NP] = ((data - mod) * inverr).ravel()
+			b[row0[i] : row0[i] + NP] = ((data - mod) * inverr).ravel()
 		#print 'b shape', b.shape
 		b = b[:urows.max() + 1]
-		#b = b[ucols]
-		#b2 = np.zeros(ucols.max() + 1)
 		#print 'b shape', b.shape
 		
 		lsqropts = dict(show=False)
@@ -980,20 +1063,24 @@ class Tractor(object):
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		# Unpack.
+		print 'X=', X
 
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
 
-		for alpha in 2.**-np.arange(5):
+		for alpha in 2.**-np.arange(10):
 			print 'Stepping with alpha =', alpha
 
-			oldcat = self.catalog.deepcopy()
-			self.pushCache()
+			#oldcat = self.catalog.deepcopy()
+			#self.pushCache()
 
-			for j,src in enumerate(self.catalog):
+			oldparams = []
+
+			for j,src in enumerate(srcs):
 				dparams = X[col0[j] : col0[j] + nparams[j]]
 				assert(len(dparams) == nparams[j])
 				#print 'Applying parameter update', dparams, 'to source', src
+				oldparams.append(src.getParams())
 				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
@@ -1002,16 +1089,21 @@ class Tractor(object):
 
 			if pAfter > pBefore:
 				print 'Accepting step!'
-				self.mergeCache()
-				break
+				#self.mergeCache()
+				return pAfter - pBefore
 
 			print 'Rejecting step!'
-			self.popCache()
+			#self.popCache()
 			# revert the catalog
-			self.catalog = oldcat
+			#self.catalog = oldcat
+
+			assert(len(srcs) == len(oldparams))
+			for j,src in enumerate(srcs):
+				src.setParams(oldparams[j])
 
 		# if we get here, this step was rejected.
-
+		return -1
+	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
 
@@ -1126,7 +1218,8 @@ class Tractor(object):
 			for j,src in enumerate(self.catalog):
 				patch = self.getModelPatch(self.images[i], src)
 				(H,W) = img.shape
-				patch.clipTo(W, H)
+				if not patch.clipTo(W, H):
+					continue
 				chi[patch.getSlice()] = 0.
 
 			# PSF-correlate
@@ -1165,6 +1258,17 @@ class Tractor(object):
 				self.catalog.append(src)
 				#print 'added source, catalog is:'
 				#print self.catalog
+
+				# first try individually optimizing the newly-added
+				# source...
+				for ostep in range(20):
+					print 'Optimizing the new source (step %i)...' % (ostep+1)
+					dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
+					if dlnprob < 1.:
+						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+						break
+				# then the whole catalog
+				print 'Optimizing the catalog with the new source...'
 				self.optimizeCatalogAtFixedComplexityStep()
 
 				pAfter = self.getLogProb()
