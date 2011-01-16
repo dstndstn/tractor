@@ -21,7 +21,6 @@ class HSTTractor(Tractor):
 		#ht /= patch.max()
 		return PointSource(PixPos([x,y]), Flux(ht))
 
-
 def measure_sky_variance(img):
 	x0,y0 = 5,7
 	d = img[y0:,x0:] - img[:-y0,:-x0]
@@ -114,7 +113,6 @@ def main():
 	plt.hot()
 	plt.colorbar()
 	plt.savefig('chi2.png')
-
 
 	# Initialize with a totally bogus Gaussian PSF model.
 	psf = NGaussianPSF([2.0], [1.0])
