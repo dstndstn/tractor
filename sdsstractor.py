@@ -13,6 +13,202 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.ngc2000 import ngc2000
 
+from compiled_profiles import *
+from galaxy_profiles import *
+
+class Galaxy(Source):
+	def __init__(self, pos, flux, re, ab, phi):
+		self.name = 'Galaxy'
+		self.pos = pos
+		self.flux = flux
+		self.re = re
+		self.ab = ab
+		self.phi = phi
+
+	def hashkey(self):
+		return (self.name, self.pos.hashkey(), self.flux.hashkey(),
+				self.re, self.ab, self.phi)
+	def __eq__(self, other):
+		return hash(self) == hash(other)
+
+	def __str__(self):
+		return (self.name + ' at ' + str(self.pos)
+				+ ' with flux ' + str(self.flux)
+				+ ', re=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi))
+	def __repr__(self):
+		return (self.name + '(pos=' + repr(self.pos) +
+				', flux=' + repr(self.flux) +
+				', re=%.1f, ab=%.2f, phi=%.1f)' % (self.re, self.ab, self.phi))
+
+	def copy(self):
+		return None
+
+	def getGalaxyPatch(self, img, cx, cy):
+		# remember to include margin for psf conv
+		return None
+
+	def getPosition(self):
+		return self.pos
+
+	def getModelPatch(self, img, px=None, py=None):
+		if px is None or py is None:
+			(px,py) = img.getWcs().positionToPixel(self.getPosition())
+		patch = self.getGalaxyPatch(img, px, py)
+		psf = img.getPsf()
+		convinv = psf.applyTo(patch.getImage())
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		return Patch(patch.getX0(), patch.getY0(), convinv * counts)
+
+	def numberOfGalaxyParams(self):
+		return 3
+
+	#def getGalaxyParamDerivatives(self, img):
+	#	return [ None, None, None ]
+
+	def getGalaxyParamStepSizes(self, img):
+		return [ self.re * 0.1, max(0.01, self.ab * 0.1), 1. ]
+
+	def getGalaxyParamNames(self):
+		return ['re', 'ab', 'phi']
+
+	def stepGalaxyParam(self, i, dg):
+		assert(i >= 0)
+		assert(i < 3)
+		if i == 0:
+			self.re += dg
+		elif i == 1:
+			self.ab += dg
+		elif i == 2:
+			self.phi += dg
+
+	def stepGalaxyParams(self, dg):
+		assert(len(dg) == 3)
+		self.re  += dg[0]
+		self.ab  += dg[1]
+		self.phi += dg[2]
+
+	def getGalaxyParams(self):
+		return [ self.re, self.ab, self.phi ]
+
+	def setGalaxyParams(self, g):
+		assert(len(g) == 3)
+		self.re  = g[0]
+		self.ab  = g[1]
+		self.phi = g[2]
+
+	# [pos], [flux], re, ab, phi
+	def numberOfFitParams(self):
+		return (self.pos.getDimension() + self.flux.numberOfFitParams() +
+				self.numberOfGalaxyParams())
+
+	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
+	def getFitParamDerivatives(self, img):
+		pos0 = self.getPosition()
+		psteps = pos0.getFitStepSizes(img)
+
+		(px0,py0) = img.getWcs().positionToPixel(pos0)
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		patch0 = self.getModelPatch(img, px0, py0)
+
+		derivs = []
+		for i in range(len(psteps)):
+			posx = pos0.copy()
+			posx.stepParam(i, psteps[i])
+			(px,py) = img.getWcs().positionToPixel(posx)
+			patchx = self.getModelPatch(img, px, py)
+			dx = (patchx - patch0) * (1. / psteps[i])
+			dx.setName('d(src)/d(pos%i)' % i)
+			derivs.append(dx)
+
+		fsteps = self.flux.getFitStepSizes(img)
+		for i in range(len(fsteps)):
+			fi = self.flux.copy()
+			fi.stepParam(i, fsteps[i])
+			countsi = img.getPhotoCal().fluxToCounts(fi)
+			df = patch0 * ((countsi - counts) / counts / fsteps[i])
+			df.setName('d(src)/d(flux%i)' % i)
+			derivs.append(df)
+
+		gsteps = self.getGalaxyParamStepSizes(img)
+		gnames = self.getGalaxyParamNames()
+		for i in range(len(gsteps)):
+			galx = self.copy()
+			galx.stepGalaxyParam(i, gsteps[i])
+			patchx = galx.getModelPatch(img, px0, py0)
+			dx = (patchx - patch0) * (1. / gsteps[i])
+			dx.setName('d(src)/d(%s)' % (gnames[i]))
+			derivs.append(dx)
+
+		return derivs
+
+	# update parameters in this direction
+	def stepParams(self, dparams):
+		pos = self.getPosition()
+		np = pos.getDimension()
+		nf = self.flux.numberOfFitParams()
+		ng = self.numberOfGalaxyParams()
+		assert(len(dparams) == (np + nf + ng))
+		dp = dparams[:np]
+		pos.stepParams(dp)
+		df = dparams[np:np+nf]
+		self.flux.stepParams(df)
+		dg = dparams[np+nf:]
+		self.stepGalaxyParams(dg)
+
+	def getParams(self):
+		pp = self.getPosition().getParams()
+		pf = self.flux.getParams()
+		np = self.getPosition().getDimension()
+		assert(len(pp) == np)
+		pg = self.getGalaxyParams()
+		p = pp + pf + pg
+		# ensure that "+" means "append"...
+		assert(len(p) == (len(pp) + len(pf) + len(pg)))
+		return p
+
+	def setParams(self, p):
+		pos = self.getPosition()
+		np = pos.getDimension()
+		nf = self.flux.numberOfFitParams()
+		ng = self.numberOfGalaxyParams()
+		assert(len(p) == (np + nf + ng))
+		pp = p[:np]
+		pos.setParams(pp)
+		pf = p[np:np+nf]
+		self.flux.setParams(pf)
+		pg = p[np+nf:]
+		self.setGalaxyParams(pg)
+
+
+class ExpGalaxy(Galaxy):
+
+	profile = None
+	@staticmethod
+	def getProfile():
+		if ExpGalaxy.profile is None:
+			ExpGalaxy.profile = CompiledProfile(modelname='exp',
+												profile_func=profile_exp, re=100, nrad=4)
+		return ExpGalaxy.profile
+	#pdev = CompiledProfile(modelname='deV', profile_func=profile_dev, re=100, nrad=8)
+
+	def __init__(self, pos, flux, re, ab, phi):
+		Galaxy.__init__(self, pos, flux, re, ab, phi)
+		self.name = 'ExpGalaxy'
+
+	def copy(self):
+		return ExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+	def getGalaxyPatch(self, img, cx, cy):
+		# remember to include margin for psf conv
+		profile = ExpGalaxy.getProfile()
+		re = max(1./30, self.re)
+		(H,W) = img.shape
+		# MAGIC
+		margin = 5.
+		(prof,x0,y0) = profile.sample(re, self.ab, self.phi, cx, cy, W, H, margin)
+		return Patch(x0, y0, prof)
+
+
 class SDSSTractor(Tractor):
 
 	def createNewSource(self, img, x, y, ht):
@@ -25,9 +221,22 @@ class SDSSTractor(Tractor):
 		#ht /= patch.max()
 		return PointSource(PixPos([x,y]), Flux(ht))
 
+	def changeSource(self, source):
+		'''
+		Proposes a list of alternatives, where each is a lists of new
+		Sources that the given Source could be changed into.
+		'''
+		if isinstance(source, PointSource):
+			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+						   5., 0.3, 120.)
+			print 'Changing PointSource', source, 'into', eg
+			return [ [eg] ]
 
-
-
+		elif isinstance(source, ExpGalaxy):
+			return []
+		else:
+			print 'unknown source type for', source
+			return []
 
 
 
@@ -72,8 +281,44 @@ def choose_field():
 			   ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=25' % (f.run, f.camcol, f.field)))
 		
 
+def testGalaxy():
+	W,H = 200,200
+	pos = PixPos([100, 100])
+	flux = Flux(1000.)
+
+	image = np.zeros((H,W))
+	invvar = np.zeros_like(image) + 1.
+	wcs = NullWCS()
+	photocal = NullPhotoCal()
+	psf = NGaussianPSF([1.5], [1.0])
+	sky = 0.
+	
+	img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
+				photocal=photocal)
+	
+	eg = ExpGalaxy(pos, flux, 10., 0.5, 30.)
+	patch = eg.getModelPatch(img)
+
+	imargs1 = dict(interpolation='nearest', origin='lower')
+
+	plt.clf()
+	plt.imshow(patch.getImage(), **imargs1)
+	plt.colorbar()
+	plt.savefig('eg-1.png')
+	
+	derivs = eg.getFitParamDerivatives(img)
+	for i,deriv in enumerate(derivs):
+		plt.clf()
+		plt.imshow(deriv.getImage(), **imargs1)
+		plt.colorbar()
+		plt.title('derivative ' + deriv.getName())
+		plt.savefig('eg-deriv%i-0a.png' % i)
+		
 
 def main():
+	#testGalaxy()
+	#return
+
 	# image
 	# invvar
 	# sky
@@ -90,10 +335,14 @@ def main():
 
 	#x0,x1,y0,y1 = 1000,1250, 400,650
 	#x0,x1,y0,y1 = 250,500, 1150,1400
-	#x0,x1,y0,y1 = 200,500, 1100,1400
+	# Smallish galaxy (gets fit by ~10 stars)
+	x0,x1,y0,y1 = 200,500, 1100,1400
+
 	# A sparse field with a small galaxy
 	# (gets fit by only one star)
-	x0,x1,y0,y1 = 0,300, 200,500
+	# (needs about 20 srcs)
+	#x0,x1,y0,y1 = 0,300, 200,500
+
 	# A sparse field with no galaxies
 	#x0,x1,y0,y1 = 500,800, 400,700
 
@@ -170,13 +419,16 @@ def main():
 	plt.colorbar()
 	plt.savefig('chi2.png')
 
+	nziv = np.sum(invvar != 0)
+	print 'Non-zero invvars:', nziv
 
 	Nsrc = 10
 	#steps = (['plots'] + ['source']*Nsrc + ['plots'] + ['psf'] + ['plots'] + ['psf2'])*3 + ['plots'] + ['break']
 
 	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc + ['psf'] + ['plots'])
 
-	steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc)
+	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc)
+	steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
 	print 'steps:', steps
 
 	chiArange = None
@@ -192,7 +444,7 @@ def main():
 			chis = tractor.getChiImages()
 			chi = chis[0]
 
-			tt = 'sources: %i, chi^2 = %g' % (NS, np.sum(chi**2))
+			tt = 'sources: %i, chi^2/pix = %g' % (NS, np.sum(chi**2)/float(nziv))
 
 			mods = tractor.getModelImages()
 			mod = mods[0]
@@ -267,6 +519,21 @@ def main():
 
 		elif step == 'psf2':
 			tractor.increaseAllPsfComplexity()
+
+		elif step == 'change':
+
+			def altCallback(tractor, src, newsrcs, srci, alti):
+				#global ploti
+				print 'alt callback'
+				plt.clf()
+				plt.imshow(tractor.getModelImages()[0],
+						   interpolation='nearest', origin='lower',
+						   vmin=zrange[0], vmax=zrange[1])
+				plt.hot()
+				plt.colorbar()
+				plt.savefig('alt-%i-%i-%i.png' % (ploti, srci, alti))
+
+			tractor.changeSourceTypes(altCallback=altCallback)
 
 		print 'Tractor cache has', len(tractor.cache), 'entries'
 

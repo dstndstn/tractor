@@ -130,6 +130,8 @@ class PointSource(Source):
 
 	def getPosition(self):
 		return self.pos
+	def getFlux(self):
+		return self.flux
 
 	def getModelPatch(self, img):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition())
@@ -757,6 +759,72 @@ class Tractor(object):
 	def increaseAllPsfComplexity(self):
 		for i in range(len(self.images)):
 			self.increasePsfComplexity(i)
+
+	def changeSource(self, source):
+		'''
+		Proposes a list of alternatives, where each is a lists of new
+		Sources that the given Source could be changed into.
+		'''
+		return []
+
+	def changeSourceTypes(self, srcs=None, altCallback=None):
+		print
+		print 'changeSourceTypes'
+		pBefore = self.getLogProb()
+		print 'log-prob before:', pBefore
+		print
+		if srcs is None:
+			srcs = self.catalog
+
+		oldcat = self.catalog
+
+		for i,src in enumerate(srcs):
+			print
+			print 'changeSourceTypes: source', i
+			print
+			self.catalog = oldcat
+			pBefore = self.getLogProb()
+			print 'log-prob before:', pBefore
+			print 'catalog hash-code', hash(self.catalog)
+
+			alts = self.changeSource(src)
+			print 'changing source', src, 'into alternatives:', alts
+			for j,newsrcs in enumerate(alts):
+				print 'trying alternative', j, ':', newsrcs
+				newcat = oldcat.deepcopy()
+				newcat.remove(src)
+				newcat.extend(newsrcs)
+				print 'Replacing', src, 'with', newsrcs
+				self.catalog = newcat
+				print 'Before optimizing:', self.getLogProb()
+				# first try individually optimizing the newly-added
+				# source...
+				for ostep in range(20):
+					print 'Optimizing the new sources (step %i)...' % (ostep+1)
+					dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=newsrcs)
+					print 'delta-log-prob', dlnprob
+					if dlnprob < 1.:
+						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+						break
+					print 'Changed to', newsrcs
+				#self.optimizeCatalogAtFixedComplexityStep(srcs=newsrcs)
+				print 'After optimizing new sources:', self.getLogProb()
+				self.optimizeCatalogAtFixedComplexityStep()
+				print 'After optimizing all with new sources:', self.getLogProb()
+
+				if altCallback is not None:
+					altCallback(self, src, newsrcs, i, j)
+
+				pAfter = self.getLogProb()
+				print 'log-prob after:', pAfter
+				print 'delta-log-prob:', pAfter - pBefore
+
+				# Revert
+				#for s in newsrcs:
+				#	newcat.remove(s)
+				#newcat.append(src)
+		self.catalog = oldcat
+
 
 	def optimizePsfAtFixedComplexityStep(self, imagei,
 										 derivCallback=None):
