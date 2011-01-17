@@ -113,7 +113,7 @@ class PointSource(Source):
 		self.pos = pos
 		self.flux = flux
 	def __str__(self):
-		return 'PointSource at ' + str(self.pos) + ' with flux ' + str(self.flux)
+		return 'PointSource at ' + str(self.pos) + ' with ' + str(self.flux)
 	def __repr__(self):
 		return 'PointSource(' + repr(self.pos) + ', ' + repr(self.flux) + ')'
 
@@ -155,7 +155,6 @@ class PointSource(Source):
 		derivs = []
 		for i in range(len(psteps)):
 			posx = pos0.copy()
-			#posx[i] += steps[i]
 			posx.stepParam(i, psteps[i])
 			(px,py) = img.getWcs().positionToPixel(posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
@@ -167,12 +166,8 @@ class PointSource(Source):
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
 			fi.stepParam(i, fsteps[i])
-			#print 'stepped flux from', self.flux, 'to', fi
 			countsi = img.getPhotoCal().fluxToCounts(fi)
-			#print '-> counts from', counts, 'to', countsi
 			df = patch0 * ((countsi - counts) / fsteps[i])
-			#print 'df', df
-			#print 'df range', df.getImage().min(), df.getImage().max()
 			df.setName('d(src)/d(flux%i)' % i)
 			derivs.append(df)
 
@@ -339,6 +334,11 @@ class NullWCS(WCS):
 		return pos
 
 class PixPos(list):
+	def __str__(self):
+		return 'pixel (%.2f, %.2f)' % (self[0], self[1])
+	def __repr__(self):
+		return 'PixPos(%.4f, %.4f)' % (self[0], self[1])
+
 	def copy(self):
 		return PixPos([self[0],self[1]])
 
@@ -501,6 +501,8 @@ class Patch(object):
 			assert(self.x0 == other.getX0())
 			assert(self.y0 == other.getY0())
 			assert(self.shape == other.shape)
+			if self.patch is None or other.patch is None:
+				return Patch(self.x0, self.y0, None)
 			return Patch(self.x0, self.y0, self.patch - other.patch)
 
 		(ph,pw) = self.patch.shape
@@ -687,6 +689,13 @@ class Catalog(list):
 		for i,x in enumerate(self):
 			print '  %i:' % i, x
 
+	def getAllParams(self):
+		return [src.getParams() for src in self]
+	def setAllParams(self, p):
+		for src,pp in zip(self, p):
+			src.setParams(pp)
+
+
 class Tractor(object):
 
 	def __init__(self, image, catalog=[]):
@@ -773,28 +782,70 @@ class Tractor(object):
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
 		print
-		if srcs is None:
-			srcs = self.catalog
+
+		#if srcs is None:
+		#	srcs = self.catalog
 
 		oldcat = self.catalog
 
-		for i,src in enumerate(srcs):
+		# We can't just loop over "srcs" -- because when we accept a
+		# change, the catalog changes!
+		#donesrcs = []
+		#addedsrcs = []
+
+		#i = -1
+		#for src in srcs:
+		#	i += 1
+			# for i,src in enumerate(srcs):
+			#i = 0
+			#while True:
+			#for ii in len(srcs):
+			#if i >= len(srcs):
+			#	break
+			#src = srcs[i]
+			#if src in 
+
+		i = -1
+		ii = -1
+		while True:
+			i += 1
 			print
 			print 'changeSourceTypes: source', i
 			print
 			self.catalog = oldcat
+			self.catalog.printLong()
+
+			if srcs is None:
+				# go through self.catalog using "ii" as the index.
+				# (which is updated within the loop when self.catalog is mutated)
+				ii += 1
+				if ii >= len(self.catalog):
+					break
+				print '  changing source index', ii
+				src = self.catalog[ii]
+			else:
+				if i >= len(srcs):
+					break
+				src = srcs[i]
+
 			pBefore = self.getLogProb()
 			print 'log-prob before:', pBefore
-			print 'catalog hash-code', hash(self.catalog)
+			#print 'catalog hash-code', hash(self.catalog)
+
+			bestlogprob = pBefore
+			bestalt = -1
+			bestparams = None
 
 			alts = self.changeSource(src)
-			print 'changing source', src, 'into alternatives:', alts
+			#print 'changing source', src, 'into alternatives:', alts
 			for j,newsrcs in enumerate(alts):
-				print 'trying alternative', j, ':', newsrcs
+				#print 'trying alternative', j, ':', newsrcs
 				newcat = oldcat.deepcopy()
 				newcat.remove(src)
 				newcat.extend(newsrcs)
-				print 'Replacing', src, 'with', newsrcs
+				print 'Replacing:'
+				print '  from', src
+				print '  to  ', newsrcs
 				self.catalog = newcat
 				print 'Before optimizing:', self.getLogProb()
 				# first try individually optimizing the newly-added
@@ -807,7 +858,6 @@ class Tractor(object):
 						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
 						break
 					print 'Changed to', newsrcs
-				#self.optimizeCatalogAtFixedComplexityStep(srcs=newsrcs)
 				print 'After optimizing new sources:', self.getLogProb()
 				self.optimizeCatalogAtFixedComplexityStep()
 				print 'After optimizing all with new sources:', self.getLogProb()
@@ -819,10 +869,29 @@ class Tractor(object):
 				print 'log-prob after:', pAfter
 				print 'delta-log-prob:', pAfter - pBefore
 
-				# Revert
-				#for s in newsrcs:
-				#	newcat.remove(s)
-				#newcat.append(src)
+				if pAfter > bestlogprob:
+					print 'Best change so far!'
+					bestlogprob = pAfter
+					bestalt = j
+					bestparams = newcat.getAllParams()
+
+			if bestparams is not None:
+				print 'Switching to new catalog!'
+				# We want to update "oldcat" in-place (rather than
+				# setting "self.catalog = bestcat") so that the source
+				# object identities don't change -- so that the outer
+				# loop "for src in self.catalog" still works.  We need
+				# to updated the structure and params.
+				oldcat.remove(src)
+				ii -= 1
+				oldcat.extend(alts[bestalt])
+				oldcat.setAllParams(bestparams)
+				self.catalog = oldcat
+				pBefore = bestlogprob
+				print 'New catalog:'
+				self.catalog.printLong()
+				assert(self.getLogProb() == pBefore)
+
 		self.catalog = oldcat
 
 
@@ -1099,12 +1168,12 @@ class Tractor(object):
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
 
-		print 'Number of sparse matrix elements:', len(sprows)
+		print '  Number of sparse matrix elements:', len(sprows)
 		urows = np.unique(sprows)
-		print 'Unique rows (pixels):', len(urows)
-		print 'Max row:', max(sprows)
+		print '  Unique rows (pixels):', len(urows)
+		print '  Max row:', max(sprows)
 		ucols = np.unique(spcols)
-		print 'Unique columns (params):', len(ucols)
+		print '  Unique columns (params):', len(ucols)
 
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))
@@ -1131,13 +1200,13 @@ class Tractor(object):
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		# Unpack.
-		print 'X=', X
+		print '  X=', X
 
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
 
 		for alpha in 2.**-np.arange(10):
-			print 'Stepping with alpha =', alpha
+			print '  Stepping with alpha =', alpha
 
 			#oldcat = self.catalog.deepcopy()
 			#self.pushCache()
@@ -1152,15 +1221,16 @@ class Tractor(object):
 				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
-			print 'log-prob before:', pBefore
-			print 'log-prob after :', pAfter
+			#print 'log-prob before:', pBefore
+			#print 'log-prob after :', pAfter
+			print '  delta log-prob:', pAfter - pBefore
 
 			if pAfter > pBefore:
 				print 'Accepting step!'
 				#self.mergeCache()
 				return pAfter - pBefore
 
-			print 'Rejecting step!'
+			print '  Rejecting step!'
 			#self.popCache()
 			# revert the catalog
 			#self.catalog = oldcat
@@ -1335,6 +1405,11 @@ class Tractor(object):
 					if dlnprob < 1.:
 						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
 						break
+
+				# Try changing the newly-added source type?
+				#print 'Trying to change the source type of the newly-added source'
+				#self.changeSourceTypes(srcs=[src])
+					
 				# then the whole catalog
 				print 'Optimizing the catalog with the new source...'
 				self.optimizeCatalogAtFixedComplexityStep()

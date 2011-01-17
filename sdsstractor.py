@@ -11,6 +11,7 @@ from tractor import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
+from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
 
 from compiled_profiles import *
@@ -33,7 +34,7 @@ class Galaxy(Source):
 
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
-				+ ' with flux ' + str(self.flux)
+				+ ' with ' + str(self.flux)
 				+ ', re=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
@@ -54,6 +55,8 @@ class Galaxy(Source):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition())
 		patch = self.getGalaxyPatch(img, px, py)
+		if patch.getImage() is None:
+			return Patch(patch.getX0(), patch.getY0(), None)
 		psf = img.getPsf()
 		convinv = psf.applyTo(patch.getImage())
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
@@ -229,7 +232,9 @@ class SDSSTractor(Tractor):
 		if isinstance(source, PointSource):
 			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
 						   5., 0.3, 120.)
-			print 'Changing PointSource', source, 'into', eg
+			print 'Changing:'
+			print '  from ', source
+			print '  into', eg
 			return [ [eg] ]
 
 		elif isinstance(source, ExpGalaxy):
@@ -428,14 +433,27 @@ def main():
 	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc + ['psf'] + ['plots'])
 
 	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc)
-	steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
+	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
+	#steps = (['source']*5 + ['change', 'plots'])
+
+	steps = (['plots'] + (['source']*5 + ['plots', 'save', 'change',
+										  'plots', 'save'])*10)
 	print 'steps:', steps
 
 	chiArange = None
 
 	ploti = 0
+	savei = 0
+	stepi = 0
 
-	for i,step in enumerate(steps):
+	# JUMP IN:
+	if True:
+		loadi = 6
+		(savei, step, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
+
+
+	#for i,step in enumerate(steps):
+	for stepi,step in zip(range(stepi, len(steps)), steps[stepi:]):
 
 		if step == 'plots':
 			print 'Making plots...'
@@ -510,10 +528,10 @@ def main():
 				ax = plt.axis()
 				plt.plot([x for x,y in tryxy], [y for x,y in tryxy], 'b+')
 				plt.axis(ax)
-				plt.savefig('create-%02i.png' % i)
+				plt.savefig('create-%02i.png' % stepi)
 
 		elif step == 'psf':
-			baton = (i,)
+			baton = (stepi,)
 			tractor.optimizeAllPsfAtFixedComplexityStep()
 			#derivCallback=(psfDerivCallback, baton))
 
@@ -533,8 +551,16 @@ def main():
 				plt.colorbar()
 				plt.savefig('alt-%i-%i-%i.png' % (ploti, srci, alti))
 
-			tractor.changeSourceTypes(altCallback=altCallback)
+			#tractor.changeSourceTypes(altCallback=altCallback)
+			tractor.changeSourceTypes()
 
+		elif step == 'save':
+
+			pickle_to_file((savei, stepi, ploti, tractor.catalog),
+						   'catalog-%02i.pickle' % savei)
+
+			savei += 1
+			
 		print 'Tractor cache has', len(tractor.cache), 'entries'
 
 
