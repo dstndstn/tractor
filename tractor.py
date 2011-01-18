@@ -1200,54 +1200,18 @@ class Tractor(object):
 		print '  X=', X
 		return X
 
-
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
-		'''
-		-synthesize images
-		-get all derivatives
-		-build matrix
-		-take step (try full step, back off)
-		'''
-		print 'Optimizing at fixed complexity'
-
- 		if srcs is None:
-			srcs = self.catalog
-
-		# need all derivatives  dChi / dparam
-		# for each pixel in each image
-		#  and each parameter in each source
-		#nparams = [src.numberOfFitParams() for src in srcs]
-		#col0 = np.cumsum([0] + nparams)
-
-		#npixels = [img.numberOfPixels() for img in self.images]
-		#row0 = np.cumsum([0] + npixels)
-		# [ 0, (W0*H0), (W0*H0 + W1*H1), ... ]
-
-		#sprows = []
-		#spcols = []
-		#spvals = []
-
-		allderivs = []
-		allimgs = []
-
-		for j,src in enumerate(srcs):
-			for i,img in enumerate(self.images):
-				# Get derivatives (in this image) of params
-				derivs = src.getFitParamDerivatives(img)
-				assert(len(derivs) == src.numberOfFitParams())
-
-				allderivs.append(derivs)
-				allimgs.append(img)
-
-		X = self.optimize(allimgs, allderivs)
-		# Unpack
+	# X: delta-params
+	def tryParamUpdates(self, srcs, X, alphas, accept='best'):
+		assert(accept in ['best', 'first'])
 
 		pBefore = self.getLogProb()
-		print 'log-prob before:', pBefore
+		print '  log-prob before:', pBefore
 
-		for alpha in 2.**-np.arange(10):
+		pBest = pBefore
+		bestAlpha = None
+
+		for alpha in alphas:
 			print '  Stepping with alpha =', alpha
-
 			oldparams = []
 			par0 = 0
 			for j,src in enumerate(srcs):
@@ -1268,22 +1232,66 @@ class Tractor(object):
 			#print 'log-prob after :', pAfter
 			print '  delta log-prob:', pAfter - pBefore
 
-			if pAfter > pBefore:
-				print 'Accepting step!'
-				#self.mergeCache()
-				return pAfter - pBefore
-
-			print '  Rejecting step!'
-			#self.popCache()
-			# revert the catalog
-			#self.catalog = oldcat
+			if accept == 'best':
+				if pAfter > pBest:
+					pBest = pAfter
+					bestAlpha = alpha
+			elif accept == 'first':
+				if pAfter > pBefore:
+					print 'Accepting step!'
+					return pAfter - pBefore
+				print '  Rejecting step!'
 
 			assert(len(srcs) == len(oldparams))
 			for j,src in enumerate(srcs):
 				src.setParams(oldparams[j])
 
+		if accept == 'best':
+			if bestAlpha is None:
+				return -1
+			print '  Stepping by', bestAlpha, 'for delta-logprob', pBest - pBefore
+			par0 = 0
+			for j,src in enumerate(srcs):
+				npar = src.numberOfFitParams()
+				dparams = X[par0 : par0 + npar]
+				par0 += npar
+				assert(len(dparams) == src.numberOfFitParams())
+				src.stepParams(dparams * bestAlpha)
+			return pBest - pBefore
+
 		# if we get here, this step was rejected.
 		return -1
+		
+
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
+		'''
+		-synthesize images
+		-get all derivatives
+		-build matrix
+		-take step (try full step, back off)
+		'''
+		print 'Optimizing at fixed complexity'
+
+ 		if srcs is None:
+			srcs = self.catalog
+
+		allderivs = []
+		allimgs = []
+		for j,src in enumerate(srcs):
+			for i,img in enumerate(self.images):
+				# Get derivatives (in this image) of params
+				derivs = src.getFitParamDerivatives(img)
+				assert(len(derivs) == src.numberOfFitParams())
+				allderivs.append(derivs)
+				allimgs.append(img)
+
+		X = self.optimize(allimgs, allderivs)
+
+		#alphas = 2.**-np.arange(10)
+		alphas = 2.**-(np.arange(10,0,-1)-1)
+		dlogprob = self.tryParamUpdates(srcs, X, alphas, accept='best')
+
+		return dlogprob
 	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
@@ -1424,7 +1432,8 @@ class Tractor(object):
 				ht = (img.getImage() - self.getModelImage(img))[iy,ix]
 				print 'creating new source at x,y', (ix,iy)
 				src = self.createNewSource(img, ix, iy, ht)
-
+				print 'Got:', src
+				
 				tryxy.append((ix,iy))
 
 				# try adding the new source...
@@ -1443,6 +1452,7 @@ class Tractor(object):
 				for ostep in range(20):
 					print 'Optimizing the new source (step %i)...' % (ostep+1)
 					dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
+					print 'After:', src
 					if dlnprob < 1.:
 						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
 						break
