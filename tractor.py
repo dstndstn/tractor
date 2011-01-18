@@ -1,85 +1,12 @@
 from math import ceil, floor, pi, sqrt, exp
 import numpy as np
 import random
-#import scipy.sparse.linalg as sparse
-#import scipy.sparse as sparse
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
 
 import pylab as plt
-
-'''
-Duck types:
-
-class Position(object):
-	def setElement(self, i, val):
-		pass
-	def getElement(self, i):
-		return 1.0
-
-
-source 42, adjust position elements 0 (stepsize=1e-6), 1 (stepsize=1e-6)
-source 43, adjust position elements 0, 1, 2
-
-class Catalog(object):
-	[sources]
-
-	def getSources(self, image):
-		return [source]
-
-class Band(object):
-	pass
-
-class Source(object):
-	'
-	Position
-	Flux
-	SourceType
-	(sourcetype-specific parameters)
-	'
-	def getParameter(self, i):
-		if i < self.Nparams:
-			return (val, step)
-		return None
-
-	def setParameter(self, i, val):
-		pass
-
-	def isInImage(self, image):
-		return True
-
-
-
-	def getFlux(self, band):
-		return 42.0
-
-
-
-class WCS(object):
-	def positionToPixel(self, position, image):
-		'
-		position: list of Position objects
-		image: Image object
-
-		returns: xy: a list of pixel locations -- (x,y) doubles
-		:            eg, [ (1.0, 2.0), (3.0, 4.0) ]
-		
-		'
-		return xy
-
-
-
-class Image(object):
-	-invvar
-	-wcs
-	-psf
-	-flux calib
-
-	
-'''
-
 
 class Source(object):
 	'''
@@ -122,8 +49,6 @@ class PointSource(Source):
 	def copy(self):
 		return PointSource(self.pos.copy(), self.flux.copy())
 
-	#def __hash__(self):
-	#	return hash((self.pos, self.flux))
 	def hashkey(self):
 		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
 
@@ -230,20 +155,8 @@ class Image(object):
 		return hash(self.hashkey())
 
 	def hashkey(self):
-		#return (id(self.data), id(self.invvar), hash(self.psf),
-		#		hash(self.sky), hash(self.wcs), hash(self.photocal))
 		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
 				hash(self.sky), hash(self.wcs), hash(self.photocal))
-
-	# Any time an attribute is changed, update the "version" number to a random value.
-	# FIXME -- should probably hash all my members instead!
-	def __setattr__(self, name, val):
-		object.__setattr__(self, name, val)
-		self.setversion(randomint())
-	def setversion(self, ver):
-		object.__setattr__(self, 'version', ver)
-	def getVersion(self):
-		return self.version
 
 	def numberOfPixels(self):
 		(H,W) = self.data.shape
@@ -266,8 +179,6 @@ class PhotoCal(object):
 	def countsToFlux(self, counts):
 		pass
 
-	#def getDimension(self):
-	#	return 0
 	def numberOfFitParams(self):
 		return 0
 	def getFitStepSizes(self, img):
@@ -281,8 +192,6 @@ class NullPhotoCal(object):
 
 	def numberOfFitParams(self):
 		return 0
-	#def getDimension(self):
-	#	return 0
 	def getFitStepSizes(self, img):
 		return []
 
@@ -307,14 +216,10 @@ class Flux(object):
 	def numberOfFitParams(self):
 		return 1
 	def getFitStepSizes(self, img):
-		#return [(Tractor.LOG, 0.1)]
 		return [0.1]
 	def stepParam(self, parami, delta):
 		assert(parami == 0)
-		#self *= exp(delta)
 		self.val += delta
-		#print 'Flux: stepping by', delta
-		#self += delta
 	def stepParams(self, params):
 		assert(len(params) == self.numberOfFitParams())
 		for i in range(len(params)):
@@ -350,7 +255,6 @@ class PixPos(list):
 	def getDimension(self):
 		return 2
 	def getFitStepSizes(self, img):
-		#return [(Tractor.LINEAR, 0.1), (Tractor.LINEAR, 0.1)]
 		return [0.1, 0.1]
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
@@ -360,7 +264,6 @@ class PixPos(list):
 		assert(len(params) == self.getDimension())
 		for i in range(len(params)):
 			self[i] += params[i]
-		#print 'PixPos: stepping by', params
 
 	def getParams(self):
 		return [self[0], self[1]]
@@ -433,23 +336,6 @@ class Patch(object):
 		assert(h <= H)
 		assert(self.shape == self.patch.shape)
 		return True
-
-	'''
-	def clipTo(self, x0, y0, W, H):
-		(h,w) = self.shape
-		newx0 = self.x0
-		if x0 > self.x0:
-			self.patch = self.patch[:, x0 - self.x0:]
-			newx0 = x0
-		newy0 = self.y0
-		if y0 > self.y0:
-			self.patch = self.patch[y0 - self.y0:, :]
-			newy0 = y0
-		newx1 = self.x0 + w
-		if W < newx1:
-			self.patch = self.patch
-		newy1 = self.
-	'''		
 
 	def getSlice(self, parent=None):
 		if self.patch is None:
@@ -765,27 +651,11 @@ class Tractor(object):
 	def getCatalog(self):
 		return self.catalog
 
-	'''
-	LINEAR = 'linear'
-	LOG = 'log'
-
-	@staticmethod
-	def getDerivative(paramtype, stepsize, img0, img1):
-		if paramtype == Tractor.LINEAR:
-			return (img1 - img0) / stepsize
-		elif paramtype == Tractor.LOG:
-			return ()
-	'''
-
 	def increasePsfComplexity(self, imagei):
 		print 'Increasing complexity of PSF in image', imagei
+		pBefore = self.getLogProb()
 		img = self.getImage(imagei)
 		psf = img.getPsf()
-		#npixels = img.numberOfPixels()
-		# For the PSF model, we render out the whole image.
-		#mod0 = self.getModelImage(img)
-		pBefore = self.getLogProb()
-
 		psfk = psf.proposeIncreasedComplexity(img)
 
 		print 'Trying to increase PSF complexity'
@@ -793,14 +663,12 @@ class Tractor(object):
 		print 'to  :', psfk
 
 		img.setPsf(psfk)
-		#modk = self.getModelImage(img)
 		pAfter = self.getLogProb()
 
 		print 'Before increasing PSF complexity: log-prob', pBefore
 		print 'After  increasing PSF complexity: log-prob', pAfter
 
 		self.optimizePsfAtFixedComplexityStep(imagei)
-
 		pAfter2 = self.getLogProb()
 
 		print 'Before increasing PSF complexity: log-prob', pBefore
@@ -833,28 +701,12 @@ class Tractor(object):
 		print 'log-prob before:', pBefore
 		print
 
-		#if srcs is None:
-		#	srcs = self.catalog
-
 		oldcat = self.catalog
 
 		# We can't just loop over "srcs" -- because when we accept a
 		# change, the catalog changes!
-		#donesrcs = []
-		#addedsrcs = []
-
-		#i = -1
-		#for src in srcs:
-		#	i += 1
-			# for i,src in enumerate(srcs):
-			#i = 0
-			#while True:
-			#for ii in len(srcs):
-			#if i >= len(srcs):
-			#	break
-			#src = srcs[i]
-			#if src in 
-
+		# FIXME -- with this structure, we try to change new sources that
+		# we have just added.
 		i = -1
 		ii = -1
 		while True:
@@ -880,16 +732,13 @@ class Tractor(object):
 
 			pBefore = self.getLogProb()
 			print 'log-prob before:', pBefore
-			#print 'catalog hash-code', hash(self.catalog)
 
 			bestlogprob = pBefore
 			bestalt = -1
 			bestparams = None
 
 			alts = self.changeSource(src)
-			#print 'changing source', src, 'into alternatives:', alts
 			for j,newsrcs in enumerate(alts):
-				#print 'trying alternative', j, ':', newsrcs
 				newcat = oldcat.deepcopy()
 				newcat.remove(src)
 				newcat.extend(newsrcs)
