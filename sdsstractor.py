@@ -60,15 +60,12 @@ class Galaxy(Source):
 		psf = img.getPsf()
 		convimg = psf.applyTo(patch.getImage())
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
-		print 'PSF-convolved'
+		#print 'PSF-convolved'
 		#self.debugPatchImage(convimg)
 		return Patch(patch.getX0(), patch.getY0(), convimg * counts)
 
 	def numberOfGalaxyParams(self):
 		return 3
-
-	#def getGalaxyParamDerivatives(self, img):
-	#	return [ None, None, None ]
 
 	def getGalaxyParamStepSizes(self, img):
 		return [ self.re * 0.1, max(0.01, self.ab * 0.1), 1. ]
@@ -347,6 +344,12 @@ def testGalaxy():
 		
 
 def main():
+	from optparse import OptionParser
+
+	parser = OptionParser()
+	parser.add_option('-l', '--load', dest='loadi', type='int',
+					  default=-1, help='Load catalog from step #...')
+	opt,args = parser.parse_args()
 	#testGalaxy()
 	#return
 
@@ -368,9 +371,9 @@ def main():
 	#x0,x1,y0,y1 = 250,500, 1150,1400
 
 	# Smallish galaxy (gets fit by ~10 stars)
-	#x0,x1,y0,y1 = 200,500, 1100,1400
+	x0,x1,y0,y1 = 200,500, 1100,1400
 	# Zoom in on single galaxy
-	x0,x1,y0,y1 = 375,475, 1225,1325
+	#x0,x1,y0,y1 = 375,475, 1225,1325
 
 	# A sparse field with a small galaxy
 	# (gets fit by only one star)
@@ -465,10 +468,10 @@ def main():
 	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
 	#steps = (['source']*5 + ['change', 'plots'])
 
-	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-	#									  'save', 'plots'])*10)
+	steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
+										  'save', 'plots'])*10)
 
-	steps = ['plots', 'source', 'plots', 'change', 'plots']
+	#steps = ['plots', 'source', 'plots', 'change', 'plots']
 
 	print 'steps:', steps
 
@@ -479,8 +482,8 @@ def main():
 	stepi = 0
 
 	# JUMP IN:
-	if False:
-		loadi = 0
+	if opt.loadi != -1:
+		loadi = opt.loadi
 		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
 		print 'Starting from step', stepi
 

@@ -477,36 +477,33 @@ class Patch(object):
 			return
 		(ih,iw) = img.shape
 		(ph,pw) = self.shape
-
 		(outx, inx) = get_overlapping_region(self.x0, self.x0+pw-1, 0, iw-1)
 		(outy, iny) = get_overlapping_region(self.y0, self.y0+ph-1, 0, ih-1)
 		if inx == [] or iny == []:
 			return
-		#x0 = outx.start
-		#y0 = outy.start
 		p = self.patch[iny,inx]
-		#img[outy, outx] += self.getImage()[iny, inx] * scale
 		img[outy, outx] += p * scale
 
-		tmpimg = np.zeros_like(img)
-		tmpimg[outy,outx] = p * scale
-		plt.clf()
-		plt.imshow(tmpimg, interpolation='nearest', origin='lower')
-		plt.hot()
-		plt.colorbar()
-		fn = 'addto-%03i.png' % Patch.plotnum
-		plt.savefig(fn)
-		print 'Wrote', fn
+		if False:
+			tmpimg = np.zeros_like(img)
+			tmpimg[outy,outx] = p * scale
+			plt.clf()
+			plt.imshow(tmpimg, interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.colorbar()
+			fn = 'addto-%03i.png' % Patch.plotnum
+			plt.savefig(fn)
+			print 'Wrote', fn
 
-		plt.clf()
-		plt.imshow(p, interpolation='nearest', origin='lower')
-		plt.hot()
-		plt.colorbar()
-		fn = 'addto-%03i-p.png' % Patch.plotnum
-		plt.savefig(fn)
-		print 'Wrote', fn
+			plt.clf()
+			plt.imshow(p, interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.colorbar()
+			fn = 'addto-%03i-p.png' % Patch.plotnum
+			plt.savefig(fn)
+			print 'Wrote', fn
 
-		Patch.plotnum += 1
+			Patch.plotnum += 1
 
 	def __getattr__(self, name):
 		if name == 'shape':
