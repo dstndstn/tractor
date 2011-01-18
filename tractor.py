@@ -978,12 +978,7 @@ class Tractor(object):
 			(func, baton) = derivCallback
 			func(self, imagei, img, psf, steps, mod0, derivs, baton)
 
-		inverrs = img.getInvError()
-
-		# Build the sparse matrix of derivatives:
-		sprows = []
-		spcols = []
-		spvals = []
+		X = self.optimize(img, derivs)
 
 		for p,deriv in enumerate(derivs):
 			(H,W) = img.shape
@@ -1090,110 +1085,75 @@ class Tractor(object):
 		for i in range(len(self.images)):
 			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
-		'''
-		-synthesize images
-
-		-get all derivatives
-		(taking numerical derivatives itself?)
-
-		-build matrix
-
-		-take step (try full step, back off)
-		'''
-		print 'Optimizing at fixed complexity'
-
- 		if srcs is None:
-			srcs = self.catalog
-
-		# need all derivatives  dChi / dparam
-		# for each pixel in each image
-		#  and each parameter in each source
-		nparams = [src.numberOfFitParams() for src in srcs]
-		col0 = np.cumsum([0] + nparams)
-
-		npixels = [img.numberOfPixels() for img in self.images]
-		row0 = np.cumsum([0] + npixels)
-		# [ 0, (W0*H0), (W0*H0 + W1*H1), ... ]
-
+	def optimize(self, allimgs, allderivs):
+		# Build the sparse matrix of derivatives:
 		sprows = []
 		spcols = []
 		spvals = []
 
-		for j,src in enumerate(srcs):
-			#params = src.getFitParams()
-			#assert(len(params) == nparams[j])
+		# Keep track of row offsets for each image.
+		imgoffs = {}
+		nextrow = 0
 
-			for i,img in enumerate(self.images):
+		nextcol = 0
+
+		for img, derivs in zip(allimgs, allderivs):
+			inverrs = img.getInvError()
+			(H,W) = img.shape
+
+			row0 = imgoffs.get(img, -1)
+			if row0 == -1:
+				row0 = nextrow
+				imgoffs[img] = row0
+				nextrow += img.numberOfPixels()
+
+			# Add to the sparse matrix of derivatives:
+			for p,deriv in enumerate(derivs):
+				#print 'Before clipping:'
+				#print 'deriv shape is', deriv.shape
+				#print 'deriv slice is', deriv.getSlice()
+				deriv.clipTo(W, H)
+				pix = deriv.getPixelIndices(img)
+				#print 'After clipping:'
+				#print 'deriv shape is', deriv.shape
+				#print 'deriv slice is', deriv.getSlice()
+				#print 'image shape is', img.shape
+				#print 'parent pix', (W*H), npixels[i]
+				#print 'pix range:', pix.min(), pix.max()
+				# (in the parent image)
+				if len(pix) == 0:
+					#print 'This source does not influence this image!'
+					continue
+
+				assert(all(pix < img.numberOfPixels()))
+				# (grab non-zero indices)
+				dimg = deriv.getImage()
+				nz = np.flatnonzero(dimg)
+				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+				rows = row0 + pix[nz]
+				cols = np.zeros_like(rows) + nextcol + p
+				vals = dimg.ravel()[nz]
+				w = inverrs[deriv.getSlice(img)].ravel()[nz]
+				assert(vals.shape == w.shape)
+
+				# We want to minimize:
+				#   || chi + (d(chi)/d(params)) * dparams ||
+				# So  b = chi
+				#     A = -d(chi)/d(params)
+				#     x = dparams
 				#
-				#patch = self.getModelPatch(img, src)
-				#if patch is None:
-				#	continue
+				# chi = (data - model) / std = (data - model) * inverr
+				# derivs = d(model)/d(param)
+				# A matrix = -d(chi)/d(param)
+				#          = + (derivs) * inverr
+				sprows.append(rows)
+				spcols.append(cols)
+				spvals.append(vals * w)
 
-				# Now we know that this src/img interact
-				# Get derivatives (in this image) of params
-				derivs = src.getFitParamDerivatives(img)
-				# derivs = [ Patch, Patch, ... ] (list of length len(params))
-				assert(len(derivs) == nparams[j])
-
-				#print 'Got derivatives:', derivs
-				inverrs = img.getInvError()
-
-				# Add to the sparse matrix of derivatives:
-				for p,deriv in enumerate(derivs):
-					(H,W) = img.shape
-					#print 'Before clipping:'
-					#print 'deriv shape is', deriv.shape
-					#print 'deriv slice is', deriv.getSlice()
-					deriv.clipTo(W, H)
-					pix = deriv.getPixelIndices(img)
-					#print 'After clipping:'
-					#print 'deriv shape is', deriv.shape
-					#print 'deriv slice is', deriv.getSlice()
-					#print 'image shape is', img.shape
-					#print 'parent pix', (W*H), npixels[i]
-					#print 'pix range:', pix.min(), pix.max()
-					# (in the parent image)
-					if len(pix) == 0:
-						print 'This source does not influence this image!'
-						continue
-					
-					if pix.max() >= npixels[i]:
-						print 'maximum pixel index:', pix.max()
-						print 'number of pixels in this image:', npixels[i]
-						print 'W,H', (W,H)
-						print 'patch origin', deriv.getOrigin()
-						print 'patch shape', deriv.shape
-					assert(all(pix < npixels[i]))
-					# (grab non-zero indices)
-					dimg = deriv.getImage()
-					nz = np.flatnonzero(dimg)
-					#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
-					rows = row0[i] + pix[nz]
-					cols = np.zeros_like(rows) + col0[j] + p
-					#rows = np.zeros(len(cols), int) + row0[j] + p
-					vals = dimg.ravel()[nz]
-					#print 'inverrs shape is', inverrs.shape
-					w = inverrs[deriv.getSlice(img)].ravel()[nz]
-					assert(vals.shape == w.shape)
-
-					# We want to minimize:
-					#   || chi + (d(chi)/d(params)) * dparams ||
-					# So  b = chi
-					#     A = -d(chi)/d(params)
-					#     x = dparams
-					#
-					# chi = (data - model) / std = (data - model) * inverr
-					# derivs = d(model)/d(param)
-					# A matrix = -d(chi)/d(param)
-					#          = + (derivs) * inverr
-
-					sprows.append(rows)
-					spcols.append(cols)
-					spvals.append(vals * w)
+			nextcol += len(derivs)
 
 		# ensure the sparse matrix is full up to the number of columns we expect
-		spcols.append([np.sum(nparams) - 1])
+		spcols.append([nextcol - 1])
 		sprows.append([0])
 		spvals.append([0])
 
@@ -1212,19 +1172,24 @@ class Tractor(object):
 		A = csr_matrix((spvals, (sprows, spcols)))
 
 		# b = chi
-		b = np.zeros(np.sum(npixels))
-		for i,img in enumerate(self.images):
-			NP = npixels[i]
+		# FIXME -- we could be much smarter here about computing just the regions
+		# we need!
+		b = np.zeros(nextrow)
+		for img,row0 in imgoffs.items():
+			NP = img.numberOfPixels()
 			mod = self.getModelImage(img)
 			data = img.getImage()
 			inverr = img.getInvError()
 			assert(np.product(mod.shape) == NP)
 			assert(mod.shape == data.shape)
 			assert(mod.shape == inverr.shape)
-			b[row0[i] : row0[i] + NP] = ((data - mod) * inverr).ravel()
+			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
 		#print 'b shape', b.shape
 		b = b[:urows.max() + 1]
 		#print 'b shape', b.shape
+
+		# FIXME -- does it make LSQR faster if we remap the row and column
+		# indices so that no rows/cols are empty?
 		
 		lsqropts = dict(show=False)
 
@@ -1232,8 +1197,50 @@ class Tractor(object):
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
-		# Unpack.
 		print '  X=', X
+		return X
+
+
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
+		'''
+		-synthesize images
+		-get all derivatives
+		-build matrix
+		-take step (try full step, back off)
+		'''
+		print 'Optimizing at fixed complexity'
+
+ 		if srcs is None:
+			srcs = self.catalog
+
+		# need all derivatives  dChi / dparam
+		# for each pixel in each image
+		#  and each parameter in each source
+		#nparams = [src.numberOfFitParams() for src in srcs]
+		#col0 = np.cumsum([0] + nparams)
+
+		#npixels = [img.numberOfPixels() for img in self.images]
+		#row0 = np.cumsum([0] + npixels)
+		# [ 0, (W0*H0), (W0*H0 + W1*H1), ... ]
+
+		#sprows = []
+		#spcols = []
+		#spvals = []
+
+		allderivs = []
+		allimgs = []
+
+		for j,src in enumerate(srcs):
+			for i,img in enumerate(self.images):
+				# Get derivatives (in this image) of params
+				derivs = src.getFitParamDerivatives(img)
+				assert(len(derivs) == src.numberOfFitParams())
+
+				allderivs.append(derivs)
+				allimgs.append(img)
+
+		X = self.optimize(allimgs, allderivs)
+		# Unpack
 
 		pBefore = self.getLogProb()
 		print 'log-prob before:', pBefore
@@ -1241,14 +1248,17 @@ class Tractor(object):
 		for alpha in 2.**-np.arange(10):
 			print '  Stepping with alpha =', alpha
 
-			#oldcat = self.catalog.deepcopy()
-			#self.pushCache()
-
 			oldparams = []
-
+			par0 = 0
 			for j,src in enumerate(srcs):
-				dparams = X[col0[j] : col0[j] + nparams[j]]
-				assert(len(dparams) == nparams[j])
+				#assert(par0 == col0[j])
+				npar = src.numberOfFitParams()
+				#assert(npar == nparams[j])
+				dparams = X[par0 : par0 + npar]
+				par0 += npar
+				assert(len(dparams) == src.numberOfFitParams())
+				#dparams = X[col0[j] : col0[j] + nparams[j]]
+				#assert(len(dparams) == nparams[j])
 				#print 'Applying parameter update', dparams, 'to source', src
 				oldparams.append(src.getParams())
 				src.stepParams(dparams * alpha)
