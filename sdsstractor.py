@@ -468,8 +468,12 @@ def main():
 	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
 	#steps = (['source']*5 + ['change', 'plots'])
 
+	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
+	#									  'save', 'plots'])*10)
+
 	steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-										  'save', 'plots'])*10)
+										  'save', 'plots']) +
+			 ['psf', 'plots', 'psf2', 'plots'])
 
 	#steps = ['plots', 'source', 'plots', 'change', 'plots']
 
@@ -520,7 +524,9 @@ def main():
 			plt.plot(x, y, 'b+')
 			plt.axis(ax)
 			plt.title(tt)
-			plt.savefig('mod-%02i.png' % ploti)
+			fn = 'mod-%02i.png' % ploti
+			plt.savefig(fn)
+			print 'Wrote', fn
 
 			if chiArange is None:
 				chiArange = (chi.min(), chi.max())
@@ -531,7 +537,9 @@ def main():
 			plt.hot()
 			plt.colorbar()
 			plt.title(tt)
-			plt.savefig('chiA-%02i.png' % ploti)
+			fn = 'chiA-%02i.png' % ploti
+			plt.savefig(fn)
+			print 'Wrote', fn
 
 			plt.clf()
 			plt.imshow(chi, interpolation='nearest', origin='lower',
@@ -539,7 +547,9 @@ def main():
 			plt.hot()
 			plt.colorbar()
 			plt.title(tt)
-			plt.savefig('chiB-%02i.png' % ploti)
+			fn = 'chiB-%02i.png' % ploti
+			plt.savefig(fn)
+			print 'Wrote', fn
 
 			ploti += 1
 

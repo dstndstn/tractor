@@ -581,6 +581,10 @@ class PSF(object):
 		assert(len(dparams) == self.numberOfFitParams())
 		for i,dp in enumerate(dparams):
 			self.stepParam(i, dp)
+	def getParams(self):
+		return []
+	def setParams(self, p):
+		pass
 	def isValidParamStep(self, dparam):
 		return True
 		
@@ -637,6 +641,19 @@ class NGaussianPSF(PSF):
 		else:
 			self.weights[parami - NS] += delta
 			#print 'NGaussianPSF: setting weight', (parami-NS), 'to', self.weights[parami-NS]
+
+	def getParams(self):
+		NS = len(self.sigmas)
+		rtn = self.sigmas + self.weights
+		assert(len(rtn) == 2*NS)
+		return rtn
+
+	def setParams(self, p):
+		NS = len(self.sigmas)
+		assert(len(p) == 2*NS)
+		for i in range(NS):
+			self.sigmas[i] = p[i]
+			self.weights[i] = p[i+NS]
 
 	def isValidParamStep(self, dparam):
 		NS = len(self.sigmas)
@@ -935,7 +952,6 @@ class Tractor(object):
 		psf = img.getPsf()
 		nparams = psf.numberOfFitParams()
 		npixels = img.numberOfPixels()
-
 		if nparams == 0:
 			raise RuntimeError('No PSF parameters to optimize')
 
@@ -947,7 +963,7 @@ class Tractor(object):
 		derivs = []
 		print 'Computing PSF derivatives around PSF:', psf
 		for k,s in enumerate(steps):
-			if False:
+			if True:
 				psfk = psf.copy()
 				psfk.stepParam(k, s)
 				print '  step param', k, 'by', s, 'to get', psfk
@@ -971,115 +987,25 @@ class Tractor(object):
 
 			derivs.append(dk)
 		img.setPsf(psf)
-
 		assert(len(derivs) == nparams)
 
 		if derivCallback:
 			(func, baton) = derivCallback
 			func(self, imagei, img, psf, steps, mod0, derivs, baton)
 
-		X = self.optimize(img, derivs)
-
-		for p,deriv in enumerate(derivs):
-			(H,W) = img.shape
-			deriv.clipTo(W, H)
-			pix = deriv.getPixelIndices(img)
-			assert(all(pix < npixels))
-			# (grab non-zero indices)
-			dimg = deriv.getImage()
-			nz = np.flatnonzero(dimg)
-			#print '  psf derivative', p, 'has', len(nz), 'non-zero entries'
-			if len(nz) == 0:
-				continue
-			rows = pix[nz]
-			cols = np.zeros_like(rows) + p
-			vals = dimg.ravel()[nz]
-			w = inverrs[deriv.getSlice()].ravel()[nz]
-			assert(vals.shape == w.shape)
-			sprows.append(rows)
-			spcols.append(cols)
-			spvals.append(vals * w)
-
-		########################### FIXME
-		######### see the other lsqr() call to make sure the params are right
-		# here.
-
-		# ensure the sparse matrix is full up to the number of columns we expect
-		spcols.append([nparams-1])
-		sprows.append([0])
-		spvals.append([0])
-
-		sprows = np.hstack(sprows)
-		spcols = np.hstack(spcols)
-		spvals = np.hstack(spvals)
-
-		print 'Number of sparse matrix elements:', len(sprows)
-		urows = np.unique(sprows)
-		print 'Unique rows (pixels):', len(urows)
-		print 'Max row:', max(sprows)
-		ucols = np.unique(spcols)
-		print 'Unique columns (params):', len(ucols)
-
-		# Build sparse matrix
-		A = csr_matrix((spvals, (sprows, spcols)))
-
-		# b = -weighted residuals
-		NP = img.numberOfPixels()
-		data = img.getImage()
-		inverr = img.getInvError()
-		mod = mod0
-		assert(np.product(mod.shape) == NP)
-		assert(mod.shape == data.shape)
-		assert(mod.shape == inverr.shape)
-		b = ((data - mod) * inverr).ravel()
-		b = b[:urows.max() + 1]
-		
-		lsqropts = dict(show=True)
-
-		# Run lsqr()
-		(X, istop, niters, r1norm, r2norm, anorm, acond,
-		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 		# (PSF)
-		print 'lsqr stopped for reason', istop, 'after', niters, 'iterations'
+		X = self.optimize([img], [derivs])
 
-		# Unpack.
+		print 'PSF Parameter changes:', X
+		dlogprob = self.tryParamUpdates([psf], X)
+		print 'After:', psf
+		print 'Log-prob improvement:', dlogprob
 
-		print 'Parameter changes:', X
+		return dlogprob
 
-		pBefore = self.getLogProb()
-		print 'log-prob before:', pBefore
-
-		for alpha in 2.**-np.arange(10):
-			print 'Stepping with alpha =', alpha
-			dparams = X
-			assert(len(dparams) == nparams)
-			if not psf.isValidParamStep(dparams * alpha):
-				print 'Changing PSF params by', (dparams*alpha), 'is not valid!'
-				continue
-
-			self.pushCache()
-
-			newpsf = psf.copy()
-			newpsf.stepParams(dparams * alpha)
-			print 'Stepped to', newpsf
-			img.setPsf(newpsf)
-
-			pAfter = self.getLogProb()
-			print 'log-prob before:', pBefore
-			print 'log-prob after :', pAfter
-
-			if pAfter > pBefore:
-				print 'Accepting step!'
-				newpsf.normalize()
-				self.mergeCache()
-				break
-
-			print 'Rejecting step!'
-			self.popCache()
-			# revert
-			img.setPsf(psf)
-
-		# if we get here, this step was rejected.
+	#if not psf.isValidParamStep(dparams * alpha):
+	#	print 'Changing PSF params by', (dparams*alpha), 'is not valid!'
+	#	continue
 
 	def optimizeAllPsfAtFixedComplexityStep(self, **kwargs):
 		for i in range(len(self.images)):
@@ -1096,6 +1022,17 @@ class Tractor(object):
 		nextrow = 0
 
 		nextcol = 0
+
+		# We want to minimize:
+		#   || chi + (d(chi)/d(params)) * dparams ||
+		# So  b = chi
+		#     A = -d(chi)/d(params)
+		#     x = dparams
+		#
+		# chi = (data - model) / std = (data - model) * inverr
+		# derivs = d(model)/d(param)
+		# A matrix = -d(chi)/d(param)
+		#          = + (derivs) * inverr
 
 		for img, derivs in zip(allimgs, allderivs):
 			inverrs = img.getInvError()
@@ -1135,17 +1072,6 @@ class Tractor(object):
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
 				assert(vals.shape == w.shape)
-
-				# We want to minimize:
-				#   || chi + (d(chi)/d(params)) * dparams ||
-				# So  b = chi
-				#     A = -d(chi)/d(params)
-				#     x = dparams
-				#
-				# chi = (data - model) / std = (data - model) * inverr
-				# derivs = d(model)/d(param)
-				# A matrix = -d(chi)/d(param)
-				#          = + (derivs) * inverr
 				sprows.append(rows)
 				spcols.append(cols)
 				spvals.append(vals * w)
@@ -1184,7 +1110,6 @@ class Tractor(object):
 			assert(mod.shape == data.shape)
 			assert(mod.shape == inverr.shape)
 			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
-		#print 'b shape', b.shape
 		b = b[:urows.max() + 1]
 		#print 'b shape', b.shape
 
@@ -1201,8 +1126,11 @@ class Tractor(object):
 		return X
 
 	# X: delta-params
-	def tryParamUpdates(self, srcs, X, alphas, accept='best'):
+	def tryParamUpdates(self, srcs, X, alphas=None, accept='best'):
 		assert(accept in ['best', 'first'])
+		if alphas is None:
+			# 1/1024 to 1 in factors of 2
+			alphas = 2.**-(np.arange(10,0,-1)-1)
 
 		pBefore = self.getLogProb()
 		print '  log-prob before:', pBefore
@@ -1215,21 +1143,14 @@ class Tractor(object):
 			oldparams = []
 			par0 = 0
 			for j,src in enumerate(srcs):
-				#assert(par0 == col0[j])
 				npar = src.numberOfFitParams()
-				#assert(npar == nparams[j])
 				dparams = X[par0 : par0 + npar]
 				par0 += npar
 				assert(len(dparams) == src.numberOfFitParams())
-				#dparams = X[col0[j] : col0[j] + nparams[j]]
-				#assert(len(dparams) == nparams[j])
-				#print 'Applying parameter update', dparams, 'to source', src
 				oldparams.append(src.getParams())
 				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
-			#print 'log-prob before:', pBefore
-			#print 'log-prob after :', pAfter
 			print '  delta log-prob:', pAfter - pBefore
 
 			if accept == 'best':
@@ -1287,9 +1208,7 @@ class Tractor(object):
 
 		X = self.optimize(allimgs, allderivs)
 
-		#alphas = 2.**-np.arange(10)
-		alphas = 2.**-(np.arange(10,0,-1)-1)
-		dlogprob = self.tryParamUpdates(srcs, X, alphas, accept='best')
+		dlogprob = self.tryParamUpdates(srcs, X)
 
 		return dlogprob
 	
@@ -1309,11 +1228,10 @@ class Tractor(object):
 			self.cache[deps] = mod
 		return mod
 
-	# ??
+	# the real deal
 	def getModelImageNoCache(self, img):
 		mod = np.zeros_like(img.getImage())
 		mod += img.sky
-		# add sources...
 		for src in self.catalog:
 			patch = self.getModelPatch(img, src)
 			patch.addTo(mod)
@@ -1322,17 +1240,10 @@ class Tractor(object):
 	def getModelImage(self, img):
 		# dependencies of this model image:
 		# img.sky, img.psf, img.wcs, sources that overlap.
-		#deps = hash((img.getVersion(), hash(self.catalog)))
-		#deps = (img.getVersion(), hash(self.catalog))
-
 		#deps = (hash(img), hash(self.catalog))
 		deps = (img.hashkey(), self.catalog.hashkey())
 		#print 'deps:', deps
 		deps = hash(deps)
-
-		#print 'Model image:'
-		#print '  catalog', self.catalog
-		#print '  -> deps', deps
 		mod = self.cache.get(deps, None)
 		if mod is not None:
 			#print '  Cache hit!'
@@ -1415,16 +1326,12 @@ class Tractor(object):
 
 			# HACK -- magic value 10
 			#pks = self.findPeaks(sm, 10)
-
 			# Try to create sources in the highest-value pixels.
 			II = np.argsort(-sm.ravel())
 
 			tryxy = []
-
 			# MAGIC: number of pixels to try.
 			for ii,I in enumerate(II[:10]):
-				# find peak pixel, create source
-				#I = np.argmax(sm)
 				(H,W) = sm.shape
 				ix = I%W
 				iy = I/W
