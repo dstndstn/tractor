@@ -244,7 +244,7 @@ class SDSSTractor(Tractor):
 		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
 		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
 		#ht /= patch.max()
-		return PointSource(PixPos([x,y]), Flux(ht))
+		return PointSource(PixPos(x,y), Flux(ht))
 
 	def changeSource(self, source):
 		'''
@@ -350,8 +350,17 @@ def main():
 	parser.add_option('-l', '--load', dest='loadi', type='int',
 					  default=-1, help='Load catalog from step #...')
 	opt,args = parser.parse_args()
+
 	#testGalaxy()
 	#return
+
+	pos = PixPos(1,2)
+	flux = Flux(3)
+	ps = PointSource(pos, flux)
+	print ps
+	print ps.hashkey()
+	pickle_to_file(ps, 'p')
+	#sys.exit(0)
 
 	# image
 	# invvar
@@ -383,6 +392,8 @@ def main():
 	# A sparse field with no galaxies
 	#x0,x1,y0,y1 = 500,800, 400,700
 
+	print 'Reading SDSS input files...'
+
 	band = band_index(bandname)
 
 	fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
@@ -402,6 +413,8 @@ def main():
 
 	zrange = np.array([-3.,+10.]) * skysig + sky
 
+	print 'Initial plots...'
+
 	plt.clf()
 	plt.imshow(image, interpolation='nearest', origin='lower',
 			  vmin=zrange[0], vmax=zrange[1])
@@ -411,6 +424,8 @@ def main():
 	plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
 	plt.axis(ax)
 	plt.savefig('fullimg.png')
+
+	print 'Firing up tractor...'
 
 	roi = (slice(y0,y1), slice(x0,x1))
 	image = image[roi]
@@ -471,11 +486,11 @@ def main():
 	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
 	#									  'save', 'plots'])*10)
 
-	steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-										  'save', 'plots']) +
-			 ['psf', 'plots', 'psf2', 'plots'])
+	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
+	#									  'save', 'plots']) +
+	#		 ['psf', 'plots', 'psf2', 'plots'])
 
-	#steps = ['plots', 'source', 'plots', 'change', 'plots']
+	steps = ['source', 'save']
 
 	print 'steps:', steps
 

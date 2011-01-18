@@ -8,39 +8,227 @@ from astrometry.util.miscutils import get_overlapping_region
 
 import pylab as plt
 
-class Source(object):
-	'''
-	MUST BE HASHABLE!
-	http://docs.python.org/glossary.html#term-hashable
-	'''
-
+class Params(object):
 	def __hash__(self):
 		return hash(self.hashkey())
+	def __eq__(self, other):
+		return hash(self) == hash(other)
 	def hashkey(self):
-		return ('Source',)
-
-	def getPosition(self):
-		pass
-	def getModelPatch(self, img):
-		pass
-
-	def numberOfFitParams(self):
+		return ('ParamSet',)
+	def numberOfParams(self):
 		return 0
-	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
-	def getFitParamDerivatives(self, img):
-		return []
-	# update parameters in this direction with this step size.
-	def stepParams(self, dparams, alpha):
+	def stepParam(self, parami, delta):
 		pass
+	def stepParams(self, dparams):
+		assert(len(dparams) == self.numberOfParams())
+		for i,dp in enumerate(dparams):
+			self.stepParam(i, dp)
+	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		return []
 	def setParams(self, p):
 		pass
-	
-class PointSource(Source):
+	def getStepSizes(self, *args, **kwargs):
+		return []
+
+# An implementation of Params that holds values in a list.
+class ParamList(Params):
+	def __init__(self, *args):
+		self.vals = list(args)
+	def hashkey(self):
+		return ('ParamList',) + tuple(self.vals)
+	def numberOfParams(self):
+		return len(self.vals)
+	def stepParam(self, parami, delta):
+		self.vals[parami] += delta
+	# Returns a *copy* of the current parameter values (list)
+	def getParams(self):
+		return list(self.vals)
+	def setParams(self, p):
+		assert(len(p) == len(self.vals))
+		for i,pp in enumerate(p):
+			self.vals[i] = pp
+	def getStepSizes(self, *args, **kwargs):
+		return [1 for x in self.vals]
+
+	# len()
+	def __len__(self):
+		return self.numberOfParams()
+	# []
+	def __getitem__(self, i):
+		return self.vals[i]
+
+	# iterable
+	class ParamListIter(object):
+		def __init__(self, pl):
+			self.pl = pl
+			self.i = 0
+		def __iter__(self):
+			return self
+		def next(self):
+			if self.i >= len(self.pl):
+				raise StopIteration
+			rtn = self.pl[self.i]
+			self.i += 1
+			return rtn
+	def __iter__(self):
+		return ParamList.ParamListIter(self)
+
+# An implementation of Params that combines component sub-Params.
+class MultiParams(Params):
+	def __init__(self, *args):
+		self.subs = args
+
+	def hashkey(self):
+		t = ('MultiParams',)
+		for s in self.subs:
+			t = t + s.hashkey()
+		return t
+
+	def numberOfParams(self):
+		return sum(s.numberOfParams() for s in self.subs)
+
+	def stepParam(self, parami, delta):
+		for s in self.subs:
+			n = s.numberOfParams()
+			if parami < n:
+				s.stepParam(parami, delta)
+				return
+			parami -= n
+
+	# Returns a *copy* of the current parameter values (list)
+	def getParams(self):
+		p = []
+		for s in self.subs:
+			p.extend(s.getParams())
+		return p
+
+	def setParams(self, p):
+		i = 0
+		for s in self.subs:
+			n = s.numberOfParams()
+			s.setParams(p[i:i+n])
+			i += n
+
+	def getStepSizes(self):
+		p = []
+		for s in self.subs:
+			p.extend(s.getStepSizes())
+		return p
+
+
+# This is just the duck-type definition
+class Source(Params):
+	'''
+	Must be hashable: see
+	  http://docs.python.org/glossary.html#term-hashable
+	'''
+	def hashkey(self):
+		return ('Source',)
+	#def getPosition(self):
+	#	pass
+	def getModelPatch(self, img):
+		pass
+	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	def getParamDerivatives(self, img):
+		return []
+
+
+class PointSource(MultiParams, Source):
 	def __init__(self, pos, flux):
-		self.pos = pos
-		self.flux = flux
+		MultiParams.__init__(self, pos, flux)
+		#print 'PointSource constructor: nparams = ', self.numberOfParams()
+	def __getattr__(self, name):
+		if name == 'pos':
+			return self.subs[0]
+		if name == 'flux':
+			return self.subs[1]
+		raise AttributeError()
+	def getPosition(self):
+		return self.pos
+	def getFlux(self):
+		return self.flux
+	def __str__(self):
+		return 'PointSource at ' + str(self.pos) + ' with ' + str(self.flux)
+	def __repr__(self):
+		return 'PointSource(' + repr(self.pos) + ', ' + repr(self.flux) + ')'
+	def copy(self):
+		return PointSource(self.pos.copy(), self.flux.copy())
+	def hashkey(self):
+		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
+
+	def getModelPatch(self, img):
+		(px,py) = img.getWcs().positionToPixel(self.getPosition())
+		patch = img.getPsf().getPointSourcePatch(px, py)
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		return patch * counts
+
+	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	def getParamDerivatives(self, img):
+		pos0 = self.getPosition()
+		(px,py) = img.getWcs().positionToPixel(pos0)
+		patch0 = img.getPsf().getPointSourcePatch(px, py)
+
+		print 'I am', self
+		flux = self.flux
+		print 'Flux is', flux
+
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		derivs = []
+		psteps = pos0.getStepSizes(img)
+		for i in range(len(psteps)):
+			posx = pos0.copy()
+			posx.stepParam(i, psteps[i])
+			(px,py) = img.getWcs().positionToPixel(posx)
+			patchx = img.getPsf().getPointSourcePatch(px, py)
+			dx = (patchx - patch0) * (counts / psteps[i])
+			dx.setName('d(ptsrc)/d(pos%i)' % i)
+			derivs.append(dx)
+		fsteps = self.flux.getStepSizes(img)
+		for i in range(len(fsteps)):
+			fi = self.flux.copy()
+			fi.stepParam(i, fsteps[i])
+			countsi = img.getPhotoCal().fluxToCounts(fi)
+			df = patch0 * ((countsi - counts) / fsteps[i])
+			df.setName('d(ptsrc)/d(flux%i)' % i)
+			derivs.append(df)
+		return derivs
+
+class Flux(ParamList):
+	def hashkey(self):
+		return ('Flux', self.val)
+	def __getattr__(self, name):
+		if name == 'val':
+			return self.vals[0]
+		raise AttributeError()
+	def __repr__(self):
+		return 'Flux(%g)' % self.val
+	def __str__(self):
+		return 'Flux: %g' % self.val
+	def copy(self):
+		return Flux(self.val)
+	def getValue(self):
+		return self.val
+
+class PixPos(ParamList):
+	def __getattr__(self, name):
+		if name == 'x':
+			return self.vals[0]
+		if name == 'y':
+			return self.vals[1]
+		raise AttributeError()
+	def __str__(self):
+		return 'pixel (%.2f, %.2f)' % (self.x, self.y)
+	def __repr__(self):
+		return 'PixPos(%.4f, %.4f)' % (self.x, self.y)
+	def copy(self):
+		return PixPos(self.x, self.y)
+	def hashkey(self):
+		return ('PixPos', self.x, self.y)
+
+
+
+class Old(object):
 	def __str__(self):
 		return 'PointSource at ' + str(self.pos) + ' with ' + str(self.flux)
 	def __repr__(self):
@@ -67,13 +255,13 @@ class PointSource(Source):
 		return patch * counts
 
 	# [pos], [flux]
-	def numberOfFitParams(self):
-		return self.pos.getDimension() + self.flux.numberOfFitParams()
+	def numberOfParams(self):
+		return self.pos.getDimension() + self.flux.numberOfParams()
 
-	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
-	def getFitParamDerivatives(self, img):
+	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		psteps = pos0.getFitStepSizes(img)
+		psteps = pos0.getStepSizes(img)
 
 		(px,py) = img.getWcs().positionToPixel(pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px, py)
@@ -89,7 +277,7 @@ class PointSource(Source):
 			dx.setName('d(src)/d(pos%i)' % i)
 			derivs.append(dx)
 
-		fsteps = self.flux.getFitStepSizes(img)
+		fsteps = self.flux.getStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
 			fi.stepParam(i, fsteps[i])
@@ -104,7 +292,7 @@ class PointSource(Source):
 	def stepParams(self, dparams):
 		pos = self.getPosition()
 		np = pos.getDimension()
-		nf = self.flux.numberOfFitParams()
+		nf = self.flux.numberOfParams()
 		assert(len(dparams) == (np + nf))
 		dp = dparams[:np]
 		pos.stepParams(dp)
@@ -123,7 +311,7 @@ class PointSource(Source):
 	def setParams(self, p):
 		pos = self.getPosition()
 		np = pos.getDimension()
-		nf = self.flux.numberOfFitParams()
+		nf = self.flux.numberOfParams()
 		assert(len(p) == (np + nf))
 		pp = p[:np]
 		pos.setParams(pp)
@@ -150,6 +338,7 @@ class Image(object):
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.data.shape
+		raise AttributeError()
 
 	def __hash__(self):
 		return hash(self.hashkey())
@@ -179,9 +368,9 @@ class PhotoCal(object):
 	def countsToFlux(self, counts):
 		pass
 
-	def numberOfFitParams(self):
+	def numberOfParams(self):
 		return 0
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return []
 
 class NullPhotoCal(object):
@@ -190,12 +379,14 @@ class NullPhotoCal(object):
 	def countsToFlux(self, counts):
 		return counts.getValue()
 
-	def numberOfFitParams(self):
+	def numberOfParams(self):
 		return 0
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return []
 
-class Flux(object):
+
+
+class OldFlux(object):
 	def __init__(self, val):
 		self.val = val
 
@@ -213,15 +404,15 @@ class Flux(object):
 	def copy(self):
 		return Flux(self.val)
 
-	def numberOfFitParams(self):
+	def numberOfParams(self):
 		return 1
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return [0.1]
 	def stepParam(self, parami, delta):
 		assert(parami == 0)
 		self.val += delta
 	def stepParams(self, params):
-		assert(len(params) == self.numberOfFitParams())
+		assert(len(params) == self.numberOfParams())
 		for i in range(len(params)):
 			self.stepParam(i, params[i])
 	def getParams(self):
@@ -240,7 +431,7 @@ class NullWCS(WCS):
 	def positionToPixel(self, pos):
 		return pos
 
-class PixPos(list):
+class OldPixPos(list):
 	def __str__(self):
 		return 'pixel (%.2f, %.2f)' % (self[0], self[1])
 	def __repr__(self):
@@ -254,7 +445,7 @@ class PixPos(list):
 
 	def getDimension(self):
 		return 2
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return [0.1, 0.1]
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
@@ -457,14 +648,14 @@ class PSF(object):
 	def proposeIncreasedComplexity(self, img):
 		return PSF()
 	
-	def numberOfFitParams(self):
+	def numberOfParams(self):
 		return 0
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return []
 	def stepParam(self, parami, delta):
 		pass
 	def stepParams(self, dparams):
-		assert(len(dparams) == self.numberOfFitParams())
+		assert(len(dparams) == self.numberOfParams())
 		for i,dp in enumerate(dparams):
 			self.stepParam(i, dp)
 	def getParams(self):
@@ -513,9 +704,9 @@ class NGaussianPSF(PSF):
 		news = self.sigmas + [maxs + 1.]
 		return NGaussianPSF(news, self.weights + [0.05])
 
-	def numberOfFitParams(self):
+	def numberOfParams(self):
 		return 2 * len(self.sigmas)
-	def getFitStepSizes(self, img):
+	def getStepSizes(self, img):
 		return [0.01]*len(self.sigmas) + [0.01]*len(self.weights)
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
@@ -799,7 +990,7 @@ class Tractor(object):
 		print 'Optimizing PSF in image', imagei, 'at fixed complexity'
 		img = self.getImage(imagei)
 		psf = img.getPsf()
-		nparams = psf.numberOfFitParams()
+		nparams = psf.numberOfParams()
 		npixels = img.numberOfPixels()
 		if nparams == 0:
 			raise RuntimeError('No PSF parameters to optimize')
@@ -807,7 +998,7 @@ class Tractor(object):
 		# For the PSF model, we render out the whole image.
 		mod0 = self.getModelImage(img)
 
-		steps = psf.getFitStepSizes(img)
+		steps = psf.getStepSizes(img)
 		assert(len(steps) == nparams)
 		derivs = []
 		print 'Computing PSF derivatives around PSF:', psf
@@ -992,10 +1183,10 @@ class Tractor(object):
 			oldparams = []
 			par0 = 0
 			for j,src in enumerate(srcs):
-				npar = src.numberOfFitParams()
+				npar = src.numberOfParams()
 				dparams = X[par0 : par0 + npar]
 				par0 += npar
-				assert(len(dparams) == src.numberOfFitParams())
+				assert(len(dparams) == src.numberOfParams())
 				oldparams.append(src.getParams())
 				src.stepParams(dparams * alpha)
 
@@ -1022,10 +1213,10 @@ class Tractor(object):
 			print '  Stepping by', bestAlpha, 'for delta-logprob', pBest - pBefore
 			par0 = 0
 			for j,src in enumerate(srcs):
-				npar = src.numberOfFitParams()
+				npar = src.numberOfParams()
 				dparams = X[par0 : par0 + npar]
 				par0 += npar
-				assert(len(dparams) == src.numberOfFitParams())
+				assert(len(dparams) == src.numberOfParams())
 				src.stepParams(dparams * bestAlpha)
 			return pBest - pBefore
 
@@ -1050,8 +1241,8 @@ class Tractor(object):
 		for j,src in enumerate(srcs):
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
-				derivs = src.getFitParamDerivatives(img)
-				assert(len(derivs) == src.numberOfFitParams())
+				derivs = src.getParamDerivatives(img)
+				assert(len(derivs) == src.numberOfParams())
 				allderivs.append(derivs)
 				allimgs.append(img)
 
