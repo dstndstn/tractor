@@ -8,6 +8,8 @@ from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
 
+import pylab as plt
+
 '''
 Duck types:
 
@@ -468,20 +470,43 @@ class Patch(object):
 		X,Y = np.meshgrid(np.arange(w), np.arange(h))
 		return (Y.ravel() + self.y0) * W + (X.ravel() + self.x0)
 
+	plotnum = 0
+
 	def addTo(self, img, scale=1.):
 		if self.patch is None:
 			return
 		(ih,iw) = img.shape
-		(ph,pw) = self.patch.shape
+		(ph,pw) = self.shape
 
 		(outx, inx) = get_overlapping_region(self.x0, self.x0+pw-1, 0, iw-1)
 		(outy, iny) = get_overlapping_region(self.y0, self.y0+ph-1, 0, ih-1)
 		if inx == [] or iny == []:
 			return
-		x0 = outx.start
-		y0 = outy.start
+		#x0 = outx.start
+		#y0 = outy.start
 		p = self.patch[iny,inx]
-		img[outy, outx] += self.getImage()[iny, inx] * scale
+		#img[outy, outx] += self.getImage()[iny, inx] * scale
+		img[outy, outx] += p * scale
+
+		tmpimg = np.zeros_like(img)
+		tmpimg[outy,outx] = p * scale
+		plt.clf()
+		plt.imshow(tmpimg, interpolation='nearest', origin='lower')
+		plt.hot()
+		plt.colorbar()
+		fn = 'addto-%03i.png' % Patch.plotnum
+		plt.savefig(fn)
+		print 'Wrote', fn
+
+		plt.clf()
+		plt.imshow(p, interpolation='nearest', origin='lower')
+		plt.hot()
+		plt.colorbar()
+		fn = 'addto-%03i-p.png' % Patch.plotnum
+		plt.savefig(fn)
+		print 'Wrote', fn
+
+		Patch.plotnum += 1
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -526,6 +551,10 @@ class Patch(object):
 class PSF(object):
 	def applyTo(self, image):
 		pass
+
+	# Returns the number of pixels in the support of this PSF.
+	def getRadius(self):
+		return 0
 
 	# return Patch, a rendering of a point source at the given pixel
 	# coordinate.
@@ -592,14 +621,14 @@ class NGaussianPSF(PSF):
 
 	def proposeIncreasedComplexity(self, img):
 		maxs = np.max(self.sigmas)
-		# MAGIC
+		# MAGIC -- make new Gaussian with variance bigger than the biggest
+		# so far
 		news = self.sigmas + [maxs + 1.]
 		return NGaussianPSF(news, self.weights + [0.05])
 
 	def numberOfFitParams(self):
 		return 2 * len(self.sigmas)
 	def getFitStepSizes(self, img):
-		#return [0.1]*len(self.sigmas) + [0.1]*len(self.weights)
 		return [0.01]*len(self.sigmas) + [0.01]*len(self.weights)
 	def stepParam(self, parami, delta):
 		assert(parami >= 0)
@@ -649,14 +678,21 @@ class NGaussianPSF(PSF):
 		res /= sum(self.weights)
 		return res
 
+	def getNSigma(self):
+		# HACK - MAGIC -- N sigma for rendering patches
+		return 5.
+
+	def getRadius(self):
+		return max(self.sigmas) * self.getNSigma()
+
 	# returns a Patch object.
 	def getPointSourcePatch(self, px, py):
 		ix = int(round(px))
 		iy = int(round(py))
 		dx = px - ix
 		dy = py - iy
-		# HACK - MAGIC -- N sigma for rendering patches
-		rad = int(ceil(max(self.sigmas) * 5.))
+
+		rad = int(ceil(self.getRadius()))
 		sz = 2*rad + 1
 		X,Y = np.meshgrid(np.arange(sz).astype(float), np.arange(sz).astype(float))
 		X -= dx + rad
@@ -1262,14 +1298,10 @@ class Tractor(object):
 	def getModelImageNoCache(self, img):
 		mod = np.zeros_like(img.getImage())
 		mod += img.sky
-		# HACK -- add sources...
+		# add sources...
 		for src in self.catalog:
-			# get model patch for this src in this img?
-			# point sources vs extended
-			# extended sources -- might want to render pre-psf then apply psf in one shot?
 			patch = self.getModelPatch(img, src)
 			patch.addTo(mod)
-
 		return mod
 
 	def getModelImage(self, img):

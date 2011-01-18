@@ -58,9 +58,11 @@ class Galaxy(Source):
 		if patch.getImage() is None:
 			return Patch(patch.getX0(), patch.getY0(), None)
 		psf = img.getPsf()
-		convinv = psf.applyTo(patch.getImage())
+		convimg = psf.applyTo(patch.getImage())
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
-		return Patch(patch.getX0(), patch.getY0(), convinv * counts)
+		print 'PSF-convolved'
+		#self.debugPatchImage(convimg)
+		return Patch(patch.getX0(), patch.getY0(), convimg * counts)
 
 	def numberOfGalaxyParams(self):
 		return 3
@@ -194,12 +196,34 @@ class ExpGalaxy(Galaxy):
 		return ExpGalaxy.profile
 	#pdev = CompiledProfile(modelname='deV', profile_func=profile_dev, re=100, nrad=8)
 
+	expnum = 0
+
 	def __init__(self, pos, flux, re, ab, phi):
 		Galaxy.__init__(self, pos, flux, re, ab, phi)
 		self.name = 'ExpGalaxy'
+		self.num = ExpGalaxy.expnum
+		ExpGalaxy.expnum += 1
+		self.plotnum = 0
 
 	def copy(self):
 		return ExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+	def debugPatchImage(self, img):
+		if img is None:
+			print 'Exp patch', img
+		elif np.product(img.shape) == 0:
+			print 'Patch empty:', img.shape
+		else:
+			print 'Patch', img.shape
+			plt.clf()
+			plt.imshow(img, interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.colorbar()
+			fn = 'exp-patch-%02i-%03i.png' % (self.num, self.plotnum)
+			plt.savefig(fn)
+			print 'saved', fn
+			self.plotnum += 1
+
 
 	def getGalaxyPatch(self, img, cx, cy):
 		# remember to include margin for psf conv
@@ -207,8 +231,9 @@ class ExpGalaxy(Galaxy):
 		re = max(1./30, self.re)
 		(H,W) = img.shape
 		# MAGIC
-		margin = 5.
+		margin = int(ceil(img.getPsf().getRadius()))
 		(prof,x0,y0) = profile.sample(re, self.ab, self.phi, cx, cy, W, H, margin)
+		#self.debugPatchImage(prof)
 		return Patch(x0, y0, prof)
 
 
@@ -341,8 +366,11 @@ def main():
 
 	#x0,x1,y0,y1 = 1000,1250, 400,650
 	#x0,x1,y0,y1 = 250,500, 1150,1400
+
 	# Smallish galaxy (gets fit by ~10 stars)
-	x0,x1,y0,y1 = 200,500, 1100,1400
+	#x0,x1,y0,y1 = 200,500, 1100,1400
+	# Zoom in on single galaxy
+	x0,x1,y0,y1 = 375,475, 1225,1325
 
 	# A sparse field with a small galaxy
 	# (gets fit by only one star)
@@ -437,8 +465,11 @@ def main():
 	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
 	#steps = (['source']*5 + ['change', 'plots'])
 
-	steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-										  'save', 'plots'])*10)
+	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
+	#									  'save', 'plots'])*10)
+
+	steps = ['plots', 'source', 'plots', 'change', 'plots']
+
 	print 'steps:', steps
 
 	chiArange = None
