@@ -17,21 +17,49 @@ from astrometry.util.ngc2000 import ngc2000
 from compiled_profiles import *
 from galaxy_profiles import *
 
-class Galaxy(Source):
-	def __init__(self, pos, flux, re, ab, phi):
+class GalaxyShape(ParamList):
+	def getNamedParams(self):
+		return [('re', 0), ('ab', 1), ('phi', 2)]
+	def hashkey(self):
+		return ('GalaxyShape',) + tuple(self.vals)
+	def __repr__(self):
+		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
+	def __str__(self):
+		return 're=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi)
+	def copy(self):
+		return GalaxyShape(*self.vals)
+	def getParamNames(self):
+		return ['re', 'ab', 'phi']
+
+	def getStepSizes(self, img):
+		abstep = 0.01
+		if self.ab >= (1 - abstep):
+			abstep = -abstep
+		return [ 1., abstep, 1. ]
+	
+
+class Galaxy(MultiParams):
+	def __init__(self, pos, flux, shape):
 		self.name = 'Galaxy'
-		self.pos = pos
-		self.flux = flux
-		self.re = re
-		self.ab = ab
-		self.phi = phi
+		MultiParams.__init__(self, pos, flux, shape)
+
+	def getPosition(self):
+		return self.pos
+
+	def getFlux(self):
+		return self.flux
+
+	def getNamedParams(self):
+		return [('pos', 0), ('flux', 1), ('shape', 2)]
+
+	def __getattr__(self, name):
+		if name in ['re', 'ab', 'phi']:
+			return getattr(self.shape, name)
+		return MultiParams.__getattr__(self, name)
 
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(), self.flux.hashkey(),
 				self.re, self.ab, self.phi)
-	def __eq__(self, other):
-		return hash(self) == hash(other)
-
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with ' + str(self.flux)
@@ -44,17 +72,27 @@ class Galaxy(Source):
 	def copy(self):
 		return None
 
-	def getGalaxyPatch(self, img, cx, cy):
-		# remember to include margin for psf conv
+	def getProfile(self):
 		return None
 
-	def getPosition(self):
-		return self.pos
+	def getGalaxyPatch(self, img, cx, cy):
+		# remember to include margin for psf conv
+		profile = self.getProfile()
+		if profile is None:
+			return None
+		re = max(1./30, self.re)
+		(H,W) = img.shape
+		margin = int(ceil(img.getPsf().getRadius()))
+		(prof,x0,y0) = profile.sample(re, self.ab, self.phi, cx, cy, W, H, margin)
+		return Patch(x0, y0, prof)
 
 	def getModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition())
 		patch = self.getGalaxyPatch(img, px, py)
+		if patch is None:
+			print 'Warning, is Galaxy(subclass).getProfile() defined?'
+			return Patch(0, 0, None)
 		if patch.getImage() is None:
 			return Patch(patch.getX0(), patch.getY0(), None)
 		psf = img.getPsf()
@@ -64,143 +102,65 @@ class Galaxy(Source):
 		#self.debugPatchImage(convimg)
 		return Patch(patch.getX0(), patch.getY0(), convimg * counts)
 
-	def numberOfGalaxyParams(self):
-		return 3
-
-	def getGalaxyParamStepSizes(self, img):
-		return [ self.re * 0.1, max(0.01, self.ab * 0.1), 1. ]
-
-	def getGalaxyParamNames(self):
-		return ['re', 'ab', 'phi']
-
-	def stepGalaxyParam(self, i, dg):
-		assert(i >= 0)
-		assert(i < 3)
-		if i == 0:
-			self.re += dg
-		elif i == 1:
-			self.ab += dg
-		elif i == 2:
-			self.phi += dg
-
-	def stepGalaxyParams(self, dg):
-		assert(len(dg) == 3)
-		self.re  += dg[0]
-		self.ab  += dg[1]
-		self.phi += dg[2]
-
-	def getGalaxyParams(self):
-		return [ self.re, self.ab, self.phi ]
-
-	def setGalaxyParams(self, g):
-		assert(len(g) == 3)
-		self.re  = g[0]
-		self.ab  = g[1]
-		self.phi = g[2]
-
-	# [pos], [flux], re, ab, phi
-	def numberOfFitParams(self):
-		return (self.pos.getDimension() + self.flux.numberOfFitParams() +
-				self.numberOfGalaxyParams())
-
-	# returns [ Patch, Patch, ... ] of length numberOfFitParams().
-	def getFitParamDerivatives(self, img):
+	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		psteps = pos0.getFitStepSizes(img)
-
 		(px0,py0) = img.getWcs().positionToPixel(pos0)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		patch0 = self.getModelPatch(img, px0, py0)
-
 		derivs = []
+		psteps = pos0.getStepSizes(img)
 		for i in range(len(psteps)):
 			posx = pos0.copy()
 			posx.stepParam(i, psteps[i])
 			(px,py) = img.getWcs().positionToPixel(posx)
 			patchx = self.getModelPatch(img, px, py)
 			dx = (patchx - patch0) * (1. / psteps[i])
-			dx.setName('d(src)/d(pos%i)' % i)
+			dx.setName('d(gal)/d(pos%i)' % i)
 			derivs.append(dx)
-
-		fsteps = self.flux.getFitStepSizes(img)
+		fsteps = self.flux.getStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
 			fi.stepParam(i, fsteps[i])
 			countsi = img.getPhotoCal().fluxToCounts(fi)
 			df = patch0 * ((countsi - counts) / counts / fsteps[i])
-			df.setName('d(src)/d(flux%i)' % i)
+			df.setName('d(gal)/d(flux%i)' % i)
 			derivs.append(df)
-
-		gsteps = self.getGalaxyParamStepSizes(img)
-		gnames = self.getGalaxyParamNames()
+		gsteps = self.shape.getStepSizes(img)
+		gnames = self.shape.getParamNames()
+		oldvals = self.shape.getParams()
 		for i in range(len(gsteps)):
-			galx = self.copy()
-			galx.stepGalaxyParam(i, gsteps[i])
-			patchx = galx.getModelPatch(img, px0, py0)
+			self.shape.stepParam(i, gsteps[i])
+			patchx = self.getModelPatch(img, px0, py0)
+			self.shape.setParams(oldvals)
 			dx = (patchx - patch0) * (1. / gsteps[i])
-			dx.setName('d(src)/d(%s)' % (gnames[i]))
+			dx.setName('d(gal)/d(%s)' % (gnames[i]))
 			derivs.append(dx)
 
 		return derivs
 
-	# update parameters in this direction
-	def stepParams(self, dparams):
-		pos = self.getPosition()
-		np = pos.getDimension()
-		nf = self.flux.numberOfFitParams()
-		ng = self.numberOfGalaxyParams()
-		assert(len(dparams) == (np + nf + ng))
-		dp = dparams[:np]
-		pos.stepParams(dp)
-		df = dparams[np:np+nf]
-		self.flux.stepParams(df)
-		dg = dparams[np+nf:]
-		self.stepGalaxyParams(dg)
-
-	def getParams(self):
-		pp = self.getPosition().getParams()
-		pf = self.flux.getParams()
-		np = self.getPosition().getDimension()
-		assert(len(pp) == np)
-		pg = self.getGalaxyParams()
-		p = pp + pf + pg
-		# ensure that "+" means "append"...
-		assert(len(p) == (len(pp) + len(pf) + len(pg)))
-		return p
-
-	def setParams(self, p):
-		pos = self.getPosition()
-		np = pos.getDimension()
-		nf = self.flux.numberOfFitParams()
-		ng = self.numberOfGalaxyParams()
-		assert(len(p) == (np + nf + ng))
-		pp = p[:np]
-		pos.setParams(pp)
-		pf = p[np:np+nf]
-		self.flux.setParams(pf)
-		pg = p[np+nf:]
-		self.setGalaxyParams(pg)
-
 
 class ExpGalaxy(Galaxy):
-
 	profile = None
 	@staticmethod
-	def getProfile():
+	def getExpProfile():
 		if ExpGalaxy.profile is None:
-			ExpGalaxy.profile = CompiledProfile(modelname='exp',
-												profile_func=profile_exp, re=100, nrad=4)
+			ExpGalaxy.profile = (
+				CompiledProfile(modelname='exp',
+								profile_func=profile_exp, re=100, nrad=4))
 		return ExpGalaxy.profile
-	#pdev = CompiledProfile(modelname='deV', profile_func=profile_dev, re=100, nrad=8)
 
 	expnum = 0
 
 	def __init__(self, pos, flux, re, ab, phi):
-		Galaxy.__init__(self, pos, flux, re, ab, phi)
+		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
 		self.name = 'ExpGalaxy'
 		self.num = ExpGalaxy.expnum
 		ExpGalaxy.expnum += 1
 		self.plotnum = 0
+
+	def getProfile(self):
+		return ExpGalaxy.getExpProfile()
 
 	def copy(self):
 		return ExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
@@ -221,17 +181,26 @@ class ExpGalaxy(Galaxy):
 			print 'saved', fn
 			self.plotnum += 1
 
+class DevGalaxy(Galaxy):
+	profile = None
+	@staticmethod
+	def getDevProfile():
+		if DevGalaxy.profile is None:
+			DevGalaxy.profile = (
+				CompiledProfile(modelname='exp',
+								profile_func=profile_dev, re=100, nrad=8))
+		return DevGalaxy.profile
 
-	def getGalaxyPatch(self, img, cx, cy):
-		# remember to include margin for psf conv
-		profile = ExpGalaxy.getProfile()
-		re = max(1./30, self.re)
-		(H,W) = img.shape
-		# MAGIC
-		margin = int(ceil(img.getPsf().getRadius()))
-		(prof,x0,y0) = profile.sample(re, self.ab, self.phi, cx, cy, W, H, margin)
-		#self.debugPatchImage(prof)
-		return Patch(x0, y0, prof)
+	def __init__(self, pos, flux, re, ab, phi):
+		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
+		self.name = 'DevGalaxy'
+
+	def getProfile(self):
+		return DevGalaxy.getDevProfile()
+
+	def copy(self):
+		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
 
 
 class SDSSTractor(Tractor):
@@ -253,15 +222,26 @@ class SDSSTractor(Tractor):
 		'''
 		if isinstance(source, PointSource):
 			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
-						   #5., 0.3, 120.)
-						   5., 0.5, 0.)
-			print 'Changing:'
-			print '  from ', source
-			print '  into', eg
-			return [ [eg] ]
+						   1., 0.5, 0.)
+			dg = DevGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+						   1., 0.5, 0.)
+			#print 'Changing:'
+			#print '  from ', source
+			#print '  into', eg
+			return [ [], [eg], [dg] ]
 
 		elif isinstance(source, ExpGalaxy):
-			return []
+			dg = DevGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+						   source.re, source.ab, source.phi)
+			ps = PointSource(source.getPosition().copy(), source.getFlux().copy())
+			return [ [], [ps], [dg] ]
+
+		elif isinstance(source, DevGalaxy):
+			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+						   source.re, source.ab, source.phi)
+			ps = PointSource(source.getPosition().copy(), source.getFlux().copy())
+			return [ [], [ps], [eg] ]
+
 		else:
 			print 'unknown source type for', source
 			return []
@@ -311,7 +291,7 @@ def choose_field():
 
 def testGalaxy():
 	W,H = 200,200
-	pos = PixPos([100, 100])
+	pos = PixPos(100, 100)
 	flux = Flux(1000.)
 
 	image = np.zeros((H,W))
@@ -334,7 +314,7 @@ def testGalaxy():
 	plt.colorbar()
 	plt.savefig('eg-1.png')
 	
-	derivs = eg.getFitParamDerivatives(img)
+	derivs = eg.getParamDerivatives(img)
 	for i,deriv in enumerate(derivs):
 		plt.clf()
 		plt.imshow(deriv.getImage(), **imargs1)
@@ -351,8 +331,8 @@ def main():
 					  default=-1, help='Load catalog from step #...')
 	opt,args = parser.parse_args()
 
-	#testGalaxy()
-	#return
+	testGalaxy()
+	return
 
 	pos = PixPos(1,2)
 	flux = Flux(3)
@@ -438,8 +418,8 @@ def main():
 	(a,s1, b,s2) = dgpsf
 	psf = NGaussianPSF([s1, s2], [a, b])
 
-	print 'PSF:', psf
-	print psf.hashkey()
+	#print 'PSF:', psf
+	#print psf.hashkey()
 
 	# We'll start by working in pixel coords
 	wcs = NullWCS()
@@ -492,7 +472,9 @@ def main():
 	#									  'save', 'plots']) +
 	#		 ['psf', 'plots', 'psf2', 'plots'])
 
-	steps = ['source', 'save', 'psf', 'psf2', 'source']
+	#steps = ['source', 'save', 'psf', 'psf2', 'source', 'change', 'plots']
+
+	steps = ['source']*5 + ['plots', 'change', 'plots']
 
 	print 'steps:', steps
 

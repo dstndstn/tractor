@@ -35,6 +35,15 @@ class Params(object):
 class ParamList(Params):
 	def __init__(self, *args):
 		self.vals = list(args)
+		self.namedparams = self.getNamedParams()
+	def getNamedParams(self):
+		return []
+	def __getattr__(self, name):
+		for n,i in self.namedparams:
+			if name == n:
+				return self.vals[i]
+		raise AttributeError('ParamList (%s): unknown attribute "%s"' %
+							 (str(type(self)), name))
 	def hashkey(self):
 		return ('ParamList',) + tuple(self.vals)
 	def numberOfParams(self):
@@ -80,6 +89,15 @@ class ParamList(Params):
 class MultiParams(Params):
 	def __init__(self, *args):
 		self.subs = args
+		self.namedparams = self.getNamedParams()
+	def getNamedParams(self):
+		return []
+	def __getattr__(self, name):
+		for n,i in self.namedparams:
+			if name == n:
+				return self.subs[i]
+		raise AttributeError('MultiParam (%s): unknown attribute "%s"' %
+							 (str(type(self)), name))
 
 	def hashkey(self):
 		t = ('MultiParams',)
@@ -140,12 +158,8 @@ class PointSource(MultiParams):
 	def __init__(self, pos, flux):
 		MultiParams.__init__(self, pos, flux)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
-	def __getattr__(self, name):
-		if name == 'pos':
-			return self.subs[0]
-		if name == 'flux':
-			return self.subs[1]
-		raise AttributeError()
+	def getNamedParams(self):
+		return [('pos', 0), ('flux', 1)]
 	def getPosition(self):
 		return self.pos
 	def getFlux(self):
@@ -194,10 +208,8 @@ class PointSource(MultiParams):
 class Flux(ParamList):
 	def hashkey(self):
 		return ('Flux', self.val)
-	def __getattr__(self, name):
-		if name == 'val':
-			return self.vals[0]
-		raise AttributeError()
+	def getNamedParams(self):
+		return [('val', 0)]
 	def __repr__(self):
 		return 'Flux(%g)' % self.val
 	def __str__(self):
@@ -211,12 +223,8 @@ class Flux(ParamList):
 		return [0.1]
 
 class PixPos(ParamList):
-	def __getattr__(self, name):
-		if name == 'x':
-			return self.vals[0]
-		if name == 'y':
-			return self.vals[1]
-		raise AttributeError()
+	def getNamedParams(self):
+		return [('x', 0), ('y', 1)]
 	def __str__(self):
 		return 'pixel (%.2f, %.2f)' % (self.x, self.y)
 	def __repr__(self):
@@ -251,7 +259,7 @@ class Image(object):
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.data.shape
-		raise AttributeError()
+		raise AttributeError('Image: unknown attribute "%s"' % name)
 
 	def __hash__(self):
 		return hash(self.hashkey())
@@ -422,7 +430,7 @@ class Patch(object):
 			if self.patch is None:
 				return (0,0)
 			return self.patch.shape
-		raise AttributeError()
+		raise AttributeError('Patch: unknown attribute "%s"' % name)
 
 	def __mul__(self, flux):
 		if self.patch is None:
@@ -505,12 +513,8 @@ class NGaussianPSF(MultiParams):
 		assert(len(sigmas) == len(weights))
 		MultiParams.__init__(self, ParamList(*sigmas), ParamList(*weights))
 
-	def __getattr__(self, name):
-		if name == 'sigmas':
-			return self.subs[0]
-		if name == 'weights':
-			return self.subs[1]
-		raise AttributeError()
+	def getNamedParams(self):
+		return [('sigmas', 0), ('weights', 1)]
 
 	def __str__(self):
 		print 'sigmas:', self.sigmas
@@ -925,6 +929,9 @@ class Tractor(object):
 				spvals.append(vals * w)
 
 			nextcol += len(derivs)
+
+		if len(spcols) == 0:
+			return []
 
 		# ensure the sparse matrix is full up to the number of columns we expect
 		spcols.append([nextcol - 1])

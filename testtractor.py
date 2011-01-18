@@ -20,7 +20,7 @@ def main():
 	image = np.zeros((H,W))
 	err = np.zeros_like(image) + 1.
 	invvar = 1./(err**2)
-	src = PointSource(PixPos([cx, cy]), Flux(flux))
+	src = PointSource(PixPos(cx, cy), Flux(flux))
 	photocal = NullPhotoCal()
 	wcs = NullWCS()
 
@@ -49,7 +49,7 @@ def main():
 
 	# Create a Tractor with a source at the right location but with not enough
 	# flux.
-	src2 = PointSource(PixPos([cx, cy]), Flux(flux / 2.))
+	src2 = PointSource(PixPos(cx, cy), Flux(flux / 2.))
 
 	tractor = TestTractor([data], catalog=[src2])
 
@@ -60,7 +60,7 @@ def main():
 	plt.colorbar()
 	plt.savefig('test-mod0.png')
 
-	derivs = src.getFitParamDerivatives(data)
+	derivs = src.getParamDerivatives(data)
 	print len(derivs), 'derivatives'
 	for i,deriv in enumerate(derivs):
 		plt.clf()
