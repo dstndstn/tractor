@@ -438,6 +438,9 @@ def main():
 	(a,s1, b,s2) = dgpsf
 	psf = NGaussianPSF([s1, s2], [a, b])
 
+	print 'PSF:', psf
+	print psf.hashkey()
+
 	# We'll start by working in pixel coords
 	wcs = NullWCS()
 	# And counts
@@ -447,7 +450,6 @@ def main():
 				 photocal=photocal)
 	
 	tractor = SDSSTractor([data])
-
 	
 	plt.clf()
 	plt.imshow(image, interpolation='nearest', origin='lower',
@@ -490,7 +492,7 @@ def main():
 	#									  'save', 'plots']) +
 	#		 ['psf', 'plots', 'psf2', 'plots'])
 
-	steps = ['source', 'save']
+	steps = ['source', 'save', 'psf', 'psf2', 'source']
 
 	print 'steps:', steps
 

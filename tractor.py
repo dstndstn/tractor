@@ -56,6 +56,7 @@ class ParamList(Params):
 		return self.numberOfParams()
 	# []
 	def __getitem__(self, i):
+		#print 'ParamList.__getitem__', i, 'returning', self.vals[i]
 		return self.vals[i]
 
 	# iterable
@@ -69,6 +70,7 @@ class ParamList(Params):
 			if self.i >= len(self.pl):
 				raise StopIteration
 			rtn = self.pl[self.i]
+			#print 'paramlistiter: returning element', self.i, '=', rtn
 			self.i += 1
 			return rtn
 	def __iter__(self):
@@ -134,7 +136,7 @@ class Source(Params):
 		return []
 
 
-class PointSource(MultiParams, Source):
+class PointSource(MultiParams):
 	def __init__(self, pos, flux):
 		MultiParams.__init__(self, pos, flux)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
@@ -168,11 +170,6 @@ class PointSource(MultiParams, Source):
 		pos0 = self.getPosition()
 		(px,py) = img.getWcs().positionToPixel(pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px, py)
-
-		print 'I am', self
-		flux = self.flux
-		print 'Flux is', flux
-
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
@@ -210,6 +207,9 @@ class Flux(ParamList):
 	def getValue(self):
 		return self.val
 
+	def getStepSizes(self, img):
+		return [0.1]
+
 class PixPos(ParamList):
 	def __getattr__(self, name):
 		if name == 'x':
@@ -226,97 +226,10 @@ class PixPos(ParamList):
 	def hashkey(self):
 		return ('PixPos', self.x, self.y)
 
-
-
-class Old(object):
-	def __str__(self):
-		return 'PointSource at ' + str(self.pos) + ' with ' + str(self.flux)
-	def __repr__(self):
-		return 'PointSource(' + repr(self.pos) + ', ' + repr(self.flux) + ')'
-
-	def copy(self):
-		return PointSource(self.pos.copy(), self.flux.copy())
-
-	def hashkey(self):
-		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
-
-	def __eq__(self, other):
-		return hash(self) == hash(other)
-
-	def getPosition(self):
-		return self.pos
-	def getFlux(self):
-		return self.flux
-
-	def getModelPatch(self, img):
-		(px,py) = img.getWcs().positionToPixel(self.getPosition())
-		patch = img.getPsf().getPointSourcePatch(px, py)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
-		return patch * counts
-
-	# [pos], [flux]
-	def numberOfParams(self):
-		return self.pos.getDimension() + self.flux.numberOfParams()
-
-	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img):
-		pos0 = self.getPosition()
-		psteps = pos0.getStepSizes(img)
-
-		(px,py) = img.getWcs().positionToPixel(pos0)
-		patch0 = img.getPsf().getPointSourcePatch(px, py)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
-
-		derivs = []
-		for i in range(len(psteps)):
-			posx = pos0.copy()
-			posx.stepParam(i, psteps[i])
-			(px,py) = img.getWcs().positionToPixel(posx)
-			patchx = img.getPsf().getPointSourcePatch(px, py)
-			dx = (patchx - patch0) * (counts / psteps[i])
-			dx.setName('d(src)/d(pos%i)' % i)
-			derivs.append(dx)
-
-		fsteps = self.flux.getStepSizes(img)
-		for i in range(len(fsteps)):
-			fi = self.flux.copy()
-			fi.stepParam(i, fsteps[i])
-			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * ((countsi - counts) / fsteps[i])
-			df.setName('d(src)/d(flux%i)' % i)
-			derivs.append(df)
-
-		return derivs
-
-	# update parameters in this direction
-	def stepParams(self, dparams):
-		pos = self.getPosition()
-		np = pos.getDimension()
-		nf = self.flux.numberOfParams()
-		assert(len(dparams) == (np + nf))
-		dp = dparams[:np]
-		pos.stepParams(dp)
-		df = dparams[np:]
-		self.flux.stepParams(df)
-
-	def getParams(self):
-		pp = self.getPosition().getParams()
-		pf = self.flux.getParams()
-		np = self.getPosition().getDimension()
-		assert(len(pp) == np)
-		p = pp + pf
-		assert(len(p) == (len(pp) + len(pf)))
-		return p
-
-	def setParams(self, p):
-		pos = self.getPosition()
-		np = pos.getDimension()
-		nf = self.flux.numberOfParams()
-		assert(len(p) == (np + nf))
-		pp = p[:np]
-		pos.setParams(pp)
-		pf = p[np:]
-		self.flux.setParams(pf)
+	def getDimension(self):
+		return 2
+	def getStepSizes(self, img):
+		return [0.1, 0.1]
 
 
 def randomint():
@@ -368,10 +281,10 @@ class PhotoCal(object):
 	def countsToFlux(self, counts):
 		pass
 
-	def numberOfParams(self):
-		return 0
-	def getStepSizes(self, img):
-		return []
+	#def numberOfParams(self):
+	#	return 0
+	#def getStepSizes(self, img):
+	#	return []
 
 class NullPhotoCal(object):
 	def fluxToCounts(self, flux):
@@ -379,48 +292,10 @@ class NullPhotoCal(object):
 	def countsToFlux(self, counts):
 		return counts.getValue()
 
-	def numberOfParams(self):
-		return 0
-	def getStepSizes(self, img):
-		return []
-
-
-
-class OldFlux(object):
-	def __init__(self, val):
-		self.val = val
-
-	def hashkey(self):
-		return ('Flux', self.val)
-
-	def __repr__(self):
-		return 'Flux(%g)' % self.val
-	def __str__(self):
-		return 'Flux: %g' % self.val
-
-	def getValue(self):
-		return self.val
-
-	def copy(self):
-		return Flux(self.val)
-
-	def numberOfParams(self):
-		return 1
-	def getStepSizes(self, img):
-		return [0.1]
-	def stepParam(self, parami, delta):
-		assert(parami == 0)
-		self.val += delta
-	def stepParams(self, params):
-		assert(len(params) == self.numberOfParams())
-		for i in range(len(params)):
-			self.stepParam(i, params[i])
-	def getParams(self):
-		return [self.val]
-	def setParams(self, p):
-		assert(len(p) == 1)
-		self.val = p[0]
-
+	#def numberOfParams(self):
+	#	return 0
+	#def getStepSizes(self, img):
+	#	return []
 
 class WCS(object):
 	def positionToPixel(self, pos):
@@ -430,46 +305,6 @@ class WCS(object):
 class NullWCS(WCS):
 	def positionToPixel(self, pos):
 		return pos
-
-class OldPixPos(list):
-	def __str__(self):
-		return 'pixel (%.2f, %.2f)' % (self[0], self[1])
-	def __repr__(self):
-		return 'PixPos(%.4f, %.4f)' % (self[0], self[1])
-
-	def copy(self):
-		return PixPos([self[0],self[1]])
-
-	def hashkey(self):
-		return ('PixPos', self[0], self[1])
-
-	def getDimension(self):
-		return 2
-	def getStepSizes(self, img):
-		return [0.1, 0.1]
-	def stepParam(self, parami, delta):
-		assert(parami >= 0)
-		assert(parami <= 1)
-		self[parami] += delta
-	def stepParams(self, params):
-		assert(len(params) == self.getDimension())
-		for i in range(len(params)):
-			self[i] += params[i]
-
-	def getParams(self):
-		return [self[0], self[1]]
-	def setParams(self, p):
-		assert(len(p) == len(self))
-		for i,pval in enumerate(p):
-			self[i] = pval
-
-	def __hash__(self):
-		# convert to tuple
-		return hash((self[0], self[1]))
-
-	#def __iadd__(self, X):
-	#  	self[0] += X[0]
-	#	self[1] += X[1]
 
 class Patch(object):
 	def __init__(self, x0, y0, patch):
@@ -587,6 +422,7 @@ class Patch(object):
 			if self.patch is None:
 				return (0,0)
 			return self.patch.shape
+		raise AttributeError()
 
 	def __mul__(self, flux):
 		if self.patch is None:
@@ -622,7 +458,8 @@ class Patch(object):
 		return Patch(ux0, uy0, p)
 
 
-class PSF(object):
+# This is just the duck-type definition
+class PSF(Params):
 	def applyTo(self, image):
 		pass
 
@@ -638,9 +475,6 @@ class PSF(object):
 	def copy(self):
 		return PSF()
 
-	def __hash__(self):
-		return hash(self.hashkey())
-
 	def hashkey(self):
 		return ('PSF',)
 
@@ -648,24 +482,13 @@ class PSF(object):
 	def proposeIncreasedComplexity(self, img):
 		return PSF()
 	
-	def numberOfParams(self):
-		return 0
 	def getStepSizes(self, img):
 		return []
-	def stepParam(self, parami, delta):
-		pass
-	def stepParams(self, dparams):
-		assert(len(dparams) == self.numberOfParams())
-		for i,dp in enumerate(dparams):
-			self.stepParam(i, dp)
-	def getParams(self):
-		return []
-	def setParams(self, p):
-		pass
 	def isValidParamStep(self, dparam):
 		return True
-		
-class NGaussianPSF(PSF):
+
+
+class NGaussianPSF(MultiParams):
 	def __init__(self, sigmas, weights):
 		'''
 		Creates a new N-Gaussian (concentric, isotropic) PSF.
@@ -680,10 +503,17 @@ class NGaussianPSF(PSF):
 		eg,   NGaussianPSF([1.5, 4.0], [0.8, 0.2])
 		'''
 		assert(len(sigmas) == len(weights))
-		self.sigmas = sigmas
-		self.weights = weights
+		MultiParams.__init__(self, ParamList(*sigmas), ParamList(*weights))
+
+	def __getattr__(self, name):
+		if name == 'sigmas':
+			return self.subs[0]
+		if name == 'weights':
+			return self.subs[1]
+		raise AttributeError()
 
 	def __str__(self):
+		print 'sigmas:', self.sigmas
 		return ('NGaussianPSF: sigmas [ ' +
 				', '.join(['%.3f'%s for s in self.sigmas]) +
 				' ], weights [ ' +
@@ -701,37 +531,14 @@ class NGaussianPSF(PSF):
 		maxs = np.max(self.sigmas)
 		# MAGIC -- make new Gaussian with variance bigger than the biggest
 		# so far
-		news = self.sigmas + [maxs + 1.]
-		return NGaussianPSF(news, self.weights + [0.05])
+		return NGaussianPSF(list(self.sigmas) + [maxs + 1.],
+							list(self.weights) + [0.05])
 
-	def numberOfParams(self):
-		return 2 * len(self.sigmas)
 	def getStepSizes(self, img):
-		return [0.01]*len(self.sigmas) + [0.01]*len(self.weights)
-	def stepParam(self, parami, delta):
-		assert(parami >= 0)
-		assert(parami < 2*len(self.sigmas))
-		NS = len(self.sigmas)
-		if parami < NS:
-			self.sigmas[parami] += delta
-			#print 'NGaussianPSF: setting sigma', parami, 'to', self.sigmas[parami]
-		else:
-			self.weights[parami - NS] += delta
-			#print 'NGaussianPSF: setting weight', (parami-NS), 'to', self.weights[parami-NS]
+		N = len(self.sigmas)
+		return [0.01]*N + [0.01]*N
 
-	def getParams(self):
-		NS = len(self.sigmas)
-		rtn = self.sigmas + self.weights
-		assert(len(rtn) == 2*NS)
-		return rtn
-
-	def setParams(self, p):
-		NS = len(self.sigmas)
-		assert(len(p) == 2*NS)
-		for i in range(NS):
-			self.sigmas[i] = p[i]
-			self.weights[i] = p[i+NS]
-
+	'''
 	def isValidParamStep(self, dparam):
 		NS = len(self.sigmas)
 		assert(len(dparam) == 2*NS)
@@ -746,10 +553,11 @@ class NGaussianPSF(PSF):
 				return False
 		return True
 		#return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
+		'''
 
 	def normalize(self):
 		mx = max(self.weights)
-		self.weights = [w/mx for w in self.weights]
+		self.weights.setParams([w/mx for w in self.weights])
 
 	def hashkey(self):
 		return ('NGaussianPSF', tuple(self.sigmas), tuple(self.weights))
