@@ -1310,16 +1310,21 @@ class Tractor(object):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
-	#def findPeaks(self, img, thresh):
-
 	def createNewSource(self, img, x, y, height):
 		return None
 
-	def getLogProb(self):
+	def getLogLikelihood(self):
 		chisq = 0.
 		for i,chi in enumerate(self.getChiImages()):
 			chisq += (chi ** 2).sum()
 		return -0.5 * chisq
+
+	def getLogPrior(self):
+		return -sum([len(p) for p in self.catalog.getAllParams()])
+
+	# posterior
+	def getLogProb(self):
+		return self.getLogLikelihood() + self.getLogPrior()
 
 	def pushCache(self):
 		self.cachestack.append(self.cache)
@@ -1331,9 +1336,6 @@ class Tractor(object):
 
 	def popCache(self):
 		self.cache = self.cachestack.pop()
-
-	#
-	#def startTryUpdate(self):
 
 	def createSource(self):
 		print

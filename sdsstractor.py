@@ -231,7 +231,8 @@ class SDSSTractor(Tractor):
 		'''
 		if isinstance(source, PointSource):
 			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
-						   5., 0.3, 120.)
+						   #5., 0.3, 120.)
+						   5., 0.5, 0.)
 			print 'Changing:'
 			print '  from ', source
 			print '  into', eg
@@ -436,8 +437,8 @@ def main():
 	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
 	#steps = (['source']*5 + ['change', 'plots'])
 
-	steps = (['plots'] + (['source']*5 + ['plots', 'save', 'change',
-										  'plots', 'save'])*10)
+	steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
+										  'save', 'plots'])*10)
 	print 'steps:', steps
 
 	chiArange = None
@@ -447,10 +448,10 @@ def main():
 	stepi = 0
 
 	# JUMP IN:
-	if True:
-		loadi = 6
-		(savei, step, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
-
+	if False:
+		loadi = 0
+		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
+		print 'Starting from step', stepi
 
 	#for i,step in enumerate(steps):
 	for stepi,step in zip(range(stepi, len(steps)), steps[stepi:]):
@@ -556,9 +557,8 @@ def main():
 
 		elif step == 'save':
 
-			pickle_to_file((savei, stepi, ploti, tractor.catalog),
+			pickle_to_file((savei, stepi+1, ploti, tractor.catalog),
 						   'catalog-%02i.pickle' % savei)
-
 			savei += 1
 			
 		print 'Tractor cache has', len(tractor.cache), 'entries'
