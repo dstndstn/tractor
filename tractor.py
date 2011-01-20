@@ -174,7 +174,7 @@ class PointSource(MultiParams):
 		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
 
 	def getModelPatch(self, img):
-		(px,py) = img.getWcs().positionToPixel(self.getPosition())
+		(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		patch = img.getPsf().getPointSourcePatch(px, py)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		return patch * counts
@@ -182,7 +182,7 @@ class PointSource(MultiParams):
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		(px,py) = img.getWcs().positionToPixel(pos0)
+		(px,py) = img.getWcs().positionToPixel(self, pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px, py)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
@@ -190,7 +190,7 @@ class PointSource(MultiParams):
 		for i in range(len(psteps)):
 			posx = pos0.copy()
 			posx.stepParam(i, psteps[i])
-			(px,py) = img.getWcs().positionToPixel(posx)
+			(px,py) = img.getWcs().positionToPixel(self, posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
 			dx = (patchx - patch0) * (counts / psteps[i])
 			dx.setName('d(ptsrc)/d(pos%i)' % i)
@@ -238,6 +238,23 @@ class PixPos(ParamList):
 		return 2
 	def getStepSizes(self, img):
 		return [0.1, 0.1]
+
+class RaDecPos(ParamList):
+	def getNamedParams(self):
+		return [('ra', 0), ('dec', 1)]
+	def __str__(self):
+		return 'RA,Dec (%.4f, %.4f)' % (self.ra, self.dec)
+	def __repr__(self):
+		return 'RaDecPos(%.4f, %.4f)' % (self.ra, self.dec)
+	def copy(self):
+		return RaDecPos(self.ra, self.dec)
+	def hashkey(self):
+		return ('RaDecPos', self.ra, self.dec)
+	def getDimension(self):
+		return 2
+	def getStepSizes(self, img):
+		return [1e-4, 1e-4]
+
 
 
 def randomint():
@@ -306,13 +323,25 @@ class NullPhotoCal(object):
 	#	return []
 
 class WCS(object):
-	def positionToPixel(self, pos):
+	def positionToPixel(self, src, pos):
+		'''
+		Returns tuple (x, y) -- or any duck that supports
+		iteration of two items
+		'''
+		pass
+
+	def pixelToPosition(self, src, xy):
+		'''
+		(x,y) to Position; src may be None (?)
+		'''
 		pass
 
 # useful when you're using raw pixel positions rather than RA,Decs
 class NullWCS(WCS):
-	def positionToPixel(self, pos):
+	def positionToPixel(self, src, pos):
 		return pos
+	def pixelToPosition(self, src, xy):
+		return xy
 
 class Patch(object):
 	def __init__(self, x0, y0, patch):
@@ -622,6 +651,10 @@ class Catalog(list):
 
 	def deepcopy(self):
 		return Catalog([x.copy() for x in self])
+
+	def __str__(self):
+		self.printLong()
+		return 'Catalog with %i sources' % len(self)
 
 	def printLong(self):
 		print 'Catalog:'
@@ -1096,6 +1129,8 @@ class Tractor(object):
 		# dependencies of this model image:
 		# img.sky, img.psf, img.wcs, sources that overlap.
 		#deps = (hash(img), hash(self.catalog))
+		print 'img', img
+		print 'catalog', self.catalog
 		deps = (img.hashkey(), self.catalog.hashkey())
 		#print 'deps:', deps
 		deps = hash(deps)

@@ -13,9 +13,35 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
+import astrometry.libkd.spherematch as spherematch
 
 from compiled_profiles import *
 from galaxy_profiles import *
+
+class SdssWcs(WCS):
+	def __init__(self, astrans):
+		self.astrans = astrans
+
+	# RA,Dec in deg to pixel x,y.
+	def positionToPixel(self, src, pos):
+		## FIXME -- color.
+		x,y = self.astrans.radec_to_pixel(pos.ra, pos.dec)
+		print 'astrans: ra,dec', (pos.ra, pos.dec), '--> x,y', (x,y)
+		print 'HIDEOUS WORKAROUND'
+		x,y = x[0],y[0]
+		return x,y
+
+	# (x,y) to RA,Dec in deg
+	def pixelToPosition(self, src, xy):
+		## FIXME -- color.
+		## NOTE, "src" may be None.
+		(x,y) = xy
+		ra,dec = self.astrans.pixel_to_radec(x, y)
+		print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
+		print 'HIDEOUS WORKAROUND'
+		ra,dec = ra[0], dec[0]
+		return RaDecPos(ra, dec)
+
 
 class GalaxyShape(ParamList):
 	def getNamedParams(self):
@@ -88,7 +114,7 @@ class Galaxy(MultiParams):
 
 	def getModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
-			(px,py) = img.getWcs().positionToPixel(self.getPosition())
+			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		patch = self.getGalaxyPatch(img, px, py)
 		if patch is None:
 			print 'Warning, is Galaxy(subclass).getProfile() defined?'
@@ -105,7 +131,7 @@ class Galaxy(MultiParams):
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		(px0,py0) = img.getWcs().positionToPixel(pos0)
+		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		patch0 = self.getModelPatch(img, px0, py0)
 		derivs = []
@@ -113,7 +139,7 @@ class Galaxy(MultiParams):
 		for i in range(len(psteps)):
 			posx = pos0.copy()
 			posx.stepParam(i, psteps[i])
-			(px,py) = img.getWcs().positionToPixel(posx)
+			(px,py) = img.getWcs().positionToPixel(self, posx)
 			patchx = self.getModelPatch(img, px, py)
 			dx = (patchx - patch0) * (1. / psteps[i])
 			dx.setName('d(gal)/d(pos%i)' % i)
@@ -213,7 +239,11 @@ class SDSSTractor(Tractor):
 		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
 		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
 		#ht /= patch.max()
-		return PointSource(PixPos(x,y), Flux(ht))
+
+		wcs = img.getWcs()
+		pos = wcs.pixelToPosition(None, (x,y))
+
+		return PointSource(pos, Flux(ht))
 
 	def changeSource(self, source):
 		'''
@@ -247,47 +277,42 @@ class SDSSTractor(Tractor):
 			return []
 
 
+def choose_field2():
+	fields = fits_table('window_flist.fits')
+	print len(ngc2000), 'NGC/IC objects'
+	goodngc = [n for n in ngc2000 if n.get('classification', None) == 'Gx']
+	print len(goodngc), 'NGC galaxies'
 
+	nra  = np.array([n['ra']  for n in goodngc])
+	ndec = np.array([n['dec'] for n in goodngc])
 
-def choose_field():
-	# Nice cluster IC21:
-	#  http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=3437&C=3&F=392&Z=50
-	# 4 Big ones!  NGC 192, 196
-	# http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=1755&C=6&F=442&Z=50
-	# NGC 307 at RA,Dec (14.15, -1.76667) Run 1755 Camcol 1 Field 471
-	# 3 nice smooth ones -- NGC 426 at RA,Dec (18.225000000000001, -0.283333) Run 125 Camcol 3 Field 196 
-	# Variety -- NGC 560 at RA,Dec (21.850000000000001, -1.9166700000000001) Run 1755 Camcol 1 Field 522
-	# nice (but bright star) -- IC 232 at RA,Dec (37.799999999999997, 1.25) Run 4157 Camcol 6 Field 128
-	# Crowded field! NGC 6959 at RA,Dec (311.77499999999998, 0.45000000000000001) Run 3360 Camcol 5 Field 39
-	# medium spiral -- NGC 6964 at RA,Dec (311.85000000000002, 0.29999999999999999) Run 4184 Camcol 4 Field 68
-	# two blended together -- NGC 7783 at RA,Dec (358.55000000000001, 0.38333299999999998) Run 94 Camcol 4 Field 158
-	#### 3 nice smooth ones -- NGC 426 at RA,Dec (18.225000000000001, -0.283333) Run 125 Camcol 3 Field 196 
-	# 94/1r/33
+	rad = 8./60.
+	(I,J,dist) = spherematch.match_radec(nra, ndec, fields.ra, fields.dec, rad)
 
-	s82 = fits_table('/Users/dstn/deblend/s82fields.fits')
-	for n in ngc2000:
-		#print n
-		ra,dec = n['ra'], n['dec']
-		if abs(dec) > 2.:
-			continue
-		if 60 < ra < 300:
-			continue
-		if not 'classification' in n:
-			continue
-		clas = n['classification']
-		if clas != 'Gx':
-			continue
+	#sdss = DR7()
+
+	for i in np.unique(I):
+		ii = (I == i)
+		n = goodngc[i]
 		isngc = n['is_ngc']
 		num = n['id']
-		print 'NGC' if isngc else 'IC', num, 'at RA,Dec', (ra,dec)
-		dst = ((s82.ra - ra)**2 + (s82.dec - dec)**2)
-		I = np.argmin(dst)
-		f = s82[I]
-		print 'Run', f.run, 'Camcol', f.camcol, 'Field', f.field
-		print 'dist', np.sqrt(dst[I])
-		print ('<img src="%s" /><br /><br />' %
-			   ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=25' % (f.run, f.camcol, f.field)))
-		
+		if (sum(ii) > 10) & (n['dec'] > 2.0):
+			print '<p>'
+			print ('NGC' if isngc else 'IC'), num, 'has', sum(ii), 'fields, and is at RA = ', n['ra'], 'Dec=', n['dec']
+			print '</p>'
+
+			ff = fields[J[ii]]
+			print 'rcfi = [',
+			for f in ff:
+				print '(', f.run, ',', f.camcol, ',', f.field, ',', f.incl, ')',
+			print ']'
+			for f in ff:
+				print 'Incl', f.incl, '<br />'
+				print ('<img src="%s" /><br /><br />' %
+					   ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=25' % (f.run, f.camcol, f.field)))
+				print '<br />'
+
+	# NGC 2511 has 12 fields, and is at RA = 120.575 Dec= 9.4 
 
 def testGalaxy():
 	W,H = 200,200
@@ -326,171 +351,119 @@ def testGalaxy():
 def main():
 	from optparse import OptionParser
 
+	#testGalaxy()
+	#choose_field2()
+
 	parser = OptionParser()
 	parser.add_option('-l', '--load', dest='loadi', type='int',
 					  default=-1, help='Load catalog from step #...')
 	opt,args = parser.parse_args()
 
-	testGalaxy()
-	return
+	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
 
-	pos = PixPos(1,2)
-	flux = Flux(3)
-	ps = PointSource(pos, flux)
-	print ps
-	print ps.hashkey()
-	pickle_to_file(ps, 'p')
-	#sys.exit(0)
-
-	# image
-	# invvar
-	# sky
-	# psf
+	rcf = [(r,c,f) for r,c,f,i in rcfi if i < 85]
+	print 'RCF', rcf
 
 	sdss = DR7()
 
-	# choose_field()
-
-	run = 125
-	camcol = 3
-	field = 196
 	bandname = 'i'
 
-	#x0,x1,y0,y1 = 1000,1250, 400,650
-	#x0,x1,y0,y1 = 250,500, 1150,1400
+	if False:
+		from astrometry.util import sdss_das as das
+		from astrometry.util.sdss_filenames import sdss_filename
+		for r,c,f in rcf:
+			for filetype in ['fpC', 'fpM', 'psField', 'tsField']:
+				fn = sdss_filename(filetype, r, c, f, band=bandname)
+				print 'Need', fn
+				#if not os.path.exists(fn):
+				print 'Getting from DAS'
+				das.sdss_das_get(filetype, fn, r, c, f, band=bandname)
 
-	# Smallish galaxy (gets fit by ~10 stars)
-	x0,x1,y0,y1 = 200,500, 1100,1400
-	# Zoom in on single galaxy
-	#x0,x1,y0,y1 = 375,475, 1225,1325
+	# we only got some of them...
+	rcf = [ (5194, 2, 44), (5194, 2, 43), (5849, 4, 27), (5935, 5, 27) ]
+	rcf = rcf[:2]
+	print 'RCF', rcf
 
-	# A sparse field with a small galaxy
-	# (gets fit by only one star)
-	# (needs about 20 srcs)
-	#x0,x1,y0,y1 = 0,300, 200,500
-
-	# A sparse field with no galaxies
-	#x0,x1,y0,y1 = 500,800, 400,700
 
 	print 'Reading SDSS input files...'
 
 	band = band_index(bandname)
 
-	fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
-	fpC = fpC.astype(float) - sdss.softbias
-	image = fpC
+	images = []
+	zrange = []
+	nziv = []
+
+	# FIXME -- bug-bug annihilation
+	rerun = 0
 	
-	psfield = sdss.readPsField(run, camcol, field)
-	gain = psfield.getGain(band)
-	darkvar = psfield.getDarkVariance(band)
-	sky = psfield.getSky(band)
-	skyerr = psfield.getSkyErr(band)
-	skysig = sqrt(sky)
+	for run,camcol,field in rcf:
+		fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
+		fpC = fpC.astype(float) - sdss.softbias
+		image = fpC
+	
+		psfield = sdss.readPsField(run, camcol, field)
+		gain = psfield.getGain(band)
+		darkvar = psfield.getDarkVariance(band)
+		sky = psfield.getSky(band)
+		skyerr = psfield.getSkyErr(band)
+		skysig = sqrt(sky)
 
-	fpM = sdss.readFpM(run, camcol, field, bandname)
+		fpM = sdss.readFpM(run, camcol, field, bandname)
 
-	invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
+		tsfield = sdss.readTsField(run, camcol, field, rerun)
 
-	zrange = np.array([-3.,+10.]) * skysig + sky
+		invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
-	print 'Initial plots...'
+		nz = np.sum(invvar != 0)
+		print 'Non-zero invvars:', nz
+		nziv.append(nz)
+		
+		zr = np.array([-3.,+10.]) * skysig + sky
+		zrange.append(zr)
 
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			  vmin=zrange[0], vmax=zrange[1])
-	plt.hot()
-	plt.colorbar()
-	ax = plt.axis()
-	plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
-	plt.axis(ax)
-	plt.savefig('fullimg.png')
+		print 'Initial plots...'
+		plt.clf()
+		plt.imshow(image, interpolation='nearest', origin='lower',
+				   vmin=zr[0], vmax=zr[1])
+		plt.hot()
+		plt.colorbar()
+		ax = plt.axis()
+		plt.axis(ax)
+		#plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
+		plt.savefig('fullimg.png')
+
+		#roi = (slice(y0,y1), slice(x0,x1))
+		#image = image[roi]
+		#invvar = invvar[roi]
+
+		dgpsf = psfield.getDoubleGaussian(band)
+		print 'Creating double-Gaussian PSF approximation'
+		print '  ', dgpsf
+		(a,s1, b,s2) = dgpsf
+		psf = NGaussianPSF([s1, s2], [a, b])
+
+		# We'll start by working in pixel coords
+		wcs = SdssWcs(tsfield.getAsTrans(bandname))
+		# And counts
+		photocal = NullPhotoCal()
+
+		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
+					photocal=photocal)
+		images.append(img)
 
 	print 'Firing up tractor...'
+	tractor = SDSSTractor(images)
 
-	roi = (slice(y0,y1), slice(x0,x1))
-	image = image[roi]
-	invvar = invvar[roi]
-
-	dgpsf = psfield.getDoubleGaussian(band)
-	print 'Creating double-Gaussian PSF approximation'
-	print '  ', dgpsf
-
-	(a,s1, b,s2) = dgpsf
-	psf = NGaussianPSF([s1, s2], [a, b])
-
-	#print 'PSF:', psf
-	#print psf.hashkey()
-
-	# We'll start by working in pixel coords
-	wcs = NullWCS()
-	# And counts
-	photocal = NullPhotoCal()
-
-	data = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
-				 photocal=photocal)
+	print 'Start: catalog is', tractor.catalog
 	
-	tractor = SDSSTractor([data])
-	
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			  vmin=zrange[0], vmax=zrange[1])
-	plt.hot()
-	plt.colorbar()
-	plt.savefig('img.png')
-
-	plt.clf()
-	plt.imshow((image - sky) * np.sqrt(invvar),
-			   interpolation='nearest', origin='lower')
-	plt.hot()
-	plt.colorbar()
-	plt.savefig('chi.png')
-
-	plt.clf()
-	plt.imshow((image - sky) * np.sqrt(invvar),
-			   interpolation='nearest', origin='lower',
-			   vmin=-3, vmax=10.)
-	plt.hot()
-	plt.colorbar()
-	plt.savefig('chi2.png')
-
-	nziv = np.sum(invvar != 0)
-	print 'Non-zero invvars:', nziv
-
-	Nsrc = 10
-	#steps = (['plots'] + ['source']*Nsrc + ['plots'] + ['psf'] + ['plots'] + ['psf2'])*3 + ['plots'] + ['break']
-
-	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc + ['psf'] + ['plots'])
-
-	#steps = (['plots'] + (['source']*5 + ['plots'])*Nsrc)
-	#steps = (['plots'] + ['source']*5 + ['plots'] + ['change', 'plots'])
-	#steps = (['source']*5 + ['change', 'plots'])
-
-	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-	#									  'save', 'plots'])*10)
-
-	#steps = (['plots'] + (['source']*5 + ['save', 'plots', 'change',
-	#									  'save', 'plots']) +
-	#		 ['psf', 'plots', 'psf2', 'plots'])
-
-	#steps = ['source', 'save', 'psf', 'psf2', 'source', 'change', 'plots']
-
-	steps = ['source']*5 + ['plots', 'change', 'plots']
-
-	print 'steps:', steps
-
-	chiArange = None
-
+	#steps = ['source']*5 + ['plots', 'change', 'plots']
+	steps = ['plots', 'source', 'plots', 'change', 'plots']
 	ploti = 0
 	savei = 0
 	stepi = 0
 
-	# JUMP IN:
-	if opt.loadi != -1:
-		loadi = opt.loadi
-		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
-		print 'Starting from step', stepi
+	chiAimargs = []
 
-	#for i,step in enumerate(steps):
 	for stepi,step in zip(range(stepi, len(steps)), steps[stepi:]):
 
 		if step == 'plots':
@@ -498,57 +471,64 @@ def main():
 			NS = len(tractor.getCatalog())
 
 			chis = tractor.getChiImages()
-			chi = chis[0]
-
-			tt = 'sources: %i, chi^2/pix = %g' % (NS, np.sum(chi**2)/float(nziv))
-
 			mods = tractor.getModelImages()
-			mod = mods[0]
 
-			plt.clf()
-			plt.imshow(mod, interpolation='nearest', origin='lower',
-					   vmin=zrange[0], vmax=zrange[1])
-			plt.hot()
-			plt.colorbar()
-			ax = plt.axis()
-			img = tractor.getImage(0)
-			wcs = img.getWcs()
-			x = []
-			y = []
-			for src in tractor.getCatalog():
-				pos = src.getPosition()
-				px,py = wcs.positionToPixel(pos)
-				x.append(px)
-				y.append(py)
-			plt.plot(x, y, 'b+')
-			plt.axis(ax)
-			plt.title(tt)
-			fn = 'mod-%02i.png' % ploti
-			plt.savefig(fn)
-			print 'Wrote', fn
+			for i in range(len(chis)):
+				chi = chis[i]
+				mod = mods[i]
+				img = tractor.getImage(i)
+				tt = 'sources: %i, chi^2/pix = %g' % (NS, np.sum(chi**2)/float(nziv[i]))
+				zr = zrange[i]
+				imargs = dict(interpolation='nearest', origin='lower',
+							  vmin=zr[0], vmax=zr[1])
 
-			if chiArange is None:
-				chiArange = (chi.min(), chi.max())
+				plt.clf()
+				plt.imshow(mod, **imargs)
+				plt.hot()
+				plt.colorbar()
+				ax = plt.axis()
+				wcs = img.getWcs()
+				x = []
+				y = []
+				for src in tractor.getCatalog():
+					pos = src.getPosition()
+					px,py = wcs.positionToPixel(src, pos)
+					x.append(px)
+					y.append(py)
+				plt.plot(x, y, 'b+')
+				plt.axis(ax)
+				plt.title(tt)
+				fn = 'mod-%02i-%02i.png' % (ploti, i)
+				plt.savefig(fn)
+				print 'Wrote', fn
 
-			plt.clf()
-			plt.imshow(chi, interpolation='nearest', origin='lower',
-					   vmin=chiArange[0], vmax=chiArange[1])
-			plt.hot()
-			plt.colorbar()
-			plt.title(tt)
-			fn = 'chiA-%02i.png' % ploti
-			plt.savefig(fn)
-			print 'Wrote', fn
+				if len(chiAimargs) <= i:
+					mn,mx = (chi.min(), chi.max())
+					chiAimargs.append(
+						dict(interpolation='nearest', origin='lower',
+							 vmin=mn, vmax=mx))
+				chiAimarg = chiAimargs[i]
 
-			plt.clf()
-			plt.imshow(chi, interpolation='nearest', origin='lower',
-					   vmin=-3, vmax=10.)
-			plt.hot()
-			plt.colorbar()
-			plt.title(tt)
-			fn = 'chiB-%02i.png' % ploti
-			plt.savefig(fn)
-			print 'Wrote', fn
+				plt.clf()
+				plt.imshow(chi, **chiAimarg)
+				plt.hot()
+				plt.colorbar()
+				plt.title(tt)
+				fn = 'chiA-%02i-%02i.png' % (ploti, i)
+				plt.savefig(fn)
+				print 'Wrote', fn
+
+				chiBimarg = dict(interpolation='nearest', origin='lower',
+								 vmin=-3, vmax=10.)
+
+				plt.clf()
+				plt.imshow(chi, **chiBimarg)
+				plt.hot()
+				plt.colorbar()
+				plt.title(tt)
+				fn = 'chiB-%02i-%02i.png' % (ploti, i)
+				plt.savefig(fn)
+				print 'Wrote', fn
 
 			ploti += 1
 
@@ -605,7 +585,6 @@ def main():
 			savei += 1
 			
 		print 'Tractor cache has', len(tractor.cache), 'entries'
-
 
 if __name__ == '__main__':
 	main()
