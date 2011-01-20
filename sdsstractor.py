@@ -247,7 +247,7 @@ class SDSSTractor(Tractor):
 
 	def changeSource(self, source):
 		'''
-		Proposes a list of alternatives, where each is a lists of new
+		Proposes a list of alternatives, where each alternative is a list of new
 		Sources that the given Source could be changed into.
 		'''
 		if isinstance(source, PointSource):
@@ -384,7 +384,6 @@ def main():
 	rcf = [rcf[0], rcf[2]]
 	print 'RCF', rcf
 
-
 	print 'Reading SDSS input files...'
 
 	band = band_index(bandname)
@@ -449,7 +448,7 @@ def main():
 
 		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
 					photocal=photocal,
-					name='Image %i: r=%i, c=%i, f=%i' % (i, run, camcol, field))
+					name='Image%i(r/c/f=%i/%i%i)' % (i, run, camcol, field))
 		images.append(img)
 
 	print 'Firing up tractor...'
@@ -458,7 +457,7 @@ def main():
 	print 'Start: catalog is', tractor.catalog
 	
 	#steps = ['source']*5 + ['plots', 'change', 'plots']
-	steps = ['plots', 'source', 'plots', 'change', 'plots']
+	steps = ['plots'] + ['source', 'plots']*5 + ['change', 'plots']
 	ploti = 0
 	savei = 0
 	stepi = 0

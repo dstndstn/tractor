@@ -739,6 +739,7 @@ class Tractor(object):
 		print
 
 		oldcat = self.catalog
+		ncat = len(oldcat)
 
 		# We can't just loop over "srcs" -- because when we accept a
 		# change, the catalog changes!
@@ -760,8 +761,11 @@ class Tractor(object):
 				ii += 1
 				if ii >= len(self.catalog):
 					break
+				if ii >= ncat:
+					break
 				print '  changing source index', ii
 				src = self.catalog[ii]
+				print '  changing source:', src
 			else:
 				if i >= len(srcs):
 					break
@@ -820,6 +824,7 @@ class Tractor(object):
 				# to updated the structure and params.
 				oldcat.remove(src)
 				ii -= 1
+				ncat -= 1
 				oldcat.extend(alts[bestalt])
 				oldcat.setAllParams(bestparams)
 				self.catalog = oldcat
@@ -880,7 +885,8 @@ class Tractor(object):
 			func(self, imagei, img, psf, steps, mod0, derivs, baton)
 
 		# (PSF)
-		X = self.optimize([img], [derivs])
+		allparams = [[(deriv,img)] for deriv in derivs]
+		X = self.optimize(allparams)
 
 		print 'PSF Parameter changes:', X
 		dlogprob = self.tryParamUpdates([psf], X)
@@ -938,7 +944,7 @@ class Tractor(object):
 				if img in imgoffs:
 					continue
 				imgoffs[img] = nextrow
-				print 'Putting image', img.name, 'at row offset', nextrow
+				#print 'Putting image', img.name, 'at row offset', nextrow
 				nextrow += img.numberOfPixels()
 		Nrows = nextrow
 		del nextrow
@@ -946,14 +952,12 @@ class Tractor(object):
 		Ncols = len(allparams)
 
 		for col, param in enumerate(allparams):
-			print 'Filling column', col
+			#print 'Filling column', col
 			for (deriv, img) in param:
 				inverrs = img.getInvError()
 				(H,W) = img.shape
-
 				row0 = imgoffs[img]
-				print 'Image', img.name, 'has row0=', row0
-
+				#print 'Image', img.name, 'has row0=', row0
 				#print 'Before clipping:'
 				#print 'deriv shape is', deriv.shape
 				#print 'deriv slice is', deriv.getSlice()
@@ -976,9 +980,7 @@ class Tractor(object):
 				nz = np.flatnonzero(dimg)
 				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
 				rows = row0 + pix[nz]
-
-				print 'Adding derivative', deriv.getName(), 'for image', img.name
-
+				#print 'Adding derivative', deriv.getName(), 'for image', img.name
 				cols = np.zeros_like(rows) + col
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
@@ -1040,12 +1042,6 @@ class Tractor(object):
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		print '  X=', X
-
-		#i = 0
-		#for derivs in allderivs:
-		#	for deriv in derivs:
-		#		print 'update for', deriv.name, ':', X[i]
-		#		i += 1
 
 		return X
 
