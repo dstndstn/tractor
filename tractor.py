@@ -897,43 +897,19 @@ class Tractor(object):
 		for i in range(len(self.images)):
 			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
-	def optimize(self, allimgs, allderivs):
+	def optimize(self, allparams):
 
-		# allimgs is a list of images, and MAY CONTAIN REPEATS
-		# allderivs is a list of derivatives (Patch objects)
+		# allparams: [
+		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
+		#    (param1:)  [],
+		#    (param2:)  [  (deriv, img), ],
+		# ]
 
-		# Each derivative patch corresponds to a model parameter that
-		# we are optimizing
+		# The "img"s may repeat
+		# "deriv" are Patch objects.
 
-		# Parameters to optimize go in the columns of matrix A
-		# Pixels go in the rows.
-
-		# Build the sparse matrix of derivatives:
-		sprows = []
-		spcols = []
-		spvals = []
-
-		# Keep track of row offsets for each image.
-		imgoffs = {}
-		nextrow = 0
-		for img in allimgs:
-			if img in imgoffs:
-				continue
-			imgoffs[img] = nextrow
-			print 'Putting image', img.name, 'at row offset', nextrow
-			nextrow += img.numberOfPixels()
-		Nrows = nextrow
-		del nextrow
-
-		# "imgrow0" is the cumulative sum of number of pixels
-		#imgrow0 = [0]
-		#for img in allimgs[:-1]:
-		#	imgrow0.append(imgrow0[-1] + img.numberOfPixels())
-		#print 'imgrow0:', imgrow0
-		#Nrows = imgrow0[-1] + allimgs[-1].numberOfPixels()
-		#print 'N rows:', Nrows
-
-		nextcol = 0
+		# Each position in the "allparams" array corresponds to a
+		# model parameter that we are optimizing
 
 		# We want to minimize:
 		#   || chi + (d(chi)/d(params)) * dparams ||^2
@@ -946,24 +922,38 @@ class Tractor(object):
 		# A matrix = -d(chi)/d(param)
 		#          = + (derivs) * inverr
 
-		for i, (img,derivs) in enumerate(zip(allimgs, allderivs)):
-			inverrs = img.getInvError()
-			(H,W) = img.shape
+		# Parameters to optimize go in the columns of matrix A
+		# Pixels go in the rows.
 
-			row0 = imgoffs[img]
-			print 'Image', img.name, 'has row0=', row0
+		# Build the sparse matrix of derivatives:
+		sprows = []
+		spcols = []
+		spvals = []
 
-			## 
-			#row0 = imgoffs.get(img, -1)
-			#if row0 == -1:
-			#	row0 = nextrow
-			#	imgoffs[img] = row0
-			#	nextrow += img.numberOfPixels()
-			#
-			#row0 = imgrow0[i]
+		# Keep track of row offsets for each image.
+		imgoffs = {}
+		nextrow = 0
+		for param in allparams:
+			for deriv,img in param:
+				if img in imgoffs:
+					continue
+				imgoffs[img] = nextrow
+				print 'Putting image', img.name, 'at row offset', nextrow
+				nextrow += img.numberOfPixels()
+		Nrows = nextrow
+		del nextrow
 
-			# Add to the sparse matrix of derivatives:
-			for p,deriv in enumerate(derivs):
+		Ncols = len(allparams)
+
+		for col, param in enumerate(allparams):
+			print 'Filling column', col
+			for (deriv, img) in param:
+				inverrs = img.getInvError()
+				(H,W) = img.shape
+
+				row0 = imgoffs[img]
+				print 'Image', img.name, 'has row0=', row0
+
 				#print 'Before clipping:'
 				#print 'deriv shape is', deriv.shape
 				#print 'deriv slice is', deriv.getSlice()
@@ -977,7 +967,7 @@ class Tractor(object):
 				#print 'parent pix', (W*H), npixels[i]
 				#print 'pix range:', pix.min(), pix.max()
 				if len(pix) == 0:
-					#print 'This source does not influence this image!'
+					#print 'This param does not influence this image!'
 					continue
 
 				assert(all(pix < img.numberOfPixels()))
@@ -987,9 +977,9 @@ class Tractor(object):
 				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
 				rows = row0 + pix[nz]
 
-				print 'Putting derivative', deriv.getName(), 'for image', img.name, 'at col', (nextcol+p)
+				print 'Adding derivative', deriv.getName(), 'for image', img.name
 
-				cols = np.zeros_like(rows) + nextcol + p
+				cols = np.zeros_like(rows) + col
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
 				assert(vals.shape == w.shape)
@@ -997,22 +987,8 @@ class Tractor(object):
 				spcols.append(cols)
 				spvals.append(vals * w)
 
-			nextcol += len(derivs)
-
-		#print 'imgrow0:', imgrow0
-		#print 'imgoffs:', imgoffs
-		#items = imgoffs.items()
-		#imgi = np.array([allimgs.index(k) for k,v in items])
-		#I = np.argsort(imgi)
-		#for i in I:
-		#	k,v = items[i]
-		#	print '  ', imgi[i], '=', v
-
 		if len(spcols) == 0:
 			return []
-
-		Ncols = nextcol
-		del nextcol
 
 		# ensure the sparse matrix is full up to the number of columns we expect
 		spcols.append([Ncols - 1])
@@ -1034,13 +1010,11 @@ class Tractor(object):
 		A = csr_matrix((spvals, (sprows, spcols)))
 
 		# b = chi
-		# FIXME -- we could be much smarter here about computing just the regions
-		# we need!
+		#
+		# FIXME -- we could be much smarter here about computing
+		# just the regions we need!
+		#
 		b = np.zeros(Nrows)
-		#for img,row0 in imgoffs.items():
-		#for img,row0 in zip(allimgs, imgrow0):
-		#for img in allimgs:
-		#	row0 = imgoffs[img]
 		# iterating this way avoid setting the elements more than once
 		for img,row0 in imgoffs.items():
 			NP = img.numberOfPixels()
@@ -1067,11 +1041,11 @@ class Tractor(object):
 
 		print '  X=', X
 
-		i = 0
-		for derivs in allderivs:
-			for deriv in derivs:
-				print 'update for', deriv.name, ':', X[i]
-				i += 1
+		#i = 0
+		#for derivs in allderivs:
+		#	for deriv in derivs:
+		#		print 'update for', deriv.name, ':', X[i]
+		#		i += 1
 
 		return X
 
@@ -1146,17 +1120,20 @@ class Tractor(object):
  		if srcs is None:
 			srcs = self.catalog
 
-		allderivs = []
-		allimgs = []
+		allparams = []
 		for j,src in enumerate(srcs):
+			allderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
 				derivs = src.getParamDerivatives(img)
 				assert(len(derivs) == src.numberOfParams())
-				allderivs.append(derivs)
-				allimgs.append(img)
+				for k,deriv in enumerate(derivs):
+					if deriv is None:
+						continue
+					allderivs[k].append((deriv, img))
+			allparams.extend(allderivs)
 
-		X = self.optimize(allimgs, allderivs)
+		X = self.optimize(allparams)
 
 		dlogprob = self.tryParamUpdates(srcs, X)
 

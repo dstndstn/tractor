@@ -381,7 +381,7 @@ def main():
 
 	# we only got some of them...
 	rcf = [ (5194, 2, 44), (5194, 2, 43), (5849, 4, 27), (5935, 5, 27) ]
-	rcf = rcf[:2]
+	rcf = [rcf[0], rcf[2]]
 	print 'RCF', rcf
 
 
