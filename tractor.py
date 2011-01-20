@@ -897,6 +897,15 @@ class Tractor(object):
 			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
 	def optimize(self, allimgs, allderivs):
+		# allimgs is a list of images
+		# allderivs is a list of derivatives (Patch objects)
+
+		# Each derivative patch corresponds to a model parameter that
+		# we are optimizing
+
+		# Parameters to optimize go in the columns of matrix A
+		# Pixels go in the rows.
+
 		# Build the sparse matrix of derivatives:
 		sprows = []
 		spcols = []
@@ -909,7 +918,7 @@ class Tractor(object):
 		nextcol = 0
 
 		# We want to minimize:
-		#   || chi + (d(chi)/d(params)) * dparams ||
+		#   || chi + (d(chi)/d(params)) * dparams ||^2
 		# So  b = chi
 		#     A = -d(chi)/d(params)
 		#     x = dparams
@@ -1126,11 +1135,12 @@ class Tractor(object):
 		return mod
 
 	def getModelImage(self, img):
+		return self.getModelImageNoCache(img)
+	'''
+	def getModelImage(self, img):
 		# dependencies of this model image:
 		# img.sky, img.psf, img.wcs, sources that overlap.
 		#deps = (hash(img), hash(self.catalog))
-		print 'img', img
-		print 'catalog', self.catalog
 		deps = (img.hashkey(), self.catalog.hashkey())
 		#print 'deps:', deps
 		deps = hash(deps)
@@ -1143,7 +1153,8 @@ class Tractor(object):
 			#print 'Caching model image'
 			self.cache[deps] = mod
 		return mod
-
+	'''
+	
 	def getModelImages(self):
 		mods = []
 		for img in self.images:

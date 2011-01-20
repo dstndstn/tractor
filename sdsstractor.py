@@ -26,8 +26,8 @@ class SdssWcs(WCS):
 	def positionToPixel(self, src, pos):
 		## FIXME -- color.
 		x,y = self.astrans.radec_to_pixel(pos.ra, pos.dec)
-		print 'astrans: ra,dec', (pos.ra, pos.dec), '--> x,y', (x,y)
-		print 'HIDEOUS WORKAROUND'
+		#print 'astrans: ra,dec', (pos.ra, pos.dec), '--> x,y', (x,y)
+		#print 'HIDEOUS WORKAROUND'
 		x,y = x[0],y[0]
 		return x,y
 
@@ -37,8 +37,8 @@ class SdssWcs(WCS):
 		## NOTE, "src" may be None.
 		(x,y) = xy
 		ra,dec = self.astrans.pixel_to_radec(x, y)
-		print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
-		print 'HIDEOUS WORKAROUND'
+		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
+		#print 'HIDEOUS WORKAROUND'
 		ra,dec = ra[0], dec[0]
 		return RaDecPos(ra, dec)
 
@@ -396,7 +396,7 @@ def main():
 	# FIXME -- bug-bug annihilation
 	rerun = 0
 	
-	for run,camcol,field in rcf:
+	for i,(run,camcol,field) in enumerate(rcf):
 		fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
 		fpC = fpC.astype(float) - sdss.softbias
 		image = fpC
@@ -430,7 +430,7 @@ def main():
 		ax = plt.axis()
 		plt.axis(ax)
 		#plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
-		plt.savefig('fullimg.png')
+		plt.savefig('fullimg-%02i.png' % i)
 
 		#roi = (slice(y0,y1), slice(x0,x1))
 		#image = image[roi]
