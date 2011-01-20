@@ -448,7 +448,8 @@ def main():
 		photocal = NullPhotoCal()
 
 		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
-					photocal=photocal)
+					photocal=photocal,
+					name='Image %i: r=%i, c=%i, f=%i' % (i, run, camcol, field))
 		images.append(img)
 
 	print 'Firing up tractor...'

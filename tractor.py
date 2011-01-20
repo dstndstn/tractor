@@ -262,13 +262,14 @@ def randomint():
 
 class Image(object):
 	def __init__(self, data=None, invvar=None, psf=None, sky=0, wcs=None,
-				 photocal=None):
+				 photocal=None, name=None):
 		self.data = data
 		self.invvar = invvar
 		self.psf = psf
 		self.sky = sky
 		self.wcs = wcs
 		self.photocal = photocal
+		self.name = name
 
 	def setPsf(self, psf):
 		self.psf = psf
@@ -897,7 +898,8 @@ class Tractor(object):
 			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
 
 	def optimize(self, allimgs, allderivs):
-		# allimgs is a list of images
+
+		# allimgs is a list of images, and MAY CONTAIN REPEATS
 		# allderivs is a list of derivatives (Patch objects)
 
 		# Each derivative patch corresponds to a model parameter that
@@ -914,6 +916,22 @@ class Tractor(object):
 		# Keep track of row offsets for each image.
 		imgoffs = {}
 		nextrow = 0
+		for img in allimgs:
+			if img in imgoffs:
+				continue
+			imgoffs[img] = nextrow
+			print 'Putting image', img.name, 'at row offset', nextrow
+			nextrow += img.numberOfPixels()
+		Nrows = nextrow
+		del nextrow
+
+		# "imgrow0" is the cumulative sum of number of pixels
+		#imgrow0 = [0]
+		#for img in allimgs[:-1]:
+		#	imgrow0.append(imgrow0[-1] + img.numberOfPixels())
+		#print 'imgrow0:', imgrow0
+		#Nrows = imgrow0[-1] + allimgs[-1].numberOfPixels()
+		#print 'N rows:', Nrows
 
 		nextcol = 0
 
@@ -928,15 +946,21 @@ class Tractor(object):
 		# A matrix = -d(chi)/d(param)
 		#          = + (derivs) * inverr
 
-		for img, derivs in zip(allimgs, allderivs):
+		for i, (img,derivs) in enumerate(zip(allimgs, allderivs)):
 			inverrs = img.getInvError()
 			(H,W) = img.shape
 
-			row0 = imgoffs.get(img, -1)
-			if row0 == -1:
-				row0 = nextrow
-				imgoffs[img] = row0
-				nextrow += img.numberOfPixels()
+			row0 = imgoffs[img]
+			print 'Image', img.name, 'has row0=', row0
+
+			## 
+			#row0 = imgoffs.get(img, -1)
+			#if row0 == -1:
+			#	row0 = nextrow
+			#	imgoffs[img] = row0
+			#	nextrow += img.numberOfPixels()
+			#
+			#row0 = imgrow0[i]
 
 			# Add to the sparse matrix of derivatives:
 			for p,deriv in enumerate(derivs):
@@ -945,13 +969,13 @@ class Tractor(object):
 				#print 'deriv slice is', deriv.getSlice()
 				deriv.clipTo(W, H)
 				pix = deriv.getPixelIndices(img)
+				# (in the parent image)
 				#print 'After clipping:'
 				#print 'deriv shape is', deriv.shape
 				#print 'deriv slice is', deriv.getSlice()
 				#print 'image shape is', img.shape
 				#print 'parent pix', (W*H), npixels[i]
 				#print 'pix range:', pix.min(), pix.max()
-				# (in the parent image)
 				if len(pix) == 0:
 					#print 'This source does not influence this image!'
 					continue
@@ -962,6 +986,9 @@ class Tractor(object):
 				nz = np.flatnonzero(dimg)
 				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
 				rows = row0 + pix[nz]
+
+				print 'Putting derivative', deriv.getName(), 'for image', img.name, 'at col', (nextcol+p)
+
 				cols = np.zeros_like(rows) + nextcol + p
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
@@ -972,11 +999,23 @@ class Tractor(object):
 
 			nextcol += len(derivs)
 
+		#print 'imgrow0:', imgrow0
+		#print 'imgoffs:', imgoffs
+		#items = imgoffs.items()
+		#imgi = np.array([allimgs.index(k) for k,v in items])
+		#I = np.argsort(imgi)
+		#for i in I:
+		#	k,v = items[i]
+		#	print '  ', imgi[i], '=', v
+
 		if len(spcols) == 0:
 			return []
 
+		Ncols = nextcol
+		del nextcol
+
 		# ensure the sparse matrix is full up to the number of columns we expect
-		spcols.append([nextcol - 1])
+		spcols.append([Ncols - 1])
 		sprows.append([0])
 		spvals.append([0])
 
@@ -997,7 +1036,12 @@ class Tractor(object):
 		# b = chi
 		# FIXME -- we could be much smarter here about computing just the regions
 		# we need!
-		b = np.zeros(nextrow)
+		b = np.zeros(Nrows)
+		#for img,row0 in imgoffs.items():
+		#for img,row0 in zip(allimgs, imgrow0):
+		#for img in allimgs:
+		#	row0 = imgoffs[img]
+		# iterating this way avoid setting the elements more than once
 		for img,row0 in imgoffs.items():
 			NP = img.numberOfPixels()
 			mod = self.getModelImage(img)
@@ -1006,6 +1050,8 @@ class Tractor(object):
 			assert(np.product(mod.shape) == NP)
 			assert(mod.shape == data.shape)
 			assert(mod.shape == inverr.shape)
+			# we haven't touched these pix before
+			assert(all(b[row0 : row0 + NP] == 0))
 			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
 		b = b[:urows.max() + 1]
 		#print 'b shape', b.shape
@@ -1020,6 +1066,13 @@ class Tractor(object):
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
 		print '  X=', X
+
+		i = 0
+		for derivs in allderivs:
+			for deriv in derivs:
+				print 'update for', deriv.name, ':', X[i]
+				i += 1
+
 		return X
 
 	# X: delta-params
