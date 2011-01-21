@@ -15,7 +15,6 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
-import astrometry.libkd.spherematch as spherematch
 
 from compiled_profiles import *
 from galaxy_profiles import *
@@ -284,6 +283,8 @@ class SDSSTractor(Tractor):
 
 
 def choose_field2():
+	import astrometry.libkd.spherematch as spherematch
+
 	fields = fits_table('window_flist.fits')
 	print len(ngc2000), 'NGC/IC objects'
 	goodngc = [n for n in ngc2000 if n.get('classification', None) == 'Gx']
