@@ -2,10 +2,12 @@ if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
 
+from math import pi, sqrt
+
 import pyfits
 import pylab as plt
 import numpy as np
-from math import pi, sqrt
+import matplotlib
 
 from tractor import *
 
@@ -31,15 +33,19 @@ class SdssWcs(WCS):
 		x,y = x[0],y[0]
 		return x,y
 
+	def pixelToRaDec(self, x, y):
+		ra,dec = self.astrans.pixel_to_radec(x, y)
+		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
+		#print 'HIDEOUS WORKAROUND'
+		ra,dec = ra[0], dec[0]
+		return ra,dec
+	
 	# (x,y) to RA,Dec in deg
 	def pixelToPosition(self, src, xy):
 		## FIXME -- color.
 		## NOTE, "src" may be None.
 		(x,y) = xy
-		ra,dec = self.astrans.pixel_to_radec(x, y)
-		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
-		#print 'HIDEOUS WORKAROUND'
-		ra,dec = ra[0], dec[0]
+		ra,dec = self.pixelToRaDec(x, y)
 		return RaDecPos(ra, dec)
 
 
@@ -451,6 +457,28 @@ def main():
 					name='Image%i(r/c/f=%i/%i%i)' % (i, run, camcol, field))
 		images.append(img)
 
+	print 'Creating footprint image...'
+	radecs = []
+	for img in images:
+		wcs = img.getWcs()
+		(H,W) = img.shape
+		corners = [ (0,0), (W,0), (W,H), (0,H), (0,0) ]
+		rds = []
+		for x,y in corners:
+			rds.append(wcs.pixelToRaDec(x,y))
+		radecs.append(rds)
+	plt.clf()
+	# FIXME -- RA=0 wrap-around
+	for rd in radecs:
+		plt.plot([r for r,d in rd], [d for r,d in rd], 'b-')
+		plt.gca().add_artist(matplotlib.patches.Polygon(rd, ec='b', fill=True, alpha=0.3))
+	plt.xlabel('RA (deg)')
+	ax = plt.axis()
+	plt.xlim(ax[1], ax[0])
+	plt.ylabel('Dec (deg)')
+	plt.savefig('footprints.png')
+
+	
 	print 'Firing up tractor...'
 	tractor = SDSSTractor(images)
 
@@ -495,7 +523,7 @@ def main():
 					px,py = wcs.positionToPixel(src, pos)
 					x.append(px)
 					y.append(py)
-				plt.plot(x, y, 'b+')
+				plt.plot(x, y, 'bo', mfc='none', mec='b')
 				plt.axis(ax)
 				plt.title(tt)
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
