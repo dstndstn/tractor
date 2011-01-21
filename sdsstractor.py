@@ -363,7 +363,15 @@ def main():
 	parser = OptionParser()
 	parser.add_option('-l', '--load', dest='loadi', type='int',
 					  default=-1, help='Load catalog from step #...')
+	parser.add_option('-v', '--verbose', dest='verbose', action='count',
+					  help='Make more verbose')
 	opt,args = parser.parse_args()
+
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else: # opt.verbose == 1:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl)
 
 	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
 

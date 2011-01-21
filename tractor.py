@@ -8,6 +8,10 @@ from astrometry.util.miscutils import get_overlapping_region
 
 import pylab as plt
 
+import logging
+from logging import debug as logverb
+from logging import info  as logmsg
+
 class Params(object):
 	def __hash__(self):
 		return hash(self.hashkey())
