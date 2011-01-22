@@ -15,13 +15,66 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
+from astrometry.util.plotutils import setRadecAxes
 
 from compiled_profiles import *
 from galaxy_profiles import *
 
+# might want to override this to set the step size to ~ a pixel
+#class SdssRaDecPos(RaDecPos):
+#	def getStepSizes(self, img):
+#		return [1e-4, 1e-4]
+
+class SdssPhotoCal(object):
+	scale = 1e6
+	def __init__(self, scale):
+		self.scale = scale
+	def fluxToCounts(self, flux):
+		'''
+		flux: your duck-typed Flux object
+
+		returns: float
+		'''
+		return flux.getValue() * self.scale
+	def countsToFlux(self, counts):
+		'''
+		counts: float
+
+		Returns: duck-typed Flux object
+		'''
+		return SdssFlux(counts / self.scale)
+
+class SdssFlux(Flux):
+	def getStepSizes(self, img):
+		return [1.]
+	def __str__(self):
+		return 'SdssFlux: %.1f' % (self.val * SdssPhotoCal.scale)
+	def __repr__(self):
+		return 'SdssFlux(%.1f)' % (self.val * SdssPhotoCal.scale)
+	def hashkey(self):
+		return ('SdssFlux', self.val)
+	def copy(self):
+		return SdssFlux(self.val)
+
 class SdssWcs(WCS):
 	def __init__(self, astrans):
 		self.astrans = astrans
+		self.x0 = 0
+		self.y0 = 0
+
+	def setX0Y0(self, x0, y0):
+		self.x0 = x0
+		self.y0 = y0
+
+	# This function is not used by the tractor, and it works in
+	# *original* pixel coords (no x0,y0 offsets)
+	# (x,y) to RA,Dec in deg
+	def pixelToRaDec(self, x, y):
+		ra,dec = self.astrans.pixel_to_radec(x, y)
+		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
+		#print 'HIDEOUS WORKAROUND'
+		ra,dec = ra[0], dec[0]
+		return ra,dec
 
 	# RA,Dec in deg to pixel x,y.
 	def positionToPixel(self, src, pos):
@@ -30,21 +83,14 @@ class SdssWcs(WCS):
 		#print 'astrans: ra,dec', (pos.ra, pos.dec), '--> x,y', (x,y)
 		#print 'HIDEOUS WORKAROUND'
 		x,y = x[0],y[0]
-		return x,y
+		return x - self.x0, y - self.y0
 
-	def pixelToRaDec(self, x, y):
-		ra,dec = self.astrans.pixel_to_radec(x, y)
-		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
-		#print 'HIDEOUS WORKAROUND'
-		ra,dec = ra[0], dec[0]
-		return ra,dec
-	
 	# (x,y) to RA,Dec in deg
 	def pixelToPosition(self, src, xy):
 		## FIXME -- color.
 		## NOTE, "src" may be None.
 		(x,y) = xy
-		ra,dec = self.pixelToRaDec(x, y)
+		ra,dec = self.pixelToRaDec(x + self.x0, y + self.y0)
 		return RaDecPos(ra, dec)
 
 
@@ -236,19 +282,163 @@ class DevGalaxy(Galaxy):
 
 class SDSSTractor(Tractor):
 
-	def createNewSource(self, img, x, y, ht):
-		# "ht" is the peak height (difference between image and model)
-		# convert to total flux by normalizing by my patch's peak pixel value.
-		#patch = img.getPsf().getPointSourcePatch(x, y)
-		#print 'psf patch:', patch.shape
-		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
-		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
-		#ht /= patch.max()
+	def __init__(self, *args, **kwargs):
+		self.debugnew = kwargs.pop('debugnew', False)
+		self.debugchange = kwargs.pop('debugchange', False)
 
+		Tractor.__init__(self, *args, **kwargs)
+		self.newsource = 0
+		self.changes = []
+		self.changei = 0
+
+	def debugChangeSources(self, **kwargs):
+		if self.debugchange:
+			self.doDebugChangeSources(**kwargs)
+
+	def doDebugChangeSources(self, step=None, src=None, newsrcs=None, alti=0,
+							 dlnprob=0, **kwargs):
+		print 'Step', step, 'for alt', alti
+		print 'changes:', len(self.changes)
+		print [type(x) for x in self.changes]
+
+		if step == 'start':
+			self.changes = []
+			#assert(len(self.changes) == 0)
+			# find an image that it overlaps.
+			img = None
+			for imgi in range(self.getNImages()):
+				img = self.getImage(imgi)
+				mod = self.getModelPatch(img, src)
+				if mod.getImage() is None:
+					continue
+				impatch = img.getImage()[mod.getSlice(img)]
+				if len(impatch.ravel()) == 0:
+					continue
+				break
+			assert(img is not None)
+			self.changes = [img, impatch, mod]
+
+		elif step in ['init', 'opt1']:
+			print 'newsrcs:', newsrcs
+			if newsrcs == []:
+				return
+			assert(len(self.changes) > 0)
+			img = self.changes[0]
+			assert(len(newsrcs) == 1)
+			mod = self.getModelPatch(img, newsrcs[0])
+			mod.name = newsrcs[0].name
+			self.changes.append(mod)
+			if step == 'opt1':
+				self.changes.append(dlnprob)
+
+		elif step in ['switch', 'keep']:
+			print 'changes:', self.changes
+			assert(len(self.changes) == 9)
+			(img, impatch, mod0, alta0, alta1, altad, altb0, altb1, altbd) = self.changes
+			plt.clf()
+			plt.subplot(2, 3, 4)
+			plotimage(mod0.getImage())
+			plt.title('original')# + src.name)
+			cl = plt.gci().get_clim()
+
+			plt.subplot(2, 3, 1)
+			plotimage(impatch - img.sky, vmin=cl[0], vmax=cl[1])
+			plt.title('image')
+
+			# HACK -- force patches to be the same size + offset...
+			sl = mod0.getSlice(img)
+			im = np.zeros_like(img.getImage())
+			alta0.addTo(im)
+			a0 = im[sl].copy()
+			im[sl] = 0
+			alta1.addTo(im)
+			a1 = im[sl].copy()
+			im[sl] = 0
+			altb0.addTo(im)
+			b0 = im[sl].copy()
+			im[sl] = 0
+			altb1.addTo(im)
+			b1 = im[sl].copy()
+
+			plt.subplot(2, 3, 2)
+			plotimage(a0, vmin=cl[0], vmax=cl[1])
+			#plt.title(alta0.name)
+			plt.subplot(2, 3, 5)
+			plotimage(a1, vmin=cl[0], vmax=cl[1])
+			plt.title('dnlprob = %.1f' % altad)
+
+			plt.subplot(2, 3, 3)
+			plotimage(b0, vmin=cl[0], vmax=cl[1])
+			#plt.title(altb0.name)
+			plt.subplot(2, 3, 6)
+			plotimage(b1, vmin=cl[0], vmax=cl[1])
+			plt.title('dnlprob = %.1f' % altbd)
+
+			plt.savefig('change-%03i.png' % self.changei)
+			self.changei += 1
+
+		print 'end of step', step, 'and changes has', len(self.changes)
+		print [type(x) for x in self.changes]
+				
+	def debugNewSource(self, *args, **kwargs):
+		if self.debugnew:
+			self.doDebugNewSource(*args, **kwargs)
+
+	def doDebugNewSource(self, *args, **kwargs):
+		step = kwargs.get('type', None)
+		if step in [ 'newsrc-0', 'newsrc-opt' ]:
+			if step == 'newsrc-0':
+				optstep = 0
+				self.newsource += 1
+			else:
+				optstep = 1 + kwargs['step']
+			src = kwargs['src']
+			img = kwargs['img']
+
+			patch = src.getModelPatch(img)
+			imgpatch = img.getImage()[patch.getSlice(img)]
+
+			plt.clf()
+			plt.subplot(2,3,4)
+			plotimage(imgpatch)
+			cl = plt.gci().get_clim()
+			plt.colorbar()
+			plt.title('image patch')
+			plt.subplot(2,3,5)
+			plotimage(patch.getImage(), vmin=cl[0], vmax=cl[1])
+			plt.colorbar()
+			plt.title('new source')
+			derivs = src.getParamDerivatives(img)
+			assert(len(derivs) == 3)
+			for i,deriv in enumerate(derivs):
+				plt.subplot(2,3,i+1)
+				plotimage(deriv.getImage())
+				cl = plt.gci().get_clim()
+				mx = max(abs(cl[0]), abs(cl[1]))
+				plt.gci().set_clim(-mx, mx)
+				plt.colorbar()
+				plt.title(deriv.name)
+			fn = 'newsource-%02i-%02i.png' % (self.newsource, optstep)
+			plt.savefig(fn)
+			print 'Wrote', fn
+			
+
+	def createNewSource(self, img, x, y, ht):
 		wcs = img.getWcs()
 		pos = wcs.pixelToPosition(None, (x,y))
 
-		return PointSource(pos, Flux(ht))
+		# "ht" is the peak height (difference between image and model)
+		# convert to total flux by normalizing by my patch's peak pixel value.
+		patch = img.getPsf().getPointSourcePatch(x, y)
+		#print 'psf patch:', patch.shape
+		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
+		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
+		ht /= patch.getImage().max()
+
+		photocal = img.getPhotoCal()
+		flux = photocal.countsToFlux(ht)
+
+		return PointSource(pos, flux)
 
 	def changeSource(self, source):
 		'''
@@ -353,7 +543,43 @@ def testGalaxy():
 		plt.colorbar()
 		plt.title('derivative ' + deriv.getName())
 		plt.savefig('eg-deriv%i-0a.png' % i)
-		
+
+def plotimage(img, **kwargs):
+	args = dict(interpolation='nearest', origin='lower')
+	args.update(kwargs)
+	plt.imshow(img, **args)
+	plt.hot()
+	#plt.colorbar()
+
+def plotfootprints(radecs, radecrange=None, catalog=None, labels=None):
+	# FIXME -- RA=0 wrap-around
+	for i,rd in enumerate(radecs):
+		plt.plot([r for r,d in rd], [d for r,d in rd], 'b-')
+		# blue dot at (0,0)
+		plt.plot([rd[0][0]], [rd[0][1]], 'bo')
+		# red dot at (W,0)
+		plt.plot([rd[1][0]], [rd[1][1]], 'ro')
+		plt.gca().add_artist(matplotlib.patches.Polygon(
+			rd, ec='0.8', fc='0.8', fill=True, alpha=0.1))
+		if labels is None:
+			lab = '%i' % i
+		else:
+			lab = labels[i]
+		plt.text(rd[0][0], rd[0][1], lab)
+
+	if radecrange is None:
+		radecrange = plt.axis()
+
+	if catalog is not None:
+		r,d = [],[]
+		for src in catalog:
+			rd = src.getPosition()
+			r.append(rd.ra)
+			d.append(rd.dec)
+		# FIXME -- plot ellipses for galaxies?  tune-up.py has code...
+		plt.plot(r, d, 'b+')
+	setRadecAxes(*radecrange)
+	return radecrange
 
 def main():
 	from optparse import OptionParser
@@ -364,15 +590,16 @@ def main():
 	parser = OptionParser()
 	parser.add_option('-l', '--load', dest='loadi', type='int',
 					  default=-1, help='Load catalog from step #...')
-	parser.add_option('-v', '--verbose', dest='verbose', action='count',
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	opt,args = parser.parse_args()
 
+	print 'Opt.verbose = ', opt.verbose
 	if opt.verbose == 0:
 		lvl = logging.INFO
 	else: # opt.verbose == 1:
 		lvl = logging.DEBUG
-	logging.basicConfig(level=lvl)
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
 
@@ -399,6 +626,21 @@ def main():
 	rcf = [rcf[0], rcf[2]]
 	print 'RCF', rcf
 
+	rois = [
+		# Mostly overlapping:
+		#( 0, 1000, 0, 600 ),
+		#( 1000, 2000, 600, 1200 ),
+
+		# Pick up a big galaxy
+		#( 600, 1600, 0, 600 ),
+		#( 1000, 2000, 600, 1200 ),
+
+		( 800, 1600, 0, 600 ),
+		( 1200, 2000, 600, 1200 ),
+
+		]
+	fullsizes = []
+
 	print 'Reading SDSS input files...'
 
 	band = band_index(bandname)
@@ -409,11 +651,15 @@ def main():
 
 	# FIXME -- bug-bug annihilation
 	rerun = 0
+
+	plt.figure(figsize=(10,7.5))
 	
 	for i,(run,camcol,field) in enumerate(rcf):
 		fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
 		fpC = fpC.astype(float) - sdss.softbias
 		image = fpC
+
+		fullsizes.append(image.shape)
 	
 		psfield = sdss.readPsField(run, camcol, field)
 		gain = psfield.getGain(band)
@@ -435,20 +681,23 @@ def main():
 		zr = np.array([-3.,+10.]) * skysig + sky
 		zrange.append(zr)
 
+		x0,x1,y0,y1 = rois[i]
+
 		print 'Initial plots...'
 		plt.clf()
-		plt.imshow(image, interpolation='nearest', origin='lower',
-				   vmin=zr[0], vmax=zr[1])
-		plt.hot()
-		plt.colorbar()
+		plotimage(image, vmin=zr[0], vmax=zr[1])
 		ax = plt.axis()
+		plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
 		plt.axis(ax)
-		#plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
 		plt.savefig('fullimg-%02i.png' % i)
 
-		#roi = (slice(y0,y1), slice(x0,x1))
-		#image = image[roi]
-		#invvar = invvar[roi]
+		roislice = (slice(y0,y1), slice(x0,x1))
+		image = image[roislice]
+		invvar = invvar[roislice]
+
+		plt.clf()
+		plotimage(image, vmin=zr[0], vmax=zr[1])
+		plt.savefig('img-%02i.png' % i)
 
 		dgpsf = psfield.getDoubleGaussian(band)
 		print 'Creating double-Gaussian PSF approximation'
@@ -456,10 +705,10 @@ def main():
 		(a,s1, b,s2) = dgpsf
 		psf = NGaussianPSF([s1, s2], [a, b])
 
-		# We'll start by working in pixel coords
 		wcs = SdssWcs(tsfield.getAsTrans(bandname))
+		wcs.setX0Y0(x0, y0)
 		# And counts
-		photocal = NullPhotoCal()
+		photocal = SdssPhotoCal(SdssPhotoCal.scale)
 
 		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
 					photocal=photocal,
@@ -468,36 +717,48 @@ def main():
 
 	print 'Creating footprint image...'
 	radecs = []
-	for img in images:
+	for i,img in enumerate(images):
+		# Find full-size and ROI boxes
 		wcs = img.getWcs()
-		(H,W) = img.shape
+		(H,W) = fullsizes[i]
+		x0,x1,y0,y1 = rois[i]
 		corners = [ (0,0), (W,0), (W,H), (0,H), (0,0) ]
-		rds = []
-		for x,y in corners:
-			rds.append(wcs.pixelToRaDec(x,y))
+		rds = [wcs.pixelToRaDec(x,y) for x,y in corners]
 		radecs.append(rds)
-	plt.clf()
-	# FIXME -- RA=0 wrap-around
-	for rd in radecs:
-		plt.plot([r for r,d in rd], [d for r,d in rd], 'b-')
-		plt.gca().add_artist(matplotlib.patches.Polygon(rd, ec='b', fill=True, alpha=0.3))
-	plt.xlabel('RA (deg)')
-	ax = plt.axis()
-	plt.xlim(ax[1], ax[0])
-	plt.ylabel('Dec (deg)')
-	plt.savefig('footprints.png')
+		corners = [ (x0,y0), (x1,y0), (x1,y1), (x0,y1), (x0,y0) ]
+		rds = [wcs.pixelToRaDec(x,y) for x,y in corners]
+		radecs.append(rds)
 
-	
+	plt.clf()
+	plotfootprints(radecs, labels=['%i'%(i/2) for i in range(len(radecs))])
+	plt.savefig('footprints-full.png')
+	# After making the full "footprints" image, trim the list down to just the ROIs
+	footradecs = radecs[1::2]
+	footradecrange = None
+
 	print 'Firing up tractor...'
-	tractor = SDSSTractor(images)
+	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 
 	print 'Start: catalog is', tractor.catalog
+
+	batchsource = 10
 	
 	#steps = ['source']*5 + ['plots', 'change', 'plots']
-	steps = ['plots'] + ['source', 'plots']*5 + ['change', 'plots']
+	steps = (['plots'] + ['source', 'plots', 'save']*90 +
+			 ['source', 'plots', 'opt', 'plots', 'save'] * 2 +
+			 ['change', 'plots'])
+	# ['change', 'plots']
+	#+ ['psf', 'plots'] 
 	ploti = 0
 	savei = 0
 	stepi = 0
+
+	# JUMP IN:
+	if opt.loadi != -1:
+		loadi = opt.loadi
+		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
+		print 'Starting from step', stepi
+		print 'steps:', steps[stepi:]
 
 	chiAimargs = []
 
@@ -520,9 +781,7 @@ def main():
 							  vmin=zr[0], vmax=zr[1])
 
 				plt.clf()
-				plt.imshow(mod, **imargs)
-				plt.hot()
-				plt.colorbar()
+				plotimage(mod, **imargs)
 				ax = plt.axis()
 				wcs = img.getWcs()
 				x = []
@@ -532,7 +791,7 @@ def main():
 					px,py = wcs.positionToPixel(src, pos)
 					x.append(px)
 					y.append(py)
-				plt.plot(x, y, 'bo', mfc='none', mec='b')
+				#plt.plot(x, y, 'bo', mfc='none', mec='b')
 				plt.axis(ax)
 				plt.title(tt)
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
@@ -547,9 +806,7 @@ def main():
 				chiAimarg = chiAimargs[i]
 
 				plt.clf()
-				plt.imshow(chi, **chiAimarg)
-				plt.hot()
-				plt.colorbar()
+				plotimage(chi, **chiAimarg)
 				plt.title(tt)
 				fn = 'chiA-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
@@ -559,22 +816,34 @@ def main():
 								 vmin=-3, vmax=10.)
 
 				plt.clf()
-				plt.imshow(chi, **chiBimarg)
-				plt.hot()
-				plt.colorbar()
+				plotimage(chi, **chiBimarg)
 				plt.title(tt)
 				fn = 'chiB-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
 				print 'Wrote', fn
 
+			plt.clf()
+			footradecrange = plotfootprints(footradecs, footradecrange,
+											tractor.getCatalog())
+			fn = 'footprints-%02i.png' % (ploti)
+			plt.savefig(fn)
+			print 'Wrote', fn
+
+
 			ploti += 1
+
+		elif step == 'opt':
+			print
+			print 'Optimizing catalog...'
+			tractor.optimizeCatalogAtFixedComplexityStep()
+			print
 
 		elif step == 'source':
 			print
 			print 'Before createSource, catalog is:',
 			tractor.getCatalog().printLong()
 			print
-			rtn = tractor.createSource()
+			rtn = tractor.createSource(nbatch=batchsource)
 			print
 			print 'After  createSource, catalog is:',
 			tractor.getCatalog().printLong()

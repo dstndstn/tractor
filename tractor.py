@@ -9,8 +9,14 @@ from astrometry.util.miscutils import get_overlapping_region
 import pylab as plt
 
 import logging
-from logging import debug as logverb
-from logging import info  as logmsg
+
+def logverb(*args):
+	msg = ' '.join([str(x) for x in args])
+	logging.debug(msg)
+def logmsg(*args):
+	msg = ' '.join([str(x) for x in args])
+	logging.info(msg)
+	
 
 class Params(object):
 	def __hash__(self):
@@ -162,6 +168,7 @@ class PointSource(MultiParams):
 	def __init__(self, pos, flux):
 		MultiParams.__init__(self, pos, flux)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
+		self.name = 'PointSource'
 	def getNamedParams(self):
 		return [('pos', 0), ('flux', 1)]
 	def getPosition(self):
@@ -186,9 +193,9 @@ class PointSource(MultiParams):
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
-		(px,py) = img.getWcs().positionToPixel(self, pos0)
-		patch0 = img.getPsf().getPointSourcePatch(px, py)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
+		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
+		counts0 = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
 		for i in range(len(psteps)):
@@ -196,7 +203,7 @@ class PointSource(MultiParams):
 			posx.stepParam(i, psteps[i])
 			(px,py) = img.getWcs().positionToPixel(self, posx)
 			patchx = img.getPsf().getPointSourcePatch(px, py)
-			dx = (patchx - patch0) * (counts / psteps[i])
+			dx = (patchx - patch0) * (counts0 / psteps[i])
 			dx.setName('d(ptsrc)/d(pos%i)' % i)
 			derivs.append(dx)
 		fsteps = self.flux.getStepSizes(img)
@@ -204,7 +211,7 @@ class PointSource(MultiParams):
 			fi = self.flux.copy()
 			fi.stepParam(i, fsteps[i])
 			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * ((countsi - counts) / fsteps[i])
+			df = patch0 * ((countsi - counts0) / fsteps[i])
 			df.setName('d(ptsrc)/d(flux%i)' % i)
 			derivs.append(df)
 		return derivs
@@ -222,7 +229,6 @@ class Flux(ParamList):
 		return Flux(self.val)
 	def getValue(self):
 		return self.val
-
 	def getStepSizes(self, img):
 		return [0.1]
 
@@ -686,6 +692,9 @@ class Tractor(object):
 		self.cache = Cache()
 		self.cachestack = []
 
+	def getNImages(self):
+		return len(self.images)
+
 	def getImage(self, imgi):
 		return self.images[imgi]
 
@@ -735,7 +744,20 @@ class Tractor(object):
 		'''
 		return []
 
-	def changeSourceTypes(self, srcs=None, altCallback=None):
+	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
+		for ostep in range(nsteps):
+			print 'Optimizing the new sources (step %i)...' % (ostep+1)
+			dlnprob = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
+			print 'delta-log-prob', dlnprob
+			if dlnprob < 1.:
+				print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+				return False
+		return True
+
+	def debugChangeSources(self, **kwargs):
+		pass
+
+	def changeSourceTypes(self, srcs=None, altCallback=None, jointopt=False):
 		print
 		print 'changeSourceTypes'
 		pBefore = self.getLogProb()
@@ -775,43 +797,47 @@ class Tractor(object):
 					break
 				src = srcs[i]
 
+			# Prevent too-easy switches due to the current source not being optimized.
 			pBefore = self.getLogProb()
-			print 'log-prob before:', pBefore
+			print 'Optimizing source before trying to change it...'
+			self.optimizeCatalogLoop(srcs=[src])
+			print 'After optimizing source'
+			pAfter = self.getLogProb()
+			print 'delta-log-prob:', pAfter - pBefore
+			pBefore = pAfter
 
 			bestlogprob = pBefore
 			bestalt = -1
 			bestparams = None
 
 			alts = self.changeSource(src)
+			self.debugChangeSources(step='start', src=src, alts=alts)
+			srcind = oldcat.index(src)
 			for j,newsrcs in enumerate(alts):
 				newcat = oldcat.deepcopy()
-				newcat.remove(src)
+				rsrc = newcat.pop(srcind)
 				newcat.extend(newsrcs)
 				print 'Replacing:'
 				print '  from', src
 				print '  to  ', newsrcs
 				self.catalog = newcat
 				print 'Before optimizing:', self.getLogProb()
+
+				self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
+
 				# first try individually optimizing the newly-added
-				# source...
-				for ostep in range(20):
-					print 'Optimizing the new sources (step %i)...' % (ostep+1)
-					dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=newsrcs)
-					print 'delta-log-prob', dlnprob
-					if dlnprob < 1.:
-						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
-						break
-					print 'Changed to', newsrcs
+				# sources...
+				self.optimizeCatalogLoop(srcs=newsrcs)
+				print 'Changed to', newsrcs
 				print 'After optimizing new sources:', self.getLogProb()
-				self.optimizeCatalogAtFixedComplexityStep()
-				print 'After optimizing all with new sources:', self.getLogProb()
-
-				if altCallback is not None:
-					altCallback(self, src, newsrcs, i, j)
-
+				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
+				if jointopt:
+					self.optimizeCatalogAtFixedComplexityStep()
+					print 'After optimizing all with new sources:', self.getLogProb()
 				pAfter = self.getLogProb()
-				print 'log-prob after:', pAfter
 				print 'delta-log-prob:', pAfter - pBefore
+
+				self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
 
 				if pAfter > bestlogprob:
 					print 'Best change so far!'
@@ -836,6 +862,9 @@ class Tractor(object):
 				print 'New catalog:'
 				self.catalog.printLong()
 				assert(self.getLogProb() == pBefore)
+				self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
+			else:
+				self.debugChangeSources(step='keep', src=src)
 
 		self.catalog = oldcat
 
@@ -1005,12 +1034,12 @@ class Tractor(object):
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
 
-		print '  Number of sparse matrix elements:', len(sprows)
+		logverb('  Number of sparse matrix elements:', len(sprows))
 		urows = np.unique(sprows)
-		print '  Unique rows (pixels):', len(urows)
-		print '  Max row:', max(sprows)
+		logverb('  Unique rows (pixels):', len(urows))
+		logverb('  Max row:', max(sprows))
 		ucols = np.unique(spcols)
-		print '  Unique columns (params):', len(ucols)
+		logverb('  Unique columns (params):', len(ucols))
 
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))
@@ -1045,7 +1074,7 @@ class Tractor(object):
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 
-		print '  X=', X
+		logmsg('  X=', X)
 
 		return X
 
@@ -1057,13 +1086,13 @@ class Tractor(object):
 			alphas = 2.**-(np.arange(10,0,-1)-1)
 
 		pBefore = self.getLogProb()
-		print '  log-prob before:', pBefore
+		logverb('  log-prob before:', pBefore)
 
 		pBest = pBefore
 		bestAlpha = None
 
 		for alpha in alphas:
-			print '  Stepping with alpha =', alpha
+			logverb('  Stepping with alpha =', alpha)
 			oldparams = []
 			par0 = 0
 			for j,src in enumerate(srcs):
@@ -1075,7 +1104,7 @@ class Tractor(object):
 				src.stepParams(dparams * alpha)
 
 			pAfter = self.getLogProb()
-			print '  delta log-prob:', pAfter - pBefore
+			logverb('  delta log-prob:', pAfter - pBefore)
 
 			if accept == 'best':
 				if pAfter > pBest:
@@ -1083,9 +1112,9 @@ class Tractor(object):
 					bestAlpha = alpha
 			elif accept == 'first':
 				if pAfter > pBefore:
-					print 'Accepting step!'
+					logverb('Accepting step!')
 					return pAfter - pBefore
-				print '  Rejecting step!'
+				logverb('  Rejecting step!')
 
 			assert(len(srcs) == len(oldparams))
 			for j,src in enumerate(srcs):
@@ -1094,7 +1123,7 @@ class Tractor(object):
 		if accept == 'best':
 			if bestAlpha is None:
 				return -1
-			print '  Stepping by', bestAlpha, 'for delta-logprob', pBest - pBefore
+			logmsg('  Stepping by', bestAlpha, 'for delta-logprob', pBest - pBefore)
 			par0 = 0
 			for j,src in enumerate(srcs):
 				npar = src.numberOfParams()
@@ -1199,6 +1228,11 @@ class Tractor(object):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
+	def getChiImage(self, imgi):
+		img = self.getImage(imgi)
+		mod = self.getModelImage(img)
+		return (img.getImage() - mod) * img.getInvError()
+
 	def createNewSource(self, img, x, y, height):
 		return None
 
@@ -1226,105 +1260,109 @@ class Tractor(object):
 	def popCache(self):
 		self.cache = self.cachestack.pop()
 
-	def createSource(self):
+	def debugNewSource(self, *args, **kwargs):
+		pass
+
+	def createSource(self, nbatch=1, imgi=None, jointopt=False):
 		print
 		print 'Tractor.createSource'
 		'''
 		-synthesize images
-		-look for "promising" Positions with "positive" residuals
+		-look for "promising" x,y image locations with positive residuals
 		- (not near existing sources)
 		---chi image, PSF smooth, propose positions?
-		-instantiate new source (Position, flux, PSFType)
+		-instantiate new source (Position, flux)
 		-local optimizeAtFixedComplexity
 		'''
-
-		rtn = []
+		if imgi is None:
+			imgi = range(self.getNImages())
 		
-		for i,chi in enumerate(self.getChiImages()):
-			img = self.images[i]
+		for i in imgi:
+			for b in range(nbatch):
+				chi = self.getChiImage(i)
+				img = self.getImage(i)
 
-			# block out regions around existing Sources.
-			for j,src in enumerate(self.catalog):
-				patch = self.getModelPatch(self.images[i], src)
-				(H,W) = img.shape
-				if not patch.clipTo(W, H):
-					continue
-				chi[patch.getSlice()] = 0.
+				# block out regions around existing Sources.
+				for j,src in enumerate(self.catalog):
+					patch = self.getModelPatch(img, src)
+					(H,W) = img.shape
+					if not patch.clipTo(W, H):
+						continue
+					chi[patch.getSlice()] = 0.
 
-			# PSF-correlate
-			sm = img.getPsf().applyTo(chi)
-			# find peaks, create sources
+				# PSF-correlate
+				sm = img.getPsf().applyTo(chi)
+				debugargs = dict(imgi=i, img=img, chiimg=chi, smoothed=sm)
+				self.debugNewSource(type='chi-smoothed', **debugargs)
 
-			# HACK -- magic value 10
-			#pks = self.findPeaks(sm, 10)
-			# Try to create sources in the highest-value pixels.
-			II = np.argsort(-sm.ravel())
+				# Try to create sources in the highest-valued pixels.
+				# FIXME -- should do peak-finding (ie, non-maximal rejection)
+				II = np.argsort(-sm.ravel())
+				# MAGIC: number of pixels to try.
+				for ii,I in enumerate(II[:10]):
+					(H,W) = sm.shape
+					ix = I%W
+					iy = I/W
+					# this is just the peak pixel height difference...
+					ht = (img.getImage() - self.getModelImage(img))[iy,ix]
+					print 'creating new source at x,y', (ix,iy)
+					src = self.createNewSource(img, ix, iy, ht)
+					print 'Got:', src
+					debugargs['src'] = src
+					self.debugNewSource(type='newsrc-0', **debugargs)
 
-			tryxy = []
-			# MAGIC: number of pixels to try.
-			for ii,I in enumerate(II[:10]):
-				(H,W) = sm.shape
-				ix = I%W
-				iy = I/W
-				# this is just the peak pixel height...
-				ht = (img.getImage() - self.getModelImage(img))[iy,ix]
-				print 'creating new source at x,y', (ix,iy)
-				src = self.createNewSource(img, ix, iy, ht)
-				print 'Got:', src
-				
-				tryxy.append((ix,iy))
+					# try adding the new source...
+					pBefore = self.getLogProb()
+					logverb('log-prob before:', pBefore)
 
-				# try adding the new source...
-				pBefore = self.getLogProb()
-				print 'log-prob before:', pBefore
+					if jointopt:
+						#self.pushCache()
+						oldcat = self.catalog.deepcopy()
 
-				self.pushCache()
-				oldcat = self.catalog.deepcopy()
+					self.catalog.append(src)
 
-				self.catalog.append(src)
-				#print 'added source, catalog is:'
-				#print self.catalog
+					# individually optimizing the newly-added
+					# source...
+					for ostep in range(20):
+						print 'Optimizing the new source (step %i)...' % (ostep+1)
+						dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
+						print 'After:', src
+						print '  debugargs[src] = ', src
+						self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
+											**debugargs)
+						if dlnprob < 1.:
+							print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+							break
 
-				# first try individually optimizing the newly-added
-				# source...
-				for ostep in range(20):
-					print 'Optimizing the new source (step %i)...' % (ostep+1)
-					dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
-					print 'After:', src
-					if dlnprob < 1.:
-						print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+					# Try changing the newly-added source type?
+					# print 'Trying to change the source type of the newly-added source'
+					# self.changeSourceTypes(srcs=[src])
+					
+					if jointopt:
+						# then the whole catalog
+						print 'Optimizing the catalog with the new source...'
+						self.optimizeCatalogAtFixedComplexityStep()
+
+					pAfter = self.getLogProb()
+					print 'd log-prob:', (pAfter - pBefore)
+
+					if pAfter > pBefore:
+						print 'Keeping new source'
+						#self.mergeCache()
 						break
 
-				# Try changing the newly-added source type?
-				#print 'Trying to change the source type of the newly-added source'
-				#self.changeSourceTypes(srcs=[src])
-					
-				# then the whole catalog
-				print 'Optimizing the catalog with the new source...'
-				self.optimizeCatalogAtFixedComplexityStep()
-
-				pAfter = self.getLogProb()
-				print 'log-prob before:', pBefore
-				print 'log-prob after :', pAfter
-				print 'd log-prob:', (pAfter - pBefore)
-
-				if pAfter > pBefore:
-					print 'Keeping new source'
-					self.mergeCache()
-					break
-
-				else:
-					print 'Rejecting new source'
-					self.popCache()
-					# revert the catalog
-					self.catalog = oldcat
-
-			rtn.append((sm, tryxy))
+					else:
+						print 'Rejecting new source'
+						#self.popCache()
+						# revert the catalog
+						if jointopt:
+							self.catalog = oldcat
+						else:
+							self.catalog.pop()
 
 			pEnd = self.getLogProb()
 			print 'log-prob at finish:', pEnd
 
-		return rtn
 
 	def modifyComplexity(self):
 		'''
