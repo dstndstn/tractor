@@ -160,15 +160,18 @@ class Source(Params):
 	def getModelPatch(self, img):
 		pass
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img):
+	def getParamDerivatives(self, img, fluxonly=False):
 		return []
+	def getSourceType(self):
+		return 'Source'
 
 
 class PointSource(MultiParams):
 	def __init__(self, pos, flux):
 		MultiParams.__init__(self, pos, flux)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
-		self.name = 'PointSource'
+	def getSourceType(self):
+		return 'PointSource'
 	def getNamedParams(self):
 		return [('pos', 0), ('flux', 1)]
 	def getPosition(self):
@@ -191,21 +194,25 @@ class PointSource(MultiParams):
 		return patch * counts
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img):
+	def getParamDerivatives(self, img, fluxonly=False):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
 		counts0 = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
-		for i in range(len(psteps)):
-			posx = pos0.copy()
-			posx.stepParam(i, psteps[i])
-			(px,py) = img.getWcs().positionToPixel(self, posx)
-			patchx = img.getPsf().getPointSourcePatch(px, py)
-			dx = (patchx - patch0) * (counts0 / psteps[i])
-			dx.setName('d(ptsrc)/d(pos%i)' % i)
-			derivs.append(dx)
+		if fluxonly:
+			derivs.extend([None] * len(psteps))
+		else:
+			for i in range(len(psteps)):
+				posx = pos0.copy()
+				posx.stepParam(i, psteps[i])
+				(px,py) = img.getWcs().positionToPixel(self, posx)
+				patchx = img.getPsf().getPointSourcePatch(px, py)
+				dx = (patchx - patch0) * (counts0 / psteps[i])
+				dx.setName('d(ptsrc)/d(pos%i)' % i)
+				derivs.append(dx)
+
 		fsteps = self.flux.getStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
@@ -280,6 +287,9 @@ class Image(object):
 		self.wcs = wcs
 		self.photocal = photocal
 		self.name = name
+
+	def getSky(self):
+		return self.sky
 
 	def setPsf(self, psf):
 		self.psf = psf
@@ -725,7 +735,8 @@ class Tractor(object):
 		print 'After  increasing PSF complexity: log-prob', pAfter
 		print 'After  tuning:                    log-prob', pAfter2
 
-		if pAfter2 > pBefore:
+		# HACKY: want to be better, and to have successfully optimized...
+		if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
 			print 'Accepting PSF change!'
 		else:
 			print 'Rejecting PSF change!'
@@ -890,7 +901,7 @@ class Tractor(object):
 			if True:
 				psfk = psf.copy()
 				psfk.stepParam(k, s)
-				print '  step param', k, 'by', s, 'to get', psfk
+				#print '  step param', k, 'by', s, 'to get', psfk
 				img.setPsf(psfk)
 				modk = self.getModelImage(img)
 				# to reuse code, wrap this in a Patch...
@@ -1079,8 +1090,7 @@ class Tractor(object):
 		return X
 
 	# X: delta-params
-	def tryParamUpdates(self, srcs, X, alphas=None, accept='best'):
-		assert(accept in ['best', 'first'])
+	def tryParamUpdates(self, srcs, X, alphas=None):
 		if alphas is None:
 			# 1/1024 to 1 in factors of 2
 			alphas = 2.**-(np.arange(10,0,-1)-1)
@@ -1089,7 +1099,7 @@ class Tractor(object):
 		logverb('  log-prob before:', pBefore)
 
 		pBest = pBefore
-		bestAlpha = None
+		alphaBest = None
 
 		for alpha in alphas:
 			logverb('  Stepping with alpha =', alpha)
@@ -1106,38 +1116,35 @@ class Tractor(object):
 			pAfter = self.getLogProb()
 			logverb('  delta log-prob:', pAfter - pBefore)
 
-			if accept == 'best':
-				if pAfter > pBest:
-					pBest = pAfter
-					bestAlpha = alpha
-			elif accept == 'first':
-				if pAfter > pBefore:
-					logverb('Accepting step!')
-					return pAfter - pBefore
-				logverb('  Rejecting step!')
-
 			assert(len(srcs) == len(oldparams))
 			for j,src in enumerate(srcs):
 				src.setParams(oldparams[j])
 
-		if accept == 'best':
-			if bestAlpha is None:
-				return -1
-			logmsg('  Stepping by', bestAlpha, 'for delta-logprob', pBest - pBefore)
-			par0 = 0
-			for j,src in enumerate(srcs):
-				npar = src.numberOfParams()
-				dparams = X[par0 : par0 + npar]
-				par0 += npar
-				assert(len(dparams) == src.numberOfParams())
-				src.stepParams(dparams * bestAlpha)
-			return pBest - pBefore
+			# want to improve over last step.
+			if pAfter < pBest:
+				break
 
-		# if we get here, this step was rejected.
-		return -1
-		
+			alphaBest = alpha
+			pBest = pAfter
 
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None):
+		if alphaBest is None:
+			return 0
+
+		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+		par0 = 0
+		for j,src in enumerate(srcs):
+			npar = src.numberOfParams()
+			dparams = X[par0 : par0 + npar]
+			par0 += npar
+			assert(len(dparams) == src.numberOfParams())
+			src.stepParams(dparams * alphaBest)
+		return pBest - pBefore
+
+	def optimizeCatalogFluxes(self, srcs=None):
+		self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
+
+
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False):
 		'''
 		-synthesize images
 		-get all derivatives
@@ -1154,7 +1161,7 @@ class Tractor(object):
 			allderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
-				derivs = src.getParamDerivatives(img)
+				derivs = src.getParamDerivatives(img, fluxonly=fluxonly)
 				assert(len(derivs) == src.numberOfParams())
 				for k,deriv in enumerate(derivs):
 					if deriv is None:

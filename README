@@ -1,0 +1,3 @@
+
+-Recent scipy is required for scipy.sparse.linalg.lsqr (> 0.7; 0.9 works)
+  --> this requires recent numpy (>= 1.4)

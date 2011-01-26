@@ -120,6 +120,9 @@ class Galaxy(MultiParams):
 		self.name = 'Galaxy'
 		MultiParams.__init__(self, pos, flux, shape)
 
+	def getSourceType(self):
+		return 'Galaxy'
+
 	def getPosition(self):
 		return self.pos
 
@@ -180,21 +183,24 @@ class Galaxy(MultiParams):
 		return Patch(patch.getX0(), patch.getY0(), convimg * counts)
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img):
+	def getParamDerivatives(self, img, fluxonly=False):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		patch0 = self.getModelPatch(img, px0, py0)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
-		for i in range(len(psteps)):
-			posx = pos0.copy()
-			posx.stepParam(i, psteps[i])
-			(px,py) = img.getWcs().positionToPixel(self, posx)
-			patchx = self.getModelPatch(img, px, py)
-			dx = (patchx - patch0) * (1. / psteps[i])
-			dx.setName('d(gal)/d(pos%i)' % i)
-			derivs.append(dx)
+		if fluxonly:
+			derivs.extend([None] * len(psteps))
+		else:
+			for i in range(len(psteps)):
+				posx = pos0.copy()
+				posx.stepParam(i, psteps[i])
+				(px,py) = img.getWcs().positionToPixel(self, posx)
+				patchx = self.getModelPatch(img, px, py)
+				dx = (patchx - patch0) * (1. / psteps[i])
+				dx.setName('d(gal)/d(pos%i)' % i)
+				derivs.append(dx)
 		fsteps = self.flux.getStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
@@ -203,17 +209,20 @@ class Galaxy(MultiParams):
 			df = patch0 * ((countsi - counts) / counts / fsteps[i])
 			df.setName('d(gal)/d(flux%i)' % i)
 			derivs.append(df)
+
 		gsteps = self.shape.getStepSizes(img)
 		gnames = self.shape.getParamNames()
 		oldvals = self.shape.getParams()
-		for i in range(len(gsteps)):
-			self.shape.stepParam(i, gsteps[i])
-			patchx = self.getModelPatch(img, px0, py0)
-			self.shape.setParams(oldvals)
-			dx = (patchx - patch0) * (1. / gsteps[i])
-			dx.setName('d(gal)/d(%s)' % (gnames[i]))
-			derivs.append(dx)
-
+		if fluxonly:
+			derivs.extend([None] * len(gsteps))
+		else:
+			for i in range(len(gsteps)):
+				self.shape.stepParam(i, gsteps[i])
+				patchx = self.getModelPatch(img, px0, py0)
+				self.shape.setParams(oldvals)
+				dx = (patchx - patch0) * (1. / gsteps[i])
+				dx.setName('d(gal)/d(%s)' % (gnames[i]))
+				derivs.append(dx)
 		return derivs
 
 
@@ -235,6 +244,9 @@ class ExpGalaxy(Galaxy):
 		self.num = ExpGalaxy.expnum
 		ExpGalaxy.expnum += 1
 		self.plotnum = 0
+
+	def getSourceType(self):
+		return 'ExpGalaxy'
 
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
@@ -271,6 +283,9 @@ class DevGalaxy(Galaxy):
 	def __init__(self, pos, flux, re, ab, phi):
 		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
 		self.name = 'DevGalaxy'
+
+	def getSourceType(self):
+		return 'DeVGalaxy'
 
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
@@ -316,7 +331,7 @@ class SDSSTractor(Tractor):
 					continue
 				break
 			assert(img is not None)
-			self.changes = [img, impatch, mod]
+			self.changes = [img, impatch, mod, src.getSourceType()]
 
 		elif step in ['init', 'opt1']:
 			print 'newsrcs:', newsrcs
@@ -328,21 +343,26 @@ class SDSSTractor(Tractor):
 			mod = self.getModelPatch(img, newsrcs[0])
 			mod.name = newsrcs[0].name
 			self.changes.append(mod)
-			if step == 'opt1':
+			if step == 'init':
+				self.changes.append(newsrcs[0].getSourceType())
+			else:
 				self.changes.append(dlnprob)
 
 		elif step in ['switch', 'keep']:
 			print 'changes:', self.changes
-			assert(len(self.changes) == 9)
-			(img, impatch, mod0, alta0, alta1, altad, altb0, altb1, altbd) = self.changes
+			assert(len(self.changes) == 12)
+			(img, impatch, mod0, src0, alta0, aname, alta1, altad, altb0, bname, altb1, altbd) = self.changes
+
+			sky = img.getSky()
+			skysig = sqrt(sky)
+			imargs = dict(vmin=-3.*skysig, vmax=10.*skysig)
 			plt.clf()
 			plt.subplot(2, 3, 4)
-			plotimage(mod0.getImage())
-			plt.title('original')# + src.name)
-			cl = plt.gci().get_clim()
+			plotimage(mod0.getImage(), **imargs)
+			plt.title('original ' + src0)
 
 			plt.subplot(2, 3, 1)
-			plotimage(impatch - img.sky, vmin=cl[0], vmax=cl[1])
+			plotimage(impatch - sky, **imargs)
 			plt.title('image')
 
 			# HACK -- force patches to be the same size + offset...
@@ -361,18 +381,18 @@ class SDSSTractor(Tractor):
 			b1 = im[sl].copy()
 
 			plt.subplot(2, 3, 2)
-			plotimage(a0, vmin=cl[0], vmax=cl[1])
-			#plt.title(alta0.name)
+			plotimage(a0, **imargs)
+			plt.title(aname)
 			plt.subplot(2, 3, 5)
-			plotimage(a1, vmin=cl[0], vmax=cl[1])
+			plotimage(a1, **imargs)
 			plt.title('dnlprob = %.1f' % altad)
 
 			plt.subplot(2, 3, 3)
-			plotimage(b0, vmin=cl[0], vmax=cl[1])
-			#plt.title(altb0.name)
+			plotimage(b0, **imargs)
+			plt.title(bname)
 			plt.subplot(2, 3, 6)
-			plotimage(b1, vmin=cl[0], vmax=cl[1])
-			plt.title('dnlprob = %.1f' % altbd)
+			plotimage(b1, **imargs)
+			plt.title('dlnp=%.2g' % altbd)
 
 			plt.savefig('change-%03i.png' % self.changei)
 			self.changei += 1
@@ -590,6 +610,8 @@ def main():
 	parser = OptionParser()
 	parser.add_option('-l', '--load', dest='loadi', type='int',
 					  default=-1, help='Load catalog from step #...')
+	parser.add_option('-i', '--no-initial-plots', dest='initialplots', default=True,
+					  action='store_false')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	opt,args = parser.parse_args()
@@ -635,8 +657,12 @@ def main():
 		#( 600, 1600, 0, 600 ),
 		#( 1000, 2000, 600, 1200 ),
 
-		( 800, 1600, 0, 600 ),
-		( 1200, 2000, 600, 1200 ),
+		#( 800, 1600, 0, 600 ),
+		#( 1200, 2000, 600, 1200 ),
+
+		# Avoid that big galaxy (that was keeping us honest)
+		( 800, 1300, 0, 500 ),
+		( 1500, 2000, 600, 1100 ),
 
 		]
 	fullsizes = []
@@ -683,21 +709,23 @@ def main():
 
 		x0,x1,y0,y1 = rois[i]
 
-		print 'Initial plots...'
-		plt.clf()
-		plotimage(image, vmin=zr[0], vmax=zr[1])
-		ax = plt.axis()
-		plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
-		plt.axis(ax)
-		plt.savefig('fullimg-%02i.png' % i)
+		if opt.initialplots:
+			print 'Initial plots...'
+			plt.clf()
+			plotimage(image, vmin=zr[0], vmax=zr[1])
+			ax = plt.axis()
+			plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'b-')
+			plt.axis(ax)
+			plt.savefig('fullimg-%02i.png' % i)
 
 		roislice = (slice(y0,y1), slice(x0,x1))
 		image = image[roislice]
 		invvar = invvar[roislice]
 
-		plt.clf()
-		plotimage(image, vmin=zr[0], vmax=zr[1])
-		plt.savefig('img-%02i.png' % i)
+		if opt.initialplots:
+			plt.clf()
+			plotimage(image, vmin=zr[0], vmax=zr[1])
+			plt.savefig('img-%02i.png' % i)
 
 		dgpsf = psfield.getDoubleGaussian(band)
 		print 'Creating double-Gaussian PSF approximation'
@@ -729,9 +757,10 @@ def main():
 		rds = [wcs.pixelToRaDec(x,y) for x,y in corners]
 		radecs.append(rds)
 
-	plt.clf()
-	plotfootprints(radecs, labels=['%i'%(i/2) for i in range(len(radecs))])
-	plt.savefig('footprints-full.png')
+	if opt.initialplots:
+		plt.clf()
+		plotfootprints(radecs, labels=['%i'%(i/2) for i in range(len(radecs))])
+		plt.savefig('footprints-full.png')
 	# After making the full "footprints" image, trim the list down to just the ROIs
 	footradecs = radecs[1::2]
 	footradecrange = None
@@ -742,13 +771,9 @@ def main():
 	print 'Start: catalog is', tractor.catalog
 
 	batchsource = 10
-	
-	#steps = ['source']*5 + ['plots', 'change', 'plots']
-	steps = (['plots'] + ['source', 'plots', 'save']*90 +
-			 ['source', 'plots', 'opt', 'plots', 'save'] * 2 +
-			 ['change', 'plots'])
-	# ['change', 'plots']
-	#+ ['psf', 'plots'] 
+
+	steps = (['plots'] + ['source', 'psf', 'flux', 'psfup', 'flux', 'opt', 'plots', 'save']*10)
+
 	ploti = 0
 	savei = 0
 	stepi = 0
@@ -756,9 +781,11 @@ def main():
 	# JUMP IN:
 	if opt.loadi != -1:
 		loadi = opt.loadi
+		# FIXME: you have to save the PSF too (and eventually sky)
 		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
 		print 'Starting from step', stepi
-		print 'steps:', steps[stepi:]
+		print 'there are', len(steps), 'steps'
+		print 'remaining steps:', steps[stepi:]
 
 	chiAimargs = []
 
@@ -860,12 +887,15 @@ def main():
 				plt.axis(ax)
 				plt.savefig('create-%02i.png' % stepi)
 
+		elif step == 'flux':
+			tractor.optimizeCatalogFluxes()
+
 		elif step == 'psf':
 			baton = (stepi,)
 			tractor.optimizeAllPsfAtFixedComplexityStep()
 			#derivCallback=(psfDerivCallback, baton))
 
-		elif step == 'psf2':
+		elif step == 'psfup':
 			tractor.increaseAllPsfComplexity()
 
 		elif step == 'change':
