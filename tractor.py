@@ -1044,8 +1044,11 @@ class Tractor(object):
 
 		Ncols = len(allparams)
 
+		colscales = []
+
 		for col, param in enumerate(allparams):
-			#print 'Filling column', col
+			VV = []
+			WW = []
 			for (deriv, img) in param:
 				inverrs = img.getInvError()
 				(H,W) = img.shape
@@ -1080,7 +1083,18 @@ class Tractor(object):
 				assert(vals.shape == w.shape)
 				sprows.append(rows)
 				spcols.append(cols)
-				spvals.append(vals * w)
+				VV.append(vals)
+				WW.append(w)
+
+			VV = np.hstack(VV)
+			WW = np.hstack(WW)
+			scale = abs(VV.max())
+			colscales.append(scale)
+			print 'Column', col, 'absmax:', scale
+			VV /= scale
+			# spvals is structured a little differently than sprows
+			# (has fewer lists with more elements), but same number of entries
+			spvals.append(VV * WW)
 
 		if len(spcols) == 0:
 			return []
@@ -1093,6 +1107,8 @@ class Tractor(object):
 		sprows = np.hstack(sprows)
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
+		assert(len(sprows) == len(spcols))
+		assert(len(sprows) == len(spvals))
 
 		logverb('  Number of sparse matrix elements:', len(sprows))
 		urows = np.unique(sprows)
@@ -1129,10 +1145,17 @@ class Tractor(object):
 		# indices so that no rows/cols are empty?
 
 		lsqropts = dict(show=isverbose())
+		#atol=1e-12,
+		#				btol=1e-12)
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+
+		logmsg('scaled  X=', X)
+
+		X = np.array(X)
+		X /= np.array(colscales)
 
 		logmsg('  X=', X)
 

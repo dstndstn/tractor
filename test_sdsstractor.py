@@ -58,7 +58,6 @@ def main():
 	* NGaussianPSF: sigmas [ 0.911, 2.687, 9.871, 7.172, 18.284 ], weights [ 1.005, 0.083, -0.032, -0.007, 0.138 ]
 	* NGaussianPSF: sigmas [ 1.014, 1.507, 3.778, 4.812 ], weights [ 1.002, 0.037, 0.050, 0.065 ]
 	'''
-	pos = RaDecPos(120.5813, 9.3017)
 
 	'''
 	to   [ExpGalaxy(pos=RaDecPos(120.5813, 9.3017), flux=SdssFlux(2260.2), re=1.0, ab=0.50, phi=0.0)]
@@ -69,13 +68,56 @@ def main():
    DevGalaxy at RA,Dec (120.5813, 9.3018) with SdssFlux: 5292.4, re=1.0, ab=1.24, phi=-0.0
 	'''
 
+	pos = RaDecPos(120.5813, 9.3017)
+
 	flux =  SdssFlux(3452.9 / SdssPhotoCal.scale)
 	src = ExpGalaxy(pos, flux, 0.6, 0.88, -0.1)
 	tractor.catalog.append(src)
 
+
+	def makePlots(tractor, fnpat, title):
+		mods = tractor.getModelImages()
+		imgs = tractor.getImages()
+		for i,(mod,img) in enumerate(zip(mods,imgs)):
+			zr = zrange[i]
+			imargs = dict(interpolation='nearest', origin='lower',
+						  vmin=zr[0], vmax=zr[1])
+			srcpatch = src.getModelPatch(img)
+			slc = srcpatch.getSlice(img)
+			plt.clf()
+			plt.subplot(1,2,1)
+			plotimage(img.getImage()[slc], **imargs)
+			plt.subplot(1,2,2)
+			plotimage(mod[slc], **imargs)
+			plt.title(title)
+			plt.savefig(fnpat % i)
+
+	makePlots(tractor, 'pre-%02i.png',
+			  're %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+
 	print
 	print 'Optimizing...'
 	tractor.optimizeCatalogAtFixedComplexityStep()
+
+	makePlots(tractor, 'post-%02i.png',
+			  're %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+
+	sys.exit(0)
+
+	mods = tractor.getModelImages()
+	imgs = tractor.getImages()
+	for i,(mod,img) in enumerate(zip(mods,imgs)):
+		zr = zrange[i]
+		imargs = dict(interpolation='nearest', origin='lower',
+					  vmin=zr[0], vmax=zr[1])
+		srcpatch = src.getModelPatch(img)
+		slc = srcpatch.getSlice(img)
+		plt.clf()
+		plt.subplot(1,2,1)
+		plotimage(img.getImage()[slc], **imargs)
+		plt.subplot(1,2,2)
+		plotimage(mod[slc], **imargs)
+		plt.savefig('post-%02i.png' % i)
 
 	sys.exit(0)
 

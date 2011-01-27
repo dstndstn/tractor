@@ -884,17 +884,19 @@ def main():
 
 				plt.clf()
 				plotimage(mod, **imargs)
-				ax = plt.axis()
-				wcs = img.getWcs()
-				x = []
-				y = []
-				for src in tractor.getCatalog():
-					pos = src.getPosition()
-					px,py = wcs.positionToPixel(src, pos)
-					x.append(px)
-					y.append(py)
-				#plt.plot(x, y, 'bo', mfc='none', mec='b')
-				plt.axis(ax)
+				# Want x's on the source centers?
+				if False:
+					ax = plt.axis()
+					wcs = img.getWcs()
+					x = []
+					y = []
+					for src in tractor.getCatalog():
+						pos = src.getPosition()
+						px,py = wcs.positionToPixel(src, pos)
+						x.append(px)
+						y.append(py)
+					plt.plot(x, y, 'bo', mfc='none', mec='b')
+					plt.axis(ax)
 				plt.title(tt)
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
