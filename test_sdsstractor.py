@@ -28,7 +28,35 @@ class FitsWcs(object):
 		cd = self.wcs.cd
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
+
+def main():
+	(images, simplexys, rois, zrange, nziv, footradecs
+	 ) = prepareTractor(False, False)
+
+	print 'Creating tractor...'
+	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
+
+	'''
+	step 19, change-011
+
+	Changing source [131] PointSource at RA,Dec (120.5813, 9.3017) with SdssFlux: 2512.0 with scalar 373541.300971
+	'''
+
+	src = PointSource(RaDecPos(120.5813, 9.3017),
+					  SdssFlux(2512.0 / SdssPhotoCal.scale))
+	tractor.catalog.append(src)
+
+	tractor.changeSourceTypes(srcs=[src])
+
+	'''
+	* NGaussianPSF: sigmas [ 0.911, 2.687, 9.871, 7.172, 18.284 ], weights [ 1.005, 0.083, -0.032, -0.007, 0.138 ]
+	* NGaussianPSF: sigmas [ 1.014, 1.507, 3.778, 4.812 ], weights [ 1.002, 0.037, 0.050, 0.065 ]
+	'''
+
 if __name__ == '__main__':
+
+	main()
+	sys.exit(0)
 
 	angles = np.linspace(0, 2.*pi, 360)
 	x,y = np.cos(angles), np.sin(angles)

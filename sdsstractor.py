@@ -337,9 +337,9 @@ class SDSSTractor(Tractor):
 
 	def doDebugChangeSources(self, step=None, src=None, newsrcs=None, alti=0,
 							 dlnprob=0, **kwargs):
-		print 'Step', step, 'for alt', alti
-		print 'changes:', len(self.changes)
-		print [type(x) for x in self.changes]
+		#print 'Step', step, 'for alt', alti
+		#print 'changes:', len(self.changes)
+		#print [type(x) for x in self.changes]
 
 		if step == 'start':
 			self.changes = []
@@ -359,7 +359,7 @@ class SDSSTractor(Tractor):
 			self.changes = [img, impatch, mod, src.getSourceType()]
 
 		elif step in ['init', 'opt1']:
-			print 'newsrcs:', newsrcs
+			#print 'newsrcs:', newsrcs
 			if newsrcs == []:
 				return
 			assert(len(self.changes) > 0)
@@ -373,7 +373,7 @@ class SDSSTractor(Tractor):
 				self.changes.append(dlnprob)
 
 		elif step in ['switch', 'keep']:
-			print 'changes:', self.changes
+			#print 'changes:', self.changes
 			assert(len(self.changes) == 12)
 			(img, impatch, mod0, src0, alta0, aname, alta1, altad, altb0, bname, altb1, altbd) = self.changes
 
@@ -420,6 +420,7 @@ class SDSSTractor(Tractor):
 
 			fn = 'change-%03i.png' % self.changei
 			plt.savefig(fn)
+			print 'Wrote', fn
 			self.changei += 1
 			self.plotfns.append(fn)
 			if step == 'switch':
@@ -427,8 +428,8 @@ class SDSSTractor(Tractor):
 			elif step == 'keep':
 				self.comments.append('rejected change')
 				
-		print 'end of step', step, 'and changes has', len(self.changes)
-		print [type(x) for x in self.changes]
+		#print 'end of step', step, 'and changes has', len(self.changes)
+		#print [type(x) for x in self.changes]
 				
 	def debugNewSource(self, *args, **kwargs):
 		if self.debugnew:
@@ -631,30 +632,9 @@ def plotfootprints(radecs, radecrange=None, catalog=None, labels=None):
 	setRadecAxes(*radecrange)
 	return radecrange
 
-def main():
-	from optparse import OptionParser
 
-	#testGalaxy()
-	#choose_field2()
-
-	parser = OptionParser()
-	parser.add_option('-l', '--load', dest='loadi', type='int',
-					  default=-1, help='Load catalog from step #...')
-	parser.add_option('-i', '--no-initial-plots', dest='initialplots', default=True,
-					  action='store_false')
-	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
-					  help='Make more verbose')
-	opt,args = parser.parse_args()
-
-	print 'Opt.verbose = ', opt.verbose
-	if opt.verbose == 0:
-		lvl = logging.INFO
-	else: # opt.verbose == 1:
-		lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
+def prepareTractor(initialPlots=False, useSimplexy=True):
 	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
-
 	rcf = [(r,c,f) for r,c,f,i in rcfi if i < 85]
 	print 'RCF', rcf
 
@@ -710,7 +690,6 @@ def main():
 
 	plt.figure(figsize=(10,7.5))
 
-	use_simplexy = True
 	simplexys = []
 	
 	for i,(run,camcol,field) in enumerate(rcf):
@@ -718,7 +697,7 @@ def main():
 		fpC = fpC.astype(float) - sdss.softbias
 		image = fpC
 
-		if use_simplexy:
+		if useSimplexy:
 			fpcfn = sdss.getFilename('fpC', run, camcol, field, bandname)
 			xyfn = fpcfn.replace('.fit', '.xy')
 			if not os.path.exists(xyfn):
@@ -808,20 +787,51 @@ def main():
 		plt.savefig('footprints-full.png')
 	# After making the full "footprints" image, trim the list down to just the ROIs
 	footradecs = radecs[1::2]
-	footradecrange = None
+
+	return (images, simplexys, rois, zrange, nziv, footradecs)
+
+def main():
+	from optparse import OptionParser
+
+	#testGalaxy()
+	#choose_field2()
+
+	parser = OptionParser()
+	parser.add_option('-l', '--load', dest='loadi', type='int',
+					  default=-1, help='Load catalog from step #...')
+	parser.add_option('-i', '--no-initial-plots', dest='initialplots', default=True,
+					  action='store_false')
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
+	opt,args = parser.parse_args()
+
+	print 'Opt.verbose = ', opt.verbose
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else: # opt.verbose == 1:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+	use_simplexy = True
+	
+	(images, simplexys, rois, zrange, nziv, footradecs
+	 ) = prepareTractor(opt.initialplots, use_simplexy)
 
 	print 'Firing up tractor...'
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 
 	print 'Start: catalog is', tractor.catalog
 
+	footradecrange = None
+
 	batchsource = 10
 
 	steps = (['plots'] +
 			 ['simplesources', 'plots'] +
 			 ['flux', 'plots', 'opt', 'plots', 'save'] +
+			 #['flux', 'plots'] +
 			 ['psfup', 'flux', 'plots', 'save'] * 4 +
-			 ['change1', 'plots'] * 100 +
+			 ['change1biased', 'plots'] * 100 +
 			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
 
 	ploti = 0
@@ -928,7 +938,7 @@ def main():
 			html += '</ul>\n'
 
 			smallimg = 'border="0" width="400" height="300"'
-			for i,img in enumerate(tractor.images):
+			for i,img in enumerate(tractor.getImages()):
 				imgfn = 'img-%02i.png' % i 
 				# img
 				html += '<br />'
@@ -1030,6 +1040,38 @@ def main():
 			srci = int(random.random() * len(tractor.getCatalog()))
 			srcs = [tractor.getCatalog()[srci]]
 			tractor.changeSourceTypes(srcs)
+
+		elif step == 'change1biased':
+			cat = tractor.getCatalog()
+			chis = tractor.getChiImages()
+			imgs = tractor.getImages()
+
+			scalars = []
+
+			for src in cat:
+				scalar = 0
+				for img,chi in zip(imgs,chis):
+					wcs = img.getWcs()
+					(px,py) = wcs.positionToPixel(src, src.getPosition())
+					r = 5
+					(H,W) = img.shape
+					xlo = max(px-r, 0)
+					xhi = min(px+r, W)
+					ylo = max(py-r, 0)
+					yhi = min(py+r, H)
+					c = chi[ylo:yhi, xlo:xhi]
+					# positive chi
+					scalar += (c[c > 0]**2).sum()
+				scalars.append(scalar)
+
+			print 'scalars:', scalars
+			X = np.random.multinomial(1, scalars/np.sum(scalars))
+			# find the element that is = 1 (rest are 0)
+			srci = np.flatnonzero(X)
+			src = tractor.getCatalog()[srci]
+			print 'Changing source', srci, str(src), 'with scalar', scalars[srci]
+			tractor.changeSourceTypes(srcs=[src])
+
 
 		elif step == 'save':
 
