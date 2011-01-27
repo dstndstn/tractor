@@ -349,13 +349,28 @@ class WCS(object):
 		Returns tuple (x, y) -- or any duck that supports
 		iteration of two items
 		'''
-		pass
+		return None
 
 	def pixelToPosition(self, src, xy):
 		'''
 		(x,y) to Position; src may be None (?)
 		'''
-		pass
+		return None
+
+	def cdAtPixel(self, x, y):
+		'''
+		(x,y) to numpy array (2,2) -- the CD matrix at pixel x,y:
+
+		[ [ dRA/dx * cos(Dec), dRA/dy * cos(Dec) ],
+		  [ dDec/dx          , dDec/dy           ] ]
+
+		in FITS these are called:
+		[ [ CD11             , CD12              ],
+		  [ CD21             , CD22              ] ]
+
+		  Note: these statements have not been verified by the FDA.
+		'''
+		return None
 
 # useful when you're using raw pixel positions rather than RA,Decs
 class NullWCS(WCS):

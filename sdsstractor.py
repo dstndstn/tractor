@@ -76,6 +76,9 @@ class SdssWcs(WCS):
 		ra,dec = ra[0], dec[0]
 		return ra,dec
 
+	def cdAtPixel(self, x, y):
+		return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
+
 	# RA,Dec in deg to pixel x,y.
 	def positionToPixel(self, src, pos):
 		## FIXME -- color.
@@ -96,6 +99,9 @@ class SdssWcs(WCS):
 
 class GalaxyShape(ParamList):
 	def getNamedParams(self):
+		# re: arcsec
+		# ab: axis ratio, dimensionless, in [0,1]
+		# phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
 		return [('re', 0), ('ab', 1), ('phi', 2)]
 	def hashkey(self):
 		return ('GalaxyShape',) + tuple(self.vals)
@@ -155,21 +161,47 @@ class Galaxy(MultiParams):
 	def getProfile(self):
 		return None
 
-	def getGalaxyPatch(self, img, cx, cy):
+	def getGalaxyPatch(self, img, cx, cy, cd):
 		# remember to include margin for psf conv
 		profile = self.getProfile()
 		if profile is None:
 			return None
-		re = max(1./30, self.re)
 		(H,W) = img.shape
 		margin = int(ceil(img.getPsf().getRadius()))
-		(prof,x0,y0) = profile.sample(re, self.ab, self.phi, cx, cy, W, H, margin)
+
+		# convert re, ab, phi into eigenvectors
+		# multiply by cd.
+
+		phi = np.deg2rad(self.phi)
+
+		#re = max(1./30, self.re)
+
+		# convert re to degrees
+		re = self.re / 3600.
+
+		abfactor = self.ab / profile.get_compiled_ab()
+
+		# units of degrees
+		G = np.array([[ re * np.cos(phi), re * np.sin(phi) ],
+					  [ re * abfactor * -np.sin(phi), re * abfactor * np.cos(phi) ]])
+
+		# T takes unit vectors to pixels in the image
+		#T = np.dot(linalg.inv(cd), G)
+		# T * (u;v) = (x;y)
+
+		# T takes pixels in the image to unit vectors.
+		T = np.dot(linalg.inv(G), cd)
+
+		# sqrt(abs(det(cd))) is pixel scale in deg/pix
+		# r_e is in arcsec
+		(prof,x0,y0) = profile.sample_transform(T, cx, cy, W, H, margin)
 		return Patch(x0, y0, prof)
 
 	def getModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
-		patch = self.getGalaxyPatch(img, px, py)
+		cd = img.getWcs().cd_at_pixel(px, py)
+		patch = self.getGalaxyPatch(img, px, py, cd)
 		if patch is None:
 			print 'Warning, is Galaxy(subclass).getProfile() defined?'
 			return Patch(0, 0, None)

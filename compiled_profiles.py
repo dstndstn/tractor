@@ -78,6 +78,18 @@ class CompiledProfile():
 		hdr.update('PROF_AB', self.cab)
 		return hdu
 
+	def get_compiled_ab(self):
+		return self.cab
+
+	def sample_transform(self, T, re_pix, x, y, outw, outh, margin):
+		'''
+		T: transforms pixels in output image coords to pixels in
+		   units of r_e in the compiled profile.
+
+	    re_pix: r_e in pixels to set the returned patch size
+		'''
+		return None
+
 	def sample(self, r_e, ab, phi, x, y, outw, outh, margin):
 		# target (output) size: number of r_e in the compiled profile
 		# times r_e of the galaxy to be sampled.
