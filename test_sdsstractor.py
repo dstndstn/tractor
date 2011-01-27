@@ -30,6 +30,18 @@ class FitsWcs(object):
 
 
 def main():
+	from optparse import OptionParser
+	parser = OptionParser()
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
+	opt,args = parser.parse_args()
+	print 'Opt.verbose = ', opt.verbose
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else: # opt.verbose == 1:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(False, False)
 
@@ -40,18 +52,83 @@ def main():
 	step 19, change-011
 
 	Changing source [131] PointSource at RA,Dec (120.5813, 9.3017) with SdssFlux: 2512.0 with scalar 373541.300971
-	'''
 
-	src = PointSource(RaDecPos(120.5813, 9.3017),
-					  SdssFlux(2512.0 / SdssPhotoCal.scale))
-	tractor.catalog.append(src)
+	Pixel position in image 1: 162.38751309 22.0818652585
 
-	tractor.changeSourceTypes(srcs=[src])
-
-	'''
 	* NGaussianPSF: sigmas [ 0.911, 2.687, 9.871, 7.172, 18.284 ], weights [ 1.005, 0.083, -0.032, -0.007, 0.138 ]
 	* NGaussianPSF: sigmas [ 1.014, 1.507, 3.778, 4.812 ], weights [ 1.002, 0.037, 0.050, 0.065 ]
 	'''
+	pos = RaDecPos(120.5813, 9.3017)
+
+	'''
+	to   [ExpGalaxy(pos=RaDecPos(120.5813, 9.3017), flux=SdssFlux(2260.2), re=1.0, ab=0.50, phi=0.0)]
+	-->
+   ExpGalaxy at RA,Dec (120.5813, 9.3017) with SdssFlux: 3452.9, re=0.6, ab=0.88, phi=-0.1
+
+  to   [DevGalaxy(pos=RaDecPos(120.5813, 9.3017), flux=SdssFlux(2260.2), re=1.0, ab=0.50, phi=0.0)]
+   DevGalaxy at RA,Dec (120.5813, 9.3018) with SdssFlux: 5292.4, re=1.0, ab=1.24, phi=-0.0
+	'''
+
+	flux =  SdssFlux(3452.9 / SdssPhotoCal.scale)
+	src = ExpGalaxy(pos, flux, 0.6, 0.88, -0.1)
+	tractor.catalog.append(src)
+
+	imgi = 1
+
+	img = images[imgi]
+	patch = src.getModelPatch(img)
+	imargs1 = dict(interpolation='nearest', origin='lower')
+	plt.clf()
+	plt.imshow(patch.getImage(), **imargs1)
+	plt.colorbar()
+	plt.title('model')
+	plt.savefig('eg-1.png')
+
+	derivs = src.getParamDerivatives(img)
+	for i,deriv in enumerate(derivs):
+		plt.clf()
+		plt.imshow(deriv.getImage(), **imargs1)
+		plt.colorbar()
+		plt.title('derivative ' + deriv.getName())
+		plt.savefig('eg-deriv%i-0a.png' % i)
+
+	chi = tractor.getChiImage(imgi)
+	sl = patch.getSlice(img)
+
+	plt.clf()
+	plt.imshow(img.getImage()[sl], **imargs1)
+	plt.colorbar()
+	plt.title('image')
+	plt.savefig('eg-image.png')
+
+	plt.clf()
+	plt.imshow(chi[sl], **imargs1)
+	plt.colorbar()
+	plt.title('chi')
+	plt.savefig('eg-chi.png')
+	
+	for i,deriv in enumerate(derivs):
+		plt.clf()
+		(H,W) = chi.shape
+		deriv.clipTo(W,H)
+		sl = deriv.getSlice(chi)
+		print 'slice', sl
+		print 'deriv:', deriv
+		print 'chi sliced:', chi[sl].shape
+		print 'deriv:', deriv.getImage().shape
+		plt.imshow(chi[sl] * deriv.getImage(), **imargs1)
+		plt.colorbar()
+		plt.title('chi * derivative ' + deriv.getName())
+		plt.savefig('eg-chideriv%i-0a.png' % i)
+
+
+	if False:
+		src = PointSource(pos, SdssFlux(2512.0 / SdssPhotoCal.scale))
+		tractor.catalog.append(src)
+		x,y = images[1].getWcs().positionToPixel(src, pos)
+		print 'Pixel position in image 1:', x,y
+		tractor.changeSourceTypes(srcs=[src])
+
 
 if __name__ == '__main__':
 

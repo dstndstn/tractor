@@ -261,9 +261,9 @@ class RaDecPos(ParamList):
 	def getNamedParams(self):
 		return [('ra', 0), ('dec', 1)]
 	def __str__(self):
-		return 'RA,Dec (%.4f, %.4f)' % (self.ra, self.dec)
+		return 'RA,Dec (%.5f, %.5f)' % (self.ra, self.dec)
 	def __repr__(self):
-		return 'RaDecPos(%.4f, %.4f)' % (self.ra, self.dec)
+		return 'RaDecPos(%.5f, %.5f)' % (self.ra, self.dec)
 	def copy(self):
 		return RaDecPos(self.ra, self.dec)
 	def hashkey(self):
@@ -385,6 +385,22 @@ class Patch(object):
 		self.x0 = x0
 		self.y0 = y0
 		self.patch = patch
+
+	def __str__(self):
+		s = 'Patch: '
+		name = getattr(self, 'name', '')
+		if len(name):
+			s += name + ' '
+		s += 'origin (%i,%i) ' % (self.x0, self.y0)
+		if self.patch is not None:
+			(H,W) = self.patch.shape
+			s += 'size (%i x %i)' % (W, H)
+		else:
+			s += '(no image)'
+		return s
+
+	def __repr__(self):
+		return str(self)
 
 	def setName(self, name):
 		self.name = name
@@ -831,7 +847,8 @@ class Tractor(object):
 			pBefore = self.getLogProb()
 			print 'Optimizing source before trying to change it...'
 			self.optimizeCatalogLoop(srcs=[src])
-			print 'After optimizing source'
+			print 'After optimizing source:'
+			print '  ', src
 			pAfter = self.getLogProb()
 			print 'delta-log-prob:', pAfter - pBefore
 			pBefore = pAfter
@@ -851,15 +868,17 @@ class Tractor(object):
 				print '  from', src
 				print '  to  ', newsrcs
 				self.catalog = newcat
-				print 'Before optimizing:', self.getLogProb()
+				#print 'Before optimizing:', self.getLogProb()
 
 				self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
 
 				# first try individually optimizing the newly-added
 				# sources...
 				self.optimizeCatalogLoop(srcs=newsrcs)
-				print 'Changed to', newsrcs
-				print 'After optimizing new sources:', self.getLogProb()
+				#print 'Changed to', newsrcs
+				print 'After optimizing new sources:'
+				for ns in newsrcs:
+					print '  ', ns
 				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
 				if jointopt:
 					self.optimizeCatalogAtFixedComplexityStep()
@@ -876,7 +895,7 @@ class Tractor(object):
 					bestparams = newcat.getAllParams()
 
 			if bestparams is not None:
-				print 'Switching to new catalog!'
+				#print 'Switching to new catalog!'
 				# We want to update "oldcat" in-place (rather than
 				# setting "self.catalog = bestcat") so that the source
 				# object identities don't change -- so that the outer
@@ -889,8 +908,17 @@ class Tractor(object):
 				oldcat.setAllParams(bestparams)
 				self.catalog = oldcat
 				pBefore = bestlogprob
-				print 'New catalog:'
-				self.catalog.printLong()
+				#print 'New catalog:'
+				#self.catalog.printLong()
+
+				print
+				print 'Accepted change:',
+				print 'from:', src
+				if len(alts[bestalt]) == 1:
+					print 'to:', alts[bestalt][0]
+				else:
+					print 'to:', alts[bestalt]
+
 				assert(self.getLogProb() == pBefore)
 				self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
 			else:

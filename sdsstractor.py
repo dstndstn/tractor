@@ -316,6 +316,8 @@ class DevGalaxy(Galaxy):
 		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
 
 
+class Changes(object):
+	pass
 
 class SDSSTractor(Tractor):
 
@@ -337,87 +339,98 @@ class SDSSTractor(Tractor):
 
 	def doDebugChangeSources(self, step=None, src=None, newsrcs=None, alti=0,
 							 dlnprob=0, **kwargs):
-		#print 'Step', step, 'for alt', alti
-		#print 'changes:', len(self.changes)
-		#print [type(x) for x in self.changes]
-
 		if step == 'start':
-			self.changes = []
-			#assert(len(self.changes) == 0)
-			# find an image that it overlaps.
-			img = None
-			for imgi in range(self.getNImages()):
+			ch = self.changes = Changes()
+			N = self.getNImages()
+			ch.src = src
+			ch.N = N
+			ch.impatch = [None for i in range(N)]
+			ch.mod0    = [None for i in range(N)]
+			ch.mod0type = src.getSourceType()
+			ch.newmods = []
+
+			for imgi in range(N):
 				img = self.getImage(imgi)
 				mod = self.getModelPatch(img, src)
-				if mod.getImage() is None:
-					continue
-				impatch = img.getImage()[mod.getSlice(img)]
-				if len(impatch.ravel()) == 0:
-					continue
-				break
-			assert(img is not None)
-			self.changes = [img, impatch, mod, src.getSourceType()]
+				ch.mod0[imgi] = mod
+				print 'image', imgi, 'got model patch', mod
+				if mod.getImage() is not None:
+					impatch = img.getImage()[mod.getSlice(img)]
+					if len(impatch.ravel()):
+						ch.impatch[imgi] = impatch
 
 		elif step in ['init', 'opt1']:
-			#print 'newsrcs:', newsrcs
+			ch = self.changes
 			if newsrcs == []:
 				return
-			assert(len(self.changes) > 0)
-			img = self.changes[0]
-			assert(len(newsrcs) == 1)
-			mod = self.getModelPatch(img, newsrcs[0])
-			self.changes.append(mod)
+			mods = []
+			for imgi in range(ch.N):
+				img = self.getImage(imgi)
+				mod = self.getModelPatch(img, newsrcs[0])
+				mods.append(mod)
+
 			if step == 'init':
-				self.changes.append(newsrcs[0].getSourceType())
+				ch.newmods.append([newsrcs[0].getSourceType(),
+								   mods])
 			else:
-				self.changes.append(dlnprob)
+				ch.newmods[-1].extend([mods, dlnprob])
 
 		elif step in ['switch', 'keep']:
-			#print 'changes:', self.changes
-			assert(len(self.changes) == 12)
-			(img, impatch, mod0, src0, alta0, aname, alta1, altad, altb0, bname, altb1, altbd) = self.changes
+			ch = self.changes
+			M = len(ch.newmods)
+			N = ch.N
+			cols = M+2
+			II = [i for i in range(N) if ch.impatch[i] is not None]
+			rows = len(II)
+			fs = 10
 
-			sky = img.getSky()
-			skysig = sqrt(sky)
-			imargs = dict(vmin=-3.*skysig, vmax=10.*skysig)
+			imargs = {}
 			plt.clf()
-			plt.subplot(2, 3, 4)
-			plotimage(mod0.getImage(), **imargs)
-			plt.title('original ' + src0)
+			# Images
+			for ri,i in enumerate(II):
+				img = self.getImage(i)
+				sky = img.getSky()
+				skysig = sqrt(sky)
+				imargs[i] = dict(vmin=-3.*skysig, vmax=10.*skysig)
+				if ch.impatch[i] is None:
+					continue
+				plt.subplot(rows, cols, ri*cols+1)
+				plotimage(ch.impatch[i] - sky, **imargs[i])
+				plt.xticks([])
+				plt.yticks([])
+				plt.title('image %i' % i, fontsize=fs)
 
-			plt.subplot(2, 3, 1)
-			plotimage(impatch - sky, **imargs)
-			plt.title('image')
+			# Original sources
+			for ri,i in enumerate(II):
+				if ch.mod0[i].getImage() is None:
+					continue
+				plt.subplot(rows, cols, ri*cols+2)
+				plotimage(ch.mod0[i].getImage(), **imargs[i])
+				plt.xticks([])
+				plt.yticks([])
+				plt.title('original ' + ch.mod0type, fontsize=fs)
 
-			# HACK -- force patches to be the same size + offset...
-			sl = mod0.getSlice(img)
-			im = np.zeros_like(img.getImage())
-			alta0.addTo(im)
-			a0 = im[sl].copy()
-			im[sl] = 0
-			alta1.addTo(im)
-			a1 = im[sl].copy()
-			im[sl] = 0
-			altb0.addTo(im)
-			b0 = im[sl].copy()
-			im[sl] = 0
-			altb1.addTo(im)
-			b1 = im[sl].copy()
+			# New sources
+			for j,newmod in enumerate(ch.newmods):
+				(srctype, premods, postmods, dlnp) = newmod
+				for ri,i in enumerate(II):
+					if postmods[i] is None:
+						continue
+					plt.subplot(rows, cols, ri*cols + 3 + j)
 
-			plt.subplot(2, 3, 2)
-			plotimage(a0, **imargs)
-			plt.title(aname)
-			plt.subplot(2, 3, 5)
-			plotimage(a1, **imargs)
-			plt.title('dlnp = %.1f' % altad)
-
-			plt.subplot(2, 3, 3)
-			plotimage(b0, **imargs)
-			plt.title(bname)
-			plt.subplot(2, 3, 6)
-			plotimage(b1, **imargs)
-			plt.title('dlnp=%.1f' % altbd)
-
+					# HACK -- force patches to be the same size + offset...
+					img = self.getImage(i)
+					sl = ch.mod0[i].getSlice(img)
+					print 'slice', sl
+					im = np.zeros_like(img.getImage())
+					postmods[i].addTo(im)
+					im = im[sl]
+					if len(im.ravel()):
+						plotimage(im, **imargs[i])
+						plt.xticks([])
+						plt.yticks([])
+						plt.title(srctype + ' (dlnp=%.1f)' % dlnp, fontsize=fs)
+				
 			fn = 'change-%03i.png' % self.changei
 			plt.savefig(fn)
 			print 'Wrote', fn
@@ -428,8 +441,6 @@ class SDSSTractor(Tractor):
 			elif step == 'keep':
 				self.comments.append('rejected change')
 				
-		#print 'end of step', step, 'and changes has', len(self.changes)
-		#print [type(x) for x in self.changes]
 				
 	def debugNewSource(self, *args, **kwargs):
 		if self.debugnew:
@@ -688,8 +699,6 @@ def prepareTractor(initialPlots=False, useSimplexy=True):
 	# FIXME -- bug-bug annihilation
 	rerun = 0
 
-	plt.figure(figsize=(10,7.5))
-
 	simplexys = []
 	
 	for i,(run,camcol,field) in enumerate(rcf):
@@ -813,6 +822,8 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	use_simplexy = True
+
+	plt.figure(figsize=(10,7.5))
 	
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(opt.initialplots, use_simplexy)
