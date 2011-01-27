@@ -955,6 +955,20 @@ def main():
 			print "Initializing with simplexy's source lists..."
 			cat = tractor.getCatalog()
 			for sxy,img,roi in zip(simplexys, tractor.getImages(), rois):
+				print 'Making mask image...'
+				# Mask out a small region around each existing source.
+				mask = np.zeros_like(img.getImage()).astype(bool)
+				wcs = img.getWcs()
+				for src in cat:
+					(px,py) = wcs.positionToPixel(src, src.getPosition())
+					r = 2
+					(H,W) = img.shape
+					xlo = max(px-r, 0)
+					xhi = min(px+r, W)
+					ylo = max(py-r, 0)
+					yhi = min(py+r, H)
+					mask[ylo:yhi, xlo:xhi] = True
+
 				print 'Simplexy has', len(sxy), 'sources'
 				(x0,x1,y0,y1) = roi
 				I = (sxy.x >= x0) * (sxy.x <= x1) * (sxy.y >= y0) * (sxy.y <= y1)
@@ -964,6 +978,11 @@ def main():
 					# MAGIC -1: simplexy produces FITS-convention coords
 					x = sxy.x[i] - x0 - 1.
 					y = sxy.y[i] - y0 - 1.
+					ix = int(round(x))
+					iy = int(round(y))
+					if mask[iy,ix]:
+						print 'Skipping masked source at', x,y
+						continue
 					src = tractor.createNewSource(img, x, y, sxy.flux[i])
 					cat.append(src)
 
