@@ -71,9 +71,6 @@ class SdssWcs(WCS):
 	# (x,y) to RA,Dec in deg
 	def pixelToRaDec(self, x, y):
 		ra,dec = self.astrans.pixel_to_radec(x, y)
-		#print 'astrans: x,y', (x,y), '--> ra,dec', (ra,dec)
-		#print 'HIDEOUS WORKAROUND'
-		ra,dec = ra[0], dec[0]
 		return ra,dec
 
 	def cdAtPixel(self, x, y):
@@ -83,9 +80,6 @@ class SdssWcs(WCS):
 	def positionToPixel(self, src, pos):
 		## FIXME -- color.
 		x,y = self.astrans.radec_to_pixel(pos.ra, pos.dec)
-		#print 'astrans: ra,dec', (pos.ra, pos.dec), '--> x,y', (x,y)
-		#print 'HIDEOUS WORKAROUND'
-		x,y = x[0],y[0]
 		return x - self.x0, y - self.y0
 
 	# (x,y) to RA,Dec in deg
@@ -707,11 +701,26 @@ def main():
 	rerun = 0
 
 	plt.figure(figsize=(10,7.5))
+
+	use_simplexy = True
+	simplexys = []
 	
 	for i,(run,camcol,field) in enumerate(rcf):
 		fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
 		fpC = fpC.astype(float) - sdss.softbias
 		image = fpC
+
+		if use_simplexy:
+			fpcfn = sdss.getFilename('fpC', run, camcol, field, bandname)
+			xyfn = fpcfn.replace('.fit', '.xy')
+			if not os.path.exists(xyfn):
+				print 'Running image2xy...'
+				cmd = 'image2xy %s -o %s' % (fpcfn, xyfn)
+				print 'Command:', cmd
+				os.system(cmd)
+			assert(os.path.exists(xyfn))
+			xy = fits_table(xyfn)
+			simplexys.append(xy)
 
 		fullsizes.append(image.shape)
 	
@@ -800,7 +809,13 @@ def main():
 
 	batchsource = 10
 
-	steps = (['plots'] + ['source', 'psf', 'flux', 'psfup', 'flux', 'opt', 'plots', 'save']*10)
+	steps = (['plots'] + ['simplesources', 'plots', 'flux', 'plots', 'save',
+						  'psf', 'flux', 'plots',
+						  'psf', 'flux', 'plots',
+						  'psf', 'flux', 'plots',
+						  'flux', 'flux', 'opt', 'save', 'plots' ])
+						  
+	#['source', 'psf', 'flux', 'psfup', 'flux', 'opt', 'plots', 'save']*10)
 
 	ploti = 0
 	savei = 0
@@ -825,7 +840,7 @@ def main():
 
 			chis = tractor.getChiImages()
 			mods = tractor.getModelImages()
-
+			fns = []
 			for i in range(len(chis)):
 				chi = chis[i]
 				mod = mods[i]
@@ -852,6 +867,7 @@ def main():
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
 				print 'Wrote', fn
+				fns.append(fn)
 
 				if len(chiAimargs) <= i:
 					mn,mx = (chi.min(), chi.max())
@@ -866,6 +882,7 @@ def main():
 				fn = 'chiA-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
 				print 'Wrote', fn
+				fns.append(fn)
 
 				chiBimarg = dict(interpolation='nearest', origin='lower',
 								 vmin=-3, vmax=10.)
@@ -876,6 +893,7 @@ def main():
 				fn = 'chiB-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
 				print 'Wrote', fn
+				fns.append(fn)
 
 			plt.clf()
 			footradecrange = plotfootprints(footradecs, footradecrange,
@@ -883,8 +901,26 @@ def main():
 			fn = 'footprints-%02i.png' % (ploti)
 			plt.savefig(fn)
 			print 'Wrote', fn
+			footfn = fn
 
-
+			html = '<html><head>Step %i</head><body>' % ploti
+			html += '<h3><a href="step%02i.html">Previous</a> &nbsp;' % (ploti-1)
+			html += '<a href="step%02i.html">Next</a></h3>' % (ploti+1)
+			#smallimg = 'border="0" width="250" height="187"'
+			smallimg = 'border="0" width="400" height="300"'
+			for i,img in enumerate(tractor.images):
+				imgfn = 'img-%02i.png' % i 
+				# img
+				html += '<br />'
+				# mod, chiB
+				for fn in [imgfn, fns[i*3 + 0], fns[i*3 + 2]]:
+					html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
+			html += '<br />'
+			fn = footfn
+			html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
+			html += '</body></html>'
+			write_file(html, 'step%02i.html' % ploti)
+			
 			ploti += 1
 
 		elif step == 'opt':
@@ -914,6 +950,22 @@ def main():
 				plt.plot([x for x,y in tryxy], [y for x,y in tryxy], 'b+')
 				plt.axis(ax)
 				plt.savefig('create-%02i.png' % stepi)
+
+		elif step == 'simplesources':
+			print "Initializing with simplexy's source lists..."
+			cat = tractor.getCatalog()
+			for sxy,img,roi in zip(simplexys, tractor.getImages(), rois):
+				print 'Simplexy has', len(sxy), 'sources'
+				(x0,x1,y0,y1) = roi
+				I = (sxy.x >= x0) * (sxy.x <= x1) * (sxy.y >= y0) * (sxy.y <= y1)
+				sxy = sxy[I]
+				print 'Keeping', len(sxy), 'in bounds'
+				for i in range(len(sxy)):
+					# MAGIC -1: simplexy produces FITS-convention coords
+					x = sxy.x[i] - x0 - 1.
+					y = sxy.y[i] - y0 - 1.
+					src = tractor.createNewSource(img, x, y, sxy.flux[i])
+					cat.append(src)
 
 		elif step == 'flux':
 			tractor.optimizeCatalogFluxes()

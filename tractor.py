@@ -723,6 +723,9 @@ class Tractor(object):
 	def getImage(self, imgi):
 		return self.images[imgi]
 
+	def getImages(self):
+		return self.images
+
 	def getCatalog(self):
 		return self.catalog
 
