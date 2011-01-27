@@ -1146,7 +1146,7 @@ class Tractor(object):
 
 		lsqropts = dict(show=isverbose())
 		#atol=1e-12,
-		#				btol=1e-12)
+		#btol=1e-12)
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
@@ -1218,6 +1218,8 @@ class Tractor(object):
 
 	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False):
 		'''
+		Return delta-log-prob.
+
 		-synthesize images
 		-get all derivatives
 		-build matrix

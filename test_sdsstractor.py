@@ -69,55 +69,80 @@ def main():
 	'''
 
 	pos = RaDecPos(120.5813, 9.3017)
-
 	flux =  SdssFlux(3452.9 / SdssPhotoCal.scale)
-	src = ExpGalaxy(pos, flux, 0.6, 0.88, -0.1)
+	#src = ExpGalaxy(pos, flux, 0.6, 0.88, -0.1)
+	src = ExpGalaxy(pos, flux, 0.6, 0.5, -0.1)
+
+	# After optimizing from ab=0.5:
+	pos = RaDecPos(120.58129, 9.30171)
+	flux =  SdssFlux(4570. / SdssPhotoCal.scale)
+	src = ExpGalaxy(pos, flux, 0.9, 0.75, -35.7)
+
+	src.setParams([120.5812843997946, 9.3017035130757009, 0.0049199047382452428, 1.2052972074376225, 0.55429578631330578, -47.611423262836823])
+
 	tractor.catalog.append(src)
 
-
-	def makePlots(tractor, fnpat, title):
+	def makePlots(tractor, fnpat, title1='', title2=''):
 		mods = tractor.getModelImages()
 		imgs = tractor.getImages()
-		for i,(mod,img) in enumerate(zip(mods,imgs)):
+		chis = tractor.getChiImages()
+		for i,(mod,img,chi) in enumerate(zip(mods,imgs,chis)):
 			zr = zrange[i]
 			imargs = dict(interpolation='nearest', origin='lower',
 						  vmin=zr[0], vmax=zr[1])
 			srcpatch = src.getModelPatch(img)
 			slc = srcpatch.getSlice(img)
 			plt.clf()
-			plt.subplot(1,2,1)
+			plt.subplot(2,2,1)
 			plotimage(img.getImage()[slc], **imargs)
-			plt.subplot(1,2,2)
+			plt.title(title1)
+			plt.subplot(2,2,2)
 			plotimage(mod[slc], **imargs)
-			plt.title(title)
-			plt.savefig(fnpat % i)
+			plt.title(title2)
+			plt.subplot(2,2,3)
+			plotimage(chi[slc], interpolation='nearest', origin='lower',
+					  vmin=-5, vmax=5)
+			plt.title('chi')
+			#plt.subplot(2,2,4)
+			#plotimage(img.getInvError[slc], interpolation='nearest', origin='lower',
+			#vmin=-5, vmax=5)
+			#plt.title('inv err')
+			fn = fnpat % i
+			plt.savefig(fn)
+			print 'wrote', fn
 
-	makePlots(tractor, 'pre-%02i.png',
-			  're %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+	makePlots(tractor, 'opt-s00-%02i.png', #'pre-%02i.png',
+			  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 
-	print
-	print 'Optimizing...'
-	tractor.optimizeCatalogAtFixedComplexityStep()
+	if True:
+		p0 = src.getParams()
+		lnp0 = tractor.getLogProb()
+		for i,step in enumerate([3e-5, 3e-5, 1e-3, 0.1, 0.1, 15.]):
+			src.setParams(p0)
+			for j in range(5):
+				src.stepParam(i, -step)
+			for j in range(9):
+				src.stepParam(i, step)
+				lnp = tractor.getLogProb()
+				dlnp = lnp - lnp0
+				makePlots(tractor, 'step-%i-%02i-%%02i.png' % (i,j),
+						  title1='dlnp=%.1f' % dlnp,
+						  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+		src.setParams(p0)
 
-	makePlots(tractor, 'post-%02i.png',
-			  're %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+	for ostep in range(10):
+		print
+		print 'Optimizing...'
+		dlnp = tractor.optimizeCatalogAtFixedComplexityStep()
+		makePlots(tractor, 'opt-s%02i-%%02i.png' % (ostep+1),
+				  title1='dlnp = %.1f' % dlnp,
+				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+		if dlnp < 1e-3:
+			break
 
-	sys.exit(0)
+	print 'Final source:', src
 
-	mods = tractor.getModelImages()
-	imgs = tractor.getImages()
-	for i,(mod,img) in enumerate(zip(mods,imgs)):
-		zr = zrange[i]
-		imargs = dict(interpolation='nearest', origin='lower',
-					  vmin=zr[0], vmax=zr[1])
-		srcpatch = src.getModelPatch(img)
-		slc = srcpatch.getSlice(img)
-		plt.clf()
-		plt.subplot(1,2,1)
-		plotimage(img.getImage()[slc], **imargs)
-		plt.subplot(1,2,2)
-		plotimage(mod[slc], **imargs)
-		plt.savefig('post-%02i.png' % i)
+	print 'Params:',  src.getParams()
 
 	sys.exit(0)
 
