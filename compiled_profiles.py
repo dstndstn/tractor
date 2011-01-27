@@ -137,6 +137,8 @@ class CompiledProfile():
 		re_factor = self.cre / (max(re_pix, 1./float(2. * self.cn)))
 		# cpix{w,h} are the width,height of sample pixels in the
 		# compiled profile
+		# FIXME -- it's not at all clear that this is the right way to
+		# assign the axis ratio!  Should change wrt angle phi.
 		cpixw = re_factor * ab_factor
 		cpixh = re_factor
 		# Now compute ii,jj, the pixel centers in the compiled image.
@@ -151,7 +153,8 @@ class CompiledProfile():
 		yhi = numpy.round(jj + cpixh/2.).astype(int)
 
 		if debugstep == 1:
-			return xlo,xhi,ylo,yhi, self.cre, self.cn, cpixw, cpixh, re_factor, ab_factor, Tij, ii, jj
+			return (xlo,xhi,ylo,yhi, self.cre, self.cn, cpixw, cpixh,
+					re_factor, ab_factor, Tij, ii, jj)
 		# Clip the boxes that are completely out of bounds:
 		ib = logical_and(logical_and(xlo < self.cn, ylo < self.cn),
 						 logical_and(xhi >= 0, yhi >= 0))

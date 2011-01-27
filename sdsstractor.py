@@ -169,41 +169,26 @@ class Galaxy(MultiParams):
 		(H,W) = img.shape
 		margin = int(ceil(img.getPsf().getRadius()))
 
-		# convert re, ab, phi into eigenvectors
-		# multiply by cd.
-
-		phi = np.deg2rad(self.phi)
-
-		#re = max(1./30, self.re)
-
+		# convert re, ab, phi into a transformation matrix
+		phi = np.deg2rad(90 - self.phi)
 		# convert re to degrees
 		re_deg = self.re / 3600.
-
 		abfactor = self.ab / profile.get_compiled_ab()
 
-		# units of degrees
 		cp = np.cos(phi)
 		sp = np.sin(phi)
+		# Squish, rotate, and scale into degrees.
+		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
 		G = re_deg * np.array([[ cp, sp * abfactor],
 							   [-sp, cp * abfactor]])
-
-		#G = np.array([[ re_deg * np.cos(phi), re_deg * np.sin(phi) ],
-		#			  [ re_deg * abfactor * -np.sin(phi), re_deg * abfactor * np.cos(phi) ]])
-
-		# T takes unit vectors to pixels in the image
-		#T = np.dot(linalg.inv(cd), G)
-		# T * (u;v) = (x;y)
-
-		# T takes pixels in the image to unit vectors.
+		# "cd" takes pixels to degrees (intermediate world coords)
+		# T takes pixels to unit vectors.
 		T = np.dot(linalg.inv(G), cd)
 
 		# sqrt(abs(det(cd))) is pixel scale in deg/pix
 		det = cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0]
 		pixscale = sqrt(abs(det))
 		repix = re_deg / pixscale
-
-		print 're_pix', repix
-		print 'ab', self.ab
 		
 		(prof,x0,y0) = profile.sample_transform(T, repix, self.ab, cx, cy, W, H, margin)
 		return Patch(x0, y0, prof)
