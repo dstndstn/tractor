@@ -328,6 +328,9 @@ class SDSSTractor(Tractor):
 		self.changes = []
 		self.changei = 0
 
+		self.plotfns = []
+		self.comments = []
+
 	def debugChangeSources(self, **kwargs):
 		if self.debugchange:
 			self.doDebugChangeSources(**kwargs)
@@ -363,7 +366,6 @@ class SDSSTractor(Tractor):
 			img = self.changes[0]
 			assert(len(newsrcs) == 1)
 			mod = self.getModelPatch(img, newsrcs[0])
-			mod.name = newsrcs[0].name
 			self.changes.append(mod)
 			if step == 'init':
 				self.changes.append(newsrcs[0].getSourceType())
@@ -407,18 +409,24 @@ class SDSSTractor(Tractor):
 			plt.title(aname)
 			plt.subplot(2, 3, 5)
 			plotimage(a1, **imargs)
-			plt.title('dnlprob = %.1f' % altad)
+			plt.title('dlnp = %.1f' % altad)
 
 			plt.subplot(2, 3, 3)
 			plotimage(b0, **imargs)
 			plt.title(bname)
 			plt.subplot(2, 3, 6)
 			plotimage(b1, **imargs)
-			plt.title('dlnp=%.2g' % altbd)
+			plt.title('dlnp=%.1f' % altbd)
 
-			plt.savefig('change-%03i.png' % self.changei)
+			fn = 'change-%03i.png' % self.changei
+			plt.savefig(fn)
 			self.changei += 1
-
+			self.plotfns.append(fn)
+			if step == 'switch':
+				self.comments.append('accepted change')
+			elif step == 'keep':
+				self.comments.append('rejected change')
+				
 		print 'end of step', step, 'and changes has', len(self.changes)
 		print [type(x) for x in self.changes]
 				
@@ -679,12 +687,12 @@ def main():
 		#( 600, 1600, 0, 600 ),
 		#( 1000, 2000, 600, 1200 ),
 
-		#( 800, 1600, 0, 600 ),
-		#( 1200, 2000, 600, 1200 ),
+		( 800, 1600, 0, 600 ),
+		( 1200, 2000, 600, 1200 ),
 
 		# Avoid that big galaxy (that was keeping us honest)
-		( 800, 1300, 0, 500 ),
-		( 1500, 2000, 600, 1100 ),
+		#( 800, 1300, 0, 500 ),
+		#( 1500, 2000, 600, 1100 ),
 
 		]
 	fullsizes = []
@@ -809,13 +817,12 @@ def main():
 
 	batchsource = 10
 
-	steps = (['plots'] + ['simplesources', 'plots', 'flux', 'plots', 'save',
-						  'psf', 'flux', 'plots',
-						  'psf', 'flux', 'plots',
-						  'psf', 'flux', 'plots',
-						  'flux', 'flux', 'opt', 'save', 'plots' ])
-						  
-	#['source', 'psf', 'flux', 'psfup', 'flux', 'opt', 'plots', 'save']*10)
+	steps = (['plots'] +
+			 ['simplesources', 'plots'] +
+			 ['flux', 'plots', 'opt', 'plots', 'save'] +
+			 ['psfup', 'flux', 'plots', 'save'] * 4 +
+			 ['change1', 'plots'] * 100 +
+			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
 
 	ploti = 0
 	savei = 0
@@ -845,7 +852,7 @@ def main():
 				chi = chis[i]
 				mod = mods[i]
 				img = tractor.getImage(i)
-				tt = 'sources: %i, chi^2/pix = %g' % (NS, np.sum(chi**2)/float(nziv[i]))
+				tt = 'sources: %i, random value = %g' % (NS, np.sum(chi**2)/float(nziv[i]))
 				zr = zrange[i]
 				imargs = dict(interpolation='nearest', origin='lower',
 							  vmin=zr[0], vmax=zr[1])
@@ -903,10 +910,23 @@ def main():
 			print 'Wrote', fn
 			footfn = fn
 
-			html = '<html><head>Step %i</head><body>' % ploti
+			html = '<html><head><title>Step %i</title></head><body>' % ploti
 			html += '<h3><a href="step%02i.html">Previous</a> &nbsp;' % (ploti-1)
-			html += '<a href="step%02i.html">Next</a></h3>' % (ploti+1)
-			#smallimg = 'border="0" width="250" height="187"'
+			html += '<a href="step%02i.html">Next</a> &nbsp;' % (ploti+1)
+			html += 'Step %i' % (ploti)
+			if stepi:
+				html += ' (%s)' % (steps[stepi-1])
+			html += '</h3>\n'
+
+			for txt in tractor.comments:
+				html += txt + '<br />'
+			tractor.comments = []
+
+			html += 'PSF models: <ul>'
+			for img in tractor.getImages():
+				html += '<li>' + str(img.getPsf()) + '</li>'
+			html += '</ul>\n'
+
 			smallimg = 'border="0" width="400" height="300"'
 			for i,img in enumerate(tractor.images):
 				imgfn = 'img-%02i.png' % i 
@@ -915,6 +935,11 @@ def main():
 				# mod, chiB
 				for fn in [imgfn, fns[i*3 + 0], fns[i*3 + 2]]:
 					html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
+				html += '\n'
+			for fn in tractor.plotfns:
+				html += '<br />'
+				html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
+			tractor.plotfns = []
 			html += '<br />'
 			fn = footfn
 			html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
@@ -998,20 +1023,13 @@ def main():
 			tractor.increaseAllPsfComplexity()
 
 		elif step == 'change':
-
-			def altCallback(tractor, src, newsrcs, srci, alti):
-				#global ploti
-				print 'alt callback'
-				plt.clf()
-				plt.imshow(tractor.getModelImages()[0],
-						   interpolation='nearest', origin='lower',
-						   vmin=zrange[0], vmax=zrange[1])
-				plt.hot()
-				plt.colorbar()
-				plt.savefig('alt-%i-%i-%i.png' % (ploti, srci, alti))
-
-			#tractor.changeSourceTypes(altCallback=altCallback)
 			tractor.changeSourceTypes()
+
+		elif step == 'change1':
+			print 'Changing one source.'
+			srci = int(random.random() * len(tractor.getCatalog()))
+			srcs = [tractor.getCatalog()[srci]]
+			tractor.changeSourceTypes(srcs)
 
 		elif step == 'save':
 

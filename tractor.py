@@ -106,8 +106,9 @@ class MultiParams(Params):
 		for n,i in self.namedparams:
 			if name == n:
 				return self.subs[i]
-		raise AttributeError('MultiParam (%s): unknown attribute "%s"' %
-							 (str(type(self)), name))
+		raise AttributeError('MultiParams (%s): unknown attribute "%s" (named params: [ %s ]; dict keys: [ %s ])' %
+							 (str(type(self)), name, ', '.join([k for k,v in self.getNamedParams()]),
+							  ', '.join(self.__dict__.keys())))
 
 	def hashkey(self):
 		t = ('MultiParams',)
@@ -786,7 +787,7 @@ class Tractor(object):
 	def debugChangeSources(self, **kwargs):
 		pass
 
-	def changeSourceTypes(self, srcs=None, altCallback=None, jointopt=False):
+	def changeSourceTypes(self, srcs=None, jointopt=False):
 		print
 		print 'changeSourceTypes'
 		pBefore = self.getLogProb()
