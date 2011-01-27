@@ -733,7 +733,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True):
 
 		x0,x1,y0,y1 = rois[i]
 
-		if opt.initialplots:
+		if initialPlots:
 			print 'Initial plots...'
 			plt.clf()
 			plotimage(image, vmin=zr[0], vmax=zr[1])
@@ -746,7 +746,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True):
 		image = image[roislice]
 		invvar = invvar[roislice]
 
-		if opt.initialplots:
+		if initialPlots:
 			plt.clf()
 			plotimage(image, vmin=zr[0], vmax=zr[1])
 			plt.savefig('img-%02i.png' % i)
@@ -781,7 +781,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True):
 		rds = [wcs.pixelToRaDec(x,y) for x,y in corners]
 		radecs.append(rds)
 
-	if opt.initialplots:
+	if initialPlots:
 		plt.clf()
 		plotfootprints(radecs, labels=['%i'%(i/2) for i in range(len(radecs))])
 		plt.savefig('footprints-full.png')
