@@ -43,7 +43,7 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	(images, simplexys, rois, zrange, nziv, footradecs
-	 ) = prepareTractor(False, False)
+	 ) = prepareTractor(False, False, rcfcut=[1])
 
 	print 'Creating tractor...'
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
@@ -73,8 +73,13 @@ def main():
 	src = ExpGalaxy(pos, flux, 0.6, 0.88, -0.1)
 	tractor.catalog.append(src)
 
-	imgi = 1
+	print
+	print 'Optimizing...'
+	tractor.optimizeCatalogAtFixedComplexityStep()
 
+	sys.exit(0)
+
+	imgi = 1
 	img = images[imgi]
 	patch = src.getModelPatch(img)
 	imargs1 = dict(interpolation='nearest', origin='lower')

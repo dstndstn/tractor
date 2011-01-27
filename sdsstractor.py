@@ -644,7 +644,7 @@ def plotfootprints(radecs, radecrange=None, catalog=None, labels=None):
 	return radecrange
 
 
-def prepareTractor(initialPlots=False, useSimplexy=True):
+def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 	rcfi = [ ( 5194 , 2 , 44 , 22.500966 ), ( 4275 , 2 , 224 , 90.003437 ), ( 3638 , 2 , 209 , 90.002781 ), ( 4291 , 2 , 227 , 90.003589 ), ( 4275 , 2 , 225 , 90.003437 ), ( 5849 , 4 , 27 , 20.003216 ), ( 5803 , 5 , 41 , 19.990683 ), ( 5194 , 2 , 43 , 22.500966 ), ( 3638 , 2 , 210 , 90.002781 ), ( 5803 , 5 , 42 , 19.990683 ), ( 5925 , 5 , 30 , 19.933986 ), ( 5935 , 5 , 27 , 20.000022 ), ]			
 	rcf = [(r,c,f) for r,c,f,i in rcfi if i < 85]
 	print 'RCF', rcf
@@ -700,6 +700,10 @@ def prepareTractor(initialPlots=False, useSimplexy=True):
 	rerun = 0
 
 	simplexys = []
+
+	if rcfcut is not None:
+		rcf  = [rcf [i] for i in rcfcut]
+		rois = [rois[i] for i in rcfcut]
 	
 	for i,(run,camcol,field) in enumerate(rcf):
 		fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
