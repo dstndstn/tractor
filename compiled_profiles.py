@@ -4,6 +4,8 @@ import pyfits
 from numpy import *
 import numpy
 
+import numpy as np
+
 from galaxy_profiles import *
 from integral_image import *
 from symmetric_integral_image import *
@@ -81,13 +83,102 @@ class CompiledProfile():
 	def get_compiled_ab(self):
 		return self.cab
 
-	def sample_transform(self, T, re_pix, x, y, outw, outh, margin):
+	def sample_transform(self, T, re_pix, ab, x, y, outw, outh, margin):
 		'''
-		T: transforms pixels in output image coords to pixels in
-		   units of r_e in the compiled profile.
+		T: transforms pixels in output image coords to units of r_e
+	       in the compiled profile.
 
 	    re_pix: r_e in pixels to set the returned patch size
 		'''
+		# target (output) size
+		tsize = ceil(self.cnrad * re_pix) + margin
+		tn = 2*tsize + 1
+		#print 'tn', tn
+
+		ix = round(x)
+		iy = round(y)
+
+		# Sample only within ~ the image bounds
+		# (we will trim more carefully below)
+		sxlo = floor(max(ix - tsize - 1, -margin))
+		sxhi = ceil (min(ix + tsize + 1, outw - 1 + margin))
+		sylo = floor(max(iy - tsize - 1, -margin))
+		syhi = ceil (min(iy + tsize + 1, outh - 1 + margin))
+		#print 'sample range x', sxlo, sxhi, 'y', sylo, syhi
+
+		# gridi,gridj are integers (-tsize to +tsize); shift to the
+		# correct subpixel positions.
+		(gridi, gridj) = meshgrid(arange(sxlo, sxhi+1)-ix,
+								  arange(sylo, syhi+1)-iy)
+		# The integer pixel offsets (ix,iy) get added in to x0,y0 at the
+		# very end.  The fractional parts (fx,fy) get dealt with here
+		fx = x - ix
+		fy = y - iy
+		gridi -= fx
+		gridj -= fy
+		gridshape = gridi.shape
+		gridi = gridi.ravel()
+		gridj = gridj.ravel()
+		# Now we compute where those sample points land in the
+		# compiled profile image.
+		ij = vstack((gridi, gridj))
+		#print 'ij range:', gridi.min(), gridi.max(), gridj.min(), gridj.max()
+
+		Tij = np.dot(T, ij)
+		#print 'Tij', Tij.shape
+		#print 'Tij range', Tij[0,:].min(), Tij[0,:].max(), Tij[1,:].min(), Tij[1,:].max()
+		# At this point, Tij has shape (2,N), and is in units of r_e in
+		# the compiled profile.
+		# Multiplying by the compiled r_e will make them in units
+		# of pixels in the compiled profile.
+
+		ab_factor = self.cab / max(ab, 1./float(2. * self.cn))
+		re_factor = self.cre / (max(re_pix, 1./float(2. * self.cn)))
+		# cpix{w,h} are the width,height of sample pixels in the
+		# compiled profile
+		cpixw = re_factor * ab_factor
+		cpixh = re_factor
+		# Now compute ii,jj, the pixel centers in the compiled image.
+		# Tij was in units of (compiled) r_e, so scale to pixels and shift
+		# to the center...
+		cx0 = cy0 = self.csize
+		ii = Tij[0,:] * self.cre + cx0
+		jj = Tij[1,:] * self.cre + cy0
+		xlo = numpy.round(ii - cpixw/2.).astype(int) - 1
+		xhi = numpy.round(ii + cpixw/2.).astype(int)
+		ylo = numpy.round(jj - cpixh/2.).astype(int) - 1
+		yhi = numpy.round(jj + cpixh/2.).astype(int)
+
+		# Clip the boxes that are completely out of bounds:
+		ib = logical_and(logical_and(xlo < self.cn, ylo < self.cn),
+						 logical_and(xhi >= 0, yhi >= 0))
+		# Compute the pixel areas before clamping...
+		A = (yhi[ib] - ylo[ib]).astype(float) * (xhi[ib] - xlo[ib])
+		# ... then clamp to the edges of the image.
+		xlo = clip(xlo[ib], -1, self.cn-2)
+		xhi = clip(xhi[ib],  0, self.cn-1)
+		ylo = clip(ylo[ib], -1, self.cn-2)
+		yhi = clip(yhi[ib],  0, self.cn-1)
+		assert(all((xlo<xhi)*(ylo<yhi)))
+
+		profile = zeros_like(gridi.ravel())
+		# Take mean over the rectangular region...
+		profile[ib] = (symm_intimg_rect(self.intimg, xlo, xhi, ylo, yhi, self.csize)
+					   / A)
+		profile = profile.reshape(gridshape)
+		# correct for the count-density of the compiled model...
+		profile *= (cpixw * cpixh)
+
+		(outx, inx) = get_overlapping_region(sxlo, sxhi+1, -margin, outw-1 + margin)
+		(outy, iny) = get_overlapping_region(sylo, syhi+1, -margin, outh-1 + margin)
+		if inx == [] or iny == []:
+			return (None, 0, 0)
+		x0 = outx.start
+		y0 = outy.start
+		profile = profile[iny,inx]
+		return (profile, x0, y0)
+
+
 		return None
 
 	def sample(self, r_e, ab, phi, x, y, outw, outh, margin):

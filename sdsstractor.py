@@ -177,13 +177,18 @@ class Galaxy(MultiParams):
 		#re = max(1./30, self.re)
 
 		# convert re to degrees
-		re = self.re / 3600.
+		re_deg = self.re / 3600.
 
 		abfactor = self.ab / profile.get_compiled_ab()
 
 		# units of degrees
-		G = np.array([[ re * np.cos(phi), re * np.sin(phi) ],
-					  [ re * abfactor * -np.sin(phi), re * abfactor * np.cos(phi) ]])
+		cp = np.cos(phi)
+		sp = np.sin(phi)
+		G = re_deg * np.array([[ cp, sp * abfactor],
+							   [-sp, cp * abfactor]])
+
+		#G = np.array([[ re_deg * np.cos(phi), re_deg * np.sin(phi) ],
+		#			  [ re_deg * abfactor * -np.sin(phi), re_deg * abfactor * np.cos(phi) ]])
 
 		# T takes unit vectors to pixels in the image
 		#T = np.dot(linalg.inv(cd), G)
@@ -193,14 +198,20 @@ class Galaxy(MultiParams):
 		T = np.dot(linalg.inv(G), cd)
 
 		# sqrt(abs(det(cd))) is pixel scale in deg/pix
-		# r_e is in arcsec
-		(prof,x0,y0) = profile.sample_transform(T, cx, cy, W, H, margin)
+		det = cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0]
+		pixscale = sqrt(abs(det))
+		repix = re_deg / pixscale
+
+		print 're_pix', repix
+		print 'ab', self.ab
+		
+		(prof,x0,y0) = profile.sample_transform(T, repix, self.ab, cx, cy, W, H, margin)
 		return Patch(x0, y0, prof)
 
 	def getModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
-		cd = img.getWcs().cd_at_pixel(px, py)
+		cd = img.getWcs().cdAtPixel(px, py)
 		patch = self.getGalaxyPatch(img, px, py, cd)
 		if patch is None:
 			print 'Warning, is Galaxy(subclass).getProfile() defined?'
