@@ -83,7 +83,8 @@ class CompiledProfile():
 	def get_compiled_ab(self):
 		return self.cab
 
-	def sample_transform(self, T, re_pix, ab, x, y, outw, outh, margin):
+	def sample_transform(self, T, re_pix, ab, x, y, outw, outh, margin,
+						 debugstep=0):
 		'''
 		T: transforms pixels in output image coords to units of r_e
 	       in the compiled profile.
@@ -149,6 +150,8 @@ class CompiledProfile():
 		ylo = numpy.round(jj - cpixh/2.).astype(int) - 1
 		yhi = numpy.round(jj + cpixh/2.).astype(int)
 
+		if debugstep == 1:
+			return xlo,xhi,ylo,yhi, self.cre, self.cn, cpixw, cpixh, re_factor, ab_factor, Tij, ii, jj
 		# Clip the boxes that are completely out of bounds:
 		ib = logical_and(logical_and(xlo < self.cn, ylo < self.cn),
 						 logical_and(xhi >= 0, yhi >= 0))

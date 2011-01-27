@@ -8,7 +8,8 @@ import pylab as plt
 from astrometry.util.sip import Tan
 
 from sdsstractor import *
-
+#from compiled_profiles import *
+#from galaxy_profiles import *
 
 class FitsWcs(object):
 	def __init__(self, wcs):
@@ -107,6 +108,44 @@ if __name__ == '__main__':
 		plt.text(XX[i], YY[i], '(%.1f,%.1f)' % (Tij[0,i], Tij[1,i]),
 				 fontsize=8, ha='center', va='center')
 	plt.savefig('g3.png')
+
+
+	profile = CompiledProfile(modelname='exp', profile_func=profile_exp, re=100, nrad=4)
+
+	#re_deg = 0.005 # 9 pix
+	re_deg = 0.002 # 
+	repix = re_deg / scale
+	print 'repix', repix
+
+	cp = np.cos(phi)
+	sp = np.sin(phi)
+	G = re_deg * np.array([[ cp, sp * abfactor],
+						   [-sp, cp * abfactor]])
+	T = np.dot(linalg.inv(G), cd)
+
+	X = profile.sample_transform(T, repix, ab, W/2, H/2, W, H, 1,
+								 debugstep=1)
+
+	(xlo,xhi,ylo,yhi, cre,cn, cpixw, cpixh, re_factor, ab_factor,
+	 Tij, ii, jj) = X
+	print 'box size', cpixw, cpixh
+	print 're_factor', re_factor
+	print 'ab_factor', ab_factor
+
+	plt.clf()
+	plt.plot(Tij[0,:], Tij[1,:], 'b.')
+	plt.title('Tij')
+	plt.savefig('g4.png')
+
+	plt.clf()
+	plt.plot(ii, jj, 'b.')
+	plt.savefig('g5.png')
+
+	plt.clf()
+	print 'boxes:', len(xlo)
+	plt.plot(np.vstack((xlo,xhi,xhi,xlo,xlo)),
+			 np.vstack((ylo,ylo,yhi,yhi,ylo)), 'b-')
+	plt.savefig('g6.png')
 
 
 	#sys.exit(0)
