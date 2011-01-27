@@ -16,7 +16,9 @@ def logverb(*args):
 def logmsg(*args):
 	msg = ' '.join([str(x) for x in args])
 	logging.info(msg)
-	
+def isverbose():
+	# Ugly logging interface...
+	return (logging.getLogger().level <= logging.DEBUG)
 
 class Params(object):
 	def __hash__(self):
@@ -1125,8 +1127,8 @@ class Tractor(object):
 
 		# FIXME -- does it make LSQR faster if we remap the row and column
 		# indices so that no rows/cols are empty?
-		
-		lsqropts = dict(show=False)
+
+		lsqropts = dict(show=isverbose())
 
 		# Run lsqr()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,

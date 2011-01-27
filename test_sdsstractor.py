@@ -252,6 +252,9 @@ if __name__ == '__main__':
 			 np.vstack((ylo,ylo,yhi,yhi,ylo)), 'b-')
 	plt.savefig('g6.png')
 
+	plt.axis([0,1000,0,1000])
+	plt.savefig('g7.png')
+
 
 	#sys.exit(0)
 
