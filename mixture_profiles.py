@@ -5,21 +5,42 @@ matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
 
-def test_exp():
+def hogg_exp(x):
+    y = np.zeros_like(x)
+    I = x > -20.0
+    y[I] = np.exp(x[I])
+    return y
+
+# this code is a HACK because it FIXES the x_k
+def test_exp(K):
+    x = np.arange(0.,20.,0.001)
+    yexp = x * np.exp(-x)
+    # MAGIC numbers 5 and 2:
+    x_k_list = 5. * ((np.arange(K) + 0.5) / K)**2
+    A = np.zeros((len(x),K))
+    for k in range(K):
+        A[:,k] = x * hogg_exp(-0.5 * x * x / x_k_list[k]**2)
+    ATA = np.dot(np.transpose(A), A)
+    ATb = np.dot(np.transpose(A), yexp)
+    ATAinv = np.linalg.inv(ATA)
+    A_k_list = np.dot(ATAinv, ATb)
+    print x_k_list
+    print A_k_list
     plt.clf()
-    x = np.arange(0.,10.,0.001)
-    yexp = np.exp(-x)
-    plt.plot(x,np.log(yexp),'r-')
-    K = 50
-    Delta = 0.1
-    ymix = np.zeros_like(yexp)
-    x_k_list = (np.arange(K) + 1.) * Delta
-    A_k_list = np.exp(-x_k_list) * Delta
-    for k in np.arange(K):
-        ymix += A_k_list[k] * np.exp(-0.5 * x * x / x_k_list[k]**2)
-    plt.plot(x,np.log(ymix),'k-')
-    plt.savefig('test_exp.png')
+    plt.plot(x,yexp,'k-')
+    for k in range(K):
+        A[:,k] = x * np.exp(-0.5 * x * x / x_k_list[k]**2)
+    ymix = np.dot(A, A_k_list)
+    print ymix.size
+    plt.plot(x,ymix,'r-')
+    plt.xlabel('$r$ with $r_e = 1$')
+    plt.xlim(0., 10.)
+    plt.ylabel('$r\,\exp(-r)$')
+    plt.ylim(-0.1 * max(yexp), 1.1 * max(yexp))
+    plt.title('black: truth / red: %d-Gaussian approximation' % K)
+    plt.savefig('test_exp_%d.png' % K)
     return
 
 if __name__ == '__main__':
-    test_exp()
+    for K in range(3,20):
+        test_exp(K)
