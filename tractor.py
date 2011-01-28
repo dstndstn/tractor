@@ -1,14 +1,15 @@
 from math import ceil, floor, pi, sqrt, exp
-import numpy as np
+import time
+import logging
 import random
+
+import numpy as np
+import pylab as plt
+
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
-
-import pylab as plt
-
-import logging
 
 def logverb(*args):
 	msg = ' '.join([str(x) for x in args])
@@ -150,6 +151,38 @@ class MultiParams(Params):
 		return p
 
 
+class Sky(Params):
+	def hashkey(self):
+		return ('Sky',)
+	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	def getParamDerivatives(self, img, fluxonly=False):
+		return []
+	def addTo(self, img):
+		pass
+
+class ConstantSky(ParamList):
+	'''
+	In counts
+	'''
+	def __str__(self):
+		return 'Sky: %.1f' % self.val
+	def __repr__(self):
+		return 'ConstantSky(%.5f)' % self.val
+	def getNamedParams(self):
+		return [('val',0)]
+	def hashkey(self):
+		return ('ConstantSky', self.val)
+	def getStepSizes(self, *args, **kwargs):
+		return [1]
+	def getParamDerivatives(self, img, fluxonly=False):
+		p = Patch(0, 0, np.ones(img.shape))
+		p.setName('dsky')
+		return [p]
+	def addTo(self, img):
+		img += self.val
+	
+
+
 # This is just the duck-type definition
 class Source(Params):
 	'''
@@ -158,8 +191,6 @@ class Source(Params):
 	'''
 	def hashkey(self):
 		return ('Source',)
-	#def getPosition(self):
-	#	pass
 	def getModelPatch(self, img):
 		pass
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
@@ -281,7 +312,7 @@ def randomint():
 	return int(random.random() * (2**32)) #(2**48))
 
 class Image(object):
-	def __init__(self, data=None, invvar=None, psf=None, sky=0, wcs=None,
+	def __init__(self, data=None, invvar=None, psf=None, sky=None, wcs=None,
 				 photocal=None, name=None):
 		self.data = data
 		self.invvar = invvar
@@ -413,6 +444,11 @@ class Patch(object):
 		if self.patch is None:
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch.copy())
+
+	def getExtent(self):
+		''' Return (x0, x1, y0, y1) '''
+		(w,h) = self.shape
+		return (self.x0, self.x0 + w, self.y0, self.y0 + h)
 
 	def getOrigin(self):
 		return (self.x0,self.y0)
@@ -601,7 +637,6 @@ class NGaussianPSF(MultiParams):
 		return [('sigmas', 0), ('weights', 1)]
 
 	def __str__(self):
-		print 'sigmas:', self.sigmas
 		return ('NGaussianPSF: sigmas [ ' +
 				', '.join(['%.3f'%s for s in self.sigmas]) +
 				' ], weights [ ' +
@@ -794,11 +829,17 @@ class Tractor(object):
 
 	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
 		for ostep in range(nsteps):
-			print 'Optimizing the new sources (step %i)...' % (ostep+1)
+			logmsg('Optimizing the new sources (step %i)...' % (ostep+1))
 			dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
-			print 'delta-log-prob', dlnprob
+			logverb('delta-log-prob', dlnprob)
+			if 'srcs' in kwargs:
+				srcs = kwargs['srcs']
+				if len(srcs) == 1:
+					logmsg('-> ', srcs[0])
+				else:
+					logmsg('-> ', srcs)
 			if dlnprob < 1.:
-				print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+				logverb('failed to improve the new source enough (d lnprob = %g)' % dlnprob)
 				return False
 		return True
 
@@ -806,11 +847,15 @@ class Tractor(object):
 		pass
 
 	def changeSourceTypes(self, srcs=None, jointopt=False):
-		print
-		print 'changeSourceTypes'
+		'''
+		Returns a list of booleans of length "srcs": whether the
+		sources were changed or not.
+		'''
+		logverb('changeSourceTypes')
 		pBefore = self.getLogProb()
-		print 'log-prob before:', pBefore
-		print
+		logverb('log-prob before:', pBefore)
+
+		didchange = []
 
 		oldcat = self.catalog
 		ncat = len(oldcat)
@@ -823,11 +868,8 @@ class Tractor(object):
 		ii = -1
 		while True:
 			i += 1
-			print
-			print 'changeSourceTypes: source', i
-			print
+			logverb('changeSourceTypes: source', i)
 			self.catalog = oldcat
-			self.catalog.printLong()
 
 			if srcs is None:
 				# go through self.catalog using "ii" as the index.
@@ -837,9 +879,9 @@ class Tractor(object):
 					break
 				if ii >= ncat:
 					break
-				print '  changing source index', ii
+				logverb('  changing source index', ii)
 				src = self.catalog[ii]
-				print '  changing source:', src
+				logmsg('Considering change to source:', src)
 			else:
 				if i >= len(srcs):
 					break
@@ -847,12 +889,11 @@ class Tractor(object):
 
 			# Prevent too-easy switches due to the current source not being optimized.
 			pBefore = self.getLogProb()
-			print 'Optimizing source before trying to change it...'
+			logverb('Optimizing source before trying to change it...')
 			self.optimizeCatalogLoop(srcs=[src])
-			print 'After optimizing source:'
-			print '  ', src
+			logmsg('After optimizing source:', src)
 			pAfter = self.getLogProb()
-			print 'delta-log-prob:', pAfter - pBefore
+			logverb('delta-log-prob:', pAfter - pBefore)
 			pBefore = pAfter
 
 			bestlogprob = pBefore
@@ -866,32 +907,30 @@ class Tractor(object):
 				newcat = oldcat.deepcopy()
 				rsrc = newcat.pop(srcind)
 				newcat.extend(newsrcs)
-				print 'Replacing:'
-				print '  from', src
-				print '  to  ', newsrcs
+				logverb('Trying change:')
+				logverb('  from', src)
+				logverb('  to  ', newsrcs)
 				self.catalog = newcat
-				#print 'Before optimizing:', self.getLogProb()
 
 				self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
 
 				# first try individually optimizing the newly-added
 				# sources...
 				self.optimizeCatalogLoop(srcs=newsrcs)
-				#print 'Changed to', newsrcs
-				print 'After optimizing new sources:'
+				logverb('After optimizing new sources:')
 				for ns in newsrcs:
-					print '  ', ns
+					logverb('  ', ns)
 				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
 				if jointopt:
 					self.optimizeCatalogAtFixedComplexityStep()
-					print 'After optimizing all with new sources:', self.getLogProb()
+
 				pAfter = self.getLogProb()
-				print 'delta-log-prob:', pAfter - pBefore
+				logverb('delta-log-prob:', pAfter - pBefore)
 
 				self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
 
 				if pAfter > bestlogprob:
-					print 'Best change so far!'
+					logverb('Best change so far!')
 					bestlogprob = pAfter
 					bestalt = j
 					bestparams = newcat.getAllParams()
@@ -913,21 +952,37 @@ class Tractor(object):
 				#print 'New catalog:'
 				#self.catalog.printLong()
 
-				print
-				print 'Accepted change:',
-				print 'from:', src
+				logmsg('')
+				logmsg('Accepted change:')
+				logmsg('from:', src)
 				if len(alts[bestalt]) == 1:
-					print 'to:', alts[bestalt][0]
+					logmsg('to:', alts[bestalt][0])
 				else:
-					print 'to:', alts[bestalt]
+					logmsg('to:', alts[bestalt])
 
 				assert(self.getLogProb() == pBefore)
 				self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
+				didchange.append(True)
 			else:
 				self.debugChangeSources(step='keep', src=src)
+				didchange.append(False)
 
 		self.catalog = oldcat
+		return didchange
 
+	def optimizeSkyAtFixedComplexityStep(self, imagei):
+		logmsg('Optimize sky at fixed complexity')
+		img = self.getImage(imagei)
+		sky = img.getSky()
+		derivs = sky.getParamDerivatives(img)
+		allparams = [[(deriv,img)] for deriv in derivs]
+		X = self.optimize(allparams)
+		logmsg('Sky paramater changes:', X)
+		logmsg('Before:', sky)
+		dlnp,alpha = self.tryParamUpdates([sky], X)
+		logmsg('After:', sky)
+		logverb('Log-prob improvement:', dlnp)
+		return dlnp, X, alpha
 
 	def optimizePsfAtFixedComplexityStep(self, imagei,
 										 derivCallback=None):
@@ -982,7 +1037,7 @@ class Tractor(object):
 		X = self.optimize(allparams)
 
 		print 'PSF Parameter changes:', X
-		dlogprob = self.tryParamUpdates([psf], X)
+		dlogprob,alpha = self.tryParamUpdates([psf], X)
 		print 'After:', psf
 		print 'Log-prob improvement:', dlogprob
 
@@ -1086,11 +1141,17 @@ class Tractor(object):
 				VV.append(vals)
 				WW.append(w)
 
+			if len(VV) == 0:
+				colscales.append(1.)
+				continue
 			VV = np.hstack(VV)
 			WW = np.hstack(WW)
+			if len(VV) == 0:
+				colscales.append(1.)
+				continue
 			scale = abs(VV.max())
 			colscales.append(scale)
-			print 'Column', col, 'absmax:', scale
+			logverb('Column', col, 'absmax:', scale)
 			VV /= scale
 			# spvals is structured a little differently than sprows
 			# (has fewer lists with more elements), but same number of entries
@@ -1139,26 +1200,25 @@ class Tractor(object):
 			assert(all(b[row0 : row0 + NP] == 0))
 			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
 		b = b[:urows.max() + 1]
-		#print 'b shape', b.shape
 
 		# FIXME -- does it make LSQR faster if we remap the row and column
 		# indices so that no rows/cols are empty?
 
 		lsqropts = dict(show=isverbose())
-		#atol=1e-12,
-		#btol=1e-12)
 
 		# Run lsqr()
+		logmsg('LSQR: %i cols, %i elements' %
+			   (Ncols, len(spvals)-1))
+		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+		t1 = time.clock()
+		logmsg('  %.1f seconds' % (t1-t0))
 
-		logmsg('scaled  X=', X)
-
+		logverb('scaled  X=', X)
 		X = np.array(X)
 		X /= np.array(colscales)
-
-		logmsg('  X=', X)
-
+		logverb('  X=', X)
 		return X
 
 	# X: delta-params
@@ -1221,7 +1281,7 @@ class Tractor(object):
 
 
 	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
-											 alphas=None):
+											 alphas=None, sky=True):
 		'''
 		Returns: (delta-log-prob, delta-parameters, step size alpha)
 
@@ -1230,7 +1290,7 @@ class Tractor(object):
 		-build matrix
 		-take step (try full step, back off)
 		'''
-		print 'Optimizing at fixed complexity'
+		logverb('Optimizing at fixed complexity')
 
  		if srcs is None:
 			srcs = self.catalog
@@ -1247,6 +1307,10 @@ class Tractor(object):
 						continue
 					allderivs[k].append((deriv, img))
 			allparams.extend(allderivs)
+		if sky:
+			for i,img in enumerate(self.getImages()):
+				derivs = img.getSky().getParamDerivatives(img)
+				allparams.extend([[(d,img) for d in derivs]])
 
 		X = self.optimize(allparams)
 
@@ -1273,7 +1337,7 @@ class Tractor(object):
 	# the real deal
 	def getModelImageNoCache(self, img):
 		mod = np.zeros_like(img.getImage())
-		mod += img.sky
+		img.sky.addTo(mod)
 		for src in self.catalog:
 			patch = self.getModelPatch(img, src)
 			patch.addTo(mod)

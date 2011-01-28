@@ -3,6 +3,7 @@ if __name__ == '__main__':
 	matplotlib.use('Agg')
 
 from math import pi, sqrt
+from datetime import datetime
 
 import pyfits
 import pylab as plt
@@ -15,7 +16,7 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
-from astrometry.util.plotutils import setRadecAxes
+from astrometry.util.plotutils import setRadecAxes, redgreen
 
 from compiled_profiles import *
 from galaxy_profiles import *
@@ -332,6 +333,7 @@ class SDSSTractor(Tractor):
 
 		self.plotfns = []
 		self.comments = []
+		self.boxes = []
 
 	def debugChangeSources(self, **kwargs):
 		if self.debugchange:
@@ -389,7 +391,7 @@ class SDSSTractor(Tractor):
 			# Images
 			for ri,i in enumerate(II):
 				img = self.getImage(i)
-				sky = img.getSky()
+				sky = img.getSky().val
 				skysig = sqrt(sky)
 				imargs[i] = dict(vmin=-3.*skysig, vmax=10.*skysig)
 				if ch.impatch[i] is None:
@@ -502,6 +504,17 @@ class SDSSTractor(Tractor):
 
 		return PointSource(pos, flux)
 
+	def changeSourceTypes(self, srcs=None, **kwargs):
+		if srcs is not None:
+			if len(self.boxes) == 0:
+				self.boxes = [[] for i in range(self.getNImages())]
+			for i,img in enumerate(self.getImages()):
+				for src in srcs:
+					patch = self.getModelPatch(img, src)
+					self.boxes[i].append(patch.getExtent())
+		Tractor.changeSourceTypes(self, srcs, **kwargs)
+
+
 	def changeSource(self, source):
 		'''
 		Proposes a list of alternatives, where each alternative is a list of new
@@ -583,7 +596,7 @@ def testGalaxy():
 	wcs = NullWCS()
 	photocal = NullPhotoCal()
 	psf = NGaussianPSF([1.5], [1.0])
-	sky = 0.
+	sky = ConstantSky(0.)
 	
 	img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
 				photocal=photocal)
@@ -606,11 +619,12 @@ def testGalaxy():
 		plt.title('derivative ' + deriv.getName())
 		plt.savefig('eg-deriv%i-0a.png' % i)
 
-def plotimage(img, **kwargs):
+def plotimage(img, setcolormap=True, **kwargs):
 	args = dict(interpolation='nearest', origin='lower')
 	args.update(kwargs)
 	plt.imshow(img, **args)
-	plt.hot()
+	if setcolormap:
+		plt.hot()
 	#plt.colorbar()
 
 def plotfootprints(radecs, radecrange=None, catalog=None, labels=None):
@@ -738,7 +752,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
 		nz = np.sum(invvar != 0)
-		print 'Non-zero invvars:', nz
+		#print 'Non-zero invvars:', nz
 		nziv.append(nz)
 		
 		zr = np.array([-3.,+10.]) * skysig + sky
@@ -774,9 +788,10 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		wcs.setX0Y0(x0, y0)
 		# And counts
 		photocal = SdssPhotoCal(SdssPhotoCal.scale)
+		skyobj = ConstantSky(sky)
 
-		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
-					photocal=photocal,
+		img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
+					sky=skyobj, photocal=photocal,
 					name='Image%i(r/c/f=%i/%i%i)' % (i, run, camcol, field))
 		images.append(img)
 
@@ -818,7 +833,6 @@ def main():
 					  help='Make more verbose')
 	opt,args = parser.parse_args()
 
-	print 'Opt.verbose = ', opt.verbose
 	if opt.verbose == 0:
 		lvl = logging.INFO
 	else: # opt.verbose == 1:
@@ -828,27 +842,27 @@ def main():
 	use_simplexy = True
 
 	plt.figure(figsize=(10,7.5))
-	
+
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(opt.initialplots, use_simplexy)
 
 	print 'Firing up tractor...'
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
 
-	print 'Start: catalog is', tractor.catalog
-
 	footradecrange = None
 
 	batchsource = 10
 
+	np.random.seed(42)
+
 	steps = (['plots'] +
 			 ['simplesources', 'plots'] +
+			 ['sky', 'plots'] +
 			 ['flux', 'plots', 'opt', 'plots', 'save'] +
 			 #['flux', 'plots'] +
-			 ['psfup', 'flux', 'plots', 'save'] * 4 +
-			 ['change1biased', 'plots'] * 100 +
+			 ['psfup', 'flux', 'sky', 'plots', 'save'] * 4 +
+			 (['change1biased', 'plots', 'source', 'plots'] * 10 + ['opt','plots'])*10 +
 			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
-
 	ploti = 0
 	savei = 0
 	stepi = 0
@@ -865,6 +879,12 @@ def main():
 	chiAimargs = []
 
 	for stepi,step in zip(range(stepi, len(steps)), steps[stepi:]):
+
+		print
+		print '-----------------------------'
+		print 'Step', stepi, ':', step
+		print '-----------------------------'
+		print
 
 		if step == 'plots':
 			print 'Making plots...'
@@ -897,6 +917,15 @@ def main():
 						y.append(py)
 					plt.plot(x, y, 'bo', mfc='none', mec='b')
 					plt.axis(ax)
+
+				print 'Tractor boxes:', tractor.boxes
+				if len(tractor.boxes) > i:
+					boxes = tractor.boxes[i]
+					ax = plt.axis()
+					for x0,x1,y0,y1 in boxes:
+						plt.plot([x0,x1,x1,x0,x0], [y0,y0,y1,y1,y0], 'b-')
+					plt.axis(ax)
+
 				plt.title(tt)
 				fn = 'mod-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
@@ -919,15 +948,18 @@ def main():
 				fns.append(fn)
 
 				chiBimarg = dict(interpolation='nearest', origin='lower',
-								 vmin=-3, vmax=10.)
+								 cmap=redgreen, vmin=-5, vmax=5)
+								 #vmin=-3, vmax=10.)
 
 				plt.clf()
-				plotimage(chi, **chiBimarg)
+				plotimage(chi, setcolormap=False, **chiBimarg)
 				plt.title(tt)
 				fn = 'chiB-%02i-%02i.png' % (ploti, i)
 				plt.savefig(fn)
 				print 'Wrote', fn
 				fns.append(fn)
+
+			tractor.boxes = []
 
 			plt.clf()
 			footradecrange = plotfootprints(footradecs, footradecrange,
@@ -941,8 +973,14 @@ def main():
 			html += '<h3><a href="step%02i.html">Previous</a> &nbsp;' % (ploti-1)
 			html += '<a href="step%02i.html">Next</a> &nbsp;' % (ploti+1)
 			html += 'Step %i' % (ploti)
-			if stepi:
-				html += ' (%s)' % (steps[stepi-1])
+			lastplot = max(0, stepi-1)
+			while lastplot > 0:
+				if steps[lastplot] == 'plots':
+					break
+				lastplot -= 1
+			html += ' (%s)' % (', '.join(steps[lastplot+1:stepi]))
+			t = datetime.now()
+			html += ' at ' + t.isoformat()
 			html += '</h3>\n'
 
 			for txt in tractor.comments:
@@ -975,33 +1013,17 @@ def main():
 			
 			ploti += 1
 
+		elif step == 'sky':
+			print 'Optimizing sky...'
+			for i in range(tractor.getNImages()):
+				tractor.optimizeSkyAtFixedComplexityStep(i)
+
 		elif step == 'opt':
-			print
 			print 'Optimizing catalog...'
 			tractor.optimizeCatalogAtFixedComplexityStep()
-			print
 
 		elif step == 'source':
-			print
-			print 'Before createSource, catalog is:',
-			tractor.getCatalog().printLong()
-			print
 			rtn = tractor.createSource(nbatch=batchsource)
-			print
-			print 'After  createSource, catalog is:',
-			tractor.getCatalog().printLong()
-			print
-
-			if False:
-				(sm,tryxy) = rtn[0]
-				plt.clf()
-				plt.imshow(sm, interpolation='nearest', origin='lower')
-				plt.hot()
-				plt.colorbar()
-				ax = plt.axis()
-				plt.plot([x for x,y in tryxy], [y for x,y in tryxy], 'b+')
-				plt.axis(ax)
-				plt.savefig('create-%02i.png' % stepi)
 
 		elif step == 'simplesources':
 			print "Initializing with simplexy's source lists..."
@@ -1033,7 +1055,7 @@ def main():
 					ix = int(round(x))
 					iy = int(round(y))
 					if mask[iy,ix]:
-						print 'Skipping masked source at', x,y
+						#print 'Skipping masked source at', x,y
 						continue
 					src = tractor.createNewSource(img, x, y, sxy.flux[i])
 					cat.append(src)
@@ -1044,7 +1066,6 @@ def main():
 		elif step == 'psf':
 			baton = (stepi,)
 			tractor.optimizeAllPsfAtFixedComplexityStep()
-			#derivCallback=(psfDerivCallback, baton))
 
 		elif step == 'psfup':
 			tractor.increaseAllPsfComplexity()
@@ -1064,7 +1085,6 @@ def main():
 			imgs = tractor.getImages()
 
 			scalars = []
-
 			for src in cat:
 				scalar = 0
 				for img,chi in zip(imgs,chis):
@@ -1081,14 +1101,16 @@ def main():
 					scalar += (c[c > 0]**2).sum()
 				scalars.append(scalar)
 
-			print 'scalars:', scalars
+			#print 'scalars:', scalars
 			X = np.random.multinomial(1, scalars/np.sum(scalars))
 			# find the element that is = 1 (rest are 0)
 			srci = np.flatnonzero(X)
 			src = tractor.getCatalog()[srci]
-			print 'Changing source', srci, str(src), 'with scalar', scalars[srci]
-			tractor.changeSourceTypes(srcs=[src])
-
+			#print 'Changing source', srci, str(src), 'with scalar', scalars[srci]
+			changed = tractor.changeSourceTypes(srcs=[src])
+			#if changed[0]:
+			#	# optimize it
+			#	tractor.
 
 		elif step == 'save':
 
