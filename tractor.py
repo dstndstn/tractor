@@ -325,6 +325,9 @@ class Image(object):
 	def getSky(self):
 		return self.sky
 
+	def setSky(self, sky):
+		self.sky = sky
+
 	def setPsf(self, psf):
 		self.psf = psf
 
@@ -1411,9 +1414,9 @@ class Tractor(object):
 	def debugNewSource(self, *args, **kwargs):
 		pass
 
-	def createSource(self, nbatch=1, imgi=None, jointopt=False):
-		print
-		print 'Tractor.createSource'
+	def createSource(self, nbatch=1, imgi=None, jointopt=False,
+					 avoidExisting=True):
+		logverb('createSource')
 		'''
 		-synthesize images
 		-look for "promising" x,y image locations with positive residuals
@@ -1430,13 +1433,14 @@ class Tractor(object):
 				chi = self.getChiImage(i)
 				img = self.getImage(i)
 
-				# block out regions around existing Sources.
-				for j,src in enumerate(self.catalog):
-					patch = self.getModelPatch(img, src)
-					(H,W) = img.shape
-					if not patch.clipTo(W, H):
-						continue
-					chi[patch.getSlice()] = 0.
+				if avoidExisting:
+					# block out regions around existing Sources.
+					for j,src in enumerate(self.catalog):
+						patch = self.getModelPatch(img, src)
+						(H,W) = img.shape
+						if not patch.clipTo(W, H):
+							continue
+						chi[patch.getSlice()] = 0.
 
 				# PSF-correlate
 				sm = img.getPsf().applyTo(chi)
@@ -1453,18 +1457,15 @@ class Tractor(object):
 					iy = I/W
 					# this is just the peak pixel height difference...
 					ht = (img.getImage() - self.getModelImage(img))[iy,ix]
-					print 'creating new source at x,y', (ix,iy)
+					logverb('Requesting new source at x,y', (ix,iy))
 					src = self.createNewSource(img, ix, iy, ht)
-					print 'Got:', src
+					logverb('Got:', src)
 					debugargs['src'] = src
 					self.debugNewSource(type='newsrc-0', **debugargs)
-
 					# try adding the new source...
 					pBefore = self.getLogProb()
 					logverb('log-prob before:', pBefore)
-
 					if jointopt:
-						#self.pushCache()
 						oldcat = self.catalog.deepcopy()
 
 					self.catalog.append(src)
@@ -1472,13 +1473,13 @@ class Tractor(object):
 					# individually optimizing the newly-added
 					# source...
 					for ostep in range(20):
-						print 'Optimizing the new source (step %i)...' % (ostep+1)
+						logverb('Optimizing the new source (step %i)...' % (ostep+1))
 						dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
-						print 'After:', src
+						logverb('After:', src)
 						self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
 											**debugargs)
 						if dlnprob < 1.:
-							print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
+							logverb('failed to improve the new source enough (d lnprob = %g)' % dlnprob)
 							break
 
 					# Try changing the newly-added source type?
@@ -1487,42 +1488,22 @@ class Tractor(object):
 					
 					if jointopt:
 						# then the whole catalog
-						print 'Optimizing the catalog with the new source...'
+						logverb('Optimizing the catalog with the new source...')
 						self.optimizeCatalogAtFixedComplexityStep()
 
 					pAfter = self.getLogProb()
-					print 'd log-prob:', (pAfter - pBefore)
+					logverb('delta log-prob:', (pAfter - pBefore))
 
 					if pAfter > pBefore:
-						print 'Keeping new source'
-						#self.mergeCache()
+						logverb('Keeping new source')
 						break
 
 					else:
-						print 'Rejecting new source'
-						#self.popCache()
+						logverb('Rejecting new source')
 						# revert the catalog
 						if jointopt:
 							self.catalog = oldcat
 						else:
 							self.catalog.pop()
 
-			pEnd = self.getLogProb()
-			print 'log-prob at finish:', pEnd
-
-
-	def modifyComplexity(self):
-		'''
-		-synthesize images
-		-for all sources?
-		---for all sourceTypes (including None)
-		-----change source.sourceType -> sourceType
-		-----local optimizeAtFixedComplexity
-		'''
-		pass
-	
-	def step(self):
-		'''
-		'''
-		pass
 

@@ -2,7 +2,7 @@ if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
 
-from math import pi, sqrt
+from math import pi, sqrt, ceil
 from datetime import datetime
 
 import pyfits
@@ -221,6 +221,9 @@ class Galaxy(MultiParams):
 				posx.stepParam(i, psteps[i])
 				(px,py) = img.getWcs().positionToPixel(self, posx)
 				patchx = self.getModelPatch(img, px, py)
+				if patchx.getImage() is None:
+					derivs.append(None)
+					continue
 				dx = (patchx - patch0) * (1. / psteps[i])
 				dx.setName('d(gal)/d(pos%i)' % i)
 				derivs.append(dx)
@@ -423,7 +426,7 @@ class SDSSTractor(Tractor):
 					# HACK -- force patches to be the same size + offset...
 					img = self.getImage(i)
 					sl = ch.mod0[i].getSlice(img)
-					print 'slice', sl
+					#print 'slice', sl
 					im = np.zeros_like(img.getImage())
 					postmods[i].addTo(im)
 					im = im[sl]
@@ -439,9 +442,17 @@ class SDSSTractor(Tractor):
 			self.changei += 1
 			self.plotfns.append(fn)
 			if step == 'switch':
-				self.comments.append('accepted change')
+				s = '<a href="#%s">' % fn + 'accepted change</a> from ' + str(src) + '<br />to '
+				if len(newsrcs) == 1:
+					s += str(newsrcs[0])
+				else:
+					s += '[ ' + ' + '.join([str(ns) for ns in newsrcs]) + ' ]'
+				self.comments.append(s)
 			elif step == 'keep':
-				self.comments.append('rejected change')
+				s = '<a href="#%s">' % fn + 'rejected change</a> of ' + str(src)
+				self.comments.append(s)
+			#smallimg = 'border="0" width="400" height="300"'
+			#s += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
 				
 				
 	def debugNewSource(self, *args, **kwargs):
@@ -856,18 +867,20 @@ def main():
 	footradecrange = None
 
 	batchsource = 10
-	batchchange = 10
+	batchchange =  5
 
 	np.random.seed(42)
 
 	steps = (['plots'] +
 			 ['simplesources', 'plots'] +
-		 ['changebiased'] +
+			 ['changebiased'] +
 			 ['sky', 'plots'] +
 			 ['flux', 'plots', 'opt', 'plots', 'save'] +
 			 ['psfup', 'flux', 'sky', 'plots', 'save'] * 4 +
-			 (['source', 'plots', 'save'] + ['changebiased', 'plots', 'save']*3 + ['opt','plots'])*10 +
-			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
+			 (['source2', 'plots', 'save'] +
+			  ['changebiased', 'plots', 'save']*3 +
+			  ['opt','plots', 'save'])*10 +
+			 [])
 	ploti = 0
 	savei = 0
 	stepi = 0
@@ -875,7 +888,6 @@ def main():
 	# JUMP IN:
 	if opt.loadi != -1:
 		loadi = opt.loadi
-		# FIXME: you have to save the PSF too (and eventually sky)
 		(savei, stepi, ploti, tractor.catalog, psfs, skys) = unpickle_from_file('catalog-%02i.pickle' % loadi)
 		for i in range(tractor.getNImages()):
 			tractor.getImage(i).setPsf(psfs[i])
@@ -884,9 +896,27 @@ def main():
 		print 'there are', len(steps), 'steps'
 		print 'remaining steps:', steps[stepi:]
 
+		# HACK
+		print 'REPLACING STEPS:'
+		steps = ( ['']*(stepi) +
+				  [ 'changeall' ]
+				  )
+		print steps
+		print 'there are', len(steps), 'steps'
+		print 'remaining steps:', steps[stepi:]
+				  
+		
+
 	chiAimargs = []
 
-	for stepi,step in zip(range(stepi, len(steps)), steps[stepi:]):
+	changenext = 0
+
+	stepi -= 1
+	while True:
+		stepi += 1
+		if stepi >= len(steps):
+			break
+		step = steps[stepi]
 
 		print
 		print '-----------------------------'
@@ -894,7 +924,27 @@ def main():
 		print '-----------------------------'
 		print
 
-		if step == 'plots':
+		if step == 'changeall':
+			Nsrcs = len(tractor.getCatalog())
+			changenext = 0
+			# add as many "changenext" steps as necessary
+			Nsteps = int(ceil(Nsrcs / float(batchchange)))
+			addsteps = ['changenext', 'plots', 'save'] * Nsteps
+			steps = steps[:stepi+1] + addsteps + steps[stepi+1:]
+			print 'modified steps array:', steps
+
+		elif step == 'changenext':
+			print 'Changing next batch of sources.'
+			cat = tractor.getCatalog()
+			srcis = range(changenext, len(cat))
+			if len(srcis) == 0:
+				continue
+			srcis = srcis[:batchchange]
+			srcs = [cat[i] for i in srcis]
+			tractor.changeSourceTypes(srcs)
+			changenext += batchchange
+
+		elif step == 'plots':
 			print 'Making plots...'
 			NS = len(tractor.getCatalog())
 
@@ -1010,6 +1060,7 @@ def main():
 				html += '\n'
 			for fn in tractor.plotfns:
 				html += '<br />'
+				html += '<a name="%s" />' % fn
 				html += '<a href="%s"><img src="%s" %s /></a>' % (fn, fn, smallimg)
 			tractor.plotfns = []
 			html += '<br />'
@@ -1031,6 +1082,10 @@ def main():
 
 		elif step == 'source':
 			rtn = tractor.createSource(nbatch=batchsource)
+
+		elif step == 'source2':
+			rtn = tractor.createSource(nbatch=batchsource,
+									   avoidExisting=False)
 
 		elif step == 'simplesources':
 			print "Initializing with simplexy's source lists..."
