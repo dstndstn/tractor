@@ -890,7 +890,7 @@ class Tractor(object):
 			# Prevent too-easy switches due to the current source not being optimized.
 			pBefore = self.getLogProb()
 			logverb('Optimizing source before trying to change it...')
-			self.optimizeCatalogLoop(srcs=[src])
+			self.optimizeCatalogLoop(srcs=[src], sky=False)
 			logmsg('After optimizing source:', src)
 			pAfter = self.getLogProb()
 			logverb('delta-log-prob:', pAfter - pBefore)
@@ -916,13 +916,13 @@ class Tractor(object):
 
 				# first try individually optimizing the newly-added
 				# sources...
-				self.optimizeCatalogLoop(srcs=newsrcs)
+				self.optimizeCatalogLoop(srcs=newsrcs, sky=False)
 				logverb('After optimizing new sources:')
 				for ns in newsrcs:
 					logverb('  ', ns)
 				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
 				if jointopt:
-					self.optimizeCatalogAtFixedComplexityStep()
+					self.optimizeCatalogAtFixedComplexityStep(sky=False)
 
 				pAfter = self.getLogProb()
 				logverb('delta-log-prob:', pAfter - pBefore)
@@ -949,8 +949,6 @@ class Tractor(object):
 				oldcat.setAllParams(bestparams)
 				self.catalog = oldcat
 				pBefore = bestlogprob
-				#print 'New catalog:'
-				#self.catalog.printLong()
 
 				logmsg('')
 				logmsg('Accepted change:')
@@ -1477,7 +1475,6 @@ class Tractor(object):
 						print 'Optimizing the new source (step %i)...' % (ostep+1)
 						dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
 						print 'After:', src
-						print '  debugargs[src] = ', src
 						self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
 											**debugargs)
 						if dlnprob < 1.:

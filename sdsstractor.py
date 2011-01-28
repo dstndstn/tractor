@@ -859,9 +859,8 @@ def main():
 			 ['simplesources', 'plots'] +
 			 ['sky', 'plots'] +
 			 ['flux', 'plots', 'opt', 'plots', 'save'] +
-			 #['flux', 'plots'] +
 			 ['psfup', 'flux', 'sky', 'plots', 'save'] * 4 +
-			 (['change1biased', 'plots', 'source', 'plots'] * 10 + ['opt','plots'])*10 +
+			 (['source', 'plots'] + ['change1biased', 'plots'] * 10 + ['opt','plots'])*10 +
 			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
 	ploti = 0
 	savei = 0
@@ -871,7 +870,10 @@ def main():
 	if opt.loadi != -1:
 		loadi = opt.loadi
 		# FIXME: you have to save the PSF too (and eventually sky)
-		(savei, stepi, ploti, tractor.catalog) = unpickle_from_file('catalog-%02i.pickle' % loadi)
+		(savei, stepi, ploti, tractor.catalog, psfs, skys) = unpickle_from_file('catalog-%02i.pickle' % loadi)
+		for i in range(tractor.getNImages()):
+			tractor.getImage(i).setPsf(psfs[i])
+			tractor.getImage(i).setSky(skys[i])
 		print 'Starting from step', stepi
 		print 'there are', len(steps), 'steps'
 		print 'remaining steps:', steps[stepi:]
@@ -1114,7 +1116,14 @@ def main():
 
 		elif step == 'save':
 
-			pickle_to_file((savei, stepi+1, ploti, tractor.catalog),
+			psfs = []
+			skys = []
+			for i in range(tractor.getNImages()):
+				psfs.append(tractor.getImage(i).getPsf())
+				skys.append(tractor.getImage(i).getSky())
+
+			pickle_to_file((savei, stepi+1, ploti, tractor.catalog,
+							psfs, skys),
 						   'catalog-%02i.pickle' % savei)
 			savei += 1
 			
