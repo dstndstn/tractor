@@ -490,28 +490,32 @@ class SDSSTractor(Tractor):
 	def createNewSource(self, img, x, y, ht):
 		wcs = img.getWcs()
 		pos = wcs.pixelToPosition(None, (x,y))
-
 		# "ht" is the peak height (difference between image and model)
 		# convert to total flux by normalizing by my patch's peak pixel value.
 		patch = img.getPsf().getPointSourcePatch(x, y)
-		#print 'psf patch:', patch.shape
-		#print 'psf patch: max', patch.max(), 'sum', patch.sum()
-		#print 'new source peak height:', ht, '-> flux', ht/patch.max()
 		ht /= patch.getImage().max()
-
 		photocal = img.getPhotoCal()
 		flux = photocal.countsToFlux(ht)
+		ps = PointSource(pos, flux)
+		try:
+			imgi = self.images.index(img)
+			patch = self.getModelPatch(img, ps)
+			self.addBox(imgi, patch.getExtent())
+		except:
+			pass
+		return ps
 
-		return PointSource(pos, flux)
+	def addBox(self, imgi, box):
+		if len(self.boxes) == 0:
+			self.boxes = [[] for i in range(self.getNImages())]
+		self.boxes[imgi].append(box)
 
 	def changeSourceTypes(self, srcs=None, **kwargs):
 		if srcs is not None:
-			if len(self.boxes) == 0:
-				self.boxes = [[] for i in range(self.getNImages())]
 			for i,img in enumerate(self.getImages()):
 				for src in srcs:
 					patch = self.getModelPatch(img, src)
-					self.boxes[i].append(patch.getExtent())
+					self.addBox(i, patch.getExtent())
 		Tractor.changeSourceTypes(self, srcs, **kwargs)
 
 
@@ -852,15 +856,19 @@ def main():
 	footradecrange = None
 
 	batchsource = 10
+	batchchange = 10
+
+	#changecount = [np.zeros(img.shape, int) for img in tractor.getImages()]
 
 	np.random.seed(42)
 
 	steps = (['plots'] +
 			 ['simplesources', 'plots'] +
+		 ['changebiased'] +
 			 ['sky', 'plots'] +
 			 ['flux', 'plots', 'opt', 'plots', 'save'] +
 			 ['psfup', 'flux', 'sky', 'plots', 'save'] * 4 +
-			 (['source', 'plots'] + ['change1biased', 'plots'] * 10 + ['opt','plots'])*10 +
+			 (['source', 'plots', 'save'] + ['changebiased', 'plots', 'save']*3 + ['opt','plots'])*10 +
 			 ['source', 'flux', 'opt', 'psf', 'plots', 'save'] * 10)
 	ploti = 0
 	savei = 0
@@ -906,7 +914,7 @@ def main():
 
 				plt.clf()
 				plotimage(mod, **imargs)
-				# Want x's on the source centers?
+				# Want x marks on the source centers?
 				if False:
 					ax = plt.axis()
 					wcs = img.getWcs()
@@ -920,7 +928,6 @@ def main():
 					plt.plot(x, y, 'bo', mfc='none', mec='b')
 					plt.axis(ax)
 
-				print 'Tractor boxes:', tractor.boxes
 				if len(tractor.boxes) > i:
 					boxes = tractor.boxes[i]
 					ax = plt.axis()
@@ -1081,38 +1088,50 @@ def main():
 			srcs = [tractor.getCatalog()[srci]]
 			tractor.changeSourceTypes(srcs)
 
-		elif step == 'change1biased':
+		elif step == 'changebiased':
 			cat = tractor.getCatalog()
 			chis = tractor.getChiImages()
 			imgs = tractor.getImages()
 
 			scalars = []
+			#bbs = []
 			for src in cat:
 				scalar = 0
+				#bb = []
+				#for img,chi,cc in zip(imgs,chis, changecount):
 				for img,chi in zip(imgs,chis):
 					wcs = img.getWcs()
 					(px,py) = wcs.positionToPixel(src, src.getPosition())
 					r = 5
 					(H,W) = img.shape
-					xlo = max(px-r, 0)
-					xhi = min(px+r, W)
-					ylo = max(py-r, 0)
-					yhi = min(py+r, H)
+					if px < -r or px > (W+r) or py < -r or py > (H+r):
+						continue
+					xlo = np.clip(px-r, 0, W)
+					xhi = np.clip(px+r, 0, W)
+					ylo = np.clip(py-r, 0, H)
+					yhi = np.clip(py+r, 0, H)
+					#x = np.clip(round(px), 0, W-1)
+					#y = np.clip(round(py), 0, H-1)
 					c = chi[ylo:yhi, xlo:xhi]
 					# positive chi
 					scalar += (c[c > 0]**2).sum()
+					#scalar += ((c[c > 0]**2).sum() / cc[y,x])
+					#bb.append([xlo,xhi,ylo,yhi])
 				scalars.append(scalar)
+				#bbs.append(bb)
+			scalars = np.array(scalars)
+			srcis = []
+			while len(srcis) < batchchange and len(srcis) < len(cat):
+				# draw N
+				N = batchchange - len(srcis)
+				X = np.random.multinomial(N, scalars/np.sum(scalars))
+				# find the elements that are set
+				newsrcis = np.flatnonzero(X)
+				scalars[newsrcis] = 0
+				srcis.extend(newsrcis)
 
-			#print 'scalars:', scalars
-			X = np.random.multinomial(1, scalars/np.sum(scalars))
-			# find the element that is = 1 (rest are 0)
-			srci = np.flatnonzero(X)
-			src = tractor.getCatalog()[srci]
-			#print 'Changing source', srci, str(src), 'with scalar', scalars[srci]
-			changed = tractor.changeSourceTypes(srcs=[src])
-			#if changed[0]:
-			#	# optimize it
-			#	tractor.
+			srcs = [cat[i] for i in srcis]
+			changed = tractor.changeSourceTypes(srcs=srcs)
 
 		elif step == 'save':
 
