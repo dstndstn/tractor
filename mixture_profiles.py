@@ -42,7 +42,7 @@ def test_exp(K):
     plt.ylabel('$r\,\exp(-r)$')
     plt.ylim(-0.1 * max(yexp), 1.1 * max(yexp))
     plt.title('black: truth / red: %d-Gaussian approximation' % K)
-    plt.savefig('test_exp_%d.png' % K)
+    plt.savefig('test_exp_%02d.png' % K)
     return
 
 # this code is a HACK because it FIXES the x_k
@@ -61,9 +61,9 @@ def test_dev(K):
     plt.ylabel('$r\,\exp(-r^{1/4})$')
     plt.ylim(-0.1 * max(ydev), 1.1 * max(ydev))
     plt.title('black: truth / red: %d-Gaussian approximation' % K)
-    plt.savefig('test_dev_%d.png' % K)
+    plt.savefig('test_dev_%02d.png' % K)
     plt.xlim(0., 10.)
-    plt.savefig('test_dev_zoom_%d.png' % K)
+    plt.savefig('test_dev_zoom_%02d.png' % K)
     return
 
 if __name__ == '__main__':
