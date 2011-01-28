@@ -858,8 +858,6 @@ def main():
 	batchsource = 10
 	batchchange = 10
 
-	#changecount = [np.zeros(img.shape, int) for img in tractor.getImages()]
-
 	np.random.seed(42)
 
 	steps = (['plots'] +
@@ -1094,11 +1092,8 @@ def main():
 			imgs = tractor.getImages()
 
 			scalars = []
-			#bbs = []
 			for src in cat:
 				scalar = 0
-				#bb = []
-				#for img,chi,cc in zip(imgs,chis, changecount):
 				for img,chi in zip(imgs,chis):
 					wcs = img.getWcs()
 					(px,py) = wcs.positionToPixel(src, src.getPosition())
@@ -1110,15 +1105,10 @@ def main():
 					xhi = np.clip(px+r, 0, W)
 					ylo = np.clip(py-r, 0, H)
 					yhi = np.clip(py+r, 0, H)
-					#x = np.clip(round(px), 0, W-1)
-					#y = np.clip(round(py), 0, H-1)
 					c = chi[ylo:yhi, xlo:xhi]
 					# positive chi
 					scalar += (c[c > 0]**2).sum()
-					#scalar += ((c[c > 0]**2).sum() / cc[y,x])
-					#bb.append([xlo,xhi,ylo,yhi])
 				scalars.append(scalar)
-				#bbs.append(bb)
 			scalars = np.array(scalars)
 			srcis = []
 			while len(srcis) < batchchange and len(srcis) < len(cat):
