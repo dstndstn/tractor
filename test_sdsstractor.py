@@ -43,7 +43,7 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	(images, simplexys, rois, zrange, nziv, footradecs
-	 ) = prepareTractor(False, False, rcfcut=[1])
+	 ) = prepareTractor(False, False, rcfcut=[0])
 
 	print 'Creating tractor...'
 	tractor = SDSSTractor(images, debugnew=False, debugchange=True)
@@ -78,7 +78,12 @@ def main():
 	flux =  SdssFlux(4570. / SdssPhotoCal.scale)
 	src = ExpGalaxy(pos, flux, 0.9, 0.75, -35.7)
 
+	# small test galaxy (img 1)
 	src.setParams([120.5812843997946, 9.3017035130757009, 0.0049199047382452428, 1.2052972074376225, 0.55429578631330578, -47.611423262836823])
+
+	# big honkin' galaxy (img 0)
+	src = DevGalaxy(pos, flux, 0.9, 0.75, -35.7)
+	src.setParams([120.60275, 9.41350, 5.2767052, 22.8, 0.81, 5.0])
 
 	tractor.catalog.append(src)
 
@@ -134,7 +139,8 @@ def main():
 	for ostep in range(10):
 		print
 		print 'Optimizing...'
-		alphas = [1., 0.5, 0.25, 0.1, 0.01]
+		#alphas = [1., 0.5, 0.25, 0.1, 0.01]
+		alphas=None
 		ppre = src.getParams()
 		lnppre = tractor.getLogProb()
 		dlnp,X,alpha = tractor.optimizeCatalogAtFixedComplexityStep(alphas=alphas)
@@ -146,14 +152,23 @@ def main():
 		print
 		src.setParams(ppre)
 		print 'Pre :', src
+
 		src.setParams(ppost)
 		print 'Post:', src
+
+		src.setParams(ppre)
+		src.stepParams(X * 0.001)
+		dlnptiny = tractor.getLogProb() - lnppre
+		print '1e-3:', src
+		makePlots(tractor, 'opt-s%02i-%%02ib.png' % (ostep+1),
+				  title1='dlnp = %.1f' % dlnptiny,
+				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+
 		src.setParams(ppre)
 		src.stepParams(X)
 		dlnpfull = tractor.getLogProb() - lnppre
-		
 		print 'Full:', src
-		makePlots(tractor, 'opt-s%02i-%%02ib.png' % (ostep+1),
+		makePlots(tractor, 'opt-s%02i-%%02ic.png' % (ostep+1),
 				  title1='dlnp = %.1f' % dlnpfull,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 		src.setParams(ppost)

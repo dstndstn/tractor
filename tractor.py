@@ -1195,11 +1195,13 @@ class Tractor(object):
 				src.setParams(oldparams[j])
 
 			# want to improve over last step.
-			if pAfter < pBest:
+			# (allow some margin though)
+			if pAfter < (pBest - 1.):
 				break
 
-			alphaBest = alpha
-			pBest = pAfter
+			if pAfter > pBest:
+				alphaBest = alpha
+				pBest = pAfter
 
 		if alphaBest is None:
 			return 0, 0.
