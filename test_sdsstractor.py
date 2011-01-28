@@ -104,8 +104,9 @@ def main():
 					  vmin=-5, vmax=5)
 			plt.title('chi')
 			#plt.subplot(2,2,4)
-			#plotimage(img.getInvError[slc], interpolation='nearest', origin='lower',
-			#vmin=-5, vmax=5)
+			#plotimage(img.getInvError()[slc],
+			#		  interpolation='nearest', origin='lower',
+			#		  vmin=0, vmax=0.1)
 			#plt.title('inv err')
 			fn = fnpat % i
 			plt.savefig(fn)
@@ -114,7 +115,7 @@ def main():
 	makePlots(tractor, 'opt-s00-%02i.png', #'pre-%02i.png',
 			  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
 
-	if True:
+	if False:
 		p0 = src.getParams()
 		lnp0 = tractor.getLogProb()
 		for i,step in enumerate([3e-5, 3e-5, 1e-3, 0.1, 0.1, 15.]):
@@ -133,10 +134,31 @@ def main():
 	for ostep in range(10):
 		print
 		print 'Optimizing...'
-		dlnp = tractor.optimizeCatalogAtFixedComplexityStep()
+		alphas = [1., 0.5, 0.25, 0.1, 0.01]
+		ppre = src.getParams()
+		lnppre = tractor.getLogProb()
+		dlnp,X,alpha = tractor.optimizeCatalogAtFixedComplexityStep(alphas=alphas)
+		ppost = src.getParams()
 		makePlots(tractor, 'opt-s%02i-%%02i.png' % (ostep+1),
 				  title1='dlnp = %.1f' % dlnp,
 				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+
+		print
+		src.setParams(ppre)
+		print 'Pre :', src
+		src.setParams(ppost)
+		print 'Post:', src
+		src.setParams(ppre)
+		src.stepParams(X)
+		dlnpfull = tractor.getLogProb() - lnppre
+		
+		print 'Full:', src
+		makePlots(tractor, 'opt-s%02i-%%02ib.png' % (ostep+1),
+				  title1='dlnp = %.1f' % dlnpfull,
+				  title2='re %.1f, ab %.2f, phi %.1f' % (src.re, src.ab, src.phi))
+		src.setParams(ppost)
+		print
+
 		if dlnp < 1e-3:
 			break
 

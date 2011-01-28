@@ -795,7 +795,7 @@ class Tractor(object):
 	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
 		for ostep in range(nsteps):
 			print 'Optimizing the new sources (step %i)...' % (ostep+1)
-			dlnprob = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
+			dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
 			print 'delta-log-prob', dlnprob
 			if dlnprob < 1.:
 				print 'failed to improve the new source enough (d lnprob = %g)' % dlnprob
@@ -1162,6 +1162,8 @@ class Tractor(object):
 		return X
 
 	# X: delta-params
+	#
+	# Returns: delta-logprob, alphaBest
 	def tryParamUpdates(self, srcs, X, alphas=None):
 		if alphas is None:
 			# 1/1024 to 1 in factors of 2
@@ -1200,7 +1202,7 @@ class Tractor(object):
 			pBest = pAfter
 
 		if alphaBest is None:
-			return 0
+			return 0, 0.
 
 		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
 		par0 = 0
@@ -1210,15 +1212,16 @@ class Tractor(object):
 			par0 += npar
 			assert(len(dparams) == src.numberOfParams())
 			src.stepParams(dparams * alphaBest)
-		return pBest - pBefore
+		return pBest - pBefore, alphaBest
 
 	def optimizeCatalogFluxes(self, srcs=None):
-		self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
+		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
 
 
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False):
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
+											 alphas=None):
 		'''
-		Return delta-log-prob.
+		Returns: (delta-log-prob, delta-parameters, step size alpha)
 
 		-synthesize images
 		-get all derivatives
@@ -1245,9 +1248,9 @@ class Tractor(object):
 
 		X = self.optimize(allparams)
 
-		dlogprob = self.tryParamUpdates(srcs, X)
+		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
 
-		return dlogprob
+		return dlogprob, X, alpha
 	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
@@ -1406,7 +1409,7 @@ class Tractor(object):
 					# source...
 					for ostep in range(20):
 						print 'Optimizing the new source (step %i)...' % (ostep+1)
-						dlnprob = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
+						dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
 						print 'After:', src
 						print '  debugargs[src] = ', src
 						self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
