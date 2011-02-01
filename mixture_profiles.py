@@ -71,7 +71,7 @@ if __name__ == '__main__':
     for model in ['dev', 'exp']:
         for K in range(1,11):
             amp = np.append(amp, 0.1)
-            var = np.append(amp, 0.0001)
+            var = np.append(amp, 0.5 * np.min(np.append(1.0, var)))
             pars = np.append(amp, var)
             (badness, pars) = optimize_mixture(K, pars, model)
             indx = np.argsort(pars[K:K+K])
