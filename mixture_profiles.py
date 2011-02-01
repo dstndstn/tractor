@@ -15,32 +15,24 @@ maxradius = 8.
 def not_normal(x, m, V):
     return 1. / (2. * pi * V) * np.exp(-0.5 * x**2 / V)
 
-def mixture_of_not_normals(x, pp):
-    K = len(pp)/2
+def mixture_of_not_normals(x, pars):
+    K = len(pars)/2
     y = 0.
     for k in range(K):
-        y += pp[k] * not_normal(x, 0., pp[k+K])
+        y += pars[k] * not_normal(x, 0., pars[k+K])
     return y
 
-def badness_of_fit_exp(pars):
-    pp = np.exp(pars)
+# note magic 1e7
+def badness_of_fit_exp(lnpars):
+    pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.01)
-    return np.sum((x * mixture_of_not_normals(x, pp)
-                   - x * np.exp(-x))**2)/len(x)
+    return np.mean((x * mixture_of_not_normals(x, pars)
+                    - x * np.exp(-x))**2) * 1e7
 
-def optimize_mixture(K):
-    # first guess
-    amps = np.log(np.random.uniform(size=(K)))
-    vars = np.log((8.0*np.random.uniform(size=(K)))**2)
-    pars = np.append(amps,vars)
-    # optimize
+def optimize_mixture(K, pars):
     func = badness_of_fit_exp
-    print func(pars)
-    print np.exp(pars)
-    newpars = op.fmin_cg(func, pars)
-    print func(newpars)
-    print np.exp(newpars)
-    return (func(newpars), np.exp(newpars))
+    newlnpars = op.fmin_cg(func, np.log(pars))
+    return (func(newlnpars), np.exp(newlnpars))
 
 def plot_mixture(pars, fn):
     x1 = np.arange(0., maxradius, 0.001)
@@ -57,18 +49,15 @@ def plot_mixture(pars, fn):
     plt.savefig(fn)
 
 if __name__ == '__main__':
-    large = 100.
-    ntry = 10
-    for K in range(3,11):
-        badness = large
-        for t in range(ntry):
-            (b, p) = optimize_mixture(K)
-            if b < badness:
-                pars = p
-                badness = b
+    amp = []
+    var = []
+    for K in range(1,11):
+        amp = np.append(amp, 0.1)
+        var = np.append(amp, 0.0001)
+        pars = np.append(amp, var)
+        (badness, pars) = optimize_mixture(K, pars)
         indx = np.argsort(pars[K:K+K])
-        indx = np.append(indx,K+indx)
-        pars = pars[indx]
-        print '----- best at %i is %f' % (K, badness)
-        print pars
+        amp = pars[indx]
+        var = pars[K+indx]
+        pars = np.append(amp, var)
         plot_mixture(pars, 'K%02d.png' % K)
