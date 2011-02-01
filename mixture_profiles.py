@@ -69,6 +69,6 @@ if __name__ == '__main__':
         indx = np.argsort(pars[K:K+K])
         indx = np.append(indx,K+indx)
         pars = pars[indx]
-        print '----- best at %i is %f' % (K, b)
+        print '----- best at %i is %f' % (K, badness)
         print pars
         plot_mixture(pars, 'K%02d.png' % K)
