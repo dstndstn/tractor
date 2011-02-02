@@ -26,25 +26,29 @@ def mixture_of_not_normals(x, pars):
     return y
 
 # note magic 1e7
+# note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
+# each has disadvantages.
 def badness_of_fit_exp(lnpars):
     pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.01)
-    return np.mean((x * mixture_of_not_normals(x, pars)
-                    - x * np.exp(-x))**2) * 1e7
+    return np.mean((mixture_of_not_normals(x, pars)
+                    - np.exp(-x))**2) * 1e7
 
 # note magic 1e7
+# note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
+# each has disadvantages.
 def badness_of_fit_dev(lnpars):
     pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.001)
-    return np.mean((x * mixture_of_not_normals(x, pars)
-                    - x * hogg_dev(x))**2) * 1e7
+    return np.mean((mixture_of_not_normals(x, pars)
+                    - hogg_dev(x))**2) * 1e7
 
 def optimize_mixture(K, pars, model):
     if model == 'exp':
         func = badness_of_fit_exp
     if model == 'dev':
         func = badness_of_fit_dev
-    newlnpars = op.fmin_cg(func, np.log(pars))
+    newlnpars = op.fmin_bfgs(func, np.log(pars))
     return (func(newlnpars), np.exp(newlnpars))
 
 def plot_mixture(pars, fn, model):
@@ -60,22 +64,46 @@ def plot_mixture(pars, fn, model):
     plt.clf()
     plt.plot(x1, y1, 'k-')
     plt.plot(x2, y2, 'k-', lw=4, alpha=0.5)
-    plt.xlim(np.min(x2), np.max(x2))
+    plt.xlim(-0.5, np.max(x2))
     plt.ylim(-0.1*np.max(y1), 1.1*np.max(y1))
-    plt.title('K = %d / badness = %e' % (len(pars)/2, badness))
+    plt.title('K = %d / badness = %f' % (len(pars)/2, badness))
     plt.savefig(fn)
 
+def rearrange_pars(pars):
+    K = len(pars) / 2
+    indx = np.argsort(pars[K:K+K])
+    amp = pars[indx]
+    var = pars[K+indx]
+    return np.append(amp, var)
+
 if __name__ == '__main__':
-    amp = []
-    var = []
-    for model in ['dev', 'exp']:
-        for K in range(1,11):
-            amp = np.append(amp, 0.1)
-            var = np.append(amp, 0.5 * np.min(np.append(1.0, var)))
+    for model in ['exp', 'dev']:
+        amp = []
+        var = []
+        badness = 1.e30
+        oldbadness = 0.5 * badness
+        for K in range(1,20):
+            print 'working on K = %d' % K
+            newvar = 0.5 * np.min(np.append(var,1.0))
+            newamp = 1.0 * newvar
+            amp = np.append(newamp, amp)
+            var = np.append(newvar, var)
             pars = np.append(amp, var)
-            (badness, pars) = optimize_mixture(K, pars, model)
-            indx = np.argsort(pars[K:K+K])
-            amp = pars[indx]
-            var = pars[K+indx]
-            pars = np.append(amp, var)
+            for i in range(3 * K):
+                (badness, pars) = optimize_mixture(K, pars, model)
+                if badness < 0.5 * oldbadness:
+                    print 'improved enough'
+                    oldbadness = badness
+                    break
+                else:
+                    print 'not enough improvement; trying again'
+                    var[0] = 0.5 * var[np.random.randint(K)]
+                    amp[0] = 1.0 * var[0]
+                    pars = np.append(amp, var)
+            pars = rearrange_pars(pars)
             plot_mixture(pars, 'K%02d_%s.png' % (K, model), model)
+            amp = pars[0:K]
+            var = pars[K:K+K]
+            # magic number
+            if badness < 0.1:
+                break
