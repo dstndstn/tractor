@@ -252,6 +252,27 @@ class Galaxy(MultiParams):
 		return derivs
 
 
+class HoggGalaxy(Galaxy):
+	def __init__(self, pos, flux, re, ab, phi):
+		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
+		self.name = 'HoggGalaxy'
+
+	def getSourceType(self):
+		return 'HoggGalaxy'
+
+	def copy(self):
+		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+	def getModelPatch(self, img, px=None, py=None):
+		if px is None or py is None:
+			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
+		cd = img.getWcs().cdAtPixel(px, py)
+		psf = img.getPsf()
+		psfconvolvedimg = 0.
+		(x0, y0) = (0., 0.)
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		return Patch(x0, y0, psfconvolvedimg * counts)
+
 class ExpGalaxy(Galaxy):
 	profile = None
 	@staticmethod
