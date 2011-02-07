@@ -282,7 +282,6 @@ class ExpGalaxy(Galaxy):
 				CompiledProfile(modelname='exp',
 								profile_func=profile_exp, re=100, nrad=4))
 		return ExpGalaxy.profile
-
 	expnum = 0
 
 	def __init__(self, pos, flux, re, ab, phi):
@@ -323,7 +322,7 @@ class DevGalaxy(Galaxy):
 	def getDevProfile():
 		if DevGalaxy.profile is None:
 			DevGalaxy.profile = (
-				CompiledProfile(modelname='exp',
+				CompiledProfile(modelname='dev',
 								profile_func=profile_dev, re=100, nrad=8))
 		return DevGalaxy.profile
 
