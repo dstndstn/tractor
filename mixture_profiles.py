@@ -8,7 +8,9 @@ import numpy as np
 import scipy.optimize as op
 
 # magic number
-maxradius = 8.
+maxradius = 7.
+# magic number setting what counts as stopping time
+squared_deviation_scale = 1.e-6
 
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
@@ -25,30 +27,30 @@ def mixture_of_not_normals(x, pars):
         y += pars[k] * not_normal(x, 0., pars[k+K])
     return y
 
-# note magic 1e7
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
 def badness_of_fit_exp(lnpars):
     pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.01)
     return np.mean((mixture_of_not_normals(x, pars)
-                    - np.exp(-x))**2) * 1e7
+                    - np.exp(-x))**2) / squared_deviation_scale
 
-# note magic 1e7
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
 def badness_of_fit_dev(lnpars):
     pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.001)
-    return np.sqrt(np.mean((mixture_of_not_normals(x, pars)
-                            - hogg_dev(x))**2) * 1e8)
+    return np.mean((mixture_of_not_normals(x, pars)
+                    - hogg_dev(x))**2) / squared_deviation_scale
 
 def optimize_mixture(K, pars, model):
     if model == 'exp':
         func = badness_of_fit_exp
     if model == 'dev':
         func = badness_of_fit_dev
-    newlnpars = op.fmin_bfgs(func, np.log(pars))
+    print pars
+    newlnpars = op.fmin_bfgs(func, np.log(pars), maxiter=300)
+    print np.exp(newlnpars)
     return (func(newlnpars), np.exp(newlnpars))
 
 def plot_mixture(pars, fn, model):
@@ -66,7 +68,7 @@ def plot_mixture(pars, fn, model):
     plt.plot(x2, y2, 'k-', lw=4, alpha=0.5)
     plt.xlim(-0.5, np.max(x2))
     plt.ylim(-0.1*np.max(y1), 1.1*np.max(y1))
-    plt.title("K = %d / rms deviation = %f$\times 10^{-4}$" % (len(pars)/2, badness))
+    plt.title(r"K = %d / mean-squared deviation = $%f\times 10^{-6}$" % (len(pars)/2, badness))
     plt.savefig(fn)
 
 def rearrange_pars(pars):
@@ -78,12 +80,13 @@ def rearrange_pars(pars):
 
 if __name__ == '__main__':
     for model in ['exp', 'dev']:
-        amp = []
-        var = []
-        badness = 1.e30
-        lastKbadness = 0.5 * badness
+        amp = np.array([1.0])
+        var = np.array([1.0])
+        pars = np.append(amp, var)
+        (badness, pars) = optimize_mixture(1, pars, model)
+        lastKbadness = badness
         bestbadness = badness
-        for K in range(1,20):
+        for K in range(2,20):
             print 'working on K = %d' % K
             newvar = 0.5 * np.min(np.append(var,1.0))
             newamp = 1.0 * newvar
@@ -109,6 +112,5 @@ if __name__ == '__main__':
             plot_mixture(pars, 'K%02d_%s.png' % (K, model), model)
             amp = pars[0:K]
             var = pars[K:K+K]
-            # magic number
-            if badness < 1.:
+            if bestbadness < 1.:
                 break
