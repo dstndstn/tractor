@@ -43,6 +43,7 @@ def makeTruth():
 	wcs.cd[3] = -scale
 	wcs.imagew = W
 	wcs.imageh = H
+	tanwcs1 = wcs
 	wcs1 = FitsWcs(wcs)
 
 	# rotate.
@@ -64,22 +65,59 @@ def makeTruth():
 	wcs.imageh = H2
 	wcs2 = FitsWcs(wcs)
 
+	photocal = SdssPhotoCal(SdssPhotoCal.scale)
+	psf = NGaussianPSF([2.0], [1.0])
+	sky = 0.
+	skyobj = ConstantSky(sky)
+	# arcsec
+	re = 10.
+	flux = SdssFlux(1.)
+
 	# image 1
 	image = np.zeros((H,W))
-	invvar = np.zeros_like(image) + 1.
-	photocal = SdssPhotoCal(SdssPhotoCal.scale)
-	psf = NGaussianPSF([1.5], [1.0])
-	sky = 0.
+	invvar = np.zeros_like(image) + 1e-4
+	img1 = Image(data=image, invvar=invvar, psf=psf, wcs=wcs1,
+				 sky=skyobj, photocal=photocal, name='Grid1')
+	# image 2
+	image = np.zeros((H2,W2))
+	invvar = np.zeros_like(image) + 1e-4
+	img2 = Image(data=image, invvar=invvar, psf=psf, wcs=wcs2,
+				 sky=skyobj, photocal=photocal, name='Grid2')
 
-	
+	tractor = SDSSTractor([img1, img2])
 
-	eg = ExpGalaxy(pos, flux, re, ab, phi)
+	# grid: ra -- ab
+	#       dec -- phi
+	for i,(x,a) in enumerate(zip(np.linspace(50, W-50, 5),
+								np.linspace(0.2, 1, 5))):
+		for j,(y,p) in enumerate(zip(np.linspace(50, H-50, 5),
+									 np.linspace(0, 90, 5))):
+			ra,dec = tanwcs1.pixelxy2radec(x, y)
+			pos = RaDecPos(ra, dec)
+			eg = ExpGalaxy(pos, flux, re, a, p)
+			tractor.catalog.append(eg)
 
-	#img1 = Image(data=image1, invvar=invvar1, psf=psf1, wcs=wcs1, sky=sky1,
-	#			photocal=photocal1)
-	
+	imgs = tractor.getModelImages()
+	for i,img in enumerate(imgs):
+		plt.clf()
+		plt.imshow(img, interpolation='nearest', origin='lower')
+		plt.savefig('grid%i.png' % i)
 
 
+	for i,img in enumerate(imgs):
+		timg = tractor.getImage(i)
+		noise = (np.random.normal(size=timg.invvar.shape) *
+				 np.sqrt(1. / timg.invvar))
+		timg.data = img + noise
+
+		plt.clf()
+		plt.imshow(timg.getImage(),
+				   interpolation='nearest', origin='lower')
+		plt.savefig('grid%in.png' % i)
+
+		pyfits.writeto('grid%in.fits' % i, timg.getImage(), clobber=True)
+
+	return tractor.images
 
 
 def main():
@@ -93,7 +131,56 @@ def main():
 		lvl = logging.INFO
 	else: # opt.verbose == 1:
 		lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+	logging.basicConfig(level=lvl, format='%(message)s',
+						stream=sys.stdout)
+
+	imgs = makeTruth()
+	tractor = SDSSTractor(imgs)
+
+	xyfn = 'grid0n.xy'
+	if not os.path.exists(xyfn):
+		print 'Running image2xy...'
+		cmd = 'image2xy %s -o %s' % (xyfn.replace('.xy', '.fits'), xyfn)
+		print 'Command:', cmd
+		os.system(cmd)
+	assert(os.path.exists(xyfn))
+	sxy = fits_table(xyfn)
+
+	cat = tractor.getCatalog()
+	for i in range(len(sxy)):
+		# MAGIC -1: simplexy produces FITS-convention coords
+		x = sxy.x[i] - 1.
+		y = sxy.y[i] - 1.
+		ix = int(round(x))
+		iy = int(round(y))
+		#src = tractor.createNewSource(imgs[0], x, y, sxy.flux[i])
+		#src = tractor.createNewSource(imgs[0], x, y, sxy.flux[i])
+		#cat.append(src)
+
+		img = tractor.getImage(0)
+		wcs = img.getWcs()
+		pos = wcs.pixelToPosition(None, (ix,iy))
+		photocal = img.getPhotoCal()
+		flux = photocal.countsToFlux(1e6) #sxy.flux[i])
+
+		cat.append(ExpGalaxy(pos, flux, 1., 0.5, 0.))
+
+	for step in range(100):
+		imgs = tractor.getModelImages()
+		for i,img in enumerate(imgs):
+			plt.clf()
+			plt.imshow(img, interpolation='nearest', origin='lower')
+			fn = 'grid%02i-%in.png' % (step, i)
+			plt.savefig(fn)
+			print 'saved', fn
+
+		#if step == 0:
+		#	tractor.changeSourceTypes()
+		#else:
+		tractor.optimizeCatalogAtFixedComplexityStep()
+
+
+	sys.exit(0)
 
 	(images, simplexys, rois, zrange, nziv, footradecs
 	 ) = prepareTractor(False, False, rcfcut=[0])
