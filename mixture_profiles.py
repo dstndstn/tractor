@@ -40,8 +40,8 @@ def badness_of_fit_exp(lnpars):
 def badness_of_fit_dev(lnpars):
     pars = np.exp(lnpars)
     x = np.arange(0., maxradius, 0.001)
-    return np.mean((mixture_of_not_normals(x, pars)
-                    - hogg_dev(x))**2) * 1e7
+    return np.sqrt(np.mean((mixture_of_not_normals(x, pars)
+                            - hogg_dev(x))**2) * 1e8)
 
 def optimize_mixture(K, pars, model):
     if model == 'exp':
@@ -66,7 +66,7 @@ def plot_mixture(pars, fn, model):
     plt.plot(x2, y2, 'k-', lw=4, alpha=0.5)
     plt.xlim(-0.5, np.max(x2))
     plt.ylim(-0.1*np.max(y1), 1.1*np.max(y1))
-    plt.title('K = %d / badness = %f' % (len(pars)/2, badness))
+    plt.title("K = %d / rms deviation = %f$\times 10^{-4}$" % (len(pars)/2, badness))
     plt.savefig(fn)
 
 def rearrange_pars(pars):
@@ -81,7 +81,8 @@ if __name__ == '__main__':
         amp = []
         var = []
         badness = 1.e30
-        oldbadness = 0.5 * badness
+        lastKbadness = 0.5 * badness
+        bestbadness = badness
         for K in range(1,20):
             print 'working on K = %d' % K
             newvar = 0.5 * np.min(np.append(var,1.0))
@@ -89,21 +90,25 @@ if __name__ == '__main__':
             amp = np.append(newamp, amp)
             var = np.append(newvar, var)
             pars = np.append(amp, var)
-            for i in range(3 * K):
+            for i in range(100):
                 (badness, pars) = optimize_mixture(K, pars, model)
-                if badness < 0.5 * oldbadness:
-                    print 'improved enough'
-                    oldbadness = badness
-                    break
+                if badness < bestbadness:
+                    print '%d %d improved' % (K, i)
+                    bestpars = pars
+                    bestbadness = badness
                 else:
-                    print 'not enough improvement; trying again'
+                    print '%d %d not improved' % (K, i)
                     var[0] = 0.5 * var[np.random.randint(K)]
                     amp[0] = 1.0 * var[0]
                     pars = np.append(amp, var)
-            pars = rearrange_pars(pars)
+                if (bestbadness < 0.5 * lastKbadness) and (i > 5):
+                    print '%d %d improved enough' % (K, i)
+                    break
+            lastKbadness = bestbadness
+            pars = rearrange_pars(bestpars)
             plot_mixture(pars, 'K%02d_%s.png' % (K, model), model)
             amp = pars[0:K]
             var = pars[K:K+K]
             # magic number
-            if badness < 0.1:
+            if badness < 1.:
                 break
