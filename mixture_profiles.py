@@ -113,4 +113,6 @@ if __name__ == '__main__':
             amp = pars[0:K]
             var = pars[K:K+K]
             if bestbadness < 1.:
+                print model
+                print pars
                 break
