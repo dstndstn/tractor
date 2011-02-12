@@ -34,8 +34,15 @@ class MixtureOfGaussians():
         self.symmetrize()
         self.test()
 
+    def __str__(self):
+        result = "MixtureOfGaussians instance with %d components in %d dimensions:\n" % (self.K, self.D)
+        result += " amp  = %s\n" % self.amp.__str__()
+        result += " mean = %s\n" % self.mean.__str__()
+        result += " var  = %s\n" % self.var.__str__()
+        return result
+
     def set_var(self, var):
-        if self.size == self.K:
+        if var.size == self.K:
             self.var = np.zeros((self.K, self.D, self.D))
             for d in range(self.D):
                 self.var[:,d,d] = var
@@ -50,7 +57,7 @@ class MixtureOfGaussians():
                 self.var[:,j,i] = tmpij
 
     def test(self):
-        assert(self.amp.shape == (self.K))
+        assert(self.amp.shape == (self.K, ))
         assert(self.mean.shape == (self.K, self.D))
         assert(self.var.shape == (self.K, self.D, self.D))
 
@@ -98,7 +105,7 @@ class MixtureOfGaussians():
         result = np.zeros(N)
         for k in range(self.K):
             dpos = pos - self.mean[k]
-            dsq = dot(dpos, np.linalg.inv(self.var[k])), np.transpose(dpos))
+            dsq = np.sum(pos * np.dot(dpos, np.linalg.inv(self.var[k])),axis=1)
             result += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq)
         return result
 
@@ -209,4 +216,16 @@ def optimize_mixtures():
                 print pars
                 break
 
+def functional_test_circular_mixtures():
+    exp_mixture = MixtureOfGaussians(exp_amp, np.zeros((exp_amp.size, 2)), exp_var)
+    dev_mixture = MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
+    pos = np.random.uniform(-5.,5.,size=(24,2))
+    exp_eva = exp_mixture.evaluate(pos)
+    dev_eva = dev_mixture.evaluate(pos)
+    (N, D) = pos.shape
+    for n in range(N):
+        print '(%+6.3f %+6.3f) exp: %+8.5f' % (pos[n,0], pos[n,1], exp_eva[n] - np.exp(-1. * np.sqrt(np.sum(pos[n] * pos[n]))))
+        print '(%+6.3f %+6.3f) dev: %+8.5f' % (pos[n,0], pos[n,1], dev_eva[n] - np.exp(-1. * np.sqrt(np.sum(pos[n] * pos[n]))**0.25))
+
 if __name__ == '__main__':
+    functional_test_circular_mixtures()
