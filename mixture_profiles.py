@@ -12,6 +12,96 @@ maxradius = 7.
 # magic number setting what counts as stopping time
 squared_deviation_scale = 1.e-6
 
+exp_amp = np.array([2.68955313e-04, 8.37767155e-03, 1.01360468e-01,
+                    7.08249585e-01, 2.61576535e+00, 2.80398456e+00])
+exp_var = np.array([9.69266499e-04, 1.36248823e-02, 8.69290774e-02,
+                    3.93552018e-01, 1.45353628e+00, 4.75412889e+00])
+dev_amp = np.array([4.13073729e-07, 3.15318990e-05, 6.30620665e-04,
+                    6.97615164e-03, 5.47379252e-02, 3.46617065e-01,
+                    2.42820930e+00, 1.61889131e+02])
+dev_var = np.array([3.21697566e-07, 5.16233300e-05, 1.07433204e-03,
+                    1.21423795e-02, 9.84125685e-02, 6.49943728e-01,
+                    4.17419470e+00, 1.04112953e+02])
+
+class MixtureOfGaussians():
+
+    # symmetrize is an unnecessary step in principle, but in practice?
+    def __init__(self, amp, mean, var):
+        self.amp = np.array(amp)
+        self.mean = np.array(mean)
+        (self.K, self.D) = self.mean.shape
+        self.set_var(var)
+        self.symmetrize()
+        self.test()
+
+    def set_var(self, var):
+        if self.size == self.K:
+            self.var = np.zeros((self.K, self.D, self.D))
+            for d in range(self.D):
+                self.var[:,d,d] = var
+        else:
+            self.var = np.array(var)
+
+    def symmetrize(self):
+        for i in range(self.D):
+            for j in range(i):
+                tmpij = 0.5 * (self.var[:,i,j] + self.var[:,j,i])
+                self.var[:,i,j] = tmpij
+                self.var[:,j,i] = tmpij
+
+    def test(self):
+        assert(self.amp.shape == (self.K))
+        assert(self.mean.shape == (self.K, self.D))
+        assert(self.var.shape == (self.K, self.D, self.D))
+
+    def copy(self):
+        return MixtureOfGaussians(self.amp, self.mean, self.var)
+
+    def normalize(self):
+        self.amp /= np.sum(self.amp)
+
+    def extend(self, other):
+        assert(self.D == other.D)
+        self.K = self.K + other.K
+        self.amp = np.append(self.amp, other.amp)
+        self.mean = np.reshape(np.append(self.mean, other.mean), (self.K, self.D))
+        self.var = np.reshape(np.append(self.var, other.var), (self.K, self.D, self.D))
+        self.test
+
+    # dstn: should this be called "correlate"?
+    def convolve(self, other):
+        assert(self.D == other.D)
+        newK = self.K * other.K
+        D = self.D
+        newamp = np.zeros((newK))
+        newmean = np.zeros((newK, D))
+        newvar = np.zeros((newK, D, D))
+        newk = 0
+        for k in other.K:
+            nextnewk = newk + self.K
+            newamp[newk:nextnewk] = self.amp * other.amp[k]
+            newmean[newk:nextnewk,:] = self.mean + other.mean[k]
+            newvar[newk:nextnewk,:,:] = self.var * other.var[k]
+            newk = nextnewk
+        return MixtureOfGaussians(newamp, newmean, newvar)
+
+    # ideally pos is a numpy array shape (N, self.D)
+    # returns a numpy array shape (N)
+    # may fail for self.D == 1
+    # loopy
+    def evaluate(self, pos):
+        if pos.size == self.D:
+            pos = np.reshape(pos, (1, self.D))
+        (N, D) = pos.shape
+        assert(self.D == D)
+        twopitotheD = (2.*np.pi)**self.D
+        result = np.zeros(N)
+        for k in range(self.K):
+            dpos = pos - self.mean[k]
+            dsq = dot(dpos, np.linalg.inv(self.var[k])), np.transpose(dpos))
+            result += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq)
+        return result
+
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
 def not_normal(x, m, V):
@@ -78,7 +168,9 @@ def rearrange_pars(pars):
     var = pars[K+indx]
     return np.append(amp, var)
 
-if __name__ == '__main__':
+# run this (possibly with adjustments to the magic numbers at top)
+# to find different or better mixtures approximations
+def optimize_mixtures():
     for model in ['exp', 'dev']:
         amp = np.array([1.0])
         var = np.array([1.0])
@@ -116,3 +208,5 @@ if __name__ == '__main__':
                 print model
                 print pars
                 break
+
+if __name__ == '__main__':
