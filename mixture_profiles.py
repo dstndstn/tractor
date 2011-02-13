@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 from math import pi as pi
 import pylab as plt
+import matplotlib.cm as cm
 import numpy as np
 import scipy.optimize as op
 
@@ -109,6 +110,31 @@ class MixtureOfGaussians():
             dsq = np.sum(pos * np.dot(dpos, np.linalg.inv(self.var[k])),axis=1)
             result += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq)
         return result
+
+# input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
+# output: a patch
+def mixture_to_patch(mixture, posmin, posmax):
+    xl = np.arange(posmin[0], posmax[0]+1., 1.)
+    nx = xl.size
+    yl = np.arange(posmin[1], posmax[1]+1., 1.)
+    ny = yl.size
+    x, y = np.meshgrid(xl, yl)
+    pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
+    return np.reshape(mixture.evaluate(pos), (ny, nx))
+
+def model_to_patch(model, scale, posmin, posmax):
+    xl = np.arange(posmin[0], posmax[0]+1., 1.)
+    nx = xl.size
+    yl = np.arange(posmin[1], posmax[1]+1., 1.)
+    ny = yl.size
+    x, y = np.meshgrid(xl, yl)
+    dist = np.sqrt(np.ravel(x)**2 + np.ravel(y)**2)
+    if model == 'exp':
+        return np.reshape(np.exp(-1. * (dist / scale)), (ny, nx))
+    if model == 'dev':
+        return np.reshape(np.exp(-1. * (dist / scale)**0.25), (ny, nx))
+    else:
+        return 0.
 
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
@@ -228,5 +254,34 @@ def functional_test_circular_mixtures():
         print '(%+6.3f %+6.3f) exp: %+8.5f' % (pos[n,0], pos[n,1], exp_eva[n] - np.exp(-1. * np.sqrt(np.sum(pos[n] * pos[n]))))
         print '(%+6.3f %+6.3f) dev: %+8.5f' % (pos[n,0], pos[n,1], dev_eva[n] - np.exp(-1. * np.sqrt(np.sum(pos[n] * pos[n]))**0.25))
 
+def functional_test_patch_maker(fn):
+    scale = 30.
+    posmin = np.array([-3, -5]) * scale
+    posmax = np.array([1, 1]) * scale
+    exp_mixture = MixtureOfGaussians(exp_amp*scale*scale, np.zeros((exp_amp.size, 2)), exp_var*scale*scale)
+    exp_mix_patch = mixture_to_patch(exp_mixture, posmin, posmax)
+    exp_patch = model_to_patch('exp', scale, posmin, posmax)
+    dev_mixture = MixtureOfGaussians(dev_amp*scale*scale, np.zeros((dev_amp.size, 2)), dev_var*scale*scale)
+    dev_mix_patch = mixture_to_patch(dev_mixture, posmin, posmax)
+    dev_patch = model_to_patch('dev', scale, posmin, posmax)
+    cmap = cm.gray
+    vmin = -0.5
+    vmax = 1.0
+    plt.clf()
+    plt.subplot(231)
+    plt.imshow(exp_mix_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.subplot(232)
+    plt.imshow(exp_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.subplot(233)
+    plt.imshow(exp_mix_patch - exp_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.subplot(234)
+    plt.imshow(dev_mix_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.subplot(235)
+    plt.imshow(dev_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.subplot(236)
+    plt.imshow(dev_mix_patch - dev_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.savefig(fn)
+
 if __name__ == '__main__':
-    functional_test_circular_mixtures()
+    # functional_test_circular_mixtures()
+    functional_test_patch_maker('test_patch.png')
