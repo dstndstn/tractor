@@ -267,19 +267,26 @@ def functional_test_patch_maker(fn):
     cmap = cm.gray
     vmin = -0.5
     vmax = 1.0
+    factor = 100.
     plt.clf()
     plt.subplot(231)
     plt.imshow(exp_mix_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.colorbar()
     plt.subplot(232)
     plt.imshow(exp_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.colorbar()
     plt.subplot(233)
-    plt.imshow(exp_mix_patch - exp_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.imshow(exp_mix_patch - exp_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=-1./factor, vmax=1./factor)
+    plt.colorbar()
     plt.subplot(234)
     plt.imshow(dev_mix_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.colorbar()
     plt.subplot(235)
     plt.imshow(dev_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.colorbar()
     plt.subplot(236)
-    plt.imshow(dev_mix_patch - dev_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.imshow(dev_mix_patch - dev_patch, interpolation='nearest', origin='lower', cmap=cmap, vmin=-1./factor, vmax=1./factor)
+    plt.colorbar()
     plt.savefig(fn)
 
 if __name__ == '__main__':
