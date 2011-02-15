@@ -1,3 +1,8 @@
+# to-do:
+# ------
+# - put in copyright strings
+# - DELETE matrix elements that are a factor of FACTOR smaller than the max for that column.
+
 from math import ceil, floor, pi, sqrt, exp
 import time
 import logging
@@ -1145,20 +1150,13 @@ class Tractor(object):
 			if len(VV) == 0:
 				colscales.append(1.)
 				continue
-			VV = np.hstack(VV)
-			WW = np.hstack(WW)
-			if len(VV) == 0:
+			vals = np.hstack(VV) * np.hstack(WW) # multiply in inverse errors
+			if len(vals) == 0:
 				colscales.append(1.)
 				continue
-			#scale = abs(VV.max())
-			vals = VV*WW
-			scale = np.sqrt(np.sum(vals**2))
+			scale = np.sqrt(np.sum(vals * vals))
 			colscales.append(scale)
-			logverb('Column', col, 'absmax:', scale)
-			#VV /= scale
-			# spvals is structured a little differently than sprows
-			# (has fewer lists with more elements), but same number of entries
-			#spvals.append(VV * WW)
+			logverb('Column', col, 'scale:', scale)
 			spvals.append(vals / scale)
 
 		if len(spcols) == 0:
