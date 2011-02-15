@@ -1166,9 +1166,8 @@ class Tractor(object):
 				continue
 			scale = np.sqrt(np.sum(vals * vals))
 			colscales.append(scale)
+			assert(len(colscales) == (col+1))
 			logverb('Column', col, 'scale:', scale)
-
-			# load matrix
 			sprows.append(rows)
 			spcols.append(cols)
 			spvals.append(vals / scale)
@@ -1177,11 +1176,13 @@ class Tractor(object):
 			return []
 
 		# ensure the sparse matrix is full up to the number of columns we expect
+		# dstn: what does this do? -hogg
+		# hogg: it is a hack. -dstn
 		spcols.append([Ncols - 1])
 		sprows.append([0])
 		spvals.append([0])
 
-		sprows = np.hstack(sprows)
+		sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
 		assert(len(sprows) == len(spcols))
@@ -1190,9 +1191,11 @@ class Tractor(object):
 		logverb('  Number of sparse matrix elements:', len(sprows))
 		urows = np.unique(sprows)
 		logverb('  Unique rows (pixels):', len(urows))
-		logverb('  Max row:', max(sprows))
+		logverb('  Max row:', max(urows))
 		ucols = np.unique(spcols)
 		logverb('  Unique columns (params):', len(ucols))
+		logverb('  Max column:', max(ucols))
+		logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
 
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))

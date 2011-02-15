@@ -21,6 +21,8 @@ from astrometry.util.plotutils import setRadecAxes, redgreen
 from compiled_profiles import *
 from galaxy_profiles import *
 
+import mixture_profiles as mp
+
 # might want to override this to set the step size to ~ a pixel
 #class SdssRaDecPos(RaDecPos):
 #	def getStepSizes(self, img):
@@ -122,7 +124,7 @@ class Galaxy(MultiParams):
 		MultiParams.__init__(self, pos, flux, shape)
 
 	def getSourceType(self):
-		return 'Galaxy'
+		return self.name
 
 	def getPosition(self):
 		return self.pos
@@ -252,27 +254,6 @@ class Galaxy(MultiParams):
 		return derivs
 
 
-class HoggGalaxy(Galaxy):
-	def __init__(self, pos, flux, re, ab, phi):
-		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
-		self.name = 'HoggGalaxy'
-
-	def getSourceType(self):
-		return 'HoggGalaxy'
-
-	def copy(self):
-		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
-
-	def getModelPatch(self, img, px=None, py=None):
-		if px is None or py is None:
-			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
-		cd = img.getWcs().cdAtPixel(px, py)
-		psf = img.getPsf()
-		psfconvolvedimg = 0.
-		(x0, y0) = (0., 0.)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
-		return Patch(x0, y0, psfconvolvedimg * counts)
-
 class ExpGalaxy(Galaxy):
 	profile = None
 	@staticmethod
@@ -290,9 +271,6 @@ class ExpGalaxy(Galaxy):
 		self.num = ExpGalaxy.expnum
 		ExpGalaxy.expnum += 1
 		self.plotnum = 0
-
-	def getSourceType(self):
-		return 'ExpGalaxy'
 
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
@@ -330,14 +308,58 @@ class DevGalaxy(Galaxy):
 		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
 		self.name = 'DevGalaxy'
 
-	def getSourceType(self):
-		return 'DeVGalaxy'
-
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
 
 	def copy(self):
 		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+
+class HoggGalaxy(Galaxy):
+	def __init__(self, pos, flux, re, ab, phi):
+		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
+		self.name = 'HoggGalaxy'
+
+	def copy(self):
+		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+	def getModelPatch(self, img, px=None, py=None):
+		if px is None or py is None:
+			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
+		cd = img.getWcs().cdAtPixel(px, py)
+		psf = img.getPsf()
+		psfconvolvedimg = 0.
+		(x0, y0) = (0., 0.)
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		return Patch(x0, y0, psfconvolvedimg * counts)
+
+class HoggExpGalaxy(HoggGalaxy):
+	profile = mp.get_exp_mixture()
+	@staticmethod
+	def getProfile():
+		return HoggExpGalaxy.profile
+	def __init__(self, pos, flux, re, ab, phi):
+		HoggGalaxy.__init__(self, pos, flux, ra, ab, phi)
+		self.name = 'HoggExpGalaxy'
+	def getProfile(self):
+		return ExpGalaxy.getProfile()
+	def copy(self):
+		return HoggExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+class HoggDevGalaxy(HoggGalaxy):
+	profile = mp.get_dev_mixture()
+	@staticmethod
+	def getProfile():
+		return HoggDevGalaxy.profile
+	def __init__(self, pos, flux, re, ab, phi):
+		HoggGalaxy.__init__(self, pos, flux, ra, ab, phi)
+		self.name = 'HoggDevGalaxy'
+	def getProfile(self):
+		return DevGalaxy.getProfile()
+	def copy(self):
+		return HoggDevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+
+
 
 
 class Changes(object):
