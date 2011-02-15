@@ -1150,13 +1150,16 @@ class Tractor(object):
 			if len(VV) == 0:
 				colscales.append(1.)
 				continue
-			scale = abs(VV.max())
+			#scale = abs(VV.max())
+			vals = VV*WW
+			scale = np.sqrt(np.sum(vals**2))
 			colscales.append(scale)
 			logverb('Column', col, 'absmax:', scale)
-			VV /= scale
+			#VV /= scale
 			# spvals is structured a little differently than sprows
 			# (has fewer lists with more elements), but same number of entries
-			spvals.append(VV * WW)
+			#spvals.append(VV * WW)
+			spvals.append(vals / scale)
 
 		if len(spcols) == 0:
 			return []
