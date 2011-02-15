@@ -1,7 +1,6 @@
 # to-do:
 # ------
 # - put in copyright strings
-# - DELETE matrix elements that are a factor of FACTOR smaller than the max for that column.
 
 from math import ceil, floor, pi, sqrt, exp
 import time
@@ -15,6 +14,8 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
+
+FACTOR = 1.e-10
 
 def logverb(*args):
 	msg = ' '.join([str(x) for x in args])
@@ -1108,6 +1109,8 @@ class Tractor(object):
 		colscales = []
 
 		for col, param in enumerate(allparams):
+			RR = []
+			CC = []
 			VV = []
 			WW = []
 			for (deriv, img) in param:
@@ -1142,21 +1145,32 @@ class Tractor(object):
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
 				assert(vals.shape == w.shape)
-				sprows.append(rows)
-				spcols.append(cols)
+				RR.append(rows)
+				CC.append(cols)
 				VV.append(vals)
 				WW.append(w)
 
+			# massage, re-scale, and clean up matrix elements
 			if len(VV) == 0:
 				colscales.append(1.)
 				continue
-			vals = np.hstack(VV) * np.hstack(WW) # multiply in inverse errors
+			rows = np.hstack(RR)
+			cols = np.hstack(CC)
+			vals = np.hstack(VV) * np.hstack(WW)
+			I = np.abs(vals) > (FACTOR * np.max(np.abs(vals)))
+			rows = rows[I]
+			cols = cols[I]
+			vals = vals[I]
 			if len(vals) == 0:
 				colscales.append(1.)
 				continue
 			scale = np.sqrt(np.sum(vals * vals))
 			colscales.append(scale)
 			logverb('Column', col, 'scale:', scale)
+
+			# load matrix
+			sprows.append(rows)
+			spcols.append(cols)
 			spvals.append(vals / scale)
 
 		if len(spcols) == 0:
