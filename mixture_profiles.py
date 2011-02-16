@@ -1,12 +1,13 @@
 # Copyright 2011 David W. Hogg and Dustin Lang.  All rights reserved.
 
-import matplotlib
-matplotlib.use('Agg')
-from math import pi as pi
-import pylab as plt
-import matplotlib.cm as cm
+if __name__ == '__main__':
+	import matplotlib
+	matplotlib.use('Agg')
+	import pylab as plt
+	import matplotlib.cm as cm
 import numpy as np
-import scipy.optimize as op
+if __name__ == '__main__':
+	import scipy.optimize as op
 
 # magic number
 maxradius = 7.
@@ -167,7 +168,7 @@ def model_to_patch(model, scale, posmin, posmax):
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
 def not_normal(x, m, V):
-	return 1. / (2. * pi * V) * np.exp(-0.5 * x**2 / V)
+	return 1. / (2. * np.pi * V) * np.exp(-0.5 * x**2 / V)
 
 def hogg_dev(x):
 	return np.exp(-1. * (x**0.25))
