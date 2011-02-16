@@ -83,7 +83,6 @@ class MixtureOfGaussians():
 		self.var = np.reshape(np.append(self.var, other.var), (self.K, self.D, self.D))
 		self.test
 
-	# the self.symmetrize() step is a bit paranoid
 	def apply_affine(self, shift, scale):
 		'''
 		shift: D-vector offset
@@ -91,7 +90,6 @@ class MixtureOfGaussians():
 		'''
 		assert(shift.shape == (self.D,))
 		assert(scale.shape == (self.D, self.D))
-
 		newmean = self.mean + shift
 		newvar = self.var.copy()
 		for k in range(self.K):

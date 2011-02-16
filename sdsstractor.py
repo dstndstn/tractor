@@ -341,8 +341,15 @@ class HoggGalaxy(Galaxy):
 		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)
 		Tinv = np.linalg.inv(self.shape.getTensor(cd))
-		amix = galmix.apply_affine(np.array([px,py]), Tinv)
-		print 'eigenvectors:', np.linalg.eig(amix.var[0])
+		amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+
+		if False:
+			(eval, evec) = np.linalg.eig(amix.var[0])
+			print amix.var[0]
+			print 'true ab:', self.ab
+			print 'eigenval-based ab:', np.sqrt(eval[1]/eval[0])
+			print 'true phi:', self.phi
+			print 'eigenvec-based phi:', deg2rad(np.arctan2(evec[0,1], evec[0,0])), deg2rad(np.arctan2(evec[1,0], evec[0,0]))
 		amix.symmetrize()
 		# now convolve with the PSF
 		psf = img.getPsf()
@@ -364,7 +371,7 @@ class HoggGalaxy(Galaxy):
 		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
 		#print 'rendering', self.shape
 		#print 'total cmix.amp:', cmix.amp.sum()
-		#print 'psf-conv img sum:', psfconvolvedimg.sum()
+		print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'x0,y0', x0,y0
