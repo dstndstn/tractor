@@ -118,7 +118,22 @@ class GalaxyShape(ParamList):
 		if self.ab >= (1 - abstep):
 			abstep = -abstep
 		return [ 1., abstep, 1. ]
-	
+
+	def getTensor(self, cd):
+		# convert re, ab, phi into a transformation matrix
+		phi = np.deg2rad(90 - self.phi)
+		# convert re to degrees
+		re_deg = self.re / 3600.
+		cp = np.cos(phi)
+		sp = np.sin(phi)
+		# Squish, rotate, and scale into degrees.
+		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
+		G = re_deg * np.array([[ cp, sp * self.ab],
+							   [-sp, cp * self.ab]])
+		# "cd" takes pixels to degrees (intermediate world coords)
+		# T takes pixels to unit vectors.
+		T = np.dot(linalg.inv(G), cd)
+		return T
 
 class Galaxy(MultiParams):
 	def __init__(self, pos, flux, shape):
@@ -168,28 +183,16 @@ class Galaxy(MultiParams):
 		(H,W) = img.shape
 		margin = int(ceil(img.getPsf().getRadius()))
 
-		# convert re, ab, phi into a transformation matrix
-		phi = np.deg2rad(90 - self.phi)
+		T = self.shape.getTensor(cd)
+		assert(profile.get_compiled_ab() == 1.)
 		# convert re to degrees
 		re_deg = self.re / 3600.
-		abfactor = self.ab / profile.get_compiled_ab()
-
-		cp = np.cos(phi)
-		sp = np.sin(phi)
-		# Squish, rotate, and scale into degrees.
-		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
-		G = re_deg * np.array([[ cp, sp * abfactor],
-							   [-sp, cp * abfactor]])
-		# "cd" takes pixels to degrees (intermediate world coords)
-		# T takes pixels to unit vectors.
-		T = np.dot(linalg.inv(G), cd)
-
 		# sqrt(abs(det(cd))) is pixel scale in deg/pix
 		det = cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0]
 		pixscale = sqrt(abs(det))
 		repix = re_deg / pixscale
-		
-		(prof,x0,y0) = profile.sample_transform(T, repix, self.ab, cx, cy, W, H, margin)
+		(prof,x0,y0) = profile.sample_transform(T, repix, self.ab,
+												cx, cy, W, H, margin)
 		return Patch(x0, y0, prof)
 
 	def getModelPatch(self, img, px=None, py=None):
@@ -330,6 +333,10 @@ class HoggGalaxy(Galaxy):
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		cd = img.getWcs().cdAtPixel(px, py)
 		psf = img.getPsf()
+
+		S = np.array([[
+
+
 		psfconvolvedimg = 0.
 		(x0, y0) = (0., 0.)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
