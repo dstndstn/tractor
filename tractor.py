@@ -16,6 +16,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
+import mixture_profiles as mp
 
 FACTOR = 1.e-10
 
@@ -28,6 +29,25 @@ def logmsg(*args):
 def isverbose():
 	# Ugly logging interface...
 	return (logging.getLogger().level <= logging.DEBUG)
+
+def set_fp_err():
+	np.seterr(all='raise')
+
+class PlotSequence(object):
+	def __init__(self, basefn, format='%02i'):
+		self.ploti = 0
+		self.basefn = basefn
+		self.format = format
+		self.suff = 0
+	def skip(self, n=1):
+		self.ploti += n
+	def skipto(self, n):
+		self.ploti = n
+	def savefig(self):
+		fn = '%s-%s.png' % (self.basefn, self.format % self.ploti)
+		plt.savefig(fn)
+		print 'saved', fn
+		self.ploti += 1
 
 class Params(object):
 	def __hash__(self):
@@ -344,6 +364,11 @@ class Image(object):
 			return self.data.shape
 		raise AttributeError('Image: unknown attribute "%s"' % name)
 
+	def getWidth(self):
+		return self.shape[0]
+	def getHeight(self):
+		return self.shape[1]
+
 	def __hash__(self):
 		return hash(self.hashkey())
 
@@ -423,6 +448,23 @@ class NullWCS(WCS):
 		return pos
 	def pixelToPosition(self, src, xy):
 		return xy
+
+class FitsWcs(object):
+	def __init__(self, wcs):
+		self.wcs = wcs
+
+	def positionToPixel(self, src, pos):
+		x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		return x,y
+
+	def pixelToPosition(self, src, xy):
+		(x,y) = xy
+		r,d = self.wcs.pixelxy2radec(x, y)
+		return RaDecPos(r,d)
+
+	def cdAtPixel(self, x, y):
+		cd = self.wcs.cd
+		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
 class Patch(object):
 	def __init__(self, x0, y0, patch):
@@ -661,6 +703,11 @@ class NGaussianPSF(MultiParams):
 				', '.join(['%.3f'%w for w in self.weights]) +
 				' ]')
 
+	def getMixtureOfGaussians(self):
+		return mp.MixtureOfGaussians(self.weights,
+									 np.zeros((len(self.weights), 2)),
+									 np.array(self.sigmas)**2)
+		
 	def proposeIncreasedComplexity(self, img):
 		maxs = np.max(self.sigmas)
 		# MAGIC -- make new Gaussian with variance bigger than the biggest
@@ -1159,13 +1206,19 @@ class Tractor(object):
 			rows = np.hstack(RR)
 			cols = np.hstack(CC)
 			vals = np.hstack(VV) * np.hstack(WW)
-			I = np.abs(vals) > (FACTOR * np.max(np.abs(vals)))
-			rows = rows[I]
-			cols = cols[I]
-			vals = vals[I]
 			if len(vals) == 0:
 				colscales.append(1.)
 				continue
+			mx = np.max(np.abs(vals))
+			if mx == 0:
+				print 'mx == 0'
+				colscales.append(1.)
+				continue
+			print 'mx=', mx
+			I = (np.abs(vals) > (FACTOR * mx))
+			rows = rows[I]
+			cols = cols[I]
+			vals = vals[I]
 			scale = np.sqrt(np.sum(vals * vals))
 			colscales.append(scale)
 			assert(len(colscales) == (col+1))
@@ -1227,6 +1280,9 @@ class Tractor(object):
 
 		lsqropts = dict(show=isverbose())
 
+		# lsqr can trigger floating-point errors
+		np.seterr(all='warn')
+		
 		# Run lsqr()
 		logmsg('LSQR: %i cols, %i elements' %
 			   (Ncols, len(spvals)-1))
@@ -1236,6 +1292,8 @@ class Tractor(object):
 		t1 = time.clock()
 		logmsg('  %.1f seconds' % (t1-t0))
 
+		set_fp_err()
+		
 		logverb('scaled  X=', X)
 		X = np.array(X)
 		X /= np.array(colscales)

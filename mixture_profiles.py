@@ -25,7 +25,6 @@ def get_exp_mixture():
 def get_dev_mixture():
 	return MixtureOfGaussians(dev_amp, np.zeros((dev_amp.size, 2)), dev_var)
 
-
 class MixtureOfGaussians():
 
 	# symmetrize is an unnecessary step in principle, but in practice?
@@ -38,7 +37,8 @@ class MixtureOfGaussians():
 		self.test()
 
 	def __str__(self):
-		result = "MixtureOfGaussians instance with %d components in %d dimensions:\n" % (self.K, self.D)
+		result = "MixtureOfGaussians instance"
+		result += " with %d components in %d dimensions:\n" % (self.K, self.D)
 		result += " amp	 = %s\n" % self.amp.__str__()
 		result += " mean = %s\n" % self.mean.__str__()
 		result += " var	 = %s\n" % self.var.__str__()
@@ -59,7 +59,7 @@ class MixtureOfGaussians():
 				self.var[:,i,j] = tmpij
 				self.var[:,j,i] = tmpij
 
-	# very harsh testing
+	# very harsh testing, and expensive
 	def test(self):
 		assert(self.amp.shape == (self.K, ))
 		assert(self.mean.shape == (self.K, self.D))
@@ -83,6 +83,7 @@ class MixtureOfGaussians():
 		self.var = np.reshape(np.append(self.var, other.var), (self.K, self.D, self.D))
 		self.test
 
+	# the self.symmetrize() step is a bit paranoid
 	def apply_affine(self, shift, scale):
 		'''
 		shift: D-vector offset
@@ -90,14 +91,12 @@ class MixtureOfGaussians():
 		'''
 		assert(shift.shape == (self.D,))
 		assert(scale.shape == (self.D, self.D))
-		self.mean += shift
+
+		newmean = self.mean + shift
+		newvar = self.var.copy()
 		for k in range(self.K):
-			self.var[k,:,:] = np.dot(scale.T, np.dot(self.var[k,:,:], scale))
-			# Frightful debris
-			#self.var[k,:,:] = np.dot(np.dot(scale, self.var[k,:,:]), scale)
-			#S * (V * S)
-			#S.T * (V * S)
-			#dot(x,y) = X * Y
+			newvar[k,:,:] = np.dot(scale.T, np.dot(self.var[k,:,:], scale))
+		return MixtureOfGaussians(self.amp, newmean, newvar)
 
 	# dstn: should this be called "correlate"?
 	def convolve(self, other):
@@ -129,16 +128,17 @@ class MixtureOfGaussians():
 		result = np.zeros(N)
 		for k in range(self.K):
 			dpos = pos - self.mean[k]
-			dsq = np.sum(dpos * np.dot(dpos, np.linalg.inv(self.var[k])),axis=1)
-			result += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq)
+			dsq = np.sum(dpos * np.dot(dpos, np.linalg.inv(self.var[k])), axis=1)
+			I = (dsq < 700)
+			result[I] += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq[I])
 		return result
 
 # input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
 # output: a patch
 def mixture_to_patch(mixture, posmin, posmax):
-	xl = np.arange(posmin[0], posmax[0]+1., 1.)
+	xl = np.arange(posmin[0], posmax[0], 1.)
 	nx = xl.size
-	yl = np.arange(posmin[1], posmax[1]+1., 1.)
+	yl = np.arange(posmin[1], posmax[1], 1.)
 	ny = yl.size
 	x, y = np.meshgrid(xl, yl)
 	pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
@@ -185,7 +185,7 @@ def functional_test_patch_maker(fn, psf=None):
 	sr = np.sin(r)
 	S = np.dot(S, np.array([[cr, sr],[-sr, cr]]))
 	print 'Det', np.linalg.det(S)
-	exp_mixture.apply_affine(np.array([10,-30]), S)
+	exp_mixture = exp_mixture.apply_affine(np.array([10,-30]), S)
 
 	if psf is not None:
 		exp_mixture = exp_mixture.convolve(psf)

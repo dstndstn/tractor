@@ -8,24 +8,6 @@ from astrometry.util.sip import Tan
 
 from sdsstractor import *
 
-class FitsWcs(object):
-	def __init__(self, wcs):
-		self.wcs = wcs
-
-	def positionToPixel(self, src, pos):
-		x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
-		return x,y
-
-	def pixelToPosition(self, src, xy):
-		(x,y) = xy
-		r,d = self.wcs.pixelxy2radec(x, y)
-		return RaDecPos(r,d)
-
-	def cdAtPixel(self, x, y):
-		cd = self.wcs.cd
-		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
-
-
 def makeTruth():
 	W,H = 500,500
 	ra,dec = 0,0
@@ -94,13 +76,15 @@ def makeTruth():
 									 np.linspace(0, 90, 5))):
 			ra,dec = tanwcs1.pixelxy2radec(x, y)
 			pos = RaDecPos(ra, dec)
-			eg = ExpGalaxy(pos, flux, re, a, p)
+			#eg = ExpGalaxy(pos, flux, re, a, p)
+			eg = HoggExpGalaxy(pos, flux, re, a, p)
 			tractor.catalog.append(eg)
 
 	imgs = tractor.getModelImages()
 	for i,img in enumerate(imgs):
 		plt.clf()
 		plt.imshow(img, interpolation='nearest', origin='lower')
+		plt.colorbar()
 		plt.savefig('grid%i.png' % i)
 
 
@@ -113,6 +97,7 @@ def makeTruth():
 		plt.clf()
 		plt.imshow(timg.getImage(),
 				   interpolation='nearest', origin='lower')
+		plt.colorbar()
 		plt.savefig('grid%in.png' % i)
 
 		pyfits.writeto('grid%in.fits' % i, timg.getImage(), clobber=True)
@@ -133,6 +118,8 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s',
 						stream=sys.stdout)
+
+	set_fp_err()
 
 	imgs = makeTruth()
 	tractor = SDSSTractor(imgs)
@@ -163,7 +150,8 @@ def main():
 		photocal = img.getPhotoCal()
 		flux = photocal.countsToFlux(1e6) #sxy.flux[i])
 
-		cat.append(ExpGalaxy(pos, flux, 1., 0.5, 0.))
+		#cat.append(ExpGalaxy(pos, flux, 1., 0.5, 0.))
+		cat.append(HoggExpGalaxy(pos, flux, 1., 0.5, 0.))
 
 	for step in range(100):
 		imgs = tractor.getModelImages()
@@ -171,6 +159,7 @@ def main():
 			plt.clf()
 			plt.imshow(img, interpolation='nearest', origin='lower')
 			fn = 'grid%02i-%in.png' % (step, i)
+			plt.colorbar()
 			plt.savefig(fn)
 			print 'saved', fn
 

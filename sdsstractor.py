@@ -4,7 +4,7 @@ if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
 
-from math import pi, sqrt, ceil
+from math import pi, sqrt, ceil, floor
 from datetime import datetime
 
 import pyfits
@@ -137,8 +137,11 @@ class GalaxyShape(ParamList):
 
 class Galaxy(MultiParams):
 	def __init__(self, pos, flux, shape):
-		self.name = 'Galaxy'
 		MultiParams.__init__(self, pos, flux, shape)
+		self.name = self.getName()
+
+	def getName(self):
+		return 'Galaxy'
 
 	def getSourceType(self):
 		return self.name
@@ -182,7 +185,6 @@ class Galaxy(MultiParams):
 			return None
 		(H,W) = img.shape
 		margin = int(ceil(img.getPsf().getRadius()))
-
 		T = self.shape.getTensor(cd)
 		assert(profile.get_compiled_ab() == 1.)
 		# convert re to degrees
@@ -321,9 +323,13 @@ class DevGalaxy(Galaxy):
 
 
 class HoggGalaxy(Galaxy):
+	ps = PlotSequence('hg', format='%03i')
+
 	def __init__(self, pos, flux, re, ab, phi):
 		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
-		self.name = 'HoggGalaxy'
+
+	def getName(self):
+		return 'HoggGalaxy'
 
 	def copy(self):
 		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
@@ -331,45 +337,78 @@ class HoggGalaxy(Galaxy):
 	def getModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
+		galmix = self.getProfile()
+		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)
+		Tinv = np.linalg.inv(self.shape.getTensor(cd))
+		amix = galmix.apply_affine(np.array([px,py]), Tinv)
+		print 'eigenvectors:', np.linalg.eig(amix.var[0])
+		amix.symmetrize()
+		# now convolve with the PSF
 		psf = img.getPsf()
-
-		S = np.array([[
-
-
-		psfconvolvedimg = 0.
-		(x0, y0) = (0., 0.)
+		psfmix = psf.getMixtureOfGaussians()
+		psfmix.normalize()
+		cmix = amix.convolve(psfmix)
+		# now choose the patch size
+		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+		halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
+		# now evaluate the mixture on the patch pixels
+		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
+		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
+		if inx == [] or iny == []:
+			return None
+		x0 = outx.start
+		y0 = outy.start
+		x1 = outx.stop
+		y1 = outy.stop
+		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
+		#print 'rendering', self.shape
+		#print 'total cmix.amp:', cmix.amp.sum()
+		#print 'psf-conv img sum:', psfconvolvedimg.sum()
+		# now return a calibrated patch
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		#print 'x0,y0', x0,y0
+		#print 'patch shape', psfconvolvedimg.shape
+		#print 'img w,h', img.getWidth(), img.getHeight()
+
+		if False:
+			plt.clf()
+			plt.imshow(psfconvolvedimg*counts,
+					   interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.colorbar()
+			HoggGalaxy.ps.savefig()
 		return Patch(x0, y0, psfconvolvedimg * counts)
 
 class HoggExpGalaxy(HoggGalaxy):
 	profile = mp.get_exp_mixture()
+	profile.normalize()
 	@staticmethod
-	def getProfile():
+	def getExpProfile():
 		return HoggExpGalaxy.profile
 	def __init__(self, pos, flux, re, ab, phi):
-		HoggGalaxy.__init__(self, pos, flux, ra, ab, phi)
-		self.name = 'HoggExpGalaxy'
+		HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	def getName(self):
+		return 'HoggExpGalaxy'
 	def getProfile(self):
-		return ExpGalaxy.getProfile()
+		return HoggExpGalaxy.getExpProfile()
 	def copy(self):
 		return HoggExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
 
 class HoggDevGalaxy(HoggGalaxy):
 	profile = mp.get_dev_mixture()
+	profile.normalize()
 	@staticmethod
-	def getProfile():
+	def getDevProfile():
 		return HoggDevGalaxy.profile
 	def __init__(self, pos, flux, re, ab, phi):
-		HoggGalaxy.__init__(self, pos, flux, ra, ab, phi)
-		self.name = 'HoggDevGalaxy'
+		HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	def getName(self):
+		return 'HoggDevGalaxy'
 	def getProfile(self):
-		return DevGalaxy.getProfile()
+		return HoggDevGalaxy.getDevProfile()
 	def copy(self):
 		return HoggDevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
-
-
-
 
 class Changes(object):
 	pass

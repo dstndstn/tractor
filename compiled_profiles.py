@@ -186,9 +186,6 @@ class CompiledProfile():
 		profile = profile[iny,inx]
 		return (profile, x0, y0)
 
-
-		return None
-
 	def sample(self, r_e, ab, phi, x, y, outw, outh, margin):
 		# target (output) size: number of r_e in the compiled profile
 		# times r_e of the galaxy to be sampled.
