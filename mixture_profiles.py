@@ -65,10 +65,15 @@ class MixtureOfGaussians():
 				self.var[:,i,j] = tmpij
 				self.var[:,j,i] = tmpij
 
+	# very harsh testing
 	def test(self):
 		assert(self.amp.shape == (self.K, ))
 		assert(self.mean.shape == (self.K, self.D))
 		assert(self.var.shape == (self.K, self.D, self.D))
+		for k in range(self.K):
+			thisvar = self.var[k]
+			assert(np.sum(thisvar.T - thisvar) == 0.)
+			assert(np.linalg.det(thisvar) >= 0.)
 
 	def copy(self):
 		return MixtureOfGaussians(self.amp, self.mean, self.var)
