@@ -1,3 +1,5 @@
+# Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')

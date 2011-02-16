@@ -1,3 +1,5 @@
+# Copyright 2011 Dustin Lang.  All rights reserved.
+
 from numpy import *
 from integral_image import intimg_rect
 

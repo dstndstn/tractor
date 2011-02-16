@@ -1,4 +1,4 @@
-# make mixture-of-Gaussian galaxy profiles
+# Copyright 2011 David W. Hogg and Dustin Lang.  All rights reserved.
 
 import matplotlib
 matplotlib.use('Agg')

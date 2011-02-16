@@ -1,3 +1,5 @@
+# Copyright 2011 Dustin Lang.  All rights reserved.
+
 import sys
 import pyfits
 

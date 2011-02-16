@@ -1,3 +1,5 @@
+# Copyright 2011 Dustin Lang.  All rights reserved.
+
 from numpy import *
 
 def integral_image(I):

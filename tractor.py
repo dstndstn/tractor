@@ -1,6 +1,8 @@
+# Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+
 # to-do:
 # ------
-# - put in copyright strings
+# - make work with mixture profiles
 
 from math import ceil, floor, pi, sqrt, exp
 import time
