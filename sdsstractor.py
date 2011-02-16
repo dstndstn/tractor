@@ -358,7 +358,10 @@ class HoggGalaxy(Galaxy):
 		cmix = amix.convolve(psfmix)
 		# now choose the patch size
 		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-		halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
+		if self.ab <= 1:
+			halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
+		else:
+			halfsize = max(8., 8. * (self.re*self.ab / 3600.) / pixscale)
 		# now evaluate the mixture on the patch pixels
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
 		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
@@ -371,7 +374,7 @@ class HoggGalaxy(Galaxy):
 		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
 		#print 'rendering', self.shape
 		#print 'total cmix.amp:', cmix.amp.sum()
-		print 'psf-conv img sum:', psfconvolvedimg.sum()
+		#print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'x0,y0', x0,y0

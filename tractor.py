@@ -1214,7 +1214,7 @@ class Tractor(object):
 				print 'mx == 0'
 				colscales.append(1.)
 				continue
-			print 'mx=', mx
+			#print 'mx=', mx
 			I = (np.abs(vals) > (FACTOR * mx))
 			rows = rows[I]
 			cols = cols[I]

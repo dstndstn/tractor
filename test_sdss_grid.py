@@ -166,6 +166,11 @@ def main():
 		#if step == 0:
 		#	tractor.changeSourceTypes()
 		#else:
+		print
+		print 'Step', step
+		print
+		for src in tractor.getCatalog():
+			print ' ', src
 		tractor.optimizeCatalogAtFixedComplexityStep()
 
 
