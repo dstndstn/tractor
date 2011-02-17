@@ -153,7 +153,7 @@ def main():
 		#cat.append(ExpGalaxy(pos, flux, 1., 0.5, 0.))
 		cat.append(HoggExpGalaxy(pos, flux, 1., 0.5, 0.))
 
-	for step in range(100):
+	for step in range(3):
 		imgs = tractor.getModelImages()
 		for i,img in enumerate(imgs):
 			plt.clf()
@@ -242,5 +242,7 @@ def main():
 
 
 if __name__ == '__main__':
-	main()
+	import cProfile
+	from datetime import tzinfo, timedelta, datetime
+	cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
 	sys.exit(0)

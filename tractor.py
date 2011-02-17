@@ -344,6 +344,7 @@ class Image(object):
 				 photocal=None, name=None):
 		self.data = data
 		self.invvar = invvar
+		self.inverr = np.sqrt(self.invvar)
 		self.psf = psf
 		self.sky = sky
 		self.wcs = wcs
@@ -381,7 +382,7 @@ class Image(object):
 		return W*H
 		
 	def getInvError(self):
-		return np.sqrt(self.invvar)
+		return self.inverr
 	def getImage(self):
 		return self.data
 	def getPsf(self):
