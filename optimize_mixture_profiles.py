@@ -8,15 +8,14 @@ import numpy as np
 import scipy.optimize as op
 import mixture_profiles as mp
 
-# magic number
-maxradius = 7.
-# magic number setting what counts as stopping time
-squared_deviation_scale = 1.e-6
-
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
-def not_normal(x, m, V):
-	return 1. / (2. * np.pi * V) * np.exp(-0.5 * x**2 / V)
+def not_normal(x, V):
+	exparg = -0.5 * x**2 / V
+	result = np.zeros_like(x)
+	I = ((exparg > -1000) * (exparg < 1000))
+	result[I] = 1. / (2. * np.pi * V) * np.exp(exparg[I])
+	return result
 
 def hogg_dev(x):
 	return np.exp(-1. * (x**0.25))
@@ -25,52 +24,57 @@ def mixture_of_not_normals(x, pars):
 	K = len(pars)/2
 	y = 0.
 	for k in range(K):
-		y += pars[k] * not_normal(x, 0., pars[k+K])
+		y += pars[k] * not_normal(x, pars[k+K])
 	return y
 
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
 def badness_of_fit_exp(lnpars):
 	pars = np.exp(lnpars)
-	x = np.arange(0., maxradius, 0.01)
+	x = np.arange(0., MAX_RADIUS, 0.01)
 	return np.mean((mixture_of_not_normals(x, pars)
-					- np.exp(-x))**2) / squared_deviation_scale
+					- np.exp(-x))**2) / 10.**LOG10_SQUARED_DEVIATION
 
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
 def badness_of_fit_dev(lnpars):
 	pars = np.exp(lnpars)
-	x = np.arange(0., maxradius, 0.001)
+	x = np.arange(0., MAX_RADIUS, 0.001)
 	return np.mean((mixture_of_not_normals(x, pars)
-					- hogg_dev(x))**2) / squared_deviation_scale
+					- hogg_dev(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 
 def optimize_mixture(K, pars, model):
 	if model == 'exp':
 		func = badness_of_fit_exp
 	if model == 'dev':
 		func = badness_of_fit_dev
-	print pars
 	newlnpars = op.fmin_bfgs(func, np.log(pars), maxiter=300)
-	print np.exp(newlnpars)
 	return (func(newlnpars), np.exp(newlnpars))
 
-def plot_mixture(pars, fn, model):
-	x1 = np.arange(0., maxradius, 0.001)
+def plot_mixture(pars, prefix, model):
+	x1 = np.arange(0., MAX_RADIUS, 0.001)
 	if model == 'exp':
 		y1 = np.exp(-x1)
 		badness = badness_of_fit_exp(np.log(pars))
 	if model == 'dev':
 		y1 = hogg_dev(x1)
 		badness = badness_of_fit_dev(np.log(pars))
-	x2 = np.arange(0., maxradius+2., 0.001)
+	K = len(pars) / 2
+	x2 = np.arange(0., MAX_RADIUS*1.2, 0.001)
 	y2 = mixture_of_not_normals(x2, pars)
 	plt.clf()
 	plt.plot(x1, y1, 'k-')
 	plt.plot(x2, y2, 'k-', lw=4, alpha=0.5)
-	plt.xlim(-0.5, np.max(x2))
+	for k in range(K):
+		plt.plot(x2, pars[k] * not_normal(x2, pars[k+K]), 'k-', alpha=0.5)
+	plt.title(r"%s / $K=%d$ / maximum radius = $%.1f$ / badness = $%.2f\times 10^{%d}$" % (model, len(pars)/2, MAX_RADIUS, badness, LOG10_SQUARED_DEVIATION))
+	plt.xlim(-0.1*np.max(x2), 1.1*np.max(x2))
 	plt.ylim(-0.1*np.max(y1), 1.1*np.max(y1))
-	plt.title(r"K = %d / mean-squared deviation = $%f\times 10^{-6}$" % (len(pars)/2, badness))
-	plt.savefig(fn)
+	plt.savefig(prefix+'_'+model+'.png')
+	plt.clf()
+	plt.xlim(0.003*np.max(x2), 1.5*np.max(x2))
+	plt.ylim(0.003*np.max(y1), 1.5*np.max(y1))
+	plt.savefig(prefix+'_'+model+'_log.png')
 
 def rearrange_pars(pars):
 	K = len(pars) / 2
@@ -81,7 +85,7 @@ def rearrange_pars(pars):
 
 # run this (possibly with adjustments to the magic numbers at top)
 # to find different or better mixtures approximations
-def optimize_mixtures():
+def main():
 	for model in ['exp', 'dev']:
 		amp = np.array([1.0])
 		var = np.array([1.0])
@@ -112,12 +116,19 @@ def optimize_mixtures():
 					break
 			lastKbadness = bestbadness
 			pars = rearrange_pars(bestpars)
-			plot_mixture(pars, 'K%02d_%s.png' % (K, model), model)
 			amp = pars[0:K]
 			var = pars[K:K+K]
 			if bestbadness < 1.:
+				prefix = 'K%02d_MR%02d_LSD%02d' % (K, int(round(MAX_RADIUS)+0.01), -1 * LOG10_SQUARED_DEVIATION)
+				plot_mixture(pars, prefix, model)
+				txtfile = open(prefix + '.txt', "w")
+				txtfile.write(str(pars))
+				txtfile.close
 				print model
-				print pars
 				break
 
 if __name__ == '__main__':
+	# magic numbers
+	for MAX_RADIUS in [5., 15., 50.]:
+		for LOG10_SQUARED_DEVIATION in [-6, -8, -10]:
+			main()
