@@ -48,7 +48,7 @@ def badness_of_fit_exp(lnpars):
 
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
-# note penalty for large variance
+# note magic number in the penalty for large variance
 def badness_of_fit_dev(lnpars):
 	pars = np.exp(lnpars)
 	x = np.arange(0., MAX_RADIUS, 0.001)
@@ -56,7 +56,7 @@ def badness_of_fit_dev(lnpars):
 			   - hogg_dev(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 	K = len(pars) / 2
 	var = pars[K:]
-	extrabadness = np.sum((var > MAX_VARIANCE) * (var - MAX_VARIANCE))
+	extrabadness = 0.0001 * np.sum(var) / MAX_RADIUS**2
 	return badness + extrabadness
 
 def badness_of_fit_lup(lnpars):
@@ -76,30 +76,30 @@ def optimize_mixture(K, pars, model):
 	return (func(newlnpars), np.exp(newlnpars))
 
 def plot_mixture(pars, prefix, model):
-	x1 = np.arange(0., MAX_RADIUS, 0.001)
+	x2 = np.arange(0., 10.*MAX_RADIUS, 0.001)
 	if model == 'exp':
-		y1 = np.exp(-x1)
+		y1 = np.exp(-x2)
 		badness = badness_of_fit_exp(np.log(pars))
 	if model == 'dev':
-		y1 = hogg_dev(x1)
+		y1 = hogg_dev(x2)
 		badness = badness_of_fit_dev(np.log(pars))
 	if model == 'lup':
-		y1 = hogg_lup(x1)
+		y1 = hogg_lup(x2)
 		badness = badness_of_fit_lup(np.log(pars))
 	K = len(pars) / 2
-	x2 = np.arange(0., 2.*MAX_RADIUS, 0.001)
 	y2 = mixture_of_not_normals(x2, pars)
 	plt.clf()
-	plt.plot(x1, y1, 'k-')
+	plt.plot(x2, y1, 'k-')
 	plt.plot(x2, y2, 'k-', lw=4, alpha=0.25)
 	for k in range(K):
 		plt.plot(x2, pars[k] * not_normal(x2, pars[k+K]), 'k-', alpha=0.5)
+	plt.axvline(MAX_RADIUS, color='k', alpha=0.25)
 	plt.title(r"%s / $K=%d$ / maximum radius = $%.1f$ / badness = $%.2f\times 10^{%d}$" % (model, len(pars)/2, MAX_RADIUS, badness, LOG10_SQUARED_DEVIATION))
-	plt.xlim(-0.1*np.max(x1), 1.1*np.max(x1))
+	plt.xlim(-0.1*MAX_RADIUS, 2.*MAX_RADIUS)
 	plt.ylim(-0.1*np.max(y1), 1.1*np.max(y1))
 	plt.savefig(prefix+'_'+model+'.png')
 	plt.loglog()
-	plt.xlim(0.003*np.max(x1), 1.5*np.max(x1))
+	plt.xlim(0.001, 10.*MAX_RADIUS)
 	plt.ylim(0.003*np.max(y1), 1.5*np.max(y1))
 	plt.savefig(prefix+'_'+model+'_log.png')
 
@@ -112,50 +112,49 @@ def rearrange_pars(pars):
 
 # run this (possibly with adjustments to the magic numbers at top)
 # to find different or better mixtures approximations
-def main():
-	for model in ['exp', 'dev']:
-		amp = np.array([1.0])
-		var = np.array([1.0])
+def main(model):
+	amp = np.array([1.0])
+	var = np.array([1.0])
+	pars = np.append(amp, var)
+	(badness, pars) = optimize_mixture(1, pars, model)
+	lastKbadness = badness
+	bestbadness = badness
+	for K in range(2,20):
+		print 'working on K = %d' % K
+		newvar = 0.5 * np.min(np.append(var,1.0))
+		newamp = 1.0 * newvar
+		amp = np.append(newamp, amp)
+		var = np.append(newvar, var)
 		pars = np.append(amp, var)
-		(badness, pars) = optimize_mixture(1, pars, model)
-		lastKbadness = badness
-		bestbadness = badness
-		for K in range(2,20):
-			print 'working on K = %d' % K
-			newvar = 0.5 * np.min(np.append(var,1.0))
-			newamp = 1.0 * newvar
-			amp = np.append(newamp, amp)
-			var = np.append(newvar, var)
-			pars = np.append(amp, var)
-			for i in range(100):
-				(badness, pars) = optimize_mixture(K, pars, model)
-				if badness < bestbadness:
-					print '%d %d improved' % (K, i)
-					bestpars = pars
-					bestbadness = badness
-				else:
-					print '%d %d not improved' % (K, i)
-					var[0] = 0.5 * var[np.random.randint(K)]
-					amp[0] = 1.0 * var[0]
-					pars = np.append(amp, var)
-				if (bestbadness < 0.5 * lastKbadness) and (i > 5):
+		for i in range(2*K):
+			(badness, pars) = optimize_mixture(K, pars, model)
+			if badness < bestbadness:
+				print '%d %d improved' % (K, i)
+				bestpars = pars
+				bestbadness = badness
+			else:
+				print '%d %d not improved' % (K, i)
+				var[0] = 0.5 * var[np.mod(i,K)]
+				amp[0] = 1.0 * var[0]
+				pars = np.append(amp, var)
+				if (bestbadness < 0.5 * lastKbadness) and (i > 4):
 					print '%d %d improved enough' % (K, i)
 					break
 			lastKbadness = bestbadness
 			pars = rearrange_pars(bestpars)
 			amp = pars[0:K]
 			var = pars[K:K+K]
-			if bestbadness < 1.:
-				prefix = 'K%02d_MR%02d_LSD%02d' % (K, int(round(MAX_RADIUS)+0.01), -1 * LOG10_SQUARED_DEVIATION)
-				plot_mixture(pars, prefix, model)
-				txtfile = open(prefix + '_' + model + '.txt', "w")
-				txtfile.write(str(pars))
-				txtfile.close
-				print model
-				break
+			prefix = 'K%02d_MR%02d_LSD%02d' % (K, int(round(MAX_RADIUS)+0.01), -1 * LOG10_SQUARED_DEVIATION)
+			plot_mixture(pars, prefix, model)
+			txtfile = open(prefix + '_' + model + '.txt', "w")
+			txtfile.write(str(pars))
+			txtfile.close
+		if bestbadness < 1.:
+			break
 
 if __name__ == '__main__':
-	for MAX_RADIUS in [3., 10.]:
-		MAX_VARIANCE = (MAX_RADIUS + 1.)**2
-		for LOG10_SQUARED_DEVIATION in [-2, -4, -6]:
-			main()
+	LOG10_SQUARED_DEVIATION = -6
+	MAX_RADIUS = 2.
+	main('dev')
+	for MAX_RADIUS in [2., 6.]:
+		main('exp')
