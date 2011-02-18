@@ -30,8 +30,8 @@ class MixtureOfGaussians():
 
 	# symmetrize is an unnecessary step in principle, but in practice?
 	def __init__(self, amp, mean, var):
-		self.amp = np.array(amp)
-		self.mean = np.array(mean)
+		self.amp = np.array(amp).astype(float)
+		self.mean = np.atleast_2d(np.array(mean)).astype(float)
 		(self.K, self.D) = self.mean.shape
 		self.set_var(var)
 		self.symmetrize()
@@ -51,8 +51,10 @@ class MixtureOfGaussians():
 			for d in range(self.D):
 				self.var[:,d,d] = var
 		else:
-			self.var = np.array(var)
-
+			# atleast_3d makes bizarre choices about which axes to expand...
+			#self.var = np.atleast_3d(np.array(var))
+			#print 'var', self.var.shape
+			self.var = np.array(var).astype(float)
 	def symmetrize(self):
 		for i in range(self.D):
 			for j in range(i):
@@ -134,7 +136,7 @@ class MixtureOfGaussians():
 			result[I] += (self.amp[k] / np.sqrt(twopitotheD * np.linalg.det(self.var[k]))) * np.exp(-0.5 * dsq[I])
 		return result
 
-	def evaluate(self, pos):
+	def evaluate_1(self, pos):
 		if pos.size == self.D:
 			pos = np.reshape(pos, (1, self.D))
 		(N, D) = pos.shape
@@ -148,6 +150,8 @@ class MixtureOfGaussians():
 		return result
 
 	def evaluate_2(self, pos):
+		from mix import c_gauss_2d
+
 		if pos.size == self.D:
 			pos = np.reshape(pos, (1, self.D))
 		(N, D) = pos.shape
@@ -158,10 +162,20 @@ class MixtureOfGaussians():
 		for k in range(self.K):
 			ivar[k,:,:] = np.linalg.inv(self.var[k])
 		scale = self.amp / np.sqrt(twopitotheD * np.array([np.linalg.det(self.var[k]) for k in range(self.K)]))
-		c_gauss(pos, scale, self.mean, ivar, result)
-		r2 = self.evaluate(pos)
-		print 'diff', np.abs((r2 - result)/r2)
+		pos = pos.astype(float)
+		#print 'scale', scale.shape
+		#print 'mean', self.mean.shape
+		rtn = c_gauss_2d(pos, scale, self.mean, ivar, result)
+		if rtn == -1:
+			raise RuntimeError('c_gauss_2d failed')
+		#r2 = self.evaluate_3(pos)
+		#print 'result', result
+		#print 'r2', r2
+		#print 'diff', np.abs((r2 - result)/np.maximum(r2, 1e-30))
+		#print 'max diff', max(np.abs((r2 - result)/np.maximum(r2, 1e-30)))
 		return result
+
+	evaluate = evaluate_2
 
 
 # input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
@@ -173,6 +187,10 @@ def mixture_to_patch(mixture, posmin, posmax):
 	ny = yl.size
 	x, y = np.meshgrid(xl, yl)
 	pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
+	#print mixture
+	#print repr(pos)
+	#print posmin[0], posmax[0]
+	#print posmin[1], posmax[1]
 	return np.reshape(mixture.evaluate(pos), (ny, nx))
 
 def model_to_patch(model, scale, posmin, posmax):
