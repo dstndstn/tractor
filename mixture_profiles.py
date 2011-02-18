@@ -161,12 +161,27 @@ class MixtureOfGaussians():
 			raise RuntimeError('c_gauss_2d failed')
 		return result
 
+	def evaluate_grid(self, xlo, xhi, ylo, yhi):
+		from mix import c_gauss_2d_grid
+		assert(self.D == 2)
+		NX = xhi - xlo - 1
+		NY = yhi - ylo - 1
+		result = np.zeros((NY, NX))
+		rtn = c_gauss_2d_grid(xlo, xhi, ylo, yhi, self.amp, self.mean,
+							  self.var, result)
+		if rtn == -1:
+			raise RuntimeError('c_gauss_2d_grid failed')
+		return result
+
 	evaluate = evaluate_2
 
 
 # input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
 # output: a patch
 def mixture_to_patch(mixture, posmin, posmax):
+	return mixture.evaluate_grid(int(posmin[0]), int(posmax[0]),
+								 int(posmin[1]), int(posmax[1]))
+'''
 	xl = np.arange(posmin[0], posmax[0], 1.)
 	nx = xl.size
 	yl = np.arange(posmin[1], posmax[1], 1.)
@@ -174,6 +189,7 @@ def mixture_to_patch(mixture, posmin, posmax):
 	x, y = np.meshgrid(xl, yl)
 	pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
 	return np.reshape(mixture.evaluate(pos), (ny, nx))
+'''
 
 def model_to_patch(model, scale, posmin, posmax):
 	xl = np.arange(posmin[0], posmax[0]+1., 1.)
