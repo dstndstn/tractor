@@ -151,28 +151,14 @@ class MixtureOfGaussians():
 
 	def evaluate_2(self, pos):
 		from mix import c_gauss_2d
-
 		if pos.size == self.D:
 			pos = np.reshape(pos, (1, self.D))
 		(N, D) = pos.shape
 		assert(self.D == D)
-		twopitotheD = (2.*np.pi)**self.D
 		result = np.zeros(N)
-		ivar = np.empty_like(self.var)
-		for k in range(self.K):
-			ivar[k,:,:] = np.linalg.inv(self.var[k])
-		scale = self.amp / np.sqrt(twopitotheD * np.array([np.linalg.det(self.var[k]) for k in range(self.K)]))
-		pos = pos.astype(float)
-		#print 'scale', scale.shape
-		#print 'mean', self.mean.shape
-		rtn = c_gauss_2d(pos, scale, self.mean, ivar, result)
+		rtn = c_gauss_2d(pos, self.amp, self.mean, self.var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d failed')
-		#r2 = self.evaluate_3(pos)
-		#print 'result', result
-		#print 'r2', r2
-		#print 'diff', np.abs((r2 - result)/np.maximum(r2, 1e-30))
-		#print 'max diff', max(np.abs((r2 - result)/np.maximum(r2, 1e-30)))
 		return result
 
 	evaluate = evaluate_2
@@ -187,10 +173,6 @@ def mixture_to_patch(mixture, posmin, posmax):
 	ny = yl.size
 	x, y = np.meshgrid(xl, yl)
 	pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
-	#print mixture
-	#print repr(pos)
-	#print posmin[0], posmax[0]
-	#print posmin[1], posmax[1]
 	return np.reshape(mixture.evaluate(pos), (ny, nx))
 
 def model_to_patch(model, scale, posmin, posmax):
