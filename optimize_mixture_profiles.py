@@ -48,11 +48,16 @@ def badness_of_fit_exp(lnpars):
 
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
+# note penalty for large variance
 def badness_of_fit_dev(lnpars):
 	pars = np.exp(lnpars)
 	x = np.arange(0., MAX_RADIUS, 0.001)
-	return np.mean((mixture_of_not_normals(x, pars)
-					- hogg_dev(x))**2) / 10.**LOG10_SQUARED_DEVIATION
+	badness = np.mean((mixture_of_not_normals(x, pars)
+			   - hogg_dev(x))**2) / 10.**LOG10_SQUARED_DEVIATION
+	K = len(pars) / 2
+	var = pars[K:]
+	extrabadness = np.sum((var > MAX_VARIANCE) * (var - MAX_VARIANCE))
+	return badness + extrabadness
 
 def badness_of_fit_lup(lnpars):
 	pars = np.exp(lnpars)
@@ -108,7 +113,7 @@ def rearrange_pars(pars):
 # run this (possibly with adjustments to the magic numbers at top)
 # to find different or better mixtures approximations
 def main():
-	for model in ['exp', 'dev', 'lup']:
+	for model in ['exp', 'dev']:
 		amp = np.array([1.0])
 		var = np.array([1.0])
 		pars = np.append(amp, var)
@@ -150,6 +155,7 @@ def main():
 				break
 
 if __name__ == '__main__':
-	for MAX_RADIUS in [10., 30.]:
+	for MAX_RADIUS in [3., 10.]:
+		MAX_VARIANCE = (MAX_RADIUS + 1.)**2
 		for LOG10_SQUARED_DEVIATION in [-2, -4, -6]:
 			main()
