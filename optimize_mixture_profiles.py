@@ -6,7 +6,6 @@ import pylab as plt
 import matplotlib.cm as cm
 import numpy as np
 import scipy.optimize as op
-import mixture_profiles as mp
 
 # note wacky normalization because this is for 2-d Gaussians
 # (but only ever called in 1-d).  Wacky!
@@ -17,8 +16,13 @@ def not_normal(x, V):
 	result[I] = 1. / (2. * np.pi * V) * np.exp(exparg[I])
 	return result
 
+# magic numbers from Lupton (makeprof.c and phFitobj.h) via dstn
+def hogg_exp(x):
+	return np.exp(-1.67835 * (x - 1.))
+
+# magic numbers from Lupton (makeprof.c and phFitobj.h) via dstn
 def hogg_dev(x):
-	return np.exp(-1. * (x**0.25))
+	return np.exp(-7.66925 * ((x*x + 0.0004)**0.125 - 1.))
 
 # not magic 7. and 8.
 def hogg_lup(x):
@@ -44,7 +48,7 @@ def badness_of_fit_exp(lnpars):
 	pars = np.exp(lnpars)
 	x = np.arange(0., MAX_RADIUS, 0.01)
 	return np.mean((mixture_of_not_normals(x, pars)
-					- np.exp(-x))**2) / 10.**LOG10_SQUARED_DEVIATION
+					- hogg_exp(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 
 # note that you can do (x * ymix - x * ytrue)**2 or (ymix - ytrue)**2
 # each has disadvantages.
@@ -78,7 +82,7 @@ def optimize_mixture(K, pars, model):
 def plot_mixture(pars, prefix, model):
 	x2 = np.arange(0., 10.*MAX_RADIUS, 0.001)
 	if model == 'exp':
-		y1 = np.exp(-x2)
+		y1 = hogg_exp(x2)
 		badness = badness_of_fit_exp(np.log(pars))
 	if model == 'dev':
 		y1 = hogg_dev(x2)
@@ -100,7 +104,7 @@ def plot_mixture(pars, prefix, model):
 	plt.savefig(prefix+'_'+model+'.png')
 	plt.loglog()
 	plt.xlim(0.001, 10.*MAX_RADIUS)
-	plt.ylim(0.003*np.max(y1), 1.5*np.max(y1))
+	plt.ylim(3.e-5, 1.5*np.max(y1))
 	plt.savefig(prefix+'_'+model+'_log.png')
 
 def rearrange_pars(pars):
@@ -154,7 +158,8 @@ def main(model):
 
 if __name__ == '__main__':
 	LOG10_SQUARED_DEVIATION = -6
-	MAX_RADIUS = 2.
+	MAX_RADIUS = 8.
+	main('exp')
+	LOG10_SQUARED_DEVIATION = -4
+	MAX_RADIUS = 8.
 	main('dev')
-	for MAX_RADIUS in [2., 6.]:
-		main('exp')

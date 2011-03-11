@@ -2,7 +2,6 @@
 
 # to-do:
 # ------
-# - make work with mixture profiles
 
 from math import ceil, floor, pi, sqrt, exp
 import time
