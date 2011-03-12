@@ -24,7 +24,7 @@ def hogg_exp(x):
 def hogg_dev(x):
 	return np.exp(-7.66925 * ((x*x + 0.0004)**0.125 - 1.))
 
-# not magic 7. and 8.
+# magic numbers from Lupton (makeprof.c and phFitobj.h) via dstn
 def hogg_lup(x):
 	inner = 7.
 	outer = 8.
@@ -46,7 +46,7 @@ def mixture_of_not_normals(x, pars):
 # each has disadvantages.
 def badness_of_fit_exp(lnpars):
 	pars = np.exp(lnpars)
-	x = np.arange(0., MAX_RADIUS, 0.01)
+	x = np.arange(0.0005, MAX_RADIUS, 0.001)
 	return np.mean((mixture_of_not_normals(x, pars)
 					- hogg_exp(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 
@@ -55,7 +55,7 @@ def badness_of_fit_exp(lnpars):
 # note magic number in the penalty for large variance
 def badness_of_fit_dev(lnpars):
 	pars = np.exp(lnpars)
-	x = np.arange(0., MAX_RADIUS, 0.001)
+	x = np.arange(0.0005, MAX_RADIUS, 0.001)
 	badness = np.mean((mixture_of_not_normals(x, pars)
 			   - hogg_dev(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 	K = len(pars) / 2
@@ -65,7 +65,7 @@ def badness_of_fit_dev(lnpars):
 
 def badness_of_fit_lup(lnpars):
 	pars = np.exp(lnpars)
-	x = np.arange(0., MAX_RADIUS, 0.001)
+	x = np.arange(0.0005, MAX_RADIUS, 0.001)
 	return np.mean((mixture_of_not_normals(x, pars)
 					- hogg_lup(x))**2) / 10.**LOG10_SQUARED_DEVIATION
 
@@ -76,7 +76,7 @@ def optimize_mixture(K, pars, model):
 		func = badness_of_fit_dev
 	if model == 'lup':
 		func = badness_of_fit_lup
-	newlnpars = op.fmin_bfgs(func, np.log(pars), maxiter=300)
+	newlnpars = op.fmin_bfgs(func, np.log(pars))
 	return (func(newlnpars), np.exp(newlnpars))
 
 def plot_mixture(pars, prefix, model):
@@ -125,21 +125,22 @@ def main(model):
 	bestbadness = badness
 	for K in range(2,20):
 		print 'working on K = %d' % K
-		newvar = 0.5 * np.min(np.append(var,1.0))
+		newvar = 2.0 * np.max(np.append(var,1.0))
 		newamp = 1.0 * newvar
 		amp = np.append(newamp, amp)
 		var = np.append(newvar, var)
 		pars = np.append(amp, var)
 		for i in range(2*K):
 			(badness, pars) = optimize_mixture(K, pars, model)
-			if badness < bestbadness:
+			if (badness < bestbadness) or (i == 0):
 				print '%d %d improved' % (K, i)
 				bestpars = pars
 				bestbadness = badness
 			else:
 				print '%d %d not improved' % (K, i)
-				var[0] = 0.5 * var[np.mod(i,K)]
-				amp[0] = 1.0 * var[0]
+				print i, len(var), K, np.mod(i,K)
+				var[0] = 2.0 * var[np.mod(i,K)]
+				amp[0] = 0.5 * amp[np.mod(i,K)]
 				pars = np.append(amp, var)
 				if (bestbadness < 0.5 * lastKbadness) and (i > 4):
 					print '%d %d improved enough' % (K, i)
@@ -159,10 +160,8 @@ def main(model):
 if __name__ == '__main__':
 	LOG10_SQUARED_DEVIATION = -4
 	MAX_RADIUS = 8.
-	main('lup')
-	LOG10_SQUARED_DEVIATION = -4
-	MAX_RADIUS = 8.
 	main('dev')
+	main('lup')
 	LOG10_SQUARED_DEVIATION = -6
 	MAX_RADIUS = 8.
 	main('exp')
