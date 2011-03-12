@@ -29,10 +29,10 @@ def hogg_lup(x):
 	inner = 7.
 	outer = 8.
 	lup = hogg_dev(x)
-	outside = (x > outer)
+	outside = (x >= outer)
 	lup[outside] *= 0.
-	middle = (x > inner) * (x < outer)
-	lup[middle] *= (outer - x[middle])
+	middle = (x >= inner) * (x <= outer)
+	lup[middle] *= (outer - x[middle]) / (outer - inner)
 	return lup
 
 def mixture_of_not_normals(x, pars):
@@ -157,9 +157,12 @@ def main(model):
 			break
 
 if __name__ == '__main__':
-	LOG10_SQUARED_DEVIATION = -6
+	LOG10_SQUARED_DEVIATION = -4
 	MAX_RADIUS = 8.
-	main('exp')
+	main('lup')
 	LOG10_SQUARED_DEVIATION = -4
 	MAX_RADIUS = 8.
 	main('dev')
+	LOG10_SQUARED_DEVIATION = -6
+	MAX_RADIUS = 8.
+	main('exp')
