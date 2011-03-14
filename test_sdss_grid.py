@@ -1,3 +1,7 @@
+if __name__ == '__main__':
+	import matplotlib
+	matplotlib.use('Agg')
+
 import sys
 from math import pi
 
@@ -5,6 +9,7 @@ import numpy as np
 import pylab as plt
 
 from astrometry.util.sip import Tan
+from astrometry.util.file import *
 
 from sdsstractor import *
 
@@ -51,8 +56,6 @@ def makeTruth():
 	psf = NGaussianPSF([2.0], [1.0])
 	sky = 0.
 	skyobj = ConstantSky(sky)
-	# arcsec
-	re = 10.
 	flux = SdssFlux(1.)
 
 	# image 1
@@ -68,16 +71,27 @@ def makeTruth():
 
 	tractor = SDSSTractor([img1, img2])
 
+	np.random.seed(42)
+
+	# arcsec
+	#re = 10.
+	#phi = 30.
+
 	# grid: ra -- ab
-	#       dec -- phi
-	for i,(x,a) in enumerate(zip(np.linspace(50, W-50, 5),
-								np.linspace(0.2, 1, 5))):
-		for j,(y,p) in enumerate(zip(np.linspace(50, H-50, 5),
-									 np.linspace(0, 90, 5))):
+	for i,(x,a) in enumerate(zip(np.linspace(50, W-50, 10),
+								np.linspace(0.1, 1, 10))):
+		#       dec -- phi
+		#       dec -- r_e
+		for j,(y,re) in enumerate(zip(np.linspace(50, H-50, 10),
+									  exp(np.linspace(np.log(1), np.log(30.), 10)))):
+									  #exp(np.linspace(np.log(0.1), np.log(20.), 10)))):
+			#np.linspace(0, 90, 10, endpoint=False),
 			ra,dec = tanwcs1.pixelxy2radec(x, y)
 			pos = RaDecPos(ra, dec)
+			phi = np.random.uniform(0, 360)
 			#eg = ExpGalaxy(pos, flux, re, a, p)
-			eg = HoggExpGalaxy(pos, flux, re, a, p)
+			#eg = HoggExpGalaxy(pos, flux, re, a, phi)
+			eg = HoggDevGalaxy(pos, flux, re, a, phi)
 			tractor.catalog.append(eg)
 
 	imgs = tractor.getModelImages()
@@ -121,7 +135,13 @@ def main():
 
 	set_fp_err()
 
+	print
+	print 'makeTruth...'
+	print
 	imgs = makeTruth()
+	print
+	print 'done makeTruth.'
+	print
 	tractor = SDSSTractor(imgs)
 
 	xyfn = 'grid0n.xy'
@@ -151,9 +171,29 @@ def main():
 		flux = photocal.countsToFlux(1e6) #sxy.flux[i])
 
 		#cat.append(ExpGalaxy(pos, flux, 1., 0.5, 0.))
-		cat.append(HoggExpGalaxy(pos, flux, 1., 0.5, 0.))
+		#cat.append(HoggExpGalaxy(pos, flux, 1., 0.5, 0.))
+		cat.append(HoggDevGalaxy(pos, flux, 1., 0.5, 0.))
 
-	for step in range(3):
+
+	Nsteps = 30
+
+	for i in range(Nsteps):
+		html = '<html><body>'
+		html += '<p>Step %i ' % i
+		if i > 0:
+			html += '&nbsp;<a href="grid%02i.html">Prev</a>' % (i-1)
+		html += '&nbsp;<a href="grid%02i.html">Next</a>' % (i+1)
+		if i >= 5:
+			html += '&nbsp;<a href="grid%02i.html">-5</a>' % (i-5)
+		html += '&nbsp;<a href="grid%02i.html">+5</a>' % (i+5)
+		html += '</p>'
+		for j in range(2):
+			html += '<img src="grid%02i-%in" width="600" />' % (i,j)
+			html += '<img src="grid%i.png" width="600" />' % j
+		html += '</body></html>'
+		write_file(html, 'grid%02i.html' % i)
+
+	for step in range(Nsteps):
 		imgs = tractor.getModelImages()
 		for i,img in enumerate(imgs):
 			plt.clf()

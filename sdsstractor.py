@@ -372,9 +372,11 @@ class HoggGalaxy(Galaxy):
 		x1 = outx.stop
 		y1 = outy.stop
 		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
-		#print 'rendering', self.shape
-		#print 'total cmix.amp:', cmix.amp.sum()
-		#print 'psf-conv img sum:', psfconvolvedimg.sum()
+
+		print 'psf sum of ampls:', np.sum(psfmix.amp)
+		print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
+		print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
+		print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'x0,y0', x0,y0
@@ -388,7 +390,9 @@ class HoggGalaxy(Galaxy):
 			plt.hot()
 			plt.colorbar()
 			HoggGalaxy.ps.savefig()
-		return Patch(x0, y0, psfconvolvedimg * counts)
+		patch = psfconvolvedimg * counts
+		print 'patch sum:', patch.sum()
+		return Patch(x0, y0, patch)
 
 class HoggExpGalaxy(HoggGalaxy):
 	profile = mp.get_exp_mixture()
