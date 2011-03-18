@@ -326,6 +326,10 @@ class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')
 
 	def __init__(self, pos, flux, re, ab, phi):
+		'''
+		re: [arcsec]
+		phi: [deg]
+		'''
 		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
 
 	def getName(self):

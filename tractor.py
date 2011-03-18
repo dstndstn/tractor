@@ -444,10 +444,17 @@ class WCS(object):
 
 # useful when you're using raw pixel positions rather than RA,Decs
 class NullWCS(WCS):
+	def __init__(self, pixscale=1.):
+		'''
+		pixscale: [arcsec/pix]
+		'''
+		self.pixscale = pixscale
 	def positionToPixel(self, src, pos):
 		return pos
 	def pixelToPosition(self, src, xy):
 		return xy
+	def cdAtPixel(self, x, y):
+		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
 class FitsWcs(object):
 	def __init__(self, wcs):
