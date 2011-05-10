@@ -4,11 +4,19 @@ import pylab as plt
 import numpy as np
 from math import pi, sqrt
 
-def emfit(I, x0, y0, K=2):
-	mu = np.zeros((K, 2))
-	#sig = np.repeat(np.eye(2)[:,:,np.newaxis], 2, axis=2)
-	sig = np.array([np.eye(2) * (i+1) for i in range(K)])
-	w = np.ones(K) / float(K)
+def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
+	if w is None:
+		w = np.ones(K) / float(K)
+	assert(w.shape == (K,))
+	w /= np.sum(w)
+
+	if mu is None:
+		mu = np.zeros((K, 2))
+	assert(mu.shape == (K,2))
+
+	if sig is None:
+		sig = np.array([np.eye(2) * (i+1) for i in range(K)])
+	assert(sig.shape == (K,2,2))
 
 	(H,W) = I.shape
 	X,Y = np.meshgrid(np.arange(W)+x0, np.arange(H)+y0)
@@ -20,7 +28,10 @@ def emfit(I, x0, y0, K=2):
 
 	steps = 1000
 	for step in range(steps):
-		#print 'w, mu, sig', w, mu, sig
+		print 'step', step
+		print '  w=', w
+		print '  mu=', mu
+		print '  sig=', sig
 
 		if step % 10 == 0:
 			IM = render_image(X, Y, w, mu, sig)
@@ -40,20 +51,13 @@ def emfit(I, x0, y0, K=2):
 			ti[k,:] = wi * gauss2d(xy, mi, si)
 		ti /= ti.sum(axis=0)
 
-		#print 'ti', ti.shape
-		#print 'mu', mu.shape
 		for k in range(K):
-			#mu[k,:] = np.average(xy, weights=ti[k,:], axis=0)
 			mu[k,:] = np.average(xy, weights=ti[k,:]*II, axis=0)
 
 		for k in range(K):
-			#print 'xy:', xy.shape
-			#print 'muk:', mu[k,:].shape
 			d = (xy - mu[k,:])
-			#print 'd', d.shape
 			wt = ti[k,:] * II
 			S = np.dot(d.T * wt, d) / np.sum(wt)
-			#print 'S', S.shape
 			sig[k,:,:] = S
 
 		w = np.sum(ti * II, axis=1)
@@ -68,9 +72,7 @@ def gauss2d(X, mu, C):
 def render_image(X,Y, w, mu, sig):
 	I = np.zeros_like(X).astype(float)
 	xy = np.array(zip(X.ravel(), Y.ravel())).astype(float)
-	#print xy.shape
 	for m,wi,s in zip(mu, w, sig):
-		#print 'w,mu,sig', wi,m,s
 		I += wi * gauss2d(xy, m, s).reshape(I.shape)
 	return I
 	
@@ -92,7 +94,6 @@ def main():
 		plt.plot(m[0]-x0, m[1]-y0, 'r.')
 	plt.axis(a)
 	plt.savefig('psf.png')
-
 
 	emfit(I, x0, y0, K=2)
 	
