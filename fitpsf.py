@@ -4,7 +4,69 @@ import pylab as plt
 import numpy as np
 from math import pi, sqrt
 
-def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
+def makevector(w, mu, sig):
+	return np.append(w, np.append(mu.ravel(), sig.ravel()))
+
+def unpackvector(T, K):
+	return T[:K], T[K:K*3].reshape(K,2), T[K*3:].reshape(K,2,2)
+
+def em_update_theta(I, theta):
+	(K,N,II,xy) = I
+	(w, mu, sig) = unpackvector(theta, K)
+	w2,mu2,sig2 = em_update(K,N,II,xy,w,mu,sig)
+	return makevector(w2,mu2,sig2)
+
+def qn1fit(I, x0, y0, K=2, w=None, mu=None, sig=None):
+	(H,W) = I.shape
+	X,Y = np.meshgrid(np.arange(W)+x0, np.arange(H)+y0)
+	II = I.ravel()
+	II /= II.sum()
+	xy = np.array(zip(X.ravel(), Y.ravel())).astype(float)
+	N = len(II)
+
+	I = (K, N, II, xy)
+
+	def ghatfunc(theta):
+		tnew = em_update_theta(I, theta)
+		print 'ghat function:'
+		print '  theta = ', theta
+		print '  tnew  = ', tnew
+		return tnew - theta
+
+	# number of parameters
+	#    w, mu, sig
+	#P = (1 + 2 + 4) * K
+	w,mu,sig = em_init_params(K, w, mu, sig)
+	theta = makevector(w, mu, sig)
+	P = len(theta)
+
+	print 'w,mu,sig', w.shape, mu.shape, sig.shape
+	print 'theta', theta.shape
+
+	ghat = ghatfunc(theta)
+	#em_update_theta(I, theta) - theta
+	print 'ghat', ghat.shape
+	print ghat
+	A = -np.eye(P)
+	print 'A', A.shape
+
+	steps = 10
+	for step in range(steps):
+		deltheta = -np.dot(A, ghat)
+		print 'deltheta', deltheta.shape
+		print deltheta
+		delghat = ghatfunc(theta + deltheta) - ghat
+		print 'delghat', delghat.shape
+		print delghat
+
+		delA = (np.dot(np.dot((deltheta - np.dot(A, delghat)), deltheta.T), A)
+				/ (np.dot(np.dot(deltheta.T, A), delghat)))
+		print 'delA', delA.shape
+		theta += deltheta
+		ghat += delghat
+		A += delA
+
+def em_init_params(K, w, mu, sig):
 	if w is None:
 		w = np.ones(K) / float(K)
 	assert(w.shape == (K,))
@@ -17,6 +79,29 @@ def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
 	if sig is None:
 		sig = np.array([np.eye(2) * (i+1) for i in range(K)])
 	assert(sig.shape == (K,2,2))
+
+	return w, mu, sig
+
+def em_update(K, N, II, xy, w, mu, sig):
+	ti = np.zeros((K,N))
+	for k,(wi,mi,si) in enumerate(zip(w, mu, sig)):
+		ti[k,:] = wi * gauss2d(xy, mi, si)
+	ti /= ti.sum(axis=0)
+
+	for k in range(K):
+		mu[k,:] = np.average(xy, weights=ti[k,:]*II, axis=0)
+
+	for k in range(K):
+		d = (xy - mu[k,:])
+		wt = ti[k,:] * II
+		S = np.dot(d.T * wt, d) / np.sum(wt)
+		sig[k,:,:] = S
+
+	w = np.sum(ti * II, axis=1)
+	return w,mu,sig
+
+def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
+	w,mu,sig = em_init_params(K, w, mu, sig)
 
 	(H,W) = I.shape
 	X,Y = np.meshgrid(np.arange(W)+x0, np.arange(H)+y0)
@@ -46,22 +131,7 @@ def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
 		if step == steps-1:
 			break
 
-		ti = np.zeros((K,N))
-		for k,(wi,mi,si) in enumerate(zip(w, mu, sig)):
-			ti[k,:] = wi * gauss2d(xy, mi, si)
-		ti /= ti.sum(axis=0)
-
-		for k in range(K):
-			mu[k,:] = np.average(xy, weights=ti[k,:]*II, axis=0)
-
-		for k in range(K):
-			d = (xy - mu[k,:])
-			wt = ti[k,:] * II
-			S = np.dot(d.T * wt, d) / np.sum(wt)
-			sig[k,:,:] = S
-
-		w = np.sum(ti * II, axis=1)
-
+		w, mu, sig = em_update(K, N, II, xy, w, mu, sig)
 
 	
 def gauss2d(X, mu, C):
@@ -95,7 +165,8 @@ def main():
 	plt.axis(a)
 	plt.savefig('psf.png')
 
-	emfit(I, x0, y0, K=2)
+	qn1fit(I, x0, y0, K=2)
+	#emfit(I, x0, y0, K=2)
 	
 
 if __name__ == '__main__':
