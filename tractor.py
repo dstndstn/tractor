@@ -848,6 +848,9 @@ class Tractor(object):
 	def getCatalog(self):
 		return self.catalog
 
+	def addSource(self, src):
+		self.catalog.append(src)
+
 	def increasePsfComplexity(self, imagei):
 		print 'Increasing complexity of PSF in image', imagei
 		pBefore = self.getLogProb()
