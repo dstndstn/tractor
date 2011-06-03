@@ -45,10 +45,10 @@ def main():
 	print 'asTrans x,y', x,y
 
 	### debug weird asTrans
-	wcs = Tan(sdss.getFilename('fpC', run, camcol, field, bandname,
-							   rerun=rerun))
-	x1,y1 = wcs.radec2pixelxy(ra,dec)
-	print 'WCS x,y', x1,y1
+	#wcs = Tan(sdss.getFilename('fpC', run, camcol, field, bandname,
+	#						   rerun=rerun))
+	#x1,y1 = wcs.radec2pixelxy(ra,dec)
+	#print 'WCS x,y', x1,y1
 
 
 	# Render ref source into ref (sub-)image.
@@ -121,11 +121,36 @@ def main():
 	print len(I), 'stars'
 	print 'psf counts:', objs.psfcounts[I,bandnum]
 	for i in I:
-
-
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		#flux = SdssFlux(objs.psfcounts[i,bandnum] / SdssPhotoCal.scale)
+		counts = tsf.mag_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		ps = PointSource(pos, flux)
+		tractor.addSource(ps)
+
+	I = np.flatnonzero(Ldev > 0)
+	print len(I), 'deV galaxies'
+	print 'counts:', objs.counts_dev[I,bandnum]
+	for i in I:
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		counts = tsf.mag_to_counts(objs.counts_dev[i,bandnum], bandnum)
+		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		re = objs.r_dev[i,bandnum]
+		ab = objs.ab_dev[i,bandnum]
+		phi = objs.phi_dev[i,bandnum]
+		ps = HoggDevGalaxy(pos, flux, re, ab, phi)
+		tractor.addSource(ps)
+
+	I = np.flatnonzero(Lexp > 0)
+	print len(I), 'exp galaxies'
+	print 'counts:', objs.counts_exp[I,bandnum]
+	for i in I:
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		counts = tsf.mag_to_counts(objs.counts_exp[i,bandnum], bandnum)
+		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		re = objs.r_exp[i,bandnum]
+		ab = objs.ab_exp[i,bandnum]
+		phi = objs.phi_exp[i,bandnum]
+		ps = HoggExpGalaxy(pos, flux, re, ab, phi)
 		tractor.addSource(ps)
 	
 	
