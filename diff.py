@@ -82,6 +82,40 @@ def main():
 	# we don't care about the invvar (for now)
 	invvar = np.zeros_like(image)
 
+
+	### Test EM-fit mixture-of-Gaussians PSF
+	mod = np.zeros_like(image)
+	if False:
+		# render KL PSFs on a grid
+		for x in range(50, 300, 50):
+			for y in range(50, 300, 50):
+				psf = psfield.getPsfAtPoints(bandnum, x+x0, y+y0)
+				S = psf.shape[0]
+				mod[y-S/2 : y-S/2+S, x-S/2 : x-S/2+S] += psf * 1e4
+
+	H,W = mod.shape
+	klpsf = psfield.getPsfAtPoints(bandnum, x0 + W/2, y0 + H/2)
+	S = klpsf.shape[0]
+	from fitpsf import emfit,render_image
+	for K in range(1, 6):
+		xm,ym = -(S/2), -(S/2)
+		w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
+		print 'w,mu,sig', w,mu,sig
+		X,Y = np.meshgrid(np.arange(S)+xm, np.arange(S)+ym)
+		IM = render_image(X, Y, w, mu, sig)
+		plt.clf()
+		plt.subplot(1,3,1)
+		plt.imshow(klpsf, origin='lower', interpolation='nearest')
+		plt.subplot(1,3,2)
+		plt.imshow(IM, origin='lower', interpolation='nearest')
+		plt.subplot(1,3,3)
+		plt.imshow(klpsf-IM, origin='lower', interpolation='nearest')
+		plt.savefig('empsf-%i.png' % K)
+
+	sys.exit(0)
+
+
+
 	timg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,
 				 name='Ref (r/c/f=%i/%i%i)' % (run, camcol, field))
@@ -112,27 +146,28 @@ def main():
 	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
 	Ldev = ((objs.prob_psf[:,bandnum] == 0) * objs.fracpsf[:,bandnum])
 	Lexp = ((objs.prob_psf[:,bandnum] == 0) * (1. - objs.fracpsf[:,bandnum]))
-
 	print 'Lstar', Lstar
 	print 'Ldev', Ldev
 	print 'Lexp', Lexp
 
 	I = np.flatnonzero(Lstar > 0)
 	print len(I), 'stars'
-	print 'psf counts:', objs.psfcounts[I,bandnum]
+	print 'psf luptitudes:', objs.psfcounts[I,bandnum]
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		counts = tsf.mag_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		#counts = tsf.mag_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		counts = tsf.luptitude_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		print 'counts:', counts
 		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		ps = PointSource(pos, flux)
 		tractor.addSource(ps)
 
 	I = np.flatnonzero(Ldev > 0)
 	print len(I), 'deV galaxies'
-	print 'counts:', objs.counts_dev[I,bandnum]
+	print 'luptitudes:', objs.counts_dev[I,bandnum]
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		counts = tsf.mag_to_counts(objs.counts_dev[i,bandnum], bandnum)
+		counts = tsf.luptitude_to_counts(objs.counts_dev[i,bandnum], bandnum)
 		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		re = objs.r_dev[i,bandnum]
 		ab = objs.ab_dev[i,bandnum]
@@ -145,7 +180,7 @@ def main():
 	print 'counts:', objs.counts_exp[I,bandnum]
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		counts = tsf.mag_to_counts(objs.counts_exp[i,bandnum], bandnum)
+		counts = tsf.luptitude_to_counts(objs.counts_exp[i,bandnum], bandnum)
 		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		re = objs.r_exp[i,bandnum]
 		ab = objs.ab_exp[i,bandnum]
@@ -159,14 +194,38 @@ def main():
 
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1])
+	imdiff = dict(interpolation='nearest', origin='lower',
+				  vmin=-10, vmax=10)
 
 	plt.clf()
 	plt.imshow(image, **ima)
+	plt.colorbar()
 	plt.savefig('refimg.png')
 
 	plt.clf()
 	plt.imshow(mod, **ima)
+	plt.colorbar()
 	plt.savefig('refmod.png')
+
+	plt.clf()
+	plt.imshow(image - mod, **imdiff)
+	plt.colorbar()
+	plt.savefig('refdiff.png')
+
+
+
+	imb = dict(interpolation='nearest', origin='lower',
+			   vmin=np.arcsinh(zr[0]-sky), vmax=np.arcsinh(zr[1]-sky))
+	plt.clf()
+	plt.imshow(np.arcsinh(image - sky), **imb)
+	plt.colorbar()
+	plt.savefig('refimg2.png')
+
+	plt.clf()
+	plt.imshow(np.arcsinh(mod - sky), **imb)
+	plt.colorbar()
+	plt.savefig('refmod2.png')
+
 
 
 if __name__ == '__main__':

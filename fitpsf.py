@@ -100,7 +100,8 @@ def em_update(K, N, II, xy, w, mu, sig):
 	w = np.sum(ti * II, axis=1)
 	return w,mu,sig
 
-def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
+def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None, plots=False,
+		  printlog=True):
 	w,mu,sig = em_init_params(K, w, mu, sig)
 
 	(H,W) = I.shape
@@ -113,12 +114,13 @@ def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
 
 	steps = 1000
 	for step in range(steps):
-		print 'step', step
-		print '  w=', w
-		print '  mu=', mu
-		print '  sig=', sig
+		if printlog:
+			print 'step', step
+			print '  w=', w
+			print '  mu=', mu
+			print '  sig=', sig
 
-		if step % 10 == 0:
+		if plots and step % 10 == 0:
 			IM = render_image(X, Y, w, mu, sig)
 			plt.clf()
 			plt.imshow(IM, interpolation='nearest', origin='lower')
@@ -132,6 +134,8 @@ def emfit(I, x0, y0, K=2, w=None, mu=None, sig=None):
 			break
 
 		w, mu, sig = em_update(K, N, II, xy, w, mu, sig)
+
+	return w, mu, sig
 
 	
 def gauss2d(X, mu, C):
@@ -166,7 +170,7 @@ def main():
 	plt.savefig('psf.png')
 
 	qn1fit(I, x0, y0, K=2)
-	#emfit(I, x0, y0, K=2)
+	#emfit(I, x0, y0, K=2, plots=True)
 	
 
 if __name__ == '__main__':
