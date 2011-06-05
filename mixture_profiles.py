@@ -157,9 +157,10 @@ class MixtureOfGaussians():
 		rtn = c_gauss_2d(pos, self.amp, self.mean, self.var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d failed')
+		x, y = meshgrid()
 		return result
 
-	def evaluate_grid(self, xlo, xhi, ylo, yhi):
+	def evaluate_grid_dstn(self, xlo, xhi, ylo, yhi):
 		from mix import c_gauss_2d_grid
 		assert(self.D == 2)
 		NX = xhi - xlo - 1
@@ -171,8 +172,16 @@ class MixtureOfGaussians():
 			raise RuntimeError('c_gauss_2d_grid failed')
 		return result
 
-	evaluate = evaluate_2
+	def evaluate_grid_hogg(self, xlo, xhi, ylo, yhi):
+		assert(self.D == 2)
+		xy = np.array(np.meshgrid(range(xlo, xhi), range(ylo, yhi)))
+		D, nx, ny = xy.shape
+		xy = xy.reshape((D, nx * ny)).T
+		result = self.evaluate_1(xy)
+		return result.reshape((nx, ny))
 
+	evaluate = evaluate_2
+	evaluate_grid = evaluate_grid_hogg
 
 # input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
 # output: a patch
