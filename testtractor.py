@@ -14,7 +14,7 @@ class TestTractor(Tractor):
 def main():
 	W,H = 300,200
 
-	psf = NGaussianPSF([2.], [1.])
+	psf = NCircularGaussianPSF([2.], [1.])
 	cx,cy,flux = 100., 80., 1000.
 
 	image = np.zeros((H,W))

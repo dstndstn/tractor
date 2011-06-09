@@ -718,7 +718,7 @@ def testGalaxy():
 	invvar = np.zeros_like(image) + 1.
 	wcs = NullWCS()
 	photocal = NullPhotoCal()
-	psf = NGaussianPSF([1.5], [1.0])
+	psf = NCircularGaussianPSF([1.5], [1.0])
 	sky = ConstantSky(0.)
 	
 	img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
@@ -905,7 +905,7 @@ def prepareTractor(initialPlots=False, useSimplexy=True, rcfcut=None):
 		print 'Creating double-Gaussian PSF approximation'
 		print '  ', dgpsf
 		(a,s1, b,s2) = dgpsf
-		psf = NGaussianPSF([s1, s2], [a, b])
+		psf = NCircularGaussianPSF([s1, s2], [a, b])
 
 		wcs = SdssWcs(tsfield.getAsTrans(bandname))
 		wcs.setX0Y0(x0, y0)

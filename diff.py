@@ -58,7 +58,7 @@ def main():
 	print 'Creating double-Gaussian PSF approximation'
 	print '  ', dgpsf
 	(a,s1, b,s2) = dgpsf
-	psf = NGaussianPSF([s1, s2], [a, b])
+	psf = NCircularGaussianPSF([s1, s2], [a, b])
 
 	# half cutout size
 	dpix = 150

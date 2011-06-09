@@ -54,8 +54,8 @@ def main():
 
 	Pixel position in image 1: 162.38751309 22.0818652585
 
-	* NGaussianPSF: sigmas [ 0.911, 2.687, 9.871, 7.172, 18.284 ], weights [ 1.005, 0.083, -0.032, -0.007, 0.138 ]
-	* NGaussianPSF: sigmas [ 1.014, 1.507, 3.778, 4.812 ], weights [ 1.002, 0.037, 0.050, 0.065 ]
+	* NCircularGaussianPSF: sigmas [ 0.911, 2.687, 9.871, 7.172, 18.284 ], weights [ 1.005, 0.083, -0.032, -0.007, 0.138 ]
+	* NCircularGaussianPSF: sigmas [ 1.014, 1.507, 3.778, 4.812 ], weights [ 1.002, 0.037, 0.050, 0.065 ]
 	'''
 
 	'''
@@ -399,7 +399,7 @@ if __name__ == '__main__':
 	image = np.zeros((H,W))
 	invvar = np.zeros_like(image) + 1.
 	photocal = SdssPhotoCal(SdssPhotoCal.scale)
-	psf = NGaussianPSF([1.5], [1.0])
+	psf = NCircularGaussianPSF([1.5], [1.0])
 	sky = 0.
 	img = Image(data=image, invvar=invvar, psf=psf, wcs=wcs, sky=sky,
 				photocal=photocal)

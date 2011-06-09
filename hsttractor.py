@@ -117,7 +117,7 @@ def main():
 	plt.savefig('chi2.png')
 
 	# Initialize with a totally bogus Gaussian PSF model.
-	psf = NGaussianPSF([2.0], [1.0])
+	psf = NCircularGaussianPSF([2.0], [1.0])
 
 	# test it...
 	if False:

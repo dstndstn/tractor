@@ -27,7 +27,7 @@ def gettractor():
 			   -pixscale/3600., 0, 0, -pixscale/3600., W, H)
 	wcs = FitsWcs(wcs1)
 	photocal = NullPhotoCal()
-	psf = NGaussianPSF([1.], [1.])
+	psf = NCircularGaussianPSF([1.], [1.])
 	sky = ConstantSky(0.)
 	
 	img = Image(data=image, invvar=invvar, psf=psf,

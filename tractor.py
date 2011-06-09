@@ -675,8 +675,101 @@ class PSF(Params):
 	def isValidParamStep(self, dparam):
 		return True
 
+class GaussianMixturePSF(Params):
+	# Call into MOG to set params, or keep my own copy (via MultiParams)
+	def __init__(self, amp, mean, var):
+		self.mog = mp.MixtureOfGaussians(amp, mean, var)
+		assert(self.mog.D == 2)
+		self.radius = 25
 
-class NGaussianPSF(MultiParams):
+	def getMixtureOfGaussians(self):
+		return self.mog
+	def proposeIncreasedComplexity(self, img):
+		raise
+	def getStepSizes(self, img):
+		K = self.mog.K
+		# amp + mean + var
+		# FIXME: -1 for normalization?
+		#  : -K for variance symmetry
+		return [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
+
+	def isValidParamStep(self, dparam):
+		## FIXME
+		return True
+	def applyTo(self, image):
+		raise
+	def getNSigma(self):
+		# MAGIC -- N sigma for rendering patches
+		return 5.
+	def getRadius(self):
+		# sqrt(det(var)) ?
+		# hmm, really, max(eigenvalue)
+		# well, enclosing circle of mu + Nsigma * eigs
+		#K = self.mog.K
+		#return self.getNSigma * np.max(self.mog.
+		# HACK!
+		return self.radius
+	# returns a Patch object.
+	def getPointSourcePatch(self, px, py):
+		r = self.getRadius()
+		x0,x1 = int(floor(px-r)), int(ceil(px+r))
+		y0,y1 = int(floor(py-r)), int(ceil(py+r))
+		return mp.mixture_to_patch(self.mog, (x0,y0+1), (x1,y1+1))
+
+	#def getNamedParams(self):
+	#	return [('sigmas', 0), ('weights', 1)]
+	def __str__(self):
+		return 'GaussianMixturePSF: ' + str(self.mog)
+	def hashkey(self):
+		return ('GaussianMixturePSF',
+				tuple(self.mog.amp.ravel()),
+				tuple(self.mog.mean.ravel()),
+				tuple(self.mog.var.ravel()),)
+	
+	def copy(self):
+		return self.mog.copy()
+
+	def numberOfParams(self):
+		K = self.mog.K
+		return K * (1 + 2 + 3)
+
+	def stepParam(self, parami, delta):
+		K = self.mog.K
+		if parami < K:
+			self.mog.amp[parami] += delta
+			return
+		parami -= K
+		if parami < (K*2):
+			i,j = parami / 2, parami % 2
+			self.mog.mean[i,j] += delta
+			return
+		parami -= 2*K
+		i,j = parami / 3, parami % 3
+		if j in [0,1]:
+			self.mog.var[i,j,j] += deltai
+		else:
+			self.mog.var[i,0,1] += deltai
+			self.mog.var[i,1,0] += deltai
+
+	# Returns a *copy* of the current parameter values (list)
+	def getParams(self):
+		p = list(self.mog.amp) + list(self.mog.mean.ravel())
+		for v in self.mog.var:
+			p += (v[0,0], v[1,1], v[0,1])
+		return p
+
+	def setParams(self, p):
+		K = self.mog.K
+		self.mog.amp = p[:K]
+		pp = p[K:]
+		self.mog.mean = np.array(pp[:K*2]).reshape(K,D)
+		pp = pp[K*2:]
+		self.mog.var[:,0,0] = pp[::3]
+		self.mog.var[:,1,1] = pp[1::3]
+		self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
+
+	
+class NCircularGaussianPSF(MultiParams):
 	def __init__(self, sigmas, weights):
 		'''
 		Creates a new N-Gaussian (concentric, isotropic) PSF.
@@ -688,7 +781,7 @@ class NGaussianPSF(MultiParams):
 		due to the second component will be 0.1.  These values will be
 		normalized so that the total mass of the PSF is 1.0.
 
-		eg,   NGaussianPSF([1.5, 4.0], [0.8, 0.2])
+		eg,   NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
 		'''
 		assert(len(sigmas) == len(weights))
 		MultiParams.__init__(self, ParamList(*sigmas), ParamList(*weights))
@@ -697,14 +790,14 @@ class NGaussianPSF(MultiParams):
 		return [('sigmas', 0), ('weights', 1)]
 
 	def __str__(self):
-		return ('NGaussianPSF: sigmas [ ' +
+		return ('NCircularGaussianPSF: sigmas [ ' +
 				', '.join(['%.3f'%s for s in self.sigmas]) +
 				' ], weights [ ' +
 				', '.join(['%.3f'%w for w in self.weights]) +
 				' ]')
 
 	def __repr__(self):
-		return ('NGaussianPSF: sigmas [ ' +
+		return ('NCircularGaussianPSF: sigmas [ ' +
 				', '.join(['%.3f'%s for s in self.sigmas]) +
 				' ], weights [ ' +
 				', '.join(['%.3f'%w for w in self.weights]) +
@@ -719,7 +812,7 @@ class NGaussianPSF(MultiParams):
 		maxs = np.max(self.sigmas)
 		# MAGIC -- make new Gaussian with variance bigger than the biggest
 		# so far
-		return NGaussianPSF(list(self.sigmas) + [maxs + 1.],
+		return NCircularGaussianPSF(list(self.sigmas) + [maxs + 1.],
 							list(self.weights) + [0.05])
 
 	def getStepSizes(self, img):
@@ -748,10 +841,10 @@ class NGaussianPSF(MultiParams):
 		self.weights.setParams([w/mx for w in self.weights])
 
 	def hashkey(self):
-		return ('NGaussianPSF', tuple(self.sigmas), tuple(self.weights))
+		return ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
 	
 	def copy(self):
-		return NGaussianPSF(list([s for s in self.sigmas]),
+		return NCircularGaussianPSF(list([s for s in self.sigmas]),
 							list([w for w in self.weights]))
 
 	def applyTo(self, image):

@@ -53,7 +53,7 @@ def makeTruth():
 	wcs2 = FitsWcs(wcs)
 
 	photocal = SdssPhotoCal(SdssPhotoCal.scale)
-	psf = NGaussianPSF([2.0], [1.0])
+	psf = NCircularGaussianPSF([2.0], [1.0])
 	sky = 0.
 	skyobj = ConstantSky(sky)
 	flux = SdssFlux(1.)
