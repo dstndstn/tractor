@@ -100,6 +100,17 @@ def main():
 	gpsf = []
 	for K in range(1, 6):
 		xm,ym = -(S/2), -(S/2)
+
+		from fitpsf import em_init_params
+		from emfit import em_fit_2d
+		w,mu,sig = em_init_params(K, None, None, None)
+		II = klpsf.ravel()
+		II /= II.sum()
+		print 'Starting C fit...'
+		em_fit_2d(II, xm, ym, w, mu, sig)
+		print 'w,mu,sig', w,mu,sig
+
+		print 'Starting fit...'
 		w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
 		print 'w,mu,sig', w,mu,sig
 		X,Y = np.meshgrid(np.arange(S)+xm, np.arange(S)+ym)
