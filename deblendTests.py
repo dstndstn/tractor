@@ -15,6 +15,11 @@ def addexpgal(x, y, flux, re, ab, theta, wcs, tractor):
 	g1 = HoggExpGalaxy(rd1, Flux(flux), re, ab, theta)
 	tractor.catalog.append(g1)
 
+def addstar(x, y, flux, wcs, tractor):
+	rd1 = wcs.pixelToPosition(None, (x, y))
+	s1 = PointSource(rd1, Flux(flux))
+	tractor.catalog.append(s1)
+
 def gettractor():
 	W,H = 200,200
 	image = np.zeros((H,W))
@@ -86,13 +91,37 @@ def writeimg(tractor, visit):
 	print 'wrote', fn
 
 
+# two galaxies, bright & fairly well separated
 def test0():
+	tractor,wcs = gettractor()
+	addexpgal( 85., 100., 1e5, 20., 0.5,  0., wcs, tractor)
+	addexpgal(115., 100., 1e5, 20., 0.5, 90., wcs, tractor)
+	writeimg(tractor, 0)
+
+# closer together
+def test1():
+	tractor,wcs = gettractor()
+	addexpgal( 90., 100., 1e5, 20., 0.5,  0., wcs, tractor)
+	addexpgal(110., 100., 1e5, 20., 0.5, 90., wcs, tractor)
+	writeimg(tractor, 1)
+
+# fainter
+def test2():
 	tractor,wcs = gettractor()
 	addexpgal( 90., 100., 1e4, 20., 0.5,  0., wcs, tractor)
 	addexpgal(110., 100., 1e4, 20., 0.5, 90., wcs, tractor)
-	writeimg(tractor, 0)
+	writeimg(tractor, 2)
 
-def test1():
+# galaxy + 2 point sources
+def test3():
+	tractor,wcs = gettractor()
+	addexpgal( 90., 100., 1e5, 20., 0.5,  0., wcs, tractor)
+	addstar(90., 120., 1e3, wcs, tractor)
+	addstar(100., 100., 1e3, wcs, tractor)
+	writeimg(tractor, 3)
+
+
+def test10():
 	tractor,wcs = gettractor()
 	S = 40.
 	X = np.arange(S/2., 200, S)
@@ -103,9 +132,9 @@ def test1():
 			theta = (j+0.5)/len(Y) * 90.
 			print 'ab', ab, 'theta', theta
 			addexpgal(x, y, 1e5, 20., ab,  theta, wcs, tractor)
-	writeimg(tractor, 1)
+	writeimg(tractor, 10)
 
-def test2():
+def test11():
 	tractor,wcs = gettractor()
 	S = 40.
 	X = np.arange(S/2., 200, S)
@@ -116,12 +145,26 @@ def test2():
 			theta = (j+0.5)/len(Y) * 90.
 			print 'ab', ab, 'theta', theta
 			addexpgal(x, y, 1e6 * np.sqrt(ab), 20., ab,  theta, wcs, tractor)
-	writeimg(tractor, 2)
+	writeimg(tractor, 11)
+
+def test2x():
+	ab = 0.4
+	tstep = 18.
+	for i in range(10):
+		theta = tstep * i
+		tractor,wcs = gettractor()
+		addexpgal(100., 100., 1e6 * np.sqrt(ab), 20., ab,  theta, wcs, tractor)
+		writeimg(tractor, 20 + i)
+
 
 
 if __name__ == '__main__':
-	test0()
-	test1()
-	test2()
+	#test0()
+	#test1()
+	#test2()
+	test3()
+	test2x()
+	#test10()
+	#test11()
 	
 			
