@@ -110,7 +110,8 @@
 
 
 
-    static int c_gauss_2d_grid(int xlo, int xhi, int ylo, int yhi,
+    static int c_gauss_2d_grid(double xlo, double xstep, int NX,
+							   double ylo, double ystep, int NY,
 							   PyObject* np_amp,
 							   PyObject* np_mean, PyObject* np_var,
 							   PyObject* np_result) {
@@ -123,7 +124,7 @@
 		double tpd;
 		double* scale, *ivar;
 		int ix, iy;
-		int NY, NX;
+		double x, y;
 
 		tpd = pow(2.*M_PI, D);
 
@@ -132,8 +133,6 @@
 		np_var = PyArray_FromAny(np_var, dtype, 3, 3, req, NULL);
 		np_result = PyArray_FromAny(np_result, dtype, 2, 2, reqout, NULL);
 
-		NY = yhi - ylo - 1;
-		NX = xhi - xlo - 1;
 		N = NY * NX;
 		K = PyArray_DIM(np_amp, 0);
 		if ((PyArray_DIM(np_mean, 0) != K) ||
@@ -174,10 +173,10 @@
 		}
 		
 		i = 0;
+		y = ylo;
 		for (iy=0; iy<NY; iy++) {
-			double y = ylo + iy;
+			x = xlo;
 			for (ix=0; ix<NX; ix++) {
-				double x = xlo + ix;
 				for (k=0; k<K; k++) {
 					double dsq;
 					double dx,dy;
@@ -193,7 +192,9 @@
 					assert(i == (iy*NX + ix));
 				}
 				i++;
+				x += xstep;
 			}
+			y += ystep;
 		}
 		free(scale);
 		free(ivar);

@@ -97,6 +97,7 @@ def main():
 	klpsf = psfield.getPsfAtPoints(bandnum, x0 + W/2, y0 + H/2)
 	S = klpsf.shape[0]
 	from fitpsf import emfit,render_image
+	gpsf = []
 	for K in range(1, 6):
 		xm,ym = -(S/2), -(S/2)
 		w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
@@ -110,10 +111,20 @@ def main():
 		plt.imshow(IM, origin='lower', interpolation='nearest')
 		plt.subplot(1,3,3)
 		plt.imshow(klpsf-IM, origin='lower', interpolation='nearest')
+		plt.title('RMS difference: %g' % (sqrt(np.mean((klpsf-IM)**2))))
 		plt.savefig('empsf-%i.png' % K)
 
-	sys.exit(0)
+		p = GaussianMixturePSF(w, mu, sig)
+		gpsf.append(p)
+		plt.clf()
+		plt.imshow(p.getPointSourcePatch(50, 50).patch,
+				   origin='lower', interpolation='nearest')
+		plt.savefig('empsf-%ib.png' % K)
 
+		if K == 2:
+			break
+
+	psf = gpsf[-1]
 
 
 	timg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,

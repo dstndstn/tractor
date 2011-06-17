@@ -676,6 +676,10 @@ class PSF(Params):
 		return True
 
 class GaussianMixturePSF(Params):
+	'''
+	A PSF model that is a mixture of general 2-D Gaussians
+	(characterized by amplitude, mean, covariance)
+	'''
 	# Call into MOG to set params, or keep my own copy (via MultiParams)
 	def __init__(self, amp, mean, var):
 		self.mog = mp.MixtureOfGaussians(amp, mean, var)
@@ -714,7 +718,8 @@ class GaussianMixturePSF(Params):
 		r = self.getRadius()
 		x0,x1 = int(floor(px-r)), int(ceil(px+r))
 		y0,y1 = int(floor(py-r)), int(ceil(py+r))
-		return mp.mixture_to_patch(self.mog, (x0,y0+1), (x1,y1+1))
+		grid = self.mog.evaluate_grid_dstn(x0-px, x1-px, y0-py, y1-py)
+		return Patch(x0, y0, grid)
 
 	#def getNamedParams(self):
 	#	return [('sigmas', 0), ('weights', 1)]
@@ -770,6 +775,9 @@ class GaussianMixturePSF(Params):
 
 	
 class NCircularGaussianPSF(MultiParams):
+	'''
+	A PSF model using N concentric, circular Gaussians.
+	'''
 	def __init__(self, sigmas, weights):
 		'''
 		Creates a new N-Gaussian (concentric, isotropic) PSF.
