@@ -29,6 +29,13 @@ def main():
 	rerun = 0
 
 	ra,dec = 53.202125, -0.365361
+
+	for filetype in ['fpC', 'tsObj', 'tsField', 'psField']:
+		fn = sdss.getFilename(filetype, run, camcol, field, bandname)
+		print 'Looking for file', fn
+		if not os.path.exists(fn):
+			print 'Retrieving', fn
+			sdss.retrieve(filetype, run, camcol, field, bandnum)
 	
 	fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
 	fpC = fpC.astype(float) - sdss.softbias
@@ -43,13 +50,6 @@ def main():
 	#print 'astrans', astrans
 	x,y = astrans.radec_to_pixel(ra, dec)
 	print 'asTrans x,y', x,y
-
-	### debug weird asTrans
-	#wcs = Tan(sdss.getFilename('fpC', run, camcol, field, bandname,
-	#						   rerun=rerun))
-	#x1,y1 = wcs.radec2pixelxy(ra,dec)
-	#print 'WCS x,y', x1,y1
-
 
 	# Render ref source into ref (sub-)image.
 
@@ -104,8 +104,10 @@ def main():
 		from fitpsf import em_init_params
 		from emfit import em_fit_2d
 		w,mu,sig = em_init_params(K, None, None, None)
-		II = klpsf.ravel()
+		II = klpsf.copy()
 		II /= II.sum()
+		print 'II', II
+		print 'max II', II.max()
 		print 'Starting C fit...'
 		em_fit_2d(II, xm, ym, w, mu, sig)
 		print 'w,mu,sig', w,mu,sig
