@@ -8,8 +8,8 @@ c_swig_module = Extension('_emfit',
 						  include_dirs = numpy_inc,
 						  extra_objects = [],
 						  undef_macros=['NDEBUG'],
-						  extra_compile_args=['-O0','-g'],
-						  extra_link_args=['-O0', '-g'],
+						  #extra_compile_args=['-O0','-g'],
+						  #extra_link_args=['-O0', '-g'],
 						  )
 
 setup(name = 'EM fit of Gaussian mixture',

@@ -106,15 +106,15 @@ def main():
 		w,mu,sig = em_init_params(K, None, None, None)
 		II = klpsf.copy()
 		II /= II.sum()
-		print 'II', II
+		#print 'II', II
 		print 'max II', II.max()
 		print 'Starting C fit...'
 		em_fit_2d(II, xm, ym, w, mu, sig)
 		print 'w,mu,sig', w,mu,sig
 
-		print 'Starting fit...'
-		w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
-		print 'w,mu,sig', w,mu,sig
+		#print 'Starting fit...'
+		#w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
+		#print 'w,mu,sig', w,mu,sig
 		X,Y = np.meshgrid(np.arange(S)+xm, np.arange(S)+ym)
 		IM = render_image(X, Y, w, mu, sig)
 		plt.clf()
@@ -134,8 +134,8 @@ def main():
 				   origin='lower', interpolation='nearest')
 		plt.savefig('empsf-%ib.png' % K)
 
-		if K == 2:
-			break
+		#if K == 2:
+		#	break
 
 	psf = gpsf[-1]
 

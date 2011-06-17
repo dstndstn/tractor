@@ -67,7 +67,7 @@
 		}
 
 		K = PyArray_DIM(np_amp, 0);
-		printf("K=%i\n", K);
+		// printf("K=%i\n", K);
 		if ((PyArray_DIM(np_mean, 0) != K) ||
 			(PyArray_DIM(np_mean, 1) != D)) {
             ERR("np_mean must be K x D");
@@ -94,12 +94,13 @@
 		ivar = malloc(K * D * D * sizeof(double));
 		assert(scale && ivar);
 
-		printf("NX=%i, NY=%i; N=%i\n", NX, NY, N);
+		// printf("NX=%i, NY=%i; N=%i\n", NX, NY, N);
 
 		for (step=0; step<1000; step++) {
 			double x,y;
 			double wsum[K];
 
+			/*
 			printf("step=%i\n", step);
 			printf("weights ");
 			for (k=0; k<K; k++)
@@ -121,7 +122,7 @@
 				printf("] ");
 			}
 			printf("\n");
-
+			 */
 
 			memset(Z, 0, K*N*sizeof(double));
 			for (k=0; k<K; k++) {
@@ -137,7 +138,7 @@
 				scale[k] = amp[k] / sqrt(tpd * det);
 			}
 
-			printf("E step...\n");
+			// printf("E step...\n");
 			i = 0;
 			for (iy=0; iy<NY; iy++) {
 				for (ix=0; ix<NX; ix++) {
@@ -160,22 +161,22 @@
 
 						zi = scale[k] * exp(-0.5 * dsq);
 						Z[i*K + k] = zi;
-						printf("Z(i=%i, k=%i) = %g\n", i, k, zi);
+						// printf("Z(i=%i, k=%i) = %g\n", i, k, zi);
 						zsum += zi;
 						//assert(i == (iy*NX + ix));
 					}
-					printf("i=%i, ix,iy=%i,%i  zsum=%g\n", i, ix, iy, zsum);
+					// printf("i=%i, ix,iy=%i,%i  zsum=%g\n", i, ix, iy, zsum);
 					if (zsum == 0)
 						continue;
 					for (k=0; k<K; k++) {
 						Z[i*K + k] /= zsum;
-						printf("normalized Z(i=%i, k=%i) = %g\n", i, k, Z[i*K+k]);
+						// printf("normalized Z(i=%i, k=%i) = %g\n", i, k, Z[i*K+k]);
 					}
 					//i++;
 				}
 			}
 
-			printf("M mu...\n");
+			// printf("M mu...\n");
 			// M: mu
 			memset(mean, 0, K*D*sizeof(double));
 			for (k=0; k<K; k++) {
@@ -197,7 +198,7 @@
 			}
 
 			// M: var
-			printf("M var...\n");
+			// printf("M var...\n");
 			memset(var, 0, K*D*D*sizeof(double));
 			for (k=0; k<K; k++) {
 				i = 0;
@@ -221,7 +222,7 @@
 			}
 
 			// M: amp
-			printf("M amp...\n");
+			// printf("M amp...\n");
 			for (k=0; k<K; k++)
 				amp[k] = wsum[k];
 		}
