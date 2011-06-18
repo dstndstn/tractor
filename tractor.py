@@ -49,6 +49,11 @@ class PlotSequence(object):
 		self.ploti += 1
 
 class Params(object):
+	'''
+	A set of parameters that can be optimized by the Tractor.
+
+	This is a duck-type definition.
+	'''
 	def __hash__(self):
 		return hash(self.hashkey())
 	def __eq__(self, other):
@@ -71,8 +76,10 @@ class Params(object):
 	def getStepSizes(self, *args, **kwargs):
 		return []
 
-# An implementation of Params that holds values in a list.
 class ParamList(Params):
+	'''
+	An implementation of Params that holds values in a list.
+	'''
 	def __init__(self, *args):
 		self.vals = list(args)
 		self.namedparams = self.getNamedParams()
@@ -90,8 +97,10 @@ class ParamList(Params):
 		return len(self.vals)
 	def stepParam(self, parami, delta):
 		self.vals[parami] += delta
-	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
+		'''
+		Returns a *copy* of the current parameter values (list)
+		'''
 		return list(self.vals)
 	def setParams(self, p):
 		assert(len(p) == len(self.vals))
@@ -125,8 +134,10 @@ class ParamList(Params):
 	def __iter__(self):
 		return ParamList.ParamListIter(self)
 
-# An implementation of Params that combines component sub-Params.
 class MultiParams(Params):
+	'''
+	An implementation of Params that combines component sub-Params.
+	'''
 	def __init__(self, *args):
 		self.subs = args
 		self.namedparams = self.getNamedParams()
@@ -179,6 +190,9 @@ class MultiParams(Params):
 
 
 class Sky(Params):
+	'''
+	Duck-type definition for the sky model.
+	'''
 	def hashkey(self):
 		return ('Sky',)
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
@@ -210,9 +224,11 @@ class ConstantSky(ParamList):
 	
 
 
-# This is just the duck-type definition
 class Source(Params):
 	'''
+	This is the duck-type definition of a Source (star, galaxy, etc)
+	that the Tractor use.
+	
 	Must be hashable: see
 	  http://docs.python.org/glossary.html#term-hashable
 	'''
@@ -228,6 +244,10 @@ class Source(Params):
 
 
 class PointSource(MultiParams):
+	'''
+	An implementation of a point source, characterized by its position
+	and flux.
+	'''
 	def __init__(self, pos, flux):
 		MultiParams.__init__(self, pos, flux)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
@@ -254,8 +274,10 @@ class PointSource(MultiParams):
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		return patch * counts
 
-	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img, fluxonly=False):
+		'''
+		returns [ Patch, Patch, ... ] of length numberOfParams().
+		'''
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
@@ -285,6 +307,9 @@ class PointSource(MultiParams):
 		return derivs
 
 class Flux(ParamList):
+	'''
+	A simple one-band Flux implementation.
+	'''
 	def hashkey(self):
 		return ('Flux', self.val)
 	def getNamedParams(self):
@@ -301,6 +326,9 @@ class Flux(ParamList):
 		return [0.1]
 
 class PixPos(ParamList):
+	'''
+	A Position implementation using pixel positions.
+	'''
 	def getNamedParams(self):
 		return [('x', 0), ('y', 1)]
 	def __str__(self):
@@ -318,6 +346,9 @@ class PixPos(ParamList):
 		return [0.1, 0.1]
 
 class RaDecPos(ParamList):
+	'''
+	A Position implementation using RA,Dec positions.
+	'''
 	def getNamedParams(self):
 		return [('ra', 0), ('dec', 1)]
 	def __str__(self):
@@ -334,11 +365,14 @@ class RaDecPos(ParamList):
 		return [1e-4, 1e-4]
 
 
-
 def randomint():
 	return int(random.random() * (2**32)) #(2**48))
 
 class Image(object):
+	'''
+	An image plus its calibration information.  The Tractor handles
+	multiple Images.
+	'''
 	def __init__(self, data=None, invvar=None, psf=None, sky=None, wcs=None,
 				 photocal=None, name=None):
 		self.data = data
@@ -392,6 +426,10 @@ class Image(object):
 		return self.photocal
 
 class PhotoCal(object):
+	'''
+	Photometric calibration.  Converts a Flux object to counts in an
+	Image.
+	'''
 	def fluxToCounts(self, flux):
 		pass
 	def countsToFlux(self, counts):
@@ -403,6 +441,9 @@ class PhotoCal(object):
 	#	return []
 
 class NullPhotoCal(object):
+	'''
+	The "identity" PhotoCal -- the Flux objects are in units of Image counts.
+	'''
 	def fluxToCounts(self, flux):
 		return flux.getValue()
 	def countsToFlux(self, counts):
@@ -414,6 +455,10 @@ class NullPhotoCal(object):
 	#	return []
 
 class WCS(object):
+	'''
+	World Coordinate System definition for the Tractor -- converts
+	between Position objects and Image pixel coordinates.
+	'''
 	def positionToPixel(self, src, pos):
 		'''
 		Returns tuple (x, y) -- or any duck that supports
@@ -442,8 +487,11 @@ class WCS(object):
 		'''
 		return None
 
-# useful when you're using raw pixel positions rather than RA,Decs
 class NullWCS(WCS):
+	'''
+	The "identity" WCS -- useful when you are using raw pixel
+	positions rather than RA,Decs.
+	'''
 	def __init__(self, pixscale=1.):
 		'''
 		pixscale: [arcsec/pix]
@@ -457,6 +505,9 @@ class NullWCS(WCS):
 		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
 class FitsWcs(object):
+	'''
+	A WCS implementation that wraps a FITS WCS object.
+	'''
 	def __init__(self, wcs):
 		self.wcs = wcs
 
@@ -474,6 +525,9 @@ class FitsWcs(object):
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
 class Patch(object):
+	'''
+	An image + pixel offset
+	'''
 	def __init__(self, x0, y0, patch):
 		self.x0 = x0
 		self.y0 = y0
