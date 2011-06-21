@@ -1,5 +1,3 @@
-
-
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -71,7 +69,8 @@ def main():
 	image = fpC[roislice]
 
 	wcs = SdssWcs(astrans)
-	wcs.setX0Y0(x0, y0)
+	# Mysterious half-pixel shift.  asTrans pixel coordinates?
+	wcs.setX0Y0(x0+0.5, y0+0.5)
 
 	photocal = SdssPhotoCal(SdssPhotoCal.scale)
 	sky = psfield.getSky(bandnum)
@@ -81,7 +80,6 @@ def main():
 
 	# we don't care about the invvar (for now)
 	invvar = np.zeros_like(image)
-
 
 	### Test EM-fit mixture-of-Gaussians PSF
 	mod = np.zeros_like(image)
@@ -181,10 +179,15 @@ def main():
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		#counts = tsf.mag_to_counts(objs.psfcounts[i,bandnum], bandnum)
 		counts = tsf.luptitude_to_counts(objs.psfcounts[i,bandnum], bandnum)
-		print 'counts:', counts
+		#print 'counts:', counts
 		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		ps = PointSource(pos, flux)
 		tractor.addSource(ps)
+
+		#x,y = wcs.positionToPixel(None, pos)
+		#r,c = objs.rowc[i,bandnum],objs.colc[i,bandnum]
+		#print 'x,y', x+x0, y+y0
+		#print 'c,r', c, r
 
 	I = np.flatnonzero(Ldev > 0)
 	print len(I), 'deV galaxies'
