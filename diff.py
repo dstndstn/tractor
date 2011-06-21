@@ -81,62 +81,25 @@ def main():
 	# we don't care about the invvar (for now)
 	invvar = np.zeros_like(image)
 
-	### Test EM-fit mixture-of-Gaussians PSF
 	mod = np.zeros_like(image)
-	if False:
-		# render KL PSFs on a grid
-		for x in range(50, 300, 50):
-			for y in range(50, 300, 50):
-				psf = psfield.getPsfAtPoints(bandnum, x+x0, y+y0)
-				S = psf.shape[0]
-				mod[y-S/2 : y-S/2+S, x-S/2 : x-S/2+S] += psf * 1e4
-
 	H,W = mod.shape
+
+	# Create Gaussian mixture model PSF approximation.
 	klpsf = psfield.getPsfAtPoints(bandnum, x0 + W/2, y0 + H/2)
 	S = klpsf.shape[0]
-	from fitpsf import emfit,render_image
-	gpsf = []
-	for K in range(1, 6):
-		xm,ym = -(S/2), -(S/2)
+	# works well enough
+	K = 3
+	from fitpsf import em_init_params
+	from emfit import em_fit_2d
+	w,mu,sig = em_init_params(K, None, None, None)
+	II = klpsf.copy()
+	II /= II.sum()
 
-		from fitpsf import em_init_params
-		from emfit import em_fit_2d
-		w,mu,sig = em_init_params(K, None, None, None)
-		II = klpsf.copy()
-		II /= II.sum()
-		#print 'II', II
-		print 'max II', II.max()
-		print 'Starting C fit...'
-		em_fit_2d(II, xm, ym, w, mu, sig)
-		print 'w,mu,sig', w,mu,sig
-
-		#print 'Starting fit...'
-		#w,mu,sig = emfit(klpsf, xm, ym, K, printlog=False)
-		#print 'w,mu,sig', w,mu,sig
-		X,Y = np.meshgrid(np.arange(S)+xm, np.arange(S)+ym)
-		IM = render_image(X, Y, w, mu, sig)
-		plt.clf()
-		plt.subplot(1,3,1)
-		plt.imshow(klpsf, origin='lower', interpolation='nearest')
-		plt.subplot(1,3,2)
-		plt.imshow(IM, origin='lower', interpolation='nearest')
-		plt.subplot(1,3,3)
-		plt.imshow(klpsf-IM, origin='lower', interpolation='nearest')
-		plt.title('RMS difference: %g' % (sqrt(np.mean((klpsf-IM)**2))))
-		plt.savefig('empsf-%i.png' % K)
-
-		p = GaussianMixturePSF(w, mu, sig)
-		gpsf.append(p)
-		plt.clf()
-		plt.imshow(p.getPointSourcePatch(50, 50).patch,
-				   origin='lower', interpolation='nearest')
-		plt.savefig('empsf-%ib.png' % K)
-
-		#if K == 2:
-		#	break
-
-	psf = gpsf[-1]
-
+	print 'Starting multi-Gaussian PSF fit...'
+	xm,ym = -(S/2), -(S/2)
+	em_fit_2d(II, xm, ym, w, mu, sig)
+	print 'w,mu,sig', w,mu,sig
+	psf = GaussianMixturePSF(w, mu, sig)
 
 	timg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,
@@ -214,7 +177,6 @@ def main():
 		phi = objs.phi_exp[i,bandnum]
 		ps = HoggExpGalaxy(pos, flux, re, ab, phi)
 		tractor.addSource(ps)
-	
 	
 	mods = tractor.getModelImages()
 	mod = mods[0]

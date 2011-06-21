@@ -398,10 +398,11 @@ class Image(object):
 			return self.data.shape
 		raise AttributeError('Image: unknown attribute "%s"' % name)
 
+	# Numpy arrays have shape H,W
 	def getWidth(self):
-		return self.shape[0]
-	def getHeight(self):
 		return self.shape[1]
+	def getHeight(self):
+		return self.shape[0]
 
 	def __hash__(self):
 		return hash(self.hashkey())
@@ -1584,6 +1585,10 @@ class Tractor(object):
 		img.sky.addTo(mod)
 		for src in self.catalog:
 			patch = self.getModelPatch(img, src)
+			if patch is None:
+				print 'None patch: src is', src
+				print 'position is', img.getWcs().positionToPixel(src,src.pos)
+				continue
 			patch.addTo(mod)
 		return mod
 

@@ -131,6 +131,7 @@
 				double* I = ivar + k*D*D;
 				double det;
 				det = V[0]*V[3] - V[1]*V[2];
+				assert(det > 0);
 				I[0] =  V[3] / det;
 				I[1] = -V[1] / det;
 				I[2] = -V[2] / det;

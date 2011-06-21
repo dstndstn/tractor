@@ -1,5 +1,4 @@
 # Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
-
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -132,6 +131,8 @@ class GalaxyShape(ParamList):
 							   [-sp, cp * self.ab]])
 		# "cd" takes pixels to degrees (intermediate world coords)
 		# T takes pixels to unit vectors.
+		#print 'phi', phi, 're', re_deg
+		#print 'G', G
 		T = np.dot(linalg.inv(G), cd)
 		return T
 
@@ -370,6 +371,7 @@ class HoggGalaxy(Galaxy):
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
 		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
 		if inx == [] or iny == []:
+			print 'No overlap between model and image'
 			return None
 		x0 = outx.start
 		y0 = outy.start
@@ -377,10 +379,10 @@ class HoggGalaxy(Galaxy):
 		y1 = outy.stop
 		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
 
-		print 'psf sum of ampls:', np.sum(psfmix.amp)
-		print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
-		print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
-		print 'psf-conv img sum:', psfconvolvedimg.sum()
+		#print 'psf sum of ampls:', np.sum(psfmix.amp)
+		#print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
+		#print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
+		#print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'x0,y0', x0,y0
@@ -395,7 +397,7 @@ class HoggGalaxy(Galaxy):
 			plt.colorbar()
 			HoggGalaxy.ps.savefig()
 		patch = psfconvolvedimg * counts
-		print 'patch sum:', patch.sum()
+		#print 'patch sum:', patch.sum()
 		return Patch(x0, y0, patch)
 
 class HoggExpGalaxy(HoggGalaxy):
