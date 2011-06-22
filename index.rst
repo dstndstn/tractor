@@ -11,10 +11,17 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   tractor/tractor
+
+..   tractor/__init__
+
 
 .. automodule:: tractor
    :members:
+   :undoc-members:
+
+.. automodule:: tractor.sdss
+   :members:
+   :undoc-members:
 
 Indices and tables
 ==================

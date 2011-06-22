@@ -11,7 +11,7 @@ import pylab as plt
 import numpy as np
 import matplotlib
 
-from tractor import *
+from engine import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
