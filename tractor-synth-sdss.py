@@ -10,13 +10,8 @@ import pylab as plt
 from astrometry.util.pyfits_utils import *
 from astrometry.sdss import *
 
-#from sdsstractor import *
-#from fitpsf import em_init_params
-#from emfit import em_fit_2d
 from tractor import *
 from tractor import sdss as st
-#from tractor.fitpsf import em_init_params
-#from tractor.emfit import em_fit_2d
 
 def main():
 	from optparse import OptionParser
@@ -42,7 +37,6 @@ def main():
 
 	if run is None or field is None or camcol is None or band is None:
 		parser.print_help()
-		print
 		print 'Must supply --run, --camcol, --field, --band'
 		sys.exit(-1)
 
@@ -260,4 +254,9 @@ def old():
 
 
 if __name__ == '__main__':
-	main()
+	import cProfile
+	import sys
+	from datetime import tzinfo, timedelta, datetime
+	cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
+	sys.exit(0)
+	#main()
