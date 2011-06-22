@@ -15,8 +15,8 @@ from astrometry.sdss import *
 #from emfit import em_fit_2d
 from tractor import *
 from tractor import sdss as st
-from tractor.fitpsf import em_init_params
-from tractor.emfit import em_fit_2d
+#from tractor.fitpsf import em_init_params
+#from tractor.emfit import em_fit_2d
 
 def main():
 	from optparse import OptionParser
@@ -55,6 +55,59 @@ def main():
 	bandname = band
 	bandnum = band_index(bandname)
 
+	timg,info = st.get_tractor_image(run, camcol, field, bandname,
+									 curl=opt.curl)
+	sources = st.get_tractor_sources(run, camcol, field, bandname,
+									 curl=opt.curl)
+	tractor = st.SDSSTractor([timg])
+	tractor.addSources(sources)
+
+	mods = tractor.getModelImages()
+	mod = mods[0]
+
+	pyfits.writeto('synth-%06i-%s%i-%04i.fits' % (run, bandname, camcol, field), mod, clobber=True)
+
+	zr = np.array([-3.,+10.]) * info['skysig'] + info['sky']
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1])
+	imdiff = dict(interpolation='nearest', origin='lower',
+				  vmin=-20, vmax=20)
+
+	image = timg.getImage()
+
+	plt.clf()
+	plt.imshow(image, **ima)
+	plt.colorbar()
+	plt.gray()
+	plt.savefig('img.png')
+
+	plt.clf()
+	plt.imshow(mod, **ima)
+	plt.colorbar()
+	plt.gray()
+	plt.savefig('mod.png')
+
+	plt.clf()
+	plt.imshow(image - mod, **imdiff)
+	plt.colorbar()
+	plt.gray()
+	plt.savefig('diff.png')
+
+	plt.clf()
+	plt.imshow(image - np.median(image), **imdiff)
+	plt.colorbar()
+	plt.gray()
+	plt.savefig('img2.png')
+
+	plt.clf()
+	plt.imshow(mod - np.median(image), **imdiff)
+	plt.colorbar()
+	plt.gray()
+	plt.savefig('mod2.png')
+
+
+
+def old():
 	sdss = DR7(curl=opt.curl)
 	for filetype in ['fpC', 'tsObj', 'tsField', 'psField']:
 		fn = sdss.getFilename(filetype, run, camcol, field, bandname)
@@ -110,6 +163,7 @@ def main():
 				 sky=skyobj, photocal=photocal,
 				 name='SDSS (r/c/f=%i/%i%i)' % (run, camcol, field))
 	tractor = st.SDSSTractor([timg])
+
 
 	# Select objects to keep; initialize tractor source objects for them.
 
@@ -203,42 +257,6 @@ def main():
 	mods = tractor.getModelImages()
 	mod = mods[0]
 
-	pyfits.writeto('synth-%06i-%s%i-%04i.fits' % (run, bandname, camcol, field), mod, clobber=True)
-
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=zr[0], vmax=zr[1])
-	imdiff = dict(interpolation='nearest', origin='lower',
-				  vmin=-20, vmax=20)
-
-	plt.clf()
-	plt.imshow(image, **ima)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('img.png')
-
-	plt.clf()
-	plt.imshow(mod, **ima)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('mod.png')
-
-	plt.clf()
-	plt.imshow(image - mod, **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('diff.png')
-
-	plt.clf()
-	plt.imshow(image - np.median(image), **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('img2.png')
-
-	plt.clf()
-	plt.imshow(mod - np.median(image), **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('mod2.png')
 
 
 if __name__ == '__main__':

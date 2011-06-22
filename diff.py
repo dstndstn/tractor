@@ -76,6 +76,7 @@ def main():
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
+
 	zr = np.array([-3.,+10.]) * skysig + sky
 
 	# we don't care about the invvar (for now)

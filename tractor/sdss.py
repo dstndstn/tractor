@@ -3,6 +3,7 @@ if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
 
+import os
 from math import pi, sqrt, ceil, floor
 from datetime import datetime
 
@@ -28,6 +29,250 @@ import mixture_profiles as mp
 #class SdssRaDecPos(RaDecPos):
 #	def getStepSizes(self, img):
 #		return [1e-4, 1e-4]
+
+
+def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
+					  retrieve=True):
+	bandnum = band_index(bandname)
+	for filetype in filetypes:
+		fn = sdss.getFilename(filetype, run, camcol, field, bandname)
+		print 'Looking for file', fn
+		if not os.path.exists(fn):
+			if retrieve:
+				print 'Retrieving', fn
+				sdss.retrieve(filetype, run, camcol, field, bandnum)
+			else:
+				raise os.OSError('no such file: "%s"' % fn)
+
+
+def get_tractor_sources(run, camcol, field, bandname, release='DR7',
+						retrieve=True, curl=False, roi=None):
+	'''
+	Creates tractor.Source objects corresponding to objects in the SDSS catalog
+	for the given field.
+
+	'''
+	if release != 'DR7':
+		raise RuntimeError('We only support DR7 currently')
+	# FIXME
+	rerun = 0
+
+	sdss = DR7(curl=curl)
+	bandnum = band_index(bandname)
+	_check_sdss_files(sdss, run, camcol, field, bandnum,
+					  ['tsObj', 'tsField'],
+					  #fpC', 'tsField', 'psField', 'fpM'],
+					  retrieve=retrieve)
+
+	tsf = sdss.readTsField(run, camcol, field, rerun)
+
+
+	objs = fits_table(sdss.getFilename('tsObj', run, camcol, field,
+									   bandname, rerun=rerun))
+	objs.indices = np.arange(len(objs))
+
+	if roi is not None:
+		x0,x1,y0,y1 = roi
+		# HACK -- keep only the sources whose centers are within the ROI box.
+		x = objs.colc[:,bandnum]
+		y = objs.rowc[:,bandnum]
+		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
+		objs = objs[I]
+
+	objs = objs[(objs.nchild == 0)]
+
+	# NO IDEA why it is NOT necessary to get PA and adjust for it.
+	# (probably that getTensor() has the phi transformation in the wrong
+	# place, terrifying)
+	# Since in DR7, tsObj files have phi_exp, phi_dev in image coordinates,
+	# not sky coordinates.
+	# Should have to Correct by finding the position angle of the field on
+	# the sky.
+	# cd = wcs.cdAtPixel(W/2, H/2)
+	# pa = np.rad2deg(np.arctan2(cd[0,1], cd[0,0]))
+	# print 'pa=', pa
+	# HACK -- DR7 phi opposite to Tractor phi, apparently
+	objs.phi_dev = -objs.phi_dev
+	objs.phi_exp = -objs.phi_exp
+
+	# MAGIC -- minimum size of galaxy.
+	objs.r_dev = np.maximum(objs.r_dev, 1./30.)
+	objs.r_exp = np.maximum(objs.r_exp, 1./30.)
+
+	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
+	Lgal  = (objs.prob_psf[:,bandnum] == 0)
+	Ldev = Lgal * objs.fracpsf[:,bandnum]
+	Lexp = Lgal * (1. - objs.fracpsf[:,bandnum])
+
+	sources = []
+
+	# Add stars
+	I = np.flatnonzero(Lstar > 0)
+	print len(I), 'stars'
+	for i in I:
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		counts = tsf.luptitude_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		ps = PointSource(pos, flux)
+		sources.append(ps)
+
+	# Add galaxies.
+	I = np.flatnonzero(Lgal > 0)
+	print len(I), 'galaxies'
+	ndev, nexp, ncomp = 0, 0, 0
+	for i in I:
+		hasdev = (Ldev[i] > 0)
+		hasexp = (Lexp[i] > 0)
+		iscomp = (hasdev and hasexp)
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		# FIXME -- should we really use counts_model if it's purely one
+		# or the other model type, or should we use counts_dev/exp ?
+		if iscomp:
+			lups = objs.counts_model[i,bandnum]
+		elif hasdev:
+			lups = objs.counts_dev[i,bandnum]
+		elif hasexp:
+			lups = objs.counts_exp[i,bandnum]
+		counts = tsf.luptitude_to_counts(lups, bandnum)
+											 
+		if hasdev:
+			dcounts = counts * Ldev[i]
+			dflux = SdssFlux(dcounts / SdssPhotoCal.scale)
+			re = objs.r_dev[i,bandnum]
+			ab = objs.ab_dev[i,bandnum]
+			phi = objs.phi_dev[i,bandnum]
+			dshape = GalaxyShape(re, ab, phi)
+		if hasexp:
+			ecounts = counts * Lexp[i]
+			eflux = SdssFlux(ecounts / SdssPhotoCal.scale)
+			re = objs.r_exp[i,bandnum]
+			ab = objs.ab_exp[i,bandnum]
+			phi = objs.phi_exp[i,bandnum]
+			eshape = GalaxyShape(re, ab, phi)
+
+		if iscomp:
+			gal = HoggCompositeGalaxy(pos, eflux, eshape, dflux, dshape)
+			ncomp += 1
+		elif hasdev:
+			#print 'pure deV; counts_model = %g; counts_dev = %g' % (
+			#	objs.counts_model[i, bandnum], objs.counts_dev[i, bandnum])
+			gal = HoggDevGalaxy(pos, dflux, dshape)
+			ndev += 1
+		elif hasexp:
+			#print 'pure exp; counts_model = %g; counts_exp = %g' % (
+			#	objs.counts_model[i, bandnum], objs.counts_exp[i, bandnum])
+			gal = HoggExpGalaxy(pos, eflux, eshape)
+			nexp += 1
+		sources.append(gal)
+	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
+	print ncomp, 'composite galaxies'
+
+	return sources
+
+	
+def get_tractor_image(run, camcol, field, bandname, release='DR7',
+					  retrieve=True, curl=False, roi=None,
+					  psf='kl-gm'):
+	'''
+	Creates a tractor.Image given an SDSS field identifier.
+
+	If not None, roi = (x0, x1, y0, y1) defines a region-of-interest
+	in the image, in zero-indexed pixel coordinates.  x1,y1 are
+	NON-inclusive; roi=(0,100,0,100) will yield a 100 x 100 image.
+
+	psf can be:
+	  "dg" for double-Gaussian
+	  "kl-gm" for SDSS KL-decomposition approximated as a Gaussian mixture
+
+	Returns:
+	  (tractor.Image, dict)
+
+	dict contains useful details like:
+	  'sky'
+	  'skysig'
+	'''
+	# Ugly
+	if release != 'DR7':
+		raise RuntimeError('We only support DR7 currently')
+	valid_psf = ['dg', 'kl-gm']
+	if psf not in valid_psf:
+		raise RuntimeError('PSF must be in ' + str(valid_psf))
+	# FIXME
+	rerun = 0
+
+	bandnum = band_index(bandname)
+
+	sdss = DR7(curl=curl)
+	_check_sdss_files(sdss, run, camcol, field, bandname,
+					  ['fpC', 'tsField', 'psField', 'fpM'],
+					  retrieve=retrieve)
+	fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
+	fpC = fpC.astype(float) - sdss.softbias
+	image = fpC
+	(H,W) = image.shape
+
+	if roi is None:
+		x0 = y0 = 0
+	else:
+		x0,x1,y0,y1 = roi
+
+	tsf = sdss.readTsField(run, camcol, field, rerun)
+	astrans = tsf.getAsTrans(bandnum)
+	wcs = SdssWcs(astrans)
+	# Mysterious half-pixel shift.  asTrans pixel coordinates?
+	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
+
+	photocal = SdssPhotoCal()
+	psfield = sdss.readPsField(run, camcol, field)
+	sky = psfield.getSky(bandnum)
+	skysig = sqrt(sky)
+	skyobj = ConstantSky(sky)
+	info = dict(sky=sky, skysig=skysig)
+
+	fpM = sdss.readFpM(run, camcol, field, bandname)
+
+	gain = psfield.getGain(bandnum)
+	darkvar = psfield.getDarkVariance(bandnum)
+	skyerr = psfield.getSkyErr(bandnum)
+	invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
+
+	if roi is not None:
+		roislice = (slice(y0,y1), slice(x0,x1))
+		image = image[roislice]
+		invvar = invvar[roislice]
+
+	if psf == 'dg':
+		dgpsf = psfield.getDoubleGaussian(bandnum)
+		print 'Creating double-Gaussian PSF approximation'
+		(a,s1, b,s2) = dgpsf
+		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
+	elif psf == 'kl-gm':
+		from emfit import em_fit_2d
+		from fitpsf import em_init_params
+		
+		# Create Gaussian mixture model PSF approximation.
+		H,W = image.shape
+		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
+		S = klpsf.shape[0]
+		# number of Gaussian components
+		K = 3
+		w,mu,sig = em_init_params(K, None, None, None)
+		II = klpsf.copy()
+		II /= II.sum()
+		# HIDEOUS HACK
+		II = np.maximum(II, 0)
+		print 'Multi-Gaussian PSF fit...'
+		xm,ym = -(S/2), -(S/2)
+		em_fit_2d(II, xm, ym, w, mu, sig)
+		print 'w,mu,sig', w,mu,sig
+		mypsf = GaussianMixturePSF(w, mu, sig)
+
+	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
+				 sky=skyobj, photocal=photocal,
+				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
+					   (run, camcol, field, bandname)))
+	return timg,info
+		
 
 class SdssPhotoCal(object):
 	scale = 1e6
@@ -325,15 +570,79 @@ class DevGalaxy(Galaxy):
 		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
 
 
+class CompositeGalaxy(Galaxy):
+	'''
+	A galaxy with Exponential and deVaucouleurs components.
+
+	The two components share a position (ie the centers are the same),
+	but have different fluxes and shapes.
+	'''
+	def __init__(self, pos, fluxExp, shapeExp, fluxDev, shapeDev):
+		MultiParams.__init__(self, pos, fluxExp, shapeExp, fluxDev, shapeDev)
+		self.name = self.getName()
+	def getName(self):
+		return 'CompositeGalaxy'
+	def getNamedParams(self):
+		return [('pos', 0), ('fluxExp', 1), ('shapeExp', 2),
+				('fluxDev', 3), ('shapeDev', 4),]
+	def hashkey(self):
+		return (self.name, self.pos.hashkey(),
+				self.fluxExp.hashkey(), self.shapeExp.hashkey(),
+				self.fluxDev.hashkey(), self.shapeDev.hashkey())
+	def __str__(self):
+		return (self.name + ' at ' + str(self.pos)
+				+ ' with Exp ' + str(self.fluxExp) + str(self.shapeExp)
+				+ ' and deV ' + str(self.fluxDev) + str(self.shapeDev))
+	def __repr__(self):
+		return (self.name + '(pos=' + repr(self.pos) +
+				', fluxExp=' + repr(self.fluxExp) +
+				', shapeExp=' + repr(self.shapeExp) + 
+				', fluxDev=' + repr(self.fluxDev) +
+				', shapeDev=' + repr(self.shapeDev))
+	def copy(self):
+		return None
+	def getModelPatch(self, img, px=None, py=None):
+		pass
+	def getParamDerivatives(self, img, fluxonly=False):
+		pass
+	
+class HoggCompositeGalaxy(CompositeGalaxy):
+	def getName(self):
+		return 'HoggCompositeGalaxy'
+	def copy(self):
+		return HoggCompositeGalaxy(self.pos, self.fluxExp, self.shapeExp,
+								   self.fluxDev, self.shapeDev)
+	def getModelPatch(self, img, px=None, py=None):
+		e = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		d = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
+		#
+		pe = e.getModelPatch(img, px, py)
+		pd = d.getModelPatch(img, px, py)
+		# union the patch sizes
+		pcomp = pe - (pd * -1.)
+		return pcomp
+
+	def getParamDerivatives(self, img, fluxonly=False):
+		pass
+
 class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')
 
-	def __init__(self, pos, flux, re, ab, phi):
+	def __init__(self, pos, flux, *args):
 		'''
+		HoggGalaxy(pos, flux, GalaxyShape)
+		or
+		HoggGalaxy(pos, flux, re, ab, phi)
+
 		re: [arcsec]
 		phi: [deg]
 		'''
-		Galaxy.__init__(self, pos, flux, GalaxyShape(re, ab, phi))
+		if len(args) == 3:
+			shape = GalaxyShape(*args)
+		else:
+			assert(len(args) == 1)
+			shape = args[0]
+		Galaxy.__init__(self, pos, flux, shape)
 
 	def getName(self):
 		return 'HoggGalaxy'
@@ -408,8 +717,8 @@ class HoggExpGalaxy(HoggGalaxy):
 	@staticmethod
 	def getExpProfile():
 		return HoggExpGalaxy.profile
-	def __init__(self, pos, flux, re, ab, phi):
-		HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	#def __init__(self, pos, flux, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
 	def getName(self):
 		return 'HoggExpGalaxy'
 	def getProfile(self):
@@ -423,8 +732,8 @@ class HoggDevGalaxy(HoggGalaxy):
 	@staticmethod
 	def getDevProfile():
 		return HoggDevGalaxy.profile
-	def __init__(self, pos, flux, re, ab, phi):
-		HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	#def __init__(self, pos, flux, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
 	def getName(self):
 		return 'HoggDevGalaxy'
 	def getProfile(self):

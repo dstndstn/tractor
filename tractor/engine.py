@@ -696,8 +696,11 @@ class Patch(object):
 		p = np.zeros((uy1 - uy0, ux1 - ux0))
 		p[self.y0 - uy0 : self.y0 - uy0 + ph,
 		  self.x0 - ux0 : self.x0 - ux0 + pw] = self.patch
-		p[oy0 - uy0 : oy0 - uy0 + oh,
-		  ox0 - ux0 : ox0 - ux0 + ow] -= other.getImage()
+
+		psub = p[oy0 - uy0 : oy0 - uy0 + oh,
+				 ox0 - ux0 : ox0 - ux0 + ow]
+		op = getattr(psub, '__isub__')
+		op(other.getImage())
 		return Patch(ux0, uy0, p)
 
 
@@ -1006,6 +1009,9 @@ class Tractor(object):
 
 	def addSource(self, src):
 		self.catalog.append(src)
+
+	def addSources(self, srcs):
+		self.catalog.extend(srcs)
 
 	def increasePsfComplexity(self, imagei):
 		print 'Increasing complexity of PSF in image', imagei
