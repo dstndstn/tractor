@@ -24,6 +24,7 @@ def main():
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
 	#parser.add_option('-R', '--rerun', dest='rerun', type='int')
+	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
 
 	(opt, args) = parser.parse_args()
 
@@ -49,7 +50,7 @@ def main():
 	bandname = band
 	bandnum = band_index(bandname)
 
-	sdss = DR7()
+	sdss = DR7(curl=opt.curl)
 	for filetype in ['fpC', 'tsObj', 'tsField', 'psField']:
 		fn = sdss.getFilename(filetype, run, camcol, field, bandname)
 		print 'Looking for file', fn
