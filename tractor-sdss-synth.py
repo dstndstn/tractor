@@ -23,6 +23,7 @@ def main():
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
+	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
 	(opt, args) = parser.parse_args()
 
 	run = opt.run
@@ -43,9 +44,19 @@ def main():
 	bandnum = band_index(bandname)
 
 	timg,info = st.get_tractor_image(run, camcol, field, bandname,
-									 curl=opt.curl)
+									 curl=opt.curl, roi=opt.roi)
 	sources = st.get_tractor_sources(run, camcol, field, bandname,
-									 curl=opt.curl)
+									 curl=opt.curl, roi=opt.roi)
+
+	### DEBUG
+
+	wcs = timg.getWcs()
+	for i,s in enumerate(sources):
+		x,y = wcs.positionToPixel(s, s.getPosition())
+		print i, ('(%.1f, %.1f): ' % (x,y)), s
+	whopper = sources[17]
+
+
 	tractor = st.SDSSTractor([timg])
 	tractor.addSources(sources)
 

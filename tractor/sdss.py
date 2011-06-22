@@ -105,16 +105,22 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 	Lexp = Lgal * (1. - objs.fracpsf[:,bandnum])
 
 	sources = []
+	ikeep = []
 
 	# Add stars
 	I = np.flatnonzero(Lstar > 0)
 	print len(I), 'stars'
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		counts = tsf.luptitude_to_counts(objs.psfcounts[i,bandnum], bandnum)
+		lup = objs.psfcounts[i,bandnum]
+		counts = tsf.luptitude_to_counts(lup, bandnum)
+		if counts <= 0:
+			print 'Skipping star with luptitude', lup, '-> counts', counts
+			continue
 		flux = SdssFlux(counts / SdssPhotoCal.scale)
 		ps = PointSource(pos, flux)
 		sources.append(ps)
+		ikeep.append(i)
 
 	# Add galaxies.
 	I = np.flatnonzero(Lgal > 0)
@@ -134,6 +140,9 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 		elif hasexp:
 			lups = objs.counts_exp[i,bandnum]
 		counts = tsf.luptitude_to_counts(lups, bandnum)
+		if counts <= 0:
+			print 'Skipping galaxy with luptitude', lups, '-> counts', counts
+			continue
 											 
 		if hasdev:
 			dcounts = counts * Ldev[i]
@@ -164,8 +173,13 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 			gal = HoggExpGalaxy(pos, eflux, eshape)
 			nexp += 1
 		sources.append(gal)
+		ikeep.append(i)
 	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
 	print ncomp, 'composite galaxies'
+
+	# if you want to cut the objs list to just the ones for which sources were created...
+	ikeep = np.unique(ikeep)
+	objs = objs[ikeep]
 
 	return sources
 
