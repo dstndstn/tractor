@@ -1,24 +1,24 @@
 all: mix emfit
 
-mix_wrap.c: mix.i
+tractor/mix.py tractor/mix_wrap.c: tractor/mix.i
 	swig -python -I. $<
 
-_mix.so: mix_wrap.c setup-mix.py
+tractor/_mix.so: tractor/mix_wrap.c setup-mix.py
 	python setup-mix.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mix.so $@
 
-mix: _mix.so
+mix: tractor/_mix.so tractor/mix.py
 .PHONY: mix
 
 
-emfit_wrap.c: emfit.i
+tractor/emfit.py tractor/emfit_wrap.c: tractor/emfit.i
 	swig -python -I. $<
 
-_emfit.so: emfit_wrap.c setup-emfit.py
+tractor/_emfit.so: tractor/emfit_wrap.c setup-emfit.py
 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_emfit.so $@
 
-emfit: _emfit.so
+emfit: tractor/_emfit.so tractor/emfit.py
 .PHONY: emfit
 
 
