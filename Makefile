@@ -22,3 +22,4 @@ emfit: _emfit.so
 .PHONY: emfit
 
 
+include Makefile.sphinx

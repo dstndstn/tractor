@@ -1,4 +1,4 @@
-%module emfit
+%module(package="tractor") emfit
 
 %include <typemaps.i>
 

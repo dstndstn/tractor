@@ -1,4 +1,4 @@
-%module mix
+%module(package="tractor") mix
 
 %include <typemaps.i>
 
