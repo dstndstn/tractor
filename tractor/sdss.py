@@ -31,7 +31,9 @@ import mixture_profiles as mp
 
 class SdssPhotoCal(object):
 	scale = 1e6
-	def __init__(self, scale):
+	def __init__(self, scale=None):
+		if scale is None:
+			scale = SdssPhotoCal.scale
 		self.scale = scale
 	def fluxToCounts(self, flux):
 		'''

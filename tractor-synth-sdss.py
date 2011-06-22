@@ -2,16 +2,21 @@ if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
 
+import os
+from math import sqrt
 import numpy as np
 import pylab as plt
 
 from astrometry.util.pyfits_utils import *
 from astrometry.sdss import *
 
-from sdsstractor import *
+#from sdsstractor import *
+#from fitpsf import em_init_params
+#from emfit import em_fit_2d
 from tractor import *
-from fitpsf import em_init_params
-from emfit import em_fit_2d
+from tractor import sdss as st
+from tractor.fitpsf import em_init_params
+from tractor.emfit import em_fit_2d
 
 def main():
 	from optparse import OptionParser
@@ -64,7 +69,7 @@ def main():
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 	astrans = tsf.getAsTrans(bandnum)
-	wcs = SdssWcs(astrans)
+	wcs = st.SdssWcs(astrans)
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(0.5, 0.5)
 
@@ -75,7 +80,7 @@ def main():
 		(a,s1, b,s2) = dgpsf
 		psf = NCircularGaussianPSF([s1, s2], [a, b])
 
-	photocal = SdssPhotoCal(SdssPhotoCal.scale)
+	photocal = st.SdssPhotoCal()
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
@@ -104,7 +109,7 @@ def main():
 	timg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,
 				 name='SDSS (r/c/f=%i/%i%i)' % (run, camcol, field))
-	tractor = SDSSTractor([timg])
+	tractor = st.SDSSTractor([timg])
 
 	# Select objects to keep; initialize tractor source objects for them.
 
@@ -158,7 +163,7 @@ def main():
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		counts = tsf.luptitude_to_counts(objs.psfcounts[i,bandnum], bandnum)
-		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		flux = st.SdssFlux(counts / st.SdssPhotoCal.scale)
 		ps = PointSource(pos, flux)
 		tractor.addSource(ps)
 
@@ -172,11 +177,11 @@ def main():
 		#print 'Luptitude', objs.counts_model[i,bandnum]
 		#print 'Counts', counts
 		counts *= Ldev[i]
-		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		flux = st.SdssFlux(counts / st.SdssPhotoCal.scale)
 		re = objs.r_dev[i,bandnum]
 		ab = objs.ab_dev[i,bandnum]
 		phi = objs.phi_dev[i,bandnum]
-		ps = HoggDevGalaxy(pos, flux, re, ab, phi)
+		ps = st.HoggDevGalaxy(pos, flux, re, ab, phi)
 		tractor.addSource(ps)
 
 	# Add exp galaxies
@@ -188,11 +193,11 @@ def main():
 		# apportion the best-fit composite model between exp and dev.
 		counts = tsf.luptitude_to_counts(objs.counts_model[i,bandnum], bandnum)
 		counts *= Lexp[i]
-		flux = SdssFlux(counts / SdssPhotoCal.scale)
+		flux = st.SdssFlux(counts / st.SdssPhotoCal.scale)
 		re = objs.r_exp[i,bandnum]
 		ab = objs.ab_exp[i,bandnum]
 		phi = objs.phi_exp[i,bandnum]
-		ps = HoggExpGalaxy(pos, flux, re, ab, phi)
+		ps = st.HoggExpGalaxy(pos, flux, re, ab, phi)
 		tractor.addSource(ps)
 
 	mods = tractor.getModelImages()

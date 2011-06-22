@@ -1,5 +1,5 @@
-import matplotlib
-matplotlib.use('Agg')
+#import matplotlib
+#matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
 from math import pi, sqrt
