@@ -355,7 +355,6 @@ class SdssWcs(WCS):
 		ra,dec = self.pixelToRaDec(x + self.x0, y + self.y0)
 		return RaDecPos(ra, dec)
 
-
 class GalaxyShape(ParamList):
 	def getNamedParams(self):
 		# re: arcsec
@@ -522,7 +521,6 @@ class Galaxy(MultiParams):
 				derivs.append(dx)
 		return derivs
 
-
 class ExpGalaxy(Galaxy):
 	profile = None
 	@staticmethod
@@ -583,7 +581,6 @@ class DevGalaxy(Galaxy):
 	def copy(self):
 		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
 
-
 class CompositeGalaxy(Galaxy):
 	'''
 	A galaxy with Exponential and deVaucouleurs components.
@@ -619,7 +616,8 @@ class CompositeGalaxy(Galaxy):
 		pass
 	def getParamDerivatives(self, img, fluxonly=False):
 		pass
-	
+
+# BUG: shouldn't this function cache the HoggDevGalaxy() and HoggExpGalaxy() calls?
 class HoggCompositeGalaxy(CompositeGalaxy):
 	def getName(self):
 		return 'HoggCompositeGalaxy'
@@ -627,26 +625,26 @@ class HoggCompositeGalaxy(CompositeGalaxy):
 		return HoggCompositeGalaxy(self.pos, self.fluxExp, self.shapeExp,
 								   self.fluxDev, self.shapeDev)
 	def getModelPatch(self, img, px=None, py=None):
-		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
 		e = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
-		#
-		pe = e.getModelPatch(img, px, py)
-		pd = d.getModelPatch(img, px, py)
-		# union the patch sizes
-		pcomp = pe - (pd * -1.)
-		return pcomp
+		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		return e.getModelPatch(img, px, py) + d.getModelPatch(img, px, py)
 
+	# couldn't this function move up to CompositeGalaxy ?
+	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
+	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
 	def getParamDerivatives(self, img, fluxonly=False):
-		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
 		e = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
-		#
+		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
 		de = e.getParamDerivatives(img, fluxonly)
 		dd = d.getParamDerivatives(img, fluxonly)
-		# de, dd are lists of Patches
-		#   pos, flux, shape (re,ab,phi)
-		# add the position derivatives
-		# append the flux and shape derivatives
-		
+		npos = len(self.pos.getStepSizes(img))
+		derivs = []
+		for i in range(npos):
+			derivs.append(de[i] + dd[i])
+		derivs.append(de[npos:])
+		derivs.append(dd[npos:])
+		print 'getParamDerivatives: derivs', len(derivs)
+		return derivs
 
 class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')

@@ -672,7 +672,7 @@ class Patch(object):
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch * flux)
 
-	def __sub__(self, other):
+	def performArithmetic(self, other, string):
 		assert(isinstance(other, Patch))
 		if (self.x0 == other.getX0() and self.y0 == other.getY0() and
 			self.shape == other.shape):
@@ -699,10 +699,15 @@ class Patch(object):
 
 		psub = p[oy0 - uy0 : oy0 - uy0 + oh,
 				 ox0 - ux0 : ox0 - ux0 + ow]
-		op = getattr(psub, '__isub__')
+		op = getattr(psub, string)
 		op(other.getImage())
 		return Patch(ux0, uy0, p)
 
+	def __add__(self, other):
+		return self.performArithmetic(self, other, '__iadd__')
+
+	def __sub__(self, other):
+		return self.performArithmetic(self, other, '__isub__')
 
 # This is just the duck-type definition
 class PSF(Params):
