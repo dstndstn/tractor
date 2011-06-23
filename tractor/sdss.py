@@ -627,8 +627,8 @@ class HoggCompositeGalaxy(CompositeGalaxy):
 		return HoggCompositeGalaxy(self.pos, self.fluxExp, self.shapeExp,
 								   self.fluxDev, self.shapeDev)
 	def getModelPatch(self, img, px=None, py=None):
-		e = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
-		d = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
+		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		e = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		#
 		pe = e.getModelPatch(img, px, py)
 		pd = d.getModelPatch(img, px, py)
@@ -637,7 +637,16 @@ class HoggCompositeGalaxy(CompositeGalaxy):
 		return pcomp
 
 	def getParamDerivatives(self, img, fluxonly=False):
-		pass
+		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		e = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
+		#
+		de = e.getParamDerivatives(img, fluxonly)
+		dd = d.getParamDerivatives(img, fluxonly)
+		# de, dd are lists of Patches
+		#   pos, flux, shape (re,ab,phi)
+		# add the position derivatives
+		# append the flux and shape derivatives
+		
 
 class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')
