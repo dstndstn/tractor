@@ -21,23 +21,26 @@ def save(idstr, tractor, zr):
 	print 'Writing synthetic image to', synthfn
 	pyfits.writeto(synthfn, mod, clobber=True)
 
+	timg = tractor.getImage(0)
+	data = timg.getImage()
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1])
-	data = tractor.getImage(0).getImage()
 
-	def savepng(pre, img, **kwargs):
+	def savepng(pre, img, title=None, **kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
 		plt.clf()
 		plt.imshow(img, **kwargs)
+		if title is not None:
+			plt.title(title)
 		plt.colorbar()
 		plt.gray()
 		plt.savefig(fn)
 
 	sky = np.median(mod)
-	savepng('data', data - sky, **ima)
-	savepng('model', mod - sky, **ima)
-	savepng('diff', data - mod, **ima)
+	savepng('data', data - sky, title='Data '+timg.name, **ima)
+	savepng('model', mod - sky, title='Model', **ima)
+	savepng('diff', data - mod, title='Data - Model', **ima)
 
 def main():
 	from optparse import OptionParser
@@ -91,9 +94,60 @@ def main():
 	zr = np.array([-5.,+5.]) * info['skysig']
 	save(prefix, tractor, zr)
 
+
 	for i in range(opt.ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
 		save('tune-%d-' % (i+1) + prefix, tractor, zr)
+
+	makeflipbook(opt, prefix)
+	print
+	print 'Created flip-book flip-%s.pdf' % prefix
+
+
+
+def makeflipbook(opt, prefix):
+	# Create a tex flip-book of the plots
+	tex = r'''
+	\documentclass[compress]{beamer}
+	\usepackage{helvet}
+	\newcommand{\plot}[1]{\includegraphics[width=0.5\textwidth]{#1}}
+	\begin{document}
+	'''
+	if opt.ntune:
+		tex += r'''\part{Tuning steps}\frame{\partpage}''' + '\n'
+	page = r'''
+	\begin{frame}{%s}
+	\plot{data-%s}
+	\plot{model-%s} \\
+	\plot{diff-%s}
+	\end{frame}'''
+	tex += page % (('Initial model',) + (prefix,)*3)
+	for i in range(opt.ntune):
+		tex += page % (('Tuning step %i' % (i+1),) +
+					   ('tune-%d-' % (i+1) + prefix,)*3)
+	if opt.ntune:
+		# Finish with a 'blink'
+		tex += r'''\part{Before-n-after}\frame{\partpage}''' + '\n'
+		tex += (r'''
+		\begin{frame}{Data}
+		\plot{data-%s}
+		\plot{data-%s} \\
+		\plot{diff-%s}
+		\plot{diff-%s}
+		\end{frame}
+		\begin{frame}{Before (left); After (right)}
+		\plot{model-%s}
+		\plot{model-%s} \\
+		\plot{diff-%s}
+		\plot{diff-%s}
+		\end{frame}
+		''' % ((prefix,)*2 +
+			   (prefix, 'tune-%d-' % (opt.ntune) + prefix)*3))
+	tex += r'\end{document}' + '\n'
+	fn = 'flip-' + prefix + '.tex'
+	print 'Writing', fn
+	open(fn, 'wb').write(tex)
+	os.system("pdflatex '%s'" % fn)
 
 if __name__ == '__main__':
 	import cProfile
