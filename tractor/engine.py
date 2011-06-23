@@ -704,10 +704,10 @@ class Patch(object):
 		return Patch(ux0, uy0, p)
 
 	def __add__(self, other):
-		return self.performArithmetic(self, other, '__iadd__')
+		return self.performArithmetic(other, '__iadd__')
 
 	def __sub__(self, other):
-		return self.performArithmetic(self, other, '__isub__')
+		return self.performArithmetic(other, '__isub__')
 
 # This is just the duck-type definition
 class PSF(Params):
