@@ -13,6 +13,32 @@ from astrometry.sdss import *
 from tractor import *
 from tractor import sdss as st
 
+# Assumes one image.
+def save(idstr, tractor, zr):
+	mod = tractor.getModelImages()[0]
+
+	synthfn = 'synth-%s.fits' % idstr
+	print 'Writing synthetic image to', synthfn
+	pyfits.writeto(synthfn, mod, clobber=True)
+
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1])
+	data = tractor.getImage(0).getImage()
+
+	def savepng(pre, img, **kwargs):
+		fn = '%s-%s.png' % (pre, idstr)
+		print 'Saving', fn
+		plt.clf()
+		plt.imshow(img, **kwargs)
+		plt.colorbar()
+		plt.gray()
+		plt.savefig(fn)
+
+	sky = np.median(mod)
+	savepng('data', data - sky, **ima)
+	savepng('model', mod - sky, **ima)
+	savepng('diff', data - mod, **ima)
+
 def main():
 	from optparse import OptionParser
 	import sys
@@ -23,8 +49,9 @@ def main():
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
-	parser.add_option('--tune', dest='tune', action='store_true', default=False, help='Improve synthetic image over DR7 by locally optimizing likelihood')
+	parser.add_option('--ntune', dest='ntune', type='int', default=0, help='Improve synthetic image over DR7 by locally optimizing likelihood for nsteps iterations')
 	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
+	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
 	(opt, args) = parser.parse_args()
 
 	run = opt.run
@@ -43,6 +70,9 @@ def main():
 		sys.exit(-1)
 	bandname = band
 	bandnum = band_index(bandname)
+	prefix = opt.prefix
+	if prefix is None:
+		prefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
 
 	timg,info = st.get_tractor_image(run, camcol, field, bandname,
 					 curl=opt.curl, roi=opt.roi)
@@ -57,53 +87,13 @@ def main():
 
 	tractor = st.SDSSTractor([timg])
 	tractor.addSources(sources)
-	if opt.tune:
-		tractor.optimizeCatalogLoop(nsteps=2)
 
-	mods = tractor.getModelImages()
-	mod = mods[0]
+	zr = np.array([-5.,+5.]) * info['skysig']
+	save(prefix, tractor, zr)
 
-	synthfn = 'synth-%06i-%s%i-%04i.fits' % (run, bandname, camcol, field)
-	print 'Writing synthetic image to', synthfn
-	pyfits.writeto(synthfn, mod, clobber=True)
-
-	zr = np.array([-3.,+10.]) * info['skysig'] + info['sky']
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=zr[0], vmax=zr[1])
-	imdiff = dict(interpolation='nearest', origin='lower',
-				  vmin=-20, vmax=20)
-	image = timg.getImage()
-
-	plt.clf()
-	plt.imshow(image, **ima)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('img.png')
-
-	plt.clf()
-	plt.imshow(mod, **ima)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('mod.png')
-
-	plt.clf()
-	plt.imshow(image - mod, **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('diff.png')
-
-	plt.clf()
-	plt.imshow(image - np.median(image), **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('img2.png')
-
-	plt.clf()
-	plt.imshow(mod - np.median(image), **imdiff)
-	plt.colorbar()
-	plt.gray()
-	plt.savefig('mod2.png')
-
+	for i in range(opt.ntune):
+		tractor.optimizeCatalogLoop(nsteps=1)
+		save('tune-%d-' % (i+1) + prefix, tractor, zr)
 
 if __name__ == '__main__':
 	import cProfile

@@ -320,6 +320,7 @@ class SdssFlux(Flux):
 		return ('SdssFlux', self.val)
 	def copy(self):
 		return SdssFlux(self.val)
+	#def 
 
 class SdssWcs(WCS):
 	def __init__(self, astrans):
@@ -458,7 +459,7 @@ class Galaxy(MultiParams):
 												cx, cy, W, H, margin)
 		return Patch(x0, y0, prof)
 
-	def getModelPatch(self, img, px=None, py=None):
+	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		cd = img.getWcs().cdAtPixel(px, py)
@@ -470,18 +471,26 @@ class Galaxy(MultiParams):
 			return Patch(patch.getX0(), patch.getY0(), None)
 		psf = img.getPsf()
 		convimg = psf.applyTo(patch.getImage())
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'PSF-convolved'
 		#self.debugPatchImage(convimg)
-		return Patch(patch.getX0(), patch.getY0(), convimg * counts)
+		return Patch(patch.getX0(), patch.getY0(), convimg)
+
+	def getModelPatch(self, img, px=None, py=None):
+		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		p1 = self.getUnitFluxModelPatch(img, px, py)
+		if p1 is None:
+			return None
+		return p1 * counts
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img, fluxonly=False):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
-		patch0 = self.getModelPatch(img, px0, py0)
+		patch0 = self.getUnitFluxModelPatch(img, px0, py0)
 		derivs = []
+
+		# derivatives wrt position
 		psteps = pos0.getStepSizes(img)
 		if fluxonly:
 			derivs.extend([None] * len(psteps))
@@ -490,22 +499,25 @@ class Galaxy(MultiParams):
 				posx = pos0.copy()
 				posx.stepParam(i, psteps[i])
 				(px,py) = img.getWcs().positionToPixel(self, posx)
-				patchx = self.getModelPatch(img, px, py)
+				patchx = self.getUnitFluxModelPatch(img, px, py)
 				if patchx.getImage() is None:
 					derivs.append(None)
 					continue
-				dx = (patchx - patch0) * (1. / psteps[i])
+				dx = (patchx - patch0) * (counts / psteps[i])
 				dx.setName('d(gal)/d(pos%i)' % i)
 				derivs.append(dx)
+
+		# derivatives wrt flux
 		fsteps = self.flux.getStepSizes(img)
 		for i in range(len(fsteps)):
 			fi = self.flux.copy()
 			fi.stepParam(i, fsteps[i])
 			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * ((countsi - counts) / counts / fsteps[i])
+			df = patch0 * ((countsi - counts) / fsteps[i])
 			df.setName('d(gal)/d(flux%i)' % i)
 			derivs.append(df)
 
+		# derivatives wrt shape
 		gsteps = self.shape.getStepSizes(img)
 		gnames = self.shape.getParamNames()
 		oldvals = self.shape.getParams()
@@ -514,9 +526,9 @@ class Galaxy(MultiParams):
 		else:
 			for i in range(len(gsteps)):
 				self.shape.stepParam(i, gsteps[i])
-				patchx = self.getModelPatch(img, px0, py0)
+				patchx = self.getUnitFluxModelPatch(img, px0, py0)
 				self.shape.setParams(oldvals)
-				dx = (patchx - patch0) * (1. / gsteps[i])
+				dx = (patchx - patch0) * (counts / gsteps[i])
 				dx.setName('d(gal)/d(%s)' % (gnames[i]))
 				derivs.append(dx)
 		return derivs
@@ -627,7 +639,28 @@ class HoggCompositeGalaxy(CompositeGalaxy):
 	def getModelPatch(self, img, px=None, py=None):
 		e = HoggExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = HoggDevGalaxy(self.pos, self.fluxDev, self.shapeDev)
-		return e.getModelPatch(img, px, py) + d.getModelPatch(img, px, py)
+		pe = e.getModelPatch(img, px, py)
+		pd = d.getModelPatch(img, px, py)
+		if pe is None:
+			return pd
+		if pd is None:
+			return pe
+		return pe + pd
+
+	def getUnitFluxModelPatch(self, img, px=None, py=None):
+		fe = self.fluxExp / (self.fluxExp + self.fluxDev)
+		fd = 1. - fe
+		assert(fe >= 0.)
+		assert(fe <= 1.)
+		e = HoggExpGalaxy(self.pos, fe, self.shapeExp)
+		d = HoggDevGalaxy(self.pos, fd, self.shapeDev)
+		pe = e.getModelPatch(img, px, py)
+		pd = d.getModelPatch(img, px, py)
+		if pe is None:
+			return pd
+		if pd is None:
+			return pe
+		return pe + pd
 
 	# couldn't this function move up to CompositeGalaxy ?
 	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
@@ -671,14 +704,18 @@ class HoggGalaxy(Galaxy):
 	def copy(self):
 		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
 
-	def getModelPatch(self, img, px=None, py=None):
+	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		galmix = self.getProfile()
 		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)
 		Tinv = np.linalg.inv(self.shape.getTensor(cd))
-		amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+		try:
+			amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+		except:
+			print 'Failed in getModelPatch of', self
+			return None
 
 		if False:
 			(eval, evec) = np.linalg.eig(amix.var[0])
@@ -709,14 +746,14 @@ class HoggGalaxy(Galaxy):
 		y0 = outy.start
 		x1 = outx.stop
 		y1 = outy.stop
-		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]), np.array([x1,y1]))
+		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]),
+											  np.array([x1,y1]))
 
 		#print 'psf sum of ampls:', np.sum(psfmix.amp)
 		#print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
 		#print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
 		#print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		#print 'x0,y0', x0,y0
 		#print 'patch shape', psfconvolvedimg.shape
 		#print 'img w,h', img.getWidth(), img.getHeight()
@@ -728,9 +765,9 @@ class HoggGalaxy(Galaxy):
 			plt.hot()
 			plt.colorbar()
 			HoggGalaxy.ps.savefig()
-		patch = psfconvolvedimg * counts
-		#print 'patch sum:', patch.sum()
-		return Patch(x0, y0, patch)
+
+		return Patch(x0, y0, psfconvolvedimg)
+
 
 class HoggExpGalaxy(HoggGalaxy):
 	profile = mp.get_exp_mixture()

@@ -325,6 +325,17 @@ class Flux(ParamList):
 	def getStepSizes(self, img):
 		return [0.1]
 
+	# enforce limit: Flux > 0
+	def setParams(self, p):
+		assert(len(p) == 1)
+		if p[0] < 0:
+			print 'Clamping Flux from', p[0], 'to zero'
+		self.val = max(0., p[0])
+	def stepParam(self, parami, delta):
+		assert(parami == 0)
+		self.setParams([self.val + delta])
+
+
 class PixPos(ParamList):
 	'''
 	A Position implementation using pixel positions.
