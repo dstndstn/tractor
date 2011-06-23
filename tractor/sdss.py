@@ -641,8 +641,8 @@ class HoggCompositeGalaxy(CompositeGalaxy):
 		derivs = []
 		for i in range(npos):
 			derivs.append(de[i] + dd[i])
-		derivs.append(de[npos:])
-		derivs.append(dd[npos:])
+		derivs.extend(de[npos:])
+		derivs.extend(dd[npos:])
 		print 'getParamDerivatives: derivs', len(derivs)
 		return derivs
 
