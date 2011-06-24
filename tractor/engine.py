@@ -1002,14 +1002,22 @@ class Catalog(list):
 
 class Tractor(object):
 
-	def __init__(self, image, catalog=[]):
+	def __init__(self, images, catalog=[]):
 		'''
 		image: list of Image objects (data)
 		catalog: list of Source objects
 		'''
-		self.images = image
+		self.images = images
 		self.catalog = Catalog(catalog)
 
+		self.cache = Cache()
+		self.cachestack = []
+
+	# For pickling
+	def __getstate__(self):
+		return (self.getImages(), self.getCatalog())
+	def __setstate__(self, state):
+		(self.images, self.catalog) = state
 		self.cache = Cache()
 		self.cachestack = []
 

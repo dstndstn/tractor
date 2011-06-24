@@ -3,11 +3,13 @@ if __name__ == '__main__':
 	matplotlib.use('Agg')
 
 import os
+import logging
 from math import sqrt
 import numpy as np
 import pylab as plt
 
 from astrometry.util.pyfits_utils import *
+from astrometry.util.file import *
 from astrometry.sdss import *
 
 from tractor import *
@@ -20,6 +22,10 @@ def save(idstr, tractor, zr):
 	synthfn = 'synth-%s.fits' % idstr
 	print 'Writing synthetic image to', synthfn
 	pyfits.writeto(synthfn, mod, clobber=True)
+
+	pfn = 'tractor-%s.pickle' % idstr
+	print 'Saving state to', pfn
+	pickle_to_file(tractor, pfn)
 
 	timg = tractor.getImage(0)
 	data = timg.getImage()
@@ -55,7 +61,15 @@ def main():
 	parser.add_option('--ntune', dest='ntune', type='int', default=0, help='Improve synthetic image over DR7 by locally optimizing likelihood for nsteps iterations')
 	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
 	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
-	(opt, args) = parser.parse_args()
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
+	opt,args = parser.parse_args()
+
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	run = opt.run
 	field = opt.field
@@ -93,7 +107,6 @@ def main():
 
 	zr = np.array([-5.,+5.]) * info['skysig']
 	save(prefix, tractor, zr)
-
 
 	for i in range(opt.ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
