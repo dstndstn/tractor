@@ -389,7 +389,14 @@ class GalaxyShape(ParamList):
 			print 'Clamping ab from', ab, 'to 1'
 		self.ab = min(1., max(1./30., ab))
 	def setphi(self, phi):
-		self.phi = np.arctan2(np.sin(phi), np.cos(phi))
+		# limit phi to [-180,180]
+		#p = np.deg2rad(phi)
+		#self.phi = np.rad2deg(np.arctan2(np.sin(p), np.cos(p)))
+		self.phi = np.fmod(phi, 360.)
+		if self.phi < -180.:
+			self.phi += 360.
+		if self.phi > 180.:
+			self.phi -= 360.
 
 	def setParams(self, p):
 		assert(len(p) == 3)
