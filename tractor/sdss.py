@@ -320,7 +320,6 @@ class SdssFlux(Flux):
 		return ('SdssFlux', self.val)
 	def copy(self):
 		return SdssFlux(self.val)
-	#def 
 
 class SdssWcs(WCS):
 	def __init__(self, astrans):
@@ -378,6 +377,32 @@ class GalaxyShape(ParamList):
 		if self.ab >= (1 - abstep):
 			abstep = -abstep
 		return [ 1., abstep, 1. ]
+
+	def setre(self, re):
+		if re < (1./30.):
+			print 'Clamping re from', re, 'to 1/30'
+		self.re = max(1./30., re)
+	def setab(self, ab):
+		if ab < (1./30.):
+			print 'Clamping ab from', ab, 'to 1/30'
+		if ab > 1.:
+			print 'Clamping ab from', ab, 'to 1'
+		self.ab = min(1., max(1./30., ab))
+	def setphi(self, phi):
+		self.phi = np.arctan2(np.sin(phi), np.cos(phi))
+
+	def setParams(self, p):
+		assert(len(p) == 3)
+		self.setre(p[0])
+		self.setab(p[1])
+		self.setphi(p[2])
+	def stepParam(self, parami, delta):
+		if parami == 0:
+			self.setre(self.re + delta)
+		if parami == 1:
+			self.setab(self.ab + delta)
+		if parami == 2:
+			self.setphi(self.phi + delta)
 
 	def getTensor(self, cd):
 		# convert re, ab, phi into a transformation matrix
