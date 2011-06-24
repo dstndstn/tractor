@@ -49,6 +49,17 @@ class GalaxyShape(ParamList):
 		if self.phi > 180.:
 			self.phi -= 360.
 
+	# Note about flipping the galaxy when ab>1:
+	#
+	# -you might worry that the caller would choose a new ab>1 and
+	#  phi, then call setab() then setphi() -- so then the phi would
+	#  be reverted.
+	#
+	# -but in Tractor.tryParamUpdates, it only calls getParams(),
+	#  stepParams(), and setParams() to revert to original params.
+	#
+	# -stepping params one at a time works fine, so it's all ok.
+
 	def setParams(self, p):
 		assert(len(p) == 3)
 		self.setre(p[0])
