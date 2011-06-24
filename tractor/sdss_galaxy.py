@@ -32,11 +32,15 @@ class GalaxyShape(ParamList):
 			print 'Clamping re from', re, 'to 1/30'
 		self.re = max(1./30., re)
 	def setab(self, ab):
-		if ab < (1./30.):
-			print 'Clamping ab from', ab, 'to 1/30'
 		if ab > 1.:
-			print 'Clamping ab from', ab, 'to 1'
-		self.ab = min(1., max(1./30., ab))
+			print 'Converting ab from', ab, 'to', 1./ab
+			self.setab(1./ab)
+			self.setphi(self.phi+90.)
+		elif ab < (1./30.):
+			print 'Clamping ab from', ab, 'to 1/30'
+			self.ab = 1./30
+		else:
+			self.ab = ab
 	def setphi(self, phi):
 		# limit phi to [-180,180]
 		self.phi = np.fmod(phi, 360.)
