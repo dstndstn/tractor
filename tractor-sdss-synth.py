@@ -4,13 +4,10 @@ if __name__ == '__main__':
 
 import os
 import logging
-from math import sqrt
 import numpy as np
 import pylab as plt
 
-from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
-from astrometry.sdss import *
 
 from tractor import *
 from tractor import sdss as st
