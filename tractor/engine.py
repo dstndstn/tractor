@@ -2,6 +2,8 @@
 
 # to-do:
 # ------
+# -write the paper!
+# -release DR9.1
 
 from math import ceil, floor, pi, sqrt, exp
 import time

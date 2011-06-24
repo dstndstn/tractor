@@ -39,8 +39,6 @@ class GalaxyShape(ParamList):
 		self.ab = min(1., max(1./30., ab))
 	def setphi(self, phi):
 		# limit phi to [-180,180]
-		#p = np.deg2rad(phi)
-		#self.phi = np.rad2deg(np.arctan2(np.sin(p), np.cos(p)))
 		self.phi = np.fmod(phi, 360.)
 		if self.phi < -180.:
 			self.phi += 360.
