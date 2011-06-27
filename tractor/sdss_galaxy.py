@@ -116,6 +116,12 @@ class Galaxy(MultiParams):
 			return getattr(self.shape, name)
 		return MultiParams.__getattr__(self, name)
 
+	def __setattr__(self, name, val):
+		if name in ['re', 'ab', 'phi']:
+			setattr(self.shape, name, val)
+			return
+		MultiParams.__setattr__(self, name, val)
+
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(), self.flux.hashkey(),
 				self.re, self.ab, self.phi)
@@ -151,6 +157,8 @@ class Galaxy(MultiParams):
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		counts = img.getPhotoCal().fluxToCounts(self.flux)
 		patch0 = self.getUnitFluxModelPatch(img, px0, py0)
+		if patch0 is None:
+			return [None] * self.numberOfParams()
 		derivs = []
 
 		# derivatives wrt position
@@ -191,6 +199,14 @@ class Galaxy(MultiParams):
 				self.shape.stepParam(i, gsteps[i])
 				patchx = self.getUnitFluxModelPatch(img, px0, py0)
 				self.shape.setParams(oldvals)
+				if patchx is None:
+					print 'patchx is None:'
+					print '  ', self
+					print '  stepping galaxy shape', self.shape.getParamNames()[i]
+					print '  stepped', gsteps[i]
+					print '  to', self.shape.getParams()[i]
+					derivs.append(None)
+
 				dx = (patchx - patch0) * (counts / gsteps[i])
 				dx.setName('d(gal)/d(%s)' % (gnames[i]))
 				derivs.append(dx)
@@ -212,14 +228,17 @@ class CompositeGalaxy(Galaxy):
 	def getNamedParams(self):
 		return [('pos', 0), ('fluxExp', 1), ('shapeExp', 2),
 				('fluxDev', 3), ('shapeDev', 4),]
+	def getFlux(self):
+		return self.fluxExp + self.fluxDev
+
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(),
 				self.fluxExp.hashkey(), self.shapeExp.hashkey(),
 				self.fluxDev.hashkey(), self.shapeDev.hashkey())
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
-				+ ' with Exp ' + str(self.fluxExp) + str(self.shapeExp)
-				+ ' and deV ' + str(self.fluxDev) + str(self.shapeDev))
+				+ ' with Exp ' + str(self.fluxExp) + ' ' + str(self.shapeExp)
+				+ ' and deV ' + str(self.fluxDev) + ' ' + str(self.shapeDev))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
 				', fluxExp=' + repr(self.fluxExp) +
@@ -239,8 +258,10 @@ class CompositeGalaxy(Galaxy):
 		if pd is None:
 			return pe
 		return pe + pd
-
+	
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
+		# this code is un-tested
+		assert(False)
 		fe = self.fluxExp / (self.fluxExp + self.fluxDev)
 		fd = 1. - fe
 		assert(fe >= 0.)
@@ -268,9 +289,7 @@ class CompositeGalaxy(Galaxy):
 			derivs.append(de[i] + dd[i])
 		derivs.extend(de[npos:])
 		derivs.extend(dd[npos:])
-		print 'getParamDerivatives: derivs', len(derivs)
 		return derivs
-
 
 class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')

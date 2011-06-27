@@ -43,6 +43,7 @@ def main():
 
 			plt.clf()
 			plt.imshow(patch.getImage(), extent=patch.getExtent(), **ima)
+			plt.gray()
 			plt.savefig('tractor-s%i-i%i-a.png' % (si, ii))
 
 			image = img.getImage()
@@ -51,6 +52,32 @@ def main():
 			plt.clf()
 			plt.imshow(I, **ima)
 			plt.savefig('tractor-s%i-i%i-b.png' % (si, ii))
+
+			if opt.derivs:
+				print 'Source', si
+				print 'Getting derivatives for', s
+				print '  params:', s.getParams()
+				print '  step sizes:', s.getStepSizes(img)
+				print '  hash key:', s.hashkey()
+				if isinstance(s, st.ExpGalaxy) or isinstance(s, st.DevGalaxy):
+					print ' -> pos', s.pos
+					print ' -> flux', s.flux
+					shape = s.shape
+					print ' -> shape', shape
+					print ' -> shape.vals', shape.vals
+					print ' -> shape.re', shape.re
+					print ' -> shape.ab', shape.ab
+					print ' -> shape.phi', shape.phi
+					
+				derivs = s.getParamDerivatives(img)
+				for di,d in enumerate(derivs):
+					if d is None:
+						continue
+					plt.clf()
+					plt.imshow(d.getImage(), **ima)
+					plt.title('Derivative: %s' % d.getName())
+					plt.savefig('tractor-s%i-i%i-d%i.png' % (si, ii, di))
+			
 
 
 	

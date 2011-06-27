@@ -311,6 +311,9 @@ class SdssFlux(Flux):
 		return ('SdssFlux', self.val)
 	def copy(self):
 		return SdssFlux(self.val)
+	def __add__(self, other):
+		assert(isinstance(other, SdssFlux))
+		return SdssFlux(self.val + other.val)
 
 class SdssWcs(WCS):
 	def __init__(self, astrans):
@@ -522,7 +525,6 @@ class SDSSTractor(Tractor):
 			fn = 'newsource-%02i-%02i.png' % (self.newsource, optstep)
 			plt.savefig(fn)
 			print 'Wrote', fn
-			
 
 	def createNewSource(self, img, x, y, ht):
 		wcs = img.getWcs()

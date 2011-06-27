@@ -7,6 +7,8 @@ import logging
 import numpy as np
 import pylab as plt
 
+import pyfits
+
 from astrometry.util.file import *
 
 from tractor import *
@@ -83,7 +85,6 @@ def main():
 		print 'Must supply band (u/g/r/i/z)'
 		sys.exit(-1)
 	bandname = band
-	bandnum = band_index(bandname)
 	prefix = opt.prefix
 	if prefix is None:
 		prefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
@@ -92,6 +93,13 @@ def main():
 					 curl=opt.curl, roi=opt.roi)
 	sources = st.get_tractor_sources(run, camcol, field, bandname,
 					 curl=opt.curl, roi=opt.roi)
+
+	photocal = timg.getPhotoCal()
+	for source in sources:
+		print 'source', source
+		print 'flux', source.getFlux()
+		print 'counts', photocal.fluxToCounts(source.getFlux())
+		assert(photocal.fluxToCounts(source.getFlux()) > 0.)
 
 	### DEBUG
 	wcs = timg.getWcs()

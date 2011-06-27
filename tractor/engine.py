@@ -83,16 +83,27 @@ class ParamList(Params):
 	An implementation of Params that holds values in a list.
 	'''
 	def __init__(self, *args):
-		self.vals = list(args)
 		self.namedparams = self.getNamedParams()
+		self.vals = list(args)
 	def getNamedParams(self):
 		return []
 	def __getattr__(self, name):
+		if not 'namedparams' in self.__dict__:
+			raise AttributeError
 		for n,i in self.namedparams:
 			if name == n:
 				return self.vals[i]
 		raise AttributeError('ParamList (%s): unknown attribute "%s"' %
 							 (str(type(self)), name))
+	def __setattr__(self, name, val):
+		if name in ['vals', 'namedparams']:
+			self.__dict__[name] = val
+			return
+		for n,i in self.namedparams:
+			if name == n:
+				self.vals[i] = val
+				return
+		self.__dict__[name] = val
 	def hashkey(self):
 		return ('ParamList',) + tuple(self.vals)
 	def numberOfParams(self):
@@ -146,6 +157,8 @@ class MultiParams(Params):
 	def getNamedParams(self):
 		return []
 	def __getattr__(self, name):
+		if not 'namedparams' in self.__dict__:
+			raise AttributeError
 		for n,i in self.namedparams:
 			if name == n:
 				return self.subs[i]
@@ -184,10 +197,10 @@ class MultiParams(Params):
 			s.setParams(p[i:i+n])
 			i += n
 
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		p = []
 		for s in self.subs:
-			p.extend(s.getStepSizes())
+			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 
 
@@ -324,7 +337,7 @@ class Flux(ParamList):
 		return Flux(self.val)
 	def getValue(self):
 		return self.val
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		return [0.1]
 
 	# enforce limit: Flux > 0
@@ -336,7 +349,6 @@ class Flux(ParamList):
 	def stepParam(self, parami, delta):
 		assert(parami == 0)
 		self.setParams([self.val + delta])
-
 
 class PixPos(ParamList):
 	'''
@@ -355,7 +367,7 @@ class PixPos(ParamList):
 
 	def getDimension(self):
 		return 2
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		return [0.1, 0.1]
 
 class RaDecPos(ParamList):
@@ -374,7 +386,7 @@ class RaDecPos(ParamList):
 		return ('RaDecPos', self.ra, self.dec)
 	def getDimension(self):
 		return 2
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		return [1e-4, 1e-4]
 
 
@@ -685,7 +697,7 @@ class Patch(object):
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch * flux)
 
-	def performArithmetic(self, other, string):
+	def performArithmetic(self, other, opname):
 		assert(isinstance(other, Patch))
 		if (self.x0 == other.getX0() and self.y0 == other.getY0() and
 			self.shape == other.shape):
@@ -694,7 +706,9 @@ class Patch(object):
 			assert(self.shape == other.shape)
 			if self.patch is None or other.patch is None:
 				return Patch(self.x0, self.y0, None)
-			return Patch(self.x0, self.y0, self.patch - other.patch)
+			pcopy = self.patch.copy()
+			op = getattr(pcopy, opname)
+			return Patch(self.x0, self.y0, op(other.patch))
 
 		(ph,pw) = self.patch.shape
 		(ox0,oy0) = other.getX0(), other.getY0()
@@ -712,7 +726,7 @@ class Patch(object):
 
 		psub = p[oy0 - uy0 : oy0 - uy0 + oh,
 				 ox0 - ux0 : ox0 - ux0 + ow]
-		op = getattr(psub, string)
+		op = getattr(psub, opname)
 		op(other.getImage())
 		return Patch(ux0, uy0, p)
 
@@ -746,7 +760,7 @@ class PSF(Params):
 	def proposeIncreasedComplexity(self, img):
 		return PSF()
 	
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		return []
 	def isValidParamStep(self, dparam):
 		return True
@@ -766,7 +780,7 @@ class GaussianMixturePSF(Params):
 		return self.mog
 	def proposeIncreasedComplexity(self, img):
 		raise
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		K = self.mog.K
 		# amp + mean + var
 		# FIXME: -1 for normalization?
@@ -899,7 +913,7 @@ class NCircularGaussianPSF(MultiParams):
 		return NCircularGaussianPSF(list(self.sigmas) + [maxs + 1.],
 							list(self.weights) + [0.05])
 
-	def getStepSizes(self, img):
+	def getStepSizes(self, img, *args, **kwargs):
 		N = len(self.sigmas)
 		return [0.01]*N + [0.01]*N
 
