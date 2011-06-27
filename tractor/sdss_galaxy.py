@@ -68,10 +68,12 @@ class GalaxyShape(ParamList):
 	def stepParam(self, parami, delta):
 		if parami == 0:
 			self.setre(self.re + delta)
-		if parami == 1:
+		elif parami == 1:
 			self.setab(self.ab + delta)
-		if parami == 2:
+		elif parami == 2:
 			self.setphi(self.phi + delta)
+		else:
+			raise RuntimeError('GalaxyShape: unknown parami: ' + str(parami))
 
 	def getTensor(self, cd):
 		# convert re, ab, phi into a transformation matrix
@@ -192,13 +194,17 @@ class Galaxy(MultiParams):
 		gsteps = self.shape.getStepSizes(img)
 		gnames = self.shape.getParamNames()
 		oldvals = self.shape.getParams()
+		print 'Galaxy.getParamDerivatives:', self.getName()
+		print '  oldvals:', oldvals
 		if fluxonly:
 			derivs.extend([None] * len(gsteps))
 		else:
 			for i in range(len(gsteps)):
 				self.shape.stepParam(i, gsteps[i])
+				print '  stepped', gnames[i], 'by', gsteps[i], 'to get', self.shape
 				patchx = self.getUnitFluxModelPatch(img, px0, py0)
 				self.shape.setParams(oldvals)
+				print '  reverted to', self.shape
 				if patchx is None:
 					print 'patchx is None:'
 					print '  ', self
@@ -286,7 +292,9 @@ class CompositeGalaxy(Galaxy):
 		npos = len(self.pos.getStepSizes(img))
 		derivs = []
 		for i in range(npos):
-			derivs.append(de[i] + dd[i])
+			dp = de[i] + dd[i]
+			dp.setName('d(gal)/d(pos%i)' % i)
+			derivs.append(dp)
 		derivs.extend(de[npos:])
 		derivs.extend(dd[npos:])
 		return derivs

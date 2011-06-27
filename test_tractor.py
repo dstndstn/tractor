@@ -36,6 +36,16 @@ class TractorTest(unittest.TestCase):
 		self.assertEqual(gal.getParams(), [ra, dec, flux, re2, ab, phi])
 		self.assertEqual(shape.getParams(), [re2, ab, phi])
 
+		re3 = 7.77
+		gal.shape = GalaxyShape(re3, ab, phi)
+		self.assertEqual(gal.re, re3)
+
+		# However:
+		self.assertNotEqual(gal.shape, shape)
+		self.assertNotEqual(shape.re, re3)
+		self.assertEqual(shape.re, re2)
+
+
 if __name__ == '__main__':
 	unittest.main()
 		

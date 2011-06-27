@@ -22,7 +22,10 @@ def main():
 	parser = OptionParser(usage=('%prog <tractorX.pickle>'))
 	parser.add_option('--derivs', dest='derivs', action='store_true',
 					  default=False, help='Plot derivatives for each source?')
-					  
+	parser.add_option('--source', '-s', dest='sources', action='append',
+					  default=[], type=int,
+					  help='Process only the given sources')
+
 	opt,args = parser.parse_args()
 	if len(args) != 1:
 		parser.print_help()
@@ -32,7 +35,13 @@ def main():
 	pfn = args[0]
 	tractor = unpickle_from_file(pfn)
 
-	for si,s in enumerate(tractor.getCatalog()):
+	srci = opt.sources
+	if len(srci) == 0:
+		srci = range(len(tractor.getCatalog()))
+
+	#for si,s in enumerate(tractor.getCatalog()):
+	for si in srci:
+		s = tractor.getCatalog()[si]
 		print
 		print 'Making plots for', s
 		for ii,img in enumerate(tractor.getImages()):
