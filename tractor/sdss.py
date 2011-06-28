@@ -122,8 +122,6 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 		hasexp = (Lexp[i] > 0)
 		iscomp = (hasdev and hasexp)
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		# FIXME -- should we really use counts_model if it's purely one
-		# or the other model type, or should we use counts_dev/exp ?
 		if iscomp:
 			lups = objs.counts_model[i,bandnum]
 		elif hasdev:

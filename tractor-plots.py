@@ -65,20 +65,26 @@ def main():
 			if opt.derivs:
 				print 'Source', si
 				print 'Getting derivatives for', s
+				p0 = s.getParams()
 				print '  params:', s.getParams()
 				print '  step sizes:', s.getStepSizes(img)
 				print '  hash key:', s.hashkey()
 				if isinstance(s, st.ExpGalaxy) or isinstance(s, st.DevGalaxy):
 					print ' -> pos', s.pos
+					print '    pos params', s.pos.getParams()
 					print ' -> flux', s.flux
+					print '    flux params', s.flux.getParams()
 					shape = s.shape
 					print ' -> shape', shape
+					print '    shape params', shape.getParams()
 					print ' -> shape.vals', shape.vals
 					print ' -> shape.re', shape.re
 					print ' -> shape.ab', shape.ab
 					print ' -> shape.phi', shape.phi
 					
 				derivs = s.getParamDerivatives(img)
+				p1 = s.getParams()
+				assert(p0 == p1)
 				for di,d in enumerate(derivs):
 					if d is None:
 						continue

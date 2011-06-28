@@ -154,6 +154,7 @@ class Galaxy(MultiParams):
 		return p1 * counts
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
+	# Galaxy.
 	def getParamDerivatives(self, img, fluxonly=False):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
@@ -284,7 +285,11 @@ class CompositeGalaxy(Galaxy):
 
 	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
 	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
+	# CompositeGalaxy.
 	def getParamDerivatives(self, img, fluxonly=False):
+		print 'CompositeGalaxy: getParamDerivatives'
+		print '  Exp flux', self.fluxExp, 'shape', self.shapeExp
+		print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
 		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
 		de = e.getParamDerivatives(img, fluxonly)
