@@ -195,17 +195,18 @@ class Galaxy(MultiParams):
 		gsteps = self.shape.getStepSizes(img)
 		gnames = self.shape.getParamNames()
 		oldvals = self.shape.getParams()
-		print 'Galaxy.getParamDerivatives:', self.getName()
-		print '  oldvals:', oldvals
+		#print 'Galaxy.getParamDerivatives:', self.getName()
+		#print '  oldvals:', oldvals
 		if fluxonly:
 			derivs.extend([None] * len(gsteps))
 		else:
 			for i in range(len(gsteps)):
 				self.shape.stepParam(i, gsteps[i])
-				print '  stepped', gnames[i], 'by', gsteps[i], 'to get', self.shape
+				#print '  stepped', gnames[i], 'by', gsteps[i],
+				#print 'to get', self.shape
 				patchx = self.getUnitFluxModelPatch(img, px0, py0)
 				self.shape.setParams(oldvals)
-				print '  reverted to', self.shape
+				#print '  reverted to', self.shape
 				if patchx is None:
 					print 'patchx is None:'
 					print '  ', self

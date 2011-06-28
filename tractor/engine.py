@@ -1512,6 +1512,27 @@ class Tractor(object):
 		logverb('  X=', X)
 		return X
 
+	# Hmm, does this make you think Catalog should be a MultiParams?
+	def stepParams(self, X, srcs=None, alpha=1.):
+ 		if srcs is None:
+			srcs = self.catalog
+		oldparams = []
+		par0 = 0
+		for j,src in enumerate(srcs):
+			npar = src.numberOfParams()
+			dparams = X[par0 : par0 + npar]
+			par0 += npar
+			assert(len(dparams) == src.numberOfParams())
+			oldparams.append(src.getParams())
+			src.stepParams(dparams * alpha)
+		return oldparams
+	def revertParams(self, oldparams, srcs=None):
+ 		if srcs is None:
+			srcs = self.catalog
+		assert(len(srcs) == len(oldparams))
+		for j,src in enumerate(srcs):
+			src.setParams(oldparams[j])
+
 	# X: delta-params
 	#
 	# Returns: delta-logprob, alphaBest
@@ -1528,22 +1549,10 @@ class Tractor(object):
 
 		for alpha in alphas:
 			logverb('  Stepping with alpha =', alpha)
-			oldparams = []
-			par0 = 0
-			for j,src in enumerate(srcs):
-				npar = src.numberOfParams()
-				dparams = X[par0 : par0 + npar]
-				par0 += npar
-				assert(len(dparams) == src.numberOfParams())
-				oldparams.append(src.getParams())
-				src.stepParams(dparams * alpha)
-
+			oldparams = self.stepParams(X, srcs, alpha)
 			pAfter = self.getLogProb()
 			logverb('  delta log-prob:', pAfter - pBefore)
-
-			assert(len(srcs) == len(oldparams))
-			for j,src in enumerate(srcs):
-				src.setParams(oldparams[j])
+			self.revertParams(oldparams, srcs)
 
 			# want to improve over last step.
 			# (allow some margin though)
@@ -1582,10 +1591,14 @@ class Tractor(object):
 		-take step (try full step, back off)
 		'''
 		logverb('Optimizing at fixed complexity')
+		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
+		X = self.optimize(allparams)
+		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
+		return dlogprob, X, alpha
 
+	def getAllDerivs(self, srcs=None, fluxonly=False, sky=True):
  		if srcs is None:
 			srcs = self.catalog
-
 		allparams = []
 		for j,src in enumerate(srcs):
 			allderivs = [[] for i in range(src.numberOfParams())]
@@ -1602,12 +1615,7 @@ class Tractor(object):
 			for i,img in enumerate(self.getImages()):
 				derivs = img.getSky().getParamDerivatives(img)
 				allparams.extend([[(d,img) for d in derivs]])
-
-		X = self.optimize(allparams)
-
-		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
-
-		return dlogprob, X, alpha
+		return allparams
 	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
