@@ -275,9 +275,11 @@ class PointSource(MultiParams):
 	def getFlux(self):
 		return self.flux
 	def __str__(self):
-		return 'PointSource at ' + str(self.pos) + ' with ' + str(self.flux)
+		return (self.getSourceType() + ' at ' + str(self.pos) +
+				' with ' + str(self.flux))
 	def __repr__(self):
-		return 'PointSource(' + repr(self.pos) + ', ' + repr(self.flux) + ')'
+		return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
+				repr(self.flux) + ')')
 	def copy(self):
 		return PointSource(self.pos.copy(), self.flux.copy())
 	def hashkey(self):
@@ -1047,11 +1049,17 @@ class Tractor(object):
 	def getCatalog(self):
 		return self.catalog
 
+	def setCatalog(self, srcs):
+		self.catalog = srcs
+
 	def addSource(self, src):
 		self.catalog.append(src)
 
 	def addSources(self, srcs):
 		self.catalog.extend(srcs)
+
+	def removeSource(self, src):
+		self.catalog.remove(src)
 
 	def increasePsfComplexity(self, imagei):
 		print 'Increasing complexity of PSF in image', imagei
@@ -1567,6 +1575,8 @@ class Tractor(object):
 			return 0, 0.
 
 		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+ 		if srcs is None:
+			srcs = self.catalog
 		par0 = 0
 		for j,src in enumerate(srcs):
 			npar = src.numberOfParams()
