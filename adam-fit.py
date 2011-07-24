@@ -136,14 +136,19 @@ if __name__ == '__main__':
 	camcol = 3
 	field = 12
 	band = 'r'
-	roi = [1850, 1950, 600, 700]
+	roi = [1850, 1950, 620, 720]
 	x0,y0 = roi[0],roi[2]
+
+	# rd1 is near the position of the SDSS-catalog object
+	# rd2 is four pixels above.
+	rd1 = RaDecPos(225.67954, 11.265948)
+	rd2 = RaDecPos(225.67991, 11.265852)
 
 	lvl = logging.INFO
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 	bandname = band
 
-	prefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
+	sdssprefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
 
 	timg,info = st.get_tractor_image(run, camcol, field, bandname,
 									 roi=roi)
@@ -158,11 +163,67 @@ if __name__ == '__main__':
 	tractor = st.SDSSTractor([timg])
 	tractor.addSources(sources)
 
-	zr = np.array([-5.,+5.]) * info['skysig']
-	save(prefix, tractor, zr)
+	zr = np.array([-5.,+10.]) * info['skysig']
+	save(sdssprefix, tractor, zr)
 
 	lnl0 = tractor.getLogLikelihood()
 
+	##
+	# -original SDSS catalog
+	# -original SDSS - SDSS source + 2 pinned PointSources
+	# -                            + pinned PointSource + pinned DeV
+	# -                            + pinned DeV + pinned PointSource
+	# -                            + 2 pinned Composite
+	##
+
+	mini = -1
+	mind2 = 1e6
+	for i,src in enumerate(sources):
+		rd = src.getPosition()
+		rascale = np.cos(np.deg2rad(rd.ra))
+		d2 = ((rd.ra - rd1.ra)*rascale)**2 + (rd.dec - rd1.dec)**2
+		if d2 < mind2:
+			mind2 = d2
+			mini = i
+	gal = sources[mini]
+	print 'Closest source:', gal
+	tractor.removeSource(gal)
+
+	sc = st.SdssPhotoCal.scale
+
+	newsrc1 = [
+		PointSource(rd1, 0.5 * gal.flux),
+		DevGalaxy(rd1, 0.5 * gal.flux, gal.shape),
+		Galaxy(rd1, 0.5 * gal.flux, gal.shape),
+		]
+	newsrc2 = [ 
+		PointSource(rd2, 0.5 * gal.flux),
+		DevGalaxy(rd2, 0.5 * gal.flux, gal.shape),
+		Galaxy(rd2, 0.5 * gal.flux, gal.shape),
+		]
+
+	lnls = np.zeros((len(newsrc1), len(newsrc2)))
+	for i,ns1 in enumerate(newsrc1):
+		for j,ns2 in enumerate(newsrc2):
+			# add sources
+			tractor.addSource(ns1)
+			tractor.addSource(ns2)
+			# pin source positions
+			ns1.pinParam('pos')
+			ns2.pinParam('pos')
+			# optimize fluxes and shapes
+			for i in range(10):
+				tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2])
+			lnls[i,j] = tractor.getLogLikelihood()
+			# make some freaky plots
+			prefix = '%s-%d-%d' % (sdssprefix, i, j)
+			print prefix, lnls[i,j]
+			save(prefix, tractor, zr)
+			# remove sources again
+			tractor.removeSource(ns1)
+			tractor.removeSource(ns2)
+
+	sys.exit(0)
 	ntune = 10
 	for i in range(ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
@@ -180,21 +241,6 @@ if __name__ == '__main__':
 	#radec = wcs.pixelToPosition(None, (1908-x0, 673-y0))
 	#print 'RA,Dec', radec
 	#tractor.addSource(PointSource(radec, st.SdssFlux(10000. / st.SdssPhotoCal.scale)))
-	rdgal  = RaDecPos(225.67954, 11.265948)
-	rdstar = RaDecPos(225.67991, 11.265852)
-	mini = -1
-	mind2 = 1e6
-	for i,src in enumerate(sources):
-		rd = src.getPosition()
-		rascale = np.cos(np.deg2rad(rd.ra))
-		d2 = ((rd.ra - rdgal.ra)*rascale)**2 + (rd.dec - rdgal.dec)**2
-		if d2 < mind2:
-			mind2 = d2
-			mini = i
-	gal = sources[mini]
-	print 'Closest source:', gal
-	tractor.removeSource(gal)
-
 	cat0 = tractor.getCatalog().deepcopy()
 
 	sc = st.SdssPhotoCal.scale

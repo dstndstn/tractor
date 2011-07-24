@@ -154,6 +154,8 @@ class MultiParams(Params):
 	def __init__(self, *args):
 		self.subs = args
 		self.namedparams = self.getNamedParams()
+		# indices of pinned params
+		self.pinnedparams = []
 	def getNamedParams(self):
 		return []
 	def __getattr__(self, name):
@@ -172,11 +174,52 @@ class MultiParams(Params):
 			t = t + s.hashkey()
 		return t
 
+	def getNamedParamIndex(self, name):
+		for n,i in self.namedparams:
+			if n == name:
+				return i
+		return None
+	def getNamedParamName(self, ii):
+		for n,i in self.namedparams:
+			if i == ii:
+				return n
+		return None
+
+	def pinParam(self, paramname):
+		i = self.getNamedParamIndex(paramname)
+		assert(i is not None)
+		self.pinnedparams.append(i)
+	def unpinParam(self, paramname):
+		i = self.getNamedParamIndex(paramname)
+		assert(i is not None)
+		self.pinnedparams.remove(i)
+	def unpinAllParams(self, paramname):
+		self.pinnedparams = []
+	def getPinnedParams(self):
+		return [self.getNamedParamName(i) for i in self.pinnedparams]
+	def getUnpinnedParamIndices(self):
+		ii = []
+		for i in range(len(self.subs)):
+			if not i in self.pinnedparams:
+				ii.append(i)
+		return ii
+	def getUnpinnedSubs(self):
+		ss = []
+		for i,s in enumerate(self.subs):
+			if not i in self.pinnedparams:
+				ss.append(s)
+		return ss
+	def isParamPinned(self, paramname):
+		i = self.getNamedParamIndex(paramname)
+		assert(i is not None)
+		return i in self.pinnedparams
+
 	def numberOfParams(self):
+		#return sum(s.numberOfParams() for s in self.getUnpinnedSubs())
 		return sum(s.numberOfParams() for s in self.subs)
 
 	def stepParam(self, parami, delta):
-		for s in self.subs:
+		for s in self.getUnpinnedSubs():
 			n = s.numberOfParams()
 			if parami < n:
 				s.stepParam(parami, delta)
@@ -186,20 +229,20 @@ class MultiParams(Params):
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		p = []
-		for s in self.subs:
+		for s in self.getUnpinnedSubs():
 			p.extend(s.getParams())
 		return p
 
 	def setParams(self, p):
 		i = 0
-		for s in self.subs:
+		for s in self.getUnpinnedSubs():
 			n = s.numberOfParams()
 			s.setParams(p[i:i+n])
 			i += n
 
 	def getStepSizes(self, *args, **kwargs):
 		p = []
-		for s in self.subs:
+		for s in self.getUnpinnedSubs():
 			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 
@@ -301,7 +344,9 @@ class PointSource(MultiParams):
 		counts0 = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
-		if fluxonly:
+		if self.isParamPinned('pos'):
+			pass
+		elif fluxonly:
 			derivs.extend([None] * len(psteps))
 		else:
 			for i in range(len(psteps)):
@@ -337,6 +382,11 @@ class Flux(ParamList):
 		return 'Flux: %g' % self.val
 	def copy(self):
 		return Flux(self.val)
+	def __mul__(self, factor):
+		new = self.copy()
+		new.val *= factor
+		return new
+	__rmul__ = __mul__
 	def getValue(self):
 		return self.val
 	def getStepSizes(self, img, *args, **kwargs):
