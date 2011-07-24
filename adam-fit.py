@@ -94,9 +94,7 @@ def makeflipbook(ntune, prefix):
 	open(fn, 'wb').write(tex)
 	os.system("pdflatex '%s'" % fn)
 
-
 if __name__ == '__main__':
-
 	run = 3972
 	camcol = 3
 	field = 12
@@ -128,19 +126,11 @@ if __name__ == '__main__':
 	tractor = st.SDSSTractor([timg])
 	tractor.addSources(sources)
 
-	zr = np.array([-5.,+10.]) * info['skysig']
-	save(sdssprefix, tractor, zr)
+	lnlorig = tractor.getLogLikelihood()
+	zr = np.array([-5.,+20.]) * info['skysig']
+	save(sdssprefix+'-orig', tractor, zr)
 
-	lnl0 = tractor.getLogLikelihood()
-
-	##
-	# -original SDSS catalog
-	# -original SDSS - SDSS source + 2 pinned PointSources
-	# -                            + pinned PointSource + pinned DeV
-	# -                            + pinned DeV + pinned PointSource
-	# -                            + 2 pinned Composite
-	##
-
+	# find closest source
 	mini = -1
 	mind2 = 1e6
 	for i,src in enumerate(sources):
@@ -151,28 +141,54 @@ if __name__ == '__main__':
 			mind2 = d2
 			mini = i
 	gal = sources[mini]
+	galorig = gal.copy()
 	print 'Closest source:', gal
-	tractor.removeSource(gal)
 
-	sc = st.SdssPhotoCal.scale
+	# optimize original SDSS source (at fixed complexity)
+	nsteps = 200
+	mndl = 0. # 0 for machine precision
+	tractor.optimizeCatalogLoop(nsteps=nsteps, mindlnprob=mndl,
+								srcs=[gal,], sky=False)
+	lnlopt = tractor.getLogLikelihood()
+	galopt = gal.copy()
+	save(sdssprefix+'-opt', tractor, zr)
 
+	##
+	# -original SDSS catalog
+	# -original SDSS - SDSS source + 2 pinned PointSources
+	# -                            + pinned PointSource + pinned DeV
+	# -                            + pinned DeV + pinned PointSource
+	# -                            + 2 pinned Composite
+	##
+
+	# set non-trivial initializations
+	shape1 = galorig.shape.copy()
+	shape1.re = 1. / 30.
+	shape2 = galorig.shape.copy()
 	newsrc1 = [
-		PointSource(rd1.copy(), 0.5 * gal.flux),
-		DevGalaxy(rd1.copy(), 0.5 * gal.flux, gal.shape.copy()),
-		CompositeGalaxy(rd1.copy(), 0.25 * gal.flux, gal.shape.copy(),
-						0.25 * gal.flux, gal.shape.copy()),
+		PointSource(rd1.copy(), 0.5 * galorig.flux),
+		ExpGalaxy(rd1.copy(), 0.5 * galorig.flux, shape1.copy()),
+		DevGalaxy(rd1.copy(), 0.5 * galorig.flux, shape1.copy()),
+		CompositeGalaxy(rd1.copy(), 0.25 * galorig.flux, shape1.copy(),
+						0.25 * galorig.flux, shape1.copy()),
 		]
 	newsrc2 = [ 
-		PointSource(rd2.copy(), 0.5 * gal.flux),
-		DevGalaxy(rd2.copy(), 0.5 * gal.flux, gal.shape.copy()),
-		CompositeGalaxy(rd2.copy(), 0.25 * gal.flux, gal.shape.copy(),
-						0.25 * gal.flux, gal.shape.copy()),
+		PointSource(rd2.copy(), 0.5 * galorig.flux),
+		ExpGalaxy(rd2.copy(), 0.5 * galorig.flux, shape2.copy()),
+		DevGalaxy(rd2.copy(), 0.5 * galorig.flux, shape2.copy()),
+		CompositeGalaxy(rd2.copy(), 0.25 * galorig.flux, shape2.copy(),
+						0.25 * galorig.flux, shape2.copy()),
 		]
 
+	# loop over source models, optimizing each in turn
+	tractor.removeSource(gal)
 	lnls = np.zeros((len(newsrc1), len(newsrc2)))
-	for i,ns1 in enumerate(newsrc1):
-		for j,ns2 in enumerate(newsrc2):
+	optsrcs = []
+	for i,ons1 in enumerate(newsrc1):
+		for j,ons2 in enumerate(newsrc2):
 			# add sources
+			ns1 = ons1.copy()
+			ns2 = ons2.copy()
 			tractor.addSource(ns1)
 			tractor.addSource(ns2)
 			print 'Created sources:'
@@ -184,24 +200,51 @@ if __name__ == '__main__':
 			# optimize fluxes and shapes
 			#D = tractor.getAllDerivs(srcs=[ns1,ns2], sky=False)
 			#print D
-			for k in range(10):
-				tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2],
-															 sky=False)
-				assert(ns1.pos == rd1)
-				assert(ns2.pos == rd2)
-			lnls[i,j] = tractor.getLogLikelihood()
+			#for k in range(10):
+			#	tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2],
+			#												 sky=False)
+			tractor.optimizeCatalogLoop(nsteps=nsteps, mindlnprob=mndl,
+										srcs=[ns1,ns2], sky=False)
+			assert(ns1.pos == rd1)
+			assert(ns2.pos == rd2)
+
+			lnls[i, j] = tractor.getLogLikelihood()
 			# make some freaky plots
 			prefix = '%s-%d-%d' % (sdssprefix, i, j)
 			print 'Optimized sources:'
 			print ' ', ns1
 			print ' ', ns2
-			print prefix, lnls[i,j]
+			print prefix, lnls[i, j]
 			save(prefix, tractor, zr)
 			# remove sources again
 			tractor.removeSource(ns1)
 			tractor.removeSource(ns2)
+			#
+			optsrcs.append((prefix, i,j,ns1.copy(),ns2.copy(),lnls[i,j]))
 
+	# output
+	print
+	print sdssprefix
+	print 'original ln likelihood:', lnlorig
+	print '  ', galorig
+	print
+	print sdssprefix
+	print 'optimized (at original SDSS complexity) ln likelihood:', lnlopt
+	print '  ', galopt
+
+	for prefix,i,j,ns1,ns2,lnl in optsrcs:
+		print
+		print prefix
+		print i,j, 'new ln likelihood:', lnl
+		print '  ', ns1
+		print '  ', ns2
+
+	print
+	# ------------------------------------------------------------------
+	# die
+	# ------------------------------------------------------------------
 	sys.exit(0)
+
 	ntune = 10
 	for i in range(ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
@@ -243,7 +286,6 @@ if __name__ == '__main__':
 
 	lnl2 = tractor.getLogLikelihood()
 
-
 	#for i in range(ntune):
 	#	tractor.optimizeCatalogLoop(nsteps=1)
 	#	save('tune-%d-' % (i+1) + prefix, tractor, zr)
@@ -269,14 +311,9 @@ if __name__ == '__main__':
 		x,y = wcs.positionToPixel(source, source.getPosition())
 		print '  (%.2f, %.2f):' % (x+x0,y+y0), source
 
-
 	makeflipbook(ntune*2, prefix)
 	print
 	print 'Created flip-book flip-%s.pdf' % prefix
-
-
-
-
 	
 	prefix = 'starstar-%06i-%s%i-%04i' % (run, bandname, camcol, field)
 	ps2 = PinnedPointSource(rdgal, gal.flux)

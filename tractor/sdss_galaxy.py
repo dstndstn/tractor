@@ -258,8 +258,9 @@ class CompositeGalaxy(Galaxy):
 				', fluxDev=' + repr(self.fluxDev) +
 				', shapeDev=' + repr(self.shapeDev))
 	def copy(self):
-		return CompositeGalaxy(self.pos, self.fluxExp, self.shapeExp,
-							   self.fluxDev, self.shapeDev)
+		return CompositeGalaxy(self.pos.copy(), self.fluxExp.copy(),
+							   self.shapeExp.copy(), self.fluxDev.copy(),
+							   self.shapeDev.copy())
 	def getModelPatch(self, img, px=None, py=None):
 		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
@@ -344,7 +345,8 @@ class HoggGalaxy(Galaxy):
 		return 'HoggGalaxy'
 
 	def copy(self):
-		return HoggGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+		return HoggGalaxy(self.pos.copy(), self.flux.copy(),
+						  self.re, self.ab, self.phi)
 
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
@@ -424,7 +426,8 @@ class ExpGalaxy(HoggGalaxy):
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
 	def copy(self):
-		return ExpGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+		return ExpGalaxy(self.pos.copy(), self.flux.copy(),
+						 self.re, self.ab, self.phi)
 
 class DevGalaxy(HoggGalaxy):
 	profile = mp.get_dev_mixture()
@@ -439,4 +442,5 @@ class DevGalaxy(HoggGalaxy):
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
 	def copy(self):
-		return DevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
+		return DevGalaxy(self.pos.copy(), self.flux.copy(),
+						 self.re, self.ab, self.phi)

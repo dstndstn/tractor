@@ -1151,6 +1151,7 @@ class Tractor(object):
 		return []
 
 	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
+		mindlnprob = kwargs.pop('mindlnprob', 1.e-3)
 		for ostep in range(nsteps):
 			logmsg('Optimizing the new sources (step %i)...' % (ostep+1))
 			dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
@@ -1161,8 +1162,8 @@ class Tractor(object):
 					logmsg('-> ', srcs[0])
 				else:
 					logmsg('-> ', srcs)
-			if dlnprob < 1.:
-				logverb('failed to improve the new source enough (d lnprob = %g)' % dlnprob)
+			if dlnprob <= mindlnprob:
+				logverb('converged to tolerance %g (d lnprob = %g)' % (mindlnprob, dlnprob))
 				return False
 		return True
 
