@@ -203,23 +203,16 @@ class MultiParams(Params):
 			if not i in self.pinnedparams:
 				ii.append(i)
 		return ii
-	def getUnpinnedSubs(self):
-		ss = []
-		for i,s in enumerate(self.subs):
-			if not i in self.pinnedparams:
-				ss.append(s)
-		return ss
 	def isParamPinned(self, paramname):
 		i = self.getNamedParamIndex(paramname)
 		assert(i is not None)
 		return i in self.pinnedparams
 
 	def numberOfParams(self):
-		#return sum(s.numberOfParams() for s in self.getUnpinnedSubs())
 		return sum(s.numberOfParams() for s in self.subs)
 
 	def stepParam(self, parami, delta):
-		for s in self.getUnpinnedSubs():
+		for s in self.subs:
 			n = s.numberOfParams()
 			if parami < n:
 				s.stepParam(parami, delta)
@@ -229,20 +222,20 @@ class MultiParams(Params):
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		p = []
-		for s in self.getUnpinnedSubs():
+		for s in self.subs:
 			p.extend(s.getParams())
 		return p
 
 	def setParams(self, p):
 		i = 0
-		for s in self.getUnpinnedSubs():
+		for s in self.subs:
 			n = s.numberOfParams()
 			s.setParams(p[i:i+n])
 			i += n
 
 	def getStepSizes(self, *args, **kwargs):
 		p = []
-		for s in self.getUnpinnedSubs():
+		for s in self.subs:
 			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 
@@ -344,9 +337,7 @@ class PointSource(MultiParams):
 		counts0 = img.getPhotoCal().fluxToCounts(self.flux)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
-		if self.isParamPinned('pos'):
-			pass
-		elif fluxonly:
+		if fluxonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			for i in range(len(psteps)):
@@ -359,13 +350,16 @@ class PointSource(MultiParams):
 				derivs.append(dx)
 
 		fsteps = self.flux.getStepSizes(img)
-		for i in range(len(fsteps)):
-			fi = self.flux.copy()
-			fi.stepParam(i, fsteps[i])
-			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * ((countsi - counts0) / fsteps[i])
-			df.setName('d(ptsrc)/d(flux%i)' % i)
-			derivs.append(df)
+		if self.isParamPinned('flux'):
+			derivs.extend([None] * len(fsteps))
+		else:
+			for i in range(len(fsteps)):
+				fi = self.flux.copy()
+				fi.stepParam(i, fsteps[i])
+				countsi = img.getPhotoCal().fluxToCounts(fi)
+				df = patch0 * ((countsi - counts0) / fsteps[i])
+				df.setName('d(ptsrc)/d(flux%i)' % i)
+				derivs.append(df)
 		return derivs
 
 class Flux(ParamList):
@@ -396,7 +390,8 @@ class Flux(ParamList):
 	def setParams(self, p):
 		assert(len(p) == 1)
 		if p[0] < 0:
-			print 'Clamping Flux from', p[0], 'to zero'
+			#print 'Clamping Flux from', p[0], 'to zero'
+			pass
 		self.val = max(0., p[0])
 	def stepParam(self, parami, delta):
 		assert(parami == 0)
@@ -1500,6 +1495,9 @@ class Tractor(object):
 		if len(spcols) == 0:
 			return []
 
+		# HACK
+		uniquecols = np.unique(np.hstack(spcols))
+
 		# ensure the sparse matrix is full up to the number of columns we expect
 		# dstn: what does this do? -hogg
 		# hogg: it is a hack. -dstn
@@ -1554,8 +1552,8 @@ class Tractor(object):
 		np.seterr(all='warn')
 		
 		# Run lsqr()
-		logmsg('LSQR: %i cols, %i elements' %
-			   (Ncols, len(spvals)-1))
+		logmsg('LSQR: %i cols (%i unique), %i elements' %
+			   (Ncols, len(uniquecols), len(spvals)-1))
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)

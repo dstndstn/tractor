@@ -29,15 +29,16 @@ class GalaxyShape(ParamList):
 
 	def setre(self, re):
 		if re < (1./30.):
-			print 'Clamping re from', re, 'to 1/30'
+			#print 'Clamping re from', re, 'to 1/30'
+			pass
 		self.re = max(1./30., re)
 	def setab(self, ab):
 		if ab > 1.:
-			print 'Converting ab from', ab, 'to', 1./ab
+			#print 'Converting ab from', ab, 'to', 1./ab
 			self.setab(1./ab)
 			self.setphi(self.phi+90.)
 		elif ab < (1./30.):
-			print 'Clamping ab from', ab, 'to 1/30'
+			#print 'Clamping ab from', ab, 'to 1/30'
 			self.ab = 1./30
 		else:
 			self.ab = ab
@@ -166,7 +167,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt position
 		psteps = pos0.getStepSizes(img)
-		if fluxonly:
+		if fluxonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			for i in range(len(psteps)):
@@ -183,23 +184,26 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt flux
 		fsteps = self.flux.getStepSizes(img)
-		for i in range(len(fsteps)):
-			fi = self.flux.copy()
-			fi.stepParam(i, fsteps[i])
-			countsi = img.getPhotoCal().fluxToCounts(fi)
-			df = patch0 * ((countsi - counts) / fsteps[i])
-			df.setName('d(gal)/d(flux%i)' % i)
-			derivs.append(df)
+		if self.isParamPinned('flux'):
+			derivs.extend([None] * len(fsteps))
+		else:
+			for i in range(len(fsteps)):
+				fi = self.flux.copy()
+				fi.stepParam(i, fsteps[i])
+				countsi = img.getPhotoCal().fluxToCounts(fi)
+				df = patch0 * ((countsi - counts) / fsteps[i])
+				df.setName('d(gal)/d(flux%i)' % i)
+				derivs.append(df)
 
 		# derivatives wrt shape
 		gsteps = self.shape.getStepSizes(img)
-		gnames = self.shape.getParamNames()
-		oldvals = self.shape.getParams()
-		#print 'Galaxy.getParamDerivatives:', self.getName()
-		#print '  oldvals:', oldvals
-		if fluxonly:
+		if fluxonly or self.isParamPinned('shape'):
 			derivs.extend([None] * len(gsteps))
 		else:
+			gnames = self.shape.getParamNames()
+			oldvals = self.shape.getParams()
+			# print 'Galaxy.getParamDerivatives:', self.getName()
+			# print '  oldvals:', oldvals
 			for i in range(len(gsteps)):
 				self.shape.stepParam(i, gsteps[i])
 				#print '  stepped', gnames[i], 'by', gsteps[i],
@@ -293,14 +297,26 @@ class CompositeGalaxy(Galaxy):
 		print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
 		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		# pin through...
+		if self.isParamPinned('fluxExp'):
+			e.pinParam('flux')
+		if self.isParamPinned('shapeExp'):
+			e.pinParam('shape')
+		if self.isParamPinned('fluxDev'):
+			d.pinParam('flux')
+		if self.isParamPinned('shapeDev'):
+			d.pinParam('shape')
 		de = e.getParamDerivatives(img, fluxonly)
 		dd = d.getParamDerivatives(img, fluxonly)
 		npos = len(self.pos.getStepSizes(img))
 		derivs = []
-		for i in range(npos):
-			dp = de[i] + dd[i]
-			dp.setName('d(gal)/d(pos%i)' % i)
-			derivs.append(dp)
+		if fluxonly or self.isParamPinned('pos'):
+			derivs.extend([None] * npos)
+		else:
+			for i in range(npos):
+				dp = de[i] + dd[i]
+				dp.setName('d(gal)/d(pos%i)' % i)
+				derivs.append(dp)
 		derivs.extend(de[npos:])
 		derivs.extend(dd[npos:])
 		return derivs

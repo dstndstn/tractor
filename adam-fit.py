@@ -95,41 +95,6 @@ def makeflipbook(ntune, prefix):
 	os.system("pdflatex '%s'" % fn)
 
 
-class PinnedPointSource(PointSource):
-	def __init__(self, pos, flux):
-		MultiParams.__init__(self, flux)
-		self.pos = pos
-	def getNamedParams(self):
-		return [('flux', 0)]
-	def getSourceType(self):
-		return 'PinnedPointSource'
-	def copy(self):
-		return PinnedPointSource(self.pos.copy(), self.flux.copy())
-
-	def getParamDerivatives(self, img, fluxonly=False):
-		#D = super(PointSource, self).getParamDerivatives(img, fluxonly=fluxonly)
-		D = PointSource.getParamDerivatives(self, img, fluxonly=fluxonly)
-		return [D[-1]]
-
-class PinnedDevGalaxy(DevGalaxy):
-	def __init__(self, pos, flux, shape):
-		self.pos = pos
-		self.shape = shape
-		#Galaxy.__init__(self, pos, flux, shape)
-		MultiParams.__init__(self, flux, shape)
-		self.name = self.getName()
-	def getNamedParams(self):
-		return [('flux', 0), ('shape', 1)]
-	def getName(self):
-		return 'PinnedDevGalaxy'
-	def copy(self):
-		return PinnedDevGalaxy(self.pos, self.flux, self.re, self.ab, self.phi)
-	def getParamDerivatives(self, img, fluxonly=False):
-		#D = super(DevGalaxy, self).getParamDerivatives(img, fluxonly=fluxonly)
-		D = DevGalaxy.getParamDerivatives(self, img, fluxonly=fluxonly)
-		return D[2:]
-
-
 if __name__ == '__main__':
 
 	run = 3972
@@ -192,14 +157,16 @@ if __name__ == '__main__':
 	sc = st.SdssPhotoCal.scale
 
 	newsrc1 = [
-		PointSource(rd1, 0.5 * gal.flux),
-		DevGalaxy(rd1, 0.5 * gal.flux, gal.shape),
-		Galaxy(rd1, 0.5 * gal.flux, gal.shape),
+		PointSource(rd1.copy(), 0.5 * gal.flux),
+		DevGalaxy(rd1.copy(), 0.5 * gal.flux, gal.shape.copy()),
+		CompositeGalaxy(rd1.copy(), 0.25 * gal.flux, gal.shape.copy(),
+						0.25 * gal.flux, gal.shape.copy()),
 		]
 	newsrc2 = [ 
-		PointSource(rd2, 0.5 * gal.flux),
-		DevGalaxy(rd2, 0.5 * gal.flux, gal.shape),
-		Galaxy(rd2, 0.5 * gal.flux, gal.shape),
+		PointSource(rd2.copy(), 0.5 * gal.flux),
+		DevGalaxy(rd2.copy(), 0.5 * gal.flux, gal.shape.copy()),
+		CompositeGalaxy(rd2.copy(), 0.25 * gal.flux, gal.shape.copy(),
+						0.25 * gal.flux, gal.shape.copy()),
 		]
 
 	lnls = np.zeros((len(newsrc1), len(newsrc2)))
@@ -208,15 +175,26 @@ if __name__ == '__main__':
 			# add sources
 			tractor.addSource(ns1)
 			tractor.addSource(ns2)
+			print 'Created sources:'
+			print ' ', ns1
+			print ' ', ns2
 			# pin source positions
 			ns1.pinParam('pos')
 			ns2.pinParam('pos')
 			# optimize fluxes and shapes
-			for i in range(10):
-				tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2])
+			#D = tractor.getAllDerivs(srcs=[ns1,ns2], sky=False)
+			#print D
+			for k in range(10):
+				tractor.optimizeCatalogAtFixedComplexityStep(srcs=[ns1,ns2],
+															 sky=False)
+				assert(ns1.pos == rd1)
+				assert(ns2.pos == rd2)
 			lnls[i,j] = tractor.getLogLikelihood()
 			# make some freaky plots
 			prefix = '%s-%d-%d' % (sdssprefix, i, j)
+			print 'Optimized sources:'
+			print ' ', ns1
+			print ' ', ns2
 			print prefix, lnls[i,j]
 			save(prefix, tractor, zr)
 			# remove sources again
