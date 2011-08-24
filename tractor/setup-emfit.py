@@ -4,7 +4,7 @@ from numpy.distutils.misc_util import get_numpy_include_dirs
 numpy_inc = get_numpy_include_dirs()
 
 c_swig_module = Extension('_emfit',
-						  sources = ['tractor/emfit_wrap.c' ],
+						  sources = ['emfit_wrap.c' ],
 						  include_dirs = numpy_inc,
 						  extra_objects = [],
 						  undef_macros=['NDEBUG'],
