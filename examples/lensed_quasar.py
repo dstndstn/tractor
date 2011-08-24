@@ -1,6 +1,13 @@
 # Copyright 2011 David W. Hogg (NYU) and Phil Marshall (Oxford).
 # All rights reserved (for now).
 
+# to-do
+# -----
+# - make and draw critical curve
+# - make and draw caustic
+# - write and test lens equation solver
+# - write down priors on magnification / mag bias
+
 import numpy as np
 import markovpy as dfm
 if __name__ == '__main__':
@@ -43,7 +50,7 @@ class GravitationalLens:
     # input: image positions shape (N, 2)
     # output: source position
     def sourcepositions(self, imagepositions):
-        spos = imagepositions
+        spos = 1. * imagepositions # note copy issue
         dpos = imagepositions - self.position
         r = np.outer(np.sqrt(dpos[:,0] * dpos[:,0] + dpos[:,1] * dpos[:,1]), [1,1])
         spos -= self.einsteinradius * dpos / r
@@ -53,11 +60,8 @@ class GravitationalLens:
         spos[:,1] -= self.gammasin2phi * dpos[:,0]
         return spos
 
-    # BUG THIS FUNCTION IS NOT RIGHT
-    # output tensor shape (N, 2, 2)
-    # with following usage:
-    # dimagepos = [np.dot(t, ds) for t, ds in zip(magnificationtensors, dsourcepos)]
-    def magnificationtensors(self, imagepositions):
+    # output shape (N, 2, 2)
+    def inversemagnificationtensors(self, imagepositions):
         mag = np.zeros((len(imagepositions), 2, 2))
         mag[:,0,0] = 1.
         mag[:,1,1] = 1.
@@ -70,8 +74,8 @@ class GravitationalLens:
             print self
         assert(np.min(rcubed) > 0.)
         mag[:,0,0] -= self.einsteinradius * dpos[:,1] * dpos[:,1] / rcubed
-        mag[:,0,1] -= self.einsteinradius * dpos[:,1] * dpos[:,0] / rcubed
-        mag[:,1,0] -= self.einsteinradius * dpos[:,0] * dpos[:,1] / rcubed
+        mag[:,0,1] += self.einsteinradius * dpos[:,1] * dpos[:,0] / rcubed
+        mag[:,1,0] += self.einsteinradius * dpos[:,0] * dpos[:,1] / rcubed
         mag[:,1,1] -= self.einsteinradius * dpos[:,0] * dpos[:,0] / rcubed
         mag[:,0,0] -= self.gammacos2phi
         mag[:,0,1] -= self.gammasin2phi
@@ -79,19 +83,33 @@ class GravitationalLens:
         mag[:,1,1] += self.gammacos2phi
         return mag
 
+    def magnificationtensors(self, imagepositions):
+        return np.array([np.linalg.inv(t) for t in self.inversemagnificationtensors(imagepositions)])
+
     # APPROXIMATION: Not yet marginalizing over true source position, true source flux
     # look for "WRONG" in code
-    def ln_prior(self, imagepositions, imagefluxes, positionvariance, fluxvariance):
+    # Note magnification sign insanity
+    def ln_prior(self, imagepositions, imagefluxes, positionvariance, fluxvariance, paritycheck=True):
         def ln_Gaussian_1d_zeromean(x, var):
             return -0.5 * np.log(2. * np.pi * var) - 0.5 * x**2 / var
+        assert(len(imagepositions) == 4)
         sourcepositions = self.sourcepositions(imagepositions)
         meansourceposition = np.mean(sourcepositions, axis=0) # WRONG
         magtensors = self.magnificationtensors(imagepositions)
-        mags = np.array([np.linalg.det(ten) for ten in magtensors])
+        mags = np.array(map(np.linalg.det, magtensors))
+        if paritycheck:
+            if mags[0] <= 0.:
+                return -np.Inf
+            if mags[1] >= 0.:
+                return -np.Inf
+            if mags[2] <= 0.:
+                return -np.Inf
+            if mags[3] >= 0.:
+                return -np.Inf
         dimagepositions = np.array([np.dot(tens, (spos - meansourceposition)) for tens, spos in zip(magtensors, sourcepositions)])
         return np.sum(ln_Gaussian_1d_zeromean(dimagepositions, positionvariance))
 
-    def sample_prior(self, imagepositions, imagefluxes, positionvariance, fluxvariance):
+    def sample_prior(self, imagepositions, imagefluxes, positionvariance, fluxvariance, nlink):
         def lnp(pars):
             return self.ln_prior(np.reshape(pars[:8], (4, 2)), None, positionvariance, None)
         pars = np.ravel(imagepositions)
@@ -99,40 +117,42 @@ class GravitationalLens:
         ndim     = len(pars)
         initial_position = [pars + 0.01 * np.random.normal(size=ndim) for i in xrange(nwalkers)]
         sampler = dfm.EnsembleSampler(nwalkers, ndim, lnp)
-        pos, prob, state = sampler.run_mcmc(initial_position, None, 200)
+        pos, prob, state = sampler.run_mcmc(initial_position, None, nlink)
         print 'Mean acceptance fraction: ',np.mean(sampler.acceptance_fraction())
         return (sampler.get_chain(), sampler.get_lnprobability())
 
 if __name__ == '__main__':
     lenspos = [0.5, 0.75]
     b = 1.3 # arcsec
-    gamma = 0.1
+    gamma = 0.03
     theta = 1.0 # rad
     sis = GravitationalLens(lenspos, b, gamma * np.cos(2. * theta), gamma * np.sin(2. * theta))
     imagepositions = sis.cross()
-    print sis.sourcepositions(imagepositions)
+    posvar = 1.e-3
+    print sis.ln_prior(imagepositions, None, posvar, None)
     imagefluxes = np.array([10., 10., 10., 10.])
     magtensors = sis.magnificationtensors(imagepositions)
     magscalars = np.array([np.linalg.det(ten) for ten in magtensors])
-    chain, lnp = sis.sample_prior(imagepositions, None, 0.1, None)
+    chain, lnp = sis.sample_prior(imagepositions, None, posvar, None, 3000)
     plt.clf()
     for i in range(5):
         plt.plot(lnp[i,:])
     plt.xlabel('link number')
     plt.ylabel('ln prior probability')
     plt.savefig('lnp.png')
-    for i in range(5):
+    for i in range(100):
         if i == 0:
             ipos = imagepositions
-            print sis.ln_prior(imagepositions, None, 0.1, None)
+            print sis.ln_prior(imagepositions, None, posvar, None)
         else:
             ipos = np.reshape(chain[i,:,-1], (4,2))
         plt.clf()
         plt.subplot(111, aspect='equal')
-        plt.plot(ipos[:,0], ipos[:,1], 'ko')
+        mags = np.abs(map(np.linalg.det, sis.magnificationtensors(ipos)))
+        plt.scatter(ipos[:,0], ipos[:,1], s=mags, c='k', marker='o')
         plt.plot(lenspos[0], lenspos[1], 'kx')
         plt.xlim(-2, 3.)
         plt.ylim(-2, 3.)
         plt.xlabel('x (arcsec)')
         plt.ylabel('y (arcsec)')
-        plt.savefig('sky-%d.png' % i)
+        plt.savefig('sky-%02d.png' % i)
