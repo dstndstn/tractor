@@ -5,9 +5,7 @@
 
 # to-do
 # -----
-# - make and draw critical curve
-# - make and draw caustic
-# - write and test lens equation solver
+# - write and test lens equation solver: 1  image done, awaiting more
 # - write down priors on magnification / mag bias
 
 import numpy as np
