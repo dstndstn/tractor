@@ -116,11 +116,15 @@ class GravitationalLens:
             return 3
         return 1
 
+    # input: a single source position shape (2) and a first guess shape (2)
+    # output: a single image position
+    def imageposition(self, sourceposition, guess):
+        return np.zeros(2)
+    
     # input: a single source position shape (2, )
-    # output: a set of one, two, or four image positions, shape (1, 2, ), (2, 2), or (4, 2)
+    # output: a set of one, two, three (naked cusp), or four image positions, shape (N, 2)
     def imagepositions(self, sourceposition):
-        
-        return 0.
+        return np.atleast_2d(np.zeros(2))
 
     # input: image positions shape (N, 2)
     # output: source position
