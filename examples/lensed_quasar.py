@@ -76,6 +76,8 @@ class GravitationalLens:
         critcurve += np.outer(r*sinphi, eig2)
         return critcurve
 
+# ----------------------------------------------------------------------------
+
     # magic number 100
     # note computational overkill; it's a fucking circle.
     def radial_caustic(self):
@@ -88,6 +90,8 @@ class GravitationalLens:
         caustic += np.outer(self.einsteinradius * cosphi, eig1)
         caustic += np.outer(self.einsteinradius * sinphi, eig2)
         return caustic
+
+# ----------------------------------------------------------------------------
 
     # magic number 100
     def tangential_caustic(self):
@@ -116,22 +120,60 @@ class GravitationalLens:
             return 3
         return 1
 
-    # input: a single source position shape (2) and a first guess shape (2)
-    # output: a single image position
-    def imageposition(self, sourceposition, guess):
-        return np.zeros(2)
-    
-    # input: a single source position shape (2, )
-    # output: a set of one, two, three (naked cusp), or four image positions, shape (N, 2)
+# ----------------------------------------------------------------------------
+
+    # only partially written
+    def guess_imagepositions(self, sourceposition):
+        N = self.number_of_images(sourceposition)
+        assert(N > 0 and N < 5)
+        if N == 1:
+            ipos = sourceposition.copy()
+        if N == 2:
+            ipos = np.zeros(2, 2)
+        if N == 3:
+            ipos = np.zeros(3, 2)
+        if N == 4:
+            ipos = np.zeros(4, 2)
+        return ipos
+
+# ----------------------------------------------------------------------------
+
+    # input: a single source position shape (2) and a first guess at N image positions shape (N, 2)
+    # output: N image positions shape (N, 2)
+    # MAGIC NUMBER: 1e-10
+    def refine_imagepositions(self, sourceposition, guessedimagepositions):
+        ipos = np.atleast_2d(guessedimagepositions)
+        N = len(ipos)
+        dspos = np.outer(np.ones(N), sourceposition) - self.sourcepositions(ipos)
+        i = 0
+        iposlist = [ipos.copy(), ]
+        while np.sum(dspos**2) > (N * 1e-10):
+            i += 1
+            dipos = np.array([np.dot(tens, dsp) for tens, dsp in zip(self.magnificationtensors(ipos), dspos)])
+            ipos += dipos
+            iposlist.append(ipos.copy())
+            dspos = np.outer(np.ones(N), sourceposition) - self.sourcepositions(ipos)
+        return iposlist
+
+# ----------------------------------------------------------------------------
+
+    # read the source code
     def imagepositions(self, sourceposition):
-        return np.atleast_2d(np.zeros(2))
+        assert(sourceposition.shape == (2, ))
+        ipos = self.guess_imagepositions(sourceposition)
+        iposlist = self.refine_imagepositions(sourceposition, ipos)
+        return iposlist[-1]
+
+# ----------------------------------------------------------------------------
 
     # input: image positions shape (N, 2)
     # output: source position
+    # note outer, sqrt, sum craziness
     def sourcepositions(self, imagepositions):
-        spos = 1. * imagepositions # note copy issue
-        dpos = imagepositions - self.position
-        r = np.outer(np.sqrt(dpos[:,0] * dpos[:,0] + dpos[:,1] * dpos[:,1]), [1,1])
+        ipos = np.atleast_2d(imagepositions)
+        dpos = ipos - np.outer(np.ones(len(ipos)), self.position)
+        r = np.outer(np.sqrt(np.sum(dpos * dpos, axis=1)), [1,1])
+        spos = 1. * ipos
         spos -= self.einsteinradius * dpos / r
         spos[:,0] -= self.gammacos2phi * dpos[:,0]
         spos[:,0] -= self.gammasin2phi * dpos[:,1]
@@ -143,13 +185,14 @@ class GravitationalLens:
 
     # output shape (N, 2, 2)
     def inversemagnificationtensors(self, imagepositions):
-        mag = np.zeros((len(imagepositions), 2, 2))
+        ipos = np.atleast_2d(imagepositions)
+        mag = np.zeros((len(ipos), 2, 2))
         mag[:,0,0] = 1.
         mag[:,1,1] = 1.
-        dpos = imagepositions - self.position
-        rcubed = ((dpos[:,0] * dpos[:,0]) + (dpos[:,1] * dpos[:,1]))**1.5
+        dpos = ipos - self.position
+        rcubed = np.sum(dpos * dpos, axis=1)**1.5
         if np.min(rcubed) <= 0.:
-            print imagepositions
+            print ipos
             print self.position
             print mag
             print self
@@ -208,6 +251,37 @@ class GravitationalLens:
         print 'Mean acceptance fraction: ',np.mean(sampler.acceptance_fraction())
         return (sampler.get_chain(), sampler.get_lnprobability())
 
+# ----------------------------------------------------------------------------
+
+    def plot(self, sourcepositions=None, imagepositions=None):
+        causticlw = 0.5
+        c = self.tangential_caustic().T
+        plt.plot(c[0], c[1], 'k', lw=causticlw)
+        c = self.radial_caustic().T
+        plt.plot(c[0], c[1], 'k', lw=causticlw)
+        c = self.critical_curve().T
+        plt.plot(c[0], c[1], 'k', lw=2.)
+        if sourcepositions is not None:
+            spos = np.atleast_2d(sourcepositions)
+            plt.scatter(spos[:,0], spos[:,1], c='k', marker='x')
+        if imagepositions is not None:
+            ipos = np.atleast_2d(imagepositions)
+            print sis.magnificationtensors(ipos)
+            mags = np.array(map(np.linalg.det, sis.magnificationtensors(ipos)))
+            print mags
+            print np.linalg.det(sis.magnificationtensors(ipos)[0])
+            s = 10. * np.abs(mags)
+            I = mags < 0
+            if np.sum(I) > 0:
+                plt.scatter(ipos[I,0], ipos[I,1], s=s[I], c='k', marker='o', facecolor='none')
+            I = mags > 0
+            if np.sum(I) > 0:
+                plt.scatter(ipos[I,0], ipos[I,1], s=s[I], c='k', marker='s', facecolor='none')
+        plt.xlabel('x (arcsec)')
+        plt.ylabel('y (arcsec)')
+        plt.axes().set_aspect('equal')
+        return None
+
 # ============================================================================
 # Command line test: sample from prior and plot.
 
@@ -215,19 +289,27 @@ if __name__ == '__main__':
         
     lenspos = [0.5, 0.75]
     b = 1.3 # arcsec
-    gamma = 0.6
+    gamma = 0.2
     phi = 0.2 # rad
     sis = GravitationalLens(lenspos, b, gamma * np.cos(2. * phi), gamma * np.sin(2. * phi))
-    imagepositions = sis.cross()
-    sourceposition = sis.sourcepositions(imagepositions)[0]
-    print sourceposition
-    print sourceposition.shape
-    print sis.number_of_images(sourceposition)
+    spos = np.array([3.5, 0.])
+    plt.clf()
+    sis.plot()
+    plt.savefig('foo.png')
+    plt.clf()
+    ipos = sis.guess_imagepositions(spos)
+    iposlist = sis.refine_imagepositions(spos, ipos)
+    a, b, two = np.array(iposlist).shape
+    iposlist = np.reshape(iposlist, (a * b, 2))
+    print iposlist
+    sis.plot(sourcepositions=spos, imagepositions=iposlist)
+    plt.savefig('bar.png')
+
+    sys.exit(0)
     caustic = sis.tangential_caustic()
     critcurve = sis.critical_curve()
     posvar = 1.e-3
-    print sis.ln_prior(imagepositions, None, posvar, None)
-    
+
     imagefluxes = np.array([10., 10., 10., 10.])
     magtensors = sis.magnificationtensors(imagepositions)
     magscalars = np.array([np.linalg.det(ten) for ten in magtensors])
