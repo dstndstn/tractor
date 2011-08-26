@@ -51,6 +51,7 @@ class GravitationalLens:
                 np.array([-np.sin(self.phi), np.cos(self.phi)]))
     
     def cross(self):
+        assert(self.gamma > 0.)
         eig1, eig2 = self.eigs()
         foo = np.array([ eig1 / (1. - self.gamma),
                          eig2 / (1. + self.gamma),
@@ -127,31 +128,32 @@ class GravitationalLens:
         if N == 1:
             ipos = sourceposition.copy()
         if N == 2:
-            ipos = np.zeros(2, 2)
+            dpos = sourceposition - self.position
+            blah = self.einsteinradius * dpos / np.sqrt(np.dot(dpos, dpos))
+            ipos = np.array([sourceposition.copy() + blah, sourceposition.copy() - blah])
         if N == 3:
-            ipos = np.zeros(3, 2)
+            assert(False)
         if N == 4:
-            ipos = np.zeros(4, 2)
+            ipos = self.cross()
         return ipos
 
 # ----------------------------------------------------------------------------
 
     # input: a single source position shape (2) and a first guess at N image positions shape (N, 2)
     # output: N image positions shape (N, 2)
-    # MAGIC NUMBER: 1e-10
-    def refine_imagepositions(self, sourceposition, guessedimagepositions):
+    # MAGIC NUMBER: tol
+    def refine_imagepositions(self, sourceposition, guessedimagepositions, tol=1.e-20):
         ipos = np.atleast_2d(guessedimagepositions)
+        parities = self.parities(ipos)
         N = len(ipos)
         dspos = np.outer(np.ones(N), sourceposition) - self.sourcepositions(ipos)
         i = 0
-        iposlist = [ipos.copy(), ]
-        while np.sum(dspos**2) > (N * 1e-10):
+        while np.sum(dspos**2) > tol:
             i += 1
             dipos = np.array([np.dot(tens, dsp) for tens, dsp in zip(self.magnificationtensors(ipos), dspos)])
-            ipos += dipos
-            iposlist.append(ipos.copy())
+            ipos = ipos + dipos
             dspos = np.outer(np.ones(N), sourceposition) - self.sourcepositions(ipos)
-        return iposlist
+        return ipos
 
 # ----------------------------------------------------------------------------
 
@@ -159,8 +161,12 @@ class GravitationalLens:
     def imagepositions(self, sourceposition):
         assert(sourceposition.shape == (2, ))
         ipos = self.guess_imagepositions(sourceposition)
-        iposlist = self.refine_imagepositions(sourceposition, ipos)
-        return iposlist[-1]
+        ipos = self.refine_imagepositions(sourceposition, ipos)
+        N = len(ipos)
+        if (N == 2) or (N == 4):
+            if (np.sum(self.parities(ipos)) != 0):
+                print 'imagepositions: WARNING: parities wrong'
+        return 
 
 # ----------------------------------------------------------------------------
 
@@ -209,6 +215,14 @@ class GravitationalLens:
 
     def magnificationtensors(self, imagepositions):
         return np.array([np.linalg.inv(t) for t in self.inversemagnificationtensors(imagepositions)])
+
+    # crazy if you run this and magnificationtensors in the same code; think caching
+    def magnifications(self, imagepositions):
+        return 1. / np.array(map(np.linalg.det, self.inversemagnificationtensors(imagepositions)))
+
+    # crazy if you run this and magnificationtensors in the same code; think caching
+    def parities(self, imagepositions):
+        return np.sign(self.magnifications(imagepositions))
 
 # ----------------------------------------------------------------------------
 
@@ -261,13 +275,11 @@ class GravitationalLens:
         plt.plot(c[0], c[1], 'k', lw=2.)
         if sourcepositions is not None:
             spos = np.atleast_2d(sourcepositions)
+            print 'plot: plotting spos:', spos
             plt.scatter(spos[:,0], spos[:,1], c='k', marker='x')
         if imagepositions is not None:
             ipos = np.atleast_2d(imagepositions)
-            print sis.magnificationtensors(ipos)
             mags = np.array(map(np.linalg.det, sis.magnificationtensors(ipos)))
-            print mags
-            print np.linalg.det(sis.magnificationtensors(ipos)[0])
             s = 10. * np.abs(mags)
             I = mags < 0
             if np.sum(I) > 0:
@@ -290,20 +302,24 @@ if __name__ == '__main__':
     gamma = 0.2
     phi = 0.2 # rad
     sis = GravitationalLens(lenspos, b, gamma * np.cos(2. * phi), gamma * np.sin(2. * phi))
-    spos = np.array([3.5, 0.])
+    nsample = 100
+    ipos = np.zeros((nsample, 2))
+    ipos[:,0] = np.random.uniform(0.5, 1.0, size=nsample)
+    ipos[:,1] = np.random.uniform(-0.6, -1.0, size=nsample)
+    mags = sis.magnifications(ipos)
+    print np.argmax(mags), mags[np.argmax(mags)], ipos[np.argmax(mags)].shape
+    spos = sis.sourcepositions(ipos[np.argmax(mags)])[0]
     plt.clf()
     sis.plot()
     plt.savefig('foo.png')
     plt.clf()
-    ipos = sis.guess_imagepositions(spos)
-    iposlist = sis.refine_imagepositions(spos, ipos)
-    a, b, two = np.array(iposlist).shape
-    iposlist = np.reshape(iposlist, (a * b, 2))
-    print iposlist
-    sis.plot(sourcepositions=spos, imagepositions=iposlist)
+    ipos = sis.imagepositions(spos)
+    spos2 = sis.sourcepositions(ipos)
+    print spos, spos2, sis.magnifications(ipos)
+    sis.plot(sourcepositions=np.append(spos2, np.atleast_2d(spos), axis=0), imagepositions=ipos)
     plt.savefig('bar.png')
 
-    sys.exit(0)
+if False:
     caustic = sis.tangential_caustic()
     critcurve = sis.critical_curve()
     posvar = 1.e-3
