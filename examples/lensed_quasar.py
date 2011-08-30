@@ -9,7 +9,7 @@
 # - write down priors on magnification / mag bias
 
 import numpy as np
-import markovpy as dfm
+# import markovpy as dfm
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -196,31 +196,65 @@ class GravitationalLens:
                 print 'image positions:',ipos
                 print 'image magnifications:',self.magnifications(ipos)
                 fail = True
-                
-        # Try refining again from a different guess?                  
-                
+        # Try refining again from a different guess?
         return ipos,fail
 
 # ----------------------------------------------------------------------------
+
+    # NB: MUST BE SYNCHRONIZED WITH DEFLECTIONS() AND INVERSE_MAGNIFICATION_TENSORS()
+    def potentials(self, imagepositions):
+        ipos = np.atleast_2d(imagepositions)
+        dpos = ipos - np.outer(np.ones(len(ipos)), self.position)
+        r = np.sqrt(np.sum(dpos * dpos, axis=1))
+        cosphi = dpos[:,0] / r
+        sinphi = dpos[:,1] / r
+        cos2phi = cosphi * cosphi - sinphi * sinphi
+        sin2phi = 2. * cosphi * sinphi
+        psis = self.einsteinradius * r
+        psis += 0.5 * r * r * self.gammacos2phi * cos2phi
+        psis += 0.5 * r * r * self.gammacos2phi * sin2phi
+        return psis
+
+    # input: image-plane positions shape (N, 2)
+    # output: potential values at those positions shape (N, )
+    def time_delays(self, sourceposition, imagepositions):
+        N = len(imagepositions)
+        dpos = np.outer(np.ones(N), sourceposition) - imagepositions
+        return 0.5 * np.sum(dpos**2, axis=1) - self.potentials(imagepositions)
+
+# ----------------------------------------------------------------------------
+
+    # NB: MUST BE SYNCHRONIZED WITH POTENTIALS() AND INVERSE_MAGNIFICATION_TENSORS()
+    def deflections(self, imagepositions):
+        ipos = np.atleast_2d(imagepositions)
+        dpos = ipos - np.outer(np.ones(len(ipos)), self.position)
+        r = np.outer(np.sqrt(np.sum(dpos * dpos, axis=1)), [1,1])
+        alphas = self.einsteinradius * dpos / r
+        alphas[:,0] += self.gammacos2phi * dpos[:,0]
+        alphas[:,0] += self.gammasin2phi * dpos[:,1]
+        alphas[:,1] -= self.gammacos2phi * dpos[:,1]
+        alphas[:,1] += self.gammasin2phi * dpos[:,0]
+        return alphas
+
+    # check synchronization between potential and deflection
+    # NOT YET WRITTEN
+    def test_deflections(self, imagepositions):
+        alphas = self.deflections(self, imagepositions)
+        psis = self.potentials(self, imagepositions)
+        alphas2 = np.zeros_like(alphas)
+        dx = 0.001 * self.einsteinradius
+        return None
 
     # input: image positions shape (N, 2)
     # output: source position
     # note outer, sqrt, sum craziness
     def source_positions(self, imagepositions):
-        ipos = np.atleast_2d(imagepositions)
-        dpos = ipos - np.outer(np.ones(len(ipos)), self.position)
-        r = np.outer(np.sqrt(np.sum(dpos * dpos, axis=1)), [1,1])
-        spos = 1. * ipos
-        spos -= self.einsteinradius * dpos / r
-        spos[:,0] -= self.gammacos2phi * dpos[:,0]
-        spos[:,0] -= self.gammasin2phi * dpos[:,1]
-        spos[:,1] += self.gammacos2phi * dpos[:,1]
-        spos[:,1] -= self.gammasin2phi * dpos[:,0]
-        return spos
+        return imagepositions - self.deflections(imagepositions)
 
  # ----------------------------------------------------------------------------
 
     # output shape (N, 2, 2)
+    # NB: MUST BE SYNCHRONIZED WITH POTENTIALS() AND DEFLECTIONS()
     def inverse_magnification_tensors(self, imagepositions):
         ipos = np.atleast_2d(imagepositions)
         mag = np.zeros((len(ipos), 2, 2))
@@ -297,7 +331,9 @@ class GravitationalLens:
 
 # ----------------------------------------------------------------------------
 
-    def plot(self, sourcepositions=None, imagepositions=None):
+    # if timedelay then plot time-delay surface
+    # several MAGIC NUMBERS
+    def plot(self, sourcepositions=None, imagepositions=None, timedelay=False):
         causticlw = 0.5
         c = self.tangential_caustic().T
         plt.plot(c[0], c[1], 'k', lw=causticlw)
@@ -308,7 +344,7 @@ class GravitationalLens:
         if sourcepositions is not None:
             spos = np.atleast_2d(sourcepositions)
             # print 'plot: plotting spos:', spos
-            plt.scatter(spos[:,0], spos[:,1], c='k', marker='x')
+            plt.scatter(spos[:,0], spos[:,1], c='k', marker='x', lw=causticlw)
         if imagepositions is not None:
             ipos = np.atleast_2d(imagepositions)
             mags = np.array(map(np.linalg.det, self.magnification_tensors(ipos)))
@@ -322,6 +358,19 @@ class GravitationalLens:
         plt.xlabel('x (arcsec)')
         plt.ylabel('y (arcsec)')
         plt.axes().set_aspect('equal')
+        if timedelay:
+            print 'plotting time delay for', spos[0]
+            dts = self.time_delays(spos[0], ipos)
+            ta = np.min(dts) - self.einsteinradius**2
+            tb = np.max(dts) + self.einsteinradius**2
+            tcontours = np.arange(ta, tb, 0.01 * self.einsteinradius**2)
+            xa, xb = plt.xlim()
+            ya, yb = plt.ylim()
+            xg, yg = np.meshgrid(np.arange(xa, xb, 0.01 * self.einsteinradius),
+                                np.arange(ya, yb, 0.01 * self.einsteinradius))
+            ig = np.array(zip(np.ravel(xg), np.ravel(yg)))
+            tg = np.reshape(self.time_delays(spos[0], ig), xg.shape)
+            plt.contour(xg, yg, tg, tcontours, alpha=0.5)
         return None
 
 # ============================================================================
@@ -415,7 +464,7 @@ if __name__ == '__main__':
       print "Corresponding source positions:",spos2
 
       plt.clf()
-      sis.plot(sourcepositions=np.append(spos2, np.atleast_2d(spos), axis=0), imagepositions=ipos)
+      sis.plot(sourcepositions=np.append(np.atleast_2d(spos), spos2, axis=0), imagepositions=ipos, timedelay=True)
       barfile = 'bar.png'
       plt.savefig(barfile)
       print "Images and source(s) plotted in",barfile
@@ -464,4 +513,3 @@ if __name__ == '__main__':
 #         plt.savefig('sky-%02d.png' % i)
 # 
 # ============================================================================
-
