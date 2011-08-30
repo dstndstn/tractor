@@ -5,7 +5,8 @@
 
 # to-do
 # -----
-# - write and test lens equation solver: 1  image done, awaiting more
+# - test lens-equation solving
+# - perhaps write unit tests for potentials(), deflections(), magnifications()
 # - write down priors on magnification / mag bias
 
 import numpy as np
@@ -165,8 +166,6 @@ class GravitationalLens:
             dipos = np.array([np.dot(tens, dsp) for tens, dsp in zip(self.magnification_tensors(ipos), dspos)])
             ipos = ipos + dipos
             dspos = np.outer(np.ones(N), sourceposition) - self.source_positions(ipos)
-            # print "refine_image_positions:",ipos,self.parities(ipos)
-                            
         return ipos
 
 # ----------------------------------------------------------------------------
@@ -206,13 +205,8 @@ class GravitationalLens:
         ipos = np.atleast_2d(imagepositions)
         dpos = ipos - np.outer(np.ones(len(ipos)), self.position)
         r = np.sqrt(np.sum(dpos * dpos, axis=1))
-        cosphi = dpos[:,0] / r
-        sinphi = dpos[:,1] / r
-        cos2phi = cosphi * cosphi - sinphi * sinphi
-        sin2phi = 2. * cosphi * sinphi
-        psis = self.einsteinradius * r
-        psis += 0.5 * r * r * self.gammacos2phi * cos2phi
-        psis += 0.5 * r * r * self.gammacos2phi * sin2phi
+        phi = np.arctan2(dpos[:,1], dpos[:,0])
+        psis = self.einsteinradius * r + 0.5 * r * r * self.gamma * np.cos(2. * (phi - self.phi))
         return psis
 
     # input: image-plane positions shape (N, 2)
@@ -235,15 +229,6 @@ class GravitationalLens:
         alphas[:,1] -= self.gammacos2phi * dpos[:,1]
         alphas[:,1] += self.gammasin2phi * dpos[:,0]
         return alphas
-
-    # check synchronization between potential and deflection
-    # NOT YET WRITTEN
-    def test_deflections(self, imagepositions):
-        alphas = self.deflections(self, imagepositions)
-        psis = self.potentials(self, imagepositions)
-        alphas2 = np.zeros_like(alphas)
-        dx = 0.001 * self.einsteinradius
-        return None
 
     # input: image positions shape (N, 2)
     # output: source position
@@ -340,7 +325,7 @@ class GravitationalLens:
         c = self.radial_caustic().T
         plt.plot(c[0], c[1], 'k', lw=causticlw)
         c = self.critical_curve().T
-        plt.plot(c[0], c[1], 'k', lw=2.)
+        plt.plot(c[0], c[1], 'k', lw=3*causticlw)
         if sourcepositions is not None:
             spos = np.atleast_2d(sourcepositions)
             # print 'plot: plotting spos:', spos
@@ -361,7 +346,7 @@ class GravitationalLens:
         if timedelay:
             print 'plotting time delay for', spos[0]
             dts = self.time_delays(spos[0], ipos)
-            ta = np.min(dts) - self.einsteinradius**2
+            ta = np.min(dts)
             tb = np.max(dts) + self.einsteinradius**2
             tcontours = np.arange(ta, tb, 0.01 * self.einsteinradius**2)
             xa, xb = plt.xlim()
@@ -370,7 +355,8 @@ class GravitationalLens:
                                 np.arange(ya, yb, 0.01 * self.einsteinradius))
             ig = np.array(zip(np.ravel(xg), np.ravel(yg)))
             tg = np.reshape(self.time_delays(spos[0], ig), xg.shape)
-            plt.contour(xg, yg, tg, tcontours, alpha=0.5)
+            plt.gray()
+            plt.contour(xg, yg, tg, tcontours, alpha=0.5, linewidths=causticlw)
         return None
 
 # ============================================================================
