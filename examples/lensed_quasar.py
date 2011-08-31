@@ -31,11 +31,11 @@ import matplotlib.nxutils as nx
 
 class GravitationalLens:
 
-    def __init__(self, position, einsteinradius, gammacos2phi, gammasin2phi):
+    def __init__(self, position, einsteinradius, gamma, phi):
         self.name = 'SIS + external shear'
         self.position = np.array(position)
         self.einsteinradius = einsteinradius
-        self.set_gamma_trig(gammacos2phi, gammasin2phi)
+        self.set_gamma_phi(gamma, phi)
         return None
 
     def __str__(self):
@@ -77,8 +77,8 @@ class GravitationalLens:
     
 # ----------------------------------------------------------------------------
 
-    # magic number 128 (sets precision)
-    def critical_curve(self, npts=128):
+    # magic number 1024 (sets precision)
+    def critical_curve(self, npts=1024):
         eig1, eig2 = self.eigs()
         ddphi = 2. * np.pi / npts
         dphi = np.arange(0., 2. * np.pi + 0.5 * ddphi, ddphi)
@@ -93,10 +93,10 @@ class GravitationalLens:
 
 # ----------------------------------------------------------------------------
 
-    # magic number 128
+    # magic number 1024
     # note crazy over-wrapping on dphi; this is used in guess_image_positions()
     # note computational overkill; it's a freakin' circle.
-    def radial_caustic(self, npts=128):
+    def radial_caustic(self, npts=1024):
         eig1, eig2 = self.eigs()
         ddphi = 2. * np.pi / npts
         dphi = np.arange(0., 2. * np.pi + 1.5 * ddphi, ddphi)
@@ -109,8 +109,8 @@ class GravitationalLens:
 
 # ----------------------------------------------------------------------------
 
-    # magic number 128
-    def tangential_caustic(self, npts=128):
+    # magic number 1024
+    def tangential_caustic(self, npts=1024):
         eig1, eig2 = self.eigs()
         ddphi = 2. * np.pi / npts
         dphi = np.arange(0., 2. * np.pi + 0.5 * ddphi, ddphi)
@@ -171,8 +171,10 @@ class GravitationalLens:
     def guess_ring_positions(self, sourceposition):
         Nmin, Nmax = 0, 0
         npts = 1024
-        while Nmin != 2 or Nmin != Nmax:
+        while (Nmin != 2 or Nmin != Nmax) and npts < 1e6:
+            print 'making ring of',npts
             ringpos = self.radial_caustic(npts=npts)
+            ringpos = self.position + (1. + self.gamma) * (ringpos - self.position)
             td = self.time_delays(sourceposition, ringpos)
             minI = ((td[1:-1] < td[0:-2]) *
                     (td[1:-1] < td[2:]))
@@ -180,6 +182,7 @@ class GravitationalLens:
             maxI = ((td[1:-1] > td[0:-2]) *
                     (td[1:-1] > td[2:]))
             Nmax = np.sum(maxI)
+            print 'Nmin, Nmax', Nmin, Nmax
             npts = npts * 4
             # note horrifying offset: exercise to the reader
         ringpos = ringpos[1:-1]
@@ -189,7 +192,7 @@ class GravitationalLens:
     # takes just one position as input; returns it as output
     def guess_radial_position(self, sourceposition, imageposition):
         rfactor = np.arange(0.5, 2.0, 0.005)
-        ipos = np.outer(rfactor, imageposition)
+        ipos = np.outer(rfactor, imageposition - self.position) + self.position
         return ipos[np.argmin(self.time_delays(sourceposition, ipos))]
 
 # ----------------------------------------------------------------------------
@@ -197,7 +200,7 @@ class GravitationalLens:
     # input: a single source position shape (2) and a first guess at N image positions shape (N, 2)
     # output: N image positions shape (N, 2)
     # MAGIC NUMBER: tol
-    def refine_image_positions(self, sourceposition, guessedimagepositions, tol=1.e-20, alpha=0.5):
+    def refine_image_positions(self, sourceposition, guessedimagepositions, tol=1.e-20, alpha=1.0):
         ipos = np.atleast_2d(guessedimagepositions)
         parities = self.parities(ipos)
         N = len(ipos)
@@ -413,102 +416,89 @@ class GravitationalLens:
 
 # ============================================================================
 
-if __name__ == '__main__':
-        
-    # Initialise lens:
-    
-    # test = 'high_mag'
-    test = 'mergers'
-
-    # config = 'major_cusp'
-    config = 'minor_cusp'
-    # config = 'naked_cusp'
+# options:
+# config = 'major_cusp'
+# config = 'minor_cusp'
+# config = 'naked_cusp'
+def merger_test(config):
     print "Requested image configuration is",config
 
     lenspos = [0.5, 0.75]
     b = 1.3 # arcsec
     if config == 'naked_cusp':
-      gamma = 0.5
+        gamma = 0.5
     else:
-      gamma = 0.2
+        gamma = 0.2
     phi = 0.2 # rad
-    sis = GravitationalLens(lenspos, b, gamma*np.cos(2.0*phi), gamma*np.sin(2.0*phi))
+    sis = GravitationalLens(lenspos, b, gamma, phi)
 
     plt.clf()
     sis.plot()
-    foofile = 'foo.png'
+    foofile = 'foo_%s.png' % config
     plt.savefig(foofile)
     print "Lens outline plotted in",foofile
-    
+
     nsample = 100
     print "Drawing",nsample,"sample image positions..."
     ipos = np.zeros((nsample, 2))
 
     if config == 'minor_cusp':
-      ipos[:,0] = np.random.uniform(1.5, 3.0, size=nsample)
-      ipos[:,1] = np.random.uniform(0.5, 1.5, size=nsample)
+        ipos[:,0] = np.random.uniform(1.5, 3.0, size=nsample)
+        ipos[:,1] = np.random.uniform(0.5, 1.5, size=nsample)
     elif config == 'major_cusp':
-      ipos[:,0] = np.random.uniform(0.5, 1.0, size=nsample)
-      ipos[:,1] = np.random.uniform(-0.6, -1.0, size=nsample)
+        ipos[:,0] = np.random.uniform(0.5, 1.0, size=nsample)
+        ipos[:,1] = np.random.uniform(-0.6, -1.0, size=nsample)
     elif config == 'naked_cusp':
-      ipos[:,0] = np.random.uniform(0.5, 1.0, size=nsample)
-      ipos[:,1] = np.random.uniform(-0.7, -2.0, size=nsample)
+        ipos[:,0] = np.random.uniform(0.5, 1.0, size=nsample)
+        ipos[:,1] = np.random.uniform(-0.7, -2.0, size=nsample)
     else:
-      ipos[:,0] = np.random.uniform(-2.0, 3.0, size=nsample)
-      ipos[:,1] = np.random.uniform(-2.0, 3.0, size=nsample)
+        ipos[:,0] = np.random.uniform(-2.0, 3.0, size=nsample)
+        ipos[:,1] = np.random.uniform(-2.0, 3.0, size=nsample)
   
-    if test == 'high_mag':
-      # High mag test - find high magnification image, its source position, and 
-      # then solve for the  image positions.
-      mags = sis.magnifications(ipos)
-      print "Highest mag sample has mag =",mags[np.argmax(mags)]
-      print "Image position is",ipos[np.argmax(mags)]
-      spos = sis.source_positions(ipos[np.argmax(mags)])[0]
-      fail = True
-
-    elif test == 'mergers':
-      # Mergers test - find an image position that does not solve properly, by
-      # testing target and solved image numbers:
-      spoz = sis.source_positions(ipos)
-      nimz = np.ones(nsample)
-      for i in range(nsample):
+    # Mergers test - find an image position that does not solve properly, by
+    # testing target and solved image numbers:
+    spoz = sis.source_positions(ipos)
+    nimz = np.ones(nsample)
+    for i in range(nsample):
         nimz[i] = sis.number_of_images(spoz[i])
-      if config == 'naked_cusp':
+    if config == 'naked_cusp':
         target = 3
-      else:
+    else:
         target = 4
-      index = np.where(nimz == target)
-      ipoz = ipos[index]
-      spoz = spoz[index]
-      fail = False
-      total = len(spoz)
-      count = 0
-      for spos in spoz:
+    index = np.where(nimz == target)
+    print len(index[0]), 'randomly generated image positions hit target'
+    ipoz = ipos[index]
+    spoz = spoz[index]
+    fail = False
+    total = len(spoz)
+    count = 0
+    for spos in spoz:
         ipos,fail = sis.image_positions(spos)
         count += 1
         if fail:
-          print "Image solve failure (after ",int(count/(0.01*total)),"% of samples)"
-          break
-
+            print "Image solve failure (after ",int(count/(0.01*total)),"% of samples)"
+            break
     if fail:
-      print "Source position is",spos
-      nim = sis.number_of_images(spos)
-      print "No. of expected images:",nim
-      ipos,dummy = sis.image_positions(spos)
-      print "Solved image positions:",ipos
-      print "Image magnifications:",sis.magnifications(ipos)
-      spos2 = sis.source_positions(ipos)
-      print "Corresponding source positions:",spos2
-
-      plt.clf()
-      sis.plot(sourcepositions=np.append(np.atleast_2d(spos), spos2, axis=0), imagepositions=ipos, timedelaymap=True)
-      barfile = 'bar.png'
-      plt.savefig(barfile)
-      print "Images and source(s) plotted in",barfile
-   
+        print "Source position is",spos
+        nim = sis.number_of_images(spos)
+        print "No. of expected images:",nim
+        ipos,dummy = sis.image_positions(spos)
+        print "Solved image positions:",ipos
+        print "Image magnifications:",sis.magnifications(ipos)
+        spos2 = sis.source_positions(ipos)
+        print "Corresponding source positions:",spos2
+        plt.clf()
+        sis.plot(sourcepositions=np.append(np.atleast_2d(spos), spos2, axis=0), imagepositions=ipos, timedelaymap=True)
+        barfile = 'bar_%s.png' % config
+        plt.savefig(barfile)
+        print "Images and source(s) plotted in",barfile
     else:
-      print "All tests passed OK"
-     
+        print "All tests passed OK"
+
+if __name__ == '__main__':
+    for config in ['major_cusp', 'minor_cusp', 'naked_cusp']:
+        merger_test(config)
+
 # if False:
 #     caustic = sis.tangential_caustic()
 #     critcurve = sis.critical_curve()
