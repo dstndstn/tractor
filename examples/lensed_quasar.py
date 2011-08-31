@@ -32,26 +32,40 @@ import matplotlib.nxutils as nx
 class GravitationalLens:
 
     def __init__(self, position, einsteinradius, gammacos2phi, gammasin2phi):
+        self.name = 'SIS + external shear'
         self.position = np.array(position)
         self.einsteinradius = einsteinradius
+        self.set_gamma_trig(gammacos2phi, gammasin2phi)
+        return None
+
+    def __str__(self):
+        return '%s (%s %.2f %.2f %.2f)' % (self.name, self.position, self.einsteinradius, self.gamma, self.phi)
+
+# ----------------------------------------------------------------------------
+    
+    # self.phi is in radians
+    def set_gamma_trig(self, gammacos2phi, gammasin2phi):
         self.gammacos2phi = gammacos2phi
         self.gammasin2phi = gammasin2phi
         self.gamma = np.sqrt(self.gammacos2phi**2 + self.gammasin2phi**2)
         self.phi = 0.5 * np.arctan2(self.gammasin2phi, self.gammacos2phi)
-        self.name = 'SIS + external shear'
+        return None
+
+    # phi is in radians
+    def set_gamma_phi(self, gamma, phi):
+        self.gamma = gamma
+        self.phi = phi
+        self.gammacos2phi = self.gamma * np.cos(2. * self.phi)
+        self.gammasin2phi = self.gamma * np.sin(2. * self.phi)
         return None
 
 # ----------------------------------------------------------------------------
 
-    def __str__(self):
-        return '%s (%s %f %f %f)' % (self.name, self.position, self.einsteinradius, self.gammacos2phi, self.gammasin2phi)
-    
-# ----------------------------------------------------------------------------
-    
     def eigs(self):
    	return (np.array([np.cos(self.phi), np.sin(self.phi)]), 
                 np.array([-np.sin(self.phi), np.cos(self.phi)]))
     
+    # return the sourceposition = 0 morphology; undefined when gamma=0
     def cross(self):
         assert(self.gamma > 0.)
         eig1, eig2 = self.eigs()
@@ -63,47 +77,48 @@ class GravitationalLens:
     
 # ----------------------------------------------------------------------------
 
-    # magic number 100 (sets precision)
-    def critical_curve(self):
+    # magic number 128 (sets precision)
+    def critical_curve(self, npts=128):
         eig1, eig2 = self.eigs()
-        npts = 100
-        dphi = np.linspace(0.0, 2.0*np.pi, num=npts, endpoint=True)
+        ddphi = 2. * np.pi / npts
+        dphi = np.arange(0., 2. * np.pi + 0.5 * ddphi, ddphi)
         cosphi = np.cos(dphi)
         sinphi = np.sin(dphi)
         costwophi = np.cos(2.0*dphi)
         r = self.einsteinradius*(1 - self.gamma*costwophi)/(1.0-self.gamma*self.gamma)
-        critcurve = np.outer(np.ones(npts), self.position)
+        critcurve = np.outer(np.ones_like(dphi), self.position)
         critcurve += np.outer(r*cosphi, eig1)
         critcurve += np.outer(r*sinphi, eig2)
         return critcurve
 
 # ----------------------------------------------------------------------------
 
-    # magic number 100
-    # note computational overkill; it's a circle.
-    def radial_caustic(self):
+    # magic number 128
+    # note crazy over-wrapping on dphi; this is used in guess_image_positions()
+    # note computational overkill; it's a freakin' circle.
+    def radial_caustic(self, npts=128):
         eig1, eig2 = self.eigs()
-        npts = 100
-        dphi = np.linspace(0.0, 2.0*np.pi, num=npts, endpoint=True)
+        ddphi = 2. * np.pi / npts
+        dphi = np.arange(0., 2. * np.pi + 1.5 * ddphi, ddphi)
         cosphi = np.cos(dphi)
         sinphi = np.sin(dphi)
-        caustic = np.outer(np.ones(npts), self.position)
+        caustic = np.outer(np.ones_like(dphi), self.position)
         caustic += np.outer(self.einsteinradius * cosphi, eig1)
         caustic += np.outer(self.einsteinradius * sinphi, eig2)
         return caustic
 
 # ----------------------------------------------------------------------------
 
-    # magic number 100
-    def tangential_caustic(self):
+    # magic number 128
+    def tangential_caustic(self, npts=128):
         eig1, eig2 = self.eigs()
-        npts = 100
-        dphi = np.linspace(0.0, 2.0*np.pi, num=npts, endpoint=True)
+        ddphi = 2. * np.pi / npts
+        dphi = np.arange(0., 2. * np.pi + 0.5 * ddphi, ddphi)
         sincubedphi = np.sin(dphi)**3
         coscubedphi = np.cos(dphi)**3
         betaplus = 2.0*self.einsteinradius*self.gamma/(1.0+self.gamma)
         betaminus = 2.0*self.einsteinradius*self.gamma/(1.0-self.gamma)
-        caustic = np.outer(np.ones(npts), self.position)
+        caustic = np.outer(np.ones_like(dphi), self.position)
         caustic += np.outer(-betaplus*coscubedphi, eig1)
         caustic += np.outer(betaminus*sincubedphi, eig2)
         return caustic
@@ -125,6 +140,9 @@ class GravitationalLens:
 
     # input: a single source position, shape (2)
     # output: a first guess at N image positions, shape (N, 2)
+    # notes:
+    # - N=3 is fugly
+    # - N=4 is worse
     def guess_image_positions(self, sourceposition):
         N = self.number_of_images(sourceposition)
         assert(N > 0 and N < 5)
@@ -145,17 +163,41 @@ class GravitationalLens:
             ipos = np.array([sourceposition.copy() - wffl, 
                              sourceposition.copy(), 
                              sourceposition.copy() + wffl])
-            # print "guessed image position:",ipos
         if N == 4:
-            ipos = self.cross()
+            ipos = self.guess_ring_positions(sourceposition)
+            ipos = np.array([self.guess_radial_position(sourceposition, ip) for ip in ipos])
         return ipos
+
+    def guess_ring_positions(self, sourceposition):
+        Nmin, Nmax = 0, 0
+        npts = 1024
+        while Nmin != 2 or Nmin != Nmax:
+            ringpos = self.radial_caustic(npts=npts)
+            td = self.time_delays(sourceposition, ringpos)
+            minI = ((td[1:-1] < td[0:-2]) *
+                    (td[1:-1] < td[2:]))
+            Nmin = np.sum(minI)
+            maxI = ((td[1:-1] > td[0:-2]) *
+                    (td[1:-1] > td[2:]))
+            Nmax = np.sum(maxI)
+            npts = npts * 4
+            # note horrifying offset: exercise to the reader
+        ringpos = ringpos[1:-1]
+        ipos = np.append(ringpos[minI], ringpos[maxI], axis=0)
+        return ipos
+
+    # takes just one position as input; returns it as output
+    def guess_radial_position(self, sourceposition, imageposition):
+        rfactor = np.arange(0.5, 2.0, 0.005)
+        ipos = np.outer(rfactor, imageposition)
+        return ipos[np.argmin(self.time_delays(sourceposition, ipos))]
 
 # ----------------------------------------------------------------------------
 
     # input: a single source position shape (2) and a first guess at N image positions shape (N, 2)
     # output: N image positions shape (N, 2)
     # MAGIC NUMBER: tol
-    def refine_image_positions(self, sourceposition, guessedimagepositions, tol=1.e-20):
+    def refine_image_positions(self, sourceposition, guessedimagepositions, tol=1.e-20, alpha=0.5):
         ipos = np.atleast_2d(guessedimagepositions)
         parities = self.parities(ipos)
         N = len(ipos)
@@ -164,7 +206,7 @@ class GravitationalLens:
         while np.sum(dspos**2) > tol:
             i += 1
             dipos = np.array([np.dot(tens, dsp) for tens, dsp in zip(self.magnification_tensors(ipos), dspos)])
-            ipos = ipos + dipos
+            ipos = ipos + alpha * dipos
             dspos = np.outer(np.ones(N), sourceposition) - self.source_positions(ipos)
         return ipos
 
@@ -316,16 +358,17 @@ class GravitationalLens:
 
 # ----------------------------------------------------------------------------
 
-    # if timedelay then plot time-delay surface
+    # if timedelaymap then plot time-delay surface
+    # if magnificationmap then plot magnification surface
     # several MAGIC NUMBERS
-    def plot(self, sourcepositions=None, imagepositions=None, timedelay=False):
+    def plot(self, sourcepositions=None, imagepositions=None, magnificationmap=False, timedelaymap=False):
         causticlw = 0.5
-        c = self.tangential_caustic().T
-        plt.plot(c[0], c[1], 'k', lw=causticlw)
-        c = self.radial_caustic().T
-        plt.plot(c[0], c[1], 'k', lw=causticlw)
-        c = self.critical_curve().T
-        plt.plot(c[0], c[1], 'k', lw=3*causticlw)
+        tc = self.tangential_caustic().T
+        plt.plot(tc[0], tc[1], 'k', lw=causticlw)
+        rc = self.radial_caustic().T
+        plt.plot(rc[0], rc[1], 'k', lw=causticlw)
+        cc = self.critical_curve().T
+        plt.plot(cc[0], cc[1], 'k', lw=3*causticlw)
         if sourcepositions is not None:
             spos = np.atleast_2d(sourcepositions)
             # print 'plot: plotting spos:', spos
@@ -343,8 +386,17 @@ class GravitationalLens:
         plt.xlabel('x (arcsec)')
         plt.ylabel('y (arcsec)')
         plt.axes().set_aspect('equal')
-        if timedelay:
-            print 'plotting time delay for', spos[0]
+        plt.title('%s' % self)
+        if magnificationmap:
+            tcontours = np.arange(-100., 100.5, 1.0)
+            xa, xb = plt.xlim()
+            ya, yb = plt.ylim()
+            xg, yg = np.meshgrid(np.arange(xa, xb, 0.01 * self.einsteinradius),
+                                np.arange(ya, yb, 0.01 * self.einsteinradius))
+            ig = np.array(zip(np.ravel(xg), np.ravel(yg)))
+            tg = np.reshape(self.magnifications(ig), xg.shape)
+            plt.contour(xg, yg, tg, tcontours, alpha=0.5, linewidths=causticlw)
+        if timedelaymap:
             dts = self.time_delays(spos[0], ipos)
             ta = np.min(dts)
             tb = np.max(dts) + self.einsteinradius**2
@@ -360,7 +412,6 @@ class GravitationalLens:
         return None
 
 # ============================================================================
-# Command line test: sample from prior and plot.
 
 if __name__ == '__main__':
         
@@ -450,7 +501,7 @@ if __name__ == '__main__':
       print "Corresponding source positions:",spos2
 
       plt.clf()
-      sis.plot(sourcepositions=np.append(np.atleast_2d(spos), spos2, axis=0), imagepositions=ipos, timedelay=True)
+      sis.plot(sourcepositions=np.append(np.atleast_2d(spos), spos2, axis=0), imagepositions=ipos, timedelaymap=True)
       barfile = 'bar.png'
       plt.savefig(barfile)
       print "Images and source(s) plotted in",barfile
