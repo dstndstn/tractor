@@ -8,11 +8,12 @@ import pyfits
 
 from astrometry.util.util import Tan
 
-from sdsstractor import *
+from tractor.sdss import *
+from tractor.sdss_galaxy import *
 
 def addexpgal(x, y, flux, re, ab, theta, wcs, tractor):
 	rd1 = wcs.pixelToPosition(None, (x, y))
-	g1 = HoggExpGalaxy(rd1, Flux(flux), re, ab, theta)
+	g1 = ExpGalaxy(rd1, Flux(flux), re, ab, theta)
 	tractor.catalog.append(g1)
 
 def addstar(x, y, flux, wcs, tractor):
@@ -90,6 +91,19 @@ def writeimg(tractor, visit):
 	hdus.writeto(fn, clobber=True)
 	print 'wrote', fn
 
+	fn = os.path.join(dirnm, 'srcs.fits')
+	srcs = tractor.getCatalog()
+	sx,sy = [],[]
+	wcs = img.getWcs()
+	for src in srcs:
+		x,y = wcs.positionToPixel(src, src.getPosition())
+		sx.append(x)
+		sy.append(y)
+	tab = pyfits.new_table([
+		pyfits.Column(name='X', format='E', array=np.array(sx)),
+		pyfits.Column(name='Y', format='E', array=np.array(sy)),])
+	tab.writeto(fn, clobber=True)
+	print 'Wrote', fn
 
 # two galaxies, bright & fairly well separated
 def test0():
@@ -162,9 +176,9 @@ if __name__ == '__main__':
 	#test0()
 	#test1()
 	#test2()
-	test3()
-	test2x()
+	#test3()
+	#test2x()
 	#test10()
-	#test11()
+	test11()
 	
 			
