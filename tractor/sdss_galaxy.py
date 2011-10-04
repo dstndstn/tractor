@@ -293,9 +293,9 @@ class CompositeGalaxy(Galaxy):
 	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
 	# CompositeGalaxy.
 	def getParamDerivatives(self, img, fluxonly=False):
-		print 'CompositeGalaxy: getParamDerivatives'
-		print '  Exp flux', self.fluxExp, 'shape', self.shapeExp
-		print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
+		#print 'CompositeGalaxy: getParamDerivatives'
+		#print '  Exp flux', self.fluxExp, 'shape', self.shapeExp
+		#print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
 		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
 		# pin through...
@@ -315,7 +315,13 @@ class CompositeGalaxy(Galaxy):
 			derivs.extend([None] * npos)
 		else:
 			for i in range(npos):
-				dp = de[i] + dd[i]
+				#dp = de[i] + dd[i]   -- but one or both could be None
+				dp = de[i]
+				if dd[i] is not None:
+					if dp is None:
+						dp = dd[i]
+					else:
+						dp += dd[i]
 				dp.setName('d(gal)/d(pos%i)' % i)
 				derivs.append(dp)
 		derivs.extend(de[npos:])

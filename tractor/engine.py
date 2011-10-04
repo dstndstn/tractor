@@ -585,7 +585,7 @@ class FitsWcs(object):
 		self.wcs = wcs
 
 	def positionToPixel(self, src, pos):
-		x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
 		return x,y
 
 	def pixelToPosition(self, src, xy):
@@ -594,7 +594,7 @@ class FitsWcs(object):
 		return RaDecPos(r,d)
 
 	def cdAtPixel(self, x, y):
-		cd = self.wcs.cd
+		cd = self.wcs.get_cd()
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
 class Patch(object):
@@ -1167,6 +1167,25 @@ class Tractor(object):
 				return False
 		return True
 
+	def optimizeCatalogFluxes(self, srcs=None):
+		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
+
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
+											 alphas=None, sky=True):
+		'''
+		Returns: (delta-log-prob, delta-parameters, step size alpha)
+
+		-synthesize images
+		-get all derivatives
+		-build matrix
+		-take step (try full step, back off)
+		'''
+		logverb('Optimizing at fixed complexity')
+		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
+		X = self.optimize(allparams)
+		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
+		return dlogprob, X, alpha
+
 	def debugChangeSources(self, **kwargs):
 		pass
 
@@ -1521,6 +1540,8 @@ class Tractor(object):
 		logverb('  Max column:', max(ucols))
 		logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
 
+		assert(all(np.isfinite(spvals)))
+
 		# Build sparse matrix
 		A = csr_matrix((spvals, (sprows, spcols)))
 
@@ -1541,8 +1562,14 @@ class Tractor(object):
 			assert(mod.shape == inverr.shape)
 			# we haven't touched these pix before
 			assert(all(b[row0 : row0 + NP] == 0))
+			assert(all(np.isfinite(data.ravel())))
+			assert(all(np.isfinite(mod.ravel())))
+			assert(all(np.isfinite(inverr.ravel())))
 			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
+			assert(all(np.isfinite(b[row0 : row0 + NP])))
 		b = b[:urows.max() + 1]
+
+		assert(all(np.isfinite(b)))
 
 		# FIXME -- does it make LSQR faster if we remap the row and column
 		# indices so that no rows/cols are empty?
@@ -1634,26 +1661,6 @@ class Tractor(object):
 			assert(len(dparams) == src.numberOfParams())
 			src.stepParams(dparams * alphaBest)
 		return pBest - pBefore, alphaBest
-
-	def optimizeCatalogFluxes(self, srcs=None):
-		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
-
-
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
-											 alphas=None, sky=True):
-		'''
-		Returns: (delta-log-prob, delta-parameters, step size alpha)
-
-		-synthesize images
-		-get all derivatives
-		-build matrix
-		-take step (try full step, back off)
-		'''
-		logverb('Optimizing at fixed complexity')
-		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
-		X = self.optimize(allparams)
-		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
-		return dlogprob, X, alpha
 
 	def getAllDerivs(self, srcs=None, fluxonly=False, sky=True):
  		if srcs is None:
