@@ -1167,8 +1167,9 @@ class Tractor(object):
 				return False
 		return True
 
-	def optimizeCatalogFluxes(self, srcs=None):
-		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True)
+	def optimizeCatalogFluxes(self, srcs=None, sky=False):
+		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True,
+														 sky=sky)
 
 	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
 											 alphas=None, sky=True):
