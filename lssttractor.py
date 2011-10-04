@@ -47,6 +47,7 @@ def main():
 		sys.exit(-1)
 	img = pimg[1].data
 	mask = pimg[2].data
+	maskhdr = pimg[2].header
 	var = pimg[3].data
 	del pimg
 	
@@ -77,6 +78,15 @@ def main():
 	Bit 5 has 37032 pixels set
 	'''
 
+	print 'Mask header:', maskhdr
+	maskplanes = {}
+	print 'Mask planes:'
+	for card in maskhdr.ascardlist():
+		if not card.key.startswith('MP_'):
+			continue
+		print card.value, card.key
+		maskplanes[card.key[3:]] = card.value
+
 	print 'Variance range:', var.min(), var.max()
 
 	print 'Image median:', np.median(img.ravel())
@@ -85,9 +95,31 @@ def main():
 	invvar[var == 0] = 0.
 	invvar[var < 0] = 0.
 
-	badmask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
-	# HACK -- EDGE
-	badmask |= (1 << 4)
+	sig = np.sqrt(np.median(var))
+	H,W = img.shape
+	for k,v in maskplanes.items():
+		plt.clf()
+
+		I = ((mask & (1 << v)) != 0)
+		rgb = np.zeros((H,W,3))
+		clipimg = np.clip((img - (-3.*sig)) / (13.*sig), 0, 1)
+		cimg = clipimg.copy()
+		cimg[I] = 1
+		rgb[:,:,0] = cimg
+		cimg = clipimg.copy()
+		cimg[I] = 0
+		rgb[:,:,1] = cimg
+		rgb[:,:,2] = cimg
+		plt.imshow(rgb, interpolation='nearest', origin='lower')
+		plt.title(k)
+		plt.savefig('mask-%s.png' % k.lower())
+
+	badmask = sum([(1 << maskplanes[k]) for k in ['BAD', 'SAT', 'INTRP', 'CR']])
+	# HACK -- left EDGE sucks
+	badmask += (1 << maskplanes['EDGE'])
+	#badmask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+	#badmask |= (1 << 4)
+	print 'Masking out: 0x%x' % badmask
 	invvar[(mask & badmask) != 0] = 0.
 
 	assert(all(np.isfinite(img.ravel())))
