@@ -185,8 +185,8 @@ def main():
 	plt.savefig('chi.png')
 
 	for step in range(5):
-		#for i,src in enumerate(chug.getCatalog()):
-		for i,src in enumerate([]):
+		for i,src in enumerate(chug.getCatalog()):
+		#for i,src in enumerate([]):
 			print 'Optimizing source', i, 'of', len(chug.getCatalog())
 
 			pre = src.getModelPatch(timg)
@@ -198,39 +198,36 @@ def main():
 
 			print 'dlnp', dlnp1, dlnp2
 
-			plt.clf()
-			plt.subplot(2,2,1)
-			img = timg.getImage()
-			(x0,x1,y0,y1) = pre.getExtent()
-			#print x0,x1,y0,y1
-			#plt.imshow(img[y0:y1, x0:x1], **ima)
-			plt.imshow(img, **ima)
-			ax = plt.axis()
-			plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'k-', lw=2)
-			plt.axis(ax)
-			plt.subplot(2,2,3)
-			plt.imshow(pre.getImage(), **ima)
-			plt.subplot(2,2,4)
-			plt.imshow(post.getImage(), **ima)
-			plt.savefig('prepost-s%i-s%03i.png' % (step, i))
-
-			mod = chug.getModelImages()[0]
-			plt.clf()
-			plt.imshow(mod, **ima)
-			plt.colorbar()
-			plt.savefig('mod-s%i-s%03i.png' % (step, i))
-
-			chi = chug.getChiImage(0)
-			plt.clf()
-			plt.imshow(chi, **chia)
-			plt.colorbar()
-			plt.savefig('chi-s%i-s%03i.png' % (step, i))
+			# plt.clf()
+			# plt.subplot(2,2,1)
+			# img = timg.getImage()
+			# (x0,x1,y0,y1) = pre.getExtent()
+			# plt.imshow(img, **ima)
+			# ax = plt.axis()
+			# plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'k-', lw=2)
+			# plt.axis(ax)
+			# plt.subplot(2,2,3)
+			# plt.imshow(pre.getImage(), **ima)
+			# plt.subplot(2,2,4)
+			# plt.imshow(post.getImage(), **ima)
+			# plt.savefig('prepost-s%i-s%03i.png' % (step, i))
+			# 
+			# mod = chug.getModelImages()[0]
+			# plt.clf()
+			# plt.imshow(mod, **ima)
+			# plt.colorbar()
+			# plt.savefig('mod-s%i-s%03i.png' % (step, i))
+			# chi = chug.getChiImage(0)
+			# plt.clf()
+			# plt.imshow(chi, **chia)
+			# plt.colorbar()
+			# plt.savefig('chi-s%i-s%03i.png' % (step, i))
 
 
-		dlnp,x,a = chug.optimizeCatalogFluxes()
-		print 'fluxes: dlnp', dlnp
-		dlnp,x,a = chug.optimizeCatalogAtFixedComplexityStep()
-		print 'opt: dlnp', dlnp
+		#dlnp,x,a = chug.optimizeCatalogFluxes()
+		#print 'fluxes: dlnp', dlnp
+		#dlnp,x,a = chug.optimizeCatalogAtFixedComplexityStep()
+		#print 'opt: dlnp', dlnp
 
 		mod = chug.getModelImages()[0]
 		plt.clf()
