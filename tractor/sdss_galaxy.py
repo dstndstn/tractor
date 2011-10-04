@@ -175,7 +175,7 @@ class Galaxy(MultiParams):
 				posx.stepParam(i, psteps[i])
 				(px,py) = img.getWcs().positionToPixel(self, posx)
 				patchx = self.getUnitFluxModelPatch(img, px, py)
-				if patchx.getImage() is None:
+				if patchx is None or patchx.getImage() is None:
 					derivs.append(None)
 					continue
 				dx = (patchx - patch0) * (counts / psteps[i])
