@@ -55,6 +55,26 @@ def main():
 	print 'img', img.shape
 	#print img
 
+	mask = mask.astype(np.int16)
+	for bit in range(16):
+		on = ((mask & (1<<bit)) != 0)
+		print 'Bit', bit, 'has', np.sum(on), 'pixels set'
+
+	'''
+	MP_BAD  =                    0
+	Bit 0 has 2500 pixels set
+	MP_SAT  =                    1
+	Bit 1 has 5771 pixels set
+	MP_INTRP=                    2
+	Bit 2 has 11269 pixels set
+	MP_CR   =                    3
+	Bit 3 has 136 pixels set
+	MP_EDGE =                    4
+	Bit 4 has 11856 pixels set
+	HIERARCH MP_DETECTED =       5
+	Bit 5 has 37032 pixels set
+	'''
+
 	print 'Variance range:', var.min(), var.max()
 
 	print 'Image median:', np.median(img.ravel())
@@ -62,6 +82,9 @@ def main():
 	invvar = 1./var
 	invvar[var == 0] = 0.
 	invvar[var < 0] = 0.
+
+	badmask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+	invvar[(mask & badmask) != 0] = 0.
 
 	assert(all(np.isfinite(img.ravel())))
 	assert(all(np.isfinite(invvar.ravel())))
