@@ -1168,7 +1168,7 @@ class Tractor(object):
 		return True
 
 	def optimizeCatalogFluxes(self, srcs=None, sky=False):
-		return self.optimizeCatalogAtFixedComplexityStep(srcs, fluxonly=True,
+		return self.optimizeCatalogAtFixedComplexityStep(srcs=srcs, fluxonly=True,
 														 sky=sky)
 
 	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
@@ -1183,6 +1183,16 @@ class Tractor(object):
 		'''
 		logverb('Optimizing at fixed complexity')
 		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
+
+		#print allparams
+		print 'optimizing: derivs are:'
+		# list, one element per parameter...
+		for p in allparams:
+			# one element per image, (derivate Patch, Image)
+			for imi,(d,im) in enumerate(p):
+				if d is not None:
+					print '  ', d.name, 'in image', imi
+
 		X = self.optimize(allparams)
 		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
 		return dlogprob, X, alpha

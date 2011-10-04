@@ -98,10 +98,17 @@ class Galaxy(MultiParams):
 	def __init__(self, pos, flux, shape):
 		MultiParams.__init__(self, pos, flux, shape)
 		self.name = self.getName()
+		self.dname = self.getDName()
 
 	def getName(self):
 		return 'Galaxy'
 
+	def getDName(self):
+		'''
+		Name used in labeling the derivative images d(Dname)/dx, eg
+		'''
+		return 'gal'
+		
 	def getSourceType(self):
 		return self.name
 
@@ -179,7 +186,7 @@ class Galaxy(MultiParams):
 					derivs.append(None)
 					continue
 				dx = (patchx - patch0) * (counts / psteps[i])
-				dx.setName('d(gal)/d(pos%i)' % i)
+				dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
 				derivs.append(dx)
 
 		# derivatives wrt flux
@@ -192,7 +199,7 @@ class Galaxy(MultiParams):
 				fi.stepParam(i, fsteps[i])
 				countsi = img.getPhotoCal().fluxToCounts(fi)
 				df = patch0 * ((countsi - counts) / fsteps[i])
-				df.setName('d(gal)/d(flux%i)' % i)
+				df.setName('d(%s)/d(flux%i)' % (self.dname, i))
 				derivs.append(df)
 
 		# derivatives wrt shape
@@ -220,7 +227,7 @@ class Galaxy(MultiParams):
 					derivs.append(None)
 
 				dx = (patchx - patch0) * (counts / gsteps[i])
-				dx.setName('d(gal)/d(%s)' % (gnames[i]))
+				dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
 				derivs.append(dx)
 		return derivs
 
@@ -298,6 +305,8 @@ class CompositeGalaxy(Galaxy):
 		#print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
 		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		e.dname = 'comp.exp'
+		d.dname = 'comp.dev'
 		# pin through...
 		if self.isParamPinned('fluxExp'):
 			e.pinParam('flux')
@@ -322,7 +331,7 @@ class CompositeGalaxy(Galaxy):
 						dp = dd[i]
 					else:
 						dp += dd[i]
-				dp.setName('d(gal)/d(pos%i)' % i)
+				dp.setName('d(comp)/d(pos%i)' % i)
 				derivs.append(dp)
 		derivs.extend(de[npos:])
 		derivs.extend(dd[npos:])

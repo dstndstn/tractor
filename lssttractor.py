@@ -13,12 +13,14 @@ from astrometry.util.file import *
 from astrometry.util.util import Sip
 from astrometry.util.pyfits_utils import *
 
-#from tractor import *
-#from tractor import sdss as st
 import tractor
 from tractor import sdss_galaxy as gal
 
 def main():
+
+	# In LSST meas-deblend (on lsst6):
+	# python examples/suprimePlot.py --data ~dstn/lsst/ACT-data -v 126969 -c 5 --data-range -100 300 --roi 0 500 0 500 --psf psf.fits --image img.fits --sources srcs.fits
+
 	from optparse import OptionParser
 	import sys
 
@@ -84,6 +86,8 @@ def main():
 	invvar[var < 0] = 0.
 
 	badmask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+	# HACK -- EDGE
+	badmask |= (1 << 4)
 	invvar[(mask & badmask) != 0] = 0.
 
 	assert(all(np.isfinite(img.ravel())))
@@ -183,7 +187,13 @@ def main():
 			tsrc = tractor.PointSource(pos, flux)
 		tsrcs.append(tsrc)
 
-	chug = tractor.Tractor([timg], catalog=tsrcs)
+	chug = tractor.Tractor([timg])
+	for src in tsrcs:
+		if chug.getModelPatch(timg, src) is None:
+			print 'Dropping non-overlapping source:', src
+			continue
+		chug.addSource(src)
+	print 'Kept a total of', len(chug.catalog), 'sources'
 
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=-3.*sig, vmax=10.*sig)
@@ -195,31 +205,73 @@ def main():
 	plt.colorbar()
 	plt.savefig('img.png')
 
+	plt.clf()
+	plt.imshow(invvar, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('invvar.png')
+
 	mod = chug.getModelImages()[0]
 	plt.clf()
 	plt.imshow(mod, **ima)
 	plt.colorbar()
-	plt.savefig('mod.png')
+	plt.savefig('mod-0.png')
 
 	chi = chug.getChiImage(0)
 	plt.clf()
 	plt.imshow(chi, **chia)
 	plt.colorbar()
-	plt.savefig('chi.png')
+	plt.savefig('chi-0.png')
 
 	for step in range(5):
-		for i,src in enumerate(chug.getCatalog()):
+		cat = chug.getCatalog()
+		for src in cat:
+			if chug.getModelPatch(timg, src) is None:
+				print 'Dropping non-overlapping source:', src
+				chug.removeSource(src)
+		print 'Kept a total of', len(chug.catalog), 'sources'
+
+		#cat = chug.getCatalog()
 		#for i,src in enumerate([]):
-			print 'Optimizing source', i, 'of', len(chug.getCatalog())
+		#for i,src in enumerate(chug.getCatalog()):
+		#for i in range(len(cat)):
+		i = 0
+		while i < len(cat):
+			src = cat[i]
 
-			pre = src.getModelPatch(timg)
+			#print 'Step', i
+			#for j,s in enumerate(cat):
+			#	x,y = timg.getWcs().positionToPixel(s, s.getPosition())
+			#	print '  ',
+			#	if j == i:
+			#		print '*',
+			#	print '(%6.1f, %6.1f)'%(x,y), s
 
+			print 'Optimizing source', i, 'of', len(cat)
+
+			x,y = timg.getWcs().positionToPixel(src, src.getPosition())
+			print '(%6.1f, %6.1f)'%(x,y), src
+			# pre = src.getModelPatch(timg)
+
+			s1 = str(src)
+			print 'src1 ', s1
 			dlnp1,X,a = chug.optimizeCatalogFluxes(srcs=[src])
-			dlnp2,X,a = chug.optimizeCatalogAtFixedComplexityStep(srcs=[src])
+			s2 = str(src)
+			dlnp2,X,a = chug.optimizeCatalogAtFixedComplexityStep(srcs=[src], sky=False)
+			s3 = str(src)
 
-			post = src.getModelPatch(timg)
+			#post = src.getModelPatch(timg)
 
+			print 'src1 ', s1
+			print 'src2 ', s2
+			print 'src3 ', s3
 			print 'dlnp', dlnp1, dlnp2
+
+			if chug.getModelPatch(timg, src) is None:
+				print 'After optimizing, no overlap!'
+				print 'Removing source', src
+				chug.removeSource(src)
+				i -= 1
+			i += 1
 
 			# plt.clf()
 			# plt.subplot(2,2,1)
@@ -256,14 +308,13 @@ def main():
 		plt.clf()
 		plt.imshow(mod, **ima)
 		plt.colorbar()
-		plt.savefig('mod-s%i.png' % step)
+		plt.savefig('mod-%i.png' % (step+1))
 
 		chi = chug.getChiImage(0)
 		plt.clf()
 		plt.imshow(chi, **chia)
 		plt.colorbar()
-		plt.savefig('chi-s%i.png' % step)
-
+		plt.savefig('chi-%i.png' % (step+1))
 
 	return
 
