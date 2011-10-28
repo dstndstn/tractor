@@ -131,7 +131,9 @@ def test3():
 	tractor,wcs = gettractor()
 	addexpgal( 90., 100., 1e5, 20., 0.5,  0., wcs, tractor)
 	addstar(90., 120., 1e3, wcs, tractor)
-	addstar(100., 100., 1e3, wcs, tractor)
+	addstar(100.5,  100.25, 1e3, wcs, tractor)
+	addstar(100.0,  110.25, 1e3, wcs, tractor)
+	addstar(100.75,  80.25, 1e3, wcs, tractor)
 	writeimg(tractor, 3)
 
 
@@ -175,8 +177,8 @@ def test2x():
 if __name__ == '__main__':
 	#test0()
 	#test1()
-	#test2()
-	#test3()
+	test2()
+	test3()
 	#test2x()
 	#test10()
 	test11()

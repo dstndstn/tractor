@@ -585,7 +585,13 @@ class FitsWcs(object):
 		self.wcs = wcs
 
 	def positionToPixel(self, src, pos):
-		ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		#ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		X = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		if len(X) == 3:
+			ok,x,y = X
+		else:
+			assert(len(X) == 2)
+			x,y = X
 		return x,y
 
 	def pixelToPosition(self, src, xy):
