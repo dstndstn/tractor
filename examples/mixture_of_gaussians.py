@@ -1,7 +1,6 @@
 # Copyright 2011 David W. Hogg (NYU) and Phillip J. Marshall (Oxford).
 # All rights reserved.
 
-
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -41,6 +40,10 @@ class gaussian_2d():
                 dy * dx * self.invvar[1,0] +
                 dy * dy * self.invvar[1,1]))
 
+    def plot(self):
+        plt.plot(self.mean[1], self.mean[0], 'cx')
+        return None
+
 class mixture_of_gaussians():
 
     def __init__(self, amps, gaussians):
@@ -53,7 +56,7 @@ class mixture_of_gaussians():
     def __getitem__(self, k):
         return self.amps[k], self.gaussians[k]
 
-    def self.copy(self):
+    def copy(self):
         return mixture_of_gaussians(self.amps, self.gaussians)
 
     def evaluate(self, x, y):
@@ -68,19 +71,64 @@ class mixture_of_gaussians():
     def chisq(self, data):
         return np.sum(self.chi(data)**2)
 
+    def plot(self):
+        for a, g in self:
+            g.plot()
+        return None
+
     def pars(self):
+        pars = np.zeros((self.K * 7, ))
+        i = 0
+        for a, g in self:
+            j = i + 1
+            pars[i:j] = a
+            i = j
+            j = i + 2
+            pars[i:j] = g.mean
+            i = j
+            j = i + 4
+            pars[i:j] = np.reshape(g.invvar, (4, ))
+            i = j
         return pars
 
     def set_parameters_from_pars(self, pars):
+        i = 0
+        for k, (a, g) in enumerate(self):
+            j = i + 1
+            self.amps[k] = pars[i]
+            i = j
+            j = i + 2
+            g.mean[:] = pars[i:j]
+            i = j
+            j = i + 4
+            g.invvar[:,:] = np.reshape(pars[i:j], (2, 2))
+            i = j
         return None
 
-    def optimize(self, data):
+    # op.leastsq CRUSHES op.fmin, duh!
+    def optimize_leastsq(self, data):
+        def chivec(pars):
+            self.set_parameters_from_pars(pars)
+            c = self.chi(data).flatten()
+            print np.sum(c*c)
+            return c
+        firstpars = self.pars()
+        bestpars, foo = op.leastsq(chivec, firstpars, maxfev=1000000, ftol=1.e-7)
+        self.set_parameters_from_pars(bestpars)
+        return None
+
+    def optimize_fmin(self, data):
         def cost(pars):
             self.set_parameters_from_pars(pars)
-            return self.chisq(data)
-        firstpars = [0., 0.,] # put first guess here
-        bestpars = op.fmin(cost, firstpars)
+            c = self.chisq(data)
+            print c
+            return c
+        firstpars = self.pars()
+        op.fmin(cost, firstpars, maxfun=np.Inf, maxiter=np.Inf, ftol=1.e-5)
+        self.set_parameters_from_pars(bestpars)
         return None
+
+    optimize = optimize_leastsq
 
 class panstarrs_data():
 
@@ -89,17 +137,14 @@ class panstarrs_data():
         self.var = pf.open(varfn)[0].data
         self.invvar = 1. / self.var
         self.invvar[np.isnan(self.var)] = 0.
+        self.invvar[self.var <= 0.] = 0.
+        self.data[np.isnan(self.data)] = 0.
+        self.data[self.invvar == 0.] = 0.
         nx, ny = self.data.shape
         self.x, self.y = np.mgrid[0:nx,0:ny]
         return None
 
 if __name__ == '__main__':
-
-    g1 = gaussian_2d([25., 25.], [[3.0, 0.5], [0.5, 4.0]])
-    g2 = gaussian_2d([27., 26.], [[10.0, -0.5], [-0.5, 10.0]])
-    x, y = np.mgrid[0:13,0:7]
-    synth = g1.evaluate(x, y)
-    mix = mixture_of_gaussians([10000., 10000.], [g1, g2])
 
     d = panstarrs_data('H1413+117_10x10arcsec_55377.34051_z_sci.fits',
                        'H1413+117_10x10arcsec_55377.34051_z_var.fits')
@@ -111,9 +156,18 @@ if __name__ == '__main__':
     plt.clf()
     plt.imshow(d.invvar, **imshow_opts)
     plt.savefig('invvar.png')
-    plt.clf()
-    plt.imshow(mix.synthesize(d), **imshow_opts)
-    plt.savefig('synth.png')
-    plt.clf()
-    plt.imshow(mix.chi(d), **imshow_opts)
-    plt.savefig('chi.png')
+    for K in range(1,5):
+        g2 = gaussian_2d([23., 28.], [[3., 0.], [0., 3.]])
+        g1 = gaussian_2d([23., 23.], [[3., 0.], [0., 3.]])
+        g3 = gaussian_2d([28., 28.], [[3., 0.], [0., 3.]])
+        g4 = gaussian_2d([28., 23.], [[3., 0.], [0., 3.]])
+        amps = [10000., 10000., 10000., 10000.]
+        gaussians = [g1, g2, g3, g4]
+        mix = mixture_of_gaussians(amps[0:K], gaussians[0:K])
+        mix.optimize(d)
+        plt.clf()
+        plt.imshow(mix.synthesize(d), **imshow_opts)
+        plt.savefig('synth-%d.png' % K)
+        plt.clf()
+        plt.imshow(mix.chi(d), **imshow_opts)
+        plt.savefig('chi-%d.png' % K)
