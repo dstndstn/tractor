@@ -14,8 +14,9 @@ from astrometry.util.file import *
 from tractor import *
 from tractor import sdss as st
 
+
 # Assumes one image.
-def save(idstr, tractor, zr):
+def save(idstr, tractor, zr,debug=False):
 	mod = tractor.getModelImages()[0]
 
 	synthfn = 'synth-%s.fits' % idstr
@@ -31,11 +32,87 @@ def save(idstr, tractor, zr):
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1])
 
+	if debug:
+		sources = tractor.getCatalog()
+		wcs = timg.getWcs()
+		allobjx = []
+		allobjy = []
+		allobjc = []
+		pointx = []
+		pointy = []
+
+		for obj in sources:
+			if (isinstance(obj,PointSource)):
+				xt,yt = wcs.positionToPixel(None,obj.getPosition())
+				pointx.append(xt)
+				pointy.append(yt)
+				continue
+			print type(obj)
+			shapes = []
+			attrType = []
+		#There must be a better way....
+			if (obj.getName() == "CompositeGalaxy"):
+				for attr in 'shapeExp', 'shapeDev':
+					shapes.append(getattr(obj, attr))
+					attrType.append(attr)
+			else:
+				shapes.append(getattr(obj,'shape'))
+				attrType.append(' ')
+			x0,y0 = wcs.positionToPixel(None,obj.getPosition())
+			cd = timg.getWcs().cdAtPixel(x0,y0)
+			print "CD",cd
+			for i,shape in enumerate(shapes):
+				T=np.linalg.inv(shape.getTensor(cd))
+				print "Inverted tensor:",T
+				print obj.getPosition()
+				print i
+
+				x,y = [],[]
+				for theta in np.linspace(0,2*np.pi,100):
+					ux = np.cos(theta)
+					uy = np.sin(theta)
+					dx,dy = np.dot(T,np.array([ux,uy]))
+					x.append(x0+dx)
+					y.append(y0+dy)
+				allobjx.append(x)
+				allobjy.append(y)
+				if (attrType[i] == 'shapeExp'):
+					allobjc.append('b')
+				elif attrType[i] == 'shapeDev':
+					allobjc.append('g')
+				else:
+					allobjc.append('r')
+
 	def savepng(pre, img, title=None, **kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
 		plt.clf()
+
+       # Make a non-linear stretched map using image "I" to set the limits:
+
+		ss = np.sort(img.ravel())
+		mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
+		q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
+
+		def nlmap(X):
+			Y = (X - q2) / ((q3-q1)/2.)
+			return np.arcsinh(Y * 10.)/10.
+		def myimshow(x, *args, **kwargs):
+			mykwargs = kwargs.copy()
+			if 'vmin' in kwargs:
+				mykwargs['vmin'] = nlmap(kwargs['vmin'])
+			if 'vmax' in kwargs:
+					mykwargs['vmax'] = nlmap(kwargs['vmax'])
+			return plt.imshow(nlmap(x), *args, **mykwargs)
+
 		plt.imshow(img, **kwargs)
+		#myimshow(img,**kwargs)
+		ax = plt.axis()
+		if debug:
+			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
+				plt.plot(objx,objy,'-',c=objc)
+				plt.plot(pointx,pointy,'y.')
+		plt.axis(ax)
 		if title is not None:
 			plt.title(title)
 		plt.colorbar()
@@ -62,6 +139,7 @@ def main():
 	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
+	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
 	opt,args = parser.parse_args()
 
 	if opt.verbose == 0:
@@ -111,7 +189,7 @@ def main():
 	tractor.addSources(sources)
 
 	zr = np.array([-5.,+5.]) * info['skysig']
-	save(prefix, tractor, zr)
+	save(prefix, tractor, zr,opt.debug)
 
 	for i in range(opt.ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
