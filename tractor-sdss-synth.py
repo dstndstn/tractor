@@ -18,6 +18,7 @@ from tractor import sdss as st
 # Assumes one image.
 def save(idstr, tractor, zr,debug=False):
 	mod = tractor.getModelImages()[0]
+	chi = tractor.getChiImages()[0]
 
 	synthfn = 'synth-%s.fits' % idstr
 	print 'Writing synthetic image to', synthfn
@@ -50,8 +51,7 @@ def save(idstr, tractor, zr,debug=False):
 			print type(obj)
 			shapes = []
 			attrType = []
-		#There must be a better way....
-			if (obj.getName() == "CompositeGalaxy"):
+			if (isinstance(obj,st.CompositeGalaxy)):
 				for attr in 'shapeExp', 'shapeDev':
 					shapes.append(getattr(obj, attr))
 					attrType.append(attr)
@@ -123,6 +123,7 @@ def save(idstr, tractor, zr,debug=False):
 	savepng('data', data - sky, title='Data '+timg.name, **ima)
 	savepng('model', mod - sky, title='Model', **ima)
 	savepng('diff', data - mod, title='Data - Model', **ima)
+	savepng('chi',chi,title='Chi',**ima)
 
 def main():
 	from optparse import OptionParser
@@ -193,7 +194,7 @@ def main():
 
 	for i in range(opt.ntune):
 		tractor.optimizeCatalogLoop(nsteps=1)
-		save('tune-%d-' % (i+1) + prefix, tractor, zr)
+		save('tune-%d-' % (i+1) + prefix, tractor, zr,opt.debug)
 
 	makeflipbook(opt, prefix)
 	print
@@ -216,11 +217,12 @@ def makeflipbook(opt, prefix):
 	\plot{data-%s}
 	\plot{model-%s} \\
 	\plot{diff-%s}
+        \plot{chi-%s} \\
 	\end{frame}'''
-	tex += page % (('Initial model',) + (prefix,)*3)
+	tex += page % (('Initial model',) + (prefix,)*4)
 	for i in range(opt.ntune):
 		tex += page % (('Tuning step %i' % (i+1),) +
-					   ('tune-%d-' % (i+1) + prefix,)*3)
+					   ('tune-%d-' % (i+1) + prefix,)*4)
 	if opt.ntune:
 		# Finish with a 'blink'
 		tex += r'''\part{Before-n-after}\frame{\partpage}''' + '\n'
