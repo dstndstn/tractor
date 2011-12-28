@@ -1717,10 +1717,16 @@ class Tractor(object):
 		return mod
 
 	# the real deal
-	def getModelImageNoCache(self, img):
+	def getModelImageNoCache(self, img, srcs=None):
 		mod = np.zeros_like(img.getImage())
 		img.sky.addTo(mod)
-		for src in self.catalog:
+		if srcs is None:
+			srcs = self.catalog
+		else:
+			srcsT = []
+			srcsT.append(srcs)
+			srcs = srcsT
+		for src in srcs:
 			patch = self.getModelPatch(img, src)
 			if patch is None:
 				print 'None patch: src is', src
@@ -1729,8 +1735,8 @@ class Tractor(object):
 			patch.addTo(mod)
 		return mod
 
-	def getModelImage(self, img):
-		return self.getModelImageNoCache(img)
+	def getModelImage(self, img,srcs=None):
+		return self.getModelImageNoCache(img,srcs)
 	'''
 	def getModelImage(self, img):
 		# dependencies of this model image:

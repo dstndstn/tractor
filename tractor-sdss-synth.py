@@ -16,7 +16,7 @@ from tractor import sdss as st
 
 
 # Assumes one image.
-def save(idstr, tractor, zr,debug=False):
+def save(idstr, tractor, zr,debug=False,plotAll=False):
 	mod = tractor.getModelImages()[0]
 	chi = tractor.getChiImages()[0]
 
@@ -41,6 +41,8 @@ def save(idstr, tractor, zr,debug=False):
 		allobjc = []
 		pointx = []
 		pointy = []
+		xplotx = []
+		xploty = []
 
 		for obj in sources:
 			if (isinstance(obj,PointSource)):
@@ -59,9 +61,12 @@ def save(idstr, tractor, zr,debug=False):
 				shapes.append(getattr(obj,'shape'))
 				attrType.append(' ')
 			x0,y0 = wcs.positionToPixel(None,obj.getPosition())
+			
 			cd = timg.getWcs().cdAtPixel(x0,y0)
 			print "CD",cd
 			for i,shape in enumerate(shapes):
+				xplotx.append(x0)
+				xploty.append(y0)
 				T=np.linalg.inv(shape.getTensor(cd))
 				print "Inverted tensor:",T
 				print obj.getPosition()
@@ -83,7 +88,7 @@ def save(idstr, tractor, zr,debug=False):
 				else:
 					allobjc.append('r')
 
-	def savepng(pre, img, title=None, **kwargs):
+	def savepng(pre, img, title=None,**kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
 		plt.clf()
@@ -114,9 +119,19 @@ def save(idstr, tractor, zr,debug=False):
 			myimshow(img,**kwargs)
 		ax = plt.axis()
 		if debug:
+			print len(xplotx),len(allobjx)
 			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
+				print i
 				plt.plot(objx,objy,'-',c=objc)
-				plt.plot(pointx,pointy,'y.')
+				tempx = []
+				tempx.append(xplotx[i])
+				tempx.append(objx[0])
+				tempy = []
+				tempy.append(xploty[i])
+				tempy.append(objy[0])
+				plt.plot(tempx,tempy,'-',c='purple')
+			plt.plot(pointx,pointy,'y.')
+			plt.plot(xplotx,xploty,'xg')
 		plt.axis(ax)
 		if title is not None:
 			plt.title(title)
@@ -128,9 +143,23 @@ def save(idstr, tractor, zr,debug=False):
 	savepng('data', data - sky, title='Data '+timg.name, **ima)
 	savepng('model', mod - sky, title='Model', **ima)
 	savepng('diff', data - mod, title='Data - Model', **ima)
+	oldvmin = ima['vmin']
+	oldvmax = ima['vmax']
 	ima['vmin'] = -10
 	ima['vmax'] = 10
 	savepng('chi',chi,title='Chi',**ima)
+	if plotAll:
+		debug = False
+		for i,src in enumerate(tractor.getCatalog()):
+			ima['vmin'] = oldvmin
+			ima['vmax'] = oldvmax
+			savepng('data-s%i'%(i+1),data - sky, title='Data '+timg.name,**ima)
+			savepng('model-s%i'%(i+1),tractor.getModelImage(timg,srcs=src) - sky, title='Model-s%i'%(i+1),**ima) #DOES NOT WORK -dm
+			savepng('diff-s%i'%(i+1), data - tractor.getModelImage(timg,srcs=src),title='Model-s%i'%(i+1),**ima)
+			ima['vmin'] = -10
+			ima['vmax'] = 10
+			savepng('chi-s%i'%(i+1),chi,title='Chi',**ima)
+		
 
 def main():
 	from optparse import OptionParser
@@ -157,6 +186,7 @@ def main():
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
+	parser.add_option('--plotAll',dest='plotAll',action='store_true',default=False,help="Makes a plot for each source")
 	opt,args = parser.parse_args()
 	print tune
 
@@ -207,27 +237,27 @@ def main():
 	tractor.addSources(sources)
 
 	zr = np.array([-5.,+5.]) * info['skysig']
-	save(prefix, tractor, zr,opt.debug)
+	save(prefix, tractor, zr,opt.debug,opt.plotAll)
 
 	for count, each in enumerate(tune):
 		if each[0]=='n':
 			for i in range(each[1]):
 				tractor.optimizeCatalogLoop(nsteps=1)
-				save('tune-%d-%d-' % (count+1, i+1) + prefix, tractor, zr, opt.debug)
+				save('tune-%d-%d-' % (count+1, i+1) + prefix, tractor, zr, opt.debug,opt.plotAll)
 	
 		elif each[0]=='i':
 			for step in range(each[1][0]):
 				for src in tractor.getCatalog():
 					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src])
-				save('tune-%d-%d-' % (count+1,step+1) + prefix, tractor, zr, opt.debug)
+				save('tune-%d-%d-' % (count+1,step+1) + prefix, tractor, zr, opt.debug,opt.plotAll)
 
-	makeflipbook(opt, prefix,tune)
+	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()))
 	print
 	print 'Created flip-book flip-%s.pdf' % prefix
 
 
 
-def makeflipbook(opt, prefix,tune):
+def makeflipbook(opt, prefix,tune,numSrcs):
 	# Create a tex flip-book of the plots
 	tex = r'''
 	\documentclass[compress]{beamer}
@@ -245,6 +275,9 @@ def makeflipbook(opt, prefix,tune):
         \plot{chi-%s} \\
 	\end{frame}'''
 	tex += page % (('Initial model',) + (prefix,)*4)
+	if opt.plotAll:
+		for i in range(numSrcs):
+			tex += page % (('Source: %i' % (i+1),)+ ('s%d-' % (i+1) + prefix,)*4)
 	for count,step in enumerate(tune):
 		if step[0] == 'n':
 			for i in range (step[1]):
