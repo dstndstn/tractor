@@ -88,7 +88,10 @@ def save(idstr, tractor, zr,debug=False):
 		print 'Saving', fn
 		plt.clf()
 
-       # Make a non-linear stretched map using image "I" to set the limits:
+		#Raises an error otherwise... no idea why --dm
+		np.seterr(under='print')
+		
+		# Make a non-linear stretched map using image "I" to set the limits:
 
 		ss = np.sort(img.ravel())
 		mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
@@ -102,11 +105,13 @@ def save(idstr, tractor, zr,debug=False):
 			if 'vmin' in kwargs:
 				mykwargs['vmin'] = nlmap(kwargs['vmin'])
 			if 'vmax' in kwargs:
-					mykwargs['vmax'] = nlmap(kwargs['vmax'])
+				mykwargs['vmax'] = nlmap(kwargs['vmax'])
 			return plt.imshow(nlmap(x), *args, **mykwargs)
 
-		plt.imshow(img, **kwargs)
-		#myimshow(img,**kwargs)
+		if kwargs['vmin'] == -10:
+			plt.imshow(img, **kwargs)
+		else:
+			myimshow(img,**kwargs)
 		ax = plt.axis()
 		if debug:
 			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
@@ -123,11 +128,21 @@ def save(idstr, tractor, zr,debug=False):
 	savepng('data', data - sky, title='Data '+timg.name, **ima)
 	savepng('model', mod - sky, title='Model', **ima)
 	savepng('diff', data - mod, title='Data - Model', **ima)
+	ima['vmin'] = -10
+	ima['vmax'] = 10
 	savepng('chi',chi,title='Chi',**ima)
 
 def main():
 	from optparse import OptionParser
 	import sys
+
+
+	tune = []
+	def store_value (option, opt, value, parser):
+		if opt == '--ntune':
+			tune.append(('n',value))
+		elif opt == '--itune':
+			tune.append(('i',value))
 
 	parser = OptionParser(usage=('%prog'))
 	parser.add_option('-r', '--run', dest='run', type='int')
@@ -135,13 +150,15 @@ def main():
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
-	parser.add_option('--ntune', dest='ntune', type='int', default=0, help='Improve synthetic image over DR7 by locally optimizing likelihood for nsteps iterations')
+	parser.add_option('--ntune', action='callback', callback=store_value, type=int,  help='Improve synthetic image over DR7 by locally optimizing likelihood for nsteps iterations')
+	parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
 	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
 	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
 	opt,args = parser.parse_args()
+	print tune
 
 	if opt.verbose == 0:
 		lvl = logging.INFO
@@ -192,17 +209,25 @@ def main():
 	zr = np.array([-5.,+5.]) * info['skysig']
 	save(prefix, tractor, zr,opt.debug)
 
-	for i in range(opt.ntune):
-		tractor.optimizeCatalogLoop(nsteps=1)
-		save('tune-%d-' % (i+1) + prefix, tractor, zr,opt.debug)
+	for count, each in enumerate(tune):
+		if each[0]=='n':
+			for i in range(each[1]):
+				tractor.optimizeCatalogLoop(nsteps=1)
+				save('tune-%d-%d-' % (count+1, i+1) + prefix, tractor, zr, opt.debug)
+	
+		elif each[0]=='i':
+			for step in range(each[1][0]):
+				for src in tractor.getCatalog():
+					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src])
+				save('tune-%d-%d-' % (count+1,step+1) + prefix, tractor, zr, opt.debug)
 
-	makeflipbook(opt, prefix)
+	makeflipbook(opt, prefix,tune)
 	print
 	print 'Created flip-book flip-%s.pdf' % prefix
 
 
 
-def makeflipbook(opt, prefix):
+def makeflipbook(opt, prefix,tune):
 	# Create a tex flip-book of the plots
 	tex = r'''
 	\documentclass[compress]{beamer}
@@ -210,7 +235,7 @@ def makeflipbook(opt, prefix):
 	\newcommand{\plot}[1]{\includegraphics[width=0.5\textwidth]{#1}}
 	\begin{document}
 	'''
-	if opt.ntune:
+	if len(tune) != 0:
 		tex += r'''\part{Tuning steps}\frame{\partpage}''' + '\n'
 	page = r'''
 	\begin{frame}{%s}
@@ -220,10 +245,21 @@ def makeflipbook(opt, prefix):
         \plot{chi-%s} \\
 	\end{frame}'''
 	tex += page % (('Initial model',) + (prefix,)*4)
-	for i in range(opt.ntune):
-		tex += page % (('Tuning step %i' % (i+1),) +
-					   ('tune-%d-' % (i+1) + prefix,)*4)
-	if opt.ntune:
+	for count,step in enumerate(tune):
+		if step[0] == 'n':
+			for i in range (step[1]):
+				tex += page % (('Tuning set %i, Tuning step %i' % (count+1,i+1),) +
+					   ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+		elif step[0] == 'i': 
+			for i in range(step[1][0]):
+				tex += page % (('Tuning set %i, Individual tuning step %i' % (count+1,i+1),) + ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+	if len(tune) != 0: 
+		last = tune[len(tune)-1]
+		lastSet = len(tune) - 1
+		if last[0] == 'n':
+			final = last[1]
+		elif last[0] == 'i':
+			final = last[1][0]
 		# Finish with a 'blink'
 		tex += r'''\part{Before-n-after}\frame{\partpage}''' + '\n'
 		tex += (r'''
@@ -240,7 +276,7 @@ def makeflipbook(opt, prefix):
 		\plot{diff-%s}
 		\end{frame}
 		''' % ((prefix,)*2 +
-			   (prefix, 'tune-%d-' % (opt.ntune) + prefix)*3))
+			   (prefix, 'tune-%d-%d-' % (lastSet+1,final)+ prefix)*3))
 	tex += r'\end{document}' + '\n'
 	fn = 'flip-' + prefix + '.tex'
 	print 'Writing', fn
