@@ -1770,9 +1770,9 @@ class Tractor(object):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
-	def getChiImage(self, imgi):
+	def getChiImage(self, imgi,srcs=None):
 		img = self.getImage(imgi)
-		mod = self.getModelImage(img)
+		mod = self.getModelImage(img,srcs)
 		return (img.getImage() - mod) * img.getInvError()
 
 	def createNewSource(self, img, x, y, height):

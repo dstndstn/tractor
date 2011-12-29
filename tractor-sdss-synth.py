@@ -88,6 +88,23 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 				else:
 					allobjc.append('r')
 
+	# Make a non-linear stretched map using image "I" to set the limits:
+
+	ss = np.sort(data.ravel())
+	mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
+	q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
+
+	def nlmap(X):
+		Y = (X - q2) / ((q3-q1)/2.)
+		return np.arcsinh(Y * 10.)/10.
+	def myimshow(x, *args, **kwargs):
+		mykwargs = kwargs.copy()
+		if 'vmin' in kwargs:
+			mykwargs['vmin'] = nlmap(kwargs['vmin'])
+		if 'vmax' in kwargs:
+			mykwargs['vmax'] = nlmap(kwargs['vmax'])
+		return plt.imshow(nlmap(x), *args, **mykwargs)
+
 	def savepng(pre, img, title=None,**kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
@@ -96,22 +113,6 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 		#Raises an error otherwise... no idea why --dm
 		np.seterr(under='print')
 		
-		# Make a non-linear stretched map using image "I" to set the limits:
-
-		ss = np.sort(img.ravel())
-		mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
-		q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
-
-		def nlmap(X):
-			Y = (X - q2) / ((q3-q1)/2.)
-			return np.arcsinh(Y * 10.)/10.
-		def myimshow(x, *args, **kwargs):
-			mykwargs = kwargs.copy()
-			if 'vmin' in kwargs:
-				mykwargs['vmin'] = nlmap(kwargs['vmin'])
-			if 'vmax' in kwargs:
-				mykwargs['vmax'] = nlmap(kwargs['vmax'])
-			return plt.imshow(nlmap(x), *args, **mykwargs)
 
 		if kwargs['vmin'] == -10:
 			plt.imshow(img, **kwargs)
@@ -154,11 +155,11 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 			ima['vmin'] = oldvmin
 			ima['vmax'] = oldvmax
 			savepng('data-s%i'%(i+1),data - sky, title='Data '+timg.name,**ima)
-			savepng('model-s%i'%(i+1),tractor.getModelImage(timg,srcs=src) - sky, title='Model-s%i'%(i+1),**ima) #DOES NOT WORK -dm
+			savepng('model-s%i'%(i+1),tractor.getModelImage(timg,srcs=src) - sky, title='Model-s%i'%(i+1),**ima) 
 			savepng('diff-s%i'%(i+1), data - tractor.getModelImage(timg,srcs=src),title='Model-s%i'%(i+1),**ima)
 			ima['vmin'] = -10
 			ima['vmax'] = 10
-			savepng('chi-s%i'%(i+1),chi,title='Chi',**ima)
+			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=src),title='Chi',**ima)
 		
 
 def main():
@@ -283,9 +284,15 @@ def makeflipbook(opt, prefix,tune,numSrcs):
 			for i in range (step[1]):
 				tex += page % (('Tuning set %i, Tuning step %i' % (count+1,i+1),) +
 					   ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+				if opt.plotAll:
+					for j in range(numSrcs):
+						tex += page % (('Source: %i' % (j+1),)+ ('s%d-tune-%d-%d-' % (j+1,count+1,i+1) + prefix,)*4)
 		elif step[0] == 'i': 
 			for i in range(step[1][0]):
 				tex += page % (('Tuning set %i, Individual tuning step %i' % (count+1,i+1),) + ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+				if opt.plotAll:
+					for j in range(numSrcs):
+						tex += page % (('Source: %i' % (j+1),) + ('s%d-tune-%d-%d-' % (j+1,count+1,i+1) + prefix,)*4)
 	if len(tune) != 0: 
 		last = tune[len(tune)-1]
 		lastSet = len(tune) - 1
