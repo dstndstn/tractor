@@ -32,7 +32,9 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 	data = timg.getImage()
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1])
-
+	imchi = ima.copy()
+	imchi.update(vmin=-10, vmax=10)
+	
 	if debug:
 		sources = tractor.getCatalog()
 		wcs = timg.getWcs()
@@ -144,23 +146,15 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 	savepng('data', data - sky, title='Data '+timg.name, **ima)
 	savepng('model', mod - sky, title='Model', **ima)
 	savepng('diff', data - mod, title='Data - Model', **ima)
-	oldvmin = ima['vmin']
-	oldvmax = ima['vmax']
-	ima['vmin'] = -10
-	ima['vmax'] = 10
-	savepng('chi',chi,title='Chi',**ima)
+	savepng('chi',chi,title='Chi',**imchi)
 	if plotAll:
 		debug = False
 		for i,src in enumerate(tractor.getCatalog()):
-			ima['vmin'] = oldvmin
-			ima['vmax'] = oldvmax
 			savepng('data-s%i'%(i+1),data - sky, title='Data '+timg.name,**ima)
 			modelimg = tractor.getModelImage(timg, srcs=[src])
 			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
 			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
-			ima['vmin'] = -10
-			ima['vmax'] = 10
-			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=src),title='Chi',**ima)
+			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=src),title='Chi',**imchi)
 		
 
 def main():
