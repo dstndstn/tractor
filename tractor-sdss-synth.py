@@ -154,7 +154,7 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 			modelimg = tractor.getModelImage(timg, srcs=[src])
 			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
 			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
-			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=src),title='Chi',**imchi)
+			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=[src]),title='Chi',**imchi)
 		
 
 def main():
