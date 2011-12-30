@@ -155,8 +155,9 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 			ima['vmin'] = oldvmin
 			ima['vmax'] = oldvmax
 			savepng('data-s%i'%(i+1),data - sky, title='Data '+timg.name,**ima)
-			savepng('model-s%i'%(i+1),tractor.getModelImage(timg,srcs=src) - sky, title='Model-s%i'%(i+1),**ima) 
-			savepng('diff-s%i'%(i+1), data - tractor.getModelImage(timg,srcs=src),title='Model-s%i'%(i+1),**ima)
+			modelimg = tractor.getModelImage(timg, srcs=[src])
+			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
+			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
 			ima['vmin'] = -10
 			ima['vmax'] = 10
 			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=src),title='Chi',**ima)
