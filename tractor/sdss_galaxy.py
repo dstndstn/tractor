@@ -117,6 +117,8 @@ class Galaxy(MultiParams):
 
 	def getFlux(self):
 		return self.flux
+	def setFlux(self, flux):
+		self.flux = flux
 
 	def getNamedParams(self):
 		return [('pos', 0), ('flux', 1), ('shape', 2)]

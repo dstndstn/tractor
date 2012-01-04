@@ -310,6 +310,8 @@ class PointSource(MultiParams):
 		return self.pos
 	def getFlux(self):
 		return self.flux
+	def setFlux(self, flux):
+		self.flux = flux
 	def __str__(self):
 		return (self.getSourceType() + ' at ' + str(self.pos) +
 				' with ' + str(self.flux))
@@ -579,10 +581,17 @@ class NullWCS(WCS):
 
 class FitsWcs(object):
 	'''
-	A WCS implementation that wraps a FITS WCS object.
+	A WCS implementation that wraps a FITS WCS object (possibly with a
+	pixel offset)
 	'''
 	def __init__(self, wcs):
 		self.wcs = wcs
+		self.x0 = 0
+		self.y0 = 0
+
+	def setX0Y0(self, x0, y0):
+		self.x0 = x0
+		self.y0 = y0
 
 	def positionToPixel(self, src, pos):
 		#ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
@@ -592,11 +601,11 @@ class FitsWcs(object):
 		else:
 			assert(len(X) == 2)
 			x,y = X
-		return x,y
+		return x-self.x0, y-self.y0
 
 	def pixelToPosition(self, src, xy):
 		(x,y) = xy
-		r,d = self.wcs.pixelxy2radec(x, y)
+		r,d = self.wcs.pixelxy2radec(x + self.x0, y + self.y0)
 		return RaDecPos(r,d)
 
 	def cdAtPixel(self, x, y):
