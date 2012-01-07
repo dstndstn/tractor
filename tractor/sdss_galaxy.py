@@ -252,6 +252,7 @@ class CompositeGalaxy(Galaxy):
 	def getFlux(self):
 		return self.fluxExp + self.fluxDev
 
+
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(),
 				self.fluxExp.hashkey(), self.shapeExp.hashkey(),

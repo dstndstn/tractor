@@ -42,18 +42,18 @@ def main():
 		##if hasattr(s, 'getFlux'):
 		# UGH!
 		x,y = timg.getWcs().positionToPixel(None, s.getPosition())
-		print 'x,y (%.1f, %.1f)' % (x,y)
+		#print 'x,y (%.1f, %.1f)' % (x,y)
 		if isinstance(s, stgal.CompositeGalaxy):
 			counts = timg.photocal.fluxToCounts(s.fluxExp)
 			s.fluxExp = photocal.countsToFlux(counts)
 			counts = timg.photocal.fluxToCounts(s.fluxDev)
 			s.fluxDev = photocal.countsToFlux(counts)
-			print '  ', s.fluxExp, s.fluxDev
+			#print '  ', s.fluxExp, s.fluxDev
 		else:
 			#print 'Source', s, 'flux', s.getFlux()
 			counts = timg.photocal.fluxToCounts(s.getFlux())
 			s.setFlux(photocal.countsToFlux(counts))
-			print '  ', s.flux
+			#print '  ', s.flux
 		#else:
 		#	print 'no getFlux() method:', s
 	timg.photocal = photocal
@@ -103,7 +103,11 @@ def main():
 
 	wcs = FitsWcs(Tan(cffn, 0))
 	print 'CFHT WCS', wcs
-	wcs.setX0Y0(x0+1., y0+1.)
+
+	#[
+	#wcs.setX0Y0(x0+1., y0+1.)
+	# From fit
+	wcs.setX0Y0(535.14208988131043, 4153.665639423165)
 
 	sky = np.median(image)
 	print 'Sky', sky
@@ -118,24 +122,195 @@ def main():
 	tractor = Tractor([timg, cftimg])
 	tractor.addSources(sources)
 
-	zrs = [np.array([-5.,+5.]) * info['skysig'] + info['sky'],
-		   np.array([-5.,+5.]) * cfstd + sky,]
+	zrs = [np.array([-2.,+6.]) * info['skysig'] + info['sky'],
+		   np.array([-2.,+20.]) * cfstd + sky,]
 
-	for i in range(2):
-		mod = tractor.getModelImages()[i]
-		zr = zrs[i]
-		ima = dict(interpolation='nearest', origin='lower',
-				   vmin=zr[0], vmax=zr[1])
-		plt.clf()
-		plt.imshow(mod, **ima)
-		plt.savefig('mod%i.png' % i)
+	#np.seterr(under='print')
+	np.seterr(all='warn')
 
-		data = tractor.getImage(i).getImage()
-		plt.clf()
-		plt.imshow(data, **ima)
-		plt.savefig('data%i.png' % i)
+	NS = 6
+	for step in range(2, NS+1):
+		
+		for i in range(2):
+			mod = tractor.getModelImage(i)
+			zr = zrs[i]
+			ima = dict(interpolation='nearest', origin='lower',
+					   vmin=zr[0], vmax=zr[1], cmap='gray')
+			imchi = dict(interpolation='nearest', origin='lower',
+						 vmin=-5., vmax=+5., cmap='gray')
+			plt.clf()
+			plt.imshow(mod, **ima)
+			ax = plt.axis()
+			for j,src in enumerate(tractor.getCatalog()):
+				im = tractor.getImage(i)
+				wcs = im.getWcs()
+				x,y = wcs.positionToPixel(None, src.getPosition())
+				plt.plot([x],[y],'r.')
+				plt.text(x, y, '%i'%j)
+			plt.axis(ax)
+			plt.savefig('mod%i-%02i.png' % (i,step))
+
+			if step == 0:
+				data = tractor.getImage(i).getImage()
+				plt.clf()
+				plt.imshow(data, **ima)
+				plt.savefig('data%i.png' % i)
+
+			chi = tractor.getChiImage(i)
+			plt.clf()
+			plt.imshow(chi, **imchi)
+			plt.savefig('chi%i-%02i.png' % (i,step))
+
+		if step == NS:
+			break
+
+		print 'Step', step
+		if step in [0, 1]:
+			# fine-tune astrometry
+			print 'Optimizing CFHT astrometry...'
+			cfim = tractor.getImage(1)
+			pa = FitsWcsShiftParams(cfim.getWcs())
+			print '# params', pa.numberOfParams()
+			derivs = [[] for i in range(pa.numberOfParams())]
+			# getParamDerivatives
+			p0 = pa.getParams()
+			print 'p0:', p0
+			mod0 = tractor.getModelImage(cfim)
+			psteps = pa.getStepSizes()
+			#plt.clf()
+			#plt.imshow(mod0, **ima)
+			#plt.savefig('dwcs.png')
+			for i,pstep in enumerate(psteps):
+				pa.stepParam(i,pstep)
+				print 'pstep:', pa.getParams()
+				mod = tractor.getModelImageNoCache(cfim)
+				#print 'model', mod
+				#plt.clf()
+				#plt.imshow(mod, **ima)
+				#plt.savefig('dwcs%i.png' % (i))
+				pa.setParams(p0)
+				print 'revert pstep:', pa.getParams()
+				D = (mod - mod0) / pstep
+				# --> convert to Patch
+				print 'derivative:', D.min(), np.median(D), D.max()
+				D = Patch(0,0,D)
+				derivs[i].append((D, cfim))
+			
+			print 'Derivs', derivs
+			X = tractor.optimize(derivs)
+			print 'X:',X
+			(dlogprob, alpha) = tractor.tryParamUpdates([pa], X) #, alphas)
+			print 'pa after:', pa
+			print pa.getParams()
+
+		elif step in [2,3]:
+			if step == 2:
+				# troublesome guy...
+				src = tractor.getCatalog()[6]
+				print 'Troublesome source:', src
+				im = tractor.getImage(1)
+				derivs = src.getParamDerivatives(im)
+				f1 = src.fluxExp
+				f2 = src.fluxDev
+				print 'Fluxes', f1, f2
+				c1 = im.getPhotoCal().fluxToCounts(f1)
+				c2 = im.getPhotoCal().fluxToCounts(f2)
+				print 'Counts', c1, c2
+				for j,d in enumerate(derivs):
+					if d is None:
+						print 'No derivative for param', j
+					mx = max(abs(d.patch.max()), abs(d.patch.min()))
+					print 'mx', mx
+					plt.clf()
+					plt.imshow(d.patch, interpolation='nearest',
+							   origin='lower', cmap='gray',
+							   vmin=-mx, vmax=mx)
+					plt.title(d.name)
+					plt.savefig('deriv%i.png' % j)
+
+					mim = np.zeros_like(im.getImage())
+					d.addTo(mim)
+					plt.clf()
+					plt.imshow(mim, interpolation='nearest',
+							   origin='lower', cmap='gray',
+							   vmin=-mx, vmax=mx)
+					plt.title(d.name)
+					plt.savefig('derivb%i.png' % j)
+
+				derivs = src.getParamDerivatives(im, fluxonly=True)
+				print 'Flux derivs', derivs
+				for j,d in enumerate(derivs):
+					if d is None:
+						print 'No derivative for param', j
+						continue
+					mx = max(abs(d.patch.max()), abs(d.patch.min()))
+					print 'mx', mx
+					plt.clf()
+					plt.imshow(d.patch, interpolation='nearest',
+							   origin='lower', cmap='gray',
+							   vmin=-mx, vmax=mx)
+					plt.title(d.name)
+					plt.savefig('derivc%i.png' % j)
+
+					mim = np.zeros_like(im.getImage())
+					d.addTo(mim)
+					plt.clf()
+					plt.imshow(mim, interpolation='nearest',
+							   origin='lower', cmap='gray',
+							   vmin=-mx, vmax=mx)
+					plt.title(d.name)
+					plt.savefig('derivd%i.png' % j)
 
 
+			print 'Optimizing fluxes separately...'
+			for j,src in enumerate(tractor.getCatalog()):
+				#tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
+				#							fluxonly=True)
+				print 'source', j, src
+				dlnp,dX,alph = tractor.optimizeCatalogFluxes(srcs=[src])
+				print 'dlnp', dlnp
+				print 'dX', dX
+				print 'alpha', alph
+
+			sys.exit(0)
+
+
+			#print 'Optimizing sources individually...'
+			#for src in tractor.getCatalog():
+			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src])
+
+
+		elif step in [4]:
+			print 'Optimizing fluxes jointly...'
+			tractor.optimizeCatalogLoop(nsteps=1, fluxonly=True)
+			#for src in tractor.getCatalog():
+			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
+			#								fluxonly=True)
+
+		else:
+			print 'Optimizing sources jointly...'
+			tractor.optimizeCatalogLoop(nsteps=1)
+			
+		
+
+
+class FitsWcsShiftParams(ParamList):
+	def __init__(self, wcs):
+		super(FitsWcsShiftParams,self).__init__(wcs.x0, wcs.y0)
+		self.wcs = wcs
+	def getNamedParams(self):
+		return [('x0',0),('y0',1)]
+	def setParam(self, i, val):
+		super(FitsWcsShiftParams,self).setParam(i,val)
+		#print 'set wcs x0y0 to', self.vals[0], self.vals[1]
+		self.wcs.setX0Y0(self.vals[0], self.vals[1])
+	def stepParam(self, i, delta):
+		#print 'wcs step param', i, delta
+		self.setParam(i, self.vals[i]+delta)
+	def getStepSizes(self, *args, **kwargs):
+		#return [1.,1.]
+		return [0.1, 0.1]
+		#return [0.01, 0.01]
 
 class Mag(Flux):
 	'''

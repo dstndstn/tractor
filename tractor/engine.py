@@ -101,9 +101,11 @@ class ParamList(Params):
 			return
 		for n,i in self.namedparams:
 			if name == n:
-				self.vals[i] = val
+				self.setParam(i, val)
 				return
 		self.__dict__[name] = val
+	def setParam(self, i, val):
+		self.vals[i] = val
 	def hashkey(self):
 		return ('ParamList',) + tuple(self.vals)
 	def numberOfParams(self):
@@ -118,7 +120,7 @@ class ParamList(Params):
 	def setParams(self, p):
 		assert(len(p) == len(self.vals))
 		for i,pp in enumerate(p):
-			self.vals[i] = pp
+			self.setParam(i,pp)
 	def getStepSizes(self, *args, **kwargs):
 		return [1 for x in self.vals]
 
@@ -589,6 +591,12 @@ class FitsWcs(object):
 		self.x0 = 0
 		self.y0 = 0
 
+	def __hash__(self):
+		return hash(self.hashkey())
+
+	def hashkey(self):
+		return ('FitsWcs', self.x0, self.y0, self.wcs)
+
 	def setX0Y0(self, x0, y0):
 		self.x0 = x0
 		self.y0 = y0
@@ -620,6 +628,7 @@ class Patch(object):
 		self.x0 = x0
 		self.y0 = y0
 		self.patch = patch
+		self.name = ''
 
 	def __str__(self):
 		s = 'Patch: '
@@ -1200,13 +1209,13 @@ class Tractor(object):
 		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
 
 		#print allparams
-		print 'optimizing: derivs are:'
 		# list, one element per parameter...
-		for p in allparams:
-			# one element per image, (derivate Patch, Image)
-			for imi,(d,im) in enumerate(p):
-				if d is not None:
-					print '  ', d.name, 'in image', imi
+		#print 'optimizing: derivs are:'
+		#for p in allparams:
+		#	# one element per image, (derivate Patch, Image)
+		#	for imi,(d,im) in enumerate(p):
+		#		if d is not None:
+		#			print '  ', d.name, 'in image', imi
 
 		X = self.optimize(allparams)
 		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
@@ -1689,6 +1698,9 @@ class Tractor(object):
 		return pBest - pBefore, alphaBest
 
 	def getAllDerivs(self, srcs=None, fluxonly=False, sky=True):
+		'''
+		Returns a list of pairs, D[parami] = (deriv,image)
+		'''
  		if srcs is None:
 			srcs = self.catalog
 		allparams = []
@@ -1732,6 +1744,8 @@ class Tractor(object):
 		then only those sources will be rendered into the image.
 		Otherwise, the whole catalog will be.
 		'''
+		if type(img) is int:
+			img = self.getImage(img)
 		mod = np.zeros_like(img.getImage())
 		img.sky.addTo(mod)
 		if srcs is None:
