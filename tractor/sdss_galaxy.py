@@ -363,7 +363,7 @@ class HoggGalaxy(Galaxy):
 
 	def copy(self):
 		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
-						  self.re, self.ab, self.phi)
+						  self.shape.copy())
 
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
@@ -436,15 +436,13 @@ class ExpGalaxy(HoggGalaxy):
 	@staticmethod
 	def getExpProfile():
 		return ExpGalaxy.profile
-	#def __init__(self, pos, brightness, re, ab, phi):
-	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'ExpGalaxy'
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
 	def copy(self):
 		return ExpGalaxy(self.pos.copy(), self.brightness.copy(),
-						 self.re, self.ab, self.phi)
+						 self.shape.copy())
 
 class DevGalaxy(HoggGalaxy):
 	profile = mp.get_dev_mixture()
@@ -452,12 +450,10 @@ class DevGalaxy(HoggGalaxy):
 	@staticmethod
 	def getDevProfile():
 		return DevGalaxy.profile
-	#def __init__(self, pos, brightness, re, ab, phi):
-	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'DevGalaxy'
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
 	def copy(self):
 		return DevGalaxy(self.pos.copy(), self.brightness.copy(),
-						 self.re, self.ab, self.phi)
+						 self.shape.copy())
