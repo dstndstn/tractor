@@ -45,8 +45,7 @@ def main():
 		# UGH!
 		x,y = timg.getWcs().positionToPixel(None, s.getPosition())
 		#print 'x,y (%.1f, %.1f)' % (x,y)
-
-		if False and isinstance(s, stgal.CompositeGalaxy):
+		if isinstance(s, stgal.CompositeGalaxy):
 			counts = timg.photocal.brightnessToCounts(s.brightnessExp)
 			s.brightnessExp = photocal.countsToBrightness(counts)
 			counts = timg.photocal.brightnessToCounts(s.brightnessDev)
@@ -132,7 +131,7 @@ def main():
 	np.seterr(all='warn')
 
 	NS = 6
-	for step in range(0, NS+1):
+	for step in range(2, NS+1):
 		
 		for i in range(2):
 			mod = tractor.getModelImage(i)
@@ -207,18 +206,18 @@ def main():
 			print pa.getParams()
 
 		elif step in [2,3]:
-			if step == 200:
+			if step == 2:
 				# troublesome guy...
 				src = tractor.getCatalog()[6]
 				print 'Troublesome source:', src
 				im = tractor.getImage(1)
 				derivs = src.getParamDerivatives(im)
-				#f1 = src.brightnessExp
-				#f2 = src.brightnessDev
-				#print 'Brightnesses', f1, f2
-				#c1 = im.getPhotoCal().brightnessToCounts(f1)
-				#c2 = im.getPhotoCal().brightnessToCounts(f2)
-				#print 'Counts', c1, c2
+				f1 = src.brightnessExp
+				f2 = src.brightnessDev
+				print 'Brightnesses', f1, f2
+				c1 = im.getPhotoCal().brightnessToCounts(f1)
+				c2 = im.getPhotoCal().brightnessToCounts(f2)
+				print 'Counts', c1, c2
 				for j,d in enumerate(derivs):
 					if d is None:
 						print 'No derivative for param', j
@@ -275,7 +274,7 @@ def main():
 				print 'dX', dX
 				print 'alpha', alph
 
-			#sys.exit(0)
+			sys.exit(0)
 
 
 			#print 'Optimizing sources individually...'

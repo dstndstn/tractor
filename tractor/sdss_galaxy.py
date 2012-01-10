@@ -240,53 +240,57 @@ class CompositeGalaxy(Galaxy):
 
 	The two components share a position (ie the centers are the same),
 	but have different brightnesses and shapes.
-
-	(Actually the CompositeGalaxy has a total brightness and a
-	"countFracExp" fraction)
 	'''
-
-	class CountFracParam(ScalarParam):
-		def hashkey(self):
-			return ('CountFrac', self.val)
-		def __str__(self):
-			return 'exp count fraction: %.3f' % self.val
-		def __repr__(self):
-			return 'CountFracParam(%.6f)' % self.val
-
-	def __init__(self, pos, brightness, countFracExp, shapeExp, shapeDev):
-		frac = CompositeGalaxy.CountFracParam(countFracExp)
-		print frac.hashkey()
-		MultiParams.__init__(self, pos, brightness, frac,
-							 shapeExp, shapeDev)
+	def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
+		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
-		print self.hashkey()
-		print self.countFracExp
 	def getName(self):
 		return 'CompositeGalaxy'
 	def getNamedParams(self):
-		return [('pos', 0), ('brightness', 1), ('countFracExp', 2),
-				('shapeExp', 3), ('shapeDev', 4),]
+		return [('pos', 0), ('brightnessExp', 1), ('shapeExp', 2),
+				('brightnessDev', 3), ('shapeDev', 4),]
 	def getBrightness(self):
-		return self.brightness
+		return self.brightnessExp + self.brightnessDev
+
+
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(),
-				self.brightness.hashkey(), self.countFracExp.hashkey(),
-				self.shapeExp.hashkey(), self.shapeDev.hashkey())
+				self.brightnessExp.hashkey(), self.shapeExp.hashkey(),
+				self.brightnessDev.hashkey(), self.shapeDev.hashkey())
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
-				+ ' with ' + str(self.brightness) + ' exp fraction ' + str(self.countFracExp)
-				+ ' and shapes exp: ' + str(self.shapeExp) + ' dev: ' + str(self.shapeDev))
+				+ ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
+				+ ' and deV ' + str(self.brightnessDev) + ' ' + str(self.shapeDev))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
-				', brightness=' + repr(self.brightness) +
-				', countFracExp=' + repr(self.countFracExp) +
+				', brightnessExp=' + repr(self.brightnessExp) +
 				', shapeExp=' + repr(self.shapeExp) + 
+				', brightnessDev=' + repr(self.brightnessDev) +
 				', shapeDev=' + repr(self.shapeDev))
 	def copy(self):
-		return CompositeGalaxy(self.pos.copy(), self.brightness.copy(), self.countFracExp.copy(),
-							   self.shapeExp.copy(), self.shapeDev.copy())
+		return CompositeGalaxy(self.pos.copy(), self.brightnessExp.copy(),
+							   self.shapeExp.copy(), self.brightnessDev.copy(),
+							   self.shapeDev.copy())
 	def getModelPatch(self, img, px=None, py=None):
-		e,d = self._getComponents(img.getPhotoCal())
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		pe = e.getModelPatch(img, px, py)
+		pd = d.getModelPatch(img, px, py)
+		if pe is None:
+			return pd
+		if pd is None:
+			return pe
+		return pe + pd
+	
+	def getUnitFluxModelPatch(self, img, px=None, py=None):
+		# this code is un-tested
+		assert(False)
+		fe = self.brightnessExp / (self.brightnessExp + self.brightnessDev)
+		fd = 1. - fe
+		assert(fe >= 0.)
+		assert(fe <= 1.)
+		e = ExpGalaxy(self.pos, fe, self.shapeExp)
+		d = DevGalaxy(self.pos, fd, self.shapeDev)
 		pe = e.getModelPatch(img, px, py)
 		pd = d.getModelPatch(img, px, py)
 		if pe is None:
@@ -295,39 +299,6 @@ class CompositeGalaxy(Galaxy):
 			return pe
 		return pe + pd
 
-	def _getComponents(self, photocal):
-		counts = photocal.brightnessToCounts(self.brightness)
-		cexp = counts * self.countFracExp.val
-		cdev = counts * (1. - self.countFracExp.val)
-		brightExp = photocal.countsToBrightness(cexp)
-		brightDev = photocal.countsToBrightness(cdev)
-		e = ExpGalaxy(self.pos, brightExp, self.shapeExp)
-		d = DevGalaxy(self.pos, brightDev, self.shapeDev)
-		return e,d
-	
-	def getUnitFluxModelPatch(self, img, px=None, py=None):
-		# this code is un-tested
-		assert(False)
-
-		# counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		# cexp = counts * self.countFracExp
-		# cdev = counts * (1. - self.countFracExp)
-		# brightExp = img.getPhotoCal().countsToBrightness(cexp)
-		# brightDev = img.getPhotoCal().countsToBrightness(cdev)
-		# e = ExpGalaxy(self.pos, brightExp, self.shapeExp)
-		# d = DevGalaxy(self.pos, brightDev, self.shapeDev)
-		# It shouldn't matter what brightness we give them, right?
-
-		e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
-		d = DevGalaxy(self.pos, self.brightness, self.shapeDev)
-		pe = e.getUnitFluxModelPatch(img, px, py)
-		pd = d.getUnitFluxModelPatch(img, px, py)
-		if pe is None:
-			return pd
-		if pd is None:
-			return pe
-		return pe * (self.countFracExp.val) + pd * (1. - self.countFracExp.val)
-
 	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
 	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
 	# CompositeGalaxy.
@@ -335,16 +306,17 @@ class CompositeGalaxy(Galaxy):
 		#print 'CompositeGalaxy: getParamDerivatives'
 		#print '  Exp brightness', self.brightnessExp, 'shape', self.shapeExp
 		#print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
-		e,d = self._getComponents(img.getPhotoCal())
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
 		e.dname = 'comp.exp'
 		d.dname = 'comp.dev'
 		# pin through...
-		if (self.isParamPinned('brightness') or
-			self.isParamPinned('countFracExp')):
+		if self.isParamPinned('brightnessExp'):
 			e.pinParam('brightness')
-			d.pinParam('brightness')
 		if self.isParamPinned('shapeExp'):
 			e.pinParam('shape')
+		if self.isParamPinned('brightnessDev'):
+			d.pinParam('brightness')
 		if self.isParamPinned('shapeDev'):
 			d.pinParam('shape')
 		de = e.getParamDerivatives(img, brightnessonly)
@@ -392,7 +364,7 @@ class HoggGalaxy(Galaxy):
 
 	def copy(self):
 		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
-						  self.shape.copy())
+						  self.re, self.ab, self.phi)
 
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
@@ -465,13 +437,15 @@ class ExpGalaxy(HoggGalaxy):
 	@staticmethod
 	def getExpProfile():
 		return ExpGalaxy.profile
+	#def __init__(self, pos, brightness, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'ExpGalaxy'
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
 	def copy(self):
 		return ExpGalaxy(self.pos.copy(), self.brightness.copy(),
-						 self.shape.copy())
+						 self.re, self.ab, self.phi)
 
 class DevGalaxy(HoggGalaxy):
 	profile = mp.get_dev_mixture()
@@ -479,10 +453,12 @@ class DevGalaxy(HoggGalaxy):
 	@staticmethod
 	def getDevProfile():
 		return DevGalaxy.profile
+	#def __init__(self, pos, brightness, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'DevGalaxy'
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
 	def copy(self):
 		return DevGalaxy(self.pos.copy(), self.brightness.copy(),
-						 self.shape.copy())
+						 self.re, self.ab, self.phi)
