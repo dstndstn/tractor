@@ -249,9 +249,8 @@ class CompositeGalaxy(Galaxy):
 	def getNamedParams(self):
 		return [('pos', 0), ('brightnessExp', 1), ('shapeExp', 2),
 				('brightnessDev', 3), ('shapeDev', 4),]
-	def getBrightness(self):
-		return self.brightnessExp + self.brightnessDev
-
+	#def getBrightness(self):
+	# return self.brightnessExp + self.brightnessDev
 
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(),

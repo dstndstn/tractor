@@ -32,7 +32,7 @@ def isverbose():
 	return (logging.getLogger().level <= logging.DEBUG)
 
 def set_fp_err():
-	np.seterr(all='raise')
+	return np.seterr(all='raise')
 
 class PlotSequence(object):
 	def __init__(self, basefn, format='%02i'):
@@ -176,7 +176,7 @@ class MultiParams(Params):
 	An implementation of Params that combines component sub-Params.
 	'''
 	def __init__(self, *args):
-		self.subs = args
+		self.subs = list(args)
 		self.namedparams = self.getNamedParams()
 		# indices of pinned params
 		self.pinnedparams = []
@@ -191,6 +191,18 @@ class MultiParams(Params):
 		raise AttributeError('MultiParams (%s): unknown attribute "%s" (named params: [ %s ]; dict keys: [ %s ])' %
 							 (str(type(self)), name, ', '.join([k for k,v in self.getNamedParams()]),
 							  ', '.join(self.__dict__.keys())))
+
+
+	def __setattr__(self, name, val):
+		if name in ['subs', 'namedparams', 'pinnedparams']:
+			self.__dict__[name] = val
+			return
+		for n,i in self.namedparams:
+			if name == n:
+				self.subs[i] = val
+				return
+		self.__dict__[name] = val
+
 
 	def hashkey(self):
 		t = ('MultiParams',)
@@ -507,7 +519,8 @@ class Image(object):
 
 	def hashkey(self):
 		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
-				hash(self.sky), hash(self.wcs), hash(self.photocal))
+				self.sky.hashkey(), self.wcs.hashkey(),
+				self.photocal.hashkey())
 
 	def numberOfPixels(self):
 		(H,W) = self.data.shape
@@ -558,6 +571,12 @@ class WCS(object):
 	World Coordinate System definition for the Tractor -- converts
 	between Position objects and Image pixel coordinates.
 	'''
+
+	def hashkey(self):
+		return ('WCS',)
+	def __hash__(self):
+		return hash(self.hashkey())
+
 	def positionToPixel(self, src, pos):
 		'''
 		Returns tuple (x, y) -- or any duck that supports
@@ -596,6 +615,8 @@ class NullWCS(WCS):
 		pixscale: [arcsec/pix]
 		'''
 		self.pixscale = pixscale
+	def hashkey(self):
+		return ('NullWCS',)
 	def positionToPixel(self, src, pos):
 		return pos
 	def pixelToPosition(self, src, xy):
@@ -612,9 +633,6 @@ class FitsWcs(object):
 		self.wcs = wcs
 		self.x0 = 0
 		self.y0 = 0
-
-	def __hash__(self):
-		return hash(self.hashkey())
 
 	def hashkey(self):
 		return ('FitsWcs', self.x0, self.y0, self.wcs)
@@ -1645,12 +1663,14 @@ class Tractor(object):
 		t1 = time.clock()
 		logmsg('  %.1f seconds' % (t1-t0))
 
-		set_fp_err()
+		olderr = set_fp_err()
 		
 		logverb('scaled  X=', X)
 		X = np.array(X)
 		X /= np.array(colscales)
 		logverb('  X=', X)
+
+		np.seterr(**olderr)
 		return X
 
 	# Hmm, does this make you think Catalog should be a MultiParams?
@@ -1673,6 +1693,13 @@ class Tractor(object):
 		assert(len(srcs) == len(oldparams))
 		for j,src in enumerate(srcs):
 			src.setParams(oldparams[j])
+	def getSourceParams(self, srcs=None):
+		if srcs is None:
+			srcs = self.catalog
+		params = []
+		for src in srcs:
+			params.append(src.getParams())
+		return params
 
 	# X: delta-params
 	#
@@ -1691,6 +1718,20 @@ class Tractor(object):
 		for alpha in alphas:
 			logverb('  Stepping with alpha =', alpha)
 			oldparams = self.stepParams(X, srcs, alpha)
+			## DEBUG
+			newparams = self.getSourceParams(srcs)
+			logverb('  old sources:')
+			isrcs = srcs
+			if isrcs is None:
+				isrcs = self.catalog
+			for isrc in isrcs:
+				logverb('    ' + str(isrc))
+			logverb('  old params: ' + str(oldparams))
+			logverb('  new params: ' + str(newparams))
+			logverb('  new sources:')
+			for isrc in isrcs:
+				logverb('    ' + str(isrc))
+			##
 			pAfter = self.getLogProb()
 			logverb('  delta log-prob:', pAfter - pBefore)
 			self.revertParams(oldparams, srcs)
@@ -1751,9 +1792,16 @@ class Tractor(object):
 		deps = hash(deps)
 		mod = self.cache.get(deps, None)
 		if mod is not None:
-			#print '  Cache hit!'
+			#logverb('  Cache hit for model patch: image ' + str(img) +
+			#		', source ' + str(src))
+			#logverb('  image hashkey ' + str(img.hashkey()))
+			#logverb('  source hashkey ' + str(src.hashkey()))
 			pass
 		else:
+			#logverb('  Cache miss for model patch: image ' + str(img) +
+			#		', source ' + str(src))
+			#logverb('  image hashkey ' + str(img.hashkey()))
+			#logverb('  source hashkey ' + str(src.hashkey()))
 			mod = self.getModelPatchNoCache(img, src)
 			#print 'Caching model image'
 			self.cache[deps] = mod

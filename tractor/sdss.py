@@ -317,6 +317,9 @@ class SdssWcs(WCS):
 		self.x0 = 0
 		self.y0 = 0
 
+	def hashkey(self):
+		return ('SdssWcs', self.x0, self.y0, self.astrans)
+
 	def setX0Y0(self, x0, y0):
 		self.x0 = x0
 		self.y0 = y0

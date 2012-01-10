@@ -1,4 +1,5 @@
 import sys
+import logging
 
 if __name__ == '__main__':
 	import matplotlib
@@ -14,6 +15,10 @@ from astrometry.sdss import *
 
 
 def main():
+
+	lvl = logging.INFO
+	#lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	run = 2728
 	camcol = 4
@@ -44,7 +49,10 @@ def main():
 		##if hasattr(s, 'getBrightness'):
 		# UGH!
 		x,y = timg.getWcs().positionToPixel(None, s.getPosition())
-		#print 'x,y (%.1f, %.1f)' % (x,y)
+
+		print 'Converting brightness for source', s
+		print 'params', s.getParams()
+
 		if isinstance(s, stgal.CompositeGalaxy):
 			counts = timg.photocal.brightnessToCounts(s.brightnessExp)
 			s.brightnessExp = photocal.countsToBrightness(counts)
@@ -56,8 +64,12 @@ def main():
 			counts = timg.photocal.brightnessToCounts(s.getBrightness())
 			s.setBrightness(photocal.countsToBrightness(counts))
 			#print '  ', s.brightness
-		#else:
-		#	print 'no getBrightness() method:', s
+
+		print 'After converting brightness:', s
+		print 'params', s.getParams()
+		#print 'bright', s.getBrightness()
+		#print 'bright2', s.brightness
+
 	timg.photocal = photocal
 
 
@@ -122,6 +134,7 @@ def main():
 				   name=('CFHT'))
 	
 	tractor = Tractor([timg, cftimg])
+	#tractor = Tractor([timg])
 	tractor.addSources(sources)
 
 	zrs = [np.array([-2.,+6.]) * info['skysig'] + info['sky'],
@@ -130,10 +143,10 @@ def main():
 	#np.seterr(under='print')
 	np.seterr(all='warn')
 
-	NS = 6
+	NS = 9
 	for step in range(2, NS+1):
 		
-		for i in range(2):
+		for i in range(len(tractor.getImages())):
 			mod = tractor.getModelImage(i)
 			zr = zrs[i]
 			ima = dict(interpolation='nearest', origin='lower',
@@ -167,7 +180,7 @@ def main():
 			break
 
 		print 'Step', step
-		if step in [0, 1]:
+		if step in [0, 1] and len(tractor.getImages())>1:
 			# fine-tune astrometry
 			print 'Optimizing CFHT astrometry...'
 			cfim = tractor.getImage(1)
@@ -206,11 +219,11 @@ def main():
 			print pa.getParams()
 
 		elif step in [2,3]:
-			if step == 2:
+			if step == -2:
 				# troublesome guy...
 				src = tractor.getCatalog()[6]
 				print 'Troublesome source:', src
-				im = tractor.getImage(1)
+				im = tractor.getImage(0)
 				derivs = src.getParamDerivatives(im)
 				f1 = src.brightnessExp
 				f2 = src.brightnessDev
@@ -274,8 +287,6 @@ def main():
 				print 'dX', dX
 				print 'alpha', alph
 
-			sys.exit(0)
-
 
 			#print 'Optimizing sources individually...'
 			#for src in tractor.getCatalog():
@@ -314,31 +325,22 @@ class FitsWcsShiftParams(ParamList):
 		return [0.1, 0.1]
 		#return [0.01, 0.01]
 
-class Mag(ParamList):
+class Mag(ScalarParam):
 	'''
-	An implementation of Brightness that stored mags.
+	An implementation of Brightness that stores a single Mag.
 	'''
-	def getNamedParams(self):
-		return [('val', 0)]
 	def getValue(self):
 		return self.val
 	def hashkey(self):
 		return ('Mag', self.val)
+	def getStepSizes(self, *args, **kwargs):
+		return [0.01]
 	def __repr__(self):
 		return 'Mag(%g)' % self.val
 	def __str__(self):
 		return 'Mag: %g' % self.val
 	def copy(self):
 		return Mag(self.val)
-	def getStepSizes(self, img, *args, **kwargs):
-		return [0.01]
-	# override positive flux limit from Flux
-	def setParams(self, p):
-		assert(len(p) == 1)
-		self.val = p[0]
-	def stepParam(self, parami, delta):
-		assert(parami == 0)
-		self.setParams([self.val + delta])
 
 class CfhtPhotoCal(object):
 	def __init__(self, hdr=None):
@@ -354,6 +356,8 @@ COMMENT   Formula for Photometry, based on keywords given in this header:
 COMMENT   m = -2.5*log(DN) + 2.5*log(EXPTIME)
 COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 '''
+	def hashkey(self):
+		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
 			
 	def brightnessToCounts(self, brightness):
 		M = brightness.getValue()
@@ -371,9 +375,10 @@ class SdssPhotoCalMag(object):
 		'''
 		self.tsfield = tsfield
 		self.band = band
+	def hashkey(self):
+		return ('SdssPhotoCalMag', self.band, self.tsfield)
 	def brightnessToCounts(self, brightness):
 		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
-
 	def countsToBrightness(self, counts):
 		return Mag(self.tsfield.counts_to_mag(counts, self.band))
 

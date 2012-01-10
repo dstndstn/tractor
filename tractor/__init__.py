@@ -5,7 +5,7 @@ __all__ = [
 	# modules
 	'sdss', 'fitpsf', 'emfit',
 	# 'engine' contents
-	'Params', 'ParamList', 'MultiParams',
+	'Params', 'ScalarParam', 'ParamList', 'MultiParams',
 	'Sky', 'ConstantSky', 'Source', 'PointSource',
 	'Flux', 'PixPos', 'RaDecPos', 'Image',
 	'PhotoCal', 'NullPhotoCal', 'WCS', 'NullWCS',
