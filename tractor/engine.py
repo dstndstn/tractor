@@ -64,6 +64,7 @@ class Params(object):
 			return name
 		return self.__class__.__name__
 		#return __class__.__name__
+		#return __name__
 
 	def __repr__(self):
 		return self.getClassName(self) + repr(self.getParams())
@@ -97,12 +98,6 @@ class Params(object):
 		'''
 		return None
 
-	# def stepParam(self, parami, delta):
-	# 	pass
-	# def stepParams(self, dparams):
-	# 	assert(len(dparams) == self.numberOfParams())
-	# 	for i,dp in enumerate(dparams):
-	# 		self.stepParam(i, dp)
 
 class ScalarParam(Params):
 	'''
@@ -111,33 +106,27 @@ class ScalarParam(Params):
 	'''
 	stepsize = 1.
 	def __init__(self, val):
-		#print 'ScalarParam constructor: class', self.__class__
-		#print 'classname:', self.__class__.classname
 		self.val = val
 	def numberOfParams(self):
 		return 1
 	def getStepSizes(self, *args, **kwargs):
-		#return [1.]
-		#return [self.__class__.stepsize]
 		return [self.stepsize]
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		return [self.val]
 	def setParams(self, p):
 		assert(len(p) == 1)
-		self.val = p[0]
+		self._set(p[0])
 	def setParam(self, i, p):
 		assert(i == 0)
 		oldval = self.val
-		self.val = p
+		self._set(p)
 		return oldval
-
+	def _set(self, val):
+		self.val = val
 	def getValue(self):
 		return self.val
 
-	# def stepParam(self, parami, delta):
-	# 	assert(parami == 0)
-	# 	self.val += delta
 
 class ParamList(Params):
 	'''
@@ -146,7 +135,9 @@ class ParamList(Params):
 	def __init__(self, *args):
 		self.namedparams = self.getNamedParams()
 		self.vals = list(args)
-	def getNamedParams(self):
+	#def getNamedParams(self):
+	@staticmethod
+	def getNamedParams():
 		return []
 	def __getattr__(self, name):
 		if not 'namedparams' in self.__dict__:
@@ -169,12 +160,8 @@ class ParamList(Params):
 		self.vals[i] = val
 	def setParam(self, i, val):
 		self.vals[i] = val
-	def hashkey(self):
-		return ('ParamList',) + tuple(self.vals)
 	def numberOfParams(self):
 		return len(self.vals)
-	def stepParam(self, parami, delta):
-		self.vals[parami] += delta
 	def getParams(self):
 		'''
 		Returns a *copy* of the current parameter values (list)
@@ -221,7 +208,13 @@ class MultiParams(Params):
 		self.namedparams = self.getNamedParams()
 		# indices of pinned params
 		self.pinnedparams = []
-	def getNamedParams(self):
+
+	def copy(self):
+		return self.__class__([s.copy() for s in self.subs])
+
+	#def getNamedParams(self):
+	@staticmethod
+	def getNamedParams():
 		return []
 	def __getattr__(self, name):
 		if not 'namedparams' in self.__dict__:
@@ -246,7 +239,7 @@ class MultiParams(Params):
 
 
 	def hashkey(self):
-		t = ('MultiParams',)
+		t = (self.getClassName(self),)
 		for s in self.subs:
 			t = t + s.hashkey()
 		return t
@@ -288,14 +281,6 @@ class MultiParams(Params):
 	def numberOfParams(self):
 		return sum(s.numberOfParams() for s in self.subs)
 
-	def stepParam(self, parami, delta):
-		for s in self.subs:
-			n = s.numberOfParams()
-			if parami < n:
-				s.stepParam(parami, delta)
-				return
-			parami -= n
-
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		p = []
@@ -309,6 +294,15 @@ class MultiParams(Params):
 			n = s.numberOfParams()
 			s.setParams(p[i:i+n])
 			i += n
+
+	def setParam(self, i, p):
+		off = 0
+		for s in self.subs:
+			n = s.numberOfParams()
+			if i < off+n:
+				return s.setParam(i-off, p)
+			off += n
+		raise RuntimeError('setParam(%i,...) for a %s that only has %i elements' % (i, self.getClassName(self), self.numberOfParams()))
 
 	def getStepSizes(self, *args, **kwargs):
 		p = []
@@ -329,20 +323,10 @@ class Sky(Params):
 	def addTo(self, img):
 		pass
 
-class ConstantSky(ParamList):
+class ConstantSky(ScalarParam):
 	'''
 	In counts
 	'''
-	def __str__(self):
-		return 'Sky: %.1f' % self.val
-	def __repr__(self):
-		return 'ConstantSky(%.5f)' % self.val
-	def getNamedParams(self):
-		return [('val',0)]
-	def hashkey(self):
-		return ('ConstantSky', self.val)
-	def getStepSizes(self, *args, **kwargs):
-		return [1]
 	def getParamDerivatives(self, img, brightnessonly=False):
 		p = Patch(0, 0, np.ones(img.shape))
 		p.setName('dsky')
@@ -360,8 +344,6 @@ class Source(Params):
 	Must be hashable: see
 	  http://docs.python.org/glossary.html#term-hashable
 	'''
-	def hashkey(self):
-		return ('Source',)
 	def getModelPatch(self, img):
 		pass
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
@@ -378,7 +360,6 @@ class PointSource(MultiParams):
 	'''
 	def __init__(self, pos, brightness):
 		MultiParams.__init__(self, pos, brightness)
-		#print 'PointSource constructor: nparams = ', self.numberOfParams()
 	def getSourceType(self):
 		return 'PointSource'
 	def getNamedParams(self):
@@ -395,10 +376,10 @@ class PointSource(MultiParams):
 	def __repr__(self):
 		return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
 				repr(self.brightness) + ')')
-	def copy(self):
-		return PointSource(self.pos.copy(), self.brightness.copy())
-	def hashkey(self):
-		return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
+	#def copy(self):
+	#	return PointSource(self.pos.copy(), self.brightness.copy())
+	#def hashkey(self):
+	#	return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
 	def getModelPatch(self, img):
 		(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
@@ -422,9 +403,6 @@ class PointSource(MultiParams):
 			pvals = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, pvals[i] + pstep)
-				#posx = pos0.copy()
-				#posx.stepParam(i, psteps[i])
-				#(px,py) = img.getWcs().positionToPixel(self, posx)
 				(px,py) = img.getWcs().positionToPixel(self, pos0)
 				patchx = img.getPsf().getPointSourcePatch(px, py)
 				pos0.setParam(i, oldval)
@@ -438,8 +416,6 @@ class PointSource(MultiParams):
 		else:
 			bvals = self.brightness.getParams()
 			for i,bstep in enumerate(bsteps):
-				#fi = self.brightness.copy()
-				#fi.stepParam(i, fsteps[i])
 				oldval = self.brightness.setParam(i, bvals[i] + bstep)
 				countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
 				self.brightness.setParam(i, oldval)
@@ -448,41 +424,21 @@ class PointSource(MultiParams):
 				derivs.append(df)
 		return derivs
 
-class Flux(ParamList):
+class Flux(ScalarParam):
 	'''
 	A simple one-band Flux implementation of Brightness.
 	'''
-	def hashkey(self):
-		return ('Flux', self.val)
-	def getNamedParams(self):
-		return [('val', 0)]
-	def __repr__(self):
-		return 'Flux(%g)' % self.val
-	def __str__(self):
-		return 'Flux: %g' % self.val
-	def copy(self):
-		return Flux(self.val)
 	def __mul__(self, factor):
 		new = self.copy()
 		new.val *= factor
 		return new
 	__rmul__ = __mul__
-	def getValue(self):
-		return self.val
-	def getStepSizes(self, img, *args, **kwargs):
-		return [0.1]
-
 	# enforce limit: Flux > 0
-	def setParams(self, p):
-		assert(len(p) == 1)
-		if p[0] < 0:
+	def _set(self, val):
+		if val < 0:
 			#print 'Clamping Flux from', p[0], 'to zero'
 			pass
-		self.val = max(0., p[0])
-
-	#def stepParam(self, parami, delta):
-	#	assert(parami == 0)
-	#	self.setParams([self.val + delta])
+		self.val = max(0., val)
 
 class PixPos(ParamList):
 	'''
