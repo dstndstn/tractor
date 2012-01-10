@@ -61,7 +61,7 @@ class Params(object):
 	def __eq__(self, other):
 		return hash(self) == hash(other)
 	def hashkey(self):
-		return ('ParamSet',)
+		return ('Params',)
 	def numberOfParams(self):
 		return 0
 	def stepParam(self, parami, delta):
@@ -77,6 +77,28 @@ class Params(object):
 		pass
 	def getStepSizes(self, *args, **kwargs):
 		return []
+
+class ScalarParam(Params):
+	'''
+	Implementation of "Params" for a single scalar (float) parameter.
+	'''
+	def __init__(self, val):
+		self.val = val
+	def hashkey(self):
+		return ('ScalarParam', self.val)
+	def numberOfParams(self):
+		return 1
+	def stepParam(self, parami, delta):
+		assert(parami == 0)
+		self.val += delta
+	# Returns a *copy* of the current parameter values (list)
+	def getParams(self):
+		return [self.val]
+	def setParams(self, p):
+		assert(len(p) == 1)
+		self.val = p[0]
+	def getStepSizes(self, *args, **kwargs):
+		return [1.]
 
 class ParamList(Params):
 	'''
