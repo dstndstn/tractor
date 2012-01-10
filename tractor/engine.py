@@ -1,4 +1,4 @@
-# Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+# Copyright 2011, 2012 Dustin Lang and David W. Hogg.  All rights reserved.
 
 # to-do:
 # ------
@@ -249,7 +249,7 @@ class Sky(Params):
 	def hashkey(self):
 		return ('Sky',)
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		return []
 	def addTo(self, img):
 		pass
@@ -268,7 +268,7 @@ class ConstantSky(ParamList):
 		return ('ConstantSky', self.val)
 	def getStepSizes(self, *args, **kwargs):
 		return [1]
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		p = Patch(0, 0, np.ones(img.shape))
 		p.setName('dsky')
 		return [p]
@@ -290,7 +290,7 @@ class Source(Params):
 	def getModelPatch(self, img):
 		pass
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		return []
 	def getSourceType(self):
 		return 'Source'
@@ -299,49 +299,49 @@ class Source(Params):
 class PointSource(MultiParams):
 	'''
 	An implementation of a point source, characterized by its position
-	and flux.
+	and brightness.
 	'''
-	def __init__(self, pos, flux):
-		MultiParams.__init__(self, pos, flux)
+	def __init__(self, pos, brightness):
+		MultiParams.__init__(self, pos, brightness)
 		#print 'PointSource constructor: nparams = ', self.numberOfParams()
 	def getSourceType(self):
 		return 'PointSource'
 	def getNamedParams(self):
-		return [('pos', 0), ('flux', 1)]
+		return [('pos', 0), ('brightness', 1)]
 	def getPosition(self):
 		return self.pos
-	def getFlux(self):
-		return self.flux
-	def setFlux(self, flux):
-		self.flux = flux
+	def getBrightness(self):
+		return self.brightness
+	def setBrightness(self, brightness):
+		self.brightness = brightness
 	def __str__(self):
 		return (self.getSourceType() + ' at ' + str(self.pos) +
-				' with ' + str(self.flux))
+				' with ' + str(self.brightness))
 	def __repr__(self):
 		return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
-				repr(self.flux) + ')')
+				repr(self.brightness) + ')')
 	def copy(self):
-		return PointSource(self.pos.copy(), self.flux.copy())
+		return PointSource(self.pos.copy(), self.brightness.copy())
 	def hashkey(self):
-		return ('PointSource', self.pos.hashkey(), self.flux.hashkey())
+		return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
 	def getModelPatch(self, img):
 		(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
 		patch = img.getPsf().getPointSourcePatch(px, py)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return patch * counts
 
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		'''
 		returns [ Patch, Patch, ... ] of length numberOfParams().
 		'''
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
-		counts0 = img.getPhotoCal().fluxToCounts(self.flux)
+		counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
 		derivs = []
 		psteps = pos0.getStepSizes(img)
-		if fluxonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			for i in range(len(psteps)):
@@ -353,22 +353,22 @@ class PointSource(MultiParams):
 				dx.setName('d(ptsrc)/d(pos%i)' % i)
 				derivs.append(dx)
 
-		fsteps = self.flux.getStepSizes(img)
-		if self.isParamPinned('flux'):
+		fsteps = self.brightness.getStepSizes(img)
+		if self.isParamPinned('brightness'):
 			derivs.extend([None] * len(fsteps))
 		else:
 			for i in range(len(fsteps)):
-				fi = self.flux.copy()
+				fi = self.brightness.copy()
 				fi.stepParam(i, fsteps[i])
-				countsi = img.getPhotoCal().fluxToCounts(fi)
+				countsi = img.getPhotoCal().brightnessToCounts(fi)
 				df = patch0 * ((countsi - counts0) / fsteps[i])
-				df.setName('d(ptsrc)/d(flux%i)' % i)
+				df.setName('d(ptsrc)/d(brightness%i)' % i)
 				derivs.append(df)
 		return derivs
 
 class Flux(ParamList):
 	'''
-	A simple one-band Flux implementation.
+	A simple one-band Flux implementation of Brightness.
 	'''
 	def hashkey(self):
 		return ('Flux', self.val)
@@ -504,12 +504,12 @@ class Image(object):
 
 class PhotoCal(object):
 	'''
-	Photometric calibration.  Converts a Flux object to counts in an
+	Photometric calibration.  Converts a Brightness object to counts in an
 	Image.
 	'''
-	def fluxToCounts(self, flux):
+	def brightnessToCounts(self, brightness):
 		pass
-	def countsToFlux(self, counts):
+	def countsToBrightness(self, counts):
 		pass
 
 	#def numberOfParams(self):
@@ -519,11 +519,11 @@ class PhotoCal(object):
 
 class NullPhotoCal(object):
 	'''
-	The "identity" PhotoCal -- the Flux objects are in units of Image counts.
+	The "identity" PhotoCal -- the Brightness objects are in units of Image counts.
 	'''
-	def fluxToCounts(self, flux):
-		return flux.getValue()
-	def countsToFlux(self, counts):
+	def brightnessToCounts(self, brightness):
+		return brightness.getValue()
+	def countsToBrightness(self, counts):
 		return counts.getValue()
 
 	#def numberOfParams(self):
@@ -1191,11 +1191,11 @@ class Tractor(object):
 				return False
 		return True
 
-	def optimizeCatalogFluxes(self, srcs=None, sky=False):
-		return self.optimizeCatalogAtFixedComplexityStep(srcs=srcs, fluxonly=True,
+	def optimizeCatalogBrightnesses(self, srcs=None, sky=False):
+		return self.optimizeCatalogAtFixedComplexityStep(srcs=srcs, brightnessonly=True,
 														 sky=sky)
 
-	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, fluxonly=False,
+	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, brightnessonly=False,
 											 alphas=None, sky=True):
 		'''
 		Returns: (delta-log-prob, delta-parameters, step size alpha)
@@ -1206,7 +1206,7 @@ class Tractor(object):
 		-take step (try full step, back off)
 		'''
 		logverb('Optimizing at fixed complexity')
-		allparams = self.getAllDerivs(srcs=srcs, fluxonly=fluxonly, sky=sky)
+		allparams = self.getAllDerivs(srcs=srcs, brightnessonly=brightnessonly, sky=sky)
 
 		#print allparams
 		# list, one element per parameter...
@@ -1697,7 +1697,7 @@ class Tractor(object):
 			src.stepParams(dparams * alphaBest)
 		return pBest - pBefore, alphaBest
 
-	def getAllDerivs(self, srcs=None, fluxonly=False, sky=True):
+	def getAllDerivs(self, srcs=None, brightnessonly=False, sky=True):
 		'''
 		Returns a list of pairs, D[parami] = (deriv,image)
 		'''
@@ -1708,7 +1708,7 @@ class Tractor(object):
 			allderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
-				derivs = src.getParamDerivatives(img, fluxonly=fluxonly)
+				derivs = src.getParamDerivatives(img, brightnessonly=brightnessonly)
 				assert(len(derivs) == src.numberOfParams())
 				for k,deriv in enumerate(derivs):
 					if deriv is None:
@@ -1837,7 +1837,7 @@ class Tractor(object):
 		-look for "promising" x,y image locations with positive residuals
 		- (not near existing sources)
 		---chi image, PSF smooth, propose positions?
-		-instantiate new source (Position, flux)
+		-instantiate new source (Position, brightness)
 		-local optimizeAtFixedComplexity
 		'''
 		if imgi is None:

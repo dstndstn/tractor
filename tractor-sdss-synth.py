@@ -219,9 +219,9 @@ def main():
 	photocal = timg.getPhotoCal()
 	for source in sources:
 		print 'source', source
-		print 'flux', source.getFlux()
-		print 'counts', photocal.fluxToCounts(source.getFlux())
-		assert(photocal.fluxToCounts(source.getFlux()) > 0.)
+		print 'brightness', source.getBrightness()
+		print 'counts', photocal.brightnessToCounts(source.getBrightness())
+		assert(photocal.brightnessToCounts(source.getBrightness()) > 0.)
 
 	### DEBUG
 	wcs = timg.getWcs()

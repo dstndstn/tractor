@@ -283,18 +283,16 @@ class SdssPhotoCal(object):
 		if scale is None:
 			scale = SdssPhotoCal.scale
 		self.scale = scale
-	def fluxToCounts(self, flux):
+	def brightnessToCounts(self, brightness):
 		'''
-		flux: your duck-typed Flux object
-
+		brightness: SdssFlux object
 		returns: float
 		'''
-		return flux.getValue() * self.scale
-	def countsToFlux(self, counts):
+		return brightness.getValue() * self.scale
+	def countsToBrightness(self, counts):
 		'''
 		counts: float
-
-		Returns: duck-typed Flux object
+		Returns: duck-typed Brightness object (SdssFlux)
 		'''
 		return SdssFlux(counts / self.scale)
 
@@ -532,7 +530,7 @@ class SDSSTractor(Tractor):
 		patch = img.getPsf().getPointSourcePatch(x, y)
 		ht /= patch.getImage().max()
 		photocal = img.getPhotoCal()
-		flux = photocal.countsToFlux(ht)
+		flux = photocal.countsToBrightness(ht)
 		ps = PointSource(pos, flux)
 		try:
 			imgi = self.images.index(img)
@@ -562,9 +560,9 @@ class SDSSTractor(Tractor):
 		Sources that the given Source could be changed into.
 		'''
 		if isinstance(source, PointSource):
-			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+			eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
 						   1., 0.5, 0.)
-			dg = DevGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+			dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
 						   1., 0.5, 0.)
 			#print 'Changing:'
 			#print '  from ', source
@@ -572,15 +570,15 @@ class SDSSTractor(Tractor):
 			return [ [], [eg], [dg] ]
 
 		elif isinstance(source, ExpGalaxy):
-			dg = DevGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+			dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
 						   source.re, source.ab, source.phi)
-			ps = PointSource(source.getPosition().copy(), source.getFlux().copy())
+			ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
 			return [ [], [ps], [dg] ]
 
 		elif isinstance(source, DevGalaxy):
-			eg = ExpGalaxy(source.getPosition().copy(), source.getFlux().copy(),
+			eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
 						   source.re, source.ab, source.phi)
-			ps = PointSource(source.getPosition().copy(), source.getFlux().copy())
+			ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
 			return [ [], [ps], [eg] ]
 
 		else:

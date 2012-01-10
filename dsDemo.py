@@ -1,3 +1,5 @@
+import sys
+
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
@@ -32,30 +34,30 @@ def main():
 	photocal = SdssPhotoCalMag(tsf, bandnum)
 	# TEST
 	counts = 100
-	mag = photocal.countsToFlux(counts)
+	mag = photocal.countsToBrightness(counts)
 	print 'Counts', counts, '-> mag', mag
-	c2 = photocal.fluxToCounts(mag)
+	c2 = photocal.brightnessToCounts(mag)
 	print '-> counts', c2
 
 	# Replace the photocal and the Mags.
 	for s in sources:
-		##if hasattr(s, 'getFlux'):
+		##if hasattr(s, 'getBrightness'):
 		# UGH!
 		x,y = timg.getWcs().positionToPixel(None, s.getPosition())
 		#print 'x,y (%.1f, %.1f)' % (x,y)
 		if isinstance(s, stgal.CompositeGalaxy):
-			counts = timg.photocal.fluxToCounts(s.fluxExp)
-			s.fluxExp = photocal.countsToFlux(counts)
-			counts = timg.photocal.fluxToCounts(s.fluxDev)
-			s.fluxDev = photocal.countsToFlux(counts)
-			#print '  ', s.fluxExp, s.fluxDev
+			counts = timg.photocal.brightnessToCounts(s.brightnessExp)
+			s.brightnessExp = photocal.countsToBrightness(counts)
+			counts = timg.photocal.brightnessToCounts(s.brightnessDev)
+			s.brightnessDev = photocal.countsToBrightness(counts)
+			#print '  ', s.brightnessExp, s.brightnessDev
 		else:
-			#print 'Source', s, 'flux', s.getFlux()
-			counts = timg.photocal.fluxToCounts(s.getFlux())
-			s.setFlux(photocal.countsToFlux(counts))
-			#print '  ', s.flux
+			#print 'Source', s, 'brightness', s.getBrightness()
+			counts = timg.photocal.brightnessToCounts(s.getBrightness())
+			s.setBrightness(photocal.countsToBrightness(counts))
+			#print '  ', s.brightness
 		#else:
-		#	print 'no getFlux() method:', s
+		#	print 'no getBrightness() method:', s
 	timg.photocal = photocal
 
 
@@ -210,11 +212,11 @@ def main():
 				print 'Troublesome source:', src
 				im = tractor.getImage(1)
 				derivs = src.getParamDerivatives(im)
-				f1 = src.fluxExp
-				f2 = src.fluxDev
-				print 'Fluxes', f1, f2
-				c1 = im.getPhotoCal().fluxToCounts(f1)
-				c2 = im.getPhotoCal().fluxToCounts(f2)
+				f1 = src.brightnessExp
+				f2 = src.brightnessDev
+				print 'Brightnesses', f1, f2
+				c1 = im.getPhotoCal().brightnessToCounts(f1)
+				c2 = im.getPhotoCal().brightnessToCounts(f2)
 				print 'Counts', c1, c2
 				for j,d in enumerate(derivs):
 					if d is None:
@@ -237,8 +239,8 @@ def main():
 					plt.title(d.name)
 					plt.savefig('derivb%i.png' % j)
 
-				derivs = src.getParamDerivatives(im, fluxonly=True)
-				print 'Flux derivs', derivs
+				derivs = src.getParamDerivatives(im, brightnessonly=True)
+				print 'Brightness derivs', derivs
 				for j,d in enumerate(derivs):
 					if d is None:
 						print 'No derivative for param', j
@@ -262,12 +264,12 @@ def main():
 					plt.savefig('derivd%i.png' % j)
 
 
-			print 'Optimizing fluxes separately...'
+			print 'Optimizing brightnesses separately...'
 			for j,src in enumerate(tractor.getCatalog()):
 				#tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
-				#							fluxonly=True)
+				#							brightnessonly=True)
 				print 'source', j, src
-				dlnp,dX,alph = tractor.optimizeCatalogFluxes(srcs=[src])
+				dlnp,dX,alph = tractor.optimizeCatalogBrightnesses(srcs=[src])
 				print 'dlnp', dlnp
 				print 'dX', dX
 				print 'alpha', alph
@@ -281,11 +283,11 @@ def main():
 
 
 		elif step in [4]:
-			print 'Optimizing fluxes jointly...'
-			tractor.optimizeCatalogLoop(nsteps=1, fluxonly=True)
+			print 'Optimizing brightnesses jointly...'
+			tractor.optimizeCatalogLoop(nsteps=1, brightnessonly=True)
 			#for src in tractor.getCatalog():
 			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
-			#								fluxonly=True)
+			#								brightnessonly=True)
 
 		else:
 			print 'Optimizing sources jointly...'
@@ -312,11 +314,14 @@ class FitsWcsShiftParams(ParamList):
 		return [0.1, 0.1]
 		#return [0.01, 0.01]
 
-class Mag(Flux):
+class Mag(ParamList):
 	'''
-	An implementation of engine.Flux that actually does mags.
-	UGH, bad naming!
+	An implementation of Brightness that stored mags.
 	'''
+	def getNamedParams(self):
+		return [('val', 0)]
+	def getValue(self):
+		return self.val
 	def hashkey(self):
 		return ('Mag', self.val)
 	def __repr__(self):
@@ -331,6 +336,9 @@ class Mag(Flux):
 	def setParams(self, p):
 		assert(len(p) == 1)
 		self.val = p[0]
+	def stepParam(self, parami, delta):
+		assert(parami == 0)
+		self.setParams([self.val + delta])
 
 class CfhtPhotoCal(object):
 	def __init__(self, hdr=None):
@@ -347,11 +355,11 @@ COMMENT   m = -2.5*log(DN) + 2.5*log(EXPTIME)
 COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 '''
 			
-	def fluxToCounts(self, flux):
-		M = flux.getValue()
+	def brightnessToCounts(self, brightness):
+		M = brightness.getValue()
 		logc = (M - self.phot_c - self.phot_k * (self.airmass - 1.)) / -2.5
 		return self.exptime * 10.**logc
-	def countsToFlux(self, counts):
+	def countsToBrightness(self, counts):
 		return Mag(-2.5 * np.log10(counts / self.exptime) +
 				   self.phot_c + self.phot_k * (self.airmass - 1.))
 		
@@ -363,11 +371,10 @@ class SdssPhotoCalMag(object):
 		'''
 		self.tsfield = tsfield
 		self.band = band
-	def fluxToCounts(self, flux):
-		''' ugh, "flux" is a Mag '''
-		return self.tsfield.mag_to_counts(flux.getValue(), self.band)
+	def brightnessToCounts(self, brightness):
+		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
 
-	def countsToFlux(self, counts):
+	def countsToBrightness(self, counts):
 		return Mag(self.tsfield.counts_to_mag(counts, self.band))
 
 

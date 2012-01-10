@@ -95,8 +95,8 @@ class GalaxyShape(ParamList):
 		return T
 
 class Galaxy(MultiParams):
-	def __init__(self, pos, flux, shape):
-		MultiParams.__init__(self, pos, flux, shape)
+	def __init__(self, pos, brightness, shape):
+		MultiParams.__init__(self, pos, brightness, shape)
 		self.name = self.getName()
 		self.dname = self.getDName()
 
@@ -115,13 +115,13 @@ class Galaxy(MultiParams):
 	def getPosition(self):
 		return self.pos
 
-	def getFlux(self):
-		return self.flux
-	def setFlux(self, flux):
-		self.flux = flux
+	def getBrightness(self):
+		return self.brightness
+	def setBrightness(self, brightness):
+		self.brightness = brightness
 
 	def getNamedParams(self):
-		return [('pos', 0), ('flux', 1), ('shape', 2)]
+		return [('pos', 0), ('brightness', 1), ('shape', 2)]
 
 	def __getattr__(self, name):
 		if name in ['re', 'ab', 'phi']:
@@ -135,15 +135,15 @@ class Galaxy(MultiParams):
 		MultiParams.__setattr__(self, name, val)
 
 	def hashkey(self):
-		return (self.name, self.pos.hashkey(), self.flux.hashkey(),
+		return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
 				self.re, self.ab, self.phi)
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
-				+ ' with ' + str(self.flux)
+				+ ' with ' + str(self.brightness)
 				+ ', re=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
-				', flux=' + repr(self.flux) +
+				', brightness=' + repr(self.brightness) +
 				', re=%.1f, ab=%.2f, phi=%.1f)' % (self.re, self.ab, self.phi))
 
 	def copy(self):
@@ -157,7 +157,7 @@ class Galaxy(MultiParams):
 						   self.getName())
 
 	def getModelPatch(self, img, px=None, py=None):
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		p1 = self.getUnitFluxModelPatch(img, px, py)
 		if p1 is None:
 			return None
@@ -165,10 +165,10 @@ class Galaxy(MultiParams):
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	# Galaxy.
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
-		counts = img.getPhotoCal().fluxToCounts(self.flux)
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		patch0 = self.getUnitFluxModelPatch(img, px0, py0)
 		if patch0 is None:
 			return [None] * self.numberOfParams()
@@ -176,7 +176,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt position
 		psteps = pos0.getStepSizes(img)
-		if fluxonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			for i in range(len(psteps)):
@@ -191,22 +191,22 @@ class Galaxy(MultiParams):
 				dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
 				derivs.append(dx)
 
-		# derivatives wrt flux
-		fsteps = self.flux.getStepSizes(img)
-		if self.isParamPinned('flux'):
+		# derivatives wrt brightness
+		fsteps = self.brightness.getStepSizes(img)
+		if self.isParamPinned('brightness'):
 			derivs.extend([None] * len(fsteps))
 		else:
 			for i in range(len(fsteps)):
-				fi = self.flux.copy()
+				fi = self.brightness.copy()
 				fi.stepParam(i, fsteps[i])
-				countsi = img.getPhotoCal().fluxToCounts(fi)
+				countsi = img.getPhotoCal().brightnessToCounts(fi)
 				df = patch0 * ((countsi - counts) / fsteps[i])
-				df.setName('d(%s)/d(flux%i)' % (self.dname, i))
+				df.setName('d(%s)/d(brightness%i)' % (self.dname, i))
 				derivs.append(df)
 
 		# derivatives wrt shape
 		gsteps = self.shape.getStepSizes(img)
-		if fluxonly or self.isParamPinned('shape'):
+		if brightnessonly or self.isParamPinned('shape'):
 			derivs.extend([None] * len(gsteps))
 		else:
 			gnames = self.shape.getParamNames()
@@ -239,41 +239,41 @@ class CompositeGalaxy(Galaxy):
 	A galaxy with Exponential and deVaucouleurs components.
 
 	The two components share a position (ie the centers are the same),
-	but have different fluxes and shapes.
+	but have different brightnesses and shapes.
 	'''
-	def __init__(self, pos, fluxExp, shapeExp, fluxDev, shapeDev):
-		MultiParams.__init__(self, pos, fluxExp, shapeExp, fluxDev, shapeDev)
+	def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
+		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
 	def getName(self):
 		return 'CompositeGalaxy'
 	def getNamedParams(self):
-		return [('pos', 0), ('fluxExp', 1), ('shapeExp', 2),
-				('fluxDev', 3), ('shapeDev', 4),]
-	def getFlux(self):
-		return self.fluxExp + self.fluxDev
+		return [('pos', 0), ('brightnessExp', 1), ('shapeExp', 2),
+				('brightnessDev', 3), ('shapeDev', 4),]
+	def getBrightness(self):
+		return self.brightnessExp + self.brightnessDev
 
 
 	def hashkey(self):
 		return (self.name, self.pos.hashkey(),
-				self.fluxExp.hashkey(), self.shapeExp.hashkey(),
-				self.fluxDev.hashkey(), self.shapeDev.hashkey())
+				self.brightnessExp.hashkey(), self.shapeExp.hashkey(),
+				self.brightnessDev.hashkey(), self.shapeDev.hashkey())
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
-				+ ' with Exp ' + str(self.fluxExp) + ' ' + str(self.shapeExp)
-				+ ' and deV ' + str(self.fluxDev) + ' ' + str(self.shapeDev))
+				+ ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
+				+ ' and deV ' + str(self.brightnessDev) + ' ' + str(self.shapeDev))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
-				', fluxExp=' + repr(self.fluxExp) +
+				', brightnessExp=' + repr(self.brightnessExp) +
 				', shapeExp=' + repr(self.shapeExp) + 
-				', fluxDev=' + repr(self.fluxDev) +
+				', brightnessDev=' + repr(self.brightnessDev) +
 				', shapeDev=' + repr(self.shapeDev))
 	def copy(self):
-		return CompositeGalaxy(self.pos.copy(), self.fluxExp.copy(),
-							   self.shapeExp.copy(), self.fluxDev.copy(),
+		return CompositeGalaxy(self.pos.copy(), self.brightnessExp.copy(),
+							   self.shapeExp.copy(), self.brightnessDev.copy(),
 							   self.shapeDev.copy())
 	def getModelPatch(self, img, px=None, py=None):
-		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
 		pe = e.getModelPatch(img, px, py)
 		pd = d.getModelPatch(img, px, py)
 		if pe is None:
@@ -285,7 +285,7 @@ class CompositeGalaxy(Galaxy):
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		# this code is un-tested
 		assert(False)
-		fe = self.fluxExp / (self.fluxExp + self.fluxDev)
+		fe = self.brightnessExp / (self.brightnessExp + self.brightnessDev)
 		fd = 1. - fe
 		assert(fe >= 0.)
 		assert(fe <= 1.)
@@ -302,28 +302,28 @@ class CompositeGalaxy(Galaxy):
 	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
 	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
 	# CompositeGalaxy.
-	def getParamDerivatives(self, img, fluxonly=False):
+	def getParamDerivatives(self, img, brightnessonly=False):
 		#print 'CompositeGalaxy: getParamDerivatives'
-		#print '  Exp flux', self.fluxExp, 'shape', self.shapeExp
-		#print '  Dev flux', self.fluxDev, 'shape', self.shapeDev
-		e = ExpGalaxy(self.pos, self.fluxExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.fluxDev, self.shapeDev)
+		#print '  Exp brightness', self.brightnessExp, 'shape', self.shapeExp
+		#print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
 		e.dname = 'comp.exp'
 		d.dname = 'comp.dev'
 		# pin through...
-		if self.isParamPinned('fluxExp'):
-			e.pinParam('flux')
+		if self.isParamPinned('brightnessExp'):
+			e.pinParam('brightness')
 		if self.isParamPinned('shapeExp'):
 			e.pinParam('shape')
-		if self.isParamPinned('fluxDev'):
-			d.pinParam('flux')
+		if self.isParamPinned('brightnessDev'):
+			d.pinParam('brightness')
 		if self.isParamPinned('shapeDev'):
 			d.pinParam('shape')
-		de = e.getParamDerivatives(img, fluxonly)
-		dd = d.getParamDerivatives(img, fluxonly)
+		de = e.getParamDerivatives(img, brightnessonly)
+		dd = d.getParamDerivatives(img, brightnessonly)
 		npos = len(self.pos.getStepSizes(img))
 		derivs = []
-		if fluxonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * npos)
 		else:
 			for i in range(npos):
@@ -343,11 +343,11 @@ class CompositeGalaxy(Galaxy):
 class HoggGalaxy(Galaxy):
 	ps = PlotSequence('hg', format='%03i')
 
-	def __init__(self, pos, flux, *args):
+	def __init__(self, pos, brightness, *args):
 		'''
-		HoggGalaxy(pos, flux, GalaxyShape)
+		HoggGalaxy(pos, brightness, GalaxyShape)
 		or
-		HoggGalaxy(pos, flux, re, ab, phi)
+		HoggGalaxy(pos, brightness, re, ab, phi)
 
 		re: [arcsec]
 		phi: [deg]
@@ -357,13 +357,13 @@ class HoggGalaxy(Galaxy):
 		else:
 			assert(len(args) == 1)
 			shape = args[0]
-		Galaxy.__init__(self, pos, flux, shape)
+		Galaxy.__init__(self, pos, brightness, shape)
 
 	def getName(self):
 		return 'HoggGalaxy'
 
 	def copy(self):
-		return HoggGalaxy(self.pos.copy(), self.flux.copy(),
+		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
 						  self.re, self.ab, self.phi)
 
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
@@ -437,14 +437,14 @@ class ExpGalaxy(HoggGalaxy):
 	@staticmethod
 	def getExpProfile():
 		return ExpGalaxy.profile
-	#def __init__(self, pos, flux, re, ab, phi):
-	#	HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	#def __init__(self, pos, brightness, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'ExpGalaxy'
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
 	def copy(self):
-		return ExpGalaxy(self.pos.copy(), self.flux.copy(),
+		return ExpGalaxy(self.pos.copy(), self.brightness.copy(),
 						 self.re, self.ab, self.phi)
 
 class DevGalaxy(HoggGalaxy):
@@ -453,12 +453,12 @@ class DevGalaxy(HoggGalaxy):
 	@staticmethod
 	def getDevProfile():
 		return DevGalaxy.profile
-	#def __init__(self, pos, flux, re, ab, phi):
-	#	HoggGalaxy.__init__(self, pos, flux, re, ab, phi)
+	#def __init__(self, pos, brightness, re, ab, phi):
+	#	HoggGalaxy.__init__(self, pos, brightness, re, ab, phi)
 	def getName(self):
 		return 'DevGalaxy'
 	def getProfile(self):
 		return DevGalaxy.getDevProfile()
 	def copy(self):
-		return DevGalaxy(self.pos.copy(), self.flux.copy(),
+		return DevGalaxy(self.pos.copy(), self.brightness.copy(),
 						 self.re, self.ab, self.phi)
