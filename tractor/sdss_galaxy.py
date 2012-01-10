@@ -56,8 +56,8 @@ class GalaxyShape(ParamList):
 	#  phi, then call setab() then setphi() -- so then the phi would
 	#  be reverted.
 	#
-	# -but in Tractor.tryParamUpdates, it only calls getParams(),
-	#  stepParams(), and setParams() to revert to original params.
+	# -but in Tractor.tryParamUpdates, it only calls getParams() and
+	#  setParams() to revert to original params.
 	#
 	# -stepping params one at a time works fine, so it's all ok.
 
@@ -66,15 +66,15 @@ class GalaxyShape(ParamList):
 		self.setre(p[0])
 		self.setab(p[1])
 		self.setphi(p[2])
-	def stepParam(self, parami, delta):
-		if parami == 0:
-			self.setre(self.re + delta)
-		elif parami == 1:
-			self.setab(self.ab + delta)
-		elif parami == 2:
-			self.setphi(self.phi + delta)
+	def setParam(self, i, p):
+		if i == 0:
+			self.setre(p)
+		elif i == 1:
+			self.setab(p)
+		elif i == 2:
+			self.setphi(p)
 		else:
-			raise RuntimeError('GalaxyShape: unknown parami: ' + str(parami))
+			raise RuntimeError('GalaxyShape: unknown param index: ' + str(i))
 
 	def getTensor(self, cd):
 		# convert re, ab, phi into a transformation matrix
@@ -179,29 +179,31 @@ class Galaxy(MultiParams):
 		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
-			for i in range(len(psteps)):
-				posx = pos0.copy()
-				posx.stepParam(i, psteps[i])
-				(px,py) = img.getWcs().positionToPixel(self, posx)
+			params = pos0.getParams()
+			for i,pstep in enumerate(psteps):
+				oldval = pos0.setParam(i, params[i]+pstep)
+				(px,py) = img.getWcs().positionToPixel(self, pos0)
+				pos0.setParam(i, oldval)
 				patchx = self.getUnitFluxModelPatch(img, px, py)
 				if patchx is None or patchx.getImage() is None:
 					derivs.append(None)
 					continue
-				dx = (patchx - patch0) * (counts / psteps[i])
+				dx = (patchx - patch0) * (counts / pstep)
 				dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
 				derivs.append(dx)
 
 		# derivatives wrt brightness
-		fsteps = self.brightness.getStepSizes(img)
+		bsteps = self.brightness.getStepSizes(img)
 		if self.isParamPinned('brightness'):
-			derivs.extend([None] * len(fsteps))
+			derivs.extend([None] * len(bsteps))
 		else:
-			for i in range(len(fsteps)):
-				fi = self.brightness.copy()
-				fi.stepParam(i, fsteps[i])
-				countsi = img.getPhotoCal().brightnessToCounts(fi)
-				df = patch0 * ((countsi - counts) / fsteps[i])
-				df.setName('d(%s)/d(brightness%i)' % (self.dname, i))
+			params = self.brightness.getParams()
+			for i,bstep in enumerate(bsteps):
+				oldval = self.brightness.setParam(i, params[i] + bstep)
+				countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+				self.brightness.setParam(i, oldval)
+				df = patch0 * ((countsi - counts) / bstep)
+				df.setName('d(%s)/d(bright%i)' % (self.dname, i))
 				derivs.append(df)
 
 		# derivatives wrt shape
@@ -213,12 +215,12 @@ class Galaxy(MultiParams):
 			oldvals = self.shape.getParams()
 			# print 'Galaxy.getParamDerivatives:', self.getName()
 			# print '  oldvals:', oldvals
-			for i in range(len(gsteps)):
-				self.shape.stepParam(i, gsteps[i])
+			for i,gstep in enumerate(gsteps):
+				oldval = self.shape.setParam(i, oldvals[i]+gstep)
 				#print '  stepped', gnames[i], 'by', gsteps[i],
 				#print 'to get', self.shape
 				patchx = self.getUnitFluxModelPatch(img, px0, py0)
-				self.shape.setParams(oldvals)
+				self.shape.setParam(i, oldval)
 				#print '  reverted to', self.shape
 				if patchx is None:
 					print 'patchx is None:'
@@ -228,7 +230,7 @@ class Galaxy(MultiParams):
 					print '  to', self.shape.getParams()[i]
 					derivs.append(None)
 
-				dx = (patchx - patch0) * (counts / gsteps[i])
+				dx = (patchx - patch0) * (counts / gstep)
 				dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
 				derivs.append(dx)
 		return derivs

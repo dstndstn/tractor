@@ -56,49 +56,88 @@ class Params(object):
 
 	This is a duck-type definition.
 	'''
+	@staticmethod
+	def getClassName(self):
+		name = getattr(self.__class__, 'classname', None)
+		#name = getattr(__class__, 'classname', None)
+		if name is not None:
+			return name
+		return self.__class__.__name__
+		#return __class__.__name__
+
+	def __repr__(self):
+		return self.getClassName(self) + repr(self.getParams())
+	def __str__(self):
+		return self.getClassName(self) + ': ' + str(self.getParams())
+	def copy(self):
+		return self.__class__(self.getParams())
+		
+	def hashkey(self):
+		return (self.getClassName(self),) + tuple(self.getParams())
 	def __hash__(self):
 		return hash(self.hashkey())
 	def __eq__(self, other):
 		return hash(self) == hash(other)
-	def hashkey(self):
-		return ('Params',)
 	def numberOfParams(self):
-		return 0
-	def stepParam(self, parami, delta):
-		pass
-	def stepParams(self, dparams):
-		assert(len(dparams) == self.numberOfParams())
-		for i,dp in enumerate(dparams):
-			self.stepParam(i, dp)
+		return len(self.getParams())
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		return []
-	def setParams(self, p):
-		pass
 	def getStepSizes(self, *args, **kwargs):
 		return []
+	def setParams(self, p):
+		assert(len(p) == self.numberOfParams())
+		for ii,pp in enumerate(p):
+			self.setParam(ii, pp)
+
+	def setParam(self, i, p):
+		'''
+		Sets parameter index 'i' to new value 'p',
+		Returns the old value.
+		'''
+		return None
+
+	# def stepParam(self, parami, delta):
+	# 	pass
+	# def stepParams(self, dparams):
+	# 	assert(len(dparams) == self.numberOfParams())
+	# 	for i,dp in enumerate(dparams):
+	# 		self.stepParam(i, dp)
 
 class ScalarParam(Params):
 	'''
-	Implementation of "Params" for a single scalar (float) parameter.
+	Implementation of "Params" for a single scalar (float) parameter,
+	stored in self.val
 	'''
+	stepsize = 1.
 	def __init__(self, val):
+		#print 'ScalarParam constructor: class', self.__class__
+		#print 'classname:', self.__class__.classname
 		self.val = val
-	def hashkey(self):
-		return ('ScalarParam', self.val)
 	def numberOfParams(self):
 		return 1
-	def stepParam(self, parami, delta):
-		assert(parami == 0)
-		self.val += delta
+	def getStepSizes(self, *args, **kwargs):
+		#return [1.]
+		#return [self.__class__.stepsize]
+		return [self.stepsize]
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		return [self.val]
 	def setParams(self, p):
 		assert(len(p) == 1)
 		self.val = p[0]
-	def getStepSizes(self, *args, **kwargs):
-		return [1.]
+	def setParam(self, i, p):
+		assert(i == 0)
+		oldval = self.val
+		self.val = p
+		return oldval
+
+	def getValue(self):
+		return self.val
+
+	# def stepParam(self, parami, delta):
+	# 	assert(parami == 0)
+	# 	self.val += delta
 
 class ParamList(Params):
 	'''
@@ -123,9 +162,11 @@ class ParamList(Params):
 			return
 		for n,i in self.namedparams:
 			if name == n:
-				self.setParam(i, val)
+				self._setParam(i, val)
 				return
 		self.__dict__[name] = val
+	def _setParam(self, i, val):
+		self.vals[i] = val
 	def setParam(self, i, val):
 		self.vals[i] = val
 	def hashkey(self):
@@ -378,25 +419,32 @@ class PointSource(MultiParams):
 		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
-			for i in range(len(psteps)):
-				posx = pos0.copy()
-				posx.stepParam(i, psteps[i])
-				(px,py) = img.getWcs().positionToPixel(self, posx)
+			pvals = pos0.getParams()
+			for i,pstep in enumerate(psteps):
+				oldval = pos0.setParam(i, pvals[i] + pstep)
+				#posx = pos0.copy()
+				#posx.stepParam(i, psteps[i])
+				#(px,py) = img.getWcs().positionToPixel(self, posx)
+				(px,py) = img.getWcs().positionToPixel(self, pos0)
 				patchx = img.getPsf().getPointSourcePatch(px, py)
-				dx = (patchx - patch0) * (counts0 / psteps[i])
+				pos0.setParam(i, oldval)
+				dx = (patchx - patch0) * (counts0 / pstep)
 				dx.setName('d(ptsrc)/d(pos%i)' % i)
 				derivs.append(dx)
 
-		fsteps = self.brightness.getStepSizes(img)
+		bsteps = self.brightness.getStepSizes(img)
 		if self.isParamPinned('brightness'):
-			derivs.extend([None] * len(fsteps))
+			derivs.extend([None] * len(bsteps))
 		else:
-			for i in range(len(fsteps)):
-				fi = self.brightness.copy()
-				fi.stepParam(i, fsteps[i])
-				countsi = img.getPhotoCal().brightnessToCounts(fi)
-				df = patch0 * ((countsi - counts0) / fsteps[i])
-				df.setName('d(ptsrc)/d(brightness%i)' % i)
+			bvals = self.brightness.getParams()
+			for i,bstep in enumerate(bsteps):
+				#fi = self.brightness.copy()
+				#fi.stepParam(i, fsteps[i])
+				oldval = self.brightness.setParam(i, bvals[i] + bstep)
+				countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+				self.brightness.setParam(i, oldval)
+				df = patch0 * ((countsi - counts0) / bstep)
+				df.setName('d(ptsrc)/d(bright%i)' % i)
 				derivs.append(df)
 		return derivs
 
@@ -431,9 +479,10 @@ class Flux(ParamList):
 			#print 'Clamping Flux from', p[0], 'to zero'
 			pass
 		self.val = max(0., p[0])
-	def stepParam(self, parami, delta):
-		assert(parami == 0)
-		self.setParams([self.val + delta])
+
+	#def stepParam(self, parami, delta):
+	#	assert(parami == 0)
+	#	self.setParams([self.val + delta])
 
 class PixPos(ParamList):
 	'''
@@ -939,23 +988,23 @@ class GaussianMixturePSF(Params):
 		K = self.mog.K
 		return K * (1 + 2 + 3)
 
-	def stepParam(self, parami, delta):
-		K = self.mog.K
-		if parami < K:
-			self.mog.amp[parami] += delta
-			return
-		parami -= K
-		if parami < (K*2):
-			i,j = parami / 2, parami % 2
-			self.mog.mean[i,j] += delta
-			return
-		parami -= 2*K
-		i,j = parami / 3, parami % 3
-		if j in [0,1]:
-			self.mog.var[i,j,j] += deltai
-		else:
-			self.mog.var[i,0,1] += deltai
-			self.mog.var[i,1,0] += deltai
+	# def stepParam(self, parami, delta):
+	# 	K = self.mog.K
+	# 	if parami < K:
+	# 		self.mog.amp[parami] += delta
+	# 		return
+	# 	parami -= K
+	# 	if parami < (K*2):
+	# 		i,j = parami / 2, parami % 2
+	# 		self.mog.mean[i,j] += delta
+	# 		return
+	# 	parami -= 2*K
+	# 	i,j = parami / 3, parami % 3
+	# 	if j in [0,1]:
+	# 		self.mog.var[i,j,j] += deltai
+	# 	else:
+	# 		self.mog.var[i,0,1] += deltai
+	# 		self.mog.var[i,1,0] += deltai
 
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
@@ -1417,28 +1466,33 @@ class Tractor(object):
 		assert(len(steps) == nparams)
 		derivs = []
 		print 'Computing PSF derivatives around PSF:', psf
+		p0 = psf.getParams()
 		for k,s in enumerate(steps):
 			if True:
-				psfk = psf.copy()
-				psfk.stepParam(k, s)
+
+				#psfk = psf.copy()
+				#psfk.stepParam(k, s)
+				oldval = psf.setParam(k, p0[k]+s)
 				#print '  step param', k, 'by', s, 'to get', psfk
-				img.setPsf(psfk)
+				#img.setPsf(psfk)
 				modk = self.getModelImage(img)
+				psf.setParam(k, oldval)
 				# to reuse code, wrap this in a Patch...
 				dk = Patch(0, 0, (modk - mod0) / s)
 			else:
 				# symmetric finite differences
-				psfk1 = psf.copy()
-				psfk2 = psf.copy()
-				psfk1.stepParam(k, -s)
-				psfk2.stepParam(k, +s)
-				print '  step param', k, 'by', -s, 'to get', psfk1
-				print '  step param', k, 'by',  s, 'to get', psfk2
-				img.setPsf(psfk1)
-				modk1 = self.getModelImage(img)
-				img.setPsf(psfk2)
-				modk2 = self.getModelImage(img)
-				dk = Patch(0, 0, (modk2 - modk1) / (s*2))
+				# psfk1 = psf.copy()
+				# psfk2 = psf.copy()
+				# psfk1.stepParam(k, -s)
+				# psfk2.stepParam(k, +s)
+				# print '  step param', k, 'by', -s, 'to get', psfk1
+				# print '  step param', k, 'by',  s, 'to get', psfk2
+				# img.setPsf(psfk1)
+				# modk1 = self.getModelImage(img)
+				# img.setPsf(psfk2)
+				# modk2 = self.getModelImage(img)
+				# dk = Patch(0, 0, (modk2 - modk1) / (s*2))
+				pass
 
 			derivs.append(dk)
 		img.setPsf(psf)
@@ -1684,8 +1738,10 @@ class Tractor(object):
 			dparams = X[par0 : par0 + npar]
 			par0 += npar
 			assert(len(dparams) == src.numberOfParams())
-			oldparams.append(src.getParams())
-			src.stepParams(dparams * alpha)
+			pars = src.getParams()
+			oldparams.append(pars)
+			#src.stepParams(dparams * alpha)
+			src.setParams(np.array(pars) + dparams * alpha)
 		return oldparams
 	def revertParams(self, oldparams, srcs=None):
  		if srcs is None:
@@ -1719,18 +1775,18 @@ class Tractor(object):
 			logverb('  Stepping with alpha =', alpha)
 			oldparams = self.stepParams(X, srcs, alpha)
 			## DEBUG
-			newparams = self.getSourceParams(srcs)
-			logverb('  old sources:')
-			isrcs = srcs
-			if isrcs is None:
-				isrcs = self.catalog
-			for isrc in isrcs:
-				logverb('    ' + str(isrc))
-			logverb('  old params: ' + str(oldparams))
-			logverb('  new params: ' + str(newparams))
-			logverb('  new sources:')
-			for isrc in isrcs:
-				logverb('    ' + str(isrc))
+			# newparams = self.getSourceParams(srcs)
+			# logverb('  old sources:')
+			# isrcs = srcs
+			# if isrcs is None:
+			# 	isrcs = self.catalog
+			# for isrc in isrcs:
+			# 	logverb('    ' + str(isrc))
+			# logverb('  old params: ' + str(oldparams))
+			# logverb('  new params: ' + str(newparams))
+			# logverb('  new sources:')
+			# for isrc in isrcs:
+			# 	logverb('    ' + str(isrc))
 			##
 			pAfter = self.getLogProb()
 			logverb('  delta log-prob:', pAfter - pBefore)
@@ -1749,15 +1805,7 @@ class Tractor(object):
 			return 0, 0.
 
 		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
- 		if srcs is None:
-			srcs = self.catalog
-		par0 = 0
-		for j,src in enumerate(srcs):
-			npar = src.numberOfParams()
-			dparams = X[par0 : par0 + npar]
-			par0 += npar
-			assert(len(dparams) == src.numberOfParams())
-			src.stepParams(dparams * alphaBest)
+		self.stepParams(X, srcs, alphaBest)
 		return pBest - pBefore, alphaBest
 
 	def getAllDerivs(self, srcs=None, brightnessonly=False, sky=True):

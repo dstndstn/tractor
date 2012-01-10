@@ -326,21 +326,21 @@ class FitsWcsShiftParams(ParamList):
 		#return [0.01, 0.01]
 
 class Mag(ScalarParam):
+	stepsize = 0.01
 	'''
 	An implementation of Brightness that stores a single Mag.
 	'''
-	def getValue(self):
-		return self.val
-	def hashkey(self):
-		return ('Mag', self.val)
-	def getStepSizes(self, *args, **kwargs):
-		return [0.01]
-	def __repr__(self):
-		return 'Mag(%g)' % self.val
-	def __str__(self):
-		return 'Mag: %g' % self.val
-	def copy(self):
-		return Mag(self.val)
+	#def hashkey(self):
+	#	return ('Mag', self.val)
+	#def getStepSizes(self, *args, **kwargs):
+	#	return [0.01]
+	#def __repr__(self):
+	#	return 'Mag(%g)' % self.val
+	#def __str__(self):
+	#	return 'Mag: %g' % self.val
+	#def copy(self):
+	#	print 'Mag.copy: class', self.__class__
+	#	return Mag(self.val)
 
 class CfhtPhotoCal(object):
 	def __init__(self, hdr=None):
