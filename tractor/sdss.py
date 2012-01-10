@@ -149,7 +149,8 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 			eshape = GalaxyShape(re, ab, phi)
 
 		if iscomp:
-			gal = CompositeGalaxy(pos, eflux, eshape, dflux, dshape)
+			gal = CompositeGalaxy(pos, eflux+dflux, eflux/(eflux+dflux),
+								  eshape, dshape)
 			ncomp += 1
 		elif hasdev:
 			#print 'pure deV; counts_model = %g; counts_dev = %g' % (
@@ -310,6 +311,9 @@ class SdssFlux(Flux):
 	def __add__(self, other):
 		assert(isinstance(other, SdssFlux))
 		return SdssFlux(self.val + other.val)
+	def __div__(self, other):
+		assert(isinstance(other, SdssFlux))
+		return self.val / other.val
 
 class SdssWcs(WCS):
 	def __init__(self, astrans):
