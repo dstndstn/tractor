@@ -405,7 +405,7 @@ class Tractor(object):
 	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
 		mindlnprob = kwargs.pop('mindlnprob', 1.e-3)
 		for ostep in range(nsteps):
-			logmsg('Optimizing the new sources (step %i)...' % (ostep+1))
+			logmsg('Optimizing sources (step %i)...' % (ostep+1))
 			dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(**kwargs)
 			logverb('delta-log-prob', dlnprob)
 			if 'srcs' in kwargs:

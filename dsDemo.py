@@ -35,48 +35,8 @@ def main():
 	sources = st.get_tractor_sources(run, camcol, field, bandname, roi=roi,
 									 useMags=True)
 
-	# sdss = DR7()
-	# rerun = 0
-	# bandnum = band_index(bandname)
-	# tsf = sdss.readTsField(run, camcol, field, rerun)
-	# photocal = SdssPhotoCalMag(tsf, bandnum)
-	# # TEST
-	# counts = 100
-	# mag = photocal.countsToBrightness(counts)
-	# print 'Counts', counts, '-> mag', mag
-	# c2 = photocal.brightnessToCounts(mag)
-	# print '-> counts', c2
-	# # Replace the photocal and the Mags.
-	# for s in sources:
-	# 	##if hasattr(s, 'getBrightness'):
-	# 	# UGH!
-	# 	x,y = timg.getWcs().positionToPixel(None, s.getPosition())
-	# 
-	# 	print 'Converting brightness for source', s
-	# 	print 'params', s.getParams()
-	# 
-	# 	if isinstance(s, stgal.CompositeGalaxy):
-	# 		counts = timg.photocal.brightnessToCounts(s.brightnessExp)
-	# 		s.brightnessExp = photocal.countsToBrightness(counts)
-	# 		counts = timg.photocal.brightnessToCounts(s.brightnessDev)
-	# 		s.brightnessDev = photocal.countsToBrightness(counts)
-	# 		#print '  ', s.brightnessExp, s.brightnessDev
-	# 	else:
-	# 		#print 'Source', s, 'brightness', s.getBrightness()
-	# 		counts = timg.photocal.brightnessToCounts(s.getBrightness())
-	# 		s.setBrightness(photocal.countsToBrightness(counts))
-	# 		#print '  ', s.brightness
-	# 
-	# 	print 'After converting brightness:', s
-	# 	print 'params', s.getParams()
-	# 	#print 'bright', s.getBrightness()
-	# 	#print 'bright2', s.brightness
-	# 
-	# timg.photocal = photocal
 
-
-
-
+	# Create CFHT tractor.Image
 	cffn = 'cr.fits'
 	psffn = 'psfimg.fits'
 	cfx,cfy = 734,4352
@@ -120,34 +80,154 @@ def main():
 	wcs = FitsWcs(Tan(cffn, 0))
 	print 'CFHT WCS', wcs
 
-	#[
 	#wcs.setX0Y0(x0+1., y0+1.)
 	# From fit
 	wcs.setX0Y0(535.14208988131043, 4153.665639423165)
 
 	sky = np.median(image)
 	print 'Sky', sky
+	# save for later...
+	cfsky = sky
 	skyobj = ConstantSky(sky)
 
 	photocal = cf.CfhtPhotoCal(hdr=pyfits.open(cffn)[0].header)
 
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal,
-				   name=('CFHT'))
+				   name='CFHT')
+
+	class ScaledWCS(object):
+		def hashkey(self):
+			return ('ScaledWcs', self.scale, self.wcs.hashkey())
+		def __init__(self, scale, wcs):
+			self.wcs = wcs
+			self.scale = float(scale)
+		def positionToPixel(self, src, pos):
+			x,y = self.wcs.positionToPixel(src,pos)
+			return x*self.scale, y*self.scale
+		def pixelToPosition(self, src, xy):
+			x,y = xy
+			xy = (x/self.scale, y/self.scale)
+			return self.wcs.pixelToPosition(src, xy)
+		def cdAtPixel(self, x, y):
+			cd = self.wcs.cdAtPixel(x/self.scale, y/self.scale)
+			return cd / self.scale
+
+	# Create fake tractor.Image
+	psf = NCircularGaussianPSF([1.], [1.])
+	#sky = ConstantSky(100.)
+	sky = timg.sky
+	print 'SDSS Sky:', timg.sky
+	photocal = timg.photocal
+	fakescale = 3
+	#wcs = ScaledWCS(fakescale, timg.wcs)
+	#(h,w) = timg.data.shape
+	#fakedata = np.zeros((h*fakescale, w*fakescale))
 	
+	# make-wcs.py -r 333.55503 -d 0.36438 -s 0.02 -W 600 -H 600 fake-wcs.fits
+	# vert flip
+	# modhead fake-wcs.fits CD2_2 3.33333333e-5
+
+	wcs = FitsWcs(Tan('fake-wcs.fits', 0))
+	h,w = 600,600
+	fakedata = np.zeros((h, w))
+	print '0,0', wcs.pixelToPosition(None, (0,0))
+	print 'W,0', wcs.pixelToPosition(None, (w,0))
+	print '0,H', wcs.pixelToPosition(None, (0,h))
+	print 'W,H', wcs.pixelToPosition(None, (w,h))
+	fakewcs = wcs
+
+	'''
+	0,0 RA,Dec (333.56505, 0.37440)
+	W,0 RA,Dec (333.54505, 0.37440)
+	0,H RA,Dec (333.56505, 0.35440)
+	W,H RA,Dec (333.54505, 0.35440)
+	'''
+	
+	fakeimg = Image(data=fakedata, invvar=fakedata, psf=psf,
+					wcs=wcs, sky=sky, photocal=photocal, name='Fake')
+	del psf
+	del wcs
+	del photocal
+
 	tractor = Tractor([timg, cftimg])
-	#tractor = Tractor([timg])
 	tractor.addSources(sources)
 
+
+	
+	zrf = np.array([-2./float(fakescale**2),
+					+6./float(fakescale**2)]) * info['skysig'] + info['sky']
+	print 'zrf', zrf
+	imfake = dict(interpolation='nearest', origin='lower',
+				  vmin=zrf[0], vmax=zrf[1], cmap='gray')
+	mod = tractor.getModelImage(fakeimg)
+	plt.clf()
+	plt.imshow(mod, **imfake)
+	#plt.title('step %i: %s' % (step-1, action))
+	#plt.colorbar()
+	plt.savefig('mod-fake.png')
+	print 'Wrote fake model'
+
+	seg = sources[1]
+	print 'Source:', seg
+	mod = tractor.getModelImage(fakeimg, srcs=[seg])
+	plt.clf()
+	plt.imshow(mod, **imfake)
+	#plt.title('step %i: %s' % (step-1, action))
+	#plt.colorbar()
+	plt.savefig('mod-fake-eg.png')
+	print 'Wrote fake model'
+
+	patch = seg.getModelPatch(fakeimg)
+	px0,py0 = patch.x0, patch.y0
+	print 'Patch', patch
+	plt.clf()
+	zrf2 = np.array([-1./float(fakescale**2),
+					+6./float(fakescale**2)]) * info['skysig']
+	plt.imshow(patch.patch, interpolation='nearest', origin='lower',
+			   vmin=zrf2[0], vmax=zrf2[1], cmap='gray')
+
+	ax = plt.axis()
+	# 333.55503, 0.36438
+	ramid,decmid = 333.55503, 0.36438
+	#ravals = np.arange(333.54, 333.58, 0.01)
+	#decvals = np.arange(0.35, 0.39, 0.01)
+	ravals = np.arange(333.55, 333.56, 0.001)
+	decvals = np.arange(0.36, 0.37, 0.001)
+	# HACK
+	xvals = [fakewcs.positionToPixel(None, RaDecPos(ra, decmid))[0]
+			 for ra in ravals]
+	yvals = [fakewcs.positionToPixel(None, RaDecPos(ramid, dec))[1]
+			 for dec in decvals]
+	xvals = np.array(xvals) - px0
+	yvals = np.array(yvals) - py0
+	print 'yvals', yvals
+	plt.xticks(xvals, ['%.3f'%ra for ra in ravals])
+	plt.xlabel('RA (deg)')
+	plt.yticks(yvals, ['%.3f'%dec for dec in decvals])
+	plt.ylabel('Dec (deg)')
+
+	plt.axis(ax)
+	plt.savefig('mod-fake-eg-patch.png')
+
+	sys.exit(0)
+
+
+
+
+
+
 	zrs = [np.array([-2.,+6.]) * info['skysig'] + info['sky'],
-		   np.array([-2.,+20.]) * cfstd + sky,]
+		   np.array([-2.,+20.]) * cfstd + cfsky,]
+
 
 	#np.seterr(under='print')
 	np.seterr(all='warn')
 
-	NS = 9
-	#for step in range(2, NS+1):
-	for step in range(5, NS+1):
+	action = 'Initial'
+
+	NS = 10
+	for step in range(1, NS+1):
 		
 		for i in range(len(tractor.getImages())):
 			mod = tractor.getModelImage(i)
@@ -156,6 +236,15 @@ def main():
 					   vmin=zr[0], vmax=zr[1], cmap='gray')
 			imchi = dict(interpolation='nearest', origin='lower',
 						 vmin=-5., vmax=+5., cmap='gray')
+
+			if step == 1:
+				data = tractor.getImage(i).getImage()
+				plt.clf()
+				plt.imshow(data, **ima)
+				plt.title('step %i: %s' % (step-1, action))
+				plt.savefig('data%i.png' % i)
+
+
 			plt.clf()
 			plt.imshow(mod, **ima)
 			ax = plt.axis()
@@ -164,26 +253,39 @@ def main():
 				wcs = im.getWcs()
 				x,y = wcs.positionToPixel(None, src.getPosition())
 				plt.plot([x],[y],'r.')
-				plt.text(x, y, '%i'%j)
-			plt.axis(ax)
-			plt.savefig('mod%i-%02i.png' % (i,step))
 
-			if step == 0:
-				data = tractor.getImage(i).getImage()
-				plt.clf()
-				plt.imshow(data, **ima)
-				plt.savefig('data%i.png' % i)
+				srct = src.getSourceType()
+				print 'source type:', srct
+				srct = srct[0]
+
+				plt.text(x, y, '%i:%s'%(j,srct))
+			plt.axis(ax)
+			plt.title('step %i: %s' % (step-1, action))
+			plt.savefig('mod%i-%02i.png' % (i,step-1))
+
 
 			chi = tractor.getChiImage(i)
 			plt.clf()
 			plt.imshow(chi, **imchi)
-			plt.savefig('chi%i-%02i.png' % (i,step))
+			plt.title('step %i: %s' % (step-1, action))
+			plt.savefig('chi%i-%02i.png' % (i,step-1))
+
+		# troublesome guy...
+		src = tractor.getCatalog()[6]
+		print 'Troublesome source:', src
 
 		if step == NS:
 			break
 
+		print
+		print '---------------------------------'
 		print 'Step', step
-		if step in [0, 1] and len(tractor.getImages())>1:
+		print '---------------------------------'
+		print
+		if step in [1, 2] and len(tractor.getImages())>1:
+			action = 'skip'
+			continue
+			action = 'astrometry'
 			# fine-tune astrometry
 			print 'Optimizing CFHT astrometry...'
 			cfim = tractor.getImage(1)
@@ -221,7 +323,20 @@ def main():
 			print 'pa after:', pa
 			print pa.getParams()
 
-		elif step in [2,3]:
+		elif step in [3, 4, 7, 8]:
+			action = 'brightness, separately'
+
+			print 'Optimizing brightnesses separately...'
+			for j,src in enumerate(tractor.getCatalog()):
+				#tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
+				#							brightnessonly=True)
+				print 'source', j, src
+				dlnp,dX,alph = tractor.optimizeCatalogBrightnesses(srcs=[src])
+				print 'dlnp', dlnp
+				print 'dX', dX
+				print 'alpha', alph
+
+
 			if step == -2:
 				# troublesome guy...
 				src = tractor.getCatalog()[6]
@@ -280,30 +395,24 @@ def main():
 					plt.savefig('derivd%i.png' % j)
 
 
-			print 'Optimizing brightnesses separately...'
-			for j,src in enumerate(tractor.getCatalog()):
-				#tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
-				#							brightnessonly=True)
-				print 'source', j, src
-				dlnp,dX,alph = tractor.optimizeCatalogBrightnesses(srcs=[src])
-				print 'dlnp', dlnp
-				print 'dX', dX
-				print 'alpha', alph
 
+		elif step in [5]:
+			action = 'sources, separately'
+			print 'Optimizing sources individually...'
+			for src in tractor.getCatalog():
+				tractor.optimizeCatalogLoop(nsteps=1, srcs=[src])
 
-			#print 'Optimizing sources individually...'
-			#for src in tractor.getCatalog():
-			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src])
-
-
-		elif step in [4]:
+		elif step in [6]:
+			action = 'brightnesses, jointly'
 			print 'Optimizing brightnesses jointly...'
 			tractor.optimizeCatalogLoop(nsteps=1, brightnessonly=True)
 			#for src in tractor.getCatalog():
 			#	tractor.optimizeCatalogLoop(nsteps=1, srcs=[src],
 			#								brightnessonly=True)
 
+
 		else:
+			action = 'sources, jointly'
 			print 'Optimizing sources jointly...'
 			tractor.optimizeCatalogLoop(nsteps=1)
 			

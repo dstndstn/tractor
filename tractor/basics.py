@@ -193,8 +193,6 @@ class PointSource(MultiParams):
 			derivs.extend([None] * len(psteps))
 		else:
 			pvals = pos0.getParams()
-			print 'position params:', pvals
-			print 'position steps:', psteps
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, pvals[i] + pstep)
 				(px,py) = img.getWcs().positionToPixel(self, pos0)
