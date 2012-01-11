@@ -84,7 +84,9 @@ class ParamList(Params):
 	def _setParam(self, i, val):
 		self.vals[i] = val
 	def setParam(self, i, val):
-		self.vals[i] = val
+		oldval = self.vals[i]
+		self._setParam(i, val)
+		return oldval
 	def numberOfParams(self):
 		return len(self.vals)
 	def getParams(self):

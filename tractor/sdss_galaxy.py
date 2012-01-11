@@ -68,6 +68,7 @@ class GalaxyShape(ParamList):
 		self.setab(p[1])
 		self.setphi(p[2])
 	def setParam(self, i, p):
+		oldval = self.vals[i]
 		if i == 0:
 			self.setre(p)
 		elif i == 1:
@@ -76,6 +77,7 @@ class GalaxyShape(ParamList):
 			self.setphi(p)
 		else:
 			raise RuntimeError('GalaxyShape: unknown param index: ' + str(i))
+		return oldval
 
 	def getTensor(self, cd):
 		# convert re, ab, phi into a transformation matrix

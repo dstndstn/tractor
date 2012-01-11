@@ -146,7 +146,8 @@ def main():
 	np.seterr(all='warn')
 
 	NS = 9
-	for step in range(2, NS+1):
+	#for step in range(2, NS+1):
+	for step in range(5, NS+1):
 		
 		for i in range(len(tractor.getImages())):
 			mod = tractor.getModelImage(i)
