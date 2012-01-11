@@ -325,11 +325,6 @@ class FitsWcsShiftParams(ParamList):
 		return [0.1, 0.1]
 		#return [0.01, 0.01]
 
-class Mag(ScalarParam):
-	stepsize = 0.01
-	'''
-	An implementation of Brightness that stores a single Mag.
-	'''
 	#def hashkey(self):
 	#	return ('Mag', self.val)
 	#def getStepSizes(self, *args, **kwargs):
