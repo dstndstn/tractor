@@ -1,5 +1,8 @@
 from engine import *
+from ducks import *
+from basics import *
 import sdss
+import cfht
 
 __all__ = [
 	# modules

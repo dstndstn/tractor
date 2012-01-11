@@ -10,6 +10,7 @@ import pyfits
 from astrometry.util.util import Tan
 from tractor import *
 from tractor import sdss as st
+from tractor import cfht as cf
 from tractor import sdss_galaxy as stgal
 from astrometry.sdss import *
 
@@ -29,48 +30,49 @@ def main():
 	S = 100
 	roi = [xc-S, xc+S, yc-S, yc+S]
 
-	timg,info = st.get_tractor_image(run, camcol, field, bandname, roi=roi)
-	sources = st.get_tractor_sources(run, camcol, field, bandname, roi=roi)
+	timg,info = st.get_tractor_image(run, camcol, field, bandname, roi=roi,
+									 useMags=True)
+	sources = st.get_tractor_sources(run, camcol, field, bandname, roi=roi,
+									 useMags=True)
 
-	sdss = DR7()
-	rerun = 0
-	bandnum = band_index(bandname)
-	tsf = sdss.readTsField(run, camcol, field, rerun)
-	photocal = SdssPhotoCalMag(tsf, bandnum)
-	# TEST
-	counts = 100
-	mag = photocal.countsToBrightness(counts)
-	print 'Counts', counts, '-> mag', mag
-	c2 = photocal.brightnessToCounts(mag)
-	print '-> counts', c2
-
-	# Replace the photocal and the Mags.
-	for s in sources:
-		##if hasattr(s, 'getBrightness'):
-		# UGH!
-		x,y = timg.getWcs().positionToPixel(None, s.getPosition())
-
-		print 'Converting brightness for source', s
-		print 'params', s.getParams()
-
-		if isinstance(s, stgal.CompositeGalaxy):
-			counts = timg.photocal.brightnessToCounts(s.brightnessExp)
-			s.brightnessExp = photocal.countsToBrightness(counts)
-			counts = timg.photocal.brightnessToCounts(s.brightnessDev)
-			s.brightnessDev = photocal.countsToBrightness(counts)
-			#print '  ', s.brightnessExp, s.brightnessDev
-		else:
-			#print 'Source', s, 'brightness', s.getBrightness()
-			counts = timg.photocal.brightnessToCounts(s.getBrightness())
-			s.setBrightness(photocal.countsToBrightness(counts))
-			#print '  ', s.brightness
-
-		print 'After converting brightness:', s
-		print 'params', s.getParams()
-		#print 'bright', s.getBrightness()
-		#print 'bright2', s.brightness
-
-	timg.photocal = photocal
+	# sdss = DR7()
+	# rerun = 0
+	# bandnum = band_index(bandname)
+	# tsf = sdss.readTsField(run, camcol, field, rerun)
+	# photocal = SdssPhotoCalMag(tsf, bandnum)
+	# # TEST
+	# counts = 100
+	# mag = photocal.countsToBrightness(counts)
+	# print 'Counts', counts, '-> mag', mag
+	# c2 = photocal.brightnessToCounts(mag)
+	# print '-> counts', c2
+	# # Replace the photocal and the Mags.
+	# for s in sources:
+	# 	##if hasattr(s, 'getBrightness'):
+	# 	# UGH!
+	# 	x,y = timg.getWcs().positionToPixel(None, s.getPosition())
+	# 
+	# 	print 'Converting brightness for source', s
+	# 	print 'params', s.getParams()
+	# 
+	# 	if isinstance(s, stgal.CompositeGalaxy):
+	# 		counts = timg.photocal.brightnessToCounts(s.brightnessExp)
+	# 		s.brightnessExp = photocal.countsToBrightness(counts)
+	# 		counts = timg.photocal.brightnessToCounts(s.brightnessDev)
+	# 		s.brightnessDev = photocal.countsToBrightness(counts)
+	# 		#print '  ', s.brightnessExp, s.brightnessDev
+	# 	else:
+	# 		#print 'Source', s, 'brightness', s.getBrightness()
+	# 		counts = timg.photocal.brightnessToCounts(s.getBrightness())
+	# 		s.setBrightness(photocal.countsToBrightness(counts))
+	# 		#print '  ', s.brightness
+	# 
+	# 	print 'After converting brightness:', s
+	# 	print 'params', s.getParams()
+	# 	#print 'bright', s.getBrightness()
+	# 	#print 'bright2', s.brightness
+	# 
+	# timg.photocal = photocal
 
 
 
@@ -127,7 +129,7 @@ def main():
 	print 'Sky', sky
 	skyobj = ConstantSky(sky)
 
-	photocal = CfhtPhotoCal(hdr=pyfits.open(cffn)[0].header)
+	photocal = cf.CfhtPhotoCal(hdr=pyfits.open(cffn)[0].header)
 
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal,
@@ -324,58 +326,6 @@ class FitsWcsShiftParams(ParamList):
 		#return [1.,1.]
 		return [0.1, 0.1]
 		#return [0.01, 0.01]
-
-	#def hashkey(self):
-	#	return ('Mag', self.val)
-	#def getStepSizes(self, *args, **kwargs):
-	#	return [0.01]
-	#def __repr__(self):
-	#	return 'Mag(%g)' % self.val
-	#def __str__(self):
-	#	return 'Mag: %g' % self.val
-	#def copy(self):
-	#	print 'Mag.copy: class', self.__class__
-	#	return Mag(self.val)
-
-class CfhtPhotoCal(object):
-	def __init__(self, hdr=None):
-		if hdr is not None:
-			self.exptime = hdr['EXPTIME']
-			self.phot_c = hdr['PHOT_C']
-			self.phot_k = hdr['PHOT_K']
-			self.airmass = hdr['AIRMASS']
-			print 'CFHT photometry:', self.exptime, self.phot_c, self.phot_k, self.airmass
-		# FIXME -- NO COLOR TERMS (phot_x)!
-		'''
-COMMENT   Formula for Photometry, based on keywords given in this header:
-COMMENT   m = -2.5*log(DN) + 2.5*log(EXPTIME)
-COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
-'''
-	def hashkey(self):
-		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
-			
-	def brightnessToCounts(self, brightness):
-		M = brightness.getValue()
-		logc = (M - self.phot_c - self.phot_k * (self.airmass - 1.)) / -2.5
-		return self.exptime * 10.**logc
-	def countsToBrightness(self, counts):
-		return Mag(-2.5 * np.log10(counts / self.exptime) +
-				   self.phot_c + self.phot_k * (self.airmass - 1.))
-		
-
-class SdssPhotoCalMag(object):
-	def __init__(self, tsfield, band):
-		'''
-		band: int
-		'''
-		self.tsfield = tsfield
-		self.band = band
-	def hashkey(self):
-		return ('SdssPhotoCalMag', self.band, self.tsfield)
-	def brightnessToCounts(self, brightness):
-		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
-	def countsToBrightness(self, counts):
-		return Mag(self.tsfield.counts_to_mag(counts, self.band))
 
 
 

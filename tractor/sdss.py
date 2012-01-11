@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib
 
 from engine import *
+from basics import *
 from sdss_galaxy import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
@@ -35,9 +36,17 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 			else:
 				raise os.OSError('no such file: "%s"' % fn)
 
+def _getBrightness(counts, tsf, bandnum, useMags):
+	if useMags:
+		mag = tsf.counts_to_mag(counts, bandnum)
+		bright = Mag(mag)
+	else:
+		bright = SdssFlux(counts / SdssPhotoCal.scale)
+	return bright
 
 def get_tractor_sources(run, camcol, field, bandname, release='DR7',
-						retrieve=True, curl=False, roi=None):
+						retrieve=True, curl=False, roi=None,
+						useMags=False):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -108,8 +117,9 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 		if counts <= 0:
 			print 'Skipping star with luptitude', lup, '-> counts', counts
 			continue
-		flux = SdssFlux(counts / SdssPhotoCal.scale)
-		ps = PointSource(pos, flux)
+
+		bright = _getBrightness(counts, tsf, bandnum, useMags)
+		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
 
@@ -135,31 +145,31 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 											 
 		if hasdev:
 			dcounts = counts * Ldev[i]
-			dflux = SdssFlux(dcounts / SdssPhotoCal.scale)
+			dbright = _getBrightness(dcounts, tsf, bandnum, useMags)
 			re = objs.r_dev[i,bandnum]
 			ab = objs.ab_dev[i,bandnum]
 			phi = objs.phi_dev[i,bandnum]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
 			ecounts = counts * Lexp[i]
-			eflux = SdssFlux(ecounts / SdssPhotoCal.scale)
+			ebright = _getBrightness(ecounts, tsf, bandnum, useMags)
 			re = objs.r_exp[i,bandnum]
 			ab = objs.ab_exp[i,bandnum]
 			phi = objs.phi_exp[i,bandnum]
 			eshape = GalaxyShape(re, ab, phi)
 
 		if iscomp:
-			gal = CompositeGalaxy(pos, eflux, eshape, dflux, dshape)
+			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
 			ncomp += 1
 		elif hasdev:
 			#print 'pure deV; counts_model = %g; counts_dev = %g' % (
 			#	objs.counts_model[i, bandnum], objs.counts_dev[i, bandnum])
-			gal = DevGalaxy(pos, dflux, dshape)
+			gal = DevGalaxy(pos, dbright, dshape)
 			ndev += 1
 		elif hasexp:
 			#print 'pure exp; counts_model = %g; counts_exp = %g' % (
 			#	objs.counts_model[i, bandnum], objs.counts_exp[i, bandnum])
-			gal = ExpGalaxy(pos, eflux, eshape)
+			gal = ExpGalaxy(pos, ebright, eshape)
 			nexp += 1
 		sources.append(gal)
 		ikeep.append(i)
@@ -175,7 +185,7 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 	
 def get_tractor_image(run, camcol, field, bandname, release='DR7',
 					  retrieve=True, curl=False, roi=None,
-					  psf='kl-gm'):
+					  psf='kl-gm', useMags=False):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -225,7 +235,10 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
-	photocal = SdssPhotoCal()
+	if useMags:
+		photocal = SdssMagPhotoCal(tsf, bandnum)
+	else:
+		photocal = SdssFluxPhotoCal()
 	psfield = sdss.readPsField(run, camcol, field)
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
@@ -275,9 +288,29 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
 					   (run, camcol, field, bandname)))
 	return timg,info
+
+
+class SdssMagPhotoCal(object):
+	'''
+	A photocal that uses Mag objects.
+	'''
+	def __init__(self, tsfield, band):
+		'''
+		band: int
+		'''
+		self.tsfield = tsfield
+		self.band = band
+	def hashkey(self):
+		return ('SdssPhotoCalMag', self.band, self.tsfield)
+	def brightnessToCounts(self, brightness):
+		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
+	def countsToBrightness(self, counts):
+		return Mag(self.tsfield.counts_to_mag(counts, self.band))
+
+
 		
 
-class SdssPhotoCal(object):
+class SdssFluxPhotoCal(object):
 	scale = 1e6
 	def __init__(self, scale=None):
 		if scale is None:

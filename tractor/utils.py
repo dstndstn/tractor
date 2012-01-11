@@ -25,8 +25,13 @@ class ScalarParam(Params):
 	stored in self.val
 	'''
 	stepsize = 1.
+	strformat = '%g'
 	def __init__(self, val):
 		self.val = val
+	def __str__(self):
+		return self.getClassName(self) + ': ' + self.strformat % self.val #str(self.val)
+	def __repr__(self):
+		return self.getClassName(self) + '(' + repr(self.val) + ')'
 	def numberOfParams(self):
 		return 1
 	def getStepSizes(self, *args, **kwargs):

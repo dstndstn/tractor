@@ -17,7 +17,6 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
-import mixture_profiles as mp
 
 FACTOR = 1.e-10
 

@@ -1,12 +1,17 @@
-#from engine import *
+from math import ceil, floor, pi, sqrt, exp
+
+from engine import *
 from ducks import *
 from utils import *
+import mixture_profiles as mp
+
 
 class Mag(ScalarParam):
 	'''
 	An implementation of Brightness that stores a single Mag.
 	'''
 	stepsize = 0.01
+	strformat = '%.3f'
 
 class Flux(ScalarParam):
 	'''

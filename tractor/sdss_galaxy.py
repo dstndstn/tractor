@@ -3,6 +3,7 @@ import numpy as np
 
 import mixture_profiles as mp
 from engine import *
+from utils import *
 
 class GalaxyShape(ParamList):
 	def getNamedParams(self):
