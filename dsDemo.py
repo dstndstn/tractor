@@ -282,6 +282,11 @@ def main():
 	plt.savefig('mod-sdss3-eg-patch.png')
 
 
+	plt.figure(figsize=(6,6))
+	plt.clf()
+	plotpos0 = [0.01, 0.01, 0.98, 0.94]
+
+
 	derivs = seg.getParamDerivatives(fakeimg)
 	for j,d in enumerate(derivs):
 		if d is None:
@@ -295,12 +300,34 @@ def main():
 		S = 25
 		mim = mim[600-S:600+S, 600-S:600+S]
 		plt.clf()
+		plt.gca().set_position(plotpos0)
 		plt.imshow(mim, #d.patch,
 				   interpolation='nearest',
 				   origin='lower', cmap='gray',
 				   vmin=-mx/10., vmax=mx/10.)
 		plt.title(d.name)
+		plt.xticks([],[])
+		plt.yticks([],[])
 		plt.savefig('deriv-eg-%i.png' % j)
+
+	zrf2 = np.array([-1./float(fakescale**2),
+					 +20./float(fakescale**2)]) * info['skysig']
+
+	patch = seg.getModelPatch(fakeimg)
+	mim = np.zeros_like(fakeimg.getImage())
+	patch.addTo(mim)
+	mim = mim[600-S:600+S, 600-S:600+S]
+	plt.clf()
+	plt.gca().set_position(plotpos0)
+	plt.imshow(mim, #d.patch,
+			   interpolation='nearest',
+			   origin='lower', cmap='gray',
+			   vmin=zrf2[0], vmax=zrf2[1])
+	plt.title('model')
+	plt.xticks([],[])
+	plt.yticks([],[])
+	plt.savefig('deriv-eg-model.png')
+
 	sys.exit(0)
 
 
@@ -312,9 +339,6 @@ def main():
 
 	action = 'Initial'
 
-	plt.figure(figsize=(6,6))
-	plt.clf()
-	plotpos0 = [0.01, 0.01, 0.98, 0.94]
 	#plt.gca().set_position(plotpos0)
 
 	#NS = 10
