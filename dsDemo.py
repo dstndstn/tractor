@@ -32,8 +32,27 @@ def main():
 
 	timg,info = st.get_tractor_image(run, camcol, field, bandname, roi=roi,
 									 useMags=True)
+
 	sources = st.get_tractor_sources(run, camcol, field, bandname, roi=roi,
 									 useMags=True)
+
+	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
+	# Run 7164 camcol 4 field 266 PSF FWHM 6.43368
+	run = 4868
+	camcol = 4
+	field = 31
+	xc,yc = 1530, 1147
+	#run = 7164
+	#camcol = 4
+	#field = 267
+	#xc,yc = 1485,1003
+	bandname = 'r'
+	#xc,yc = 1510, 1040
+	#ra,dec = (333.556, 0.369)
+	S = 100
+	roi = [xc-S, xc+S, yc-S, yc+S]
+	timg2,info2 = st.get_tractor_image(run, camcol, field, bandname, roi=roi,
+									   useMags=True)
 
 
 	# Create CFHT tractor.Image
@@ -114,7 +133,7 @@ def main():
 			return cd / self.scale
 
 	# Create fake tractor.Image
-	psf = NCircularGaussianPSF([1.], [1.])
+	psf = NCircularGaussianPSF([0.1], [1.])
 	#sky = ConstantSky(100.)
 	sky = timg.sky
 	print 'SDSS Sky:', timg.sky
@@ -123,13 +142,22 @@ def main():
 	#wcs = ScaledWCS(fakescale, timg.wcs)
 	#(h,w) = timg.data.shape
 	#fakedata = np.zeros((h*fakescale, w*fakescale))
-	
-	# make-wcs.py -r 333.55503 -d 0.36438 -s 0.02 -W 600 -H 600 fake-wcs.fits
-	# vert flip
-	# modhead fake-wcs.fits CD2_2 3.33333333e-5
 
+	#
+	# 0.066
+	# make-wcs.py -r 333.55503 -d 0.36438 -s 0.02 -W 1200 -H 1200 fake-wcs.fits
+	# # flip parity
+	# modhead fake-wcs.fits CD1_1 0
+	# modhead fake-wcs.fits CD1_2 1.666666667e-5
+	# modhead fake-wcs.fits CD2_1 1.666666667e-5
+	# modhead fake-wcs.fits CD2_2 0
+	
 	wcs = FitsWcs(Tan('fake-wcs.fits', 0))
-	h,w = 600,600
+	#h,w = 600,600
+	h,w = 1200,1200
+
+	fakescale = 0.396 * w / (0.02 * 3600.)
+
 	fakedata = np.zeros((h, w))
 	print '0,0', wcs.pixelToPosition(None, (0,0))
 	print 'W,0', wcs.pixelToPosition(None, (w,0))
@@ -150,17 +178,24 @@ def main():
 	del wcs
 	del photocal
 
-	tractor = Tractor([timg, cftimg])
+	tractor = Tractor([timg, cftimg, timg2])
 	tractor.addSources(sources)
+
+	zrs = [np.array([-1.,+6.]) * info['skysig'] + info['sky'],
+		   np.array([-1.,+20.]) * cfstd + cfsky,
+		   np.array([-1.,+6.]) * info2['skysig'] + info2['sky'],]
 
 
 	
-	zrf = np.array([-2./float(fakescale**2),
+	zrf = np.array([-1./float(fakescale**2),
 					+6./float(fakescale**2)]) * info['skysig'] + info['sky']
 	print 'zrf', zrf
 	imfake = dict(interpolation='nearest', origin='lower',
 				  vmin=zrf[0], vmax=zrf[1], cmap='gray')
 	mod = tractor.getModelImage(fakeimg)
+
+	#fig = plt.figure()
+	#fig.patch.set_alpha(0.)
 	plt.clf()
 	plt.imshow(mod, **imfake)
 	#plt.title('step %i: %s' % (step-1, action))
@@ -184,6 +219,7 @@ def main():
 	plt.clf()
 	zrf2 = np.array([-1./float(fakescale**2),
 					+6./float(fakescale**2)]) * info['skysig']
+
 	plt.imshow(patch.patch, interpolation='nearest', origin='lower',
 			   vmin=zrf2[0], vmax=zrf2[1], cmap='gray')
 
@@ -194,10 +230,10 @@ def main():
 	#decvals = np.arange(0.35, 0.39, 0.01)
 	ravals = np.arange(333.55, 333.56, 0.001)
 	decvals = np.arange(0.36, 0.37, 0.001)
-	# HACK
-	xvals = [fakewcs.positionToPixel(None, RaDecPos(ra, decmid))[0]
+	# NOTE flipped [0],[1] indices... (modhead above)
+	xvals = [fakewcs.positionToPixel(None, RaDecPos(ra, decmid))[1]
 			 for ra in ravals]
-	yvals = [fakewcs.positionToPixel(None, RaDecPos(ramid, dec))[1]
+	yvals = [fakewcs.positionToPixel(None, RaDecPos(ramid, dec))[0]
 			 for dec in decvals]
 	xvals = np.array(xvals) - px0
 	yvals = np.array(yvals) - py0
@@ -208,17 +244,67 @@ def main():
 	plt.ylabel('Dec (deg)')
 
 	plt.axis(ax)
+	plt.savefig('mod-fake-eg-patch.pdf')
 	plt.savefig('mod-fake-eg-patch.png')
 
+
+	oldpsf = timg.psf
+	timg.psf = fakeimg.psf
+	
+	patch = seg.getModelPatch(timg)
+	plt.clf()
+	#zrf2 = np.array([-1./float(fakescale**2),
+	#				+6./float(fakescale**2)]) * info['skysig']
+	#zr = zrs[0]
+	zr = np.array([-1.,+6.]) * info['skysig'] #+ info['sky']
+	plt.imshow(patch.patch, interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1], cmap='gray')
+	plt.savefig('mod-sdss1-eg-patch.pdf')
+	plt.savefig('mod-sdss1-eg-patch.png')
+
+	timg.psf = oldpsf
+	
+	patch = seg.getModelPatch(timg)
+	px0,py0 = patch.x0, patch.y0
+	plt.clf()
+	plt.imshow(patch.patch, interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1], cmap='gray')
+	plt.savefig('mod-sdss2-eg-patch.pdf')
+	plt.savefig('mod-sdss2-eg-patch.png')
+
+	ph,pw = patch.patch.shape
+	subimg = timg.getImage()[py0:py0+ph, px0:px0+pw]
+	plt.clf()
+	sky = info['sky']
+	plt.imshow(subimg-sky, interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1], cmap='gray')
+	plt.savefig('mod-sdss3-eg-patch.pdf')
+	plt.savefig('mod-sdss3-eg-patch.png')
+
+
+	derivs = seg.getParamDerivatives(fakeimg)
+	for j,d in enumerate(derivs):
+		if d is None:
+			print 'No derivative for param', j
+		mx = max(abs(d.patch.max()), abs(d.patch.min()))
+		print 'mx', mx
+		print 'Patch size:', d.patch.shape
+		print 'patch x0,y0', d.x0, d.y0
+		mim = np.zeros_like(fakeimg.getImage())
+		d.addTo(mim)
+		S = 25
+		mim = mim[600-S:600+S, 600-S:600+S]
+		plt.clf()
+		plt.imshow(mim, #d.patch,
+				   interpolation='nearest',
+				   origin='lower', cmap='gray',
+				   vmin=-mx/10., vmax=mx/10.)
+		plt.title(d.name)
+		plt.savefig('deriv-eg-%i.png' % j)
 	sys.exit(0)
 
 
 
-
-
-
-	zrs = [np.array([-2.,+6.]) * info['skysig'] + info['sky'],
-		   np.array([-2.,+20.]) * cfstd + cfsky,]
 
 
 	#np.seterr(under='print')
@@ -226,7 +312,13 @@ def main():
 
 	action = 'Initial'
 
-	NS = 10
+	plt.figure(figsize=(6,6))
+	plt.clf()
+	plotpos0 = [0.01, 0.01, 0.98, 0.94]
+	#plt.gca().set_position(plotpos0)
+
+	#NS = 10
+	NS = 1
 	for step in range(1, NS+1):
 		
 		for i in range(len(tractor.getImages())):
@@ -240,12 +332,17 @@ def main():
 			if step == 1:
 				data = tractor.getImage(i).getImage()
 				plt.clf()
+				plt.gca().set_position(plotpos0)
 				plt.imshow(data, **ima)
-				plt.title('step %i: %s' % (step-1, action))
+				#plt.title('step %i: %s' % (step-1, action))
+				plt.title('Data')
+				plt.xticks([],[])
+				plt.yticks([],[])
 				plt.savefig('data%i.png' % i)
 
 
 			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(mod, **ima)
 			ax = plt.axis()
 			for j,src in enumerate(tractor.getCatalog()):
@@ -253,21 +350,25 @@ def main():
 				wcs = im.getWcs()
 				x,y = wcs.positionToPixel(None, src.getPosition())
 				plt.plot([x],[y],'r.')
-
 				srct = src.getSourceType()
-				print 'source type:', srct
 				srct = srct[0]
-
-				plt.text(x, y, '%i:%s'%(j,srct))
+				#plt.text(x, y, '%i:%s'%(j,srct))
 			plt.axis(ax)
-			plt.title('step %i: %s' % (step-1, action))
+			#plt.title('step %i: %s' % (step-1, action))
+			plt.title('Model')
+			plt.xticks([],[])
+			plt.yticks([],[])
 			plt.savefig('mod%i-%02i.png' % (i,step-1))
 
 
 			chi = tractor.getChiImage(i)
 			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(chi, **imchi)
-			plt.title('step %i: %s' % (step-1, action))
+			#plt.title('step %i: %s' % (step-1, action))
+			plt.title('Chi')
+			plt.xticks([],[])
+			plt.yticks([],[])
 			plt.savefig('chi%i-%02i.png' % (i,step-1))
 
 		# troublesome guy...
@@ -354,10 +455,12 @@ def main():
 						print 'No derivative for param', j
 					mx = max(abs(d.patch.max()), abs(d.patch.min()))
 					print 'mx', mx
+					print 'Patch size:', d.patch.shape
+					print 'patch x0,y0', d.x0, d.y0
 					plt.clf()
 					plt.imshow(d.patch, interpolation='nearest',
 							   origin='lower', cmap='gray',
-							   vmin=-mx, vmax=mx)
+							   vmin=-mx/2., vmax=mx/2.)
 					plt.title(d.name)
 					plt.savefig('deriv%i.png' % j)
 
