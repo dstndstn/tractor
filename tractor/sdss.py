@@ -36,23 +36,23 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 			else:
 				raise os.OSError('no such file: "%s"' % fn)
 
-def _getBrightness(counts, tsf):
+def _getBrightness(counts, tsf, bands):
 	allcounts = counts
 	order = []
 	kwargs = {}
-	#for i,lup in enumerate(lups):
 	for i,counts in enumerate(allcounts):
 		bandname = band_name(i)
-		#counts = tsf.luptitude_to_counts(lup,i)
+		if not bandname in bands:
+			continue
 		mag = tsf.counts_to_mag(counts, i)
 		order.append(bandname)
 		kwargs[bandname] = mag
-		#print 'Band', bandname, 'lup', lup, 'counts', counts, 'mag', mag
-		print 'Band', bandname, 'counts', counts, 'mag', mag
+		#print 'Band', bandname, 'counts', counts, 'mag', mag
 	return Mags(order=order, **kwargs)
 
 def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
-						retrieve=True, curl=False, roi=None):
+						retrieve=True, curl=False, roi=None,
+						bands=None):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -64,6 +64,9 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 		raise RuntimeError('We only support DR7 currently')
 	# FIXME
 	rerun = 0
+
+	if bands is None:
+		bands = band_names()
 
 	sdss = DR7(curl=curl)
 	bandnum = band_index(bandname)
@@ -123,7 +126,7 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		lups = objs.psfcounts[i,:]
 		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
-		bright = _getBrightness(counts, tsf)
+		bright = _getBrightness(counts, tsf, bands)
 		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
@@ -147,23 +150,23 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 			assert(False)
 		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
 		counts = np.array(counts)
-		print 'lups', lups
-		print 'counts', counts
+		#print 'lups', lups
+		#print 'counts', counts
 											 
 		if hasdev:
 			dcounts = counts * Ldev[i]
-			print 'dcounts', dcounts
-			dbright = _getBrightness(dcounts, tsf)
-			print 'dbright', dbright
+			#print 'dcounts', dcounts
+			dbright = _getBrightness(dcounts, tsf, bands)
+			#print 'dbright', dbright
 			re = objs.r_dev[i,bandnum]
 			ab = objs.ab_dev[i,bandnum]
 			phi = objs.phi_dev[i,bandnum]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
 			ecounts = counts * Lexp[i]
-			print 'ecounts', ecounts
-			ebright = _getBrightness(ecounts, tsf)
-			print 'ebright', ebright
+			#print 'ecounts', ecounts
+			ebright = _getBrightness(ecounts, tsf, bands)
+			#print 'ebright', ebright
 			re = objs.r_exp[i,bandnum]
 			ab = objs.ab_exp[i,bandnum]
 			phi = objs.phi_exp[i,bandnum]

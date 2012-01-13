@@ -39,7 +39,8 @@ def main():
 	for timg,info in TI:
 		print timg.hashkey()
 
-	sources = st.get_tractor_sources(run, camcol, field, roi=roi)
+	sources = st.get_tractor_sources(run, camcol, field, roi=roi,
+									 bands=['g','r','i'])
 
 	print 'Sources:'
 	for s in sources:
