@@ -40,11 +40,19 @@ def _getBrightness(counts, tsf, bands):
 	allcounts = counts
 	order = []
 	kwargs = {}
+
+	BAD_MAG = 99.
+	
 	for i,counts in enumerate(allcounts):
 		bandname = band_name(i)
 		if not bandname in bands:
 			continue
-		mag = tsf.counts_to_mag(counts, i)
+		if counts == 0:
+			mag = BAD_MAG
+		else:
+			mag = tsf.counts_to_mag(counts, i)
+		if not np.isfinite(mag):
+			mag = BAD_MAG
 		order.append(bandname)
 		kwargs[bandname] = mag
 		#print 'Band', bandname, 'counts', counts, 'mag', mag
@@ -289,10 +297,10 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 		II /= II.sum()
 		# HIDEOUS HACK
 		II = np.maximum(II, 0)
-		print 'Multi-Gaussian PSF fit...'
+		#print 'Multi-Gaussian PSF fit...'
 		xm,ym = -(S/2), -(S/2)
 		em_fit_2d(II, xm, ym, w, mu, sig)
-		print 'w,mu,sig', w,mu,sig
+		#print 'w,mu,sig', w,mu,sig
 		mypsf = GaussianMixturePSF(w, mu, sig)
 
 	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
@@ -313,8 +321,10 @@ class SdssMagsPhotoCal(object):
 	def hashkey(self):
 		return ('SdssMagsPhotoCal', self.bandname, self.tsfield)
 	def brightnessToCounts(self, brightness):
-		return self.tsfield.mag_to_counts(brightness.getMag(self.bandname),
-										  self.band)
+		mag = brightness.getMag(self.bandname)
+		if not np.isfinite(mag):
+			return 0.
+		return self.tsfield.mag_to_counts(mag, self.band)
 	def countsToBrightness(self, counts):
 		# FIXME -- information loss here...
 		return Mags({ self.bandname:

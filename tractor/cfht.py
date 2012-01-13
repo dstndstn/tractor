@@ -1,5 +1,6 @@
 class CfhtPhotoCal(object):
-	def __init__(self, hdr=None):
+	def __init__(self, hdr=None, bandname=None):
+		self.bandname = bandname
 		if hdr is not None:
 			self.exptime = hdr['EXPTIME']
 			self.phot_c = hdr['PHOT_C']
@@ -16,7 +17,8 @@ COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
 			
 	def brightnessToCounts(self, brightness):
-		M = brightness.getValue()
+		#M = brightness.getValue()
+		M = brightness.getMag(self.bandname)
 		logc = (M - self.phot_c - self.phot_k * (self.airmass - 1.)) / -2.5
 		return self.exptime * 10.**logc
 	def countsToBrightness(self, counts):
