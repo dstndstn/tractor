@@ -21,6 +21,9 @@ def main():
 	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+	#mm = Mags(r=14.5, g=17.8, i=19.8, order=['g','r','i'])
+	#print mm
+
 	run = 2728
 	camcol = 4
 	field = 236
@@ -30,15 +33,22 @@ def main():
 	S = 100
 	roi = [xc-S, xc+S, yc-S, yc+S]
 
-	timg,info = st.get_tractor_image(run, camcol, field, bandname, roi=roi,
-									 useMags=True)
+	TI = [st.get_tractor_image(run, camcol, field, bandname, roi=roi,
+							   useMags=True)
+		  for bandname in 'gri']
+	for timg,info in TI:
+		print timg.hashkey()
 
-	sources = st.get_tractor_sources(run, camcol, field, bandname, roi=roi,
-									 useMags=True)
+	sources = st.get_tractor_sources(run, camcol, field, roi=roi)
+
 	print 'Sources:'
 	for s in sources:
 		print s
 	print
+
+	print 'Tractor images:', TI
+
+	sys.exit(0)
 
 	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
 	# Run 7164 camcol 4 field 266 PSF FWHM 6.43368

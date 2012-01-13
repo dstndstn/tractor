@@ -10,7 +10,8 @@ __all__ = [
 	# 'engine' contents
 	'Params', 'ScalarParam', 'ParamList', 'MultiParams',
 	'Sky', 'ConstantSky', 'Source', 'PointSource',
-	'Flux', 'PixPos', 'RaDecPos', 'Image',
+	'Flux', 'Mag', 'Mags',
+	'PixPos', 'RaDecPos', 'Image',
 	'PhotoCal', 'NullPhotoCal', 'WCS', 'NullWCS',
 	'FitsWcs', 'Patch', 'PSF', 'GaussianMixturePSF',
 	'NCircularGaussianPSF', 'Catalog', 'Tractor',

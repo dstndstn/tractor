@@ -60,10 +60,33 @@ class ParamList(Params):
 	def __init__(self, *args):
 		self.namedparams = self.getNamedParams()
 		self.vals = list(args)
-	#def getNamedParams(self):
+
+	def getFormatString(self, i):
+		return '%g'
+
+	def __str__(self):
+		pvals = self.getParams()
+		s = self.getClassName(self) + ': '
+		ss = []
+		for i,val in enumerate(pvals):
+			name = None
+			for k,j in self.namedparams:
+				if i == j:
+					name = k
+					break
+			fmt = self.getFormatString(i)
+			if name is not None:
+				ss.append(('%s='+fmt) % (name, val))
+			else:
+				ss.append(fmt % val)
+		return s + ', '.join(ss)
+
 	@staticmethod
 	def getNamedParams():
 		return []
+	#def getNamedParams(self):
+	#	return self.namedparams
+
 	def __getattr__(self, name):
 		if not 'namedparams' in self.__dict__:
 			raise AttributeError

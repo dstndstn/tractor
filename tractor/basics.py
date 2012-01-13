@@ -6,6 +6,30 @@ from utils import *
 import mixture_profiles as mp
 
 
+class Mags(ParamList):
+	'''
+	An implementation of Brightness that stores multiple mags.
+	'''
+	def __init__(self, **kwargs):
+		'''
+		Mags(r=14.3, g=15.6, order=['r','g'])
+		'''
+		keys = kwargs.pop('order', None)
+		if keys is None:
+			keys = kwargs.keys()
+			keys.sort()
+		assert(len(kwargs) == len(keys))
+		assert(set(kwargs.keys()) == set(keys))
+		vals = []
+		for k in keys:
+			vals.append(kwargs[k])
+		ParamList.__init__(self, *vals)
+		self.namedparams = [(k,i) for i,k in enumerate(keys)]
+
+	def getMag(self, bandname):
+		return getattr(self, bandname)
+
+
 class Mag(ScalarParam):
 	'''
 	An implementation of Brightness that stores a single Mag.

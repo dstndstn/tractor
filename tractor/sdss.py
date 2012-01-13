@@ -36,20 +36,28 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 			else:
 				raise os.OSError('no such file: "%s"' % fn)
 
-def _getBrightness(counts, tsf, bandnum, useMags):
-	if useMags:
-		mag = tsf.counts_to_mag(counts, bandnum)
-		bright = Mag(mag)
-	else:
-		bright = SdssFlux(counts / SdssPhotoCal.scale)
-	return bright
+def _getBrightness(counts, tsf):
+	allcounts = counts
+	order = []
+	kwargs = {}
+	#for i,lup in enumerate(lups):
+	for i,counts in enumerate(allcounts):
+		bandname = band_name(i)
+		#counts = tsf.luptitude_to_counts(lup,i)
+		mag = tsf.counts_to_mag(counts, i)
+		order.append(bandname)
+		kwargs[bandname] = mag
+		#print 'Band', bandname, 'lup', lup, 'counts', counts, 'mag', mag
+		print 'Band', bandname, 'counts', counts, 'mag', mag
+	return Mags(order=order, **kwargs)
 
-def get_tractor_sources(run, camcol, field, bandname, release='DR7',
-						retrieve=True, curl=False, roi=None,
-						useMags=False):
+def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
+						retrieve=True, curl=False, roi=None):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
+
+	bandname: "canonical" band from which to get galaxy shapes, positions, etc
 
 	'''
 	if release != 'DR7':
@@ -66,7 +74,6 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 
-
 	objs = fits_table(sdss.getFilename('tsObj', run, camcol, field,
 									   bandname, rerun=rerun))
 	objs.indices = np.arange(len(objs))
@@ -81,16 +88,18 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 
 	objs = objs[(objs.nchild == 0)]
 
-	# NO IDEA why it is NOT necessary to get PA and adjust for it.
-	# (probably that getTensor() has the phi transformation in the wrong
-	# place, terrifying)
-	# Since in DR7, tsObj files have phi_exp, phi_dev in image coordinates,
-	# not sky coordinates.
-	# Should have to Correct by finding the position angle of the field on
-	# the sky.
-	# cd = wcs.cdAtPixel(W/2, H/2)
-	# pa = np.rad2deg(np.arctan2(cd[0,1], cd[0,0]))
-	# print 'pa=', pa
+	# On further reflection, we believe tsObjs are in sky coords
+	# so this (below) is all kool.
+	# # NO IDEA why it is NOT necessary to get PA and adjust for it.
+	# # (probably that getTensor() has the phi transformation in the wrong
+	# # place, terrifying)
+	# # Since in DR7, tsObj files have phi_exp, phi_dev in image coordinates,
+	# # not sky coordinates.
+	# # Should have to Correct by finding the position angle of the field on
+	# # the sky.
+	# # cd = wcs.cdAtPixel(W/2, H/2)
+	# # pa = np.rad2deg(np.arctan2(cd[0,1], cd[0,0]))
+	# # print 'pa=', pa
 	# HACK -- DR7 phi opposite to Tractor phi, apparently
 	objs.phi_dev = -objs.phi_dev
 	objs.phi_exp = -objs.phi_exp
@@ -112,13 +121,9 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 	print len(I), 'stars'
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		lup = objs.psfcounts[i,bandnum]
-		counts = tsf.luptitude_to_counts(lup, bandnum)
-		if counts <= 0:
-			print 'Skipping star with luptitude', lup, '-> counts', counts
-			continue
-
-		bright = _getBrightness(counts, tsf, bandnum, useMags)
+		lups = objs.psfcounts[i,:]
+		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+		bright = _getBrightness(counts, tsf)
 		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
@@ -133,26 +138,32 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 		iscomp = (hasdev and hasexp)
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		if iscomp:
-			lups = objs.counts_model[i,bandnum]
+			lups = objs.counts_model[i,:]
 		elif hasdev:
-			lups = objs.counts_dev[i,bandnum]
+			lups = objs.counts_dev[i,:]
 		elif hasexp:
-			lups = objs.counts_exp[i,bandnum]
-		counts = tsf.luptitude_to_counts(lups, bandnum)
-		if counts <= 0:
-			print 'Skipping galaxy with luptitude', lups, '-> counts', counts
-			continue
+			lups = objs.counts_exp[i,:]
+		else:
+			assert(False)
+		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+		counts = np.array(counts)
+		print 'lups', lups
+		print 'counts', counts
 											 
 		if hasdev:
 			dcounts = counts * Ldev[i]
-			dbright = _getBrightness(dcounts, tsf, bandnum, useMags)
+			print 'dcounts', dcounts
+			dbright = _getBrightness(dcounts, tsf)
+			print 'dbright', dbright
 			re = objs.r_dev[i,bandnum]
 			ab = objs.ab_dev[i,bandnum]
 			phi = objs.phi_dev[i,bandnum]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
 			ecounts = counts * Lexp[i]
-			ebright = _getBrightness(ecounts, tsf, bandnum, useMags)
+			print 'ecounts', ecounts
+			ebright = _getBrightness(ecounts, tsf)
+			print 'ebright', ebright
 			re = objs.r_exp[i,bandnum]
 			ab = objs.ab_exp[i,bandnum]
 			phi = objs.phi_exp[i,bandnum]
@@ -162,13 +173,9 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
 			ncomp += 1
 		elif hasdev:
-			#print 'pure deV; counts_model = %g; counts_dev = %g' % (
-			#	objs.counts_model[i, bandnum], objs.counts_dev[i, bandnum])
 			gal = DevGalaxy(pos, dbright, dshape)
 			ndev += 1
 		elif hasexp:
-			#print 'pure exp; counts_model = %g; counts_exp = %g' % (
-			#	objs.counts_model[i, bandnum], objs.counts_exp[i, bandnum])
 			gal = ExpGalaxy(pos, ebright, eshape)
 			nexp += 1
 		sources.append(gal)
@@ -186,6 +193,8 @@ def get_tractor_sources(run, camcol, field, bandname, release='DR7',
 def get_tractor_image(run, camcol, field, bandname, release='DR7',
 					  retrieve=True, curl=False, roi=None,
 					  psf='kl-gm', useMags=False):
+	# get_tractor_sources() no longer supports !useMags, so
+	assert(useMags)
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -236,7 +245,7 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
 	if useMags:
-		photocal = SdssMagPhotoCal(tsf, bandnum)
+		photocal = SdssMagsPhotoCal(tsf, bandname)
 	else:
 		photocal = SdssFluxPhotoCal()
 	psfield = sdss.readPsField(run, camcol, field)
@@ -290,6 +299,26 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	return timg,info
 
 
+class SdssMagsPhotoCal(object):
+	'''
+	A photocal that uses Mags objects.
+	'''
+	def __init__(self, tsfield, bandname):
+		self.tsfield = tsfield
+		self.bandname = bandname
+		self.band = band_index(bandname)
+	def hashkey(self):
+		return ('SdssMagsPhotoCal', self.bandname, self.tsfield)
+	def brightnessToCounts(self, brightness):
+		return self.tsfield.mag_to_counts(brightness.getMag(self.bandname),
+										  self.band)
+	def countsToBrightness(self, counts):
+		# FIXME -- information loss here...
+		return Mags({ self.bandname:
+					  self.tsfield.counts_to_mag(counts, self.band)})
+
+
+
 class SdssMagPhotoCal(object):
 	'''
 	A photocal that uses Mag objects.
@@ -301,7 +330,7 @@ class SdssMagPhotoCal(object):
 		self.tsfield = tsfield
 		self.band = band
 	def hashkey(self):
-		return ('SdssPhotoCalMag', self.band, self.tsfield)
+		return ('SdssMagPhotoCal', self.band, self.tsfield)
 	def brightnessToCounts(self, brightness):
 		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
 	def countsToBrightness(self, counts):
