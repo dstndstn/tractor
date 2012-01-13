@@ -324,6 +324,9 @@ class SdssMagsPhotoCal(object):
 		mag = brightness.getMag(self.bandname)
 		if not np.isfinite(mag):
 			return 0.
+		# MAGIC
+		if mag > 50.:
+			return 0.
 		return self.tsfield.mag_to_counts(mag, self.band)
 	def countsToBrightness(self, counts):
 		# FIXME -- information loss here...

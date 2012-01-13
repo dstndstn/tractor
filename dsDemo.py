@@ -243,6 +243,7 @@ def main():
 	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 	np.seterr(all='warn')
+	np.seterr(divide='raise')
 
 	bands = ['u', 'g','r','i', 'z']
 
@@ -310,7 +311,10 @@ def main():
 	del wcs
 	del photocal
 
-	tractor = Tractor([timg for timg,tinf in TI] + [cftimg])
+	tims = [timg for timg,tinf in TI] + [cftimg]
+	CFI = len(tims)-1
+	
+	tractor = Tractor(tims)
 	tractor.addSources(sources)
 
 	zrs = ([np.array([-1.,+6.]) * info['skysig'] + info['sky']
@@ -346,7 +350,7 @@ def main():
 				plt.title('Data %s' % tim.name)
 				plt.xticks([],[])
 				plt.yticks([],[])
-				plt.savefig('data%i.png' % i)
+				plt.savefig('data%02i.png' % i)
 
 
 			plt.clf()
@@ -367,7 +371,7 @@ def main():
 			plt.title('Model')
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.savefig('mod%i-%02i.png' % (i,step-1))
+			plt.savefig('mod%02i-%02i.png' % (i,step-1))
 
 			chi = tractor.getChiImage(i)
 			plt.clf()
@@ -377,7 +381,7 @@ def main():
 			plt.title('Chi')
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.savefig('chi%i-%02i.png' % (i,step-1))
+			plt.savefig('chi%02i-%02i.png' % (i,step-1))
 
 		# troublesome guy...
 		src = tractor.getCatalog()[6]
@@ -391,13 +395,13 @@ def main():
 		print 'Step', step
 		print '---------------------------------'
 		print
-		if step in [1, 2] and len(tractor.getImages())>1:
+		if step in [1, 2]:
 			#action = 'skip'
 			#continue
 			action = 'astrometry'
 			# fine-tune astrometry
 			print 'Optimizing CFHT astrometry...'
-			cfim = tractor.getImage(1)
+			cfim = tractor.getImage(CFI)
 			pa = FitsWcsShiftParams(cfim.getWcs())
 			print '# params', pa.numberOfParams()
 			derivs = [[] for i in range(pa.numberOfParams())]

@@ -963,6 +963,10 @@ class Tractor(object):
 				for k,deriv in enumerate(derivs):
 					if deriv is None:
 						continue
+					if not all(np.isfinite(deriv.patch.ravel())):
+						print 'Derivative for source', src
+						print 'deriv index', i
+						assert(False)
 					allderivs[k].append((deriv, img))
 			allparams.extend(allderivs)
 		if sky:

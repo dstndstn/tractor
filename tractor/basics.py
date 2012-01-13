@@ -212,6 +212,8 @@ class PointSource(MultiParams):
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
 		counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
 		derivs = []
+
+		# Position
 		psteps = pos0.getStepSizes(img)
 		if brightnessonly or self.isParamPinned('pos'):
 			derivs.extend([None] * len(psteps))
@@ -226,6 +228,7 @@ class PointSource(MultiParams):
 				dx.setName('d(ptsrc)/d(pos%i)' % i)
 				derivs.append(dx)
 
+		# Brightness
 		bsteps = self.brightness.getStepSizes(img)
 		if self.isParamPinned('brightness'):
 			derivs.extend([None] * len(bsteps))
