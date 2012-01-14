@@ -195,33 +195,39 @@ def main():
 	run = opt.run
 	field = opt.field
 	camcol = opt.camcol
-	band = opt.band
+	bands = []
+	for char in opt.band:
+		bands.append(char)
 	rerun = 0
-	if run is None or field is None or camcol is None or band is None:
+	if run is None or field is None or camcol is None or len(bands)==0:
 		parser.print_help()
 		print 'Must supply --run, --camcol, --field, --band'
 		sys.exit(-1)
-	if not band in ['u','g','r','i', 'z']:
-		parser.print_help()
-		print
-		print 'Must supply band (u/g/r/i/z)'
-		sys.exit(-1)
-	bandname = band
+	#if not band in ['u','g','r','i', 'z']:
+	#	parser.print_help()
+	#	print
+	#	print 'Must supply band (u/g/r/i/z)'
+	#	sys.exit(-1)
+	bandname = 'r' #initial position and shape
 	prefix = opt.prefix
 	if prefix is None:
 		prefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
 
-	timg,info = st.get_tractor_image(run, camcol, field, bandname,
-					 curl=opt.curl, roi=opt.roi)
-	sources = st.get_tractor_sources(run, camcol, field, bandname,
+
+	TI = []
+	TI.extend([st.get_tractor_image(run, camcol, field, bandname,
+					 curl=opt.curl, roi=opt.roi,useMags=True) for bandname in bands])
+	for timg,info in TI:
+		print timg.hashkey()
+	sources = st.get_tractor_sources(run, camcol, field,bandname, bands=bands,
 					 curl=opt.curl, roi=opt.roi)
 
 	photocal = timg.getPhotoCal()
 	for source in sources:
 		print 'source', source
-		print 'brightness', source.getBrightness()
-		print 'counts', photocal.brightnessToCounts(source.getBrightness())
-		assert(photocal.brightnessToCounts(source.getBrightness()) > 0.)
+		#print 'brightness', source.getBrightness()
+		#print 'counts', photocal.brightnessToCounts(source.getBrightness())
+		#assert(photocal.brightnessToCounts(source.getBrightness()) > 0.)
 
 	### DEBUG
 	wcs = timg.getWcs()
@@ -229,7 +235,8 @@ def main():
 		x,y = wcs.positionToPixel(s, s.getPosition())
 		print i, ('(%.1f, %.1f): ' % (x,y)), s
 
-	tractor = st.SDSSTractor([timg])
+	tims = [timg for timg.tinf in TI]
+	tractor = st.SDSSTractor(tims)
 	tractor.addSources(sources)
 
 	zr = np.array([-5.,+5.]) * info['skysig']
@@ -244,6 +251,7 @@ def main():
 		elif each[0]=='i':
 			for step in range(each[1][0]):
 				for src in tractor.getCatalog():
+					print "Source: ", [src]
 					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src])
 				save('tune-%d-%d-' % (count+1,step+1) + prefix, tractor, zr, opt.debug,opt.plotAll)
 
