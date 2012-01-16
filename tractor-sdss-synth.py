@@ -16,9 +16,10 @@ from tractor import sdss as st
 
 
 # Assumes one image.
-def save(idstr, tractor, zr,debug=False,plotAll=False):
-	mod = tractor.getModelImages()[0]
-	chi = tractor.getChiImages()[0]
+def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
+	print "Index: ", imgi
+	mod = tractor.getModelImages()[imgi]
+	chi = tractor.getChiImages()[imgi]
 
 	synthfn = 'synth-%s.fits' % idstr
 	print 'Writing synthetic image to', synthfn
@@ -28,7 +29,7 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 	print 'Saving state to', pfn
 	pickle_to_file(tractor, pfn)
 
-	timg = tractor.getImage(0)
+	timg = tractor.getImage(imgi)
 	data = timg.getImage()
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1])
@@ -124,7 +125,6 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 		if debug:
 			print len(xplotx),len(allobjx)
 			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
-				print i
 				plt.plot(objx,objy,'-',c=objc)
 				tempx = []
 				tempx.append(xplotx[i])
@@ -154,7 +154,7 @@ def save(idstr, tractor, zr,debug=False,plotAll=False):
 			modelimg = tractor.getModelImage(timg, srcs=[src])
 			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
 			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
-			savepng('chi-s%i'%(i+1),tractor.getChiImage(0,srcs=[src]),title='Chi',**imchi)
+			savepng('chi-s%i'%(i+1),tractor.getChiImage(imgi,srcs=[src]),title='Chi',**imchi)
 		
 
 def main():
@@ -198,36 +198,35 @@ def main():
 	bands = []
 	for char in opt.band:
 		bands.append(char)
+		if not char in ['u','g','r','i','z']:
+			parser.print_help()
+			print
+			print 'Must supply band (u/g/r/i/z)'
+			sys.exit(-1)
 	rerun = 0
 	if run is None or field is None or camcol is None or len(bands)==0:
 		parser.print_help()
 		print 'Must supply --run, --camcol, --field, --band'
 		sys.exit(-1)
-	#if not band in ['u','g','r','i', 'z']:
-	#	parser.print_help()
-	#	print
-	#	print 'Must supply band (u/g/r/i/z)'
-	#	sys.exit(-1)
-	bandname = 'r' #initial position and shape
+	bandname = bands[0] #initial position and shape
 	prefix = opt.prefix
 	if prefix is None:
-		prefix = '%06i-%s%i-%04i' % (run, bandname, camcol, field)
+		prefix = '%06i-%i-%04i' % (run,camcol, field)
 
 
 	TI = []
 	TI.extend([st.get_tractor_image(run, camcol, field, bandname,
 					 curl=opt.curl, roi=opt.roi,useMags=True) for bandname in bands])
-	for timg,info in TI:
-		print timg.hashkey()
 	sources = st.get_tractor_sources(run, camcol, field,bandname, bands=bands,
 					 curl=opt.curl, roi=opt.roi)
-
+	
+	timg,info = TI[0]
 	photocal = timg.getPhotoCal()
 	for source in sources:
 		print 'source', source
 		#print 'brightness', source.getBrightness()
 		#print 'counts', photocal.brightnessToCounts(source.getBrightness())
-		#assert(photocal.brightnessToCounts(source.getBrightness()) > 0.)
+		#assert(photocal.brightnessToCounts(source.getBrightness()) >= 0.)
 
 	### DEBUG
 	wcs = timg.getWcs()
@@ -240,28 +239,30 @@ def main():
 	tractor.addSources(sources)
 
 	zr = np.array([-5.,+5.]) * info['skysig']
-	save(prefix, tractor, zr,opt.debug,opt.plotAll)
+	for j,band in enumerate(bands):
+		save('initial-%s-' % (band) + prefix, tractor, zr,opt.debug,opt.plotAll,imgi=j)
 
 	for count, each in enumerate(tune):
 		if each[0]=='n':
 			for i in range(each[1]):
 				tractor.optimizeCatalogLoop(nsteps=1)
-				save('tune-%d-%d-' % (count+1, i+1) + prefix, tractor, zr, opt.debug,opt.plotAll)
+				for j,band in enumerate(bands):
+					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
 	
 		elif each[0]=='i':
-			for step in range(each[1][0]):
+			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
-					print "Source: ", [src]
 					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src])
-				save('tune-%d-%d-' % (count+1,step+1) + prefix, tractor, zr, opt.debug,opt.plotAll)
+				for j,band in enumerate(bands):
+					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
 
-	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()))
+	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
 	print
 	print 'Created flip-book flip-%s.pdf' % prefix
 
 
 
-def makeflipbook(opt, prefix,tune,numSrcs):
+def makeflipbook(opt, prefix,tune,numSrcs,bands):
 	# Create a tex flip-book of the plots
 	tex = r'''
 	\documentclass[compress]{beamer}
@@ -278,24 +279,30 @@ def makeflipbook(opt, prefix,tune,numSrcs):
 	\plot{diff-%s}
         \plot{chi-%s} \\
 	\end{frame}'''
-	tex += page % (('Initial model',) + (prefix,)*4)
+	for j,band in enumerate(bands):
+		tex += page % (('Initial model, Band: %s' % (band),) + ('initial-%s-' % (band) + prefix,)*4)
 	if opt.plotAll:
 		for i in range(numSrcs):
-			tex += page % (('Source: %i' % (i+1),)+ ('s%d-' % (i+1) + prefix,)*4)
+			for j,band in enumerate(bands):
+				tex += page % (('Source: %i, Band: %s' % (i+1,band),)+ ('s%d-initial-%s-' % (i+1,band) + prefix,)*4)
 	for count,step in enumerate(tune):
 		if step[0] == 'n':
 			for i in range (step[1]):
-				tex += page % (('Tuning set %i, Tuning step %i' % (count+1,i+1),) +
-					   ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+				for k,band in enumerate(bands):
+					tex += page % (('Tuning set %i, Tuning step %i, Band: %s' % (count+1,i+1,band),) +
+					   ('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix,)*4)
 				if opt.plotAll:
 					for j in range(numSrcs):
-						tex += page % (('Source: %i' % (j+1),)+ ('s%d-tune-%d-%d-' % (j+1,count+1,i+1) + prefix,)*4)
+						for k,band in enumerate(bands):
+							tex += page % (('Source: %i, Band: %s' % (j+1,band),)+ ('s%d-tune-%d-%d-%s-' % (j+1,count+1,i+1,band) + prefix,)*4)
 		elif step[0] == 'i': 
 			for i in range(step[1][0]):
-				tex += page % (('Tuning set %i, Individual tuning step %i' % (count+1,i+1),) + ('tune-%d-%d-' % (count+1,i+1) + prefix,)*4)
+				for band in bands:
+					tex += page % (('Tuning set %i, Individual tuning step %i, Band: %s' % (count+1,i+1,band),) + ('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix,)*4)
 				if opt.plotAll:
 					for j in range(numSrcs):
-						tex += page % (('Source: %i' % (j+1),) + ('s%d-tune-%d-%d-' % (j+1,count+1,i+1) + prefix,)*4)
+						for band in bands:
+							tex += page % (('Source: %i, Band: %s' % (j+1,band),) + ('s%d-tune-%d-%d-%s-' % (j+1,count+1,i+1,band) + prefix,)*4)
 	if len(tune) != 0: 
 		last = tune[len(tune)-1]
 		lastSet = len(tune) - 1
@@ -303,6 +310,7 @@ def makeflipbook(opt, prefix,tune,numSrcs):
 			final = last[1]
 		elif last[0] == 'i':
 			final = last[1][0]
+		lBand = bands[0]
 		# Finish with a 'blink'
 		tex += r'''\part{Before-n-after}\frame{\partpage}''' + '\n'
 		tex += (r'''
@@ -318,8 +326,8 @@ def makeflipbook(opt, prefix,tune,numSrcs):
 		\plot{diff-%s}
 		\plot{diff-%s}
 		\end{frame}
-		''' % ((prefix,)*2 +
-			   (prefix, 'tune-%d-%d-' % (lastSet+1,final)+ prefix)*3))
+		''' % (('initial-%s-' % (lBand) + prefix,)*2 +
+			   ('initial-%s-' %(lBand) +prefix, 'tune-%d-%d-%s-' % (lastSet+1,final,lBand)+ prefix)*3))
 	tex += r'\end{document}' + '\n'
 	fn = 'flip-' + prefix + '.tex'
 	print 'Writing', fn
