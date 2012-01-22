@@ -147,6 +147,8 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 	savepng('model', mod - sky, title='Model', **ima)
 	savepng('diff', data - mod, title='Data - Model', **ima)
 	savepng('chi',chi,title='Chi',**imchi)
+	print "Chi mean: ", np.mean(chi)
+	print "Chi median: ", np.median(chi)
 	if plotAll:
 		debug = False
 		for i,src in enumerate(tractor.getCatalog()):
@@ -234,7 +236,7 @@ def main():
 		x,y = wcs.positionToPixel(s, s.getPosition())
 		print i, ('(%.1f, %.1f): ' % (x,y)), s
 
-	tims = [timg for timg.tinf in TI]
+	tims = [timg for timg,tinf in TI]
 	tractor = st.SDSSTractor(tims)
 	tractor.addSources(sources)
 
@@ -245,14 +247,14 @@ def main():
 	for count, each in enumerate(tune):
 		if each[0]=='n':
 			for i in range(each[1]):
-				tractor.optimizeCatalogLoop(nsteps=1)
+				tractor.optimizeCatalogLoop(nsteps=1,sky=True)
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
 	
 		elif each[0]=='i':
 			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
-					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src])
+					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src],sky=False)
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
 
