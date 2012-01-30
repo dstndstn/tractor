@@ -1048,6 +1048,9 @@ class Tractor(object):
 			mods.append(mod)
 		return mods
 
+	def clearCache(self):
+		self.cache = Cache()
+
 	def getChiImages(self):
 		mods = self.getModelImages()
 		chis = []

@@ -215,7 +215,7 @@ def main():
 	if prefix is None:
 		prefix = '%06i-%i-%04i' % (run,camcol, field)
 
-
+	print bands
 	TI = []
 	TI.extend([st.get_tractor_image(run, camcol, field, bandname,
 					 curl=opt.curl, roi=opt.roi,useMags=True) for bandname in bands])
@@ -257,6 +257,7 @@ def main():
 					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src],sky=False)
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
+				tractor.clearCache()
 
 	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
 	print
