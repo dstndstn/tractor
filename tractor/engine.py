@@ -876,6 +876,11 @@ class Tractor(object):
 			npar = src.numberOfParams()
 			dparams = X[par0 : par0 + npar]
 			par0 += npar
+			if len(dparams) != src.numberOfParams():
+				print src
+				print dparams
+				print src.numberOfParams()
+				assert(False)
 			assert(len(dparams) == src.numberOfParams())
 			pars = src.getParams()
 			oldparams.append(pars)
