@@ -13,149 +13,7 @@ from astrometry.util.file import *
 
 from tractor import *
 from tractor import sdss as st
-
-def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
-	print "Index: ", imgi
-	mod = tractor.getModelImages()[imgi]
-	chi = tractor.getChiImages()[imgi]
-
-	synthfn = 'synth-%s.fits' % idstr
-	print 'Writing synthetic image to', synthfn
-	pyfits.writeto(synthfn, mod, clobber=True)
-
-	pfn = 'tractor-%s.pickle' % idstr
-	print 'Saving state to', pfn
-	pickle_to_file(tractor, pfn)
-
-	timg = tractor.getImage(imgi)
-	data = timg.getImage()
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=zr[0], vmax=zr[1])
-	imchi = ima.copy()
-	imchi.update(vmin=-10, vmax=10)
-	
-	if debug:
-		sources = tractor.getCatalog()
-		wcs = timg.getWcs()
-		allobjx = []
-		allobjy = []
-		allobjc = []
-		pointx = []
-		pointy = []
-		xplotx = []
-		xploty = []
-
-		for obj in sources:
-			if (isinstance(obj,PointSource)):
-				xt,yt = wcs.positionToPixel(None,obj.getPosition())
-				pointx.append(xt)
-				pointy.append(yt)
-				continue
-			print type(obj)
-			shapes = []
-			attrType = []
-			if (isinstance(obj,st.CompositeGalaxy)):
-				for attr in 'shapeExp', 'shapeDev':
-					shapes.append(getattr(obj, attr))
-					attrType.append(attr)
-			else:
-				shapes.append(getattr(obj,'shape'))
-				attrType.append(' ')
-			x0,y0 = wcs.positionToPixel(None,obj.getPosition())
-			
-			cd = timg.getWcs().cdAtPixel(x0,y0)
-			print "CD",cd
-			for i,shape in enumerate(shapes):
-				xplotx.append(x0)
-				xploty.append(y0)
-				T=np.linalg.inv(shape.getTensor(cd))
-				print "Inverted tensor:",T
-				print obj.getPosition()
-				print i
-
-				x,y = [],[]
-				for theta in np.linspace(0,2*np.pi,100):
-					ux = np.cos(theta)
-					uy = np.sin(theta)
-					dx,dy = np.dot(T,np.array([ux,uy]))
-					x.append(x0+dx)
-					y.append(y0+dy)
-				allobjx.append(x)
-				allobjy.append(y)
-				if (attrType[i] == 'shapeExp'):
-					allobjc.append('b')
-				elif attrType[i] == 'shapeDev':
-					allobjc.append('g')
-				else:
-					allobjc.append('r')
-
-	# Make a non-linear stretched map using image "I" to set the limits:
-
-	ss = np.sort(data.ravel())
-	mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
-	q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
-
-	def nlmap(X):
-		Y = (X - q2) / ((q3-q1)/2.)
-		return np.arcsinh(Y * 10.)/10.
-	def myimshow(x, *args, **kwargs):
-		mykwargs = kwargs.copy()
-		if 'vmin' in kwargs:
-			mykwargs['vmin'] = nlmap(kwargs['vmin'])
-		if 'vmax' in kwargs:
-			mykwargs['vmax'] = nlmap(kwargs['vmax'])
-		return plt.imshow(nlmap(x), *args, **mykwargs)
-
-	def savepng(pre, img, title=None,**kwargs):
-		fn = '%s-%s.png' % (pre, idstr)
-		print 'Saving', fn
-		plt.clf()
-
-		#Raises an error otherwise... no idea why --dm
-		np.seterr(under='print')
-		
-
-		if kwargs['vmin'] == -10:
-			plt.imshow(img, **kwargs)
-		else:
-			myimshow(img,**kwargs)
-		ax = plt.axis()
-		if debug:
-			print len(xplotx),len(allobjx)
-			for i,(objx,objy,objc) in enumerate(zip(allobjx,allobjy,allobjc)):
-				plt.plot(objx,objy,'-',c=objc)
-				tempx = []
-				tempx.append(xplotx[i])
-				tempx.append(objx[0])
-				tempy = []
-				tempy.append(xploty[i])
-				tempy.append(objy[0])
-				plt.plot(tempx,tempy,'-',c='purple')
-			plt.plot(pointx,pointy,'y.')
-			plt.plot(xplotx,xploty,'xg')
-		plt.axis(ax)
-		if title is not None:
-			plt.title(title)
-		plt.colorbar()
-		plt.gray()
-		plt.savefig(fn)
-
-	sky = np.median(mod)
-	savepng('data', data - sky, title='Data '+timg.name, **ima)
-	savepng('model', mod - sky, title='Model', **ima)
-	savepng('diff', data - mod, title='Data - Model', **ima)
-	savepng('chi',chi,title='Chi',**imchi)
-	print "Chi mean: ", np.mean(chi)
-	print "Chi median: ", np.median(chi)
-	if plotAll:
-		debug = False
-		for i,src in enumerate(tractor.getCatalog()):
-			savepng('data-s%i'%(i+1),data - sky, title='Data '+timg.name,**ima)
-			modelimg = tractor.getModelImage(timg, srcs=[src])
-			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
-			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
-			savepng('chi-s%i'%(i+1),tractor.getChiImage(imgi,srcs=[src]),title='Chi',**imchi)
-
+from tractor.saveImg import *
 
 def main():
     run = 2863
@@ -192,24 +50,103 @@ def main():
 
     print bands
 
+    # for src in sources:
+    #     if isinstance(src,st.CompositeGalaxy):
+    #         x,y = wcs.positionToPixel(src,src.getPosition())
+    #         if (80 < x < 100 and 275 < y < 310):
+    #             print src,x,y
+    #             tractor.removeSource(src)
+
+
+    ra,dec = 152.041958,53.083472
+
+    r = 200
+    itune = 10
+    ntune = 5
+    prefix = 'ugc5459'
+
+    saveBands('initial-'+prefix, tractor,zr,bands,debug=True)
+
+    xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
+    
+    print xtr,ytr
+
+    xt = 250. #Moving to the left for better results
+    yt = 210.
     for src in sources:
-        if isinstance(src,st.CompositeGalaxy):
-            x,y = wcs.positionToPixel(src,src.getPosition())
-            if (80 < x < 100 and 275 < y < 310):
-                print src,x,y
-                tractor.removeSource(src)
+        xs,ys = wcs.positionToPixel(src,src.getPosition())
+        if (xs-xt)**2+(ys-yt)**2 <= r**2:
+            print "Removed:", src
+            print xs,ys
+            tractor.removeSource(src)
+
+    saveBands('removed-'+prefix, tractor,zr,bands,debug=True)
+
+    bright = Mags(r=20.,u=20.,g=20.,z=20.,i=20.,order=['r','u','g','z','i'])
+    shape = st.GalaxyShape(60.,0.1,1.)
+    shape2 = st.GalaxyShape(60.,0.3,89.)
+    print bright
+    print shape
+    print shape2
+
+    CG = st.CompositeGalaxy(RaDecPos(ra,dec),bright,shape,bright,shape2)
+    print CG
+    tractor.addSource(CG)
 
 
-    for i,band in enumerate(bands):
-        save('initial-%s-' % (band), tractor,zr,debug=True,imgi=i)
-
-    for i in range(4):
-        for src in tractor.getCatalog():
-            print src
-            tractor.optimizeCatalogLoop(nsteps=4,srcs=[src],sky=False)
-        for j,band in enumerate(bands):
-            save('tune-%d-%s-' % (i+1,band),tractor,zr,debug=True)
+    saveBands('added-'+prefix,tractor,zr,bands,debug=True)
+    for i in range(itune):
+        tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
+        saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,bands,debug=True)
+
+    for i in range(ntune):
+        tractor.optimizeCatalogLoop(nsteps=1,sky=True)
+        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,bands,debug=True)
+        tractor.clearCache()
+
+    makeflipbook(prefix,bands,itune,ntune)
+
+def makeflipbook(prefix,bands,itune=0,ntune=0):
+    # Create a tex flip-book of the plots
+
+    def allBands(title,imgpre):
+        page = r'''
+        \begin{frame}{%s}
+        \plot{data-%s}
+        \plot{model-%s} \\
+        \plot{diff-%s}
+        \plot{chi-%s} \\
+        \end{frame}'''
+        temp = ''
+        for j,band in enumerate(bands):
+            temp+= page % ((title+', Band: %s' % (band),) + (imgpre+'-%s-' % (band),)*4)
+        return temp
+
+    tex = r'''
+    \documentclass[compress]{beamer}
+    \usepackage{helvet}
+    \newcommand{\plot}[1]{\includegraphics[width=0.5\textwidth]{#1}}
+    \begin{document}
+    '''
+    
+    tex+=allBands('Initial Model','initial-'+prefix)
+    tex+=allBands('Removed','removed-'+prefix)
+    tex+=allBands('Added','added-'+prefix)
+    for i in range(itune):
+        tex+=allBands('Galaxy tuning, step %d' % (i+1),'itune-%d-' %(i+1)+prefix)
+
+    for i in range(ntune):
+        tex+=allBands('All tuning, step %d' % (i+1),'ntune-%d-' % (i+1)+prefix)
+    
+    tex += r'\end{document}' + '\n'
+    fn = 'flip-' + prefix + '.tex'
+    print 'Writing', fn
+    open(fn, 'wb').write(tex)
+    os.system("pdflatex '%s'" % fn)
+
+
+
 if __name__ == '__main__':
     import cProfile
     import sys
