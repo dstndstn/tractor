@@ -28,6 +28,7 @@ def main():
     
     bands=['r','g','i','u','z']
     bandname = 'r'
+    flipBands = ['r']
 
     rerun = 0
 
@@ -50,14 +51,6 @@ def main():
 
     print bands
 
-    # for src in sources:
-    #     if isinstance(src,st.CompositeGalaxy):
-    #         x,y = wcs.positionToPixel(src,src.getPosition())
-    #         if (80 < x < 100 and 275 < y < 310):
-    #             print src,x,y
-    #             tractor.removeSource(src)
-
-
     ra,dec = 152.041958,53.083472
 
     r = 200
@@ -65,47 +58,57 @@ def main():
     ntune = 5
     prefix = 'ugc5459'
 
-    saveBands('initial-'+prefix, tractor,zr,bands,debug=True)
+    saveBands('initial-'+prefix, tractor,zr,flipBands,debug=True)
 
     xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
     
     print xtr,ytr
+    bright = None
+    sumbright = 1000
 
     xt = 250. #Moving to the left for better results
     yt = 210.
     for src in sources:
         xs,ys = wcs.positionToPixel(src,src.getPosition())
         if (xs-xt)**2+(ys-yt)**2 <= r**2:
+            if isinstance(src,st.CompositeGalaxy) and src.brightnessExp.getMag('r') < sumbright:
+                print("GREATER")
+                bright = src.brightnessExp
+                sumbright = bright.getMag('r')
+                shape =src.shapeExp
+                print bright
+                print sumbright
+                print shape
             print "Removed:", src
             print xs,ys
             tractor.removeSource(src)
 
-    saveBands('removed-'+prefix, tractor,zr,bands,debug=True)
+    saveBands('removed-'+prefix, tractor,zr,flipBands,debug=True)
 
-    bright = Mags(r=15.,u=15.,g=15.,z=15.,i=15.,order=['r','u','g','z','i'])
-    shape = st.GalaxyShape(30.,0.6,15.)
-    shape2 = st.GalaxyShape(30.,0.3,45.)
+#    bright = Mags(r=15.,u=15.,g=15.,z=15.,i=15.,order=['r','u','g','z','i'])
+#    shape = st.GalaxyShape(re,ab,phi)
+#    shape2 = st.GalaxyShape(30.,0.3,45.)
     print bright
     print shape
-    print shape2
+ #   print shape2
 
-    CG = st.CompositeGalaxy(RaDecPos(ra,dec),bright,shape,bright,shape2)
+    CG = st.CompositeGalaxy(RaDecPos(ra,dec),bright,shape,bright,shape)
     print CG
     tractor.addSource(CG)
 
 
-    saveBands('added-'+prefix,tractor,zr,bands,debug=True)
+    saveBands('added-'+prefix,tractor,zr,flipBands,debug=True)
     for i in range(itune):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
-        saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,bands,debug=True)
+        saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,bands,debug=True)
+        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
 
-    makeflipbook(prefix,bands,itune,ntune)
+    makeflipbook(prefix,flipBands,itune,ntune)
 
 def makeflipbook(prefix,bands,itune=0,ntune=0):
     # Create a tex flip-book of the plots
