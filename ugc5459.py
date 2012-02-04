@@ -82,9 +82,9 @@ def main():
 
     saveBands('removed-'+prefix, tractor,zr,bands,debug=True)
 
-    bright = Mags(r=20.,u=20.,g=20.,z=20.,i=20.,order=['r','u','g','z','i'])
-    shape = st.GalaxyShape(60.,0.1,1.)
-    shape2 = st.GalaxyShape(60.,0.3,89.)
+    bright = Mags(r=15.,u=15.,g=15.,z=15.,i=15.,order=['r','u','g','z','i'])
+    shape = st.GalaxyShape(30.,0.6,15.)
+    shape2 = st.GalaxyShape(30.,0.3,45.)
     print bright
     print shape
     print shape2
