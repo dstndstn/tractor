@@ -23,6 +23,8 @@ def main():
     x1 = 900
     y0 = 400
     y1 = 850
+    starx = 200.
+    stary = 300.
 
     roi = [x0,x1,y0,y1]
     
@@ -64,21 +66,23 @@ def main():
     
     print xtr,ytr
     bright = None
-    sumbright = 1000
+    lowbright = 1000
 
     xt = 250. #Moving to the left for better results
     yt = 210.
     for src in sources:
         xs,ys = wcs.positionToPixel(src,src.getPosition())
         if (xs-xt)**2+(ys-yt)**2 <= r**2:
-            if isinstance(src,st.CompositeGalaxy) and src.brightnessExp.getMag('r') < sumbright:
-                print("GREATER")
-                bright = src.brightnessExp
-                sumbright = bright.getMag('r')
-                shape =src.shapeExp
-                print bright
-                print sumbright
-                print shape
+            if isinstance(src,st.CompositeGalaxy):
+                brightE = src.brightnessExp
+                brightD = src.brightnessDev
+                sumbright = sum([brightE.getMag(bandname)+brightD.getMag(bandname) for bandname in bands])
+                if sumbright < lowbright:
+                    print("GREATER")
+                    lowBrightE = brightE
+                    lowBrightD = brightD
+                    lowShapeE = src.shapeExp
+                    lowShapeD = src.shapeDev
             print "Removed:", src
             print xs,ys
             tractor.removeSource(src)
@@ -88,11 +92,11 @@ def main():
 #    bright = Mags(r=15.,u=15.,g=15.,z=15.,i=15.,order=['r','u','g','z','i'])
 #    shape = st.GalaxyShape(re,ab,phi)
 #    shape2 = st.GalaxyShape(30.,0.3,45.)
-    print bright
-    print shape
+#    print bright
+#    print shape
  #   print shape2
 
-    CG = st.CompositeGalaxy(RaDecPos(ra,dec),bright,shape,bright,shape)
+    CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
     print CG
     tractor.addSource(CG)
 
