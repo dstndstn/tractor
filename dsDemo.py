@@ -173,17 +173,35 @@ def fakeimg_plots():
 	plt.savefig('deriv-eg-model.png')
 
 
-def get_cfht_img():
+def get_cfht_img(ra, dec, extent):
 	# Create CFHT tractor.Image
 	cffn = 'cr.fits'
 	psffn = 'psfimg.fits'
-	cfx,cfy = 734,4352
-	S = 200
+
+	wcs = FitsWcs(Tan(cffn, 0))
+	print 'CFHT WCS', wcs
+
+	x,y = wcs.positionToPixel(None, RaDecPos(ra,dec))
+	print 'x,y', x,y
+	cfx,cfy = x,y
+
+	cd = wcs.cdAtPixel(x,y)
+	pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+	print 'pixscale', pixscale
+	S = int(extent / pixscale)
+	print 'S', S
+
+	#cfx,cfy = 734,4352
+	#S = 200
 	cfroi = [cfx-S, cfx+S, cfy-S, cfy+S]
+	x0,x1,y0,y1 = cfroi
+
+	wcs.setX0Y0(x0+1., y0+1.)
+	# From fit
+	#wcs.setX0Y0(535.14208988131043, 4153.665639423165)
 
 	I = pyfits.open(cffn)[1].data
 	print 'Img data', I.shape
-	x0,x1,y0,y1 = cfroi
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
 	I = pyfits.open(cffn)[3].data
@@ -215,13 +233,6 @@ def get_cfht_img():
 	print 'w,mu,sig', w,mu,sig
 	psf = GaussianMixturePSF(w, mu, sig)
 
-	wcs = FitsWcs(Tan(cffn, 0))
-	print 'CFHT WCS', wcs
-
-	wcs.setX0Y0(x0+1., y0+1.)
-	# From fit
-	#wcs.setX0Y0(535.14208988131043, 4153.665639423165)
-
 	sky = np.median(image)
 	print 'Sky', sky
 	# save for later...
@@ -246,6 +257,7 @@ def main():
 	np.seterr(divide='raise')
 
 	bands = ['u', 'g','r','i', 'z']
+	#bands = ['r']
 
 	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
 	# Run 7164 camcol 4 field 266 PSF FWHM 6.43368
@@ -254,15 +266,30 @@ def main():
 	TI = []
 	# canonical band from which to get initial position, shape
 	bandname = 'r'
-	ra,dec = (333.556, 0.369)
-	S = 100
-	for run,camcol,field,xc,yc in [
-		(2728, 4, 236, 1510,1040),
-		(4868, 4,  31, 1530,1147)]:
+	#ra,dec = (333.556, 0.369)
+	S = 80
+	for i,(run,camcol,field,xc,yc) in enumerate([
+		#(2728, 4, 236, 1510,1040),
+		(2728, 4, 236, 1490,1070),
+		#(4868, 4,  31, 1530,1147)]:
+		(4868, 4,  31, 1510,1177)]):
 		roi = [xc-S, xc+S, yc-S, yc+S]
 		TI.extend([st.get_tractor_image(run, camcol, field, bandname, roi=roi,
 										useMags=True)
 				   for bandname in bands])
+
+		if i == 0:
+			im,info = TI[bands.index('r')]
+			wcs = im.getWcs()
+			# this is a shifted WCS; S,S is the center.
+			rd = wcs.pixelToPosition(None, (S,S))
+			ra,dec = rd.ra,rd.dec
+			print 'RA,Dec', ra,dec
+			cd = wcs.cdAtPixel(xc,yc)
+			pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+			print 'pixscale', pixscale
+			extent = pixscale * S
+
 	for timg,info in TI:
 		print timg.hashkey()
 
@@ -276,11 +303,10 @@ def main():
 
 	print 'Tractor images:', TI
 
-	cftimg,cfsky,cfstd = get_cfht_img()
+	cftimg,cfsky,cfstd = get_cfht_img(ra,dec, extent)
 
 	# Create fake tractor.Image
 	psf = NCircularGaussianPSF([0.1], [1.])
-	#sky = ConstantSky(100.)
 	sky = timg.sky
 	print 'SDSS Sky:', timg.sky
 	photocal = timg.photocal
@@ -311,15 +337,21 @@ def main():
 	del wcs
 	del photocal
 
-	tims = [timg for timg,tinf in TI] + [cftimg]
-	CFI = len(tims)-1
+	tims = [cftimg] + [timg for timg,tinf in TI]
+	CFI = 0
+	# [np.array([-1.,+20.]) * cfstd + cfsky] +
+	zrs = (
+		[np.array([-3.,+18.]) * cfstd + cfsky] +
+		[np.array([-1.,+6.]) * info['skysig'] + info['sky']
+		 for timg,info in TI])
+
+	# CFI = len(tims)-1
+	def cfimshow(im, *args, **kwargs):
+		return plt.imshow(np.rot90(im, k=1), *args, **kwargs)
+	
 	
 	tractor = Tractor(tims)
 	tractor.addSources(sources)
-
-	zrs = ([np.array([-1.,+6.]) * info['skysig'] + info['sky']
-			for timg,info in TI] +
-		   [np.array([-1.,+20.]) * cfstd + cfsky])
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -345,7 +377,11 @@ def main():
 				data = tim.getImage()
 				plt.clf()
 				plt.gca().set_position(plotpos0)
-				plt.imshow(data, **ima)
+
+				if i == CFI:
+					cfimshow(data, **ima)
+				else:
+					plt.imshow(data, **ima)
 				#plt.title('step %i: %s' % (step-1, action))
 				plt.title('Data %s' % tim.name)
 				plt.xticks([],[])
@@ -355,7 +391,10 @@ def main():
 
 			plt.clf()
 			plt.gca().set_position(plotpos0)
-			plt.imshow(mod, **ima)
+			if i == CFI:
+				cfimshow(mod, **ima)
+			else:
+				plt.imshow(mod, **ima)
 			ax = plt.axis()
 			for j,src in enumerate(tractor.getCatalog()):
 				im = tractor.getImage(i)
@@ -376,7 +415,10 @@ def main():
 			chi = tractor.getChiImage(i)
 			plt.clf()
 			plt.gca().set_position(plotpos0)
-			plt.imshow(chi, **imchi)
+			if i == CFI:
+				cfimshow(chi, **imchi)
+			else:
+				plt.imshow(chi, **imchi)
 			#plt.title('step %i: %s' % (step-1, action))
 			plt.title('Chi')
 			plt.xticks([],[])
