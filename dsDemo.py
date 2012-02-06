@@ -256,7 +256,8 @@ def main():
 	np.seterr(all='warn')
 	np.seterr(divide='raise')
 
-	bands = ['u', 'g','r','i', 'z']
+	#bands = ['u', 'g','r','i', 'z']
+	bands = ['g','r','i']
 	#bands = ['r']
 
 	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
@@ -265,30 +266,39 @@ def main():
 
 	TI = []
 	# canonical band from which to get initial position, shape
-	bandname = 'r'
 	#ra,dec = (333.556, 0.369)
+	ra,dec = (333.5596, 0.3671)
 	S = 80
-	for i,(run,camcol,field,xc,yc) in enumerate([
-		#(2728, 4, 236, 1510,1040),
-		(2728, 4, 236, 1490,1070),
-		#(4868, 4,  31, 1530,1147)]:
-		(4868, 4,  31, 1510,1177)]):
-		roi = [xc-S, xc+S, yc-S, yc+S]
-		TI.extend([st.get_tractor_image(run, camcol, field, bandname, roi=roi,
-										useMags=True)
-				   for bandname in bands])
+	RCFS = [(2728, 4, 236),
+			(4868, 4,  31)]
 
-		if i == 0:
-			im,info = TI[bands.index('r')]
+	for i,(run,camcol,field) in enumerate(RCFS):
+
+		for bandname in bands:
+			# HACK - get whole-frame tractor Image to get WCS to find ROI.
+			im,inf = st.get_tractor_image(run, camcol, field, bandname,
+										  useMags=True, psf='dg')
 			wcs = im.getWcs()
-			# this is a shifted WCS; S,S is the center.
-			rd = wcs.pixelToPosition(None, (S,S))
-			ra,dec = rd.ra,rd.dec
-			print 'RA,Dec', ra,dec
-			cd = wcs.cdAtPixel(xc,yc)
-			pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-			print 'pixscale', pixscale
-			extent = pixscale * S
+			fxc,fyc = wcs.positionToPixel(None, RaDecPos(ra,dec))
+			xc,yc = [int(np.round(p)) for p in fxc,fyc]
+
+			roi = [xc-S, xc+S, yc-S, yc+S]
+			im,inf = st.get_tractor_image(run, camcol, field, bandname,
+										  roi=roi,	useMags=True)
+			im.dxdy = (fxc - xc, fyc - yc)
+			TI.append((im,inf))
+
+			if i == 0 and bandname == 'r':
+				# im,info = TI[bands.index('r')]
+				#wcs = im.getWcs()
+				# this is a shifted WCS; S,S is the center.
+				# rd = wcs.pixelToPosition(None, (S,S))
+				# ra,dec = rd.ra,rd.dec
+				# print 'RA,Dec', ra,dec
+				cd = wcs.cdAtPixel(xc,yc)
+				pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+				print 'pixscale', pixscale
+				extent = pixscale * S
 
 	for timg,info in TI:
 		print timg.hashkey()
@@ -345,6 +355,9 @@ def main():
 		[np.array([-1.,+6.]) * info['skysig'] + info['sky']
 		 for timg,info in TI])
 
+	RGBS = [((3,2,1),'SDSS r/c/f %i/%i/%i gri' % (RCFS[0])),
+			((6,5,4),'SDSS r/c/f %i/%i/%i gri' % (RCFS[1]))]
+
 	# CFI = len(tims)-1
 	def cfimshow(im, *args, **kwargs):
 		return plt.imshow(np.rot90(im, k=1), *args, **kwargs)
@@ -363,6 +376,25 @@ def main():
 	NS = 15
 	#NS = 1
 	for step in range(1, NS+1):
+
+		if step == 1:
+			for j,((ri,gi,bi),rgbname) in enumerate(RGBS):
+				ims = []
+				for ii in ri,gi,bi:
+					lo,hi = zrs[ii]
+					tim = tractor.getImage(ii)
+					print 'dx,dy', tim.dxdy
+					im = (tim.getImage() - lo) / (hi-lo)
+					ims.append(im)
+
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				plt.imshow(np.clip(np.dstack(ims), 0, 1), interpolation='nearest', origin='lower')
+				plt.title('Data %s' % rgbname)
+				plt.xticks([],[])
+				plt.yticks([],[])
+				plt.savefig('rgbdata%02i.png' % j)
+				
 		
 		for i in range(len(tractor.getImages())):
 			mod = tractor.getModelImage(i)
