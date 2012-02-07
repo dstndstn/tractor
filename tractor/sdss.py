@@ -315,11 +315,20 @@ class SdssMagsPhotoCal(object):
 	A photocal that uses Mags objects.
 	'''
 	def __init__(self, tsfield, bandname):
-		self.tsfield = tsfield
 		self.bandname = bandname
 		self.band = band_index(bandname)
+
+		#self.tsfield = tsfield
+		band = self.band
+		self.exptime = tsfield.exptime
+		self.aa = tsfield.aa[band]
+		self.kk = tsfield.kk[band]
+		self.airmass = tsfield.airmass[band]
+
 	def hashkey(self):
-		return ('SdssMagsPhotoCal', self.bandname, self.tsfield)
+		return ('SdssMagsPhotoCal', self.bandname, #self.tsfield)
+				self.exptime, self.aa, self.kk, self.airmass)
+	
 	def brightnessToCounts(self, brightness):
 		mag = brightness.getMag(self.bandname)
 		if not np.isfinite(mag):
@@ -327,11 +336,20 @@ class SdssMagsPhotoCal(object):
 		# MAGIC
 		if mag > 50.:
 			return 0.
-		return self.tsfield.mag_to_counts(mag, self.band)
+		#return self.tsfield.mag_to_counts(mag, self.band)
+
+		# FROM astrometry.sdss.common.TsField.mag_to_counts:
+		logcounts = (-0.4 * mag + np.log10(self.exptime)
+					 - 0.4*(self.aa + self.kk * self.airmass))
+		rtn = 10.**logcounts
+		return rtn
+		
+
 	def countsToBrightness(self, counts):
+		sys.exit(0)
 		# FIXME -- information loss here...
-		return Mags({ self.bandname:
-					  self.tsfield.counts_to_mag(counts, self.band)})
+		#return Mags({ self.bandname:
+		#			  self.tsfield.counts_to_mag(counts, self.band)})
 
 
 

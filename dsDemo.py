@@ -1,5 +1,6 @@
 import sys
 import logging
+import traceback
 
 if __name__ == '__main__':
 	import matplotlib
@@ -8,6 +9,7 @@ import numpy as np
 import pylab as plt
 import pyfits
 from astrometry.util.util import Tan
+from astrometry.util.file import *
 from tractor import *
 from tractor import sdss as st
 from tractor import cfht as cf
@@ -204,11 +206,31 @@ def get_cfht_img(ra, dec, extent):
 	print 'Img data', I.shape
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
+
+	sky = np.median(image)
+	print 'Sky', sky
+	# save for later...
+	cfsky = sky
+	skyobj = ConstantSky(sky)
+
+	# Third plane in image: variance map.
 	I = pyfits.open(cffn)[3].data
 	var = I[roislice]
 	cfstd = np.sqrt(np.median(var))
-	invvar = 1./var
+
 	## FIXME -- add source photon noise, read noise
+	# actually the read noise will have already been measured by LSST
+	phdr = pyfits.open(cffn)[0].header
+	# e/ADU
+	gain = phdr.get('GAIN')
+	# Poisson statistics are on electrons; var = mean
+	el = np.maximum(0, (image - sky) * gain)
+	# var in ADU...
+	srcvar = el / gain**2
+	invvar = 1./(var + srcvar)
+	#darkcur = phdr.get('DARKCUR')
+	#readnoise = phdr.get('RDNOISE')
+
 	I = pyfits.open(cffn)[2].data
 	mask = I[roislice]
 	invvar[mask > 0] = 0.
@@ -233,13 +255,7 @@ def get_cfht_img(ra, dec, extent):
 	print 'w,mu,sig', w,mu,sig
 	psf = GaussianMixturePSF(w, mu, sig)
 
-	sky = np.median(image)
-	print 'Sky', sky
-	# save for later...
-	cfsky = sky
-	skyobj = ConstantSky(sky)
-
-	photocal = cf.CfhtPhotoCal(hdr=pyfits.open(cffn)[0].header,
+	photocal = cf.CfhtPhotoCal(hdr=phdr,
 							   bandname='r')
 
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
@@ -248,30 +264,8 @@ def get_cfht_img(ra, dec, extent):
 	return cftimg, cfsky, cfstd
 
 
-def main():
-
-	lvl = logging.INFO
-	#lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-	np.seterr(all='warn')
-	np.seterr(divide='raise')
-
-	#bands = ['u', 'g','r','i', 'z']
-	bands = ['g','r','i']
-	#bands = ['r']
-
-	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
-	# Run 7164 camcol 4 field 266 PSF FWHM 6.43368
-	#   -> PSF model sucks for this one (too broad for KL eigen size?)
-
+def makeTractor(bands, ra, dec, S, RCFS):
 	TI = []
-	# canonical band from which to get initial position, shape
-	#ra,dec = (333.556, 0.369)
-	ra,dec = (333.5596, 0.3671)
-	S = 80
-	RCFS = [(2728, 4, 236),
-			(4868, 4,  31)]
-
 	for i,(run,camcol,field) in enumerate(RCFS):
 
 		for bandname in bands:
@@ -297,11 +291,11 @@ def main():
 				# print 'RA,Dec', ra,dec
 				cd = wcs.cdAtPixel(xc,yc)
 				pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-				print 'pixscale', pixscale
+				print 'pixscale', pixscale * 3600.
 				extent = pixscale * S
 
-	for timg,info in TI:
-		print timg.hashkey()
+	#for timg,info in TI:
+	#	print timg.hashkey()
 
 	sources = st.get_tractor_sources(run, camcol, field, roi=roi,
 									 bands=bands)
@@ -316,66 +310,183 @@ def main():
 	cftimg,cfsky,cfstd = get_cfht_img(ra,dec, extent)
 
 	# Create fake tractor.Image
-	psf = NCircularGaussianPSF([0.1], [1.])
-	sky = timg.sky
-	print 'SDSS Sky:', timg.sky
-	photocal = timg.photocal
-	fakescale = 3
-	#wcs = ScaledWCS(fakescale, timg.wcs)
-	#(h,w) = timg.data.shape
-	#fakedata = np.zeros((h*fakescale, w*fakescale))
-	# 0.066
-	# make-wcs.py -r 333.55503 -d 0.36438 -s 0.02 -W 1200 -H 1200 fake-wcs.fits
-	# # flip parity
-	# modhead fake-wcs.fits CD1_1 0
-	# modhead fake-wcs.fits CD1_2 1.666666667e-5
-	# modhead fake-wcs.fits CD2_1 1.666666667e-5
-	# modhead fake-wcs.fits CD2_2 0
-	wcs = FitsWcs(Tan('fake-wcs.fits', 0))
-	#h,w = 600,600
-	h,w = 1200,1200
-	fakescale = 0.396 * w / (0.02 * 3600.)
-	fakedata = np.zeros((h, w))
-	# print '0,0', wcs.pixelToPosition(None, (0,0))
-	# print 'W,0', wcs.pixelToPosition(None, (w,0))
-	# print '0,H', wcs.pixelToPosition(None, (0,h))
-	# print 'W,H', wcs.pixelToPosition(None, (w,h))
-	fakewcs = wcs
-	fakeimg = Image(data=fakedata, invvar=fakedata, psf=psf,
-					wcs=wcs, sky=sky, photocal=photocal, name='Fake')
-	del psf
-	del wcs
-	del photocal
+	#  psf = NCircularGaussianPSF([0.1], [1.])
+	#  sky = timg.sky
+	#  print 'SDSS Sky:', timg.sky
+	#  photocal = timg.photocal
+	#  fakescale = 3
+	#  #wcs = ScaledWCS(fakescale, timg.wcs)
+	#  #(h,w) = timg.data.shape
+	#  #fakedata = np.zeros((h*fakescale, w*fakescale))
+	#  # 0.066
+	#  # make-wcs.py -r 333.55503 -d 0.36438 -s 0.02 -W 1200 -H 1200 fake-wcs.fits
+	#  # # flip parity
+	#  # modhead fake-wcs.fits CD1_1 0
+	#  # modhead fake-wcs.fits CD1_2 1.666666667e-5
+	#  # modhead fake-wcs.fits CD2_1 1.666666667e-5
+	#  # modhead fake-wcs.fits CD2_2 0
+	#  wcs = FitsWcs(Tan('fake-wcs.fits', 0))
+	#  #h,w = 600,600
+	#  h,w = 1200,1200
+	#  fakescale = 0.396 * w / (0.02 * 3600.)
+	#  fakedata = np.zeros((h, w))
+	#  # print '0,0', wcs.pixelToPosition(None, (0,0))
+	#  # print 'W,0', wcs.pixelToPosition(None, (w,0))
+	#  # print '0,H', wcs.pixelToPosition(None, (0,h))
+	#  # print 'W,H', wcs.pixelToPosition(None, (w,h))
+	#  fakewcs = wcs
+	#  fakeimg = Image(data=fakedata, invvar=fakedata, psf=psf,
+	#  				wcs=wcs, sky=sky, photocal=photocal, name='Fake')
+	#  del psf
+	#  del wcs
+	#  del photocal
 
 	tims = [cftimg] + [timg for timg,tinf in TI]
-	CFI = 0
-	# [np.array([-1.,+20.]) * cfstd + cfsky] +
-	zrs = (
-		[np.array([-3.,+18.]) * cfstd + cfsky] +
-		[np.array([-1.,+6.]) * info['skysig'] + info['sky']
-		 for timg,info in TI])
+	# for tim in tims:
+	# 	try:
+	# 		print 'Test pickling im', tim.name
+	# 		pickle_to_file(tim, 'test.pickle')
+	# 	except:
+	# 		print 'failed:'
+	# 		traceback.print_exc()
+	# 		pass
+	# for src in sources:
+	# 	try:
+	# 		print 'Test pickling source', src
+	# 		pickle_to_file(src, 'test.pickle')
+	# 	except:
+	# 		print 'failed:'
+	# 		traceback.print_exc()
+	# 		pass
+	# sys.exit(0)
+	
+	tractor = Tractor(tims)
+	tractor.addSources(sources)
 
-	RGBS = [((3,2,1),'SDSS r/c/f %i/%i/%i gri' % (RCFS[0])),
-			((6,5,4),'SDSS r/c/f %i/%i/%i gri' % (RCFS[1]))]
+	skyvals = ( [(cfstd, cfsky)] +
+				[(info['skysig'], info['sky'])
+				 for timg,info in TI] )
+	return tractor,skyvals
+
+def main():
+
+	from optparse import OptionParser
+	parser = OptionParser()
+	parser.add_option('-s', type=int, dest='step')
+	opt,args = parser.parse_args()
+
+	# cffn = 'cr.fits'
+	# wcs = Tan(cffn, 0)
+	# pickle_to_file(wcs, 'test.pickle')
+	# wcs = FitsWcs(wcs)
+	# pickle_to_file(wcs, 'test.pickle')
+	# wcs2 = unpickle_from_file('test.pickle')
+	# print wcs2
+	# sys.exit(0)
+
+	lvl = logging.INFO
+	#lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+	np.seterr(all='warn')
+	np.seterr(divide='raise')
+
+	#bands = ['u', 'g','r','i', 'z']
+	#bands = ['g','r','i']
+	#bands = ['r']
+
+	# LBL
+	bands = ['r','z']
+
+
+	# Run 4868 camcol 4 field 30 PSF FWHM 4.24519
+	# Run 7164 camcol 4 field 266 PSF FWHM 6.43368
+	#   -> PSF model sucks for this one (too broad for KL eigen size?)
+
+	# canonical band from which to get initial position, shape
+	#ra,dec = (333.556, 0.369)
+	ra,dec = (333.5596, 0.3671)
+	S = 80
+
+	RCFS = [(2728, 4, 236),
+			(4868, 4,  31)]
+	#RCFS = [(2728, 4, 236),]
+
+	settings = dict(bands=bands, ra=ra, dec=dec, S=S, RCFS=RCFS)
+
+	if opt.step is not None:
+		pfn = 'tractor-step%02i.pickle' % opt.step
+		if os.path.exists(pfn):
+			tractor,settins = unpickle_from_file(pfn)
+			for k,v in settings.items():
+				assert(settins[k] == v)
+			settings = settins
+			skyvals = settings['skyvals']
+
+			# for src in tractor.getCatalog():
+			# 	print 'Source', src
+			# for img in tractor.getImages():
+			# 	print 'Image', img
+			# 	wcs = img.getWcs()
+			# 	print 'wcs', wcs
+			# 	print wcs.hashkey()
+	
+	else:
+		tractor,skyvals = makeTractor(**settings)
+
+		pickle_to_file(tractor, 'test.pickle')
+		tr = unpickle_from_file('test.pickle')
+
+		settings['skyvals'] = skyvals
+
+	tims = tractor.getImages()
 
 	# CFI = len(tims)-1
 	def cfimshow(im, *args, **kwargs):
 		return plt.imshow(np.rot90(im, k=1), *args, **kwargs)
-	
-	
-	tractor = Tractor(tims)
-	tractor.addSources(sources)
+
+	CFI = 0
+	zrs = []
+	for i,(st,sky) in enumerate(skyvals):
+		if i == CFI:
+			zrs.append(np.array([-3.,+18.]) * st + sky)
+		else:
+			zrs.append(np.array([-1.,+6.]) * st + sky)
+
+	#RGBS = [((3,2,1),'SDSS r/c/f %i/%i/%i gri' % (RCFS[0])),
+	#		((6,5,4),'SDSS r/c/f %i/%i/%i gri' % (RCFS[1]))]
+	RGBS = []
+
+
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
 
+	plotpos1 = [0.01, 0.01, 0.9, 0.94]
+
 	#fakeimg_plots(fakescale, ...)
 
 	action = 'Initial'
-	NS = 15
+
+	steptypes = ([ 'nil', 'wcs','wcs','wcs',
+				   'bright', 'bright', 'source', 'jbright',
+				   'bright', 'bright', ] +
+				 ['jsource', 'source']*4 +
+				 ['simplify'] +
+				 ['nil'])
+				  
+	NS = len(steptypes) - 1
+	#NS = 15
 	#NS = 1
-	for step in range(1, NS+1):
+
+	step0 = 1
+	if opt.step is not None:
+		step0 = opt.step
+
+	for step in range(step0, NS+1):
+
+		stype = steptypes[step]
+		print 'Step', step, ':', stype
 
 		if step == 1:
 			for j,((ri,gi,bi),rgbname) in enumerate(RGBS):
@@ -420,6 +531,20 @@ def main():
 				plt.yticks([],[])
 				plt.savefig('data%02i.png' % i)
 
+				plt.colorbar()
+				plt.savefig('datacb%02i.png' % i)
+				iv = tim.getInvError()**2
+				plt.clf()
+				if i == CFI:
+					iv = np.rot90(iv,k=1)
+				plt.imshow(iv, interpolation='nearest', origin='lower',
+						   vmin=0, vmax=np.max(iv), cmap='gray')
+				plt.colorbar()
+				plt.title('Invvar %s' % tim.name)
+				plt.xticks([],[])
+				plt.yticks([],[])
+				plt.savefig('ivar%02i.png' % i)
+						   
 
 			plt.clf()
 			plt.gca().set_position(plotpos0)
@@ -427,23 +552,35 @@ def main():
 				cfimshow(mod, **ima)
 			else:
 				plt.imshow(mod, **ima)
-			ax = plt.axis()
-			for j,src in enumerate(tractor.getCatalog()):
-				im = tractor.getImage(i)
-				wcs = im.getWcs()
-				x,y = wcs.positionToPixel(None, src.getPosition())
-				plt.plot([x],[y],'r.')
-				srct = src.getSourceType()
-				srct = srct[0]
-				#plt.text(x, y, '%i:%s'%(j,srct))
-				#plt.text(x+1.5, y+1.5, '%s'%(srct), color='r')
-			plt.axis(ax)
+
+			# HACK -- plot objects on first SDSS frame.
+			if i == 1:
+				ax = plt.axis()
+				xx,yy,tt = [],[],[]
+				for j,src in enumerate(tractor.getCatalog()):
+					im = tractor.getImage(i)
+					wcs = im.getWcs()
+					x,y = wcs.positionToPixel(None, src.getPosition())
+					xx.append(x)
+					yy.append(y)
+					srct = src.getSourceType()
+					srct = srct[0]
+					tt.append(srct)
+				plt.plot(xx,yy, 'r.')
+				plt.axis(ax)
 			#plt.title('step %i: %s' % (step-1, action))
 			plt.title('Model')
 			plt.xticks([],[])
 			plt.yticks([],[])
 			plt.savefig('mod%02i-%02i.png' % (i,step-1))
-
+			# HACK -- add annotations
+			if i == 1:
+				for x,y,t in zip(xx,yy,tt):
+					#plt.text(x, y, '%i:%s'%(j,srct))
+					plt.text(x+1.5, y+1.5, '%s'%t, color='r')
+				plt.axis(ax)
+				plt.savefig('modann%02i-%02i.png' % (i,step-1))
+				
 			chi = tractor.getChiImage(i)
 			plt.clf()
 			plt.gca().set_position(plotpos0)
@@ -458,8 +595,11 @@ def main():
 			plt.savefig('chi%02i-%02i.png' % (i,step-1))
 
 		# troublesome guy...
-		src = tractor.getCatalog()[6]
-		print 'Troublesome source:', src
+		#src = tractor.getCatalog()[6]
+		#print 'Troublesome source:', src
+
+		pickle_to_file((tractor,settings),
+					   'tractor-step%02i.pickle' % step)
 
 		if step == NS:
 			break
@@ -469,7 +609,7 @@ def main():
 		print 'Step', step
 		print '---------------------------------'
 		print
-		if step in [1, 2]:
+		if stype == 'wcs':
 			#action = 'skip'
 			#continue
 			action = 'astrometry'
@@ -510,7 +650,7 @@ def main():
 			print 'pa after:', pa
 			print pa.getParams()
 
-		elif step in [3, 4, 7, 8]:
+		elif stype == 'bright':
 			action = 'brightness, separately'
 
 			print 'Optimizing brightnesses separately...'
@@ -585,13 +725,13 @@ def main():
 
 
 
-		elif step in [5]:
+		elif stype == 'source':
 			action = 'sources, separately'
 			print 'Optimizing sources individually...'
 			for src in tractor.getCatalog():
 				tractor.optimizeCatalogLoop(nsteps=1, srcs=[src])
 
-		elif step in [6]:
+		elif stype == 'jbright':
 			action = 'brightnesses, jointly'
 			print 'Optimizing brightnesses jointly...'
 			tractor.optimizeCatalogLoop(nsteps=1, brightnessonly=True)
@@ -600,12 +740,54 @@ def main():
 			#								brightnessonly=True)
 
 
-		else:
+		elif stype == 'jsource':
 			action = 'sources, jointly'
 			print 'Optimizing sources jointly...'
 			tractor.optimizeCatalogLoop(nsteps=1)
+
+		elif stype == 'simplify':
+			# Try removing each source in turn.
+			for j,src in enumerate(tractor.getCatalog()):
+				cat = tractor.getCatalog()
+				ii = cat.index(src)
+				lnp0 = tractor.getLogProb()
+				p0 = cat.getAllParams()
+				print 'Try removing source', src
+				print 'lnp0:', lnp0
+				tractor.removeSource(src)
+				lnp1 = tractor.getLogProb()
+				print 'dlnp1:', (lnp1 - lnp0)
+				tractor.optimizeCatalogLoop(nsteps=5)
+				lnp2 = tractor.getLogProb()
+				print 'dlnp2:', (lnp2 - lnp0)
+
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				cfim = tractor.getImages()[CFI]
+				mod = tractor.getModelImage(cfim)
+				zr = zrs[CFI]
+				ima = dict(interpolation='nearest', origin='lower',
+						   vmin=zr[0], vmax=zr[1], cmap='gray')
+				cfimshow(mod, **ima)
+				fn = 'mod-rem%02i-%02i-%02i.png' % (j, CFI, step)
+				plt.savefig(fn)
+				print 'saved', fn
+
+				if lnp2 > lnp0:
+					continue
+				else:
+					# reinsert
+					cat.insert(ii, src)
+					cat.setAllParams(p0)
+					print 'Reverted'
+					lnp3 = tractor.getLogProb()
+					print 'lnp3', lnp3
+					assert(lnp3 == lnp0)
+					
 			
-		
+			
+		else:
+			print 'Unknown step type', stype
 
 
 class FitsWcsShiftParams(ParamList):

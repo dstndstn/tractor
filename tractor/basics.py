@@ -95,6 +95,10 @@ class FitsWcs(object):
 	def hashkey(self):
 		return ('FitsWcs', self.x0, self.y0, self.wcs)
 
+	def __str__(self):
+		return ('FitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)
+				+ str(self.wcs))
+
 	def setX0Y0(self, x0, y0):
 		self.x0 = x0
 		self.y0 = y0
