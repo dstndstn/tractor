@@ -473,6 +473,7 @@ def main():
 				   'bright', 'bright', ] +
 				 ['jsource', 'source']*4 +
 				 ['simplify'] +
+				 ['complexify'] +
 				 ['nil'])
 				  
 	NS = len(steptypes) - 1
@@ -785,6 +786,74 @@ def main():
 					assert(lnp3 == lnp0)
 					
 			
+		elif stype == 'complexify':
+			for j,src in enumerate(tractor.getCatalog()):
+				cat = tractor.getCatalog()
+				ii = cat.index(src)
+				p0 = cat.getAllParams()
+				print 'Try complexifying source', src
+				#if isinstance(src, PointSource):
+				newsrc = None
+				if (isinstance(src, stgal.ExpGalaxy) or
+					isinstance(src, stgal.DevGalaxy)):
+					# HACK
+					faintmag = 21
+					faint = Mags(**dict([(b,faintmag) for b in bands]))
+					print 'Faint mag:', faint
+					args = [src.pos]
+					if isinstance(src, stgal.ExpGalaxy):
+						args.extend([src.brightness, src.shape])
+						args.extend([faint, src.shape])
+					else:
+						args.extend([faint, src.shape])
+						args.extend([src.brightness, src.shape])
+					newsrc = stgal.CompositeGalaxy(*args)
+				if newsrc is None:
+					continue
+
+				lnp0 = tractor.getLogProb()
+				print 'lnp0:', lnp0
+
+				print 'Replacing', src
+				print '     with', newsrc
+				tractor.removeSource(src)
+				tractor.addSource(newsrc)
+				lnp1 = tractor.getLogProb()
+				print 'dlnp1:', (lnp1 - lnp0)
+				print 'Optimizing new source...'
+				tractor.optimizeCatalogLoop(nsteps=5, src=[newsrc])
+				lnp2 = tractor.getLogProb()
+				print 'dlnp2:', (lnp2 - lnp0)
+				print 'Optimizing everything...'
+				tractor.optimizeCatalogLoop(nsteps=5)
+				lnp3 = tractor.getLogProb()
+				print 'dlnp3:', (lnp3 - lnp0)
+
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				cfim = tractor.getImages()[CFI]
+				mod = tractor.getModelImage(cfim)
+				zr = zrs[CFI]
+				ima = dict(interpolation='nearest', origin='lower',
+						   vmin=zr[0], vmax=zr[1], cmap='gray')
+				cfimshow(mod, **ima)
+				fn = 'mod-complex%02i-%02i-%02i.png' % (j, CFI, step)
+				plt.savefig(fn)
+				print 'saved', fn
+
+				if lnp3 > lnp0:
+					print 'Keeping this change!'
+					continue
+				else:
+					# reinsert
+					cat.remove(newsrc)
+					cat.insert(ii, src)
+					cat.setAllParams(p0)
+					print 'Reverted'
+					lnp3 = tractor.getLogProb()
+					print 'lnp3', lnp3
+					assert(lnp3 == lnp0)
+
 			
 		else:
 			print 'Unknown step type', stype
