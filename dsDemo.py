@@ -821,7 +821,7 @@ def main():
 				lnp1 = tractor.getLogProb()
 				print 'dlnp1:', (lnp1 - lnp0)
 				print 'Optimizing new source...'
-				tractor.optimizeCatalogLoop(nsteps=5, src=[newsrc])
+				tractor.optimizeCatalogLoop(nsteps=5, srcs=[newsrc])
 				lnp2 = tractor.getLogProb()
 				print 'dlnp2:', (lnp2 - lnp0)
 				print 'Optimizing everything...'
