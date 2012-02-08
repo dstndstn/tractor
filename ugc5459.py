@@ -19,12 +19,13 @@ def main():
     run = 2863
     field = 180
     camcol = 4
-    x0 = 200
+    x0 = 200 #Field of view for the image
     x1 = 900
     y0 = 400
     y1 = 850
-    starx = 200.
+    starx = 200. #Star location
     stary = 300.
+    starr = 50. #Star radius
 
     roi = [x0,x1,y0,y1]
     
@@ -94,7 +95,7 @@ def main():
 #    shape2 = st.GalaxyShape(30.,0.3,45.)
 #    print bright
 #    print shape
- #   print shape2
+#   print shape2
 
     CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
     print CG
@@ -102,6 +103,15 @@ def main():
 
 
     saveBands('added-'+prefix,tractor,zr,flipBands,debug=True)
+
+
+    for img in tractor.getImages():
+        star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
+        for (x,y) in star:
+            img.getInvError()[y][x] = 0
+
+
+    saveBands('nostar-'+prefix,tractor,zr,flipBands,debug=True)
     for i in range(itune):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
@@ -140,6 +150,7 @@ def makeflipbook(prefix,bands,itune=0,ntune=0):
     tex+=allBands('Initial Model','initial-'+prefix)
     tex+=allBands('Removed','removed-'+prefix)
     tex+=allBands('Added','added-'+prefix)
+    tex+=allBands('No Star','nostar-'+prefix)
     for i in range(itune):
         tex+=allBands('Galaxy tuning, step %d' % (i+1),'itune-%d-' %(i+1)+prefix)
 
