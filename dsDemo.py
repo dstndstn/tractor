@@ -269,20 +269,13 @@ def makeTractor(bands, ra, dec, S, RCFS):
 	for i,(run,camcol,field) in enumerate(RCFS):
 
 		for bandname in bands:
-			# HACK - get whole-frame tractor Image to get WCS to find ROI.
 			im,inf = st.get_tractor_image(run, camcol, field, bandname,
-										  useMags=True, psf='dg')
-			wcs = im.getWcs()
-			fxc,fyc = wcs.positionToPixel(None, RaDecPos(ra,dec))
-			xc,yc = [int(np.round(p)) for p in fxc,fyc]
-
-			roi = [xc-S, xc+S, yc-S, yc+S]
-			im,inf = st.get_tractor_image(run, camcol, field, bandname,
-										  roi=roi,	useMags=True)
-			im.dxdy = (fxc - xc, fyc - yc)
+										  useMags=True,
+										  roiradecsize=(ra,dec,S))
+			#im.dxdy = (fxc - xc, fyc - yc)
 			TI.append((im,inf))
-
 			if i == 0 and bandname == 'r':
+				wcs = im.getWcs()
 				# im,info = TI[bands.index('r')]
 				#wcs = im.getWcs()
 				# this is a shifted WCS; S,S is the center.
@@ -495,7 +488,7 @@ def main():
 				for ii in ri,gi,bi:
 					lo,hi = zrs[ii]
 					tim = tractor.getImage(ii)
-					print 'dx,dy', tim.dxdy
+					#print 'dx,dy', tim.dxdy
 					im = (tim.getImage() - lo) / (hi-lo)
 					ims.append(im)
 

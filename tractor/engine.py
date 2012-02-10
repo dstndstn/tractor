@@ -326,6 +326,22 @@ class Tractor(object):
 		self.cache = Cache()
 		self.cachestack = []
 
+	# For emcee multi-threading
+	# FIXME -- we want to be able to include image calib params
+	# as well.
+	def __call__(self, X):
+		#self.catalog.setAllParams(X)
+		self.setAllSourceParams(X)
+		lnp = self.getLogProb()
+		print 'lnp', lnp
+		return lnp
+	def setAllSourceParams(self, X):
+		i=0
+		for src in self.catalog:
+			N = src.numberOfParams()
+			src.setParams(X[i:i+N])
+			i += N
+
 	# For pickling
 	def __getstate__(self):
 		return (self.getImages(), self.getCatalog())

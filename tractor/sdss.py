@@ -203,7 +203,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 	
 def get_tractor_image(run, camcol, field, bandname, release='DR7',
 					  retrieve=True, curl=False, roi=None,
-					  psf='kl-gm', useMags=False):
+					  psf='kl-gm', useMags=False, roiradecsize=None):
+					  
 	# get_tractor_sources() no longer supports !useMags, so
 	assert(useMags)
 	'''
@@ -216,6 +217,9 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	psf can be:
 	  "dg" for double-Gaussian
 	  "kl-gm" for SDSS KL-decomposition approximated as a Gaussian mixture
+
+	"roiradecsize" = (ra, dec, half-size in pixels) indicates that you
+	want to grab a ROI around the given RA,Dec.
 
 	Returns:
 	  (tractor.Image, dict)
@@ -244,14 +248,25 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	image = fpC
 	(H,W) = image.shape
 
-	if roi is None:
-		x0 = y0 = 0
-	else:
-		x0,x1,y0,y1 = roi
+	info = dict()
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 	astrans = tsf.getAsTrans(bandnum)
 	wcs = SdssWcs(astrans)
+
+	if roiradecsize is not None:
+		ra,dec,S = roiradecsize
+		fxc,fyc = wcs.positionToPixel(None, RaDecPos(ra,dec))
+		xc,yc = [int(np.round(p)) for p in fxc,fyc]
+		roi = [xc-S, xc+S, yc-S, yc+S]
+		info.update(roi=roi)
+		
+	if roi is not None:
+		x0,x1,y0,y1 = roi
+	else:
+		x0 = y0 = 0
+
+
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
@@ -263,7 +278,7 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
-	info = dict(sky=sky, skysig=skysig)
+	info.update(sky=sky, skysig=skysig)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
 
