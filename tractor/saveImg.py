@@ -158,3 +158,7 @@ def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
     for i,band in enumerate(bands):
         save(idstr+'-%s-' % (band), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
+
+def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False):
+    for i,img in enumerate(tractor.getImages()):
+        save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
