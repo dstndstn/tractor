@@ -19,19 +19,23 @@ def main():
     run = [3818,3813,3813]
     field = [231,290,289]
     camcol = [3,3,3]
-    x0 = 1200 #Field of view for the image
-    x1 = 1700
-    y0 = 0
-    y1 = 1400
+    x00 = 1500 #Field of view for the image
+    x01 = 2000
+    y00 = 1000
+    y01 = 1400
+    
 
-    roi = [x0,x1,y0,y1]
+    roi0 = [x00,x01,y00,y01]
+    roi1 = [0,500,0,400]
+    roi2 = [0,500,1300,1500]
+    roi = [roi0,roi1,roi2]
     
     ra = 198.05
-    dec = 44.0386
-    itune = 10
-    ntune = 5
+    dec = 44.0333
+    itune = 5
+    ntune = 2
 
-    bands=['r','g','i','u','z']
+    bands=['r','g','u','i','z'] #Just r to speed up run time for now
     bandname = 'r'
     flipBands = ['r']
 
@@ -39,9 +43,9 @@ def main():
 
     TI = []
     sources = []
-    for run,field,camcol in zip(run,field,camcol):
-        TI.extend([st.get_tractor_image(run, camcol, field, bandname,useMags=True) for bandname in bands])
-        sources.append(st.get_tractor_sources(run, camcol, field,bandname,bands=bands))
+    for run,field,camcol,roi in zip(run,field,camcol,roi):
+        TI.extend([st.get_tractor_image(run, camcol, field, bandname,useMags=True,roi=roi) for bandname in bands])
+        sources.append(st.get_tractor_sources(run, camcol, field,bandname,bands=bands,roi=roi))
 
     timg,info = TI[0]
     photocal = timg.getPhotoCal()
@@ -60,60 +64,61 @@ def main():
     print bands
 
     prefix = 'ngc5023'
-    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
-    assert(False)
-    xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
-    
-    print xtr,ytr
+#    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     bright = None
     lowbright = 1000
 
-    xt = 300. 
-    yt = 700.
-    r = 200.
-    for src in sources:
-        xs,ys = wcs.positionToPixel(src,src.getPosition())
-        if (xs-xt)**2+(ys-yt)**2 <= r**2:
-            if isinstance(src,st.CompositeGalaxy):
-                brightE = src.brightnessExp
-                brightD = src.brightnessDev
-                sumbright = sum([brightE.getMag(bandname)+brightD.getMag(bandname) for bandname in bands])
-                if sumbright < lowbright:
-                    print("GREATER")
-                    lowBrightE = brightE
-                    lowBrightD = brightD
-                    lowShapeE = src.shapeExp
-                    lowShapeD = src.shapeDev
-            print "Removed:", src
-            print xs,ys
-            tractor.removeSource(src)
+    for timg,sources in zip(tims,sources):
+        wcs = timg.getWcs()
+        xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
+    
+        print xtr,ytr
 
-    saveBands('removed-'+prefix, tractor,zr,flipBands,debug=True)
+        xt = xtr 
+        yt = ytr
+        r = 250.
+        for src in sources:
+            xs,ys = wcs.positionToPixel(src,src.getPosition())
+            if (xs-xt)**2+(ys-yt)**2 <= r**2:
+                if isinstance(src,st.CompositeGalaxy):
+                    brightE = src.brightnessExp
+                    brightD = src.brightnessDev
+                    sumbright = sum([brightE.getMag(bandname)+brightD.getMag(bandname) for bandname in bands])
+                    if sumbright < lowbright:
+                        print("GREATER")
+                        lowBrightE = brightE
+                        lowBrightD = brightD
+                        lowShapeE = src.shapeExp
+                        lowShapeD = src.shapeDev
+                print "Removed:", src
+                print xs,ys
+                tractor.removeSource(src)
 
+#    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
     print CG
     tractor.addSource(CG)
 
 
-    saveBands('added-'+prefix,tractor,zr,flipBands,debug=True)
+#    saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
 
 
     for i in range(itune):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
-        saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
 
-    makeflipbook(prefix,flipBands,itune,ntune)
+    makeflipbook(prefix,len(tractor.getImages()),itune,ntune)
 
-def makeflipbook(prefix,bands,itune=0,ntune=0):
+def makeflipbook(prefix,numImg,itune=0,ntune=0):
     # Create a tex flip-book of the plots
 
-    def allBands(title,imgpre):
+    def allImages(title,imgpre):
         page = r'''
         \begin{frame}{%s}
         \plot{data-%s}
@@ -122,8 +127,8 @@ def makeflipbook(prefix,bands,itune=0,ntune=0):
         \plot{chi-%s} \\
         \end{frame}'''
         temp = ''
-        for j,band in enumerate(bands):
-            temp+= page % ((title+', Band: %s' % (band),) + (imgpre+'-%s-' % (band),)*4)
+        for j in range(numImg):
+            temp+= page % ((title+', %d' % (j),) + (imgpre+'-%d' % (j),)*4)
         return temp
 
     tex = r'''
@@ -133,14 +138,14 @@ def makeflipbook(prefix,bands,itune=0,ntune=0):
     \begin{document}
     '''
     
-    tex+=allBands('Initial Model','initial-'+prefix)
-    tex+=allBands('Removed','removed-'+prefix)
-    tex+=allBands('Added','added-'+prefix)
+    tex+=allImages('Initial Model','initial-'+prefix)
+    tex+=allImages('Removed','removed-'+prefix)
+    tex+=allImages('Added','added-'+prefix)
     for i in range(itune):
-        tex+=allBands('Galaxy tuning, step %d' % (i+1),'itune-%d-' %(i+1)+prefix)
+        tex+=allImages('Galaxy tuning, step %d' % (i+1),'itune-%d-' %(i+1)+prefix)
 
     for i in range(ntune):
-        tex+=allBands('All tuning, step %d' % (i+1),'ntune-%d-' % (i+1)+prefix)
+        tex+=allImages('All tuning, step %d' % (i+1),'ntune-%d-' % (i+1)+prefix)
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
