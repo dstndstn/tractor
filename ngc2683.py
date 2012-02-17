@@ -57,7 +57,8 @@ def main():
     print bands
 
     prefix = 'ngc2683'
-    saveBands('initial-'+prefix, tractor,zr,flipBands,debug=True)
+#    saveBands('initial-'+prefix, tractor,zr,flipBands,debug=True)
+    plotInvvar('initial-'+prefix,tractor)
 
     xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
     
@@ -85,27 +86,32 @@ def main():
             print xs,ys
             tractor.removeSource(src)
 
-    saveBands('removed-'+prefix, tractor,zr,flipBands,debug=True)
+#    saveBands('removed-'+prefix, tractor,zr,flipBands,debug=True)
+    plotInvvar('removed-'+prefix,tractor)
+
 
     CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
     print CG
     tractor.addSource(CG)
 
 
-    saveBands('added-'+prefix,tractor,zr,flipBands,debug=True)
+ #   saveBands('added-'+prefix,tractor,zr,flipBands,debug=True)
+    plotInvvar('added-'+prefix,tractor)
 
 
     for i in range(itune):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
-        saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+ #       saveBands('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        plotInvvar('itune-%d-' % (i+1)+prefix,tractor)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+#        saveBands('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        plotInvvar('ntune-%d-' % (i+1)+prefix,tractor)
         tractor.clearCache()
 
-    makeflipbook(prefix,flipBands,itune,ntune)
+#    makeflipbook(prefix,flipBands,itune,ntune)
 
 def makeflipbook(prefix,bands,itune=0,ntune=0):
     # Create a tex flip-book of the plots

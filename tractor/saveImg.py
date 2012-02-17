@@ -162,3 +162,14 @@ def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
 def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False):
     for i,img in enumerate(tractor.getImages()):
         save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
+
+
+def plotInvvar(idstr,tractor):
+	models = tractor.getModelImages()
+	timgs = tractor.getImages()
+	chis = tractor.getChiImages()
+	for i,(timg,mod,chi) in enumerate(zip(timgs,models,chis)):
+		data = timg.getImage()
+		plt.clf()
+		plt.plot(mod.flatten(),(data-mod).flatten()**2,'x')
+		plt.savefig(idstr+'test-%d' % (i))

@@ -338,7 +338,8 @@ class CompositeGalaxy(Galaxy):
 						dp = dd[i]
 					else:
 						dp += dd[i]
-				dp.setName('d(comp)/d(pos%i)' % i)
+				if dp is not None: 
+					dp.setName('d(comp)/d(pos%i)' % i)
 				derivs.append(dp)
 		derivs.extend(de[npos:])
 		derivs.extend(dd[npos:])
