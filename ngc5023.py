@@ -19,15 +19,15 @@ def main():
     run = [3818,3813,3813]
     field = [231,290,289]
     camcol = [3,3,3]
-    x00 = 1500 #Field of view for the image
+    x00 = 1400 #Field of view for the image
     x01 = 2000
-    y00 = 1000
-    y01 = 1400
+    y00 = 900
+    y01 = 1500
     
 
     roi0 = [x00,x01,y00,y01]
-    roi1 = [0,500,0,400]
-    roi2 = [0,500,1300,1500]
+    roi1 = [0,600,0,400]
+    roi2 = [0,500,1200,1500]
     roi = [roi0,roi1,roi2]
     
     ra = 198.05
@@ -35,7 +35,7 @@ def main():
     itune = 5
     ntune = 2
 
-    bands=['r','g','u','i','z'] #Just r to speed up run time for now
+    bands=['r','g','u','i','z']
     bandname = 'r'
     flipBands = ['r']
 
@@ -64,7 +64,7 @@ def main():
     print bands
 
     prefix = 'ngc5023'
-#    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
+    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     bright = None
     lowbright = 1000
 
@@ -94,17 +94,17 @@ def main():
                 print xs,ys
                 tractor.removeSource(src)
 
-#    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
+    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
     print CG
     tractor.addSource(CG)
 
 
-#    saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
+    saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
 
 
     for i in range(itune):
-        tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
+        tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         tractor.clearCache()
         saveAll('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
