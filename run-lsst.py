@@ -1,5 +1,6 @@
 import os
 import math
+import sys
 
 import lsst.afw.image as afwImage
 import lsst.afw.detection as afwDet
@@ -14,7 +15,7 @@ import lsst.meas.utils.sourceMeasurement as muMeasurement
 def getFakePsf(pixscale):
 	#fwhmarcsec = 0.7 #1.0 #0.5
 	fwhmarcsec = 1.0
-	fwhm = fwhmarcsec / wcs.pixelScale().asArcseconds()
+	fwhm = fwhmarcsec / pixscale
 	print 'fwhm', fwhm
 	psfsize = 25
 	model = 'DoubleGaussian'
@@ -24,8 +25,8 @@ def getFakePsf(pixscale):
 	print 'psf', psf
 	return psf
 
-def cr(crfn):
-	exposure = afwImage.ExposureF('850994p-21.fits')
+def cr(infn, crfn, maskfn):
+	exposure = afwImage.ExposureF(infn) #'850994p-21.fits'
 	print 'exposure', exposure
 	print 'w,h', exposure.getWidth(), exposure.getHeight()
 	W,H = exposure.getWidth(), exposure.getHeight()
@@ -82,18 +83,33 @@ def cr(crfn):
 	mask = mi.getMask()
 	crBit = mask.getPlaneBitMask("CR")
 	afwDet.setMaskFromFootprintList(mask, crs, crBit)
-	mask.writeFits('mask.fits')
+	mask.writeFits(maskfn)
 	exposure.writeFits(crfn)
 
 
-
-
-
 if __name__ == '__main__':
-	crfn = 'cr.fits'
-	if not os.path.exists(crfn):
-		cr(crfn)
-	print 'Reading', crfn
+	from optparse import OptionParser
+
+	parser = OptionParser(usage='%prog <input-image> <output-base>')
+	parser.add_option('--ra', dest='ra', type=float, help='RA at which to instantiate PSF')
+	parser.add_option('--dec', dest='dec', type=float, help='Dec at which to instantiate PSF')
+	opt,args = parser.parse_args()
+	if len(args) != 2:
+		parser.print_help()
+		sys.exit(-1)
+
+	infn = args[0]
+	outbase = args[1]
+
+	crfn = '%s-cr.fits' % outbase
+	maskfn = '%s-mask.fits' % outbase
+	psffn = '%s-psf.fits' % outbase
+	cr(infn, crfn, maskfn)
+
+	#crfn = 'cr.fits'
+	#if not os.path.exists(crfn):
+	#	cr(crfn)
+	#print 'Reading', crfn
 
 	exposure = afwImage.ExposureF(crfn)
 	print 'Read', exposure
@@ -106,6 +122,12 @@ if __name__ == '__main__':
 	pixscale = wcs.pixelScale().asArcseconds()
 	psf = getFakePsf(pixscale)
 
+	if opt.ra is not None and opt.dec is not None:
+		x,y = wcs.skyToPixel(opt.ra * afwGeom.degrees, opt.dec * afwGeom.degrees)
+		print 'Instantiating PSF at x,y', x,y
+	else:
+		x,y = W/2, H/2
+
 	mi = exposure.getMaskedImage()
 	bg = afwMath.makeStatistics(mi, afwMath.MEDIAN).getValue()
 	print 'bg', bg
@@ -117,14 +139,10 @@ if __name__ == '__main__':
 
 	# phot.py
 	#footprintSet = self.detect(exposure, psf)
-	policy = pexPolicy.Policy()
-	policy.add('minPixels', 1)
-	policy.add('nGrow', 1)
-	#policy.add('thresholdValue', 5.)
-	policy.add('thresholdValue', 50.)
-	policy.add('thresholdType', 'stdev')
-	policy.add('thresholdPolarity', 'positive')
-	posSources, negSources = muDetection.detectSources(exposure, psf, policy)
+	detconf = muDetection.DetectionConfig()
+	detconf.thresholdValue = 50.
+	print 'Detection config:', detconf
+	posSources, negSources = muDetection.detectSources(exposure, psf, detconf)
 	numPos = len(posSources.getFootprints()) if posSources is not None else 0
 	numNeg = len(negSources.getFootprints()) if negSources is not None else 0
 	print 'Detected', numPos, 'pos and', numNeg, 'neg'
@@ -136,14 +154,10 @@ if __name__ == '__main__':
 		print 'npix', fp.getNpix()
 
 	# phot.py
-	#bg, exposure = self.background(exposure); del bg
-	policy = pexPolicy.Policy()
-	policy.add('statisticsproperty', 'MEANCLIP')
-	policy.add('undersamplestyle', 'THROW_EXCEPTION')
-	policy.add('binsize', 256)
-	policy.add('algorithm', 'NATURAL_SPLINE')
+	bgconf = muDetection.BackgroundConfig()
+	print 'Background config:', bgconf
 	subtract = True
-	bg, subtracted = muDetection.estimateBackground(exposure, policy, subtract=subtract)
+	bg, subtracted = muDetection.estimateBackground(exposure, bgconf, subtract=subtract)
 	print 'bg', bg
 	exposure = subtracted
 
@@ -153,8 +167,8 @@ if __name__ == '__main__':
 	num = len(footprintSet.getFootprints())
 	print 'Measuring', num, 'sources'
 	footprints.append([footprintSet.getFootprints(), False])
-	policy = pexPolicy.Policy()
-	sources = muMeasurement.sourceMeasurement(exposure, psf, footprints, policy)
+	measconf = measAlg.MeasureSourcesConfig()
+	sources = muMeasurement.sourceMeasurement(exposure, psf, footprints, measconf)
 	muMeasurement.computeSkyCoords(wcs, sources)
 
 	# calibrate.py
@@ -209,9 +223,9 @@ if __name__ == '__main__':
 	print 'Got PSF', psf
 
 	# Target cluster
-	x,y = 726., 4355.
+	#x,y = 726., 4355.
 	psfimg = psf.computeImage(afwGeom.Point2D(x,y))
-	psfimg.writeFits('psfimg.fits')
+	psfimg.writeFits(psffn)
 
 	
 
