@@ -1,0 +1,103 @@
+dstn's CS82 tests
+
+-------------------------------------------
+2012-02-29
+-------------------------------------------
+Test catalogs from:
+http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/morphology_catalogs/
+
+Notes:
+-----------------------------------------------------------------------
+Date: Wed, 8 Feb 2012 14:07:58 -0200
+From: Roberto Pereira <vilela.roberto@gmail.com>
+
+CHI2_MODEL Reduced Chi2 of the fit
+FLUX_MODEL Flux from model-fitting [count]
+FLUXERR_MODEL RMS error on model-fitting flux [count]
+MAG_MODEL Magnitude from model-fitting [mag]
+MAGERR_MODEL RMS error on model-fitting magnitude [mag]
+
+Parameters with the word DISK refer to a exp profile, for instance:
+
+DISK_SCALE_IMAGE         Disk scalelength from fitting                             [pixel]
+DISK_SCALEERR_IMAGE      RMS error on fitted disk scalelength                      [pixel]
+DISK_SCALE_WORLD         Disk scalelength from fitting (world coords)              [deg]
+DISK_SCALEERR_WORLD      RMS error on fitted disk scalelength (world coords)       [deg]
+DISK_ASPECT_IMAGE        Disk aspect ratio from fitting                          
+DISK_ASPECTERR_IMAGE     RMS error on fitted disk aspect ratio                   
+DISK_ASPECT_WORLD        Disk aspect ratio from fitting                          
+DISK_ASPECTERR_WORLD     RMS error on disk aspect ratio                          
+DISK_INCLINATION         Disk inclination from fitting                             [deg]
+DISK_INCLINATIONERR      RMS error on disk inclination from fitting                [deg]
+DISK_THETA_IMAGE         Disk position angle (CCW/x) from fitting                  [deg]
+DISK_THETAERR_IMAGE      RMS error on fitted disk position angle                   [deg]
+
+Respectively, parameters for a deV fit have the word SPHEROID, for instance:
+...
+-----------------------------------------------------------------------
+
+RA,Dec range: < [333.75, 334.8], [-0.15, 0.95]
+
+SDSS Stripe82 fields: 4 camcols goes right through the area; 2 have partial overlap.
+
+Trim to a central region:  334.4, 0.3
+(22:17:36, 00:18:00)
+10 arcmin -> 160 SDSS fields in one strip
+84 of which actually contain the target RA,Dec center.
+
+CS82 data: 4 x 410 s exposures, i band, 23.5 mag depth galaxies, 24 mag point sources.
+0.6" median seeing
+from
+bccp.lbl.gov/~sudeep/BCLWSchedule_files/alexieTalk.pdf
+
+The CADC search form seems to be interpreting decimal degrees incorrectly?
+
+http://www2.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/cadcbin/cfht/wdbi.cgi/cfht/cfhtls/form
+
+RA: 22 17 36
+Dec: 00 18 00
+Filter: i'
+Search box: 00 30 00
+
+-> 14 fields
+
+Survey    FILE ID     Target Name     RA (J2000)    DEC (J2000)     Exposure Time  Observation Date    Public Date           Filter  Image Quality  Photometric  QSO Status
+Wide      863049p     W4.+1-1         22 17 02.14   +00 24 00.0          615.1     Aug 21 2006 9:28AM  Sep 21 2007 10:00AM   I.MP9701  0.610  Y  VALIDATED
+Wide      860598p     W4.+1-1         22 17 05.23   +00 24 30.0          615.1     Aug 1 2006 11:25AM  Sep 1 2007 10:00AM    I.MP9701  0.730  Y  VALIDATED
+Wide      860599p     W4.+1-1         22 17 04.77   +00 24 00.0          615.1     Aug 1 2006 11:36AM  Sep 1 2007 10:00AM    I.MP9701  0.730  Y  VALIDATED
+Wide      860595p     W4.+1-1         22 17 04.31   +00 22 30.0          615.1     Aug 1 2006 10:51AM  Sep 1 2007 10:00AM    I.MP9701  0.750  Y  VALIDATED
+Wide      863050p     W4.+1-1         22 17 04.14   +00 22 00.0          615.1     Aug 21 2006 9:39AM  Sep 21 2007 10:00AM   I.MP9701  0.580  Y  VALIDATED
+Wide      863047p     W4.+1-1         22 17 07.23   +00 23 30.0          615.1     Aug 21 2006 8:53AM  Sep 21 2007 10:00AM   I.MP9701  0.530  Y  VALIDATED
+Wide      860600p     W4.+1-1         22 17 06.77   +00 22 00.0          615.1     Aug 1 2006 11:47AM  Sep 1 2007 10:00AM    I.MP9701  0.740  Y  VALIDATED
+Wide      860596p     W4.+1-1         22 17 06.31   +00 21 30.0          615.1     Aug 1 2006 11:02AM  Sep 1 2007 10:00AM    I.MP9701  0.710  Y  VALIDATED
+Wide      863048p     W4.+1-1         22 17 02.61   +00 24 30.0          615.1     Aug 21 2006 9:17AM  Sep 21 2007 10:00AM   I.MP9701  0.540  Y  VALIDATED
+Wide      863045p     W4.+1-1         22 17 04.30   +00 22 30.0          615.1     Aug 21 2006 8:31AM  Sep 21 2007 10:00AM   I.MP9701  0.530  Y  VALIDATED
+Wide      860594p     W4.+1-1         22 17 05.77   +00 23 00.1          615.1     Aug 1 2006 10:40AM  Sep 1 2007 10:00AM    I.MP9701  0.900  Y  VALIDATED
+Wide      863044p     W4.+1-1         22 17 05.77   +00 23 00.0          615.1     Aug 21 2006 8:19AM  Sep 21 2007 10:00AM   I.MP9701  0.550  Y  VALIDATED
+Wide      863046p     W4.+1-1         22 17 06.30   +00 21 30.0          615.1     Aug 21 2006 8:42AM  Sep 21 2007 10:00AM   I.MP9701  0.500  Y  VALIDATED
+Wide      860597p     W4.+1-1         22 17 07.24   +00 23 30.0          615.1     Aug 1 2006 11:13AM  Sep 1 2007 10:00AM    I.MP9701  0.660  Y  VALIDATED
+
+
+Need ~3 or 4 to match CS82 depth.  Which ones?
+
+1,2,4,5 -- Aug 1/21 split, some range of seeing
+
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/863049p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/860598p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/860595p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/863050p
+
+-> cs82data
+
+36 x (2k x 4k extensions)
+
+They're rice compressed.
+
+for x in cs82data/86*p.fits; do imcopy $x $x.u; done
+for x in cs82data/86*p.fits; do mv $x.u $x; done
+
+extension 21 (in all four images) covers my test area.
+
+
+for x in cs82data/86*p.fits; do echo imcopy $x+22 $(echo $x | sed s/.fits//g)-21.fits; done
+
