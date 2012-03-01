@@ -123,6 +123,43 @@ class FitsWcs(object):
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
 
+class RotatedFitsWcs(FitsWcs):
+	def __init__(self, wcs):
+		super(RotatedFitsWcs,self).__init__(wcs)
+		self.W = wcs.get_width()
+	def rotate(self, x, y, fwd=True):
+		if fwd:
+			xp,yp = y,x
+			xp = self.W - 1 - xp
+			return xp,yp
+		else:
+			xp = self.W - 1 - x
+			xp,yp = y,xp
+			return xp, yp
+
+	def hashkey(self):
+		return ('RotatedFitsWcs',) + super(RotatedFitsWcs,self).hashkey()
+	def __str__(self):
+		return ('RotatedFitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)
+				+ str(self.wcs))
+	def positionToPixel(self, src, pos):
+		x,y = super(RotatedFitsWcs,self).positionToPixel(src,pos)
+		return self.rotate(x,y)
+	def pixelToPosition(self, src, xy):
+		(x,y) = xy
+		x,y = self.rotate(x, y, False)
+		return super(RotatedFitsWcs,self).pixelToPosition(src, (x,y))
+
+	def cdAtPixel(self, x, y):
+		x,y = self.rotate(x, y, False)
+		cd = super(RotatedFitsWcs,self).cdAtPixel(x,y)
+		(cd1,cd2),(cd3,cd4) = cd
+		# HACK -- so many ways to get this wrong...
+		cd1,cd2,cd3,cd4 = -cd2,cd1,-cd4,cd3
+		return np.array([[cd1,cd2], [cd3,cd4]])
+	
+
+
 class PixPos(ParamList):
 	'''
 	A Position implementation using pixel positions.

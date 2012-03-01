@@ -27,7 +27,8 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 					  retrieve=True):
 	bandnum = band_index(bandname)
 	for filetype in filetypes:
-		fn = sdss.getFilename(filetype, run, camcol, field, bandname)
+		#fn = sdss.getFilename(filetype, run, camcol, field, bandname)
+		fn = sdss.getPath(filetype, run, camcol, field, bandname)
 		print 'Looking for file', fn
 		if not os.path.exists(fn):
 			if retrieve:
@@ -201,7 +202,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 	return sources
 
 	
-def get_tractor_image(run, camcol, field, bandname, release='DR7',
+def get_tractor_image(run, camcol, field, bandname, 
+					  sdssobj=None, release='DR7',
 					  retrieve=True, curl=False, roi=None,
 					  psf='kl-gm', useMags=False, roiradecsize=None):
 					  
@@ -228,9 +230,14 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 	  'sky'
 	  'skysig'
 	'''
-	# Ugly
-	if release != 'DR7':
-		raise RuntimeError('We only support DR7 currently')
+	if sdssobj is None:
+		# Ugly
+		if release != 'DR7':
+			raise RuntimeError('We only support DR7 currently')
+		sdss = DR7(curl=curl)
+	else:
+		sdss = sdssobj
+
 	valid_psf = ['dg', 'kl-gm']
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
@@ -239,7 +246,6 @@ def get_tractor_image(run, camcol, field, bandname, release='DR7',
 
 	bandnum = band_index(bandname)
 
-	sdss = DR7(curl=curl)
 	_check_sdss_files(sdss, run, camcol, field, bandname,
 					  ['fpC', 'tsField', 'psField', 'fpM'],
 					  retrieve=retrieve)

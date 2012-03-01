@@ -98,6 +98,50 @@ for x in cs82data/86*p.fits; do mv $x.u $x; done
 
 extension 21 (in all four images) covers my test area.
 
-
 for x in cs82data/86*p.fits; do echo imcopy $x+22 $(echo $x | sed s/.fits//g)-21.fits; done
+
+
+
+-------------------------------------------
+2012-03-01
+-------------------------------------------
+
+Tweaking script to run LSST stack on CFHT-LS images for PSF estimate, etc;
+sesame3, screen cs82, code run-lsst-2.py
+
+loadLSST
+setup pipe_tasks
+python run-lsst-2.py --ra 334.4 --dec 0.3 860595p-21.fits 860595p-21
+
+for x in 860598p-21 863049p-21 863050p-21; do #860595p-21
+  python run-lsst-2.py --ra 334.4 --dec 0.3 $x.fits $x;
+done
+
+worked:
+860595
+863050
+other two failed with TOO MANY CR PIXELS
+
+863049p     22 17 02.14   +00 24 00.0     615.1     Aug 21 2006 9:28AM  I.MP9701  0.610
+860598p     22 17 05.23   +00 24 30.0     615.1     Aug 1 2006 11:25AM  I.MP9701  0.730
+860595p     22 17 04.31   +00 22 30.0     615.1     Aug 1 2006 10:51AM  I.MP9701  0.750
+863050p     22 17 04.14   +00 22 00.0     615.1     Aug 21 2006 9:39AM  I.MP9701  0.580
+
+crank up maxCRpix and they work (with ~ same number of CRs detected)
+
+Looking at the images, there are still some cosmics unremoved though...
+
+for x in 860598p-21 863049p-21; do
+  python run-lsst-2.py --ra 334.4 --dec 0.3 $x.fits $x;
+done
+
+
+Some SDSS fields have ~no detected objects; eg 5759/4/231/i, 6548/4/265/i
+
+Actually, looks like it's mostly just sky brightness.
+
+Can't see a consistent cut I could use to isolate them; eg,
+for x in cs82data/tsField-006548-4-0265.fit cs82data/tsField-005759-4-0231.fit cs82data/tsField-005770-4-0211.fit; do
+  echo $x; tablist $x"[col quality;status;psp_status;aa;kk;airmass;sky;sky_psp;numStars;aaErr]";
+done
 

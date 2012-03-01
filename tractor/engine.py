@@ -365,6 +365,9 @@ class Tractor(object):
 	def setCatalog(self, srcs):
 		self.catalog = srcs
 
+	def addImage(self, img):
+		self.images.append(img)
+
 	def addSource(self, src):
 		self.catalog.append(src)
 

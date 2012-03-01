@@ -15,4 +15,5 @@ __all__ = [
 	'PhotoCal', 'NullPhotoCal', 'WCS', 'NullWCS',
 	'FitsWcs', 'Patch', 'PSF', 'GaussianMixturePSF',
 	'NCircularGaussianPSF', 'Catalog', 'Tractor',
+	'RotatedFitsWcs', 
 	]
