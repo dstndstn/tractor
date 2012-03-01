@@ -63,7 +63,7 @@ if __name__ == '__main__':
 	cr.minSigma = 10.
 	cr.min_DN = 500.
 	cr.niteration = 3
-	cr.nCrPixelMax = 100000
+	cr.nCrPixelMax = 1000000
 
 	#calconf.fwhm = 1.0
 	#calconf.size = 25
