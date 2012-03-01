@@ -158,48 +158,26 @@ def get_cfht_image(fn, psffn, pixscale):
 	print 'Image shape', W, H
 	print 'x0,y0', x0,y0
 	print 'Original WCS:', wcs
-
 	rdcorners = [wcs.pixelxy2radec(x+x0,y+y0) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
 	print 'Original RA,Dec corners:', rdcorners
-
-	x,y = wcs.radec2pixelxy(RA,DEC)
-	print 'x,y', x,y
 	wcs = crop_wcs(wcs, x0, y0, W, H)
 	print 'Cropped WCS:', wcs
-	x,y = wcs.radec2pixelxy(RA,DEC)
-	print 'x,y', x,y
 	rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
 	print 'cropped RA,Dec corners:', rdcorners
-
-
-	#wcs = rot90_wcs(wcs, W)
 	wcs = rot90_wcs(wcs, W, H)
-	#wcs = rot90_wcs(wcs, W)
-	#wcs = rot90_wcs(wcs, W)
 	print 'Rotated WCS:', wcs
-	x,y = wcs.radec2pixelxy(RA,DEC)
-	print 'x,y', x,y
-
-	#rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
 	rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(H,1),(H,W),(1,W)]]
 	print 'rotated RA,Dec corners:', rdcorners
 
 	wcs = FitsWcs(wcs)
 	wcs.setX0Y0(1., 1.)
-	#wcs.setX0Y0(x0+1., y0+1.)
 
 	image = np.rot90(image, k=1)
 	invvar = np.rot90(invvar, k=1)
-	#wcs.W = W
 							   
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal, name='CFHT %s' % filename)
 	return cftimg, cfsky, cfstd
-
-
-# The CFHT images are rotated wrt to SDSS.
-#def cfimshow(im, *args, **kwargs):
-#	return plt.imshow(np.rot90(im, k=1), *args, **kwargs)
 
 def crop_wcs(wcs, x0, y0, W, H):
 	out = Tan()
@@ -212,20 +190,16 @@ def crop_wcs(wcs, x0, y0, W, H):
 	return out
 
 def rot90_wcs(wcs, W, H):
-	#
 	out = Tan()
 	out.set_crval(wcs.crval[0], wcs.crval[1])
-	#out.set_crpix(W+1 - wcs.crpix[1], wcs.crpix[0])
 	out.set_crpix(wcs.crpix[1], W+1 - wcs.crpix[0])
 	cd = wcs.get_cd()
 	out.set_cd(cd[1], -cd[0], cd[3], -cd[2])
 	out.imagew = wcs.imageh
 	out.imageh = wcs.imagew
-
-	# one direction:
+	# opposite direction:
 	#out.set_crpix(H+1 - wcs.crpix[1], wcs.crpix[0])
 	#out.set_cd(-cd[1], cd[0], -cd[3], cd[2])
-
 	return out
 
 
@@ -236,10 +210,10 @@ def get_tractor(RA, DEC, sz):
 	pixscale = 0.187
 	cffns = glob('cs82data/86*p-21-cr.fits')
 	print 'CFHT images:', cffns
-	for fn in cffns[:1]:
+	#for fn in cffns[:1]:
+	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale)
-		#cfimg.imshow = cfimshow
 		tractor.addImage(cfimg)
 		skies.append((cfsky, cfstd))
 
@@ -251,8 +225,8 @@ def get_tractor(RA, DEC, sz):
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
 
-	#rcf = rcf[:16]
-	rcf = rcf[:1]
+	rcf = rcf[:16]
+	#rcf = rcf[:1]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
 	for r,c,f,ra,dec in rcf:
@@ -260,7 +234,6 @@ def get_tractor(RA, DEC, sz):
 			print 'Retrieving', r,c,f,band
 			im,info = st.get_tractor_image(r, c, f, band, psf='kl-gm', useMags=True,
 										   sdssobj=sdss, roiradecsize=(RA,DEC,S/2))
-			#im.imshow = plt.imshow
 			tractor.addImage(im)
 			skies.append((info['sky'], info['skysig']))
 
@@ -321,7 +294,6 @@ if __name__ == '__main__':
 
 				plt.clf()
 				plt.gca().set_position(plotpos0)
-				#tim.imshow(data, **ima)
 				plt.imshow(data, **ima)
 				plt.title('Data %s' % tim.name)
 				plt.xticks([],[])
