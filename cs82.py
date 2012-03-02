@@ -12,6 +12,7 @@ from astrometry.sdss import *
 from tractor import *
 from tractor import cfht as cf
 from tractor import sdss as st
+from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 
@@ -238,6 +239,11 @@ def get_tractor(RA, DEC, sz):
 			skies.append((info['sky'], info['skysig']))
 
 	return tractor,skies
+
+def mysavefig(fn):
+	plt.savefig(fn)
+	print 'Wrote', fn
+	
 	
 if __name__ == '__main__':
 	#getdata()
@@ -260,7 +266,7 @@ if __name__ == '__main__':
 	if False:
 		plt.clf()
 		plt.plot(T.ra, T2.ra, 'r.')
-		plt.savefig('ra.png')
+		mysavefig('ra.png')
 		sys.exit(0)
 
 	# approx...
@@ -279,23 +285,38 @@ if __name__ == '__main__':
 			plt.clf()
 			plt.hist(Tgal.get(c), 100)
 			plt.xlabel(c)
-			plt.savefig('hist%i.png' % i)
+			mysavefig('hist%i.png' % i)
 		sys.exit(0)
-
-	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
-	print 'Cut to', len(T), 'objects nearby.'
 
 	plt.clf()
 	plt.semilogx(T.chi2_psf, T.chi2_psf - T.chi2_model, 'r.')
 	plt.ylim(-100, 100)
 	plt.xlabel('chi2_psf')
 	plt.ylabel('chi2_psf - chi2_model')
-	plt.savefig('chi.png')
+	mysavefig('chi.png')
 
-	Tstar = T[np.logical_and(T.chi2_psf < T.chi2_model, T.mag_psf < 50)]
-	Tgal = T[np.logical_and(T.chi2_model < T.chi2_psf, T.mag_model < 50)]
+	for c in ['disk_scale_world', 'disk_aspect_world', 'disk_theta_world']:
+		T.set(c, T2.get(c))
+
+	T.mag_disk = T2.mag_model
+	T.chi2_disk = T2.chi2_model
+	T.mag_sph = T.mag_model
+	T.chi2_sph = T.chi2_model
+
+	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
+	print 'Cut to', len(T), 'objects nearby.'
+
+	T.chi2_gal = np.minimum(T.chi2_disk, T.chi2_sph)
+	T.mag_gal = np.where(T.chi2_disk < T.chi2_sph, T.mag_disk, T.mag_sph)
+
+	Tstar = T[np.logical_and(T.chi2_psf < T.chi2_gal, T.mag_psf < 50)]
+	Tgal = T[np.logical_and(T.chi2_gal < T.chi2_psf, T.mag_gal < 50)]
 	print len(Tstar), 'stars'
 	print len(Tgal), 'galaxies'
+	Tdisk = Tgal[Tgal.chi2_disk < Tgal.chi2_sph]
+	Tsph  = Tgal[Tgal.chi2_sph  <= Tgal.chi2_disk]
+	print len(Tdisk), 'disk'
+	print len(Tsph), 'spheroid'
 	
 	pfn = 'tractor.pickle'
 	if os.path.exists(pfn):
@@ -309,9 +330,23 @@ if __name__ == '__main__':
 	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
 	tim = tractor.getImage(0)
-	wcs = tim.getWcs()
-	x,y = wcs.positionToPixel(None, RaDecPos(RA,DEC))
-	print 'x,y', x,y
+	#wcs = tim.getWcs()
+	#x,y = wcs.positionToPixel(None, RaDecPos(RA,DEC))
+	#print 'x,y', x,y
+
+	for t in Tdisk:
+		src = DevGalaxy(RaDecPos(t.ra, t.dec), Mags(i=t.mag_disk, r=t.mag_disk),
+						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
+									t.disk_theta_world + 90.))
+		print 'Adding source', src
+		tractor.addSource(src)
+	for t in Tsph:
+		src = ExpGalaxy(RaDecPos(t.ra, t.dec), Mags(i=t.mag_sph, r=t.mag_sph),
+						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+									t.spheroid_theta_world + 90.))
+		print 'Adding source', src
+		tractor.addSource(src)
+	
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -329,7 +364,7 @@ if __name__ == '__main__':
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
 
-	for step in range(100):
+	for step in range(1, 100):
 
 
 		for i in range(len(tractor.getImages())):
@@ -348,7 +383,7 @@ if __name__ == '__main__':
 				plt.title('Data %s' % tim.name)
 				plt.xticks([],[])
 				plt.yticks([],[])
-				plt.savefig('data%02i.png' % i)
+				mysavefig('data%02i.png' % i)
 
 				if i == 0:
 					ax = plt.axis()
@@ -356,5 +391,19 @@ if __name__ == '__main__':
 								   for r,d in zip(T.ra, T.dec)])
 					plt.plot(xy[:,0], xy[:,1], 'r.')
 					plt.axis(ax)
-					plt.savefig('data%02i-ann.png' % i)
+					mysavefig('data%02i-ann.png' % i)
+
+
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			mod = tractor.getModelImage(i)
+			myimshow(mod, **ima)
+			plt.title('Model in %s' % tim.name)
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('mod%02i-%02i.png' % (i,step-1))
+			
+
 					
+
+		break
