@@ -1,5 +1,11 @@
 from ducks import *
 
+def getClassName(obj):
+	name = getattr(obj.__class__, 'classname', None)
+	if name is not None:
+		return name
+	return obj.__class__.__name__
+
 class PlotSequence(object):
 	def __init__(self, basefn, format='%02i'):
 		self.ploti = 0
@@ -66,7 +72,7 @@ class ParamList(Params):
 
 	def __str__(self):
 		pvals = self.getParams()
-		s = self.getClassName(self) + ': '
+		s = getClassName(self) + ': '
 		ss = []
 		for i,val in enumerate(pvals):
 			name = None
@@ -154,7 +160,10 @@ class MultiParams(Params):
 	An implementation of Params that combines component sub-Params.
 	'''
 	def __init__(self, *args):
-		self.subs = list(args)
+		if len(args):
+			self.subs = list(args)
+		else:
+			self.subs = []
 		self.namedparams = self.getNamedParams()
 		# indices of pinned params
 		self.pinnedparams = []
@@ -176,7 +185,6 @@ class MultiParams(Params):
 							 (str(type(self)), name, ', '.join([k for k,v in self.getNamedParams()]),
 							  ', '.join(self.__dict__.keys())))
 
-
 	def __setattr__(self, name, val):
 		if name in ['subs', 'namedparams', 'pinnedparams']:
 			self.__dict__[name] = val
@@ -187,12 +195,11 @@ class MultiParams(Params):
 				return
 		self.__dict__[name] = val
 
-
 	def hashkey(self):
-		t = (self.getClassName(self),)
+		t = [getClassName(self)]
 		for s in self.subs:
-			t = t + s.hashkey()
-		return t
+			t.append(s.hashkey())
+		return tuple(t)
 
 	def getNamedParamIndex(self, name):
 		for n,i in self.namedparams:

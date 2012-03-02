@@ -17,6 +17,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
+from .utils import MultiParams
 
 FACTOR = 1.e-10
 
@@ -287,30 +288,27 @@ class Patch(object):
 class Cache(dict):
 	pass
 
-class Catalog(list):
-	def __hash__(self):
-		return hash(self.hashkey())
-	def hashkey(self):
-		#return tuple([hash(x) for x in self])
-		return tuple([x.hashkey() for x in self])
+class Catalog(MultiParams):
 
-	def deepcopy(self):
-		return Catalog([x.copy() for x in self])
+	deepcopy = MultiParams.copy
 
 	def __str__(self):
 		self.printLong()
-		return 'Catalog with %i sources' % len(self)
+	 	return 'Catalog with %i sources' % len(self)
 
 	def printLong(self):
 		print 'Catalog:'
 		for i,x in enumerate(self):
 			print '  %i:' % i, x
 
-	def getAllParams(self):
-		return [src.getParams() for src in self]
-	def setAllParams(self, p):
-		for src,pp in zip(self, p):
-			src.setParams(pp)
+	# delegate list operations to self.subs.
+	# FIXME -- should some of these go in MultiParams?
+	def __iter__(self):
+		return self.subs.__iter__()
+	def __getitem__(self, key):
+		return self.subs.__getitem__(self, key)
+	def append(self, x):
+		self.subs.append(x)
 
 
 class Tractor(object):
@@ -321,7 +319,9 @@ class Tractor(object):
 		catalog: list of Source objects
 		'''
 		self.images = images
-		self.catalog = Catalog(catalog)
+		self.catalog = Catalog()
+		for obj in catalog:
+			self.catalog.append(obj)
 
 		self.cache = Cache()
 		self.cachestack = []
@@ -558,7 +558,7 @@ class Tractor(object):
 					logverb('Best change so far!')
 					bestlogprob = pAfter
 					bestalt = j
-					bestparams = newcat.getAllParams()
+					bestparams = newcat.getParams()
 
 			if bestparams is not None:
 				#print 'Switching to new catalog!'
@@ -1092,7 +1092,7 @@ class Tractor(object):
 		return -0.5 * chisq
 
 	def getLogPrior(self):
-		return -sum([len(p) for p in self.catalog.getAllParams()])
+		return -len(self.catalog.getParams())
 
 	# posterior
 	def getLogProb(self):

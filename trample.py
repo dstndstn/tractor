@@ -53,7 +53,7 @@ def main():
 	lnp0 = tractor.getLogProb()
 
 	nthreads = 16
-	p0 = np.hstack(tractor.catalog.getAllParams())
+	p0 = np.array(tractor.catalog.getParams())
 	ndim = len(p0)
 	nw = 2*ndim
 	print 'ndim', ndim

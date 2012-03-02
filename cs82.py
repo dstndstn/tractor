@@ -210,8 +210,8 @@ def get_tractor(RA, DEC, sz, cffns):
 	skies = []
 	pixscale = 0.187
 	print 'CFHT images:', cffns
-	#for fn in cffns[:1]:
-	for fn in cffns:
+	for fn in cffns[:1]:
+	#for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale)
 		tractor.addImage(cfimg)
@@ -225,8 +225,8 @@ def get_tractor(RA, DEC, sz, cffns):
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
 
-	rcf = rcf[:16]
-	#rcf = rcf[:1]
+	#rcf = rcf[:16]
+	rcf = rcf[:1]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
 	for r,c,f,ra,dec in rcf:
@@ -340,7 +340,6 @@ if __name__ == '__main__':
 	#print 'x,y', x,y
 
 	for t in Tdisk:
-
 		# xmodel_world == alphamodel_sky
 
 		origwcs = Tan(cffns[0],0)
@@ -362,9 +361,22 @@ if __name__ == '__main__':
 		print 'Adding source', src
 		tractor.addSource(src)
 
+	cat = tractor.getCatalog()
+	print cat.hashkey()
+
+	p = cat.getParams()
+	print 'Params', p
+	print len(p), 'params'
+
+	print 'Cat objects:'
+	for src in cat:
+		print src
+
+	sys.exit(0)
+
 	lnp0 = tractor.getLogProb()
 	nthreads = 16
-	p0 = np.hstack(tractor.catalog.getAllParams())
+	p0 = np.array(tractor.getCatalog().getParams())
 	ndim = len(p0)
 	nw = 2*ndim
 	print 'ndim', ndim

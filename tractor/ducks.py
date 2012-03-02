@@ -53,8 +53,6 @@ class Sky(Params):
 	'''
 	Duck-type definition for the sky model.
 	'''
-	def hashkey(self):
-		return ('Sky',)
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	def getParamDerivatives(self, img, brightnessonly=False):
 		return []
@@ -78,7 +76,7 @@ class Source(Params):
 	def getSourceType(self):
 		return 'Source'
 
-class PhotoCal(object):
+class PhotoCal(Params):
 	'''
 	Duck-type definition of photometric calibration.
 
@@ -88,17 +86,12 @@ class PhotoCal(object):
 		pass
 
 
-class WCS(object):
+class WCS(Params):
 	'''
 	Duck-type definition of World Coordinate System.
 	
 	Converts between Position objects and Image pixel coordinates.
 	'''
-	def hashkey(self):
-		return ('WCS',)
-	def __hash__(self):
-		return hash(self.hashkey())
-
 	def positionToPixel(self, pos, src=None):
 		'''
 		Returns tuple (x, y) -- or any duck that supports

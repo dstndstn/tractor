@@ -744,7 +744,7 @@ def main():
 				cat = tractor.getCatalog()
 				ii = cat.index(src)
 				lnp0 = tractor.getLogProb()
-				p0 = cat.getAllParams()
+				p0 = cat.getParams()
 				print 'Try removing source', src
 				print 'lnp0:', lnp0
 				tractor.removeSource(src)
@@ -771,7 +771,7 @@ def main():
 				else:
 					# reinsert
 					cat.insert(ii, src)
-					cat.setAllParams(p0)
+					cat.setParams(p0)
 					print 'Reverted'
 					lnp3 = tractor.getLogProb()
 					print 'lnp3', lnp3
@@ -782,7 +782,7 @@ def main():
 			for j,src in enumerate(tractor.getCatalog()):
 				cat = tractor.getCatalog()
 				ii = cat.index(src)
-				p0 = cat.getAllParams()
+				p0 = cat.getParams()
 				print 'Try complexifying source', src
 				#if isinstance(src, PointSource):
 				newsrc = None
@@ -840,7 +840,7 @@ def main():
 					# reinsert
 					cat.remove(newsrc)
 					cat.insert(ii, src)
-					cat.setAllParams(p0)
+					cat.setParams(p0)
 					print 'Reverted'
 					lnp3 = tractor.getLogProb()
 					print 'lnp3', lnp3
