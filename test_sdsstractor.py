@@ -14,12 +14,11 @@ class FitsWcs(object):
 	def __init__(self, wcs):
 		self.wcs = wcs
 
-	def positionToPixel(self, src, pos):
+	def positionToPixel(self, pos, src=None):
 		x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
 		return x,y
 
-	def pixelToPosition(self, src, xy):
-		(x,y) = xy
+	def pixelToPosition(self, x, y, src=None):
 		r,d = self.wcs.pixelxy2radec(x, y)
 		return RaDecPos(r,d)
 
@@ -233,7 +232,7 @@ def main():
 	if False:
 		src = PointSource(pos, SdssFlux(2512.0 / SdssPhotoCal.scale))
 		tractor.catalog.append(src)
-		x,y = images[1].getWcs().positionToPixel(src, pos)
+		x,y = images[1].getWcs().positionToPixel(pos, src=src)
 		print 'Pixel position in image 1:', x,y
 		tractor.changeSourceTypes(srcs=[src])
 

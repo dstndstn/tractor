@@ -60,7 +60,7 @@ def main():
 #    saveBands('initial-'+prefix, tractor,zr,flipBands,debug=True)
     plotInvvar('initial-'+prefix,tractor)
 
-    xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
+    xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
     print xtr,ytr
     bright = None
@@ -70,7 +70,7 @@ def main():
     yt = 700.
     r = 200.
     for src in sources:
-        xs,ys = wcs.positionToPixel(src,src.getPosition())
+        xs,ys = wcs.positionToPixel(src.getPosition(), src)
         if (xs-xt)**2+(ys-yt)**2 <= r**2:
             if isinstance(src,st.CompositeGalaxy):
                 brightE = src.brightnessExp

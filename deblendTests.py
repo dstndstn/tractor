@@ -12,12 +12,12 @@ from tractor.sdss import *
 from tractor.sdss_galaxy import *
 
 def addexpgal(x, y, flux, re, ab, theta, wcs, tractor):
-	rd1 = wcs.pixelToPosition(None, (x, y))
+	rd1 = wcs.pixelToPosition(x, y)
 	g1 = ExpGalaxy(rd1, Flux(flux), re, ab, theta)
 	tractor.catalog.append(g1)
 
 def addstar(x, y, flux, wcs, tractor):
-	rd1 = wcs.pixelToPosition(None, (x, y))
+	rd1 = wcs.pixelToPosition(x, y)
 	s1 = PointSource(rd1, Flux(flux))
 	tractor.catalog.append(s1)
 
@@ -96,7 +96,7 @@ def writeimg(tractor, visit):
 	sx,sy = [],[]
 	wcs = img.getWcs()
 	for src in srcs:
-		x,y = wcs.positionToPixel(src, src.getPosition())
+		x,y = wcs.positionToPixel(src.getPosition(), src)
 		sx.append(x)
 		sy.append(y)
 	tab = pyfits.new_table([

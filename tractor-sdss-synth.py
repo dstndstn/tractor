@@ -49,7 +49,7 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 
 		for obj in sources:
 			if (isinstance(obj,PointSource)):
-				xt,yt = wcs.positionToPixel(None,obj.getPosition())
+				xt,yt = wcs.positionToPixel(obj.getPosition(), obj)
 				pointx.append(xt)
 				pointy.append(yt)
 				continue
@@ -63,7 +63,7 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 			else:
 				shapes.append(getattr(obj,'shape'))
 				attrType.append(' ')
-			x0,y0 = wcs.positionToPixel(None,obj.getPosition())
+			x0,y0 = wcs.positionToPixel(obj.getPosition(), obj)
 			
 			cd = timg.getWcs().cdAtPixel(x0,y0)
 			print "CD",cd
@@ -233,7 +233,7 @@ def main():
 	### DEBUG
 	wcs = timg.getWcs()
 	for i,s in enumerate(sources):
-		x,y = wcs.positionToPixel(s, s.getPosition())
+		x,y = wcs.positionToPixel(s.getPosition(), s)
 		print i, ('(%.1f, %.1f): ' % (x,y)), s
 
 	tims = [timg for timg,tinf in TI]

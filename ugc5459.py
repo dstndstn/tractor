@@ -63,7 +63,7 @@ def main():
 
     saveBands('initial-'+prefix, tractor,zr,flipBands,debug=True)
 
-    xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
+    xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
     print xtr,ytr
     bright = None
@@ -72,7 +72,7 @@ def main():
     xt = 250. #Moving to the left for better results
     yt = 210.
     for src in sources:
-        xs,ys = wcs.positionToPixel(src,src.getPosition())
+        xs,ys = wcs.positionToPixel(src.getPosition(), src)
         if (xs-xt)**2+(ys-yt)**2 <= r**2:
             if isinstance(src,st.CompositeGalaxy):
                 brightE = src.brightnessExp

@@ -59,8 +59,6 @@ class NullPhotoCal(object):
 	'''
 	def brightnessToCounts(self, brightness):
 		return brightness.getValue()
-	def countsToBrightness(self, counts):
-		return counts.getValue()
 
 
 class NullWCS(WCS):
@@ -75,10 +73,10 @@ class NullWCS(WCS):
 		self.pixscale = pixscale
 	def hashkey(self):
 		return ('NullWCS',)
-	def positionToPixel(self, src, pos):
+	def positionToPixel(self, pos, src=None):
 		return pos
-	def pixelToPosition(self, src, xy):
-		return xy
+	def pixelToPosition(self, x, y, src=None):
+		return x,y
 	def cdAtPixel(self, x, y):
 		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
@@ -103,9 +101,9 @@ class FitsWcs(object):
 		self.x0 = x0
 		self.y0 = y0
 
-	def positionToPixel(self, src, pos):
-		#ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+	def positionToPixel(self, pos, src=None):
 		X = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		# handle X = (ok,x,y) and X = (x,y) return values
 		if len(X) == 3:
 			ok,x,y = X
 		else:
@@ -113,8 +111,7 @@ class FitsWcs(object):
 			x,y = X
 		return x-self.x0, y-self.y0
 
-	def pixelToPosition(self, src, xy):
-		(x,y) = xy
+	def pixelToPosition(self, x, y, src=None):
 		r,d = self.wcs.pixelxy2radec(x + self.x0, y + self.y0)
 		return RaDecPos(r,d)
 
@@ -136,7 +133,6 @@ class RotatedFitsWcs(FitsWcs):
 			xp = self.W - 1 - x
 			xp,yp = y,xp
 			return xp, yp
-
 	def hashkey(self):
 		return ('RotatedFitsWcs',) + super(RotatedFitsWcs,self).hashkey()
 	def __str__(self):
@@ -145,8 +141,7 @@ class RotatedFitsWcs(FitsWcs):
 	def positionToPixel(self, src, pos):
 		x,y = super(RotatedFitsWcs,self).positionToPixel(src,pos)
 		return self.rotate(x,y)
-	def pixelToPosition(self, src, xy):
-		(x,y) = xy
+	def pixelToPosition(self, x, y, src=None):
 		x,y = self.rotate(x, y, False)
 		return super(RotatedFitsWcs,self).pixelToPosition(src, (x,y))
 
@@ -239,7 +234,7 @@ class PointSource(MultiParams):
 	#	return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
 	def getModelPatch(self, img):
-		(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
+		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		patch = img.getPsf().getPointSourcePatch(px, py)
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return patch * counts
@@ -249,7 +244,7 @@ class PointSource(MultiParams):
 		returns [ Patch, Patch, ... ] of length numberOfParams().
 		'''
 		pos0 = self.getPosition()
-		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
+		(px0,py0) = img.getWcs().positionToPixel(pos0, self)
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
 		counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
 		derivs = []
@@ -262,7 +257,7 @@ class PointSource(MultiParams):
 			pvals = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, pvals[i] + pstep)
-				(px,py) = img.getWcs().positionToPixel(self, pos0)
+				(px,py) = img.getWcs().positionToPixel(pos0, self)
 				patchx = img.getPsf().getPointSourcePatch(px, py)
 				pos0.setParam(i, oldval)
 				dx = (patchx - patch0) * (counts0 / pstep)

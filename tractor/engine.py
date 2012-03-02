@@ -1034,7 +1034,7 @@ class Tractor(object):
 			patch = self.getModelPatch(img, src)
 			if patch is None:
 				print 'None patch: src is', src
-				print 'position is', img.getWcs().positionToPixel(src,src.pos)
+				print 'position is', img.getWcs().positionToPixel(src.pos, src)
 				continue
 			patch.addTo(mod)
 		return mod

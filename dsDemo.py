@@ -23,13 +23,12 @@ class ScaledWCS(object):
 	def __init__(self, scale, wcs):
 		self.wcs = wcs
 		self.scale = float(scale)
-	def positionToPixel(self, src, pos):
-		x,y = self.wcs.positionToPixel(src,pos)
+	def positionToPixel(self, pos, src=None):
+		x,y = self.wcs.positionToPixel(pos, src)
 		return x*self.scale, y*self.scale
-	def pixelToPosition(self, src, xy):
-		x,y = xy
-		xy = (x/self.scale, y/self.scale)
-		return self.wcs.pixelToPosition(src, xy)
+	def pixelToPosition(self, x, y, src=None):
+		x,y = (x/self.scale, y/self.scale)
+		return self.wcs.pixelToPosition(x, y, src)
 	def cdAtPixel(self, x, y):
 		cd = self.wcs.cdAtPixel(x/self.scale, y/self.scale)
 		return cd / self.scale
@@ -80,9 +79,9 @@ def fakeimg_plots():
 	ravals = np.arange(333.55, 333.56, 0.001)
 	decvals = np.arange(0.36, 0.37, 0.001)
 	# NOTE flipped [0],[1] indices... (modhead above)
-	xvals = [fakewcs.positionToPixel(None, RaDecPos(ra, decmid))[1]
+	xvals = [fakewcs.positionToPixel(RaDecPos(ra, decmid))[1]
 			 for ra in ravals]
-	yvals = [fakewcs.positionToPixel(None, RaDecPos(ramid, dec))[0]
+	yvals = [fakewcs.positionToPixel(RaDecPos(ramid, dec))[0]
 			 for dec in decvals]
 	xvals = np.array(xvals) - px0
 	yvals = np.array(yvals) - py0
@@ -183,7 +182,7 @@ def get_cfht_img(ra, dec, extent):
 	wcs = FitsWcs(Tan(cffn, 0))
 	print 'CFHT WCS', wcs
 
-	x,y = wcs.positionToPixel(None, RaDecPos(ra,dec))
+	x,y = wcs.positionToPixel(RaDecPos(ra,dec))
 	print 'x,y', x,y
 	cfx,cfy = x,y
 
@@ -554,7 +553,7 @@ def main():
 				for j,src in enumerate(tractor.getCatalog()):
 					im = tractor.getImage(i)
 					wcs = im.getWcs()
-					x,y = wcs.positionToPixel(None, src.getPosition())
+					x,y = wcs.positionToPixel(src.getPosition(), src)
 					xx.append(x)
 					yy.append(y)
 					srct = src.getSourceType()

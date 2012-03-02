@@ -204,12 +204,11 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def get_tractor(RA, DEC, sz):
+def get_tractor(RA, DEC, sz, cffns):
 	tractor = Tractor([])
 
 	skies = []
 	pixscale = 0.187
-	cffns = glob('cs82data/86*p-21-cr.fits')
 	print 'CFHT images:', cffns
 	#for fn in cffns[:1]:
 	for fn in cffns:
@@ -298,8 +297,12 @@ if __name__ == '__main__':
 	for c in ['disk_scale_world', 'disk_aspect_world', 'disk_theta_world']:
 		T.set(c, T2.get(c))
 
+	T.ra_disk  = T2.alphamodel_sky
+	T.dec_disk = T2.deltamodel_sky
 	T.mag_disk = T2.mag_model
 	T.chi2_disk = T2.chi2_model
+	T.ra_sph  = T2.alphamodel_sky
+	T.dec_sph = T2.deltamodel_sky
 	T.mag_sph = T.mag_model
 	T.chi2_sph = T.chi2_model
 
@@ -317,36 +320,55 @@ if __name__ == '__main__':
 	Tsph  = Tgal[Tgal.chi2_sph  <= Tgal.chi2_disk]
 	print len(Tdisk), 'disk'
 	print len(Tsph), 'spheroid'
-	
+
+	cffns = glob('cs82data/86*p-21-cr.fits')
+
 	pfn = 'tractor.pickle'
 	if os.path.exists(pfn):
 		print 'Reading pickle', pfn
 		tractor,skies = unpickle_from_file(pfn)
 	else:
-		tractor,skies = get_tractor(RA,DEC,sz)
+		tractor,skies = get_tractor(RA,DEC,sz, cffns)
 		pickle_to_file((tractor,skies), pfn)
 	
 	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
 	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
 	tim = tractor.getImage(0)
-	#wcs = tim.getWcs()
-	#x,y = wcs.positionToPixel(None, RaDecPos(RA,DEC))
+	wcs = tim.getWcs()
+	#x,y = wcs.positionToPixel(RaDecPos(RA,DEC))
 	#print 'x,y', x,y
 
 	for t in Tdisk:
-		src = DevGalaxy(RaDecPos(t.ra, t.dec), Mags(i=t.mag_disk, r=t.mag_disk),
+
+		# xmodel_world == alphamodel_sky
+
+		origwcs = Tan(cffns[0],0)
+		x,y = origwcs.radec2pixelxy(t.alphamodel_sky, t.deltamodel_sky)
+		print 'WCS x,y', x,y
+		print '    x,y', t.xmodel_image, t.ymodel_image
+		print '    del', t.xmodel_image - x, t.ymodel_image - y
+		print '    x,y', t.x_image, t.y_image
+
+		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
 						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
 									t.disk_theta_world + 90.))
 		print 'Adding source', src
 		tractor.addSource(src)
 	for t in Tsph:
-		src = ExpGalaxy(RaDecPos(t.ra, t.dec), Mags(i=t.mag_sph, r=t.mag_sph),
+		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
 						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
 									t.spheroid_theta_world + 90.))
 		print 'Adding source', src
 		tractor.addSource(src)
-	
+
+	lnp0 = tractor.getLogProb()
+	nthreads = 16
+	p0 = np.hstack(tractor.catalog.getAllParams())
+	ndim = len(p0)
+	nw = 2*ndim
+	print 'ndim', ndim
+
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -373,7 +395,7 @@ if __name__ == '__main__':
 					   vmin=zr[0], vmax=zr[1], cmap='gray')
 			imchi = dict(interpolation='nearest', origin='lower',
 						 vmin=-5., vmax=+5., cmap='gray')
-			if step == 0:
+			if step == 1:
 				tim = tractor.getImage(i)
 				data = tim.getImage()
 
@@ -387,9 +409,9 @@ if __name__ == '__main__':
 
 				if i == 0:
 					ax = plt.axis()
-					xy = np.array([tim.getWcs().positionToPixel(None, RaDecPos(r,d))
+					xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
 								   for r,d in zip(T.ra, T.dec)])
-					plt.plot(xy[:,0], xy[:,1], 'r.')
+					plt.plot(xy[:,0], xy[:,1], 'r+')
 					plt.axis(ax)
 					mysavefig('data%02i-ann.png' % i)
 

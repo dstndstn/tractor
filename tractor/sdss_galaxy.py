@@ -170,7 +170,7 @@ class Galaxy(MultiParams):
 	# Galaxy.
 	def getParamDerivatives(self, img, brightnessonly=False):
 		pos0 = self.getPosition()
-		(px0,py0) = img.getWcs().positionToPixel(self, pos0)
+		(px0,py0) = img.getWcs().positionToPixel(pos0, self)
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		patch0 = self.getUnitFluxModelPatch(img, px0, py0)
 		if patch0 is None:
@@ -185,7 +185,7 @@ class Galaxy(MultiParams):
 			params = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, params[i]+pstep)
-				(px,py) = img.getWcs().positionToPixel(self, pos0)
+				(px,py) = img.getWcs().positionToPixel(pos0, self)
 				pos0.setParam(i, oldval)
 				patchx = self.getUnitFluxModelPatch(img, px, py)
 				if patchx is None or patchx.getImage() is None:
@@ -373,7 +373,7 @@ class HoggGalaxy(Galaxy):
 
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
-			(px,py) = img.getWcs().positionToPixel(self, self.getPosition())
+			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		galmix = self.getProfile()
 		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)

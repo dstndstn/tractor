@@ -262,7 +262,7 @@ def get_tractor_image(run, camcol, field, bandname,
 
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
-		fxc,fyc = wcs.positionToPixel(None, RaDecPos(ra,dec))
+		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
 		xc,yc = [int(np.round(p)) for p in fxc,fyc]
 		roi = [xc-S, xc+S, yc-S, yc+S]
 		info.update(roi=roi)
@@ -364,15 +364,6 @@ class SdssMagsPhotoCal(object):
 					 - 0.4*(self.aa + self.kk * self.airmass))
 		rtn = 10.**logcounts
 		return rtn
-		
-
-	def countsToBrightness(self, counts):
-		sys.exit(0)
-		# FIXME -- information loss here...
-		#return Mags({ self.bandname:
-		#			  self.tsfield.counts_to_mag(counts, self.band)})
-
-
 
 class SdssMagPhotoCal(object):
 	'''
@@ -388,8 +379,8 @@ class SdssMagPhotoCal(object):
 		return ('SdssMagPhotoCal', self.band, self.tsfield)
 	def brightnessToCounts(self, brightness):
 		return self.tsfield.mag_to_counts(brightness.getValue(), self.band)
-	def countsToBrightness(self, counts):
-		return Mag(self.tsfield.counts_to_mag(counts, self.band))
+	#def countsToBrightness(self, counts):
+	#	return Mag(self.tsfield.counts_to_mag(counts, self.band))
 
 
 		
@@ -406,12 +397,6 @@ class SdssFluxPhotoCal(object):
 		returns: float
 		'''
 		return brightness.getValue() * self.scale
-	def countsToBrightness(self, counts):
-		'''
-		counts: float
-		Returns: duck-typed Brightness object (SdssFlux)
-		'''
-		return SdssFlux(counts / self.scale)
 
 class SdssFlux(Flux):
 	def getStepSizes(self, img):
@@ -452,16 +437,14 @@ class SdssWcs(WCS):
 		return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
 
 	# RA,Dec in deg to pixel x,y.
-	def positionToPixel(self, src, pos):
+	def positionToPixel(self, pos, src=None):
 		## FIXME -- color.
 		x,y = self.astrans.radec_to_pixel(pos.ra, pos.dec)
 		return x - self.x0, y - self.y0
 
 	# (x,y) to RA,Dec in deg
-	def pixelToPosition(self, src, xy):
+	def pixelToPosition(self, x, y, src=None):
 		## FIXME -- color.
-		## NOTE, "src" may be None.
-		(x,y) = xy
 		ra,dec = self.pixelToRaDec(x + self.x0, y + self.y0)
 		return RaDecPos(ra, dec)
 
@@ -650,6 +633,7 @@ class SDSSTractor(Tractor):
 		patch = img.getPsf().getPointSourcePatch(x, y)
 		ht /= patch.getImage().max()
 		photocal = img.getPhotoCal()
+		# XXX
 		flux = photocal.countsToBrightness(ht)
 		ps = PointSource(pos, flux)
 		try:

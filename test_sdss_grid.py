@@ -166,7 +166,7 @@ def main():
 
 		img = tractor.getImage(0)
 		wcs = img.getWcs()
-		pos = wcs.pixelToPosition(None, (ix,iy))
+		pos = wcs.pixelToPosition(ix,iy)
 		photocal = img.getPhotoCal()
 		flux = photocal.countsToFlux(1e6) #sxy.flux[i])
 

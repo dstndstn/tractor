@@ -21,7 +21,7 @@ COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 		M = brightness.getMag(self.bandname)
 		logc = (M - self.phot_c - self.phot_k * (self.airmass - 1.)) / -2.5
 		return self.exptime * 10.**logc
-	def countsToBrightness(self, counts):
-		return Mag(-2.5 * np.log10(counts / self.exptime) +
-				   self.phot_c + self.phot_k * (self.airmass - 1.))
+	#def countsToBrightness(self, counts):
+	#	return Mag(-2.5 * np.log10(counts / self.exptime) +
+	#			   self.phot_c + self.phot_k * (self.airmass - 1.))
 		

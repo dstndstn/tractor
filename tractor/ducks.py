@@ -86,8 +86,6 @@ class PhotoCal(object):
 	'''
 	def brightnessToCounts(self, brightness):
 		pass
-	def countsToBrightness(self, counts):
-		pass
 
 
 class WCS(object):
@@ -101,14 +99,14 @@ class WCS(object):
 	def __hash__(self):
 		return hash(self.hashkey())
 
-	def positionToPixel(self, src, pos):
+	def positionToPixel(self, pos, src=None):
 		'''
 		Returns tuple (x, y) -- or any duck that supports
 		iteration of two items
 		'''
 		return None
 
-	def pixelToPosition(self, src, xy):
+	def pixelToPosition(self, x, y, src=None):
 		'''
 		(x,y) to Position; src may be None (?)
 		'''
@@ -137,17 +135,23 @@ class PSF(Params):
 	def applyTo(self, image):
 		pass
 
-	# Returns the number of pixels in the support of this PSF.
 	def getRadius(self):
+		'''
+		Returns the size of the support of this PSF.
+		'''
 		return 0
 
-	# return Patch, a rendering of a point source at the given pixel
-	# coordinate.
 	def getPointSourcePatch(self, px, py):
+		'''
+		returns a Patch, a rendering of a point source at the given pixel
+		coordinate.
+		'''
 		pass
 
-	# Returns a new PSF object that is a more complex version of self.
 	def proposeIncreasedComplexity(self, img):
+		'''
+		Returns a new PSF object that is a more complex version of self.
+		'''
 		return PSF()
 	
 	def isValidParamStep(self, dparam):

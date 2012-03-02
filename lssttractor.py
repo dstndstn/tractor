@@ -280,7 +280,7 @@ def main():
 
 			print 'Optimizing source', i, 'of', len(cat)
 
-			x,y = timg.getWcs().positionToPixel(src, src.getPosition())
+			x,y = timg.getWcs().positionToPixel(src.getPosition(), src)
 			print '(%6.1f, %6.1f)'%(x,y), src
 			# pre = src.getModelPatch(timg)
 
