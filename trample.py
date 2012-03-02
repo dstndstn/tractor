@@ -117,7 +117,7 @@ def main():
 				plt.savefig('data%02i.png' % i)
 
 			modsum = None
-			KK = 
+			#KK = 
 			for k in xrange(nw):
 				tractor.setAllSourceParams(pp[k,:])
 				mod = tractor.getModelImage(i)

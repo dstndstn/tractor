@@ -165,6 +165,7 @@ class MultiParams(Params):
 		else:
 			self.subs = []
 		self.namedparams = self.getNamedParams()
+		#print getClassName(self), 'named params:', self.namedparams
 		# indices of pinned params
 		self.pinnedparams = []
 
@@ -189,10 +190,11 @@ class MultiParams(Params):
 		if name in ['subs', 'namedparams', 'pinnedparams']:
 			self.__dict__[name] = val
 			return
-		for n,i in self.namedparams:
-			if name == n:
-				self.subs[i] = val
-				return
+		if hasattr(self, 'namedparams'):
+			for n,i in self.namedparams:
+				if name == n:
+					self.subs[i] = val
+					return
 		self.__dict__[name] = val
 
 	def hashkey(self):

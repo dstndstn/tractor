@@ -372,6 +372,9 @@ if __name__ == '__main__':
 	for src in cat:
 		print src
 
+	print 'Image params', tim.getParams()
+	print 'Image hashkey:', tim.hashkey()
+
 	sys.exit(0)
 
 	lnp0 = tractor.getLogProb()

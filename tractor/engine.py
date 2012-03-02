@@ -37,21 +37,36 @@ def set_fp_err():
 def randomint():
 	return int(random.random() * (2**32)) #(2**48))
 
-class Image(object):
+class Image(MultiParams):
 	'''
 	An image plus its calibration information.  The Tractor handles
 	multiple Images.
+
 	'''
-	def __init__(self, data=None, invvar=None, psf=None, sky=None, wcs=None,
-				 photocal=None, name=None):
-		self.data = data
-		self.invvar = invvar
+	def __init__(self, **kwargs):
+		'''
+		Expected kwargs:
+		(data=None, invvar=None,
+		 psf=None, wcs=None, sky=None, photocal=None,
+		 name=None)
+		
+		'''
+		self.data = kwargs.pop('data', None)
+		self.invvar = kwargs.pop('invvar', None)
 		self.inverr = np.sqrt(self.invvar)
-		self.psf = psf
-		self.sky = sky
-		self.wcs = wcs
-		self.photocal = photocal
-		self.name = name
+		self.name = kwargs.pop('name', None)
+
+		psf = kwargs.pop('psf', None)
+		sky = kwargs.pop('sky', None)
+		wcs = kwargs.pop('wcs', None)
+		photocal = kwargs.pop('photocal', None)
+		super(Image,self).__init__(psf, wcs, photocal, sky)
+
+		print 'wcs', self.wcs
+
+	@staticmethod
+	def getNamedParams():
+		return [('psf',0), ('wcs',1), ('photocal', 2), ('sky',3)]
 
 	def getSky(self):
 		return self.sky
@@ -65,7 +80,7 @@ class Image(object):
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.data.shape
-		raise AttributeError('Image: unknown attribute "%s"' % name)
+		return super(Image,self).__getattr__(name)
 
 	# Numpy arrays have shape H,W
 	def getWidth(self):
@@ -84,7 +99,7 @@ class Image(object):
 	def numberOfPixels(self):
 		(H,W) = self.data.shape
 		return W*H
-		
+
 	def getInvError(self):
 		return self.inverr
 	def getImage(self):
@@ -333,17 +348,12 @@ class Tractor(object):
 	# FIXME -- we want to be able to include image calib params
 	# as well.
 	def __call__(self, X):
-		#self.catalog.setAllParams(X)
 		self.setAllSourceParams(X)
 		lnp = self.getLogProb()
 		print 'lnp', lnp
 		return lnp
 	def setAllSourceParams(self, X):
-		i=0
-		for src in self.catalog:
-			N = src.numberOfParams()
-			src.setParams(X[i:i+N])
-			i += N
+		self.catalog.setParams(X)
 
 	# For pickling
 	def __getstate__(self):
@@ -366,6 +376,7 @@ class Tractor(object):
 		return self.catalog
 
 	def setCatalog(self, srcs):
+		# FIXME -- ensure that "srcs" is a Catalog?  Or duck-type it?
 		self.catalog = srcs
 
 	def addImage(self, img):
