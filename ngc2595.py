@@ -67,7 +67,7 @@ def main():
 
     for timg,sources in zip(tims,sources):
         wcs = timg.getWcs()
-        xtr,ytr = wcs.positionToPixel(None,RaDecPos(ra,dec))
+        xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
         print xtr,ytr
 
@@ -75,7 +75,7 @@ def main():
         yt = ytr
         r = 250.
         for src in sources:
-            xs,ys = wcs.positionToPixel(src,src.getPosition())
+            xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
                 print "Removed:", src
                 print xs,ys
