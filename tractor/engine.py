@@ -309,7 +309,10 @@ class Catalog(MultiParams):
 		return self.subs.__getitem__(self, key)
 	def append(self, x):
 		self.subs.append(x)
-
+	def extend(self, x):
+		self.subs.extend(x)
+	def remove(self, x):
+		self.subs.remove(x)
 
 class Tractor(object):
 
