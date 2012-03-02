@@ -237,8 +237,7 @@ def get_tractor(RA, DEC, sz):
 			tractor.addImage(im)
 			skies.append((info['sky'], info['skysig']))
 
-	zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
-	return tractor,zrs
+	return tractor,skies
 	
 if __name__ == '__main__':
 	#getdata()
@@ -252,23 +251,62 @@ if __name__ == '__main__':
 	T.ra  = T.alpha_sky
 	T.dec = T.delta_sky
 
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_exp_ord2_size25.fit'
+	T2 = fits_table(fn, hdunum=2)
+	print 'Read', len(T2), 'rows from', fn
+	T2.ra  = T2.alpha_sky
+	T2.dec = T2.delta_sky
+
+	if False:
+		plt.clf()
+		plt.plot(T.ra, T2.ra, 'r.')
+		plt.savefig('ra.png')
+		sys.exit(0)
+
 	# approx...
 	S = sz / 3600.
 	ra0 ,ra1  = RA-S/2.,  RA+S/2.
 	dec0,dec1 = DEC-S/2., DEC+S/2.
 
+	if False:
+		T = T[np.logical_or(T.mag_model < 50, T.mag_psf < 50)]
+		Tstar = T[np.logical_and(T.chi2_psf < T.chi2_model, T.mag_psf < 50)]
+		Tgal = T[np.logical_and(T.chi2_model < T.chi2_psf, T.mag_model < 50)]
+		# 'mag_psf', 'chi2_psf',
+		for i,c in enumerate(['mag_model', 'chi2_model', 
+							  'spheroid_reff_world', 'spheroid_aspect_world',
+							  'spheroid_theta_world']):
+			plt.clf()
+			plt.hist(Tgal.get(c), 100)
+			plt.xlabel(c)
+			plt.savefig('hist%i.png' % i)
+		sys.exit(0)
+
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
 	print 'Cut to', len(T), 'objects nearby.'
 
+	plt.clf()
+	plt.semilogx(T.chi2_psf, T.chi2_psf - T.chi2_model, 'r.')
+	plt.ylim(-100, 100)
+	plt.xlabel('chi2_psf')
+	plt.ylabel('chi2_psf - chi2_model')
+	plt.savefig('chi.png')
 
+	Tstar = T[np.logical_and(T.chi2_psf < T.chi2_model, T.mag_psf < 50)]
+	Tgal = T[np.logical_and(T.chi2_model < T.chi2_psf, T.mag_model < 50)]
+	print len(Tstar), 'stars'
+	print len(Tgal), 'galaxies'
+	
 	pfn = 'tractor.pickle'
 	if os.path.exists(pfn):
 		print 'Reading pickle', pfn
-		tractor,zrs = unpickle_from_file(pfn)
+		tractor,skies = unpickle_from_file(pfn)
 	else:
-		tractor,zrs = get_tractor(RA,DEC,sz)
-		pickle_to_file((tractor,zrs), pfn)
+		tractor,skies = get_tractor(RA,DEC,sz)
+		pickle_to_file((tractor,skies), pfn)
 	
+	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
+	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
 	tim = tractor.getImage(0)
 	wcs = tim.getWcs()
@@ -278,6 +316,18 @@ if __name__ == '__main__':
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
+
+	def nlmap(X):
+		S = 0.01
+		return np.arcsinh(X * S)/S
+	def myimshow(x, *args, **kwargs):
+		mykwargs = kwargs.copy()
+		if 'vmin' in kwargs:
+			mykwargs['vmin'] = nlmap(kwargs['vmin'])
+		if 'vmax' in kwargs:
+			mykwargs['vmax'] = nlmap(kwargs['vmax'])
+		return plt.imshow(nlmap(x), *args, **mykwargs)
+
 
 	for step in range(100):
 
@@ -294,7 +344,7 @@ if __name__ == '__main__':
 
 				plt.clf()
 				plt.gca().set_position(plotpos0)
-				plt.imshow(data, **ima)
+				myimshow(data, **ima)
 				plt.title('Data %s' % tim.name)
 				plt.xticks([],[])
 				plt.yticks([],[])
@@ -304,7 +354,6 @@ if __name__ == '__main__':
 					ax = plt.axis()
 					xy = np.array([tim.getWcs().positionToPixel(None, RaDecPos(r,d))
 								   for r,d in zip(T.ra, T.dec)])
-					print 'xy', xy
 					plt.plot(xy[:,0], xy[:,1], 'r.')
 					plt.axis(ax)
 					plt.savefig('data%02i-ann.png' % i)
