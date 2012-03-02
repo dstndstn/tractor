@@ -49,7 +49,6 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 				pointx.append(xt)
 				pointy.append(yt)
 				continue
-			print type(obj)
 			shapes = []
 			attrType = []
 			if (isinstance(obj,st.CompositeGalaxy)):
@@ -62,14 +61,10 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 			x0,y0 = wcs.positionToPixel(obj.getPosition(), obj)
 			
 			cd = timg.getWcs().cdAtPixel(x0,y0)
-			print "CD",cd
 			for i,shape in enumerate(shapes):
 				xplotx.append(x0)
 				xploty.append(y0)
 				T=np.linalg.inv(shape.getTensor(cd))
-				print "Inverted tensor:",T
-				print obj.getPosition()
-				print i
 
 				x,y = [],[]
 				for theta in np.linspace(0,2*np.pi,100):
@@ -161,14 +156,14 @@ def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
 
 def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False):
     for i,img in enumerate(tractor.getImages()):
-        save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
+	    if i % 5 == 0:
+		    save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
 
 def plotInvvar(idstr,tractor):
 	models = tractor.getModelImages()
 	timgs = tractor.getImages()
-	chis = tractor.getChiImages()
-	for i,(timg,mod,chi) in enumerate(zip(timgs,models,chis)):
+	for i,(timg,mod) in enumerate(zip(timgs,models)):
 		data = timg.getImage()
 		plt.clf()
 		plt.plot(mod.flatten(),(data-mod).flatten()**2,'x')
