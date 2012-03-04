@@ -200,6 +200,8 @@ class MultiParams(Params):
 	def hashkey(self):
 		t = [getClassName(self)]
 		for s in self.subs:
+			if s is None:
+				t.append(None)
 			t.append(s.hashkey())
 		return tuple(t)
 
@@ -238,18 +240,26 @@ class MultiParams(Params):
 		return i in self.pinnedparams
 
 	def numberOfParams(self):
-		return sum(s.numberOfParams() for s in self.subs)
+		return sum(s.numberOfParams() for s in self.subs
+				   if s is not None)
 
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
 		p = []
 		for s in self.subs:
-			p.extend(s.getParams())
+			if s is None:
+				continue
+			pp = s.getParams()
+			if pp is None:
+				continue
+			p.extend(pp)
 		return p
 
 	def setParams(self, p):
 		i = 0
 		for s in self.subs:
+			if s is None:
+				continue
 			n = s.numberOfParams()
 			s.setParams(p[i:i+n])
 			i += n
@@ -257,6 +267,8 @@ class MultiParams(Params):
 	def setParam(self, i, p):
 		off = 0
 		for s in self.subs:
+			if s is None:
+				continue
 			n = s.numberOfParams()
 			if i < off+n:
 				return s.setParam(i-off, p)
@@ -266,6 +278,8 @@ class MultiParams(Params):
 	def getStepSizes(self, *args, **kwargs):
 		p = []
 		for s in self.subs:
+			if s is None:
+				continue
 			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 

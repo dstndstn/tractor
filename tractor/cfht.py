@@ -15,6 +15,9 @@ COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 '''
 	def hashkey(self):
 		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
+
+	def getParams(self):
+		return (self.phot_c,)
 			
 	def brightnessToCounts(self, brightness):
 		#M = brightness.getValue()

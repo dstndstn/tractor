@@ -15,6 +15,7 @@ from tractor import sdss as st
 from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
+import emcee
 
 def getdata():
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
@@ -372,6 +373,11 @@ if __name__ == '__main__':
 	for src in cat:
 		print src
 
+	print tim.sky.getParams()
+	print tim.wcs.getParams()
+	print tim.psf.getParams()
+	print tim.photocal.getParams()
+
 	print 'Image params', tim.getParams()
 	print 'Image hashkey:', tim.hashkey()
 
@@ -400,6 +406,22 @@ if __name__ == '__main__':
 			mykwargs['vmax'] = nlmap(kwargs['vmax'])
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
+
+	nthreads = 16
+	p0 = np.array(tractor.catalog.getParams())
+	ndim = len(p0)
+	nw = 2*ndim
+	print 'ndim', ndim
+
+	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+									threads=nthreads,
+									live_dangerously=True)
+
+	lnp = None
+	pp = pp0
+	rstate = None
+	alllnp = []
+	allp = []
 
 	for step in range(1, 100):
 
@@ -440,6 +462,9 @@ if __name__ == '__main__':
 			plt.yticks([],[])
 			mysavefig('mod%02i-%02i.png' % (i,step-1))
 			
+
+		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+
 
 					
 

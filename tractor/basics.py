@@ -80,7 +80,7 @@ class NullWCS(WCS):
 	def cdAtPixel(self, x, y):
 		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
-class FitsWcs(object):
+class FitsWcs(Params):
 	'''
 	A WCS implementation that wraps a FITS WCS object (possibly with a
 	pixel offset)
@@ -92,6 +92,12 @@ class FitsWcs(object):
 
 	def hashkey(self):
 		return ('FitsWcs', self.x0, self.y0, self.wcs)
+
+	def getParams(self):
+		w = self.wcs
+		wcsparams = ((w.crval[0], w.crval[1], w.crpix[0], w.crpix[1],) +
+					 tuple(w.get_cd()))
+		#return (self.x0, self.y0,) + wcsparams
 
 	def __str__(self):
 		return ('FitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)
