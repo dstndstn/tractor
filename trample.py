@@ -79,22 +79,29 @@ def main():
 	pp = pp0
 	rstate = None
 	for step in range(100):
-		print 'Taking step', step
-		print 'pp shape', pp.shape
-		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-		print 'lnprobs:', lnp
-		print 'pp shape', pp.shape
-		# nw,ndim
 
-		alllnp.append(lnp.copy())
-		allp.append(pp.copy())
-		pickle_to_file((allp, alllnp), 'trample-%03i.pickle' % step)
+		pfn = 'trample-%03i.pickle' % step
+		if os.path.exists(pfn):
+			print 'Unpickling', pfn
+			allp,alllnp = unpickle_from_file(pfn)
+			lnp = alllnp[-1]
+			pp  = allp[-1]
+		else:
+			print 'Taking step', step
+			print 'pp shape', pp.shape
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+			print 'lnprobs:', lnp
+			print 'pp shape', pp.shape
+			# nw,ndim
+			alllnp.append(lnp.copy())
+			allp.append(pp.copy())
+			pickle_to_file((allp, alllnp), pfn)
 		
 		plt.clf()
 		plt.plot(alllnp, 'k', alpha=0.5)
 		plt.axhline(lnp0, color='r', lw=2, alpha=0.5)
 		mx = np.max([p.max() for p in alllnp])
-		plt.ylim(mx-100, mx)
+		plt.ylim(mx-300, mx)
 		plt.xlim(0, len(alllnp)-1)
 		plt.savefig('lnp.png')
 
@@ -164,7 +171,6 @@ def main():
 			plt.xticks([],[])
 			plt.yticks([],[])
 			plt.savefig('chibest%02i-%02i.png' % (i,step))
-			
 
 			plt.clf()
 			plt.gca().set_position(plotpos0)
