@@ -330,46 +330,13 @@ if __name__ == '__main__':
 		tractor,skies = unpickle_from_file(pfn)
 	else:
 		tractor,skies = get_tractor(RA,DEC,sz, cffns)
-		print 'tractor, skies', tractor, skies
-		print 'tractor state'
-		print tractor.__getstate__()
-		print
-		print 'Images'
-		print
-		print tractor.getImages()
-		print repr(tractor.getImages())
-		print
-		print 'Catalog'
-		print
-		print tractor.getCatalog()
-		print
-		pickle_to_file(tractor.getCatalog(), 'cat.pickle')
-		pickle_to_file(tractor.getImages()[0].psf, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].wcs, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].photocal, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].sky, 'img.pickle')
-
-		pickle_to_file(tractor.getImages()[0].data, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].invvar, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].inverr, 'img.pickle')
-		pickle_to_file(tractor.getImages()[0].name, 'img.pickle')
-
-		tim = tractor.getImages()[0]
-		print 'tim', tim
-		red = getattr(tim, '__reduce_ex__', None)
-		print 'red', red
-		print 'red type', type(red)
-		red(2)
-
-		pickle_to_file(tractor.getImages()[0], 'img.pickle')
-		pickle_to_file(tractor.getImages(), 'img.pickle')
-
 		pickle_to_file((tractor,skies), pfn)
 	
 	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
 	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
 	tim = tractor.getImage(0)
+	print 'tim', tim
 	wcs = tim.getWcs()
 	#x,y = wcs.positionToPixel(RaDecPos(RA,DEC))
 	#print 'x,y', x,y
@@ -418,9 +385,9 @@ if __name__ == '__main__':
 
 	print 'N image params:', tim.numberOfParams()
 
-	tim.pinParams('photocal', 'psf')
+	tim.freezeParams('photocal', 'psf')
 	wcs = tim.getWcs()
-	wcs.pinAllBut('crval0', 'crval1')
+	wcs.freezeAllBut('crval0', 'crval1')
 	#wcs.pinParams('crpix1', 'crpix2', 'cd11', 'cd12', 'cd21', 'cd22', 'x0', 'y0')
 
 	print '(unpinned) Image params', tim.getUnpinnedParams()

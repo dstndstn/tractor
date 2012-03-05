@@ -65,15 +65,20 @@ class NamedParams(object):
 
 	Also allows parameters to be set "Active" or "Inactive".
 	'''
-	def __init__(self):
-		super(NamedParams,self).__init__()
-		#print 'NamedParams __init__.'
+
+	@staticmethod
+	def getNamedParams():
+		'''
+		Returns a dict of name->index mappings.
+		'''
+		return {}
+
+	def __new__(cl, *args, **kwargs):
+		self = super(NamedParams,cl).__new__(cl, *args, **kwargs)
+
 		self.namedparams = self.getNamedParams()
 		# create the reverse mapping: from parameter index to name.
 		self.paramnames = dict((v,k) for k,v in self.namedparams.items())
-
-		# active/inactive
-		self.liquid = [True] * self._numberOfThings()
 
 		# Create a property for each named parameter.
 		for n,i in self.namedparams.items():
@@ -84,13 +89,13 @@ class NamedParams(object):
 			getter = makeGetter(i)
 			setter = makeSetter(i)
 			setattr(self.__class__, n, property(getter, setter, None, 'named param %s' % n))
+		return self
 
-	@staticmethod
-	def getNamedParams():
-		'''
-		Returns a dict of name->index mappings.
-		'''
-		return {}
+	def __init__(self):
+		super(NamedParams,self).__init__()
+		#print 'NamedParams __init__.'
+		# active/inactive
+		self.liquid = [True] * self._numberOfThings()
 
 	def _iterNamesAndVals(self):
 		'''
