@@ -23,8 +23,6 @@ class PlotSequence(object):
 		self.ploti += 1
 
 
-
-
 class ScalarParam(Params):
 	'''
 	Implementation of "Params" for a single scalar (float) parameter,
@@ -59,50 +57,50 @@ class ScalarParam(Params):
 		return self.val
 
 
-class ParamList(Params):
+class NamedParams1(object):
 	'''
-	An implementation of Params that holds values in a list.
+	A mix-in class.
+
+	Allows names to be attached to parameters.
+
+	Also allows parameters to be set "Active" or "Inactive".
 	'''
-	def __init__(self, *args):
+	def __init__(self):
+		#print 'NamedParams __init__.'
 		self.namedparams = self.getNamedParams()
-		self.vals = list(args)
+		# FIXME -- could I do this with property() instead?
 
-	def getFormatString(self, i):
-		return '%g'
+	@staticmethod
+	def getNamedParams():
+		return []
 
-	def __str__(self):
-		pvals = self.getParams()
-		s = getClassName(self) + ': '
-		ss = []
+	def iterNamesAndVals(self):
+		'''
+		Yields  (name,val) tuples, where "name" is None if the parameter is not named.
+		'''
+		pvals = self._getParams()
 		for i,val in enumerate(pvals):
+			## FIXME -- this implementation is ugly.
 			name = None
 			for k,j in self.namedparams:
 				if i == j:
 					name = k
 					break
-			fmt = self.getFormatString(i)
-			if name is not None:
-				ss.append(('%s='+fmt) % (name, val))
-			else:
-				ss.append(fmt % val)
-		return s + ', '.join(ss)
+			yield((name,val))
 
-	@staticmethod
-	def getNamedParams():
-		return []
-	#def getNamedParams(self):
-	#	return self.namedparams
-
-	def __getattr__(self, name):
+	def getNamedAttr(self, name):
+		#print 'getNamedAttr(' + name + ')'
 		if not 'namedparams' in self.__dict__:
 			raise AttributeError
 		for n,i in self.namedparams:
 			if name == n:
-				return self.vals[i]
-		raise AttributeError('ParamList (%s): unknown attribute "%s"' %
-							 (str(type(self)), name))
-	def __setattr__(self, name, val):
-		if name in ['vals', 'namedparams']:
+				return self._getParam(i)
+		raise AttributeError(getClassName(self) + ': unknown attribute "%s"' % name)
+	def __getattr__(self, name):
+		return self.getNamedAttr(name)
+
+	def setNamedAttr(self, name, val):
+		if name == 'namedparams':
 			self.__dict__[name] = val
 			return
 		for n,i in self.namedparams:
@@ -110,8 +108,106 @@ class ParamList(Params):
 				self._setParam(i, val)
 				return
 		self.__dict__[name] = val
+
+
+class NamedParams(object):
+	'''
+	A mix-in class.
+
+	Allows names to be attached to parameters.
+
+	Also allows parameters to be set "Active" or "Inactive".
+	'''
+	def __init__(self):
+		#print 'NamedParams __init__.'
+		self.namedparams = self.getNamedParams()
+		# FIXME -- could I do this with property() instead?
+		for n,i in self.namedparams:
+			# class Indexer(object):
+			# 	def __init__(self, obj, ind):
+			# 		self.obj = obj
+			# 		self.ind = ind
+			# 	def get(
+
+			#getter = lambda x: x._getParam(ii)
+			class Getter(object):
+				def __init__(self, ind):
+					self.ind = ind
+				def __call__(self, x):
+					return x._getParam(self.ind)
+			class Setter(object):
+				def __init__(self, ind):
+					self.ind = ind
+				def __call__(self, x, val):
+					return x._setParam(self.ind, val)
+
+			def makeGetter(ii):
+				return lambda x: x._getParam(ii)
+			def makeSetter(ii):
+				return lambda x,v: x._setParam(ii, v)
+
+			#getter = Getter(i)
+			#setter = Setter(i)
+			getter = makeGetter(i)
+			setter = makeSetter(i)
+			setattr(self.__class__, n, property(getter, setter, None, 'named param %s' % n))
+
+	@staticmethod
+	def getNamedParams():
+		return []
+
+	def iterNamesAndVals(self):
+		'''
+		Yields  (name,val) tuples, where "name" is None if the parameter is not named.
+		'''
+		pvals = self._getParams()
+		for i,val in enumerate(pvals):
+			## FIXME -- this implementation is ugly.
+			name = None
+			for k,j in self.namedparams:
+				if i == j:
+					name = k
+					break
+			yield((name,val))
+
+
+
+class ParamList(Params, NamedParams):
+	'''
+	An implementation of Params that holds values in a list.
+	'''
+	def __init__(self, *args):
+		#print 'ParamList __init__()'
+		super(ParamList,self).__init__()
+		# FIXME -- kwargs with named params?
+		self.vals = list(args)
+
+	def getFormatString(self, i):
+		return '%g'
+
+	def __str__(self):
+		s = getClassName(self) + ': '
+		ss = []
+		for i,(name,val) in enumerate(self.iterNamesAndVals()):
+			fmt = self.getFormatString(i)
+			if name is not None:
+				ss.append(('%s='+fmt) % (name, val))
+			else:
+				ss.append(fmt % val)
+		return s + ', '.join(ss)
+
+	# def __setattr__(self, name, val):
+	# 	if name == 'vals':
+	# 		self.__dict__[name] = val
+	# 		return
+	# 	self.setNamedAttr(name, val)
 	def _setParam(self, i, val):
 		self.vals[i] = val
+	def _getParam(self, i):
+		return self.vals[i]
+	def _getParams(self):
+		return self.vals
+	
 	def setParam(self, i, val):
 		oldval = self.vals[i]
 		self._setParam(i, val)
@@ -167,7 +263,7 @@ class MultiParams(Params):
 		self.namedparams = self.getNamedParams()
 		#print getClassName(self), 'named params:', self.namedparams
 		# indices of pinned params
-		self.pinnedparams = []
+		self.pinnedparams = set()
 
 	def copy(self):
 		return self.__class__([s.copy() for s in self.subs])
@@ -216,39 +312,64 @@ class MultiParams(Params):
 				return n
 		return None
 
+	def pinParams(self, *args):
+		for n in args:
+			self.pinParam(n)
 	def pinParam(self, paramname):
 		i = self.getNamedParamIndex(paramname)
 		assert(i is not None)
-		self.pinnedparams.append(i)
+		self.pinnedparams.add(i)
+	def pinAllBut(self, *args):
+		self.pinAllParams()
+		self.pinParams(*args)
 	def unpinParam(self, paramname):
 		i = self.getNamedParamIndex(paramname)
 		assert(i is not None)
-		self.pinnedparams.remove(i)
+		self.pinnedparams.discard(i)
 	def unpinAllParams(self, paramname):
-		self.pinnedparams = []
+		self.pinnedparams.clear()
+	def pinAllParams(self, paramname):
+		self.pinnedparams.union(set(xrange(len(self.subs))))
 	def getPinnedParams(self):
 		return [self.getNamedParamName(i) for i in self.pinnedparams]
 	def getUnpinnedParamIndices(self):
-		ii = []
-		for i in range(len(self.subs)):
-			if not i in self.pinnedparams:
-				ii.append(i)
-		return ii
+		unpinned = set(xrange(len(self.subs)))
+		unpinned.difference_update(self.pinnedparams)
+		l = list(unpinned)
+		l.sort()
+		return l
+		#ii = []
+		#for i in range(len(self.subs)):
+		#	if not i in self.pinnedparams:
+		#		ii.append(i)
+		#return ii
+	def getUnpinnedParams(self):
+		return [self.getNamedParamName(i) for i in range(len(self.subs))
+				if not i in self.pinnedparams]
 	def isParamPinned(self, paramname):
 		i = self.getNamedParamIndex(paramname)
 		assert(i is not None)
 		return i in self.pinnedparams
 
-	def numberOfParams(self):
-		return sum(s.numberOfParams() for s in self.subs
-				   if s is not None)
+	def _getActiveSubs(self):
+		for i,s in enumerate(self.subs):
+			if not i in self.pinnedparams:
+				# Should 'subs' be allowed to contain None values?
+				if s is not None:
+					yield s
 
-	# Returns a *copy* of the current parameter values (list)
+	def numberOfParams(self):
+		'''
+		Count unpinned (active) params.
+		'''
+		return sum(s.numberOfParams() for s in self._getActiveSubs())
+
 	def getParams(self):
+		'''
+		Returns a *copy* of the current active parameter values (as a flat list)
+		'''
 		p = []
-		for s in self.subs:
-			if s is None:
-				continue
+		for s in self._getActiveSubs():
 			pp = s.getParams()
 			if pp is None:
 				continue
@@ -257,29 +378,24 @@ class MultiParams(Params):
 
 	def setParams(self, p):
 		i = 0
-		for s in self.subs:
-			if s is None:
-				continue
+		for s in self._getActiveSubs():
 			n = s.numberOfParams()
 			s.setParams(p[i:i+n])
 			i += n
 
 	def setParam(self, i, p):
 		off = 0
-		for s in self.subs:
-			if s is None:
-				continue
+		for s in self._getActiveSubs():
 			n = s.numberOfParams()
 			if i < off+n:
 				return s.setParam(i-off, p)
 			off += n
-		raise RuntimeError('setParam(%i,...) for a %s that only has %i elements' % (i, self.getClassName(self), self.numberOfParams()))
+		raise RuntimeError('setParam(%i,...) for a %s that only has %i elements' %
+						   (i, self.getClassName(self), self.numberOfParams()))
 
 	def getStepSizes(self, *args, **kwargs):
 		p = []
-		for s in self.subs:
-			if s is None:
-				continue
+		for s in self._getActiveSubs():
 			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 

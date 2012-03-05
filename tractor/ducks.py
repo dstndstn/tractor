@@ -16,6 +16,10 @@ class Params(object):
 		#return __class__.__name__
 		#return __name__
 
+	#def __init__(self):
+	#	print 'Params __init__'
+	#	super(Params,self).__init__()
+
 	def __repr__(self):
 		return self.getClassName(self) + repr(self.getParams())
 	def __str__(self):

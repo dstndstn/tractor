@@ -373,6 +373,7 @@ if __name__ == '__main__':
 	for src in cat:
 		print src
 
+	print 'image component params:'
 	print tim.sky.getParams()
 	print tim.wcs.getParams()
 	print tim.psf.getParams()
@@ -380,6 +381,17 @@ if __name__ == '__main__':
 
 	print 'Image params', tim.getParams()
 	print 'Image hashkey:', tim.hashkey()
+
+	print 'N image params:', tim.numberOfParams()
+
+	tim.pinParams('photocal', 'psf')
+	wcs = tim.getWcs()
+	wcs.pinAllBut('crval0', 'crval1')
+	#wcs.pinParams('crpix1', 'crpix2', 'cd11', 'cd12', 'cd21', 'cd22', 'x0', 'y0')
+
+	print '(unpinned) Image params', tim.getUnpinnedParams()
+	print '(unpinned) Image params', tim.getParams()
+	print '(unpinned) N image params:', tim.numberOfParams()
 
 	sys.exit(0)
 
