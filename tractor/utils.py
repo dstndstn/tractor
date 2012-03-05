@@ -36,6 +36,8 @@ class ScalarParam(Params):
 		return self.getClassName(self) + ': ' + self.strformat % self.val #str(self.val)
 	def __repr__(self):
 		return self.getClassName(self) + '(' + repr(self.val) + ')'
+	def getParamNames(self):
+		return [getClassName(self)]
 	def numberOfParams(self):
 		return 1
 	def getStepSizes(self, *args, **kwargs):
@@ -120,11 +122,14 @@ class NamedParams(object):
 		self.liquid[i] = False
 	def freezeAllBut(self, *args):
 		self.freezeAllParams()
-		self.freezeParams(*args)
+		self.thawParams(*args)
 	def thawParam(self, paramname):
 		i = self.getNamedParamIndex(paramname)
 		assert(i is not None)
 		self.liquid[i] = True
+	def thawParams(self, *args):
+		for n in args:
+			self.thawParam(n)
 	def thawAllParams(self):
 		for i in xrange(len(self.liquid)):
 			self.liquid[i] = True
@@ -172,11 +177,11 @@ class NamedParams(object):
 
 	def _indexBoth(self):
 		''' Yields (i,j), for i-th liquid parameter and j the raw index. '''
-		j = 0
-		for i,v in enumerate(self.liquid):
+		i = 0
+		for j,v in enumerate(self.liquid):
 			if v:
-				yield (j,i)
-				j += 1
+				yield (i, j)
+				i += 1
 
 class ParamList(Params, NamedParams):
 	'''
@@ -201,6 +206,15 @@ class ParamList(Params, NamedParams):
 			else:
 				ss.append(fmt % val)
 		return s + ', '.join(ss)
+
+	def getParamNames(self):
+		n = []
+		for i,j in self._indexBoth():
+			pre = self.getNamedParamName(j)
+			if pre is None:
+				pre = 'param%i' % i
+			n.append(pre)
+		return n
 
 	# These underscored versions are for use by NamedParams(), and ignore
 	# the active/inactive state.
@@ -307,6 +321,15 @@ class MultiParams(Params, NamedParams):
 			# Should 'subs' be allowed to contain None values?
 			if s is not None:
 				yield s
+
+	def getParamNames(self):
+		n = []
+		for i,s in self._enumerateLiquidArray(self.subs):
+			pre = self.getNamedParamName(i)
+			if pre is None:
+				pre = 'param%i' % i
+			n.extend('%s.%s' % (pre,post) for post in s.getParamNames())
+		return n
 
 	def numberOfParams(self):
 		'''

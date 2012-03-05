@@ -33,6 +33,8 @@ class Params(object):
 		return hash(self.hashkey())
 	def __eq__(self, other):
 		return hash(self) == hash(other)
+	def getParamNames(self):
+		return []
 	def numberOfParams(self):
 		return len(self.getParams())
 	# Returns a *copy* of the current parameter values (list)

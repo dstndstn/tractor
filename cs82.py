@@ -387,12 +387,27 @@ if __name__ == '__main__':
 
 	tim.freezeParams('photocal', 'psf')
 	wcs = tim.getWcs()
-	wcs.freezeAllBut('crval0', 'crval1')
+
+	print 'WCS', wcs
+	#print wcs._getThings()
+	#print wcs.namedparams
+	#print wcs.paramnames
+
+	print 'wcs params:', wcs.getThawedParams()
+
+	wcs.freezeAllBut('crval1', 'crval2')
+	print 'wcs params now:', wcs.getThawedParams()
+
 	#wcs.pinParams('crpix1', 'crpix2', 'cd11', 'cd12', 'cd21', 'cd22', 'x0', 'y0')
 
-	print '(unpinned) Image params', tim.getUnpinnedParams()
+	print 'WCS liquid params:', wcs.liquid
+	print 'WCS n params:', wcs.numberOfParams()
+
+	print '(unpinned) Image params', tim.getThawedParams()
 	print '(unpinned) Image params', tim.getParams()
 	print '(unpinned) N image params:', tim.numberOfParams()
+
+	print 'Image param names:', tim.getParamNames()
 
 	sys.exit(0)
 
