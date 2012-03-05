@@ -99,6 +99,10 @@ class NamedParams(object):
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
 
+	def addNamedParams(self, **d):
+		self.namedparams.update(d)
+		self.paramnames.update(dict((v,k) for k,v in d.items()))
+
 	def _iterNamesAndVals(self):
 		'''
 		Yields  (name,val) tuples, where "name" is None if the parameter is not named.

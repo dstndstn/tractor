@@ -84,8 +84,11 @@ class FitsWcs(ParamList):
 
 	@staticmethod
 	def getNamedParams():
+		# We omit x0,y0 from this list so that properties are no created for them;
+		# we add them back into the named param list in __init__().
+		# (x0=8, y0=9)
 		return dict(crval1=0, crval2=1, crpix1=2, crpix2=3,
-					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7) #, x0=8, y0=9)
+					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7)
 
 	'''
 	A WCS implementation that wraps a FITS WCS object (possibly with a
@@ -93,30 +96,16 @@ class FitsWcs(ParamList):
 	'''
 	def __init__(self, wcs):
 		super(FitsWcs, self).__init__(0, 0, wcs)
-		# properties will be created for these three elements; remove them.
-		#del self.wcs
-		#del self.x0
-		#del self.y0
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals
-		self.namedparams.update(x0=8, y0=9)
-		self.paramnames.update({8:'x0', 9:'y0'})
+		self.addNamedParams(x0=8, y0=9)
 
 		self.wcs = wcs
 		self.x0 = 0
 		self.y0 = 0
 
-	#def hashkey(self):
-	#	return ('FitsWcs', self.x0, self.y0, self.wcs)
-	# def getParams(self):
-	# 	# Here we ASSUME TAN WCS!
-	# 	w = self.wcs
-	# 	wcsparams = ((w.crval[0], w.crval[1], w.crpix[0], w.crpix[1],) +
-	# 				 tuple(w.get_cd()))
-	# 	return (self.x0, self.y0,) + wcsparams
-	# 	#return wcsparams
-
 	# Here we ASSUME TAN WCS!
+	# oi vey...
 	def _setThing(self, i, val):
 		w = self.wcs
 		if i in [0,1]:
@@ -155,9 +144,7 @@ class FitsWcs(ParamList):
 			raise IndexError
 	def _getThings(self):
 		w = self.wcs
-		T = w.crval + w.crpix + w.cd + [self.x0, self.y0]
-		#print 'FitsWcs _getThings:', T
-		return T
+		return w.crval + w.crpix + w.cd + [self.x0, self.y0]
 	def _numberOfThings(self):
 		return 10
 	def getParams(self):
