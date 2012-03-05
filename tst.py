@@ -7,8 +7,6 @@ class MyParam(ParamList):
 	def getNamedParams():
 		return dict(x=0, y=1)
 
-
-
 p = MyParam(12, 51)
 print 'p:', p
 p.x = 42
@@ -34,4 +32,31 @@ p.thawAllParams()
 print p
 print 'frozen:', p.getFrozenParams()
 print 'thawed:', p.getThawedParams()
+
+
+
+class MyMultiParams(MultiParams):
+	@staticmethod
+	def getNamedParams():
+		return dict(a=0, b=1)
+print
+print
+mp = MyMultiParams(MyParam(1,2), MyParam(3,4))
+print 'mp:', mp
+print 'hashkey:', mp.hashkey()
+print 'params:', mp.getParams()
+print 'n params:', mp.numberOfParams()
+
+mp.freezeParam('a')
+print 'Frozen a:', mp.getParams()
+print 'n:', mp.numberOfParams()
+mp.b.freezeParam('y')
+print 'n:', mp.numberOfParams()
+
+mp.setParams([17])
+print mp.getParams()
+mp.thawAllParams()
+print mp
+
+
 

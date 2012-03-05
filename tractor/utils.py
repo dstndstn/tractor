@@ -72,14 +72,14 @@ class NamedParams(object):
 		self.paramnames = dict((v,k) for k,v in self.namedparams.items())
 
 		# active/inactive
-		self.liquid = [True] * self._numberOfParams()
+		self.liquid = [True] * self._numberOfThings()
 
 		# Create a property for each named parameter.
 		for n,i in self.namedparams.items():
 			def makeGetter(ii):
-				return lambda x: x._getParam(ii)
+				return lambda x: x._getThing(ii)
 			def makeSetter(ii):
-				return lambda x,v: x._setParam(ii, v)
+				return lambda x,v: x._setThing(ii, v)
 			getter = makeGetter(i)
 			setter = makeSetter(i)
 			setattr(self.__class__, n, property(getter, setter, None, 'named param %s' % n))
@@ -95,7 +95,7 @@ class NamedParams(object):
 		'''
 		Yields  (name,val) tuples, where "name" is None if the parameter is not named.
 		'''
-		pvals = self._getParams()
+		pvals = self._getThings()
 		for i,val in enumerate(pvals):
 			name = self.paramnames.get(i, None)
 			yield((name,val))
@@ -180,7 +180,6 @@ class ParamList(Params, NamedParams):
 		#print 'ParamList __init__()'
 		# FIXME -- kwargs with named params?
 		self.vals = list(args)
-
 		super(ParamList,self).__init__()
 
 	def getFormatString(self, i):
@@ -199,24 +198,24 @@ class ParamList(Params, NamedParams):
 
 	# These underscored versions are for use by NamedParams(), and ignore
 	# the active/inactive state.
-	def _setParam(self, i, val):
+	def _setThing(self, i, val):
 		self.vals[i] = val
-	def _getParam(self, i):
+	def _getThing(self, i):
 		return self.vals[i]
-	def _getParams(self):
+	def _getThings(self):
 		return self.vals
-	def _numberOfParams(self):
+	def _numberOfThings(self):
 		return len(self.vals)
 	
 	# These versions skip frozen values.
 	def setParam(self, i, val):
 		ii = self._indexLiquid(i)
-		oldval = self._getParam(ii)
-		self._setParam(ii, val)
+		oldval = self._getThing(ii)
+		self._setThing(ii, val)
 		return oldval
 	def setParams(self, p):
 		for i,j in self._indexBoth():
-			self._setParam(j, p[i])
+			self._setThing(j, p[i])
 	def numberOfParams(self):
 		return self._countLiquid()
 	def getParams(self):
@@ -226,7 +225,7 @@ class ParamList(Params, NamedParams):
 		return list(self._getLiquidArray(self.vals))
 	def getParam(self):
 		ii = self._indexLiquid(i)
-		return self._getParam(ii)
+		return self._getThing(ii)
 
 	def getStepSizes(self, *args, **kwargs):
 		return [1] * self.numberOfParams()
@@ -255,7 +254,7 @@ class ParamList(Params, NamedParams):
 	def __iter__(self):
 		return ParamList.ParamListIter(self)
 
-class MultiParams(Params):
+class MultiParams(Params, NamedParams):
 	'''
 	An implementation of Params that combines component sub-Params.
 	'''
@@ -264,38 +263,10 @@ class MultiParams(Params):
 			self.subs = list(args)
 		else:
 			self.subs = []
-		self.namedparams = self.getNamedParams()
-		#print getClassName(self), 'named params:', self.namedparams
-		# indices of pinned params
-		self.pinnedparams = set()
+		super(MultiParams,self).__init__()
 
 	def copy(self):
 		return self.__class__([s.copy() for s in self.subs])
-
-	#def getNamedParams(self):
-	@staticmethod
-	def getNamedParams():
-		return []
-	def __getattr__(self, name):
-		if not 'namedparams' in self.__dict__:
-			raise AttributeError
-		for n,i in self.namedparams:
-			if name == n:
-				return self.subs[i]
-		raise AttributeError('MultiParams (%s): unknown attribute "%s" (named params: [ %s ]; dict keys: [ %s ])' %
-							 (str(type(self)), name, ', '.join([k for k,v in self.getNamedParams()]),
-							  ', '.join(self.__dict__.keys())))
-
-	def __setattr__(self, name, val):
-		if name in ['subs', 'namedparams', 'pinnedparams']:
-			self.__dict__[name] = val
-			return
-		if hasattr(self, 'namedparams'):
-			for n,i in self.namedparams:
-				if name == n:
-					self.subs[i] = val
-					return
-		self.__dict__[name] = val
 
 	def hashkey(self):
 		t = [getClassName(self)]
@@ -305,62 +276,31 @@ class MultiParams(Params):
 			t.append(s.hashkey())
 		return tuple(t)
 
-	def getNamedParamIndex(self, name):
-		for n,i in self.namedparams:
-			if n == name:
-				return i
-		return None
-	def getNamedParamName(self, ii):
-		for n,i in self.namedparams:
-			if i == ii:
-				return n
-		return None
+	def __str__(self):
+		s = []
+		for n,v in self._iterNamesAndVals():
+			if n is None:
+				s.append(str(v))
+			else:
+				s.append('%s: %s' % (n, str(v)))
+		return getClassName(self) + ": " + ', '.join(s)
 
-	def pinParams(self, *args):
-		for n in args:
-			self.pinParam(n)
-	def pinParam(self, paramname):
-		i = self.getNamedParamIndex(paramname)
-		assert(i is not None)
-		self.pinnedparams.add(i)
-	def pinAllBut(self, *args):
-		self.pinAllParams()
-		self.pinParams(*args)
-	def unpinParam(self, paramname):
-		i = self.getNamedParamIndex(paramname)
-		assert(i is not None)
-		self.pinnedparams.discard(i)
-	def unpinAllParams(self, paramname):
-		self.pinnedparams.clear()
-	def pinAllParams(self, paramname):
-		self.pinnedparams.union(set(xrange(len(self.subs))))
-	def getPinnedParams(self):
-		return [self.getNamedParamName(i) for i in self.pinnedparams]
-	def getUnpinnedParamIndices(self):
-		unpinned = set(xrange(len(self.subs)))
-		unpinned.difference_update(self.pinnedparams)
-		l = list(unpinned)
-		l.sort()
-		return l
-		#ii = []
-		#for i in range(len(self.subs)):
-		#	if not i in self.pinnedparams:
-		#		ii.append(i)
-		#return ii
-	def getUnpinnedParams(self):
-		return [self.getNamedParamName(i) for i in range(len(self.subs))
-				if not i in self.pinnedparams]
-	def isParamPinned(self, paramname):
-		i = self.getNamedParamIndex(paramname)
-		assert(i is not None)
-		return i in self.pinnedparams
+	# These underscored versions are for use by NamedParams(), and ignore
+	# the active/inactive state.
+	def _setThing(self, i, val):
+		self.subs[i] = val
+	def _getThing(self, i):
+		return self.subs[i]
+	def _getThings(self):
+		return self.subs
+	def _numberOfThings(self):
+		return len(self.subs)
 
 	def _getActiveSubs(self):
-		for i,s in enumerate(self.subs):
-			if not i in self.pinnedparams:
-				# Should 'subs' be allowed to contain None values?
-				if s is not None:
-					yield s
+		for s in self._getLiquidArray(self.subs):
+			# Should 'subs' be allowed to contain None values?
+			if s is not None:
+				yield s
 
 	def numberOfParams(self):
 		'''
