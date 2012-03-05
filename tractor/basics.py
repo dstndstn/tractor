@@ -86,7 +86,7 @@ class FitsWcs(ParamList):
 	pixel offset)
 	'''
 	def __init__(self, wcs):
-		super(self, FitsWcs).__init__(0, 0, wcs)
+		super(FitsWcs, self).__init__(0, 0, wcs)
 		self.wcs = wcs
 		self.x0 = 0
 		self.y0 = 0
@@ -133,8 +133,9 @@ class PixPos(ParamList):
 	'''
 	A Position implementation using pixel positions.
 	'''
-	def getNamedParams(self):
-		return [('x', 0), ('y', 1)]
+	@staticmethod
+	def getNamedParams():
+		return dict(x=0, y=1)
 	def __str__(self):
 		return 'pixel (%.2f, %.2f)' % (self.x, self.y)
 	#def __repr__(self):
@@ -152,8 +153,9 @@ class RaDecPos(ParamList):
 	'''
 	A Position implementation using RA,Dec positions.
 	'''
-	def getNamedParams(self):
-		return [('ra', 0), ('dec', 1)]
+	@staticmethod
+	def getNamedParams():
+		return dict(ra=0, dec=1)
 	def __str__(self):
 		return 'RA,Dec (%.5f, %.5f)' % (self.ra, self.dec)
 	#def __repr__(self):
@@ -185,11 +187,13 @@ class PointSource(MultiParams):
 	and brightness.
 	'''
 	def __init__(self, pos, brightness):
-		MultiParams.__init__(self, pos, brightness)
+		super(PointSource, self).__init__(pos, brightness)
+	@staticmethod
+	def getNamedParams():
+		return dict(pos=0, brightness=1)
+
 	def getSourceType(self):
 		return 'PointSource'
-	def getNamedParams(self):
-		return [('pos', 0), ('brightness', 1)]
 	def getPosition(self):
 		return self.pos
 	def getBrightness(self):
@@ -264,6 +268,7 @@ class GaussianMixturePSF(Params):
 		self.mog = mp.MixtureOfGaussians(amp, mean, var)
 		assert(self.mog.D == 2)
 		self.radius = 25
+		super(GaussianMixturePSF, self).__init__()
 
 	def getMixtureOfGaussians(self):
 		return self.mog
@@ -300,8 +305,6 @@ class GaussianMixturePSF(Params):
 		grid = self.mog.evaluate_grid_dstn(x0-px, x1-px, y0-py, y1-py)
 		return Patch(x0, y0, grid)
 
-	#def getNamedParams(self):
-	#	return [('sigmas', 0), ('weights', 1)]
 	def __str__(self):
 		return 'GaussianMixturePSF: ' + str(self.mog)
 	def hashkey(self):
@@ -372,10 +375,11 @@ class NCircularGaussianPSF(MultiParams):
 		eg,   NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
 		'''
 		assert(len(sigmas) == len(weights))
-		MultiParams.__init__(self, ParamList(*sigmas), ParamList(*weights))
+		super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
 
-	def getNamedParams(self):
-		return [('sigmas', 0), ('weights', 1)]
+	@staticmethod
+	def getNamedParams():
+		return dict(sigmas=0, weights=1)
 
 	def __str__(self):
 		return ('NCircularGaussianPSF: sigmas [ ' +

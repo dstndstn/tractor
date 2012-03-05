@@ -19,7 +19,12 @@ COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
 
 	def getParams(self):
-		return (self.phot_c,)
+		return [self.phot_c,]
+	def getStepSizes(self):
+		return [0.01]
+	def setParam(self, i, p):
+		assert(i == 0)
+		self.phot_c = p
 			
 	def brightnessToCounts(self, brightness):
 		#M = brightness.getValue()

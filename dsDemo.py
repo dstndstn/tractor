@@ -852,11 +852,12 @@ def main():
 
 
 class FitsWcsShiftParams(ParamList):
+	@staticmethod
+	def getNamedParams():
+		return dict(x0=0, y0=1)
 	def __init__(self, wcs):
 		super(FitsWcsShiftParams,self).__init__(wcs.x0, wcs.y0)
 		self.wcs = wcs
-	def getNamedParams(self):
-		return [('x0',0),('y0',1)]
 	def setParam(self, i, val):
 		super(FitsWcsShiftParams,self).setParam(i,val)
 		#print 'set wcs x0y0 to', self.vals[0], self.vals[1]

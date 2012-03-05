@@ -331,7 +331,7 @@ def get_tractor_image(run, camcol, field, bandname,
 	return timg,info
 
 
-class SdssMagsPhotoCal(object):
+class SdssMagsPhotoCal(Params):
 	'''
 	A photocal that uses Mags objects.
 	'''
@@ -345,6 +345,33 @@ class SdssMagsPhotoCal(object):
 		self.aa = tsfield.aa[band]
 		self.kk = tsfield.kk[band]
 		self.airmass = tsfield.airmass[band]
+
+		super(SdssMagsPhotoCal,self).__init__()
+
+	# @staticmethod
+	# def getNamedParams():
+	# 	return dict(aa=0)
+	# # These underscored versions are for use by NamedParams(), and ignore
+	# # the active/inactive state.
+	# def _setThing(self, i, val):
+	# 	assert(i == 0)
+	# 	self.aa = val
+	# def _getThing(self, i):
+	# 	assert(i == 0)
+	# 	return self.aa
+	# def _getThings(self):
+	# 	return [self.aa]
+	# def _numberOfThings(self):
+	# 	return 1
+
+	# to implement Params
+	def getParams(self):
+		return [self.aa]
+	def getStepSizes(self):
+		return [0.01]
+	def setParam(self, i, p):
+		assert(i == 0)
+		self.aa = p
 
 	def hashkey(self):
 		return ('SdssMagsPhotoCal', self.bandname, #self.tsfield)

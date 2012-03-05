@@ -66,6 +66,7 @@ class NamedParams(object):
 	Also allows parameters to be set "Active" or "Inactive".
 	'''
 	def __init__(self):
+		super(NamedParams,self).__init__()
 		#print 'NamedParams __init__.'
 		self.namedparams = self.getNamedParams()
 		# create the reverse mapping: from parameter index to name.

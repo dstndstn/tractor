@@ -9,6 +9,7 @@ __all__ = [
 	'sdss', 'fitpsf', 'emfit',
 	# 'engine' contents
 	'Params', 'ScalarParam', 'ParamList', 'MultiParams',
+	'NamedParams',
 	'Sky', 'ConstantSky', 'Source', 'PointSource',
 	'Flux', 'Mag', 'Mags',
 	'PixPos', 'RaDecPos', 'Image',

@@ -62,11 +62,11 @@ class Image(MultiParams):
 		photocal = kwargs.pop('photocal', None)
 		super(Image,self).__init__(psf, wcs, photocal, sky)
 
-		print 'wcs', self.wcs
+		print 'Image:', self.wcs, self.psf, self.sky, self.photocal
 
 	@staticmethod
 	def getNamedParams():
-		return [('psf',0), ('wcs',1), ('photocal', 2), ('sky',3)]
+		return dict(psf=0, wcs=1, photocal=2, sky=3)
 
 	def getSky(self):
 		return self.sky
@@ -80,7 +80,7 @@ class Image(MultiParams):
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.data.shape
-		return super(Image,self).__getattr__(name)
+		raise AttributeError('Image: unknown attribute "%s"' % name)
 
 	# Numpy arrays have shape H,W
 	def getWidth(self):
@@ -88,8 +88,8 @@ class Image(MultiParams):
 	def getHeight(self):
 		return self.shape[0]
 
-	def __hash__(self):
-		return hash(self.hashkey())
+	#def __hash__(self):
+	#	return hash(self.hashkey())
 
 	def hashkey(self):
 		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
@@ -315,6 +315,9 @@ class Catalog(MultiParams):
 		print 'Catalog:'
 		for i,x in enumerate(self):
 			print '  %i:' % i, x
+
+	def __len__(self):
+		return len(self.subs)
 
 	# delegate list operations to self.subs.
 	# FIXME -- should some of these go in MultiParams?

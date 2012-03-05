@@ -6,13 +6,14 @@ from engine import *
 from utils import *
 
 class GalaxyShape(ParamList):
-	def getNamedParams(self):
+	@staticmethod
+	def getNamedParams():
 		# re: arcsec
 		# ab: axis ratio, dimensionless, in [0,1]
 		# phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
-		return [('re', 0), ('ab', 1), ('phi', 2)]
-	def hashkey(self):
-		return ('GalaxyShape',) + tuple(self.vals)
+		return dict(re=0, ab=1, phi=2)
+	#def hashkey(self):
+	#	return ('GalaxyShape',) + tuple(self.vals)
 	def __repr__(self):
 		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 	def __str__(self):
@@ -99,9 +100,25 @@ class GalaxyShape(ParamList):
 
 class Galaxy(MultiParams):
 	def __init__(self, pos, brightness, shape):
-		MultiParams.__init__(self, pos, brightness, shape)
+		super(Galaxy, self).__init__(pos, brightness, shape)
 		self.name = self.getName()
 		self.dname = self.getDName()
+
+	@staticmethod
+	def getNamedParams():
+		return dict(pos=0, brightness=1, shape=2)
+
+	def _setRe (self, re ): self.shape.re  = re
+	def _setAb (self, ab ): self.shape.ab  = ab
+	def _setPhi(self, phi): self.shape.phi = phi
+
+	# define pass-through names
+	re = property(lambda x: x.shape.re, _setRe, None,
+				  'galaxy effective radius')
+	ab = property(lambda x: x.shape.ab, _setAb, None,
+				  'galaxy axis ratio')
+	phi = property(lambda x: x.shape.phi, _setPhi, None,
+				   'galaxy position angle')
 
 	def getName(self):
 		return 'Galaxy'
@@ -123,23 +140,10 @@ class Galaxy(MultiParams):
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 
-	def getNamedParams(self):
-		return [('pos', 0), ('brightness', 1), ('shape', 2)]
+	#def hashkey(self):
+	#	return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
+	#			self.re, self.ab, self.phi)
 
-	def __getattr__(self, name):
-		if name in ['re', 'ab', 'phi']:
-			return getattr(self.shape, name)
-		return MultiParams.__getattr__(self, name)
-
-	def __setattr__(self, name, val):
-		if name in ['re', 'ab', 'phi']:
-			setattr(self.shape, name, val)
-			return
-		MultiParams.__setattr__(self, name, val)
-
-	def hashkey(self):
-		return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
-				self.re, self.ab, self.phi)
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with ' + str(self.brightness)
@@ -247,20 +251,22 @@ class CompositeGalaxy(Galaxy):
 	but have different brightnesses and shapes.
 	'''
 	def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
-		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
+		super(CompositeGalaxy,self).__init__(pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
+
+	@staticmethod
+	def getNamedParams():
+		return dict(pos=0, brightnessExp=1, shapeExp=2, brightnessDev=3, shapeDev=4)
+
 	def getName(self):
 		return 'CompositeGalaxy'
-	def getNamedParams(self):
-		return [('pos', 0), ('brightnessExp', 1), ('shapeExp', 2),
-				('brightnessDev', 3), ('shapeDev', 4),]
 	#def getBrightness(self):
 		#return self.brightnessExp + self.brightnessDev
 
-	def hashkey(self):
-		return (self.name, self.pos.hashkey(),
-				self.brightnessExp.hashkey(), self.shapeExp.hashkey(),
-				self.brightnessDev.hashkey(), self.shapeDev.hashkey())
+	# def hashkey(self):
+	# 	return (self.name, self.pos.hashkey(),
+	# 			self.brightnessExp.hashkey(), self.shapeExp.hashkey(),
+	# 			self.brightnessDev.hashkey(), self.shapeDev.hashkey())
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
@@ -362,7 +368,7 @@ class HoggGalaxy(Galaxy):
 		else:
 			assert(len(args) == 1)
 			shape = args[0]
-		Galaxy.__init__(self, pos, brightness, shape)
+		super(HoggGalaxy, self).__init__(pos, brightness, shape)
 
 	def getName(self):
 		return 'HoggGalaxy'
