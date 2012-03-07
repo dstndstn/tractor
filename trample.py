@@ -81,6 +81,7 @@ def main():
 	ndim = len(p0)
 	nw = max(50, 2*ndim)
 	print 'ndim', ndim
+	print 'nw', nw
 
 	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 									threads=nthreads)
@@ -207,6 +208,7 @@ def main():
 				plt.yticks([],[])
 				plt.savefig('chibest%02i-%02i.png' % (i,step))
 
+			if step % 1 == 0:
 				plt.clf()
 				plt.gca().set_position(plotpos0)
 				plt.imshow(modsum/float(nw), **ima)
@@ -216,17 +218,88 @@ def main():
 				plt.savefig('modsum%02i-%02i.png' % (i,step))
 
 
+			if step % 1 == 0 and False:
+				# Plot models, exaggerating the variance
+				# pp shape is (nw,ndim)
+				p0 = pp.mean(axis=0)
+				print 'p0 shape', p0
+				for i in range(nw):
+					delta = pp[i,:] - p0
+					exagg = 10.
+					pnew = pp[i,:] + (exagg-1.)*delta
+					tractor.setAllSourceParams(pnew)
+					modex = tractor.getModelImage(0)
+					
+					plt.clf()
+					plt.gca().set_position(plotpos0)
+					plt.imshow(modex, **ima)
+					plt.title('Model (exaggerated x %g)' % exagg)
+					plt.xticks([],[])
+					plt.yticks([],[])
+					plt.savefig('modex%02i-%02i.png' % (i,step))
+
+
+
 			if step % 50 == 0:
-				plt.figure(2)
-				plt.clf()
 				pnames = tractor.catalog[0].getParamNames()
 				NP = len(pnames)
+
+				# select objid, ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r from mydb.mytable_2 where run=756 and camcol=3 and field=243
+				#objid,ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r
+				#1237648721218568377,152.208922638573,0.00391166133082899,-0.202430118237826,0.00423603626875907,17.59624,0.005895343,1.081388,0.0371073,26.40831,0.435521,0.01508615
+
+
+				# DR8
+				sdssvals = [ 152.208922638573,-0.202430118237826,17.59624,1.081388,0.435521, 26.40831 ]
+				sdsserrs = [ 0.00391166133082899, 0.00423603626875907,0.005895343,0.0371073, 0.01508615, 0. ]
+
+				# DR7
+				sdssvals7 = [ 152.20891415,-0.20242878,17.60266,1.044212,0.4157184,26.3763,]
+				sdsserrs7 = [ 0.0443575305964374,0.041734802988402,0.006056787,0.03344231,0.0143005, 0.]
 
 				nsteps = 20
 				ppp = allp[-nsteps:]
 
+				plt.figure(2)
+				plt.clf()
 				for i in range(NP):
 					pari = np.hstack([p[:,i] for p in ppp])
+
+					plt.figure(1)
+					plt.clf()
+					n,b,p = plt.hist(pari, 25)
+					mn = np.mean(pari)
+					std = np.std(pari)
+					xx = np.linspace(b[0], b[-1], 100)
+					ax = plt.axis()
+					dx = b[1]-b[0]
+					yy = np.exp(-0.5 * (xx - mn)**2 / std**2)
+					yy /= sum(yy)
+					yy *= sum(n)*dx / (xx[1]-xx[0])
+					#print 'yy', yy
+					plt.plot(xx, yy, 'b-', lw=3, alpha=0.8)
+					print 'mn', mn, 'std', std
+					plt.axvline(mn, color='b', lw=3, alpha=0.5)
+
+					for mn,std,c in [(sdssvals[i],sdsserrs[i],'r'),
+									 (sdssvals7[i],sdsserrs7[i],'m')]:
+						if std != 0:
+							yy = np.exp(-0.5 * (xx - mn)**2 / std**2)
+							yy /= sum(yy)
+							yy *= sum(n)*dx / (xx[1]-xx[0])
+							plt.plot(xx, yy, '-', color=c, lw=3, alpha=0.8)
+						print 'sdss', mn, std
+						plt.axvline(mn, color=c, lw=3, alpha=0.5)
+
+					#plt.axis(ax)
+					plt.xlabel(pnames[i])
+					fn = 'modparam%02i-%02i.png' % (step,i)
+					print 'save', fn
+					plt.savefig(fn)
+
+
+					plt.figure(2)
+
 					for j in range(i, NP):
 						parj = np.hstack([p[:,j] for p in ppp])
 						plt.subplot(NP, NP, (i*NP)+j+1)
