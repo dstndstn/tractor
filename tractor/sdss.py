@@ -57,7 +57,10 @@ def _getBrightness(counts, tsf, bands):
 		order.append(bandname)
 		kwargs[bandname] = mag
 		#print 'Band', bandname, 'counts', counts, 'mag', mag
-	return Mags(order=order, **kwargs)
+	#print 'creating mags:', kwargs
+	m = Mags(order=order, **kwargs)
+	#print 'created', m
+	return m
 
 def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 						retrieve=True, curl=False, roi=None,

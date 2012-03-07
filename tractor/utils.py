@@ -78,19 +78,11 @@ class NamedParams(object):
 	def __new__(cl, *args, **kwargs):
 		self = super(NamedParams,cl).__new__(cl, *args, **kwargs)
 
-		self.namedparams = self.getNamedParams()
-		# create the reverse mapping: from parameter index to name.
-		self.paramnames = dict((v,k) for k,v in self.namedparams.items())
+		self.namedparams = {}
+		self.paramnames = {}
+		named = self.getNamedParams()
+		self.addNamedParams(**named)
 
-		# Create a property for each named parameter.
-		for n,i in self.namedparams.items():
-			def makeGetter(ii):
-				return lambda x: x._getThing(ii)
-			def makeSetter(ii):
-				return lambda x,v: x._setThing(ii, v)
-			getter = makeGetter(i)
-			setter = makeSetter(i)
-			setattr(self.__class__, n, property(getter, setter, None, 'named param %s' % n))
 		return self
 
 	def __init__(self):
@@ -101,13 +93,29 @@ class NamedParams(object):
 
 	def addNamedParams(self, **d):
 		self.namedparams.update(d)
+		# create the reverse mapping: from parameter index to name.
 		self.paramnames.update(dict((v,k) for k,v in d.items()))
+
+		# Create a property for each named parameter.
+		for n,i in self.namedparams.items():
+			if hasattr(self.__class__, n):
+				continue
+			def makeGetter(ii):
+				return lambda x: x._getThing(ii)
+			def makeSetter(ii):
+				return lambda x,v: x._setThing(ii, v)
+			getter = makeGetter(i)
+			setter = makeSetter(i)
+			prop = property(getter, setter, None, 'named param %s' % n)
+			setattr(self.__class__, n, prop)
+
 
 	def _iterNamesAndVals(self):
 		'''
 		Yields  (name,val) tuples, where "name" is None if the parameter is not named.
 		'''
 		pvals = self._getThings()
+		#print '_iterNamesAndVals: pvals types', [type(x) for x in pvals]
 		for i,val in enumerate(pvals):
 			name = self.paramnames.get(i, None)
 			yield((name,val))
@@ -206,6 +214,7 @@ class ParamList(Params, NamedParams):
 		for i,(name,val) in enumerate(self._iterNamesAndVals()):
 			fmt = self.getFormatString(i)
 			if name is not None:
+				#print 'name', name, 'val', type(val)
 				ss.append(('%s='+fmt) % (name, val))
 			else:
 				ss.append(fmt % val)

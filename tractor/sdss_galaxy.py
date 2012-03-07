@@ -251,7 +251,11 @@ class CompositeGalaxy(Galaxy):
 	but have different brightnesses and shapes.
 	'''
 	def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
-		super(CompositeGalaxy,self).__init__(pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
+		#super(CompositeGalaxy,self).__init__(pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
+		# Don't call the Galaxy superclass __init__; instead call straight
+		# to MultiParams... does this make you think CompositeGalaxy should
+		# inherit from MultiParams directly?
+		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
 
 	@staticmethod

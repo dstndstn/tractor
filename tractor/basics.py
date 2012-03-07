@@ -23,8 +23,8 @@ class Mags(ParamList):
 		vals = []
 		for k in keys:
 			vals.append(kwargs[k])
-		ParamList.__init__(self, *vals)
-		self.namedparams = [(k,i) for i,k in enumerate(keys)]
+		super(Mags,self).__init__(*vals)
+		self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
 
 	def getMag(self, bandname):
 		return getattr(self, bandname)
