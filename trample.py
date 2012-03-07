@@ -18,6 +18,16 @@ from tractor import sdss_galaxy as stgal
 from astrometry.sdss import *
 
 def main():
+	from optparse import OptionParser
+	parser = OptionParser(usage=('%prog'))
+	parser.add_option('--steps', dest='steps', type=int, help='Number of steps',
+					  default=100)
+	parser.add_option('--step0', dest='step0', type=int, help='Starting step',
+					  default=0)
+	opt,args = parser.parse_args()
+	
+
+
 	lvl = logging.INFO
 	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
@@ -30,7 +40,7 @@ def main():
 	#S = 40
 	RCFS = [(756, 3, 243),]
 	ra,dec = (152.208922638573, -0.202430118237826)
-	S = 40
+	S = 18
 
 
 	TI = []
@@ -49,16 +59,27 @@ def main():
 	roi = inf['roi']
 	sources = st.get_tractor_sources(run, camcol, field, roi=roi,
 									 bands=bands)
+
+	# DevGalaxy
+	s0 = sources[0]
+	s0.re = 0.01
+	s0.brightness.r = 22.
 	
 	tractor = Tractor(tims)
 	tractor.addSources(sources)
 
 	lnp0 = tractor.getLogProb()
 
+	print 'Catalog:'
+	print tractor.catalog
+	# UGH!
+	tractor.catalog.recountParams()
+	print tractor.catalog.getParams()
+
 	nthreads = 16
 	p0 = np.array(tractor.catalog.getParams())
 	ndim = len(p0)
-	nw = 2*ndim
+	nw = max(50, 2*ndim)
 	print 'ndim', ndim
 
 	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
@@ -71,7 +92,11 @@ def main():
 	pp0 = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
 					 for i in range(nw)])
 
-	plt.figure(figsize=(6,6))
+
+	plt.figure(1, figsize=(6,6))
+	plt.figure(2, figsize=(18,18))
+
+	plt.figure(1)
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
 
@@ -81,7 +106,7 @@ def main():
 	lnp = None #lnp0
 	pp = pp0
 	rstate = None
-	for step in range(100):
+	for step in range(opt.step0, opt.steps):
 
 		pfn = 'trample-%03i.pickle' % step
 		if os.path.exists(pfn):
@@ -94,7 +119,13 @@ def main():
 			print 'pp shape', pp.shape
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
 			print 'lnprobs:', lnp
-			print 'pp shape', pp.shape
+
+			for p,x in zip(lnp,pp):
+				tractor.setAllSourceParams(x)
+				print 'lnp', p
+				print tractor.catalog
+
+			#print 'pp shape', pp.shape
 			# nw,ndim
 			alllnp.append(lnp.copy())
 			allp.append(pp.copy())
@@ -104,7 +135,7 @@ def main():
 		plt.plot(alllnp, 'k', alpha=0.5)
 		plt.axhline(lnp0, color='r', lw=2, alpha=0.5)
 		mx = np.max([p.max() for p in alllnp])
-		plt.ylim(mx-300, mx)
+		plt.ylim(mx-300, mx+10)
 		plt.xlim(0, len(alllnp)-1)
 		plt.savefig('lnp.png')
 
@@ -136,7 +167,7 @@ def main():
 				else:
 					modsum += mod
 
-				if step%10 == 0:
+				if step%50 == 0:
 					plt.clf()
 					plt.gca().set_position(plotpos0)
 					plt.imshow(mod, **ima)
@@ -154,36 +185,60 @@ def main():
 					plt.yticks([],[])
 					plt.savefig('chi%02i-%02i-%03i.png' % (i,step,k))
 
-			ibest = np.argmax(lnp)
-			print 'ibest', ibest
-			tractor.setAllSourceParams(pp[ibest,:])
-			mod = tractor.getModelImage(i)
-			plt.clf()
-			plt.gca().set_position(plotpos0)
-			plt.imshow(mod, **ima)
-			plt.title('Best Model')
-			plt.xticks([],[])
-			plt.yticks([],[])
-			plt.savefig('modbest%02i-%02i.png' % (i,step))
+			if step % 10 == 0:
+				ibest = np.argmax(lnp)
+				print 'ibest', ibest
+				tractor.setAllSourceParams(pp[ibest,:])
+				mod = tractor.getModelImage(i)
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				plt.imshow(mod, **ima)
+				plt.title('Best Model')
+				plt.xticks([],[])
+				plt.yticks([],[])
+				plt.savefig('modbest%02i-%02i.png' % (i,step))
 
-			chi = tractor.getChiImage(i)
-			plt.clf()
-			plt.gca().set_position(plotpos0)
-			plt.imshow(chi, **imchi)
-			plt.title('Best Chi')
-			plt.xticks([],[])
-			plt.yticks([],[])
-			plt.savefig('chibest%02i-%02i.png' % (i,step))
+				chi = tractor.getChiImage(i)
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				plt.imshow(chi, **imchi)
+				plt.title('Best Chi')
+				plt.xticks([],[])
+				plt.yticks([],[])
+				plt.savefig('chibest%02i-%02i.png' % (i,step))
 
-			plt.clf()
-			plt.gca().set_position(plotpos0)
-			plt.imshow(modsum/float(nw), **ima)
-			plt.title('Model')
-			plt.xticks([],[])
-			plt.yticks([],[])
-			plt.savefig('modsum%02i-%02i.png' % (i,step))
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				plt.imshow(modsum/float(nw), **ima)
+				plt.title('Model')
+				plt.xticks([],[])
+				plt.yticks([],[])
+				plt.savefig('modsum%02i-%02i.png' % (i,step))
 
 
+			if step % 50 == 0:
+				plt.figure(2)
+				plt.clf()
+				pnames = tractor.catalog[0].getParamNames()
+				NP = len(pnames)
+
+				nsteps = 20
+				ppp = allp[-nsteps:]
+
+				for i in range(NP):
+					pari = np.hstack([p[:,i] for p in ppp])
+					for j in range(i, NP):
+						parj = np.hstack([p[:,j] for p in ppp])
+						plt.subplot(NP, NP, (i*NP)+j+1)
+						if i == j:
+							plt.hist(pari, 25)
+							#plt.xlabel(pnames[i])
+						else:
+							plt.plot(pari, parj, 'r.', alpha=0.1)
+							plt.ylabel(pnames[j])
+						plt.xlabel(pnames[i])
+				plt.savefig('modhist%02i.png' % step)
+				plt.figure(1)
 
 if __name__ == '__main__':
 	main()

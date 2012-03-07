@@ -324,7 +324,7 @@ class Catalog(MultiParams):
 	def __iter__(self):
 		return self.subs.__iter__()
 	def __getitem__(self, key):
-		return self.subs.__getitem__(self, key)
+		return self.subs.__getitem__(key)
 	def append(self, x):
 		self.subs.append(x)
 	def extend(self, x):

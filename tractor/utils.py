@@ -91,6 +91,9 @@ class NamedParams(object):
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
 
+	def recountParams(self):
+		self.liquid = [True] * self._numberOfThings()
+
 	def addNamedParams(self, **d):
 		self.namedparams.update(d)
 		# create the reverse mapping: from parameter index to name.
