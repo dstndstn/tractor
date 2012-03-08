@@ -24,6 +24,7 @@ def main():
 					  default=100)
 	parser.add_option('--step0', dest='step0', type=int, help='Starting step',
 					  default=0)
+	parser.add_option('--nomodplot', dest='modplot', action='store_false', default=True)
 	opt,args = parser.parse_args()
 	
 
@@ -168,7 +169,8 @@ def main():
 				else:
 					modsum += mod
 
-				if step%50 == 0:
+				if step%50 == 0 and opt.modplot:
+					print 'mod,chi'
 					plt.clf()
 					plt.gca().set_position(plotpos0)
 					plt.imshow(mod, **ima)
@@ -187,6 +189,7 @@ def main():
 					plt.savefig('chi%02i-%02i-%03i.png' % (i,step,k))
 
 			if step % 10 == 0:
+				print 'modbest, chibest'
 				ibest = np.argmax(lnp)
 				print 'ibest', ibest
 				tractor.setAllSourceParams(pp[ibest,:])
@@ -209,6 +212,7 @@ def main():
 				plt.savefig('chibest%02i-%02i.png' % (i,step))
 
 			if step % 1 == 0:
+				print 'modsum'
 				plt.clf()
 				plt.gca().set_position(plotpos0)
 				plt.imshow(modsum/float(nw), **ima)
@@ -221,6 +225,7 @@ def main():
 			if step % 1 == 0 and False:
 				# Plot models, exaggerating the variance
 				# pp shape is (nw,ndim)
+				print 'exag'
 				p0 = pp.mean(axis=0)
 				print 'p0 shape', p0
 				for i in range(nw):
@@ -240,78 +245,126 @@ def main():
 
 
 
-			if step % 50 == 0:
-				pnames = tractor.catalog[0].getParamNames()
-				NP = len(pnames)
+		if step % 50 == 0:
+			pnames = tractor.catalog[0].getParamNames()
+			print 'Params', pnames
+			NP = len(pnames)
 
-				# select objid, ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r from mydb.mytable_2 where run=756 and camcol=3 and field=243
-				#objid,ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r
-				#1237648721218568377,152.208922638573,0.00391166133082899,-0.202430118237826,0.00423603626875907,17.59624,0.005895343,1.081388,0.0371073,26.40831,0.435521,0.01508615
+			# select objid, ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r from mydb.mytable_2 where run=756 and camcol=3 and field=243
+			#objid,ra,raerr,dec,decerr,devmag_r,devmagerr_r,devrad_r,devraderr_r,devphi_r,devab_r,devaberr_r
+			#1237648721218568377,152.208922638573,0.00391166133082899,-0.202430118237826,0.00423603626875907,17.59624,0.005895343,1.081388,0.0371073,26.40831,0.435521,0.01508615
 
 
-				# DR8
-				sdssvals = [ 152.208922638573,-0.202430118237826,17.59624,1.081388,0.435521, 26.40831 ]
-				sdsserrs = [ 0.00391166133082899, 0.00423603626875907,0.005895343,0.0371073, 0.01508615, 0. ]
+			# DR8
+			sdssvals = [ 152.208922638573,-0.202430118237826,17.59624,1.081388,0.435521, 26.40831 * -1. ]
+			sdsserrs = [ 0.00391166133082899, 0.00423603626875907,0.005895343,0.0371073, 0.01508615, 0. ]
+			# DR7; phi*-1; raErr, decErr are in arcsec, and raErr is err in ra*cos(dec)
+			sdssvals7 = [ 152.20891415,-0.20242878,17.60266,1.044212,0.4157184,26.3763*-1.,]
+			sdsserrs7 = [ 0.0443575305964374 / 3600., 0.041734802988402 / 3600.,0.006056787,0.03344231,0.0143005, 0.]
 
-				# DR7
-				sdssvals7 = [ 152.20891415,-0.20242878,17.60266,1.044212,0.4157184,26.3763,]
-				sdsserrs7 = [ 0.0443575305964374,0.041734802988402,0.006056787,0.03344231,0.0143005, 0.]
 
-				nsteps = 20
-				ppp = allp[-nsteps:]
+			tractor.setAllSourceParams(sdssvals7)
+			sdssmod = tractor.getModelImage(0)
+					
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			plt.imshow(sdssmod, **ima)
+			plt.title('SDSS Model')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			plt.savefig('sdssmod.png')
 
-				plt.figure(2)
+
+			ra0, dec0 = sdssvals7[:2]
+			#152.209, -0.202
+			pnames = [#'RA - %.3f (arcsec)' % np.abs(ra0),
+					  #'Dec + %.3f (arcsec)' % np.abs(dec0),
+				'RA - SDSS (arcsec)',
+				'Dec - SDSS (arcsec)',
+					  'r (mag)',
+					  'effective radius (arcsec)', 'axis ratio',
+					  'position angle (deg)']
+
+			nsteps = 20
+			ppp = allp[-nsteps:]
+
+			plt.figure(2)
+			plt.clf()
+			for i in range(NP):
+				pari = np.hstack([p[:,i] for p in ppp])
+
+				mn,std,c =(sdssvals7[i],sdsserrs7[i],'m')
+				# in [#(sdssvals[i],sdsserrs[i],'r'),
+
+				if i == 0:
+					pari -= ra0
+					mn -= ra0
+					pari *= 3600.
+					mn *= 3600.
+					std *= 3600.
+				elif i == 1:
+					pari -= dec0
+					mn -= dec0
+					pari *= 3600.
+					mn *= 3600.
+					std *= 3600.
+
+				plt.figure(1)
 				plt.clf()
-				for i in range(NP):
-					pari = np.hstack([p[:,i] for p in ppp])
+				#mn = np.mean(pari)
+				#std = np.std(pari)
+				xlo, xhi = min(pari.min(), mn-std), max(pari.max(), mn+std)
+				n,b,p1 = plt.hist(pari, 25, ec='none', alpha=0.5)
+				plt.hist(pari, 25, histtype='step', ec='b', lw=2)
+				xx = np.linspace(xlo, xhi, 100)
+				ax = plt.axis()
+				dx = b[1]-b[0]
+				#yy = np.exp(-0.5 * (xx - mn)**2 / std**2)
+				#yy /= sum(yy)
+				#yy *= sum(n)*dx / (xx[1]-xx[0])
+				#print 'yy', yy
+				#plt.plot(xx, yy, 'b-', lw=3, alpha=0.8)
+				print 'mn', mn, 'std', std
+				#plt.axvline(mn, color='b', lw=3, alpha=0.5)
 
-					plt.figure(1)
-					plt.clf()
-					n,b,p = plt.hist(pari, 25)
-					mn = np.mean(pari)
-					std = np.std(pari)
-					xx = np.linspace(b[0], b[-1], 100)
-					ax = plt.axis()
-					dx = b[1]-b[0]
+				#for mn,std,c in [#(sdssvals[i],sdsserrs[i],'r'),
+				#				 (sdssvals7[i],sdsserrs7[i],'m')]:
+				if std != 0:
 					yy = np.exp(-0.5 * (xx - mn)**2 / std**2)
 					yy /= sum(yy)
 					yy *= sum(n)*dx / (xx[1]-xx[0])
-					#print 'yy', yy
-					plt.plot(xx, yy, 'b-', lw=3, alpha=0.8)
-					print 'mn', mn, 'std', std
-					plt.axvline(mn, color='b', lw=3, alpha=0.5)
+					plt.plot(xx, yy, '-', color=c, lw=3, alpha=0.8)
+				print 'sdss', mn, std
+				p2 = plt.axvline(mn, color=c, lw=3, alpha=0.8)
 
-					for mn,std,c in [(sdssvals[i],sdsserrs[i],'r'),
-									 (sdssvals7[i],sdsserrs7[i],'m')]:
-						if std != 0:
-							yy = np.exp(-0.5 * (xx - mn)**2 / std**2)
-							yy /= sum(yy)
-							yy *= sum(n)*dx / (xx[1]-xx[0])
-							plt.plot(xx, yy, '-', color=c, lw=3, alpha=0.8)
-						print 'sdss', mn, std
-						plt.axvline(mn, color=c, lw=3, alpha=0.5)
+				#plt.axis(ax)
 
-					#plt.axis(ax)
+				#plt.xlim(min(xx.min(), mn-std), max(xx.max(), mn+std))
+				plt.xlim(xlo,xhi)
+				plt.xlabel(pnames[i])
+				plt.legend((p1[0],p2), ('Tractor', 'SDSS DR7'))
+				fn = 'modparam%02i-%02i.png' % (step,i)
+				print 'save', fn
+
+				
+
+				plt.savefig(fn)
+
+
+				plt.figure(2)
+
+				for j in range(i, NP):
+					parj = np.hstack([p[:,j] for p in ppp])
+					plt.subplot(NP, NP, (i*NP)+j+1)
+					if i == j:
+						plt.hist(pari, 25)
+						#plt.xlabel(pnames[i])
+					else:
+						plt.plot(pari, parj, 'r.', alpha=0.1)
+						plt.ylabel(pnames[j])
 					plt.xlabel(pnames[i])
-					fn = 'modparam%02i-%02i.png' % (step,i)
-					print 'save', fn
-					plt.savefig(fn)
-
-
-					plt.figure(2)
-
-					for j in range(i, NP):
-						parj = np.hstack([p[:,j] for p in ppp])
-						plt.subplot(NP, NP, (i*NP)+j+1)
-						if i == j:
-							plt.hist(pari, 25)
-							#plt.xlabel(pnames[i])
-						else:
-							plt.plot(pari, parj, 'r.', alpha=0.1)
-							plt.ylabel(pnames[j])
-						plt.xlabel(pnames[i])
-				plt.savefig('modhist%02i.png' % step)
-				plt.figure(1)
+			plt.savefig('modhist%02i.png' % step)
+			plt.figure(1)
 
 if __name__ == '__main__':
 	main()
