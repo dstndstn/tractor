@@ -96,7 +96,9 @@ def main():
 
 
 	plt.figure(1, figsize=(6,6))
-	plt.figure(2, figsize=(18,18))
+	#plt.figure(2, figsize=(18,18))
+	plt.figure(2, figsize=(12,12))
+	plt.figure(3, figsize=(4,4))
 
 	plt.figure(1)
 	plt.clf()
@@ -265,6 +267,7 @@ def main():
 
 			tractor.setAllSourceParams(sdssvals7)
 			sdssmod = tractor.getModelImage(0)
+			sdsschi = tractor.getChiImage(0)
 					
 			plt.clf()
 			plt.gca().set_position(plotpos0)
@@ -273,23 +276,32 @@ def main():
 			plt.xticks([],[])
 			plt.yticks([],[])
 			plt.savefig('sdssmod.png')
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			plt.imshow(sdsschi, **imchi)
+			plt.title('SDSS Model Chi')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			plt.savefig('sdsschi.png')
 
 
 			ra0, dec0 = sdssvals7[:2]
 			#152.209, -0.202
 			pnames = [#'RA - %.3f (arcsec)' % np.abs(ra0),
 					  #'Dec + %.3f (arcsec)' % np.abs(dec0),
-				'RA - SDSS (arcsec)',
-				'Dec - SDSS (arcsec)',
-					  'r (mag)',
-					  'effective radius (arcsec)', 'axis ratio',
-					  'position angle (deg)']
+				'RA - SDSS (milli-arcsec)',
+				'Dec - SDSS (milli-arcsec)',
+				'r (mag)',
+				'effective radius (arcsec)', 'axis ratio',
+				'position angle (deg)']
 
 			nsteps = 20
 			ppp = allp[-nsteps:]
 
-			plt.figure(2)
-			plt.clf()
+			tmn = {}
+			tstd = {}
+			paris = {}
+			
 			for i in range(NP):
 				pari = np.hstack([p[:,i] for p in ppp])
 
@@ -299,20 +311,22 @@ def main():
 				if i == 0:
 					pari -= ra0
 					mn -= ra0
-					pari *= 3600.
-					mn *= 3600.
-					std *= 3600.
+					pari *= 3600. * 1000.
+					mn *= 3600. * 1000.
+					std *= 3600. * 1000.
 				elif i == 1:
 					pari -= dec0
 					mn -= dec0
-					pari *= 3600.
-					mn *= 3600.
-					std *= 3600.
+					pari *= 3600. * 1000.
+					mn *= 3600. * 1000.
+					std *= 3600. * 1000.
 
-				plt.figure(1)
+				paris[i] = pari
+				tmn[i] = np.mean(pari)
+				tstd[i] = np.std(pari)
+
+				plt.figure(3)
 				plt.clf()
-				#mn = np.mean(pari)
-				#std = np.std(pari)
 				xlo, xhi = min(pari.min(), mn-std), max(pari.max(), mn+std)
 				n,b,p1 = plt.hist(pari, 25, ec='none', alpha=0.5)
 				plt.hist(pari, 25, histtype='step', ec='b', lw=2)
@@ -345,25 +359,36 @@ def main():
 				plt.legend((p1[0],p2), ('Tractor', 'SDSS DR7'))
 				fn = 'modparam%02i-%02i.png' % (step,i)
 				print 'save', fn
-
-				
-
 				plt.savefig(fn)
 
 
-				plt.figure(2)
-
+			plt.figure(2)
+			plt.clf()
+			plt.subplots_adjust(left=0.01, right=0.98, bottom=0.03, top=0.98,
+								wspace=0.1, hspace=0.1)
+			for i in range(NP):
+				pari = paris[i]
 				for j in range(i, NP):
-					parj = np.hstack([p[:,j] for p in ppp])
+					parj = paris[j]
 					plt.subplot(NP, NP, (i*NP)+j+1)
+					mn,std = tmn[i],tstd[i]
+					irng = (mn-3*std, mn+3*std)
+					mn,std = tmn[j],tstd[j]
+					jrng = (mn-3*std, mn+3*std)
 					if i == j:
-						plt.hist(pari, 25)
-						#plt.xlabel(pnames[i])
+						plt.hist(pari, 25, ec='none', alpha=0.5, range=irng)
+						plt.hist(pari, 25, histtype='step', ec='b', lw=1, range=irng)
+						plt.xlabel(pnames[i])
 					else:
-						plt.plot(pari, parj, 'r.', alpha=0.1)
-						plt.ylabel(pnames[j])
-					plt.xlabel(pnames[i])
+						plt.plot(pari, parj, 'b.', alpha=0.1)
+						plt.ylim(*jrng)
+						#plt.ylabel(pnames[j])
+					#plt.xlabel(pnames[i])
+					plt.xticks([])
+					plt.yticks([])
+					plt.xlim(*irng)
 			plt.savefig('modhist%02i.png' % step)
+			plt.savefig('modhist%02i.pdf' % step)
 			plt.figure(1)
 
 if __name__ == '__main__':
