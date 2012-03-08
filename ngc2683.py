@@ -14,6 +14,8 @@ from astrometry.util.file import *
 from tractor import *
 from tractor import sdss as st
 from tractor.saveImg import *
+from tractor import sdss_galaxy as sg
+from tractor import bascis as ba
 
 def main():
     run = 3530

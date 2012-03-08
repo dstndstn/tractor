@@ -80,22 +80,15 @@ def main():
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(), src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
-                if isinstance(src,st.CompositeGalaxy):
-                    brightE = src.brightnessExp
-                    brightD = src.brightnessDev
-                    sumbright = sum([brightE.getMag(bandname)+brightD.getMag(bandname) for bandname in bands])
-                    if sumbright < lowbright:
-                        print("GREATER")
-                        lowBrightE = brightE
-                        lowBrightD = brightD
-                        lowShapeE = src.shapeExp
-                        lowShapeD = src.shapeDev
                 print "Removed:", src
                 print xs,ys
                 tractor.removeSource(src)
 
     saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
-    CG = st.CompositeGalaxy(RaDecPos(ra,dec),lowBrightE,lowShapeE,lowBrightD,lowShapeD)
+    newShape = sg.GalaxyShape(30.,1.,0.)
+    newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
+    CG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
+
     print CG
     tractor.addSource(CG)
 

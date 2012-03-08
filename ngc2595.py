@@ -29,8 +29,9 @@ def main():
     
     ra = 126.925
     dec = 21.4833
-    itune = 6
-    ntune = 3
+    itune1 = 3
+    itune2 = 3
+    ntune = 0
 
     bands=['r','g','u','i','z']
     bandname = 'r'
@@ -84,29 +85,54 @@ def main():
     saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
-    CG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
-    print CG
-    tractor.addSource(CG)
+    EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
+    print EG
+    tractor.addSource(EG)
 
 
     saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
 
-    for i in range(itune):
+    for i in range(itune1):
+        if (i % 5 == 0):
+            tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
+        else:
+            tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
+        tractor.clearCache()
+        saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+    
+    CGPos = EG.getPosition()
+    CGShape = EG.getShape()
+    EGBright = EG.getBrightness()
+
+    CGr = EGBright[0]*1.25
+    CGg = EGBright[1]*1.25
+    CGu = EGBright[2]*1.25
+    CGz = EGBright[3]*1.25
+    CGi = EGBright[4]*1.25
+    CGBright = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
+    print EGBright
+    print CGBright
+
+    CG = st.CompositeGalaxy(CGPos,CGBright,CGShape,CGBright,CGShape)
+    tractor.removeSource(EG)
+    tractor.addSource(CG)
+
+    for i in range(itune2):
         if (i % 5 == 0):
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
-        saveAll('itune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
 
-    makeflipbook(prefix,len(tractor.getImages()),itune,ntune)
+    makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
-def makeflipbook(prefix,numImg,itune=0,ntune=0):
+def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     # Create a tex flip-book of the plots
 
     def allImages(title,imgpre):
@@ -133,9 +159,10 @@ def makeflipbook(prefix,numImg,itune=0,ntune=0):
     tex+=allImages('Initial Model','initial-'+prefix)
     tex+=allImages('Removed','removed-'+prefix)
     tex+=allImages('Added','added-'+prefix)
-    for i in range(itune):
-        tex+=allImages('Galaxy tuning, step %d' % (i+1),'itune-%d-' %(i+1)+prefix)
-
+    for i in range(itune1):
+        tex+=allImages('Galaxy tuning, step %d' % (i+1),'itune1-%d-' %(i+1)+prefix)
+    for i in range(itune2):
+        tex+=allImages('Galaxy tuning (w/ Composite), step %d' % (i+1),'itune2-%d-' %(i+1)+prefix)
     for i in range(ntune):
         tex+=allImages('All tuning, step %d' % (i+1),'ntune-%d-' % (i+1)+prefix)
     
