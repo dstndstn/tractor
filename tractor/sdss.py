@@ -429,7 +429,7 @@ class SdssFluxPhotoCal(object):
 		return brightness.getValue() * self.scale
 
 class SdssFlux(Flux):
-	def getStepSizes(self, img):
+	def getStepSizes(self):
 		return [1.]
 	def __str__(self):
 		return 'SdssFlux: %.1f' % (self.val * SdssPhotoCal.scale)

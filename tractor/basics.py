@@ -197,7 +197,7 @@ class PixPos(ParamList):
 	#	return ('PixPos', self.x, self.y)
 	def getDimension(self):
 		return 2
-	def getStepSizes(self, img, *args, **kwargs):
+	def getStepSizes(self, *args, **kwargs):
 		return [0.1, 0.1]
 
 class RaDecPos(ParamList):
@@ -217,7 +217,7 @@ class RaDecPos(ParamList):
 	#	return ('RaDecPos', self.ra, self.dec)
 	def getDimension(self):
 		return 2
-	def getStepSizes(self, img, *args, **kwargs):
+	def getStepSizes(self, *args, **kwargs):
 		return [1e-4, 1e-4]
 
 class ConstantSky(ScalarParam):
@@ -325,7 +325,7 @@ class GaussianMixturePSF(Params):
 		return self.mog
 	def proposeIncreasedComplexity(self, img):
 		raise
-	def getStepSizes(self, img, *args, **kwargs):
+	def getStepSizes(self, *args, **kwargs):
 		K = self.mog.K
 		# amp + mean + var
 		# FIXME: -1 for normalization?
@@ -458,7 +458,7 @@ class NCircularGaussianPSF(MultiParams):
 		return NCircularGaussianPSF(list(self.sigmas) + [maxs + 1.],
 							list(self.weights) + [0.05])
 
-	def getStepSizes(self, img, *args, **kwargs):
+	def getStepSizes(self, *args, **kwargs):
 		N = len(self.sigmas)
 		return [0.01]*N + [0.01]*N
 

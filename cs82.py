@@ -341,15 +341,21 @@ if __name__ == '__main__':
 	#x,y = wcs.positionToPixel(RaDecPos(RA,DEC))
 	#print 'x,y', x,y
 
+	magcut = 25.
+
 	for t in Tdisk:
 		# xmodel_world == alphamodel_sky
 
+		if t.mag_disk > magcut:
+			print 'Skipping source with mag=', t.mag_disk
+			continue
+
 		origwcs = Tan(cffns[0],0)
 		x,y = origwcs.radec2pixelxy(t.alphamodel_sky, t.deltamodel_sky)
-		print 'WCS x,y', x,y
-		print '    x,y', t.xmodel_image, t.ymodel_image
-		print '    del', t.xmodel_image - x, t.ymodel_image - y
-		print '    x,y', t.x_image, t.y_image
+		#print 'WCS x,y', x,y
+		#print '    x,y', t.xmodel_image, t.ymodel_image
+		#print '    del', t.xmodel_image - x, t.ymodel_image - y
+		#print '    x,y', t.x_image, t.y_image
 
 		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
 						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
@@ -357,11 +363,18 @@ if __name__ == '__main__':
 		print 'Adding source', src
 		tractor.addSource(src)
 	for t in Tsph:
+		if t.mag_sph > magcut:
+			print 'Skipping source with mag=', t.mag_sph
+			continue
+
 		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
 						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
 									t.spheroid_theta_world + 90.))
 		print 'Adding source', src
 		tractor.addSource(src)
+
+	# UGH!
+	tractor.catalog.recountParams()
 
 	cat = tractor.getCatalog()
 	print cat.hashkey()
@@ -409,15 +422,7 @@ if __name__ == '__main__':
 
 	print 'Image param names:', tim.getParamNames()
 
-	sys.exit(0)
-
-	lnp0 = tractor.getLogProb()
-	nthreads = 16
-	p0 = np.array(tractor.getCatalog().getParams())
-	ndim = len(p0)
-	nw = 2*ndim
-	print 'ndim', ndim
-
+	print 'Image step sizes:', tim.getStepSizes()
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -435,24 +440,29 @@ if __name__ == '__main__':
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
 
-	nthreads = 16
-	p0 = np.array(tractor.catalog.getParams())
+	p0 = np.array(tractor.getCatalog().getParams())
 	ndim = len(p0)
-	nw = 2*ndim
 	print 'ndim', ndim
+	nw = 50
+	print 'nw', nw
+	nthreads = 16
 
 	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 									threads=nthreads,
 									live_dangerously=True)
 
+	steps = np.array(tractor.catalog.getStepSizes())
+	print 'steps', steps
+
+	pp = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
+					for i in range(nw)])
+
 	lnp = None
-	pp = pp0
 	rstate = None
 	alllnp = []
 	allp = []
 
 	for step in range(1, 100):
-
 
 		for i in range(len(tractor.getImages())):
 			zr = zrs[i]
@@ -481,19 +491,26 @@ if __name__ == '__main__':
 					mysavefig('data%02i-ann.png' % i)
 
 
-			plt.clf()
-			plt.gca().set_position(plotpos0)
-			mod = tractor.getModelImage(i)
-			myimshow(mod, **ima)
-			plt.title('Model in %s' % tim.name)
-			plt.xticks([],[])
-			plt.yticks([],[])
-			mysavefig('mod%02i-%02i.png' % (i,step-1))
-			
+			if step % 1 == 0:
+				modsum = None
+				for k in xrange(nw):
+					tractor.setAllSourceParams(pp[k,:])
+					mod = tractor.getModelImage(i)
+					if k == 0:
+						modsum = mod
+					else:
+						modsum += mod
+						
+				plt.clf()
+				plt.gca().set_position(plotpos0)
+				myimshow(modsum/float(nw), **ima)
+				plt.title('Model (sum)')
+				plt.xticks([],[])
+				plt.yticks([],[])
+				mysavefig('modsum%02i-%02i.png' % (i,step-1))
 
+		print 'Run MCMC step', step
 		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+		print 'lnprobs:', lnp
 
 
-					
-
-		break
