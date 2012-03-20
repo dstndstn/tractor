@@ -33,7 +33,9 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 		if not os.path.exists(fn):
 			if retrieve:
 				print 'Retrieving', fn
-				sdss.retrieve(filetype, run, camcol, field, bandnum)
+				res = sdss.retrieve(filetype, run, camcol, field, bandnum)
+				if res is False:
+					raise RuntimeError('No such file on SDSS DAS: %s, rcfb %i/%i/%i/%s' % (filetype, run, camcol, field, bandname))
 			else:
 				raise os.OSError('no such file: "%s"' % fn)
 
@@ -252,20 +254,26 @@ def get_tractor_image(run, camcol, field, bandname,
 	_check_sdss_files(sdss, run, camcol, field, bandname,
 					  ['fpC', 'tsField', 'psField', 'fpM'],
 					  retrieve=retrieve)
-	fpC = sdss.readFpC(run, camcol, field, bandname).getImage()
+	fpC = sdss.readFpC(run, camcol, field, bandname)
+	tai = fpC.getHeader().get('TAI')
+	print 'TAI', tai
+	fpC = fpC.getImage()
 	fpC = fpC.astype(float) - sdss.softbias
 	image = fpC
 	(H,W) = image.shape
 
 	info = dict()
+	info.update(tai=tai)
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 	astrans = tsf.getAsTrans(bandnum)
 	wcs = SdssWcs(astrans)
+	#print 'Created SDSS Wcs:', wcs
 
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
 		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
+		print 'RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
 		xc,yc = [int(np.round(p)) for p in fxc,fyc]
 		roi = [xc-S, xc+S, yc-S, yc+S]
 		info.update(roi=roi)
@@ -274,7 +282,6 @@ def get_tractor_image(run, camcol, field, bandname,
 		x0,x1,y0,y1 = roi
 	else:
 		x0 = y0 = 0
-
 
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
@@ -298,8 +305,8 @@ def get_tractor_image(run, camcol, field, bandname,
 
 	if roi is not None:
 		roislice = (slice(y0,y1), slice(x0,x1))
-		image = image[roislice]
-		invvar = invvar[roislice]
+		image = image[roislice].copy()
+		invvar = invvar[roislice].copy()
 
 	if psf == 'dg':
 		dgpsf = psfield.getDoubleGaussian(bandnum)
@@ -448,6 +455,9 @@ class SdssWcs(WCS):
 		self.astrans = astrans
 		self.x0 = 0
 		self.y0 = 0
+
+	#def getParamNames(self):
+	#	return ['x0', 'y0',]
 
 	def hashkey(self):
 		return ('SdssWcs', self.x0, self.y0, self.astrans)

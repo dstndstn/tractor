@@ -62,7 +62,7 @@ class Image(MultiParams):
 		photocal = kwargs.pop('photocal', None)
 		super(Image,self).__init__(psf, wcs, photocal, sky)
 
-		print 'Image:', self.wcs, self.psf, self.sky, self.photocal
+		#print 'Image:', self.wcs, self.psf, self.sky, self.photocal
 
 	@staticmethod
 	def getNamedParams():

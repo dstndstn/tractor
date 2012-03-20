@@ -259,7 +259,7 @@ class ParamList(Params, NamedParams):
 		Returns a *copy* of the current active parameter values (list)
 		'''
 		return list(self._getLiquidArray(self.vals))
-	def getParam(self):
+	def getParam(self, i):
 		ii = self._indexLiquid(i)
 		return self._getThing(ii)
 
@@ -284,7 +284,7 @@ class ParamList(Params, NamedParams):
 		def next(self):
 			if self.i >= self.N:
 				raise StopIteration
-			rtn = self.pl.getParam(i)
+			rtn = self.pl.getParam(self.i)
 			self.i += 1
 			return rtn
 	def __iter__(self):
