@@ -66,8 +66,17 @@ def main():
 	# known; too bright
 	#RA,DEC,N = 52.64687, -0.42678, 3
 	# known; z = 19.5; parallax -0.003+-0.142;
-	#   dRA/dt +0.084+-0.010; dDec/dt 0.011+-0.009
+	#   dRA/dt +0.084+-0.010; dDec/dt 0.011+-0.009 [arcsec/yr]
 	RA,DEC,N = 342.47285, 0.73458, 4
+	zmag,dradt,ddecdt = 19.5, 0.084, 0.011
+
+
+
+	# TAI = 4412910179.40 / Number of seconds since Nov 17 1858
+
+	# -> deg/year
+	dradt /= 3600.
+	ddecdt /= 3600.
 
 	pfn = 'faint%i.pickle' % N
 	if os.path.exists(pfn):
@@ -104,10 +113,16 @@ def main():
 	skies = [skies[i] for i in I]
 	tais = [tais[i] for i in I]
 
+	tai0 = np.mean(tais)
+
+	#tractor = Tractor([])
+	#for i,im in enumerate(ims):
+	#	tractor.addImage(im)
+
 	zrs = [np.array([-1.,+5.]) * std + sky for sky,std in skies]
 
-	plt.figure(figsize=(4,4))
-	plt.clf()
+	# figsize
+	fs1 = (4,4)
 	plotpos0 = [0.01, 0.01, 0.98, 0.92]
 
 	imsum = None
@@ -129,6 +144,7 @@ def main():
 			slo += zr[0]
 			shi += zr[1]
 	
+		plt.figure(figsize=fs1)
 		plt.clf()
 		plt.gca().set_position(plotpos0)
 		plt.imshow(data, **ima)
@@ -136,6 +152,37 @@ def main():
 		plt.xticks([],[])
 		plt.yticks([],[])
 		mysavefig('faint-data%02i' % i)
+
+		# in yrs
+		dt = (tais[i] - tai0) / (86400. * 365.25)
+
+		tractor = Tractor([])
+		tractor.addImage(im)
+		src = PointSource(RaDecPos(RA + dradt * dt, DEC + ddecdt * dt),
+						  Mags(z=zmag))
+		tractor.addSource(src)
+		mod = tractor.getModelImage(im)
+		
+		plt.clf()
+		plt.gca().set_position(plotpos0)
+		plt.imshow(mod, **ima)
+		plt.xticks([],[])
+		plt.yticks([],[])
+		mysavefig('faint-mod%02i' % i)
+
+		plt.figure(figsize=(8,4))
+		plt.clf()
+		plt.subplots_adjust(left=0.01, bottom=0.01, right=0.99, top=0.99,
+							wspace=0.01, hspace=0)
+		plt.subplot(1,2,1)
+		plt.imshow(data, **ima)
+		plt.xticks([],[])
+		plt.yticks([],[])
+		plt.subplot(1,2,2)
+		plt.imshow(mod, **ima)
+		plt.xticks([],[])
+		plt.yticks([],[])
+		mysavefig('faint-datamod%02i' % i)
 
 	plt.clf()
 	plt.gca().set_position(plotpos0)
