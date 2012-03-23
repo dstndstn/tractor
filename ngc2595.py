@@ -63,6 +63,7 @@ def main():
 
     prefix = 'ngc2595'
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
+    plotInvvar('initial-'+prefix,tractor)
     bright = None
     lowbright = 1000
 
@@ -129,7 +130,7 @@ def main():
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
-
+    plotInvvar('final-'+prefix,tractor)
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
 def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):

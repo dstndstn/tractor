@@ -140,6 +140,11 @@ class Galaxy(MultiParams):
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 
+	def getShape(self):
+		return self.shape
+	def setShape(self,shape):
+		self.shape = shape
+
 	#def hashkey(self):
 	#	return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
 	#			self.re, self.ab, self.phi)
@@ -183,7 +188,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt position
 		psteps = pos0.getStepSizes(img)
-		if brightnessonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamFrozen('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			params = pos0.getParams()
@@ -201,7 +206,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt brightness
 		bsteps = self.brightness.getStepSizes(img)
-		if self.isParamPinned('brightness'):
+		if self.isParamFrozen('brightness'):
 			derivs.extend([None] * len(bsteps))
 		else:
 			params = self.brightness.getParams()
@@ -214,8 +219,8 @@ class Galaxy(MultiParams):
 				derivs.append(df)
 
 		# derivatives wrt shape
-		gsteps = self.shape.getStepSizes(img)
-		if brightnessonly or self.isParamPinned('shape'):
+		gsteps = self.shape.getStepSizes()
+		if brightnessonly or self.isParamFrozen('shape'):
 			derivs.extend([None] * len(gsteps))
 		else:
 			gnames = self.shape.getParamNames()
@@ -325,19 +330,19 @@ class CompositeGalaxy(Galaxy):
 		e.dname = 'comp.exp'
 		d.dname = 'comp.dev'
 		# pin through...
-		if self.isParamPinned('brightnessExp'):
+		if self.isParamFrozen('brightnessExp'):
 			e.pinParam('brightness')
-		if self.isParamPinned('shapeExp'):
+		if self.isParamFrozen('shapeExp'):
 			e.pinParam('shape')
-		if self.isParamPinned('brightnessDev'):
+		if self.isParamFrozen('brightnessDev'):
 			d.pinParam('brightness')
-		if self.isParamPinned('shapeDev'):
+		if self.isParamFrozen('shapeDev'):
 			d.pinParam('shape')
 		de = e.getParamDerivatives(img, brightnessonly)
 		dd = d.getParamDerivatives(img, brightnessonly)
-		npos = len(self.pos.getStepSizes(img))
+		npos = len(self.pos.getStepSizes())
 		derivs = []
-		if brightnessonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamFrozen('pos'):
 			derivs.extend([None] * npos)
 		else:
 			for i in range(npos):

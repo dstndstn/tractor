@@ -156,7 +156,7 @@ def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
 
 def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False):
     for i,img in enumerate(tractor.getImages()):
-	    if i % 5 == 0:
+	    if i % 5 == 0: #Only print 'r' band HACK
 		    save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
 
@@ -164,7 +164,8 @@ def plotInvvar(idstr,tractor):
 	models = tractor.getModelImages()
 	timgs = tractor.getImages()
 	for i,(timg,mod) in enumerate(zip(timgs,models)):
-		data = timg.getImage()
-		plt.clf()
-		plt.plot(mod.flatten(),(data-mod).flatten()**2,'x')
-		plt.savefig(idstr+'test-%d' % (i))
+		if i % 5 ==0: #Only print 'r' band HACK
+			data = timg.getImage()
+			plt.clf()
+			plt.plot(mod.flatten(),(data-mod).flatten()**2,'x')
+			plt.savefig(idstr+'invvar-%d' % (i))
