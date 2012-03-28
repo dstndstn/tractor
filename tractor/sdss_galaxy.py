@@ -140,11 +140,6 @@ class Galaxy(MultiParams):
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 
-	def getShape(self):
-		return self.shape
-	def setShape(self,shape):
-		self.shape = shape
-
 	#def hashkey(self):
 	#	return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
 	#			self.re, self.ab, self.phi)
@@ -187,7 +182,7 @@ class Galaxy(MultiParams):
 		derivs = []
 
 		# derivatives wrt position
-		psteps = pos0.getStepSizes(img)
+		psteps = pos0.getStepSizes()
 		if brightnessonly or self.isParamFrozen('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
@@ -205,7 +200,7 @@ class Galaxy(MultiParams):
 				derivs.append(dx)
 
 		# derivatives wrt brightness
-		bsteps = self.brightness.getStepSizes(img)
+		bsteps = self.brightness.getStepSizes()
 		if self.isParamFrozen('brightness'):
 			derivs.extend([None] * len(bsteps))
 		else:
@@ -461,6 +456,8 @@ class ExpGalaxy(HoggGalaxy):
 		return 'ExpGalaxy'
 	def getProfile(self):
 		return ExpGalaxy.getExpProfile()
+	def getShape(self):
+		return self.shape
 	def copy(self):
 		return ExpGalaxy(self.pos.copy(), self.brightness.copy(),
 						 self.shape.copy())

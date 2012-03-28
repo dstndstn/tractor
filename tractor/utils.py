@@ -259,7 +259,7 @@ class ParamList(Params, NamedParams):
 		Returns a *copy* of the current active parameter values (list)
 		'''
 		return list(self._getLiquidArray(self.vals))
-	def getParam(self, i):
+	def getParam(self,i):
 		ii = self._indexLiquid(i)
 		return self._getThing(ii)
 

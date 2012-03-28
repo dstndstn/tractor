@@ -54,6 +54,11 @@ class Image(MultiParams):
 		self.data = kwargs.pop('data', None)
 		self.invvar = kwargs.pop('invvar', None)
 		self.inverr = np.sqrt(self.invvar)
+		for i,x in enumerate(self.inverr):
+			for j,y in enumerate(x):
+				if not np.isfinite(y):
+					self.inverr[i][j] = 0
+
 		self.name = kwargs.pop('name', None)
 
 		psf = kwargs.pop('psf', None)
@@ -62,7 +67,7 @@ class Image(MultiParams):
 		photocal = kwargs.pop('photocal', None)
 		super(Image,self).__init__(psf, wcs, photocal, sky)
 
-		#print 'Image:', self.wcs, self.psf, self.sky, self.photocal
+		print 'Image:', self.wcs, self.psf, self.sky, self.photocal
 
 	@staticmethod
 	def getNamedParams():

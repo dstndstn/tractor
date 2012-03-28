@@ -59,6 +59,25 @@ class NullPhotoCal(object):
 	'''
 	def brightnessToCounts(self, brightness):
 		return brightness.getValue()
+	def hashkey(self):
+		return ('NullPhotoCal',)
+
+class NasaSloanPhotoCal(object):
+	'''
+	A temporary photocal for NS atlas
+	'''
+	def __init__(self,bandname):
+		self.bandname = bandname
+	def brightnessToCounts(self, brightness):
+		M= brightness.getMag(self.bandname)
+		if not np.isfinite(M):
+			return 0.
+		if M > 50.:
+			return 0.
+		logc = M/-2.5
+		return 10.**logc
+	def hashkey(self):
+		return ('TempPhotoCal',)
 
 
 class NullWCS(WCS):
@@ -98,7 +117,7 @@ class FitsWcs(ParamList):
 		super(FitsWcs, self).__init__(0, 0, wcs)
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals
-		self.addNamedParams(x0=8, y0=9)
+#		self.addNamedParams(x0=8, y0=9)
 
 		self.wcs = wcs
 		self.x0 = 0
@@ -120,10 +139,10 @@ class FitsWcs(ParamList):
 			cd = w.get_cd()
 			cd[i-4] = val
 			w.set_cd(*cd)
-		elif i == 8:
-			self.x0 = val
-		elif i == 9:
-			self.y0 = val
+		#elif i == 8:
+		#	self.x0 = val
+		#elif i == 9:
+		#	self.y0 = val
 		else:
 			raise IndexError
 	def _getThing(self, i):
@@ -136,17 +155,17 @@ class FitsWcs(ParamList):
 			return crp[i-2]
 		elif i in [4,5,6,7]:
 			return cd[i-4]
-		elif i == 8:
-			return self.x0
-		elif i == 9:
-			return self.y0
+#		elif i == 8:
+#			return self.x0
+#		elif i == 9:
+#			return self.y0
 		else:
 			raise IndexError
 	def _getThings(self):
 		w = self.wcs
-		return w.crval + w.crpix + w.cd + [self.x0, self.y0]
+		return w.crval + w.crpix + w.cd# + [self.x0, self.y0]
 	def _numberOfThings(self):
-		return 10
+		return 8
 	def getParams(self):
 		'''
 		Returns a *copy* of the current active parameter values (list)
