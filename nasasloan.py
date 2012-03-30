@@ -18,12 +18,14 @@ from tractor import sdss_galaxy as sg
 from tractor import basics as ba
 from tractor import engine as en
 from astrometry.util.util import Tan
+from tractor.emfit import em_fit_2d
+from tractor.fitpsf import em_init_params
 
 def main():
     ra = 126.925
     dec = 21.4833
-    itune1 = 3
-    itune2 = 3
+    itune1 = 5
+    itune2 = 5
     ntune = 0
 
     bands=['r']
@@ -42,7 +44,24 @@ def main():
     data = table[0].data
     invvar=table[1].data
     skyobj = ba.ConstantSky(header['skyval'])
-    psf = ba.NCircularGaussianPSF([2.0],[1.0])
+    psffn = 'J082742.02+212844.7-r-bpsf.fits.gz'
+    psfimg = pyfits.open(psffn)[0].data
+    print 'PSF image shape', psfimg.shape
+    # number of Gaussian components
+    PS = psfimg.shape[0]
+    K = 3
+    w,mu,sig = em_init_params(K, None, None, None)
+    II = psfimg.copy()
+    II /= II.sum()
+    # HACK
+    II = np.maximum(II, 0)
+    print 'Multi-Gaussian PSF fit...'
+    xm,ym = -(PS/2), -(PS/2)
+    em_fit_2d(II, xm, ym, w, mu, sig)
+    print 'w,mu,sig', w,mu,sig
+    psf = GaussianMixturePSF(w, mu, sig)
+
+
     wcs = Tan("J082742.02+212844.7-r.fits",0)
     wcs = FitsWcs(wcs)
     wcs.setX0Y0(1.,1.)
@@ -98,17 +117,17 @@ def main():
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
         tractor.clearCache()
-        saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        save('itune1-%d-' % (i+1)+prefix,tractor,zr,debug=True)
     
     CGPos = EG.getPosition()
     CGShape = EG.getShape()
     EGBright = EG.getBrightness()
-
-    CGr = EGBright[0]*1.25
-    CGg = EGBright[1]*1.25
-    CGu = EGBright[2]*1.25
-    CGz = EGBright[3]*1.25
-    CGi = EGBright[4]*1.25
+    print EGBright
+    CGg = EGBright[0]*1.25
+    CGi = EGBright[1]*1.25
+    CGr = EGBright[2]*1.25
+    CGu = EGBright[3]*1.25
+    CGz = EGBright[4]*1.25
     CGBright = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     print EGBright
     print CGBright

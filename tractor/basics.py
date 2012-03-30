@@ -74,7 +74,7 @@ class NasaSloanPhotoCal(object):
 			return 0.
 		if M > 50.:
 			return 0.
-		logc = M/-2.5
+		logc = (M-22.5)/-2.5
 		return 10.**logc
 	def hashkey(self):
 		return ('TempPhotoCal',)
