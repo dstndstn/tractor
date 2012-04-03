@@ -26,7 +26,11 @@ def main():
     dec = 21.4833
     itune1 = 5
     itune2 = 5
-    ntune = 0
+    ntune = 2
+    run = [4517,4576,4576]
+    field = [103,99,100]
+    camcol = [2,6,6]
+
 
     bands=['r']
     bandname = 'r'
@@ -61,7 +65,9 @@ def main():
     print 'w,mu,sig', w,mu,sig
     psf = GaussianMixturePSF(w, mu, sig)
 
-
+    sources = []
+    for run,camcol,field in zip(run,camcol,field):
+        sources.append(st.get_tractor_sources(run,camcol,field,bandname,bands=bands))
     wcs = Tan("J082742.02+212844.7-r.fits",0)
     wcs = FitsWcs(wcs)
     wcs.setX0Y0(1.,1.)
@@ -72,15 +78,15 @@ def main():
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
     tims = [TI[0]]
     tractor = st.SDSSTractor(tims)
-#    for source in sources:
-#        tractor.addSources(source)
+    for source in sources:
+        tractor.addSources(source)
 
     zr = np.array([-5.,+5.])# * info['skysig']
 
     print bands
 
     prefix = 'ngc2595'
-#    save('initial-'+prefix, tractor,zr,debug=True)
+    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     bright = None
     lowbright = 1000
     sources=[]
@@ -101,7 +107,7 @@ def main():
                 print xs,ys
                 tractor.removeSource(src)
 
-#    save('removed-'+prefix, tractor,zr,debug=True)
+    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
@@ -109,7 +115,7 @@ def main():
     tractor.addSource(EG)
 
 
-    save('added-'+prefix,tractor,zr,debug=True)
+    saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(itune1):
         if (i % 5 == 0):
@@ -117,7 +123,7 @@ def main():
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
         tractor.clearCache()
-        save('itune1-%d-' % (i+1)+prefix,tractor,zr,debug=True)
+        saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     
     CGPos = EG.getPosition()
     CGShape = EG.getShape()
@@ -142,11 +148,11 @@ def main():
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
         tractor.clearCache()
-        save('itune2-%d-' % (i+1)+prefix,tractor,zr,debug=True)
+        saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        save('ntune-%d-' % (i+1)+prefix,tractor,zr,debug=True)
+        saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
@@ -175,8 +181,8 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     \begin{document}
     '''
     
-#    tex+=allImages('Initial Model','initial-'+prefix)
-#    tex+=allImages('Removed','removed-'+prefix)
+    tex+=allImages('Initial Model','initial-'+prefix)
+    tex+=allImages('Removed','removed-'+prefix)
     tex+=allImages('Added','added-'+prefix)
     for i in range(itune1):
         tex+=allImages('Galaxy tuning, step %d' % (i+1),'itune1-%d-' %(i+1)+prefix)
