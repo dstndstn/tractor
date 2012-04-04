@@ -66,8 +66,8 @@ def main():
     psf = GaussianMixturePSF(w, mu, sig)
 
     sources = []
-    for run,camcol,field in zip(run,camcol,field):
-        sources.append(st.get_tractor_sources(run,camcol,field,bandname,bands=bands))
+#    for run,camcol,field in zip(run,camcol,field):
+#        sources.append(st.get_tractor_sources(run,camcol,field,bandname,bands=bands))
     wcs = Tan("J082742.02+212844.7-r.fits",0)
     wcs = FitsWcs(wcs)
     wcs.setX0Y0(1.,1.)
@@ -86,7 +86,7 @@ def main():
     print bands
 
     prefix = 'ngc2595'
-    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
+#    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     bright = None
     lowbright = 1000
     sources=[]
@@ -107,7 +107,7 @@ def main():
                 print xs,ys
                 tractor.removeSource(src)
 
-    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
+#    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
@@ -116,14 +116,17 @@ def main():
 
 
     saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
+    plotInvvar('added-'+prefix,tractor)
 
     for i in range(itune1):
         if (i % 5 == 0):
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
+        tractor.changeInvvar(9.)
         tractor.clearCache()
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        plotInvvar('itune1-%d-' % (i+1)+prefix,tractor)
     
     CGPos = EG.getPosition()
     CGShape = EG.getShape()
@@ -147,8 +150,10 @@ def main():
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
+        tractor.changeInvvar(9.)
         tractor.clearCache()
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        plotInvvar('itune2-%d-' % (i+1)+prefix,tractor)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)

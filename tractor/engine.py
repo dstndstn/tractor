@@ -54,6 +54,7 @@ class Image(MultiParams):
 		self.data = kwargs.pop('data', None)
 		self.invvar = kwargs.pop('invvar', None)
 		self.inverr = np.sqrt(self.invvar)
+		self.origInvvar = self.invvar
 		for i,x in enumerate(self.inverr):
 			for j,y in enumerate(x):
 				if not np.isfinite(y):
@@ -107,6 +108,12 @@ class Image(MultiParams):
 
 	def getInvError(self):
 		return self.inverr
+	def getInvvar(self):
+		return self.invvar
+	def setInvvar(self,invvar):
+		self.invvar = invvar
+	def getOrigInvvar(self):
+		return self.origInvvar
 	def getImage(self):
 		return self.data
 	def getPsf(self):
@@ -142,7 +149,6 @@ class Patch(object):
 
 	def __repr__(self):
 		return str(self)
-
 	def setName(self, name):
 		self.name = name
 	def getName(self):
@@ -1015,6 +1021,16 @@ class Tractor(object):
 				derivs = img.getSky().getParamDerivatives(img)
 				allparams.extend([[(d,img) for d in derivs]])
 		return allparams
+
+	def changeInvvar(self,IWLSscale=None):
+		if IWLSscale is None:
+			return
+		for img in self.getImages():
+			data = img.getImage()
+			mod = self.getModelImage(img)
+			chi = data-mod
+			invvar = img.getInvvar()
+			img.setInvvar((1./invvar)*((IWLSscale*(chi**2))/(IWLSscale+(chi)**2)))
 	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
