@@ -129,9 +129,25 @@ def get_cfht_image(fn, psffn, pixscale):
 	invvar = 1./(var + srcvar)
 
 	# Apply mask
-	I = P[2].data
+	# MP_BAD  =                    0
+	# MP_SAT  =                    1
+	# MP_INTRP=                    2
+	# MP_CR   =                    3
+	# MP_EDGE =                    4
+	# HIERARCH MP_DETECTED =       5
+	# HIERARCH MP_DETECTED_NEGATIVE = 6
+	I = P[2].data.astype(np.uint16)
+	print 'I:', I
+	print I.dtype
 	mask = I[roislice]
-	invvar[mask > 0] = 0.
+	print 'Mask:', mask
+	hdr = P[2].header
+	badbits = [hdr.get('MP_%s' % nm) for nm in ['BAD', 'SAT', 'INTRP', 'CR']]
+	print 'Bad bits:', badbits
+	badmask = sum([1 << bit for bit in badbits])
+	print 'Bad mask:', badmask
+	print 'Mask dtype', mask.dtype
+	invvar[(mask & int(badmask)) > 0] = 0.
 	del I
 	del var
 
@@ -482,6 +498,18 @@ if __name__ == '__main__':
 
 	for step in range(1, 100):
 
+		allp.append(pp)
+
+		plt.clf()
+		for p in allp[:-1]:
+			plt.plot(p[:,0], p[:,1], 'k.', alpha=0.1)
+		p = allp[-1]
+		plt.plot(p[:,0], p[:,1], 'r.', alpha=0.5)
+		nms = tractor.getParamNames()
+		plt.xlabel(nms[0])
+		plt.ylabel(nms[1])
+		mysavefig('params-%02i.png' % step)
+
 		for i in range(len(tractor.getImages())):
 			zr = zrs[i]
 			ima = dict(interpolation='nearest', origin='lower',
@@ -531,7 +559,7 @@ if __name__ == '__main__':
 				plt.yticks([],[])
 				mysavefig('modsum%02i-%02i.png' % (i,step-1))
 
-				myimshow(chisum/float(nw), **imchi)
+				plt.imshow(chisum/float(nw), **imchi)
 				plt.title('Chi (sum)')
 				plt.xticks([],[])
 				plt.yticks([],[])
