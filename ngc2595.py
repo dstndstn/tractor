@@ -29,8 +29,8 @@ def main():
     
     ra = 126.925
     dec = 21.4833
-    itune1 = 3
-    itune2 = 3
+    itune1 = 2
+    itune2 = 1
     ntune = 0
 
     bands=['r','g','u','i','z']
