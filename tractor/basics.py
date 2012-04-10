@@ -101,8 +101,11 @@ class NullWCS(WCS):
 
 class FitsWcs(ParamList):
 	'''
-	A WCS implementation that wraps a FITS WCS object (possibly with a
-	pixel offset)
+	A WCS implementation that wraps a FITS WCS object (with a pixel
+	offset).
+
+	The WCS object must be an astrometry.util.util.Tan object, or a
+	convincingly quacking duck.
 	'''
 
 	@staticmethod
@@ -164,7 +167,12 @@ class FitsWcs(ParamList):
 	def _numberOfThings(self):
 		return 10
 	def getStepSizes(self, *args, **kwargs):
-		ss = [0.1/3600., 0.1/3600., 0.1, 0.1, 1e-8, 1e-8, 1e-8, 1e-8, 0.1, 0.1]
+		pixscale = self.wcs.pixel_scale()
+		# we set everything ~ 1 pixel
+		dcrval = pixscale / 3600.
+		# CD matrix: ~1 pixel over image size (call it 1000)
+		dcd = pixscale / 3600. / 1000.
+		ss = [dcrval, dcrval, 1., 1., dcd, dcd, dcd, dcd, 1., 1.]
 		return list(self._getLiquidArray(ss))
 	def getParams(self):
 		'''

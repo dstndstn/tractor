@@ -332,7 +332,6 @@ class Catalog(MultiParams):
 	# def numberOfParams(self):
 	#  '''Returns the number of active parameters in all sources'''
 
-
 	def getNamedParamName(self, j):
 		return 'source%i' % j
 
@@ -356,32 +355,16 @@ class Tractor(MultiParams):
 		self.cachestack = []
 
 	# For emcee multi-threading
-	# FIXME -- we want to be able to include image calib params
-	# as well.
 	def __call__(self, X):
-		# nsp = self.catalog.numberOfParams()
-		# self.setAllSourceParams(X[:nsp])
-		# X = X[nsp:]
-		# #for im in self.images:
-		# #	nip = im.numberOfParams()
-		# #	if nip ==0:
-		# #		continue
-		# #	im.setParams(X[:nip])
-		# #	X = X[nip:]
-		# self.images.setParams(X)
 		self.setParams(X)
-		
 		lnp = self.getLogProb()
-		print 'lnp', lnp
+		#print 'lnp', lnp
 		return lnp
-	#def setAllSourceParams(self, X):
-	#	self.catalog.setParams(X)
 
 	# For pickling
 	def __getstate__(self):
 		return (self.getImages(), self.getCatalog(), self.liquid)
 	def __setstate__(self, state):
-		#(self.images, self.catalog) = state
 		(images, catalog, liquid) = state
 		self.subs = [images, catalog]
 		self.liquid = liquid
@@ -506,6 +489,110 @@ class Tractor(MultiParams):
 		X = self.optimize(allparams)
 		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
 		return dlogprob, X, alpha
+
+
+	### FIXME -- temporary functions, parallel to optimizeCatalogAtFixedComplexityStep()
+	### et al, that use the param infrastructure correctly.
+	def opt2(self):
+		allderivs = self.getderivs2()
+		X = self.optimize(allderivs)
+		(dlogprob, alpha) = self.tryupdates2(X)
+		return dlogprob, X, alpha
+
+	def tryupdates2(self, X, alphas=None):
+		if alphas is None:
+			# 1/1024 to 1 in factors of 2
+			alphas = 2.**-(np.arange(10,0,-1)-1)
+
+		pBefore = self.getLogProb()
+		logverb('  log-prob before:', pBefore)
+		pBest = pBefore
+		alphaBest = None
+		p0 = self.getParams()
+		for alpha in alphas:
+			logverb('  Stepping with alpha =', alpha)
+			pa = [p + alpha * d for p,d in zip(p0, X)]
+			self.setParams(pa)
+			pAfter = self.getLogProb()
+			logverb('  delta log-prob:', pAfter - pBefore)
+			if pAfter < (pBest - 1.):
+				break
+
+			if pAfter > pBest:
+				alphaBest = alpha
+				pBest = pAfter
+
+		if alphaBest is None:
+			self.setParams(p0)
+			return 0, 0.
+
+		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+		pa = [p + alphaBest * d for p,d in zip(p0, X)]
+		self.setParams(pa)
+		return pBest - pBefore, alphaBest
+
+
+	def getderivs2(self):
+		# allderivs: [
+		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
+		#    (param1:)  [],
+		#    (param2:)  [  (deriv, img), ],
+		# ]
+		allderivs = []
+
+		# First, add Image parameters
+		#ims = self.images
+		#if self.isParamFrozen('images'):
+		#	ims = []
+		print 'Finding derivatives for', self.images.numberOfParams(), '(unfrozen) image params'
+		#for j,nm in enumerate(self.images.getParamNames()):
+		#	print '  finding derivative for', nm
+		#	derivs = []
+		#	
+		#
+		#	allderivs.append(derivs)
+		ims = self.images
+		if self.isParamFrozen('images'):
+			ims = []
+		for j,im in enumerate(ims):
+			mod0 = self.getModelImage(im)
+			print 'Finding derivatives in image', im
+			p0 = im.getParams()
+			print 'nominal params:', p0
+			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
+				print 'Finding derivative', nm
+				print 'Step size:', step
+				im.setParam(k, p0[k] + step)
+				mod = self.getModelImage(im)
+				im.setParam(k, p0[k])
+				deriv = Patch(0, 0, (mod - mod0) / step)
+				deriv.name = 'd(im%i)/d(%s)' % (j, nm)
+				
+				allderivs.append([(deriv, im)])
+
+		srcs = self.catalog
+		if self.isParamFrozen('catalog'):
+			srcs = []
+		print 'Finding derivatives for', len(srcs), '(unfrozen) sources'
+		print 'In', len(self.images), 'images'
+		for j,src in enumerate(srcs):
+			srcderivs = [[] for i in range(src.numberOfParams())]
+			for i,img in enumerate(self.images):
+				# Get derivatives (in this image) of params
+				derivs = src.getParamDerivatives(img)
+				# derivs is a list of Patch objects or None, one per parameter.
+				assert(len(derivs) == src.numberOfParams())
+				for k,deriv in enumerate(derivs):
+					if deriv is None:
+						continue
+					if not all(np.isfinite(deriv.patch.ravel())):
+						print 'Derivative for source', src
+						print 'deriv index', i
+						assert(False)
+					srcderivs[k].append((deriv, img))
+			allderivs.extend(allderivs)
+		return allderivs
+		
 
 	def debugChangeSources(self, **kwargs):
 		pass

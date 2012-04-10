@@ -1,4 +1,6 @@
 import os
+import time
+import logging
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -267,7 +269,15 @@ if __name__ == '__main__':
 	import optparse
 	parser = optparse.OptionParser()
 	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
 	opt,args = parser.parse_args()
+
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
@@ -366,7 +376,8 @@ if __name__ == '__main__':
 	#x,y = wcs.positionToPixel(RaDecPos(RA,DEC))
 	#print 'x,y', x,y
 
-	magcut = 25.
+	#magcut = 25.
+	magcut = 24.
 
 	for t in Tdisk:
 		# xmodel_world == alphamodel_sky
@@ -460,6 +471,16 @@ if __name__ == '__main__':
 	print 'Images: total', tractor.images.numberOfParams(), 'unfrozen'
 	print '  ', tractor.images.getParams()
 
+
+	print 'Run optimization step'
+	t0 = time.clock()
+	#tractor.optimizeCatalogAtFixedComplexityStep()
+	tractor.opt2()
+	t_opt = time.clock() - t0
+	print 'Optimization took', t_opt
+
+
+
 	p0 = np.array(tractor.getParams())
 	ndim = len(p0)
 	print 'ndim', ndim
@@ -496,8 +517,10 @@ if __name__ == '__main__':
 			mykwargs['vmax'] = nlmap(kwargs['vmax'])
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
-	for step in range(1, 100):
 
+
+
+	for step in range(1, 100):
 		allp.append(pp)
 
 		plt.clf()
@@ -565,8 +588,17 @@ if __name__ == '__main__':
 				plt.yticks([],[])
 				mysavefig('chisum%02i-%02i.png' % (i,step-1))
 
-		print 'Run MCMC step', step
-		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-		print 'lnprobs:', lnp
+		print 'Run optimization step', step
+		t0 = time.clock()
+		#tractor.optimizeCatalogAtFixedComplexityStep()
+		tractor.opt2()
+		t_opt = time.clock() - t0
+		print 'Optimization took', t_opt
 
+		print 'Run MCMC step', step
+		t0 = time.clock()
+		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+		t_mcmc = time.clock() - t0
+		print 'lnprobs:', lnp
+		print 'MCMC took', t_mcmc
 
