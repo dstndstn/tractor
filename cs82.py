@@ -380,21 +380,21 @@ if __name__ == '__main__':
 	print cat.hashkey()
 
 	p = cat.getParams()
-	print 'Params', p
-	print len(p), 'params'
+	#print 'Params', p
+	print 'Catalog:', len(p), 'params'
 
-	print 'Cat objects:'
-	for src in cat:
-		print src
+	#print 'Cat objects:'
+	#for src in cat:
+	#	print src
 
 	print 'image component params:'
-	print tim.sky.getParams()
-	print tim.wcs.getParams()
-	print tim.psf.getParams()
-	print tim.photocal.getParams()
+	print '  sky', tim.sky.getParams()
+	print '  wcs', tim.wcs.getParams()
+	print '  psf', tim.psf.getParams()
+	print '  photocal', tim.photocal.getParams()
 
-	print 'Image params', tim.getParams()
-	print 'Image hashkey:', tim.hashkey()
+	#print 'Image params', tim.getParams()
+	#print 'Image hashkey:', tim.hashkey()
 
 	print 'N image params:', tim.numberOfParams()
 

@@ -100,28 +100,25 @@ class NullWCS(WCS):
 		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
 class FitsWcs(ParamList):
-
-	@staticmethod
-	def getNamedParams():
-		# We omit x0,y0 from this list so that properties are no created for them;
-		# we add them back into the named param list in __init__().
-		# (x0=8, y0=9)
-		return dict(crval1=0, crval2=1, crpix1=2, crpix2=3,
-					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7)
-
 	'''
 	A WCS implementation that wraps a FITS WCS object (possibly with a
 	pixel offset)
 	'''
-	def __init__(self, wcs):
-		super(FitsWcs, self).__init__(0, 0, wcs)
-		# ParamList keeps its params in a list; we don't want to do that.
-		del self.vals
-#		self.addNamedParams(x0=8, y0=9)
 
-		self.wcs = wcs
+	@staticmethod
+	def getNamedParams():
+		return dict(crval1=0, crval2=1, crpix1=2, crpix2=3,
+					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7)
+
+	def __init__(self, wcs):
+		if hasattr(self, 'x0'):
+			print 'FitsWcs has an x0 attr:', self.x0
 		self.x0 = 0
 		self.y0 = 0
+		super(FitsWcs, self).__init__(self.x0, self.y0, wcs)
+		# ParamList keeps its params in a list; we don't want to do that.
+		del self.vals
+		self.wcs = wcs
 
 	# Here we ASSUME TAN WCS!
 	# oi vey...
@@ -139,10 +136,10 @@ class FitsWcs(ParamList):
 			cd = w.get_cd()
 			cd[i-4] = val
 			w.set_cd(*cd)
-		#elif i == 8:
-		#	self.x0 = val
-		#elif i == 9:
-		#	self.y0 = val
+		elif i == 8:
+			self.x0 = val
+		elif i == 9:
+			self.y0 = val
 		else:
 			raise IndexError
 	def _getThing(self, i):
@@ -155,17 +152,20 @@ class FitsWcs(ParamList):
 			return crp[i-2]
 		elif i in [4,5,6,7]:
 			return cd[i-4]
-#		elif i == 8:
-#			return self.x0
-#		elif i == 9:
-#			return self.y0
+		elif i == 8:
+			return self.x0
+		elif i == 9:
+			return self.y0
 		else:
 			raise IndexError
 	def _getThings(self):
 		w = self.wcs
-		return w.crval + w.crpix + w.cd# + [self.x0, self.y0]
+		return w.crval + w.crpix + w.cd + [self.x0, self.y0]
 	def _numberOfThings(self):
-		return 8
+		return 10
+	def getStepSizes(self, *args, **kwargs):
+		ss = [0.1/3600., 0.1/3600., 0.1, 0.1, 1e-8, 1e-8, 1e-8, 1e-8, 0.1, 0.1]
+		return list(self._getLiquidArray(ss))
 	def getParams(self):
 		'''
 		Returns a *copy* of the current active parameter values (list)

@@ -101,8 +101,13 @@ class NamedParams(object):
 
 		# Create a property for each named parameter.
 		for n,i in self.namedparams.items():
+			#print 'Adding named parameter', n, 'to class', self.__class__
 			if hasattr(self.__class__, n):
+				#print '  class', self.__class__, 'already has that attr'
 				continue
+			#if hasattr(self, n):
+			#	print '  self of type', self.__class__, 'already has that attr'
+			#	continue
 			def makeGetter(ii):
 				return lambda x: x._getThing(ii)
 			def makeSetter(ii):
