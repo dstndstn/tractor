@@ -206,7 +206,7 @@ def rot90_wcs(wcs, W, H):
 
 
 def get_tractor(RA, DEC, sz, cffns):
-	tractor = Tractor([])
+	tractor = Tractor()
 
 	skies = []
 	pixscale = 0.187
@@ -247,6 +247,11 @@ def mysavefig(fn):
 	
 if __name__ == '__main__':
 	#getdata()
+
+	import optparse
+	parser = optparse.OptionParser()
+	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
+	opt,args = parser.parse_args()
 
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
@@ -335,6 +340,10 @@ if __name__ == '__main__':
 	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
 	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
+	print
+	print 'Tractor:', tractor
+	print
+
 	tim = tractor.getImage(0)
 	print 'tim', tim
 	wcs = tim.getWcs()
@@ -375,14 +384,13 @@ if __name__ == '__main__':
 
 	# UGH!
 	tractor.catalog.recountParams()
+	tractor.images.recountParams()
 
 	cat = tractor.getCatalog()
-	print cat.hashkey()
-
 	p = cat.getParams()
+	#print cat.hashkey()
 	#print 'Params', p
 	print 'Catalog:', len(p), 'params'
-
 	#print 'Cat objects:'
 	#for src in cat:
 	#	print src
@@ -392,42 +400,75 @@ if __name__ == '__main__':
 	print '  wcs', tim.wcs.getParams()
 	print '  psf', tim.psf.getParams()
 	print '  photocal', tim.photocal.getParams()
-
 	#print 'Image params', tim.getParams()
 	#print 'Image hashkey:', tim.hashkey()
-
 	print 'N image params:', tim.numberOfParams()
 
-	tim.freezeParams('photocal', 'psf')
+	tim.freezeParams('photocal', 'psf', 'sky')
 	wcs = tim.getWcs()
 
 	print 'WCS', wcs
 	#print wcs._getThings()
 	#print wcs.namedparams
 	#print wcs.paramnames
-
 	print 'wcs params:', wcs.getThawedParams()
-
 	wcs.freezeAllBut('crval1', 'crval2')
 	print 'wcs params now:', wcs.getThawedParams()
-
-	#wcs.pinParams('crpix1', 'crpix2', 'cd11', 'cd12', 'cd21', 'cd22', 'x0', 'y0')
-
 	print 'WCS liquid params:', wcs.liquid
 	print 'WCS n params:', wcs.numberOfParams()
-
 	print '(unpinned) Image params', tim.getThawedParams()
 	print '(unpinned) Image params', tim.getParams()
 	print '(unpinned) N image params:', tim.numberOfParams()
 
 	print 'Image param names:', tim.getParamNames()
-
 	print 'Image step sizes:', tim.getStepSizes()
+
+	tractor.freezeParam('catalog')
+	print 'Tractor has', len(tractor.images), 'images'
+
+	for im in tractor.images[1:]:
+		print 'Freezing all params of image', im
+		im.freezeAllParams()
+
+	for i,im in enumerate(tractor.images):
+		print 'Tractor image', i
+		print '  ', im
+		print '  Unfrozen params:', im.getParamNames()
+	print 'Param names:', tractor.getParamNames()
+
+	print 'Tractor:', tractor.catalog.numberOfParams(), 'catalog params and',
+	print tractor.images.numberOfParams(), 'image params'
+	print 'Total', tractor.numberOfParams(), 'unfrozen'
+	print '  ', tractor.getParams()
+
+	print 'Images: total', tractor.images.numberOfParams(), 'unfrozen'
+	print '  ', tractor.images.getParams()
+
+	p0 = np.array(tractor.getParams())
+	ndim = len(p0)
+	print 'ndim', ndim
+	#nw = 50
+	nw = 10
+	print 'nw', nw
+
+	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+									threads=opt.threads,
+									live_dangerously=True)
+
+	steps = np.array(tractor.getStepSizes())
+	print 'step sizes', steps
+
+	pp = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
+					for i in range(nw)])
+
+	lnp = None
+	rstate = None
+	alllnp = []
+	allp = []
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
-
 	def nlmap(X):
 		S = 0.01
 		return np.arcsinh(X * S)/S
@@ -438,29 +479,6 @@ if __name__ == '__main__':
 		if 'vmax' in kwargs:
 			mykwargs['vmax'] = nlmap(kwargs['vmax'])
 		return plt.imshow(nlmap(x), *args, **mykwargs)
-
-
-	p0 = np.array(tractor.getCatalog().getParams())
-	ndim = len(p0)
-	print 'ndim', ndim
-	nw = 50
-	print 'nw', nw
-	nthreads = 16
-
-	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
-									threads=nthreads,
-									live_dangerously=True)
-
-	steps = np.array(tractor.catalog.getStepSizes())
-	print 'steps', steps
-
-	pp = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
-					for i in range(nw)])
-
-	lnp = None
-	rstate = None
-	alllnp = []
-	allp = []
 
 	for step in range(1, 100):
 
@@ -493,13 +511,17 @@ if __name__ == '__main__':
 
 			if step % 1 == 0:
 				modsum = None
+				chisum = None
 				for k in xrange(nw):
-					tractor.setAllSourceParams(pp[k,:])
+					tractor.setParams(pp[k,:])
 					mod = tractor.getModelImage(i)
+					chi = tractor.getChiImage(i)
 					if k == 0:
 						modsum = mod
+						chisum = chi
 					else:
 						modsum += mod
+						chisum += chi
 						
 				plt.clf()
 				plt.gca().set_position(plotpos0)
@@ -508,6 +530,12 @@ if __name__ == '__main__':
 				plt.xticks([],[])
 				plt.yticks([],[])
 				mysavefig('modsum%02i-%02i.png' % (i,step-1))
+
+				myimshow(chisum/float(nw), **imchi)
+				plt.title('Chi (sum)')
+				plt.xticks([],[])
+				plt.yticks([],[])
+				mysavefig('chisum%02i-%02i.png' % (i,step-1))
 
 		print 'Run MCMC step', step
 		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)

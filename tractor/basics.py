@@ -250,6 +250,9 @@ class ConstantSky(ScalarParam):
 	def addTo(self, img):
 		img += self.val
 	
+	def getParamNames(self):
+		return ['sky']
+
 
 class PointSource(MultiParams):
 	'''
@@ -376,7 +379,10 @@ class GaussianMixturePSF(Params):
 		return Patch(x0, y0, grid)
 
 	def __str__(self):
-		return 'GaussianMixturePSF: ' + str(self.mog)
+		return (#'GaussianMixturePSF: ' + str(self.mog)
+			'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
+			', means=' + str(tuple(self.mog.mean.ravel())) +
+			', var=' + str(tuple(self.mog.var.ravel())))
 	def hashkey(self):
 		return ('GaussianMixturePSF',
 				tuple(self.mog.amp.ravel()),
@@ -390,6 +396,15 @@ class GaussianMixturePSF(Params):
 	def numberOfParams(self):
 		K = self.mog.K
 		return K * (1 + 2 + 3)
+
+	def getParamNames(self):
+		K = self.mog.K
+		names = ['amp%i' % i for i in range(K)]
+		for i in range(K):
+			names.extend(['mean%i.x'%i, 'mean%i.y'%i])
+		for i in range(K):
+			names.extend(['var%i.xx'%i, 'var%i.yy'%i, 'var%i.xy'%i])
+		return names
 
 	# def stepParam(self, parami, delta):
 	# 	K = self.mog.K
@@ -420,6 +435,7 @@ class GaussianMixturePSF(Params):
 		K = self.mog.K
 		self.mog.amp = p[:K]
 		pp = p[K:]
+		D = 2
 		self.mog.mean = np.array(pp[:K*2]).reshape(K,D)
 		pp = pp[K*2:]
 		self.mog.var[:,0,0] = pp[::3]

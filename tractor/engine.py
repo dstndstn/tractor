@@ -315,7 +315,6 @@ class Cache(dict):
 	pass
 
 class Catalog(MultiParams):
-
 	deepcopy = MultiParams.copy
 
 	def __str__(self):
@@ -323,38 +322,36 @@ class Catalog(MultiParams):
 	 	return 'Catalog with %i sources' % len(self)
 
 	def printLong(self):
-		print 'Catalog:'
+		print 'Catalog with %i sources:' % len(self)
 		for i,x in enumerate(self):
 			print '  %i:' % i, x
 
-	def __len__(self):
-		return len(self.subs)
+	# inherited from MultiParams:
+	# def __len__(self):
+	#  ''' Returns the number of sources in this catalog'''
+	# def numberOfParams(self):
+	#  '''Returns the number of active parameters in all sources'''
 
-	# delegate list operations to self.subs.
-	# FIXME -- should some of these go in MultiParams?
-	def __iter__(self):
-		return self.subs.__iter__()
-	def __getitem__(self, key):
-		return self.subs.__getitem__(key)
-	def append(self, x):
-		self.subs.append(x)
-	def extend(self, x):
-		self.subs.extend(x)
-	def remove(self, x):
-		self.subs.remove(x)
 
-class Tractor(object):
+	def getNamedParamName(self, j):
+		return 'source%i' % j
 
-	def __init__(self, images, catalog=[]):
+class Images(MultiParams):
+	def getNamedParamName(self, j):
+		return 'image%i' % j
+
+
+class Tractor(MultiParams):
+	@staticmethod
+	def getNamedParams():
+		return dict(images=0, catalog=1)
+
+	def __init__(self, images=[], catalog=[]):
 		'''
 		image: list of Image objects (data)
 		catalog: list of Source objects
 		'''
-		self.images = images
-		self.catalog = Catalog()
-		for obj in catalog:
-			self.catalog.append(obj)
-
+		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
 		self.cache = Cache()
 		self.cachestack = []
 
@@ -362,18 +359,32 @@ class Tractor(object):
 	# FIXME -- we want to be able to include image calib params
 	# as well.
 	def __call__(self, X):
-		self.setAllSourceParams(X)
+		# nsp = self.catalog.numberOfParams()
+		# self.setAllSourceParams(X[:nsp])
+		# X = X[nsp:]
+		# #for im in self.images:
+		# #	nip = im.numberOfParams()
+		# #	if nip ==0:
+		# #		continue
+		# #	im.setParams(X[:nip])
+		# #	X = X[nip:]
+		# self.images.setParams(X)
+		self.setParams(X)
+		
 		lnp = self.getLogProb()
 		print 'lnp', lnp
 		return lnp
-	def setAllSourceParams(self, X):
-		self.catalog.setParams(X)
+	#def setAllSourceParams(self, X):
+	#	self.catalog.setParams(X)
 
 	# For pickling
 	def __getstate__(self):
-		return (self.getImages(), self.getCatalog())
+		return (self.getImages(), self.getCatalog(), self.liquid)
 	def __setstate__(self, state):
-		(self.images, self.catalog) = state
+		#(self.images, self.catalog) = state
+		(images, catalog, liquid) = state
+		self.subs = [images, catalog]
+		self.liquid = liquid
 		self.cache = Cache()
 		self.cachestack = []
 

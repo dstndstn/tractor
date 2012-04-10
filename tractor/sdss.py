@@ -383,6 +383,9 @@ class SdssMagsPhotoCal(Params):
 		assert(i == 0)
 		self.aa = p
 
+	def getParamNames(self):
+		return ['aa']
+
 	def hashkey(self):
 		return ('SdssMagsPhotoCal', self.bandname, #self.tsfield)
 				self.exptime, self.aa, self.kk, self.airmass)

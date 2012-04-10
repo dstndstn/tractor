@@ -309,6 +309,43 @@ class MultiParams(Params, NamedParams):
 	def copy(self):
 		return self.__class__([s.copy() for s in self.subs])
 
+	# delegate list operations to self.subs.
+	def append(self, x):
+		self.subs.append(x)
+	def extend(self, x):
+		self.subs.extend(x)
+	def remove(self, x):
+		self.subs.remove(x)
+	def __len__(self):
+		return len(self.subs)
+	def __getitem__(self, key):
+		return self.subs.__getitem__(key)
+	def __iter__(self):
+		return self.subs.__iter__()
+
+	# def __len__(self):
+	# 	''' len(): of liquid params '''
+	# 	return self._countLiquid()
+	# def __getitem__(self, i):
+	# 	''' index into liquid params '''
+	# 	return self.subs[self._indexLiquid(i)]
+	# # iterable -- of liquid params.
+	# class MultiParamsIter(object):
+	# 	def __init__(self, me):
+	# 		self.me = me
+	# 		self.i = 0
+	# 		self.N = len(me)
+	# 	def __iter__(self):
+	# 		return self
+	# 	def next(self):
+	# 		if self.i >= self.N:
+	# 			raise StopIteration
+	# 		rtn = self.me[self.i]
+	# 		self.i += 1
+	# 		return rtn
+	# def __iter__(self):
+	# 	return MultiParams.MultiParamsIter(self)
+
 	def hashkey(self):
 		t = [getClassName(self)]
 		for s in self.subs:
@@ -349,7 +386,15 @@ class MultiParams(Params, NamedParams):
 			pre = self.getNamedParamName(i)
 			if pre is None:
 				pre = 'param%i' % i
-			n.extend('%s.%s' % (pre,post) for post in s.getParamNames())
+			snames = s.getParamNames()
+			if snames is not None and len(snames) == s.numberOfParams():
+				n.extend('%s.%s' % (pre,post) for post in s.getParamNames())
+			else:
+				print 'Getting named params for', pre
+				print '  -> ', s.getParamNames()
+				print '      (expected', s.numberOfParams(), 'of them)'
+				n.extend('%s.param%i' % (pre,i) for i in range(s.numberOfParams()))
+			
 		return n
 
 	def numberOfParams(self):

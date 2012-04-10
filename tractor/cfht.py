@@ -25,7 +25,10 @@ COMMENT   M = m + PHOT_C + PHOT_K*(AIRMASS - 1) + PHOT_X*(PHOT_C1 - PHOT_C2)
 	def setParam(self, i, p):
 		assert(i == 0)
 		self.phot_c = p
-			
+
+	def getParamNames(self):
+		return ['phot_c']
+
 	def brightnessToCounts(self, brightness):
 		#M = brightness.getValue()
 		M = brightness.getMag(self.bandname)
