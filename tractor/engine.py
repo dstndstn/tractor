@@ -112,6 +112,12 @@ class Image(MultiParams):
 		return self.invvar
 	def setInvvar(self,invvar):
 		self.invvar = invvar
+		self.inverr = np.sqrt(invvar)
+		for i,x in enumerate(self.inverr):
+			for j,y in enumerate(x):
+				if not np.isfinite(y):
+					self.inverr[i][j] = 0
+
 	def getOrigInvvar(self):
 		return self.origInvvar
 	def getImage(self):
