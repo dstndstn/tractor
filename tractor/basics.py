@@ -310,7 +310,7 @@ class PointSource(MultiParams):
 
 		# Position
 		psteps = pos0.getStepSizes(img)
-		if brightnessonly or self.isParamPinned('pos'):
+		if brightnessonly or self.isParamFrozen('pos'):
 			derivs.extend([None] * len(psteps))
 		else:
 			pvals = pos0.getParams()
@@ -325,7 +325,7 @@ class PointSource(MultiParams):
 
 		# Brightness
 		bsteps = self.brightness.getStepSizes(img)
-		if self.isParamPinned('brightness'):
+		if self.isParamFrozen('brightness'):
 			derivs.extend([None] * len(bsteps))
 		else:
 			bvals = self.brightness.getParams()

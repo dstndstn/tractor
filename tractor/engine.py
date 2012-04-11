@@ -53,12 +53,12 @@ class Image(MultiParams):
 		'''
 		self.data = kwargs.pop('data', None)
 		self.invvar = kwargs.pop('invvar', None)
+		for i,x in enumerate(self.invvar):
+			for j,y in enumerate(x):
+				if y < 0:
+					self.invvar[i][j] = 0
 		self.inverr = np.sqrt(self.invvar)
 		self.origInvvar = self.invvar
-		for i,x in enumerate(self.inverr):
-			for j,y in enumerate(x):
-				if not np.isfinite(y):
-					self.inverr[i][j] = 0
 
 		self.name = kwargs.pop('name', None)
 
@@ -112,12 +112,11 @@ class Image(MultiParams):
 		return self.invvar
 	def setInvvar(self,invvar):
 		self.invvar = invvar
-		self.inverr = np.sqrt(invvar)
-		for i,x in enumerate(self.inverr):
+		for i,x in enumerate(self.invvar):
 			for j,y in enumerate(x):
 				if not np.isfinite(y):
-					self.inverr[i][j] = 0
-
+					self.invvar[i][j] = 0
+		self.inverr = np.sqrt(invvar)
 	def getOrigInvvar(self):
 		return self.origInvvar
 	def getImage(self):

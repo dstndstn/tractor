@@ -29,9 +29,9 @@ def main():
     
     ra = 126.925
     dec = 21.4833
-    itune1 = 2
-    itune2 = 1
-    ntune = 0
+    itune1 = 4
+    itune2 = 4
+    ntune = 2
 
     bands=['r','g','u','i','z']
     bandname = 'r'
@@ -98,6 +98,7 @@ def main():
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
+        tractor.changeInvvar()
         tractor.clearCache()
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     
@@ -123,11 +124,13 @@ def main():
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
+        tractor.changeInvvar(9.)
         tractor.clearCache()
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
+        tractor.changeInvvar(9.)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
     plotInvvar('final-'+prefix,tractor)
