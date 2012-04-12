@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import datetime
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -18,6 +19,20 @@ from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 import emcee
+
+class Time(object):
+	def __init__(self):
+		self.wall = datetime.datetime.now()
+		self.cpu = time.clock()
+	def __sub__(self, other):
+		dwall = (self.wall - other.wall)
+		# python2.7
+		if hasattr(dwall, 'total_seconds'):
+			dwall = dwall.total_seconds()
+		else:
+			dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
+		dcpu = (self.cpu - other.cpu)
+		return '%f wall, %f cpu' % (dwall, dcpu)
 
 def getdata():
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
@@ -383,7 +398,7 @@ if __name__ == '__main__':
 		# xmodel_world == alphamodel_sky
 
 		if t.mag_disk > magcut:
-			print 'Skipping source with mag=', t.mag_disk
+			#print 'Skipping source with mag=', t.mag_disk
 			continue
 
 		origwcs = Tan(cffns[0],0)
@@ -396,90 +411,53 @@ if __name__ == '__main__':
 		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
 						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
 									t.disk_theta_world + 90.))
-		print 'Adding source', src
+		#print 'Adding source', src
 		tractor.addSource(src)
 	for t in Tsph:
 		if t.mag_sph > magcut:
-			print 'Skipping source with mag=', t.mag_sph
+			#print 'Skipping source with mag=', t.mag_sph
 			continue
 
 		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
 						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
 									t.spheroid_theta_world + 90.))
-		print 'Adding source', src
+		#print 'Adding source', src
 		tractor.addSource(src)
 
-	# UGH!
-	tractor.catalog.recountParams()
-	tractor.images.recountParams()
-
 	cat = tractor.getCatalog()
-	p = cat.getParams()
-	#print cat.hashkey()
-	#print 'Params', p
-	print 'Catalog:', len(p), 'params'
-	#print 'Cat objects:'
-	#for src in cat:
-	#	print src
+	print 'Catalog:', len(cat), 'sources,', cat.numberOfParams(), 'params'
 
-	print 'image component params:'
-	print '  sky', tim.sky.getParams()
-	print '  wcs', tim.wcs.getParams()
-	print '  psf', tim.psf.getParams()
-	print '  photocal', tim.photocal.getParams()
-	#print 'Image params', tim.getParams()
-	#print 'Image hashkey:', tim.hashkey()
-	print 'N image params:', tim.numberOfParams()
+	# print 'image component params:'
+	# print '  sky', tim.sky.getParams()
+	# print '  wcs', tim.wcs.getParams()
+	# print '  psf', tim.psf.getParams()
+	# print '  photocal', tim.photocal.getParams()
+	# print 'N image params:', tim.numberOfParams()
 
 	tim.freezeParams('photocal', 'psf', 'sky')
 	wcs = tim.getWcs()
-
-	print 'WCS', wcs
-	#print wcs._getThings()
-	#print wcs.namedparams
-	#print wcs.paramnames
-	print 'wcs params:', wcs.getThawedParams()
+	#print 'WCS', wcs
 	wcs.freezeAllBut('crval1', 'crval2')
-	print 'wcs params now:', wcs.getThawedParams()
-	print 'WCS liquid params:', wcs.liquid
-	print 'WCS n params:', wcs.numberOfParams()
-	print '(unpinned) Image params', tim.getThawedParams()
-	print '(unpinned) Image params', tim.getParams()
-	print '(unpinned) N image params:', tim.numberOfParams()
-
-	print 'Image param names:', tim.getParamNames()
+	print 'Image params', tim.getParamNames()
 	print 'Image step sizes:', tim.getStepSizes()
 
 	tractor.freezeParam('catalog')
 	print 'Tractor has', len(tractor.images), 'images'
 
 	for im in tractor.images[1:]:
-		print 'Freezing all params of image', im
+		#print 'Freezing all params of image', im
 		im.freezeAllParams()
 
-	for i,im in enumerate(tractor.images):
-		print 'Tractor image', i
-		print '  ', im
-		print '  Unfrozen params:', im.getParamNames()
-	print 'Param names:', tractor.getParamNames()
+	# for i,im in enumerate(tractor.images):
+	# 	print 'Tractor image', i
+	# 	print '  ', im
+	# 	print '  Unfrozen params:', im.getParamNames()
+	# print 'Param names:', tractor.getParamNames()
 
 	print 'Tractor:', tractor.catalog.numberOfParams(), 'catalog params and',
 	print tractor.images.numberOfParams(), 'image params'
 	print 'Total', tractor.numberOfParams(), 'unfrozen'
-	print '  ', tractor.getParams()
-
-	print 'Images: total', tractor.images.numberOfParams(), 'unfrozen'
-	print '  ', tractor.images.getParams()
-
-
-	print 'Run optimization step'
-	t0 = time.clock()
-	#tractor.optimizeCatalogAtFixedComplexityStep()
-	tractor.opt2()
-	t_opt = time.clock() - t0
-	print 'Optimization took', t_opt
-
-
+	#print '  ', tractor.getParams()
 
 	p0 = np.array(tractor.getParams())
 	ndim = len(p0)
@@ -491,12 +469,8 @@ if __name__ == '__main__':
 	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 									threads=opt.threads,
 									live_dangerously=True)
-
 	steps = np.array(tractor.getStepSizes())
-	print 'step sizes', steps
-
-	pp = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
-					for i in range(nw)])
+	pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
 
 	lnp = None
 	rstate = None
@@ -518,20 +492,19 @@ if __name__ == '__main__':
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
 
-
-
 	for step in range(1, 100):
 		allp.append(pp)
 
-		plt.clf()
-		for p in allp[:-1]:
-			plt.plot(p[:,0], p[:,1], 'k.', alpha=0.1)
-		p = allp[-1]
-		plt.plot(p[:,0], p[:,1], 'r.', alpha=0.5)
-		nms = tractor.getParamNames()
-		plt.xlabel(nms[0])
-		plt.ylabel(nms[1])
-		mysavefig('params-%02i.png' % step)
+		if True:
+			plt.clf()
+			for p in allp[:-1]:
+				plt.plot(p[:,0], p[:,1], 'k.', alpha=0.1)
+			p = allp[-1]
+			plt.plot(p[:,0], p[:,1], 'r.', alpha=0.5)
+			nms = tractor.getParamNames()
+			plt.xlabel(nms[0])
+			plt.ylabel(nms[1])
+			mysavefig('params-%02i.png' % (step-1))
 
 		for i in range(len(tractor.getImages())):
 			zr = zrs[i]
@@ -539,6 +512,7 @@ if __name__ == '__main__':
 					   vmin=zr[0], vmax=zr[1], cmap='gray')
 			imchi = dict(interpolation='nearest', origin='lower',
 						 vmin=-5., vmax=+5., cmap='gray')
+
 			if step == 1:
 				tim = tractor.getImage(i)
 				data = tim.getImage()
@@ -560,7 +534,7 @@ if __name__ == '__main__':
 					mysavefig('data%02i-ann.png' % i)
 
 
-			if step % 1 == 0:
+			if step % 10 == 0:
 				modsum = None
 				chisum = None
 				for k in xrange(nw):
@@ -588,17 +562,32 @@ if __name__ == '__main__':
 				plt.yticks([],[])
 				mysavefig('chisum%02i-%02i.png' % (i,step-1))
 
-		print 'Run optimization step', step
-		t0 = time.clock()
-		#tractor.optimizeCatalogAtFixedComplexityStep()
-		tractor.opt2()
-		t_opt = time.clock() - t0
-		print 'Optimization took', t_opt
+		if step % 2 == 0:
+			print 'Run optimization step', step
+			#print 'param shape', pp.shape
+			stdev = np.std(pp, axis=0)
+			print 'stdev', stdev
+			mn = np.mean(pp, axis=0)
+			print 'mean', mn
+			tractor.setParams(mn)
+			t0 = Time()
+			# tractor.optimizeCatalogAtFixedComplexityStep()
+			tractor.opt2()
+			t_opt = (Time() - t0)
+			print 'Optimization took', t_opt, 'sec'
+			mn = tractor.getParams()
+			lnp0 = tractor.getLogProb()
+			print 'Lnprob', lnp0
+			pp = emcee.EnsembleSampler.sampleBall(mn, stdev, nw)
+			lnp = None
 
-		print 'Run MCMC step', step
-		t0 = time.clock()
-		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-		t_mcmc = time.clock() - t0
-		print 'lnprobs:', lnp
-		print 'MCMC took', t_mcmc
-
+		else:
+			kwargs = dict(storechain=False)
+			# if step % 2 == 0:
+			#	kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(steps)
+			print 'Run MCMC step', step
+			t0 = Time()
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+			t_mcmc = (Time() - t0)
+			print 'lnprobs:', lnp
+			print 'MCMC took', t_mcmc, 'sec'

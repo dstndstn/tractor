@@ -91,8 +91,8 @@ class NamedParams(object):
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
 
-	def recountParams(self):
-		self.liquid = [True] * self._numberOfThings()
+	#def recountParams(self):
+	#	self.liquid = [True] * self._numberOfThings()
 
 	def addNamedParams(self, **d):
 		self.namedparams.update(d)
@@ -312,10 +312,15 @@ class MultiParams(Params, NamedParams):
 	# delegate list operations to self.subs.
 	def append(self, x):
 		self.subs.append(x)
+		self.liquid.append(True)
 	def extend(self, x):
 		self.subs.extend(x)
+		self.liquid.extend([True] * len(x))
 	def remove(self, x):
-		self.subs.remove(x)
+		i = self.subs.index(x)
+		self.subs = self.subs[:i] + self.subs[i+1:]
+		self.liquid = self.liquid[:i] + self.liquid[i+1:]
+		#self.subs.remove(x)
 	def __len__(self):
 		return len(self.subs)
 	def __getitem__(self, key):

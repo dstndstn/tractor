@@ -9,6 +9,7 @@ from math import ceil, floor, pi, sqrt, exp
 import time
 import logging
 import random
+import os
 
 import numpy as np
 import pylab as plt
@@ -361,9 +362,9 @@ class Tractor(MultiParams):
 
 	# For emcee multi-threading
 	def __call__(self, X):
+		print 'Tractor.__call__: I am pid', os.getpid()
 		self.setParams(X)
 		lnp = self.getLogProb()
-		#print 'lnp', lnp
 		return lnp
 
 	# For pickling
@@ -404,50 +405,6 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	def increasePsfComplexity(self, imagei):
-		print 'Increasing complexity of PSF in image', imagei
-		pBefore = self.getLogProb()
-		img = self.getImage(imagei)
-		psf = img.getPsf()
-		psfk = psf.proposeIncreasedComplexity(img)
-
-		print 'Trying to increase PSF complexity'
-		print 'from:', psf
-		print 'to  :', psfk
-
-		img.setPsf(psfk)
-		pAfter = self.getLogProb()
-
-		print 'Before increasing PSF complexity: log-prob', pBefore
-		print 'After  increasing PSF complexity: log-prob', pAfter
-
-		self.optimizePsfAtFixedComplexityStep(imagei)
-		pAfter2 = self.getLogProb()
-
-		print 'Before increasing PSF complexity: log-prob', pBefore
-		print 'After  increasing PSF complexity: log-prob', pAfter
-		print 'After  tuning:                    log-prob', pAfter2
-
-		# HACKY: want to be better, and to have successfully optimized...
-		if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
-			print 'Accepting PSF change!'
-		else:
-			print 'Rejecting PSF change!'
-			img.setPsf(psf)
-
-		print 'PSF is', img.getPsf()
-
-	def increaseAllPsfComplexity(self):
-		for i in range(len(self.images)):
-			self.increasePsfComplexity(i)
-
-	def changeSource(self, source):
-		'''
-		Proposes a list of alternatives, where each is a lists of new
-		Sources that the given Source could be changed into.
-		'''
-		return []
-
 	def optimizeCatalogLoop(self, nsteps=20, **kwargs):
 		mindlnprob = kwargs.pop('mindlnprob', 1.e-3)
 		for ostep in range(nsteps):
@@ -465,10 +422,6 @@ class Tractor(MultiParams):
 				return False
 		return True
 
-	def optimizeCatalogBrightnesses(self, srcs=None, sky=False):
-		return self.optimizeCatalogAtFixedComplexityStep(srcs=srcs, brightnessonly=True,
-														 sky=sky)
-
 	def optimizeCatalogAtFixedComplexityStep(self, srcs=None, brightnessonly=False,
 											 alphas=None, sky=True):
 		'''
@@ -480,18 +433,8 @@ class Tractor(MultiParams):
 		-take step (try full step, back off)
 		'''
 		logverb('Optimizing at fixed complexity')
-		allparams = self.getAllDerivs(srcs=srcs, brightnessonly=brightnessonly, sky=sky)
-
-		#print allparams
-		# list, one element per parameter...
-		#print 'optimizing: derivs are:'
-		#for p in allparams:
-		#	# one element per image, (derivate Patch, Image)
-		#	for imi,(d,im) in enumerate(p):
-		#		if d is not None:
-		#			print '  ', d.name, 'in image', imi
-
-		X = self.optimize(allparams)
+		alldevirs = self.getAllDerivs(srcs=srcs, brightnessonly=brightnessonly, sky=sky)
+		X = self.optimize(alldevirs)
 		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
 		return dlogprob, X, alpha
 
@@ -538,48 +481,39 @@ class Tractor(MultiParams):
 
 
 	def getderivs2(self):
+		# Returns:
 		# allderivs: [
 		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
 		#    (param1:)  [],
 		#    (param2:)  [  (deriv, img), ],
 		# ]
 		allderivs = []
-
-		# First, add Image parameters
-		#ims = self.images
-		#if self.isParamFrozen('images'):
-		#	ims = []
-		print 'Finding derivatives for', self.images.numberOfParams(), '(unfrozen) image params'
-		#for j,nm in enumerate(self.images.getParamNames()):
-		#	print '  finding derivative for', nm
-		#	derivs = []
-		#	
-		#
-		#	allderivs.append(derivs)
+		# First, derivs for Image parameters (because 'images' comes first in the
+		# tractor's parameters)
+		#print 'Finding derivatives for', self.images.numberOfParams(), 'image params'
 		ims = self.images
 		if self.isParamFrozen('images'):
 			ims = []
 		for j,im in enumerate(ims):
 			mod0 = self.getModelImage(im)
-			print 'Finding derivatives in image', im
+			#print 'Finding derivatives in image', im
 			p0 = im.getParams()
-			print 'nominal params:', p0
+			#print 'nominal params:', p0
 			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
-				print 'Finding derivative', nm
-				print 'Step size:', step
+				#print 'Finding derivative', nm
+				#print 'Step size:', step
 				im.setParam(k, p0[k] + step)
 				mod = self.getModelImage(im)
 				im.setParam(k, p0[k])
 				deriv = Patch(0, 0, (mod - mod0) / step)
 				deriv.name = 'd(im%i)/d(%s)' % (j, nm)
-				
 				allderivs.append([(deriv, im)])
-
+		assert(len(allderivs) == sum(im.numberOfParams) for im in ims)
+		# Next, derivs for the sources.
 		srcs = self.catalog
 		if self.isParamFrozen('catalog'):
 			srcs = []
-		print 'Finding derivatives for', len(srcs), '(unfrozen) sources'
-		print 'In', len(self.images), 'images'
+		#print 'Finding derivatives for', len(srcs), 'sources'
 		for j,src in enumerate(srcs):
 			srcderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
@@ -596,232 +530,20 @@ class Tractor(MultiParams):
 						assert(False)
 					srcderivs[k].append((deriv, img))
 			allderivs.extend(allderivs)
+		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
-		
 
-	def debugChangeSources(self, **kwargs):
-		pass
+	def optimize(self, alldevirs):
 
-	def changeSourceTypes(self, srcs=None, jointopt=False):
-		'''
-		Returns a list of booleans of length "srcs": whether the
-		sources were changed or not.
-		'''
-		logverb('changeSourceTypes')
-		pBefore = self.getLogProb()
-		logverb('log-prob before:', pBefore)
-
-		didchange = []
-
-		oldcat = self.catalog
-		ncat = len(oldcat)
-
-		# We can't just loop over "srcs" -- because when we accept a
-		# change, the catalog changes!
-		# FIXME -- with this structure, we try to change new sources that
-		# we have just added.
-		i = -1
-		ii = -1
-		while True:
-			i += 1
-			logverb('changeSourceTypes: source', i)
-			self.catalog = oldcat
-
-			if srcs is None:
-				# go through self.catalog using "ii" as the index.
-				# (which is updated within the loop when self.catalog is mutated)
-				ii += 1
-				if ii >= len(self.catalog):
-					break
-				if ii >= ncat:
-					break
-				logverb('  changing source index', ii)
-				src = self.catalog[ii]
-				logmsg('Considering change to source:', src)
-			else:
-				if i >= len(srcs):
-					break
-				src = srcs[i]
-
-			# Prevent too-easy switches due to the current source not being optimized.
-			pBefore = self.getLogProb()
-			logverb('Optimizing source before trying to change it...')
-			self.optimizeCatalogLoop(srcs=[src], sky=False)
-			logmsg('After optimizing source:', src)
-			pAfter = self.getLogProb()
-			logverb('delta-log-prob:', pAfter - pBefore)
-			pBefore = pAfter
-
-			bestlogprob = pBefore
-			bestalt = -1
-			bestparams = None
-
-			alts = self.changeSource(src)
-			self.debugChangeSources(step='start', src=src, alts=alts)
-			srcind = oldcat.index(src)
-			for j,newsrcs in enumerate(alts):
-				newcat = oldcat.deepcopy()
-				rsrc = newcat.pop(srcind)
-				newcat.extend(newsrcs)
-				logverb('Trying change:')
-				logverb('  from', src)
-				logverb('  to  ', newsrcs)
-				self.catalog = newcat
-
-				self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
-
-				# first try individually optimizing the newly-added
-				# sources...
-				self.optimizeCatalogLoop(srcs=newsrcs, sky=False)
-				logverb('After optimizing new sources:')
-				for ns in newsrcs:
-					logverb('  ', ns)
-				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
-				if jointopt:
-					self.optimizeCatalogAtFixedComplexityStep(sky=False)
-
-				pAfter = self.getLogProb()
-				logverb('delta-log-prob:', pAfter - pBefore)
-
-				self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
-
-				if pAfter > bestlogprob:
-					logverb('Best change so far!')
-					bestlogprob = pAfter
-					bestalt = j
-					bestparams = newcat.getParams()
-
-			if bestparams is not None:
-				#print 'Switching to new catalog!'
-				# We want to update "oldcat" in-place (rather than
-				# setting "self.catalog = bestcat") so that the source
-				# object identities don't change -- so that the outer
-				# loop "for src in self.catalog" still works.  We need
-				# to updated the structure and params.
-				oldcat.remove(src)
-				ii -= 1
-				ncat -= 1
-				oldcat.extend(alts[bestalt])
-				oldcat.setAllParams(bestparams)
-				self.catalog = oldcat
-				pBefore = bestlogprob
-
-				logmsg('')
-				logmsg('Accepted change:')
-				logmsg('from:', src)
-				if len(alts[bestalt]) == 1:
-					logmsg('to:', alts[bestalt][0])
-				else:
-					logmsg('to:', alts[bestalt])
-
-				assert(self.getLogProb() == pBefore)
-				self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
-				didchange.append(True)
-			else:
-				self.debugChangeSources(step='keep', src=src)
-				didchange.append(False)
-
-		self.catalog = oldcat
-		return didchange
-
-	def optimizeSkyAtFixedComplexityStep(self, imagei):
-		logmsg('Optimize sky at fixed complexity')
-		img = self.getImage(imagei)
-		sky = img.getSky()
-		derivs = sky.getParamDerivatives(img)
-		allparams = [[(deriv,img)] for deriv in derivs]
-		X = self.optimize(allparams)
-		logmsg('Sky paramater changes:', X)
-		logmsg('Before:', sky)
-		dlnp,alpha = self.tryParamUpdates([sky], X)
-		logmsg('After:', sky)
-		logverb('Log-prob improvement:', dlnp)
-		return dlnp, X, alpha
-
-	def optimizePsfAtFixedComplexityStep(self, imagei,
-										 derivCallback=None):
-		print 'Optimizing PSF in image', imagei, 'at fixed complexity'
-		img = self.getImage(imagei)
-		psf = img.getPsf()
-		nparams = psf.numberOfParams()
-		npixels = img.numberOfPixels()
-		if nparams == 0:
-			raise RuntimeError('No PSF parameters to optimize')
-
-		# For the PSF model, we render out the whole image.
-		mod0 = self.getModelImage(img)
-
-		steps = psf.getStepSizes(img)
-		assert(len(steps) == nparams)
-		derivs = []
-		print 'Computing PSF derivatives around PSF:', psf
-		p0 = psf.getParams()
-		for k,s in enumerate(steps):
-			if True:
-
-				#psfk = psf.copy()
-				#psfk.stepParam(k, s)
-				oldval = psf.setParam(k, p0[k]+s)
-				#print '  step param', k, 'by', s, 'to get', psfk
-				#img.setPsf(psfk)
-				modk = self.getModelImage(img)
-				psf.setParam(k, oldval)
-				# to reuse code, wrap this in a Patch...
-				dk = Patch(0, 0, (modk - mod0) / s)
-			else:
-				# symmetric finite differences
-				# psfk1 = psf.copy()
-				# psfk2 = psf.copy()
-				# psfk1.stepParam(k, -s)
-				# psfk2.stepParam(k, +s)
-				# print '  step param', k, 'by', -s, 'to get', psfk1
-				# print '  step param', k, 'by',  s, 'to get', psfk2
-				# img.setPsf(psfk1)
-				# modk1 = self.getModelImage(img)
-				# img.setPsf(psfk2)
-				# modk2 = self.getModelImage(img)
-				# dk = Patch(0, 0, (modk2 - modk1) / (s*2))
-				pass
-
-			derivs.append(dk)
-		img.setPsf(psf)
-		assert(len(derivs) == nparams)
-
-		if derivCallback:
-			(func, baton) = derivCallback
-			func(self, imagei, img, psf, steps, mod0, derivs, baton)
-
-		# (PSF)
-		allparams = [[(deriv,img)] for deriv in derivs]
-		X = self.optimize(allparams)
-
-		print 'PSF Parameter changes:', X
-		dlogprob,alpha = self.tryParamUpdates([psf], X)
-		print 'After:', psf
-		print 'Log-prob improvement:', dlogprob
-
-		return dlogprob
-
-	#if not psf.isValidParamStep(dparams * alpha):
-	#	print 'Changing PSF params by', (dparams*alpha), 'is not valid!'
-	#	continue
-
-	def optimizeAllPsfAtFixedComplexityStep(self, **kwargs):
-		for i in range(len(self.images)):
-			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
-
-	def optimize(self, allparams):
-
-		# allparams: [
+		# allderivs: [
 		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
 		#    (param1:)  [],
 		#    (param2:)  [  (deriv, img), ],
 		# ]
-
 		# The "img"s may repeat
 		# "deriv" are Patch objects.
 
-		# Each position in the "allparams" array corresponds to a
+		# Each position in the "allderivs" array corresponds to a
 		# model parameter that we are optimizing
 
 		# We want to minimize:
@@ -846,7 +568,7 @@ class Tractor(MultiParams):
 		# Keep track of row offsets for each image.
 		imgoffs = {}
 		nextrow = 0
-		for param in allparams:
+		for param in alldevirs:
 			for deriv,img in param:
 				if img in imgoffs:
 					continue
@@ -855,12 +577,10 @@ class Tractor(MultiParams):
 				nextrow += img.numberOfPixels()
 		Nrows = nextrow
 		del nextrow
-
-		Ncols = len(allparams)
+		Ncols = len(alldevirs)
 
 		colscales = []
-
-		for col, param in enumerate(allparams):
+		for col, param in enumerate(alldevirs):
 			RR = []
 			CC = []
 			VV = []
@@ -1038,13 +758,6 @@ class Tractor(MultiParams):
 		assert(len(srcs) == len(oldparams))
 		for j,src in enumerate(srcs):
 			src.setParams(oldparams[j])
-	def getSourceParams(self, srcs=None):
-		if srcs is None:
-			srcs = self.catalog
-		params = []
-		for src in srcs:
-			params.append(src.getParams())
-		return params
 
 	# X: delta-params
 	#
@@ -1063,36 +776,18 @@ class Tractor(MultiParams):
 		for alpha in alphas:
 			logverb('  Stepping with alpha =', alpha)
 			oldparams = self.stepParams(X, srcs, alpha)
-			## DEBUG
-			# newparams = self.getSourceParams(srcs)
-			# logverb('  old sources:')
-			# isrcs = srcs
-			# if isrcs is None:
-			# 	isrcs = self.catalog
-			# for isrc in isrcs:
-			# 	logverb('    ' + str(isrc))
-			# logverb('  old params: ' + str(oldparams))
-			# logverb('  new params: ' + str(newparams))
-			# logverb('  new sources:')
-			# for isrc in isrcs:
-			# 	logverb('    ' + str(isrc))
-			##
 			pAfter = self.getLogProb()
 			logverb('  delta log-prob:', pAfter - pBefore)
 			self.revertParams(oldparams, srcs)
-
 			# want to improve over last step.
 			# (allow some margin though)
 			if pAfter < (pBest - 1.):
 				break
-
 			if pAfter > pBest:
 				alphaBest = alpha
 				pBest = pAfter
-
 		if alphaBest is None:
 			return 0, 0.
-
 		logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
 		self.stepParams(X, srcs, alphaBest)
 		return pBest - pBefore, alphaBest
@@ -1103,7 +798,7 @@ class Tractor(MultiParams):
 		'''
  		if srcs is None:
 			srcs = self.catalog
-		allparams = []
+		alldevirs = []
 		for j,src in enumerate(srcs):
 			allderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
@@ -1118,12 +813,12 @@ class Tractor(MultiParams):
 						print 'deriv index', i
 						assert(False)
 					allderivs[k].append((deriv, img))
-			allparams.extend(allderivs)
+			alldevirs.extend(allderivs)
 		if sky:
 			for i,img in enumerate(self.getImages()):
 				derivs = img.getSky().getParamDerivatives(img)
-				allparams.extend([[(d,img) for d in derivs]])
-		return allparams
+				alldevirs.extend([[(d,img) for d in derivs]])
+		return alldevirs
 
 	def changeInvvar(self,IWLSscale=None):
 		if IWLSscale is None:
@@ -1223,9 +918,6 @@ class Tractor(MultiParams):
 		mod = self.getModelImage(img,srcs)
 		return (img.getImage() - mod) * img.getInvError()
 
-	def createNewSource(self, img, x, y, height):
-		return None
-
 	def getLogLikelihood(self):
 		chisq = 0.
 		for i,chi in enumerate(self.getChiImages()):
@@ -1249,6 +941,9 @@ class Tractor(MultiParams):
 
 	def popCache(self):
 		self.cache = self.cachestack.pop()
+
+	def createNewSource(self, img, x, y, height):
+		return None
 
 	def debugNewSource(self, *args, **kwargs):
 		pass
@@ -1345,4 +1040,259 @@ class Tractor(MultiParams):
 						else:
 							self.catalog.pop()
 
+
+	def increasePsfComplexity(self, imagei):
+		print 'Increasing complexity of PSF in image', imagei
+		pBefore = self.getLogProb()
+		img = self.getImage(imagei)
+		psf = img.getPsf()
+		psfk = psf.proposeIncreasedComplexity(img)
+
+		print 'Trying to increase PSF complexity'
+		print 'from:', psf
+		print 'to  :', psfk
+
+		img.setPsf(psfk)
+		pAfter = self.getLogProb()
+
+		print 'Before increasing PSF complexity: log-prob', pBefore
+		print 'After  increasing PSF complexity: log-prob', pAfter
+
+		self.optimizePsfAtFixedComplexityStep(imagei)
+		pAfter2 = self.getLogProb()
+
+		print 'Before increasing PSF complexity: log-prob', pBefore
+		print 'After  increasing PSF complexity: log-prob', pAfter
+		print 'After  tuning:                    log-prob', pAfter2
+
+		# HACKY: want to be better, and to have successfully optimized...
+		if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
+			print 'Accepting PSF change!'
+		else:
+			print 'Rejecting PSF change!'
+			img.setPsf(psf)
+
+		print 'PSF is', img.getPsf()
+
+	def increaseAllPsfComplexity(self):
+		for i in range(len(self.images)):
+			self.increasePsfComplexity(i)
+
+	def changeSource(self, source):
+		'''
+		Proposes a list of alternatives, where each is a lists of new
+		Sources that the given Source could be changed into.
+		'''
+		return []
+
+	def optimizeCatalogBrightnesses(self, srcs=None, sky=False):
+		return self.optimizeCatalogAtFixedComplexityStep(srcs=srcs, brightnessonly=True,
+														 sky=sky)
+
+	def optimizeSkyAtFixedComplexityStep(self, imagei):
+		logmsg('Optimize sky at fixed complexity')
+		img = self.getImage(imagei)
+		sky = img.getSky()
+		derivs = sky.getParamDerivatives(img)
+		allparams = [[(deriv,img)] for deriv in derivs]
+		X = self.optimize(allparams)
+		logmsg('Sky paramater changes:', X)
+		logmsg('Before:', sky)
+		dlnp,alpha = self.tryParamUpdates([sky], X)
+		logmsg('After:', sky)
+		logverb('Log-prob improvement:', dlnp)
+		return dlnp, X, alpha
+
+	def optimizePsfAtFixedComplexityStep(self, imagei,
+										 derivCallback=None):
+		print 'Optimizing PSF in image', imagei, 'at fixed complexity'
+		img = self.getImage(imagei)
+		psf = img.getPsf()
+		nparams = psf.numberOfParams()
+		npixels = img.numberOfPixels()
+		if nparams == 0:
+			raise RuntimeError('No PSF parameters to optimize')
+
+		# For the PSF model, we render out the whole image.
+		mod0 = self.getModelImage(img)
+
+		steps = psf.getStepSizes(img)
+		assert(len(steps) == nparams)
+		derivs = []
+		print 'Computing PSF derivatives around PSF:', psf
+		p0 = psf.getParams()
+		for k,s in enumerate(steps):
+			if True:
+
+				#psfk = psf.copy()
+				#psfk.stepParam(k, s)
+				oldval = psf.setParam(k, p0[k]+s)
+				#print '  step param', k, 'by', s, 'to get', psfk
+				#img.setPsf(psfk)
+				modk = self.getModelImage(img)
+				psf.setParam(k, oldval)
+				# to reuse code, wrap this in a Patch...
+				dk = Patch(0, 0, (modk - mod0) / s)
+			else:
+				# symmetric finite differences
+				# psfk1 = psf.copy()
+				# psfk2 = psf.copy()
+				# psfk1.stepParam(k, -s)
+				# psfk2.stepParam(k, +s)
+				# print '  step param', k, 'by', -s, 'to get', psfk1
+				# print '  step param', k, 'by',  s, 'to get', psfk2
+				# img.setPsf(psfk1)
+				# modk1 = self.getModelImage(img)
+				# img.setPsf(psfk2)
+				# modk2 = self.getModelImage(img)
+				# dk = Patch(0, 0, (modk2 - modk1) / (s*2))
+				pass
+
+			derivs.append(dk)
+		img.setPsf(psf)
+		assert(len(derivs) == nparams)
+
+		if derivCallback:
+			(func, baton) = derivCallback
+			func(self, imagei, img, psf, steps, mod0, derivs, baton)
+
+		# (PSF)
+		allparams = [[(deriv,img)] for deriv in derivs]
+		X = self.optimize(allparams)
+
+		print 'PSF Parameter changes:', X
+		dlogprob,alpha = self.tryParamUpdates([psf], X)
+		print 'After:', psf
+		print 'Log-prob improvement:', dlogprob
+
+		return dlogprob
+
+	def optimizeAllPsfAtFixedComplexityStep(self, **kwargs):
+		for i in range(len(self.images)):
+			self.optimizePsfAtFixedComplexityStep(i, **kwargs)
+
+	def debugChangeSources(self, **kwargs):
+		pass
+
+	def changeSourceTypes(self, srcs=None, jointopt=False):
+		'''
+		Returns a list of booleans of length "srcs": whether the
+		sources were changed or not.
+		'''
+		logverb('changeSourceTypes')
+		pBefore = self.getLogProb()
+		logverb('log-prob before:', pBefore)
+
+		didchange = []
+
+		oldcat = self.catalog
+		ncat = len(oldcat)
+
+		# We can't just loop over "srcs" -- because when we accept a
+		# change, the catalog changes!
+		# FIXME -- with this structure, we try to change new sources that
+		# we have just added.
+		i = -1
+		ii = -1
+		while True:
+			i += 1
+			logverb('changeSourceTypes: source', i)
+			self.catalog = oldcat
+
+			if srcs is None:
+				# go through self.catalog using "ii" as the index.
+				# (which is updated within the loop when self.catalog is mutated)
+				ii += 1
+				if ii >= len(self.catalog):
+					break
+				if ii >= ncat:
+					break
+				logverb('  changing source index', ii)
+				src = self.catalog[ii]
+				logmsg('Considering change to source:', src)
+			else:
+				if i >= len(srcs):
+					break
+				src = srcs[i]
+
+			# Prevent too-easy switches due to the current source not being optimized.
+			pBefore = self.getLogProb()
+			logverb('Optimizing source before trying to change it...')
+			self.optimizeCatalogLoop(srcs=[src], sky=False)
+			logmsg('After optimizing source:', src)
+			pAfter = self.getLogProb()
+			logverb('delta-log-prob:', pAfter - pBefore)
+			pBefore = pAfter
+
+			bestlogprob = pBefore
+			bestalt = -1
+			bestparams = None
+
+			alts = self.changeSource(src)
+			self.debugChangeSources(step='start', src=src, alts=alts)
+			srcind = oldcat.index(src)
+			for j,newsrcs in enumerate(alts):
+				newcat = oldcat.deepcopy()
+				rsrc = newcat.pop(srcind)
+				newcat.extend(newsrcs)
+				logverb('Trying change:')
+				logverb('  from', src)
+				logverb('  to  ', newsrcs)
+				self.catalog = newcat
+
+				self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
+
+				# first try individually optimizing the newly-added
+				# sources...
+				self.optimizeCatalogLoop(srcs=newsrcs, sky=False)
+				logverb('After optimizing new sources:')
+				for ns in newsrcs:
+					logverb('  ', ns)
+				self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
+				if jointopt:
+					self.optimizeCatalogAtFixedComplexityStep(sky=False)
+
+				pAfter = self.getLogProb()
+				logverb('delta-log-prob:', pAfter - pBefore)
+
+				self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
+
+				if pAfter > bestlogprob:
+					logverb('Best change so far!')
+					bestlogprob = pAfter
+					bestalt = j
+					bestparams = newcat.getParams()
+
+			if bestparams is not None:
+				#print 'Switching to new catalog!'
+				# We want to update "oldcat" in-place (rather than
+				# setting "self.catalog = bestcat") so that the source
+				# object identities don't change -- so that the outer
+				# loop "for src in self.catalog" still works.  We need
+				# to updated the structure and params.
+				oldcat.remove(src)
+				ii -= 1
+				ncat -= 1
+				oldcat.extend(alts[bestalt])
+				oldcat.setAllParams(bestparams)
+				self.catalog = oldcat
+				pBefore = bestlogprob
+
+				logmsg('')
+				logmsg('Accepted change:')
+				logmsg('from:', src)
+				if len(alts[bestalt]) == 1:
+					logmsg('to:', alts[bestalt][0])
+				else:
+					logmsg('to:', alts[bestalt])
+
+				assert(self.getLogProb() == pBefore)
+				self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
+				didchange.append(True)
+			else:
+				self.debugChangeSources(step='keep', src=src)
+				didchange.append(False)
+
+		self.catalog = oldcat
+		return didchange
 

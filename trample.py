@@ -73,8 +73,6 @@ def main():
 
 	print 'Catalog:'
 	print tractor.catalog
-	# UGH!
-	tractor.catalog.recountParams()
 	print tractor.catalog.getParams()
 
 	nthreads = 16
