@@ -71,7 +71,7 @@ def main():
 	tractor.freezeParam('catalog')
 
 	for i in range(5):
-		if (i % 5 == 0):
+		if True or (i % 5 == 0):
 			print 'Thawing sky...'
 			tractor.images.thawParamsRecursive('sky')
 
@@ -84,9 +84,9 @@ def main():
 		tractor.opt2()
 
 		tractor.cache.about()
-		tractor.clearCache()
+		#tractor.clearCache()
 
-		if (i % 5 == 0):
+		if True or (i % 5 == 0):
 			print 'Freezing sky...'
 			tractor.images.freezeParamsRecursive('sky')
 

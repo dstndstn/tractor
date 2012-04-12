@@ -20,6 +20,12 @@ from scipy.sparse.linalg import lsqr
 from astrometry.util.miscutils import get_overlapping_region
 from .utils import MultiParams
 
+try:
+	# python 2.7
+	from collections import OrderedDict
+except:
+	from .ordereddict import OrderedDict
+
 FACTOR = 1.e-10
 
 def logverb(*args):
@@ -317,52 +323,60 @@ class Patch(object):
 		return self.performArithmetic(other, '__isub__')
 
 
+'''
+This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
+By: Raymond Hettinger
+License: Python Software Foundation (PSF) license.
+'''
 class Cache(object):
 	class Entry(object):
 		pass
 	def __init__(self):
-		self.dict = dict()
+		self.dict = OrderedDict()
+		self.hits = 0
+		self.misses = 0
+		self.maxsize = 1000
 	def __setitem__(self, key, val):
 		#print 'Cache: adding item', len(self)+1
 		if isinstance(val, Patch):
 			H,W = val.patch.shape
 			sz = H*W
-			#print 'size:', val.patch.shape
 		else:
 			sz = 0
 		e = Cache.Entry()
 		e.val = val
 		e.size = sz
 		e.hits = 0
-		#super(Cache, self).__setitem__(key, e)
 		self.dict[key] = e
 	def __getitem__(self, key):
-		#e = super(Cache, self).__getitem__(key)
-		e = self.dict[key]
+		# pop
+		try:
+			e = self.dict.pop(key)
+		except KeyError:
+			self.misses += 1
+			# purge LRU item
+			if len(self.dict) > self.maxsize:
+				self.dict.popitem(0)
+			raise
+		self.hits += 1
+		# reinsert (to record recent use)
+		self.dict[key] = e
 		if e is None:
-			return None
+			return e
 		e.hits += 1
 		return e.val
 	def __len__(self):
 		return len(self.dict)
 	def get(self, *args):
-		e = self.dict.get(*args)
-		if e is None:
-			return None
-		e.hits += 1
-		return e.val
-
-		#if len(args) == 1:
-		#	key = args[0]
-		#	return self[key]
-		#assert(len(args) == 2)
-		#key,default = args
-		#try:
-		#	return self[key]
-		#except KeyError:
-		#	return default
-		
-
+		if len(args) == 1:
+			key = args[0]
+			return self.__getitem__(key)
+		assert(len(args) == 2)
+		key,default = args
+		try:
+			return self.__getitem__(key)
+		except:
+			return default
 	def about(self):
 		print 'Cache has', len(self), 'items:'
 		for k,v in self.dict.items():
