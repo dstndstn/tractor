@@ -24,10 +24,17 @@ class Mags(ParamList):
 		for k in keys:
 			vals.append(kwargs[k])
 		super(Mags,self).__init__(*vals)
+		self.order = keys
 		self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
 
 	def getMag(self, bandname):
 		return getattr(self, bandname)
+
+	# For pickling: 
+	def __setstate__(self, state):
+		#super(Mags,self).__setstate__(state)
+		self.__dict__ = state
+		self.addNamedParams(**dict((k,i) for i,k in enumerate(self.order)))
 
 
 class Mag(ScalarParam):

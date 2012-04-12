@@ -19,12 +19,7 @@ from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
 from .utils import MultiParams
-
-try:
-	# python 2.7
-	from collections import OrderedDict
-except:
-	from .ordereddict import OrderedDict
+from .cache import *
 
 FACTOR = 1.e-10
 
@@ -46,7 +41,7 @@ def randomint():
 
 class Image(MultiParams):
 	'''
-	An image plus its calibration information.  The Tractor handles
+	An image plus its calibration information.	The Tractor handles
 	multiple Images.
 
 	'''
@@ -166,6 +161,10 @@ class Patch(object):
 	def getName(self):
 		return self.name
 
+	# for Cache
+	def size(self):
+		(H,W) = self.patch.shape
+		return H*W
 	def copy(self):
 		if self.patch is None:
 			return Patch(self.x0, self.y0, None)
@@ -323,84 +322,18 @@ class Patch(object):
 		return self.performArithmetic(other, '__isub__')
 
 
-'''
-This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
-By: Raymond Hettinger
-License: Python Software Foundation (PSF) license.
-'''
-class Cache(object):
-	class Entry(object):
-		pass
-	def __init__(self):
-		self.dict = OrderedDict()
-		self.hits = 0
-		self.misses = 0
-		self.maxsize = 1000
-	def __setitem__(self, key, val):
-		#print 'Cache: adding item', len(self)+1
-		if isinstance(val, Patch):
-			H,W = val.patch.shape
-			sz = H*W
-		else:
-			sz = 0
-		e = Cache.Entry()
-		e.val = val
-		e.size = sz
-		e.hits = 0
-		self.dict[key] = e
-	def __getitem__(self, key):
-		# pop
-		try:
-			e = self.dict.pop(key)
-		except KeyError:
-			self.misses += 1
-			# purge LRU item
-			if len(self.dict) > self.maxsize:
-				self.dict.popitem(0)
-			raise
-		self.hits += 1
-		# reinsert (to record recent use)
-		self.dict[key] = e
-		if e is None:
-			return e
-		e.hits += 1
-		return e.val
-	def __len__(self):
-		return len(self.dict)
-	def get(self, *args):
-		if len(args) == 1:
-			key = args[0]
-			return self.__getitem__(key)
-		assert(len(args) == 2)
-		key,default = args
-		try:
-			return self.__getitem__(key)
-		except:
-			return default
-	def about(self):
-		print 'Cache has', len(self), 'items:'
-		for k,v in self.dict.items():
-			if v is None:
-				continue
-			print '  size', v.size, 'hits', v.hits
-
-class NullCache(object):
-	def __getitem__(self, key):
-		raise KeyError
-	def __setitem__(self, key, val):
-		pass
 
 class Catalog(MultiParams):
 	deepcopy = MultiParams.copy
 
 	def __str__(self):
 		self.printLong()
-	 	return 'Catalog with %i sources' % len(self)
+		return 'Catalog with %i sources' % len(self)
 
 	def printLong(self):
 		print 'Catalog with %i sources:' % len(self)
 		for i,x in enumerate(self):
-			print '  %i:' % i, x
+			print '	 %i:' % i, x
 
 	# inherited from MultiParams:
 	# def __len__(self):
@@ -415,13 +348,53 @@ class Images(MultiParams):
 	def getNamedParamName(self, j):
 		return 'image%i' % j
 
+class FakeAsyncResult(object):
+	def __init__(self, X):
+		self.X = X
+	def wait(self, *a):
+		pass
+	def get(self, *a):
+		return self.X
+	def ready(self):
+		return True
+	def successful(self):
+		return True
 
+def getderivfunc((tr, j, k, p0, step, nm, mod0)):
+	#from tractor import Patch
+	im = tr.getImage(j)
+	im.setParam(k, p0 + step)
+	mod = tr.getModelImage(im)
+	im.setParam(k, p0)
+	deriv = Patch(0, 0, (mod - mod0) / step)
+	deriv.name = 'd(im%i)/d(%s)' % (j,nm)
+	return deriv
+def getmodelimagefunc((tr, imj)):
+	#from tractor import Patch
+	return tr.getModelImage(imj)
+
+class funcwrapper(object):
+	def __init__(self, func):
+		self.func = func
+	def __call__(self, *X):
+		print 'Trying to call', self.func
+		print 'with args', X
+		try:
+			return self.func(*X)
+		except:
+			import traceback
+			print 'Exception while calling your function:'
+			print '	 params:', X
+			print '	 exception:'
+			traceback.print_exc()
+			raise
+			
 class Tractor(MultiParams):
 	@staticmethod
 	def getNamedParams():
 		return dict(images=0, catalog=1)
 
-	def __init__(self, images=[], catalog=[]):
+	def __init__(self, images=[], catalog=[], pool=None):
 		'''
 		image: list of Image objects (data)
 		catalog: list of Source objects
@@ -429,8 +402,18 @@ class Tractor(MultiParams):
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
 		self.cache = Cache()
 		self.cachestack = []
+		self.pool = pool
 
-	# For emcee multi-threading
+	def _map(self, func, iterable):
+		if self.pool is None:
+			return map(func, iterable)
+		return self.pool.map(funcwrapper(func), iterable)
+	def _map_async(self, func, iterable):
+		if self.pool is None:
+			return FakeAsyncResult(map(func, iterable))
+		return self.pool.map_async(funcwrapper(func), iterable)
+
+	# For use from emcee
 	def __call__(self, X):
 		print 'Tractor.__call__: I am pid', os.getpid()
 		self.setParams(X)
@@ -460,7 +443,7 @@ class Tractor(MultiParams):
 		return self.catalog
 
 	def setCatalog(self, srcs):
-		# FIXME -- ensure that "srcs" is a Catalog?  Or duck-type it?
+		# FIXME -- ensure that "srcs" is a Catalog?	 Or duck-type it?
 		self.catalog = srcs
 
 	def addImage(self, img):
@@ -557,32 +540,39 @@ class Tractor(MultiParams):
 	def getderivs2(self):
 		# Returns:
 		# allderivs: [
-		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
-		#    (param1:)  [],
-		#    (param2:)  [  (deriv, img), ],
+		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
+		#	 (param1:)	[],
+		#	 (param2:)	[  (deriv, img), ],
 		# ]
 		allderivs = []
 		# First, derivs for Image parameters (because 'images' comes first in the
 		# tractor's parameters)
 		#print 'Finding derivatives for', self.images.numberOfParams(), 'image params'
 		ims = self.images
+		imjs = range(len(self.images))
 		if self.isParamFrozen('images'):
 			ims = []
+			imjs = []
+
+		print 'Getting dImage initial models for', len(ims), 'in parallel...'
+		mod0s = self._map(getmodelimagefunc, [(self,imj) for imj in imjs])
+		print 'Getting dImage derivatives...'
+		args = []
+		js = []
 		for j,im in enumerate(ims):
-			mod0 = self.getModelImage(im)
-			#print 'Finding derivatives in image', im
 			p0 = im.getParams()
-			#print 'nominal params:', p0
 			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
-				#print 'Finding derivative', nm
-				#print 'Step size:', step
-				im.setParam(k, p0[k] + step)
-				mod = self.getModelImage(im)
-				im.setParam(k, p0[k])
-				deriv = Patch(0, 0, (mod - mod0) / step)
-				deriv.name = 'd(im%i)/d(%s)' % (j, nm)
-				allderivs.append([(deriv, im)])
-		assert(len(allderivs) == sum(im.numberOfParams) for im in ims)
+				args.append((self, j, k, p0[k], step, nm, mod0s[j]))
+				js.append(j)
+
+		print 'running', len(args), 'in parallel.'
+		derivs = self._map(getderivfunc, args)
+		allderivs.extend([[(deriv,ims[j])] for deriv,j in zip(derivs,js)])
+		assert(len(allderivs) == sum(im.numberOfParams()) for im in ims)
+
+		print len(allderivs), 'derivs'
+		print allderivs
+
 		# Next, derivs for the sources.
 		srcs = self.catalog
 		if self.isParamFrozen('catalog'):
@@ -604,15 +594,18 @@ class Tractor(MultiParams):
 						assert(False)
 					srcderivs[k].append((deriv, img))
 			allderivs.extend(srcderivs)
+
+		print allderivs
+
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
 	def optimize(self, alldevirs):
 
 		# allderivs: [
-		#    (param0:)  [  (deriv, img), (deriv, img), ... ],
-		#    (param1:)  [],
-		#    (param2:)  [  (deriv, img), ],
+		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
+		#	 (param1:)	[],
+		#	 (param2:)	[  (deriv, img), ],
 		# ]
 		# The "img"s may repeat
 		# "deriv" are Patch objects.
@@ -621,15 +614,15 @@ class Tractor(MultiParams):
 		# model parameter that we are optimizing
 
 		# We want to minimize:
-		#   || chi + (d(chi)/d(params)) * dparams ||^2
+		#	|| chi + (d(chi)/d(params)) * dparams ||^2
 		# So  b = chi
-		#     A = -d(chi)/d(params)
-		#     x = dparams
+		#	  A = -d(chi)/d(params)
+		#	  x = dparams
 		#
 		# chi = (data - model) / std = (data - model) * inverr
 		# derivs = d(model)/d(param)
 		# A matrix = -d(chi)/d(param)
-		#          = + (derivs) * inverr
+		#		   = + (derivs) * inverr
 
 		# Parameters to optimize go in the columns of matrix A
 		# Pixels go in the rows.
@@ -802,7 +795,7 @@ class Tractor(MultiParams):
 
 		olderr = set_fp_err()
 		
-		logverb('scaled  X=', X)
+		logverb('scaled	 X=', X)
 		X = np.array(X)
 		X /= np.array(colscales)
 		logverb('  X=', X)
@@ -812,7 +805,7 @@ class Tractor(MultiParams):
 
 	# Hmm, does this make you think Catalog should be a MultiParams?
 	def stepParams(self, X, srcs=None, alpha=1.):
- 		if srcs is None:
+		if srcs is None:
 			srcs = self.catalog
 		oldparams = []
 		par0 = 0
@@ -827,7 +820,7 @@ class Tractor(MultiParams):
 			src.setParams(np.array(pars) + dparams * alpha)
 		return oldparams
 	def revertParams(self, oldparams, srcs=None):
- 		if srcs is None:
+		if srcs is None:
 			srcs = self.catalog
 		assert(len(srcs) == len(oldparams))
 		for j,src in enumerate(srcs):
@@ -870,7 +863,7 @@ class Tractor(MultiParams):
 		'''
 		Returns a list of pairs, D[parami] = (deriv,image)
 		'''
- 		if srcs is None:
+		if srcs is None:
 			srcs = self.catalog
 		alldevirs = []
 		for j,src in enumerate(srcs):
@@ -912,16 +905,16 @@ class Tractor(MultiParams):
 		deps = hash(deps)
 		mod = self.cache.get(deps, None)
 		if mod is not None:
-			#logverb('  Cache hit for model patch: image ' + str(img) +
+			#logverb('	Cache hit for model patch: image ' + str(img) +
 			#		', source ' + str(src))
-			#logverb('  image hashkey ' + str(img.hashkey()))
-			#logverb('  source hashkey ' + str(src.hashkey()))
+			#logverb('	image hashkey ' + str(img.hashkey()))
+			#logverb('	source hashkey ' + str(src.hashkey()))
 			pass
 		else:
-			#logverb('  Cache miss for model patch: image ' + str(img) +
+			#logverb('	Cache miss for model patch: image ' + str(img) +
 			#		', source ' + str(src))
-			#logverb('  image hashkey ' + str(img.hashkey()))
-			#logverb('  source hashkey ' + str(src.hashkey()))
+			#logverb('	image hashkey ' + str(img.hashkey()))
+			#logverb('	source hashkey ' + str(src.hashkey()))
 			mod = self.getModelPatchNoCache(img, src)
 			#print 'Caching model image'
 			self.cache[deps] = mod
@@ -930,7 +923,7 @@ class Tractor(MultiParams):
 	def getModelImageNoCache(self, img, srcs=None):
 		'''
 		Create a model image for the given "tractor image", including
-		the sky level.  If "srcs" is specified (a list of sources),
+		the sky level.	If "srcs" is specified (a list of sources),
 		then only those sources will be rendered into the image.
 		Otherwise, the whole catalog will be.
 		'''
@@ -1137,7 +1130,7 @@ class Tractor(MultiParams):
 
 		print 'Before increasing PSF complexity: log-prob', pBefore
 		print 'After  increasing PSF complexity: log-prob', pAfter
-		print 'After  tuning:                    log-prob', pAfter2
+		print 'After  tuning:					 log-prob', pAfter2
 
 		# HACKY: want to be better, and to have successfully optimized...
 		if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
