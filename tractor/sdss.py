@@ -453,17 +453,65 @@ class SdssFlux(Flux):
 		assert(isinstance(other, SdssFlux))
 		return SdssFlux(self.val + other.val)
 
-class SdssWcs(WCS):
+class SdssWcs(ParamList):
+	pnames = ['a', 'b', 'c', 'd', 'e', 'f',
+			  'drow0', 'drow1', 'drow2', 'drow3',
+			  'dcol0', 'dcol1', 'dcol2', 'dcol3',
+			  'csrow', 'cscol', 'ccrow', 'cccol',
+			  'x0', 'y0']
+
+	@staticmethod
+	def getNamedParams():
+		# node and incl are properties of the survey geometry, not params.
+		# riCut... not clear.
+		# Note that we omit x0,y0 from this list
+		return dict([(k,i) for i,k in enumerate(SdssWcs.pnames[:-2])])
+
 	def __init__(self, astrans):
-		self.astrans = astrans
 		self.x0 = 0
 		self.y0 = 0
+		super(SdssWcs, self).__init__(self.x0, self.y0, astrans)
+		# ParamList keeps its params in a list; we don't want to do that.
+		del self.vals
+		self.astrans = astrans
 
-	#def getParamNames(self):
-	#	return ['x0', 'y0',]
+	def _setThing(self, i, val):
+		N = len(SdssWcs.pnames)
+		if i == N-2:
+			self.x0 = val
+		elif i == N-1:
+			self.y0 = val
+		else:
+			t = self.astrans.trans
+			t[SdssWcs.pnames[i]] = val
+	def _getThing(self, i):
+		N = len(SdssWcs.pnames)
+		if i == N-2:
+			return self.x0
+		elif i == N-1:
+			return self.y0
+		t = self.astrans.trans
+		return t[SdssWcs.pnames[i]]
+	def _getThings(self):
+		t = self.astrans.trans
+		return [t[nm] for nm in SdssWcs.pnames[:-2]] + [self.x0, self.y0]
+	def _numberOfThings(self):
+		return len(SdssWcs.pnames)
 
-	def hashkey(self):
-		return ('SdssWcs', self.x0, self.y0, self.astrans)
+	def getStepSizes(self, *args, **kwargs):
+		deg = 0.396 / 3600. # deg/pix
+		P = 2000. # ~ image size
+		# a,d: degrees
+		# b,c,e,f: deg/pixels
+		# drowX: 1/(pix ** (X-1)
+		# dcolX: 1/(pix ** (X-1)
+		# c*row,col: 1.
+		ss = [ deg, deg/P, deg/P, deg, deg/P, deg/P,
+			   1., 1./P, 1./P**2, 1./P**3,
+			   1., 1./P, 1./P**2, 1./P**3,
+			   1., 1., 1., 1.,
+			   1., 1.]
+		return list(self._getLiquidArray(ss))
 
 	def setX0Y0(self, x0, y0):
 		self.x0 = x0

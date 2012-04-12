@@ -181,11 +181,12 @@ class FitsWcs(ParamList):
 		dcd = pixscale / 3600. / 1000.
 		ss = [dcrval, dcrval, 1., 1., dcd, dcd, dcd, dcd, 1., 1.]
 		return list(self._getLiquidArray(ss))
-	def getParams(self):
-		'''
-		Returns a *copy* of the current active parameter values (list)
-		'''
-		return list(self._getLiquidArray(self._getThings()))
+
+	# def getParams(self):
+	# 	'''
+	# 	Returns a *copy* of the current active parameter values (list)
+	# 	'''
+	# 	return list(self._getLiquidArray(self._getThings()))
 
 	def __str__(self):
 		return ('FitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)

@@ -158,15 +158,21 @@ class NamedParams(object):
 		for n in args:
 			self.freezeParam(n)
 	def freezeParam(self, paramname):
-		i = self.getNamedParamIndex(paramname)
-		assert(i is not None)
+		if type(paramname) is int:
+			i = paramname
+		else:
+			i = self.getNamedParamIndex(paramname)
+			assert(i is not None)
 		self.liquid[i] = False
 	def freezeAllBut(self, *args):
 		self.freezeAllParams()
 		self.thawParams(*args)
 	def thawParam(self, paramname):
-		i = self.getNamedParamIndex(paramname)
-		assert(i is not None)
+		if type(paramname) is int:
+			i = paramname
+		else:
+			i = self.getNamedParamIndex(paramname)
+			assert(i is not None)
 		self.liquid[i] = True
 	def thawParams(self, *args):
 		for n in args:
@@ -284,7 +290,8 @@ class ParamList(Params, NamedParams):
 		'''
 		Returns a *copy* of the current active parameter values (list)
 		'''
-		return list(self._getLiquidArray(self.vals))
+		#return list(self._getLiquidArray(self.vals))
+		return list(self._getLiquidArray(self._getThings()))
 	def getParam(self,i):
 		ii = self._indexLiquid(i)
 		return self._getThing(ii)

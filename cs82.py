@@ -230,8 +230,7 @@ def get_tractor(RA, DEC, sz, cffns):
 	skies = []
 	pixscale = 0.187
 	print 'CFHT images:', cffns
-	for fn in cffns[:1]:
-	#for fn in cffns:
+	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale)
 		tractor.addImage(cfimg)
@@ -245,8 +244,9 @@ def get_tractor(RA, DEC, sz, cffns):
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
 
-	#rcf = rcf[:16]
-	rcf = rcf[:1]
+	# rcf = rcf[:16]
+	rcf = rcf[:4]
+	# rcf = rcf[:1]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
 	for r,c,f,ra,dec in rcf:
@@ -262,29 +262,9 @@ def get_tractor(RA, DEC, sz, cffns):
 def mysavefig(fn):
 	plt.savefig(fn)
 	print 'Wrote', fn
-	
-	
-if __name__ == '__main__':
-	#getdata()
 
-	import optparse
-	parser = optparse.OptionParser()
-	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
-	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
-					  help='Make more verbose')
-	opt,args = parser.parse_args()
 
-	if opt.verbose == 0:
-		lvl = logging.INFO
-	else:
-		lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
-	mp = multiproc(opt.threads)
-
-	RA,DEC = 334.4, 0.3
-	sz = 2.*60. # arcsec
-
+def read_cf_catalogs(RA, DEC, sz):
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
 	T = fits_table(fn, hdunum=2)
 	print 'Read', len(T), 'rows from', fn
@@ -296,12 +276,6 @@ if __name__ == '__main__':
 	print 'Read', len(T2), 'rows from', fn
 	T2.ra  = T2.alpha_sky
 	T2.dec = T2.delta_sky
-
-	if False:
-		plt.clf()
-		plt.plot(T.ra, T2.ra, 'r.')
-		mysavefig('ra.png')
-		sys.exit(0)
 
 	# approx...
 	S = sz / 3600.
@@ -322,16 +296,15 @@ if __name__ == '__main__':
 			mysavefig('hist%i.png' % i)
 		sys.exit(0)
 
-	plt.clf()
-	plt.semilogx(T.chi2_psf, T.chi2_psf - T.chi2_model, 'r.')
-	plt.ylim(-100, 100)
-	plt.xlabel('chi2_psf')
-	plt.ylabel('chi2_psf - chi2_model')
-	mysavefig('chi.png')
+		plt.clf()
+		plt.semilogx(T.chi2_psf, T.chi2_psf - T.chi2_model, 'r.')
+		plt.ylim(-100, 100)
+		plt.xlabel('chi2_psf')
+		plt.ylabel('chi2_psf - chi2_model')
+		mysavefig('chi.png')
 
 	for c in ['disk_scale_world', 'disk_aspect_world', 'disk_theta_world']:
 		T.set(c, T2.get(c))
-
 	T.ra_disk  = T2.alphamodel_sky
 	T.dec_disk = T2.deltamodel_sky
 	T.mag_disk = T2.mag_model
@@ -356,14 +329,89 @@ if __name__ == '__main__':
 	print len(Tdisk), 'disk'
 	print len(Tsph), 'spheroid'
 
-	cffns = glob('cs82data/86*p-21-cr.fits')
+	return Tstar, Tdisk, Tsph
+
+def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100):
+	srcs = []
+	for t in Tdisk:
+		# xmodel_world == alphamodel_sky
+		if t.mag_disk > magcut:
+			#print 'Skipping source with mag=', t.mag_disk
+			continue
+		#origwcs = Tan(cffns[0],0)
+		#x,y = origwcs.radec2pixelxy(t.alphamodel_sky, t.deltamodel_sky)
+		#print 'WCS x,y', x,y
+		#print '    x,y', t.xmodel_image, t.ymodel_image
+		#print '    del', t.xmodel_image - x, t.ymodel_image - y
+		#print '    x,y', t.x_image, t.y_image
+		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
+						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
+									t.disk_theta_world + 90.))
+		#print 'Adding source', src
+		srcs.append(src)
+	for t in Tsph:
+		if t.mag_sph > magcut:
+			#print 'Skipping source with mag=', t.mag_sph
+			continue
+		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
+						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+									t.spheroid_theta_world + 90.))
+		#print 'Adding source', src
+		srcs.append(src)
+	assert(len(Tstar) == 0)
+	return srcs
+
+def tweak_wcs((tractor, im)):
+	#print 'Tractor', tractor
+	#print 'Image', im
+	tractor.images = Images(im)
+	#print 'Tractor params:', tractor.numberOfParams()
+	for step in range(10):
+		print 'Run optimization step', step
+		t0 = Time()
+		dlnp,X,alpha = tractor.opt2(alphas=[0.5, 1., 2., 4.])
+		t_opt = (Time() - t0)
+		print 'alpha', alpha
+		print 'Optimization took', t_opt, 'sec'
+		lnp0 = tractor.getLogProb()
+		print 'Lnprob', lnp0
+		if dlnp == 0:
+			break
+	return im.getParams()
+	
+if __name__ == '__main__':
+	#getdata()
+
+	import optparse
+	parser = optparse.OptionParser()
+	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
+	opt,args = parser.parse_args()
+
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+	mp = multiproc(opt.threads)
+
+	RA,DEC = 334.4, 0.3
+	sz = 2.*60. # arcsec
 
 	pfn = 'tractor.pickle'
 	if os.path.exists(pfn):
 		print 'Reading pickle', pfn
 		tractor,skies = unpickle_from_file(pfn)
 	else:
+		cffns = glob('cs82data/86*p-21-cr.fits')
 		tractor,skies = get_tractor(RA,DEC,sz, cffns)
+
+		Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
+		srcs = get_cf_sources(Tstar, Tdisk, Tsph)
+		tractor.addSources(srcs)
+
 		pickle_to_file((tractor,skies), pfn)
 	
 	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
@@ -374,88 +422,91 @@ if __name__ == '__main__':
 	print
 	tractor.mp = mp
 
-	tim = tractor.getImage(0)
-	print 'tim', tim
-	wcs = tim.getWcs()
-	#x,y = wcs.positionToPixel(RaDecPos(RA,DEC))
-	#print 'x,y', x,y
-
-	#magcut = 25.
-	magcut = 24.
-
-	for t in Tdisk:
-		# xmodel_world == alphamodel_sky
-
-		if t.mag_disk > magcut:
-			#print 'Skipping source with mag=', t.mag_disk
-			continue
-
-		origwcs = Tan(cffns[0],0)
-		x,y = origwcs.radec2pixelxy(t.alphamodel_sky, t.deltamodel_sky)
-		#print 'WCS x,y', x,y
-		#print '    x,y', t.xmodel_image, t.ymodel_image
-		#print '    del', t.xmodel_image - x, t.ymodel_image - y
-		#print '    x,y', t.x_image, t.y_image
-
-		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
-						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
-									t.disk_theta_world + 90.))
-		#print 'Adding source', src
-		tractor.addSource(src)
-	for t in Tsph:
-		if t.mag_sph > magcut:
-			#print 'Skipping source with mag=', t.mag_sph
-			continue
-
-		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
-						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
-									t.spheroid_theta_world + 90.))
-		#print 'Adding source', src
-		tractor.addSource(src)
-
 	cat = tractor.getCatalog()
 	print 'Catalog:', len(cat), 'sources,', cat.numberOfParams(), 'params'
 
-	# print 'image component params:'
-	# print '  sky', tim.sky.getParams()
-	# print '  wcs', tim.wcs.getParams()
-	# print '  psf', tim.psf.getParams()
-	# print '  photocal', tim.photocal.getParams()
-	# print 'N image params:', tim.numberOfParams()
+	# For the initial WCS alignment, cut to brightish sources...
+	allsources = tractor.getCatalog()
 
-	tim.freezeParams('photocal', 'psf', 'sky')
-	wcs = tim.getWcs()
-	#print 'WCS', wcs
-	wcs.freezeAllBut('crval1', 'crval2')
-	print 'Image params', tim.getParamNames()
-	print 'Image step sizes:', tim.getStepSizes()
+	magcut = 24.
+	brightcat = Catalog()
+	for src in allsources:
+		if src.getBrightness().i < magcut:
+			brightcat.append(src)
 
-	tractor.freezeParam('catalog')
-	print 'Tractor has', len(tractor.images), 'images'
+	print 'Cut to', len(brightcat), 'bright sources'
+	tractor.setCatalog(brightcat)
+	cat = tractor.getCatalog()
+	print 'Catalog:', len(cat), 'sources,', cat.numberOfParams(), 'params'
 
-	for im in tractor.images[1:]:
-		#print 'Freezing all params of image', im
-		im.freezeAllParams()
-
-	# for i,im in enumerate(tractor.images):
-	# 	print 'Tractor image', i
-	# 	print '  ', im
-	# 	print '  Unfrozen params:', im.getParamNames()
-	# print 'Param names:', tractor.getParamNames()
-
-	print 'Tractor:', tractor.catalog.numberOfParams(), 'catalog params and',
+	#tractor.getImages().freezeParamsRecursive('photocal', 'psf', 'sky')
+	for im in tractor.getImages():
+		im.freezeParams('photocal', 'psf', 'sky')
+		# print 'WCS', im.wcs
+		# print '  ', dir(im.wcs)
+		# print '  ', im.wcs.__dict__
+		if hasattr(im.wcs, 'crval1'):
+			im.wcs.freezeAllBut('crval1', 'crval2')
+		else:
+			# SdssWcs: equivalent is 'a','d'
+			im.wcs.freezeAllBut('a', 'd')
+			# print '  ', im.wcs.astrans
+			# print '  ', im.wcs.astrans.__dict__
+			# print im.wcs.getParamNames()
+			# print im.wcs.getParams()
 	print tractor.images.numberOfParams(), 'image params'
-	print 'Total', tractor.numberOfParams(), 'unfrozen'
-	#print '  ', tractor.getParams()
+	tractor.freezeParam('catalog')
+
+	print tractor.numberOfParams(), 'tractor params'
+
+	lnp0 = tractor.getLogProb()
+	print 'Lnprob', lnp0
+
+	allims = tractor.getImages()
+	tractor.images = Images()
+	#tweak_wcs((tractor, allims[4]))
+	dwcs = mp.map(tweak_wcs, [(tractor,im) for im in allims], wrap=True)
+	tractor.images = allims
+	for im,dp in zip(allims,dwcs):
+		im.setParams(dp)
+		
+	# for i,im in enumerate(allims):
+	# 	#tractor.images.freezeAllBut(i)
+	# 	print 'Tweaking WCS of', i
+	# 	tractor.images = Images(im)
+	# 	print 'Tractor params:', tractor.numberOfParams()
+	# 	for step in range(10):
+	# 		print 'Run optimization step', step
+	# 		t0 = Time()
+	# 		dlnp,X,alpha = tractor.opt2(alphas=[0.5, 1., 2., 4.])
+	# 		t_opt = (Time() - t0)
+	# 		print 'alpha', alpha
+	# 		print 'Optimization took', t_opt, 'sec'
+	# 		lnp0 = tractor.getLogProb()
+	# 		print 'Lnprob', lnp0
+	# 		if dlnp == 0:
+	# 			break
+	#tractor.images = allims
+
+	lnp0 = tractor.getLogProb()
+	print 'Lnprob', lnp0
+
+
+
+	sys.exit(0)
+	
+
+
+
+
 
 	p0 = np.array(tractor.getParams())
+	steps = np.array(tractor.getStepSizes())
 	ndim = len(p0)
 	print 'ndim', ndim
-	#nw = 50
 	nw = 10
 	print 'nw', nw
 
-	steps = np.array(tractor.getStepSizes())
 
 	# sampler = emcee.EnsembleSampler(nw, ndim, tractor,
 	# pool = mp.pool,

@@ -74,6 +74,9 @@ class Image(MultiParams):
 
 		print 'Image:', self.wcs, self.psf, self.sky, self.photocal
 
+	def __str__(self):
+		return 'Image ' + str(self.name)
+
 	@staticmethod
 	def getNamedParams():
 		return dict(psf=0, wcs=1, photocal=2, sky=3)
@@ -379,6 +382,11 @@ class Tractor(MultiParams):
 			mp = multiproc()
 		self.mp = mp
 
+	def __str__(self):
+		s = 'Tractor with %i images and %i sources: ' % (len(self.images), len(self.catalog))
+		s += str([im.name for im in self.images])
+		return s
+
 	def _map(self, func, iterable):
 		return self.mp.map(func, iterable)
 	def _map_async(self, func, iterable):
@@ -398,6 +406,7 @@ class Tractor(MultiParams):
 		(images, catalog, liquid) = state
 		self.subs = [images, catalog]
 		self.liquid = liquid
+		self.mp = multiproc()
 		self.cache = Cache()
 		self.cachestack = []
 
@@ -465,18 +474,23 @@ class Tractor(MultiParams):
 
 	### FIXME -- temporary functions, parallel to optimizeCatalogAtFixedComplexityStep()
 	### et al, that use the param infrastructure correctly.
-	def opt2(self):
+	def opt2(self, alphas=None):
 		print 'opt2: Finding derivs...'
 		t0 = Time()
 		allderivs = self.getderivs2()
 		print Time() - t0
+		#print 'allderivs:', allderivs
+		#for d in allderivs:
+		#	for (p,im) in d:
+		#		print 'patch mean', np.mean(p.patch)
 		print 'Finding optimal update direction...'
 		t0 = Time()
 		X = self.optimize(allderivs)
 		print Time() - t0
+		#print 'X:', X
 		print 'Finding optimal step size...'
 		t0 = Time()
-		(dlogprob, alpha) = self.tryupdates2(X)
+		(dlogprob, alpha) = self.tryupdates2(X, alphas=alphas)
 		print Time() - t0
 		print 'Finished opt2.'
 		return dlogprob, X, alpha
@@ -524,11 +538,12 @@ class Tractor(MultiParams):
 		allderivs = []
 		# First, derivs for Image parameters (because 'images' comes first in the
 		# tractor's parameters)
-		ims = self.images
-		imjs = range(len(self.images))
 		if self.isParamFrozen('images'):
 			ims = []
 			imjs = []
+		else:
+			imjs = [i for i in self.getThawedParamIndices()]
+			ims = [self.images[j] for j in imjs]
 		# initial models...
 		mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in imjs])
 		# stepping each param...
@@ -553,8 +568,8 @@ class Tractor(MultiParams):
 		# Wait for and unpack the image derivatives...
 		mod0s = mod0s.get()
 		mod1s = mod1s.get()
-		for j,im in enumerate(ims):
-			mod0 = mod0s[j]
+		for i,(j,im) in enumerate(zip(imjs,ims)):
+			mod0 = mod0s[i]
 			p0 = im.getParams()
 			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
 				mod1 = mod1s.pop()
@@ -703,6 +718,7 @@ class Tractor(MultiParams):
 			spvals.append(vals / scale)
 
 		if len(spcols) == 0:
+			logverb("len(spcols) == 0")
 			return []
 
 		# HACK
