@@ -20,6 +20,7 @@ from scipy.sparse.linalg import lsqr
 from astrometry.util.miscutils import get_overlapping_region
 from .utils import MultiParams
 from .cache import *
+from .ttime import Time
 
 FACTOR = 1.e-10
 
@@ -360,25 +361,30 @@ class FakeAsyncResult(object):
 	def successful(self):
 		return True
 
-def getderivfunc((tr, j, k, p0, step, nm, mod0)):
-	#from tractor import Patch
+# def getderivfunc((tr, j, k, p0, step, nm, mod0)):
+# 	im = tr.getImage(j)
+# 	im.setParam(k, p0 + step)
+# 	mod = tr.getModelImage(im)
+# 	im.setParam(k, p0)
+# 	deriv = Patch(0, 0, (mod - mod0) / step)
+# 	deriv.name = 'd(im%i)/d(%s)' % (j,nm)
+# 	return deriv
+def getmodelimagestep((tr, j, k, p0, step)):
 	im = tr.getImage(j)
 	im.setParam(k, p0 + step)
 	mod = tr.getModelImage(im)
 	im.setParam(k, p0)
-	deriv = Patch(0, 0, (mod - mod0) / step)
-	deriv.name = 'd(im%i)/d(%s)' % (j,nm)
-	return deriv
+	return mod
+	
 def getmodelimagefunc((tr, imj)):
-	#from tractor import Patch
 	return tr.getModelImage(imj)
 
 class funcwrapper(object):
 	def __init__(self, func):
 		self.func = func
 	def __call__(self, *X):
-		print 'Trying to call', self.func
-		print 'with args', X
+		#print 'Trying to call', self.func
+		#print 'with args', X
 		try:
 			return self.func(*X)
 		except:
@@ -496,11 +502,17 @@ class Tractor(MultiParams):
 	### et al, that use the param infrastructure correctly.
 	def opt2(self):
 		print 'opt2: Finding derivs...'
+		t0 = Time()
 		allderivs = self.getderivs2()
+		print Time() - t0
 		print 'Finding optimal update direction...'
+		t0 = Time()
 		X = self.optimize(allderivs)
+		print Time() - t0
 		print 'Finding optimal step size...'
+		t0 = Time()
 		(dlogprob, alpha) = self.tryupdates2(X)
+		print Time() - t0
 		print 'Finished opt2.'
 		return dlogprob, X, alpha
 
@@ -554,24 +566,51 @@ class Tractor(MultiParams):
 			ims = []
 			imjs = []
 
-		print 'Getting dImage initial models for', len(ims), 'in parallel...'
-		mod0s = self._map(getmodelimagefunc, [(self,imj) for imj in imjs])
-		print 'Getting dImage derivatives...'
+		mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in imjs])
+
 		args = []
-		js = []
 		for j,im in enumerate(ims):
 			p0 = im.getParams()
+			for k,step in enumerate(im.getStepSizes()):
+				args.append((self, j, k, p0[k], step))
+		# reverse the args so we can pop() below.
+		mod1s = self._map_async(getmodelimagestep, reversed(args))
+
+		print 'Waiting...'
+		mod0s = mod0s.get()
+		mod1s = mod1s.get()
+
+		print 'args', len(args)
+		print 'mod1s', len(mod1s)
+
+		for j,im in enumerate(ims):
+			mod0 = mod0s[j]
+			print 'mod0', mod0
+			p0 = im.getParams()
 			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
-				args.append((self, j, k, p0[k], step, nm, mod0s[j]))
-				js.append(j)
+				mod1 = mod1s.pop()
+				deriv = Patch(0, 0, (mod1 - mod0) / step)
+				deriv.name = 'd(im%i)/d(%s)' % (j,nm)
+				allderivs.append([(deriv, im)])
 
-		print 'running', len(args), 'in parallel.'
-		derivs = self._map(getderivfunc, args)
-		allderivs.extend([[(deriv,ims[j])] for deriv,j in zip(derivs,js)])
-		assert(len(allderivs) == sum(im.numberOfParams()) for im in ims)
-
-		print len(allderivs), 'derivs'
-		print allderivs
+		# #print 'Getting dImage initial models for', len(ims), 'in parallel...'
+		# mod0s = self._map(getmodelimagefunc, [(self,imj) for imj in imjs])
+		# #print 'Getting dImage derivatives...'
+		# args = []
+		# js = []
+		# for j,im in enumerate(ims):
+		# 	p0 = im.getParams()
+		# 	for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
+		# 		args.append((self, j, k, p0[k], step, nm, mod0s[j]))
+		# 		js.append(j)
+		# 
+		# #print 'running', len(args), 'in parallel.'
+		# derivs = self._map(getderivfunc, args)
+		# allderivs.extend([[(deriv,ims[j])] for deriv,j in zip(derivs,js)])
+		# assert(len(allderivs) == sum(im.numberOfParams()) for im in ims)
+		# 
+		# #print len(allderivs), 'derivs'
+		# #print allderivs
 
 		# Next, derivs for the sources.
 		srcs = self.catalog
@@ -594,9 +633,7 @@ class Tractor(MultiParams):
 						assert(False)
 					srcderivs[k].append((deriv, img))
 			allderivs.extend(srcderivs)
-
-		print allderivs
-
+		#print allderivs
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 

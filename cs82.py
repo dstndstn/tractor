@@ -1,7 +1,6 @@
 import os
 import time
 import logging
-import datetime
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -19,20 +18,6 @@ from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 import emcee
-
-class Time(object):
-	def __init__(self):
-		self.wall = datetime.datetime.now()
-		self.cpu = time.clock()
-	def __sub__(self, other):
-		dwall = (self.wall - other.wall)
-		# python2.7
-		if hasattr(dwall, 'total_seconds'):
-			dwall = dwall.total_seconds()
-		else:
-			dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
-		dcpu = (self.cpu - other.cpu)
-		return '%f wall, %f cpu' % (dwall, dcpu)
 
 def getdata():
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'

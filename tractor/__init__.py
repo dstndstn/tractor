@@ -3,7 +3,7 @@ from ducks import *
 from basics import *
 import sdss
 import cfht
-
+from ttime import Time
 __all__ = [
 	# modules
 	'sdss', 'fitpsf', 'emfit',
@@ -15,5 +15,5 @@ __all__ = [
 	'PixPos', 'RaDecPos', 'Image',
 	'PhotoCal', 'NullPhotoCal', 'WCS', 'NullWCS',
 	'FitsWcs', 'Patch', 'PSF', 'GaussianMixturePSF',
-	'NCircularGaussianPSF', 'Catalog', 'Tractor',
+	'NCircularGaussianPSF', 'Catalog', 'Tractor', 'Time',
 	]

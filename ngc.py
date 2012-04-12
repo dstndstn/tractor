@@ -37,7 +37,7 @@ def main():
 	ra,dec,radius = ngc.ra, ngc.dec, ngc.size / 2. / 60.
 	print 'Found NGC', ngcnum, 'at RA,Dec', ngc.ra, ngc.dec, 'radius', ngc.size/2, 'arcmin'
 
-	bands=['r','g']#,'u','i','z']
+	bands=['r']#,'g']#,'u','i','z']
 	canonband = 'r'
 	pixscale = 0.396
 	pixr = radius * 3600. / pixscale
