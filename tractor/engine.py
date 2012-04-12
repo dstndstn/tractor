@@ -18,6 +18,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
 
 from astrometry.util.miscutils import get_overlapping_region
+from astrometry.util.multiproc import *
 from .utils import MultiParams
 from .cache import *
 from .ttime import Time
@@ -349,24 +350,15 @@ class Images(MultiParams):
 	def getNamedParamName(self, j):
 		return 'image%i' % j
 
-# def getderivfunc((tr, j, k, p0, step, nm, mod0)):
-# 	im = tr.getImage(j)
-# 	im.setParam(k, p0 + step)
-# 	mod = tr.getModelImage(im)
-# 	im.setParam(k, p0)
-# 	deriv = Patch(0, 0, (mod - mod0) / step)
-# 	deriv.name = 'd(im%i)/d(%s)' % (j,nm)
-# 	return deriv
+# These are free functions for multiprocessing in "getderivs2()"
 def getmodelimagestep((tr, j, k, p0, step)):
 	im = tr.getImage(j)
 	im.setParam(k, p0 + step)
 	mod = tr.getModelImage(im)
 	im.setParam(k, p0)
 	return mod
-
 def getmodelimagefunc((tr, imj)):
 	return tr.getModelImage(imj)
-
 def getsrcderivs((src, img)):
 	return src.getParamDerivatives(img)
 
@@ -491,8 +483,8 @@ class Tractor(MultiParams):
 
 	def tryupdates2(self, X, alphas=None):
 		if alphas is None:
-			# 1/1024 to 1 in factors of 2
-			alphas = 2.**-(np.arange(10,0,-1)-1)
+			# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
+			alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
 
 		pBefore = self.getLogProb()
 		logverb('  log-prob before:', pBefore)
@@ -547,13 +539,11 @@ class Tractor(MultiParams):
 				args.append((self, j, k, p0[k], step))
 		# reverse the args so we can pop() below.
 		mod1s = self._map_async(getmodelimagestep, reversed(args))
-		#print 'Waiting...'
 
 		# Next, derivs for the sources.
 		srcs = self.catalog
 		if self.isParamFrozen('catalog'):
 			srcs = []
-		#print 'Finding derivatives for', len(srcs), 'sources'
 		args = []
 		for j,src in enumerate(srcs):
 			for i,img in enumerate(self.images):

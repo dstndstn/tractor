@@ -8,6 +8,7 @@ import pylab as plt
 from glob import glob
 from astrometry.util.pyfits_utils import *
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.multiproc import *
 from astrometry.util.file import *
 from astrometry.util.util import *
 from astrometry.sdss import *
@@ -279,6 +280,8 @@ if __name__ == '__main__':
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+	mp = multiproc(opt.threads)
+
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
 
@@ -369,6 +372,7 @@ if __name__ == '__main__':
 	print
 	print 'Tractor:', tractor
 	print
+	tractor.mp = mp
 
 	tim = tractor.getImage(0)
 	print 'tim', tim
@@ -451,11 +455,13 @@ if __name__ == '__main__':
 	nw = 10
 	print 'nw', nw
 
-	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
-									threads=opt.threads,
-									live_dangerously=True)
 	steps = np.array(tractor.getStepSizes())
-	pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
+
+	# sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+	# pool = mp.pool,
+	# 								live_dangerously=True)
+	# 								threads=opt.threads,
+	# pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
 
 	lnp = None
 	rstate = None
@@ -477,6 +483,7 @@ if __name__ == '__main__':
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
 
+	pp = np.array([p0])
 	for step in range(1, 100):
 		allp.append(pp)
 
@@ -522,6 +529,7 @@ if __name__ == '__main__':
 			if step % 10 == 0:
 				modsum = None
 				chisum = None
+				nw = len(pp)
 				for k in xrange(nw):
 					tractor.setParams(pp[k,:])
 					mod = tractor.getModelImage(i)
@@ -547,30 +555,37 @@ if __name__ == '__main__':
 				plt.yticks([],[])
 				mysavefig('chisum%02i-%02i.png' % (i,step-1))
 
-		if step % 2 == 0:
+		#if False and step % 2 == 0:
+		if True:
 			print 'Run optimization step', step
-			#print 'param shape', pp.shape
-			stdev = np.std(pp, axis=0)
-			print 'stdev', stdev
-			mn = np.mean(pp, axis=0)
-			print 'mean', mn
-			tractor.setParams(mn)
+			if len(pp) > 1:
+				# print 'param shape', pp.shape
+				stdev = np.std(pp, axis=0)
+				print 'stdev', stdev
+				steps = stdev
+				mn = np.mean(pp, axis=0)
+				print 'mean', mn
+				tractor.setParams(mn)
+			else:
+				tractor.setParams(pp[0])
 			t0 = Time()
 			# tractor.optimizeCatalogAtFixedComplexityStep()
 			tractor.opt2()
 			t_opt = (Time() - t0)
 			print 'Optimization took', t_opt, 'sec'
-			mn = tractor.getParams()
+			pp = np.array([tractor.getParams()])
 			lnp0 = tractor.getLogProb()
 			print 'Lnprob', lnp0
-			pp = emcee.EnsembleSampler.sampleBall(mn, stdev, nw)
-			lnp = None
 
 		else:
 			kwargs = dict(storechain=False)
 			# if step % 2 == 0:
 			#	kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(steps)
 			print 'Run MCMC step', step
+			if len(pp) == 1:
+				mn = tractor.getParams()
+				pp = emcee.EnsembleSampler.sampleBall(mn, steps, nw)
+				lnp = None
 			t0 = Time()
 			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
 			t_mcmc = (Time() - t0)
