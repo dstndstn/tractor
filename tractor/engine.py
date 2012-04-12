@@ -349,18 +349,6 @@ class Images(MultiParams):
 	def getNamedParamName(self, j):
 		return 'image%i' % j
 
-class FakeAsyncResult(object):
-	def __init__(self, X):
-		self.X = X
-	def wait(self, *a):
-		pass
-	def get(self, *a):
-		return self.X
-	def ready(self):
-		return True
-	def successful(self):
-		return True
-
 # def getderivfunc((tr, j, k, p0, step, nm, mod0)):
 # 	im = tr.getImage(j)
 # 	im.setParam(k, p0 + step)
@@ -375,32 +363,19 @@ def getmodelimagestep((tr, j, k, p0, step)):
 	mod = tr.getModelImage(im)
 	im.setParam(k, p0)
 	return mod
-	
+
 def getmodelimagefunc((tr, imj)):
 	return tr.getModelImage(imj)
 
-class funcwrapper(object):
-	def __init__(self, func):
-		self.func = func
-	def __call__(self, *X):
-		#print 'Trying to call', self.func
-		#print 'with args', X
-		try:
-			return self.func(*X)
-		except:
-			import traceback
-			print 'Exception while calling your function:'
-			print '	 params:', X
-			print '	 exception:'
-			traceback.print_exc()
-			raise
-			
+def getsrcderivs((src, img)):
+	return src.getParamDerivatives(img)
+
 class Tractor(MultiParams):
 	@staticmethod
 	def getNamedParams():
 		return dict(images=0, catalog=1)
 
-	def __init__(self, images=[], catalog=[], pool=None):
+	def __init__(self, images=[], catalog=[], mp=None):
 		'''
 		image: list of Image objects (data)
 		catalog: list of Source objects
@@ -408,16 +383,14 @@ class Tractor(MultiParams):
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
 		self.cache = Cache()
 		self.cachestack = []
-		self.pool = pool
+		if mp is None:
+			mp = multiproc()
+		self.mp = mp
 
 	def _map(self, func, iterable):
-		if self.pool is None:
-			return map(func, iterable)
-		return self.pool.map(funcwrapper(func), iterable)
+		return self.mp.map(func, iterable)
 	def _map_async(self, func, iterable):
-		if self.pool is None:
-			return FakeAsyncResult(map(func, iterable))
-		return self.pool.map_async(funcwrapper(func), iterable)
+		return self.mp.map_async(func, iterable)
 
 	# For use from emcee
 	def __call__(self, X):
@@ -559,15 +532,14 @@ class Tractor(MultiParams):
 		allderivs = []
 		# First, derivs for Image parameters (because 'images' comes first in the
 		# tractor's parameters)
-		#print 'Finding derivatives for', self.images.numberOfParams(), 'image params'
 		ims = self.images
 		imjs = range(len(self.images))
 		if self.isParamFrozen('images'):
 			ims = []
 			imjs = []
-
+		# initial models...
 		mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in imjs])
-
+		# stepping each param...
 		args = []
 		for j,im in enumerate(ims):
 			p0 = im.getParams()
@@ -575,17 +547,24 @@ class Tractor(MultiParams):
 				args.append((self, j, k, p0[k], step))
 		# reverse the args so we can pop() below.
 		mod1s = self._map_async(getmodelimagestep, reversed(args))
+		#print 'Waiting...'
 
-		print 'Waiting...'
+		# Next, derivs for the sources.
+		srcs = self.catalog
+		if self.isParamFrozen('catalog'):
+			srcs = []
+		#print 'Finding derivatives for', len(srcs), 'sources'
+		args = []
+		for j,src in enumerate(srcs):
+			for i,img in enumerate(self.images):
+				args.append((src, img))
+		sderivs = self._map_async(getsrcderivs, reversed(args))
+
+		# Wait for and unpack the image derivatives...
 		mod0s = mod0s.get()
 		mod1s = mod1s.get()
-
-		print 'args', len(args)
-		print 'mod1s', len(mod1s)
-
 		for j,im in enumerate(ims):
 			mod0 = mod0s[j]
-			print 'mod0', mod0
 			p0 = im.getParams()
 			for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
 				mod1 = mod1s.pop()
@@ -593,35 +572,14 @@ class Tractor(MultiParams):
 				deriv.name = 'd(im%i)/d(%s)' % (j,nm)
 				allderivs.append([(deriv, im)])
 
-		# #print 'Getting dImage initial models for', len(ims), 'in parallel...'
-		# mod0s = self._map(getmodelimagefunc, [(self,imj) for imj in imjs])
-		# #print 'Getting dImage derivatives...'
-		# args = []
-		# js = []
-		# for j,im in enumerate(ims):
-		# 	p0 = im.getParams()
-		# 	for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
-		# 		args.append((self, j, k, p0[k], step, nm, mod0s[j]))
-		# 		js.append(j)
-		# 
-		# #print 'running', len(args), 'in parallel.'
-		# derivs = self._map(getderivfunc, args)
-		# allderivs.extend([[(deriv,ims[j])] for deriv,j in zip(derivs,js)])
-		# assert(len(allderivs) == sum(im.numberOfParams()) for im in ims)
-		# 
-		# #print len(allderivs), 'derivs'
-		# #print allderivs
+		# Wait for source derivs...
+		sderivs = sderivs.get()
 
-		# Next, derivs for the sources.
-		srcs = self.catalog
-		if self.isParamFrozen('catalog'):
-			srcs = []
-		#print 'Finding derivatives for', len(srcs), 'sources'
 		for j,src in enumerate(srcs):
 			srcderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
-				derivs = src.getParamDerivatives(img)
+				derivs = sderivs.pop()
 				# derivs is a list of Patch objects or None, one per parameter.
 				assert(len(derivs) == src.numberOfParams())
 				for k,deriv in enumerate(derivs):
@@ -633,7 +591,7 @@ class Tractor(MultiParams):
 						assert(False)
 					srcderivs[k].append((deriv, img))
 			allderivs.extend(srcderivs)
-		#print allderivs
+
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 

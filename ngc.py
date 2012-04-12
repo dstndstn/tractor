@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.multiproc import *
 from astrometry.sdss.dr7 import *
 from tractor import *
 from tractor import sdss as st
@@ -15,6 +16,7 @@ def main():
 	import optparse
 	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
 	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
+	parser.add_option('--force-radius', dest='radius', default=None, type=float, help='Force using this radius (in arcmin)')
 	opt,args = parser.parse_args()
 	if len(args) != 1:
 		parser.print_help()
@@ -30,12 +32,14 @@ def main():
 		print 'Failed to find NGC object in ngc2000 list'
 		sys.exit(-1)
 
-	pool = None
-	if opt.threads > 1:
-		pool = multiprocessing.Pool(opt.threads)
+	mp = multiproc(nthreads = opt.threads)
 
 	ra,dec,radius = ngc.ra, ngc.dec, ngc.size / 2. / 60.
 	print 'Found NGC', ngcnum, 'at RA,Dec', ngc.ra, ngc.dec, 'radius', ngc.size/2, 'arcmin'
+
+	if opt.radius is not None:
+		print 'Forcing radius of', opt.radius, 'arcmin'
+		radius = opt.radius / 60.
 
 	bands=['r']#,'g']#,'u','i','z']
 	canonband = 'r'
@@ -71,12 +75,12 @@ def main():
 		# (could also get 'roi' from the st.get_tractor_image info dict)
 
 
-	tractor = Tractor([tim for tim,tinf in TI], sources, pool)
+	tractor = Tractor([tim for tim,tinf in TI], sources, mp)
 
 	for im in tractor.getImages():
 		im.freezeParams('wcs', 'photocal', 'psf', 'sky')
 
-	tractor.freezeParam('catalog')
+	#tractor.freezeParam('catalog')
 
 	for i in range(5):
 		if True or (i % 5 == 0):
