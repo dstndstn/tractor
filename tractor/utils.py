@@ -133,6 +133,20 @@ class NamedParams(object):
 	def getNamedParamName(self, ii):
 		return self.paramnames.get(ii, None)
 
+	def freezeParamsRecursive(self, *pnames):
+		for nm in pnames:
+			i = self.getNamedParamIndex(nm)
+			if i is None:
+				continue
+			self.liquid[i] = False
+	def thawParamsRecursive(self, *pnames):
+		#self.thawParams(*pnames)
+		for nm in pnames:
+			i = self.getNamedParamIndex(nm)
+			if i is None:
+				continue
+			self.liquid[i] = True
+
 	def freezeParams(self, *args):
 		for n in args:
 			self.freezeParam(n)
@@ -384,6 +398,19 @@ class MultiParams(Params, NamedParams):
 			# Should 'subs' be allowed to contain None values?
 			if s is not None:
 				yield s
+
+	def freezeParamsRecursive(self, *pnames):
+		for name,sub in self._iterNamesAndVals():
+			if hasattr(sub, 'freezeParamsRecursive'):
+				sub.freezeParamsRecursive(*pnames)
+			if name in pnames:
+				self.freezeParam(name)
+	def thawParamsRecursive(self, *pnames):
+		for name,sub in self._iterNamesAndVals():
+			if hasattr(sub, 'thawParamsRecursive'):
+				sub.thawParamsRecursive(*pnames)
+			if name in pnames:
+				self.thawParam(name)
 
 	def getParamNames(self):
 		n = []

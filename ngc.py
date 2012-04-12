@@ -1,5 +1,6 @@
 import sys
 import math
+import logging
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 from astrometry.sdss.dr7 import *
@@ -8,8 +9,8 @@ from tractor import sdss as st
 
 
 def main():
-    lvl = logging.DEBUG
-    logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
+	lvl = logging.DEBUG
+	logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
 	import optparse
 	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
 	opt,args = parser.parse_args()
@@ -28,15 +29,15 @@ def main():
 	ra,dec,radius = ngc.ra, ngc.dec, ngc.size / 2. / 60.
 	print 'Found NGC', ngcnum, 'at RA,Dec', ngc.ra, ngc.dec, 'radius', ngc.size/2, 'arcmin'
 
-	bands=['r','g','u','i','z']
+	bands=['r','g']#,'u','i','z']
 	canonband = 'r'
 	pixscale = 0.396
 	pixr = radius * 3600. / pixscale
 	rerun = 0
 	H,W = 1489,2048
 
-    TI = []
-    sources = []
+	TI = []
+	sources = []
 	sdss = DR7()
 	RCF = radec_to_sdss_rcf(ra, dec, radius=math.hypot(radius*60., 13./2.))
 	print 'Run,camcol,field list:', RCF
@@ -64,9 +65,30 @@ def main():
 
 	tractor = Tractor([tim for tim,tinf in TI], sources)
 
-	for i in range(5):
-		tractor.optimizeCatalogLoop(nsteps=1)
+	for im in tractor.getImages():
+		im.freezeParams('wcs', 'photocal', 'psf', 'sky')
 
+	tractor.freezeParam('catalog')
+
+	for i in range(5):
+		if (i % 5 == 0):
+			print 'Thawing sky...'
+			tractor.images.thawParamsRecursive('sky')
+
+		print 'Iteration', i
+		nms = tractor.getParamNames()
+		print len(nms), 'parameters:'
+		for nm in nms:
+			print '	 ', nm
+		#tractor.optimizeCatalogLoop(nsteps=1)
+		tractor.opt2()
+
+		tractor.cache.about()
+		tractor.clearCache()
+
+		if (i % 5 == 0):
+			print 'Freezing sky...'
+			tractor.images.freezeParamsRecursive('sky')
 
 if __name__ == '__main__':
 	main()

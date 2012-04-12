@@ -317,8 +317,64 @@ class Patch(object):
 		return self.performArithmetic(other, '__isub__')
 
 
-class Cache(dict):
-	pass
+class Cache(object):
+	class Entry(object):
+		pass
+	def __init__(self):
+		self.dict = dict()
+	def __setitem__(self, key, val):
+		#print 'Cache: adding item', len(self)+1
+		if isinstance(val, Patch):
+			H,W = val.patch.shape
+			sz = H*W
+			#print 'size:', val.patch.shape
+		else:
+			sz = 0
+		e = Cache.Entry()
+		e.val = val
+		e.size = sz
+		e.hits = 0
+		#super(Cache, self).__setitem__(key, e)
+		self.dict[key] = e
+	def __getitem__(self, key):
+		#e = super(Cache, self).__getitem__(key)
+		e = self.dict[key]
+		if e is None:
+			return None
+		e.hits += 1
+		return e.val
+	def __len__(self):
+		return len(self.dict)
+	def get(self, *args):
+		e = self.dict.get(*args)
+		if e is None:
+			return None
+		e.hits += 1
+		return e.val
+
+		#if len(args) == 1:
+		#	key = args[0]
+		#	return self[key]
+		#assert(len(args) == 2)
+		#key,default = args
+		#try:
+		#	return self[key]
+		#except KeyError:
+		#	return default
+		
+
+	def about(self):
+		print 'Cache has', len(self), 'items:'
+		for k,v in self.dict.items():
+			if v is None:
+				continue
+			print '  size', v.size, 'hits', v.hits
+
+class NullCache(object):
+	def __getitem__(self, key):
+		raise KeyError
+	def __setitem__(self, key, val):
+		pass
 
 class Catalog(MultiParams):
 	deepcopy = MultiParams.copy
@@ -442,9 +498,13 @@ class Tractor(MultiParams):
 	### FIXME -- temporary functions, parallel to optimizeCatalogAtFixedComplexityStep()
 	### et al, that use the param infrastructure correctly.
 	def opt2(self):
+		print 'opt2: Finding derivs...'
 		allderivs = self.getderivs2()
+		print 'Finding optimal update direction...'
 		X = self.optimize(allderivs)
+		print 'Finding optimal step size...'
 		(dlogprob, alpha) = self.tryupdates2(X)
+		print 'Finished opt2.'
 		return dlogprob, X, alpha
 
 	def tryupdates2(self, X, alphas=None):
@@ -529,7 +589,7 @@ class Tractor(MultiParams):
 						print 'deriv index', i
 						assert(False)
 					srcderivs[k].append((deriv, img))
-			allderivs.extend(allderivs)
+			allderivs.extend(srcderivs)
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
@@ -869,8 +929,8 @@ class Tractor(MultiParams):
 		for src in srcs:
 			patch = self.getModelPatch(img, src)
 			if patch is None:
-				print 'None patch: src is', src
-				print 'position is', img.getWcs().positionToPixel(src.pos, src)
+				#print 'None patch: src is', src
+				#print 'position is', img.getWcs().positionToPixel(src.pos, src)
 				continue
 			patch.addTo(mod)
 		return mod

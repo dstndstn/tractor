@@ -417,7 +417,7 @@ class HoggGalaxy(Galaxy):
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
 		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
 		if inx == [] or iny == []:
-			print 'No overlap between model and image'
+			#print 'No overlap between model and image'
 			return None
 		x0 = outx.start
 		y0 = outy.start
