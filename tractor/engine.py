@@ -45,7 +45,6 @@ class Image(MultiParams):
 	'''
 	An image plus its calibration information.	The Tractor handles
 	multiple Images.
-
 	'''
 	def __init__(self, **kwargs):
 		'''
@@ -383,8 +382,8 @@ class Tractor(MultiParams):
 		self.mp = mp
 
 	def __str__(self):
-		s = 'Tractor with %i images and %i sources: ' % (len(self.images), len(self.catalog))
-		s += str([im.name for im in self.images])
+		s = 'Tractor with %i sources and %i images' % (len(self.catalog), len(self.images))
+		s += ' (' + ', '.join([im.name for im in self.images]) + ')'
 		return s
 
 	def _map(self, func, iterable):

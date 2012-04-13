@@ -143,7 +143,7 @@ class FitsWcs(ParamList):
 			crp[i-2] = val
 			w.set_crpix(*crp)
 		elif i in [4,5,6,7]:
-			cd = w.get_cd()
+			cd = list(w.get_cd())
 			cd[i-4] = val
 			w.set_cd(*cd)
 		elif i == 8:
@@ -161,6 +161,7 @@ class FitsWcs(ParamList):
 			crp = w.crpix
 			return crp[i-2]
 		elif i in [4,5,6,7]:
+			cd = w.get_cd()
 			return cd[i-4]
 		elif i == 8:
 			return self.x0
