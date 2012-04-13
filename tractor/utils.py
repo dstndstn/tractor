@@ -180,6 +180,10 @@ class NamedParams(object):
 	def thawAllParams(self):
 		for i in xrange(len(self.liquid)):
 			self.liquid[i] = True
+	unfreezeParam = thawParam
+	unfreezeParams = thawParams
+	unfreezeAllParams = thawAllParams
+	
 	def freezeAllParams(self):
 		for i in xrange(len(self.liquid)):
 			self.liquid[i] = False

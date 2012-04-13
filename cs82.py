@@ -378,6 +378,83 @@ def tweak_wcs((tractor, im)):
 		if dlnp == 0:
 			break
 	return im.getParams()
+
+def plot1((tractor, i, zr, plotnames, step, pp)):
+	plotpos0 = [0.01, 0.01, 0.98, 0.94]
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1], cmap='gray')
+	imchi = dict(interpolation='nearest', origin='lower',
+				 vmin=-5., vmax=+5., cmap='gray')
+	tim = tractor.getImage(i)
+	if 'data' in plotnames:
+		data = tim.getImage()
+		plt.clf()
+		plt.gca().set_position(plotpos0)
+		myimshow(data, **ima)
+		plt.title('Data %s' % tim.name)
+		plt.xticks([],[])
+		plt.yticks([],[])
+		mysavefig('data%02i.png' % i)
+
+	if 'dataann' in plotnames and i == 0:
+		ax = plt.axis()
+		xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+					   for s in tractor.catalog])
+		plt.plot(xy[:,0], xy[:,1], 'r+')
+		plt.axis(ax)
+		mysavefig('data%02i-ann.png' % i)
+
+	if 'modsum' in plotnames or 'chisum' in plotnames:
+		modsum = None
+		chisum = None
+		nw = len(pp)
+		for k in xrange(nw):
+			tractor.setParams(pp[k,:])
+			mod = tractor.getModelImage(i)
+			chi = tractor.getChiImage(i)
+			if k == 0:
+				modsum = mod
+				chisum = chi
+			else:
+				modsum += mod
+				chisum += chi
+
+		if 'modsum' in plotnames:
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			myimshow(modsum/float(nw), **ima)
+			plt.title('Model (sum)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('modsum%02i-%02i.png' % (i,step))
+		if 'chisum' in plotnames:
+			plt.imshow(chisum/float(nw), **imchi)
+			plt.title('Chi (sum)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('chisum%02i-%02i.png' % (i,step))
+
+def plots(tractor, zrs, plotnames, step, pp=None, mp=None):
+	args = []
+	for i in range(len(tractor.getImages())):
+		zr = zrs[i]
+		args.append((tractor, i, zr, plotnames, step, pp))
+	if mp is None:
+		map(plot1, args)
+	else:
+		mp.map(plot1, args)
+
+
+def nlmap(X):
+	S = 0.01
+	return np.arcsinh(X * S)/S
+def myimshow(x, *args, **kwargs):
+	mykwargs = kwargs.copy()
+	if 'vmin' in kwargs:
+		mykwargs['vmin'] = nlmap(kwargs['vmin'])
+	if 'vmax' in kwargs:
+		mykwargs['vmax'] = nlmap(kwargs['vmax'])
+	return plt.imshow(nlmap(x), *args, **mykwargs)
 	
 if __name__ == '__main__':
 	#getdata()
@@ -396,6 +473,9 @@ if __name__ == '__main__':
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	mp = multiproc(opt.threads)
+
+	plt.figure(figsize=(6,6))
+	plt.clf()
 
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
@@ -462,150 +542,99 @@ if __name__ == '__main__':
 	lnp0 = tractor.getLogProb()
 	print 'Lnprob', lnp0
 
+	plots(tractor, zrs, ['modsum', 'chisum'], 0, pp=np.array([tractor.getParams()]),
+		  mp=mp)
+
+	wcs0 = tractor.getParams()
+
 	allims = tractor.getImages()
 	tractor.images = Images()
 	#tweak_wcs((tractor, allims[4]))
-	dwcs = mp.map(tweak_wcs, [(tractor,im) for im in allims], wrap=True)
+	wcs1 = mp.map(tweak_wcs, [(tractor,im) for im in allims], wrap=True)
 	tractor.images = allims
-	for im,dp in zip(allims,dwcs):
-		im.setParams(dp)
-		
-	# for i,im in enumerate(allims):
-	# 	#tractor.images.freezeAllBut(i)
-	# 	print 'Tweaking WCS of', i
-	# 	tractor.images = Images(im)
-	# 	print 'Tractor params:', tractor.numberOfParams()
-	# 	for step in range(10):
-	# 		print 'Run optimization step', step
-	# 		t0 = Time()
-	# 		dlnp,X,alpha = tractor.opt2(alphas=[0.5, 1., 2., 4.])
-	# 		t_opt = (Time() - t0)
-	# 		print 'alpha', alpha
-	# 		print 'Optimization took', t_opt, 'sec'
-	# 		lnp0 = tractor.getLogProb()
-	# 		print 'Lnprob', lnp0
-	# 		if dlnp == 0:
-	# 			break
-	#tractor.images = allims
-
+	for im,p in zip(allims,wcs1):
+		im.setParams(p)
 	lnp0 = tractor.getLogProb()
 	print 'Lnprob', lnp0
 
+	wcs1 = np.hstack(wcs1)
+	print 'Orig WCS:', wcs0
+	print 'Opt  WCS:', wcs1
 
+	print 'dWCS (arcsec):', (wcs1 - wcs0) * 3600.
 
-	sys.exit(0)
-	
+	for im in tractor.getImages():
+		im.wcs.thawAllParams()
+		im.freezeParam('wcs')
+	tractor.unfreezeParam('catalog')
 
+	tractor.catalog = allsources
+	pfn = 'tractor2.pickle'
+	pickle_to_file((tractor,skies), pfn)
 
+	tractor.catalog = brightcat
 
+	plots(tractor, zrs, ['modsum', 'chisum'], 1, pp=np.array([tractor.getParams()]),
+		  mp=mp)
 
 
 	p0 = np.array(tractor.getParams())
 	steps = np.array(tractor.getStepSizes())
 	ndim = len(p0)
-	print 'ndim', ndim
-	nw = 10
-	print 'nw', nw
+	nw = 32
+	pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
 
-
-	# sampler = emcee.EnsembleSampler(nw, ndim, tractor,
-	# pool = mp.pool,
-	# 								live_dangerously=True)
-	# 								threads=opt.threads,
-	# pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
-
+	sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+									pool = mp.pool,
+									live_dangerously=True)
 	lnp = None
 	rstate = None
 	alllnp = []
 	allp = []
 
-	plt.figure(figsize=(6,6))
-	plt.clf()
-	plotpos0 = [0.01, 0.01, 0.98, 0.94]
-	def nlmap(X):
-		S = 0.01
-		return np.arcsinh(X * S)/S
-	def myimshow(x, *args, **kwargs):
-		mykwargs = kwargs.copy()
-		if 'vmin' in kwargs:
-			mykwargs['vmin'] = nlmap(kwargs['vmin'])
-		if 'vmax' in kwargs:
-			mykwargs['vmax'] = nlmap(kwargs['vmax'])
-		return plt.imshow(nlmap(x), *args, **mykwargs)
-
-
-	pp = np.array([p0])
 	for step in range(1, 100):
 		allp.append(pp)
 
-		if True:
-			plt.clf()
-			for p in allp[:-1]:
-				plt.plot(p[:,0], p[:,1], 'k.', alpha=0.1)
-			p = allp[-1]
-			plt.plot(p[:,0], p[:,1], 'r.', alpha=0.5)
-			nms = tractor.getParamNames()
-			plt.xlabel(nms[0])
-			plt.ylabel(nms[1])
-			mysavefig('params-%02i.png' % (step-1))
+		# if True:
+		# 	plt.clf()
+		# 	for p in allp[:-1]:
+		# 		plt.plot(p[:,0], p[:,1], 'k.', alpha=0.1)
+		# 	p = allp[-1]
+		# 	plt.plot(p[:,0], p[:,1], 'r.', alpha=0.5)
+		# 	nms = tractor.getParamNames()
+		# 	plt.xlabel(nms[0])
+		# 	plt.ylabel(nms[1])
+		# 	mysavefig('params-%02i.png' % (step-1))
 
-		for i in range(len(tractor.getImages())):
-			zr = zrs[i]
-			ima = dict(interpolation='nearest', origin='lower',
-					   vmin=zr[0], vmax=zr[1], cmap='gray')
-			imchi = dict(interpolation='nearest', origin='lower',
-						 vmin=-5., vmax=+5., cmap='gray')
+		#if step == 1:
+		#	plots(tractor, zrs, ['data'], step)
 
-			if step == 1:
-				tim = tractor.getImage(i)
-				data = tim.getImage()
-
-				plt.clf()
-				plt.gca().set_position(plotpos0)
-				myimshow(data, **ima)
-				plt.title('Data %s' % tim.name)
-				plt.xticks([],[])
-				plt.yticks([],[])
-				mysavefig('data%02i.png' % i)
-
-				if i == 0:
-					ax = plt.axis()
-					xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
-								   for r,d in zip(T.ra, T.dec)])
-					plt.plot(xy[:,0], xy[:,1], 'r+')
-					plt.axis(ax)
-					mysavefig('data%02i-ann.png' % i)
+		if step % 10 == 0:
+			plots(tractor, zrs, ['modsum', 'chisum'], step, pp=pp, mp=mp)
 
 
-			if step % 10 == 0:
-				modsum = None
-				chisum = None
-				nw = len(pp)
-				for k in xrange(nw):
-					tractor.setParams(pp[k,:])
-					mod = tractor.getModelImage(i)
-					chi = tractor.getChiImage(i)
-					if k == 0:
-						modsum = mod
-						chisum = chi
-					else:
-						modsum += mod
-						chisum += chi
-						
-				plt.clf()
-				plt.gca().set_position(plotpos0)
-				myimshow(modsum/float(nw), **ima)
-				plt.title('Model (sum)')
-				plt.xticks([],[])
-				plt.yticks([],[])
-				mysavefig('modsum%02i-%02i.png' % (i,step-1))
+		kwargs = dict(storechain=False)
+		# if step % 2 == 0:
+		#	kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(steps)
+		print 'Run MCMC step', step
+		#if len(pp) == 1:
+		#	mn = tractor.getParams()
+		#	pp = emcee.EnsembleSampler.sampleBall(mn, steps, nw)
+		#	lnp = None
+		t0 = Time()
+		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+		t_mcmc = (Time() - t0)
+		print 'lnprobs:', lnp
+		print 'MCMC took', t_mcmc, 'sec'
 
-				plt.imshow(chisum/float(nw), **imchi)
-				plt.title('Chi (sum)')
-				plt.xticks([],[])
-				plt.yticks([],[])
-				mysavefig('chisum%02i-%02i.png' % (i,step-1))
 
+	sys.exit(0)
+
+
+
+
+
+	for x in []:
 		#if False and step % 2 == 0:
 		if True:
 			print 'Run optimization step', step
