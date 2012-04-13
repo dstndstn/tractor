@@ -331,8 +331,9 @@ class Catalog(MultiParams):
 	deepcopy = MultiParams.copy
 
 	def __str__(self):
-		self.printLong()
-		return 'Catalog with %i sources' % len(self)
+		#self.printLong()
+		#return 'Catalog with %i sources' % len(self)
+		return 'Catalog: %i sources, %i parameters' % (len(self), self.numberOfParams())
 
 	def printLong(self):
 		print 'Catalog with %i sources:' % len(self)

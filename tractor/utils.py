@@ -301,6 +301,8 @@ class ParamList(Params, NamedParams):
 		return self._getThing(ii)
 
 	def getStepSizes(self, *args, **kwargs):
+		if hasattr(self, 'stepsizes'):
+			return list(self._getLiquidArray(self.stepsizes))
 		return [1] * self.numberOfParams()
 
 	def __len__(self):
@@ -423,12 +425,16 @@ class MultiParams(Params, NamedParams):
 				sub.freezeParamsRecursive(*pnames)
 			if name in pnames:
 				self.freezeParam(name)
+		if '*' in pnames:
+			self.freezeAllParams()
 	def thawParamsRecursive(self, *pnames):
 		for name,sub in self._iterNamesAndVals():
 			if hasattr(sub, 'thawParamsRecursive'):
 				sub.thawParamsRecursive(*pnames)
 			if name in pnames:
 				self.thawParam(name)
+		if '*' in pnames:
+			self.thawAllParams()
 
 	def getParamNames(self):
 		n = []
