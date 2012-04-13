@@ -379,7 +379,7 @@ def tweak_wcs((tractor, im)):
 			break
 	return im.getParams()
 
-def plot1((tractor, i, zr, plotnames, step, pp)):
+def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
@@ -387,6 +387,8 @@ def plot1((tractor, i, zr, plotnames, step, pp)):
 			   vmin=zr[0], vmax=zr[1], cmap='gray')
 	imchi = dict(interpolation='nearest', origin='lower',
 				 vmin=-5., vmax=+5., cmap='gray')
+	imchi2 = dict(interpolation='nearest', origin='lower',
+				  vmin=-50., vmax=+50., cmap='gray')
 	tim = tractor.getImage(i)
 	if 'data' in plotnames:
 		data = tim.getImage()
@@ -396,7 +398,7 @@ def plot1((tractor, i, zr, plotnames, step, pp)):
 		plt.title('Data %s' % tim.name)
 		plt.xticks([],[])
 		plt.yticks([],[])
-		mysavefig('data%02i.png' % i)
+		mysavefig('data-%02i.png' % i)
 
 	if 'dataann' in plotnames and i == 0:
 		ax = plt.axis()
@@ -404,7 +406,33 @@ def plot1((tractor, i, zr, plotnames, step, pp)):
 					   for s in tractor.catalog])
 		plt.plot(xy[:,0], xy[:,1], 'r+')
 		plt.axis(ax)
-		mysavefig('data%02i-ann.png' % i)
+		mysavefig('data-%02i-ann.png' % i)
+
+	if 'modbest' in plotnames or 'chibest' in plotnames:
+		pbest = pp[ibest,:]
+		tractor.setParams(pp[ibest,:])
+		if 'modbest' in plotnames:
+			mod = tractor.getModelImage(i)
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			myimshow(mod, **ima)
+			plt.title('Model (best)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('modbest-%02i-%02i.png' % (i,step))
+		if 'chibest' in plotnames:
+			chi = tractor.getChiImage(i)
+			plt.imshow(chi, **imchi)
+			plt.title('Chi (best)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('chibest-%02i-%02i.png' % (i,step))
+
+			plt.imshow(chi, **imchi2)
+			plt.title('Chi (best)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('chibest2-%02i-%02i.png' % (i,step))
 
 	if 'modsum' in plotnames or 'chisum' in plotnames:
 		modsum = None
@@ -412,6 +440,7 @@ def plot1((tractor, i, zr, plotnames, step, pp)):
 		if pp is None:
 			pp = np.array([tractor.getParams()])
 		nw = len(pp)
+		print 'modsum/chisum plots for', nw, 'walkers'
 		for k in xrange(nw):
 			tractor.setParams(pp[k,:])
 			mod = tractor.getModelImage(i)
@@ -430,15 +459,22 @@ def plot1((tractor, i, zr, plotnames, step, pp)):
 			plt.title('Model (sum)')
 			plt.xticks([],[])
 			plt.yticks([],[])
-			mysavefig('modsum%02i-%02i.png' % (i,step))
+			mysavefig('modsum-%02i-%02i.png' % (i,step))
 		if 'chisum' in plotnames:
+			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(chisum/float(nw), **imchi)
 			plt.title('Chi (sum)')
 			plt.xticks([],[])
 			plt.yticks([],[])
-			mysavefig('chisum%02i-%02i.png' % (i,step))
+			mysavefig('chisum-%02i-%02i.png' % (i,step))
+			plt.imshow(chisum/float(nw), **imchi2)
+			plt.title('Chi (sum)')
+			plt.xticks([],[])
+			plt.yticks([],[])
+			mysavefig('chisum2-%02i-%02i.png' % (i,step))
 
-def plots(tractor, zrs, plotnames, step, pp=None, mp=None):
+def plots(tractor, zrs, plotnames, step, pp=None, mp=None, ibest=None):
 	args = []
 	for i in range(len(tractor.getImages())):
 		#zr = zrs[i]
@@ -446,7 +482,7 @@ def plots(tractor, zrs, plotnames, step, pp=None, mp=None):
 			zr = tractor.getImage(i).zr
 		else:
 			zr = zrs[i]
-		args.append((tractor, i, zr, plotnames, step, pp))
+		args.append((tractor, i, zr, plotnames, step, pp, ibest))
 	if mp is None:
 		map(plot1, args)
 	else:
@@ -584,6 +620,17 @@ def main():
 
 	def stage03(tractor=None, mp=None, **kwargs):
 		print 'Tractor:', tractor
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		allsources = tractor.getCatalog()
+		brightcat,nil = cut_bright(allsources)
+		tractor.setCatalog(brightcat)
+		print ' Cut to:', tractor.getCatalog()
+	
+
+
+	def stage03old(tractor=None, mp=None, **kwargs):
+		print 'Tractor:', tractor
 		#print ' catalog:', len(tractor.getCatalog()), 'sources',
 		#print tractor.getCatalog().numberOfParams(), 'params'
 		print ' catalog:', tractor.getCatalog()
@@ -635,81 +682,165 @@ def main():
 		return dict(tractor=tractor, steps=steps)
 
 
-	def stage04(tractor=None, mp=None, steps=None, **kwargs):
+	def stage03(tractor=None, mp=None, steps=None, **kwargs):
 		print 'Tractor:', tractor
+		tractor.mp = mp
 		tractor.freezeParam('images')
 		tractor.catalog.thawParamsRecursive('*')
 
 		# Am I going to be better to literally cut the catalog, or freeze faint sources?
-
 		allsources = tractor.getCatalog()
-		brightcat,Ibright = cut_bright(allsources, magcut=22)
+		brightcat,Ibright = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
 		print ' Cut to:', tractor.getCatalog()
 
-		# Find indices of the params of bright sources.
-		bparams = []
-		keep = np.zeros(len(allsources), bool)
-		keep[Ibright] = True
-		ii = 0
-		for i,src in enumerate(allsources):
-			N = src.numberOfParams()
-			if keep[i]:
-				bparams.append(steps[ii:ii+N])
-			ii += N
-		assert(ii == allsources.numberOfParams())
-		bparams = np.hstack(bparams)
-		assert(len(bparams) == tractor.catalog.numberOfParams())
-		steps = steps[bparams]
-		assert(len(steps) == tractor.catalog.numberOfParams())
+		# # Find indices of the params of bright sources.
+		# bparams = []
+		# keep = np.zeros(len(allsources), bool)
+		# keep[Ibright] = True
+		# ii = 0
+		# for i,src in enumerate(allsources):
+		# 	N = src.numberOfParams()
+		# 	if keep[i]:
+		# 		bparams.append(steps[ii:ii+N])
+		# 	ii += N
+		# assert(ii == allsources.numberOfParams())
+		# bparams = np.hstack(bparams)
+		# assert(len(bparams) == tractor.catalog.numberOfParams())
+		# steps = steps[bparams]
+		# assert(len(steps) == tractor.catalog.numberOfParams())
 
 		p0 = np.array(tractor.getParams())
-		steps = np.array(tractor.getStepSizes())
 		pnames = np.array(tractor.getParamNames())
 
 		ndim = len(p0)
 		nw = 32
-		pp = emcee.EnsembleSampler.sampleBall(p0, 1e-2*steps, nw)
 
 		sampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
 										live_dangerously=True)
-		lnp = None
+		mhsampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
+										  live_dangerously=True)
+
+		psteps = 1e-7 * np.array(tractor.getStepSizes())
+		while True:
+			pp = emcee.EnsembleSampler.sampleBall(p0, psteps, nw)
+			# Put one walker at the nominal position.
+			pp[0,:] = p0
+			lnp = np.array(mp.map(tractor, pp))
+			dlnp = lnp - np.max(lnp)
+			print 'dlnp min', np.min(dlnp), 'median', np.median(dlnp)
+			if np.median(dlnp) > -10:
+				break
+			psteps *= 0.1
+
 		rstate = None
 		alllnp = []
 		allp = []
 
-		for step in range(1, 100):
+		for step in range(1, 101):
 			allp.append(pp)
 
 			if step % 10 == 0:
-				plots(tractor, None, ['modsum', 'chisum'], step, pp=pp, mp=mp)
-
-			if step % 5 == 0:
-				# Resample walkers that are doing badly
-				pass
-
-			# Recompute the step sizes from the walker stdev.
-			#steps = np.std(pp, axis=0)
+				ibest = np.argmax(lnp)
+				plots(tractor, None, ['modsum', 'chisum', 'modbest', 'chibest'],
+					  step, pp=pp, mp=mp, ibest=ibest)
 
 			print 'Run MCMC step', step
 			kwargs = dict(storechain=False)
 			# Alternate 5 steps of stretch move, 5 steps of MH.
+			t0 = Time()
 			if step % 10 >= 5:
 				print 'Using MH proposal'
-				kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(steps)
-			# if len(pp) == 1:
-			#	mn = tractor.getParams()
-			#	pp = emcee.EnsembleSampler.sampleBall(mn, steps, nw)
-			#	lnp = None
-			t0 = Time()
-			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+				kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(psteps)
+				pp,lnp,rstate = mhsampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+			else:
+				pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
 			t_mcmc = (Time() - t0)
-			print 'lnprobs:', lnp
+			#print 'lnprobs:', lnp
+			print 'Best lnprob:', np.max(lnp)
+			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
 			print 'MCMC took', t_mcmc, 'sec'
 
-		tractor.setCatalog(allsources)
-		return dict(tractor=tractor, allp3=allp, pp3=pp)
+			print 'Running acceptance fraction: emcee', sampler.acceptance_fraction
+			print 'mean', np.mean(sampler.acceptance_fraction)
+			print 'Running acceptance fraction: MH', mhsampler.acceptance_fraction
+			print 'mean', np.mean(mhsampler.acceptance_fraction)
 
+			# Tweak step sizes...
+			print 'Walker stdevs / psteps:'
+			st = np.std(pp, axis=0)
+			f = st / np.abs(psteps)
+			print '  median', np.median(f)
+			print '  range', np.min(f), np.max(f)
+			# Adjust the "psteps" toward the stdev by small factors.
+			# Note that this is per-parameter.
+			mx = 1.2
+			tweak = np.clip(f, 1./mx, mx)
+			psteps *= tweak
+			print 'After tweaking:'
+			f = st / np.abs(psteps)
+			print '  median', np.median(f)
+			print '  range', np.min(f), np.max(f)
+
+			if step % 2 == 0:
+				# Resample walkers that are doing badly
+				bestlnp = np.max(lnp)
+				dlnp = lnp - bestlnp
+				cut = -20
+				I = np.flatnonzero(dlnp < cut)
+				print len(I), 'walkers have lnprob more than', -cut, 'worse than the best'
+				if len(I):
+					ok = np.flatnonzero(dlnp >= cut)
+					print 'Resampling from', len(ok), 'good walkers'
+					# Sample another walker
+					J = np.random.randint(len(ok), size=len(I))
+					lnp0 = lnp[I]
+					lnp1 = lnp[J]
+					for i,j in zip(I,J):
+						pp[i,:] = emcee.EnsembleSampler.sampleBall(pp[j,:], psteps, 1)
+					lnp2 = mp.map(tractor, pp[I])
+					#print 'lnp0', lnp0
+					#print 'lnp1', lnp1
+					#print 'lnp2', lnp2
+					print 'dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)])
+					lnp[I] = lnp2
+
+		tractor.setCatalog(allsources)
+		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright3)
+
+
+	def stage04(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
+				Ibright3=None, **kwargs):
+		print 'Tractor:', tractor
+		tractor.mp = mp
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+
+		Ibright = Ibright3
+		allsources = tractor.getCatalog()
+		brightcut = [allsources[i] for i in Ibright]
+		#brightcat,nil = cut_bright(allsources, magcut=23)
+		tractor.setCatalog(brightcat)
+		print ' Cut to:', tractor.getCatalog()
+
+		pp = pp3
+		#if psteps3 is None:
+		#	psteps = np.std(pp, axis=0)
+		#else:
+		psteps = psteps3
+
+		lnp = mp.map(tractor, pp)
+		ibest = np.argmax(lnp)
+		step = 100
+		plots(tractor, None, ['modsum', 'chisum', 'modbest', 'chibest'],
+			  step, pp=pp, mp=mp, ibest=ibest)
+
+		pnames = np.array(tractor.getParamNames())
+		st = np.std(pp, axis=0)
+		mn = np.mean(pp, axis=0)
+		print 'Params:'
+		for nm,pmn,pst in zip(pnames, mn, st):
+			print '  ', nm, 'mean', pmn, 'std', pst
 
 
 	def runstage(stage):
@@ -738,84 +869,9 @@ def main():
 		pickle_to_file(R, pfn)
 		return R
 
-	runstage(3)
+	runstage(4)
 
 	sys.exit(0)
-
-
-	pfn = 'tractor.pickle'
-	if os.path.exists(pfn):
-		print 'Reading pickle', pfn
-		tractor,skies = unpickle_from_file(pfn)
-	else:
-		cffns = glob('cs82data/86*p-21-cr.fits')
-		tractor,skies = get_tractor(RA,DEC,sz, cffns)
-		Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
-		srcs = get_cf_sources(Tstar, Tdisk, Tsph)
-		tractor.addSources(srcs)
-		pickle_to_file((tractor,skies), pfn)
-	
-	#zrs = [np.array([-1.,+6.]) * std + sky for sky,std in skies]
-	zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
-
-	print 'Tractor:', tractor
-	tractor.mp = mp
-	cat = tractor.getCatalog()
-	print 'Catalog:', len(cat), 'sources,', cat.numberOfParams(), 'params'
-
-	# For the initial WCS alignment, cut to brightish sources...
-	allsources = tractor.getCatalog()
-
-	magcut = 24.
-	brightcat = Catalog()
-	for src in allsources:
-		if src.getBrightness().i < magcut:
-			brightcat.append(src)
-
-	print 'Cut to', len(brightcat), 'bright sources'
-	tractor.setCatalog(brightcat)
-	cat = tractor.getCatalog()
-	print 'Catalog:', len(cat), 'sources,', cat.numberOfParams(), 'params'
-
-	#tractor.getImages().freezeParamsRecursive('photocal', 'psf', 'sky')
-	for im in tractor.getImages():
-		im.freezeParams('photocal', 'psf', 'sky')
-		# print 'WCS', im.wcs
-		# print '  ', dir(im.wcs)
-		# print '  ', im.wcs.__dict__
-		if hasattr(im.wcs, 'crval1'):
-			im.wcs.freezeAllBut('crval1', 'crval2')
-		else:
-			# SdssWcs: equivalent is 'a','d'
-			im.wcs.freezeAllBut('a', 'd')
-			# print '  ', im.wcs.astrans
-			# print '  ', im.wcs.astrans.__dict__
-			# print im.wcs.getParamNames()
-			# print im.wcs.getParams()
-	print tractor.images.numberOfParams(), 'image params'
-	tractor.freezeParam('catalog')
-
-	print tractor.numberOfParams(), 'tractor params'
-
-
-
-	tractor.catalog = allsources
-	pfn = 'tractor2.pickle'
-	pickle_to_file((tractor,skies), pfn)
-
-	tractor.catalog = brightcat
-
-	plots(tractor, zrs, ['modsum', 'chisum'], 1, pp=np.array([tractor.getParams()]),
-		  mp=mp)
-
-
-
-
-	sys.exit(0)
-
-
-
-
 
 	for x in []:
 		#if False and step % 2 == 0:
@@ -839,22 +895,6 @@ def main():
 			pp = np.array([tractor.getParams()])
 			lnp0 = tractor.getLogProb()
 			print 'Lnprob', lnp0
-
-		else:
-			kwargs = dict(storechain=False)
-			# if step % 2 == 0:
-			#	kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(steps)
-			print 'Run MCMC step', step
-			if len(pp) == 1:
-				mn = tractor.getParams()
-				pp = emcee.EnsembleSampler.sampleBall(mn, steps, nw)
-				lnp = None
-			t0 = Time()
-			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-			t_mcmc = (Time() - t0)
-			print 'lnprobs:', lnp
-			print 'MCMC took', t_mcmc, 'sec'
-
 
 if __name__ == '__main__':
 	main()
