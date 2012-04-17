@@ -806,7 +806,7 @@ def main():
 					lnp[I] = lnp2
 
 		tractor.setCatalog(allsources)
-		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright3)
+		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
 
 
 	def stage04(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
@@ -818,7 +818,7 @@ def main():
 
 		Ibright = Ibright3
 		allsources = tractor.getCatalog()
-		brightcut = [allsources[i] for i in Ibright]
+		brightcat = [allsources[i] for i in Ibright]
 		#brightcat,nil = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
 		print ' Cut to:', tractor.getCatalog()
