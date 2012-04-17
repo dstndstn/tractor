@@ -210,7 +210,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 def get_tractor_image(run, camcol, field, bandname, 
 					  sdssobj=None, release='DR7',
 					  retrieve=True, curl=False, roi=None,
-					  psf='kl-gm', useMags=False, roiradecsize=None):
+					  psf='kl-gm', useMags=False, roiradecsize=None,
+					  savepsfimg=None):
 					  
 	# get_tractor_sources() no longer supports !useMags, so
 	assert(useMags)
@@ -256,7 +257,7 @@ def get_tractor_image(run, camcol, field, bandname,
 					  retrieve=retrieve)
 	fpC = sdss.readFpC(run, camcol, field, bandname)
 	tai = fpC.getHeader().get('TAI')
-	print 'TAI', tai
+	#print 'TAI', tai
 	fpC = fpC.getImage()
 	fpC = fpC.astype(float) - sdss.softbias
 	image = fpC
@@ -297,7 +298,6 @@ def get_tractor_image(run, camcol, field, bandname,
 	info.update(sky=sky, skysig=skysig)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
-
 	gain = psfield.getGain(bandnum)
 	darkvar = psfield.getDarkVariance(bandnum)
 	skyerr = psfield.getSkyErr(bandnum)
@@ -308,12 +308,7 @@ def get_tractor_image(run, camcol, field, bandname,
 		image = image[roislice].copy()
 		invvar = invvar[roislice].copy()
 
-	if psf == 'dg':
-		dgpsf = psfield.getDoubleGaussian(bandnum)
-		print 'Creating double-Gaussian PSF approximation'
-		(a,s1, b,s2) = dgpsf
-		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
-	elif psf == 'kl-gm':
+	if psf == 'kl-gm':
 		from emfit import em_fit_2d
 		from fitpsf import em_init_params
 		
@@ -330,9 +325,25 @@ def get_tractor_image(run, camcol, field, bandname,
 		II = np.maximum(II, 0)
 		#print 'Multi-Gaussian PSF fit...'
 		xm,ym = -(S/2), -(S/2)
-		em_fit_2d(II, xm, ym, w, mu, sig)
-		#print 'w,mu,sig', w,mu,sig
-		mypsf = GaussianMixturePSF(w, mu, sig)
+		if savepsfimg is not None:
+			plt.clf()
+			plt.imshow(II, interpolation='nearest', origin='lower')
+			plt.title('PSF image to fit with EM')
+			plt.savefig(savepsfimg)
+		res = em_fit_2d(II, xm, ym, w, mu, sig)
+		print 'em_fit_2d result:', res
+		if res == 0:
+			# print 'w,mu,sig', w,mu,sig
+			mypsf = GaussianMixturePSF(w, mu, sig)
+		else:
+			# Failed!  Return 'dg' model instead?
+			print 'PSF model fit', psf, 'failed!  Returning DG model instead'
+			psf = 'dg'
+	if psf == 'dg':
+		dgpsf = psfield.getDoubleGaussian(bandnum)
+		print 'Creating double-Gaussian PSF approximation'
+		(a,s1, b,s2) = dgpsf
+		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
 
 	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,

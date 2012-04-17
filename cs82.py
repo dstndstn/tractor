@@ -91,7 +91,10 @@ def getdata():
 	plt.savefig('rd2.png')
 
 
-def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz):
+def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
+				   filtermap=None):
+	if filtermap is None:
+		filtermap = {'i.MP9701': 'i'}
 	wcs = Tan(fn, 0)
 	x,y = wcs.radec2pixelxy(RA,DEC)
 	print 'x,y', x,y
@@ -170,10 +173,19 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz):
 	print 'w,mu,sig', w,mu,sig
 	psf = GaussianMixturePSF(w, mu, sig)
 
-	photocal = cf.CfhtPhotoCal(hdr=phdr, bandname='i')
+	if bandname is None:
+		# try looking up in filtermap.
+		filt = phdr['FILTER']
+		if filt in filtermap:
+			print 'Mapping filter', filt, 'to', filtermap[filt]
+			bandname = filtermap[filt]
+		else:
+			print 'No mapping found for filter', filt
+			bandname = flit
+
+	photocal = cf.CfhtPhotoCal(hdr=phdr, bandname=bandname)
 
 	filename = phdr['FILENAME'].strip()
-
 
 	(H,W) = image.shape
 	print 'Image shape', W, H
@@ -224,7 +236,9 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def get_tractor(RA, DEC, sz, cffns):
+def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None):
+	if sdssbands is None:
+		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
 
 	skies = []
@@ -232,7 +246,8 @@ def get_tractor(RA, DEC, sz, cffns):
 	print 'CFHT images:', cffns
 	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
-		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale, RA, DEC, sz)
+		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale, RA, DEC, sz,
+										   filtermap=filtermap)
 		tractor.addImage(cfimg)
 		skies.append((cfsky, cfstd))
 
@@ -245,15 +260,23 @@ def get_tractor(RA, DEC, sz, cffns):
 	print 'Filtering out run 206:', len(rcf)
 
 	# rcf = rcf[:16]
-	rcf = rcf[:4]
+	# rcf = rcf[:4]
 	# rcf = rcf[:1]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
+	i = 0
 	for r,c,f,ra,dec in rcf:
-		for band in 'i':
+		for band in sdssbands:
 			print 'Retrieving', r,c,f,band
+			fn = 'sdss-psf-%03i.png' % i
+			i += 1
+			print fn
 			im,info = st.get_tractor_image(r, c, f, band, psf='kl-gm', useMags=True,
-										   sdssobj=sdss, roiradecsize=(RA,DEC,S/2))
+										   sdssobj=sdss, roiradecsize=(RA,DEC,S/2),
+										   savepsfimg=fn)
+			print 'Image size', im.getWidth(), im.getHeight()
+			if im.getWidth() == 0 or im.getHeight() == 0:
+				continue
 			tractor.addImage(im)
 			skies.append((info['sky'], info['skysig']))
 
@@ -331,7 +354,7 @@ def read_cf_catalogs(RA, DEC, sz):
 
 	return Tstar, Tdisk, Tsph
 
-def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100):
+def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100, mags=['u','g','r','i','z']):
 	srcs = []
 	for t in Tdisk:
 		# xmodel_world == alphamodel_sky
@@ -344,7 +367,8 @@ def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100):
 		#print '    x,y', t.xmodel_image, t.ymodel_image
 		#print '    del', t.xmodel_image - x, t.ymodel_image - y
 		#print '    x,y', t.x_image, t.y_image
-		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), Mags(i=t.mag_disk, r=t.mag_disk),
+		m = Mags(order=mags, **dict([(k, t.mag_disk) for k in mags]))
+		src = DevGalaxy(RaDecPos(t.ra_disk, t.dec_disk), m,
 						GalaxyShape(t.disk_scale_world * 3600., t.disk_aspect_world,
 									t.disk_theta_world + 90.))
 		#print 'Adding source', src
@@ -353,7 +377,8 @@ def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100):
 		if t.mag_sph > magcut:
 			#print 'Skipping source with mag=', t.mag_sph
 			continue
-		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), Mags(i=t.mag_sph, r=t.mag_sph),
+		m = Mags(order=mags, **dict([(k, t.mag_sph) for k in mags]))
+		src = ExpGalaxy(RaDecPos(t.ra_sph, t.dec_sph), m,
 						GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
 									t.spheroid_theta_world + 90.))
 		#print 'Adding source', src
@@ -517,6 +542,8 @@ def main():
 					  help='Make more verbose')
 	parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
 					  help="Force re-running the given stage(s) -- don't read from pickle.")
+	parser.add_option('-s', '--stage', dest='stage', default=4, type=int,
+					  help="Run up to the given stage")
 	opt,args = parser.parse_args()
 
 	if opt.verbose == 0:
@@ -541,9 +568,13 @@ def main():
 	# Read image files and catalogs, make Tractor object.
 	def stage00(mp=None):
 		cffns = glob('cs82data/86*p-21-cr.fits')
-		tractor,skies = get_tractor(RA,DEC,sz, cffns)
+		# Don't map them to the same mag as SDSS i-band
+		filtermap = {'i.MP9701': 'i2'}
+		#sdssbands = ['u','g','r','i','z']
+		sdssbands = ['g','r','i']
+		tractor,skies = get_tractor(RA,DEC,sz, cffns, filtermap=filtermap, sdssbands=sdssbands)
 		Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
-		srcs = get_cf_sources(Tstar, Tdisk, Tsph)
+		srcs = get_cf_sources(Tstar, Tdisk, Tsph, mags=sdssbands + ['i2'])
 		tractor.addSources(srcs)
 		for im,(sky,skystd) in zip(tractor.getImages(), skies):
 			# for display purposes...
@@ -555,7 +586,9 @@ def main():
 		return dict(tractor=tractor, skies=skies)
 
 	def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
-				thaw_sdss=['a','d'], **kwargs):
+				#thaw_sdss=['a','d'],
+				thaw_sdss=[],
+				**kwargs):
 		print 'tractor', tractor
 		tractor.mp = mp
 		# For the initial WCS alignment, cut to brightish sources...
@@ -563,15 +596,20 @@ def main():
 		brightcat,nil = cut_bright(allsources)
 		tractor.setCatalog(brightcat)
 		print 'Cut to', len(brightcat), 'bright sources', brightcat.numberOfParams(), 'params'
-		for im in tractor.getImages():
+		allims = tractor.getImages()
+		fitims = []
+		for im in allims:
 			im.freezeParams('photocal', 'psf', 'sky')
 			if hasattr(im.wcs, 'crval1'):
 				# FitsWcs:
 				im.wcs.freezeAllBut(*thaw_wcs)
-			else:
+			elif len(thaw_sdss):
 				# SdssWcs: equivalent is 'a','d'
 				im.wcs.freezeAllBut(*thaw_sdss)
-		print tractor.images.numberOfParams(), 'image params'
+			else:
+				continue
+			fitims.append(im)
+		print len(tractor.getImages()), 'images', tractor.images.numberOfParams(), 'image params'
 		tractor.freezeParam('catalog')
 
 		lnp0 = tractor.getLogProb()
@@ -580,14 +618,13 @@ def main():
 
 		wcs0 = tractor.getParams()
 		# We will tweak the WCS parameters one image at a time...
-		allims = tractor.getImages()
 		tractor.images = Images()
 		# Do the work:
-		wcs1 = mp.map(tweak_wcs, [(tractor,im) for im in allims], wrap=True)
+		wcs1 = mp.map(tweak_wcs, [(tractor,im) for im in fitims], wrap=True)
 		# Reset the images
-		tractor.images = allims
+		tractor.setImages(allims)
 		# Save the new WCS params!
-		for im,p in zip(allims,wcs1):
+		for im,p in zip(fitims,wcs1):
 			im.setParams(p)
 		lnp1 = tractor.getLogProb()
 		print 'Lnprob', lnp1
@@ -615,7 +652,8 @@ def main():
 			#print 'Params:', im.getParamNames()
 		stage01(tractor=tractor, mp=mp, step0=2,
 				thaw_wcs=['crval1', 'crval2', 'cd1_1', 'cd1_2', 'cd2_1', 'cd2_2'],
-				thaw_sdss=['a','d','b','c','e','f'], **kwargs)
+				#thaw_sdss=['a','d','b','c','e','f'],
+				**kwargs)
 		return dict(tractor=tractor)
 
 	def stage03(tractor=None, mp=None, **kwargs):
@@ -869,7 +907,7 @@ def main():
 		pickle_to_file(R, pfn)
 		return R
 
-	runstage(4)
+	runstage(opt.stage)
 
 	sys.exit(0)
 

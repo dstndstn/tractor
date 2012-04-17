@@ -29,10 +29,11 @@
 		int ix, iy;
 		int NX, NY;
 		const int D = 2;
-		double* Z;
-		double* scale, *ivar;
+		double* Z = NULL;
+		double* scale = NULL, *ivar = NULL;
 		int step;
 		double tpd;
+		int result;
 
 		PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
 		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
@@ -131,7 +132,12 @@
 				double* I = ivar + k*D*D;
 				double det;
 				det = V[0]*V[3] - V[1]*V[2];
-				assert(det > 0);
+				if (det <= 0.0) {
+					printf("det = %g\n", det);
+					ERR("Got non-positive determinant\n");
+					result = -1;
+					goto cleanup;
+				}
 				I[0] =  V[3] / det;
 				I[1] = -V[1] / det;
 				I[2] = -V[2] / det;
@@ -227,11 +233,13 @@
 			for (k=0; k<K; k++)
 				amp[k] = wsum[k];
 		}
+		result = 0;
 		
+	cleanup:
 		free(Z);
 		free(scale);
 		free(ivar);
-		return 0;
+		return result;
 	}
 
 

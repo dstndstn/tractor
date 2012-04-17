@@ -70,8 +70,7 @@ class Image(MultiParams):
 		wcs = kwargs.pop('wcs', None)
 		photocal = kwargs.pop('photocal', None)
 		super(Image,self).__init__(psf, wcs, photocal, sky)
-
-		print 'Image:', self.wcs, self.psf, self.sky, self.photocal
+		#print 'Image:', self.wcs, self.psf, self.sky, self.photocal
 
 	def __str__(self):
 		return 'Image ' + str(self.name)
@@ -99,9 +98,6 @@ class Image(MultiParams):
 		return self.shape[1]
 	def getHeight(self):
 		return self.shape[0]
-
-	#def __hash__(self):
-	#	return hash(self.hashkey())
 
 	def hashkey(self):
 		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
@@ -425,6 +421,9 @@ class Tractor(MultiParams):
 	def setCatalog(self, srcs):
 		# FIXME -- ensure that "srcs" is a Catalog?	 Or duck-type it?
 		self.catalog = srcs
+
+	def setImages(self, ims):
+		self.images = ims
 
 	def addImage(self, img):
 		self.images.append(img)
