@@ -357,9 +357,15 @@ def getmodelimagestep((tr, j, k, p0, step)):
 	im.setParam(k, p0)
 	return mod
 def getmodelimagefunc((tr, imj)):
+	print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
 	return tr.getModelImage(imj)
 def getsrcderivs((src, img)):
 	return src.getParamDerivatives(img)
+
+def getmodelimagefunc2((tr, im)):
+	print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
+	#tr.images = Images(im)
+	return tr.getModelImage(im)
 
 class Tractor(MultiParams):
 	@staticmethod
@@ -382,6 +388,9 @@ class Tractor(MultiParams):
 		s = 'Tractor with %i sources and %i images' % (len(self.catalog), len(self.images))
 		s += ' (' + ', '.join([im.name for im in self.images]) + ')'
 		return s
+
+	def is_multiproc(self):
+		return self.mp.pool is not None
 
 	def _map(self, func, iterable):
 		return self.mp.map(func, iterable)
@@ -964,10 +973,14 @@ class Tractor(MultiParams):
 	'''
 	
 	def getModelImages(self):
-		mods = []
-		for img in self.images:
-			mod = self.getModelImage(img)
-			mods.append(mod)
+		if self.is_multiproc():
+			# avoid shipping my images...
+			allimages = self.getImages()
+			self.images = []
+			mods = self._map(getmodelimagefunc2, [(self, im) for im in allimages])
+			self.images = allimages
+		else:
+			mods = [self.getModelImage(img) for img in self.images]
 		return mods
 
 	def clearCache(self):

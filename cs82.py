@@ -716,7 +716,7 @@ def main():
 			dlnps = dlnps2
 		return dict(tractor=tractor, steps=steps)
 
-	def stage03(tractor=None, mp=None, steps=None, **kwargs):
+	def stage03old2(tractor=None, mp=None, steps=None, **kwargs):
 		print 'Tractor:', tractor
 		tractor.mp = mp
 		tractor.freezeParam('images')
@@ -878,11 +878,14 @@ def main():
 
 
 	# stage 3 replacement: "quick" fit of bright sources to one CFHT image
-	def stage06(tractor=None, mp=None, steps=None, **kwargs):
+	def stage03(tractor=None, mp=None, steps=None, **kwargs):
 		print 'Tractor:', tractor
 		tractor.mp = mp
 		tractor.freezeParam('images')
 		tractor.catalog.thawParamsRecursive('*')
+		print 'Getting initial logprob...'
+		alllnp0 = tractor.getLogProb()
+		print 'Initial log-prob (all images, all sources)', alllnp0
 		allsources = tractor.getCatalog()
 		brightcat,Ibright = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
@@ -921,7 +924,7 @@ def main():
 		rstate = None
 		alllnp = []
 		allp = []
-		for step in range(1, 101):
+		for step in range(1, 201):
 			allp.append(pp)
 			if step % 10 == 0:
 				ibest = np.argmax(lnp)
@@ -982,9 +985,11 @@ def main():
 					print 'dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)])
 					lnp[I] = lnp2
 		tractor.setCatalog(allsources)
+		tractor.setImages(allimages)
+		alllnp1 = tractor.getLogProb()
+		print 'Initial log-prob (all images, all sources)', alllnp0
+		print 'Final   log-prob (all images, all sources)', alllnp1
 		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
-		
-
 		
 
 	def runstage(stage):
@@ -1006,7 +1011,8 @@ def main():
 		#F = locals()['stage%02i' % stage]
 		#F = globals()['stage%02i' % stage]
 		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
-			   6: stage06 }
+			   }
+			   #6: stage06 }
 		F = ss[stage]
 		P.update(mp=mp)
 		R = F(**P)
