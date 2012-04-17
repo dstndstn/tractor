@@ -499,14 +499,12 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 			plt.yticks([],[])
 			mysavefig('chisum2-%02i-%02i.png' % (i,step))
 
-def plots(tractor, zrs, plotnames, step, pp=None, mp=None, ibest=None):
+def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None):
 	args = []
-	for i in range(len(tractor.getImages())):
-		#zr = zrs[i]
-		if zrs is None:
-			zr = tractor.getImage(i).zr
-		else:
-			zr = zrs[i]
+	if imis is None:
+		imis = range(len(tractor.getImages()))
+	for i in imis:
+		zr = tractor.getImage(i).zr
 		args.append((tractor, i, zr, plotnames, step, pp, ibest))
 	if mp is None:
 		map(plot1, args)
@@ -556,6 +554,9 @@ def main():
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
 
+	plotims = [0,1,2,3, 7,8,9]
+	plotsa = dict(imis=plotims, mp=mp)
+
 	def cut_bright(cat, magcut=24):
 		brightcat = Catalog()
 		I = []
@@ -582,7 +583,7 @@ def main():
 			im.skystd = skystd
 			im.zr = np.array([-1.,+20.]) * skystd + sky
 			#im.zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
-		plots(tractor, None, ['data'], 0)
+		plots(tractor, ['data'], 0, **plotsa)
 		return dict(tractor=tractor, skies=skies)
 
 	def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
@@ -614,9 +615,11 @@ def main():
 
 		lnp0 = tractor.getLogProb()
 		print 'Lnprob', lnp0
-		plots(tractor, None, ['modsum', 'chisum'], step0 + 0, mp=mp)
+		plots(tractor, ['modsum', 'chisum'], step0 + 0, **plotsa)
 
-		wcs0 = tractor.getParams()
+		#wcs0 = tractor.getParams()
+		wcs0 = np.hstack([im.getParams() for im in fitims])
+		print 'Orig WCS:', wcs0
 		# We will tweak the WCS parameters one image at a time...
 		tractor.images = Images()
 		# Do the work:
@@ -627,12 +630,13 @@ def main():
 		for im,p in zip(fitims,wcs1):
 			im.setParams(p)
 		lnp1 = tractor.getLogProb()
-		print 'Lnprob', lnp1
+		print 'Before lnprob', lnp0
+		print 'After  lnprob', lnp1
 		wcs1 = np.hstack(wcs1)
 		print 'Orig WCS:', wcs0
 		print 'Opt  WCS:', wcs1
 		print 'dWCS (arcsec):', (wcs1 - wcs0) * 3600.
-		plots(tractor, None, ['modsum', 'chisum'], step0 + 1, None, mp=mp)
+		plots(tractor, ['modsum', 'chisum'], step0 + 1, None, **plotsa)
 
 		# Re-freeze WCS
 		for im in tractor.getImages():
@@ -780,8 +784,8 @@ def main():
 
 			if step % 10 == 0:
 				ibest = np.argmax(lnp)
-				plots(tractor, None, ['modsum', 'chisum', 'modbest', 'chibest'],
-					  step, pp=pp, mp=mp, ibest=ibest)
+				plots(tractor, ['modsum', 'chisum', 'modbest', 'chibest'],
+					  step, pp=pp, mp=mp, ibest=ibest, **plotsa)
 
 			print 'Run MCMC step', step
 			kwargs = dict(storechain=False)
@@ -870,8 +874,8 @@ def main():
 		lnp = mp.map(tractor, pp)
 		ibest = np.argmax(lnp)
 		step = 100
-		plots(tractor, None, ['modsum', 'chisum', 'modbest', 'chibest'],
-			  step, pp=pp, mp=mp, ibest=ibest)
+		plots(tractor, ['modsum', 'chisum', 'modbest', 'chibest'],
+			  step, pp=pp, ibest=ibest, **plotsa)
 
 		pnames = np.array(tractor.getParamNames())
 		st = np.std(pp, axis=0)
