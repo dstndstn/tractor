@@ -503,7 +503,11 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None):
 	args = []
 	if imis is None:
 		imis = range(len(tractor.getImages()))
+	NI = len(tractor.getImages())
 	for i in imis:
+		if i >= NI:
+			print 'Skipping plot of image', i, 'with N images', NI
+			continue
 		zr = tractor.getImage(i).zr
 		args.append((tractor, i, zr, plotnames, step, pp, ibest))
 	if mp is None:
@@ -712,7 +716,6 @@ def main():
 			dlnps = dlnps2
 		return dict(tractor=tractor, steps=steps)
 
-
 	def stage03(tractor=None, mp=None, steps=None, **kwargs):
 		print 'Tractor:', tractor
 		tractor.mp = mp
@@ -874,6 +877,116 @@ def main():
 			print '  ', nm, 'mean', pmn, 'std', pst
 
 
+	# stage 3 replacement: "quick" fit of bright sources to one CFHT image
+	def stage06(tractor=None, mp=None, steps=None, **kwargs):
+		print 'Tractor:', tractor
+		tractor.mp = mp
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		allsources = tractor.getCatalog()
+		brightcat,Ibright = cut_bright(allsources, magcut=23)
+		tractor.setCatalog(brightcat)
+		print ' Cut to:', tractor.getCatalog()
+		allimages = tractor.getImages()
+		tractor.setImages(Images(allimages[0]))
+		print ' Cut to:', tractor
+
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+
+		p0 = np.array(tractor.getParams())
+		pnames = np.array(tractor.getParamNames())
+
+		ndim = len(p0)
+		nw = 32
+
+		sampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
+										live_dangerously=True)
+		mhsampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
+										  live_dangerously=True)
+
+		# Scale step sizes until we get small lnp changes
+		psteps = 1e-7 * np.array(tractor.getStepSizes())
+		while True:
+			pp = emcee.EnsembleSampler.sampleBall(p0, psteps, nw)
+			# Put one walker at the nominal position.
+			pp[0,:] = p0
+			lnp = np.array(mp.map(tractor, pp))
+			dlnp = lnp - np.max(lnp)
+			print 'dlnp min', np.min(dlnp), 'median', np.median(dlnp)
+			if np.median(dlnp) > -10:
+				break
+			psteps *= 0.1
+
+		rstate = None
+		alllnp = []
+		allp = []
+		for step in range(1, 101):
+			allp.append(pp)
+			if step % 10 == 0:
+				ibest = np.argmax(lnp)
+				plots(tractor, ['modsum', 'chisum', 'modbest', 'chibest'],
+					  step, pp=pp, ibest=ibest, **plotsa)
+			print 'Run MCMC step', step
+			kwargs = dict(storechain=False)
+			# Alternate 5 steps of stretch move, 5 steps of MH.
+			t0 = Time()
+			if step % 10 >= 5:
+				print 'Using MH proposal'
+				kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(psteps)
+				pp,lnp,rstate = mhsampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+			else:
+				pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+			t_mcmc = (Time() - t0)
+			print 'Best lnprob:', np.max(lnp)
+			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
+			print 'MCMC took', t_mcmc, 'sec'
+
+			print 'Running acceptance fraction: emcee', sampler.acceptance_fraction
+			print 'mean', np.mean(sampler.acceptance_fraction)
+			print 'Running acceptance fraction: MH', mhsampler.acceptance_fraction
+			print 'mean', np.mean(mhsampler.acceptance_fraction)
+
+			# Tweak step sizes...
+			print 'Walker stdevs / psteps:'
+			st = np.std(pp, axis=0)
+			f = st / np.abs(psteps)
+			print '  median', np.median(f)
+			print '  range', np.min(f), np.max(f)
+			# Adjust the "psteps" toward the stdev by small factors.
+			# Note that this is per-parameter.
+			mx = 1.2
+			tweak = np.clip(f, 1./mx, mx)
+			psteps *= tweak
+			print 'After tweaking:'
+			f = st / np.abs(psteps)
+			print '  median', np.median(f)
+			print '  range', np.min(f), np.max(f)
+			if step % 2 == 0:
+				# Resample walkers that are doing badly
+				bestlnp = np.max(lnp)
+				dlnp = lnp - bestlnp
+				cut = -20
+				I = np.flatnonzero(dlnp < cut)
+				print len(I), 'walkers have lnprob more than', -cut, 'worse than the best'
+				if len(I):
+					ok = np.flatnonzero(dlnp >= cut)
+					print 'Resampling from', len(ok), 'good walkers'
+					# Sample another walker
+					J = np.random.randint(len(ok), size=len(I))
+					lnp0 = lnp[I]
+					lnp1 = lnp[J]
+					for i,j in zip(I,J):
+						pp[i,:] = emcee.EnsembleSampler.sampleBall(pp[j,:], psteps, 1)
+					lnp2 = mp.map(tractor, pp[I])
+					print 'dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)])
+					lnp[I] = lnp2
+		tractor.setCatalog(allsources)
+		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
+		
+
+		
+
 	def runstage(stage):
 		print 'Runstage', stage
 		pfn = 'tractor%02i.pickle' % stage
@@ -892,7 +1005,8 @@ def main():
 		print 'Running stage', stage
 		#F = locals()['stage%02i' % stage]
 		#F = globals()['stage%02i' % stage]
-		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04 }
+		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
+			   6: stage06 }
 		F = ss[stage]
 		P.update(mp=mp)
 		R = F(**P)
