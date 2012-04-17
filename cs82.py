@@ -660,17 +660,6 @@ def main():
 				**kwargs)
 		return dict(tractor=tractor)
 
-	def stage03(tractor=None, mp=None, **kwargs):
-		print 'Tractor:', tractor
-		tractor.freezeParam('images')
-		tractor.catalog.thawParamsRecursive('*')
-		allsources = tractor.getCatalog()
-		brightcat,nil = cut_bright(allsources)
-		tractor.setCatalog(brightcat)
-		print ' Cut to:', tractor.getCatalog()
-	
-
-
 	def stage03old(tractor=None, mp=None, **kwargs):
 		print 'Tractor:', tractor
 		#print ' catalog:', len(tractor.getCatalog()), 'sources',
@@ -729,7 +718,6 @@ def main():
 		tractor.mp = mp
 		tractor.freezeParam('images')
 		tractor.catalog.thawParamsRecursive('*')
-
 		# Am I going to be better to literally cut the catalog, or freeze faint sources?
 		allsources = tractor.getCatalog()
 		brightcat,Ibright = cut_bright(allsources, magcut=23)
@@ -763,6 +751,7 @@ def main():
 		mhsampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
 										  live_dangerously=True)
 
+		# Scale step sizes until we get small lnp changes
 		psteps = 1e-7 * np.array(tractor.getStepSizes())
 		while True:
 			pp = emcee.EnsembleSampler.sampleBall(p0, psteps, nw)
@@ -785,7 +774,7 @@ def main():
 			if step % 10 == 0:
 				ibest = np.argmax(lnp)
 				plots(tractor, ['modsum', 'chisum', 'modbest', 'chibest'],
-					  step, pp=pp, mp=mp, ibest=ibest, **plotsa)
+					  step, pp=pp, ibest=ibest, **plotsa)
 
 			print 'Run MCMC step', step
 			kwargs = dict(storechain=False)
