@@ -863,7 +863,7 @@ def main():
 		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
 
 
-	def stage04(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
+	def stage04old(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
 				Ibright3=None, **kwargs):
 		print 'Tractor:', tractor
 		tractor.mp = mp
@@ -903,14 +903,11 @@ def main():
 		tractor.mp = mp
 		tractor.freezeParam('images')
 		tractor.catalog.thawParamsRecursive('*')
-		#print 'Getting initial logprob...'
-		#alllnp0 = tractor.getLogProb()
-		#print 'Initial log-prob (all images, all sources)', alllnp0
-		params0 = tractor.getParams()
+		params0 = np.array(tractor.getParams()).copy()
 		allsources = tractor.getCatalog()
 		brightcat,Ibright = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
-		print ' Cut to:', tractor.getCatalog()
+		bparams0 = np.array(tractor.getParams()).copy()
 		allimages = tractor.getImages()
 		tractor.setImages(Images(allimages[0]))
 		print ' Cut to:', tractor
@@ -919,7 +916,6 @@ def main():
 		plotsa = dict(imis=plotims, mp=mp)
 
 		alllnp = []
-
 		for step in xrange(100):
 			print 'Run optimization step', step
 			t0 = Time()
@@ -938,7 +934,7 @@ def main():
 					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 			if alpha == 0.:
 				break
-		
+
 		tractor.catalog.freezeAllParams()
 		step -= 1
 		for srci in xrange(len(tractor.catalog)):
@@ -971,9 +967,18 @@ def main():
 					tractor.catalog.freezeParam(srci)
 					break
 
-		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
+		tractor.catalog.thawParamsRecursive('*')
+		bparams1 = np.array(tractor.getParams()).copy()
+		tractor.setCatalog(allsources)
+		tractor.setImages(allimages)
+		params1 = np.array(tractor.getParams()).copy()
+		#print 'dparams for bright sources:', bparams1 - bparams0
+		#print 'dparams for all sources:', params1 - params0
+		return dict(tractor=tractor, alllnp3=alllnp, Ibright3=Ibright)
 
 
+	def stage04(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
+				Ibright3=None, **kwargs):
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
 
