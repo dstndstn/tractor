@@ -342,6 +342,9 @@ class Catalog(MultiParams):
 	# def numberOfParams(self):
 	#  '''Returns the number of active parameters in all sources'''
 
+	def getThawedSources(self):
+		return self._getActiveSubs()
+
 	def getNamedParamName(self, j):
 		return 'source%i' % j
 
@@ -564,9 +567,11 @@ class Tractor(MultiParams):
 		mod1s = self._map_async(getmodelimagestep, reversed(args))
 
 		# Next, derivs for the sources.
-		srcs = self.catalog
 		if self.isParamFrozen('catalog'):
 			srcs = []
+		else:
+			srcs = list(self.catalog.getThawedSources())
+			print len(srcs), 'thawed sources'
 		args = []
 		for j,src in enumerate(srcs):
 			for i,img in enumerate(self.images):

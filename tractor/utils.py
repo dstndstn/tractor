@@ -355,6 +355,8 @@ class MultiParams(Params, NamedParams):
 		self.subs = self.subs[:i] + self.subs[i+1:]
 		self.liquid = self.liquid[:i] + self.liquid[i+1:]
 		#self.subs.remove(x)
+
+	# Note that these *don't* pay attention to thawed/frozen status... Mistake?
 	def __len__(self):
 		return len(self.subs)
 	def __getitem__(self, key):

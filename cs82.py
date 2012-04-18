@@ -574,11 +574,19 @@ def main():
 	def cut_bright(cat, magcut=24):
 		brightcat = Catalog()
 		I = []
+		mags = []
 		for i,src in enumerate(cat):
-			if src.getBrightness().i < magcut:
-				brightcat.append(src)
+			mag = src.getBrightness().i
+			if mag < magcut:
+				#brightcat.append(src)
 				I.append(i)
-		return brightcat, np.array(I)
+				mags.append(mag)
+		J = np.argsort(mags)
+		I = np.array(I)
+		I = I[J]
+		for i in I:
+			brightcat.append(cat[i])
+		return brightcat, I
 
 	# Read image files and catalogs, make Tractor object.
 	def stage00(mp=None):
@@ -909,6 +917,62 @@ def main():
 
 		plotims = [0,]
 		plotsa = dict(imis=plotims, mp=mp)
+
+		alllnp = []
+
+		for step in xrange(100):
+			print 'Run optimization step', step
+			t0 = Time()
+			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+			t_opt = (Time() - t0)
+			print 'alpha', alpha
+			print 'Optimization took', t_opt, 'sec'
+			lnp0 = tractor.getLogProb()
+			print 'Lnprob', lnp0
+			alllnp.append([lnp0])
+			if True:
+				pp = np.array([tractor.getParams()])
+				ibest = 0
+				plots(tractor,
+					  ['modbest', 'chibest', 'lnps'],
+					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+			if alpha == 0.:
+				break
+		
+		tractor.catalog.freezeAllParams()
+		step -= 1
+		for srci in xrange(len(tractor.catalog)):
+			print 'srci', srci
+			tractor.catalog.thawParam(srci)
+			print tractor.numberOfParams(), 'active parameters'
+			for nm in tractor.getParamNames():
+				print '  ', nm
+			print 'Source:', tractor.catalog[srci]
+			while True:
+				step += 1
+				print 'Run optimization step', step
+				t0 = Time()
+				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+				t_opt = (Time() - t0)
+				print 'alpha', alpha
+				print 'Optimization took', t_opt, 'sec'
+				lnp0 = tractor.getLogProb()
+				print 'Lnprob', lnp0
+				alllnp.append([lnp0])
+				if step%10 == 0:
+					print 'Plots...'
+					pp = np.array([tractor.getParams()])
+					ibest = 0
+					plots(tractor,
+						  ['modbest', 'chibest', 'lnps'],
+						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+					print 'Done plots.'
+				if alpha == 0.:
+					tractor.catalog.freezeParam(srci)
+					break
+
+		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
+
 
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
