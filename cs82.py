@@ -499,7 +499,17 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 			plt.yticks([],[])
 			mysavefig('chisum2-%02i-%02i.png' % (i,step))
 
-def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None):
+def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None):
+	if 'lnps' in plotnames:
+		plotnames.remove('lnps')
+		plt.figure(figsize=(6,6))
+		plt.clf()
+		plotpos0 = [0.15, 0.15, 0.84, 0.80]
+		plt.gca().set_position(plotpos0)
+		for s,lnps in enumerate(alllnp):
+			plt.plot(np.zeros_like(lnps)+s, lnps, 'r.')
+		plt.savefig('lnps-%02i.png' % step)
+
 	args = []
 	if imis is None:
 		imis = range(len(tractor.getImages()))
@@ -795,10 +805,12 @@ def main():
 			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
 			print 'MCMC took', t_mcmc, 'sec'
 
-			print 'Running acceptance fraction: emcee', sampler.acceptance_fraction
-			print 'mean', np.mean(sampler.acceptance_fraction)
-			print 'Running acceptance fraction: MH', mhsampler.acceptance_fraction
-			print 'mean', np.mean(mhsampler.acceptance_fraction)
+			if sampler.iterations:
+				print 'Running acceptance fraction: emcee', sampler.acceptance_fraction
+				print 'mean', np.mean(sampler.acceptance_fraction)
+			if mhsampler.iterations:
+				print 'Running acceptance fraction: MH', mhsampler.acceptance_fraction
+				print 'mean', np.mean(mhsampler.acceptance_fraction)
 
 			# Tweak step sizes...
 			print 'Walker stdevs / psteps:'
@@ -883,9 +895,10 @@ def main():
 		tractor.mp = mp
 		tractor.freezeParam('images')
 		tractor.catalog.thawParamsRecursive('*')
-		print 'Getting initial logprob...'
-		alllnp0 = tractor.getLogProb()
-		print 'Initial log-prob (all images, all sources)', alllnp0
+		#print 'Getting initial logprob...'
+		#alllnp0 = tractor.getLogProb()
+		#print 'Initial log-prob (all images, all sources)', alllnp0
+		params0 = tractor.getParams()
 		allsources = tractor.getCatalog()
 		brightcat,Ibright = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
@@ -909,7 +922,8 @@ def main():
 										  live_dangerously=True)
 
 		# Scale step sizes until we get small lnp changes
-		psteps = 1e-7 * np.array(tractor.getStepSizes())
+		stepscale = 1e-7
+		psteps = stepscale * np.array(tractor.getStepSizes())
 		while True:
 			pp = emcee.EnsembleSampler.sampleBall(p0, psteps, nw)
 			# Put one walker at the nominal position.
@@ -920,52 +934,26 @@ def main():
 			if np.median(dlnp) > -10:
 				break
 			psteps *= 0.1
+			stepscale *= 0.1
+
+		stepscales = np.zeros_like(psteps) + stepscale
 
 		rstate = None
 		alllnp = []
 		allp = []
 		for step in range(1, 201):
-			allp.append(pp)
+			allp.append(pp.copy())
+			alllnp.append(lnp.copy())
 			if step % 10 == 0:
 				ibest = np.argmax(lnp)
-				plots(tractor, ['modsum', 'chisum', 'modbest', 'chibest'],
-					  step, pp=pp, ibest=ibest, **plotsa)
+				plots(tractor, #['modsum', 'chisum', 'modbest', 'chibest', 'lnps'],
+					  ['modbest', 'chibest', 'lnps'],
+					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 			print 'Run MCMC step', step
 			kwargs = dict(storechain=False)
 			# Alternate 5 steps of stretch move, 5 steps of MH.
 			t0 = Time()
-			if step % 10 >= 5:
-				print 'Using MH proposal'
-				kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(psteps)
-				pp,lnp,rstate = mhsampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-			else:
-				pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
-			t_mcmc = (Time() - t0)
-			print 'Best lnprob:', np.max(lnp)
-			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
-			print 'MCMC took', t_mcmc, 'sec'
-
-			print 'Running acceptance fraction: emcee', sampler.acceptance_fraction
-			print 'mean', np.mean(sampler.acceptance_fraction)
-			print 'Running acceptance fraction: MH', mhsampler.acceptance_fraction
-			print 'mean', np.mean(mhsampler.acceptance_fraction)
-
-			# Tweak step sizes...
-			print 'Walker stdevs / psteps:'
-			st = np.std(pp, axis=0)
-			f = st / np.abs(psteps)
-			print '  median', np.median(f)
-			print '  range', np.min(f), np.max(f)
-			# Adjust the "psteps" toward the stdev by small factors.
-			# Note that this is per-parameter.
-			mx = 1.2
-			tweak = np.clip(f, 1./mx, mx)
-			psteps *= tweak
-			print 'After tweaking:'
-			f = st / np.abs(psteps)
-			print '  median', np.median(f)
-			print '  range', np.min(f), np.max(f)
-			if step % 2 == 0:
+			if step % 10 in [4, 9]:
 				# Resample walkers that are doing badly
 				bestlnp = np.max(lnp)
 				dlnp = lnp - bestlnp
@@ -976,16 +964,84 @@ def main():
 					ok = np.flatnonzero(dlnp >= cut)
 					print 'Resampling from', len(ok), 'good walkers'
 					# Sample another walker
-					J = np.random.randint(len(ok), size=len(I))
+					J = ok[np.random.randint(len(ok), size=len(I))]
 					lnp0 = lnp[I]
 					lnp1 = lnp[J]
-					for i,j in zip(I,J):
-						pp[i,:] = emcee.EnsembleSampler.sampleBall(pp[j,:], psteps, 1)
-					lnp2 = mp.map(tractor, pp[I])
+					print 'J', J.shape, J
+					#print 'lnp0', lnp0.shape, lnp0
+					#print 'lnp1', lnp1.shape, lnp1
+					#print 'pp[J,:]', pp[J,:].shape
+					#print 'psteps', psteps.shape
+					#print 'rand', np.random.normal(size=(len(J),len(psteps))).shape
+					ppnew = pp[J,:] + psteps * np.random.normal(size=(len(J),len(psteps)))
+					#print 'ppnew', ppnew.shape
+					lnp2 = np.array(mp.map(tractor, ppnew))
+					#print 'lnp2', lnp2.shape, lnp2
 					print 'dlnps', ', '.join(['%.1f' % d for d in lnp2 - np.max(lnp)])
-					lnp[I] = lnp2
+					# M-H acceptance rule (from original position, not resampled)
+					acc = emcee.EnsembleSampler.mh_accept(lnp0, lnp2)
+					dlnp = lnp2[acc] - lnp[I[acc]]
+					lnp[I[acc]] = lnp2[acc]
+					pp[I[acc],:] = ppnew[acc,:]
+					print 'Accepted', sum(acc), 'resamplings'
+					print '  with dlnp mean', np.mean(dlnp), 'median', np.median(dlnp)
+					# FIXME: Should record the acceptance rate of this...
+
+			elif step % 10 >= 5:
+				print 'Using MH proposal'
+				kwargs['mh_proposal'] = emcee.MH_proposal_axisaligned(psteps)
+				pp,lnp,rstate = mhsampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+				print 'Running acceptance fraction: MH'#, mhsampler.acceptance_fraction
+				print 'after', mhsampler.iterations, 'iterations'
+				print 'mean', np.mean(mhsampler.acceptance_fraction)
+			else:
+				pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+				print 'Running acceptance fraction: emcee'#, sampler.acceptance_fraction
+				print 'after', sampler.iterations, 'iterations'
+				print 'mean', np.mean(sampler.acceptance_fraction)
+			t_mcmc = (Time() - t0)
+			print 'Best lnprob:', np.max(lnp)
+			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
+			print 'MCMC took', t_mcmc, 'sec'
+
+			# Tweak step sizes...
+			print 'Walker stdevs / psteps:'
+			st = np.std(pp, axis=0)
+			f = st / np.abs(psteps)
+			print '  median', np.median(f)
+			print '  range', np.min(f), np.max(f)
+			if step % 10 == 9:
+				# After this batch of MH updates, tweak step sizes.
+				acc = np.mean(mhsampler.acceptance_fraction)
+				tweak = 2.
+				if acc < 0.33:
+					psteps /= tweak
+					stepscales /= tweak
+					print 'Acceptance rate too low: decreasing step sizes'
+				elif acc > 0.66:
+					psteps *= tweak
+					stepscales *= tweak
+					print 'Acceptance rate too high: increasing step sizes'
+				print 'log-mean step scales', np.exp(np.mean(np.log(stepscales)))
+
+			# # Note that this is per-parameter.
+			# mx = 1.2
+			# tweak = np.clip(f, 1./mx, mx)
+			# psteps *= tweak
+			# print 'After tweaking:'
+			# f = st / np.abs(psteps)
+			# print '  median', np.median(f)
+			# print '  range', np.min(f), np.max(f)
 		tractor.setCatalog(allsources)
 		tractor.setImages(allimages)
+		print 'Checking all-image, all-source logprob...'
+		params1 = tractor.getParams()
+		print 'Getting initial logprob...'
+		tractor.setParams(params0)
+		alllnp0 = tractor.getLogProb()
+		print 'Initial log-prob (all images, all sources)', alllnp0
+		print 'Getting final logprob...'
+		tractor.setParams(params1)
 		alllnp1 = tractor.getLogProb()
 		print 'Initial log-prob (all images, all sources)', alllnp0
 		print 'Final   log-prob (all images, all sources)', alllnp1
