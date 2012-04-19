@@ -210,7 +210,10 @@ at 20611
 optimization (first of all sources, then of individual sources) blows away sampling.
 at 20612
 
+python -u cs82.py -s 4 -f 4 > log4 2>&1 &
+at 20613
 
+#python -u cs82.py -s 5 -f 5 --threads 8 > log5 2>&1 &
 
 
 
