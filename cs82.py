@@ -573,6 +573,7 @@ def main():
 	import debugpool
 	global dpool
 	dpool = debugpool.DebugPool(opt.threads)
+	Time.add_measurement(DebugPoolMeas(dpool))
 	mp = multiproc(pool=dpool)
 	#mp = multiproc(opt.threads)
 
@@ -1082,29 +1083,6 @@ def main():
 		step, alllnp = optsourcestogether(tractor, step)
 		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 		alllnp += alllnp2
-
-		# if True:
-		# 	tractor.catalog.freezeAllParams()
-		# 	srci = 193
-		# 	tractor.catalog.thawParam(srci)
-		# 	print tractor.numberOfParams(), 'active parameters'
-		# 	for nm in tractor.getParamNames():
-		# 		print '  ', nm
-		# 	print 'Source:', tractor.catalog[srci]
-		# 	while True:
-		# 		step += 1
-		# 		print 'Run optimization step', step
-		# 		t0 = Time()
-		# 		dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-		# 		t_opt = (Time() - t0)
-		# 		print 'alpha', alpha
-		# 		print 'Optimization took', t_opt, 'sec'
-		# 		print '  ', tractor.catalog[srci]
-		# 		lnp0 = tractor.getLogProb()
-		# 		print 'Lnprob', lnp0
-		# 		if alpha == 0.:
-		# 			tractor.catalog.freezeParam(srci)
-		# 			break
 
 		tractor.catalog.thawParamsRecursive('*')
 		return dict(tractor=tractor, alllnp5=alllnp)

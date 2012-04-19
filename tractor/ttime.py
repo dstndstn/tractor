@@ -1,11 +1,18 @@
 
 class Time(object):
+	@staticmethod
+	def add_measurement(m):
+		Time.measurements.append(m)
+	measurements = []
+
 	def __init__(self):
 		import datetime
 		from time import clock
 		self.wall = datetime.datetime.now()
 		#self.cpu = time.clock()
 		self.cpu = clock()
+		self.meas = [m() for m in Time.measurements]
+
 	def __sub__(self, other):
 		dwall = (self.wall - other.wall)
 		# python2.7
@@ -14,6 +21,8 @@ class Time(object):
 		else:
 			dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
 		dcpu = (self.cpu - other.cpu)
-		return '%f wall, %f cpu' % (dwall, dcpu)
+
+		meas = [m.format_diff(om) for m,om in zip(self.meas, other.meas)]
+		return ', '.join(['%f wall' % dwall, '%f cpu' % dcpu] + meas)
 
 

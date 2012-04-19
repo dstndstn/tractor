@@ -216,7 +216,7 @@ from multiprocessing.synchronize import Lock
 
 class BeanCounter(object):
 	def __init__(self):
-		self.cpu = 0
+		self.cpu = 0.
 		self.lock = Lock()
 	### LOCKING
 	def add_cpu(self, dt):
@@ -234,89 +234,69 @@ class BeanCounter(object):
 	def __str__(self):
 		return 'CPU time: %g s' % self.get_cpu()
 
-# class DebugMapResult(mp.pool.MapResult):
-#	def __init__(self, *args):
-#		self.cpu = 0.
-#		super(DebugMapResult, self).__init__(*args)
-#		
-#	def get(self, **kwargs):
-#		result = super(DebugMapResult, self).get(**kwargs)
-#		#print 'Result:', result
-#		#result,dt = result
-#		#print 'Result took', dt, 'seconds of CPU'
-#		return result
-# 
-#	def _set(self, i, obj):
-#		#print '_set', i, obj
-#		succ, (val,dt) = obj
-#		obj = (succ, val)
-#		#print 'dt', dt
-#		self.cpu += dt
-#		return super(DebugMapResult, self)._set(i, obj)
-
 Pool = mp.pool.Pool
 mapstar = mp.pool.mapstar
 
-class DebugPool(mp.pool.Pool):
-	def __del__(self):
-		print 'DebugPool __del__:'
-		#print '  inqueue', self._inqueue.stats()
-		#print '  outqueue', self._outqueue.stats()
-		#Pool.__del__(self)
-		S1 = self._inqueue.stats()
-		S2 = self._outqueue.stats()
-		S = [s1+s2 for s1,s2 in zip(S1,S2)]
-		print S
-		#print S[:3]
-		(po,pb,pt, uo,ub,ut) = S
-		print '	 pickled %i objs, %g MB, %g s CPU' % (po,pb*1e-6,pt)
-		print 'unpickled %i objs, %g MB, %g s CPU' % (uo,ub*1e-6,ut)
+class DebugPoolMeas(object):
+	def __init__(self, pool):
+		self.pool = pool
+	def __call__(self):
+		class FormatDiff(object):
+			def __init__(self, pool):
+				self.pool = pool
+				self.t0 = self.now()
+				print 'now:', self.t0
+			# def format_diff_now(self):
+			# 	t1 = self.now()
+			# 	print 'now:', t1
+			# 	t0 = self.t0
+			# 	print 'Formatting diff... t0=', t0, 't1=', t1
+			# 	return ('%f s worker CPU, pickled %i/%i objs, %g/%g MB' %
+			# 			(tuple(t1[i]-t0[i] for i in [0, 1, 4]) +
+			# 			 tuple(1e-6*(t1[i]-t0[i]) for i in [2,5])))
+			def format_diff(self, other):
+				t1 = self.t0
+				t0 = other.t0
+				return ('%f s worker CPU, pickled %i/%i objs, %g/%g MB' %
+						(tuple(t1[i]-t0[i] for i in [0, 1, 4]) +
+						 tuple(1e-6*(t1[i]-t0[i]) for i in [2,5])))
+			def now(self):
+				return [self.pool.get_worker_cpu()] + self.pool.get_pickle_traffic()
+		return FormatDiff(self.pool)
 
+
+class DebugPool(mp.pool.Pool):
 	def _setup_queues(self):
 		self._inqueue = DebugSimpleQueue()
 		self._outqueue = DebugSimpleQueue()
 		self._quick_put = self._inqueue._writer.send
 		self._quick_get = self._outqueue._reader.recv
 
-	# def map(self, func, iterable, chunksize=None):
-	# 	'''
-	# 	Equivalent of `map()` builtin
-	# 	'''
-	# 	assert self._state == RUN
-	# 	mapres = self.map_async(func, iterable, chunksize)
-	# 	val = mapres.get()
-	# 	print 'map() used a total of', mapres.cpu, 's CPU'
-	# 	return val
+	def get_pickle_traffic_string(self):
+		S = self.get_pickle_traffic()
+		(po,pb,pt, uo,ub,ut) = S
+		return ('  pickled %i objs, %g MB, using %g s CPU' % (po,pb*1e-6,pt)
+				+ '\n' +
+				'unpickled %i objs, %g MB, using %g s CPU' % (uo,ub*1e-6,ut))
+
+	def get_pickle_traffic(self):
+		S1 = self._inqueue.stats()
+		S2 = self._outqueue.stats()
+		S = [s1+s2 for s1,s2 in zip(S1,S2)]
+		return S
 
 	def get_worker_cpu(self):
 		return self._beancounter.get_cpu()
 
-	# # Copied from superclass, but with DebugMapResult.
-	# def map_async(self, func, iterable, chunksize=None, callback=None):
-	#	'''
-	#	Asynchronous equivalent of `map()` builtin
-	#	'''
-	#	assert self._state == RUN
-	#	if not hasattr(iterable, '__len__'):
-	#		iterable = list(iterable)
-	# 
-	#	if chunksize is None:
-	#		chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
-	#		if extra:
-	#			chunksize += 1
-	# 
-	#	task_batches = Pool._get_tasks(func, iterable, chunksize)
-	#	result = DebugMapResult(self._cache, chunksize, len(iterable), callback)
-	#	self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-	#						  for i, x in enumerate(task_batches)), None))
-	#	return result
-
-	# This is just copied from the superclass; we redefine the worker() routine though.
+	# This is just copied from the superclass; we use redefined routines:
+	#  -worker -> debug_worker
+	#  -handle_results -> debug_handle_results
+	# And add _beancounter.
 	def __init__(self, processes=None, initializer=None, initargs=()):
+		self._beancounter = BeanCounter()
 		self._setup_queues()
 		self._taskqueue = Queue.Queue()
 		self._cache = {}
-		self._beancounter = BeanCounter()
 		self._state = RUN
 
 		if processes is None:
@@ -421,7 +401,21 @@ class Tractor2(Tractor):
 	#	R = super(Tractor2,self).getModelPatchNoCache(img, src)
 	#	img.data, img.invvar = data,invvar
 
+
+def work((i)):
+	time.sleep(1)
+
 if __name__ == '__main__':
+	dpool = DebugPool(4)
+	dmup = multiproc.multiproc(pool=dpool)
+	Time.add_measurement(DebugPoolMeas(dpool))
+
+	t0 = Time()
+	dmup.map(work, range(10))
+	print Time()-t0
+
+	sys.exit(0)
+
 	#run,camcol,field = 7164,4,273
 	#band='g'
 	run,camcol,field = 2662, 4, 111
@@ -438,9 +432,6 @@ if __name__ == '__main__':
 	p0 = tractor.getParams()
 	tractor.setParams(p0)
 
-	dpool = DebugPool(4)
-	dmup = multiproc.multiproc(pool=dpool)
-
 	print
 	print 'With Debug:'
 	tractor.setParams(p0)
@@ -448,6 +439,9 @@ if __name__ == '__main__':
 	t0 = Time()
 	tractor.opt2()
 	print 'With Debug:', Time()-t0
+	print dpool.get_pickle_traffic_string()
+	print dpool.get_worker_cpu(), 'worker CPU'
+	print Time()-t0
 	sys.exit(0)
 
 	pool = mp.Pool(4)
