@@ -938,6 +938,9 @@ def main():
 				print '  ', nm
 			print 'Source:', tractor.catalog[srci]
 
+			# Here we subtract the other models from each image.
+			# We could instead keep a table of model patches,
+			# but this is not the bottleneck at the moment...
 			tt0 = Time()
 			others = tractor.catalog[0:srci] + tractor.catalog[srci+1:]
 			origims = []
@@ -965,8 +968,7 @@ def main():
 				lnp0 = tractor.getLogProb()
 				print 'Lnprob', lnp0
 				alllnp.append([lnp0])
-				#####
-				if False and step % plotmod == 0:
+				if step % plotmod == 0:
 					print 'Plots...'
 					pp = np.array([tractor.getParams()])
 					ibest = 0

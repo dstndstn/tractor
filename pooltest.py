@@ -130,7 +130,7 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=()):
 		initializer(*initargs)
 
 	while 1:
-		t0 = time.time()
+		#t0 = time.time()
 		try:
 			task = get()
 		except (EOFError, IOError):
@@ -144,36 +144,115 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=()):
 		job, i, func, args, kwds = task
 		t1 = time.time()
 		try:
-			result = (True, func(*args, **kwds))
+			success,val = (True, func(*args, **kwds))
 		except Exception, e:
-			result = (False, e)
+			success,val = (False, e)
 		t2 = time.time()
-		succ,val = result
-		result = (succ, (val, t2-t1))
-		#print 'Putting result', result
-		put((job, i, result))
-		t3 = time.time()
+		dt = t2 - t1
+		#result = (, (succ, val))
+		#put((job, i, result))
+		put((job, i, (dt,(success,val))))
+		#t3 = time.time()
 		#print 'worker: get task', (t1-t0), 'run', (t2-t1), 'result', (t3-t2)
 
-class DebugMapResult(mp.pool.MapResult):
-	def __init__(self, *args):
-		self.cpu = 0.
-		super(DebugMapResult, self).__init__(*args)
-		
-	def get(self, **kwargs):
-		result = super(DebugMapResult, self).get(**kwargs)
-		#print 'Result:', result
-		#result,dt = result
-		#print 'Result took', dt, 'seconds of CPU'
-		return result
+def debug_handle_results(outqueue, get, cache, beancounter):
+    thread = threading.current_thread()
+    while 1:
+        try:
+            task = get()
+        except (IOError, EOFError):
+            debug('result handler got EOFError/IOError -- exiting')
+            return
+        if thread._state:
+            assert thread._state == TERMINATE
+            debug('result handler found thread._state=TERMINATE')
+            break
+        if task is None:
+            debug('result handler got sentinel')
+            break
+        job, i, obj = task
+		dt,obj = obj
+        try:
+            cache[job]._set(i, obj)
+        except KeyError:
+            pass
+		beancounter.add_cpu_time(dt)
 
-	def _set(self, i, obj):
-		#print '_set', i, obj
-		succ, (val,dt) = obj
-		obj = (succ, val)
-		#print 'dt', dt
-		self.cpu += dt
-		return super(DebugMapResult, self)._set(i, obj)
+    while cache and thread._state != TERMINATE:
+        try:
+            task = get()
+        except (IOError, EOFError):
+            debug('result handler got EOFError/IOError -- exiting')
+            return
+
+        if task is None:
+            debug('result handler ignoring extra sentinel')
+            continue
+        job, i, obj = task
+		dt,obj = obj
+        try:
+            cache[job]._set(i, obj)
+        except KeyError:
+            pass
+		beancounter.add_cpu_time(dt)
+
+    if hasattr(outqueue, '_reader'):
+        debug('ensuring that outqueue is not full')
+        # If we don't make room available in outqueue then
+        # attempts to add the sentinel (None) to outqueue may
+        # block.  There is guaranteed to be no more than 2 sentinels.
+        try:
+            for i in range(10):
+                if not outqueue._reader.poll():
+                    break
+                get()
+        except (IOError, EOFError):
+            pass
+    debug('result handler exiting: len(cache)=%s, thread._state=%s',
+          len(cache), thread._state)
+
+
+from multiprocessing.synchronize import Lock
+
+class BeanCounter(object):
+	def __init__(self):
+		self.cpu = 0
+		self.lock = Lock()
+	### LOCKING
+	def add_cpu(self, dt):
+		self.lock.acquire()
+		try:
+			self.cpu += dt
+		finally:
+			self.lock.release()
+	def get_cpu(self):
+		self.lock.acquire()
+		try:
+			return self.cpu
+		finally:
+			self.lock.release()
+	def __str__(self):
+		return 'CPU time: %g s' % self.get_cpu()
+
+# class DebugMapResult(mp.pool.MapResult):
+# 	def __init__(self, *args):
+# 		self.cpu = 0.
+# 		super(DebugMapResult, self).__init__(*args)
+# 		
+# 	def get(self, **kwargs):
+# 		result = super(DebugMapResult, self).get(**kwargs)
+# 		#print 'Result:', result
+# 		#result,dt = result
+# 		#print 'Result took', dt, 'seconds of CPU'
+# 		return result
+# 
+# 	def _set(self, i, obj):
+# 		#print '_set', i, obj
+# 		succ, (val,dt) = obj
+# 		obj = (succ, val)
+# 		#print 'dt', dt
+# 		self.cpu += dt
+# 		return super(DebugMapResult, self)._set(i, obj)
 
 Pool = mp.pool.Pool
 mapstar = mp.pool.mapstar
@@ -193,7 +272,6 @@ class DebugPool(mp.pool.Pool):
 		print '  pickled %i objs, %g MB, %g s CPU' % (po,pb*1e-6,pt)
 		print 'unpickled %i objs, %g MB, %g s CPU' % (uo,ub*1e-6,ut)
 
-
 	def _setup_queues(self):
 		self._inqueue = DebugSimpleQueue()
 		self._outqueue = DebugSimpleQueue()
@@ -210,31 +288,35 @@ class DebugPool(mp.pool.Pool):
 		print 'map() used a total of', mapres.cpu, 's CPU'
 		return val
 
-	# Copied from superclass, but with DebugMapResult.
-	def map_async(self, func, iterable, chunksize=None, callback=None):
-		'''
-		Asynchronous equivalent of `map()` builtin
-		'''
-		assert self._state == RUN
-		if not hasattr(iterable, '__len__'):
-			iterable = list(iterable)
+	def get_worker_cpu(self):
+		return self.beancounter.get_cpu()
 
-		if chunksize is None:
-			chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
-			if extra:
-				chunksize += 1
-
-		task_batches = Pool._get_tasks(func, iterable, chunksize)
-		result = DebugMapResult(self._cache, chunksize, len(iterable), callback)
-		self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-							  for i, x in enumerate(task_batches)), None))
-		return result
+	# # Copied from superclass, but with DebugMapResult.
+	# def map_async(self, func, iterable, chunksize=None, callback=None):
+	# 	'''
+	# 	Asynchronous equivalent of `map()` builtin
+	# 	'''
+	# 	assert self._state == RUN
+	# 	if not hasattr(iterable, '__len__'):
+	# 		iterable = list(iterable)
+	# 
+	# 	if chunksize is None:
+	# 		chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
+	# 		if extra:
+	# 			chunksize += 1
+	# 
+	# 	task_batches = Pool._get_tasks(func, iterable, chunksize)
+	# 	result = DebugMapResult(self._cache, chunksize, len(iterable), callback)
+	# 	self._taskqueue.put((((result._job, i, mapstar, (x,), {})
+	# 						  for i, x in enumerate(task_batches)), None))
+	# 	return result
 
 	# This is just copied from the superclass; we redefine the worker() routine though.
 	def __init__(self, processes=None, initializer=None, initargs=()):
 		self._setup_queues()
 		self._taskqueue = Queue.Queue()
 		self._cache = {}
+		self._beancounter = BeanCounter()
 		self._state = RUN
 
 		if processes is None:
@@ -263,8 +345,8 @@ class DebugPool(mp.pool.Pool):
 		self._task_handler.start()
 
 		self._result_handler = threading.Thread(
-			target=Pool._handle_results,
-			args=(self._outqueue, self._quick_get, self._cache)
+			target=debug_handle_results,
+			args=(self._outqueue, self._quick_get, self._cache, self._beancounter)
 			)
 		self._result_handler.daemon = True
 		self._result_handler._state = RUN
