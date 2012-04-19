@@ -493,7 +493,8 @@ class Tractor(MultiParams):
 		print 'opt2: Finding derivs...'
 		t0 = Time()
 		allderivs = self.getderivs2()
-		print Time() - t0
+		tderivs = Time()-t0
+		#print Time() - t0
 		#print 'allderivs:', allderivs
 		#for d in allderivs:
 		#	for (p,im) in d:
@@ -501,15 +502,19 @@ class Tractor(MultiParams):
 		print 'Finding optimal update direction...'
 		t0 = Time()
 		X = self.optimize(allderivs)
-		print Time() - t0
+		#print Time() - t0
+		topt = Time()-t0
 		#print 'X:', X
 		if len(X) == 0:
 			return 0, X, 0.
 		print 'Finding optimal step size...'
 		t0 = Time()
 		(dlogprob, alpha) = self.tryupdates2(X, alphas=alphas)
-		print Time() - t0
+		tstep = Time() - t0
 		print 'Finished opt2.'
+		print '  Tderiv', tderivs
+		print '  Topt  ', topt
+		print '  Tstep ', tstep
 		return dlogprob, X, alpha
 
 	def tryupdates2(self, X, alphas=None):
@@ -940,7 +945,7 @@ class Tractor(MultiParams):
 			self.cache[deps] = mod
 		return mod
 
-	def getModelImageNoCache(self, img, srcs=None):
+	def getModelImageNoCache(self, img, srcs=None, sky=True):
 		'''
 		Create a model image for the given "tractor image", including
 		the sky level.	If "srcs" is specified (a list of sources),
@@ -952,7 +957,8 @@ class Tractor(MultiParams):
 		#mod = np.zeros_like(img.getImage())
 		# FIXME -- specify type?? np.float32?
 		mod = np.zeros(img.getShape())
-		img.sky.addTo(mod)
+		if sky:
+			img.sky.addTo(mod)
 		if srcs is None:
 			srcs = self.catalog
 		for src in srcs:
@@ -964,8 +970,8 @@ class Tractor(MultiParams):
 			patch.addTo(mod)
 		return mod
 
-	def getModelImage(self, img, srcs=None):
-		return self.getModelImageNoCache(img, srcs)
+	def getModelImage(self, img, srcs=None, sky=True):
+		return self.getModelImageNoCache(img, srcs=srcs, sky=sky)
 	'''
 	def getModelImage(self, img):
 		# dependencies of this model image:

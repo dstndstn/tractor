@@ -934,6 +934,8 @@ def main():
 			for nm in tractor.getParamNames():
 				print '  ', nm
 			print 'Source:', tractor.catalog[srci]
+			tt0 = Time()
+			p0 = tractor.catalog.getParams()
 			while True:
 				step += 1
 				print 'Run optimization step', step
@@ -942,10 +944,12 @@ def main():
 				t_opt = (Time() - t0)
 				print 'alpha', alpha
 				print 'Optimization took', t_opt, 'sec'
+				print tractor.catalog[srci]
 				lnp0 = tractor.getLogProb()
 				print 'Lnprob', lnp0
 				alllnp.append([lnp0])
-				if step % plotmod == 0:
+				#####
+				if False and step % plotmod == 0:
 					print 'Plots...'
 					pp = np.array([tractor.getParams()])
 					ibest = 0
@@ -954,8 +958,56 @@ def main():
 						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 					print 'Done plots.'
 				if alpha == 0.:
-					tractor.catalog.freezeParam(srci)
 					break
+			print 'with other sources:', Time()-tt0
+
+			print
+			print 'Removing other sources'
+			tractor.catalog.setParams(p0)
+			print 'Source:', tractor.catalog[srci]
+			allsources = tractor.catalog
+			others = tractor.catalog[0:srci] + tractor.catalog[srci+1:]
+			print 'catalog has', len(tractor.catalog)
+			print 'others:', len(others)
+			origims = []
+			for im in tractor.images:
+				origims.append(im.data)
+				sub = im.data.copy()
+				sub -= tractor.getModelImage(im, others, sky=False)
+				im.data = sub
+			tractor.catalog = Catalog(allsources[srci])
+			tt0 = Time()
+			src = allsources[srci]
+			while True:
+				step += 1
+				print 'Run optimization step', step
+				t0 = Time()
+				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+				t_opt = (Time() - t0)
+				print 'alpha', alpha
+				print 'Optimization took', t_opt, 'sec'
+				print src
+				lnp0 = tractor.getLogProb()
+				print 'Lnprob', lnp0
+				alllnp.append([lnp0])
+				if False and step % plotmod == 0:
+					print 'Plots...'
+					pp = np.array([tractor.getParams()])
+					ibest = 0
+					plots(tractor,
+						  ['modbest', 'chibest', 'lnps'],
+						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+					print 'Done plots.'
+				if alpha == 0.:
+					break
+			print 'without other sources:', Time()-tt0
+			print
+
+			tractor.catalog = allsources
+			for im,dat in zip(tractor.images, origims):
+				im.data = dat
+
+			tractor.catalog.freezeParam(srci)
 		return step, alllnp
 
 
@@ -1034,7 +1086,7 @@ def main():
 		plotsa = dict(imis=plotims, mp=mp)
 
 		step = 5000
-		step, alllnp = optsourcestogether(tractor, step)
+		#step, alllnp = optsourcestogether(tractor, step)
 		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 		alllnp += alllnp2
 
