@@ -542,7 +542,13 @@ def getlnp((tractor, i, par0, step)):
 	lnp = tractor.getLogProb()
 	tractor.setParam(i, par0)
 	return lnp
-	
+
+
+dpool = None
+def pool_stats():
+	if dpool is None:
+		return
+	print 'Total pool CPU time:', dpool.get_worker_cpu()
 	
 def main():
 	#getdata()
@@ -563,7 +569,12 @@ def main():
 	else:
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-	mp = multiproc(opt.threads)
+
+	import debugpool
+	global dpool
+	dpool = debugpool.DebugPool(opt.threads)
+	mp = multiproc(pool=dpool)
+	#mp = multiproc(opt.threads)
 
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
@@ -928,6 +939,8 @@ def main():
 
 		allsources = tractor.catalog
 
+		pool_stats()
+
 		alllnp = []
 		for j,srci in enumerate(I):
 			srci = int(srci)
@@ -985,6 +998,9 @@ def main():
 				im.data = dat
 
 			tractor.catalog.freezeParam(srci)
+
+			pool_stats()
+
 		return step, alllnp
 
 
