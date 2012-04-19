@@ -1079,7 +1079,7 @@ def main():
 		plotsa = dict(imis=plotims, mp=mp)
 
 		step = 5000
-		#step, alllnp = optsourcestogether(tractor, step)
+		step, alllnp = optsourcestogether(tractor, step)
 		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 		alllnp += alllnp2
 
