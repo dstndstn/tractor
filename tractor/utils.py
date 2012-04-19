@@ -77,10 +77,11 @@ class NamedParams(object):
 
 	def __new__(cl, *args, **kwargs):
 		sup = super(NamedParams,cl)
-		if sup is object:
-			self = sup.__new__(cl)
-		else:
-			self = sup.__new__(cl, *args, **kwargs)
+		#print 'sup', sup
+		#if sup is object:
+		self = sup.__new__(cl)
+		#else:
+		#self = sup.__new__(cl, *args, **kwargs)
 		#print 'NamedParams.__new__:'
 		#print '  args', args
 		#print '  kwargs', kwargs

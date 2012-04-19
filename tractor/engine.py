@@ -90,14 +90,18 @@ class Image(MultiParams):
 
 	def __getattr__(self, name):
 		if name == 'shape':
-			return self.data.shape
+			return self.getShape()
 		raise AttributeError('Image: unknown attribute "%s"' % name)
 
 	# Numpy arrays have shape H,W
 	def getWidth(self):
-		return self.shape[1]
+		return self.getShape()[1]
 	def getHeight(self):
-		return self.shape[0]
+		return self.getShape()[0]
+	def getShape(self):
+		if 'shape' in self.__dict__:
+			return self.shape
+		return self.data.shape
 
 	def hashkey(self):
 		return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
@@ -366,7 +370,7 @@ def getsrcderivs((src, img)):
 	return src.getParamDerivatives(img)
 
 def getmodelimagefunc2((tr, im)):
-	print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
+	#print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
 	#tr.images = Images(im)
 	return tr.getModelImage(im)
 
@@ -499,6 +503,8 @@ class Tractor(MultiParams):
 		X = self.optimize(allderivs)
 		print Time() - t0
 		#print 'X:', X
+		if len(X) == 0:
+			return 0, X, 0.
 		print 'Finding optimal step size...'
 		t0 = Time()
 		(dlogprob, alpha) = self.tryupdates2(X, alphas=alphas)
@@ -943,7 +949,9 @@ class Tractor(MultiParams):
 		'''
 		if type(img) is int:
 			img = self.getImage(img)
-		mod = np.zeros_like(img.getImage())
+		#mod = np.zeros_like(img.getImage())
+		# FIXME -- specify type?? np.float32?
+		mod = np.zeros(img.getShape())
 		img.sky.addTo(mod)
 		if srcs is None:
 			srcs = self.catalog
@@ -961,10 +969,7 @@ class Tractor(MultiParams):
 	'''
 	def getModelImage(self, img):
 		# dependencies of this model image:
-		# img.sky, img.psf, img.wcs, sources that overlap.
-		#deps = (hash(img), hash(self.catalog))
 		deps = (img.hashkey(), self.catalog.hashkey())
-		#print 'deps:', deps
 		deps = hash(deps)
 		mod = self.cache.get(deps, None)
 		if mod is not None:
@@ -1006,7 +1011,7 @@ class Tractor(MultiParams):
 	def getLogLikelihood(self):
 		chisq = 0.
 		for i,chi in enumerate(self.getChiImages()):
-			chisq += (chi ** 2).sum()
+			chisq += (chi.astype(float) ** 2).sum()
 		return -0.5 * chisq
 
 	def getLogPrior(self):
