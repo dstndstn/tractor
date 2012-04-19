@@ -977,8 +977,85 @@ def main():
 		return dict(tractor=tractor, alllnp3=alllnp, Ibright3=Ibright)
 
 
-	def stage04(tractor=None, mp=None, steps=None, pp3=None, psteps3=None,
-				Ibright3=None, **kwargs):
+	def stage04(tractor=None, mp=None, steps=None, alllnp3=None, Ibright3=None,
+				**kwargs):
+		print 'Tractor:', tractor
+		tractor.mp = mp
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		params0 = np.array(tractor.getParams()).copy()
+		allsources = tractor.getCatalog()
+		allimages = tractor.getImages()
+
+		tractor.setImages(Images(allimages[0]))
+		print ' Cut to:', tractor
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+
+		step = 200-1
+		alllnp = []
+		while True:
+			step += 1
+			print 'Run optimization step', step
+			t0 = Time()
+			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+			t_opt = (Time() - t0)
+			print 'alpha', alpha
+			print 'Optimization took', t_opt, 'sec'
+			lnp0 = tractor.getLogProb()
+			print 'Lnprob', lnp0
+			alllnp.append([lnp0])
+			if True:
+				pp = np.array([tractor.getParams()])
+				ibest = 0
+				plots(tractor,
+					  ['modbest', 'chibest', 'lnps'],
+					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+			if alpha == 0.:
+				break
+
+		step -= 1
+		tractor.catalog.freezeAllParams()
+		I = np.argsort([src.getBrightness().i for src in tractor.catalog])
+		for j,srci in enumerate(I):
+			srci = int(srci)
+			print 'source', j, 'of', len(I), ', srci', srci
+			tractor.catalog.thawParam(srci)
+			print tractor.numberOfParams(), 'active parameters'
+			for nm in tractor.getParamNames():
+				print '  ', nm
+			print 'Source:', tractor.catalog[srci]
+			while True:
+				step += 1
+				print 'Run optimization step', step
+				t0 = Time()
+				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+				t_opt = (Time() - t0)
+				print 'alpha', alpha
+				print 'Optimization took', t_opt, 'sec'
+				lnp0 = tractor.getLogProb()
+				print 'Lnprob', lnp0
+				alllnp.append([lnp0])
+				if step%10 == 0:
+					print 'Plots...'
+					pp = np.array([tractor.getParams()])
+					ibest = 0
+					plots(tractor,
+						  ['modbest', 'chibest', 'lnps'],
+						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+					print 'Done plots.'
+				if alpha == 0.:
+					tractor.catalog.freezeParam(srci)
+					break
+
+		tractor.catalog.thawParamsRecursive('*')
+		tractor.setImages(allimages)
+		params1 = np.array(tractor.getParams()).copy()
+		return dict(tractor=tractor, alllnp3=alllnp3, Ibright3=Ibright3,
+					alllnp4=alllnp)
+
+
+	def stage05():
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
 
