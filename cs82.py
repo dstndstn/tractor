@@ -897,6 +897,68 @@ def main():
 			print '  ', nm, 'mean', pmn, 'std', pst
 
 
+	def optsourcestogether(tractor, step0):
+		step = step0
+		alllnp = []
+		while True:
+			print 'Run optimization step', step
+			t0 = Time()
+			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+			t_opt = (Time() - t0)
+			print 'alpha', alpha
+			print 'Optimization took', t_opt, 'sec'
+			lnp0 = tractor.getLogProb()
+			print 'Lnprob', lnp0
+			alllnp.append([lnp0])
+			if True:
+				pp = np.array([tractor.getParams()])
+				ibest = 0
+				plots(tractor,
+					  ['modbest', 'chibest', 'lnps'],
+					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+			step += 1
+			if alpha == 0.:
+				break
+		return step, alllnp
+
+	def optsourcesseparate(tractor, step0, plotmod, plotsa):
+		step = step0 - 1
+		tractor.catalog.freezeAllParams()
+		I = np.argsort([src.getBrightness().i for src in tractor.catalog])
+		alllnp = []
+		for j,srci in enumerate(I):
+			srci = int(srci)
+			print 'source', j, 'of', len(I), ', srci', srci
+			tractor.catalog.thawParam(srci)
+			print tractor.numberOfParams(), 'active parameters'
+			for nm in tractor.getParamNames():
+				print '  ', nm
+			print 'Source:', tractor.catalog[srci]
+			while True:
+				step += 1
+				print 'Run optimization step', step
+				t0 = Time()
+				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+				t_opt = (Time() - t0)
+				print 'alpha', alpha
+				print 'Optimization took', t_opt, 'sec'
+				lnp0 = tractor.getLogProb()
+				print 'Lnprob', lnp0
+				alllnp.append([lnp0])
+				if step % plotmod == 0:
+					print 'Plots...'
+					pp = np.array([tractor.getParams()])
+					ibest = 0
+					plots(tractor,
+						  ['modbest', 'chibest', 'lnps'],
+						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+					print 'Done plots.'
+				if alpha == 0.:
+					tractor.catalog.freezeParam(srci)
+					break
+		return step, alllnp
+
+
 	# stage 3 replacement: "quick" fit of bright sources to one CFHT image
 	def stage03(tractor=None, mp=None, steps=None, **kwargs):
 		print 'Tractor:', tractor
@@ -915,57 +977,10 @@ def main():
 		plotims = [0,]
 		plotsa = dict(imis=plotims, mp=mp)
 
-		alllnp = []
-		for step in xrange(100):
-			print 'Run optimization step', step
-			t0 = Time()
-			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-			t_opt = (Time() - t0)
-			print 'alpha', alpha
-			print 'Optimization took', t_opt, 'sec'
-			lnp0 = tractor.getLogProb()
-			print 'Lnprob', lnp0
-			alllnp.append([lnp0])
-			if True:
-				pp = np.array([tractor.getParams()])
-				ibest = 0
-				plots(tractor,
-					  ['modbest', 'chibest', 'lnps'],
-					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-			if alpha == 0.:
-				break
+		alllnp,step = optsourcestogether(tractor, 0)
 
-		tractor.catalog.freezeAllParams()
-		step -= 1
-		for srci in xrange(len(tractor.catalog)):
-			print 'srci', srci
-			tractor.catalog.thawParam(srci)
-			print tractor.numberOfParams(), 'active parameters'
-			for nm in tractor.getParamNames():
-				print '  ', nm
-			print 'Source:', tractor.catalog[srci]
-			while True:
-				step += 1
-				print 'Run optimization step', step
-				t0 = Time()
-				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-				t_opt = (Time() - t0)
-				print 'alpha', alpha
-				print 'Optimization took', t_opt, 'sec'
-				lnp0 = tractor.getLogProb()
-				print 'Lnprob', lnp0
-				alllnp.append([lnp0])
-				if step%10 == 0:
-					print 'Plots...'
-					pp = np.array([tractor.getParams()])
-					ibest = 0
-					plots(tractor,
-						  ['modbest', 'chibest', 'lnps'],
-						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-					print 'Done plots.'
-				if alpha == 0.:
-					tractor.catalog.freezeParam(srci)
-					break
+		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+		alllnp += alllnp2
 
 		tractor.catalog.thawParamsRecursive('*')
 		bparams1 = np.array(tractor.getParams()).copy()
@@ -993,60 +1008,10 @@ def main():
 		plotsa = dict(imis=plotims, mp=mp)
 
 		step = 200-1
-		alllnp = []
-		while True:
-			step += 1
-			print 'Run optimization step', step
-			t0 = Time()
-			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-			t_opt = (Time() - t0)
-			print 'alpha', alpha
-			print 'Optimization took', t_opt, 'sec'
-			lnp0 = tractor.getLogProb()
-			print 'Lnprob', lnp0
-			alllnp.append([lnp0])
-			if True:
-				pp = np.array([tractor.getParams()])
-				ibest = 0
-				plots(tractor,
-					  ['modbest', 'chibest', 'lnps'],
-					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-			if alpha == 0.:
-				break
+		step, alllnp = optsourcestogether(tractor, step)
 
-		step -= 1
-		tractor.catalog.freezeAllParams()
-		I = np.argsort([src.getBrightness().i for src in tractor.catalog])
-		for j,srci in enumerate(I):
-			srci = int(srci)
-			print 'source', j, 'of', len(I), ', srci', srci
-			tractor.catalog.thawParam(srci)
-			print tractor.numberOfParams(), 'active parameters'
-			for nm in tractor.getParamNames():
-				print '  ', nm
-			print 'Source:', tractor.catalog[srci]
-			while True:
-				step += 1
-				print 'Run optimization step', step
-				t0 = Time()
-				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-				t_opt = (Time() - t0)
-				print 'alpha', alpha
-				print 'Optimization took', t_opt, 'sec'
-				lnp0 = tractor.getLogProb()
-				print 'Lnprob', lnp0
-				alllnp.append([lnp0])
-				if step%10 == 0:
-					print 'Plots...'
-					pp = np.array([tractor.getParams()])
-					ibest = 0
-					plots(tractor,
-						  ['modbest', 'chibest', 'lnps'],
-						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-					print 'Done plots.'
-				if alpha == 0.:
-					tractor.catalog.freezeParam(srci)
-					break
+		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+		alllnp += alllnp2
 
 		tractor.catalog.thawParamsRecursive('*')
 		tractor.setImages(allimages)
@@ -1054,8 +1019,29 @@ def main():
 		return dict(tractor=tractor, alllnp3=alllnp3, Ibright3=Ibright3,
 					alllnp4=alllnp)
 
+	def stage05(tractor=None, mp=None, steps=None,
+				**kwargs):
+		print 'Tractor:', tractor
+		tractor.mp = mp
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		tractor.catalog.freezeParamsRecursive('g', 'r', 'i')
 
-	def stage05():
+		allimages = tractor.getImages()
+		tractor.setImages(Images(*[im for im in allimages if im.name.startswith('CFHT')]))
+		print ' Cut to:', tractor
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+
+		step = 5000
+		step, alllnp = optsourcestogether(tractor, step)
+		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+		alllnp += alllnp2
+
+		tractor.catalog.thawParamsRecursive('*')
+		return dict(tractor=tractor, alllnp5=alllnp)
+		
+	def stage06():
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
 
@@ -1213,8 +1199,8 @@ def main():
 		#F = locals()['stage%02i' % stage]
 		#F = globals()['stage%02i' % stage]
 		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
+			   5: stage05, 6: stage06
 			   }
-			   #6: stage06 }
 		F = ss[stage]
 		P.update(mp=mp)
 		R = F(**P)
