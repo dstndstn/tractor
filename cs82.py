@@ -925,6 +925,9 @@ def main():
 		step = step0 - 1
 		tractor.catalog.freezeAllParams()
 		I = np.argsort([src.getBrightness().i for src in tractor.catalog])
+
+		allsources = tractor.catalog
+
 		alllnp = []
 		for j,srci in enumerate(I):
 			srci = int(srci)
@@ -934,6 +937,20 @@ def main():
 			for nm in tractor.getParamNames():
 				print '  ', nm
 			print 'Source:', tractor.catalog[srci]
+
+			tt0 = Time()
+			others = tractor.catalog[0:srci] + tractor.catalog[srci+1:]
+			origims = []
+			for im in tractor.images:
+				origims.append(im.data)
+				sub = im.data.copy()
+				sub -= tractor.getModelImage(im, others, sky=False)
+				im.data = sub
+			tractor.catalog = Catalog(allsources[srci])
+			tpre = Time()-tt0
+			print 'Removing other sources:', tpre
+			src = allsources[srci]
+
 			tt0 = Time()
 			p0 = tractor.catalog.getParams()
 			while True:
@@ -944,7 +961,7 @@ def main():
 				t_opt = (Time() - t0)
 				print 'alpha', alpha
 				print 'Optimization took', t_opt, 'sec'
-				print tractor.catalog[srci]
+				print src
 				lnp0 = tractor.getLogProb()
 				print 'Lnprob', lnp0
 				alllnp.append([lnp0])
@@ -959,49 +976,7 @@ def main():
 					print 'Done plots.'
 				if alpha == 0.:
 					break
-			print 'with other sources:', Time()-tt0
-
-			print
-			print 'Removing other sources'
-			tractor.catalog.setParams(p0)
-			print 'Source:', tractor.catalog[srci]
-			allsources = tractor.catalog
-			others = tractor.catalog[0:srci] + tractor.catalog[srci+1:]
-			print 'catalog has', len(tractor.catalog)
-			print 'others:', len(others)
-			origims = []
-			for im in tractor.images:
-				origims.append(im.data)
-				sub = im.data.copy()
-				sub -= tractor.getModelImage(im, others, sky=False)
-				im.data = sub
-			tractor.catalog = Catalog(allsources[srci])
-			tt0 = Time()
-			src = allsources[srci]
-			while True:
-				step += 1
-				print 'Run optimization step', step
-				t0 = Time()
-				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
-				t_opt = (Time() - t0)
-				print 'alpha', alpha
-				print 'Optimization took', t_opt, 'sec'
-				print src
-				lnp0 = tractor.getLogProb()
-				print 'Lnprob', lnp0
-				alllnp.append([lnp0])
-				if False and step % plotmod == 0:
-					print 'Plots...'
-					pp = np.array([tractor.getParams()])
-					ibest = 0
-					plots(tractor,
-						  ['modbest', 'chibest', 'lnps'],
-						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
-					print 'Done plots.'
-				if alpha == 0.:
-					break
-			print 'without other sources:', Time()-tt0
-			print
+			print 'removing other sources:', Time()-tt0
 
 			tractor.catalog = allsources
 			for im,dat in zip(tractor.images, origims):
