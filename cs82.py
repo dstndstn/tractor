@@ -573,7 +573,7 @@ def main():
 	import debugpool
 	global dpool
 	dpool = debugpool.DebugPool(opt.threads)
-	Time.add_measurement(DebugPoolMeas(dpool))
+	Time.add_measurement(debugpool.DebugPoolMeas(dpool))
 	mp = multiproc(pool=dpool)
 	#mp = multiproc(opt.threads)
 
@@ -1084,10 +1084,79 @@ def main():
 		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 		alllnp += alllnp2
 
+		##
+		tractor.setImages(allimages)
+
 		tractor.catalog.thawParamsRecursive('*')
 		return dict(tractor=tractor, alllnp5=alllnp)
+
+	def stage06(tractor=None, mp=None, steps=None,
+				**kwargs):
+		print 'Tractor:', tractor
+
+		# oops, forgot to reset the images in an earlier version of stage05...
+		pfn = 'tractor%02i.pickle' % 4
+		print 'Reading pickle', pfn
+		R = unpickle_from_file(pfn)
+		allimages = R['tractor'].getImages()
+		del R
+
+		tractor.mp = mp
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		tractor.catalog.freezeParamsRecursive('pos', 'i2', 'shape')
+
+		sdssimages = [im for im in allimages if im.name.startswith('SDSS')]
+		tractor.setImages(Images(*sdssimages))
+
+		allsources = tractor.getCatalog()
+		brightcat,Ibright = cut_bright(allsources, magcut=23)
+		tractor.setCatalog(brightcat)
+
+		print 'Tractor:', tractor
+
+		allp = []
+
+		sbands = ['g','r','i']
+
+		for imi,im in enumerate(sdssimages):
+			tractor.setImages(Images(im))
+			band = im.photocal.bandname
+			print im
+			print 'Band', band
+			#tractor.catalog.freezeAllBut(band)
+			tractor.catalog.freezeParamsRecursive(*sbands)
+			tractor.catalog.thawParamsRecursive(band)
+			print 'Tractor:', tractor
+			print 'Active params:'
+			for nm in tractor.getParamNames():
+				print '  ', nm
+
+			# for nm,meliq,liq in tractor.getParamStateRecursive():
+			# 	if liq:
+			# 		print ' ',
+			# 	else:
+			# 		print 'F',
+			# 	if meliq:
+			# 		print ' ',
+			# 	else:
+			# 		print 'F',
+			# 	print nm
+
+
+			step = 7000 + 100*imi
+			step, alllnp = optsourcestogether(tractor, step)
+			step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+			alllnp += alllnp2
+			allp.append(tractor.getParams())
+
+		tractor.setImages(allimages)
+		tractor.setCatalog(allsources)
+
+		return dict(tractor=tractor, allp=allp)
+								
 		
-	def stage06():
+	def stage06old():
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
 

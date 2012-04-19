@@ -77,14 +77,7 @@ class NamedParams(object):
 
 	def __new__(cl, *args, **kwargs):
 		sup = super(NamedParams,cl)
-		#print 'sup', sup
-		#if sup is object:
 		self = sup.__new__(cl)
-		#else:
-		#self = sup.__new__(cl, *args, **kwargs)
-		#print 'NamedParams.__new__:'
-		#print '  args', args
-		#print '  kwargs', kwargs
 
 		self.namedparams = {}
 		self.paramnames = {}
@@ -95,12 +88,8 @@ class NamedParams(object):
 
 	def __init__(self):
 		super(NamedParams,self).__init__()
-		#print 'NamedParams __init__.'
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
-
-	#def recountParams(self):
-	#	self.liquid = [True] * self._numberOfThings()
 
 	def addNamedParams(self, **d):
 		self.namedparams.update(d)
@@ -141,6 +130,15 @@ class NamedParams(object):
 	def getNamedParamName(self, ii):
 		return self.paramnames.get(ii, None)
 
+	def getParamStateRecursive(self):
+		n = []
+		for j,liquid in enumerate(self.liquid):
+			nm = self.getNamedParamName(j)
+			if nm is None:
+				nm = 'param%i' % j
+			n.append((nm,liquid,liquid))
+		return n
+
 	def freezeParamsRecursive(self, *pnames):
 		for nm in pnames:
 			i = self.getNamedParamIndex(nm)
@@ -148,13 +146,14 @@ class NamedParams(object):
 				continue
 			self.liquid[i] = False
 	def thawParamsRecursive(self, *pnames):
-		#self.thawParams(*pnames)
 		for nm in pnames:
 			i = self.getNamedParamIndex(nm)
 			if i is None:
 				continue
 			self.liquid[i] = True
-
+		if '*' in pnames:
+			self.thawAllParams()
+		
 	def freezeParams(self, *args):
 		for n in args:
 			self.freezeParam(n)
@@ -263,10 +262,10 @@ class ParamList(Params, NamedParams):
 	def getParamNames(self):
 		n = []
 		for i,j in self._indexBoth():
-			pre = self.getNamedParamName(j)
-			if pre is None:
-				pre = 'param%i' % i
-			n.append(pre)
+			nm = self.getNamedParamName(j)
+			if nm is None:
+				nm = 'param%i' % i
+			n.append(nm)
 		return n
 
 	# These underscored versions are for use by NamedParams(), and ignore
@@ -439,6 +438,21 @@ class MultiParams(Params, NamedParams):
 		if '*' in pnames:
 			self.thawAllParams()
 
+	def getParamStateRecursive(self):
+		n = []
+		for i,(s,liquid) in enumerate(zip(self.subs, self.liquid)):
+			pre = self.getNamedParamName(i)
+			if pre is None:
+				pre = 'param%i' % i
+			n.append((pre, liquid, True))
+			if hasattr(s, 'getParamStateRecursive'):
+				snames = s.getParamStateRecursive()
+			else:
+				snames = [(nm,True,True) for nm in s.getParamNames()]
+			n.extend(('%s.%s' % (pre,post), pliq, (liquid and pliq2))
+					 for (post,pliq,pliq2) in snames)
+		return n
+
 	def getParamNames(self):
 		n = []
 		for i,s in self._enumerateLiquidArray(self.subs):
@@ -447,10 +461,10 @@ class MultiParams(Params, NamedParams):
 				pre = 'param%i' % i
 			snames = s.getParamNames()
 			if snames is not None and len(snames) == s.numberOfParams():
-				n.extend('%s.%s' % (pre,post) for post in s.getParamNames())
+				n.extend('%s.%s' % (pre,post) for post in snames)
 			else:
 				print 'Getting named params for', pre
-				print '  -> ', s.getParamNames()
+				print '  -> ', snames
 				print '      (expected', s.numberOfParams(), 'of them)'
 				n.extend('%s.param%i' % (pre,i) for i in range(s.numberOfParams()))
 			
