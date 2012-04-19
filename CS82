@@ -168,3 +168,54 @@ SDSS: ~ 0
 [ 0.06159949 , 0.07945703 ]
 [ 0.07220552  0.0957091   ]
 
+
+-------------------------------------------
+2012-04-17
+-------------------------------------------
+
+Try making CFHT "i" a different band from SDSS "i", for testing.
+
+All gri images: -> nearly 250 images!
+(219 SDSS images)
+(483 MB pickle!)
+
+python -u cs82.py -f 0 -s 0 > log0 2>&1 &
+at 20604
+python -u cs82.py -s 1 -f 1 > log1 2>&1 &
+at 20605
+python -u cs82.py -s 3 -f 2 -f 3 > log23 2>&1 &
+at 20605
+(crashed during stage 3)
+python -u cs82.py -s 3 -f 3 > log3 2>&1 &
+at 20606
+30 walkers, bright sources: MCMC steps taking 200 sec wall time.
+
+Meanwhile...
+
+ln -s tractor02.pickle tractor05.pickle
+python -u cs82.py -s 6 -f 6 > log6 2>&1 &
+at 20607
+Cut to: Tractor with 51 sources and 1 images (CFHT 863050p21)
+MCMC took 2.585344 wall
+
+rm tractor05.pickle
+python -u cs82.py -s 3 -f 3 > log3 2>&1 &
+at 20608
+-> gets an inf/nan, wanders off into left field
+80->90: big change
+
+at 20610
+fixed step size tweaking & resampling logic.  Now consistently improving logprob from -650k to -620k in 200 steps.
+at 20611
+optimization (first of all sources, then of individual sources) blows away sampling.
+at 20612
+
+
+
+
+
+Todo:
+-how to tune step sizes w.r.t walkers stdevs???
+-think about "maximum plausible step size" for params?
+-priors
+
