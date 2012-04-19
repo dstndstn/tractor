@@ -41,6 +41,8 @@ import os
 # Only _multiprocessing/socket_connection.c is used on non-Windows platforms.
 
 import _multiprocessing
+import cPickle as pickle
+import time
 
 class DebugConnection():
 	def __init__(self, fd, writable=True, readable=True):
@@ -50,14 +52,27 @@ class DebugConnection():
 	def recv(self):
 		# read string length + string
 		# unpickle.loads()
-		obj = self.real.recv()
-		print 'received', obj
+		# obj = self.real.recv()
+		bytes = self.real.recv_bytes()
+		t0 = time.time()
+		obj = pickle.loads(bytes)
+		dt = time.time() - t0
+		print 'unpickling took', dt
+		#print 'received', obj
 		return obj
+
 	def send(self, obj):
 		# pickle obj to string (dumps())
 		# write string length (u32 network byte order) + string
+		# return self.real.send(obj)
 		print 'sending', obj
-		return self.real.send(obj)
+		t0 = time.time()
+		s = pickle.dumps(obj, -1)
+		dt = time.time() - t0
+		print '-->', len(s), 'bytes'
+		print 'pickling took', dt
+		return self.real.send_bytes(s)
+
 	def close(self):
 		return self.real.close()
 
