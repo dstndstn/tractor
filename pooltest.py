@@ -190,8 +190,8 @@ class DebugPool(mp.pool.Pool):
 		print S
 		#print S[:3]
 		(po,pb,pt, uo,ub,ut) = S
-		print 'pickled %i objs, %i bytes, %g s CPU' % (po,pb,pt) #S[:3]
-		print 'unpickled %i objs, %i bytes, %g s CPU' % (uo,ub,ut) #S[3:]
+		print '  pickled %i objs, %g MB, %g s CPU' % (po,pb*1e-6,pt)
+		print 'unpickled %i objs, %g MB, %g s CPU' % (uo,ub*1e-6,ut)
 
 
 	def _setup_queues(self):
@@ -284,6 +284,8 @@ from tractor import *
 from tractor import sdss as st
 from astrometry.util import multiproc
 
+from tractor.engine import getmodelimagefunc2
+
 class Tractor2(Tractor):
 	def _map(self, *args):
 		t0 = Time()
@@ -291,13 +293,51 @@ class Tractor2(Tractor):
 		print 'map:', Time()-t0
 		return R
 
-	def getModelPatchNoCache(self, img, src):
-		data,invvar = img.data,img.invvar
-		img.shape = data.shape
-		del img.data
-		del img.invvar
-		R = super(Tractor2,self).getModelPatchNoCache(img, src)
-		img.data, img.invvar = data,invvar
+	def getderivs2(self):
+		alldata = []
+		for im in self.images:
+			alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
+			im.shape = im.data.shape
+			im.data,im.invvar = None,None
+			im.inverr,im.origInvvar = None,None
+			#print 'Image:', dir(im)
+		R = super(Tractor2,self).getderivs2()
+		for im,d in zip(self.images, alldata):
+			im.data,im.invvar, im.inverr, im.origInvvar = d
+		return R
+
+	def getModelImages(self):
+		if self.is_multiproc():
+			# avoid shipping my images...
+			allimages = self.getImages()
+			self.images = []
+
+			alldata = []
+			for im in allimages:
+				alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
+				im.shape = im.data.shape
+				im.data,im.invvar = None,None
+				im.inverr,im.origInvvar = None,None
+
+			mods = self._map(getmodelimagefunc2, [(self, im) for im in allimages])
+
+			for im,d in zip(allimages, alldata):
+				im.data,im.invvar, im.inverr, im.origInvvar = d
+
+			self.images = allimages
+		else:
+			mods = [self.getModelImage(img) for img in self.images]
+		return mods
+
+
+
+	# def getModelPatchNoCache(self, img, src):
+	# 	data,invvar = img.data,img.invvar
+	# 	img.shape = data.shape
+	# 	del img.data
+	# 	del img.invvar
+	# 	R = super(Tractor2,self).getModelPatchNoCache(img, src)
+	# 	img.data, img.invvar = data,invvar
 
 if __name__ == '__main__':
 	#run,camcol,field = 7164,4,273
