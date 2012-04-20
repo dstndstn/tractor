@@ -404,7 +404,7 @@ def tweak_wcs((tractor, im)):
 			break
 	return im.getParams()
 
-def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
+def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
@@ -420,7 +420,10 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 		plt.clf()
 		plt.gca().set_position(plotpos0)
 		myimshow(data, **ima)
-		plt.title('Data %s' % tim.name)
+		tt = 'Data %s' % tim.name
+		if tsuf is not None:
+			tt += tsuf
+		plt.title(tt)
 		plt.xticks([],[])
 		plt.yticks([],[])
 		mysavefig('data-%02i.png' % i)
@@ -441,20 +444,26 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(mod, **ima)
-			plt.title('Model (best)')
+			tt = 'Model (best)'
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('modbest-%02i-%02i.png' % (i,step))
 		if 'chibest' in plotnames:
 			chi = tractor.getChiImage(i)
 			plt.imshow(chi, **imchi)
-			plt.title('Chi (best)')
+			tt = 'Chi (best)'
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('chibest-%02i-%02i.png' % (i,step))
 
 			plt.imshow(chi, **imchi2)
-			plt.title('Chi (best)')
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('chibest2-%02i-%02i.png' % (i,step))
@@ -481,7 +490,10 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(modsum/float(nw), **ima)
-			plt.title('Model (sum)')
+			tt = 'Model (sum)'
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('modsum-%02i-%02i.png' % (i,step))
@@ -489,17 +501,21 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			plt.imshow(chisum/float(nw), **imchi)
-			plt.title('Chi (sum)')
+			tt = 'Chi (sum)'
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('chisum-%02i-%02i.png' % (i,step))
 			plt.imshow(chisum/float(nw), **imchi2)
-			plt.title('Chi (sum)')
+			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
 			mysavefig('chisum2-%02i-%02i.png' % (i,step))
 
-def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None):
+def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None,
+		  tsuf=None):
 	if 'lnps' in plotnames:
 		plotnames.remove('lnps')
 		plt.figure(figsize=(6,6))
@@ -519,7 +535,7 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, all
 			print 'Skipping plot of image', i, 'with N images', NI
 			continue
 		zr = tractor.getImage(i).zr
-		args.append((tractor, i, zr, plotnames, step, pp, ibest))
+		args.append((tractor, i, zr, plotnames, step, pp, ibest, tsuf))
 	if mp is None:
 		map(plot1, args)
 	else:
@@ -874,9 +890,15 @@ def main():
 		tractor.catalog.thawParamsRecursive('*')
 		return dict(tractor=tractor, alllnp5=alllnp)
 
+	from tractor.mpcache import createCache
+
 	def stage06(tractor=None, mp=None, steps=None,
 				**kwargs):
 		print 'Tractor:', tractor
+		cache = createCache(maxsize=10000)
+		print 'Using multiprocessing cache', cache
+		tractor.cache = cache
+		tractor.pickleCache = True
 
 		# oops, forgot to reset the images in an earlier version of stage05...
 		pfn = 'tractor%02i.pickle' % 4
@@ -931,18 +953,23 @@ def main():
 			# 		print 'F',
 			# 	print nm
 
-			step = 7000 + imi*2
-			step, alllnp = optsourcestogether(tractor, step, doplots=False)
+			step = 7000 + imi*3
 			plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
-				  ibest=0, **plotsa)
-			step, alllnp2 = optsourcesseparate(tractor, step, doplots=False)
+				  ibest=0, tsuf=': '+im.name+' init', **plotsa)
+			optsourcestogether(tractor, step, doplots=False)
+			plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
+				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+			optsourcesseparate(tractor, step, doplots=False)
 			#print 'Tractor params:', tractor.getParams()
 			tractor.catalog.thawAllParams()
 			#print 'Tractor params:', tractor.getParams()
-			plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
-				  ibest=0, **plotsa)
+			plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
+				  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
 
 			allp.append((band, tractor.getParams()))
+
+			print 'Cache stats'
+			cache.printStats()
 
 		tractor.setImages(allimages)
 		tractor.setCatalog(allsources)
@@ -959,28 +986,20 @@ def main():
 			lastg = np.array(allp[-3][1])
 			lastr = np.array(allp[-2][1])
 			lasti = np.array(allp[-1][1])
-
 			ib = np.zeros(len(lastg), int)
 			for j,src in enumerate(tractor.getCatalog()):
 				b = src.brightness
-				#print '  ', b.g, b.r, b.i, b.i2
 				I = np.flatnonzero(b.g == lastg)
 				J = np.flatnonzero(b.r == lastr)
 				K = np.flatnonzero(b.i == lasti)
-				#print '  ', I, J, K
 				if len(I) == 1 and len(J) == 1 and len(K) == 1 and I[0] == J[0] and I[0] == K[0]:
 					ib[I[0]] = j
-			#print len(ib)
-			#print ib
 			assert(len(ib) == len(lastg))
 			bright = [tractor.getCatalog()[i] for i in ib]
 			assert(all(np.array([b.brightness.g for b in bright]) == lastg))
 
-		#print 'allp:', allp
 		allmags = {}
 		for band,p in allp:
-			#print
-			#print band, len(p), p 
 			if not band in allmags:
 				allmags[band] = [p]
 			else:
@@ -988,7 +1007,6 @@ def main():
 		for band,vals in allmags.items():
 			vals = np.array(vals)
 			allmags[band] = vals
-			#print band, vals.shape
 			nimg,nsrcs = vals.shape
 
 		for i in range(nsrcs):

@@ -5,16 +5,19 @@ from cache import Cache
 
 class CacheManager(BaseManager):
 	pass
-CacheManager.register('Cache', Cache)
+CacheManager.register('Cache', Cache, exposed=('get','put'))
 
 def createManager():
 	manager = CacheManager()
 	manager.start()
 	return manager
 
-def createCache():
+def createCache(**kwargs):
 	man = createManager()
-	cache = man.Cache()
+	#kwargs = {}
+	#if maxsize is not None:
+	#		kwargs['maxsize'] = maxsize
+	cache = man.Cache(**kwargs)
 	return cache
 
 

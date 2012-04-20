@@ -144,6 +144,12 @@ class Patch(object):
 		self.y0 = y0
 		self.patch = patch
 		self.name = ''
+		if patch is not None:
+			try:
+				H,W = patch.shape
+				self.size = H*W
+			except:
+				pass
 
 	def __str__(self):
 		s = 'Patch: '
@@ -166,9 +172,9 @@ class Patch(object):
 		return self.name
 
 	# for Cache
-	def size(self):
-		(H,W) = self.patch.shape
-		return H*W
+	#def size(self):
+	#	(H,W) = self.patch.shape
+	#	return H*W
 	def copy(self):
 		if self.patch is None:
 			return Patch(self.x0, self.y0, None)
@@ -390,6 +396,7 @@ class Tractor(MultiParams):
 		if mp is None:
 			mp = multiproc()
 		self.mp = mp
+		self.pickleCache = False
 
 	def __str__(self):
 		s = 'Tractor with %i sources and %i images' % (len(self.catalog), len(self.images))
@@ -413,13 +420,22 @@ class Tractor(MultiParams):
 
 	# For pickling
 	def __getstate__(self):
-		return (self.getImages(), self.getCatalog(), self.liquid)
+		S = (self.getImages(), self.getCatalog(), self.liquid)
+		if self.pickleCache:
+			S = S + (self.cache,)
+		return S
 	def __setstate__(self, state):
-		(images, catalog, liquid) = state
+		if len(state) == 3:
+			(images, catalog, liquid) = state
+			self.pickleCache = False
+			self.cache = Cache()
+		elif len(state) == 4:
+			(images, catalog, liquid, cache) = state
+			self.cache = cache
+			self.pickleCache = True
 		self.subs = [images, catalog]
 		self.liquid = liquid
 		self.mp = multiproc()
-		self.cache = Cache()
 		self.cachestack = []
 
 	def getNImages(self):
@@ -582,7 +598,7 @@ class Tractor(MultiParams):
 			srcs = []
 		else:
 			srcs = list(self.catalog.getThawedSources())
-			print len(srcs), 'thawed sources'
+			#print len(srcs), 'thawed sources'
 		args = []
 		for j,src in enumerate(srcs):
 			for i,img in enumerate(self.images):
@@ -942,7 +958,7 @@ class Tractor(MultiParams):
 			#logverb('	source hashkey ' + str(src.hashkey()))
 			mod = self.getModelPatchNoCache(img, src)
 			#print 'Caching model image'
-			self.cache[deps] = mod
+			self.cache.put(deps, mod)
 		return mod
 
 	def getModelImageNoCache(self, img, srcs=None, sky=True):
