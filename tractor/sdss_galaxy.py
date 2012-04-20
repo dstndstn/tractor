@@ -184,7 +184,8 @@ class Galaxy(MultiParams):
 		# derivatives wrt position
 		psteps = pos0.getStepSizes()
 		if brightnessonly or self.isParamFrozen('pos'):
-			derivs.extend([None] * len(psteps))
+			#derivs.extend([None] * len(psteps))
+			pass
 		else:
 			params = pos0.getParams()
 			for i,pstep in enumerate(psteps):
@@ -202,7 +203,8 @@ class Galaxy(MultiParams):
 		# derivatives wrt brightness
 		bsteps = self.brightness.getStepSizes()
 		if self.isParamFrozen('brightness'):
-			derivs.extend([None] * len(bsteps))
+			#derivs.extend([None] * len(bsteps))
+			pass
 		else:
 			params = self.brightness.getParams()
 			for i,bstep in enumerate(bsteps):
@@ -216,7 +218,8 @@ class Galaxy(MultiParams):
 		# derivatives wrt shape
 		gsteps = self.shape.getStepSizes()
 		if brightnessonly or self.isParamFrozen('shape'):
-			derivs.extend([None] * len(gsteps))
+			#derivs.extend([None] * len(gsteps))
+			pass
 		else:
 			gnames = self.shape.getParamNames()
 			oldvals = self.shape.getParams()

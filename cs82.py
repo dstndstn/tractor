@@ -990,7 +990,7 @@ def main():
 						  ['modbest', 'chibest', 'lnps'],
 						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 					print 'Done plots.'
-				if alpha == 0.:
+				if alpha < 1e-3:
 					break
 			print 'removing other sources:', Time()-tt0
 
@@ -1113,6 +1113,9 @@ def main():
 		brightcat,Ibright = cut_bright(allsources, magcut=23)
 		tractor.setCatalog(brightcat)
 
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+
 		print 'Tractor:', tractor
 
 		allp = []
@@ -1120,6 +1123,7 @@ def main():
 		sbands = ['g','r','i']
 
 		for imi,im in enumerate(sdssimages):
+			print 'Fitting image', imi, 'of', len(sdssimages)
 			tractor.setImages(Images(im))
 			band = im.photocal.bandname
 			print im
@@ -1142,7 +1146,6 @@ def main():
 			# 	else:
 			# 		print 'F',
 			# 	print nm
-
 
 			step = 7000 + 100*imi
 			step, alllnp = optsourcestogether(tractor, step)
@@ -1321,6 +1324,7 @@ def main():
 		R = F(**P)
 		print 'Saving pickle', pfn
 		pickle_to_file(R, pfn)
+		print 'Saved', pfn
 		return R
 
 	runstage(opt.stage)

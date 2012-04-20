@@ -2,9 +2,11 @@ try:
 	# python 2.7
 	from collections import OrderedDict
 except:
-	from .ordereddict import OrderedDict
+	#from .ordereddict import OrderedDict
+	from ordereddict import OrderedDict
 
 '''
+LRU cache.
 This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
 By: Raymond Hettinger
 License: Python Software Foundation (PSF) license.
@@ -49,6 +51,8 @@ class Cache(object):
 		return e.val
 	def __len__(self):
 		return len(self.dict)
+	def put(self, k, v):
+		self[k] = v
 	def get(self, *args):
 		if len(args) == 1:
 			key = args[0]

@@ -245,15 +245,6 @@ class DebugPoolMeas(object):
 			def __init__(self, pool):
 				self.pool = pool
 				self.t0 = self.now()
-				print 'now:', self.t0
-			# def format_diff_now(self):
-			# 	t1 = self.now()
-			# 	print 'now:', t1
-			# 	t0 = self.t0
-			# 	print 'Formatting diff... t0=', t0, 't1=', t1
-			# 	return ('%f s worker CPU, pickled %i/%i objs, %g/%g MB' %
-			# 			(tuple(t1[i]-t0[i] for i in [0, 1, 4]) +
-			# 			 tuple(1e-6*(t1[i]-t0[i]) for i in [2,5])))
 			def format_diff(self, other):
 				t1 = self.t0
 				t0 = other.t0
