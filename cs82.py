@@ -997,6 +997,8 @@ def main():
 			assert(len(ib) == len(lastg))
 			bright = [tractor.getCatalog()[i] for i in ib]
 			assert(all(np.array([b.brightness.g for b in bright]) == lastg))
+		else:
+			bright = [tractor.getCatalog()[i] for i in Ibright]
 
 		allmags = {}
 		for band,p in allp:
@@ -1025,9 +1027,11 @@ def main():
 			pp['i2'] = plt.axvline(bright[i].brightness.i2, color=(0.5,0,0.5), lw=2, alpha=0.5)
 			order = ['g','r','i','i2']
 			plt.legend([pp[k] for k in order if k in pp], [k for k in order if k in pp], 'upper right')
-			plt.savefig('mags-%02i.png' % i)
+			fn = 'mags-%02i.png' % i
+			plt.savefig(fn)
+			print 'Wrote', fn
 
-
+		return {}
 		
 	def stage06old():
 		p0 = np.array(tractor.getParams())
@@ -1166,7 +1170,16 @@ def main():
 		print 'Initial log-prob (all images, all sources)', alllnp0
 		print 'Final   log-prob (all images, all sources)', alllnp1
 		return dict(tractor=tractor, allp3=allp, pp3=pp, psteps3=psteps, Ibright3=Ibright)
-		
+
+	# One time I forgot to reset the mpcache before pickling a Tractor... upon unpickling it
+	# fails here... so hack it up.
+	realRebuildProxy = multiprocessing.managers.RebuildProxy
+	def fakeRebuildProxy(*args, **kwargs):
+		try:
+			return realRebuildProxy(*args, **kwargs)
+		except Exception as e:
+			print 'real RebuildProxy failed:', e
+			return None
 
 	def runstage(stage):
 		print 'Runstage', stage
@@ -1176,7 +1189,13 @@ def main():
 				print 'Ignoring pickle', pfn, 'and forcing stage', stage
 			else:
 				print 'Reading pickle', pfn
+
+				multiprocessing.managers.RebuildProxy = fakeRebuildProxy
+
 				R = unpickle_from_file(pfn)
+
+				multiprocessing.managers.RebuildProxy = realRebuildProxy
+
 				return R
 		if stage > 0:
 			# Get prereqs
@@ -1195,6 +1214,13 @@ def main():
 			P['tractor'].mp = mp
 
 		R = F(**P)
+
+		if 'tractor' in R:
+			try:
+				tractor = R['tractor']
+				tractor.pickleCache = False
+			except:
+				pass
 		print 'Saving pickle', pfn
 		pickle_to_file(R, pfn)
 		print 'Saved', pfn
