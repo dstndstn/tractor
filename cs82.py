@@ -702,7 +702,7 @@ def main():
 			t0 = Time()
 			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 			t_opt = (Time() - t0)
-			print 'alpha', alpha
+			#print 'alpha', alpha
 			print 'Optimization took', t_opt, 'sec'
 			lnp0 = tractor.getLogProb()
 			print 'Lnprob', lnp0
@@ -714,7 +714,7 @@ def main():
 					  ['modbest', 'chibest', 'lnps'],
 					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 			step += 1
-			if alpha < 1e-3:
+			if alpha == 0 or dlnp < 1e-3:
 				break
 		return step, alllnp
 
@@ -761,7 +761,6 @@ def main():
 				t0 = Time()
 				dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 				t_opt = (Time() - t0)
-				print 'alpha', alpha
 				print 'Optimization took', t_opt, 'sec'
 				print src
 				lnp0 = tractor.getLogProb()
@@ -775,7 +774,7 @@ def main():
 						  ['modbest', 'chibest', 'lnps'],
 						  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 					print 'Done plots.'
-				if alpha < 1e-3:
+				if alpha == 0 or dlnp < 1e-3:
 					break
 			print 'removing other sources:', Time()-tt0
 
@@ -948,13 +947,69 @@ def main():
 		tractor.setImages(allimages)
 		tractor.setCatalog(allsources)
 
-		return dict(tractor=tractor, allp=allp)
+		return dict(tractor=tractor, allp=allp, Ibright=Ibright)
 
-	def stage07(tractor=None, allp=None, mp=None, **kwargs):
+	def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 		print 'Tractor:', tractor
 		tractor.mp = mp
-		print 'allp:', allp
-								
+
+		if Ibright is None:
+			# argh, forgot to save it.
+			# Last measurements for each band in allp...
+			lastg = np.array(allp[-3][1])
+			lastr = np.array(allp[-2][1])
+			lasti = np.array(allp[-1][1])
+
+			ib = np.zeros(len(lastg), int)
+			for j,src in enumerate(tractor.getCatalog()):
+				b = src.brightness
+				#print '  ', b.g, b.r, b.i, b.i2
+				I = np.flatnonzero(b.g == lastg)
+				J = np.flatnonzero(b.r == lastr)
+				K = np.flatnonzero(b.i == lasti)
+				#print '  ', I, J, K
+				if len(I) == 1 and len(J) == 1 and len(K) == 1 and I[0] == J[0] and I[0] == K[0]:
+					ib[I[0]] = j
+			#print len(ib)
+			#print ib
+			assert(len(ib) == len(lastg))
+			bright = [tractor.getCatalog()[i] for i in ib]
+			assert(all(np.array([b.brightness.g for b in bright]) == lastg))
+
+		#print 'allp:', allp
+		allmags = {}
+		for band,p in allp:
+			#print
+			#print band, len(p), p 
+			if not band in allmags:
+				allmags[band] = [p]
+			else:
+				allmags[band].append(p)
+		for band,vals in allmags.items():
+			vals = np.array(vals)
+			allmags[band] = vals
+			#print band, vals.shape
+			nimg,nsrcs = vals.shape
+
+		for i in range(nsrcs):
+			plt.clf()
+			cmap = dict(r='r', g='g', i='m')
+			pp = {}
+			for band,vals in allmags.items():
+				# hist(histtype='step') breaks when no vals are within the range.
+				X = vals[:,i]
+				mn,mx = 15,25
+				keep = X[(X >= mn) * (X <= mx)]
+				if sum(keep) == 0:
+					continue
+				n,b,p = plt.hist(vals[:,i], 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
+				pp[band] = p
+			pp['i2'] = plt.axvline(bright[i].brightness.i2, color=(0.5,0,0.5), lw=2, alpha=0.5)
+			order = ['g','r','i','i2']
+			plt.legend([pp[k] for k in order if k in pp], [k for k in order if k in pp], 'upper right')
+			plt.savefig('mags-%02i.png' % i)
+
+
 		
 	def stage06old():
 		p0 = np.array(tractor.getParams())
@@ -1114,10 +1169,13 @@ def main():
 		#F = locals()['stage%02i' % stage]
 		#F = globals()['stage%02i' % stage]
 		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
-			   5: stage05, 6: stage06
+			   5: stage05, 6: stage06, 7: stage07,
 			   }
 		F = ss[stage]
 		P.update(mp=mp)
+		if 'tractor' in P:
+			P['tractor'].mp = mp
+
 		R = F(**P)
 		print 'Saving pickle', pfn
 		pickle_to_file(R, pfn)
