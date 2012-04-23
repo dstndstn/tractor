@@ -5,7 +5,7 @@ from cache import Cache
 
 class CacheManager(BaseManager):
 	pass
-CacheManager.register('Cache', Cache, exposed=('get','put'))
+CacheManager.register('Cache', Cache, exposed=('get','put','printStats'))
 
 def createManager():
 	manager = CacheManager()

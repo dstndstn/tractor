@@ -236,7 +236,8 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None):
+def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None, just_rcf=False,
+				sdss_psf='kl-gm'):
 	if sdssbands is None:
 		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
@@ -259,6 +260,8 @@ def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None):
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
 
+	if just_rcf:
+		return rcf
 	# rcf = rcf[:16]
 	# rcf = rcf[:4]
 	# rcf = rcf[:1]
@@ -268,15 +271,17 @@ def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None):
 	for r,c,f,ra,dec in rcf:
 		for band in sdssbands:
 			print 'Retrieving', r,c,f,band
-			fn = 'sdss-psf-%03i.png' % i
-			i += 1
-			print fn
-			im,info = st.get_tractor_image(r, c, f, band, psf='kl-gm', useMags=True,
+			#fn = 'sdss-psf-%03i.png' % i
+			#i += 1
+			#print fn
+			im,info = st.get_tractor_image(r, c, f, band, useMags=True,
 										   sdssobj=sdss, roiradecsize=(RA,DEC,S/2),
-										   savepsfimg=fn)
+										   psf=sdss_psf)
+										   #savepsfimg=fn)
 			print 'Image size', im.getWidth(), im.getHeight()
 			if im.getWidth() == 0 or im.getHeight() == 0:
 				continue
+			im.rcf = (r,c,f)
 			tractor.addImage(im)
 			skies.append((info['sky'], info['skysig']))
 
@@ -599,16 +604,16 @@ def main():
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
 
-	def cut_bright(cat, magcut=24):
+	def cut_bright(cat, magcut=24, mag='i'):
 		brightcat = Catalog()
 		I = []
 		mags = []
 		for i,src in enumerate(cat):
-			mag = src.getBrightness().i
-			if mag < magcut:
+			m = getattr(src.getBrightness(), mag)
+			if m < magcut:
 				#brightcat.append(src)
 				I.append(i)
-				mags.append(mag)
+				mags.append(m)
 		J = np.argsort(mags)
 		I = np.array(I)
 		I = I[J]
@@ -892,6 +897,19 @@ def main():
 
 	from tractor.mpcache import createCache
 
+	def print_frozen(tractor):
+		for nm,meliq,liq in tractor.getParamStateRecursive():
+			if liq:
+				print ' ',
+			else:
+				print 'F',
+			if meliq:
+				print ' ',
+			else:
+				print 'F',
+			print nm
+
+
 	def stage06(tractor=None, mp=None, steps=None,
 				**kwargs):
 		print 'Tractor:', tractor
@@ -916,7 +934,7 @@ def main():
 		tractor.setImages(Images(*sdssimages))
 
 		allsources = tractor.getCatalog()
-		brightcat,Ibright = cut_bright(allsources, magcut=23)
+		brightcat,Ibright = cut_bright(allsources, magcut=23, mag='i2')
 		tractor.setCatalog(brightcat)
 
 		plotims = [0,]
@@ -928,30 +946,30 @@ def main():
 
 		sbands = ['g','r','i']
 
+		# Set all bands = i2, and save those params.
+		for src in brightcat:
+			for b in sbands:
+				br = src.getBrightness()
+				setattr(br, b, br.i2)
+		tractor.catalog.thawParamsRecursive(*sbands)
+		params0 = tractor.getParams()
+
 		for imi,im in enumerate(sdssimages):
 			print 'Fitting image', imi, 'of', len(sdssimages)
 			tractor.setImages(Images(im))
 			band = im.photocal.bandname
 			print im
 			print 'Band', band
-			#tractor.catalog.freezeAllBut(band)
+			# Reset params.
+			tractor.catalog.thawParamsRecursive(*sbands)
+			tractor.setParams(params0)
+			
 			tractor.catalog.freezeParamsRecursive(*sbands)
 			tractor.catalog.thawParamsRecursive(band)
 			print 'Tractor:', tractor
 			print 'Active params:'
 			for nm in tractor.getParamNames():
 				print '  ', nm
-
-			# for nm,meliq,liq in tractor.getParamStateRecursive():
-			# 	if liq:
-			# 		print ' ',
-			# 	else:
-			# 		print 'F',
-			# 	if meliq:
-			# 		print ' ',
-			# 	else:
-			# 		print 'F',
-			# 	print nm
 
 			step = 7000 + imi*3
 			plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
@@ -966,7 +984,9 @@ def main():
 			plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
 				  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
 
-			allp.append((band, tractor.getParams()))
+			p = tractor.getParams()
+			print 'Saving params', p
+			allp.append((band, p))
 
 			print 'Cache stats'
 			cache.printStats()
@@ -978,27 +998,86 @@ def main():
 
 	def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 		print 'Tractor:', tractor
-		tractor.mp = mp
 
-		if Ibright is None:
-			# argh, forgot to save it.
-			# Last measurements for each band in allp...
-			lastg = np.array(allp[-3][1])
-			lastr = np.array(allp[-2][1])
-			lasti = np.array(allp[-1][1])
-			ib = np.zeros(len(lastg), int)
-			for j,src in enumerate(tractor.getCatalog()):
-				b = src.brightness
-				I = np.flatnonzero(b.g == lastg)
-				J = np.flatnonzero(b.r == lastr)
-				K = np.flatnonzero(b.i == lasti)
-				if len(I) == 1 and len(J) == 1 and len(K) == 1 and I[0] == J[0] and I[0] == K[0]:
-					ib[I[0]] = j
-			assert(len(ib) == len(lastg))
-			bright = [tractor.getCatalog()[i] for i in ib]
-			assert(all(np.array([b.brightness.g for b in bright]) == lastg))
-		else:
-			bright = [tractor.getCatalog()[i] for i in Ibright]
+		#rcf = get_tractor(RA, DEC, sz, [], just_rcf=True)
+		tr1,nil = get_tractor(RA, DEC, sz, [], sdss_psf='dg', sdssbands=['g','r','i'])
+		rcf = []
+		for im in tr1.getImages():
+			rcf.append(im.rcf + (None,None))
+		print 'RCF', rcf
+		print len(rcf)
+		print 'Kept', len(rcf), 'of', len(tr1.getImages()), 'images'
+		# W = fits_table('window_flist-dr8.fits')
+		W = fits_table('window_flist-DR8-S82.fits')
+		scores = []
+		noscores = []
+		rcfscore = {}
+		for r,c,f,nil,nil in rcf:
+			print 'RCF', r,c,f
+			w = W[(W.run == r) * (W.camcol == c) * (W.field == f)]
+			print w
+			if len(w) == 0:
+				print 'No entry'
+				noscores.append((r,c,f))
+				continue
+			score = w.score[0]
+			print 'score', score
+			scores.append(score)
+			rcfscore[(r,c,f)] = score
+		print 'No scores:', noscores
+		plt.clf()
+		plt.hist(scores, 20)
+		plt.savefig('scores.png')
+		print len(scores), 'scores'
+		scores = np.array(scores)
+		print sum(scores > 0.5), '> 0.5'
+
+		# if Ibright is None:
+		# 	# argh, forgot to save it.
+		# 	# Last measurements for each band in allp...
+		# 	lastg = np.array(allp[-3][1])
+		# 	lastr = np.array(allp[-2][1])
+		# 	lasti = np.array(allp[-1][1])
+		# 	ib = np.zeros(len(lastg), int)
+		# 	for j,src in enumerate(tractor.getCatalog()):
+		# 		b = src.brightness
+		# 		I = np.flatnonzero(b.g == lastg)
+		# 		J = np.flatnonzero(b.r == lastr)
+		# 		K = np.flatnonzero(b.i == lasti)
+		# 		if len(I) == 1 and len(J) == 1 and len(K) == 1 and I[0] == J[0] and I[0] == K[0]:
+		# 			ib[I[0]] = j
+		# 	assert(len(ib) == len(lastg))
+		# 	Ibright = np.array(ib)
+		# 	#bright = [tractor.getCatalog()[i] for i in ib]
+		# 	#assert(all(np.array([b.brightness.g for b in bright]) == lastg))
+		# else:
+		# 	#bright = [tractor.getCatalog()[i] for i in Ibright]
+		# 	pass
+
+		allsources = tractor.getCatalog()
+		bright = Catalog()
+		for i in Ibright:
+			bright.append(allsources[i])
+		tractor.setCatalog(bright)
+
+		allimages = tractor.getImages()
+		sdssimages = [im for im in allimages if im.name.startswith('SDSS')]
+		tractor.setImages(Images(*sdssimages))
+
+		# Add "rcf" and "score" fields to the SDSS images...
+		# first build name->rcf map
+		namercf = {}
+		print len(tr1.getImages()), 'tr1 images'
+		print len(tractor.getImages()), 'tractor images'
+		for im in tr1.getImages():
+			print im.name, '->', im.rcf
+			namercf[im.name] = im.rcf
+		for im in tractor.getImages():
+			print im.name
+			rcf = namercf[im.name]
+			print '->', rcf
+			im.rcf = rcf
+			im.score = rcfscore.get(rcf, None)
 
 		allmags = {}
 		for band,p in allp:
@@ -1010,29 +1089,131 @@ def main():
 			vals = np.array(vals)
 			allmags[band] = vals
 			nimg,nsrcs = vals.shape
+			#print 'band', band, 'nimg,nsrcs', nimg,nsrcs
+			#print vals.T
 
+		#nout = np.zeros(nimg,int)
 		for i in range(nsrcs):
+			print 'source', i
+			#print tractor.getCatalog()[Ibright[i]]
+			print tractor.getCatalog()[i]
 			plt.clf()
 			cmap = dict(r='r', g='g', i='m')
 			pp = {}
 			for band,vals in allmags.items():
 				# hist(histtype='step') breaks when no vals are within the range.
 				X = vals[:,i]
+				#print 'band', band, 'X', X.shape
 				mn,mx = 15,25
-				keep = X[(X >= mn) * (X <= mx)]
+				keep = ((X >= mn) * (X <= mx))
 				if sum(keep) == 0:
+					print 'skipping', band
 					continue
 				n,b,p = plt.hist(vals[:,i], 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
+
+				# #q1,q2,q3 = [np.percentile(vals[:,i], p) for p in [25,50,75]]
+				# lo,hi = [np.percentile(vals[:,i], pct) for pct in [10,90]]
+				# print 'Band', band, sum(keep)
+				# print '10-90th pct:', lo,hi
+				# out = np.flatnonzero(np.logical_or(vals[:,i] < lo, vals[:,i] > hi))
+				# print 'Outliers:', out
+				# nout[out] += 1
+
 				pp[band] = p
 			pp['i2'] = plt.axvline(bright[i].brightness.i2, color=(0.5,0,0.5), lw=2, alpha=0.5)
 			order = ['g','r','i','i2']
 			plt.legend([pp[k] for k in order if k in pp], [k for k in order if k in pp], 'upper right')
 			fn = 'mags-%02i.png' % i
+			plt.ylim(0, 75)
+			plt.xlim(mn,mx)
 			plt.savefig(fn)
 			print 'Wrote', fn
 
-		return {}
-		
+		#print 'Outliers per-image:', nout
+
+		sbands = ['g','r','i']
+
+		omit = []
+		zps = dict([(b,[]) for b in sbands])
+		skys = dict([(b,[]) for b in sbands])
+		for i,im in enumerate(sdssimages):
+			band = im.photocal.bandname
+			zps[band].append((im.photocal.aa,i))
+			skys[band].append((im.sky.getValue(),i))
+		print 'Zeropoints:'
+		for k,zpi in zps.items():
+			zpi = np.array(zpi)
+			zp = zpi[:,0]
+			zpi = zpi[:,1]
+			print k, 'zp', zp
+			#lo,hi = [np.percentile(zp, pct) for pct in [10,90]]
+			#out = np.flatnonzero(np.logical_or(zp < lo, zp > hi))
+			#print 'Outliers:', out
+			I = np.argsort(zp)
+			print zp[I]
+			omit.append(zpi[I[-2:]])
+			sky = np.array(skys[k])
+			sky = sky[:,0]
+			I = np.argsort(sky)
+			print 'sky', sky[I]
+		omit = np.hstack(omit)
+		print 'Omitting images', omit
+
+
+
+		goodimages = []
+		Iimages = []
+		for i,im in enumerate(allimages):
+			if im.name.startswith('SDSS') and im.score is not None and im.score >= 0.5:
+				goodimages.append(im)
+				Iimages.append(i)
+		Iimages = np.array(Iimages)
+		tractor.setImages(Images(*goodimages))
+
+		cache = createCache(maxsize=10000)
+		print 'Using multiprocessing cache', cache
+		tractor.cache = cache
+		tractor.pickleCache = True
+		tractor.freezeParam('images')
+		tractor.catalog.thawParamsRecursive('*')
+		tractor.catalog.freezeParamsRecursive('pos', 'i2', 'shape')
+
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+
+		print 'Tractor:', tractor
+
+		# Set all bands = i2, and save those params.
+		for src in bright:
+			br = src.getBrightness()
+			m = min(br.i2, 28)
+			for b in sbands:
+				setattr(br, b, m)
+		tractor.catalog.thawParamsRecursive(*sbands)
+		params0 = tractor.getParams()
+
+		print 'Tractor:', tractor
+		print 'Active params:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		step = 8000
+		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': '+im.name+' init', **plotsa)
+		optsourcestogether(tractor, step, doplots=False)
+		plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+		optsourcesseparate(tractor, step, doplots=False)
+		tractor.catalog.thawAllParams()
+		plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
+
+		tractor.setImages(allimages)
+		tractor.setCatalog(allsources)
+
+		return dict(tractor=tractor, Ibright=Ibright, Iimages=Iimages)
+
+
 	def stage06old():
 		p0 = np.array(tractor.getParams())
 		pnames = np.array(tractor.getParamNames())
