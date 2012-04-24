@@ -417,18 +417,20 @@ class Tractor(MultiParams):
 		self.setParams(X)
 		lnp = self.getLogProb()
 		print self.cache
-		print 'Items:'
-		self.cache.printItems()
+		#print 'Items:'
+		#self.cache.printItems()
 		print
 		return lnp
 
 	# For pickling
 	def __getstate__(self):
+		#print 'pickling tractor in pid', os.getpid()
 		S = (self.getImages(), self.getCatalog(), self.liquid)
 		if self.pickleCache:
 			S = S + (self.cache,)
 		return S
 	def __setstate__(self, state):
+		#print 'unpickling tractor in pid', os.getpid()
 		if len(state) == 3:
 			(images, catalog, liquid) = state
 			self.pickleCache = False

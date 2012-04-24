@@ -31,16 +31,17 @@ class Cache(object):
 		e.val = val
 		e.size = sz
 		e.hits = 0
+		# purge LRU item
+		if len(self.dict) >= self.maxsize:
+			self.dict.popitem(0)
 		self.dict[key] = e
+
 	def __getitem__(self, key):
 		# pop
 		try:
 			e = self.dict.pop(key)
 		except KeyError:
 			self.misses += 1
-			# purge LRU item
-			if len(self.dict) > self.maxsize:
-				self.dict.popitem(0)
 			raise
 		self.hits += 1
 		# reinsert (to record recent use)

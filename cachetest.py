@@ -22,22 +22,16 @@ sources = st.get_tractor_sources(run, camcol, field,bandname, bands=[bandname])
 
 #sources = [sources[J[i]] for i in range(10)]
 
-sources = sources[:10]
+sources = sources[:20]
 
 tractor = Tractor([timg], sources)
 tractor.cache = Cache(maxsize=100)
 
-tractor.getLogProb()
-print 'After first getLogProb():'
-print tractor.cache
-print 'Items:'
-tractor.cache.printItems()
-print
-
-tractor.getLogProb()
-print 'After second getLogProb():'
-print tractor.cache
-print 'Items:'
-tractor.cache.printItems()
-print
+for step in range(10):
+	tractor.getLogProb()
+	print 'After getLogProb() number', (step+1)
+	print tractor.cache
+	print 'Items:'
+	tractor.cache.printItems()
+	print
 

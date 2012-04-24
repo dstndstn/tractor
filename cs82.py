@@ -1244,7 +1244,7 @@ def main():
 
 		# cache = createCache(maxsize=10000)
 		# print 'Using multiprocessing cache', cache
-		tractor.cache = Cache(maxsize=100)
+		# tractor.cache = Cache(maxsize=100)
 		# tractor.pickleCache = True
 
 		# Ugh!
