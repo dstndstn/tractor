@@ -69,6 +69,37 @@ class Cache(object):
 			if v is None:
 				continue
 			print '  size', v.size, 'hits', v.hits
+	def __str__(self):
+		s =  'Cache: %i items, total of %i hits, %i misses' % (len(self), self.hits, self.misses)
+		nnone = 0
+		hits = 0
+		size = 0
+		for k,v in self.dict.items():
+			if v is None:
+				nnone += 1
+				continue
+			if v.val is None:
+				nnone += 1
+				continue
+			hits += v.hits
+			size += v.size
+		s +=  ', %i entries are None' % nnone
+		s +=  '; current cache entries: %i hits, %i pixels' % (hits, size)
+		return s
+
+	def printItems(self):
+		for k,v in self.dict.items():
+			val = None
+			hits = None
+			size = None
+			if v is not None:
+				if v.val is not None:
+					val = v.val
+					hits = v.hits
+					size = v.size
+			print '  ', hits, size, k
+
+		
 	def printStats(self):
 		print 'Cache has', len(self), 'items'
 		print 'Total of', self.hits, 'cache hits and', self.misses, 'misses'

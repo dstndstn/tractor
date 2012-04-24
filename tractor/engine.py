@@ -416,6 +416,10 @@ class Tractor(MultiParams):
 		print 'Tractor.__call__: I am pid', os.getpid()
 		self.setParams(X)
 		lnp = self.getLogProb()
+		print self.cache
+		print 'Items:'
+		self.cache.printItems()
+		print
 		return lnp
 
 	# For pickling

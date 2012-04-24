@@ -999,8 +999,10 @@ def main():
 	def stage07(tractor=None, allp=None, Ibright=None, mp=None, **kwargs):
 		print 'Tractor:', tractor
 
+		sbands = ['g','r','i']
+
 		#rcf = get_tractor(RA, DEC, sz, [], just_rcf=True)
-		tr1,nil = get_tractor(RA, DEC, sz, [], sdss_psf='dg', sdssbands=['g','r','i'])
+		tr1,nil = get_tractor(RA, DEC, sz, [], sdss_psf='dg', sdssbands=sbands)
 		rcf = []
 		for im in tr1.getImages():
 			rcf.append(im.rcf + (None,None))
@@ -1031,28 +1033,6 @@ def main():
 		print len(scores), 'scores'
 		scores = np.array(scores)
 		print sum(scores > 0.5), '> 0.5'
-
-		# if Ibright is None:
-		# 	# argh, forgot to save it.
-		# 	# Last measurements for each band in allp...
-		# 	lastg = np.array(allp[-3][1])
-		# 	lastr = np.array(allp[-2][1])
-		# 	lasti = np.array(allp[-1][1])
-		# 	ib = np.zeros(len(lastg), int)
-		# 	for j,src in enumerate(tractor.getCatalog()):
-		# 		b = src.brightness
-		# 		I = np.flatnonzero(b.g == lastg)
-		# 		J = np.flatnonzero(b.r == lastr)
-		# 		K = np.flatnonzero(b.i == lasti)
-		# 		if len(I) == 1 and len(J) == 1 and len(K) == 1 and I[0] == J[0] and I[0] == K[0]:
-		# 			ib[I[0]] = j
-		# 	assert(len(ib) == len(lastg))
-		# 	Ibright = np.array(ib)
-		# 	#bright = [tractor.getCatalog()[i] for i in ib]
-		# 	#assert(all(np.array([b.brightness.g for b in bright]) == lastg))
-		# else:
-		# 	#bright = [tractor.getCatalog()[i] for i in Ibright]
-		# 	pass
 
 		allsources = tractor.getCatalog()
 		bright = Catalog()
@@ -1089,13 +1069,9 @@ def main():
 			vals = np.array(vals)
 			allmags[band] = vals
 			nimg,nsrcs = vals.shape
-			#print 'band', band, 'nimg,nsrcs', nimg,nsrcs
-			#print vals.T
 
-		#nout = np.zeros(nimg,int)
 		for i in range(nsrcs):
 			print 'source', i
-			#print tractor.getCatalog()[Ibright[i]]
 			print tractor.getCatalog()[i]
 			plt.clf()
 			cmap = dict(r='r', g='g', i='m')
@@ -1103,22 +1079,12 @@ def main():
 			for band,vals in allmags.items():
 				# hist(histtype='step') breaks when no vals are within the range.
 				X = vals[:,i]
-				#print 'band', band, 'X', X.shape
 				mn,mx = 15,25
 				keep = ((X >= mn) * (X <= mx))
 				if sum(keep) == 0:
 					print 'skipping', band
 					continue
 				n,b,p = plt.hist(vals[:,i], 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
-
-				# #q1,q2,q3 = [np.percentile(vals[:,i], p) for p in [25,50,75]]
-				# lo,hi = [np.percentile(vals[:,i], pct) for pct in [10,90]]
-				# print 'Band', band, sum(keep)
-				# print '10-90th pct:', lo,hi
-				# out = np.flatnonzero(np.logical_or(vals[:,i] < lo, vals[:,i] > hi))
-				# print 'Outliers:', out
-				# nout[out] += 1
-
 				pp[band] = p
 			pp['i2'] = plt.axvline(bright[i].brightness.i2, color=(0.5,0,0.5), lw=2, alpha=0.5)
 			order = ['g','r','i','i2']
@@ -1128,38 +1094,6 @@ def main():
 			plt.xlim(mn,mx)
 			plt.savefig(fn)
 			print 'Wrote', fn
-
-		#print 'Outliers per-image:', nout
-
-		sbands = ['g','r','i']
-
-		omit = []
-		zps = dict([(b,[]) for b in sbands])
-		skys = dict([(b,[]) for b in sbands])
-		for i,im in enumerate(sdssimages):
-			band = im.photocal.bandname
-			zps[band].append((im.photocal.aa,i))
-			skys[band].append((im.sky.getValue(),i))
-		print 'Zeropoints:'
-		for k,zpi in zps.items():
-			zpi = np.array(zpi)
-			zp = zpi[:,0]
-			zpi = zpi[:,1]
-			print k, 'zp', zp
-			#lo,hi = [np.percentile(zp, pct) for pct in [10,90]]
-			#out = np.flatnonzero(np.logical_or(zp < lo, zp > hi))
-			#print 'Outliers:', out
-			I = np.argsort(zp)
-			print zp[I]
-			omit.append(zpi[I[-2:]])
-			sky = np.array(skys[k])
-			sky = sky[:,0]
-			I = np.argsort(sky)
-			print 'sky', sky[I]
-		omit = np.hstack(omit)
-		print 'Omitting images', omit
-
-
 
 		goodimages = []
 		Iimages = []
@@ -1212,6 +1146,160 @@ def main():
 		tractor.setCatalog(allsources)
 
 		return dict(tractor=tractor, Ibright=Ibright, Iimages=Iimages)
+
+	def stage08(tractor=None, Ibright=None, Iimages=None, mp=None, **kwargs):
+		print 'Tractor:', tractor
+		sbands = ['g','r','i']
+
+		# Grab individual-image fits from stage06
+		pfn = 'tractor%02i.pickle' % 6
+		print 'Reading pickle', pfn
+		R = unpickle_from_file(pfn)
+		allp = R['allp']
+		del R
+
+		allsources = tractor.getCatalog()
+		bright = Catalog(*[allsources[i] for i in Ibright])
+
+		allimages = tractor.getImages()
+		# = 4 + all SDSS
+		print 'All images:', len(allimages)
+
+		# 78 = 26 * 3 good-scoring images
+		# index is in 'allimages'.
+		print 'Iimages:', len(Iimages)
+		# 219 = 73 * 3 all SDSS images
+		print 'allp:', len(allp)
+
+		# HACK -- assume CFHT images are at the front
+		Ncfht = len(allimages) - len(allp)
+
+		allmags = dict([(b,[]) for b in sbands])
+		goodmags = dict([(b,[]) for b in sbands])
+		for i,(band,p) in enumerate(allp):
+			allmags[band].append(p)
+			if (Ncfht + i) in Iimages:
+				goodmags[band].append(p)
+		for band,vals in allmags.items():
+			vals = np.array(vals)
+			allmags[band] = vals
+			nimg,nsrcs = vals.shape
+			goodmags[band] = np.array(goodmags[band])
+		print 'nsrcs', nsrcs
+
+		for i in range(nsrcs):
+			##### 
+			continue
+			print 'source', i
+			#print tractor.getCatalog()[i]
+			plt.clf()
+			#cmap = dict(r='r', g='g', i='m')
+			cmap = dict(r=(1,0,0), g=(0,0.7,0), i=(0.8,0,0.8))
+			pp = {}
+			for band,vals in allmags.items():
+				# hist(histtype='step') breaks when no vals are within the range.
+				X = vals[:,i]
+				mn,mx = 15,25
+				keep = ((X >= mn) * (X <= mx))
+				if sum(keep) == 0:
+					print 'skipping', band
+					continue
+				cc = cmap[band]
+				s = 0.2
+				cc = [c*s+(1.-s)*0.5 for c in cc]
+				n,b,p = plt.hist(X, 100, range=(mn,mx), color=cc, histtype='step', alpha=0.5)#, ls='dashed')
+				#pp[band] = p
+			for band,vals in goodmags.items():
+				# hist(histtype='step') breaks when no vals are within the range.
+				X = vals[:,i]
+				mn,mx = 15,25
+				keep = ((X >= mn) * (X <= mx))
+				if sum(keep) == 0:
+					print 'skipping', band
+					continue
+				n,b,p = plt.hist(X, 100, range=(mn,mx), color=cmap[band], histtype='step', alpha=0.7)
+				pp[band] = p
+				plt.axvline(bright[i].brightness.getMag(band), color=cmap[band], lw=2, alpha=0.5)
+				me,std = np.mean(X), np.std(X)
+				xx = np.linspace(mn,mx, 500)
+				yy = 1./(np.sqrt(2.*np.pi)*std) * np.exp(-0.5*(xx-me)**2/std**2)
+				yy *= sum(n)*(b[1]-b[0])
+				plt.plot(xx, yy, '-', color=cmap[band])
+
+			pp['i2'] = plt.axvline(bright[i].brightness.i2, color=(0.5,0,0.5), lw=2, alpha=0.5)
+			order = ['g','r','i','i2']
+			plt.legend([pp[k] for k in order if k in pp], [k for k in order if k in pp], 'upper right')
+			fn = 'mags-%02i.png' % i
+			plt.ylim(0, 60)
+			plt.xlim(mn,mx)
+			plt.savefig(fn)
+			print 'Wrote', fn
+
+
+		#tractor.setImages(Images(*allimages))
+		goodimages = Images(*[allimages[i] for i in Iimages])
+		tractor.setImages(goodimages)
+		tractor.setCatalog(bright)
+		print 'MCMC with tractor:', tractor
+
+		# cache = createCache(maxsize=10000)
+		# print 'Using multiprocessing cache', cache
+		tractor.cache = Cache(maxsize=100)
+		# tractor.pickleCache = True
+
+		# Ugh!
+		# No cache:
+		# MCMC took 307.5 wall, 3657.9 s worker CPU, pickled 64/64 objs, 30922.6/0.008 MB
+		# With cache:
+		# MCMC took 354.3 wall, 4568.5 s worker CPU, pickled 64/64 objs, 30922.6/0.008 MB
+		# but:
+		# Cache stats
+		# Cache has 480882 items
+		# Total of 0 cache hits and 613682 misses
+		# so maybe something is bogus...
+
+		p0 = np.array(tractor.getParams())
+		print 'Tractor params:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		ndim = len(p0)
+		nw = 200
+		sampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
+										live_dangerously=True)
+
+		psteps = np.zeros_like(p0) + 0.001
+		pp = emcee.EnsembleSampler.sampleBall(p0, psteps, nw)
+		# Put one walker at the nominal position.
+		pp[0,:] = p0
+
+		rstate = None
+		lnp = None
+		smags = []
+		for step in range(1, 201):
+			smags.append(pp.copy())
+			print 'Run MCMC step', step
+			kwargs = dict(storechain=False)
+			t0 = Time()
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate, **kwargs)
+			print 'Running acceptance fraction: emcee'
+			print 'after', sampler.iterations, 'iterations'
+			print 'mean', np.mean(sampler.acceptance_fraction)
+			t_mcmc = (Time() - t0)
+			print 'Best lnprob:', np.max(lnp)
+			print 'dlnprobs:', ', '.join(['%.1f' % d for d in lnp - np.max(lnp)])
+			print 'MCMC took', t_mcmc, 'sec'
+
+			#print 'Cache stats'
+			#cache.printStats()
+
+
+		tractor.setParams(p0)
+		tractor.setCatalog(allsources)
+		tractor.setImages(allimages)
+		return dict(tractor=tractor, Ibright=Ibright, Iimages=Iimages,
+					allp=allp, smags=smags, allmags=allmags, goodmags=goodmags)
+
 
 
 	def stage06old():
@@ -1387,7 +1475,7 @@ def main():
 		#F = locals()['stage%02i' % stage]
 		#F = globals()['stage%02i' % stage]
 		ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
-			   5: stage05, 6: stage06, 7: stage07,
+			   5: stage05, 6: stage06, 7: stage07, 8: stage08,
 			   }
 		F = ss[stage]
 		P.update(mp=mp)
