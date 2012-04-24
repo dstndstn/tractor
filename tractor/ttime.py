@@ -1,3 +1,29 @@
+import os
+import resource
+def memusage():
+	# print heapy.heap()
+	#ru = resource.getrusage(resource.RUSAGE_BOTH)
+	ru = resource.getrusage(resource.RUSAGE_SELF)
+	pgsize = resource.getpagesize()
+	print 'Memory usage:'
+	#print 'page size', pgsize
+	print 'max rss:', (ru.ru_maxrss * pgsize / 1e6), 'MB'
+	#print 'shared memory size:', (ru.ru_ixrss / 1e6), 'MB'
+	#print 'unshared memory size:', (ru.ru_idrss / 1e6), 'MB'
+	#print 'unshared stack size:', (ru.ru_isrss / 1e6), 'MB'
+	#print 'shared memory size:', ru.ru_ixrss
+	#print 'unshared memory size:', ru.ru_idrss
+	#print 'unshared stack size:', ru.ru_isrss
+	procfn = '/proc/%d/status' % os.getpid()
+	try:
+		t = open(procfn).readlines()
+		#print 'proc file:', t
+		d = dict([(line.split()[0][:-1], line.split()[1:]) for line in t])
+		#print 'dict:', d
+		for key in ['VmPeak', 'VmSize', 'VmRSS', 'VmData', 'VmStk' ]: # VmLck, VmHWM, VmExe, VmLib, VmPTE
+			print key, ' '.join(d.get(key, []))
+	except:
+		pass
 
 class Time(object):
 	@staticmethod

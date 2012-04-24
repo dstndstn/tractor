@@ -7,6 +7,10 @@ import numpy as np
 from tractor import *
 from tractor import sdss as st
 from tractor.cache import *
+from tractor.ttime import *
+import gc
+#gc.set_debug(gc.DEBUG_LEAK)
+#gc.enable()
 
 run,camcol,field = 3384, 4, 198
 bandname = 'r'
@@ -35,3 +39,18 @@ for step in range(10):
 	tractor.cache.printItems()
 	print
 
+print 'Before clearing cache...'
+print tractor.cache
+memusage()
+
+tractor.cache.clear()
+
+gc.collect()
+
+print 'After clearing cache...'
+print tractor.cache
+memusage()
+
+#print 'garbage:'
+#for x in gc.garbage:
+#	print x

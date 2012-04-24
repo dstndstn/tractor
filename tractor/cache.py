@@ -15,11 +15,15 @@ class Cache(object):
 	class Entry(object):
 		pass
 	def __init__(self, maxsize=1000, sizeattr='size'):
+		self.clear()
+		self.maxsize = maxsize
+		self.sizeattr = sizeattr
+
+	def clear(self):
 		self.dict = OrderedDict()
 		self.hits = 0
 		self.misses = 0
-		self.maxsize = maxsize
-		self.sizeattr = sizeattr
+		
 	def __setitem__(self, key, val):
 		sz = 0
 		if hasattr(val, self.sizeattr):
