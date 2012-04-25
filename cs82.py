@@ -591,12 +591,14 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	import debugpool
-	global dpool
-	dpool = debugpool.DebugPool(opt.threads)
-	Time.add_measurement(debugpool.DebugPoolMeas(dpool))
-	mp = multiproc(pool=dpool)
-	#mp = multiproc(opt.threads)
+	if opt.threads > 1:
+		global dpool
+		import debugpool
+		dpool = debugpool.DebugPool(opt.threads)
+		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
+		mp = multiproc(pool=dpool)
+	else:
+		mp = multiproc(opt.threads)
 
 	RA,DEC = 334.4, 0.3
 	sz = 2.*60. # arcsec
@@ -1236,17 +1238,21 @@ def main():
 			print 'Wrote', fn
 
 
-		#tractor.setImages(Images(*allimages))
 		goodimages = Images(*[allimages[i] for i in Iimages])
 		tractor.setImages(goodimages)
 		tractor.setCatalog(bright)
+		print 'MCMC with tractor:', tractor
+
+		# DEBUG
+		goodimages = Images(*[allimages[i] for i in Iimages[:4]])
+		tractor.setImages(goodimages)
+		tractor.setCatalog(Catalog(*bright[:5]))
 		print 'MCMC with tractor:', tractor
 
 		# cache = createCache(maxsize=10000)
 		# print 'Using multiprocessing cache', cache
 		# tractor.cache = Cache(maxsize=100)
 		# tractor.pickleCache = True
-
 		# Ugh!
 		# No cache:
 		# MCMC took 307.5 wall, 3657.9 s worker CPU, pickled 64/64 objs, 30922.6/0.008 MB
@@ -1260,11 +1266,11 @@ def main():
 
 		p0 = np.array(tractor.getParams())
 		print 'Tractor params:'
-		for nm in tractor.getParamNames():
-			print '  ', nm
+		for i,nm in enumerate(tractor.getParamNames()):
+			print '  ', nm, '=', p0[i]
 
 		ndim = len(p0)
-		nw = 200
+		nw = 100
 		sampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
 										live_dangerously=True)
 
@@ -1293,6 +1299,11 @@ def main():
 			#print 'Cache stats'
 			#cache.printStats()
 
+			print 'SDSS galaxy cache:'
+			print get_galaxy_cache()
+			
+
+			break
 
 		tractor.setParams(p0)
 		tractor.setCatalog(allsources)

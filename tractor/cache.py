@@ -5,6 +5,7 @@ except:
 	#from .ordereddict import OrderedDict
 	from ordereddict import OrderedDict
 
+
 '''
 LRU cache.
 This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/

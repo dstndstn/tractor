@@ -5,6 +5,12 @@ import mixture_profiles as mp
 from engine import *
 from utils import *
 
+from cache import *
+
+_galcache = Cache()
+def get_galaxy_cache():
+	return _galcache
+
 class GalaxyShape(ParamList):
 	@staticmethod
 	def getNamedParams():
@@ -12,8 +18,6 @@ class GalaxyShape(ParamList):
 		# ab: axis ratio, dimensionless, in [0,1]
 		# phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
 		return dict(re=0, ab=1, phi=2)
-	#def hashkey(self):
-	#	return ('GalaxyShape',) + tuple(self.vals)
 	def __repr__(self):
 		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 	def __str__(self):
@@ -140,10 +144,6 @@ class Galaxy(MultiParams):
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 
-	#def hashkey(self):
-	#	return (self.name, self.pos.hashkey(), self.brightness.hashkey(),
-	#			self.re, self.ab, self.phi)
-
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with ' + str(self.brightness)
@@ -164,10 +164,10 @@ class Galaxy(MultiParams):
 						   self.getName())
 
 	def getModelPatch(self, img, px=None, py=None):
-		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		p1 = self.getUnitFluxModelPatch(img, px, py)
 		if p1 is None:
 			return None
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return p1 * counts
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
@@ -267,13 +267,7 @@ class CompositeGalaxy(Galaxy):
 
 	def getName(self):
 		return 'CompositeGalaxy'
-	#def getBrightness(self):
-		#return self.brightnessExp + self.brightnessDev
 
-	# def hashkey(self):
-	# 	return (self.name, self.pos.hashkey(),
-	# 			self.brightnessExp.hashkey(), self.shapeExp.hashkey(),
-	# 			self.brightnessDev.hashkey(), self.shapeDev.hashkey())
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
@@ -387,15 +381,40 @@ class HoggGalaxy(Galaxy):
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-		galmix = self.getProfile()
+
+		#
+		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
+					 img.getPsf().hashkey(), self.shape.hashkey()))
+		cached = _galcache.get(deps, None)
+		if cached is not None:
+			# We also want to cache None values!
+			cached,nil = cached
+			return cached
+		patch = self._realGetUnitFluxModelPatch(img, px, py)
+		_galcache.put(deps, (patch,None))
+		return patch
+		
+
+	def _realGetUnitFluxModelPatch(self, img, px, py):
 		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)
-		Tinv = np.linalg.inv(self.shape.getTensor(cd))
-		try:
-			amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
-		except:
-			print 'Failed in getModelPatch of', self
+
+		# now choose the patch size
+		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+		if self.ab <= 1:
+			halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
+		else:
+			halfsize = max(8., 8. * (self.re*self.ab / 3600.) / pixscale)
+		# now evaluate the mixture on the patch pixels
+		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
+		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
+		if inx == [] or iny == []:
+			#print 'No overlap between model and image'
 			return None
+
+		galmix = self.getProfile()
+		Tinv = np.linalg.inv(self.shape.getTensor(cd))
+		amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
 
 		if False:
 			(eval, evec) = np.linalg.eig(amix.var[0])
@@ -410,18 +429,6 @@ class HoggGalaxy(Galaxy):
 		psfmix = psf.getMixtureOfGaussians()
 		psfmix.normalize()
 		cmix = amix.convolve(psfmix)
-		# now choose the patch size
-		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-		if self.ab <= 1:
-			halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
-		else:
-			halfsize = max(8., 8. * (self.re*self.ab / 3600.) / pixscale)
-		# now evaluate the mixture on the patch pixels
-		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
-		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
-		if inx == [] or iny == []:
-			#print 'No overlap between model and image'
-			return None
 		x0 = outx.start
 		y0 = outy.start
 		x1 = outx.stop

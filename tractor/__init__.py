@@ -6,7 +6,7 @@ import cfht
 from ttime import Time
 __all__ = [
 	# modules
-	'sdss', 'fitpsf', 'emfit',
+	'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
 	# 'engine' contents
 	'Params', 'ScalarParam', 'ParamList', 'MultiParams',
 	'NamedParams',
