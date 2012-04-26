@@ -1,4 +1,6 @@
-class NasaSloanPhotoCal(object):
+from .utils import BaseParams
+
+class NasaSloanPhotoCal(BaseParams):
 	'''
 	A temporary photocal for NS atlas
 	'''
@@ -12,6 +14,4 @@ class NasaSloanPhotoCal(object):
 			return 0.
 		logc = (M-22.5)/-2.5
 		return 10.**logc
-	def hashkey(self):
-		return ('TempPhotoCal',)
 
