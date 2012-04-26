@@ -1244,10 +1244,10 @@ def main():
 		print 'MCMC with tractor:', tractor
 
 		# DEBUG
-		goodimages = Images(*[allimages[i] for i in Iimages[:4]])
-		tractor.setImages(goodimages)
-		tractor.setCatalog(Catalog(*bright[:5]))
-		print 'MCMC with tractor:', tractor
+		#goodimages = Images(*[allimages[i] for i in Iimages[:4]])
+		#tractor.setImages(goodimages)
+		#tractor.setCatalog(Catalog(*bright[:5]))
+		#print 'MCMC with tractor:', tractor
 
 		# cache = createCache(maxsize=10000)
 		# print 'Using multiprocessing cache', cache
@@ -1270,7 +1270,9 @@ def main():
 			print '  ', nm, '=', p0[i]
 
 		ndim = len(p0)
-		nw = 100
+		# DEBUG
+		#nw = 100
+		nw = 5
 		sampler = emcee.EnsembleSampler(nw, ndim, tractor, pool = mp.pool,
 										live_dangerously=True)
 

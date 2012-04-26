@@ -1,9 +1,13 @@
-# Copyright 2011, 2012 Dustin Lang and David W. Hogg.  All rights reserved.
+'''
+This file is part of the Tractor project.
+Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Licensed under the GPLv2; see the file COPYING for details.
 
-# to-do:
-# ------
-# -write the paper!
-# -release DR9.1
+`engine.py`
+===========
+
+Core image modeling and fitting.
+'''
 
 from math import ceil, floor, pi, sqrt, exp
 import time
@@ -23,8 +27,6 @@ from .utils import MultiParams
 from .cache import *
 from .ttime import Time
 
-FACTOR = 1.e-10
-
 def logverb(*args):
 	msg = ' '.join([str(x) for x in args])
 	logging.debug(msg)
@@ -36,15 +38,22 @@ def isverbose():
 	return (logging.getLogger().level <= logging.DEBUG)
 
 def set_fp_err():
-	return np.seterr(all='raise')
+	'''Cause all floating-point errors to raise exceptions.
+	Returns the current error state so you can revert via:
 
-def randomint():
-	return int(random.random() * (2**32)) #(2**48))
+	    olderr = set_fp_err()
+	    # do stuff
+	    np.seterr(**olderr)
+	'''
+	return np.seterr(all='raise')
 
 class Image(MultiParams):
 	'''
-	An image plus its calibration information.	The Tractor handles
-	multiple Images.
+	An image plus its calibration information.  An `Image` has pixels,
+	inverse-variance map, WCS, PSF, photometric calibration
+	information, and sky level.  All these things are `Params`
+	instances, and `Image` is a `MultiParams` so that the Tractor can
+	optimize them.
 	'''
 	def __init__(self, **kwargs):
 		'''
@@ -137,7 +146,13 @@ class Image(MultiParams):
 
 class Patch(object):
 	'''
-	An image + pixel offset
+	An image patch; a subimage.  In the Tractor we use these to hold
+	synthesized (ie, model) images.  The patch is a rectangular grid
+	of pixels and it knows its offset (2-d position) in some larger
+	image.
+
+	This class overloads arithmetic operations (like add and multiply)
+	relevant to synthetic image patches.
 	'''
 	def __init__(self, x0, y0, patch):
 		self.x0 = x0
@@ -334,12 +349,16 @@ class Patch(object):
 
 
 class Catalog(MultiParams):
+	'''
+	A list of Source objects.  This class allows the Tractor to treat
+	a set of astronomical sources as a single object with a bunch of
+	parameters.  Most of the functionality comes from the base class.
+	'''
 	deepcopy = MultiParams.copy
 
 	def __str__(self):
-		#self.printLong()
-		#return 'Catalog with %i sources' % len(self)
-		return 'Catalog: %i sources, %i parameters' % (len(self), self.numberOfParams())
+		return ('Catalog: %i sources, %i parameters' %
+				(len(self), self.numberOfParams())
 
 	def printLong(self):
 		print 'Catalog with %i sources:' % len(self)
@@ -358,7 +377,15 @@ class Catalog(MultiParams):
 	def getNamedParamName(self, j):
 		return 'source%i' % j
 
+
 class Images(MultiParams):
+	"""
+	This is a class for holding a list of `Image` objects, each which
+	contains data and metadata.  This class allows the Tractor to
+	treat a list of `Image`s as a single object that has a set of
+	parameters.  Basically all the functionality comes from the base
+	class.
+	"""
 	def getNamedParamName(self, j):
 		return 'image%i' % j
 
@@ -381,14 +408,23 @@ def getmodelimagefunc2((tr, im)):
 	return tr.getModelImage(im)
 
 class Tractor(MultiParams):
+	"""
+	Heavy farm machinery.
+
+	As you might guess from the name, this is the main class of the
+	Tractor framework.  A Tractor has a set of Images and a set of
+	Sources, and has methods to optimize the parameters of those
+	Images and Sources.
+
+	"""
 	@staticmethod
 	def getNamedParams():
 		return dict(images=0, catalog=1)
 
 	def __init__(self, images=[], catalog=[], mp=None):
 		'''
-		image: list of Image objects (data)
-		catalog: list of Source objects
+		- `images:` list of Image objects (data)
+		- `catalog:` list of Source objects
 		'''
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
 		self.cache = Cache()
@@ -417,9 +453,11 @@ class Tractor(MultiParams):
 		self.setParams(X)
 		lnp = self.getLogProb()
 		print self.cache
+		from .sdss_galaxy import get_galaxy_cache
+		print 'Galaxy cache:', get_galaxy_cache()
 		#print 'Items:'
 		#self.cache.printItems()
-		print
+		#print
 		return lnp
 
 	# For pickling
@@ -750,7 +788,9 @@ class Tractor(MultiParams):
 				print 'mx == 0'
 				colscales.append(1.)
 				continue
-			#print 'mx=', mx
+			# MAGIC number: near-zero matrix elements -> 0
+			# 'mx' is the max value in this column.
+			FACTOR = 1.e-10
 			I = (np.abs(vals) > (FACTOR * mx))
 			rows = rows[I]
 			cols = cols[I]

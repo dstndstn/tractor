@@ -1,4 +1,17 @@
-# Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+"""
+This file is part of the Tractor project.
+Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Licensed under the GPLv2; see the file COPYING for details.
+
+`sdss.py`
+===========
+
+SDSS-specific implementation of Tractor elements:
+
+ - retrieves and reads SDSS images, converting them to Tractor language
+ - knows about SDSS photometric and astrometric calibration conventions
+
+"""
 import os
 from math import pi, sqrt, ceil, floor
 from datetime import datetime
@@ -352,7 +365,7 @@ def get_tractor_image(run, camcol, field, bandname,
 	return timg,info
 
 
-class SdssMagsPhotoCal(Params):
+class SdssMagsPhotoCal(BaseParams):
 	'''
 	A photocal that uses Mags objects.
 	'''
@@ -541,7 +554,7 @@ class SdssWcs(ParamList):
 	# RA,Dec in deg to pixel x,y.
 	def positionToPixel(self, pos, src=None):
 		## FIXME -- color.
-		x,y = self.astrans.radec_to_pixel(pos.ra, pos.dec)
+		x,y = self.astrans.radec_to_pixel_single(pos.ra, pos.dec)
 		return x - self.x0, y - self.y0
 
 	# (x,y) to RA,Dec in deg

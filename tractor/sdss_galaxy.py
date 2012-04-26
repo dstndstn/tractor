@@ -1,4 +1,17 @@
-# Copyright 2011 Dustin Lang and David W. Hogg.  All rights reserved.
+"""
+This file is part of the Tractor project.
+Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Licensed under the GPLv2; see the file COPYING for details.
+
+`sdss_galaxy.py`
+===========
+
+SDSS exponential and deVaucouleurs galaxy model classes.
+
+These models are not specific to SDSS *images*, they just use a
+slightly modified definition of the exp and dev profiles from SDSS
+Photo.
+"""
 import numpy as np
 
 import mixture_profiles as mp
@@ -7,7 +20,7 @@ from utils import *
 
 from cache import *
 
-_galcache = Cache()
+_galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
 	return _galcache
 
@@ -426,6 +439,7 @@ class HoggGalaxy(Galaxy):
 		amix.symmetrize()
 		# now convolve with the PSF
 		psf = img.getPsf()
+		# We're making a strong assumption about the PSF here:
 		psfmix = psf.getMixtureOfGaussians()
 		psfmix.normalize()
 		cmix = amix.convolve(psfmix)

@@ -33,7 +33,7 @@ class MixtureOfGaussians():
 		(self.K, self.D) = self.mean.shape
 		self.set_var(var)
 		self.symmetrize()
-		self.test()
+		#self.test()
 
 	def __str__(self):
 		result = "MixtureOfGaussians instance"

@@ -1,6 +1,6 @@
 from ducks import *
 
-class CfhtPhotoCal(Params):
+class CfhtPhotoCal(BaseParams):
 	def __init__(self, hdr=None, bandname=None):
 		self.bandname = bandname
 		if hdr is not None:

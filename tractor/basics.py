@@ -1,3 +1,15 @@
+"""
+This file is part of the Tractor project.
+Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Licensed under the GPLv2; see the file COPYING for details.
+
+`basics.py`
+===========
+
+Generally useful generic implementations of things the Tractor needs:
+Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
+
+"""
 from math import ceil, floor, pi, sqrt, exp
 
 from engine import *
@@ -348,7 +360,7 @@ class PointSource(MultiParams):
 		return derivs
 
 
-class GaussianMixturePSF(Params):
+class GaussianMixturePSF(BaseParams):
 	'''
 	A PSF model that is a mixture of general 2-D Gaussians
 	(characterized by amplitude, mean, covariance)

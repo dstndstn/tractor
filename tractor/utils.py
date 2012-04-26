@@ -1,3 +1,16 @@
+"""
+This file is part of the Tractor project.
+Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Licensed under the GPLv2; see the file COPYING for details.
+
+`utils.py`
+===========
+
+Utility classes: low-level useful implementations of ducks the Tractor
+needs: sets of parameters stored in lists and such.  This framework
+could be useful outside the Tractor context.
+
+"""
 from ducks import *
 
 def getClassName(obj):
@@ -23,7 +36,60 @@ class PlotSequence(object):
 		self.ploti += 1
 
 
-class ScalarParam(Params):
+class BaseParams(object):
+	'''
+	A basic implementation of the `Params` duck type.
+	'''
+	def __repr__(self):
+		return getClassName(self) + repr(self.getParams())
+	def __str__(self):
+		return getClassName(self) + ': ' + str(self.getParams())
+	def copy(self):
+		return self.__class__(self.getParams())
+	def hashkey(self):
+		return (getClassName(self),) + tuple(self.getParams())
+	def __hash__(self):
+		return hash(self.hashkey())
+	def __eq__(self, other):
+		return hash(self) == hash(other)
+	def getParamNames(self):
+		''' Returns a list containing the names of the parameters. '''
+		return []
+	def numberOfParams(self):
+		''' Returns the number of parameters (ie, number of scalar
+		values).'''
+		return len(self.getParams())
+	def getParams(self):
+		''' Returns a *copy* of the current parameter values as an
+		iterable (eg, list)'''
+		return []
+	def getStepSizes(self, *args, **kwargs):
+		''' Returns "reasonable" step sizes for the parameters.'''
+		return []
+	def setParams(self, p):
+		'''
+		Sets the parameter values to the values in the given iterable
+		`p`.  The base class implementation just calls `setParam` for
+		each element.
+		'''
+		assert(len(p) == self.numberOfParams())
+		for ii,pp in enumerate(p):
+			self.setParam(ii, pp)
+	def setParam(self, i, p):
+		'''
+		Sets parameter index `i` to new value `p`.
+
+		i: integer in the range [0, numberOfParams()).
+		p: float
+
+		Returns the old value.
+		'''
+		return None
+		
+
+
+
+class ScalarParam(BaseParams):
 	'''
 	Implementation of "Params" for a single scalar (float) parameter,
 	stored in self.val
@@ -234,7 +300,7 @@ class NamedParams(object):
 				yield (i, j)
 				i += 1
 
-class ParamList(Params, NamedParams):
+class ParamList(BaseParams, NamedParams):
 	'''
 	An implementation of Params that holds values in a list.
 	'''
@@ -329,7 +395,7 @@ class ParamList(Params, NamedParams):
 	def __iter__(self):
 		return ParamList.ParamListIter(self)
 
-class MultiParams(Params, NamedParams):
+class MultiParams(BaseParams, NamedParams):
 	'''
 	An implementation of Params that combines component sub-Params.
 	'''
