@@ -3,12 +3,14 @@ from ducks import *
 from basics import *
 import sdss
 import cfht
+from nasasloan import *
+
 from ttime import Time
 __all__ = [
 	# modules
 	'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
 	# 'engine' contents
-	'Params', 'ScalarParam', 'ParamList', 'MultiParams',
+	'Params', 'BaseParams', 'ScalarParam', 'ParamList', 'MultiParams',
 	'NamedParams',
 	'Sky', 'ConstantSky', 'Source', 'PointSource',
 	'Flux', 'Mag', 'Mags',

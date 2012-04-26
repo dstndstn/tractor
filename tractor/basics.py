@@ -20,11 +20,15 @@ import mixture_profiles as mp
 
 class Mags(ParamList):
 	'''
-	An implementation of Brightness that stores multiple mags.
+	An implementation of `Brightness` that stores magnitudes in
+	multiple bands.
 	'''
 	def __init__(self, **kwargs):
 		'''
 		Mags(r=14.3, g=15.6, order=['r','g'])
+
+		The `order` parameter is optional; it determines the ordering
+		of the bands in the parameter vector (eg, `getParams()`).
 		'''
 		keys = kwargs.pop('order', None)
 		if keys is None:
@@ -40,25 +44,27 @@ class Mags(ParamList):
 		self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
 
 	def getMag(self, bandname):
+		''' Bandname: string
+		Returns: mag in the given band.
+		'''
 		return getattr(self, bandname)
 
-	# For pickling: 
 	def __setstate__(self, state):
-		#super(Mags,self).__setstate__(state)
+		'''For pickling.'''
 		self.__dict__ = state
 		self.addNamedParams(**dict((k,i) for i,k in enumerate(self.order)))
 
 
 class Mag(ScalarParam):
 	'''
-	An implementation of Brightness that stores a single Mag.
+	An implementation of `Brightness` that stores a single magnitude.
 	'''
 	stepsize = 0.01
 	strformat = '%.3f'
 
 class Flux(ScalarParam):
 	'''
-	A simple one-band Flux implementation of Brightness.
+	A `Brightness` implementation that stores raw counts.
 	'''
 	def __mul__(self, factor):
 		new = self.copy()
@@ -72,32 +78,13 @@ class Flux(ScalarParam):
 			pass
 		self.val = max(0., val)
 
-class NullPhotoCal(object):
+class NullPhotoCal(BaseParams):
 	'''
-	The "identity" PhotoCal -- the Brightness objects are in units of Image counts.
+	The "identity" `PhotoCal`, to be used with `Flux` -- the
+	`Brightness` objects are in units of `Image` counts.
 	'''
 	def brightnessToCounts(self, brightness):
 		return brightness.getValue()
-	def hashkey(self):
-		return ('NullPhotoCal',)
-
-class NasaSloanPhotoCal(object):
-	'''
-	A temporary photocal for NS atlas
-	'''
-	def __init__(self,bandname):
-		self.bandname = bandname
-	def brightnessToCounts(self, brightness):
-		M= brightness.getMag(self.bandname)
-		if not np.isfinite(M):
-			return 0.
-		if M > 50.:
-			return 0.
-		logc = (M-22.5)/-2.5
-		return 10.**logc
-	def hashkey(self):
-		return ('TempPhotoCal',)
-
 
 class NullWCS(WCS):
 	'''
