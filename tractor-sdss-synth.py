@@ -224,17 +224,20 @@ def main():
 	
 	timg,info = TI[0]
 	photocal = timg.getPhotoCal()
-	for source in sources:
-		print 'source', source
-		#print 'brightness', source.getBrightness()
-		#print 'counts', photocal.brightnessToCounts(source.getBrightness())
-		#assert(photocal.brightnessToCounts(source.getBrightness()) >= 0.)
+	#for source in sources:
+	#	print 'source', source
+	#	#print 'brightness', source.getBrightness()
+	#	#print 'counts', photocal.brightnessToCounts(source.getBrightness())
+	#	#assert(photocal.brightnessToCounts(source.getBrightness()) >= 0.)
 
 	### DEBUG
 	wcs = timg.getWcs()
 	for i,s in enumerate(sources):
+		print 'Source', s
+		print '  position', s.getPosition()
 		x,y = wcs.positionToPixel(s.getPosition(), s)
-		print i, ('(%.1f, %.1f): ' % (x,y)), s
+		print '  -> x,y (%.1f, %.1f): ' % (x,y)
+		# print i, ('(%.1f, %.1f): ' % (x,y)), s
 
 	tims = [timg for timg,tinf in TI]
 	tractor = st.SDSSTractor(tims)

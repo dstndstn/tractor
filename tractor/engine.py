@@ -358,7 +358,7 @@ class Catalog(MultiParams):
 
 	def __str__(self):
 		return ('Catalog: %i sources, %i parameters' %
-				(len(self), self.numberOfParams())
+				(len(self), self.numberOfParams()))
 
 	def printLong(self):
 		print 'Catalog with %i sources:' % len(self)

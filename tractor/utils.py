@@ -11,7 +11,7 @@ needs: sets of parameters stored in lists and such.  This framework
 could be useful outside the Tractor context.
 
 """
-from ducks import *
+#from ducks import *
 
 def getClassName(obj):
 	name = getattr(obj.__class__, 'classname', None)
@@ -99,9 +99,9 @@ class ScalarParam(BaseParams):
 	def __init__(self, val):
 		self.val = val
 	def __str__(self):
-		return self.getClassName(self) + ': ' + self.strformat % self.val #str(self.val)
+		return getClassName(self) + ': ' + self.strformat % self.val
 	def __repr__(self):
-		return self.getClassName(self) + '(' + repr(self.val) + ')'
+		return getClassName(self) + '(' + repr(self.val) + ')'
 	def getParamNames(self):
 		return [getClassName(self)]
 	def numberOfParams(self):
@@ -569,7 +569,7 @@ class MultiParams(BaseParams, NamedParams):
 				return s.setParam(i-off, p)
 			off += n
 		raise RuntimeError('setParam(%i,...) for a %s that only has %i elements' %
-						   (i, self.getClassName(self), self.numberOfParams()))
+						   (i, getClassName(self), self.numberOfParams()))
 
 	def getStepSizes(self, *args, **kwargs):
 		p = []

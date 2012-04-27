@@ -1,4 +1,4 @@
-from ducks import *
+from .utils import BaseParams
 
 class CfhtPhotoCal(BaseParams):
 	def __init__(self, hdr=None, bandname=None):

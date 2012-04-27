@@ -30,7 +30,7 @@ class Params(object):
 		All elements must be hashable: see
 		http://docs.python.org/glossary.html#term-hashable
 		'''
-		return (,)
+		return ()
 	def __hash__(self):
 		''' Params must be hashable. '''
 		return None

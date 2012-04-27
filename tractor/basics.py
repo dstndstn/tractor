@@ -13,7 +13,7 @@ Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
 from math import ceil, floor, pi, sqrt, exp
 
 from engine import *
-from ducks import *
+#from ducks import *
 from utils import *
 import mixture_profiles as mp
 
@@ -86,7 +86,7 @@ class NullPhotoCal(BaseParams):
 	def brightnessToCounts(self, brightness):
 		return brightness.getValue()
 
-class NullWCS(WCS):
+class NullWCS(BaseParams):
 	'''
 	The "identity" WCS -- useful when you are using raw pixel
 	positions rather than RA,Decs.

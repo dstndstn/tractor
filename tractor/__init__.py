@@ -9,13 +9,22 @@ from ttime import Time
 __all__ = [
 	# modules
 	'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
-	# 'engine' contents
-	'Params', 'BaseParams', 'ScalarParam', 'ParamList', 'MultiParams',
+	# ducks
+	'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
+	'PSF', 
+	# utils
+	'BaseParams', 'ScalarParam', 'ParamList', 'MultiParams',
 	'NamedParams',
-	'Sky', 'ConstantSky', 'Source', 'PointSource',
+	# basics
+	'ConstantSky', 'PointSource',
 	'Flux', 'Mag', 'Mags',
-	'PixPos', 'RaDecPos', 'Image',
-	'PhotoCal', 'NullPhotoCal', 'WCS', 'NullWCS',
-	'FitsWcs', 'Patch', 'PSF', 'GaussianMixturePSF',
-	'NCircularGaussianPSF', 'Catalog', 'Tractor', 'Time',
+	'PixPos', 'RaDecPos',
+	'NullPhotoCal', 'WCS', 'NullWCS',
+	'FitsWcs', 'GaussianMixturePSF',
+	'NCircularGaussianPSF', 
+	# engine
+	'Patch', 'Image', 'Images',
+	'Catalog', 'Tractor',
+	# ttime
+	'Time',
 	]
