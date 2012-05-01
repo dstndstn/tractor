@@ -213,12 +213,33 @@ at 20612
 python -u cs82.py -s 4 -f 4 > log4 2>&1 &
 at 20613
 
-#python -u cs82.py -s 5 -f 5 --threads 8 > log5 2>&1 &
+nice python -u cs82.py -s 5 -f 5 --threads 8 > log5 2>&1 &
+at 20629
+
+python -u cs82.py -s 7 -f 7  > log7 2>&1 &
+at 20644
+
+
+pooltest.py:
+   pickled 34 objs, 60,769,807 bytes, 0.116506 s CPU
+ unpickled 30 objs, 24,339,497 bytes, 0.0158684 s CPU
+
+   pickled 31 objs, 44.157 MB, 0.0927482 s CPU
+ unpickled 27 objs, 22.179 MB, 0.0136151 s CPU
+
+   pickled 31 objs, 23.9961 MB, 0.084888 s CPU
+ unpickled 27 objs, 22.179 MB,  0.014848 s CPU
+
+   pickled 31 objs,  0.234687 MB, 0.0401144 s CPU
+ unpickled 27 objs, 22.179    MB, 0.0114594 s CPU
 
 
 
 Todo:
+-regularizing: use STEP SIZES, don't scale columns
 -how to tune step sizes w.r.t walkers stdevs???
 -think about "maximum plausible step size" for params?
 -priors
+
+
 
