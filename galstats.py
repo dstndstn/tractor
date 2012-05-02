@@ -1,4 +1,5 @@
 import os
+import sys
 import matplotlib
 matplotlib.use('Agg')
 from astrometry.util.pyfits_utils import *
@@ -99,13 +100,65 @@ def plots1():
 	plt.ylabel('number of galaxies')
 	plt.savefig('rad5.png')
 
+def plots2():
+	T = fits_table('exp3818i_dstn.fit')
+
+	plt.clf()
+	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.1,10),(15,22)))
+	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
+	plt.colorbar()
+	plt.savefig('radi-mag1.png')
+
+	plt.clf()
+	n,b,p = plt.hist(np.log10(T.exprad_i), 100, range=(np.log10(0.1), np.log10(10.)))
+	plt.xlabel('log r_e')
+	plt.ylabel('number of galaxies')
+	plt.title('Run 3818, i-band, total %i' % sum(n))
+	plt.savefig('radi1.png')
+
+	plt.clf()
+	n,b,p = plt.hist(T.exprad_i, 100, range=(1.3, 1.5))
+	plt.xlabel('r_e (arcsec)')
+	plt.ylabel('number of galaxies')
+	plt.title('Run 3818, i-band, total %i' % sum(n))
+	plt.xlim(1.3, 1.5)
+	plt.savefig('radi2.png')
+
+	T2 = T[(T.exprad_i >= 1.3) * (T.exprad_i <= 1.5)]
+	print len(T2), 'in radius range'
+	T2 = T2[T2.expmag_i < 21]
+	print len(T2), 'in mag range'
+
+	T2.band = np.array(['i']*len(T2))
+
+	T2.writeto('exp3818c.fits')
+
+	plt.clf()
+	n,b,p = plt.hist(T2.exprad_i, 100, range=(1.3, 1.5))
+	plt.xlabel('r_e (arcsec)')
+	plt.ylabel('number of galaxies')
+	plt.title('Run 3818, i-band, mag < 21, total %i' % sum(n))
+	plt.xlim(1.3, 1.5)
+	plt.savefig('radi3.png')
+
+	plt.clf()
+	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((1.3,1.5),(15,22)))
+	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
+	plt.colorbar()
+	plt.savefig('radi-mag2.png')
+
+	
+
 if __name__ == '__main__':
 	#plots1()
-
+	#plots2()
+	#sys.exit(0)
+	
 	from tractor.sdss import *
 	from tractor import *
 
-	T = fits_table('exp3818b.fits')
+	#T = fits_table('exp3818b.fits')
+	T = fits_table('exp3818c.fits')
 	print len(T), 'galaxies'
 
 	sdss = DR7()
@@ -114,12 +167,17 @@ if __name__ == '__main__':
 		os.mkdir(dn)
 	sdss.setBasedir(dn)
 
-	band = 'r'
+	#band = 'r'
 
 	# radius in pixels of ROI; max r_e = 0.55 arcsec, 8 r_e
-	sz = 0.55 * 8 / 0.396
+	#sz = 0.55 * 8 / 0.396
+	sz = 1.5 * 8 / 0.396
 	tractors = []
 	for i,(run,camcol,field,ra,dec) in enumerate(zip(T.run, T.camcol, T.field, T.ra, T.dec)):
+		if hasattr(T, 'band'):
+			band = T.band[i]
+		else:
+			band = 'r'
 		print
 		print 'Galaxy', (i+1), 'of', len(T)
 		im,info = get_tractor_image(run, camcol, field, band, sdssobj=sdss, useMags=True,
