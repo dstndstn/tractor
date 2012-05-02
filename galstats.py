@@ -1,5 +1,6 @@
 import os
 import sys
+from math import ceil
 import matplotlib
 matplotlib.use('Agg')
 from astrometry.util.pyfits_utils import *
@@ -33,6 +34,27 @@ def plots1():
 	and exprad_r between 0.4 and 0.55
 	and expmag_r between 21 and 22
 	=> exp3818b.fits
+
+	select fracdev_i,exprad_i,expab_i,expmag_i,expphi_i,run,camcol,field,ra,dec into mydb.exp3818i
+	from Galaxy where run=3818 and camcol=2
+    and clean=1 and probpsf=0
+	and (flags & (dbo.fPhotoFlags('BINNED1'))) = (dbo.fPhotoFlags('BINNED1'))
+	and (flags & (dbo.fPhotoFlags('INTERP') | dbo.fPhotoFlags('BLENDED') |
+	dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
+	dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
+	and fracdev_i < 0.5
+	=> exp3818i.fits
+
+	select fracdev_i,exprad_i,expab_i,expmag_i,expphi_i,run,camcol,field,ra,dec into mydb.exp3818i_dr7
+	from Galaxy where run=3818
+    and clean=1 and probpsf=0
+	and (flags & (dbo.fPhotoFlags('BINNED1'))) = (dbo.fPhotoFlags('BINNED1'))
+	and (flags & (dbo.fPhotoFlags('INTERP') | dbo.fPhotoFlags('BLENDED') |
+	dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
+	dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
+	and fracdev_i = 0
+	## In DR7 context of SDSS3 CAS
+	=> exp3818i_dr7.fits
 	
 	"""
 	
@@ -100,8 +122,11 @@ def plots1():
 	plt.ylabel('number of galaxies')
 	plt.savefig('rad5.png')
 
-def plots2():
+def plots2(rlo=1.3, rhi=1.5):
 	T = fits_table('exp3818i_dstn.fit')
+	print 'Read', len(T)
+	T.cut(T.fracdev_i == 0)
+	print 'Cut to', len(T), 'pure-exp'
 
 	plt.clf()
 	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.1,10),(15,22)))
@@ -117,14 +142,14 @@ def plots2():
 	plt.savefig('radi1.png')
 
 	plt.clf()
-	n,b,p = plt.hist(T.exprad_i, 100, range=(1.3, 1.5))
+	n,b,p = plt.hist(T.exprad_i, 100, range=(rlo, rhi))
 	plt.xlabel('r_e (arcsec)')
 	plt.ylabel('number of galaxies')
 	plt.title('Run 3818, i-band, total %i' % sum(n))
-	plt.xlim(1.3, 1.5)
+	plt.xlim(rlo, rhi)
 	plt.savefig('radi2.png')
 
-	T2 = T[(T.exprad_i >= 1.3) * (T.exprad_i <= 1.5)]
+	T2 = T[(T.exprad_i >= rlo) * (T.exprad_i <= rhi)]
 	print len(T2), 'in radius range'
 	T2 = T2[T2.expmag_i < 21]
 	print len(T2), 'in mag range'
@@ -134,15 +159,15 @@ def plots2():
 	T2.writeto('exp3818c.fits')
 
 	plt.clf()
-	n,b,p = plt.hist(T2.exprad_i, 100, range=(1.3, 1.5))
+	n,b,p = plt.hist(T2.exprad_i, 100, range=(rlo, rhi))
 	plt.xlabel('r_e (arcsec)')
 	plt.ylabel('number of galaxies')
 	plt.title('Run 3818, i-band, mag < 21, total %i' % sum(n))
-	plt.xlim(1.3, 1.5)
+	plt.xlim(rlo, rhi)
 	plt.savefig('radi3.png')
 
 	plt.clf()
-	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((1.3,1.5),(15,22)))
+	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((rlo,rhi),(15,22)))
 	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
 	plt.colorbar()
 	plt.savefig('radi-mag2.png')
@@ -151,7 +176,7 @@ def plots2():
 
 if __name__ == '__main__':
 	#plots1()
-	#plots2()
+	#plots2(0.4, 0.55)
 	#sys.exit(0)
 	
 	from tractor.sdss import *
@@ -170,8 +195,8 @@ if __name__ == '__main__':
 	#band = 'r'
 
 	# radius in pixels of ROI; max r_e = 0.55 arcsec, 8 r_e
-	#sz = 0.55 * 8 / 0.396
-	sz = 1.5 * 8 / 0.396
+	sz = int(ceil(0.55 * 8 / 0.396))
+	#sz = 1.5 * 8 / 0.396
 	tractors = []
 	for i,(run,camcol,field,ra,dec) in enumerate(zip(T.run, T.camcol, T.field, T.ra, T.dec)):
 		if hasattr(T, 'band'):
