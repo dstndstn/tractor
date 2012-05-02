@@ -1,10 +1,12 @@
+import os
 import matplotlib
 matplotlib.use('Agg')
 from astrometry.util.pyfits_utils import *
+from astrometry.sdss import *
 import pylab as plt
 import numpy as np
 
-if __name__ == '__main__':
+def plots1():
 
 	"""
 	select fracdev_r,exprad_r,expab_r,expmag_r,expphi_r,run,camcol,field into mydb.exp3818
@@ -97,76 +99,42 @@ if __name__ == '__main__':
 	plt.ylabel('number of galaxies')
 	plt.savefig('rad5.png')
 
+if __name__ == '__main__':
+	#plots1()
 
+	from tractor.sdss import *
+	from tractor import *
 
+	T = fits_table('exp3818b.fits')
+	print len(T), 'galaxies'
 
+	sdss = DR7()
+	dn = 'paper0-data'
+	if not os.path.exists(dn):
+		os.mkdir(dn)
+	sdss.setBasedir(dn)
 
+	band = 'r'
 
+	# radius in pixels of ROI; max r_e = 0.55 arcsec, 8 r_e
+	sz = 0.55 * 8 / 0.396
+	tractors = []
+	for i,(run,camcol,field,ra,dec) in enumerate(zip(T.run, T.camcol, T.field, T.ra, T.dec)):
+		print
+		print 'Galaxy', (i+1), 'of', len(T)
+		im,info = get_tractor_image(run, camcol, field, band, sdssobj=sdss, useMags=True,
+									roiradecsize=(ra,dec,sz))
+		sky,skysig = info['sky'],info['skysig']
+		pa = dict(origin='lower', interpolation='nearest', vmin=sky-3*skysig, vmax=sky+10*skysig)
+		plt.clf()
+		plt.imshow(im.data, **pa)
+		plt.savefig('gs-data-%03i.png' % i)
 
-
-
-
-
-	T=fits_table('exp3818i_dstn.fit')
-
-	plt.clf()
-	n,b,p = plt.hist(np.log10(T.exprad_i), 100, range=(np.log10(0.1), np.log10(10.)))
-	plt.xlabel('log r_e')
-	plt.ylabel('number of galaxies')
-	plt.title('Run 3818: total %i' % sum(n))
-	plt.savefig('radi1.png')
-
-	plt.clf()
-	plt.hist(T.exprad_i, 100, range=(0.4, 0.55))
-	plt.xlim(0.4, 0.55)
-	plt.savefig('radi2.png')
-
-	plt.clf()
-	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.4,0.55),(20,22)))
-	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
-	plt.colorbar()
-	plt.savefig('radi-mag.png')
-
-	T2 = T[(T.expmag_i > 21) * (T.expmag_i < 22)]
-	print len(T2), 'in mag 21-22 range'
-	T2 = T2[(T2.exprad_i >= 0.4) * (T2.exprad_i <= 0.55)]
-	print len(T2), 'in radius 0.4-0.55 range'
-
-	#for cc in np.unique(T2.camcol):
-	#	n = sum(T2.camcol == cc)
-	#	print n, 'in camcol', cc
-
-	T2 = T2[T2.camcol == 2]
-	print len(T2), 'in camcol 2'
-	print 'Fields:', min(T2.field), max(T2.field)
-	T2.about()
-	plt.clf()
-	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((0.4,0.55),(21,22)))
-	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
-	plt.colorbar()
-	plt.savefig('radi-mag2.png')
-
-	plt.clf()
-	n,b,p = plt.hist(T2.exprad_i, 100, range=(0.4, 0.55))
-	print sum(n), 'counts plotted'
-	plt.xlim(0.4, 0.55)
-	plt.title('Run 3818, Camcol 2: total %i' % sum(n))
-	plt.xlabel('exp r_e (arcsec)')
-	plt.ylabel('number of galaxies')
-	plt.savefig('radi3.png')
-
-	plt.clf()
-	plt.hist(T2.exprad_i, 300, range=(0.4, 0.55))
-	plt.xlim(0.4, 0.55)
-	plt.savefig('radi4.png')
-
-	T2 = T2[(T2.field >= 100) * (T2.field < 200)]
-	print len(T2), 'in fields [100, 200)'
-
-	plt.clf()
-	n,b,p = plt.hist(T2.exprad_i, 100, range=(0.4, 0.55))
-	plt.xlim(0.4, 0.55)
-	plt.title('Run 3818, Camcol 2, Fields 100-200: total %i' % sum(n))
-	plt.xlabel('exp r_e (arcsec)')
-	plt.ylabel('number of galaxies')
-	plt.savefig('radi5.png')
+		roi = info['roi']
+		srcs = get_tractor_sources(run, camcol, field, band, bands=[band], sdss=sdss, roi=roi)
+		tractor = Tractor([im], srcs)
+		synth = tractor.getModelImage(im)
+		plt.clf()
+		plt.imshow(synth, **pa)
+		plt.savefig('gs-synth-%03i.png' % i)
+		tractors.append(tractor)

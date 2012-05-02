@@ -77,9 +77,8 @@ def _getBrightness(counts, tsf, bands):
 	#print 'created', m
 	return m
 
-def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
-						retrieve=True, curl=False, roi=None,
-						bands=None):
+def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
+						retrieve=True, curl=False, roi=None, bands=None):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -95,7 +94,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 	if bands is None:
 		bands = band_names()
 
-	sdss = DR7(curl=curl)
+	if sdss is None:
+		sdss = DR7(curl=curl)
 	bandnum = band_index(bandname)
 	_check_sdss_files(sdss, run, camcol, field, bandnum,
 					  ['tsObj', 'tsField'],
@@ -104,8 +104,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', release='DR7',
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 
-	objs = fits_table(sdss.getFilename('tsObj', run, camcol, field,
-									   bandname, rerun=rerun))
+	objs = fits_table(sdss.getPath('tsObj', run, camcol, field,
+								   bandname, rerun=rerun))
 	objs.indices = np.arange(len(objs))
 
 	if roi is not None:
