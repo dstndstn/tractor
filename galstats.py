@@ -19,7 +19,7 @@ def plots1():
     dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
     dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
     and fracdev_r < 0.5
-
+	=> exp3818_dstn.fit
 
 	select fracdev_r,exprad_r,expab_r,expmag_r,expphi_r,run,camcol,field,ra,dec into mydb.exp3818
 	from Galaxy where
@@ -45,20 +45,21 @@ def plots1():
 	and fracdev_i < 0.5
 	=> exp3818i.fits
 
-	select fracdev_i,exprad_i,expab_i,expmag_i,expphi_i,run,camcol,field,ra,dec into mydb.exp3818i_dr7
-	from Galaxy where run=3818
-    and clean=1 and probpsf=0
-	and (flags & (dbo.fPhotoFlags('BINNED1'))) = (dbo.fPhotoFlags('BINNED1'))
-	and (flags & (dbo.fPhotoFlags('INTERP') | dbo.fPhotoFlags('BLENDED') |
-	dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
-	dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
-	and fracdev_i = 0
-	## In DR7 context of SDSS3 CAS
-	=> exp3818i_dr7.fits
 	
 	"""
 	
 	T=fits_table('exp3818_dstn.fit')
+
+	plt.clf()
+	H,xe,ye = np.histogram2d(np.log10(T.exprad_r), T.expmag_r, 200, range=((np.log10(0.1),np.log10(10)),(15,22)))
+	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
+	plt.colorbar()
+	plt.savefig('radi-mag1.png')
+	
+	return
+
+
+
 
 	plt.clf()
 	n,b,p = plt.hist(np.log10(T.exprad_r), 100, range=(np.log10(0.1), np.log10(10.)))
@@ -122,8 +123,9 @@ def plots1():
 	plt.ylabel('number of galaxies')
 	plt.savefig('rad5.png')
 
-def plots2(rlo=1.3, rhi=1.5):
-	T = fits_table('exp3818i_dstn.fit')
+def plots2(rlo=1.3, rhi=1.5, fn='exp3818i_dstn.fit',
+		   maxmag=20):
+	T = fits_table(fn)
 	print 'Read', len(T)
 	T.cut(T.fracdev_i == 0)
 	print 'Cut to', len(T), 'pure-exp'
@@ -132,7 +134,7 @@ def plots2(rlo=1.3, rhi=1.5):
 	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.1,10),(15,22)))
 	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
 	plt.colorbar()
-	plt.savefig('radi-mag1.png')
+	plt.savefig('rad-mag1.png')
 
 	plt.clf()
 	n,b,p = plt.hist(np.log10(T.exprad_i), 100, range=(np.log10(0.1), np.log10(10.)))
@@ -151,7 +153,7 @@ def plots2(rlo=1.3, rhi=1.5):
 
 	T2 = T[(T.exprad_i >= rlo) * (T.exprad_i <= rhi)]
 	print len(T2), 'in radius range'
-	T2 = T2[T2.expmag_i < 21]
+	T2 = T2[T2.expmag_i < maxmag]
 	print len(T2), 'in mag range'
 
 	T2.band = np.array(['i']*len(T2))
@@ -162,22 +164,34 @@ def plots2(rlo=1.3, rhi=1.5):
 	n,b,p = plt.hist(T2.exprad_i, 100, range=(rlo, rhi))
 	plt.xlabel('r_e (arcsec)')
 	plt.ylabel('number of galaxies')
-	plt.title('Run 3818, i-band, mag < 21, total %i' % sum(n))
+	plt.title('Run 3818, i-band, mag < %g, total %i' % (maxmag,sum(n)))
 	plt.xlim(rlo, rhi)
 	plt.savefig('radi3.png')
 
 	plt.clf()
-	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((rlo,rhi),(15,22)))
+	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((rlo,rhi),(15,maxmag)))
 	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
 	plt.colorbar()
 	plt.savefig('radi-mag2.png')
 
-	
+
+	"""
+	select fracdev_i,exprad_i,expab_i,expmag_i,expphi_i,run,camcol,field,ra,dec into mydb.exp3818i_dr7
+	from Galaxy where run=3818
+    and probpsf=0
+	and (flags & (dbo.fPhotoFlags('BINNED1'))) = (dbo.fPhotoFlags('BINNED1'))
+	and (flags & (dbo.fPhotoFlags('INTERP') | dbo.fPhotoFlags('BLENDED') |
+	dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
+	dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
+	and fracdev_i < 0.1
+	## In DR7 context of SDSS3 CAS
+	=> exp3818i_dr7.fits
+	"""
 
 if __name__ == '__main__':
 	#plots1()
-	#plots2(0.4, 0.55)
-	#sys.exit(0)
+	plots2(0.4, 0.55, fn='exp3818i_dr7.fits', maxmag=20.5)
+	sys.exit(0)
 	
 	from tractor.sdss import *
 	from tractor import *
