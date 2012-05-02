@@ -15,6 +15,22 @@ if __name__ == '__main__':
     dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
     dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
     and fracdev_r < 0.5
+
+
+	select fracdev_r,exprad_r,expab_r,expmag_r,expphi_r,run,camcol,field,ra,dec into mydb.exp3818
+	from Galaxy where
+	run=3818
+	and camcol=2
+	and clean=1 and probpsf=0
+	and (flags & (dbo.fPhotoFlags('BINNED1'))) = (dbo.fPhotoFlags('BINNED1'))
+	and (flags & (dbo.fPhotoFlags('INTERP') | dbo.fPhotoFlags('BLENDED') |
+    dbo.fPhotoFlags('BINNED2') | dbo.fPhotoFlags('MOVED') | dbo.fPhotoFlags('DEBLENDED_AT_EDGE') |
+    dbo.fPhotoFlags('MAYBE_CR') | dbo.fPhotoFlags('MAYBE_EGHOST'))) = 0
+	and fracdev_r < 0.5
+	and exprad_r between 0.4 and 0.55
+	and expmag_r between 21 and 22
+	=> exp3818b.fits
+	
 	"""
 	
 	T=fits_table('exp3818_dstn.fit')
@@ -80,3 +96,77 @@ if __name__ == '__main__':
 	plt.xlabel('exp r_e (arcsec)')
 	plt.ylabel('number of galaxies')
 	plt.savefig('rad5.png')
+
+
+
+
+
+
+
+
+
+
+
+	T=fits_table('exp3818i_dstn.fit')
+
+	plt.clf()
+	n,b,p = plt.hist(np.log10(T.exprad_i), 100, range=(np.log10(0.1), np.log10(10.)))
+	plt.xlabel('log r_e')
+	plt.ylabel('number of galaxies')
+	plt.title('Run 3818: total %i' % sum(n))
+	plt.savefig('radi1.png')
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(0.4, 0.55))
+	plt.xlim(0.4, 0.55)
+	plt.savefig('radi2.png')
+
+	plt.clf()
+	H,xe,ye = np.histogram2d(T.exprad_i, T.expmag_i, 200, range=((0.4,0.55),(20,22)))
+	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
+	plt.colorbar()
+	plt.savefig('radi-mag.png')
+
+	T2 = T[(T.expmag_i > 21) * (T.expmag_i < 22)]
+	print len(T2), 'in mag 21-22 range'
+	T2 = T2[(T2.exprad_i >= 0.4) * (T2.exprad_i <= 0.55)]
+	print len(T2), 'in radius 0.4-0.55 range'
+
+	#for cc in np.unique(T2.camcol):
+	#	n = sum(T2.camcol == cc)
+	#	print n, 'in camcol', cc
+
+	T2 = T2[T2.camcol == 2]
+	print len(T2), 'in camcol 2'
+	print 'Fields:', min(T2.field), max(T2.field)
+	T2.about()
+	plt.clf()
+	H,xe,ye = np.histogram2d(T2.exprad_i, T2.expmag_i, 200, range=((0.4,0.55),(21,22)))
+	plt.imshow(H.T, extent=(xe[0],xe[-1],ye[0],ye[-1]), aspect='auto', origin='lower', interpolation='nearest')
+	plt.colorbar()
+	plt.savefig('radi-mag2.png')
+
+	plt.clf()
+	n,b,p = plt.hist(T2.exprad_i, 100, range=(0.4, 0.55))
+	print sum(n), 'counts plotted'
+	plt.xlim(0.4, 0.55)
+	plt.title('Run 3818, Camcol 2: total %i' % sum(n))
+	plt.xlabel('exp r_e (arcsec)')
+	plt.ylabel('number of galaxies')
+	plt.savefig('radi3.png')
+
+	plt.clf()
+	plt.hist(T2.exprad_i, 300, range=(0.4, 0.55))
+	plt.xlim(0.4, 0.55)
+	plt.savefig('radi4.png')
+
+	T2 = T2[(T2.field >= 100) * (T2.field < 200)]
+	print len(T2), 'in fields [100, 200)'
+
+	plt.clf()
+	n,b,p = plt.hist(T2.exprad_i, 100, range=(0.4, 0.55))
+	plt.xlim(0.4, 0.55)
+	plt.title('Run 3818, Camcol 2, Fields 100-200: total %i' % sum(n))
+	plt.xlabel('exp r_e (arcsec)')
+	plt.ylabel('number of galaxies')
+	plt.savefig('radi5.png')
