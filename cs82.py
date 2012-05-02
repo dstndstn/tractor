@@ -1460,12 +1460,7 @@ def runstage(stage, force=[], threads=1):
 	else:
 		P = {}
 	print 'Running stage', stage
-	#F = locals()['stage%02i' % stage]
-	#F = globals()['stage%02i' % stage]
-	ss = { 0: stage00, 1: stage01, 2: stage02, 3: stage03, 4: stage04,
-		   5: stage05, 6: stage06, 7: stage07, 8: stage08,
-		   }
-	F = ss[stage]
+	F = eval('stage%02i' % stage)
 
 	P.update(mp=mp)
 	if 'tractor' in P:

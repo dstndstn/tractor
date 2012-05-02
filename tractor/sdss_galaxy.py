@@ -34,7 +34,7 @@ class GalaxyShape(ParamList):
 	def __repr__(self):
 		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 	def __str__(self):
-		return 're=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi)
+		return 're=%.2f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi)
 	def copy(self):
 		return GalaxyShape(*self.vals)
 	def getParamNames(self):
