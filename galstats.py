@@ -513,5 +513,54 @@ def main():
 if __name__ == '__main__':
 	#plots1()
 	#plots2(0.4, 0.55, fn='exp3818i_dr7.fits', maxmag=20.5)
+
+
+	dn = 'paper0-data'
+	if not os.path.exists(dn):
+		os.mkdir(dn)
+	sdss = DR7(basedir=dn)
+
+	run,camcol,field = 3818,2,100
+	band='r'
+	B = 2
+	rlo,rhi = (0.1, 1.5)
+	sdss.retrieve('fpObjc', run, camcol, field, band)
+	fn = sdss.getPath('fpObjc', run, camcol, field, band)
+	fp = fits_table(fn)
+	plt.clf()
+	plt.hist(fp.r_exp.ravel(), 200, range=(rlo, rhi))
+	plt.xlim(rlo,rhi)
+	plt.ylim(0, 50)
+	plt.xlabel('r_exp (pixels)')
+	plt.title('DR7 fpObjc')
+	plt.savefig('re20.png')
+
+	sdss.retrieve('tsObj', run, camcol, field, band)
+	fn = sdss.getPath('tsObj', run, camcol, field, band)
+	fp = fits_table(fn)
+	alo,ahi = (rlo*0.396, rhi*0.396)
+	plt.clf()
+	plt.hist(fp.r_exp.ravel(), 200, range=(alo,ahi))
+	plt.xlabel('r_exp (arcsec)')
+	plt.xlim(alo,ahi)
+	plt.ylim(0, 50)
+	plt.title('DR7 tsObj')
+	plt.savefig('re21.png')
+
+	T = fits_table('MyTable_10_dstn.fit')
+	rad = np.hstack([T.get('exprad_%s'%b) for b in 'ugriz'])
+	plt.clf()
+	plt.hist(rad, 200, range=(alo,ahi))
+	plt.xlabel('exprad (arcsec)')
+	plt.xlim(alo,ahi)
+	plt.ylim(0, 50)
+	plt.title('DR7 CAS')
+	plt.savefig('re22.png')
+	
+	sys.exit(0)
+
+
+
+
 	main()
 	sys.exit(0)

@@ -219,6 +219,132 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 
 	return sources
 
+
+
+def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
+							retrieve=True, curl=False, roi=None, bands=None):
+	'''
+	Creates tractor.Source objects corresponding to objects in the SDSS catalog
+	for the given field.
+
+	bandname: "canonical" band from which to get galaxy shapes, positions, etc
+
+	'''
+	if bands is None:
+		bands = band_names()
+	if sdss is None:
+		sdss = DR8(curl=curl)
+	bandnum = band_index(bandname)
+
+	bandnums = np.array([band_index(b) for b in bands])
+
+	fn = sdss.retrieve('photoObj', run, camcol, field)
+	objs = fits_table(fn)
+	objs.indices = np.arange(len(objs))
+
+	if roi is not None:
+		x0,x1,y0,y1 = roi
+		# HACK -- keep only the sources whose centers are within the ROI box.
+		# Really we should take an object-specific margin.
+		x = objs.colc[:,bandnum]
+		y = objs.rowc[:,bandnum]
+		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
+		objs = objs[I]
+
+	# Only deblended children.
+	objs = objs[(objs.nchild == 0)]
+
+	# FIXME -- phi_offset ?
+
+	# DR8 and Tractor have different opinions on which way this rotation goes
+	objs.phi_dev_deg *= -1.
+	objs.phi_exp_deg *= -1.
+
+	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
+	Lgal  = (objs.prob_psf[:,bandnum] == 0)
+	Ldev = Lgal * objs.fracdev[:,bandnum]
+	Lexp = Lgal * (1. - objs.fracdev[:,bandnum])
+
+	sources = []
+	ikeep = []
+
+	def lup2bright(lups, bandnames, bandnums):
+		mags = sdss.luptitude_to_mag(lups, bandnums)
+		bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
+		return bright
+
+	def nmgy2bright(flux, bandnames):
+		mag = sdss.nmgy_to_mag(flux)
+		bright = Mags(order=bandnames, **dict(zip(bandnames,mag)))
+
+	# Add stars
+	I = np.flatnonzero(Lstar > 0)
+	print len(I), 'stars'
+	for i in I:
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		bright = lup2bright(objs.psfmag[i,:], bandnames, bandnums)
+		ps = PointSource(pos, bright)
+		sources.append(ps)
+		ikeep.append(i)
+
+	# Add galaxies.
+	I = np.flatnonzero(Lgal > 0)
+	print len(I), 'galaxies'
+	ndev, nexp, ncomp = 0, 0, 0
+	for i in I:
+		hasdev = (Ldev[i] > 0)
+		hasexp = (Lexp[i] > 0)
+		iscomp = (hasdev and hasexp)
+		pos = RaDecPos(objs.ra[i], objs.dec[i])
+		if iscomp:
+			flux = objs.cmodelflux[i,bandnums]
+			dflux = flux * Ldev[i]
+			dbright = nmgy2bright(dflux, bandnames)
+			eflux = flux * Lexp[i]
+			ebright = nmgy2bright(eflux, bandnames)
+		elif hasdev:
+			flux = objs.devflux[i,bandnums]
+			dbright = nmgy2bright(flux, bandnames)
+		elif hasexp:
+			flux = objs.expflux[i,bandnums]
+			ebright = nmgy2bright(flux, bandnames)
+		else:
+			assert(False)
+											 
+		if hasdev:
+			re = objs.theta_dev[i,bandnum]
+			ab = objs.ab_dev[i,bandnum]
+			phi = objs.phi_dev[i,bandnum]
+			dshape = GalaxyShape(re, ab, phi)
+		if hasexp:
+			re = objs.theta_exp[i,bandnum]
+			ab = objs.ab_exp[i,bandnum]
+			phi = objs.phi_exp[i,bandnum]
+			eshape = GalaxyShape(re, ab, phi)
+
+		if iscomp:
+			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
+			ncomp += 1
+		elif hasdev:
+			gal = DevGalaxy(pos, dbright, dshape)
+			ndev += 1
+		elif hasexp:
+			gal = ExpGalaxy(pos, ebright, eshape)
+			nexp += 1
+		sources.append(gal)
+		ikeep.append(i)
+	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
+	print ncomp, 'composite galaxies'
+
+	# if you want to cut the objs list to just the ones for which sources were created...
+	ikeep = np.unique(ikeep)
+	objs = objs[ikeep]
+
+	return sources
+
+
+
+
 	
 def get_tractor_image(run, camcol, field, bandname, 
 					  sdssobj=None, release='DR7',
