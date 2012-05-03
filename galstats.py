@@ -298,6 +298,13 @@ def stage01(tractor=None, T=None):
 		os.mkdir(dn)
 	dr8 = DR8(basedir=dn)
 
+	t = T[0]
+	print t
+	t.about()
+	s8 = get_tractor_sources_dr8(t.run, t.camcol, t.field, t.band, sdss=dr8)
+	i8 = get_tractor_image_dr8(t.run, t.camcol, t.field, t.band, sdss=dr8)
+
+
 	# fns = glob('paper0-data/tsObj-003818-*.fit')
 	# fns.sort()
 	# fns = fns[:100]
@@ -378,7 +385,7 @@ def stage01(tractor=None, T=None):
 		r = fp.r_exp[:,B]
 		allfrads8.append(r)
 
-		fn = dr8.retrieve('photoObj', t.run, t.camcol, t.field, t.band)
+		fn = dr8.retrieve('photoObj', t.run, t.camcol, t.field)#, t.band)
 		print fn
 		fp = fits_table(fn)
 		print 'photoObj', fp
@@ -513,8 +520,12 @@ def main():
 if __name__ == '__main__':
 	#plots1()
 	#plots2(0.4, 0.55, fn='exp3818i_dr7.fits', maxmag=20.5)
+	#mrb_plots()
+	main()
+	sys.exit(0)
 
 
+def mrb_plots():
 	dn = 'paper0-data'
 	if not os.path.exists(dn):
 		os.mkdir(dn)
@@ -557,10 +568,4 @@ if __name__ == '__main__':
 	plt.title('DR7 CAS')
 	plt.savefig('re22.png')
 	
-	sys.exit(0)
 
-
-
-
-	main()
-	sys.exit(0)

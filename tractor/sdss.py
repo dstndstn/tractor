@@ -237,6 +237,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	bandnum = band_index(bandname)
 
 	bandnums = np.array([band_index(b) for b in bands])
+	bandnames = bands
 
 	fn = sdss.retrieve('photoObj', run, camcol, field)
 	objs = fits_table(fn)
@@ -314,12 +315,12 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		if hasdev:
 			re = objs.theta_dev[i,bandnum]
 			ab = objs.ab_dev[i,bandnum]
-			phi = objs.phi_dev[i,bandnum]
+			phi = objs.phi_dev_deg[i,bandnum]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
 			re = objs.theta_exp[i,bandnum]
 			ab = objs.ab_exp[i,bandnum]
-			phi = objs.phi_exp[i,bandnum]
+			phi = objs.phi_exp_deg[i,bandnum]
 			eshape = GalaxyShape(re, ab, phi)
 
 		if iscomp:
@@ -489,6 +490,139 @@ def get_tractor_image(run, camcol, field, bandname,
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
 					   (run, camcol, field, bandname)))
 	return timg,info
+
+
+
+
+def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
+						  roi=None, psf='kl-gm', roiradecsize=None,
+						  savepsfimg=None):
+	'''
+	Creates a tractor.Image given an SDSS field identifier.
+
+	If not None, roi = (x0, x1, y0, y1) defines a region-of-interest
+	in the image, in zero-indexed pixel coordinates.  x1,y1 are
+	NON-inclusive; roi=(0,100,0,100) will yield a 100 x 100 image.
+
+	psf can be:
+	  "dg" for double-Gaussian
+	  "kl-gm" for SDSS KL-decomposition approximated as a Gaussian mixture
+
+	"roiradecsize" = (ra, dec, half-size in pixels) indicates that you
+	want to grab a ROI around the given RA,Dec.
+
+	Returns:
+	  (tractor.Image, dict)
+
+	dict contains useful details like:
+	  'sky'
+	  'skysig'
+	'''
+	valid_psf = ['dg', 'kl-gm']
+	if psf not in valid_psf:
+		raise RuntimeError('PSF must be in ' + str(valid_psf))
+
+	bandnum = band_index(bandname)
+
+	fn = sdss.retrieve('frame', run, camcol, field, bandname)
+
+	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
+	image = frame.getImage().astype(np.float32)
+	print 'Image:', image.dtype
+	print 'mean:', np.mean(image.ravel())
+	(H,W) = image.shape
+	print 'shape:', W,H
+	
+	info = dict()
+	#info.update(tai=tai)
+
+	astrans = frame.getAsTrans()
+	wcs = SdssWcs(astrans)
+	#print 'Created SDSS Wcs:', wcs
+
+	if roiradecsize is not None:
+		ra,dec,S = roiradecsize
+		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
+		print 'RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
+		xc,yc = [int(np.round(p)) for p in fxc,fyc]
+		roi = [xc-S, xc+S, yc-S, yc+S]
+		info.update(roi=roi)
+		
+	if roi is not None:
+		x0,x1,y0,y1 = roi
+	else:
+		x0 = y0 = 0
+
+	# Mysterious half-pixel shift.  asTrans pixel coordinates?
+	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
+
+
+	#### FIXME HERE
+
+	#photocal = SdssMagsPhotoCal(tsf, bandname)
+
+	#psfield = sdss.readPsField(run, camcol, field)
+	sky = psfield.getSky(bandnum)
+	skysig = sqrt(sky)
+	skyobj = ConstantSky(sky)
+	info.update(sky=sky, skysig=skysig)
+
+	fpM = sdss.readFpM(run, camcol, field, bandname)
+	gain = psfield.getGain(bandnum)
+	darkvar = psfield.getDarkVariance(bandnum)
+	skyerr = psfield.getSkyErr(bandnum)
+	invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
+
+	if roi is not None:
+		roislice = (slice(y0,y1), slice(x0,x1))
+		image = image[roislice].copy()
+		invvar = invvar[roislice].copy()
+
+	if psf == 'kl-gm':
+		from emfit import em_fit_2d
+		from fitpsf import em_init_params
+		
+		# Create Gaussian mixture model PSF approximation.
+		H,W = image.shape
+		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
+		S = klpsf.shape[0]
+		# number of Gaussian components
+		K = 3
+		w,mu,sig = em_init_params(K, None, None, None)
+		II = klpsf.copy()
+		II /= II.sum()
+		# HIDEOUS HACK
+		II = np.maximum(II, 0)
+		#print 'Multi-Gaussian PSF fit...'
+		xm,ym = -(S/2), -(S/2)
+		if savepsfimg is not None:
+			plt.clf()
+			plt.imshow(II, interpolation='nearest', origin='lower')
+			plt.title('PSF image to fit with EM')
+			plt.savefig(savepsfimg)
+		res = em_fit_2d(II, xm, ym, w, mu, sig)
+		print 'em_fit_2d result:', res
+		if res == 0:
+			# print 'w,mu,sig', w,mu,sig
+			mypsf = GaussianMixturePSF(w, mu, sig)
+		else:
+			# Failed!  Return 'dg' model instead?
+			print 'PSF model fit', psf, 'failed!  Returning DG model instead'
+			psf = 'dg'
+	if psf == 'dg':
+		dgpsf = psfield.getDoubleGaussian(bandnum)
+		print 'Creating double-Gaussian PSF approximation'
+		(a,s1, b,s2) = dgpsf
+		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
+
+	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
+				 sky=skyobj, photocal=photocal,
+				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
+					   (run, camcol, field, bandname)))
+	return timg,info
+
+
+
 
 
 class SdssMagsPhotoCal(BaseParams):
