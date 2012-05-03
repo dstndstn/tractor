@@ -556,15 +556,15 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
+	photocal = SdssNanomaggiesPhotoCal(bandname)
+
+	sky = 0.
+	skyobj = ConstantSky(sky)
 
 	#### FIXME HERE
 
-	#photocal = SdssMagsPhotoCal(tsf, bandname)
+	# skysig = ...
 
-	#psfield = sdss.readPsField(run, camcol, field)
-	sky = psfield.getSky(bandnum)
-	skysig = sqrt(sky)
-	skyobj = ConstantSky(sky)
 	info.update(sky=sky, skysig=skysig)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
@@ -623,7 +623,27 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
 
 
 
+class SdssNanomaggiesPhotoCal(BaseParams):
+	def __init__(self, bandname):
+		self.bandname = bandname
+	def __str__(self):
+		return self.__class__.__name__
+	def hashkey(self):
+		return ('SdssNanomaggiesPhotoCal', self.bandname)
+	def brightnessToCounts(self, brightness):
+		mag = brightness.getMag(self.bandname)
+		if not np.isfinite(mag):
+			return 0.
+		# MAGIC
+		if mag > 50.:
+			return 0.
+		nmgy = 10. ** ((mag - 22.5) / -2.5)
+		nmgy2 = np.exp(mag * -0.9210340371976184 + 20.723265836946414)
 
+		print 'nmgy', nmgy
+		print 'nmgy2', nmgy2
+
+		return nmgy
 
 class SdssMagsPhotoCal(BaseParams):
 	'''
