@@ -524,6 +524,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
 
 	bandnum = band_index(bandname)
 
+	for ft in ['psField', 'fpM']:
+		fn = sdss.retrieve(ft, run, camcol, field, bandname)
+		print 'got', fn
 	fn = sdss.retrieve('frame', run, camcol, field, bandname)
 
 	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
@@ -561,17 +564,61 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
 	sky = 0.
 	skyobj = ConstantSky(sky)
 
-	#### FIXME HERE
+	calibvec = frame.getCalibVec()
 
-	# skysig = ...
+	print 'sky', #frame.sky
+	print frame.sky.shape
+	print 'x', frame.skyxi
+	print frame.skyxi.shape
+	print 'y', frame.skyyi
+	print frame.skyyi.shape
+
+	(sh,sw) = frame.sky.shape
+	xi = np.round(frame.skyxi).astype(int)
+	#print 'xi:', xi.min(), xi.max()
+	yi = np.round(frame.skyyi).astype(int)
+	#print 'yi:', yi.min(), yi.max()
+	assert(all(xi >= 0) and all(xi < sw))
+	assert(all(yi >= 0) and all(yi < sh))
+	XI,YI = np.meshgrid(xi, yi)
+	#print 'XI', XI.shape
+	# Nearest-neighbour interpolation -- we just need this for approximate invvar.
+	bigsky = frame.sky[YI,XI]
+	#print 'bigsky', bigsky.shape
+	assert(bigsky.shape == image.shape)
+
+	# plt.clf()
+	# plt.imshow(frame.sky, interpolation='nearest', origin='lower')
+	# plt.savefig('sky.png')
+	# plt.clf()
+	# plt.imshow(bigsky, interpolation='nearest', origin='lower')
+	# plt.savefig('bigsky.png')
+
+	#print 'calibvec', calibvec.shape
+	dn = (image / calibvec) + bigsky
+
+	# Could get this from photoField instead
+	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
+	psfield = sdss.readPsField(run, camcol, field)
+	gain = psfield.getGain(bandnum)
+	darkvar = psfield.getDarkVariance(bandnum)
+	dnvar = (dn / gain) + darkvar
+	invvar = dnvar * calibvec**2
+	#print 'imgvar:', imgvar.shape
+	assert(invvar.shape == image.shape)
+
+	meansky = np.mean(frame.sky)
+	meancalib = np.mean(calibvec)
+	skysig = sqrt((meansky / gain) + darkvar) * meancalib
+	print 'skysig:', skysig
 
 	info.update(sky=sky, skysig=skysig)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
-	gain = psfield.getGain(bandnum)
-	darkvar = psfield.getDarkVariance(bandnum)
-	skyerr = psfield.getSkyErr(bandnum)
-	invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
+	#gain = psfield.getGain(bandnum)
+	#darkvar = psfield.getDarkVariance(bandnum)
+	#skyerr = psfield.getSkyErr(bandnum)
+	#invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
 	if roi is not None:
 		roislice = (slice(y0,y1), slice(x0,x1))
