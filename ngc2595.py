@@ -18,20 +18,21 @@ from tractor import sdss_galaxy as sg
 from tractor import basics as ba
 
 def main():
-    run = [4517,4576,4576]
-    field = [103,99,100]
-    camcol = [2,6,6]
+    runs = [4517,4576,4576]
+    fields = [103,99,100]
+    camcols = [2,6,6]
 
     roi0 = [700,1400,0,800]
     roi1 = [1300,1800,1000,1500]
     roi2 = [1400,1800,0,400]
-    roi = [roi0,roi1,roi2]
+    rois = [roi0,roi1,roi2]
     
     ra = 126.925
     dec = 21.4833
-    itune1 = 4
-    itune2 = 4
-    ntune = 2
+    itune1 = 3
+    itune2 = 2
+    ntune = 0
+    IRLS_scale = 9.
 
     bands=['r','g','u','i','z']
     bandname = 'r'
@@ -41,7 +42,7 @@ def main():
 
     TI = []
     sources = []
-    for run,field,camcol,roi in zip(run,field,camcol,roi):
+    for run,field,camcol,roi in zip(runs,fields,camcols,rois):
         TI.extend([st.get_tractor_image(run, camcol, field, bandname,roi=roi,useMags=True) for bandname in bands])
         sources.append(st.get_tractor_sources(run, camcol, field,bandname,roi=roi,bands=bands))
 
@@ -98,7 +99,7 @@ def main():
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
-        tractor.changeInvvar()
+        tractor.changeInvvar(IRLS_scale)
         tractor.clearCache()
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     
@@ -124,13 +125,13 @@ def main():
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         else:
             tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
-        tractor.changeInvvar(9.)
+        tractor.changeInvvar(IRLS_scale)
         tractor.clearCache()
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        tractor.changeInvvar(9.)
+        tractor.changeInvvar(IRLS_scale)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
         tractor.clearCache()
     plotInvvar('final-'+prefix,tractor)

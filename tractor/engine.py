@@ -974,15 +974,17 @@ class Tractor(MultiParams):
 				alldevirs.extend([[(d,img) for d in derivs]])
 		return alldevirs
 
-	def changeInvvar(self,IWLSscale=None):
-		if IWLSscale is None:
+	def changeInvvar(self,Q2=None):
+		if Q2 is None:
 			return
 		for img in self.getImages():
 			data = img.getImage()
 			mod = self.getModelImage(img)
-			chi = data-mod
+			resid = data-mod
 			invvar = img.getInvvar()
-			img.setInvvar((1./invvar)*((IWLSscale*(chi**2))/(IWLSscale+(chi)**2)))
+			chi2 = (resid**2) * invvar
+			IRLS_factor = Q2 / (Q2+chi2)
+			img.setInvvar(invvar*IRLS_factor)
 	
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
