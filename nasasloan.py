@@ -47,11 +47,6 @@ def main():
     header = table[0].header
     data = table[0].data
     invvar=table[1].data
-    for i,y in enumerate(invvar):
-        for j,x in enumerate(y):
-            if x < 0:
-                print x,j,i
-    assert(False)
     skyobj = ba.ConstantSky(header['skyval'])
     psffn = 'J082742.02+212844.7-r-bpsf.fits.gz'
     psfimg = pyfits.open(psffn)[0].data
