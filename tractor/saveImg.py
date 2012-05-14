@@ -2,8 +2,6 @@ import os
 import logging
 import numpy as np
 import pylab as plt
-import matplotlib
-matplotlib.use('Agg')
 import pyfits
 
 from astrometry.util.file import *
