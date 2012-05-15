@@ -51,9 +51,12 @@ class Params(object):
 		''' Returns "reasonable" step sizes for the parameters.'''
 		return []
 	def setParams(self, p):
-		''' Sets the parameter values to the values in the given
+		'''
+		Sets the parameter values to the values in the given
 		iterable `p`.  The length of `p` will be equal to
-		`numberOfParams()`.'''
+		`numberOfParams()`.
+		'''
+		assert(len(p) == self.numberOfParams())
 		pass
 	def setParam(self, i, p):
 		'''
@@ -65,7 +68,12 @@ class Params(object):
 		Returns the old value.
 		'''
 		return None
-
+	def getLogPrior(self):
+		'''
+		Returns the prior, evaluated at the current values of
+		the parameters.
+		'''
+		return 0.
 
 class Sky(Params):
 	'''

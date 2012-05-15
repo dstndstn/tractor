@@ -1084,12 +1084,10 @@ class Tractor(MultiParams):
 			chisq += (chi.astype(float) ** 2).sum()
 		return -0.5 * chisq
 
-	# EVIL and WRONG
-	def getLogPrior(self):
-		return -len(self.catalog.getParams())
-
-	# posterior
 	def getLogProb(self):
+		'''
+		return the posterior PDF, evaluated at the parametrs
+		'''
 		return self.getLogLikelihood() + self.getLogPrior()
 
 	def pushCache(self):

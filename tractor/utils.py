@@ -85,9 +85,12 @@ class BaseParams(object):
 		Returns the old value.
 		'''
 		return None
-		
-
-
+	def getStepSizes(self):
+		'''
+		Return the prior PDF, evaluated at the current value
+		of the paramters.
+		'''
+		return 0.
 
 class ScalarParam(BaseParams):
 	'''
@@ -577,4 +580,5 @@ class MultiParams(BaseParams, NamedParams):
 			p.extend(s.getStepSizes(*args, **kwargs))
 		return p
 
-
+	def getLogPrior(self):
+		return np.sum([s.getLogPrior() for s in self._getActiveSubs()])
