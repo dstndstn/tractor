@@ -1084,6 +1084,7 @@ class Tractor(MultiParams):
 			chisq += (chi.astype(float) ** 2).sum()
 		return -0.5 * chisq
 
+	# EVIL and WRONG
 	def getLogPrior(self):
 		return -len(self.catalog.getParams())
 
