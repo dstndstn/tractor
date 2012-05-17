@@ -401,7 +401,7 @@ class GaussianMixturePSF(BaseParams):
 			', var=' + str(tuple(self.mog.var.ravel())))
 	def hashkey(self):
 		return ('GaussianMixturePSF',
-				tuple(self.mog.amp.ravel()),
+				tuple(self.mog.amp),
 				tuple(self.mog.mean.ravel()),
 				tuple(self.mog.var.ravel()),)
 	
