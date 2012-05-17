@@ -897,8 +897,12 @@ def stage06(tractor=None, mp=None, steps=None,
 	tractor.catalog.thawParamsRecursive('*')
 	tractor.catalog.freezeParamsRecursive('pos', 'i2', 'shape')
 
+	# tractor.catalog.source46.shape
+	#                         .brightness.i2
+	#                         .pos
+
 	sdssimages = [im for im in allimages if im.name.startswith('SDSS')]
-	tractor.setImages(Images(*sdssimages))
+	#tractor.setImages(Images(*sdssimages))
 
 	allsources = tractor.getCatalog()
 	brightcat,Ibright = cut_bright(allsources, magcut=23, mag='i2')
@@ -918,8 +922,12 @@ def stage06(tractor=None, mp=None, steps=None,
 		for b in sbands:
 			br = src.getBrightness()
 			setattr(br, b, br.i2)
-	tractor.catalog.thawParamsRecursive(*sbands)
+	# this is a no-op; we did a thawRecursive above.
+	#tractor.catalog.thawParamsRecursive(*sbands)
 	params0 = tractor.getParams()
+
+	#frozen0 = tractor.getFreezeState()
+	#allparams0 = tractor.getParamsEvenFrozenOnes()
 
 	for imi,im in enumerate(sdssimages):
 		print 'Fitting image', imi, 'of', len(sdssimages)
@@ -927,12 +935,22 @@ def stage06(tractor=None, mp=None, steps=None,
 		band = im.photocal.bandname
 		print im
 		print 'Band', band
-		# Reset params.
+
+		print 'Current param names:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+		print len(tractor.getParamNames()), 'params, p0', len(params0)
+
+		# Reset params; need to thaw first though!
 		tractor.catalog.thawParamsRecursive(*sbands)
 		tractor.setParams(params0)
-		
+
+		#tractor.catalog.setFreezeState(frozen0)
+		#tractor.catalog.setParams(params0)
+
 		tractor.catalog.freezeParamsRecursive(*sbands)
 		tractor.catalog.thawParamsRecursive(band)
+
 		print 'Tractor:', tractor
 		print 'Active params:'
 		for nm in tractor.getParamNames():

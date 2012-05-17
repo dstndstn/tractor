@@ -624,7 +624,7 @@ class Tractor(MultiParams):
 			ims = []
 			imjs = []
 		else:
-			imjs = [i for i in self.getThawedParamIndices()]
+			imjs = [i for i in self.images.getThawedParamIndices()]
 			ims = [self.images[j] for j in imjs]
 		# initial models...
 		mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in imjs])
