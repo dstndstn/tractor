@@ -64,7 +64,9 @@ class BaseParams(object):
 		iterable (eg, list)'''
 		return []
 	def getStepSizes(self, *args, **kwargs):
-		''' Returns "reasonable" step sizes for the parameters.'''
+		'''
+		Returns "reasonable" step sizes for the parameters.
+		'''
 		return []
 	def setParams(self, p):
 		'''
@@ -85,7 +87,7 @@ class BaseParams(object):
 		Returns the old value.
 		'''
 		return None
-	def getStepSizes(self):
+	def getLogPrior(self):
 		'''
 		Return the prior PDF, evaluated at the current value
 		of the paramters.
