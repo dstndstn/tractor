@@ -10,7 +10,6 @@ Duck-type definitions of types used by the Tractor.
 
 Most of this code is not actually used at all.  It's here for
 documentation purposes.
-
 """
 
 class Params(object):
@@ -197,6 +196,7 @@ class WCS(Params):
 		  [ dDec/dx          , dDec/dy           ] ]
 
 		in FITS these are called:
+
 		[ [ CD11             , CD12              ],
 		  [ CD21             , CD22              ] ]
 		'''

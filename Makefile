@@ -1,5 +1,9 @@
 all: mix emfit
 
+doc: html
+	cp -a _build/html .
+.PHONE: doc
+
 tractor/mix.py tractor/mix_wrap.c: tractor/mix.i
 	cd tractor && swig -python -I. mix.i
 
