@@ -10,9 +10,9 @@ Welcome to the Tractor's documentation!
 .. toctree::
    :maxdepth: 2
 
-   tutorial
    oaq
    reference
+   tutorial
 
 
 

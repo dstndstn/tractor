@@ -1,6 +1,5 @@
-
-Tutorial for the Tractor
-========================
+Case Study: Extending the Tractor to do Strong Gravitational Lensing
+====================================================================
 
 This tutorial (really more of a case study) goes through extending the
 Tractor for a new kind of astronomical source.  Hi, Phil!
