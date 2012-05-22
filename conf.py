@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.todo', 'sphinx.ext.coverage', 'sphinx.ext.pngmath',
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.todo',
+			  'sphinx.ext.coverage', 'sphinx.ext.pngmath',
 			  #'sphinx.ext.jsmath',
 			  'sphinx.ext.ifconfig', 'sphinx.ext.viewcode']
 
@@ -43,7 +44,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Tractor'
-copyright = u'2011, Hogg & Lang'
+copyright = u'2011-2012 Hogg & Lang'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -216,3 +217,16 @@ man_pages = [
     ('index', 'tractor', u'Tractor Documentation',
      [u'Hogg & Lang'], 1)
 ]
+
+
+# -- Options for autodoc --
+
+autoclass_content = 'both'
+
+autodoc_default_flags = ['members',
+						 'undoc-members',
+						 #'private-members',
+						 #'special-members',
+						 #'inherited-members',
+						 #'show-inheritance'
+						 ]

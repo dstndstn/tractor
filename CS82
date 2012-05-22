@@ -242,7 +242,6 @@ Todo:
 -priors
 
 
-
 =================== 2012-05-10 =========================
 
 near-term plan:
@@ -258,6 +257,154 @@ near-term plan:
 -jointly on all SDSS images; or individually
 
 -issue: quality assessment on the SDSS fields (have one from Schlegel, but pretty harsh cut)
+
+
+
+-------------------------------------------
+2012-05-21
+-------------------------------------------
+
+Grab re-reduced CFHTLS images from
+
+http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
+
+863049
+860598
+860595
+863050
+
+Their different CCD numbering scheme -> chip 13 contains (334.4, 0.3).
+
+The .weight.fits WCS are wrong (CRVALs are bogus); .sub.fits are
+right... ish.  They have a diagonal CD matrix, so I'm going to need
+the SCAMP-updated headers.
+
+Yargh, they're also a different size;
+
+CFHT orig:
+   NAXIS1 = 2112
+   NAXIS2 = 4644
+
+CS82:
+   NAXIS1 = 2043
+   NAXIS2 = 4606
+
+HISTORY preprocess: THELI Pipeline Version: 0.10.3
+HISTORY preprocess: called at 2006-05-26T20:55:32
+HISTORY image has been trimmed
+HISTORY trim sextion: Xmin = 35; Xmax = 2077; Ymin = 3; Ymax = 4608
+
+
+Thomas sent Scamp headers:
+
+$ tar xvzf CS82_headers_V2.7A.tgz ./W4p1m1
+./W4p1m1/i/headers_V2.7A/
+
+
+Catalogs:
+
+http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/
+
+Move old ones:
+mkdir cs82data/v1
+mv cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_* cs82data/v1
+
+wget --user cs82 --password XXXXXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/W4p1m1_i.V2.7A.swarp.cut.deV.fit
+{exp, deVexp}
+
+(but wait for Alexie's combined catalogs?)
+
+(Hendrik: ~3 hours per tile for exp / dev, 6-7 for exp+dev)
+
+------------------------------------------------------------------
+--> deV + exp:
+    Change all SPHEROID* --> cModel_deV_*
+    Change all DISK* --> cModel_exp_*
+    Add cModel_ to the beginning of all variable *_MODEL
+Also:
+- MAG_DISK ->  cModel_MAG_DISK
+- MAG_SPHEROID ->  cModel_MAG_SPHEROID
+- cModel_ to ALPHAMODEL_SKY, DELTAMODEL_SKY, AMODEL_WORLD, BMODEL_WORLD, THETAMODEL_WORLD,  FWHMPSF_WORLD
+---------------------------------
+
+Which columns to pick up
+====================
+
+For all files:
+----------------
+CHI2_MODEL
+FLAGS_MODEL
+MAG_MODEL 
+MAGERR_MODEL
+ALPHAMODEL_SKY  
+DELTAMODEL_SKY  
+AMODEL_WORLD
+BMODEL_WORLD
+THETAMODEL_WORLD
+FWHMPSF_WORLD
+SPREAD_MODEL
+
+for Exp and Exp+deV
+------------------------------
+MAG_DISK
+DISK_SCALE_WORLD
+DISK_ASPECT_WORLD
+DISK_THETA_WORLD   
+
+for deV and Exp+deV
+-----------------------------
+MAG_SPHEROID
+SPHEROID_REFF_WORLD 
+SPHEROID_ASPECT_WORLD
+SPHEROID_THETA_WORLD   
+------------------------------------------------------------------
+
+HDU #3  Binary Table:  149 columns x 212778 rows
+ COL NAME             FORMAT
+  26 BACKGROUND       1E              
+  27 THRESHOLD        1E              
+  36 X_IMAGE          1E              
+  37 Y_IMAGE          1E              
+  40 ALPHA_J2000      1D              
+  41 DELTA_J2000      1D              
+  42 CXX_IMAGE        1E              
+  43 CYY_IMAGE        1E              
+  44 CXY_IMAGE        1E              
+  45 A_IMAGE          1E              
+  46 B_IMAGE          1E              
+  47 THETA_IMAGE      1E              
+  48 A_WORLD          1E              
+  49 B_WORLD          1E              
+  50 THETA_WORLD      1E              
+  51 THETA_J2000      1E              
+  56 FLAGS            1I              
+  58 FWHM_WORLD       1E              
+  62 CLASS_STAR       1E              
+  67 MAG_PSF          1E              
+  70 CHI2_PSF         1E              
+
+  71 FLAGS_MODEL      1B              
+  72 NITER_MODEL      1I              
+  89 AMODEL_WORLD     1E              
+  90 BMODEL_WORLD     1E              
+  91 THETAMODEL_WORLD 1E              
+  95 SPREAD_MODEL     1E              
+  97 ALPHAMODEL_J2000 1D              
+  98 DELTAMODEL_J2000 1D              
+  99 CHI2_MODEL       1E              
+ 102 MAG_MODEL        1E              
+
+ 106 MAG_SPHEROID     1E              
+ 116 SPHEROID_REFF_WORLD 1E              
+ 120 SPHEROID_ASPECT_WORLD 1E              
+ 124 SPHEROID_THETA_WORLD 1E              
+
+ 128 MAG_DISK         1E              
+ 138 DISK_SCALE_WORLD 1E              
+ 142 DISK_ASPECT_WORLD 1E              
+ 144 DISK_INCLINATION 1E              
+ 148 DISK_THETA_WORLD 1E              
+
 
 
 

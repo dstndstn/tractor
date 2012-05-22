@@ -220,7 +220,7 @@ class PSF(Params):
 		Returns the size of the support of this PSF.
 
 		This is required because the Tractor has to decide what size
-		to make the `Patch`es.
+		to make the ``Patch``es.
 		'''
 		return 0
 

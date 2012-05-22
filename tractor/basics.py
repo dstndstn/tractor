@@ -120,6 +120,15 @@ class FitsWcs(ParamList):
 					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7)
 
 	def __init__(self, wcs):
+		'''
+		Creates a new ``FitsWcs`` given a :class:`~astrometry.util.util.Tan`_
+		object.  To create one of these from a filename and FITS HDU extension,
+
+
+		    fn = 'my-file.fits'
+			ext = 0
+		    FitsWcs(Tan(fn, ext))
+		'''
 		if hasattr(self, 'x0'):
 			print 'FitsWcs has an x0 attr:', self.x0
 		self.x0 = 0
@@ -193,10 +202,18 @@ class FitsWcs(ParamList):
 				+ str(self.wcs))
 
 	def setX0Y0(self, x0, y0):
+		'''
+		Sets the pixel offset to apply to pixel coordinates before putting
+		them through the wrapped WCS.  Useful when using a cropped image.
+		'''
 		self.x0 = x0
 		self.y0 = y0
 
 	def positionToPixel(self, pos, src=None):
+		'''
+		Converts an :class:`tractor.RaDecPos` to a pixel position.
+		Returns: tuple of floats ``(x, y)``
+		'''
 		X = self.wcs.radec2pixelxy(pos.ra, pos.dec)
 		# handle X = (ok,x,y) and X = (x,y) return values
 		if len(X) == 3:
@@ -207,10 +224,19 @@ class FitsWcs(ParamList):
 		return x-self.x0, y-self.y0
 
 	def pixelToPosition(self, x, y, src=None):
+		'''
+		Converts floats ``x``, ``y`` to a
+		:class:`tractor.RaDecPos`
+		'''
 		r,d = self.wcs.pixelxy2radec(x + self.x0, y + self.y0)
 		return RaDecPos(r,d)
 
 	def cdAtPixel(self, x, y):
+		'''
+		Returns the ``CD`` matrix at the given ``x,y`` pixel position.
+
+		(Returns the constant ``CD`` matrix elements)
+		'''
 		cd = self.wcs.get_cd()
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 

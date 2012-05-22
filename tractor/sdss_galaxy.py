@@ -4,7 +4,7 @@ Copyright 2011, 2012 Dustin Lang and David W. Hogg.
 Licensed under the GPLv2; see the file COPYING for details.
 
 `sdss_galaxy.py`
-===========
+================
 
 SDSS exponential and deVaucouleurs galaxy model classes.
 

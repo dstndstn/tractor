@@ -9,6 +9,40 @@ API Reference
 * :ref:`sdss` -- Specific data types for handling SDSS images and catalogs
 * :ref:`cfht` -- Specific data types for handling data from the Canada-France-Hawaii Telescope
 
+Flat list
+---------
+
+* :class:`~tractor.Brightness`
+* :class:`~tractor.sdss_galaxy.CompositeGalaxy`
+* :class:`~tractor.Catalog`
+* :class:`~tractor.ConstantSky`
+* :class:`~tractor.sdss_galaxy.DevGalaxy`
+* :class:`~tractor.sdss_galaxy.ExpGalaxy`
+* :class:`~tractor.FitsWcs`
+* :class:`~tractor.Flux`
+* :class:`~tractor.GaussianMixturePSF`
+* :class:`~tractor.Image`
+* :class:`~tractor.Images`
+* :class:`~tractor.Mag`
+* :class:`~tractor.Mags`
+* :class:`~tractor.MultiParams`
+* :class:`~tractor.NCircularGaussianPSF`
+* :class:`~tractor.NullPhotoCal`
+* :class:`~tractor.NullWCS`
+* :class:`~tractor.ParamList`
+* :class:`~tractor.Params`
+* :class:`~tractor.Patch`
+* :class:`~tractor.PhotoCal`
+* :class:`~tractor.PixPos`
+* :class:`~tractor.PointSource`
+* :class:`~tractor.PSF`
+* :class:`~tractor.RaDecPos`
+* :class:`~tractor.Sky`
+* :class:`~tractor.Source`
+* :class:`~tractor.Tractor`
+* :class:`~tractor.WCS`
+
+
 
 .. _ducks:
 
@@ -43,25 +77,73 @@ Ducks
 
 Utilities
 ---------
-.. automodule:: tractor.utils
+.. autoclass:: tractor.BaseParams
    :members:
-   :undoc-members:
+.. autoclass:: tractor.ScalarParam
+   :members:
+.. autoclass:: tractor.ParamList
+   :members:
+.. autoclass:: tractor.MultiParams
+   :members:
 
 .. _basics:
 
 Basics for standard images & catalogs
 -------------------------------------
-.. automodule:: tractor.basics
+
+.. autoclass:: tractor.ConstantSky
    :members:
-   :undoc-members:
+
+.. autoclass:: tractor.PointSource
+   :members:
+
+.. autoclass:: tractor.NullWCS
+   :members:
+.. autoclass:: tractor.PixPos
+   :members:
+
+.. autoclass:: tractor.NullPhotoCal
+   :members:
+.. autoclass:: tractor.Flux
+   :members:
+
+.. autoclass:: tractor.FitsWcs
+   :members:
+.. autoclass:: tractor.RaDecPos
+   :members:
+
+.. autoclass:: tractor.Mag
+   :members:
+.. autoclass:: tractor.Mags
+   :members:
+
+.. autoclass:: tractor.NCircularGaussianPSF
+   :members:
+.. autoclass:: tractor.GaussianMixturePSF
+   :members:
+
+
 
 .. _engine:
 
 Core Tractor routines
 ---------------------
-.. automodule:: tractor.engine
+.. autoclass:: tractor.Tractor
    :members:
-   :undoc-members:
+
+.. autoclass:: tractor.Catalog
+   :members:
+
+.. autoclass:: tractor.Images
+   :members:
+
+.. autoclass:: tractor.Image
+   :members:
+
+.. autoclass:: tractor.Patch
+   :members:
+
+
 
 .. _sdss_galaxy:
 

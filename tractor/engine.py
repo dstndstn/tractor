@@ -49,31 +49,30 @@ def set_fp_err():
 
 class Image(MultiParams):
 	'''
-	An image plus its calibration information.  An `Image` has pixels,
-	inverse-variance map, WCS, PSF, photometric calibration
-	information, and sky level.  All these things are `Params`
-	instances, and `Image` is a `MultiParams` so that the Tractor can
-	optimize them.
+	An image plus its calibration information.  An ``Image`` has
+	pixels, inverse-variance map, WCS, PSF, photometric calibration
+	information, and sky level.  All these things are ``Params``
+	instances, and ``Image`` is a ``MultiParams`` so that the Tractor
+	can optimize them.
 	'''
-	def __init__(self, **kwargs):
+	def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
+				 photocal=None, name=None, **kwargs):
 		'''
-		Expected kwargs:
-		(data=None, invvar=None,
-		 psf=None, wcs=None, sky=None, photocal=None,
-		 name=None)
-		
+		Args:
+		  * *data*: numpy array: the image pixels
+		  * *invvar*: numpy array: the image inverse-variance
+		  * *psf*: a :class:`tractor.PSF` duck
+		  * *wcs*: a :class:`tractor.WCS` duck
+		  * *sky*: a :class:`tractor.Sky` duck
+		  * *photocal*: a :class:`tractor.PhotoCal` duck
+		  * *name*: string name of this image.
+
 		'''
-		self.data = kwargs.pop('data', None)
-		invvar = kwargs.pop('invvar', None)
+		self.data = data
+		invvar = invvar
 		self.setInvvar(invvar)
-		self.inverr = np.sqrt(self.invvar)
-		self.name = kwargs.pop('name', None)
-		psf = kwargs.pop('psf', None)
-		sky = kwargs.pop('sky', None)
-		wcs = kwargs.pop('wcs', None)
-		photocal = kwargs.pop('photocal', None)
-		super(Image,self).__init__(psf, wcs, photocal, sky)
-		#print 'Image:', self.wcs, self.psf, self.sky, self.photocal
+		self.name = name
+		super(Image, self).__init__(psf, wcs, photocal, sky)
 
 	def __str__(self):
 		return 'Image ' + str(self.name)
