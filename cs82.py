@@ -205,9 +205,11 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	wcs = FitsWcs(wcs)
 	wcs.setX0Y0(1., 1.)
 
+	print 'rotating images...'
 	image = np.rot90(image, k=1)
 	invvar = np.rot90(invvar, k=1)
 							   
+	print 'creating tr.Image obj...'
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal, name='CFHT %s' % filename)
 	return cftimg, cfsky, cfstd
@@ -236,55 +238,65 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def get_tractor(RA, DEC, sz, cffns, filtermap=None, sdssbands=None, just_rcf=False,
-				sdss_psf='kl-gm'):
+def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S)):
+	print 'Retrieving', r,c,f,band
+	kwargs = {}
+	if cut_sdss:
+		kwargs.update(roiradecsize=(RA,DEC,S/2))
+	im,info = st.get_tractor_image(r, c, f, band, useMags=True,
+								   sdssobj=sdss, psf=sdss_psf, **kwargs)
+	print 'Image size', im.getWidth(), im.getHeight()
+	if im.getWidth() == 0 or im.getHeight() == 0:
+		return None,None
+	im.rcf = (r,c,f)
+	return im,(info['sky'], info['skysig'])
+
+def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf=False,
+				sdss_psf='kl-gm', cut_sdss=True):
 	if sdssbands is None:
 		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
 
 	skies = []
+	ims = []
 	pixscale = 0.187
 	print 'CFHT images:', cffns
 	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale, RA, DEC, sz,
 										   filtermap=filtermap)
-		tractor.addImage(cfimg)
+		ims.append(cfimg)
 		skies.append((cfsky, cfstd))
 
 	pixscale = 0.396
 	S = int(sz / pixscale)
 	print 'SDSS size:', S
-	rcf = radec_to_sdss_rcf(RA,DEC, radius=10., tablefn='s82fields.fits', contains=True)
+	rcf = radec_to_sdss_rcf(RA,DEC, radius=15., tablefn='s82fields.fits', contains=True)
 	print 'SDSS fields nearby:', len(rcf)
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
 
 	if just_rcf:
 		return rcf
+	# Just do a subset of the fields?
 	# rcf = rcf[:16]
-	# rcf = rcf[:4]
-	# rcf = rcf[:1]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
-	i = 0
+	args = []
 	for r,c,f,ra,dec in rcf:
 		for band in sdssbands:
-			print 'Retrieving', r,c,f,band
-			#fn = 'sdss-psf-%03i.png' % i
-			#i += 1
-			#print fn
-			im,info = st.get_tractor_image(r, c, f, band, useMags=True,
-										   sdssobj=sdss, roiradecsize=(RA,DEC,S/2),
-										   psf=sdss_psf)
-										   #savepsfimg=fn)
-			print 'Image size', im.getWidth(), im.getHeight()
-			if im.getWidth() == 0 or im.getHeight() == 0:
-				continue
-			im.rcf = (r,c,f)
-			tractor.addImage(im)
-			skies.append((info['sky'], info['skysig']))
-
+			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S))
+	print 'Getting SDSS images...'
+	X = mp.map(_mapf_sdss_im, args)
+	print 'Got SDSS images.'
+	for im,sky in X:
+		if im is None:
+			continue
+		ims.append(im)
+		skies.append(sky)
+	print 'setting tractor images...'
+	tractor.setImages(Images(*ims))
+	print 'set tractor images'
 	return tractor,skies
 
 def mysavefig(fn):
@@ -293,13 +305,13 @@ def mysavefig(fn):
 
 
 def read_cf_catalogs(RA, DEC, sz):
-	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
+	fn = 'cs82data/v1/W4p1m1_i.V2.7A.swarp.cut.vig15_deV_ord2_size25.fits'
 	T = fits_table(fn, hdunum=2)
 	print 'Read', len(T), 'rows from', fn
 	T.ra  = T.alpha_sky
 	T.dec = T.delta_sky
 
-	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_exp_ord2_size25.fit'
+	fn = 'cs82data/v1/W4p1m1_i.V2.7A.swarp.cut.vig15_exp_ord2_size25.fit'
 	T2 = fits_table(fn, hdunum=2)
 	print 'Read', len(T2), 'rows from', fn
 	T2.ra  = T2.alpha_sky
@@ -390,6 +402,92 @@ def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100, mags=['u','g','r','i','z']):
 		srcs.append(src)
 	assert(len(Tstar) == 0)
 	return srcs
+
+
+
+def get_cf_sources2(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
+	Tcomb = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+	#Tcomb.about()
+
+	plt.clf()
+	plt.plot(Tcomb.mag_spheroid, Tcomb.mag_disk, 'r.')
+	plt.axhline(26)
+	plt.axvline(26)
+	plt.axhline(27)
+	plt.axvline(27)
+	plt.savefig('magmag.png')
+
+	plt.clf()
+	I = (Tcomb.chi2_psf < 1e7)
+	plt.loglog(Tcomb.chi2_psf[I], Tcomb.chi2_model[I], 'r.')
+	plt.xlabel('chi2 psf')
+	plt.ylabel('chi2 model')
+	ax = plt.axis()
+	plt.plot([ax[0],ax[1]], [ax[0],ax[1]], 'k-')
+	plt.axis(ax)
+	plt.savefig('psfgal.png')
+
+	# approx...
+	S = sz / 3600.
+	ra0 ,ra1  = RA-S/2.,  RA+S/2.
+	dec0,dec1 = DEC-S/2., DEC+S/2.
+
+	T = Tcomb
+	print 'Read', len(T), 'sources'
+	T.ra  = T.alpha_j2000
+	T.dec = T.delta_j2000
+	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
+	print 'Cut to', len(T), 'objects nearby.'
+
+	maglim = 27.
+	
+	srcs = []
+	for t in T:
+
+		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
+			#print 'PSF'
+			themag = t.mag_psf
+			m = Mags(order=mags, **dict([(k, themag) for k in mags]))
+			srcs.append(PointSource(RaDecPos(t.alpha_j2000, t.delta_j2000), m))
+			continue
+
+		if t.mag_disk > maglim and t.mag_spheroid > maglim:
+			#print 'Faint'
+			continue
+
+		themag = t.mag_spheroid
+		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		themag = t.mag_disk
+		m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
+
+		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
+
+		shape_dev = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
+								t.disk_theta_world + 90.)
+		shape_exp = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+								t.spheroid_theta_world + 90.)
+		pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
+
+		if t.mag_disk > maglim and t.mag_spheroid <= maglim:
+			# exp
+			#print 'Exp'
+			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
+			continue
+		if t.mag_disk <= maglim and t.mag_spheroid > maglim:
+			# deV
+			#print 'deV'
+			srcs.append(DevGalaxy(pos, m_dev, shape_dev))
+			continue
+
+		# exp + deV
+		#print 'comp'
+		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+	print 'Sources:', len(srcs)
+	#for src in srcs:
+	#	print '  ', src
+	return srcs
+
+
 
 def tweak_wcs((tractor, im)):
 	#print 'Tractor', tractor
@@ -589,23 +687,50 @@ def cut_bright(cat, magcut=24, mag='i'):
 	return brightcat, I
 
 # Read image files and catalogs, make Tractor object.
-def stage00(mp=None):
+def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None, **kwargs):
+
 	cffns = glob('cs82data/86*p-21-cr.fits')
 	# Don't map them to the same mag as SDSS i-band
 	filtermap = {'i.MP9701': 'i2'}
-	#sdssbands = ['u','g','r','i','z']
-	sdssbands = ['g','r','i']
-	tractor,skies = get_tractor(RA,DEC,sz, cffns, filtermap=filtermap, sdssbands=sdssbands)
-	Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
-	srcs = get_cf_sources(Tstar, Tdisk, Tsph, mags=sdssbands + ['i2'])
+	sdssbands = ['u','g','r','i','z']
+	#sdssbands = ['g','r','i']
+
+	plt.clf()
+	for fn in cffns:
+		wcs = Tan(fn, 0)
+		#W,H = wcs.imagew, wcs.imageh
+		P = pyfits.open(fn)
+		image = P[1].data
+		(H,W) = image.shape
+		
+		x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
+		print 'x,y', x,y
+		r,d = wcs.pixelxy2radec(x, y)
+		plt.plot(r, d, 'r-', alpha=0.6)
+	plt.xlabel('RA (deg)')
+	plt.xlabel('Dec (deg)')
+	plt.savefig('outlines.png')
+
+	srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
+
+	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
+								cut_sdss=False, sdss_psf='dg')
+
+	#Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
+	#srcs = get_cf_sources(Tstar, Tdisk, Tsph, mags=sdssbands + ['i2'])
+	print 'Adding sources'
 	tractor.addSources(srcs)
+	print 'Setting plot ranges'
 	for im,(sky,skystd) in zip(tractor.getImages(), skies):
 		# for display purposes...
 		im.skylevel = sky
 		im.skystd = skystd
 		im.zr = np.array([-1.,+20.]) * skystd + sky
 		#im.zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
+
+	print 'Data plots...'
 	plots(tractor, ['data'], 0, **plotsa)
+	print 'done!'
 	return dict(tractor=tractor, skies=skies)
 
 def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
@@ -1483,13 +1608,15 @@ def runstage(stage, force=[], threads=1):
 	P.update(mp=mp)
 	if 'tractor' in P:
 		P['tractor'].mp = mp
-	P.update(RA = 334.4, DEC = 0.3, sz = 2.*60.) # arcsec
+	#P.update(RA = 334.4, DEC = 0.3, sz = 2.*60.) # arcsec
+	P.update(RA = 334.4, DEC = 0.3, sz = 15.*60.) # arcsec
 
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
 	P.update(plotsa=plotsa)
 
 	R = F(**P)
+	print 'Stage', stage, 'finished'
 
 	if 'tractor' in R:
 		try:

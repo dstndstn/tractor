@@ -243,3 +243,22 @@ Todo:
 
 
 
+=================== 2012-05-10 =========================
+
+near-term plan:
+
+-CFHT and SDSS have a small astrometric shift
+  -input catalogs match SDSS but not CFHT
+  -get around that by asking them for better calibrations of the CFHT imaging
+  -also CRs, etc
+
+-simplest possible: forced photometry: freeze the input catalog
+ (galaxy shapes), fit the SDSS ugriz mags.
+
+-jointly on all SDSS images; or individually
+
+-issue: quality assessment on the SDSS fields (have one from Schlegel, but pretty harsh cut)
+
+
+
+
