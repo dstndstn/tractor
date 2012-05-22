@@ -1,7 +1,3 @@
-if __name__ == '__main__':
-    import matplotlib
-    matplotlib.use('Agg')
-
 import os
 import logging
 import numpy as np
@@ -16,19 +12,25 @@ from tractor import sdss as st
 from tractor.saveImg import *
 from tractor import sdss_galaxy as sg
 from tractor import basics as ba
+from astrometry.util.ngc2000 import *
+from astrometry.util.sdss_radec_to_rcf import *
 
 def main():
-    runs = [4517,4576,4576]
-    fields = [103,99,100]
-    camcols = [2,6,6]
 
-    roi0 = [700,1400,0,800]
-    roi1 = [1300,1800,1000,1500]
-    roi2 = [1400,1800,0,400]
-    rois = [roi0,roi1,roi2]
+    for i,j in enumerate(ngc2000):
+        if j['id'] == 4258 and j['is_ngc']:
+            print j
+            break
+
+    rcfs = radec_to_sdss_rcf(j['ra'],j['dec'])
+    print rcfs
     
-    ra = 126.925
-    dec = 21.4833
+    roi0 = [1000,2000,700,1500]
+    roi1 = [0,600,0,400]
+    rois = [roi0,roi1]
+    
+    ra = j['ra']
+    dec = j['dec']
     itune1 = 5
     itune2 = 5
     ntune = 0
@@ -42,9 +44,9 @@ def main():
 
     TI = []
     sources = []
-    for run,field,camcol,roi in zip(runs,fields,camcols,rois):
-        TI.extend([st.get_tractor_image(run, camcol, field, bandname,roi=roi,useMags=True) for bandname in bands])
-        sources.append(st.get_tractor_sources(run, camcol, field,bandname,roi=roi,bands=bands))
+    for rcf,roi in zip(rcfs,rois): 
+        TI.extend([st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,roi=roi,useMags=True) for bandname in bands])
+        sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,roi=roi,bands=bands))
 
     timg,info = TI[0]
     photocal = timg.getPhotoCal()
@@ -62,12 +64,11 @@ def main():
 
     print bands
 
-    prefix = 'ngc2595'
+    prefix = 'ngc4258'
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     plotInvvar('initial-'+prefix,tractor)
     bright = None
     lowbright = 1000
-
     for timg,sources in zip(tims,sources):
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
