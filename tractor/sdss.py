@@ -396,15 +396,18 @@ def get_tractor_image(run, camcol, field, bandname,
 					  ['fpC', 'tsField', 'psField', 'fpM'],
 					  retrieve=retrieve)
 	fpC = sdss.readFpC(run, camcol, field, bandname)
-	tai = fpC.getHeader().get('TAI')
-	#print 'TAI', tai
+	hdr = fpC.getHeader()
 	fpC = fpC.getImage()
 	fpC = fpC.astype(float) - sdss.softbias
 	image = fpC
 	(H,W) = image.shape
 
 	info = dict()
-	info.update(tai=tai)
+	tai = hdr.get('TAI')
+	stripe = hdr.get('STRIPE')
+	strip = hdr.get('STRIP')
+	obj = hdr.get('OBJECT')
+	info.update(tai=tai, stripe=stripe, strip=strip, object=obj)
 
 	tsf = sdss.readTsField(run, camcol, field, rerun)
 	astrans = tsf.getAsTrans(bandnum)
@@ -416,7 +419,12 @@ def get_tractor_image(run, camcol, field, bandname,
 		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
 		print 'RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
 		xc,yc = [int(np.round(p)) for p in fxc,fyc]
-		roi = [xc-S, xc+S, yc-S, yc+S]
+
+		roi = [np.clip(xc-S, 0, W),
+			   np.clip(xc+S, 0, W),
+			   np.clip(yc-S, 0, H),
+			   np.clip(yc+S, 0, H)]
+
 		info.update(roi=roi)
 		
 	if roi is not None:

@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
+import multiprocessing
 from glob import glob
 from astrometry.util.pyfits_utils import *
 from astrometry.util.sdss_radec_to_rcf import *
@@ -95,7 +96,7 @@ def getdata():
 
 
 def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
-				   filtermap=None):
+				   filtermap=None, rotate=True):
 	if filtermap is None:
 		filtermap = {'i.MP9701': 'i'}
 	wcs = Tan(fn, 0)
@@ -103,18 +104,23 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	print 'x,y', x,y
 	S = int(sz / pixscale) / 2
 	print '(half) S', S
-	cfx,cfy = int(x),int(y)
-	cfroi = [cfx-S, cfx+S, cfy-S, cfy+S]
-	#cfroi = [cfx-S*2, cfx+S*2, cfy-S, cfy+S]
+	cfx,cfy = int(np.round(x)),int(np.round(y))
+
+	P = pyfits.open(fn)
+	I = P[1].data
+	print 'Img data', I.shape
+	H,W = I.shape
+
+	cfroi = [np.clip(cfx-S, 0, W),
+			 np.clip(cfx+S, 0, W),
+			 np.clip(cfy-S, 0, H),
+			 np.clip(cfy+S, 0, H)]
 	x0,x1,y0,y1 = cfroi
 
 	#wcs = FitsWcs(wcs)
 	#wcs = RotatedFitsWcs(wcs)
 	#wcs.setX0Y0(x0+1., y0+1.)
 
-	P = pyfits.open(fn)
-	I = P[1].data
-	print 'Img data', I.shape
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
 	sky = np.median(image)
@@ -200,19 +206,19 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	print 'Cropped WCS:', wcs
 	rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(W,1),(W,H),(1,H)]]
 	print 'cropped RA,Dec corners:', rdcorners
-	wcs = rot90_wcs(wcs, W, H)
-	print 'Rotated WCS:', wcs
-	rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(H,1),(H,W),(1,W)]]
-	print 'rotated RA,Dec corners:', rdcorners
+	if rotate:
+		wcs = rot90_wcs(wcs, W, H)
+		print 'Rotated WCS:', wcs
+		rdcorners = [wcs.pixelxy2radec(x,y) for x,y in [(1,1),(H,1),(H,W),(1,W)]]
+		print 'rotated RA,Dec corners:', rdcorners
+
+		print 'rotating images...'
+		image = np.rot90(image, k=1)
+		invvar = np.rot90(invvar, k=1)
 
 	wcs = FitsWcs(wcs)
 	wcs.setX0Y0(1., 1.)
 
-	print 'rotating images...'
-	image = np.rot90(image, k=1)
-	invvar = np.rot90(invvar, k=1)
-							   
-	print 'creating tr.Image obj...'
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal, name='CFHT %s' % filename)
 	return cftimg, cfsky, cfstd
@@ -241,13 +247,33 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S)):
+def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname)):
 	print 'Retrieving', r,c,f,band
 	kwargs = {}
 	if cut_sdss:
 		kwargs.update(roiradecsize=(RA,DEC,S/2))
-	im,info = st.get_tractor_image(r, c, f, band, useMags=True,
-								   sdssobj=sdss, psf=sdss_psf, **kwargs)
+
+	try:
+		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
+									   sdssobj=sdss, psf=sdss_psf, **kwargs)
+	except:
+		import traceback
+		print 'Exception in get_tractor_image():'
+		traceback.print_exc()
+
+		bandnum = band_index(band)
+		for ft in ['fpC', 'tsField', 'psField', 'fpM']:
+			print 'Re-retrieving', ft
+			res = sdss.retrieve(ft, r, c, f, bandnum, skipExisting=False)
+		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
+									   sdssobj=sdss, psf=sdss_psf, **kwargs)
+	if objname is not None:
+		obj = info['object']
+		print 'Header object: "%s"' % obj
+		if obj != objname:
+			print 'Skipping obj !=', objname
+			return None,None
+		
 	print 'Image size', im.getWidth(), im.getHeight()
 	if im.getWidth() == 0 or im.getHeight() == 0:
 		return None,None
@@ -255,7 +281,9 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S)):
 	return im,(info['sky'], info['skysig'])
 
 def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf=False,
-				sdss_psf='kl-gm', cut_sdss=True):
+				sdss_psf='kl-gm', cut_sdss=True,
+				good_sdss_only=False, sdss_object=None,
+				rotate_cfht=True):
 	if sdssbands is None:
 		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
@@ -267,14 +295,17 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 	for fn in cffns:
 		psffn = fn.replace('-cr', '-psf')
 		cfimg,cfsky,cfstd = get_cfht_image(fn, psffn, pixscale, RA, DEC, sz,
-										   filtermap=filtermap)
+										   filtermap=filtermap, rotate=rotate_cfht)
 		ims.append(cfimg)
 		skies.append((cfsky, cfstd))
 
 	pixscale = 0.396
 	S = int(sz / pixscale)
-	print 'SDSS size:', S
-	rcf = radec_to_sdss_rcf(RA,DEC, radius=15., tablefn='s82fields.fits', contains=True)
+	print 'SDSS size:', S, 'pixels'
+	# Find all SDSS images that could overlap the RA,Dec +- S/2,S/2 box
+	R = np.sqrt(2.*(S/2.)**2 + (2048/2.)**2 + (1489/2.)**2) * pixscale / 60.
+	print 'Search radius:', R, 'arcmin'
+	rcf = radec_to_sdss_rcf(RA,DEC, radius=R, tablefn='s82fields.fits') #, contains=True)
 	print 'SDSS fields nearby:', len(rcf)
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
@@ -285,21 +316,51 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 	# rcf = rcf[:16]
 	sdss = DR7()
 	sdss.setBasedir('cs82data')
+
+	if good_sdss_only:
+		W = fits_table('window_flist-DR8-S82.fits')
+		scores = []
+		noscores = []
+		rcfscore = {}
+		for r,c,f,nil,nil in rcf:
+			print 'RCF', r,c,f
+			w = W[(W.run == r) * (W.camcol == c) * (W.field == f)]
+			print w
+			if len(w) == 0:
+				print 'No entry'
+				noscores.append((r,c,f))
+				continue
+			score = w.score[0]
+			print 'score', score
+			scores.append(score)
+			rcfscore[(r,c,f)] = score
+		print 'No scores:', noscores
+		plt.clf()
+		plt.hist(scores, 20)
+		plt.savefig('scores.png')
+		print len(scores), 'scores'
+		scores = np.array(scores)
+		print sum(scores > 0.5), '> 0.5'
+
 	args = []
 	for r,c,f,ra,dec in rcf:
+		if good_sdss_only:
+			score = rcfscore.get((r,c,f), 0.)
+			if score < 0.5:
+				print 'Skipping,', r,c,f
+				continue
 		for band in sdssbands:
-			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S))
-	print 'Getting SDSS images...'
+			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, sdss_object))
+	print 'Getting', len(args), 'SDSS images...'
 	X = mp.map(_mapf_sdss_im, args)
-	print 'Got SDSS images.'
+	print 'Got', len(X), 'SDSS images.'
 	for im,sky in X:
 		if im is None:
 			continue
 		ims.append(im)
 		skies.append(sky)
-	print 'setting tractor images...'
+
 	tractor.setImages(Images(*ims))
-	print 'set tractor images'
 	return tractor,skies
 
 def mysavefig(fn):
@@ -489,6 +550,91 @@ def get_cf_sources2(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 	#for src in srcs:
 	#	print '  ', src
 	return srcs
+
+
+
+def get_cf_sources3(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
+	Tcomb = fits_table('cs82data/cs82_morphology_may2012.fits')
+	Tcomb.about()
+
+	plt.clf()
+	plt.plot(Tcomb.mag_spheroid, Tcomb.mag_disk, 'r.')
+	plt.axhline(26)
+	plt.axvline(26)
+	plt.axhline(27)
+	plt.axvline(27)
+	plt.savefig('magmag.png')
+
+	plt.clf()
+	I = (Tcomb.chi2_psf < 1e7)
+	plt.loglog(Tcomb.chi2_psf[I], Tcomb.chi2_model[I], 'r.')
+	plt.xlabel('chi2 psf')
+	plt.ylabel('chi2 model')
+	ax = plt.axis()
+	plt.plot([ax[0],ax[1]], [ax[0],ax[1]], 'k-')
+	plt.axis(ax)
+	plt.savefig('psfgal.png')
+
+	# approx...
+	S = sz / 3600.
+	ra0 ,ra1  = RA-S/2.,  RA+S/2.
+	dec0,dec1 = DEC-S/2., DEC+S/2.
+
+	T = Tcomb
+	print 'Read', len(T), 'sources'
+	T.ra  = T.alpha_j2000
+	T.dec = T.delta_j2000
+	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
+	print 'Cut to', len(T), 'objects nearby.'
+
+	maglim = 27.
+	
+	srcs = []
+	for t in T:
+
+		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
+			#print 'PSF'
+			themag = t.mag_psf
+			m = Mags(order=mags, **dict([(k, themag) for k in mags]))
+			srcs.append(PointSource(RaDecPos(t.alpha_j2000, t.delta_j2000), m))
+			continue
+
+		if t.mag_disk > maglim and t.mag_spheroid > maglim:
+			#print 'Faint'
+			continue
+
+		themag = t.mag_spheroid
+		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		themag = t.mag_disk
+		m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
+
+		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
+
+		shape_dev = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
+								t.disk_theta_world + 90.)
+		shape_exp = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+								t.spheroid_theta_world + 90.)
+		pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
+
+		if t.mag_disk > maglim and t.mag_spheroid <= maglim:
+			# exp
+			#print 'Exp'
+			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
+			continue
+		if t.mag_disk <= maglim and t.mag_spheroid > maglim:
+			# deV
+			#print 'deV'
+			srcs.append(DevGalaxy(pos, m_dev, shape_dev))
+			continue
+
+		# exp + deV
+		#print 'comp'
+		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+	print 'Sources:', len(srcs)
+	#for src in srcs:
+	#	print '  ', src
+	return srcs
+
 
 
 
@@ -690,7 +836,8 @@ def cut_bright(cat, magcut=24, mag='i'):
 	return brightcat, I
 
 # Read image files and catalogs, make Tractor object.
-def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None, **kwargs):
+def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
+			doplots=True, **kwargs):
 
 	cffns = glob('cs82data/86*p-21-cr.fits')
 	# Don't map them to the same mag as SDSS i-band
@@ -698,42 +845,29 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None, **kwargs):
 	sdssbands = ['u','g','r','i','z']
 	#sdssbands = ['g','r','i']
 
-	plt.clf()
-	for fn in cffns:
-		wcs = Tan(fn, 0)
-		#W,H = wcs.imagew, wcs.imageh
-		P = pyfits.open(fn)
-		image = P[1].data
-		(H,W) = image.shape
-		
-		x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
-		print 'x,y', x,y
-		r,d = wcs.pixelxy2radec(x, y)
-		plt.plot(r, d, 'r-', alpha=0.6)
-	plt.xlabel('RA (deg)')
-	plt.xlabel('Dec (deg)')
-	plt.savefig('outlines.png')
-
 	srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
+	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])
 
 	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
-								cut_sdss=False, sdss_psf='dg')
+								cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
+								sdss_object = '82 N',
+								rotate_cfht=False)
 
 	#Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
 	#srcs = get_cf_sources(Tstar, Tdisk, Tsph, mags=sdssbands + ['i2'])
-	print 'Adding sources'
+	#print 'Adding sources'
 	tractor.addSources(srcs)
-	print 'Setting plot ranges'
+	#print 'Setting plot ranges'
 	for im,(sky,skystd) in zip(tractor.getImages(), skies):
 		# for display purposes...
 		im.skylevel = sky
 		im.skystd = skystd
 		im.zr = np.array([-1.,+20.]) * skystd + sky
-		#im.zrs = [np.array([-1.,+20.]) * std + sky for sky,std in skies]
 
-	print 'Data plots...'
-	plots(tractor, ['data'], 0, **plotsa)
-	print 'done!'
+	if doplots:
+		print 'Data plots...'
+		plots(tractor, ['data'], 0, **plotsa)
+		print 'done plots'
 	return dict(tractor=tractor, skies=skies)
 
 def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
@@ -742,6 +876,63 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			**kwargs):
 	print 'tractor', tractor
 	tractor.mp = mp
+
+	# Make RA,Dec overview plot
+	plt.clf()
+	if False:
+		cffns = glob('cs82data/86*p-21-cr.fits')
+		for fn in cffns:
+			wcs = Tan(fn, 0)
+			#W,H = wcs.imagew, wcs.imageh
+			P = pyfits.open(fn)
+			image = P[1].data
+			(H,W) = image.shape
+			x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
+			print 'x,y', x,y
+			r,d = wcs.pixelxy2radec(x, y)
+			plt.plot(r, d, 'k-', lw=1, alpha=0.8)
+	for im in tractor.getImages():
+		wcs = im.getWcs()
+		W,H = im.getWidth(), im.getHeight()
+		r,d = [],[]
+		for x,y in zip([1,W,W,1,1], [1,1,H,H,1]):
+			rd = wcs.pixelToPosition(x, y)
+			r.append(rd.ra)
+			d.append(rd.dec)
+		if im.name.startswith('SDSS'):
+			band = im.getPhotoCal().bandname
+			cmap = dict(u='b', g='g', r='r', i='m', z=(0.6,0.,1.))
+			cc = cmap[band]
+			#aa = 0.1
+			aa = 0.04
+		else:
+			print 'CFHT WCS x0,y0', wcs.x0, wcs.y0
+			print 'image W,H', W,H
+			cc = 'k'
+			aa = 0.5
+		plt.plot(r, d, '-', color=cc, alpha=aa, lw=1)
+		#plt.gca().add_artist(matplotlib.patches.Polygon(np.vstack((r,d)).T, ec='none', fc=cc,
+		#alpha=aa/4.))
+
+	ax = plt.axis()
+
+	r,d = [],[]
+	for src in tractor.getCatalog():
+		pos = src.getPosition()
+		r.append(pos.ra)
+		d.append(pos.dec)
+	plt.plot(r, d, 'k,', alpha=0.3)
+
+	plt.axis(ax)
+	plt.xlabel('RA (deg)')
+	plt.xlabel('Dec (deg)')
+	plt.savefig('outlines.png')
+
+	sys.exit(0)
+
+
+
+
 	# For the initial WCS alignment, cut to brightish sources...
 	allsources = tractor.getCatalog()
 	brightcat,nil = cut_bright(allsources)
@@ -1574,13 +1765,17 @@ def fakeRebuildProxy(*args, **kwargs):
 		print 'real RebuildProxy failed:', e
 		return None
 
-def runstage(stage, force=[], threads=1):
+def runstage(stage, force=[], threads=1, doplots=True):
 	if threads > 1:
-		global dpool
-		import debugpool
-		dpool = debugpool.DebugPool(threads)
-		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
-		mp = multiproc(pool=dpool)
+		if False:
+			global dpool
+			import debugpool
+			dpool = debugpool.DebugPool(threads)
+			Time.add_measurement(debugpool.DebugPoolMeas(dpool))
+			mp = multiproc(pool=dpool)
+		else:
+			mp = multiproc(pool=multiprocessing.Pool(threads))
+			
 	else:
 		mp = multiproc(threads)
 
@@ -1602,17 +1797,20 @@ def runstage(stage, force=[], threads=1):
 			return R
 	if stage > 0:
 		# Get prereqs
-		P = runstage(stage-1)
+		P = runstage(stage-1, force=force, threads=threads, doplots=doplots)
 	else:
 		P = {}
 	print 'Running stage', stage
 	F = eval('stage%02i' % stage)
 
-	P.update(mp=mp)
+	P.update(mp=mp, doplots=doplots)
 	if 'tractor' in P:
 		P['tractor'].mp = mp
 	#P.update(RA = 334.4, DEC = 0.3, sz = 2.*60.) # arcsec
-	P.update(RA = 334.4, DEC = 0.3, sz = 15.*60.) # arcsec
+	#P.update(RA = 334.4, DEC = 0.3, sz = 15.*60.) # arcsec
+
+	# "sz" is the square side length of the ROI, in arcsec
+	P.update(RA = 334.32, DEC = 0.315, sz = 0.24 * 3600.)
 
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
@@ -1645,6 +1843,8 @@ def main():
 					  help="Force re-running the given stage(s) -- don't read from pickle.")
 	parser.add_option('-s', '--stage', dest='stage', default=4, type=int,
 					  help="Run up to the given stage")
+	parser.add_option('-P', '--no-plots', dest='plots', action='store_false', default=True, help='No plots')
+	
 	opt,args = parser.parse_args()
 
 	if opt.verbose == 0:
@@ -1653,7 +1853,7 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	runstage(opt.stage, opt.force, opt.threads)
+	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots)
 
 if __name__ == '__main__':
 	main()
