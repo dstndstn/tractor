@@ -102,6 +102,8 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 		filtermap = {'i.MP9701': 'i'}
 	wcs = Tan(fn, 0)
 	x,y = wcs.radec2pixelxy(RA,DEC)
+	x -= 1
+	y -= 1
 	print 'x,y', x,y
 	S = int(sz / pixscale) / 2
 	print '(half) S', S
@@ -117,10 +119,6 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 			 np.clip(cfy-S, 0, H),
 			 np.clip(cfy+S, 0, H)]
 	x0,x1,y0,y1 = cfroi
-
-	#wcs = FitsWcs(wcs)
-	#wcs = RotatedFitsWcs(wcs)
-	#wcs.setX0Y0(x0+1., y0+1.)
 
 	roislice = (slice(y0,y1), slice(x0,x1))
 	image = I[roislice]
@@ -218,7 +216,6 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 		invvar = np.rot90(invvar, k=1)
 
 	wcs = FitsWcs(wcs)
-	wcs.setX0Y0(1., 1.)
 
 	cftimg = Image(data=image, invvar=invvar, psf=psf, wcs=wcs,
 				   sky=skyobj, photocal=photocal, name='CFHT %s' % filename)
@@ -849,12 +846,15 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 	print 'Image', image.shape
 	(H,W) = image.shape
 	OH,OW = H,W
-	x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
-	print 'x,y', x,y
-	rco,dco = wcs.pixelxy2radec(x, y)
+
+	#x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
+	#rco,dco = wcs.pixelxy2radec(x, y)
+
 	# The coadd image has my ROI roughly in the middle.
 	# Pixel 1,1 is the high-RA, low-Dec corner.
 	x,y = wcs.radec2pixelxy(RA, DEC)
+	x -= 1
+	y -= 1
 	print 'Center pix:', x,y
 	xc,yc = int(x), int(y)
 	image = image[yc-S: yc+S, xc-S: xc+S]
@@ -927,6 +927,10 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 
 	tim = Image(data=image, invvar=invvar, psf=tpsf, wcs=twcs, photocal=photocal,
 				sky=tsky, name='CFHT coadd %s %s' % (obj, bandname))
+
+	# set "zr" for plots
+	sig = 1./np.median(tim.inverr)
+	tim.zr = np.array([-1., +20.]) * sig
 
 	if not doplots:
 		return tim
@@ -1142,6 +1146,18 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	return dict(tractor=tractor)
 
 
+def stage02(tractor=None, mp=None, **kwargs):
+
+	# set dummy "invvar"s
+	for im in tractor.getImages():
+		im.invvar = None
+
+	print 'Plots...'
+	plots(tractor, ['data', 'modbest', 'chibest'], 0, ibest=0, pp=np.array([tractor.getParams()]),
+		  alllnp=[0.])
+
+
+
 def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			#thaw_sdss=['a','d'],
 			thaw_sdss=[],
@@ -1203,7 +1219,7 @@ def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	return dict(tractor=tractor)
 
 # Also fit the WCS rotation matrix (CD) terms.
-def stage02(tractor=None, mp=None, **kwargs):
+def stage02_OLD(tractor=None, mp=None, **kwargs):
 	for i,im in enumerate(tractor.getImages()):
 		#print 'Tractor image i:', im.name
 		#print 'Params:', im.getParamNames()

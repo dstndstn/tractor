@@ -197,7 +197,7 @@ def get_cfht_img(ra, dec, extent):
 	cfroi = [cfx-S, cfx+S, cfy-S, cfy+S]
 	x0,x1,y0,y1 = cfroi
 
-	wcs.setX0Y0(x0+1., y0+1.)
+	wcs.setX0Y0(x0, y0)
 	# From fit
 	#wcs.setX0Y0(535.14208988131043, 4153.665639423165)
 

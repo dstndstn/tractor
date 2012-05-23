@@ -171,12 +171,14 @@ class WCS(Params):
 	'''
 	def positionToPixel(self, pos, src=None):
 		'''
-		Converts a `Position` into x,y pixel coordinates.
+		Converts a :class:`tractor.Position` *pos* into ``x,y`` pixel coordinates.
 
-		Note that the `Source` may be passed in; your `WCS` could have
-		color-specific behavior, for example.
+		Note that the :class:`tractor.Source` may be passed in; your
+		:class:`tractor.WCS` could have color-specific behavior, for
+		example.
 
-		Returns tuple `(x, y)`, where `x` and `y` are floats.
+		Returns tuple `(x, y)`, where `x` and `y` are floats, and `0,
+		0` is the first pixel.
 		'''
 		return None
 

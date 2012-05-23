@@ -255,14 +255,16 @@ class FitsWcs(ParamList):
 		else:
 			assert(len(X) == 2)
 			x,y = X
-		return x-self.x0, y-self.y0
+		# MAGIC: subtract 1 to convert from FITS to zero-indexed pixels.
+		return x - 1 - self.x0, y - 1 - self.y0
 
 	def pixelToPosition(self, x, y, src=None):
 		'''
 		Converts floats ``x``, ``y`` to a
-		:class:`tractor.RaDecPos`
+		:class:`tractor.RaDecPos`.
 		'''
-		r,d = self.wcs.pixelxy2radec(x + self.x0, y + self.y0)
+		# MAGIC: add 1 to convert from zero-indexed to FITS pixels.
+		r,d = self.wcs.pixelxy2radec(x + 1 + self.x0, y + 1 + self.y0)
 		return RaDecPos(r,d)
 
 	def cdAtPixel(self, x, y):
