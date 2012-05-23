@@ -277,6 +277,9 @@ class CompositeGalaxy(MultiParams):
 	def getName(self):
 		return 'CompositeGalaxy'
 
+	def getPosition(self):
+		return self.pos
+
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)

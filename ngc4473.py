@@ -16,17 +16,18 @@ from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 
 def main():
-
+    prefix = 'ngc4473'
     for i,j in enumerate(ngc2000):
-        if j['id'] == 4258 and j['is_ngc']:
+        if j['id'] == 4473 and j['is_ngc']:
             print j
             break
 
     rcfs = radec_to_sdss_rcf(j['ra'],j['dec'])
     print rcfs
-    
-    roi0 = [1000,2000,700,1500]
-    roi1 = [0,600,0,400]
+ 
+
+    roi0 = [750,1250,0,500]
+    roi1 = [750,1250,1000,1500]
     rois = [roi0,roi1]
     
     ra = j['ra']
@@ -64,7 +65,8 @@ def main():
 
     print bands
 
-    prefix = 'ngc4258'
+
+
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     plotInvvar('initial-'+prefix,tractor)
     bright = None
