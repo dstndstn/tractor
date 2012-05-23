@@ -100,7 +100,8 @@ def main():
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     
     CGPos = EG.getPosition()
-    CGShape = EG.getShape()
+    CGShape1 = EG.getShape().copy()
+    CGShape2 = EG.getShape().copy()
     EGBright = EG.getBrightness()
 
     CGr = EGBright[0] + 0.75
@@ -108,11 +109,12 @@ def main():
     CGu = EGBright[2] + 0.75
     CGz = EGBright[3] + 0.75
     CGi = EGBright[4] + 0.75
-    CGBright = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
+    CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
+    CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     print EGBright
     print CGBright
 
-    CG = st.CompositeGalaxy(CGPos,CGBright,CGShape,CGBright,CGShape)
+    CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape,CGBright1,CGShape)
     tractor.removeSource(EG)
     tractor.addSource(CG)
 
