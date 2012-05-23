@@ -113,7 +113,7 @@ def main():
     print EGBright
     print CGBright1
 
-    CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape,CGBright2,CGShape)
+    CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape1,CGBright2,CGShape2)
     tractor.removeSource(EG)
     tractor.addSource(CG)
 
