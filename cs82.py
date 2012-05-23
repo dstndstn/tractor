@@ -694,7 +694,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(mod, **ima)
-			tt = 'Model (best)'
+			tt = 'Model (best) %s' % tim.name
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
@@ -704,7 +704,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		if 'chibest' in plotnames:
 			chi = tractor.getChiImage(i)
 			plt.imshow(chi, **imchi)
-			tt = 'Chi (best)'
+			tt = 'Chi (best) %s' % tim.name
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
@@ -740,7 +740,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(modsum/float(nw), **ima)
-			tt = 'Model (sum)'
+			tt = 'Model (sum) %s' % tim.name
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
@@ -751,7 +751,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			plt.imshow(chisum/float(nw), **imchi)
-			tt = 'Chi (sum)'
+			tt = 'Chi (sum) %s' % tim.name
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
@@ -1147,14 +1147,57 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 
 
 def stage02(tractor=None, mp=None, **kwargs):
-
 	# set dummy "invvar"s
 	for im in tractor.getImages():
 		im.invvar = None
 
 	print 'Plots...'
 	plots(tractor, ['data', 'modbest', 'chibest'], 0, ibest=0, pp=np.array([tractor.getParams()]),
-		  alllnp=[0.])
+		  alllnp=[0.], imis=[0,1,2,3,4,5])
+
+	return dict(tractor=tractor)
+
+
+def stage03(tractor=None, mp=None, **kwargs):
+	tractor.freezeParam('images')
+	tractor.catalog.thawParamsRecursive('*')
+
+	params0 = np.array(tractor.getParams()).copy()
+	allsources = tractor.getCatalog()
+	brightcat,Ibright = cut_bright(allsources, magcut=23)
+	tractor.setCatalog(brightcat)
+	bparams0 = np.array(tractor.getParams()).copy()
+	allimages = tractor.getImages()
+	tractor.setImages(Images(allimages[0]))
+	print ' Cut to:', tractor
+	print len(tractor.getParams()), 'params'
+
+	plotims = [0,]
+	plotsa = dict(imis=plotims, mp=mp)
+	plots(tractor, ['modbest', 'chibest'], 3, ibest=0, pp=np.array([bparams0]),
+		  alllnp=[0.], **plotsa)
+
+	alllnp,step = optsourcestogether(tractor, 0)
+
+	plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
+		  alllnp=[0.], **plotsa)
+
+	step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+	alllnp += alllnp2
+
+	plots(tractor, ['modbest', 'chibest'], 5, ibest=0, pp=np.array([tractor.getParams()]),
+		  alllnp=[0.], **plotsa)
+
+	tractor.catalog.thawParamsRecursive('*')
+	bparams1 = np.array(tractor.getParams()).copy()
+	tractor.setCatalog(allsources)
+	tractor.setImages(allimages)
+	params1 = np.array(tractor.getParams()).copy()
+	#print 'dparams for bright sources:', bparams1 - bparams0
+	#print 'dparams for all sources:', params1 - params0
+	return dict(tractor=tractor, alllnp3=alllnp, Ibright3=Ibright)
+
+
 
 
 
@@ -1327,7 +1370,7 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True):
 
 
 # stage 3 replacement: "quick" fit of bright sources to one CFHT image
-def stage03(tractor=None, mp=None, steps=None, **kwargs):
+def stage03_OLD(tractor=None, mp=None, steps=None, **kwargs):
 	print 'Tractor:', tractor
 	tractor.mp = mp
 	tractor.freezeParam('images')

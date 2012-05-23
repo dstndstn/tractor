@@ -259,7 +259,7 @@ class Galaxy(MultiParams):
 		return derivs
 
 
-class CompositeGalaxy(Galaxy):
+class CompositeGalaxy(MultiParams):
 	'''
 	A galaxy with Exponential and deVaucouleurs components.
 
@@ -267,10 +267,6 @@ class CompositeGalaxy(Galaxy):
 	but have different brightnesses and shapes.
 	'''
 	def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
-		#super(CompositeGalaxy,self).__init__(pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
-		# Don't call the Galaxy superclass __init__; instead call straight
-		# to MultiParams... does this make you think CompositeGalaxy should
-		# inherit from MultiParams directly?
 		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
 
@@ -295,6 +291,12 @@ class CompositeGalaxy(Galaxy):
 		return CompositeGalaxy(self.pos.copy(), self.brightnessExp.copy(),
 							   self.shapeExp.copy(), self.brightnessDev.copy(),
 							   self.shapeDev.copy())
+
+	def getBrightness(self):
+		''' This makes some assumptions about the ``Brightness`` / ``PhotoCal`` and
+		should be treated as approximate.'''
+		return self.brightnessExp + self.brightnessDev
+
 	def getModelPatch(self, img, px=None, py=None):
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)

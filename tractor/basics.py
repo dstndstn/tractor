@@ -49,6 +49,16 @@ class Mags(ParamList):
 		'''
 		return getattr(self, bandname)
 
+	def __add__(self, other):
+		# ASSUME some things about calibration here...
+		kwargs = {}
+		for band in self.order:
+			m1 = self.getMag(band)
+			m2 = other.getMag(band)
+			msum = -2.5 * np.log10( 10.**(-m1/2.5) + 10.**(-m2/2.5) )
+			kwargs[band] = msum
+		return Mags(order=self.order, **kwargs)
+
 	def __setstate__(self, state):
 		'''For pickling.'''
 		self.__dict__ = state
@@ -108,6 +118,9 @@ class MagsPhotoCal(ParamList):
 		if mag > self.maxmag:
 			return 0.
 		return 10.**(0.4 * (self.zp - mag))
+
+	def countsToMag(self, counts):
+		return self.zp - 2.5 * np.log10(counts)
 
 	def __str__(self):
 		return 'MagsPhotoCal(band=%s, zp=%.3f)' % (self.band, self.zp)

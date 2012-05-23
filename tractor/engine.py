@@ -532,8 +532,8 @@ class Tractor(MultiParams):
 		-take step (try full step, back off)
 		'''
 		logverb('Optimizing at fixed complexity')
-		alldevirs = self.getAllDerivs(srcs=srcs, brightnessonly=brightnessonly, sky=sky)
-		X = self.optimize(alldevirs)
+		allderivs = self.getAllDerivs(srcs=srcs, brightnessonly=brightnessonly, sky=sky)
+		X = self.optimize(allderivs)
 		(dlogprob, alpha) = self.tryParamUpdates(srcs, X, alphas)
 		return dlogprob, X, alpha
 
@@ -675,7 +675,7 @@ class Tractor(MultiParams):
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
-	def optimize(self, alldevirs):
+	def optimize(self, allderivs):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -710,7 +710,7 @@ class Tractor(MultiParams):
 		# Keep track of row offsets for each image.
 		imgoffs = {}
 		nextrow = 0
-		for param in alldevirs:
+		for param in allderivs:
 			for deriv,img in param:
 				if img in imgoffs:
 					continue
@@ -719,10 +719,10 @@ class Tractor(MultiParams):
 				nextrow += img.numberOfPixels()
 		Nrows = nextrow
 		del nextrow
-		Ncols = len(alldevirs)
+		Ncols = len(allderivs)
 
 		colscales = []
-		for col, param in enumerate(alldevirs):
+		for col, param in enumerate(allderivs):
 			RR = []
 			CC = []
 			VV = []
@@ -943,9 +943,9 @@ class Tractor(MultiParams):
 		'''
 		if srcs is None:
 			srcs = self.catalog
-		alldevirs = []
+		allderivs = []
 		for j,src in enumerate(srcs):
-			allderivs = [[] for i in range(src.numberOfParams())]
+			thisderivs = [[] for i in range(src.numberOfParams())]
 			for i,img in enumerate(self.images):
 				# Get derivatives (in this image) of params
 				derivs = src.getParamDerivatives(img, brightnessonly=brightnessonly)
@@ -957,13 +957,13 @@ class Tractor(MultiParams):
 						print 'Derivative for source', src
 						print 'deriv index', i
 						assert(False)
-					allderivs[k].append((deriv, img))
-			alldevirs.extend(allderivs)
+					thisderivs[k].append((deriv, img))
+			allderivs.extend(thisderivs)
 		if sky:
 			for i,img in enumerate(self.getImages()):
 				derivs = img.getSky().getParamDerivatives(img)
-				alldevirs.extend([[(d,img) for d in derivs]])
-		return alldevirs
+				allderivs.extend([[(d,img) for d in derivs]])
+		return allderivs
 
 	def changeInvvar(self, Q2=None):
 		'''
