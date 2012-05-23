@@ -103,11 +103,11 @@ def main():
     CGShape = EG.getShape()
     EGBright = EG.getBrightness()
 
-    CGr = EGBright[0]*1.25
-    CGg = EGBright[1]*1.25
-    CGu = EGBright[2]*1.25
-    CGz = EGBright[3]*1.25
-    CGi = EGBright[4]*1.25
+    CGr = EGBright[0] + 0.75
+    CGg = EGBright[1] + 0.75
+    CGu = EGBright[2] + 0.75
+    CGz = EGBright[3] + 0.75
+    CGi = EGBright[4] + 0.75
     CGBright = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     print EGBright
     print CGBright
