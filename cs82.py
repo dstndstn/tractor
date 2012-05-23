@@ -2,6 +2,7 @@
 #http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
 #
 import os
+import math
 import time
 import logging
 import matplotlib
@@ -873,12 +874,20 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			#thaw_sdss=['a','d'],
 			thaw_sdss=[],
+			RA=None, DEC=None, sz=None,
 			**kwargs):
 	print 'tractor', tractor
 	tractor.mp = mp
 
+
+
+
+
+
 	# Make RA,Dec overview plot
 	plt.clf()
+	plt.plot(rco, dco, 'k-', lw=1, alpha=0.8)
+	plt.plot(rco[0], dco[0], 'ko')
 	if False:
 		cffns = glob('cs82data/86*p-21-cr.fits')
 		for fn in cffns:
@@ -904,7 +913,7 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			cmap = dict(u='b', g='g', r='r', i='m', z=(0.6,0.,1.))
 			cc = cmap[band]
 			#aa = 0.1
-			aa = 0.04
+			aa = 0.06
 		else:
 			print 'CFHT WCS x0,y0', wcs.x0, wcs.y0
 			print 'image W,H', W,H
@@ -925,8 +934,24 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 
 	plt.axis(ax)
 	plt.xlabel('RA (deg)')
-	plt.xlabel('Dec (deg)')
+	plt.ylabel('Dec (deg)')
 	plt.savefig('outlines.png')
+
+	from astrometry.libkd.spherematch import match_radec
+	r,d = np.array(r),np.array(d)
+	for dr in [7,8]:
+		T = fits_table('cs82data/cas-primary-DR%i.fits' % dr)
+		I,J,nil = match_radec(r, d, T.ra, T.dec, 1./3600.)
+
+		plt.clf()
+		H,xe,ye = np.histogram2d((r[I]-T.ra[J])*3600., (d[I]-T.dec[J])*3600., bins=100)
+		plt.imshow(H.T, extent=(min(xe), max(xe), min(ye), max(ye)),
+				   aspect='auto', interpolation='nearest', origin='lower')
+		plt.hot()
+		plt.title('CFHT - SDSS DR%i source positions' % dr)
+		plt.xlabel('dRA (arcsec)')
+		plt.ylabel('dDec (arcsec)')
+		plt.savefig('dradec-%i.png' % dr)
 
 	sys.exit(0)
 
@@ -1830,6 +1855,28 @@ def runstage(stage, force=[], threads=1, doplots=True):
 	print 'Saved', pfn
 	return R
 
+
+def estimate_noise(im, S=5):
+	# From "dsigma.c" by Mike Blanton via Astrometry.net
+	(H,W) = im.shape
+	xi = np.arange(0, W, S)
+	yi = np.arange(0, H, S)
+	I,J = np.meshgrid(xi, yi)
+	D = np.abs((im[J[:-1, :-1], I[:-1, :-1]] - im[J[1:, 1:], I[1:, 1:]]).ravel())
+	D.sort()
+	N = len(D)
+	print 'estimating noise at', N, 'samples'
+	nsig = 0.7
+	s = 0.
+	while s == 0.:
+		k = int(math.floor(N * math.erf(nsig / math.sqrt(2.))))
+		if k >= N:
+			raise 'Failed to estmate noise in image'
+		s = D[k] / (nsig * math.sqrt(2.))
+		nsig += 0.1
+	return s
+
+	
 	
 def main():
 	#getdata()
@@ -1852,6 +1899,105 @@ def main():
 	else:
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+
+	RA = 334.32
+	DEC = 0.315
+	sz = 0.24 * 3600.
+	cofn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.fits'
+	wcs = Tan(cofn, 0)
+	P = pyfits.open(cofn)
+	image = P[0].data
+	print 'Image', image.shape
+	(H,W) = image.shape
+	x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
+	print 'x,y', x,y
+	rco,dco = wcs.pixelxy2radec(x, y)
+	# The coadd image has my ROI roughly in the middle.
+	# Pixel 1,1 is the high-RA, low-Dec corner.
+	# Cut to a ~ 1k x 1k subimage
+	# May as well take the middle
+	x,y = wcs.radec2pixelxy(RA, DEC)
+	print 'Center pix:', x,y
+	S = 500
+	image = image[y-S: y+S, x-S: x+S]
+	image = image.copy()
+	print 'Subimage:', image.shape
+	twcs = FitsWcs(wcs)
+	twcs.setX0Y0(x-S, y-S)
+	xs,ys = twcs.positionToPixel(RaDecPos(RA, DEC))
+	print 'Subimage center pix:', xs,ys
+	rd = twcs.pixelToPosition(xs, ys)
+	print 'RA,DEC sv RaDec', RA,DEC, rd
+
+	imstd = estimate_noise(image)
+	print 'estimated std:', imstd
+
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.weight.fits'
+	P = pyfits.open(fn)
+	weight = P[0].data
+	weight = weight[y-S:y+S, x-S:x+S].copy()
+	print 'Weight', weight.shape
+	print 'Median', np.median(weight.ravel())
+
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.flag.fits'
+	P = pyfits.open(fn)
+	flags = P[0].data
+	flags = flags[y-S:y+S, x-S:x+S].copy()
+	print 'Flags', flags.shape
+
+	# From SExtractor manual: MAP_WEIGHT propto 1/var;
+	# scale to variance units by calibrating to the estimated image variance.
+	a = np.median(weight) * imstd**2
+	print 'a', a
+	invvar = weight / a
+	invvar[flags == 1] = 0.
+
+	print 'image min', image.min()
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=10.)
+	plt.colorbar()
+	plt.savefig('coim.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=3.)
+	plt.colorbar()
+	plt.savefig('coim2.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=1.)
+	plt.colorbar()
+	plt.savefig('coim3.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=0.3)
+	plt.colorbar()
+	plt.savefig('coim4.png')
+
+	plt.clf()
+	plt.imshow(image * np.sqrt(invvar), interpolation='nearest', origin='lower',
+			   vmin=-3, vmax=10.)
+	plt.colorbar()
+	plt.savefig('cochi.png')
+
+	plt.clf()
+	plt.imshow(weight, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('cowt.png')
+
+	plt.clf()
+	plt.imshow(invvar, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('coiv.png')
+
+	plt.clf()
+	plt.imshow(flags, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('cofl.png')
+
+	sys.exit(0)
+
 
 	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots)
 
