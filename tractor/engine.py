@@ -971,14 +971,12 @@ class Tractor(MultiParams):
 		'''
 		if Q2 is None:
 			return
+		assert(Q2 > 0.5)
 		for img in self.getImages():
-			data = img.getImage()
-			mod = self.getModelImage(img)
-			resid = data-mod
-			oinvvar = img.getOrigInvvar()
-			chi2 = oinvvar * resid**2
-			IRLS_factor = Q2 / (Q2 + chi2)
-			img.setInvvar(oinvvar * IRLS_factor)
+			resid = img.getImage() - self.getModelImage(img)
+			chi2 = img.getOrigInvvar() * resid**2
+			factor = Q2 / (Q2 + chi2)
+			img.setInvvar(oinvvar * factor)
 
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
