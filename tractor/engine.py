@@ -69,8 +69,8 @@ class Image(MultiParams):
 
 		'''
 		self.data = data
-		invvar = invvar
-		self.setInvvar(invvar)
+		self.origInvvar = 1. * np.array(invvar)
+		self.setInvvar(self.origInvvar())
 		self.name = name
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
@@ -119,9 +119,9 @@ class Image(MultiParams):
 	def getInvvar(self):
 		return self.invvar
 	def setInvvar(self,invvar):
-		self.invvar = invvar
+		self.invvar = 1. * invvar
 		self.invvar[np.logical_not(np.isfinite(self.invvar))] = 0.
-		self.invvar = np.maximum(0, self.invvar)
+		self.invvar = np.maximum(self.invvar, 0.)
 		self.inverr = np.sqrt(invvar)
 	def getOrigInvvar(self):
 		return self.origInvvar
@@ -965,18 +965,21 @@ class Tractor(MultiParams):
 				alldevirs.extend([[(d,img) for d in derivs]])
 		return alldevirs
 
-	def changeInvvar(self,Q2=None):
+	def changeInvvar(self, Q2=None):
+		'''
+		run one iteration of iteratively reweighting the invvars for IRLS
+		'''
 		if Q2 is None:
 			return
 		for img in self.getImages():
 			data = img.getImage()
 			mod = self.getModelImage(img)
 			resid = data-mod
-			invvar = img.getInvvar()
-			chi2 = (resid**2) * invvar
-			IRLS_factor = Q2 / (Q2+chi2)
-			img.setInvvar(invvar*IRLS_factor)
-	
+			oinvvar = img.getOrigInvvar()
+			chi2 = oinvvar * resid**2
+			IRLS_factor = Q2 / (Q2 + chi2)
+			img.setInvvar(oinvvar * IRLS_factor)
+
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
 
