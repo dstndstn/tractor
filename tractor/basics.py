@@ -78,6 +78,40 @@ class Flux(ScalarParam):
 			pass
 		self.val = max(0., val)
 
+class MagsPhotoCal(ParamList):
+	'''
+	A `PhotoCal` implementation to be usesd with zeropoint-calibrated `Mags`.
+	'''
+	def __init__(self, band, zeropoint):
+		'''
+		Create a new ``MagsPhotoCal`` object with a *zeropoint* in a *band*.
+
+		The ``Mags`` objects you use must have *band* as one of their
+		available bands.
+		'''
+		self.band = band
+		# MAGIC
+		self.maxmag = 50.
+		ParamList.__init__(self, zeropoint)
+
+	@staticmethod
+	def getNamedParams():
+		return dict(zp=0)
+
+	def getStepSizes(self):
+		return [0.01]
+
+	def brightnessToCounts(self, brightness):
+		mag = brightness.getMag(self.band)
+		if not np.isfinite(mag):
+			return 0.
+		if mag > self.maxmag:
+			return 0.
+		return 10.**(0.4 * (self.zp - mag))
+
+	def __str__(self):
+		return 'MagsPhotoCal(band=%s, zp=%.3f)' % (self.band, self.zp)
+
 class NullPhotoCal(BaseParams):
 	'''
 	The "identity" `PhotoCal`, to be used with `Flux` -- the

@@ -17,7 +17,7 @@ __all__ = [
 	'NamedParams',
 	# basics
 	'ConstantSky', 'PointSource',
-	'Flux', 'Mag', 'Mags',
+	'Flux', 'Mag', 'Mags', 'MagsPhotoCal',
 	'PixPos', 'RaDecPos',
 	'NullPhotoCal', 'WCS', 'NullWCS',
 	'FitsWcs', 'GaussianMixturePSF',

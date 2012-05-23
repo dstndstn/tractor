@@ -25,6 +25,7 @@ Flat list
 * :class:`~tractor.Images`
 * :class:`~tractor.Mag`
 * :class:`~tractor.Mags`
+* :class:`~tractor.MagsPhotoCal`
 * :class:`~tractor.MultiParams`
 * :class:`~tractor.NCircularGaussianPSF`
 * :class:`~tractor.NullPhotoCal`
@@ -115,6 +116,8 @@ Basics for standard images & catalogs
 .. autoclass:: tractor.Mag
    :members:
 .. autoclass:: tractor.Mags
+   :members:
+.. autoclass:: tractor.MagsPhotoCal
    :members:
 
 .. autoclass:: tractor.NCircularGaussianPSF

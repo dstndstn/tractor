@@ -170,8 +170,8 @@ def get_cfht_image(fn, psffn, pixscale, RA, DEC, sz, bandname=None,
 	psfimg = pyfits.open(psffn)[0].data
 	print 'PSF image shape', psfimg.shape
 	# number of Gaussian components
-	PS = psfimg.shape[0]
 	K = 3
+	PS = psfimg.shape[0]
 	w,mu,sig = em_init_params(K, None, None, None)
 	II = psfimg.copy()
 	II /= II.sum()
@@ -836,6 +836,181 @@ def cut_bright(cat, magcut=24, mag='i'):
 		brightcat.append(cat[i])
 	return brightcat, I
 
+
+def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
+						 doplots=False, psfK=3):
+	if filtermap is None:
+		filtermap = {'i.MP9701': 'i'}
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.fits'
+	wcs = Tan(fn, 0)
+	P = pyfits.open(fn)
+	image = P[0].data
+	phdr = P[0].header
+	print 'Image', image.shape
+	(H,W) = image.shape
+	OH,OW = H,W
+	x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
+	print 'x,y', x,y
+	rco,dco = wcs.pixelxy2radec(x, y)
+	# The coadd image has my ROI roughly in the middle.
+	# Pixel 1,1 is the high-RA, low-Dec corner.
+	x,y = wcs.radec2pixelxy(RA, DEC)
+	print 'Center pix:', x,y
+	xc,yc = int(x), int(y)
+	image = image[yc-S: yc+S, xc-S: xc+S]
+	image = image.copy()
+	print 'Subimage:', image.shape
+	twcs = FitsWcs(wcs)
+	twcs.setX0Y0(xc-S, yc-S)
+	xs,ys = twcs.positionToPixel(RaDecPos(RA, DEC))
+	print 'Subimage center pix:', xs,ys
+	rd = twcs.pixelToPosition(xs, ys)
+	print 'RA,DEC vs RaDec', RA,DEC, rd
+
+	if bandname is None:
+		# try looking up in filtermap.
+		filt = phdr['FILTER']
+		if filt in filtermap:
+			print 'Mapping filter', filt, 'to', filtermap[filt]
+			bandname = filtermap[filt]
+		else:
+			print 'No mapping found for filter', filt
+			bandname = filt
+
+	zp = float(phdr['MAGZP'])
+	print 'Zeropoint', zp
+	photocal = MagsPhotoCal(bandname, zp)
+	print photocal
+
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.weight.fits'
+	P = pyfits.open(fn)
+	weight = P[0].data
+	weight = weight[yc-S:yc+S, xc-S:xc+S].copy()
+	print 'Weight', weight.shape
+	print 'Median', np.median(weight.ravel())
+	invvar = weight
+
+	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.flag.fits'
+	P = pyfits.open(fn)
+	flags = P[0].data
+	flags = flags[yc-S:yc+S, xc-S:xc+S].copy()
+	print 'Flags', flags.shape
+	del P
+	invvar[flags == 1] = 0.
+
+	fn = 'cs82data/snap_W4p1m1_i.V2.7A.swarp.cut.fits'
+	psfim = pyfits.open(fn)[0].data
+	H,W = psfim.shape
+	N = 9
+	assert(((H % N) == 0) and ((W % N) == 0))
+	# Select which of the NxN PSF images applies to our cutout.
+	ix = int(N * float(xc) / OW)
+	iy = int(N * float(yc) / OH)
+	print 'PSF image number', ix,iy
+	PW,PH = W/N, H/N
+	print 'PSF image shape', PW,PH
+
+	psfim = psfim[iy*PH: (iy+1)*PH, ix*PW: (ix+1)*PW]
+	print 'my PSF image shape', PW,PH
+	psfim = np.maximum(psfim, 0)
+	psfim /= np.sum(psfim)
+
+	K = psfK
+	w,mu,sig = em_init_params(K, None, None, None)
+	xm,ym = -(PW/2), -(PH/2)
+	em_fit_2d(psfim, xm, ym, w, mu, sig)
+	tpsf = GaussianMixturePSF(w, mu, sig)
+
+	tsky = ConstantSky(0.)
+
+	obj = phdr['OBJECT'].strip()
+
+	tim = Image(data=image, invvar=invvar, psf=tpsf, wcs=twcs, photocal=photocal,
+				sky=tsky, name='CFHT coadd %s %s' % (obj, bandname))
+
+	if not doplots:
+		return tim
+
+	psfimpatch = Patch(-(PW/2), -(PH/2), psfim)
+	# number of Gaussian components
+	for K in range(1, 4):
+		w,mu,sig = em_init_params(K, None, None, None)
+		xm,ym = -(PW/2), -(PH/2)
+		em_fit_2d(psfim, xm, ym, w, mu, sig)
+		#print 'w,mu,sig', w,mu,sig
+		psf = GaussianMixturePSF(w, mu, sig)
+		patch = psf.getPointSourcePatch(0, 0)
+
+		plt.clf()
+		plt.subplot(1,2,1)
+		plt.imshow(patch.getImage(), interpolation='nearest', origin='lower')
+		plt.colorbar()
+		plt.subplot(1,2,2)
+		plt.imshow((patch - psfimpatch).getImage(), interpolation='nearest', origin='lower')
+		plt.colorbar()
+		plt.savefig('copsf-%i.png' % K)
+
+	plt.clf()
+	plt.imshow(psfim, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('copsf.png')
+
+	imstd = estimate_noise(image)
+	print 'estimated std:', imstd
+	# Turns out that a ~= 1
+	# From SExtractor manual: MAP_WEIGHT propto 1/var;
+	# scale to variance units by calibrating to the estimated image variance.
+	a = np.median(weight) * imstd**2
+	print 'a', a
+	#invvar = weight / a
+
+	print 'image min', image.min()
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=10.)
+	plt.colorbar()
+	plt.savefig('coim.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=3.)
+	plt.colorbar()
+	plt.savefig('coim2.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=1.)
+	plt.colorbar()
+	plt.savefig('coim3.png')
+	plt.clf()
+	plt.imshow(image, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=0.3)
+	plt.colorbar()
+	plt.savefig('coim4.png')
+
+	plt.clf()
+	plt.imshow(image * np.sqrt(invvar), interpolation='nearest', origin='lower',
+			   vmin=-3, vmax=10.)
+	plt.colorbar()
+	plt.savefig('cochi.png')
+
+	plt.clf()
+	plt.imshow(weight, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('cowt.png')
+
+	plt.clf()
+	plt.imshow(invvar, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('coiv.png')
+
+	plt.clf()
+	plt.imshow(flags, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	plt.savefig('cofl.png')
+
+	return tim
+
+
+
 # Read image files and catalogs, make Tractor object.
 def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 			doplots=True, **kwargs):
@@ -879,15 +1054,23 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	print 'tractor', tractor
 	tractor.mp = mp
 
+	S=500
+	filtermap = {'i.MP9701': 'i2'}
+	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap)
 
+	newims = Images(*([coim] + [im for im in tractor.getImages() if im.name.startswith('SDSS')]))
+	tractor.setImages(newims)
+	print 'tractor:', tractor
 
-
-
+	# We only use the 'inverr' element, so don't also store 'invvar'.
+	for im in tractor.getImages():
+		if hasattr(im, 'invvar'):
+			del im.invvar
 
 	# Make RA,Dec overview plot
 	plt.clf()
-	plt.plot(rco, dco, 'k-', lw=1, alpha=0.8)
-	plt.plot(rco[0], dco[0], 'ko')
+	#plt.plot(rco, dco, 'k-', lw=1, alpha=0.8)
+	#plt.plot(rco[0], dco[0], 'ko')
 	if False:
 		cffns = glob('cs82data/86*p-21-cr.fits')
 		for fn in cffns:
@@ -900,6 +1083,7 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			print 'x,y', x,y
 			r,d = wcs.pixelxy2radec(x, y)
 			plt.plot(r, d, 'k-', lw=1, alpha=0.8)
+
 	for im in tractor.getImages():
 		wcs = im.getWcs()
 		W,H = im.getWidth(), im.getHeight()
@@ -933,6 +1117,8 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	plt.plot(r, d, 'k,', alpha=0.3)
 
 	plt.axis(ax)
+	plt.xlim(ax[1],ax[0])
+	plt.axis('equal')
 	plt.xlabel('RA (deg)')
 	plt.ylabel('Dec (deg)')
 	plt.savefig('outlines.png')
@@ -953,11 +1139,14 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 		plt.ylabel('dDec (arcsec)')
 		plt.savefig('dradec-%i.png' % dr)
 
-	sys.exit(0)
+	return dict(tractor=tractor)
 
 
-
-
+def stage01_OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
+			#thaw_sdss=['a','d'],
+			thaw_sdss=[],
+			RA=None, DEC=None, sz=None,
+			**kwargs):
 	# For the initial WCS alignment, cut to brightish sources...
 	allsources = tractor.getCatalog()
 	brightcat,nil = cut_bright(allsources)
@@ -1901,103 +2090,11 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 
-	RA = 334.32
-	DEC = 0.315
-	sz = 0.24 * 3600.
-	cofn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.fits'
-	wcs = Tan(cofn, 0)
-	P = pyfits.open(cofn)
-	image = P[0].data
-	print 'Image', image.shape
-	(H,W) = image.shape
-	x,y = np.array([1,W,W,1,1]), np.array([1,1,H,H,1])
-	print 'x,y', x,y
-	rco,dco = wcs.pixelxy2radec(x, y)
-	# The coadd image has my ROI roughly in the middle.
-	# Pixel 1,1 is the high-RA, low-Dec corner.
-	# Cut to a ~ 1k x 1k subimage
-	# May as well take the middle
-	x,y = wcs.radec2pixelxy(RA, DEC)
-	print 'Center pix:', x,y
-	S = 500
-	image = image[y-S: y+S, x-S: x+S]
-	image = image.copy()
-	print 'Subimage:', image.shape
-	twcs = FitsWcs(wcs)
-	twcs.setX0Y0(x-S, y-S)
-	xs,ys = twcs.positionToPixel(RaDecPos(RA, DEC))
-	print 'Subimage center pix:', xs,ys
-	rd = twcs.pixelToPosition(xs, ys)
-	print 'RA,DEC sv RaDec', RA,DEC, rd
-
-	imstd = estimate_noise(image)
-	print 'estimated std:', imstd
-
-	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.weight.fits'
-	P = pyfits.open(fn)
-	weight = P[0].data
-	weight = weight[y-S:y+S, x-S:x+S].copy()
-	print 'Weight', weight.shape
-	print 'Median', np.median(weight.ravel())
-
-	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.flag.fits'
-	P = pyfits.open(fn)
-	flags = P[0].data
-	flags = flags[y-S:y+S, x-S:x+S].copy()
-	print 'Flags', flags.shape
-
-	# From SExtractor manual: MAP_WEIGHT propto 1/var;
-	# scale to variance units by calibrating to the estimated image variance.
-	a = np.median(weight) * imstd**2
-	print 'a', a
-	invvar = weight / a
-	invvar[flags == 1] = 0.
-
-	print 'image min', image.min()
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			   vmin=0, vmax=10.)
-	plt.colorbar()
-	plt.savefig('coim.png')
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			   vmin=0, vmax=3.)
-	plt.colorbar()
-	plt.savefig('coim2.png')
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			   vmin=0, vmax=1.)
-	plt.colorbar()
-	plt.savefig('coim3.png')
-	plt.clf()
-	plt.imshow(image, interpolation='nearest', origin='lower',
-			   vmin=0, vmax=0.3)
-	plt.colorbar()
-	plt.savefig('coim4.png')
-
-	plt.clf()
-	plt.imshow(image * np.sqrt(invvar), interpolation='nearest', origin='lower',
-			   vmin=-3, vmax=10.)
-	plt.colorbar()
-	plt.savefig('cochi.png')
-
-	plt.clf()
-	plt.imshow(weight, interpolation='nearest', origin='lower')
-	plt.colorbar()
-	plt.savefig('cowt.png')
-
-	plt.clf()
-	plt.imshow(invvar, interpolation='nearest', origin='lower')
-	plt.colorbar()
-	plt.savefig('coiv.png')
-
-	plt.clf()
-	plt.imshow(flags, interpolation='nearest', origin='lower')
-	plt.colorbar()
-	plt.savefig('cofl.png')
-
-	sys.exit(0)
-
+	# RA = 334.32
+	# DEC = 0.315
+	# # Cut to a ~ 1k x 1k subimage
+	# S = 500
+	# get_cfht_coadd_image(RA, DEC, S, doplots=True)
 
 	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots)
 
