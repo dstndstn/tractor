@@ -103,7 +103,6 @@ def main():
     CGShape1 = EG.getShape().copy()
     CGShape2 = EG.getShape().copy()
     EGBright = EG.getBrightness()
-
     CGr = EGBright[0] + 0.75
     CGg = EGBright[1] + 0.75
     CGu = EGBright[2] + 0.75
@@ -112,9 +111,9 @@ def main():
     CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     print EGBright
-    print CGBright
+    print CGBright1
 
-    CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape,CGBright1,CGShape)
+    CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape,CGBright2,CGShape)
     tractor.removeSource(EG)
     tractor.addSource(CG)
 
