@@ -70,7 +70,7 @@ class Image(MultiParams):
 		'''
 		self.data = data
 		self.origInvvar = 1. * np.array(invvar)
-		self.setInvvar(self.origInvvar())
+		self.setInvvar(self.origInvvar)
 		self.name = name
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
