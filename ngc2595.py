@@ -95,10 +95,7 @@ def main():
     saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
 
     for i in range(itune1):
-        if (i % 5 == 0):
-            tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
-        else:
-            tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=False)
+        tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     
@@ -120,10 +117,7 @@ def main():
     tractor.addSource(CG)
 
     for i in range(itune2):
-        if (i % 5 == 0):
-            tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
-        else:
-            tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=False)
+        tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
 

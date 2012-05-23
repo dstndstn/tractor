@@ -70,7 +70,7 @@ class Image(MultiParams):
 		'''
 		self.data = data
 		self.origInvvar = 1. * np.array(invvar)
-		self.setInvvar(self.origInvvar)
+		self.setInvvar(invvar)
 		self.name = name
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
@@ -974,7 +974,8 @@ class Tractor(MultiParams):
 		assert(Q2 > 0.5)
 		for img in self.getImages():
 			resid = img.getImage() - self.getModelImage(img)
-			chi2 = img.getOrigInvvar() * resid**2
+			oinvvar = img.getOrigInvvar()
+			chi2 = oinvvar * resid**2
 			factor = Q2 / (Q2 + chi2)
 			img.setInvvar(oinvvar * factor)
 
