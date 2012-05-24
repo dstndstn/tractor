@@ -11,7 +11,7 @@ from tractor import basics as ba
 
 
 for i,j in enumerate(ngc2000):
-    if j['id'] == 4258 and j['is_ngc']:
+    if j['id'] == 4471 and j['is_ngc']:
         print j
         break
 
@@ -20,7 +20,7 @@ cons = .5
 print j['ra']
 print j['dec']
 
-rcfs = radec_to_sdss_rcf(j['ra']+cons,j['dec'])
+rcfs = radec_to_sdss_rcf(j['ra'],j['dec'])
 print rcfs
 
 x0 = j['ra']
@@ -39,16 +39,16 @@ for theta in np.linspace(0,2*np.pi,100):
     y.append(uy*radius+y0)
 
 plt.plot(x,y)
-plt.plot(x0,y0)
+plt.plot(x0,y0,'o')
 
 for rcf in rcfs:
     timg,info = st.get_tractor_image(rcf[0],rcf[1],rcf[2],bandname,useMags=True)
-    wcs = timg.getWCS()
+    wcs = timg.getWcs()
     rd = wcs.pixelToPosition(0,0)
-    plt.plot(rd.ra,rd.dec)
-    plt.plot(rd.ra+width,rd.dec)
-    plt.plot(rd.ra,rd.dec+height)
-    plt.plot(rd.ra+width,rd.dec+height)
+    plt.plot(rd.ra,rd.dec,'+')
+    plt.plot(rd.ra+width,rd.dec,'+')
+    plt.plot(rd.ra,rd.dec+height,'+')
+    plt.plot(rd.ra+width,rd.dec+height,'+')
 
 plt.show()
 
