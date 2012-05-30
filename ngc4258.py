@@ -22,12 +22,12 @@ def main():
             print j
             break
 
-    rcfs = radec_to_sdss_rcf(j['ra'],j['dec'])
+    rcfs = radec_to_sdss_rcf(j['ra'],j['dec'],tablefn="dr8fields.fits")
     print rcfs
     
-    roi0 = [1000,2000,700,1500]
-    roi1 = [0,600,0,400]
-    rois = [roi0,roi1]
+#    roi0 = [1000,2000,700,1500]
+#    roi1 = [0,600,0,400]
+#    rois = [roi0,roi1]
     
     ra = j['ra']
     dec = j['dec']
@@ -44,9 +44,13 @@ def main():
 
     TI = []
     sources = []
-    for rcf,roi in zip(rcfs,rois): 
-        TI.extend([st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,roi=roi,useMags=True) for bandname in bands])
-        sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,roi=roi,bands=bands))
+    for rcf in rcfs:
+        print rcf
+        try:
+            TI.extend([st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,useMags=True) for bandname in bands])
+            sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,bands=bands))
+        except:
+            print "Sources not in data! %s" % (rcf)
 
     timg,info = TI[0]
     photocal = timg.getPhotoCal()
@@ -67,6 +71,7 @@ def main():
     prefix = 'ngc4258'
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     plotInvvar('initial-'+prefix,tractor)
+    assert(False)
     bright = None
     lowbright = 1000
     for timg,sources in zip(tims,sources):

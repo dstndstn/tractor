@@ -41,38 +41,43 @@ def main():
 		print 'Forcing radius of', opt.radius, 'arcmin'
 		radius = opt.radius / 60.
 
-	bands=['r']#,'g']#,'u','i','z']
+	bands=['r','g','u','i','z']
 	canonband = 'r'
 	pixscale = 0.396
 	pixr = radius * 3600. / pixscale
 	rerun = 0
 	H,W = 1489,2048
+	itune1 = 5
+	itune2 = 5
+	ntune = 0
+	IRLS_scale = 25.
 
 	TI = []
 	sources = []
 	sdss = DR7()
-	RCF = radec_to_sdss_rcf(ra, dec, radius=math.hypot(radius*60., 13./2.))
+	RCF = radec_to_sdss_rcf(ra, dec, radius=math.hypot(radius*60., 13./2.),tablefn="dr8fields.fits")
 	print 'Run,camcol,field list:', RCF
 	for run,camcol,field,rr,dd in RCF:
-		fn = sdss.getPath('tsField', run, camcol, field)
-		if not os.path.exists(fn):
-			sdss.retrieve('tsField', run, camcol, field)
-		tsf = sdss.readTsField(run, camcol, field, rerun)
-		astrans = tsf.getAsTrans(canonband)
-		x,y = astrans.radec_to_pixel(ra, dec)
-		print 'x,y', x,y
-		roi = [np.clip(x-pixr, 0, W), np.clip(x+pixr, 0, W),
-			   np.clip(y-pixr, 0, H), np.clip(y+pixr, 0, H)]
-		if roi[0] == roi[1] or roi[2] == roi[3]:
-			print 'Skipping', run, camcol, field
-			continue
+		try:
+			fn = sdss.getPath('tsField', run, camcol, field)
+			if not os.path.exists(fn):
+				sdss.retrieve('tsField', run, camcol, field)
+			tsf = sdss.readTsField(run, camcol, field, rerun)
+			astrans = tsf.getAsTrans(canonband)
+			x,y = astrans.radec_to_pixel(ra, dec)
+			print 'x,y', x,y
+			roi = [np.clip(x-pixr, 0, W), np.clip(x+pixr, 0, W),
+			       np.clip(y-pixr, 0, H), np.clip(y+pixr, 0, H)]
+			if roi[0] == roi[1] or roi[2] == roi[3]:
+				print 'Skipping', run, camcol, field
+				continue
 
-		TI.extend([st.get_tractor_image(run, camcol, field, band, useMags=True,
-										roiradecsize=(ra,dec,pixr), sdssobj=sdss)
+			TI.extend([st.get_tractor_image(run, camcol, field, band, useMags=True,
+							roiradecsize=(ra,dec,pixr), sdssobj=sdss)
 				   for band in bands])
-		sources.extend(st.get_tractor_sources(run, camcol, field, bandname=canonband,
-											  bands=bands, roi=roi))
-		# (could also get 'roi' from the st.get_tractor_image info dict)
+			sources.extend(st.get_tractor_sources(run, camcol, field, bandname=canonband,
+							      bands=bands, roi=roi))
+	# (could also get 'roi' from the st.get_tractor_image info dict)
 
 
 	tractor = Tractor([tim for tim,tinf in TI], sources, mp)
