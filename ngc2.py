@@ -61,19 +61,20 @@ def main():
     sources = []
     TItemp = []
     for rcf in rcfs:
-        print rcf
         try:
-            
+            print rcf
+
             TItemp.extend([st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,useMags=True,roiradecsize=(ra,dec,radius)) for bandname in bands])
+            print TItemp
             timg,info = TItemp[0]
             sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
             TI.extend(TItemp)
             TItemp = []
-        except:
-            print "Sources not in data!"
-            print rcf
+        except TypeError:
+            print "Sources not in data"
 
     timg,info = TI[0]
+    print TI
     photocal = timg.getPhotoCal()
 
     wcs = timg.getWcs()
