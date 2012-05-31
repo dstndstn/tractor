@@ -425,6 +425,10 @@ def get_tractor_image(run, camcol, field, bandname,
 			   np.clip(yc-S, 0, H),
 			   np.clip(yc+S, 0, H)]
 
+		if roi[0]==roi[1] or roi[2]==roi[3]:
+			print "ZERO ROI?", roi
+			return None,None
+
 		info.update(roi=roi)
 		
 	if roi is not None:
@@ -443,7 +447,8 @@ def get_tractor_image(run, camcol, field, bandname,
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
-	info.update(sky=sky, skysig=skysig)
+	zr = np.array([-5.,+5.]) * skysig
+	info.update(sky=sky, skysig=skysig,zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
 	gain = psfield.getGain(bandnum)

@@ -59,22 +59,27 @@ def main():
 
     TI = []
     sources = []
-    TItemp = []
     for rcf in rcfs:
         try:
             print rcf
 
-            TItemp.extend([st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,useMags=True,roiradecsize=(ra,dec,radius)) for bandname in bands])
+            TItemp = [st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,useMags=True,roiradecsize=(ra,dec,radius)) for bandname in bands]
             print TItemp
+            print TItemp[0]
+
             timg,info = TItemp[0]
+            if timg is None:
+                print "Zero roi"
+                continue
+
+            print info['roi']
             sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
             TI.extend(TItemp)
-            TItemp = []
         except TypeError:
             print "Sources not in data"
 
-    timg,info = TI[0]
     print TI
+    timg,info = TI[0]
     photocal = timg.getPhotoCal()
 
     wcs = timg.getWcs()
@@ -85,7 +90,7 @@ def main():
     for source in sources:
         tractor.addSources(source)
 
-    zr = np.array([-5.,+5.]) * info['skysig']
+    zr = info['zr']
 
     print bands
 
