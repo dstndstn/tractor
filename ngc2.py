@@ -60,23 +60,20 @@ def main():
     TI = []
     sources = []
     for rcf in rcfs:
-        try:
-            print rcf
+        print rcf
+        
+        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], bandname,roiradecsize=(ra,dec,(radius*60.)/.396)) for bandname in bands]
+        print TItemp
+        print TItemp[0]
 
-            TItemp = [st.get_tractor_image(rcf[0], rcf[1], rcf[2], bandname,useMags=True,roiradecsize=(ra,dec,radius)) for bandname in bands]
-            print TItemp
-            print TItemp[0]
+        timg,info = TItemp[0]
+        if timg is None:
+            print "Zero roi"
+            continue
 
-            timg,info = TItemp[0]
-            if timg is None:
-                print "Zero roi"
-                continue
-
-            print info['roi']
-            sources.append(st.get_tractor_sources(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
-            TI.extend(TItemp)
-        except TypeError:
-            print "Sources not in data"
+        print info['roi']
+        sources.append(st.get_tractor_sources_dr8(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
+        TI.extend(TItemp)
 
     print TI
     timg,info = TI[0]
@@ -97,7 +94,6 @@ def main():
     prefix = 'ngc%d' % (ngc)
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
     plotInvvar('initial-'+prefix,tractor)
-    assert(False)
     bright = None
     lowbright = 1000
     for timg,sources in zip(tims,sources):

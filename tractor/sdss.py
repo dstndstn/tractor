@@ -507,9 +507,9 @@ def get_tractor_image(run, camcol, field, bandname,
 
 
 
-def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
+def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
-						  savepsfimg=None):
+						  savepsfimg=None,curl=False):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -534,6 +534,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss,
 	valid_psf = ['dg', 'kl-gm']
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
+
+	if sdss is None:
+		sdss = DR8(curl=curl)
 
 	bandnum = band_index(bandname)
 

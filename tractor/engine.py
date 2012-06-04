@@ -20,6 +20,7 @@ import pylab as plt
 
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import lsqr
+from scipy.ndimage.morphology import binary_dilation
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
@@ -70,7 +71,8 @@ class Image(MultiParams):
 		'''
 		self.data = data
 		self.origInvvar = 1. * np.array(invvar)
-		self.setInvvar(invvar)
+		self.setMask()
+		self.setInvvar(self.origInvvar)
 		self.name = name
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
@@ -120,9 +122,22 @@ class Image(MultiParams):
 		return self.invvar
 	def setInvvar(self,invvar):
 		self.invvar = 1. * invvar
-		self.invvar[np.logical_not(np.isfinite(self.invvar))] = 0.
-		self.invvar = np.maximum(self.invvar, 0.)
-		self.inverr = np.sqrt(invvar)
+		print self.invvar
+		print self.mask
+		self.invvar[self.mask] = 0. 
+		self.inverr = np.sqrt(self.invvar)
+
+
+	def getMask(self):
+		return self.mask
+
+	def setMask(self):
+		self.mask = (self.origInvvar <= 0.)
+		print self.mask
+		self.mask = binary_dilation(self.mask,iterations=3)
+		print self.mask
+
+
 	def getOrigInvvar(self):
 		return self.origInvvar
 	def getImage(self):
