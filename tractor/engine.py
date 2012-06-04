@@ -122,8 +122,6 @@ class Image(MultiParams):
 		return self.invvar
 	def setInvvar(self,invvar):
 		self.invvar = 1. * invvar
-		print self.invvar
-		print self.mask
 		self.invvar[self.mask] = 0. 
 		self.inverr = np.sqrt(self.invvar)
 
@@ -133,9 +131,7 @@ class Image(MultiParams):
 
 	def setMask(self):
 		self.mask = (self.origInvvar <= 0.)
-		print self.mask
 		self.mask = binary_dilation(self.mask,iterations=3)
-		print self.mask
 
 
 	def getOrigInvvar(self):
