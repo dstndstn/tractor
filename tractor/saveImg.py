@@ -152,9 +152,9 @@ def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
         save(idstr+'-%s-' % (band), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
 
-def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False):
+def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False,plotBands=False):
     for i,img in enumerate(tractor.getImages()):
-	    if i % 5 == 0: #Only print 'r' band HACK
+	    if i % 5 == 0 or plotBands: #Only print 'r' band
 		    save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
 

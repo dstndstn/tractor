@@ -157,12 +157,13 @@ def main():
         tractor.changeInvvar(IRLS_scale)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     plotInvvar('final-'+prefix,tractor)
+    saveAll('allBands-' + prefix,tractor,zr,bands,debug=True,plotBands=True)
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
 def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     # Create a tex flip-book of the plots
 
-    def allImages(title,imgpre):
+    def allImages(title,imgpre,allBands=False):
         page = r'''
         \begin{frame}{%s}
         \plot{data-%s}
@@ -172,7 +173,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
         \end{frame}'''
         temp = ''
         for j in range(numImg):
-            if j % 5 == 0:
+            if j % 5 == 0 or allBands:
                 temp+= page % ((title+', %d' % (j),) + (imgpre+'-%d' % (j),)*4)
         return temp
 
@@ -192,6 +193,8 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
         tex+=allImages('Galaxy tuning (w/ Composite), step %d' % (i+1),'itune2-%d-' %(i+1)+prefix)
     for i in range(ntune):
         tex+=allImages('All tuning, step %d' % (i+1),'ntune-%d-' % (i+1)+prefix)
+
+    tex+=allImages('All Bands','allBands-'+prefix,True)
     
     tex += r'\end{document}' + '\n'
     fn = 'flip-' + prefix + '.tex'
