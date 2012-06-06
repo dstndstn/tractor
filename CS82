@@ -406,6 +406,100 @@ HDU #3  Binary Table:  149 columns x 212778 rows
  148 DISK_THETA_WORLD 1E              
 
 
+-------------------------------------------
+2012-05-22
+-------------------------------------------
+
+Choose a slightly different area, to get the whole height of the SDSS images.
+Aim for ~2048 x 2048 SDSS pixels.
+
+The CFHT images are shifted slightly (and significantly dithered) so
+for some of the exposures up to 1/3 of the image is off our area.
+
+The CFHT images are about the full height and half the width, so shift
+the area over so that they cover the "right" half; we can pick up a
+neighbouring CCD later if necessary.
+
+New region:  (334.320, 0.315) += 0.12 deg
+
+FIXME: We should trim the SDSS images from 1489 to -128 = 1361
+
+-> get the overlapping camcol from the other strip (~200-pix overlap; camcols 4 & 5)
+-> want it?  (I cut it out for now)
 
 
+-> Tractor with 12088 sources and 382 images (4 CFHT)
+
+select * from PhotoPrimary where ra between 334.20 and 334.44
+  and dec between 0.195 and 0.435
+---> cas-primary-DR8.fits
+
+
+Try using CFHT coadd instead:
+
+wget --user cs82shear --password XXX http://vn90.phas.ubc.ca/CS82/CS82_data_products/coadd_V2.7A/flag_V2.7A/W4p1m1_i.V2.7A.swarp.cut.flag.fits.gz
+wget --user cs82shear --password XXX http://vn90.phas.ubc.ca/CS82/CS82_data_products/coadd_V2.7A/weight_V2.7A/W4p1m1_i.V2.7A.swarp.cut.weight.fits.gz
+wget --user cs82 --password XXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/coadd_V2.7A_9/images_V2.7A/W4p1m1_i.V2.7A.swarp.cut.fits
+
+
+mag = MAGZP - 2.5*log10(counts)
+
+The weight image is propto 1/var.  I find that   median(weight) ~= 1/(image estimated std)**2
+
+so the propto is an =; weight = invvar in image units.
+
+The PSF model for the coadd, evaluated at 9x9 positions, is here:
+  http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/snap_W4p1m1_i.V2.7A.swarp.cut.fits
+
+1-component Gaussian PSF approximation gets ~10% error
+2-component Gaussian PSF approximation gets ~ 2% error
+3-component Gaussian PSF approximation gets ~ 0.5% error
+
+Ok, the coadd model looks good!  But looks like a ~ 1-pixel shift.... oh, my bad in FitsWcs?
+
+
+
+-------------------------------------------
+2012-05-31
+-------------------------------------------
+
+hmm, optimizing all at once hurts...
+
+ 36757  0.00000e+00   1.433e+03  1.433e+03    3.9e-01  8.8e-09   5.2e+02  6.2e+06
+ 
+LSQR finished
+The least-squares solution is good enough, given atol     
+ 
+istop =       2   r1norm = 1.4e+03   anorm = 5.2e+02   arnorm = 6.6e-03
+itn   =   36757   r2norm = 1.4e+03   acond = 6.2e+06   xnorm  = 1.2e+05
+ 
+  17195.1 seconds
+scaled   X= [ 0.  0.  0. ...,  0.  0.  0.]
+  X= [ 0.  0.  0. ...,  0.  0.  0.]
+
+Finding optimal step size...
+  log-prob before: -6826028.15209
+  Stepping with alpha = 0.01
+overflow encountered in double_scalars
+invalid value encountered in multiply
+  delta log-prob: nan
+  Stepping with alpha = 0.125
+invalid value encountered in multiply
+  delta log-prob: nan
+  Stepping with alpha = 0.25
+  delta log-prob: nan
+  Stepping with alpha = 0.5
+  delta log-prob: nan
+  Stepping with alpha = 1.0
+  delta log-prob: nan
+  Stepping with alpha = 2.0
+  delta log-prob: nan
+  Stepping with alpha = 4.0
+  delta log-prob: nan
+Finished opt2.
+  Tderiv 21.178869 wall, 21.180000 cpu
+  Topt   17214.232143 wall, 17212.710000 cpu
+  Tstep  64.888621 wall, 64.880000 cpu
+
+  17195.1 seconds
 

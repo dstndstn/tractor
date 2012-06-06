@@ -36,7 +36,7 @@ def main():
     itune2 = 5
     ntune = 0
     IRLS_scale = 25.
-    radius = j.size/4.
+    radius = j.size
 
     print radius
     print ra
@@ -62,7 +62,7 @@ def main():
     for rcf in rcfs:
         print rcf
         
-        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], bandname,roiradecsize=(ra,dec,(radius*60.)/.396)) for bandname in bands]
+        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], bandname,roiradecsize=(ra,dec,(radius*60.)/0.396)) for bandname in bands]
         print TItemp
         print TItemp[0]
 
@@ -85,6 +85,7 @@ def main():
     tims = [timg for timg,tinf in TI]
     tractor = st.SDSSTractor(tims)
     for source in sources:
+        print 'Adding sources', source
         tractor.addSources(source)
 
     zr = info['zr']

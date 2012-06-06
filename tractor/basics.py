@@ -168,12 +168,13 @@ class FitsWcs(ParamList):
 
 	def __init__(self, wcs):
 		'''
-		Creates a new ``FitsWcs`` given a :class:`~astrometry.util.util.Tan`_
+		Creates a new ``FitsWcs`` given a :class:`~astrometry.util.util.Tan`
 		object.  To create one of these from a filename and FITS HDU extension,
 
+		::
 
 		    fn = 'my-file.fits'
-			ext = 0
+		    ext = 0
 		    FitsWcs(Tan(fn, ext))
 		'''
 		if hasattr(self, 'x0'):
@@ -313,6 +314,10 @@ class PixPos(ParamList):
 class RaDecPos(ParamList):
 	'''
 	A Position implementation using RA,Dec positions.
+
+	Attributes:
+	  * ``.ra``
+	  * ``.dec``
 	'''
 	@staticmethod
 	def getNamedParams():

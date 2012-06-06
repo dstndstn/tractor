@@ -222,7 +222,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 
 
 def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
-							retrieve=True, curl=False, roi=None, bands=None):
+							retrieve=True, curl=False, roi=None, bands=None,
+							badmag=25):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -270,14 +271,19 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	ikeep = []
 
 	def lup2bright(lups, bandnames, bandnums):
+		# -9999 -> badmag
+		lups = np.maximum(lups, badmag)
 		mags = sdss.luptitude_to_mag(lups, bandnums)
 		bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
 		return bright
 
 	def nmgy2bright(flux, bandnames):
-		mag = sdss.nmgy_to_mag(flux)
+		I = (flux > 0)
+		mag = np.zeros_like(flux) + badmag
+		mag[I] = sdss.nmgy_to_mag(flux[I])
 		bright = Mags(order=bandnames, **dict(zip(bandnames,mag)))
-
+		return bright
+	
 	# Add stars
 	I = np.flatnonzero(Lstar > 0)
 	print len(I), 'stars'
@@ -306,20 +312,22 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		elif hasdev:
 			flux = objs.devflux[i,bandnums]
 			dbright = nmgy2bright(flux, bandnames)
+			#print 'Dev galaxy: flux', flux, 'bright', dbright
 		elif hasexp:
 			flux = objs.expflux[i,bandnums]
 			ebright = nmgy2bright(flux, bandnames)
+			#print 'Exp galaxy: flux', flux, 'bright', ebright
 		else:
 			assert(False)
 											 
 		if hasdev:
-			re = objs.theta_dev[i,bandnum]
-			ab = objs.ab_dev[i,bandnum]
+			re  = objs.theta_dev  [i,bandnum]
+			ab  = objs.ab_dev     [i,bandnum]
 			phi = objs.phi_dev_deg[i,bandnum]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
-			re = objs.theta_exp[i,bandnum]
-			ab = objs.ab_exp[i,bandnum]
+			re  = objs.theta_exp  [i,bandnum]
+			ab  = objs.ab_exp     [i,bandnum]
 			phi = objs.phi_exp_deg[i,bandnum]
 			eshape = GalaxyShape(re, ab, phi)
 
@@ -352,9 +360,6 @@ def get_tractor_image(run, camcol, field, bandname,
 					  retrieve=True, curl=False, roi=None,
 					  psf='kl-gm', useMags=False, roiradecsize=None,
 					  savepsfimg=None):
-					  
-	# get_tractor_sources() no longer supports !useMags, so
-	assert(useMags)
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -376,6 +381,10 @@ def get_tractor_image(run, camcol, field, bandname,
 	  'sky'
 	  'skysig'
 	'''
+					  
+	# get_tractor_sources() no longer supports !useMags, so
+	assert(useMags)
+
 	if sdssobj is None:
 		# Ugly
 		if release != 'DR7':
@@ -509,7 +518,7 @@ def get_tractor_image(run, camcol, field, bandname,
 
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
-						  savepsfimg=None,curl=False):
+						  savepsfimg=None, curl=False):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -542,22 +551,22 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	for ft in ['psField', 'fpM']:
 		fn = sdss.retrieve(ft, run, camcol, field, bandname)
-		print 'got', fn
+		#print 'got', fn
 	fn = sdss.retrieve('frame', run, camcol, field, bandname)
 
 	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
 	image = frame.getImage().astype(np.float32)
-	print 'Image:', image.dtype
-	print 'mean:', np.mean(image.ravel())
+	#print 'Image:', image.dtype
+	#print 'mean:', np.mean(image.ravel())
 	(H,W) = image.shape
-	print 'shape:', W,H
+	#print 'shape:', W,H
 	
 	info = dict()
-	#info.update(tai=tai)
 
 	astrans = frame.getAsTrans()
 	wcs = SdssWcs(astrans)
 	#print 'Created SDSS Wcs:', wcs
+	#print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
 
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
@@ -571,10 +580,10 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		x0,x1,y0,y1 = roi
 	else:
 		x0 = y0 = 0
-
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
+	print 'Band name:', bandname
 	photocal = SdssNanomaggiesPhotoCal(bandname)
 
 	sky = 0.
@@ -582,24 +591,25 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	calibvec = frame.getCalibVec()
 
-	print 'sky', #frame.sky
-	print frame.sky.shape
-	print 'x', frame.skyxi
-	print frame.skyxi.shape
-	print 'y', frame.skyyi
-	print frame.skyyi.shape
+	#print 'sky', #frame.sky
+	#print frame.sky.shape
+	#print 'x', len(frame.skyxi), frame.skyxi
+	#print frame.skyxi.shape
+	#print 'y', len(frame.skyyi), frame.skyyi
+	#print frame.skyyi.shape
 
-	(sh,sw) = frame.sky.shape
+	skyim = frame.sky.T
+	(sh,sw) = skyim.shape
 	xi = np.round(frame.skyxi).astype(int)
-	#print 'xi:', xi.min(), xi.max()
+	#print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
 	yi = np.round(frame.skyyi).astype(int)
-	#print 'yi:', yi.min(), yi.max()
+	#print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
 	assert(all(xi >= 0) and all(xi < sw))
 	assert(all(yi >= 0) and all(yi < sh))
 	XI,YI = np.meshgrid(xi, yi)
 	#print 'XI', XI.shape
 	# Nearest-neighbour interpolation -- we just need this for approximate invvar.
-	bigsky = frame.sky[YI,XI]
+	bigsky = skyim[YI,XI]
 	#print 'bigsky', bigsky.shape
 	assert(bigsky.shape == image.shape)
 
@@ -626,9 +636,11 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	meansky = np.mean(frame.sky)
 	meancalib = np.mean(calibvec)
 	skysig = sqrt((meansky / gain) + darkvar) * meancalib
-	print 'skysig:', skysig
+	#print 'skysig:', skysig
 
 	info.update(sky=sky, skysig=skysig)
+	zr = np.array([-5.,+5.])*skysig + sky
+	info.update(zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
 	#gain = psfield.getGain(bandnum)
@@ -664,7 +676,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 			plt.title('PSF image to fit with EM')
 			plt.savefig(savepsfimg)
 		res = em_fit_2d(II, xm, ym, w, mu, sig)
-		print 'em_fit_2d result:', res
+		#print 'em_fit_2d result:', res
 		if res == 0:
 			# print 'w,mu,sig', w,mu,sig
 			mypsf = GaussianMixturePSF(w, mu, sig)

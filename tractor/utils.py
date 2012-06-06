@@ -463,7 +463,8 @@ class MultiParams(BaseParams, NamedParams):
 		for s in self.subs:
 			if s is None:
 				t.append(None)
-			t.append(s.hashkey())
+			else:
+				t.append(s.hashkey())
 		return tuple(t)
 
 	def __str__(self):
