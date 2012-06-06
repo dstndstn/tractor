@@ -51,7 +51,7 @@ def main():
 
     
 
-    bands=['r','g','u','i','z']
+    bands=['u','g','r','i','z']
     bandname = 'r'
     flipBands = ['r']
 
@@ -133,11 +133,11 @@ def main():
     CGShape2 = EG.getShape().copy()
     EGBright = EG.getBrightness()
 
-    CGr = EGBright[0] + 0.75
+    CGu = EGBright[0] + 0.75
     CGg = EGBright[1] + 0.75
-    CGu = EGBright[2] + 0.75
-    CGz = EGBright[3] + 0.75
-    CGi = EGBright[4] + 0.75
+    CGr = EGBright[2] + 0.75
+    CGi = EGBright[3] + 0.75
+    CGz = EGBright[4] + 0.75
     CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
     print EGBright
@@ -173,7 +173,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
         \end{frame}'''
         temp = ''
         for j in range(numImg):
-            if j % 5 == 0 or allBands:
+            if j % 5 == 2 or allBands:
                 temp+= page % ((title+', %d' % (j),) + (imgpre+'-%d' % (j),)*4)
         return temp
 
