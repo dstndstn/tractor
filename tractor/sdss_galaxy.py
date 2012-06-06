@@ -424,8 +424,8 @@ class HoggGalaxy(Galaxy):
 		else:
 			halfsize = max(8., 8. * (self.re*self.ab / 3600.) / pixscale)
 		# now evaluate the mixture on the patch pixels
-		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0., img.getWidth())
-		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0., img.getHeight())
+		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0, img.getWidth())
+		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0, img.getHeight())
 		if inx == [] or iny == []:
 			#print 'No overlap between model and image'
 			return None
