@@ -1177,10 +1177,10 @@ def stage03(tractor=None, mp=None, **kwargs):
 	plots(tractor, ['modbest', 'chibest'], 3, ibest=0, pp=np.array([bparams0]),
 		  alllnp=[0.], **plotsa)
 
-	alllnp,step = optsourcestogether(tractor, 0)
-
-	plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
-		  alllnp=[0.], **plotsa)
+	#alllnp,step = optsourcestogether(tractor, 0)
+	#
+	#plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
+	#	  alllnp=[0.], **plotsa)
 
 	step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 	alllnp += alllnp2

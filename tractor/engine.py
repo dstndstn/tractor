@@ -18,7 +18,7 @@ import os
 import numpy as np
 import pylab as plt
 
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, csc_matrix
 from scipy.sparse.linalg import lsqr
 from scipy.ndimage.morphology import binary_dilation
 
@@ -256,7 +256,7 @@ class Patch(object):
 
 	def getPixelIndices(self, parent):
 		if self.patch is None:
-			return np.array([])
+			return np.array([], np.int)
 		(h,w) = self.shape
 		(H,W) = parent.shape
 		X,Y = np.meshgrid(np.arange(w), np.arange(h))
@@ -732,29 +732,19 @@ class Tractor(MultiParams):
 		del nextrow
 		Ncols = len(allderivs)
 
+		print 'imgoffs:', imgoffs
+
 		colscales = []
 		for col, param in enumerate(allderivs):
 			RR = []
-			CC = []
 			VV = []
 			WW = []
 			for (deriv, img) in param:
 				inverrs = img.getInvError()
 				(H,W) = img.shape
 				row0 = imgoffs[img]
-				#print 'Image', img.name, 'has row0=', row0
-				#print 'Before clipping:'
-				#print 'deriv shape is', deriv.shape
-				#print 'deriv slice is', deriv.getSlice()
 				deriv.clipTo(W, H)
 				pix = deriv.getPixelIndices(img)
-				# (in the parent image)
-				#print 'After clipping:'
-				#print 'deriv shape is', deriv.shape
-				#print 'deriv slice is', deriv.getSlice()
-				#print 'image shape is', img.shape
-				#print 'parent pix', (W*H), npixels[i]
-				#print 'pix range:', pix.min(), pix.max()
 				if len(pix) == 0:
 					#print 'This param does not influence this image!'
 					continue
@@ -766,12 +756,10 @@ class Tractor(MultiParams):
 				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
 				rows = row0 + pix[nz]
 				#print 'Adding derivative', deriv.getName(), 'for image', img.name
-				cols = np.zeros_like(rows) + col
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
 				assert(vals.shape == w.shape)
 				RR.append(rows)
-				CC.append(cols)
 				VV.append(vals)
 				WW.append(w)
 
@@ -780,7 +768,6 @@ class Tractor(MultiParams):
 				colscales.append(1.)
 				continue
 			rows = np.hstack(RR)
-			cols = np.hstack(CC)
 			vals = np.hstack(VV) * np.hstack(WW)
 			if len(vals) == 0:
 				colscales.append(1.)
@@ -795,29 +782,18 @@ class Tractor(MultiParams):
 			FACTOR = 1.e-10
 			I = (np.abs(vals) > (FACTOR * mx))
 			rows = rows[I]
-			cols = cols[I]
 			vals = vals[I]
 			scale = np.sqrt(np.sum(vals * vals))
 			colscales.append(scale)
 			assert(len(colscales) == (col+1))
 			logverb('Column', col, 'scale:', scale)
 			sprows.append(rows)
-			spcols.append(cols)
+			spcols.append(np.zeros_like(rows) + col)
 			spvals.append(vals / scale)
 
 		if len(spcols) == 0:
 			logverb("len(spcols) == 0")
 			return []
-
-		# HACK
-		uniquecols = np.unique(np.hstack(spcols))
-
-		# ensure the sparse matrix is full up to the number of columns we expect
-		# dstn: what does this do? -hogg
-		# hogg: it is a hack. -dstn
-		spcols.append([Ncols - 1])
-		sprows.append([0])
-		spvals.append([0])
 
 		sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
 		spcols = np.hstack(spcols)
@@ -828,16 +804,22 @@ class Tractor(MultiParams):
 		logverb('  Number of sparse matrix elements:', len(sprows))
 		urows = np.unique(sprows)
 		logverb('  Unique rows (pixels):', len(urows))
-		logverb('  Max row:', max(urows))
+		logverb('  Max row:', urows[-1])
 		ucols = np.unique(spcols)
 		logverb('  Unique columns (params):', len(ucols))
-		logverb('  Max column:', max(ucols))
+		logverb('  Max column:', ucols[-1])
 		logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
 
 		assert(all(np.isfinite(spvals)))
 
+		# FIXME -- does it make LSQR faster if we remap the row and column
+		# indices so that no rows/cols are empty?
+
+		# FIXME -- we could probably construct the CSC matrix ourselves!
+
 		# Build sparse matrix
-		A = csr_matrix((spvals, (sprows, spcols)))
+		#A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+		A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 
 		# b = chi
 		#
@@ -847,26 +829,18 @@ class Tractor(MultiParams):
 		b = np.zeros(Nrows)
 		# iterating this way avoid setting the elements more than once
 		for img,row0 in imgoffs.items():
-			NP = img.numberOfPixels()
-			mod = self.getModelImage(img)
-			data = img.getImage()
-			inverr = img.getInvError()
-			assert(np.product(mod.shape) == NP)
-			assert(mod.shape == data.shape)
-			assert(mod.shape == inverr.shape)
+			chi = self.getChiImage(img=img).ravel()
+			NP = len(chi)
 			# we haven't touched these pix before
 			assert(all(b[row0 : row0 + NP] == 0))
-			assert(all(np.isfinite(data.ravel())))
-			assert(all(np.isfinite(mod.ravel())))
-			assert(all(np.isfinite(inverr.ravel())))
-			b[row0 : row0 + NP] = ((data - mod) * inverr).ravel()
-			assert(all(np.isfinite(b[row0 : row0 + NP])))
-		b = b[:urows.max() + 1]
+			assert(all(np.isfinite(chi)))
+			b[row0 : row0 + NP] = chi
 
+		# Zero out unused rows -- FIXME, is this useful??
+		bnz = np.zeros(Nrows)
+		bnz[urows] = b[urows]
+		b = bnz
 		assert(all(np.isfinite(b)))
-
-		# FIXME -- does it make LSQR faster if we remap the row and column
-		# indices so that no rows/cols are empty?
 
 		lsqropts = dict(show=isverbose())
 
@@ -875,7 +849,7 @@ class Tractor(MultiParams):
 		
 		# Run lsqr()
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
-			   (Ncols, len(uniquecols), len(spvals)-1))
+			   (Ncols, len(ucols), len(spvals)-1))
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
@@ -1077,9 +1051,10 @@ class Tractor(MultiParams):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
-	def getChiImage(self, imgi,srcs=None):
-		img = self.getImage(imgi)
-		mod = self.getModelImage(img,srcs)
+	def getChiImage(self, imgi=-1, img=None, srcs=None):
+		if img is None:
+			img = self.getImage(imgi)
+		mod = self.getModelImage(img, srcs)
 		return (img.getImage() - mod) * img.getInvError()
 
 	def getLogLikelihood(self):

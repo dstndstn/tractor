@@ -598,12 +598,16 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#print 'y', len(frame.skyyi), frame.skyyi
 	#print frame.skyyi.shape
 
-	skyim = frame.sky.T
+	skyim = frame.sky
+	(sh,sw) = skyim.shape
+	print 'Skyim shape', skyim.shape
+	if sw != 256:
+		skyim = skyim.T
 	(sh,sw) = skyim.shape
 	xi = np.round(frame.skyxi).astype(int)
-	#print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
+	print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
 	yi = np.round(frame.skyyi).astype(int)
-	#print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
 	assert(all(xi >= 0) and all(xi < sw))
 	assert(all(yi >= 0) and all(yi < sh))
 	XI,YI = np.meshgrid(xi, yi)
