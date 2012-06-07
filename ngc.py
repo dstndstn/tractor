@@ -16,6 +16,7 @@ from tractor.saveImg import *
 from tractor import sdss_galaxy as sg
 from tractor import basics as ba
 from tractor.overview import fieldPlot
+from tractor.tychodata import tychoMatch
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
@@ -45,6 +46,10 @@ def main():
     print ra
     print dec
 
+    sra, sdec = tychoMatch(ra,dec,(radius*4.)/60.)
+    print sra
+    print sdec
+    assert(False)
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
@@ -118,7 +123,7 @@ def main():
 
     saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
     newShape = sg.GalaxyShape(30.,1.,0.)
-    newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0)
+    newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
     print EG
     tractor.addSource(EG)
@@ -141,8 +146,8 @@ def main():
     CGr = EGBright[2] + 0.75
     CGi = EGBright[3] + 0.75
     CGz = EGBright[4] + 0.75
-    CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
-    CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi)
+    CGBright1 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
+    CGBright2 = ba.Mags(r=CGr,g=CGg,u=CGu,z=CGz,i=CGi,order=['u','g','r','i','z'])
     print EGBright
     print CGBright1
 
@@ -161,6 +166,16 @@ def main():
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
     plotInvvar('final-'+prefix,tractor)
     saveAll('allBands-' + prefix,tractor,zr,bands,debug=True,plotBands=True)
+
+    print CG
+    print CG.getPosition()
+    print CGBright1
+    print CGBright2
+    print CGShape1
+    print CGShape2
+    print CGBright1+CGBright2
+    print CG.getBrightness()
+
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
 def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
