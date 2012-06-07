@@ -49,7 +49,6 @@ def main():
     sra, sdec = tychoMatch(ra,dec,(radius*4.)/60.)
     print sra
     print sdec
-    assert(False)
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
