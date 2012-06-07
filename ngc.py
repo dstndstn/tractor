@@ -69,7 +69,7 @@ def main():
     for rcf in rcfs:
         print rcf
         
-        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], bandname,roiradecsize=(ra,dec,(radius*60.)/0.396)) for bandname in bands]
+        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396)) for band in bands]
         print TItemp
         print TItemp[0]
 
@@ -112,7 +112,7 @@ def main():
 
         xt = xtr 
         yt = ytr
-        r = 250.
+        r = (radius*60.)/.396 #radius in pixels
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:

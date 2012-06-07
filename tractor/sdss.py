@@ -719,8 +719,8 @@ class SdssNanomaggiesPhotoCal(BaseParams):
 		nmgy = 10. ** ((mag - 22.5) / -2.5)
 		nmgy2 = np.exp(mag * -0.9210340371976184 + 20.723265836946414)
 
-		print 'nmgy', nmgy
-		print 'nmgy2', nmgy2
+		#print 'nmgy', nmgy
+		#print 'nmgy2', nmgy2
 
 		return nmgy
 
