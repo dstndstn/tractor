@@ -96,6 +96,8 @@ def main():
         tractor.addSources(source)
 
     zr = info['zr']
+    print "zr is: ",zr
+    print info
 
     print bands
 
@@ -104,6 +106,18 @@ def main():
     plotInvvar('initial-'+prefix,tractor)
     bright = None
     lowbright = 1000
+
+
+    starr = 25.
+    for starx,stary in zip(sra,sdec):
+        print starx,stary
+        starx,stary = wcs.positionToPixel(RaDecPos(starx,stary))
+        print starx,stary
+        for img in tractor.getImages():
+            star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
+            for (x,y) in star:
+                img.getInvError()[y][x] = 0
+
     for timg,sources in zip(tims,sources):
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))

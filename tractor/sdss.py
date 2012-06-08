@@ -643,7 +643,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#print 'skysig:', skysig
 
 	info.update(sky=sky, skysig=skysig)
-	zr = np.array([-5.,+5.])*skysig + sky
+	zr = np.array([-3.,+10.])*skysig + sky
 	info.update(zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
