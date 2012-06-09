@@ -40,16 +40,25 @@ def main():
     itune2 = 5
     ntune = 0
     IRLS_scale = 25.
-    radius = j.size
+    radius = j.size/2.
 
     print radius
     print ra
     print dec
 
-    sra, sdec = tychoMatch(ra,dec,(radius*4.)/60.)
-    print sra
-    print sdec
+#    sras, sdecs, smags = tychoMatch(ra,dec,(radius*4.)/60.)
+#    print sras
+#    print sdecs
+#    print smags
 
+#    for sra,sdec,smag in zip(sras,sdecs,smags):
+#        print sra,sdec,smag
+
+
+
+    sra = [] #Temporary for now...
+    sdec = []
+    smag = [] 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
 
@@ -100,6 +109,12 @@ def main():
     print info
 
     print bands
+
+    timgs = tractor.getImages()
+    for timg,band in zip(timgs,bands):
+        data = timg.getImage()/np.sqrt(timg.getInvvar())
+        plt.hist(data,bins=100)
+        plt.savefig('hist-%s.png' % (band))
 
     prefix = 'ngc%d' % (ngc)
     saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
