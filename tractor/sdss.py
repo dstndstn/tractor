@@ -636,8 +636,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	gain = psfield.getGain(bandnum)
 	darkvar = psfield.getDarkVariance(bandnum)
 	dnvar = (dn / gain) + darkvar
-	invvar = dnvar * calibvec**2
+	invvar = 1./(dnvar * calibvec**2)
 	#print 'imgvar:', imgvar.shape
+	invvar = invvar.astype(np.float32)
 	assert(invvar.shape == image.shape)
 
 	meansky = np.mean(frame.sky)

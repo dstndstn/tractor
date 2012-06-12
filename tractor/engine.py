@@ -125,7 +125,6 @@ class Image(MultiParams):
 		self.invvar[self.mask] = 0. 
 		self.inverr = np.sqrt(self.invvar)
 
-
 	def getMask(self):
 		return self.mask
 
@@ -429,6 +428,7 @@ class Tractor(MultiParams):
 		- `catalog:` list of Source objects
 		'''
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
+		self.modtype = np.float32
 		self.cache = Cache()
 		self.cachestack = []
 		if mp is None:
@@ -996,9 +996,7 @@ class Tractor(MultiParams):
 		'''
 		if type(img) is int:
 			img = self.getImage(img)
-		#mod = np.zeros_like(img.getImage())
-		# FIXME -- specify type?? np.float32?
-		mod = np.zeros(img.getShape())
+		mod = np.zeros(img.getShape(), self.modtype)
 		if sky:
 			img.sky.addTo(mod)
 		if srcs is None:
