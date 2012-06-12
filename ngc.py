@@ -36,11 +36,11 @@ def main():
     j = get_ngc(ngc)
     ra = j.ra
     dec = j.dec
-    itune1 = 5
-    itune2 = 5
+    itune1 = 7
+    itune2 = 7
     ntune = 0
     IRLS_scale = 25.
-    radius = j.size/2.
+    radius = j.size
     dr8 = True
     noarcsinh = False
 
@@ -160,7 +160,7 @@ def main():
 
         xt = xtr 
         yt = ytr
-        r = (radius*60.)/.396 #radius in pixels
+        r = ((radius*60.)/2.)/.396 #radius in pixels
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
@@ -181,7 +181,7 @@ def main():
     for i in range(itune1):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         tractor.changeInvvar(IRLS_scale)
-        saveAll('itune1-%d-' % (i+1)+prefix,tractor,flipBands,**sa)
+        saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
 
     CGPos = EG.getPosition()
     CGShape1 = EG.getShape().copy()
