@@ -409,7 +409,7 @@ def get_tractor_image(run, camcol, field, bandname,
 	fpC = sdss.readFpC(run, camcol, field, bandname)
 	hdr = fpC.getHeader()
 	fpC = fpC.getImage()
-	fpC = fpC.astype(float) - sdss.softbias
+	fpC = fpC.astype(np.float32) - sdss.softbias
 	image = fpC
 	(H,W) = image.shape
 
@@ -458,7 +458,7 @@ def get_tractor_image(run, camcol, field, bandname,
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
-	zr = np.array(zrange) * skysig
+	zr = sky + np.array(zrange) * skysig
 	info.update(sky=sky, skysig=skysig, zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)

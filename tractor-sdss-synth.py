@@ -6,65 +6,17 @@ import os
 import logging
 import numpy as np
 import pylab as plt
-
 import pyfits
 
 from astrometry.util.file import *
+from astrometry.util.plotutils import ArcsinhNormalize
 
 from tractor import *
 from tractor import sdss as st
 
-import matplotlib
-import matplotlib.colors as mc
-class ArcsinhNormalize(mc.Normalize):
- 	def __init__(self, mean=None, std=None, **kwargs):
- 		self.mean = mean
- 		self.std = std
-		mc.Normalize.__init__(self, **kwargs)
-
-	def _map(self, X, out=None):
-		Y = (X - self.mean) / self.std
-		args = (Y,)
-		if out is not None:
-			args = args + (out,)
-		return np.arcsinh(*args)
-
-	def __call__(self, value, clip=None):
-		# copied from Normalize since it's not easy to subclass
-		if clip is None:
-			clip = self.clip
-		result, is_scalar = self.process_value(value)
-		self.autoscale_None(result)
-		vmin, vmax = self.vmin, self.vmax
-		if vmin > vmax:
-			raise ValueError("minvalue must be less than or equal to maxvalue")
-		elif vmin == vmax:
-			result.fill(0)	 # Or should it be all masked?	Or 0.5?
-		else:
-			vmin = float(vmin)
-			vmax = float(vmax)
-			if clip:
-				mask = ma.getmask(result)
-				result = ma.array(np.clip(result.filled(vmax), vmin, vmax), mask=mask)
-			# ma division is very slow; we can take a shortcut
-			resdat = result.data
-			self._map(resdat, resdat)
-			vmin = self._map(vmin)
-			vmax = self._map(vmax)
-			resdat -= vmin
-			resdat /= (vmax - vmin)
-			result = np.ma.array(resdat, mask=result.mask, copy=False)
-		if is_scalar:
-			result = result[0]
-		return result
-
-
-
-# Assumes one image.
-def save(idstr, tractor, nlscale=10., debug=False, plotAll=False, imgi=0,
+def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 		 chilo=-10., chihi=10.):
-
-	print "Index: ", imgi
+	#print "Index: ", imgi
 	mod = tractor.getModelImage(imgi)
 	chi = tractor.getChiImage(imgi=imgi)
 	synthfn = 'synth-%s.fits' % idstr
@@ -85,6 +37,7 @@ def save(idstr, tractor, nlscale=10., debug=False, plotAll=False, imgi=0,
 	print 'Chi type:', chi.dtype
 	print 'Data type:', data.dtype
 	zr = timg.zr
+	print 'zr', zr
 	# Set up nonlinear mapping based on the statistics of the data image.
 	#sigma = np.median(timg.getInvError())
 	#print 'sigma', sigma
@@ -93,6 +46,7 @@ def save(idstr, tractor, nlscale=10., debug=False, plotAll=False, imgi=0,
 		ima.update(vmin=zr[0], vmax=zr[1])
 	else:
 		q1,q2,q3 = np.percentile(data.ravel(), [25, 50, 75])
+		print 'Data quartiles:', q1, q2, q3
 		ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2.,
 										   vmin=zr[0], vmax=zr[1]))
 	imchi = ima.copy()
@@ -193,8 +147,6 @@ def save(idstr, tractor, nlscale=10., debug=False, plotAll=False, imgi=0,
 	savepng('model', mod, title='Model ' + timg.name, **ima)
 	savepng('diff', data - mod, title='Data - Model, ' + timg.name, **imdiff)
 	savepng('chi',  chi, title='Chi ' + timg.name, **imchi)
-	print "Chi mean: ", np.mean(chi)
-	print "Chi median: ", np.median(chi)
 	if plotAll:
 		debug = False
 		for i,src in enumerate(tractor.getCatalog()):
@@ -210,13 +162,6 @@ def main():
 
 	# Otherwise plotting code can raise floating-point errors
 	np.seterr(under='print')
-
-	#norm = ArcsinhNormalize(mean=1., std=0.1, vmin=-1, vmax=3)
-	#X = np.linspace(-2, 5, 500)
-	#plt.clf()
-	#plt.plot(X, norm(X), 'r-')
-	#plt.savefig('1.png')
-	#sys.exit(0)
 
 	tune = []
 	def store_value (option, opt, value, parser):
@@ -288,42 +233,13 @@ def main():
 		tims.append(tim)
 		
 	sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
-	
-	# timg,info = TI[0]
-	# photocal = timg.getPhotoCal()
-	# for source in sources:
-	#	print 'source', source
-	#	#print 'brightness', source.getBrightness()
-	#	#print 'counts', photocal.brightnessToCounts(source.getBrightness())
-	#	#assert(photocal.brightnessToCounts(source.getBrightness()) >= 0.)
-	### DEBUG
-	# wcs = timg.getWcs()
-	# for i,s in enumerate(sources):
-	# 	print 'Source', s
-	# 	print '  position', s.getPosition()
-	# 	x,y = wcs.positionToPixel(s.getPosition(), s)
-	# 	print '  -> x,y (%.1f, %.1f): ' % (x,y)
-	# 	# print i, ('(%.1f, %.1f): ' % (x,y)), s
-
 	tractor = Tractor(tims, sources)
-
-	tim = tims[0]
-	data = tim.getImage()
-	print 'Data type:', data.dtype
-	plt.clf()
-	plt.hist(data.ravel() * tim.getInvError().ravel(), bins=100, range=(-5, 5))
-	plt.savefig('chi.png')
-	print 'Median error:', np.median(tim.getInvError().ravel())
-	plt.clf()
-	plt.imshow(data, interpolation='nearest', origin='lower', vmin=-1, vmax=5)
-	plt.colorbar()
-	plt.savefig('data.png')
 
 	sa = dict(debug=opt.debug, plotAll=opt.plotAll)
 	if opt.noarcsinh:
 		sa.update(nlscale=0)
 	elif opt.dr8:
-		sa.update(nlscale=1.)
+		#sa.update(nlscale=1.)
 		sa.update(chilo=-50., chihi=50.)
 		
 	for j,band in enumerate(bands):
