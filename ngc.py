@@ -41,6 +41,8 @@ def main():
     ntune = 0
     IRLS_scale = 25.
     radius = j.size/2.
+    dr8 = True
+    noarcsinh = False
 
     print radius
     print ra
@@ -64,8 +66,15 @@ def main():
 
     fieldPlot(ra,dec,radius,ngc)
     
-
-    
+    imkw = {}
+    if dr8:
+        getim = st.get_tractor_image_dr8
+        getsrc = st.get_tractor_sources_dr8
+        imkw.update(zrange=[-3,100])
+    else:
+        getim = st.get_tractor_image
+        getsrc = st.get_tractor_sources_dr8
+        imkw.update(useMags=True)
 
     bands=['u','g','r','i','z']
     bandname = 'r'
@@ -74,22 +83,25 @@ def main():
     rerun = 0
 
     TI = []
+    TItemps = []
     sources = []
     for rcf in rcfs:
         print rcf
-        
-        TItemp = [st.get_tractor_image_dr8(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396)) for band in bands]
-        print TItemp
-        print TItemp[0]
+        for band in bands:
+            TItemp,tinf = getim(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396),**imkw)
+            TItemp.zr = tinf['zr']
+            TItemps.append([TItemp,tinf])
+        print TItemps
+        print TItemps[0]
 
-        timg,info = TItemp[0]
+        timg,info = TItemps[0]
         if timg is None:
             print "Zero roi"
             continue
 
         print info['roi']
-        sources.append(st.get_tractor_sources_dr8(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
-        TI.extend(TItemp)
+        sources.append(getsrc(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
+        TI.extend(TItemps)
 
     print TI
     timg,info = TI[0]
@@ -104,6 +116,13 @@ def main():
         print 'Adding sources', source
         tractor.addSources(source)
 
+    sa = dict(debug=True, plotAll=False,plotBands=False)
+
+    if noarcsinh:
+        sa.update(nlscale=0)
+    elif dr8:
+        sa.update(chilo=-50.,chihi=50.)
+
     zr = info['zr']
     print "zr is: ",zr
     print info
@@ -111,13 +130,13 @@ def main():
     print bands
 
     timgs = tractor.getImages()
-    for timg,band in zip(timgs,bands):
-        data = timg.getImage()/np.sqrt(timg.getInvvar())
-        plt.hist(data,bins=100)
-        plt.savefig('hist-%s.png' % (band))
+#    for timg,band in zip(timgs,bands):
+#        data = timg.getImage()/np.sqrt(timg.getInvvar())
+#        plt.hist(data,bins=100)
+#        plt.savefig('hist-%s.png' % (band))
 
     prefix = 'ngc%d' % (ngc)
-    saveAll('initial-'+prefix, tractor,zr,flipBands,debug=True)
+    saveAll('initial-'+prefix, tractor,**sa)
     plotInvvar('initial-'+prefix,tractor)
     bright = None
     lowbright = 1000
@@ -149,7 +168,7 @@ def main():
                 print xs,ys
                 tractor.removeSource(src)
 
-    saveAll('removed-'+prefix, tractor,zr,flipBands,debug=True)
+    saveAll('removed-'+prefix, tractor,**sa)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
@@ -157,12 +176,12 @@ def main():
     tractor.addSource(EG)
 
 
-    saveAll('added-'+prefix,tractor,zr,flipBands,debug=True)
+    saveAll('added-'+prefix,tractor,**sa)
 
     for i in range(itune1):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
         tractor.changeInvvar(IRLS_scale)
-        saveAll('itune1-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('itune1-%d-' % (i+1)+prefix,tractor,flipBands,**sa)
 
     CGPos = EG.getPosition()
     CGShape1 = EG.getShape().copy()
@@ -186,14 +205,15 @@ def main():
     for i in range(itune2):
         tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
         tractor.changeInvvar(IRLS_scale)
-        saveAll('itune2-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
 
     for i in range(ntune):
         tractor.optimizeCatalogLoop(nsteps=1,sky=True)
         tractor.changeInvvar(IRLS_scale)
-        saveAll('ntune-%d-' % (i+1)+prefix,tractor,zr,flipBands,debug=True)
+        saveAll('ntune-%d-' % (i+1)+prefix,tractor,**sa)
     plotInvvar('final-'+prefix,tractor)
-    saveAll('allBands-' + prefix,tractor,zr,bands,debug=True,plotBands=True)
+    sa.update(plotBands=True)
+    saveAll('allBands-' + prefix,tractor,**sa)
 
     print CG
     print CG.getPosition()

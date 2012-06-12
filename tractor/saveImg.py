@@ -5,16 +5,16 @@ import pylab as plt
 import pyfits
 
 from astrometry.util.file import *
+from astrometry.util.plotutils import ArcsinhNormalize
 
 from tractor import *
 from tractor import sdss as st
 
 
-def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
-	print "Index: ", imgi
-	mod = tractor.getModelImages()[imgi]
-	chi = tractor.getChiImages()[imgi]
-
+def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,chihi=10.):
+	#print "Index: ", imgi
+	mod = tractor.getModelImage(imgi)
+	chi = tractor.getChiImage(imgi=imgi)
 	synthfn = 'synth-%s.fits' % idstr
 	print 'Writing synthetic image to', synthfn
 	pyfits.writeto(synthfn, mod, clobber=True)
@@ -23,13 +23,42 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 	print 'Saving state to', pfn
 	pickle_to_file(tractor, pfn)
 
+	plt.clf()
+	plt.hist(chi.ravel(),range=(-10,10), bins=100)
+	plt.savefig('chi2.png')
+
 	timg = tractor.getImage(imgi)
 	data = timg.getImage()
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=zr[0], vmax=zr[1])
+	print 'Mod type:', mod.dtype
+	print 'Chi type:', chi.dtype
+	print 'Data type:', data.dtype
+	zr = timg.zr
+	print 'zr', zr
+	# Set up nonlinear mapping based on the statistics of the data image.
+	#sigma = np.median(timg.getInvError())
+	#print 'sigma', sigma
+	ima = dict(interpolation='nearest', origin='lower')
+	if nlscale == 0.:
+		ima.update(vmin=zr[0], vmax=zr[1])
+	else:
+		q1,q2,q3 = np.percentile(data.ravel(), [25, 50, 75])
+		print 'Data quartiles:', q1, q2, q3
+		ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2., 
+						   vmin=zr[0], vmax=zr[1]))
+
 	imchi = ima.copy()
-	imchi.update(vmin=-10, vmax=10)
-	
+	if nlscale ==0.:
+		imchi.update(vmin=chilo, vmax=chihi, norm=None)
+	else:
+		imchi.update(norm=ArcsinhNormalize(mean=0., std=1./nlscale, vmin=chilo, vmax=chihi))
+
+	imdiff = ima.copy()
+	dzr = (zr[1] - zr[0])/2.
+	if nlscale == 0.:
+		imdiff.update(vmin=-dzr, vmax=+dzr, norm=None)
+	else:
+		imdiff.update(norm= ArcsinhNormalize(mean=0., std=1./nlscale, vmin=-dzr, vmax=dzr))
+
 	if debug:
 		sources = tractor.getCatalog()
 		wcs = timg.getWcs()
@@ -80,36 +109,11 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 				else:
 					allobjc.append('r')
 
-	# Make a non-linear stretched map using image "I" to set the limits:
-
-	ss = np.sort(data.ravel())
-	mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
-	q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
-
-	def nlmap(X):
-		Y = (X - q2) / ((q3-q1)/2.)
-		return np.arcsinh(Y * 10.)/10.
-	def myimshow(x, *args, **kwargs):
-		mykwargs = kwargs.copy()
-		if 'vmin' in kwargs:
-			mykwargs['vmin'] = nlmap(kwargs['vmin'])
-		if 'vmax' in kwargs:
-			mykwargs['vmax'] = nlmap(kwargs['vmax'])
-		return plt.imshow(nlmap(x), *args, **mykwargs)
-
 	def savepng(pre, img, title=None,**kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
 		plt.clf()
-
-		#Raises an error otherwise... no idea why --dm
-		np.seterr(under='print')
-		
-
-		if kwargs['vmin'] == -10:
-			plt.imshow(img, **kwargs)
-		else:
-			myimshow(img,**kwargs)
+		plt.imshow(img, **kwargs)
 		ax = plt.axis()
 		if debug:
 			print len(xplotx),len(allobjx)
@@ -131,11 +135,10 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 		plt.gray()
 		plt.savefig(fn)
 
-	sky = np.median(mod)
-	savepng('data', data - sky, title='Data '+timg.name, **ima)
-	savepng('model', mod - sky, title='Model', **ima)
-	savepng('diff', data - mod, title='Data - Model', **ima)
-	savepng('chi',chi,title='Chi',**imchi)
+	savepng('data', data, title='Data '+timg.name, **ima)
+	savepng('model', mod, title='Model '+timg.name, **ima)
+	savepng('diff', data - mod, title='Data - Model, ' + timg.name, **imdiff)
+	savepng('chi',chi,title='Chi ' + timg.name, **imchi)
 	print "Chi mean: ", np.mean(chi)
 	print "Chi median: ", np.median(chi)
 	if plotAll:
@@ -145,17 +148,19 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 			modelimg = tractor.getModelImage(timg, srcs=[src])
 			savepng('model-s%i'%(i+1), modelimg - sky, title='Model-s%i'%(i+1),**ima) 
 			savepng('diff-s%i'%(i+1), data - modelimg, title='Model-s%i'%(i+1),**ima)
-			savepng('chi-s%i'%(i+1),tractor.getChiImage(imgi,srcs=[src]),title='Chi',**imchi)
+			savepng('chi-s%i'%(i+1),tractor.getChiImage(imgi,srcs=[src]),
+				title='Chi',**imchi)
 
 def saveBands(idstr, tractor, zr,bands, debug=False,plotAll=False):
     for i,band in enumerate(bands):
         save(idstr+'-%s-' % (band), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
 
 
-def saveAll(idstr, tractor, zr,bands, debug=False,plotAll=False,plotBands=False):
+def saveAll(idstr, tractor, nlscale=1.,debug=False,plotAll=False,plotBands=False,chilo=-10.,chihi=10.):
     for i,img in enumerate(tractor.getImages()):
 	    if i % 5 == 2 or plotBands: #Only print 'r' band
-		    save(idstr+'-%d' % (i), tractor,zr,debug=debug,plotAll=plotAll,imgi=i)
+		    save(idstr+'-%d' % (i), tractor,nlscale=nlscale,debug=debug, plotAll=plotAll, 
+			 imgi=i, chilo=chilo, chihi=chihi)
 
 
 def plotInvvar(idstr,tractor):
