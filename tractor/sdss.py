@@ -272,8 +272,10 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 
 	def lup2bright(lups, bandnames, bandnums):
 		# -9999 -> badmag
-		lups = np.maximum(lups, badmag)
-		mags = sdss.luptitude_to_mag(lups, bandnums)
+		I = (lups < -100)
+		l2 = np.array(lups)
+		l2[I] = badmag
+		mags = sdss.luptitude_to_mag(l2, bandnums)
 		bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
 		return bright
 
@@ -289,7 +291,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	print len(I), 'stars'
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		bright = lup2bright(objs.psfmag[i,:], bandnames, bandnums)
+		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums)
 		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
@@ -359,7 +361,7 @@ def get_tractor_image(run, camcol, field, bandname,
 					  sdssobj=None, release='DR7',
 					  retrieve=True, curl=False, roi=None,
 					  psf='kl-gm', useMags=False, roiradecsize=None,
-					  savepsfimg=None):
+					  savepsfimg=None, zrange=[-3,10]):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -456,8 +458,8 @@ def get_tractor_image(run, camcol, field, bandname,
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)
 	skyobj = ConstantSky(sky)
-	zr = np.array([-5.,+5.]) * skysig
-	info.update(sky=sky, skysig=skysig,zr=zr)
+	zr = np.array(zrange) * skysig
+	info.update(sky=sky, skysig=skysig, zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)
 	gain = psfield.getGain(bandnum)
@@ -518,7 +520,8 @@ def get_tractor_image(run, camcol, field, bandname,
 
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
-						  savepsfimg=None, curl=False):
+						  savepsfimg=None, curl=False,
+						  zrange=[-3,10]):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -643,7 +646,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#print 'skysig:', skysig
 
 	info.update(sky=sky, skysig=skysig)
-	zr = np.array([-3.,+10.])*skysig + sky
+	zr = np.array(zrange)*skysig + sky
 	info.update(zr=zr)
 
 	fpM = sdss.readFpM(run, camcol, field, bandname)

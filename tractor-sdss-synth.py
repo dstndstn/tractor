@@ -16,7 +16,7 @@ from tractor import sdss as st
 
 
 # Assumes one image.
-def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
+def save(idstr, tractor, nlscale=10., debug=False, plotAll=False, imgi=0):
 	print "Index: ", imgi
 	mod = tractor.getModelImages()[imgi]
 	chi = tractor.getChiImages()[imgi]
@@ -31,11 +31,11 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 
 	timg = tractor.getImage(imgi)
 	data = timg.getImage()
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=zr[0], vmax=zr[1])
+	zr = timg.zr
+	ima = dict(interpolation='nearest', origin='lower', vmin=zr[0], vmax=zr[1])
 	imchi = ima.copy()
-	imchi.update(vmin=-10, vmax=10)
-	
+	imchi.update(vmin=-10, vmax=10, arcsinh=False)
+
 	if debug:
 		sources = tractor.getCatalog()
 		wcs = timg.getWcs()
@@ -91,15 +91,18 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 				else:
 					allobjc.append('r')
 
-	# Make a non-linear stretched map using image "I" to set the limits:
+	# Make a non-linear stretched map using image "data" to set the limits:
 
 	ss = np.sort(data.ravel())
 	mn,mx = [ss[int(p*len(ss))] for p in [0.1, 0.99]]
 	q1,q2,q3 = [ss[int(p*len(ss))] for p in [0.25, 0.5, 0.75]]
 
 	def nlmap(X):
+		if nlscale == 0:
+			return X
 		Y = (X - q2) / ((q3-q1)/2.)
-		return np.arcsinh(Y * 10.)/10.
+		return np.arcsinh(Y * nlscale) / nlscale
+
 	def myimshow(x, *args, **kwargs):
 		mykwargs = kwargs.copy()
 		if 'vmin' in kwargs:
@@ -108,19 +111,16 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 			mykwargs['vmax'] = nlmap(kwargs['vmax'])
 		return plt.imshow(nlmap(x), *args, **mykwargs)
 
-	def savepng(pre, img, title=None,**kwargs):
+	def savepng(pre, img, title=None, arcsinh=True, **kwargs):
 		fn = '%s-%s.png' % (pre, idstr)
 		print 'Saving', fn
 		plt.clf()
-
-		#Raises an error otherwise... no idea why --dm
+		# Raises an error otherwise... no idea why --dm
 		np.seterr(under='print')
-		
-
-		if kwargs['vmin'] == -10:
-			plt.imshow(img, **kwargs)
+		if arcsinh:
+			myimshow(img, **kwargs)
 		else:
-			myimshow(img,**kwargs)
+			plt.imshow(img, **kwargs)
 		ax = plt.axis()
 		if debug:
 			print len(xplotx),len(allobjx)
@@ -142,11 +142,14 @@ def save(idstr, tractor, zr,debug=False,plotAll=False,imgi=0):
 		plt.gray()
 		plt.savefig(fn)
 
-	sky = np.median(mod)
-	savepng('data', data - sky, title='Data '+timg.name, **ima)
-	savepng('model', mod - sky, title='Model', **ima)
-	savepng('diff', data - mod, title='Data - Model', **ima)
-	savepng('chi',chi,title='Chi',**imchi)
+	savepng('data', data, title='Data ' + timg.name, **ima)
+	savepng('model', mod, title='Model ' + timg.name, **ima)
+	aa = ima.copy()
+	mzr = (zr[0] + zr[1])/2.
+	dzr = (zr[1] - zr[0])/2.
+	aa.update(vmin=mzr-dzr, vmax=mzr+dzr)
+	savepng('diff', data - mod, title='Data - Model, ' + timg.name, **aa)
+	savepng('chi',  chi, title='Chi ' + timg.name, **imchi)
 	print "Chi mean: ", np.mean(chi)
 	print "Chi median: ", np.median(chi)
 	if plotAll:
@@ -163,7 +166,6 @@ def main():
 	from optparse import OptionParser
 	import sys
 
-
 	tune = []
 	def store_value (option, opt, value, parser):
 		if opt == '--ntune':
@@ -176,8 +178,9 @@ def main():
 	parser.add_option('-c', '--camcol', dest='camcol', type='int')
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
+	parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?  Default is DR7')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
-	parser.add_option('--ntune', action='callback', callback=store_value, type=int,  help='Improve synthetic image over DR7 by locally optimizing likelihood for nsteps iterations')
+	parser.add_option('--ntune', action='callback', callback=store_value, type=int,  help='Improve synthetic image by locally optimizing likelihood for nsteps iterations')
 	parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
 	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
 	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
@@ -185,6 +188,7 @@ def main():
 					  help='Make more verbose')
 	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
 	parser.add_option('--plotAll',dest='plotAll',action='store_true',default=False,help="Makes a plot for each source")
+	parser.add_option('--no-arcsinh', dest='noarcsinh', action='store_true', help='Do not arcsinh-stretch plots')
 	opt,args = parser.parse_args()
 	print tune
 
@@ -215,51 +219,74 @@ def main():
 	if prefix is None:
 		prefix = '%06i-%i-%04i' % (run,camcol, field)
 
-	print bands
-	TI = []
-	TI.extend([st.get_tractor_image(run, camcol, field, bandname,
-					 curl=opt.curl, roi=opt.roi,useMags=True) for bandname in bands])
-	sources = st.get_tractor_sources(run, camcol, field,bandname, bands=bands,
-					 curl=opt.curl, roi=opt.roi)
+	imkw = {}
+	if opt.dr8:
+		getim = st.get_tractor_image_dr8
+		getsrc = st.get_tractor_sources_dr8
+	else:
+		getim = st.get_tractor_image
+		getsrc = st.get_tractor_sources
+		imkw.update(useMags=True)
+
+	tims = []
+	for bandname in bands:
+		tim,tinf = getim(run, camcol, field, bandname, curl=opt.curl, roi=opt.roi, **imkw)
+		tim.zr = tinf['zr']
+		tims.append(tim)
+		
+	sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
 	
-	timg,info = TI[0]
-	photocal = timg.getPhotoCal()
-	#for source in sources:
+	# timg,info = TI[0]
+	# photocal = timg.getPhotoCal()
+	# for source in sources:
 	#	print 'source', source
 	#	#print 'brightness', source.getBrightness()
 	#	#print 'counts', photocal.brightnessToCounts(source.getBrightness())
 	#	#assert(photocal.brightnessToCounts(source.getBrightness()) >= 0.)
-
 	### DEBUG
-	wcs = timg.getWcs()
-	for i,s in enumerate(sources):
-		print 'Source', s
-		print '  position', s.getPosition()
-		x,y = wcs.positionToPixel(s.getPosition(), s)
-		print '  -> x,y (%.1f, %.1f): ' % (x,y)
-		# print i, ('(%.1f, %.1f): ' % (x,y)), s
+	# wcs = timg.getWcs()
+	# for i,s in enumerate(sources):
+	# 	print 'Source', s
+	# 	print '  position', s.getPosition()
+	# 	x,y = wcs.positionToPixel(s.getPosition(), s)
+	# 	print '  -> x,y (%.1f, %.1f): ' % (x,y)
+	# 	# print i, ('(%.1f, %.1f): ' % (x,y)), s
 
-	tims = [timg for timg,tinf in TI]
-	tractor = st.SDSSTractor(tims)
-	tractor.addSources(sources)
+	tractor = Tractor(tims, sources)
 
-	zr = np.array([-5.,+5.]) * info['skysig']
+	# tim = tims[0]
+	# data = tim.getImage()
+	# plt.clf()
+	# plt.hist(data.ravel() / tim.getInvError().ravel(), bins=100, range=(-5, 5))
+	# plt.savefig('chi.png')
+	# print 'Median error:', np.median(tim.getInvError().ravel())
+	# plt.clf()
+	# plt.imshow(data, interpolation='nearest', origin='lower', vmin=-1, vmax=5)
+	# plt.colorbar()
+	# plt.savefig('data.png')
+
+	sa = dict(debug=opt.debug, plotAll=opt.plotAll)
+	if opt.noarcsinh:
+		sa.update(nlscale=0)
+	elif opt.dr8:
+		sa.update(nlscale=1e-3)
+
 	for j,band in enumerate(bands):
-		save('initial-%s-' % (band) + prefix, tractor, zr,opt.debug,opt.plotAll,imgi=j)
+		save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
 
 	for count, each in enumerate(tune):
 		if each[0]=='n':
 			for i in range(each[1]):
 				tractor.optimizeCatalogLoop(nsteps=1,sky=True)
 				for j,band in enumerate(bands):
-					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
+					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
 	
 		elif each[0]=='i':
 			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
 					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src],sky=False)
 				for j,band in enumerate(bands):
-					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, zr, opt.debug,opt.plotAll,imgi=j)
+					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
 				tractor.clearCache()
 
 	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
