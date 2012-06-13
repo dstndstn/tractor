@@ -91,8 +91,6 @@ def main():
             TItemp,tinf = getim(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396),**imkw)
             TItemp.zr = tinf['zr']
             TItemps.append([TItemp,tinf])
-        print TItemps
-        print TItemps[0]
 
         timg,info = TItemps[0]
         if timg is None:
@@ -102,8 +100,8 @@ def main():
         print info['roi']
         sources.append(getsrc(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
         TI.extend(TItemps)
+        TItemps = []
 
-    print TI
     timg,info = TI[0]
     photocal = timg.getPhotoCal()
 
@@ -113,7 +111,6 @@ def main():
     tims = [timg for timg,tinf in TI]
     tractor = st.SDSSTractor(tims)
     for source in sources:
-        print 'Adding sources', source
         tractor.addSources(source)
 
     sa = dict(debug=True, plotAll=False,plotBands=False)
@@ -130,6 +127,7 @@ def main():
     print bands
 
     timgs = tractor.getImages()
+    print "Number of images: ", len(timgs)
 #    for timg,band in zip(timgs,bands):
 #        data = timg.getImage()/np.sqrt(timg.getInvvar())
 #        plt.hist(data,bins=100)
