@@ -1,3 +1,5 @@
+# -*- mode: python; indent-tabs-mode: nil -*-
+# (this tells emacs to indent with spaces)
 import matplotlib
 matplotlib.use('Agg')
 
@@ -29,7 +31,8 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     print 'SDSS jpeg scale', scale
     imgfn = 'sdss-mosaic-ngc%04i.png' % ngcnum
     if not os.path.exists(imgfn):
-        url = ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=%f&width=%i&height=%i' %
+        url = (('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?' +
+                'ra=%f&dec=%f&scale=%f&width=%i&height=%i') %
                (ra, dec, scale, W, H))
         f = urllib2.urlopen(url)
         of,tmpfn = tempfile.mkstemp(suffix='.jpg')
@@ -50,7 +53,8 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     x,y = wcs.radec2pixelxy(ra, dec)
     R = radius * 60. / scale
     ax = plt.axis()
-    plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g', lw=3, alpha=0.5, fc='none'))
+    plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g',
+                                                   lw=3, alpha=0.5, fc='none'))
     if tims is not None:
         print 'Plotting outlines of', len(tims), 'images'
         for tim in tims:
@@ -68,14 +72,25 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
                 px.append(xx)
                 py.append(yy)
             plt.plot(px, py, 'g-', lw=3, alpha=0.5)
+
+            # plot full-frame image outline too
+            # px,py = [],[]
+            # W,H = 2048,1489
+            # for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
+            #     r,d = twcs.pixelToRaDec(x,y)
+            #     xx,yy = wcs.radec2pixelxy(r,d)
+            #     px.append(xx)
+            #     py.append(yy)
+            # plt.plot(px, py, 'g-', lw=1, alpha=1.)
+
     if rds is not None:
-		px,py = [],[]
+        px,py = [],[]
         for ra,dec in rds:
             print 'ra,dec', ra,dec
             xx,yy = wcs.radec2pixelxy(ra, dec)
-			px.append(xx)
-			py.append(yy)
-		plt.plot(px, py, 'go')
+            px.append(xx)
+            py.append(yy)
+        plt.plot(px, py, 'go')
 
     plt.axis(ax)
     fn = 'ngc-%04i.png' % ngcnum
@@ -103,7 +118,6 @@ def main():
     IRLS_scale = 25.
     radius = j.size
     dr8 = True
-    #dr8 = False
     noarcsinh = False
 
     print 'Radius', radius
@@ -125,7 +139,7 @@ def main():
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
 
-    fieldPlot(ra,dec,radius,ngc)
+    #fieldPlot(ra,dec,radius,ngc)
     
     imkw = dict(psf='dg')
     if dr8:
@@ -155,6 +169,8 @@ def main():
                 break
             if roi is None:
                 roi = tinf['roi']
+                #print 'ROI', roi
+            #print 'Image shape:', tim.shape
             tim.zr = tinf['zr']
             timgs.append(tim)
         if tim is None:
@@ -163,12 +179,12 @@ def main():
         sources.append(s)
         allsources.extend(s)
 
-    rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, radius, ngc, timgs, rds)
-
+    #rds = [rcf[3:5] for rcf in rcfs]
+    plotarea(ra, dec, radius, ngc, timgs) #, rds)
+    
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
-    tractor = st.SDSSTractor(timgs, allsources)
+    tractor = st.Tractor(timgs, allsources)
 
     sa = dict(debug=True, plotAll=False,plotBands=False)
 

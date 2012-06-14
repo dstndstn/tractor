@@ -577,9 +577,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
 		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-		print 'RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
+		print 'ROI center RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
 		xc,yc = [int(np.round(p)) for p in fxc,fyc]
-		roi = [xc-S, xc+S, yc-S, yc+S]
+		roi = [max(0, xc-S), min(W, xc+S), max(0, yc-S), min(H, yc+S)]
 		info.update(roi=roi)
 		
 	if roi is not None:
@@ -606,14 +606,14 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	skyim = frame.sky
 	(sh,sw) = skyim.shape
-	print 'Skyim shape', skyim.shape
+	#print 'Skyim shape', skyim.shape
 	if sw != 256:
 		skyim = skyim.T
 	(sh,sw) = skyim.shape
 	xi = np.round(frame.skyxi).astype(int)
-	print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
+	#print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
 	yi = np.round(frame.skyyi).astype(int)
-	print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	#print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
 	assert(all(xi >= 0) and all(xi < sw))
 	assert(all(yi >= 0) and all(yi < sh))
 	XI,YI = np.meshgrid(xi, yi)
