@@ -15,6 +15,7 @@ from astrometry.util.pyfits_utils import *
 from astrometry.util.sdss_radec_to_rcf import *
 from astrometry.util.multiproc import *
 from astrometry.util.file import *
+from astrometry.util.plotutils import ArcsinhNormalize
 from astrometry.util.util import *
 from astrometry.sdss import *
 from tractor import *
@@ -658,6 +659,10 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 	plt.figure(figsize=(6,6))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
+
+	print 'zr = ', zr
+
+
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1], cmap='gray')
 	imchi = dict(interpolation='nearest', origin='lower',
@@ -665,6 +670,18 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 	imchi2 = dict(interpolation='nearest', origin='lower',
 				  vmin=-50., vmax=+50., cmap='gray')
 	tim = tractor.getImage(i)
+
+	data = tim.getImage()
+	q0,q1,q2,q3,q4 = np.percentile(data.ravel(), [0, 25, 50, 75, 100])
+	print 'Data quartiles:', q0, q1, q2, q3, q4
+
+	ima.update(norm=ArcsinhNormalize(mean=q2, std=(q3-q1)/2., vmin=zr[0], vmax=zr[1]),
+			   vmin=None, vmax=None,    nonl=True)
+
+	plt.clf()
+	plt.hist(data.ravel(), bins=100, log=True)
+	plt.savefig('data-hist-%02i.png' % step)
+
 	if 'data' in plotnames:
 		data = tim.getImage()
 		plt.clf()
@@ -676,6 +693,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		plt.title(tt)
 		plt.xticks([],[])
 		plt.yticks([],[])
+		plt.colorbar()
 		mysavefig('data-%02i.png' % i)
 
 	if 'dataann' in plotnames and i == 0:
@@ -691,6 +709,11 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		tractor.setParams(pp[ibest,:])
 		if 'modbest' in plotnames:
 			mod = tractor.getModelImage(i)
+
+			plt.clf()
+			plt.hist(mod.ravel(), bins=100, log=True)
+			plt.savefig('mod-hist-%02i.png' % step)
+								  
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(mod, **ima)
@@ -698,11 +721,14 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
-			plt.xticks([],[])
-			plt.yticks([],[])
+			#plt.xticks([],[])
+			#plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('modbest-%02i-%02i.png' % (i,step))
 		if 'chibest' in plotnames:
 			chi = tractor.getChiImage(i)
+			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(chi, **imchi)
 			tt = 'Chi (best) %s' % tim.name
 			if tsuf is not None:
@@ -710,12 +736,16 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('chibest-%02i-%02i.png' % (i,step))
 
+			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(chi, **imchi2)
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('chibest2-%02i-%02i.png' % (i,step))
 
 	if 'modsum' in plotnames or 'chisum' in plotnames:
@@ -746,6 +776,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('modsum-%02i-%02i.png' % (i,step))
 		if 'chisum' in plotnames:
 			plt.clf()
@@ -757,11 +788,15 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('chisum-%02i-%02i.png' % (i,step))
+			plt.clf()
+			plt.gca().set_position(plotpos0)
 			plt.imshow(chisum/float(nw), **imchi2)
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
+			plt.colorbar()
 			mysavefig('chisum2-%02i-%02i.png' % (i,step))
 
 def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None,
@@ -796,6 +831,10 @@ def nlmap(X):
 	S = 0.01
 	return np.arcsinh(X * S)/S
 def myimshow(x, *args, **kwargs):
+	if kwargs.get('nonl', False):
+		kwargs = kwargs.copy()
+		kwargs.pop('nonl')
+		return plt.imshow(x, *args, **kwargs)
 	mykwargs = kwargs.copy()
 	if 'vmin' in kwargs:
 		mykwargs['vmin'] = nlmap(kwargs['vmin'])
@@ -1164,29 +1203,72 @@ def stage03(tractor=None, mp=None, **kwargs):
 
 	params0 = np.array(tractor.getParams()).copy()
 	allsources = tractor.getCatalog()
-	brightcat,Ibright = cut_bright(allsources, magcut=23)
+	#brightcat,Ibright = cut_bright(allsources, magcut=23)
+	brightcat,Ibright = cut_bright(allsources, magcut=24)
 	tractor.setCatalog(brightcat)
 	bparams0 = np.array(tractor.getParams()).copy()
 	allimages = tractor.getImages()
 	tractor.setImages(Images(allimages[0]))
 	print ' Cut to:', tractor
 	print len(tractor.getParams()), 'params'
+	
+	# TRY cutting to sources in the RA,Dec box.
+	im = allimages[0]
+	W,H = im.getWidth(), im.getHeight()
+	wcs = im.getWcs()
+	r,d = [],[]
+	for x,y in zip([1,W,W,1,1], [1,1,H,H,1]):
+		rd = wcs.pixelToPosition(x, y)
+		r.append(rd.ra)
+		d.append(rd.dec)
+		print 'pix', x,y, 'radec', rd
+	ramin = np.min(r)
+	ramax = np.max(r)
+	decmin = np.min(d)
+	decmax = np.max(d)
+	print 'RA,Dec range', ramin, ramax, decmin, decmax
+	cutrd = Catalog()
+	Icut = []
+	for i in xrange(len(brightcat)):
+		src = brightcat[i]
+		print 'Source:', src
+		pos = src.getPosition()
+		print '  pos', pos
+		if pos.ra > ramin and pos.ra < ramax and pos.dec > decmin and pos.dec < decmax:
+			print '  -> Keep'
+			cutrd.append(src)
+			Icut.append(Ibright[i])
+		else:
+			print '  -> cut.'
+	
+	print 'Keeping sources:'
+	for src in cutrd:
+		print '  ', src
+		x,y = wcs.positionToPixel(src.getPosition())
+		print '  --> (%.1f, %.1f)' % (x,y)
+			
+	tractor.setCatalog(cutrd)
+	print ' Cut on RA,Dec box to:', tractor
+	print len(tractor.getParams()), 'params'
+
+	cparams0 = np.array(tractor.getParams()).copy()
+	p0 = cparams0
 
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
-	plots(tractor, ['modbest', 'chibest'], 3, ibest=0, pp=np.array([bparams0]),
+	plots(tractor, ['data', 'dataann', 'modbest', 'chibest'], 3, ibest=0, pp=np.array([p0]),
 		  alllnp=[0.], **plotsa)
 
-	#alllnp,step = optsourcestogether(tractor, 0)
-	#
-	#plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
-	#	  alllnp=[0.], **plotsa)
-
-	step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
-	alllnp += alllnp2
-
-	plots(tractor, ['modbest', 'chibest'], 5, ibest=0, pp=np.array([tractor.getParams()]),
+	alllnp,step = optsourcestogether(tractor, 0)
+	
+	plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
 		  alllnp=[0.], **plotsa)
+
+	# step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
+	# alllnp += alllnp2
+	# 
+	# plots(tractor, ['modbest', 'chibest'], 5, ibest=0, pp=np.array([tractor.getParams()]),
+	# 	  alllnp=[0.], **plotsa)
 
 	tractor.catalog.thawParamsRecursive('*')
 	bparams1 = np.array(tractor.getParams()).copy()
@@ -1274,7 +1356,7 @@ def stage02_OLD(tractor=None, mp=None, **kwargs):
 			**kwargs)
 	return dict(tractor=tractor)
 
-def optsourcestogether(tractor, step0, doplots=True):
+def optsourcestogether(tractor, step0, doplots=True, plotsa={}):
 	step = step0
 	alllnp = []
 	while True:
@@ -1284,6 +1366,7 @@ def optsourcestogether(tractor, step0, doplots=True):
 		t_opt = (Time() - t0)
 		#print 'alpha', alpha
 		print 'Optimization took', t_opt, 'sec'
+		assert(all(np.isfinite(X)))
 		lnp0 = tractor.getLogProb()
 		print 'Lnprob', lnp0
 		alllnp.append([lnp0])
@@ -2078,7 +2161,10 @@ def runstage(stage, force=[], threads=1, doplots=True):
 
 	P.update(mp=mp, doplots=doplots)
 	if 'tractor' in P:
-		P['tractor'].mp = mp
+		tractor = P['tractor']
+		tractor.mp = mp
+		tractor.modtype = np.float32
+
 	#P.update(RA = 334.4, DEC = 0.3, sz = 2.*60.) # arcsec
 	#P.update(RA = 334.4, DEC = 0.3, sz = 15.*60.) # arcsec
 

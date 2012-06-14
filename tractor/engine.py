@@ -594,6 +594,7 @@ class Tractor(MultiParams):
 			pa = [p + alpha * d for p,d in zip(p0, X)]
 			self.setParams(pa)
 			pAfter = self.getLogProb()
+			logverb('  Log-prob after:', pAfter)
 			logverb('  delta log-prob:', pAfter - pBefore)
 			if pAfter < (pBest - 1.):
 				break

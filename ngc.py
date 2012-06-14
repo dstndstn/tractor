@@ -3,9 +3,10 @@ matplotlib.use('Agg')
 
 import os
 import logging
+import urllib2
+import tempfile
 import numpy as np
 import pylab as plt
-
 import pyfits
 
 from astrometry.util.file import *
@@ -20,6 +21,50 @@ from tractor.tychodata import tychoMatch
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
+
+def plotarea(ra, dec, radius, ngcnum, tims=None):
+    from astrometry.util.util import Tan
+    W,H = 512,512
+    scale = (radius * 60. * 4) / float(W)
+    imgfn = 'sdss-mosaic-ngc%04i.png' % ngcnum
+    if not os.path.exists(imgfn):
+        url = ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=%f&width=%i&height=%i' %
+               (ra, dec, scale, W, H))
+        f = urllib2.urlopen(url)
+        of,tmpfn = tempfile.mkstemp(suffix='.jpg')
+        os.close(of)
+        of = open(tmpfn, 'wb')
+        of.write(f.read())
+        of.close()
+        cmd = 'jpegtopnm %s | pnmtopng > %s' % (tmpfn, imgfn)
+        os.system(cmd)
+    # Create WCS header for it
+    cd = scale / 3600.
+    args = (ra, dec, W/2. + 0.5, H/2. + 0.5, -cd, 0., 0., -cd, W, H)
+    wcs = Tan(*[float(x) for x in args])
+
+    plt.clf()
+    I = plt.imread(imgfn)
+    plt.imshow(I, interpolation='nearest', origin='lower')
+    x,y = wcs.radec2pixelxy(ra, dec)
+    R = radius * 60. / scale
+    ax = plt.axis()
+    plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g', lw=3, alpha=0.5, fc='none'))
+    if tims is not None:
+        for tim in tims:
+            H,W = tim.shape
+            twcs = tim.getWcs()
+            px,py = [],[]
+            for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
+                rd = twcs.pixelToPosition(x,y)
+                xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
+                px.append(xx)
+                py.append(yy)
+            plt.plot(px, py, 'g-', lw=3, alpha=0.5)
+    plt.axis(ax)
+    fn = 'ngc-%04i.png' % ngcnum
+    plt.savefig(fn)
+    print 'saved', fn
 
 def main():
 
@@ -44,9 +89,8 @@ def main():
     dr8 = True
     noarcsinh = False
 
-    print radius
-    print ra
-    print dec
+    print 'Radius', radius
+    print 'RA,Dec', ra, dec
 
 #    sras, sdecs, smags = tychoMatch(ra,dec,(radius*4.)/60.)
 #    print sras
@@ -80,38 +124,32 @@ def main():
     bandname = 'r'
     flipBands = ['r']
 
-    rerun = 0
-
-    TI = []
-    TItemps = []
+    timgs = []
     sources = []
+    allsources = []
     for rcf in rcfs:
         print rcf
+        roi = None
         for band in bands:
-            TItemp,tinf = getim(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396),**imkw)
-            TItemp.zr = tinf['zr']
-            TItemps.append([TItemp,tinf])
-
-        timg,info = TItemps[0]
-        if timg is None:
-            print "Zero roi"
+            tim,tinf = getim(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396),**imkw)
+            if tim is None:
+                print "Zero roi"
+                break
+            if roi is None:
+                roi = tinf['roi']
+            tim.zr = tinf['zr']
+            timgs.append(tim)
+        if tim is None:
             continue
+        s = getsrc(rcf[0], rcf[1], rcf[2],bandname,roi=roi,bands=bands)
+        sources.append(s)
+        allsources.extend(s)
 
-        print info['roi']
-        sources.append(getsrc(rcf[0], rcf[1], rcf[2],bandname,roi=info['roi'],bands=bands))
-        TI.extend(TItemps)
-        TItemps = []
+    plotarea(ra, dec, radius, ngc, timgs)
 
-    timg,info = TI[0]
-    photocal = timg.getPhotoCal()
-
-    wcs = timg.getWcs()
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
-    tims = [timg for timg,tinf in TI]
-    tractor = st.SDSSTractor(tims)
-    for source in sources:
-        tractor.addSources(source)
+    tractor = st.SDSSTractor(timgs, allsources)
 
     sa = dict(debug=True, plotAll=False,plotBands=False)
 
@@ -120,9 +158,8 @@ def main():
     elif dr8:
         sa.update(chilo=-50.,chihi=50.)
 
-    zr = info['zr']
+	zr = timgs[0].zr
     print "zr is: ",zr
-    print info
 
     print bands
 
@@ -150,7 +187,9 @@ def main():
             for (x,y) in star:
                 img.getInvError()[y][x] = 0
 
-    for timg,sources in zip(tims,sources):
+    ### THIS ONLY MAKES SENSE FOR SINGLE-BAND -- there's one "timg" for each band
+    ### but only one "sources" per r,c,f.
+    for timg,sources in zip(timgs,sources):
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
