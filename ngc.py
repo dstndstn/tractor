@@ -22,10 +22,11 @@ from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
 
-def plotarea(ra, dec, radius, ngcnum, tims=None):
+def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     from astrometry.util.util import Tan
     W,H = 512,512
     scale = (radius * 60. * 4) / float(W)
+    print 'SDSS jpeg scale', scale
     imgfn = 'sdss-mosaic-ngc%04i.png' % ngcnum
     if not os.path.exists(imgfn):
         url = ('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=%f&width=%i&height=%i' %
@@ -51,6 +52,7 @@ def plotarea(ra, dec, radius, ngcnum, tims=None):
     ax = plt.axis()
     plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g', lw=3, alpha=0.5, fc='none'))
     if tims is not None:
+        print 'Plotting outlines of', len(tims), 'images'
         for tim in tims:
             H,W = tim.shape
             twcs = tim.getWcs()
@@ -58,9 +60,23 @@ def plotarea(ra, dec, radius, ngcnum, tims=None):
             for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
                 rd = twcs.pixelToPosition(x,y)
                 xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
+                print 'x,y', x, y
+                x1,y1 = twcs.positionToPixel(rd)
+                print '  x1,y1', x1,y1
+                print '  r,d', rd.ra, rd.dec,
+                print '  xx,yy', xx, yy
                 px.append(xx)
                 py.append(yy)
             plt.plot(px, py, 'g-', lw=3, alpha=0.5)
+    if rds is not None:
+		px,py = [],[]
+        for ra,dec in rds:
+            print 'ra,dec', ra,dec
+            xx,yy = wcs.radec2pixelxy(ra, dec)
+			px.append(xx)
+			py.append(yy)
+		plt.plot(px, py, 'go')
+
     plt.axis(ax)
     fn = 'ngc-%04i.png' % ngcnum
     plt.savefig(fn)
@@ -87,6 +103,7 @@ def main():
     IRLS_scale = 25.
     radius = j.size
     dr8 = True
+    #dr8 = False
     noarcsinh = False
 
     print 'Radius', radius
@@ -110,7 +127,7 @@ def main():
 
     fieldPlot(ra,dec,radius,ngc)
     
-    imkw = {}
+    imkw = dict(psf='dg')
     if dr8:
         getim = st.get_tractor_image_dr8
         getsrc = st.get_tractor_sources_dr8
@@ -121,6 +138,7 @@ def main():
         imkw.update(useMags=True)
 
     bands=['u','g','r','i','z']
+    #bands=['r']
     bandname = 'r'
     flipBands = ['r']
 
@@ -145,7 +163,8 @@ def main():
         sources.append(s)
         allsources.extend(s)
 
-    plotarea(ra, dec, radius, ngc, timgs)
+    rds = [rcf[3:5] for rcf in rcfs]
+    plotarea(ra, dec, radius, ngc, timgs, rds)
 
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -158,7 +177,7 @@ def main():
     elif dr8:
         sa.update(chilo=-50.,chihi=50.)
 
-	zr = timgs[0].zr
+    zr = timgs[0].zr
     print "zr is: ",zr
 
     print bands

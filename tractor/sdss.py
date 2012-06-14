@@ -242,6 +242,9 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 
 	fn = sdss.retrieve('photoObj', run, camcol, field)
 	objs = fits_table(fn)
+	if objs is None:
+		print 'No sources in photoObj file', fn
+		return []
 	objs.indices = np.arange(len(objs))
 
 	if roi is not None:
