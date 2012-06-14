@@ -12,6 +12,7 @@ import pylab as plt
 import pyfits
 
 from astrometry.util.file import *
+from astrometry.util.multiproc import multiproc
 
 from tractor import *
 from tractor import sdss as st
@@ -97,15 +98,35 @@ def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):
     plt.savefig(fn)
     print 'saved', fn
 
-def main():
+def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc)):
+    tims = []
+    roi = None
+    for band in bands:
+        tim,tinf = getim(r, c, f, band, roiradecsize=(ra,dec,roipix), **imkw)
+        if tim is None:
+            print "Zero roi"
+            return None,None
+        if roi is None:
+            roi = tinf['roi']
+        tim.zr = tinf['zr']
+        tims.append(tim)
+    s = getsrc(r, c, f, roi=roi, bands=bands)
+    return (tims,s)
 
+def main():
     import optparse
     parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
+    parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
 
     opt,args = parser.parse_args()
     if len(args) != 1:
         parser.print_help()
         sys.exit(-1)
+
+    if opt.threads:
+        mp = multiproc(nthreads=opt.threads)
+    else:
+        mp = multiproc()
 
     ngc = int(args[0])
 
@@ -156,35 +177,24 @@ def main():
     bandname = 'r'
     flipBands = ['r']
 
+    imsrcs = mp.map(get_ims_and_srcs, [(rcf + (bands, ra, dec, radius*60./0.396, imkw, getim, getsrc))
+                                       for rcf in rcfs])
     timgs = []
     sources = []
     allsources = []
-    for rcf in rcfs:
-        print rcf
-        roi = None
-        for band in bands:
-            tim,tinf = getim(rcf[0], rcf[1], rcf[2], band,roiradecsize=(ra,dec,(radius*60.)/0.396),**imkw)
-            if tim is None:
-                print "Zero roi"
-                break
-            if roi is None:
-                roi = tinf['roi']
-                #print 'ROI', roi
-            #print 'Image shape:', tim.shape
-            tim.zr = tinf['zr']
-            timgs.append(tim)
-        if tim is None:
+    for ims,s in imsrcs:
+        if ims is None:
             continue
-        s = getsrc(rcf[0], rcf[1], rcf[2],bandname,roi=roi,bands=bands)
-        sources.append(s)
+        timgs.extend(ims)
         allsources.extend(s)
+        sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
     plotarea(ra, dec, radius, ngc, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
-    tractor = st.Tractor(timgs, allsources)
+    tractor = st.Tractor(timgs, allsources, mp=mp)
 
     sa = dict(debug=True, plotAll=False,plotBands=False)
 

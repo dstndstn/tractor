@@ -101,11 +101,14 @@ class GalaxyShape(ParamList):
 		# convert re, ab, phi into a transformation matrix
 		phi = np.deg2rad(90 - self.phi)
 		# convert re to degrees
-		re_deg = self.re / 3600.
+		# HACK -- bring up to a minimum size to prevent singular matrix inversions
+		re_deg = max(1./30, self.re) / 3600.
 		cp = np.cos(phi)
 		sp = np.sin(phi)
 		# Squish, rotate, and scale into degrees.
 		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
+		#print 're_deg', re_deg
+		#print 'ab', self.ab
 		G = re_deg * np.array([[ cp, sp * self.ab],
 							   [-sp, cp * self.ab]])
 		# "cd" takes pixels to degrees (intermediate world coords)
