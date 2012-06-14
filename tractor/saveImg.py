@@ -12,7 +12,7 @@ from tractor import sdss as st
 
 
 def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,chihi=10.):
-	#print "Index: ", imgi
+	print "Index: ", imgi
 	mod = tractor.getModelImage(imgi)
 	chi = tractor.getChiImage(imgi=imgi)
 	synthfn = 'synth-%s.fits' % idstr

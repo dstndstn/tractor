@@ -21,6 +21,7 @@ from tractor import sdss_galaxy as sg
 from tractor import basics as ba
 from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
+from tractor.rc3 import getNGC
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
@@ -130,33 +131,34 @@ def main():
 
     ngc = int(args[0])
 
-    j = get_ngc(ngc)
-    ra = j.ra
-    dec = j.dec
-    itune1 = 7
-    itune2 = 7
+    j = getNGC(ngc)
+    print j
+    ra = j['RA'][0]
+    dec = j['DEC'][0]
+    itune1 = 3
+    itune2 = 3
     ntune = 0
     IRLS_scale = 25.
-    radius = j.size
+    radius = (10.**j['LOG_D25'][0])/10.
     dr8 = True
     noarcsinh = False
 
     print 'Radius', radius
     print 'RA,Dec', ra, dec
 
-#    sras, sdecs, smags = tychoMatch(ra,dec,(radius*4.)/60.)
-#    print sras
-#    print sdecs
-#    print smags
+    sras, sdecs, smags = tychoMatch(ra,dec,(radius*4.)/60.)
+    print sras
+    print sdecs
+    print smags
+    sras=[]
+    sdecs=[]
+    smags=[]
 
-#    for sra,sdec,smag in zip(sras,sdecs,smags):
-#        print sra,sdec,smag
+    for sra,sdec,smag in zip(sras,sdecs,smags):
+        print sra,sdec,smag
 
 
 
-    sra = [] #Temporary for now...
-    sdec = []
-    smag = [] 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
 
@@ -190,7 +192,7 @@ def main():
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, radius, ngc, timgs) #, rds)
+    #plotarea(ra, dec, radius, ngc, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -223,9 +225,9 @@ def main():
 
 
     starr = 25.
-    for starx,stary in zip(sra,sdec):
-        print starx,stary
-        starx,stary = wcs.positionToPixel(RaDecPos(starx,stary))
+    for sra,sdec in zip(sras,sdecs):
+        print sra,sdec
+        starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
         print starx,stary
         for img in tractor.getImages():
             star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
@@ -242,7 +244,7 @@ def main():
 
         xt = xtr 
         yt = ytr
-        r = ((radius*60.)/2.)/.396 #radius in pixels
+        r = ((radius*60.))/.396 #radius in pixels
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
