@@ -343,8 +343,11 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
 
 
 if __name__ == '__main__':
-    import cProfile
-    import sys
-    from datetime import tzinfo, timedelta, datetime
-    cProfile.run('main()','prof-%s.dat' % (datetime.now().isoformat()))
-    sys.exit(0)
+    # To profile the code, you can do:
+    #import cProfile
+    #import sys
+    #from datetime import tzinfo, timedelta, datetime
+    #cProfile.run('main()','prof-%s.dat' % (datetime.now().isoformat()))
+    #sys.exit(0)
+    main()
+    
