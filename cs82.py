@@ -656,7 +656,8 @@ def tweak_wcs((tractor, im)):
 	return im.getParams()
 
 def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
-	plt.figure(figsize=(6,6))
+	#plt.figure(figsize=(6,6))
+	plt.figure(figsize=(10,10))
 	plt.clf()
 	plotpos0 = [0.01, 0.01, 0.98, 0.94]
 
@@ -691,8 +692,8 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		if tsuf is not None:
 			tt += tsuf
 		plt.title(tt)
-		plt.xticks([],[])
-		plt.yticks([],[])
+		#plt.xticks([],[])
+		#plt.yticks([],[])
 		plt.colorbar()
 		mysavefig('data-%02i.png' % i)
 
@@ -1204,16 +1205,39 @@ def stage03(tractor=None, mp=None, **kwargs):
 	params0 = np.array(tractor.getParams()).copy()
 	allsources = tractor.getCatalog()
 	#brightcat,Ibright = cut_bright(allsources, magcut=23)
-	brightcat,Ibright = cut_bright(allsources, magcut=24)
+	#brightcat,Ibright = cut_bright(allsources, magcut=24)
+	brightcat,Ibright = cut_bright(allsources, magcut=27)
 	tractor.setCatalog(brightcat)
 	bparams0 = np.array(tractor.getParams()).copy()
 	allimages = tractor.getImages()
 	tractor.setImages(Images(allimages[0]))
 	print ' Cut to:', tractor
 	print len(tractor.getParams()), 'params'
+
+	# TRY drilling down to a much smaller region to check out galaxy scale parameters
+	tim = allimages[0]
+	im = tim.getImage()
+	#x0,x1,y0,y1 = (200, 400, 800, 1000)
+	x0,x1,y0,y1 = (250, 350, 900, 1000)
+	subim = im[y0:y1, x0:x1].copy()
+	suberr = tim.getInvError()[y0:y1, x0:x1].copy()
+	subwcs = tim.getWcs().copy()
+	print 'x0,y0', subwcs.x0, subwcs.y0
+	subwcs.setX0Y0(subwcs.x0 + x0, subwcs.y0 + y0)
+	print 'subwcs:', subwcs
+	pc = tim.getPhotoCal().copy()
+	psf = tim.getPsf().copy()
+	sky = tim.getSky().copy()
+	subtim = Image(data=subim, invvar=suberr**2, wcs=subwcs,
+				   photocal=pc, psf=psf, sky=sky, name=tim.name)
+	subtim.zr = tim.zr
+
+	tractor.setImages(Images(subtim))
 	
 	# TRY cutting to sources in the RA,Dec box.
-	im = allimages[0]
+	#im = allimages[0]
+	im = subtim
+
 	W,H = im.getWidth(), im.getHeight()
 	wcs = im.getWcs()
 	r,d = [],[]
@@ -1231,22 +1255,22 @@ def stage03(tractor=None, mp=None, **kwargs):
 	Icut = []
 	for i in xrange(len(brightcat)):
 		src = brightcat[i]
-		print 'Source:', src
+		#print 'Source:', src
 		pos = src.getPosition()
-		print '  pos', pos
+		#print '  pos', pos
 		if pos.ra > ramin and pos.ra < ramax and pos.dec > decmin and pos.dec < decmax:
-			print '  -> Keep'
+			#print '  -> Keep'
 			cutrd.append(src)
 			Icut.append(Ibright[i])
 		else:
-			print '  -> cut.'
-	
+			#print '  -> cut.'
+			pass
 	print 'Keeping sources:'
 	for src in cutrd:
 		print '  ', src
 		x,y = wcs.positionToPixel(src.getPosition())
 		print '  --> (%.1f, %.1f)' % (x,y)
-			
+		
 	tractor.setCatalog(cutrd)
 	print ' Cut on RA,Dec box to:', tractor
 	print len(tractor.getParams()), 'params'
@@ -1259,16 +1283,24 @@ def stage03(tractor=None, mp=None, **kwargs):
 	plots(tractor, ['data', 'dataann', 'modbest', 'chibest'], 3, ibest=0, pp=np.array([p0]),
 		  alllnp=[0.], **plotsa)
 
-	alllnp,step = optsourcestogether(tractor, 0)
+	for j in xrange(5):
+		step, alllnp = optsourcestogether(tractor, 0, doplots=False)
 	
-	plots(tractor, ['modbest', 'chibest'], 4, ibest=0, pp=np.array([tractor.getParams()]),
-		  alllnp=[0.], **plotsa)
+		plots(tractor, ['modbest', 'chibest'], 4 + j*2, ibest=0, pp=np.array([tractor.getParams()]),
+			  alllnp=[0.], **plotsa)
 
-	# step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
-	# alllnp += alllnp2
-	# 
-	# plots(tractor, ['modbest', 'chibest'], 5, ibest=0, pp=np.array([tractor.getParams()]),
-	# 	  alllnp=[0.], **plotsa)
+		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa, doplots=False)
+		alllnp += alllnp2
+	
+		plots(tractor, ['modbest', 'chibest'], 5 + j*2, ibest=0, pp=np.array([tractor.getParams()]),
+			  alllnp=[0.], **plotsa)
+
+
+	print 'Optimized sources:'
+	for src in cutrd:
+		print '  ', src
+		x,y = wcs.positionToPixel(src.getPosition())
+		print '  --> (%.1f, %.1f)' % (x,y)
 
 	tractor.catalog.thawParamsRecursive('*')
 	bparams1 = np.array(tractor.getParams()).copy()
@@ -1470,7 +1502,7 @@ def stage03_OLD(tractor=None, mp=None, steps=None, **kwargs):
 	plotims = [0,]
 	plotsa = dict(imis=plotims, mp=mp)
 
-	alllnp,step = optsourcestogether(tractor, 0)
+	step,alllnp = optsourcestogether(tractor, 0)
 
 	step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa)
 	alllnp += alllnp2
@@ -2210,10 +2242,50 @@ def estimate_noise(im, S=5):
 		nsig += 0.1
 	return s
 
-	
+def kicktires():
+	Tcomb = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+	Tcomb.about()
+
+	I = np.flatnonzero(Tcomb.chi2_psf < Tcomb.chi2_model)
+	print len(I), 'point sources'
+	plt.clf()
+	plt.hist(Tcomb[I].mag_psf, 100, range=(15,25))
+	plt.savefig('psf-mag.png')
+
+	I = np.flatnonzero(Tcomb.chi2_psf > Tcomb.chi2_model)
+	print len(I), 'galaxies'
+
+	plt.clf()
+	ha=dict(histtype='step', range=(15,40), bins=100)
+	nil,nil,p1 = plt.hist(Tcomb[I].mag_spheroid, color='r', **ha)
+	nil,nil,p2 = plt.hist(Tcomb[I].mag_disk, color='b', **ha)
+	plt.xlabel('Mag')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	plt.savefig('gal-mag.png')
+
+	plt.clf()
+	ha=dict(histtype='step', range=(-7, -2), bins=100)
+	nil,nil,p1 = plt.hist(np.log10(Tcomb[I].spheroid_reff_world), color='r', **ha)
+	nil,nil,p2 = plt.hist(np.log10(Tcomb[I].disk_scale_world), color='b', **ha)
+	plt.xlabel('log_10 Scale')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	plt.savefig('gal-scale.png')
+
+	plt.clf()
+	ha=dict(histtype='step', range=(0, 1), bins=100)
+	nil,nil,p1 = plt.hist(Tcomb[I].spheroid_aspect_world, color='r', **ha)
+	nil,nil,p2 = plt.hist(Tcomb[I].disk_aspect_world, color='b', **ha)
+	plt.xlabel('Aspect ratio')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	plt.savefig('gal-aspect.png')
+
+
 	
 def main():
 	#getdata()
+
+	#kicktires()
+	#sys.exit(0)
 
 	import optparse
 	parser = optparse.OptionParser()

@@ -107,6 +107,8 @@ class ScalarParam(BaseParams):
 		return getClassName(self) + ': ' + self.strformat % self.val
 	def __repr__(self):
 		return getClassName(self) + '(' + repr(self.val) + ')'
+	def copy(self):
+		return self.__class__(self.val)
 	def getParamNames(self):
 		return [getClassName(self)]
 	def numberOfParams(self):

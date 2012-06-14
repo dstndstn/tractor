@@ -17,7 +17,6 @@ from engine import *
 from utils import *
 import mixture_profiles as mp
 
-
 class Mags(ParamList):
 	'''
 	An implementation of `Brightness` that stores magnitudes in
@@ -104,6 +103,9 @@ class MagsPhotoCal(ParamList):
 		self.maxmag = 50.
 		ParamList.__init__(self, zeropoint)
 
+	def copy(self):
+		return MagsPhotoCal(self.band, self.zp)
+
 	@staticmethod
 	def getNamedParams():
 		return dict(zp=0)
@@ -185,6 +187,12 @@ class FitsWcs(ParamList):
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals
 		self.wcs = wcs
+
+	def copy(self):
+		from astrometry.util.util import Tan
+		wcs = FitsWcs(Tan(self.wcs))
+		wcs.setX0Y0(self.x0, self.y0)
+		return wcs
 
 	# Here we ASSUME TAN WCS!
 	# oi vey...
@@ -345,7 +353,6 @@ class ConstantSky(ScalarParam):
 		return [p]
 	def addTo(self, img):
 		img += self.val
-	
 	def getParamNames(self):
 		return ['sky']
 
@@ -486,8 +493,9 @@ class GaussianMixturePSF(BaseParams):
 				tuple(self.mog.var.ravel()),)
 	
 	def copy(self):
-		raise
-		#return self.mog.copy()
+		return GaussianMixturePSF(self.mog.amp.copy(),
+								  self.mog.mean.copy(),
+								  self.mog.var.copy())
 
 	def numberOfParams(self):
 		K = self.mog.K

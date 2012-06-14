@@ -18,6 +18,12 @@ class CfhtPhotoCal(BaseParams):
 	def hashkey(self):
 		return ('CfhtPhotoCal', self.exptime, self.phot_c, self.phot_k, self.airmass)
 
+	def copy(self):
+		return CfhtPhotoCal(hdr=dict(EXPTIME = self.exptime,
+									 PHOT_C = self.phot_c,
+									 PHOT_K = self.phot_k,
+									 AIRMASS = self.airmass), bandname=self.bandname)
+
 	def getParams(self):
 		return [self.phot_c,]
 	def getStepSizes(self):
