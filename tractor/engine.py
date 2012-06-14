@@ -428,13 +428,18 @@ class Tractor(MultiParams):
 		- `catalog:` list of Source objects
 		'''
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
-		self.modtype = np.float32
-		self.cache = Cache()
-		self.cachestack = []
+		self._setup(mp=mp)
+
+	def _setup(self, mp=None, cache=None, pickleCache=False, cachestack=[]):
 		if mp is None:
 			mp = multiproc()
 		self.mp = mp
-		self.pickleCache = False
+		self.modtype = np.float32
+		if cache is None:
+			cache = Cache()
+		self.cache = Cache()
+		self.cachestack = []
+		self.pickleCache = pickleCache
 
 	def __str__(self):
 		s = 'Tractor with %i sources and %i images' % (len(self.catalog), len(self.images))
@@ -471,18 +476,15 @@ class Tractor(MultiParams):
 		return S
 	def __setstate__(self, state):
 		#print 'unpickling tractor in pid', os.getpid()
+		args = {}
 		if len(state) == 3:
 			(images, catalog, liquid) = state
-			self.pickleCache = False
-			self.cache = Cache()
 		elif len(state) == 4:
 			(images, catalog, liquid, cache) = state
-			self.cache = cache
-			self.pickleCache = True
+			args.update(cache=cache, pickleCache=pickleCache)
 		self.subs = [images, catalog]
 		self.liquid = liquid
-		self.mp = multiproc()
-		self.cachestack = []
+		self._setup(**args)
 
 	def getNImages(self):
 		return len(self.images)
