@@ -133,8 +133,8 @@ def main():
 
     j = getNGC(ngc)
     print j
-    ra = j['RA'][0]
-    dec = j['DEC'][0]
+    ra = float(j['RA'][0])
+    dec = float(j['DEC'][0])
     itune1 = 3
     itune2 = 3
     ntune = 0
@@ -192,7 +192,7 @@ def main():
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    #plotarea(ra, dec, radius, ngc, timgs) #, rds)
+    plotarea(ra, dec, radius, ngc, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
