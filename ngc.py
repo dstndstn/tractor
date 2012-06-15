@@ -135,8 +135,8 @@ def main():
     print j
     ra = float(j['RA'][0])
     dec = float(j['DEC'][0])
-    itune1 = 3
-    itune2 = 3
+    itune1 = 6
+    itune2 = 6
     ntune = 0
     IRLS_scale = 25.
     radius = (10.**j['LOG_D25'][0])/10.
@@ -227,16 +227,17 @@ def main():
     starr = 25.
     for sra,sdec in zip(sras,sdecs):
         print sra,sdec
-        starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
-        print starx,stary
+
         for img in tractor.getImages():
+            wcs = img.getWcs()
+            invvar = img.getInvvar() 
+            starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
             star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
             for (x,y) in star:
                 img.getInvError()[y][x] = 0
 
-    ### THIS ONLY MAKES SENSE FOR SINGLE-BAND -- there's one "timg" for each band
-    ### but only one "sources" per r,c,f.
-    for timg,sources in zip(timgs,sources):
+    for timgs,sources in imsrcs:
+        timg = timgs[0]
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
