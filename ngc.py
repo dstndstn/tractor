@@ -234,7 +234,7 @@ def main():
             starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
             star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
             for (x,y) in star:
-                img.getInvError()[y][x] = 0
+                img.getStarMask()[y][x] = 0
 
     for timgs,sources in imsrcs:
         timg = timgs[0]
@@ -308,6 +308,12 @@ def main():
     print CGShape2
     print CGBright1+CGBright2
     print CG.getBrightness()
+
+    result = open('ngc-%s.txt' % (ngc),'w')
+
+    result.write(str(CG))
+    result.write(str(CG.getBrightness()))
+    result.close()
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 

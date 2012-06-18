@@ -74,6 +74,7 @@ class Image(MultiParams):
 		self.setMask()
 		self.setInvvar(self.origInvvar)
 		self.name = name
+		self.starMask = np.ones_like(self.data)
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
 	def __str__(self):
@@ -131,6 +132,11 @@ class Image(MultiParams):
 	def setMask(self):
 		self.mask = (self.origInvvar <= 0.)
 		self.mask = binary_dilation(self.mask,iterations=3)
+
+	def getStarMask(self):
+		return self.starMask
+	def setStarMask(self,mask):
+		self.starMask = mask
 
 
 	def getOrigInvvar(self):
@@ -963,9 +969,10 @@ class Tractor(MultiParams):
 		for img in self.getImages():
 			resid = img.getImage() - self.getModelImage(img)
 			oinvvar = img.getOrigInvvar()
+			smask = img.getStarMask()
 			chi2 = oinvvar * resid**2
 			factor = Q2 / (Q2 + chi2)
-			img.setInvvar(oinvvar * factor)
+			img.setInvvar(oinvvar * factor * smask)
 
 	def getModelPatchNoCache(self, img, src):
 		return src.getModelPatch(img)
