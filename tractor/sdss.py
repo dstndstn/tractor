@@ -241,7 +241,13 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	bandnames = bands
 
 	fn = sdss.retrieve('photoObj', run, camcol, field)
-	objs = fits_table(fn)
+	try:
+		objs = fits_table(fn)
+	except:
+		# Try again in case we got a partially downloaded file
+		fn = sdss.retrieve('photoObj', run, camcol, field, skipExisting=False)
+		objs = fits_table(fn)
+
 	if objs is None:
 		print 'No sources in photoObj file', fn
 		return []
