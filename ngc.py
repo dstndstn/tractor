@@ -187,6 +187,8 @@ def main():
     for ims,s in imsrcs:
         if ims is None:
             continue
+        if s is None:
+            continue
         timgs.extend(ims)
         allsources.extend(s)
         sources.append(s)
@@ -314,6 +316,9 @@ def main():
     result.write(str(CG))
     result.write(str(CG.getBrightness()))
     result.close()
+
+    pfn = 'ngc-%d.pickle' % ngc
+    pickle_to_file(CG,pfn)
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
