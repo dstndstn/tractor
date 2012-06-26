@@ -150,9 +150,6 @@ def main():
     print 'RA,Dec', ra, dec
 
     sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
-    print sras
-    print sdecs
-    print smags
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
         print sra,sdec,smag
@@ -221,10 +218,9 @@ def main():
 
     prefix = 'ngc%d' % (ngc)
     saveAll('initial-'+prefix, tractor,**sa)
-    plotInvvar('initial-'+prefix,tractor)
-    bright = None
-    lowbright = 1000
+    #plotInvvar('initial-'+prefix,tractor)
 
+    
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
         print sra,sdec,smag
@@ -233,9 +229,14 @@ def main():
             wcs = img.getWcs()
             starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
             starr=25*(2**(max(11-smag,0.)))
-            star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
-            for (x,y) in star:
-                img.getStarMask()[y][x] = 0
+            if starx+starr<0. or starx-starr>img.getWidth() or stary+starr <0. or stary-starr>img.getHeight():
+                continue
+            X,Y = np.meshgrid(np.arange(img.getWidth()), np.arange(img.getHeight()))
+            R2 = (X - starx)**2 + (Y - stary)**2
+            img.getStarMask()[R2 < starr**2] = 0
+            #star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
+            #for (x,y) in star:
+            #    img.getStarMask()[y][x] = 0
 
     for timgs,sources in imsrcs:
         timg = timgs[0]
@@ -254,7 +255,7 @@ def main():
                 print xs,ys
                 tractor.removeSource(src)
 
-    saveAll('removed-'+prefix, tractor,**sa)
+    #saveAll('removed-'+prefix, tractor,**sa)
     newShape = sg.GalaxyShape(30.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
@@ -310,7 +311,7 @@ def main():
         tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,**sa)
-    plotInvvar('final-'+prefix,tractor)
+    #plotInvvar('final-'+prefix,tractor)
     sa.update(plotBands=True)
     saveAll('allBands-' + prefix,tractor,**sa)
 
@@ -353,7 +354,7 @@ def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     '''
     
     tex+=allImages('Initial Model','initial-'+prefix)
-    tex+=allImages('Removed','removed-'+prefix)
+    #tex+=allImages('Removed','removed-'+prefix)
     tex+=allImages('Added','added-'+prefix)
     for i in range(itune1):
         tex+=allImages('Galaxy tuning, step %d' % (i+1),'itune1-%d-' %(i+1)+prefix)

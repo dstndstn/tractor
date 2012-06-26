@@ -19,9 +19,9 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 	print 'Writing synthetic image to', synthfn
 	pyfits.writeto(synthfn, mod, clobber=True)
 
-	pfn = 'tractor-%s.pickle' % idstr
-	print 'Saving state to', pfn
-	pickle_to_file(tractor, pfn)
+	#pfn = 'tractor-%s.pickle' % idstr
+	#print 'Saving state to', pfn
+	#pickle_to_file(tractor, pfn)
 
 	plt.clf()
 	plt.hist(chi.ravel(),range=(-10,10), bins=100)
