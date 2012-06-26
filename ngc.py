@@ -266,7 +266,6 @@ def main():
 
     print 'Tractor has', tractor.getParamNames()
 
-    #tractor.freezeParam('images')
     for im in tractor.images:
         im.freezeAllParams()
         im.thawParam('sky')
@@ -276,8 +275,7 @@ def main():
     print 'values', tractor.getParams()
 
     for i in range(itune1):
-        #tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
-        tractor.opt2()
+        tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
 
@@ -303,15 +301,13 @@ def main():
     tractor.catalog.freezeAllBut(CG)
 
     for i in range(itune2):
-        #tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
-        tractor.opt2()
+        tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
 
     tractor.catalog.thawAllParams()
     for i in range(ntune):
-        #tractor.optimizeCatalogLoop(nsteps=1,sky=True)
-        tractor.opt2()
+        tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,**sa)
     plotInvvar('final-'+prefix,tractor)
@@ -326,12 +322,6 @@ def main():
     print CGShape2
     print CGBright1+CGBright2
     print CG.getBrightness()
-
-    result = open('ngc-%s.txt' % (ngc),'w')
-
-    result.write(str(CG))
-    result.write(str(CG.getBrightness()))
-    result.close()
 
     pfn = 'ngc-%d.pickle' % ngc
     pickle_to_file(CG,pfn)

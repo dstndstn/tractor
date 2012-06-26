@@ -525,10 +525,10 @@ class Tractor(MultiParams):
 
 	### FIXME -- temporary functions, parallel to optimizeCatalogAtFixedComplexityStep()
 	### et al, that use the param infrastructure correctly.
-	def opt2(self, alphas=None):
+	def optimize(self, alphas=None):
 		print 'opt2: Finding derivs...'
 		t0 = Time()
-		allderivs = self.getderivs2()
+		allderivs = self.getDerivs()
 		tderivs = Time()-t0
 		#print Time() - t0
 		#print 'allderivs:', allderivs
@@ -537,7 +537,7 @@ class Tractor(MultiParams):
 		#		print 'patch mean', np.mean(p.patch)
 		print 'Finding optimal update direction...'
 		t0 = Time()
-		X = self.optimize(allderivs)
+		X = self.getUpdateDirection(allderivs)
 		#print Time() - t0
 		topt = Time()-t0
 		#print 'X:', X
@@ -545,7 +545,7 @@ class Tractor(MultiParams):
 			return 0, X, 0.
 		print 'Finding optimal step size...'
 		t0 = Time()
-		(dlogprob, alpha) = self.tryupdates2(X, alphas=alphas)
+		(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 		tstep = Time() - t0
 		print 'Finished opt2.'
 		print '  Tderiv', tderivs
@@ -553,7 +553,7 @@ class Tractor(MultiParams):
 		print '  Tstep ', tstep
 		return dlogprob, X, alpha
 
-	def tryupdates2(self, X, alphas=None):
+	def tryUpdates(self, X, alphas=None):
 		if alphas is None:
 			# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 			alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
@@ -587,7 +587,7 @@ class Tractor(MultiParams):
 		return pBest - pBefore, alphaBest
 
 
-	def getderivs2(self):
+	def getDerivs(self):
 		# Returns:
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -661,7 +661,7 @@ class Tractor(MultiParams):
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
-	def optimize(self, allderivs):
+	def getUpdateDirection(self, allderivs):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
