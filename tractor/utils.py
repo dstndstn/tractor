@@ -243,9 +243,13 @@ class NamedParams(object):
 	def thawParam(self, paramname):
 		if type(paramname) is int:
 			i = paramname
-		else:
+		elif isinstance(paramname, basestring):
 			i = self.getNamedParamIndex(paramname)
 			assert(i is not None)
+		else:
+			# assume it's an actual Param, not a name
+			i = self._getThings().index(paramname)
+			
 		self.liquid[i] = True
 	def thawParams(self, *args):
 		for n in args:

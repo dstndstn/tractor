@@ -120,6 +120,7 @@ def main():
     parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
     parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
     parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
+    parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
 
     opt,args = parser.parse_args()
     if len(args) != 1:
@@ -139,7 +140,7 @@ def main():
     dec = float(j['DEC'][0])
     itune1 = opt.itune1
     itune2 = opt.itune2
-    ntune = 0
+    ntune = opt.ntune
     IRLS_scale = 25.
     radius = (10.**j['LOG_D25'][0])/10.
     dr8 = True
@@ -263,8 +264,20 @@ def main():
 
     saveAll('added-'+prefix,tractor,**sa)
 
+    print 'Tractor has', tractor.getParamNames()
+
+    #tractor.freezeParam('images')
+    for im in tractor.images:
+        im.freezeAllParams()
+        im.thawParam('sky')
+    tractor.catalog.freezeAllBut(EG)
+
+    print 'Tractor has', tractor.getParamNames()
+    print 'values', tractor.getParams()
+
     for i in range(itune1):
-        tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
+        #tractor.optimizeCatalogLoop(nsteps=1,srcs=[EG],sky=True)
+        tractor.opt2()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
 
@@ -287,13 +300,18 @@ def main():
     tractor.removeSource(EG)
     tractor.addSource(CG)
 
+    tractor.catalog.freezeAllBut(CG)
+
     for i in range(itune2):
-        tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
+        #tractor.optimizeCatalogLoop(nsteps=1,srcs=[CG],sky=True)
+        tractor.opt2()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
 
+    tractor.catalog.thawAllParams()
     for i in range(ntune):
-        tractor.optimizeCatalogLoop(nsteps=1,sky=True)
+        #tractor.optimizeCatalogLoop(nsteps=1,sky=True)
+        tractor.opt2()
         tractor.changeInvvar(IRLS_scale)
         saveAll('ntune-%d-' % (i+1)+prefix,tractor,**sa)
     plotInvvar('final-'+prefix,tractor)
