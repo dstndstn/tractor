@@ -118,6 +118,8 @@ def main():
     import optparse
     parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
     parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
+    parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
+    parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
 
     opt,args = parser.parse_args()
     if len(args) != 1:
@@ -135,8 +137,8 @@ def main():
     print j
     ra = float(j['RA'][0])
     dec = float(j['DEC'][0])
-    itune1 = 6
-    itune2 = 6
+    itune1 = opt.itune1
+    itune2 = opt.itune2
     ntune = 0
     IRLS_scale = 25.
     radius = (10.**j['LOG_D25'][0])/10.
@@ -146,13 +148,10 @@ def main():
     print 'Radius', radius
     print 'RA,Dec', ra, dec
 
-    sras, sdecs, smags = tychoMatch(ra,dec,(radius*4.)/60.)
+    sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
     print sras
     print sdecs
     print smags
-    sras=[]
-    sdecs=[]
-    smags=[]
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
         print sra,sdec,smag
@@ -194,7 +193,7 @@ def main():
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, radius, ngc, timgs) #, rds)
+#    plotarea(ra, dec, radius, ngc, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -205,7 +204,7 @@ def main():
     if noarcsinh:
         sa.update(nlscale=0)
     elif dr8:
-        sa.update(chilo=-50.,chihi=50.)
+        sa.update(chilo=-8.,chihi=8.)
 
     zr = timgs[0].zr
     print "zr is: ",zr
@@ -226,14 +225,13 @@ def main():
     lowbright = 1000
 
 
-    starr = 25.
-    for sra,sdec in zip(sras,sdecs):
-        print sra,sdec
+    for sra,sdec,smag in zip(sras,sdecs,smags):
+        print sra,sdec,smag
 
         for img in tractor.getImages():
             wcs = img.getWcs()
-            invvar = img.getInvvar() 
             starx,stary = wcs.positionToPixel(RaDecPos(sra,sdec))
+            starr=25*(2**(max(11-smag,0.)))
             star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
             for (x,y) in star:
                 img.getStarMask()[y][x] = 0

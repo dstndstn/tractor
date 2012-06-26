@@ -9,7 +9,6 @@ def getNGC(ngc):
     rc3 = pyfits.open("rc3.fits")
 
 
-    print rc3[1].columns
 
     data = rc3[1].data
     name = 'NGC %d' % (ngc)
@@ -18,8 +17,8 @@ def getNGC(ngc):
     mask = data.field("NAME") == name
 
     record = data[mask]
+    rc3.close()
     return record
-
 
 
 

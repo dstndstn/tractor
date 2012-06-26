@@ -47,7 +47,7 @@ def save(idstr, tractor, nlscale=1.,debug=False,plotAll=False,imgi=0,chilo=-10.,
 						   vmin=zr[0], vmax=zr[1]))
 
 	imchi = ima.copy()
-	if nlscale ==0.:
+	if nlscale ==0. or True:
 		imchi.update(vmin=chilo, vmax=chihi, norm=None)
 	else:
 		imchi.update(norm=ArcsinhNormalize(mean=0., std=1./nlscale, vmin=chilo, vmax=chihi))
