@@ -263,7 +263,7 @@ def main():
 			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
 					tractor.catalog.freezeAllBut(src)
-					for step in each[1][1]:
+					for step in range(each[1][1]):
 						tractor.optimize()
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
