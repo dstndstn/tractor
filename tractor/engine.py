@@ -932,7 +932,7 @@ class Tractor(MultiParams):
 		return mods
 
 	def clearCache(self):
-		self.cache = Cache()
+		self.cache.clear() # = Cache()
 
 	def getChiImages(self):
 		mods = self.getModelImages()

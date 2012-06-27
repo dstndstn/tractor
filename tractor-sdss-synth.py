@@ -146,7 +146,7 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 	savepng('data', data, title='Data ' + timg.name, **ima)
 	savepng('model', mod, title='Model ' + timg.name, **ima)
 	savepng('diff', data - mod, title='Data - Model, ' + timg.name, **imdiff)
-	savepng('chi',  chi, title='Chi ' + timg.name, **imchi)
+	savepng('chi',	chi, title='Chi ' + timg.name, **imchi)
 	if plotAll:
 		debug = False
 		for i,src in enumerate(tractor.getCatalog()):
@@ -175,12 +175,12 @@ def main():
 	parser.add_option('-c', '--camcol', dest='camcol', type='int')
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
-	parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?  Default is DR7')
+	parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?	Default is DR7')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
-	parser.add_option('--ntune', action='callback', callback=store_value, type=int,  help='Improve synthetic image by locally optimizing likelihood for nsteps iterations')
+	parser.add_option('--ntune', action='callback', callback=store_value, type=int,	 help='Improve synthetic image by locally optimizing likelihood for nsteps iterations')
 	parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
 	parser.add_option('--roi', dest='roi', type=int, nargs=4, help='Select an x0,x1,y0,y1 subset of the image')
-	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS  RRRRRR-BC-FFFF string (run, band, camcol, field)')
+	parser.add_option('--prefix', dest='prefix', help='Set output filename prefix; default is the SDSS	RRRRRR-BC-FFFF string (run, band, camcol, field)')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
@@ -245,17 +245,26 @@ def main():
 	for j,band in enumerate(bands):
 		save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
 
+	for im in tractor.images:
+		im.freezeAllParams()
+		im.thawParam('sky')
+
 	for count, each in enumerate(tune):
 		if each[0]=='n':
+			tractor.catalog.thawAllParams()
+			tractor.images.thawParamsRecursive('sky')
 			for i in range(each[1]):
-				tractor.optimizeCatalogLoop(nsteps=1,sky=True)
+				tractor.optimize()
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
 	
 		elif each[0]=='i':
+			tractor.images.freezeParamsRecursive('sky')
 			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
-					tractor.optimizeCatalogLoop(nsteps=each[1][1],srcs=[src],sky=False)
+					tractor.catalog.freezeAllBut(src)
+					for step in each[1][1]:
+						tractor.optimize()
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
 				tractor.clearCache()
@@ -281,7 +290,7 @@ def makeflipbook(opt, prefix,tune,numSrcs,bands):
 	\plot{data-%s}
 	\plot{model-%s} \\
 	\plot{diff-%s}
-        \plot{chi-%s} \\
+		\plot{chi-%s} \\
 	\end{frame}'''
 	for j,band in enumerate(bands):
 		tex += page % (('Initial model, Band: %s' % (band),) + ('initial-%s-' % (band) + prefix,)*4)

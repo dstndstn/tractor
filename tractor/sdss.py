@@ -568,6 +568,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		#print 'got', fn
 	fn = sdss.retrieve('frame', run, camcol, field, bandname)
 
+	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
 	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
 	image = frame.getImage().astype(np.float32)
 	#print 'Image:', image.dtype
@@ -672,16 +673,16 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	zr = np.array(zrange)*skysig + sky
 	info.update(zr=zr)
 
+	# http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/fpM.html
 	fpM = sdss.readFpM(run, camcol, field, bandname)
-	#gain = psfield.getGain(bandnum)
-	#darkvar = psfield.getDarkVariance(bandnum)
-	#skyerr = psfield.getSkyErr(bandnum)
-	#invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
 	if roi is not None:
 		roislice = (slice(y0,y1), slice(x0,x1))
 		image = image[roislice].copy()
 		invvar = invvar[roislice].copy()
+
+	for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
+		fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 
 	if psf == 'kl-gm':
 		from emfit import em_fit_2d

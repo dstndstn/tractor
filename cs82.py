@@ -645,7 +645,7 @@ def tweak_wcs((tractor, im)):
 	for step in range(10):
 		print 'Run optimization step', step
 		t0 = Time()
-		dlnp,X,alpha = tractor.opt2(alphas=[0.5, 1., 2., 4.])
+		dlnp,X,alpha = tractor.optimize(alphas=[0.5, 1., 2., 4.])
 		t_opt = (Time() - t0)
 		print 'alpha', alpha
 		print 'Optimization took', t_opt, 'sec'
@@ -1394,7 +1394,7 @@ def optsourcestogether(tractor, step0, doplots=True, plotsa={}):
 	while True:
 		print 'Run optimization step', step
 		t0 = Time()
-		dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+		dlnp,X,alpha = tractor.optimize(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 		t_opt = (Time() - t0)
 		#print 'alpha', alpha
 		print 'Optimization took', t_opt, 'sec'
@@ -1454,7 +1454,7 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True):
 			step += 1
 			print 'Run optimization step', step
 			t0 = Time()
-			dlnp,X,alpha = tractor.opt2(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
+			dlnp,X,alpha = tractor.optimize(alphas=[0.01, 0.125, 0.25, 0.5, 1., 2., 4.])
 			t_opt = (Time() - t0)
 			print 'Optimization took', t_opt, 'sec'
 			print src
