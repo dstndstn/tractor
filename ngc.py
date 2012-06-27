@@ -191,7 +191,7 @@ def main():
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-#    plotarea(ra, dec, radius, ngc, timgs) #, rds)
+    plotarea(ra, dec, radius, ngc, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -209,7 +209,6 @@ def main():
 
     print bands
 
-    timgs = tractor.getImages()
     print "Number of images: ", len(timgs)
 #    for timg,band in zip(timgs,bands):
 #        data = timg.getImage()/np.sqrt(timg.getInvvar())
