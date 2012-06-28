@@ -251,7 +251,6 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname)
 	kwargs = {}
 	if cut_sdss:
 		kwargs.update(roiradecsize=(RA,DEC,S/2))
-
 	try:
 		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
 									   sdssobj=sdss, psf=sdss_psf, **kwargs)
@@ -266,6 +265,8 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname)
 			res = sdss.retrieve(ft, r, c, f, bandnum, skipExisting=False)
 		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
 									   sdssobj=sdss, psf=sdss_psf, **kwargs)
+	if im is None:
+		return None,None
 	if objname is not None:
 		obj = info['object']
 		print 'Header object: "%s"' % obj
@@ -318,25 +319,27 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 
 	if good_sdss_only:
 		W = fits_table('window_flist-DR8-S82.fits')
+		print 'Building fidmap...'
+		fidmap = dict(zip(W.run * 10000 + W.camcol * 1000 + W.field, W.score))
+		print 'finding scores...'
 		scores = []
 		noscores = []
 		rcfscore = {}
 		for r,c,f,nil,nil in rcf:
 			print 'RCF', r,c,f
-			w = W[(W.run == r) * (W.camcol == c) * (W.field == f)]
-			print w
-			if len(w) == 0:
+			fid = r*10000 + c*1000 + f
+			score = fidmap.get(fid, None)
+			if score is None:
 				print 'No entry'
 				noscores.append((r,c,f))
 				continue
-			score = w.score[0]
 			print 'score', score
 			scores.append(score)
 			rcfscore[(r,c,f)] = score
 		print 'No scores:', noscores
-		plt.clf()
-		plt.hist(scores, 20)
-		plt.savefig('scores.png')
+		#plt.clf()
+		#plt.hist(scores, 20)
+		#plt.savefig('scores.png')
 		print len(scores), 'scores'
 		scores = np.array(scores)
 		print sum(scores > 0.5), '> 0.5'
@@ -502,7 +505,7 @@ def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z']):
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
 	print 'Cut to', len(T), 'objects nearby.'
 
-	srcs = []
+	srcs = Catalog()
 	for t in T:
 
 		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
@@ -1086,36 +1089,54 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 # Read image files and catalogs, make Tractor object.
 def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 			doplots=True, **kwargs):
-
-	#cffns = glob('cs82data/86*p-21-cr.fits')
-	# Don't map them to the same mag as SDSS i-band
 	filtermap = {'i.MP9701': 'i2'}
-	#sdssbands = ['u','g','r','i','z']
-	#sdssbands = ['g','r','i']
+	sdssbands = ['u','g','r','i','z']
 
-	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'])
+	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands)
 	#srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
 	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])
-
 	
-	# cffns = []
-	# tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
-	# 							cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
-	# 							sdss_object = '82 N', rotate_cfht=False)
+	#cffns = glob('cs82data/86*p-21-cr.fits')
+	cffns = []
+	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
+								cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
+								sdss_object = '82 N', rotate_cfht=False)
 
-	S=500
-	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap)
-	tractor = Tractor([coim], srcs)
+	pixscale = 0.187
+	S = int(1.01 * sz / pixscale) / 2
+	print 'Grabbing S =', S, 'subregion of CFHT coadd'
+	#S=500
+	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap, doplots=False)
+	tractor.images.prepend(coim)
+
+	tractor.catalog = srcs
+
+	tims = tractor.getImages()
+	print 'Plotting outlines of', len(tims), 'images'
+	plt.clf()
+	for tim in tims:
+		H,W = tim.shape
+		twcs = tim.getWcs()
+		rr,dd = [],[]
+		for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
+			rd = twcs.pixelToPosition(x,y)
+			rr.append(rd.ra)
+			dd.append(rd.dec)
+		if tim.name.startswith('SDSS'):
+			sty = dict(color='b', lw=2, alpha=0.2, zorder=10)
+		else:
+			sty = dict(color='r', lw=2, alpha=0.8, zorder=11)
+		plt.plot(rr, dd, '-', **sty)
+	plt.savefig('radec.png')
 
 	# for im,(sky,skystd) in zip(tractor.getImages(), skies):
 	# 	# for display purposes...
 	# 	im.skylevel = sky
 	# 	im.skystd = skystd
 	# 	im.zr = np.array([-1.,+20.]) * skystd + sky
-	# if doplots:
-	# 	print 'Data plots...'
-	# 	plots(tractor, ['data'], 0, **plotsa)
-	# 	print 'done plots'
+	if doplots:
+		print 'Data plots...'
+		plots(tractor, ['data'], 0, **plotsa)
 
 	# clear unused image planes.
 	for im in tractor.getImages():

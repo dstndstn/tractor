@@ -424,6 +424,9 @@ class MultiParams(BaseParams, NamedParams):
 	def append(self, x):
 		self.subs.append(x)
 		self.liquid.append(True)
+	def prepend(self, x):
+		self.subs = [x] + self.subs
+		self.liquid = [True] + self.liquid
 	def extend(self, x):
 		self.subs.extend(x)
 		self.liquid.extend([True] * len(x))

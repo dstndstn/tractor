@@ -109,7 +109,6 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
             return None,None
         if roi is None:
             roi = tinf['roi']
-        tim.zr = tinf['zr']
         tims.append(tim)
     s = getsrc(r, c, f, roi=roi, bands=bands)
     return (tims,s)

@@ -524,6 +524,7 @@ def get_tractor_image(run, camcol, field, bandname,
 				 sky=skyobj, photocal=photocal,
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
 					   (run, camcol, field, bandname)))
+	timg.zr = zr
 	return timg,info
 
 
@@ -725,6 +726,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 				 sky=skyobj, photocal=photocal,
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
 					   (run, camcol, field, bandname)))
+	timg.zr = zr
 	return timg,info
 
 
