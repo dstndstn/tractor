@@ -468,7 +468,7 @@ def get_cf_sources(Tstar, Tdisk, Tsph, magcut=100, mags=['u','g','r','i','z']):
 
 
 
-def get_cf_sources2(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
+def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z']):
 	Tcomb = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
 	#Tcomb.about()
 
@@ -502,8 +502,6 @@ def get_cf_sources2(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 	T = T[(T.ra > ra0) * (T.ra < ra1) * (T.dec > dec0) * (T.dec < dec1)]
 	print 'Cut to', len(T), 'objects nearby.'
 
-	maglim = 27.
-	
 	srcs = []
 	for t in T:
 
@@ -518,39 +516,33 @@ def get_cf_sources2(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 			#print 'Faint'
 			continue
 
+		# deV: spheroid
+		# exp: disk
+
 		themag = t.mag_spheroid
-		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
-		themag = t.mag_disk
 		m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		themag = t.mag_disk
+		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
 
 		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
 
-		shape_dev = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
+		shape_exp = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
 								t.disk_theta_world + 90.)
-		shape_exp = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+		shape_dev = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
 								t.spheroid_theta_world + 90.)
 		pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
 
 		if t.mag_disk > maglim and t.mag_spheroid <= maglim:
-			# exp
-			#print 'Exp'
-			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
-			continue
-		if t.mag_disk <= maglim and t.mag_spheroid > maglim:
-			# deV
-			#print 'deV'
 			srcs.append(DevGalaxy(pos, m_dev, shape_dev))
 			continue
+		if t.mag_disk <= maglim and t.mag_spheroid > maglim:
+			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
+			continue
 
-		# exp + deV
-		#print 'comp'
 		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+
 	print 'Sources:', len(srcs)
-	#for src in srcs:
-	#	print '  ', src
 	return srcs
-
-
 
 def get_cf_sources3(RA, DEC, sz, magcut=100, mags=['u','g','r','i','z']):
 	Tcomb = fits_table('cs82data/cs82_morphology_may2012.fits')
@@ -679,9 +671,9 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 	ima.update(norm=ArcsinhNormalize(mean=q2, std=(q3-q1)/2., vmin=zr[0], vmax=zr[1]),
 			   vmin=None, vmax=None,    nonl=True)
 
-	plt.clf()
-	plt.hist(data.ravel(), bins=100, log=True)
-	plt.savefig('data-hist-%02i.png' % step)
+	#plt.clf()
+	#plt.hist(data.ravel(), bins=100, log=True)
+	#plt.savefig('data-hist-%02i.png' % step)
 
 	if 'data' in plotnames:
 		data = tim.getImage()
@@ -705,20 +697,30 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		plt.axis(ax)
 		mysavefig('data-%02i-ann.png' % i)
 
-	if 'modbest' in plotnames or 'chibest' in plotnames:
+	if ('modbest' in plotnames or 'chibest' in plotnames or
+		'modnoise' in plotnames or 'chinoise' in plotnames):
 		pbest = pp[ibest,:]
 		tractor.setParams(pp[ibest,:])
-		if 'modbest' in plotnames:
+
+		if 'modnoise' in plotnames or 'chinoise' in plotnames:
+			ierr = tim.getInvError()
+			noiseim = np.random.normal(size=ierr.shape)
+			I = (ierr > 0)
+			noiseim[I] *= 1./ierr[I]
+			noiseim[np.logical_not(I)] = 0.
+
+		if 'modbest' in plotnames or 'modnoise' in plotname:
 			mod = tractor.getModelImage(i)
 
-			plt.clf()
-			plt.hist(mod.ravel(), bins=100, log=True)
-			plt.savefig('mod-hist-%02i.png' % step)
-								  
+		if 'modbest' in plotnames:
+			#plt.clf()
+			#plt.hist(mod.ravel(), bins=100, log=True)
+			#plt.savefig('mod-hist-%02i.png' % step)
+
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			myimshow(mod, **ima)
-			tt = 'Model (best) %s' % tim.name
+			tt = 'Model %s' % tim.name
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
@@ -726,6 +728,18 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			#plt.yticks([],[])
 			plt.colorbar()
 			mysavefig('modbest-%02i-%02i.png' % (i,step))
+
+		if 'modnoise' in plotnames:
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			myimshow(mod + noiseim, **ima)
+			tt = 'Model+noise %s' % tim.name
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
+			plt.colorbar()
+			mysavefig('modnoise-%02i-%02i.png' % (i,step))
+
 		if 'chibest' in plotnames:
 			chi = tractor.getChiImage(i)
 			plt.clf()
@@ -748,6 +762,20 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.yticks([],[])
 			plt.colorbar()
 			mysavefig('chibest2-%02i-%02i.png' % (i,step))
+
+		if 'chinoise' in plotnames:
+			chi = (data - (mod + noiseim)) * tim.getInvError()
+			plt.clf()
+			plt.gca().set_position(plotpos0)
+			plt.imshow(chi, **imchi)
+			tt = 'Chi+noise %s' % tim.name
+			if tsuf is not None:
+				tt += tsuf
+			plt.title(tt)
+			plt.xticks([],[])
+			plt.yticks([],[])
+			plt.colorbar()
+			mysavefig('chinoise-%02i-%02i.png' % (i,step))
 
 	if 'modsum' in plotnames or 'chisum' in plotnames:
 		modsum = None
@@ -1059,38 +1087,183 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 			doplots=True, **kwargs):
 
-	cffns = glob('cs82data/86*p-21-cr.fits')
+	#cffns = glob('cs82data/86*p-21-cr.fits')
 	# Don't map them to the same mag as SDSS i-band
 	filtermap = {'i.MP9701': 'i2'}
-	sdssbands = ['u','g','r','i','z']
+	#sdssbands = ['u','g','r','i','z']
 	#sdssbands = ['g','r','i']
 
-	srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
+	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'])
+	#srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
 	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])
 
-	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
-								cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
-								sdss_object = '82 N',
-								rotate_cfht=False)
+	
+	# cffns = []
+	# tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
+	# 							cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
+	# 							sdss_object = '82 N', rotate_cfht=False)
 
-	#Tstar,Tdisk,Tsph = read_cf_catalogs(RA, DEC, sz)
-	#srcs = get_cf_sources(Tstar, Tdisk, Tsph, mags=sdssbands + ['i2'])
-	#print 'Adding sources'
-	tractor.addSources(srcs)
-	#print 'Setting plot ranges'
-	for im,(sky,skystd) in zip(tractor.getImages(), skies):
-		# for display purposes...
-		im.skylevel = sky
-		im.skystd = skystd
-		im.zr = np.array([-1.,+20.]) * skystd + sky
+	S=500
+	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap)
+	tractor = Tractor([coim], srcs)
 
-	if doplots:
-		print 'Data plots...'
-		plots(tractor, ['data'], 0, **plotsa)
-		print 'done plots'
-	return dict(tractor=tractor, skies=skies)
+	# for im,(sky,skystd) in zip(tractor.getImages(), skies):
+	# 	# for display purposes...
+	# 	im.skylevel = sky
+	# 	im.skystd = skystd
+	# 	im.zr = np.array([-1.,+20.]) * skystd + sky
+	# if doplots:
+	# 	print 'Data plots...'
+	# 	plots(tractor, ['data'], 0, **plotsa)
+	# 	print 'done plots'
 
-def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
+	# clear unused image planes.
+	for im in tractor.getImages():
+		im.invvar = None
+		im.starMask = None
+		im.origInvvar = None
+		im.mask = None
+
+	return dict(tractor=tractor)#, skies=skies)
+
+def stage01(tractor=None, mp=None, **kwargs):
+	allsources = tractor.getCatalog()
+	allimages = tractor.getImages()
+
+	maglim = 24.
+
+	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
+	tractor.setCatalog(brightcat)
+	print ' Cut to:', tractor
+	print len(tractor.getParams()), 'params'
+
+	# TRY drilling down to a much smaller region to check out galaxy scale parameters
+	tim = allimages[0]
+	im = tim.getImage()
+	x0,x1,y0,y1 = (200, 400, 800, 1000)
+	#x0,x1,y0,y1 = (250, 350, 900, 1000)
+	subim = im[y0:y1, x0:x1].copy()
+	suberr = tim.getInvError()[y0:y1, x0:x1].copy()
+	subwcs = tim.getWcs().copy()
+	print 'x0,y0', subwcs.x0, subwcs.y0
+	subwcs.setX0Y0(subwcs.x0 + x0, subwcs.y0 + y0)
+	print 'subwcs:', subwcs
+	pc = tim.getPhotoCal().copy()
+	psf = tim.getPsf().copy()
+	sky = tim.getSky().copy()
+	subtim = Image(data=subim, invvar=suberr**2, wcs=subwcs,
+				   photocal=pc, psf=psf, sky=sky, name=tim.name)
+	subtim.zr = tim.zr
+
+	tractor.setImages(Images(subtim))
+
+	# TRY cutting to sources in the RA,Dec box.
+	#im = allimages[0]
+	im = subtim
+
+	W,H = im.getWidth(), im.getHeight()
+	wcs = im.getWcs()
+	r,d = [],[]
+	for x,y in zip([1,W,W,1,1], [1,1,H,H,1]):
+		rd = wcs.pixelToPosition(x, y)
+		r.append(rd.ra)
+		d.append(rd.dec)
+		print 'pix', x,y, 'radec', rd
+	ramin = np.min(r)
+	ramax = np.max(r)
+	decmin = np.min(d)
+	decmax = np.max(d)
+	print 'RA,Dec range', ramin, ramax, decmin, decmax
+	cutrd = Catalog()
+	Icut = []
+	for i in xrange(len(brightcat)):
+		src = brightcat[i]
+		pos = src.getPosition()
+		if pos.ra > ramin and pos.ra < ramax and pos.dec > decmin and pos.dec < decmax:
+			cutrd.append(src)
+			Icut.append(Ibright[i])
+		else:
+			pass
+
+	tractor.setCatalog(cutrd)
+	print ' Cut on RA,Dec box to:', tractor
+	print len(tractor.getParams()), 'params'
+
+	mags = ['i2']
+
+	cats = [cutrd]
+	for i,(fn,gal) in enumerate([('cs82data/W4p1m1_i.V2.7A.swarp.cut.deV.fit', 'deV'),
+								 ('cs82data/W4p1m1_i.V2.7A.swarp.cut.exp.fit', 'exp'),]):
+		T = fits_table(fn, hdunum=2)
+		T.ra  = T.alpha_j2000
+		T.dec = T.delta_j2000
+		print 'Read', len(T), gal, 'galaxies'
+		T.cut((T.ra > ramin) * (T.ra < ramax) * (T.dec > decmin) * (T.dec < decmax))
+		print 'Cut to', len(T), 'in RA,Dec box'
+
+		srcs = Catalog()
+		for t in T:
+			if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
+				themag = t.mag_psf
+				m = Mags(order=mags, **dict([(k, themag) for k in mags]))
+				srcs.append(PointSource(RaDecPos(t.alpha_j2000, t.delta_j2000), m))
+				continue
+
+			
+			# deV: spheroid
+			# exp: disk
+
+			if gal == 'deV' and t.mag_spheroid > maglim:
+				continue
+			if gal == 'exp' and t.mag_disk > maglim:
+				continue
+
+			pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
+			if gal == 'deV':
+				shape_dev = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
+										t.spheroid_theta_world + 90.)
+				themag = t.mag_spheroid
+				m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
+				srcs.append(DevGalaxy(pos, m_dev, shape_dev))
+			else:
+				shape_exp = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
+										t.disk_theta_world + 90.)
+				themag = t.mag_disk
+				m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+				srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
+
+		cats.append(srcs)
+
+
+	plotims = [0,]
+	plotsa = dict(imis=plotims, mp=mp)
+	plots(tractor, ['data', 'dataann'], 0,
+		  ibest=0, pp=np.array([tractor.getParams()]), alllnp=[0.], **plotsa)
+
+	tractor.freezeParam('images')
+
+	for i,(srcs,gal) in enumerate(zip(cats, ['deV+exp', 'deV', 'exp'])):
+		tractor.setCatalog(srcs)
+		tractor.catalog.thawParamsRecursive('*')
+
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp, tsuf=' '+gal)
+		plots(tractor, ['modbest', 'chibest', 'modnoise', 'chinoise'], 2*i + 0,
+			  ibest=0, pp=np.array([tractor.getParams()]), alllnp=[0.], **plotsa)
+
+		for j in xrange(5):
+			step, alllnp = optsourcestogether(tractor, 0, doplots=False)
+			step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa, doplots=False)
+			
+		plots(tractor, ['modbest', 'chibest', 'modnoise', 'chinoise',], 2*i + 1,
+			  ibest=0, pp=np.array([tractor.getParams()]), alllnp=[0.], **plotsa)
+
+
+
+
+
+
+def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 			#thaw_sdss=['a','d'],
 			thaw_sdss=[],
 			RA=None, DEC=None, sz=None,
@@ -1167,21 +1340,22 @@ def stage01(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	plt.ylabel('Dec (deg)')
 	plt.savefig('outlines.png')
 
-	from astrometry.libkd.spherematch import match_radec
-	r,d = np.array(r),np.array(d)
-	for dr in [7,8]:
-		T = fits_table('cs82data/cas-primary-DR%i.fits' % dr)
-		I,J,nil = match_radec(r, d, T.ra, T.dec, 1./3600.)
+	if True:
+		from astrometry.libkd.spherematch import match_radec
+		r,d = np.array(r),np.array(d)
+		for dr in [7,8]:
+			T = fits_table('cs82data/cas-primary-DR%i.fits' % dr)
+			I,J,nil = match_radec(r, d, T.ra, T.dec, 1./3600.)
 
-		plt.clf()
-		H,xe,ye = np.histogram2d((r[I]-T.ra[J])*3600., (d[I]-T.dec[J])*3600., bins=100)
-		plt.imshow(H.T, extent=(min(xe), max(xe), min(ye), max(ye)),
-				   aspect='auto', interpolation='nearest', origin='lower')
-		plt.hot()
-		plt.title('CFHT - SDSS DR%i source positions' % dr)
-		plt.xlabel('dRA (arcsec)')
-		plt.ylabel('dDec (arcsec)')
-		plt.savefig('dradec-%i.png' % dr)
+			plt.clf()
+			H,xe,ye = np.histogram2d((r[I]-T.ra[J])*3600., (d[I]-T.dec[J])*3600., bins=100)
+			plt.imshow(H.T, extent=(min(xe), max(xe), min(ye), max(ye)),
+					   aspect='auto', interpolation='nearest', origin='lower')
+			plt.hot()
+			plt.title('CFHT - SDSS DR%i source positions' % dr)
+			plt.xlabel('dRA (arcsec)')
+			plt.ylabel('dDec (arcsec)')
+			plt.savefig('dradec-%i.png' % dr)
 
 	return dict(tractor=tractor)
 
@@ -1198,7 +1372,7 @@ def stage02(tractor=None, mp=None, **kwargs):
 	return dict(tractor=tractor)
 
 
-def stage03(tractor=None, mp=None, **kwargs):
+def stage03OLD(tractor=None, mp=None, **kwargs):
 	tractor.freezeParam('images')
 	tractor.catalog.thawParamsRecursive('*')
 
@@ -1206,7 +1380,8 @@ def stage03(tractor=None, mp=None, **kwargs):
 	allsources = tractor.getCatalog()
 	#brightcat,Ibright = cut_bright(allsources, magcut=23)
 	#brightcat,Ibright = cut_bright(allsources, magcut=24)
-	brightcat,Ibright = cut_bright(allsources, magcut=27)
+	brightcat,Ibright = cut_bright(allsources, magcut=23.8)
+	#brightcat,Ibright = cut_bright(allsources, magcut=27)
 	tractor.setCatalog(brightcat)
 	bparams0 = np.array(tractor.getParams()).copy()
 	allimages = tractor.getImages()
@@ -1217,8 +1392,8 @@ def stage03(tractor=None, mp=None, **kwargs):
 	# TRY drilling down to a much smaller region to check out galaxy scale parameters
 	tim = allimages[0]
 	im = tim.getImage()
-	#x0,x1,y0,y1 = (200, 400, 800, 1000)
-	x0,x1,y0,y1 = (250, 350, 900, 1000)
+	x0,x1,y0,y1 = (200, 400, 800, 1000)
+	#x0,x1,y0,y1 = (250, 350, 900, 1000)
 	subim = im[y0:y1, x0:x1].copy()
 	suberr = tim.getInvError()[y0:y1, x0:x1].copy()
 	subwcs = tim.getWcs().copy()
@@ -1270,37 +1445,13 @@ def stage03(tractor=None, mp=None, **kwargs):
 		print '  ', src
 		x,y = wcs.positionToPixel(src.getPosition())
 		print '  --> (%.1f, %.1f)' % (x,y)
-		
+
 	tractor.setCatalog(cutrd)
 	print ' Cut on RA,Dec box to:', tractor
 	print len(tractor.getParams()), 'params'
 
 	cparams0 = np.array(tractor.getParams()).copy()
 	p0 = cparams0
-
-	plotims = [0,]
-	plotsa = dict(imis=plotims, mp=mp)
-	plots(tractor, ['data', 'dataann', 'modbest', 'chibest'], 3, ibest=0, pp=np.array([p0]),
-		  alllnp=[0.], **plotsa)
-
-	for j in xrange(5):
-		step, alllnp = optsourcestogether(tractor, 0, doplots=False)
-	
-		plots(tractor, ['modbest', 'chibest'], 4 + j*2, ibest=0, pp=np.array([tractor.getParams()]),
-			  alllnp=[0.], **plotsa)
-
-		step, alllnp2 = optsourcesseparate(tractor, step, 10, plotsa, doplots=False)
-		alllnp += alllnp2
-	
-		plots(tractor, ['modbest', 'chibest'], 5 + j*2, ibest=0, pp=np.array([tractor.getParams()]),
-			  alllnp=[0.], **plotsa)
-
-
-	print 'Optimized sources:'
-	for src in cutrd:
-		print '  ', src
-		x,y = wcs.positionToPixel(src.getPosition())
-		print '  --> (%.1f, %.1f)' % (x,y)
 
 	tractor.catalog.thawParamsRecursive('*')
 	bparams1 = np.array(tractor.getParams()).copy()
@@ -1413,10 +1564,10 @@ def optsourcestogether(tractor, step0, doplots=True, plotsa={}):
 			break
 	return step, alllnp
 
-def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True):
+def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sortmag='i2'):
 	step = step0 - 1
 	tractor.catalog.freezeAllParams()
-	I = np.argsort([src.getBrightness().i for src in tractor.catalog])
+	I = np.argsort([getattr(src.getBrightness(), sortmag) for src in tractor.catalog])
 
 	allsources = tractor.catalog
 
