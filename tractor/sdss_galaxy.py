@@ -188,7 +188,7 @@ class Galaxy(MultiParams):
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
 	# Galaxy.
-	def getParamDerivatives(self, img, brightnessonly=False):
+	def getParamDerivatives(self, img):
 		pos0 = self.getPosition()
 		(px0,py0) = img.getWcs().positionToPixel(pos0, self)
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
@@ -199,10 +199,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt position
 		psteps = pos0.getStepSizes()
-		if brightnessonly or self.isParamFrozen('pos'):
-			#derivs.extend([None] * len(psteps))
-			pass
-		else:
+		if not self.isParamFrozen('pos'):
 			params = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, params[i]+pstep)
@@ -218,10 +215,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt brightness
 		bsteps = self.brightness.getStepSizes()
-		if self.isParamFrozen('brightness'):
-			#derivs.extend([None] * len(bsteps))
-			pass
-		else:
+		if not self.isParamFrozen('brightness'):
 			params = self.brightness.getParams()
 			for i,bstep in enumerate(bsteps):
 				oldval = self.brightness.setParam(i, params[i] + bstep)
@@ -233,10 +227,7 @@ class Galaxy(MultiParams):
 
 		# derivatives wrt shape
 		gsteps = self.shape.getStepSizes()
-		if brightnessonly or self.isParamFrozen('shape'):
-			#derivs.extend([None] * len(gsteps))
-			pass
-		else:
+		if not self.isParamFrozen('shape'):
 			gnames = self.shape.getParamNames()
 			oldvals = self.shape.getParams()
 			# print 'Galaxy.getParamDerivatives:', self.getName()
@@ -334,7 +325,7 @@ class CompositeGalaxy(MultiParams):
 	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
 	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
 	# CompositeGalaxy.
-	def getParamDerivatives(self, img, brightnessonly=False):
+	def getParamDerivatives(self, img):
 		#print 'CompositeGalaxy: getParamDerivatives'
 		#print '  Exp brightness', self.brightnessExp, 'shape', self.shapeExp
 		#print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
@@ -342,22 +333,27 @@ class CompositeGalaxy(MultiParams):
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
 		e.dname = 'comp.exp'
 		d.dname = 'comp.dev'
-		# pin through...
+		if self.isParamFrozen('pos'):
+			e.freezeParam('pos')
+			d.freezeParam('pos')
 		if self.isParamFrozen('brightnessExp'):
-			e.pinParam('brightness')
+			e.freezeParam('brightness')
 		if self.isParamFrozen('shapeExp'):
-			e.pinParam('shape')
+			e.freezeParam('shape')
 		if self.isParamFrozen('brightnessDev'):
-			d.pinParam('brightness')
+			d.freezeParam('brightness')
 		if self.isParamFrozen('shapeDev'):
-			d.pinParam('shape')
-		de = e.getParamDerivatives(img, brightnessonly)
-		dd = d.getParamDerivatives(img, brightnessonly)
-		npos = len(self.pos.getStepSizes())
-		derivs = []
-		if brightnessonly or self.isParamFrozen('pos'):
-			derivs.extend([None] * npos)
+			d.freezeParam('shape')
+
+		de = e.getParamDerivatives(img)
+		dd = d.getParamDerivatives(img)
+
+		if self.isParamFrozen('pos'):
+			derivs = de + dd
 		else:
+			derivs = []
+			# "pos" is shared between the models, so add the derivs.
+			npos = len(self.pos.getStepSizes())
 			for i in range(npos):
 				#dp = de[i] + dd[i]   -- but one or both could be None
 				dp = de[i]
@@ -369,8 +365,9 @@ class CompositeGalaxy(MultiParams):
 				if dp is not None: 
 					dp.setName('d(comp)/d(pos%i)' % i)
 				derivs.append(dp)
-		derivs.extend(de[npos:])
-		derivs.extend(dd[npos:])
+			derivs.extend(de[npos:])
+			derivs.extend(dd[npos:])
+
 		return derivs
 
 class HoggGalaxy(Galaxy):

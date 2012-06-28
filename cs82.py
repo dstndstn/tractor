@@ -1129,11 +1129,6 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 		plt.plot(rr, dd, '-', **sty)
 	plt.savefig('radec.png')
 
-	# for im,(sky,skystd) in zip(tractor.getImages(), skies):
-	# 	# for display purposes...
-	# 	im.skylevel = sky
-	# 	im.skystd = skystd
-	# 	im.zr = np.array([-1.,+20.]) * skystd + sky
 	if doplots:
 		print 'Data plots...'
 		plots(tractor, ['data'], 0, **plotsa)
@@ -1145,9 +1140,108 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 		im.origInvvar = None
 		im.mask = None
 
-	return dict(tractor=tractor)#, skies=skies)
+	return dict(tractor=tractor)
+
 
 def stage01(tractor=None, mp=None, **kwargs):
+
+	#
+	# Forced photometry on individual images (SDSS and CFHT coadd) using unoptimized catalog.
+	#
+
+	#cache = createCache(maxsize=10000)
+	#print 'Using multiprocessing cache', cache
+	#tractor.cache = cache
+	#tractor.pickleCache = True
+
+	allsources = tractor.getCatalog()
+	allimages = tractor.getImages()
+
+	maglim = 24.
+	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
+	tractor.setCatalog(brightcat)
+
+	print 'Cut to', len(brightcat), 'sources'
+
+	sbands = ['u','g','r','i','z']
+	allbands = ['i2'] + sbands
+
+	# Set all bands = i2, and save those params.
+	for src in brightcat:
+		for b in sbands:
+			br = src.getBrightness()
+			setattr(br, b, br.i2)
+
+	tractor.thawParamsRecursive('*')
+	tractor.freezeParam('images')
+	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
+
+	print 'params0:'
+	for nm in tractor.getParamNames():
+		print '  ', nm
+	params0 = tractor.getParams()
+
+	allp = []
+
+	for imi,im in enumerate(allimages):
+		print 'Fitting image', imi, 'of', len(allimages)
+		tractor.setImages(Images(im))
+		if im.name.startswith('SDSS'):
+			band = im.photocal.bandname
+		else:
+			band = im.photocal.band
+		print im
+		print 'Band', band
+
+		# Reset params; need to thaw first though!
+		tractor.catalog.thawParamsRecursive(*allbands)
+		tractor.setParams(params0)
+
+		# Thaw just this image's band
+		tractor.catalog.freezeParamsRecursive(*allbands)
+		tractor.catalog.thawParamsRecursive(band)
+
+		print 'Tractor:', tractor
+		print 'Active params:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		plotims = [0,]
+		plotsa = dict(imis=plotims, mp=mp)
+		 
+		step = 1000 + imi*3
+		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': '+im.name+' init', **plotsa)
+
+		if imi != 0:
+			optsourcestogether(tractor, step, doplots=False)
+			plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
+				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+
+		optsourcesseparate(tractor, step, doplots=False)
+
+		plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
+
+		tractor.catalog.thawAllParams()
+
+		p = tractor.getParams()
+		print 'Saving params', p
+		allp.append((band, p))
+
+		#print 'Cache stats'
+		#cache.printStats()
+
+	tractor.setImages(allimages)
+	tractor.setCatalog(allsources)
+
+	return dict(tractor=tractor, allp=allp, Ibright=Ibright, params0=params0)
+
+
+
+
+
+def stage01TEST(tractor=None, mp=None, **kwargs):
 	allsources = tractor.getCatalog()
 	allimages = tractor.getImages()
 

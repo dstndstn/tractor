@@ -347,7 +347,7 @@ class ConstantSky(ScalarParam):
 	'''
 	In counts
 	'''
-	def getParamDerivatives(self, img, brightnessonly=False):
+	def getParamDerivatives(self, img):
 		p = Patch(0, 0, np.ones(img.shape))
 		p.setName('dsky')
 		return [p]
@@ -393,7 +393,7 @@ class PointSource(MultiParams):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return patch * counts
 
-	def getParamDerivatives(self, img, brightnessonly=False):
+	def getParamDerivatives(self, img):
 		'''
 		returns [ Patch, Patch, ... ] of length numberOfParams().
 		'''
@@ -405,9 +405,7 @@ class PointSource(MultiParams):
 
 		# Position
 		psteps = pos0.getStepSizes(img)
-		if brightnessonly or self.isParamFrozen('pos'):
-			derivs.extend([None] * len(psteps))
-		else:
+		if not self.isParamFrozen('pos'):
 			pvals = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, pvals[i] + pstep)
@@ -420,9 +418,7 @@ class PointSource(MultiParams):
 
 		# Brightness
 		bsteps = self.brightness.getStepSizes(img)
-		if self.isParamFrozen('brightness'):
-			derivs.extend([None] * len(bsteps))
-		else:
+		if not self.isParamFrozen('brightness'):
 			bvals = self.brightness.getParams()
 			for i,bstep in enumerate(bsteps):
 				oldval = self.brightness.setParam(i, bvals[i] + bstep)
