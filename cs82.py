@@ -1154,10 +1154,15 @@ def stage01(tractor=None, mp=None, **kwargs):
 	#tractor.cache = cache
 	#tractor.pickleCache = True
 
+	print 'Tractor cache is', tractor.cache
+
 	allsources = tractor.getCatalog()
 	allimages = tractor.getImages()
 
-	maglim = 24.
+	# maglim = 24.
+	#########
+	#maglim = 22.
+	maglim = 21.
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
@@ -1186,12 +1191,64 @@ def stage01(tractor=None, mp=None, **kwargs):
 	for imi,im in enumerate(allimages):
 		print 'Fitting image', imi, 'of', len(allimages)
 		tractor.setImages(Images(im))
+
 		if im.name.startswith('SDSS'):
 			band = im.photocal.bandname
 		else:
 			band = im.photocal.band
 		print im
 		print 'Band', band
+
+		###### !!!
+		
+		if band != 'r':
+			continue
+
+
+		### Plot CMD results so far...
+		i2mags = np.array([src.getBrightness().i2 for src in tractor.catalog])
+		allmags = []
+		print 'i2 mags', i2mags
+		for ii,bb,pa in allp:
+			print 'pa', pa
+
+			# Thaw just this image's band
+			tractor.catalog.freezeParamsRecursive(*allbands)
+			tractor.catalog.thawParamsRecursive(bb)
+			tractor.catalog.setParams(pa)
+
+			mags = [src.getBrightness().getMag(bb) for src in tractor.catalog]
+			print 'mags', mags
+			print len(mags)
+
+			assert(len(mags) == len(i2mags))
+			allmags.append(mags)
+
+		allmags = np.array(allmags)
+		print 'i2 mags shape', i2mags.shape
+		print 'allmags shape', allmags.shape
+
+		plt.figure(figsize=(6,6))
+		plt.clf()
+		#plotpos0 = [0.15, 0.15, 0.84, 0.80]
+		#plt.gca().set_position(plotpos0)
+		for i2,rr in zip(i2mags, allmags.T):
+			ii2 = i2.repeat(len(rr))
+			plt.plot(rr - ii2, ii2, 'b.')
+			mr = np.mean(rr)
+			sr = np.std(rr)
+			plt.plot([(mr-sr) - i2, (mr+sr) - i2], [i2,i2], 'b-', lw=3, alpha=0.25)
+
+		print 'Axis', plt.axis()
+		plt.axis([-3, 3, 23, 15])
+		plt.xlabel('SDSS r - CFHT i (mag)')
+		plt.ylabel('CFHT i (mag)')
+		plt.yticks([16,17,18,19,20])
+		plt.savefig('cmd-%03i.png' % imi)
+
+		pfn = 's1-%03i.pickle' % imi
+		pickle_to_file((allp, i2mags, tractor.catalog), pfn)
+		print 'saved pickle', pfn
 
 		# Reset params; need to thaw first though!
 		tractor.catalog.thawParamsRecursive(*allbands)
@@ -1213,32 +1270,41 @@ def stage01(tractor=None, mp=None, **kwargs):
 		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
 			  ibest=0, tsuf=': '+im.name+' init', **plotsa)
 
+		optargs = dict(doplots=False, mindlnp=0.1)
+
 		if imi != 0:
-			optsourcestogether(tractor, step, doplots=False)
+			optsourcestogether(tractor, step, **optargs)
 			plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
 				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
 
-		optsourcesseparate(tractor, step, doplots=False)
+		optsourcesseparate(tractor, step, **optargs)
+		# AFTER THIS CALL, ALL CATALOG PARAMS ARE FROZEN!
+
+		tractor.catalog.thawParamsRecursive('*')
+		tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
+		tractor.catalog.freezeParamsRecursive(*allbands)
+		tractor.catalog.thawParamsRecursive(band)
 
 		plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
 			  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
 
-		tractor.catalog.thawAllParams()
-
 		p = tractor.getParams()
-		print 'Saving params', p
-		allp.append((band, p))
+		print 'params', p
+		#print 'Saving params:'
+		#for nm,val in zip(tractor.getParamNames(), p):
+		#print '  ', nm, '=', val
+		allp.append((imi, band, p))
 
-		#print 'Cache stats'
-		#cache.printStats()
+		print 'Cache stats:'
+		print 'tractor:'
+		tractor.cache.printStats()
+		print 'galaxies:'
+		get_galaxy_cache().printStats()
 
 	tractor.setImages(allimages)
 	tractor.setCatalog(allsources)
 
 	return dict(tractor=tractor, allp=allp, Ibright=Ibright, params0=params0)
-
-
-
 
 
 def stage01TEST(tractor=None, mp=None, **kwargs):
@@ -1654,7 +1720,7 @@ def stage02_OLD(tractor=None, mp=None, **kwargs):
 			**kwargs)
 	return dict(tractor=tractor)
 
-def optsourcestogether(tractor, step0, doplots=True, plotsa={}):
+def optsourcestogether(tractor, step0, doplots=True, plotsa={}, mindlnp=1e-3):
 	step = step0
 	alllnp = []
 	while True:
@@ -1675,11 +1741,12 @@ def optsourcestogether(tractor, step0, doplots=True, plotsa={}):
 				  ['modbest', 'chibest', 'lnps'],
 				  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 		step += 1
-		if alpha == 0 or dlnp < 1e-3:
+		if alpha == 0 or dlnp < mindlnp:
 			break
 	return step, alllnp
 
-def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sortmag='i2'):
+def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sortmag='i2',
+					   mindlnp=1e-3):
 	step = step0 - 1
 	tractor.catalog.freezeAllParams()
 	I = np.argsort([getattr(src.getBrightness(), sortmag) for src in tractor.catalog])
@@ -1691,7 +1758,7 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sort
 	alllnp = []
 	for j,srci in enumerate(I):
 		srci = int(srci)
-		print 'source', j, 'of', len(I), ', srci', srci
+		print 'source', j, 'of', len(I), ', srci', srci, ':', tractor.catalog[srci]
 		tractor.catalog.thawParam(srci)
 		print tractor.numberOfParams(), 'active parameters'
 		for nm in tractor.getParamNames():
@@ -1735,7 +1802,7 @@ def optsourcesseparate(tractor, step0, plotmod=10, plotsa={}, doplots=True, sort
 					  ['modbest', 'chibest', 'lnps'],
 					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
 				print 'Done plots.'
-			if alpha == 0 or dlnp < 1e-3:
+			if alpha == 0 or dlnp < mindlnp:
 				break
 		print 'removing other sources:', Time()-tt0
 
@@ -2443,15 +2510,22 @@ def runstage(stage, force=[], threads=1, doplots=True):
 			print 'Reading pickle', pfn
 
 			multiprocessing.managers.RebuildProxy = fakeRebuildProxy
-
 			R = unpickle_from_file(pfn)
-
 			multiprocessing.managers.RebuildProxy = realRebuildProxy
 
 			return R
+
 	if stage > 0:
-		# Get prereqs
-		P = runstage(stage-1, force=force, threads=threads, doplots=doplots)
+
+		prereqs = {
+			}
+
+		# Get prereq: from dict, or stage-1
+		
+		prereq = prereqs.get(stage, stage-1)
+
+		P = runstage(prereq, force=force, threads=threads, doplots=doplots)
+
 	else:
 		P = {}
 	print 'Running stage', stage
@@ -2467,7 +2541,10 @@ def runstage(stage, force=[], threads=1, doplots=True):
 	#P.update(RA = 334.4, DEC = 0.3, sz = 15.*60.) # arcsec
 
 	# "sz" is the square side length of the ROI, in arcsec
-	P.update(RA = 334.32, DEC = 0.315, sz = 0.24 * 3600.)
+	# This is a full SDSS frame (2048 x 2048)
+	#P.update(RA = 334.32, DEC = 0.315, sz = 0.24 * 3600.)
+
+	P.update(RA = 334.32, DEC = 0.315, sz = 0.12 * 3600.)
 
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
