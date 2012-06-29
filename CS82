@@ -503,3 +503,66 @@ Finished opt2.
 
   17195.1 seconds
 
+--------------------------------------------
+2012-06-27
+--------------------------------------------
+Emails from team:
+
+"
+Just for info, the completeness of the images varies between
+mag_auto=23 and mag_auto=24 depending on the seeing of the image. I
+wouldn't trust anything in the catalog that is much fainter than
+mag_auto=24.
+
+For example, you might remove objects with low S/N where S/N could be
+defined as FLUX_MODEL/FLUXERR_MODEL. I bet a lot of the thin disk
+would go away if you made a cut of say, SN>3.
+
+If you add noise to the model image, these galaxies might look more
+similar.
+
+
+"For this particular tile, our nominal limiting magnitude (90% completeness) is 23.8."
+
+To see if the "strange" objects are not due to spurious or noisy
+detections, you could try a S/N > 5 (i.e. MAGERR_AUTO < 0.2172) or
+even S/N > 10 cut.
+
+In the tests we performed, we have seen that the morphology is much
+more robust in this case.  You could also make cuts discarding objects
+with FLAGS != 0.
+
+Also, it may be worth applying the masks provided by Alexie to avoid objects close to bright stars, borders, etc. (see
+http://twiki.linea.gov.br/bin/view/CS82/DataAccess#Masks).
+We may provide a "filtered" catalog if needed.
+
+Dustin, would it be possible for you to create the same model image
+(and histograms) for a single-component deV (or exp) profile and see
+what comes out?
+"
+
+
+Grab single-component catalogs... oh, I've got them already.
+
+-rw-r--r-- 1 dstn dstn  170928000 May 15 11:42 W4p1m1_i.V2.7A.swarp.cut.deVexp.fit
+-rw-r--r-- 1 dstn dstn  150497280 May 15 22:54 W4p1m1_i.V2.7A.swarp.cut.deV.fit
+-rw-r--r-- 1 dstn dstn  152199360 May 15 16:24 W4p1m1_i.V2.7A.swarp.cut.exp.fit
+-rw-r--r-- 1 dstn dstn 1764011520 Oct  5  2011 W4p1m1_i.V2.7A.swarp.cut.fits
+-rw-r--r-- 1 dstn dstn  441011520 Aug 24  2011 W4p1m1_i.V2.7A.swarp.cut.flag.fits
+-rw-r--r-- 1 dstn dstn 1764011520 Sep 19  2011 W4p1m1_i.V2.7A.swarp.cut.weight.fits
+
+wget --user cs82 --password XXXXXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/W4p1m1_i.V2.7A.swarp.cut.deV.fit
+{exp, deVexp}
+
+-Adding noise doesn't really change the visual impression that the
+ fits are wrong.
+
+--------------------------------------------
+2012-06-28
+--------------------------------------------
+
+ARGH, deV is SPHEROID,  exp is DISK, not vice versa.
+
+Now fits look generally good.
+
+Given that, 
