@@ -7,6 +7,30 @@ from astrometry.util.file import *
 
 if __name__ == '__main__':
 
+	plt.figure(figsize=(6,6))
+
+	T=fits_table('ri.fits')
+	plt.clf()
+	plt.plot(T.r - T.i, T.i, 'r,', mfc='r', mec='none', alpha=0.5)
+	plt.xlabel('SDSS r - SDSS i (mag)')
+	plt.ylabel('SDSS i (mag)')
+	plt.title('SDSS galaxies')
+	plt.axis([-3, 3, 21.5, 15.5])
+	#plt.axis([-3, 3, 22, 16])
+	plt.savefig('gal-ri.pdf')
+
+	T=fits_table('star-ri.fits')
+	plt.clf()
+	plt.plot(T.r - T.i, T.i, 'r,', mfc='r', mec='none', alpha=0.5)
+	plt.xlabel('SDSS r - SDSS i (mag)')
+	plt.ylabel('SDSS i (mag)')
+	plt.title('SDSS stars')
+	plt.axis([-3, 3, 21.5, 15.5])
+	#plt.axis([-3, 3, 22, 16])
+	plt.savefig('star-ri.pdf')
+
+
+
 	(allp, i2mags, cat) = unpickle_from_file('s1-258.pickle')
 
 	allbands = ['i2','u','g','r','i','z']
@@ -120,5 +144,6 @@ if __name__ == '__main__':
 	plt.yticks(range(16, 21 + 1))
 	plt.title('CS82 test patch: SDSS--CFHT CMD')
 	plt.savefig('cmd4.png')
+	plt.savefig('cmd4.pdf')
 
 
