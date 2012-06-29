@@ -650,7 +650,7 @@ def tweak_wcs((tractor, im)):
 			break
 	return im.getParams()
 
-def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
+def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 	#plt.figure(figsize=(6,6))
 	plt.figure(figsize=(10,10))
 	plt.clf()
@@ -689,8 +689,9 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		plt.title(tt)
 		#plt.xticks([],[])
 		#plt.yticks([],[])
-		plt.colorbar()
-		mysavefig('data-%02i.png' % i)
+		if colorbar:
+			plt.colorbar()
+		mysavefig('data-%02i' % i + fmt)
 
 	if 'dataann' in plotnames and i == 0:
 		ax = plt.axis()
@@ -698,7 +699,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 					   for s in tractor.catalog])
 		plt.plot(xy[:,0], xy[:,1], 'r+')
 		plt.axis(ax)
-		mysavefig('data-%02i-ann.png' % i)
+		mysavefig(('data-%02i-ann'+fmt) % i)
 
 	if ('modbest' in plotnames or 'chibest' in plotnames or
 		'modnoise' in plotnames or 'chinoise' in plotnames):
@@ -718,7 +719,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 		if 'modbest' in plotnames:
 			#plt.clf()
 			#plt.hist(mod.ravel(), bins=100, log=True)
-			#plt.savefig('mod-hist-%02i.png' % step)
+			#plt.savefig(('mod-hist-%02i'+fmt) % step)
 
 			plt.clf()
 			plt.gca().set_position(plotpos0)
@@ -727,10 +728,13 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
+
 			#plt.xticks([],[])
 			#plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('modbest-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+
+			mysavefig(('modbest-%02i-%02i'+fmt) % (i,step))
 
 		if 'modnoise' in plotnames:
 			plt.clf()
@@ -740,8 +744,9 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			if tsuf is not None:
 				tt += tsuf
 			plt.title(tt)
-			plt.colorbar()
-			mysavefig('modnoise-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+			mysavefig(('modnoise-%02i-%02i'+fmt) % (i,step))
 
 		if 'chibest' in plotnames:
 			chi = tractor.getChiImage(i)
@@ -754,17 +759,18 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('chibest-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+			mysavefig(('chibest-%02i-%02i'+fmt) % (i,step))
 
-			plt.clf()
-			plt.gca().set_position(plotpos0)
-			plt.imshow(chi, **imchi2)
-			plt.title(tt)
-			plt.xticks([],[])
-			plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('chibest2-%02i-%02i.png' % (i,step))
+			# plt.clf()
+			# plt.gca().set_position(plotpos0)
+			# plt.imshow(chi, **imchi2)
+			# plt.title(tt)
+			# plt.xticks([],[])
+			# plt.yticks([],[])
+			# plt.colorbar()
+			# mysavefig('chibest2-%02i-%02i'+fmt % (i,step))
 
 		if 'chinoise' in plotnames:
 			chi = (data - (mod + noiseim)) * tim.getInvError()
@@ -777,8 +783,9 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('chinoise-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+			mysavefig(('chinoise-%02i-%02i'+fmt) % (i,step))
 
 	if 'modsum' in plotnames or 'chisum' in plotnames:
 		modsum = None
@@ -808,8 +815,9 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('modsum-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+			mysavefig(('modsum-%02i-%02i'+fmt) % (i,step))
 		if 'chisum' in plotnames:
 			plt.clf()
 			plt.gca().set_position(plotpos0)
@@ -821,18 +829,19 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf)):
 			plt.xticks([],[])
 			plt.yticks([],[])
 			plt.colorbar()
-			mysavefig('chisum-%02i-%02i.png' % (i,step))
+			mysavefig('chisum-%02i-%02i'+fmt % (i,step))
 			plt.clf()
 			plt.gca().set_position(plotpos0)
 			plt.imshow(chisum/float(nw), **imchi2)
 			plt.title(tt)
 			plt.xticks([],[])
 			plt.yticks([],[])
-			plt.colorbar()
-			mysavefig('chisum2-%02i-%02i.png' % (i,step))
+			if colorbar:
+				plt.colorbar()
+			mysavefig(('chisum2-%02i-%02i'+fmt) % (i,step))
 
 def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None,
-		  tsuf=None):
+		  tsuf=None, colorbar=True, format='.png'):
 	if 'lnps' in plotnames:
 		plotnames.remove('lnps')
 		plt.figure(figsize=(6,6))
@@ -852,7 +861,7 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, all
 			print 'Skipping plot of image', i, 'with N images', NI
 			continue
 		zr = tractor.getImage(i).zr
-		args.append((tractor, i, zr, plotnames, step, pp, ibest, tsuf))
+		args.append((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, format))
 	if mp is None:
 		map(plot1, args)
 	else:
@@ -1143,6 +1152,100 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	return dict(tractor=tractor)
 
 
+def stage100(tractor=None, mp=None, **kwargs):
+	print 'Tractor cache is', tractor.cache
+
+	allsources = tractor.getCatalog()
+	allimages = tractor.getImages()
+
+	# maglim = 24.
+	#########
+	#maglim = 22.
+	maglim = 21.
+	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
+	tractor.setCatalog(brightcat)
+
+	print 'Cut to', len(brightcat), 'sources'
+
+	sbands = ['u','g','r','i','z']
+	allbands = ['i2'] + sbands
+
+	# Set all bands = i2, and save those params.
+	for src in brightcat:
+		for b in sbands:
+			br = src.getBrightness()
+			setattr(br, b, br.i2)
+
+	tractor.thawParamsRecursive('*')
+	tractor.freezeParam('images')
+	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
+
+	print 'params0:'
+	for nm in tractor.getParamNames():
+		print '  ', nm
+	params0 = tractor.getParams()
+
+	####
+
+	if False:
+		plotims = [0,1,2,3,4,5]
+		plotsa = dict(mp=mp, imis=plotims)
+		plots(tractor, ['data'], 0, **plotsa)
+
+	cat2,I2 = cut_bright(allsources, magcut=24, mag='i2')
+	tractor.setCatalog(cat2)
+	plotims = [0]
+	plotsa = dict(mp=mp, imis=plotims, colorbar=False, format='.pdf')
+	plots(tractor, ['modbest', 'chibest'], 0, pp=np.array([tractor.getParams()]),
+		  ibest=0, tsuf=': init', **plotsa)
+
+	tractor.setCatalog(brightcat)
+  
+
+	pfn = 's2-006.pickle'
+	(ap,i2,cat) = unpickle_from_file(pfn)
+
+	plotsa = dict(mp=mp, colorbar=False, format='.pdf')
+
+	for imi,im in enumerate(allimages[:6]):
+		tractor.setImages(Images(im))
+		if im.name.startswith('SDSS'):
+			band = im.photocal.bandname
+		else:
+			band = im.photocal.band
+		print im
+		print 'Band', band
+
+		(ii,bb,pp) = ap[imi]
+		assert(ii == imi)
+		assert(bb == band)
+
+		step = 1000 + imi*3
+
+		# Reset params; need to thaw first though!
+		tractor.catalog.thawParamsRecursive(*allbands)
+		tractor.setParams(params0)
+
+		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': init', **plotsa)
+
+		# Thaw just this image's band
+		tractor.catalog.freezeParamsRecursive(*allbands)
+		tractor.catalog.thawParamsRecursive(band)
+
+		assert(len(pp) == len(tractor.getParams()))
+		tractor.setParams(pp)
+
+		plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
+			  ibest=0, tsuf=': opt', **plotsa)
+
+
+	sys.exit(0)
+	####
+
+
+
+
 def stage01(tractor=None, mp=None, **kwargs):
 
 	#
@@ -1186,6 +1289,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 		print '  ', nm
 	params0 = tractor.getParams()
 
+
 	allp = []
 
 	for imi,im in enumerate(allimages):
@@ -1201,52 +1305,51 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 		###### !!!
 		
-		if band != 'r':
-			continue
-
+		#if band != 'r':
+		#	continue
 
 		### Plot CMD results so far...
 		i2mags = np.array([src.getBrightness().i2 for src in tractor.catalog])
-		allmags = []
-		print 'i2 mags', i2mags
-		for ii,bb,pa in allp:
-			print 'pa', pa
+		# allmags = []
+		# print 'i2 mags', i2mags
+		# for ii,bb,pa in allp:
+		# 	print 'pa', pa
+		# 
+		# 	# Thaw just this image's band
+		# 	tractor.catalog.freezeParamsRecursive(*allbands)
+		# 	tractor.catalog.thawParamsRecursive(bb)
+		# 	tractor.catalog.setParams(pa)
+		# 
+		# 	mags = [src.getBrightness().getMag(bb) for src in tractor.catalog]
+		# 	print 'mags', mags
+		# 	print len(mags)
+		# 
+		# 	assert(len(mags) == len(i2mags))
+		# 	allmags.append(mags)
+		# 
+		# allmags = np.array(allmags)
+		# print 'i2 mags shape', i2mags.shape
+		# print 'allmags shape', allmags.shape
+		# plt.figure(figsize=(6,6))
+		# plt.clf()
+		# #plotpos0 = [0.15, 0.15, 0.84, 0.80]
+		# #plt.gca().set_position(plotpos0)
+		# for i2,rr in zip(i2mags, allmags.T):
+		# 	ii2 = i2.repeat(len(rr))
+		# 	plt.plot(rr - ii2, ii2, 'b.')
+		# 	mr = np.mean(rr)
+		# 	sr = np.std(rr)
+		# 	plt.plot([(mr-sr) - i2, (mr+sr) - i2], [i2,i2], 'b-', lw=3, alpha=0.25)
+		# print 'Axis', plt.axis()
+		# plt.axis([-3, 3, 23, 15])
+		# plt.xlabel('SDSS r - CFHT i (mag)')
+		# plt.ylabel('CFHT i (mag)')
+		# plt.yticks([16,17,18,19,20])
+		# plt.savefig('cmd-%03i.png' % imi)
 
-			# Thaw just this image's band
-			tractor.catalog.freezeParamsRecursive(*allbands)
-			tractor.catalog.thawParamsRecursive(bb)
-			tractor.catalog.setParams(pa)
+		#pfn = 's1-%03i.pickle' % imi
 
-			mags = [src.getBrightness().getMag(bb) for src in tractor.catalog]
-			print 'mags', mags
-			print len(mags)
-
-			assert(len(mags) == len(i2mags))
-			allmags.append(mags)
-
-		allmags = np.array(allmags)
-		print 'i2 mags shape', i2mags.shape
-		print 'allmags shape', allmags.shape
-
-		plt.figure(figsize=(6,6))
-		plt.clf()
-		#plotpos0 = [0.15, 0.15, 0.84, 0.80]
-		#plt.gca().set_position(plotpos0)
-		for i2,rr in zip(i2mags, allmags.T):
-			ii2 = i2.repeat(len(rr))
-			plt.plot(rr - ii2, ii2, 'b.')
-			mr = np.mean(rr)
-			sr = np.std(rr)
-			plt.plot([(mr-sr) - i2, (mr+sr) - i2], [i2,i2], 'b-', lw=3, alpha=0.25)
-
-		print 'Axis', plt.axis()
-		plt.axis([-3, 3, 23, 15])
-		plt.xlabel('SDSS r - CFHT i (mag)')
-		plt.ylabel('CFHT i (mag)')
-		plt.yticks([16,17,18,19,20])
-		plt.savefig('cmd-%03i.png' % imi)
-
-		pfn = 's1-%03i.pickle' % imi
+		pfn = 's2-%03i.pickle' % imi
 		pickle_to_file((allp, i2mags, tractor.catalog), pfn)
 		print 'saved pickle', pfn
 
@@ -1272,7 +1375,8 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 		optargs = dict(doplots=False, mindlnp=0.1)
 
-		if imi != 0:
+		#if imi != 0:
+		if True:
 			optsourcestogether(tractor, step, **optargs)
 			plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
 				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
@@ -2518,6 +2622,8 @@ def runstage(stage, force=[], threads=1, doplots=True):
 	if stage > 0:
 
 		prereqs = {
+			100: 0,
+			
 			}
 
 		# Get prereq: from dict, or stage-1
