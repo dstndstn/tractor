@@ -14,6 +14,8 @@ import time
 import logging
 import random
 import os
+import resource
+import gc
 
 import numpy as np
 import pylab as plt
@@ -523,12 +525,12 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	### FIXME -- temporary functions, parallel to optimizeCatalogAtFixedComplexityStep()
-	### et al, that use the param infrastructure correctly.
 	def optimize(self, alphas=None):
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		print 'opt2: Finding derivs...'
 		t0 = Time()
 		allderivs = self.getDerivs()
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		tderivs = Time()-t0
 		#print Time() - t0
 		#print 'allderivs:', allderivs
@@ -538,6 +540,7 @@ class Tractor(MultiParams):
 		print 'Finding optimal update direction...'
 		t0 = Time()
 		X = self.getUpdateDirection(allderivs)
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		#print Time() - t0
 		topt = Time()-t0
 		#print 'X:', X
@@ -546,6 +549,7 @@ class Tractor(MultiParams):
 		print 'Finding optimal step size...'
 		t0 = Time()
 		(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		tstep = Time() - t0
 		print 'Finished opt2.'
 		print '  Tderiv', tderivs
@@ -706,6 +710,8 @@ class Tractor(MultiParams):
 		Nrows = nextrow
 		del nextrow
 		Ncols = len(allderivs)
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+
 
 		print 'imgoffs:', imgoffs
 
@@ -766,6 +772,7 @@ class Tractor(MultiParams):
 			spcols.append(np.zeros_like(rows) + col)
 			spvals.append(vals / scale)
 
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		if len(spcols) == 0:
 			logverb("len(spcols) == 0")
 			return []
@@ -773,6 +780,7 @@ class Tractor(MultiParams):
 		sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		assert(len(sprows) == len(spcols))
 		assert(len(sprows) == len(spvals))
 
@@ -795,6 +803,7 @@ class Tractor(MultiParams):
 		# Build sparse matrix
 		#A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 		A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
 		# b = chi
 		#
@@ -821,6 +830,7 @@ class Tractor(MultiParams):
 
 		# lsqr can trigger floating-point errors
 		np.seterr(all='warn')
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		
 		# Run lsqr()
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
@@ -839,6 +849,7 @@ class Tractor(MultiParams):
 		logverb('  X=', X)
 
 		np.seterr(**olderr)
+		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		return X
 
 	def changeInvvar(self, Q2=None):

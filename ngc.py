@@ -10,6 +10,8 @@ import tempfile
 import numpy as np
 import pylab as plt
 import pyfits
+import resource
+import gc
 
 from astrometry.util.file import *
 from astrometry.util.multiproc import multiproc
@@ -114,6 +116,7 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 def main():
+    gc.set_debug(gc.DEBUG_LEAK)
     import optparse
     parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
     parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
@@ -130,6 +133,7 @@ def main():
         mp = multiproc(nthreads=opt.threads)
     else:
         mp = multiproc()
+
 
     ngc = int(args[0])
 
@@ -275,8 +279,20 @@ def main():
 
     for i in range(itune1):
         tractor.optimize()
+        print resource.getpagesize()
+        print resource.getrusage(resource.RUSAGE_SELF)[2]
         tractor.changeInvvar(IRLS_scale)
+        print resource.getpagesize()
+        print resource.getrusage(resource.RUSAGE_SELF)[2]
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
+        print resource.getpagesize()
+        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        tractor.clearCache()
+        sg.get_galaxy_cache().clear()
+        gc.collect()
+        print resource.getpagesize()
+        print resource.getrusage(resource.RUSAGE_SELF)[2]
+        
 
     CGPos = EG.getPosition()
     CGShape1 = EG.getShape().copy()
@@ -298,11 +314,22 @@ def main():
     tractor.addSource(CG)
 
     tractor.catalog.freezeAllBut(CG)
+    print resource.getpagesize()
+    print resource.getrusage(resource.RUSAGE_SELF)[2]
+
 
     for i in range(itune2):
         tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
+        print resource.getpagesize()
+        print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+        tractor.clearCache()
+        sg.get_galaxy_cache().clear()
+        print resource.getpagesize()
+        print resource.getrusage(resource.RUSAGE_SELF)[2]
+
+
 
     tractor.catalog.thawAllParams()
     for i in range(ntune):
