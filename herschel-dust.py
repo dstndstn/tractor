@@ -26,6 +26,7 @@ class Physics(object):
 	hh = 6.62606957e-34 # J s
 	cc = 299792458. # m s^{-1}
 	kk = 1.3806488e-23 # J K^{-1}
+	#logtwohcsq = np.log(2. * hh * cc ** 2)
 
 	@staticmethod
 	def black_body(lam, lnT):
@@ -34,7 +35,15 @@ class Physics(object):
 		"""
 		return (2. * Physics.hh * Physics.cc ** 2 * lam ** -5 /
 				(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
-	
+
+	# @staticmethod
+	# def log_black_body(lam, lnT):
+	# 	"""
+	# 	Compute the black-body formula, for a given lnT.
+	# 	"""
+	# 	return (Physics.logtwohcsq +
+	# 			-5.0 * np.log(lam) +
+	# 			-np.log(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
 
 class DustBrightness(ParamList):
 	@staticmethod
@@ -43,8 +52,6 @@ class DustBrightness(ParamList):
 	def getStepSizes(self, *args):
 		#return [1., 1., 1.]
 		return [1e-2, 1e-2, 1e-2]
-
-
 
 class DustPhotoCal(ParamList):
 	# MAGIC number: wavelength scale for emissivity model
@@ -133,6 +140,38 @@ class CachingPointSource(PointSource):
 				derivs.append(df)
 		return derivs
 
+
+
+class NpArrayParams(ParamList):
+	'''
+	An implementation of Params that holds values in an np.ndarray
+	'''
+	def __init__(self, a):
+		self.a = np.array(a)
+		super(NpArrayParams, self).__init__()
+		del self.vals
+
+	def __getattr__(self, name):
+		if name == 'vals':
+			return self.a.ravel()
+		raise AttributeError(name + ': no such attribute in NpArrayParams.__getattr__')
+
+
+class DustSheet(MultiParams):
+	@staticmethod
+	def getNamedParams():
+		return dict(logsolidangle=0, logtemperature=1, emissivity=2)
+
+	def __init__(self, logsolidangle, logtemperature, emissivity, ras, decs):
+		super(DustSheet, self).__init__(logsolidangle, logtemperature, emissivity)
+		self.ras = ras
+		self.decs = decs
+
+	def getModelPatch(self, img, src):
+		# Project ras,decs into image pixels via WCS
+		# Interpolate + do PSF convolution in one shot
+		pass
+
 		
 
 def main():
@@ -174,34 +213,6 @@ def main():
 		('m31_brick15_SPIRE500.fits',  None, 37.0),
 		]
 
-	'''
-	TELESCOP= 'Herschel'           /
-	INSTRUME= 'SPIRE   '           /
-	FILTER  = '250     '           /
-	'''
-	'''
-	TELESCOP= 'Herschel'           /
-	INSTRUME= 'PACS    '           /
-	FILTER  = '100     '           /
-	BUNIT   = 'MJy/Sr  '           /
-	PFOV    =              1.00000 /pixel size (arcseconds)
-	CTYPE1  = 'RA---TAN'           /
-	CTYPE2  = 'DEC--TAN'           /
-	EQUINOX =              2000.00 /
-	CRPIX1  =                806.6 / reference pixel in X coordinate
-	CRPIX2  =             -1729.35 / reference pixel in Y coordinate
-	CRVAL1  =              10.9859 /RA of reference position (degrees)
-	CRVAL2  =              41.3530 /DEC of reference position (degrees)
-	CDELT1  =         -0.000277778 /
-	CDELT2  =          0.000277778 /
-	CROTA2  =              0.00000 /angle from Y axis to North axis (degrees)
-	SOFTWARE= 'processed from level 1 with Scanamorphos v12.0 (Roussel 2011)' /
-	OPTIONS = 'parallel'           /
-	HISTORY Converted from FM,5 to FM,6 by dividing by 1.151
-	HISTORY Background subtracted of 0.0 MJy/Sr, uncertainty 1.1 MJy/Sr
-	HISTORY Gaussian determined pixel noise of 7.23 MJy/Sr (1.7E-4 Jy/pix)
-	'''
-
 	print 'Reading images...'
 	tims = []
 	for i, (fn, noise, fwhm) in enumerate(dataList):
@@ -233,6 +244,7 @@ def main():
 		nm = fn.replace('.fits', '')
 		#zr = noise * np.array([-3, 10]) + skyval
 		zr = np.array([np.percentile(image.ravel(), p) for p in [10, 95]])
+		print 'Pixel scale:', wcs.pixel_scale()
 		# meh
 		sigma = fwhm / wcs.pixel_scale() / 2.35
 		print 'PSF sigma', sigma, 'pixels'

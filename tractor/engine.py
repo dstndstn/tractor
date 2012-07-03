@@ -26,7 +26,7 @@ from scipy.ndimage.morphology import binary_dilation
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
-from .utils import MultiParams
+from .utils import MultiParams, _isint
 from .cache import *
 from .ttime import Time
 
@@ -890,14 +890,15 @@ class Tractor(MultiParams):
 			self.cache.put(deps, mod)
 		return mod
 
-	def getModelImageNoCache(self, img, srcs=None, sky=True):
+	#def getModelImageNoCache(self, img, srcs=None, sky=True):
+	def getModelImage(self, img, srcs=None, sky=True):
 		'''
 		Create a model image for the given "tractor image", including
 		the sky level.	If "srcs" is specified (a list of sources),
 		then only those sources will be rendered into the image.
 		Otherwise, the whole catalog will be.
 		'''
-		if type(img) is int:
+		if _isint(img):
 			img = self.getImage(img)
 		mod = np.zeros(img.getShape(), self.modtype)
 		if sky:
@@ -913,8 +914,8 @@ class Tractor(MultiParams):
 			patch.addTo(mod)
 		return mod
 
-	def getModelImage(self, img, srcs=None, sky=True):
-		return self.getModelImageNoCache(img, srcs=srcs, sky=sky)
+	#def getModelImage(self, img, srcs=None, sky=True):
+	#	return self.getModelImageNoCache(img, srcs=srcs, sky=sky)
 	'''
 	def getModelImage(self, img):
 		# dependencies of this model image:
