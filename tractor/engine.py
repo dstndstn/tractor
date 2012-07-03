@@ -525,7 +525,7 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	def optimize(self, alphas=None):
+	def optimize(self, alphas=None, damp=0):
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		print 'opt2: Finding derivs...'
 		t0 = Time()
@@ -539,7 +539,7 @@ class Tractor(MultiParams):
 		#		print 'patch mean', np.mean(p.patch)
 		print 'Finding optimal update direction...'
 		t0 = Time()
-		X = self.getUpdateDirection(allderivs)
+		X = self.getUpdateDirection(allderivs, damp=damp)
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		#print Time() - t0
 		topt = Time()-t0
@@ -665,7 +665,7 @@ class Tractor(MultiParams):
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
-	def getUpdateDirection(self, allderivs):
+	def getUpdateDirection(self, allderivs, damp=0.):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -826,7 +826,7 @@ class Tractor(MultiParams):
 		b = bnz
 		assert(all(np.isfinite(b)))
 
-		lsqropts = dict(show=isverbose())
+		lsqropts = dict(show=isverbose(), damp=damp)
 
 		# lsqr can trigger floating-point errors
 		np.seterr(all='warn')

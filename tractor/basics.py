@@ -404,8 +404,8 @@ class PointSource(MultiParams):
 		derivs = []
 
 		# Position
-		psteps = pos0.getStepSizes(img)
 		if not self.isParamFrozen('pos'):
+			psteps = pos0.getStepSizes(img)
 			pvals = pos0.getParams()
 			for i,pstep in enumerate(psteps):
 				oldval = pos0.setParam(i, pvals[i] + pstep)
@@ -417,8 +417,8 @@ class PointSource(MultiParams):
 				derivs.append(dx)
 
 		# Brightness
-		bsteps = self.brightness.getStepSizes(img)
 		if not self.isParamFrozen('brightness'):
+			bsteps = self.brightness.getStepSizes(img)
 			bvals = self.brightness.getParams()
 			for i,bstep in enumerate(bsteps):
 				oldval = self.brightness.setParam(i, bvals[i] + bstep)

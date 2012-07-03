@@ -131,6 +131,12 @@ class ScalarParam(BaseParams):
 	def getValue(self):
 		return self.val
 
+def _isint(i):
+	#return type(i) in [int, np.int64]
+	try:
+		return int(i) == i
+	except:
+		return False
 
 class NamedParams(object):
 	'''
@@ -231,7 +237,8 @@ class NamedParams(object):
 		for n in args:
 			self.freezeParam(n)
 	def freezeParam(self, paramname):
-		if type(paramname) is int:
+		#if type(paramname) in [int, np.int64]:
+		if _isint(paramname):
 			i = paramname
 		else:
 			i = self.getNamedParamIndex(paramname)
@@ -241,7 +248,8 @@ class NamedParams(object):
 		self.freezeAllParams()
 		self.thawParams(*args)
 	def thawParam(self, paramname):
-		if type(paramname) is int:
+		#if type(paramname) in [int, np.int64]:
+		if _isint(paramname):
 			i = paramname
 		elif isinstance(paramname, basestring):
 			i = self.getNamedParamIndex(paramname)
