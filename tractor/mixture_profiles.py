@@ -32,7 +32,7 @@ class MixtureOfGaussians():
 
 	# symmetrize is an unnecessary step in principle, but in practice?
 	def __init__(self, amp, mean, var):
-		self.amp = np.array(amp).astype(float)
+		self.amp = np.atleast_1d(amp).astype(float)
 		self.mean = np.atleast_2d(np.array(mean)).astype(float)
 		(self.K, self.D) = self.mean.shape
 		self.set_var(var)

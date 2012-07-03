@@ -533,10 +533,10 @@ class GaussianMixturePSF(BaseParams):
 
 	def setParams(self, p):
 		K = self.mog.K
-		self.mog.amp = p[:K]
+		self.mog.amp = np.atleast_1d(p[:K])
 		pp = p[K:]
 		D = 2
-		self.mog.mean = np.array(pp[:K*2]).reshape(K,D)
+		self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,D)
 		pp = pp[K*2:]
 		self.mog.var[:,0,0] = pp[::3]
 		self.mog.var[:,1,1] = pp[1::3]
