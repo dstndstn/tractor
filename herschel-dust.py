@@ -17,8 +17,9 @@ import numpy as np
 from tractor import *
 from tractor.cache import Cache
 import pyfits
-from astrometry.util.util import Tan
+from astrometry.util.util import Tan, tan_wcs_resample, log_init
 from astrometry.util.multiproc import multiproc
+from astrometry.util.file import *
 import multiprocessing
 
 class Physics(object):
@@ -150,33 +151,126 @@ class NpArrayParams(ParamList):
 		self.a = np.array(a)
 		super(NpArrayParams, self).__init__()
 		del self.vals
+		# from NamedParams...
+		# active/inactive
+		self.liquid = [True] * self._numberOfThings()
 
 	def __getattr__(self, name):
 		if name == 'vals':
 			return self.a.ravel()
+		if name in ['shape',]:
+			return getattr(self.a, name)
 		raise AttributeError(name + ': no such attribute in NpArrayParams.__getattr__')
 
 
 class DustSheet(MultiParams):
+	'''
+	A Source composed of a a grid of dust parameters
+	'''
 	@staticmethod
 	def getNamedParams():
 		return dict(logsolidangle=0, logtemperature=1, emissivity=2)
 
-	def __init__(self, logsolidangle, logtemperature, emissivity, ras, decs):
-		super(DustSheet, self).__init__(logsolidangle, logtemperature, emissivity)
-		self.ras = ras
-		self.decs = decs
+	def __init__(self, logsolidangle, logtemperature, emissivity, wcs):
+		assert(logsolidangle.shape == logtemperature.shape)
+		assert(logsolidangle.shape == emissivity.shape)
+		assert(logsolidangle.shape == (wcs.get_height(), wcs.get_width()))
+		super(DustSheet, self).__init__(NpArrayParams(logsolidangle),
+										NpArrayParams(logtemperature),
+										NpArrayParams(emissivity))
+		self.wcs = wcs
 
-	def getModelPatch(self, img, src):
-		# Project ras,decs into image pixels via WCS
-		# Interpolate + do PSF convolution in one shot
-		pass
+	def __getattr__(self, name):
+		if name == 'shape':
+			return self.logsolidangle.shape
 
-		
+	def getModelPatch(self, img):
+		# Compute emission in the native grid
+		# Resample onto img grid + do PSF convolution in one shot
+		H,W = self.shape
+
+		# This takes advantage of the coincidence that our DustPhotoCal does the right thing
+		# with numpy arrays.
+		counts = img.getPhotoCal().brightnessToCounts(self)
+		# Thanks to NpArrayParams they get ravel()'d down to 1-d, so
+		# reshape back to 2d
+		counts = counts.reshape(self.shape).astype(np.float32)
+
+		#print 'Counts:', counts.shape
+
+		# I am weak... do resampling + convolution in separate shots
+		iH,iW = img.shape
+		rim = np.zeros((iH,iW), np.float32)
+		imwcs = img.getWcs()
+
+		## ASSUME TAN WCS on both the DustSheet and img.
+		res = tan_wcs_resample(self.wcs, imwcs.wcs, counts, rim, 2)
+		assert(res == 0)
+
+		## ASSUME the PSF has "applyTo"
+		outimg = img.getPsf().applyTo(rim)
+
+		return Patch(0, 0, outimg)
+
+	def getStepSizes(self, *args, **kwargs):
+		return ([0.1] * len(self.logsolidangle) +
+				[0.1] * len(self.logtemperature) +
+				[0.1] * len(self.emissivity))
+
+	def getParamDerivatives(self, img):
+		# Super-naive!!
+		p0 = self.getParams()
+		mod0 = self.getModelPatch(img)
+		derivs = []
+		for i,step in enumerate(self.getStepSizes()):
+			print 'Img', img.name, 'deriv', i
+			oldval = self.setParam(i, p0[i] + step)
+			modi = self.getModelPatch(img)
+			self.setParam(i, oldval)
+			d = (modi - mod0) * (1./step)
+			derivs.append(d)
+		return derivs
+
+def makeplots(tractor, step):
+	print 'Rendering synthetic images...'
+
+	mods = tractor.getModelImages()
+	for i,mod in enumerate(mods):
+		tim = tractor.getImage(i)
+		ima = dict(interpolation='nearest', origin='lower',
+				   vmin=tim.zr[0], vmax=tim.zr[1])
+		plt.clf()
+		plt.imshow(mod, **ima)
+		plt.gray()
+		plt.colorbar()
+		plt.title(tim.name)
+		plt.savefig('model-%i-%02i.png' % (i, step))
+
+		if step == 0:
+			plt.clf()
+			plt.imshow(tim.getImage(), **ima)
+			plt.gray()
+			plt.colorbar()
+			plt.title(tim.name)
+			plt.savefig('data-%i.png' % (i))
+
+		plt.clf()
+		# tractor.getChiImage(i), 
+		plt.imshow((tim.getImage() - mod) * tim.getInvError(),
+				   interpolation='nearest', origin='lower',
+				   vmin=-5, vmax=+5)
+		plt.gray()
+		plt.colorbar()
+		plt.title(tim.name)
+		plt.savefig('chi-%i-%02i.png' % (i, step))
 
 def main():
 	import optparse
 	import logging
+	import sys
+
+	###
+	log_init(3)
 	
 	parser = optparse.OptionParser()
 	parser.add_option('--threads', dest='threads', default=1, type=int, help='Use this many concurrent processors')
@@ -190,10 +284,7 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	if opt.threads > 1:
-		mp = multiproc(pool=multiprocessing.Pool(opt.threads))
-	else:
-		mp = multiproc(opt.threads)
+	mp = multiproc(opt.threads, wrap_all=True)
 
 	"""
 	Brittle function to read Groves data sample and make the
@@ -206,7 +297,7 @@ def main():
 	- Can I just blow up the SPIRE images with interpolation?
 	"""
 	dataList = [
-		('m31_brick15_PACS100.fits',   7.23,  7.7), # mum
+		#('m31_brick15_PACS100.fits',   7.23,  7.7),
 		('m31_brick15_PACS160.fits',   3.71, 12.0),
 		('m31_brick15_SPIRE250.fits',  None, 18.0),
 		('m31_brick15_SPIRE350.fits',  None, 25.0),
@@ -226,6 +317,7 @@ def main():
 		wcs = Tan(hdr['CRVAL1'], hdr['CRVAL2'],
 				  hdr['CRPIX1'], hdr['CRPIX2'],
 				  hdr['CDELT1'], 0., 0., hdr['CDELT2'], W, H)
+		assert(hdr['CROTA2'] == 0.)
 		if noise is None:
 			noise = float(hdr['NOISE'])
 		print 'Noise', noise
@@ -243,7 +335,7 @@ def main():
 		#nm = '%s %i' % (hdr['INSTRUME'], lam)
 		nm = fn.replace('.fits', '')
 		#zr = noise * np.array([-3, 10]) + skyval
-		zr = np.array([np.percentile(image.ravel(), p) for p in [10, 95]])
+		zr = np.array([np.percentile(image.ravel(), p) for p in [1, 99]])
 		print 'Pixel scale:', wcs.pixel_scale()
 		# meh
 		sigma = fwhm / wcs.pixel_scale() / 2.35
@@ -255,11 +347,85 @@ def main():
 		tim.zr = zr
 		tims.append(tim)
 
-		plt.clf()
-		plt.hist(image.ravel(), 100)
-		plt.title(nm)
-		plt.savefig('im%i-hist.png' % i)
+		# plt.clf()
+		# plt.hist(image.ravel(), 100)
+		# plt.title(nm)
+		# plt.savefig('im%i-hist.png' % i)
 
+	plt.clf()
+	for tim,c in zip(tims, ['b','g','y',(1,0.5,0),'r']):
+		H,W = tim.shape
+		twcs = tim.getWcs()
+		rds = []
+		for x,y in [(0.5,0.5),(W+0.5,0.5),(W+0.5,H+0.5),(0.5,H+0.5),(0.5,0.5)]:
+			rd = twcs.pixelToPosition(x,y)
+			rds.append(rd)
+		rds = np.array(rds)
+		plt.plot(rds[:,0], rds[:,1], '-', color=c, lw=2, alpha=0.5)
+	plt.savefig('radec.png')
+
+	print 'Creating dust sheet...'
+	N = 5
+
+	# Build a WCS for the dust sheet to match the first image (assuming it's square and axis-aligned)
+	
+	wcs = tims[0].getWcs().wcs
+	r,d = wcs.radec_center()
+	H,W = tims[0].shape
+	scale = wcs.pixel_scale()
+	scale *= float(W)/N / 3600.
+	c = float(N)/2. + 0.5
+	dwcs = Tan(r, d, c, c, scale, 0, 0, scale, N, N)
+
+	rds = []
+	H,W = N,N
+	for x,y in [(0.5,0.5),(W+0.5,0.5),(W+0.5,H+0.5),(0.5,H+0.5),(0.5,0.5)]:
+		r,d = dwcs.pixelxy2radec(x,y)
+		rds.append((r,d))
+	rds = np.array(rds)
+	plt.plot(rds[:,0], rds[:,1], 'k-', lw=1, alpha=1)
+	plt.savefig('radec2.png')
+
+	pixscale = dwcs.pixel_scale()
+	logsa = np.log(1e-3 * ((pixscale / 3600 / (180./np.pi))**2))
+
+	logsa = np.zeros((H,W)) + logsa
+	logt = np.zeros((H,W)) + np.log(17.)
+	emis = np.zeros((H,W)) + 2.
+
+	#X,Y = np.meshgrid(np.arange(W), np.arange(H))
+	#logsa += X*0.1
+	#logt += Y*0.1
+	#emis += Y*0.1
+	
+	ds = DustSheet(logsa, logt, emis, dwcs)
+
+	print 'DustSheet:', ds
+	#print 'np', ds.numberOfParams()
+	#print 'pn', ds.getParamNames()
+	#print 'p', ds.getParams()
+
+	cat = Catalog()
+	cat.append(ds)
+	
+	tractor = Tractor(Images(*tims), cat)
+	tractor.mp = mp
+
+	makeplots(tractor, 0)
+
+	for im in tractor.getImages():
+		im.freezeAllBut('sky')
+
+	for i in range(10):
+		#tractor.optimize(damp=10.)
+		tractor.optimize(damp=1., alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
+		makeplots(tractor, 1 + i)
+
+	pickle_to_file(tractor, 'herschel.pickle')
+
+	
+
+def old():
 	print 'Creating point sources...'
 	# Create grid of PointSources of dust.
 	twcs = tims[0].wcs
@@ -413,4 +579,4 @@ if __name__ == '__main__':
 	import sys
 	from datetime import tzinfo, timedelta, datetime
 	cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
-	sys.exit(0)
+	#sys.exit(0)
