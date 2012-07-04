@@ -276,6 +276,8 @@ def main():
 	import logging
 	import sys
 
+	import callgrind
+
 	###
 	log_init(3)
 	
@@ -284,8 +286,12 @@ def main():
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 
-	parser.add_option('--grid', dest='gridn', type=int, default=5, help='Dust parameter grid size')
+	parser.add_option('--grid', '-g', dest='gridn', type=int, default=5, help='Dust parameter grid size')
+	parser.add_option('--steps', '-s', dest='steps', type=int, default=10, help='# Optimization step')
 	parser.add_option('--suffix', dest='suffix', default='', help='Output file suffix')
+
+	parser.add_option('--no-100', dest='no100', action='store_true', default=False,
+					  help='Omit PACS-100 data?')
 
 	opt,args = parser.parse_args()
 
@@ -321,6 +327,9 @@ def main():
 		('m31_brick15_SPIRE350.fits',  None, 25.0),
 		('m31_brick15_SPIRE500.fits',  None, 37.0),
 		]
+
+	if opt.no100:
+		dataList = dataList[1:]
 
 	print 'Reading images...'
 	tims = []
@@ -430,9 +439,13 @@ def main():
 	for im in tractor.getImages():
 		im.freezeAllBut('sky')
 
-	for i in range(10):
+	for i in range(opt.steps):
 		#tractor.optimize(damp=10.)
+
+		callgrind.callgrind_start_instrumentation()
 		tractor.optimize(damp=1., alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
+		callgrind.callgrind_stop_instrumentation()
+
 		makeplots(tractor, 1 + i, opt.suffix)
 		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (i, opt.suffix))
 
