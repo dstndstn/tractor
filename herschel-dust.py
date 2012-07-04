@@ -25,61 +25,64 @@ import multiprocessing
 
 class Physics(object):
 	# all the following from physics.nist.gov
+	# http://physics.nist.gov/cuu/Constants/Table/allascii.txt
 	hh = 6.62606957e-34 # J s
 	cc = 299792458. # m s^{-1}
 	kk = 1.3806488e-23 # J K^{-1}
-	#logtwohcsq = np.log(2. * hh * cc ** 2)
 
 	@staticmethod
 	def black_body(lam, lnT):
 		"""
 		Compute the black-body formula, for a given lnT.
+
+		'lam' is wavelength in meters
+		'lnT' is log-temperature in Kelvin
+
+		Return value is in [J s^-1 m^-3],
+		power radiated per square meter (area), per meter of wavelength
 		"""
-		return (2. * Physics.hh * Physics.cc ** 2 * lam ** -5 /
+		return (2. * Physics.hh * (Physics.cc ** 2) * (lam ** -5) /
 				(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
 
-	# @staticmethod
-	# def log_black_body(lam, lnT):
-	# 	"""
-	# 	Compute the black-body formula, for a given lnT.
-	# 	"""
-	# 	return (Physics.logtwohcsq +
-	# 			-5.0 * np.log(lam) +
-	# 			-np.log(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
-
-class DustBrightness(ParamList):
-	@staticmethod
-	def getNamedParams():
-		return dict(logsolidangle=0, logtemperature=1, emissivity=2)
-	def getStepSizes(self, *args):
-		#return [1., 1., 1.]
-		return [1e-2, 1e-2, 1e-2]
-
 class DustPhotoCal(ParamList):
-	# MAGIC number: wavelength scale for emissivity model
-	lam0 = 1.e-4 # m
-
-	def __init__(self, lam, Mjypersrperdn):
+	def __init__(self, lam, pixscale):   #, Mjypersrperdn):
 		'''
 		lam: central wavelength of filter in microns
 
 		Mjypersrperdn: photometric calibration in mega-Jansky per
 		steradian per DN.
 
+		Jansky: 1e-26 watts per square meter per hertz.
 
-		self.cal is in SI units (should be the same as the black_body
-		formula).  CHECK this.
+		self.cal is the calibration factor that scales SI units to
+		image pixel values.  The images are in MJy/Sr, so
+
+		ie, [Joules/s/m^2/m] * [self.cal] = [MJy/Sr]
+
+		So self.cal has to be in units of [m s / Sr], which we get from lam^2/c
+		and the pixel scale (?)
+
 		'''
 		self.lam = lam
-		self.cal = Mjypersrperdn / (1e-20)
+		self.cal = 1e20 * lam**2 / Physics.cc
+		self.cal /= ((pixscale / 3600 / (180./np.pi))**2)
+		print 'Cal', self.cal
 		# No (adjustable) params
 		super(DustPhotoCal,self).__init__()
-		
+
+
+	# MAGIC number: wavelength scale for emissivity model
+	lam0 = 1.e-4 # m
+
 	def brightnessToCounts(self, brightness):
-		br = (brightness.logsolidangle +
-			  np.log(Physics.black_body(self.lam, brightness.logtemperature)) +
-			  brightness.emissivity * np.log(self.lam / DustPhotoCal.lam0))
-		return self.cal * np.exp(br)
+		# see http://arxiv.org/abs/astro-ph/9902255 for (lam/lam0) ^ -beta, eg
+		beta = np.array(brightness.emissivity)
+		print 'beta', beta.shape, 'range', beta.min(), beta.max()
+		return(
+			np.exp(brightness.logsolidangle)
+			* ((self.lam / DustPhotoCal.lam0) ** (-1. * beta))
+			* Physics.black_body(self.lam, brightness.logtemperature)
+			* self.cal)
 
 class NpArrayParams(ParamList):
 	'''
@@ -114,7 +117,8 @@ class NpArrayParams(ParamList):
 
 class DustSheet(MultiParams):
 	'''
-	A Source composed of a a grid of dust parameters
+	A Source that represents a smooth sheet of dust.  The dust parameters are help in arrays
+	that represent sample points on the sky; they are interpolated onto the destination image.
 	'''
 	@staticmethod
 	def getNamedParams():
@@ -128,6 +132,8 @@ class DustSheet(MultiParams):
 										NpArrayParams(logtemperature),
 										NpArrayParams(emissivity))
 		self.wcs = wcs
+
+		self.Tcache = {}
 
 	def getArrays(self):
 		shape = self.shape
@@ -151,13 +157,76 @@ class DustSheet(MultiParams):
 	def _getcounts(self, img):
 		# This takes advantage of the coincidence that our DustPhotoCal does the right thing
 		# with numpy arrays.
+
+		#class fakebright(object):
+		#	pass
+		#b = fakebright()
+		#b.logsolidangle, b.logtemperature, b.emissivity = self.getArrays()
+		#counts = img.getPhotoCal().brightnessToCounts(b)
+
 		counts = img.getPhotoCal().brightnessToCounts(self)
 		# Thanks to NpArrayParams they get ravel()'d down to 1-d, so
 		# reshape back to 2d
-		counts = counts.reshape(self.shape).astype(np.float32)
+		counts = counts.reshape(self.shape) #.astype(np.float32)
 		return counts
 
+	def _computeTransformation(self, img):
+		imwcs = img.getWcs()
+		# Brutal pre-computation of the transformation matrix...
+		H,W = self.shape
+		Ngrid = W*H
+		iH,iW = img.shape
+		Nim = iW*iH
+		cmock = np.zeros((H,W), np.float32)
+		rim = np.zeros((iH,iW), np.float32)
+		X = np.zeros((Nim, Ngrid), np.float32)
+		for i in range(H):
+			print 'Precomputing matrix for image', img.name, 'row', i
+			for j in range(W):
+				#print 'Precomputing matrix for grid pixel', j,i
+				cmock[i,j] = 1.
+				res = tan_wcs_resample(self.wcs, imwcs.wcs, cmock, rim, 2)
+				assert(res == 0)
+				outimg = img.getPsf().applyTo(rim)
+				X[:, i*W+j] = outimg.ravel()
+				cmock[i,j] = 0.
+		return X
+
+	def _setTransformation(self, img, X):
+		key = (img.getWcs(), img.getPsf())
+		self.Tcache[key] = X
+
+	def _getTransformation(self, img):
+		imwcs = img.getWcs()
+		key = (imwcs,img.getPsf())
+		if not key in self.Tcache:
+			X = self._computeTransformation(img)
+			self.Tcache[key] = X
+		else:
+			X = self.Tcache[key]
+		return X
+
 	def getModelPatch(self, img):
+		X = self._getTransformation(img)
+
+		imwcs = img.getWcs()
+		counts = self._getcounts(img)
+		#print 'Img shape', img.shape
+		#print 'counts shape', counts.shape
+		#print 'X shape', X.shape
+		#rim = np.dot(X, counts.ravel())
+		#print 'dot shape', rim.shape
+		#rim = rim.reshape(img.shape)
+		rim = np.dot(X, counts.ravel()).reshape(img.shape)
+
+		gridscale = self.wcs.pixel_scale()
+		imscale = imwcs.wcs.pixel_scale()
+		#print 'pixel scaling:', (imscale / gridscale)**2
+		rim *= (imscale / gridscale)**2
+		#print 'Median model patch:', np.median(rim)
+		return Patch(0, 0, rim)
+
+	def getModelPatch_1(self, img):
 		# Compute emission in the native grid
 		# Resample onto img grid + do PSF convolution in one shot
 
@@ -171,6 +240,13 @@ class DustSheet(MultiParams):
 		res = tan_wcs_resample(self.wcs, imwcs.wcs, counts, rim, 2)
 		assert(res == 0)
 
+		# Correct for the difference in solid angle per pixel of the grid and the image.
+		# NB we should perhaps do this before the call to "brightnessToCounts", but it's a
+		# linear scale factor so it doesn't really matter.
+		gridscale = self.wcs.pixel_scale()
+		imscale = imwcs.wcs.pixel_scale()
+		rim *= (imscale / gridscale)**2
+
 		## ASSUME the PSF has "applyTo"
 		outimg = img.getPsf().applyTo(rim)
 
@@ -181,7 +257,68 @@ class DustSheet(MultiParams):
 				[0.1] * len(self.logtemperature) +
 				[0.1] * len(self.emissivity))
 
+
 	def getParamDerivatives(self, img):
+		X = self._getTransformation(img)
+
+		imwcs = img.getWcs()
+		gridscale = self.wcs.pixel_scale()
+		imscale = imwcs.wcs.pixel_scale()
+		cscale = (imscale / gridscale)**2
+
+		imshape = img.shape
+
+		p0 = self.getParams()
+		counts0 = self._getcounts(img)
+		derivs = []
+
+		# This is ugly -- the dust param vectors are stored one after another, so the
+		# three parameters affecting each pixel are not contiguous, and we also ignore the
+		# fact that we should *know* which grid pixel is affected by each parameter!!
+		# (but this might work with freezing... maybe...)
+
+		#for i,step in enumerate(self.getStepSizes()):
+		for i,(step,name) in enumerate(zip(self.getStepSizes(), self.getParamNames())):
+			print 'Img', img.name, 'deriv', i, name
+			oldval = self.setParam(i, p0[i] + step)
+			countsi = self._getcounts(img)
+			pnow = self.getParams()
+			dp = (np.array(pnow) - np.array(p0))
+			self.setParam(i, oldval)
+			print 'dparams', dp
+
+			dc = (countsi - counts0).ravel()
+			I = np.flatnonzero(dc != 0)
+			if len(I) != 1:
+				print 'I', I
+				print 'i', i
+				print 'step', step
+				print 'oldval', oldval
+				print 'p0[i]', p0[i]
+				print '+step', p0[i]+step
+				print 'countsi', countsi
+				print 'counts0', counts0
+				print 'dcounts', countsi - counts0
+				print 'rav', (countsi - counts0).ravel()
+			if len(I) == 0:
+				derivs.append(None)
+				continue
+			#assert(len(I) == 1)
+			ii = I[0]
+
+			#xx = X[:,ii]
+			#print 'mean non-zero X elements:', np.mean(xx[np.flatnonzero(xx)])
+			#print 'dc', dc[ii]
+			#print 'scale', cscale / step
+
+			dmod = ((X[:,ii] * dc[ii]) * (cscale / step)).reshape(imshape)
+			derivs.append(Patch(0, 0, dmod))
+
+
+		return derivs
+
+
+	def getParamDerivatives_1(self, img):
 		# Super-naive!!
 		p0 = self.getParams()
 		mod0 = self.getModelPatch(img)
@@ -200,6 +337,7 @@ class DustSheet(MultiParams):
 		for i,step in enumerate(self.getStepSizes()):
 			print 'Img', img.name, 'deriv', i
 			oldval = self.setParam(i, p0[i] + step)
+
 			# countsi = self._getcounts(img)
 			# I = (countsi != counts0)
 			# xi = np.where(np.sum(I, axis=0) > 0)
@@ -207,6 +345,7 @@ class DustSheet(MultiParams):
 			# xi = min(xi),max(xi)
 			# yi = min(yi),max(yi)
 			# Expand by Lanczos + PSF kernel
+
 			modi = self.getModelPatch(img)
 			self.setParam(i, oldval)
 			d = (modi - mod0) * (1./step)
@@ -354,17 +493,18 @@ def main():
 		if noise is None:
 			noise = float(hdr['NOISE'])
 		print 'Noise', noise
-		#print 'Median image value', np.median(image)
+		print 'Median image value', np.median(image)
 		invvar = np.ones_like(image) / (noise**2)
 
 		skyval = np.percentile(image, 5)
 		sky = ConstantSky(skyval)
 
 		lam = float(hdr['FILTER'])
-		#print 'Lambda', lam
+		print 'Lambda', lam
 		# calibrated, yo
 		assert(hdr['BUNIT'] == 'MJy/Sr')
-		pcal = DustPhotoCal(lam, 1.)
+		# "Filter" is in *microns* in the headers; convert to *m* here, to match "lam0"
+		pcal = DustPhotoCal(lam * 1e-6, wcs.pixel_scale())   #, 1.)
 		#nm = '%s %i' % (hdr['INSTRUME'], lam)
 		nm = fn.replace('.fits', '')
 		#zr = noise * np.array([-3, 10]) + skyval
@@ -440,6 +580,12 @@ def main():
 	## hack
 	#ds.mp = mp
 
+	print 'Precomputing transformations...'
+	XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])
+	for im,X in zip(tractor.getImages(), XX):
+		ds._setTransformation(im, X)
+	print 'done precomputing.'
+
 	makeplots(tractor, 0, opt.suffix)
 
 	for im in tractor.getImages():
@@ -459,6 +605,9 @@ def main():
 		makeplots(tractor, 1 + i, opt.suffix)
 		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (i, opt.suffix))
 
+
+def _map_trans((ds, img)):
+	return ds._computeTransformation(img)
 
 if __name__ == '__main__':
 	main()

@@ -946,8 +946,8 @@ class Tractor(MultiParams):
 			allimages = self.getImages()
 			self.images = Images()
 			args = [(self, im) for im in allimages]
-			print 'Calling _map:', getmodelimagefunc2
-			print 'args:', args
+			#print 'Calling _map:', getmodelimagefunc2
+			#print 'args:', args
 			mods = self._map(getmodelimagefunc2, args)
 			self.images = allimages
 		else:
