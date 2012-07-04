@@ -412,15 +412,13 @@ def getsrcderivs((src, img)):
 	return src.getParamDerivatives(img)
 
 def getmodelimagefunc2((tr, im)):
-	print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
+	#print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
 	#tr.images = Images(im)
 	try:
 		return tr.getModelImage(im)
 	except:
 		import traceback
 		print 'Exception in getmodelimagefun2:'
-		#print '	 params:', X
-		print '	 exception:'
 		traceback.print_exc()
 		raise
 		

@@ -13,22 +13,15 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 
-#import cPickle as pickle
-import pickle
-
 import numpy as np
 from tractor import *
-print 'after tractor:', pickle
 
 from tractor.cache import Cache
 import pyfits
 from astrometry.util.util import Tan, tan_wcs_resample, log_init
 from astrometry.util.multiproc import multiproc
 from astrometry.util.file import pickle_to_file, unpickle_from_file
-print 'after file:', pickle
 import multiprocessing
-
-import pickle
 
 class Physics(object):
 	# all the following from physics.nist.gov
@@ -105,11 +98,19 @@ class NpArrayParams(ParamList):
 			return self.a.ravel()
 		if name in ['shape',]:
 			return getattr(self.a, name)
-		raise AttributeError(name + ': no such attribute in NpArrayParams.__getattr__')
+		raise AttributeError() #name + ': no such attribute in NpArrayParams.__getattr__')
 
 	def __getstate__(self): return self.__dict__
 	def __setstate__(self, d): self.__dict__.update(d)
 
+
+# def _map_dsderivs((ds, i, pnew, img)):
+# 	print 'Img', img.name, 'deriv', i
+# 	oldval = ds.setParam(i, p0[i] + step)
+# 	modi = ds.getModelPatch(img)
+# 	ds.setParam(i, oldval)
+# 	return modi
+	
 
 class DustSheet(MultiParams):
 	'''
@@ -128,22 +129,24 @@ class DustSheet(MultiParams):
 										NpArrayParams(emissivity))
 		self.wcs = wcs
 
+	def getArrays(self):
+		shape = self.shape
+		logsa = self.logsolidangle.a.reshape(shape)
+		logt  = self.logtemperature.a.reshape(shape)
+		emis  = self.emissivity.a.reshape(shape)
+		return (logsa, logt, emis)
+
+
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.logsolidangle.shape
-		raise AttributeError(name + ': no such attribute in DustSheet.__getattr__')
+		raise AttributeError() #name + ': no such attribute in DustSheet.__getattr__')
 
-	def __getstate__(self):
-		# ugh!
+	def __getstate__(self): #return self.__dict__
 		D = self.__dict__.copy()
-		D.update(wcs=self.wcs.__getstate__())
+		D.pop('mp', None)
 		return D
-
-	def __setstate__(self, d):
-		swcs = d.pop('wcs')
-		self.__dict__.update(d)
-		self.wcs = Tan()
-		self.wcs.__setstate__(swcs)
+	def __setstate__(self, d): self.__dict__.update(d)
 
 	def _getcounts(self, img):
 		# This takes advantage of the coincidence that our DustPhotoCal does the right thing
@@ -184,10 +187,19 @@ class DustSheet(MultiParams):
 		mod0 = self.getModelPatch(img)
 		#counts0 = self._getcounts(img)
 		derivs = []
+
+		# This doesn't work because the tractor already map()s this function
+		# ss = self.getStepSizes()
+		# if hasattr(self, 'mp'):
+		# 	modis = self.mp.map(_map_dsderivs, [(i,step,img) for i,step in enumerate(ss)])
+		# 	for modi,step in sip(modis,ss):
+		# 		d = (modi - mod0) * (1./step)
+		# 		derivs.append(d)
+		# 	return derivs
+
 		for i,step in enumerate(self.getStepSizes()):
 			print 'Img', img.name, 'deriv', i
 			oldval = self.setParam(i, p0[i] + step)
-
 			# countsi = self._getcounts(img)
 			# I = (countsi != counts0)
 			# xi = np.where(np.sum(I, axis=0) > 0)
@@ -195,17 +207,15 @@ class DustSheet(MultiParams):
 			# xi = min(xi),max(xi)
 			# yi = min(yi),max(yi)
 			# Expand by Lanczos + PSF kernel
-
 			modi = self.getModelPatch(img)
 			self.setParam(i, oldval)
 			d = (modi - mod0) * (1./step)
 			derivs.append(d)
 		return derivs
 
-def makeplots(tractor, step):
+def makeplots(tractor, step, suffix):
 	print 'Rendering synthetic images...'
 	mods = tractor.getModelImages()
-	print 'got mods'
 	for i,mod in enumerate(mods):
 		tim = tractor.getImage(i)
 		ima = dict(interpolation='nearest', origin='lower',
@@ -215,7 +225,7 @@ def makeplots(tractor, step):
 		plt.gray()
 		plt.colorbar()
 		plt.title(tim.name)
-		plt.savefig('model-%i-%02i.png' % (i, step))
+		plt.savefig('model-%i-%02i%s.png' % (i, step, suffix))
 
 		if step == 0:
 			plt.clf()
@@ -233,7 +243,32 @@ def makeplots(tractor, step):
 		plt.gray()
 		plt.colorbar()
 		plt.title(tim.name)
-		plt.savefig('chi-%i-%02i.png' % (i, step))
+		plt.savefig('chi-%i-%02i%s.png' % (i, step, suffix))
+
+	ds = tractor.getCatalog()[0]
+	print 'Dust sheet:', ds
+	logsa, logt, emis = ds.getArrays()
+	plt.clf()
+	plt.imshow(logsa, interpolation='nearest', origin='lower')
+	plt.gray()
+	plt.colorbar()
+	plt.title('Dust: log(solid angle)')
+	plt.savefig('logsa-%02i%s.png' % (step, suffix))
+
+	plt.clf()
+	plt.imshow(logt, interpolation='nearest', origin='lower')
+	plt.gray()
+	plt.colorbar()
+	plt.title('Dust: log(temperature)')
+	plt.savefig('logt-%02i%s.png' % (step, suffix))
+
+	plt.clf()
+	plt.imshow(emis, interpolation='nearest', origin='lower')
+	plt.gray()
+	plt.colorbar()
+	plt.title('Dust: emissivity')
+	plt.savefig('emis-%02i%s.png' % (step, suffix))
+
 	print 'Finished plotting images'
 
 def main():
@@ -248,6 +283,10 @@ def main():
 	parser.add_option('--threads', dest='threads', default=1, type=int, help='Use this many concurrent processors')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
+
+	parser.add_option('--grid', dest='gridn', type=int, default=5, help='Dust parameter grid size')
+	parser.add_option('--suffix', dest='suffix', default='', help='Output file suffix')
+
 	opt,args = parser.parse_args()
 
 	if opt.verbose == 0:
@@ -256,14 +295,14 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	if opt.threads > 1 and True:
+	if opt.threads > 1 and False:
 		global dpool
 		import debugpool
 		dpool = debugpool.DebugPool(opt.threads)
 		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
 		mp = multiproc(pool=dpool)
 	else:
-		mp = multiproc(opt.threads, wrap_all=True)
+		mp = multiproc(opt.threads)#, wrap_all=True)
 
 	"""
 	Brittle function to read Groves data sample and make the
@@ -276,7 +315,7 @@ def main():
 	- Can I just blow up the SPIRE images with interpolation?
 	"""
 	dataList = [
-		#('m31_brick15_PACS100.fits',   7.23,  7.7),
+		('m31_brick15_PACS100.fits',   7.23,  7.7),
 		('m31_brick15_PACS160.fits',   3.71, 12.0),
 		('m31_brick15_SPIRE250.fits',  None, 18.0),
 		('m31_brick15_SPIRE350.fits',  None, 25.0),
@@ -300,15 +339,15 @@ def main():
 		if noise is None:
 			noise = float(hdr['NOISE'])
 		print 'Noise', noise
-		print 'Median image value', np.median(image)
+		#print 'Median image value', np.median(image)
 		invvar = np.ones_like(image) / (noise**2)
 
 		skyval = np.percentile(image, 5)
 		sky = ConstantSky(skyval)
 
 		lam = float(hdr['FILTER'])
+		#print 'Lambda', lam
 		# calibrated, yo
-		print 'Lambda', lam
 		assert(hdr['BUNIT'] == 'MJy/Sr')
 		pcal = DustPhotoCal(lam, 1.)
 		#nm = '%s %i' % (hdr['INSTRUME'], lam)
@@ -344,7 +383,7 @@ def main():
 	plt.savefig('radec.png')
 
 	print 'Creating dust sheet...'
-	N = 10
+	N = opt.gridn
 
 	# Build a WCS for the dust sheet to match the first image (assuming it's square and axis-aligned)
 	
@@ -372,48 +411,7 @@ def main():
 	logt = np.zeros((H,W)) + np.log(17.)
 	emis = np.zeros((H,W)) + 2.
 
-	#X,Y = np.meshgrid(np.arange(W), np.arange(H))
-	#logsa += X*0.1
-	#logt += Y*0.1
-	#emis += Y*0.1
-
-	print 'reduce is', reduce
-	print 'Pickle is', pickle
-	print pickle.__file__
-
-	#pickle.dumps(logsa, -1)
-	#pickle.dumps(logt, -1)
-	#pickle.dumps(emis, -1)
-	#pickle.dumps(NpArrayParams(logsa), -1)
-	#pickle.dumps(dwcs, -1)
-
 	ds = DustSheet(logsa, logt, emis, dwcs)
-
-	#print 'Pickle ds:'
-	#pickle.dumps(ds, -1)
-	print 'Mup',
-	mup = MultiParams(NpArrayParams(logsa),
-					  NpArrayParams(logt),
-					  NpArrayParams(emis))
-	mup.wcs = dwcs
-	pickle.dumps(mup, -1)
-	print 'WCS'
-	pickle.dumps(dwcs, -1)
-	print 'ds'
-
-	S = ds.__getstate__()
-	print 'State', S
-
-	#ds1 = DustSheet.__new__()
-	#ds1.__setstate__(S)
-
-	# print ds.__dict__
-	# for k,v in ds.__dict__.items():
-	# 	print k, v
-	# 	pickle.dumps((k,v),-1)
-	pickle.dumps(ds, -1)
-	sys.exit(0)
-	
 	print 'DustSheet:', ds
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
@@ -424,15 +422,10 @@ def main():
 	
 	tractor = Tractor(Images(*tims), cat)
 	tractor.mp = mp
+	## hack
+	#ds.mp = mp
 
-	#print 'Pickle cat:'
-	#pickle.dumps(cat, -1)
-
-	#print 'pickle tractor:'
-	#pickle.dumps(tractor, -1)
-	sys.exit(0)
-
-	makeplots(tractor, 0)
+	makeplots(tractor, 0, opt.suffix)
 
 	for im in tractor.getImages():
 		im.freezeAllBut('sky')
@@ -440,11 +433,9 @@ def main():
 	for i in range(10):
 		#tractor.optimize(damp=10.)
 		tractor.optimize(damp=1., alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
-		makeplots(tractor, 1 + i)
+		makeplots(tractor, 1 + i, opt.suffix)
+		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (i, opt.suffix))
 
-	pickle_to_file(tractor, 'herschel.pickle')
-
-	
 
 if __name__ == '__main__':
 	main()

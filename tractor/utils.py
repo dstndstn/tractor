@@ -571,8 +571,6 @@ class MultiParams(BaseParams, NamedParams):
 		'''
 		p = []
 		for s in self._getActiveSubs():
-			#print 'me:', self
-			#print 's', s
 			pp = s.getParams()
 			if pp is None:
 				continue

@@ -78,17 +78,8 @@ class DebugConnection():
 		# pickle obj to string (dumps())
 		# write string length (u32 network byte order) + string
 		# return self.real.send(obj)
-		print 'sending', str(obj)
 		t0 = time.time()
-		try:
-			print 'Pickle', pickle
-			s = pickle.dumps(obj, -1)
-		except:
-			import traceback
-			print 'Exception in debugpool.send:'
-			traceback.print_exc()
-			raise
-		
+		s = pickle.dumps(obj, -1)
 		dt = time.time() - t0
 		self.pbytes += len(s)
 		self.ptime += dt
