@@ -720,9 +720,6 @@ class Tractor(MultiParams):
 		Ncols = len(allderivs)
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
-
-		print 'imgoffs:', imgoffs
-
 		colscales = []
 		for col, param in enumerate(allderivs):
 			RR = []

@@ -77,7 +77,6 @@ class DustPhotoCal(ParamList):
 	def brightnessToCounts(self, brightness):
 		# see http://arxiv.org/abs/astro-ph/9902255 for (lam/lam0) ^ -beta, eg
 		beta = np.array(brightness.emissivity)
-		print 'beta', beta.shape, 'range', beta.min(), beta.max()
 		return(
 			np.exp(brightness.logsolidangle)
 			* ((self.lam / DustPhotoCal.lam0) ** (-1. * beta))
@@ -282,35 +281,17 @@ class DustSheet(MultiParams):
 			print 'Img', img.name, 'deriv', i, name
 			oldval = self.setParam(i, p0[i] + step)
 			countsi = self._getcounts(img)
-			pnow = self.getParams()
-			dp = (np.array(pnow) - np.array(p0))
 			self.setParam(i, oldval)
-			print 'dparams', dp
 
 			dc = (countsi - counts0).ravel()
 			I = np.flatnonzero(dc != 0)
-			if len(I) != 1:
-				print 'I', I
-				print 'i', i
-				print 'step', step
-				print 'oldval', oldval
-				print 'p0[i]', p0[i]
-				print '+step', p0[i]+step
-				print 'countsi', countsi
-				print 'counts0', counts0
-				print 'dcounts', countsi - counts0
-				print 'rav', (countsi - counts0).ravel()
+			# I spent a long time trying to figure out why the SPIRE100 beta derivative was zero...
+			# (d/dX(1. ** X) == 0)
 			if len(I) == 0:
 				derivs.append(None)
 				continue
-			#assert(len(I) == 1)
+			assert(len(I) == 1)
 			ii = I[0]
-
-			#xx = X[:,ii]
-			#print 'mean non-zero X elements:', np.mean(xx[np.flatnonzero(xx)])
-			#print 'dc', dc[ii]
-			#print 'scale', cscale / step
-
 			dmod = ((X[:,ii] * dc[ii]) * (cscale / step)).reshape(imshape)
 			derivs.append(Patch(0, 0, dmod))
 
@@ -353,8 +334,9 @@ class DustSheet(MultiParams):
 		return derivs
 
 def makeplots(tractor, step, suffix):
-	print 'Rendering synthetic images...'
+	print 'Making plots'
 	mods = tractor.getModelImages()
+	plt.figure(figsize=(8,6))
 	for i,mod in enumerate(mods):
 		tim = tractor.getImage(i)
 		ima = dict(interpolation='nearest', origin='lower',
@@ -384,6 +366,44 @@ def makeplots(tractor, step, suffix):
 		plt.title(tim.name)
 		plt.savefig('chi-%i-%02i%s.png' % (i, step, suffix))
 
+
+	plt.figure(figsize=(16,8))
+	plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.9, wspace=0.1, hspace=0.1)
+	R,C = 3,len(mods)
+	plt.clf()
+	for i,mod in enumerate(mods):
+		tim = tractor.getImage(i)
+		ima = dict(interpolation='nearest', origin='lower',
+				   vmin=tim.zr[0], vmax=tim.zr[1])
+
+		plt.subplot(R, C, i + 1)
+		plt.imshow(tim.getImage(), **ima)
+		plt.xticks([])
+		plt.yticks([])
+		plt.gray()
+		plt.colorbar()
+		plt.title(tim.name)
+
+		plt.subplot(R, C, i + 1 + C)
+		plt.imshow(mod, **ima)
+		plt.xticks([])
+		plt.yticks([])
+		plt.gray()
+		plt.colorbar()
+		#plt.title(tim.name)
+
+		plt.subplot(R, C, i + 1 + 2*C)
+		plt.imshow((tim.getImage() - mod) * tim.getInvError(),
+				   interpolation='nearest', origin='lower',
+				   vmin=-5, vmax=+5)
+		plt.xticks([])
+		plt.yticks([])
+		plt.gray()
+		plt.colorbar()
+		#plt.title(tim.name)
+	plt.savefig('all-%02i%s.png' % (step, suffix))
+	plt.figure(figsize=(8,6))
+
 	ds = tractor.getCatalog()[0]
 	print 'Dust sheet:', ds
 	logsa, logt, emis = ds.getArrays()
@@ -395,11 +415,25 @@ def makeplots(tractor, step, suffix):
 	plt.savefig('logsa-%02i%s.png' % (step, suffix))
 
 	plt.clf()
+	plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	plt.hot()
+	plt.colorbar()
+	plt.title('Dust: solid angle')
+	plt.savefig('sa-%02i%s.png' % (step, suffix))
+
+	plt.clf()
 	plt.imshow(logt, interpolation='nearest', origin='lower')
 	plt.gray()
 	plt.colorbar()
 	plt.title('Dust: log(temperature)')
 	plt.savefig('logt-%02i%s.png' % (step, suffix))
+
+	plt.clf()
+	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
+	plt.hot()
+	plt.colorbar()
+	plt.title('Dust: temperature (K)')
+	plt.savefig('t-%02i%s.png' % (step, suffix))
 
 	plt.clf()
 	plt.imshow(emis, interpolation='nearest', origin='lower')
@@ -408,7 +442,7 @@ def makeplots(tractor, step, suffix):
 	plt.title('Dust: emissivity')
 	plt.savefig('emis-%02i%s.png' % (step, suffix))
 
-	print 'Finished plotting images'
+
 
 def main():
 	import optparse
