@@ -141,6 +141,22 @@ class DustSheet(MultiParams):
 		emis  = self.emissivity.a.reshape(shape)
 		return (logsa, logt, emis)
 
+	def getLogPrior(self):
+		logsa, logt, emis = self.getArrays()
+		# harsh punishment for invalid values
+		if (emis < 0.).any():
+			return -1e100 * np.sum(emis < 0.)
+		P = (
+			# log(T): log-normal, mean 17K sigma 20%
+			np.sum(((logt - np.log(17.)) / np.log(1.2))**2) +
+
+			# emissivity: normal, mean 2. sigma 0.5
+			np.sum(((emis - 2.) / 0.5) ** 2)
+
+			# log(surface density): free
+			)
+		print 'Returning log-prior', P
+		return P
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -506,6 +522,14 @@ def main():
 		('m31_brick15_SPIRE350.fits',  None, 25.0),
 		('m31_brick15_SPIRE500.fits',  None, 37.0),
 		]
+
+	# From Groves via Rix:
+	# 6.97, 11.01, 18.01, 24.73, 35.98
+
+	# Within the region Ive selected I found temperatures between 15
+	# and 21 K, averaging 17 K, and Beta= 1.5 to 2.5 (with a larger
+	# uncertainty), averaging around 2.0.
+
 
 	if opt.no100:
 		dataList = dataList[1:]
