@@ -276,8 +276,6 @@ def main():
 	import logging
 	import sys
 
-	import callgrind
-
 	###
 	log_init(3)
 	
@@ -292,6 +290,8 @@ def main():
 
 	parser.add_option('--no-100', dest='no100', action='store_true', default=False,
 					  help='Omit PACS-100 data?')
+
+	parser.add_option('--callgrind', dest='callgrind', action='store_true', default=False, help='Turn on callgrind around tractor.optimize()')
 
 	opt,args = parser.parse_args()
 
@@ -309,6 +309,12 @@ def main():
 		mp = multiproc(pool=dpool)
 	else:
 		mp = multiproc(opt.threads)#, wrap_all=True)
+
+	if opt.callgrind:
+		import callgrind
+	else:
+		callgrind = None
+
 
 	"""
 	Brittle function to read Groves data sample and make the
@@ -442,9 +448,13 @@ def main():
 	for i in range(opt.steps):
 		#tractor.optimize(damp=10.)
 
-		callgrind.callgrind_start_instrumentation()
+		if callgrind:
+			callgrind.callgrind_start_instrumentation()
+
 		tractor.optimize(damp=1., alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
-		callgrind.callgrind_stop_instrumentation()
+
+		if callgrind:
+			callgrind.callgrind_stop_instrumentation()
 
 		makeplots(tractor, 1 + i, opt.suffix)
 		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (i, opt.suffix))
