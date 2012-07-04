@@ -41,7 +41,8 @@ import os
 # Only _multiprocessing/socket_connection.c is used on non-Windows platforms.
 
 import _multiprocessing
-import cPickle as pickle
+#import cPickle as pickle
+import pickle
 import time
 
 class DebugConnection():
@@ -77,9 +78,17 @@ class DebugConnection():
 		# pickle obj to string (dumps())
 		# write string length (u32 network byte order) + string
 		# return self.real.send(obj)
-		#print 'sending', str(obj)
+		print 'sending', str(obj)
 		t0 = time.time()
-		s = pickle.dumps(obj, -1)
+		try:
+			print 'Pickle', pickle
+			s = pickle.dumps(obj, -1)
+		except:
+			import traceback
+			print 'Exception in debugpool.send:'
+			traceback.print_exc()
+			raise
+		
 		dt = time.time() - t0
 		self.pbytes += len(s)
 		self.ptime += dt

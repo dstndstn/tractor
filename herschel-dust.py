@@ -13,14 +13,22 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 
+#import cPickle as pickle
+import pickle
+
 import numpy as np
 from tractor import *
+print 'after tractor:', pickle
+
 from tractor.cache import Cache
 import pyfits
 from astrometry.util.util import Tan, tan_wcs_resample, log_init
 from astrometry.util.multiproc import multiproc
-from astrometry.util.file import *
+from astrometry.util.file import pickle_to_file, unpickle_from_file
+print 'after file:', pickle
 import multiprocessing
+
+import pickle
 
 class Physics(object):
 	# all the following from physics.nist.gov
@@ -99,6 +107,9 @@ class NpArrayParams(ParamList):
 			return getattr(self.a, name)
 		raise AttributeError(name + ': no such attribute in NpArrayParams.__getattr__')
 
+	def __getstate__(self): return self.__dict__
+	def __setstate__(self, d): self.__dict__.update(d)
+
 
 class DustSheet(MultiParams):
 	'''
@@ -120,22 +131,35 @@ class DustSheet(MultiParams):
 	def __getattr__(self, name):
 		if name == 'shape':
 			return self.logsolidangle.shape
+		raise AttributeError(name + ': no such attribute in DustSheet.__getattr__')
 
-	def getModelPatch(self, img):
-		# Compute emission in the native grid
-		# Resample onto img grid + do PSF convolution in one shot
-		H,W = self.shape
+	def __getstate__(self):
+		# ugh!
+		D = self.__dict__.copy()
+		D.update(wcs=self.wcs.__getstate__())
+		return D
 
+	def __setstate__(self, d):
+		swcs = d.pop('wcs')
+		self.__dict__.update(d)
+		self.wcs = Tan()
+		self.wcs.__setstate__(swcs)
+
+	def _getcounts(self, img):
 		# This takes advantage of the coincidence that our DustPhotoCal does the right thing
 		# with numpy arrays.
 		counts = img.getPhotoCal().brightnessToCounts(self)
 		# Thanks to NpArrayParams they get ravel()'d down to 1-d, so
 		# reshape back to 2d
 		counts = counts.reshape(self.shape).astype(np.float32)
+		return counts
 
-		#print 'Counts:', counts.shape
+	def getModelPatch(self, img):
+		# Compute emission in the native grid
+		# Resample onto img grid + do PSF convolution in one shot
 
 		# I am weak... do resampling + convolution in separate shots
+		counts = self._getcounts(img)
 		iH,iW = img.shape
 		rim = np.zeros((iH,iW), np.float32)
 		imwcs = img.getWcs()
@@ -158,10 +182,20 @@ class DustSheet(MultiParams):
 		# Super-naive!!
 		p0 = self.getParams()
 		mod0 = self.getModelPatch(img)
+		#counts0 = self._getcounts(img)
 		derivs = []
 		for i,step in enumerate(self.getStepSizes()):
 			print 'Img', img.name, 'deriv', i
 			oldval = self.setParam(i, p0[i] + step)
+
+			# countsi = self._getcounts(img)
+			# I = (countsi != counts0)
+			# xi = np.where(np.sum(I, axis=0) > 0)
+			# yi = np.where(np.sum(I, axis=1) > 0)
+			# xi = min(xi),max(xi)
+			# yi = min(yi),max(yi)
+			# Expand by Lanczos + PSF kernel
+
 			modi = self.getModelPatch(img)
 			self.setParam(i, oldval)
 			d = (modi - mod0) * (1./step)
@@ -170,8 +204,8 @@ class DustSheet(MultiParams):
 
 def makeplots(tractor, step):
 	print 'Rendering synthetic images...'
-
 	mods = tractor.getModelImages()
+	print 'got mods'
 	for i,mod in enumerate(mods):
 		tim = tractor.getImage(i)
 		ima = dict(interpolation='nearest', origin='lower',
@@ -200,6 +234,7 @@ def makeplots(tractor, step):
 		plt.colorbar()
 		plt.title(tim.name)
 		plt.savefig('chi-%i-%02i.png' % (i, step))
+	print 'Finished plotting images'
 
 def main():
 	import optparse
@@ -221,7 +256,14 @@ def main():
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	mp = multiproc(opt.threads, wrap_all=True)
+	if opt.threads > 1 and True:
+		global dpool
+		import debugpool
+		dpool = debugpool.DebugPool(opt.threads)
+		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
+		mp = multiproc(pool=dpool)
+	else:
+		mp = multiproc(opt.threads, wrap_all=True)
 
 	"""
 	Brittle function to read Groves data sample and make the
@@ -302,7 +344,7 @@ def main():
 	plt.savefig('radec.png')
 
 	print 'Creating dust sheet...'
-	N = 5
+	N = 10
 
 	# Build a WCS for the dust sheet to match the first image (assuming it's square and axis-aligned)
 	
@@ -334,9 +376,44 @@ def main():
 	#logsa += X*0.1
 	#logt += Y*0.1
 	#emis += Y*0.1
-	
+
+	print 'reduce is', reduce
+	print 'Pickle is', pickle
+	print pickle.__file__
+
+	#pickle.dumps(logsa, -1)
+	#pickle.dumps(logt, -1)
+	#pickle.dumps(emis, -1)
+	#pickle.dumps(NpArrayParams(logsa), -1)
+	#pickle.dumps(dwcs, -1)
+
 	ds = DustSheet(logsa, logt, emis, dwcs)
 
+	#print 'Pickle ds:'
+	#pickle.dumps(ds, -1)
+	print 'Mup',
+	mup = MultiParams(NpArrayParams(logsa),
+					  NpArrayParams(logt),
+					  NpArrayParams(emis))
+	mup.wcs = dwcs
+	pickle.dumps(mup, -1)
+	print 'WCS'
+	pickle.dumps(dwcs, -1)
+	print 'ds'
+
+	S = ds.__getstate__()
+	print 'State', S
+
+	#ds1 = DustSheet.__new__()
+	#ds1.__setstate__(S)
+
+	# print ds.__dict__
+	# for k,v in ds.__dict__.items():
+	# 	print k, v
+	# 	pickle.dumps((k,v),-1)
+	pickle.dumps(ds, -1)
+	sys.exit(0)
+	
 	print 'DustSheet:', ds
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
@@ -347,6 +424,13 @@ def main():
 	
 	tractor = Tractor(Images(*tims), cat)
 	tractor.mp = mp
+
+	#print 'Pickle cat:'
+	#pickle.dumps(cat, -1)
+
+	#print 'pickle tractor:'
+	#pickle.dumps(tractor, -1)
+	sys.exit(0)
 
 	makeplots(tractor, 0)
 
@@ -363,9 +447,9 @@ def main():
 	
 
 if __name__ == '__main__':
-	#main()
-	import cProfile
-	import sys
-	from datetime import tzinfo, timedelta, datetime
-	cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
+	main()
+	#import cProfile
+	#import sys
+	#from datetime import tzinfo, timedelta, datetime
+	#cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
 	#sys.exit(0)

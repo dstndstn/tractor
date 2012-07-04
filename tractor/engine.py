@@ -412,9 +412,18 @@ def getsrcderivs((src, img)):
 	return src.getParamDerivatives(img)
 
 def getmodelimagefunc2((tr, im)):
-	#print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
+	print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
 	#tr.images = Images(im)
-	return tr.getModelImage(im)
+	try:
+		return tr.getModelImage(im)
+	except:
+		import traceback
+		print 'Exception in getmodelimagefun2:'
+		#print '	 params:', X
+		print '	 exception:'
+		traceback.print_exc()
+		raise
+		
 
 class Tractor(MultiParams):
 	"""
@@ -445,7 +454,7 @@ class Tractor(MultiParams):
 		self.modtype = np.float32
 		if cache is None:
 			cache = Cache()
-		self.cache = Cache()
+		self.cache = cache
 		self.cachestack = []
 		self.pickleCache = pickleCache
 
@@ -481,6 +490,7 @@ class Tractor(MultiParams):
 		S = (self.getImages(), self.getCatalog(), self.liquid)
 		if self.pickleCache:
 			S = S + (self.cache,)
+		#print 'Tractor.__getstate__:', S
 		return S
 	def __setstate__(self, state):
 		#print 'unpickling tractor in pid', os.getpid()
@@ -936,8 +946,11 @@ class Tractor(MultiParams):
 		if self.is_multiproc():
 			# avoid shipping my images...
 			allimages = self.getImages()
-			self.images = []
-			mods = self._map(getmodelimagefunc2, [(self, im) for im in allimages])
+			self.images = Images()
+			args = [(self, im) for im in allimages]
+			print 'Calling _map:', getmodelimagefunc2
+			print 'args:', args
+			mods = self._map(getmodelimagefunc2, args)
 			self.images = allimages
 		else:
 			mods = [self.getModelImage(img) for img in self.images]
