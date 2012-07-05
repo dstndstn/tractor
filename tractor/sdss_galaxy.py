@@ -166,7 +166,7 @@ class Galaxy(MultiParams):
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with ' + str(self.brightness)
-				+ ', re=%.1f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi))
+				+ ' and ' + str(self.shape))
 	def __repr__(self):
 		return (self.name + '(pos=' + repr(self.pos) +
 				', brightness=' + repr(self.brightness) +
