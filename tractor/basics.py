@@ -58,6 +58,20 @@ class Mags(ParamList):
 			kwargs[band] = msum
 		return Mags(order=self.order, **kwargs)
 
+	def copy(self):
+		return self*1.
+      
+	def __mul__(self, factor):
+		# Negative magnifications appear in gravitational lensing, but they just label
+		# the "parity" of the source, not its brightness. So, we treat factor=-3 the 
+		# same as factor=3, for example.
+		kwargs = {}
+		for band in self.order:
+			m = self.getMag(band)
+			mscaled = m - 2.5 * np.log10( np.abs(factor) )
+			kwargs[band] = mscaled
+		return Mags(order=self.order, **kwargs)
+
 	def __setstate__(self, state):
 		'''For pickling.'''
 		self.__dict__ = state
@@ -89,7 +103,7 @@ class Flux(ScalarParam):
 
 class MagsPhotoCal(ParamList):
 	'''
-	A `PhotoCal` implementation to be usesd with zeropoint-calibrated `Mags`.
+	A `PhotoCal` implementation to be used with zeropoint-calibrated `Mags`.
 	'''
 	def __init__(self, band, zeropoint):
 		'''
