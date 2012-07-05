@@ -31,18 +31,36 @@ class Physics(object):
 	kk = 1.3806488e-23 # J K^{-1}
 
 	@staticmethod
-	def black_body(lam, lnT):
+	def black_body_lambda(lam, lnT):
 		"""
 		Compute the black-body formula, for a given lnT.
 
 		'lam' is wavelength in meters
 		'lnT' is log-temperature in Kelvin
 
-		Return value is in [J s^-1 m^-3],
-		power radiated per square meter (area), per meter of wavelength
+		Return value is in [J s^{-1} m^{-2} m^{-1} sr^{-1}],
+		power radiated per square meter (area), per meter of wavelength, per steradian
 		"""
 		return (2. * Physics.hh * (Physics.cc ** 2) * (lam ** -5) /
 				(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
+
+	@staticmethod
+	def black_body_nu(lam, lnT):
+		"""
+		Compute the black-body formula, for a given lnT.
+
+		'lam' is wavelength in meters
+		'lnT' is log-temperature in Kelvin
+
+		Return value is in [J s^{-1} m^{-2} Hz^{-1} sr^{-1}],
+		power radiated per square meter (area), per Hz of frequency, per steradian
+		"""
+		return (lam * lam / Physics.cc) * black_body_lambda(lam, lnT)
+
+	@staticmethod
+	def black_body(lam, lnT):
+		return black_body_nu(lam, lnT)
+
 
 class DustPhotoCal(ParamList):
 	def __init__(self, lam, pixscale):   #, Mjypersrperdn):
