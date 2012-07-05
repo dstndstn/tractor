@@ -62,7 +62,10 @@ class Mags(ParamList):
 		return self*1.
       
 	def __mul__(self, factor):
-		# Negative magnifications appear in gravitational lensing, but they just label
+		# Return the magnitude that corresponds to the flux rescaled by factor.
+            # Flux is positive (and log(-ve) is not permitted), so we take the abs
+            # of the input scale factor to prevent embarrassment.
+            # Negative magnifications appear in gravitational lensing, but they just label
 		# the "parity" of the source, not its brightness. So, we treat factor=-3 the 
 		# same as factor=3, for example.
 		kwargs = {}
