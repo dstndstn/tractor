@@ -756,7 +756,17 @@ class Tractor(MultiParams):
 				colscales.append(1.)
 				continue
 			rows = np.hstack(RR)
-			vals = np.hstack(VV) * np.hstack(WW)
+			VV = np.hstack(VV)
+			WW = np.hstack(WW)
+			#vals = np.hstack(VV) * np.hstack(WW)
+			print 'VV absmin:', np.min(np.abs(VV))
+			print 'WW absmin:', np.min(np.abs(WW))
+			print 'VV type', VV.dtype
+			print 'WW type', WW.dtype
+			vals = VV * WW
+			print 'vals absmin:', np.min(np.abs(vals))
+			print 'vals absmax:', np.max(np.abs(vals))
+
 			# shouldn't be necessary since we check len(nz)>0 above
 			#if len(vals) == 0:
 			#	colscales.append(1.)
@@ -772,7 +782,7 @@ class Tractor(MultiParams):
 			I = (np.abs(vals) > (FACTOR * mx))
 			rows = rows[I]
 			vals = vals[I]
-			scale = np.sqrt(np.sum(vals * vals))
+			scale = np.sqrt(np.dot(vals, vals)) #sum(vals * vals))
 			colscales.append(scale)
 			assert(len(colscales) == (col+1))
 			logverb('Column', col, 'scale:', scale)
@@ -797,23 +807,13 @@ class Tractor(MultiParams):
 				sprows.extend([ri + Nrows for ri in rA])
 				spcols.extend(cA)
 				spvals.extend([vi / colscale[ci] for vi,ci in zip(vA,cA)])
-
-				print 'Nrows:', Nrows
 				oldnrows = Nrows
-
 				nr = np.max([np.max(ri) for ri in rA]) + 1
-				print 'Added', nr, 'rows of priors'
 				Nrows += nr
-				print 'Now Nrows = ', Nrows
+				logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
 				Ncols = max(Ncols, np.max(cA)+1)
-
 				b = np.zeros(Nrows)
-				print 'pb', pb
-				pb = np.hstack(pb)
-				print 'stacked', pb.shape, pb
-				print 'b', b.shape
-				print 'b[oldnrows:]', b[oldnrows:].shape
-				b[oldnrows:] = pb
+				b[oldnrows:] = np.hstack(pb)
 
 		if len(spcols) == 0:
 			logverb("len(spcols) == 0")

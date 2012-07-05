@@ -106,14 +106,6 @@ class NpArrayParams(ParamList):
 	def __setstate__(self, d): self.__dict__.update(d)
 
 
-# def _map_dsderivs((ds, i, pnew, img)):
-# 	print 'Img', img.name, 'deriv', i
-# 	oldval = ds.setParam(i, p0[i] + step)
-# 	modi = ds.getModelPatch(img)
-# 	ds.setParam(i, oldval)
-# 	return modi
-	
-
 class DustSheet(MultiParams):
 	'''
 	A Source that represents a smooth sheet of dust.  The dust parameters are help in arrays
@@ -137,6 +129,7 @@ class DustSheet(MultiParams):
 		# log(T): log-normal, mean 17K sigma 20%
 		self.prior_logt_mean = np.log(17.)
 		self.prior_logt_std = np.log(1.2)
+		# emissivity: normal
 		self.prior_emis_mean = 2.
 		self.prior_emis_std = 0.5
 
@@ -183,10 +176,14 @@ class DustSheet(MultiParams):
 		This will go into the least-squares fitting (each term in the
 		prior acts like an extra "pixel" in the fit).
 
-		Returns (pA, pb), where:
+		Returns (rowA, colA, valA, pb), where:
+
+		rowA, colA, valA: describe a sparse matrix pA
 
 		pA: has shape N x numberOfParams
 		pb: has shape N
+
+		rowA, colA, valA, and pb should be *lists* of np.arrays
 
 		where "N" is the number of "pseudo-pixels"; "pA" will be
 		appended to the least-squares "A" matrix, and "pb" will be
@@ -197,18 +194,6 @@ class DustSheet(MultiParams):
 
 		This function must take frozen-ness of parameters into account
 		(this is implied by the "numberOfParams" shape requirement).
-
-
-
-		Returns (rowA, colA, valA, pb), where:
-
-		rowA, colA, valA: describe a sparse matrix pA
-
-		pA: has shape N x numberOfParams
-		pb: has shape N
-
-		rowA, colA, valA, and pb should be *lists* of np.arrays
-
 		'''
 
 		# We have separable priors on the log-T and emissivity
@@ -226,43 +211,25 @@ class DustSheet(MultiParams):
 			c0 += self.logsolidangle.numberOfParams()
 		r0 = 0
 
-		if not self.isParamFrozen('logtemperature'):
-			I = np.array(list(self.logtemperature.getThawedParamIndices()))
+		for pname, mn, st, arr in [('logtemperature', self.prior_logt_mean,
+									self.prior_logt_std, logt),
+								   ('emissivity', self.prior_emis_mean,
+									self.prior_emis_std, emis)]:
+			if self.isParamFrozen(pname):
+				continue
+			p = getattr(self, pname)
+			I = np.array(list(p.getThawedParamIndices()))
 			NI = len(I)
 			off = np.arange(NI)
-			std = self.prior_logt_std * np.ones(NI)
-			
+			std = st * np.ones(NI)
 			rA.append(r0 + off)
 			cA.append(c0 + off)
 			vA.append( 1. / std )
-			pb.append( -(logt[I] - self.prior_logt_mean) / std )
-
+			pb.append( -(arr[I] - mn) / std )
 			c0 += NI
 			r0 += NI
-
-		if not self.isParamFrozen('emissivity'):
-			I = np.array(list(self.emissivity.getThawedParamIndices()))
-			NI = len(I)
-			off = np.arange(NI)
-			std = self.prior_emis_std * np.ones(NI)
-
-			rA.append(r0 + off)
-			cA.append(c0 + off)
-			vA.append( 1. / std )
-			pb.append( -(emis[I] - self.prior_emis_mean) / std )
-
-			c0 += NI
-			r0 += NI
-
-
-		#rA = np.hstack(rA)
-		#cA = np.hstack(cA)
-		#vA = np.hstack(vA)
-		#pb = np.hstack(pb)
 
 		return (rA, cA, vA, pb)
-
-
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -425,17 +392,7 @@ class DustSheet(MultiParams):
 		# Super-naive!!
 		p0 = self.getParams()
 		mod0 = self.getModelPatch(img)
-		#counts0 = self._getcounts(img)
 		derivs = []
-
-		# This doesn't work because the tractor already map()s this function
-		# ss = self.getStepSizes()
-		# if hasattr(self, 'mp'):
-		# 	modis = self.mp.map(_map_dsderivs, [(i,step,img) for i,step in enumerate(ss)])
-		# 	for modi,step in sip(modis,ss):
-		# 		d = (modi - mod0) * (1./step)
-		# 		derivs.append(d)
-		# 	return derivs
 
 		for i,step in enumerate(self.getStepSizes()):
 			print 'Img', img.name, 'deriv', i
@@ -524,11 +481,37 @@ def makeplots(tractor, step, suffix):
 		plt.colorbar()
 		#plt.title(tim.name)
 	plt.savefig('all-%02i%s.png' % (step, suffix))
-	plt.figure(figsize=(8,6))
 
 	ds = tractor.getCatalog()[0]
 	print 'Dust sheet:', ds
 	logsa, logt, emis = ds.getArrays()
+
+	plt.figure(figsize=(16,5))
+
+	plt.clf()
+
+	plt.subplot(1,3,1)
+	plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	plt.hot()
+	plt.colorbar()
+	plt.title('Dust: solid angle (Sr?)')
+
+	plt.subplot(1,3,2)
+	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower') #, vmin=0)
+	plt.hot()
+	plt.colorbar()
+	plt.title('Dust: temperature (K)')
+
+	plt.subplot(1,3,3)
+	plt.imshow(emis, interpolation='nearest', origin='lower')
+	plt.gray()
+	plt.colorbar()
+	plt.title('Dust: emissivity')
+	plt.savefig('dust-%02i%s.png' % (step, suffix))
+
+
+	plt.figure(figsize=(8,6))
+
 	plt.clf()
 	plt.imshow(logsa, interpolation='nearest', origin='lower')
 	plt.gray()
@@ -567,55 +550,13 @@ def makeplots(tractor, step, suffix):
 def np_err_handler(typ, flag):
 	print 'Floating point error (%s), with flag %s' % (typ, flag)
 	import traceback
-	traceback.print_stack()
+	#print traceback.print_stack()
+	tb = traceback.extract_stack()
+	# omit myself
+	tb = tb[:-1]
+	print '\n'.join(traceback.format_list(tb))
 
-def main():
-	import optparse
-	import logging
-	import sys
-
-	###
-	log_init(3)
-	
-	parser = optparse.OptionParser()
-	parser.add_option('--threads', dest='threads', default=1, type=int, help='Use this many concurrent processors')
-	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
-					  help='Make more verbose')
-
-	parser.add_option('--grid', '-g', dest='gridn', type=int, default=5, help='Dust parameter grid size')
-	parser.add_option('--steps', '-s', dest='steps', type=int, default=10, help='# Optimization step')
-	parser.add_option('--suffix', dest='suffix', default='', help='Output file suffix')
-
-	parser.add_option('--no-100', dest='no100', action='store_true', default=False,
-					  help='Omit PACS-100 data?')
-
-	parser.add_option('--callgrind', dest='callgrind', action='store_true', default=False, help='Turn on callgrind around tractor.optimize()')
-
-	opt,args = parser.parse_args()
-
-	if opt.verbose == 0:
-		lvl = logging.INFO
-	else:
-		lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
-	if opt.threads > 1 and False:
-		global dpool
-		import debugpool
-		dpool = debugpool.DebugPool(opt.threads)
-		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
-		mp = multiproc(pool=dpool)
-	else:
-		mp = multiproc(opt.threads)#, wrap_all=True)
-
-	if opt.callgrind:
-		import callgrind
-	else:
-		callgrind = None
-
-	np.seterrcall(np_err_handler)
-	np.seterr(all='call')
-
+def create_tractor(opt):
 	"""
 	Brittle function to read Groves data sample and make the
 	things we need for fitting.
@@ -640,7 +581,6 @@ def main():
 	# Within the region Ive selected I found temperatures between 15
 	# and 21 K, averaging 17 K, and Beta= 1.5 to 2.5 (with a larger
 	# uncertainty), averaging around 2.0.
-
 
 	if opt.no100:
 		dataList = dataList[1:]
@@ -741,41 +681,96 @@ def main():
 	#print 'pn', ds.getParamNames()
 	#print 'p', ds.getParams()
 
-	print 'PriorChi:', ds.getLogPriorChi()
-	ra,ca,va,pb = ds.getLogPriorChi()
-	print 'ra', ra
-	print 'ca', ca
-	print 'va', va
-	print 'pb', pb
-	for ri,ci,vi,bi in zip(ra,ca,va,pb):
-		print
-		print 'ri', ri
-		print 'ci', ci
-		print 'vi', vi
-		print 'bi', bi
+	# print 'PriorChi:', ds.getLogPriorChi()
+	# ra,ca,va,pb = ds.getLogPriorChi()
+	# print 'ra', ra
+	# print 'ca', ca
+	# print 'va', va
+	# print 'pb', pb
+	# for ri,ci,vi,bi in zip(ra,ca,va,pb):
+	# 	print
+	# 	print 'ri', ri
+	# 	print 'ci', ci
+	# 	print 'vi', vi
+	# 	print 'bi', bi
 
 	cat = Catalog()
 	cat.append(ds)
 	
 	tractor = Tractor(Images(*tims), cat)
-	tractor.mp = mp
-	## hack
-	#ds.mp = mp
+	return tractor
 
-	print 'Precomputing transformations...'
-	XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])
-	for im,X in zip(tractor.getImages(), XX):
-		ds._setTransformation(im, X)
-	print 'done precomputing.'
 
-	makeplots(tractor, 0, opt.suffix)
+
+def main():
+	import optparse
+	import logging
+	import sys
+
+	###
+	log_init(3)
+	
+	parser = optparse.OptionParser()
+	parser.add_option('--threads', dest='threads', default=1, type=int, help='Use this many concurrent processors')
+	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+					  help='Make more verbose')
+
+	parser.add_option('--grid', '-g', dest='gridn', type=int, default=5, help='Dust parameter grid size')
+	parser.add_option('--steps', '-s', dest='steps', type=int, default=10, help='# Optimization step')
+	parser.add_option('--suffix', dest='suffix', default='', help='Output file suffix')
+
+	parser.add_option('--no-100', dest='no100', action='store_true', default=False,
+					  help='Omit PACS-100 data?')
+
+	parser.add_option('--callgrind', dest='callgrind', action='store_true', default=False, help='Turn on callgrind around tractor.optimize()')
+
+	parser.add_option('--resume', '-r', dest='resume', type=int, help='Resume from a previous run at the given step?')
+
+	opt,args = parser.parse_args()
+
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+	if opt.threads > 1 and False:
+		global dpool
+		import debugpool
+		dpool = debugpool.DebugPool(opt.threads)
+		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
+		mp = multiproc(pool=dpool)
+	else:
+		mp = multiproc(opt.threads)#, wrap_all=True)
+
+	if opt.callgrind:
+		import callgrind
+	else:
+		callgrind = None
+
+	np.seterrcall(np_err_handler)
+	np.seterr(all='call')
+
+	if opt.resume:
+		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
+		tractor = unpickle_from_file(pfn)
+		tractor.mp = mp
+		step0 = opt.resume + 1
+	else:
+		step0 = 0
+		tractor = create_tractor(opt)
+		tractor.mp = mp
+		print 'Precomputing transformations...'
+		XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])
+		for im,X in zip(tractor.getImages(), XX):
+			ds._setTransformation(im, X)
+		print 'done precomputing.'
+		makeplots(tractor, 0, opt.suffix)
 
 	for im in tractor.getImages():
 		im.freezeAllBut('sky')
 
-	for i in range(opt.steps):
-		#tractor.optimize(damp=10.)
-
+	for i in range(step0, opt.steps):
 		if callgrind:
 			callgrind.callgrind_start_instrumentation()
 
@@ -785,8 +780,7 @@ def main():
 			callgrind.callgrind_stop_instrumentation()
 
 		makeplots(tractor, 1 + i, opt.suffix)
-		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (i, opt.suffix))
-
+		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (1 + i, opt.suffix))
 
 def _map_trans((ds, img)):
 	return ds._computeTransformation(img)
