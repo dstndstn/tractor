@@ -673,7 +673,7 @@ class Tractor(MultiParams):
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
-	def getUpdateDirection(self, allderivs, damp=0.):
+	def getUpdateDirection(self, allderivs, damp=0., priors=True):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -740,6 +740,8 @@ class Tractor(MultiParams):
 				dimg = deriv.getImage()
 				nz = np.flatnonzero(dimg)
 				#print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+				if len(nz) == 0:
+					continue
 				rows = row0 + pix[nz]
 				#print 'Adding derivative', deriv.getName(), 'for image', img.name
 				vals = dimg.ravel()[nz]
@@ -755,9 +757,10 @@ class Tractor(MultiParams):
 				continue
 			rows = np.hstack(RR)
 			vals = np.hstack(VV) * np.hstack(WW)
-			if len(vals) == 0:
-				colscales.append(1.)
-				continue
+			# shouldn't be necessary since we check len(nz)>0 above
+			#if len(vals) == 0:
+			#	colscales.append(1.)
+			#	continue
 			mx = np.max(np.abs(vals))
 			if mx == 0:
 				print 'mx == 0'
@@ -777,7 +780,41 @@ class Tractor(MultiParams):
 			spcols.append(np.zeros_like(rows) + col)
 			spvals.append(vals / scale)
 
+		colscale = np.array(colscales)
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+
+		b = None
+		if priors:
+			# We don't include the priors in the "colscale"
+			# computation above, mostly because the priors are
+			# returned as sparse additions to the matrix, and not
+			# necessarily column-oriented the way the other params
+			# are.  It would be possible to make it work, but dstn is
+			# not convinced it's worth the effort right now.
+			X = self.getLogPriorChi()
+			if X is not None:
+				rA,cA,vA,pb = X
+				sprows.extend([ri + Nrows for ri in rA])
+				spcols.extend(cA)
+				spvals.extend([vi / colscale[ci] for vi,ci in zip(vA,cA)])
+
+				print 'Nrows:', Nrows
+				oldnrows = Nrows
+
+				nr = np.max([np.max(ri) for ri in rA]) + 1
+				print 'Added', nr, 'rows of priors'
+				Nrows += nr
+				print 'Now Nrows = ', Nrows
+				Ncols = max(Ncols, np.max(cA)+1)
+
+				b = np.zeros(Nrows)
+				print 'pb', pb
+				pb = np.hstack(pb)
+				print 'stacked', pb.shape, pb
+				print 'b', b.shape
+				print 'b[oldnrows:]', b[oldnrows:].shape
+				b[oldnrows:] = pb
+
 		if len(spcols) == 0:
 			logverb("len(spcols) == 0")
 			return []
@@ -815,8 +852,9 @@ class Tractor(MultiParams):
 		# FIXME -- we could be much smarter here about computing
 		# just the regions we need!
 		#
-		b = np.zeros(Nrows)
-		# iterating this way avoid setting the elements more than once
+		if b is None:
+			b = np.zeros(Nrows)
+		# iterating this way avoids setting the elements more than once
 		for img,row0 in imgoffs.items():
 			chi = self.getChiImage(img=img).ravel()
 			NP = len(chi)
@@ -824,6 +862,8 @@ class Tractor(MultiParams):
 			assert(all(b[row0 : row0 + NP] == 0))
 			assert(all(np.isfinite(chi)))
 			b[row0 : row0 + NP] = chi
+
+
 
 		# Zero out unused rows -- FIXME, is this useful??
 		bnz = np.zeros(Nrows)
@@ -834,7 +874,7 @@ class Tractor(MultiParams):
 		lsqropts = dict(show=isverbose(), damp=damp)
 
 		# lsqr can trigger floating-point errors
-		np.seterr(all='warn')
+		#np.seterr(all='warn')
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		
 		# Run lsqr()
@@ -846,14 +886,14 @@ class Tractor(MultiParams):
 		t1 = time.clock()
 		logmsg('  %.1f seconds' % (t1-t0))
 
-		olderr = set_fp_err()
+		#olderr = set_fp_err()
 		
 		logverb('scaled	 X=', X)
 		X = np.array(X)
-		X /= np.array(colscales)
+		X /= colscales
 		logverb('  X=', X)
 
-		np.seterr(**olderr)
+		#np.seterr(**olderr)
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		return X
 

@@ -134,11 +134,26 @@ class DustSheet(MultiParams):
 
 		self.Tcache = {}
 
-	def getArrays(self):
-		shape = self.shape
-		logsa = self.logsolidangle.a.reshape(shape)
-		logt  = self.logtemperature.a.reshape(shape)
-		emis  = self.emissivity.a.reshape(shape)
+		# log(T): log-normal, mean 17K sigma 20%
+		self.prior_logt_mean = np.log(17.)
+		self.prior_logt_std = np.log(1.2)
+		self.prior_emis_mean = 2.
+		self.prior_emis_std = 0.5
+
+
+	def getArrays(self, ravel=False): #, reshape=True):   DOI, they're already the right shape.
+		logsa = self.logsolidangle.a
+		logt  = self.logtemperature.a
+		emis  = self.emissivity.a
+		# if reshape:
+		# 	shape = self.shape
+		# 	logsa = logsa.reshape(shape)
+		# 	logt  = logt.reshape(shape)
+		# 	emis  = emis.reshape(shape)
+		if ravel:
+			logsa = logsa.ravel()
+			logt  = logt.ravel()
+			emis  = emis.ravel()
 		return (logsa, logt, emis)
 
 	def getLogPrior(self):
@@ -147,16 +162,107 @@ class DustSheet(MultiParams):
 		if (emis < 0.).any():
 			return -1e100 * np.sum(emis < 0.)
 		P = (
-			# log(T): log-normal, mean 17K sigma 20%
-			np.sum(((logt - np.log(17.)) / np.log(1.2))**2) +
+			-0.5 * np.sum(((logt - self.prior_logt_mean) /
+						   self.prior_logt_std)**2) +
 
 			# emissivity: normal, mean 2. sigma 0.5
-			np.sum(((emis - 2.) / 0.5) ** 2)
+			-0.5 * np.sum(((emis - self.prior_emis_mean) /
+						   self.prior_emis_std) ** 2) +
 
-			# log(surface density): free
+			# log(surface density): free (flat prior)
+			0.
 			)
-		print 'Returning log-prior', P
+		#print 'Returning log-prior', P
 		return P
+
+	def getLogPriorChi(self):
+		'''
+		Returns a "chi-like" approximation to the log-prior at the
+		current parameter values.
+
+		This will go into the least-squares fitting (each term in the
+		prior acts like an extra "pixel" in the fit).
+
+		Returns (pA, pb), where:
+
+		pA: has shape N x numberOfParams
+		pb: has shape N
+
+		where "N" is the number of "pseudo-pixels"; "pA" will be
+		appended to the least-squares "A" matrix, and "pb" will be
+		appended to the least-squares "b" vector, and the
+		least-squares problem is minimizing
+
+		|| A * (delta-params) - b ||^2
+
+		This function must take frozen-ness of parameters into account
+		(this is implied by the "numberOfParams" shape requirement).
+
+
+
+		Returns (rowA, colA, valA, pb), where:
+
+		rowA, colA, valA: describe a sparse matrix pA
+
+		pA: has shape N x numberOfParams
+		pb: has shape N
+
+		rowA, colA, valA, and pb should be *lists* of np.arrays
+
+		'''
+
+		# We have separable priors on the log-T and emissivity
+		# parameters, so the number of unfrozen params will be N.
+
+		rA = []
+		cA = []
+		vA = []
+		pb = []
+
+		logsa, logt, emis = self.getArrays(ravel=True)
+
+		c0 = 0
+		if not self.isParamFrozen('logsolidangle'):
+			c0 += self.logsolidangle.numberOfParams()
+		r0 = 0
+
+		if not self.isParamFrozen('logtemperature'):
+			I = np.array(list(self.logtemperature.getThawedParamIndices()))
+			NI = len(I)
+			off = np.arange(NI)
+			std = self.prior_logt_std * np.ones(NI)
+			
+			rA.append(r0 + off)
+			cA.append(c0 + off)
+			vA.append( 1. / std )
+			pb.append( -(logt[I] - self.prior_logt_mean) / std )
+
+			c0 += NI
+			r0 += NI
+
+		if not self.isParamFrozen('emissivity'):
+			I = np.array(list(self.emissivity.getThawedParamIndices()))
+			NI = len(I)
+			off = np.arange(NI)
+			std = self.prior_emis_std * np.ones(NI)
+
+			rA.append(r0 + off)
+			cA.append(c0 + off)
+			vA.append( 1. / std )
+			pb.append( -(emis[I] - self.prior_emis_mean) / std )
+
+			c0 += NI
+			r0 += NI
+
+
+		#rA = np.hstack(rA)
+		#cA = np.hstack(cA)
+		#vA = np.hstack(vA)
+		#pb = np.hstack(pb)
+
+		return (rA, cA, vA, pb)
+
+
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -302,7 +408,7 @@ class DustSheet(MultiParams):
 			dc = (countsi - counts0).ravel()
 			I = np.flatnonzero(dc != 0)
 			# I spent a long time trying to figure out why the SPIRE100 beta derivative was zero...
-			# (d/dX(1. ** X) == 0)
+			# (d/dX((100 um / lam0) ** X) = d/dX(1.**X) == 0...)
 			if len(I) == 0:
 				derivs.append(None)
 				continue
@@ -458,7 +564,10 @@ def makeplots(tractor, step, suffix):
 	plt.title('Dust: emissivity')
 	plt.savefig('emis-%02i%s.png' % (step, suffix))
 
-
+def np_err_handler(typ, flag):
+	print 'Floating point error (%s), with flag %s' % (typ, flag)
+	import traceback
+	traceback.print_stack()
 
 def main():
 	import optparse
@@ -504,6 +613,8 @@ def main():
 	else:
 		callgrind = None
 
+	np.seterrcall(np_err_handler)
+	np.seterr(all='call')
 
 	"""
 	Brittle function to read Groves data sample and make the
@@ -524,7 +635,7 @@ def main():
 		]
 
 	# From Groves via Rix:
-	# 6.97, 11.01, 18.01, 24.73, 35.98
+	# PSF FWHMs: 6.97, 11.01, 18.01, 24.73, 35.98
 
 	# Within the region Ive selected I found temperatures between 15
 	# and 21 K, averaging 17 K, and Beta= 1.5 to 2.5 (with a larger
@@ -629,6 +740,19 @@ def main():
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
 	#print 'p', ds.getParams()
+
+	print 'PriorChi:', ds.getLogPriorChi()
+	ra,ca,va,pb = ds.getLogPriorChi()
+	print 'ra', ra
+	print 'ca', ca
+	print 'va', va
+	print 'pb', pb
+	for ri,ci,vi,bi in zip(ra,ca,va,pb):
+		print
+		print 'ri', ri
+		print 'ci', ci
+		print 'vi', vi
+		print 'bi', bi
 
 	cat = Catalog()
 	cat.append(ds)

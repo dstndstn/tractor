@@ -74,6 +74,9 @@ class Params(object):
 		'''
 		return 0.
 
+	def getLogPriorChi(self):
+		return None
+
 class Sky(Params):
 	'''
 	Duck-type definition for a sky model.

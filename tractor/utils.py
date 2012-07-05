@@ -12,6 +12,7 @@ could be useful outside the Tractor context.
 
 """
 #from ducks import *
+import numpy as np
 
 def getClassName(obj):
 	name = getattr(obj.__class__, 'classname', None)
@@ -93,6 +94,9 @@ class BaseParams(object):
 		of the paramters.
 		'''
 		return 0.
+
+	def getLogPriorChi(self):
+		return None
 
 class ScalarParam(BaseParams):
 	'''
@@ -603,9 +607,34 @@ class MultiParams(BaseParams, NamedParams):
 
 	def getLogPrior(self):
 		'''
-		This function does shenanigans to avoid importing `numpy.sum()`.
+		This function does shenanigans to avoid importing `numpy.sum()`.  (Why?)
 		'''
 		lnp = 0.
 		for s in self._getActiveSubs():
 			lnp += s.getLogPrior()
 		return lnp
+
+	def getLogPriorChi(self):
+		rA,cA,vA,pb = [],[],[],[]
+
+		r0 = 0
+		c0 = 0
+		
+		for s in self._getActiveSubs():
+			X = s.getLogPriorChi()
+			if X is None:
+				c0 += s.numberOfParams()
+				continue
+			(r,c,v,b) = X
+			rA.extend([ri + r0 for ri in r])
+			cA.extend([ci + c0 for ci in c])
+			vA.extend(v)
+			pb.extend(b)
+
+			c0 += s.numberOfParams()
+			r0 += np.max([np.max(ri) for ri in r])
+
+		if rA == []:
+			return None
+		return rA,cA,vA,pb
+
