@@ -26,6 +26,9 @@ def get_galaxy_cache():
 
 class GalaxyShape(ParamList):
 	@staticmethod
+	def getName():
+		return "Galaxy Shape"
+	@staticmethod
 	def getNamedParams():
 		# re: arcsec
 		# ab: axis ratio, dimensionless, in [0,1]
@@ -34,7 +37,7 @@ class GalaxyShape(ParamList):
 	def __repr__(self):
 		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 	def __str__(self):
-		return 're=%.2f, ab=%.2f, phi=%.1f' % (self.re, self.ab, self.phi)
+		return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
 	def copy(self):
 		return GalaxyShape(*self.vals)
 	def getParamNames(self):
