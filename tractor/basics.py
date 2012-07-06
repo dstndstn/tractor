@@ -345,10 +345,13 @@ class RaDecPos(ParamList):
 	  * ``.dec``
 	'''
 	@staticmethod
+	def getName():
+		return "RaDecPos"
+	@staticmethod
 	def getNamedParams():
 		return dict(ra=0, dec=1)
 	def __str__(self):
-		return 'RA,Dec (%.5f, %.5f)' % (self.ra, self.dec)
+		return '%s: RA, Dec = (%.5f, %.5f)' % (self.getName(), self.ra, self.dec)
 	#def __repr__(self):
 	#	return 'RaDecPos(%.5f, %.5f)' % (self.ra, self.dec)
 	#def copy(self):
@@ -389,6 +392,8 @@ class PointSource(MultiParams):
 		return 'PointSource'
 	def getPosition(self):
 		return self.pos
+	def setPosition(self, position):
+		self.pos = position
 	def getBrightness(self):
 		return self.brightness
 	def setBrightness(self, brightness):
