@@ -300,15 +300,9 @@ class DustSheet(MultiParams):
 				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
 				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, Lorder)
 				assert(res == 0)
-				#outimg = img.getPsf().applyTo(rim)
-				#X[:, i*W+j] = outimg.ravel()
 				outimg = img.getPsf().applyTo(rim).ravel()
 				I = np.flatnonzero(outimg)
-				#print 'I', I
-				#print 'outimg', outimg
-				#print 'outimg[I]', outimg[I]
 				X[i*W+j] = (I, outimg[I])
-				
 		return X
 
 	def _setTransformation(self, img, X):
@@ -328,7 +322,6 @@ class DustSheet(MultiParams):
 	def getModelPatch(self, img):
 		X = self._getTransformation(img)
 		counts = self._getcounts(img)
-		#rim = np.dot(X, counts.ravel()).reshape(img.shape)
 		rim = np.zeros(img.shape)
 		rim1 = rim.ravel()
 		for i,c in enumerate(counts.ravel()):
@@ -383,21 +376,16 @@ class DustSheet(MultiParams):
 		gridscale = self.wcs.pixel_scale()
 		imscale = imwcs.wcs.pixel_scale()
 		cscale = (imscale / gridscale)**2
-
 		imshape = img.shape
-
 		p0 = self.getParams()
 		counts0 = self._getcounts(img)
 		derivs = []
-
-		#X = X.astype(np.float64)
 
 		# This is ugly -- the dust param vectors are stored one after another, so the
 		# three parameters affecting each pixel are not contiguous, and we also ignore the
 		# fact that we should *know* which grid pixel is affected by each parameter!!
 		# (but this might work with freezing... maybe...)
 
-		#for i,step in enumerate(self.getStepSizes()):
 		for i,(step,name) in enumerate(zip(self.getStepSizes(), self.getParamNames())):
 			print 'Img', img.name, 'deriv', i, name
 			oldval = self.setParam(i, p0[i] + step)
@@ -406,7 +394,8 @@ class DustSheet(MultiParams):
 
 			dc = (countsi - counts0).ravel()
 			I = np.flatnonzero(dc != 0)
-			# I spent a long time trying to figure out why the SPIRE100 beta derivative was zero...
+			# I spent a long time trying to figure out why the
+			# SPIRE100 beta derivative was zero...
 			# (d/dX((100 um / lam0) ** X) = d/dX(1.**X) == 0...)
 			if len(I) == 0:
 				derivs.append(None)
@@ -421,71 +410,42 @@ class DustSheet(MultiParams):
 			dc = float(dc[ii])
 			dmod = np.zeros(imshape)
 			dmod.ravel()[I] = V * (cscale / step)
-
-			#dmod = ((dc * X[:,ii]) * (cscale / step)).reshape(imshape)
 			derivs.append(Patch(0, 0, dmod))
 
-
-		return derivs
-
-
-	def getParamDerivatives_1(self, img):
-		# Super-naive!!
-		p0 = self.getParams()
-		mod0 = self.getModelPatch(img)
-		derivs = []
-
-		for i,step in enumerate(self.getStepSizes()):
-			print 'Img', img.name, 'deriv', i
-			oldval = self.setParam(i, p0[i] + step)
-
-			# countsi = self._getcounts(img)
-			# I = (countsi != counts0)
-			# xi = np.where(np.sum(I, axis=0) > 0)
-			# yi = np.where(np.sum(I, axis=1) > 0)
-			# xi = min(xi),max(xi)
-			# yi = min(yi),max(yi)
-			# Expand by Lanczos + PSF kernel
-
-			modi = self.getModelPatch(img)
-			self.setParam(i, oldval)
-			d = (modi - mod0) * (1./step)
-			derivs.append(d)
 		return derivs
 
 def makeplots(tractor, step, suffix):
 	print 'Making plots'
 	mods = tractor.getModelImages()
-	plt.figure(figsize=(8,6))
-	for i,mod in enumerate(mods):
-		tim = tractor.getImage(i)
-		ima = dict(interpolation='nearest', origin='lower',
-				   vmin=tim.zr[0], vmax=tim.zr[1])
-		plt.clf()
-		plt.imshow(mod, **ima)
-		plt.gray()
-		plt.colorbar()
-		plt.title(tim.name)
-		plt.savefig('model-%i-%02i%s.png' % (i, step, suffix))
-
-		if step == 0:
-			plt.clf()
-			plt.imshow(tim.getImage(), **ima)
-			plt.gray()
-			plt.colorbar()
-			plt.title(tim.name)
-			plt.savefig('data-%i.png' % (i))
-
-		plt.clf()
-		# tractor.getChiImage(i), 
-		plt.imshow((tim.getImage() - mod) * tim.getInvError(),
-				   interpolation='nearest', origin='lower',
-				   vmin=-5, vmax=+5)
-		plt.gray()
-		plt.colorbar()
-		plt.title(tim.name)
-		plt.savefig('chi-%i-%02i%s.png' % (i, step, suffix))
-
+	# plt.figure(figsize=(8,6))
+	# for i,mod in enumerate(mods):
+	# 	tim = tractor.getImage(i)
+	# 	ima = dict(interpolation='nearest', origin='lower',
+	# 			   vmin=tim.zr[0], vmax=tim.zr[1])
+	# 	plt.clf()
+	# 	plt.imshow(mod, **ima)
+	# 	plt.gray()
+	# 	plt.colorbar()
+	# 	plt.title(tim.name)
+	# 	plt.savefig('model-%i-%02i%s.png' % (i, step, suffix))
+	# 
+	# 	if step == 0:
+	# 		plt.clf()
+	# 		plt.imshow(tim.getImage(), **ima)
+	# 		plt.gray()
+	# 		plt.colorbar()
+	# 		plt.title(tim.name)
+	# 		plt.savefig('data-%i.png' % (i))
+	# 
+	# 	plt.clf()
+	# 	# tractor.getChiImage(i), 
+	# 	plt.imshow((tim.getImage() - mod) * tim.getInvError(),
+	# 			   interpolation='nearest', origin='lower',
+	# 			   vmin=-5, vmax=+5)
+	# 	plt.gray()
+	# 	plt.colorbar()
+	# 	plt.title(tim.name)
+	# 	plt.savefig('chi-%i-%02i%s.png' % (i, step, suffix))
 
 	plt.figure(figsize=(16,8))
 	plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.9, wspace=0.1, hspace=0.1)
@@ -524,11 +484,9 @@ def makeplots(tractor, step, suffix):
 	plt.savefig('all-%02i%s.png' % (step, suffix))
 
 	ds = tractor.getCatalog()[0]
-	print 'Dust sheet:', ds
 	logsa, logt, emis = ds.getArrays()
 
 	plt.figure(figsize=(16,5))
-
 	plt.clf()
 
 	plt.subplot(1,3,1)
@@ -551,42 +509,42 @@ def makeplots(tractor, step, suffix):
 	plt.savefig('dust-%02i%s.png' % (step, suffix))
 
 
-	plt.figure(figsize=(8,6))
-
-	plt.clf()
-	plt.imshow(logsa, interpolation='nearest', origin='lower')
-	plt.gray()
-	plt.colorbar()
-	plt.title('Dust: log(solid angle)')
-	plt.savefig('logsa-%02i%s.png' % (step, suffix))
-
-	plt.clf()
-	plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
-	plt.hot()
-	plt.colorbar()
-	plt.title('Dust: solid angle')
-	plt.savefig('sa-%02i%s.png' % (step, suffix))
-
-	plt.clf()
-	plt.imshow(logt, interpolation='nearest', origin='lower')
-	plt.gray()
-	plt.colorbar()
-	plt.title('Dust: log(temperature)')
-	plt.savefig('logt-%02i%s.png' % (step, suffix))
-
-	plt.clf()
-	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
-	plt.hot()
-	plt.colorbar()
-	plt.title('Dust: temperature (K)')
-	plt.savefig('t-%02i%s.png' % (step, suffix))
-
-	plt.clf()
-	plt.imshow(emis, interpolation='nearest', origin='lower')
-	plt.gray()
-	plt.colorbar()
-	plt.title('Dust: emissivity')
-	plt.savefig('emis-%02i%s.png' % (step, suffix))
+	# plt.figure(figsize=(8,6))
+	# 
+	# plt.clf()
+	# plt.imshow(logsa, interpolation='nearest', origin='lower')
+	# plt.gray()
+	# plt.colorbar()
+	# plt.title('Dust: log(solid angle)')
+	# plt.savefig('logsa-%02i%s.png' % (step, suffix))
+	# 
+	# plt.clf()
+	# plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	# plt.hot()
+	# plt.colorbar()
+	# plt.title('Dust: solid angle')
+	# plt.savefig('sa-%02i%s.png' % (step, suffix))
+	# 
+	# plt.clf()
+	# plt.imshow(logt, interpolation='nearest', origin='lower')
+	# plt.gray()
+	# plt.colorbar()
+	# plt.title('Dust: log(temperature)')
+	# plt.savefig('logt-%02i%s.png' % (step, suffix))
+	# 
+	# plt.clf()
+	# plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
+	# plt.hot()
+	# plt.colorbar()
+	# plt.title('Dust: temperature (K)')
+	# plt.savefig('t-%02i%s.png' % (step, suffix))
+	# 
+	# plt.clf()
+	# plt.imshow(emis, interpolation='nearest', origin='lower')
+	# plt.gray()
+	# plt.colorbar()
+	# plt.title('Dust: emissivity')
+	# plt.savefig('emis-%02i%s.png' % (step, suffix))
 
 def np_err_handler(typ, flag):
 	print 'Floating point error (%s), with flag %s' % (typ, flag)
@@ -690,8 +648,9 @@ def create_tractor(opt):
 	print 'Creating dust sheet...'
 	N = opt.gridn
 
-	# Build a WCS for the dust sheet to match the first image (assuming it's square and axis-aligned)
-	
+	# Build a WCS for the dust sheet to match the first image
+	# (assuming it's square and axis-aligned)
+
 	wcs = tims[0].getWcs().wcs
 	r,d = wcs.radec_center()
 	H,W = tims[0].shape
@@ -758,7 +717,6 @@ def create_tractor(opt):
 	return tractor
 
 
-
 def main():
 	import optparse
 	import logging
@@ -805,9 +763,9 @@ def main():
 	else:
 		callgrind = None
 
-	#np.seterrcall(np_err_handler)
-	#np.seterr(all='call')
-	np.seterr(all='raise')
+	np.seterrcall(np_err_handler)
+	np.seterr(all='call')
+	#np.seterr(all='raise')
 
 	if opt.resume > -1:
 		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
