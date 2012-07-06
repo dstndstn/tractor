@@ -151,6 +151,11 @@ class DustSheet(MultiParams):
 		self.prior_emis_mean = 2.
 		self.prior_emis_std = 0.5
 
+		# priors on smoothness (stdevs)
+		self.prior_logt_smooth = np.log(1.2)
+		self.prior_logsa_smooth = np.log(1.2)
+		self.prior_emis_smooth = 0.25
+
 
 	def getArrays(self, ravel=False): #, reshape=True):   DOI, they're already the right shape.
 		logsa = self.logsolidangle.a
@@ -183,6 +188,13 @@ class DustSheet(MultiParams):
 			# log(surface density): free (flat prior)
 			0.
 			)
+		# Smoothness:
+		for p,smooth in [(logt,  self.prior_logt_smooth),
+						 (logsa, self.prior_logsa_smooth),
+						 (emis,  self.prior_emis_smooth)]:
+			P += (-0.5 * np.sum(((p[1:,:] - p[:-1,:]) / smooth)**2) +
+				  -0.5 * np.sum(((p[:,1:] - p[:,:-1]) / smooth)**2))
+
 		#print 'Returning log-prior', P
 		return P
 
@@ -246,6 +258,103 @@ class DustSheet(MultiParams):
 			pb.append( -(arr[I] - mn) / std )
 			c0 += NI
 			r0 += NI
+
+		# Smoothness:
+		c0 = 0
+		H,W = self.shape
+		for pname, smooth, arr in [('logsolidangle',  self.prior_logsa_smooth, logsa),
+								   ('logtemperature', self.prior_logt_smooth,  logt),
+								   ('emissivity',     self.prior_emis_smooth,  emis)]:
+			if self.isParamFrozen(pname):
+				continue
+			p = getattr(self, pname)
+			I = np.array(list(p.getThawedParamIndices()))
+			assert(np.all(I >= 0))
+			assert(np.all(I < (W*H)))
+
+			# grid coords of thawed parameters
+			X,Y = (I % W), (I / W)
+			#print 'X,Y', X.dtype, Y.dtype
+			# pixel-to-param map.
+			paramindex = np.zeros(H*W, int) - 1
+			paramindex[I] = np.arange(len(I))
+
+			# dx
+			# params to include in this constraint
+			KK = (X > 0)
+			# pixel indices 
+			II = I[KK]
+			JJ = II-1
+			# is pixel J thawed?
+			Jind = paramindex[JJ]
+			Jlive = (Jind != -1)
+
+			NI = len(II)
+			offI = np.flatnonzero(KK)
+			assert(NI == len(offI))
+			row = np.arange(NI) + r0
+			rA.append(row)
+			cA.append(c0 + offI)
+			sm = np.ones(NI) / smooth 
+			vA.append( sm )
+			pb.append( -(arr[II] - arr[JJ]) / sm )
+			print rA[-1]
+			print cA[-1]
+			print vA[-1]
+			print pb[-1]
+			assert(len(rA[-1]) == len(cA[-1]))
+			assert(len(rA[-1]) == len(vA[-1]))
+			assert(len(rA[-1]) == len(pb[-1]))
+
+			# include thawed pixels J too.
+			rr = row[Jlive]
+			rA.append(rr)
+			cA.append(c0 + Jind[Jlive])
+			vA.append( -np.ones(len(rr)) / smooth )
+			r0 += NI
+			assert(len(rA[-1]) == len(cA[-1]))
+			assert(len(rA[-1]) == len(vA[-1]))
+			print rA[-1]
+			print cA[-1]
+			print vA[-1]
+
+			# dy
+			# params to include in this constraint
+			KK = (Y > 0)
+			# pixel indices 
+			II = I[KK]
+			JJ = II-W
+			Jind = paramindex[JJ]
+			Jlive = (Jind != -1)
+			NI = len(II)
+			offI = np.flatnonzero(KK)
+			assert(NI == len(offI))
+			row = np.arange(NI) + r0
+			rA.append(row)
+			cA.append(c0 + offI)
+			sm = np.ones(NI) / smooth 
+			vA.append( sm )
+			pb.append( -(arr[II] - arr[JJ]) / sm )
+			assert(len(rA[-1]) == len(cA[-1]))
+			assert(len(rA[-1]) == len(vA[-1]))
+			assert(len(rA[-1]) == len(pb[-1]))
+			print rA[-1]
+			print cA[-1]
+			print vA[-1]
+			print pb[-1]
+			# include thawed pixels J too
+			rr = row[Jlive]
+			rA.append(rr)
+			cA.append(c0 + Jind[Jlive])
+			vA.append( -np.ones(len(rr)) / smooth )
+			r0 += NI
+			assert(len(rA[-1]) == len(cA[-1]))
+			assert(len(rA[-1]) == len(vA[-1]))
+			print rA[-1]
+			print cA[-1]
+			print vA[-1]
+
+			c0 += len(I)
 
 		return (rA, cA, vA, pb)
 

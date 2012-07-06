@@ -816,7 +816,11 @@ class Tractor(MultiParams):
 				nr = np.max([np.max(ri) for ri in rA]) + 1
 				Nrows += nr
 				logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-				Ncols = max(Ncols, np.max(cA)+1)
+				#print 'cA', cA
+				#print 'max', np.max(cA)
+				#print 'max', np.max(cA)+1
+				#print 'Ncols', Ncols
+				Ncols = max(Ncols, np.max([ci.max() for ci in cA]) + 1)
 				b = np.zeros(Nrows)
 				b[oldnrows:] = np.hstack(pb)
 
