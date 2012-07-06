@@ -4,6 +4,11 @@ doc: html
 	cp -a _build/html .
 .PHONE: doc
 
+_denorm.so: denorm.i
+	swig -python $<
+	gcc -fPIC -c denorm_wrap.c -I/usr/include/python2.7
+	gcc -o $@ -shared denorm_wrap.o -lpython2.7
+
 _callgrind.so: callgrind.i
 	swig -python $<
 	gcc -fPIC -c callgrind_wrap.c -I/usr/include/python2.7 -I/usr/include/valgrind

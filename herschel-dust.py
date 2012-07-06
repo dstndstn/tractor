@@ -572,7 +572,7 @@ def np_err_handler(typ, flag):
 	tb = traceback.extract_stack()
 	# omit myself
 	tb = tb[:-1]
-	print '\n'.join(traceback.format_list(tb))
+	print ''.join(traceback.format_list(tb))
 
 def create_tractor(opt):
 	"""

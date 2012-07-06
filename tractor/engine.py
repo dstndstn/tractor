@@ -766,6 +766,7 @@ class Tractor(MultiParams):
 			vals = VV * WW
 			print 'vals absmin:', np.min(np.abs(vals))
 			print 'vals absmax:', np.max(np.abs(vals))
+			print 'vals type', vals.dtype
 
 			# shouldn't be necessary since we check len(nz)>0 above
 			#if len(vals) == 0:
