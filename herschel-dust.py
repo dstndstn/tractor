@@ -22,6 +22,7 @@ from astrometry.util.util import Tan, tan_wcs_resample, log_init
 from astrometry.util.multiproc import multiproc
 from astrometry.util.file import pickle_to_file, unpickle_from_file
 import multiprocessing
+import os
 
 class Physics(object):
 	# all the following from physics.nist.gov
@@ -152,9 +153,14 @@ class DustSheet(MultiParams):
 		self.prior_emis_std = 0.5
 
 		# priors on smoothness (stdevs)
-		self.prior_logt_smooth = np.log(1.2)
-		self.prior_logsa_smooth = np.log(1.2)
-		self.prior_emis_smooth = 0.25
+		#self.prior_logt_smooth = np.log(1.2)
+		#self.prior_logsa_smooth = np.log(1.2)
+		#self.prior_emis_smooth = 0.25
+
+		# weak
+		self.prior_logt_smooth = np.log(1.5)
+		self.prior_logsa_smooth = np.log(1.5)
+		self.prior_emis_smooth = 0.5
 
 
 	def getArrays(self, ravel=False): #, reshape=True):   DOI, they're already the right shape.
@@ -274,86 +280,43 @@ class DustSheet(MultiParams):
 
 			# grid coords of thawed parameters
 			X,Y = (I % W), (I / W)
-			#print 'X,Y', X.dtype, Y.dtype
 			# pixel-to-param map.
 			paramindex = np.zeros(H*W, int) - 1
 			paramindex[I] = np.arange(len(I))
 
-			# dx
-			# params to include in this constraint
-			KK = (X > 0)
-			# pixel indices 
-			II = I[KK]
-			JJ = II-1
-			# is pixel J thawed?
-			Jind = paramindex[JJ]
-			Jlive = (Jind != -1)
+			for KK, dp in [((X > 0), 1), ((Y > 0), W)]:
+				# KK: params to include in this constraint
+				# pixel indices 
+				II = I[KK]
+				# dp: where is the neighbouring pixel in the grid??
+				JJ = II - dp
+				# is pixel J thawed?
+				Jind = paramindex[JJ]
+				Jlive = (Jind != -1)
+				#
+				NI = len(II)
+				offI = np.flatnonzero(KK)
+				assert(NI == len(offI))
+				row = np.arange(NI) + r0
+				rA.append(row)
+				cA.append(c0 + offI)
+				sm = np.ones(NI) / smooth 
+				vA.append( sm )
+				pb.append( -(arr[II] - arr[JJ]) / sm )
+				assert(len(rA[-1]) == len(cA[-1]))
+				assert(len(rA[-1]) == len(vA[-1]))
+				assert(len(rA[-1]) == len(pb[-1]))
 
-			NI = len(II)
-			offI = np.flatnonzero(KK)
-			assert(NI == len(offI))
-			row = np.arange(NI) + r0
-			rA.append(row)
-			cA.append(c0 + offI)
-			sm = np.ones(NI) / smooth 
-			vA.append( sm )
-			pb.append( -(arr[II] - arr[JJ]) / sm )
-			print rA[-1]
-			print cA[-1]
-			print vA[-1]
-			print pb[-1]
-			assert(len(rA[-1]) == len(cA[-1]))
-			assert(len(rA[-1]) == len(vA[-1]))
-			assert(len(rA[-1]) == len(pb[-1]))
+				# include thawed pixels J too.
+				rr = row[Jlive]
+				rA.append(rr)
+				cA.append(c0 + Jind[Jlive])
+				vA.append( -np.ones(len(rr)) / smooth )
+				r0 += NI
+				assert(len(rA[-1]) == len(cA[-1]))
+				assert(len(rA[-1]) == len(vA[-1]))
 
-			# include thawed pixels J too.
-			rr = row[Jlive]
-			rA.append(rr)
-			cA.append(c0 + Jind[Jlive])
-			vA.append( -np.ones(len(rr)) / smooth )
-			r0 += NI
-			assert(len(rA[-1]) == len(cA[-1]))
-			assert(len(rA[-1]) == len(vA[-1]))
-			print rA[-1]
-			print cA[-1]
-			print vA[-1]
-
-			# dy
-			# params to include in this constraint
-			KK = (Y > 0)
-			# pixel indices 
-			II = I[KK]
-			JJ = II-W
-			Jind = paramindex[JJ]
-			Jlive = (Jind != -1)
-			NI = len(II)
-			offI = np.flatnonzero(KK)
-			assert(NI == len(offI))
-			row = np.arange(NI) + r0
-			rA.append(row)
-			cA.append(c0 + offI)
-			sm = np.ones(NI) / smooth 
-			vA.append( sm )
-			pb.append( -(arr[II] - arr[JJ]) / sm )
-			assert(len(rA[-1]) == len(cA[-1]))
-			assert(len(rA[-1]) == len(vA[-1]))
-			assert(len(rA[-1]) == len(pb[-1]))
-			print rA[-1]
-			print cA[-1]
-			print vA[-1]
-			print pb[-1]
-			# include thawed pixels J too
-			rr = row[Jlive]
-			rA.append(rr)
-			cA.append(c0 + Jind[Jlive])
-			vA.append( -np.ones(len(rr)) / smooth )
-			r0 += NI
-			assert(len(rA[-1]) == len(cA[-1]))
-			assert(len(rA[-1]) == len(vA[-1]))
-			print rA[-1]
-			print cA[-1]
-			print vA[-1]
-
+			# This is outside the loop
 			c0 += len(I)
 
 		return (rA, cA, vA, pb)
@@ -801,11 +764,6 @@ def create_tractor(opt):
 	#print 'pn', ds.getParamNames()
 	#print 'p', ds.getParams()
 
-	for tim in tims:
-		mod = ds.getModelPatch(tim)
-		print 'Image', tim.name, ': data median', np.median(tim.getImage()), 'model median:',
-		print np.median(mod.patch)
-
 	# print 'PriorChi:', ds.getLogPriorChi()
 	# ra,ca,va,pb = ds.getLogPriorChi()
 	# print 'ra', ra
@@ -865,6 +823,7 @@ def main():
 		Time.add_measurement(debugpool.DebugPoolMeas(dpool))
 		mp = multiproc(pool=dpool)
 	else:
+		print 'N threads', opt.threads
 		mp = multiproc(opt.threads)#, wrap_all=True)
 
 	if opt.callgrind:
@@ -891,6 +850,13 @@ def main():
 		for im,X in zip(tractor.getImages(), XX):
 			ds._setTransformation(im, X)
 		print 'done precomputing.'
+
+		# must put this after the precomputing or it does it!
+		for tim in tims:
+			mod = ds.getModelPatch(tim)
+			print 'Image', tim.name, ': data median', np.median(tim.getImage()),
+			print 'model median:', np.median(mod.patch)
+
 		makeplots(tractor, 0, opt.suffix)
 
 		pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
@@ -915,6 +881,7 @@ def main():
 		print 'Wrote', pfn
 
 def _map_trans((ds, img)):
+	print 'computing transformation in PID', os.getpid()
 	return ds._computeTransformation(img)
 
 if __name__ == '__main__':
