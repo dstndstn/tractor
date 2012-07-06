@@ -82,7 +82,7 @@ class DustPhotoCal(ParamList):
 
 		'''
 		self.lam = lam
-		self.cal = 1e20 * lam**2 / Physics.cc
+		self.cal = 1e20 #* lam**2 / Physics.cc
 		self.cal /= ((pixscale / 3600 / (180./np.pi))**2)
 		print 'Cal', self.cal
 		# No (adjustable) params
@@ -98,7 +98,7 @@ class DustPhotoCal(ParamList):
 		return(
 			np.exp(brightness.logsolidangle)
 			* ((self.lam / DustPhotoCal.lam0) ** (-1. * beta))
-			* Physics.black_body(self.lam, brightness.logtemperature)
+			* Physics.black_body_nu(self.lam, brightness.logtemperature)
 			* self.cal)
 
 class NpArrayParams(ParamList):
