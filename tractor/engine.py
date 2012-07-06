@@ -434,6 +434,10 @@ class Tractor(MultiParams):
 
 	"""
 	@staticmethod
+	def getName():
+		return 'Tractor'
+	
+	@staticmethod
 	def getNamedParams():
 		return dict(images=0, catalog=1)
 
@@ -457,7 +461,7 @@ class Tractor(MultiParams):
 		self.pickleCache = pickleCache
 
 	def __str__(self):
-		s = 'Tractor with %i sources and %i images' % (len(self.catalog), len(self.images))
+		s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
 		s += ' (' + ', '.join([im.name for im in self.images]) + ')'
 		return s
 
@@ -471,7 +475,7 @@ class Tractor(MultiParams):
 
 	# For use from emcee
 	def __call__(self, X):
-		print 'Tractor.__call__: I am pid', os.getpid()
+		print self.getName()+'.__call__: I am pid', os.getpid()
 		self.setParams(X)
 		lnp = self.getLogProb()
 		print self.cache
@@ -535,7 +539,7 @@ class Tractor(MultiParams):
 
 	def optimize(self, alphas=None, damp=0):
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
-		print 'opt2: Finding derivs...'
+		print self.getName()+': Finding derivs...'
 		t0 = Time()
 		allderivs = self.getDerivs()
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
