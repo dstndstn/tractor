@@ -537,7 +537,7 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	def optimize(self, alphas=None, damp=0):
+	def optimize(self, alphas=None, damp=0, priors=True):
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
@@ -551,7 +551,7 @@ class Tractor(MultiParams):
 		#		print 'patch mean', np.mean(p.patch)
 		print 'Finding optimal update direction...'
 		t0 = Time()
-		X = self.getUpdateDirection(allderivs, damp=damp)
+		X = self.getUpdateDirection(allderivs, damp=damp, priors=priors)
 		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		#print Time() - t0
 		topt = Time()-t0

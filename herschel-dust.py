@@ -55,7 +55,7 @@ class Physics(object):
 		Return value is in [J s^{-1} m^{-2} Hz^{-1} sr^{-1}],
 		power radiated per square meter (area), per Hz of frequency, per steradian
 		"""
-		return (lam * lam / Physics.cc) * Physics.black_body_lambda(lam, lnT)
+		return (lam **2 / Physics.cc) * Physics.black_body_lambda(lam, lnT)
 
 	@staticmethod
 	def black_body(lam, lnT):
@@ -292,7 +292,7 @@ class DustSheet(MultiParams):
 		cwcs.set_imagesize(S, S)
 		cx0,cy0 = self.wcs.crpix[0], self.wcs.crpix[1]
 		rim = np.zeros((iH,iW), np.float32)
-		X = np.zeros((Nim, Ngrid), np.float32)
+		X = {}
 		for i in range(H):
 			print 'Precomputing matrix for image', img.name, 'row', i
 			for j in range(W):
@@ -300,8 +300,15 @@ class DustSheet(MultiParams):
 				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
 				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, Lorder)
 				assert(res == 0)
-				outimg = img.getPsf().applyTo(rim)
-				X[:, i*W+j] = outimg.ravel()
+				#outimg = img.getPsf().applyTo(rim)
+				#X[:, i*W+j] = outimg.ravel()
+				outimg = img.getPsf().applyTo(rim).ravel()
+				I = np.flatnonzero(outimg)
+				#print 'I', I
+				#print 'outimg', outimg
+				#print 'outimg[I]', outimg[I]
+				X[i*W+j] = (I, outimg[I])
+				
 		return X
 
 	def _setTransformation(self, img, X):
@@ -321,7 +328,14 @@ class DustSheet(MultiParams):
 	def getModelPatch(self, img):
 		X = self._getTransformation(img)
 		counts = self._getcounts(img)
-		rim = np.dot(X, counts.ravel()).reshape(img.shape)
+		#rim = np.dot(X, counts.ravel()).reshape(img.shape)
+		rim = np.zeros(img.shape)
+		rim1 = rim.ravel()
+		for i,c in enumerate(counts.ravel()):
+			if not i in X:
+				continue
+			I,V = X[i]
+			rim1[I] += V * c
 
 		imwcs = img.getWcs()
 		imscale = imwcs.wcs.pixel_scale()
@@ -365,7 +379,6 @@ class DustSheet(MultiParams):
 
 	def getParamDerivatives(self, img):
 		X = self._getTransformation(img)
-
 		imwcs = img.getWcs()
 		gridscale = self.wcs.pixel_scale()
 		imscale = imwcs.wcs.pixel_scale()
@@ -398,10 +411,18 @@ class DustSheet(MultiParams):
 			if len(I) == 0:
 				derivs.append(None)
 				continue
+			if len(I) != 1:
+				print 'dcounts', dc
+				print 'I', I
 			assert(len(I) == 1)
 			ii = I[0]
+
+			I,V = X[ii]
 			dc = float(dc[ii])
-			dmod = ((dc * X[:,ii]) * (cscale / step)).reshape(imshape)
+			dmod = np.zeros(imshape)
+			dmod.ravel()[I] = V * (cscale / step)
+
+			#dmod = ((dc * X[:,ii]) * (cscale / step)).reshape(imshape)
 			derivs.append(Patch(0, 0, dmod))
 
 
@@ -664,7 +685,7 @@ def create_tractor(opt):
 			rds.append(rd)
 		rds = np.array(rds)
 		plt.plot(rds[:,0], rds[:,1], '-', color=c, lw=2, alpha=0.5)
-	plt.savefig('radec.png')
+	plt.savefig('radec1%s.png' % opt.suffix)
 
 	print 'Creating dust sheet...'
 	N = opt.gridn
@@ -675,7 +696,7 @@ def create_tractor(opt):
 	r,d = wcs.radec_center()
 	H,W = tims[0].shape
 	scale = wcs.pixel_scale()
-	scale *= float(W)/N / 3600.
+	scale *= float(W)/max(1, N-1) / 3600.
 	c = float(N)/2. + 0.5
 	dwcs = Tan(r, d, c, c, scale, 0, 0, scale, N, N)
 
@@ -686,7 +707,18 @@ def create_tractor(opt):
 		rds.append((r,d))
 	rds = np.array(rds)
 	plt.plot(rds[:,0], rds[:,1], 'k-', lw=1, alpha=1)
-	plt.savefig('radec2.png')
+	plt.savefig('radec2%s.png' % opt.suffix)
+
+	# plot grid of sample points.
+	rds = []
+	H,W = N,N
+	for y in range(N):
+		for x in range(N):
+			r,d = dwcs.pixelxy2radec(x+1, y+1)
+			rds.append((r,d))
+	rds = np.array(rds)
+	plt.plot(rds[:,0], rds[:,1], 'k.', lw=1, alpha=0.5)
+	plt.savefig('radec3%s.png' % opt.suffix)
 
 	pixscale = dwcs.pixel_scale()
 	logsa = np.log(1e-3 * ((pixscale / 3600 / (180./np.pi))**2))
@@ -700,6 +732,11 @@ def create_tractor(opt):
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
 	#print 'p', ds.getParams()
+
+	for tim in tims:
+		mod = ds.getModelPatch(tim)
+		print 'Image', tim.name, ': data median', np.median(tim.getImage()), 'model median:',
+		print np.median(mod.patch)
 
 	# print 'PriorChi:', ds.getLogPriorChi()
 	# ra,ca,va,pb = ds.getLogPriorChi()
@@ -727,9 +764,6 @@ def main():
 	import logging
 	import sys
 
-	###
-	log_init(3)
-	
 	parser = optparse.OptionParser()
 	parser.add_option('--threads', dest='threads', default=1, type=int, help='Use this many concurrent processors')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
@@ -750,8 +784,11 @@ def main():
 
 	if opt.verbose == 0:
 		lvl = logging.INFO
+		log_init(2)
 	else:
 		lvl = logging.DEBUG
+		log_init(3)
+	
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	if opt.threads > 1 and False:
@@ -768,8 +805,9 @@ def main():
 	else:
 		callgrind = None
 
-	np.seterrcall(np_err_handler)
-	np.seterr(all='call')
+	#np.seterrcall(np_err_handler)
+	#np.seterr(all='call')
+	np.seterr(all='raise')
 
 	if opt.resume > -1:
 		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
