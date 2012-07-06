@@ -278,7 +278,7 @@ class DustSheet(MultiParams):
 
 	def _computeTransformation(self, img):
 		imwcs = img.getWcs()
-		# Brutal pre-computation of the transformation matrix...
+		# Pre-computation the "grid-spread function" transformation matrix...
 		H,W = self.shape
 		Ngrid = W*H
 		iH,iW = img.shape
@@ -286,33 +286,22 @@ class DustSheet(MultiParams):
 		Lorder = 2
 		S = (Lorder * 2 + 3)
 		i0 = S/2
-		#cmock = np.zeros((H,W), np.float32)
 		cmock = np.zeros((S,S), np.float32)
 		cmock[i0,i0] = 1.
 		cwcs = Tan(self.wcs)
 		cwcs.set_imagesize(S, S)
 		cx0,cy0 = self.wcs.crpix[0], self.wcs.crpix[1]
-		
 		rim = np.zeros((iH,iW), np.float32)
 		X = np.zeros((Nim, Ngrid), np.float32)
 		for i in range(H):
 			print 'Precomputing matrix for image', img.name, 'row', i
 			for j in range(W):
-				print 'Precomputing matrix for grid pixel', j,i
-				#cmock[i,j] = 1.
-				r,d = self.wcs.pixelxy2radec(i,j)
-
+				#print 'Precomputing matrix for grid pixel', j,i
 				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
-				r2,d2 = cwcs.pixelxy2radec(i0,i0)
-				print 'r1,d1', r,d
-				print 'r2,d2', r2,d2
-
-				#res = tan_wcs_resample(self.wcs, imwcs.wcs, cmock, rim, Lorder)
 				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, Lorder)
 				assert(res == 0)
 				outimg = img.getPsf().applyTo(rim)
 				X[:, i*W+j] = outimg.ravel()
-				#cmock[i,j] = 0.
 		return X
 
 	def _setTransformation(self, img, X):
@@ -755,7 +744,7 @@ def main():
 
 	parser.add_option('--callgrind', dest='callgrind', action='store_true', default=False, help='Turn on callgrind around tractor.optimize()')
 
-	parser.add_option('--resume', '-r', dest='resume', type=int, help='Resume from a previous run at the given step?')
+	parser.add_option('--resume', '-r', dest='resume', type=int, default=-1, help='Resume from a previous run at the given step?')
 
 	opt,args = parser.parse_args()
 
@@ -782,7 +771,7 @@ def main():
 	np.seterrcall(np_err_handler)
 	np.seterr(all='call')
 
-	if opt.resume:
+	if opt.resume > -1:
 		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
 		tractor = unpickle_from_file(pfn)
 		tractor.mp = mp
@@ -799,12 +788,12 @@ def main():
 		print 'done precomputing.'
 		makeplots(tractor, 0, opt.suffix)
 
+		pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
+		pickle_to_file(tractor, pfn)
+		print 'Wrote', pfn
+
 	for im in tractor.getImages():
 		im.freezeAllBut('sky')
-
-	pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
-	pickle_to_file(tractor, pfn)
-	print 'Wrote', pfn
 
 	for i in range(step0, opt.steps):
 		if callgrind:
