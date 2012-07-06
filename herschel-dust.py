@@ -55,7 +55,7 @@ class Physics(object):
 		Return value is in [J s^{-1} m^{-2} Hz^{-1} sr^{-1}],
 		power radiated per square meter (area), per Hz of frequency, per steradian
 		"""
-		return (lam * lam / Physics.cc) * black_body_lambda(lam, lnT)
+		return (lam * lam / Physics.cc) * Physics.black_body_lambda(lam, lnT)
 
 	@staticmethod
 	def black_body(lam, lnT):
@@ -283,19 +283,36 @@ class DustSheet(MultiParams):
 		Ngrid = W*H
 		iH,iW = img.shape
 		Nim = iW*iH
-		cmock = np.zeros((H,W), np.float32)
+		Lorder = 2
+		S = (Lorder * 2 + 3)
+		i0 = S/2
+		#cmock = np.zeros((H,W), np.float32)
+		cmock = np.zeros((S,S), np.float32)
+		cmock[i0,i0] = 1.
+		cwcs = Tan(self.wcs)
+		cwcs.set_imagesize(S, S)
+		cx0,cy0 = self.wcs.crpix[0], self.wcs.crpix[1]
+		
 		rim = np.zeros((iH,iW), np.float32)
 		X = np.zeros((Nim, Ngrid), np.float32)
 		for i in range(H):
 			print 'Precomputing matrix for image', img.name, 'row', i
 			for j in range(W):
-				#print 'Precomputing matrix for grid pixel', j,i
-				cmock[i,j] = 1.
-				res = tan_wcs_resample(self.wcs, imwcs.wcs, cmock, rim, 2)
+				print 'Precomputing matrix for grid pixel', j,i
+				#cmock[i,j] = 1.
+				r,d = self.wcs.pixelxy2radec(i,j)
+
+				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
+				r2,d2 = cwcs.pixelxy2radec(i0,i0)
+				print 'r1,d1', r,d
+				print 'r2,d2', r2,d2
+
+				#res = tan_wcs_resample(self.wcs, imwcs.wcs, cmock, rim, Lorder)
+				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, Lorder)
 				assert(res == 0)
 				outimg = img.getPsf().applyTo(rim)
 				X[:, i*W+j] = outimg.ravel()
-				cmock[i,j] = 0.
+				#cmock[i,j] = 0.
 		return X
 
 	def _setTransformation(self, img, X):
@@ -314,19 +331,12 @@ class DustSheet(MultiParams):
 
 	def getModelPatch(self, img):
 		X = self._getTransformation(img)
-
-		imwcs = img.getWcs()
 		counts = self._getcounts(img)
-		#print 'Img shape', img.shape
-		#print 'counts shape', counts.shape
-		#print 'X shape', X.shape
-		#rim = np.dot(X, counts.ravel())
-		#print 'dot shape', rim.shape
-		#rim = rim.reshape(img.shape)
 		rim = np.dot(X, counts.ravel()).reshape(img.shape)
 
-		gridscale = self.wcs.pixel_scale()
+		imwcs = img.getWcs()
 		imscale = imwcs.wcs.pixel_scale()
+		gridscale = self.wcs.pixel_scale()
 		#print 'pixel scaling:', (imscale / gridscale)**2
 		rim *= (imscale / gridscale)**2
 		#print 'Median model patch:', np.median(rim)
@@ -378,6 +388,8 @@ class DustSheet(MultiParams):
 		counts0 = self._getcounts(img)
 		derivs = []
 
+		#X = X.astype(np.float64)
+
 		# This is ugly -- the dust param vectors are stored one after another, so the
 		# three parameters affecting each pixel are not contiguous, and we also ignore the
 		# fact that we should *know* which grid pixel is affected by each parameter!!
@@ -399,7 +411,8 @@ class DustSheet(MultiParams):
 				continue
 			assert(len(I) == 1)
 			ii = I[0]
-			dmod = ((X[:,ii] * dc[ii]) * (cscale / step)).reshape(imshape)
+			dc = float(dc[ii])
+			dmod = ((dc * X[:,ii]) * (cscale / step)).reshape(imshape)
 			derivs.append(Patch(0, 0, dmod))
 
 
@@ -694,7 +707,7 @@ def create_tractor(opt):
 	emis = np.zeros((H,W)) + 2.
 
 	ds = DustSheet(logsa, logt, emis, dwcs)
-	print 'DustSheet:', ds
+	#print 'DustSheet:', ds
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
 	#print 'p', ds.getParams()
@@ -779,6 +792,7 @@ def main():
 		tractor = create_tractor(opt)
 		tractor.mp = mp
 		print 'Precomputing transformations...'
+		ds = tractor.getCatalog()[0]
 		XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])
 		for im,X in zip(tractor.getImages(), XX):
 			ds._setTransformation(im, X)
@@ -787,6 +801,10 @@ def main():
 
 	for im in tractor.getImages():
 		im.freezeAllBut('sky')
+
+	pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
+	pickle_to_file(tractor, pfn)
+	print 'Wrote', pfn
 
 	for i in range(step0, opt.steps):
 		if callgrind:
@@ -798,7 +816,9 @@ def main():
 			callgrind.callgrind_stop_instrumentation()
 
 		makeplots(tractor, 1 + i, opt.suffix)
-		pickle_to_file(tractor, 'herschel-%02i%s.pickle' % (1 + i, opt.suffix))
+		pfn = 'herschel-%02i%s.pickle' % (1 + i, opt.suffix)
+		pickle_to_file(tractor, pfn)
+		print 'Wrote', pfn
 
 def _map_trans((ds, img)):
 	return ds._computeTransformation(img)
