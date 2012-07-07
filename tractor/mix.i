@@ -36,11 +36,51 @@
 
 		tpd = pow(2.*M_PI, D);
 
+		Py_INCREF(dtype);
 		np_pos = PyArray_FromAny(np_pos, dtype, 2, 2, req, NULL);
+		if (!np_pos) {
+			ERR("pos wasn't the type expected");
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, req, NULL);
+		if (!np_amp) {
+			ERR("amp wasn't the type expected");
+			Py_DECREF(np_pos);
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, req, NULL);
+		if (!np_mean) {
+			ERR("mean wasn't the type expected");
+			Py_DECREF(np_amp);
+			Py_DECREF(np_pos);
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_var = PyArray_FromAny(np_var, dtype, 3, 3, req, NULL);
+		if (!np_var) {
+			ERR("var wasn't the type expected");
+			Py_DECREF(np_mean);
+			Py_DECREF(np_amp);
+			Py_DECREF(np_pos);
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_result = PyArray_FromAny(np_result, dtype, 1, 1, reqout, NULL);
+		if (!np_result) {
+			ERR("result wasn't the type expected");
+			Py_DECREF(np_var);
+			Py_DECREF(np_mean);
+			Py_DECREF(np_amp);
+			Py_DECREF(np_pos);
+			Py_DECREF(dtype);
+			return -1;
+		}
 
 		N = PyArray_DIM(np_pos, 0);
 		d = PyArray_DIM(np_pos, 1);
@@ -128,10 +168,40 @@
 
 		tpd = pow(2.*M_PI, D);
 
+		Py_INCREF(dtype);
 		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, req, NULL);
+		if (!np_amp) {
+			ERR("amp wasn't the type expected");
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, req, NULL);
+		if (!np_mean) {
+			ERR("mean wasn't the type expected");
+			Py_DECREF(np_amp);
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_var = PyArray_FromAny(np_var, dtype, 3, 3, req, NULL);
+		if (!np_var) {
+			ERR("var wasn't the type expected");
+			Py_DECREF(np_mean);
+			Py_DECREF(np_amp);
+			Py_DECREF(dtype);
+			return -1;
+		}
+		Py_INCREF(dtype);
 		np_result = PyArray_FromAny(np_result, dtype, 2, 2, reqout, NULL);
+		if (!np_result) {
+			ERR("result wasn't the type expected");
+			Py_DECREF(np_var);
+			Py_DECREF(np_mean);
+			Py_DECREF(np_amp);
+			Py_DECREF(dtype);
+			return -1;
+		}
 
 		N = NY * NX;
 		K = PyArray_DIM(np_amp, 0);

@@ -15,7 +15,7 @@ def plot_cmd(allmags, i2mags, band):
 	#plt.gca().set_position(plotpos0)
 	xx,yy,xerr = [],[],[]
 	xx2,xerr2 = [],[]
-	for i2,rr in zip(i2mags, allmags.T):
+	for i2,rr in zip(i2mags, allmags):
 		print 'rr', rr
 
 		# When the source is off the image, the optimizer doesn't change anything and
@@ -81,9 +81,13 @@ if __name__ == '__main__':
 		assert(len(mags) == len(i2mags))
 		allmags[bb].append(mags)
 
-	for bb in allbands[1:]:
+	for bb in allbands:
+		print 'Band', bb, 'shape', np.array(allmags[bb]).shape
 		#allmags[bb] = np.array(allmags[bb])
-		plot_cmd(np.array(allmags[bb]), i2mags, bb)
+		allmags = np.array(allmags[bb])
+		if bb != 'i2':
+			allmags = allmags.T
+		plot_cmd(allmags, i2mags, bb)
 
 
 

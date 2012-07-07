@@ -25,7 +25,7 @@
 						 PyObject* np_amp,
 						 PyObject* np_mean,
 						 PyObject* np_var) {
-        int i, N, K, k, d;
+        int i, N, K, k;
 		int ix, iy;
 		int NX, NY;
 		const int D = 2;
@@ -46,24 +46,35 @@
 
 		tpd = pow(2.*M_PI, D);
 
+		Py_INCREF(dtype);
 		np_img = PyArray_FromAny(np_img, dtype, 2, 2, req, NULL);
-		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
-		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, reqout, NULL);
-		np_var = PyArray_FromAny(np_var, dtype, 3, 3, reqout, NULL);
 		if (!np_img) {
 			ERR("img wasn't the type expected");
+			Py_DECREF(dtype);
 			return -1;
 		}
+		Py_INCREF(dtype);
+		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
 		if (!np_amp) {
 			ERR("amp wasn't the type expected");
+			Py_DECREF(dtype);
 			return -1;
 		}
+		Py_INCREF(dtype);
+		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, reqout, NULL);
 		if (!np_mean) {
 			ERR("mean wasn't the type expected");
+			Py_DECREF(np_amp);
+			Py_DECREF(dtype);
 			return -1;
 		}
+		Py_INCREF(dtype);
+		np_var = PyArray_FromAny(np_var, dtype, 3, 3, reqout, NULL);
 		if (!np_var) {
 			ERR("var wasn't the type expected");
+			Py_DECREF(np_amp);
+			Py_DECREF(np_var);
+			Py_DECREF(dtype);
 			return -1;
 		}
 
