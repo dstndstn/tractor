@@ -43,7 +43,7 @@ class GalaxyShape(ParamList):
 	def getParamNames(self):
 		return ['re', 'ab', 'phi']
 
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		abstep = 0.01
 		if self.ab >= (1 - abstep):
 			abstep = -abstep

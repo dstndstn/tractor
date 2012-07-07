@@ -18,7 +18,7 @@ from tractor import *
 
 from tractor.cache import Cache
 import pyfits
-from astrometry.util.util import Tan, tan_wcs_resample, log_init
+from astrometry.util.util import Tan, tan_wcs_resample, log_init, lanczos
 from astrometry.util.multiproc import multiproc
 from astrometry.util.file import pickle_to_file, unpickle_from_file
 import multiprocessing
@@ -370,7 +370,8 @@ class DustSheet(MultiParams):
 			for j in range(W):
 				#print 'Precomputing matrix for grid pixel', j,i
 				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
-				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, Lorder)
+				rim[:,:] = 0
+				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, 0, Lorder)
 				assert(res == 0)
 				outimg = img.getPsf().applyTo(rim).ravel()
 				I = np.flatnonzero(outimg)
@@ -525,6 +526,10 @@ def makeplots(tractor, step, suffix):
 	plt.clf()
 	for i,mod in enumerate(mods):
 		tim = tractor.getImage(i)
+
+		print 'Image', tim.name, ': data median', np.median(tim.getImage()),
+		print 'model median:', np.median(mod)
+
 		ima = dict(interpolation='nearest', origin='lower',
 				   vmin=tim.zr[0], vmax=tim.zr[1])
 
@@ -839,7 +844,43 @@ def main():
 		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
 		tractor = unpickle_from_file(pfn)
 		tractor.mp = mp
+
+		ds = tractor.getCatalog()[0]
+		print 'DustSheet:', ds
+
+		# X,Y = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+		# Lorder = 2
+		# LX = np.array([lanczos(x, Lorder) for x in X.ravel()]).reshape(X.shape)
+		# LY = np.array([lanczos(y, Lorder) for y in Y.ravel()]).reshape(Y.shape)
+		# plt.clf()
+		# plt.imshow(LX, interpolation='nearest', origin='lower')
+		# plt.savefig('lx.png')
+		# plt.clf()
+		# plt.imshow(LY, interpolation='nearest', origin='lower')
+		# plt.savefig('ly.png')
+		# plt.clf()
+		# plt.imshow(LX*LY, interpolation='nearest', origin='lower')
+		# plt.savefig('lxly.png')
+		# tim = tractor.getImages()[0]
+		# X = ds._getTransformation(tim)
+		# print 'X', X
+		# keys = X.keys()
+		# keys.sort()
+		# for k in keys:
+		# 	I,G = X[k]
+		# 	plt.clf()
+		# 	rim = np.zeros_like(tim.getImage())
+		# 	rim.ravel()[I] = G
+		# 	plt.imshow(rim, interpolation='nearest', origin='lower')
+		# 	plt.savefig('rim-%i.png' % k)
+		# 	print 'pix', k
+		# sys.exit(0)
+
+
+		makeplots(tractor, opt.resume, opt.suffix)
 		step0 = opt.resume + 1
+
+
 	else:
 		step0 = 0
 		tractor = create_tractor(opt)
@@ -851,14 +892,7 @@ def main():
 			ds._setTransformation(im, X)
 		print 'done precomputing.'
 
-		# must put this after the precomputing or it does it!
-		for tim in tims:
-			mod = ds.getModelPatch(tim)
-			print 'Image', tim.name, ': data median', np.median(tim.getImage()),
-			print 'model median:', np.median(mod.patch)
-
 		makeplots(tractor, 0, opt.suffix)
-
 		pfn = 'herschel-%02i%s.pickle' % (0, opt.suffix)
 		pickle_to_file(tractor, pfn)
 		print 'Wrote', pfn

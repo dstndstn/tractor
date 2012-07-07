@@ -127,7 +127,7 @@ class MagsPhotoCal(ParamList):
 	def getNamedParams():
 		return dict(zp=0)
 
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		return [0.01]
 
 	def brightnessToCounts(self, brightness):

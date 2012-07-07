@@ -789,7 +789,7 @@ class SdssMagsPhotoCal(BaseParams):
 	# to implement Params
 	def getParams(self):
 		return [self.aa]
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		return [0.01]
 	def setParam(self, i, p):
 		assert(i == 0)
@@ -851,7 +851,7 @@ class SdssFluxPhotoCal(object):
 		return brightness.getValue() * self.scale
 
 class SdssFlux(Flux):
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		return [1.]
 	def __str__(self):
 		return 'SdssFlux: %.1f' % (self.val * SdssPhotoCal.scale)

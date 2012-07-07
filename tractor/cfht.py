@@ -26,7 +26,7 @@ class CfhtPhotoCal(BaseParams):
 
 	def getParams(self):
 		return [self.phot_c,]
-	def getStepSizes(self):
+	def getStepSizes(self, *args, **kwargs):
 		return [0.01]
 	def setParam(self, i, p):
 		assert(i == 0)
