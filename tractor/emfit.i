@@ -57,6 +57,7 @@
 		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
 		if (!np_amp) {
 			ERR("amp wasn't the type expected");
+			Py_DECREF(np_img);
 			Py_DECREF(dtype);
 			return -1;
 		}
@@ -64,6 +65,7 @@
 		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, reqout, NULL);
 		if (!np_mean) {
 			ERR("mean wasn't the type expected");
+			Py_DECREF(np_img);
 			Py_DECREF(np_amp);
 			Py_DECREF(dtype);
 			return -1;
@@ -72,8 +74,9 @@
 		np_var = PyArray_FromAny(np_var, dtype, 3, 3, reqout, NULL);
 		if (!np_var) {
 			ERR("var wasn't the type expected");
+			Py_DECREF(np_img);
 			Py_DECREF(np_amp);
-			Py_DECREF(np_var);
+			Py_DECREF(np_mean);
 			Py_DECREF(dtype);
 			return -1;
 		}
@@ -250,6 +253,13 @@
 		free(Z);
 		free(scale);
 		free(ivar);
+
+		Py_DECREF(np_img);
+		Py_DECREF(np_amp);
+		Py_DECREF(np_mean);
+		Py_DECREF(np_var);
+		Py_DECREF(dtype);
+
 		return result;
 	}
 
