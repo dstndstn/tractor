@@ -71,6 +71,9 @@ class BaseParams(object):
 		return []
 	def setParams(self, p):
 		'''
+		NOTE, you MUST implement either "setParams" or "setParam",
+		because the default implementation causes an infinite loop!
+
 		Sets the parameter values to the values in the given iterable
 		`p`.  The base class implementation just calls `setParam` for
 		each element.
@@ -80,6 +83,9 @@ class BaseParams(object):
 			self.setParam(ii, pp)
 	def setParam(self, i, p):
 		'''
+		NOTE, you MUST implement either "setParams" or "setParam",
+		because the default implementation causes an infinite loop!
+
 		Sets parameter index `i` to new value `p`.
 
 		i: integer in the range [0, numberOfParams()).
@@ -87,7 +93,11 @@ class BaseParams(object):
 
 		Returns the old value.
 		'''
-		return None
+		P = self.getParams()
+		old = P[i]
+		P[i] = p
+		return old
+
 	def getLogPrior(self):
 		'''
 		Return the prior PDF, evaluated at the current value

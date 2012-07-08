@@ -18,7 +18,7 @@ import resource
 import gc
 
 import numpy as np
-import pylab as plt
+#import pylab as plt
 
 from scipy.sparse import csr_matrix, csc_matrix
 from scipy.sparse.linalg import lsqr
@@ -283,26 +283,26 @@ class Patch(object):
 		p = self.patch[iny,inx]
 		img[outy, outx] += p * scale
 
-		if False:
-			tmpimg = np.zeros_like(img)
-			tmpimg[outy,outx] = p * scale
-			plt.clf()
-			plt.imshow(tmpimg, interpolation='nearest', origin='lower')
-			plt.hot()
-			plt.colorbar()
-			fn = 'addto-%03i.png' % Patch.plotnum
-			plt.savefig(fn)
-			print 'Wrote', fn
-
-			plt.clf()
-			plt.imshow(p, interpolation='nearest', origin='lower')
-			plt.hot()
-			plt.colorbar()
-			fn = 'addto-%03i-p.png' % Patch.plotnum
-			plt.savefig(fn)
-			print 'Wrote', fn
-
-			Patch.plotnum += 1
+		# if False:
+		# 	tmpimg = np.zeros_like(img)
+		# 	tmpimg[outy,outx] = p * scale
+		# 	plt.clf()
+		# 	plt.imshow(tmpimg, interpolation='nearest', origin='lower')
+		# 	plt.hot()
+		# 	plt.colorbar()
+		# 	fn = 'addto-%03i.png' % Patch.plotnum
+		# 	plt.savefig(fn)
+		# 	print 'Wrote', fn
+		# 
+		# 	plt.clf()
+		# 	plt.imshow(p, interpolation='nearest', origin='lower')
+		# 	plt.hot()
+		# 	plt.colorbar()
+		# 	fn = 'addto-%03i-p.png' % Patch.plotnum
+		# 	plt.savefig(fn)
+		# 	print 'Wrote', fn
+		# 
+		# 	Patch.plotnum += 1
 
 	def __getattr__(self, name):
 		if name == 'shape':
@@ -763,14 +763,14 @@ class Tractor(MultiParams):
 			VV = np.hstack(VV)
 			WW = np.hstack(WW)
 			#vals = np.hstack(VV) * np.hstack(WW)
-			print 'VV absmin:', np.min(np.abs(VV))
-			print 'WW absmin:', np.min(np.abs(WW))
-			print 'VV type', VV.dtype
-			print 'WW type', WW.dtype
+			#print 'VV absmin:', np.min(np.abs(VV))
+			#print 'WW absmin:', np.min(np.abs(WW))
+			#print 'VV type', VV.dtype
+			#print 'WW type', WW.dtype
 			vals = VV * WW
-			print 'vals absmin:', np.min(np.abs(vals))
-			print 'vals absmax:', np.max(np.abs(vals))
-			print 'vals type', vals.dtype
+			#print 'vals absmin:', np.min(np.abs(vals))
+			#print 'vals absmax:', np.max(np.abs(vals))
+			#print 'vals type', vals.dtype
 
 			# shouldn't be necessary since we check len(nz)>0 above
 			#if len(vals) == 0:

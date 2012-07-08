@@ -187,7 +187,7 @@
 							   PyObject* np_amp,
 							   PyObject* np_mean, PyObject* np_var,
 							   PyObject* np_result) {
-        int i, N, K, k;
+        int i, K, k;
 		const int D = 2;
 		double *amp, *mean, *var, *result;
 		PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
@@ -235,7 +235,6 @@
 			return -1;
 		}
 
-		N = NY * NX;
 		K = PyArray_DIM(np_amp, 0);
 		if ((PyArray_DIM(np_mean, 0) != K) ||
 			(PyArray_DIM(np_mean, 1) != D)) {

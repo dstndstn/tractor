@@ -19,7 +19,6 @@ from datetime import datetime
 import pyfits
 import pylab as plt
 import numpy as np
-import matplotlib
 
 from engine import *
 from basics import *
