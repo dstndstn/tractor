@@ -378,7 +378,9 @@ class DustSheet(MultiParams):
 				#print 'Precomputing matrix for grid pixel', j,i
 				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
 				rim[:,:] = 0
-				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, 0, Lorder)
+				##
+				weighted = 1
+				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, weighted, Lorder)
 				assert(res == 0)
 				outimg = img.getPsf().applyTo(rim).ravel()
 				I = np.flatnonzero(outimg)
@@ -455,7 +457,7 @@ class DustSheet(MultiParams):
 				dc = (countsi - counts0[gridi])
 				I,V,((x0,y0),nzshape),NZI = X[gridi]
 				dmod = np.zeros(nzshape)
-				dmod.ravel()[NZI] = V * (cscale / step)
+				dmod.ravel()[NZI] = dc * V * (cscale / step)
 				derivs.append(Patch(x0, y0, dmod))
 
 			i0 += sub.numberOfParams()
@@ -866,25 +868,35 @@ def main():
 		# plt.clf()
 		# plt.imshow(LX*LY, interpolation='nearest', origin='lower')
 		# plt.savefig('lxly.png')
+
 		# tim = tractor.getImages()[0]
+		# derivs = ds.getParamDerivatives(tim)
+		# dim = np.zeros(tim.shape)
+		# #for k,deriv in enumerate(derivs[:40]):
+		# for k,deriv in enumerate(derivs[::10]):
+		# 	dim[:,:] = 0
+		# 	deriv.addTo(dim)
+		# 	plt.clf()
+		# 	plt.imshow(dim, interpolation='nearest', origin='lower')
+		# 	plt.savefig('deriv-%04i.png' % k)
+
 		# X = ds._getTransformation(tim)
-		# print 'X', X
+		# #print 'X', X
 		# keys = X.keys()
 		# keys.sort()
-		# for k in keys:
-		# 	I,G = X[k]
+		# #for k in keys[::10]:
+		# for k in keys[:40]:
+		# 	I,G,nil,nil = X[k]
 		# 	plt.clf()
 		# 	rim = np.zeros_like(tim.getImage())
 		# 	rim.ravel()[I] = G
 		# 	plt.imshow(rim, interpolation='nearest', origin='lower')
-		# 	plt.savefig('rim-%i.png' % k)
+		# 	plt.savefig('rim-%04i.png' % k)
 		# 	print 'pix', k
-		# sys.exit(0)
-
+		#sys.exit(0)
 
 		makeplots(tractor, opt.resume, opt.suffix)
 		step0 = opt.resume + 1
-
 
 	else:
 		step0 = 0
