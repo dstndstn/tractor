@@ -466,8 +466,8 @@ class GaussianMixturePSF(BaseParams):
 
 	def getMixtureOfGaussians(self):
 		return self.mog
-	def proposeIncreasedComplexity(self, img):
-		raise
+	#def proposeIncreasedComplexity(self, img):
+	#	raise
 	def getStepSizes(self, *args, **kwargs):
 		K = self.mog.K
 		# amp + mean + var
@@ -475,9 +475,9 @@ class GaussianMixturePSF(BaseParams):
 		#  : -K for variance symmetry
 		return [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
 
-	def isValidParamStep(self, dparam):
-		## FIXME
-		return True
+	#def isValidParamStep(self, dparam):
+	#	## FIXME
+	#	return True
 	def applyTo(self, image):
 		raise
 	def getNSigma(self):
@@ -557,13 +557,35 @@ class GaussianMixturePSF(BaseParams):
 		K = self.mog.K
 		self.mog.amp = np.atleast_1d(p[:K])
 		pp = p[K:]
-		D = 2
-		self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,D)
+		self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
 		pp = pp[K*2:]
 		self.mog.var[:,0,0] = pp[::3]
 		self.mog.var[:,1,1] = pp[1::3]
 		self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
 
+	def setParam(self, i, p):
+		K = self.mog.K
+		if i < K:
+			old = self.mog.amp[i]
+			self.mog.amp[i] = p
+			return old
+		i -= K
+		if i < K*2:
+			old = self.mog.mean.ravel()[i]
+			self.mog.mean.ravel()[i] = p
+			return old
+		i -= K*2
+		j = i / 3
+		k = i % 3
+		if k in [0,1]:
+			old = self.mog.var[j,k,k]
+			self.mog.var[j,k,k] = p
+			return old
+		old = self.mog.var[j,0,1]
+		self.mog.var[j,0,1] = p
+		self.mog.var[j,1,0] = p
+		return old
+		
 	
 class NCircularGaussianPSF(MultiParams):
 	'''
