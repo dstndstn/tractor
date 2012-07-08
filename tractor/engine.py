@@ -475,15 +475,15 @@ class Tractor(MultiParams):
 
 	# For use from emcee
 	def __call__(self, X):
-		print self.getName()+'.__call__: I am pid', os.getpid()
+		# print self.getName()+'.__call__: I am pid', os.getpid()
 		self.setParams(X)
 		lnp = self.getLogProb()
-		print self.cache
-		from .sdss_galaxy import get_galaxy_cache
-		print 'Galaxy cache:', get_galaxy_cache()
-		#print 'Items:'
-		#self.cache.printItems()
-		#print
+		# print self.cache
+		# from .sdss_galaxy import get_galaxy_cache
+		# print 'Galaxy cache:', get_galaxy_cache()
+		# print 'Items:'
+		# self.cache.printItems()
+		# print
 		return lnp
 
 	# For pickling
@@ -1016,6 +1016,13 @@ class Tractor(MultiParams):
 		mod = self.getModelImage(img, srcs)
 		return (img.getImage() - mod) * img.getInvError()
 
+	def getNdata(self):
+		count = 0
+		for img in self.images:
+			InvError = img.getInvError()
+			count += len(np.ravel(InvError > 0.0))
+		return count
+            
 	def getLogLikelihood(self):
 		chisq = 0.
 		for i,chi in enumerate(self.getChiImages()):
