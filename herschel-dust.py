@@ -83,9 +83,7 @@ class DustPhotoCal(ParamList):
 
 		'''
 		self.lam = lam
-		self.cal = 1e20 #* lam**2 / Physics.cc
-		self.cal /= ((pixscale / 3600 / (180./np.pi))**2)
-		print 'Cal', self.cal
+		self.cal = 1e20
 		# No (adjustable) params
 		super(DustPhotoCal,self).__init__()
 
@@ -402,12 +400,6 @@ class DustSheet(MultiParams):
 				continue
 			I,V = X[i]
 			rim1[I] += V * c
-
-		imwcs = img.getWcs()
-		imscale = imwcs.wcs.pixel_scale()
-		gridscale = self.wcs.pixel_scale()
-		#print 'pixel scaling:', (imscale / gridscale)**2
-		rim *= (imscale / gridscale)**2
 		#print 'Median model patch:', np.median(rim)
 		return Patch(0, 0, rim)
 
@@ -757,7 +749,7 @@ def create_tractor(opt):
 	plt.savefig('radec3%s.png' % opt.suffix)
 
 	pixscale = dwcs.pixel_scale()
-	logsa = np.log(1e-3 * ((pixscale / 3600 / (180./np.pi))**2))
+	logsa = np.log(1e-3)
 
 	logsa = np.zeros((H,W)) + logsa
 	logt = np.zeros((H,W)) + np.log(17.)
