@@ -64,7 +64,7 @@ class Physics(object):
 
 
 class DustPhotoCal(ParamList):
-	def __init__(self, lam, pixscale):   #, Mjypersrperdn):
+	def __init__(self, lam, pixscale):
 		'''
 		lam: central wavelength of filter in microns
 
@@ -91,14 +91,19 @@ class DustPhotoCal(ParamList):
 	# MAGIC number: wavelength scale for emissivity model
 	lam0 = 1.e-4 # m
 
-	def brightnessToCounts(self, brightness):
-		# see http://arxiv.org/abs/astro-ph/9902255 for (lam/lam0) ^ -beta, eg
-		beta = np.array(brightness.emissivity)
+	def dustParamsToCounts(self, logsolidangle, logtemperature, emissivity):
+		# see, eg, http://arxiv.org/abs/astro-ph/9902255 for (lam/lam0) ^ -beta
+		beta = np.array(emissivity)
 		return(
-			np.exp(brightness.logsolidangle)
+			np.exp(logsolidangle)
 			* ((self.lam / DustPhotoCal.lam0) ** (-1. * beta))
-			* Physics.black_body_nu(self.lam, brightness.logtemperature)
+			* Physics.black_body_nu(self.lam, logtemperature)
 			* self.cal)
+		
+	def brightnessToCounts(self, brightness):
+		return self.dustParamsToCounts(brightness.logsolidangle,
+									   brightness.logtemperature,
+									   brightness.emissivity)
 
 class NpArrayParams(ParamList):
 	'''
@@ -330,25 +335,29 @@ class DustSheet(MultiParams):
 		return D
 	def __setstate__(self, d): self.__dict__.update(d)
 
-	def _getcounts(self, img):
-		# This takes advantage of the coincidence that our DustPhotoCal does the right thing
-		# with numpy arrays.
+	def _getcounts(self, img, I=None):
+		# This takes advantage of the coincidence that our
+		# DustPhotoCal does the right thing with numpy arrays.
 
-		#class fakebright(object):
-		#	pass
-		#b = fakebright()
-		#b.logsolidangle, b.logtemperature, b.emissivity = self.getArrays()
-		#counts = img.getPhotoCal().brightnessToCounts(b)
+		if I is not None:
+			# class fakebright(object):
+			# 	pass
+			# b = fakebright()
+			sa,t,e = self.getArrays(ravel=True)
+			#b.logsolidangle, b.logtemperature, b.emissivity = sa[I], t[I], e[I]
+			#counts = img.getPhotoCal().brightnessToCounts(b)
+			counts = img.getPhotoCal().dustParamsToCounts(sa[I], t[I], e[I])
+			return counts
 
 		counts = img.getPhotoCal().brightnessToCounts(self)
 		# Thanks to NpArrayParams they get ravel()'d down to 1-d, so
 		# reshape back to 2d
-		counts = counts.reshape(self.shape) #.astype(np.float32)
+		counts = counts.reshape(self.shape)
 		return counts
 
 	def _computeTransformation(self, img):
 		imwcs = img.getWcs()
-		# Pre-computation the "grid-spread function" transformation matrix...
+		# Pre-compute the "grid-spread function" transformation matrix...
 		H,W = self.shape
 		Ngrid = W*H
 		iH,iW = img.shape
@@ -373,7 +382,14 @@ class DustSheet(MultiParams):
 				assert(res == 0)
 				outimg = img.getPsf().applyTo(rim).ravel()
 				I = np.flatnonzero(outimg)
-				X[i*W+j] = (I, outimg[I])
+
+				xx,yy = (I % iW), (I / iW)
+				x0,y0 = xx.min(), yy.min()
+				nzh,nzw = 1 + yy.max() - y0, 1 + xx.max() - x0
+				NZ = ((x0, y0), (nzh, nzw))
+				NZI = (xx - x0) + (yy - y0) * nzw
+
+				X[i*W+j] = (I, outimg[I], NZ, NZI)
 		return X
 
 	def _setTransformation(self, img, X):
@@ -398,36 +414,10 @@ class DustSheet(MultiParams):
 		for i,c in enumerate(counts.ravel()):
 			if not i in X:
 				continue
-			I,V = X[i]
+			I,V,nil,nil = X[i]
 			rim1[I] += V * c
 		#print 'Median model patch:', np.median(rim)
 		return Patch(0, 0, rim)
-
-	def getModelPatch_1(self, img):
-		# Compute emission in the native grid
-		# Resample onto img grid + do PSF convolution in one shot
-
-		# I am weak... do resampling + convolution in separate shots
-		counts = self._getcounts(img)
-		iH,iW = img.shape
-		rim = np.zeros((iH,iW), np.float32)
-		imwcs = img.getWcs()
-
-		## ASSUME TAN WCS on both the DustSheet and img.
-		res = tan_wcs_resample(self.wcs, imwcs.wcs, counts, rim, 2)
-		assert(res == 0)
-
-		# Correct for the difference in solid angle per pixel of the grid and the image.
-		# NB we should perhaps do this before the call to "brightnessToCounts", but it's a
-		# linear scale factor so it doesn't really matter.
-		gridscale = self.wcs.pixel_scale()
-		imscale = imwcs.wcs.pixel_scale()
-		rim *= (imscale / gridscale)**2
-
-		## ASSUME the PSF has "applyTo"
-		outimg = img.getPsf().applyTo(rim)
-
-		return Patch(0, 0, outimg)
 
 	def getStepSizes(self, *args, **kwargs):
 		return ([0.1] * len(self.logsolidangle) +
@@ -446,36 +436,59 @@ class DustSheet(MultiParams):
 		counts0 = self._getcounts(img)
 		derivs = []
 
+		ss = self.getStepSizes()
+		nms = self.getParamNames()
+		i0 = 0
+
+		counts0 = counts0.ravel()
+		#arrs = self.getArrays(ravel=True)
+		sa,t,e = self.getArrays(ravel=True)
+		photocal = img.getPhotoCal()
+		for si,sub in self._enumerateActiveSubs():
+			for parami,gridi in sub._indexBoth():
+				print 'Img', img.name, 'deriv', i0+parami, nms[i0+parami]
+
+				step = ss[i0+parami]
+				args = [sa[gridi], t[gridi], e[gridi]]
+				args[si] += step
+				countsi = photocal.dustParamsToCounts(*args)
+				dc = (countsi - counts0[gridi])
+				I,V,((x0,y0),nzshape),NZI = X[gridi]
+				dmod = np.zeros(nzshape)
+				dmod.ravel()[NZI] = V * (cscale / step)
+				derivs.append(Patch(x0, y0, dmod))
+
+			i0 += sub.numberOfParams()
+
 		# This is ugly -- the dust param vectors are stored one after another, so the
 		# three parameters affecting each pixel are not contiguous, and we also ignore the
 		# fact that we should *know* which grid pixel is affected by each parameter!!
 		# (but this might work with freezing... maybe...)
-
-		for i,(step,name) in enumerate(zip(self.getStepSizes(), self.getParamNames())):
-			print 'Img', img.name, 'deriv', i, name
-			oldval = self.setParam(i, p0[i] + step)
-			countsi = self._getcounts(img)
-			self.setParam(i, oldval)
-
-			dc = (countsi - counts0).ravel()
-			I = np.flatnonzero(dc != 0)
-			# I spent a long time trying to figure out why the
-			# SPIRE100 beta derivative was zero...
-			# (d/dX((100 um / lam0) ** X) = d/dX(1.**X) == 0...)
-			if len(I) == 0:
-				derivs.append(None)
-				continue
-			if len(I) != 1:
-				print 'dcounts', dc
-				print 'I', I
-			assert(len(I) == 1)
-			ii = I[0]
-
-			I,V = X[ii]
-			dc = float(dc[ii])
-			dmod = np.zeros(imshape)
-			dmod.ravel()[I] = V * (cscale / step)
-			derivs.append(Patch(0, 0, dmod))
+		# for i,(step,name) in enumerate(zip(self.getStepSizes(), self.getParamNames())):
+		# 	print 'Img', img.name, 'deriv', i, name
+		# 	oldval = self.setParam(i, p0[i] + step)
+		# 	countsi = self._getcounts(img)
+		# 	self.setParam(i, oldval)
+		# 
+		# 	dc = (countsi - counts0).ravel()
+		# 	I = np.flatnonzero(dc != 0)
+		# 	# I spent a long time trying to figure out why the
+		# 	# SPIRE100 beta derivative was zero...
+		# 	# (d/dX((100 um / lam0) ** X) = d/dX(1.**X) == 0...)
+		# 	if len(I) == 0:
+		# 		derivs.append(None)
+		# 		continue
+		# 	if len(I) != 1:
+		# 		print 'dcounts', dc
+		# 		print 'I', I
+		# 	assert(len(I) == 1)
+		# 	ii = I[0]
+		# 
+		# 	I,V = X[ii]
+		# 	dc = float(dc[ii])
+		# 	dmod = np.zeros(imshape)
+		# 	dmod.ravel()[I] = V * (cscale / step)
+		# 	derivs.append(Patch(0, 0, dmod))
 
 		return derivs
 
@@ -681,7 +694,7 @@ def create_tractor(opt):
 		# calibrated, yo
 		assert(hdr['BUNIT'] == 'MJy/Sr')
 		# "Filter" is in *microns* in the headers; convert to *m* here, to match "lam0"
-		pcal = DustPhotoCal(lam * 1e-6, wcs.pixel_scale())   #, 1.)
+		pcal = DustPhotoCal(lam * 1e-6, wcs.pixel_scale())
 		#nm = '%s %i' % (hdr['INSTRUME'], lam)
 		nm = fn.replace('.fits', '')
 		#zr = noise * np.array([-3, 10]) + skyval

@@ -251,7 +251,6 @@ class NamedParams(object):
 		for n in args:
 			self.freezeParam(n)
 	def freezeParam(self, paramname):
-		#if type(paramname) in [int, np.int64]:
 		if _isint(paramname):
 			i = paramname
 		else:
@@ -262,7 +261,6 @@ class NamedParams(object):
 		self.freezeAllParams()
 		self.thawParams(*args)
 	def thawParam(self, paramname):
-		#if type(paramname) in [int, np.int64]:
 		if _isint(paramname):
 			i = paramname
 		elif isinstance(paramname, basestring):
@@ -312,6 +310,11 @@ class NamedParams(object):
 		for i,v in enumerate(self.liquid):
 			if v:
 				yield array[i]
+	def _enumerateLiquidArray(self, array):
+		for i,v in enumerate(self.liquid):
+			if v:
+				yield i,array[i]
+
 
 	def _countLiquid(self):
 		return sum(self.liquid)
@@ -326,7 +329,7 @@ class NamedParams(object):
 		raise IndexError
 
 	def _indexBoth(self):
-		''' Yields (i,j), for i-th liquid parameter and j the raw index. '''
+		''' Yields (i,j), for i, the liquid parameter and j, the raw index. '''
 		i = 0
 		for j,v in enumerate(self.liquid):
 			if v:
@@ -524,6 +527,16 @@ class MultiParams(BaseParams, NamedParams):
 			# Should 'subs' be allowed to contain None values?
 			if s is not None:
 				yield s
+
+	def _enumerateActiveSubs(self):
+		'''
+		Yields *index-ignoring-freeze-state*,sub
+		for unfrozen subs.
+		'''
+		for i,s in self._enumerateLiquidArray(self.subs):
+			# Should 'subs' be allowed to contain None values?
+			if s is not None:
+				yield i,s
 
 	def freezeParamsRecursive(self, *pnames):
 		for name,sub in self._iterNamesAndVals():
