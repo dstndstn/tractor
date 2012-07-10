@@ -81,6 +81,36 @@ class Mags(ParamList):
 		self.addNamedParams(**dict((k,i) for i,k in enumerate(self.order)))
 
 
+class Fluxes(Mags):
+	'''
+	An implementation of `Brightness` that stores fluxes in multiple
+	bands.
+	'''
+    getBand = getMag
+    getFlux = getMag
+    def __add__(self, other):
+		kwargs = {}
+		for band in self.order:
+            m1 = self.getBand(band)
+            m2 = other.getBand(band)
+			kwargs[band] = m1 + m2
+        return Fluxes(order=self.order, **kwargs)
+    def __mul__(self, factor):
+        raise
+
+class FluxesPhotoCal(BaseParams):
+    def __init__(self, band):
+        self.band = band
+        BaseParams.__init__(self)
+    def copy(self):
+		return FluxesPhotoCal(self.band)
+    def brightnessToCounts(self, brightness):
+		flux = brightness.getFlux(self.band)
+        return flux
+	def __str__(self):
+		return 'FluxesPhotoCal(band=%s)' % (self.band)
+
+
 class Mag(ScalarParam):
 	'''
 	An implementation of `Brightness` that stores a single magnitude.
@@ -120,7 +150,7 @@ class MagsPhotoCal(ParamList):
 		self.maxmag = 50.
 		ParamList.__init__(self, zeropoint)
 
-	def copy(self):
+    def copy(self):
 		return MagsPhotoCal(self.band, self.zp)
 
 	@staticmethod
