@@ -24,6 +24,11 @@ _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
 	return _galcache
 
+def set_galaxy_cache_size(N):
+	global _galcache
+	_galcache.clear()
+	_galcache = Cache(maxsize=N)
+
 def disable_galaxy_cache():
 	global _galcache
 	_galcache = NullCache()

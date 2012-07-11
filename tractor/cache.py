@@ -34,12 +34,10 @@ class Cache(object):
 			print 'Clearing Cache object.'
 			objs = [(k,v) for k,v in self.dict.items()]
 			self.dict.clear()
-			for k,v in objs:
+			while len(objs):
+				k,v = objs.pop()
 				print 'refcnt key', refcnt(k), 'val', refcnt(v),
-				#if hasattr(v, 'val'):
 				print 'real', refcnt(v.val),
-				#else:
-				#	print
 				vv = v.val
 				v.val = None
 				print 'real', refcnt(vv)

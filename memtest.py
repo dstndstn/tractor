@@ -84,12 +84,13 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy as np
 
-from tractor.sdss_galaxy import get_galaxy_cache, disable_galaxy_cache
+from tractor.sdss_galaxy import get_galaxy_cache, disable_galaxy_cache, set_galaxy_cache_size
 tractor = None
 
 import resource
 import os
 import subprocess
+import time
 def memuse():
 	#cmd = '/bin/ps -p %i -o rss,size,sz,vsz,command' % os.getpid()
 	cmd = '/bin/ps -p %i -o rss,size,sz,vsz h' % os.getpid()
@@ -150,6 +151,9 @@ tractor = Tractor(Images(im), Catalog(*srcs))
 #tractor.cache = NullCache()
 #disable_galaxy_cache()
 
+tractor.cache = Cache(100)
+set_galaxy_cache_size(100)
+
 labels.append((len(mem), 'tractor'))
 mem.append(memuse())
 
@@ -161,8 +165,8 @@ mem.append(memuse())
 track('mod')
 
 tractor.freezeParam('images')
-#for x in range(10):
-for x in range(2):
+for x in range(10):
+#for x in range(2):
 	tractor.optimize(alphas=[1e-3, 1e-2, 0.1, 1])
 	labels.append((len(mem), 'opt %i' % x))
 	mem.append(memuse())
@@ -232,56 +236,79 @@ labels.append((len(mem), 'gc'))
 mem.append(memuse())
 track('end')
 
-# print
-# print
-# print 'Unreachable objects:'
-# print
-# 
-# garbage = gc.garbage
-# 
-# for i,obj in enumerate(garbage):
-# 	print
-# 	print
-# 	print
-# 	print i, type(obj)
-# 	refs = []
-# 	rr = gc.get_referents(obj)
-# 	#try:
-# 	#	refs.append(garbage.index(r))
-# 	#except ValueError:
-# 	#	pass
-# 	for j,o in enumerate(garbage):
-# 		if i == j:
-# 			continue
-# 		if any([o is r for r in rr]):
-# 			refs.append(j)
-# 		#if o in rr:
-# 		#	refs.append(j)
-# 	print 'Refers to:', refs
-# 	print str(obj)[:256]
-# 	print repr(obj)[:256]
+print
+print
+print 'Unreachable objects:'
+print
+garbage = gc.garbage
+seengids = set()
+idmap = dict([(id(obj), i) for i,obj in enumerate(garbage)])
+for i,obj in enumerate(garbage):
+	if id(obj) in seengids:
+		print 'Already printed obj', i
+		continue
+	print
+	print
+	print
+	print i, type(obj)
+	seengids.add(id(obj))
+	refs = []
+	rr = [(obj,o) for o in gc.get_referents(obj)]
+	while len(rr):
+		src,ref = rr.pop()
+		sid = idmap.get(id(src), -1)
+		rid = idmap.get(id(ref), -1)
+		print sid, ' -> ', rid
+		if sid == -1:
+			print 'src:', src
+		if rid == -1:
+			print 'ref:', ref
 
+		if id(ref) in seengids:
+			print 'Object', idmap[id(ref)], 'already printed'
+			continue
+
+		print rid, type(ref)
+
+		for o in gc.get_referents(ref):
+			rr.push((ref, o))
+
+	#print 'Refers to:', refs
+	#print str(obj)[:256]
+	#print repr(obj)[:256]
+del garbage
+
+del gc.garbage[:]
+labels.append((len(mem), 'clean gc'))
+mem.append(memuse())
+
+time.sleep(3)
+mem.append(memuse())
 
 import pylab as plt
+plt.figure(figsize=(10,8))
 plt.clf()
 mem = np.array(mem)
 print 'mem', mem.shape
+S,nil = mem.shape
 scales = [ 1e-3, 1e-6, 1. ]
+R,C = 2,2
 for i,(nm,j) in enumerate([('rss',0), ('size',0), ('sz',0), ('vsz',0), ('maxrss',0),
 						   ('tcache pix',1), ('tcache N',2),
 						   ('galcache pix',1), ('galcache N',2)]):
 	#plt.plot(mem[:,i], '-', label=nm)
-	plt.subplot(3,1, j+1)
-	plt.plot(mem[:,i] * scales[j], '-', label=nm)
+	plt.subplot(R,C, j+1)
+	plt.plot(mem[:,i] * scales[j], '-', label=nm, lw=3, alpha=0.5)
 
-plt.subplot(3,1, 1)
+plt.subplot(R,C, 1)
 ax = plt.axis()
 for x,txt in labels:
 	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
 labs = ['MB', 'Mpixels', 'number of cache entries']
 for j in range(3):
-	plt.subplot(3,1, j+1)
+	plt.subplot(R,C, j+1)
 	plt.ylabel(labs[j])
+	plt.xlim(0, S)
 	plt.legend(loc='upper left')
 plt.savefig('mem.png')
 

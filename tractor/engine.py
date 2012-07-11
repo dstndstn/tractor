@@ -449,11 +449,11 @@ class Tractor(MultiParams):
 		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
 		self._setup(mp=mp)
 
-	def __del__(self):
-		# dstn is not sure this is necessary / useful
-		if self.cache is not None:
-			self.cache.clear()
-		del self.cache
+	# def __del__(self):
+	# 	# dstn is not sure this is necessary / useful
+	# 	if self.cache is not None:
+	# 		self.cache.clear()
+	# 	del self.cache
 
 	def _setup(self, mp=None, cache=None, pickleCache=False):
 		if mp is None:
