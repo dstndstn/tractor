@@ -136,3 +136,11 @@ class NullCache(object):
 		raise KeyError
 	def __setitem__(self, key, val):
 		pass
+	def clear(self):
+		pass
+	def get(self, *args):
+		if len(args) == 1:
+			return self.__getitem__(args[0])
+		return args[1]
+	def put(self, *args):
+		pass

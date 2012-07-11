@@ -109,6 +109,8 @@ import numpy as np
 
 from tractor.sdss import get_tractor_sources_dr8, get_tractor_image_dr8
 from tractor import Tractor, Images, Catalog
+from tractor.sdss_galaxy import get_galaxy_cache, disable_galaxy_cache
+from tractor.cache import *
 
 import sys
 import logging
@@ -133,6 +135,9 @@ mem.append(memuse())
 track('image')
 
 tractor = Tractor(Images(im), Catalog(*srcs))
+
+tractor.cache = NullCache()
+disable_galaxy_cache()
 
 labels.append((len(mem), 'tractor'))
 mem.append(memuse())
@@ -193,7 +198,6 @@ labels.append((len(mem), 'clear cache'))
 mem.append(memuse())
 track('clear tractor cache')
 
-from tractor.sdss_galaxy import get_galaxy_cache
 get_galaxy_cache().clear()
 labels.append((len(mem), 'clear gal cache'))
 mem.append(memuse())
