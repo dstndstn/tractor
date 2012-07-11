@@ -9,6 +9,11 @@ _denorm.so: denorm.i
 	gcc -fPIC -c denorm_wrap.c -I/usr/include/python2.7
 	gcc -o $@ -shared denorm_wrap.o -lpython2.7
 
+_refcnt.so: refcnt.i
+	swig -python $<
+	gcc -fPIC -c refcnt_wrap.c -I/usr/include/python2.7
+	gcc -o $@ -shared refcnt_wrap.o -lpython2.7
+
 _callgrind.so: callgrind.i
 	swig -python $<
 	gcc -fPIC -c callgrind_wrap.c -I/usr/include/python2.7 -I/usr/include/valgrind

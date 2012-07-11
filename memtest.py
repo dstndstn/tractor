@@ -161,7 +161,8 @@ mem.append(memuse())
 track('mod')
 
 tractor.freezeParam('images')
-for x in range(10):
+#for x in range(10):
+for x in range(2):
 	tractor.optimize(alphas=[1e-3, 1e-2, 0.1, 1])
 	labels.append((len(mem), 'opt %i' % x))
 	mem.append(memuse())
@@ -171,35 +172,35 @@ for x in range(10):
 
 	track('opt')
 
-
-for x in range(10):
-	p0 = np.array(tractor.getParams())
-	ss = np.array(tractor.getStepSizes())
-	p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
-	tractor.setParams(p0)
-	mod = tractor.getModelImage(im)
-
-	labels.append((len(mem), 'mod %i' % x))
-	mem.append(memuse())
-	track('mod')
-
-for x in range(10):
-	p0 = np.array(tractor.getParams())
-	ss = np.array(tractor.getStepSizes())
-	p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
-	tractor.setParams(p0)
-	dervs = tractor.getDerivs()
-
-	labels.append((len(mem), 'derivs %i' % x))
-	mem.append(memuse())
-	track('derivs')
-
-
-for x in range(10):
-	X = tractor.getUpdateDirection(dervs)
-	labels.append((len(mem), 'upd %i' % x))
-	mem.append(memuse())
-	track('upd')
+if False:
+	for x in range(10):
+		p0 = np.array(tractor.getParams())
+		ss = np.array(tractor.getStepSizes())
+		p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
+		tractor.setParams(p0)
+		mod = tractor.getModelImage(im)
+	
+		labels.append((len(mem), 'mod %i' % x))
+		mem.append(memuse())
+		track('mod')
+	
+	for x in range(10):
+		p0 = np.array(tractor.getParams())
+		ss = np.array(tractor.getStepSizes())
+		p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
+		tractor.setParams(p0)
+		dervs = tractor.getDerivs()
+	
+		labels.append((len(mem), 'derivs %i' % x))
+		mem.append(memuse())
+		track('derivs')
+	
+	
+	for x in range(10):
+		X = tractor.getUpdateDirection(dervs)
+		labels.append((len(mem), 'upd %i' % x))
+		mem.append(memuse())
+		track('upd')
 
 
 
@@ -265,18 +266,19 @@ import pylab as plt
 plt.clf()
 mem = np.array(mem)
 print 'mem', mem.shape
+scales = [ 1e-3, 1e-6, 1. ]
 for i,(nm,j) in enumerate([('rss',0), ('size',0), ('sz',0), ('vsz',0), ('maxrss',0),
 						   ('tcache pix',1), ('tcache N',2),
 						   ('galcache pix',1), ('galcache N',2)]):
 	#plt.plot(mem[:,i], '-', label=nm)
 	plt.subplot(3,1, j+1)
-	plt.plot(mem[:,i], '-', label=nm)
+	plt.plot(mem[:,i] * scales[j], '-', label=nm)
 
 plt.subplot(3,1, 1)
 ax = plt.axis()
 for x,txt in labels:
 	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
-labs = ['kB', 'pixels', 'number of cache entries']
+labs = ['MB', 'Mpixels', 'number of cache entries']
 for j in range(3):
 	plt.subplot(3,1, j+1)
 	plt.ylabel(labs[j])

@@ -31,105 +31,70 @@
 		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
 		int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
 		double tpd;
-		PyObject *np_pos, *np_amp, *np_mean, *np_var, *np_result;
-
-		double* scale, *ivar;
+		PyObject *np_pos=NULL, *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+		double *scale=NULL, *ivar=NULL;
+		int rtn = -1;
 
 		tpd = pow(2.*M_PI, D);
 
 		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
 		np_pos = PyArray_FromAny(ob_pos, dtype, 2, 2, req, NULL);
-		if (!np_pos) {
-			ERR("pos wasn't the type expected");
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-		if (!np_amp) {
-			ERR("amp wasn't the type expected");
-			Py_DECREF(np_pos);
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-		if (!np_mean) {
-			ERR("mean wasn't the type expected");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-		if (!np_var) {
-			ERR("var wasn't the type expected");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_result = PyArray_FromAny(ob_result, dtype, 1, 1, reqout, NULL);
-		if (!np_result) {
-			ERR("result wasn't the type expected");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(dtype);
-			return -1;
+		Py_CLEAR(dtype);
+
+		if (!(np_pos && np_amp && np_mean && np_var && np_result)) {
+			if (!np_pos) {
+				ERR("pos wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_amp) {
+				ERR("amp wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_mean) {
+				ERR("mean wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_var) {
+				ERR("var wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_result) {
+				ERR("result wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			goto bailout;
 		}
 
 		N = PyArray_DIM(np_pos, 0);
 		d = PyArray_DIM(np_pos, 1);
-		//printf("N=%i, d=%i, D=%i\n", N, D, D);
 		if (d != D) {
             ERR("must be 2-D");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			goto bailout;
 		}
 		K = PyArray_DIM(np_amp, 0);
 		//printf("K=%i\n", K);
 		if ((PyArray_DIM(np_mean, 0) != K) ||
 			(PyArray_DIM(np_mean, 1) != D)) {
-            ERR("np_mean must be K x D");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			ERR("np_mean must be K x D");
+			goto bailout;
 		}
 		if ((PyArray_DIM(np_var, 0) != K) ||
 			(PyArray_DIM(np_var, 1) != D) ||
 			(PyArray_DIM(np_var, 2) != D)) {
-            ERR("np_var must be K x D x D");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			ERR("np_var must be K x D x D");
+			goto bailout;
 		}
 		if (PyArray_DIM(np_result, 0) != N) {
             ERR("np_result must be size N");
-			Py_DECREF(np_pos);
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			goto bailout;
 		}
 
         pos = PyArray_DATA(np_pos);
@@ -168,17 +133,17 @@
 				result[i] += scale[k] * exp(-0.5 * dsq);
 			}
 		}
+		rtn = 0;
+
+	bailout:
 		free(scale);
 		free(ivar);
-
-		Py_DECREF(np_pos);
-		Py_DECREF(np_amp);
-		Py_DECREF(np_mean);
-		Py_DECREF(np_var);
-		Py_DECREF(np_result);
-		Py_DECREF(dtype);
-
-        return 0;
+		Py_XDECREF(np_pos);
+		Py_XDECREF(np_amp);
+		Py_XDECREF(np_mean);
+		Py_XDECREF(np_var);
+		Py_XDECREF(np_result);
+        return rtn;
     }
 
 
@@ -195,79 +160,59 @@
 		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
 		int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
 		double tpd;
-		double* scale, *ivar;
+		double* scale = NULL, *ivar = NULL;
 		int ix, iy;
 		double x, y;
-		PyObject *np_amp, *np_mean, *np_var, *np_result;
+		PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+		int rtn = -1;
 
 		tpd = pow(2.*M_PI, D);
 
 		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
 		np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-		if (!np_amp) {
-			ERR("amp wasn't the type expected");
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-		if (!np_mean) {
-			ERR("mean wasn't the type expected");
-			Py_DECREF(np_amp);
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-		if (!np_var) {
-			ERR("var wasn't the type expected");
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(dtype);
-			return -1;
-		}
-		Py_INCREF(dtype);
 		np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
-		if (!np_result) {
-			ERR("result wasn't the type expected");
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(dtype);
-			return -1;
-		}
+		Py_CLEAR(dtype);
 
+		if (!(np_amp && np_mean && np_var && np_result)) {
+			if (!np_amp) {
+				ERR("amp wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_mean) {
+				ERR("mean wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_var) {
+				ERR("var wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!np_result) {
+				ERR("result wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			goto bailout;
+		}
 		K = PyArray_DIM(np_amp, 0);
 		if ((PyArray_DIM(np_mean, 0) != K) ||
 			(PyArray_DIM(np_mean, 1) != D)) {
             ERR("np_mean must be K x D");
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			goto bailout;
 		}
 		if ((PyArray_DIM(np_var, 0) != K) ||
 			(PyArray_DIM(np_var, 1) != D) ||
 			(PyArray_DIM(np_var, 2) != D)) {
             ERR("np_var must be K x D x D");
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			goto bailout;
 		}
 		if ((PyArray_DIM(np_result, 0) != NY) ||
 			(PyArray_DIM(np_result, 1) != NX)) {
             ERR("np_result must be size NY x NX");
-			Py_DECREF(np_amp);
-			Py_DECREF(np_mean);
-			Py_DECREF(np_var);
-			Py_DECREF(np_result);
-			Py_DECREF(dtype);
-            return -1;
+			goto bailout;
 		}
 
         amp = PyArray_DATA(np_amp);
@@ -314,16 +259,16 @@
 			}
 			y += ystep;
 		}
+		rtn = 0;
+
+	bailout:
 		free(scale);
 		free(ivar);
-
-		Py_DECREF(np_amp);
-		Py_DECREF(np_mean);
-		Py_DECREF(np_var);
-		Py_DECREF(np_result);
-		Py_DECREF(dtype);
-
-        return 0;
+		Py_XDECREF(np_amp);
+		Py_XDECREF(np_mean);
+		Py_XDECREF(np_var);
+		Py_XDECREF(np_result);
+        return rtn;
     }
 
 

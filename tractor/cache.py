@@ -6,6 +6,8 @@ except:
 	from ordereddict import OrderedDict
 
 
+from refcnt import refcnt
+
 '''
 LRU cache.
 This code is based on: http://code.activestate.com/recipes/498245-lru-and-lfu-cache-decorators/
@@ -22,14 +24,26 @@ class Cache(object):
 
 	def __del__(self):
 		# OrderedDict objects seem to be prone to leaving garbage around...
-		self.dict.clear()
+		self.clear()
 		del self.dict
 
 	def clear(self):
 		if not hasattr(self, 'dict'):
 			self.dict = OrderedDict()
 		else:
+			print 'Clearing Cache object.'
+			objs = [(k,v) for k,v in self.dict.items()]
 			self.dict.clear()
+			for k,v in objs:
+				print 'refcnt key', refcnt(k), 'val', refcnt(v),
+				#if hasattr(v, 'val'):
+				print 'real', refcnt(v.val),
+				#else:
+				#	print
+				vv = v.val
+				v.val = None
+				print 'real', refcnt(vv)
+				
 		self.hits = 0
 		self.misses = 0
 		
