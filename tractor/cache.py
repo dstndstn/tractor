@@ -20,8 +20,16 @@ class Cache(object):
 		self.maxsize = maxsize
 		self.sizeattr = sizeattr
 
+	def __del__(self):
+		# OrderedDict objects seem to be prone to leaving garbage around...
+		self.dict.clear()
+		del self.dict
+
 	def clear(self):
-		self.dict = OrderedDict()
+		if not hasattr(self, 'dict'):
+			self.dict = OrderedDict()
+		else:
+			self.dict.clear()
 		self.hits = 0
 		self.misses = 0
 		

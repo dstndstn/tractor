@@ -87,6 +87,7 @@ def memuse():
 import gc
 gc.set_debug(gc.DEBUG_LEAK) # gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_INSTANCES) #
 
+from garbagetrack import track
 
 labels = []
 mem = []
@@ -104,15 +105,21 @@ logging.basicConfig(level=logging.DEBUG, format='%(message)s', stream=sys.stdout
 
 mem.append(memuse())
 
+track('start', doprint=False)
+
 srcs = get_tractor_sources_dr8(3063,4,60,'g', roi=[100,300,100,300])
 
 labels.append((len(mem), 'sources'))
 mem.append(memuse())
 
+track('sources')
+
 im,inf = get_tractor_image_dr8(3063,4,60,'g', roi=[100,300,100,300])
 
 labels.append((len(mem), 'image'))
 mem.append(memuse())
+
+track('image')
 
 tractor = Tractor(Images(im), Catalog(*srcs))
 
@@ -124,25 +131,30 @@ mod = tractor.getModelImage(im)
 labels.append((len(mem), 'model'))
 mem.append(memuse())
 
+track('mod')
+
 tractor.freezeParam('images')
 for x in range(10):
 	tractor.optimize(alphas=[1e-3, 1e-2, 0.1, 1])
 	labels.append((len(mem), 'opt %i' % x))
 	mem.append(memuse())
 
-	import gc
 	nun = gc.collect()
 	print nun, 'unreachable objects'
+
+	track('opt')
 
 
 tractor.clearCache()
 labels.append((len(mem), 'clear cache'))
 mem.append(memuse())
+track('clear tractor cache')
 
 from tractor.sdss_galaxy import get_galaxy_cache
 get_galaxy_cache().clear()
 labels.append((len(mem), 'clear gal cache'))
 mem.append(memuse())
+track('clear galaxy cache')
 
 del srcs
 del im
@@ -152,42 +164,42 @@ del tractor
 
 labels.append((len(mem), 'del'))
 mem.append(memuse())
+track('del')
 
-import gc
 nun = gc.collect()
 print nun, 'unreachable objects'
-
 labels.append((len(mem), 'gc'))
 mem.append(memuse())
+track('end')
 
-print
-print
-print 'Unreachable objects:'
-print
-
-garbage = gc.garbage
-
-for i,obj in enumerate(garbage):
-	print
-	print
-	print
-	print i, type(obj)
-	refs = []
-	rr = gc.get_referents(obj)
-	#try:
-	#	refs.append(garbage.index(r))
-	#except ValueError:
-	#	pass
-	for j,o in enumerate(garbage):
-		if i == j:
-			continue
-		if any([o is r for r in rr]):
-			refs.append(j)
-		#if o in rr:
-		#	refs.append(j)
-	print 'Refers to:', refs
-	print str(obj)[:256]
-	print repr(obj)[:256]
+# print
+# print
+# print 'Unreachable objects:'
+# print
+# 
+# garbage = gc.garbage
+# 
+# for i,obj in enumerate(garbage):
+# 	print
+# 	print
+# 	print
+# 	print i, type(obj)
+# 	refs = []
+# 	rr = gc.get_referents(obj)
+# 	#try:
+# 	#	refs.append(garbage.index(r))
+# 	#except ValueError:
+# 	#	pass
+# 	for j,o in enumerate(garbage):
+# 		if i == j:
+# 			continue
+# 		if any([o is r for r in rr]):
+# 			refs.append(j)
+# 		#if o in rr:
+# 		#	refs.append(j)
+# 	print 'Refers to:', refs
+# 	print str(obj)[:256]
+# 	print repr(obj)[:256]
 
 
 import matplotlib
