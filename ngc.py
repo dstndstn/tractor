@@ -24,6 +24,7 @@ from tractor import basics as ba
 from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getNGC
+from tractor.cache import *
 from astrometry.util.ngc2000 import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
