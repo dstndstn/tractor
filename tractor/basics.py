@@ -60,12 +60,12 @@ class Mags(ParamList):
 
 	def copy(self):
 		return self*1.
-      
+	  
 	def __mul__(self, factor):
 		# Return the magnitude that corresponds to the flux rescaled by factor.
-            # Flux is positive (and log(-ve) is not permitted), so we take the abs
-            # of the input scale factor to prevent embarrassment.
-            # Negative magnifications appear in gravitational lensing, but they just label
+			# Flux is positive (and log(-ve) is not permitted), so we take the abs
+			# of the input scale factor to prevent embarrassment.
+			# Negative magnifications appear in gravitational lensing, but they just label
 		# the "parity" of the source, not its brightness. So, we treat factor=-3 the 
 		# same as factor=3, for example.
 		kwargs = {}
@@ -86,27 +86,27 @@ class Fluxes(Mags):
 	An implementation of `Brightness` that stores fluxes in multiple
 	bands.
 	'''
-    getBand = getMag
-    getFlux = getMag
-    def __add__(self, other):
+	getBand = getMag
+	getFlux = getMag
+	def __add__(self, other):
 		kwargs = {}
 		for band in self.order:
-            m1 = self.getBand(band)
-            m2 = other.getBand(band)
+			m1 = self.getBand(band)
+			m2 = other.getBand(band)
 			kwargs[band] = m1 + m2
-        return Fluxes(order=self.order, **kwargs)
-    def __mul__(self, factor):
-        raise
+		return Fluxes(order=self.order, **kwargs)
+	def __mul__(self, factor):
+		raise
 
 class FluxesPhotoCal(BaseParams):
-    def __init__(self, band):
-        self.band = band
-        BaseParams.__init__(self)
-    def copy(self):
+	def __init__(self, band):
+		self.band = band
+		BaseParams.__init__(self)
+	def copy(self):
 		return FluxesPhotoCal(self.band)
-    def brightnessToCounts(self, brightness):
+	def brightnessToCounts(self, brightness):
 		flux = brightness.getFlux(self.band)
-        return flux
+		return flux
 	def __str__(self):
 		return 'FluxesPhotoCal(band=%s)' % (self.band)
 
@@ -150,7 +150,7 @@ class MagsPhotoCal(ParamList):
 		self.maxmag = 50.
 		ParamList.__init__(self, zeropoint)
 
-    def copy(self):
+	def copy(self):
 		return MagsPhotoCal(self.band, self.zp)
 
 	@staticmethod
@@ -218,13 +218,13 @@ class FitsWcs(ParamList):
 	def __init__(self, wcs):
 		'''
 		Creates a new ``FitsWcs`` given a :class:`~astrometry.util.util.Tan`
-		object.  To create one of these from a filename and FITS HDU extension,
+		object.	 To create one of these from a filename and FITS HDU extension,
 
 		::
 
-		    fn = 'my-file.fits'
-		    ext = 0
-		    FitsWcs(Tan(fn, ext))
+			fn = 'my-file.fits'
+			ext = 0
+			FitsWcs(Tan(fn, ext))
 		'''
 		if hasattr(self, 'x0'):
 			print 'FitsWcs has an x0 attr:', self.x0
@@ -295,10 +295,10 @@ class FitsWcs(ParamList):
 		return list(self._getLiquidArray(ss))
 
 	# def getParams(self):
-	# 	'''
-	# 	Returns a *copy* of the current active parameter values (list)
-	# 	'''
-	# 	return list(self._getLiquidArray(self._getThings()))
+	#	'''
+	#	Returns a *copy* of the current active parameter values (list)
+	#	'''
+	#	return list(self._getLiquidArray(self._getThings()))
 
 	def __str__(self):
 		return ('FitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)
@@ -559,22 +559,22 @@ class GaussianMixturePSF(BaseParams):
 		return names
 
 	# def stepParam(self, parami, delta):
-	# 	K = self.mog.K
-	# 	if parami < K:
-	# 		self.mog.amp[parami] += delta
-	# 		return
-	# 	parami -= K
-	# 	if parami < (K*2):
-	# 		i,j = parami / 2, parami % 2
-	# 		self.mog.mean[i,j] += delta
-	# 		return
-	# 	parami -= 2*K
-	# 	i,j = parami / 3, parami % 3
-	# 	if j in [0,1]:
-	# 		self.mog.var[i,j,j] += deltai
-	# 	else:
-	# 		self.mog.var[i,0,1] += deltai
-	# 		self.mog.var[i,1,0] += deltai
+	#	K = self.mog.K
+	#	if parami < K:
+	#		self.mog.amp[parami] += delta
+	#		return
+	#	parami -= K
+	#	if parami < (K*2):
+	#		i,j = parami / 2, parami % 2
+	#		self.mog.mean[i,j] += delta
+	#		return
+	#	parami -= 2*K
+	#	i,j = parami / 3, parami % 3
+	#	if j in [0,1]:
+	#		self.mog.var[i,j,j] += deltai
+	#	else:
+	#		self.mog.var[i,0,1] += deltai
+	#		self.mog.var[i,1,0] += deltai
 
 	# Returns a *copy* of the current parameter values (list)
 	def getParams(self):
@@ -632,7 +632,7 @@ class NCircularGaussianPSF(MultiParams):
 		due to the second component will be 0.1.  These values will be
 		normalized so that the total mass of the PSF is 1.0.
 
-		eg,   NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
+		eg,	  NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
 		'''
 		assert(len(sigmas) == len(weights))
 		super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
