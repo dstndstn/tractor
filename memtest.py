@@ -105,6 +105,7 @@ mem.append(memuse())
 
 import matplotlib
 matplotlib.use('Agg')
+import numpy as np
 
 from tractor.sdss import get_tractor_sources_dr8, get_tractor_image_dr8
 from tractor import Tractor, Images, Catalog
@@ -153,6 +154,38 @@ for x in range(10):
 	print nun, 'unreachable objects'
 
 	track('opt')
+
+
+for x in range(10):
+	p0 = np.array(tractor.getParams())
+	ss = np.array(tractor.getStepSizes())
+	p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
+	tractor.setParams(p0)
+	mod = tractor.getModelImage(im)
+
+	labels.append((len(mem), 'mod %i' % x))
+	mem.append(memuse())
+	track('mod')
+
+for x in range(10):
+	p0 = np.array(tractor.getParams())
+	ss = np.array(tractor.getStepSizes())
+	p0 += ss * np.random.normal(0., 1e-3, size=len(p0))
+	tractor.setParams(p0)
+	dervs = tractor.getDerivs()
+
+	labels.append((len(mem), 'derivs %i' % x))
+	mem.append(memuse())
+	track('derivs')
+
+
+for x in range(10):
+	X = tractor.getUpdateDirection(dervs)
+	labels.append((len(mem), 'upd %i' % x))
+	mem.append(memuse())
+	track('upd')
+
+
 
 
 tractor.clearCache()
@@ -213,7 +246,6 @@ track('end')
 
 
 import pylab as plt
-import numpy as np
 plt.clf()
 mem = np.array(mem)
 print 'mem', mem.shape
