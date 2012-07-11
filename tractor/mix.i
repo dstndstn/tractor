@@ -21,9 +21,9 @@
 	printf(x, ## __VA_ARGS__)
 	// PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
 
-    static int c_gauss_2d(PyObject* np_pos, PyObject* np_amp,
-						  PyObject* np_mean, PyObject* np_var,
-						  PyObject* np_result) {
+    static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
+						  PyObject* ob_mean, PyObject* ob_var,
+						  PyObject* ob_result) {
         int i, N, d, K, k;
 		const int D = 2;
 		double *pos, *amp, *mean, *var, *result;
@@ -31,20 +31,21 @@
 		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
 		int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
 		double tpd;
+		PyObject *np_pos, *np_amp, *np_mean, *np_var, *np_result;
 
 		double* scale, *ivar;
 
 		tpd = pow(2.*M_PI, D);
 
 		Py_INCREF(dtype);
-		np_pos = PyArray_FromAny(np_pos, dtype, 2, 2, req, NULL);
+		np_pos = PyArray_FromAny(ob_pos, dtype, 2, 2, req, NULL);
 		if (!np_pos) {
 			ERR("pos wasn't the type expected");
 			Py_DECREF(dtype);
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, req, NULL);
+		np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
 		if (!np_amp) {
 			ERR("amp wasn't the type expected");
 			Py_DECREF(np_pos);
@@ -52,7 +53,7 @@
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, req, NULL);
+		np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
 		if (!np_mean) {
 			ERR("mean wasn't the type expected");
 			Py_DECREF(np_pos);
@@ -61,7 +62,7 @@
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_var = PyArray_FromAny(np_var, dtype, 3, 3, req, NULL);
+		np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
 		if (!np_var) {
 			ERR("var wasn't the type expected");
 			Py_DECREF(np_pos);
@@ -71,7 +72,7 @@
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_result = PyArray_FromAny(np_result, dtype, 1, 1, reqout, NULL);
+		np_result = PyArray_FromAny(ob_result, dtype, 1, 1, reqout, NULL);
 		if (!np_result) {
 			ERR("result wasn't the type expected");
 			Py_DECREF(np_pos);
@@ -184,9 +185,9 @@
 
     static int c_gauss_2d_grid(double xlo, double xstep, int NX,
 							   double ylo, double ystep, int NY,
-							   PyObject* np_amp,
-							   PyObject* np_mean, PyObject* np_var,
-							   PyObject* np_result) {
+							   PyObject* ob_amp,
+							   PyObject* ob_mean, PyObject* ob_var,
+							   PyObject* ob_result) {
         int i, K, k;
 		const int D = 2;
 		double *amp, *mean, *var, *result;
@@ -197,18 +198,19 @@
 		double* scale, *ivar;
 		int ix, iy;
 		double x, y;
+		PyObject *np_amp, *np_mean, *np_var, *np_result;
 
 		tpd = pow(2.*M_PI, D);
 
 		Py_INCREF(dtype);
-		np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, req, NULL);
+		np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
 		if (!np_amp) {
 			ERR("amp wasn't the type expected");
 			Py_DECREF(dtype);
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_mean = PyArray_FromAny(np_mean, dtype, 2, 2, req, NULL);
+		np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
 		if (!np_mean) {
 			ERR("mean wasn't the type expected");
 			Py_DECREF(np_amp);
@@ -216,7 +218,7 @@
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_var = PyArray_FromAny(np_var, dtype, 3, 3, req, NULL);
+		np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
 		if (!np_var) {
 			ERR("var wasn't the type expected");
 			Py_DECREF(np_amp);
@@ -225,7 +227,7 @@
 			return -1;
 		}
 		Py_INCREF(dtype);
-		np_result = PyArray_FromAny(np_result, dtype, 2, 2, reqout, NULL);
+		np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
 		if (!np_result) {
 			ERR("result wasn't the type expected");
 			Py_DECREF(np_amp);

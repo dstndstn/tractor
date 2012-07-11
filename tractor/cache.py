@@ -113,6 +113,13 @@ class Cache(object):
 					size = v.size
 			print '  ', hits, size, k
 
+	def totalSize(self):
+		sz = 0
+		for k,v in self.dict.items():
+			if v is None:
+				continue
+			sz += v.size
+		return sz
 		
 	def printStats(self):
 		print 'Cache has', len(self), 'items'
@@ -144,3 +151,8 @@ class NullCache(object):
 		return args[1]
 	def put(self, *args):
 		pass
+	def totalSize(self):
+		return 0
+	def __len__(self):
+		return len(self.dict)
+

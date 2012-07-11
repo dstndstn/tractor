@@ -410,13 +410,13 @@ class HoggGalaxy(Galaxy):
 		#
 		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
 					 img.getPsf().hashkey(), self.shape.hashkey()))
-		cached = _galcache.get(deps, None)
-		if cached is not None:
-			# We also want to cache None values!
-			cached,nil = cached
+		try:
+			cached = _galcache.get(deps)
 			return cached
+		except KeyError:
+			pass
 		patch = self._realGetUnitFluxModelPatch(img, px, py)
-		_galcache.put(deps, (patch,None))
+		_galcache.put(deps, patch)
 		return patch
 		
 

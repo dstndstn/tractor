@@ -80,6 +80,13 @@
 #    still reachable: 9,352,515 bytes in 59,242 blocks
 #         suppressed: 0 bytes in 0 blocks
 
+import matplotlib
+matplotlib.use('Agg')
+import numpy as np
+
+from tractor.sdss_galaxy import get_galaxy_cache, disable_galaxy_cache
+tractor = None
+
 import resource
 import os
 import subprocess
@@ -90,7 +97,16 @@ def memuse():
 	#print 'ps says:', res
 	mem = [int(x) for x in res.split()]
 	mem.append(resource.getrusage(resource.RUSAGE_SELF)[2])
-	print 'memory', mem
+	global tractor
+	if tractor is not None:
+		mem.append(tractor.cache.totalSize())
+		mem.append(len(tractor.cache))
+	else:
+		mem.append(0)
+		mem.append(0)
+	mem.append(get_galaxy_cache().totalSize())
+	mem.append(len(get_galaxy_cache()))
+
 	return mem
 
 import gc
@@ -103,13 +119,8 @@ labels = []
 mem = []
 mem.append(memuse())
 
-import matplotlib
-matplotlib.use('Agg')
-import numpy as np
-
 from tractor.sdss import get_tractor_sources_dr8, get_tractor_image_dr8
 from tractor import Tractor, Images, Catalog
-from tractor.sdss_galaxy import get_galaxy_cache, disable_galaxy_cache
 from tractor.cache import *
 
 import sys
@@ -136,8 +147,8 @@ track('image')
 
 tractor = Tractor(Images(im), Catalog(*srcs))
 
-tractor.cache = NullCache()
-disable_galaxy_cache()
+#tractor.cache = NullCache()
+#disable_galaxy_cache()
 
 labels.append((len(mem), 'tractor'))
 mem.append(memuse())
@@ -208,6 +219,7 @@ del im
 del inf
 del mod
 del tractor
+tractor = None
 
 labels.append((len(mem), 'del'))
 mem.append(memuse())
@@ -253,11 +265,21 @@ import pylab as plt
 plt.clf()
 mem = np.array(mem)
 print 'mem', mem.shape
-for i,nm in enumerate(['rss', 'size', 'sz', 'vsz', 'maxrss']):
+for i,(nm,j) in enumerate([('rss',0), ('size',0), ('sz',0), ('vsz',0), ('maxrss',0),
+						   ('tcache pix',1), ('tcache N',2),
+						   ('galcache pix',1), ('galcache N',2)]):
+	#plt.plot(mem[:,i], '-', label=nm)
+	plt.subplot(3,1, j+1)
 	plt.plot(mem[:,i], '-', label=nm)
+
+plt.subplot(3,1, 1)
 ax = plt.axis()
 for x,txt in labels:
 	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
-plt.legend(loc='upper left')
+labs = ['kB', 'pixels', 'number of cache entries']
+for j in range(3):
+	plt.subplot(3,1, j+1)
+	plt.ylabel(labs[j])
+	plt.legend(loc='upper left')
 plt.savefig('mem.png')
 
