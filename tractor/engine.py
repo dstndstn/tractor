@@ -450,9 +450,12 @@ class Tractor(MultiParams):
 		self._setup(mp=mp)
 
 	def __del__(self):
+		# dstn is not sure this is necessary / useful
+		if self.cache is not None:
+			self.cache.clear()
 		del self.cache
 
-	def _setup(self, mp=None, cache=None, pickleCache=False, cachestack=[]):
+	def _setup(self, mp=None, cache=None, pickleCache=False):
 		if mp is None:
 			mp = multiproc()
 		self.mp = mp
@@ -460,7 +463,6 @@ class Tractor(MultiParams):
 		if cache is None:
 			cache = Cache()
 		self.cache = cache
-		self.cachestack = []
 		self.pickleCache = pickleCache
 
 	def __str__(self):
@@ -1037,17 +1039,6 @@ class Tractor(MultiParams):
 		return the posterior PDF, evaluated at the parametrs
 		'''
 		return self.getLogLikelihood() + self.getLogPrior()
-
-	def pushCache(self):
-		self.cachestack.append(self.cache)
-		self.cache = self.cache.copy()
-
-	def mergeCache(self):
-		# drop the top of the stack.
-		self.cachestack.pop()
-
-	def popCache(self):
-		self.cache = self.cachestack.pop()
 
 	def createNewSource(self, img, x, y, height):
 		return None

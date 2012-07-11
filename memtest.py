@@ -81,11 +81,21 @@
 #         suppressed: 0 bytes in 0 blocks
 
 import resource
+import os
+import subprocess
 def memuse():
-	return resource.getrusage(resource.RUSAGE_SELF)[2]
+	#cmd = '/bin/ps -p %i -o rss,size,sz,vsz,command' % os.getpid()
+	cmd = '/bin/ps -p %i -o rss,size,sz,vsz h' % os.getpid()
+	res = subprocess.check_output(cmd, shell=True)
+	#print 'ps says:', res
+	mem = [int(x) for x in res.split()]
+	mem.append(resource.getrusage(resource.RUSAGE_SELF)[2])
+	print 'memory', mem
+	return mem
 
 import gc
-gc.set_debug(gc.DEBUG_LEAK) # gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_INSTANCES) #
+#gc.set_debug(gc.DEBUG_LEAK) # gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_INSTANCES) #
+gc.set_debug(gc.DEBUG_UNCOLLECTABLE | gc.DEBUG_INSTANCES | gc.DEBUG_OBJECTS | gc.DEBUG_SAVEALL)
 
 from garbagetrack import track
 
@@ -202,13 +212,16 @@ track('end')
 # 	print repr(obj)[:256]
 
 
-import matplotlib
-matplotlib.use('Agg')
 import pylab as plt
+import numpy as np
 plt.clf()
-plt.plot(mem, 'r-')
+mem = np.array(mem)
+print 'mem', mem.shape
+for i,nm in enumerate(['rss', 'size', 'sz', 'vsz', 'maxrss']):
+	plt.plot(mem[:,i], '-', label=nm)
 ax = plt.axis()
 for x,txt in labels:
 	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
+plt.legend(loc='upper left')
 plt.savefig('mem.png')
 
