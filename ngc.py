@@ -116,13 +116,13 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 def main():
-    gc.set_debug(gc.DEBUG_LEAK)
     import optparse
     parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
     parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
     parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
     parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
     parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
+    parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
 
     opt,args = parser.parse_args()
     if len(args) != 1:
@@ -206,6 +206,10 @@ def main():
         sa.update(nlscale=0)
     elif dr8:
         sa.update(chilo=-8.,chihi=8.)
+
+    if opt.nocache:
+        tractor.cache = NullCache()
+        sg.disable_galaxy_cache()
 
     zr = timgs[0].zr
     print "zr is: ",zr
