@@ -47,7 +47,6 @@ class Mags(ParamList):
 		Returns: mag in the given band.
 		'''
 		return getattr(self, bandname)
-
 	def __add__(self, other):
 		# ASSUME some things about calibration here...
 		kwargs = {}

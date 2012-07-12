@@ -1,7 +1,7 @@
 %module refcnt
 
 %{
-#include "python2.7/object.h"
+#include "object.h"
 	%}
 
 %inline %{
