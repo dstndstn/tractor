@@ -31,7 +31,7 @@ class Cache(object):
 		if not hasattr(self, 'dict'):
 			self.dict = OrderedDict()
 		else:
-			pass
+			self.dict.clear()
 		    # print 'Clearing Cache object.'
 			# objs = [(k,v) for k,v in self.dict.items()]
 			# self.dict.clear()
@@ -42,7 +42,6 @@ class Cache(object):
 			# 	vv = v.val
 			# 	v.val = None
 			# 	print 'real', refcnt(vv)
-				
 		self.hits = 0
 		self.misses = 0
 		
