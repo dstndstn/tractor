@@ -6,7 +6,7 @@ except:
 	from ordereddict import OrderedDict
 
 
-from refcnt import refcnt
+#from refcnt import refcnt
 
 '''
 LRU cache.
@@ -31,16 +31,17 @@ class Cache(object):
 		if not hasattr(self, 'dict'):
 			self.dict = OrderedDict()
 		else:
-			print 'Clearing Cache object.'
-			objs = [(k,v) for k,v in self.dict.items()]
-			self.dict.clear()
-			while len(objs):
-				k,v = objs.pop()
-				print 'refcnt key', refcnt(k), 'val', refcnt(v),
-				print 'real', refcnt(v.val),
-				vv = v.val
-				v.val = None
-				print 'real', refcnt(vv)
+			pass
+		    # print 'Clearing Cache object.'
+			# objs = [(k,v) for k,v in self.dict.items()]
+			# self.dict.clear()
+			# while len(objs):
+			# 	k,v = objs.pop()
+			# 	print 'refcnt key', refcnt(k), 'val', refcnt(v),
+			# 	print 'real', refcnt(v.val),
+			# 	vv = v.val
+			# 	v.val = None
+			# 	print 'real', refcnt(vv)
 				
 		self.hits = 0
 		self.misses = 0

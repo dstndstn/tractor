@@ -1,4 +1,4 @@
-all: mix emfit refcnt
+all: mix emfit #refcnt
 
 doc: html
 	cp -a _build/html .

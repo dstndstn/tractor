@@ -475,7 +475,7 @@ class DustSheet(MultiParams):
 		# 	dc = (countsi - counts0).ravel()
 		# 	I = np.flatnonzero(dc != 0)
 		# 	# I spent a long time trying to figure out why the
-		# 	# SPIRE100 beta derivative was zero...
+		# 	# PACS100 beta derivative was zero...
 		# 	# (d/dX((100 um / lam0) ** X) = d/dX(1.**X) == 0...)
 		# 	if len(I) == 0:
 		# 		derivs.append(None)
