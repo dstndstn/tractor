@@ -15,7 +15,7 @@ from tractor import *
 from tractor import sdss as st
 
 def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
-		 chilo=-10., chihi=10.):
+		 chilo=-10., chihi=10., roi=None):
 	#print "Index: ", imgi
 	mod = tractor.getModelImage(imgi)
 	chi = tractor.getChiImage(imgi=imgi)
@@ -49,6 +49,10 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 		print 'Data quartiles:', q1, q2, q3
 		ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2.,
 										   vmin=zr[0], vmax=zr[1]))
+
+	if roi is not None:
+		ima.update(extent=roi)
+
 	imchi = ima.copy()
 	if nlscale == 0.:
 		imchi.update(vmin=chilo, vmax=chihi, norm=None)
@@ -235,7 +239,7 @@ def main():
 	sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
 	tractor = Tractor(tims, sources)
 
-	sa = dict(debug=opt.debug, plotAll=opt.plotAll)
+	sa = dict(debug=opt.debug, plotAll=opt.plotAll, roi=opt.roi)
 	if opt.noarcsinh:
 		sa.update(nlscale=0)
 	elif opt.dr8:

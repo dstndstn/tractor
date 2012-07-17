@@ -4,10 +4,12 @@ import pylab as plt
 import numpy as np
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
+from astrometry.libkd.spherematch import *
 
-def plot_cmd(allmags, i2mags, band):
+def plot_cmd(allmags, i2mags, band, catflags, classstar):
 	print 'i2 mags shape', i2mags.shape
 	print 'allmags shape', allmags.shape
+	print 'catflags shape', catflags.shape
 
 	plt.figure(figsize=(6,6))
 	plt.clf()
@@ -16,7 +18,7 @@ def plot_cmd(allmags, i2mags, band):
 	xx,yy,xerr = [],[],[]
 	xx2,xerr2 = [],[]
 	for i2,rr in zip(i2mags, allmags):
-		print 'rr', rr
+		#print 'rr', rr
 
 		# When the source is off the image, the optimizer doesn't change anything and
 		# we end up with r = i2
@@ -50,10 +52,26 @@ def plot_cmd(allmags, i2mags, band):
 	yy2 = yy2[I]
 	xerr2 = xerr2[I]
 
+	flag = catflags[I]
+	cstar = classstar[I]
+
 	plt.clf()
-	plt.plot(xx2, yy2, 'o', mfc='b', mec='none', mew=0, ms=5, alpha=0.8)
-	plt.plot([xx2-xerr2, xx2+xerr2], [yy2,yy2], '-', color='b', lw=2, mew='none', alpha=0.5)
-	plt.axis([-3, 3, 21.5, 15.5])
+	#plt.plot(xx2, yy2, 'o', mfc='b', mec='none', mew=0, ms=5, alpha=0.8)
+
+	LL = []
+	for F,c in [((flag > 0), '0.5'), ((flag == 0) * (cstar < 0.5), 'b'),
+				((flag == 0) * (cstar >= 0.5), 'g')]:
+		p1 = plt.plot(xx2[F], yy2[F], 'o', mfc=c, mec='none', mew=0, ms=5, alpha=0.8)
+		LL.append(p1[0])
+		plt.plot([xx2[F]-xerr2[F], xx2[F]+xerr2[F]], [yy2[F],yy2[F]], '-',
+				 color=c, lw=2, mew='none', alpha=0.5)
+
+	#plt.axis([-3, 3, 21.5, 15.5])
+	plt.legend(LL, ('flagged', 'galaxy', 'star'))
+	plt.ylim(21.5, 15.5)
+	cl,ch = { 'u': (-3,6), 'g': (-1,5), 'r': (-2,3), 'i': (-2,2), 'z': (-2,1) }[band]
+	plt.xticks(range(cl,ch+1))
+	plt.xlim(cl,ch)
 	plt.xlabel('SDSS %s - CFHT i (mag)' % band)
 	plt.ylabel('CFHT i (mag)')
 	plt.yticks(range(16, 21 + 1))
@@ -65,7 +83,46 @@ def plot_cmd(allmags, i2mags, band):
 if __name__ == '__main__':
 	(allp, i2mags, cat) = unpickle_from_file('s2-260.pickle')
 
+	#allbands = ['i2','u','g','r','i','z']
 	allbands = ['i2','u','g','r','i','z']
+
+	T = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+	#RA = 334.32
+	#DEC = 0.315
+	#sz = 0.12 * 3600.
+	#S = sz / 3600.
+	#ra0 ,ra1  = RA-S/2.,  RA+S/2.
+	#dec0,dec1 = DEC-S/2., DEC+S/2.
+	print 'Read', len(T), 'sources'
+	T.ra  = T.alpha_j2000
+	T.dec = T.delta_j2000
+	
+	sra  = np.array([src.getPosition().ra for src in cat])
+	sdec = np.array([src.getPosition().dec for src in cat])
+	ra0,ra1 = sra.min(), sra.max()
+	dec0,dec1 = sdec.min(), sdec.max()
+
+	T = T[(T.ra >= ra0) * (T.ra <= ra1) * (T.dec >= dec0) * (T.dec <= dec1)]
+	print 'ra', ra0, ra1, 'dec', dec0, dec1
+	print 'Cut to', len(T), 'objects nearby.'
+
+
+	#print 'RA', sra.min(), sra.max()
+	#print 'Dec', sdec.min(), sdec.max()
+
+
+	I1,I2,D = match_radec(sra, sdec, T.ra, T.dec, 0.5/3600.)
+	print 'Matched', len(I1), 'of', len(cat)
+	print 'D', D
+	print len(np.unique(I1)), 'unique cat'
+	print len(np.unique(I2)), 'unique T'
+	catflags = np.zeros(len(cat), int)
+	for i1,i2 in zip(I1,I2):
+		catflags[i1] |= T.flags[i2]
+	print 'Set', np.sum(catflags), 'catalog flags'
+	classstar = np.zeros(len(cat))
+	for i1,i2 in zip(I1,I2):
+		classstar[i1] = T.class_star[i2]
 
 	#print 'i2 mags', i2mags
 	allmags = dict([(b, []) for b in allbands])
@@ -81,13 +138,19 @@ if __name__ == '__main__':
 		assert(len(mags) == len(i2mags))
 		allmags[bb].append(mags)
 
+		
+
+
+	print 'allmags:', allmags.keys()
 	for bb in allbands:
-		print 'Band', bb, 'shape', np.array(allmags[bb]).shape
+		m = np.array(allmags[bb])
+		print 'Band', bb, 'shape', m.shape
 		#allmags[bb] = np.array(allmags[bb])
-		allmags = np.array(allmags[bb])
-		if bb != 'i2':
-			allmags = allmags.T
-		plot_cmd(allmags, i2mags, bb)
+		if bb == 'i2':
+			continue
+		#if bb != 'i2':
+		m = m.T
+		plot_cmd(m, i2mags, bb, catflags, classstar)
 
 
 
