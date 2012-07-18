@@ -1,13 +1,22 @@
 import os
 import tempfile
-#from tractor.engine import *
-#from tractor import *
 import tractor
 import pyfits
 import numpy as np
 
 def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
                     filtermap=None):
+    '''
+    Given filenames for CFHT coadd image and weight files, produce
+    a tractor.Image object.
+
+    *roi*: (x0,x1, y0,y1): a region-of-interest in pixel space;
+           returns the subimage [x0,x1), [y0,y1).
+    *radecroi*: (ra0, ra1, dec0, dec1): a region-of-interest in RA,Dec space;
+           returns the subimage bounding the given RA,Dec box [ra0,ra1], [dec0,dec1].
+    *filtermap*: dict, eg,  { 'i.MP9701': 'i' }, to map from the FILTER header keyword to
+           a standard filter name.
+    '''
 
     P = pyfits.open(imgfn)
     print 'Read', P[0].data.shape, 'image'
@@ -15,13 +24,15 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
     imgheader = P[0].header
 
     # WCS: the image file has a WCS header
+    # we should be able to do:
     #twcs = tractor.FitsWcs(imgfn)
-    # ARGH!  Memory issues reading the file; HACK copy header...
+    # ARGH!  Memory issues reading the file; HACK: copy header...
     f,tempfn = tempfile.mkstemp()
     os.close(f)
     pyfits.writeto(tempfn, None, header=imgheader, clobber=True)
     twcs = tractor.FitsWcs(tempfn)
 
+    # Cut down to the region-of-interest, if given.
     if roi is not None:
         x0,x1,y0,y1 = roi
     elif radecroi is not None:
@@ -36,60 +47,56 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
         H,W = img.shape
         x0,x1,y0,y1 = 0,W, 0,H
 
-    img = img[y0:y1, x0:x1]
-    img = img.copy()
+    if roi is not None or radecroi is not None:
+        # Actually cut the pixels
+        img = img[y0:y1, x0:x1].copy()
+        # Also tell the WCS to apply an offset.
+        twcs.setX0Y0(x0,y0)
+
     print 'Image:', img.shape
-    #pyfits.writeto('/tmp/1.fits', img, clobber=True)
 
     # HACK, tell the WCS how big the image is...
-    # (needed because of the previous HACK)
+    # (needed because of the previous HACK, copying the header)
     twcs.wcs.set_imagesize(x1-x0, y1-y0)
-    twcs.setX0Y0(x0,y0)
     print twcs
 
-    # Argh, no dice: .fz compressed
+    # Argh, this doesn't work: the files are .fz compressed
     #P = pyfits.open(weightfn)
-    #print len(P)
-    #print 'Read', P[0].data.shape, 'image'
-    #P = pyfits.getdata(weightfn, 1)
-    #print 'Read', P[1].data.shape, 'image'
-
+    #weight = P[1].data[y0:y1, x0:x1]
     # HACK: use "imcopy" to uncompress to a temp file!
-    print 'Writing to temp file', tempfn
+    #print 'Writing to temp file', tempfn
     cmd = "imcopy '%s[%i:%i,%i:%i]' '!%s'" % (weightfn, x0+1,x1,y0+1,y1, tempfn)
     print 'running', cmd
     os.system(cmd)
     P = pyfits.open(tempfn)
-    print 'Read', P[0].data.shape, 'weight image'
-    #weight = P[0].data[y0:y1, x0:x1]
     weight = P[0].data
+    print 'Read', weight.shape, 'weight image'
 
     # PSF model: FAKE IT for now
     tpsf = tractor.GaussianMixturePSF(np.array([0.9, 0.1]), np.zeros((2,2)), np.array([1,2]))
 
     # SKY level: assume zero
-    sky = np.median(img)
-    print 'Image median value:', sky
+    #sky = np.median(img)
+    #print 'Image median value:', sky
     #tsky = tractor.ConstantSky(sky)
     tsky = tractor.ConstantSky(0.)
 
-    # Photometric calibration:
+    # Photometric calibration: the FITS header says:
     '''
     FILTER  = 'r.MP9601'           / Filter
     PHOTZP  =               30.000 / photometric zeropoint
     COMMENT AB magnitude = -2.5 * log10(flux) + PHOTZP
     COMMENT r.MP9601=r_SDSS-0.024*(g_SDSS-r_SDSS)
     '''
+    # Grab the filter name, and apply the filtermap (if given)
     filter = imgheader['FILTER']
     if filtermap:
         filter = filtermap.get(filter, filter)
     zp = imgheader['PHOTZP']
-    
+    # Simple photocal object
     photocal = tractor.MagsPhotoCal(filter, zp)
 
-    #pyfits.writeto('/tmp/2.fits', weight, clobber=True)
-
-    # plotting: find the approximate standard deviation
+    # For plotting: find the approximate standard deviation
     #print 'Median weight:', np.median(weight)
     sigma1 = 1./np.sqrt(np.median(weight))
     zr = np.array([-3,10]) * sigma1 + sky
@@ -100,6 +107,8 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
                         sky=tsky, photocal=photocal, name=name, zr=zr)
     tim.extent = [x0,x1,y0,y1]
     return tim
+
+
 
 
 if __name__ == '__main__':
