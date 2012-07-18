@@ -214,7 +214,7 @@ class FitsWcs(ParamList):
 		return dict(crval1=0, crval2=1, crpix1=2, crpix2=3,
 					cd1_1=4, cd1_2=5, cd2_1=6, cd2_2=7)
 
-	def __init__(self, wcs):
+	def __init__(self, wcs, hdu=0):
 		'''
 		Creates a new ``FitsWcs`` given a :class:`~astrometry.util.util.Tan`
 		object.	 To create one of these from a filename and FITS HDU extension,
@@ -229,6 +229,11 @@ class FitsWcs(ParamList):
 			print 'FitsWcs has an x0 attr:', self.x0
 		self.x0 = 0
 		self.y0 = 0
+
+		if isinstance(wcs, basestring):
+			from astrometry.util.util import Tan
+			wcs = Tan(wcs, hdu)
+
 		super(FitsWcs, self).__init__(self.x0, self.y0, wcs)
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals

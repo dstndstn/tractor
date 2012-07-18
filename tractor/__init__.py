@@ -1,8 +1,8 @@
 from engine import *
 from ducks import *
 from basics import *
-import sdss
-import cfht
+#import sdss
+#import cfht
 from nasasloan import *
 
 from ttime import Time

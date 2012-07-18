@@ -69,6 +69,7 @@ class Image(MultiParams):
 		  * *sky*: a :class:`tractor.Sky` duck
 		  * *photocal*: a :class:`tractor.PhotoCal` duck
 		  * *name*: string name of this image.
+		  * *zr*: plotting range ("vmin"/"vmax" in matplotlib.imshow)
 
 		'''
 		self.data = data
@@ -77,6 +78,7 @@ class Image(MultiParams):
 		self.setInvvar(self.origInvvar)
 		self.name = name
 		self.starMask = np.ones_like(self.data)
+		self.zr = kwargs.pop('zr', None)
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
 	def __str__(self):
