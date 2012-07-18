@@ -78,8 +78,8 @@ def read_cfht_coadd(imgfn, weightfn, roi=None, radecroi=None,
     # SKY level: assume zero
     #sky = np.median(img)
     #print 'Image median value:', sky
-    #tsky = tractor.ConstantSky(sky)
-    tsky = tractor.ConstantSky(0.)
+    sky = 0.
+    tsky = tractor.ConstantSky(sky)
 
     # Photometric calibration: the FITS header says:
     '''
@@ -123,9 +123,15 @@ if __name__ == '__main__':
                          os.path.join(basedir, field + '.weight.fits.fz'),
                          roi=roi, radecroi=radecroi, filtermap=filtermap)
 
+
+    # Load a catalog, render a model image and make some plots.
+
     from astrometry.util.pyfits_utils import fits_table
     from tractor import Mags, RaDecPos, PointSource, Images, Catalog
     from tractor.sdss_galaxy import DevGalaxy, ExpGalaxy, CompositeGalaxy, GalaxyShape
+    import matplotlib
+    matplotlib.use('Agg')
+    import pylab as plt
     
     T = fits_table('/project/projectdirs/bigboss/data/cs82/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
     print 'Read', len(T), 'sources'
@@ -146,18 +152,15 @@ if __name__ == '__main__':
             m = Mags(order=mags, **dict([(k, themag) for k in mags]))
             srcs.append(PointSource(RaDecPos(t.ra, t.dec), m))
             continue
-
         if t.mag_disk > maglim and t.mag_spheroid > maglim:
             #print 'Faint'
             continue
-
         themag = t.mag_spheroid
         m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
         themag = t.mag_disk
         m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
 
         # SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
-
         shape_dev = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
                                 t.disk_theta_world + 90.)
         shape_exp = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
@@ -172,19 +175,11 @@ if __name__ == '__main__':
             #print 'deV'
             srcs.append(DevGalaxy(pos, m_dev, shape_dev))
             continue
-
         # exp + deV
         srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
-    print 'Sources:', len(srcs)
-
-
 
     tr = tractor.Tractor(Images(im), srcs)
     mod = tr.getModelImage(im)
-
-    import matplotlib
-    matplotlib.use('Agg')
-    import pylab as plt
 
     ima = dict(interpolation='nearest', origin='lower',
                vmin=im.zr[0], vmax=im.zr[1], extent=im.extent)
@@ -195,6 +190,7 @@ if __name__ == '__main__':
     plt.gray()
     plt.title(im.name + ': initial model')
     plt.savefig('mod.png')
+
     plt.clf()
     plt.imshow(im.getImage(), **ima)
     plt.gray()
