@@ -146,6 +146,8 @@ def main():
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+    from astrometry.util.util import *
+
 
     #bandnums = [1,2,3,4]
     bandnums = [1,]
@@ -176,9 +178,6 @@ def main():
     # also freeze all bands
     tr.catalog.freezeParamsRecursive(*bands)
 
-    # Optimize sources one at a time, and one image at a time.
-    sortmag = 'w1'
-    I = np.argsort([getattr(src.getBrightness(), sortmag) for src in srcs])
     for im,bandnum in zip(ims,bandnums):
 	tr.setImages(tractor.Images(im))
         band = im.photocal.band
@@ -186,54 +185,98 @@ def main():
         # thaw this band
         tr.catalog.thawParamsRecursive(band)
 
-        # have to add PSF-sized margin to radius
-        ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
-        radius = 1./60.
-        tr.catalog.thawSourcesInCircle(tractor.RaDecPos(ra, dec), radius)
+        # sweep across the image, optimizing in circles.
+        # we'll use the healpix grid for circle centers.
+        # how big? in arcmin
+        R = 1.
+        Rpix = R / 60. / np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
+        nside = int(healpix_nside_for_side_length_arcmin(R/2.))
+        print 'Nside', nside
+        print 'radius in pixels:', Rpix
+
+        # start in one corner.
+        pos = im.wcs.pixelToPosition(0, 0)
+        hp = radecdegtohealpix(pos.ra, pos.dec, nside)
+
+        hpqueue = [hp]
+        hpdone = []
 
         j = 1
-        while True:
-            print 'Optimizing:'
-            for nm in tr.getParamNames():
-                print nm
-            (dlnp,X,alpha) = tr.optimize(damp=1.)
-            print 'dlnp', dlnp
-            print 'alpha', alpha
+
+        while len(hpqueue):
+            hp = hpqueue.pop()
+            hpdone.append(hp)
+            print 'looking at healpix', hp
+            ra,dec = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
+            print 'RA,Dec center', ra,dec
+            x,y = im.wcs.positionToPixel(tractor.RaDecPos(ra,dec))
+            H,W  = im.shape
+            if x < -Rpix or y < -Rpix or x >= W+Rpix or y >= H+Rpix:
+                print 'pixel', x,y, 'out of bounds'
+                continue
+
+            # add neighbours
+            nn = healpix_get_neighbours(hp, nside)
+            print 'healpix neighbours', nn
+            for ni in nn:
+                if ni in hpdone:
+                    continue
+                if ni in hpqueue:
+                    continue
+                hpqueue.append(ni)
+                print 'enqueued neighbour', ni
+
+            # FIXME -- add PSF-sized margin to radius
+            #ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
+
+            tr.catalog.thawSourcesInCircle(tractor.RaDecPos(ra, dec), R/60.)
+
+            for step in range(10):
+                print 'Optimizing:'
+                for nm in tr.getParamNames():
+                    print nm
+                (dlnp,X,alpha) = tr.optimize(damp=1.)
+                print 'dlnp', dlnp
+                print 'alpha', alpha
             
-            if True:
-                print 'plotting', j
-                make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
-                j += 1
+                if True:
+                    print 'plotting', j
+                    make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
+                    j += 1
 
-            if dlnp < 1:
-                break
+                if dlnp < 1:
+                    break
 
-
-
-
-        # for j,i in enumerate(I):
-        #     srci = int(i)
-        #     # 
-        #     tr.catalog.thawParam(srci)
-        #     while True:
-        #         print 'optimizing source', j+1, 'of', len(I)
-        #         print 'Optimizing:'
-        #         for nm in tr.getParamNames():
-        #             print nm
-        #         (dlnp,X,alpha) = tr.optimize()
-        #         if dlnp < 1:
-        #             break
-        # 
-        #     tr.catalog.freezeParam(srci)
-        # 
-        #     #if ((j+1) % 10 == 0):
-        #     if True:
-        #         print 'plotting', j
-        #         make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
-
+            tr.catalog.freezeAllParams()
 
         # re-freeze this band
         tr.catalog.freezeParamsRecursive(band)
+
+
+
+    # Optimize sources one at a time, and one image at a time.
+    #sortmag = 'w1'
+    #I = np.argsort([getattr(src.getBrightness(), sortmag) for src in srcs])
+    # for j,i in enumerate(I):
+    #     srci = int(i)
+    #     # 
+    #     tr.catalog.thawParam(srci)
+    #     while True:
+    #         print 'optimizing source', j+1, 'of', len(I)
+    #         print 'Optimizing:'
+    #         for nm in tr.getParamNames():
+    #             print nm
+    #         (dlnp,X,alpha) = tr.optimize()
+    #         if dlnp < 1:
+    #             break
+    # 
+    #     tr.catalog.freezeParam(srci)
+    # 
+    #     #if ((j+1) % 10 == 0):
+    #     if True:
+    #         print 'plotting', j
+    #         make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
+
 
 
     #print 'Optimizing:'
