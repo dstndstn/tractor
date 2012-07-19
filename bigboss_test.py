@@ -12,9 +12,12 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi']):
     mod = tr.getModelImage(im)
 
     ima = dict(interpolation='nearest', origin='lower',
-               vmin=im.zr[0], vmax=im.zr[1], extent=im.extent)
+               vmin=im.zr[0], vmax=im.zr[1])
     imchi = dict(interpolation='nearest', origin='lower',
-               vmin=-5, vmax=+5, extent=im.extent)
+               vmin=-5, vmax=+5)
+    if hasattr(im, 'extent'):
+        ima.update(extent=im.extent)
+        imchi.update(extent=im.extent)
     
     if 'data' in plots:
         plt.clf()
