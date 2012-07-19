@@ -20,7 +20,7 @@ __all__ = [
 	'Flux', 'Mag', 'Mags', 'MagsPhotoCal',
 	'PixPos', 'RaDecPos',
 	'NullPhotoCal', 'WCS', 'NullWCS',
-	'FitsWcs', 'GaussianMixturePSF',
+	'FitsWcs', 'WcslibWcs', 'GaussianMixturePSF',
 	'NCircularGaussianPSF', 
 	# engine
 	'Patch', 'Image', 'Images',

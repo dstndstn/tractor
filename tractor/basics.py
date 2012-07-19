@@ -16,6 +16,7 @@ from engine import *
 #from ducks import *
 from utils import *
 import mixture_profiles as mp
+import numpy as np
 
 class Mags(ParamList):
 	'''
@@ -199,6 +200,75 @@ class NullWCS(BaseParams):
 		return x,y
 	def cdAtPixel(self, x, y):
 		return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
+
+class WcslibWcs(BaseParams):
+	'''
+	A WCS implementation that wraps a FITS WCS object (with a pixel
+	offset), delegating to wcslib.
+
+	FIXME: we could use the "wcssub()" functionality to handle subimages
+	rather than x0,y0.
+
+	FIXME: we could implement anwcs_copy() using wcscopy().
+	
+	'''
+	def __init__(self, filename, hdu=0):
+		self.x0 = 0.
+		self.y0 = 0.
+		from astrometry.util.util import anwcs
+		wcs = anwcs(filename, hdu)
+		self.wcs = wcs
+
+	def copy(self):
+		raise RuntimeError('unimplemented')
+
+	def __str__(self):
+		return ('WcslibWcs: x0,y0 %.3f,%.3f' % (self.x0,self.y0))
+
+	def debug(self):
+		from astrometry.util.util import anwcs_print_stdout
+		print 'WcslibWcs:'
+		anwcs_print_stdout(self.wcs)
+
+	def pixel_scale(self):
+		#from astrometry.util.util import anwcs_pixel_scale
+		#return anwcs_pixel_scale(self.wcs)
+		cd = self.cdAtPixel(self.x0, self.y0)
+		return np.sqrt(np.abs(cd[0,0]*cd[1,1] - cd[0,1]*cd[1,0])) * 3600.
+
+	def setX0Y0(self, x0, y0):
+		'''
+		Sets the pixel offset to apply to pixel coordinates before putting
+		them through the wrapped WCS.  Useful when using a cropped image.
+		'''
+		self.x0 = x0
+		self.y0 = y0
+
+	def positionToPixel(self, pos, src=None):
+		ok,x,y = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		# MAGIC: 1 for FITS coords.
+		return x - 1. - self.x0, y - 1. - self.y0
+
+	def pixelToPosition(self, x, y, src=None):
+		# MAGIC: 1 for FITS coords.
+		ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+		return RaDecPos(ra, dec)
+
+	def cdAtPixel(self, x, y):
+		'''
+		Returns the ``CD`` matrix at the given ``x,y`` pixel position.
+
+		(Returns the constant ``CD`` matrix elements)
+		'''
+		ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+		ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
+		ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
+
+		cosdec = np.cos(np.deg2rad(dec0))
+
+		return np.array([[(ra1 - ra0)*cosdec, (ra2 - ra0)*cosdec],
+				 [dec1 - dec0,        dec2 - dec0]])
+	
 
 class FitsWcs(ParamList):
 	'''
