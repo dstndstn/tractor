@@ -18,8 +18,12 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi']):
     if hasattr(im, 'extent'):
         ima.update(extent=im.extent)
         imchi.update(extent=im.extent)
+
+    fignum = 1
     
     if 'data' in plots:
+        plt.figure(fignum)
+        fignum += 1
         plt.clf()
         plt.imshow(im.getImage(), **ima)
         plt.gray()
@@ -27,6 +31,8 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi']):
         plt.savefig(prefix + 'data.png')
 
     if 'model' in plots:
+        plt.figure(fignum)
+        fignum += 1
         plt.clf()
         plt.imshow(mod, **ima)
         plt.gray()
@@ -34,6 +40,8 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi']):
         plt.savefig(prefix + 'mod.png')
 
     if 'chi' in plots:
+        plt.figure(fignum)
+        fignum += 1
         plt.clf()
         plt.imshow((mod - im.getImage()) * im.getInvError(), **imchi)
         plt.gray()

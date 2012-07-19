@@ -118,6 +118,13 @@ if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
 
+    import logging
+    import sys
+    lvl = logging.INFO
+    #lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+
     bandnums = [1,2,3,4]
     bands = ['w%i' % n for n in bandnums]
 
@@ -133,7 +140,7 @@ if __name__ == '__main__':
 
         ims.append(im)
 
-    #tr = tractor.Tractor(tractor.Images(*ims), srcs)
+    tr = tractor.Tractor(tractor.Images(*ims), srcs)
 
     # fix all calibration
     tr.freezeParam('images')
@@ -143,26 +150,44 @@ if __name__ == '__main__':
 
     # freeze all sources
     tr.catalog.freezeAllParams()
-    # also freeze 
-    tr.freezeParamsRecursive(*bands)
+    # also freeze all bands
+    tr.catalog.freezeParamsRecursive(*bands)
 
     # Optimize sources one at a time, and one image at a time.
     sortmag = 'w1'
     I = np.argsort([getattr(src.getBrightness(), sortmag) for src in srcs])
-    for im in ims:
-	tr.setImages(Images(im))
+    for im,bandnum in zip(ims,bandnums):
+	tr.setImages(tractor.Images(im))
         band = im.photocal.band
-        for i in I:
+        print 'band', band
+        # thaw this band
+        tr.catalog.thawParamsRecursive(band)
+        for j,i in enumerate(I):
             srci = int(i)
+            # 
             tr.catalog.thawParam(srci)
+            while True:
+                print 'optimizing source', j+1, 'of', len(I)
+                (dlnp,X,alpha) = tr.optimize()
+                if dlnp < 1:
+                    break
 
-            
+            tr.catalog.freezeParam(srci)
+
+            #if ((j+1) % 10 == 0):
+            if True:
+                print 'plotting', j
+                make_plots('wise-%i-step%03i' % (bandnum,j), im, tr=tr, plots=['model','chi'])
 
 
-    print 'Optimizing:'
-    for n in tr.getParamNames():
-        print n
-    tr.optimize()
+        # re-freeze this band
+        tr.catalog.freezeParamsRecursive(band)
+
+
+    #print 'Optimizing:'
+    #for n in tr.getParamNames():
+    #    print n
+    #tr.optimize()
 
     for band,im in zip([1,2,3,4], ims):
-        make_plots('wise-%i-opt1-' % band, im, tr=tr)
+        make_plots('wise-%i-opt1-' % band, im, tr=tr, plots=['model','chi'])
