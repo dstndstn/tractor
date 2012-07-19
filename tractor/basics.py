@@ -442,7 +442,7 @@ class PixPos(ParamList):
 
 class RaDecPos(ParamList):
 	'''
-	A Position implementation using RA,Dec positions.
+	A Position implementation using RA,Dec positions, in degrees.
 
 	Attributes:
 	  * ``.ra``
@@ -466,6 +466,10 @@ class RaDecPos(ParamList):
 		return 2
 	def getStepSizes(self, *args, **kwargs):
 		return [1e-4, 1e-4]
+
+	def distanceFrom(self, pos):
+		from astrometry.util.starutil_numpy import degrees_between
+		return degrees_between(self.ra, self.dec, pos.ra, pos.dec)
 
 class ConstantSky(ScalarParam):
 	'''
@@ -554,6 +558,9 @@ class PointSource(MultiParams):
 				df.setName('d(ptsrc)/d(bright%i)' % i)
 				derivs.append(df)
 		return derivs
+
+	def overlapsCircle(self, pos, radius):
+		return self.pos.distanceFrom(pos) <= radius
 
 
 class GaussianMixturePSF(BaseParams):

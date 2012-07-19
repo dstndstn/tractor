@@ -109,7 +109,10 @@ class GalaxyShape(ParamList):
 			raise RuntimeError('GalaxyShape: unknown param index: ' + str(i))
 		return oldval
 
-	def getTensor(self, cd):
+	def getRaDecBasis(self):
+		''' Returns a transformation matrix that takes vectors in r_e
+		to delta-RA, delta-Dec vectors.
+		'''
 		# convert re, ab, phi into a transformation matrix
 		phi = np.deg2rad(90 - self.phi)
 		# convert re to degrees
@@ -119,16 +122,37 @@ class GalaxyShape(ParamList):
 		sp = np.sin(phi)
 		# Squish, rotate, and scale into degrees.
 		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
-		#print 're_deg', re_deg
-		#print 'ab', self.ab
 		G = re_deg * np.array([[ cp, sp * self.ab],
 							   [-sp, cp * self.ab]])
+		return G
+
+	def getTensor(self, cd):
+		# G takes unit vectors (in r_e) to degrees (~intermediate world coords)
+		G = self.getRaDecBasis()
 		# "cd" takes pixels to degrees (intermediate world coords)
 		# T takes pixels to unit vectors.
-		#print 'phi', phi, 're', re_deg
-		#print 'G', G
 		T = np.dot(np.linalg.inv(G), cd)
 		return T
+
+	def mayOverlapCircle(self, dra, ddec, radius, nre):
+		# is it outside the bounding circle?
+		re_deg = max(1./30, self.re) / 3600. * nre
+		dd = np.hypot(dra,ddec)
+		if dd > (re_deg + radius):
+			#print 'outside bounding circle'
+			return False
+		return True
+ 	# is it inside the bounding circle of the squished circle?
+	# if dd < (re_deg * self.ab + radius):
+	# 	#print 'inside inner bounding circle'
+	# 	return True
+	# 	G = self.getRaDecBasis()
+	# 	angles = np.linspace(0., 2.*np.pi, 36, endpoint=False)
+	# 	vv = np.vstack([np.cos(angles), np.sin(angles)])
+	# 	print vv.shape
+	# 	dradec = np.dot(vv.T, G)
+	# 	print dradec.shape
+	# 	return np.min((dradec - np.array([dra,ddec]))**2 <= radius**2)
 
 class Galaxy(MultiParams):
 	def __init__(self, pos, brightness, shape):
@@ -276,6 +300,13 @@ class CompositeGalaxy(MultiParams):
 		MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
 		self.name = self.getName()
 
+	def overlapsCircle(self, pos, radius):
+		cosdec = np.cos(np.deg2rad(pos.dec))
+		dr = (pos.ra - self.pos.ra)*cosdec
+		dd = pos.dec - self.pos.dec
+		return (self.shapeDev.mayOverlapCircle(dr, dd, radius, DevGalaxy.nre) or
+			self.shapeExp.mayOverlapCircle(dr, dd, radius, ExpGalaxy.nre))
+
 	@staticmethod
 	def getNamedParams():
 		return dict(pos=0, brightnessExp=1, shapeExp=2, brightnessDev=3, shapeDev=4)
@@ -401,6 +432,12 @@ class HoggGalaxy(Galaxy):
 			shape = args[0]
 		super(HoggGalaxy, self).__init__(pos, brightness, shape)
 
+	def overlapsCircle(self, pos, radius):
+		cosdec = np.cos(np.deg2rad(pos.dec))
+		return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,
+						   pos.dec - self.pos.dec,
+						   radius, self.nre)
+
 	def getName(self):
 		return 'HoggGalaxy'
 
@@ -488,11 +525,15 @@ class HoggGalaxy(Galaxy):
 
 
 class ExpGalaxy(HoggGalaxy):
+	nre = 4.
 	profile = mp.get_exp_mixture()
 	profile.normalize()
 	@staticmethod
 	def getExpProfile():
 		return ExpGalaxy.profile
+	def __init__(self, *args, **kwargs):
+		self.nre = ExpGalaxy.nre
+		super(ExpGalaxy,self).__init__(*args, **kwargs)
 	def getName(self):
 		return 'ExpGalaxy'
 	def getProfile(self):
@@ -504,11 +545,15 @@ class ExpGalaxy(HoggGalaxy):
 						 self.shape.copy())
 
 class DevGalaxy(HoggGalaxy):
+	nre = 8.
 	profile = mp.get_dev_mixture()
 	profile.normalize()
 	@staticmethod
 	def getDevProfile():
 		return DevGalaxy.profile
+	def __init__(self, *args, **kwargs):
+		self.nre = DevGalaxy.nre
+		super(DevGalaxy,self).__init__(*args, **kwargs)
 	def getName(self):
 		return 'DevGalaxy'
 	def getProfile(self):

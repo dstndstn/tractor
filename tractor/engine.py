@@ -388,6 +388,12 @@ class Catalog(MultiParams):
 	def getNamedParamName(self, j):
 		return 'source%i' % j
 
+	def thawSourcesInCircle(self, pos, radius):
+		for i,src in enumerate(self):
+			if src.overlapsCircle(pos, radius):
+				self.thawParam(i)
+			
+
 
 class Images(MultiParams):
 	"""

@@ -22,6 +22,27 @@ def read_wise_coadd(basefn, radecroi=None, filtermap={}):
     unc = P[0].data
     print 'Read', unc.shape, 'uncertainty'
 
+    ''' cov:
+    BAND    =                    1 / wavelength band number
+    WAVELEN =                3.368 / [microns] effective wavelength of band
+    COADDID = '3342p000_ab41'      / atlas-image identifier
+    MAGZP   =                 20.5 / [mag] relative photometric zero point
+    MEDINT  =      4.0289044380188 / [DN] median of intensity pixels
+    '''
+    ''' int:
+    BUNIT   = 'DN      '           / image pixel units
+    CTYPE1  = 'RA---SIN'           / Projection type for axis 1
+    CTYPE2  = 'DEC--SIN'           / Projection type for axis 2
+    CRPIX1  =          2048.000000 / Axis 1 reference pixel at CRVAL1,CRVAL2
+    CRPIX2  =          2048.000000 / Axis 2 reference pixel at CRVAL1,CRVAL2
+    CDELT1  =  -0.0003819444391411 / Axis 1 scale at CRPIX1,CRPIX2 (deg/pix)
+    CDELT2  =   0.0003819444391411 / Axis 2 scale at CRPIX1,CRPIX2 (deg/pix)
+    CROTA2  =             0.000000 / Image twist: +axis2 W of N, J2000.0 (deg)
+    '''
+    ''' unc:
+    FILETYPE= '1-sigma uncertainty image' / product description
+    '''
+
     twcs = tractor.WcslibWcs(intfn)
     print 'WCS', twcs
     #twcs.debug()
@@ -84,7 +105,30 @@ def read_wise_coadd(basefn, radecroi=None, filtermap={}):
     return tim
 
 
-if __name__ == '__main__':
+def main():
+    # from tractor.sdss_galaxy import *
+    # import sys
+    # 
+    # ell = GalaxyShape(10., 0.5, 45)
+    # print ell
+    # S = 20./3600.
+    # dra,ddec = np.meshgrid(np.linspace(-S, S, 200),
+    #                        np.linspace(-S, S, 200))
+    # overlap = []
+    # for r,d in zip(dra.ravel(),ddec.ravel()):
+    #     overlap.append(ell.overlapsCircle(r,d, 0.))
+    # overlap = np.array(overlap).reshape(dra.shape)
+    # print 'overlap', overlap.min(), overlap.max()
+    # 
+    # import matplotlib
+    # matplotlib.use('Agg')
+    # import pylab as plt
+    # plt.clf()
+    # plt.imshow(overlap)
+    # plt.savefig('overlap.png')
+    # 
+    # sys.exit(0)
+
     from bigboss_test import *
 
     basedir = '/project/projectdirs/bigboss/data/wise/level3'
@@ -92,40 +136,19 @@ if __name__ == '__main__':
     filtermap = None
     
     pat = '3342p000_ab41-w%i'
-    
-
-    ''' cov:
-    BAND    =                    1 / wavelength band number
-    WAVELEN =                3.368 / [microns] effective wavelength of band
-    COADDID = '3342p000_ab41'      / atlas-image identifier
-    MAGZP   =                 20.5 / [mag] relative photometric zero point
-    MEDINT  =      4.0289044380188 / [DN] median of intensity pixels
-    '''
-    ''' int:
-    BUNIT   = 'DN      '           / image pixel units
-    CTYPE1  = 'RA---SIN'           / Projection type for axis 1
-    CTYPE2  = 'DEC--SIN'           / Projection type for axis 2
-    CRPIX1  =          2048.000000 / Axis 1 reference pixel at CRVAL1,CRVAL2
-    CRPIX2  =          2048.000000 / Axis 2 reference pixel at CRVAL1,CRVAL2
-    CDELT1  =  -0.0003819444391411 / Axis 1 scale at CRPIX1,CRPIX2 (deg/pix)
-    CDELT2  =   0.0003819444391411 / Axis 2 scale at CRPIX1,CRPIX2 (deg/pix)
-    CROTA2  =             0.000000 / Image twist: +axis2 W of N, J2000.0 (deg)
-    '''
-    ''' unc:
-    FILETYPE= '1-sigma uncertainty image' / product description
-    '''
 
     import matplotlib
     matplotlib.use('Agg')
 
     import logging
     import sys
-    lvl = logging.INFO
-    #lvl = logging.DEBUG
+    #lvl = logging.INFO
+    lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 
-    bandnums = [1,2,3,4]
+    #bandnums = [1,2,3,4]
+    bandnums = [1,]
     bands = ['w%i' % n for n in bandnums]
 
     srcs = get_cfht_catalog(mags=bands, maglim=25.)
@@ -162,22 +185,51 @@ if __name__ == '__main__':
         print 'band', band
         # thaw this band
         tr.catalog.thawParamsRecursive(band)
-        for j,i in enumerate(I):
-            srci = int(i)
-            # 
-            tr.catalog.thawParam(srci)
-            while True:
-                print 'optimizing source', j+1, 'of', len(I)
-                (dlnp,X,alpha) = tr.optimize()
-                if dlnp < 1:
-                    break
 
-            tr.catalog.freezeParam(srci)
+        # have to add PSF-sized margin to radius
+        ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
+        radius = 1./60.
+        tr.catalog.thawSourcesInCircle(tractor.RaDecPos(ra, dec), radius)
 
-            #if ((j+1) % 10 == 0):
+        j = 1
+        while True:
+            print 'Optimizing:'
+            for nm in tr.getParamNames():
+                print nm
+            (dlnp,X,alpha) = tr.optimize(damp=1.)
+            print 'dlnp', dlnp
+            print 'alpha', alpha
+            
             if True:
                 print 'plotting', j
-                make_plots('wise-%i-step%03i' % (bandnum,j), im, tr=tr, plots=['model','chi'])
+                make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
+                j += 1
+
+            if dlnp < 1:
+                break
+
+
+
+
+        # for j,i in enumerate(I):
+        #     srci = int(i)
+        #     # 
+        #     tr.catalog.thawParam(srci)
+        #     while True:
+        #         print 'optimizing source', j+1, 'of', len(I)
+        #         print 'Optimizing:'
+        #         for nm in tr.getParamNames():
+        #             print nm
+        #         (dlnp,X,alpha) = tr.optimize()
+        #         if dlnp < 1:
+        #             break
+        # 
+        #     tr.catalog.freezeParam(srci)
+        # 
+        #     #if ((j+1) % 10 == 0):
+        #     if True:
+        #         print 'plotting', j
+        #         make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
 
 
         # re-freeze this band
@@ -191,3 +243,11 @@ if __name__ == '__main__':
 
     for band,im in zip([1,2,3,4], ims):
         make_plots('wise-%i-opt1-' % band, im, tr=tr, plots=['model','chi'])
+
+
+
+if __name__ == '__main__':
+    import cProfile
+    from datetime import tzinfo, timedelta, datetime
+    cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
+
