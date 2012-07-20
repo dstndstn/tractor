@@ -698,7 +698,19 @@ class GaussianMixturePSF(BaseParams):
 		self.mog.var[j,0,1] = p
 		self.mog.var[j,1,0] = p
 		return old
-		
+
+	@staticmethod
+	def fromStamp(stamp, N=3):
+		from emfit import em_fit_2d
+		from fitpsf import em_init_params
+		w,mu,sig = em_init_params(N, None, None, None)
+		stamp = stamp.copy()
+		stamp /= stamp.sum()
+		stamp = np.maximum(stamp, 0)
+		xm, ym = -(stamp.shape[0]/2), -(stamp.shape[1]/2)
+		em_fit_2d(stamp, xm, ym, w, mu, sig)
+		tpsf = GaussianMixturePSF(w, mu, sig)
+		return tpsf
 	
 class NCircularGaussianPSF(MultiParams):
 	'''
