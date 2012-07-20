@@ -18,7 +18,8 @@ def main():
         print
 
         p = pstats.Stats(fn)
-        p.sort_stats('cumulative').print_stats(40)
+        p = p.strip_dirs()
+        p.sort_stats('cumulative').print_stats(100)
 
         p.print_callees(40)
 

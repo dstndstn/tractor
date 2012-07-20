@@ -4,7 +4,99 @@ import tractor
 import pyfits
 import numpy as np
 
-def read_wise_coadd(basefn, radecroi=None, filtermap={}):
+def read_wise_level1b(basefn, radecroi=None, filtermap={}):
+    intfn  = basefn + '-int-1b.fits'
+    maskfn = basefn + '-msk-1b.fits'
+    uncfn  = basefn + '-unc-1b.fits'
+
+    print 'intensity image', intfn
+    print 'mask image', maskfn
+    print 'uncertainty image', uncfn
+
+    P = pyfits.open(intfn)
+    ihdr = P[0].header
+    data = P[0].data
+    print 'Read', data.shape, 'intensity'
+    band = ihdr['BAND']
+
+    P = pyfits.open(uncfn)
+    uhdr = P[0].header
+    unc = P[0].data
+    print 'Read', unc.shape, 'uncertainty'
+
+    P = pyfits.open(maskfn)
+    mhdr = P[0].header
+    mask = P[0].data
+    print 'Read', mask.shape, 'mask'
+
+    #twcs = tractor.FitsWcs(intfn)
+    twcs = tractor.WcslibWcs(intfn)
+    print 'WCS', twcs
+
+    # HACK -- circular Gaussian PSF of fixed size...
+    # in arcsec 
+    fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
+    # -> sigma in pixels
+    sig = fwhms[band] / 2.35 / twcs.pixel_scale()
+    print 'PSF sigma', sig, 'pixels'
+    tpsf = tractor.NCircularGaussianPSF([sig], [1.])
+
+    if radecroi is not None:
+        ralo,rahi, declo,dechi = radecroi
+        xy = [twcs.positionToPixel(tractor.RaDecPos(r,d))
+              for r,d in [(ralo,declo), (ralo,dechi), (rahi,declo), (rahi,dechi)]]
+        xy = np.array(xy)
+        x0,x1 = xy[:,0].min(), xy[:,0].max()
+        y0,y1 = xy[:,1].min(), xy[:,1].max()
+        print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+
+        # Clip to image size...
+        H,W = data.shape
+        x0 = max(0, min(x0, W-1))
+        x1 = max(0, min(x1, W))
+        y0 = max(0, min(y0, H-1))
+        y1 = max(0, min(y1, H))
+        print ' clipped to', x0,x1,y0,y1
+
+        data = data[y0:y1, x0:x1]
+        unc = unc[y0:y1, x0:x1]
+        mask = mask[y0:y1, x0:x1]
+        twcs.setX0Y0(x0,y0)
+        print 'Cut data to', data.shape
+
+    else:
+        H,W = data.shape
+        x0,x1,y0,y1 = 0,W, 0,H
+
+    filter = 'w%i' % band
+    if filtermap:
+        filter = filtermap.get(filter, filter)
+    zp = ihdr['MAGZP']
+    photocal = tractor.MagsPhotoCal(filter, zp)
+
+    print 'Image median:', np.median(data)
+    print 'unc median:', np.median(unc)
+
+    sky = np.median(data)
+    tsky = tractor.ConstantSky(sky)
+
+    sigma1 = np.median(unc)
+    zr = np.array([-3,10]) * sigma1 + sky
+
+    name = 'WISE ' + ihdr['FRSETID'] + ' W%i' % band
+
+    invvar = np.zeros_like(data)
+    invvar[mask == 0] = 1./(unc[mask == 0])**2
+    # avoid NaNs
+    data[mask != 0] = sky
+
+    tim = tractor.Image(data=data, invvar=invvar, psf=tpsf, wcs=twcs,
+                        sky=tsky, photocal=photocal, name=name, zr=zr)
+    tim.extent = [x0,x1,y0,y1]
+    return tim
+
+
+def read_wise_level3(basefn, radecroi=None, filtermap={}):
     intfn = basefn + '-int-3.fits'
     uncfn = basefn + '-unc-3.fits'
 
@@ -104,6 +196,10 @@ def read_wise_coadd(basefn, radecroi=None, filtermap={}):
     tim.extent = [x0,x1,y0,y1]
     return tim
 
+read_wise_coadd = read_wise_level3
+read_wise_image = read_wise_level1b
+
+
 
 def main():
     # from tractor.sdss_galaxy import *
@@ -131,12 +227,9 @@ def main():
 
     from bigboss_test import *
 
-    basedir = '/project/projectdirs/bigboss/data/wise/level3'
     #filtermap = { 'w1':'i', 'w2':'i', 'w3':'i', 'w4':'i' }
     filtermap = None
     
-    pat = '3342p000_ab41-w%i'
-
     import matplotlib
     matplotlib.use('Agg')
 
@@ -156,13 +249,26 @@ def main():
     srcs = get_cfht_catalog(mags=bands, maglim=25.)
 
     ims = []
+
+    # basedir = '/project/projectdirs/bigboss/data/wise/level3'
+    # pat = '3342p000_ab41-w%i'
+    # for band in bandnums:
+    #     base = pat % band
+    #     basefn = os.path.join(basedir, base)
+    #     im = read_wise_coadd(basefn, radecroi=radecroi, filtermap=filtermap)
+    #     tr = tractor.Tractor(tractor.Images(im), srcs)
+    #     make_plots('wise-%i-' % band, im, tr=tr)
+    # 
+    #     ims.append(im)
+
+    basedir = '/project/projectdirs/bigboss/data/wise/level1b'
+    pat = '04933b137-w%i'
     for band in bandnums:
         base = pat % band
         basefn = os.path.join(basedir, base)
-        im = read_wise_coadd(basefn, radecroi=radecroi, filtermap=filtermap)
+        im = read_wise_image(basefn, radecroi=radecroi, filtermap=filtermap)
         tr = tractor.Tractor(tractor.Images(im), srcs)
         make_plots('wise-%i-' % band, im, tr=tr)
-
         ims.append(im)
 
     tr = tractor.Tractor(tractor.Images(*ims), srcs)
@@ -243,6 +349,11 @@ def main():
                     print 'plotting', j
                     make_plots('wise-%i-step%03i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
                     j += 1
+
+                    ###################### profiling
+                    #if j == 10:
+                    #    sys.exit(0)
+                    ######################
 
                 if dlnp < 1:
                     break

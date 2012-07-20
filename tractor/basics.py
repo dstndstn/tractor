@@ -277,6 +277,8 @@ class FitsWcs(ParamList):
 
 	The WCS object must be an astrometry.util.util.Tan object, or a
 	convincingly quacking duck.
+
+	You can also give it a filename and HDU.
 	'''
 
 	@staticmethod
