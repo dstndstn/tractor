@@ -1,12 +1,17 @@
 
 radecroi = (334.3, 334.4, 0.3, 0.4)
 
-def make_plots(prefix, im, tr=None, plots=['data','model','chi']):
+def make_plots(prefix, im, tr=None, plots=['data','model','chi'], mags=['i'],
+               radecroi_in=None):
     import pylab as plt
     import tractor
 
+    if radecroi_in:
+        global radecroi
+        radecroi = radecroi_in
+
     if tr is None:
-        srcs = get_cfht_catalog()
+        srcs = get_cfht_catalog(mags=mags)
         tr = tractor.Tractor(tractor.Images(im), srcs)
 
     mod = tr.getModelImage(im)
