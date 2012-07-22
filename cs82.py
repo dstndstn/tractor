@@ -1152,6 +1152,9 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	return dict(tractor=tractor)
 
 
+#def stage101(tractor=None, mp=None, **kwargs):
+	
+
 def stage100(tractor=None, mp=None, **kwargs):
 	print 'Tractor cache is', tractor.cache
 
