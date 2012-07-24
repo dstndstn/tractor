@@ -21,6 +21,7 @@ import pyfits
 from astrometry.util.util import Tan, tan_wcs_resample, log_init, lanczos
 from astrometry.util.multiproc import multiproc
 from astrometry.util.file import pickle_to_file, unpickle_from_file
+from astrometry.util.plotutils import setRadecAxes
 import multiprocessing
 import os
 
@@ -164,6 +165,16 @@ class DustSheet(MultiParams):
 		self.prior_logt_smooth = np.log(1.5)
 		self.prior_logsa_smooth = np.log(1.5)
 		self.prior_emis_smooth = 0.5
+
+	def getRaDecCorners(self, margin=0):
+		H,W = self.wcs.get_height(), self.wcs.get_width()
+		rds = []
+		for x,y in [(1.-margin,1.-margin),(W+margin,1.-margin),(W+margin,H+margin),(1.-margin,H+margin)]:
+			r,d = self.wcs.pixelxy2radec(x,y)
+			rds.append((r,d))
+		rds.append(rds[0])
+		rds = np.array(rds)
+		return rds
 
 
 	def getArrays(self, ravel=False): #, reshape=True):   DOI, they're already the right shape.
@@ -364,26 +375,63 @@ class DustSheet(MultiParams):
 		Nim = iW*iH
 		Lorder = 2
 		S = (Lorder * 2 + 3)
-		i0 = S/2
+
+		if False:
+			i0 = S/2
+		else:
+			print 'Image', img.name
+			print 'Image PSF', img.getPsf()
+			psfw = img.getPsf().getRadius()
+			scale = img.getWcs().pixel_scale() / self.wcs.pixel_scale()
+			print 'Image pixel scale', img.getWcs().pixel_scale()
+			print 'Model pixel scale', self.wcs.pixel_scale()
+			print 'PSF extent', psfw, 'pixels'
+			print 'pixel scale factor', scale
+			print '->', psfw * scale, 'model pixels'
+			S += int(np.ceil(psfw*scale * 2.))
+			print 'S=', S
+			i0 = S/2
+
 		cmock = np.zeros((S,S), np.float32)
 		cmock[i0,i0] = 1.
+
+		if True:
+			spsf = img.getPsf().scale(scale)
+			print 'Scaled PSF', spsf
+			cmock = spsf.applyTo(cmock)
+			#print 'cmock'
+			#print cmock
+
 		cwcs = Tan(self.wcs)
 		cwcs.set_imagesize(S, S)
 		cx0,cy0 = self.wcs.crpix[0], self.wcs.crpix[1]
 		rim = np.zeros((iH,iW), np.float32)
+
+		sumr = np.zeros((iH,iW), np.float32)
+
 		X = {}
 		for i in range(H):
 			print 'Precomputing matrix for image', img.name, 'row', i
 			for j in range(W):
 				#print 'Precomputing matrix for grid pixel', j,i
-				cwcs.set_crpix(cx0 - i + i0, cy0 - j + i0)
+				cwcs.set_crpix(cx0 - j + i0, cy0 - i + i0)
 				rim[:,:] = 0
 				##
 				weighted = 1
 				res = tan_wcs_resample(cwcs, imwcs.wcs, cmock, rim, weighted, Lorder)
 				assert(res == 0)
-				outimg = img.getPsf().applyTo(rim).ravel()
+
+				if False:
+					outimg = img.getPsf().applyTo(rim).ravel()
+				else:
+					outimg = rim.ravel()
+
 				I = np.flatnonzero(outimg)
+
+				if len(I) == 0:
+					continue
+				if True:
+					sumr.ravel()[I] += outimg[I]
 
 				xx,yy = (I % iW), (I / iW)
 				x0,y0 = xx.min(), yy.min()
@@ -392,6 +440,17 @@ class DustSheet(MultiParams):
 				NZI = (xx - x0) + (yy - y0) * nzw
 
 				X[i*W+j] = (I, outimg[I], NZ, NZI)
+
+		if True:
+			print 'sumr range', sumr.min(), sumr.max()
+			sumr[sumr == 0] = 1.
+			mn,mx = 0.,0.
+			for (I, outim, NZ, NZI) in X.values():
+				outim /= sumr.ravel()[I]
+				mx = max(outim.max(), mx)
+				mn = max(outim.min(), mn)
+			print 'Min,Max grid-spread function:', mn,mx
+
 		return X
 
 	def _setTransformation(self, img, X):
@@ -448,14 +507,19 @@ class DustSheet(MultiParams):
 		photocal = img.getPhotoCal()
 		for si,sub in self._enumerateActiveSubs():
 			for parami,gridi in sub._indexBoth():
-				print 'Img', img.name, 'deriv', i0+parami, nms[i0+parami]
-
+				if parami % 100 == 0:
+					print 'Img', img.name, 'deriv', i0+parami, nms[i0+parami]
+				try:
+					I,V,((x0,y0),nzshape),NZI = X[gridi]
+				except KeyError:
+					# This model pixel doesn't touch this image.
+					derivs.append(None)
+					continue
 				step = ss[i0+parami]
 				args = [sa[gridi], t[gridi], e[gridi]]
 				args[si] += step
 				countsi = photocal.dustParamsToCounts(*args)
 				dc = (countsi - counts0[gridi])
-				I,V,((x0,y0),nzshape),NZI = X[gridi]
 				dmod = np.zeros(nzshape)
 				dmod.ravel()[NZI] = dc * V * (cscale / step)
 				derivs.append(Patch(x0, y0, dmod))
@@ -717,8 +781,8 @@ def create_tractor(opt):
 		# plt.title(nm)
 		# plt.savefig('im%i-hist.png' % i)
 
-	plt.clf()
-	for tim,c in zip(tims, ['b','g','y',(1,0.5,0),'r']):
+	radecbounds = []
+	for tim in tims:
 		H,W = tim.shape
 		twcs = tim.getWcs()
 		rds = []
@@ -726,7 +790,19 @@ def create_tractor(opt):
 			rd = twcs.pixelToPosition(x,y)
 			rds.append(rd)
 		rds = np.array(rds)
+		radecbounds.append(rds)
+	rd = np.vstack(radecbounds)
+	#print 'rd', rd.shape
+	ramin,decmin = rd.min(axis=0)
+	ramax,decmax = rd.max(axis=0)
+
+	dr,dd = ramax-ramin, decmax-decmin
+	plotrange = (ramin - 0.05*dr, ramax + 0.05*dr, decmin - 0.05*dd, decmax + 0.05*dd)
+
+	plt.clf()
+	for rds,c in zip(radecbounds, ['b','g','y',(1,0.5,0),'r']):
 		plt.plot(rds[:,0], rds[:,1], '-', color=c, lw=2, alpha=0.5)
+	setRadecAxes(*plotrange)
 	plt.savefig('radec1%s.png' % opt.suffix)
 
 	print 'Creating dust sheet...'
@@ -734,22 +810,39 @@ def create_tractor(opt):
 
 	# Build a WCS for the dust sheet to match the first image
 	# (assuming it's square and axis-aligned)
+	#wcs = tims[0].getWcs().wcs
+	#r,d = wcs.radec_center()
+	#H,W = tims[0].shape
+	#scale = wcs.pixel_scale()
+	#scale *= float(W)/max(1, N-1) / 3600.
+	#c = float(N)/2. + 0.5
+	#dwcs = Tan(r, d, c, c, scale, 0, 0, scale, N, N)
 
-	wcs = tims[0].getWcs().wcs
-	r,d = wcs.radec_center()
-	H,W = tims[0].shape
-	scale = wcs.pixel_scale()
-	scale *= float(W)/max(1, N-1) / 3600.
-	c = float(N)/2. + 0.5
-	dwcs = Tan(r, d, c, c, scale, 0, 0, scale, N, N)
+	# Build an axis-aligned WCS that contains all the images.
 
-	rds = []
+	r,d = (ramin + ramax) / 2., (decmin + decmax) / 2.
+	# HACK -- ignore pole issues
+	scale = max((ramax - ramin) * np.cos(np.deg2rad(d)), decmax - decmin) / float(N)
+	scale *= float(N) / float(max(1, N-1))
+
+	scale *= (1. / opt.zoom)
+
+	cpix = float(N)/2. + 0.5
+	dwcs = Tan(r, d, cpix, cpix, scale, 0, 0, scale, N, N)
+
+	pixscale = dwcs.pixel_scale()
+	logsa = np.log(1e-3)
+
 	H,W = N,N
-	for x,y in [(0.5,0.5),(W+0.5,0.5),(W+0.5,H+0.5),(0.5,H+0.5),(0.5,0.5)]:
-		r,d = dwcs.pixelxy2radec(x,y)
-		rds.append((r,d))
-	rds = np.array(rds)
+	logsa = np.zeros((H,W)) + logsa
+	logt = np.zeros((H,W)) + np.log(17.)
+	emis = np.zeros((H,W)) + 2.
+
+	ds = DustSheet(logsa, logt, emis, dwcs)
+
+	rds = ds.getRaDecCorners(0.5)
 	plt.plot(rds[:,0], rds[:,1], 'k-', lw=1, alpha=1)
+	setRadecAxes(*plotrange)
 	plt.savefig('radec2%s.png' % opt.suffix)
 
 	# plot grid of sample points.
@@ -761,16 +854,9 @@ def create_tractor(opt):
 			rds.append((r,d))
 	rds = np.array(rds)
 	plt.plot(rds[:,0], rds[:,1], 'k.', lw=1, alpha=0.5)
+	setRadecAxes(*plotrange)
 	plt.savefig('radec3%s.png' % opt.suffix)
 
-	pixscale = dwcs.pixel_scale()
-	logsa = np.log(1e-3)
-
-	logsa = np.zeros((H,W)) + logsa
-	logt = np.zeros((H,W)) + np.log(17.)
-	emis = np.zeros((H,W)) + 2.
-
-	ds = DustSheet(logsa, logt, emis, dwcs)
 	#print 'DustSheet:', ds
 	#print 'np', ds.numberOfParams()
 	#print 'pn', ds.getParamNames()
@@ -796,6 +882,10 @@ def create_tractor(opt):
 	return tractor
 
 
+pipi = 0
+		
+		
+
 def main():
 	import optparse
 	import logging
@@ -816,6 +906,8 @@ def main():
 	parser.add_option('--callgrind', dest='callgrind', action='store_true', default=False, help='Turn on callgrind around tractor.optimize()')
 
 	parser.add_option('--resume', '-r', dest='resume', type=int, default=-1, help='Resume from a previous run at the given step?')
+
+	parser.add_option('--zoom', dest='zoom', type=float, default=1, help='Scale down the model to only touch the (1/zoom x 1/zoom) central region of the images')
 
 	opt,args = parser.parse_args()
 
@@ -849,27 +941,13 @@ def main():
 
 	if opt.resume > -1:
 		pfn = 'herschel-%02i%s.pickle' % (opt.resume, opt.suffix)
+		print 'Reading from', pfn
 		tractor = unpickle_from_file(pfn)
 		tractor.mp = mp
 
 		ds = tractor.getCatalog()[0]
 		print 'DustSheet:', ds
 
-		# X,Y = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
-		# Lorder = 2
-		# LX = np.array([lanczos(x, Lorder) for x in X.ravel()]).reshape(X.shape)
-		# LY = np.array([lanczos(y, Lorder) for y in Y.ravel()]).reshape(Y.shape)
-		# plt.clf()
-		# plt.imshow(LX, interpolation='nearest', origin='lower')
-		# plt.savefig('lx.png')
-		# plt.clf()
-		# plt.imshow(LY, interpolation='nearest', origin='lower')
-		# plt.savefig('ly.png')
-		# plt.clf()
-		# plt.imshow(LX*LY, interpolation='nearest', origin='lower')
-		# plt.savefig('lxly.png')
-
-		# tim = tractor.getImages()[0]
 		# derivs = ds.getParamDerivatives(tim)
 		# dim = np.zeros(tim.shape)
 		# #for k,deriv in enumerate(derivs[:40]):
@@ -880,20 +958,24 @@ def main():
 		# 	plt.imshow(dim, interpolation='nearest', origin='lower')
 		# 	plt.savefig('deriv-%04i.png' % k)
 
-		# X = ds._getTransformation(tim)
-		# #print 'X', X
-		# keys = X.keys()
-		# keys.sort()
-		# #for k in keys[::10]:
-		# for k in keys[:40]:
-		# 	I,G,nil,nil = X[k]
-		# 	plt.clf()
-		# 	rim = np.zeros_like(tim.getImage())
-		# 	rim.ravel()[I] = G
-		# 	plt.imshow(rim, interpolation='nearest', origin='lower')
-		# 	plt.savefig('rim-%04i.png' % k)
-		# 	print 'pix', k
-		#sys.exit(0)
+		#tim = tractor.getImages()[0]
+		for it,tim in enumerate(tractor.getImages()):
+			X = ds._getTransformation(tim)
+			# #print 'X', X
+			keys = X.keys()
+			keys.sort()
+			# for k in keys[::10]:
+			# for k in keys[:40]:
+			for k in keys[::202]:
+				I,G,nil,nil = X[k]
+				rim = np.zeros_like(tim.getImage())
+				rim.ravel()[I] = G
+				plt.clf()
+				plt.imshow(rim, interpolation='nearest', origin='lower')
+				plt.colorbar()
+				plt.savefig('rim-%i-%04i.png' % (it,k))
+				print 'pix', k
+		sys.exit(0)
 
 		makeplots(tractor, opt.resume, opt.suffix)
 		step0 = opt.resume + 1
@@ -902,6 +984,66 @@ def main():
 		step0 = 0
 		tractor = create_tractor(opt)
 		tractor.mp = mp
+
+		def point_in_poly(x, y, poly):
+			inside = np.zeros(np.atleast_1d(x).shape, bool)
+			for i in range(len(poly)):
+				j = (i-1 + len(poly)) % len(poly)
+				xi,xj = poly[i,0], poly[j,0]
+				yi,yj = poly[i,1], poly[j,1]
+				I = np.logical_and(
+					np.logical_or(np.logical_and(yi <= y, y < yj),
+								  np.logical_and(yj <= y, y < yi)),
+					x < (xi + ((xj - xi) * (y - yi) / (yj - yi))))
+				inside[I] = np.logical_not(inside[I])
+			return inside
+
+		def point_in_poly_X(x, y, poly):
+
+			global pipi
+
+			a = np.zeros_like(x).astype(float)
+			for i in range(len(poly)):
+				dx1 = poly[i,0] - x
+				dy1 = poly[i,1] - y
+				dx2 = poly[(i+1) % len(poly), 0] - poly[i,0]
+				dy2 = poly[(i+1) % len(poly), 1] - poly[i,1]
+				angle = np.arctan2(dy2, dx2) - np.arctan2(dy1, dx1)
+				angle += ( 2.*np.pi * (angle < -np.pi))
+				angle += (-2.*np.pi * (angle >  np.pi))
+				assert(np.all(angle <= np.pi))
+				assert(np.all(angle >= -np.pi))
+				a += angle
+
+				plt.clf()
+				plt.imshow(a, interpolation='nearest', origin='lower')
+				plt.colorbar()
+				plt.title('polygon edge %i' % i)
+				plt.savefig('pip-%03i.png' % pipi)
+				pipi += 1
+
+			return (np.abs(a) > np.pi)
+			
+		
+		# zero out invvar outside the model bounds.
+		ds = tractor.getCatalog()[0]
+		rd = ds.getRaDecCorners()
+		for i,tim in enumerate(tractor.getImages()):
+			poly = np.array([tim.getWcs().positionToPixel(RaDecPos(rdi[0], rdi[1])) for rdi in rd])
+			poly = poly[:-1,:]
+			print 'Model bounding box in image', tim.name, 'coordinates:'
+			print poly.shape
+			print poly
+			H,W = tim.shape
+			xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+			inside = point_in_poly(xx, yy, poly)
+			plt.clf()
+			plt.imshow(inside, interpolation='nearest', origin='lower')
+			plt.savefig('inside-%i.png' % i)
+			iv = tim.getInvvar()
+			iv[(inside == 0)] = 0.
+			tim.setInvvar(iv)
+
 		print 'Precomputing transformations...'
 		ds = tractor.getCatalog()[0]
 		XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])

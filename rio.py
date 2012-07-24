@@ -79,6 +79,10 @@ def plot_cmd(allmags, i2mags, band, catflags, classstar):
 	plt.savefig('cmd-%s.png' % band)
 	plt.savefig('cmd-%s.pdf' % band)
 
+	I = np.flatnonzero((flag == 0) * (xx2 < -1))
+	print 'Not-flagged and c < -1:', I
+	return I
+
 
 if __name__ == '__main__':
 	(allp, i2mags, cat) = unpickle_from_file('s2-260.pickle')
@@ -140,7 +144,6 @@ if __name__ == '__main__':
 
 		
 
-
 	print 'allmags:', allmags.keys()
 	for bb in allbands:
 		m = np.array(allmags[bb])
@@ -150,8 +153,37 @@ if __name__ == '__main__':
 			continue
 		#if bb != 'i2':
 		m = m.T
-		plot_cmd(m, i2mags, bb, catflags, classstar)
+		I = plot_cmd(m, i2mags, bb, catflags, classstar)
+		if bb == 'i':
+			outliers = I
 
+	from cs82 import *
+	RA = 334.32
+	DEC = 0.315
+	sz = 0.12 * 3600.
+	pixscale = 0.187
+	S = int(1.01 * sz / pixscale) / 2
+	filtermap = {'i.MP9701': 'i2'}
+	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap)
+
+	rr,dd = [],[]
+	xx,yy = [],[]
+	for i in outliers:
+		print 'Outlier source', cat[i]
+		rr.append(cat[i].getPosition().ra)
+		dd.append(cat[i].getPosition().dec)
+		x,y = coim.getWcs().positionToPixel(cat[i].getPosition())
+		xx.append(x)
+		yy.append(y)
+	plt.clf()
+	plt.imshow(coim.getImage(), interpolation='nearest', origin='lower',
+			   vmin=coim.zr[0], vmax=coim.zr[1])
+	plt.gray()
+	ax = plt.axis()
+	#plt.plot(rr, dd, 'r+', ms=10)
+	plt.plot(xx, yy, 'o', ms=25, mec='r', lw=2, alpha=0.5)
+	plt.axis(ax)
+	plt.savefig('outliers.png')
 
 
 

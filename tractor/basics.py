@@ -421,6 +421,9 @@ class FitsWcs(ParamList):
 		cd = self.wcs.get_cd()
 		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
 
+	def pixel_scale(self):
+		return self.wcs.pixel_scale()
+
 
 class PixPos(ParamList):
 	'''
@@ -749,6 +752,10 @@ class NCircularGaussianPSF(MultiParams):
 				' ], weights [ ' +
 				', '.join(['%.3f'%w for w in self.weights]) +
 				' ]')
+
+	def scale(self, factor):
+		''' Returns a new PSF that is *factor* times wider. '''
+		return NCircularGaussianPSF(np.array(self.weights) * factor, self.weights)
 
 	def getMixtureOfGaussians(self):
 		return mp.MixtureOfGaussians(self.weights,
