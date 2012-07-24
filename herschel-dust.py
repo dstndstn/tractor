@@ -388,8 +388,9 @@ class DustSheet(MultiParams):
 			print 'PSF extent', psfw, 'pixels'
 			print 'pixel scale factor', scale
 			print '->', psfw * scale, 'model pixels'
-			S += int(np.ceil(psfw*scale * 2.))
-			print 'S=', S
+			print 'Increasing S from', S
+			S += int(np.ceil(psfw*scale)) * 2
+			print 'to', S
 			i0 = S/2
 
 		cmock = np.zeros((S,S), np.float32)
