@@ -246,16 +246,21 @@ class DustSheet(MultiParams):
 		(this is implied by the "numberOfParams" shape requirement).
 		'''
 
-		# We have separable priors on the log-T and emissivity
-		# parameters, so the number of unfrozen params will be N.
-
 		rA = []
 		cA = []
 		vA = []
 		pb = []
 
+		# columns are parameters
+		# rows are prior terms
+
 		logsa, logt, emis = self.getArrays(ravel=True)
 
+		# We have separable priors on the log-T and emissivity
+		# parameters
+
+		# The order of these params has to match getNamedParams().
+		# Skip solid angle (no prior)
 		c0 = 0
 		if not self.isParamFrozen('logsolidangle'):
 			c0 += self.logsolidangle.numberOfParams()
@@ -279,7 +284,7 @@ class DustSheet(MultiParams):
 			c0 += NI
 			r0 += NI
 
-		# Smoothness:
+		# Smoothness priors:
 		c0 = 0
 		H,W = self.shape
 		for pname, smooth, arr in [('logsolidangle',  self.prior_logsa_smooth, logsa),
@@ -289,6 +294,7 @@ class DustSheet(MultiParams):
 				continue
 			p = getattr(self, pname)
 			I = np.array(list(p.getThawedParamIndices()))
+			# "I" are active pixel indices
 			assert(np.all(I >= 0))
 			assert(np.all(I < (W*H)))
 
