@@ -411,7 +411,7 @@ class DustSheet(MultiParams):
 
 		X = {}
 		for i in range(H):
-			print 'Precomputing matrix for image', img.name, 'row', i
+			print 'Precomputing matrix for image', img.name, 'model row', i
 			for j in range(W):
 				#print 'Precomputing matrix for grid pixel', j,i
 				cwcs.set_crpix(cx0 - j + i0, cy0 - i + i0)
@@ -426,10 +426,14 @@ class DustSheet(MultiParams):
 				else:
 					outimg = rim.ravel()
 
-				I = np.flatnonzero(outimg)
+				if sum(outimg) == 0:
+					continue
+
+				I = np.flatnonzero((outimg > 0) * (img.getInvError().ravel() > 0))
 
 				if len(I) == 0:
 					continue
+
 				if True:
 					sumr.ravel()[I] += outimg[I]
 
@@ -882,10 +886,6 @@ def create_tractor(opt):
 	return tractor
 
 
-pipi = 0
-		
-		
-
 def main():
 	import optparse
 	import logging
@@ -998,33 +998,6 @@ def main():
 				inside[I] = np.logical_not(inside[I])
 			return inside
 
-		def point_in_poly_X(x, y, poly):
-
-			global pipi
-
-			a = np.zeros_like(x).astype(float)
-			for i in range(len(poly)):
-				dx1 = poly[i,0] - x
-				dy1 = poly[i,1] - y
-				dx2 = poly[(i+1) % len(poly), 0] - poly[i,0]
-				dy2 = poly[(i+1) % len(poly), 1] - poly[i,1]
-				angle = np.arctan2(dy2, dx2) - np.arctan2(dy1, dx1)
-				angle += ( 2.*np.pi * (angle < -np.pi))
-				angle += (-2.*np.pi * (angle >  np.pi))
-				assert(np.all(angle <= np.pi))
-				assert(np.all(angle >= -np.pi))
-				a += angle
-
-				plt.clf()
-				plt.imshow(a, interpolation='nearest', origin='lower')
-				plt.colorbar()
-				plt.title('polygon edge %i' % i)
-				plt.savefig('pip-%03i.png' % pipi)
-				pipi += 1
-
-			return (np.abs(a) > np.pi)
-			
-		
 		# zero out invvar outside the model bounds.
 		ds = tractor.getCatalog()[0]
 		rd = ds.getRaDecCorners()
@@ -1037,9 +1010,6 @@ def main():
 			H,W = tim.shape
 			xx,yy = np.meshgrid(np.arange(W), np.arange(H))
 			inside = point_in_poly(xx, yy, poly)
-			plt.clf()
-			plt.imshow(inside, interpolation='nearest', origin='lower')
-			plt.savefig('inside-%i.png' % i)
 			iv = tim.getInvvar()
 			iv[(inside == 0)] = 0.
 			tim.setInvvar(iv)
