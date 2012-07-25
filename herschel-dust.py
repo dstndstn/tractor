@@ -372,7 +372,7 @@ class DustSheet(MultiParams):
 		counts = counts.reshape(self.shape)
 		return counts
 
-	def _computeTransformation(self, img):
+	def _computeTransformation(self, img, ylo, yhi):
 		imwcs = img.getWcs()
 		# Pre-compute the "grid-spread function" transformation matrix...
 		H,W = self.shape
@@ -414,10 +414,8 @@ class DustSheet(MultiParams):
 		cx0,cy0 = self.wcs.crpix[0], self.wcs.crpix[1]
 		rim = np.zeros((iH,iW), np.float32)
 
-		sumr = np.zeros((iH,iW), np.float32)
-
 		X = {}
-		for i in range(H):
+		for i in range(ylo, yhi):
 			print 'Precomputing matrix for image', img.name, 'model row', i
 			for j in range(W):
 				#print 'Precomputing matrix for grid pixel', j,i
@@ -441,8 +439,8 @@ class DustSheet(MultiParams):
 				if len(I) == 0:
 					continue
 
-				if True:
-					sumr.ravel()[I] += outimg[I]
+				#if True:
+				#	sumr.ravel()[I] += outimg[I]
 
 				xx,yy = (I % iW), (I / iW)
 				x0,y0 = xx.min(), yy.min()
@@ -452,17 +450,31 @@ class DustSheet(MultiParams):
 
 				X[i*W+j] = (I, outimg[I], NZ, NZI)
 
-		if True:
-			print 'sumr range', sumr.min(), sumr.max()
-			sumr[sumr == 0] = 1.
-			mn,mx = 0.,0.
-			for (I, outim, NZ, NZI) in X.values():
-				outim /= sumr.ravel()[I]
-				mx = max(outim.max(), mx)
-				mn = max(outim.min(), mn)
-			print 'Min,Max grid-spread function:', mn,mx
+		# if True:
+		# 	print 'sumr range', sumr.min(), sumr.max()
+		# 	sumr[sumr == 0] = 1.
+		# 	mn,mx = 0.,0.
+		# 	for (I, outim, NZ, NZI) in X.values():
+		# 		outim /= sumr.ravel()[I]
+		# 		mx = max(outim.max(), mx)
+		# 		mn = max(outim.min(), mn)
+		# 	print 'Min,Max grid-spread function:', mn,mx
 
 		return X
+
+	def _normalizeTransformation(self, img, X):
+		iH,iW = img.shape
+		sumr = np.zeros(iH *iW, np.float32)
+		for (I, outim, NZ, NZI) in X.values():
+			sumr[I] += outim
+		print 'sumr range', sumr.min(), sumr.max()
+		sumr[sumr == 0] = 1.
+		mn,mx = 0.,0.
+		for (I, outim, NZ, NZI) in X.values():
+			outim /= sumr.ravel()[I]
+			mx = max(outim.max(), mx)
+			mn = max(outim.min(), mn)
+		print 'Min,Max grid-spread function:', mn,mx
 
 	def _setTransformation(self, img, X):
 		key = (img.getWcs(), img.getPsf())
@@ -966,23 +978,23 @@ def main():
 		# 	plt.savefig('deriv-%04i.png' % k)
 
 		#tim = tractor.getImages()[0]
-		for it,tim in enumerate(tractor.getImages()):
-			X = ds._getTransformation(tim)
-			# #print 'X', X
-			keys = X.keys()
-			keys.sort()
-			# for k in keys[::10]:
-			# for k in keys[:40]:
-			for k in keys[::202]:
-				I,G,nil,nil = X[k]
-				rim = np.zeros_like(tim.getImage())
-				rim.ravel()[I] = G
-				plt.clf()
-				plt.imshow(rim, interpolation='nearest', origin='lower')
-				plt.colorbar()
-				plt.savefig('rim-%i-%04i.png' % (it,k))
-				print 'pix', k
-		sys.exit(0)
+		# for it,tim in enumerate(tractor.getImages()):
+		# 	X = ds._getTransformation(tim)
+		# 	# #print 'X', X
+		# 	keys = X.keys()
+		# 	keys.sort()
+		# 	# for k in keys[::10]:
+		# 	# for k in keys[:40]:
+		# 	for k in keys[::202]:
+		# 		I,G,nil,nil = X[k]
+		# 		rim = np.zeros_like(tim.getImage())
+		# 		rim.ravel()[I] = G
+		# 		plt.clf()
+		# 		plt.imshow(rim, interpolation='nearest', origin='lower')
+		# 		plt.colorbar()
+		# 		plt.savefig('rim-%i-%04i.png' % (it,k))
+		# 		print 'pix', k
+		# sys.exit(0)
 
 		makeplots(tractor, opt.resume, opt.suffix)
 		step0 = opt.resume + 1
@@ -1023,8 +1035,17 @@ def main():
 
 		print 'Precomputing transformations...'
 		ds = tractor.getCatalog()[0]
-		XX = mp.map(_map_trans, [(ds,im) for im in tractor.getImages()])
+		args = []
+		for im in tractor.getImages():
+			H,W = ds.shape
+			dy = 10
+			y = 0
+			while y <= H:
+				args.append((ds, im, y, min(H, y+dy)))
+				y += dy
+		XX = mp.map(_map_trans, args)
 		for im,X in zip(tractor.getImages(), XX):
+			ds._normalizeTransformation(im, X)
 			ds._setTransformation(im, X)
 		print 'done precomputing.'
 
@@ -1050,9 +1071,9 @@ def main():
 		pickle_to_file(tractor, pfn)
 		print 'Wrote', pfn
 
-def _map_trans((ds, img)):
+def _map_trans((ds, img, ylo, yhi)):
 	print 'computing transformation in PID', os.getpid()
-	return ds._computeTransformation(img)
+	return ds._computeTransformation(img, ylo, yhi)
 
 if __name__ == '__main__':
 	main()
