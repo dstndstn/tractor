@@ -26,7 +26,7 @@ from scipy.ndimage.morphology import binary_dilation
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
-from .utils import MultiParams, _isint
+from .utils import MultiParams, _isint, listmax
 from .cache import *
 from .ttime import Time
 
@@ -826,14 +826,14 @@ class Tractor(MultiParams):
 				spcols.extend(cA)
 				spvals.extend([vi / colscale[ci] for vi,ci in zip(vA,cA)])
 				oldnrows = Nrows
-				nr = np.max([np.max(ri) for ri in rA]) + 1
+				nr = listmax(rA, -1) + 1
 				Nrows += nr
 				logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
 				#print 'cA', cA
 				#print 'max', np.max(cA)
 				#print 'max', np.max(cA)+1
 				#print 'Ncols', Ncols
-				Ncols = max(Ncols, np.max([ci.max() for ci in cA]) + 1)
+				Ncols = max(Ncols, listmax(cA, -1) + 1)
 				b = np.zeros(Nrows)
 				b[oldnrows:] = np.hstack(pb)
 
@@ -850,10 +850,12 @@ class Tractor(MultiParams):
 
 		logverb('  Number of sparse matrix elements:', len(sprows))
 		urows = np.unique(sprows)
-		logverb('  Unique rows (pixels):', len(urows))
-		logverb('  Max row:', urows[-1])
 		ucols = np.unique(spcols)
+		logverb('  Unique rows (pixels):', len(urows))
 		logverb('  Unique columns (params):', len(ucols))
+		if len(urows) == 0 or len(ucols) == 0:
+			return []
+		logverb('  Max row:', urows[-1])
 		logverb('  Max column:', ucols[-1])
 		logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
 
@@ -902,6 +904,13 @@ class Tractor(MultiParams):
 		# Run lsqr()
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
 			   (Ncols, len(ucols), len(spvals)-1))
+
+		print 'A matrix:'
+		print A.todense()
+		print
+		print 'vector b:'
+		print b
+		
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)

@@ -208,6 +208,20 @@ class DustSheet(MultiParams):
 			# log(surface density): free (flat prior)
 			0.
 			)
+
+		print 'LogPrior:'
+		print self
+		print self.emissivity
+		print self.emissivity.vals
+		print self.emissivity.getParams()
+		print 'emissivity:', emis
+		print 'prior mean:', self.prior_emis_mean
+		print 'prior std:', self.prior_emis_std
+		print 'chi:', ((emis - self.prior_emis_mean) / self.prior_emis_std)
+		print 'lnprob:', -0.5 * np.sum(((emis - self.prior_emis_mean) /
+										self.prior_emis_std) ** 2)
+		print 'P', P
+
 		# Smoothness:
 		for p,smooth in [(logt,  self.prior_logt_smooth),
 						 (logsa, self.prior_logsa_smooth),
@@ -215,6 +229,7 @@ class DustSheet(MultiParams):
 			P += (-0.5 * np.sum(((p[1:,:] - p[:-1,:]) / smooth)**2) +
 				  -0.5 * np.sum(((p[:,1:] - p[:,:-1]) / smooth)**2))
 
+		print 'after smoothness, P', P
 		#print 'Returning log-prior', P
 		return P
 
@@ -274,14 +289,24 @@ class DustSheet(MultiParams):
 				continue
 			p = getattr(self, pname)
 			I = np.array(list(p.getThawedParamIndices()))
+			nparams = len(I)
+
+			# values that are exactly equal to the prior mean produce zero derivative
+			# (and that can cause problems for lsqr)
+			b = -(arr[I] - mn) / st
+			J = (b != 0)
+			I = I[J]
+			b = b[J]
+
 			NI = len(I)
 			off = np.arange(NI)
 			std = st * np.ones(NI)
+
 			rA.append(r0 + off)
 			cA.append(c0 + off)
 			vA.append( 1. / std )
-			pb.append( -(arr[I] - mn) / std )
-			c0 += NI
+			pb.append( b )
+			c0 += nparams
 			r0 += NI
 
 		# Smoothness priors:
@@ -372,10 +397,12 @@ class DustSheet(MultiParams):
 		counts = counts.reshape(self.shape)
 		return counts
 
-	def _computeTransformation(self, img, ylo, yhi):
+	def _computeTransformation(self, img, ylo=0, yhi=-1):
 		imwcs = img.getWcs()
 		# Pre-compute the "grid-spread function" transformation matrix...
 		H,W = self.shape
+		if yhi == -1:
+			yhi = H
 		Ngrid = W*H
 		iH,iW = img.shape
 		Nim = iW*iH
@@ -1035,15 +1062,27 @@ def main():
 
 		print 'Precomputing transformations...'
 		ds = tractor.getCatalog()[0]
-		args = []
+
+		# Split the grid-spread matrix into strips...
+		async_results = []
 		for im in tractor.getImages():
+			args = []
 			H,W = ds.shape
 			dy = 10
 			y = 0
 			while y <= H:
 				args.append((ds, im, y, min(H, y+dy)))
 				y += dy
-		XX = mp.map(_map_trans, args)
+			async_results.append(mp.map_async(_map_trans, args))
+		# Glue to strips back together...
+		XX = []
+		for ar in async_results:
+			Xblocks = ar.get()
+			X = Xblocks[0]
+			for xi in Xblocks[1:]:
+				X.update(xi)
+			XX.append(X)
+			
 		for im,X in zip(tractor.getImages(), XX):
 			ds._normalizeTransformation(im, X)
 			ds._setTransformation(im, X)
@@ -1075,8 +1114,89 @@ def _map_trans((ds, img, ylo, yhi)):
 	print 'computing transformation in PID', os.getpid()
 	return ds._computeTransformation(img, ylo, yhi)
 
+
+
+def check_priors():
+	np.seterrcall(np_err_handler)
+	np.seterr(all='call')
+
+	N = 1
+
+	H,W = N,N
+	logsa = np.zeros((H,W)) + np.log(1e-3)
+	logt  = np.zeros((H,W)) + np.log(17.)
+	emis  = np.zeros((H,W)) + 2.
+	dwcs = Tan(11.2, 41.9, 1, 1, 1e-3, 0, 0, 1e-3, N, N)
+	
+	ds = DustSheet(logsa, logt, emis, dwcs)
+	cat = Catalog()
+	cat.append(ds)
+	tractor = Tractor()
+	tractor.setCatalog(cat)
+
+	p0 = tractor.getParams()
+	print 'lnp0', tractor.getLogProb()
+
+	# no prior on solid angle
+	# N(log(17.), log(1.2)) on T
+	# N(2, 0.5) on emis
+	for j,xx in enumerate([
+		np.linspace(np.log(1e-5), np.log(1e-1), 20),
+		np.linspace(np.log(10.), np.log(20.), 20),
+		np.linspace(0., 4., 20),
+		]):
+		pp = []
+		for x in xx:
+			tractor.setParam(j, x)
+			p = tractor.getLogProb()
+			pp.append(p)
+		tractor.setParam(j, p0[j])
+		plt.clf()
+		plt.plot(xx, pp, 'ro-')
+		plt.title(tractor.getParamNames()[j])
+		plt.savefig('p%i.png' % j)
+
+	# Check getPriorChi().
+
+	import logging
+	import sys
+	lvl = logging.DEBUG
+	log_init(3)
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+
+	for j,(ip,val) in enumerate([
+		#(0, 1e-2),
+		#(1, np.log(5.)),
+		#(1, np.log(30.)),
+		(2, 1.),
+		(2, 3.),
+		]):
+		print
+		print
+		print 'Setting', tractor.getParamNames()[ip], 'to', val
+		
+		tractor.setParams(p0)
+		tractor.setParam(ip, val)
+		xx = [val]
+		pp = [tractor.getLogProb()]
+		for i in range(10):
+			tractor.optimize()#damp=1e-3)
+			xx.append(tractor.getParams()[ip])
+			pp.append(tractor.getLogProb())
+		plt.clf()
+		plt.plot(xx, pp, 'ro-')
+		plt.title(tractor.getParamNames()[ip])
+		plt.savefig('p%i.png' % (j+10))
+		
+
+
+
+
 if __name__ == '__main__':
-	main()
+	check_priors()
+
+	#main()
 	#import cProfile
 	#import sys
 	#from datetime import tzinfo, timedelta, datetime

@@ -14,6 +14,13 @@ could be useful outside the Tractor context.
 #from ducks import *
 import numpy as np
 
+def listmax(X, default=0):
+	mx = [np.max(x) for x in X if len(x)]
+	if len(mx) == 0:
+		return default
+	return np.max(mx)
+	
+
 def getClassName(obj):
 	name = getattr(obj.__class__, 'classname', None)
 	if name is not None:
@@ -655,7 +662,7 @@ class MultiParams(BaseParams, NamedParams):
 			pb.extend(b)
 
 			c0 += s.numberOfParams()
-			r0 += np.max([np.max(ri) for ri in r])
+			r0 += listmax(r)
 
 		if rA == []:
 			return None
