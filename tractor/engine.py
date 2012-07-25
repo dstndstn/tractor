@@ -551,11 +551,9 @@ class Tractor(MultiParams):
 		self.catalog.remove(src)
 
 	def optimize(self, alphas=None, damp=0, priors=True):
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
 		allderivs = self.getDerivs()
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		tderivs = Time()-t0
 		#print Time() - t0
 		#print 'allderivs:', allderivs
@@ -565,7 +563,6 @@ class Tractor(MultiParams):
 		print 'Finding optimal update direction...'
 		t0 = Time()
 		X = self.getUpdateDirection(allderivs, damp=damp, priors=priors)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		#print Time() - t0
 		topt = Time()-t0
 		#print 'X:', X
@@ -574,7 +571,6 @@ class Tractor(MultiParams):
 		print 'Finding optimal step size...'
 		t0 = Time()
 		(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		tstep = Time() - t0
 		print 'Finished opt2.'
 		print '  Tderiv', tderivs
@@ -735,7 +731,6 @@ class Tractor(MultiParams):
 		Nrows = nextrow
 		del nextrow
 		Ncols = len(allderivs)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
 		colscales = []
 		for col, param in enumerate(allderivs):
@@ -809,7 +804,6 @@ class Tractor(MultiParams):
 			spvals.append(vals / scale)
 
 		colscale = np.array(colscales)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
 		b = None
 		if priors:
@@ -844,7 +838,6 @@ class Tractor(MultiParams):
 		sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
 		spcols = np.hstack(spcols)
 		spvals = np.hstack(spvals)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		assert(len(sprows) == len(spcols))
 		assert(len(sprows) == len(spvals))
 
@@ -869,7 +862,6 @@ class Tractor(MultiParams):
 		# Build sparse matrix
 		#A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 		A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
 		# b = chi
 		#
@@ -899,17 +891,16 @@ class Tractor(MultiParams):
 
 		# lsqr can trigger floating-point errors
 		#np.seterr(all='warn')
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		
 		# Run lsqr()
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
 			   (Ncols, len(ucols), len(spvals)-1))
 
-		print 'A matrix:'
-		print A.todense()
-		print
-		print 'vector b:'
-		print b
+		# print 'A matrix:'
+		# print A.todense()
+		# print
+		# print 'vector b:'
+		# print b
 		
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,

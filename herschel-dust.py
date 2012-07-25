@@ -290,11 +290,9 @@ class DustSheet(MultiParams):
 
 			NI = len(I)
 			off = np.arange(NI)
-			std = st * np.ones(NI)
-
 			rA.append(r0 + off)
 			cA.append(c0 + off)
-			vA.append( 1. / std )
+			vA.append( np.ones(NI) / st )
 			pb.append( b )
 			c0 += nparams
 			r0 += NI
@@ -948,6 +946,8 @@ def main():
 
 	parser.add_option('--zoom', dest='zoom', type=float, default=1, help='Scale down the model to only touch the (1/zoom x 1/zoom) central region of the images')
 
+	parser.add_option('--damp', dest='damp', type=float, default=1., help='LSQR damping')
+
 	opt,args = parser.parse_args()
 
 	if opt.verbose == 0:
@@ -1093,7 +1093,7 @@ def main():
 		if callgrind:
 			callgrind.callgrind_start_instrumentation()
 
-		tractor.optimize(damp=1., alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
+		tractor.optimize(damp=opt.damp, alphas=[1e-3, 1e-2, 0.1, 0.3, 1., 3., 10., 30., 100.])
 
 		if callgrind:
 			callgrind.callgrind_stop_instrumentation()
@@ -1310,9 +1310,8 @@ def check_priors():
 
 
 if __name__ == '__main__':
-	check_priors()
-
-	#main()
+	#check_priors()
+	main()
 	#import cProfile
 	#import sys
 	#from datetime import tzinfo, timedelta, datetime
