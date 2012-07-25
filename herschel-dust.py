@@ -163,7 +163,9 @@ class DustSheet(MultiParams):
 
 		# weak
 		self.prior_logt_smooth = np.log(1.5)
-		self.prior_logsa_smooth = np.log(1.5)
+		# try matching it to the absolute prior
+		#self.prior_logt_smooth = np.log(1.2)
+		self.prior_logsa_smooth = np.log(2.)
 		self.prior_emis_smooth = 0.5
 
 	def getRaDecCorners(self, margin=0):
@@ -209,18 +211,8 @@ class DustSheet(MultiParams):
 			0.
 			)
 
-		print 'LogPrior:'
+		print 'getLogPrior:'
 		print self
-		print self.emissivity
-		print self.emissivity.vals
-		print self.emissivity.getParams()
-		print 'emissivity:', emis
-		print 'prior mean:', self.prior_emis_mean
-		print 'prior std:', self.prior_emis_std
-		print 'chi:', ((emis - self.prior_emis_mean) / self.prior_emis_std)
-		print 'lnprob:', -0.5 * np.sum(((emis - self.prior_emis_mean) /
-										self.prior_emis_std) ** 2)
-		print 'P', P
 
 		# Smoothness:
 		for p,smooth in [(logt,  self.prior_logt_smooth),
@@ -229,8 +221,6 @@ class DustSheet(MultiParams):
 			P += (-0.5 * np.sum(((p[1:,:] - p[:-1,:]) / smooth)**2) +
 				  -0.5 * np.sum(((p[:,1:] - p[:,:-1]) / smooth)**2))
 
-		print 'after smoothness, P', P
-		#print 'Returning log-prior', P
 		return P
 
 	def getLogPriorChi(self):
@@ -291,7 +281,7 @@ class DustSheet(MultiParams):
 			I = np.array(list(p.getThawedParamIndices()))
 			nparams = len(I)
 
-			# values that are exactly equal to the prior mean produce zero derivative
+			# values that are exactly equal to the prior mean produce zero derivatives
 			# (and that can cause problems for lsqr)
 			b = -(arr[I] - mn) / st
 			J = (b != 0)
@@ -308,6 +298,8 @@ class DustSheet(MultiParams):
 			pb.append( b )
 			c0 += nparams
 			r0 += NI
+
+			print 'Added', NI, 'rows of priors for absolute value of', pname
 
 		# Smoothness priors:
 		c0 = 0
@@ -345,9 +337,8 @@ class DustSheet(MultiParams):
 				row = np.arange(NI) + r0
 				rA.append(row)
 				cA.append(c0 + offI)
-				sm = np.ones(NI) / smooth 
-				vA.append( sm )
-				pb.append( -(arr[II] - arr[JJ]) / sm )
+				vA.append( np.ones(NI) / smooth )
+				pb.append( -(arr[II] - arr[JJ]) / smooth )
 				assert(len(rA[-1]) == len(cA[-1]))
 				assert(len(rA[-1]) == len(vA[-1]))
 				assert(len(rA[-1]) == len(pb[-1]))
@@ -360,6 +351,8 @@ class DustSheet(MultiParams):
 				r0 += NI
 				assert(len(rA[-1]) == len(cA[-1]))
 				assert(len(rA[-1]) == len(vA[-1]))
+
+				print 'Added', NI, 'rows of priors for smoothness of', pname
 
 			# This is outside the loop
 			c0 += len(I)
@@ -1120,43 +1113,6 @@ def check_priors():
 	np.seterrcall(np_err_handler)
 	np.seterr(all='call')
 
-	N = 1
-
-	H,W = N,N
-	logsa = np.zeros((H,W)) + np.log(1e-3)
-	logt  = np.zeros((H,W)) + np.log(17.)
-	emis  = np.zeros((H,W)) + 2.
-	dwcs = Tan(11.2, 41.9, 1, 1, 1e-3, 0, 0, 1e-3, N, N)
-	
-	ds = DustSheet(logsa, logt, emis, dwcs)
-	cat = Catalog()
-	cat.append(ds)
-	tractor = Tractor()
-	tractor.setCatalog(cat)
-
-	p0 = tractor.getParams()
-	print 'lnp0', tractor.getLogProb()
-
-	# no prior on solid angle
-	# N(log(17.), log(1.2)) on T
-	# N(2, 0.5) on emis
-	for j,xx in enumerate([
-		np.linspace(np.log(1e-5), np.log(1e-1), 20),
-		np.linspace(np.log(10.), np.log(20.), 20),
-		np.linspace(0., 4., 20),
-		]):
-		pp = []
-		for x in xx:
-			tractor.setParam(j, x)
-			p = tractor.getLogProb()
-			pp.append(p)
-		tractor.setParam(j, p0[j])
-		plt.clf()
-		plt.plot(xx, pp, 'ro-')
-		plt.title(tractor.getParamNames()[j])
-		plt.savefig('p%i.png' % j)
-
-	# Check getPriorChi().
 
 	import logging
 	import sys
@@ -1164,30 +1120,190 @@ def check_priors():
 	log_init(3)
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+	if True:
+		# Check two-pixel priors: smoothness.
+		H,W = 1,2
+		logsa = np.zeros((H,W)) + np.log(1e-3)
+		logt  = np.zeros((H,W)) + np.log(17.)
+		emis  = np.zeros((H,W)) + 2.
+		dwcs = Tan(11.2, 41.9, 1, 1, 1e-3, 0, 0, 1e-3, W, H)
 
-	for j,(ip,val) in enumerate([
-		#(0, 1e-2),
-		#(1, np.log(5.)),
-		#(1, np.log(30.)),
-		(2, 1.),
-		(2, 3.),
-		]):
-		print
-		print
-		print 'Setting', tractor.getParamNames()[ip], 'to', val
+		ds = DustSheet(logsa, logt, emis, dwcs)
+		cat = Catalog()
+		cat.append(ds)
+		tractor = Tractor()
+		tractor.setCatalog(cat)
+
+		p0 = tractor.getParams()
+		print 'lnp0', tractor.getLogProb()
+
+		if True:
+			# check getLogProb()
+			for j,xx in enumerate([
+				np.linspace(np.log(1e-5), np.log(1e-1), 20),
+				np.linspace(np.log(1e-5), np.log(1e-1), 20),
+				np.linspace(np.log(10.), np.log(20.), 20),
+				np.linspace(np.log(10.), np.log(20.), 20),
+				np.linspace(0., 4., 20),
+				np.linspace(0., 4., 20),
+				]):
+				pp = []
+				for x in xx:
+					tractor.setParam(j, x)
+					p = tractor.getLogProb()
+					pp.append(p)
+				tractor.setParam(j, p0[j])
+				plt.clf()
+				plt.plot(xx, pp, 'ro-')
+				plt.title(ds.getParamNames()[j])
+			plt.savefig('p%i.png' % (20 + j))
+			
+
+			# set the absolute priors to have little effect and repeat.
+			ds.prior_logt_std = np.log(100.)
+			ds.prior_emis_std = np.log(100.)
+			for j,xx in enumerate([
+				np.linspace(np.log(1e-5), np.log(1e-1), 20),
+				np.linspace(np.log(1e-5), np.log(1e-1), 20),
+				np.linspace(np.log(10.), np.log(20.), 20),
+				np.linspace(np.log(10.), np.log(20.), 20),
+				np.linspace(0., 4., 20),
+				np.linspace(0., 4., 20),
+				]):
+				pp = []
+				for x in xx:
+					tractor.setParam(j, x)
+					p = tractor.getLogProb()
+					pp.append(p)
+				tractor.setParam(j, p0[j])
+				plt.clf()
+				plt.plot(xx, pp, 'ro-')
+				plt.title(ds.getParamNames()[j])
+				plt.savefig('p%i.png' % (30 + j))
+
+
+
+			# revert the priors
+			ds.prior_logt_std = np.log(1.2)
+			ds.prior_emis_std = np.log(0.5)
+
+		# check getLogPriorChi.
+		for j,(ip,val) in enumerate([
+			(0, np.log(1e-1)),
+			(1, np.log(1e-5)),
+			(2, np.log(5.)),
+			(3, np.log(5.)),
+			(2, np.log(30.)),
+			(3, np.log(30.)),
+			(4, 1.),
+			(5, 1.),
+			(4, 3.),
+			(5, 3.),
+			]):
+			print
+			print
+			print 'Setting', ds.getParamNames()[ip], 'from', p0[ip], 'to', val
+
+			tractor.setParams(p0)
+			tractor.setParam(ip, val)
+			xx = [val]
+			xxall = [tractor.getParams()]
+			pp = [tractor.getLogProb()]
+			for i in range(10):
+				tractor.optimize()#damp=1e-3)
+				xx.append(tractor.getParams()[ip])
+				pp.append(tractor.getLogProb())
+				xxall.append(tractor.getParams())
+			plt.clf()
+			plt.plot(xx, pp, 'ro-')
+			plt.axvline(val, color='r', lw=2, alpha=0.5)
+			plt.title(ds.getParamNames()[ip])
+			plt.savefig('p%i.png' % (j+40))
+
+			plt.clf()
+			xxall = np.vstack(xxall)
+			print 'xxall', xxall.shape
+			for i in range(6):
+				#plt.subplot(1,3,(i/2)+1)
+				#plt.plot(xxall[:,i], pp, 'ro-')
+				#if i == ip:
+				#		plt.axvline(xxall[0,i], color='r', lw=2, alpha=0.5)
+				#plt.title(ds.getParamNames()[i])
+				plt.subplot(3,1,(i/2)+1)
+				c = 'b'
+				if i == ip:
+					c = 'r'
+				plt.plot(xxall[:,i], 'o-', color=c)
+				plt.title(ds.getParamNames()[i])
+			plt.savefig('p%i.png' % (j+50))
+
+
+
+
 		
-		tractor.setParams(p0)
-		tractor.setParam(ip, val)
-		xx = [val]
-		pp = [tractor.getLogProb()]
-		for i in range(10):
-			tractor.optimize()#damp=1e-3)
-			xx.append(tractor.getParams()[ip])
-			pp.append(tractor.getLogProb())
-		plt.clf()
-		plt.plot(xx, pp, 'ro-')
-		plt.title(tractor.getParamNames()[ip])
-		plt.savefig('p%i.png' % (j+10))
+
+	if False:
+		# Check single-pixel priors: getLogPrior()
+		N = 1
+
+		H,W = N,N
+		logsa = np.zeros((H,W)) + np.log(1e-3)
+		logt  = np.zeros((H,W)) + np.log(17.)
+		emis  = np.zeros((H,W)) + 2.
+		dwcs = Tan(11.2, 41.9, 1, 1, 1e-3, 0, 0, 1e-3, N, N)
+
+		ds = DustSheet(logsa, logt, emis, dwcs)
+		cat = Catalog()
+		cat.append(ds)
+		tractor = Tractor()
+		tractor.setCatalog(cat)
+
+		p0 = tractor.getParams()
+		print 'lnp0', tractor.getLogProb()
+
+		# no prior on solid angle
+		# N(log(17.), log(1.2)) on T
+		# N(2, 0.5) on emis
+		for j,xx in enumerate([
+			np.linspace(np.log(1e-5), np.log(1e-1), 20),
+			np.linspace(np.log(10.), np.log(20.), 20),
+			np.linspace(0., 4., 20),
+			]):
+			pp = []
+			for x in xx:
+				tractor.setParam(j, x)
+				p = tractor.getLogProb()
+				pp.append(p)
+			tractor.setParam(j, p0[j])
+			plt.clf()
+			plt.plot(xx, pp, 'ro-')
+			plt.title(ds.getParamNames()[j])
+			plt.savefig('p%i.png' % j)
+
+		# Check single-pixel priors: getPriorChi()
+		for j,(ip,val) in enumerate([
+			(0, 1e-2),
+			(1, np.log(5.)),
+			(1, np.log(30.)),
+			(2, 1.),
+			(2, 3.),
+			]):
+			print
+			print
+			print 'Setting', ds.getParamNames()[ip], 'to', val
+
+			tractor.setParams(p0)
+			tractor.setParam(ip, val)
+			xx = [val]
+			pp = [tractor.getLogProb()]
+			for i in range(10):
+				tractor.optimize(damp=1e-3)
+				xx.append(tractor.getParams()[ip])
+				pp.append(tractor.getLogProb())
+			plt.clf()
+			plt.plot(xx, pp, 'ro-')
+			plt.title(ds.getParamNames()[ip])
+			plt.savefig('p%i.png' % (j+10))
 		
 
 
