@@ -21,4 +21,15 @@ def getNGC(ngc):
     return record
 
 
+def getName(name):
 
+    rc3 = pyfits.open("rc3limited.fits")
+
+    data = rc3[1].data
+    names = data.field("NAME")
+
+    mask = data.field("NAME") == name
+
+    record = data[mask]
+    rc3.close()
+    return record
