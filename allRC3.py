@@ -13,6 +13,7 @@ def main():
         else:
             pass
 
+#dm-shouldnt this be the other way around? if the pickle file exists then pass but if not then continue on to 'general.py'?
 
 if __name__ == '__main__':
     main()
