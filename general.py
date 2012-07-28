@@ -145,7 +145,7 @@ def main():
     itune2 = opt.itune2
     ntune = opt.ntune
     IRLS_scale = 25.
-    radius = (10.**j['LOG_D25'][0])/10.
+    radius = (10.**entry['LOG_D25'][0])/10.
     dr8 = True
     noarcsinh = False
 
