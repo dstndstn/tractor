@@ -18,7 +18,7 @@ select
   g.z, g.err_z, g.extinction_z,
   s.z, s.zerr
   from Galaxy as g
-  JOIN SpecObj as s ON g.objId = g.bestObjId
+  JOIN SpecObj as s ON g.objId = s.bestObjId
   where
   --- MAIN galaxy sample
   s.primtarget = dbo.fPrimTarget('GALAXY')
