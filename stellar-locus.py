@@ -8,6 +8,24 @@ from astrometry.util.pyfits_utils import *
 from astrometry.util.plotutils import *
 from astrometry.sdss import cas_flags
 
+'''
+select
+  g.flags,
+  g.u, g.err_u, g.extinction_u,
+  g.g, g.err_g, g.extinction_g,
+  g.r, g.err_r, g.extinction_r,
+  g.i, g.err_i, g.extinction_i,
+  g.z, g.err_z, g.extinction_z,
+  s.z, s.zerr
+  from Galaxy as g
+  JOIN SpecObj as s ON g.objId = g.bestObjId
+  where
+  --- MAIN galaxy sample
+  s.primtarget = dbo.fPrimTarget('GALAXY')
+  and s.z between 0.09 and 0.11
+  and s.zwarning = 0
+'''
+
 T = fits_table('main-galaxies.fits')
 
 flag_names = dict((v,k) for k,v in cas_flags.items())
@@ -77,6 +95,26 @@ sys.exit(0)
 
 
 
+
+'''
+select (dbo.fPhotoFlags('CHILD') & flags) as ischild,
+(dbo.fPhotoFlags('BLENDED') & flags) as blend,
+(dbo.fPhotoFlags('DEBLENDED_AS_PSF') & flags) as debpsf,
+flags,
+psfmag_u, psfmagerr_u, extinction_u,
+psfmag_g, psfmagerr_g, extinction_g,
+psfmag_r, psfmagerr_r, extinction_r,
+psfmag_i, psfmagerr_i, extinction_i,
+psfmag_z, psfmagerr_z, extinction_z into mydb.MyTable_19 from Star
+where
+run=3818
+and insideMask=0
+and (flags & (
+dbo.fPhotoFlags('PEAKCENTER') |
+dbo.fPhotoFlags('COSMIC_RAY') |
+dbo.fPhotoFlags('MOVED')) = 0)
+and ((flags & dbo.fPhotoFlags('BINNED1')) > 0)
+'''
 
 T = fits_table('MyTable_19_dstn.fit')
 
