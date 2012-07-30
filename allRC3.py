@@ -4,6 +4,7 @@ import pylab as plt
 import pyfits
 import sys
 
+
 #Work in progress...
 def main():
     rc3 = pyfits.open('rc3limited.fits')
@@ -19,13 +20,15 @@ def main():
             print 'run %s through tractor' %entry['NAME']
             entries.append('%s' %entry['NAME'])
     things=[str(x) for x in entries]
-    print things
-    #print entries
     
     for entry in things:
-        print 'entry',
+        print 'entry'
+        newentry=entry.replace(' ', '')
+        print newentry
+        #assert(False)
         os.system("python -u general.py '%s' --threads 4 --itune1 6 --itune2 6 --nocache 1>%s.log 2>%s_err.log" % (entry,entry,entry))
         print 'running tractor for %s' %entry
+        assert(False)
         os.system('cp flip-%s.pdf RC3_Output' % entry)
         os.system('cp ngc-%s.png RC3_Output' % entry)
         os.system('cp flip-%s.tex RC3_Output' % entry)
