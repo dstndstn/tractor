@@ -13,10 +13,9 @@ def main():
         print (10**entry['LOG_D25'])/10.
         fn = '%s.pickle' % (entry['NAME'])
         if os.path.exists(fn):
-            continue 
             print '%s has run successfully already' %entry['NAME'] 
+            continue 
         else:
-            pass
             print 'run %s through tractor' %entry['NAME']
             entries.append('%s' %entry['NAME'])
     things=[str(x) for x in entries]
