@@ -7,7 +7,8 @@ from astrometry.libkd import spherematch as sm
 
 
 def tychoMatch(ra,dec,rad):
-    data = pyf.open("tycho2-cut.fits")[1].data
+    cat = pyf.open("tycho2-cut.fits")
+    data = cat[1].data
     RA=data.field('RA')
     DEC=data.field('DEC')
     MAG=data.field('MAG')
@@ -17,7 +18,8 @@ def tychoMatch(ra,dec,rad):
     matchrad = rad
     I1,I2,d = sm.match_radec(ra1,dec1, RA,DEC, matchrad)
 
-    print pyf.open("tycho2-cut.fits")[1].columns.names
+    print cat[1].columns.names
+    cat.close()
 
     
     return RA[I2],DEC[I2],MAG[I2]

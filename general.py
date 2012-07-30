@@ -115,35 +115,17 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     s = getsrc(r, c, f, roi=roi, bands=bands)
     return (tims,s)
 
-def main():
-    import optparse
-    parser = optparse.OptionParser(usage='%prog [options] <name>')
-    parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
-    parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
-    parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
-    parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
-    parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
 
-    opt,args = parser.parse_args()
-    if len(args) != 1:
-        parser.print_help()
-        sys.exit(-1)
-
-    if opt.threads:
-        mp = multiproc(nthreads=opt.threads)
+def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+    if threads:
+        mp = multiproc(nthreads=threads)
     else:
         mp = multiproc()
-
-
-    name = args[0]
 
     entry = getName(name)
     print entry
     ra = float(entry['RA'][0])
     dec = float(entry['DEC'][0])
-    itune1 = opt.itune1
-    itune2 = opt.itune2
-    ntune = opt.ntune
     IRLS_scale = 25.
     radius = (10.**entry['LOG_D25'][0])/10.
     dr8 = True
@@ -161,6 +143,7 @@ def main():
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
+    assert(len(rcfs)>0)
 
     imkw = dict(psf='dg')
     if dr8:
@@ -205,7 +188,7 @@ def main():
     elif dr8:
         sa.update(chilo=-8.,chihi=8.)
 
-    if opt.nocache:
+    if nocache:
         tractor.cache = NullCache()
         sg.disable_galaxy_cache()
 
@@ -355,6 +338,32 @@ def main():
     pickle_to_file(CG,pfn)
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
+
+
+def main():
+    import optparse
+    parser = optparse.OptionParser(usage='%prog [options] <name>')
+    parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
+    parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
+    parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
+    parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
+    parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
+
+    opt,args = parser.parse_args()
+    if len(args) != 1:
+        parser.print_help()
+        sys.exit(-1)
+
+    threads=opt.threads
+
+    name = args[0]
+    itune1 = opt.itune1
+    itune2 = opt.itune2
+    ntune = opt.ntune
+    nocache = opt.nocache
+    general(name,threads,itune1,itune2,ntune,nocache)
+
+
 
 def makeflipbook(prefix,numImg,itune1=0,itune2=0,ntune=0):
     # Create a tex flip-book of the plots
