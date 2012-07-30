@@ -11,18 +11,21 @@ def main():
     rc3 = pyfits.open('rc3limited.fits')
     entries=[]
     for entry in rc3[1].data:
-        if entry['NAME'] == '' or entry['DEC'] < -30.:
+        if entry['NAME'] == '':
+            name = entry['ALT_NAME_1']
+        else:
+            name = entry['NAME']
+        if entry['DEC'] < -30.:
             continue
         print (10**entry['LOG_D25'])/10.
-        fn = 'RC3_Output/%s.pickle' % (entry['NAME'])
+        fn = 'RC3_Output/%s.pickle' % (name)
         if os.path.exists(fn):
-            print '%s has run successfully already' %entry['NAME'] 
+            print '%s has run successfully already' %name 
             continue 
         else:
-            print 'run %s through tractor' %entry['NAME']
-            entries.append('%s' %entry['NAME'])
+            print 'run %s through tractor' %name
+            entries.append('%s' %name)
     things=[str(x) for x in entries]
-
 
     count = 0
     for entry in things:
