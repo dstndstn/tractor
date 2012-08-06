@@ -18,7 +18,6 @@ def tychoMatch(ra,dec,rad):
     matchrad = rad
     I1,I2,d = sm.match_radec(ra1,dec1, RA,DEC, matchrad)
 
-    print cat[1].columns.names
     cat.close()
 
     

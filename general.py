@@ -28,12 +28,12 @@ from tractor.cache import *
 from astrometry.util.sdss_radec_to_rcf import *
 import optparse
 
-def plotarea(ra, dec, radius, name, tims=None, rds=[]):
+def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     from astrometry.util.util import Tan
     W,H = 512,512
     scale = (radius * 60. * 4) / float(W)
     print 'SDSS jpeg scale', scale
-    imgfn = 'sdss-mosaic-%s.png' % name
+    imgfn = 'sdss-mosaic-%s.png' % prefix
     if not os.path.exists(imgfn):
         url = (('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?' +
                 'ra=%f&dec=%f&scale=%f&width=%i&height=%i') %
@@ -97,7 +97,7 @@ def plotarea(ra, dec, radius, name, tims=None, rds=[]):
         plt.plot(px, py, 'go')
 
     plt.axis(ax)
-    fn = '%s.png' % name
+    fn = '%s.png' % prefix
     plt.savefig(fn)
     print 'saved', fn
 
@@ -131,19 +131,23 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     dr8 = True
     noarcsinh = False
 
+    prefix = '%s' % (name.replace(' ', '_'))
+
+
     print 'Radius', radius
     print 'RA,Dec', ra, dec
 
-    sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
-
-    for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
 
 
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
     print rcfs
     assert(len(rcfs)>0)
+
+    sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
+
+    for sra,sdec,smag in zip(sras,sdecs,smags):
+        print sra,sdec,smag
 
     imkw = dict(psf='dg')
     if dr8:
@@ -175,7 +179,7 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, radius, name, timgs) #, rds)
+    plotarea(ra, dec, radius, name, prefix, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -203,7 +207,6 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
 #        plt.hist(data,bins=100)
 #        plt.savefig('hist-%s.png' % (band))
 
-    prefix = '%s' % (name)
     saveAll('initial-'+prefix, tractor,**sa)
     #plotInvvar('initial-'+prefix,tractor)
 
@@ -334,7 +337,7 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     print CGBright1+CGBright2
     print CG.getBrightness()
 
-    pfn = '%s.pickle' % name
+    pfn = '%s.pickle' % prefix
     pickle_to_file(CG,pfn)
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
