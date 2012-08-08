@@ -5,16 +5,21 @@ import pyfits
 import sys
 
 from general import general
+from halflight import halflight
 
 #Work in progress...
 def main():
     rc3 = pyfits.open('rc3limited.fits')
     entries=[]
     for entry in rc3[1].data:
-        if entry['NAME'] == '':
-            name = entry['ALT_NAME_1']
-        else:
+        if entry['NAME'] != '':
             name = entry['NAME']
+        elif entry['ALT_NAME_1'] != '':
+            name = entry['ALT_NAME_1']
+        elif entry['ALT_NAME_2'] != '':
+            name = entry['ALT_NAME_2']
+        else:
+            name = entry['PGC_NAME']
         if entry['DEC'] < -20.:
             continue
         print (10**entry['LOG_D25'])/10.
@@ -31,11 +36,10 @@ def main():
         print entry
         newentry=entry.replace(' ', '_')
         print newentry
-        #assert(False)
-            #os.system("python -u general.py '%s' --threads 4 --itune1 6 --itune2 6 --nocache 1>%s.log 2>%s_err.log" % (entry,newentry,newentry))
         try:
             print 'running tractor for %s' %entry
             general(entry,itune1=6,itune2=6,nocache=True)
+            halflight(newentry)
             os.system('cp flip-%s.pdf RC3_Output' % newentry)
             os.system('cp %s.png RC3_Output' % newentry)
             os.system('cp %s.pickle RC3_Output' % newentry)
@@ -44,8 +48,6 @@ def main():
             print sys.exc_info()[0]
             continue
             
-#some rc3 entries dont have a name in the 'NAME' data field. what to do with those? Also, the space in the name NGC 1234 is causing problems with the os.system commands. run this file and you will see what i am talking about. thats all that needs to be fixed and everything else should be good to go
-
 #3053 galaxies
 if __name__ == '__main__':
     main()

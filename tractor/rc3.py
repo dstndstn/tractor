@@ -38,5 +38,16 @@ def getName(name):
         altnames = data.field("ALT_NAME_1")
         mask = data.field("ALT_NAME_1") == name
         record = data[mask]
+    if len(record) ==0:
+        print "NONE"
+        altnames = data.field("ALT_NAME_2")
+        mask = data.field("ALT_NAME_2") == name
+        record = data[mask]
+    if len(record) ==0:
+        print "NONE"
+        altnames = data.field("PGC_NAME")
+        mask = data.field("PGC_NAME") == name
+        record = data[mask]
+
     rc3.close()
     return record

@@ -224,9 +224,6 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
             X,Y = np.meshgrid(np.arange(img.getWidth()), np.arange(img.getHeight()))
             R2 = (X - starx)**2 + (Y - stary)**2
             img.getStarMask()[R2 < starr**2] = 0
-            #star =  [(x,y) for x in range(img.getWidth()) for y in range(img.getHeight()) if (x-starx)**2+(y-stary)**2 <= starr**2]
-            #for (x,y) in star:
-            #    img.getStarMask()[y][x] = 0
 
     for timgs,sources in imsrcs:
         timg = timgs[0]
