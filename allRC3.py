@@ -1,3 +1,7 @@
+if __name__ == "__main__":
+    import matplotlib
+    matplotlib.use('Agg')
+
 import os
 import numpy as np
 import pylab as plt
@@ -39,10 +43,10 @@ def main():
         try:
             print 'running tractor for %s' %entry
             general(entry,itune1=6,itune2=6,nocache=True)
-            halflight(newentry)
             os.system('cp flip-%s.pdf RC3_Output' % newentry)
             os.system('cp %s.png RC3_Output' % newentry)
             os.system('cp %s.pickle RC3_Output' % newentry)
+            halflight(newentry)
 
         except AssertionError:
             print sys.exc_info()[0]

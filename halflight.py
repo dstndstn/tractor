@@ -20,7 +20,6 @@ from tractor import engine as en
 from astrometry.util.util import Tan
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
-from astrometry.util.file import unpickle_from_file,pickle_to_file
 
 def halflight(name,makePlots=False):
     CG = unpickle_from_file("RC3_Output/%s.pickle" %name)
@@ -72,6 +71,8 @@ def halflight(name,makePlots=False):
     r50s = []
     r90s = []
     concs = []
+    expr50 = CG.shapeExp.re * np.sqrt(CG.shapeExp.ab)
+    devr50 = CG.shapeDev.re * np.sqrt(CG.shapeDev.ab)
 
     for bandname,image in zip(bands,mimgs):
         plist = [np.sum(image[r2g < (r * r)]) for r in rlist_pix]
@@ -81,7 +82,7 @@ def halflight(name,makePlots=False):
         r50s.append(r50)
         r90s.append(r90)
         concs.append(conc)
-        if r50<min(CG.shapeDev.re,CG.shapeExp.re) or r50>maxradius:
+        if r50<min(devr50,expr50) or r50>max(devr50,expr50):
             print "R50 is not in between DeV and exp radii for %s" %name
         if 1./conc > .46 or 1./conc <.29:
             print "C=%.2f is a strange concentration for %s" % (conc,name)
@@ -95,11 +96,11 @@ def halflight(name,makePlots=False):
             plt.plot(rlist_arcsec, plist, 'k-')
             plt.axvline(r50, color='k', alpha=0.5)
             plt.axvline(r90, color='k', alpha=0.5)
-            plt.axvline(CG.shapeDev.re, color='r', alpha=0.5)
-            plt.axvline(CG.shapeExp.re, color='b', alpha=0.5)
+            plt.axvline(devr50, color='r', alpha=0.5)
+            plt.axvline(expr50, color='b', alpha=0.5)
             plt.text(1.02 * r90, 0.01, "$C = %.1f$" % (conc), ha='left')
             plt.xlim(0,2.*r90)
             plt.ylim(-0.1,1.1)
-            plt.savefig("radial-profile-%s.png" % bandname)
+            plt.savefig("radial-profile-%s-%s.png" % (name,bandname))
 
     pickle_to_file([CG,r50s,r90s,concs],'RC3_Output/%s-updated.pickle' %name)
