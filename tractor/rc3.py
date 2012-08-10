@@ -23,7 +23,7 @@ def getNGC(ngc):
 
 def getName(name):
 
-    rc3 = pyfits.open("rc3limited.fits")
+    rc3 = pyfits.open("newrc3limited.fits")
 
     data = rc3[1].data
     names = data.field("NAME")

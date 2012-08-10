@@ -13,7 +13,7 @@ from halflight import halflight
 
 #Work in progress...
 def main():
-    rc3 = pyfits.open('rc3limited.fits')
+    rc3 = pyfits.open('newrc3limited.fits')
     entries=[]
     for entry in rc3[1].data:
         if entry['NAME'] != '':
@@ -24,7 +24,7 @@ def main():
             name = entry['ALT_NAME_2']
         else:
             name = entry['PGC_NAME']
-        if entry['DEC'] < -20.:
+        if entry['DEC'] < 20.:
             continue
         print (10**entry['LOG_D25'])/10.
         fn = 'RC3_Output/%s.pickle' % (name.replace(' ', '_'))

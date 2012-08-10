@@ -104,3 +104,18 @@ def halflight(name,makePlots=False):
             plt.savefig("radial-profile-%s-%s.png" % (name,bandname))
 
     pickle_to_file([CG,r50s,r90s,concs],'RC3_Output/%s-updated.pickle' %name)
+
+
+def main():
+    import optparse
+    parser = optparse.OptionParser(usage='%prog [options] <name>')
+    opt,args = parser.parse_args()
+    if len(args) != 1:
+        parser.print_help()
+        sys.exit(-1)
+
+    name = args[0]
+    halflight(name)
+
+if __name__ == '__main__':
+    main()

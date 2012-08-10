@@ -121,8 +121,26 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     print entry
     ra = float(entry['RA'][0])
     dec = float(entry['DEC'][0])
-    radius = (10.**entry['LOG_D25'][0])/10.
-    general(entry,ra,dec,radius,radius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False)
+    log_ae = float(entry['LOG_AE'][0])
+    log_d25 = float(entry['LOG_D25'][0])
+    print 'LOG_AE is %s' % log_ae
+    print 'LOG_D25 is %s' % log_d25
+
+#    if log_ae != 0:
+        #fieldradius = 10.*(10.**log_ae)/10.
+        #remradius = 10.*(10.**log_ae)/10.
+    if log_d25 !=0:
+        #print 'No log_AE, using d25'
+        fieldradius = (10.**log_d25)/10.
+        remradius = (10.**log_d25)/10.
+    else:
+        print 'No d_25, using default values'
+        fieldradius = 3.
+        remradius = 2.
+    
+        
+    
+    general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False)
 
 def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     #Radius should be in arcminutes
@@ -134,6 +152,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     IRLS_scale = 25.
     dr8 = True
     noarcsinh = False
+    print name
 
     prefix = '%s' % (name.replace(' ', '_'))
     print 'Removal Radius', remradius
@@ -143,6 +162,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr8fields.fits")
     print rcfs
     assert(len(rcfs)>0)
+    assert(len(rcfs)<25)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
@@ -243,7 +263,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
                 tractor.removeSource(src)
 
     #saveAll('removed-'+prefix, tractor,**sa)
-    newShape = sg.GalaxyShape(30.,1.,0.)
+    newShape = sg.GalaxyShape((remradius*60.)/10.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
     print EG
@@ -361,7 +381,7 @@ def main():
     itune2 = opt.itune2
     ntune = opt.ntune
     nocache = opt.nocache
-    general(name,threads,itune1,itune2,ntune,nocache)
+    generalRC3(name,threads,itune1,itune2,ntune,nocache)
 
 
 
