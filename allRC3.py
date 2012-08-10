@@ -8,7 +8,7 @@ import pylab as plt
 import pyfits
 import sys
 
-from general import general
+from general import generalRC3
 from halflight import halflight
 
 #Work in progress...
@@ -35,6 +35,7 @@ def main():
             print 'run %s through tractor' %name
             entries.append('%s' %name)
     things=[str(x) for x in entries]
+    print len(things)
 
     for entry in things:
         print entry
@@ -42,7 +43,7 @@ def main():
         print newentry
         try:
             print 'running tractor for %s' %entry
-            general(entry,itune1=6,itune2=6,nocache=True)
+            generalRC3(entry,itune1=6,itune2=6,nocache=True)
             os.system('cp flip-%s.pdf RC3_Output' % newentry)
             os.system('cp %s.png RC3_Output' % newentry)
             os.system('cp %s.pickle RC3_Output' % newentry)

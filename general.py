@@ -116,35 +116,35 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 
-def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+    entry = getName(name)
+    print entry
+    ra = float(entry['RA'][0])
+    dec = float(entry['DEC'][0])
+    radius = (10.**entry['LOG_D25'][0])/10.
+    general(entry,ra,dec,radius,radius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False)
+
+def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+    #Radius should be in arcminutes
     if threads:
         mp = multiproc(nthreads=threads)
     else:
         mp = multiproc()
 
-    entry = getName(name)
-    print entry
-    ra = float(entry['RA'][0])
-    dec = float(entry['DEC'][0])
     IRLS_scale = 25.
-    radius = (10.**entry['LOG_D25'][0])/10.
     dr8 = True
     noarcsinh = False
 
     prefix = '%s' % (name.replace(' ', '_'))
-
-
-    print 'Radius', radius
+    print 'Removal Radius', remradius
+    print 'Field Radius', fieldradius
     print 'RA,Dec', ra, dec
 
-
-
-
-    rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(radius,13./2.),tablefn="dr8fields.fits")
+    rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr8fields.fits")
     print rcfs
     assert(len(rcfs)>0)
 
-    sras, sdecs, smags = tychoMatch(ra,dec,(radius*1.5)/60.)
+    sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
         print sra,sdec,smag
@@ -164,7 +164,7 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     bandname = 'r'
     flipBands = ['r']
 
-    imsrcs = mp.map(get_ims_and_srcs, [(rcf + (bands, ra, dec, radius*60./0.396, imkw, getim, getsrc))
+    imsrcs = mp.map(get_ims_and_srcs, [(rcf + (bands, ra, dec, fieldradius*60./0.396, imkw, getim, getsrc))
                                        for rcf in rcfs])
     timgs = []
     sources = []
@@ -179,7 +179,7 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, radius, name, prefix, timgs) #, rds)
+    plotarea(ra, dec, fieldradius, name, prefix, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
@@ -234,7 +234,7 @@ def general(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
 
         xt = xtr 
         yt = ytr
-        r = ((radius*60.))/.396 #radius in pixels
+        r = ((remradius*60.))/.396 #radius in pixels
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
