@@ -24,7 +24,7 @@ def main():
             name = entry['ALT_NAME_2']
         else:
             name = entry['PGC_NAME']
-        if entry['DEC'] < 20.:
+        if entry['DEC'] < -5.:
             continue
         print (10**entry['LOG_D25'])/10.
         fn = 'RC3_Output/%s.pickle' % (name.replace(' ', '_'))

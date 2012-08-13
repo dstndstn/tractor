@@ -580,8 +580,8 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	astrans = frame.getAsTrans()
 	wcs = SdssWcs(astrans)
-	#print 'Created SDSS Wcs:', wcs
-	#print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
+	print 'Created SDSS Wcs:', wcs
+	print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
 
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
