@@ -11,7 +11,6 @@ import sys
 from general import generalRC3
 from halflight import halflight
 
-#Work in progress...
 def main():
     rc3 = pyfits.open('newrc3limited.fits')
     entries=[]
@@ -36,6 +35,7 @@ def main():
             entries.append('%s' %name)
     things=[str(x) for x in entries]
     print len(things)
+    #things.reverse()
 
     for entry in things:
         print entry

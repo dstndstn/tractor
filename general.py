@@ -162,7 +162,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr8fields.fits")
     print rcfs
     assert(len(rcfs)>0)
-    assert(len(rcfs)<25)
+    assert(len(rcfs)<15)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
@@ -258,8 +258,8 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         for src in sources:
             xs,ys = wcs.positionToPixel(src.getPosition(),src)
             if (xs-xt)**2+(ys-yt)**2 <= r**2:
-                print "Removed:", src
-                print xs,ys
+                #print "Removed:", src
+                #print xs,ys
                 tractor.removeSource(src)
 
     #saveAll('removed-'+prefix, tractor,**sa)
@@ -272,15 +272,15 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
 
     saveAll('added-'+prefix,tractor,**sa)
 
-    print 'Tractor has', tractor.getParamNames()
+    #print 'Tractor has', tractor.getParamNames()
 
     for im in tractor.images:
         im.freezeAllParams()
         im.thawParam('sky')
     tractor.catalog.freezeAllBut(EG)
 
-    print 'Tractor has', tractor.getParamNames()
-    print 'values', tractor.getParams()
+    #print 'Tractor has', tractor.getParamNames()
+    #print 'values', tractor.getParams()
 
     for i in range(itune1):
         tractor.optimize()

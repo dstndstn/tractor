@@ -32,8 +32,6 @@ gra=a[good]
 gdec = b[good]
 grad = z[good]
 g = e[good]
-print len(g)
-
 newGood=np.array([True for x in g])
 
 
@@ -43,18 +41,14 @@ for entry in rc3[1].data:
     radius = ((10**entry['LOG_D25'])/10.)/2. #In arc-minutes
     radius /= 60. #In degrees
     m1,m2,d12 = match_radec(gra,gdec,entry['RA'],entry['DEC'],radius)
-    if len(m1) !=0:
-        print m1
     newGood[m1]=False
 
 gra=gra[newGood]
 g=g[newGood]
 gdec=gdec[newGood]
 grad = grad[newGood]
-print g
-print gra[0]
-print gdec[0]
-print len(g)
+for obj in g:
+    print obj
 
 
 #general("NSA_ID_%d" % g[0],gra[0],gdec[0],25./60.,itune1=6,itune2=6,nocache=True)
