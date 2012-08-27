@@ -1297,6 +1297,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 	for imi,im in enumerate(allimages):
 		print 'Fitting image', imi, 'of', len(allimages)
+		print im.name
 		tractor.setImages(Images(im))
 
 		if im.name.startswith('SDSS'):

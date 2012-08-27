@@ -267,8 +267,20 @@ def main():
 			for i in range(each[1][0]):
 				for src in tractor.getCatalog():
 					tractor.catalog.freezeAllBut(src)
+
+					if i < 6:
+						print 'Freezing position'
+						src.freezeParam('pos')
+
+					print 'Optimizing:'
+					for nm in tractor.getParamNames():
+						print nm
+
 					for step in range(each[1][1]):
 						tractor.optimize()
+
+					src.unfreezeParam('pos')
+
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
 				tractor.clearCache()

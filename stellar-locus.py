@@ -26,7 +26,12 @@ select
   and s.zwarning = 0
 '''
 
-T = fits_table('main-galaxies.fits')
+#T = fits_table('main-galaxies.fits')
+#igirange=((0.4,1.6), (15.5, 17.5))
+#zlo,zhi = 0.09, 0.11
+T = fits_table('z05_dstn.fit')
+igirange=((0.2,1.5), (15, 18))
+zlo,zhi = 0.04, 0.06
 
 flag_names = dict((v,k) for k,v in cas_flags.items())
 child = cas_flags['CHILD']
@@ -81,11 +86,12 @@ for nm,cut in [('all', np.arange(len(T))),
 	plt.savefig('riz-%s.png' % nm)
 
 	loghist((T.eg - T.ei)[cut], (T.ei)[cut],
-			range=((0.4,1.6), (15.5, 17.5)))
-	plt.ylim(17.5, 15.5)
+			range=igirange)
+	y = igirange[1]
+	plt.ylim(y[1], y[0])
 	plt.xlabel('g-i')
 	plt.ylabel('i')
-	plt.title('MAIN galaxy sample, z = [0.09, 0.11]')
+	plt.title('MAIN galaxy sample, z = [%.2f, %.2f]' % (zlo,zhi))
 	plt.savefig('igi-%s.png' % nm)
 
 
