@@ -245,6 +245,9 @@ class NamedParams(object):
 			if i is None:
 				continue
 			self.liquid[i] = False
+		if '*' in pnames:
+			self.freezeAllParams()
+
 	def thawParamsRecursive(self, *pnames):
 		for nm in pnames:
 			i = self.getNamedParamIndex(nm)
@@ -267,6 +270,23 @@ class NamedParams(object):
 	def freezeAllBut(self, *args):
 		self.freezeAllParams()
 		self.thawParams(*args)
+
+	def thawPathsTo(self, *pnames):
+		'''
+		This is a (non-recursive) basic implementation
+		'''
+		print 'NamedParams.thawPathsTo: start', self.getParamNames()
+		thawed = False
+		for nm in pnames:
+			i = self.getNamedParamIndex(nm)
+			if i is None:
+				continue
+			print 'NamedParams.thawPathsTo', pnames, '(', nm, ')', i
+			self.liquid[i] = True
+			thawed = True
+		print 'Now', self.getParamNames()
+		return thawed
+
 	def thawParam(self, paramname):
 		if _isint(paramname):
 			i = paramname
@@ -561,6 +581,21 @@ class MultiParams(BaseParams, NamedParams):
 				self.thawParam(name)
 		if '*' in pnames:
 			self.thawAllParams()
+
+	def thawPathsTo(self, *pnames):
+		thawed = False
+		for i,(name,sub) in enumerate(self._iterNamesAndVals()):
+			print 'MultiParams.thawPathsTo(', pnames, '), name', name, 'sub', sub
+			if hasattr(sub, 'thawPathsTo'):
+				if sub.thawPathsTo(*pnames):
+					print 'MultiParams.thawPaths: child', name, 'thawed'
+					self.thawParam(i)
+					print 'now:', sub.getParamNames()
+					thawed = True
+			if name in pnames:
+				self.thawParam(i)
+				thawed = True
+		return thawed
 
 	def getParamStateRecursive(self):
 		n = []

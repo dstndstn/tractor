@@ -1277,7 +1277,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 	sbands = ['u','g','r','i','z']
 	allbands = ['i2'] + sbands
 
-	# Set all bands = i2, and save those params.
+	# Set all bands = i2...
 	for src in brightcat:
 		for b in sbands:
 			br = src.getBrightness()
@@ -1287,11 +1287,11 @@ def stage01(tractor=None, mp=None, **kwargs):
 	tractor.freezeParam('images')
 	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
 
+	# ... and save those params.
 	print 'params0:'
 	for nm in tractor.getParamNames():
 		print '  ', nm
 	params0 = tractor.getParams()
-
 
 	allp = []
 
@@ -1649,7 +1649,69 @@ def stage01OLD(tractor=None, mp=None, step0=0, thaw_wcs=['crval1','crval2'],
 	return dict(tractor=tractor)
 
 
-def stage02(tractor=None, mp=None, **kwargs):
+def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
+
+	print 'Tractor sources:', len(tractor.getCatalog())
+	print 'Ibright:', Ibright
+	print 'Ibright len', len(Ibright)
+	#print 'allp:', allp
+	#print 'params0:', params0
+
+	bright = Catalog()
+	for i in Ibright:
+		bright.append(tractor.getCatalog()[i])
+	tractor.setCatalog(bright)
+
+	(imi, band, i2fit) = allp[0]
+
+	print 'imi', imi
+	print 'band', band
+	print 'i2fit', i2fit
+	print len(i2fit)
+	
+	assert(band == 'i2')
+	assert(len(i2fit) == tractor.getCatalog().numberOfParams())
+
+	# ugriz + i2
+	assert(len(params0) == 6 * len(i2fit))
+	
+	i2cat = params0[0::6]
+
+	cat = tractor.getCatalog()
+	cat.freezeParamsRecursive('*')
+
+	#print 'Freeze state:'
+	#print_frozen(cat)
+
+	#print 'All frozen:'
+	#for nm in cat.getParamNames():
+	#	print '  ', nm
+	cat.thawPathsTo('i2')
+
+	print 'Thawed:'
+	for nm in cat.getParamNames():
+		print '  ', nm
+
+	cat.setParams(i2cat)
+	catsum = np.array([src.getBrightness().i2 for src in cat])
+
+	cat.setParams(i2fit)
+	fitsum = np.array([src.getBrightness().i2 for src in cat])
+
+	star = np.array([isinstance(src, PointSource) for src in cat])
+
+	plt.clf()
+	p1 = plt.plot((fitsum - catsum)[star], catsum[star], 'b.')
+	p2 = plt.plot((fitsum - catsum)[np.logical_not(star)], catsum[np.logical_not(star)], 'g.')
+	plt.xlabel('Fit i2 - Catalog i2 (mag)')
+	plt.ylabel('Catalog i2 (mag)')
+	plt.ylim(21, 16)
+	plt.xlim(-1, 1)
+	plt.legend((p1[0],p2[0]), ('Stars', 'Galaxies'))
+	plt.savefig('i2.png')
+
+	return dict(tractor=tractor)
+
 	# set dummy "invvar"s
 	for im in tractor.getImages():
 		im.invvar = None

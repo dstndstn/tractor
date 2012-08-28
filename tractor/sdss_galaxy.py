@@ -47,16 +47,16 @@ class GalaxyShape(ParamList):
 		return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 	def __str__(self):
 		return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
-	def copy(self):
-		return GalaxyShape(*self.vals)
-	def getParamNames(self):
-		return ['re', 'ab', 'phi']
+	#def copy(self):
+	#	return GalaxyShape(*self.vals)
+	#def getParamNames(self):
+	#	return ['re', 'ab', 'phi']
 
 	def getStepSizes(self, *args, **kwargs):
 		abstep = 0.01
 		if self.ab >= (1 - abstep):
 			abstep = -abstep
-		return [ 1., abstep, 1. ]
+		return list(self._getLiquidArray([ 1., abstep, 1. ]))
 
 	def setre(self, re):
 		if re < (1./30.):
