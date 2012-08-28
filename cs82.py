@@ -2799,12 +2799,81 @@ def kicktires():
 	plt.savefig('gal-aspect.png')
 
 
+
+def checkstarmags():
+	T = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+	T.ra  = T.alpha_j2000
+	T.dec = T.delta_j2000
+
+	print 'RA', T.ra.min(), T.ra.max()
+	print 'Dec', T.dec.min(), T.dec.max()
+
+	'''select probpsf, psfmag_i, devmag_i, expmag_i, cmodelmag_i, fracDev_i, ra, dec into mydb.MyTable from photoprimary
+	where
+	  ra between 333.77 and 334.77
+	    and dec between -0.14 and 0.91'''
+	S = fits_table('MyTable_dstn.fit')
+
+	from astrometry.libkd.spherematch import *
+	from astrometry.util.plotutils import *
+
+	I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, 1./3600.)
+
+	#plt.clf()
+	#plothist(T.ra[I] - S.ra[J], T.dec[I] - S.dec[J])
+	#plt.savefig('draddec.png')
+
+	TT = T[I]
+	SS = S[J]
+
+	print len(TT), 'matches'
+
+	plt.clf()
+	#plothist(TT.mag_psf, SS.psfmag_i)
+	plt.plot(TT.mag_psf, SS.psfmag_i, 'r.')
+
+	K = (SS.probpsf == 1)
+	plt.plot(TT.mag_psf[K], SS.psfmag_i[K], 'b.')
+
+	plt.plot([17,24],[17,24], 'k-')
+	plt.axis([17, 24, 17, 24])
+	plt.xlabel('CS82 mag_psf')
+	plt.ylabel('SDSS psfmag_i')
+	plt.savefig('psfmag.png')
+
+
+	plt.clf()
+	plt.plot(SS.psfmag_i, TT.mag_psf - SS.psfmag_i, 'r.')
+
+	K = (SS.probpsf == 1)
+	plt.plot(SS.psfmag_i[K], (TT.mag_psf - SS.psfmag_i)[K], 'b.')
+
+	plt.axhline(0, color='k')
+	plt.axis([17, 24, -1, 1])
+	plt.xlabel('SDSS psfmag_i')
+	plt.ylabel('CS82 mag_psf - SDSS psfmag_i')
+	plt.savefig('psfdmag.png')
+
+	#TT.mag_total = -2.5 * np.log10(10.**(0.4 * -TT.mag_spheroid) + 10.**(0.4 * -TT.mag_disk))
+
+	plt.clf()
+	plt.plot(TT.mag_model, SS.cmodelmag_i, 'r.')
+	K = (SS.probpsf == 0)
+	plt.plot(TT.mag_model[K], SS.cmodelmag_i[K], 'g.')
+	plt.plot([17,24],[17,24], 'k-')
+	plt.axis([17, 24, 17, 24])
+	plt.xlabel('CS82 mag_model')
+	plt.ylabel('SDSS cmodelmag_i')
+	plt.savefig('modmag.png')
+	
+
 	
 def main():
 	#getdata()
-
 	#kicktires()
-	#sys.exit(0)
+	checkstarmags()
+	sys.exit(0)
+
 
 	import optparse
 	parser = optparse.OptionParser()
