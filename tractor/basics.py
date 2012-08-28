@@ -525,6 +525,7 @@ class PointSource(MultiParams):
 	def getModelPatch(self, img):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		patch = img.getPsf().getPointSourcePatch(px, py)
+		print 'PointSource: PSF patch has sum', patch.getImage().sum()
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return patch * counts
 

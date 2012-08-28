@@ -448,7 +448,6 @@ class HoggGalaxy(Galaxy):
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-
 		#
 		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
 					 img.getPsf().hashkey(), self.shape.hashkey()))
@@ -506,12 +505,14 @@ class HoggGalaxy(Galaxy):
 
 		#print 'psf sum of ampls:', np.sum(psfmix.amp)
 		#print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
-		#print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
+		print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
 		#print 'psf-conv img sum:', psfconvolvedimg.sum()
 		# now return a calibrated patch
 		#print 'x0,y0', x0,y0
 		#print 'patch shape', psfconvolvedimg.shape
 		#print 'img w,h', img.getWidth(), img.getHeight()
+
+		print 'psf-convolved img sum:', psfconvolvedimg.sum()
 
 		if False:
 			plt.clf()

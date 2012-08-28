@@ -275,16 +275,13 @@ class NamedParams(object):
 		'''
 		This is a (non-recursive) basic implementation
 		'''
-		print 'NamedParams.thawPathsTo: start', self.getParamNames()
 		thawed = False
 		for nm in pnames:
 			i = self.getNamedParamIndex(nm)
 			if i is None:
 				continue
-			print 'NamedParams.thawPathsTo', pnames, '(', nm, ')', i
 			self.liquid[i] = True
 			thawed = True
-		print 'Now', self.getParamNames()
 		return thawed
 
 	def thawParam(self, paramname):
@@ -585,12 +582,9 @@ class MultiParams(BaseParams, NamedParams):
 	def thawPathsTo(self, *pnames):
 		thawed = False
 		for i,(name,sub) in enumerate(self._iterNamesAndVals()):
-			print 'MultiParams.thawPathsTo(', pnames, '), name', name, 'sub', sub
 			if hasattr(sub, 'thawPathsTo'):
 				if sub.thawPathsTo(*pnames):
-					print 'MultiParams.thawPaths: child', name, 'thawed'
 					self.thawParam(i)
-					print 'now:', sub.getParamNames()
 					thawed = True
 			if name in pnames:
 				self.thawParam(i)

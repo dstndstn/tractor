@@ -1680,6 +1680,10 @@ def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
 	cat = tractor.getCatalog()
 	cat.freezeParamsRecursive('*')
 
+	for src in cat:
+		src.getModelPatch(tractor.getImage(0))
+
+
 	#print 'Freeze state:'
 	#print_frozen(cat)
 
@@ -1688,9 +1692,9 @@ def stage02(tractor=None, mp=None, Ibright=[], allp=[], params0=None, **kwargs):
 	#	print '  ', nm
 	cat.thawPathsTo('i2')
 
-	print 'Thawed:'
-	for nm in cat.getParamNames():
-		print '  ', nm
+	#print 'Thawed:'
+	#for nm in cat.getParamNames():
+	#	print '  ', nm
 
 	cat.setParams(i2cat)
 	catsum = np.array([src.getBrightness().i2 for src in cat])
