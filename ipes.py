@@ -9,6 +9,9 @@ Things to show / tests to run include:
 -weird galaxy parameter distributions go away.  Don't even need ipes
  for this, just need a swath of imaging.
 
+ -> galstats.py
+ to select a galaxy sample
+
 -our error estimates are better.  Do this by cross-matching objects in
  the ipes and comparing their measurements.  Compare the variance of
  the two SDSS measurements to the SDSS error estimates.  *This much is
@@ -58,101 +61,195 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
+import sys
+import logging
 
 from astrometry.util.fits import *
-
-
-T = fits_table('dr9fields.fits')
-
-print 'cd11', T.cd11.min(), T.cd11.max()
-print 'cd12', T.cd12.min(), T.cd12.max()
-print 'cd21', T.cd21.min(), T.cd21.max()
-print 'cd22', T.cd22.min(), T.cd22.max()
-
-def get_rrdd(T):
-	dx,dy = 2048./2, 1489./2
-	RR,DD = [],[]
-	for sx,sy in [(-1,-1), (1,-1), (1,1), (-1,1)]:
-		r,d = T.ra + sx*dx*T.cd11 + sy*dy*T.cd12, T.dec + sx*dx*T.cd21 + sy*dy*T.cd22
-		RR.append(r)
-		DD.append(d)
-	RR.append(RR[0])
-	DD.append(DD[0])
-	RR = np.vstack(RR)
-	DD = np.vstack(DD)
-	print RR.shape
-	return RR,DD
-
 from astrometry.blind.plotstuff import *
 from astrometry.util.c import *
 
-if True:
-	RR,DD = get_rrdd(T)
+from astrometry.sdss import DR9
 
-	W,H = 1000,500
-	p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H))
-	p.wcs = anwcs_create_allsky_hammer_aitoff(0., 0., W, H)
-	p.color = 'verydarkblue'
-	p.plot('fill')
-	p.color = 'white'
-	p.alpha = 0.25
-	p.apply_settings()
-	for rr,dd in zip(RR.T, DD.T):
-		if not (np.all((rr - 180) > 0) or np.all((rr - 180) < 0)):
-			print 'Skipping boundary-spanning', rr,dd
-			continue
-		p.move_to_radec(rr[0], dd[0])
-		for r,d in zip(rr[1:],dd[1:]):
-			p.line_to_radec(r,d)
-		p.fill()
-	p.color = 'gray'
-	p.plot_grid(30, 30, 30, 30)
-	p.write('rd1.png')
-
-#if True:
-for r,d,w,g,fn in [#(230,30,120,10,'rd2.png'),
-	(255,15,30,5,'rd3.png'),
-	(250,20,10,1,'rd4.png'),
-	(250,18,3,1, 'rd5.png'),
-	(250,17.8,1,0.5, 'rd6.png')]:
-
-	W,H = 1000,1000
-	p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H),
-				  rdw=(r,d,w))
-	rmn,rmx,dmn,dmx = anwcs_get_radec_bounds(p.wcs, 100)
-	print 'Bounds', rmn,rmx,dmn,dmx
-
-	T.cut((T.ramin < rmx) * (T.ramax > rmn) *
-		  (T.decmin < dmx) * (T.decmax > dmn))
-	RR,DD = get_rrdd(T)
-
-	p.color = 'verydarkblue'
-	p.plot('fill')
-	p.color = 'white'
-	p.alpha = 0.25
-	#p.op = CAIRO_OPERATOR_ADD
-	p.apply_settings()
-	for rr,dd in zip(RR.T, DD.T):
-		if not (np.all((rr - 180) > 0) or np.all((rr - 180) < 0)):
-			#print 'Skipping boundary-spanning', rr,dd
-			continue
-		p.move_to_radec(rr[0], dd[0])
-		for r,d in zip(rr[1:],dd[1:]):
-			p.line_to_radec(r,d)
-		p.fill_preserve()
-		p.stroke()
-	p.color = 'gray'
-	p.plot_grid(g,g,g,g)
-	p.write(fn)
+from tractor.sdss import *
+from tractor import *
 
 
+def main():
 
-# plt.clf()
-# plt.plot(RR, DD, 'r-')
-# plt.xlabel('RA (deg)')
-# plt.xlim(360, 0)
-# plt.ylabel('Dec (deg)')
-# plt.ylim(-30, 90)
-# plt.savefig('rd.pdf')
+	#lvl = logging.INFO
+	lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+	#plot_ipes()
+	refit_galaxies()
+
+def refit_galaxies():
+	T = fits_table('exp4_dstn.fit')
+
+	sdss = DR9(basedir='paper0-data-dr9')
+
+	print 'basedir', sdss.basedir
+	print 'dasurl', sdss.dasurl
+
+	bandname = 'i'
+	# ROI radius in pixels
+	S = 100
+
+	rlo,rhi = 4.1, 4.4
+	Ti = T[(T.exprad_i > rlo) * (T.exprad_i < rhi)]
+	Ti = Ti[Ti.expmag_i < 19]
+	I = np.argsort(Ti.expmag_i)
+	Ti = Ti[I]
+
+	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
+
+
+	for i in range(len(Ti)):
+		ti = Ti[i]
+
+		print 'psField:', sdss.retrieve('psField', ti.run, ti.camcol, ti.field,
+										bandname)
+
+		im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
+										roiradecsize=(ti.ra, ti.dec, S),
+										sdss=sdss)
+
+		roi = info['roi']
+
+		cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, bandname,
+									  sdss=sdss, roi=roi, bands=[bandname])
+
+		tractor = Tractor(Images(im), cat)
+		print 'Tractor', tractor
+
+		ima = dict(interpolation='nearest', origin='lower')
+		zr = im.zr
+		ima.update(vmin=zr[0], vmax=zr[1])
+		ima.update(extent=roi)
+
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+
+		R,C = 2,3
+		plt.clf()
+		plt.suptitle(im.name)
+		plt.subplot(R,C,1)
+
+		plt.imshow(im.getImage(), **ima)
+		plt.gray()
+
+		plt.subplot(R,C,2)
+
+		plt.imshow(tractor.getModelImage(0), **ima)
+		plt.gray()
+
+		plt.subplot(R,C,3)
+
+		plt.imshow(tractor.getChiImage(0), **imchi)
+		plt.gray()
+
+		tractor.freezeParam('images')
+		while True:
+			dlnp,X,alpha = tractor.optimize(damp=1e-3)
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			if dlnp < 1:
+				break
+
+		plt.subplot(R,C,5)
+
+		plt.imshow(tractor.getModelImage(0), **ima)
+		plt.gray()
+
+		plt.subplot(R,C,6)
+
+		plt.imshow(tractor.getChiImage(0), **imchi)
+		plt.gray()
+
+		plt.savefig('trgal-%06i.png' % i)
+
+
+
+
+def plot_ipes():
+	T = fits_table('dr9fields.fits')
+
+	def get_rrdd(T):
+		dx,dy = 2048./2, 1489./2
+		RR,DD = [],[]
+		for sx,sy in [(-1,-1), (1,-1), (1,1), (-1,1)]:
+			r = T.ra  + sx*dx*T.cd11 + sy*dy*T.cd12
+			d = T.dec + sx*dx*T.cd21 + sy*dy*T.cd22
+			RR.append(r)
+			DD.append(d)
+		RR.append(RR[0])
+		DD.append(DD[0])
+		RR = np.vstack(RR)
+		DD = np.vstack(DD)
+		#print RR.shape
+		return RR,DD
+
+	
+	if True:
+		RR,DD = get_rrdd(T)
+	
+		W,H = 1000,500
+		p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H))
+		p.wcs = anwcs_create_allsky_hammer_aitoff(0., 0., W, H)
+		p.color = 'verydarkblue'
+		p.plot('fill')
+		p.color = 'white'
+		p.alpha = 0.25
+		p.apply_settings()
+		for rr,dd in zip(RR.T, DD.T):
+			if not (np.all((rr - 180) > 0) or np.all((rr - 180) < 0)):
+				print 'Skipping boundary-spanning', rr,dd
+				continue
+			p.move_to_radec(rr[0], dd[0])
+			for r,d in zip(rr[1:],dd[1:]):
+				p.line_to_radec(r,d)
+			p.fill()
+		p.color = 'gray'
+		p.plot_grid(30, 30, 30, 30)
+		p.write('rd1.png')
+	
+	#if True:
+	for r,d,w,g,fn in [#(230,30,120,10,'rd2.png'),
+		(255,15,30,5,'rd3.png'),
+		(250,20,10,1,'rd4.png'),
+		(250,18,3,1, 'rd5.png'),
+		(250,17.8,1,0.5, 'rd6.png')]:
+	
+		W,H = 1000,1000
+		p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H),
+					  rdw=(r,d,w))
+		rmn,rmx,dmn,dmx = anwcs_get_radec_bounds(p.wcs, 100)
+		print 'Bounds', rmn,rmx,dmn,dmx
+	
+		T.cut((T.ramin < rmx) * (T.ramax > rmn) *
+			  (T.decmin < dmx) * (T.decmax > dmn))
+		RR,DD = get_rrdd(T)
+	
+		p.color = 'verydarkblue'
+		p.plot('fill')
+		p.color = 'white'
+		p.alpha = 0.25
+		#p.op = CAIRO_OPERATOR_ADD
+		p.apply_settings()
+		for rr,dd in zip(RR.T, DD.T):
+			if not (np.all((rr - 180) > 0) or np.all((rr - 180) < 0)):
+				#print 'Skipping boundary-spanning', rr,dd
+				continue
+			p.move_to_radec(rr[0], dd[0])
+			for r,d in zip(rr[1:],dd[1:]):
+				p.line_to_radec(r,d)
+			p.fill_preserve()
+			p.stroke()
+		p.color = 'gray'
+		p.plot_grid(g,g,g,g)
+		p.write(fn)
+	
    
+if __name__ == '__main__':
+	main()
+	

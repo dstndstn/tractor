@@ -517,11 +517,128 @@ def main():
 
 	runstage(opt.stage, opt.force)#, opt.threads)
 
+
+def big():
+	T = fits_table('exp1_dstn.fit')
+
+	plt.clf()
+	#plt.hist(np.log10(T.exprad_i), 100)
+	plt.hist(T.exprad_i, 100, range=(1, 3))
+	plt.savefig('erad1.png')
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(1.7, 1.8))
+	plt.savefig('erad2.png')
+
+	Ti = T[((T.exprad_i > 1.7) * (T.exprad_i < 1.8))]
+	print len(Ti), 'in cut on exprad_i'
+	print 'Runs:', np.unique(Ti.run)
+	for r,d in zip(Ti.ra, Ti.dec):
+		print r,d
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(2.1, 2.3))
+	plt.savefig('erad3.png')
+
+	Ti = T[((T.exprad_i > 2.1) * (T.exprad_i < 2.3))]
+	print len(Ti), 'in cut on exprad_i'
+	print 'Runs:', np.unique(Ti.run)
+	for r,d in zip(Ti.ra, Ti.dec):
+		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+
+	Ti = T[T.exprad_i > 3.]
+	plt.clf()
+	plt.hist(Ti.exprad_i, 100, range=(3., 5.))
+	plt.savefig('erad4.png')
+
+	T = fits_table('exp3_dstn.fit')
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(3., 5.))
+	plt.savefig('erad5.png')
+
+	Ti = T[(T.exprad_i > 3.2) * (T.exprad_i < 3.5)]
+
+	print len(Ti), 'in cut on exprad_i'
+	print 'Runs:', np.unique(Ti.run)
+	I = np.argsort(-Ti.expmag_i)
+	Tj = Ti[I]
+	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
+		print 'mag', mag
+		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+
+
+	Ti = T[(T.exprad_i > 4.1) * (T.exprad_i < 4.4)]
+
+	print len(Ti), 'in cut on exprad_i'
+	print 'Runs:', np.unique(Ti.run)
+	I = np.argsort(-Ti.expmag_i)
+	Tj = Ti[I]
+	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
+		print 'mag', mag
+		print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.1&width=512&height=512&opt=&query=' % (r,d)
+
+
+
+	T = fits_table('exp4_dstn.fit')
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(3., 5.))
+	plt.savefig('erad6.png')
+
+	rlo,rhi = 4.1, 4.4
+	Ti = T[(T.exprad_i > rlo) * (T.exprad_i < rhi)]
+
+	plt.clf()
+	plt.hist(T.exprad_i, 100, range=(rlo, rhi))
+	plt.xlabel('exprad_i (arcsec)')
+	plt.ylabel('Number of galaxies')
+	plt.title('exp galaxies')
+	plt.xlim(rlo, rhi)
+	plt.savefig('erad7.png')
+
+	Ti = Ti[Ti.expmag_i < 19]
+	print 'Runs:', np.unique(Ti.run)
+	I = np.argsort(-Ti.expmag_i)
+	Tj = Ti[I]
+	urls = []
+	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.expmag_i):
+		print '  mag', mag,
+		url = 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.198&width=128&height=128&opt=&query=' % (r,d)
+		print '  ', url
+		urls.append(url)
+
+	html = '<html><body>' + '\n'.join(['<img src="%s" />' % url for url in urls]) + '</body></html>'
+	write_file(html, '/home/dstn/public_html/temp/gals.html')
+	
+	plt.clf()
+	plt.plot(Ti.expab_i, Ti.expphi_i, 'r.')
+	plt.xlabel('ab')
+	plt.ylabel('phi')
+	plt.savefig('erad8.png')
+
+	plt.clf()
+	plt.hist(Ti.expab_i, 100)
+	plt.xlabel('ab')
+	plt.savefig('erad9.png')
+
+	plt.clf()
+	plt.plot(Ti.expmag_i, Ti.expab_i, 'r.')
+	plt.xlabel('mag')
+	plt.ylabel('ab')
+	plt.savefig('erad10.png')
+	
+
+
+
 if __name__ == '__main__':
 	#plots1()
 	#plots2(0.4, 0.55, fn='exp3818i_dr7.fits', maxmag=20.5)
 	#mrb_plots()
-	main()
+	#main()
+
+	big()
+
 	sys.exit(0)
 
 

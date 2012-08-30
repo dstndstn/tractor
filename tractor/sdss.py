@@ -567,6 +567,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		fn = sdss.retrieve(ft, run, camcol, field, bandname)
 		#print 'got', fn
 	fn = sdss.retrieve('frame', run, camcol, field, bandname)
+	#print 'got', fn
 
 	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
 	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
@@ -730,6 +731,21 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	return timg,info
 
 
+def get_tractor_image_dr9(*args, **kwargs):
+	sdss = kwargs.get('sdss', None)
+	if sdss is None:
+		curl = kwargs.pop('curl', False)
+		kwargs['sdss'] = DR9(curl=curl)
+	#print 'Calling get_tractor_image_dr8 with sdss=', sdss
+	return get_tractor_image_dr8(*args, **kwargs)
+
+def get_tractor_sources_dr9(*args, **kwargs):
+	sdss = kwargs.get('sdss', None)
+	if sdss is None:
+		curl = kwargs.pop('curl', False)
+		kwargs['sdss'] = DR9(curl=curl)
+	return get_tractor_sources_dr8(*args, **kwargs)
+
 
 class SdssNanomaggiesPhotoCal(BaseParams):
 	def __init__(self, bandname):
@@ -745,6 +761,7 @@ class SdssNanomaggiesPhotoCal(BaseParams):
 		# MAGIC
 		if mag > 50.:
 			return 0.
+		#print 'mag', mag
 		nmgy = 10. ** ((mag - 22.5) / -2.5)
 		nmgy2 = np.exp(mag * -0.9210340371976184 + 20.723265836946414)
 
