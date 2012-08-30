@@ -370,6 +370,9 @@ class ParamList(BaseParams, NamedParams):
 		self.vals = list(args)
 		super(ParamList,self).__init__()
 
+	def copy(self):
+		return self.__class__(*self.getParams())
+
 	def getFormatString(self, i):
 		return '%g'
 
@@ -491,6 +494,8 @@ class MultiParams(BaseParams, NamedParams):
 		return len(self.subs)
 	def __getitem__(self, key):
 		return self.subs.__getitem__(key)
+	def __setitem__(self, key, val):
+		return self.subs.__setitem__(key, val)
 	def __iter__(self):
 		return self.subs.__iter__()
 

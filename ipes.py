@@ -76,8 +76,8 @@ from tractor import *
 
 def main():
 
-	#lvl = logging.INFO
-	lvl = logging.DEBUG
+	lvl = logging.INFO
+	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	#plot_ipes()
@@ -121,6 +121,13 @@ def refit_galaxies():
 
 		tractor = Tractor(Images(im), cat)
 		print 'Tractor', tractor
+
+		for src in tractor.catalog:
+			if isinstance(src, DevGalaxy):
+				print 'Gal', src
+				s1 = src.shape.copy()
+				print 'Shape', s1
+
 
 		ima = dict(interpolation='nearest', origin='lower')
 		zr = im.zr
@@ -176,6 +183,124 @@ def refit_galaxies():
 		p1 = tractor.getParams()
 		mod1 = tractor.getModelImage(0)
 		chi1 = tractor.getChiImage(0)
+		lnp1 = tractor.getLogProb()
+
+		im = tractor.getImage(0)
+		wcs = im.getWcs()
+
+		# Find the galaxy in question and see if we can make any model-switching
+		# changes to it.
+		dd = 1e6
+		ii = None
+		xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
+		for i,src in enumerate(tractor.catalog):
+			pos = src.getPosition()
+			x,y = wcs.positionToPixel(pos)
+			d = np.hypot(x-xc, y-yc)
+			if d < dd:
+				ii = i
+				dd = d
+		assert(ii is not None)
+
+		print 'Closest to image center:', tractor.catalog[ii]
+
+		gal = tractor.catalog[ii]
+
+		tractor.catalog.freezeAllBut(ii)
+
+		print 'Catalog length (with all but one frozen):', len(tractor.catalog)
+
+		print 'Galaxy', gal
+
+		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
+			print 'Single-component.  Try Composite...'
+			m = gal.brightness
+			# Give the new component 1% of the flux...
+			m1 = m + 0.01
+			m2 = m + 5.
+			print 'Mag 1', m1
+			print 'Mag 2', m2
+
+			s1 = gal.shape.copy()
+			s2 = gal.shape.copy()
+			print 'Galaxy shape 1', s1
+			print 'Galaxy shape 2', s2
+
+			if isinstance(gal, DevGalaxy):
+				comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
+									   m1, gal.shape.copy())
+			else:
+				comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
+									   m2, gal.shape.copy())
+
+			tractor.catalog[ii] = comp
+
+			print 'Trying composite', comp
+
+			lnp2 = tractor.getLogProb()
+			print 'Initial dlnp:', lnp2 - lnp1
+
+			while True:
+				dlnp,X,alpha = tractor.optimize(damp=1e-3)
+				print 'dlnp', dlnp
+				print 'alpha', alpha
+				if dlnp < 1:
+					break
+			
+			lnp2 = tractor.getLogProb()
+			print 'Final dlnp:', lnp2 - lnp1
+
+			print 'Reverting'
+			tractor.catalog[ii] = gal
+
+
+		elif isinstance(gal, CompositeGalaxy):
+			print 'Composite.  Flux ratio:'
+			photocal = im.getPhotoCal()
+			ce = photocal.brightnessToCounts(gal.brightnessExp)
+			cd = photocal.brightnessToCounts(gal.brightnessDev)
+			print ce / (ce + cd), 'exp'
+
+			frac = ce / (ce + cd)
+
+			if frac < 0.1:
+				print 'Trying pure Dev'
+				newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
+			elif frac > 0.9:
+				print 'Trying pure Exp'
+				newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
+			else:
+				newgal = None
+			if newgal is not None:
+				print newgal
+				tractor.catalog[ii] = newgal
+				print tractor.catalog[ii]
+				lnp2 = tractor.getLogProb()
+				print 'Initial dlnp:', lnp2 - lnp1
+
+				while True:
+					dlnp,X,alpha = tractor.optimize(damp=1e-3)
+					print 'dlnp', dlnp
+					print 'alpha', alpha
+					if dlnp < 1:
+						break
+			
+				lnp2 = tractor.getLogProb()
+				print 'Final dlnp:', lnp2 - lnp1
+
+			print 'Reverting'
+			tractor.catalog[ii] = gal
+
+		else:
+			print 'Hmmm?  Unknown source type', gal
+
+		
+
+
+		#p1 = tractor.getParams()
+		#mod1 = tractor.getModelImage(0)
+		#chi1 = tractor.getChiImage(0)
+		#lnp1 = tractor.getLogProb()
 
 		R,C = 2,3
 		plt.clf()
@@ -190,7 +315,6 @@ def refit_galaxies():
 		plt.imshow(mod0, **ima)
 		plt.gray()
 
-		im = tractor.getImage(0)
 		tractor.setParams(p0)
 		plot_ellipses(im, tractor.catalog)
 		tractor.setParams(p1)
@@ -233,12 +357,12 @@ def plot_ellipses(im, cat):
 			plt.plot(x, y, 'g+')
 			continue
 		elif isinstance(src, ExpGalaxy):
-			gals.append((True, src.shape))
+			gals.append((True, src.shape, 'r'))
 		elif isinstance(src, DevGalaxy):
-			gals.append((False, src.shape))
+			gals.append((False, src.shape, 'b'))
 		elif isinstance(src, CompositeGalaxy):
-			gals.append((True,  src.shapeExp))
-			gals.append((False, src.shapeDev))
+			gals.append((True,  src.shapeExp, 'm'))
+			gals.append((False, src.shapeDev, 'c'))
 		else:
 			print 'Unknown source type:', src
 			continue
@@ -247,15 +371,15 @@ def plot_ellipses(im, cat):
 		ux,uy = np.cos(theta), np.sin(theta)
 		u = np.vstack((ux,uy)).T
 
-		for isexp,shape in gals:
+		for isexp,shape,c in gals:
 			T = np.linalg.inv(shape.getTensor(cd))
 			#print 'T shape', T.shape
 			#print 'u shape', u.shape
 			dx,dy = np.dot(T, u.T)
-			if isexp:
-				c = 'm'
-			else:
-				c = 'c'
+			#if isexp:
+			#	c = 'm'
+			#else:
+			#	c = 'c'
 			#print 'x,y', x, y
 			#print 'dx range', dx.min(), dx.max()
 			#print 'dy range', dy.min(), dy.max()

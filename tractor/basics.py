@@ -49,6 +49,15 @@ class Mags(ParamList):
 		'''
 		return getattr(self, bandname)
 	def __add__(self, other):
+
+		# mags + 0.1
+		if np.isscalar(other):
+			kwargs = {}
+			for band in self.order:
+				m1 = self.getMag(band)
+				kwargs[band] = m1 + other
+			return Mags(order=self.order, **kwargs)
+
 		# ASSUME some things about calibration here...
 		kwargs = {}
 		for band in self.order:
