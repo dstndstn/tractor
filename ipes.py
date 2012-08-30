@@ -99,41 +99,38 @@ def refit_galaxies():
 	Ti = T[(T.exprad_i > rlo) * (T.exprad_i < rhi)]
 	Ti = Ti[Ti.expmag_i < 19]
 	I = np.argsort(Ti.expmag_i)
+
+	###
+	I = I[:4]
+
 	Ti = Ti[I]
 
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
+	for prefix in ['my_', 'init_']:
+		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i', 'ra', 'dec']:
+			Ti.set(prefix + c, np.zeros_like(Ti.get(c)))
+		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
+			Ti.set(prefix + c, np.zeros_like(Ti.get(c.replace('dev','exp'))))
+		Ti.set(prefix + 'type', np.zeros(len(Ti), str))
 
 	for gali in range(len(Ti)):
 		ti = Ti[gali]
 
-		print 'psField:', sdss.retrieve('psField', ti.run, ti.camcol, ti.field,
-										bandname)
-
 		im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
 										roiradecsize=(ti.ra, ti.dec, S),
 										sdss=sdss)
-
 		roi = info['roi']
-
 		cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, bandname,
 									  sdss=sdss, roi=roi, bands=[bandname])
 
 		tractor = Tractor(Images(im), cat)
 		print 'Tractor', tractor
 
-		for src in tractor.catalog:
-			if isinstance(src, DevGalaxy):
-				print 'Gal', src
-				s1 = src.shape.copy()
-				print 'Shape', s1
-
-
 		ima = dict(interpolation='nearest', origin='lower')
 		zr = im.zr
 		ima.update(vmin=zr[0], vmax=zr[1])
 		ima.update(extent=roi)
-
 		imchi = ima.copy()
 		imchi.update(vmin=-5, vmax=5)
 
@@ -142,6 +139,28 @@ def refit_galaxies():
 
 		tractor.freezeParam('images')
 		p0 = tractor.getParams()
+
+
+		# Find the galaxy in question
+		im = tractor.getImage(0)
+		wcs = im.getWcs()
+		dd = 1e6
+		ii = None
+		xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
+		for i,src in enumerate(tractor.catalog):
+			pos = src.getPosition()
+			x,y = wcs.positionToPixel(pos)
+			d = np.hypot(x-xc, y-yc)
+			if d < dd:
+				ii = i
+				dd = d
+		assert(ii is not None)
+		print 'Closest to image center:', tractor.catalog[ii]
+		gal = tractor.catalog[ii]
+
+		gal0 = gal.copy()
+
+		set_table_from_galaxy(ti, gal0, 'init_')
 
 		while True:
 			dlnp,X,alpha = tractor.optimize(damp=1e-3)
@@ -178,103 +197,59 @@ def refit_galaxies():
 			if dlnp < 1:
 				break
 
+		print 'Fitting the key galaxy:'
+		tractor.catalog.freezeAllBut(ii)
+		while True:
+			dlnp,X,alpha = tractor.optimize(damp=1e-3)
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			if dlnp < 1:
+				break
+
 		tractor.catalog.thawAllParams()
 
 		p1 = tractor.getParams()
 		mod1 = tractor.getModelImage(0)
 		chi1 = tractor.getChiImage(0)
 		lnp1 = tractor.getLogProb()
+		gal1 = gal.copy()
 
-		im = tractor.getImage(0)
-		wcs = im.getWcs()
+		set_table_from_galaxy(ti, gal1, 'my_')
 
-		# Find the galaxy in question and see if we can make any model-switching
-		# changes to it.
-		dd = 1e6
-		ii = None
-		xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
-		for i,src in enumerate(tractor.catalog):
-			pos = src.getPosition()
-			x,y = wcs.positionToPixel(pos)
-			d = np.hypot(x-xc, y-yc)
-			if d < dd:
-				ii = i
-				dd = d
-		assert(ii is not None)
+		ti.about()
 
-		print 'Closest to image center:', tractor.catalog[ii]
-
-		gal = tractor.catalog[ii]
-
-		tractor.catalog.freezeAllBut(ii)
-
-		print 'Catalog length (with all but one frozen):', len(tractor.catalog)
-
-		print 'Galaxy', gal
-
-		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
-			print 'Single-component.  Try Composite...'
-			m = gal.brightness
-			# Give the new component 1% of the flux...
-			m1 = m + 0.01
-			m2 = m + 5.
-			print 'Mag 1', m1
-			print 'Mag 2', m2
-
-			s1 = gal.shape.copy()
-			s2 = gal.shape.copy()
-			print 'Galaxy shape 1', s1
-			print 'Galaxy shape 2', s2
-
-			if isinstance(gal, DevGalaxy):
-				comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
-									   m1, gal.shape.copy())
-			else:
-				comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
-									   m2, gal.shape.copy())
-
-			tractor.catalog[ii] = comp
-
-			print 'Trying composite', comp
-
-			lnp2 = tractor.getLogProb()
-			print 'Initial dlnp:', lnp2 - lnp1
-
-			while True:
-				dlnp,X,alpha = tractor.optimize(damp=1e-3)
-				print 'dlnp', dlnp
-				print 'alpha', alpha
-				if dlnp < 1:
-					break
 			
-			lnp2 = tractor.getLogProb()
-			print 'Final dlnp:', lnp2 - lnp1
+		if False:
+			# Try making model-switching changes to the galaxy...
+			tractor.catalog.freezeAllBut(ii)
+			#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
+			print 'Galaxy', gal
 
-			print 'Reverting'
-			tractor.catalog[ii] = gal
+			if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
+				print 'Single-component.  Try Composite...'
+				m = gal.brightness
+				# Give the new component 1% of the flux...
+				m1 = m + 0.01
+				m2 = m + 5.
+				print 'Mag 1', m1
+				print 'Mag 2', m2
 
+				s1 = gal.shape.copy()
+				s2 = gal.shape.copy()
+				print 'Galaxy shape 1', s1
+				print 'Galaxy shape 2', s2
 
-		elif isinstance(gal, CompositeGalaxy):
-			print 'Composite.  Flux ratio:'
-			photocal = im.getPhotoCal()
-			ce = photocal.brightnessToCounts(gal.brightnessExp)
-			cd = photocal.brightnessToCounts(gal.brightnessDev)
-			print ce / (ce + cd), 'exp'
+				if isinstance(gal, DevGalaxy):
+					comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
+										   m1, gal.shape.copy())
+				else:
+					comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
+										   m2, gal.shape.copy())
 
-			frac = ce / (ce + cd)
+				tractor.catalog[ii] = comp
 
-			if frac < 0.1:
-				print 'Trying pure Dev'
-				newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
-			elif frac > 0.9:
-				print 'Trying pure Exp'
-				newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
-			else:
-				newgal = None
-			if newgal is not None:
-				print newgal
-				tractor.catalog[ii] = newgal
-				print tractor.catalog[ii]
+				print 'Trying composite', comp
+
 				lnp2 = tractor.getLogProb()
 				print 'Initial dlnp:', lnp2 - lnp1
 
@@ -284,17 +259,53 @@ def refit_galaxies():
 					print 'alpha', alpha
 					if dlnp < 1:
 						break
-			
+
 				lnp2 = tractor.getLogProb()
 				print 'Final dlnp:', lnp2 - lnp1
 
-			print 'Reverting'
-			tractor.catalog[ii] = gal
+				print 'Reverting'
+				tractor.catalog[ii] = gal
 
-		else:
-			print 'Hmmm?  Unknown source type', gal
 
-		
+			elif isinstance(gal, CompositeGalaxy):
+				print 'Composite.  Flux ratio:'
+				photocal = im.getPhotoCal()
+				ce = photocal.brightnessToCounts(gal.brightnessExp)
+				cd = photocal.brightnessToCounts(gal.brightnessDev)
+				print ce / (ce + cd), 'exp'
+
+				frac = ce / (ce + cd)
+
+				if frac < 0.1:
+					print 'Trying pure Dev'
+					newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
+				elif frac > 0.9:
+					print 'Trying pure Exp'
+					newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
+				else:
+					newgal = None
+				if newgal is not None:
+					print newgal
+					tractor.catalog[ii] = newgal
+					print tractor.catalog[ii]
+					lnp2 = tractor.getLogProb()
+					print 'Initial dlnp:', lnp2 - lnp1
+
+					while True:
+						dlnp,X,alpha = tractor.optimize(damp=1e-3)
+						print 'dlnp', dlnp
+						print 'alpha', alpha
+						if dlnp < 1:
+							break
+
+					lnp2 = tractor.getLogProb()
+					print 'Final dlnp:', lnp2 - lnp1
+
+				print 'Reverting'
+				tractor.catalog[ii] = gal
+
+			else:
+				print 'Hmmm?  Unknown source type', gal
 
 
 		#p1 = tractor.getParams()
@@ -337,6 +348,42 @@ def refit_galaxies():
 
 		plt.savefig('trgal-%06i.png' % gali)
 
+		Ti[gali] = ti
+
+	Ti.about()
+
+	Ti.writeto('mye4.fits')
+	
+
+def set_table_from_galaxy(ti, gal, prefix):
+	ti.set(prefix + 'ra',  gal.pos.ra)
+	ti.set(prefix + 'dec', gal.pos.dec)
+	if isinstance(gal, ExpGalaxy):
+		ti.set(prefix + 'type', 'E')
+		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
+			ti.set(c, np.nan)
+		ti.set(prefix + 'exprad_i', gal.shape.re)
+		ti.set(prefix + 'expphi_i', gal.shape.phi)
+		ti.set(prefix + 'expab_i', gal.shape.ab)
+		ti.set(prefix + 'expmag_i', gal.brightness.i)
+	elif isinstance(gal, DevGalaxy):
+		ti.set(prefix + 'type', 'D')
+		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i']:
+			ti.set(prefix + c, np.nan)
+		ti.set(prefix + 'devrad_i', gal.shape.re)
+		ti.set(prefix + 'devphi_i', gal.shape.phi)
+		ti.set(prefix + 'devab_i', gal.shape.ab)
+		ti.set(prefix + 'devmag_i', gal.brightness.i)
+	elif isinstance(gal, CompositeGalaxy):
+		ti.set(prefix + 'type', 'C')
+		ti.set(prefix + 'exprad_i', gal.shapeExp.re)
+		ti.set(prefix + 'expphi_i', gal.shapeExp.phi)
+		ti.set(prefix + 'expab_i', gal.shapeExp.ab)
+		ti.set(prefix + 'expmag_i', gal.brightnessExp.i)
+		ti.set(prefix + 'devrad_i', gal.shapeDev.re)
+		ti.set(prefix + 'devphi_i', gal.shapeDev.phi)
+		ti.set(prefix + 'devab_i', gal.shapeDev.ab)
+		ti.set(prefix + 'devmag_i', gal.brightnessDev.i)
 
 
 def plot_ellipses(im, cat):

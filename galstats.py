@@ -580,10 +580,12 @@ def big():
 
 
 
-	T = fits_table('exp4_dstn.fit')
+	#T = fits_table('exp4_dstn.fit')
+	T = fits_table('exp5b_dstn.fit')
 
 	plt.clf()
-	plt.hist(T.exprad_i, 100, range=(3., 5.))
+	#plt.hist(T.exprad_i, 100, range=(3., 5.))
+	plt.hist(T.exprad_i, 100, range=(3., 8.))
 	plt.savefig('erad6.png')
 
 	rlo,rhi = 4.1, 4.4
@@ -609,7 +611,7 @@ def big():
 		urls.append(url)
 
 	html = '<html><body>' + '\n'.join(['<img src="%s" />' % url for url in urls]) + '</body></html>'
-	write_file(html, '/home/dstn/public_html/temp/gals.html')
+	write_file(html, '/home/dstn/public_html/temp/gals5b.html')
 	
 	plt.clf()
 	plt.plot(Ti.expab_i, Ti.expphi_i, 'r.')
