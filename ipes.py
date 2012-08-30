@@ -84,12 +84,6 @@ def main():
 	#plot_ipes()
 	refit_galaxies()
 
-# def procinit(*args):
-# 	print 'procinit().'
-# 	X = np.zeros(4, str)
-# 	print X
-# 	print type(X)
-# 	print X.dtype
 
 def refit_galaxies():
 	import optparse
@@ -97,10 +91,10 @@ def refit_galaxies():
 	parser.add_option('--threads', dest='threads', type=int, default=1,
 					  help='use multiprocessing')
 	opt,args = parser.parse_args()
-	#mp = multiproc(nthreads=opt.threads, init=procinit, initargs=[])
 	mp = multiproc(nthreads=opt.threads)
 
-	T = fits_table('exp4_dstn.fit')
+	#T = fits_table('exp4_dstn.fit')
+	T = fits_table('exp5b_dstn.fit')
 
 	sdss = DR9(basedir='paper0-data-dr9')
 
@@ -117,49 +111,65 @@ def refit_galaxies():
 	I = np.argsort(Ti.expmag_i)
 
 	###
-	I = I[:4]
+	#I = I[:4]
+	#I = I[7:8]
 
 	Ti = Ti[I]
 
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
-	for prefix in ['my_', 'init_']:
+	for prefix in ['my_', 'init_', 'sw_']:
 		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i', 'ra', 'dec']:
 			Ti.set(prefix + c, np.zeros_like(Ti.get(c)))
 		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
 			Ti.set(prefix + c, np.zeros_like(Ti.get(c.replace('dev','exp'))))
-		#Ti.set(prefix + 'type', np.zeros(len(Ti), str))
 		Ti.set(prefix + 'type', np.chararray(len(Ti), 1))
+	Ti.set('sw_dlnp', np.zeros(len(Ti), np.float32))
 
 	args = []
 
 	for gali in range(len(Ti)):
 		ti = Ti[gali]
-
 		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
-		ti.about()
-
+		#ti.about()
 		args.append((ti, bandname, S, sdss, gali))
 
-	tinew = mp.map(_refit_gal, args)
+	#tinew = mp.map(_refit_gal, args)
 
-	for gali in range(len(Ti)):
-		Ti[gali] = tinew[gali]
-	Ti.about()
+	# Run in blocks.
+	tinew = []
+	B = 0
+	while len(args):
 
+		N = 100
+		#N = 4
+		B += N
+		thisargs = args[:N]
+		args = args[N:]
+		#print 'thisargs:', thisargs
+		thisres = mp.map(_refit_gal, thisargs)
+		#print 'thisres:', thisres
+		tinew.extend(thisres)
+		#print 'tinew:', tinew
+
+		for gali in range(min(len(Ti), len(tinew))):
+			Ti[gali] = tinew[gali]
+		#Ti.about()
+
+		Ti.writeto('mye4-%06i.fits' % B)
 	Ti.writeto('mye4.fits')
 
 
-
 def _refit_gal((ti, bandname, S, sdss, gali)):
+	try:
+		return _real_refit_gal((ti, bandname, S, sdss, gali))
+	except:
+		import traceback
+		traceback.print_exc()
+		raise
 
-	#try:
-	#	_real_refit_gal((ti,bandname,S,sdss))
-	#except:
-	#	import traceback
-	#	traceback.print_exc()
-	#def _real_refit_gal((ti, bandname, S, sdss)):
 
+def _real_refit_gal((ti, bandname, S, sdss, gali)):
 	im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
 									roiradecsize=(ti.ra, ti.dec, S),
 									sdss=sdss)
@@ -259,13 +269,14 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 
 	set_table_from_galaxy(ti, gal1, 'my_')
 
-	ti.about()
-
+	mod2 = chi2 = gal2 = None
+	dlnp2 = None
 		
-	if False:
+	if True:
 		# Try making model-switching changes to the galaxy...
 		tractor.catalog.freezeAllBut(ii)
 		#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
+		gal = tractor.catalog[ii]
 		print 'Galaxy', gal
 
 		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
@@ -294,17 +305,33 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 			print 'Trying composite', comp
 
 			lnp2 = tractor.getLogProb()
-			print 'Initial dlnp:', lnp2 - lnp1
+			print 'Single->comp Initial dlnp:', lnp2 - lnp1
+
+			print 'Fitting:'
+			for nm in tractor.getParamNames():
+				print '	 ', nm
 
 			while True:
 				dlnp,X,alpha = tractor.optimize(damp=1e-3)
+				print 'Single->comp'
 				print 'dlnp', dlnp
 				print 'alpha', alpha
-				if dlnp < 1:
+				if dlnp < 0.1:
 					break
 
 			lnp2 = tractor.getLogProb()
-			print 'Final dlnp:', lnp2 - lnp1
+			print 'Single->comp Final dlnp:', lnp2 - lnp1
+
+			tractor.catalog.thawAllParams()
+
+			p2 = tractor.getParams()
+			mod2 = tractor.getModelImage(0)
+			chi2 = tractor.getChiImage(0)
+			lnp2 = tractor.getLogProb()
+			gal2 = comp.copy()
+
+			print 'tractor.catalog[ii]:', tractor.catalog[ii]
+			print 'comp:', comp.copy()
 
 			print 'Reverting'
 			tractor.catalog[ii] = gal
@@ -319,10 +346,12 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 
 			frac = ce / (ce + cd)
 
-			if frac < 0.1:
+			#if frac < 0.1:
+			if frac < 0.5:
 				print 'Trying pure Dev'
 				newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
-			elif frac > 0.9:
+			#elif frac > 0.9:
+			elif frac >= 0.5:
 				print 'Trying pure Exp'
 				newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
 			else:
@@ -332,17 +361,33 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 				tractor.catalog[ii] = newgal
 				print tractor.catalog[ii]
 				lnp2 = tractor.getLogProb()
-				print 'Initial dlnp:', lnp2 - lnp1
+				print 'Comp->single: Initial dlnp:', lnp2 - lnp1
+
+				print 'Fitting:'
+				for nm in tractor.getParamNames():
+					print '	 ', nm
 
 				while True:
 					dlnp,X,alpha = tractor.optimize(damp=1e-3)
+					print 'comp->single'
 					print 'dlnp', dlnp
 					print 'alpha', alpha
-					if dlnp < 1:
+					if dlnp < 0.1:
 						break
 
 				lnp2 = tractor.getLogProb()
-				print 'Final dlnp:', lnp2 - lnp1
+				print 'comp->single Final dlnp:', lnp2 - lnp1
+
+			tractor.catalog.thawAllParams()
+			p2 = tractor.getParams()
+			mod2 = tractor.getModelImage(0)
+			chi2 = tractor.getChiImage(0)
+			lnp2 = tractor.getLogProb()
+			#gal2 = tractor.catalog[ii].copy()
+			gal2 = newgal.copy()
+
+			print 'tractor.catalog[ii]:', tractor.catalog[ii]
+			print 'newgal:', newgal.copy()
 
 			print 'Reverting'
 			tractor.catalog[ii] = gal
@@ -350,13 +395,12 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 		else:
 			print 'Hmmm?  Unknown source type', gal
 
+	if gal2 is not None:
+		set_table_from_galaxy(ti, gal2, 'sw_')
+		ti.sw_dlnp = lnp2 - lnp1
 
-	#p1 = tractor.getParams()
-	#mod1 = tractor.getModelImage(0)
-	#chi1 = tractor.getChiImage(0)
-	#lnp1 = tractor.getLogProb()
-
-	R,C = 2,3
+	R,C = 3,3
+	plt.figure(figsize=(8,8))
 	plt.clf()
 	plt.suptitle(im.name)
 	plt.subplot(R,C,1)
@@ -388,6 +432,22 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 
 	plt.imshow(chi1, **imchi)
 	plt.gray()
+
+	if mod2 is not None:
+		plt.subplot(R,C,8)
+		plt.imshow(mod2, **ima)
+		plt.gray()
+
+		tractor.catalog[ii] = gal2
+		tractor.setParams(p2)
+		plot_ellipses(im, tractor.catalog)
+		tractor.catalog[ii] = gal1
+		tractor.setParams(p1)
+
+		plt.subplot(R,C,9)
+
+		plt.imshow(chi2, **imchi)
+		plt.gray()
 
 	plt.savefig('trgal-%06i.png' % gali)
 
@@ -443,12 +503,12 @@ def plot_ellipses(im, cat):
 			plt.plot(x, y, 'g+')
 			continue
 		elif isinstance(src, ExpGalaxy):
-			gals.append((True, src.shape, 'r'))
+			gals.append((True, src.shape, 'r', {}))
 		elif isinstance(src, DevGalaxy):
-			gals.append((False, src.shape, 'b'))
+			gals.append((False, src.shape, 'b', {}))
 		elif isinstance(src, CompositeGalaxy):
-			gals.append((True,	src.shapeExp, 'm'))
-			gals.append((False, src.shapeDev, 'c'))
+			gals.append((True,	src.shapeExp, 'm', dict(lw=2, alpha=0.5)))
+			gals.append((False, src.shapeDev, 'c', {}))
 		else:
 			print 'Unknown source type:', src
 			continue
@@ -457,7 +517,7 @@ def plot_ellipses(im, cat):
 		ux,uy = np.cos(theta), np.sin(theta)
 		u = np.vstack((ux,uy)).T
 
-		for isexp,shape,c in gals:
+		for isexp,shape,c,kwa in gals:
 			T = np.linalg.inv(shape.getTensor(cd))
 			#print 'T shape', T.shape
 			#print 'u shape', u.shape
@@ -469,7 +529,7 @@ def plot_ellipses(im, cat):
 			#print 'x,y', x, y
 			#print 'dx range', dx.min(), dx.max()
 			#print 'dy range', dy.min(), dy.max()
-			plt.plot(x + dx, y + dy, '-', color=c)
+			plt.plot(x + dx, y + dy, '-', color=c, **kwa)
 			plt.plot([x], [y], '+', color=c)
 			
 	plt.axis(ax)
