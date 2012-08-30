@@ -14,6 +14,7 @@ matplotlib.use('Agg')
 import pylab as plt
 
 import numpy as np
+
 from tractor import *
 
 from tractor.cache import Cache
@@ -25,6 +26,7 @@ from astrometry.util.plotutils import setRadecAxes
 import multiprocessing
 import os
 
+
 class Physics(object):
 	# all the following from physics.nist.gov
 	# http://physics.nist.gov/cuu/Constants/Table/allascii.txt
@@ -33,7 +35,11 @@ class Physics(object):
 	kk = 1.3806488e-23 # J K^{-1}
 
 	@staticmethod
-	def black_body_lambda(lam, lnT):
+	def lam2nu(lam):
+		return Physics.cc / lam
+
+	@staticmethod
+	def black_body_lam(lam, lnT):
 		"""
 		Compute the black-body formula, for a given lnT.
 
@@ -41,10 +47,12 @@ class Physics(object):
 		'lnT' is log-temperature in Kelvin
 
 		Return value is in [J s^{-1} m^{-2} m^{-1} sr^{-1}],
-		power radiated per square meter (area), per meter of wavelength, per steradian
+		power radiated per square meter (area), per m of wavelength, per steradian
+
+		BUGS: formula needs to be audited
 		"""
-		return (2. * Physics.hh * (Physics.cc ** 2) * (lam ** -5) /
-				(np.exp(Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))) - 1.))
+		xx = Physics.hh * Physics.cc / (lam * Physics.kk * np.exp(lnT))
+		return 2. * Physics.hh * (lam ** -5) * (Physics.cc ** 2) / (np.exp(xx) - 1.)
 
 	@staticmethod
 	def black_body_nu(lam, lnT):
@@ -56,13 +64,34 @@ class Physics(object):
 
 		Return value is in [J s^{-1} m^{-2} Hz^{-1} sr^{-1}],
 		power radiated per square meter (area), per Hz of frequency, per steradian
+
+		BUGS: formula needs to be audited
 		"""
-		return (lam **2 / Physics.cc) * Physics.black_body_lambda(lam, lnT)
+		nu = Physics.lam2nu(lam)
+		xx = Physics.hh * nu / (Physics.kk * np.exp(lnT))
+		return 2. * Physics.hh * (nu ** 3) * (Physics.cc ** -2) / (np.exp(xx) - 1.)
+
+	@staticmethod
+	def d_black_body_nu_d_lnT(lam, lnT):
+		"""
+		Compute the derivative of the black body formula with
+		respect to lnT.  Same inputs as `black_body_nu()`.
+
+		Return value is in [J s^{-1} m^{-2} Hz^{-1} sr^{-1}],
+
+		BUGS: formula needs to be audited
+		"""
+		nu = Physics.lam2nu(lam)
+		xx = Physics.hh * nu / (Physics.kk * np.exp(lnT))
+		return xx * 2. * Physics.hh * (nu ** 3) * (Physics.cc ** -2) / ((np.exp(xx) - 1. ) * (1. - np.exp(-xx)))
 
 	@staticmethod
 	def black_body(lam, lnT):
 		return black_body_nu(lam, lnT)
 
+	@staticmethod
+	def d_black_body_d_lnT(lam, lnT):
+		return d_black_body_nu_d_lnT(lam, lnT)
 
 class DustPhotoCal(ParamList):
 	def __init__(self, lam, pixscale):
@@ -1107,8 +1136,6 @@ def _map_trans((ds, img, ylo, yhi)):
 	print 'computing transformation in PID', os.getpid()
 	return ds._computeTransformation(img, ylo, yhi)
 
-
-
 def check_priors():
 	np.seterrcall(np_err_handler)
 	np.seterr(all='call')
@@ -1237,11 +1264,6 @@ def check_priors():
 				plt.title(ds.getParamNames()[i])
 			plt.savefig('p%i.png' % (j+50))
 
-
-
-
-		
-
 	if False:
 		# Check single-pixel priors: getLogPrior()
 		N = 1
@@ -1305,11 +1327,17 @@ def check_priors():
 			plt.title(ds.getParamNames()[ip])
 			plt.savefig('p%i.png' % (j+10))
 		
-
-
-
+def check_physics():
+	ntry = 10
+	for lam in 100. + 400. * np.random.uniform(size=ntry):
+		lam *= 1.e-6 # go to meters
+		lnT = np.log(10.) + 2. * np.random.uniform()
+		print lam, lnT, Physics.black_body_nu(lam, lnT), lam * Physics.black_body_lam(lam, lnT) / Physics.lam2nu(lam)
+		print lam, lnT, Physics.d_black_body_nu_d_lnT(lam, lnT), (Physics.black_body_nu(lam, lnT + 0.0005) - Physics.black_body_nu(lam, lnT - 0.0005)) / 0.001
+	return None
 
 if __name__ == '__main__':
+	#check_physics()
 	#check_priors()
 	main()
 	#import cProfile
