@@ -686,7 +686,8 @@ class Tractor(MultiParams):
 		assert(len(allderivs) == self.numberOfParams())
 		return allderivs
 
-	def getUpdateDirection(self, allderivs, damp=0., priors=True):
+	def getUpdateDirection(self, allderivs, damp=0., priors=True,
+						   ):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],

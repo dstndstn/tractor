@@ -104,8 +104,8 @@ def refit_galaxies():
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
 
-	for i in range(len(Ti)):
-		ti = Ti[i]
+	for gali in range(len(Ti)):
+		ti = Ti[gali]
 
 		print 'psField:', sdss.retrieve('psField', ti.run, ti.camcol, ti.field,
 										bandname)
@@ -130,6 +130,53 @@ def refit_galaxies():
 		imchi = ima.copy()
 		imchi.update(vmin=-5, vmax=5)
 
+		mod0 = tractor.getModelImage(0)
+		chi0 = tractor.getChiImage(0)
+
+		tractor.freezeParam('images')
+		p0 = tractor.getParams()
+
+		while True:
+			dlnp,X,alpha = tractor.optimize(damp=1e-3)
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			if dlnp < 1:
+				# p0 = np.array(tractor.getParams())
+				# dp = np.array(X)				
+				# tractor.setParams(p0 + dp)
+				# modi = tractor.getModelImage(0)
+				# tractor.setParams(p0)
+				# plt.clf()
+				# plt.imshow(modi, interpolation='nearest', origin='lower')
+				# plt.savefig('badstep-%06i.png' % gali)
+				# print 'Attempted parameter changes:'
+				# for x,nm in zip(X, tractor.getParamNames()):
+				# 	print '  ', nm, '  ', x
+				break
+
+		# Find bright sources and unfreeze them.
+		tractor.catalog.freezeAllParams()
+		for i,src in enumerate(tractor.catalog):
+			if src.getBrightness().i < 19.:
+				tractor.catalog.thawParam(i)
+
+		print 'Fitting bright sources:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		while True:
+			dlnp,X,alpha = tractor.optimize(damp=1e-3)
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			if dlnp < 1:
+				break
+
+		tractor.catalog.thawAllParams()
+
+		p1 = tractor.getParams()
+		mod1 = tractor.getModelImage(0)
+		chi1 = tractor.getChiImage(0)
+
 		R,C = 2,3
 		plt.clf()
 		plt.suptitle(im.name)
@@ -140,35 +187,83 @@ def refit_galaxies():
 
 		plt.subplot(R,C,2)
 
-		plt.imshow(tractor.getModelImage(0), **ima)
+		plt.imshow(mod0, **ima)
 		plt.gray()
+
+		im = tractor.getImage(0)
+		tractor.setParams(p0)
+		plot_ellipses(im, tractor.catalog)
+		tractor.setParams(p1)
 
 		plt.subplot(R,C,3)
 
-		plt.imshow(tractor.getChiImage(0), **imchi)
+		plt.imshow(chi0, **imchi)
 		plt.gray()
-
-		tractor.freezeParam('images')
-		while True:
-			dlnp,X,alpha = tractor.optimize(damp=1e-3)
-			print 'dlnp', dlnp
-			print 'alpha', alpha
-			if dlnp < 1:
-				break
 
 		plt.subplot(R,C,5)
 
-		plt.imshow(tractor.getModelImage(0), **ima)
+		plt.imshow(mod1, **ima)
 		plt.gray()
+		plot_ellipses(im, tractor.catalog)
 
 		plt.subplot(R,C,6)
 
-		plt.imshow(tractor.getChiImage(0), **imchi)
+		plt.imshow(chi1, **imchi)
 		plt.gray()
 
-		plt.savefig('trgal-%06i.png' % i)
+		plt.savefig('trgal-%06i.png' % gali)
 
 
+
+def plot_ellipses(im, cat):
+	wcs = im.getWcs()
+	x0,y0 = wcs.x0, wcs.y0
+	#xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
+	H,W = im.getImage().shape
+	xc,yc = W/2., H/2.
+	cd = wcs.cdAtPixel(xc,yc)
+	ax = plt.axis()
+	for src in cat:
+		pos = src.getPosition()
+		x,y = wcs.positionToPixel(pos)
+		x += x0
+		y += y0
+		gals = []
+		if isinstance(src, PointSource):
+			plt.plot(x, y, 'g+')
+			continue
+		elif isinstance(src, ExpGalaxy):
+			gals.append((True, src.shape))
+		elif isinstance(src, DevGalaxy):
+			gals.append((False, src.shape))
+		elif isinstance(src, CompositeGalaxy):
+			gals.append((True,  src.shapeExp))
+			gals.append((False, src.shapeDev))
+		else:
+			print 'Unknown source type:', src
+			continue
+
+		theta = np.linspace(0, 2*np.pi, 90)
+		ux,uy = np.cos(theta), np.sin(theta)
+		u = np.vstack((ux,uy)).T
+
+		for isexp,shape in gals:
+			T = np.linalg.inv(shape.getTensor(cd))
+			#print 'T shape', T.shape
+			#print 'u shape', u.shape
+			dx,dy = np.dot(T, u.T)
+			if isexp:
+				c = 'm'
+			else:
+				c = 'c'
+			#print 'x,y', x, y
+			#print 'dx range', dx.min(), dx.max()
+			#print 'dy range', dy.min(), dy.max()
+			plt.plot(x + dx, y + dy, '-', color=c)
+			plt.plot([x], [y], '+', color=c)
+			
+	plt.axis(ax)
+	
 
 
 def plot_ipes():
