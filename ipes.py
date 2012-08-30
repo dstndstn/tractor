@@ -6,21 +6,21 @@ data.  Some validation can be done using the stripe overlaps -- the
 
 Things to show / tests to run include:
 
--weird galaxy parameter distributions go away.  Don't even need ipes
+-weird galaxy parameter distributions go away.	Don't even need ipes
  for this, just need a swath of imaging.
 
  -> galstats.py
  to select a galaxy sample
 
 -our error estimates are better.  Do this by cross-matching objects in
- the ipes and comparing their measurements.  Compare the variance of
- the two SDSS measurements to the SDSS error estimates.  *This much is
+ the ipes and comparing their measurements.	 Compare the variance of
+ the two SDSS measurements to the SDSS error estimates.	 *This much is
  just evaluating SDSS results and doesn't even involve the Tractor!*
  We should find that the SDSS error estimates tend to
  over/underestimate the sample variance of the measurements.
 
 -...then, look at the Tractor error estimates, and the two samples, on
- single fields fit separately.  We should find that the error
+ single fields fit separately.	We should find that the error
  estimates and the sample variance coincide.
 
 -...then, look at the Tractor error estimates fitting the ipes
@@ -40,13 +40,13 @@ Things to show / tests to run include:
  can tune it up without much trouble.  That's not the best example,
  since RHL will complain that Photo was built to perform well on the
  whole sky, so it's not surprising that it breaks down in peculiar
- places like rich clusters and Messier objects.  That's fair, so we
+ places like rich clusters and Messier objects.	 That's fair, so we
  could instead look at less-extreme clusters that are still of
  significant interest and where Photo's difficulties really matter.
  This would be an opportunity to show the power of simultaneously
  fitting sky + galaxies, though that does involve writing a flexible
- sky model.  That's required for projects with Rachel anyway so I'm
- not bothered.  For this paper, I think I want to just show the
+ sky model.	 That's required for projects with Rachel anyway so I'm
+ not bothered.	For this paper, I think I want to just show the
  before-n-after pictures, rather than do any sort of numerical
  characterization of what's going on.  Do we want to show any sampling
  results?  If so, this would be the place since we could show
@@ -67,6 +67,7 @@ import logging
 from astrometry.util.fits import *
 from astrometry.blind.plotstuff import *
 from astrometry.util.c import *
+from astrometry.util.multiproc import multiproc
 
 from astrometry.sdss import DR9
 
@@ -83,7 +84,22 @@ def main():
 	#plot_ipes()
 	refit_galaxies()
 
+# def procinit(*args):
+# 	print 'procinit().'
+# 	X = np.zeros(4, str)
+# 	print X
+# 	print type(X)
+# 	print X.dtype
+
 def refit_galaxies():
+	import optparse
+	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
+	parser.add_option('--threads', dest='threads', type=int, default=1,
+					  help='use multiprocessing')
+	opt,args = parser.parse_args()
+	#mp = multiproc(nthreads=opt.threads, init=procinit, initargs=[])
+	mp = multiproc(nthreads=opt.threads)
+
 	T = fits_table('exp4_dstn.fit')
 
 	sdss = DR9(basedir='paper0-data-dr9')
@@ -112,144 +128,209 @@ def refit_galaxies():
 			Ti.set(prefix + c, np.zeros_like(Ti.get(c)))
 		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
 			Ti.set(prefix + c, np.zeros_like(Ti.get(c.replace('dev','exp'))))
-		Ti.set(prefix + 'type', np.zeros(len(Ti), str))
+		#Ti.set(prefix + 'type', np.zeros(len(Ti), str))
+		Ti.set(prefix + 'type', np.chararray(len(Ti), 1))
+
+	args = []
 
 	for gali in range(len(Ti)):
 		ti = Ti[gali]
 
-		im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
-										roiradecsize=(ti.ra, ti.dec, S),
-										sdss=sdss)
-		roi = info['roi']
-		cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, bandname,
-									  sdss=sdss, roi=roi, bands=[bandname])
-
-		tractor = Tractor(Images(im), cat)
-		print 'Tractor', tractor
-
-		ima = dict(interpolation='nearest', origin='lower')
-		zr = im.zr
-		ima.update(vmin=zr[0], vmax=zr[1])
-		ima.update(extent=roi)
-		imchi = ima.copy()
-		imchi.update(vmin=-5, vmax=5)
-
-		mod0 = tractor.getModelImage(0)
-		chi0 = tractor.getChiImage(0)
-
-		tractor.freezeParam('images')
-		p0 = tractor.getParams()
-
-
-		# Find the galaxy in question
-		im = tractor.getImage(0)
-		wcs = im.getWcs()
-		dd = 1e6
-		ii = None
-		xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
-		for i,src in enumerate(tractor.catalog):
-			pos = src.getPosition()
-			x,y = wcs.positionToPixel(pos)
-			d = np.hypot(x-xc, y-yc)
-			if d < dd:
-				ii = i
-				dd = d
-		assert(ii is not None)
-		print 'Closest to image center:', tractor.catalog[ii]
-		gal = tractor.catalog[ii]
-
-		gal0 = gal.copy()
-
-		set_table_from_galaxy(ti, gal0, 'init_')
-
-		while True:
-			dlnp,X,alpha = tractor.optimize(damp=1e-3)
-			print 'dlnp', dlnp
-			print 'alpha', alpha
-			if dlnp < 1:
-				# p0 = np.array(tractor.getParams())
-				# dp = np.array(X)				
-				# tractor.setParams(p0 + dp)
-				# modi = tractor.getModelImage(0)
-				# tractor.setParams(p0)
-				# plt.clf()
-				# plt.imshow(modi, interpolation='nearest', origin='lower')
-				# plt.savefig('badstep-%06i.png' % gali)
-				# print 'Attempted parameter changes:'
-				# for x,nm in zip(X, tractor.getParamNames()):
-				# 	print '  ', nm, '  ', x
-				break
-
-		# Find bright sources and unfreeze them.
-		tractor.catalog.freezeAllParams()
-		for i,src in enumerate(tractor.catalog):
-			if src.getBrightness().i < 19.:
-				tractor.catalog.thawParam(i)
-
-		print 'Fitting bright sources:'
-		for nm in tractor.getParamNames():
-			print '  ', nm
-
-		while True:
-			dlnp,X,alpha = tractor.optimize(damp=1e-3)
-			print 'dlnp', dlnp
-			print 'alpha', alpha
-			if dlnp < 1:
-				break
-
-		print 'Fitting the key galaxy:'
-		tractor.catalog.freezeAllBut(ii)
-		while True:
-			dlnp,X,alpha = tractor.optimize(damp=1e-3)
-			print 'dlnp', dlnp
-			print 'alpha', alpha
-			if dlnp < 1:
-				break
-
-		tractor.catalog.thawAllParams()
-
-		p1 = tractor.getParams()
-		mod1 = tractor.getModelImage(0)
-		chi1 = tractor.getChiImage(0)
-		lnp1 = tractor.getLogProb()
-		gal1 = gal.copy()
-
-		set_table_from_galaxy(ti, gal1, 'my_')
-
+		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
 		ti.about()
 
-			
-		if False:
-			# Try making model-switching changes to the galaxy...
-			tractor.catalog.freezeAllBut(ii)
-			#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
-			print 'Galaxy', gal
+		args.append((ti, bandname, S, sdss, gali))
 
-			if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
-				print 'Single-component.  Try Composite...'
-				m = gal.brightness
-				# Give the new component 1% of the flux...
-				m1 = m + 0.01
-				m2 = m + 5.
-				print 'Mag 1', m1
-				print 'Mag 2', m2
+	tinew = mp.map(_refit_gal, args)
 
-				s1 = gal.shape.copy()
-				s2 = gal.shape.copy()
-				print 'Galaxy shape 1', s1
-				print 'Galaxy shape 2', s2
+	for gali in range(len(Ti)):
+		Ti[gali] = tinew[gali]
+	Ti.about()
 
-				if isinstance(gal, DevGalaxy):
-					comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
-										   m1, gal.shape.copy())
-				else:
-					comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
-										   m2, gal.shape.copy())
+	Ti.writeto('mye4.fits')
 
-				tractor.catalog[ii] = comp
 
-				print 'Trying composite', comp
 
+def _refit_gal((ti, bandname, S, sdss, gali)):
+
+	#try:
+	#	_real_refit_gal((ti,bandname,S,sdss))
+	#except:
+	#	import traceback
+	#	traceback.print_exc()
+	#def _real_refit_gal((ti, bandname, S, sdss)):
+
+	im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
+									roiradecsize=(ti.ra, ti.dec, S),
+									sdss=sdss)
+	roi = info['roi']
+	cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, bandname,
+								  sdss=sdss, roi=roi, bands=[bandname])
+
+	tractor = Tractor(Images(im), cat)
+	print 'Tractor', tractor
+
+	ima = dict(interpolation='nearest', origin='lower')
+	zr = im.zr
+	ima.update(vmin=zr[0], vmax=zr[1])
+	ima.update(extent=roi)
+	imchi = ima.copy()
+	imchi.update(vmin=-5, vmax=5)
+
+	mod0 = tractor.getModelImage(0)
+	chi0 = tractor.getChiImage(0)
+
+	tractor.freezeParam('images')
+	p0 = tractor.getParams()
+
+
+	# Find the galaxy in question
+	im = tractor.getImage(0)
+	wcs = im.getWcs()
+	dd = 1e6
+	ii = None
+	xc,yc = wcs.positionToPixel(RaDecPos(ti.ra, ti.dec))
+	for i,src in enumerate(tractor.catalog):
+		pos = src.getPosition()
+		x,y = wcs.positionToPixel(pos)
+		d = np.hypot(x-xc, y-yc)
+		if d < dd:
+			ii = i
+			dd = d
+	assert(ii is not None)
+	print 'Closest to image center:', tractor.catalog[ii]
+	gal = tractor.catalog[ii]
+
+	gal0 = gal.copy()
+
+	set_table_from_galaxy(ti, gal0, 'init_')
+
+	while True:
+		dlnp,X,alpha = tractor.optimize(damp=1e-3)
+		print 'dlnp', dlnp
+		print 'alpha', alpha
+		if dlnp < 1:
+			# p0 = np.array(tractor.getParams())
+			# dp = np.array(X)				
+			# tractor.setParams(p0 + dp)
+			# modi = tractor.getModelImage(0)
+			# tractor.setParams(p0)
+			# plt.clf()
+			# plt.imshow(modi, interpolation='nearest', origin='lower')
+			# plt.savefig('badstep-%06i.png' % gali)
+			# print 'Attempted parameter changes:'
+			# for x,nm in zip(X, tractor.getParamNames()):
+			#	print '	 ', nm, '  ', x
+			break
+
+	# Find bright sources and unfreeze them.
+	tractor.catalog.freezeAllParams()
+	for i,src in enumerate(tractor.catalog):
+		if src.getBrightness().i < 19.:
+			tractor.catalog.thawParam(i)
+
+	print 'Fitting bright sources:'
+	for nm in tractor.getParamNames():
+		print '	 ', nm
+
+	while True:
+		dlnp,X,alpha = tractor.optimize(damp=1e-3)
+		print 'dlnp', dlnp
+		print 'alpha', alpha
+		if dlnp < 1:
+			break
+
+	print 'Fitting the key galaxy:'
+	tractor.catalog.freezeAllBut(ii)
+	while True:
+		dlnp,X,alpha = tractor.optimize(damp=1e-3)
+		print 'dlnp', dlnp
+		print 'alpha', alpha
+		if dlnp < 1:
+			break
+
+	tractor.catalog.thawAllParams()
+
+	p1 = tractor.getParams()
+	mod1 = tractor.getModelImage(0)
+	chi1 = tractor.getChiImage(0)
+	lnp1 = tractor.getLogProb()
+	gal1 = gal.copy()
+
+	set_table_from_galaxy(ti, gal1, 'my_')
+
+	ti.about()
+
+		
+	if False:
+		# Try making model-switching changes to the galaxy...
+		tractor.catalog.freezeAllBut(ii)
+		#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
+		print 'Galaxy', gal
+
+		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
+			print 'Single-component.  Try Composite...'
+			m = gal.brightness
+			# Give the new component 1% of the flux...
+			m1 = m + 0.01
+			m2 = m + 5.
+			print 'Mag 1', m1
+			print 'Mag 2', m2
+
+			s1 = gal.shape.copy()
+			s2 = gal.shape.copy()
+			print 'Galaxy shape 1', s1
+			print 'Galaxy shape 2', s2
+
+			if isinstance(gal, DevGalaxy):
+				comp = CompositeGalaxy(gal.pos, m2, gal.shape.copy(),
+									   m1, gal.shape.copy())
+			else:
+				comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
+									   m2, gal.shape.copy())
+
+			tractor.catalog[ii] = comp
+
+			print 'Trying composite', comp
+
+			lnp2 = tractor.getLogProb()
+			print 'Initial dlnp:', lnp2 - lnp1
+
+			while True:
+				dlnp,X,alpha = tractor.optimize(damp=1e-3)
+				print 'dlnp', dlnp
+				print 'alpha', alpha
+				if dlnp < 1:
+					break
+
+			lnp2 = tractor.getLogProb()
+			print 'Final dlnp:', lnp2 - lnp1
+
+			print 'Reverting'
+			tractor.catalog[ii] = gal
+
+
+		elif isinstance(gal, CompositeGalaxy):
+			print 'Composite.  Flux ratio:'
+			photocal = im.getPhotoCal()
+			ce = photocal.brightnessToCounts(gal.brightnessExp)
+			cd = photocal.brightnessToCounts(gal.brightnessDev)
+			print ce / (ce + cd), 'exp'
+
+			frac = ce / (ce + cd)
+
+			if frac < 0.1:
+				print 'Trying pure Dev'
+				newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
+			elif frac > 0.9:
+				print 'Trying pure Exp'
+				newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
+			else:
+				newgal = None
+			if newgal is not None:
+				print newgal
+				tractor.catalog[ii] = newgal
+				print tractor.catalog[ii]
 				lnp2 = tractor.getLogProb()
 				print 'Initial dlnp:', lnp2 - lnp1
 
@@ -263,96 +344,54 @@ def refit_galaxies():
 				lnp2 = tractor.getLogProb()
 				print 'Final dlnp:', lnp2 - lnp1
 
-				print 'Reverting'
-				tractor.catalog[ii] = gal
+			print 'Reverting'
+			tractor.catalog[ii] = gal
+
+		else:
+			print 'Hmmm?  Unknown source type', gal
 
 
-			elif isinstance(gal, CompositeGalaxy):
-				print 'Composite.  Flux ratio:'
-				photocal = im.getPhotoCal()
-				ce = photocal.brightnessToCounts(gal.brightnessExp)
-				cd = photocal.brightnessToCounts(gal.brightnessDev)
-				print ce / (ce + cd), 'exp'
+	#p1 = tractor.getParams()
+	#mod1 = tractor.getModelImage(0)
+	#chi1 = tractor.getChiImage(0)
+	#lnp1 = tractor.getLogProb()
 
-				frac = ce / (ce + cd)
+	R,C = 2,3
+	plt.clf()
+	plt.suptitle(im.name)
+	plt.subplot(R,C,1)
 
-				if frac < 0.1:
-					print 'Trying pure Dev'
-					newgal = DevGalaxy(gal.pos, gal.getBrightness(), gal.shapeDev)
-				elif frac > 0.9:
-					print 'Trying pure Exp'
-					newgal = ExpGalaxy(gal.pos, gal.getBrightness(), gal.shapeExp)
-				else:
-					newgal = None
-				if newgal is not None:
-					print newgal
-					tractor.catalog[ii] = newgal
-					print tractor.catalog[ii]
-					lnp2 = tractor.getLogProb()
-					print 'Initial dlnp:', lnp2 - lnp1
+	plt.imshow(im.getImage(), **ima)
+	plt.gray()
 
-					while True:
-						dlnp,X,alpha = tractor.optimize(damp=1e-3)
-						print 'dlnp', dlnp
-						print 'alpha', alpha
-						if dlnp < 1:
-							break
+	plt.subplot(R,C,2)
 
-					lnp2 = tractor.getLogProb()
-					print 'Final dlnp:', lnp2 - lnp1
+	plt.imshow(mod0, **ima)
+	plt.gray()
 
-				print 'Reverting'
-				tractor.catalog[ii] = gal
+	tractor.setParams(p0)
+	plot_ellipses(im, tractor.catalog)
+	tractor.setParams(p1)
 
-			else:
-				print 'Hmmm?  Unknown source type', gal
+	plt.subplot(R,C,3)
 
+	plt.imshow(chi0, **imchi)
+	plt.gray()
 
-		#p1 = tractor.getParams()
-		#mod1 = tractor.getModelImage(0)
-		#chi1 = tractor.getChiImage(0)
-		#lnp1 = tractor.getLogProb()
+	plt.subplot(R,C,5)
 
-		R,C = 2,3
-		plt.clf()
-		plt.suptitle(im.name)
-		plt.subplot(R,C,1)
+	plt.imshow(mod1, **ima)
+	plt.gray()
+	plot_ellipses(im, tractor.catalog)
 
-		plt.imshow(im.getImage(), **ima)
-		plt.gray()
+	plt.subplot(R,C,6)
 
-		plt.subplot(R,C,2)
+	plt.imshow(chi1, **imchi)
+	plt.gray()
 
-		plt.imshow(mod0, **ima)
-		plt.gray()
+	plt.savefig('trgal-%06i.png' % gali)
 
-		tractor.setParams(p0)
-		plot_ellipses(im, tractor.catalog)
-		tractor.setParams(p1)
-
-		plt.subplot(R,C,3)
-
-		plt.imshow(chi0, **imchi)
-		plt.gray()
-
-		plt.subplot(R,C,5)
-
-		plt.imshow(mod1, **ima)
-		plt.gray()
-		plot_ellipses(im, tractor.catalog)
-
-		plt.subplot(R,C,6)
-
-		plt.imshow(chi1, **imchi)
-		plt.gray()
-
-		plt.savefig('trgal-%06i.png' % gali)
-
-		Ti[gali] = ti
-
-	Ti.about()
-
-	Ti.writeto('mye4.fits')
+	return ti
 	
 
 def set_table_from_galaxy(ti, gal, prefix):
@@ -408,7 +447,7 @@ def plot_ellipses(im, cat):
 		elif isinstance(src, DevGalaxy):
 			gals.append((False, src.shape, 'b'))
 		elif isinstance(src, CompositeGalaxy):
-			gals.append((True,  src.shapeExp, 'm'))
+			gals.append((True,	src.shapeExp, 'm'))
 			gals.append((False, src.shapeDev, 'c'))
 		else:
 			print 'Unknown source type:', src
