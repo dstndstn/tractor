@@ -631,6 +631,61 @@ def big():
 	plt.savefig('erad10.png')
 	
 
+	T = fits_table('dev5b_dstn.fit')
+
+	plt.clf()
+	plt.hist(T.devrad_i, 100, range=(3., 8.))
+	plt.savefig('drad6.png')
+
+	rlo,rhi = 5., 5.2
+	Ti = T[(T.devrad_i > rlo) * (T.devrad_i < rhi)]
+
+	plt.clf()
+	plt.hist(T.devrad_i, 100, range=(rlo, rhi))
+	plt.xlabel('devrad_i (arcsec)')
+	plt.ylabel('Number of galaxies')
+	plt.title('dev galaxies')
+	plt.xlim(rlo, rhi)
+	plt.savefig('drad7.png')
+
+	Ti = Ti[Ti.devmag_i < 18]
+	print 'Runs:', np.unique(Ti.run)
+	I = np.argsort(-Ti.devmag_i)
+	Tj = Ti[I]
+	urls = []
+	for r,d,mag in zip(Tj.ra, Tj.dec, Tj.devmag_i):
+		print '  mag', mag,
+		url = 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.198&width=128&height=128&opt=&query=' % (r,d)
+		print '  ', url
+		urls.append(url)
+
+	html = '<html><body>' + '\n'.join(['<img src="%s" />' % url for url in urls]) + '</body></html>'
+	write_file(html, '/home/dstn/public_html/temp/dev5b.html')
+
+
+	T = fits_table('mye4.fits')
+
+	T2 = fits_table('exp5b_dstn.fit')
+	T2.cut(T2.expmag_i < 19)
+
+	plt.clf()
+	rlo,rhi = 3.2, 6
+	n,b,p = plt.hist(T2.exprad_i, 100, histtype='step', color='m', range=(rlo,rhi))
+	n2,b2,p2 = plt.hist(T.exprad_i, bins=b, histtype='step', color='r')
+	n3,b3,p3 = plt.hist(T.my_exprad_i, bins=b, histtype='step', color='b')
+	plt.legend((p[0],p2[0],p3[0]), ('All Photo', 'Photo, exprad in [4.1, 4.4]', 'Tractor-refit [4.1, 4.4]'))
+	plt.xlim(rlo, rhi)
+	plt.savefig('my1.png')
+
+	plt.clf()
+	rlo,rhi = 3.6, 6
+	n,b,p = plt.hist(T2.exprad_i, 100, histtype='step', color='m', range=(rlo,rhi))
+	n2,b2,p2 = plt.hist(T.exprad_i, bins=b, histtype='step', color='r')
+	n3,b3,p3 = plt.hist(T.my_exprad_i, bins=b, histtype='step', color='b')
+	plt.legend((p[0],p2[0],p3[0]), ('All Photo', 'Photo, exprad in [4.1, 4.4]', 'Tractor-refit [4.1, 4.4]'))
+	plt.xlim(rlo, rhi)
+	plt.savefig('my2.png')
+
 
 
 if __name__ == '__main__':

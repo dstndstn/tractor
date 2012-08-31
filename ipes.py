@@ -153,7 +153,11 @@ def refit_galaxies():
 		#print 'tinew:', tinew
 
 		for gali in range(min(len(Ti), len(tinew))):
-			Ti[gali] = tinew[gali]
+			tin = tinew[gali]
+			if tin is None:
+				print 'Skipping', gali
+				continue
+			Ti[gali] = tin
 		#Ti.about()
 
 		Ti.writeto('mye4-%06i.fits' % B)
@@ -166,7 +170,7 @@ def _refit_gal((ti, bandname, S, sdss, gali)):
 	except:
 		import traceback
 		traceback.print_exc()
-		raise
+		return None
 
 
 def _real_refit_gal((ti, bandname, S, sdss, gali)):
