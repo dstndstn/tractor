@@ -11,6 +11,7 @@ Things to show / tests to run include:
 
  -> galstats.py
  to select a galaxy sample
+ -> ipes.py : refit_galaxies() -> mye4.fits
 
 -our error estimates are better.  Do this by cross-matching objects in
  the ipes and comparing their measurements.	 Compare the variance of
@@ -68,8 +69,11 @@ from astrometry.util.fits import *
 from astrometry.blind.plotstuff import *
 from astrometry.util.c import *
 from astrometry.util.multiproc import multiproc
+from astrometry.util.plotutils import *
 
 from astrometry.sdss import DR9
+
+from astrometry.libkd.spherematch import *
 
 from tractor.sdss import *
 from tractor import *
@@ -82,7 +86,234 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	#plot_ipes()
-	refit_galaxies()
+	#sys.exit(0)
+	#refit_galaxies()
+
+	ipe_errors()
+
+def ipe_errors():
+	#T = fits_table('ipe1_dstn.fit')
+	#T.cut((T.ra < 249.85) * (T.dec < 17.65))
+	#print 'Cut to', len(T)
+
+	#T = fits_table('ipe2_dstn_1.fit')
+	T = fits_table('ipe3_dstn_2.fit')
+	print len(T), 'objects'
+
+	print 'Runs', np.unique(T.run)
+	print 'Camcols', np.unique(T.camcol)
+	print 'Fields', np.unique(T.field)
+
+	T1 = T[T.run == 5183]
+	T2 = T[T.run == 5224]
+
+	plt.clf()
+	plt.plot(T1.ra, T1.dec, 'r.', alpha=0.1)
+	plt.plot(T2.ra, T2.dec, 'bx', alpha=0.1)
+	plt.savefig('ipe1.png')
+
+	for T in [T1,T2]:
+		# self-matches:
+		print 'T:', len(T)
+		R = 0.5 / 3600.
+		I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
+		print len(I), 'matches'
+		K = (I < J)
+		I = I[K]
+		J = J[K]
+		print len(I), 'symmetric'
+
+		print sum(T.field[I] == T.field[J]), 'are in the same field'
+
+		#plt.clf()
+		#plt.plot(T.rowc[I], T.colc[I], 'r.')
+		#plt.plot(T.rowc[J], T.colc[J], 'b.')
+		#plt.savefig('ipe2.png')
+
+		keep = np.ones(len(T), bool)
+		keep[I[T.field[I] != T.field[J]]] = False
+
+		T.cut(keep)
+		print 'Cut to', len(T), 'with no matches in other fields'
+
+
+	R = 1./3600.
+
+	I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+	print len(I), 'matches'
+
+	dra = (T1.ra[I] - T2.ra[J])*np.cos(np.deg2rad(T1.dec[I])) * 3600.
+	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
+
+	plt.clf()
+	loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
+	plt.savefig('ipe4.png')
+
+	X1 = np.vstack((T1.ra * np.cos(np.deg2rad(T1.dec)), T1.dec)).T
+	X2 = np.vstack((T2.ra * np.cos(np.deg2rad(T2.dec)), T2.dec)).T
+
+	I,d = nearest(X1, X2, R)
+	#print 'nearest I', I
+	J = np.arange(len(X2))
+	K = (I >= 0)
+	I = I[K]
+	J = J[K]
+	#print 'I', I
+	#print 'J', J
+	print 'Nearest-neighbour matches:', len(I)
+
+	print 'All T1', T1.rowc.min(), T1.rowc.max(), T1.colc.min(), T1.colc.max()
+	print 'Matched T1', T1.rowc[I].min(), T1.rowc[I].max(), T1.colc[I].min(), T1.colc[I].max()
+
+	print 'All T2', T2.rowc.min(), T2.rowc.max(), T2.colc.min(), T2.colc.max()
+	print 'Matched T2', T2.rowc[J].min(), T2.rowc[J].max(), T2.colc[J].min(), T2.colc[J].max()
+
+	dra = (T1.ra[I] - T2.ra[J])*np.cos(np.deg2rad(T1.dec[I])) * 3600.
+	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
+
+	plt.clf()
+	loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
+	plt.savefig('ipe3.png')
+	
+	# Errors are in arcsec.
+	rerr1 = T1.raerr[I]
+	derr1 = T1.decerr[I]
+	rerr2 = T2.raerr[J]
+	derr2 = T2.decerr[J]
+
+	hi = 6.
+	S = 1./np.sqrt(2.)
+	plt.clf()
+	n,b,p = plt.hist(S * np.hypot(dra, ddec) / np.hypot(rerr1, derr1), 100, range=(0, hi), histtype='step', color='r')
+	plt.hist(S * np.hypot(dra, ddec) / np.hypot(rerr2, derr2), 100, range=(0, hi), histtype='step', color='b')
+	xx = np.linspace(0, hi, 500)
+	from scipy.stats import chi
+	yy = chi.pdf(xx, 2)
+	plt.plot(xx, yy * len(dra) * (b[1]-b[0]), 'k-')
+	plt.xlim(0,hi)
+	plt.xlabel('N sigma of RA,Dec repeat observations')
+	plt.ylabel('Number of sources')
+	plt.savefig('ipe5.png')
+
+	for c,cerr,nn in [('psfmag_r', 'psfmagerr_r', 6)]:
+		plt.clf()
+		n,b,p = plt.hist(S * np.abs(T1.get(c)[I] - T2.get(c)[J]) / T1.get(cerr)[I], 100, range=(0,hi), histtype='step', color='r')
+		plt.xlabel('N sigma of ' + c)
+		xx = np.linspace(0, hi, 500)
+		yy = 2./np.sqrt(2.*np.pi)*np.exp(-0.5 * xx**2)
+		print 'yy', sum(yy)
+		plt.plot(xx, yy * len(I) * (b[1]-b[0]), 'k-')
+		plt.savefig('ipe%i.png' % nn)
+
+	# Pairs where both are galaxies
+	K = ((T1.type[I] == 3) * (T2.type[J] == 3))
+	G1 = T1[I[K]]
+	G2 = T2[J[K]]
+	print len(G1), 'galaxies'
+	
+	print (np.sum((T1.type[I] == 3) * (T2.type[J] != 3)) +
+		   np.sum((T1.type[I] != 3) * (T2.type[J] == 3))), 'galaxy type-mismatches'
+	
+	for c,cerr,nn in [('modelmag_r', 'modelmagerr_r', 7),]:
+		plt.clf()
+		n,b,p = plt.hist(S * np.abs(G1.get(c) - G2.get(c)) / G1.get(cerr), 100, range=(0,hi),
+						 histtype='step', color='r')
+		plt.xlabel('N sigma of ' + c)
+		yy = np.exp(-0.5 * b**2)
+		yy *= sum(n) / np.sum(yy)
+		plt.plot(b, yy, 'k-')
+		plt.savefig('ipe%i.png' % nn)
+
+	plt.clf()
+	loghist(G1.fracdev_r, G2.fracdev_r, 100)
+	plt.xlabel('G1 fracdev_r')
+	plt.ylabel('G2 fracdev_r')
+	plt.savefig('ipe8.png')
+
+	S = 1.
+	for t in ['exp', 'dev']:
+		if t == 'exp':
+			I = (G1.fracdev_r < 0.5) * (G2.fracdev_r < 0.5)
+			print sum(I), 'of', len(G1), 'both have fracdev_r < 0.5'
+		else:
+			I = (G1.fracdev_r >= 0.5) * (G2.fracdev_r >= 0.5)
+			print sum(I), 'of', len(G1), 'both have fracdev_r >= 0.5'
+		H1 = G1[I]
+		H2 = G2[I]
+			
+		for c,cerr,nn in [('%smag_r', '%smagerr_r', 9),
+						  ('%sab_r',  '%saberr_r', 10),
+						  ('%srad_r', '%sraderr_r', 11),
+						  ]:
+			cc = c % t
+			ccerr = cerr % t
+			dval = np.abs(H1.get(cc) - H2.get(cc))
+			derr = H1.get(ccerr)
+			plt.clf()
+			n,b,p = plt.hist(S * dval / derr, 100, range=(0,hi),
+							 histtype='step', color='r')
+			plt.xlabel('N sigma of ' + cc)
+			#yy = np.exp(-0.5 * b**2)
+			#yy *= sum(n) / np.sum(yy)
+			#plt.plot(b, yy, 'k-')
+			plt.savefig('ipe%i%s.png' % (nn,t))
+
+
+	return
+
+
+
+
+
+
+	
+	I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, 0.5/3600., notself=True)
+	print len(I), 'matches'
+
+	plt.clf()
+	loghist((T.ra[I] - T.ra[J])*np.cos(np.deg2rad(T.dec[I])) * 3600.,
+			(T.dec[I] - T.dec[J])*3600., 100, range=((-1,1),(-1,1)))
+	plt.savefig('ipe4.png')
+
+
+	K = (I < J)
+	I = I[K]
+	J = J[K]
+	d = d[K]
+	print 'Cut to', len(I), 'symmetric'
+	
+	plt.clf()
+	plt.plot(T.ra, T.dec, 'r.')
+	plt.plot(T.ra[I], T.dec[I], 'bo', mec='b', mfc='none')
+	plt.savefig('ipe2.png')
+
+	dra,ddec = [],[]
+	raerr,decerr = [],[]
+	RC = T.run * 10 + T.camcol
+	RCF = T.run * 10 * 1000 + T.camcol * 1000 + T.field
+	for i in np.unique(I):
+		K = (I == i)
+		JJ = J[K]
+		print
+		print 'Source', i, 'has', len(JJ), 'matches'
+		print '  ', np.sum(RC[JJ] == RC[i]), 'in the same run/camcol'
+		print '  ', np.sum(RCF[JJ] == RCF[i]), 'in the same run/camcol/field'
+		orc = (RC[JJ] != RC[i])
+		print '  ', np.sum(orc), 'are in other run/camcols'
+		print '  ', len(np.unique(RC[JJ][orc])), 'unique other run/camcols'
+		print '  ', len(np.unique(RCF[JJ][orc])), 'unique other run/camcols/fields'
+		print '  other sources:', JJ
+		dra.extend((T.ra[JJ] - T.ra[i]) * np.cos(np.deg2rad(T.dec[i])))
+		ddec.extend(T.dec[JJ] - T.dec[i])
+		raerr.extend ([T.raerr [i]] * len(JJ))
+		decerr.extend([T.decerr[i]] * len(JJ))
+
+	dra,ddec = np.array(dra), np.array(ddec)
+	raerr,decerr = np.array(raerr), np.array(decerr)
+
+	plt.clf()
+	plt.hist(np.hypot(dra,ddec) / np.hypot(raerr,decerr), 100)
+	plt.savefig('ipe3.png')
 
 
 def refit_galaxies():
@@ -92,6 +323,19 @@ def refit_galaxies():
 					  help='use multiprocessing')
 	opt,args = parser.parse_args()
 	mp = multiproc(nthreads=opt.threads)
+
+	'''
+	select fracdev_i,exprad_i,expab_i,expmag_i,expphi_i,run,camcol,field,ra,dec,flags
+	into mydb.exp5 from Galaxy where
+	exprad_i > 3
+	and expmag_i < 20
+	and clean=1 and probpsf=0
+	and fracdev_i < 0.5
+	
+	select * from mydb.exp5 into mydb.exp5b
+	where (flags & 0x10000000) = 0x10000000
+	and (flags & 0x3002000a0020008) = 0
+	'''
 
 	#T = fits_table('exp4_dstn.fit')
 	T = fits_table('exp5b_dstn.fit')
@@ -559,7 +803,7 @@ def plot_ipes():
 		return RR,DD
 
 	
-	if True:
+	if False:
 		RR,DD = get_rrdd(T)
 	
 		W,H = 1000,500
@@ -581,13 +825,30 @@ def plot_ipes():
 		p.color = 'gray'
 		p.plot_grid(30, 30, 30, 30)
 		p.write('rd1.png')
+
+	Ti = T[(T.ra > 190) * (T.ra < 200) * (T.dec > 23) * (T.dec < 24)]
+	print 'Runs', np.unique(Ti.run)
+	print 'Camcols', np.unique(Ti.camcol)
+	print 'Stripes', np.unique(Ti.stripe)
+	print 'Strips', np.unique(Ti.strip)
+
+	Ti = T[(T.ra > 194) * (T.ra < 195) * (T.dec > 23.3) * (T.dec < 23.7)]
+	print 'Runs', np.unique(Ti.run)
+	print 'Camcols', np.unique(Ti.camcol)
+	print 'Stripes', np.unique(Ti.stripe)
+	print 'Strips', np.unique(Ti.strip)
+
 	
 	#if True:
-	for r,d,w,g,fn in [#(230,30,120,10,'rd2.png'),
-		(255,15,30,5,'rd3.png'),
-		(250,20,10,1,'rd4.png'),
-		(250,18,3,1, 'rd5.png'),
-		(250,17.8,1,0.5, 'rd6.png')]:
+	for r,d,w,g,fn,lab in [#(230,30,120,10,'rd2.png', False),
+		#(255,15,30,5,'rd3.png', False),
+		#(250,20,10,1,'rd4.png', False),
+		#(250,18,3,1, 'rd5.png', False),
+		#(250,17.8,1,0.5, 'rd6.png', False),
+		(195, 25, 5, 1, 'rd7.png', False),
+		(194.5, 23.5, 1, 0.1, 'rd8.png', True),
+		(195, 25, 20, 1, 'rd9.png', False),
+		]:
 	
 		W,H = 1000,1000
 		p = Plotstuff(outformat=PLOTSTUFF_FORMAT_PNG, size=(W,H),
@@ -595,9 +856,9 @@ def plot_ipes():
 		rmn,rmx,dmn,dmx = anwcs_get_radec_bounds(p.wcs, 100)
 		print 'Bounds', rmn,rmx,dmn,dmx
 	
-		T.cut((T.ramin < rmx) * (T.ramax > rmn) *
-			  (T.decmin < dmx) * (T.decmax > dmn))
-		RR,DD = get_rrdd(T)
+		Ti = T[((T.ramin < rmx) * (T.ramax > rmn) *
+				(T.decmin < dmx) * (T.decmax > dmn))]
+		RR,DD = get_rrdd(Ti)
 	
 		p.color = 'verydarkblue'
 		p.plot('fill')
@@ -616,6 +877,14 @@ def plot_ipes():
 			p.stroke()
 		p.color = 'gray'
 		p.plot_grid(g,g,g,g)
+
+		if lab:
+			p.color = 'white'
+			p.apply_settings()
+			for i in range(len(Ti)):
+				p.text_radec(Ti.ra[i], Ti.dec[i],
+							 '%i/%i/%i' % (Ti.run[i], Ti.camcol[i], Ti.field[i]))
+
 		p.write(fn)
 	
    

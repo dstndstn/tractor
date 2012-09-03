@@ -675,6 +675,8 @@ def big():
 	n3,b3,p3 = plt.hist(T.my_exprad_i, bins=b, histtype='step', color='b')
 	plt.legend((p[0],p2[0],p3[0]), ('All Photo', 'Photo, exprad in [4.1, 4.4]', 'Tractor-refit [4.1, 4.4]'))
 	plt.xlim(rlo, rhi)
+	plt.xlabel('exprad_i (arcsec)')
+	plt.ylabel('number of galaxies')
 	plt.savefig('my1.png')
 
 	plt.clf()
@@ -684,6 +686,8 @@ def big():
 	n3,b3,p3 = plt.hist(T.my_exprad_i, bins=b, histtype='step', color='b')
 	plt.legend((p[0],p2[0],p3[0]), ('All Photo', 'Photo, exprad in [4.1, 4.4]', 'Tractor-refit [4.1, 4.4]'))
 	plt.xlim(rlo, rhi)
+	plt.xlabel('exprad_i (arcsec)')
+	plt.ylabel('number of galaxies')
 	plt.savefig('my2.png')
 
 
