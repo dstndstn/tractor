@@ -10,6 +10,7 @@ import sys
 
 from general import generalRC3
 from halflight import halflight
+from addtodb import add_to_table
 
 def main():
     rc3 = pyfits.open('newrc3limited.fits')
@@ -48,6 +49,7 @@ def main():
             os.system('cp %s.png RC3_Output' % newentry)
             os.system('cp %s.pickle RC3_Output' % newentry)
             halflight(newentry)
+            add_to_table(newentry)
 
         except AssertionError:
             print sys.exc_info()[0]

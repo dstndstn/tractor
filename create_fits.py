@@ -9,6 +9,31 @@ import matplotlib
 import pylab as plt
 from astropysics.obstools import *
 
+def mu_50(i,r):
+    return i+2.5*(log10(pi*r**2))
+
+def extinction(pos):
+    #where pos is the position
+    
+    #extinction values by filter for Sloan
+    sloanu=5.155
+    sloang=3.793
+    sloanr=2.751
+    sloani=2.086
+    sloanz=1.479
+
+    galactic=radectolb(pos[0],pos[1])
+    print 'galactic',galactic
+    x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
+    correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
+    correctu=float(correction[0])
+    correctg=float(correction[1])
+    correctr=float(correction[2])
+    correcti=float(correction[3])
+    correctz=float(correction[4])
+    return correctu,correctg,correctr,correcti,correctz
+
+
 def main():
     rc3=pyf.open('newrc3limited.fits')
 
@@ -36,31 +61,6 @@ def main():
 
     os.chdir("RC3_Output/updated_pickle/")
     
-    def mu_50(i,r):
-        return i+2.5*(log10(pi*r**2))
-
-    def extinction(x):
-        #where x is the file name
-        CG,r50s,r90s,concs=unpickle_from_file(x)
-
-        #extinction values by filter for Sloan
-        sloanu=5.155
-        sloang=3.793
-        sloanr=2.751
-        sloani=2.086
-        sloanz=1.479
-
-        pos=CG.getPosition()
-        galactic=radectolb(pos[0],pos[1])
-        print 'galactic',galactic
-        x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
-        correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
-        correctu=float(correction[0])
-        correctg=float(correction[1])
-        correctr=float(correction[2])
-        correcti=float(correction[3])
-        correctz=float(correction[4])
-        return correctu,correctg,correctr,correcti,correctz
     
     #print extinction('NGC_3884-updated.pickle')
     
