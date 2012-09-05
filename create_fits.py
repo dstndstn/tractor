@@ -32,15 +32,40 @@ def main():
     cg_r90s=[]
     cg_conc=[]
     cg_extinction=[]
+    cg_mu50=[]
 
     os.chdir("RC3_Output/updated_pickle/")
-    #extinction values by filter for Sloan
-    sloanu=5.155
-    sloang=3.793
-    sloanr=2.751
-    sloani=2.086
-    sloanz=1.479
     
+    def mu_50(i,r):
+        return i+2.5*(log10(pi*r**2))
+
+    def extinction(x):
+        #where x is the file name
+        CG,r50s,r90s,concs=unpickle_from_file(x)
+
+        #extinction values by filter for Sloan
+        sloanu=5.155
+        sloang=3.793
+        sloanr=2.751
+        sloani=2.086
+        sloanz=1.479
+
+        pos=CG.getPosition()
+        galactic=radectolb(pos[0],pos[1])
+        print 'galactic',galactic
+        x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
+        correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
+        correctu=float(correction[0])
+        correctg=float(correction[1])
+        correctr=float(correction[2])
+        correcti=float(correction[3])
+        correctz=float(correction[4])
+        return correctu,correctg,correctr,correcti,correctz
+    
+    #print extinction('NGC_3884-updated.pickle')
+    
+
+
     for files in os.listdir("."):
         if files.endswith("-updated.pickle"):
             print files
@@ -48,7 +73,8 @@ def main():
             CG,r50s,r90s,concs=unpickle_from_file(files)
             pos=CG.getPosition()
             tot=CG.getBrightness()
-            
+            print tot, 'tot mags'
+
             dev=CG.brightnessDev
             dev_re=CG.shapeDev.re
             dev_ab=CG.shapeDev.ab
@@ -73,7 +99,7 @@ def main():
             cg_r50s.append(r50s)
             cg_r90s.append(r90s)
             cg_conc.append(concs)
-            
+
             #get extinction from SFD
             galactic=radectolb(pos[0],pos[1])
             print 'galactic',galactic
@@ -93,6 +119,15 @@ def main():
             cg_extinction.append(cg_extinctiontemp)
             #print cg_extinction
             
+            imag_corrected=tot[3]-correcti
+            print tot[3],correcti,imag_corrected
+            print r50s[3]
+            y=mu_50(imag_corrected,r50s[3])
+            
+            cg_mu50.append(mu_50(imag_corrected,r50s[3]))
+            #print cg_mu50
+            
+
             #data from rc3
             strip=files.rstrip('-updated.pickle')
             replace=strip.replace('_',' ')
@@ -143,6 +178,7 @@ def main():
     a18=np.array(cg_expphi)
     a19=np.array(cg_expmags)
     a20=np.array(cg_extinction)
+    a21=np.array(cg_mu50)
     col1=pyf.Column(name='RC3_NAME',format='10A',array=a1)
     col2=pyf.Column(name='RC3_RA',format='1E',array=a2)
     col3=pyf.Column(name='RC3_DEC',format='1E',array=a3)
@@ -163,8 +199,8 @@ def main():
     col18=pyf.Column(name='CG_EXPPHI',format='1E',array=a18)
     col19=pyf.Column(name='CG_EXPMAGS',format='5E',array=a19)
     col20=pyf.Column(name='CG_EXTINCTION',format='5E',array=a20)
-
-    cols=pyf.ColDefs([col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20])
+    col21=pyf.Column(name='CG I-SB', format='1E',array=a21)
+    cols=pyf.ColDefs([col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21])
     tbhdu=pyf.new_table(cols)
     tbhdulist=pyf.HDUList([hdu,tbhdu])
     os.chdir("../../")
