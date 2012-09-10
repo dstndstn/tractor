@@ -191,6 +191,33 @@ class NullPhotoCal(BaseParams):
 	def brightnessToCounts(self, brightness):
 		return brightness.getValue()
 
+class LinearPhotoCal(ScalarParam):
+	'''
+	A `PhotoCal`, to be used with `Flux` or `Fluxes` brightnesses,
+	that simply scales the flux by a fixed factor; the brightness
+	units are proportional to image counts.
+	'''
+
+	def __init__(self, scale, band=None):
+		'''
+		Creates a new LinearPhotoCal object that scales the Fluxes by
+		the given factor to produce image counts.
+
+		If 'band' is not None, will retrieve that band from a `Fluxes` object.
+		'''
+		super(LinearPhotoCal, self).__init__(self, scale)
+		self.band = band
+
+	def getScale(self):
+		return self.val
+
+	def brightnessToCounts(self, brightness):
+		if self.band is None:
+			return brightness.getValue() * self.val
+		else:
+			return brightness.getFlux(self.band) * self.val
+
+
 class NullWCS(BaseParams):
 	'''
 	The "identity" WCS -- useful when you are using raw pixel

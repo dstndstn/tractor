@@ -1046,7 +1046,6 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	pixscale = 0.187
 	S = int(1.01 * sz / pixscale) / 2
 	print 'Grabbing S =', S, 'subregion of CFHT coadd'
-	#S=500
 	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap, doplots=False)
 	tractor.images.prepend(coim)
 
@@ -1135,7 +1134,6 @@ def stage100(tractor=None, mp=None, **kwargs):
 		  ibest=0, tsuf=': init', **plotsa)
 
 	tractor.setCatalog(brightcat)
-  
 
 	pfn = 's2-006.pickle'
 	(ap,i2,cat) = unpickle_from_file(pfn)
@@ -1406,9 +1404,9 @@ def runstage(stage, force=[], threads=1, doplots=True):
 
 	# "sz" is the square side length of the ROI, in arcsec
 	# This is a full SDSS frame (2048 x 2048)
-	#P.update(RA = 334.32, DEC = 0.315, sz = 0.24 * 3600.)
+	P.update(RA = 334.32, DEC = 0.315, sz = 0.24 * 3600.)
 
-	P.update(RA = 334.32, DEC = 0.315, sz = 0.12 * 3600.)
+	#P.update(RA = 334.32, DEC = 0.315, sz = 0.12 * 3600.)
 
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
