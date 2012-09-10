@@ -565,4 +565,37 @@ ARGH, deV is SPHEROID,  exp is DISK, not vice versa.
 
 Now fits look generally good.
 
-Given that, 
+--------------------------------------------
+2012-08-28
+--------------------------------------------
+
+Ran CS82 catalog vs CS82 co-add images, and found 0.5-mag offset
+between SDSS stars and CS82 mag_psf.  Emailed team.
+
+--------------------------------------------
+2012-09-10
+--------------------------------------------
+
+No news re half-mag offset.  Just compensate for it and move on.
+
+Move on to what, exactly?  What is the critical path for having forced
+photometry results on the whole CS82 area?
+
+-single-image, object-by-object then full-field fits, flux only
+-(work in fluxes rather than mags)
+-(measure errors?)
+-report mean/sample variance
+-outlier images?  Compare vs Schlegel's SCORE
+-output catalogs
+
+run_1/camcol_1/field_1 mag_[ugriz]_1
+
+-measure speed, figure out how to parallelize, talk to Schlegel re: NERSCing
+
+Next steps:
+
+-all images in a band simultaneously
+-re-fit CS82 mags vs CS82 coadds
+-(re-fit shapes)
+
+

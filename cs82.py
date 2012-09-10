@@ -2905,4 +2905,46 @@ def main():
 
 if __name__ == '__main__':
 	main()
+	if False:
+		T = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+		T.about()
+		maglim = 23
+		psf = (T.chi2_psf < T.chi2_model) * (T.mag_psf <= maglim)
+		faint = (T.mag_disk > maglim) * (T.mag_spheroid > maglim)
+		Tgal = T[np.logical_not(psf) * np.logical_not(faint)]
+		Texp = Tgal[Tgal.mag_disk <= maglim]
+		Tdev = Tgal[Tgal.mag_spheroid <= maglim]
+		plt.clf()
+		plt.hist(Texp.disk_scale_world, 100)
+		plt.xlabel('disk_scale')
+		plt.savefig('1.png')
+		plt.clf()
+		plt.hist(Texp.disk_aspect_world, 100)
+		plt.xlabel('disk_aspect_world')
+		plt.savefig('2.png')
+		plt.clf()
+		plt.hist(Texp.disk_theta_world, 100)
+		plt.xlabel('disk_theta_world')
+		plt.savefig('3.png')
+		plt.clf()
+		plt.hist(Texp.mag_disk, 100)
+		plt.xlabel('mag_disk')
+		plt.savefig('4.png')
+		plt.clf()
+		plt.hist(Tdev.spheroid_reff_world, 100)
+		plt.xlabel('spheroid_reff')
+		plt.savefig('5.png')
+		plt.clf()
+		plt.hist(Tdev.spheroid_aspect_world, 100)
+		plt.xlabel('spheroid_aspect_world')
+		plt.savefig('6.png')
+		plt.clf()
+		plt.hist(Tdev.spheroid_theta_world, 100)
+		plt.xlabel('spheroid_theta_world')
+		plt.savefig('7.png')
+		plt.clf()
+		plt.hist(Tdev.mag_spheroid, 100)
+		plt.xlabel('mag_spheroid')
+		plt.savefig('8.png')
+	
 	sys.exit(0)
