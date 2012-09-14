@@ -59,16 +59,19 @@ def add_to_table(name):
     rc3_log_ae = float(rc3['LOG_AE'][0])
     rc3_log_d25 = float(rc3['LOG_D25'][0])
 
-    newdata = rc3_name,rc3_ra,rc3_dec,rc3_log_ae,rc3_log_d25,cg_ra,cg_dec,cg_r50s,cg_r90s,cg_conc,cg_totmags,cg_devre,cg_devab,cg_devphi,cg_devmags,cg_expre,cg_devab,cg_devphi,cg_expmags,cg_extinction
+    newdata = rc3_name,rc3_ra,rc3_dec,rc3_log_ae,rc3_log_d25,cg_ra,cg_dec,cg_r50s,cg_r90s,cg_conc,cg_totmags,cg_devre,cg_devab,cg_devphi,cg_devmags,cg_expre,cg_devab,cg_devphi,cg_expmags,cg_extinction,cg_mu50
 
 
     nrows=table[1].data.shape[0]+1
     hdu= pyfits.new_table(table[1].columns,nrows=nrows)
     for i in range(len(table[1].columns.names)):
         hdu.data.field(i)[-1]=newdata[i]
-    print hdu.data
 
     pri_hdu = pyf.PrimaryHDU(np.arange(100))
     tbuhdulist =pyf.HDUList([pri_hdu,hdu])
 
     tbuhdulist.writeto('large_galaxies.fits',clobber=True)
+    print os.getcwd()
+    os.chdir('/data1/dwm261/tractor/')
+    print os.getcwd()
+

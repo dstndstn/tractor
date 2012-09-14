@@ -35,7 +35,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     print 'SDSS jpeg scale', scale
     imgfn = 'sdss-mosaic-%s.png' % prefix
     if not os.path.exists(imgfn):
-        url = (('http://skyservice.pha.jhu.edu/DR8/ImgCutout/getjpeg.aspx?' +
+        url = (('http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?' +
                 'ra=%f&dec=%f&scale=%f&width=%i&height=%i') %
                (ra, dec, scale, W, H))
         f = urllib2.urlopen(url)
@@ -136,11 +136,21 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     else:
         print 'No d_25, using default values'
         fieldradius = 3.
-        remradius = 2.
+        remradius = 2.        
     
-        
-    
-    general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False)
+    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
+
+def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+    data = pyfits.open("nsa-short.fits.gz")[1].data
+    e=data.field('NSAID')
+
+    mask = e == nsid
+    record = data[mask]
+    print record
+
+    general("NSA_ID_%s" % nsid,record['RA'],record['DEC'],record['SERSIC_TH50']/60.,record['SERSIC_TH50']/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
+
+
 
 def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
     #Radius should be in arcminutes
@@ -150,7 +160,8 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         mp = multiproc()
 
     IRLS_scale = 25.
-    dr8 = True
+    dr9 = True
+    dr8 = False
     noarcsinh = False
     print name
 
@@ -159,7 +170,9 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print 'Field Radius', fieldradius
     print 'RA,Dec', ra, dec
 
-    rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr8fields.fits")
+    print os.getcwd()
+
+    rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
     print rcfs
     assert(len(rcfs)>0)
     assert(len(rcfs)<15)
@@ -170,7 +183,11 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         print sra,sdec,smag
 
     imkw = dict(psf='dg')
-    if dr8:
+    if dr9:
+        getim = st.get_tractor_image_dr9
+        getsrc = st.get_tractor_sources_dr9
+        imkw.update(zrange=[-3,100])
+    elif dr8:
         getim = st.get_tractor_image_dr8
         getsrc = st.get_tractor_sources_dr8
         imkw.update(zrange=[-3,100])
@@ -209,7 +226,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
 
     if noarcsinh:
         sa.update(nlscale=0)
-    elif dr8:
+    elif dr8 or dr9:
         sa.update(chilo=-8.,chihi=8.)
 
     if nocache:
@@ -284,14 +301,8 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
 
     for i in range(itune1):
         tractor.optimize()
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
         tractor.changeInvvar(IRLS_scale)
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
         saveAll('itune1-%d-' % (i+1)+prefix,tractor,**sa)
-        print resource.getpagesize()
-        print resource.getrusage(resource.RUSAGE_SELF)[2]
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
         gc.collect()
@@ -327,8 +338,6 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         tractor.optimize()
         tractor.changeInvvar(IRLS_scale)
         saveAll('itune2-%d-' % (i+1)+prefix,tractor,**sa)
-        print resource.getpagesize()
-        print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
         tractor.clearCache()
         sg.get_galaxy_cache().clear()
         print resource.getpagesize()
@@ -368,6 +377,7 @@ def main():
     parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
     parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
     parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
+    parser.add_option('--nsatlas',dest='nsatlas',action='store_true',default=False,help='Use argument as Nasa-Sloan Atlas id')
 
     opt,args = parser.parse_args()
     if len(args) != 1:
@@ -376,12 +386,16 @@ def main():
 
     threads=opt.threads
 
-    name = args[0]
+    
     itune1 = opt.itune1
     itune2 = opt.itune2
     ntune = opt.ntune
     nocache = opt.nocache
-    generalRC3(name,threads,itune1,itune2,ntune,nocache)
+    if opt.nsatlas:
+        generalNSAtlas(args[0],threads,itune1,itune2,ntune,nocache)
+    else:
+        name = args[0]
+        generalRC3(name,threads,itune1,itune2,ntune,nocache)
 
 
 
