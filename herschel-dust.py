@@ -23,6 +23,7 @@ from astrometry.util.util import Tan, tan_wcs_resample, log_init, lanczos
 from astrometry.util.multiproc import multiproc
 from astrometry.util.file import pickle_to_file, unpickle_from_file
 from astrometry.util.plotutils import setRadecAxes
+from astrometry.util.miscutils import point_in_poly
 import multiprocessing
 import os
 
@@ -1052,19 +1053,6 @@ def main():
 		step0 = 0
 		tractor = create_tractor(opt)
 		tractor.mp = mp
-
-		def point_in_poly(x, y, poly):
-			inside = np.zeros(np.atleast_1d(x).shape, bool)
-			for i in range(len(poly)):
-				j = (i-1 + len(poly)) % len(poly)
-				xi,xj = poly[i,0], poly[j,0]
-				yi,yj = poly[i,1], poly[j,1]
-				I = np.logical_and(
-					np.logical_or(np.logical_and(yi <= y, y < yj),
-								  np.logical_and(yj <= y, y < yi)),
-					x < (xi + ((xj - xi) * (y - yi) / (yj - yi))))
-				inside[I] = np.logical_not(inside[I])
-			return inside
 
 		# zero out invvar outside the model bounds.
 		ds = tractor.getCatalog()[0]

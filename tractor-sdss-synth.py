@@ -180,6 +180,7 @@ def main():
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
 	parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?	Default is DR7')
+	parser.add_option('--dr9', dest='dr9', action='store_true', help='Use DR9?	Default is DR7')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
 	parser.add_option('--ntune', action='callback', callback=store_value, type=int,	 help='Improve synthetic image by locally optimizing likelihood for nsteps iterations')
 	parser.add_option('--itune', action='callback', callback=store_value, type=int, nargs=2, help='Optimizes each source individually')
@@ -221,7 +222,11 @@ def main():
 		prefix = '%06i-%i-%04i' % (run,camcol, field)
 
 	imkw = {}
-	if opt.dr8:
+	if opt.dr9:
+		getim = st.get_tractor_image_dr9
+		getsrc = st.get_tractor_sources_dr9
+		imkw.update(zrange=[-3,100])
+	elif opt.dr8:
 		getim = st.get_tractor_image_dr8
 		getsrc = st.get_tractor_sources_dr8
 		imkw.update(zrange=[-3,100])
