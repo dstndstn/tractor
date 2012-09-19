@@ -87,10 +87,10 @@ def main():
 	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	p1 = Patch(10, 15, np.zeros((100,200)))
-	p2 = Patch(20, 20, np.zeros((20,25)))
-	p1.hasNonzeroOverlapWith(p2)
-	p2.hasNonzeroOverlapWith(p1)
+	#p1 = Patch(10, 15, np.zeros((100,200)))
+	#p2 = Patch(20, 20, np.zeros((20,25)))
+	#p1.hasNonzeroOverlapWith(p2)
+	#p2.hasNonzeroOverlapWith(p1)
 	#sys.exit(0)
 
 	#plot_ipes()
@@ -595,8 +595,6 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 	overlap.append(gal)
 	galpatch = tractor.getModelPatch(im, gal)
 	galpatch.trimToNonZero()
-	#galext = galpatch.getExtent()
-	#(gx0,gx1,gy0,gy1) = galext
 	for src in tractor.catalog:
 		if src is gal:
 			continue
@@ -604,11 +602,6 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 		if patch is None:
 			continue
 		patch.trimToNonZero()
-		#ext = patch.getExtent()
-		#(x0,x1,y0,y1) = ext
-		#if x0 >= gx1 or gx0 >= x1 or y0 >= gy1 or gy0 >= y1:
-		#		# no overlap
-		#	continue
 		if galpatch.hasNonzeroOverlapWith(patch):
 			overlap.append(src)
 
@@ -657,8 +650,8 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 		if dlnp < 1:
 			break
 
-	print 'Fitting the key galaxy:'
-	tractor.catalog.freezeAllBut(ii)
+	print 'Fitting the target galaxy:'
+	tractor.catalog.freezeAllBut(0)
 	while True:
 		dlnp,X,alpha = tractor.optimize(damp=1e-3)
 		print 'dlnp', dlnp
@@ -681,9 +674,9 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 		
 	if True:
 		# Try making model-switching changes to the galaxy...
-		tractor.catalog.freezeAllBut(ii)
+		tractor.catalog.freezeAllBut(0)
 		#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
-		gal = tractor.catalog[ii]
+		gal = tractor.catalog[0]
 		print 'Galaxy', gal
 
 		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
@@ -707,7 +700,7 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 				comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
 									   m2, gal.shape.copy())
 
-			tractor.catalog[ii] = comp
+			tractor.catalog[0] = comp
 
 			print 'Trying composite', comp
 
@@ -737,11 +730,11 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 			lnp2 = tractor.getLogProb()
 			gal2 = comp.copy()
 
-			print 'tractor.catalog[ii]:', tractor.catalog[ii]
+			print 'tractor.catalog[0]:', tractor.catalog[0]
 			print 'comp:', comp.copy()
 
 			print 'Reverting'
-			tractor.catalog[ii] = gal
+			tractor.catalog[0] = gal
 
 
 		elif isinstance(gal, CompositeGalaxy):
@@ -765,8 +758,8 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 				newgal = None
 			if newgal is not None:
 				print newgal
-				tractor.catalog[ii] = newgal
-				print tractor.catalog[ii]
+				tractor.catalog[0] = newgal
+				print tractor.catalog[0]
 				lnp2 = tractor.getLogProb()
 				print 'Comp->single: Initial dlnp:', lnp2 - lnp1
 
@@ -790,14 +783,14 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 			mod2 = tractor.getModelImage(0)
 			chi2 = tractor.getChiImage(0)
 			lnp2 = tractor.getLogProb()
-			#gal2 = tractor.catalog[ii].copy()
+			#gal2 = tractor.catalog[0].copy()
 			gal2 = newgal.copy()
 
-			print 'tractor.catalog[ii]:', tractor.catalog[ii]
+			print 'tractor.catalog[0]:', tractor.catalog[0]
 			print 'newgal:', newgal.copy()
 
 			print 'Reverting'
-			tractor.catalog[ii] = gal
+			tractor.catalog[0] = gal
 
 		else:
 			print 'Hmmm?  Unknown source type', gal
