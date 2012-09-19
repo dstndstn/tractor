@@ -94,7 +94,8 @@ def main():
 	#sys.exit(0)
 
 	#plot_ipes()
-	refit_galaxies_1()
+	#refit_galaxies_1()
+	refit_galaxies_2()
 	#ipe_errors()
 
 
@@ -132,7 +133,6 @@ def ipe_errors():
 		I = I[K]
 		J = J[K]
 		print len(I), 'symmetric'
-
 		print sum(T.field[I] == T.field[J]), 'are in the same field'
 
 		#plt.clf()
@@ -442,6 +442,63 @@ def ipe_errors():
 	plt.savefig('ipe3.png')
 
 
+
+def refit_galaxies_2():
+	import optparse
+	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
+	parser.add_option('--threads', dest='threads', type=int, default=1,
+					  help='use multiprocessing')
+	opt,args = parser.parse_args()
+	mp = multiproc(nthreads=opt.threads)
+
+	T = fits_table('ipe3_dstn_2.fit')
+	print len(T), 'objects'
+	T1 = T[T.run == 5183]
+	T2 = T[T.run == 5224]
+
+	rascale = np.mean(np.cos(np.deg2rad(np.append(T1.dec, T2.dec))))
+	X1 = np.vstack((T1.ra * rascale, T1.dec)).T
+	X2 = np.vstack((T2.ra * rascale, T2.dec)).T
+	R = 1. / 3600.
+	inds,d = nearest(X1, X2, R)
+	J = np.flatnonzero(inds > -1)
+	I = inds[J]
+	M1 = T1[I]
+	M2 = T2[J]
+
+	# select both-galaxy subset.
+	K = ((M1.type == 3) * (M2.type == 3))
+	M1 = M1[K]
+	M2 = M2[I]
+
+	# sort by mag
+	I = np.argsort(M1.modelmag_i)
+	M1 = M1[I]
+	M2 = M2[I]
+
+	# interleave them
+	newvals = []
+	for c in M1.get_columns():
+		X1 = M1.get(c)
+		print 'column', c, 'shape', X1.shape
+		## can't handle arrays here
+		assert(len(X1.shape) == 1)
+		XX = np.zeros(len(X1) * 2, dtype=X1.dtype)
+		XX[0::2] = X1
+		X2 = M2.get(c)
+		XX[1::2] = X2
+		newvals.append(XX)
+	# set them all at once to avoid length problems?
+	for c,XX in zip(M1.get_columns(), newvals):
+		M1.set(c, XX)
+	MM = M1
+	del M1
+	del M2
+		
+	refit_galaxies(MM, intermediate_fn='my-ipes-%06i.fits', mp=mp,
+				   modswitch=False, errors=True)
+	T.writeto('my-ipes.fits')
+
 def refit_galaxies_1():
 	import optparse
 	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
@@ -479,11 +536,13 @@ def refit_galaxies_1():
 
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
-	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits', mp=mp)
+	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits', mp=mp,
+				   modswitch=True)
 	Ti.writeto('mye4.fits')
 
 def refit_galaxies(T, bandname='i', S=100,
-				   intermediate_fn='refit-%06i.fits', mp=None):
+				   intermediate_fn='refit-%06i.fits', mp=None,
+				   modswitch=False, errors=False):
 	if mp is None:
 		mp = multiproc()
 	sdss = DR9(basedir='paper0-data-dr9')
@@ -508,7 +567,7 @@ def refit_galaxies(T, bandname='i', S=100,
 		ti = T[gali]
 		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
 		#ti.about()
-		args.append((ti, bandname, S, sdss, gali))
+		args.append((ti, bandname, S, sdss, gali, modswitch, errors))
 
 	#tinew = mp.map(_refit_gal, args)
 
@@ -539,16 +598,18 @@ def refit_galaxies(T, bandname='i', S=100,
 		if intermediate_fn:
 			Ti.writeto(intermediate_fn % B)
 
-def _refit_gal((ti, bandname, S, sdss, gali)):
+def _refit_gal(*args): #(ti, bandname, S, sdss, gali)):
 	try:
-		return _real_refit_gal((ti, bandname, S, sdss, gali))
+		#return _real_refit_gal((ti, bandname, S, sdss, gali))
+		return _real_refit_gal(*args)
 	except:
 		import traceback
 		traceback.print_exc()
 		return None
 
 
-def _real_refit_gal((ti, bandname, S, sdss, gali)):
+def _real_refit_gal((ti, bandname, S, sdss, gali,
+					 modswitch, errors)):
 	im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
 									roiradecsize=(ti.ra, ti.dec, S),
 									sdss=sdss)

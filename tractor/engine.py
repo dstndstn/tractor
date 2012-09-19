@@ -595,6 +595,11 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
+	#
+	def computeParameterErrors(self):
+		### 
+		pass
+
 	def optimize(self, alphas=None, damp=0, priors=True):
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
