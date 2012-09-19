@@ -313,7 +313,6 @@ def ipe_errors():
 	plt.ylabel('Photo error: ' + cerr)
 	ps.savefig()
 
-
 	plt.clf()
 	loghist(G1.fracdev_r, G2.fracdev_r, 100, range=((0,1),(0,1)), clamp=True)
 	plt.xlabel('G1 fracdev_r')
@@ -437,7 +436,7 @@ def ipe_errors():
 	plt.savefig('ipe3.png')
 
 
-def refit_galaxies():
+def refit_galaxies_1():
 	import optparse
 	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
 	parser.add_option('--threads', dest='threads', type=int, default=1,
@@ -461,15 +460,6 @@ def refit_galaxies():
 	#T = fits_table('exp4_dstn.fit')
 	T = fits_table('exp5b_dstn.fit')
 
-	sdss = DR9(basedir='paper0-data-dr9')
-
-	print 'basedir', sdss.basedir
-	print 'dasurl', sdss.dasurl
-
-	bandname = 'i'
-	# ROI radius in pixels
-	S = 100
-
 	rlo,rhi = 4.1, 4.4
 	Ti = T[(T.exprad_i > rlo) * (T.exprad_i < rhi)]
 	Ti = Ti[Ti.expmag_i < 19]
@@ -483,18 +473,31 @@ def refit_galaxies():
 
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
+	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits')
+	Ti.writeto('mye4.fits')
+
+def refit_galaxies(T, bandname='i', S=100,
+				   intermediate_fn='refit-%06i.fits'):
+	sdss = DR9(basedir='paper0-data-dr9')
+	print 'basedir', sdss.basedir
+	print 'dasurl', sdss.dasurl
+
+	#bandname = 'i'
+	# ROI radius in pixels
+	#S = 100
+
 	for prefix in ['my_', 'init_', 'sw_']:
 		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i', 'ra', 'dec']:
-			Ti.set(prefix + c, np.zeros_like(Ti.get(c)))
+			T.set(prefix + c, np.zeros_like(T.get(c)))
 		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
-			Ti.set(prefix + c, np.zeros_like(Ti.get(c.replace('dev','exp'))))
-		Ti.set(prefix + 'type', np.chararray(len(Ti), 1))
-	Ti.set('sw_dlnp', np.zeros(len(Ti), np.float32))
+			T.set(prefix + c, np.zeros_like(T.get(c.replace('dev','exp'))))
+		T.set(prefix + 'type', np.chararray(len(T), 1))
+	T.set('sw_dlnp', np.zeros(len(T), np.float32))
 
 	args = []
 
-	for gali in range(len(Ti)):
-		ti = Ti[gali]
+	for gali in range(len(T)):
+		ti = T[gali]
 		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
 		#ti.about()
 		args.append((ti, bandname, S, sdss, gali))
@@ -517,17 +520,16 @@ def refit_galaxies():
 		tinew.extend(thisres)
 		#print 'tinew:', tinew
 
-		for gali in range(min(len(Ti), len(tinew))):
+		for gali in range(min(len(T), len(tinew))):
 			tin = tinew[gali]
 			if tin is None:
 				print 'Skipping', gali
 				continue
-			Ti[gali] = tin
+			T[gali] = tin
 		#Ti.about()
 
-		Ti.writeto('mye4-%06i.fits' % B)
-	Ti.writeto('mye4.fits')
-
+		if intermediate_fn:
+			Ti.writeto(intermediate_fn % B)
 
 def _refit_gal((ti, bandname, S, sdss, gali)):
 	try:
