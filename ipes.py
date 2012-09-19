@@ -87,11 +87,17 @@ def main():
 	#lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	#plot_ipes()
+	p1 = Patch(10, 15, np.zeros((100,200)))
+	p2 = Patch(20, 20, np.zeros((20,25)))
+	p1.hasNonzeroOverlapWith(p2)
+	p2.hasNonzeroOverlapWith(p1)
 	#sys.exit(0)
-	#refit_galaxies()
 
-	ipe_errors()
+	#plot_ipes()
+	refit_galaxies_1()
+	#ipe_errors()
+
+
 
 def ipe_errors():
 	#T = fits_table('ipe1_dstn.fit')
@@ -473,11 +479,13 @@ def refit_galaxies_1():
 
 	print 'Cut to', len(Ti), 'galaxies in radius and mag cuts'
 
-	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits')
+	refit_galaxies(Ti, intermediate_fn='mye4-%06i.fits', mp=mp)
 	Ti.writeto('mye4.fits')
 
 def refit_galaxies(T, bandname='i', S=100,
-				   intermediate_fn='refit-%06i.fits'):
+				   intermediate_fn='refit-%06i.fits', mp=None):
+	if mp is None:
+		mp = multiproc()
 	sdss = DR9(basedir='paper0-data-dr9')
 	print 'basedir', sdss.basedir
 	print 'dasurl', sdss.dasurl
@@ -581,6 +589,34 @@ def _real_refit_gal((ti, bandname, S, sdss, gali)):
 	assert(ii is not None)
 	print 'Closest to image center:', tractor.catalog[ii]
 	gal = tractor.catalog[ii]
+
+	# Find sources that overlap this one?
+	overlap = Catalog()
+	overlap.append(gal)
+	galpatch = tractor.getModelPatch(im, gal)
+	galpatch.trimToNonZero()
+	#galext = galpatch.getExtent()
+	#(gx0,gx1,gy0,gy1) = galext
+	for src in tractor.catalog:
+		if src is gal:
+			continue
+		patch = tractor.getModelPatch(im, src)
+		if patch is None:
+			continue
+		patch.trimToNonZero()
+		#ext = patch.getExtent()
+		#(x0,x1,y0,y1) = ext
+		#if x0 >= gx1 or gx0 >= x1 or y0 >= gy1 or gy0 >= y1:
+		#		# no overlap
+		#	continue
+		if galpatch.hasNonzeroOverlapWith(patch):
+			overlap.append(src)
+
+	print len(tractor.getCatalog()), 'sources in the region'
+	print len(overlap), 'overlap the target galaxy'
+
+	tractor.setCatalog(overlap)
+	gal = overlap[0]
 
 	gal0 = gal.copy()
 

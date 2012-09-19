@@ -190,6 +190,71 @@ class Patch(object):
 			s += '(no image)'
 		return s
 
+	def trimToNonZero(self):
+		if self.patch is None:
+			return
+		H,W = self.patch.shape
+		for x in range(W):
+			if not np.all(self.patch[:,x] == 0):
+				break
+		x0 = x
+		for x in range(W, 0, -1):
+			if not np.all(self.patch[:,x-1] == 0):
+				break
+		x1 = x
+
+		for y in range(H):
+			if not np.all(self.patch[y,:] == 0):
+				break
+		y0 = y
+		for y in range(H, 0, -1):
+			if not np.all(self.patch[y-1,:] == 0):
+				break
+		y1 = y
+
+		if x0 == 0 and y0 == 0 and x1 == W and y1 == H:
+			return
+
+		self.patch = self.patch[y0:y1, x0:x1]
+		self.x0 += x0
+		self.y0 += y0
+
+	def hasNonzeroOverlapWith(self, other):
+		ext = self.getExtent()
+		(x0,x1,y0,y1) = ext
+		oext = other.getExtent()
+		(ox0,ox1,oy0,oy1) = oext
+		if x0 >= ox1 or ox0 >= x1 or y0 >= oy1 or oy0 >= y1:
+			return False
+		print 'me shape', self.patch.shape
+		print 'other shape', other.patch.shape
+		print 'me x [%i, %i]' % (x0, x1-1)
+		print 'other x [%i, %i]' % (ox0, ox1-1)
+		print 'me y [%i, %i]' % (y0, y1-1)
+		print 'other y [%i, %i]' % (oy0, oy1-1)
+		ix,ox = get_overlapping_region(ox0, ox1-1, x0, x1-1)
+		iy,oy = get_overlapping_region(oy0, oy1-1, y0, y1-1)
+		print 'ox', ox
+		print 'ix', ix
+		print 'oy', oy
+		print 'iy', iy
+		ix = slice(ix.start -  x0, ix.stop -  x0)
+		iy = slice(iy.start -  y0, iy.stop -  y0)
+		print 'ix', ix
+		print 'iy', iy
+
+		print 'before cut: my shape', self.patch.shape
+		sub = self.patch[iy,ix]
+		print 'after cut: my shape', sub.shape
+
+		print 'before cut: other shape', other.patch.shape
+		osub = other.patch[oy,ox]
+		print 'after cut: other shape', osub.shape
+
+		print sub.shape, osub.shape
+		assert(sub.shape == osub.shape)
+		return np.sum(sub * osub) > 0.
+
 	def __repr__(self):
 		return str(self)
 	def setName(self, name):
@@ -208,7 +273,7 @@ class Patch(object):
 
 	def getExtent(self):
 		''' Return (x0, x1, y0, y1) '''
-		(w,h) = self.shape
+		(h,w) = self.shape
 		return (self.x0, self.x0 + w, self.y0, self.y0 + h)
 
 	def getOrigin(self):

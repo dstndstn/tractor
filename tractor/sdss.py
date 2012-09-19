@@ -611,7 +611,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
-	print 'Band name:', bandname
+	#print 'Band name:', bandname
 	photocal = SdssNanomaggiesPhotoCal(bandname)
 
 	sky = 0.
@@ -619,23 +619,23 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	calibvec = frame.getCalibVec()
 
-	print 'sky', #frame.sky
-	print frame.sky.shape
-	print 'x', len(frame.skyxi), frame.skyxi
-	print frame.skyxi.shape
-	print 'y', len(frame.skyyi), frame.skyyi
-	print frame.skyyi.shape
+	#print 'sky', #frame.sky
+	#print frame.sky.shape
+	#print 'x', len(frame.skyxi), frame.skyxi
+	#print frame.skyxi.shape
+	#print 'y', len(frame.skyyi), frame.skyyi
+	#print frame.skyyi.shape
 
 	skyim = frame.sky
 	(sh,sw) = skyim.shape
-	print 'Skyim shape', skyim.shape
+	#print 'Skyim shape', skyim.shape
 	if sw != 256:
 		skyim = skyim.T
 	(sh,sw) = skyim.shape
 	xi = np.round(frame.skyxi).astype(int)
-	print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
+	#print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
 	yi = np.round(frame.skyyi).astype(int)
-	print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	#print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
 	assert(all(xi >= 0) and all(xi < sw))
 	assert(all(yi >= 0) and all(yi < sh))
 	XI,YI = np.meshgrid(xi, yi)
