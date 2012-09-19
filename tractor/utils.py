@@ -38,6 +38,7 @@ class PlotSequence(object):
 	def skipto(self, n):
 		self.ploti = n
 	def savefig(self):
+		import pylab as plt
 		fn = '%s-%s.png' % (self.basefn, self.format % self.ploti)
 		plt.savefig(fn)
 		print 'saved', fn

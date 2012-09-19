@@ -65,6 +65,8 @@ import numpy as np
 import sys
 import logging
 
+from tractor.utils import PlotSequence
+
 from astrometry.util.fits import *
 from astrometry.blind.plotstuff import *
 from astrometry.util.c import *
@@ -96,6 +98,8 @@ def ipe_errors():
 	#T.cut((T.ra < 249.85) * (T.dec < 17.65))
 	#print 'Cut to', len(T)
 
+	ps = PlotSequence('ipe')
+
 	#T = fits_table('ipe2_dstn_1.fit')
 	T = fits_table('ipe3_dstn_2.fit')
 	print len(T), 'objects'
@@ -110,7 +114,7 @@ def ipe_errors():
 	plt.clf()
 	plt.plot(T1.ra, T1.dec, 'r.', alpha=0.1)
 	plt.plot(T2.ra, T2.dec, 'bx', alpha=0.1)
-	plt.savefig('ipe1.png')
+	ps.savefig()
 
 	for T in [T1,T2]:
 		# self-matches:
@@ -145,47 +149,65 @@ def ipe_errors():
 	dra = (T1.ra[I] - T2.ra[J])*np.cos(np.deg2rad(T1.dec[I])) * 3600.
 	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
 
-	plt.clf()
-	loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
-	plt.savefig('ipe4.png')
+	#plt.clf()
+	#loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
+	#ps.savefig()
 
-	X1 = np.vstack((T1.ra * np.cos(np.deg2rad(T1.dec)), T1.dec)).T
-	X2 = np.vstack((T2.ra * np.cos(np.deg2rad(T2.dec)), T2.dec)).T
+	print 'Range of Decs:', T1.dec.min(), T1.dec.max(), T2.dec.min(), T2.dec.max()
+	ras = np.cos(np.deg2rad(np.append(T1.dec, T2.dec)))
+	print 'Range of RAscales:', ras.min(), ras.max()
 
-	I,d = nearest(X1, X2, R)
-	#print 'nearest I', I
-	J = np.arange(len(X2))
-	K = (I >= 0)
-	I = I[K]
-	J = J[K]
-	#print 'I', I
-	#print 'J', J
+	rascale = np.mean(ras)
+
+	X1 = np.vstack((T1.ra * rascale, T1.dec)).T
+	X2 = np.vstack((T2.ra * rascale, T2.dec)).T
+	inds,d = nearest(X1, X2, R)
+	J = np.flatnonzero(inds > -1)
+	I = inds[J]
 	print 'Nearest-neighbour matches:', len(I)
+	d = np.sqrt(d[J])
+	print 'd', d.shape
+	print 'I,J', len(I), len(J)
+	print 'd max', np.max(d), 'min', np.min(d)
+	print 'R', R
+	assert(np.all(d <= R))
+	assert(np.all(J >= 0))
+	assert(np.all(I >= 0))
 
-	print 'All T1', T1.rowc.min(), T1.rowc.max(), T1.colc.min(), T1.colc.max()
-	print 'Matched T1', T1.rowc[I].min(), T1.rowc[I].max(), T1.colc[I].min(), T1.colc[I].max()
+	dx = X1[I] - X2[J]
+	print 'dx', dx.shape
+	dr = np.hypot(dx[:,0], dx[:,1])
+	print 'dr', dr.shape
+	assert(np.all(dr <= R))
 
-	print 'All T2', T2.rowc.min(), T2.rowc.max(), T2.colc.min(), T2.colc.max()
-	print 'Matched T2', T2.rowc[J].min(), T2.rowc[J].max(), T2.colc[J].min(), T2.colc[J].max()
-
-	dra = (T1.ra[I] - T2.ra[J])*np.cos(np.deg2rad(T1.dec[I])) * 3600.
+	dra  = (T1.ra [I] - T2.ra [J]) * rascale * 3600.
 	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
 
 	plt.clf()
 	loghist(dra, ddec, 100, range=((-1,1),(-1,1)))
-	plt.savefig('ipe3.png')
-	
+	ps.savefig()
+
+	M1 = T1[I]
+	M2 = T2[J]
+
+	#print 'All T1', T1.rowc.min(), T1.rowc.max(), T1.colc.min(), T1.colc.max()
+	#print 'Matched T1', T1.rowc[I].min(), T1.rowc[I].max(), T1.colc[I].min(), T1.colc[I].max()
+	#print 'All T2', T2.rowc.min(), T2.rowc.max(), T2.colc.min(), T2.colc.max()
+	#print 'Matched T2', T2.rowc[J].min(), T2.rowc[J].max(), T2.colc[J].min(), T2.colc[J].max()
+
 	# Errors are in arcsec.
-	rerr1 = T1.raerr[I]
-	derr1 = T1.decerr[I]
-	rerr2 = T2.raerr[J]
-	derr2 = T2.decerr[J]
+	rerr1 = M1.raerr
+	derr1 = M1.decerr
+	rerr2 = M2.raerr
+	derr2 = M2.decerr
 
 	hi = 6.
-	S = 1./np.sqrt(2.)
+	dscale = 1./np.sqrt(2.)
 	plt.clf()
-	n,b,p = plt.hist(S * np.hypot(dra, ddec) / np.hypot(rerr1, derr1), 100, range=(0, hi), histtype='step', color='r')
-	plt.hist(S * np.hypot(dra, ddec) / np.hypot(rerr2, derr2), 100, range=(0, hi), histtype='step', color='b')
+	n,b,p = plt.hist(dscale * np.hypot(dra, ddec) / np.hypot(rerr1, derr1), 100,
+					 range=(0, hi), histtype='step', color='r')
+	plt.hist(dscale * np.hypot(dra, ddec) / np.hypot(rerr2, derr2), 100,
+			 range=(0, hi), histtype='step', color='b')
 	xx = np.linspace(0, hi, 500)
 	from scipy.stats import chi
 	yy = chi.pdf(xx, 2)
@@ -193,70 +215,169 @@ def ipe_errors():
 	plt.xlim(0,hi)
 	plt.xlabel('N sigma of RA,Dec repeat observations')
 	plt.ylabel('Number of sources')
-	plt.savefig('ipe5.png')
+	ps.savefig()
 
-	for c,cerr,nn in [('psfmag_r', 'psfmagerr_r', 6)]:
-		plt.clf()
-		n,b,p = plt.hist(S * np.abs(T1.get(c)[I] - T2.get(c)[J]) / T1.get(cerr)[I], 100, range=(0,hi), histtype='step', color='r')
-		plt.xlabel('N sigma of ' + c)
-		xx = np.linspace(0, hi, 500)
-		yy = 2./np.sqrt(2.*np.pi)*np.exp(-0.5 * xx**2)
-		print 'yy', sum(yy)
-		plt.plot(xx, yy * len(I) * (b[1]-b[0]), 'k-')
-		plt.savefig('ipe%i.png' % nn)
+	#loghist(np.hypot(dra, ddec), np.sqrt(np.hypot(rerr1, derr1) * np.hypot(rerr2, derr2)), 100,
+	#		clamp=((0,1),(0,1)))
+	loghist(np.hypot(dra, ddec), (np.hypot(rerr1, derr1) + np.hypot(rerr2, derr2)) / 2., 100, range=((0,1),(0,1)), clamp=True)
+	plt.xlabel('Inter-ipe difference: RA,Dec (arcsec)')
+	plt.ylabel('Photo errors: RA,Dec (arcsec)')
+	ps.savefig()
 
-	# Pairs where both are galaxies
-	K = ((T1.type[I] == 3) * (T2.type[J] == 3))
-	G1 = T1[I[K]]
-	G2 = T2[J[K]]
-	print len(G1), 'galaxies'
-	
-	print (np.sum((T1.type[I] == 3) * (T2.type[J] != 3)) +
-		   np.sum((T1.type[I] != 3) * (T2.type[J] == 3))), 'galaxy type-mismatches'
-	
-	for c,cerr,nn in [('modelmag_r', 'modelmagerr_r', 7),]:
-		plt.clf()
-		n,b,p = plt.hist(S * np.abs(G1.get(c) - G2.get(c)) / G1.get(cerr), 100, range=(0,hi),
-						 histtype='step', color='r')
-		plt.xlabel('N sigma of ' + c)
-		yy = np.exp(-0.5 * b**2)
-		yy *= sum(n) / np.sum(yy)
-		plt.plot(b, yy, 'k-')
-		plt.savefig('ipe%i.png' % nn)
+	loghist(np.log10(np.hypot(dra, ddec)), np.log10((np.hypot(rerr1, derr1) + np.hypot(rerr2, derr2)) / 2.),
+			100, range=((-3,0),(-3,0)), clamp=True)
+	plt.xlabel('Inter-ipe difference: log RA,Dec (arcsec)')
+	plt.ylabel('Photo errors: log RA,Dec (arcsec)')
+	ps.savefig()
 
 	plt.clf()
-	loghist(G1.fracdev_r, G2.fracdev_r, 100)
+	n,b,p = plt.hist(dscale * np.abs(M1.psfmag_r - M2.psfmag_r) / M1.psfmagerr_r, 100, range=(0,hi), histtype='step', color='r')
+	plt.xlabel('N sigma of psfmag_r')
+	xx = np.linspace(0, hi, 500)
+	yy = 2./np.sqrt(2.*np.pi)*np.exp(-0.5 * xx**2)
+	print 'yy', sum(yy)
+	plt.plot(xx, yy * len(M1) * (b[1]-b[0]), 'k-')
+	ps.savefig()
+
+	# Galaxy-star matches
+	K1 = (M1.type == 3) * (M2.type == 6)
+	K2 = (M1.type == 6) * (M2.type == 3)
+	G = merge_tables((M1[K1], M2[K2]))
+	S = merge_tables((M2[K1], M1[K2]))
+	print 'G types:', np.unique(G.type)
+	print 'S types:', np.unique(S.type)
+	mhi,mlo = 24,10
+	K = ((G.modelmag_r < mhi) * (S.psfmag_r < mhi) *
+		 (G.modelmag_r > mlo) * (S.psfmag_r > mlo))
+	print 'Star/gal mismatches with good mags:', np.sum(K)
+
+	# gm = G.modelmag_r.copy()
+	# gm[np.logical_or(gm > mhi, gm < mlo)] = 25.
+	# sm = S.psfmag_r.copy()
+	# sm[np.logical_or(sm > mhi, sm < mlo)] = 25.
+	# 
+	# #loghist(G.modelmag_r[K], S.psfmag_r[K], 100)
+	# loghist(gm, sm, 100)
+
+	loghist(G.modelmag_r, S.psfmag_r, clamp=((mlo,mhi),(mlo,mhi)),
+			clamp_to=((mlo-1,mhi+1),(mlo-1,mhi+1)))
+	ax = plt.axis()
+	plt.axhline(mhi, color='b')
+	plt.axvline(mhi, color='b')
+	plt.plot(*([  [min(ax[0],ax[2]), max(ax[1],ax[3])] ]*2) + ['b-',])
+	plt.axis(ax)
+	plt.xlabel('Galaxy modelmag_r')
+	plt.ylabel('Star psfmag_r')
+	plt.title('Star/Galaxy ipe mismatches')
+	ps.savefig()
+
+	K = ((G.modelmag_r < mhi) * (G.modelmag_r > mlo))
+	plt.clf()
+	KK = (G.fracdev_r < 0.5)
+	kwargs = dict(bins=100, range=(np.log10(0.01), np.log10(30.)), histtype='step')
+	plt.hist(np.log10(G.exprad_r[K * KK]), color='r', **kwargs)
+	KK = (G.fracdev_r >= 0.5)
+	plt.hist(np.log10(G.devrad_r[K * KK]), color='b', **kwargs)
+	plt.xlabel('*rad_r (arcsec)')
+	loc,lab = plt.xticks()
+	plt.xticks(loc, ['%g' % (10.**x) for x in loc])
+	plt.title('Star/Galaxy ipe mismatches')
+	ps.savefig()
+
+
+
+	# Pairs where both are galaxies
+	K = ((M1.type == 3) * (M2.type == 3))
+	G1 = M1[K]
+	G2 = M2[K]
+	print len(G1), 'pairs where both are galaxies'
+	
+	#for 
+	plt.clf()
+	c,cerr = 'modelmag_r', 'modelmagerr_r'
+	n,b,p = plt.hist(dscale * np.abs(G1.get(c) - G2.get(c)) / G1.get(cerr), 100, range=(0,hi),
+					 histtype='step', color='r')
+	plt.xlabel('N sigma of ' + c)
+	yy = np.exp(-0.5 * b**2)
+	yy *= sum(n) / np.sum(yy)
+	plt.plot(b, yy, 'k-')
+	ps.savefig()
+
+	loghist(np.abs(G1.get(c) - G2.get(c)), G1.get(cerr), 100, range=((0,2),(0,2)), clamp=True)
+	plt.xlabel('Inter-ipe difference: ' + c)
+	plt.ylabel('Photo error: ' + cerr)
+	ps.savefig()
+
+	loghist(np.log10(np.abs(G1.get(c) - G2.get(c))), np.log10(G1.get(cerr)), 100, range=((-3,1),(-3,1)), clamp=True)
+	plt.xlabel('Inter-ipe difference: ' + c)
+	plt.ylabel('Photo error: ' + cerr)
+	ps.savefig()
+
+
+	plt.clf()
+	loghist(G1.fracdev_r, G2.fracdev_r, 100, range=((0,1),(0,1)), clamp=True)
 	plt.xlabel('G1 fracdev_r')
 	plt.ylabel('G2 fracdev_r')
-	plt.savefig('ipe8.png')
+	ps.savefig()
 
-	S = 1.
-	for t in ['exp', 'dev']:
-		if t == 'exp':
-			I = (G1.fracdev_r < 0.5) * (G2.fracdev_r < 0.5)
-			print sum(I), 'of', len(G1), 'both have fracdev_r < 0.5'
-		else:
-			I = (G1.fracdev_r >= 0.5) * (G2.fracdev_r >= 0.5)
-			print sum(I), 'of', len(G1), 'both have fracdev_r >= 0.5'
-		H1 = G1[I]
-		H2 = G2[I]
-			
-		for c,cerr,nn in [('%smag_r', '%smagerr_r', 9),
-						  ('%sab_r',  '%saberr_r', 10),
-						  ('%srad_r', '%sraderr_r', 11),
-						  ]:
-			cc = c % t
-			ccerr = cerr % t
-			dval = np.abs(H1.get(cc) - H2.get(cc))
-			derr = H1.get(ccerr)
-			plt.clf()
-			n,b,p = plt.hist(S * dval / derr, 100, range=(0,hi),
-							 histtype='step', color='r')
-			plt.xlabel('N sigma of ' + cc)
-			#yy = np.exp(-0.5 * b**2)
-			#yy *= sum(n) / np.sum(yy)
-			#plt.plot(b, yy, 'k-')
-			plt.savefig('ipe%i%s.png' % (nn,t))
+	dscale = 1.
+
+	I = (G1.fracdev_r < 0.5) * (G2.fracdev_r < 0.5)
+	print sum(I), 'of', len(G1), 'both have fracdev_r < 0.5'
+	E1 = G1[I]
+	E2 = G2[I]
+
+	I = (G1.fracdev_r >= 0.5) * (G2.fracdev_r >= 0.5)
+	print sum(I), 'of', len(G1), 'both have fracdev_r >= 0.5'
+	D1 = G1[I]
+	D2 = G2[I]
+
+	for t,H1,H2 in [('exp',E1,E2),('dev',D1,D2)]:
+
+		c,cerr = '%smag_r'%t, '%smagerr_r'%t
+		dval = np.abs(H1.get(c) - H2.get(c))
+		derr = H1.get(cerr)
+		rng = ((0,1),(0,1))
+
+		loghist(dval, derr, 100, range=rng, clamp=True)
+		plt.xlabel('Inter-ipe difference: ' + c)
+		plt.ylabel('Photo error: ' + cerr)
+		ps.savefig()
+
+		loghist(np.log10(dval), np.log10(derr), 100, range=((-3,0),(-3,0)), clamp=True)
+		plt.xlabel('Inter-ipe difference: log ' + c)
+		plt.ylabel('Photo error: log ' + cerr)
+		ps.savefig()
+
+		c,cerr = '%sab_r'%t,  '%saberr_r'%t
+		dval = np.abs(H1.get(c) - H2.get(c))
+		derr = H1.get(cerr)
+		rng = ((0,1),(0,1))
+
+		loghist(dval, derr, 100, range=rng, clamp=True)
+		plt.xlabel('Inter-ipe difference: ' + c)
+		plt.ylabel('Photo error: ' + cerr)
+		ps.savefig()
+
+		loghist(np.log10(dval), np.log10(derr), 100, range=((-3,0),(-3,0)), clamp=True)
+		plt.xlabel('Inter-ipe difference: log ' + c)
+		plt.ylabel('Photo error: log ' + cerr)
+		ps.savefig()
+
+		c,cerr = '%srad_r'%t, '%sraderr_r'%t
+		dval = np.abs(H1.get(c) - H2.get(c))
+		derr = H1.get(cerr)
+		rng = ((0,30),(0,30))
+
+		loghist(dval, derr, 100, range=rng, clamp=True)
+		plt.xlabel('Inter-ipe difference: ' + c)
+		plt.ylabel('Photo error: ' + cerr)
+		ps.savefig()
+
+		loghist(np.log10(dval), np.log10(derr), 100, range=((-2,2),(-2,2)), clamp=True)
+		plt.xlabel('Inter-ipe difference: log ' + c)
+		plt.ylabel('Photo error: log ' + cerr)
+		ps.savefig()
 
 
 	return
