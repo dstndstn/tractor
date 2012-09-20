@@ -455,6 +455,19 @@ def refit_galaxies_2():
 
 	T = fits_table('ipe3_dstn_2.fit')
 	print len(T), 'objects'
+
+	binned1 = 268435456
+	blended = 8
+	bad = 216207968633487360
+	bright = 2
+
+	T.cut((T.flags & (bad | blended)) == 0)
+	print 'Removing bad or blended:', len(T)
+	T.cut((T.flags & bright) == 0)
+	print 'Removing bright:', len(T)
+	T.cut((T.flags & binned1) > 0)
+	print 'Binned1:', len(T)
+
 	T1 = T[T.run == 5183]
 	T2 = T[T.run == 5224]
 
@@ -465,6 +478,25 @@ def refit_galaxies_2():
 	inds,d = nearest(X1, X2, R)
 	J = np.flatnonzero(inds > -1)
 	I = inds[J]
+	print len(J), 'matches'
+	print len(np.unique(I)), 'unique objs in target'
+
+	from collections import Counter
+	tally = Counter(I)
+	# subtract 1
+	for k in tally: tally[k] -= 1
+	# remove zero and negative entries
+	tally += Counter()
+	# Now "tally" just contains keys (from I) with >= 2 counts
+	print 'multiple matches:', len(tally), ':', tally.keys()
+	multi = set(tally.keys())
+	K = np.array([k for k,ii in enumerate(I) if not ii in multi])
+	I = I[K]
+	J = J[K]
+	print 'Kept', len(I), 'non-multi-matched pairs'
+	print len(np.unique(J)), 'unique J'
+	print len(np.unique(I)), 'unique I'
+
 	M1 = T1[I]
 	M2 = T2[J]
 
