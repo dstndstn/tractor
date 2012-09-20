@@ -496,7 +496,6 @@ def refit_galaxies_2():
 	print 'Kept', len(I), 'non-multi-matched pairs'
 	print len(np.unique(J)), 'unique J'
 	print len(np.unique(I)), 'unique I'
-
 	M1 = T1[I]
 	M2 = T2[J]
 
@@ -504,37 +503,38 @@ def refit_galaxies_2():
 	K = ((M1.type == 3) * (M2.type == 3))
 	M1 = M1[K]
 	M2 = M2[K]
+	print 'Both galaxies:', len(M1)
 
 	# sort by mag, moving -9999 to the end.
 	mag = M1.get('modelmag_' + band).copy()
 	mag[mag < 0] = 9999.
 	# avoid bright guys too...
-	mag[mag < 16] = 9999.
+	mag[mag < 16] = 9000.
 	I = np.argsort(mag)
 	M1 = M1[I]
 	M2 = M2[I]
 
 	# interleave them
-	newvals = []
+	N = len(M1)
 	for c in M1.get_columns():
 		X1 = M1.get(c)
-		print 'column', c, 'shape', X1.shape
+		X2 = M2.get(c)
+		#print 'column', c, 'shape', X1.shape
 		## can't handle arrays here
 		assert(len(X1.shape) == 1)
-		XX = np.zeros(len(X1) * 2, dtype=X1.dtype)
+		XX = np.zeros(N * 2, dtype=X1.dtype)
 		XX[0::2] = X1
-		X2 = M2.get(c)
 		XX[1::2] = X2
-		newvals.append(XX)
-	# set them all at once to avoid length problems?
-	for c,XX in zip(M1.get_columns(), newvals):
 		M1.set(c, XX)
 	MM = M1
+	# We have to set the length manually.
+	MM._length = 2*N
+	print 'Length of MM:', len(MM)
 	del M1
 	del M2
 
 	#####
-	MM = MM[:2]
+	#MM = MM[:2]
 		
 	refit_galaxies(MM, intermediate_fn='my-ipes-%06i.fits', mp=mp,
 				   modswitch=False, errors=True, band=band)
@@ -591,8 +591,13 @@ def refit_galaxies(T, band='i', S=100,
 	print 'dasurl', sdss.dasurl
 
 	N = len(T)
-	for prefix,suffix in [('my_',''), ('my_','_err'), ('init_',''), ('sw_','')]:
+	ps = [('my_',''), ('init_',''),]
+	if modswitch:
+		ps.append(('sw_',''))
+	if errors:
+		ps.append(('my_','_err'))
 
+	for prefix,suffix in ps:
 		for c in ['exprad_', 'expab_', 'expphi_', 'expmag_',
 				  'devrad_', 'devab_', 'devphi_', 'devmag_']:
 			T.set(prefix + c + band + suffix, np.zeros(N, dtype=np.float32))
@@ -604,21 +609,19 @@ def refit_galaxies(T, band='i', S=100,
 				dt = np.float64
 			T.set(prefix + c + suffix, np.zeros(N, dtype=dt))
 
+		# assume suffix implies _error; omit prefix_type_err field
 		if len(suffix):
 			continue
 		T.set(prefix + 'type', np.chararray(len(T), 1))
 
-	T.set('sw_dlnp', np.zeros(len(T), np.float32))
+	if modswitch:
+		T.set('sw_dlnp', np.zeros(len(T), np.float32))
 
 	args = []
 
 	for gali in range(len(T)):
 		ti = T[gali]
-		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
-		#ti.about()
 		args.append((ti, band, S, sdss, gali, modswitch, errors))
-
-	#tinew = mp.map(_refit_gal, args)
 
 	# Run in blocks.
 	tinew = []
@@ -628,20 +631,32 @@ def refit_galaxies(T, band='i', S=100,
 		N = 100
 		#N = 4
 		B += N
+		# Pop N args off the front of the list
 		thisargs = args[:N]
 		args = args[N:]
-		#print 'thisargs:', thisargs
+
+		# Run on those args
 		thisres = mp.map(_refit_gal, thisargs)
-		#print 'thisres:', thisres
-		tinew.extend(thisres)
+
+		#tinew.extend(thisres)
 		#print 'tinew:', tinew
 
-		for gali in range(min(len(T), len(tinew))):
-			tin = tinew[gali]
-			if tin is None:
-				print 'Skipping', gali
+		for resi,argi in zip(thisres, thisargs):
+			###
+			gali = argi[4]
+			###
+			if resi is None:
+				print 'Result', gali, 'is None'
 				continue
-			T[gali] = tin
+			print 'Saving result', gali
+			T[gali] = resi
+
+		#for gali in range(min(len(T), len(tinew))):
+		#	tin = tinew[gali]
+		#	if tin is None:
+		#		print 'Skipping', gali
+		#		continue
+		#	T[gali] = tin
 		#Ti.about()
 
 		if intermediate_fn:
@@ -747,12 +762,6 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 			#	print '	 ', nm, '  ', x
 			break
 
-	print 'Computing errors on the target galaxy:'
-
-	tractor.catalog.freezeAllBut(ii)
-	sigs = tractor.computeParameterErrors()
-	nms = gal.getParamNames()
-
 	# Find bright sources and unfreeze them.
 	#tractor.catalog.freezeAllParams()
 	#for i,src in enumerate(tractor.catalog):
@@ -768,19 +777,26 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 	#	if dlnp < 1:
 	#		break
 
-	tractor.catalog.thawAllParams()
+	if errors:
+		print 'Computing errors on the target galaxy:'
+		tractor.catalog.freezeAllBut(ii)
+		sigs = tractor.computeParameterErrors()
+		nms = gal.getParamNames()
 
+	tractor.catalog.thawAllParams()
 	p1 = tractor.getParams()
 	mod1 = tractor.getModelImage(0)
 	chi1 = tractor.getChiImage(0)
 	lnp1 = tractor.getLogProb()
 	gal1 = gal.copy()
 
-	set_table_from_galaxy(ti, gal1, 'my_', errors=dict(zip(nms, sigs)), band=band)
+	err = None
+	if errors:
+		err = dict(zip(nms, sigs))
+	set_table_from_galaxy(ti, gal1, 'my_', errors=err, band=band)
 
 	mod2 = chi2 = gal2 = None
 	dlnp2 = None
-		
 	if modswitch:
 		# Try making model-switching changes to the galaxy...
 		tractor.catalog.freezeAllBut(ii)
@@ -906,8 +922,13 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 		set_table_from_galaxy(ti, gal2, 'sw_', band=band)
 		ti.sw_dlnp = lnp2 - lnp1
 
-	R,C = 3,3
-	plt.figure(figsize=(8,8))
+	if mod2 is not None:
+		R,C = 3,3
+		plt.figure(figsize=(8,8))
+	else:
+		R,C = 2,3
+		plt.figure(figsize=(8,6))
+
 	plt.clf()
 	plt.suptitle(im.name)
 	plt.subplot(R,C,1)
