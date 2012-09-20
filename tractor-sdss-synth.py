@@ -260,6 +260,9 @@ def main():
 	for j,band in enumerate(bands):
 		save('initial-%s-' % (band) + prefix, tractor, imgi=j, **sa)
 
+	lnp0 = tractor.getLogProb()
+	print 'Initial lnprob:', lnp0
+
 	for im in tractor.images:
 		im.freezeAllParams()
 		im.thawParam('sky')
@@ -275,11 +278,14 @@ def main():
 					tractor.optimize()
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
+				lnp1 = tractor.getLogProb()
+				print 'After optimization: lnprob', lnp1
+				print '  delta-lnprob:', lnp1 - lnp0
 	
 		elif each[0]=='i':
 			tractor.images.freezeParamsRecursive('sky')
 			for i in range(each[1][0]):
-				for src in tractor.getCatalog():
+				for j,src in enumerate(tractor.getCatalog()):
 					tractor.catalog.freezeAllBut(src)
 
 					if i < 6:
@@ -292,7 +298,7 @@ def main():
 
 					for step in range(each[1][1]):
 						if opt.lbfgsb:
-							tractor.optimize_lbfgsb()
+							tractor.optimize_lbfgsb(plotfn='synt-opt-i%i-s%04i.png' % (i,j))
 						else:
 							tractor.optimize()
 
@@ -301,6 +307,10 @@ def main():
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1,i+1,band) + prefix, tractor, imgi=j, **sa)
 				tractor.clearCache()
+
+				lnp1 = tractor.getLogProb()
+				print 'After optimization: lnprob', lnp1
+				print '  delta-lnprob:', lnp1 - lnp0
 
 	makeflipbook(opt, prefix,tune,len(tractor.getCatalog()),bands)
 	print

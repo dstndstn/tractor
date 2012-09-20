@@ -469,7 +469,7 @@ def refit_galaxies_2():
 	# select both-galaxy subset.
 	K = ((M1.type == 3) * (M2.type == 3))
 	M1 = M1[K]
-	M2 = M2[I]
+	M2 = M2[K]
 
 	# sort by mag
 	I = np.argsort(M1.modelmag_i)
@@ -502,7 +502,7 @@ def refit_galaxies_2():
 def refit_galaxies_1():
 	import optparse
 	parser = optparse.OptionParser(usage='%prog [options] <NGC-number>')
-	parser.add_option('--threads', dest='threads', type=int, default=1,
+	parser.add_option('--threads', dest='threads', type=int, default=None,
 					  help='use multiprocessing')
 	opt,args = parser.parse_args()
 	mp = multiproc(nthreads=opt.threads)
@@ -598,9 +598,8 @@ def refit_galaxies(T, bandname='i', S=100,
 		if intermediate_fn:
 			Ti.writeto(intermediate_fn % B)
 
-def _refit_gal(*args): #(ti, bandname, S, sdss, gali)):
+def _refit_gal(*args):
 	try:
-		#return _real_refit_gal((ti, bandname, S, sdss, gali))
 		return _real_refit_gal(*args)
 	except:
 		import traceback
@@ -671,6 +670,8 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 
 	tractor.setCatalog(overlap)
 	gal = overlap[0]
+
+	sigs = tractor.computeParameterErrors()
 
 	gal0 = gal.copy()
 

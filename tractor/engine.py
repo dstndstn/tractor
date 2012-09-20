@@ -595,15 +595,71 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	#
 	def computeParameterErrors(self):
-		### 
-		pass
+		# Try to compute 1-sigma error bars on each parameter by
+		# sweeping the parameter (in the "getStepSizes()" direction)
+		# until we find delta-chi-squared of 1.
+		stepsizes = np.array(self.getStepSizes())
+		pp0 = np.array(self.getParams())
+		lnp0 = self.getLogProb()
 
-	def optimize_lbfgsb(self, hessian_terms=10):
-		def objective(x, tractor, stepsizes):
-			res = -tractor(x * stepsizes)
+		nms = self.getParamNames()
+
+		sigmas = []
+		target = lnp0 - 1
+		for i,(p0,step,nm) in enumerate(zip(pp0, stepsizes, nms)):
+			self.setParams(pp0)
+			# Take increasingly large steps until we find one with
+			# delta-chisq > 1.
+			p1 = None
+			print 'Looking for error bars on', nm, 'around', p0
+			for j in range(20):
+				tryp1 = p0 + step * (2. ** j)
+				self.setParam(i, tryp1)
+				lnp1 = self.getLogProb()
+				print '  stepping to', tryp1, 'for dlnp', lnp1 - lnp0
+				# FIXME -- could also track the largest dlnp < 1...
+				if lnp1 < target:
+					p1 = tryp1
+					break
+			if p1 is None:
+				sigmas.append(None)
+				continue
+			# Binary search until the range is small enough.
+			lo,hi = min(p0, p1), max(p0, p1)
+			lnplo,lnphi = lnp0,lnp1
+			print 'Binary searching in', lo, hi
+			sigma = None
+			for j in range(20):
+				assert(lo <= hi)
+				if np.abs(lnplo - target) < 1e-3:
+					sigma = np.abs(lo - p0)
+					break
+				mid = (lo + hi) / 2.
+				self.setParam(i, mid)
+				lnpmid = self.getLogProb()
+				print '  trying', mid, 'for dlnp', lnpmid - lnp0
+				if lnpmid < target:
+					hi = mid
+					lnphi = lnpmid
+				else:
+					lo = mid
+					lnplo = lnpmid
+			sigmas.append(sigma)
+		return np.array(sigmas)
+
+
+
+	def optimize_lbfgsb(self, hessian_terms=10, plotfn=None):
+
+		XX = []
+		OO = []
+		def objective(x, tractor, stepsizes, lnp0):
+			res = lnp0 - tractor(x * stepsizes)
 			print 'LBFGSB objective:', res
+			if plotfn:
+				XX.append(x.copy())
+				OO.append(res)
 			return res
 
 		from scipy.optimize import fmin_l_bfgs_b
@@ -616,14 +672,37 @@ class Tractor(MultiParams):
 
 		print 'Calling L-BFGS-B ...'
 		X = fmin_l_bfgs_b(objective, p0 / stepsizes, fprime=None,
-						  args=(self, stepsizes),
+						  args=(self, stepsizes, lnp0),
 						  approx_grad=True, bounds=None, m=hessian_terms,
-						  epsilon=1e-1, iprint=0)
+						  epsilon=1e-8, iprint=0)
 		p1,lnp1,d = X
 		print d
 		print 'lnp0:', lnp0
 		self.setParams(p1 * stepsizes)
 		print 'lnp1:', self.getLogProb()
+
+		if plotfn:
+			import pylab as plt
+			plt.clf()
+			XX = np.array(XX)
+			OO = np.array(OO)
+			print 'XX shape', XX.shape
+			(N,D) = XX.shape
+			for i in range(D):
+				OO[np.abs(OO) < 1e-8] = 1e-8
+				neg = (OO < 0)
+				plt.semilogy(XX[neg,i], -OO[neg], 'bx', ms=12, mew=2)
+				pos = np.logical_not(neg)
+				plt.semilogy(XX[pos,i], OO[pos], 'rx', ms=12, mew=2)
+				I = np.argsort(XX[:,i])
+				plt.plot(XX[I,i], np.abs(OO[I]), 'k-', alpha=0.5)
+				plt.ylabel('Objective value')
+				plt.xlabel('Parameter')
+			plt.twinx()
+			for i in range(D):
+				plt.plot(XX[:,i], np.arange(N), 'r-')
+				plt.ylabel('L-BFGS-B iteration number')
+			plt.savefig(plotfn)
 
 	def optimize(self, alphas=None, damp=0, priors=True):
 		print self.getName()+': Finding derivs...'
