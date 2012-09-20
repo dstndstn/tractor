@@ -602,7 +602,9 @@ class Tractor(MultiParams):
 
 	def optimize_lbfgsb(self, hessian_terms=10):
 		def objective(x, tractor, stepsizes):
-			return -tractor(x * stepsizes)
+			res = -tractor(x * stepsizes)
+			print 'LBFGSB objective:', res
+			return res
 
 		from scipy.optimize import fmin_l_bfgs_b
 
@@ -610,10 +612,12 @@ class Tractor(MultiParams):
 		p0 = np.array(self.getParams())
 		lnp0 = self.getLogProb()
 
+		print 'Active parameters:', len(p0)
+
 		print 'Calling L-BFGS-B ...'
 		X = fmin_l_bfgs_b(objective, p0 / stepsizes, fprime=None,
 						  args=(self, stepsizes),
-						  approx_grad=True, bounds=None, m=hessian_order,
+						  approx_grad=True, bounds=None, m=hessian_terms,
 						  epsilon=1e-1, iprint=0)
 		p1,lnp1,d = X
 		print d
