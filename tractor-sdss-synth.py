@@ -191,6 +191,8 @@ def main():
 	parser.add_option('-d','--debug',dest='debug',action='store_true',default=False,help="Trigger debug images")
 	parser.add_option('--plotAll',dest='plotAll',action='store_true',default=False,help="Makes a plot for each source")
 	parser.add_option('--no-arcsinh', dest='noarcsinh', action='store_true', help='Do not arcsinh-stretch plots')
+	parser.add_option('--lbfgsb', dest='lbfgsb', action='store_true', default=False,
+					  help='Use L-BFGS-B optimization method')
 	opt,args = parser.parse_args()
 	print tune
 
@@ -204,6 +206,10 @@ def main():
 	field = opt.field
 	camcol = opt.camcol
 	bands = []
+	if opt.band is None:
+		print
+		print 'Must supply band (-b [u | g |r |i | z])'
+		sys.exit(-1)
 	for char in opt.band:
 		bands.append(char)
 		if not char in ['u','g','r','i','z']:
@@ -263,7 +269,10 @@ def main():
 			tractor.catalog.thawAllParams()
 			tractor.images.thawParamsRecursive('sky')
 			for i in range(each[1]):
-				tractor.optimize()
+				if opt.lbfgsb:
+					tractor.optimize_lbfgsb()
+				else:
+					tractor.optimize()
 				for j,band in enumerate(bands):
 					save('tune-%d-%d-%s-' % (count+1, i+1,band) + prefix, tractor, imgi=j, **sa)
 	
@@ -282,7 +291,10 @@ def main():
 						print nm
 
 					for step in range(each[1][1]):
-						tractor.optimize()
+						if opt.lbfgsb:
+							tractor.optimize_lbfgsb()
+						else:
+							tractor.optimize()
 
 					src.unfreezeParam('pos')
 

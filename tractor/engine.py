@@ -600,6 +600,27 @@ class Tractor(MultiParams):
 		### 
 		pass
 
+	def optimize_lbfgsb(self, hessian_terms=10):
+		def objective(x, tractor, stepsizes):
+			return -tractor(x * stepsizes)
+
+		from scipy.optimize import fmin_l_bfgs_b
+
+		stepsizes = np.array(self.getStepSizes())
+		p0 = np.array(self.getParams())
+		lnp0 = self.getLogProb()
+
+		print 'Calling L-BFGS-B ...'
+		X = fmin_l_bfgs_b(objective, p0 / stepsizes, fprime=None,
+						  args=(self, stepsizes),
+						  approx_grad=True, bounds=None, m=hessian_order,
+						  epsilon=1e-1, iprint=0)
+		p1,lnp1,d = X
+		print d
+		print 'lnp0:', lnp0
+		self.setParams(p1 * stepsizes)
+		print 'lnp1:', self.getLogProb()
+
 	def optimize(self, alphas=None, damp=0, priors=True):
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
