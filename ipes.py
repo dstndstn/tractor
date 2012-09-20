@@ -451,6 +451,8 @@ def refit_galaxies_2():
 	opt,args = parser.parse_args()
 	mp = multiproc(nthreads=opt.threads)
 
+	band = 'r'
+
 	T = fits_table('ipe3_dstn_2.fit')
 	print len(T), 'objects'
 	T1 = T[T.run == 5183]
@@ -471,8 +473,12 @@ def refit_galaxies_2():
 	M1 = M1[K]
 	M2 = M2[K]
 
-	# sort by mag
-	I = np.argsort(M1.modelmag_i)
+	# sort by mag, moving -9999 to the end.
+	mag = M1.get('modelmag_' + band).copy()
+	mag[mag < 0] = 9999.
+	# avoid bright guys too...
+	mag[mag < 16] = 9999.
+	I = np.argsort(mag)
 	M1 = M1[I]
 	M2 = M2[I]
 
@@ -494,10 +500,13 @@ def refit_galaxies_2():
 	MM = M1
 	del M1
 	del M2
+
+	#####
+	MM = MM[:2]
 		
 	refit_galaxies(MM, intermediate_fn='my-ipes-%06i.fits', mp=mp,
-				   modswitch=False, errors=True)
-	T.writeto('my-ipes.fits')
+				   modswitch=False, errors=True, band=band)
+	MM.writeto('my-ipes.fits')
 
 def refit_galaxies_1():
 	import optparse
@@ -521,7 +530,7 @@ def refit_galaxies_1():
 	'''
 
 	#T = fits_table('exp4_dstn.fit')
-	T = fits_table('exp5b_dstn.fit')
+	Ti = fits_table('exp5b_dstn.fit')
 
 	rlo,rhi = 4.1, 4.4
 	Ti = T[(T.exprad_i > rlo) * (T.exprad_i < rhi)]
@@ -540,7 +549,7 @@ def refit_galaxies_1():
 				   modswitch=True)
 	Ti.writeto('mye4.fits')
 
-def refit_galaxies(T, bandname='i', S=100,
+def refit_galaxies(T, band='i', S=100,
 				   intermediate_fn='refit-%06i.fits', mp=None,
 				   modswitch=False, errors=False):
 	if mp is None:
@@ -549,16 +558,24 @@ def refit_galaxies(T, bandname='i', S=100,
 	print 'basedir', sdss.basedir
 	print 'dasurl', sdss.dasurl
 
-	#bandname = 'i'
-	# ROI radius in pixels
-	#S = 100
+	N = len(T)
+	for prefix,suffix in [('my_',''), ('my_','_err'), ('init_',''), ('sw_','')]:
 
-	for prefix in ['my_', 'init_', 'sw_']:
-		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i', 'ra', 'dec']:
-			T.set(prefix + c, np.zeros_like(T.get(c)))
-		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
-			T.set(prefix + c, np.zeros_like(T.get(c.replace('dev','exp'))))
+		for c in ['exprad_', 'expab_', 'expphi_', 'expmag_',
+				  'devrad_', 'devab_', 'devphi_', 'devmag_']:
+			T.set(prefix + c + band + suffix, np.zeros(N, dtype=np.float32))
+
+		for c in ['ra', 'dec']:
+			if len(suffix):
+				dt = np.float32
+			else:
+				dt = np.float64
+			T.set(prefix + c + suffix, np.zeros(N, dtype=dt))
+
+		if len(suffix):
+			continue
 		T.set(prefix + 'type', np.chararray(len(T), 1))
+
 	T.set('sw_dlnp', np.zeros(len(T), np.float32))
 
 	args = []
@@ -567,7 +584,7 @@ def refit_galaxies(T, bandname='i', S=100,
 		ti = T[gali]
 		#pickle_to_file(ti, '/tmp/%04i.pickle' % gali)
 		#ti.about()
-		args.append((ti, bandname, S, sdss, gali, modswitch, errors))
+		args.append((ti, band, S, sdss, gali, modswitch, errors))
 
 	#tinew = mp.map(_refit_gal, args)
 
@@ -596,7 +613,7 @@ def refit_galaxies(T, bandname='i', S=100,
 		#Ti.about()
 
 		if intermediate_fn:
-			Ti.writeto(intermediate_fn % B)
+			T.writeto(intermediate_fn % B)
 
 def _refit_gal(*args):
 	try:
@@ -606,15 +623,14 @@ def _refit_gal(*args):
 		traceback.print_exc()
 		return None
 
-
-def _real_refit_gal((ti, bandname, S, sdss, gali,
+def _real_refit_gal((ti, band, S, sdss, gali,
 					 modswitch, errors)):
-	im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, bandname,
+	im,info = get_tractor_image_dr9(ti.run, ti.camcol, ti.field, band,
 									roiradecsize=(ti.ra, ti.dec, S),
 									sdss=sdss)
 	roi = info['roi']
-	cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, bandname,
-								  sdss=sdss, roi=roi, bands=[bandname])
+	cat = get_tractor_sources_dr9(ti.run, ti.camcol, ti.field, band,
+								  sdss=sdss, roi=roi, bands=[band])
 
 	tractor = Tractor(Images(im), cat)
 	print 'Tractor', tractor
@@ -650,12 +666,23 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 	print 'Closest to image center:', tractor.catalog[ii]
 	gal = tractor.catalog[ii]
 
-	# Find sources that overlap this one?
-	overlap = Catalog()
-	overlap.append(gal)
+	gal0 = gal.copy()
+	set_table_from_galaxy(ti, gal0, 'init_', band=band)
+
+	print 'Fitting the target galaxy:'
+	tractor.catalog.freezeAllBut(ii)
+	while True:
+		dlnp,X,alpha = tractor.optimize(damp=1e-3)
+		print 'dlnp', dlnp
+		print 'alpha', alpha
+		if dlnp < 1:
+			break
+
+	print 'Fitting all sources that overlap the target galaxy:'
+	thaw = []
 	galpatch = tractor.getModelPatch(im, gal)
 	galpatch.trimToNonZero()
-	for src in tractor.catalog:
+	for j,src in enumerate(tractor.catalog):
 		if src is gal:
 			continue
 		patch = tractor.getModelPatch(im, src)
@@ -663,19 +690,12 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 			continue
 		patch.trimToNonZero()
 		if galpatch.hasNonzeroOverlapWith(patch):
-			overlap.append(src)
+			thaw.append(j)
+
+	tractor.catalog.freezeAllBut(*thaw)
 
 	print len(tractor.getCatalog()), 'sources in the region'
-	print len(overlap), 'overlap the target galaxy'
-
-	tractor.setCatalog(overlap)
-	gal = overlap[0]
-
-	sigs = tractor.computeParameterErrors()
-
-	gal0 = gal.copy()
-
-	set_table_from_galaxy(ti, gal0, 'init_')
+	print len(thaw), 'overlap the target galaxy'
 
 	while True:
 		dlnp,X,alpha = tractor.optimize(damp=1e-3)
@@ -695,31 +715,26 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 			#	print '	 ', nm, '  ', x
 			break
 
+	print 'Computing errors on the target galaxy:'
+
+	tractor.catalog.freezeAllBut(ii)
+	sigs = tractor.computeParameterErrors()
+	nms = gal.getParamNames()
+
 	# Find bright sources and unfreeze them.
-	tractor.catalog.freezeAllParams()
-	for i,src in enumerate(tractor.catalog):
-		if src.getBrightness().i < 19.:
-			tractor.catalog.thawParam(i)
-
-	print 'Fitting bright sources:'
-	for nm in tractor.getParamNames():
-		print '	 ', nm
-
-	while True:
-		dlnp,X,alpha = tractor.optimize(damp=1e-3)
-		print 'dlnp', dlnp
-		print 'alpha', alpha
-		if dlnp < 1:
-			break
-
-	print 'Fitting the target galaxy:'
-	tractor.catalog.freezeAllBut(0)
-	while True:
-		dlnp,X,alpha = tractor.optimize(damp=1e-3)
-		print 'dlnp', dlnp
-		print 'alpha', alpha
-		if dlnp < 1:
-			break
+	#tractor.catalog.freezeAllParams()
+	#for i,src in enumerate(tractor.catalog):
+	#if src.getBrightness().i < 19.:
+	#		tractor.catalog.thawParam(i)
+	#print 'Fitting bright sources:'
+	#for nm in tractor.getParamNames():
+	#	print '	 ', nm
+	#while True:
+	#	dlnp,X,alpha = tractor.optimize(damp=1e-3)
+	#	print 'dlnp', dlnp
+	#	print 'alpha', alpha
+	#	if dlnp < 1:
+	#		break
 
 	tractor.catalog.thawAllParams()
 
@@ -729,16 +744,16 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 	lnp1 = tractor.getLogProb()
 	gal1 = gal.copy()
 
-	set_table_from_galaxy(ti, gal1, 'my_')
+	set_table_from_galaxy(ti, gal1, 'my_', errors=dict(zip(nms, sigs)), band=band)
 
 	mod2 = chi2 = gal2 = None
 	dlnp2 = None
 		
-	if True:
+	if modswitch:
 		# Try making model-switching changes to the galaxy...
-		tractor.catalog.freezeAllBut(0)
+		tractor.catalog.freezeAllBut(ii)
 		#print 'Catalog length (with all but one frozen):', len(tractor.catalog)
-		gal = tractor.catalog[0]
+		gal = tractor.catalog[ii]
 		print 'Galaxy', gal
 
 		if isinstance(gal, DevGalaxy) or isinstance(gal, ExpGalaxy):
@@ -762,8 +777,7 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 				comp = CompositeGalaxy(gal.pos, m1, gal.shape.copy(),
 									   m2, gal.shape.copy())
 
-			tractor.catalog[0] = comp
-
+			tractor.catalog[ii] = comp
 			print 'Trying composite', comp
 
 			lnp2 = tractor.getLogProb()
@@ -792,12 +806,11 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 			lnp2 = tractor.getLogProb()
 			gal2 = comp.copy()
 
-			print 'tractor.catalog[0]:', tractor.catalog[0]
+			print 'tractor.catalog[ii]:', tractor.catalog[ii]
 			print 'comp:', comp.copy()
 
 			print 'Reverting'
-			tractor.catalog[0] = gal
-
+			tractor.catalog[ii] = gal
 
 		elif isinstance(gal, CompositeGalaxy):
 			print 'Composite.  Flux ratio:'
@@ -820,8 +833,8 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 				newgal = None
 			if newgal is not None:
 				print newgal
-				tractor.catalog[0] = newgal
-				print tractor.catalog[0]
+				tractor.catalog[ii] = newgal
+				print tractor.catalog[ii]
 				lnp2 = tractor.getLogProb()
 				print 'Comp->single: Initial dlnp:', lnp2 - lnp1
 
@@ -848,17 +861,17 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 			#gal2 = tractor.catalog[0].copy()
 			gal2 = newgal.copy()
 
-			print 'tractor.catalog[0]:', tractor.catalog[0]
+			print 'tractor.catalog[ii]:', tractor.catalog[ii]
 			print 'newgal:', newgal.copy()
 
 			print 'Reverting'
-			tractor.catalog[0] = gal
+			tractor.catalog[ii] = gal
 
 		else:
 			print 'Hmmm?  Unknown source type', gal
 
 	if gal2 is not None:
-		set_table_from_galaxy(ti, gal2, 'sw_')
+		set_table_from_galaxy(ti, gal2, 'sw_', band=band)
 		ti.sw_dlnp = lnp2 - lnp1
 
 	R,C = 3,3
@@ -916,35 +929,52 @@ def _real_refit_gal((ti, bandname, S, sdss, gali,
 	return ti
 	
 
-def set_table_from_galaxy(ti, gal, prefix):
-	ti.set(prefix + 'ra',  gal.pos.ra)
-	ti.set(prefix + 'dec', gal.pos.dec)
+def set_table_from_galaxy(ti, gal, prefix, band='i', errors=None):
+	fields = []
+	fields.append(('ra', 'pos.ra'))
+	fields.append(('dec', 'pos.dec'))
 	if isinstance(gal, ExpGalaxy):
 		ti.set(prefix + 'type', 'E')
-		for c in ['devrad_i', 'devab_i', 'devphi_i', 'devmag_i']:
-			ti.set(c, np.nan)
-		ti.set(prefix + 'exprad_i', gal.shape.re)
-		ti.set(prefix + 'expphi_i', gal.shape.phi)
-		ti.set(prefix + 'expab_i', gal.shape.ab)
-		ti.set(prefix + 'expmag_i', gal.brightness.i)
+		for c in [f + band for f in ['devrad_', 'devab_', 'devphi_', 'devmag_']]:
+			ti.set(prefix + c, np.nan)
+		fields.append(('exprad_' + band, 'shape.re'))
+		fields.append(('expphi_' + band, 'shape.phi'))
+		fields.append(('expab_'  + band, 'shape.ab'))
+		fields.append(('expmag_' + band, 'brightness.' + band))
 	elif isinstance(gal, DevGalaxy):
 		ti.set(prefix + 'type', 'D')
-		for c in ['exprad_i', 'expab_i', 'expphi_i', 'expmag_i']:
+		for c in [f + band for f in ['exprad_', 'expab_', 'expphi_', 'expmag_']]:
 			ti.set(prefix + c, np.nan)
-		ti.set(prefix + 'devrad_i', gal.shape.re)
-		ti.set(prefix + 'devphi_i', gal.shape.phi)
-		ti.set(prefix + 'devab_i', gal.shape.ab)
-		ti.set(prefix + 'devmag_i', gal.brightness.i)
+		fields.append(('devrad_' + band, 'shape.re'))
+		fields.append(('devphi_' + band, 'shape.phi'))
+		fields.append(('devab_'  + band, 'shape.ab'))
+		fields.append(('devmag_' + band, 'brightness.' + band))
 	elif isinstance(gal, CompositeGalaxy):
 		ti.set(prefix + 'type', 'C')
-		ti.set(prefix + 'exprad_i', gal.shapeExp.re)
-		ti.set(prefix + 'expphi_i', gal.shapeExp.phi)
-		ti.set(prefix + 'expab_i', gal.shapeExp.ab)
-		ti.set(prefix + 'expmag_i', gal.brightnessExp.i)
-		ti.set(prefix + 'devrad_i', gal.shapeDev.re)
-		ti.set(prefix + 'devphi_i', gal.shapeDev.phi)
-		ti.set(prefix + 'devab_i', gal.shapeDev.ab)
-		ti.set(prefix + 'devmag_i', gal.brightnessDev.i)
+		fields.append(('exprad_' + band, 'shapeExp.re'))
+		fields.append(('expphi_' + band, 'shapeExp.phi'))
+		fields.append(('expab_'  + band, 'shapeExp.ab'))
+		fields.append(('expmag_' + band, 'brightnessExp.' + band))
+		fields.append(('devrad_' + band, 'shapeDev.re'))
+		fields.append(('devphi_' + band, 'shapeDev.phi'))
+		fields.append(('devab_'  + band, 'shapeDev.ab'))
+		fields.append(('devmag_' + band, 'brightnessDev.' + band))
+
+	if errors:
+		print 'Errors:', errors
+
+	for tnm,gnm in fields:
+		val = gal
+		for t in gnm.split('.'):
+			val = getattr(val, t)
+		#val = getattr(gal, gnm)
+		print 'galaxy', gnm, '->', val
+		ti.set(prefix + tnm, val)
+		if errors:
+			err = errors.get(gnm, None)
+			print 'Error', err
+			if err is not None:
+				ti.set(prefix + tnm + '_err', err)
 
 
 def plot_ellipses(im, cat):

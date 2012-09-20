@@ -602,9 +602,7 @@ class Tractor(MultiParams):
 		stepsizes = np.array(self.getStepSizes())
 		pp0 = np.array(self.getParams())
 		lnp0 = self.getLogProb()
-
 		nms = self.getParamNames()
-
 		sigmas = []
 		target = lnp0 - 1
 		for i,(p0,step,nm) in enumerate(zip(pp0, stepsizes, nms)):
@@ -612,12 +610,12 @@ class Tractor(MultiParams):
 			# Take increasingly large steps until we find one with
 			# delta-chisq > 1.
 			p1 = None
-			print 'Looking for error bars on', nm, 'around', p0
+			#print 'Looking for error bars on', nm, 'around', p0
 			for j in range(20):
 				tryp1 = p0 + step * (2. ** j)
 				self.setParam(i, tryp1)
 				lnp1 = self.getLogProb()
-				print '  stepping to', tryp1, 'for dlnp', lnp1 - lnp0
+				#print '  stepping to', tryp1, 'for dlnp', lnp1 - lnp0
 				# FIXME -- could also track the largest dlnp < 1...
 				if lnp1 < target:
 					p1 = tryp1
@@ -628,7 +626,7 @@ class Tractor(MultiParams):
 			# Binary search until the range is small enough.
 			lo,hi = min(p0, p1), max(p0, p1)
 			lnplo,lnphi = lnp0,lnp1
-			print 'Binary searching in', lo, hi
+			#print 'Binary searching in', lo, hi
 			sigma = None
 			for j in range(20):
 				assert(lo <= hi)
@@ -638,7 +636,7 @@ class Tractor(MultiParams):
 				mid = (lo + hi) / 2.
 				self.setParam(i, mid)
 				lnpmid = self.getLogProb()
-				print '  trying', mid, 'for dlnp', lnpmid - lnp0
+				#print '  trying', mid, 'for dlnp', lnpmid - lnp0
 				if lnpmid < target:
 					hi = mid
 					lnphi = lnpmid
@@ -647,8 +645,6 @@ class Tractor(MultiParams):
 					lnplo = lnpmid
 			sigmas.append(sigma)
 		return np.array(sigmas)
-
-
 
 	def optimize_lbfgsb(self, hessian_terms=10, plotfn=None):
 
