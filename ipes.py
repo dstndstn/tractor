@@ -116,15 +116,6 @@ def my_ipe_errors():
 	print len(T1), 'pairs'
 
 	plt.clf()
-	plt.plot(T1.raerr * 3600., (T1.ra - T2.ra) * 3600., 'r.')
-	plt.plot(T2.raerr * 3600., (T1.ra - T2.ra) * 3600., 'm.')
-	plt.plot(T1.my_ra_err * 3600., (T1.my_ra - T2.my_ra) * 3600., 'b.')
-	plt.plot(T2.my_ra_err * 3600., (T1.my_ra - T2.my_ra) * 3600., 'c.')
-	plt.gca().set_xscale('log')
-	plt.gca().set_yscale('symlog', linthreshy=1e-3)
-	ps.savefig()
-
-	plt.clf()
 	plt.plot(T1.raerr * 3600., np.abs((T1.ra - T2.ra) / T1.raerr), 'r.')
 	plt.plot(T2.raerr * 3600., np.abs((T1.ra - T2.ra) / T2.raerr), 'm.')
 	plt.plot(T1.my_ra_err * 3600., np.abs(T1.my_ra - T2.my_ra) / T1.my_ra_err, 'b.')
@@ -143,6 +134,7 @@ def my_ipe_errors():
 
 	x = np.append(T1.raerr, T2.raerr)*3600.
 	y = np.append(np.abs(T1.ra - T2.ra) / T1.raerr, np.abs(T1.ra - T2.ra) / T2.raerr)
+	x1,y1 = x,y
 	I = np.argsort(x)
 	S = np.linspace(0, len(x), 11).astype(int)
 	xm,ym,ys = [],[],[]
@@ -151,7 +143,11 @@ def my_ipe_errors():
 		xm.append(np.mean(x[J]))
 		ym.append(np.median(y[J]))
 		ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
-	plt.errorbar(xm, ym, yerr=ys, color='k', fmt=None, ecolor='k', marker='o')
+	p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o')
+	for pp in [p]+list(c)+list(b):
+		pp.set_zorder(20)
+	#for ci in c: ci.set_zorder(20)
+	#for bi in b: bi.set_zorder(20)
 	xm1,ym1,ys1 = xm,ym,ys
 
 	#plt.xlim(mn,mx)
@@ -161,6 +157,7 @@ def my_ipe_errors():
 
 	x = np.append(T1.my_ra_err, T2.my_ra_err)*3600.
 	y = np.append(np.abs(T1.my_ra - T2.my_ra) / T1.my_ra_err, np.abs(T1.my_ra - T2.my_ra) / T2.my_ra_err)
+	x2,y2 = x,y
 	I = np.argsort(x)
 	S = np.linspace(0, len(x), 11).astype(int)
 	xm,ym,ys = [],[],[]
@@ -169,7 +166,9 @@ def my_ipe_errors():
 		xm.append(np.mean(x[J]))
 		ym.append(np.median(y[J]))
 		ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
-	plt.errorbar(xm, ym, yerr=ys, color='k', fmt=None, ecolor='k', marker='o')
+	p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o')#, zorder=20, barsabove=True)
+	for pp in [p]+list(c)+list(b):
+		pp.set_zorder(20)
 
 	ax2 = plt.axis()
 	#print 'ax1', ax1
@@ -177,22 +176,39 @@ def my_ipe_errors():
 	ax = [min(ax1[0],ax2[0]), max(ax1[1],ax2[1]), min(ax1[2],ax2[2]), max(ax1[3],ax2[3])]
 	#print 'ax', ax
 	plt.axis(ax)
+	plt.gca().set_yscale('symlog', linthreshy=1e-3)
+	plt.axhline(1, color='k', alpha=0.5, lw=2)
 	#plt.gca().set_xscale('log')
 	#plt.gca().set_yscale('log')
 	plt.subplot(2,1,1)
 	plt.axis(ax)
+	plt.gca().set_yscale('symlog', linthreshy=1e-3)
+	plt.axhline(1, color='k', alpha=0.5, lw=2)
 	#plt.xlim(mn,mx)
 	#plt.gca().set_xscale('log')
 	#plt.gca().set_yscale('log')
 	ps.savefig()
 
+	for sp in [1,2]:
+		plt.subplot(2,1,sp)
+		#plt.axis([1e-2, 1, 1e-3, 10])
+		plt.axis([1e-2, 1, 1e-2, 1e2])
+		plt.ylabel('Inter-ipe difference / error')
+	plt.xlabel('RA error (arcsec)')
+	ps.savefig()
+
+	# plt.clf()
+	# plt.loglog(x1, y1, 'r.')
+	# plt.loglog(x2, y2, 'r.')
+	# plt.axis([1e-3, 1e1, 1e-5, 1e3]) 
+	# ps.savefig()
+
 	plt.clf()
-	plt.errorbar(xm, ym, yerr=ys, color='r', fmt='o', ecolor='r') #, ecolor='k')
-	xm,ym,ys = xm1,ym1,ys1
-	plt.errorbar(xm, ym, yerr=ys, color='b', fmt='o') #, ecolor='k')
-	plt.axis(ax)
-	plt.gca().set_xscale('log')
-	plt.gca().set_yscale('symlog', linthreshy=1e-3)
+	plt.hist(y1, 100, range=(0, 6), histtype='step', color='r')
+	plt.hist(y2, 100, range=(0, 6), histtype='step', color='b')
+	#plt.xlabel('N sigma of inter-ipe difference')
+	plt.xlabel('Inter-ipe difference / error')
+	plt.title('RA')
 	ps.savefig()
 
 
