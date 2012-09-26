@@ -95,9 +95,105 @@ def main():
 
 	#plot_ipes()
 	#refit_galaxies_1()
-	refit_galaxies_2()
 	#ipe_errors()
 
+	#refit_galaxies_2()
+	my_ipe_errors()
+
+
+def my_ipe_errors():
+	ps = PlotSequence('myipe')
+	T = fits_table('my-ipes.fits')
+	print 'Got', len(T), 'galaxies'
+
+	# Photo errors are in arcsec.
+	T.raerr /= 3600.
+	T.decerr /= 3600.
+
+	# The galaxies here are in consecutive pairs.
+	T1 = T[::2]
+	T2 = T[1::2]
+	print len(T1), 'pairs'
+
+	plt.clf()
+	plt.plot(T1.raerr * 3600., (T1.ra - T2.ra) * 3600., 'r.')
+	plt.plot(T2.raerr * 3600., (T1.ra - T2.ra) * 3600., 'm.')
+	plt.plot(T1.my_ra_err * 3600., (T1.my_ra - T2.my_ra) * 3600., 'b.')
+	plt.plot(T2.my_ra_err * 3600., (T1.my_ra - T2.my_ra) * 3600., 'c.')
+	plt.gca().set_xscale('log')
+	plt.gca().set_yscale('symlog', linthreshy=1e-3)
+	ps.savefig()
+
+	plt.clf()
+	plt.plot(T1.raerr * 3600., np.abs((T1.ra - T2.ra) / T1.raerr), 'r.')
+	plt.plot(T2.raerr * 3600., np.abs((T1.ra - T2.ra) / T2.raerr), 'm.')
+	plt.plot(T1.my_ra_err * 3600., np.abs(T1.my_ra - T2.my_ra) / T1.my_ra_err, 'b.')
+	plt.plot(T2.my_ra_err * 3600., np.abs(T1.my_ra - T2.my_ra) / T2.my_ra_err, 'c.')
+	plt.gca().set_xscale('log')
+	plt.gca().set_yscale('log')
+	ps.savefig()
+
+	plt.clf()
+	#mn = np.min(T1.raerr.min(), T1.my_ra_err.min())*3600.
+	#mx = np.max(T1.raerr.max(), T1.my_ra_err.max())*3600.
+	plt.subplot(2,1,1)
+	plt.loglog(T1.raerr * 3600., np.abs((T1.ra - T2.ra) / T1.raerr), 'r.', alpha=0.5)
+	plt.plot(T2.raerr * 3600., np.abs((T1.ra - T2.ra) / T2.raerr), 'r.', alpha=0.5)
+	ax1 = plt.axis()
+
+	x = np.append(T1.raerr, T2.raerr)*3600.
+	y = np.append(np.abs(T1.ra - T2.ra) / T1.raerr, np.abs(T1.ra - T2.ra) / T2.raerr)
+	I = np.argsort(x)
+	S = np.linspace(0, len(x), 11).astype(int)
+	xm,ym,ys = [],[],[]
+	for ilo,ihi in zip(S[:-1], S[1:]):
+		J = I[ilo:ihi]
+		xm.append(np.mean(x[J]))
+		ym.append(np.median(y[J]))
+		ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
+	plt.errorbar(xm, ym, yerr=ys, color='k', fmt=None, ecolor='k', marker='o')
+	xm1,ym1,ys1 = xm,ym,ys
+
+	#plt.xlim(mn,mx)
+	plt.subplot(2,1,2)
+	plt.loglog(T1.my_ra_err * 3600., np.abs(T1.my_ra - T2.my_ra) / T1.my_ra_err, 'b.', alpha=0.5)
+	plt.plot(T2.my_ra_err * 3600., np.abs(T1.my_ra - T2.my_ra) / T2.my_ra_err, 'b.', alpha=0.5)
+
+	x = np.append(T1.my_ra_err, T2.my_ra_err)*3600.
+	y = np.append(np.abs(T1.my_ra - T2.my_ra) / T1.my_ra_err, np.abs(T1.my_ra - T2.my_ra) / T2.my_ra_err)
+	I = np.argsort(x)
+	S = np.linspace(0, len(x), 11).astype(int)
+	xm,ym,ys = [],[],[]
+	for ilo,ihi in zip(S[:-1], S[1:]):
+		J = I[ilo:ihi]
+		xm.append(np.mean(x[J]))
+		ym.append(np.median(y[J]))
+		ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
+	plt.errorbar(xm, ym, yerr=ys, color='k', fmt=None, ecolor='k', marker='o')
+
+	ax2 = plt.axis()
+	#print 'ax1', ax1
+	#print 'ax2', ax2
+	ax = [min(ax1[0],ax2[0]), max(ax1[1],ax2[1]), min(ax1[2],ax2[2]), max(ax1[3],ax2[3])]
+	#print 'ax', ax
+	plt.axis(ax)
+	#plt.gca().set_xscale('log')
+	#plt.gca().set_yscale('log')
+	plt.subplot(2,1,1)
+	plt.axis(ax)
+	#plt.xlim(mn,mx)
+	#plt.gca().set_xscale('log')
+	#plt.gca().set_yscale('log')
+	ps.savefig()
+
+	plt.clf()
+	plt.errorbar(xm, ym, yerr=ys, color='r', fmt='o', ecolor='r') #, ecolor='k')
+	xm,ym,ys = xm1,ym1,ys1
+	plt.errorbar(xm, ym, yerr=ys, color='b', fmt='o') #, ecolor='k')
+	plt.axis(ax)
+	plt.gca().set_xscale('log')
+	plt.gca().set_yscale('symlog', linthreshy=1e-3)
+	ps.savefig()
 
 
 def ipe_errors():

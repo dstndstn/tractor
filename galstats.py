@@ -5,6 +5,7 @@ from glob import glob
 import matplotlib
 matplotlib.use('Agg')
 from astrometry.util.pyfits_utils import *
+from astrometry.util.plotutils import *
 from astrometry.util.file import *
 from astrometry.util.starutil_numpy import *
 from astrometry.sdss import *
@@ -698,7 +699,102 @@ if __name__ == '__main__':
 	#mrb_plots()
 	#main()
 
-	big()
+	#big()
+
+	T = fits_table('dev5b_dstn.fit')
+
+	ps = PlotSequence('stats')
+
+	loghist(np.log10(T.devrad_i), T.devmag_i, 100)
+	plt.xlabel('deV radius (arcsec)')
+	xt = [5, 10, 20, 30]
+	plt.xticks([np.log10(t) for t in xt], ['%i' % t for t in xt])
+	plt.ylabel('deV mag')
+	plt.ylim(20, 15)
+	ps.savefig()
+
+	loghist(T.devab_i, T.devmag_i, 100)
+	plt.xlabel('deV a/b ratio')
+	plt.ylabel('deV mag')
+	plt.ylim(20, 15)
+	ps.savefig()
+
+	loghist(T.devphi_i, T.devmag_i, 100)
+	plt.xlabel('deV position angle (deg)')
+	plt.ylabel('deV mag')
+	plt.ylim(20, 15)
+	ps.savefig()
+
+	T = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+
+	maglim = 25
+	I = np.flatnonzero(T.chi2_psf > T.chi2_model)
+	print len(I), 'galaxies'
+	T.cut(I)
+	faint = (T.mag_disk > maglim) * (T.mag_spheroid > maglim)
+	T.cut(np.logical_not(faint))
+
+	Texp = T[T.mag_disk <= maglim]
+	Tdev = T[T.mag_spheroid <= maglim]
+
+	plt.clf()
+	ha=dict(histtype='step', range=(16,25), bins=100, log=True)
+	nil,nil,p1 = plt.hist(Tdev.mag_spheroid, color='r', **ha)
+	nil,nil,p2 = plt.hist(Texp.mag_disk, color='b', **ha)
+	plt.xlabel('Mag')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'), loc='upper left')
+	plt.xlim(16,25)
+	ps.savefig()
+
+	plt.clf()
+	ha=dict(histtype='step', range=(-7, -2), bins=100)
+	nil,nil,p1 = plt.hist(np.log10(Tdev.spheroid_reff_world), color='r', **ha)
+	nil,nil,p2 = plt.hist(np.log10(Texp.disk_scale_world), color='b', **ha)
+	plt.xlabel('log_10 Scale')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	ps.savefig()
+
+	plt.clf()
+	ha=dict(histtype='step', range=(0, 1), bins=100)
+	nil,nil,p1 = plt.hist(Tdev.spheroid_aspect_world, color='r', **ha)
+	nil,nil,p2 = plt.hist(Texp.disk_aspect_world, color='b', **ha)
+	plt.xlabel('Aspect ratio')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	ps.savefig()
+
+	plt.clf()
+	ha=dict(histtype='step', range=(-90, 90), bins=180)
+	nil,nil,p1 = plt.hist(Tdev.spheroid_theta_world, color='r', **ha)
+	nil,nil,p2 = plt.hist(Texp.disk_theta_world, color='b', **ha)
+	plt.xlabel('Position angle (deg)')
+	plt.legend((p1[0],p2[0]), ('spheroid', 'disk'))
+	ps.savefig()
+
+	loghist(np.append(Tdev.spheroid_theta_world,
+					  Texp.disk_theta_world),
+			np.append(Tdev.mag_spheroid,
+					  Texp.mag_disk), 100, range=((-90,90),(16,25)))
+	plt.xlabel('theta (deg)')
+	plt.ylabel('mag')
+	ps.savefig()
+
+	loghist(Tdev.spheroid_theta_world,
+			Tdev.spheroid_aspect_world,
+			100, range=((-90,90),(0,1)))
+	plt.xlabel('theta (deg)')
+	plt.ylabel('aspect ratio')
+	plt.title('spheroid')
+	ps.savefig()
+
+	loghist(Texp.disk_theta_world,
+			Texp.disk_aspect_world,
+			100, range=((-90,90),(0,1)))
+	plt.xlabel('theta (deg)')
+	plt.ylabel('aspect ratio')
+	plt.title('disk')
+	ps.savefig()
+
+
 
 	sys.exit(0)
 
