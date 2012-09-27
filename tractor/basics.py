@@ -617,6 +617,13 @@ class GaussianMixturePSF(BaseParams):
 		self.radius = 25
 		super(GaussianMixturePSF, self).__init__()
 
+	def scaleBy(self, factor):
+		# Use not advised, ever
+		amp = self.mog.amp
+		mean = self.mog.mean * factor
+		var = self.mog.var * factor**2
+		return GaussianMixturePSF(amp, mean, var)
+
 	def getMixtureOfGaussians(self):
 		return self.mog
 	#def proposeIncreasedComplexity(self, img):

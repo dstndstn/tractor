@@ -45,6 +45,8 @@ def save(idstr, tractor, nlscale=1., debug=False, plotAll=False, imgi=0,
 	if nlscale == 0.:
 		ima.update(vmin=zr[0], vmax=zr[1])
 	else:
+		print 'percentiles', data
+		print data.shape
 		q1,q2,q3 = np.percentile(data.ravel(), [25, 50, 75])
 		print 'Data quartiles:', q1, q2, q3
 		ima.update(norm = ArcsinhNormalize(mean=q2, std=(1./nlscale) * (q3-q1)/2.,
@@ -193,6 +195,7 @@ def main():
 	parser.add_option('--no-arcsinh', dest='noarcsinh', action='store_true', help='Do not arcsinh-stretch plots')
 	parser.add_option('--lbfgsb', dest='lbfgsb', action='store_true', default=False,
 					  help='Use L-BFGS-B optimization method')
+	parser.add_option('--scale', dest='scale', type=int, help='Scale images down by this factor')
 	opt,args = parser.parse_args()
 	print tune
 
@@ -246,6 +249,18 @@ def main():
 		tim,tinf = getim(run, camcol, field, bandname, curl=opt.curl, roi=opt.roi, **imkw)
 		tim.zr = tinf['zr']
 		tims.append(tim)
+
+	if opt.scale:
+		print 'Scaling images by', opt.scale
+		#tims = [st.scale_sdss_image(tim, opt.scale) for tim in tims]
+		nt = []
+		for tim in tims:
+			print 'Tim hashkey:', tim.hashkey()
+			tt = st.scale_sdss_image(tim, opt.scale)
+			print tt
+			print tt.hashkey()
+			nt.append(tt)
+		tims = nt
 		
 	sources = getsrc(run, camcol, field, bandname, bands=bands, curl=opt.curl, roi=opt.roi)
 	tractor = Tractor(tims, sources)

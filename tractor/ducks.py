@@ -182,6 +182,11 @@ class WCS(Params):
 
 		Returns tuple `(x, y)`, where `x` and `y` are floats, and `0,
 		0` is the first pixel.
+
+		Pixels are funny things.  Our convention is shifted by 1 from
+		the FITS convention, so 0,0 is the *center* of the first
+		("zeroth", says Hogg) pixel, if you think of pixels as little
+		boxes.  (What is the emoticon for "point and laugh"?)
 		'''
 		return None
 
@@ -204,6 +209,8 @@ class WCS(Params):
 
 		[ [ CD11             , CD12              ],
 		  [ CD21             , CD22              ] ]
+
+		The units of these things are degrees per pixel.
 		'''
 		return None
 

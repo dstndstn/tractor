@@ -528,6 +528,104 @@ def get_tractor_image(run, camcol, field, bandname,
 
 
 
+def scale_sdss_image(tim, S):
+	'''
+	Returns a rebinned "tim" by integer scale "S" (ie S=2 reduces the
+	image size by a factor of 2x2).
+
+	The rescaling preserves intensity.
+	
+	We drop remainder pixels.
+	'''
+
+	# drop remainder pixels (for all image-shaped data items)
+	H,W = tim.shape
+	#for nm in ['data', 'origInvvar', 'invvar', 'starMask']:
+	#	setattr(tim, nm, getattr(tim, nm)[:-(H%S), :-(W%S)])
+
+	print H,W
+	print 'odd', H%S, W%S
+
+	data = tim.getImage()
+	invvar = tim.getOrigInvvar()
+	if H%S:
+		data = data    [:-(H%S),:]
+		invvar = invvar[:-(H%S),:]
+	if W%S:
+		data = data    [:,:-(W%S)]
+		invvar = invvar[:,:-(W%S)]
+
+	H,W = data.shape
+	assert((H % S) == 0)
+	assert((W % S) == 0)
+
+	# rebin image data
+	sH,sW = H/S, W/S
+	newdata = np.zeros((sH,sW), dtype=data.dtype)
+	newiv = np.zeros((sH,sW), dtype=invvar.dtype)
+	for i in range(S):
+		for j in range(S):
+			iv = invvar[i::S, j::S]
+			newdata += data[i::S, j::S] * iv
+			newiv += iv
+	newdata /= (newiv + (newiv == 0)*1.)
+	newdata[newiv == 0] = 0.
+	data = newdata
+	invvar = newiv
+
+	psf = tim.getPsf().scaleBy(1./S)
+
+	wcs = ScaledWcs(tim.getWcs(), 1./S)
+
+	# We're assuming ConstantSky here
+	sky = tim.getSky().copy()
+
+	#photocal = tim.getPhotoCal().copy()
+	photocal = ScaledPhotoCal(tim.getPhotoCal(), (1./S)**2)
+
+	print 'Scaled: data', data
+	print data.shape
+	print invvar.shape
+
+	return Image(data=data, invvar=invvar, psf=psf, wcs=wcs,
+				 sky=sky, photocal=photocal, name='Scaled(%i) '%S + tim.name,
+				 zr=tim.zr)
+
+
+class ScaledPhotoCal():
+	def __init__(self, photocal, factor):
+		self.pc = photocal
+		self.factor = factor
+	def hashkey(self):
+		return ('ScaledPhotoCal', self.factor) + self.pc.hashkey()
+	def getLogPrior(self):
+		return self.pc.getLogPrior()
+	def brightnessToCounts(self, brightness):
+		return self.factor * self.pc.brightnessToCounts(brightness)
+
+class ScaledWcs():
+	def __init__(self, wcs, factor):
+		self.factor = factor
+		self.wcs = wcs
+
+	def getLogPrior(self):
+		return self.wcs.getLogPrior()
+
+	def hashkey(self):
+		return ('ScaledWcs', self.factor) + tuple(self.wcs.hashkey())
+
+	def cdAtPixel(self, x, y):
+		x,y = (x + 0.5) / self.factor - 0.5, (y + 0.5) * self.factor - 0.5
+		cd = self.wcs.cdAtPixel(x, y)
+		return cd / self.factor
+
+	def positionToPixel(self, pos, src=None):
+		x,y = self.wcs.positionToPixel(pos, src=src)
+		# Or somethin'
+		return ((x + 0.5) * self.factor - 0.5,
+				(y + 0.5) * self.factor - 0.5)
+
+
 
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
@@ -754,6 +852,8 @@ class SdssNanomaggiesPhotoCal(BaseParams):
 		return self.__class__.__name__
 	def hashkey(self):
 		return ('SdssNanomaggiesPhotoCal', self.bandname)
+	def copy(self):
+		return SdssNanomaggiesPhotoCal(self.bandname)
 	def brightnessToCounts(self, brightness):
 		mag = brightness.getMag(self.bandname)
 		if not np.isfinite(mag):
