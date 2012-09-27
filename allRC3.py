@@ -27,7 +27,7 @@ def main():
         if entry['DEC'] < -1.:
             continue
         print (10**entry['LOG_D25'])/10.
-        fn = 'RC3_Output/%s.pickle' % (name.replace(' ', '_'))
+        fn = 'RC3_Output/%s-updated.pickle' % (name.replace(' ', '_'))
         print fn
         if os.path.exists(fn):
             print '%s has run successfully already' %name
@@ -36,7 +36,7 @@ def main():
             entries.append('%s' %name)
     things=[str(x) for x in entries]
     print len(things)
-    #things.reverse()
+    things.reverse()
 
     for entry in things:
         print entry

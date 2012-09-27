@@ -146,9 +146,10 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
 
     mask = e == nsid
     record = data[mask]
+
     print record
 
-    general("NSA_ID_%s" % nsid,record['RA'],record['DEC'],record['SERSIC_TH50']/60.,record['SERSIC_TH50']/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
+    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],record['SERSIC_TH50'][0]/60.,record['SERSIC_TH50'][0]/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
 
 
 
@@ -200,6 +201,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     #bands=['r']
     bandname = 'r'
     flipBands = ['r']
+    print rcfs
 
     imsrcs = mp.map(get_ims_and_srcs, [(rcf + (bands, ra, dec, fieldradius*60./0.396, imkw, getim, getsrc))
                                        for rcf in rcfs])

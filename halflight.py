@@ -21,10 +21,11 @@ from astrometry.util.util import Tan
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 
-def halflight(name,makePlots=False):
-    CG = unpickle_from_file("RC3_Output/%s.pickle" %name)
+def halflight(name,makePlots=False,direc='RC3_Output'):
+    CG = unpickle_from_file("%s/%s.pickle" %(direc,name))
     ra,dec = CG.getPosition()
     maxradius=max(CG.shapeExp.re,CG.shapeDev.re)
+    assert(maxradius<300.)
     print "Working on %s" % name
     print CG
 
@@ -103,7 +104,7 @@ def halflight(name,makePlots=False):
             plt.ylim(-0.1,1.1)
             plt.savefig("radial-profile-%s-%s.png" % (name,bandname))
 
-    pickle_to_file([CG,r50s,r90s,concs],'RC3_Output/%s-updated.pickle' %name)
+    pickle_to_file([CG,r50s,r90s,concs],'%s/%s-updated.pickle' %(direc,name))
 
 
 def main():
