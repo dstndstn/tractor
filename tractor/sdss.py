@@ -540,12 +540,6 @@ def scale_sdss_image(tim, S):
 
 	# drop remainder pixels (for all image-shaped data items)
 	H,W = tim.shape
-	#for nm in ['data', 'origInvvar', 'invvar', 'starMask']:
-	#	setattr(tim, nm, getattr(tim, nm)[:-(H%S), :-(W%S)])
-
-	print H,W
-	print 'odd', H%S, W%S
-
 	data = tim.getImage()
 	invvar = tim.getOrigInvvar()
 	if H%S:
@@ -554,7 +548,6 @@ def scale_sdss_image(tim, S):
 	if W%S:
 		data = data    [:,:-(W%S)]
 		invvar = invvar[:,:-(W%S)]
-
 	H,W = data.shape
 	assert((H % S) == 0)
 	assert((W % S) == 0)
@@ -582,10 +575,6 @@ def scale_sdss_image(tim, S):
 
 	#photocal = tim.getPhotoCal().copy()
 	photocal = ScaledPhotoCal(tim.getPhotoCal(), (1./S)**2)
-
-	print 'Scaled: data', data
-	print data.shape
-	print invvar.shape
 
 	return Image(data=data, invvar=invvar, psf=psf, wcs=wcs,
 				 sky=sky, photocal=photocal, name='Scaled(%i) '%S + tim.name,
