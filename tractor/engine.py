@@ -599,16 +599,17 @@ class Tractor(MultiParams):
 		# Try to compute 1-sigma error bars on each parameter by
 		# sweeping the parameter (in the "getStepSizes()" direction)
 		# until we find delta-chi-squared of 1.
+		# That's a delta-logprob of 0.5
 		stepsizes = np.array(self.getStepSizes())
 		pp0 = np.array(self.getParams())
 		lnp0 = self.getLogProb()
 		nms = self.getParamNames()
 		sigmas = []
-		target = lnp0 - 1
+		target = lnp0 - 0.5
 		for i,(p0,step,nm) in enumerate(zip(pp0, stepsizes, nms)):
 			self.setParams(pp0)
 			# Take increasingly large steps until we find one with
-			# delta-chisq > 1.
+			# logprob < target
 			p1 = None
 			#print 'Looking for error bars on', nm, 'around', p0
 			for j in range(20):
@@ -616,7 +617,8 @@ class Tractor(MultiParams):
 				self.setParam(i, tryp1)
 				lnp1 = self.getLogProb()
 				#print '  stepping to', tryp1, 'for dlnp', lnp1 - lnp0
-				# FIXME -- could also track the largest dlnp < 1...
+				# FIXME -- could also track the largest lnp < target,
+				# to narrow the binary search range later...
 				if lnp1 < target:
 					p1 = tryp1
 					break

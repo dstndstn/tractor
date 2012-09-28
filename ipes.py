@@ -1,4 +1,5 @@
-
+if False:
+	print 'Hello'
 """
 We want to show some Tractor vs SDSS improvements using only SDSS
 data.  Some validation can be done using the stripe overlaps -- the
@@ -62,6 +63,7 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
+import scipy.stats
 import sys
 import logging
 
@@ -211,6 +213,117 @@ def my_ipe_errors():
 	plt.title('RA')
 	ps.savefig()
 
+	x1 = np.sqrt(T1.raerr * T2.raerr)
+	y1 = (T1.ra - T2.ra) / x1
+	x1 *= 3600.
+	x2 = np.sqrt(T1.my_ra_err * T2.my_ra_err)
+	y2 = (T1.my_ra - T2.my_ra) / x2
+	x2 *= 3600.
+
+	plt.clf()
+	plt.hist(y1, 50, range=(-5, 5), histtype='step', color='r')
+	plt.hist(y2, 50, range=(-5, 5), histtype='step', color='b')
+	plt.xlim(-5,5)
+	plt.xlabel('Inter-ipe difference / error')
+	plt.title('RA')
+	ps.savefig()
+
+	X1,Y1,X2,Y2 = x1,y1,x2,y2
+	plt.clf()
+	plt.subplot(2,1,1)
+	plt.semilogx(x1, y1, 'r.', alpha=0.5)
+	plt.subplot(2,1,2)
+	blue = (0.2,0.2,1.0)
+	plt.semilogx(x2, y2, '.', color=blue, alpha=0.5)
+
+	for i,x,y,cc in [(1,x1,y1,'r'), (2,x2,y2,blue)]:
+		plt.subplot(2,1,i)
+		I = np.argsort(x)
+		S = np.linspace(0, len(x), 11).astype(int)
+		xm,ym,ys = [],[],[]
+		ysigs = []
+		for ilo,ihi in zip(S[:-1], S[1:]):
+			J = I[ilo:ihi]
+			xm.append(np.mean(x[J]))
+			ym.append(np.median(y[J]))
+			ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
+
+			ysigs.append([np.percentile(y[J], scipy.stats.norm.cdf(s)*100)
+						  for s in [-2,-1,1,2]])
+		#p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o',
+		#					 capsize=5)
+		#for pp in [p]+list(c)+list(b):
+		#	pp.set_zorder(20)
+		ysigs = np.array(ysigs)
+		xm = np.array(xm)
+		#nil,S = ysigs.shape
+		#for j in range(S):
+
+		#for ys in ysigs.T:
+		#	plt.plot(xm, ys, #cc+'o',
+		#			 'kx',
+		#			 mec='k', mfc=None)
+
+		y1,y2,y3,y4 = ysigs.T
+		#plt.plot(np.vstack([xm,xm]), np.vstack([y2,y3]), 'k-', lw=5, alpha=0.75)
+		#plt.plot(np.vstack([xm,xm]), np.vstack([y1,y4]), 'k-', lw=1)
+
+		W = 1.03
+		plt.plot(np.vstack([xm/W,xm*W,xm*W,xm/W,xm/W]), np.vstack([y2,y2,y3,y3,y2]), 'k-', lw=1, alpha=0.75)
+		plt.plot(np.vstack([xm,xm]), np.vstack([y1,y2]), 'k-', lw=1)
+		plt.plot(np.vstack([xm,xm]), np.vstack([y3,y4]), 'k-', lw=1)
+		plt.axis([1e-2, 2, -5, 5])
+		plt.axhline(0, color='k', alpha=0.5)
+	plt.ylabel('Inter-ipe difference / error')
+	plt.xlabel('RA error (arcsec)')
+	plt.title('RA')
+	ps.savefig()
+
+
+
+
+	x1,y1,x2,y2 = X1,Y1,X2,Y2
+
+	plt.clf()
+	plt.subplot(2,1,1)
+	plt.semilogx(X1, Y1, 'r.', alpha=0.5)
+	plt.subplot(2,1,2)
+	plt.semilogx(X2, Y2, '.', color=blue, alpha=0.5)
+	for i,x,y,cc in [(1,x1,y1,'r'), (2,x2,y2,blue)]:
+		plt.subplot(2,1,i)
+		I = np.argsort(x)
+		S = np.linspace(0, len(x), 11).astype(int)
+		xm,ym = [],[]
+		ysigs = []
+		for ilo,ihi in zip(S[:-1], S[1:]):
+			J = I[ilo:ihi]
+			xm.append(np.mean(x[J]))
+			ym.append(np.median(y[J]))
+			ysigs.append([np.percentile(y[J], scipy.stats.norm.cdf(s)*100)
+						  for s in [-2,-1,1,2]])
+		ysigs = np.array(ysigs)
+		xm = np.array(xm)
+		y1,y2,y3,y4 = ysigs.T
+		#plt.plot(np.vstack([xm,xm]), np.vstack([y2,y3]), 'k-', lw=5, alpha=0.75)
+		#plt.plot(np.vstack([xm,xm]), np.vstack([y1,y4]), 'k-', lw=1)
+		plt.plot(xm, ym, 'ko')
+		plt.plot(xm, y2, 'ko', mec='k', mfc='none', mew=2)
+		plt.plot(xm, y3, 'ko', mec='k', mfc='none', mew=2)
+		plt.plot(xm, y1, 'ks', mec='k', mfc='none', mew=2)
+		plt.plot(xm, y4, 'ks', mec='k', mfc='none', mew=2)
+		plt.axis([1e-2, 2, -5, 5])
+		plt.axhline(0, color='k', alpha=0.5)
+		plt.axhline(-2, color='k', alpha=0.25)
+		plt.axhline(-1, color='k', alpha=0.25)
+		plt.axhline(1, color='k', alpha=0.25)
+		plt.axhline(2, color='k', alpha=0.25)
+	plt.ylabel('Inter-ipe difference / error')
+	plt.xlabel('RA error (arcsec)')
+	plt.title('RA')
+	ps.savefig()
+
+	
+
 
 def ipe_errors():
 	#T = fits_table('ipe1_dstn.fit')
@@ -298,7 +411,7 @@ def ipe_errors():
 	print 'dr', dr.shape
 	assert(np.all(dr <= R))
 
-	dra  = (T1.ra [I] - T2.ra [J]) * rascale * 3600.
+	dra	 = (T1.ra [I] - T2.ra [J]) * rascale * 3600.
 	ddec = (T1.dec[I] - T2.dec[J]) * 3600.
 
 	plt.clf()
@@ -534,13 +647,13 @@ def ipe_errors():
 		JJ = J[K]
 		print
 		print 'Source', i, 'has', len(JJ), 'matches'
-		print '  ', np.sum(RC[JJ] == RC[i]), 'in the same run/camcol'
-		print '  ', np.sum(RCF[JJ] == RCF[i]), 'in the same run/camcol/field'
+		print '	 ', np.sum(RC[JJ] == RC[i]), 'in the same run/camcol'
+		print '	 ', np.sum(RCF[JJ] == RCF[i]), 'in the same run/camcol/field'
 		orc = (RC[JJ] != RC[i])
-		print '  ', np.sum(orc), 'are in other run/camcols'
-		print '  ', len(np.unique(RC[JJ][orc])), 'unique other run/camcols'
-		print '  ', len(np.unique(RCF[JJ][orc])), 'unique other run/camcols/fields'
-		print '  other sources:', JJ
+		print '	 ', np.sum(orc), 'are in other run/camcols'
+		print '	 ', len(np.unique(RC[JJ][orc])), 'unique other run/camcols'
+		print '	 ', len(np.unique(RCF[JJ][orc])), 'unique other run/camcols/fields'
+		print '	 other sources:', JJ
 		dra.extend((T.ra[JJ] - T.ra[i]) * np.cos(np.deg2rad(T.dec[i])))
 		ddec.extend(T.dec[JJ] - T.dec[i])
 		raerr.extend ([T.raerr [i]] * len(JJ))
@@ -1104,7 +1217,7 @@ def set_table_from_galaxy(ti, gal, prefix, band='i', errors=None):
 			ti.set(prefix + c, np.nan)
 		fields.append(('exprad_' + band, 'shape.re'))
 		fields.append(('expphi_' + band, 'shape.phi'))
-		fields.append(('expab_'  + band, 'shape.ab'))
+		fields.append(('expab_'	 + band, 'shape.ab'))
 		fields.append(('expmag_' + band, 'brightness.' + band))
 	elif isinstance(gal, DevGalaxy):
 		ti.set(prefix + 'type', 'D')
@@ -1112,17 +1225,17 @@ def set_table_from_galaxy(ti, gal, prefix, band='i', errors=None):
 			ti.set(prefix + c, np.nan)
 		fields.append(('devrad_' + band, 'shape.re'))
 		fields.append(('devphi_' + band, 'shape.phi'))
-		fields.append(('devab_'  + band, 'shape.ab'))
+		fields.append(('devab_'	 + band, 'shape.ab'))
 		fields.append(('devmag_' + band, 'brightness.' + band))
 	elif isinstance(gal, CompositeGalaxy):
 		ti.set(prefix + 'type', 'C')
 		fields.append(('exprad_' + band, 'shapeExp.re'))
 		fields.append(('expphi_' + band, 'shapeExp.phi'))
-		fields.append(('expab_'  + band, 'shapeExp.ab'))
+		fields.append(('expab_'	 + band, 'shapeExp.ab'))
 		fields.append(('expmag_' + band, 'brightnessExp.' + band))
 		fields.append(('devrad_' + band, 'shapeDev.re'))
 		fields.append(('devphi_' + band, 'shapeDev.phi'))
-		fields.append(('devab_'  + band, 'shapeDev.ab'))
+		fields.append(('devab_'	 + band, 'shapeDev.ab'))
 		fields.append(('devmag_' + band, 'brightnessDev.' + band))
 
 	if errors:
