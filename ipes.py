@@ -99,7 +99,7 @@ def main():
 	#refit_galaxies_1()
 	#ipe_errors()
 
-	#refit_galaxies_2()
+	refit_galaxies_2()
 	my_ipe_errors()
 
 
@@ -1005,7 +1005,7 @@ def _real_refit_gal((ti, band, S, sdss, gali,
 	if errors:
 		print 'Computing errors on the target galaxy:'
 		tractor.catalog.freezeAllBut(ii)
-		sigs = tractor.computeParameterErrors()
+		sigs = tractor.computeParameterErrors(symmetric=True)
 		nms = gal.getParamNames()
 
 	tractor.catalog.thawAllParams()

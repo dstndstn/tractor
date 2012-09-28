@@ -595,7 +595,23 @@ class Tractor(MultiParams):
 	def removeSource(self, src):
 		self.catalog.remove(src)
 
-	def computeParameterErrors(self):
+	def computeParameterErrors(self, symmetric=False):
+		if not symmetric:
+			return self._param_errors_1()
+
+		e1 = self._param_errors_1(1.)
+		e2 = self._param_errors_1(-1.)
+		sigs = []
+		for s1,s2 in zip(e1,e2):
+			if s1 is None:
+				sigs.append(s2)
+			elif s2 is None:
+				sigs.append(s1)
+			else:
+				sigs.append((s1 + s2) / 2.)
+		return sigs
+
+	def _param_errors_1(self, sign=1.):
 		# Try to compute 1-sigma error bars on each parameter by
 		# sweeping the parameter (in the "getStepSizes()" direction)
 		# until we find delta-chi-squared of 1.
@@ -613,7 +629,7 @@ class Tractor(MultiParams):
 			p1 = None
 			#print 'Looking for error bars on', nm, 'around', p0
 			for j in range(20):
-				tryp1 = p0 + step * (2. ** j)
+				tryp1 = p0 + sign * step * (2. ** j)
 				self.setParam(i, tryp1)
 				lnp1 = self.getLogProb()
 				#print '  stepping to', tryp1, 'for dlnp', lnp1 - lnp0
