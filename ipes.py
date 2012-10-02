@@ -201,15 +201,32 @@ def my_ipe_errors():
 
 	ipe_err_plots(x1, y1, x2, y2, 'Dec error (arcsec)', (5e-3, 2.), ps)
 
-	x1 = np.sqrt(T1.devmagerr_r * T2.devmagerr_r)
-	y1 = (T1.devmag_r - T2.devmag_r) / x1
-	x2 = np.sqrt(T1.my_devmag_r_err * T2.my_devmag_r_err)
-	y2 = (T1.my_devmag_r - T2.my_devmag_r) / x2
+	for p in ['dev','exp']:
 
-	ipe_err_plots(x1, y1, x2, y2, 'deV mag r error (mag)', (5e-3, 2.), ps,
-				  semilogx=True)
+		for c1,e1,c2,e2,tt,xlim in [
+			('%smag_r', '%smagerr_r', 'my_%smag_r', 'my_%smag_r_err', '%s r mag error'%p, (5e-3,2)),
+			('%srad_r', '%sraderr_r', 'my_%srad_r', 'my_%srad_r_err', '%s radius error (arcsec)'%p, (5e-3,10)),
+			('%sab_r',  '%saberr_r',  'my_%sab_r',  'my_%sab_r_err',  '%s A/B error'%p, (9e-3, 5.)),
+			#('%sphi_r',  '%sphierr_r',  'my_%sphi_r',  'my_%sphi_r_err',  '%s phi error'%p, (1e-3, 1e2)),
+			]:
+			c1 = c1 % p
+			c2 = c2 % p
+			e1 = e1 % p
+			e2 = e2 % p
 
-	
+			
+			x1 = np.sqrt(T1.get(e1) * T2.get(e1))
+			y1 = (T1.get(c1) - T2.get(c1)) / x1
+			I = (np.isfinite(x1) * np.isfinite(y1))
+			x1,y1 = x1[I], y1[I]
+
+			x2 = np.sqrt(T1.get(e2) * T2.get(e2))
+			y2 = (T1.get(c2) - T2.get(c2)) / x2
+			I = (np.isfinite(x2) * np.isfinite(y2))
+			x2,y2 = x2[I], y2[I]
+
+			ipe_err_plots(x1, y1, x2, y2, tt, xlim, ps)
+
 	
 
 def ipe_err_plots(X1, Y1, X2, Y2, tt, xlim, ps, semilogx=True):
