@@ -99,7 +99,7 @@ def main():
 	#refit_galaxies_1()
 	#ipe_errors()
 
-	refit_galaxies_2()
+	#refit_galaxies_2()
 	my_ipe_errors()
 
 
@@ -168,49 +168,19 @@ def my_ipe_errors():
 		xm.append(np.mean(x[J]))
 		ym.append(np.median(y[J]))
 		ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
-	p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o')#, zorder=20, barsabove=True)
+	p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o')
 	for pp in [p]+list(c)+list(b):
 		pp.set_zorder(20)
 
 	ax2 = plt.axis()
-	#print 'ax1', ax1
-	#print 'ax2', ax2
 	ax = [min(ax1[0],ax2[0]), max(ax1[1],ax2[1]), min(ax1[2],ax2[2]), max(ax1[3],ax2[3])]
-	#print 'ax', ax
 	plt.axis(ax)
 	plt.gca().set_yscale('symlog', linthreshy=1e-3)
 	plt.axhline(1, color='k', alpha=0.5, lw=2)
-	#plt.gca().set_xscale('log')
-	#plt.gca().set_yscale('log')
 	plt.subplot(2,1,1)
 	plt.axis(ax)
 	plt.gca().set_yscale('symlog', linthreshy=1e-3)
 	plt.axhline(1, color='k', alpha=0.5, lw=2)
-	#plt.xlim(mn,mx)
-	#plt.gca().set_xscale('log')
-	#plt.gca().set_yscale('log')
-	ps.savefig()
-
-	for sp in [1,2]:
-		plt.subplot(2,1,sp)
-		#plt.axis([1e-2, 1, 1e-3, 10])
-		plt.axis([1e-2, 1, 1e-2, 1e2])
-		plt.ylabel('Inter-ipe difference / error')
-	plt.xlabel('RA error (arcsec)')
-	ps.savefig()
-
-	# plt.clf()
-	# plt.loglog(x1, y1, 'r.')
-	# plt.loglog(x2, y2, 'r.')
-	# plt.axis([1e-3, 1e1, 1e-5, 1e3]) 
-	# ps.savefig()
-
-	plt.clf()
-	plt.hist(y1, 100, range=(0, 6), histtype='step', color='r')
-	plt.hist(y2, 100, range=(0, 6), histtype='step', color='b')
-	#plt.xlabel('N sigma of inter-ipe difference')
-	plt.xlabel('Inter-ipe difference / error')
-	plt.title('RA')
 	ps.savefig()
 
 	x1 = np.sqrt(T1.raerr * T2.raerr)
@@ -220,23 +190,56 @@ def my_ipe_errors():
 	y2 = (T1.my_ra - T2.my_ra) / x2
 	x2 *= 3600.
 
+	ipe_err_plots(x1, y1, x2, y2, 'RA error (arcsec)', (5e-3, 2.), ps)
+
+	x1 = np.sqrt(T1.decerr * T2.decerr)
+	y1 = (T1.dec - T2.dec) / x1
+	x1 *= 3600.
+	x2 = np.sqrt(T1.my_dec_err * T2.my_dec_err)
+	y2 = (T1.my_dec - T2.my_dec) / x2
+	x2 *= 3600.
+
+	ipe_err_plots(x1, y1, x2, y2, 'Dec error (arcsec)', (5e-3, 2.), ps)
+
+	x1 = np.sqrt(T1.devmagerr_r * T2.devmagerr_r)
+	y1 = (T1.devmag_r - T2.devmag_r) / x1
+	x2 = np.sqrt(T1.my_devmag_r_err * T2.my_devmag_r_err)
+	y2 = (T1.my_devmag_r - T2.my_devmag_r) / x2
+
+	ipe_err_plots(x1, y1, x2, y2, 'deV mag r error (mag)', (5e-3, 2.), ps,
+				  semilogx=True)
+
+	
+	
+
+def ipe_err_plots(X1, Y1, X2, Y2, tt, xlim, ps, semilogx=True):
+	siglim = -6,6
 	plt.clf()
-	plt.hist(y1, 50, range=(-5, 5), histtype='step', color='r')
-	plt.hist(y2, 50, range=(-5, 5), histtype='step', color='b')
-	plt.xlim(-5,5)
+	plt.hist(Y1, 50, range=siglim, histtype='step', color='r')
+	plt.hist(Y2, 50, range=siglim, histtype='step', color='b')
+	plt.xlim(siglim)
 	plt.xlabel('Inter-ipe difference / error')
-	plt.title('RA')
+	plt.title(tt)
 	ps.savefig()
 
-	X1,Y1,X2,Y2 = x1,y1,x2,y2
 	plt.clf()
+	plt.subplots_adjust(hspace=0.25, top=0.95)
 	plt.subplot(2,1,1)
-	plt.semilogx(x1, y1, 'r.', alpha=0.5)
+	red = (1., 0.2, 0.2)
+	if semilogx:
+		plt.semilogx(X1, Y1, '.', color=red, alpha=0.5)
+	else:
+		plt.plot(X1, Y1, '.', color=red, alpha=0.5)
+	plt.title('SDSS Photo')
 	plt.subplot(2,1,2)
-	blue = (0.2,0.2,1.0)
-	plt.semilogx(x2, y2, '.', color=blue, alpha=0.5)
+	blue = (0.3,0.3,1.0)
+	if semilogx:
+		plt.semilogx(X2, Y2, '.', color=blue, alpha=0.5)
+	else:
+		plt.plot(X2, Y2, '.', color=blue, alpha=0.5)
+	plt.title('Tractor')
 
-	for i,x,y,cc in [(1,x1,y1,'r'), (2,x2,y2,blue)]:
+	for i,x,y in [(1,X1,Y1), (2,X2,Y2)]:
 		plt.subplot(2,1,i)
 		I = np.argsort(x)
 		S = np.linspace(0, len(x), 11).astype(int)
@@ -246,50 +249,48 @@ def my_ipe_errors():
 			J = I[ilo:ihi]
 			xm.append(np.mean(x[J]))
 			ym.append(np.median(y[J]))
-			ys.append(np.abs(np.percentile(y[J], 75) - np.percentile(y[J], 25)))
-
 			ysigs.append([np.percentile(y[J], scipy.stats.norm.cdf(s)*100)
 						  for s in [-2,-1,1,2]])
-		#p,c,b = plt.errorbar(xm, ym, yerr=ys, color='k', fmt='o',
-		#					 capsize=5)
-		#for pp in [p]+list(c)+list(b):
-		#	pp.set_zorder(20)
 		ysigs = np.array(ysigs)
 		xm = np.array(xm)
-		#nil,S = ysigs.shape
-		#for j in range(S):
-
-		#for ys in ysigs.T:
-		#	plt.plot(xm, ys, #cc+'o',
-		#			 'kx',
-		#			 mec='k', mfc=None)
-
 		y1,y2,y3,y4 = ysigs.T
-		#plt.plot(np.vstack([xm,xm]), np.vstack([y2,y3]), 'k-', lw=5, alpha=0.75)
-		#plt.plot(np.vstack([xm,xm]), np.vstack([y1,y4]), 'k-', lw=1)
 
 		W = 1.03
 		plt.plot(np.vstack([xm/W,xm*W,xm*W,xm/W,xm/W]), np.vstack([y2,y2,y3,y3,y2]), 'k-', lw=1, alpha=0.75)
 		plt.plot(np.vstack([xm,xm]), np.vstack([y1,y2]), 'k-', lw=1)
 		plt.plot(np.vstack([xm,xm]), np.vstack([y3,y4]), 'k-', lw=1)
-		plt.axis([1e-2, 2, -5, 5])
-		plt.axhline(0, color='k', alpha=0.5)
+
+		W = 1.02
+		plt.plot(np.vstack([xm/W,xm*W]), np.vstack([ym,ym]), 'k-', lw=2)
+		plt.plot(np.vstack([xm/W,xm*W]), np.vstack([y2,y2]), 'k-', lw=2)
+		plt.plot(np.vstack([xm/W,xm*W]), np.vstack([y3,y3]), 'k-', lw=2)
+		plt.plot(xm, y1, 'ko', mec='k', mfc='k', ms=3)
+		plt.plot(xm, y4, 'ko', mec='k', mfc='k', ms=3)
+
+		plt.xlim(xlim)
+		plt.ylim(siglim)
+		for s in np.sqrt(2.) * np.arange(-2, 2+1):
+			plt.axhline(s, color='k', alpha=0.25 + (s==0)*0.25)
 	plt.ylabel('Inter-ipe difference / error')
-	plt.xlabel('RA error (arcsec)')
-	plt.title('RA')
+	plt.xlabel(tt)
 	ps.savefig()
 
 
-
-
-	x1,y1,x2,y2 = X1,Y1,X2,Y2
-
 	plt.clf()
+	plt.subplots_adjust(hspace=0.25, top=0.95)
 	plt.subplot(2,1,1)
-	plt.semilogx(X1, Y1, 'r.', alpha=0.5)
+	if semilogx:
+		plt.semilogx(X1, Y1, '.', color=red, alpha=0.5)
+	else:
+		plt.plot(X1, Y1, '.', color=red, alpha=0.5)
+	plt.title('SDSS Photo')
 	plt.subplot(2,1,2)
-	plt.semilogx(X2, Y2, '.', color=blue, alpha=0.5)
-	for i,x,y,cc in [(1,x1,y1,'r'), (2,x2,y2,blue)]:
+	if semilogx:
+		plt.semilogx(X2, Y2, '.', color=blue, alpha=0.5)
+	else:
+		plt.plot(X2, Y2, '.', color=blue, alpha=0.5)
+	plt.title('Tractor')
+	for i,x,y in [(1,X1,Y1), (2,X2,Y2)]:
 		plt.subplot(2,1,i)
 		I = np.argsort(x)
 		S = np.linspace(0, len(x), 11).astype(int)
@@ -304,22 +305,17 @@ def my_ipe_errors():
 		ysigs = np.array(ysigs)
 		xm = np.array(xm)
 		y1,y2,y3,y4 = ysigs.T
-		#plt.plot(np.vstack([xm,xm]), np.vstack([y2,y3]), 'k-', lw=5, alpha=0.75)
-		#plt.plot(np.vstack([xm,xm]), np.vstack([y1,y4]), 'k-', lw=1)
-		plt.plot(xm, ym, 'ko')
-		plt.plot(xm, y2, 'ko', mec='k', mfc='none', mew=2)
-		plt.plot(xm, y3, 'ko', mec='k', mfc='none', mew=2)
-		plt.plot(xm, y1, 'ks', mec='k', mfc='none', mew=2)
-		plt.plot(xm, y4, 'ks', mec='k', mfc='none', mew=2)
-		plt.axis([1e-2, 2, -5, 5])
-		plt.axhline(0, color='k', alpha=0.5)
-		plt.axhline(-2, color='k', alpha=0.25)
-		plt.axhline(-1, color='k', alpha=0.25)
-		plt.axhline(1, color='k', alpha=0.25)
-		plt.axhline(2, color='k', alpha=0.25)
+		plt.plot(xm, ym, 'ko', ms=5)
+		plt.plot(xm, y2, 'ks', mec='k', mfc='none', mew=1.5, ms=5)
+		plt.plot(xm, y3, 'ks', mec='k', mfc='none', mew=1.5, ms=5)
+		plt.plot(xm, y1, 'kv', mec='k', mfc='none', mew=1.5, ms=5)
+		plt.plot(xm, y4, 'k^', mec='k', mfc='none', mew=1.5, ms=5)
+		plt.xlim(xlim)
+		plt.ylim(siglim)
+		for s in np.sqrt(2.) * np.arange(-2, 2+1):
+			plt.axhline(s, color='k', alpha=0.25 + (s==0)*0.25)
 	plt.ylabel('Inter-ipe difference / error')
-	plt.xlabel('RA error (arcsec)')
-	plt.title('RA')
+	plt.xlabel(tt)
 	ps.savefig()
 
 	
