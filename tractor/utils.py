@@ -179,12 +179,10 @@ class NamedParams(object):
 	def __new__(cl, *args, **kwargs):
 		sup = super(NamedParams,cl)
 		self = sup.__new__(cl)
-
 		self.namedparams = {}
 		self.paramnames = {}
 		named = self.getNamedParams()
 		self.addNamedParams(**named)
-
 		return self
 
 	def __init__(self):
@@ -201,19 +199,35 @@ class NamedParams(object):
 		for n,i in self.namedparams.items():
 			#print 'Adding named parameter', n, 'to class', self.__class__
 			if hasattr(self.__class__, n):
-				#print '  class', self.__class__, 'already has that attr'
+				#print '  class', self.__class__, 'already has attr', n
 				continue
 			#if hasattr(self, n):
 			#	print '  self of type', self.__class__, 'already has that attr'
 			#	continue
-			def makeGetter(ii):
-				return lambda x: x._getThing(ii)
-			def makeSetter(ii):
-				return lambda x,v: x._setThing(ii, v)
-			getter = makeGetter(i)
-			setter = makeSetter(i)
+
+			# def makeGetter(ii):
+			# 	return lambda x: x._getThing(ii)
+			# def makeSetter(ii):
+			# 	return lambda x,v: x._setThing(ii, v)
+			# getter = makeGetter(i)
+			# setter = makeSetter(i)
+
+			def makeNamedGetter(nm):
+				#return lambda x: x._getThing(self.namedparams[nm])
+				return lambda x: x._getNamedThing(nm)
+			def makeNamedSetter(nm):
+				#return lambda x,v: x._setThing(self.namedparams[nm], v)
+				return lambda x,v: x._setNamedThing(nm, v)
+			getter = makeNamedGetter(n)
+			setter = makeNamedSetter(n)
+
 			prop = property(getter, setter, None, 'named param %s' % n)
 			setattr(self.__class__, n, prop)
+
+	def _getNamedThing(self, nm):
+		return self._getThing(self.namedparams[nm])
+	def _setNamedThing(self, nm, v):
+		return self._setThing(self.namedparams[nm], v)
 
 
 	def _iterNamesAndVals(self):
@@ -339,7 +353,6 @@ class NamedParams(object):
 		for i,v in enumerate(self.liquid):
 			if v:
 				yield i,array[i]
-
 
 	def _countLiquid(self):
 		return sum(self.liquid)

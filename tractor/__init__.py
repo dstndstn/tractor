@@ -18,8 +18,10 @@ __all__ = [
 	# basics
 	'ConstantSky', 'PointSource',
 	'Flux', 'Mag', 'Mags', 'MagsPhotoCal',
+	'NanoMaggies',
 	'PixPos', 'RaDecPos',
-	'NullPhotoCal', 'WCS', 'NullWCS',
+	'NullPhotoCal', 'LinearPhotoCal',
+	'WCS', 'NullWCS',
 	'FitsWcs', 'WcslibWcs', 'GaussianMixturePSF',
 	'NCircularGaussianPSF', 
 	# engine

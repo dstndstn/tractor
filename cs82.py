@@ -1033,6 +1033,57 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	filtermap = {'i.MP9701': 'i2'}
 	sdssbands = ['u','g','r','i','z']
 
+
+	nm = NanoMaggies(order=['i2', 'i', 'u','g','r','z'],
+					 **dict([(k, NanoMaggies.magToNanomaggies(v))
+						   for k,v in
+						   dict(i2=20., i=21., u=22., g=23., r=24., z=25.).items()]))
+	print 'NanoMaggies:', nm
+	print nm.getParams()
+	print nm.getStepSizes()
+
+	pc1 = LinearPhotoCal(1., band='r')
+	print 'Linear cal:', pc1
+	print 'counts:', pc1.brightnessToCounts(nm)
+
+	pc2 = LinearPhotoCal(10., band='i2')
+	print 'Linear cal:', pc2
+	print 'counts:', pc2.brightnessToCounts(nm)
+
+
+	m1 = Mags(r=20.)
+	m2 = Mags(r=25.)
+	m3 = Mags(r=30.)
+
+	mpc1 = MagsPhotoCal('r', 23.)
+	mpc2 = MagsPhotoCal('r', 25.)
+
+	sc1 = NanoMaggies.zeroPointToScale(23.)
+	sc2 = NanoMaggies.zeroPointToScale(25.)
+	lpc1 = LinearPhotoCal(sc1, band='r')
+	lpc2 = LinearPhotoCal(sc2, band='r')
+
+	nm = NanoMaggies.magToNanomaggies(m1.r)
+	print 'nm', nm
+	nm1 = NanoMaggies(r=nm)
+	nm2 = NanoMaggies(r=NanoMaggies.magToNanomaggies(m2.r))
+	nm3 = NanoMaggies(r=NanoMaggies.magToNanomaggies(m3.r))
+
+	print 'Mags', m1, m2, m3
+
+	print 'nm np', nm1.namedparams
+
+	print 'NM', nm1, nm2, nm3
+
+	print 'MPC', mpc1, mpc2
+	print 'LPC', lpc1, lpc2
+
+	for m,nm in [(m1,nm1),(m2,nm2),(m3,nm3)]:
+		for lpc,mpc in [(lpc1,mpc1),(lpc2,mpc2)]:
+			print m, mpc, '->', mpc.brightnessToCounts(m)
+			print nm,lpc, '->', lpc.brightnessToCounts(nm)
+
+
 	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands)
 	#srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
 	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])

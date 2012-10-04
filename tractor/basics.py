@@ -49,7 +49,6 @@ class Mags(ParamList):
 		'''
 		return getattr(self, bandname)
 	def __add__(self, other):
-
 		# mags + 0.1
 		if np.isscalar(other):
 			kwargs = {}
@@ -95,17 +94,22 @@ class Fluxes(Mags):
 	An implementation of `Brightness` that stores fluxes in multiple
 	bands.
 	'''
-	getBand = Mags.getMag
-	getFlux = Mags.getMag
+	#getBand = Mags.getMag
+	#getFlux = Mags.getMag
 	def __add__(self, other):
 		kwargs = {}
 		for band in self.order:
 			m1 = self.getBand(band)
 			m2 = other.getBand(band)
 			kwargs[band] = m1 + m2
-		return Fluxes(order=self.order, **kwargs)
+		return self.__class__(order=self.order, **kwargs)
 	def __mul__(self, factor):
 		raise
+
+	def getBand(self, *args, **kwargs):
+		return super(Fluxes,self).getMag(*args,**kwargs)
+	getFlux = getBand
+
 
 class FluxesPhotoCal(BaseParams):
 	def __init__(self, band):
@@ -118,6 +122,44 @@ class FluxesPhotoCal(BaseParams):
 		return flux
 	def __str__(self):
 		return 'FluxesPhotoCal(band=%s)' % (self.band)
+
+
+class NanoMaggies(Fluxes):
+	'''
+	A `Brightness` implementation that stores nano-maggies (ie,
+	calibrated flux units), which have the advantage of being linear
+	and easily convertible to mags.
+	'''
+	def __repr__(self):
+		return str(self)
+	def __str__(self):
+		s = getClassName(self) + ': '
+		ss = []
+		for b in self.order:
+			m = self.getMag(b)
+			ss.append('%s=%.3g' % (b,m))
+		s += ', '.join(ss)
+		return s
+
+	def getMag(self, band):
+		''' Convert to mag.'''
+		flux = self.getFlux(band)
+		mag = -2.5 * (np.log10(flux) - 9)
+		return mag
+
+	@staticmethod
+	def magToNanomaggies(mag):
+		nmgy = 10. ** ((mag - 22.5) / -2.5)
+		return nmgy
+
+	@staticmethod
+	def zeroPointToScale(zp):
+		'''
+		Converts a traditional magnitude zeropoint to a scale factor
+		by which nanomaggies should be multiplied to produce image
+		counts.
+		'''
+		return 10.**((zp - 22.5)/2.5)
 
 
 class Mag(ScalarParam):
@@ -205,7 +247,7 @@ class LinearPhotoCal(ScalarParam):
 
 		If 'band' is not None, will retrieve that band from a `Fluxes` object.
 		'''
-		super(LinearPhotoCal, self).__init__(self, scale)
+		super(LinearPhotoCal, self).__init__(scale)
 		self.band = band
 
 	def getScale(self):
