@@ -370,6 +370,7 @@ def get_tractor_image(run, camcol, field, bandname,
 					  sdssobj=None, release='DR7',
 					  retrieve=True, curl=False, roi=None,
 					  psf='kl-gm', useMags=False, roiradecsize=None,
+					  nanomaggies=False,
 					  savepsfimg=None, zrange=[-3,10]):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
@@ -392,10 +393,6 @@ def get_tractor_image(run, camcol, field, bandname,
 	  'sky'
 	  'skysig'
 	'''
-					  
-	# get_tractor_sources() no longer supports !useMags, so
-	assert(useMags)
-
 	if sdssobj is None:
 		# Ugly
 		if release != 'DR7':
@@ -461,7 +458,34 @@ def get_tractor_image(run, camcol, field, bandname,
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
-	if useMags:
+	if nanomaggies:
+		pc = SdssMagsPhotoCal(tsf, bandname)
+		zp = tsf.get_zeropoint(bandnum)
+		print 'Got zeropoint', zp
+		photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
+
+		m1 = Mags(**{ bandname: 20.})
+		nm1 = NanoMaggies.fromMag(m1)
+		c1 = pc.brightnessToCounts(m1)
+		c2 = photocal.brightnessToCounts(nm1)
+		print 'm1', m1, '->', c1
+		print 'nm1', nm1, '->', c2
+
+		m1 = Mags(**{ bandname: 23.})
+		nm1 = NanoMaggies.fromMag(m1)
+		c1 = pc.brightnessToCounts(m1)
+		c2 = photocal.brightnessToCounts(nm1)
+		print 'mag', m1, '->', c1
+		print 'nanomag', nm1, '->', c2
+
+		m1 = Mags(**{ bandname: 25.})
+		nm1 = NanoMaggies.fromMag(m1)
+		c1 = pc.brightnessToCounts(m1)
+		c2 = photocal.brightnessToCounts(nm1)
+		print 'mag', m1, '->', c1
+		print 'nanomag', nm1, '->', c2
+
+	elif useMags:
 		photocal = SdssMagsPhotoCal(tsf, bandname)
 	else:
 		photocal = SdssFluxPhotoCal()

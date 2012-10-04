@@ -196,9 +196,9 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
 	if cut_sdss:
 		kwargs.update(roiradecsize=(RA,DEC,S/2))
 	try:
-		im,info = st.get_tractor_image_dr9(r, c, f, band, sdss=sdss,
-										   psf=sdss_psf, nanomaggies=nanomaggies,
-										   **kwargs)
+		im,info = st.get_tractor_image(r, c, f, band, sdssobj=sdss,
+									   psf=sdss_psf, nanomaggies=nanomaggies,
+									   **kwargs)
 	except:
 		import traceback
 		print 'Exception in get_tractor_image_dr9():'
@@ -268,9 +268,9 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 		return rcf
 	# Just do a subset of the fields?
 	# rcf = rcf[:16]
-	#sdss = DR7()
+	sdss = DR7(basedir='cs82data/dr7')
 	#sdss.setBasedir('cs82data')
-	sdss = DR9(basedir='cs82data/dr9')
+	#sdss = DR9(basedir='cs82data/dr9')
 
 	if good_sdss_only:
 		W = fits_table('window_flist-DR8-S82.fits')
@@ -1657,6 +1657,24 @@ def main():
 	#kicktires()
 	#checkstarmags()
 	#sys.exit(0)
+
+	# sdss = DR7(basedir='cs82data/dr7')
+	# run,camcol,field,rerun = 4797, 4, 190, 0
+	# bandname = 'g'
+	# bandnum = band_index(bandname)
+	# tsf = sdss.readTsField(run, camcol, field, rerun)
+	# from tractor.sdss import SdssMagsPhotoCal
+	# pc = SdssMagsPhotoCal(tsf, bandname)
+	# zp = tsf.get_zeropoint(bandnum)
+	# print 'Got zeropoint', zp
+	# photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
+	# m1 = Mags(**{ bandname: 20.})
+	# nm1 = NanoMaggies.fromMag(m1)
+	# c1 = pc.brightnessToCounts(m1)
+	# c2 = photocal.brightnessToCounts(nm1)
+	# print 'm1', m1, '->', c1
+	# print 'nm1', nm1, '->', c2
+	# sys.exit(0)
 
 	import optparse
 	parser = optparse.OptionParser()
