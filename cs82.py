@@ -189,28 +189,34 @@ def rot90_wcs(wcs, W, H):
 	return out
 
 
-def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname)):
+def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
+				   nanomaggies)):
 	print 'Retrieving', r,c,f,band
 	kwargs = {}
 	if cut_sdss:
 		kwargs.update(roiradecsize=(RA,DEC,S/2))
 	try:
-		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
-									   sdssobj=sdss, psf=sdss_psf, **kwargs)
+		im,info = st.get_tractor_image_dr9(r, c, f, band, sdss=sdss,
+										   psf=sdss_psf, nanomaggies=nanomaggies,
+										   **kwargs)
 	except:
 		import traceback
-		print 'Exception in get_tractor_image():'
+		print 'Exception in get_tractor_image_dr9():'
 		traceback.print_exc()
-
-		bandnum = band_index(band)
-		for ft in ['fpC', 'tsField', 'psField', 'fpM']:
-			print 'Re-retrieving', ft
-			res = sdss.retrieve(ft, r, c, f, bandnum, skipExisting=False)
-		im,info = st.get_tractor_image(r, c, f, band, useMags=True,
-									   sdssobj=sdss, psf=sdss_psf, **kwargs)
+		# bandnum = band_index(band)
+		# for ft in ['fpC', 'tsField', 'psField', 'fpM']:
+		# 	print 'Re-retrieving', ft
+		# 	res = sdss.retrieve(ft, r, c, f, bandnum, skipExisting=False)
+		# im,info = st.get_tractor_image(r, c, f, band, useMags=True,
+		# 							   sdssobj=sdss, psf=sdss_psf, **kwargs)
+		print 'Failed to get R,C,F,band', r,c,f,band
+		return None,None
+		#raise
 	if im is None:
 		return None,None
+
 	if objname is not None:
+		print 'info', info
 		obj = info['object']
 		print 'Header object: "%s"' % obj
 		if obj != objname:
@@ -223,10 +229,12 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname)
 	im.rcf = (r,c,f)
 	return im,(info['sky'], info['skysig'])
 
-def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf=False,
+def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
+				just_rcf=False,
 				sdss_psf='kl-gm', cut_sdss=True,
 				good_sdss_only=False, sdss_object=None,
-				rotate_cfht=True):
+				rotate_cfht=True,
+				nanomaggies=False):
 	if sdssbands is None:
 		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
@@ -241,6 +249,9 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 										   filtermap=filtermap, rotate=rotate_cfht)
 		ims.append(cfimg)
 		skies.append((cfsky, cfstd))
+		if nanomaggies:
+			# unimplemented
+			assert(False)
 
 	pixscale = 0.396
 	S = int(sz / pixscale)
@@ -248,7 +259,7 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 	# Find all SDSS images that could overlap the RA,Dec +- S/2,S/2 box
 	R = np.sqrt(2.*(S/2.)**2 + (2048/2.)**2 + (1489/2.)**2) * pixscale / 60.
 	print 'Search radius:', R, 'arcmin'
-	rcf = radec_to_sdss_rcf(RA,DEC, radius=R, tablefn='s82fields.fits') #, contains=True)
+	rcf = radec_to_sdss_rcf(RA,DEC, radius=R, tablefn='s82fields.fits')
 	print 'SDSS fields nearby:', len(rcf)
 	rcf = [(r,c,f,ra,dec) for r,c,f,ra,dec in rcf if r != 206]
 	print 'Filtering out run 206:', len(rcf)
@@ -257,8 +268,9 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 		return rcf
 	# Just do a subset of the fields?
 	# rcf = rcf[:16]
-	sdss = DR7()
-	sdss.setBasedir('cs82data')
+	#sdss = DR7()
+	#sdss.setBasedir('cs82data')
+	sdss = DR9(basedir='cs82data/dr9')
 
 	if good_sdss_only:
 		W = fits_table('window_flist-DR8-S82.fits')
@@ -295,7 +307,7 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None, just_rcf
 				print 'Skipping,', r,c,f
 				continue
 		for band in sdssbands:
-			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, sdss_object))
+			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, sdss_object, nanomaggies))
 	print 'Getting', len(args), 'SDSS images...'
 	X = mp.map(_mapf_sdss_im, args)
 	print 'Got', len(X), 'SDSS images.'
@@ -312,7 +324,8 @@ def mysavefig(fn):
 	plt.savefig(fn)
 	print 'Wrote', fn
 
-def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z']):
+def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z'],
+					nanomaggies=False):
 	Tcomb = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
 	#Tcomb.about()
 
@@ -353,6 +366,8 @@ def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z']):
 			#print 'PSF'
 			themag = t.mag_psf
 			m = Mags(order=mags, **dict([(k, themag) for k in mags]))
+			if nanomaggies:
+				m = NanoMaggies.fromMag(m)
 			srcs.append(PointSource(RaDecPos(t.alpha_j2000, t.delta_j2000), m))
 			continue
 
@@ -367,6 +382,10 @@ def get_cf_sources2(RA, DEC, sz, maglim=25, mags=['u','g','r','i','z']):
 		m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
 		themag = t.mag_disk
 		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+
+		if nanomaggies:
+			m_dev = NanoMaggies.fromMag(m_dev)
+			m_exp = NanoMaggies.fromMag(m_exp)
 
 		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
 
@@ -755,11 +774,11 @@ def cut_bright(cat, magcut=24, mag='i'):
 
 
 def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
-						 doplots=False, psfK=3):
+						 doplots=False, psfK=3, nanomaggies=False):
 	if filtermap is None:
 		filtermap = {'i.MP9701': 'i'}
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.fits'
-	wcs = Tan(fn, 0)
+	wcs = Tan(fn, 0, 1)
 	P = pyfits.open(fn)
 	image = P[0].data
 	phdr = P[0].header
@@ -799,7 +818,10 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 
 	zp = float(phdr['MAGZP'])
 	print 'Zeropoint', zp
-	photocal = MagsPhotoCal(bandname, zp)
+	if nanomaggies:
+		photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
+	else:
+		photocal = MagsPhotoCal(bandname, zp)
 	print photocal
 
 	fn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.weight.fits'
@@ -1058,8 +1080,8 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	mpc1 = MagsPhotoCal('r', 23.)
 	mpc2 = MagsPhotoCal('r', 25.)
 
-	sc1 = NanoMaggies.zeroPointToScale(23.)
-	sc2 = NanoMaggies.zeroPointToScale(25.)
+	sc1 = NanoMaggies.zeropointToScale(23.)
+	sc2 = NanoMaggies.zeropointToScale(25.)
 	lpc1 = LinearPhotoCal(sc1, band='r')
 	lpc2 = LinearPhotoCal(sc2, band='r')
 
@@ -1083,8 +1105,10 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 			print m, mpc, '->', mpc.brightnessToCounts(m)
 			print nm,lpc, '->', lpc.brightnessToCounts(nm)
 
+	donm = True
 
-	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands)
+	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands,
+						   nanomaggies=donm)
 	#srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
 	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])
 	
@@ -1092,12 +1116,14 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	cffns = []
 	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
 								cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
-								sdss_object = '82 N', rotate_cfht=False)
+								sdss_object = '82 N', rotate_cfht=False,
+								nanomaggies=donm)
 
 	pixscale = 0.187
 	S = int(1.01 * sz / pixscale) / 2
 	print 'Grabbing S =', S, 'subregion of CFHT coadd'
-	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap, doplots=False)
+	coim = get_cfht_coadd_image(RA, DEC, S, filtermap=filtermap, doplots=False,
+								nanomaggies=donm)
 	tractor.images.prepend(coim)
 
 	tractor.catalog = srcs

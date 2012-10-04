@@ -148,12 +148,19 @@ class NanoMaggies(Fluxes):
 		return mag
 
 	@staticmethod
+	def fromMag(mag):
+		order = mag.order
+		return NanoMaggies(order=order,
+						   **dict([(k,NanoMaggies.magToNanomaggies(mag.getMag(k)))
+								   for k in order]))
+
+	@staticmethod
 	def magToNanomaggies(mag):
 		nmgy = 10. ** ((mag - 22.5) / -2.5)
 		return nmgy
 
 	@staticmethod
-	def zeroPointToScale(zp):
+	def zeropointToScale(zp):
 		'''
 		Converts a traditional magnitude zeropoint to a scale factor
 		by which nanomaggies should be multiplied to produce image

@@ -13,6 +13,7 @@ SDSS-specific implementation of Tractor elements:
 
 """
 import os
+import sys
 from math import pi, sqrt, ceil, floor
 from datetime import datetime
 
@@ -619,7 +620,9 @@ class ScaledWcs():
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
 						  savepsfimg=None, curl=False,
-						  zrange=[-3,10]):
+						  nanomaggies=False,
+						  zrange=[-3,10],
+						  retry_retrieve=True):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -645,6 +648,23 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
 
+	if retry_retrieve:
+		try:
+			args = (run,camcol,field, bandname)
+			kwargs = dict(sdss=sdss, roi=roi, psf=psf,
+						  roiradecsize=roiradecsize, savepsfimg=savepsfimg,
+						  curl=curl, nanomaggies=nanomaggies,
+						  zrange=zrange, retry_retrieve=False)
+			X = get_tractor_image_dr8(*args, **kwargs)
+			return X
+		except:
+			# Re-retrieve the data
+			for ft in ['psField', 'fpM', 'frame']:
+				fn = sdss.retrieve(ft, run, camcol, field, bandname,
+								   skipExisting=False)
+			# and continue...
+
+
 	if sdss is None:
 		sdss = DR8(curl=curl)
 
@@ -652,9 +672,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	for ft in ['psField', 'fpM']:
 		fn = sdss.retrieve(ft, run, camcol, field, bandname)
-		#print 'got', fn
 	fn = sdss.retrieve('frame', run, camcol, field, bandname)
-	#print 'got', fn
 
 	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
 	frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
@@ -665,6 +683,12 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#print 'shape:', W,H
 	
 	info = dict()
+	hdr = frame.getHeader()
+	tai = hdr.get('TAI')
+	stripe = hdr.get('STRIPE')
+	strip = hdr.get('STRIP')
+	obj = hdr.get('OBJECT')
+	info.update(tai=tai, stripe=stripe, strip=strip, object=obj)
 
 	astrans = frame.getAsTrans()
 	wcs = SdssWcs(astrans)
@@ -699,7 +723,11 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
 	#print 'Band name:', bandname
-	photocal = SdssNanomaggiesPhotoCal(bandname)
+
+	if nanomaggies:
+		photocal = LinearPhotoCal(1., band=bandname)
+	else:
+		photocal = SdssNanomaggiesPhotoCal(bandname)
 
 	sky = 0.
 	skyobj = ConstantSky(sky)
@@ -720,9 +748,10 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		skyim = skyim.T
 	(sh,sw) = skyim.shape
 	xi = np.round(frame.skyxi).astype(int)
-	#print 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'
 	yi = np.round(frame.skyyi).astype(int)
-	#print 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	print >>sys.stderr, 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']', run, camcol, field, bandname
+	print >>sys.stderr, 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	print >>sys.stderr, 'frame url:', sdss.get_url('frame', run, camcol, field, bandname)
 	assert(all(xi >= 0) and all(xi < sw))
 	assert(all(yi >= 0) and all(yi < sh))
 	XI,YI = np.meshgrid(xi, yi)
