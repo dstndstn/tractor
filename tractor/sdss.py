@@ -459,36 +459,13 @@ def get_tractor_image(run, camcol, field, bandname,
 	wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 
 	if nanomaggies:
-		pc = SdssMagsPhotoCal(tsf, bandname)
 		zp = tsf.get_zeropoint(bandnum)
-		print 'Got zeropoint', zp
 		photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
-
-		m1 = Mags(**{ bandname: 20.})
-		nm1 = NanoMaggies.fromMag(m1)
-		c1 = pc.brightnessToCounts(m1)
-		c2 = photocal.brightnessToCounts(nm1)
-		print 'm1', m1, '->', c1
-		print 'nm1', nm1, '->', c2
-
-		m1 = Mags(**{ bandname: 23.})
-		nm1 = NanoMaggies.fromMag(m1)
-		c1 = pc.brightnessToCounts(m1)
-		c2 = photocal.brightnessToCounts(nm1)
-		print 'mag', m1, '->', c1
-		print 'nanomag', nm1, '->', c2
-
-		m1 = Mags(**{ bandname: 25.})
-		nm1 = NanoMaggies.fromMag(m1)
-		c1 = pc.brightnessToCounts(m1)
-		c2 = photocal.brightnessToCounts(nm1)
-		print 'mag', m1, '->', c1
-		print 'nanomag', nm1, '->', c2
-
 	elif useMags:
 		photocal = SdssMagsPhotoCal(tsf, bandname)
 	else:
 		photocal = SdssFluxPhotoCal()
+
 	psfield = sdss.readPsField(run, camcol, field)
 	sky = psfield.getSky(bandnum)
 	skysig = sqrt(sky)

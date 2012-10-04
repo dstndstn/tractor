@@ -203,12 +203,6 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
 		import traceback
 		print 'Exception in get_tractor_image_dr9():'
 		traceback.print_exc()
-		# bandnum = band_index(band)
-		# for ft in ['fpC', 'tsField', 'psField', 'fpM']:
-		# 	print 'Re-retrieving', ft
-		# 	res = sdss.retrieve(ft, r, c, f, bandnum, skipExisting=False)
-		# im,info = st.get_tractor_image(r, c, f, band, useMags=True,
-		# 							   sdssobj=sdss, psf=sdss_psf, **kwargs)
 		print 'Failed to get R,C,F,band', r,c,f,band
 		return None,None
 		#raise
@@ -1055,56 +1049,7 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	filtermap = {'i.MP9701': 'i2'}
 	sdssbands = ['u','g','r','i','z']
 
-
-	nm = NanoMaggies(order=['i2', 'i', 'u','g','r','z'],
-					 **dict([(k, NanoMaggies.magToNanomaggies(v))
-						   for k,v in
-						   dict(i2=20., i=21., u=22., g=23., r=24., z=25.).items()]))
-	print 'NanoMaggies:', nm
-	print nm.getParams()
-	print nm.getStepSizes()
-
-	pc1 = LinearPhotoCal(1., band='r')
-	print 'Linear cal:', pc1
-	print 'counts:', pc1.brightnessToCounts(nm)
-
-	pc2 = LinearPhotoCal(10., band='i2')
-	print 'Linear cal:', pc2
-	print 'counts:', pc2.brightnessToCounts(nm)
-
-
-	m1 = Mags(r=20.)
-	m2 = Mags(r=25.)
-	m3 = Mags(r=30.)
-
-	mpc1 = MagsPhotoCal('r', 23.)
-	mpc2 = MagsPhotoCal('r', 25.)
-
-	sc1 = NanoMaggies.zeropointToScale(23.)
-	sc2 = NanoMaggies.zeropointToScale(25.)
-	lpc1 = LinearPhotoCal(sc1, band='r')
-	lpc2 = LinearPhotoCal(sc2, band='r')
-
-	nm = NanoMaggies.magToNanomaggies(m1.r)
-	print 'nm', nm
-	nm1 = NanoMaggies(r=nm)
-	nm2 = NanoMaggies(r=NanoMaggies.magToNanomaggies(m2.r))
-	nm3 = NanoMaggies(r=NanoMaggies.magToNanomaggies(m3.r))
-
-	print 'Mags', m1, m2, m3
-
-	print 'nm np', nm1.namedparams
-
-	print 'NM', nm1, nm2, nm3
-
-	print 'MPC', mpc1, mpc2
-	print 'LPC', lpc1, lpc2
-
-	for m,nm in [(m1,nm1),(m2,nm2),(m3,nm3)]:
-		for lpc,mpc in [(lpc1,mpc1),(lpc2,mpc2)]:
-			print m, mpc, '->', mpc.brightnessToCounts(m)
-			print nm,lpc, '->', lpc.brightnessToCounts(nm)
-
+	# nanomaggies?
 	donm = True
 
 	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands,
@@ -1657,24 +1602,6 @@ def main():
 	#kicktires()
 	#checkstarmags()
 	#sys.exit(0)
-
-	# sdss = DR7(basedir='cs82data/dr7')
-	# run,camcol,field,rerun = 4797, 4, 190, 0
-	# bandname = 'g'
-	# bandnum = band_index(bandname)
-	# tsf = sdss.readTsField(run, camcol, field, rerun)
-	# from tractor.sdss import SdssMagsPhotoCal
-	# pc = SdssMagsPhotoCal(tsf, bandname)
-	# zp = tsf.get_zeropoint(bandnum)
-	# print 'Got zeropoint', zp
-	# photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp), band=bandname)
-	# m1 = Mags(**{ bandname: 20.})
-	# nm1 = NanoMaggies.fromMag(m1)
-	# c1 = pc.brightnessToCounts(m1)
-	# c2 = photocal.brightnessToCounts(nm1)
-	# print 'm1', m1, '->', c1
-	# print 'nm1', nm1, '->', c2
-	# sys.exit(0)
 
 	import optparse
 	parser = optparse.OptionParser()
