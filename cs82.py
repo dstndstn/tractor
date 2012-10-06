@@ -754,7 +754,8 @@ def cut_bright(cat, magcut=24, mag='i'):
 	I = []
 	mags = []
 	for i,src in enumerate(cat):
-		m = getattr(src.getBrightness(), mag)
+		#m = getattr(src.getBrightness(), mag)
+		m = src.getBrightness().getMag(mag)
 		if m < magcut:
 			#brightcat.append(src)
 			I.append(i)
@@ -1219,8 +1220,8 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 	# maglim = 24.
 	#########
-	#maglim = 22.
-	maglim = 21.
+	maglim = 22.
+	#maglim = 21.
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
