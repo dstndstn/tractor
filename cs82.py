@@ -1,5 +1,5 @@
 #
-#http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
+# http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
 #
 import os
 import math
@@ -201,7 +201,7 @@ def _mapf_sdss_im((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, objname,
 									   **kwargs)
 	except:
 		import traceback
-		print 'Exception in get_tractor_image_dr9():'
+		print 'Exception in get_tractor_image():'
 		traceback.print_exc()
 		print 'Failed to get R,C,F,band', r,c,f,band
 		return None,None
@@ -228,7 +228,8 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 				sdss_psf='kl-gm', cut_sdss=True,
 				good_sdss_only=False, sdss_object=None,
 				rotate_cfht=True,
-				nanomaggies=False):
+				nanomaggies=False,
+				nimages=None):
 	if sdssbands is None:
 		sdssbands = ['u','g','r','i','z']
 	tractor = Tractor()
@@ -260,10 +261,7 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 
 	if just_rcf:
 		return rcf
-	# Just do a subset of the fields?
-	# rcf = rcf[:16]
 	sdss = DR7(basedir='cs82data/dr7')
-	#sdss.setBasedir('cs82data')
 	#sdss = DR9(basedir='cs82data/dr9')
 
 	if good_sdss_only:
@@ -302,6 +300,11 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 				continue
 		for band in sdssbands:
 			args.append((r, c, f, band, sdss, sdss_psf, cut_sdss, RA, DEC, S, sdss_object, nanomaggies))
+
+	# Just do a subset of the fields?
+	if nimages:
+		args = args[:nimages]
+
 	print 'Getting', len(args), 'SDSS images...'
 	X = mp.map(_mapf_sdss_im, args)
 	print 'Got', len(X), 'SDSS images.'
@@ -310,6 +313,7 @@ def get_tractor(RA, DEC, sz, cffns, mp, filtermap=None, sdssbands=None,
 			continue
 		ims.append(im)
 		skies.append(sky)
+	print 'Kept', len(X), 'SDSS images.'
 
 	tractor.setImages(Images(*ims))
 	return tractor,skies
@@ -1050,6 +1054,14 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	filtermap = {'i.MP9701': 'i2'}
 	sdssbands = ['u','g','r','i','z']
 
+	opt = kwargs.pop('opt')
+	if opt.bands:
+		sdssbands = list(opt.bands)
+	if opt.nimages:
+		nimages = opt.nimages
+	else:
+		nimages = None
+		
 	# nanomaggies?
 	donm = True
 
@@ -1063,7 +1075,8 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
 								cut_sdss=True, sdss_psf='dg', good_sdss_only=True,
 								sdss_object = '82 N', rotate_cfht=False,
-								nanomaggies=donm)
+								nanomaggies=donm,
+		nimages=nimages)
 
 	pixscale = 0.187
 	S = int(1.01 * sz / pixscale) / 2
@@ -1369,7 +1382,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 
 
-def runstage(stage, force=[], threads=1, doplots=True):
+def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 	if threads > 1:
 		if False:
 			global dpool
@@ -1409,7 +1422,7 @@ def runstage(stage, force=[], threads=1, doplots=True):
 		
 		prereq = prereqs.get(stage, stage-1)
 
-		P = runstage(prereq, force=force, threads=threads, doplots=doplots)
+		P = runstage(prereq, force=force, threads=threads, doplots=doplots, opt=opt)
 
 	else:
 		P = {}
@@ -1434,7 +1447,8 @@ def runstage(stage, force=[], threads=1, doplots=True):
 	plotims = [0,1,2,3, 7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
 	P.update(plotsa=plotsa)
-
+	P.update(opt=opt)
+	
 	R = F(**P)
 	print 'Stage', stage, 'finished'
 
@@ -1545,8 +1559,8 @@ def checkstarmags():
 	    and dec between -0.14 and 0.91'''
 	S = fits_table('MyTable_dstn.fit')
 
-	from astrometry.libkd.spherematch import *
-	from astrometry.util.plotutils import *
+	from astrometry.libkd.spherematch import match_radec
+	#from astrometry.util.plotutils import *
 
 	I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, 1./3600.)
 
@@ -1614,6 +1628,10 @@ def main():
 	parser.add_option('-s', '--stage', dest='stage', default=4, type=int,
 					  help="Run up to the given stage")
 	parser.add_option('-P', '--no-plots', dest='plots', action='store_false', default=True, help='No plots')
+
+	parser.add_option('--nimages', dest='nimages', type=int, help='Number of SDSS images to include')
+
+	parser.add_option('--bands', dest='bands', type=str, help='SDSS bands')
 	
 	opt,args = parser.parse_args()
 
@@ -1629,7 +1647,7 @@ def main():
 	# S = 500
 	# get_cfht_coadd_image(RA, DEC, S, doplots=True)
 
-	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots)
+	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots, opt=opt)
 
 if __name__ == '__main__':
 	main()

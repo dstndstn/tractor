@@ -213,7 +213,6 @@ def my_ipe_errors():
 			c2 = c2 % p
 			e1 = e1 % p
 			e2 = e2 % p
-
 			
 			x1 = np.sqrt(T1.get(e1) * T2.get(e1))
 			y1 = (T1.get(c1) - T2.get(c1)) / x1
