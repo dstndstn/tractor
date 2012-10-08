@@ -971,58 +971,97 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 
 
 
-def optsources_searchlight(tractor, im, step0, doplots=True, plotsa={},
-						 mindlnp=1e-3):
+def optsources_searchlight(tractor, im, step0,
+						   npix = 100,
+						   doplots=True, plotsa={},
+						   mindlnp=1e-3):
 	step = step0
 	alllnp = []
-	# sweep across the image, optimizing in circles.
-	# we'll use the healpix grid for circle centers.
-	# how big? in arcmin
-	R = 0.25
-	Rpix = R / 60. / np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
-	nside = int(healpix_nside_for_side_length_arcmin(R/2.))
-	if nside > 13377:
-		print 'Clamping Nside from', nside, 'to 13376'
-		nside = 13376
-	print 'Nside', nside
-	#print 'radius in pixels:', Rpix
 
-	# start in one corner.
-	pos = im.wcs.pixelToPosition(0, 0)
-	hp = radecdegtohealpix(pos.ra, pos.dec, nside)
+	# # sweep across the image, optimizing in circles.
+	# # we'll use the healpix grid for circle centers.
+	# # how big? in arcmin
+	# R = 0.25
+	# Rpix = R / 60. / np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
+	# nside = int(healpix_nside_for_side_length_arcmin(R/2.))
+	# if nside > 13377:
+	# 	print 'Clamping Nside from', nside, 'to 13376'
+	# 	nside = 13376
+	# print 'Nside', nside
+	# #print 'radius in pixels:', Rpix
+	# # start in one corner.
+	# pos = im.wcs.pixelToPosition(0, 0)
+	# hp = radecdegtohealpix(pos.ra, pos.dec, nside)
+	# hpqueue = [hp]
+	# hpdone = []
 
-	hpqueue = [hp]
-	hpdone = []
+	H,W = im.shape
+	nx,ny = int(np.ceil(W / float(npix))), int(np.ceil(H / float(npix)))
+	XX = np.linspace(npix/2, W-npix/2, nx)
+	YY = np.linspace(npix/2, H-npix/2, ny)
+	dx,dy = XX[1]-XX[0], YY[1]-YY[0]
+	print 'Optimizing on a grid of', len(XX), 'x', len(YY), 'cells'
+	print 'Cell sizes', dx,'x',dy, 'pixels'
+	XY = zip(XX,YY)
+	R = np.sqrt(2.)*npix/2. * np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
+	print 'Radius', R, 'deg'
 
-	j = 1
+	# while len(hpqueue):
+	# 	hp = hpqueue.pop()
+	# 	hpdone.append(hp)
+	# 	print 'looking at healpix', hp
+	# 	ra,dec = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
+	# 	print 'RA,Dec center', ra,dec
+	# 	x,y = im.wcs.positionToPixel(RaDecPos(ra,dec))
+	# 	H,W	 = im.shape
+	# 	if x < -Rpix or y < -Rpix or x >= W+Rpix or y >= H+Rpix:
+	# 		print 'pixel', x,y, 'out of bounds'
+	# 		continue
+	# 
+	# 	# add neighbours
+	# 	nn = healpix_get_neighbours(hp, nside)
+	# 	print 'healpix neighbours', nn
+	# 	for ni in nn:
+	# 		if ni in hpdone:
+	# 			continue
+	# 		if ni in hpqueue:
+	# 			continue
+	# 		hpqueue.append(ni)
+	# 		print 'enqueued neighbour', ni
+	# 
+	# 	# FIXME -- add PSF-sized margin to radius
+	# 	#ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
+	for xi,yi in XY:
+		print 'x,y', xi,yi
+		rd = im.wcs.pixelToPosition(xi, yi)
+		ra,dec = rd.ra, rd.dec
+		print 'ra,dec', ra,dec
 
-	while len(hpqueue):
-		hp = hpqueue.pop()
-		hpdone.append(hp)
-		print 'looking at healpix', hp
-		ra,dec = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
-		print 'RA,Dec center', ra,dec
-		x,y = im.wcs.positionToPixel(RaDecPos(ra,dec))
-		H,W	 = im.shape
-		if x < -Rpix or y < -Rpix or x >= W+Rpix or y >= H+Rpix:
-			print 'pixel', x,y, 'out of bounds'
-			continue
-
-		# add neighbours
-		nn = healpix_get_neighbours(hp, nside)
-		print 'healpix neighbours', nn
-		for ni in nn:
-			if ni in hpdone:
-				continue
-			if ni in hpqueue:
-				continue
-			hpqueue.append(ni)
-			print 'enqueued neighbour', ni
-
-		# FIXME -- add PSF-sized margin to radius
-		#ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
-
+		print 'All sources:', len(tractor.catalog)
+		tractor.catalog.freezeAllParams()
 		tractor.catalog.thawSourcesInCircle(RaDecPos(ra, dec), R/60.)
+
+		plt.clf()
+		xx,yy = [],[]
+		for src in tractor.catalog:
+			x,y = im.wcs.positionToPixel(src.getPosition())
+			xx.append(x)
+			yy.append(y)
+		plt.plot(xx, yy, 'k.', alpha=0.5)
+		xx,yy = [],[]
+		for src in tractor.catalog.getThawedSources():
+			x,y = im.wcs.positionToPixel(src.getPosition())
+			xx.append(x)
+			yy.append(y)
+		plt.plot(xx, yy, 'r.')
+		plt.plot([xi],[yi], 'ro')
+		for xx,yy in XY:
+			plt.axhline(yy, color='k', alpha=0.5)
+			plt.axvline(xx, color='k', alpha=0.5)
+		plt.axis([0,W,0,H])
+		fn = 'circle-%04i.png' % step
+		plt.savefig(fn)
+		print 'Saved', fn
 
 		for ss in range(10):
 			print 'Optimizing:', len(tractor.getParamNames())
@@ -1358,8 +1397,8 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 	# maglim = 24.
 	#########
-	maglim = 22.
-	#maglim = 21.
+	#maglim = 22.
+	maglim = 21.
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
@@ -1475,11 +1514,12 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 		#if imi != 0:
 		if True:
-			#optsourcestogether(tractor, step, **optargs)
-			#plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
-			#	  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+			optsourcestogether(tractor, step, **optargs)
+			plots(tractor, ['modbest', 'chibest'], step+1,
+				  pp=np.array([tractor.getParams()]),
+				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
 
-			optsources_searchlight(tractor, im, step)
+			#optsources_searchlight(tractor, im, step)
 
 		optsourcesseparate(tractor, step, **optargs)
 		# AFTER THIS CALL, ALL CATALOG PARAMS ARE FROZEN!

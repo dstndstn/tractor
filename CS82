@@ -633,3 +633,14 @@ subsets of overlapping sources and solve them simultaneously.
 -Will source-at-a-time converge?
 
 -Opt all image in a given band simultaneously
+
+
+
+
+
+-optsources_searchlight:
+
+	large-Nside healpixes
+	image grid -- subimages
+	OR create a grid of sub-image Tractor images and just work at image scale
+	BUT still need source-in-image cuts
