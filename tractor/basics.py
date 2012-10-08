@@ -334,7 +334,7 @@ class WcslibWcs(BaseParams):
 		# print '------------------------------------------------'
 		print 'Unpickling: wcslib header string length:', len(hdrstr)
 		self.wcs = anwcs_from_string(hdrstr)
-		pritn 'unpickling done'
+		print 'unpickling done'
 		
 	def copy(self):
 		raise RuntimeError('unimplemented')

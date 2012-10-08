@@ -699,6 +699,7 @@ def plot1((tractor, i, zr, plotnames, step, pp, ibest, tsuf, colorbar, fmt)):
 
 def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, alllnp=None,
 		  tsuf=None, colorbar=True, format='.png'):
+	print 'plots...'
 	if 'lnps' in plotnames:
 		plotnames.remove('lnps')
 		plt.figure(figsize=(6,6))
@@ -723,6 +724,7 @@ def plots(tractor, plotnames, step, pp=None, mp=None, ibest=None, imis=None, all
 		map(plot1, args)
 	else:
 		mp.map(plot1, args)
+	print 'plots done'
 
 
 def nlmap(X):
@@ -969,6 +971,84 @@ def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 
 
 
+def optsources_searchlight(tractor, im, step0, doplots=True, plotsa={},
+						 mindlnp=1e-3):
+	step = step0
+	alllnp = []
+	# sweep across the image, optimizing in circles.
+	# we'll use the healpix grid for circle centers.
+	# how big? in arcmin
+	R = 0.25
+	Rpix = R / 60. / np.sqrt(np.abs(np.linalg.det(im.wcs.cdAtPixel(0,0))))
+	nside = int(healpix_nside_for_side_length_arcmin(R/2.))
+	if nside > 13377:
+		print 'Clamping Nside from', nside, 'to 13376'
+		nside = 13376
+	print 'Nside', nside
+	#print 'radius in pixels:', Rpix
+
+	# start in one corner.
+	pos = im.wcs.pixelToPosition(0, 0)
+	hp = radecdegtohealpix(pos.ra, pos.dec, nside)
+
+	hpqueue = [hp]
+	hpdone = []
+
+	j = 1
+
+	while len(hpqueue):
+		hp = hpqueue.pop()
+		hpdone.append(hp)
+		print 'looking at healpix', hp
+		ra,dec = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
+		print 'RA,Dec center', ra,dec
+		x,y = im.wcs.positionToPixel(RaDecPos(ra,dec))
+		H,W	 = im.shape
+		if x < -Rpix or y < -Rpix or x >= W+Rpix or y >= H+Rpix:
+			print 'pixel', x,y, 'out of bounds'
+			continue
+
+		# add neighbours
+		nn = healpix_get_neighbours(hp, nside)
+		print 'healpix neighbours', nn
+		for ni in nn:
+			if ni in hpdone:
+				continue
+			if ni in hpqueue:
+				continue
+			hpqueue.append(ni)
+			print 'enqueued neighbour', ni
+
+		# FIXME -- add PSF-sized margin to radius
+		#ra,dec = (radecroi[0]+radecroi[1])/2., (radecroi[2]+radecroi[3])/2.
+
+		tractor.catalog.thawSourcesInCircle(RaDecPos(ra, dec), R/60.)
+
+		for ss in range(10):
+			print 'Optimizing:', len(tractor.getParamNames())
+			for nm in tractor.getParamNames()[:10]:
+				print nm
+			print '...'
+			(dlnp,X,alpha) = tractor.optimize() #damp=1.)
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			lnp0 = tractor.getLogProb()
+			alllnp.append([lnp0])
+
+			if doplots:
+				pp = np.array([tractor.getParams()])
+				ibest = 0
+				plots(tractor,
+					  ['modbest', 'chibest', 'lnps'],
+					  step, pp=pp, ibest=ibest, alllnp=alllnp, **plotsa)
+			step += 1
+			if alpha == 0 or dlnp < mindlnp:
+				break
+
+		tractor.catalog.freezeAllParams()
+	return step, alllnp
+	
+
 def optsourcestogether(tractor, step0, doplots=True, plotsa={}, mindlnp=1e-3):
 	step = step0
 	alllnp = []
@@ -1190,8 +1270,9 @@ def stage100(tractor=None, mp=None, **kwargs):
 	tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
 
 	print 'params0:'
-	for nm in tractor.getParamNames():
+	for nm in tractor.getParamNames()[:10]:
 		print '  ', nm
+	print '...'
 	params0 = tractor.getParams()
 
 	####
@@ -1299,7 +1380,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 	# ... and save those params.
 	print 'params0:'
-	for nm in tractor.getParamNames():
+	for nm in tractor.getParamNames()[:10]:
 		print '  ', nm
 	params0 = tractor.getParams()
 
@@ -1378,9 +1459,10 @@ def stage01(tractor=None, mp=None, **kwargs):
 		tractor.catalog.thawParamsRecursive(band)
 
 		print 'Tractor:', tractor
-		print 'Active params:'
-		for nm in tractor.getParamNames():
+		print 'Active params:', len(tractor.getParamNames())
+		for nm in tractor.getParamNames()[:10]:
 			print '  ', nm
+		print '...'
 
 		plotims = [0,]
 		plotsa = dict(imis=plotims, mp=mp)
@@ -1393,9 +1475,11 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 		#if imi != 0:
 		if True:
-			optsourcestogether(tractor, step, **optargs)
-			plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
-				  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+			#optsourcestogether(tractor, step, **optargs)
+			#plots(tractor, ['modbest', 'chibest'], step+1, pp=np.array([tractor.getParams()]),
+			#	  ibest=0, tsuf=': '+im.name+' joint', **plotsa)
+
+			optsources_searchlight(tractor, im, step)
 
 		optsourcesseparate(tractor, step, **optargs)
 		# AFTER THIS CALL, ALL CATALOG PARAMS ARE FROZEN!
