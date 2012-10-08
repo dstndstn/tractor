@@ -136,8 +136,12 @@ class NanoMaggies(Fluxes):
 		s = getClassName(self) + ': '
 		ss = []
 		for b in self.order:
-			m = self.getMag(b)
-			ss.append('%s=%.3g' % (b,m))
+			f = self.getFlux(b)
+			if f <= 0:
+				ss.append('%s=(flux %.3g)' % (b,f))
+			else:
+				m = self.getMag(b)
+				ss.append('%s=%.3g' % (b,m))
 		s += ', '.join(ss)
 		return s
 
@@ -262,10 +266,14 @@ class LinearPhotoCal(ScalarParam):
 
 	def brightnessToCounts(self, brightness):
 		if self.band is None:
-			return brightness.getValue() * self.val
+			counts = brightness.getValue() * self.val
 		else:
-			return brightness.getFlux(self.band) * self.val
-
+			counts = brightness.getFlux(self.band) * self.val
+		if counts < 0:
+			print 'Clamping counts up to zero:', counts, 'for brightness', brightnss
+			return 0.
+		return counts
+		
 
 class NullWCS(BaseParams):
 	'''
