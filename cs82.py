@@ -1217,10 +1217,15 @@ def stage100(tractor=None, mp=None, **kwargs):
 
 	for imi,im in enumerate(allimages[:6]):
 		tractor.setImages(Images(im))
-		if im.name.startswith('SDSS'):
-			band = im.photocal.bandname
-		else:
-			band = im.photocal.band
+
+		#if im.name.startswith('SDSS'):
+		#	band = im.photocal.bandname
+		#else:
+		#	band = im.photocal.band
+
+		# LinearPhotoCal -- nanomaggies
+		band = im.photocal.band
+
 		print im
 		print 'Band', band
 
@@ -1305,11 +1310,13 @@ def stage01(tractor=None, mp=None, **kwargs):
 		print im.name
 		tractor.setImages(Images(im))
 
-		if im.name.startswith('SDSS'):
-			band = im.photocal.bandname
-		else:
-			band = im.photocal.band
+		#if im.name.startswith('SDSS'):
+		#	band = im.photocal.bandname
+		#else:
+		#	band = im.photocal.band
+
 		print im
+		band = im.photocal.band
 		print 'Band', band
 
 		###### !!!
@@ -1691,20 +1698,5 @@ def main():
 	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots, opt=opt)
 
 if __name__ == '__main__':
-
-	s = ('''WCSAXES =                    2 / Number of coordinate axes                      CRPIX1  =                 2048 / Pixel coordinate of reference point            CRPIX2  =                 2048 / Pixel coordinate of reference point            CDELT1  =   -0.000381944439141 / [deg] Coordinate increment at reference point  CDELT2  =    0.000381944439141 / [deg] Coordinate increment at reference point  CUNIT1  = 'deg'                / Units of coordinate increment and value        CUNIT2  = 'deg'                / Units of coordinate increment and value        CTYPE1  = 'RA---SIN'           / Right ascension, orthographic/synthesis projectCTYPE2  = 'DEC--SIN'           / Declination, orthographic/synthesis projection CRVAL1  =           334.286977 / [deg] Coordinate value at reference point      CRVAL2  =                    0 / [deg] Coordinate value at reference point      LONPOLE =                  180 / [deg] Native longitude of celestial pole       LATPOLE =                    0 / [deg] Native latitude of celestial pole        RESTFRQ =                    0 / [Hz] Line rest frequency                       RESTWAV =                    0 / [Hz] Line rest wavelength                      EQUINOX =                 2000 / [yr] Equinox of equatorial coordinates         ''' + 
-		 'NAXIS   = 2' + ' '*69 +
-		 'NAXIS1  = % 20i'%1024 + ' '*50 +
-		 'NAXIS2  = % 20i'%1024 + ' '*50 +
-		 'END'+' '*77
-		)
-	from astrometry.util.util import anwcs_from_string
-	wcs = anwcs_from_string(s)
-	print 'Read WCS', wcs
-	print 'size', wcs.imagew, wcs.imageh
-
-	#sys.exit(0)
-
-
 	main()
 	sys.exit(0)
