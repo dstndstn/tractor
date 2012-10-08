@@ -772,6 +772,28 @@ def cut_bright(cat, magcut=24, mag='i'):
 	return brightcat, I
 
 
+def get_wise_coadd_images(RA, DEC, radius, bandnums = [1,2,3,4],
+						  nanomaggies=False):
+	from wise import read_wise_coadd
+	bands = ['w%i' % n for n in bandnums]
+	basedir = 'cs82data/wise/level3/'
+	pat = '3342p000_ab41-w%i'
+	#pat = '04933b137-w%i'
+	filtermap = None
+
+	radius /= 3600.
+	# HACK - no cos(dec)
+	radecbox = [RA-radius, RA+radius, DEC-radius, DEC+radius]
+	
+	ims = []
+	for band in bandnums:
+		base = pat % band
+		basefn = os.path.join(basedir, base)
+		im = read_wise_coadd(basefn, radecroi=radecbox, filtermap=filtermap,
+							 nanomaggies=nanomaggies)
+		ims.append(im)
+	return ims
+
 def get_cfht_coadd_image(RA, DEC, S, bandname=None, filtermap=None,
 						 doplots=False, psfK=3, nanomaggies=False):
 	if filtermap is None:
@@ -1065,11 +1087,23 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 	# nanomaggies?
 	donm = True
 
+	print 'Grabbing WISE images'
+	wiseims = get_wise_coadd_images(RA, DEC, sz/2., nanomaggies=donm)
+
+	import cPickle
+	print 'Pickling WISE images...'
+	SS = cPickle.dumps(wiseims)
+
+	print 'UnPickling WISE images...'
+	wims = cPickle.loads(SS)
+
+	print wims
+
 	srcs = get_cf_sources2(RA, DEC, sz, mags=['i2'] + sdssbands,
 						   nanomaggies=donm)
 	#srcs = get_cf_sources2(RA, DEC, sz, mags=sdssbands + ['i2'])
 	#srcs = get_cf_sources3(RA, DEC, sz, mags=sdssbands + ['i2'])
-	
+
 	#cffns = glob('cs82data/86*p-21-cr.fits')
 	cffns = []
 	tractor,skies = get_tractor(RA,DEC,sz, cffns, mp, filtermap=filtermap, sdssbands=sdssbands,
@@ -1078,6 +1112,9 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 								nanomaggies=donm,
 		nimages=nimages)
 
+	for im in reversed(wiseims):
+		tractor.images.prepend(im)
+	
 	pixscale = 0.187
 	S = int(1.01 * sz / pixscale) / 2
 	print 'Grabbing S =', S, 'subregion of CFHT coadd'
@@ -1100,6 +1137,8 @@ def stage00(mp=None, plotsa=None, RA=None, DEC=None, sz=None,
 			dd.append(rd.dec)
 		if tim.name.startswith('SDSS'):
 			sty = dict(color='b', lw=2, alpha=0.2, zorder=10)
+		elif tim.name.startswith('WISE'):
+			sty = dict(color='g', lw=2, alpha=0.8, zorder=10)
 		else:
 			sty = dict(color='r', lw=2, alpha=0.8, zorder=11)
 		plt.plot(rr, dd, '-', **sty)
@@ -1444,7 +1483,9 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 
 	#P.update(RA = 334.32, DEC = 0.315, sz = 0.12 * 3600.)
 
-	plotims = [0,1,2,3, 7,8,9]
+	#plotims = [0,1,2,3, 7,8,9]
+	# CFHT, W[1234], ugriz
+	plotims = [0, 1,2,3,4, 5,6,7,8,9]
 	plotsa = dict(imis=plotims, mp=mp)
 	P.update(plotsa=plotsa)
 	P.update(opt=opt)
@@ -1650,5 +1691,20 @@ def main():
 	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots, opt=opt)
 
 if __name__ == '__main__':
+
+	s = ('''WCSAXES =                    2 / Number of coordinate axes                      CRPIX1  =                 2048 / Pixel coordinate of reference point            CRPIX2  =                 2048 / Pixel coordinate of reference point            CDELT1  =   -0.000381944439141 / [deg] Coordinate increment at reference point  CDELT2  =    0.000381944439141 / [deg] Coordinate increment at reference point  CUNIT1  = 'deg'                / Units of coordinate increment and value        CUNIT2  = 'deg'                / Units of coordinate increment and value        CTYPE1  = 'RA---SIN'           / Right ascension, orthographic/synthesis projectCTYPE2  = 'DEC--SIN'           / Declination, orthographic/synthesis projection CRVAL1  =           334.286977 / [deg] Coordinate value at reference point      CRVAL2  =                    0 / [deg] Coordinate value at reference point      LONPOLE =                  180 / [deg] Native longitude of celestial pole       LATPOLE =                    0 / [deg] Native latitude of celestial pole        RESTFRQ =                    0 / [Hz] Line rest frequency                       RESTWAV =                    0 / [Hz] Line rest wavelength                      EQUINOX =                 2000 / [yr] Equinox of equatorial coordinates         ''' + 
+		 'NAXIS   = 2' + ' '*69 +
+		 'NAXIS1  = % 20i'%1024 + ' '*50 +
+		 'NAXIS2  = % 20i'%1024 + ' '*50 +
+		 'END'+' '*77
+		)
+	from astrometry.util.util import anwcs_from_string
+	wcs = anwcs_from_string(s)
+	print 'Read WCS', wcs
+	print 'size', wcs.imagew, wcs.imageh
+
+	#sys.exit(0)
+
+
 	main()
 	sys.exit(0)

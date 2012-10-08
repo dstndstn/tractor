@@ -304,6 +304,27 @@ class WcslibWcs(BaseParams):
 		wcs = anwcs(filename, hdu)
 		self.wcs = wcs
 
+	# pickling
+	def __getstate__(self):
+		s = self.wcs.getHeaderString()
+		# print 'Pickling WcslibWcs: string'
+		# print '------------------------------------------------'
+		# print s
+		# print '------------------------------------------------'
+		return (self.x0, self.y0, s)
+
+	def __setstate__(self, state):
+		(x0,y0,hdrstr) = state
+		print 'Unpickling: wcslib header string length:', len(hdrstr)
+		self.x0 = x0
+		self.y0 = y0
+		from astrometry.util.util import anwcs_from_string
+		# print 'Creating WcslibWcs from header string:'
+		# print '------------------------------------------------'
+		# print hdrstr
+		# print '------------------------------------------------'
+		self.wcs = anwcs_from_string(hdrstr)
+	
 	def copy(self):
 		raise RuntimeError('unimplemented')
 

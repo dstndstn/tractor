@@ -599,3 +599,37 @@ Next steps:
 -(re-fit shapes)
 
 
+--------------------------------------------
+2012-10-06
+--------------------------------------------
+
+Finished converting to NanoMaggies.  Only problem: wants to take some
+fluxes negative when fitting CS82 catalog vs CS82 coadd.  First opt
+step takes alpha=1. for huge dlnp.  (900 CPU sec on my laptop, (1800
+wall) and ~12 GB or more of memory for the joint opt.  (~2048x2048
+SDSS pixels).  Subsequent optimization step: almost no change.
+  Finding optimal step size...
+  Stepping by 0.25 for delta-logprob 0.396217003465
+
+Would be much better to do either searchlight optimization, or find
+subsets of overlapping sources and solve them simultaneously.
+
+-Need to impose positive flux constraints.  Detect when a composite
+ component wants to go negative and remove it?  Add damping, priors,
+ and iterate?
+
+-Can I somehow isolate just the image regions to be optimized (so that
+ I only render the sources in the region and only compute the lnprob
+ in that region?)  Or just suck it up and work at image-at-a-time
+ resolution?
+
+ --hmm, could find sources touching a healpix grid, and blank out the
+ axis-aligned bounding box in each image.  (Set invvar = 0)
+
+--find healpix corners in image
+--find bounding box
+--find sources overlapping
+
+-Will source-at-a-time converge?
+
+-Opt all image in a given band simultaneously
