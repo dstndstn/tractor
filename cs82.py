@@ -1398,7 +1398,8 @@ def stage01(tractor=None, mp=None, **kwargs):
 	# maglim = 24.
 	#########
 	#maglim = 22.
-	maglim = 21.
+	#maglim = 21.
+	maglim = 20.
 	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
 	tractor.setCatalog(brightcat)
 
@@ -1426,6 +1427,11 @@ def stage01(tractor=None, mp=None, **kwargs):
 	allp = []
 
 	for imi,im in enumerate(allimages):
+
+		if imi == 0:
+			print 'Skipping', im.name
+			continue
+
 		print 'Fitting image', imi, 'of', len(allimages)
 		print im.name
 		tractor.setImages(Images(im))
@@ -1438,11 +1444,6 @@ def stage01(tractor=None, mp=None, **kwargs):
 		print im
 		band = im.photocal.band
 		print 'Band', band
-
-		###### !!!
-		
-		#if band != 'r':
-		#	continue
 
 		### Plot CMD results so far...
 		i2mags = np.array([src.getBrightness().i2 for src in tractor.catalog])
@@ -1486,6 +1487,7 @@ def stage01(tractor=None, mp=None, **kwargs):
 		#pfn = 's1-%03i.pickle' % imi
 
 		pfn = 's2-%03i.pickle' % imi
+		
 		pickle_to_file((allp, i2mags, tractor.catalog), pfn)
 		print 'saved pickle', pfn
 
@@ -1497,6 +1499,14 @@ def stage01(tractor=None, mp=None, **kwargs):
 		tractor.catalog.freezeParamsRecursive(*allbands)
 		tractor.catalog.thawParamsRecursive(band)
 
+		if im.name.startswith('WISE'):
+			tractor.thawParam('images')
+			im.freezeAllBut('sky', 'psf')
+			im.psf.freezeAllBut('sigmas')
+			print 'Image params:', im.getParamNames()
+			print 'Initial sky:', im.sky
+			print 'Initial psf:', im.psf
+
 		print 'Tractor:', tractor
 		print 'Active params:', len(tractor.getParamNames())
 		for nm in tractor.getParamNames()[:10]:
@@ -1506,7 +1516,8 @@ def stage01(tractor=None, mp=None, **kwargs):
 		plotims = [0,]
 		plotsa = dict(imis=plotims, mp=mp)
 		 
-		step = 1000 + imi*3
+		#step = 1000 + imi*3
+		step = 1000 + imi*2
 		plots(tractor, ['modbest', 'chibest'], step, pp=np.array([tractor.getParams()]),
 			  ibest=0, tsuf=': '+im.name+' init', **plotsa)
 
@@ -1521,16 +1532,24 @@ def stage01(tractor=None, mp=None, **kwargs):
 
 			#optsources_searchlight(tractor, im, step)
 
-		optsourcesseparate(tractor, step, **optargs)
-		# AFTER THIS CALL, ALL CATALOG PARAMS ARE FROZEN!
+		if False:
+			optsourcesseparate(tractor, step, **optargs)
+			# AFTER THIS CALL, ALL CATALOG PARAMS ARE FROZEN!
+			tractor.catalog.thawParamsRecursive('*')
+			tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
+			tractor.catalog.freezeParamsRecursive(*allbands)
+			tractor.catalog.thawParamsRecursive(band)
 
-		tractor.catalog.thawParamsRecursive('*')
-		tractor.catalog.freezeParamsRecursive('pos', 'shape', 'shapeExp', 'shapeDev')
-		tractor.catalog.freezeParamsRecursive(*allbands)
-		tractor.catalog.thawParamsRecursive(band)
+			plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
+				  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
 
-		plots(tractor, ['modbest', 'chibest'], step+2, pp=np.array([tractor.getParams()]),
-			  ibest=0, tsuf=': '+im.name+' indiv', **plotsa)
+
+		
+		print 'Final sky:', im.sky
+		print 'Final psf:', im.psf
+
+		# WISE sky
+		tractor.freezeParam('images')
 
 		p = tractor.getParams()
 		print 'params', p
@@ -1549,6 +1568,43 @@ def stage01(tractor=None, mp=None, **kwargs):
 	tractor.setCatalog(allsources)
 
 	return dict(tractor=tractor, allp=allp, Ibright=Ibright, params0=params0)
+
+stage201 = stage01
+def stage200(tractor=None, mp=None, **kwargs):
+	#
+	allsources = tractor.getCatalog()
+
+	def addw(br):
+		print 'bright', br
+		bands = ['w1','w2','w3','w4']
+		i2 = br.i2
+		kwa = dict([(b,getattr(br,b)) for b in br.order])
+		kwa.update(dict([(b,i2) for b in bands]))
+		br = NanoMaggies(order=br.order+bands, **kwa)
+		print 'updated brightness', br
+		return br
+
+	# add w[1234] to brightnesses
+	cat = tractor.getCatalog()
+	for src in cat:
+		print src
+		if (isinstance(src, PointSource) or
+			isinstance(src, ExpGalaxy) or
+			isinstance(src, DevGalaxy)):
+			src.setBrightness(addw(src.getBrightness()))
+		else:
+			# Comp
+			src.brightnessExp = addw(src.brightnessExp)
+			src.brightnessDev = addw(src.brightnessDev)
+		print '-->', src
+
+	return dict(tractor=tractor)
+
+# maglim = 20.
+#	brightcat,Ibright = cut_bright(allsources, magcut=maglim, mag='i2')
+#	tractor.setCatalog(brightcat)
+#	print 'Cut to', len(brightcat), 'sources'
+
 
 
 
@@ -1585,7 +1641,7 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 
 		prereqs = {
 			100: 0,
-			
+			200: 0,
 			}
 
 		# Get prereq: from dict, or stage-1

@@ -314,9 +314,9 @@ class WcslibWcs(BaseParams):
 
 	# pickling
 	def __getstate__(self):
-		print 'pickling wcslib header...'
+		#print 'pickling wcslib header...'
 		s = self.wcs.getHeaderString()
-		print 'pickled wcslib header: len', len(s)
+		#print 'pickled wcslib header: len', len(s)
 		# print 'Pickling WcslibWcs: string'
 		# print '------------------------------------------------'
 		# print s
@@ -332,9 +332,9 @@ class WcslibWcs(BaseParams):
 		# print '------------------------------------------------'
 		# print hdrstr
 		# print '------------------------------------------------'
-		print 'Unpickling: wcslib header string length:', len(hdrstr)
+		#print 'Unpickling: wcslib header string length:', len(hdrstr)
 		self.wcs = anwcs_from_string(hdrstr)
-		print 'unpickling done'
+		#print 'unpickling done'
 		
 	def copy(self):
 		raise RuntimeError('unimplemented')
@@ -896,7 +896,12 @@ class NCircularGaussianPSF(MultiParams):
 
 	def getStepSizes(self, *args, **kwargs):
 		N = len(self.sigmas)
-		return [0.01]*N + [0.01]*N
+		ss = []
+		if not self.isParamFrozen('sigmas'):
+			ss.extend([0.01]*N)
+		if not self.isParamFrozen('weights'):
+			ss.extend([0.01]*N)
+		return ss
 
 	'''
 	def isValidParamStep(self, dparam):
@@ -920,11 +925,22 @@ class NCircularGaussianPSF(MultiParams):
 		self.weights.setParams([w/mx for w in self.weights])
 
 	def hashkey(self):
-		return ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
+		hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
+		#hk = ('NCircularGaussianPSF',
+		#	  tuple(x for x in self.sigmas),
+		#	  tuple(x for x in self.weights))
+		# print 'sigmas', self.sigmas
+		# print 'sigmas type', type(self.sigmas)
+		# print 'sigmas[0]', self.sigmas[0]
+		# print 'Hashkey', hk
+		# print hash(hk)
+		return hk
 	
 	def copy(self):
-		return NCircularGaussianPSF(list([s for s in self.sigmas]),
-							list([w for w in self.weights]))
+		cc = NCircularGaussianPSF(list([s for s in self.sigmas]),
+								  list([w for w in self.weights]))
+		#print 'NCirc copy', cc
+		return cc
 
 	def applyTo(self, image):
 		from scipy.ndimage.filters import gaussian_filter

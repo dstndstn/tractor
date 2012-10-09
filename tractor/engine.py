@@ -454,6 +454,7 @@ class Images(MultiParams):
 # These are free functions for multiprocessing in "getderivs2()"
 def getmodelimagestep((tr, j, k, p0, step)):
 	im = tr.getImage(j)
+	#print 'Setting param', p0, step, p0+step
 	im.setParam(k, p0 + step)
 	mod = tr.getModelImage(im)
 	im.setParam(k, p0)
@@ -802,6 +803,9 @@ class Tractor(MultiParams):
 		args = []
 		for j,im in enumerate(ims):
 			p0 = im.getParams()
+			print 'Image', im
+			print 'Step sizes:', im.getStepSizes()
+			print 'p0:', p0
 			for k,step in enumerate(im.getStepSizes()):
 				args.append((self, j, k, p0[k], step))
 		# reverse the args so we can pop() below.

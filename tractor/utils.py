@@ -382,6 +382,7 @@ class ParamList(BaseParams, NamedParams):
 		#print 'ParamList __init__()'
 		# FIXME -- kwargs with named params?
 		self.vals = list(args)
+		#print 'Creating ParamList', self.__class__, '->', self.vals
 		super(ParamList,self).__init__()
 
 	def copy(self):
