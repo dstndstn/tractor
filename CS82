@@ -635,6 +635,9 @@ subsets of overlapping sources and solve them simultaneously.
 -Opt all image in a given band simultaneously
 
 
+-Bright stars -- adaptive size of Patch=======
+
+
 
 
 
@@ -644,3 +647,4 @@ subsets of overlapping sources and solve them simultaneously.
 	image grid -- subimages
 	OR create a grid of sub-image Tractor images and just work at image scale
 	BUT still need source-in-image cuts
+
