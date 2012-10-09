@@ -20,6 +20,7 @@ from tractor import *
 from tractor import sdss as st
 from tractor.saveImg import *
 from tractor import sdss_galaxy as sg
+from tractor import sdss as st
 from tractor import basics as ba
 from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
@@ -116,7 +117,7 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 
-def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
     entry = getName(name)
     print entry
     ra = float(entry['RA'][0])
@@ -138,9 +139,9 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
         fieldradius = 3.
         remradius = 2.        
     
-    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
+    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
-def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
     data = pyfits.open("nsa-short.fits.gz")[1].data
     e=data.field('NSAID')
 
@@ -149,11 +150,11 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
 
     print record
 
-    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],record['SERSIC_TH50'][0]/60.,record['SERSIC_TH50'][0]/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache)
+    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],record['SERSIC_TH50'][0]/60.,record['SERSIC_TH50'][0]/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
 
 
-def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False):
+def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
     #Radius should be in arcminutes
     if threads:
         mp = multiproc(nthreads=threads)
@@ -176,14 +177,20 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
     print rcfs
     assert(len(rcfs)>0)
-    assert(len(rcfs)<15)
+    if 10 < len(rcfs) < 20:
+        scale = 2
+    elif 20 < len(rcfs) < 40:
+        scale = 4
+    elif 40 < len(rcfs) < 80:
+        scale = 8
+    assert(len(rcfs)<80)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
         print sra,sdec,smag
 
-    imkw = dict(psf='dg')
+    imkw = dict(psf='kl-gm')
     if dr9:
         getim = st.get_tractor_image_dr9
         getsrc = st.get_tractor_sources_dr9
@@ -213,12 +220,16 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
             continue
         if s is None:
             continue
-        timgs.extend(ims)
+        if scale > 1:
+            for im in ims:
+                timgs.append(st.scale_sdss_image(im,scale))
+        else:
+            timgs.extend(ims)
         allsources.extend(s)
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    plotarea(ra, dec, fieldradius, name, prefix, timgs) #, rds)
+    #plotarea(ra, dec, fieldradius, name, prefix, timgs) #, rds)
     
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)

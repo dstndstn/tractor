@@ -23,9 +23,9 @@ indx1=np.where(y[:,5] <= 0)
 good[indx1]=False
 indx2=np.where(y[:,3] <= 0)
 good[indx2]=False
-indx3=np.where(z > 158)
+indx3=np.where(z > 120)
 good[indx3]=False
-indx4=np.where(z < 120)
+indx4=np.where(z < 30)
 good[indx4]=False
 
 gra=a[good]

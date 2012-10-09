@@ -577,7 +577,6 @@ def scale_sdss_image(tim, S):
 
 	#photocal = tim.getPhotoCal().copy()
 	photocal = ScaledPhotoCal(tim.getPhotoCal(), (1./S)**2)
-
 	return Image(data=data, invvar=invvar, psf=psf, wcs=wcs,
 				 sky=sky, photocal=photocal, name='Scaled(%i) '%S + tim.name,
 				 zr=tim.zr)

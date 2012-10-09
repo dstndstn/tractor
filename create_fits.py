@@ -78,13 +78,15 @@ def makeNSAtlastable():
             strip=files.rstrip('-updated.pickle')
             replace=strip.replace('_',' ')
             nsa_name.append(replace)
-            nsid = float (replace.split()[2])
+            nsid = int(replace.split()[2])
+            print nsid
             e=data.field('NSAID')
             mask = e ==nsid
+            print mask
             record = data[mask]
-            ra = float(data['RA'][0])
-            dec = float(data['DEC'][0])
-            sersic_th50 = float(data['SERSIC_TH50'][0])
+            ra = float(record['RA'][0])
+            dec = float(record['DEC'][0])
+            sersic_th50 = float(record['SERSIC_TH50'][0])
             nsa_ra.append(ra)
             nsa_dec.append(dec)
             nsa_nsid.append(nsid)
@@ -225,7 +227,6 @@ def makeNSAtlastable():
     tbhdulist=pyf.HDUList([hdu,tbhdu])
     os.chdir("../")
     tbhdulist.writeto('nsa_galaxies.fits',clobber=True)
-    print os.pwd()
 
 
 
