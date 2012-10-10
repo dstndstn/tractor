@@ -34,6 +34,16 @@ grad = z[good]
 g = e[good]
 newGood=np.array([True for x in g])
 
+def getimage(x):
+    nocom = [t for t in xrange(len(e[good])) if e[good][t]==x]
+    for t in nocom:       
+        if b[good][t] > 0: 
+       		url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/p%02d/%s/%s.jpg' %(w[good][t][1:3],((int(w[good][t][11:13]))/2)*2,w[good][t],w[good][t])
+        else: 
+                url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/m%02d/%s/%s.jpg' %(w[good][t][1:3],((int(w[good][t][11:13]))/2)*2,w[good][t],w[good][t])
+
+    urllib.urlretrieve(url, '%s.jpg' %(x))
+    print url
 
 rc3 = pyf.open('rc3limited.fits')
 
@@ -44,7 +54,7 @@ for entry in rc3[1].data:
     newGood[m1]=False
 
 gra=gra[newGood]
-g=g[newGood]
+g=g[newGood] #list of all nsaids that should now be checked 
 gdec=gdec[newGood]
 grad = grad[newGood]
 for obj in g:
