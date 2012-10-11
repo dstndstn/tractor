@@ -2,7 +2,6 @@
 # (this tells emacs to indent with spaces)
 import matplotlib
 matplotlib.use('Agg')
-
 import os
 import logging
 import urllib2

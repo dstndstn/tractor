@@ -3,28 +3,28 @@
 #M31 - NGC 224 - (Andromeda Galaxy) 945 fields
 #M32 - NGC 221 - Near andromeda-worked
 #M33 - NGC 598 - (Triangulum Galaxy) 146 fields
-#M49 - NGC 4472 - Memory error- Segmentation fault (core dumped)- 7/11
+#M49 - NGC 4472 - Memory error- Segmentation fault (core dumped)- 7/11, worked -7/12
 #M51 - NGC 5194 - (Whirlpool Galaxy) - worked 7/10
 #M58 - NGC 4579 - Memory error - worked 7/7 !
 #M59 - NGC 4621 - Worked
 #M60 - NGC 4649 - Neighboring Galaxy-Worked, bad fit
-#M61 - NGC 4303 - Assertion Error 7/9
-#M63 - NGC 5055 - (Sunflower Galaxy) - 6 fields -- try again? - 7/11 
+#M61 - NGC 4303 - Assertion Error 7/9, 7/12
+#M63 - NGC 5055 - (Sunflower Galaxy) - worked - 7/11 
 #M64 - NGC 4826 - (Black Eye Galaxy) - Memory error - worked -7/11
 #M65 - NGC 3623 - Memory error - worked 7/10
-#M66 - NGC 3627 - Memory error
-#M74 - NGC 628
+#M66 - NGC 3627 - Memory error - worked 7/11
+#M74 - NGC 628 - memory error 7/11- worked 7/12
 #M77 - NGC 1068 85 fields
 #M81 - NGC 3031 - (Bode's Galaxy) 22 fields
-#M82 - NGC 3034 - (Cigar Galaxy) - Segmentation fault(core dumped)
+#M82 - NGC 3034 - (Cigar Galaxy) - Segmentation fault(core dumped) - worked 7/13
 #M83 - NGC 5236 - (Southern Pinwheel Galaxy) Not in SDSS!!!
 #M84 - NGC 4374 - worked
 #M85 - NGC 4382 - mem error- worked 7/11
-#M86 - NGC 4406
-#M87 - NGC 4486 - (Virgo A) - mem error
+#M86 - NGC 4406 - worked 7/11
+#M87 - NGC 4486 - (Virgo A) - mem error- worked 7/12
 #M88 - NGC 4501 - worked
-#M89 - NGC 4552 - memory error 7/9
-#M90 - NGC 4569- 9 fields 
+#M89 - NGC 4552 - memory error 7/9 - worked 7/12
+#M90 - NGC 4569- 9 fields - mem error 7/12 -worked
 #M91 - NGC 4548 - worked
 #M94 - NGC 4736 - worked 7/5
 #M95 - NGC 3351 - worked
@@ -36,7 +36,7 @@
 #M104 - NGC 4594 - (sombrero galaxy) - worked 7/7  
 #M105 - NGC 3379 - worked 7/7
 #M106 - NGC 4258 - 20 fields
-#M108 - NGC 3556 -  8 fields 
+#M108 - NGC 3556 -  8 fields - worked 7/12
 #M109 - NGC 3992 - worked
 #M110 - NGC 205 - 23 fields
 
@@ -92,13 +92,13 @@ def main():
         #     print "NOT FOUND: NGC: %d" % ngc
         print "Galaxy: NGC-%d" % ngc
         os.system("python -u ngc.py %d --threads 4 --itune1 6 --itune2 6 1>%d.log 2>%d_err.log" % (ngc, ngc, ngc))
-   #     os.system('cp flip-ngc%d.pdf messier' % ngc)
-   #     os.system('cp ngc-%d.png messier' % ngc)
-   #     os.system('cp ngc-%d.pickle messier' % ngc)
+   #    os.system('cp flip-ngc%d.pdf messier' % ngc)
+   #    os.system('cp ngc-%d.png messier' % ngc)
+   #    os.system('cp ngc-%d.pickle messier' % ngc)
         os.system('cp flip-ngc%d.pdf TractorOutput' % ngc)
         os.system('cp ngc-%d.png TractorOutput' % ngc)
         os.system('cp flip-ngc%d.tex TractorOutput' % ngc)
-     #   os.system('cp ngc-%d.pickle TractorOutput' % ngc)
+     #  os.system('cp ngc-%d.pickle TractorOutput' % ngc)
 
         #assert(False)
 

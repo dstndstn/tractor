@@ -12,3 +12,7 @@ NGC_3365 bad fit, not sure why
 NGC_221 famous galaxy, very bad fit
 UGCA_295 Bad sky level in i band?
 UGC_7332 crazy morphology, fit not great
+UGC_9394 very bad fit
+LEO_A low surface brightness, but good fit
+NGC_52 initializes and fits the bright star next to it
+NGC_5194 bad fit, lies off of the color-color plot (M51a)

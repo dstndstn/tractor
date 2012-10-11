@@ -1,4 +1,6 @@
+#used to find red galaxies and run them in tractor and then compare their results to NSA
 from astrometry.util.file import *
+from astrometry.util.starutil_numpy import *
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -17,7 +19,7 @@ if __name__ == '__main__':
     a=data.field('RA')
     b=data.field('DEC')
     y = data.field('SERSICFLUX')
-    z = data.field('SERSIC_TH50')
+    radius = data.field('SERSIC_TH50')
     n=data.field('SERSIC_N')
     p50=data.field('PETROTH50')
     p90=data.field('PETROTH90')
@@ -28,9 +30,9 @@ if __name__ == '__main__':
     good[indx1]=False
     indx2=np.where(y[:,3] <= 0)
     good[indx2]=False
-    indx3=np.where(z > 158)
+    indx3=np.where(radius > 158)
     good[indx3]=False
-    print z[good].shape
+    print radius[good].shape
 
 
 #fnugriz
@@ -48,32 +50,33 @@ umag=Mag1(y[:,2][good])
 gmag=Mag1(y[:,3][good])
 rmag=Mag1(y[:,4][good])
 imag=Mag1(y[:,5][good])
-gminusr=map(operator.sub,gmag,rmag)
-rminusi=map(operator.sub,rmag,imag)
-uminusr=map(operator.sub,umag,rmag)
-u=map(operator.sub,Mag1(y[:,2][good]),extinction[:,2][good])
-g=map(operator.sub,Mag1(y[:,3][good]),extinction[:,3][good])
-r=map(operator.sub,Mag1(y[:,4][good]),extinction[:,4][good])
-i=map(operator.sub,Mag1(y[:,5][good]),extinction[:,5][good])
-zmag=map(operator.sub,Mag1(y[:,6][good]),extinction[:,6][good])
-badu=map(operator.sub,Mag1(y[:,2][good==False]),extinction[:,2][good==False])
-badg=map(operator.sub,Mag1(y[:,3][good==False]),extinction[:,3][good==False])
-badr=map(operator.sub,Mag1(y[:,4][good==False]),extinction[:,4][good==False])
-badi=map(operator.sub,Mag1(y[:,5][good==False]),extinction[:,5][good==False])
-badz=map(operator.sub,Mag1(y[:,6][good==False]),extinction[:,6][good==False])
+zmag=Mag1(y[:,6][good])
+gminusr=gmag-rmag
+rminusi=rmag-imag
+uminusr=umag-rmag
+u=umag-extinction[:,2][good]
+g=gmag-extinction[:,3][good]
+r=rmag-extinction[:,4][good]
+i=imag-extinction[:,5][good]
+z=zmag-extinction[:,6][good]
+badu=Mag1(y[:,2][good==False])-extinction[:,2][good==False]
+badg=Mag1(y[:,3][good==False])-extinction[:,3][good==False]
+badr=Mag1(y[:,4][good==False])-extinction[:,4][good==False]
+badi=Mag1(y[:,5][good==False])-extinction[:,5][good==False]
+badz=Mag1(y[:,6][good==False])-extinction[:,6][good==False]
    
 #colors
-gi=map(operator.sub,g,i)
-ug=map(operator.sub,u,g)
-gr=map(operator.sub,g,r)
-ri=map(operator.sub,r,i) 
-iz=map(operator.sub,i,zmag)
-ur=map(operator.sub,u,r)
-badgi=map(operator.sub,badg,badi)
-badug=map(operator.sub,badu,badg)
-badgr=map(operator.sub,badg,badr)
-badri=map(operator.sub,badr,badi)
-badiz=map(operator.sub,badi,badz) 
+gi=g-i
+ug=u-g
+gr=g-r
+ri=r-i 
+iz=i-z
+ur=u-r
+badgi=badg-badi
+badug=badu-badg
+badgr=badg-badr
+badri=badr-badi
+badiz=badi-badz 
 
 fig1=plt.figure(1)
 plt.plot(badgr,badri,'m.', alpha=0.5)
@@ -84,10 +87,10 @@ plt.xlim(0,1.2)
 plt.ylim(-.1,0.8)
 
 #22883, 93093, 129429
-color=[x for x in xrange(len(nsaid[good])) if nsaid[good][x]==93093]
+color=[x for x in xrange(len(nsaid[good])) if nsaid[good][x]==23057]
 for x in color:
     print gr[x],ri[x],ur[x]
-    print gminusr[x],rminusi[x],uminusr[x]
+    print 'done'
 assert(False)
 fig1=plt.figure(1)
 plt.plot(badgr,badri,'m.', alpha=0.5)
@@ -109,8 +112,9 @@ for ngc in ngcs:
     pos=CG.getPosition()
     print pos
     dev=CG.brightnessDev
-    exp = CG.brightnessExp
-
+    exp=CG.brightnessExp
+    print CG
+    assert(False)
 
 #extinction values by filter for Sloan
     sloanu=5.155
@@ -120,7 +124,9 @@ for ngc in ngcs:
     sloanz=1.479
 
 #get extinction from SFD
-    x=get_SFD_dust(pos[0], pos[1],dustmap='ebv',interpolate=True)
+    galactic=radectolb(pos[0],pos[1])
+    print galactic
+    x=get_SFD_dust(galactic[0], galactic[1],dustmap='ebv',interpolate=True)
     correction=[x*sloanu,x*sloang,x*sloanr,x*sloani,x*sloanz]
     corrected_mags=map(operator.sub,tot,correction)
     print 'corrected mags',corrected_mags
@@ -144,8 +150,23 @@ for ngc in ngcs:
     xyz=['red','yellow','blue','cyan','magenta','green','purple','orange']
     rando=choice(xyz)
     choosing=[t for t in xrange(len(xyz)) if rando == xyz[t]]
+
+    #this plots de-reddened NSA vs. de-reddened tractor
     for t in choosing:
         plt.plot(color1, color2,'*',linestyle='-', color=rando, ms=12, markeredgecolor=xyz[t] , markeredgewidth=1,markerfacecolor='none')
+    plt.savefig('locater.pdf')
+    os.system('cp locater.pdf public_html/')
+
+
+    # plt.savefig('locate.pdf')
+    # os.system('cp locate.pdf public_html/')
+
+    # this plots de-reddened NS Atlas vs. original tractor colors
+    # for t in choosing:
+    #     plt.plot(color3, color4,'*',linestyle='-', color=rando, ms=12, markeredgecolor=xyz[t] , markeredgewidth=1,markerfacecolor='none')
+    # plt.savefig('locate2.pdf')
+    # os.system('cp locate2.pdf public_html/')
+ 
 
 # locate1=[i for i in xrange(len(gr))]
 # for i in locate1:
@@ -155,5 +176,3 @@ for ngc in ngcs:
 #              plt.plot(gr[i],ri[i],'bs',ms=10,markeredgecolor='blue',markeredgewidth=1,markerfacecolor='none')
 
 
-plt.savefig('locate.pdf')
-os.system('cp locate.pdf public_html/')

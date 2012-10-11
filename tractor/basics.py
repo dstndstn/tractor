@@ -97,7 +97,7 @@ class Fluxes(Mags):
 	#getBand = Mags.getMag
 	#getFlux = Mags.getMag
 	def __add__(self, other):
-		kwargs = {}
+	        kwargs = {}
 		for band in self.order:
 			m1 = self.getBand(band)
 			m2 = other.getBand(band)

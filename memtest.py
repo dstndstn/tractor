@@ -132,14 +132,16 @@ mem.append(memuse())
 
 track('start', doprint=False)
 
-srcs = get_tractor_sources_dr8(3063,4,60,'g', roi=[100,300,100,300])
+#srcs = get_tractor_sources_dr8(3063,4,60,'g', roi=[100,300,100,300])
+srcs = get_tractor_sources_dr8(4381,2,114,'u', roi=[0.0,1746.0,0.0,712.0])
 
 labels.append((len(mem), 'sources'))
 mem.append(memuse())
 
 track('sources')
 
-im,inf = get_tractor_image_dr8(3063,4,60,'g', roi=[100,300,100,300])
+#im,inf = get_tractor_image_dr8(3063,4,60,'g', roi=[100,300,100,300])
+im,inf = get_tractor_image_dr8(4381,2,114,'u', roi=[0.0,1746.0,0.0,712.0])
 
 labels.append((len(mem), 'image'))
 mem.append(memuse())
@@ -300,15 +302,15 @@ for i,(nm,j) in enumerate([('rss',0), ('size',0), ('sz',0), ('vsz',0), ('maxrss'
 	plt.subplot(R,C, j+1)
 	plt.plot(mem[:,i] * scales[j], '-', label=nm, lw=3, alpha=0.5)
 
-plt.subplot(R,C, 1)
-ax = plt.axis()
-for x,txt in labels:
-	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
-labs = ['MB', 'Mpixels', 'number of cache entries']
-for j in range(3):
-	plt.subplot(R,C, j+1)
-	plt.ylabel(labs[j])
-	plt.xlim(0, S)
-	plt.legend(loc='upper left')
-plt.savefig('mem.png')
-
+# plt.subplot(R,C, 1)
+# ax = plt.axis()
+# for x,txt in labels:
+# 	plt.text(x, 0.1 * ax[3], txt, rotation='vertical', va='bottom')
+# labs = ['MB', 'Mpixels', 'number of cache entries']
+# for j in range(3):
+# 	plt.subplot(R,C, j+1)
+# 	plt.ylabel(labs[j])
+# 	plt.xlim(0, S)
+# 	plt.legend(loc='upper left')
+#plt.savefig('mem.png')
+plt.savefig('tracmem.png')
