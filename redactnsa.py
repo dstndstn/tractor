@@ -5,6 +5,7 @@ import pylab as plt
 import pyfits as pyf
 from general import general
 from halflight import halflight
+import urllib
 
 
 from astrometry.libkd.spherematch import match_radec
@@ -18,6 +19,7 @@ n=data.field('SERSIC_N')
 p50=data.field('PETROTH50')
 p90=data.field('PETROTH90')
 e=data.field('NSAID')
+w=data.field('IAUNAME')
 good=np.array([True for x in data.field('RA')])
 indx1=np.where(y[:,5] <= 0)
 good[indx1]=False
@@ -25,7 +27,7 @@ indx2=np.where(y[:,3] <= 0)
 good[indx2]=False
 indx3=np.where(z > 120)
 good[indx3]=False
-indx4=np.where(z < 30)
+indx4=np.where(z < 60)
 good[indx4]=False
 
 gra=a[good]
@@ -34,16 +36,18 @@ grad = z[good]
 g = e[good]
 newGood=np.array([True for x in g])
 
-def getimage(x):
-    nocom = [t for t in xrange(len(e[good])) if e[good][t]==x]
-    for t in nocom:       
-        if b[good][t] > 0: 
-       		url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/p%02d/%s/%s.jpg' %(w[good][t][1:3],((int(w[good][t][11:13]))/2)*2,w[good][t],w[good][t])
-        else: 
-                url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/m%02d/%s/%s.jpg' %(w[good][t][1:3],((int(w[good][t][11:13]))/2)*2,w[good][t],w[good][t])
+def getImage(x):
+    #nocom = [t for t in xrange(len(e[good])) if g[good][t]==x]
+    mask = e==x
+    t = data[mask][0]
+    iau = str(t['IAUNAME'])
+    print iau
+    if t['DEC'] > 0: 
+        url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/p%02d/%s/%s.jpg' %(iau[1:3],((int(iau[11:13]))/2)*2,iau,iau)
+    else: 
+        url='http://sdss.physics.nyu.edu/mblanton/v0/detect/v0_1/%sh/m%02d/%s/%s.jpg' %(iau[1:3],((int(iau[11:13]))/2)*2,iau,iau)
 
-    urllib.urlretrieve(url, '%s.jpg' %(x))
-    print url
+    return url
 
 rc3 = pyf.open('rc3limited.fits')
 
@@ -57,8 +61,18 @@ gra=gra[newGood]
 g=g[newGood] #list of all nsaids that should now be checked 
 gdec=gdec[newGood]
 grad = grad[newGood]
+i = 0
 for obj in g:
-    print obj
+    if (i==0):
+        url = getImage(obj)
+        urllib.urlretrieve(url, 'nsahogg/%s.jpg' %(obj))
+    elif (i==1):
+        url = getImage(obj)
+        urllib.urlretrieve(url, 'nsamykytyn/%s.jpg' %(obj))
+    else:
+        url = getImage(obj)
+        urllib.urlretrieve(url, 'nsapatel/%s.jpg' %(obj))
+    i = (i+1) % 3
 
 
 #general("NSA_ID_%d" % g[0],gra[0],gdec[0],25./60.,itune1=6,itune2=6,nocache=True)

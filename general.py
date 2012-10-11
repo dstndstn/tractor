@@ -175,6 +175,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
     print rcfs
+    print len(rcfs)
     assert(len(rcfs)>0)
     if 10 < len(rcfs) < 20:
         scale = 2
@@ -185,9 +186,6 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     assert(len(rcfs)<80)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
-
-    for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
 
     imkw = dict(psf='kl-gm')
     if dr9:
