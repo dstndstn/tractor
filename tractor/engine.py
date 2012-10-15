@@ -797,6 +797,10 @@ class Tractor(MultiParams):
 		else:
 			imjs = [i for i in self.images.getThawedParamIndices()]
 			ims = [self.images[j] for j in imjs]
+			
+		# FIXME -- don't we want Sky, PSF, etc to be able to prodvide
+		# their own derivatives?
+			
 		# initial models...
 		mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in imjs])
 		# stepping each param...

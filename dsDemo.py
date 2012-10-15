@@ -16,7 +16,6 @@ from tractor import cfht as cf
 from tractor import sdss_galaxy as stgal
 from astrometry.sdss import *
 
-
 class ScaledWCS(object):
 	def hashkey(self):
 		return ('ScaledWcs', self.scale, self.wcs.hashkey())

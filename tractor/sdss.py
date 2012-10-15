@@ -323,7 +323,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		elif hasdev:
 			flux = objs.devflux[i,bandnums]
 			dbright = nmgy2bright(flux, bandnames)
-			#print 'Dev galaxy: flux', flux, 'bright', dbright
+			#print 'De galaxy: flux', flux, 'bright', dbright
 		elif hasexp:
 			flux = objs.expflux[i,bandnums]
 			ebright = nmgy2bright(flux, bandnames)
