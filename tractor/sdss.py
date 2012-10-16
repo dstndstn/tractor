@@ -223,7 +223,7 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 
 def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 							retrieve=True, curl=False, roi=None, bands=None,
-							badmag=25):
+							badmag=25, nanomaggies=False):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -279,20 +279,28 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	sources = []
 	ikeep = []
 
-	def lup2bright(lups, bandnames, bandnums):
+	def lup2bright(lups, bandnames, bandnums, nanomaggies):
 		# -9999 -> badmag
 		I = (lups < -100)
 		l2 = np.array(lups)
 		l2[I] = badmag
 		mags = sdss.luptitude_to_mag(l2, bandnums)
-		bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
+		if nanomaggies:
+			bright = NanoMaggies(order=bandnames, **dict(zip(bandnames,
+															 [NanoMaggies.magToNanomaggies(m) for m in mags])))
+		else:
+			bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
 		return bright
 
-	def nmgy2bright(flux, bandnames):
+	def nmgy2bright(flux, bandnames, nanomaggies):
 		I = (flux > 0)
 		mag = np.zeros_like(flux) + badmag
 		mag[I] = sdss.nmgy_to_mag(flux[I])
-		bright = Mags(order=bandnames, **dict(zip(bandnames,mag)))
+		if nanomaggies:
+			bright = NanoMaggies(order=bandnames, **dict(zip(bandnames,
+															 [NanoMaggies.magToNanomaggies(m) for m in mag])))
+		else:
+			bright = Mags(order=bandnames, **dict(zip(bandnames,mag)))
 		return bright
 	
 	# Add stars
@@ -300,7 +308,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	print len(I), 'stars'
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums)
+		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums, nanomaggies)
 		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
@@ -317,16 +325,16 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		if iscomp:
 			flux = objs.cmodelflux[i,bandnums]
 			dflux = flux * Ldev[i]
-			dbright = nmgy2bright(dflux, bandnames)
+			dbright = nmgy2bright(dflux, bandnames, nanomaggies)
 			eflux = flux * Lexp[i]
-			ebright = nmgy2bright(eflux, bandnames)
+			ebright = nmgy2bright(eflux, bandnames, nanomaggies)
 		elif hasdev:
 			flux = objs.devflux[i,bandnums]
-			dbright = nmgy2bright(flux, bandnames)
+			dbright = nmgy2bright(flux, bandnames, nanomaggies)
 			#print 'De galaxy: flux', flux, 'bright', dbright
 		elif hasexp:
 			flux = objs.expflux[i,bandnums]
-			ebright = nmgy2bright(flux, bandnames)
+			ebright = nmgy2bright(flux, bandnames, nanomaggies)
 			#print 'Exp galaxy: flux', flux, 'bright', ebright
 		else:
 			assert(False)
@@ -616,7 +624,41 @@ class ScaledWcs():
 				(y + 0.5) * self.factor - 0.5)
 
 
+def get_sky_dr8(frame):
+	skyim = frame.sky
+	(sh,sw) = skyim.shape
+	#print 'Skyim shape', skyim.shape
+	if sw != 256:
+		skyim = skyim.T
+	(sh,sw) = skyim.shape
+	xi = np.round(frame.skyxi).astype(int)
+	yi = np.round(frame.skyyi).astype(int)
+	#print >>sys.stderr, 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']', run, camcol, field, bandname
+	#print >>sys.stderr, 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
+	#print >>sys.stderr, 'frame url:', sdss.get_url('frame', run, camcol, field, bandname)
+	assert(all(xi >= 0) and all(xi < sw))
+	assert(all(yi >= 0) and all(yi < sh))
+	XI,YI = np.meshgrid(xi, yi)
+	#print 'XI', XI.shape
+	# Nearest-neighbour interpolation -- we just need this for approximate invvar.
+	bigsky = skyim[YI,XI]
+	#print 'bigsky', bigsky.shape
 
+	#print 'sky', #frame.sky
+	#print frame.sky.shape
+	#print 'x', len(frame.skyxi), frame.skyxi
+	#print frame.skyxi.shape
+	#print 'y', len(frame.skyyi), frame.skyyi
+	#print frame.skyyi.shape
+
+	# plt.clf()
+	# plt.imshow(frame.sky, interpolation='nearest', origin='lower')
+	# plt.savefig('sky.png')
+	# plt.clf()
+	# plt.imshow(bigsky, interpolation='nearest', origin='lower')
+	# plt.savefig('bigsky.png')
+	return bigsky
+	
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
 						  savepsfimg=None, curl=False,
@@ -734,40 +776,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
 	calibvec = frame.getCalibVec()
 
-	#print 'sky', #frame.sky
-	#print frame.sky.shape
-	#print 'x', len(frame.skyxi), frame.skyxi
-	#print frame.skyxi.shape
-	#print 'y', len(frame.skyyi), frame.skyyi
-	#print frame.skyyi.shape
-
-	skyim = frame.sky
-	(sh,sw) = skyim.shape
-	#print 'Skyim shape', skyim.shape
-	if sw != 256:
-		skyim = skyim.T
-	(sh,sw) = skyim.shape
-	xi = np.round(frame.skyxi).astype(int)
-	yi = np.round(frame.skyyi).astype(int)
-	print >>sys.stderr, 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']', run, camcol, field, bandname
-	print >>sys.stderr, 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
-	print >>sys.stderr, 'frame url:', sdss.get_url('frame', run, camcol, field, bandname)
-	assert(all(xi >= 0) and all(xi < sw))
-	assert(all(yi >= 0) and all(yi < sh))
-	XI,YI = np.meshgrid(xi, yi)
-	#print 'XI', XI.shape
-	# Nearest-neighbour interpolation -- we just need this for approximate invvar.
-	bigsky = skyim[YI,XI]
-	#print 'bigsky', bigsky.shape
+	bigsky = get_sky_dr8(frame)
 	assert(bigsky.shape == image.shape)
-
-	# plt.clf()
-	# plt.imshow(frame.sky, interpolation='nearest', origin='lower')
-	# plt.savefig('sky.png')
-	# plt.clf()
-	# plt.imshow(bigsky, interpolation='nearest', origin='lower')
-	# plt.savefig('bigsky.png')
-
+	
 	#print 'calibvec', calibvec.shape
 	dn = (image / calibvec) + bigsky
 
@@ -862,6 +873,7 @@ def get_tractor_sources_dr9(*args, **kwargs):
 		kwargs['sdss'] = DR9(curl=curl)
 	return get_tractor_sources_dr8(*args, **kwargs)
 
+get_sky_dr9 = get_sky_dr8
 
 class SdssNanomaggiesPhotoCal(BaseParams):
 	def __init__(self, bandname):

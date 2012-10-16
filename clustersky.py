@@ -63,19 +63,129 @@
 #   Group 6: mag 17.3-18.0
 #   Group 7: mag > 18.0
 
+if __name__ == '__main__':
+	import matplotlib
+	matplotlib.use('Agg')
+
 from astrometry.util.fits import *
 from astrometry.util.sdss_radec_to_rcf import *
 from tractor.utils import *
 from tractor import sdss as st
 from tractor import *
 
+from astrometry.sdss import *
 
+
+def test1():
+	ps = PlotSequence('abell')
+
+	run, camcol, field = 5115, 5, 151
+	band = 'i'
+	bands = [band]
+	roi = (1048,2048, 0,1000)
+
+	tim,tinf = st.get_tractor_image_dr9(run, camcol, field, band,
+										roi=roi, nanomaggies=True)
+	srcs = st.get_tractor_sources_dr9(run, camcol, field, band,
+		roi=roi, nanomaggies=True,
+		bands=bands)
+	tractor = Tractor([tim], srcs)
+
+	print tractor
+
+	sdss = DR9()
+	fn = sdss.retrieve('frame', run, camcol, field, band)
+	frame = sdss.readFrame(run, camcol, field, band, filename=fn)
+
+	sky = st.get_sky_dr9(frame)
+
+	print tinf
+	
+	plt.clf()
+	plt.imshow(sky, interpolation='nearest', origin='lower')
+	plt.colorbar()
+	ps.savefig()
+
+	x0,x1,y0,y1 = roi
+	roislice = (slice(y0,y1), slice(x0,x1))
+
+	sky = sky[roislice]
+
+	z0,z1 = tim.zr
+	
+	ima = dict(interpolation='nearest', origin='lower',
+			   extent=roi)
+
+	mn = (sky.min() + sky.max()) / 2.
+	d = (z1 - z0)
+	
+	plt.clf()
+	plt.imshow(sky, vmin=mn - d/2, vmax=mn + d/2, **ima)
+	plt.colorbar()
+	ps.savefig()
+	
+	imb = ima.copy()
+	imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
+
+	plt.clf()
+	plt.imshow(tim.getImage(), **imb)
+	plt.colorbar()
+	ps.savefig()
+
+	mod = tractor.getModelImage(0)
+	plt.clf()
+	plt.imshow(mod, **imb)
+	plt.colorbar()
+	ps.savefig()
+
+	tractor.freezeParam('images')
+
+	mags = []
+	for src in tractor.getCatalog():
+		mags.append(src.getBrightness().getMag(band))
+	I = np.argsort(mags)
+	for i in I:
+		tractor.catalog.freezeAllBut(i)
+		j = 1
+		while True:
+			print '-------------------------------------'
+			print 'Optimizing source', i, 'step', j
+			print '-------------------------------------'
+			print tractor.catalog[i]
+			dlnp,X,alpha = tractor.optimize()
+			print 'delta-logprob', dlnp
+			print tractor.catalog[i]
+			print
+			if dlnp < 1:
+				break
+			j += 1
+
+			mod = tractor.getModelImage(0)
+			plt.clf()
+			plt.imshow(mod, **imb)
+			plt.colorbar()
+			ps.savefig()
+		tractor.catalog.thawAllParams()
+
+		
+	mod = tractor.getModelImage(0)
+	plt.clf()
+	plt.imshow(mod, **imb)
+	plt.colorbar()
+	ps.savefig()
+	
+
+	
+	
 if __name__ == '__main__':
-	import matplotlib
-	matplotlib.use('Agg')
 	import pylab as plt
 	import numpy as np
+
+	#find()
+	test1()
+
 	
+def find():
 	cmap = {'_RAJ2000':'ra', '_DEJ2000':'dec', 'ACOS':'aco'}
 	T1 = fits_table('abell.fits', column_map=cmap)
 	#T1.about()
