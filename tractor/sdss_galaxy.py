@@ -193,6 +193,8 @@ class Galaxy(MultiParams):
 
 	def getBrightness(self):
 		return self.brightness
+	def getBrightnesses(self):
+		return [self.getBrightness()]
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 
@@ -337,6 +339,9 @@ class CompositeGalaxy(MultiParams):
 		should be treated as approximate.'''
 		return self.brightnessExp + self.brightnessDev
 
+	def getBrightnesses(self):
+		return [self.brightnessExp, self.brightnessDev]
+	
 	def getModelPatch(self, img, px=None, py=None):
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)

@@ -48,6 +48,10 @@ class Mags(ParamList):
 		Returns: mag in the given band.
 		'''
 		return getattr(self, bandname)
+
+	def setMag(self, bandname, mag):
+		setattr(self, bandname, mag)
+
 	def __add__(self, other):
 		# mags + 0.1
 		if np.isscalar(other):
@@ -110,6 +114,9 @@ class Fluxes(Mags):
 		return super(Fluxes,self).getMag(*args,**kwargs)
 	getFlux = getBand
 
+	def setBand(self, band, val):
+		self.setMag(band, val)
+	setFlux = setBand	
 
 class FluxesPhotoCal(BaseParams):
 	def __init__(self, band):
@@ -626,6 +633,8 @@ class PointSource(MultiParams):
 		self.pos = position
 	def getBrightness(self):
 		return self.brightness
+	def getBrightnesses(self):
+		return [self.getBrightness()]
 	def setBrightness(self, brightness):
 		self.brightness = brightness
 	def __str__(self):

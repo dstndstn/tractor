@@ -140,6 +140,29 @@ def test1():
 
 	tractor.freezeParam('images')
 
+	j=0
+	while True:
+		print '-------------------------------------'
+		print 'Optimizing all step', j
+		print '-------------------------------------'
+		dlnp,X,alpha = tractor.optimize()
+		print 'delta-logprob', dlnp
+		for src in tractor.getCatalog():
+			for b in src.getBrightnesses():
+				f = b.getFlux(band)
+				if f < 0:
+					print 'Clamping flux', f, 'up to zero'
+					b.setFlux(band, 0.)
+		if dlnp < 1:
+			break
+		j += 1
+
+		mod = tractor.getModelImage(0)
+		plt.clf()
+		plt.imshow(mod, **imb)
+		plt.colorbar()
+		ps.savefig()
+	
 	mags = []
 	for src in tractor.getCatalog():
 		mags.append(src.getBrightness().getMag(band))
@@ -154,6 +177,13 @@ def test1():
 			print tractor.catalog[i]
 			dlnp,X,alpha = tractor.optimize()
 			print 'delta-logprob', dlnp
+
+			for b in tractor.catalog[i].getBrightnesses():
+				f = b.getFlux(band)
+				if f < 0:
+					print 'Clamping flux', f, 'up to zero'
+					b.setFlux(band, 0.)
+
 			print tractor.catalog[i]
 			print
 			if dlnp < 1:

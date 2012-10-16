@@ -118,6 +118,9 @@ class Source(Params):
 		'''
 		return []
 
+	def getBrightnesses(self):
+		return []
+	
 class Brightness(Params):
 	'''
 	Duck-type definition of the brightness of an astronomical source.
