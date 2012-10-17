@@ -69,7 +69,12 @@ def plot_cmd(allmags, i2mags, band, catflags, classstar):
 	#plt.axis([-3, 3, 21.5, 15.5])
 	plt.legend(LL, ('flagged', 'galaxy', 'star'))
 	plt.ylim(21.5, 15.5)
-	cl,ch = { 'u': (-3,6), 'g': (-1,5), 'r': (-2,3), 'i': (-2,2), 'z': (-2,1) }[band]
+	cl,ch = { 'u': (-3,6), 'g': (-1,5), 'r': (-2,3), 'i': (-2,2), 'z': (-2,1),
+			  'w1': (-10,10),
+			  'w2': (-10,10),
+			  'w3': (-10,10),
+			  'w4': (-10,10),
+			  }[band]
 	plt.xticks(range(cl,ch+1))
 	plt.xlim(cl,ch)
 	plt.xlabel('SDSS %s - CFHT i (mag)' % band)
@@ -85,10 +90,23 @@ def plot_cmd(allmags, i2mags, band, catflags, classstar):
 
 
 if __name__ == '__main__':
-	(allp, i2mags, cat) = unpickle_from_file('s2-260-A.pickle')
+
+	#(allp, i2magsA, cat) = unpickle_from_file('s2-260-A.pickle')
+
+	(allp, i2mags, cat) = unpickle_from_file('s2-382.pickle')
+
+	#print 'i2 mags A:', len(i2magsA)
+	#print 'i2 mags:', len(i2mags)
+	#i2mags = i2magsA
+
+	from tractor.basics import NanoMaggies
+	#print 'i2mags', i2mags
+	i2mags = np.array([NanoMaggies(i=m).getMag('i') for m in i2mags])
+	#print 'i2mags', mags
+	
 
 	#allbands = ['i2','u','g','r','i','z']
-	allbands = ['i2','u','g','r','i','z']
+	allbands = ['i2','u','g','r','i','z', 'w1','w2','w3','w4']
 
 	T = fits_table('cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
 	#RA = 334.32
@@ -109,7 +127,6 @@ if __name__ == '__main__':
 	T = T[(T.ra >= ra0) * (T.ra <= ra1) * (T.dec >= dec0) * (T.dec <= dec1)]
 	print 'ra', ra0, ra1, 'dec', dec0, dec1
 	print 'Cut to', len(T), 'objects nearby.'
-
 
 	#print 'RA', sra.min(), sra.max()
 	#print 'Dec', sdec.min(), sdec.max()
@@ -156,6 +173,40 @@ if __name__ == '__main__':
 		I = plot_cmd(m, i2mags, bb, catflags, classstar)
 		if bb == 'i':
 			outliers = I
+
+	for b1,b2 in zip(allbands[1:-1], allbands[2:]):
+		print 'Bands', b1, b2
+		m1 = np.array(allmags[b1])
+		m2 = np.array(allmags[b2])
+		#plot_cmd(m1, m2, b1, catflags, classstar)
+		print 'm1 shape', m1.shape
+		print 'm2 shape', m2.shape
+
+		mn1,mn2 = [],[]
+		for i,(s1,s2) in enumerate(zip(m1.T,m2.T)):
+			print 'src', i
+			print 'i2mag', i2mags[i]
+			print 'mag 1', s1
+			print 'mag 2', s2
+			s1 = s1[np.isfinite(s1)]
+			s2 = s2[np.isfinite(s2)]
+			if len(s1) == 0 or len(s2) == 0:
+				continue
+			mn1.append(np.median(s1))
+			mn2.append(np.median(s2))
+
+		mn1 = np.array(mn1)
+		mn2 = np.array(mn2)
+		plt.clf()
+		#I = np.flatnonzero(np.isfinite(m1) * np.isfinite(m2))
+		#if len(I) == 0:
+		#	print 'No', b1, 'and', b2, 'mags'
+		#	continue
+		#plt.plot(m1[I], m1[I]-m2[I], 'k.')
+		plt.plot(mn1, mn1 - mn2, 'k.')
+		plt.xlabel('band '+b1)
+		plt.ylabel('band %s - %s' % (b1, b2))
+		plt.savefig('cmd-%s-%s.png' % (b1,b2))
 
 	from cs82 import *
 	RA = 334.32
