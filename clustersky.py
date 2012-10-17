@@ -140,72 +140,13 @@ def test1():
 
 	tractor.freezeParam('images')
 
-	# Find connected clusters of sources
-	# [ (mask image, [src,src]), ... ]
-	# [ (mask patch, [src,src]), ... ]
-	clusters = []
-	for i,src in enumerate(tractor.getCatalog()):
-		print 'Clustering source', i
-		p = tractor.getModelPatch(tim, src)
-		nz = p.getNonZeroMask()
-		print '  nz vals:', np.unique(nz.patch)
-		found = []
-		for j,(mask, srcs) in enumerate(clusters):
-			if not mask.hasNonzeroOverlapWith(nz):
-				continue
-			print 'Added to cluster', j
-			#found = True
-			found.append(j)
-			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			s = mask.performArithmetic(nz, '__iadd__', otype=bool)
-			mask.set(s)
-			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			mask.trimToNonZero()
-			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			print '  mask type', mask.patch.dtype
-			srcs.append(src)
-			#break
-				
-		if len(found) == 0:
-			#if not found:
-			# new cluster
-			print 'Creating new cluster', len(clusters)
-			# mask = np.zeros(tim.shape, dtype=np.int8)
-			mask = nz
-			#mask.patch = mask.patch.astype(np.uint8)
-			srcs = [src]
-			clusters.append((mask, srcs))
+	# for src in tractor.getCatalog():
+	# 	for b in src.getBrightnesses():
+	# 		f = b.getFlux(band)
+	# 		if f <= 0:
+	# 			print 'src', src
+	# find_clusters()
 
-		if len(found) > 1:
-			print 'Merging clusters', found
-			m0,srcs0 = clusters[found[0]]
-			for j in found[1:]:
-				mi,srcsi = clusters[j]
-				m0.set(m0.performArithmetic(mi, '__iadd__', otype=bool))
-				srcs0.extend(srcsi)
-			for j in reversed(found[1:]):
-				del clusters[j]
-			print 'Now have', len(clusters), 'clusters'
-			
-	print 'Found', len(clusters), 'clusters'
-	for i,(mask,srcs) in enumerate(clusters):
-		n = len(np.flatnonzero(mask.patch))
-		print 'Cluster', i, 'has', len(srcs), 'sources and', n, 'pixels'
-		if n == 0:
-			continue
-		plt.clf()
-		plt.imshow(mask.patch, interpolation='nearest', origin='lower',
-				   extent=mask.getExtent(), vmin=0, vmax=1)
-		ax = plt.axis()
-		plt.gray()
-		xy = np.array([tim.getWcs().positionToPixel(src.getPosition())
-					   for src in srcs])
-		plt.plot(xy[:,0], xy[:,1], 'r+')
-		plt.axis(ax)
-		plt.colorbar()
-		ps.savefig()
-
-		
 	j=0
 	while True:
 		print '-------------------------------------'
@@ -345,3 +286,66 @@ def find():
 		ps.savefig()
 
 	print '\n'.join(urls)
+
+
+
+def find_clusters(tractor, tim):
+	# Find connected clusters of sources
+	# [ (mask patch, [src,src]), ... ]
+	dtype = np.int
+	clusters = []
+	for i,src in enumerate(tractor.getCatalog()):
+		print 'Clustering source', i
+		p = tractor.getModelPatch(tim, src)
+		nz = p.getNonZeroMask()
+		nz.patch = nz.patch.astype(dtype)
+		#print '  nz vals:', np.unique(nz.patch)
+		found = []
+		for j,(mask, srcs) in enumerate(clusters):
+			if not mask.hasNonzeroOverlapWith(nz):
+				continue
+			print 'Overlaps cluster', j
+			found.append(j)
+			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
+			mask.set(mask.performArithmetic(nz, '__iadd__', otype=dtype))
+			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
+			mask.trimToNonZero()
+			#print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
+			print '  mask type', mask.patch.dtype
+			srcs.append(src)
+				
+		if len(found) == 0:
+			print 'Creating new cluster', len(clusters)
+			clusters.append((nz, [src]))
+
+		elif len(found) > 1:
+			print 'Merging clusters', found
+			m0,srcs0 = clusters[found[0]]
+			for j in found[1:]:
+				mi,srcsi = clusters[j]
+				m0.set(m0.performArithmetic(mi, '__iadd__', otype=dtype))
+				srcs0.extend(srcsi)
+			for j in reversed(found[1:]):
+				del clusters[j]
+			print 'Now have', len(clusters), 'clusters'
+			
+	print 'Found', len(clusters), 'clusters'
+	for i,(mask,srcs) in enumerate(clusters):
+		n = len(np.flatnonzero(mask.patch))
+		print 'Cluster', i, 'has', len(srcs), 'sources and', n, 'pixels'
+		if n == 0:
+			continue
+		plt.clf()
+		plt.imshow(np.sqrt(mask.patch),
+				   interpolation='nearest', origin='lower',
+				   extent=mask.getExtent(), vmin=0, vmax=sqrt(max(1, mask.patch.max())))
+		ax = plt.axis()
+		plt.gray()
+		xy = np.array([tim.getWcs().positionToPixel(src.getPosition())
+					   for src in srcs])
+		plt.plot(xy[:,0], xy[:,1], 'r+')
+		plt.axis(ax)
+		plt.colorbar()
+		ps.savefig()
+
+	
