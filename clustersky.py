@@ -148,41 +148,26 @@ def test1():
 		print 'Clustering source', i
 		p = tractor.getModelPatch(tim, src)
 		nz = p.getNonZeroMask()
-		#nz.patch = nz.patch.astype(np.uint8)
 		print '  nz vals:', np.unique(nz.patch)
-		found = False
+		found = []
 		for j,(mask, srcs) in enumerate(clusters):
-			#if not mask.hasBboxOverlapWith(nz):
-			#	print '  no bbox overlap with', j
-			#	continue
-			#s = nz.performArithmetic(mask, '__iadd__', otype=np.uint8)
-			#print 'sum unique vals', np.unique(s.patch)
-			#if s.patch.max() > 1:
 			if not mask.hasNonzeroOverlapWith(nz):
 				continue
 			print 'Added to cluster', j
-			found = True
-			#mask.patch = s.patch
-			#mask.patch[mask.patch > 1] = 1
+			#found = True
+			found.append(j)
 			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			#mask += nz
 			s = mask.performArithmetic(nz, '__iadd__', otype=bool)
 			mask.set(s)
 			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
-			#mask.trimToNonZero()
+			mask.trimToNonZero()
+			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
 			print '  mask type', mask.patch.dtype
 			srcs.append(src)
-			break
+			#break
 				
-			# nz.addTo(mask, scale=1)
-			# if mask.max() > 1:
-			# 	print 'Added to cluster', j
-			# 	found = True
-			# 	mask[mask > 1] = 1
-			# 	srcs.append(src)
-			# 	break
-			# nz.addTo(mask, scale=-1)
-		if not found:
+		if len(found) == 0:
+			#if not found:
 			# new cluster
 			print 'Creating new cluster', len(clusters)
 			# mask = np.zeros(tim.shape, dtype=np.int8)
@@ -191,6 +176,17 @@ def test1():
 			srcs = [src]
 			clusters.append((mask, srcs))
 
+		if len(found) > 1:
+			print 'Merging clusters', found
+			m0,srcs0 = clusters[found[0]]
+			for j in found[1:]:
+				mi,srcsi = clusters[j]
+				m0.set(m0.performArithmetic(mi, '__iadd__', otype=bool))
+				srcs0.extend(srcsi)
+			for j in reversed(found[1:]):
+				del clusters[j]
+			print 'Now have', len(clusters), 'clusters'
+			
 	print 'Found', len(clusters), 'clusters'
 	for i,(mask,srcs) in enumerate(clusters):
 		n = len(np.flatnonzero(mask.patch))
