@@ -140,6 +140,76 @@ def test1():
 
 	tractor.freezeParam('images')
 
+	# Find connected clusters of sources
+	# [ (mask image, [src,src]), ... ]
+	# [ (mask patch, [src,src]), ... ]
+	clusters = []
+	for i,src in enumerate(tractor.getCatalog()):
+		print 'Clustering source', i
+		p = tractor.getModelPatch(tim, src)
+		nz = p.getNonZeroMask()
+		#nz.patch = nz.patch.astype(np.uint8)
+		print '  nz vals:', np.unique(nz.patch)
+		found = False
+		for j,(mask, srcs) in enumerate(clusters):
+			#if not mask.hasBboxOverlapWith(nz):
+			#	print '  no bbox overlap with', j
+			#	continue
+			#s = nz.performArithmetic(mask, '__iadd__', otype=np.uint8)
+			#print 'sum unique vals', np.unique(s.patch)
+			#if s.patch.max() > 1:
+			if not mask.hasNonzeroOverlapWith(nz):
+				continue
+			print 'Added to cluster', j
+			found = True
+			#mask.patch = s.patch
+			#mask.patch[mask.patch > 1] = 1
+			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
+			#mask += nz
+			s = mask.performArithmetic(nz, '__iadd__', otype=bool)
+			mask.set(s)
+			print '  Nonzero mask pixels:', len(np.flatnonzero(mask.patch))
+			#mask.trimToNonZero()
+			print '  mask type', mask.patch.dtype
+			srcs.append(src)
+			break
+				
+			# nz.addTo(mask, scale=1)
+			# if mask.max() > 1:
+			# 	print 'Added to cluster', j
+			# 	found = True
+			# 	mask[mask > 1] = 1
+			# 	srcs.append(src)
+			# 	break
+			# nz.addTo(mask, scale=-1)
+		if not found:
+			# new cluster
+			print 'Creating new cluster', len(clusters)
+			# mask = np.zeros(tim.shape, dtype=np.int8)
+			mask = nz
+			#mask.patch = mask.patch.astype(np.uint8)
+			srcs = [src]
+			clusters.append((mask, srcs))
+
+	print 'Found', len(clusters), 'clusters'
+	for i,(mask,srcs) in enumerate(clusters):
+		n = len(np.flatnonzero(mask.patch))
+		print 'Cluster', i, 'has', len(srcs), 'sources and', n, 'pixels'
+		if n == 0:
+			continue
+		plt.clf()
+		plt.imshow(mask.patch, interpolation='nearest', origin='lower',
+				   extent=mask.getExtent(), vmin=0, vmax=1)
+		ax = plt.axis()
+		plt.gray()
+		xy = np.array([tim.getWcs().positionToPixel(src.getPosition())
+					   for src in srcs])
+		plt.plot(xy[:,0], xy[:,1], 'r+')
+		plt.axis(ax)
+		plt.colorbar()
+		ps.savefig()
+
+		
 	j=0
 	while True:
 		print '-------------------------------------'

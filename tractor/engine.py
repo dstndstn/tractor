@@ -190,6 +190,12 @@ class Patch(object):
 			s += '(no image)'
 		return s
 
+	def set(self, other):
+		self.x0 = other.x0
+		self.y0 = other.y0
+		self.patch = other.patch
+		self.name = other.name
+	
 	def trimToNonZero(self):
 		if self.patch is None:
 			return
@@ -219,13 +225,22 @@ class Patch(object):
 		self.x0 += x0
 		self.y0 += y0
 
-	def hasNonzeroOverlapWith(self, other):
+	def hasBboxOverlapWith(self, other):
 		ext = self.getExtent()
 		(x0,x1,y0,y1) = ext
 		oext = other.getExtent()
 		(ox0,ox1,oy0,oy1) = oext
 		if x0 >= ox1 or ox0 >= x1 or y0 >= oy1 or oy0 >= y1:
 			return False
+		return True
+		
+	def hasNonzeroOverlapWith(self, other):
+		if not self.hasBboxOverlapWith(other):
+			return False
+		ext = self.getExtent()
+		(x0,x1,y0,y1) = ext
+		oext = other.getExtent()
+		(ox0,ox1,oy0,oy1) = oext
 		ix,ox = get_overlapping_region(ox0, ox1-1, x0, x1-1)
 		iy,oy = get_overlapping_region(oy0, oy1-1, y0, y1-1)
 		ix = slice(ix.start -  x0, ix.stop -  x0)
@@ -235,6 +250,10 @@ class Patch(object):
 		assert(sub.shape == osub.shape)
 		return np.sum(sub * osub) > 0.
 
+	def getNonZeroMask(self):
+		nz = (self.patch != 0)
+		return Patch(self.x0, self.y0, nz)
+	
 	def __repr__(self):
 		return str(self)
 	def setName(self, name):
@@ -363,7 +382,7 @@ class Patch(object):
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch * flux)
 
-	def performArithmetic(self, other, opname):
+	def performArithmetic(self, other, opname, otype=float):
 		assert(isinstance(other, Patch))
 		if (self.x0 == other.getX0() and self.y0 == other.getY0() and
 			self.shape == other.shape):
@@ -386,7 +405,7 @@ class Patch(object):
 		ux1 = max(ox0 + ow, self.x0 + pw)
 		uy1 = max(oy0 + oh, self.y0 + ph)
 
-		p = np.zeros((uy1 - uy0, ux1 - ux0))
+		p = np.zeros((uy1 - uy0, ux1 - ux0), dtype=otype)
 		p[self.y0 - uy0 : self.y0 - uy0 + ph,
 		  self.x0 - ux0 : self.x0 - ux0 + pw] = self.patch
 
