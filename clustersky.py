@@ -68,6 +68,7 @@ if __name__ == '__main__':
 	matplotlib.use('Agg')
 
 from astrometry.util.fits import *
+from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
 from tractor.utils import *
 from tractor import sdss as st
@@ -91,6 +92,12 @@ def test1():
 		bands=bands)
 	tractor = Tractor([tim], srcs)
 
+	pnum = 00
+	pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+	pnum += 1
+	
+	zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+	
 	print tractor
 
 	sdss = DR9()
@@ -126,20 +133,83 @@ def test1():
 	
 	imb = ima.copy()
 	imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
+	imc = ima.copy()
+	imc.update(vmin=zr2[0], vmax=zr2[1])
 
+	imchi1 = ima.copy()
+	imchi1.update(vmin=-5, vmax=5)
+	imchi2 = ima.copy()
+	imchi2.update(vmin=-50, vmax=50)
+	
 	plt.clf()
 	plt.imshow(tim.getImage(), **imb)
 	plt.colorbar()
 	ps.savefig()
-
-	mod = tractor.getModelImage(0)
 	plt.clf()
-	plt.imshow(mod, **imb)
+	plt.imshow(tim.getImage(), **imc)
 	plt.colorbar()
 	ps.savefig()
 
+	def plotmod():
+		mod = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+		plt.clf()
+		plt.imshow(mod, **imb)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(mod, **imc)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(chi, **imchi1)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(chi, **imchi2)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+
+	plotmod()
+		
 	tractor.freezeParam('images')
 
+	tractor.catalog.freezeAllRecursive()
+	tractor.catalog.thawPathsTo(band)
+	print 'Params:'
+	for nm in tractor.getParamNames():
+		print nm
+
+	j=0
+	while True:
+		print '-------------------------------------'
+		print 'Optimizing flux step', j
+		print '-------------------------------------'
+		dlnp,X,alpha = tractor.optimize()
+		print 'delta-logprob', dlnp
+		nup = 0
+		for src in tractor.getCatalog():
+			for b in src.getBrightnesses():
+				f = b.getFlux(band)
+				if f < 0:
+					#print 'Clamping flux', f, 'up to zero'
+					nup += 1
+					b.setFlux(band, 0.)
+		print 'Clamped', nup, 'fluxes up to zero'
+		if dlnp < 1:
+			break
+		j += 1
+		plotmod()
+		
+		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+		print 'Saved pickle', pnum
+		pnum += 1
+		
+	
 	# for src in tractor.getCatalog():
 	# 	for b in src.getBrightnesses():
 	# 		f = b.getFlux(band)
@@ -147,29 +217,36 @@ def test1():
 	# 			print 'src', src
 	# find_clusters()
 
+	tractor.catalog.thawAllRecursive()
+	
 	j=0
 	while True:
 		print '-------------------------------------'
-		print 'Optimizing all step', j
+		print 'Optimizing all, step', j
 		print '-------------------------------------'
 		dlnp,X,alpha = tractor.optimize()
 		print 'delta-logprob', dlnp
+		nup = 0
 		for src in tractor.getCatalog():
 			for b in src.getBrightnesses():
 				f = b.getFlux(band)
 				if f < 0:
-					print 'Clamping flux', f, 'up to zero'
+					#print 'Clamping flux', f, 'up to zero'
+					nup += 1
 					b.setFlux(band, 0.)
+		print 'Clamped', nup, 'fluxes up to zero'
 		if dlnp < 1:
 			break
 		j += 1
 
-		mod = tractor.getModelImage(0)
-		plt.clf()
-		plt.imshow(mod, **imb)
-		plt.colorbar()
-		ps.savefig()
-	
+		plotmod()
+
+		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+		print 'Saved pickle', pnum
+		pnum += 1
+
+
+		
 	mags = []
 	for src in tractor.getCatalog():
 		mags.append(src.getBrightness().getMag(band))
@@ -197,20 +274,13 @@ def test1():
 				break
 			j += 1
 
-			mod = tractor.getModelImage(0)
-			plt.clf()
-			plt.imshow(mod, **imb)
-			plt.colorbar()
-			ps.savefig()
+		plotmod()
 		tractor.catalog.thawAllParams()
 
+	pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+	print 'Saved pickle', pnum
+	pnum += 1
 		
-	mod = tractor.getModelImage(0)
-	plt.clf()
-	plt.imshow(mod, **imb)
-	plt.colorbar()
-	ps.savefig()
-	
 
 	
 	

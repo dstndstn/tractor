@@ -590,6 +590,9 @@ class MultiParams(BaseParams, NamedParams):
 				self.freezeParam(name)
 		if '*' in pnames:
 			self.freezeAllParams()
+	def freezeAllRecursive(self):
+		self.freezeParamsRecursive('*')
+
 	def thawParamsRecursive(self, *pnames):
 		for name,sub in self._iterNamesAndVals():
 			if hasattr(sub, 'thawParamsRecursive'):
@@ -598,6 +601,8 @@ class MultiParams(BaseParams, NamedParams):
 				self.thawParam(name)
 		if '*' in pnames:
 			self.thawAllParams()
+	def thawAllRecursive(self):
+		self.thawParamsRecursive('*')
 
 	def thawPathsTo(self, *pnames):
 		thawed = False
