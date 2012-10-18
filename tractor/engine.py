@@ -1194,7 +1194,7 @@ class Tractor(MultiParams):
 			self.cache[deps] = mod
 		return mod
 	'''
-	
+
 	def getModelImages(self):
 		if self.is_multiproc():
 			# avoid shipping my images...
@@ -1231,7 +1231,7 @@ class Tractor(MultiParams):
 			InvError = img.getInvError()
 			count += len(np.ravel(InvError > 0.0))
 		return count
-            
+
 	def getLogLikelihood(self):
 		chisq = 0.
 		for i,chi in enumerate(self.getChiImages()):
