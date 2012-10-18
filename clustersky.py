@@ -281,16 +281,140 @@ def test1():
 	print 'Saved pickle', pnum
 	pnum += 1
 		
+def test2():
+	band = 'i'
+	ps = PlotSequence('abell')
+	
+	ps.skipto(56)
+	pnum = 13
+	tractor = unpickle_from_file('clustersky-12.pickle')
+
+	print tractor
+	tim = tractor.getImage(0)
+	rng = tim.zr[1]-tim.zr[0]
+	# Magic!
+	zr2 = (tim.zr[0], tim.zr[0] + 103./13.)
+
+	ima = dict(interpolation='nearest', origin='lower')
+	imb = ima.copy()
+	imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
+	imc = ima.copy()
+	imc.update(vmin=zr2[0], vmax=zr2[1])
+	imchi1 = ima.copy()
+	imchi1.update(vmin=-5, vmax=5)
+	imchi2 = ima.copy()
+	imchi2.update(vmin=-50, vmax=50)
+	
+	def plotmod():
+		mod = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+		plt.clf()
+		plt.imshow(mod, **imb)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(mod, **imc)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(chi, **imchi1)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+		plt.clf()
+		plt.imshow(chi, **imchi2)
+		plt.gray()
+		plt.colorbar()
+		ps.savefig()
+
+	from tractor.splinesky import SplineSky
+
+	H,W = tim.shape
+	NX,NY = 10,10
+	vals = np.zeros((NY,NX))
+	XX = np.linspace(0, W, NX)
+	YY = np.linspace(0, H, NY)
+	tim.sky = SplineSky(XX, YY, vals)
+
+	tractor.thawAllRecursive()
+	tractor.images[0].freezeAllBut('sky')
+	tractor.catalog.freezeAllRecursive()
+	tractor.catalog.thawPathsTo(band)
+
+	def plotsky():
+		skyim = np.zeros(tim.shape)
+		tim.sky.addTo(skyim)
+		plt.clf()
+		plt.imshow(skyim, **ima)
+		plt.gray()
+		plt.colorbar()
+		plt.title('Spline sky model')
+		ps.savefig()
+		
+
+	j=0
+	while True:
+		print '-------------------------------------'
+		print 'Optimizing fluxes + sky step', j
+		print '-------------------------------------'
+		dlnp,X,alpha = tractor.optimize()
+		print 'delta-logprob', dlnp
+		nup = 0
+		for src in tractor.getCatalog():
+			for b in src.getBrightnesses():
+				f = b.getFlux(band)
+				if f < 0:
+					#print 'Clamping flux', f, 'up to zero'
+					nup += 1
+					b.setFlux(band, 0.)
+		print 'Clamped', nup, 'fluxes up to zero'
+		if dlnp < 1:
+			break
+		j += 1
+		plotmod()
+		plotsky()
+		
+		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+		print 'Saved pickle', pnum
+		pnum += 1
+
+		print 'Sky:', tim.sky
+	
+
+	tractor.catalog.thawAllRecursive()
+
+	j=0
+	while True:
+		print '-------------------------------------'
+		print 'Optimizing all sources + sky step', j
+		print '-------------------------------------'
+		dlnp,X,alpha = tractor.optimize()
+		print 'delta-logprob', dlnp
+		nup = 0
+		for src in tractor.getCatalog():
+			for b in src.getBrightnesses():
+				f = b.getFlux(band)
+				if f < 0:
+					#print 'Clamping flux', f, 'up to zero'
+					nup += 1
+					b.setFlux(band, 0.)
+		print 'Clamped', nup, 'fluxes up to zero'
+		if dlnp < 1:
+			break
+		j += 1
+		plotmod()
+		plotsky()
+		
+		pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
+		print 'Saved pickle', pnum
+		pnum += 1
+
+		print 'Sky:', tim.sky
+
 
 	
-	
-if __name__ == '__main__':
-	import pylab as plt
-	import numpy as np
-
-	#find()
-	test1()
-
 	
 def find():
 	cmap = {'_RAJ2000':'ra', '_DEJ2000':'dec', 'ACOS':'aco'}
@@ -306,7 +430,25 @@ def find():
 	#T.rename('_raj2000', 'ra')
 	#T.rename('_dec2000', 'dec')
 
-	ps = PlotSequence('abell')
+	ps = PlotSequence('abell-b')
+
+	for anum in [2151]:
+		I = np.flatnonzero(T.aco == anum)
+		print 'Abell', anum, ': found', len(I)
+		Ti = T[I[0]]
+		Ti.about()
+
+		rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, contains=True,
+								tablefn='dr9fields.fits')
+		if len(rcf) == 0:
+			print '-> Not in SDSS'
+			continue
+		print 'RCF', rcf
+		for r,c,f,ra,dec in rcf:
+			print 'http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpegcodec.aspx?R=%i&C=%i&F=%i&Z=50' % (r,c,f)
+		
+	return
+
 	
 	plt.clf()
 	plt.hist(T.rich, bins=np.arange(-0.5,max(T.rich)+0.5))
@@ -419,3 +561,29 @@ def find_clusters(tractor, tim):
 		ps.savefig()
 
 	
+if __name__ == '__main__':
+	import pylab as plt
+	import numpy as np
+
+	#find()
+	#test1()
+
+	#if False:
+	run, camcol, field = 5115, 5, 151
+	band = 'i'
+	sdss = DR9()
+	fn = sdss.retrieve('idR', run, camcol, field, band)
+	print 'Got', fn
+	P = pyfits.open(fn)[0]
+	from astrometry.util.fix_sdss_idr import fix_sdss_idr
+	P = fix_sdss_idr(P)
+	D = P.data
+	plt.clf()
+	plt.imshow(D, interpolation='nearest', origin='lower',
+			   vmin=2000, vmax=2200)
+	plt.gray()
+	plt.colorbar()
+	plt.savefig('idr.png')
+	
+	#test2()
+
