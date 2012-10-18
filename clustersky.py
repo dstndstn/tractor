@@ -580,7 +580,7 @@ if __name__ == '__main__':
 	D = P.data
 	plt.clf()
 	plt.imshow(D, interpolation='nearest', origin='lower',
-			   vmin=2000, vmax=2200)
+			   vmin=2070, vmax=2120)
 	plt.gray()
 	plt.colorbar()
 	plt.savefig('idr.png')
