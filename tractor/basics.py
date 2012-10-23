@@ -416,10 +416,18 @@ class FitsWcs(ParamList):
 		object.	 To create one of these from a filename and FITS HDU extension,
 
 		::
+		    from astrometry.util.util import Tan
 
 			fn = 'my-file.fits'
 			ext = 0
 			FitsWcs(Tan(fn, ext))
+
+		To create one from WCS parameters,
+
+		    tanwcs = Tan(crval1, crval2, crpix1, crpix2,
+			    cd11, cd12, cd21, cd22, imagew, imageh)
+			FitsWcs(tanwcs)
+
 		'''
 		if hasattr(self, 'x0'):
 			print 'FitsWcs has an x0 attr:', self.x0
@@ -704,9 +712,20 @@ class GaussianMixturePSF(BaseParams):
 	def __init__(self, amp, mean, var):
 		self.mog = mp.MixtureOfGaussians(amp, mean, var)
 		assert(self.mog.D == 2)
+		# !!
 		self.radius = 25
 		super(GaussianMixturePSF, self).__init__()
 
+	def computeRadius(self):
+		import numpy.linalg
+		# ?
+		meig = max([max(abs(numpy.linalg.eigvalsh(v)))
+					for v in self.mog.var])
+		#for v in self.mog.var:
+		#	print 'Var', v
+		#	print 'Eigs:', numpy.linalg.eigvalsh(v)
+		return self.getNSigma() * np.sqrt(meig)
+		
 	def scaleBy(self, factor):
 		# Use not advised, ever
 		amp = self.mog.amp
@@ -868,7 +887,8 @@ class NCircularGaussianPSF(MultiParams):
 		'''
 		assert(len(sigmas) == len(weights))
 		super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
-
+		self.minradius = 1.
+		
 	@staticmethod
 	def getNamedParams():
 		return dict(sigmas=0, weights=1)
@@ -967,7 +987,7 @@ class NCircularGaussianPSF(MultiParams):
 		return 5.
 
 	def getRadius(self):
-		return max(self.sigmas) * self.getNSigma()
+		return max(self.minradius, max(self.sigmas) * self.getNSigma())
 
 	# returns a Patch object.
 	def getPointSourcePatch(self, px, py):

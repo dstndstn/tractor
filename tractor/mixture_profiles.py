@@ -164,14 +164,14 @@ class MixtureOfGaussians():
 		x, y = meshgrid()
 		return result
 
-	def evaluate_grid_dstn(self, xlo, xhi, ylo, yhi):
+	def evaluate_grid_dstn(self, xlo, xhi, ylo, yhi, xstep=1., ystep=1.):
 		from mix import c_gauss_2d_grid
 		assert(self.D == 2)
-		NX = int(round(xhi - xlo - 1))
-		NY = int(round(yhi - ylo - 1))
+		NX = int(round(xhi - xlo + 1))
+		NY = int(round(yhi - ylo + 1))
 		result = np.zeros((NY, NX))
-		rtn = c_gauss_2d_grid(xlo, 1., NX, ylo, 1., NY, self.amp, self.mean,
-							  self.var, result)
+		rtn = c_gauss_2d_grid(xlo, xstep, NX, ylo, ystep, NY,
+							  self.amp, self.mean,self.var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_grid failed')
 		return result

@@ -519,6 +519,7 @@ def get_tractor_image(run, camcol, field, bandname,
 		if res == 0:
 			# print 'w,mu,sig', w,mu,sig
 			mypsf = GaussianMixturePSF(w, mu, sig)
+			mypsf.computeRadius()
 		else:
 			# Failed!  Return 'dg' model instead?
 			print 'PSF model fit', psf, 'failed!  Returning DG model instead'
@@ -840,6 +841,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		if res == 0:
 			# print 'w,mu,sig', w,mu,sig
 			mypsf = GaussianMixturePSF(w, mu, sig)
+			mypsf.computeRadius()
 		else:
 			# Failed!  Return 'dg' model instead?
 			print 'PSF model fit', psf, 'failed!  Returning DG model instead'

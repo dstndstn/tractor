@@ -473,9 +473,15 @@ class HoggGalaxy(Galaxy):
 		# now choose the patch size
 		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
 		if self.ab <= 1:
-			halfsize = max(8., 8. * (self.re / 3600.) / pixscale)
+			abscale = 1.
 		else:
-			halfsize = max(8., 8. * (self.re*self.ab / 3600.) / pixscale)
+			abscale = self.ab
+		halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
+		#print 'halfsize', halfsize, 'pixels'
+		psf = img.getPsf()
+		halfsize += psf.getRadius()
+		#print ' +psf -> ', halfsize, 'pixels'
+
 		# now evaluate the mixture on the patch pixels
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0, img.getWidth())
 		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0, img.getHeight())
@@ -496,7 +502,6 @@ class HoggGalaxy(Galaxy):
 			print 'eigenvec-based phi:', deg2rad(np.arctan2(evec[0,1], evec[0,0])), deg2rad(np.arctan2(evec[1,0], evec[0,0]))
 		amix.symmetrize()
 		# now convolve with the PSF
-		psf = img.getPsf()
 		# We're making a strong assumption about the PSF here:
 		psfmix = psf.getMixtureOfGaussians()
 		psfmix.normalize()

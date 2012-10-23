@@ -270,10 +270,11 @@ class Patch(object):
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch.copy())
 
-	def getExtent(self):
+	def getExtent(self, margin=0.):
 		''' Return (x0, x1, y0, y1) '''
 		(h,w) = self.shape
-		return (self.x0, self.x0 + w, self.y0, self.y0 + h)
+		return (self.x0-margin, self.x0 + w + margin,
+				self.y0-margin, self.y0 + h + margin)
 
 	def getOrigin(self):
 		return (self.x0,self.y0)
