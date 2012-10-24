@@ -66,16 +66,160 @@
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
+import numpy as np
+import pylab as plt
 
 from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.plotutils import ArcsinhNormalize
+import astrometry.libkd.spherematch as sm
+from astrometry.sdss import *
+
 from tractor.utils import *
 from tractor import sdss as st
 from tractor import *
+from tractor.sdss_galaxy import *
 
-from astrometry.sdss import *
 
+def fp():
+	band = 'i'
+
+	run, camcol, field = 5115, 5, 151
+	bands = [band]
+	roi = (1048,2048, 0,1000)
+	tim,tinf = st.get_tractor_image_dr9(run, camcol, field, band,
+										roi=roi, nanomaggies=True)
+	ima = dict(interpolation='nearest', origin='lower',
+			   extent=roi)
+	zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+	#imb = ima.copy()
+	#imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
+	imc = ima.copy()
+	imc.update(norm=ArcsinhNormalize(mean=tinf['sky'], 
+									 std=tinf['skysig']),
+				vmin=zr2[0], vmax=zr2[1])
+
+
+	
+
+	# Match spectra with Abell catalog
+	T = fits_table('a1656-spectro.fits')
+
+	IJ = []
+	cats = []
+	for step in [0, 12]:
+		tractor = unpickle_from_file('clustersky-%02i.pickle' % step)
+		cat = tractor.getCatalog()
+		cat = [src for src in cat if src.getBrightness().getMag(band) < 20]
+		cats.append(cat)
+		rd = [src.getPosition() for src in cat]
+		ra  = np.array([p.ra  for p in rd])
+		dec = np.array([p.dec for p in rd])
+		rad = 1./3600.
+		I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
+							   nearest=True)
+		print len(I), 'matches on RA,Dec'
+		#print I, J
+		IJ.append((I,J))
+
+	(I1,J1),(I2,J2) = IJ
+	assert(np.all(I1 == I2))
+	cat1 = [cats[0][j] for j in J1]
+	cat2 = [cats[1][j] for j in J2]
+	m1 = np.array([src.getBrightness().getMag(band) for src in cat1])
+	m2 = np.array([src.getBrightness().getMag(band) for src in cat2])
+
+	ps = PlotSequence('fp')
+
+	plt.clf()
+	plt.plot(m1, m2, 'k.')
+	plt.xlabel('SDSS i mag')
+	plt.ylabel('Tractor i mag')
+	ax = plt.axis()
+	mn,mx = min(ax[0],ax[2]), max(ax[1],ax[3])
+	plt.plot([mn,mx],[mn,mx], 'k-', alpha=0.5)
+	plt.axis(ax)
+	ps.savefig()
+
+	plt.clf()
+	plt.plot(m1, m2-m1, 'k.')
+	plt.xlabel('SDSS i mag')
+	plt.ylabel('(Tractor - SDSS) i mag')
+	plt.axhline(0, color='k', alpha=0.5)
+	ps.savefig()
+
+	sdss = DR9()
+	p = sdss.readPhotoObj(run, camcol, field)
+	print 'PhotoObj:', p
+	objs = p.getTable()
+	# from tractor.sdss.get_tractor_sources
+	x0,x1,y0,y1 = roi
+	bandnum = band_index(band)
+	x = objs.colc[:,bandnum]
+	y = objs.rowc[:,bandnum]
+	I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
+	objs = objs[I]
+	# Only deblended children.
+	objs = objs[(objs.nchild == 0)]
+	objs.about()
+	I3,J3,d = sm.match_radec(T.ra, T.dec, objs.ra, objs.dec, rad,
+							 nearest=True)
+	print 'Got', len(I3), 'matches to photoObj'
+	
+
+	# FP
+	for I,cat,nm in [(I1,cat1,'SDSS'),(I2,cat2,'Tractor')]:
+		#
+		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
+		wcs = tim.getWcs()
+		x0,y0 = wcs.x0,wcs.y0
+		#rd0 = [src.getPosition() for src in cat]
+		xy0 = np.array([wcs.positionToPixel(src.getPosition())
+						for src in cat])
+		
+		origI = I
+		keep = []
+		keepI = []
+		#print 'Matched sources:'
+		for i,src in zip(I,cat):
+			#print '  ', src
+			if type(src) is CompositeGalaxy:
+				devflux = src.brightnessDev.getFlux(band)
+				expflux = src.brightnessExp.getFlux(band)
+				df = devflux / (devflux + expflux)
+				print '  dev fraction', df
+				if df > 0.8:
+					keep.append(src)
+					keepI.append(i)
+			if type(src) in [DevGalaxy]:
+				keep.append(src)
+				keepI.append(i)
+		I,cat = keepI,keep
+		m1 = np.array([src.getBrightness().getMag(band) for src in cat])
+		xy1 = np.array([wcs.positionToPixel(src.getPosition())
+						for src in cat])
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		ax = plt.axis()
+		plt.gray()
+		plt.colorbar()
+		p1 = plt.plot(xy0[:,0]+x0, xy0[:,1]+y0, 'o', mec='m', mfc='none',
+					  ms=8, mew=1)
+		p2 = plt.plot(xy1[:,0]+x0, xy1[:,1]+y0, 'o', mec='r', mfc='none',
+					  ms=10, mew=2)
+		plt.legend((p1[0],p2[0]), ('Spectro sources', 'deV profiles'))
+		for (x,y),i in zip(xy0, origI):
+			plt.text(x+x0, y+y0 + 20,
+					 '%.03f' % T.z[i], color='r', size=8,
+				ha='center', va='bottom')
+		plt.axis(ax)
+		plt.title(nm)
+		ps.savefig()
+
+
+		
 
 def test1():
 	ps = PlotSequence('abell')
@@ -90,13 +234,66 @@ def test1():
 	srcs = st.get_tractor_sources_dr9(run, camcol, field, band,
 		roi=roi, nanomaggies=True,
 		bands=bands)
+
+	mags = [src.getBrightness().getMag(band) for src in srcs]
+	I = np.argsort(mags)
+	print 'Brightest sources:'
+	for i in I[:10]:
+		print '  ', srcs[i]
+	
+	ima = dict(interpolation='nearest', origin='lower',
+			   extent=roi)
+	zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+	imb = ima.copy()
+	imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
+	imc = ima.copy()
+	#imc.update(vmin=zr2[0], vmax=zr2[1])
+	imc.update(norm=ArcsinhNormalize(mean=tinf['sky'],
+									 std=tinf['skysig']),
+				vmin=zr2[0], vmax=zr2[1])
+	plt.clf()
+	plt.imshow(tim.getImage(), **imb)
+	plt.gray()
+	plt.colorbar()
+	ps.savefig()
+
+	T = fits_table('a1656-spectro.fits')
+	wcs = tim.getWcs()
+	x0,y0 = wcs.x0,wcs.y0
+	print 'x0,y0', x0,y0
+	xy = np.array([wcs.positionToPixel(RaDecPos(r,d))
+				   for r,d in zip(T.ra, T.dec)])
+	sxy = np.array([wcs.positionToPixel(src.getPosition())
+					for src in srcs])
+	sxy2 = sxy[I[:20]]
+	sa = dict(mec='r', mfc='None', ms=8, mew=1, alpha=0.5)
+	pa = dict(mec='b', mfc='None', ms=6, mew=1, alpha=0.5)
+	
+	ax = plt.axis()
+	plt.plot(xy[:,0]+x0, xy[:,1]+y0, 'o', **sa)
+	plt.plot(sxy2[:,0]+x0, sxy2[:,1]+y0, 's', **pa)
+	plt.axis(ax)
+	ps.savefig()
+	
+	plt.clf()
+	plt.imshow(tim.getImage(), **imc)
+	plt.colorbar()
+	ps.savefig()
+
+	ax = plt.axis()
+	plt.plot(xy[:,0]+x0, xy[:,1]+y0, 'o', **sa)
+	plt.plot(sxy2[:,0]+x0, sxy2[:,1]+y0, 's', **pa)
+	for (x,y),z in zip(xy, T.z):
+		plt.text(x+x0, y+y0, '%.3f'%z)
+
+	plt.axis(ax)
+	ps.savefig()
+
 	tractor = Tractor([tim], srcs)
 
 	pnum = 00
 	pickle_to_file(tractor, 'clustersky-%02i.pickle' % pnum)
 	pnum += 1
-	
-	zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
 	
 	print tractor
 
@@ -119,10 +316,6 @@ def test1():
 	sky = sky[roislice]
 
 	z0,z1 = tim.zr
-	
-	ima = dict(interpolation='nearest', origin='lower',
-			   extent=roi)
-
 	mn = (sky.min() + sky.max()) / 2.
 	d = (z1 - z0)
 	
@@ -131,25 +324,11 @@ def test1():
 	plt.colorbar()
 	ps.savefig()
 	
-	imb = ima.copy()
-	imb.update(vmin=tim.zr[0], vmax=tim.zr[1])
-	imc = ima.copy()
-	imc.update(vmin=zr2[0], vmax=zr2[1])
-
 	imchi1 = ima.copy()
 	imchi1.update(vmin=-5, vmax=5)
 	imchi2 = ima.copy()
 	imchi2.update(vmin=-50, vmax=50)
 	
-	plt.clf()
-	plt.imshow(tim.getImage(), **imb)
-	plt.colorbar()
-	ps.savefig()
-	plt.clf()
-	plt.imshow(tim.getImage(), **imc)
-	plt.colorbar()
-	ps.savefig()
-
 	def plotmod():
 		mod = tractor.getModelImage(0)
 		chi = tractor.getChiImage(0)
@@ -562,28 +741,27 @@ def find_clusters(tractor, tim):
 
 	
 if __name__ == '__main__':
-	import pylab as plt
-	import numpy as np
-
 	#find()
-	#test1()
+	fp()
+	sys.exit(0)
+	test1()
 
-	#if False:
-	run, camcol, field = 5115, 5, 151
-	band = 'i'
-	sdss = DR9()
-	fn = sdss.retrieve('idR', run, camcol, field, band)
-	print 'Got', fn
-	P = pyfits.open(fn)[0]
-	from astrometry.util.fix_sdss_idr import fix_sdss_idr
-	P = fix_sdss_idr(P)
-	D = P.data
-	plt.clf()
-	plt.imshow(D, interpolation='nearest', origin='lower',
-			   vmin=2070, vmax=2120)
-	plt.gray()
-	plt.colorbar()
-	plt.savefig('idr.png')
+	if False:
+		run, camcol, field = 5115, 5, 151
+		band = 'i'
+		sdss = DR9()
+		fn = sdss.retrieve('idR', run, camcol, field, band)
+		print 'Got', fn
+		P = pyfits.open(fn)[0]
+		from astrometry.util.fix_sdss_idr import fix_sdss_idr
+		P = fix_sdss_idr(P)
+		D = P.data
+		plt.clf()
+		plt.imshow(D, interpolation='nearest', origin='lower',
+				   vmin=2070, vmax=2120)
+		plt.gray()
+		plt.colorbar()
+		plt.savefig('idr.png')
 	
-	#test2()
+	test2()
 
