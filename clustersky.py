@@ -83,6 +83,49 @@ from tractor.sdss_galaxy import *
 
 
 def fp():
+
+	from astrometry.util import casjobs
+	import os
+	casjobs.setup_cookies()
+	cas = casjobs.get_known_servers()['dr9']
+	username = os.environ['SDSS_CAS_USER']
+	password = os.environ['SDSS_CAS_PASS']
+	cas.login(username, password)
+
+	t = []
+	j = 0
+	dbnames = []
+	for i,z in enumerate(np.linspace(0., 1., 1001)):
+		if z == 0.:
+			# hahaha, it fails for z=0.
+			continue
+		#t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i, %.4f as Z%04i' % (z, i, z, i))
+		t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))
+		#t.append('dbo.fCosmoDistanceModulus(%.g, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))#, %.4f as z%i' % (z, i, z, i))
+ 
+		if i % 100 == 0 and len(t):
+			dbname = 'dmz%i' % j
+			sql = 'select into mydb.%s\n' % dbname + ',\n'.join(t) + '\n'
+			#print 'SQL length:', len(sql)
+			jid = cas.submit_query(sql)
+			print 'Submitted job id', jid
+			while True:
+				jobstatus = cas.get_job_status(jid)
+				print 'Job id', jid, 'is', jobstatus
+				if jobstatus in ['Finished', 'Failed', 'Cancelled']:
+					break
+				print 'Sleeping...'
+				time.sleep(5)
+			dbnames.append(dbname)
+			j += 1
+			t = []
+	print 'Output-downloads-delete'
+	dodelete = True
+	outfn = dbname + '.fits'
+	cas.output_and_download(dbnames, [nm + '.fits' for nm in dbnames], dodelete)
+			
+	sys.exit(0)
+			
 	band = 'i'
 
 	run, camcol, field = 5115, 5, 151
@@ -104,7 +147,7 @@ def fp():
 	
 
 	# Match spectra with Abell catalog
-	T = fits_table('a1656-spectro.fits')
+	T = fits_table('a1656-spectro.fits', column_map={'class':'clazz'})
 
 	IJ = []
 	cats = []
@@ -166,15 +209,29 @@ def fp():
 	I3,J3,d = sm.match_radec(T.ra, T.dec, objs.ra, objs.dec, rad,
 							 nearest=True)
 	print 'Got', len(I3), 'matches to photoObj'
-	
+	cat3 = Catalog()
+	for j in J3:
+		phi = -objs.phi_dev_deg[j, bandnum]
+		ab  =  objs.     ab_dev[j, bandnum]
+		re  =  objs.  theta_dev[j, bandnum]
+		flux =     objs.devflux[j, bandnum]
+		dshape = GalaxyShape(re, ab, phi)
+		dbright = NanoMaggies(**{band: flux})
+		pos = RaDecPos(objs.ra[j], objs.dec[j])
+		gal = DevGalaxy(pos, dbright, dshape)
+		cat3.append(gal)
+
+	T.about()
+	print 'Spectro types:', T.sourcetype[I1]
+	print 'Spectro classes:', T.clazz[I1]
+	print 'Spectro subclasses:', T.subclass[I1]
 
 	# FP
-	for I,cat,nm in [(I1,cat1,'SDSS'),(I2,cat2,'Tractor')]:
+	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
 		#
 		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
 		wcs = tim.getWcs()
 		x0,y0 = wcs.x0,wcs.y0
-		#rd0 = [src.getPosition() for src in cat]
 		xy0 = np.array([wcs.positionToPixel(src.getPosition())
 						for src in cat])
 		
@@ -218,7 +275,55 @@ def fp():
 		plt.title(nm)
 		ps.savefig()
 
+		r0 = []
+		for i,src in zip(I,cat):
+			if type(src) is CompositeGalaxy:
+				shape = src.shapeDev
+				# this is total exp + dev
+				mag = src.getBrightness()
+			elif type(src) is DevGalaxy:
+				shape = src.shape
+				mag = src.getBrightness()
+				
+			# major axis, arcsec
+			rdev = shape.re
+			ab = shape.ab
+			mdev = mag.getMag(band)
 
+			z = T.z[i]
+
+			# FIXME!!!  K-correction(z)
+			Kz = 0.
+
+			# CasJobs:
+			#   fCosmoAbsMag(m, z, COSMO) =
+			#      m - fCosmoDistanceModulus(z, COSMO)
+
+			
+			# Luminosity distance(z) in megaparsecs
+			#DLz = 
+			
+			# Bernardi paper 1, pg 1823, first paragraph.
+			# This seems nutty as squirrel poo to me...
+			r0 = rdev * ab
+
+			# FIXME -- r0 to R0 correction via a poorly-described
+			# correction similar to K-correction to size in a given
+			# band; claimed 4-10% correction in radius.
+
+			# FIXME -- ln or log10 ?
+			
+			# "effective surface brightness"
+			mu0 = (mdev + 2.5*np.log10(2. * np.pi * r0**2) - Kz
+				   - 10.*np.log10(1. + z))
+
+			# "mean surface brightness within effective radius R0
+			I0 = exp(mu0 / -2.5)
+
+			# absolute mag
+			M = mdev - 5.*np.log10(DLz) - 25. - Kz
+			
+		
 		
 
 def test1():
