@@ -140,7 +140,7 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1
     
     general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
-def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
+def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
     data = pyfits.open("nsa-short.fits.gz")[1].data
     e=data.field('NSAID')
 
@@ -149,7 +149,12 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,sc
 
     print record
 
-    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],record['SERSIC_TH50'][0]/60.,record['SERSIC_TH50'][0]/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
+    if fieldradius==0:
+        fieldradius=record['SERSIC_TH50'][0]
+
+    print "Radius is %e" % fieldradius
+
+    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
 
 
@@ -179,9 +184,9 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     assert(len(rcfs)>0)
     if 10 < len(rcfs) < 20:
         scale = 2
-    elif 20 < len(rcfs) < 40:
+    elif 20 <= len(rcfs) < 40:
         scale = 4
-    elif 40 < len(rcfs) < 80:
+    elif 40 <= len(rcfs) < 80:
         scale = 8
     assert(len(rcfs)<80)
 
@@ -260,7 +265,6 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
-        print sra,sdec,smag
 
         for img in tractor.getImages():
             wcs = img.getWcs()
@@ -277,8 +281,6 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
-        print xtr,ytr
-
         xt = xtr 
         yt = ytr
         r = ((remradius*60.))/.396 #radius in pixels
@@ -386,6 +388,7 @@ def main():
     parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
     parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
     parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
+    parser.add_option('--radius',dest='fradius',type=float,help='Search radius in arcseconds',default=1.)
     parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
     parser.add_option('--nsatlas',dest='nsatlas',action='store_true',default=False,help='Use argument as Nasa-Sloan Atlas id')
 
@@ -402,7 +405,7 @@ def main():
     ntune = opt.ntune
     nocache = opt.nocache
     if opt.nsatlas:
-        generalNSAtlas(args[0],threads,itune1,itune2,ntune,nocache)
+        generalNSAtlas(int (args[0]),threads,itune1,itune2,ntune,nocache,fieldradius=opt.fradius)
     else:
         name = args[0]
         generalRC3(name,threads,itune1,itune2,ntune,nocache)

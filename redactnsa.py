@@ -25,9 +25,9 @@ indx1=np.where(y[:,5] <= 0)
 good[indx1]=False
 indx2=np.where(y[:,3] <= 0)
 good[indx2]=False
-indx3=np.where(z > 120)
+indx3=np.where(z > 60)
 good[indx3]=False
-indx4=np.where(z < 60)
+indx4=np.where(z < 40)
 good[indx4]=False
 
 gra=a[good]
@@ -49,7 +49,7 @@ def getImage(x):
 
     return url
 
-rc3 = pyf.open('rc3limited.fits')
+rc3 = pyf.open('allrc3.fits')
 
 for entry in rc3[1].data:
     radius = ((10**entry['LOG_D25'])/10.)/2. #In arc-minutes
@@ -57,21 +57,31 @@ for entry in rc3[1].data:
     m1,m2,d12 = match_radec(gra,gdec,entry['RA'],entry['DEC'],radius)
     newGood[m1]=False
 
+print len(g[newGood])
+
 gra=gra[newGood]
 g=g[newGood] #list of all nsaids that should now be checked 
 gdec=gdec[newGood]
 grad = grad[newGood]
 i = 0
+print len(g)
+
+fekta = open("objs2_ekta.txt",'w')
+fmykytyn = open("objs2_mykytyn.txt",'w')
+fhogg = open("objs2_hogg.txt",'w')
 for obj in g:
     if (i==0):
         url = getImage(obj)
-        urllib.urlretrieve(url, 'nsahogg/%s.jpg' %(obj))
+        urllib.urlretrieve(url, 'nsahogg2/%s.jpg' %(obj))
+        fhogg.write("%s\n" % obj)
     elif (i==1):
         url = getImage(obj)
-        urllib.urlretrieve(url, 'nsamykytyn/%s.jpg' %(obj))
+        urllib.urlretrieve(url, 'nsamykytyn2/%s.jpg' %(obj))
+        fmykytyn.write("%s\n" % obj)
     else:
         url = getImage(obj)
-        urllib.urlretrieve(url, 'nsapatel/%s.jpg' %(obj))
+        urllib.urlretrieve(url, 'nsaekta2/%s.jpg' %(obj))
+        fekta.write("%s\n" % obj)
     i = (i+1) % 3
 
 

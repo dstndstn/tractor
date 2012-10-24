@@ -7,6 +7,7 @@ import numpy as np
 import pylab as plt
 import pyfits
 import sys
+import traceback
 
 from general import generalRC3
 from halflight import halflight
@@ -36,7 +37,7 @@ def main():
             entries.append('%s' %name)
     things=[str(x) for x in entries]
     print len(things)
-    things.reverse()
+    #things.reverse()
 
     for entry in things:
         print entry
@@ -52,7 +53,12 @@ def main():
             add_to_table(newentry)
 
         except AssertionError:
-            print sys.exc_info()[0]
+            print traceback.print_exc()
+            print "Tractor failed on entry: %s" % newentry
+            continue
+        except MemoryError:
+            print traceback.print_exc()
+            print "Tractor failed on entry: %s" % newentry
             continue
             
 #3053 galaxies

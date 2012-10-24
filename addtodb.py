@@ -69,7 +69,7 @@ def add_to_table_nsatlas(name):
     pri_hdu = pyf.PrimaryHDU(np.arange(100))
     tbuhdulist =pyf.HDUList([pri_hdu,hdu])
 
-    tbuhdulist.writeto('large_galaxies.fits',clobber=True)
+    #tbuhdulist.writeto('large_galaxies.fits',clobber=True)
     print os.getcwd()
     os.chdir('/data1/dwm261/tractor/')
     print os.getcwd()

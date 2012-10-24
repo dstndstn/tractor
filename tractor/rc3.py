@@ -31,7 +31,6 @@ def getName(name):
     mask = data.field("NAME") == name
 
     record = data[mask]
-    print mask
     print record
     if len(record) ==0:
         print "NONE"

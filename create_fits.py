@@ -92,23 +92,8 @@ def makeNSAtlastable():
             nsa_nsid.append(nsid)
             nsa_sersic_th50.append(sersic_th50)
             print ra,dec,nsid,sersic_th50
-            cg_ra=[]
-            cg_dec=[]
-            cg_totmags=[]
-            cg_devmags=[]
-            cg_devre=[]
-            cg_devab=[]
-            cg_devphi=[]
-            cg_expmags=[]
-            cg_expre=[]
-            cg_expab=[]
-            cg_expphi=[]
-            cg_r50s=[]
-            cg_r90s=[]
-            cg_conc=[]
-            cg_extinction=[]
-            cg_mu50=[]
             CG,r50s,r90s,concs=unpickle_from_file(files)
+            print CG,r50s,r90s,concs
             pos=CG.getPosition()
             tot=CG.getBrightness()
             print tot, 'tot mags'
@@ -124,6 +109,7 @@ def makeNSAtlastable():
             exp_phi=CG.shapeExp.phi
             
             cg_ra.append(pos[0])
+            print cg_ra
             cg_dec.append(pos[1])
             cg_totmags.append(tot)
             cg_devmags.append(dev)
@@ -131,6 +117,7 @@ def makeNSAtlastable():
             cg_devab.append(dev_ab)
             cg_devphi.append(dev_phi)
             cg_expmags.append(exp)
+            print cg_expmags
             cg_expre.append(exp_re)
             cg_expab.append(exp_ab)
             cg_expphi.append(exp_phi)
@@ -261,7 +248,7 @@ def makeRC3table():
     cg_extinction=[]
     cg_mu50=[]
 
-    os.chdir("RC3_Output/updated_pickle/")
+    os.chdir("RC3_Output/")
     
     
     #print extinction('NGC_3884-updated.pickle')
@@ -286,22 +273,6 @@ def makeRC3table():
             rc3_log_ae.append(log_ae)
             rc3_log_d25.append(log_d25)
             print ra,dec,log_ae,log_d25
-            cg_ra=[]
-            cg_dec=[]
-            cg_totmags=[]
-            cg_devmags=[]
-            cg_devre=[]
-            cg_devab=[]
-            cg_devphi=[]
-            cg_expmags=[]
-            cg_expre=[]
-            cg_expab=[]
-            cg_expphi=[]
-            cg_r50s=[]
-            cg_r90s=[]
-            cg_conc=[]
-            cg_extinction=[]
-            cg_mu50=[]
             CG,r50s,r90s,concs=unpickle_from_file(files)
             pos=CG.getPosition()
             tot=CG.getBrightness()
@@ -419,10 +390,10 @@ def makeRC3table():
     cols=pyf.ColDefs([col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21])
     tbhdu=pyf.new_table(cols)
     tbhdulist=pyf.HDUList([hdu,tbhdu])
-    os.chdir("../../")
-    tbhdulist.writeto('large_galaxies.fits',clobber=True)
+    os.chdir("/home/dwm261/")
+    tbhdulist.writeto('large_galaxies2.fits',clobber=True)
 
 #try to run on all types of pickle files with differents names while going back one directory
 
 if __name__ == '__main__':
-    makeNSAtlastable()
+    makeRC3table()
