@@ -437,12 +437,43 @@ def fp():
 		xl,xh = [15., 24.]
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 19.) * -3.91 + -20., 'k-', alpha=0.5)
+		plt.plot(X, (X - 19.) * -(3.91/2.5) + -20., 'k-', alpha=0.5)
 		plt.xlabel('mu_0 [mag/arcsec^2]')
 		plt.ylabel('M - 5 log(h) [mag]')
 		plt.ylim(-17,-24)
 		plt.xlim(xh,xl)
 		plt.title('Bernardi paper 2 fig 9: %s' % nm)
+		ps.savefig()
+
+
+		plt.clf()
+		plt.plot(MU, log(RR * 1e3 / h70), 'k.')
+		xl,xh = [15., 24.]
+		yl,yh = [-1, 1.5]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 18.) * (0.76/2.5) + 0., 'k-', alpha=0.5)
+		plt.xlabel('mu_0 [mag/arcsec^2]')
+		plt.ylabel('log(R_0) [kpc / h]')
+		plt.ylim(yl,yh)
+		plt.xlim(xh,xl)
+		plt.title('Bernardi paper 2 fig 10: %s' % nm)
+		ps.savefig()
+		
+
+		plt.clf()
+		plt.plot(log(SS) + 0.2*(MU - 19.61)*log(SS) + 0.2*(MU - 19.24),
+				 log(RR * 1e3 / h70), 'k.')
+		xl,xh = [-0.5, 3.5]
+		yl,yh = [-1, 1.5]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 2.) * (1.52) + 0.2, 'k-', alpha=0.5)
+		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61) log(sigma) + 0.2 (mu_0 - 19.24)')
+		plt.ylabel('log(R_0) [kpc / h]')
+		plt.ylim(yl,yh)
+		#plt.xlim(xh,xl)
+		plt.title('Bernardi paper 3 fig 1: %s' % nm)
 		ps.savefig()
 
 		
