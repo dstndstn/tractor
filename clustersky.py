@@ -68,6 +68,7 @@ if __name__ == '__main__':
 	matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
+import scipy.interpolate
 
 from astrometry.util.fits import *
 from astrometry.util.file import *
@@ -89,57 +90,79 @@ def get_dm_table():
 	username = os.environ['SDSS_CAS_USER']
 	password = os.environ['SDSS_CAS_PASS']
 	cas.login(username, password)
+	sqls = []
 	t = []
-	j = 0
-	dbnames = []
 	for i,z in enumerate(np.linspace(0., 1., 1001)):
-		if z == 0.:
-			# hahaha, it fails for z=0.
-			continue
-		t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))
- 
-		if i % 100 == 0 and len(t):
-			dbname = 'dmz%i' % j
-			sql = 'select into mydb.%s\n' % dbname + ',\n'.join(t) + '\n'
-			jid = cas.submit_query(sql)
-			print 'Submitted job id', jid
-			while True:
-				jobstatus = cas.get_job_status(jid)
-				print 'Job id', jid, 'is', jobstatus
-				if jobstatus in ['Finished', 'Failed', 'Cancelled']:
-					break
-				print 'Sleeping...'
-				time.sleep(5)
-			dbnames.append(dbname)
-			j += 1
+		#if z == 0.:
+		#	# hahaha, it fails for z=0.
+		#	continue
+		#t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))
+		t.append('dbo.fCosmoDl(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DL%04i' % (z,i))
+
+		if i % 500 == 0 and len(t)>1:
+			sqls.append(t)
 			t = []
-	print 'Output-downloads-delete'
+	print 't=',t
+	if len(t):
+		sqls.append(t)
+
+	dbnames = []
+	for j,t in enumerate(sqls):
+		dbname = 'dlz%i' % j
+		sql = 'select into mydb.%s\n' % dbname + ',\n'.join(t) + '\n'
+		jid = cas.submit_query(sql)
+		print 'Submitted job id', jid
+		while True:
+			jobstatus = cas.get_job_status(jid)
+			print 'Job id', jid, 'is', jobstatus
+			if jobstatus in ['Finished', 'Failed', 'Cancelled']:
+				break
+			print 'Sleeping...'
+			time.sleep(5)
+		dbnames.append(dbname)
 	dodelete = True
-	outfn = dbname + '.fits'
 	tabfns = [nm + '.fits' for nm in dbnames]
 	cas.output_and_download(dbnames, tabfns, dodelete)
 
-	DM = []
+	#def join():
+	#tabfns = ['dlz%i.fits' % i for i in [0,1]]
+	#DM = []
+	DL = []
 	Z = []
-	for i in range(10):
-		tabfn = 'dmz%i.fits' % i
+	for tabfn in tabfns:
+		#for i in range(10):
+		#tabfn = 'dmz%i.fits' % i
+		print 'Reading', tabfn
 		T = fits_table(tabfn)
 		for c in T.get_columns():
 			print 'col', c
-			if c.startswith('dm') and len(c) == 6:
+			#if c.startswith('dm') and len(c) == 6:
+			if c.startswith('dl') and len(c) == 6:
 				z = float(c[2] + '.' + c[3:])
-				dm = T.get(c)[0]
 				Z.append(z)
-				DM.append(dm)
+				#dm = T.get(c)[0]
+				#DM.append(dm)
+				dl = T.get(c)[0]
+				DL.append(dl)
 	T = tabledata()
-	T.dm = DM
+	#T.dm = DM
+	T.dl = DL
 	T.z = Z
-	T.writeto('dmz.fits')
+	#T.writeto('dmz.fits')
+	T.writeto('dlz.fits')
 	plt.clf()
-	plt.plot(Z, DM, 'k-')
-	plt.savefig('dmz.png')
-	
+	plt.plot(Z, DL, 'k-')
+	plt.savefig('dlz.png')
+	#plt.savefig('dmz.png')
 
+class DistanceModulus(object):
+	def __init__(self):
+		T = fits_table('dmz.fits')
+		self.spline = scipy.interpolate.InterpolatedUnivariateSpline(T.z, T.dm)
+	def __call__(self, z):
+		return self.spline(z)
+	
+	
 def fp():
 	band = 'i'
 	ps = PlotSequence('fp')
@@ -240,6 +263,8 @@ def fp():
 	print 'Spectro classes:', T.clazz[I1]
 	print 'Spectro subclasses:', T.subclass[I1]
 
+	DM = DistanceModulus()
+	
 	# FP
 	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
 		#
@@ -309,14 +334,6 @@ def fp():
 			# FIXME!!!  K-correction(z)
 			Kz = 0.
 
-			# CasJobs:
-			#   fCosmoAbsMag(m, z, COSMO) =
-			#      m - fCosmoDistanceModulus(z, COSMO)
-
-			
-			# Luminosity distance(z) in megaparsecs
-			#DLz = 
-			
 			# Bernardi paper 1, pg 1823, first paragraph.
 			# This seems nutty as squirrel poo to me...
 			r0 = rdev * ab
@@ -325,18 +342,34 @@ def fp():
 			# correction similar to K-correction to size in a given
 			# band; claimed 4-10% correction in radius.
 
-			# FIXME -- ln or log10 ?
+			log = np.log10
 			
 			# "effective surface brightness"
-			mu0 = (mdev + 2.5*np.log10(2. * np.pi * r0**2) - Kz
-				   - 10.*np.log10(1. + z))
+			mu0 = (mdev + 2.5 * log(2. * np.pi * r0**2) - Kz
+				   - 10.* log(1. + z))
 
 			# "mean surface brightness within effective radius R0
-			I0 = exp(mu0 / -2.5)
+			I0 = 10.**(mu0 / -2.5)
 
-			# absolute mag
-			M = mdev - 5.*np.log10(DLz) - 25. - Kz
+			# Luminosity distance(z) in megaparsecs
+			# DLz = ...
+			# DMz = -5.*np.log10(DLz)
+
+			# R0: want "proper size" aka "angular diameter distance"
+			#  D_L = [10. pc] * 10. ** [DM / 5.]
+			#  D_A = D_L / (1+z)**2
+			# where DM is the distance modulus,
+			#       D_L is the luminosity distance, and
+			#       D_A is the angular diameter distance.
 			
+			# CasJobs:
+			#   fCosmoAbsMag(m, z, COSMO) =
+			#      m - fCosmoDistanceModulus(z, COSMO)
+			DMz = DM(z)
+			
+			# absolute mag
+			M = mdev - DMz - 25. - Kz
+
 		
 		
 
@@ -861,7 +894,9 @@ def find_clusters(tractor, tim):
 	
 if __name__ == '__main__':
 	#find()
-	fp()
+	#fp()
+	#get_dm_table()
+	join()
 	sys.exit(0)
 	test1()
 
