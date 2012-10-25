@@ -73,7 +73,7 @@ import scipy.interpolate
 from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
-from astrometry.util.plotutils import ArcsinhNormalize
+from astrometry.util.plotutils import ArcsinhNormalize, plothist
 from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
 from astrometry.sdss import *
@@ -142,13 +142,69 @@ def get_dm_table():
 	plt.plot(Z, DL, 'k-')
 	plt.savefig('dlz.png')
 
-	#class DistanceModulus(object):
 class LuminosityDistance(object):
 	def __init__(self):
 		T = fits_table('dlz.fits')
 		self.spline = scipy.interpolate.InterpolatedUnivariateSpline(T.z, T.dl)
 	def __call__(self, z):
 		return self.spline(z)
+
+def compile_nyu_vagc():
+	# Compile NYU-VAGC values
+	print 'Compiling NYU-VAGC catalog...'
+	nyudir = 'nyu-vagc-2'
+	Tcat = fits_table(os.path.join(nyudir, 'object_catalog.fits'))
+	#Tcat.about()
+	I = np.flatnonzero((Tcat.sdss_imaging_position != -1) * (Tcat.sdss_spectro_position != -1))
+	print 'Found', len(I), 'rows with spectra and imaging'
+	#Tcat.cut(I)
+	del Tcat
+
+	print 'Reading imaging...'
+	Tim = fits_table(os.path.join(nyudir, 'object_sdss_imaging.fits'),
+					 rows=I, columns=['run','camcol','field','id'])
+	print Tim
+	Tim.about()
+	print 'Reading spec...'
+	Tspec = fits_table(os.path.join(nyudir, 'object_sdss_spectro.fits'),
+					   rows=I, columns=['vdisp','z'])
+	print Tspec
+	Tspec.about()
+	print 'Reading kcorrect...'
+	Tk = fits_table(os.path.join(nyudir, 'kcorrect', 'kcorrect.nearest.model.z0.00.fits'),
+					rows=I, columns=['absmag','kcorrect','z'])
+	print Tk
+	Tk.about()
+	#Tim.cut(I)
+	#Tspec.cut(I)
+	#Tk.cut(I)
+
+	Tnyu = tabledata()
+	Tnyu.sigma = Tspec.vdisp
+	#Tnyu.z = Tspec.z
+	Tnyu.z = Tk.z
+	# abs mag
+	Tnyu.M = Tk.absmag[:,bandnum]
+	# K-correction
+	Tnyu.Kz = Tk.kcorrect[:,bandnum]
+	
+	Tnyu.rdev = np.zeros(len(Tnyu))
+	Tnyu.ab   = np.zeros(len(Tnyu))
+	
+	for run,camcol in np.unique(zip(Tim.run, Tim.camcol)):
+		print 'Run', run, 'camcol', camcol
+		J = np.flatnonzero((Tim.run == run) * (Tim.camcol == camcol))
+		Tc = fits_table(os.path.join(nyudir, 'sdss', 'parameters',
+									 'calibObj-%06i-%i.fits' % (run, camcol)),
+									 columns=['r_dev','ab_dev','field','id'])
+		for j in J:
+			K = np.flatnonzero((Tc.field == Tim.field[j]) * (Tc.id == Tim.id[j]))
+			assert(len(K) == 1)
+			K = K[0]
+			Tnyu.rdev[j] = Tc.r_dev [K, bandnum]
+			Tnyu.ab[j]   = Tc.ab_dev[K, bandnum]
+
+	return Tnyu
 	
 	
 def fp():
@@ -251,9 +307,10 @@ def fp():
 	print 'Spectro classes:', T.clazz[I1]
 	print 'Spectro subclasses:', T.subclass[I1]
 
-	#DM = DistanceModulus()
 	DL = LuminosityDistance()
 
+	log = np.log10
+	
 	TT = []
 	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
 		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
@@ -328,11 +385,6 @@ def fp():
 		Ti = tabledata()
 		for j,col in enumerate(['rdev','ab','mdev','z','Kz', 'sigma']):
 			Ti.set(col, vals[:,j])
-		TT.append(Ti)
-
-	
-	# FP
-	for Ti,nm in zip(TT, ['SDSS', 'SDSS-forced', 'Tractor']):
 
 		# Derived values
 
@@ -343,7 +395,6 @@ def fp():
 		# FIXME -- r0 to R0 correction via a poorly-described
 		# correction similar to K-correction to size in a given
 		# band; claimed 4-10% correction in radius.
-		log = np.log10
 			
 		# "effective surface brightness" [mag/arcsec**2]
 		Ti.mu0 = (Ti.mdev + 2.5 * log(2. * np.pi * Ti.r0**2) - Ti.Kz
@@ -370,102 +421,144 @@ def fp():
 		# R0 [Mpc]
 		Ti.R0 = arcsec2rad(Ti.r0) * Ti.DAz
 
+		TT.append(Ti)
+
+	fn = 'nyu-vagc.fits'
+	if not os.path.exists(fn):
+		Tnyu = compile_nyu_vagc()
+		Tnyu.writeto('nyu-vagc.fits')
+	else:
+		Tnyu = fits_table(fn, lower=False)
+		
+	# -> arcsec
+	Tnyu.rdev *= 0.396
+	Tnyu.r0 = Tnyu.rdev * Tnyu.ab
+	Tnyu.DLz = DL(Tnyu.z)
+	Tnyu.DMz = 5. * log(Tnyu.DLz * 1e6 / 10.)
+	Tnyu.DAz = Tnyu.DLz / ((1.+Tnyu.z)**2)
+	Tnyu.R0 = arcsec2rad(Tnyu.r0) * Tnyu.DAz
+	# hack
+	Tnyu.mdev = Tnyu.M + Tnyu.DMz + Tnyu.Kz
+	Tnyu.mu0 = (Tnyu.mdev + 2.5 * log(2. * np.pi * Tnyu.r0**2)
+				- Tnyu.Kz - 10.* log(1. + Tnyu.z))
+	
+	# FP
+	for Ti,nm in zip(TT + [Tnyu],
+					 ['SDSS', 'SDSS-forced', 'Tractor'] + ['NYU-VAGC']):
 		MM = Ti.M
 		SS = Ti.sigma
 		RR = Ti.R0
 		MU = Ti.mu0
 		
 		h70 = 0.7
+
+		def plot_nyu(x, y, xr, yr):
+			plothist(x, y, range=((xr,yr)), docolorbar=False,
+					 dohot=False)
+			plt.gray()
+		
+		def plot_sdss(x, y, xr, yr):
+			pa = dict(color='k', marker='.', linestyle='None')
+			plt.plot(x, y, **pa)
+			plt.xlim(xr)
+			plt.ylim(yr)
+
+		if nm.startswith('NYU'):
+			plot_pts = plot_nyu
+			ta = dict(color='r', lw=2,)
+		else:
+			plot_pts = plot_sdss
+			ta = dict(color='k', lw=2, alpha=0.5)
 		
 		plt.clf()
-		plt.plot(log(SS), MM - 5.*log(h70), 'k.')
+		yl,yh = [-24,-17]
 		xl,xh = [1.2, 2.6]
+		plot_pts(log(SS), MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 2.) * -3.95 + -19.5, 'k-', alpha=0.5)
+		plt.plot(X, (X - 2.) * -3.95 + -19.5, **ta)
 		plt.xlabel('log(sigma) [km/s]')
 		plt.ylabel('M - 5 log(h) [mag]')
-		plt.ylim(-17,-24)
+		plt.ylim(yh,yl)
 		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 2 fig 4: %s' % nm)
 		ps.savefig()
 
 		plt.clf()
-		plt.plot(log(RR * 1e3 / h70), MM - 5.*log(h70), 'k.')
 		xl,xh = [-1., 1.5]
+		plot_pts(log(RR * 1e3 / h70), MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 0.) * -1.59 + -19.5, 'k-', alpha=0.5)
+		plt.plot(X, (X - 0.) * -1.59 + -19.5, **ta)
 		plt.xlabel('log(R_0) [kpc / h]')
 		plt.ylabel('M - 5 log(h) [mag]')
-		plt.ylim(-17,-24)
+		plt.ylim(yh,yl)
 		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 2 fig 5: %s' % nm)
 		ps.savefig()
 
 		plt.clf()
-		plt.plot(log(RR * 1e3 * SS**2), MM - 5.*log(h70), 'k.')
 		xl,xh = [2., 7.]
+		plot_pts(log(RR * 1e3 * SS**2), MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 4.) * -0.88 + -19.5, 'k-', alpha=0.5)
+		plt.plot(X, (X - 4.) * -0.88 + -19.5, **ta)
 		plt.xlabel('log(R_0 sigma^2) [kpc (km/s)^2]')
 		plt.ylabel('M - 5 log(h) [mag]')
-		plt.ylim(-17,-24)
+		plt.ylim(yh,yl)
 		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 2 fig 7: %s' % nm)
 		ps.savefig()
 
 		plt.clf()
-		plt.plot(log((SS / (RR * 1e3))**2), MM - 5.*log(h70), 'k.')
 		xl,xh = [1., 6.]
+		plot_pts(log((SS / (RR * 1e3))**2), MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 4.) * 1.34 + -19.5, 'k-', alpha=0.5)
+		plt.plot(X, (X - 4.) * 1.34 + -19.5, **ta)
 		plt.xlabel('log((sigma / R_0)^2) [((km/s) / kpc)^2]')
 		plt.ylabel('M - 5 log(h) [mag]')
-		plt.ylim(-17,-24)
-		#plt.xlim(xl,xh)
+		plt.ylim(yh,yl)
+		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 2 fig 8: %s' % nm)
 		ps.savefig()
 
 		plt.clf()
-		plt.plot(MU, MM - 5.*log(h70), 'k.')
 		xl,xh = [15., 24.]
+		plot_pts(MU, MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 19.) * -(3.91/2.5) + -20., 'k-', alpha=0.5)
+		plt.plot(X, (X - 19.) * -(3.91/2.5) + -20., **ta)
 		plt.xlabel('mu_0 [mag/arcsec^2]')
 		plt.ylabel('M - 5 log(h) [mag]')
-		plt.ylim(-17,-24)
+		plt.ylim(yh,yl)
 		plt.xlim(xh,xl)
 		plt.title('Bernardi paper 2 fig 9: %s' % nm)
 		ps.savefig()
 
 
 		plt.clf()
-		plt.plot(MU, log(RR * 1e3 / h70), 'k.')
 		xl,xh = [15., 24.]
 		yl,yh = [-1, 1.5]
+		plot_pts(MU, log(RR * 1e3 / h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 18.) * (0.76/2.5) + 0., 'k-', alpha=0.5)
+		plt.plot(X, (X - 18.) * (0.76/2.5) + 0., **ta)
 		plt.xlabel('mu_0 [mag/arcsec^2]')
 		plt.ylabel('log(R_0) [kpc / h]')
 		plt.ylim(yl,yh)
 		plt.xlim(xh,xl)
 		plt.title('Bernardi paper 2 fig 10: %s' % nm)
 		ps.savefig()
-		
 
 		plt.clf()
-		plt.plot(log(SS) + 0.2*(MU - 19.61)*log(SS) + 0.2*(MU - 19.24),
-				 log(RR * 1e3 / h70), 'k.')
 		xl,xh = [-0.5, 3.5]
 		yl,yh = [-1, 1.5]
+		plot_pts(log(SS) + 0.2*(MU - 19.61)*log(SS) + 0.2*(MU - 19.24),
+				 log(RR * 1e3 / h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 2.) * (1.52) + 0.2, 'k-', alpha=0.5)
+		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
 		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61) log(sigma) + 0.2 (mu_0 - 19.24)')
 		plt.ylabel('log(R_0) [kpc / h]')
 		plt.ylim(yl,yh)
