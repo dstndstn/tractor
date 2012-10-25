@@ -81,9 +81,7 @@ from tractor import sdss as st
 from tractor import *
 from tractor.sdss_galaxy import *
 
-
-def fp():
-
+def get_dm_table():
 	from astrometry.util import casjobs
 	import os
 	casjobs.setup_cookies()
@@ -91,7 +89,6 @@ def fp():
 	username = os.environ['SDSS_CAS_USER']
 	password = os.environ['SDSS_CAS_PASS']
 	cas.login(username, password)
-
 	t = []
 	j = 0
 	dbnames = []
@@ -99,14 +96,11 @@ def fp():
 		if z == 0.:
 			# hahaha, it fails for z=0.
 			continue
-		#t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i, %.4f as Z%04i' % (z, i, z, i))
 		t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))
-		#t.append('dbo.fCosmoDistanceModulus(%.g, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))#, %.4f as z%i' % (z, i, z, i))
  
 		if i % 100 == 0 and len(t):
 			dbname = 'dmz%i' % j
 			sql = 'select into mydb.%s\n' % dbname + ',\n'.join(t) + '\n'
-			#print 'SQL length:', len(sql)
 			jid = cas.submit_query(sql)
 			print 'Submitted job id', jid
 			while True:
@@ -122,12 +116,34 @@ def fp():
 	print 'Output-downloads-delete'
 	dodelete = True
 	outfn = dbname + '.fits'
-	cas.output_and_download(dbnames, [nm + '.fits' for nm in dbnames], dodelete)
-			
-	sys.exit(0)
-			
-	band = 'i'
+	tabfns = [nm + '.fits' for nm in dbnames]
+	cas.output_and_download(dbnames, tabfns, dodelete)
 
+	DM = []
+	Z = []
+	for i in range(10):
+		tabfn = 'dmz%i.fits' % i
+		T = fits_table(tabfn)
+		for c in T.get_columns():
+			print 'col', c
+			if c.startswith('dm') and len(c) == 6:
+				z = float(c[2] + '.' + c[3:])
+				dm = T.get(c)[0]
+				Z.append(z)
+				DM.append(dm)
+	T = tabledata()
+	T.dm = DM
+	T.z = Z
+	T.writeto('dmz.fits')
+	plt.clf()
+	plt.plot(Z, DM, 'k-')
+	plt.savefig('dmz.png')
+	
+
+def fp():
+	band = 'i'
+	ps = PlotSequence('fp')
+	
 	run, camcol, field = 5115, 5, 151
 	bands = [band]
 	roi = (1048,2048, 0,1000)
@@ -172,8 +188,6 @@ def fp():
 	cat2 = [cats[1][j] for j in J2]
 	m1 = np.array([src.getBrightness().getMag(band) for src in cat1])
 	m2 = np.array([src.getBrightness().getMag(band) for src in cat2])
-
-	ps = PlotSequence('fp')
 
 	plt.clf()
 	plt.plot(m1, m2, 'k.')
