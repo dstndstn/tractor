@@ -360,7 +360,7 @@ def fp():
 			# where DM is the distance modulus,
 			#       D_L is the luminosity distance, and
 			#       D_A is the angular diameter distance.
-			DAz = DLz / (1.+z)**2
+			DAz = DLz / ((1.+z)**2)
 
 			# R0 [Mpc]
 			R0 = arcsec2rad(r0) * DAz
@@ -472,7 +472,7 @@ def fp():
 		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61) log(sigma) + 0.2 (mu_0 - 19.24)')
 		plt.ylabel('log(R_0) [kpc / h]')
 		plt.ylim(yl,yh)
-		#plt.xlim(xh,xl)
+		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 3 fig 1: %s' % nm)
 		ps.savefig()
 
