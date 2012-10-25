@@ -74,6 +74,7 @@ from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
 from astrometry.util.plotutils import ArcsinhNormalize
+from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
 from astrometry.sdss import *
 
@@ -93,9 +94,6 @@ def get_dm_table():
 	sqls = []
 	t = []
 	for i,z in enumerate(np.linspace(0., 1., 1001)):
-		#if z == 0.:
-		#	# hahaha, it fails for z=0.
-		#	continue
 		#t.append('dbo.fCosmoDistanceModulus(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DM%04i' % (z,i))
 		t.append('dbo.fCosmoDl(%.4f, 0.3, 0.7, DEFAULT, DEFAULT, 0.7) as DL%04i' % (z,i))
 
@@ -124,41 +122,31 @@ def get_dm_table():
 	tabfns = [nm + '.fits' for nm in dbnames]
 	cas.output_and_download(dbnames, tabfns, dodelete)
 
-	#def join():
-	#tabfns = ['dlz%i.fits' % i for i in [0,1]]
-	#DM = []
 	DL = []
 	Z = []
 	for tabfn in tabfns:
-		#for i in range(10):
-		#tabfn = 'dmz%i.fits' % i
 		print 'Reading', tabfn
 		T = fits_table(tabfn)
 		for c in T.get_columns():
 			print 'col', c
-			#if c.startswith('dm') and len(c) == 6:
 			if c.startswith('dl') and len(c) == 6:
 				z = float(c[2] + '.' + c[3:])
 				Z.append(z)
-				#dm = T.get(c)[0]
-				#DM.append(dm)
 				dl = T.get(c)[0]
 				DL.append(dl)
 	T = tabledata()
-	#T.dm = DM
 	T.dl = DL
 	T.z = Z
-	#T.writeto('dmz.fits')
 	T.writeto('dlz.fits')
 	plt.clf()
 	plt.plot(Z, DL, 'k-')
 	plt.savefig('dlz.png')
-	#plt.savefig('dmz.png')
 
-class DistanceModulus(object):
+	#class DistanceModulus(object):
+class LuminosityDistance(object):
 	def __init__(self):
-		T = fits_table('dmz.fits')
-		self.spline = scipy.interpolate.InterpolatedUnivariateSpline(T.z, T.dm)
+		T = fits_table('dlz.fits')
+		self.spline = scipy.interpolate.InterpolatedUnivariateSpline(T.z, T.dl)
 	def __call__(self, z):
 		return self.spline(z)
 	
@@ -242,7 +230,7 @@ def fp():
 	objs = objs[I]
 	# Only deblended children.
 	objs = objs[(objs.nchild == 0)]
-	objs.about()
+	#objs.about()
 	I3,J3,d = sm.match_radec(T.ra, T.dec, objs.ra, objs.dec, rad,
 							 nearest=True)
 	print 'Got', len(I3), 'matches to photoObj'
@@ -258,12 +246,13 @@ def fp():
 		gal = DevGalaxy(pos, dbright, dshape)
 		cat3.append(gal)
 
-	T.about()
+	# T.about()
 	print 'Spectro types:', T.sourcetype[I1]
 	print 'Spectro classes:', T.clazz[I1]
 	print 'Spectro subclasses:', T.subclass[I1]
 
-	DM = DistanceModulus()
+	#DM = DistanceModulus()
+	DL = LuminosityDistance()
 	
 	# FP
 	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
@@ -314,7 +303,11 @@ def fp():
 		plt.title(nm)
 		ps.savefig()
 
-		r0 = []
+		MM = []
+		SS = []
+		RR = []
+		MU = []
+		
 		for i,src in zip(I,cat):
 			if type(src) is CompositeGalaxy:
 				shape = src.shapeDev
@@ -326,7 +319,9 @@ def fp():
 				
 			# major axis, arcsec
 			rdev = shape.re
+			# b/a axis ratio
 			ab = shape.ab
+			print 'ab', ab
 			mdev = mag.getMag(band)
 
 			z = T.z[i]
@@ -344,7 +339,7 @@ def fp():
 
 			log = np.log10
 			
-			# "effective surface brightness"
+			# "effective surface brightness" [mag/arcsec**2]
 			mu0 = (mdev + 2.5 * log(2. * np.pi * r0**2) - Kz
 				   - 10.* log(1. + z))
 
@@ -352,8 +347,12 @@ def fp():
 			I0 = 10.**(mu0 / -2.5)
 
 			# Luminosity distance(z) in megaparsecs
-			# DLz = ...
-			# DMz = -5.*np.log10(DLz)
+			DLz = DL(z)
+			DMz = 5. * log(DLz * 1e6 / 10.)
+			#DMz = DM(z)
+			
+			# absolute mag
+			M = mdev - DMz - Kz
 
 			# R0: want "proper size" aka "angular diameter distance"
 			#  D_L = [10. pc] * 10. ** [DM / 5.]
@@ -361,18 +360,93 @@ def fp():
 			# where DM is the distance modulus,
 			#       D_L is the luminosity distance, and
 			#       D_A is the angular diameter distance.
+			DAz = DLz / (1.+z)**2
+
+			# R0 [Mpc]
+			R0 = arcsec2rad(r0) * DAz
+
+			# velocity dispersion - sigma [km/s]
+			sigma = T.veldisp[i]
+
+			MM.append(M)
+			SS.append(sigma)
+			RR.append(R0)
+			MU.append(mu0)
 			
-			# CasJobs:
-			#   fCosmoAbsMag(m, z, COSMO) =
-			#      m - fCosmoDistanceModulus(z, COSMO)
-			DMz = DM(z)
-			
-			# absolute mag
-			M = mdev - DMz - 25. - Kz
+		SS = np.array(SS)
+		MM = np.array(MM)
+		RR = np.array(RR)
+		MU = np.array(MU)
+		
+		h70 = 0.7
+		
+		plt.clf()
+		plt.plot(log(SS), MM - 5.*log(h70), 'k.')
+		xl,xh = [1.2, 2.6]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 2.) * -3.95 + -19.5, 'k-', alpha=0.5)
+		plt.xlabel('log(sigma) [km/s]')
+		plt.ylabel('M - 5 log(h) [mag]')
+		plt.ylim(-17,-24)
+		plt.xlim(xl,xh)
+		plt.title('Bernardi paper 2 fig 4: %s' % nm)
+		ps.savefig()
+
+		plt.clf()
+		plt.plot(log(RR * 1e3 / h70), MM - 5.*log(h70), 'k.')
+		xl,xh = [-1., 1.5]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 0.) * -1.59 + -19.5, 'k-', alpha=0.5)
+		plt.xlabel('log(R_0) [kpc / h]')
+		plt.ylabel('M - 5 log(h) [mag]')
+		plt.ylim(-17,-24)
+		plt.xlim(xl,xh)
+		plt.title('Bernardi paper 2 fig 5: %s' % nm)
+		ps.savefig()
+
+		plt.clf()
+		plt.plot(log(RR * 1e3 * SS**2), MM - 5.*log(h70), 'k.')
+		xl,xh = [2., 7.]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 4.) * -0.88 + -19.5, 'k-', alpha=0.5)
+		plt.xlabel('log(R_0 sigma^2) [kpc (km/s)^2]')
+		plt.ylabel('M - 5 log(h) [mag]')
+		plt.ylim(-17,-24)
+		plt.xlim(xl,xh)
+		plt.title('Bernardi paper 2 fig 7: %s' % nm)
+		ps.savefig()
+
+		plt.clf()
+		plt.plot(log((SS / (RR * 1e3))**2), MM - 5.*log(h70), 'k.')
+		xl,xh = [1., 6.]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 4.) * 1.34 + -19.5, 'k-', alpha=0.5)
+		plt.xlabel('log((sigma / R_0)^2) [((km/s) / kpc)^2]')
+		plt.ylabel('M - 5 log(h) [mag]')
+		plt.ylim(-17,-24)
+		#plt.xlim(xl,xh)
+		plt.title('Bernardi paper 2 fig 8: %s' % nm)
+		ps.savefig()
+
+		plt.clf()
+		plt.plot(MU, MM - 5.*log(h70), 'k.')
+		xl,xh = [15., 24.]
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 19.) * -3.91 + -20., 'k-', alpha=0.5)
+		plt.xlabel('mu_0 [mag/arcsec^2]')
+		plt.ylabel('M - 5 log(h) [mag]')
+		plt.ylim(-17,-24)
+		plt.xlim(xh,xl)
+		plt.title('Bernardi paper 2 fig 9: %s' % nm)
+		ps.savefig()
 
 		
-		
-
+			
 def test1():
 	ps = PlotSequence('abell')
 
@@ -894,9 +968,9 @@ def find_clusters(tractor, tim):
 	
 if __name__ == '__main__':
 	#find()
-	#fp()
+	fp()
 	#get_dm_table()
-	join()
+	#join()
 	sys.exit(0)
 	test1()
 
