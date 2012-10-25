@@ -253,10 +253,9 @@ def fp():
 
 	#DM = DistanceModulus()
 	DL = LuminosityDistance()
-	
-	# FP
+
+	TT = []
 	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
-		#
 		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
 		wcs = tim.getWcs()
 		x0,y0 = wcs.x0,wcs.y0
@@ -266,9 +265,7 @@ def fp():
 		origI = I
 		keep = []
 		keepI = []
-		#print 'Matched sources:'
 		for i,src in zip(I,cat):
-			#print '  ', src
 			if type(src) is CompositeGalaxy:
 				devflux = src.brightnessDev.getFlux(band)
 				expflux = src.brightnessExp.getFlux(band)
@@ -303,11 +300,8 @@ def fp():
 		plt.title(nm)
 		ps.savefig()
 
-		MM = []
-		SS = []
-		RR = []
-		MU = []
-		
+		## Compile measurements into tables.
+		vals = []
 		for i,src in zip(I,cat):
 			if type(src) is CompositeGalaxy:
 				shape = src.shapeDev
@@ -316,67 +310,70 @@ def fp():
 			elif type(src) is DevGalaxy:
 				shape = src.shape
 				mag = src.getBrightness()
-				
-			# major axis, arcsec
+			# major axis [arcsec]
 			rdev = shape.re
 			# b/a axis ratio
 			ab = shape.ab
-			print 'ab', ab
+			# deV mag [mag]
 			mdev = mag.getMag(band)
-
+			# redshift
 			z = T.z[i]
-
 			# FIXME!!!  K-correction(z)
 			Kz = 0.
-
-			# Bernardi paper 1, pg 1823, first paragraph.
-			# This seems nutty as squirrel poo to me...
-			r0 = rdev * ab
-
-			# FIXME -- r0 to R0 correction via a poorly-described
-			# correction similar to K-correction to size in a given
-			# band; claimed 4-10% correction in radius.
-
-			log = np.log10
-			
-			# "effective surface brightness" [mag/arcsec**2]
-			mu0 = (mdev + 2.5 * log(2. * np.pi * r0**2) - Kz
-				   - 10.* log(1. + z))
-
-			# "mean surface brightness within effective radius R0
-			I0 = 10.**(mu0 / -2.5)
-
-			# Luminosity distance(z) in megaparsecs
-			DLz = DL(z)
-			DMz = 5. * log(DLz * 1e6 / 10.)
-			#DMz = DM(z)
-			
-			# absolute mag
-			M = mdev - DMz - Kz
-
-			# R0: want "proper size" aka "angular diameter distance"
-			#  D_L = [10. pc] * 10. ** [DM / 5.]
-			#  D_A = D_L / (1+z)**2
-			# where DM is the distance modulus,
-			#       D_L is the luminosity distance, and
-			#       D_A is the angular diameter distance.
-			DAz = DLz / ((1.+z)**2)
-
-			# R0 [Mpc]
-			R0 = arcsec2rad(r0) * DAz
-
 			# velocity dispersion - sigma [km/s]
 			sigma = T.veldisp[i]
-
-			MM.append(M)
-			SS.append(sigma)
-			RR.append(R0)
-			MU.append(mu0)
+			vals.append((rdev, ab, mdev, z, Kz, sigma))
+		vals = np.array(vals)
 			
-		SS = np.array(SS)
-		MM = np.array(MM)
-		RR = np.array(RR)
-		MU = np.array(MU)
+		Ti = tabledata()
+		for j,col in enumerate(['rdev','ab','mdev','z','Kz', 'sigma']):
+			Ti.set(col, vals[:,j])
+		TT.append(Ti)
+
+	
+	# FP
+	for Ti,nm in zip(TT, ['SDSS', 'SDSS-forced', 'Tractor']):
+
+		# Derived values
+
+		# Bernardi paper 1, pg 1823, first paragraph.
+		# This seems nutty as squirrel poo to me...
+		Ti.r0 = Ti.rdev * Ti.ab
+
+		# FIXME -- r0 to R0 correction via a poorly-described
+		# correction similar to K-correction to size in a given
+		# band; claimed 4-10% correction in radius.
+		log = np.log10
+			
+		# "effective surface brightness" [mag/arcsec**2]
+		Ti.mu0 = (Ti.mdev + 2.5 * log(2. * np.pi * Ti.r0**2) - Ti.Kz
+				  - 10.* log(1. + Ti.z))
+
+		# "mean surface brightness within effective radius R0"
+		Ti.I0 = 10.**(Ti.mu0 / -2.5)
+
+		# Luminosity distance(z) [megaparsecs]
+		Ti.DLz = DL(Ti.z)
+		Ti.DMz = 5. * log(Ti.DLz * 1e6 / 10.)
+			
+		# absolute mag
+		Ti.M = Ti.mdev - Ti.DMz - Ti.Kz
+
+		# R0: want "proper size" aka "angular diameter distance"
+		#  D_L = [10. pc] * 10. ** [DM / 5.]
+		#  D_A = D_L / (1+z)**2
+		# where DM is the distance modulus,
+		#       D_L is the luminosity distance, and
+		#       D_A is the angular diameter distance.
+		Ti.DAz = Ti.DLz / ((1.+Ti.z)**2)
+
+		# R0 [Mpc]
+		Ti.R0 = arcsec2rad(Ti.r0) * Ti.DAz
+
+		MM = Ti.M
+		SS = Ti.sigma
+		RR = Ti.R0
+		MU = Ti.mu0
 		
 		h70 = 0.7
 		
