@@ -354,118 +354,6 @@ def fp():
 
 	log = np.log10
 	
-	TT = []
-	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
-		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
-		wcs = tim.getWcs()
-		x0,y0 = wcs.x0,wcs.y0
-		xy0 = np.array([wcs.positionToPixel(src.getPosition())
-						for src in cat])
-		
-		origI = I
-		keep = []
-		keepI = []
-		for i,src in zip(I,cat):
-			if type(src) is CompositeGalaxy:
-				devflux = src.brightnessDev.getFlux(band)
-				expflux = src.brightnessExp.getFlux(band)
-				df = devflux / (devflux + expflux)
-				print '  dev fraction', df
-				if df > 0.8:
-					keep.append(src)
-					keepI.append(i)
-			if type(src) in [DevGalaxy]:
-				keep.append(src)
-				keepI.append(i)
-		I,cat = keepI,keep
-		m1 = np.array([src.getBrightness().getMag(band) for src in cat])
-		xy1 = np.array([wcs.positionToPixel(src.getPosition())
-						for src in cat])
-
-		plt.clf()
-		plt.imshow(tim.getImage(), **imc)
-		ax = plt.axis()
-		plt.gray()
-		plt.colorbar()
-		p1 = plt.plot(xy0[:,0]+x0, xy0[:,1]+y0, 'o', mec='m', mfc='none',
-					  ms=8, mew=1)
-		p2 = plt.plot(xy1[:,0]+x0, xy1[:,1]+y0, 'o', mec='r', mfc='none',
-					  ms=10, mew=2)
-		plt.legend((p1[0],p2[0]), ('Spectro sources', 'deV profiles'))
-		for (x,y),i in zip(xy0, origI):
-			plt.text(x+x0, y+y0 + 20,
-					 '%.03f' % T.z[i], color='r', size=8,
-				ha='center', va='bottom')
-		plt.axis(ax)
-		plt.title(nm)
-		ps.savefig()
-
-		## Compile measurements into tables.
-		vals = []
-		for i,src in zip(I,cat):
-			if type(src) is CompositeGalaxy:
-				shape = src.shapeDev
-				# this is total exp + dev
-				mag = src.getBrightness()
-			elif type(src) is DevGalaxy:
-				shape = src.shape
-				mag = src.getBrightness()
-			# major axis [arcsec]
-			rdev = shape.re
-			# b/a axis ratio
-			ab = shape.ab
-			# deV mag [mag]
-			mdev = mag.getMag(band)
-			# redshift
-			z = T.z[i]
-			# FIXME!!!  K-correction(z)
-			Kz = 0.
-			# velocity dispersion - sigma [km/s]
-			sigma = T.veldisp[i]
-			vals.append((rdev, ab, mdev, z, Kz, sigma))
-		vals = np.array(vals)
-			
-		Ti = tabledata()
-		for j,col in enumerate(['rdev','ab','mdev','z','Kz', 'sigma']):
-			Ti.set(col, vals[:,j])
-
-		# Derived values
-
-		# Bernardi paper 1, pg 1823, first paragraph.
-		# This seems nutty as squirrel poo to me...
-		#Ti.r0 = Ti.rdev * Ti.ab
-		Ti.r0 = Ti.rdev * np.sqrt(Ti.ab)
-
-		# FIXME -- r0 to R0 correction via a poorly-described
-		# correction similar to K-correction to size in a given
-		# band; claimed 4-10% correction in radius.
-			
-		# "effective surface brightness" [mag/arcsec**2]
-		Ti.mu0 = (Ti.mdev + 2.5 * log(2. * np.pi * Ti.r0**2) - Ti.Kz
-				  - 10.* log(1. + Ti.z))
-
-		# "mean surface brightness within effective radius R0"
-		Ti.I0 = 10.**(Ti.mu0 / -2.5)
-
-		# Luminosity distance(z) [megaparsecs]
-		Ti.DLz = DL(Ti.z)
-		Ti.DMz = 5. * log(Ti.DLz * 1e6 / 10.)
-
-		# absolute mag
-		Ti.M = Ti.mdev - Ti.DMz - Ti.Kz
-
-		# R0: want "proper size" aka "angular diameter distance"
-		#  D_L = [10. pc] * 10. ** [DM / 5.]
-		#  D_A = D_L / (1+z)**2
-		# where DM is the distance modulus,
-		#       D_L is the luminosity distance, and
-		#       D_A is the angular diameter distance.
-		Ti.DAz = Ti.DLz / ((1.+Ti.z)**2)
-
-		# R0 [Mpc]
-		Ti.R0 = arcsec2rad(Ti.r0) * Ti.DAz
-
-		TT.append(Ti)
 
 	cutfn = 'nyu-vagc-cut.fits'
 	if not os.path.exists(cutfn):
@@ -549,7 +437,8 @@ def fp():
 	#print 'ADDING MAG FUDGE OF', MFUDGE
 	#Tnyu.mdev += MFUDGE
 	#Tnyu.M = Tnyu.mdev - Tnyu.DMz - Tnyu.Kz
-	
+	#print 'M2 - M now:', np.mean(Tnyu.M2 - Tnyu.M)
+
 	Tnyu.mu0 = (Tnyu.mdev + 2.5 * log(2. * np.pi * Tnyu.r0**2)
 				- Tnyu.Kz - 10.* log(1. + Tnyu.z))
 	
@@ -563,12 +452,28 @@ def fp():
 	plt.xlabel('K-correction')
 	ps.savefig()
 
+	# Build a spline approximation to the median K-correction in the NYU-VAGC
+	edges = np.arange(0, 0.3, 0.01)
+	xx,yy = [],[]
+	for e0,e1 in zip(edges[:-1], edges[1:]):
+		I = np.flatnonzero((Tnyu.z >= e0) * (Tnyu.z < e1))
+		if len(I) == 0:
+			continue
+		mid = (e0 + e1) / 2.
+		kmed = np.median(Tnyu.Kz[I])
+		xx.append(mid)
+		yy.append(kmed)
+	NYUK = scipy.interpolate.InterpolatedUnivariateSpline(xx,yy)
+		
 	plt.clf()
 	pha = dict(docolorbar=False,
 			   dohot=False, imshowargs=dict(cmap=antigray))
 	plothist(Tnyu.z, Tnyu.Kz, range=((0,0.3),(-0.1,0.4)), **pha)
+	zz = np.linspace(0, 0.3, 300)
+	plt.plot(zz, NYUK(zz), 'r-')
 	plt.xlabel('z')
 	plt.ylabel('K-correction')
+	plt.axis([0, 0.3, -0.1, 0.4])
 	ps.savefig()
 
 	plt.clf()
@@ -631,7 +536,7 @@ def fp():
 	plt.subplot(3,2,6)
 	plt.yticks([])
 	plt.twinx()
-	plt.hist(Tnyu.ab, 100, range=(0,1))
+	plt.hist(Tnyu.ab, 50, range=(0,1))
 	plt.xlabel('ab')
 	ps.savefig()
 
@@ -692,20 +597,131 @@ def fp():
 		plt.ylabel('DA [Mpc/radian ?]')
 		plt.xlabel('z')
 		ps.savefig()
-	
-	# FP
-	for Ti,nm in zip([Tnyu] + TT,
-					 ['NYU-VAGC'] + ['SDSS', 'SDSS-forced', 'Tractor']):
-		if nm == 'SDSS':
-			continue
-		#if not nm.startswith('NYU'):
-		#	continue
 
+
+
+	TT = []
+	for I,cat,nm in [(I1,cat1,'SDSS'),(I3,cat3,'SDSS-forced'),(I2,cat2,'Tractor')]:
+		m0 = np.array([src.getBrightness().getMag(band) for src in cat])
+		wcs = tim.getWcs()
+		x0,y0 = wcs.x0,wcs.y0
+		xy0 = np.array([wcs.positionToPixel(src.getPosition())
+						for src in cat])
+		
+		origI = I
+		keep = []
+		keepI = []
+		for i,src in zip(I,cat):
+			if type(src) is CompositeGalaxy:
+				devflux = src.brightnessDev.getFlux(band)
+				expflux = src.brightnessExp.getFlux(band)
+				df = devflux / (devflux + expflux)
+				print '  dev fraction', df
+				if df > 0.8:
+					keep.append(src)
+					keepI.append(i)
+			if type(src) in [DevGalaxy]:
+				keep.append(src)
+				keepI.append(i)
+		I,cat = keepI,keep
+		m1 = np.array([src.getBrightness().getMag(band) for src in cat])
+		xy1 = np.array([wcs.positionToPixel(src.getPosition())
+						for src in cat])
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		ax = plt.axis()
+		plt.gray()
+		plt.colorbar()
+		p1 = plt.plot(xy0[:,0]+x0, xy0[:,1]+y0, 'o', mec='m', mfc='none',
+					  ms=8, mew=1)
+		p2 = plt.plot(xy1[:,0]+x0, xy1[:,1]+y0, 'o', mec='r', mfc='none',
+					  ms=10, mew=2)
+		plt.legend((p1[0],p2[0]), ('Spectro sources', 'deV profiles'))
+		for (x,y),i in zip(xy0, origI):
+			plt.text(x+x0, y+y0 + 20,
+					 '%.03f' % T.z[i], color='r', size=8,
+				ha='center', va='bottom')
+		plt.axis(ax)
+		plt.title(nm)
+		ps.savefig()
+
+		## Compile measurements into tables.
+		vals = []
+		for i,src in zip(I,cat):
+			if type(src) is CompositeGalaxy:
+				shape = src.shapeDev
+				# this is total exp + dev
+				mag = src.getBrightness()
+			elif type(src) is DevGalaxy:
+				shape = src.shape
+				mag = src.getBrightness()
+			# major axis [arcsec]
+			rdev = shape.re
+			# b/a axis ratio
+			ab = shape.ab
+			# deV mag [mag]
+			mdev = mag.getMag(band)
+			# redshift
+			z = T.z[i]
+			# FIXME!!!  K-correction(z)
+			#Kz = 0.
+			Kz = NYUK(z)
+
+			# velocity dispersion - sigma [km/s]
+			sigma = T.veldisp[i]
+			vals.append((rdev, ab, mdev, z, Kz, sigma))
+		vals = np.array(vals)
+			
+		Ti = tabledata()
+		for j,col in enumerate(['rdev','ab','mdev','z','Kz', 'sigma']):
+			Ti.set(col, vals[:,j])
+
+		# Derived values
+
+		# Bernardi paper 1, pg 1823, first paragraph.
+		# This seems nutty as squirrel poo to me...
+		#Ti.r0 = Ti.rdev * Ti.ab
+		Ti.r0 = Ti.rdev * np.sqrt(Ti.ab)
+
+		# FIXME -- r0 to R0 correction via a poorly-described
+		# correction similar to K-correction to size in a given
+		# band; claimed 4-10% correction in radius.
+			
+		# "effective surface brightness" [mag/arcsec**2]
+		Ti.mu0 = (Ti.mdev + 2.5 * log(2. * np.pi * Ti.r0**2) - Ti.Kz
+				  - 10.* log(1. + Ti.z))
+
+		# "mean surface brightness within effective radius R0"
+		Ti.I0 = 10.**(Ti.mu0 / -2.5)
+
+		# Luminosity distance(z) [megaparsecs]
+		Ti.DLz = DL(Ti.z)
+		Ti.DMz = 5. * log(Ti.DLz * 1e6 / 10.)
+
+		# absolute mag
+		Ti.M = Ti.mdev - Ti.DMz - Ti.Kz
+
+		# R0: want "proper size" aka "angular diameter distance"
+		#  D_L = [10. pc] * 10. ** [DM / 5.]
+		#  D_A = D_L / (1+z)**2
+		# where DM is the distance modulus,
+		#       D_L is the luminosity distance, and
+		#       D_A is the angular diameter distance.
+		Ti.DAz = Ti.DLz / ((1.+Ti.z)**2)
+		# R0 [Mpc]
+		Ti.R0 = arcsec2rad(Ti.r0) * Ti.DAz
+		TT.append(Ti)
+
+		
+	# FP
+	for Ti,nm in zip(TT + [Tnyu],
+					 ['SDSS', 'SDSS-forced', 'Tractor'] + ['NYU-VAGC']):
 		MM = Ti.M
 		SS = Ti.sigma
 		RR = Ti.R0
 		MU = Ti.mu0
-
+		
 		def plot_nyu(x, y, xr, yr):
 			plothist(x, y, range=((xr,yr)), docolorbar=False,
 					 dohot=False, imshowargs=dict(cmap=antigray))
@@ -728,7 +744,29 @@ def fp():
 			#ta = dict(color='k', lw=2, alpha=0.5)
 			#fa = dict(color='b', lw=2, alpha=0.5)
 			#ga = dict(color='g', lw=2, alpha=0.5)
-		
+
+		plt.clf()
+		xl,xh = [1.25, 3.75]
+		yl,yh = [-0.5, 2.0]
+		plot_pts(log(SS) + 0.2*(MU - 19.61),
+				 log(RR * 1e3 / h70), (xl,xh), (yl,yh))
+		X = np.array([xl,xh])
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
+		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
+		plt.ylabel('log(R_0) [kpc / h]')
+		#plt.axhline(0.2, **la)
+		#plt.axhline(1.7, **la)
+		#plt.axvline(2., **la)
+		#plt.axvline(3., **la)
+		plt.ylim(yl,yh)
+		plt.xlim(xl,xh)
+		plt.title('Bernardi paper 3 fig 1: %s' % nm)
+		ps.savefig()
+
+		if not nm.startswith('NYU'):
+			continue
+			
 		plt.clf()
 		yl,yh = [-24,-17]
 		#xl,xh = [1.2, 2.6]
@@ -862,28 +900,6 @@ def fp():
 		plt.title('Bernardi paper 2 fig 10: %s' % nm)
 		ps.savefig()
 
-		plt.clf()
-		#xl,xh = [-0.5, 3.5]
-		xl,xh = [1.25, 3.75]
-		#yl,yh = [-1, 1.5]
-		yl,yh = [-0.5, 2.0]
-		plot_pts(log(SS) + 0.2*(MU - 19.61),
-				 log(RR * 1e3 / h70), (xl,xh), (yl,yh))
-		X = np.array([xl,xh])
-		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
-		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
-		plt.ylabel('log(R_0) [kpc / h]')
-
-		plt.axhline(0.2, **la)
-		plt.axhline(1.7, **la)
-		plt.axvline(2., **la)
-		plt.axvline(3., **la)
-
-		plt.ylim(yl,yh)
-		plt.xlim(xl,xh)
-		plt.title('Bernardi paper 3 fig 1: %s' % nm)
-		ps.savefig()
 
 		
 			
