@@ -83,6 +83,7 @@ from tractor import sdss as st
 from tractor import *
 from tractor.sdss_galaxy import *
 
+
 def get_dm_table():
 	from astrometry.util import casjobs
 	import os
@@ -1421,12 +1422,69 @@ def find_clusters(tractor, tim):
 		plt.colorbar()
 		ps.savefig()
 
+
+def runlots():
+	cmap = {'_RAJ2000':'ra', '_DEJ2000':'dec', 'ACOS':'aco'}
+	T1 = fits_table('abell.fits', column_map=cmap)
+	T2 = fits_table('abell2.fits', column_map=cmap)
+	T3 = fits_table('abell3.fits', column_map=cmap)
+	T = merge_tables([T1, T2, T3])
+
+	# T = fits_table('maxbcg.fits')
+	# I = np.argsort(-T.ngals)
+	# T = T[I]
+	# print T.ngals[:10]
+
+	I = np.argsort(T.m10)
+	T = T[I]
+	for ai in range(len(T)):
+		Ti = T[ai]
+		print 'Abell', Ti.aco, 'with m10', Ti.m10
+		#rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, contains=True,
+		#						tablefn='dr9fields.fits')
+
+		# Totally arbitrary radius in arcmin
+		R = 5.
+		rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, radius=R,
+								tablefn='dr9fields.fits')
+		if len(rcf) == 0:
+			continue
+		print 'RCF', rcf
+
+		getim = st.get_tractor_image_dr9
+		getsrc = st.get_tractor_sources_dr9
+		
+		for run,camcol,field,nil,nil in rcf:
+			print 'RCF', run, camcol, field
+			for bandname in ['g','r','i']:
+				print 'Band', bandname
+				#
+				S = (R * 60.) / 0.396
+				tim,tinf = getim(run, camcol, field, bandname,
+								 roiradecsize=(Ti.ra, Ti.dec, S))
+				if tim.shape == (0,0):
+					print 'Tim shape', tim.shape
+					break
+				roi = tinf.get('roi', None)
+				sources = getsrc(run, camcol, field, bandname,
+								 roi=roi)
+				tractor = Tractor([tim], sources)
+				#mod = tractor.getModelImage(0)
+
+				tractor.freezeParam('images')
+				tractor.catalog.freezeAllRecursive()
+				tractor.catalog.thawPathsTo(band)
+				
+				
+		
+	
 	
 if __name__ == '__main__':
 	#find()
-	fp()
+	#fp()
 	#get_dm_table()
 	#join()
+	runlots()
 	sys.exit(0)
 	test1()
 
