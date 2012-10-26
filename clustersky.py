@@ -166,7 +166,7 @@ def compile_nyu_vagc(bandnum):
 	Tim.about()
 	print 'Reading spec...'
 	Tspec = fits_table(os.path.join(nyudir, 'object_sdss_spectro.fits'),
-					   rows=I, columns=['vdisp','z', 'objtype',
+					   rows=I, columns=['vdisp','z', 'sn_median', 'zwarning', 'objtype',
 										'class', 'subclass'],
 						column_map={'class':'clazz'})
 	print Tspec
@@ -183,7 +183,9 @@ def compile_nyu_vagc(bandnum):
 	Tnyu.objtype = Tspec.objtype
 	Tnyu.clazz = Tspec.clazz
 	Tnyu.subclass = Tspec.subclass
-
+	Tnyu.sn_median = Tspec.sn_median
+	Tnyu.zwarning = Tspec.zwarning
+	
 	#Tnyu.z = Tspec.z
 	Tnyu.z = Tk.z
 	# abs mag
@@ -196,15 +198,22 @@ def compile_nyu_vagc(bandnum):
 	Tnyu.rdev = np.zeros(len(Tnyu))
 	Tnyu.ab   = np.zeros(len(Tnyu))
 
+	Tnyu.rdev_g = np.zeros(len(Tnyu))
+	Tnyu.rdev_r = np.zeros(len(Tnyu))
+	Tnyu.rdev_z = np.zeros(len(Tnyu))
+	
 	Tnyu.r90i = np.zeros(len(Tnyu))
 	Tnyu.r50i = np.zeros(len(Tnyu))
 	Tnyu.exp_lnl = np.zeros(len(Tnyu))
 	Tnyu.dev_lnl = np.zeros(len(Tnyu))
 	Tnyu.prob_psf = np.zeros(len(Tnyu))
 	Tnyu.fracpsf = np.zeros(len(Tnyu))
-	#Tnyu.devflux = np.zeros(len(Tnyu))
 	
 	iband = band_index('i')
+
+	gband = band_index('g')
+	rband = band_index('r')
+	zband = band_index('z')
 	
 	for run,camcol in np.unique(zip(Tim.run, Tim.camcol)):
 		print 'Run', run, 'camcol', camcol
@@ -221,13 +230,16 @@ def compile_nyu_vagc(bandnum):
 			Tnyu.rdev[j] = Tc.r_dev [K, bandnum]
 			Tnyu.ab[j]   = Tc.ab_dev[K, bandnum]
 
+			Tnyu.rdev_g[j] = Tc.r_dev [K, gband]
+			Tnyu.rdev_r[j] = Tc.r_dev [K, rband]
+			Tnyu.rdev_z[j] = Tc.r_dev [K, zband]
+			
 			Tnyu.r90i[j] = Tc.petror90[K, iband]
 			Tnyu.r50i[j] = Tc.petror50[K, iband]
 			Tnyu.exp_lnl[j] = Tc.exp_lnl[K, bandnum]
 			Tnyu.dev_lnl[j] = Tc.dev_lnl[K, bandnum]
 			Tnyu.prob_psf[j] = Tc.prob_psf[K, bandnum]
 			Tnyu.fracpsf[j] = Tc.fracpsf[K, bandnum]
-			#Tnyu.devflux[j] = Tc.devflux[K, bandnum]
 			
 	return Tnyu
 	
@@ -449,32 +461,50 @@ def fp():
 
 		TT.append(Ti)
 
-	fn = 'nyu-vagc.fits'
-	if not os.path.exists(fn):
-		Tnyu = compile_nyu_vagc(bandnum)
-		Tnyu.writeto('nyu-vagc.fits')
+	cutfn = 'nyu-vagc-cut.fits'
+	if not os.path.exists(cutfn):
+		fn = 'nyu-vagc.fits'
+		if not os.path.exists(fn):
+			Tnyu = compile_nyu_vagc(bandnum)
+			Tnyu.writeto(fn)
+		else:
+			Tnyu = fits_table(fn, lower=False)
+
+		#Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 1.))
+		# Bernardi-like cuts
+		print 'Got', len(Tnyu), 'NYU-VAGC objects'
+		Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 0.3))
+		print 'Cut on redshift:', len(Tnyu)
+		Tnyu.cut(Tnyu.clazz == 'GALAXY')
+		print 'Cut on GALAXY:', len(Tnyu)
+		print 'subclasses:', np.unique(Tnyu.subclass)
+		#Tnyu.cut(Tnyu.subclass == '')
+		#print 'Cut on plain GALAXY:', len(Tnyu)
+		Tnyu.cut(Tnyu.r90i / Tnyu.r50i > 2.5)
+		print 'Cut on concentration index:', len(Tnyu)
+		Tnyu.cut(Tnyu.dev_lnl > Tnyu.exp_lnl)
+		print 'Cut on deV lnl:', len(Tnyu)
+		Tnyu.cut(Tnyu.sn_median > 10.)
+		print 'Cut on SN:', len(Tnyu)
+		Tnyu.writeto(cutfn)
 	else:
-		Tnyu = fits_table(fn, lower=False)
-
-	#Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 1.))
-	# Bernardi-like cuts
-	print 'Got', len(Tnyu), 'NYU-VAGC objects'
-	Tnyu.cut((Tnyu.z > 0) * (Tnyu.z <= 0.3))
-	print 'Cut on redshift:', len(Tnyu)
-	Tnyu.cut(Tnyu.clazz == 'GALAXY')
-	print 'Cut on GALAXY:', len(Tnyu)
-	print 'subclasses:', np.unique(Tnyu.subclass)
-	Tnyu.cut(Tnyu.subclass == '')
-	print 'Cut on plain GALAXY:', len(Tnyu)
-
-	Tnyu.cut(Tnyu.r90i / Tnyu.r50i > 2.5)
-	print 'Cut on concentration index:', len(Tnyu)
-	Tnyu.cut(Tnyu.dev_lnl > Tnyu.exp_lnl)
-	print 'Cut on deV lnl:', len(Tnyu)
-	
+		Tnyu = fits_table(cutfn, lower=False)
+		
 	# -> arcsec
-	Tnyu.rdev *= 0.396
+	pixscale = 0.396
 
+	Tnyu.rdev *= pixscale
+	Tnyu.rdev_g *= pixscale
+	Tnyu.rdev_r *= pixscale
+	Tnyu.rdev_z *= pixscale
+
+	### HACK -- unexplained scale difference between us and Bernardi.
+	FUDGE = 1. / 0.85
+	Tnyu.rdev *= FUDGE
+	Tnyu.rdev_g *= FUDGE
+	Tnyu.rdev_r *= FUDGE
+	Tnyu.rdev_z *= FUDGE
+	
 	Tnyu.DLz = DL(Tnyu.z)
 	Tnyu.DMz = 5. * log(Tnyu.DLz * 1e6 / 10.)
 	Tnyu.DAz = Tnyu.DLz / ((1.+Tnyu.z)**2)
@@ -495,9 +525,13 @@ def fp():
 	# hack
 	#Tnyu.mdev = Tnyu.M + Tnyu.DMz + Tnyu.Kz
 
+	# absmag from Kcorrect file
+	Tnyu.M2 = Tnyu.M
+	
 	Tnyu.mdev = 22.5 - 2.5*log(Tnyu.devflux)
 	Tnyu.M = Tnyu.mdev - Tnyu.DMz - Tnyu.Kz
 
+	
 	Tnyu.mu0 = (Tnyu.mdev + 2.5 * log(2. * np.pi * Tnyu.r0**2)
 				- Tnyu.Kz - 10.* log(1. + Tnyu.z))
 
@@ -508,10 +542,36 @@ def fp():
 	ps.savefig()
 
 	plt.clf()
+	plt.hist(Tnyu.Kz, 100)
+	plt.xlabel('K-correction')
+	ps.savefig()
+
+	plt.clf()
+	plothist(Tnyu.z, Tnyu.Kz, range=((0,0.3),(-0.1,0.4)))
+	plt.xlabel('z')
+	plt.ylabel('K-correction')
+	ps.savefig()
+
+	plt.clf()
+	plt.subplot(2,2,1)
+	plt.hist(Tnyu.rdev_g, 100, range=(0, 10))
+	plt.xlabel('g (mean: %g)' % np.mean(Tnyu.rdev_g))
+	plt.subplot(2,2,2)
+	plt.hist(Tnyu.rdev_r, 100, range=(0, 10))
+	plt.xlabel('r (mean: %g)' % np.mean(Tnyu.rdev_r))
+	plt.subplot(2,2,3)
+	plt.hist(Tnyu.rdev, 100, range=(0, 10))
+	plt.xlabel('%s (mean: %g)' % (band, np.mean(Tnyu.rdev)))
+	plt.subplot(2,2,4)
+	plt.hist(Tnyu.rdev_z, 100, range=(0, 10))
+	plt.xlabel('z (mean: %g)' % np.mean(Tnyu.rdev_z))
+	ps.savefig()
+	
+	plt.clf()
 	plt.hist(Tnyu.ab, 100, range=(0,1))
 	plt.xlabel('ab')
 	ps.savefig()
-	
+
 	pha = dict(docolorbar=False,
 			   dohot=False, imshowargs=dict(cmap=antigray))
 	plt.clf()
@@ -521,11 +581,18 @@ def fp():
 	ps.savefig()
 
 	plt.clf()
-	plothist(Tnyu.ab, Tnyu.rdev, range=((0,1),(0, 10)), **pha)
+	plothist(Tnyu.ab, Tnyu.rdev, range=((0,1),(-1, 11)), **pha)
 	plt.xlabel('ab')
 	plt.ylabel('r_dev (arcsec)')
 	ps.savefig()
 
+	plt.clf()
+	plt.plot(Tnyu.ab, Tnyu.rdev, 'k,')
+	plt.xlabel('ab')
+	plt.ylabel('r_dev (arcsec)')
+	plt.ylim(-1, 11)
+	ps.savefig()
+	
 	plt.clf()
 	I = (Tnyu.R0 > 0)
 	plothist(Tnyu.ab[I], log(Tnyu.R0[I] * 1e3),
@@ -535,55 +602,60 @@ def fp():
 	plt.ylabel('log R_0')
 	ps.savefig()
 
-
-	for nm,R0 in [('r_dev * ab', Tnyu.R0a),
-				  ('r_dev * sqrt(ab)', Tnyu.R0b),
-				  ('r_dev', Tnyu.R0c)]:
-		plt.clf()
-		I = (R0 > 0)
-		plothist(Tnyu.ab[I], log(R0[I] * 1e3),
-				 range=((0,1),(-0.7, 1.7)), **pha)
-		plt.xlabel('ab')
-		plt.ylabel('log R_0 [kpc]')
-		plt.title('r0 = %s' % nm)
-		ps.savefig()
-	
-	
-	plt.clf()
-	zz = np.linspace(0., 1., 1000)
-	DLz = DL(zz)
-	plt.plot(zz, DLz, 'k-')
-	plt.ylabel('DL [Mpc]')
-	plt.xlabel('z')
-	ps.savefig()
-
-	plt.clf()
-	DMz = 5. * log(DLz * 1e6 / 10.)
-	plt.plot(zz, DMz, 'k-')
-	plt.ylabel('DM [mag]')
-	plt.xlabel('z')
-	ps.savefig()
-
-	plt.clf()
-	DAz = DLz / ((1. + zz)**2)
-	plt.plot(zz, DAz, 'k-')
-	plt.ylabel('DA [Mpc/radian ?]')
-	plt.xlabel('z')
-	ps.savefig()
+	if False:
+		for nm,R0 in [('r_dev * ab', Tnyu.R0a),
+					  ('r_dev * sqrt(ab)', Tnyu.R0b),
+					  ('r_dev', Tnyu.R0c)]:
+			plt.clf()
+			I = (R0 > 0)
+			plothist(Tnyu.ab[I], log(R0[I] * 1e3),
+					 range=((0,1),(-0.7, 1.7)), **pha)
+			plt.xlabel('ab')
+			plt.ylabel('log R_0 [kpc]')
+			plt.title('r0 = %s' % nm)
+			ps.savefig()
+			
+			
+			plt.clf()
+			zz = np.linspace(0., 1., 1000)
+			DLz = DL(zz)
+			plt.plot(zz, DLz, 'k-')
+			plt.ylabel('DL [Mpc]')
+			plt.xlabel('z')
+			ps.savefig()
+			
+			plt.clf()
+			DMz = 5. * log(DLz * 1e6 / 10.)
+			plt.plot(zz, DMz, 'k-')
+			plt.ylabel('DM [mag]')
+			plt.xlabel('z')
+			ps.savefig()
+			
+			plt.clf()
+			DAz = DLz / ((1. + zz)**2)
+			plt.plot(zz, DAz, 'k-')
+			plt.ylabel('DA [Mpc/radian ?]')
+			plt.xlabel('z')
+			ps.savefig()
 	
 	
 	
 	# FP
 	for Ti,nm in zip(TT + [Tnyu],
 					 ['SDSS', 'SDSS-forced', 'Tractor'] + ['NYU-VAGC']):
-		if nm == 'SDSS':
+		#if nm == 'SDSS':
+		#	continue
+		if not nm.startswith('NYU'):
 			continue
 		MM = Ti.M
 		SS = Ti.sigma
 		RR = Ti.R0
 		MU = Ti.mu0
-		
+
 		h70 = 0.7
+
+		#LL = (MM - 5.*log(h70)) / -2.5
+
 
 		def plot_nyu(x, y, xr, yr):
 			plothist(x, y, range=((xr,yr)), docolorbar=False,
@@ -595,27 +667,84 @@ def fp():
 			plt.xlim(xr)
 			plt.ylim(yr)
 
+		la = dict(color='k', alpha=0.25)
+		ta = dict(color='r', lw=2,)
+		fa = dict(color='b', lw=2,)
+		ga = dict(color='g', lw=2,)
+			
 		if nm.startswith('NYU'):
 			plot_pts = plot_nyu
-			ta = dict(color='r', lw=2,)
 		else:
 			plot_pts = plot_sdss
-			ta = dict(color='k', lw=2, alpha=0.5)
+			#ta = dict(color='k', lw=2, alpha=0.5)
+			#fa = dict(color='b', lw=2, alpha=0.5)
+			#ga = dict(color='g', lw=2, alpha=0.5)
 		
 		plt.clf()
 		yl,yh = [-24,-17]
-		xl,xh = [1.2, 2.6]
+		#xl,xh = [1.2, 2.6]
+		xl,xh = [1.8, 2.8]
+
+		xx = log(SS)
+		yy = MM - 5.*log(h70)
+		I = (np.isfinite(xx) * np.isfinite(yy))
+		xx = xx[I]
+		yy = yy[I]
+		mx = np.mean(xx)
+		my = np.mean(yy)
+		A = np.zeros((len(xx),2))
+		A[:,0] = 1.
+		A[:,1] = xx-mx
+		b,res,rank,s = np.linalg.lstsq(A, yy-my)
+		print 'b', b
+		m = b[1]
+		b = b[0]
+		A[:,1] = yy-my
+		b2,res,rank,s = np.linalg.lstsq(A, xx-mx)
+		print 'b2', b2
+		m2 = b2[1]
+		b2 = b2[0]
+		
 		plot_pts(log(SS), MM - 5.*log(h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
+		Y = np.array([yl,yh])
 		# eyeballed Bernardi relation for i-band
 		plt.plot(X, (X - 2.) * -3.95*2.5 + -19.5, **ta)
+		plt.plot(X, (X - 2.) * -3.95 + -19.5, **ta)
+		plt.plot(X, (X-mx)*m + b + my, **fa)
+		plt.plot((Y-my)*m2 + b2 + mx, Y, **ga)
 		plt.xlabel('log(sigma) [km/s]')
 		plt.ylabel('M - 5 log(h) [mag]')
+		plt.axvline(2., **la)
+		plt.axvline(2.4, **la)
+		plt.axhline(-19.5, **la)
+		plt.axvline(-23.5, **la)
 		plt.ylim(yh,yl)
 		plt.xlim(xl,xh)
 		plt.title('Bernardi paper 2 fig 4: %s' % nm)
 		ps.savefig()
 
+		if hasattr(Ti, 'M2'):
+			plt.clf()
+			plot_pts(log(SS), Ti.M2 - 5.*log(h70), (xl,xh), (yl,yh))
+			X = np.array([xl,xh])
+			# eyeballed Bernardi relation for i-band
+			#plt.plot(X, (X - 2.) * -3.95*2.5 + -19.5, **ta)
+			plt.plot(X, (X - 2.) * -3.95 + -19.5, **ta)
+			plt.xlabel('log(sigma) [km/s]')
+			plt.ylabel('M - 5 log(h) [mag]')
+			plt.ylim(yh,yl)
+			plt.xlim(xl,xh)
+			plt.title('Bernardi paper 2 fig 4: %s' % nm)
+			ps.savefig()
+
+		plt.clf()
+		yl,yh = min(LL),max(LL)
+		plot_pts(log(SS), LL, (xl,xh), (yl,yh))
+		plt.xlabel('log(sigma) [km/s]')
+		plt.ylabel('LL')
+		ps.savefig()
+		
 		plt.clf()
 		xl,xh = [-1., 1.5]
 		plot_pts(log(RR * 1e3 / h70), MM - 5.*log(h70), (xl,xh), (yl,yh))
@@ -695,7 +824,6 @@ def fp():
 		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
 		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61) log(sigma) + 0.2 (mu_0 - 19.24)')
 		plt.ylabel('log(R_0) [kpc / h]')
-		la = dict(color='k', alpha=0.25)
 
 		plt.axhline(0.2, **la)
 		plt.axhline(1.7, **la)
