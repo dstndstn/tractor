@@ -194,13 +194,18 @@ def compile_nyu_vagc(bandnum):
 	Tnyu.Kz = Tk.kcorrect[:,bandnum]
 
 	Tnyu.devflux = Tim.devflux[:,bandnum]
+
+	for b in ['g','r','i','z']:
+		i = band_index(b)
+		Tnyu.set('devflux_'+b, Tim.devflux[:,i])
 	
 	Tnyu.rdev = np.zeros(len(Tnyu))
 	Tnyu.ab   = np.zeros(len(Tnyu))
 
-	Tnyu.rdev_g = np.zeros(len(Tnyu))
-	Tnyu.rdev_r = np.zeros(len(Tnyu))
-	Tnyu.rdev_z = np.zeros(len(Tnyu))
+	bands = ['g','r','i','z']
+	binds = [band_index(b) for b in bands]
+	for b in bands:
+		Tnyu.set('rdev_'+b, np.zeros(len(Tnyu)))
 	
 	Tnyu.r90i = np.zeros(len(Tnyu))
 	Tnyu.r50i = np.zeros(len(Tnyu))
@@ -211,9 +216,9 @@ def compile_nyu_vagc(bandnum):
 	
 	iband = band_index('i')
 
-	gband = band_index('g')
-	rband = band_index('r')
-	zband = band_index('z')
+	#gband = band_index('g')
+	#rband = band_index('r')
+	#zband = band_index('z')
 	
 	for run,camcol in np.unique(zip(Tim.run, Tim.camcol)):
 		print 'Run', run, 'camcol', camcol
@@ -230,9 +235,10 @@ def compile_nyu_vagc(bandnum):
 			Tnyu.rdev[j] = Tc.r_dev [K, bandnum]
 			Tnyu.ab[j]   = Tc.ab_dev[K, bandnum]
 
-			Tnyu.rdev_g[j] = Tc.r_dev [K, gband]
-			Tnyu.rdev_r[j] = Tc.r_dev [K, rband]
-			Tnyu.rdev_z[j] = Tc.r_dev [K, zband]
+			for b,i in zip(bands,binds):
+				Tnyu.get('rdev_'+b)[j] = Tc.r_dev[K, i]
+			#Tnyu.rdev_r[j] = Tc.r_dev [K, rband]
+			#Tnyu.rdev_z[j] = Tc.r_dev [K, zband]
 			
 			Tnyu.r90i[j] = Tc.petror90[K, iband]
 			Tnyu.r50i[j] = Tc.petror50[K, iband]
@@ -489,20 +495,25 @@ def fp():
 		Tnyu.writeto(cutfn)
 	else:
 		Tnyu = fits_table(cutfn, lower=False)
-		
+
+	h70 = 0.7
+
 	# -> arcsec
 	pixscale = 0.396
 
 	Tnyu.rdev *= pixscale
 	Tnyu.rdev_g *= pixscale
 	Tnyu.rdev_r *= pixscale
+	Tnyu.rdev_i *= pixscale
 	Tnyu.rdev_z *= pixscale
 
 	### HACK -- unexplained scale difference between us and Bernardi.
-	FUDGE = 1. / 0.85
+	#FUDGE = 1. / 0.85 / 1.07
+	FUDGE = 1.1
 	Tnyu.rdev *= FUDGE
 	Tnyu.rdev_g *= FUDGE
 	Tnyu.rdev_r *= FUDGE
+	Tnyu.rdev_i *= FUDGE
 	Tnyu.rdev_z *= FUDGE
 	
 	Tnyu.DLz = DL(Tnyu.z)
@@ -531,10 +542,16 @@ def fp():
 	Tnyu.mdev = 22.5 - 2.5*log(Tnyu.devflux)
 	Tnyu.M = Tnyu.mdev - Tnyu.DMz - Tnyu.Kz
 
+	print 'M2 - M:', np.mean(Tnyu.M2 - Tnyu.M)
+	#MFUDGE = np.mean(Tnyu.M2 - Tnyu.M)
+
+	#MFUDGE = 5.*log(h70)
+	#print 'ADDING MAG FUDGE OF', MFUDGE
+	#Tnyu.mdev += MFUDGE
+	#Tnyu.M = Tnyu.mdev - Tnyu.DMz - Tnyu.Kz
 	
 	Tnyu.mu0 = (Tnyu.mdev + 2.5 * log(2. * np.pi * Tnyu.r0**2)
 				- Tnyu.Kz - 10.* log(1. + Tnyu.z))
-
 	
 	plt.clf()
 	plt.hist(Tnyu.z, 100, range=(0,0.3))
@@ -547,115 +564,147 @@ def fp():
 	ps.savefig()
 
 	plt.clf()
-	plothist(Tnyu.z, Tnyu.Kz, range=((0,0.3),(-0.1,0.4)))
+	pha = dict(docolorbar=False,
+			   dohot=False, imshowargs=dict(cmap=antigray))
+	plothist(Tnyu.z, Tnyu.Kz, range=((0,0.3),(-0.1,0.4)), **pha)
 	plt.xlabel('z')
 	plt.ylabel('K-correction')
 	ps.savefig()
 
 	plt.clf()
 	plt.subplot(2,2,1)
-	plt.hist(Tnyu.rdev_g, 100, range=(0, 10))
+	plt.hist(Tnyu.rdev_g, 50, range=(0, 10))
 	plt.xlabel('g (mean: %g)' % np.mean(Tnyu.rdev_g))
 	plt.subplot(2,2,2)
-	plt.hist(Tnyu.rdev_r, 100, range=(0, 10))
+	plt.hist(Tnyu.rdev_r, 50, range=(0, 10))
 	plt.xlabel('r (mean: %g)' % np.mean(Tnyu.rdev_r))
 	plt.subplot(2,2,3)
-	plt.hist(Tnyu.rdev, 100, range=(0, 10))
+	plt.hist(Tnyu.rdev, 50, range=(0, 10))
 	plt.xlabel('%s (mean: %g)' % (band, np.mean(Tnyu.rdev)))
 	plt.subplot(2,2,4)
-	plt.hist(Tnyu.rdev_z, 100, range=(0, 10))
+	plt.hist(Tnyu.rdev_z, 50, range=(0, 10))
 	plt.xlabel('z (mean: %g)' % np.mean(Tnyu.rdev_z))
 	ps.savefig()
-	
+
+	bands = ['g','r','i','z']
 	plt.clf()
+	for i,b in enumerate(bands):
+		plt.subplot(2,2,i+1)
+		plothist(Tnyu.z, 22.5 - 2.5*log(Tnyu.get('devflux_'+b)),
+				 range=((0,0.3),(13,20)), doclf=False, **pha)
+		plt.xlabel('redshift')
+		plt.ylabel('mdev ' + b)
+	ps.savefig()
+
+	pha = dict(docolorbar=False, doclf=False,
+			   dohot=False, imshowargs=dict(cmap=antigray))
+	plt.clf()
+	plt.suptitle('Bernardi paper 1 fig 1')
+	plt.subplots_adjust(left=0.2, right=0.8, wspace=0, hspace=0)
+	plt.subplot(3,2,1)
+	plothist(Tnyu.ab, Tnyu.rdev_r, range=((0,1),(-1, 11)), **pha)
+	plt.ylabel('r_dev (arcsec)')
+	plt.xticks([])
+	
+	R0r = arcsec2rad(Tnyu.rdev_r * np.sqrt(Tnyu.ab)) * Tnyu.DAz
+	R0r *= (1e3 * h70)
+	I = (R0r > 0)
+	plt.subplot(3,2,2)
+	plt.yticks([])
+	plt.twinx()
+	plothist(Tnyu.ab[I], log(R0r[I]), range=((0,1),(-0.7, 1.7)), **pha)
+	plt.ylabel('log R_0 [kpc/h70]')
+	plt.xticks([])
+	
+	plt.subplot(3,2,3)
+	plothist(Tnyu.ab, log(Tnyu.sigma), range=((0,1),(1.8,2.7)), **pha)
+	plt.ylabel('log sigma')
+	plt.xticks([])
+
+	plt.subplot(3,2,4)
+	plt.yticks([])
+	plt.twinx()
+	plothist(Tnyu.ab, Tnyu.z, range=((0,1),(-0.025,0.375)), **pha)
+	plt.ylabel('z')
+	plt.xticks([])
+	
+	plt.subplot(3,2,6)
+	plt.yticks([])
+	plt.twinx()
 	plt.hist(Tnyu.ab, 100, range=(0,1))
 	plt.xlabel('ab')
 	ps.savefig()
 
-	pha = dict(docolorbar=False,
-			   dohot=False, imshowargs=dict(cmap=antigray))
-	plt.clf()
-	plothist(Tnyu.ab, log(Tnyu.sigma), range=((0,1),(1.8,2.7)), **pha)
-	plt.xlabel('ab')
-	plt.ylabel('log sigma')
-	ps.savefig()
-
-	plt.clf()
-	plothist(Tnyu.ab, Tnyu.rdev, range=((0,1),(-1, 11)), **pha)
-	plt.xlabel('ab')
-	plt.ylabel('r_dev (arcsec)')
-	ps.savefig()
-
-	plt.clf()
-	plt.plot(Tnyu.ab, Tnyu.rdev, 'k,')
-	plt.xlabel('ab')
-	plt.ylabel('r_dev (arcsec)')
-	plt.ylim(-1, 11)
-	ps.savefig()
+	# revert to defaults
+	plt.subplots_adjust(left=0.125, right=0.9, wspace=0.2, hspace=0.2)
 	
-	plt.clf()
-	I = (Tnyu.R0 > 0)
-	plothist(Tnyu.ab[I], log(Tnyu.R0[I] * 1e3),
-			 range=((0,1),(-0.7, 1.7)), **pha)
-	#plothist(Tnyu.ab[I], log(Tnyu.R0[I] * 1e3), **pha)
-	plt.xlabel('ab')
-	plt.ylabel('log R_0')
-	ps.savefig()
+	
+	# plt.clf()
+	# plt.plot(Tnyu.ab, Tnyu.rdev, 'k,')
+	# plt.xlabel('ab')
+	# plt.ylabel('r_dev (arcsec)')
+	# plt.ylim(-1, 11)
+	# ps.savefig()
+	
+	# plt.clf()
+	# I = (Tnyu.R0 > 0)
+	# plothist(Tnyu.ab[I], log(Tnyu.R0[I] * 1e3),
+	# 		 range=((0,1),(-0.7, 1.7)), **pha)
+	# #plothist(Tnyu.ab[I], log(Tnyu.R0[I] * 1e3), **pha)
+	# plt.xlabel('ab')
+	# plt.ylabel('log R_0')
+	# ps.savefig()
 
-	if False:
-		for nm,R0 in [('r_dev * ab', Tnyu.R0a),
-					  ('r_dev * sqrt(ab)', Tnyu.R0b),
-					  ('r_dev', Tnyu.R0c)]:
-			plt.clf()
+	if True:
+		plt.clf()
+		for i,(nm,R0) in enumerate([
+				('r_dev * ab', Tnyu.R0a),
+				('r_dev * sqrt(ab)', Tnyu.R0b),
+				('r_dev', Tnyu.R0c)]):
+			plt.subplot(2,2, i+1)
 			I = (R0 > 0)
-			plothist(Tnyu.ab[I], log(R0[I] * 1e3),
+			plothist(Tnyu.ab[I], log(R0[I] * 1e3 / h70),
 					 range=((0,1),(-0.7, 1.7)), **pha)
 			plt.xlabel('ab')
-			plt.ylabel('log R_0 [kpc]')
+			plt.ylabel('log R_0 [kpc/h70]')
 			plt.title('r0 = %s' % nm)
-			ps.savefig()
+		ps.savefig()
+
+	if False:
+		plt.clf()
+		zz = np.linspace(0., 1., 1000)
+		DLz = DL(zz)
+		plt.plot(zz, DLz, 'k-')
+		plt.ylabel('DL [Mpc]')
+		plt.xlabel('z')
+		ps.savefig()
+
+		plt.clf()
+		DMz = 5. * log(DLz * 1e6 / 10.)
+		plt.plot(zz, DMz, 'k-')
+		plt.ylabel('DM [mag]')
+		plt.xlabel('z')
+		ps.savefig()
 			
-			
-			plt.clf()
-			zz = np.linspace(0., 1., 1000)
-			DLz = DL(zz)
-			plt.plot(zz, DLz, 'k-')
-			plt.ylabel('DL [Mpc]')
-			plt.xlabel('z')
-			ps.savefig()
-			
-			plt.clf()
-			DMz = 5. * log(DLz * 1e6 / 10.)
-			plt.plot(zz, DMz, 'k-')
-			plt.ylabel('DM [mag]')
-			plt.xlabel('z')
-			ps.savefig()
-			
-			plt.clf()
-			DAz = DLz / ((1. + zz)**2)
-			plt.plot(zz, DAz, 'k-')
-			plt.ylabel('DA [Mpc/radian ?]')
-			plt.xlabel('z')
-			ps.savefig()
-	
-	
+		plt.clf()
+		DAz = DLz / ((1. + zz)**2)
+		plt.plot(zz, DAz, 'k-')
+		plt.ylabel('DA [Mpc/radian ?]')
+		plt.xlabel('z')
+		ps.savefig()
 	
 	# FP
-	for Ti,nm in zip(TT + [Tnyu],
-					 ['SDSS', 'SDSS-forced', 'Tractor'] + ['NYU-VAGC']):
-		#if nm == 'SDSS':
-		#	continue
-		if not nm.startswith('NYU'):
+	for Ti,nm in zip([Tnyu] + TT,
+					 ['NYU-VAGC'] + ['SDSS', 'SDSS-forced', 'Tractor']):
+		if nm == 'SDSS':
 			continue
+		#if not nm.startswith('NYU'):
+		#	continue
+
 		MM = Ti.M
 		SS = Ti.sigma
 		RR = Ti.R0
 		MU = Ti.mu0
-
-		h70 = 0.7
-
-		#LL = (MM - 5.*log(h70)) / -2.5
-
 
 		def plot_nyu(x, y, xr, yr):
 			plothist(x, y, range=((xr,yr)), docolorbar=False,
@@ -729,8 +778,8 @@ def fp():
 			plot_pts(log(SS), Ti.M2 - 5.*log(h70), (xl,xh), (yl,yh))
 			X = np.array([xl,xh])
 			# eyeballed Bernardi relation for i-band
-			#plt.plot(X, (X - 2.) * -3.95*2.5 + -19.5, **ta)
-			plt.plot(X, (X - 2.) * -3.95 + -19.5, **ta)
+			plt.plot(X, (X - 2.) * -3.95*2.5 + -19.5, **ta)
+			#plt.plot(X, (X - 2.) * -3.95 + -19.5, **ta)
 			plt.xlabel('log(sigma) [km/s]')
 			plt.ylabel('M - 5 log(h) [mag]')
 			plt.ylim(yh,yl)
@@ -738,12 +787,12 @@ def fp():
 			plt.title('Bernardi paper 2 fig 4: %s' % nm)
 			ps.savefig()
 
-		plt.clf()
-		yl,yh = min(LL),max(LL)
-		plot_pts(log(SS), LL, (xl,xh), (yl,yh))
-		plt.xlabel('log(sigma) [km/s]')
-		plt.ylabel('LL')
-		ps.savefig()
+		# plt.clf()
+		# yl,yh = min(LL),max(LL)
+		# plot_pts(log(SS), LL, (xl,xh), (yl,yh))
+		# plt.xlabel('log(sigma) [km/s]')
+		# plt.ylabel('LL')
+		# ps.savefig()
 		
 		plt.clf()
 		xl,xh = [-1., 1.5]
@@ -814,15 +863,16 @@ def fp():
 		ps.savefig()
 
 		plt.clf()
-		xl,xh = [-0.5, 3.5]
+		#xl,xh = [-0.5, 3.5]
+		xl,xh = [1.25, 3.75]
 		#yl,yh = [-1, 1.5]
-		yl,yh = [-1, 2.0]
-		plot_pts(log(SS) + 0.2*(MU - 19.61)*log(SS) + 0.2*(MU - 19.24),
+		yl,yh = [-0.5, 2.0]
+		plot_pts(log(SS) + 0.2*(MU - 19.61),
 				 log(RR * 1e3 / h70), (xl,xh), (yl,yh))
 		X = np.array([xl,xh])
 		# eyeballed Bernardi relation for i-band
 		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
-		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61) log(sigma) + 0.2 (mu_0 - 19.24)')
+		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
 		plt.ylabel('log(R_0) [kpc / h]')
 
 		plt.axhline(0.2, **la)
