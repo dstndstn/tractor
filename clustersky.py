@@ -1439,6 +1439,7 @@ def runlots():
 
 	I = np.argsort(T.m10)
 	T = T[I]
+	RR = []
 	for ai in range(len(T)):
 		Ti = T[ai]
 		print 'Abell', Ti.aco, 'with m10', Ti.m10
@@ -1452,9 +1453,6 @@ def runlots():
 		if len(rcf) == 0:
 			continue
 		print 'RCF', rcf
-
-
-		RR = []
 
 		for run,camcol,field,nil,nil in rcf:
 			print 'RCF', run, camcol, field
@@ -1473,9 +1471,19 @@ def runlots():
 					continue
 				RR.append(r)
 
-		for R in RR:
-			runstage(6, R.pat, R)
-				
+		if len(RR) >= 20:
+			break
+
+	#for R in RR:
+	#	runstage(6, R.pat, R)
+
+	from astrometry.util.multiproc import multiproc
+	mp = multiproc(8)
+	mp.map(_run, RR)
+
+def _run((R, stage)):
+    return runstage(stage, R.pat, R)
+		
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
 				 ra, dec, R, aco):
