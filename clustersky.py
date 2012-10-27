@@ -78,11 +78,13 @@ from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
 from astrometry.sdss import *
 
+from astrometry.util.stages import *
+
 from tractor.utils import *
 from tractor import sdss as st
 from tractor import *
 from tractor.sdss_galaxy import *
-
+from tractor.splinesky import SplineSky
 
 def get_dm_table():
 	from astrometry.util import casjobs
@@ -1451,34 +1453,144 @@ def runlots():
 			continue
 		print 'RCF', rcf
 
-		getim = st.get_tractor_image_dr9
-		getsrc = st.get_tractor_sources_dr9
-		
+
+		RR = []
+
 		for run,camcol,field,nil,nil in rcf:
 			print 'RCF', run, camcol, field
-			for bandname in ['g','r','i']:
+			#for bandname in ['g','r','i']:
+			for bandname in ['i']:
 				print 'Band', bandname
-				#
-				S = (R * 60.) / 0.396
-				tim,tinf = getim(run, camcol, field, bandname,
-								 roiradecsize=(Ti.ra, Ti.dec, S))
-				if tim.shape == (0,0):
-					print 'Tim shape', tim.shape
-					break
-				roi = tinf.get('roi', None)
-				sources = getsrc(run, camcol, field, bandname,
-								 roi=roi)
-				tractor = Tractor([tim], sources)
-				#mod = tractor.getModelImage(0)
 
-				tractor.freezeParam('images')
-				tractor.catalog.freezeAllRecursive()
-				tractor.catalog.thawPathsTo(band)
+				ppat = 'clusky-a%04i-r%04i-c%i-f%04i-%s-s%%02i.pickle' % (Ti.aco, run, camcol, field, bandname)
+
+				r = RunAbell(run, camcol, field, bandname,
+							 Ti.ra, Ti.dec, R, Ti.aco)
+				r.abell = Ti
+				r.pat = ppat
+				res = runstage(0, ppat, r)
+				if res is None:
+					continue
+				RR.append(r)
+
+		for R in RR:
+			runstage(6, R.pat, R)
 				
-				
+class RunAbell(object):
+	def __init__(self, run, camcol, field, bandname,
+				 ra, dec, R, aco):
+		self.run = run
+		self.camcol = camcol
+		self.field = field
+		self.bandname = bandname
+		self.ra = ra
+		self.dec = dec
+		self.R = R
+		self.aco = aco
+		#self.S = S
+	def __call__(self, stage, **kwargs):
+		kwargs.update(band=self.bandname, run=self.run,
+					  camcol=self.camcol, field=self.field,
+					  ra=self.ra, dec=self.dec)
+		func = getattr(self.__class__, 'stage%i' % stage)
+		return func(self, **kwargs)
+
+	def optloop(self, tractor):
+		band = self.bandname
+		j=0
+		while True:
+			print '-------------------------------------'
+			print 'Optimizing: step', j
+			print '-------------------------------------'
+			dlnp,X,alpha = tractor.optimize()
+			print 'delta-logprob', dlnp
+			nup = 0
+			for src in tractor.getCatalog():
+				for b in src.getBrightnesses():
+					f = b.getFlux(band)
+					if f < 0:
+						nup += 1
+						b.setFlux(band, 0.)
+			print 'Clamped', nup, 'fluxes up to zero'
+			if dlnp < 1:
+				break
+			j += 1
 		
+	def stage0(self, run=None, camcol=None, field=None,
+			   band=None, ra=None, dec=None, **kwargs):
+		#
+		S = (self.R * 60.) / 0.396
+		getim = st.get_tractor_image_dr9
+		getsrc = st.get_tractor_sources_dr9
+		tim,tinf = getim(run, camcol, field, band,
+						 roiradecsize=(ra, dec, S), nanomaggies=True)
+		if tim.shape == (0,0):
+			print 'Tim shape', tim.shape
+			return None
+		roi = tinf.get('roi', None)
+		sources = getsrc(run, camcol, field, band,
+						 roi=roi, nanomaggies=True, bands=[band])
+		tractor = Tractor([tim], sources)
+		return dict(tractor=tractor,
+					roi=roi, tinf=tinf)
+
+	def stage1(self, tractor=None, band=None, **kwargs):
+		# Opt fluxes only
+		tractor.freezeParam('images')
+		tractor.catalog.freezeAllRecursive()
+		tractor.catalog.thawPathsTo(band)
+		self.optloop(tractor)
+		#self.plotmod(tractor)
+		tractor.catalog.thawAllRecursive()
+		return dict(tractor=tractor)
+
+	def stage2(self, tractor=None, band=None, **kwargs):
+		# Remove sources with 0 flux ?
+		for src in tractor.getCatalog():
+			if src.getBrightness().getFlux(band) <= 0:
+				tractor.getCatalog().remove(src)
+		return dict(tractor=tractor)
+
+	def stage3(self, tractor=None, **kwargs):
+		self.optloop(tractor)
+		return dict(tractor=tractor)
+
+	def stage4(self, tractor=None, band=None, **kwargs):
+		mags = []
+		for src in tractor.getCatalog():
+			mags.append(src.getBrightness().getMag(band))
+		I = np.argsort(mags)
+		for i in I:
+			tractor.catalog.freezeAllBut(i)
+			self.optloop(tractor)
+			print tractor.catalog[i]
+		#plotmod()
+		tractor.catalog.thawAllParams()
+		return dict(tractor=tractor)
+
+	def stage5(self, tractor=None, band=None, **kwargs):
+		tim = tractor.getImages()[0]
+		H,W = tim.shape
+		NX,NY = [int(np.ceil(x / 100) + 1) for x in [W,H]]
+		vals = np.zeros((NY,NX))
+		XX = np.linspace(0, W, NX)
+		YY = np.linspace(0, H, NY)
+		tim.sky = SplineSky(XX, YY, vals)
+		tractor.thawAllRecursive()
+		tractor.images[0].freezeAllBut('sky')
+		tractor.catalog.freezeAllRecursive()
+		tractor.catalog.thawPathsTo(band)
+		self.optloop(tractor)
+		tractor.catalog.thawAllRecursive()
+		return dict(tractor=tractor)
+
+	def stage6(self, tractor=None, band=None, **kwargs):
+		self.optloop(tractor)
+		return dict(tractor=tractor)
+
+	#def stage8(self, tractor=None, **kwargs):
 	
-	
+
 if __name__ == '__main__':
 	#find()
 	#fp()
