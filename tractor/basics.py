@@ -277,7 +277,7 @@ class LinearPhotoCal(ScalarParam):
 		else:
 			counts = brightness.getFlux(self.band) * self.val
 		if counts < 0:
-			print 'Clamping counts up to zero:', counts, 'for brightness', brightness
+			#print 'Clamping counts up to zero:', counts, 'for brightness', brightness
 			return 0.
 		return counts
 		

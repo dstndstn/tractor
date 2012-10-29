@@ -1129,7 +1129,7 @@ def test1():
 			for b in tractor.catalog[i].getBrightnesses():
 				f = b.getFlux(band)
 				if f < 0:
-					print 'Clamping flux', f, 'up to zero'
+					#print 'Clamping flux', f, 'up to zero'
 					b.setFlux(band, 0.)
 
 			print tractor.catalog[i]
@@ -1688,6 +1688,17 @@ class RunAbell(object):
 					nzsum = nz
 				else:
 					nzsum += nz
+
+				ie = tim.getInvError()
+				#ie = ie[p.getSlice(ie)]
+				#p2 = p * ie
+				p2 = np.zeros_like(ie)
+				p.addTo(p2)
+				effect = np.sum(p2)
+				#effect = np.sum(p2.patch)
+				print 'Source:', src
+				print 'Total chi contribution:', effect, 'sigma'
+
 				srcs.append(src)
 			nzsum.trimToNonZero()
 			roi = nzsum.getExtent()
@@ -1727,16 +1738,20 @@ class RunAbell(object):
 			subcat = Catalog(*srcs)
 			subcat.freezeAllParams()
 			for i in range(Nin):
+				#print 'Thawing subcat param', i
 				subcat.thawParam(i)
 			subtractor = Tractor(Images(subimg), subcat)
 			subtractor.freezeParam('images')
 
-			print 'Subimage shape', subimg.shape
-			print 'Subimage image shape', subimg.getImage().shape
-			print 'ROI', roi
+			print 'Subtractor: params'
+			for nm in subtractor.getParamNames():
+				print '  ', nm
 
+			#print 'Subimage shape', subimg.shape
+			#print 'Subimage image shape', subimg.getImage().shape
+			#print 'ROI', roi
 			submod = subtractor.getModelImage(0)
-			print 'Submod', submod.shape
+			#print 'Submod', submod.shape
 			imsub = imc.copy()
 			imsub.update(extent=roi)
 

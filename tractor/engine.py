@@ -548,7 +548,11 @@ class Tractor(MultiParams):
 		- `images:` list of Image objects (data)
 		- `catalog:` list of Source objects
 		'''
-		super(Tractor,self).__init__(Images(*images), Catalog(*catalog))
+		if not isinstance(images, Images):
+			images = Images(*images)
+		if not isinstance(catalog, Catalog):
+			catalog = Catalog(*catalog)
+		super(Tractor,self).__init__(images, catalog)
 		self._setup(mp=mp)
 
 	# def __del__(self):
