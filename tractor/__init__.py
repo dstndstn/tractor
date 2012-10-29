@@ -24,6 +24,7 @@ __all__ = [
 	'WCS', 'NullWCS',
 	'FitsWcs', 'WcslibWcs', 'GaussianMixturePSF',
 	'NCircularGaussianPSF', 
+	'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal',
 	# engine
 	'Patch', 'Image', 'Images',
 	'Catalog', 'Tractor',

@@ -225,14 +225,17 @@ class Patch(object):
 		self.x0 += x0
 		self.y0 += y0
 
-	def hasBboxOverlapWith(self, other):
+	def overlapsBbox(self, bbox):
 		ext = self.getExtent()
 		(x0,x1,y0,y1) = ext
-		oext = other.getExtent()
-		(ox0,ox1,oy0,oy1) = oext
+		(ox0,ox1,oy0,oy1) = bbox
 		if x0 >= ox1 or ox0 >= x1 or y0 >= oy1 or oy0 >= y1:
 			return False
 		return True
+
+	def hasBboxOverlapWith(self, other):
+		oext = other.getExtent()
+		return self.overlapsBbox()
 		
 	def hasNonzeroOverlapWith(self, other):
 		if not self.hasBboxOverlapWith(other):
@@ -316,6 +319,31 @@ class Patch(object):
 		assert(h <= H)
 		assert(self.shape == self.patch.shape)
 		return True
+
+
+	#### WARNing, this function has not been tested
+	def clipToRoi(self, x0,x1,y0,y1):
+		if self.patch is None:
+			return False
+		if ((self.x0 >= x1) or (self.x1 <= x0) or
+			(self.y0 >= y1) or (self.y1 <= y0)):
+			# empty
+			self.patch = None
+			return False
+
+		if self.x0 < x0:
+			self.patch = self.patch[:, x0-self.x0:]
+			self.x0 = x0
+		if self.y0 < y0:
+			self.patch = self.patch[(y0-self.y0):, :]
+			self.y0 = y0
+		(h,w) = self.shape
+		if (self.x0 + w) > x1:
+			self.patch = self.patch[:, :(x1 - self.x0)]
+		if (self.y0 + h) > y1:
+			self.patch = self.patch[:(y1 - self.y0), :]
+		return True
+
 
 	def getSlice(self, parent=None):
 		if self.patch is None:
@@ -818,7 +846,7 @@ class Tractor(MultiParams):
 			imjs = [i for i in self.images.getThawedParamIndices()]
 			ims = [self.images[j] for j in imjs]
 			
-		# FIXME -- don't we want Sky, PSF, etc to be able to prodvide
+		# FIXME -- don't we want Sky, PSF, etc to be able to provide
 		# their own derivatives?
 			
 		# initial models...

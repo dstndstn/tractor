@@ -1012,3 +1012,99 @@ class NCircularGaussianPSF(MultiParams):
 		return Patch(x0, y0, patch)
 
 
+# class SubImage(Image):
+# 	def __init__(self, im, roi,
+# 				 skyclass=SubSky,
+# 				 psfclass=SubPsf,
+# 				 wcsclass=SubWcs):
+# 		(x0,x1,y0,y1) = roi
+# 		slc = (slice(y0,y1), slice(x0,x1))
+# 		data = im.getImage[slc]
+# 		invvar = im.getInvvar[slc]
+# 		sky = skyclass(im.getSky(), roi)
+# 		psf = psfclass(im.getPsf(), roi)
+# 		wcs = wcsclass(im.getWcs(), roi)
+# 		pcal = im.getPhotoCal()
+# 		super(SubImage, self).__init__(data=data, invvar=invvar, psf=psf,
+# 									   wcs=wcs, sky=sky, photocal=photocal,
+# 									   name='sub'+im.name)
+# 
+# class SubSky(object):
+# 	def __init__(self, sky, roi):
+# 		self.sky = sky
+# 		self.roi = roi
+# 
+# 	#def getParamDerivatives(self, img):
+# 	def addTo(self, mod):
+
+class ParamsWrapper(BaseParams):
+	def __init__(self, real):
+		self.real = real
+	def hashkey(self):
+		return self.real.hashkey()
+	def getLogPrior(self):
+		return self.real.getLogPrior()
+	def getLogPriorChi(self):
+		return self.real.getLogPriorChi()
+	def getParams(self):
+		return self.real.getParams()
+	def setParams(self, x):
+		return self.real.setParams(x)
+	def setParam(self, i, x):
+		return self.real.setParam(i, x)
+	def numberOfParams(self):
+		return self.real.numberOfParams()
+	def getParamNames(self):
+		return self.real.getParamNames()
+	def getStepSizes(self, *args, **kwargs):
+		return self.real.getStepSizes(*args, **kwargs)
+	
+class ScaledPhotoCal(ParamsWrapper):
+	def __init__(self, photocal, factor):
+		super(ScaledPhotoCal,self).__init__(photocal)
+		self.pc = photocal
+		self.factor = factor
+	def hashkey(self):
+		return ('ScaledPhotoCal', self.factor) + self.pc.hashkey()
+	def brightnessToCounts(self, brightness):
+		return self.factor * self.pc.brightnessToCounts(brightness)
+
+class ScaledWcs(ParamsWrapper):
+	def __init__(self, wcs, factor):
+		super(ScaledWcs,self).__init__(photocal)
+		self.factor = factor
+		self.wcs = wcs
+
+	def hashkey(self):
+		return ('ScaledWcs', self.factor) + tuple(self.wcs.hashkey())
+
+	def cdAtPixel(self, x, y):
+		x,y = (x + 0.5) / self.factor - 0.5, (y + 0.5) * self.factor - 0.5
+		cd = self.wcs.cdAtPixel(x, y)
+		return cd / self.factor
+
+	def positionToPixel(self, pos, src=None):
+		x,y = self.wcs.positionToPixel(pos, src=src)
+		# Or somethin'
+		return ((x + 0.5) * self.factor - 0.5,
+				(y + 0.5) * self.factor - 0.5)
+
+class ShiftedWcs(ParamsWrapper):
+	'''
+	Wraps a WCS in order to use it for a subimage.
+	'''
+	def __init__(self, wcs, x0, y0):
+		super(ShiftedWcs,self).__init__(wcs)
+		self.x0 = x0
+		self.y0 = y0
+		self.wcs = wcs
+
+	def hashkey(self):
+		return ('ShiftedWcs', self.x0, self.y0) + tuple(self.wcs.hashkey())
+
+	def cdAtPixel(self, x, y):
+		return self.wcs.cdAtPixel(x + self.x0, y + self.y0)
+
+	def positionToPixel(self, pos, src=None):
+		x,y = self.wcs.positionToPixel(pos, src=src)
+		return (x - self.x0, y - self.y0)

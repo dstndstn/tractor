@@ -1426,7 +1426,7 @@ def find_clusters(tractor, tim):
 		ps.savefig()
 
 
-def runlots():
+def runlots(stage, N, force=[]):
 	cmap = {'_RAJ2000':'ra', '_DEJ2000':'dec', 'ACOS':'aco'}
 	T1 = fits_table('abell.fits', column_map=cmap)
 	T2 = fits_table('abell2.fits', column_map=cmap)
@@ -1447,12 +1447,10 @@ def runlots():
 	for ai in range(len(T)):
 		Ti = T[ai]
 		print 'Abell', Ti.aco, 'with m10', Ti.m10
-		#rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, contains=True,
-		#						tablefn='dr9fields.fits')
-
 		# Totally arbitrary radius in arcmin
 		R = 5.
-		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True, radius=R)
+		RS = np.hypot(R, np.hypot(13., 9.)/2.)
+		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True, radius=RS)
 		if len(rcf) == 0:
 			continue
 		print 'RCF', rcf
@@ -1469,23 +1467,51 @@ def runlots():
 							 Ti.ra, Ti.dec, R, Ti.aco)
 				r.abell = Ti
 				r.pat = ppat
-				res = runstage(0, ppat, r)
+				r.force = force
+				res = r.runstage(0)
 				if res is None:
 					continue
 				RR.append(r)
+				if len(RR) >= N:
+					break
+			if len(RR) >= N:
+				break
 
-		if len(RR) >= 20:
+		if len(RR) >= N:
 			break
 
 	for R in RR:
-		runstage(6, R.pat, R)
+		R.runstage(stage)
 
 	#from astrometry.util.multiproc import multiproc
 	#mp = multiproc(8)
-	#mp.map(_run, [(R,6) for R in RR])
+	#mp.map(_run, [(R,stage) for R in RR])
 
 def _run((R, stage)):
-    return runstage(stage, R.pat, R)
+    return R(stage)
+
+
+class SubImage(Image):
+	def __init__(self, im, roi):
+		#skyclass=SubSky,
+		#psfclass=SubPsf,
+		#wcsclass=SubWcs):
+		(x0,x1,y0,y1) = roi
+		slc = (slice(y0,y1), slice(x0,x1))
+		data = im.getImage()[slc]
+		invvar = im.getInvvar()[slc]
+		sky = im.getSky()
+		psf = im.getPsf()
+		#wcs = wcsclass(im.getWcs(), roi)
+		pcal = im.getPhotoCal()
+		wcs = ShiftedWcs(im.getWcs(), x0, y0)
+		#print 'PSF:', im.getPsf()
+		#print 'Sky:', im.getSky()
+		super(SubImage, self).__init__(data=data, invvar=invvar, psf=psf,
+									   wcs=wcs, sky=sky, photocal=pcal,
+									   name='sub'+im.name)
+
+
 		
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
@@ -1498,6 +1524,7 @@ class RunAbell(object):
 		self.dec = dec
 		self.R = R
 		self.aco = aco
+		self.prereqs = { 103: 2 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -1506,14 +1533,22 @@ class RunAbell(object):
 		func = getattr(self.__class__, 'stage%i' % stage)
 		return func(self, **kwargs)
 
-	def optloop(self, tractor):
+	def runstage(self, stage, **kwargs):
+		res = runstage(stage, self.pat, self, prereqs=self.prereqs,
+					   force=self.force, **kwargs)
+		return res
+
+	def optloop(self, tractor): #, srcs=None, roi=None):
 		band = self.bandname
 		j=0
 		while True:
 			print '-------------------------------------'
 			print 'Optimizing: step', j
 			print '-------------------------------------'
-			dlnp,X,alpha = tractor.optimize()
+			#if srcs is not None and roi is not None:
+		   	dlnp,X,alpha = tractor.optimize(priors=False)
+			#else:
+			#	dlnp,X,alpha = tractor.optimize()
 			print 'delta-logprob', dlnp
 			nup = 0
 			for src in tractor.getCatalog():
@@ -1539,6 +1574,7 @@ class RunAbell(object):
 			print 'Tim shape', tim.shape
 			return None
 		roi = tinf.get('roi', None)
+		#print 'Stage 0: roi', roi
 		sources = getsrc(run, camcol, field, band,
 						 roi=roi, nanomaggies=True, bands=[band])
 		tractor = Tractor([tim], sources)
@@ -1566,7 +1602,175 @@ class RunAbell(object):
 		self.optloop(tractor)
 		return dict(tractor=tractor)
 
+	def stage103(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 tinf=None, roi=None,
+				 **kwargs):
+
+		print 'tinf', tinf
+		S = (self.R * 60.) / 0.396
+		getim = st.get_tractor_image_dr9
+		getsrc = st.get_tractor_sources_dr9
+		tim,tinf = getim(run, camcol, field, band,
+						 roiradecsize=(self.ra, self.dec, S), nanomaggies=True)
+		print 'tinf', tinf
+		
+
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+
+		ima = dict(interpolation='nearest', origin='lower',
+				   extent=roi)
+		zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+		imc = ima.copy()
+		imc.update(norm=ArcsinhNormalize(mean=tinf['sky'], std=tinf['skysig']),
+				   vmin=zr2[0], vmax=zr2[1])
+
+		# Optimize SDSS deblend families
+		sdss = DR9()
+		fn = sdss.retrieve('photoObj', run, camcol, field)
+		objs = fits_table(fn)
+		#print 'SDSS objects:'
+		#objs.about()
+
+		cat = tractor.getCatalog()
+		# match tractor sources and SDSS children
+		kids = objs[objs.nchild == 0]
+		I,J,d = sm.match_radec(np.array([src.getPosition().ra  for src in cat]),
+							   np.array([src.getPosition().dec for src in cat]),
+							   kids.ra, kids.dec, 1./3600., nearest=True)
+		print len(cat), 'tractor sources'
+		print len(kids), 'SDSS kids'
+		print len(I), 'matched'
+
+		kids = kids[J]
+		tractor.catalog.freezeAllParams()
+		tim = tractor.getImage(0)
+		tim.origInvvar = None
+		tim.starMask = None
+		#tim.invvar = None
+		#tim.invvar = (tim.inverr)**2
+		psf = tim.getPsf()
+		psf.radius = min(25, int(np.ceil(psf.computeRadius())))
+		print 'PSF radius:', psf.radius
+
+		mod = tractor.getModelImage(0)
+		plt.clf()
+		plt.imshow(mod, **imc)
+		plt.gray()
+		#plt.colorbar()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		plt.gray()
+		ps.savefig()
+		
+		for p in np.unique(kids.parent):
+			if p == -1:
+				continue
+			K = np.flatnonzero(kids.parent == p)
+			print len(K), 'with parent', p
+
+			srcs = []
+			nzsum = None
+			for i in I[K]:
+				cat.thawParam(i)
+
+				# find bbox
+				src = cat[i]
+				p = tractor.getModelPatch(tim, src)
+				if p is None:
+					continue
+				nz = p.getNonZeroMask()
+				dtype = np.int
+				nz.patch = nz.patch.astype(dtype)
+				if nzsum is None:
+					nzsum = nz
+				else:
+					nzsum += nz
+				srcs.append(src)
+			nzsum.trimToNonZero()
+			roi = nzsum.getExtent()
+
+			Nin = len(srcs)
+			
+			# find other sources that overlap the ROI.
+			for src in cat:
+				if src in srcs:
+					continue
+				p = tractor.getModelPatch(tim, src)
+				if p is None:
+					continue
+				if p.overlapsBbox(roi):
+					srcs.append(src)
+			print 'Found', len(srcs), 'total sources overlapping the bbox'
+
+			ax = plt.axis()
+			for i,src in enumerate(srcs):
+				x,y = tim.getWcs().positionToPixel(src.getPosition())
+				if i < Nin:
+					cc = 'r'
+				else:
+					cc = 'g'
+				plt.plot([x],[y], 'x', color=cc)
+
+				p = tractor.getModelPatch(tim, src)
+				x0,x1,y0,y1 = p.getExtent()
+				plt.plot([x0,x0,x1,x1,x0],[y0,y1,y1,y0,y0], '-', color=cc, alpha=0.5)
+
+			x0,x1,y0,y1 = roi
+			plt.plot([x0,x0,x1,x1,x0],[y0,y1,y1,y0,y0], 'r-')
+			plt.axis(ax)
+			ps.savefig()
+
+			subimg = SubImage(tim, roi)
+			subcat = Catalog(*srcs)
+			subcat.freezeAllParams()
+			for i in range(Nin):
+				subcat.thawParam(i)
+			subtractor = Tractor(Images(subimg), subcat)
+			subtractor.freezeParam('images')
+
+			print 'Subimage shape', subimg.shape
+			print 'Subimage image shape', subimg.getImage().shape
+			print 'ROI', roi
+
+			submod = subtractor.getModelImage(0)
+			print 'Submod', submod.shape
+			imsub = imc.copy()
+			imsub.update(extent=roi)
+
+			plt.clf()
+			plt.imshow(submod, **imsub)
+			plt.gray()
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(subimg.getImage(), **imsub)
+			plt.gray()
+			ps.savefig()
+
+			self.optloop(subtractor)
+
+			submod = subtractor.getModelImage(0)
+			plt.clf()
+			plt.imshow(submod, **imsub)
+			plt.gray()
+			ps.savefig()
+
+			for i in I[K]:
+				cat.freezeParam(i)
+
+			mod = tractor.getModelImage(0)
+			plt.clf()
+			plt.imshow(mod, **imc)
+			plt.gray()
+			ps.savefig()
+
+		return dict(tractor=tractor, tinf=tinf)
+
 	def stage4(self, tractor=None, band=None, **kwargs):
+		# Opt sources individually, brightest first
 		mags = []
 		for src in tractor.getCatalog():
 			mags.append(src.getBrightness().getMag(band))
@@ -1609,6 +1813,12 @@ if __name__ == '__main__':
 	parser = OptionParser(usage=('%prog'))
 	parser.add_option('-v', '--verbose', dest='verbose', action='count',
 					  default=0, help='Make more verbose')
+	parser.add_option('-s', '--stage', dest='stage', type=int,
+					  default=6, help='Run to stage...')
+	parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
+					  help="Force re-running the given stage(s) -- don't read from pickle.")
+	parser.add_option('-n', dest='N', type=int,
+					  default=20, help='Run this # of fields')
 	opt,args = parser.parse_args()
 	if opt.verbose == 0:
 		lvl = logging.INFO
@@ -1620,7 +1830,7 @@ if __name__ == '__main__':
 	#fp()
 	#get_dm_table()
 	#join()
-	runlots()
+	runlots(stage=opt.stage, N=opt.N, force=opt.force)
 	sys.exit(0)
 	test1()
 

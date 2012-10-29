@@ -451,6 +451,7 @@ def get_tractor_image(run, camcol, field, bandname,
 			   np.clip(xc+S, 0, W),
 			   np.clip(yc-S, 0, H),
 			   np.clip(yc+S, 0, H)]
+		roi = [int(x) for x in roi]
 
 		if roi[0]==roi[1] or roi[2]==roi[3]:
 			print "ZERO ROI?", roi
@@ -593,39 +594,6 @@ def scale_sdss_image(tim, S):
 				 zr=tim.zr)
 
 
-class ScaledPhotoCal():
-	def __init__(self, photocal, factor):
-		self.pc = photocal
-		self.factor = factor
-	def hashkey(self):
-		return ('ScaledPhotoCal', self.factor) + self.pc.hashkey()
-	def getLogPrior(self):
-		return self.pc.getLogPrior()
-	def brightnessToCounts(self, brightness):
-		return self.factor * self.pc.brightnessToCounts(brightness)
-
-class ScaledWcs():
-	def __init__(self, wcs, factor):
-		self.factor = factor
-		self.wcs = wcs
-
-	def getLogPrior(self):
-		return self.wcs.getLogPrior()
-
-	def hashkey(self):
-		return ('ScaledWcs', self.factor) + tuple(self.wcs.hashkey())
-
-	def cdAtPixel(self, x, y):
-		x,y = (x + 0.5) / self.factor - 0.5, (y + 0.5) * self.factor - 0.5
-		cd = self.wcs.cdAtPixel(x, y)
-		return cd / self.factor
-
-	def positionToPixel(self, pos, src=None):
-		x,y = self.wcs.positionToPixel(pos, src=src)
-		# Or somethin'
-		return ((x + 0.5) * self.factor - 0.5,
-				(y + 0.5) * self.factor - 0.5)
-
 
 def get_sky_dr8(frame):
 	skyim = frame.sky
@@ -753,7 +721,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 			   np.clip(xc+S, 0, W),
 			   np.clip(yc-S, 0, H),
 			   np.clip(yc+S, 0, H)]
-
+		roi = [int(x) for x in roi]
 		if roi[0]==roi[1] or roi[2]==roi[3]:
 			print "ZERO ROI?", roi
 			assert(False)

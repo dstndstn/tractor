@@ -696,9 +696,6 @@ class MultiParams(BaseParams, NamedParams):
 		return p
 
 	def getLogPrior(self):
-		'''
-		This function does shenanigans to avoid importing `numpy.sum()`.  (Why?)
-		'''
 		lnp = 0.
 		for s in self._getActiveSubs():
 			lnp += s.getLogPrior()
