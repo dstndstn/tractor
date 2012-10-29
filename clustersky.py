@@ -1296,14 +1296,15 @@ def find():
 
 	ps = PlotSequence('abell-b')
 
+	LookupRcf = RaDecToRcf(tablefn='dr9fields.fits')
+
 	for anum in [2151]:
 		I = np.flatnonzero(T.aco == anum)
 		print 'Abell', anum, ': found', len(I)
 		Ti = T[I[0]]
 		Ti.about()
 
-		rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, contains=True,
-								tablefn='dr9fields.fits')
+		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True)
 		if len(rcf) == 0:
 			print '-> Not in SDSS'
 			continue
@@ -1440,6 +1441,9 @@ def runlots():
 	I = np.argsort(T.m10)
 	T = T[I]
 	RR = []
+
+	LookupRcf = RaDecToRcf(tablefn='dr9fields.fits')
+
 	for ai in range(len(T)):
 		Ti = T[ai]
 		print 'Abell', Ti.aco, 'with m10', Ti.m10
@@ -1448,8 +1452,7 @@ def runlots():
 
 		# Totally arbitrary radius in arcmin
 		R = 5.
-		rcf = radec_to_sdss_rcf(Ti.ra, Ti.dec, radius=R,
-								tablefn='dr9fields.fits')
+		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True, radius=R)
 		if len(rcf) == 0:
 			continue
 		print 'RCF', rcf
@@ -1474,12 +1477,12 @@ def runlots():
 		if len(RR) >= 20:
 			break
 
-	#for R in RR:
-	#	runstage(6, R.pat, R)
+	for R in RR:
+		runstage(6, R.pat, R)
 
-	from astrometry.util.multiproc import multiproc
-	mp = multiproc(8)
-	mp.map(_run, RR)
+	#from astrometry.util.multiproc import multiproc
+	#mp = multiproc(8)
+	#mp.map(_run, [(R,6) for R in RR])
 
 def _run((R, stage)):
     return runstage(stage, R.pat, R)
@@ -1600,6 +1603,19 @@ class RunAbell(object):
 	
 
 if __name__ == '__main__':
+	import logging
+	from optparse import OptionParser
+	import sys
+	parser = OptionParser(usage=('%prog'))
+	parser.add_option('-v', '--verbose', dest='verbose', action='count',
+					  default=0, help='Make more verbose')
+	opt,args = parser.parse_args()
+	if opt.verbose == 0:
+		lvl = logging.INFO
+	else:
+		lvl = logging.DEBUG
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
 	#find()
 	#fp()
 	#get_dm_table()
