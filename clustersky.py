@@ -1524,7 +1524,8 @@ class RunAbell(object):
 		self.dec = dec
 		self.R = R
 		self.aco = aco
-		self.prereqs = { 103: 2, 203: 2 }
+		#self.prereqs = { 103: 2, 203: 2 }
+		self.prereqs = { 103: 2, 204: 0 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -1620,6 +1621,7 @@ class RunAbell(object):
 				 ra=None, dec=None, roi=None, tinf=None,
 				 **kwargs):
 		fn = 'a%04i-spectro.fits' % self.aco
+		print 'Looking for', fn
 		if not os.path.exists(fn):
 			sql = ' '.join(['select ra,dec,sourceType,z,zerr,',
 							'class as clazz, subclass, velDisp,',
@@ -1704,7 +1706,10 @@ class RunAbell(object):
 			gis.append([i for i in K if not i in sgis[-1]])
 		print 'Groups:', len(groups)
 
-		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+		#ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', '') + '-groups')
+
+
 		ima = dict(interpolation='nearest', origin='lower',
 				   extent=roi)
 		zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
@@ -1812,8 +1817,9 @@ class RunAbell(object):
 			ps.savefig()
 
 			##### HACK!
-			if i != 1:
-				continue
+			#if i != 1:
+			continue
+
 			
 			plt.clf()
 			plt.imshow(((modi >= 0.01*sigma).astype(int) +
@@ -2146,6 +2152,260 @@ class RunAbell(object):
 
 		return dict()
 			
+
+	def stage208(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 subcat=None, sgroup=None, group=None, over=None,
+				 orig_ie=None, mpatch=None, imc=None, ps=None,
+				 old_sgroup=None, new_sgroup=None, sgi=None,
+				 cat=None,
+				 **kwargs):
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+		ix0,iy0 = wcs.x0,wcs.y0
+		slc = mpatch.getSlice()
+		subext = mpatch.getExtent()
+		print 'Extent', subext
+		subext = [subext[0]+ix0, subext[1]+ix0,
+				  subext[2]+iy0, subext[3]+iy0]
+		imsub = imc.copy()
+		imsub.update(extent=subext)
+
+		import emcee
+		lnp0 = tractor.getLogProb()
+		print 'Tractor: active params'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		p0 = np.array(tractor.getParams())
+		ndim = len(p0)
+		#nw = max(50, 2*ndim)
+		nw = 2*ndim
+		print 'ndim', ndim
+		print 'nw', nw
+
+		sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+										threads=8)
+
+		steps = np.array(tractor.getStepSizes())
+		print 'steps: len', len(steps)
+		pp0 = np.vstack([p0 + 1e-2 * steps *
+						 np.random.normal(size=len(steps))
+						 for i in range(nw)])
+
+		alllnp = []
+		allp = []
+
+		lnp = None
+		pp = pp0
+		rstate = None
+		for step in range(100):
+			print 'Taking emcee step', step
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+			print 'lnprobs:', lnp
+
+			if (step+0) % 10 == 0:
+				for k,(p,x) in enumerate(zip(lnp,pp)):
+					tractor.setParams(x)
+
+					#chi = tractor.getChiImage(0)
+					modj = tractor.getModelImage(0)
+					plt.clf()
+					plt.imshow(modj[slc], **imsub)
+					plt.gray()
+					plt.title('Step %i, walker %i: lnp %f' % (step, k, p))
+					ps.savefig()
+
+					if k == 5:
+						break
+
+			alllnp.append(lnp.copy())
+			allp.append(pp.copy())
+
+		return dict(alllnp=alllnp, allp=allp)
+
+
+	def stage209(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 subcat=None, sgroup=None, group=None, over=None,
+				 orig_ie=None, mpatch=None, imc=None, ps=None,
+				 old_sgroup=None, new_sgroup=None, sgi=None,
+				 cat=None,
+				 alllnp=None, allp=None,
+				 **kwargs):
+
+		alllnp = np.array(alllnp)
+		allp = np.array(allp)
+		print 'alllnp shape', alllnp.shape
+		print 'allp shape', allp.shape
+		# steps, walkers, params
+
+		print 'sgi', sgi
+
+		burn = 50
+
+		plt.clf()
+		plt.plot(alllnp, 'k.')
+		plt.xlabel('step')
+		plt.ylabel('lnp')
+		ps.savefig()
+
+		DL = LuminosityDistance()
+		log = np.log10
+		h70 = 0.7
+
+		print 'Tractor: active params'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		# for i,nm in enumerate(tractor.getParamNames()):
+		# 	if not nm.startswith('catalog.source'):
+		# 		continue
+		# 	P = allp[burn:, :, i].ravel()
+		# 	nm = nm.replace('catalog.','')
+		# 	plt.clf()
+		# 	plt.hist(P, 100)
+		# 	plt.xlabel(nm)
+		# 	ps.savefig()
+
+		pnames = tractor.getParamNames()
+
+		# Deja vu...
+		fn = 'a%04i-spectro.fits' % self.aco
+		print 'Looking for', fn
+		T = fits_table(fn)
+
+		svals = []
+
+		for si in sgi:
+			src = tractor.getCatalog()[si]
+			print 'Source', src
+
+			rd = src.getPosition()
+			ra,dec = rd.ra, rd.dec
+			rad = 1./3600.
+			I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
+								   nearest=True)
+			print len(I), 'matches on RA,Dec'
+			Ti = T[I]
+			print 'Matched spectro'
+			Ti.about()
+			Ti = Ti[0]
+
+			samp = []
+			for pp in allp[-10:]:
+				samp.extend(pp)
+			print len(samp), 'samples'
+
+		   	# redshift
+	   		z = Ti.z
+			# HACK!! K-correction
+			Kz = 0.
+			#Kz = NYUK(z)
+			# velocity dispersion - sigma [km/s]
+			sigma = Ti.veldisp
+
+			vals = []
+			for p in samp:
+				tractor.setParams(p)
+
+				if type(src) is CompositeGalaxy:
+					# pnm = 'catalog.source%i.shapeDev.re' % si
+					# ire = pnames.index(pnm)
+					shape = src.shapeDev
+					# this is total exp + dev
+					mag = src.getBrightness()
+				elif type(src) is DevGalaxy:
+					shape = src.shape
+					mag = src.getBrightness()
+				# major axis [arcsec]
+				rdev = shape.re
+				# b/a axis ratio
+				ab = shape.ab
+				# deV mag [mag]
+				mdev = mag.getMag(band)
+				vals.append((rdev, ab, mdev, z, Kz, sigma))
+
+			Ti = tabledata()
+			vals = np.array(vals)
+			for j,col in enumerate(['rdev','ab','mdev','z','Kz', 'sigma']):
+				Ti.set(col, vals[:,j])
+
+			Ti.r0 = Ti.rdev * np.sqrt(Ti.ab)
+			Ti.mu0 = (Ti.mdev + 2.5 * log(2. * np.pi * Ti.r0**2) - Ti.Kz
+					  - 10.* log(1. + Ti.z))
+			Ti.I0 = 10.**(Ti.mu0 / -2.5)
+			Ti.DLz = DL(Ti.z)
+			Ti.DMz = 5. * log(Ti.DLz * 1e6 / 10.)
+			Ti.M = Ti.mdev - Ti.DMz - Ti.Kz
+			Ti.DAz = Ti.DLz / ((1.+Ti.z)**2)
+			Ti.R0 = arcsec2rad(Ti.r0) * Ti.DAz
+
+			for c in ['rdev', 'r0', 'mdev', 'mu0', 'I0', 'M', 'R0']:
+				plt.clf()
+				plt.hist(Ti.get(c), 100)
+				plt.xlabel(c)
+				ps.savefig()
+
+			MM = Ti.M
+			SS = Ti.sigma
+			RR = Ti.R0
+			MU = Ti.mu0
+
+			print 'SS', SS
+			xx = log(SS) + 0.2*(MU - 19.61)
+			plt.clf()
+			plt.hist(xx, 100)
+			plt.xlabel('FP x-axis')
+			ps.savefig()
+
+			yy = log(RR * 1e3 / h70)
+			plt.clf()
+			plt.hist(yy, 100)
+			plt.xlabel('FP y-axis')
+			ps.savefig()
+
+			def plot_pts(x, y, xr, yr):
+				pa = dict(color='k', marker='.', linestyle='None')
+				plt.plot(x, y, **pa)
+				#plt.xlim(xr)
+				#plt.ylim(yr)
+			la = dict(color='k', alpha=0.25)
+			ta = dict(color='r', lw=2,)
+			fa = dict(color='b', lw=2,)
+			ga = dict(color='g', lw=2,)
+
+			#print 'MM', MM.shape
+			print 'SS', SS.shape
+			print 'RR', RR.shape
+			print 'MU', MU.shape
+
+			plt.clf()
+			xl,xh = [1.25, 3.75]
+			yl,yh = [-0.5, 2.0]
+			plot_pts(log(SS) + 0.2*(MU - 19.61),
+					 log(RR * 1e3 / h70), (xl,xh), (yl,yh))
+			X = np.array([xl,xh])
+			# eyeballed Bernardi relation for i-band
+			plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
+			plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
+			plt.ylabel('log(R_0) [kpc / h]')
+			#plt.ylim(yl,yh)
+			#plt.xlim(xl,xh)
+			plt.title('FP')
+			ps.savefig()
+
+
+			svals.append(Ti)
+
+		#T = tabledata()
+		#T.
+		#stepslice = slice(-10,None)
+
+
+		return dict()
 		
 		
 	def stage103(self, tractor=None, band=None,

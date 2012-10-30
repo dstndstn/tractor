@@ -92,7 +92,6 @@ def main():
 	pp0 = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
 					 for i in range(nw)])
 
-
 	plt.figure(1, figsize=(6,6))
 	#plt.figure(2, figsize=(18,18))
 	plt.figure(2, figsize=(12,12))
@@ -123,7 +122,7 @@ def main():
 			print 'lnprobs:', lnp
 
 			for p,x in zip(lnp,pp):
-				tractor.setAllSourceParams(x)
+				tractor.setParams(x)
 				print 'lnp', p
 				print tractor.catalog
 
