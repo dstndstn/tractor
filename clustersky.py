@@ -1538,17 +1538,14 @@ class RunAbell(object):
 					   force=self.force, **kwargs)
 		return res
 
-	def optloop(self, tractor): #, srcs=None, roi=None):
+	def optloop(self, tractor):
 		band = self.bandname
 		j=0
 		while True:
 			print '-------------------------------------'
 			print 'Optimizing: step', j
 			print '-------------------------------------'
-			#if srcs is not None and roi is not None:
-		   	dlnp,X,alpha = tractor.optimize(priors=False)
-			#else:
-			#	dlnp,X,alpha = tractor.optimize()
+		   	dlnp,X,alpha = tractor.optimize() #priors=False)
 			print 'delta-logprob', dlnp
 			nup = 0
 			for src in tractor.getCatalog():
@@ -1920,6 +1917,22 @@ class RunAbell(object):
 		plt.gray()
 		ps.savefig()
 
+		return dict(imsub=imsub, imchi1=imchi1)
+
+
+	def stage206(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 subcat=None, sgroup=None, group=None, over=None,
+				 orig_ie=None, mpatch=None, imc=None, ps=None,
+				 imsub=None, imchi1=None,
+				 **kwargs):
+
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+		ix0,iy0 = wcs.x0,wcs.y0
+		slc = mpatch.getSlice()
+
 		# Model-switching the spectro targets
 		origsrcs = sgroup
 		newsrcs = []
@@ -2005,7 +2018,7 @@ class RunAbell(object):
 		return dict(old_sgroup=sgroup, new_sgroup=newsrcs,
 					sgi=sgi)
 	
-	def stage206(self, tractor=None, band=None,
+	def stage207(self, tractor=None, band=None,
 				 run=None, camcol=None, field=None,
 				 ra=None, dec=None, roi=None, tinf=None,
 				 subcat=None, sgroup=None, group=None, over=None,
@@ -2065,13 +2078,18 @@ class RunAbell(object):
 		submod = modj[slc]
 		H,W = submod.shape
 		print 'Submod shape:', submod.shape
-		NX,NY = 2 + int(np.ceil(W/50.)), 2 + int(np.ceil(H/50.))
+		G = 100.
+		NX,NY = 2 + int(np.ceil(W/G)), 2 + int(np.ceil(H/G))
 		print 'NX,NY', NX,NY
 		vals = np.zeros((NY,NX))
 		print 'vals shape', vals.shape
 		XX = np.linspace(0, W, NX)
 		YY = np.linspace(0, H, NY)
 		ssky = SplineSky(XX, YY, vals)
+		###
+		sigma = 1./np.median(orig_ie)
+		print 'Sigma', sigma
+		ssky.setPriorSmoothness(sigma * 0.3)
 
 		subsky = SubSky(ssky, slc)		
 		
@@ -2084,7 +2102,17 @@ class RunAbell(object):
 		for nm in tractor.getParamNames():
 			print '  ', nm
 
+		print 'Initial:'
+		print 'lnLikelihood', tractor.getLogLikelihood()
+		print 'lnPrior', tractor.getLogPrior()
+		print 'lnProb', tractor.getLogProb()
+
 		self.optloop(tractor)
+
+		print 'After opt:'
+		print 'lnLikelihood', tractor.getLogLikelihood()
+		print 'lnPrior', tractor.getLogPrior()
+		print 'lnProb', tractor.getLogProb()
 
 		modj = tractor.getModelImage(0)
 		chi = tractor.getChiImage(0)
