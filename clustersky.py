@@ -69,6 +69,7 @@ if __name__ == '__main__':
 import numpy as np
 import pylab as plt
 import scipy.interpolate
+import os
 
 from astrometry.util.fits import *
 from astrometry.util.file import *
@@ -1511,7 +1512,6 @@ class SubImage(Image):
 									   wcs=wcs, sky=sky, photocal=pcal,
 									   name='sub'+im.name)
 
-
 		
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
@@ -1524,7 +1524,7 @@ class RunAbell(object):
 		self.dec = dec
 		self.R = R
 		self.aco = aco
-		self.prereqs = { 103: 2 }
+		self.prereqs = { 103: 2, 203: 2 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -1602,6 +1602,303 @@ class RunAbell(object):
 		self.optloop(tractor)
 		return dict(tractor=tractor)
 
+	def stage203(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None,
+				 **kwargs):
+		print 'Stage203: kwargs', kwargs
+		S = (self.R * 60.) / 0.396
+		getim = st.get_tractor_image_dr9
+		getsrc = st.get_tractor_sources_dr9
+		tim,tinf = getim(run, camcol, field, band,
+						 roiradecsize=(self.ra, self.dec, S), nanomaggies=True)
+		print 'tinf', tinf
+		tim = tractor.getImage(0)
+		tim.origInvvar = None
+		tim.starMask = None
+		return dict(tinf=tinf, roi=tinf['roi'])
+		
+	def stage204(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 **kwargs):
+		#print 'Stage204: kwargs', kwargs
+		fn = 'a%04i-spectro.fits' % self.aco
+		if not os.path.exists(fn):
+			sql = ' '.join(['select ra,dec,sourceType,z,zerr,',
+							'class as clazz, subclass, velDisp,',
+							'velDispErr',
+							'from SpecObj where',
+							'ra between %f and %f and',
+							'dec between %f and %f']) % (ra-1, ra+1, dec-1, dec+1)
+			from astrometry.util import casjobs
+			casjobs.setup_cookies()
+			cas = casjobs.get_known_servers()['dr9']
+			username = os.environ['SDSS_CAS_USER']
+			password = os.environ['SDSS_CAS_PASS']
+			cas.login(username, password)
+			cas.sql_to_fits(sql, fn, dbcontext='DR9')
+			print 'Saved', fn
+
+		T = fits_table(fn)
+		print 'Read', len(T), 'spectro targets'
+		T.about()
+		T.cut(T.clazz == 'GALAXY')
+		print 'Cut to', len(T), 'galaxies'
+
+		cat = tractor.getCatalog()
+		for i,src in enumerate(cat):
+			src.ind = i
+
+		rd = [src.getPosition() for src in cat]
+		ra  = np.array([p.ra  for p in rd])
+		dec = np.array([p.dec for p in rd])
+		rad = 1./3600.
+		I,J,d = sm.match_radec(T.ra, T.dec, ra, dec, rad,
+							   nearest=True)
+		print len(I), 'matches on RA,Dec'
+		T.cut(I)
+		specI = J
+
+		# Optimize SDSS deblend families for spectro objects
+		sdss = DR9()
+		fn = sdss.retrieve('photoObj', run, camcol, field)
+		objs = fits_table(fn)
+		
+		kids = objs[objs.nchild == 0]
+		allkids = kids
+		I,J,d = sm.match_radec(
+			np.array([src.getPosition().ra  for src in cat]),
+			np.array([src.getPosition().dec for src in cat]),
+			kids.ra, kids.dec, 1./3600., nearest=True)
+		print len(cat), 'tractor sources'
+		print len(kids), 'SDSS kids'
+		print len(I), 'matched'
+		#kids = kids[J]
+
+		for src in cat:
+			src.parent = -2
+		for i,j in zip(I,J):
+			cat[i].parent = kids[j].parent
+
+		P = np.array([src.parent for src in cat])
+		specP = P[specI]
+		print 'spec parents:', specP
+		sgis = []
+		gis = []
+		specgroups = []
+		groups = []
+		for i,p in zip(specI, specP):
+			if p == -1:
+				sgis.append([i])
+				groups.append([cat[i]])
+				specgroups.append([cat[i]])
+		print len(groups), 'unblended'
+		for p in np.unique(specP):
+			if p in [-1, -2]:
+				continue
+			print 'parent', p
+			K = np.flatnonzero(p == specP)
+			print 'specs', K
+			specgroups.append([cat[i] for i in specI[K]])
+			sgis.append(specI[K])
+			K = np.flatnonzero(p == P)
+			print len(K), 'with parent', p
+			groups.append([cat[i] for i in K])
+			gis.append([i for i in K if not i in sgis[-1]])
+		print 'Groups:', len(groups)
+
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+		ima = dict(interpolation='nearest', origin='lower',
+				   extent=roi)
+		zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+		imc = ima.copy()
+		imc.update(norm=ArcsinhNormalize(mean=tinf['sky'], std=tinf['skysig']),
+				   vmin=zr2[0], vmax=zr2[1])
+		
+		tim = tractor.getImage(0)
+		mod = tractor.getModelImage(0)
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(mod, **imc)
+		plt.gray()
+		ps.savefig()
+		
+		# Find the bbox of the sources in this group
+		for i,(sgroup,group) in enumerate(zip(specgroups, groups)):
+			bbox = tractor.getBbox(tim, group)
+			
+			plt.clf()
+			plt.imshow(mod, **imc)
+			plt.gray()
+			ax = plt.axis()
+			wcs = tim.getWcs()
+			ix0,iy0 = wcs.x0,wcs.y0
+			for src in group:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x+ix0],[y+iy0], 'o', mec='y', mfc='none',
+						 mew=1.5, ms=10, alpha=0.5)
+			for src in sgroup:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
+						 mew=1.5, ms=8, alpha=0.5)
+			x0,x1,y0,y1 = bbox
+			plt.plot([x+ix0 for x in [x0,x0,x1,x1,x0]],
+					 [y+iy0 for y in [y0,y1,y1,y0,y0]], 'r-')
+			plt.axis(ax)
+			plt.title('Group %i' % (i+1))
+			ps.savefig()
+
+			sigma = 1./np.sqrt(np.median(tim.getInvvar()))
+			modi = tractor.getModelImage(tim, group, sky=False)
+
+			# norm = ArcsinhNormalize(mean=tinf['sky'],
+			# 						std=tinf['skysig'])
+			# norm.vmin = zr2[0]
+			# norm.vmax = zr2[1]
+			# rgb = norm(modi)
+			# rgb = np.clip(rgb, 0, 1)
+			# print 'rgb', rgb
+			# print rgb.shape
+			# print rgb.min(), rgb.max()
+			#r2 = rgb[:,:,np.newaxis].repeat(3,axis=2)
+
+			# plt.clf()
+			# #r2[:,:,2] = np.clip(rgb + 0.2*(modi >= sigma), 0, 1)
+			# #plt.imshow(r2, **ima)
+			# plt.imshow(modi >= sigma, **ima)
+			# plt.title('1 sigma')
+			# ps.savefig()
+			# 
+			# plt.clf()
+			# #r2[:,:,2] = np.clip(rgb + 0.2*(modi >= 0.1*sigma), 0, 1)
+			# #plt.imshow(r2, **ima)
+			# plt.imshow(modi >= 0.1*sigma, **ima)
+			# plt.title('0.1 sigma')
+			# ps.savefig()
+			# 
+			# plt.clf()
+			# plt.imshow(modi >= 0.01*sigma, **ima)
+			# plt.title('0.01 sigma')
+			# ps.savefig()
+
+			thresh = 0.1*sigma
+			mask = (modi >= thresh)
+
+			mpatch = Patch(0, 0, mask)
+			mpatch.trimToNonZero()
+			print 'Mask:', mpatch
+			
+			over = []
+			for src in cat:
+				if src in group:
+					continue
+				p = tractor.getModelPatch(tim, src)
+				if p is None:
+					continue
+				ns = np.sum(p.patch) / sigma
+				# otherwise we corrupt the cache...!
+				p = p.copy()
+				p.patch = (p.patch >= thresh)
+				if mpatch.hasNonzeroOverlapWith(p):
+					print 'Patch:', ns, 'sigma'
+					over.append(src)
+					#print 'src', src
+					#print 'group', group
+					#print 'src index', src.ind
+					#print 'group', [g.ind for g in group]
+					
+			for src in over:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x+ix0],[y+iy0], 'o', mec='g', mfc='none',
+						 mew=1.5, ms=6, alpha=0.5)
+			ps.savefig()
+				
+			plt.clf()
+			plt.imshow(((modi >= 0.01*sigma).astype(int) +
+						(modi >= 0.1*sigma).astype(int) +
+						(modi >= sigma).astype(int)), **ima)
+			plt.title('1 / 0.1 / 0.01 sigma')
+			ps.savefig()
+
+			subcat = Catalog(*(group + over))
+			subcat.freezeAllParams()
+			for i in range(len(group)):
+				subcat.thawParam(i)
+			tractor.setCatalog(subcat)
+
+			# Zero out chi contribution outside masked area
+			ie = tim.getInvError()
+			orig_ie = ie.copy()
+			ie[mask == 0] = 0.
+
+			slc = mpatch.getSlice()
+			subext = mpatch.getExtent()
+			imsub = imc.copy()
+			imsub.update(extent=subext)
+			imchi1 = ima.copy()
+			imchi1.update(vmin=-5, vmax=5, extent=subext)
+
+			modj = tractor.getModelImage(0)
+			chi = tractor.getChiImage(0)
+
+			plt.clf()
+			plt.imshow(modj, **imc)
+			plt.gray()
+			ps.savefig()
+			
+			plt.clf()
+			plt.imshow(modj[slc], **imsub)
+			plt.gray()
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(chi[slc], **imchi1)
+			plt.gray()
+			ps.savefig()
+
+			print 'Sub tractor: params'
+			for nm in tractor.getParamNames():
+				print '  ', nm
+			
+			self.optloop(tractor)
+
+			modj = tractor.getModelImage(0)
+			chi = tractor.getChiImage(0)
+
+			plt.clf()
+			plt.imshow(chi[slc], **imchi1)
+			plt.gray()
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(modj[slc], **imsub)
+			plt.gray()
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(tim.getImage()[slc], **imsub)
+			plt.gray()
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(modj, **imc)
+			plt.gray()
+			ps.savefig()
+			
+			# Revert
+			tim.inverr = orig_ie
+			tractor.setCatalog(cat)
+			
+			
+			
+		
+		
 	def stage103(self, tractor=None, band=None,
 				 run=None, camcol=None, field=None,
 				 tinf=None, roi=None,

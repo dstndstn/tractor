@@ -235,7 +235,7 @@ class Patch(object):
 
 	def hasBboxOverlapWith(self, other):
 		oext = other.getExtent()
-		return self.overlapsBbox()
+		return self.overlapsBbox(oext)
 		
 	def hasNonzeroOverlapWith(self, other):
 		if not self.hasBboxOverlapWith(other):
@@ -1277,6 +1277,29 @@ class Tractor(MultiParams):
 		'''
 		return self.getLogLikelihood() + self.getLogPrior()
 
+	def getBbox(self, img, srcs):
+		nzsum = None
+		# find bbox
+		for src in srcs:
+		 	p = self.getModelPatch(img, src)
+		 	if p is None:
+		 		continue
+		 	nz = p.getNonZeroMask()
+		 	nz.patch = nz.patch.astype(np.int)
+		 	if nzsum is None:
+		 		nzsum = nz
+		 	else:
+		 		nzsum += nz
+			# ie = tim.getInvError()
+			# p2 = np.zeros_like(ie)
+			# p.addTo(p2)
+			# effect = np.sum(p2)
+			# print 'Source:', src
+			# print 'Total chi contribution:', effect, 'sigma'
+		nzsum.trimToNonZero()
+		roi = nzsum.getExtent()
+		return roi
+	
 	def createNewSource(self, img, x, y, height):
 		return None
 
