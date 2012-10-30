@@ -1952,17 +1952,20 @@ class RunAbell(object):
 					dbr, src.getShape().copy())
 				newsrcs.append(newgal)
 			else:
-				newsrcs.append(None)
+				newsrcs.append(src)
+
 		sgi = []
 		for src,newsrc in zip(sgroup,newsrcs):
 			if newsrc is None:
 				continue
 			i = subcat.index(src)
+			sgi.append(i)
+			if newsrc == src:
+				continue
 			subcat[i] = newsrc
 			print 'Switching source', i, 'from:'
 			print ' from  ', src
 			print ' to    ', newsrc
-			sgi.append(i)
 		tractor.catalog.freezeAllBut(*sgi)
 
 		modj = tractor.getModelImage(0)
@@ -2089,14 +2092,16 @@ class RunAbell(object):
 		###
 		sigma = 1./np.median(orig_ie)
 		print 'Sigma', sigma
-		ssky.setPriorSmoothness(sigma * 0.3)
+		ssky.setPriorSmoothness(sigma * 0.1)
 
 		subsky = SubSky(ssky, slc)		
-		
+
 		tim.sky = subsky
 		tractor.thawParam('images')
 		tim.freezeAllBut('sky')
 		tractor.catalog.freezeAllBut(*sgi)
+
+		print 'Supposed to be thawing sources', sgi
 
 		print 'Spline sky: opt'
 		for nm in tractor.getParamNames():
