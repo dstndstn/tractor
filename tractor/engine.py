@@ -293,12 +293,6 @@ class Patch(object):
 	def clipTo(self, W, H):
 		if self.patch is None:
 			return False
-		if self.x0 < 0:
-			self.patch = self.patch[:, -self.x0:]
-			self.x0 = 0
-		if self.y0 < 0:
-			self.patch = self.patch[-self.y0:, :]
-			self.y0 = 0
 		if self.x0 >= W:
 			# empty
 			self.patch = None
@@ -306,6 +300,12 @@ class Patch(object):
 		if self.y0 >= H:
 			self.patch = None
 			return False
+		if self.x0 < 0:
+			self.patch = self.patch[:, -self.x0:]
+			self.x0 = 0
+		if self.y0 < 0:
+			self.patch = self.patch[-self.y0:, :]
+			self.y0 = 0
 		(h,w) = self.shape
 		if (self.x0 + w) > W:
 			self.patch = self.patch[:, :(W - self.x0)]

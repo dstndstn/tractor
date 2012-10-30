@@ -9,25 +9,30 @@ class SplineSky(ParamList):
 		# spline boxes)
 
 		self.spl = interp.RectBivariateSpline(X, Y, bg.T)
-		print 'fp', self.spl.fp
-		print 'tck', self.spl.tck
-		print 'deg', self.spl.degrees
+		#print 'fp', self.spl.fp
+		#print 'tck', self.spl.tck
+		#print 'deg', self.spl.degrees
 		(tx, ty, c) = self.spl.tck
-		print 'tx', tx
-		print 'ty', ty
+		#print 'tx', tx
+		#print 'ty', ty
 		# shape of c: (len(X) - kx(=3) - 1) * (len(Y) - ky(=3) - 1)
-		print 'c', c
-		print ','.join(['%g'%x for x in tx])
+		#print 'c', c
+		#print ','.join(['%g'%x for x in tx])
 		super(SplineSky, self).__init__(*c)
 		# override -- "c" is a list, so this should work as expected
 		self.vals = c
 
 	def addTo(self, mod):
 		H,W = mod.shape
-		X = np.arange(W)
-		Y = np.arange(H)[:,np.newaxis]
+		#X = np.arange(W)
+		#Y = np.arange(H)[:,np.newaxis]
+		X = np.arange(W)#[:,np.newaxis]
+		Y = np.arange(H)
 		#print 'Y', Y.shape, 'Y.T', Y.T.shape
-		S = self.spl(X, Y.T)
+		#print 'X shape', X.shape, 'Y shape', Y.shape
+		#S = self.spl(X, Y.T)
+		S = self.spl(X, Y).T
+		#print 'mod', mod.shape
 		#print 'S', S.shape
 		mod += S
 		

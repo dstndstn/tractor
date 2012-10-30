@@ -1622,7 +1622,6 @@ class RunAbell(object):
 				 run=None, camcol=None, field=None,
 				 ra=None, dec=None, roi=None, tinf=None,
 				 **kwargs):
-		#print 'Stage204: kwargs', kwargs
 		fn = 'a%04i-spectro.fits' % self.aco
 		if not os.path.exists(fn):
 			sql = ' '.join(['select ra,dec,sourceType,z,zerr,',
@@ -1808,10 +1807,6 @@ class RunAbell(object):
 				if mpatch.hasNonzeroOverlapWith(p):
 					print 'Patch:', ns, 'sigma'
 					over.append(src)
-					#print 'src', src
-					#print 'group', group
-					#print 'src index', src.ind
-					#print 'group', [g.ind for g in group]
 					
 			for src in over:
 				x,y = wcs.positionToPixel(src.getPosition())
@@ -1837,65 +1832,278 @@ class RunAbell(object):
 			orig_ie = ie.copy()
 			ie[mask == 0] = 0.
 
-			slc = mpatch.getSlice()
-			subext = mpatch.getExtent()
-			imsub = imc.copy()
-			imsub.update(extent=subext)
-			imchi1 = ima.copy()
-			imchi1.update(vmin=-5, vmax=5, extent=subext)
 
-			modj = tractor.getModelImage(0)
-			chi = tractor.getChiImage(0)
+			return dict(cat=cat, subcat=subcat,
+						sgroup=sgroup, group=group, over=over,
+						orig_ie=orig_ie,
+						mpatch=mpatch, imc=imc, ps=ps,
+						tractor=tractor)
 
-			plt.clf()
-			plt.imshow(modj, **imc)
-			plt.gray()
-			ps.savefig()
-			
-			plt.clf()
-			plt.imshow(modj[slc], **imsub)
-			plt.gray()
-			ps.savefig()
+	def stage205(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 subcat=None, sgroup=None, group=None, over=None,
+				 orig_ie=None, mpatch=None, imc=None, ps=None,
+				 **kwargs):
+		ima = dict(interpolation='nearest', origin='lower',
+				   extent=roi)
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+		ix0,iy0 = wcs.x0,wcs.y0
 
-			plt.clf()
-			plt.imshow(chi[slc], **imchi1)
-			plt.gray()
-			ps.savefig()
+		slc = mpatch.getSlice()
+		subext = mpatch.getExtent()
+		#print 'Subimage extent:', subext
+		subext = [subext[0]+ix0, subext[1]+ix0,
+				  subext[2]+iy0, subext[3]+iy0]
+		#print 'Subimage extent:', subext
+		imsub = imc.copy()
+		imsub.update(extent=subext)
+		imchi1 = ima.copy()
+		imchi1.update(vmin=-5, vmax=5, extent=subext)
 
-			print 'Sub tractor: params'
-			for nm in tractor.getParamNames():
-				print '  ', nm
-			
-			self.optloop(tractor)
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
 
-			modj = tractor.getModelImage(0)
-			chi = tractor.getChiImage(0)
+		plt.clf()
+		plt.imshow(modj, **imc)
+		plt.gray()
+		ps.savefig()
+		
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
 
-			plt.clf()
-			plt.imshow(chi[slc], **imchi1)
-			plt.gray()
-			ps.savefig()
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
 
-			plt.clf()
-			plt.imshow(modj[slc], **imsub)
-			plt.gray()
-			ps.savefig()
+		print 'Sub tractor: params'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+		
+		self.optloop(tractor)
 
-			plt.clf()
-			plt.imshow(tim.getImage()[slc], **imsub)
-			plt.gray()
-			ps.savefig()
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
 
-			plt.clf()
-			plt.imshow(modj, **imc)
-			plt.gray()
-			ps.savefig()
-			
-			# Revert
-			tim.inverr = orig_ie
-			tractor.setCatalog(cat)
-			
-			
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getImage()[slc], **imsub)
+		ax = plt.axis()
+		for src in sgroup:
+			x,y = wcs.positionToPixel(src.getPosition())
+			print 'sgroup', src, 'x,y', x+ix0, y+iy0
+			plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
+					 mew=1.5, ms=8, alpha=0.5)
+
+		plt.axis(ax)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj, **imc)
+		plt.gray()
+		ps.savefig()
+
+		# Model-switching the spectro targets
+		origsrcs = sgroup
+		newsrcs = []
+		for src in sgroup:
+			if isinstance(src, DevGalaxy):
+				mag = src.getBrightness().getMag(band)
+				#en = NanoMaggies.magToNanomaggies(mag + 5.)
+				#dn = NanoMaggies.magToNanomaggies(mag + 0.01)
+				# Give it 10% of the flux
+				en = NanoMaggies.magToNanomaggies(mag + 2.5)
+				dn = NanoMaggies.magToNanomaggies(mag + 0.1)
+				ebr = NanoMaggies(**{band:en})
+				dbr = NanoMaggies(**{band:dn})
+				newgal = CompositeGalaxy(
+					src.pos.copy(), ebr, src.getShape().copy(),
+					dbr, src.getShape().copy())
+				newsrcs.append(newgal)
+		sgi = []		
+		for src,newsrc in zip(sgroup,newsrcs):
+			i = subcat.index(src)
+			subcat[i] = newsrc
+			print 'Switching source', i, 'from:'
+			print ' from  ', src
+			print ' to    ', newsrc
+			sgi.append(i)
+		tractor.catalog.freezeAllBut(*sgi)
+
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
+
+		print 'Model-switching: opt params'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+		
+		self.optloop(tractor)
+
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
+
+		tractor.catalog.thawAllParams()
+		print 'Model-switching: opt all'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
+
+		return dict(old_sgroup=sgroup, new_sgroup=newsrcs,
+					sgi=sgi)
+	
+	def stage206(self, tractor=None, band=None,
+				 run=None, camcol=None, field=None,
+				 ra=None, dec=None, roi=None, tinf=None,
+				 subcat=None, sgroup=None, group=None, over=None,
+				 orig_ie=None, mpatch=None, imc=None, ps=None,
+				 old_sgroup=None, new_sgroup=None, sgi=None,
+				 cat=None,
+				 **kwargs):
+		ima = dict(interpolation='nearest', origin='lower',
+				   extent=roi)
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+		ix0,iy0 = wcs.x0,wcs.y0
+		slc = mpatch.getSlice()
+
+		print 'Mpatch', mpatch
+		print 'Slice', slc
+		subext = mpatch.getExtent()
+		print 'Extent', subext
+		subext = [subext[0]+ix0, subext[1]+ix0,
+				  subext[2]+iy0, subext[3]+iy0]
+		print 'Subimage extent:', subext
+		imsub = imc.copy()
+		imsub.update(extent=subext)
+		imchi1 = ima.copy()
+		imchi1.update(vmin=-5, vmax=5, extent=subext)
+
+		srcs = group + over
+		I = np.argsort([src.getBrightness().getMag(band) for src in srcs])
+		modj = tractor.getModelImage(0)
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ax = plt.axis()
+		print 'Brightest sources:'
+		for j,i in enumerate(I[:10]):
+			src = srcs[i]
+			print src
+			x,y = wcs.positionToPixel(src.getPosition())
+			plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
+					 mew=1.5, ms=8, alpha=0.5)
+			plt.text(x+ix0, y+iy0, '%i'%j, color='r')
+		plt.axis(ax)
+		ps.savefig()
+
+		blank = [0]
+		ie = tim.getInvError()
+		for j in blank:
+			src = srcs[I[j]]
+			x,y = wcs.positionToPixel(src.getPosition())
+			rr = 25
+			H,W = ie.shape
+			ie[max(0, y-rr): min(H, y+rr+1),
+			   max(0, x-rr): min(W, x+rr+1)] = 0
+		
+		# Add spline sky
+		modj = tractor.getModelImage(0)
+		submod = modj[slc]
+		H,W = submod.shape
+		print 'Submod shape:', submod.shape
+		NX,NY = 2 + int(np.ceil(W/50.)), 2 + int(np.ceil(H/50.))
+		print 'NX,NY', NX,NY
+		vals = np.zeros((NY,NX))
+		print 'vals shape', vals.shape
+		XX = np.linspace(0, W, NX)
+		YY = np.linspace(0, H, NY)
+		ssky = SplineSky(XX, YY, vals)
+
+		subsky = SubSky(ssky, slc)		
+		
+		tim.sky = subsky
+		tractor.thawParam('images')
+		tim.freezeAllBut('sky')
+		tractor.catalog.freezeAllBut(*sgi)
+
+		print 'Spline sky: opt'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		self.optloop(tractor)
+
+		modj = tractor.getModelImage(0)
+		chi = tractor.getChiImage(0)
+
+		plt.clf()
+		plt.imshow(chi[slc], **imchi1)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(modj[slc], **imsub)
+		plt.gray()
+		ps.savefig()
+
+		skyim = np.zeros_like(modj[slc])
+		ssky.addTo(skyim)
+		plt.clf()
+		plt.imshow(skyim, **imsub)
+		plt.gray()
+		plt.title('Spline sky model')
+		ps.savefig()
+		
+		# Revert
+		#tim.inverr = orig_ie
+		#tractor.setCatalog(cat)
+
+		return dict()
 			
 		
 		
@@ -2116,6 +2324,17 @@ class RunAbell(object):
 		return dict(tractor=tractor)
 
 	#def stage8(self, tractor=None, **kwargs):
+
+class SubSky(ParamsWrapper):
+	def __init__(self, real, slc):
+		super(SubSky, self).__init__(real)
+		self.real = real
+		self.slc = slc
+	def getParamDerivatives(self, img):
+		return self.real.getParamDerivatives(img)
+	def addTo(self, mod):
+		self.real.addTo(mod[self.slc])
+
 	
 
 if __name__ == '__main__':

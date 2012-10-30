@@ -190,7 +190,8 @@ class Galaxy(MultiParams):
 
 	def getPosition(self):
 		return self.pos
-
+	def getShape(self):
+		return self.shape
 	def getBrightness(self):
 		return self.brightness
 	def getBrightnesses(self):
