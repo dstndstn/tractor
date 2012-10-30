@@ -1805,7 +1805,7 @@ class RunAbell(object):
 				p = p.copy()
 				p.patch = (p.patch >= thresh)
 				if mpatch.hasNonzeroOverlapWith(p):
-					print 'Patch:', ns, 'sigma'
+					#print 'Patch:', ns, 'sigma'
 					over.append(src)
 					
 			for src in over:
@@ -1813,7 +1813,11 @@ class RunAbell(object):
 				plt.plot([x+ix0],[y+iy0], 'o', mec='g', mfc='none',
 						 mew=1.5, ms=6, alpha=0.5)
 			ps.savefig()
-				
+
+			##### HACK!
+			if i != 1:
+				continue
+			
 			plt.clf()
 			plt.imshow(((modi >= 0.01*sigma).astype(int) +
 						(modi >= 0.1*sigma).astype(int) +
@@ -1869,6 +1873,18 @@ class RunAbell(object):
 		plt.imshow(modj, **imc)
 		plt.gray()
 		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getImage()[slc], **imsub)
+		ax = plt.axis()
+		for src in sgroup:
+			x,y = wcs.positionToPixel(src.getPosition())
+			#print 'sgroup', src, 'x,y', x+ix0, y+iy0
+			plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
+					 mew=1.5, ms=8, alpha=0.5)
+		plt.axis(ax)
+		plt.gray()
+		ps.savefig()
 		
 		plt.clf()
 		plt.imshow(modj[slc], **imsub)
@@ -1900,19 +1916,6 @@ class RunAbell(object):
 		ps.savefig()
 
 		plt.clf()
-		plt.imshow(tim.getImage()[slc], **imsub)
-		ax = plt.axis()
-		for src in sgroup:
-			x,y = wcs.positionToPixel(src.getPosition())
-			print 'sgroup', src, 'x,y', x+ix0, y+iy0
-			plt.plot([x+ix0],[y+iy0], 'o', mec='r', mfc='none',
-					 mew=1.5, ms=8, alpha=0.5)
-
-		plt.axis(ax)
-		plt.gray()
-		ps.savefig()
-
-		plt.clf()
 		plt.imshow(modj, **imc)
 		plt.gray()
 		ps.savefig()
@@ -1923,6 +1926,7 @@ class RunAbell(object):
 		for src in sgroup:
 			if isinstance(src, DevGalaxy):
 				mag = src.getBrightness().getMag(band)
+				# Give it 1% of the flux
 				#en = NanoMaggies.magToNanomaggies(mag + 5.)
 				#dn = NanoMaggies.magToNanomaggies(mag + 0.01)
 				# Give it 10% of the flux
@@ -1934,8 +1938,12 @@ class RunAbell(object):
 					src.pos.copy(), ebr, src.getShape().copy(),
 					dbr, src.getShape().copy())
 				newsrcs.append(newgal)
-		sgi = []		
+			else:
+				newsrcs.append(None)
+		sgi = []
 		for src,newsrc in zip(sgroup,newsrcs):
+			if newsrc is None:
+				continue
 			i = subcat.index(src)
 			subcat[i] = newsrc
 			print 'Switching source', i, 'from:'
@@ -2042,15 +2050,15 @@ class RunAbell(object):
 		plt.axis(ax)
 		ps.savefig()
 
-		blank = [0]
-		ie = tim.getInvError()
-		for j in blank:
-			src = srcs[I[j]]
-			x,y = wcs.positionToPixel(src.getPosition())
-			rr = 25
-			H,W = ie.shape
-			ie[max(0, y-rr): min(H, y+rr+1),
-			   max(0, x-rr): min(W, x+rr+1)] = 0
+		# blank = [0]
+		# ie = tim.getInvError()
+		# for j in blank:
+		# 	src = srcs[I[j]]
+		# 	x,y = wcs.positionToPixel(src.getPosition())
+		# 	rr = 25
+		# 	H,W = ie.shape
+		# 	ie[max(0, y-rr): min(H, y+rr+1),
+		# 	   max(0, x-rr): min(W, x+rr+1)] = 0
 		
 		# Add spline sky
 		modj = tractor.getModelImage(0)
