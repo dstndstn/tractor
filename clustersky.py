@@ -69,6 +69,7 @@ if __name__ == '__main__':
 import numpy as np
 import pylab as plt
 import scipy.interpolate
+import scipy.spatial
 import os
 
 from astrometry.util.fits import *
@@ -145,6 +146,30 @@ def get_dm_table():
 	plt.clf()
 	plt.plot(Z, DL, 'k-')
 	plt.savefig('dlz.png')
+
+def get_spectro_table(ra, dec, aco):
+	fn = 'a%04i-spectro.fits' % aco
+	if not os.path.exists(fn):
+		sql = ' '.join(['select ra,dec,sourceType,z,zerr,',
+						'class as clazz, subclass, velDisp,',
+						'velDispErr',
+						'from SpecObj where',
+						'ra between %f and %f and',
+						'dec between %f and %f']) % (ra-1, ra+1, dec-1, dec+1)
+		from astrometry.util import casjobs
+		casjobs.setup_cookies()
+		cas = casjobs.get_known_servers()['dr9']
+		username = os.environ['SDSS_CAS_USER']
+		password = os.environ['SDSS_CAS_PASS']
+		cas.login(username, password)
+		try:
+			cas.sql_to_fits(sql, fn, dbcontext='DR9')
+			print 'Saved', fn
+		except:
+			print 'Failed to execute SQL query on CasJobs'
+			return None
+	return fn
+
 
 class LuminosityDistance(object):
 	def __init__(self):
@@ -1448,6 +1473,14 @@ def runlots(stage, N, force=[]):
 	for ai in range(len(T)):
 		Ti = T[ai]
 		print 'Abell', Ti.aco, 'with m10', Ti.m10
+
+		blacklist = [2666, # no SDSS spectro coverage
+					 2634,
+					 ]
+		if Ti.aco in blacklist:
+			print 'Skipping blacklisted Abell', Ti.aco
+			continue
+
 		# Totally arbitrary radius in arcmin
 		R = 5.
 		RS = np.hypot(R, np.hypot(13., 9.)/2.)
@@ -1455,6 +1488,37 @@ def runlots(stage, N, force=[]):
 		if len(rcf) == 0:
 			continue
 		print 'RCF', rcf
+
+
+		# Overview plot
+		fn = get_spectro_table(Ti.ra, Ti.dec, Ti.aco)
+		if fn is None:
+			continue
+		Tspec = fits_table(fn)
+		sdss = DR9()
+		corners = []
+		for run,camcol,field,nil,nil in rcf:
+			bandname = 'i'
+			fn = sdss.retrieve('frame', run, camcol, field, bandname)
+			frame = sdss.readFrame(run, camcol, field, bandname,
+								   filename=fn)
+			astrans = frame.getAsTrans()
+			W,H = 2048,1489
+			rds = [astrans.pixel_to_radec(x,y)
+				   for x,y in [(0,0),(W,0),(W,H),(0,H),(0,0)]]
+			corners.append(rds)
+		plt.clf()
+		for rds in corners:
+			rds = np.array(rds)
+			plt.plot(rds[:,0], rds[:,1], 'k-')
+		plt.plot(Tspec.ra, Tspec.dec, 'o', mec='r', mfc='none',
+				 mew=1.5, ms=5, alpha=0.5)
+		plt.plot([Ti.ra], [Ti.dec], 'k+', ms=30, mew=2)
+		plt.xlabel('RA (deg)')
+		plt.ylabel('Dec (deg)')
+		plt.savefig('overview-a%04i.png' % Ti.aco)
+
+
 
 		for run,camcol,field,nil,nil in rcf:
 			print 'RCF', run, camcol, field
@@ -1477,7 +1541,6 @@ def runlots(stage, N, force=[]):
 					break
 			if len(RR) >= N:
 				break
-
 		if len(RR) >= N:
 			break
 
@@ -1525,7 +1588,7 @@ class RunAbell(object):
 		self.R = R
 		self.aco = aco
 		#self.prereqs = { 103: 2, 203: 2 }
-		self.prereqs = { 103: 2, 204: 0 }
+		self.prereqs = { 103: 2, 204: 0, 1000: 0, }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -1559,6 +1622,134 @@ class RunAbell(object):
 			if dlnp < 1:
 				break
 			j += 1
+
+	def stage1000(self, run=None, camcol=None, field=None,
+				  band=None, ra=None, dec=None, **kwargs):
+		tim,tinf = st.get_tractor_image_dr9(run, camcol, field, band,
+											nanomaggies=True, psf='dg')
+		# sources = st.get_tractor_sources_dr9(run, camcol, field, band,
+		# 									 nanomaggies=True,
+		# 									 bands=[band])
+
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', '') + '-g2')
+
+		sdss = DR9()
+		fn = sdss.retrieve('photoObj', run, camcol, field)
+		objs = fits_table(fn)
+
+		# top-level deblend families
+		dt = objs.parent.dtype
+		idToIndex = np.zeros(max(objs.id)+1, dt) - 1
+		idToIndex[objs.id.astype(dt)] = np.arange(len(objs)).astype(dt)
+		print 'idToIndex:', idToIndex
+		# objs.family is the *index* (not id) of the top-level
+		# deblend ancestor for each object.
+		objs.family = np.zeros_like(objs.parent) - 1
+		print 'objs.family:', objs.family
+		I = np.flatnonzero(objs.parent > -1)
+		print 'parents:', objs.parent[I].astype(dt)
+		print 'ids', idToIndex[objs.parent[I].astype(dt)]
+		objs.family[I] = idToIndex[objs.parent[I].astype(dt)].astype(dt)
+
+		while True:
+			I = np.flatnonzero(objs.family > -1)
+			# current ancestors
+			A = objs[ objs.family[I] ]
+			# ancestors that still have parents
+			J = np.flatnonzero(A.family > -1)
+			if len(J) == 0:
+				break
+			print 'Updating', len(J), 'ancestors'
+			# update family pointers
+			objs.family[I[J]] = A.family[J]
+
+		kids = objs[objs.nchild == 0]
+
+		abell = self.abell
+		print abell.about()
+
+		fn = get_spectro_table(abell.ra, abell.dec, self.aco)
+		if fn is None:
+			return dict()
+		print 'Looking for', fn
+		#fn = 'a%04i-spectro.fits' % self.aco
+		Tspec = fits_table(fn)
+		print len(Tspec), 'SDSS spectra'
+		Tspec.cut(Tspec.clazz == 'GALAXY')
+		print len(Tspec), 'after cut on GALAXY'
+		Tspec.cut((Tspec.z > 0) * (Tspec.z <= 0.3))
+		print len(Tspec), 'after cut on z'
+
+		ima = dict(interpolation='nearest', origin='lower')
+		zr2 = tinf['sky'] + tinf['skysig'] * np.array([-3, 100])
+		imc = ima.copy()
+		imc.update(norm=ArcsinhNormalize(mean=tinf['sky'], std=tinf['skysig']),
+				   vmin=zr2[0], vmax=zr2[1])
+
+		I,J,d = sm.match_radec(Tspec.ra, Tspec.dec, kids.ra, kids.dec,
+							   1./3600., nearest=True)
+		print len(Tspec), 'SDSS spectra'
+		print len(kids), 'SDSS kids'
+		print len(I), 'matched'
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		plt.gray()
+		ax = plt.axis()
+		wcs = tim.getWcs()
+
+		for i,j in zip(I,J):
+			x,y = wcs.positionToPixel(RaDecPos(Tspec.ra[i], Tspec.dec[i]))
+			plt.text(x, y+25, '%.3f' % Tspec.z[i], ha='center', va='bottom',
+					 color='r')
+			plt.plot([x],[y], 'o', mec='r', mfc='none',
+					 mew=1.5, ms=8, alpha=0.5)
+
+		x,y = wcs.positionToPixel(RaDecPos(abell.ra, abell.dec))
+		plt.plot([x],[y], 'r+', ms=30, mew=3, alpha=0.5)
+		plt.text(x, y+25, '%.3f' % abell.z, color='r')
+
+
+		xy = np.array([wcs.positionToPixel(RaDecPos(r,d))
+					   for r,d in zip(kids.ra, kids.dec)])
+		kids.x = xy[:,0]
+		kids.y = xy[:,1]
+		kids.xy = xy
+
+		for f in np.unique(kids.family):
+			if f == -1:
+				continue
+			I = np.flatnonzero(kids.family == f)
+			#print len(I), 'kids in family', f
+			if len(I) == 1:
+				continue
+			# for j,i in enumerate(I):
+			# 	for k in I[j+1:]:
+			# 		plt.plot([kids.x[i],kids.x[k]],
+			# 				 [kids.y[i],kids.y[k]], 'r-',
+			# 				 lw=2, alpha=0.25)
+
+			if len(I) > 2:
+				D = scipy.spatial.Delaunay(kids.xy[I])
+				#print 'Convex hull:', D.convex_hull
+				hull = [(I[i],I[j]) for i,j in D.convex_hull]
+			else:
+				hull = [I]
+			for i,j in hull:
+				plt.plot([kids.x[i],kids.x[j]],
+						 [kids.y[i],kids.y[j]], 'r-',
+						 lw=2, alpha=0.25)
+			
+		plt.axis(ax)
+		ps.savefig()
+		
+		return dict()
+
+		#tractor = Tractor([tim], sources)
+		#return dict(tractor=tractor,
+		#			roi=roi, tinf=tinf)
+
+
 		
 	def stage0(self, run=None, camcol=None, field=None,
 			   band=None, ra=None, dec=None, **kwargs):
@@ -1620,24 +1811,9 @@ class RunAbell(object):
 				 run=None, camcol=None, field=None,
 				 ra=None, dec=None, roi=None, tinf=None,
 				 **kwargs):
-		fn = 'a%04i-spectro.fits' % self.aco
-		print 'Looking for', fn
-		if not os.path.exists(fn):
-			sql = ' '.join(['select ra,dec,sourceType,z,zerr,',
-							'class as clazz, subclass, velDisp,',
-							'velDispErr',
-							'from SpecObj where',
-							'ra between %f and %f and',
-							'dec between %f and %f']) % (ra-1, ra+1, dec-1, dec+1)
-			from astrometry.util import casjobs
-			casjobs.setup_cookies()
-			cas = casjobs.get_known_servers()['dr9']
-			username = os.environ['SDSS_CAS_USER']
-			password = os.environ['SDSS_CAS_PASS']
-			cas.login(username, password)
-			cas.sql_to_fits(sql, fn, dbcontext='DR9')
-			print 'Saved', fn
 
+		fn = get_spectro_table(ra, dec, self.aco)
+		print 'Looking for', fn
 		T = fits_table(fn)
 		print 'Read', len(T), 'spectro targets'
 		T.about()
@@ -2273,7 +2449,7 @@ class RunAbell(object):
 		pnames = tractor.getParamNames()
 
 		# Deja vu...
-		fn = 'a%04i-spectro.fits' % self.aco
+		fn = get_spectro_table(ra, dec, self.aco)
 		print 'Looking for', fn
 		T = fits_table(fn)
 
