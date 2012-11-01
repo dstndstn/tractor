@@ -1474,6 +1474,11 @@ def runlots(stage, N, force=[]):
 		Ti = T[ai]
 		print 'Abell', Ti.aco, 'with m10', Ti.m10
 
+		#####
+		#if not Ti.aco in [2147, 1656]:
+		if not Ti.aco in [1656]:
+			continue
+
 		blacklist = [2666, # no SDSS spectro coverage
 					 2634,
 					 ]
@@ -1484,44 +1489,54 @@ def runlots(stage, N, force=[]):
 		# Totally arbitrary radius in arcmin
 		R = 5.
 		RS = np.hypot(R, np.hypot(13., 9.)/2.)
-		rcf = LookupRcf(Ti.ra, Ti.dec, contains=True, radius=RS)
+		rcf = LookupRcf(Ti.ra, Ti.dec, radius=RS) #contains=True, 
 		if len(rcf) == 0:
 			continue
 		print 'RCF', rcf
 
-
-		# Overview plot
-		fn = get_spectro_table(Ti.ra, Ti.dec, Ti.aco)
-		if fn is None:
-			continue
-		Tspec = fits_table(fn)
-		sdss = DR9()
-		corners = []
-		for run,camcol,field,nil,nil in rcf:
-			bandname = 'i'
-			fn = sdss.retrieve('frame', run, camcol, field, bandname)
-			frame = sdss.readFrame(run, camcol, field, bandname,
-								   filename=fn)
-			astrans = frame.getAsTrans()
-			W,H = 2048,1489
-			rds = [astrans.pixel_to_radec(x,y)
-				   for x,y in [(0,0),(W,0),(W,H),(0,H),(0,0)]]
-			corners.append(rds)
-		plt.clf()
-		for rds in corners:
-			rds = np.array(rds)
-			plt.plot(rds[:,0], rds[:,1], 'k-')
-		plt.plot(Tspec.ra, Tspec.dec, 'o', mec='r', mfc='none',
-				 mew=1.5, ms=5, alpha=0.5)
-		plt.plot([Ti.ra], [Ti.dec], 'k+', ms=30, mew=2)
-		plt.xlabel('RA (deg)')
-		plt.ylabel('Dec (deg)')
-		plt.savefig('overview-a%04i.png' % Ti.aco)
-
+		ofn = 'overview-a%04i.png' % Ti.aco
+		if not os.path.exists(ofn):
+			# Overview plot
+			fn = get_spectro_table(Ti.ra, Ti.dec, Ti.aco)
+			if fn is None:
+				continue
+			Tspec = fits_table(fn)
+			sdss = DR9()
+			corners = []
+			for run,camcol,field,nil,nil in rcf:
+				bandname = 'i'
+				fn = sdss.retrieve('frame', run, camcol, field, bandname)
+				frame = sdss.readFrame(run, camcol, field, bandname,
+									   filename=fn)
+				astrans = frame.getAsTrans()
+				W,H = 2048,1489
+				rds = [astrans.pixel_to_radec(x,y)
+					   for x,y in [(0,0),(W,0),(W,H),(0,H),(0,0)]]
+				corners.append(rds)
+			plt.clf()
+			for (r,c,f,nil,nil),rds in zip(rcf,corners):
+				rds = np.array(rds)
+				plt.plot(rds[:,0], rds[:,1], 'k-')
+				plt.text(rds[0,0], rds[0,1], '%i/%i/%i' % (r,c,f),
+						 bbox=dict(facecolor='1', alpha=0.8))
+			plt.plot(Tspec.ra, Tspec.dec, 'o', mec='r', mfc='none',
+					 mew=1.5, ms=5, alpha=0.5)
+			plt.plot([Ti.ra], [Ti.dec], 'k+', ms=30, mew=2)
+			plt.xlabel('RA (deg)')
+			plt.ylabel('Dec (deg)')
+			R = 20./60.
+			plt.axis([Ti.ra-R, Ti.ra+R, Ti.dec-R, Ti.dec+R])
+			plt.savefig(ofn)
 
 
 		for run,camcol,field,nil,nil in rcf:
 			print 'RCF', run, camcol, field
+
+			###
+			#if not (run in [4678, 5237, 
+			if not (run == 5115 and camcol == 5 and field == 150):
+				continue
+
 			#for bandname in ['g','r','i']:
 			for bandname in ['i']:
 				print 'Band', bandname
@@ -1627,28 +1642,29 @@ class RunAbell(object):
 				  band=None, ra=None, dec=None, **kwargs):
 		tim,tinf = st.get_tractor_image_dr9(run, camcol, field, band,
 											nanomaggies=True, psf='dg')
-		# sources = st.get_tractor_sources_dr9(run, camcol, field, band,
-		# 									 nanomaggies=True,
-		# 									 bands=[band])
-
+		if tim is None:
+			return None
+		srcs,objs,objI = st.get_tractor_sources_dr9(run, camcol, field, band,
+													bands=[band], nanomaggies=True,
+													getobjs=True, getobjinds=True)
 		ps = PlotSequence(self.pat.replace('-s%02i.pickle', '') + '-g2')
 
-		sdss = DR9()
-		fn = sdss.retrieve('photoObj', run, camcol, field)
-		objs = fits_table(fn)
+		#sdss = DR9()
+		#fn = sdss.retrieve('photoObj', run, camcol, field)
+		#objs = fits_table(fn)
 
 		# top-level deblend families
 		dt = objs.parent.dtype
 		idToIndex = np.zeros(max(objs.id)+1, dt) - 1
 		idToIndex[objs.id.astype(dt)] = np.arange(len(objs)).astype(dt)
-		print 'idToIndex:', idToIndex
+		#print 'idToIndex:', idToIndex
 		# objs.family is the *index* (not id) of the top-level
 		# deblend ancestor for each object.
 		objs.family = np.zeros_like(objs.parent) - 1
-		print 'objs.family:', objs.family
+		#print 'objs.family:', objs.family
 		I = np.flatnonzero(objs.parent > -1)
-		print 'parents:', objs.parent[I].astype(dt)
-		print 'ids', idToIndex[objs.parent[I].astype(dt)]
+		#print 'parents:', objs.parent[I].astype(dt)
+		#print 'ids', idToIndex[objs.parent[I].astype(dt)]
 		objs.family[I] = idToIndex[objs.parent[I].astype(dt)].astype(dt)
 
 		while True:
@@ -1700,16 +1716,25 @@ class RunAbell(object):
 
 		for i,j in zip(I,J):
 			x,y = wcs.positionToPixel(RaDecPos(Tspec.ra[i], Tspec.dec[i]))
-			plt.text(x, y+25, '%.3f' % Tspec.z[i], ha='center', va='bottom',
-					 color='r')
-			plt.plot([x],[y], 'o', mec='r', mfc='none',
+			#print 'spec z', Tspec.z[i], 'abell z', abell.z
+			#print 'diff', abell.z - Tspec[i]
+			#print 'abs', np.abs(abell.z - Tspec[i])
+			#print 'in:', (np.abs(abell.z - Tspec[i]) <= 0.02)
+			if np.abs(abell.z - Tspec.z[i]) <= 0.02:
+				cc = 'r'
+			else:
+				cc = (0,0.5,1)
+			#print 'color', cc
+			plt.text(x, y+25, '%.3f' % Tspec.z[i], ha='center',
+					 va='bottom', color=cc)
+			plt.plot([x],[y], 'o', mec=cc, mfc='none',
 					 mew=1.5, ms=8, alpha=0.5)
 
 		x,y = wcs.positionToPixel(RaDecPos(abell.ra, abell.dec))
 		plt.plot([x],[y], 'r+', ms=30, mew=3, alpha=0.5)
 		plt.text(x, y+25, '%.3f' % abell.z, color='r')
-
-
+		plt.title('Abell %i at z=%.3f (pix %i,%i)' % (abell.aco, abell.z, int(x), int(y)))
+													  
 		xy = np.array([wcs.positionToPixel(RaDecPos(r,d))
 					   for r,d in zip(kids.ra, kids.dec)])
 		kids.x = xy[:,0]
@@ -1720,15 +1745,8 @@ class RunAbell(object):
 			if f == -1:
 				continue
 			I = np.flatnonzero(kids.family == f)
-			#print len(I), 'kids in family', f
 			if len(I) == 1:
 				continue
-			# for j,i in enumerate(I):
-			# 	for k in I[j+1:]:
-			# 		plt.plot([kids.x[i],kids.x[k]],
-			# 				 [kids.y[i],kids.y[k]], 'r-',
-			# 				 lw=2, alpha=0.25)
-
 			if len(I) > 2:
 				D = scipy.spatial.Delaunay(kids.xy[I])
 				#print 'Convex hull:', D.convex_hull
@@ -1742,13 +1760,144 @@ class RunAbell(object):
 			
 		plt.axis(ax)
 		ps.savefig()
-		
+
+		tractor = Tractor([tim], srcs)
+		tim.origInvvar = None
+		tim.starMask = None
+
+		return dict(tractor=tractor, objs=objs, objI=objI,
+					tinf=tinf, Tspec=Tspec, ima=ima, imc=imc)
+
+
+	def stage1001(self, run=None, camcol=None, field=None,
+				  band=None, ra=None, dec=None,
+				  tractor=None, objs=None, objI=None,
+				  tinf=None, Tspec=None, ima=None, imc=None,
+				  **kwargs):
+		tobjs = objs[objI]
+		kids = tobjs
+		cat = tractor.getCatalog()
+		print 'Tractor catalog', len(cat), 'objs', tobjs
+
+		# Select sources and deblend families of spectro targets...
+
+		I,J,d = sm.match_radec(Tspec.ra, Tspec.dec, kids.ra, kids.dec,
+							   1./3600.) #, nearest=True)
+
+		print len(Tspec), 'SDSS spectra'
+		print len(kids), 'SDSS kids'
+		print len(I), 'matched'
+
+		for i,j in zip(I,J):
+			K = np.flatnonzero(i == I)
+			print len(K), 'matches for this spectro object'
+			if len(K) > 1:
+				continue
+			K = np.flatnonzero(j == J)
+			print len(K), 'matches for this photo object'
+			if len(K) > 1:
+				continue
+			#spec = Tspec[i]
+			cat[j].spec = Tspec[i]
+
+		donefams = []
+
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', '') + '-groups')
+
+		tim = tractor.getImage(0)
+		mod = tractor.getModelImage(0)
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(mod, **imc)
+		plt.gray()
+		ps.savefig()
+
+		#ax = plt.axis()
+		wcs = tim.getWcs()
+		sigma = 1./np.sqrt(np.median(tim.getInvvar()))
+
+		for i,j in zip(I,J):
+
+			src = cat[j]
+			kid = kids[j]
+			if kid.family == -1:
+				fam = np.array([j])
+			else:
+				if kid.family in donefams:
+					continue
+				donefams.append(kid.family)
+				fam = np.flatnonzero(kids.family == kid.family)
+			print len(fam), 'sources in deblend family'
+
+			plt.clf()
+			plt.imshow(tim.getImage(), **imc)
+			plt.gray()
+			ax = plt.axis()
+
+			srcs = [cat[k] for k in fam]
+			bbox = tractor.getBbox(tim, srcs)
+			for src in srcs:
+				x,y = wcs.positionToPixel(src.getPosition())
+				kwa = dict(mec='y', mfc='none', mew=1.5, ms=8, alpha=0.5)
+				if hasattr(src, 'spec'):
+					kwa.update(mec='r', ms=10)
+				plt.plot([x], [y], 'o', **kwa)
+			modi = tractor.getModelImage(tim, srcs, sky=False)
+
+			thresh = 0.1*sigma
+			mask = (modi >= thresh)
+			mpatch = Patch(0, 0, mask)
+			mpatch.trimToNonZero()
+			#print 'Mask:', mpatch
+
+			over = []
+			for src in cat:
+				if src in srcs:
+					continue
+				p = tractor.getModelPatch(tim, src)
+				if p is None:
+					continue
+				ns = np.sum(p.patch) / sigma
+				# otherwise we corrupt the cache...!
+				p = p.copy()
+				p.patch = (p.patch >= thresh)
+				if mpatch.hasNonzeroOverlapWith(p):
+					#print 'Patch:', ns, 'sigma'
+					over.append(src)
+			for src in over:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='g', mfc='none',
+						 mew=1.5, ms=6, alpha=0.5)
+
+			plt.axis(ax)
+			ps.savefig()
+
+		#plt.axis(ax)
+		#ps.savefig()
+
+
+
+		# fams = []
+		# for i in np.flatnonzero(kids.family == -1):
+		# 	fams.append(np.array([i]))
+		# for f in np.unique(kids.family):
+		# 	if f == -1:
+		# 		continue
+		# 	I = np.flatnonzero(kids.family == f)
+		# 	#if len(I) == 1:
+		# 	#	continue
+		# 	fams.append(I)
+		# 
+		# for I in fams:
+		# 	#if len(I) == 1:
+		# 	#	continue
+
 		return dict()
-
-		#tractor = Tractor([tim], sources)
-		#return dict(tractor=tractor,
-		#			roi=roi, tinf=tinf)
-
 
 		
 	def stage0(self, run=None, camcol=None, field=None,
@@ -2827,6 +2976,12 @@ if __name__ == '__main__':
 					  help="Force re-running the given stage(s) -- don't read from pickle.")
 	parser.add_option('-n', dest='N', type=int,
 					  default=20, help='Run this # of fields')
+
+	#parser.add_option('-a', type=int, dest='abells', action='append',
+	#				  default=[], help='Run only these Abell clusters')
+	#parser.add_option('-r', type=int, dest='runs', action='append',
+	#				  default=
+
 	opt,args = parser.parse_args()
 	if opt.verbose == 0:
 		lvl = logging.INFO

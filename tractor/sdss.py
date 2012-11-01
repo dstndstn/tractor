@@ -223,7 +223,8 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 
 def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 							retrieve=True, curl=False, roi=None, bands=None,
-							badmag=25, nanomaggies=False):
+							badmag=25, nanomaggies=False,
+							getobjs=False, getobjinds=False):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -247,11 +248,13 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		# Try again in case we got a partially downloaded file
 		fn = sdss.retrieve('photoObj', run, camcol, field, skipExisting=False)
 		objs = fits_table(fn)
+	if getobjs:
+		allobjs = objs.copy()
 
 	if objs is None:
 		print 'No sources in photoObj file', fn
 		return []
-	objs.indices = np.arange(len(objs))
+	objs.index = np.arange(len(objs))
 
 	if roi is not None:
 		x0,x1,y0,y1 = roi
@@ -260,10 +263,10 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		x = objs.colc[:,bandnum]
 		y = objs.rowc[:,bandnum]
 		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
-		objs = objs[I]
+		objs.cut(I)
 
 	# Only deblended children.
-	objs = objs[(objs.nchild == 0)]
+	objs.cut(objs.nchild == 0)
 
 	# FIXME -- phi_offset ?
 
@@ -278,6 +281,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 
 	sources = []
 	ikeep = []
+	obji = []
 
 	def lup2bright(lups, bandnames, bandnums, nanomaggies):
 		# -9999 -> badmag
@@ -310,6 +314,8 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums, nanomaggies)
 		ps = PointSource(pos, bright)
+		#ps.objindex = objs.index[i]
+		obji.append(objs.index[i])
 		sources.append(ps)
 		ikeep.append(i)
 
@@ -359,6 +365,7 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 		elif hasexp:
 			gal = ExpGalaxy(pos, ebright, eshape)
 			nexp += 1
+		obji.append(objs.index[i])
 		sources.append(gal)
 		ikeep.append(i)
 	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
@@ -366,11 +373,17 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 
 	# if you want to cut the objs list to just the ones for which sources were created...
 	ikeep = np.unique(ikeep)
-	if len(ikeep)!=0:
-		objs = objs[ikeep]
+	if len(ikeep):
+		objs.cut(ikeep)
 	else:
 		objs = []
-	return sources
+
+	rtn = [sources]
+	if getobjs:
+		rtn.append(allobjs)
+	if getobjinds:
+		rtn.append(np.array(obji))
+	return rtn
 
 
 
@@ -724,6 +737,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		roi = [int(x) for x in roi]
 		if roi[0]==roi[1] or roi[2]==roi[3]:
 			print "ZERO ROI?", roi
+			print 'S = ', S, 'xc,yc = ', xc,yc
 			assert(False)
 			return None,None
 
