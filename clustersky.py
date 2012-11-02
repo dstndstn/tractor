@@ -1974,10 +1974,26 @@ class RunAbell(object):
 				plt.xticks([]); plt.yticks([])
 				plt.axis(ext)
 
+				if len(I) > 1:
+					for j,i in enumerate(I):
+						src = specsrcs[i]
+						print 'Source', src
+						sdss = src.sdssobj
+						flags  = sdss.objc_flags
+						flags2 = sdss.objc_flags2
+						print 'Bits set:'
+						for bit,nm,desc in photo_flags1_info:
+							if (1 << bit) & flags:
+								print '  ', nm
+						for bit,nm,desc in photo_flags2_info:
+							if (1 << bit) & flags2:
+								print '  ', nm
+
 				Ts = Tspec[speci]
 				sx,sy = wcs.positionToPixel(RaDecPos(Ts.ra, Ts.dec))
 				for j,i in enumerate(I):
 					src = specsrcs[i]
+
 					modj = tractor.getModelImage(tim, [src], sky=False)
 					plt.subplot(R,C, 4+j)
 					plt.imshow(modj, **imc)

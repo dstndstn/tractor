@@ -268,6 +268,10 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	# Only deblended children.
 	objs.cut(objs.nchild == 0)
 
+	# No BRIGHT sources
+	bright = photo_flags1_map.get('BRIGHT')
+	objs.cut((objs.objc_flags & bright) == 0)
+
 	# FIXME -- phi_offset ?
 
 	# DR8 and Tractor have different opinions on which way this rotation goes
