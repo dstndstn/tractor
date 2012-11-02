@@ -122,7 +122,7 @@ def main():
 			print 'lnprobs:', lnp
 
 			for p,x in zip(lnp,pp):
-				tractor.setParams(x)
+				tractor.setAllSourceParams(x)
 				print 'lnp', p
 				print tractor.catalog
 

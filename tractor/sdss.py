@@ -738,7 +738,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		if roi[0]==roi[1] or roi[2]==roi[3]:
 			print "ZERO ROI?", roi
 			print 'S = ', S, 'xc,yc = ', xc,yc
-			assert(False)
+			#assert(False)
 			return None,None
 
 		print 'roi', roi

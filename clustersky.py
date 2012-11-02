@@ -1452,7 +1452,7 @@ def find_clusters(tractor, tim):
 		ps.savefig()
 
 
-def runlots(stage, N, force=[]):
+def runlots(stage, N, force=[], threads=None):
 	cmap = {'_RAJ2000':'ra', '_DEJ2000':'dec', 'ACOS':'aco'}
 	T1 = fits_table('abell.fits', column_map=cmap)
 	T2 = fits_table('abell2.fits', column_map=cmap)
@@ -1481,6 +1481,12 @@ def runlots(stage, N, force=[]):
 
 		blacklist = [2666, # no SDSS spectro coverage
 					 2634,
+					 592,
+					 2626,
+					 179,
+					 2572,
+					 2256,
+					 195,
 					 ]
 		if Ti.aco in blacklist:
 			print 'Skipping blacklisted Abell', Ti.aco
@@ -1494,7 +1500,7 @@ def runlots(stage, N, force=[]):
 			continue
 		print 'RCF', rcf
 
-		ofn = 'overview-a%04i.png' % Ti.aco
+		ofn = 'overview-n%04i-a%04i.png' % (ai, Ti.aco)
 		if not os.path.exists(ofn):
 			# Overview plot
 			fn = get_spectro_table(Ti.ra, Ti.dec, Ti.aco)
@@ -1525,7 +1531,9 @@ def runlots(stage, N, force=[]):
 			plt.xlabel('RA (deg)')
 			plt.ylabel('Dec (deg)')
 			R = 20./60.
+			plt.axis('equal')
 			plt.axis([Ti.ra-R, Ti.ra+R, Ti.dec-R, Ti.dec+R])
+			plt.title('Abell %i (m10=%.1f) at z=%.3f' % (Ti.aco, Ti.m10, Ti.z))
 			plt.savefig(ofn)
 
 
@@ -1548,10 +1556,11 @@ def runlots(stage, N, force=[]):
 				r.abell = Ti
 				r.pat = ppat
 				r.force = force
-				res = r.runstage(0)
-				if res is None:
-					continue
+				#res = r.runstage(0)
+				#if res is None:
+				#	continue
 				RR.append(r)
+				print 'Got r/c/f', len(RR)
 				if len(RR) >= N:
 					break
 			if len(RR) >= N:
@@ -1559,15 +1568,33 @@ def runlots(stage, N, force=[]):
 		if len(RR) >= N:
 			break
 
-	for R in RR:
-		R.runstage(stage)
+	if stage == -1:
+		return
 
+	from astrometry.util.multiproc import multiproc
+	if threads is None:
+		threads = 1
+	mp = multiproc(threads)
+
+	# Run stage 0
+	print 'Running stage 0 on all...'
+	s = 0
+	res = mp.map(_run, [(R,s) for R in RR])
+	RR = [r for r,result in zip(RR,res) if result is not None]
+
+	print 'Running stage', stage, 'on all...'
+	s = stage
+	mp.map(_run, [(R,s) for R in RR])
+
+
+	#for R in RR:
+	#	R.runstage(stage)
 	#from astrometry.util.multiproc import multiproc
 	#mp = multiproc(8)
 	#mp.map(_run, [(R,stage) for R in RR])
 
 def _run((R, stage)):
-    return R(stage)
+	return R.runstage(stage)
 
 
 class SubImage(Image):
@@ -1590,6 +1617,9 @@ class SubImage(Image):
 									   wcs=wcs, sky=sky, photocal=pcal,
 									   name='sub'+im.name)
 
+
+class Family(object):
+	pass
 		
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
@@ -1733,7 +1763,7 @@ class RunAbell(object):
 		x,y = wcs.positionToPixel(RaDecPos(abell.ra, abell.dec))
 		plt.plot([x],[y], 'r+', ms=30, mew=3, alpha=0.5)
 		plt.text(x, y+25, '%.3f' % abell.z, color='r')
-		plt.title('Abell %i at z=%.3f (pix %i,%i)' % (abell.aco, abell.z, int(x), int(y)))
+		plt.title('Abell %i (m10=%.1f) at z=%.3f (pix %i,%i)' % (abell.aco, abell.m10, abell.z, int(x), int(y)))
 													  
 		xy = np.array([wcs.positionToPixel(RaDecPos(r,d))
 					   for r,d in zip(kids.ra, kids.dec)])
@@ -1779,6 +1809,9 @@ class RunAbell(object):
 		cat = tractor.getCatalog()
 		print 'Tractor catalog', len(cat), 'objs', tobjs
 
+		for src,i in zip(cat,objI):
+			src.sdssobj = objs[i]
+
 		# Select sources and deblend families of spectro targets...
 
 		I,J,d = sm.match_radec(Tspec.ra, Tspec.dec, kids.ra, kids.dec,
@@ -1790,15 +1823,19 @@ class RunAbell(object):
 
 		for i,j in zip(I,J):
 			K = np.flatnonzero(i == I)
-			print len(K), 'matches for this spectro object'
 			if len(K) > 1:
-				continue
+				print len(K), 'matches for this spectro object'
+				#continue
 			K = np.flatnonzero(j == J)
-			print len(K), 'matches for this photo object'
 			if len(K) > 1:
-				continue
+				print len(K), 'matches for this photo object'
+				# Shouldn't happen due to fiber collisions, unless multiple plates
+				# per field
+				assert(False)
+				#continue
 			#spec = Tspec[i]
 			cat[j].spec = Tspec[i]
+			cat[j].speci = i
 
 		donefams = []
 
@@ -1809,17 +1846,21 @@ class RunAbell(object):
 
 		plt.clf()
 		plt.imshow(tim.getImage(), **imc)
+		plt.xticks([]); plt.yticks([])
 		plt.gray()
 		ps.savefig()
 
 		plt.clf()
 		plt.imshow(mod, **imc)
+		plt.xticks([]); plt.yticks([])
 		plt.gray()
 		ps.savefig()
 
 		#ax = plt.axis()
 		wcs = tim.getWcs()
 		sigma = 1./np.sqrt(np.median(tim.getInvvar()))
+
+		fams = []
 
 		for i,j in zip(I,J):
 
@@ -1834,19 +1875,31 @@ class RunAbell(object):
 				fam = np.flatnonzero(kids.family == kid.family)
 			print len(fam), 'sources in deblend family'
 
+			family = Family()
+			# Photo family ID
+			family.family = kid.family
+
 			plt.clf()
 			plt.imshow(tim.getImage(), **imc)
+			#plt.xticks([]); plt.yticks([])
 			plt.gray()
 			ax = plt.axis()
 
 			srcs = [cat[k] for k in fam]
 			bbox = tractor.getBbox(tim, srcs)
+			specsrcs = []
 			for src in srcs:
 				x,y = wcs.positionToPixel(src.getPosition())
 				kwa = dict(mec='y', mfc='none', mew=1.5, ms=8, alpha=0.5)
 				if hasattr(src, 'spec'):
 					kwa.update(mec='r', ms=10)
+					specsrcs.append(src)
 				plt.plot([x], [y], 'o', **kwa)
+
+			family.srcs = srcs
+			#family.bbox = bbox
+			family.specsrcs = specsrcs
+
 			modi = tractor.getModelImage(tim, srcs, sky=False)
 
 			thresh = 0.1*sigma
@@ -1854,6 +1907,10 @@ class RunAbell(object):
 			mpatch = Patch(0, 0, mask)
 			mpatch.trimToNonZero()
 			#print 'Mask:', mpatch
+			ext = mpatch.getExtent()
+
+			family.ext = ext
+			family.mpatch = mpatch
 
 			over = []
 			for src in cat:
@@ -1874,8 +1931,65 @@ class RunAbell(object):
 				plt.plot([x],[y], 'o', mec='g', mfc='none',
 						 mew=1.5, ms=6, alpha=0.5)
 
+			family.over = over
+
 			plt.axis(ax)
 			ps.savefig()
+
+			# find unique spectro sources, and disentangle multiple
+			# matches.
+			specI = [src.speci for src in specsrcs]
+			for speci in np.unique(specI):
+				I = np.flatnonzero(specI == speci)
+				N = len(I) + 3
+				C = int(np.ceil(np.sqrt(N)))
+				R = int(np.ceil(float(N) / C))
+
+				plt.clf()
+				plt.subplot(R,C,1)
+				plt.imshow(tim.getImage(), **imc)
+				plt.xticks([]); plt.yticks([])
+				plt.gray()
+				plt.axis(ext)
+
+				plt.subplot(R,C,2)
+				plt.imshow(tim.getImage(), **imc)
+				plt.xticks([]); plt.yticks([])
+				plt.gray()
+
+				for src in srcs:
+					x,y = wcs.positionToPixel(src.getPosition())
+					kwa = dict(mec='y', mfc='none', mew=1.5, ms=8, alpha=0.5)
+					if hasattr(src, 'spec'):
+						kwa.update(mec='r', ms=10)
+						specsrcs.append(src)
+						if src.speci == speci:
+							kwa.update(mec='m', ms=12)
+					plt.plot([x], [y], 'o', **kwa)
+				plt.axis(ext)
+
+				modj = tractor.getModelImage(tim, over+srcs, sky=False)
+				plt.subplot(R,C, 3)
+				plt.imshow(modj, **imc)
+				plt.xticks([]); plt.yticks([])
+				plt.axis(ext)
+
+				Ts = Tspec[speci]
+				sx,sy = wcs.positionToPixel(RaDecPos(Ts.ra, Ts.dec))
+				for j,i in enumerate(I):
+					src = specsrcs[i]
+					modj = tractor.getModelImage(tim, [src], sky=False)
+					plt.subplot(R,C, 4+j)
+					plt.imshow(modj, **imc)
+					plt.xticks([]); plt.yticks([])
+					x,y = wcs.positionToPixel(src.getPosition())
+					plt.plot([x], [y], 'r+', ms=8)
+					plt.plot([sx], [sy], 'ro', mec='r', mfc='none', ms=8)
+					plt.title('SDSS id %i' % src.sdssobj.id)
+
+					plt.axis(ext)
+
+				ps.savefig()
 
 		#plt.axis(ax)
 		#ps.savefig()
@@ -1898,7 +2012,6 @@ class RunAbell(object):
 		# 	#	continue
 
 		return dict()
-
 		
 	def stage0(self, run=None, camcol=None, field=None,
 			   band=None, ra=None, dec=None, **kwargs):
@@ -1908,6 +2021,8 @@ class RunAbell(object):
 		getsrc = st.get_tractor_sources_dr9
 		tim,tinf = getim(run, camcol, field, band,
 						 roiradecsize=(ra, dec, S), nanomaggies=True)
+		if tim is None:
+			return None
 		if tim.shape == (0,0):
 			print 'Tim shape', tim.shape
 			return None
@@ -2976,7 +3091,11 @@ if __name__ == '__main__':
 					  help="Force re-running the given stage(s) -- don't read from pickle.")
 	parser.add_option('-n', dest='N', type=int,
 					  default=20, help='Run this # of fields')
+	parser.add_option('--threads', dest='threads', type=int,
+					  help='Run multithreaded with this # of threads')
 
+	#parser.add_option('-na', dest='N', type=int,
+	#				  default=20, help='Run this # of Abells')
 	#parser.add_option('-a', type=int, dest='abells', action='append',
 	#				  default=[], help='Run only these Abell clusters')
 	#parser.add_option('-r', type=int, dest='runs', action='append',
@@ -2993,7 +3112,7 @@ if __name__ == '__main__':
 	#fp()
 	#get_dm_table()
 	#join()
-	runlots(stage=opt.stage, N=opt.N, force=opt.force)
+	runlots(stage=opt.stage, N=opt.N, force=opt.force, threads=opt.threads)
 	sys.exit(0)
 	test1()
 
