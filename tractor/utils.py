@@ -27,29 +27,6 @@ def getClassName(obj):
 		return name
 	return obj.__class__.__name__
 
-class PlotSequence(object):
-	def __init__(self, basefn, format='%02i', suffix='png',
-				 suffixes=None):
-		self.ploti = 0
-		self.basefn = basefn
-		self.format = format
-		if suffixes is None:
-			self.suffixes = [suffix]
-		else:
-			self.suffixes = suffixes
-	def skip(self, n=1):
-		self.ploti += n
-	def skipto(self, n):
-		self.ploti = n
-	def savefig(self):
-		import pylab as plt
-		for suff in self.suffixes:
-			fn = '%s-%s.%s' % (self.basefn, self.format % self.ploti,
-							   suff)
-			plt.savefig(fn)
-			print 'saved', fn
-		self.ploti += 1
-
 
 class BaseParams(object):
 	'''
