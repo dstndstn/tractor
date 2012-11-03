@@ -1647,7 +1647,8 @@ class RunOneGroup(object):
 
 def draw_gaussian(mu, sigma, size):
 	sigma = np.abs(sigma)
-	sigma += 1.*(sigma == 0.)
+	if sigma == 0:
+		return np.zeros(size) + mu
 	return np.random.normal(loc=mu, scale=sigma, size=size)
 
 class RunAbell(object):
@@ -2118,12 +2119,26 @@ class RunAbell(object):
 			DL = DLfunc(z)
 			DA = DL / ((1.+z)**2)
 			R0 = arcsec2rad(r0) * DA
-
-			return (log(sigma) + 0.2 * (mu0 - 19.61),
-					log(R0 * 1e3 / h70))
+			fpx = log(sigma) + 0.2 * (mu0 - 19.61)
+			fpy = log(R0 * 1e3 / h70)
+			if fpx.shape == fpy.shape:
+				return fpx, fpy
+			B = np.broadcast(fpx, fpy)
+			xy = np.array([[x,y] for x,y in B])
+			x,y = xy[:,0], xy[:,1]
+			return x,y
+					
 		
 		N = 100
 		FPXY = []
+		FPXY2 = []
+
+		FPXY3 = []
+		FPXY4 = []
+		FPXY5 = []
+		FPXY6 = []
+		FPXY7 = []
+
 		#vals = []
 		for fam in fams:
 			for src in fam.specsrcs:
@@ -2155,26 +2170,75 @@ class RunAbell(object):
 					draw_gaussian(z,   dz,   N),
 					draw_gaussian(k,   dk,   N))
 				FPXY.append(fpxy)
+				FPXY2.append(FP(
+					draw_gaussian(s,   0.,   N),
+					draw_gaussian(mag, dmag, N),
+					draw_gaussian(re,  dre,  N),
+					draw_gaussian(ab,  dab,  N),
+					draw_gaussian(z,   dz,   N),
+					draw_gaussian(k,   dk,   N)))
 
-		plt.clf()
-		for X,Y in FPXY:
-			plt.plot(X,Y, 'k.', alpha=0.1)
-		for X,Y in FPXY:
-			I = (np.isfinite(X) * np.isfinite(Y))
-			plt.plot(np.mean(X[I]),np.mean(Y[I]), 'ro',
-					 ms=8, mew=1.5, mec='r', mfc='none')
-		xl,xh = [1.25, 3.75]
-		yl,yh = [-0.5, 2.0]
-		X = np.array([xl,xh])
-		ta = dict(color='r', lw=2,)
-		# eyeballed Bernardi relation for i-band
-		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
-		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
-		plt.ylabel('log(R_0) [kpc / h]')
-		#plt.ylim(yl,yh)
-		#plt.xlim(xl,xh)
-		plt.title('FP from SDSS error estimates')
-		ps.savefig()
+				FPXY3.append(FP(draw_gaussian(s,   ds,   N),
+								mag, re, ab, z, k))
+				FPXY4.append(FP(s, draw_gaussian(mag, dmag, N),
+								re, ab, z, k))
+				FPXY5.append(FP(s, mag, draw_gaussian(re,  dre,  N),
+								ab, z, k))
+				FPXY6.append(FP(s, mag, re, draw_gaussian(ab,  dab,  N),
+								z, k))
+				FPXY7.append(FP(s, mag, re, ab,
+								draw_gaussian(z,   dz,   N), k))
+
+
+		for FPXY,tt in [(FPXY,''), (FPXY2,': sigma_err = 0'),
+						(FPXY3, ': sigma error only'),
+						(FPXY4, ': mag error only'),
+						(FPXY5, ': r_e error only'),
+						(FPXY6, ': ab error only'),
+						(FPXY7, ': z error only'),
+						]:
+			plt.clf()
+			for X,Y in FPXY:
+				plt.plot(X,Y, 'k.', alpha=0.1)
+			for X,Y in FPXY:
+				I = (np.isfinite(X) * np.isfinite(Y))
+				X = X[I]
+				Y = Y[I]
+				mx = np.mean(X)
+				my = np.mean(Y)
+				plt.plot(mx,my, 'ro',
+						 # ms=4, alpha=0.5)
+						 ms=4, mew=1.5, mec='r', mfc='none', alpha=0.5)
+						 
+				#dd = np.vstack((X-mx, Y-my))
+				#print 'dd', dd.shape
+				xx = np.mean((X-mx)**2)
+				xy = np.mean((X-mx)*(Y-my))
+				yy = np.mean((Y-my)**2)
+				C = np.array([[xx,xy],[xy,yy]])
+				s,v = np.linalg.eigh(C)
+				print 'evals', s
+				print 'evecs', v
+				[mini,maxi] = np.argsort(s)
+				a = v[maxi,:]
+				angle = np.rad2deg(np.arctan2(a[1],a[0]))
+				from matplotlib.patches import Ellipse
+				gca().add_artist(Ellipse([mx,my], np.sqrt(s[maxi]), np.sqrt(s[mini]),
+										 angle, ec='m', fc='none', lw=1.5))
+										 
+
+			xl,xh = [0., 3.5]
+			yl,yh = [-1, 2.0]
+			X = np.array([xl,xh])
+			ta = dict(color='r', lw=2,)
+			# eyeballed Bernardi relation for i-band
+			plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
+			plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
+			plt.ylabel('log(R_0) [kpc / h]')
+			plt.ylim(yl,yh)
+			plt.xlim(xl,xh)
+			plt.title('FP from SDSS error estimates' + tt)
+			ps.savefig()
 
 		# vals = np.array(vals)
 		# plt.clf()
