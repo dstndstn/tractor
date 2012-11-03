@@ -1993,9 +1993,6 @@ class RunAbell(object):
 
 			family.over = over
 
-			print 'srcs', len(family.srcs), 'specsrcs',
-			print len(family.specsrcs), 'overlap', len(family.over)
-
 			plt.axis(ax)
 			ps.savefig()
 
@@ -2069,34 +2066,16 @@ class RunAbell(object):
 
 				ps.savefig()
 
-		for fam in fams:
-			print 's1001 output: srcs', len(fam.srcs), 'spec', len(fam.specsrcs), 'over', len(fam.over)
-
 		return dict(fams=fams)
 
 	def stage1002(self, fams=None, **kwargs):
 		R = []
 		for i,fam in enumerate(fams):
 			pat = self.pat.replace('s%02i.pickle', 'g%02i-s%%02i.pickle' % i)
-
-			print 's1002 input: family srcs', len(fam.srcs), 'specsrcs',
-			print len(fam.specsrcs), 'overlap', len(fam.over)
-
 			ro = RunOneGroup(pat, fam=fam, parent=self, **kwargs)
-
 			res = ro.runstage(1)
-
-			fam = res['fam']
-			print 's1002 output: family srcs', len(fam.srcs), 'specsrcs',
-			print len(fam.specsrcs), 'overlap', len(fam.over)
-
 			R.append(res)
 		newfams = [r['fam'] for r in R]
-
-		for fam in newfams:
-			print 's1002 output: family srcs', len(fam.srcs), 'specsrcs',
-			print len(fam.specsrcs), 'overlap', len(fam.over)
-
 		return dict(fams=newfams)
 
 	def stage1003(self, fams=None, band=None, ps=None, tractor=None,
@@ -2113,9 +2092,7 @@ class RunAbell(object):
 		ax = plt.axis()
 		plt.gray()
 		for fam in fams:
-			print 'Family', fam.family, 'has', len(fam.specsrcs), 'spec srcs'
-			print 'and', len(fam.srcs), 'srcs'
-			print 'and', len(fam.over), 'overlaps'
+			print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
 			for src in fam.over:
 				x,y = wcs.positionToPixel(src.getPosition())
 				plt.plot([x],[y], 'o', mec='g', mfc='none',
@@ -2130,7 +2107,6 @@ class RunAbell(object):
 						 mew=1.5, ms=10, alpha=0.5)
 		plt.axis(ax)
 		ps.savefig()
-
 
 		DLfunc = LuminosityDistance()
 		log = np.log10
@@ -2148,23 +2124,11 @@ class RunAbell(object):
 		
 		N = 100
 		FPXY = []
-		vals = []
+		#vals = []
 		for fam in fams:
-			print 'Family', fam.family, 'has', len(fam.specsrcs), 'spec srcs'
 			for src in fam.specsrcs:
 				sdss = src.sdssobj
 				spec = src.spec
-
-				#if type(src) is CompositeGalaxy:
-				#	shape = src.shapeDev
-				#	# this is total exp + dev
-				#	mag = src.getBrightness()
-				#elif type(src) is DevGalaxy:
-				#	shape = src.shape
-				#	mag = src.getBrightness()
-				#else:
-				# 	continue # ?
-
 				# [arcsec]
 				re  = sdss.theta_dev[bandnum]
 				dre = sdss.theta_deverr[bandnum]
@@ -2173,7 +2137,6 @@ class RunAbell(object):
 				# [mag]
 				mag  = sdss.devmag[bandnum]
 				dmag = sdss.devmagerr[bandnum]
-				
 				# redshift
 				z = spec.z
 				dz = spec.zerr
@@ -2183,25 +2146,7 @@ class RunAbell(object):
 				# velocity dispersion - sigma [km/s]
 				s = spec.veldisp
 				ds = spec.veldisperr
-
-				vals.append((re, ab, mag, z, s))
-
-				#fpxy = []
-				# for i in N:
-				# 	rnd = np.random.normal(size=6)
-				# 	fpxy.append(FP(s + ds * rnd[0],
-				# 				   mag + dmag * rnd[1],
-				# 				   re + dre * rnd[2],
-				# 				   ab + dab * rnd[3],
-				# 				   z + dz * rnd[4],
-				# 				   k + dk * rnd[5]))
-				# fpxy = [FP(*args) for args in zip(
-				# 	draw_gaussian(s,   ds,   N),
-				# 	draw_gaussian(mag, dmag, N),
-				# 	draw_gaussian(re,  dre,  N),
-				# 	draw_gaussian(ab,  dab,  N),
-				# 	draw_gaussian(z,   dz,   N),
-				# 	draw_gaussian(k,   dk,   N))]
+				#vals.append((re, ab, mag, z, s))
 				fpxy = FP(
 					draw_gaussian(s,   ds,   N),
 					draw_gaussian(mag, dmag, N),
@@ -2211,16 +2156,13 @@ class RunAbell(object):
 					draw_gaussian(k,   dk,   N))
 				FPXY.append(fpxy)
 
-
 		plt.clf()
-		#for XY in FPXY:
-		#	X = [x for x,y in XY]
-		#	Y = [y for x,y in XY]
 		for X,Y in FPXY:
 			plt.plot(X,Y, 'k.', alpha=0.1)
 		for X,Y in FPXY:
-			plt.plot(np.mean(X),np.mean(Y), 'r.', ms=10, mec='r', mfc='none')
-
+			I = (np.isfinite(X) * np.isfinite(Y))
+			plt.plot(np.mean(X[I]),np.mean(Y[I]), 'ro',
+					 ms=8, mew=1.5, mec='r', mfc='none')
 		xl,xh = [1.25, 3.75]
 		yl,yh = [-0.5, 2.0]
 		X = np.array([xl,xh])
@@ -2234,33 +2176,13 @@ class RunAbell(object):
 		plt.title('FP from SDSS error estimates')
 		ps.savefig()
 
-		vals = np.array(vals)
-		print 'vals', vals.shape
-
-		re  = vals[:,0]
-		ab  = vals[:,1]
-		mag = vals[:,2]
-		z   = vals[:,3]
-		s   = vals[:,4]
-		print 're', re
-		print 'ab', ab
-		print 'mag', mag
-		print 'z', z
-		print 's', s
-
-		XY = np.array([FP(si, magi, rei, abi, zi, 0.)
-					   for rei, abi, magi, zi, si in zip(
-						   re, ab, mag, z, s)])
-		plt.plot(XY[:,0], XY[:,1], 'gx')
-		ps.savefig()
-
-		plt.clf()
-		for i,(s,v) in enumerate(zip(['re','ab','mag','z','s'], vals.T)):
-			plt.subplot(2,3, i+1)
-			plt.hist(v, 25)
-			plt.title(s)
-		ps.savefig()
-
+		# vals = np.array(vals)
+		# plt.clf()
+		# for i,(s,v) in enumerate(zip(['re','ab','mag','z','s'], vals.T)):
+		# 	plt.subplot(2,3, i+1)
+		# 	plt.hist(v, 25)
+		# 	plt.title(s)
+		# ps.savefig()
 
 		return dict(ps=ps)
 		
