@@ -75,7 +75,6 @@ import os
 from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
-#from astrometry.util.plotutils import ArcsinhNormalize, plothist, antigray
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
@@ -1621,7 +1620,29 @@ class SubImage(Image):
 
 class Family(object):
 	pass
+
+class RunOneGroup(object):
+	def __init__(self, pat, fam, force=[], **kwa):
+		self.pat = pat
+		self.fam = fam
+		self.force = force
+		kwa.update(ps = PlotSequence(pat.replace('.pickle', ''), ''))
+		self.globals = kwa
+		self.prereqs = { }
+	def __call__(self, stage, **kwargs):
+		kwargs.update(self.globals)
+		func = getattr(self.__class__, 'stage%i' % stage)
+		return func(self, **kwargs)
+	def runstage(self, stage, **kwargs):
+		res = runstage(stage, self.pat, self, prereqs=self.prereqs,
+					   force=self.force, **kwargs)
+		return res
+
+	def stage1(self, fam=None, ps=None, **kwargs):
 		
+		return dict()
+	
+
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
 				 ra, dec, R, aco):
@@ -1908,6 +1929,7 @@ class RunAbell(object):
 			print len(fam), 'sources in deblend family'
 
 			family = Family()
+			fams.append(family)
 			# Photo family ID
 			family.family = kid.family
 
@@ -2039,26 +2061,97 @@ class RunAbell(object):
 
 				ps.savefig()
 
-		#plt.axis(ax)
-		#ps.savefig()
+		return dict(fams=fams)
 
+	def stage1002(self, fams=None, **kwargs):
+		res = []
+		for i,f in fams:
+			pat = self.pat.replace('s%02i.pickle', 'g%02i-s%%02i.pickle' % i)
+			ro = RunOneGroup(pat, fam=f, parent=self, **kwargs)
 
+			res.append(ro.runstage(1))
+		newfams = [r['fam'] for r in res]
+		return dict(fams=newfams)
 
-		# fams = []
-		# for i in np.flatnonzero(kids.family == -1):
-		# 	fams.append(np.array([i]))
-		# for f in np.unique(kids.family):
-		# 	if f == -1:
-		# 		continue
-		# 	I = np.flatnonzero(kids.family == f)
-		# 	#if len(I) == 1:
-		# 	#	continue
-		# 	fams.append(I)
-		# 
-		# for I in fams:
-		# 	#if len(I) == 1:
-		# 	#	continue
+	def stage1003(self, fams=None, band=None, ps=None,
+				  **kwargs):
+		bandnum = band_index(band)
 
+		DLfunc = LuminosityDistance()
+		log = np.log10
+		h70 = 0.7
+
+		def FP(sigma, mdev, rdev, ab, z, kz):
+			r0 = rdev * np.sqrt(ab)
+			mu0 = mdev + 2.5*log(2*np.pi * r0**2) - kz - 10.*log(1.*z)
+			DL = DLfunc(z)
+			DA = DL / ((1.+z)**2)
+			R0 = arcsec2rad(r0) * DA
+
+			return (log(sigma) + 0.2*(mu0 - 19.61),
+					log(R0 * 1e3 / h70))
+		
+		N = 100
+		FPXY = []
+		for fam in fams:
+			for src in specsrcs:
+				sdss = src.sdssobj
+				spec = src.spec
+
+				#if type(src) is CompositeGalaxy:
+				#	shape = src.shapeDev
+				#	# this is total exp + dev
+				#	mag = src.getBrightness()
+				#elif type(src) is DevGalaxy:
+				#	shape = src.shape
+				#	mag = src.getBrightness()
+				#else:
+				# 	continue # ?
+
+				re  = sdss.theta_dev[bandnum]
+				dre = sdss.theta_deverr[bandnum]
+				ab  = sdss.ab_dev[bandnum]
+				dab = sdss.ab_deverr[bandnum]
+				#flux = sdss.devflux[bandnum]
+				#dflux = np.sqrt(1./sdss.devflux_ivar[bandnum])
+				#dbright = NanoMaggies(**{band: flux})
+				mag  = sdss.devmag[bandnum]
+				dmag = sdss.devmagerr[bandnum]
+				
+				# redshift
+				z = spec.z
+				dz = spec.zerr
+				# HACK!! K-correction
+				k = 0.
+				dk = 0.
+				# velocity dispersion - sigma [km/s]
+				s = spec.veldisp
+				ds = spec.veldisperr
+
+				#fpxy = []
+				# for i in N:
+				# 	rnd = np.random.normal(size=6)
+				# 	fpxy.append(FP(s + ds * rnd[0],
+				# 				   mag + dmag * rnd[1],
+				# 				   re + dre * rnd[2],
+				# 				   ab + dab * rnd[3],
+				# 				   z + dz * rnd[4],
+				# 				   k + dk * rnd[5]))
+				fpxy = [FP(*args) for args in zip(
+					np.random.normal(s, ds, N),
+					np.random.normal(mag, dmag, N),
+					np.random.normal(re, dre, N),
+					np.random.normal(ab, dab, N),
+					np.random.normal(z, dz, N),
+					np.random.normal(k, dk, N))]
+				FPXY.append(fpxy)
+
+		plt.clf()
+		for X,Y in FPXY:
+			plt.plot(X,Y, 'k.', alpha=0.1)
+		for X,Y in FPXY:
+			plt.plot(np.mean(X),np.mean(Y), 'r.', ms=10, mec='r', mfc='none')
+		ps.savefig()
 		return dict()
 		
 	def stage0(self, run=None, camcol=None, field=None,
