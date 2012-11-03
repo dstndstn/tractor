@@ -1638,10 +1638,17 @@ class RunOneGroup(object):
 					   force=self.force, **kwargs)
 		return res
 
-	def stage1(self, fam=None, ps=None, **kwargs):
-		
-		return dict()
+	def stage0(self, **kwargs):
+		#return self.globals
+		return dict(fam = self.fam)
 	
+	def stage1(self, fam=None, ps=None, **kwargs):
+		return dict()
+
+def draw_gaussian(mu, sigma, size):
+	sigma = np.abs(sigma)
+	sigma += 1.*(sigma == 0.)
+	return np.random.normal(loc=mu, scale=sigma, size=size)
 
 class RunAbell(object):
 	def __init__(self, run, camcol, field, bandname,
@@ -1916,7 +1923,6 @@ class RunAbell(object):
 		fams = []
 
 		for i,j in zip(I,J):
-
 			src = cat[j]
 			kid = kids[j]
 			if kid.family == -1:
@@ -1987,6 +1993,9 @@ class RunAbell(object):
 
 			family.over = over
 
+			print 'srcs', len(family.srcs), 'specsrcs',
+			print len(family.specsrcs), 'overlap', len(family.over)
+
 			plt.axis(ax)
 			ps.savefig()
 
@@ -2016,7 +2025,6 @@ class RunAbell(object):
 					kwa = dict(mec='y', mfc='none', mew=1.5, ms=8, alpha=0.5)
 					if hasattr(src, 'spec'):
 						kwa.update(mec='r', ms=10)
-						specsrcs.append(src)
 						if src.speci == speci:
 							kwa.update(mec='m', ms=12)
 					plt.plot([x], [y], 'o', **kwa)
@@ -2061,21 +2069,68 @@ class RunAbell(object):
 
 				ps.savefig()
 
+		for fam in fams:
+			print 's1001 output: srcs', len(fam.srcs), 'spec', len(fam.specsrcs), 'over', len(fam.over)
+
 		return dict(fams=fams)
 
 	def stage1002(self, fams=None, **kwargs):
-		res = []
-		for i,f in fams:
+		R = []
+		for i,fam in enumerate(fams):
 			pat = self.pat.replace('s%02i.pickle', 'g%02i-s%%02i.pickle' % i)
-			ro = RunOneGroup(pat, fam=f, parent=self, **kwargs)
 
-			res.append(ro.runstage(1))
-		newfams = [r['fam'] for r in res]
+			print 's1002 input: family srcs', len(fam.srcs), 'specsrcs',
+			print len(fam.specsrcs), 'overlap', len(fam.over)
+
+			ro = RunOneGroup(pat, fam=fam, parent=self, **kwargs)
+
+			res = ro.runstage(1)
+
+			fam = res['fam']
+			print 's1002 output: family srcs', len(fam.srcs), 'specsrcs',
+			print len(fam.specsrcs), 'overlap', len(fam.over)
+
+			R.append(res)
+		newfams = [r['fam'] for r in R]
+
+		for fam in newfams:
+			print 's1002 output: family srcs', len(fam.srcs), 'specsrcs',
+			print len(fam.specsrcs), 'overlap', len(fam.over)
+
 		return dict(fams=newfams)
 
-	def stage1003(self, fams=None, band=None, ps=None,
+	def stage1003(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None,
 				  **kwargs):
 		bandnum = band_index(band)
+		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		ax = plt.axis()
+		plt.gray()
+		for fam in fams:
+			print 'Family', fam.family, 'has', len(fam.specsrcs), 'spec srcs'
+			print 'and', len(fam.srcs), 'srcs'
+			print 'and', len(fam.over), 'overlaps'
+			for src in fam.over:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='g', mfc='none',
+						 mew=1.5, ms=6, alpha=0.5)
+			for src in fam.srcs:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='y', mfc='none',
+						 mew=1.5, ms=8, alpha=0.5)
+			for src in fam.specsrcs:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='r', mfc='none',
+						 mew=1.5, ms=10, alpha=0.5)
+		plt.axis(ax)
+		ps.savefig()
+
 
 		DLfunc = LuminosityDistance()
 		log = np.log10
@@ -2083,18 +2138,20 @@ class RunAbell(object):
 
 		def FP(sigma, mdev, rdev, ab, z, kz):
 			r0 = rdev * np.sqrt(ab)
-			mu0 = mdev + 2.5*log(2*np.pi * r0**2) - kz - 10.*log(1.*z)
+			mu0 = mdev + 2.5*log(2.*np.pi * r0**2) - kz - 10.*log(1.+z)
 			DL = DLfunc(z)
 			DA = DL / ((1.+z)**2)
 			R0 = arcsec2rad(r0) * DA
 
-			return (log(sigma) + 0.2*(mu0 - 19.61),
+			return (log(sigma) + 0.2 * (mu0 - 19.61),
 					log(R0 * 1e3 / h70))
 		
 		N = 100
 		FPXY = []
+		vals = []
 		for fam in fams:
-			for src in specsrcs:
+			print 'Family', fam.family, 'has', len(fam.specsrcs), 'spec srcs'
+			for src in fam.specsrcs:
 				sdss = src.sdssobj
 				spec = src.spec
 
@@ -2108,13 +2165,12 @@ class RunAbell(object):
 				#else:
 				# 	continue # ?
 
+				# [arcsec]
 				re  = sdss.theta_dev[bandnum]
 				dre = sdss.theta_deverr[bandnum]
 				ab  = sdss.ab_dev[bandnum]
 				dab = sdss.ab_deverr[bandnum]
-				#flux = sdss.devflux[bandnum]
-				#dflux = np.sqrt(1./sdss.devflux_ivar[bandnum])
-				#dbright = NanoMaggies(**{band: flux})
+				# [mag]
 				mag  = sdss.devmag[bandnum]
 				dmag = sdss.devmagerr[bandnum]
 				
@@ -2128,6 +2184,8 @@ class RunAbell(object):
 				s = spec.veldisp
 				ds = spec.veldisperr
 
+				vals.append((re, ab, mag, z, s))
+
 				#fpxy = []
 				# for i in N:
 				# 	rnd = np.random.normal(size=6)
@@ -2137,22 +2195,74 @@ class RunAbell(object):
 				# 				   ab + dab * rnd[3],
 				# 				   z + dz * rnd[4],
 				# 				   k + dk * rnd[5]))
-				fpxy = [FP(*args) for args in zip(
-					np.random.normal(s, ds, N),
-					np.random.normal(mag, dmag, N),
-					np.random.normal(re, dre, N),
-					np.random.normal(ab, dab, N),
-					np.random.normal(z, dz, N),
-					np.random.normal(k, dk, N))]
+				# fpxy = [FP(*args) for args in zip(
+				# 	draw_gaussian(s,   ds,   N),
+				# 	draw_gaussian(mag, dmag, N),
+				# 	draw_gaussian(re,  dre,  N),
+				# 	draw_gaussian(ab,  dab,  N),
+				# 	draw_gaussian(z,   dz,   N),
+				# 	draw_gaussian(k,   dk,   N))]
+				fpxy = FP(
+					draw_gaussian(s,   ds,   N),
+					draw_gaussian(mag, dmag, N),
+					draw_gaussian(re,  dre,  N),
+					draw_gaussian(ab,  dab,  N),
+					draw_gaussian(z,   dz,   N),
+					draw_gaussian(k,   dk,   N))
 				FPXY.append(fpxy)
 
+
 		plt.clf()
+		#for XY in FPXY:
+		#	X = [x for x,y in XY]
+		#	Y = [y for x,y in XY]
 		for X,Y in FPXY:
 			plt.plot(X,Y, 'k.', alpha=0.1)
 		for X,Y in FPXY:
 			plt.plot(np.mean(X),np.mean(Y), 'r.', ms=10, mec='r', mfc='none')
+
+		xl,xh = [1.25, 3.75]
+		yl,yh = [-0.5, 2.0]
+		X = np.array([xl,xh])
+		ta = dict(color='r', lw=2,)
+		# eyeballed Bernardi relation for i-band
+		plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
+		plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
+		plt.ylabel('log(R_0) [kpc / h]')
+		#plt.ylim(yl,yh)
+		#plt.xlim(xl,xh)
+		plt.title('FP from SDSS error estimates')
 		ps.savefig()
-		return dict()
+
+		vals = np.array(vals)
+		print 'vals', vals.shape
+
+		re  = vals[:,0]
+		ab  = vals[:,1]
+		mag = vals[:,2]
+		z   = vals[:,3]
+		s   = vals[:,4]
+		print 're', re
+		print 'ab', ab
+		print 'mag', mag
+		print 'z', z
+		print 's', s
+
+		XY = np.array([FP(si, magi, rei, abi, zi, 0.)
+					   for rei, abi, magi, zi, si in zip(
+						   re, ab, mag, z, s)])
+		plt.plot(XY[:,0], XY[:,1], 'gx')
+		ps.savefig()
+
+		plt.clf()
+		for i,(s,v) in enumerate(zip(['re','ab','mag','z','s'], vals.T)):
+			plt.subplot(2,3, i+1)
+			plt.hist(v, 25)
+			plt.title(s)
+		ps.savefig()
+
+
+		return dict(ps=ps)
 		
 	def stage0(self, run=None, camcol=None, field=None,
 			   band=None, ra=None, dec=None, **kwargs):
