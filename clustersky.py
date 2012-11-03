@@ -75,7 +75,8 @@ import os
 from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.sdss_radec_to_rcf import *
-from astrometry.util.plotutils import ArcsinhNormalize, plothist, antigray
+#from astrometry.util.plotutils import ArcsinhNormalize, plothist, antigray
+from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
 from astrometry.sdss import *
@@ -1844,6 +1845,10 @@ class RunAbell(object):
 		tim = tractor.getImage(0)
 		mod = tractor.getModelImage(0)
 
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		chi = tractor.getChiImage(0)
+
 		plt.clf()
 		plt.imshow(tim.getImage(), **imc)
 		plt.xticks([]); plt.yticks([])
@@ -1854,6 +1859,33 @@ class RunAbell(object):
 		plt.imshow(mod, **imc)
 		plt.xticks([]); plt.yticks([])
 		plt.gray()
+		ps.savefig()
+
+		noise = np.random.normal(size=mod.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+		plt.clf()
+		plt.imshow(mod + noise, **imc)
+		plt.xticks([]); plt.yticks([])
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(chi, **imchi)
+		plt.xticks([]); plt.yticks([])
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(chi, cmap=redgreen, **imchi)
+		plt.xticks([]); plt.yticks([])
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(chi, cmap=bluegrayred, **imchi)
+		plt.xticks([]); plt.yticks([])
 		ps.savefig()
 
 		#ax = plt.axis()
