@@ -612,44 +612,6 @@ def scale_sdss_image(tim, S):
 
 
 
-def get_sky_dr8(frame):
-	skyim = frame.sky
-	(sh,sw) = skyim.shape
-	#print >>sys.stderr,'Skyim shape', skyim.shape
-	if sw != 256:
-		skyim = skyim.T
-	(sh,sw) = skyim.shape
-	#print >>sys.stderr,'Skyim shape', skyim.shape
-	xi = np.round(frame.skyxi).astype(int)
-	yi = np.round(frame.skyyi).astype(int)
-	yi = np.minimum(yi,sh-1)
-	#print >>sys.stderr, 'xi:', xi.min(), xi.max(), 'vs [0,', sw, ']'#, run, camcol, field, bandname
-	#print >>sys.stderr, 'yi:', yi.min(), yi.max(), 'vs [0,', sh, ']'
-	#print >>sys.stderr, 'skyyi:', frame.skyxi.min(), frame.skyyi.max(), 'vs [0,', sh, ']'
-
-	assert(all(xi >= 0) and all(xi < sw))
-	assert(all(yi >= 0) and all(yi < sh))
-	XI,YI = np.meshgrid(xi, yi)
-	#print 'XI', XI.shape
-	# Nearest-neighbour interpolation -- we just need this for approximate invvar.
-	bigsky = skyim[YI,XI]
-	#print 'bigsky', bigsky.shape
-
-	#print 'sky', #frame.sky
-	#print frame.sky.shape
-	#print 'x', len(frame.skyxi), frame.skyxi
-	#print frame.skyxi.shape
-	#print 'y', len(frame.skyyi), frame.skyyi
-	#print frame.skyyi.shape
-
-	# plt.clf()
-	# plt.imshow(frame.sky, interpolation='nearest', origin='lower')
-	# plt.savefig('sky.png')
-	# plt.clf()
-	# plt.imshow(bigsky, interpolation='nearest', origin='lower')
-	# plt.savefig('bigsky.png')
-	return bigsky
-	
 def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
 						  savepsfimg=None, curl=False,
@@ -767,29 +729,23 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	skyobj = ConstantSky(sky)
 
 	calibvec = frame.getCalibVec()
-	#print >>sys.stderr, 'frame url:', sdss.get_url('frame', run, camcol, field, bandname)
 
-	bigsky = get_sky_dr8(frame)
-	assert(bigsky.shape == image.shape)
-	
-	#print 'calibvec', calibvec.shape
-	dn = (image / calibvec) + bigsky
+	#bigsky = frame.getSky()
+	#assert(bigsky.shape == image.shape)
 
-	# Could get this from photoField instead
-	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
 	psfield = sdss.readPsField(run, camcol, field)
-	gain = psfield.getGain(bandnum)
-	darkvar = psfield.getDarkVariance(bandnum)
-	dnvar = (dn / gain) + darkvar
-	invvar = 1./(dnvar * calibvec**2)
-	#print 'imgvar:', imgvar.shape
+	invvar = frame.getInvvar(psfield, bandnum)
 	invvar = invvar.astype(np.float32)
 	assert(invvar.shape == image.shape)
+	
+	# Could get this from photoField instead
+	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
+	gain = psfield.getGain(bandnum)
+	darkvar = psfield.getDarkVariance(bandnum)
 
 	meansky = np.mean(frame.sky)
 	meancalib = np.mean(calibvec)
 	skysig = sqrt((meansky / gain) + darkvar) * meancalib
-	#print 'skysig:', skysig
 
 	info.update(sky=sky, skysig=skysig)
 	zr = np.array(zrange)*skysig + sky
@@ -866,8 +822,6 @@ def get_tractor_sources_dr9(*args, **kwargs):
 		curl = kwargs.pop('curl', False)
 		kwargs['sdss'] = DR9(curl=curl)
 	return get_tractor_sources_dr8(*args, **kwargs)
-
-get_sky_dr9 = get_sky_dr8
 
 class SdssNanomaggiesPhotoCal(BaseParams):
 	def __init__(self, bandname):
