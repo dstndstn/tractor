@@ -382,6 +382,9 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	else:
 		objs = []
 
+	if not (getobjs or getobjinds):
+		return sources
+
 	rtn = [sources]
 	if getobjs:
 		rtn.append(allobjs)

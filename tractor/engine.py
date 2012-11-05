@@ -1196,6 +1196,7 @@ class Tractor(MultiParams):
 		'''
 		if _isint(img):
 			img = self.getImage(img)
+		#print 'getModelImage: for image', img
 		mod = np.zeros(img.getShape(), self.modtype)
 		if sky:
 			img.sky.addTo(mod)
