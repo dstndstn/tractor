@@ -17,17 +17,10 @@ class WeakLensWcs(ParamsWrapper):
 	def cdAtPixel(self, x, y):
 		cd = self.real.cdAtPixel(x,y)
 		J = self.lensJacobianAtPixel(x,y)
-		print 'cd', cd
-		print 'J', J
+		#print 'cd', cd
+		#print 'J', J
 		Jcd = np.dot(J, cd)
-		#print 'J.cd', Jcd
 		return Jcd
-		#cdJ = np.dot(cd, J)
-		#return cdJ
-		#Jinvcd = np.dot(np.linalg.inv(J), cd)
-		#return Jinvcd
-		#cdJinv = np.dot(cd, np.linalg.inv(J))
-		#return cdJinv
 
 	def positionToLensedPosition(self, pos, src=None):
 		return pos
@@ -45,7 +38,12 @@ class PointSourceWeakLensWcs(WeakLensWcs):
 				self.mass, self.real.hashkey())
 		
 	def positionToLensedPosition(self, pos, src=None):
-		return pos
+		rscale = np.cos(np.deg2rad(self.pos.dec))
+		dr = (self.pos.ra - pos.ra) * rscale
+		dd = (self.pos.dec - pos.dec)
+		defl = self.mass / np.hypot(dr,dd)
+		return RaDecPos(pos.ra - defl * dr / rscale,
+						pos.dec - defl * dd)
 
 	def lensJacobianAtPixel(self, x, y):
 		pos = self.real.pixelToPosition(x, y)
@@ -88,7 +86,7 @@ if __name__ == '__main__':
 				sky=sky, photocal=photocal, name='im')
 
 	srcs = []
-	NX,NY = 10,10
+	NX,NY = 21,21
 	xx = np.linspace(0, W, NX)
 	yy = np.linspace(0, H, NY)
 	xx += (xx[1]-xx[0])/2.
@@ -105,7 +103,7 @@ if __name__ == '__main__':
 	tractor = Tractor([tim], srcs)
 
 	#for mass in [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.]:
-	for mass in 10.**np.linspace(-5, -3, 11):
+	for mass in [0] + list(10.**np.linspace(-5, -3, 11)):
 		lwcs.mass = mass
 		mod = tractor.getModelImage(0)
 		imc = dict(interpolation='nearest', origin='lower',
