@@ -420,7 +420,7 @@ class CompositeGalaxy(MultiParams):
 		return derivs
 
 class HoggGalaxy(Galaxy):
-	ps = PlotSequence('hg', format='%03i')
+	#ps = PlotSequence('hg', format='%03i')
 
 	def __init__(self, pos, brightness, *args):
 		'''
@@ -525,13 +525,13 @@ class HoggGalaxy(Galaxy):
 
 		#print 'psf-convolved img sum:', psfconvolvedimg.sum()
 
-		if False:
-			plt.clf()
-			plt.imshow(psfconvolvedimg*counts,
-					   interpolation='nearest', origin='lower')
-			plt.hot()
-			plt.colorbar()
-			HoggGalaxy.ps.savefig()
+		# if False:
+		# 	plt.clf()
+		# 	plt.imshow(psfconvolvedimg*counts,
+		# 			   interpolation='nearest', origin='lower')
+		# 	plt.hot()
+		# 	plt.colorbar()
+		# 	#HoggGalaxy.ps.savefig()
 
 		return Patch(x0, y0, psfconvolvedimg)
 
