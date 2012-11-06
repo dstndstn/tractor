@@ -990,6 +990,7 @@ class NCircularGaussianPSF(MultiParams):
 		return max(self.minradius, max(self.sigmas) * self.getNSigma())
 
 	# returns a Patch object.
+	#### FIXME -- could use mixture_profiles!!
 	def getPointSourcePatch(self, px, py):
 		ix = int(round(px))
 		iy = int(round(py))

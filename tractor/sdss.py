@@ -31,6 +31,126 @@ from astrometry.util.file import *
 from astrometry.util.ngc2000 import ngc2000
 from astrometry.util.plotutils import setRadecAxes, redgreen
 
+## FIXME -- these PSF params are not Params
+class SdssBrightPSF(ParamsWrapper):
+	def __init__(self, real, a1, s1, a2, s2, a3, sigmap, beta):
+		self.a1 = a1
+		self.a2 = a2
+		self.a3 = a3
+		self.s1 = s1
+		self.s2 = s2
+		self.sigmap = sigmap
+		self.beta = beta
+		super(SdssBrightPSF,self).__init__(real)
+
+	def getRadius(self):
+		return self.real.getRadius()
+	def getMixtureOfGaussians(self):
+		return self.real.getMixtureOfGaussians()
+		
+	def getBrightPointSourcePatch(self, px, py, dc):
+		R = np.sqrt( self.beta * self.sigmap**2 * ( (dc / self.a3)**(-2./self.beta) - 1.) )
+		# print 'beta', self.beta
+		# print 'sigmap', self.sigmap
+		# print 'p0:', self.a3
+		# print 'dc', dc
+		# print 'Bright ps patch: R=', R
+
+		R = np.clip(R, 25., 200.)
+
+		x0,x1 = int(floor(px-R)), int(ceil(px+R))
+		y0,y1 = int(floor(py-R)), int(ceil(py+R))
+		# clip to image bounds?
+
+		#mog = MixtureOfGaussians([self.a1, self.a2], np.zeros((2,2)),
+		#						 [np.diag([s1,s1]), np.diag([s2,s2])])
+		#grid = mog.evaluate_grid_dstn(x0-px, x1-px, y0-py, y1-py)
+		#patch = Patch(x0, y0, grid)
+
+		X,Y = np.meshgrid(np.arange(x0,x1+1), np.arange(y1,y1+1))
+		#print 'patch shape', patch.shape
+		#print 'X,Y shape', X.shape
+		R2 = ((X-px)**2 + (Y-py)**2)
+		# According to RHL, these are denormalized Gaussians
+		P = (self.a1 * np.exp(-0.5 * R2 / (self.s1**2)) +
+			 self.a2 * np.exp(-0.5 * R2 / (self.s2**2)) +
+			 self.a3 * ((1. + R2 / (self.beta * self.sigmap**2))**(-self.beta/2.)))
+		P /= np.sum(P)
+		return Patch(x0, y0, P)
+
+	def getPointSourcePatch(self, px, py):
+		return self.real.getPointSourcePatch(px, py)
+		
+'''
+Warning: Bright point sources do NOT produce correct derivatives!!
+'''
+
+class SdssPointSource(PointSource):
+	'''
+	Knows about the SDSS 2-Gaussian-plus-power-law PSF model and
+	switches (smoothly) to it for bright sources.
+
+	*thresh* is the threshold, in COUNTS, for using the bright PSF
+	model.
+	
+	*thresh2* is the lower threshold, in COUNTS, for when to start
+	switching to the bright PSF model.  We use linear interpolation
+	for the *thresh2 < b < thresh* range.  If not specified, defaults
+	to factor (1./2.5) of *thresh*, ie, about a mag.
+	'''
+	def __init__(self, pos, bright, thresh=None, thresh2=None):
+		super(SdssPointSource, self).__init__(pos, bright)
+		self.thresh1 = thresh
+		if thresh2 is not None:
+			self.thresh2 = thresh2
+			assert(self.thresh2 <= thresh)
+		elif thresh is not None:
+			self.thresh2 = (thresh / 2.5)
+		else:
+			self.thresh2 = None
+
+	def copy(self):
+		return SdssPointSource(pos, bright, self.thresh1, self.thresh2)
+
+	def getModelPatch(self, img):
+		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+		if counts == 0:
+			return None
+		if self.thresh1 is not None and counts >= self.thresh1:
+			fb = 1.
+			fa = 0.
+		if self.thresh2 is not None and counts >= self.thresh2:
+			fb = (counts - self.thresh2) / (self.thresh1 - self.thresh2)
+			fb = np.clip(fb, 0., 1.)
+			fa = 1. - fb
+		else:
+			fb = 0.
+			fa = 1.
+
+		patch = None
+		if fb != 0.:
+			## HACK -- precision
+			#print 'Counts:', counts
+			#print 'sigma:', img.getMedianPixelNoise()
+			# after scaling by counts, we want to have a small fraction
+			# of a sigma beyond the cutoff
+			dc = 1e-3 * img.getMedianPixelNoise() / counts
+			patchb = img.getPsf().getBrightPointSourcePatch(px, py, dc)
+			patch = patchb * fb
+
+		if fa != 0:
+			patcha = img.getPsf().getPointSourcePatch(px, py)
+			if patch is None:
+				patch = patcha
+			else:
+				patch += patcha * fa
+
+		#print 'PointSource: PSF patch has sum', patch.getImage().sum()
+		return patch * counts
+	
+
+
 # might want to override this to set the step size to ~ a pixel
 #class SdssRaDecPos(RaDecPos):
 #	def getStepSizes(self, img):
@@ -224,7 +344,9 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 							retrieve=True, curl=False, roi=None, bands=None,
 							badmag=25, nanomaggies=False,
-							getobjs=False, getobjinds=False):
+							getobjs=False, getobjinds=False,
+							brightPointSourceThreshold=0.):
+							#brightPointSourceBand='r'):
 	'''
 	Creates tractor.Source objects corresponding to objects in the SDSS catalog
 	for the given field.
@@ -314,10 +436,22 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	# Add stars
 	I = np.flatnonzero(Lstar > 0)
 	print len(I), 'stars'
+
+	#bband = band_index(brightPointSourceBand)
+
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums, nanomaggies)
-		ps = PointSource(pos, bright)
+		#mag = objs.psfmag[i, bband]
+		#if mag < brightPointSourceThreshold:
+		#	ps = BrightPointSource(pos, bright)
+		#else:
+
+		if brightPointSourceThreshold:
+			ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
+		else:
+			ps = PointSource(pos, bright)
+
 		#ps.objindex = objs.index[i]
 		obji.append(objs.index[i])
 		sources.append(ps)
@@ -632,6 +766,9 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	  "dg" for double-Gaussian
 	  "kl-gm" for SDSS KL-decomposition approximated as a Gaussian mixture
 
+      "bright-*", "*" one of the above PSFs, with special handling at
+      the bright end.
+
 	"roiradecsize" = (ra, dec, half-size in pixels) indicates that you
 	want to grab a ROI around the given RA,Dec.
 
@@ -642,6 +779,15 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	  'sky'
 	  'skysig'
 	'''
+
+	origpsf = psf
+	if psf.startswith('bright-'):
+		psf = psf[7:]
+		brightpsf = True
+		print 'Setting bright PSF handling'
+	else:
+		brightpsf = False
+
 	valid_psf = ['dg', 'kl-gm']
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
@@ -649,7 +795,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if retry_retrieve:
 		try:
 			args = (run,camcol,field, bandname)
-			kwargs = dict(sdss=sdss, roi=roi, psf=psf,
+			kwargs = dict(sdss=sdss, roi=roi, psf=origpsf,
 						  roiradecsize=roiradecsize, savepsfimg=savepsfimg,
 						  curl=curl, nanomaggies=nanomaggies,
 						  zrange=zrange, retry_retrieve=False)
@@ -802,6 +948,12 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		print 'Creating double-Gaussian PSF approximation'
 		(a,s1, b,s2) = dgpsf
 		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
+
+	if brightpsf:
+		print 'Wrapping PSF in SdssBrightPSF'
+		(a1,s1, a2,s2, a3,sigmap,beta) = psfield.getPowerLaw(bandnum)
+		mypsf = SdssBrightPSF(mypsf, a1,s1,a2,s2,a3,sigmap,beta)
+		print 'PSF:', mypsf
 
 	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,

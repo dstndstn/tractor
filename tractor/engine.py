@@ -130,6 +130,13 @@ class Image(MultiParams):
 		self.invvar[self.mask] = 0. 
 		self.inverr = np.sqrt(self.invvar)
 
+	def getMedianPixelNoise(self, nz=True):
+		if nz:
+			iv = self.invvar[self.invvar != 0.]
+		else:
+			iv = self.invvar
+		return 1./np.sqrt(np.median(iv))
+
 	def getMask(self):
 		return self.mask
 
