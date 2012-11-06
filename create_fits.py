@@ -188,7 +188,7 @@ def makeNSAtlastable():
     a19=np.array(cg_expmags)
     a20=np.array(cg_extinction)
     a21=np.array(cg_mu50)
-    col1=pyf.Column(name='NSA_NAME',format='10A',array=a1)
+    col1=pyf.Column(name='NSA_NAME',format='30A',array=a1)
     col2=pyf.Column(name='NSA_RA',format='1E',array=a2)
     col3=pyf.Column(name='NSA_DEC',format='1E',array=a3)
     col4=pyf.Column(name='NSA_NSID',format='1E',array=a4)
@@ -366,7 +366,7 @@ def makeRC3table():
     a19=np.array(cg_expmags)
     a20=np.array(cg_extinction)
     a21=np.array(cg_mu50)
-    col1=pyf.Column(name='RC3_NAME',format='10A',array=a1)
+    col1=pyf.Column(name='RC3_NAME',format='30A',array=a1)
     col2=pyf.Column(name='RC3_RA',format='1E',array=a2)
     col3=pyf.Column(name='RC3_DEC',format='1E',array=a3)
     col4=pyf.Column(name='RC3_LOG_AE',format='1E',array=a4)
@@ -396,4 +396,4 @@ def makeRC3table():
 #try to run on all types of pickle files with differents names while going back one directory
 
 if __name__ == '__main__':
-    makeRC3table()
+    makeNSAtlastable()

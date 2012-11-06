@@ -19,6 +19,7 @@ from engine import *
 from utils import *
 
 from cache import *
+from astrometry.util.plotutils import PlotSequence
 
 _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
