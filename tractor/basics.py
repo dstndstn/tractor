@@ -171,6 +171,11 @@ class NanoMaggies(Fluxes):
 		return nmgy
 
 	@staticmethod
+	def nanomaggiesToMag(nmgy):
+		mag = -2.5 * (np.log10(nmgy) - 9)
+		return mag
+
+	@staticmethod
 	def zeropointToScale(zp):
 		'''
 		Converts a traditional magnitude zeropoint to a scale factor

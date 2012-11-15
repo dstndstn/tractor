@@ -49,7 +49,10 @@ class SdssBrightPSF(ParamsWrapper):
 		return self.real.getMixtureOfGaussians()
 		
 	def getBrightPointSourcePatch(self, px, py, dc):
-		R = np.sqrt( self.beta * self.sigmap**2 * ( (dc / self.a3)**(-2./self.beta) - 1.) )
+		if dc > self.a3:
+			R = 25.
+		else:
+			R = np.sqrt( self.beta * self.sigmap**2 * ( (dc / self.a3)**(-2./self.beta) - 1.) )
 		# print 'beta', self.beta
 		# print 'sigmap', self.sigmap
 		# print 'p0:', self.a3
@@ -67,7 +70,7 @@ class SdssBrightPSF(ParamsWrapper):
 		#grid = mog.evaluate_grid_dstn(x0-px, x1-px, y0-py, y1-py)
 		#patch = Patch(x0, y0, grid)
 
-		X,Y = np.meshgrid(np.arange(x0,x1+1), np.arange(y1,y1+1))
+		X,Y = np.meshgrid(np.arange(x0,x1+1), np.arange(y0,y1+1))
 		#print 'patch shape', patch.shape
 		#print 'X,Y shape', X.shape
 		R2 = ((X-px)**2 + (Y-py)**2)
@@ -682,7 +685,7 @@ def get_tractor_image(run, camcol, field, bandname,
 			print 'PSF model fit', psf, 'failed!  Returning DG model instead'
 			psf = 'dg'
 	if psf == 'dg':
-		dgpsf = psfield.getDoubleGaussian(bandnum)
+		dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
 		print 'Creating double-Gaussian PSF approximation'
 		(a,s1, b,s2) = dgpsf
 		mypsf = NCircularGaussianPSF([s1, s2], [a, b])
