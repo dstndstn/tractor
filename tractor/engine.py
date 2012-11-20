@@ -778,7 +778,7 @@ class Tractor(MultiParams):
 				plt.ylabel('L-BFGS-B iteration number')
 			plt.savefig(plotfn)
 
-	def optimize(self, alphas=None, damp=0, priors=True):
+	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
 		allderivs = self.getDerivs()
@@ -790,7 +790,8 @@ class Tractor(MultiParams):
 		#		print 'patch mean', np.mean(p.patch)
 		print 'Finding optimal update direction...'
 		t0 = Time()
-		X = self.getUpdateDirection(allderivs, damp=damp, priors=priors)
+		X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
+									scale_columns=scale_columns)
 		#print Time() - t0
 		topt = Time()-t0
 		#print 'X:', X
@@ -922,7 +923,7 @@ class Tractor(MultiParams):
 		return allderivs
 
 	def getUpdateDirection(self, allderivs, damp=0., priors=True,
-						   ):
+						   scale_columns=True):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -1031,14 +1032,17 @@ class Tractor(MultiParams):
 			I = (np.abs(vals) > (FACTOR * mx))
 			rows = rows[I]
 			vals = vals[I]
-			scale = np.sqrt(np.dot(vals, vals)) #sum(vals * vals))
+			scale = np.sqrt(np.dot(vals, vals))
 			colscales.append(scale)
 			assert(len(colscales) == (col+1))
 			logverb('Column', col, 'scale:', scale)
 			sprows.append(rows)
 			spcols.append(np.zeros_like(rows) + col)
-			spvals.append(vals / scale)
-
+			if scale_columns:
+				spvals.append(vals / scale)
+			else:
+				spvals.append(vals)
+				
 		colscale = np.array(colscales)
 
 		b = None
@@ -1116,7 +1120,6 @@ class Tractor(MultiParams):
 			b[row0 : row0 + NP] = chi
 
 
-
 		# Zero out unused rows -- FIXME, is this useful??
 		bnz = np.zeros(Nrows)
 		bnz[urows] = b[urows]
@@ -1148,7 +1151,8 @@ class Tractor(MultiParams):
 		
 		logverb('scaled	 X=', X)
 		X = np.array(X)
-		X /= colscales
+		if scale_columns:
+			X /= colscales
 		logverb('  X=', X)
 
 		#np.seterr(**olderr)

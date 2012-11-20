@@ -4,13 +4,14 @@ This code is part of the Tractor.
 Copyright 2012 David W. Hogg
 
 This code builds a simultaneous emitting dust model for a set of
-aligned Herschel maps.
+(not aligned) Herschel maps.
 
 It has various things related to Herschel data hard-coded.
 """
 
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rc('text', usetex=True)
 import pylab as plt
 
 import numpy as np
@@ -631,7 +632,111 @@ class DustSheet(MultiParams):
 
 def makeplots(tractor, step, suffix):
 	print 'Making plots'
-	mods = tractor.getModelImages()
+
+	ds = tractor.getCatalog()[0]
+	logsa, logt, emis = ds.getArrays()
+	suff = '.pdf'
+	
+	#plt.figure(figsize=(8,6))
+	#plt.figure(figsize=(4.5,4))
+	#plt.figure(figsize=(4,3.5))
+	plt.figure(figsize=(3.5,3))
+	plt.subplots_adjust(left=0.01, right=0.99, bottom=0.02, top=0.92)
+
+	logsa = np.fliplr(logsa)
+	logt = np.fliplr(logt)
+	emis = np.fliplr(emis)
+	
+	# plt.clf()
+	# plt.imshow(logsa, interpolation='nearest', origin='lower')
+	# plt.gray()
+	# plt.colorbar()
+	# plt.title('Dust: log(solid angle)')
+	# plt.savefig('logsa-%02i%s.png' % (step, suffix))
+	
+	plt.clf()
+	plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	plt.hot()
+	plt.colorbar()
+	plt.xticks([])
+	plt.yticks([])
+	plt.title('Dust Column Density') #: solid angle')
+	plt.savefig(('sa-%02i%s'+suff) % (step, suffix))
+	
+	# plt.clf()
+	# plt.imshow(logt, interpolation='nearest', origin='lower')
+	# plt.gray()
+	# plt.colorbar()
+	# plt.title('Dust: log(temperature)')
+	# plt.savefig('logt-%02i%s'+suff % (step, suffix))
+	
+	plt.clf()
+	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
+	plt.hot()
+	plt.colorbar()
+	plt.xticks([])
+	plt.yticks([])
+	plt.title('Dust Temperature (K)')
+	plt.savefig(('t-%02i%s'+suff) % (step, suffix))
+	
+	plt.clf()
+	plt.imshow(emis, interpolation='nearest', origin='lower',
+			   vmin=1, vmax=2.5)
+	plt.gray()
+	plt.colorbar()
+	plt.xticks([])
+	plt.yticks([])
+	plt.title('Dust Emissivity Index')
+	plt.savefig(('emis-%02i%s'+suff) % (step, suffix))
+
+	#plt.figure(figsize=(4,4))
+	#plt.figure(figsize=(3,3))
+	plt.figure(figsize=(2.5,2.5))
+	plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.9)
+
+	for i,tim in enumerate(tractor.getImages()):
+	 	ima = dict(interpolation='nearest', origin='lower',
+	 			   vmin=tim.zr[0], vmax=tim.zr[1])
+	 	plt.clf()
+	 	plt.imshow(tim.getImage(), **ima)
+	 	plt.gray()
+	 	#plt.colorbar()
+	 	#plt.title(tim.name)
+		name = ['PACS 100', 'PACS 160', 'SPIRE 250', 'SPIRE 350', 'SPIRE 500'][i]
+		plt.title('Data: ' + name)
+		plt.xticks([])
+		plt.yticks([])
+	 	plt.savefig(('data-%i-%02i%s'+suff) % (i, step, suffix))
+
+	mods = []
+	for i,tim in enumerate(tractor.getImages()):
+	 	ima = dict(interpolation='nearest', origin='lower',
+	 			   vmin=tim.zr[0], vmax=tim.zr[1])
+
+		print 'Getting model image', i
+		mod = tractor.getModelImage(i)
+		mods.append(mod)
+	 	plt.clf()
+	 	plt.imshow(mod, **ima)
+	 	plt.gray()
+		name = ['PACS 100', 'PACS 160', 'SPIRE 250', 'SPIRE 350', 'SPIRE 500'][i]
+		plt.title('Model: ' + name)
+		#plt.title(name)
+		plt.xticks([])
+		plt.yticks([])
+	 	plt.savefig(('model-%i-%02i%s'+suff) % (i, step, suffix))
+
+	# 
+	# 	if step == 0:
+	# 		plt.clf()
+	# 		plt.imshow(tim.getImage(), **ima)
+	# 		plt.gray()
+	# 		plt.colorbar()
+	# 		plt.title(tim.name)
+	# 		plt.savefig('data-%i.png' % (i))
+
+	#mods = tractor.getModelImages()
+
 	# plt.figure(figsize=(8,6))
 	# for i,mod in enumerate(mods):
 	# 	tim = tractor.getImage(i)
@@ -728,42 +833,7 @@ def makeplots(tractor, step, suffix):
 	plt.savefig('dust-%02i%s.png' % (step, suffix))
 
 
-	# plt.figure(figsize=(8,6))
-	# 
-	# plt.clf()
-	# plt.imshow(logsa, interpolation='nearest', origin='lower')
-	# plt.gray()
-	# plt.colorbar()
-	# plt.title('Dust: log(solid angle)')
-	# plt.savefig('logsa-%02i%s.png' % (step, suffix))
-	# 
-	# plt.clf()
-	# plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
-	# plt.hot()
-	# plt.colorbar()
-	# plt.title('Dust: solid angle')
-	# plt.savefig('sa-%02i%s.png' % (step, suffix))
-	# 
-	# plt.clf()
-	# plt.imshow(logt, interpolation='nearest', origin='lower')
-	# plt.gray()
-	# plt.colorbar()
-	# plt.title('Dust: log(temperature)')
-	# plt.savefig('logt-%02i%s.png' % (step, suffix))
-	# 
-	# plt.clf()
-	# plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
-	# plt.hot()
-	# plt.colorbar()
-	# plt.title('Dust: temperature (K)')
-	# plt.savefig('t-%02i%s.png' % (step, suffix))
-	# 
-	# plt.clf()
-	# plt.imshow(emis, interpolation='nearest', origin='lower')
-	# plt.gray()
-	# plt.colorbar()
-	# plt.title('Dust: emissivity')
-	# plt.savefig('emis-%02i%s.png' % (step, suffix))
+
 
 def np_err_handler(typ, flag):
 	print 'Floating point error (%s), with flag %s' % (typ, flag)

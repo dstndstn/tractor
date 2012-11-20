@@ -1663,7 +1663,7 @@ class RunAbell(object):
 		self.R = R
 		self.aco = aco
 		#self.prereqs = { 103: 2, 203: 2 }
-		self.prereqs = { 103: 2, 204: 0, 1000: 0, }
+		self.prereqs = { 103: 2, 204: 0, 1000: 0,  1004:1002 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -1677,14 +1677,14 @@ class RunAbell(object):
 					   force=self.force, **kwargs)
 		return res
 
-	def optloop(self, tractor):
+	def optloop(self, tractor, **optargs):
 		band = self.bandname
 		j=0
 		while True:
 			print '-------------------------------------'
 			print 'Optimizing: step', j
 			print '-------------------------------------'
-		   	dlnp,X,alpha = tractor.optimize() #priors=False)
+		   	dlnp,X,alpha = tractor.optimize(**optargs)
 			print 'delta-logprob', dlnp
 			nup = 0
 			for src in tractor.getCatalog():
@@ -2083,7 +2083,9 @@ class RunAbell(object):
 				  imc=None,
 				  **kwargs):
 		bandnum = band_index(band)
-		ps = PlotSequence(self.pat.replace('-s%02i.pickle', ''))
+		pspat = self.pat.replace('-s%02i.pickle', '')
+		print 'plotsequence pattern:', pspat
+		ps = PlotSequence(pspat)
 
 		tim = tractor.getImage(0)
 		wcs = tim.getWcs()
@@ -2108,6 +2110,29 @@ class RunAbell(object):
 						 mew=1.5, ms=10, alpha=0.5)
 		plt.axis(ax)
 		ps.savefig()
+
+		for i,fam in enumerate(fams):
+			plt.clf()
+			plt.imshow(tim.getImage(), **imc)
+			ax = plt.axis()
+			plt.gray()
+			print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
+			for src in fam.over:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='g', mfc='none',
+						 mew=1.5, ms=6, alpha=0.5)
+			for src in fam.srcs:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='y', mfc='none',
+						 mew=1.5, ms=8, alpha=0.5)
+			for src in fam.specsrcs:
+				x,y = wcs.positionToPixel(src.getPosition())
+				plt.plot([x],[y], 'o', mec='r', mfc='none',
+						 mew=1.5, ms=10, alpha=0.5)
+			plt.axis(ax)
+			plt.title('Family %i' % i)
+			ps.savefig()
+
 
 		DLfunc = LuminosityDistance()
 		log = np.log10
@@ -2249,6 +2274,492 @@ class RunAbell(object):
 		# ps.savefig()
 
 		return dict(ps=ps)
+
+
+	def stage1004(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, **kwargs):
+		bandnum = band_index(band)
+		pspat = self.pat.replace('-s%02i.pickle', '')
+		print 'plotsequence pattern:', pspat
+		ps = PlotSequence(pspat, format='%03i')
+
+		plt.figure(figsize=(5,4))
+		plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.92)
+
+		tim = tractor.getImage(0)
+		wcs = tim.getWcs()
+
+		# the big one
+		
+		fam = fams[22]
+		# fam.srcs
+		# fam.specsrcs
+		# family.ext = ext
+		# family.mpatch = mpatch
+
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+		print 'Slice', slc
+
+		fam.mpatch = Patch(mpatch.x0, 100,
+						   mpatch.patch[100-mpatch.y0:, :2000 - mpatch.x0])
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+		print 'Slice', slc
+
+		fam.ext = list(fam.ext)
+		# Trim ugly edges
+		fam.ext[1] = 2000
+		fam.ext[2] = 100
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		print 'mpatch extent:', mpatch.getExtent()
+		print 'fam ext', fam.ext
+
+
+
+
+		print 'Spectroscopic sources:'
+		for src in fam.specsrcs:
+			print '  ', src
+		#I = np.argsort([src.getBrightness().getMag(band) for src in fam.srcs])
+		#print 'Brightest sources:'
+		#for i in I[:10]:
+
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **imc)
+		plt.gray()
+		print 'Fam has', len(fam.specsrcs), 'spec', len(fam.srcs), 'srcs', len(fam.over), 'overlaps'
+		for src in fam.over:
+			x,y = wcs.positionToPixel(src.getPosition())
+			plt.plot([x],[y], 'o', mec='g', mfc='none',
+					 mew=1.5, ms=6, alpha=0.5)
+		for src in fam.srcs:
+			x,y = wcs.positionToPixel(src.getPosition())
+			plt.plot([x],[y], 'o', mec='y', mfc='none',
+					 mew=1.5, ms=8, alpha=0.5)
+		for src in fam.specsrcs:
+			x,y = wcs.positionToPixel(src.getPosition())
+			plt.plot([x],[y], 'o', mec='r', mfc='none',
+					 mew=1.5, ms=10, alpha=0.5)
+			if isinstance(src, DevGalaxy):
+				plt.text(x, y, 'D', color='r')
+			elif isinstance(src, ExpGalaxy):
+				plt.text(x, y, 'E', color='r')
+			elif isinstance(src, CompositeGalaxy):
+				plt.text(x, y, 'C', color='r')
+			elif isinstance(src, PointSource):
+				plt.text(x, y, 'P', color='r')
+		plt.axis(fam.ext)
+		ps.savefig()
+
+		plt.clf()
+		#plt.imshow(tim.getImage(), **imc)
+		plt.imshow(tim.getImage().T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		#plt.axis(fam.ext)
+		plt.axis(rext)
+		plt.title('Data')
+		ps.savefig()
+
+		inbox = []
+		for src in tractor.getCatalog():
+			if src in fam.srcs or src in fam.over:
+				continue
+			x,y = wcs.positionToPixel(src.getPosition())
+			if (x >= fam.ext[0] and x <= fam.ext[1] and
+				y >= fam.ext[2] and y <= fam.ext[3]):
+				inbox.append(src)
+
+		noise = np.random.normal(size=tim.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+
+		ima = dict(interpolation='nearest', origin='lower')
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		imchi2 = ima.copy()
+		imchi2.update(vmin=-50, vmax=50)
+
+		def plotem(srcs=None):
+			#mod = tractor.getModelImage(tim, fam.srcs + fam.over + inbox)
+			mod = tractor.getModelImage(tim, srcs=srcs)
+
+			# plt.clf()
+			# plt.imshow(mod, **imc)
+			# plt.gray()
+			# plt.xticks([]); plt.yticks([])
+			# plt.axis(fam.ext)
+			# ps.savefig()
+
+			plt.clf()
+			plt.imshow(mod.T, **imc)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Model')
+			ps.savefig()
+
+			plt.clf()
+			#plt.imshow(mod + noise, **imc)
+			plt.imshow((mod + noise).T, **imc)
+			plt.xticks([]); plt.yticks([])
+			plt.gray()
+			plt.axis(rext)
+			#plt.axis(fam.ext)
+			plt.title('Model')
+			ps.savefig()
+
+			chi = (tim.getImage() - mod) * tim.getInvError()
+			plt.clf()
+			#plt.imshow(chi, **imchi)
+			plt.imshow(chi.T, **imchi)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			#plt.axis(fam.ext)
+			plt.axis(rext)
+			plt.title('Chi')
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(chi.T, **imchi2)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Chi (+-50)')
+			ps.savefig()
+
+
+		plotem(srcs=fam.srcs + fam.over + inbox)
+
+
+		ix0,iy0 = wcs.x0,wcs.y0
+		subext = mpatch.getExtent()
+		print 'Extent', subext
+		subext = [subext[0]+ix0, subext[1]+ix0,
+				  subext[2]+iy0, subext[3]+iy0]
+		print 'Subimage extent:', subext
+
+		#imsub = imc.copy()
+		#imsub.update(extent=subext)
+
+		# Add spline sky
+		mod = tractor.getModelImage(tim)
+		submod = mod[slc]
+		H,W = submod.shape
+		print 'Submod shape:', submod.shape
+		G = 100.
+		NX,NY = 2 + int(np.ceil(W/G)), 2 + int(np.ceil(H/G))
+		print 'NX,NY', NX,NY
+		vals = np.zeros((NY,NX))
+		print 'vals shape', vals.shape
+		XX = np.linspace(0, W, NX)
+		YY = np.linspace(0, H, NY)
+		ssky = SplineSky(XX, YY, vals)
+
+		### Zero out the invvar except for our ROI
+		ie = tim.getInvError()
+		orig_ie = ie.copy()
+		sigma = 1./np.median(orig_ie)
+		print 'Sigma', sigma
+		ssky.setPriorSmoothness(sigma * 0.1)
+
+		sub_ie = np.zeros_like(ie)
+		sub_ie[slc] = ie[slc]
+
+		sub_cat = Catalog()
+		for src in fam.srcs + fam.over + inbox:
+			mod = tractor.getModelImage(tim, [src])
+			print 'Source', src
+			print '  brightness:', src.getBrightness()
+			ms = mod.max()/sigma
+			print '  max model pixel:', ms, 'sigma'
+			if ms < 3.:
+				continue
+			ms = (mod * sub_ie).max()
+			print '  max model pixel * sub_ie:', ms
+			if ms < 3.:
+				continue
+			sub_cat.append(src)
+
+		tim.setInvvar(sub_ie**2)
+		tractor.setCatalog(sub_cat)
+		
+		#plt.clf()
+		#plt.imshow(tim.getInvError())
+		#ps.savefig()
+
+		subsky = SubSky(ssky, slc)		
+		tim.sky = subsky
+
+		def plotsky():
+			skyim = np.zeros_like(tim.getImage()[slc])
+			ssky.addTo(skyim)
+			plt.clf()
+			# plt.imshow(skyim, **imsub)
+			plt.imshow(skyim.T, **imc)
+			plt.gray()
+			plt.title('Spline sky model')
+			# plt.axis(fam.ext)
+			# plt.axis(rext)
+			plt.xticks([]); plt.yticks([])
+			ps.savefig()
+
+		print 'After cutting to sub_cat, sub_ie, etc.'
+		plotem()
+
+
+
+		print 'Initial:'
+		print 'lnLikelihood', tractor.getLogLikelihood()
+		print 'lnPrior', tractor.getLogPrior()
+		print 'lnProb', tractor.getLogProb()
+
+		tractor.freezeParam('images')
+		tractor.catalog.freezeAllRecursive()
+		tractor.catalog.thawPathsTo(band)
+		#tractor.catalog.freezeAllBut(*fam.srcs)
+		tractor.catalog.thawAllParams()
+
+		print 'Fluxes: opt'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		self.optloop(tractor, scale_columns=False)
+		tractor.catalog.thawAllRecursive()
+
+		plotem()
+
+		print 'After optimizing fluxes:'
+		print 'lnLikelihood', tractor.getLogLikelihood()
+		print 'lnPrior', tractor.getLogPrior()
+		print 'lnProb', tractor.getLogProb()
+
+
+
+		subsubcat = Catalog()
+		cat = tractor.getCatalog()
+		mod0 = tractor.getModelImage(tim, cat)
+		iv = tim.getInvvar()
+		data = tim.getImage()
+		lnp0 = -0.5 * np.sum((data - mod0)**2 * iv)
+		print 'lnp0:', lnp0
+		for i,src in enumerate(cat):
+			print 'Source', src
+			print '  brightness:', src.getBrightness()
+			mod = tractor.getModelImage(tim, cat[:i] + cat[i+1:])
+			#lnp1 = tractor.getLogLikelihood()
+			lnp = -0.5 * np.sum((data - mod)**2 * iv)
+			dlnp = lnp - lnp0
+			print '  removing it: lnp:', lnp
+			print '  dlnp:', dlnp
+			print '  delta-mod:', np.abs((mod - mod0) * tim.getInvError()).sum(), 'sigma'
+			if dlnp < -1:
+				subsubcat.append(src)
+			else:
+				print '  dropping it'
+
+		tractor.setCatalog(subsubcat)
+
+		print 'After dropping small dlnp:'
+		plotem()
+
+		I = np.argsort([src.getBrightness().getMag(band)
+						for src in tractor.getCatalog()])
+		#for i,src in enumerate(tractor.getCatalog()):
+		for i in I:
+			src = tractor.getCatalog()[i]
+			mod = tractor.getModelImage(tim, [src])
+		
+			# plt.clf()
+			# plt.imshow(mod.T, **imc)
+			# plt.gray()
+			# plt.xticks([]); plt.yticks([])
+			# x,y = wcs.positionToPixel(src.getPosition())
+			# plt.plot([y],[x],'ro', ms=10, mec='r', mfc='none')
+			# plt.axis(rext)
+			# plt.title('Model for source %i' % i)
+			# ps.savefig()
+			print 'Source', i, ':', src
+			ms = (mod * sub_ie).max()
+			print '  max model pixel * sub_ie:', ms
+
+		# HACK!!  Remove ones that offend me
+		# dropsrcs = [tractor.getCatalog()[i] for i in [50,53]]
+		# for src in dropsrcs:
+		# 	tractor.getCatalog().remove(src)
+		#print 'After removing offensive ones:'
+		#plotem()
+
+		# This isn't necessary -- it's linear, after all; I got confused
+		# because I was thawing all params, not just fluxes.
+		# while True:
+		# 	gotone = False
+		# 	for i,src in enumerate(tractor.getCatalog()):
+		# 		print 'Optimizing source', i
+		# 		tractor.catalog.freezeAllBut(i)
+		# 		src.freezeAllParams()
+		# 		src.thawPathsTo(band)
+		# 		for nm in tractor.getParamNames():
+		# 			print '  ', nm
+		# 		dlnp,X,alpha = tractor.optimize()
+		# 		print 'delta-logprob', dlnp
+		# 		if dlnp > 1:
+		# 			gotone = True
+		# 	if not gotone:
+		# 		break
+		# 
+		# 	plotem()
+
+		return dict(ps=ps)
+
+
+	def stage1005(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, **kwargs):
+		bandnum = band_index(band)
+
+		fam = fams[22]
+		tim = tractor.getImage(0)
+
+		# tractor.catalog.freezeAllRecursive()
+		# tractor.catalog.thawPathsTo(band)
+		# tractor.catalog.thawAllParams()
+		# print 'Fluxes: opt'
+		# for nm in tractor.getParamNames():
+		# 	print '  ', nm
+		# self.optloop(tractor)
+		# tractor.catalog.thawAllRecursive()
+		# 
+		# plotem()
+		# 
+		# print 'Fluxes 2:'
+		# print 'lnLikelihood', tractor.getLogLikelihood()
+		# print 'lnPrior', tractor.getLogPrior()
+		# print 'lnProb', tractor.getLogProb()
+
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+
+		ima = dict(interpolation='nearest', origin='lower')
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		imchi2 = ima.copy()
+		imchi2.update(vmin=-50, vmax=50)
+
+		noise = np.random.normal(size=tim.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+
+		ssky = tim.getSky()
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		#### UGHHHH!
+		def plotem(srcs=None):
+			mod = tractor.getModelImage(tim, srcs=srcs)
+
+			plt.clf()
+			plt.imshow(mod.T, **imc)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Model')
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow((mod + noise).T, **imc)
+			plt.xticks([]); plt.yticks([])
+			plt.gray()
+			plt.axis(rext)
+			plt.title('Model')
+			ps.savefig()
+
+			chi = (tim.getImage() - mod) * tim.getInvError()
+			plt.clf()
+			plt.imshow(chi.T, **imchi)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Chi')
+			ps.savefig()
+
+			plt.clf()
+			plt.imshow(chi.T, **imchi2)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Chi (+-50)')
+			ps.savefig()
+
+		def plotsky():
+			skyim = np.zeros_like(tim.getImage()[slc])
+			ssky.addTo(skyim)
+			plt.clf()
+			# plt.imshow(skyim, **imsub)
+			plt.imshow(skyim.T, **imc)
+			plt.gray()
+			plt.title('Spline sky model')
+			# plt.axis(fam.ext)
+			# plt.axis(rext)
+			plt.xticks([]); plt.yticks([])
+			ps.savefig()
+
+
+		plotem()
+		plotsky()
+
+		tractor.thawParam('images')
+		tim.freezeAllBut('sky')
+		tractor.catalog.thawAllRecursive()
+		tractor.catalog.freezeAllBut(*fam.specsrcs)
+
+		print 'Spline sky: opt'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		j=0
+		while True:
+			print '-------------------------------------'
+			print 'Optimizing: step', j
+			print '-------------------------------------'
+		   	dlnp,X,alpha = tractor.optimize()
+			print 'delta-logprob', dlnp
+			nup = 0
+			for src in tractor.getCatalog():
+				for b in src.getBrightnesses():
+					f = b.getFlux(band)
+					if f < 0:
+						nup += 1
+						b.setFlux(band, 0.)
+			print 'Clamped', nup, 'fluxes up to zero'
+			if dlnp < 1:
+				break
+			j += 1
+
+			print 'After opt:'
+			print 'lnLikelihood', tractor.getLogLikelihood()
+			print 'lnPrior', tractor.getLogPrior()
+			print 'lnProb', tractor.getLogProb()
+
+			plotem()
+			plotsky()
+			
+		#self.optloop(tractor)
+
+		print 'After opt:'
+		print 'lnLikelihood', tractor.getLogLikelihood()
+		print 'lnPrior', tractor.getLogPrior()
+		print 'lnProb', tractor.getLogProb()
+
+		plotem()
+		plotsky()
+
+
 		
 	def stage0(self, run=None, camcol=None, field=None,
 			   band=None, ra=None, dec=None, **kwargs):
