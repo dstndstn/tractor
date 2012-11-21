@@ -87,6 +87,7 @@ from tractor import sdss as st
 from tractor import *
 from tractor.sdss_galaxy import *
 from tractor.splinesky import SplineSky
+from tractor.sdss import SdssPointSource, SdssBrightPSF
 
 def get_dm_table():
 	from astrometry.util import casjobs
@@ -2386,53 +2387,8 @@ class RunAbell(object):
 		imchi2.update(vmin=-50, vmax=50)
 
 		def plotem(srcs=None):
-			#mod = tractor.getModelImage(tim, fam.srcs + fam.over + inbox)
-			mod = tractor.getModelImage(tim, srcs=srcs)
-
-			# plt.clf()
-			# plt.imshow(mod, **imc)
-			# plt.gray()
-			# plt.xticks([]); plt.yticks([])
-			# plt.axis(fam.ext)
-			# ps.savefig()
-
-			plt.clf()
-			plt.imshow(mod.T, **imc)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.axis(rext)
-			plt.title('Model')
-			ps.savefig()
-
-			plt.clf()
-			#plt.imshow(mod + noise, **imc)
-			plt.imshow((mod + noise).T, **imc)
-			plt.xticks([]); plt.yticks([])
-			plt.gray()
-			plt.axis(rext)
-			#plt.axis(fam.ext)
-			plt.title('Model')
-			ps.savefig()
-
-			chi = (tim.getImage() - mod) * tim.getInvError()
-			plt.clf()
-			#plt.imshow(chi, **imchi)
-			plt.imshow(chi.T, **imchi)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			#plt.axis(fam.ext)
-			plt.axis(rext)
-			plt.title('Chi')
-			ps.savefig()
-
-			plt.clf()
-			plt.imshow(chi.T, **imchi2)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.axis(rext)
-			plt.title('Chi (+-50)')
-			ps.savefig()
-
+			self.plots(tractor, imc, imchi, rext, ps, srcs=srcs, noise=noise,
+					   imchi2=imchi2)
 
 		plotem(srcs=fam.srcs + fam.over + inbox)
 
@@ -2617,6 +2573,45 @@ class RunAbell(object):
 
 		return dict(ps=ps)
 
+	def plots(self, tractor, imc, imchi, rext, ps, srcs=None, noise=None, imchi2=None):
+		tim = tractor.getImage(0)
+		mod = tractor.getModelImage(tim, srcs=srcs)
+
+		plt.clf()
+		plt.imshow(mod.T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		plt.axis(rext)
+		plt.title('Model')
+		ps.savefig()
+
+		if noise is not None:
+			plt.clf()
+			plt.imshow((mod + noise).T, **imc)
+			plt.xticks([]); plt.yticks([])
+			plt.gray()
+			plt.axis(rext)
+			plt.title('Model')
+			ps.savefig()
+
+		chi = (tim.getImage() - mod) * tim.getInvError()
+		plt.clf()
+		plt.imshow(chi.T, **imchi)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		plt.axis(rext)
+		plt.title('Chi')
+		ps.savefig()
+
+		if imchi2 is not None:
+			plt.clf()
+			plt.imshow(chi.T, **imchi2)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+			plt.axis(rext)
+			plt.title('Chi (+-50)')
+			ps.savefig()
+
 
 	def stage1005(self, fams=None, band=None, ps=None, tractor=None,
 				  imc=None, **kwargs):
@@ -2643,7 +2638,6 @@ class RunAbell(object):
 
 		mpatch = fam.mpatch
 		slc = mpatch.getSlice()
-
 		ima = dict(interpolation='nearest', origin='lower')
 		imchi = ima.copy()
 		imchi.update(vmin=-5, vmax=5)
@@ -2656,67 +2650,68 @@ class RunAbell(object):
 		I = np.logical_not(I)
 		noise[I] *= 1./(tim.getInvError()[I])
 
-		ssky = tim.getSky()
+		# ssky is the SplineSky (not the SubSky)
+		ssky = tim.getSky().real
 		rext = fam.ext[2:] + fam.ext[:2]
+		#print 'Ssky:', ssky
+		#print '.real', ssky.real
+		#print '.slc', ssky.slc
 
-		#### UGHHHH!
 		def plotem(srcs=None):
-			mod = tractor.getModelImage(tim, srcs=srcs)
-
-			plt.clf()
-			plt.imshow(mod.T, **imc)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.axis(rext)
-			plt.title('Model')
-			ps.savefig()
-
-			plt.clf()
-			plt.imshow((mod + noise).T, **imc)
-			plt.xticks([]); plt.yticks([])
-			plt.gray()
-			plt.axis(rext)
-			plt.title('Model')
-			ps.savefig()
-
-			chi = (tim.getImage() - mod) * tim.getInvError()
-			plt.clf()
-			plt.imshow(chi.T, **imchi)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.axis(rext)
-			plt.title('Chi')
-			ps.savefig()
-
-			plt.clf()
-			plt.imshow(chi.T, **imchi2)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.axis(rext)
-			plt.title('Chi (+-50)')
-			ps.savefig()
-
+			self.plots(tractor, imc, imchi, rext, ps, srcs=srcs, noise=noise,
+					   imchi2=imchi2)
 		def plotsky():
 			skyim = np.zeros_like(tim.getImage()[slc])
+			#print 'Slice', slc
+			#print 'Skyim', skyim.shape
 			ssky.addTo(skyim)
 			plt.clf()
-			# plt.imshow(skyim, **imsub)
 			plt.imshow(skyim.T, **imc)
 			plt.gray()
 			plt.title('Spline sky model')
-			# plt.axis(fam.ext)
 			# plt.axis(rext)
 			plt.xticks([]); plt.yticks([])
 			ps.savefig()
 
 
-		plotem()
 		plotsky()
+		plotem()
+
+		# wcs = tim.getWcs()
+		# mod = tractor.getModelImage(tim)
+		# plt.clf()
+		# plt.imshow(mod.T, **imc)
+		# plt.gray()
+		# plt.xticks([]); plt.yticks([])
+		# for src in tractor.getCatalog():
+		# 	x,y = wcs.positionToPixel(src.getPosition())
+		# 	plt.plot([y],[x],'ro', ms=10, mec='r', mfc='none')
+		# for src in fam.specsrcs:
+		# 	x,y = wcs.positionToPixel(src.getPosition())
+		# 	plt.plot([y],[x],'ro', ms=8, mec=(0,1,0), mfc='none')
+		# plt.axis(rext)
+		# plt.title('Model')
+		# ps.savefig()
+
 
 		tractor.thawParam('images')
 		tim.freezeAllBut('sky')
 		tractor.catalog.thawAllRecursive()
-		tractor.catalog.freezeAllBut(*fam.specsrcs)
+		tractor.catalog.freezeAllParams()
+		keptspecs = []
+		for src in fam.specsrcs:
+			if src in tractor.catalog:
+				keptspecs.append(src)
+				tractor.catalog.thawParam(src)
+				src.freezeAllParams()
+				src.thawPathsTo(band)
+			else:
+				print 'Missing src:', src
+				wcs = tim.getWcs()
+				x,y = wcs.positionToPixel(src.getPosition())
+				print 'x,y', x,y
+		# Some of them were removed??
+		#tractor.catalog.freezeAllBut(*fam.specsrcs)
 
 		print 'Spline sky: opt'
 		for nm in tractor.getParamNames():
@@ -2749,8 +2744,6 @@ class RunAbell(object):
 			plotem()
 			plotsky()
 			
-		#self.optloop(tractor)
-
 		print 'After opt:'
 		print 'lnLikelihood', tractor.getLogLikelihood()
 		print 'lnPrior', tractor.getLogPrior()
@@ -2759,6 +2752,300 @@ class RunAbell(object):
 		plotem()
 		plotsky()
 
+		### Thaw all the spectro sources
+
+		for src in keptspecs:
+			src.thawAllParams()
+
+		print 'Spline sky: opt'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		j=0
+		while True:
+			print '-------------------------------------'
+			print 'Optimizing: step', j
+			print '-------------------------------------'
+		   	dlnp,X,alpha = tractor.optimize()
+			print 'delta-logprob', dlnp
+			nup = 0
+			for src in tractor.getCatalog():
+				for b in src.getBrightnesses():
+					f = b.getFlux(band)
+					if f < 0:
+						nup += 1
+						b.setFlux(band, 0.)
+			print 'Clamped', nup, 'fluxes up to zero'
+			j += 1
+			print 'After opt:'
+			print 'lnLikelihood', tractor.getLogLikelihood()
+			print 'lnPrior', tractor.getLogPrior()
+			print 'lnProb', tractor.getLogProb()
+			plotem()
+			plotsky()
+			if dlnp < 1:
+				break
+
+
+	def stage1006(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, run=None, camcol=None, field=None, **kwargs):
+		bandnum = band_index(band)
+		fam = fams[22]
+		tim = tractor.getImage(0)
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+		ima = dict(interpolation='nearest', origin='lower')
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		imchi2 = ima.copy()
+		imchi2.update(vmin=-50, vmax=50)
+
+		noise = np.random.normal(size=tim.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+
+		# ssky is the SplineSky (not the SubSky)
+		ssky = tim.getSky().real
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		def plotem(srcs=None):
+			self.plots(tractor, imc, imchi, rext, ps, srcs=srcs, noise=noise,
+					   imchi2=imchi2)
+		def plotsky():
+			skyim = np.zeros_like(tim.getImage()[slc])
+			ssky.addTo(skyim)
+			plt.clf()
+			plt.imshow(skyim.T, **imc)
+			plt.gray()
+			plt.title('Spline sky model')
+			plt.xticks([]); plt.yticks([])
+			ps.savefig()
+
+		wcs = tim.getWcs()
+		mod = tractor.getModelImage(tim)
+		plt.clf()
+		plt.imshow(mod.T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		for i,src in enumerate(tractor.getCatalog()):
+			x,y = wcs.positionToPixel(src.getPosition())
+			c = 'r'
+			if src in fam.specsrcs:
+				c = (0,1,0)
+			elif src in fam.srcs:
+				c = (0,1,1)
+			plt.plot([y],[x],'o', ms=10, mec=c, mfc='none')
+			if isinstance(src, PointSource):
+				st = 'P'
+			elif isinstance(src, DevGalaxy):
+				st = 'D'
+			elif isinstance(src, ExpGalaxy):
+				st = 'E'
+			elif isinstance(src, CompositeGalaxy):
+				st = 'C'
+			plt.text(y+5, x+5, '%i' % i + st, color='w', fontsize=8)
+			print i, 'mag', src.getBrightness().getMag(band)
+		plt.axis(rext)
+		plt.title('Model')
+		ps.savefig()
+
+
+		newcat = Catalog()
+		bright = 19.
+		bthresh = NanoMaggies.magToNanomaggies(bright - 1.)
+		for src in tractor.getCatalog():
+			if ((not isinstance(src, PointSource)) or
+				(not src.getBrightness().getMag(band) < bright)):
+				newcat.append(src)
+				continue
+			ss = SdssPointSource(src.getPosition(), src.getBrightness(), thresh=bthresh)
+			newcat.append(ss)
+			# FIXME -- replace entry in fam.srcs, fam.specsrcs
+			if src in fam.srcs:
+				i = fam.srcs.index(src)
+				fam.srcs[i] = ss
+			if src in fam.specsrcs:
+				i = fam.specsrcs.index(src)
+				fam.specsrcs[i] = ss
+
+		tractor.setCatalog(newcat)
+
+		print 'Wrapping PSF in SdssBrightPSF'
+		sdss = DR9()
+		psfield = sdss.readPsField(run, camcol, field)
+		(a1,s1, a2,s2, a3,sigmap,beta) = psfield.getPowerLaw(bandnum)
+		mypsf = SdssBrightPSF(tim.getPsf(), a1,s1,a2,s2,a3,sigmap,beta)
+		print 'PSF:', mypsf
+		tim.setPsf(mypsf)
+
+		mod = tractor.getModelImage(tim)
+		plt.clf()
+		plt.imshow(mod.T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		for i,src in enumerate(tractor.getCatalog()):
+			x,y = wcs.positionToPixel(src.getPosition())
+			c = 'r'
+			if src in fam.specsrcs:
+				c = (0,1,0)
+			elif src in fam.srcs:
+				c = (0,1,1)
+			plt.plot([y],[x],'o', ms=10, mec=c, mfc='none')
+			if isinstance(src, SdssPointSource):
+				st = 'B'
+			elif isinstance(src, PointSource):
+				st = 'P'
+			elif isinstance(src, DevGalaxy):
+				st = 'D'
+			elif isinstance(src, ExpGalaxy):
+				st = 'E'
+			elif isinstance(src, CompositeGalaxy):
+				st = 'C'
+			plt.text(y+5, x+5, '%i' % i + st, color='w', fontsize=8)
+			#print i, 'mag', src.getBrightness().getMag(band)
+		plt.axis(rext)
+		plt.title('Model')
+		ps.savefig()
+
+		plotem()
+
+		I = np.argsort([src.getBrightness().getMag(band)
+						for src in tractor.getCatalog()])
+		tractor.freezeParam('images')
+
+		for srcset in [ fam.specsrcs, fam.srcs, tractor.getCatalog() ]:
+			while True:
+				activeset = srcset
+				# Keep resetting the active set and checking them all until we
+				# find that none of them move.
+				firsttime = True
+				print 'Resetting active set to', len(activeset), 'sources'
+				while True:
+					# Narrow down to just the sources that are actually changing
+					print
+					print 'Looping through', len(activeset), 'active sources'
+					moved = []
+					for j,i in enumerate(I):
+						src = tractor.getCatalog()[i]
+						if not src in activeset:
+							continue
+						tractor.catalog.freezeAllBut(i)
+						src.thawAllRecursive()
+						print
+						print 'Optimizing source', i, '(%i of %i)' % (j, len(I))
+						for nm in tractor.getParamNames():
+							print '  ', nm
+						dlnp,X,alpha = tractor.optimize()
+						print 'delta-logprob', dlnp
+						if dlnp > 1:
+							moved.append(src)
+					if len(moved) == 0:
+						break
+					firsttime = False
+					activeset = moved
+					plotem()
+				if firsttime:
+					break
+		# for srcset in [ fam.specsrcs, fam.srcs, tractor.getCatalog() ]:
+		# 	while True:
+		# 		gotone = False
+		# 		for j,i in enumerate(I):
+		# 			src = tractor.getCatalog()[i]
+		# 			if not src in srcset:
+		# 				continue
+		# 			tractor.catalog.freezeAllBut(i)
+		# 			src.thawAllRecursive()
+		# 			print
+		# 			print 'Optimizing source', i, '(%i of %i)' % (j, len(I))
+		# 			for nm in tractor.getParamNames():
+		# 				print '  ', nm
+		# 			dlnp,X,alpha = tractor.optimize()
+		# 			print 'delta-logprob', dlnp
+		# 			if dlnp > 1:
+		# 				gotone = True
+		# 		if not gotone:
+		# 			break
+		# 		plotem()
+
+
+	def stage1007(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, run=None, camcol=None, field=None, **kwargs):
+		bandnum = band_index(band)
+		fam = fams[22]
+		tim = tractor.getImage(0)
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+		ima = dict(interpolation='nearest', origin='lower')
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		imchi2 = ima.copy()
+		imchi2.update(vmin=-50, vmax=50)
+
+		noise = np.random.normal(size=tim.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+
+		# ssky is the SplineSky (not the SubSky)
+		ssky = tim.getSky().real
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		def plotem(srcs=None):
+			self.plots(tractor, imc, imchi, rext, ps, srcs=srcs, noise=noise,
+					   imchi2=imchi2)
+		def plotsky():
+			skyim = np.zeros_like(tim.getImage()[slc])
+			ssky.addTo(skyim)
+			plt.clf()
+			plt.imshow(skyim.T, **imc)
+			plt.gray()
+			plt.title('Spline sky model')
+			plt.xticks([]); plt.yticks([])
+			ps.savefig()
+
+
+		tractor.thawParam('images')
+		I = np.argsort([src.getBrightness().getMag(band)
+						for src in tractor.getCatalog()])
+		for srcset in [ fam.specsrcs ]: #, fam.srcs, tractor.getCatalog() ]:
+			while True:
+				activeset = srcset
+				# Keep resetting the active set and checking them all until we
+				# find that none of them move.
+				firsttime = True
+				print 'Resetting active set to', len(activeset), 'sources'
+				while True:
+					# Narrow down to just the sources that are actually changing
+					print
+					print 'Looping through', len(activeset), 'active sources'
+					moved = []
+					for j,i in enumerate(I):
+						src = tractor.getCatalog()[i]
+						if not src in activeset:
+							continue
+						tractor.catalog.freezeAllBut(i)
+						src.thawAllRecursive()
+						print
+						print 'Optimizing source', i, '(%i of %i)' % (j, len(I))
+						for nm in tractor.getParamNames():
+							print '  ', nm
+						dlnp,X,alpha = tractor.optimize()
+						print 'delta-logprob', dlnp
+						if dlnp > 1:
+							moved.append(src)
+					if len(moved) == 0:
+						break
+					firsttime = False
+					activeset = moved
+
+					plotem()
+					plotsky()
+
+				if firsttime:
+					break
 
 		
 	def stage0(self, run=None, camcol=None, field=None,
@@ -3812,15 +4099,23 @@ class RunAbell(object):
 		self.optloop(tractor)
 		return dict(tractor=tractor)
 
-	#def stage8(self, tractor=None, **kwargs):
-
 class SubSky(ParamsWrapper):
 	def __init__(self, real, slc):
 		super(SubSky, self).__init__(real)
 		self.real = real
 		self.slc = slc
-	def getParamDerivatives(self, img):
-		return self.real.getParamDerivatives(img)
+	def getParamDerivatives(self, *args):
+		derivs = self.real.getParamDerivatives(*args)
+		for d in derivs:
+			if d in [False, None]:
+				continue
+			# Shift Patch
+			assert(isinstance(d, Patch))
+			sly,slx = self.slc
+			d.x0 += self.slx.start
+			d.y0 += self.sly.start
+		return derivs
+
 	def addTo(self, mod):
 		self.real.addTo(mod[self.slc])
 

@@ -144,6 +144,22 @@ class SplineSky(ParamList):
 		#print 'log prior chi: returning', len(rA), 'sets of terms'
 
 		return (rA, cA, vA, pb)
+
+	def getParamDerivatives(self, *args):
+		derivs = []
+		tx,ty = self.spl.get_knots()
+		print 'Knots:'
+		print 'x', len(tx), tx
+		print 'y', len(ty), ty
+		print 'W,H', self.W, self.H
+		#NX = len(tx) - self.order
+		#print 'NX', NX
+		for i in self.getThawedParamIndices():
+			ix = i % W
+			iy = i / W
+			derivs.append(False)
+		return derivs
+
 		
 if __name__ == '__main__':
 	W,H = 1024,600
