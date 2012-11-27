@@ -832,6 +832,13 @@ class Tractor(MultiParams):
 		print '  Tstep ', tstep
 		return dlogprob, X, alpha
 
+	def getParameterScales(self):
+		print self.getName()+': Finding derivs...'
+		allderivs = self.getDerivs()
+		print 'Finding optimal update direction...'
+		s = self.getUpdateDirection(allderivs, scales_only=True)
+		return s
+
 	def tryUpdates(self, X, alphas=None):
 		if alphas is None:
 			# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
@@ -991,7 +998,7 @@ class Tractor(MultiParams):
 		return allderivs
 
 	def getUpdateDirection(self, allderivs, damp=0., priors=True,
-						   scale_columns=True):
+						   scale_columns=True, scales_only=False):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -1064,9 +1071,10 @@ class Tractor(MultiParams):
 				vals = dimg.ravel()[nz]
 				w = inverrs[deriv.getSlice(img)].ravel()[nz]
 				assert(vals.shape == w.shape)
-				RR.append(rows)
-				VV.append(vals)
-				WW.append(w)
+				if not scales_only:
+					RR.append(rows)
+					VV.append(vals)
+					WW.append(w)
 
 			# massage, re-scale, and clean up matrix elements
 			if len(VV) == 0:
@@ -1104,6 +1112,8 @@ class Tractor(MultiParams):
 			colscales.append(scale)
 			assert(len(colscales) == (col+1))
 			logverb('Column', col, 'scale:', scale)
+			if scales_only:
+				continue
 			sprows.append(rows)
 			spcols.append(np.zeros_like(rows) + col)
 			if scale_columns:
@@ -1112,6 +1122,8 @@ class Tractor(MultiParams):
 				spvals.append(vals)
 				
 		colscale = np.array(colscales)
+		if scales_only:
+			return colscale
 
 		b = None
 		if priors:

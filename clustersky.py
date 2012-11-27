@@ -66,6 +66,7 @@
 if __name__ == '__main__':
 	import matplotlib
 	matplotlib.use('Agg')
+	matplotlib.rc('text', usetex=True)
 import numpy as np
 import pylab as plt
 import scipy.interpolate
@@ -88,6 +89,19 @@ from tractor import *
 from tractor.sdss_galaxy import *
 from tractor.splinesky import SplineSky
 from tractor.sdss import SdssPointSource, SdssBrightPSF
+
+def global_init(*args, **kwargs):
+	#plt.figure(figsize=(12,6))
+	H = 4
+	hfrac = 0.94
+	W = (941 - 100.) / (2000 - 1311.) * H * hfrac
+	print 'W,H', W,H
+	plt.figure(figsize=(W,H))
+	plt.clf()
+	b = 0.
+	plt.subplots_adjust(hspace=0.01, wspace=0.01,
+						left=0.005, right=0.995,
+						bottom=b, top=b + hfrac)
 
 def get_dm_table():
 	from astrometry.util import casjobs
@@ -1575,7 +1589,10 @@ def runlots(stage, N, force=[], threads=None):
 	from astrometry.util.multiproc import multiproc
 	if threads is None:
 		threads = 1
-	mp = multiproc(threads)
+
+	mpa = dict(init=global_init, initargs=())
+
+	mp = multiproc(threads, **mpa)
 
 	# Run stage 0
 	print 'Running stage 0 on all...'
@@ -1646,6 +1663,10 @@ class RunOneGroup(object):
 	def stage1(self, fam=None, ps=None, **kwargs):
 		return dict()
 
+
+dpool = None
+
+
 def draw_gaussian(mu, sigma, size):
 	sigma = np.abs(sigma)
 	if sigma == 0:
@@ -1664,12 +1685,14 @@ class RunAbell(object):
 		self.R = R
 		self.aco = aco
 		#self.prereqs = { 103: 2, 203: 2 }
-		self.prereqs = { 103: 2, 204: 0, 1000: 0,  1004:1002 }
+		self.prereqs = { 103: 2, 204: 0, 1000: 0,  1004:1002,
+						 1008:1006,
+						 1009:1006 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
 					  camcol=self.camcol, field=self.field,
-					  ra=self.ra, dec=self.dec)
+					  ra=self.ra, dec=self.dec, stage=stage)
 		func = getattr(self.__class__, 'stage%i' % stage)
 		return func(self, **kwargs)
 
@@ -2216,14 +2239,15 @@ class RunAbell(object):
 								draw_gaussian(z,   dz,   N), k))
 
 
-		for FPXY,tt in [(FPXY,''), (FPXY2,': sigma_err = 0'),
-						(FPXY3, ': sigma error only'),
-						(FPXY4, ': mag error only'),
-						(FPXY5, ': r_e error only'),
-						(FPXY6, ': ab error only'),
-						(FPXY7, ': z error only'),
+		for FPXY,tt in [(FPXY,''), (FPXY2, r': sigma\_err = 0'),
+						(FPXY3, r': sigma error only'),
+						(FPXY4, r': mag error only'),
+						(FPXY5, r': r\_e error only'),
+						(FPXY6, r': ab error only'),
+						(FPXY7, r': z error only'),
 						]:
 			plt.clf()
+			plt.gca().set_position([0.17, 0.1, 0.81, 0.80])
 			for X,Y in FPXY:
 				plt.plot(X,Y, 'k.', alpha=0.1)
 			for X,Y in FPXY:
@@ -2259,8 +2283,8 @@ class RunAbell(object):
 			ta = dict(color='r', lw=2,)
 			# eyeballed Bernardi relation for i-band
 			plt.plot(X, (X - 2.) * (1.52) + 0.2, **ta)
-			plt.xlabel('log(sigma) + 0.2 (mu_0 - 19.61)')
-			plt.ylabel('log(R_0) [kpc / h]')
+			plt.xlabel('log(sigma) + 0.2 ($\mu_0$ - 19.61)')
+			plt.ylabel('log($R_0$) [kpc / h]')
 			plt.ylim(yl,yh)
 			plt.xlim(xl,xh)
 			plt.title('FP from SDSS error estimates' + tt)
@@ -3047,6 +3071,288 @@ class RunAbell(object):
 				if firsttime:
 					break
 
+
+	def stage1008(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, run=None, camcol=None, field=None, **kwargs):
+		ps = PlotSequence('clustersky', suffix='pdf')
+
+		bandnum = band_index(band)
+		fam = fams[22]
+		tim = tractor.getImage(0)
+		mpatch = fam.mpatch
+		slc = mpatch.getSlice()
+		ima = dict(interpolation='nearest', origin='lower')
+		imchi = ima.copy()
+		imchi.update(vmin=-5, vmax=5)
+		imchi2 = ima.copy()
+		imchi2.update(vmin=-50, vmax=50)
+
+		print 'kwargs:', kwargs.keys()
+		print 'kwargs', kwargs
+
+		noise = np.random.normal(size=tim.shape)
+		I = (tim.getInvvar() == 0)
+		noise[I] = 0.
+		I = np.logical_not(I)
+		noise[I] *= 1./(tim.getInvError()[I])
+
+		# ssky is the SplineSky (not the SubSky)
+		ssky = tim.getSky().real
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		# def plotem(srcs=None):
+		# 	self.plots(tractor, imc, imchi, rext, ps, srcs=srcs, noise=noise,
+		# 			   imchi2=imchi2)
+		# def plotsky():
+		# 	skyim = np.zeros_like(tim.getImage()[slc])
+		# 	ssky.addTo(skyim)
+		# 	plt.clf()
+		# 	plt.imshow(skyim.T, **imc)
+		# 	plt.gray()
+		# 	plt.title('Spline sky model')
+		# 	plt.xticks([]); plt.yticks([])
+		# 	ps.savefig()
+
+		
+		print 'rext', rext
+
+		P = unpickle_from_file('clusky-a1656-r5115-c5-f0150-i-s1001.pickle')
+		t0 = P['tractor']
+		ss0 = P['fams'][22].specsrcs
+
+		print 'Optimize spectro sources:'
+		for src in fam.specsrcs:
+			print '  ', src
+
+		print 'Original spectro sources:'
+		for src in ss0:
+			print '  ', src
+
+		#rd0 = [src.getPosition() for src in t0.getCatalog()]
+		#ra0  = np.array([rd.ra for rd in rd0])
+		#dec0 = np.array([rd.dec for rd in rd0])
+
+		plt.clf()
+		plt.imshow(tim.getImage().T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		plt.axis(rext)
+		plt.title('Data')
+		ps.savefig()
+
+		mod0 = t0.getModelImage(0)
+		plt.clf()
+		plt.imshow((mod0+noise).T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		plt.axis(rext)
+		plt.title('SDSS Model')
+		ps.savefig()
+
+		mod = tractor.getModelImage(tim)
+		plt.clf()
+		plt.imshow((mod+noise).T, **imc)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+		plt.axis(rext)
+		plt.title('Optimized Model')
+		ps.savefig()
+
+		skyim = np.zeros_like(tim.getImage()[slc])
+		ssky.addTo(skyim)
+		plt.clf()
+		plt.imshow(skyim.T, **imc)
+		plt.gray()
+		plt.title('Sky model')
+		plt.xticks([]); plt.yticks([])
+		ps.savefig()
+
+		print 'skyim', skyim.min(), skyim.max()
+
+		print 'imc', imc
+		imsky = imc.copy()
+		imsky.update(vmax=skyim.max())
+
+		plt.clf()
+		plt.imshow(skyim.T, **imsky)
+		plt.gray()
+		plt.title('Sky model')
+		plt.xticks([]); plt.yticks([])
+		ps.savefig()
+
+		imsky2 = ima.copy()
+		imsky2.update(vmin=0, vmax=skyim.max())
+
+		plt.clf()
+		plt.imshow(skyim.T, **imsky2)
+		plt.gray()
+		plt.title('Sky model')
+		plt.xticks([]); plt.yticks([])
+		ps.savefig()
+
+
+	def stage1009(self, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, run=None, camcol=None, field=None, **kwargs):
+		ps = PlotSequence('clusky1009')
+
+		fam = fams[22]
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		tractor.thawParam('images')
+		tractor.catalog.freezeAllParams()
+		for src in fam.specsrcs:
+			if src in tractor.catalog:
+				tractor.catalog.thawParam(src)
+				src.thawAllRecursive()
+
+		import emcee
+		lnp0 = tractor.getLogProb()
+		print 'Tractor: active params'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		p0 = np.array(tractor.getParams())
+		ndim = len(p0)
+		nw = 2*ndim
+		print 'ndim', ndim
+		print 'nw', nw
+
+		sampler = emcee.EnsembleSampler(nw, ndim, tractor,
+										threads=8)
+
+		steps = np.array(tractor.getStepSizes())
+		print 'steps: len', len(steps)
+
+		# Scale the step sizes by the size of their derivatives.
+		cs = tractor.getParameterScales()
+
+		pp0 = np.vstack([p0 + 1e-4 * steps / cs *
+						 np.random.normal(size=len(steps))
+						 for i in range(nw)])
+		alllnp = []
+		allp = []
+
+		lnp = None
+		pp = pp0
+		rstate = None
+		for step in range(100):
+			print 'Taking emcee step', step
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+			#print 'lnprobs:', lnp
+
+			if (step+0) % 10 == 0:
+				for k,(p,x) in enumerate(zip(lnp,pp)):
+					tractor.setParams(x)
+
+					#chi = tractor.getChiImage(0)
+					modj = tractor.getModelImage(0)
+
+					plt.clf()
+					plt.imshow(modj.T, **imc)
+					plt.gray()
+					plt.xticks([]); plt.yticks([])
+					plt.axis(rext)
+					plt.title('Sampled Model: step %i' % step)
+					ps.savefig()
+
+					if k == 4:
+						break
+
+			print 'Max lnprob:', max(lnp)
+			print 'Std in lnprobs:', np.std(lnp)
+
+			alllnp.append(lnp.copy())
+			allp.append(pp.copy())
+
+			plt.clf()
+			plt.gca().set_position([0.1, 0.1, 0.88, 0.80])
+			plt.plot(np.array(alllnp) - np.array(alllnp).max(), 'k-', alpha=0.1)
+			ps.savefig()
+
+		return dict(alllnp=alllnp, allp=allp)
+
+
+	def stage101x(self, stage=None, fams=None, band=None, ps=None, tractor=None,
+				  imc=None, run=None, camcol=None, field=None,
+				  alllnp=None, allp=None, **kwargs):
+		ps = PlotSequence('clusky%04i' % stage)
+
+		fam = fams[22]
+		rext = fam.ext[2:] + fam.ext[:2]
+
+		# alllnp = np.array(alllnp)
+		# allp = np.array(allp)
+		# print 'all lnp', alllnp.shape
+		# print 'all p', allp.shape
+		# plt.clf()
+		# plt.plot(alllnp, 'k-', alpha=0.1)
+		# ps.savefig()
+		# print 'tractor params:', tractor.numberOfParams()
+		# for nm in tractor.getParamNames():
+		# 	print '  ', nm
+
+		import emcee
+		# allp shape (100, 422, 211) == nsteps, nw, ndim
+
+		step0, nw, ndim = np.array(allp).shape
+
+		# DEBUG
+		# global dpool
+		# import debugpool
+		# threads = 8
+		# dpool = debugpool.DebugPool(threads)
+		# Time.add_measurement(debugpool.DebugPoolMeas(dpool))
+
+		sampler = emcee.EnsembleSampler(nw, ndim, tractor) #, pool=dpool)
+
+		pp0 = allp[-1]
+
+		lnp = None
+		pp = pp0
+		rstate = None
+		for step in range(step0, step0 + 100):
+			print 'Taking emcee step', step
+			t0 = Time()
+			pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+			print 'Emcee step took:'
+			print Time() - t0
+			if (step+0) % 10 == 0:
+				for k,(p,x) in enumerate(zip(lnp,pp)):
+					tractor.setParams(x)
+
+					#chi = tractor.getChiImage(0)
+					modj = tractor.getModelImage(0)
+
+					plt.clf()
+					plt.imshow(modj.T, **imc)
+					plt.gray()
+					plt.xticks([]); plt.yticks([])
+					plt.axis(rext)
+					plt.title('Sampled Model: step %i' % step)
+					ps.savefig()
+
+					if k == 4:
+						break
+
+				plt.clf()
+				plt.gca().set_position([0.1, 0.1, 0.88, 0.80])
+				plt.plot(np.array(alllnp) - np.array(alllnp).max(), 'k-', alpha=0.1)
+				ps.savefig()
+
+			print 'Max lnprob:', max(lnp)
+			print 'Std in lnprobs:', np.std(lnp)
+
+			alllnp.append(lnp.copy())
+			allp.append(pp.copy())
+
+		return dict(alllnp=alllnp, allp=allp)
+
+	# again again
+	stage1010 = stage101x
+	stage1011 = stage101x
+	stage1012 = stage101x
+	stage1013 = stage101x
+		
 		
 	def stage0(self, run=None, camcol=None, field=None,
 			   band=None, ra=None, dec=None, **kwargs):

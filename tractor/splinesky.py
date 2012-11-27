@@ -155,8 +155,8 @@ class SplineSky(ParamList):
 		#NX = len(tx) - self.order
 		#print 'NX', NX
 		for i in self.getThawedParamIndices():
-			ix = i % W
-			iy = i / W
+			ix = i % self.W
+			iy = i / self.W
 			derivs.append(False)
 		return derivs
 

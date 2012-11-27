@@ -640,8 +640,16 @@ def makeplots(tractor, step, suffix):
 	#plt.figure(figsize=(8,6))
 	#plt.figure(figsize=(4.5,4))
 	#plt.figure(figsize=(4,3.5))
-	plt.figure(figsize=(3.5,3))
-	plt.subplots_adjust(left=0.01, right=0.99, bottom=0.02, top=0.92)
+
+	#spa = dict(left=0.01, right=0.99, bottom=0.02, top=0.92)
+	spa = dict(left=0.005, right=0.995, bottom=0.02, top=0.92)
+	H = 3.
+	W1 = 3.5
+	W2 = (0.90 / 0.99) * H
+	print 'W2', W2
+
+	plt.figure(figsize=(W1,H))
+	plt.subplots_adjust(**spa)
 
 	logsa = np.fliplr(logsa)
 	logt = np.fliplr(logt)
@@ -655,12 +663,14 @@ def makeplots(tractor, step, suffix):
 	# plt.savefig('logsa-%02i%s.png' % (step, suffix))
 	
 	plt.clf()
-	plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	#plt.imshow(np.exp(logsa), interpolation='nearest', origin='lower')
+	plt.imshow(np.exp(logsa) * 1000., interpolation='nearest', origin='lower',
+			   vmin=0., vmax=6.)
 	plt.hot()
-	plt.colorbar()
+	plt.colorbar(ticks=[0,2,4,6])
 	plt.xticks([])
 	plt.yticks([])
-	plt.title('Dust Column Density') #: solid angle')
+	plt.title('Dust Column Density (arb units)') #: solid angle')
 	plt.savefig(('sa-%02i%s'+suff) % (step, suffix))
 	
 	# plt.clf()
@@ -671,9 +681,9 @@ def makeplots(tractor, step, suffix):
 	# plt.savefig('logt-%02i%s'+suff % (step, suffix))
 	
 	plt.clf()
-	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0)
+	plt.imshow(np.exp(logt), interpolation='nearest', origin='lower', vmin=0, vmax=30)
 	plt.hot()
-	plt.colorbar()
+	plt.colorbar(ticks=[0,10,20,30])
 	plt.xticks([])
 	plt.yticks([])
 	plt.title('Dust Temperature (K)')
@@ -683,7 +693,7 @@ def makeplots(tractor, step, suffix):
 	plt.imshow(emis, interpolation='nearest', origin='lower',
 			   vmin=1, vmax=2.5)
 	plt.gray()
-	plt.colorbar()
+	plt.colorbar(ticks=[1.0, 1.5, 2.0, 2.5])
 	plt.xticks([])
 	plt.yticks([])
 	plt.title('Dust Emissivity Index')
@@ -691,8 +701,12 @@ def makeplots(tractor, step, suffix):
 
 	#plt.figure(figsize=(4,4))
 	#plt.figure(figsize=(3,3))
-	plt.figure(figsize=(2.5,2.5))
-	plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.9)
+	#plt.figure(figsize=(2.5,2.5))
+	#plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.9)
+
+	plt.figure(figsize=(W2,H))
+	#plt.figure(figsize=(3,3))
+	plt.subplots_adjust(**spa)
 
 	for i,tim in enumerate(tractor.getImages()):
 	 	ima = dict(interpolation='nearest', origin='lower',
