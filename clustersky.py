@@ -1687,7 +1687,10 @@ class RunAbell(object):
 		#self.prereqs = { 103: 2, 203: 2 }
 		self.prereqs = { 103: 2, 204: 0, 1000: 0,  1004:1002,
 						 1008:1006,
-						 1009:1006 }
+						 1009:1006,
+
+						 1020:1015,
+						 }
 		#self.S = S
 	def __call__(self, stage, **kwargs):
 		kwargs.update(band=self.bandname, run=self.run,
@@ -3352,6 +3355,65 @@ class RunAbell(object):
 	stage1011 = stage101x
 	stage1012 = stage101x
 	stage1013 = stage101x
+	stage1014 = stage101x
+	stage1015 = stage101x
+	stage1016 = stage101x
+	stage1017 = stage101x
+	stage1018 = stage101x
+
+	def stage1020(self, allp=None, tractor=None, **kwa):
+		allp = np.array(allp)
+		allp = allp[-100::10, :, :]
+		steps, nw, ndim = allp.shape
+
+		ps = PlotSequence('corr')
+
+		print 'Shape', allp.shape
+		allp = allp.reshape((-1, ndim))
+		print 'Reshaped to', allp.shape
+		ns,ndim = allp.shape
+
+		print 'Params:'
+		for nm in tractor.getParamNames():
+			print '  ', nm
+
+		names = tractor.getParamNames()
+		# Look for the largest correlation coefficients
+		#ia = [i for i,nm in enumerate(names) if 'sky' in name]
+		#ib = [i for i,nm in enumerate(names) if 'shape' in name or 'brightness' in name]
+
+		sigmas = np.std(allp, axis=0)
+		means = np.mean(allp, axis=0)
+		print 'sigmas', sigmas.shape
+
+		aa = (allp - means[np.newaxis,:]) / sigmas[np.newaxis,:]
+
+		cov = np.dot(aa.T, aa)
+		print 'cov', cov.shape
+
+		for i,j in zip(*np.unravel_index(np.argsort(-np.abs(cov.flat)), cov.shape)):
+			if j >= i:
+				continue
+			print 'Cov:', i, j, cov[i,j], names[i], names[j]
+
+			plt.clf()
+			plt.gca().set_position([0.17, 0.1, 0.81, 0.80])
+			plt.subplot(2,1,1)
+			plt.plot(allp[:,i] - means[i], allp[:,j] - means[j], 'r.', alpha=0.25)
+			plt.xlabel(names[i] + '+ %g' % means[i])
+			plt.ylabel(names[j] + '+ %g' % means[j])
+			plt.subplot(2,1,2)
+			plt.plot((allp[:,i] - means[i]) / sigmas[i], 'r-')
+			plt.plot((allp[:,j] - means[j]) / sigmas[j], 'b-')
+			ps.savefig()
+
+		#cc = []
+		#ij = []
+		#for i in range(ns):
+		#		for j in range(i+1, ns):
+		#		aa = 
+
+		
 		
 		
 	def stage0(self, run=None, camcol=None, field=None,
