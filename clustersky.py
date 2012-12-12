@@ -1334,7 +1334,8 @@ def find():
 	T.about()
 	#T.rename('_raj2000', 'ra')
 	#T.rename('_dec2000', 'dec')
-
+	T.writeto('abell-all.fits')
+	
 	ps = PlotSequence('abell-b')
 
 	LookupRcf = RaDecToRcf(tablefn='dr9fields.fits')
@@ -4519,7 +4520,7 @@ if __name__ == '__main__':
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-	#find()
+	find()
 	#fp()
 	#get_dm_table()
 	#join()

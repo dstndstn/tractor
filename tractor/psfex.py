@@ -1,7 +1,9 @@
 import numpy as np
 import numpy.linalg
 import scipy.interpolate as interp
+from scipy.ndimage.interpolation import affine_transform
 from astrometry.util.fits import *
+from astrometry.util.plotutils import *
 
 from tractor.basics import *
 from tractor.utils import *
@@ -27,6 +29,9 @@ class PsfEx(MultiParams):
 		y0     = hdr.get('POLZERO2')
 		yscale = hdr.get('POLSCAL2')
 		degree = hdr.get('POLDEG1')
+
+		self.sampling = hdr.get('PSF_SAMP')
+
 		# number of terms in polynomial
 		ne = (degree + 1) * (degree + 2) / 2
 		assert(hdr['PSFAXIS3'] == ne)
@@ -44,7 +49,9 @@ class PsfEx(MultiParams):
 		self.degree = degree
 		self.W, self.H = W,H
 
-		self._fitParamGrid(nx, ny, K)
+		### FIXME
+		print 'warning: not calling _fitParamGrid!'
+		#self._fitParamGrid(nx, ny, K)
 		
 	def _fitParamGrid(self, nx=10, ny=10, K=3):
 		w,mu,sig = em_init_params(K, None, None, None)
@@ -191,30 +198,40 @@ class PsfEx(MultiParams):
 		vals = vals[K:]
 		return GaussianMixturePSF(w, mu, sig)
 		
-	def instantiateAt(self, x, y):
+	def instantiateAt(self, x, y, scale=True):
 		psf = np.zeros_like(self.psfbases[0])
 		print 'psf', psf.shape
 		dx = (x - self.x0) / self.xscale
 		dy = (y - self.y0) / self.yscale
 		i = 0
-		print 'dx',dx,'dy',dy
+		#print 'dx',dx,'dy',dy
 		for d in range(self.degree + 1):
 			#print 'degree', d
 			for j in range(d+1):
 				k = d - j
-				print 'x',j,'y',k,
+				#print 'x',j,'y',k,
 				#print 'component', i
 				amp = dx**j * dy**k
-				print 'amp', amp,
-				psf += self.psfbases[i] * amp
-				print 'basis rms', np.sqrt(np.mean(self.psfbases[i]**2)),
+				#print 'amp', amp,
+				# PSFEx manual pg. 111 ?
+				ii = j + (self.degree+1) * k - (k * (k-1))/ 2
+				#print 'ii', ii, 'vs i', i
+				psf += self.psfbases[ii] * amp
+				#print 'basis rms', np.sqrt(np.mean(self.psfbases[i]**2)),
 				i += 1
-				print 'psf sum', psf.sum()
-				
-		print 'min', psf.min(), 'max', psf.max()
+				#print 'psf sum', psf.sum()
+		#print 'min', psf.min(), 'max', psf.max()
+
+		if scale and self.sampling != 1:
+			ny,nx = psf.shape
+			spsf = affine_transform(psf, [1./self.sampling]*2,
+									offset=nx/2 * (self.sampling - 1.))
+			return spsf
+			
 		return psf
 
 if __name__ == '__main__':
+	import sys
 	import matplotlib
 	matplotlib.use('Agg')
 	import pylab as plt
@@ -223,16 +240,27 @@ if __name__ == '__main__':
 
 	ps = PlotSequence('ex')
 	
-	im = psf.instantiateAt(0.,0.)
-	print type(im)
-	plt.clf()
-	mx = im.max()
-	plt.imshow(im, origin='lower', interpolation='nearest',
-			   vmin=-0.1*mx, vmax=mx*1.1)
-	plt.hot()
-	plt.colorbar()
-	ps.savefig()
+	for scale in [False, True]:
+		im = psf.instantiateAt(0.,0., scale=scale)
 
+		ny,nx = im.shape
+		XX,YY = np.meshgrid(np.arange(nx), np.arange(ny))
+		print 'cx', (np.sum(im * XX) / np.sum(im))
+		print 'cy', (np.sum(im * YY) / np.sum(im))
+		
+		plt.clf()
+		mx = im.max()
+		plt.imshow(im, origin='lower', interpolation='nearest',
+				   vmin=-0.1*mx, vmax=mx*1.1)
+		plt.hot()
+		plt.colorbar()
+		ps.savefig()
+
+	print 'PSF scale', psf.sampling
+	print '1./scale', 1./psf.sampling
+		
+	sys.exit(0)
+	
 	# import cPickle
 	# print 'Pickling...'
 	# SS = cPickle.dumps(psf)
