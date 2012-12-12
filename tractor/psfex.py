@@ -53,7 +53,7 @@ class PsfEx(MultiParams):
 		print 'warning: not calling _fitParamGrid!'
 		#self._fitParamGrid(nx, ny, K)
 		
-	def _fitParamGrid(self, nx=10, ny=10, K=3):
+	def _fitParamGrid(self, nx=10, ny=10, K=3, scale=True):
 		w,mu,sig = em_init_params(K, None, None, None)
 		pp = []
 
@@ -72,24 +72,29 @@ class PsfEx(MultiParams):
 				
 				if ix == 0 and px0 is not None:
 					w,mu,sig = px0
-				im = self.instantiateAt(x, y)
+				im = self.instantiateAt(x, y, scale=scale)
 				PS = im.shape[0]
 				im /= im.sum()
 				im = np.maximum(im, 0)
 				xm,ym = -(PS/2), -(PS/2)
 				em_fit_2d(im, xm, ym, w, mu, sig)
-				print 'w,mu,sig', w,mu,sig
+				#print 'w,mu,sig', w,mu,sig
 				if ix == 0:
 					px0 = w,mu,sig
 
+				if not scale:
+					# We didn't downsample the PSF in pixel space, so
+					# scale down the MOG params.
+					sfactor = self.sampling
+				else:
+					sfactor = 1.
+
 				params = np.hstack((w.ravel()[:-1],
-									mu.ravel(),
-									sig[:,0,0].ravel(),
-									sig[:,0,1].ravel(),
-									sig[:,1,1].ravel())).copy()
+									(sfactor * mu).ravel(),
+									(sfactor**2 * sig[:,0,0]).ravel(),
+									(sfactor**2 * sig[:,0,1]).ravel(),
+									(sfactor**2 * sig[:,1,1]).ravel())).copy()
 				pprow.append(params)
-				#pprow.append(np.hstack((w.ravel(), mu.ravel(),
-				#						sig.ravel())))
 
 				if False:
 					psf = GaussianMixturePSF(w, mu, sig)
@@ -111,77 +116,78 @@ class PsfEx(MultiParams):
 		pp = np.array(pp)
 		print 'pp', pp.shape
 
-		ND = len(pp[:,:,0].ravel())
-		DX = np.array(DX)
-		DY = np.array(DY)
-		A = np.zeros((ND, 10))
-		A[:,0] = 1.
-		A[:,1] = DX
-		A[:,2] = DY
-		A[:,3] = DY**2
-		A[:,4] = DX*DY
-		A[:,5] = DX**2
-		A[:,6] = DY**3
-		A[:,7] = DX * DY**2
-		A[:,8] = DX**2 * DY
-		A[:,9] = DY**3
+		# ND = len(pp[:,:,0].ravel())
+		# DX = np.array(DX)
+		# DY = np.array(DY)
+		# A = np.zeros((ND, 10))
+		# A[:,0] = 1.
+		# A[:,1] = DX
+		# A[:,2] = DY
+		# A[:,3] = DY**2
+		# A[:,4] = DX*DY
+		# A[:,5] = DX**2
+		# A[:,6] = DY**3
+		# A[:,7] = DX * DY**2
+		# A[:,8] = DX**2 * DY
+		# A[:,9] = DY**3
 
 		splines = []
-		
-		
 		N = len(pp[0][0])
 
 		for i in range(N):
 			data = pp[:,:, i]
 			spl = interp.RectBivariateSpline(XX, YY, data.T)
+			print 'Building a spline on XX,YY,data', XX.shape, YY.shape, data.T.shape
 			splines.append(spl)
 			
-			X,res,rank,s = np.linalg.lstsq(A, data.ravel())
-			#print 'Coefficients', X
-			bb = np.dot(A, X)
-			#print 'reconstruction', bb
-			bb = bb.reshape(pp[:,:,i].shape)
-			#print 'bb shape', bb.shape
-
-			if False:
-				plt.clf()
-				cc = ['r','y','g','b','m']
-				xx = np.linspace(0, self.W, 100)
-				scale = (nx-1) / float(self.W-1)
-				plt.subplot(2,2,1)
-				ss = []
-				for j in range(ny):
-					plt.plot(pp[j, :, i], '-', color=cc[j%len(cc)])
-					plt.plot(bb[j, :], '--', color=cc[j%len(cc)])
-					plt.plot(xx * scale, spl(xx, YY[j]), ':', color=cc[j%len(cc)])
-					s = spl(XX, YY[j])
-					#print 'splined', s
-					ss.append(s)
-				#print 'ss', ss
-				ss = np.hstack(ss).T
-				#print 'ss', ss
-				#print 'shape', ss.shape
-				mn,mx = data.min(), data.max()
-				ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
-				plt.subplot(2,2,2)
-				plt.imshow(data, **ima)
-				plt.title('data')
-				plt.subplot(2,2,3)
-				plt.imshow(bb, **ima)
-				plt.title('poly')
-				plt.subplot(2,2,4)
-				plt.imshow(ss, **ima)
-				plt.title('spline')
-				ps.savefig()
+			#X,res,rank,s = np.linalg.lstsq(A, data.ravel())
+			##print 'Coefficients', X
+			#bb = np.dot(A, X)
+			##print 'reconstruction', bb
+			#bb = bb.reshape(pp[:,:,i].shape)
+			##print 'bb shape', bb.shape
+			#
+			#if False:
+			#	plt.clf()
+			#	cc = ['r','y','g','b','m']
+			#	xx = np.linspace(0, self.W, 100)
+			#	scale = (nx-1) / float(self.W-1)
+			#	plt.subplot(2,2,1)
+			#	ss = []
+			#	for j in range(ny):
+			#		plt.plot(pp[j, :, i], '-', color=cc[j%len(cc)])
+			#		plt.plot(bb[j, :], '--', color=cc[j%len(cc)])
+			#		plt.plot(xx * scale, spl(xx, YY[j]), ':', color=cc[j%len(cc)])
+			#		s = spl(XX, YY[j])
+			#		#print 'splined', s
+			#		ss.append(s)
+			#	#print 'ss', ss
+			#	ss = np.hstack(ss).T
+			#	#print 'ss', ss
+			#	#print 'shape', ss.shape
+			#	mn,mx = data.min(), data.max()
+			#	ima = dict(interpolation='nearest', origin='lower', vmin=mn, vmax=mx)
+			#	plt.subplot(2,2,2)
+			#	plt.imshow(data, **ima)
+			#	plt.title('data')
+			#	plt.subplot(2,2,3)
+			#	plt.imshow(bb, **ima)
+			#	plt.title('poly')
+			#	plt.subplot(2,2,4)
+			#	plt.imshow(ss, **ima)
+			#	plt.title('spline')
+			#	ps.savefig()
 
 		self.splines = splines
 		self.K = K
 
-
 	def mogAt(self, x, y):
 		vals = [spl(x, y) for spl in self.splines]
+		print 'vals', vals
 		K = self.K
 		w = np.empty(K)
+		print 'w', w
+		print 'K', K
 		w[:-1] = vals[:K-1]
 		vals = vals[K-1:]
 		w[-1] = 1. - sum(w[:-1])
@@ -200,7 +206,7 @@ class PsfEx(MultiParams):
 		
 	def instantiateAt(self, x, y, scale=True):
 		psf = np.zeros_like(self.psfbases[0])
-		print 'psf', psf.shape
+		#print 'psf', psf.shape
 		dx = (x - self.x0) / self.xscale
 		dy = (y - self.y0) / self.yscale
 		i = 0
@@ -258,7 +264,51 @@ if __name__ == '__main__':
 
 	print 'PSF scale', psf.sampling
 	print '1./scale', 1./psf.sampling
-		
+
+	YY = np.linspace(0, 4096, 5)
+	XX = np.linspace(0, 2048, 5)
+
+	yims = []
+	for y in YY:
+		xims = []
+		for x in XX:
+			im = psf.instantiateAt(x, y)
+			im /= im.sum()
+			xims.append(im)
+		xims = np.hstack(xims)
+		yims.append(xims)
+	yims = np.vstack(yims)
+	plt.clf()
+	plt.imshow(yims, origin='lower', interpolation='nearest')
+	plt.gray()
+	plt.hot()
+	plt.title('instantiated')
+	ps.savefig()
+	
+	for scale in [True, False]:
+		print 'fitting params, scale=', scale
+		psf._fitParamGrid(nx=11, ny=11, scale=scale)
+
+		sims = []
+		for y in YY:
+			xims = []
+			for x in XX:
+				mog = psf.mogAt(x, y)
+				patch = mog.getPointSourcePatch(12,12)
+				pim = np.zeros((25,25))
+				patch.addTo(pim)
+				pim /= pim.sum()
+				xims.append(pim)
+			xims = np.hstack(xims)
+			sims.append(xims)
+		sims = np.vstack(sims)
+		plt.clf()
+		plt.imshow(sims, origin='lower', interpolation='nearest')
+		plt.gray()
+		plt.hot()
+		plt.title('Spline mogs, scale=%s' % str(scale))
+		ps.savefig()
+	
 	sys.exit(0)
 	
 	# import cPickle
