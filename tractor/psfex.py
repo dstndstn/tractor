@@ -114,8 +114,7 @@ class PsfEx(MultiParams):
 			pp.append(pprow)
 
 		pp = np.array(pp)
-		print 'pp', pp.shape
-
+		#print 'pp', pp.shape
 		# ND = len(pp[:,:,0].ravel())
 		# DX = np.array(DX)
 		# DY = np.array(DY)
@@ -137,7 +136,7 @@ class PsfEx(MultiParams):
 		for i in range(N):
 			data = pp[:,:, i]
 			spl = interp.RectBivariateSpline(XX, YY, data.T)
-			print 'Building a spline on XX,YY,data', XX.shape, YY.shape, data.T.shape
+			#print 'Building a spline on XX,YY,data', XX.shape, YY.shape, data.T.shape
 			splines.append(spl)
 			
 			#X,res,rank,s = np.linalg.lstsq(A, data.ravel())
@@ -183,11 +182,8 @@ class PsfEx(MultiParams):
 
 	def mogAt(self, x, y):
 		vals = [spl(x, y) for spl in self.splines]
-		print 'vals', vals
 		K = self.K
 		w = np.empty(K)
-		print 'w', w
-		print 'K', K
 		w[:-1] = vals[:K-1]
 		vals = vals[K-1:]
 		w[-1] = 1. - sum(w[:-1])
