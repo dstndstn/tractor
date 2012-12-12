@@ -17,22 +17,26 @@ if __name__ == '__main__':
 
 	imgfn = 'dec028475.fits.fz'
 	imgext = 1
-	psffn = 'dec028475.psf'
+	#psffn = 'dec028475.psf'
+	# test syntax with totally incorrect input
+	psffn = 'PTF_201112091448_i_p_scie_t032828_u010430936_f02_p002794_c08.fix.psf'
 	psfext = imgext
-	catfn = 'sextractor-028475.fits'
+	#catfn = 'sextractor-028475.fits'
+	catfn = 'cs82data/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit'
 	
 	P = pyfits.open(imgfn)
 	img = P[imgext].data
 	H,W = img.shape
 
-	band = P[0].get('FILTER')
+	hdr = P[0].header
+	band = hdr.get('FILTER')
 	band = band.split()[0]
-	print 'band', i
+	print 'band', band
 
-	pixscale = P[0].get('PIXSCAL1')
+	pixscale = hdr.get('PIXSCAL1')
 	# it would be evil to make PIXSCAL1 != PIXSCAL2...
 
-	name = P[0].get('FILENAME').replace('.fits','')
+	name = hdr.get('FILENAME').replace('.fits','')
 	
 	# FIXME!
 	invvar = np.ones_like(img)

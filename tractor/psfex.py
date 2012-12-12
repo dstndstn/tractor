@@ -49,10 +49,10 @@ class PsfEx(MultiParams):
 		self.degree = degree
 		self.W, self.H = W,H
 
-		### FIXME
-		print 'warning: not calling _fitParamGrid!'
-		#self._fitParamGrid(nx, ny, K)
-		
+		self.nx = nx
+		self.ny = ny
+		self.K = K
+
 	def _fitParamGrid(self, nx=10, ny=10, K=3, scale=True):
 		w,mu,sig = em_init_params(K, None, None, None)
 		pp = []
@@ -181,6 +181,8 @@ class PsfEx(MultiParams):
 		self.K = K
 
 	def mogAt(self, x, y):
+		if not hasattr(self, 'splines'):
+			self._fitParamGrid(self.nx, self.ny, self.K)
 		vals = [spl(x, y) for spl in self.splines]
 		K = self.K
 		w = np.empty(K)
