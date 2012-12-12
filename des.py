@@ -38,14 +38,32 @@ if __name__ == '__main__':
 	# it would be evil to make PIXSCAL1 != PIXSCAL2...
 
 	name = hdr.get('FILENAME').replace('.fits','')
+
+	meansky = 3000.
+	skystd = 100.
+
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=meansky - 3.*skystd, vmax=meansky + 10.*skystd)
+
+	ps = PlotSequence('des')
+
+	plt.clf()
+	plt.hist(img[:200,:200].ravel(), 100)
+	ps.savefig()
+
+	plt.clf()
+	plt.imshow(img[:200,:200], **ima)
+	plt.gray()
+	ps.savefig()
+
 	
 	# FIXME!
-	invvar = np.ones_like(img)
+	invvar = np.ones_like(img) * skystd
 
 	psf = PsfEx(psffn, W, H, ext=psfext)
 
 	# FIXME?
-	sky = ConstantSky(0.)
+	sky = ConstantSky(meansky)
 
 	# Work in raw counts?
 	photocal = NullPhotoCal()
@@ -111,23 +129,14 @@ if __name__ == '__main__':
 	# 	srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
 
 
-	cat.append(PointSource(PixPos(100.,100.), Flux(100.)))
+	cat.append(PointSource(PixPos(100.,100.), Flux(100. * skystd)))
 	
 	tractor = Tractor([tim], cat)
 	
 	mod = tractor.getModelImage(0)
 
-	ima = dict(interpolation='nearest', origin='lower',
-			   vmin=tim.zr[0], vmax=tim.zr[1])
-
-	ps = PlotSequence('des')
-	
 	plt.clf()
 	plt.imshow(mod[:200,:200], **ima)
 	plt.gray()
 	ps.savefig()
 	
-	plt.clf()
-	plt.imshow(img[:200,:200], **ima)
-	plt.gray()
-	ps.savefig()
