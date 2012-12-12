@@ -9,6 +9,7 @@ from tractor import *
 from tractor.psfex import *
 
 from astrometry.util.fits import *
+from astrometry.util.plotutils import *
 # for Tan wcs, etc
 #from astrometry.util.util import *
 
@@ -109,5 +110,24 @@ if __name__ == '__main__':
 	# 		continue
 	# 	srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
 
+
+	cat.append(PointSource(PixPos(100.,100.), Flux(100.)))
+	
 	tractor = Tractor([tim], cat)
 	
+	mod = tractor.getModelImage(0)
+
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=tim.zr[0], vmax=tim.zr[1])
+
+	ps = PlotSequence('des')
+	
+	plt.clf()
+	plt.imshow(mod[:200,:200], **ima)
+	plt.gray()
+	ps.savefig()
+	
+	plt.clf()
+	plt.imshow(img[:200,:200], **ima)
+	plt.gray()
+	ps.savefig()
