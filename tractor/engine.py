@@ -74,7 +74,10 @@ class Image(MultiParams):
 		'''
 		self.data = data
 		self.origInvvar = 1. * np.array(invvar)
-		self.setMask()
+		kwa = dict()
+		if 'dilation' in kwargs:
+			kwa.update(dilation=kwargs.pop('dilation'))
+		self.setMask(**kwa)
 		self.setInvvar(self.origInvvar)
 		self.name = name
 		self.starMask = np.ones_like(self.data)
@@ -161,9 +164,10 @@ class Image(MultiParams):
 	def getMask(self):
 		return self.mask
 
-	def setMask(self):
+	def setMask(self, dilation=3):
 		self.mask = (self.origInvvar <= 0.)
-		self.mask = binary_dilation(self.mask,iterations=3)
+		if dilation > 0:
+			self.mask = binary_dilation(self.mask,iterations=dilation)
 
 	def getStarMask(self):
 		return self.starMask

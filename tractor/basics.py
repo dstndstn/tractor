@@ -108,7 +108,11 @@ class Fluxes(Mags):
 			kwargs[band] = m1 + m2
 		return self.__class__(order=self.order, **kwargs)
 	def __mul__(self, factor):
-		raise
+		kwargs = {}
+		for band in self.order:
+			m = self.getFlux(band)
+			kwargs[band] = m * factor
+		return Fluxes(order=self.order, **kwargs)
 
 	def getBand(self, *args, **kwargs):
 		return super(Fluxes,self).getMag(*args,**kwargs)

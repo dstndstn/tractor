@@ -7,8 +7,13 @@ import tempfile
 import tractor
 import pyfits
 import numpy as np
+from tractor import *
+from tractor.sdss_galaxy import *
 
-def read_wise_level1b(basefn, radecroi=None, filtermap={}):
+from matplotlib.nxutils import points_inside_poly
+
+def read_wise_level1b(basefn, radecroi=None, filtermap={},
+					  nanomaggies=False):
 	intfn  = basefn + '-int-1b.fits'
 	maskfn = basefn + '-msk-1b.fits'
 	uncfn  = basefn + '-unc-1b.fits'
@@ -76,7 +81,11 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={}):
 	if filtermap:
 		filter = filtermap.get(filter, filter)
 	zp = ihdr['MAGZP']
-	photocal = tractor.MagsPhotoCal(filter, zp)
+	if nanomaggies:
+		photocal = tractor.LinearPhotoCal(tractor.NanoMaggies.zeropointToScale(zp),
+										  band=filter)
+	else:
+		photocal = tractor.MagsPhotoCal(filter, zp)
 
 	print 'Image median:', np.median(data)
 	print 'unc median:', np.median(unc)
@@ -89,14 +98,63 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={}):
 
 	name = 'WISE ' + ihdr['FRSETID'] + ' W%i' % band
 
+	# Mask bits, from
+	# http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4a.html#maskdef
+	# 0 from static mask: excessively noisy due to high dark current alone
+	# 1 from static mask: generally noisy [includes bit 0]
+	# 2 from static mask: dead or very low responsivity
+	# 3 from static mask: low responsivity or low dark current
+	# 4 from static mask: high responsivity or high dark current
+	# 5 from static mask: saturated anywhere in ramp
+	# 6 from static mask: high, uncertain, or unreliable non-linearity
+	# 7 from static mask: known broken hardware pixel or excessively noisy responsivity estimate [may include bit 1]
+	# 8 reserved
+	# 9 broken pixel or negative slope fit value (downlink value = 32767)
+	# 10 saturated in sample read 1 (down-link value = 32753)
+	# 11 saturated in sample read 2 (down-link value = 32754)
+	# 12 saturated in sample read 3 (down-link value = 32755)
+	# 13 saturated in sample read 4 (down-link value = 32756)
+	# 14 saturated in sample read 5 (down-link value = 32757)
+	# 15 saturated in sample read 6 (down-link value = 32758)
+	# 16 saturated in sample read 7 (down-link value = 32759)
+	# 17 saturated in sample read 8 (down-link value = 32760)
+	# 18 saturated in sample read 9 (down-link value = 32761)
+	# 19 reserved
+	# 20 reserved
+	# 21 new/transient bad pixel from dynamic masking
+	# 22 reserved
+	# 23 reserved
+	# 24 reserved
+	# 25 reserved
+	# 26 non-linearity correction unreliable
+	# 27 contains cosmic-ray or outlier that cannot be classified (from temporal outlier rejection in multi-frame pipeline)
+	# 28 contains positive or negative spike-outlier
+	# 29 reserved
+	# 30 reserved
+	# 31 not used: sign bit
+
+	#goodmask = (mask == 0)
+
+	goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
+												10,11,12,13,14,15,16,17,18,
+												21,26,27,28]])) == 0)
+
 	invvar = np.zeros_like(data)
-	invvar[mask == 0] = 1./(unc[mask == 0])**2
+	invvar[goodmask] = 1./(unc[goodmask])**2
+	#invvar = 1./(unc)**2
+
 	# avoid NaNs
-	data[mask != 0] = sky
+	data[np.logical_not(goodmask)] = sky
 
 	tim = tractor.Image(data=data, invvar=invvar, psf=tpsf, wcs=twcs,
 						sky=tsky, photocal=photocal, name=name, zr=zr)
 	tim.extent = [x0,x1,y0,y1]
+
+	# FIXME
+	tim.maskplane = mask
+	tim.uncplane = unc
+	tim.goodmask = goodmask
+
 	return tim
 
 
@@ -410,6 +468,214 @@ def main():
 
 
 
+def forcedphot():
+	T1 = fits_table('cs82data/cas-primary-DR8.fits')
+	print len(T1), 'primary'
+	T1.cut(T1.nchild == 0)
+	print len(T1), 'children'
+
+	rl,rh = T1.ra.min(), T1.ra.max()
+	dl,dh = T1.dec.min(), T1.dec.max()
+
+	tims = []
+
+	# Coadd
+	basedir = os.path.join('cs82data', 'wise', 'level3')
+	basefn = os.path.join(basedir, '3342p000_ab41-w1')
+	tim = read_wise_coadd(basefn, radecroi=[rl,rh,dl,dh], nanomaggies=True)
+	tims.append(tim)
+
+	# Individuals
+	basedir = os.path.join('cs82data', 'wise', 'level1b')
+	for fn in [ '04933b137-w1', '04937b137-w1', '04941b137-w1', '04945b137-w1', '04948a112-w1',
+				'04949b137-w1', '04952a112-w1', '04953b137-w1', '04956a112-w1', '04960a112-w1',
+				'04964a112-w1', '04968a112-w1', '05204a106-w1' ]:
+		basefn = os.path.join(basedir, '04933b137-w1')
+		tim = read_wise_image(basefn, radecroi=[rl,rh,dl,dh], nanomaggies=True)
+		tims.append(tim)
+
+	# tractor.Image's setMask() does a binary dilation on bad pixels!
+	for tim in tims:
+		#	tim.mask = np.zeros(tim.shape, dtype=bool)
+		tim.invvar = tim.origInvvar
+		tim.mask = np.zeros(tim.shape, dtype=bool)
+	print 'tim:', tim
+
+	ps = PlotSequence('forced')
+
+	plt.clf()
+	plt.plot(T1.ra, T1.dec, 'r.')
+	for tim in tims:
+		wcs = tim.getWcs()
+		H,W = tim.shape
+		rr,dd = [],[]
+		for x,y in zip([1,1,W,W,1], [1,H,H,1,1]):
+			rd = wcs.pixelToPosition(x,y)
+			rr.append(rd.ra)
+			dd.append(rd.dec)
+		plt.plot(rr, dd, 'k-', alpha=0.5)
+	#setRadecAxes(rl,rh,dl,dh)
+	ps.savefig()
+
+	T2 = fits_table('wise-cut.fits')
+	T2.w1 = T2.w1mpro
+	R = 1./3600.
+	I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+	print len(I), 'matches'
+
+	refband = 'r'
+	#bandnum = band_index('r')
+
+	Lstar = (T1.probpsf == 1) * 1.0
+	Lgal  = (T1.probpsf == 0)
+	fracdev = T1.get('fracdev_%s' % refband)
+	Ldev = Lgal * fracdev
+	Lexp = Lgal * (1. - fracdev)
+
+	ndev, nexp, ncomp,nstar = 0, 0, 0, 0
+	cat = Catalog()
+	#for i,t in enumerate(T1):
+
+	jmatch = np.zeros(len(T1))
+	jmatch[:] = -1
+	jmatch[I] = J
+
+	for i in range(len(T1)):
+		j = jmatch[i]
+		if j >= 0:
+			# match source: grab WISE catalog mag
+			w1 = T2.w1[j]
+		else:
+			# unmatched: set it faint
+			w1 = 18.
+
+		bright = NanoMaggies(w1=NanoMaggies.magToNanomaggies(w1))
+
+		pos = RaDecPos(T1.ra[i], T1.dec[i])
+		if Lstar[i] > 0:
+			# Star
+			star = PointSource(pos, bright)
+			cat.append(star)
+			nstar += 1
+			continue
+
+		hasdev = (Ldev[i] > 0)
+		hasexp = (Lexp[i] > 0)
+		iscomp = (hasdev and hasexp)
+		if iscomp:
+			dbright = bright * Ldev[i]
+			ebright = bright * Lexp[i]
+		elif hasdev:
+			dbright = bright
+		elif hasexp:
+			ebright = bright
+		else:
+			assert(False)
+											 
+		if hasdev:
+			re  = T1.get('devrad_%s' % refband)[i]
+			ab  = T1.get('devab_%s'  % refband)[i]
+			phi = T1.get('devphi_%s' % refband)[i]
+			dshape = GalaxyShape(re, ab, phi)
+		if hasexp:
+			re  = T1.get('exprad_%s' % refband)[i]
+			ab  = T1.get('expab_%s'  % refband)[i]
+			phi = T1.get('expphi_%s' % refband)[i]
+			eshape = GalaxyShape(re, ab, phi)
+
+		if iscomp:
+			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
+			ncomp += 1
+		elif hasdev:
+			gal = DevGalaxy(pos, dbright, dshape)
+			ndev += 1
+		elif hasexp:
+			gal = ExpGalaxy(pos, ebright, eshape)
+			nexp += 1
+
+		cat.append(gal)
+	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
+	print ncomp, 'composite galaxies',
+	print 'and', nstar, 'stars'
+
+	tractor = Tractor(tims, cat)
+
+	for i,tim in enumerate(tims):
+		ima = dict(interpolation='nearest', origin='lower',
+				   vmin=tim.zr[0], vmax=tim.zr[1])
+
+		mod = tractor.getModelImage(i)
+
+		plt.clf()
+		plt.imshow(mod, **ima)
+		plt.gray()
+		plt.title('model: %s' % tim.name)
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **ima)
+		plt.gray()
+		plt.title('data: %s' % tim.name)
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getInvvar(), interpolation='nearest', origin='lower')
+		plt.gray()
+		plt.title('invvar')
+		ps.savefig()
+
+		#for tim in tims:
+		wcs = tim.getWcs()
+		H,W = tim.shape
+		poly = []
+		for r,d in zip([rl,rl,rh,rh,rl], [dl,dh,dh,dl,dl]):
+			x,y = wcs.positionToPixel(RaDecPos(r,d))
+			poly.append((x,y))
+		xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+		xy = np.vstack((xx.flat, yy.flat)).T
+		grid = points_inside_poly(xy, poly)
+		grid = grid.reshape((H,W))
+
+		tim.setInvvar(tim.getInvvar() * grid)
+
+		# plt.clf()
+		# plt.imshow(grid, interpolation='nearest', origin='lower')
+		# plt.gray()
+		# ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getInvvar(), interpolation='nearest', origin='lower')
+		plt.gray()
+		plt.title('invvar')
+		ps.savefig()
+
+		if i == 1:
+			plt.clf()
+			plt.imshow(tim.goodmask, interpolation='nearest', origin='lower')
+			plt.gray()
+			plt.title('goodmask')
+			ps.savefig()
+
+			miv = (1./(tim.uncplane)**2)
+			for bit in range(-1,32):
+				if bit >= 0:
+					miv[(tim.maskplane & (1 << bit)) != 0] = 0.
+				if bit == 31:
+					plt.clf()
+					plt.imshow(miv, interpolation='nearest', origin='lower')
+					plt.gray()
+					plt.title('invvar with mask bits up to %i blanked out' % bit)
+					ps.savefig()
+
+			# for bit in range(32):
+			# 	plt.clf()
+			# 	plt.imshow(tim.maskplane & (1 << bit),
+			# 			   interpolation='nearest', origin='lower')
+			# 	plt.gray()
+			# 	plt.title('mask bit %i' % bit)
+			# 	ps.savefig()
+
+
 if __name__ == '__main__':
 	from astrometry.util.fits import *
 	from astrometry.util.plotutils import *
@@ -417,6 +683,9 @@ if __name__ == '__main__':
 	import pylab as plt
 	import sys
 
+	forcedphot()
+	sys.exit(0)
+	
 	T1 = fits_table('cs82data/cas-primary-DR8.fits')
 	print len(T1), 'SDSS'
 	print '  RA', T1.ra.min(), T1.ra.max()
@@ -440,7 +709,12 @@ if __name__ == '__main__':
 
 	plt.clf()
 	#loghist(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 200, range=((0,2),(-2,5)))
-	plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
+	#plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
+	for cc,lo,hi in [('r', 8, 14), ('y', 14, 15), ('g', 15, 16), ('b', 16, 17), ('m', 17,20)]:
+		w1 = T2.w1mpro[J]
+		K = (w1 >= lo) * (w1 < hi)
+		plt.plot(T1.r[I[K]] - T1.i[I[K]], T1.r[I[K]] - T2.w1mpro[J[K]], '.', color=cc)
+		#plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
 	plt.xlabel('r - i')
 	plt.ylabel('r - W1 3.4 micron')
 	plt.axis([0,2,0,8])
@@ -464,6 +738,27 @@ if __name__ == '__main__':
 	plt.xlabel('dRA (arcsec)')
 	plt.ylabel('dDec (arcsec)')
 	plt.savefig('wise4.png')
+
+	plt.clf()
+	plt.subplot(2,1,1)
+	plt.hist(T1.r, 100, range=(10,25), histtype='step', color='k')
+	plt.hist(T1.r[I], 100, range=(10,25), histtype='step', color='r')
+	plt.hist(T1.r[I2], 100, range=(10,25), histtype='step', color='m')
+	plt.xlabel('r band')
+	plt.axhline(0, color='k', alpha=0.5)
+	plt.ylim(-5, 90)
+	plt.xlim(10,25)
+
+	plt.subplot(2,1,2)
+	plt.hist(T2.w1mpro, 100, range=(10,25), histtype='step', color='k')
+	plt.hist(T2.w1mpro[J], 100, range=(10,25), histtype='step', color='r')
+	plt.hist(T2.w1mpro[J2], 100, range=(10,25), histtype='step', color='m')
+	plt.xlabel('W1 band')
+	plt.axhline(0, color='k', alpha=0.5)
+	plt.ylim(-5, 60)
+	plt.xlim(10,25)
+
+	plt.savefig('wise5.png')
 
 	sys.exit(0)
 
