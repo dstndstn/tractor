@@ -1,3 +1,7 @@
+if __name__ == '__main__':
+	import matplotlib
+	matplotlib.use('Agg')
+
 import os
 import tempfile
 import tractor
@@ -407,7 +411,40 @@ def main():
 
 
 if __name__ == '__main__':
-	import cProfile
-	from datetime import tzinfo, timedelta, datetime
-	cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
+	from astrometry.util.fits import *
+	from astrometry.util.plotutils import *
+	from astrometry.libkd.spherematch import *
+	import pylab as plt
+	import sys
+
+	T1 = fits_table('cs82data/cas-primary-DR8.fits')
+	T2 = fits_table('wise-27-tag.fits')
+	print len(T1), 'SDSS'
+	print '  RA', T1.ra.min(), T1.ra.max()
+	print len(T2), 'WISE'
+	print '  RA', T2.ra.min(), T2.ra.max()
+
+	T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
+		   (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
+	print 'Cut WISE to same RA,Dec region:', len(T2)
+	T2.writeto('wise-cut.fits')
+
+	R = 1./3600.
+	I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+	print len(I), 'matches'
+
+	plt.clf()
+	#loghist(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 200, range=((0,2),(-2,5)))
+	plt.plot(T1.r[I] - T1.i[I], T1.r[I] - T2.w1mpro[J], 'r.')
+	plt.xlabel('r - i')
+	plt.ylabel('r - W1 3.4 micron')
+	plt.axis([0,2,0,8])
+	plt.savefig('wise.png')
+
+	sys.exit(0)
+
+	#import cProfile
+	#from datetime import tzinfo, timedelta, datetime
+	#cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
+	main()
 
