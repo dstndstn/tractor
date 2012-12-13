@@ -418,16 +418,21 @@ if __name__ == '__main__':
 	import sys
 
 	T1 = fits_table('cs82data/cas-primary-DR8.fits')
-	T2 = fits_table('wise-27-tag.fits')
 	print len(T1), 'SDSS'
 	print '  RA', T1.ra.min(), T1.ra.max()
-	print len(T2), 'WISE'
-	print '  RA', T2.ra.min(), T2.ra.max()
 
-	T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
-		   (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
-	print 'Cut WISE to same RA,Dec region:', len(T2)
-	T2.writeto('wise-cut.fits')
+	cutfn = 'wise-cut.fits'
+	if not os.path.exists(cutfn):
+		T2 = fits_table('wise-27-tag.fits')
+		print len(T2), 'WISE'
+		print '  RA', T2.ra.min(), T2.ra.max()
+		T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
+			   (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
+		print 'Cut WISE to same RA,Dec region:', len(T2)
+		T2.writeto('wise-cut.fits')
+	else:
+		T2 = fits_table(cutfn)
+		print len(T2), 'WISE (cut)'
 
 	R = 1./3600.
 	I,J,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
@@ -439,7 +444,26 @@ if __name__ == '__main__':
 	plt.xlabel('r - i')
 	plt.ylabel('r - W1 3.4 micron')
 	plt.axis([0,2,0,8])
-	plt.savefig('wise.png')
+	plt.savefig('wise1.png')
+
+	plt.clf()
+	plt.plot(T1.ra, T1.dec, 'bx')
+	plt.plot(T2.ra, T2.dec, 'o', mec='r', mfc='none')
+	plt.plot(T2.ra[J], T2.dec[J], '^', mec='g', mfc='none')
+	plt.savefig('wise2.png')
+
+	R = 2./3600.
+	I2,J2,d = match_radec(T1.ra, T1.dec, T2.ra, T2.dec, R)
+	print len(I), 'matches'
+	plt.plot(T2.ra[J2], T2.dec[J2], '^', mec='g', mfc='none', ms=10)
+	plt.savefig('wise3.png')
+
+	plt.clf()
+	plt.plot(3600.*(T1.ra [I2] - T2.ra [J2]),
+			 3600.*(T1.dec[I2] - T2.dec[J2]), 'r.')
+	plt.xlabel('dRA (arcsec)')
+	plt.ylabel('dDec (arcsec)')
+	plt.savefig('wise4.png')
 
 	sys.exit(0)
 
