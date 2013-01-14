@@ -7,9 +7,12 @@ import logging
 import numpy as np
 import pylab as plt
 import pyfits
+import math
 
 from astrometry.util.file import *
 from astrometry.util.plotutils import ArcsinhNormalize
+from astrometry.util.starutil_numpy import *
+from astrometry.util.sdss_radec_to_rcf import *
 
 from tractor import *
 from tractor import sdss as st
@@ -180,6 +183,9 @@ def main():
 	parser.add_option('-c', '--camcol', dest='camcol', type='int')
 	parser.add_option('-f', '--field', dest='field', type='int')
 	parser.add_option('-b', '--band', dest='band', help='SDSS Band (u, g, r, i, z)')
+	parser.add_option('-R', '--radec', dest='radec', nargs=2, type=str, help='RA,Dec center: float degrees or hh:mm:ss +-dd:mm:ss')
+	parser.add_option('-s', '--size', dest='pixsize', type=int, help='Pixel size when using RA,Dec center option')
+	parser.add_option('--drfields', dest='drfields', help='FITS table of SDSS fields: default dr%ifields.fits, etc')
 	parser.add_option('--dr8', dest='dr8', action='store_true', help='Use DR8?	Default is DR7')
 	parser.add_option('--dr9', dest='dr9', action='store_true', help='Use DR9?	Default is DR7')
 	parser.add_option('--curl', dest='curl', action='store_true', default=False, help='Use "curl", not "wget", to download files')
@@ -220,33 +226,75 @@ def main():
 			print 'Must supply band (u/g/r/i/z)'
 			sys.exit(-1)
 	rerun = 0
-	if run is None or field is None or camcol is None or len(bands)==0:
+	usercf = (run is not None and field is not None and camcol is not None)
+	userd = (radec is not None and pixsize is not None)
+	if not (usercf or userd) or or len(bands)==0:
 		parser.print_help()
-		print 'Must supply --run, --camcol, --field, --band'
+		print 'Must supply (--run, --camcol, --field) or (--radec, --size), and --band'
 		sys.exit(-1)
 	bandname = bands[0] #initial position and shape
 	prefix = opt.prefix
+	if userd:
+		ra = opt.radec[0]
+		dec = opt.radec[1]
+		size = opt.pixsize
 	if prefix is None:
-		prefix = '%06i-%i-%04i' % (run,camcol, field)
+		if usercf:
+			prefix = '%06i-%i-%04i' % (run,camcol, field)
+		else:
+			prefix = '%s-%s' % (ra, dec)
+
+	if userd:
+		# convert h:m:s to deg
+		try:
+			ra = float(ra)
+		except:
+			ra = ra.replace(':',' ')
+			ra = hmsstring2ra(ra)
+		try:
+			dec = float(dec)
+		except:
+			dec = dec.replace(':',' ')
+			dec = dmsstring2dec(dec)
 
 	imkw = {}
 	if opt.dr9:
 		getim = st.get_tractor_image_dr9
 		getsrc = st.get_tractor_sources_dr9
 		imkw.update(zrange=[-3,100])
+		drnum = 9
 	elif opt.dr8:
 		getim = st.get_tractor_image_dr8
 		getsrc = st.get_tractor_sources_dr8
 		imkw.update(zrange=[-3,100])
+		drnum = 8
 	else:
 		getim = st.get_tractor_image
 		getsrc = st.get_tractor_sources
 		imkw.update(useMags=True)
-
+		drnum = 7
+		
 	tims = []
 	for bandname in bands:
+		if userd:
+			if not usercf:
+				tfn = opt.drfields
+				if tfn is None:
+					tfn = 'dr%ifields.fits' % drnum
+				rcfs = radec_to_sdss_rcf(ra, dec, radius=math.hypot(radius,13./2.), tablefn=tfn)
+				if len(rcfs) == 0:
+					print 'RA,Dec (%.3f,%.3f): found no overlapping SDSS fields in file %s' % (ra, dec, tfn)
+					sys.exit(-1)
+				if len(rcfs) > 1:
+					print 'Found %i Run,Camcol,Fields overlapping RA,Dec (%.3f,%.3f): taking the first one' % (len(rcfs), ra, dec)
+				rcfs = rcfs[0]
+				run,camcol,field = rcfs[:3]
+			imkw.update(roiradecsize = (ra, dec, opt.pixsize))
 		tim,tinf = getim(run, camcol, field, bandname, curl=opt.curl, roi=opt.roi, **imkw)
 		tim.zr = tinf['zr']
+		if userd:
+			opt.roi = tinf['roi']
+		
 		tims.append(tim)
 
 	if opt.scale:
