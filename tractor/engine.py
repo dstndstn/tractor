@@ -104,7 +104,7 @@ class Image(MultiParams):
 		for s in self._getActiveSubs():
 			if hasattr(s, 'getParamDerivatives'):
 				print 'Calling getParamDerivatives on', s
-				sd = s.getParamDerivatives(tractor, srcs)
+				sd = s.getParamDerivatives(tractor, self, srcs)
 				assert(len(sd) == s.numberOfParams())
 				derivs.extend(sd)
 			else:

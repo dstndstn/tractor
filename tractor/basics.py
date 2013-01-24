@@ -621,7 +621,7 @@ class ConstantSky(ScalarParam):
 	'''
 	In counts
 	'''
-	def getParamDerivatives(self, tractor, srcs):
+	def getParamDerivatives(self, tractor, img, srcs):
 		p = Patch(0, 0, np.ones(img.shape))
 		p.setName('dsky')
 		return [p]
