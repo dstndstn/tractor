@@ -28,7 +28,6 @@ from sdss_galaxy import *
 from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
-from astrometry.util.ngc2000 import ngc2000
 from astrometry.util.plotutils import setRadecAxes, redgreen
 
 ## FIXME -- these PSF params are not Params
