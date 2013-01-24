@@ -178,7 +178,7 @@ def main():
 		elif opt == '--itune':
 			tune.append(('i',value))
 
-	parser = OptionParser(usage=('%prog'))
+	parser = OptionParser(usage=('%prog [options] [-r <run> -c <camcol> -f <field> -b <band>]'))
 	parser.add_option('-r', '--run', dest='run', type='int')
 	parser.add_option('-c', '--camcol', dest='camcol', type='int')
 	parser.add_option('-f', '--field', dest='field', type='int')
@@ -202,7 +202,6 @@ def main():
 					  help='Use L-BFGS-B optimization method')
 	parser.add_option('--scale', dest='scale', type=int, help='Scale images down by this factor')
 	opt,args = parser.parse_args()
-	print tune
 
 	if opt.verbose == 0:
 		lvl = logging.INFO
@@ -214,9 +213,28 @@ def main():
 	field = opt.field
 	camcol = opt.camcol
 	bands = []
+
+	if run is None and field is None and camcol is None and opt.band is None:
+		# Demo mode...
+		## FIXME -- find a nice field here
+		run = 1752
+		camcol = 3
+		field = 164
+		opt.band = 'r'
+		opt.dr9 = True
+		opt.curl = True
+		tune.extend([('i',[1,1]), ('n',1)])
+		opt.roi = [100,600,100,600]
+		print
+		print 'Demo mode: grabbing Run/Camcol/Field/Band %i/%i/%i/%s' % (run, camcol, field, opt.band)
+		print 'Using SDSS DR9 data'
+		print
+		
 	if opt.band is None:
+		parser.print_help()
 		print
 		print 'Must supply band (-b [u | g |r |i | z])'
+		print
 		sys.exit(-1)
 	for char in opt.band:
 		bands.append(char)
@@ -224,11 +242,12 @@ def main():
 			parser.print_help()
 			print
 			print 'Must supply band (u/g/r/i/z)'
+			print
 			sys.exit(-1)
 	rerun = 0
 	usercf = (run is not None and field is not None and camcol is not None)
-	userd = (radec is not None and pixsize is not None)
-	if not (usercf or userd) or or len(bands)==0:
+	userd = (opt.radec is not None and opt.pixsize is not None)
+	if not (usercf or userd) or len(bands)==0:
 		parser.print_help()
 		print 'Must supply (--run, --camcol, --field) or (--radec, --size), and --band'
 		sys.exit(-1)
