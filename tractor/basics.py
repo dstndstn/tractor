@@ -1054,8 +1054,8 @@ class ParamsWrapper(BaseParams):
 		return self.real.hashkey()
 	def getLogPrior(self):
 		return self.real.getLogPrior()
-	def getLogPriorChi(self):
-		return self.real.getLogPriorChi()
+	def getLogPriorDerivatives(self):
+		return self.real.getLogPriorDerivatives()
 	def getParams(self):
 		return self.real.getParams()
 	def setParams(self, x):

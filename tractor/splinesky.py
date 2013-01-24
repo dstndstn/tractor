@@ -68,7 +68,7 @@ class SplineSky(ParamList):
 		#print 'logPrior: returning', lnP
 		return lnP
 
-	def getLogPriorChi(self):
+	def getLogPriorDerivatives(self):
 		'''
 		Returns a "chi-like" approximation to the log-prior at the
 		current parameter values.

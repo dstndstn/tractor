@@ -74,7 +74,7 @@ class Params(object):
 		'''
 		return 0.
 
-	def getLogPriorChi(self):
+	def getLogPriorDerivatives(self):
 		return None
 
 class Sky(Params):

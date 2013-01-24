@@ -1137,7 +1137,7 @@ class Tractor(MultiParams):
 			# necessarily column-oriented the way the other params
 			# are.  It would be possible to make it work, but dstn is
 			# not convinced it's worth the effort right now.
-			X = self.getLogPriorChi()
+			X = self.getLogPriorDerivatives()
 			if X is not None:
 				rA,cA,vA,pb = X
 				sprows.extend([ri + Nrows for ri in rA])

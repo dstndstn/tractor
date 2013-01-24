@@ -96,7 +96,7 @@ class BaseParams(object):
 		'''
 		return 0.
 
-	def getLogPriorChi(self):
+	def getLogPriorDerivatives(self):
 		return None
 
 class ScalarParam(BaseParams):
@@ -680,14 +680,14 @@ class MultiParams(BaseParams, NamedParams):
 			lnp += s.getLogPrior()
 		return lnp
 
-	def getLogPriorChi(self):
+	def getLogPriorDerivatives(self):
 		rA,cA,vA,pb = [],[],[],[]
 
 		r0 = 0
 		c0 = 0
 		
 		for s in self._getActiveSubs():
-			X = s.getLogPriorChi()
+			X = s.getLogPriorDerivatives()
 			if X is None:
 				c0 += s.numberOfParams()
 				continue
