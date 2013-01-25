@@ -37,7 +37,7 @@ class BaseParams(object):
 	def __str__(self):
 		return getClassName(self) + ': ' + str(self.getParams())
 	def copy(self):
-		return self.__class__(self.getParams())
+		return self.__class__(*self.getParams())
 	def hashkey(self):
 		return (getClassName(self),) + tuple(self.getParams())
 	def __hash__(self):
@@ -430,7 +430,7 @@ class ParamList(BaseParams, NamedParams):
 	def getStepSizes(self, *args, **kwargs):
 		if hasattr(self, 'stepsizes'):
 			return list(self._getLiquidArray(self.stepsizes))
-		return [1] * self.numberOfParams()
+		return [1.0] * self.numberOfParams()
 
 	def __len__(self):
 		''' len(): of liquid params '''
@@ -681,6 +681,11 @@ class MultiParams(BaseParams, NamedParams):
 		return lnp
 
 	def getLogPriorDerivatives(self):
+		"""
+		Return prior formatted so that it can be used in least square fitting
+		DSTN: this needs documenting here.
+		For now, splinesky.py contains a useful docstring.
+		"""
 		rA,cA,vA,pb = [],[],[],[]
 
 		r0 = 0

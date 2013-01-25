@@ -831,6 +831,7 @@ class Tractor(MultiParams):
 		(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 		tstep = Time() - t0
 		print 'Finished opt2.'
+		print '  alpha =',alpha
 		print '  Tderiv', tderivs
 		print '  Topt  ', topt
 		print '  Tstep ', tstep
@@ -866,7 +867,13 @@ class Tractor(MultiParams):
 			if pAfter > pBest:
 				alphaBest = alpha
 				pBest = pAfter
-
+		
+		if alphaBest is None or alphaBest == 0:
+			print "Warning: optimization is borking"
+			print "Parameter direction =",X
+			print "Parameters and step sizes:"
+			for n,p,s in zip(self.getParamNames(), self.getParams(), self.getStepSizes()):
+				print n, p, s
 		if alphaBest is None:
 			self.setParams(p0)
 			return 0, 0.

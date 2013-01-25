@@ -42,6 +42,7 @@ class Mags(ParamList):
 		super(Mags,self).__init__(*vals)
 		self.order = keys
 		self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
+		self.stepsizes = [0.01] * self.numberOfParams()
 
 	def getMag(self, bandname):
 		''' Bandname: string
@@ -602,6 +603,11 @@ class RaDecPos(ParamList):
 		return dict(ra=0, dec=1)
 	def __str__(self):
 		return '%s: RA, Dec = (%.5f, %.5f)' % (self.getName(), self.ra, self.dec)
+	def __init__(self, *args, **kwargs):
+		self.stepsizes = [0,0]	# in case the superclass constructor cares
+						# about the length?
+		super(RaDecPos,self).__init__(*args,**kwargs)
+		self.setStepSizes(1e-4)
 	#def __repr__(self):
 	#	return 'RaDecPos(%.5f, %.5f)' % (self.ra, self.dec)
 	#def copy(self):
@@ -611,7 +617,9 @@ class RaDecPos(ParamList):
 	def getDimension(self):
 		return 2
 	def getStepSizes(self, *args, **kwargs):
-		return [1e-4, 1e-4]
+		return self.stepsizes
+	def setStepSizes(self, delta):
+		self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
 
 	def distanceFrom(self, pos):
 		from astrometry.util.starutil_numpy import degrees_between
@@ -641,7 +649,6 @@ class PointSource(MultiParams):
 	@staticmethod
 	def getNamedParams():
 		return dict(pos=0, brightness=1)
-
 	def getSourceType(self):
 		return 'PointSource'
 	def getPosition(self):
