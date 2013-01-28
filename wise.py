@@ -6,9 +6,14 @@ import os
 import tempfile
 import tractor
 import pyfits
+import pylab as plt
 import numpy as np
+
 from tractor import *
 from tractor.sdss_galaxy import *
+
+from tractor.emfit import em_fit_2d
+from tractor.fitpsf import em_init_params
 
 from matplotlib.nxutils import points_inside_poly
 
@@ -847,11 +852,9 @@ def wisemap():
 	out.fill = True
 	plot.plot('outline')
 	plot.write('wisemap2.png')
-	
-	
 
-if __name__ == '__main__':
-	import pylab as plt
+
+def wise_psf_plots():
 	# Plot Aaron's PSF models
 	for i in range(1,5):
 		P=pyfits.open('psf%i.fits' % i)[0].data
@@ -871,9 +874,6 @@ if __name__ == '__main__':
 			plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
 			#plt.colorbar()
 	plt.savefig('psf-w1-xy.png')
-
-	from tractor.emfit import em_fit_2d
-	from tractor.fitpsf import em_init_params
 
 	psf = pyfits.open('psf%i.fits' % 1)[0].data
 	S = psf.shape[0]
@@ -906,6 +906,10 @@ if __name__ == '__main__':
 		plt.imshow(np.log10(np.maximum(mod, 1e-8)), **ima)
 		plt.savefig('psf-k%i.png' % K)
 
+
+if __name__ == '__main__':
+	wise_psf_plots()
+	sys.exit(0)
 
 	wisemap()
 	sys.exit(0)
