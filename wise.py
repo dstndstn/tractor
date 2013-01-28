@@ -749,8 +749,9 @@ def wisemap():
 	from astrometry.util.util import Sip, anwcs, fits_use_error_system
 	from astrometry.blind.plotstuff import *
 	from astrometry.libkd.spherematch import match_radec
+	from astrometry.util.fits import *
 
-	fits_use_error_system()
+	#fits_use_error_system()
 
 	basedir = '/project/projectdirs/bigboss'
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
@@ -850,18 +851,64 @@ def wisemap():
 	
 
 if __name__ == '__main__':
+	import pylab as plt
+	# Plot Aaron's PSF models
+	for i in range(1,5):
+		P=pyfits.open('psf%i.fits' % i)[0].data
+		print P.min(), P.max()
+		P/=P.max()
+		plt.clf()
+		plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
+		plt.colorbar()
+		plt.savefig('/tmp/%i.png' % i)
+
+	from tractor.emfit import em_fit_2d
+	from tractor.fitpsf import em_init_params
+
+	psf = pyfits.open('psf%i.fits' % 1)[0].data
+	S = psf.shape[0]
+	# number of Gaussian components
+	for K in range(1,6):
+		w,mu,sig = em_init_params(K, None, None, None)
+		II = psf.copy()
+		II /= II.sum()
+		II = np.maximum(II, 0)
+		xm,ym = -(S/2), -(S/2)
+		res = em_fit_2d(II, xm, ym, w, mu, sig)
+		print 'em_fit_2d result:', res
+		if res != 0:
+			raise RuntimeError('Failed to fit PSF')
+		print 'w,mu,sig', w,mu,sig
+		mypsf = GaussianMixturePSF(w, mu, sig)
+		mypsf.computeRadius()
+
+		#
+		mypsf.radius = S/2
+		mod = mypsf.getPointSourcePatch(0., 0.)
+		mod = mod.patch
+		mod /= mod.sum()
+
+		plt.clf()
+		plt.subplot(1,2,1)
+		ima = dict(interpolation='nearest', origin='lower', vmax=0.01 + np.log10(II.max()))
+		plt.imshow(np.log10(np.maximum(II, 1e-8)), **ima)
+		plt.subplot(1,2,2)
+		plt.imshow(np.log10(np.maximum(mod, 1e-8)), **ima)
+		plt.savefig('psf-k%i.png' % K)
+
+
+	wisemap()
+	sys.exit(0)
+
+	forcedphot()
+	sys.exit(0)
+
 	from astrometry.util.fits import *
 	from astrometry.util.plotutils import *
 	from astrometry.libkd.spherematch import *
 	import pylab as plt
 	import sys
 
-	wisemap()
-	sys.exit(0)
-	
-	forcedphot()
-	sys.exit(0)
-	
 	T1 = fits_table('cs82data/cas-primary-DR8.fits')
 	print len(T1), 'SDSS'
 	print '	 RA', T1.ra.min(), T1.ra.max()
