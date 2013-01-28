@@ -53,7 +53,7 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi'], mags=['i'],
         plt.title(im.name + ': chi')
         plt.savefig(prefix + 'chi.png')
 
-def get_cfht_catalog(mags=['i'], maglim = 27.):
+def get_cfht_catalog(mags=['i'], maglim = 27., returnTable=False):
     from astrometry.util.pyfits_utils import fits_table
     from tractor import Mags, RaDecPos, PointSource, Images, Catalog
     from tractor.sdss_galaxy import DevGalaxy, ExpGalaxy, CompositeGalaxy, GalaxyShape
@@ -68,16 +68,19 @@ def get_cfht_catalog(mags=['i'], maglim = 27.):
     print 'Cut to', len(T), 'objects in ROI.'
     
     srcs = Catalog()
-    for t in T:
+    keepi = []
+    for i,t in enumerate(T):
         if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
             #print 'PSF'
             themag = t.mag_psf
             m = Mags(order=mags, **dict([(k, themag) for k in mags]))
             srcs.append(PointSource(RaDecPos(t.ra, t.dec), m))
+            keepi.append(i)
             continue
         if t.mag_disk > maglim and t.mag_spheroid > maglim:
             #print 'Faint'
             continue
+        keepi.append(i)
         themag = t.mag_spheroid
         m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
         themag = t.mag_disk
@@ -100,4 +103,10 @@ def get_cfht_catalog(mags=['i'], maglim = 27.):
             continue
         # exp + deV
         srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+
+    if returnTable:
+        import numpy as np
+        T.cut(np.array(keepi))
+        return srcs, T
+
     return srcs

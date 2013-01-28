@@ -308,26 +308,84 @@ def main():
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	from astrometry.util.util import *
-
+	from astrometry.util.pyfits_utils import fits_table
+	from astrometry.libkd.spherematch import *
+	import numpy as np
 
 	#bandnums = [1,2,3,4]
 	bandnums = [1,]
 	bands = ['w%i' % n for n in bandnums]
 
-	srcs = get_cfht_catalog(mags=bands, maglim=25.)
+	(ra0,ra1, dec0,dec1) = radecroi
+
+	# cfht = fits_table('/project/projectdirs/bigboss/data/cs82/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
+	# print 'Read', len(cfht), 'sources'
+	# # Cut to ROI
+	# cfht.ra  = cfht.alpha_j2000
+	# cfht.dec = cfht.delta_j2000
+	# cfht.cut((cfht.ra > ra0) * (cfht.ra < ra1) * (cfht.dec > dec0) * (cfht.dec < dec1))
+	# print 'Cut to', len(cfht), 'objects in ROI.'
+	# cfht.cut((cfht.mag_psf < 25.))
+	# print 'Cut to', len(cfht), 'bright'
+	#srcs = get_cfht_catalog(mags=bands, maglim=25.)
+
+	srcs,T = get_cfht_catalog(mags=['i'] + bands, maglim=25., returnTable=True)
+	print 'Got', len(srcs), 'CFHT sources'
+
+
+	wise = fits_table('/project/projectdirs/bigboss/data/wise/catalogs/wisecat.fits')
+	print 'Read', len(wise), 'WISE sources'
+	#(ra0,ra1, dec0,dec1) = radecroi
+	wise.cut((wise.ra > ra0) * (wise.ra < ra1) * (wise.dec > dec0) * (wise.dec < dec1))
+	print 'Cut to', len(wise), 'objects in ROI.'
+
+	I,J,D = match_radec(T.ra, T.dec, wise.ra, wise.dec, 1./3600.)
+	print len(I), 'matches'
+	print len(np.unique(I)), 'unique CFHT sources in matches'
+	print len(np.unique(J)), 'unique WISE sources in matches'
+
+	for j in np.unique(J):
+		K = np.flatnonzero(J == j)
+		# UGH, just assign to the nearest
+		i = np.argmin(D[K])
+		K = K[i]
+		i = I[K]
+
+		for band in bands:
+			if isinstance(srcs[i], CompositeGalaxy):
+				mag = wise.get(band+'mag')[j]
+				half = mag + 0.75
+				setattr(srcs[i].brightnessExp, band, half)
+				setattr(srcs[i].brightnessDev, band, half)
+			else:
+				setattr(srcs[i].brightness, band, wise.get(band+'mag')[j])
+		print 'Plugged in WISE mags for source:', srcs[i]
+	
+	#### Cut to just sources that had a match to the WISE catalog
+	# ### uhh, why don't we just use the WISE catalog then?
+	# JJ,KK = np.unique(J, return_index=True)
+	# keep = Catalog()
+	# for i in I[KK]:
+	# keep.append(srcs[i])
+	# srcs = keep
+	# print 'Kept:'
+	# for src in srcs:
+	# print src
+	
 
 	ims = []
 
-	# basedir = '/project/projectdirs/bigboss/data/wise/level3'
-	# pat = '3342p000_ab41-w%i'
-	# for band in bandnums:
-	#	  base = pat % band
-	#	  basefn = os.path.join(basedir, base)
-	#	  im = read_wise_coadd(basefn, radecroi=radecroi, filtermap=filtermap)
-	#	  tr = tractor.Tractor(tractor.Images(im), srcs)
-	#	  make_plots('wise-%i-' % band, im, tr=tr)
-	# 
-	#	  ims.append(im)
+
+	basedir = '/project/projectdirs/bigboss/data/wise/level3'
+	pat = '3342p000_ab41-w%i'
+	for band in bandnums:
+		base = pat % band
+		basefn = os.path.join(basedir, base)
+		im = read_wise_coadd(basefn, radecroi=radecroi, filtermap=filtermap)
+		tr = tractor.Tractor(tractor.Images(im), srcs)
+		make_plots('wise-%i-' % band, im, tr=tr)
+		ims.append(im)
+
 
 	basedir = '/project/projectdirs/bigboss/data/wise/level1b'
 	pat = '04933b137-w%i'
@@ -338,6 +396,16 @@ def main():
 		tr = tractor.Tractor(tractor.Images(im), srcs)
 		make_plots('wise-%i-' % band, im, tr=tr)
 		ims.append(im)
+		im.freezeAllBut('psf', 'sky')
+		tr.freezeParam('catalog')
+
+		j = 1
+		while True:
+			dlnp,X,alpha = tr.optimize(damp=1.)
+			make_plots('wise-%i-psfsky-%i-' % (bandnum,j), im, tr=tr, plots=['model','chi'])
+			j += 1
+
+	sys.exit(0)
 
 	tr = tractor.Tractor(tractor.Images(*ims), srcs)
 
@@ -574,12 +642,12 @@ def forcedphot():
 											 
 		if hasdev:
 			re  = T1.get('devrad_%s' % refband)[i]
-			ab  = T1.get('devab_%s'  % refband)[i]
+			ab  = T1.get('devab_%s'	 % refband)[i]
 			phi = T1.get('devphi_%s' % refband)[i]
 			dshape = GalaxyShape(re, ab, phi)
 		if hasexp:
 			re  = T1.get('exprad_%s' % refband)[i]
-			ab  = T1.get('expab_%s'  % refband)[i]
+			ab  = T1.get('expab_%s'	 % refband)[i]
 			phi = T1.get('expphi_%s' % refband)[i]
 			eshape = GalaxyShape(re, ab, phi)
 
@@ -668,12 +736,12 @@ def forcedphot():
 					ps.savefig()
 
 			# for bit in range(32):
-			# 	plt.clf()
-			# 	plt.imshow(tim.maskplane & (1 << bit),
-			# 			   interpolation='nearest', origin='lower')
-			# 	plt.gray()
-			# 	plt.title('mask bit %i' % bit)
-			# 	ps.savefig()
+			#	plt.clf()
+			#	plt.imshow(tim.maskplane & (1 << bit),
+			#			   interpolation='nearest', origin='lower')
+			#	plt.gray()
+			#	plt.title('mask bit %i' % bit)
+			#	ps.savefig()
 
 def wisemap():
 	from bigboss_test import radecroi
@@ -704,13 +772,13 @@ if __name__ == '__main__':
 	
 	T1 = fits_table('cs82data/cas-primary-DR8.fits')
 	print len(T1), 'SDSS'
-	print '  RA', T1.ra.min(), T1.ra.max()
+	print '	 RA', T1.ra.min(), T1.ra.max()
 
 	cutfn = 'wise-cut.fits'
 	if not os.path.exists(cutfn):
 		T2 = fits_table('wise-27-tag.fits')
 		print len(T2), 'WISE'
-		print '  RA', T2.ra.min(), T2.ra.max()
+		print '	 RA', T2.ra.min(), T2.ra.max()
 		T2.cut((T2.ra  > T1.ra.min())  * (T2.ra < T1.ra.max()) *
 			   (T2.dec > T1.dec.min()) * (T2.dec < T1.dec.max()))
 		print 'Cut WISE to same RA,Dec region:', len(T2)
