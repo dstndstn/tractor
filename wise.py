@@ -860,7 +860,17 @@ if __name__ == '__main__':
 		plt.clf()
 		plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
 		plt.colorbar()
-		plt.savefig('/tmp/%i.png' % i)
+		plt.savefig('psf-w%i.png' % i)
+		
+	plt.clf()
+	for i,y in enumerate([0,500,1000]):
+		for j,x in enumerate([0,500,1000]):
+			P=pyfits.open('psf-1-%i-%i.fits' % (x,y))[0].data
+			P/=P.max()
+			plt.subplot(3, 3, 3*i+j+1)
+			plt.imshow(np.log10(np.maximum(P,1e-8)), interpolation='nearest', origin='lower', vmax=0.01)
+			#plt.colorbar()
+	plt.savefig('psf-w1-xy.png')
 
 	from tractor.emfit import em_fit_2d
 	from tractor.fitpsf import em_init_params
