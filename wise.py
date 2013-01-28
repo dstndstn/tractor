@@ -675,6 +675,19 @@ def forcedphot():
 			# 	plt.title('mask bit %i' % bit)
 			# 	ps.savefig()
 
+def wisemap():
+	from bigboss_test import radecroi
+
+	basedir = '/project/projectdirs/bigboss'
+	wisedatadir = os.path.join(basedir, 'wise', 'data')
+	catfn = os.path.join(wisedatadir, 'index-allsky-astr-L1b.fits')
+
+	T = fits_table(catfn)
+	print 'Read', len(T)
+	T.about()
+	print 'Header:',  T.header[0]
+	
+	
 
 if __name__ == '__main__':
 	from astrometry.util.fits import *
@@ -683,6 +696,9 @@ if __name__ == '__main__':
 	import pylab as plt
 	import sys
 
+	wisemap()
+	sys.exit(0)
+	
 	forcedphot()
 	sys.exit(0)
 	
