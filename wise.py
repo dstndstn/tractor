@@ -745,15 +745,141 @@ def forcedphot():
 
 def wisemap():
 	from bigboss_test import radecroi
+	from astrometry.util.util import Sip, anwcs
+	from astrometry.blind.plotstuff import *
+	from astrometry.libkd.spherematch import match_radec
 
 	basedir = '/project/projectdirs/bigboss'
-	wisedatadir = os.path.join(basedir, 'wise', 'data')
-	catfn = os.path.join(wisedatadir, 'index-allsky-astr-L1b.fits')
+	wisedatadir = os.path.join(basedir, 'data', 'wise')
 
-	T = fits_table(catfn)
-	print 'Read', len(T)
+	(ra0,ra1, dec0,dec1) = radecroi
+	ra = (ra0 + ra1) / 2.
+	dec = (dec0 + dec1) / 2.
+
+	width = 2.
+	plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
+	out = plot.outline
+	plot.color = 'white'
+	plot.alpha = 0.1
+	plot.apply_settings()
+
+	TT = []
+	#cra,cdec = [],[]
+	for part in range(1, 7):
+		fn = 'index-allsky-astr-L1b-part%i.fits' % part
+		catfn = os.path.join(wisedatadir, fn)
+		print 'Reading', catfn
+		T = fits_table(catfn)
+		print 'Read', len(T)
+		#T.about()
+
+		#I,J,d = match_radec(np.array([ra]), np.array([dec]), T.ra, T.dec, R)
+		I,J,d = match_radec(ra, dec, T.ra, T.dec, width)
+		print 'Found', len(I), 'RA,Dec matches'
+		if len(I) == 0:
+			del T
+			continue
+		T.cut(J)
+		print 'Scan/Frame:'
+		for s,f in zip(T.scan_id, T.frame_num):
+			print '  ', s, f
+		TT.append(T)
+
+		newhdr = []
+
+		for i in range(len(T)):
+			hdr = T.header[i]
+			#print 'hdr', hdr.dtype
+			#print hdr.shape
+			hdr = [str(s) for s in hdr]
+			hdr = (['SIMPLE  =                    T',
+				'BITPIX  =                    8',
+				'NAXIS   =                    0',
+				] + hdr +
+			       ['END'])
+			hdr = [x + (' ' * (80-len(x))) for x in hdr]
+			hdrstr = ''.join(hdr)
+			#print 'Header string:', hdrstr
+
+			#sip = Sip(hdrstr, len(hdrstr), 0)
+			#print 'Read SIP header:', sip
+
+			wcs = anwcs(hdrstr, -1, len(hdrstr))
+			#print 'Read anwcs:', wcs
+
+			newhdr.append(hdrstr)
+
+			#cr,cd = wcs.get_center()
+			#cra.append(cr)
+			#cdec.append(cd)
+
+			out.wcs = wcs
+			out.fill = False
+			plot.plot('outline')
+			out.fill = True
+			plot.plot('outline')
+
+		T.newhdr = np.array(newhdr)
+		#T.center_ra = np.array(cra)
+		#T.center_dec = np.array(cdec)
+
+		
+
+	plot.color = 'gray'
+	plot.alpha = 1.0
+	plot.plot_grid(1, 1, 2, 2)
+	plot.write('wisemap.png')
+
+	print 'Merged tables:'
+
+	T = TT[0].copy()
+	T.rename('header', 'hdrstr')
 	T.about()
-	print 'Header:',  T.header[0]
+	print 'Scan id:'
+	print type(T.scan_id)
+	print T.scan_id.dtype
+	print T.scan_id.shape
+
+	T.delete_column('hdrstr')
+	T.rename('newhdr', 'headerstr')
+
+	T.writeto('wise-roi-0.fits')
+
+	for T in TT:
+		T.delete_column('header')
+		T.rename('newhdr', 'headerstr')
+	
+	T = merge_tables(TT)
+	T.about()
+
+	print 'scan id:', T.scan_id
+
+	sid = np.array([np.sum([float(1 << (8*(6-i))) * ord(s[i]) for i in range(6)])
+			for s in T.scan_id])
+	I = np.lexsort((T.frame_num, sid))
+	T.cut(I)
+	T.writeto('wise-roi.fits')
+
+	print 'Scan/Frame:'
+	for s,f in zip(T.scan_id, T.frame_num):
+		print '  ', s, f
+
+	I,J,d = match_radec(ra, dec, T.ra, T.dec, width)
+	print 'Found', len(I), 'RA,Dec matches'
+	i = np.argmin(d)
+	i = J[i]
+	print 'ra,dec', ra,dec, 'closest', T.ra[i], T.dec[i]
+	hdrstr = T.headerstr[i]
+	wcs = anwcs(hdrstr, -1, len(hdrstr))
+	plot.color = 'blue'
+	plot.alpha = 0.2
+	plot.apply_settings()
+	out.wcs = wcs
+	out.fill = False
+	plot.plot('outline')
+	out.fill = True
+	plot.plot('outline')
+	plot.write('wisemap2.png')
 	
 	
 
