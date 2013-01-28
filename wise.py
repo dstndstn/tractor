@@ -8,6 +8,11 @@ import tractor
 import pyfits
 import pylab as plt
 import numpy as np
+import sys
+
+from astrometry.util.fits import *
+from astrometry.libkd.spherematch import match_radec
+from astrometry.util.util import Sip, anwcs
 
 from tractor import *
 from tractor.sdss_galaxy import *
@@ -43,8 +48,8 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	mask = P[0].data
 	print 'Read', mask.shape, 'mask'
 
-	#twcs = tractor.FitsWcs(intfn)
-	twcs = tractor.WcslibWcs(intfn)
+	twcs = tractor.FitsWcs(intfn)
+	#twcs = tractor.WcslibWcs(intfn)
 	print 'WCS', twcs
 
 	# HACK -- circular Gaussian PSF of fixed size...
@@ -751,12 +756,7 @@ def forcedphot():
 
 def wisemap():
 	from bigboss_test import radecroi
-	from astrometry.util.util import Sip, anwcs, fits_use_error_system
 	from astrometry.blind.plotstuff import *
-	from astrometry.libkd.spherematch import match_radec
-	from astrometry.util.fits import *
-
-	#fits_use_error_system()
 
 	basedir = '/project/projectdirs/bigboss'
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
@@ -820,10 +820,7 @@ def wisemap():
 
 	for i in range(len(T)):
 		hdrstr = T.headerstr[i]
-		hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
-		#print 'hdrstr:', type(hdrstr), len(hdrstr)
-		#print 'XXX%sXXX' % hdrstr
-		wcs = anwcs(hdrstr, -1, len(hdrstr))
+		wcs = getWcsFromHeaderString(hdrstr)
 		out.wcs = wcs
 		out.fill = False
 		plot.plot('outline')
@@ -907,21 +904,90 @@ def wise_psf_plots():
 		plt.savefig('psf-k%i.png' % K)
 
 
+def getWcsFromHeaderString(hdrstr):
+	hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
+	wcs = anwcs(hdrstr, -1, len(hdrstr))
+	return wcs
+
+def forced2():
+	from bigboss_test import radecroi
+
+	'''
+	select
+	  run, rerun, camcol, field, nChild, probPSF,
+	  psfFlux_u, psfFlux_g, psfFlux_r, psfFlux_i, psfFlux_z,
+	  deVRad_u, deVRad_g, deVRad_r, deVRad_i, deVRad_z,
+	  deVAB_u, deVAB_g, deVAB_r, deVAB_i, deVAB_z,
+	  deVPhi_u, deVPhi_g, deVPhi_r, deVPhi_i, deVPhi_z,
+	  deVFlux_u, deVFlux_g, deVFlux_r, deVFlux_i, deVFlux_z,
+	  expRad_u, expRad_g, expRad_r, expRad_i, expRad_z,
+	  expAB_u, expAB_g, expAB_r, expAB_i, expAB_z,
+	  expPhi_u, expPhi_g, expPhi_r, expPhi_i, expPhi_z,
+	  expFlux_u, expFlux_g, expFlux_r, expFlux_i, expFlux_z,
+	  fracDeV_u, fracDeV_g, fracDeV_r, fracDeV_i, fracDeV_z,
+	  flags_u, flags_g, flags_r, flags_i, flags_z,
+	  probPSF_u, probPSF_g, probPSF_r, probPSF_i, probPSF_z,
+	  ra, dec
+	  from PhotoPrimary
+	  where ra between 333.5 and 335.5 and dec between -0.5 and 1.5
+	    '''
+
+	''' -> 124k rows.  Distinct runs:
+	2585, 2728, 7712, 4203, 2583, 4192, 4207, 4184, 2662, 7717
+
+	Run  #sources
+	2583 663
+	2585 675
+	2662 4
+	2728 156
+	4184 762
+	4192 36135
+	4203 5
+	4207 44078
+	7712 12047
+	7717 29911
+	'''
+	
+
+	basedir = '/project/projectdirs/bigboss'
+	wisedatadir = os.path.join(basedir, 'data', 'wise')
+	l1bdir = os.path.join(wisedatadir, 'level1b')
+
+	(ra0,ra1, dec0,dec1) = radecroi
+	ra = (ra0 + ra1) / 2.
+	dec = (dec0 + dec1) / 2.
+
+	T = fits_table('wise-roi.fits')
+	for i in range(len(T)):
+		basefn = os.path.join(l1bdir, '%s%i-w1' % (T.scan_id[i], T.frame_num[i]))
+		fn = basefn + '-int-1b.fits'
+		print 'Looking for', fn
+		if not os.path.exists(fn):
+			continue
+		print '  -> Found it!'
+
+		tim = read_wise_image(basefn, nanomaggies=True)
+
+		wcs = tim.wcs.wcs
+		r0,r1,d0,d1 = wcs.radec_bounds()
+		print 'RA,Dec bounds:', r0,r1, d0,d1
+		
+
+
+
 if __name__ == '__main__':
-	wise_psf_plots()
+	forced2()
 	sys.exit(0)
 
+	wise_psf_plots()
 	wisemap()
-	sys.exit(0)
 
 	forcedphot()
-	sys.exit(0)
 
 	from astrometry.util.fits import *
 	from astrometry.util.plotutils import *
 	from astrometry.libkd.spherematch import *
 	import pylab as plt
-	import sys
 
 	T1 = fits_table('cs82data/cas-primary-DR8.fits')
 	print len(T1), 'SDSS'
