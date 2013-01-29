@@ -12,10 +12,12 @@ import sys
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
+from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.util import Sip, anwcs
 
 from tractor import *
+from tractor.sdss import *
 from tractor.sdss_galaxy import *
 
 from tractor.emfit import em_fit_2d
@@ -962,15 +964,24 @@ def forced2():
 		plothist(T.ra[I], T.dec[I], 200, range=rng)
 		plt.savefig('sdss2-%i.png' % run)
 	'''
-
-	basedir = '/project/projectdirs/bigboss'
+	ps = PlotSequence('forced')
+	
+	basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
 	l1bdir = os.path.join(wisedatadir, 'level1b')
+
+	wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
+	rng = ((333.5, 335.5), (-0.5, 1.5))
+	#plt.clf()
+	#plothist(wisecat.ra, wisecat.dec, 200, range=rng)
+	#plt.savefig('wisecat.png')
 
 	(ra0,ra1, dec0,dec1) = radecroi
 	ra = (ra0 + ra1) / 2.
 	dec = (dec0 + dec1) / 2.
 
+	cas = fits_table('sdss-cas-testarea.fits')
+	
 	T = fits_table('wise-roi.fits')
 	for i in range(len(T)):
 		basefn = os.path.join(l1bdir, '%s%i-w1' % (T.scan_id[i], T.frame_num[i]))
@@ -986,8 +997,72 @@ def forced2():
 		r0,r1,d0,d1 = wcs.radec_bounds()
 		print 'RA,Dec bounds:', r0,r1, d0,d1
 		
+		w,h = wcs.imagew, wcs.imageh
+		rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
+					   [(1,1), (w,1), (w,h), (1,h), (1,1)]])
 
+		I = np.flatnonzero((cas.ra > r0) * (cas.ra < r1) *
+						   (cas.dec > d0) * (cas.dec < d1))
+		J = point_in_poly(cas.ra[I], cas.dec[I], rd)
+		I = I[J]
+		cashere = cas[I]
 
+		wbands = ['w1']
+		sdssband = 'i'
+		tsrcs = get_tractor_sources_cas_dr9(cashere, nanomaggies=True,
+											bandname=sdssband, bands=[sdssband],
+											extrabands=wbands)
+		for src in tsrcs:
+		 	for br in src.getBrightnesses():
+				f = br.getBand(sdssband)
+				for wb in wbands:
+					br.setBand(wb, f)
+					#print 'to', br
+		# 		print 'from', br
+		# 		wband = 'w1'
+		# 		n = len(br.order)
+		# 		br.order.append(wband)
+		# 		br.addNamedParams(**{ wband: n })
+		# 		br.vals.append(br.getFlux('i'))
+		# 		br.liquid.append(True)
+		# 		print '  to', br
+				
+		print 'Created', len(tsrcs), 'tractor sources in this image'
+		# 10-20k sources...
+
+		I = np.flatnonzero((wisecat.ra > r0) * (wisecat.ra < r1) *
+						   (wisecat.dec > d0) * (wisecat.dec < d1))
+		J = point_in_poly(wisecat.ra[I], wisecat.dec[I], rd)
+		I = I[J]
+		print 'Found', len(I), 'WISE catalog sources in this image'
+
+		wc = wisecat[I]
+		I,J,d = match_radec(cashere.ra, cashere.dec, wc.ra, wc.dec, 1./3600.)
+		print 'Found', len(I), 'SDSS-WISE matches within 1 arcsec'
+
+		plt.clf()
+		plt.plot(rd[:,0], rd[:,1], 'k-')
+		plt.plot(cashere.ra, cashere.dec, 'r.', alpha=0.1)
+		plt.plot(wc.ra, wc.dec, 'bx', alpha=0.1)
+		setRadecAxes(r0,r1,d0,d1)
+		ps.savefig()
+
+		zlo,zhi = tim.zr
+		ima = dict(interpolation='nearest', origin='lower', vmin=zlo, vmax=zhi)
+
+		plt.clf()
+		plt.imshow(tim.getImage(), **ima)
+		ps.savefig()
+
+		tr = Tractor([tim], tsrcs)
+		print 'Rendering model image...'
+		mod = tr.getModelImage(0)
+
+		plt.clf()
+		plt.imshow(mod, **ima)
+		ps.savefig()
+		
+		
 
 if __name__ == '__main__':
 	forced2()

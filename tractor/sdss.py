@@ -152,29 +152,36 @@ class SdssPointSource(PointSource):
 		return patch * counts
 	
 
-
-# might want to override this to set the step size to ~ a pixel
-#class SdssRaDecPos(RaDecPos):
-#	def getStepSizes(self, img):
-#		return [1e-4, 1e-4]
-
 def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
-					  retrieve=True):
+					  retrieve=True, tryopen=False):
 	bandnum = band_index(bandname)
 	for filetype in filetypes:
-		#fn = sdss.getFilename(filetype, run, camcol, field, bandname)
 		fn = sdss.getPath(filetype, run, camcol, field, bandname)
 		print 'Looking for file', fn
-		if not os.path.exists(fn):
-			if retrieve:
-				print 'Retrieving', fn
-				res = sdss.retrieve(filetype, run, camcol, field, bandnum)
-				if res is False:
-					raise RuntimeError('No such file on SDSS DAS: %s, rcfb %i/%i/%i/%s' % (filetype, run, camcol, field, bandname))
-			else:
-				raise os.OSError('no such file: "%s"' % fn)
+		exists = os.path.exists(fn)
+		retrieveKwargs = {}
+		if tryopen:
+			# This doesn't catch *all* types of errors you can imagine...
+			try:
+				T = pyfits.open(fn)
+			except:
+				print 'Failed to open file', fn, 'as FITS file: maybe corrupt.'
+				exists = False
+				retrieveKwargs.update(skipExisting=False)
+				
+		if (not exists) and retrieve:
+			print 'Retrieving', fn
+			res = sdss.retrieve(filetype, run, camcol, field, bandnum,
+								**retrieveKwargs)
+			if res is False:
+				raise RuntimeError('No such file on SDSS DAS: %s, ' % filetype +
+								   'rcfb %i/%i/%i/%s' %
+								   (run, camcol, field, bandname))
+		elif not exists:
+			raise os.OSError('no such file: "%s"' % fn)
 
-def _getBrightness(counts, tsf, bands):
+		
+def _getBrightness(counts, tsf, bands, extrabands):
 	allcounts = counts
 	order = []
 	kwargs = {}
@@ -195,76 +202,156 @@ def _getBrightness(counts, tsf, bands):
 		kwargs[bandname] = mag
 		#print 'Band', bandname, 'counts', counts, 'mag', mag
 	#print 'creating mags:', kwargs
+	for b in extrabands:
+		order.append(b)
+		kwargs.update(b=BAG_MAG)
 	m = Mags(order=order, **kwargs)
 	#print 'created', m
 	return m
 
-def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
-						retrieve=True, curl=False, roi=None, bands=None):
-	'''
-	Creates tractor.Source objects corresponding to objects in the SDSS catalog
-	for the given field.
 
-	bandname: "canonical" band from which to get galaxy shapes, positions, etc
 
-	'''
-	if release != 'DR7':
-		raise RuntimeError('We only support DR7 currently')
-	# FIXME
-	rerun = 0
-
-	if bands is None:
-		bands = band_names()
+def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
+				 objs=None,
+				 retrieve=True, curl=False, roi=None, bands=None,
+				 badmag=25, nanomaggies=False,
+				 getobjs=False, getobjinds=False,
+				 extrabands=None):
+	#	brightPointSourceThreshold=0.):
 
 	if sdss is None:
-		sdss = DR7(curl=curl)
+		dr = dict(DR7=DR7, DR8=DR8, DR9=DR9)[release]
+		sdss = dr(curl=curl)
+	drnum = sdss.getDRNumber()
+	isdr7 = (drnum == 7)
+	
+	if bands is None:
+		bands = band_names()
 	bandnum = band_index(bandname)
-	_check_sdss_files(sdss, run, camcol, field, bandnum,
-					  ['tsObj', 'tsField'],
-					  #fpC', 'tsField', 'psField', 'fpM'],
-					  retrieve=retrieve)
 
-	tsf = sdss.readTsField(run, camcol, field, rerun)
+	bandnums = np.array([band_index(b) for b in bands])
+	bandnames = bands
 
-	objs = fits_table(sdss.getPath('tsObj', run, camcol, field,
-								   bandname, rerun=rerun))
-	objs.indices = np.arange(len(objs))
+	if extrabands is None:
+		extrabands = []
+	
+	if objs is None:
+		if isdr7:
+			# FIXME
+			rerun = 0
+			_check_sdss_files(sdss, run, camcol, field, bandnum,
+							  ['tsObj', 'tsField'],
+							  retrieve=retrieve, tryopen=True)
+			tsf = sdss.readTsField(run, camcol, field, rerun)
+			
+			objfn = sdss.getPath('tsObj', run, camcol, field,
+								 bandname, rerun=rerun)
+			objs.indices = np.arange(len(objs))
+		else:
+			_check_sdss_files(sdss, run, camcol, field, bandnum, ['photoObj'],
+							  tryOpen=True, retrieve=retrieve)
+			objfn = sdss.getPath('photoObj', run, camcol, field)
+			
+			objs = fits_table(objfn)
+			if objs is None:
+				print 'No sources in SDSS file', objfn
+				return []
 
+	objs.index = np.arange(len(objs))
+	if getobjs:
+		allobjs = objs.copy()
+		
 	if roi is not None:
 		x0,x1,y0,y1 = roi
-		# HACK -- keep only the sources whose centers are within the ROI box.
+		# FIXME -- keep only the sources whose centers are within the ROI box.
+		# Should do some ellipse-overlaps geometry.
 		x = objs.colc[:,bandnum]
 		y = objs.rowc[:,bandnum]
 		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
-		objs = objs[I]
+		objs.cut(I)
 
-	objs = objs[(objs.nchild == 0)]
+	# Only deblended children.
+	objs.cut(objs.nchild == 0)
 
-	# On further reflection, we believe tsObjs are in sky coords
-	# so this (below) is all kool.
-	# # NO IDEA why it is NOT necessary to get PA and adjust for it.
-	# # (probably that getTensor() has the phi transformation in the wrong
-	# # place, terrifying)
-	# # Since in DR7, tsObj files have phi_exp, phi_dev in image coordinates,
-	# # not sky coordinates.
-	# # Should have to Correct by finding the position angle of the field on
-	# # the sky.
-	# # cd = wcs.cdAtPixel(W/2, H/2)
-	# # pa = np.rad2deg(np.arctan2(cd[0,1], cd[0,0]))
-	# # print 'pa=', pa
-	# HACK -- DR7 phi opposite to Tractor phi, apparently
-	objs.phi_dev = -objs.phi_dev
-	objs.phi_exp = -objs.phi_exp
+	# No BRIGHT sources
+	bright = photo_flags1_map.get('BRIGHT')
+	objs.cut((objs.objc_flags & bright) == 0)
+
+	if isdr7:
+		objs.rename('phi_dev', 'phi_dev_deg')
+		objs.rename('phi_exp', 'phi_exp_deg')
+		objs.rename('r_dev', 'theta_dev')
+		objs.rename('r_exp', 'theta_exp')
+		
+	# SDSS and Tractor have different opinions on which way this rotation goes
+	objs.phi_dev_deg *= -1.
+	objs.phi_exp_deg *= -1.
 
 	# MAGIC -- minimum size of galaxy.
-	objs.r_dev = np.maximum(objs.r_dev, 1./30.)
-	objs.r_exp = np.maximum(objs.r_exp, 1./30.)
+	objs.theta_dev = np.maximum(objs.theta_dev, 1./30.)
+	objs.theta_exp = np.maximum(objs.theta_exp, 1./30.)
 
 	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
 	Lgal  = (objs.prob_psf[:,bandnum] == 0)
-	Ldev = Lgal * objs.fracpsf[:,bandnum]
-	Lexp = Lgal * (1. - objs.fracpsf[:,bandnum])
+	if isdr7:
+		fracdev = objs.fracpsf[:,bandnum]
+	else:
+		fracdev = objs.fracdev[:,bandnum]
+	Ldev = Lgal * fracdev
+	Lexp = Lgal * (1. - fracdev)
 
+	if isdr7:
+		if nanomaggies:
+			raise RuntimeError('Nanomaggies not supported for DR7 (yet)')
+		def lup2bright(lups):
+			counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+			counts = np.array(counts)
+			bright = _getBrightness(counts, tsf, bandnames, extrabands)
+			return bright
+		flux2bright = lup2bright
+		starflux = objs.psfcounts
+		compflux = objs.counts_model
+		devflux = objs.counts_dev
+		expflux = objs.counts_exp
+		def comp2bright(lups, Ldev, Lexp):
+			counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
+			counts = np.array(counts)
+			dcounts = counts * Ldev
+			ecounts = counts * Lexp
+			dbright = _getBrightness(dcounts, tsf, bands, extrabands)
+			ebright = _getBrightness(ecounts, tsf, bands, extrabands)
+			return dbright, ebright
+	else:
+		def nmgy2bright(flux):
+			flux = flux[bandnums]
+			bb = bandnames + extrabands
+			if nanomaggies:
+				if len(extrabands):
+					flux = np.append(flux, np.zeros(len(extrabands)))
+				bright = NanoMaggies(order=bb,
+									 **dict(zip(bb, flux)))
+			else:
+				I = (flux > 0)
+				mag = np.zeros_like(flux) + badmag
+				mag[I] = sdss.nmgy_to_mag(flux[I])
+				if len(extrabands):
+					mag = np.append(mag, np.zeros(len(extrabands)) + badmag)
+				bright = Mags(order=bb, **dict(zip(bb,mag)))
+			return bright
+		def comp2bright(flux, Ldev, Lexp):
+			dflux = flux * Ldev
+			eflux = flux * Lexp
+			dbright = nmgy2bright(dflux)
+			ebright = nmgy2bright(eflux)
+			return dbright, ebright
+		
+		flux2bright = nmgy2bright
+		starflux = objs.psfflux
+		compflux = objs.cmodelflux
+		devflux = objs.devflux
+		expflux = objs.expflux
+
+		
 	sources = []
 	ikeep = []
 
@@ -273,9 +360,13 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 	print len(I), 'stars'
 	for i in I:
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		lups = objs.psfcounts[i,:]
-		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
-		bright = _getBrightness(counts, tsf, bands)
+		flux = starflux[i,:]
+		bright = flux2bright(flux)
+		# This should work, I just don't feel like testing it now...
+		# if brightPointSourceThreshold:
+		# 	ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
+		# else:
+		# 	ps = PointSource(pos, bright)
 		ps = PointSource(pos, bright)
 		sources.append(ps)
 		ikeep.append(i)
@@ -290,201 +381,19 @@ def get_tractor_sources(run, camcol, field, bandname='r', sdss=None, release='DR
 		iscomp = (hasdev and hasexp)
 		pos = RaDecPos(objs.ra[i], objs.dec[i])
 		if iscomp:
-			lups = objs.counts_model[i,:]
+			flux = compflux[i,:]
 		elif hasdev:
-			lups = objs.counts_dev[i,:]
+			flux = devflux[i,:]
 		elif hasexp:
-			lups = objs.counts_exp[i,:]
+			flux = expflux[i,:]
 		else:
 			assert(False)
-		counts = [tsf.luptitude_to_counts(lup,j) for j,lup in enumerate(lups)]
-		counts = np.array(counts)
-		#print 'lups', lups
-		#print 'counts', counts
-											 
-		if hasdev:
-			dcounts = counts * Ldev[i]
-			#print 'dcounts', dcounts
-			dbright = _getBrightness(dcounts, tsf, bands)
-			#print 'dbright', dbright
-			re = objs.r_dev[i,bandnum]
-			ab = objs.ab_dev[i,bandnum]
-			phi = objs.phi_dev[i,bandnum]
-			dshape = GalaxyShape(re, ab, phi)
-		if hasexp:
-			ecounts = counts * Lexp[i]
-			#print 'ecounts', ecounts
-			ebright = _getBrightness(ecounts, tsf, bands)
-			#print 'ebright', ebright
-			re = objs.r_exp[i,bandnum]
-			ab = objs.ab_exp[i,bandnum]
-			phi = objs.phi_exp[i,bandnum]
-			eshape = GalaxyShape(re, ab, phi)
 
 		if iscomp:
-			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
-			ncomp += 1
-		elif hasdev:
-			gal = DevGalaxy(pos, dbright, dshape)
-			ndev += 1
-		elif hasexp:
-			gal = ExpGalaxy(pos, ebright, eshape)
-			nexp += 1
-		sources.append(gal)
-		ikeep.append(i)
-	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
-	print ncomp, 'composite galaxies'
-
-	# if you want to cut the objs list to just the ones for which sources were created...
-	ikeep = np.unique(ikeep)
-	objs = objs[ikeep]
-
-	return sources
-
-
-
-def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
-							retrieve=True, curl=False, roi=None, bands=None,
-							badmag=25, nanomaggies=False,
-							getobjs=False, getobjinds=False,
-							brightPointSourceThreshold=0.):
-							#brightPointSourceBand='r'):
-	'''
-	Creates tractor.Source objects corresponding to objects in the SDSS catalog
-	for the given field.
-
-	bandname: "canonical" band from which to get galaxy shapes, positions, etc
-
-	'''
-	if bands is None:
-		bands = band_names()
-	if sdss is None:
-		sdss = DR8(curl=curl)
-	bandnum = band_index(bandname)
-
-	bandnums = np.array([band_index(b) for b in bands])
-	bandnames = bands
-
-	fn = sdss.retrieve('photoObj', run, camcol, field)
-	try:
-		objs = fits_table(fn)
-	except:
-		# Try again in case we got a partially downloaded file
-		fn = sdss.retrieve('photoObj', run, camcol, field, skipExisting=False)
-		objs = fits_table(fn)
-	if getobjs:
-		allobjs = objs.copy()
-
-	if objs is None:
-		print 'No sources in photoObj file', fn
-		return []
-	objs.index = np.arange(len(objs))
-
-	if roi is not None:
-		x0,x1,y0,y1 = roi
-		# HACK -- keep only the sources whose centers are within the ROI box.
-		# Really we should take an object-specific margin.
-		x = objs.colc[:,bandnum]
-		y = objs.rowc[:,bandnum]
-		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
-		objs.cut(I)
-
-	# Only deblended children.
-	objs.cut(objs.nchild == 0)
-
-	# No BRIGHT sources
-	bright = photo_flags1_map.get('BRIGHT')
-	objs.cut((objs.objc_flags & bright) == 0)
-
-	# FIXME -- phi_offset ?
-
-	# DR8 and Tractor have different opinions on which way this rotation goes
-	objs.phi_dev_deg *= -1.
-	objs.phi_exp_deg *= -1.
-
-	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
-	Lgal  = (objs.prob_psf[:,bandnum] == 0)
-	Ldev = Lgal * objs.fracdev[:,bandnum]
-	Lexp = Lgal * (1. - objs.fracdev[:,bandnum])
-
-	sources = []
-	ikeep = []
-	obji = []
-
-	def lup2bright(lups, bandnames, bandnums, nanomaggies):
-		# -9999 -> badmag
-		I = (lups < -100)
-		l2 = np.array(lups)
-		l2[I] = badmag
-		mags = sdss.luptitude_to_mag(l2, bandnums)
-		if nanomaggies:
-			bright = NanoMaggies(order=bandnames, **dict(zip(bandnames,
-															 [NanoMaggies.magToNanomaggies(m) for m in mags])))
+			dbright,ebright = comp2bright(flux, Ldev[i], Lexp[i])
 		else:
-			bright = Mags(order=bandnames, **dict(zip(bandnames,mags)))
-		return bright
+			bright = nmgy2bright(flux)
 
-	def nmgy2bright(flux, bandnames, nanomaggies):
-		I = (flux > 0)
-		mag = np.zeros_like(flux) + badmag
-		mag[I] = sdss.nmgy_to_mag(flux[I])
-		if nanomaggies:
-			bright = NanoMaggies(order=bandnames, **dict(zip(bandnames,
-															 [NanoMaggies.magToNanomaggies(m) for m in mag])))
-		else:
-			bright = Mags(order=bandnames, **dict(zip(bandnames,mag)))
-		return bright
-	
-	# Add stars
-	I = np.flatnonzero(Lstar > 0)
-	print len(I), 'stars'
-
-	#bband = band_index(brightPointSourceBand)
-
-	for i in I:
-		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		bright = lup2bright(objs.psfmag[i, bandnums], bandnames, bandnums, nanomaggies)
-		#mag = objs.psfmag[i, bband]
-		#if mag < brightPointSourceThreshold:
-		#	ps = BrightPointSource(pos, bright)
-		#else:
-
-		if brightPointSourceThreshold:
-			ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
-		else:
-			ps = PointSource(pos, bright)
-
-		#ps.objindex = objs.index[i]
-		obji.append(objs.index[i])
-		sources.append(ps)
-		ikeep.append(i)
-
-	# Add galaxies.
-	I = np.flatnonzero(Lgal > 0)
-	print len(I), 'galaxies'
-	ndev, nexp, ncomp = 0, 0, 0
-	for i in I:
-		hasdev = (Ldev[i] > 0)
-		hasexp = (Lexp[i] > 0)
-		iscomp = (hasdev and hasexp)
-		pos = RaDecPos(objs.ra[i], objs.dec[i])
-		if iscomp:
-			flux = objs.cmodelflux[i,bandnums]
-			dflux = flux * Ldev[i]
-			dbright = nmgy2bright(dflux, bandnames, nanomaggies)
-			eflux = flux * Lexp[i]
-			ebright = nmgy2bright(eflux, bandnames, nanomaggies)
-		elif hasdev:
-			flux = objs.devflux[i,bandnums]
-			dbright = nmgy2bright(flux, bandnames, nanomaggies)
-			#print 'De galaxy: flux', flux, 'bright', dbright
-		elif hasexp:
-			flux = objs.expflux[i,bandnums]
-			ebright = nmgy2bright(flux, bandnames, nanomaggies)
-			#print 'Exp galaxy: flux', flux, 'bright', ebright
-		else:
-			assert(False)
-											 
 		if hasdev:
 			re  = objs.theta_dev  [i,bandnum]
 			ab  = objs.ab_dev     [i,bandnum]
@@ -500,18 +409,18 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
 			ncomp += 1
 		elif hasdev:
-			gal = DevGalaxy(pos, dbright, dshape)
+			gal = DevGalaxy(pos, bright, dshape)
 			ndev += 1
 		elif hasexp:
-			gal = ExpGalaxy(pos, ebright, eshape)
+			gal = ExpGalaxy(pos, bright, eshape)
 			nexp += 1
-		obji.append(objs.index[i])
 		sources.append(gal)
 		ikeep.append(i)
 	print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
 	print ncomp, 'composite galaxies'
 
-	# if you want to cut the objs list to just the ones for which sources were created...
+	# if you want to cut the objs list to just the ones
+	# for which sources were created...
 	ikeep = np.unique(ikeep)
 	if len(ikeep):
 		objs.cut(ikeep)
@@ -529,9 +438,109 @@ def get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
 	return rtn
 
 
+def get_tractor_sources_dr7(*args, **kwargs):
+	'''
+	get_tractor_sources_dr7(run, camcol, field, bandname='r',
+	                        sdss=None, release='DR7',
+							retrieve=True, curl=False, roi=None, bands=None)
+
+	Creates tractor.Source objects corresponding to objects in the SDSS catalog
+	for the given field.
+
+	bandname: "canonical" band from which to get galaxy shapes, positions, etc
+	'''
+	kwargs.update(release='DR7')
+	return _get_sources(*args, **kwargs)
 
 
+# Backward-compatibility
+get_tractor_sources = get_tractor_sources_dr7
+
+
+def get_tractor_sources_dr8(*args, **kwargs):
+	#brightPointSourceThreshold=0.):
+	#brightPointSourceBand='r'):
+	'''
+	get_tractor_sources_dr8(run, camcol, field, bandname='r', sdss=None,
+							retrieve=True, curl=False, roi=None, bands=None,
+							badmag=25, nanomaggies=False,
+							getobjs=False, getobjinds=False)
+
+	Creates tractor.Source objects corresponding to objects in the SDSS catalog
+	for the given field.
+
+	bandname: "canonical" band from which to get galaxy shapes, positions, etc
+
+	'''
+	kwargs.update(release='DR8')
+	return _get_sources(*args, **kwargs)
+
+def get_tractor_sources_dr9(*args, **kwargs):
+	kwargs.update(release='DR9')
+	return _get_sources(*args, **kwargs)
+
+
+def get_tractor_sources_cas_dr9(table, bandname='r', bands=None,
+								extrabands=None,
+								nanomaggies=False):
+	'''
+	table: filename or astrometry.util.fits.fits_table() object
+	'''
+	if isinstance(table, basestring):
+		cas = fits_table(table)
+	else:
+		cas = table
+
+	# Make it look like a "photoObj" file.
+	cols = cas.get_columns()
+	N = len(cas)
+
+	T = tabledata()
+	T.ra = cas.ra
+	T.dec = cas.dec
 	
+	# nchild
+	if not 'nchild' in cols:
+		T.nchild = np.zeros(N,int)
+	else:
+		T.nchild = cas.nchild
+	# rowc,colc -- shouldn't be necessary...
+	if not 'objc_flags' in cols:
+		T.objc_flags = np.zeros(N,int)
+	else:
+		T.objc_flags = cas.objc_flags
+
+	allbands = band_names()
+	nbands = len(allbands)
+
+	colmap = [('phi_dev_deg', 'devphi'),
+			  ('phi_exp_deg', 'expphi'),
+			  ('theta_dev',   'devrad'),
+			  ('theta_exp',   'exprad'),
+			  ('ab_dev',      'devab'),
+			  ('ab_exp',      'expab'),
+			  ('psfflux',     'psfflux'),
+			  ('cmodelflux',  'cmodelflux'),
+			  ('devflux',     'devflux'),
+			  ('expflux',     'expflux'),
+			  ('fracdev',     'fracdev'),
+			  ('prob_psf',     'probpsf'),
+			]
+
+	for c1,c2 in colmap:
+		T.set(c1, np.zeros((N, nbands)))
+
+	for bi,b in enumerate(allbands):
+		for c1,c2 in colmap:
+			cname = '%s_%s' % (c2, b)
+			if cname in cols:
+				T.get(c1)[:,bi] = cas.get(cname)
+
+	return _get_sources(-1, -1, -1, release='DR9', objs=T, sdss=DR9(),
+						bandname=bandname, bands=bands, nanomaggies=nanomaggies,
+						extrabands=extrabands)
+
+
 def get_tractor_image(run, camcol, field, bandname, 
 					  sdssobj=None, release='DR7',
 					  retrieve=True, curl=False, roi=None,
@@ -973,12 +982,6 @@ def get_tractor_image_dr9(*args, **kwargs):
 	#print 'Calling get_tractor_image_dr8 with sdss=', sdss
 	return get_tractor_image_dr8(*args, **kwargs)
 
-def get_tractor_sources_dr9(*args, **kwargs):
-	sdss = kwargs.get('sdss', None)
-	if sdss is None:
-		curl = kwargs.pop('curl', False)
-		kwargs['sdss'] = DR9(curl=curl)
-	return get_tractor_sources_dr8(*args, **kwargs)
 
 class SdssNanomaggiesPhotoCal(BaseParams):
 	def __init__(self, bandname):
