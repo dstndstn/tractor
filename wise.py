@@ -981,6 +981,27 @@ def forced2():
 	dec = (dec0 + dec1) / 2.
 
 	cas = fits_table('sdss-cas-testarea.fits')
+
+	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+	S = psf.shape[0]
+	# number of Gaussian components
+	K = 3
+	w,mu,sig = em_init_params(K, None, None, None)
+	II = psf.copy()
+	II = np.maximum(II, 0)
+	II /= II.sum()
+	xm,ym = -(S/2), -(S/2)
+	res = em_fit_2d(II, xm, ym, w, mu, sig)
+	if res != 0:
+		raise RuntimeError('Failed to fit PSF')
+	print 'W1 PSF:'
+	print '  w', w
+	print '  mu', mu
+	print '  sigma', sig
+	w1psf = GaussianMixturePSF(w, mu, sig)
+	w1psf.computeRadius()
+
+	print 'PSF radius:', w1psf.getRadius(), 'pixels'
 	
 	T = fits_table('wise-roi.fits')
 	for i in range(len(T)):
@@ -992,7 +1013,8 @@ def forced2():
 		print '  -> Found it!'
 
 		tim = read_wise_image(basefn, nanomaggies=True)
-
+		tim.psf = w1psf
+		
 		wcs = tim.wcs.wcs
 		r0,r1,d0,d1 = wcs.radec_bounds()
 		print 'RA,Dec bounds:', r0,r1, d0,d1
@@ -1006,29 +1028,25 @@ def forced2():
 		J = point_in_poly(cas.ra[I], cas.dec[I], rd)
 		I = I[J]
 		cashere = cas[I]
+		# 10-20k sources...
 
 		wbands = ['w1']
 		sdssband = 'i'
 		tsrcs = get_tractor_sources_cas_dr9(cashere, nanomaggies=True,
 											bandname=sdssband, bands=[sdssband],
 											extrabands=wbands)
+		#keepsrcs = []
 		for src in tsrcs:
 		 	for br in src.getBrightnesses():
 				f = br.getBand(sdssband)
+				#if f < 0:
+				#	continue
 				for wb in wbands:
 					br.setBand(wb, f)
-					#print 'to', br
-		# 		print 'from', br
-		# 		wband = 'w1'
-		# 		n = len(br.order)
-		# 		br.order.append(wband)
-		# 		br.addNamedParams(**{ wband: n })
-		# 		br.vals.append(br.getFlux('i'))
-		# 		br.liquid.append(True)
-		# 		print '  to', br
+				#keepsrcs.append(src)
+		#tsrcs = keepsrcs
 				
 		print 'Created', len(tsrcs), 'tractor sources in this image'
-		# 10-20k sources...
 
 		I = np.flatnonzero((wisecat.ra > r0) * (wisecat.ra < r1) *
 						   (wisecat.dec > d0) * (wisecat.dec < d1))
@@ -1037,9 +1055,41 @@ def forced2():
 		print 'Found', len(I), 'WISE catalog sources in this image'
 
 		wc = wisecat[I]
-		I,J,d = match_radec(cashere.ra, cashere.dec, wc.ra, wc.dec, 1./3600.)
-		print 'Found', len(I), 'SDSS-WISE matches within 1 arcsec'
+		tra  = np.array([src.getPosition().ra  for src in tsrcs])
+		tdec = np.array([src.getPosition().dec for src in tsrcs])
 
+		R = 2.
+		I,J,d = match_radec(wc.ra, wc.dec, tra, tdec,
+							R/3600., nearest=True)
+		# cashere.ra, cashere.dec, 
+		print 'Found', len(I), 'SDSS-WISE matches within', R, 'arcsec'
+
+		for i,j in zip(I,J):
+			w1 = wc.w1mpro[i]
+			w1 = NanoMaggies.magToNanomaggies(w1)
+			bb = tsrcs[j].getBrightnesses()
+			for b in bb:
+				b.setBand('w1', w1 / float(len(bb)))
+
+		keepsrcs = []
+		for src in tsrcs:
+			#for b in src.getBrightness():
+			b = src.getBrightness()
+			if b.getBand(sdssband) > 0 or b.getBand(wbands[0]) > 0:
+				keepsrcs.append(src)
+		tsrcs = keepsrcs
+		print 'Keeping', len(tsrcs), 'tractor sources from SDSS'
+
+		unmatched = np.ones(len(wc), bool)
+		unmatched[I] = False
+		wun = wc[unmatched]
+		print len(wun), 'unmatched WISE sources'
+		for i in range(len(wun)):
+			pos = RaDecPos(wun.ra[i], wun.dec[i])
+			nm = NanoMaggies.magToNanomaggies(wun.w1mpro[i])
+			br = NanoMaggies(i=25., w1=nm)
+			tsrcs.append(PointSource(pos, br))
+		
 		plt.clf()
 		plt.plot(rd[:,0], rd[:,1], 'k-')
 		plt.plot(cashere.ra, cashere.dec, 'r.', alpha=0.1)
