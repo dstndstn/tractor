@@ -11,6 +11,7 @@ import numpy as np
 import sys
 
 from astrometry.util.fits import *
+from astrometry.util.plotutils import *
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.util import Sip, anwcs
 
@@ -947,7 +948,20 @@ def forced2():
 	7712 12047
 	7717 29911
 	'''
-	
+
+	''' Check it out: spatial source density looks fine.  No overlap between runs.
+	T = fits_table('sdss-cas-testarea.fits')
+	rng = ((333.5, 335.5), (-0.5, 1.5))
+	plt.clf()
+	plothist(T.ra, T.dec, 200, range=rng)
+	plt.savefig('sdss1.png')
+
+	for run in np.unique(T.run):
+		I = (T.run == run)
+		plt.clf()
+		plothist(T.ra[I], T.dec[I], 200, range=rng)
+		plt.savefig('sdss2-%i.png' % run)
+	'''
 
 	basedir = '/project/projectdirs/bigboss'
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
@@ -985,7 +999,6 @@ if __name__ == '__main__':
 	forcedphot()
 
 	from astrometry.util.fits import *
-	from astrometry.util.plotutils import *
 	from astrometry.libkd.spherematch import *
 	import pylab as plt
 
