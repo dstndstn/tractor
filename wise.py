@@ -1110,6 +1110,26 @@ def forced2():
 
 		plt.clf()
 		plt.imshow(mod, **ima)
+		plt.title(tim.name + ': SDSS + WISE sources')
+		ps.savefig()
+
+		print 'tim', tim
+		print 'tim.photocal:', tim.photocal
+		
+		wsrcs = []
+		for i in range(len(wc)):
+			pos = RaDecPos(wc.ra[i], wc.dec[i])
+			nm = NanoMaggies.magToNanomaggies(wc.w1mpro[i])
+			br = NanoMaggies(i=25., w1=nm)
+			wsrcs.append(PointSource(pos, br))
+
+		tr = Tractor([tim], wsrcs)
+		print 'Rendering WISE model image...'
+		wmod = tr.getModelImage(0)
+
+		plt.clf()
+		plt.imshow(wmod, **ima)
+		plt.title(tim.name + ': WISE sources only')
 		ps.savefig()
 		
 		
