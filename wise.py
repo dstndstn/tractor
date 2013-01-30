@@ -9,12 +9,13 @@ import pyfits
 import pylab as plt
 import numpy as np
 import sys
+from glob import glob
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec
-from astrometry.util.util import Sip, anwcs
+from astrometry.util.util import Sip, anwcs, Tan
 
 from tractor import *
 from tractor.sdss import *
@@ -953,10 +954,6 @@ def forced2():
 
 	''' Check it out: spatial source density looks fine.  No overlap between runs.
 	T = fits_table('sdss-cas-testarea.fits')
-	rng = ((333.5, 335.5), (-0.5, 1.5))
-	plt.clf()
-	plothist(T.ra, T.dec, 200, range=rng)
-	plt.savefig('sdss1.png')
 
 	for run in np.unique(T.run):
 		I = (T.run == run)
@@ -970,8 +967,9 @@ def forced2():
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
 	l1bdir = os.path.join(wisedatadir, 'level1b')
 
-	wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
 	rng = ((333.5, 335.5), (-0.5, 1.5))
+
+	wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
 	#plt.clf()
 	#plothist(wisecat.ra, wisecat.dec, 200, range=rng)
 	#plt.savefig('wisecat.png')
@@ -982,6 +980,264 @@ def forced2():
 
 	cas = fits_table('sdss-cas-testarea.fits')
 
+	# Check out WISE / SDSS matches.
+	wise = wisecat
+	sdss = cas
+	print len(sdss), 'SDSS sources'
+	print len(wise), 'WISE sources'
+	R = 10.
+	I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
+						R/3600., nearest=True)
+	print len(I), 'matches'
+
+	print 'max dist:', d.max()
+
+	plt.clf()
+	plt.hist(d * 3600., 100, range=(0,R), log=True)
+	plt.xlabel('Match distance (arcsec)')
+	plt.ylabel('Number of matches')
+	plt.title('SDSS-WISE astrometric matches')
+	ps.savefig()
+	
+	plt.clf()
+	loghist((wise.ra[I] - sdss.ra[J])*3600., (wise.dec[I] - sdss.dec[J])*3600.,
+			200, range=((-R,R),(-R,R)))
+	plt.title('SDSS-WISE astrometric matches')
+	plt.xlabel('dRA (arcsec)')
+	plt.ylabel('dDec (arcsec)')
+	ps.savefig()
+
+	R = 4.
+
+	I,J,d = match_radec(wise.ra, wise.dec, sdss.ra, sdss.dec,
+						R/3600., nearest=True)
+	print len(I), 'matches'
+
+	unmatched = np.ones(len(wise), bool)
+	unmatched[I] = False
+	wun = wise[unmatched]
+
+	plt.clf()
+	plothist(sdss.ra, sdss.dec, 200, range=rng)
+	plt.title('SDSS source density')
+	ps.savefig()
+
+	plt.clf()
+	plothist(wise.ra, wise.dec, 200, range=rng)
+	plt.title('WISE source density')
+	ps.savefig()
+
+	plt.clf()
+	#plt.plot(wun.ra, wun.dec, 'r.')
+	#plt.axis(rng[0] + rng[1])
+	plothist(wun.ra, wun.dec, 200, range=rng)
+	plt.title('Unmatched WISE sources')
+	ps.savefig()
+
+	for band in 'ugriz':
+		sdss.set('psfmag_'+band,
+				 NanoMaggies.nanomaggiesToMag(sdss.get('psfflux_'+band)))
+	
+	# plt.clf()
+	# loghist(wise.w1mpro[I], sdss.psfmag_r[J], 200)
+	# plt.xlabel('WISE w1mpro')
+	# plt.ylabel('SDSS psfflux_r')
+	# ps.savefig()
+	
+	for band in 'riz':
+		ax = [0, 10, 25, 5]
+		plt.clf()
+		mag = sdss.get('psfmag_'+band)[J]
+		loghist(mag - wise.w1mpro[I], mag, 200,
+				range=((ax[0],ax[1]),(ax[3],ax[2])))
+		plt.xlabel('SDSS %s - WISE w1' % band)
+		plt.ylabel('SDSS '+band)
+		plt.axis(ax)
+		ps.savefig()
+
+	for w,t in [(wise[I], 'Matched'), (wun, 'Unmatched')]:
+		plt.clf()
+		w1 = w.get('w1mpro')
+		w2 = w.get('w2mpro')
+		ax = [-1, 3, 18, 6]
+		loghist(w1-w2, w1, 200,
+				range=((ax[0],ax[1]),(ax[3],ax[2])))
+		plt.xlabel('W1 - W2')
+		plt.ylabel('W1')
+		plt.title('WISE CMD for %s sources' % t)
+		plt.axis(ax)
+		ps.savefig()
+
+	sdssobj = DR9()
+	fns = []
+	wcses = []
+	band = 'r'
+	RCF = np.unique(zip(sdss.run, sdss.camcol, sdss.field))
+	for r,c,f in RCF:
+		fn = sdssobj.retrieve('frame', r, c, f, band)
+		print 'got', fn
+		fns.append(fn)
+		wcs = Tan(fn, 0)
+		print 'got wcs', wcs
+		wcses.append(wcs)
+
+	wisefns = glob(os.path.join(wisedatadir, 'level3', '*w1-int-3.fits'))
+	wisewcs = []
+	for fn in wisefns:
+		print 'Reading', fn
+		wcs = anwcs(fn, 0)
+		print 'Got', wcs
+		wisewcs.append(wcs)
+		
+	I = np.argsort(wun.w1mpro)
+	wun.cut(I)
+	for i in range(len(wun)):
+		ra,dec = wun.ra[i], wun.dec[i]
+		insdss = -1
+		for j,wcs in enumerate(wcses):
+			if wcs.is_inside(ra,dec):
+				insdss = j
+				break
+		inwise = -1
+		for j,wcs in enumerate(wisewcs):
+			if wcs.is_inside(ra,dec):
+				inwise = j
+				break
+		N = 0
+		if insdss != -1:
+			N += 1
+		if inwise != -1:
+			N += 1
+		if N == 0:
+			continue
+
+		if N != 2:
+			continue
+		
+		plt.clf()
+		ss = 1
+		plt.subplot(2, N, ss)
+		ss += 1
+		M = 0.02
+		I = np.flatnonzero((sdss.ra  > (ra  - M)) * (sdss.ra  < (ra  + M)) *
+						   (sdss.dec > (dec - M)) * (sdss.dec < (dec + M)))
+		sdssnear = sdss[I]
+		plt.plot(sdss.ra[I], sdss.dec[I], 'b.', alpha=0.7)
+		I = np.flatnonzero((wise.ra  > (ra  - M)) * (wise.ra  < (ra  + M)) *
+						   (wise.dec > (dec - M)) * (wise.dec < (dec + M)))
+		wisenear = wise[I]
+		plt.plot(wise.ra[I], wise.dec[I], 'rx', alpha=0.7)
+		if insdss:
+			wcs = wcses[j]
+			w,h = wcs.imagew, wcs.imageh
+			rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
+						   [(1,1), (w,1), (w,h), (1,h), (1,1)]])
+			plt.plot(rd[:,0], rd[:,1], 'b-', alpha=0.5)
+		if inwise:
+			wcs = wisewcs[j]
+			w,h = wcs.imagew, wcs.imageh
+			rd = np.array([wcs.pixelxy2radec(x,y) for x,y in
+						   [(1,1), (w,1), (w,h), (1,h), (1,1)]])
+			plt.plot(rd[:,0], rd[:,1], 'r-', alpha=0.5)
+		plt.plot([ra], [dec], 'o', mec='k', mfc='none', mew=3, ms=20, alpha=0.5)
+		#plt.axis([ra+M, ra-M, dec-M, dec+M])
+		plt.axis([ra-M, ra+M, dec-M, dec+M])
+		plt.xticks([ra], ['RA = %0.3f' % ra])
+		plt.yticks([dec], ['Dec = %0.3f' % dec])
+
+		SW = 20
+		
+		ss = N+1
+		plt.subplot(2, N, ss)
+		if insdss != -1:
+			ss += 1
+			j = insdss
+			wcs = wcses[j]
+			x,y = wcs.radec2pixelxy(ra,dec)
+			r,c,f = RCF[j]
+			frame = sdssobj.readFrame(r,c,f, band)
+			#S = 50
+			S = SW * 3.472
+			im = frame.image
+			H,W = im.shape
+			y0,x0 = max(0, y-S), max(0, x-S)
+			y1,x1 = min(H, y+S), min(W, x+S)
+			subim = im[y0:y1, x0:x1]
+
+			#plt.imshow(subim, interpolation='nearest', origin='lower',
+			#		   vmax=0.3, extent=[x0,x1,y0,y1])
+			plt.imshow(subim.T, interpolation='nearest', origin='lower',
+					   vmax=0.3, extent=[y0,y1,x0,x1])
+			#vmax=subim.max()*1.01)
+			ax = plt.axis()
+			x,y = wcs.radec2pixelxy(sdssnear.ra, sdssnear.dec)
+			#plt.plot(x, y, 'o', mec='b', mfc='none', ms=15)
+			plt.plot(y, x, 'o', mec='b', mfc='none', ms=15)
+
+			x,y = wcs.radec2pixelxy(wisenear.ra, wisenear.dec)
+			#plt.plot(x, y, 'rx', ms=10)
+			plt.plot(y, x, 'rx', ms=10)
+
+			# Which way up?
+			x,y = wcs.radec2pixelxy(np.array([ra, ra]), np.array([0.5,2.0]) * S * 0.396/3600. + dec)
+			#plt.plot(x, y, 'b-', alpha=0.5, lw=2)
+			plt.plot(y, x, 'b-', alpha=0.5, lw=2)
+			plt.axis(ax)
+			plt.gray()
+			plt.title('SDSS %s (%i/%i/%i)' % (band, r,c,f))
+
+		if inwise != -1:
+			plt.subplot(2, N, ss)
+			ss += 1
+			j = inwise
+			wcs = wisewcs[j]
+			ok,x,y = wcs.radec2pixelxy(ra,dec)
+			im = pyfits.open(wisefns[j])[0].data
+			S = SW
+			H,W = im.shape
+			y0,x0 = max(0, y-S), max(0, x-S)
+			subim = im[y0 : min(H, y+S), x0 : min(W, x+S)]
+
+			plt.imshow(subim, interpolation='nearest', origin='lower',
+					   vmax=subim.max()*1.01)
+			ax = plt.axis()
+			x,y = [],[]
+			for r,d in zip(wisenear.ra, wisenear.dec):
+				ok,xi,yi = wcs.radec2pixelxy(r,d)
+				x.append(xi)
+				y.append(yi)
+			x = np.array(x)
+			y = np.array(y)
+			plt.plot(x-x0, y-y0, 'rx', ms=15)
+
+			x,y = [],[]
+			for r,d in zip(sdssnear.ra, sdssnear.dec):
+				ok,xi,yi = wcs.radec2pixelxy(r,d)
+				x.append(xi)
+				y.append(yi)
+			x = np.array(x)
+			y = np.array(y)
+			plt.plot(x-x0, y-y0, 'o', mec='b', mfc='none', ms=10)
+
+			# Which way up?
+			pixscale = 1.375 / 3600.
+			ok,x1,y1 = wcs.radec2pixelxy(ra, dec + 0.5 * S * pixscale)
+			ok,x2,y2 = wcs.radec2pixelxy(ra, dec + 2.0 * S * pixscale)
+			plt.plot([x1-x0,x2-x0], [y1-y0,y2-y0], 'r-', alpha=0.5, lw=2)
+
+			plt.axis([ax[1],ax[0],ax[2],ax[3]])
+			#plt.axis(ax)
+			plt.gray()
+			plt.title('WISE W1 (coadd)')
+
+		plt.suptitle('WISE unmatched source: w1=%.1f, RA,Dec = (%.3f, %.3f)' %
+					 (wun.w1mpro[i], ra, dec))
+			
+		ps.savefig()
+
+	return
+
+	
 	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
 	S = psf.shape[0]
 	# number of Gaussian components
