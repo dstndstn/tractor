@@ -17,6 +17,8 @@ from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.util import Sip, anwcs, Tan
 
+from astrometry.util.sdss_radec_to_rcf import *
+
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -975,6 +977,31 @@ def forced2():
 			    dbo.fResolveStatus('SURVEY_EDGE'))) != 0
 
         --> sdss-cas-testarea-2.fits
+
+	select
+	run, rerun, camcol, field, nChild, probPSF,
+	psfFlux_u, psfFlux_g, psfFlux_r, psfFlux_i, psfFlux_z,
+	deVRad_u, deVRad_g, deVRad_r, deVRad_i, deVRad_z,
+	deVAB_u, deVAB_g, deVAB_r, deVAB_i, deVAB_z,
+	deVPhi_u, deVPhi_g, deVPhi_r, deVPhi_i, deVPhi_z,
+	deVFlux_u, deVFlux_g, deVFlux_r, deVFlux_i, deVFlux_z,
+	expRad_u, expRad_g, expRad_r, expRad_i, expRad_z,
+	expAB_u, expAB_g, expAB_r, expAB_i, expAB_z,
+	expPhi_u, expPhi_g, expPhi_r, expPhi_i, expPhi_z,
+	expFlux_u, expFlux_g, expFlux_r, expFlux_i, expFlux_z,
+	fracDeV_u, fracDeV_g, fracDeV_r, fracDeV_i, fracDeV_z,
+	flags_u, flags_g, flags_r, flags_i, flags_z,
+	probPSF_u, probPSF_g, probPSF_r, probPSF_i, probPSF_z,
+	ra, dec, resolveStatus, score into mydb.wisetest from PhotoObjAll
+	where ra between 333.5 and 335.5 and dec between -0.5 and 1.5
+	and (resolveStatus & (
+        dbo.fResolveStatus('SURVEY_PRIMARY') |
+	dbo.fResolveStatus('SURVEY_BADFIELD') |
+	dbo.fResolveStatus('SURVEY_EDGE') |
+	dbo.fResolveStatus('SURVEY_BEST')
+	)) != 0
+	
+	--> sdss-cas-testarea-3.fits
 	'''
 
 	''' Check it out: spatial source density looks fine.  No overlap between runs.
@@ -984,50 +1011,99 @@ def forced2():
 
 	ps = PlotSequence('sdss')
 
-	T = fits_table('sdss-cas-testarea.fits')
-	plt.clf()
-	plothist(T.ra, T.dec, 200, range=rng)
-	plt.title('PhotoPrimary')
-	ps.savefig()
+	if False:
+		r,d = np.mean(rng[0]), np.mean(rng[1])
+	
+		RCF = radec_to_sdss_rcf(r, d, radius=2. * 60., tablefn='window_flist-DR9.fits')
+		print 'Found', len(RCF), 'fields in range'
+		for run,c,f,ra,dec in RCF:
+			print '  ',run,c,f, 'at', ra,dec
+	
+		from astrometry.blind.plotstuff import *
+		plot = Plotstuff(rdw=(r,d, 10), size=(1000,1000), outformat='png')
+		plot.color = 'white'
+		plot.alpha = 0.5
+		plot.apply_settings()
+		T = fits_table('window_flist-DR9.fits')
+		I,J,d = match_radec(T.ra, T.dec, r,d, 10)
+		T.cut(I)
+		print 'Plotting', len(T)
+		for i,(m0,m1,n0,n1,node,incl) in enumerate(zip(T.mu_start, T.mu_end, T.nu_start, T.nu_end, T.node, T.incl)):
+			#rr,dd = [],[]
+			for j,(m,n) in enumerate([(m0,n0),(m0,n1),(m1,n1),(m1,n0),(m0,n0)]):
+				ri,di = munu_to_radec_deg(m, n, node, incl)
+				#rr.append(ri)
+				#dd.append(di)
+				if j == 0:
+					plot.move_to_radec(ri,di)
+				else:
+					plot.line_to_radec(ri,di)
+			plot.stroke()
+		plot.plot_grid(2, 2, 5, 5)
+		plot.write('fields.png')
 
-	T = fits_table('sdss-cas-testarea-2.fits')
-
-	plt.clf()
-	plothist(T.ra, T.dec, 200, range=rng)
-	plt.title('PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE')
-	ps.savefig()
-
+	# CAS PhotoObjAll.resolveStatus bits
 	sprim = 0x100
 	sbad  = 0x800
 	sedge = 0x1000
+	sbest = 0x200
 
-	for j,(flags,txt) in enumerate([ (sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
-					 (sprim | sbad, 'PRIM & BAD'), (sprim | sedge, 'PRIM & EDGE'),
-					 (sprim | sbad | sedge, 'PRIM & BAD & EDGE')]):
-		I = np.flatnonzero((T.resolvestatus & (sprim | sbad | sedge)) == flags)
-		print len(I), 'with', txt
-		if len(I) == 0:
-			continue
+	if False:
+		T = fits_table('sdss-cas-testarea.fits')
 		plt.clf()
-		plothist(T.ra[I], T.dec[I], 200, range=rng)
-		plt.title('%i with %s' % (len(I), txt))
+		plothist(T.ra, T.dec, 200, range=rng)
+		plt.title('PhotoPrimary')
 		ps.savefig()
 
-	for run in np.unique(T.run):
-		I = (T.run == run)
+		T = fits_table('sdss-cas-testarea-2.fits')
 		plt.clf()
-		plothist(T.ra[I], T.dec[I], 200, range=rng)
-		plt.title('Run %i' % run)
+		plothist(T.ra, T.dec, 200, range=rng)
+		plt.title('PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE')
 		ps.savefig()
 
-	R = 1./3600.
-	I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
-	print len(I), 'matches'
-	plt.clf()
-	loghist((T.ra[I]-T.ra[J])*3600., (T.dec[I]-T.dec[J])*3600., 200, range=((-1,1),(-1,1)))
-	ps.savefig()
+		T = fits_table('sdss-cas-testarea-3.fits')
+		plt.clf()
+		plothist(T.ra, T.dec, 200, range=rng)
+		plt.title('PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE | SURVEY_BEST')
+		ps.savefig()
 
-	#sys.exit(0)
+		for j,(flags,txt) in enumerate([ (sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
+						 (sbest, 'BEST')]):
+			I = np.flatnonzero((T.resolvestatus & (sprim | sbad | sedge | sbest)) == flags)
+			print len(I), 'with', txt
+			if len(I) == 0:
+				continue
+			plt.clf()
+			plothist(T.ra[I], T.dec[I], 200, range=rng)
+			plt.title('%i with %s' % (len(I), txt))
+			ps.savefig()
+
+		for j,(flags,txt) in enumerate([ (sprim | sbad, 'PRIM + BAD'),
+						 (sprim | sedge, 'PRIM + EDGE'),
+						 (sprim | sbest, 'PRIM + BEST') ]):
+			I = np.flatnonzero((T.resolvestatus & flags) > 0)
+			print len(I), 'with', txt
+			if len(I) == 0:
+				continue
+			plt.clf()
+			plothist(T.ra[I], T.dec[I], 200, range=rng)
+			plt.title('%i with %s' % (len(I), txt))
+			ps.savefig()
+
+
+		# for run in np.unique(T.run):
+		# 	I = (T.run == run)
+		# 	plt.clf()
+		# 	plothist(T.ra[I], T.dec[I], 200, range=rng)
+		# 	plt.title('Run %i' % run)
+		# 	ps.savefig()
+
+		R = 1./3600.
+		I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
+		print len(I), 'matches'
+		plt.clf()
+		loghist((T.ra[I]-T.ra[J])*3600., (T.dec[I]-T.dec[J])*3600., 200, range=((-1,1),(-1,1)))
+		ps.savefig()
 
 	ps = PlotSequence('forced')
 	
@@ -1045,7 +1121,12 @@ def forced2():
 	dec = (dec0 + dec1) / 2.
 
 	#cas = fits_table('sdss-cas-testarea.fits')
-	cas = fits_table('sdss-cas-testarea-2.fits')
+	#cas = fits_table('sdss-cas-testarea-2.fits')
+	cas = fits_table('sdss-cas-testarea-3.fits')
+	print 'Read', len(cas), 'CAS sources'
+
+	cas.cut((cas.resolvestatus & sedge) == 0)
+	print 'Cut to ', len(cas), 'without SURVEY_EDGE set'
 
 
 	# Check out WISE / SDSS matches.
@@ -1137,17 +1218,25 @@ def forced2():
 		ps.savefig()
 
 	sdssobj = DR9()
-	fns = []
-	wcses = []
 	band = 'r'
 	RCF = np.unique(zip(sdss.run, sdss.camcol, sdss.field))
-	for r,c,f in RCF:
-		fn = sdssobj.retrieve('frame', r, c, f, band)
-		print 'got', fn
-		fns.append(fn)
-		wcs = Tan(fn, 0)
-		print 'got wcs', wcs
-		wcses.append(wcs)
+	wcses = []
+	fns = []
+
+	pfn = 'wcses.pickle'
+	if os.path.exists(pfn):
+		print 'Reading', pfn
+		wcses,fns = unpickle_from_file(pfn)
+	else:
+		for r,c,f in RCF:
+			fn = sdssobj.retrieve('frame', r, c, f, band)
+			print 'got', fn
+			fns.append(fn)
+			wcs = Tan(fn, 0)
+			print 'got wcs', wcs
+			wcses.append(wcs)
+		pickle_to_file((wcses,fns), pfn)
+		print 'Wrote to', pfn
 
 	wisefns = glob(os.path.join(wisedatadir, 'level3', '*w1-int-3.fits'))
 	wisewcs = []
@@ -1221,15 +1310,15 @@ def forced2():
 			ss += 1
 			j = insdss
 			wcs = wcses[j]
-			x,y = wcs.radec2pixelxy(ra,dec)
+			xc,yc = wcs.radec2pixelxy(ra,dec)
 			r,c,f = RCF[j]
 			frame = sdssobj.readFrame(r,c,f, band)
 			#S = 50
 			S = SW * 3.472
 			im = frame.image
 			H,W = im.shape
-			y0,x0 = max(0, y-S), max(0, x-S)
-			y1,x1 = min(H, y+S), min(W, x+S)
+			y0,x0 = max(0, yc-S), max(0, xc-S)
+			y1,x1 = min(H, yc+S), min(W, xc+S)
 			subim = im[y0:y1, x0:x1]
 
 			#plt.imshow(subim, interpolation='nearest', origin='lower',
@@ -1238,9 +1327,9 @@ def forced2():
 					   vmax=0.3, extent=[y0,y1,x0,x1])
 			#vmax=subim.max()*1.01)
 			ax = plt.axis()
-			x,y = wcs.radec2pixelxy(sdssnear.ra, sdssnear.dec)
+			sx,sy = wcs.radec2pixelxy(sdssnear.ra, sdssnear.dec)
 			#plt.plot(x, y, 'o', mec='b', mfc='none', ms=15)
-			plt.plot(y, x, 'o', mec='b', mfc='none', ms=15)
+			plt.plot(sy, sx, 'o', mec='b', mfc='none', ms=15)
 
 			x,y = wcs.radec2pixelxy(wisenear.ra, wisenear.dec)
 			#plt.plot(x, y, 'rx', ms=10)
@@ -1253,6 +1342,35 @@ def forced2():
 			plt.axis(ax)
 			plt.gray()
 			plt.title('SDSS %s (%i/%i/%i)' % (band, r,c,f))
+
+			# Try to guess the PRIMARY run from the nearest object.
+			for I in np.argsort((sx-xc)**2 + (sy-yc)**2):
+				r,c,f = sdssnear.run[I], sdssnear.camcol[I], sdssnear.field[I]
+				jj = None
+				for j,(ri,ci,fi) in enumerate(RCF):
+					if ri == r and ci == c and fi == f:
+						jj = j
+						break
+				assert(jj is not None)
+				wcs = wcses[jj]
+				xc,yc = wcs.radec2pixelxy(ra,dec)
+				frame = sdssobj.readFrame(r,c,f, band)
+				S = SW * 3.472
+				im = frame.image
+				H,W = im.shape
+				y0,x0 = max(0, yc-S), max(0, xc-S)
+				y1,x1 = min(H, yc+S), min(W, xc+S)
+				subim = im[y0:y1, x0:x1]
+				if np.prod(subim.shape) == 0:
+					continue
+				print 'subim shape', subim.shape
+				plt.subplot(2,N,2)
+				plt.imshow(subim.T, interpolation='nearest', origin='lower',
+					   vmax=0.3, extent=[y0,y1,x0,x1])
+				plt.gray()
+				plt.title('SDSS %s (%i/%i/%i)' % (band, r,c,f))
+				break
+
 
 		if inwise != -1:
 			plt.subplot(2, N, ss)
@@ -1302,6 +1420,9 @@ def forced2():
 					 (wun.w1mpro[i], ra, dec))
 			
 		ps.savefig()
+
+		rcfs = zip(sdssnear.run, sdssnear.camcol, sdssnear.field)
+		print 'Nearby SDSS sources are from:', np.unique(rcfs)
 
 	return
 
