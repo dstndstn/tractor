@@ -936,7 +936,7 @@ def forced2():
 	  where ra between 333.5 and 335.5 and dec between -0.5 and 1.5
 	    '''
 
-	''' -> 124k rows.  Distinct runs:
+	''' -> 124k rows.  (sdss-cas-testarea.fits)  Distinct runs:
 	2585, 2728, 7712, 4203, 2583, 4192, 4207, 4184, 2662, 7717
 
 	Run  #sources
@@ -952,22 +952,88 @@ def forced2():
 	7717 29911
 	'''
 
+	'''
+	select
+	  run, rerun, camcol, field, nChild, probPSF,
+	  psfFlux_u, psfFlux_g, psfFlux_r, psfFlux_i, psfFlux_z,
+	  deVRad_u, deVRad_g, deVRad_r, deVRad_i, deVRad_z,
+	  deVAB_u, deVAB_g, deVAB_r, deVAB_i, deVAB_z,
+	  deVPhi_u, deVPhi_g, deVPhi_r, deVPhi_i, deVPhi_z,
+	  deVFlux_u, deVFlux_g, deVFlux_r, deVFlux_i, deVFlux_z,
+	  expRad_u, expRad_g, expRad_r, expRad_i, expRad_z,
+	  expAB_u, expAB_g, expAB_r, expAB_i, expAB_z,
+	  expPhi_u, expPhi_g, expPhi_r, expPhi_i, expPhi_z,
+	  expFlux_u, expFlux_g, expFlux_r, expFlux_i, expFlux_z,
+	  fracDeV_u, fracDeV_g, fracDeV_r, fracDeV_i, fracDeV_z,
+	  flags_u, flags_g, flags_r, flags_i, flags_z,
+	  probPSF_u, probPSF_g, probPSF_r, probPSF_i, probPSF_z,
+	  ra, dec, resolveStatus, score into mydb.wisetest from PhotoObjAll
+	  where ra between 333.5 and 335.5 and dec between -0.5 and 1.5
+	    and (resolveStatus & (
+		        dbo.fResolveStatus('SURVEY_PRIMARY') |
+			    dbo.fResolveStatus('SURVEY_BADFIELD') |
+			    dbo.fResolveStatus('SURVEY_EDGE'))) != 0
+
+        --> sdss-cas-testarea-2.fits
+	'''
+
 	''' Check it out: spatial source density looks fine.  No overlap between runs.
+	'''
+
+	rng = ((333.5, 335.5), (-0.5, 1.5))
+
+	ps = PlotSequence('sdss')
+
 	T = fits_table('sdss-cas-testarea.fits')
+	plt.clf()
+	plothist(T.ra, T.dec, 200, range=rng)
+	plt.title('PhotoPrimary')
+	ps.savefig()
+
+	T = fits_table('sdss-cas-testarea-2.fits')
+
+	plt.clf()
+	plothist(T.ra, T.dec, 200, range=rng)
+	plt.title('PhotoObjAll: SURVEY_PRIMARY | SURVEY_BADFIELD | SURVEY_EDGE')
+	ps.savefig()
+
+	sprim = 0x100
+	sbad  = 0x800
+	sedge = 0x1000
+
+	for j,(flags,txt) in enumerate([ (sprim, 'PRIM'), (sbad, 'BAD'), (sedge, 'EDGE'),
+					 (sprim | sbad, 'PRIM & BAD'), (sprim | sedge, 'PRIM & EDGE'),
+					 (sprim | sbad | sedge, 'PRIM & BAD & EDGE')]):
+		I = np.flatnonzero((T.resolvestatus & (sprim | sbad | sedge)) == flags)
+		print len(I), 'with', txt
+		if len(I) == 0:
+			continue
+		plt.clf()
+		plothist(T.ra[I], T.dec[I], 200, range=rng)
+		plt.title('%i with %s' % (len(I), txt))
+		ps.savefig()
 
 	for run in np.unique(T.run):
 		I = (T.run == run)
 		plt.clf()
 		plothist(T.ra[I], T.dec[I], 200, range=rng)
-		plt.savefig('sdss2-%i.png' % run)
-	'''
+		plt.title('Run %i' % run)
+		ps.savefig()
+
+	R = 1./3600.
+	I,J,d = match_radec(T.ra, T.dec, T.ra, T.dec, R, notself=True)
+	print len(I), 'matches'
+	plt.clf()
+	loghist((T.ra[I]-T.ra[J])*3600., (T.dec[I]-T.dec[J])*3600., 200, range=((-1,1),(-1,1)))
+	ps.savefig()
+
+	#sys.exit(0)
+
 	ps = PlotSequence('forced')
 	
 	basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
 	wisedatadir = os.path.join(basedir, 'data', 'wise')
 	l1bdir = os.path.join(wisedatadir, 'level1b')
-
-	rng = ((333.5, 335.5), (-0.5, 1.5))
 
 	wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
 	#plt.clf()
@@ -978,7 +1044,9 @@ def forced2():
 	ra = (ra0 + ra1) / 2.
 	dec = (dec0 + dec1) / 2.
 
-	cas = fits_table('sdss-cas-testarea.fits')
+	#cas = fits_table('sdss-cas-testarea.fits')
+	cas = fits_table('sdss-cas-testarea-2.fits')
+
 
 	# Check out WISE / SDSS matches.
 	wise = wisecat
