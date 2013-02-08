@@ -271,6 +271,12 @@
         return rtn;
     }
 
+    static int c_gauss_2d_approx(double x, double y, double minval, int S,
+				   PyObject* ob_amp,
+				   PyObject* ob_mean, PyObject* ob_var,
+				   PyObject* ob_result) {
+	return -1;
+    }
 
 
 

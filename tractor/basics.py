@@ -780,6 +780,8 @@ class GaussianMixturePSF(BaseParams):
 		return self.radius
 	# returns a Patch object.
 	def getPointSourcePatch(self, px, py, minval=None):
+		if minval is not None:
+			grid = self.mog.evaluale_grid_approx(px, py, minval)
 		r = self.getRadius()
 		x0,x1 = int(floor(px-r)), int(ceil(px+r))
 		y0,y1 = int(floor(py-r)), int(ceil(py+r))

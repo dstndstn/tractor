@@ -176,6 +176,18 @@ class MixtureOfGaussians():
 			raise RuntimeError('c_gauss_2d_grid failed')
 		return result
 
+	def evaluate_grid_approx(self, x, y, minval):
+		from mix import c_gauss_2d_approx
+		assert(self.D == 2)
+		# "More than enough"
+		S = 101
+		result = np.zeros((S, S))
+		rtn = c_gauss_2d_grid(xlo, xstep, NX, ylo, ystep, NY,
+							  self.amp, self.mean,self.var, result)
+		if rtn == -1:
+			raise RuntimeError('c_gauss_2d_grid failed')
+		return result
+
 	def evaluate_grid_hogg(self, xlo, xhi, ylo, yhi):
 		assert(self.D == 2)
 		xy = np.array(np.meshgrid(range(xlo, xhi), range(ylo, yhi)))
