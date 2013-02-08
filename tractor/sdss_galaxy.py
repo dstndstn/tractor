@@ -215,15 +215,18 @@ class Galaxy(MultiParams):
 	def getProfile(self):
 		return None
 
-	def getUnitFluxModelPatch(self, img, px=None, py=None):
+	def getUnitFluxModelPatch(self, img, **kwargs):
 		raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
 						   self.getName())
 
-	def getModelPatch(self, img, px=None, py=None):
-		p1 = self.getUnitFluxModelPatch(img, px, py)
+	def getModelPatch(self, img, minsb=None):
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+		#minval = None
+		#if minsb is not None:
+		#	minval = minsb / counts
+		p1 = self.getUnitFluxModelPatch(img) #, minval=minval)
 		if p1 is None:
 			return None
-		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		return p1 * counts
 
 	# returns [ Patch, Patch, ... ] of length numberOfParams().
@@ -344,11 +347,11 @@ class CompositeGalaxy(MultiParams):
 	def getBrightnesses(self):
 		return [self.brightnessExp, self.brightnessDev]
 	
-	def getModelPatch(self, img, px=None, py=None):
+	def getModelPatch(self, img, minsb=minsb):
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		pe = e.getModelPatch(img, px, py)
-		pd = d.getModelPatch(img, px, py)
+		pe = e.getModelPatch(img)#, minsb=minsb/2.)
+		pd = d.getModelPatch(img)#, minsb=minsb/2.)
 		if pe is None:
 			return pd
 		if pd is None:

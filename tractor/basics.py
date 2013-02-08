@@ -672,11 +672,13 @@ class PointSource(MultiParams):
 	#def hashkey(self):
 	#	return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
-	def getModelPatch(self, img):
+	def getModelPatch(self, img, minsb=None):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-		patch = img.getPsf().getPointSourcePatch(px, py)
-		#print 'PointSource: PSF patch has sum', patch.getImage().sum()
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+		minval = None
+		if minsb is not None:
+			minval = minsb / counts
+		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
 		return patch * counts
 
 	def getParamDerivatives(self, img):
@@ -777,7 +779,7 @@ class GaussianMixturePSF(BaseParams):
 		# HACK!
 		return self.radius
 	# returns a Patch object.
-	def getPointSourcePatch(self, px, py):
+	def getPointSourcePatch(self, px, py, minval=None):
 		r = self.getRadius()
 		x0,x1 = int(floor(px-r)), int(ceil(px+r))
 		y0,y1 = int(floor(py-r)), int(ceil(py+r))
@@ -1007,7 +1009,7 @@ class NCircularGaussianPSF(MultiParams):
 
 	# returns a Patch object.
 	#### FIXME -- could use mixture_profiles!!
-	def getPointSourcePatch(self, px, py):
+	def getPointSourcePatch(self, px, py, minval=None):
 		ix = int(round(px))
 		iy = int(round(py))
 		dx = px - ix

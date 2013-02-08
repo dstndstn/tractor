@@ -56,9 +56,9 @@ class PsfEx(MultiParams):
 		# no args?
 		super(PsfEx, self).__init__()
 
-	def getPointSourcePatch(self, px, py):
+	def getPointSourcePatch(self, px, py, minval=None):
 		mog = self.mogAt(px, py)
-		return mog.getPointSourcePatch(px, py)
+		return mog.getPointSourcePatch(px, py, minval=minval)
 
 	def _fitParamGrid(self, nx=10, ny=10, K=3, scale=True):
 		w,mu,sig = em_init_params(K, None, None, None)

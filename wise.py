@@ -159,6 +159,12 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	invvar[goodmask] = 1./(unc[goodmask])**2
 	#invvar = 1./(unc)**2
 
+	if not np.all(np.isfinite(invvar)):
+		print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))
+		bad = np.logical_not(np.isfinite(invvar))
+		invvar[bad] = 0.
+		data[bad] = sky
+
 	# avoid NaNs
 	data[np.logical_not(goodmask)] = sky
 
@@ -915,9 +921,8 @@ def getWcsFromHeaderString(hdrstr):
 	wcs = anwcs(hdrstr, -1, len(hdrstr))
 	return wcs
 
-def forced2():
+def plot_unmatched():
 	from bigboss_test import radecroi
-
 	'''
 	select
 	  run, rerun, camcol, field, nChild, probPSF,
@@ -1426,6 +1431,48 @@ def forced2():
 
 	return
 
+
+
+def forced2():
+	from bigboss_test import radecroi
+	ps = PlotSequence('forced')
+
+	basedir = os.environ.get('BIGBOSS_DATA', '/project/projectdirs/bigboss')
+	wisedatadir = os.path.join(basedir, 'data', 'wise')
+	l1bdir = os.path.join(wisedatadir, 'level1b')
+	wisecat = fits_table(os.path.join(wisedatadir, 'catalogs', 'wisecat2.fits'))
+
+	# CAS PhotoObjAll.resolveStatus bits
+	sprim = 0x100
+	sbad  = 0x800
+	sedge = 0x1000
+	sbest = 0x200
+
+	(ra0,ra1, dec0,dec1) = radecroi
+	ra = (ra0 + ra1) / 2.
+	dec = (dec0 + dec1) / 2.
+
+	cas = fits_table('sdss-cas-testarea-3.fits')
+	print 'Read', len(cas), 'CAS sources'
+	cas.cut((cas.resolvestatus & sedge) == 0)
+	print 'Cut to ', len(cas), 'without SURVEY_EDGE set'
+
+	# Drop "sbest" sources that have an "sprim" nearby.
+	Ibest = (cas.resolvestatus & (sprim | sbest)) == sbest
+	Iprim = (cas.resolvestatus & (sprim | sbest)) == sprim
+	I,J,d = match_radec(cas.ra[Ibest], cas.dec[Ibest], cas.ra[Iprim], cas.dec[Iprim], 2./3600.)
+
+	Ibest[np.flatnonzero(Ibest)[I]] = False
+	#Ikeep = np.ones(len(Ibest), bool)
+	#Ikeep[I] = False
+	cas.cut(np.logical_or(Ibest, Iprim))
+	print 'Cut to', len(cas), 'PRIMARY + BEST-not-near-PRIMARY'
+
+	I,J,d = match_radec(cas.ra, cas.dec, cas.ra, cas.dec, 2./3600., notself=True)
+	plt.clf()
+	loghist((cas.ra[I]-cas.ra[J])*3600., (cas.dec[I]-cas.dec[J])*3600., 200)
+	plt.title('CAS self-matches')
+	ps.savefig()
 	
 	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
 	S = psf.shape[0]
@@ -1503,7 +1550,7 @@ def forced2():
 		tra  = np.array([src.getPosition().ra  for src in tsrcs])
 		tdec = np.array([src.getPosition().dec for src in tsrcs])
 
-		R = 2.
+		R = 4.
 		I,J,d = match_radec(wc.ra, wc.dec, tra, tdec,
 							R/3600., nearest=True)
 		# cashere.ra, cashere.dec, 
@@ -1544,10 +1591,50 @@ def forced2():
 
 		zlo,zhi = tim.zr
 		ima = dict(interpolation='nearest', origin='lower', vmin=zlo, vmax=zhi)
+		imchi = dict(interpolation='nearest', origin='lower',
+			     vmin=-5, vmax=5)
 
 		plt.clf()
 		plt.imshow(tim.getImage(), **ima)
+		plt.hot()
+		plt.title(tim.name + ': data')
 		ps.savefig()
+
+		wsrcs = []
+		for i in range(len(wc)):
+			pos = RaDecPos(wc.ra[i], wc.dec[i])
+			nm = NanoMaggies.magToNanomaggies(wc.w1mpro[i])
+			br = NanoMaggies(i=25., w1=nm)
+			wsrcs.append(PointSource(pos, br))
+
+		tr = Tractor([tim], wsrcs)
+		tr.freezeParam('images')
+
+		for jj in range(2):
+			print 'Rendering WISE model image...'
+			wmod = tr.getModelImage(0)
+			plt.clf()
+			plt.imshow(wmod, **ima)
+			plt.hot()
+			plt.title(tim.name + ': WISE sources only')
+			ps.savefig()
+
+			assert(np.all(np.isfinite(wmod)))
+			assert(np.all(np.isfinite(tim.getInvError())))
+			assert(np.all(np.isfinite(tim.getImage())))
+
+			wchi = tr.getChiImage(0)
+			plt.clf()
+			plt.imshow(wchi, **imchi)
+			plt.title(tim.name + ': chi, WISE sources only')
+			plt.gray()
+			ps.savefig()
+
+			if jj == 1:
+				break
+
+			tr.optimize()
+
 
 		tr = Tractor([tim], tsrcs)
 		print 'Rendering model image...'

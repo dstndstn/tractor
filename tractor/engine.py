@@ -1265,10 +1265,10 @@ class Tractor(MultiParams):
 			factor = Q2 / (Q2 + chi2)
 			img.setInvvar(oinvvar * factor * smask)
 
-	def getModelPatchNoCache(self, img, src):
+	def getModelPatchNoCache(self, img, src, **kwargs):
 		return src.getModelPatch(img)
 
-	def getModelPatch(self, img, src):
+	def getModelPatch(self, img, src, **kwargs):
 		deps = (img.hashkey(), src.hashkey())
 		deps = hash(deps)
 		mod = self.cache.get(deps, None)
@@ -1283,13 +1283,13 @@ class Tractor(MultiParams):
 			#		', source ' + str(src))
 			#logverb('	image hashkey ' + str(img.hashkey()))
 			#logverb('	source hashkey ' + str(src.hashkey()))
-			mod = self.getModelPatchNoCache(img, src)
+			mod = self.getModelPatchNoCache(img, src, **kwargs)
 			#print 'Caching model image'
 			self.cache.put(deps, mod)
 		return mod
 
 	#def getModelImageNoCache(self, img, srcs=None, sky=True):
-	def getModelImage(self, img, srcs=None, sky=True):
+	def getModelImage(self, img, srcs=None, sky=True, minsb=None):
 		'''
 		Create a model image for the given "tractor image", including
 		the sky level.	If "srcs" is specified (a list of sources),
@@ -1305,7 +1305,7 @@ class Tractor(MultiParams):
 		if srcs is None:
 			srcs = self.catalog
 		for src in srcs:
-			patch = self.getModelPatch(img, src)
+			patch = self.getModelPatch(img, src, minsb=minsb)
 			if patch is None:
 				#print 'None patch: src is', src
 				#print 'position is', img.getWcs().positionToPixel(src.pos, src)

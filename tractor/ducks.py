@@ -101,12 +101,16 @@ class Source(Params):
 	This is the duck-type definition of a Source (star, galaxy, etc)
 	that the Tractor uses.
 	'''
-	def getModelPatch(self, img):
+	def getModelPatch(self, img, minsb=None):
 		'''
 		Returns a Patch object containing a rendering of this Source
 		into the given `Image` object.  This will probably use the
 		calibration information of the `Image`: the WCS, PSF, and
 		photometric calibration.
+
+		The "minsb" argument, if given, is the allowable approximation
+		error per pixel; we're asking the source to render itself out to
+		this surface brightness.
 		'''
 		pass
 
@@ -221,12 +225,15 @@ class PSF(Params):
 	'''
 	Duck-type definition of a point-spread function.
 	'''
-	def getPointSourcePatch(self, px, py):
+	def getPointSourcePatch(self, px, py, minval=None):
 		'''
 		Returns a `Patch`, a rendering of a point source at the given
 		pixel coordinates.
 
 		The returned `Patch` should have unit "counts".
+
+		The "minval" arg says that we're willing to accept an approximation
+		such that pixels with counts < minval can be omitted.
 		'''
 		pass
 
