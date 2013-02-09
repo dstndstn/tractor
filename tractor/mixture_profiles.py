@@ -295,7 +295,7 @@ def functional_test_patch_maker(fn, psf=None):
 if __name__ == '__main__':
 	# functional test: c_gauss_2d_approx
 
-	from mix import c_gauss_2d_approx
+	from mix import c_gauss_2d_approx, c_gauss_2d_grid
 	# "More than enough"
 
 	from astrometry.util.plotutils import PlotSequence
@@ -325,15 +325,30 @@ if __name__ == '__main__':
 		elif j == 4:
 			var = np.array([ [ [ 100., 50. ], [50., 100.,] ], ])
 			minval = 1e-9
-		elif j == 5:
-			var = np.array([ [ [ 400., 100. ], [100., 100.,] ], ])
+		elif j in [5,6]:
+			var = np.array([ [ [ 400., -100. ], [-100., 100.,] ], ])
+			minval = 1e-9
+			if j == 6:
+				mean[0,0] -= 0.8
+		elif j == 7:
+			mean += 10.
+			x = 10
+			y = 10
 			minval = 1e-9
 		else:
 			break
+
 		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
 								amp, mean, var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_approx failed')
+
+		r2 = np.zeros((S, S))
+		rtn = c_gauss_2d_grid(x-50, 1, S, x-50, 1, S, amp, mean, var, r2)
+		if rtn == -1:
+			raise RuntimeError('c_gauss_2d_grid failed')
+
+		print 'Max difference:', np.max(np.abs(r2 - result))
 		
 		plt.clf()
 		plt.imshow(np.log10(np.maximum(minval * 1e-3, result)),
@@ -341,6 +356,8 @@ if __name__ == '__main__':
 		plt.colorbar()
 		ps.savefig()
 
+		assert(np.all(np.abs(r2 - result) < minval))
+		
 		if j == 3:
 			plt.clf()
 			for row in range(50,71):
