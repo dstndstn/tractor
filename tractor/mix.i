@@ -347,19 +347,11 @@
 			double mv;
 			double* V  = var  + k*D*D;
 			double* IV = ivar + k*D*D;
-			double sx, sy, r;
 			mx = mean[k*D+0];
 			my = mean[k*D+1];
 			mv = minval * amp[k] / scale[k];
-
-			// V = [ [ sx**2,   r * sx * sy, ], [r * sx * sy, sy**2] ]
-			sx = sqrt(V[0]);
-			sy = sqrt(V[3]);
-			r = V[1] / (sx * sy);
-			printf("sx=%g, sy=%g, r=%g\n", sx, sy, r);
-			printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale[k], mv);
-
-			for (dyabs=0; dyabs<Shalf; dyabs++) {
+			//printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale[k], mv);
+			for (dyabs=0; dyabs<=Shalf; dyabs++) {
 				int dysign;
 				int ngood = 0;
 				for (dysign=-1; dysign<=1; dysign+=2) {
@@ -371,9 +363,9 @@
 					if ((dyabs == 0) && (dysign == 1))
 						continue;
 					dy = dyabs * dysign;
-					//dxc = lround(((r == 0) ? 0 : (signbit(r) ? -1.0 : 1.0)) * sx / sy * dy);
+					// mean of condition distribution of dx given dy
 					dxc = lround(V[1] / V[3] * dy);
-					printf("dy=%i, dxc=%i\n", dy, dxc);
+					//printf("dy=%i, dxc=%i\n", dy, dxc);
 					dxc = MIN(dxc,  Shalf);
 					dxc = MAX(dxc, -Shalf);
 					dx = dxc;
@@ -381,14 +373,14 @@
 					// eval at dx = +- 1, ...
 					// stop altogether if neither are accepted
 					g = eval_g(IV, (xc + dx) - mx, (yc + dy) - my);
-					printf("g = %g vs mv %g\n", g, mv);
+					//printf("g = %g vs mv %g\n", g, mv);
 					result[(dy + Shalf)*S + (dx + Shalf)] += scale[k] * g;
 					if (g > mv)
 						ngood++;
 					for (dir=-1; dir<=1; dir+=2) {
-						for (dx = dxc + dir; (dx < Shalf) && (dx >= -Shalf); dx += dir) {
+						for (dx = dxc + dir; (dx <= Shalf) && (dx >= -Shalf); dx += dir) {
 							g = eval_g(IV, (xc+dx) - mx, (yc+dy) - my);
-							printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
+							//printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
 							result[(dy + Shalf)*S + (dx + Shalf)] += scale[k] * g;
 							if (g > mv)
 								ngood++;

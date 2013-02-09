@@ -301,7 +301,7 @@ if __name__ == '__main__':
 	from astrometry.util.plotutils import PlotSequence
 	ps = PlotSequence('approx')
 	
-	for j in range(4):
+	for j in range(100):
 		print
 		print 'j =', j
 		print
@@ -322,7 +322,14 @@ if __name__ == '__main__':
 		elif j == 3:
 			var = np.array([ [ [ 100., 50. ], [50., 100.,] ], ])
 			minval = 1e-6
-			
+		elif j == 4:
+			var = np.array([ [ [ 100., 50. ], [50., 100.,] ], ])
+			minval = 1e-9
+		elif j == 5:
+			var = np.array([ [ [ 400., 100. ], [100., 100.,] ], ])
+			minval = 1e-9
+		else:
+			break
 		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
 								amp, mean, var, result)
 		if rtn == -1:
