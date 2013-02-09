@@ -6,6 +6,7 @@
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
+#include <sys/param.h>
 	%}
 
 %init %{
@@ -147,6 +148,71 @@
     }
 
 
+	static int _get_np(PyObject* ob_amp,
+					   PyObject* ob_mean,
+					   PyObject* ob_var,
+					   PyObject* ob_result,
+					   int NX, int NY,
+					   int* K,
+					   PyObject **np_amp,
+					   PyObject **np_mean,
+					   PyObject **np_var,
+					   PyObject **np_result) {
+		PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
+		int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+		const int D = 2;
+
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		Py_INCREF(dtype);
+		*np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
+		*np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
+		*np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
+		*np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
+		Py_CLEAR(dtype);
+
+		if (!(*np_amp && *np_mean && *np_var && *np_result)) {
+			if (!*np_amp) {
+				ERR("amp wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!*np_mean) {
+				ERR("mean wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!*np_var) {
+				ERR("var wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			if (!*np_result) {
+				ERR("result wasn't the type expected");
+				Py_DECREF(dtype);
+			}
+			return 1;
+		}
+		*K = PyArray_DIM(*np_amp, 0);
+		if ((PyArray_DIM(*np_mean, 0) != *K) ||
+			(PyArray_DIM(*np_mean, 1) != D)) {
+            ERR("np_mean must be K x D");
+			return 1;
+		}
+		if ((PyArray_DIM(*np_var, 0) != *K) ||
+			(PyArray_DIM(*np_var, 1) != D) ||
+			(PyArray_DIM(*np_var, 2) != D)) {
+            ERR("np_var must be K x D x D");
+			return 1;
+		}
+		if ((PyArray_DIM(*np_result, 0) != NY) ||
+			(PyArray_DIM(*np_result, 1) != NX)) {
+            ERR("np_result must be size NY x NX");
+			return 1;
+		}
+		return 0;
+	}
+
+
 
     static int c_gauss_2d_grid(double xlo, double xstep, int NX,
 							   double ylo, double ystep, int NY,
@@ -156,9 +222,6 @@
         int i, K, k;
 		const int D = 2;
 		double *amp, *mean, *var, *result;
-		PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
-		int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-		int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
 		double tpd;
 		double* scale = NULL, *ivar = NULL;
 		int ix, iy;
@@ -168,52 +231,9 @@
 
 		tpd = pow(2.*M_PI, D);
 
-		Py_INCREF(dtype);
-		Py_INCREF(dtype);
-		Py_INCREF(dtype);
-		Py_INCREF(dtype);
-		np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-		np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-		np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-		np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
-		Py_CLEAR(dtype);
-
-		if (!(np_amp && np_mean && np_var && np_result)) {
-			if (!np_amp) {
-				ERR("amp wasn't the type expected");
-				Py_DECREF(dtype);
-			}
-			if (!np_mean) {
-				ERR("mean wasn't the type expected");
-				Py_DECREF(dtype);
-			}
-			if (!np_var) {
-				ERR("var wasn't the type expected");
-				Py_DECREF(dtype);
-			}
-			if (!np_result) {
-				ERR("result wasn't the type expected");
-				Py_DECREF(dtype);
-			}
+		if (_get_np(ob_amp, ob_mean, ob_var, ob_result, NX, NY,
+					&K, &np_amp, &np_mean, &np_var, &np_result))
 			goto bailout;
-		}
-		K = PyArray_DIM(np_amp, 0);
-		if ((PyArray_DIM(np_mean, 0) != K) ||
-			(PyArray_DIM(np_mean, 1) != D)) {
-            ERR("np_mean must be K x D");
-			goto bailout;
-		}
-		if ((PyArray_DIM(np_var, 0) != K) ||
-			(PyArray_DIM(np_var, 1) != D) ||
-			(PyArray_DIM(np_var, 2) != D)) {
-            ERR("np_var must be K x D x D");
-			goto bailout;
-		}
-		if ((PyArray_DIM(np_result, 0) != NY) ||
-			(PyArray_DIM(np_result, 1) != NX)) {
-            ERR("np_result must be size NY x NX");
-			goto bailout;
-		}
 
         amp = PyArray_DATA(np_amp);
         mean = PyArray_DATA(np_mean);
@@ -271,11 +291,126 @@
         return rtn;
     }
 
-    static int c_gauss_2d_approx(double x, double y, double minval, int S,
-				   PyObject* ob_amp,
-				   PyObject* ob_mean, PyObject* ob_var,
-				   PyObject* ob_result) {
-	return -1;
+	   double eval_g(double* ivar, double dx, double dy) {
+		   double dsq = (ivar[0] * dx * dx +
+						 ivar[1] * dx * dy +
+						 ivar[2] * dx * dy +
+						 ivar[3] * dy * dy);
+		   if (dsq >= 100)
+			   return 0.0;
+		   return exp(-0.5 * dsq);
+	   }
+
+    static int c_gauss_2d_approx(int xc, int yc, double minval, int S,
+								 PyObject* ob_amp,
+								 PyObject* ob_mean,
+								 PyObject* ob_var,
+								 PyObject* ob_result) {
+		double *amp, *mean, *var, *result;
+		const int D=2;
+        int i, K, k;
+		int dx, dyabs;
+		int rtn = -1;
+		PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+		double* scale = NULL, *ivar = NULL;
+		double tpd;
+		int Shalf = S/2;
+		assert((S%2) == 1);
+		tpd = pow(2.*M_PI, D);
+
+		if (_get_np(ob_amp, ob_mean, ob_var, ob_result, S, S,
+					&K, &np_amp, &np_mean, &np_var, &np_result))
+			goto bailout;
+
+        amp = PyArray_DATA(np_amp);
+        mean = PyArray_DATA(np_mean);
+        var = PyArray_DATA(np_var);
+        result = PyArray_DATA(np_result);
+
+		scale = malloc(K * sizeof(double));
+		ivar = malloc(K * D * D * sizeof(double));
+
+		for (k=0; k<K; k++) {
+			double* V = var + k*D*D;
+			double* I = ivar + k*D*D;
+			double det;
+			det = V[0]*V[3] - V[1]*V[2];
+			I[0] =  V[3] / det;
+			I[1] = -V[1] / det;
+			I[2] = -V[2] / det;
+			I[3] =  V[0] / det;
+			scale[k] = amp[k] / sqrt(tpd * det);
+		}
+
+		for (k=0; k<K; k++) {
+			double mx,my;
+			double mv;
+			double* V  = var  + k*D*D;
+			double* IV = ivar + k*D*D;
+			double sx, sy, r;
+			mx = mean[k*D+0];
+			my = mean[k*D+1];
+			mv = minval * amp[k] / scale[k];
+
+			// V = [ [ sx**2,   r * sx * sy, ], [r * sx * sy, sy**2] ]
+			sx = sqrt(V[0]);
+			sy = sqrt(V[3]);
+			r = V[1] / (sx * sy);
+			printf("sx=%g, sy=%g, r=%g\n", sx, sy, r);
+			printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale[k], mv);
+
+			for (dyabs=0; dyabs<Shalf; dyabs++) {
+				int dysign;
+				int ngood = 0;
+				for (dysign=-1; dysign<=1; dysign+=2) {
+					int dy;
+					int dxc;
+					double g;
+					double fx, fy;
+					int dir;
+					if ((dyabs == 0) && (dysign == 1))
+						continue;
+					dy = dyabs * dysign;
+					//dxc = lround(((r == 0) ? 0 : (signbit(r) ? -1.0 : 1.0)) * sx / sy * dy);
+					dxc = lround(V[1] / V[3] * dy);
+					printf("dy=%i, dxc=%i\n", dy, dxc);
+					dxc = MIN(dxc,  Shalf);
+					dxc = MAX(dxc, -Shalf);
+					dx = dxc;
+					// eval at dx=0
+					// eval at dx = +- 1, ...
+					// stop altogether if neither are accepted
+					g = eval_g(IV, (xc + dx) - mx, (yc + dy) - my);
+					printf("g = %g vs mv %g\n", g, mv);
+					result[(dy + Shalf)*S + (dx + Shalf)] += scale[k] * g;
+					if (g > mv)
+						ngood++;
+					for (dir=-1; dir<=1; dir+=2) {
+						for (dx = dxc + dir; (dx < Shalf) && (dx >= -Shalf); dx += dir) {
+							g = eval_g(IV, (xc+dx) - mx, (yc+dy) - my);
+							printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
+							result[(dy + Shalf)*S + (dx + Shalf)] += scale[k] * g;
+							if (g > mv)
+								ngood++;
+							else
+								break;
+						}
+					}
+				}
+				// If this whole row (+ and -) was all < mv, we're done
+				if (ngood == 0)
+					break;
+			}
+		}
+		rtn = 0;
+	bailout:
+		free(scale);
+		free(ivar);
+		Py_XDECREF(np_amp);
+		Py_XDECREF(np_mean);
+		Py_XDECREF(np_var);
+		Py_XDECREF(np_result);
+		return rtn;
     }
 
 

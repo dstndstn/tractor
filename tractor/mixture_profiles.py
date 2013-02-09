@@ -182,10 +182,10 @@ class MixtureOfGaussians():
 		# "More than enough"
 		S = 101
 		result = np.zeros((S, S))
-		rtn = c_gauss_2d_grid(xlo, xstep, NX, ylo, ystep, NY,
+		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
 							  self.amp, self.mean,self.var, result)
 		if rtn == -1:
-			raise RuntimeError('c_gauss_2d_grid failed')
+			raise RuntimeError('c_gauss_2d_approx failed')
 		return result
 
 	def evaluate_grid_hogg(self, xlo, xhi, ylo, yhi):
@@ -293,6 +293,61 @@ def functional_test_patch_maker(fn, psf=None):
 	plt.savefig(fn)
 
 if __name__ == '__main__':
+	# functional test: c_gauss_2d_approx
+
+	from mix import c_gauss_2d_approx
+	# "More than enough"
+
+	from astrometry.util.plotutils import PlotSequence
+	ps = PlotSequence('approx')
+	
+	for j in range(4):
+		print
+		print 'j =', j
+		print
+		S = 101
+		result = np.zeros((S, S))
+
+		amp = np.array([1.0])
+		mean = np.array([[0.3, 0.7],])
+		x = 0.
+		y = 0.
+		minval = 1e-3
+		if j == 0:
+			var = np.array([ [ [ 4., 4. ], [4., 9.,] ], ])
+		elif j == 1:
+			var = np.array([ [ [ 4., -5.5 ], [-5.5, 9.,] ], ])
+		elif j == 2:
+			var = np.array([ [ [ 4., 0. ], [0., 9.,] ], ])
+		elif j == 3:
+			var = np.array([ [ [ 100., 50. ], [50., 100.,] ], ])
+			minval = 1e-6
+			
+		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
+								amp, mean, var, result)
+		if rtn == -1:
+			raise RuntimeError('c_gauss_2d_approx failed')
+		
+		plt.clf()
+		plt.imshow(np.log10(np.maximum(minval * 1e-3, result)),
+				   interpolation='nearest', origin='lower')
+		plt.colorbar()
+		ps.savefig()
+
+		if j == 3:
+			plt.clf()
+			for row in range(50,71):
+				plt.plot(result[row,:])
+				dy = (row - S/2)
+				mx = var[0, 0, 1] / var[0, 1, 1] * dy
+				plt.axvline(mx + S/2)
+			ps.savefig()
+		
+
+	import sys
+	sys.exit(0)
+
+
 	# functional_test_circular_mixtures()
 	psfamp = np.array([0.7,0.2,0.1])
 	psfmean = np.zeros((3,2))
