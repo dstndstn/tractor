@@ -359,15 +359,12 @@
 			//printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
 			xc = MAX(x0, MIN(x1-1, lround(mx)));
 			yc = MAX(y0, MIN(y1-1, lround(my)));
-
-			printf("mx,my (%.1f, %.1f)   xc,yc (%i,%i)\n", mx,my,xc,yc);
-
+			//printf("mx,my (%.1f, %.1f)   xc,yc (%i,%i)\n", mx,my,xc,yc);
 			for (dyabs=0; dyabs < MAX(y1-yc, 1+yc-y0); dyabs++) {
 				int dysign;
 				int ngood = 0;
 				for (dysign=-1; dysign<=1; dysign+=2) {
 					int dy;
-					int dxc;
 					double g;
 					int dir;
 					int xm;
@@ -381,8 +378,6 @@
 					if ((y < y0) || (y >= y1))
 						continue;
 					// mean of conditional distribution of dx given dy
-					//dxc = lround(V[1] / V[3] * dy);
-
 					xm = lround(V[1] / V[3] * (y - my) + mx);
 					xm = MAX(x0, MIN(x1-1, xm));
 					// eval at dx=0

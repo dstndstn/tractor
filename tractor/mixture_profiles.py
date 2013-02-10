@@ -209,8 +209,11 @@ def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
 
 	Returns: a Patch object
 	'''
-	return mixture.evaluate_grid(x0, x1, y0, y1)
-
+	if minval == 0.:
+		return mixture.evaluate_grid(x0, x1, y0, y1)
+	else:
+		return mixture.evaluate_grid_approx(x0, x1, y0, y1, minval)
+	
 def model_to_patch(model, scale, posmin, posmax):
 	xl = np.arange(posmin[0], posmax[0]+1., 1.)
 	nx = xl.size

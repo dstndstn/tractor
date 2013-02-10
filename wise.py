@@ -1490,6 +1490,7 @@ def forced2():
 	print '  w', w
 	print '  mu', mu
 	print '  sigma', sig
+					   
 	w1psf = GaussianMixturePSF(w, mu, sig)
 	w1psf.computeRadius()
 

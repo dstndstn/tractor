@@ -221,10 +221,10 @@ class Galaxy(MultiParams):
 
 	def getModelPatch(self, img, minsb=None):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		#minval = None
-		#if minsb is not None:
-		#	minval = minsb / counts
-		p1 = self.getUnitFluxModelPatch(img) #, minval=minval)
+		minval = 0.
+		if minsb is not None:
+			minval = minsb / counts
+		p1 = self.getUnitFluxModelPatch(img, minval=minval)
 		if p1 is None:
 			return None
 		return p1 * counts
@@ -347,11 +347,15 @@ class CompositeGalaxy(MultiParams):
 	def getBrightnesses(self):
 		return [self.brightnessExp, self.brightnessDev]
 	
-	def getModelPatch(self, img, minsb=minsb):
+	def getModelPatch(self, img, minsb=None):
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		pe = e.getModelPatch(img)#, minsb=minsb/2.)
-		pd = d.getModelPatch(img)#, minsb=minsb/2.)
+		if minsb is None:
+			kw = {}
+		else:
+			kw = dict(minsb=minsb/2.)
+		pe = e.getModelPatch(img, **kw)
+		pd = d.getModelPatch(img, **kw)
 		if pe is None:
 			return pd
 		if pd is None:
@@ -517,8 +521,6 @@ class HoggGalaxy(Galaxy):
 		x1 = outx.stop
 		y1 = outy.stop
 
-		print 'cmix means:', cmix.mean
-
 		psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
 
 		#print 'psf sum of ampls:', np.sum(psfmix.amp)
@@ -580,3 +582,56 @@ class DevGalaxy(HoggGalaxy):
 	def copy(self):
 		return DevGalaxy(self.pos.copy(), self.brightness.copy(),
 						 self.shape.copy())
+
+
+if __name__ == '__main__':
+	from astrometry.util.plotutils import PlotSequence
+	import matplotlib
+	from basics import GaussianMixturePSF, PixPos, Flux, NullPhotoCal, NullWCS, ConstantSky
+	from engine import Image
+	matplotlib.use('Agg')
+	import pylab as plt
+	ps = PlotSequence('gal')
+	
+	# example PSF (from WISE W1 fit)
+	w = np.array([ 0.77953706,  0.16022146,  0.06024237])
+	mu = np.array([[-0.01826623, -0.01823262],
+				   [-0.21878855, -0.0432496 ],
+				   [-0.83365747, -0.13039277]])
+	sigma = np.array([[[  7.72925584e-01,   5.23305564e-02],
+					   [  5.23305564e-02,   8.89078473e-01]],
+					   [[  9.84585869e+00,   7.79378820e-01],
+					   [  7.79378820e-01,   8.84764455e+00]],
+					   [[  2.02664489e+02,  -8.16667434e-01],
+						[ -8.16667434e-01,   1.87881670e+02]]])
+	
+	psf = GaussianMixturePSF(w, mu, sigma)
+
+	shape = GalaxyShape(10., 0.5, 30.)
+	pos = PixPos(100, 50)
+	bright = Flux(1000.)
+	egal = ExpGalaxy(pos, bright, shape)
+
+	pcal = NullPhotoCal()
+	wcs = NullWCS()
+	data = np.zeros((100, 200))
+	invvar = np.zeros_like(data)
+	tim = Image(data=data, invvar=invvar, psf=psf, wcs=wcs, sky=ConstantSky(0.),
+				photocal=pcal)
+
+	p0 = egal.getModelPatch(tim)
+	
+	p1 = egal.getModelPatch(tim, 1e-3)
+
+	print 'p0', p0.patch.sum()
+	print 'p1', p1.patch.sum()
+	
+	plt.clf()
+	ima = dict(interpolation='nearest', origin='lower')
+	plt.subplot(2,1,1)
+	plt.imshow(np.log10(np.maximum(1e-16, p0.patch)), **ima)
+	plt.colorbar()
+	plt.subplot(2,1,2)
+	plt.imshow(np.log10(np.maximum(1e-16, p1.patch)), **ima)
+	plt.colorbar()
+	ps.savefig()
