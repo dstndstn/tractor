@@ -455,23 +455,24 @@ class HoggGalaxy(Galaxy):
 		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
 						  self.shape.copy())
 
-	def getUnitFluxModelPatch(self, img, px=None, py=None):
+	def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		#
 		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
 					 img.getPsf().hashkey(), self.shape.hashkey()))
 		try:
-			cached = _galcache.get(deps)
-			return cached
+			(cached,mv) = _galcache.get(deps)
+			if mv <= minval:
+				return cached
 		except KeyError:
 			pass
-		patch = self._realGetUnitFluxModelPatch(img, px, py)
-		_galcache.put(deps, patch)
+		patch = self._realGetUnitFluxModelPatch(img, px, py, minval)
+		_galcache.put(deps, (patch,minval))
 		return patch
 		
 
-	def _realGetUnitFluxModelPatch(self, img, px, py):
+	def _realGetUnitFluxModelPatch(self, img, px, py, minval):
 		# shift and squash
 		cd = img.getWcs().cdAtPixel(px, py)
 
@@ -515,8 +516,10 @@ class HoggGalaxy(Galaxy):
 		y0 = outy.start
 		x1 = outx.stop
 		y1 = outy.stop
-		psfconvolvedimg = mp.mixture_to_patch(cmix, np.array([x0,y0]),
-											  np.array([x1,y1]))
+
+		print 'cmix means:', cmix.mean
+
+		psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
 
 		#print 'psf sum of ampls:', np.sum(psfmix.amp)
 		#print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)

@@ -176,14 +176,16 @@ class MixtureOfGaussians():
 			raise RuntimeError('c_gauss_2d_grid failed')
 		return result
 
-	def evaluate_grid_approx(self, x, y, minval):
+	def evaluate_grid_approx(self, x0, x1, y0, y1, minval):
+		'''
+		minval: small value at which to stop evaluating
+		'''
 		from mix import c_gauss_2d_approx
 		assert(self.D == 2)
-		# "More than enough"
-		S = 101
-		result = np.zeros((S, S))
-		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
-							  self.amp, self.mean,self.var, result)
+
+		result = np.zeros((y1-y0, x1-x0))
+		rtn = c_gauss_2d_approx(x0, x1, y0, y1, minval,
+								self.amp, self.mean,self.var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_approx failed')
 		return result
@@ -200,20 +202,14 @@ class MixtureOfGaussians():
 	#evaluate_grid = evaluate_grid_hogg
 	evaluate_grid = evaluate_grid_dstn
 
-# input: a mixture, a 2d array of x,y minimum values, and a 2d array of x,y maximum values
-# output: a patch
-def mixture_to_patch(mixture, posmin, posmax):
-	return mixture.evaluate_grid(int(posmin[0]), int(posmax[0]),
-								 int(posmin[1]), int(posmax[1]))
-'''
-	xl = np.arange(posmin[0], posmax[0], 1.)
-	nx = xl.size
-	yl = np.arange(posmin[1], posmax[1], 1.)
-	ny = yl.size
-	x, y = np.meshgrid(xl, yl)
-	pos = np.transpose(np.array([np.ravel(x), np.ravel(y)]))
-	return np.reshape(mixture.evaluate(pos), (ny, nx))
-'''
+def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
+	'''
+	`mixture`: a MixtureOfGaussians
+	`x0,x1,y0,y1`: integer bounds [x0,x1), [y0,y1) of the grid to evaluate
+
+	Returns: a Patch object
+	'''
+	return mixture.evaluate_grid(x0, x1, y0, y1)
 
 def model_to_patch(model, scale, posmin, posmax):
 	xl = np.arange(posmin[0], posmax[0]+1., 1.)
@@ -260,12 +256,13 @@ def functional_test_patch_maker(fn, psf=None):
 
 	if psf is not None:
 		exp_mixture = exp_mixture.convolve(psf)
-	exp_mix_patch = mixture_to_patch(exp_mixture, posmin, posmax)
+	pa = [int(x) for x in [posmin[0], posmax[0], posmin[1], posmax[1]]]
+	exp_mix_patch = mixture_to_patch(exp_mixture, *pa)
 	exp_patch = model_to_patch('exp', scale, posmin, posmax)
 	dev_mixture = MixtureOfGaussians(dev_amp*scale*scale, np.zeros((dev_amp.size, 2)), dev_var*scale*scale)
 	if psf is not None:
 		dev_mixture = dev_mixture.convolve(psf)
-	dev_mix_patch = mixture_to_patch(dev_mixture, posmin, posmax)
+	dev_mix_patch = mixture_to_patch(dev_mixture, *pa)
 	dev_patch = model_to_patch('dev', scale, posmin, posmax)
 	cmap = cm.gray
 	vmin = -0.5
@@ -305,13 +302,15 @@ if __name__ == '__main__':
 		print
 		print 'j =', j
 		print
-		S = 101
-		result = np.zeros((S, S))
+
+		x0,x1 = -50, 50
+		y0,y1 = -51, 51
+		W = x1 - x0
+		H = y1 - y0
+		result = np.zeros((H, W))
 
 		amp = np.array([1.0])
 		mean = np.array([[0.3, 0.7],])
-		x = 0.
-		y = 0.
 		minval = 1e-3
 		if j == 0:
 			var = np.array([ [ [ 4., 4. ], [4., 9.,] ], ])
@@ -332,19 +331,25 @@ if __name__ == '__main__':
 				mean[0,0] -= 0.8
 		elif j == 7:
 			mean += 10.
-			x = 10
-			y = 10
+			#x = 10
+			#y = 10
+			minval = 1e-9
+		elif j == 8:
+			mean[0,1] += 50.
+			minval = 1e-9
+		elif j == 9:
+			mean[0,1] += 80.
 			minval = 1e-9
 		else:
 			break
 
-		rtn = c_gauss_2d_approx(int(np.round(x)), int(np.round(y)), minval, S,
-								amp, mean, var, result)
+		rtn = c_gauss_2d_approx(x0, x1, y0, y1, minval, amp, mean, var, result)
+								
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_approx failed')
 
-		r2 = np.zeros((S, S))
-		rtn = c_gauss_2d_grid(x-50, 1, S, x-50, 1, S, amp, mean, var, r2)
+		r2 = np.zeros((H,W))
+		rtn = c_gauss_2d_grid(x0, 1, W, y0, 1, H, amp, mean, var, r2)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_grid failed')
 
@@ -358,14 +363,14 @@ if __name__ == '__main__':
 
 		assert(np.all(np.abs(r2 - result) < minval))
 		
-		if j == 3:
-			plt.clf()
-			for row in range(50,71):
-				plt.plot(result[row,:])
-				dy = (row - S/2)
-				mx = var[0, 0, 1] / var[0, 1, 1] * dy
-				plt.axvline(mx + S/2)
-			ps.savefig()
+		# if j == 3:
+		# 	plt.clf()
+		# 	for row in range(50,71):
+		# 		plt.plot(result[row,:])
+		# 		dy = (row - S/2)
+		# 		mx = var[0, 0, 1] / var[0, 1, 1] * dy
+		# 		plt.axvline(mx + S/2)
+		# 	ps.savefig()
 		
 
 	import sys

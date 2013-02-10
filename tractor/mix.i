@@ -148,7 +148,7 @@
     }
 
 
-	static int _get_np(PyObject* ob_amp,
+	static int get_np(PyObject* ob_amp,
 					   PyObject* ob_mean,
 					   PyObject* ob_var,
 					   PyObject* ob_result,
@@ -206,7 +206,9 @@
 		}
 		if ((PyArray_DIM(*np_result, 0) != NY) ||
 			(PyArray_DIM(*np_result, 1) != NX)) {
-            ERR("np_result must be size NY x NX");
+            ERR("np_result must be size NY x NX (%i x %i), got %i x %i",
+				NY, NX, (int)PyArray_DIM(*np_result, 0),
+				(int)PyArray_DIM(*np_result, 1));
 			return 1;
 		}
 		return 0;
@@ -231,7 +233,7 @@
 
 		tpd = pow(2.*M_PI, D);
 
-		if (_get_np(ob_amp, ob_mean, ob_var, ob_result, NX, NY,
+		if (get_np(ob_amp, ob_mean, ob_var, ob_result, NX, NY,
 					&K, &np_amp, &np_mean, &np_var, &np_result))
 			goto bailout;
 
@@ -300,8 +302,9 @@
 			return 0.0;
 		return exp(dsq);
 	}
-
-    static int c_gauss_2d_approx(int xc, int yc, double minval, int S,
+	
+    static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
+								 double minval,
 								 PyObject* ob_amp,
 								 PyObject* ob_mean,
 								 PyObject* ob_var,
@@ -309,15 +312,15 @@
 		double *amp, *mean, *var, *result;
 		const int D=2;
         int K, k;
-		int dx, dyabs;
 		int rtn = -1;
 		PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
 		double tpd;
-		int Shalf = S/2;
-		assert((S%2) == 1);
+		int W,H;
+		W = x1 - x0;
+		H = y1 - y0;
 		tpd = pow(2.*M_PI, D);
 
-		if (_get_np(ob_amp, ob_mean, ob_var, ob_result, S, S,
+		if (get_np(ob_amp, ob_mean, ob_var, ob_result, W, H,
 					&K, &np_amp, &np_mean, &np_var, &np_result))
 			goto bailout;
 
@@ -329,8 +332,8 @@
 		for (k=0; k<K; k++) {
 			// We symmetrize the covariance matrix,
 			// so we don't actually set V[2] or I[2].
-			// We also scale the the I
-			
+			// We also scale the the I to make the Gaussian evaluation easier
+			int dyabs;
 			double V[4];
 			double I[4];
 			double det;
@@ -338,7 +341,7 @@
 			double scale;
 			double mx,my;
 			double mv;
-
+			int xc,yc;
 			V[0] = var[k*D*D + 0];
 			V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
 			V[3] = var[k*D*D + 3];
@@ -354,7 +357,12 @@
 			my = mean[k*D+1];
 			mv = minval * amp[k] / scale;
 			//printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
-			for (dyabs=0; dyabs<=Shalf; dyabs++) {
+			xc = MAX(x0, MIN(x1-1, lround(mx)));
+			yc = MAX(y0, MIN(y1-1, lround(my)));
+
+			printf("mx,my (%.1f, %.1f)   xc,yc (%i,%i)\n", mx,my,xc,yc);
+
+			for (dyabs=0; dyabs < MAX(y1-yc, 1+yc-y0); dyabs++) {
 				int dysign;
 				int ngood = 0;
 				for (dysign=-1; dysign<=1; dysign+=2) {
@@ -362,30 +370,36 @@
 					int dxc;
 					double g;
 					int dir;
+					int xm;
+					int x, y;
 					double* rrow;
+					// only do the dy=0 row once
 					if ((dyabs == 0) && (dysign == 1))
 						continue;
 					dy = dyabs * dysign;
+					y = yc + dy;
+					if ((y < y0) || (y >= y1))
+						continue;
 					// mean of conditional distribution of dx given dy
-					dxc = lround(V[1] / V[3] * dy);
-					//printf("dy=%i, dxc=%i\n", dy, dxc);
-					dxc = MIN(dxc,  Shalf);
-					dxc = MAX(dxc, -Shalf);
-					dx = dxc;
+					//dxc = lround(V[1] / V[3] * dy);
+
+					xm = lround(V[1] / V[3] * (y - my) + mx);
+					xm = MAX(x0, MIN(x1-1, xm));
 					// eval at dx=0
 					// eval at dx = +- 1, ...
 					// stop altogether if neither are accepted
-					g = eval_g(I, (xc + dx) - mx, (yc + dy) - my);
+					x = xm;
+					g = eval_g(I, x - mx, y - my);
 					//printf("g = %g vs mv %g\n", g, mv);
-					rrow = result + (dy + Shalf)*S + Shalf;
-					rrow[dx] += scale * g;
+					rrow = result + (y - y0)*W - x0;
+					rrow[x] += scale * g;
 					if (g > mv)
 						ngood++;
 					for (dir=0; dir<2; dir++) {
-						for (dx = dxc + (dir ? 1 : -1); (dir ? dx <= Shalf : dx >= -Shalf); dir ? dx++ : dx--) {
-							g = eval_g(I, (xc+dx) - mx, (yc+dy) - my);
+						for (x = xm + (dir ? 1 : -1); (dir ? x < x1 : x >= x0); dir ? x++ : x--) {
+							g = eval_g(I, x - mx, y - my);
 							//printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
-							rrow[dx] += scale * g;
+							rrow[x] += scale * g;
 							if (g > mv)
 								ngood++;
 							else
