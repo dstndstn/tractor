@@ -879,8 +879,12 @@ class Tractor(MultiParams):
 		assert(len(derivs) == len(self.getParams()))
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor):
-			pa = [p + alpha * d for p,d in zip(p0, X)]
+			if alpha == 0.:
+				pa = p0
+			else:
+				pa = [p + alpha * d for p,d in zip(p0, X)]
 			chisq = 0.
+			chis = []
 			for img,umods,m0 in zip(imgs, umodels, mod0):
 				mod = m0.copy()
 				#pcal = img.getPhotoCal()
@@ -892,46 +896,54 @@ class Tractor(MultiParams):
 					if counts <= 0.:
 						continue
 					(um * counts).addTo(mod)
-				chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
+				chi = (img.getImage() - mod) * img.getInvError()
+				chis.append(chi)
+				chisq += (chi**2).sum()
 			lnp = -0.5 * chisq + tractor.getLogPrior()
-			return lnp
+			return lnp,chis
 
-
+		lnp0 = None
+		chis0 = None
+		
 		while True:
+			p0 = self.getParams()
+			if lnp0 is None:
+				lnp0,chis0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self)
+
 			t0 = Time()
 			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
-										scale_columns=False)
+										scale_columns=False, chiImages=chis0)
 			topt = Time()-t0
 			print 'forced phot: opt:', topt
 
 			t0 = Time()
-
 			## tryUpdates():
 			if alphas is None:
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
-			p0 = self.getParams()
-
-			lnp0 = lnpForUpdate(mod0, imgs, umodels, X, 0., p0, self)
 
 			lnpBest = lnp0
 			alphaBest = None
+			chiBest = None
 
 			for alpha in alphas:
 				logverb('  Stepping with alpha =', alpha)
-				lnp = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self)
+				lnp,chis = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self)
 				print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
 				if lnp > lnpBest:
 					alphaBest = alpha
 					lnpBest = lnp
+					chiBest = chis
 
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
 				pa = [p + alphaBest * d for p,d in zip(p0, X)]
 				self.setParams(pa)
 				dlogprob,alpha = lnpBest - lnp0, alphaBest
+				lnp0 = lnpBest
+				chis0 = chiBest
 			else:
 				dlogprob = 0.
 				alpha = 0.
@@ -1155,7 +1167,8 @@ class Tractor(MultiParams):
 		return allderivs
 
 	def getUpdateDirection(self, allderivs, damp=0., priors=True,
-						   scale_columns=True, scales_only=False):
+						   scale_columns=True, scales_only=False,
+						   chiImages=None):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -1347,9 +1360,18 @@ class Tractor(MultiParams):
 		#
 		if b is None:
 			b = np.zeros(Nrows)
+
+		chimap = {}
+		if chiImages is not None:
+			for img,chi in zip(self.getImages(), chiImages):
+				chimap[img] = chi
+				
 		# iterating this way avoids setting the elements more than once
 		for img,row0 in imgoffs.items():
-			chi = self.getChiImage(img=img).ravel()
+			chi = chimap.get(img, None)
+			if chi is None:
+				chi = self.getChiImage(img=img)
+			chi = chi.ravel()
 			NP = len(chi)
 			# we haven't touched these pix before
 			assert(all(b[row0 : row0 + NP] == 0))
