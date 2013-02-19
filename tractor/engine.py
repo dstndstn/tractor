@@ -825,28 +825,37 @@ class Tractor(MultiParams):
 
 		ASSUMES all source parameters except brightness are frozen.
 		'''
+		from basics import LinearPhotoCal
+		
+		imgs = self.getImages()
+		for img in imgs:
+			assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
+			### FIXME!!
+			assert(img.getPhotoCal().getScale() == 1.)
 		t0 = Time()
 		if minsb is None:
 			minsb = 0.
 		umodels = []
-		counts = []
+		#counts = []
 		srcs = list(self.catalog.getThawedSources())
-		imgs = self.getImages()
 		for img in imgs:
 			umods = []
-			cnts = []
+			#cnts = []
 			pcal = img.getPhotoCal()
 			for src in srcs:
 				cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
-				cnts.append(cc)
+				#cnts.extend(cc)
 				csum = sum(cc)
 				if csum == 0:
 					mv = 0.
 				else:
 					mv = minsb / csum
-				umods.append(src.getUnitFluxModelPatches(img, minval=mv))
+				umods.extend(src.getUnitFluxModelPatches(img, minval=mv))
+
+			#assert(len(umods) == len(cnts))
+			assert(len(umods) == self.numberOfParams())
 			umodels.append(umods)
-			counts.append(cnts)
+			#counts.append(cnts)
 		tmods = Time()-t0
 		print 'forced phot: getting unit-flux models:', tmods
 
@@ -856,21 +865,37 @@ class Tractor(MultiParams):
 		for img in imgs:
 			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
 		tmod = Time() - t0
-		print 'forced phot: getting initial model:', tmod
+		print 'forced phot: getting initial model image:', tmod
 
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
-		for img,umods,cnts in zip(imgs, umodels, counts):
-			for um,c,dd in zip(umods, cnts, derivs):
+		for img,umods in zip(imgs, umodels):
+			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
-				dd.extend([(u,img) for u in um])
+				dd.append((um, img))
 		tderivs = Time() - t0
 		print 'forced phot: building derivs:', tderivs
-
-		print 'Derivs:', derivs
-
 		assert(len(derivs) == len(self.getParams()))
+
+		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor):
+			pa = [p + alpha * d for p,d in zip(p0, X)]
+			chisq = 0.
+			for img,umods,m0 in zip(imgs, umodels, mod0):
+				mod = m0.copy()
+				#pcal = img.getPhotoCal()
+				for b,um in zip(pa,umods):
+					if um is None:
+						continue
+					#counts = pcal.brightnessToCounts(b)
+					counts = b
+					if counts <= 0.:
+						continue
+					(um * counts).addTo(mod)
+				chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
+			lnp = -0.5 * chisq + tractor.getLogPrior()
+			return lnp
+
 
 		while True:
 			t0 = Time()
@@ -880,6 +905,36 @@ class Tractor(MultiParams):
 			print 'forced phot: opt:', topt
 
 			t0 = Time()
+
+			## tryUpdates():
+			if alphas is None:
+				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
+				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
+			p0 = self.getParams()
+
+			lnp0 = lnpForUpdate(mod0, imgs, umodels, X, 0., p0, self)
+
+			lnpBest = lnp0
+			alphaBest = None
+
+			for alpha in alphas:
+				logverb('  Stepping with alpha =', alpha)
+				lnp = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self)
+				print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
+				if lnp < (lnpBest - 1.):
+					break
+				if lnp > lnpBest:
+					alphaBest = alpha
+					lnpBest = lnp
+
+			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
+			if alphaBest is not None:
+				pa = [p + alphaBest * d for p,d in zip(p0, X)]
+				self.setParams(pa)
+				dlogprob,alpha = lnpBest - lnp0, alphaBest
+			else:
+				dlogprob = 0.
+				alpha = 0.
 			#(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 			tstep = Time() - t0
 			print 'forced phot: line search:', tstep
