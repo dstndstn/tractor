@@ -514,6 +514,9 @@ class Catalog(MultiParams):
 	def getThawedSources(self):
 		return self._getActiveSubs()
 
+	def getFrozenSources(self):
+		return self._getInactiveSubs()
+
 	def getNamedParamName(self, j):
 		return 'source%i' % j
 
@@ -811,9 +814,88 @@ class Tractor(MultiParams):
 				plt.ylabel('L-BFGS-B iteration number')
 			plt.savefig(plotfn)
 
+	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
+								   #scale_columns=True,
+								   minsb=None,
+								   mindlnp=1.):
+		'''
+		ASSUMES linear brightnesses!
+
+		ASSUMES image parameters are frozen.
+
+		ASSUMES all source parameters except brightness are frozen.
+		'''
+		t0 = Time()
+		if minsb is None:
+			minsb = 0.
+		umodels = []
+		counts = []
+		srcs = list(self.catalog.getThawedSources())
+		imgs = self.getImages()
+		for img in imgs:
+			umods = []
+			cnts = []
+			pcal = img.getPhotoCal()
+			for src in srcs:
+				cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
+				cnts.append(cc)
+				csum = sum(cc)
+				if csum == 0:
+					mv = 0.
+				else:
+					mv = minsb / csum
+				umods.append(src.getUnitFluxModelPatches(img, minval=mv))
+			umodels.append(umods)
+			counts.append(cnts)
+		tmods = Time()-t0
+		print 'forced phot: getting unit-flux models:', tmods
+
+		t0 = Time()
+		fsrcs = list(self.catalog.getFrozenSources())
+		mod0 = []
+		for img in imgs:
+			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
+		tmod = Time() - t0
+		print 'forced phot: getting initial model:', tmod
+
+		t0 = Time()
+		derivs = [ [] for i in range(self.numberOfParams()) ]
+		for img,umods,cnts in zip(imgs, umodels, counts):
+			for um,c,dd in zip(umods, cnts, derivs):
+				if um is None:
+					continue
+				dd.extend([(u,img) for u in um])
+		tderivs = Time() - t0
+		print 'forced phot: building derivs:', tderivs
+
+		print 'Derivs:', derivs
+
+		assert(len(derivs) == len(self.getParams()))
+
+		while True:
+			t0 = Time()
+			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
+										scale_columns=False)
+			topt = Time()-t0
+			print 'forced phot: opt:', topt
+
+			t0 = Time()
+			#(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
+			tstep = Time() - t0
+			print 'forced phot: line search:', tstep
+			print 'forced phot: delta-lnprob:', dlogprob
+			if dlogprob < mindlnp:
+				break
+
+			## FIXME -- remove sources with negative brightness from the opt?
+
+
+		#return dlogprob, X, alpha
+
+
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
 		'''
-		Performs *one step* of linearized least-squares + line search
+		Performs *one step* of linearized least-squares + line search.
 		
 		Returns (delta-logprob, parameter update X, alpha stepsize)
 		'''
@@ -1405,10 +1487,10 @@ class Tractor(MultiParams):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
-	def getChiImage(self, imgi=-1, img=None, srcs=None):
+	def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=None):
 		if img is None:
 			img = self.getImage(imgi)
-		mod = self.getModelImage(img, srcs)
+		mod = self.getModelImage(img, srcs, minsb=minsb)
 		return (img.getImage() - mod) * img.getInvError()
 
 	def getNdata(self):

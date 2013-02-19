@@ -1,6 +1,6 @@
 """
 This file is part of the Tractor project.
-Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Copyright 2011, 2012, 2013 Dustin Lang and David W. Hogg.
 Licensed under the GPLv2; see the file COPYING for details.
 
 `sdss_galaxy.py`
@@ -361,7 +361,16 @@ class CompositeGalaxy(MultiParams):
 		if pd is None:
 			return pe
 		return pe + pd
-	
+
+	def getUnitFluxModelPatches(self, img, minval=None):
+		if minval is not None:
+			# allow each component half the error
+			minval = minval * 0.5
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		return (e.getUnitFluxModelPatches(img, minval=minval) +
+				d.getUnitFluxModelPatches(img, minval=minval))
+
 	def getUnitFluxModelPatch(self, img, px=None, py=None):
 		# this code is un-tested
 		assert(False)
@@ -474,7 +483,11 @@ class HoggGalaxy(Galaxy):
 		patch = self._realGetUnitFluxModelPatch(img, px, py, minval)
 		_galcache.put(deps, (patch,minval))
 		return patch
-		
+
+	def getUnitFluxModelPatches(self, img, minval=None):
+		if minval is None:
+			minval = 0.
+		return [self.getUnitFluxModelPatch(img, minval=minval)]
 
 	def _realGetUnitFluxModelPatch(self, img, px, py, minval):
 		# shift and squash

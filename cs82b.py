@@ -6,6 +6,8 @@ import numpy as np
 import pylab as plt
 import multiprocessing
 from glob import glob
+from scipy.ndimage.measurements import label,find_objects
+
 from astrometry.util.pyfits_utils import *
 from astrometry.util.sdss_radec_to_rcf import *
 from astrometry.util.multiproc import *
@@ -168,71 +170,27 @@ def main():
 			plt.title('Image %s' % tim.name)
 			ps.savefig()
 
-			# plt.clf()
-			# plt.imshow(L, **imx)
-			# plt.title('Labels %s' % tim.name)
-			# ps.savefig()
-
 			plt.clf()
 			plt.imshow(mod, **ima)
 			plt.title('Mod %s -- 0' % tim.name)
 			ps.savefig()
 
-			# plt.clf()
-			# plt.imshow(np.log10(np.maximum(minsb*0.1, mod)), **imx)
-			# plt.jet()
-			# plt.colorbar()
-			# plt.title('Mod %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# plt.clf()
-			# plt.imshow(np.log10(np.maximum(minsb*0.01, mod)), vmin=-4, vmax=-2, **imx)
-			# plt.jet()
-			# plt.colorbar()
-			# plt.title('Mod %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# 
-			# plt.clf()
-			# plt.imshow(mod > 0, **imbin)
-			# plt.title('Mod > 0 %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# plt.clf()
-			# plt.imshow(mod > minsb, **imbin)
-			# plt.title('Mod > minsb %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# plt.clf()
-			# plt.imshow(mod > (0.1*minsb), **imbin)
-			# plt.title('Mod > 0.1 minsb %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# plt.clf()
-			# plt.imshow(mod > (0.01 * minsb), **imbin)
-			# plt.title('Mod > 0.01 minsb %s -- 0' % tim.name)
-			# ps.savefig()
-			# 
-			# 
-			# plt.clf()
-			# plt.hist(mod.ravel(), range=(0, 0.01), bins=100)
-			# plt.title('Mod %s -- 0' % tim.name)
-			# ps.savefig()
+			# Sort the groups by the chi-squared values they contain
+			chi = tr.getChiImage(0, minsb=minsb)
+			nl = L.max()
+			gslices = find_objects(L, nl)
+			print 'nl', nl
+			print 'gslices len', len(gslices)
+			chisq = []
+			for i,gs in enumerate(gslices):
+				c = np.sum(chi[L == (i+1)]**2)
+				chisq.append(c)
+			Gorder = np.argsort(-np.array(chisq))
 
-			# for src in cat:
-			# 	mod = tr.getModelPatch(tim, src)
-			# 	mod.trimToNonZero()
-			# 	ext = mod.getExtent()
-			# 	print 'ext', ext
-			# 	[x0,x1,y0,y1] = ext
-			# 	if ((x1-x0) * (y1-y0) > 1000):
-			# 		plt.clf()
-			# 		plt.subplot(1,2,1)
-			# 		plt.imshow(mod.patch, extent=ext, **ima)
-			# 		plt.subplot(1,2,2)
-			# 		plt.imshow(mod.patch > 0, extent=ext, **imbin)
-
-			for gi,(gl,gsrcs) in enumerate(groups.items()):
+			#for gi,(gl,gsrcs) in enumerate(groups.items()):
+			for gi,gl in enumerate(Gorder):
+				gl += 1
+				gsrcs = groups[gl]
 				print 'Group', gl, ': sources', gsrcs
 				tr.catalog.freezeAllBut(*gsrcs)
 				#srcs = []
@@ -240,37 +198,41 @@ def main():
 				#	srcs.append(tr.catalog[i])
 
 				print 'Thawed params:'
-				for nm in tr.getParamNames():
-					print '  ', nm
+				tr.printThawedParams()
 
-				while True:
-					dlnp,X,alpha = tr.optimize()
+				# while True:
+				# 	dlnp,X,alpha = tr.optimize()
+				# 	pc = tim.getPhotoCal()
+				# 	for i in gsrcs:
+				# 		bb = tr.catalog[i].getBrightnesses()
+				# 		counts = 0.
+				# 		for b in bb:
+				# 			c = pc.brightnessToCounts(b)
+				# 			if c <= 0:
+				# 				print 'Clamping brightness up to zero for', tr.catalog[i]
+				# 				b.setBand(band, 0.)
+				# 			else:
+				# 				counts += c
+				# 		if counts == 0.:
+				# 			print 'Freezing zero-flux source', i, tr.catalog[i]
+				# 			tr.catalog.freezeParam(i)
+				# 			gsrcs.remove(i)
+				# 			
+				# 	print 'delta-logprob', dlnp
+				# 	if dlnp < 1.:
+				# 		break
 
-					pc = tim.getPhotoCal()
-					for i in gsrcs:
-						bb = tr.catalog[i].getBrightnesses()
-						counts = 0.
-						for b in bb:
-							c = pc.brightnessToCounts(b)
-							if c <= 0:
-								print 'Clamping brightness up to zero for', tr.catalog[i]
-								b.setBand(band, 0.)
-							else:
-								counts += c
-						if counts == 0.:
-							print 'Freezing zero-flux source', i, tr.catalog[i]
-							tr.catalog.freezeParam(i)
-							gsrcs.remove(i)
-							
-					print 'delta-logprob', dlnp
-					if dlnp < 1.:
-						break
+				tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.)
 
 				mod = tr.getModelImage(0, minsb=minsb)
 				plt.clf()
 				plt.imshow(mod, **ima)
 				plt.title('Mod %s -- group %i' % (tim.name, gi+1))
 				ps.savefig()
+
+				if gi == 10:
+					break
+
 
 		cat.thawPathsTo(band)
 		cat1 = cat.getParams()

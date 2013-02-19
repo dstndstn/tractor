@@ -672,14 +672,21 @@ class PointSource(MultiParams):
 	#def hashkey(self):
 	#	return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
-	def getModelPatch(self, img, minsb=None):
+	def getUnitFluxModelPatch(self, img, minval=None):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
+		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
+		return patch
+
+	def getUnitFluxModelPatches(self, *args, **kwargs):
+		return [self.getUnitFluxModelPatch(*args, **kwargs)]
+
+	def getModelPatch(self, img, minsb=None):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		minval = None
 		if minsb is not None:
 			minval = minsb / counts
-		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
-		return patch * counts
+		upatch = self.getUnitFluxModelPatch(img, minval=minval)
+		return upatch * counts
 
 	def getParamDerivatives(self, img):
 		'''

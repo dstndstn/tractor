@@ -329,9 +329,14 @@ class NamedParams(object):
 				yield i,array[i]
 
 	def _getLiquidArray(self, array):
-		for i,v in enumerate(self.liquid):
+		for i,(v,a) in enumerate(zip(self.liquid, array)):
 			if v:
-				yield array[i]
+				yield a
+	def _getFrozenArray(self, array):
+		for i,(v,a) in enumerate(zip(self.liquid, array)):
+			if not v:
+				yield a
+
 	def _enumerateLiquidArray(self, array):
 		for i,v in enumerate(self.liquid):
 			if v:
@@ -557,6 +562,12 @@ class MultiParams(BaseParams, NamedParams):
 			if s is not None:
 				yield s
 
+	def _getInactiveSubs(self):
+		for s in self._getFrozenArray(self.subs):
+			# Should 'subs' be allowed to contain None values?
+			if s is not None:
+				yield s
+
 	def _enumerateActiveSubs(self):
 		'''
 		Yields *index-ignoring-freeze-state*,sub
@@ -615,6 +626,10 @@ class MultiParams(BaseParams, NamedParams):
 			n.extend(('%s.%s' % (pre,post), pliq, (liquid and pliq2))
 					 for (post,pliq,pliq2) in snames)
 		return n
+
+	def printThawedParams(self):
+		for nm,val in zip(self.getParamNames(), self.getParams()):
+			print '  ', nm, '=', val
 
 	def getParamNames(self):
 		n = []

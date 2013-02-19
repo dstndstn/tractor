@@ -109,8 +109,8 @@ class Source(Params):
 		photometric calibration.
 
 		The "minsb" argument, if given, is the allowable approximation
-		error per pixel; we're asking the source to render itself out to
-		this surface brightness.
+		error per pixel; we are asking the source to render itself out
+		to this surface brightness.
 		'''
 		pass
 
@@ -124,7 +124,20 @@ class Source(Params):
 
 	def getBrightnesses(self):
 		return []
-	
+
+	def getUnitFluxModelPatches(self, img, minval=None):
+		'''
+		Returns a list the same length as getBrightnesses(), each
+		containing a Patch whose sum is ~ unity.
+
+		Like getModelPatch(), but ignore the brightness of the object
+		and just return a patch whose sum is unity.  Like "minsb",
+		"minval" gives the allowable per-pixel value at which the
+		profile can be truncated.  The patch may therefore not sum to
+		1 exactly.
+		'''
+		pass
+
 class Brightness(Params):
 	'''
 	Duck-type definition of the brightness of an astronomical source.
