@@ -49,3 +49,7 @@ class TractorTest(unittest.TestCase):
 if __name__ == '__main__':
 	unittest.main()
 		
+	#import matplotlib
+	#matplotlib.use('Agg')
+	#import pylab as plt
+		

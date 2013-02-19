@@ -1,6 +1,3 @@
-#
-# http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
-#
 import os
 import math
 import time
@@ -1630,24 +1627,16 @@ def runstage(stage, force=[], threads=1, doplots=True, opt=None):
 			print 'Ignoring pickle', pfn, 'and forcing stage', stage
 		else:
 			print 'Reading pickle', pfn
-
-			#multiprocessing.managers.RebuildProxy = fakeRebuildProxy
 			R = unpickle_from_file(pfn)
-			#multiprocessing.managers.RebuildProxy = realRebuildProxy
-
 			return R
 
 	if stage > 0:
-
 		prereqs = {
 			100: 0,
 			200: 0,
 			}
-
 		# Get prereq: from dict, or stage-1
-		
 		prereq = prereqs.get(stage, stage-1)
-
 		P = runstage(prereq, force=force, threads=threads, doplots=doplots, opt=opt)
 
 	else:
@@ -1842,10 +1831,6 @@ def checkstarmags():
 
 	
 def main():
-	#kicktires()
-	#checkstarmags()
-	#sys.exit(0)
-
 	import optparse
 	parser = optparse.OptionParser()
 	parser.add_option('--threads', dest='threads', default=16, type=int, help='Use this many concurrent processors')
@@ -1868,12 +1853,6 @@ def main():
 	else:
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
-	# RA = 334.32
-	# DEC = 0.315
-	# # Cut to a ~ 1k x 1k subimage
-	# S = 500
-	# get_cfht_coadd_image(RA, DEC, S, doplots=True)
 
 	runstage(opt.stage, opt.force, opt.threads, doplots=opt.plots, opt=opt)
 

@@ -304,6 +304,7 @@
 	}
 	
     static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
+								 double fx, double fy,
 								 double minval,
 								 PyObject* ob_amp,
 								 PyObject* ob_mean,
@@ -353,9 +354,10 @@
 			I[1] = -V[1] * isc * 2.0;
 			I[3] =  V[0] * isc;
 			scale = amp[k] / sqrt(tpd * det);
-			mx = mean[k*D+0];
-			my = mean[k*D+1];
-			mv = minval * amp[k] / scale;
+			mx = mean[k*D+0] + fx;
+			my = mean[k*D+1] + fy;
+			mv = minval * amp[k];
+			//printf("minval %g: amp %g, allowing mv %g\n", minval, amp[k], mv);
 			//printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
 			xc = MAX(x0, MIN(x1-1, lround(mx)));
 			yc = MAX(y0, MIN(y1-1, lround(my)));
@@ -365,7 +367,7 @@
 				int ngood = 0;
 				for (dysign=-1; dysign<=1; dysign+=2) {
 					int dy;
-					double g;
+					double g, v;
 					int dir;
 					int xm;
 					int x, y;
@@ -387,15 +389,17 @@
 					g = eval_g(I, x - mx, y - my);
 					//printf("g = %g vs mv %g\n", g, mv);
 					rrow = result + (y - y0)*W - x0;
-					rrow[x] += scale * g;
-					if (g > mv)
+					v = scale * g;
+					rrow[x] += v;
+					if (v > mv)
 						ngood++;
 					for (dir=0; dir<2; dir++) {
 						for (x = xm + (dir ? 1 : -1); (dir ? x < x1 : x >= x0); dir ? x++ : x--) {
 							g = eval_g(I, x - mx, y - my);
 							//printf("dx %i, g = %g vs mv %g\n", dx, g, mv);
-							rrow[x] += scale * g;
-							if (g > mv)
+							v = scale * g;
+							rrow[x] += v;
+							if (v > mv)
 								ngood++;
 							else
 								break;

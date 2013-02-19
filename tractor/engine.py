@@ -23,6 +23,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
 from scipy.sparse.linalg import lsqr
 from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage.measurements import label
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
@@ -811,6 +812,11 @@ class Tractor(MultiParams):
 			plt.savefig(plotfn)
 
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
+		'''
+		Performs *one step* of linearized least-squares + line search
+		
+		Returns (delta-logprob, parameter update X, alpha stepsize)
+		'''
 		print self.getName()+': Finding derivs...'
 		t0 = Time()
 		allderivs = self.getDerivs()
@@ -1269,12 +1275,14 @@ class Tractor(MultiParams):
 			img.setInvvar(oinvvar * factor * smask)
 
 	def getModelPatchNoCache(self, img, src, **kwargs):
-		return src.getModelPatch(img)
+		return src.getModelPatch(img, **kwargs)
 
-	def getModelPatch(self, img, src, **kwargs):
+	def getModelPatch(self, img, src, minsb=0., **kwargs):
 		deps = (img.hashkey(), src.hashkey())
 		deps = hash(deps)
-		mod = self.cache.get(deps, None)
+		mv,mod = self.cache.get(deps, (0.,None))
+		if mv > minsb:
+			mod = None
 		if mod is not None:
 			#logverb('	Cache hit for model patch: image ' + str(img) +
 			#		', source ' + str(src))
@@ -1286,9 +1294,9 @@ class Tractor(MultiParams):
 			#		', source ' + str(src))
 			#logverb('	image hashkey ' + str(img.hashkey()))
 			#logverb('	source hashkey ' + str(src.hashkey()))
-			mod = self.getModelPatchNoCache(img, src, **kwargs)
+			mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
 			#print 'Caching model image'
-			self.cache.put(deps, mod)
+			self.cache.put(deps, (minsb,mod))
 		return mod
 
 	#def getModelImageNoCache(self, img, srcs=None, sky=True):
@@ -1333,6 +1341,45 @@ class Tractor(MultiParams):
 			self.cache[deps] = mod
 		return mod
 	'''
+
+	def getOverlappingSources(self, img, srcs=None, minsb=None):
+		mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
+		if minsb is None:
+			minflux = 0.
+		else:
+			minflux = minsb
+		L,n = label(mod > minflux, structure=np.ones((3,3), int))
+		#print 'Found', n, 'groups of sources'
+		assert(L.shape == mod.shape)
+		if srcs is None:
+			srcs = self.catalog
+		if _isint(img):
+			img = self.getImage(img)
+
+		srcgroups = {}
+		H,W = mod.shape
+		for i,src in enumerate(srcs):
+			modpatch = self.getModelPatch(img, src, minsb=minsb)
+			#print 'modpatch', modpatch
+			if not modpatch.clipTo(W,H):
+				# no overlap with image
+				continue
+			#print 'modpatch', modpatch
+			lpatch = L[modpatch.getSlice(mod)]
+			#print 'mp', modpatch.shape
+			#print 'lpatch', lpatch.shape
+			ll = np.unique(lpatch[modpatch.patch > minflux])
+			#print 'labels:', ll, 'for source', src
+			if len(ll) == 0:
+				# this sources contributes very little!
+				continue
+			assert(len(ll) == 1)
+			ll = ll[0]
+			if not ll in srcgroups:
+				srcgroups[ll] = []
+			srcgroups[ll].append(i)
+		#return srcgroups.values() #, L
+		return srcgroups, L
 
 	def getModelImages(self):
 		if self.is_multiproc():

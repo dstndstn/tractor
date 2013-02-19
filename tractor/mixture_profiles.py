@@ -176,7 +176,7 @@ class MixtureOfGaussians():
 			raise RuntimeError('c_gauss_2d_grid failed')
 		return result
 
-	def evaluate_grid_approx(self, x0, x1, y0, y1, minval):
+	def evaluate_grid_approx(self, x0, x1, y0, y1, dx, dy, minval):
 		'''
 		minval: small value at which to stop evaluating
 		'''
@@ -184,7 +184,7 @@ class MixtureOfGaussians():
 		assert(self.D == 2)
 
 		result = np.zeros((y1-y0, x1-x0))
-		rtn = c_gauss_2d_approx(x0, x1, y0, y1, minval,
+		rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval,
 								self.amp, self.mean,self.var, result)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_approx failed')
@@ -212,7 +212,8 @@ def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
 	if minval == 0.:
 		return mixture.evaluate_grid(x0, x1, y0, y1)
 	else:
-		return mixture.evaluate_grid_approx(x0, x1, y0, y1, minval)
+		#print 'eval grid:', x0,x1,y0,y1
+		return mixture.evaluate_grid_approx(x0, x1, y0, y1, 0., 0., minval)
 	
 def model_to_patch(model, scale, posmin, posmax):
 	xl = np.arange(posmin[0], posmax[0]+1., 1.)
@@ -315,6 +316,7 @@ if __name__ == '__main__':
 		amp = np.array([1.0])
 		mean = np.array([[0.3, 0.7],])
 		minval = 1e-3
+		dx = dy = 0.
 		if j == 0:
 			var = np.array([ [ [ 4., 4. ], [4., 9.,] ], ])
 		elif j == 1:
@@ -343,16 +345,35 @@ if __name__ == '__main__':
 		elif j == 9:
 			mean[0,1] += 80.
 			minval = 1e-9
+		elif j == 10:
+			amp = np.array([0.9, 0.1])
+			mean = np.array([[0.3, 0.7],[-0.3, -0.7],])
+			var = np.array([ [ [ 400., -100. ], [-100., 100.,] ],
+							 [ [ 400., -100. ], [-100., 100.,] ], ])
+			minval = 1e-9
+		elif j == 11:
+			amp = np.array([0.99, 0.01])
+			mean = np.array([[0.3, 0.7],[-0.3, -0.7],])
+			var = np.array([ [ [ 400., -100. ], [-100., 100.,] ],
+							 [ [ 400., -100. ], [-100., 100.,] ], ])
+			minval = 1e-9
+		elif j == 12:
+			amp = np.array([0.99, 0.01])
+			mean = np.array([[0.3, 0.7],[-0.3, -0.7],])
+			var = np.array([ [ [ 400., -100. ], [-100., 100.,] ],
+							 [ [ 400., -100. ], [-100., 100.,] ], ])
+			dx = 1.
+			minval = 1e-9
 		else:
 			break
 
-		rtn = c_gauss_2d_approx(x0, x1, y0, y1, minval, amp, mean, var, result)
+		rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result)
 								
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_approx failed')
 
 		r2 = np.zeros((H,W))
-		rtn = c_gauss_2d_grid(x0, 1, W, y0, 1, H, amp, mean, var, r2)
+		rtn = c_gauss_2d_grid(x0 - dx, 1, W, y0 - dy, 1, H, amp, mean, var, r2)
 		if rtn == -1:
 			raise RuntimeError('c_gauss_2d_grid failed')
 
