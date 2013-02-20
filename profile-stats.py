@@ -21,6 +21,9 @@ def main():
         p = p.strip_dirs()
         p.sort_stats('cumulative').print_stats(100)
 
+        print
+        print 'Callees ordered by cumulative time:'
+        print
         p.print_callees(40)
 
         print

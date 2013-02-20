@@ -493,6 +493,17 @@ class Catalog(MultiParams):
 	A list of Source objects.  This class allows the Tractor to treat
 	a set of astronomical sources as a single object with a bunch of
 	parameters.  Most of the functionality comes from the base class.
+
+
+	Constructor syntax:
+
+	cat = Catalog(src1, src2, src3)
+
+	so if you have a list of sources,
+
+	srcs = [src1, src2, src3]
+	cat = Catalog(*srcs)
+
 	'''
 	deepcopy = MultiParams.copy
 
@@ -817,7 +828,8 @@ class Tractor(MultiParams):
 	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
 								   #scale_columns=True,
 								   minsb=None,
-								   mindlnp=1.):
+								   mindlnp=1.,
+								   rois=None):
 		'''
 		ASSUMES linear brightnesses!
 
@@ -832,6 +844,8 @@ class Tractor(MultiParams):
 			assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
 			### FIXME!!
 			assert(img.getPhotoCal().getScale() == 1.)
+		if rois is not None:
+			assert(len(rois) == len(imgs))
 		t0 = Time()
 		if minsb is None:
 			minsb = 0.
@@ -878,14 +892,14 @@ class Tractor(MultiParams):
 		print 'forced phot: building derivs:', tderivs
 		assert(len(derivs) == len(self.getParams()))
 
-		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor):
+		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
 			if alpha == 0.:
 				pa = p0
 			else:
 				pa = [p + alpha * d for p,d in zip(p0, X)]
 			chisq = 0.
 			chis = []
-			for img,umods,m0 in zip(imgs, umodels, mod0):
+			for i,(img,umods,m0) in enumerate(zip(imgs, umodels, mod0)):
 				mod = m0.copy()
 				#pcal = img.getPhotoCal()
 				for b,um in zip(pa,umods):
@@ -896,9 +910,17 @@ class Tractor(MultiParams):
 					if counts <= 0.:
 						continue
 					(um * counts).addTo(mod)
-				chi = (img.getImage() - mod) * img.getInvError()
+
+				if rois:
+					roi = rois[i]
+					subchi = (img.getImage()[roi] - mod[roi]) * img.getInvError()[roi]
+					chisq += (subchi**2).sum()
+					chi = np.zeros_like(mod)
+					chi[roi] = subchi
+				else:
+					chi = (img.getImage() - mod) * img.getInvError()
+					chisq += (chi**2).sum()
 				chis.append(chi)
-				chisq += (chi**2).sum()
 			lnp = -0.5 * chisq + tractor.getLogPrior()
 			return lnp,chis
 
@@ -908,7 +930,7 @@ class Tractor(MultiParams):
 		while True:
 			p0 = self.getParams()
 			if lnp0 is None:
-				lnp0,chis0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self)
+				lnp0,chis0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self, rois)
 
 			t0 = Time()
 			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
@@ -928,7 +950,7 @@ class Tractor(MultiParams):
 
 			for alpha in alphas:
 				logverb('  Stepping with alpha =', alpha)
-				lnp,chis = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self)
+				lnp,chis = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois)
 				print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
