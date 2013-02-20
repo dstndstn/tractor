@@ -151,32 +151,6 @@ def runone(tr, ps, band):
 				tsrcs.extend(groups[g])
 		print 'sources in groups touching slice:', tsrcs
 
-		#tr.catalog.freezeAllBut(*gsrcs)
-		#srcs = []
-		#for i in gsrcs:
-		#	srcs.append(tr.catalog[i])
-		# while True:
-		# 	dlnp,X,alpha = tr.optimize()
-		# 	pc = tim.getPhotoCal()
-		# 	for i in gsrcs:
-		# 		bb = tr.catalog[i].getBrightnesses()
-		# 		counts = 0.
-		# 		for b in bb:
-		# 			c = pc.brightnessToCounts(b)
-		# 			if c <= 0:
-		# 				print 'Clamping brightness up to zero for', tr.catalog[i]
-		# 				b.setBand(band, 0.)
-		# 			else:
-		# 				counts += c
-		# 		if counts == 0.:
-		# 			print 'Freezing zero-flux source', i, tr.catalog[i]
-		# 			tr.catalog.freezeParam(i)
-		# 			gsrcs.remove(i)
-		# 			
-		# 	print 'delta-logprob', dlnp
-		# 	if dlnp < 1.:
-		# 		break
-
 		fullcat = tr.catalog
 		subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
 		for i in range(len(tsrcs)):
@@ -186,16 +160,25 @@ def runone(tr, ps, band):
 		print 'Thawed params:'
 		tr.printThawedParams()
 
+		t0 = Time()
 		tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 									  rois=[gslice])
+		print 'optimize_forced_photometry took', Time()-t0
 
 		tr.catalog = fullcat
 
+		t0 = Time()
 		mod = tr.getModelImage(0, minsb=minsb)
+		print 'Getting model for plot took', Time()-t0
+
 		plt.clf()
 		plt.imshow(mod, **ima)
 		plt.title('Mod %s -- group %i' % (tim.name, gi+1))
 		ps.savefig()
+
+		#### Plot before-n-after for the ROI
+		#### Plot chi image
+		#### Modify invvar code to *not* include image Poisson term.
 
 		#if gi == 10:
 		#	break
