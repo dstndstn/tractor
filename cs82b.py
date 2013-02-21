@@ -80,7 +80,7 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 	return srcs, np.array(isrcs)
 
 
-def runone(tr, ps, band):
+def runone(tr, ps, band, opt):
 	from tractor.ttime import Time
 
 	tr.freezeParam('images')
@@ -100,10 +100,6 @@ def runone(tr, ps, band):
 	minsb = 0.1 * sig
 
 	img = tim.getImage()
-	print 'Getting initial model...'
-	t0 = Time()
-	mod = tr.getModelImage(0, minsb=minsb)
-	print 'initial model took', Time()-t0
 
 	print 'Finding overlapping sources...'
 	t0 = Time()
@@ -120,21 +116,27 @@ def runone(tr, ps, band):
 				 vmin=0, vmax=1, cmap='gray')
 	imx = dict(interpolation='nearest', origin='lower')
 
-	plt.clf()
-	plt.imshow(img, **ima)
-	plt.title('Image %s' % tim.name)
-	ps.savefig()
+	if opt.plots:
+		print 'Getting initial model...'
+		t0 = Time()
+		mod = tr.getModelImage(0, minsb=minsb)
+		print 'initial model took', Time()-t0
 
-	plt.clf()
-	plt.imshow(mod, **ima)
-	plt.title('Mod %s -- 0' % tim.name)
-	ps.savefig()
+		plt.clf()
+		plt.imshow(img, **ima)
+		plt.title('Image %s' % tim.name)
+		ps.savefig()
 
-	plt.clf()
-	plt.imshow(tim.getInvError(), vmin=0, **imx)
-	plt.colorbar()
-	plt.title('InvError %s -- 0' % tim.name)
-	ps.savefig()
+		plt.clf()
+		plt.imshow(mod, **ima)
+		plt.title('Mod %s -- 0' % tim.name)
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(tim.getInvError(), vmin=0, **imx)
+		plt.colorbar()
+		plt.title('InvError %s -- 0' % tim.name)
+		ps.savefig()
 
 	# Sort the groups by the chi-squared values they contain
 	print 'Getting chi image...'
@@ -152,7 +154,6 @@ def runone(tr, ps, band):
 		subL = L[gs]
 		subchi = chi[gs]
 		c = np.sum(subchi[subL == (i+1)]**2)
-		##c = np.sum(chi[L == (i+1)]**2)
 		chisq.append(c)
 	Gorder = np.argsort(-np.array(chisq))
 	print 'Sorting objects took', Time()-t0
@@ -170,9 +171,7 @@ def runone(tr, ps, band):
 		gsrcs = groups[gl]
 		print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
 
-		#print 'slice', gslice
 		tgroups = np.unique(L[gslice])
-		#print 'groups touching slice:', tgroups
 		tsrcs = []
 		for g in tgroups:
 			if not g in [gl,0]:
@@ -201,15 +200,7 @@ def runone(tr, ps, band):
 
 		tr.catalog = fullcat
 
-		# t0 = Time()
-		# mod = tr.getModelImage(0, minsb=minsb)
-		# print 'Getting model for plot took', Time()-t0
-		# plt.clf()
-		# plt.imshow(mod, **ima)
-		# plt.title('Mod %s -- group %i' % (tim.name, gi+1))
-		# ps.savefig()
-
-		if gi % 10 == 0 and gi < 250:
+		if opt.plots and gi % 10 == 0 and gi < 250:
 			(im,mod0,chi0,roi0) = ims0[0]
 			if ims1 is not None:
 				(im,mod1,chi1,roi1) = ims1[0]
@@ -236,14 +227,14 @@ def runone(tr, ps, band):
 				
 			plt.clf()
 			plt.subplot(2,3,1)
-			print 'gslice', gslice
+			#print 'gslice', gslice
 			sy,sx = gslice
-			print 'sy', sy
-			print 'sx', sx
-			print 'gx,gy', gx,gy
-			print 'tx,ty', tx,ty
+			#print 'sy', sy
+			#print 'sx', sx
+			#print 'gx,gy', gx,gy
+			#print 'tx,ty', tx,ty
 			x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
-			print 'ext', [x0,x1,y0,y1]
+			#print 'ext', [x0,x1,y0,y1]
 			margin = 25
 			H,W = img.shape
 			ext = [max(0, x0-margin), min(W-1, x1+margin),
@@ -298,10 +289,17 @@ def runone(tr, ps, band):
 	plt.ylabel('i-band (%s)' % tim.name)
 	plt.axis([25,8, 25,8])
 	ps.savefig()
-	
+
+	plt.clf()
+	for bs in blindsteps:
+		plt.semilogy(np.maximum(1e-6, bs), 'r-')
+	plt.xlabel('step')
+	plt.ylabel('dlnp')
+	plt.title('blind step results')
+	ps.savefig()
 
 
-def main():
+def main(opt):
 	cs82field = 'S82p18p'
 
 	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
@@ -376,13 +374,18 @@ def main():
 			print 'invvar range:', iv[iv>0].min(), iv[iv>0].max()
 
 			fn = 'prof-cs82b-%s.dat' % (datetime.now().isoformat())
-			locs = dict(tr=tr, ps=ps, band=band)
-			cProfile.runctx('runone(tr,ps,band)', globals(), locs, fn)
+			locs = dict(tr=tr, ps=ps, band=band, opt=opt)
+			cProfile.runctx('runone(tr,ps,band,opt)', globals(), locs, fn)
 
 
 		break
 
 if __name__ == '__main__':
+	import optparse
+	parser = optparse.OptionParser('%prog [options]')
+	parser.add_option('--no-plots', dest='plots', default=True, action='store_false',
+					  help='Do not produce plots')
+	opt,args = parser.parse_args()
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
-	main()
+	main(opt)
 

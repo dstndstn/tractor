@@ -848,11 +848,25 @@ class Tractor(MultiParams):
 		t0 = Time()
 		if minsb is None:
 			minsb = 0.
+
 		umodels = []
+		subimgs = []
 		srcs = list(self.catalog.getThawedSources())
-		for img in imgs:
+		for i,img in enumerate(imgs):
 			umods = []
 			pcal = img.getPhotoCal()
+
+			if rois is not None:
+				roi = rois[i]
+				y0 = roi[0].start
+				x0 = roi[1].start
+				subimg = Image(data=img.data[roi], invvar=img.invvar[roi],
+							   psf=img.psf, wcs=img.wcs, sky=img.sky,
+							   photocal=img.photocal, name=img.name)
+				subimgs.append(subimg)
+			else:
+				x0 = y0 = 0
+
 			for src in srcs:
 				cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
 				csum = sum(cc)
@@ -860,7 +874,12 @@ class Tractor(MultiParams):
 					mv = 0.
 				else:
 					mv = minsb / csum
-				umods.extend(src.getUnitFluxModelPatches(img, minval=mv))
+				ums = src.getUnitFluxModelPatches(img, minval=mv)
+				for um in ums:
+					um.x0 -= x0
+					um.y0 -= y0
+					#print 'unit-flux model', um
+				umods.extend(ums)
 
 			assert(len(umods) == self.numberOfParams())
 			umodels.append(umods)
@@ -870,6 +889,7 @@ class Tractor(MultiParams):
 		t0 = Time()
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
+		# FIXME -- getModelImage(subimg) rather than clipping afterwards?
 		for img in imgs:
 			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
 		tmod = Time() - t0
@@ -877,45 +897,26 @@ class Tractor(MultiParams):
 
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
-		subimgs = []
-		for img,umods in zip(imgs, umodels):
-			if rois is None:
-				x0,y0 = 0,0
-			else:
-				roi = rois[0]
-				y0 = roi[0].start
-				x0 = roi[1].start
-				# Select subimg also!
-				# getUpdateDirection() calls:
-				#    img.numberOfPixels()
-				#    img.getInvError()
-				#    img.shape
-				subimg = Image(data=img.data[roi],
-							   invvar=img.invvar[roi],
-							   psf=img.psf, wcs=img.wcs, sky=img.sky,
-							   photocal=img.photocal,
-							   name=img.name)
-				#img = img[roi]
-				subimgs.append(subimg)
-				img = subimg
+		for i,(img,umods) in enumerate(zip(imgs, umodels)):
+			if rois is not None:
+				img = subimgs[i]
 				
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
-				if rois is not None:
-					# um is a Patch; create a shifted copy so that its coords are
-					# relative to the ROI.
-					um = Patch(um.x0 - x0, um.y0 - y0, um.patch)
 				dd.append((um, img))
 		tderivs = Time() - t0
 		print 'forced phot: building derivs:', tderivs
 		assert(len(derivs) == len(self.getParams()))
+
 		## ABOUT rois and derivs: we call
 		#   getUpdateDirection(derivs, ..., chiImages=[chis])
 		# And this uses the "img" objects in "derivs" to decide on the region
 		# that is being optimized; the number of rows = total number of pixels.
 		# We have to make sure that "chiImages" matches that size.
-
+		#
+		# We shift the unit-flux models (above, um.x0 -= x0) to be relative to the
+		# ROI.
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
 			ims = []
@@ -926,7 +927,15 @@ class Tractor(MultiParams):
 			chisq = 0.
 			chis = []
 			for i,(img,umods,m0) in enumerate(zip(imgs, umodels, mod0)):
-				mod = m0.copy()
+				roi = None
+				if rois:
+					roi = rois[i]
+
+				if roi is not None:
+					mod = m0[roi].copy()
+				else:
+					mod = m0.copy()
+					
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
@@ -935,10 +944,9 @@ class Tractor(MultiParams):
 						continue
 					(um * counts).addTo(mod)
 
-				if rois:
-					roi = rois[i]
-					subchi = (img.getImage()[roi] - mod[roi]) * img.getInvError()[roi]
-					ims.append((img.getImage()[roi], mod[roi], subchi, roi))
+				if roi is not None:
+					subchi = (img.getImage()[roi] - mod) * img.getInvError()[roi]
+					ims.append((img.getImage()[roi], mod, subchi, roi))
 					chi = subchi
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
@@ -987,15 +995,14 @@ class Tractor(MultiParams):
 
 			t0 = Time()
 			## tryUpdates():
-			#(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 			if alphas is None:
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
 
 			# Check whether the update produces all positive fluxes: if so we
 			# should be able to take it with alpha=1 and quit.
-			print 'p0:', p0
-			print 'X:', X
+			#print 'p0:', p0
+			#print 'X:', X
 			if np.all(p0 + X >= 0.):
 				print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
@@ -1042,8 +1049,8 @@ class Tractor(MultiParams):
 			if dlogprob < mindlnp:
 				break
 
-			# if quitNow:
-			#     break
+			if quitNow:
+				break
 
 			## FIXME -- remove sources with negative brightness from the opt?
 
