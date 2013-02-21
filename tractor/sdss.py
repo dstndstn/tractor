@@ -1141,6 +1141,12 @@ class SdssWcs(ParamList):
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals
 		self.astrans = astrans
+		# if not None, cd_at_pixel() returns this constant value; set via
+		# setConstantCd()
+		self.constant_cd = None
+
+	def setConstantCd(self, x, y):
+		self.constant_cd = self.cdAtPixel(x, y)
 
 	def _setThing(self, i, val):
 		N = len(SdssWcs.pnames)
@@ -1192,6 +1198,8 @@ class SdssWcs(ParamList):
 		return ra,dec
 
 	def cdAtPixel(self, x, y):
+		if self.constant_cd is not None:
+			return self.constant_cd
 		return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
 
 	# RA,Dec in deg to pixel x,y.

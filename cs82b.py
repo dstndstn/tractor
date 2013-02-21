@@ -367,6 +367,8 @@ def main(opt):
 			tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
 											nanomaggies=True, zrange=[-2,5],
 											invvarIgnoresSourceFlux=True)
+			(H,W) = tim.shape
+			tim.wcs.setConstantCd(W/2., H/2.)
 			tr = Tractor([tim], cat)
 			print tr
 
