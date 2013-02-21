@@ -760,13 +760,27 @@ def scale_sdss_image(tim, S):
 
 
 
-def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
+def get_tractor_image_dr8(*args, **kwargs):
+	retry = kwargs.pop('retry_retrieve', True)
+	if retry:
+		try:
+			return _get_tractor_image_dr8(*args, **kwargs)
+		except:
+			# Re-retrieve the data
+			(run,camcol,field,bandnum) = args
+			for ft in ['psField', 'fpM', 'frame']:
+				fn = sdss.retrieve(ft, run, camcol, field, bandname,
+								   skipExisting=False)
+			# and continue...
+	return _get_tractor_image_dr8(*args, **kwargs)
+
+def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
 						  savepsfimg=None, curl=False,
 						  nanomaggies=False,
 						  zrange=[-3,10],
-						  retry_retrieve=True,
 						  invvarIgnoresSourceFlux=False):
+	# retry_retrieve=True,
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -803,23 +817,6 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	valid_psf = ['dg', 'kl-gm']
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
-
-	if retry_retrieve:
-		try:
-			args = (run,camcol,field, bandname)
-			kwargs = dict(sdss=sdss, roi=roi, psf=origpsf,
-						  roiradecsize=roiradecsize, savepsfimg=savepsfimg,
-						  curl=curl, nanomaggies=nanomaggies,
-						  zrange=zrange, retry_retrieve=False)
-			X = get_tractor_image_dr8(*args, **kwargs)
-			return X
-		except:
-			# Re-retrieve the data
-			for ft in ['psField', 'fpM', 'frame']:
-				fn = sdss.retrieve(ft, run, camcol, field, bandname,
-								   skipExisting=False)
-			# and continue...
-
 
 	if sdss is None:
 		sdss = DR8(curl=curl)
@@ -898,7 +895,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	invvar = frame.getInvvar(psfield, bandnum, ignoreSourceFlux=invvarIgnoresSourceFlux)
 	invvar = invvar.astype(np.float32)
 	assert(invvar.shape == image.shape)
-	
+
 	# Could get this from photoField instead
 	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
 	gain = psfield.getGain(bandnum)

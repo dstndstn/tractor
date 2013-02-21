@@ -130,26 +130,40 @@ def runone(tr, ps, band):
 	plt.title('Mod %s -- 0' % tim.name)
 	ps.savefig()
 
+	plt.clf()
+	plt.imshow(tim.getInvError(), vmin=0, **imx)
+	plt.colorbar()
+	plt.title('InvError %s -- 0' % tim.name)
+	ps.savefig()
+
 	# Sort the groups by the chi-squared values they contain
 	print 'Getting chi image...'
 	t0 = Time()
 	chi = tr.getChiImage(0, minsb=minsb)
 	print 'Chi image took', Time()-t0
 
+	t0 = Time()
 	nl = L.max()
 	gslices = find_objects(L, nl)
+	print 'find_objects took', Time()-t0
+	t0 = Time()
 	chisq = []
 	for i,gs in enumerate(gslices):
 		c = np.sum(chi[L == (i+1)]**2)
 		chisq.append(c)
 	Gorder = np.argsort(-np.array(chisq))
+	print 'Sorting objects took', Time()-t0
+
+	blindsteps = []
 
 	for gi,gl in enumerate(Gorder):
+		print
+		# note, gslices is zero-indexed
+		gslice = gslices[gl]
 		gl += 1
 		if not gl in groups:
 			print 'Group', gl, 'not in groups array; skipping'
 			continue
-		gslice = gslices[gl]
 		gsrcs = groups[gl]
 		print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
 
@@ -159,7 +173,8 @@ def runone(tr, ps, band):
 		tsrcs = []
 		for g in tgroups:
 			if not g in [gl,0]:
-				tsrcs.extend(groups[g])
+				if g in groups:
+					tsrcs.extend(groups[g])
 		print 'sources in groups touching slice:', tsrcs
 
 		fullcat = tr.catalog
@@ -172,9 +187,11 @@ def runone(tr, ps, band):
 		tr.printThawedParams()
 
 		t0 = Time()
-		ims0,ims1 = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-												  rois=[gslice])
+		ims0,ims1,blindstep = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+															rois=[gslice])
 		print 'optimize_forced_photometry took', Time()-t0
+		if len(blindstep):
+			blindsteps.append(blindstep)
 
 		print 'After params:'
 		tr.printThawedParams()
@@ -189,51 +206,73 @@ def runone(tr, ps, band):
 		# plt.title('Mod %s -- group %i' % (tim.name, gi+1))
 		# ps.savefig()
 
-		if gi < 50:
+		if gi % 10 == 0 and gi < 250:
 			(im,mod0,chi0,roi0) = ims0[0]
 			if ims1 is not None:
 				(im,mod1,chi1,roi1) = ims1[0]
-	
+
+			gx,gy = [],[]
+			wcs = tim.getWcs()
+			for src in gsrcs:
+				x,y = wcs.positionToPixel(tr.catalog[src].getPosition())
+				gx.append(x)
+				gy.append(y)
+			tx,ty = [],[]
+			for src in tsrcs:
+				x,y = wcs.positionToPixel(tr.catalog[src].getPosition())
+				tx.append(x)
+				ty.append(y)
+
+			plt.clf()
+			for bs in blindsteps:
+				plt.semilogy(np.maximum(1e-6, bs), 'r-')
+			plt.xlabel('step')
+			plt.ylabel('dlnp')
+			plt.title('blind step results')
+			ps.savefig()
+				
 			plt.clf()
 			plt.subplot(2,3,1)
 			print 'gslice', gslice
 			sy,sx = gslice
 			print 'sy', sy
 			print 'sx', sx
+			print 'gx,gy', gx,gy
+			print 'tx,ty', tx,ty
 			x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
 			print 'ext', [x0,x1,y0,y1]
 			margin = 25
 			H,W = img.shape
 			ext = [max(0, x0-margin), min(W-1, x1+margin),
 				   max(0, y0-margin), min(H-1, y1+margin)]
-			plt.imshow(img, extent=ext, **ima)
+			plt.imshow(img[ext[2]:ext[3]+1, ext[0]:ext[1]+1], extent=ext, **ima)
 			ax = plt.axis()
 			plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'r-')
+			plt.plot(gx, gy, 'rx')
+			plt.plot(tx, ty, 'gx')
 			plt.axis(ax)
+			plt.title('data')
 			plt.subplot(2,3,2)
 			plt.imshow(mod0, **ima)
+			plt.title('cs82 model')
 			plt.xticks([]); plt.yticks([])
 			plt.subplot(2,3,3)
 			plt.imshow(chi0, **imchi)
+			plt.title('cs82 chi')
 			plt.xticks([]); plt.yticks([])
 			plt.subplot(2,3,4)
 			plt.imshow(im, **ima)
 			if ims1 is not None:
 				plt.subplot(2,3,5)
 				plt.imshow(mod1, **ima)
+				plt.title('fit model')
 				plt.xticks([]); plt.yticks([])
 				plt.subplot(2,3,6)
 				plt.imshow(chi1, **imchi)
+				plt.title('fit chi')
 				plt.xticks([]); plt.yticks([])
 			ps.savefig()
 	
-		#### Plot before-n-after for the ROI
-		#### Plot chi image
-		#### Modify invvar code to *not* include image Poisson term.
-
-		#if gi == 10:
-		#	break
-
 	cat.thawPathsTo(band)
 	cat1 = cat.getParams()
 
@@ -321,6 +360,9 @@ def main():
 											invvarIgnoresSourceFlux=True)
 			tr = Tractor([tim], cat)
 			print tr
+
+			iv = tim.invvar
+			print 'invvar range:', iv[iv>0].min(), iv[iv>0].max()
 
 			fn = 'prof-cs82b-%s.dat' % (datetime.now().isoformat())
 			locs = dict(tr=tr, ps=ps, band=band)

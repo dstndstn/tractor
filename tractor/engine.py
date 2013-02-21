@@ -826,7 +826,6 @@ class Tractor(MultiParams):
 			plt.savefig(plotfn)
 
 	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
-								   #scale_columns=True,
 								   minsb=None,
 								   mindlnp=1.,
 								   rois=None):
@@ -879,13 +878,42 @@ class Tractor(MultiParams):
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
 		for img,umods in zip(imgs, umodels):
+			if rois is None:
+				x0,y0 = 0,0
+			else:
+				roi = rois[0]
+				y0 = roi[0].start
+				x0 = roi[1].start
+				# Select subimg also!
+				# getUpdateDirection() calls:
+				#    img.numberOfPixels()
+				#    img.getInvError()
+				#    img.shape
+				subimg = Image(data=img.data[roi],
+							   invvar=img.invvar[roi],
+							   psf=img.psf, wcs=img.wcs, sky=img.sky,
+							   photocal=img.photocal,
+							   name=img.name)
+				#img = img[roi]
+				img = subimg
+				
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
+				if rois is not None:
+					# um is a Patch; create a shifted copy so that its coords are
+					# relative to the ROI.
+					um = Patch(um.x0 - x0, um.y0 - y0, um.patch)
 				dd.append((um, img))
 		tderivs = Time() - t0
 		print 'forced phot: building derivs:', tderivs
 		assert(len(derivs) == len(self.getParams()))
+		## ABOUT rois and derivs: we call
+		#   getUpdateDirection(derivs, ..., chiImages=[chis])
+		# And this uses the "img" objects in "derivs" to decide on the region
+		# that is being optimized; the number of rows = total number of pixels.
+		# We have to make sure that "chiImages" matches that size.
+
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
 			ims = []
@@ -911,8 +939,9 @@ class Tractor(MultiParams):
 					roi = rois[i]
 					subchi = (img.getImage()[roi] - mod[roi]) * img.getInvError()[roi]
 					chisq += (subchi**2).sum()
-					chi = np.zeros_like(mod)
-					chi[roi] = subchi
+					#chi = np.zeros_like(mod)
+					#chi[roi] = subchi
+					chi = subchi
 					ims.append((img.getImage()[roi], mod[roi], subchi, roi))
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
@@ -923,12 +952,18 @@ class Tractor(MultiParams):
 			return lnp,chis,ims
 
 		lnp0 = None
+		#chis0 = [ np.zeros_like(img) for img in imgs ]
+		#chis1 = [ np.zeros_like(img) for img in imgs ]
 		chis0 = None
 
 		# debugging images
 		ims0 = None
 		imsBest = None
 
+		# debug blind-stepping
+		blindstep = []
+
+		quitNow = False
 		while True:
 			p0 = self.getParams()
 			if lnp0 is None:
@@ -947,6 +982,15 @@ class Tractor(MultiParams):
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
 
+			# Check whether the update produces all positive fluxes: if so we
+			# should be able to take it with alpha=1 and quit.
+			print 'p0:', p0
+			print 'X:', X
+			if np.all(p0 + X >= 0.):
+				print 'Update produces non-negative fluxes; accepting with alpha=1'
+				alphas = [1.]
+				quitNow = True
+
 			lnpBest = lnp0
 			alphaBest = None
 			chiBest = None
@@ -963,6 +1007,9 @@ class Tractor(MultiParams):
 					chiBest = chis
 					imsBest = ims
 
+			if quitNow:
+				blindstep.append(lnp - lnp0)
+
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
 				pa = [p + alphaBest * d for p,d in zip(p0, X)]
@@ -975,12 +1022,17 @@ class Tractor(MultiParams):
 				alpha = 0.
 			tstep = Time() - t0
 			print 'forced phot: line search:', tstep
+			print 'forced phot: alpha', alphaBest
 			print 'forced phot: delta-lnprob:', dlogprob
 			if dlogprob < mindlnp:
 				break
+
+			# if quitNow:
+			#     break
+
 			## FIXME -- remove sources with negative brightness from the opt?
 
-		return ims0,imsBest
+		return ims0,imsBest, blindstep
 
 
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
@@ -1308,7 +1360,9 @@ class Tractor(MultiParams):
 			if scales_only:
 				continue
 			sprows.append(rows)
-			spcols.append(np.zeros_like(rows) + col)
+			c = np.empty_like(rows)
+			c[:] = col
+			spcols.append(c)
 			if scale_columns:
 				spvals.append(vals / scale)
 			else:
@@ -1403,8 +1457,10 @@ class Tractor(MultiParams):
 
 
 		# Zero out unused rows -- FIXME, is this useful??
+		print 'Nrows', Nrows, 'vs len(urows)', len(urows)
 		bnz = np.zeros(Nrows)
 		bnz[urows] = b[urows]
+		print 'b', len(b), 'vs bnz', len(bnz)
 		b = bnz
 		assert(np.all(np.isfinite(b)))
 
