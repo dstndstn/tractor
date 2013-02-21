@@ -32,8 +32,10 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
 			#print 'PSF'
 			themag = t.mag_psf
-			m = Mags(order=mags, **dict([(k, themag) for k in mags]))
-			m = NanoMaggies.fromMag(m)
+			#m = Mags(order=mags, **dict([(k, themag) for k in mags]))
+			#m = NanoMaggies.fromMag(m)
+			nm = NanoMaggies.magToNanomaggies(themag)
+			m = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 			srcs.append(PointSource(RaDecPos(t.ra, t.dec), m))
 			isrcs.append(i)
 			continue
@@ -46,12 +48,16 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 		# exp: disk
 
 		themag = t.mag_spheroid
-		m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
-		themag = t.mag_disk
-		m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		#m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		#m_dev = NanoMaggies.fromMag(m_dev)
+		nm = NanoMaggies.magToNanomaggies(themag)
+		m_dev = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 
-		m_dev = NanoMaggies.fromMag(m_dev)
-		m_exp = NanoMaggies.fromMag(m_exp)
+		themag = t.mag_disk
+		#m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
+		#m_exp = NanoMaggies.fromMag(m_exp)
+		nm = NanoMaggies.magToNanomaggies(themag)
+		m_exp = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 
 		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
 
@@ -108,6 +114,8 @@ def runone(tr, ps, band):
 	zr = tim.zr
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=zr[0], vmax=zr[1], cmap='gray')
+	imchi = dict(interpolation='nearest', origin='lower',
+				 vmin=-5, vmax=5, cmap='gray')
 	imbin = dict(interpolation='nearest', origin='lower',
 				 vmin=0, vmax=1, cmap='gray')
 	imx = dict(interpolation='nearest', origin='lower')
@@ -137,14 +145,17 @@ def runone(tr, ps, band):
 	Gorder = np.argsort(-np.array(chisq))
 
 	for gi,gl in enumerate(Gorder):
-		gslice = gslices[gl]
 		gl += 1
+		if not gl in groups:
+			print 'Group', gl, 'not in groups array; skipping'
+			continue
+		gslice = gslices[gl]
 		gsrcs = groups[gl]
-		print 'Group', gl, ': sources', gsrcs
+		print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
 
-		print 'slice', gslice
+		#print 'slice', gslice
 		tgroups = np.unique(L[gslice])
-		print 'groups touching slice:', tgroups
+		#print 'groups touching slice:', tgroups
 		tsrcs = []
 		for g in tgroups:
 			if not g in [gl,0]:
@@ -161,21 +172,61 @@ def runone(tr, ps, band):
 		tr.printThawedParams()
 
 		t0 = Time()
-		tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-									  rois=[gslice])
+		ims0,ims1 = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+												  rois=[gslice])
 		print 'optimize_forced_photometry took', Time()-t0
+
+		print 'After params:'
+		tr.printThawedParams()
 
 		tr.catalog = fullcat
 
-		t0 = Time()
-		mod = tr.getModelImage(0, minsb=minsb)
-		print 'Getting model for plot took', Time()-t0
+		# t0 = Time()
+		# mod = tr.getModelImage(0, minsb=minsb)
+		# print 'Getting model for plot took', Time()-t0
+		# plt.clf()
+		# plt.imshow(mod, **ima)
+		# plt.title('Mod %s -- group %i' % (tim.name, gi+1))
+		# ps.savefig()
 
-		plt.clf()
-		plt.imshow(mod, **ima)
-		plt.title('Mod %s -- group %i' % (tim.name, gi+1))
-		ps.savefig()
-
+		if gi < 50:
+			(im,mod0,chi0,roi0) = ims0[0]
+			if ims1 is not None:
+				(im,mod1,chi1,roi1) = ims1[0]
+	
+			plt.clf()
+			plt.subplot(2,3,1)
+			print 'gslice', gslice
+			sy,sx = gslice
+			print 'sy', sy
+			print 'sx', sx
+			x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
+			print 'ext', [x0,x1,y0,y1]
+			margin = 25
+			H,W = img.shape
+			ext = [max(0, x0-margin), min(W-1, x1+margin),
+				   max(0, y0-margin), min(H-1, y1+margin)]
+			plt.imshow(img, extent=ext, **ima)
+			ax = plt.axis()
+			plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'r-')
+			plt.axis(ax)
+			plt.subplot(2,3,2)
+			plt.imshow(mod0, **ima)
+			plt.xticks([]); plt.yticks([])
+			plt.subplot(2,3,3)
+			plt.imshow(chi0, **imchi)
+			plt.xticks([]); plt.yticks([])
+			plt.subplot(2,3,4)
+			plt.imshow(im, **ima)
+			if ims1 is not None:
+				plt.subplot(2,3,5)
+				plt.imshow(mod1, **ima)
+				plt.xticks([]); plt.yticks([])
+				plt.subplot(2,3,6)
+				plt.imshow(chi1, **imchi)
+				plt.xticks([]); plt.yticks([])
+			ps.savefig()
+	
 		#### Plot before-n-after for the ROI
 		#### Plot chi image
 		#### Modify invvar code to *not* include image Poisson term.
@@ -266,7 +317,8 @@ def main():
 
 		for band in 'i':
 			tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
-											nanomaggies=True, zrange=[-2,3])
+											nanomaggies=True, zrange=[-2,5],
+											invvarIgnoresSourceFlux=True)
 			tr = Tractor([tim], cat)
 			print tr
 

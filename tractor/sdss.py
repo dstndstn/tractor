@@ -765,7 +765,8 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  savepsfimg=None, curl=False,
 						  nanomaggies=False,
 						  zrange=[-3,10],
-						  retry_retrieve=True):
+						  retry_retrieve=True,
+						  invvarIgnoresSourceFlux=False):
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
 
@@ -894,7 +895,7 @@ def get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#assert(bigsky.shape == image.shape)
 
 	psfield = sdss.readPsField(run, camcol, field)
-	invvar = frame.getInvvar(psfield, bandnum)
+	invvar = frame.getInvvar(psfield, bandnum, ignoreSourceFlux=invvarIgnoresSourceFlux)
 	invvar = invvar.astype(np.float32)
 	assert(invvar.shape == image.shape)
 	
@@ -979,7 +980,6 @@ def get_tractor_image_dr9(*args, **kwargs):
 	if sdss is None:
 		curl = kwargs.pop('curl', False)
 		kwargs['sdss'] = DR9(curl=curl)
-	#print 'Calling get_tractor_image_dr8 with sdss=', sdss
 	return get_tractor_image_dr8(*args, **kwargs)
 
 

@@ -850,15 +850,12 @@ class Tractor(MultiParams):
 		if minsb is None:
 			minsb = 0.
 		umodels = []
-		#counts = []
 		srcs = list(self.catalog.getThawedSources())
 		for img in imgs:
 			umods = []
-			#cnts = []
 			pcal = img.getPhotoCal()
 			for src in srcs:
 				cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
-				#cnts.extend(cc)
 				csum = sum(cc)
 				if csum == 0:
 					mv = 0.
@@ -866,10 +863,8 @@ class Tractor(MultiParams):
 					mv = minsb / csum
 				umods.extend(src.getUnitFluxModelPatches(img, minval=mv))
 
-			#assert(len(umods) == len(cnts))
 			assert(len(umods) == self.numberOfParams())
 			umodels.append(umods)
-			#counts.append(cnts)
 		tmods = Time()-t0
 		print 'forced phot: getting unit-flux models:', tmods
 
@@ -893,6 +888,7 @@ class Tractor(MultiParams):
 		assert(len(derivs) == len(self.getParams()))
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
+			ims = []
 			if alpha == 0.:
 				pa = p0
 			else:
@@ -917,20 +913,26 @@ class Tractor(MultiParams):
 					chisq += (subchi**2).sum()
 					chi = np.zeros_like(mod)
 					chi[roi] = subchi
+					ims.append((img.getImage()[roi], mod[roi], subchi, roi))
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
+					ims.append((img.getImage(), mod, chi, None))
 					chisq += (chi**2).sum()
 				chis.append(chi)
 			lnp = -0.5 * chisq + tractor.getLogPrior()
-			return lnp,chis
+			return lnp,chis,ims
 
 		lnp0 = None
 		chis0 = None
-		
+
+		# debugging images
+		ims0 = None
+		imsBest = None
+
 		while True:
 			p0 = self.getParams()
 			if lnp0 is None:
-				lnp0,chis0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self, rois)
+				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self, rois)
 
 			t0 = Time()
 			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
@@ -940,6 +942,7 @@ class Tractor(MultiParams):
 
 			t0 = Time()
 			## tryUpdates():
+			#(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 			if alphas is None:
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
@@ -950,7 +953,7 @@ class Tractor(MultiParams):
 
 			for alpha in alphas:
 				logverb('  Stepping with alpha =', alpha)
-				lnp,chis = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois)
+				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois)
 				print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
@@ -958,6 +961,7 @@ class Tractor(MultiParams):
 					alphaBest = alpha
 					lnpBest = lnp
 					chiBest = chis
+					imsBest = ims
 
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
@@ -969,17 +973,14 @@ class Tractor(MultiParams):
 			else:
 				dlogprob = 0.
 				alpha = 0.
-			#(dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
 			tstep = Time() - t0
 			print 'forced phot: line search:', tstep
 			print 'forced phot: delta-lnprob:', dlogprob
 			if dlogprob < mindlnp:
 				break
-
 			## FIXME -- remove sources with negative brightness from the opt?
 
-
-		#return dlogprob, X, alpha
+		return ims0,imsBest
 
 
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
@@ -1178,7 +1179,7 @@ class Tractor(MultiParams):
 				for k,deriv in enumerate(derivs):
 					if deriv is None:
 						continue
-					if not all(np.isfinite(deriv.patch.ravel())):
+					if not np.all(np.isfinite(deriv.patch.ravel())):
 						print 'Derivative for source', src
 						print 'deriv index', i
 						assert(False)
@@ -1251,7 +1252,7 @@ class Tractor(MultiParams):
 					#print 'This param does not influence this image!'
 					continue
 
-				assert(all(pix < img.numberOfPixels()))
+				assert(np.all(pix < img.numberOfPixels()))
 				# (grab non-zero indices)
 				dimg = deriv.getImage()
 				nz = np.flatnonzero(dimg)
@@ -1364,7 +1365,7 @@ class Tractor(MultiParams):
 		logverb('  Max column:', ucols[-1])
 		logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
 
-		assert(all(np.isfinite(spvals)))
+		assert(np.all(np.isfinite(spvals)))
 
 		# FIXME -- does it make LSQR faster if we remap the row and column
 		# indices so that no rows/cols are empty?
@@ -1396,8 +1397,8 @@ class Tractor(MultiParams):
 			chi = chi.ravel()
 			NP = len(chi)
 			# we haven't touched these pix before
-			assert(all(b[row0 : row0 + NP] == 0))
-			assert(all(np.isfinite(chi)))
+			assert(np.all(b[row0 : row0 + NP] == 0))
+			assert(np.all(np.isfinite(chi)))
 			b[row0 : row0 + NP] = chi
 
 
@@ -1405,7 +1406,7 @@ class Tractor(MultiParams):
 		bnz = np.zeros(Nrows)
 		bnz[urows] = b[urows]
 		b = bnz
-		assert(all(np.isfinite(b)))
+		assert(np.all(np.isfinite(b)))
 
 		lsqropts = dict(show=isverbose(), damp=damp)
 
