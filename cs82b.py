@@ -149,7 +149,10 @@ def runone(tr, ps, band):
 	t0 = Time()
 	chisq = []
 	for i,gs in enumerate(gslices):
-		c = np.sum(chi[L == (i+1)]**2)
+		subL = L[gs]
+		subchi = chi[gs]
+		c = np.sum(subchi[subL == (i+1)]**2)
+		##c = np.sum(chi[L == (i+1)]**2)
 		chisq.append(c)
 	Gorder = np.argsort(-np.array(chisq))
 	print 'Sorting objects took', Time()-t0
@@ -251,7 +254,7 @@ def runone(tr, ps, band):
 			plt.plot(gx, gy, 'rx')
 			plt.plot(tx, ty, 'gx')
 			plt.axis(ax)
-			plt.title('data')
+			plt.title('data (context)')
 			plt.subplot(2,3,2)
 			plt.imshow(mod0, **ima)
 			plt.title('cs82 model')
@@ -262,6 +265,8 @@ def runone(tr, ps, band):
 			plt.xticks([]); plt.yticks([])
 			plt.subplot(2,3,4)
 			plt.imshow(im, **ima)
+			plt.title('data')
+			plt.xticks([]); plt.yticks([])
 			if ims1 is not None:
 				plt.subplot(2,3,5)
 				plt.imshow(mod1, **ima)

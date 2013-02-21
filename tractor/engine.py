@@ -877,6 +877,7 @@ class Tractor(MultiParams):
 
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
+		subimgs = []
 		for img,umods in zip(imgs, umodels):
 			if rois is None:
 				x0,y0 = 0,0
@@ -895,6 +896,7 @@ class Tractor(MultiParams):
 							   photocal=img.photocal,
 							   name=img.name)
 				#img = img[roi]
+				subimgs.append(subimg)
 				img = subimg
 				
 			for um,dd in zip(umods, derivs):
@@ -917,7 +919,7 @@ class Tractor(MultiParams):
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
 			ims = []
-			if alpha == 0.:
+			if X is None:
 				pa = p0
 			else:
 				pa = [p + alpha * d for p,d in zip(p0, X)]
@@ -925,11 +927,9 @@ class Tractor(MultiParams):
 			chis = []
 			for i,(img,umods,m0) in enumerate(zip(imgs, umodels, mod0)):
 				mod = m0.copy()
-				#pcal = img.getPhotoCal()
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
-					#counts = pcal.brightnessToCounts(b)
 					counts = b
 					if counts <= 0.:
 						continue
@@ -938,23 +938,15 @@ class Tractor(MultiParams):
 				if rois:
 					roi = rois[i]
 					subchi = (img.getImage()[roi] - mod[roi]) * img.getInvError()[roi]
-					chisq += (subchi**2).sum()
-					#chi = np.zeros_like(mod)
-					#chi[roi] = subchi
-					chi = subchi
 					ims.append((img.getImage()[roi], mod[roi], subchi, roi))
+					chi = subchi
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
 					ims.append((img.getImage(), mod, chi, None))
-					chisq += (chi**2).sum()
+				chisq += (chi**2).sum()
 				chis.append(chi)
 			lnp = -0.5 * chisq + tractor.getLogPrior()
 			return lnp,chis,ims
-
-		lnp0 = None
-		#chis0 = [ np.zeros_like(img) for img in imgs ]
-		#chis1 = [ np.zeros_like(img) for img in imgs ]
-		chis0 = None
 
 		# debugging images
 		ims0 = None
@@ -963,15 +955,33 @@ class Tractor(MultiParams):
 		# debug blind-stepping
 		blindstep = []
 
+		lnp0 = None
+		chis0 = None
 		quitNow = False
+
 		while True:
 			p0 = self.getParams()
 			if lnp0 is None:
-				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, 0., p0, self, rois)
+				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois)
+
+			print 'Starting opt loop with'
+			print '  p0', p0
+			print '  lnp0', lnp0
+			print '  chisqs', [(chi**2).sum() for chi in chis0]
+			print 'chis0:', chis0
 
 			t0 = Time()
+			# Ugly: getUpdateDirection calls self.getImages(), and
+			# ASSUMES they are the same as the images referred-to in
+			# the "derivs", to figure out which chi image goes with
+			# which image.  Temporarily set images = subimages
+			if rois is not None:
+				realims = self.images
+				self.images = subimgs
 			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
 										scale_columns=False, chiImages=chis0)
+			if rois is not None:
+				self.images = realims
 			topt = Time()-t0
 			print 'forced phot: opt:', topt
 
@@ -1014,9 +1024,14 @@ class Tractor(MultiParams):
 			if alphaBest is not None:
 				pa = [p + alphaBest * d for p,d in zip(p0, X)]
 				self.setParams(pa)
-				dlogprob,alpha = lnpBest - lnp0, alphaBest
+				dlogprob = lnpBest - lnp0
+				alpha = alphaBest
 				lnp0 = lnpBest
 				chis0 = chiBest
+				print 'Accepting alpha =', alpha
+				print 'new lnp0', lnp0
+				print 'new chisqs', [(chi**2).sum() for chi in chis0]
+				print 'new params', self.getParams()
 			else:
 				dlogprob = 0.
 				alpha = 0.
@@ -1447,21 +1462,22 @@ class Tractor(MultiParams):
 		for img,row0 in imgoffs.items():
 			chi = chimap.get(img, None)
 			if chi is None:
+				print 'computing chi image'
 				chi = self.getChiImage(img=img)
 			chi = chi.ravel()
 			NP = len(chi)
 			# we haven't touched these pix before
 			assert(np.all(b[row0 : row0 + NP] == 0))
 			assert(np.all(np.isfinite(chi)))
+			print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
 			b[row0 : row0 + NP] = chi
 
-
-		# Zero out unused rows -- FIXME, is this useful??
-		print 'Nrows', Nrows, 'vs len(urows)', len(urows)
-		bnz = np.zeros(Nrows)
-		bnz[urows] = b[urows]
-		print 'b', len(b), 'vs bnz', len(bnz)
-		b = bnz
+		###### Zero out unused rows -- FIXME, is this useful??
+		# print 'Nrows', Nrows, 'vs len(urows)', len(urows)
+		# bnz = np.zeros(Nrows)
+		# bnz[urows] = b[urows]
+		# print 'b', len(b), 'vs bnz', len(bnz)
+		# b = bnz
 		assert(np.all(np.isfinite(b)))
 
 		lsqropts = dict(show=isverbose(), damp=damp)
@@ -1473,17 +1489,28 @@ class Tractor(MultiParams):
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
 			   (Ncols, len(ucols), len(spvals)-1))
 
-		# print 'A matrix:'
-		# print A.todense()
-		# print
-		# print 'vector b:'
-		# print b
+		#print 'A matrix:'
+		#print A.todense()
+		print
+		print 'vector b:'
+		print b
 		
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
 		 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
 		t1 = time.clock()
 		logmsg('  %.1f seconds' % (t1-t0))
+
+		print 'LSQR results:'
+		print '  istop =', istop
+		print '  niters =', niters
+		print '  r1norm =', r1norm
+		print '  r2norm =', r2norm
+		print '  anorm =', anorm
+		print '  acord =', acond
+		print '  arnorm =', arnorm
+		print '  xnorm =', xnorm
+		print '  var =', var
 
 		#olderr = set_fp_err()
 		
