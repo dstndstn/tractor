@@ -964,11 +964,11 @@ class Tractor(MultiParams):
 			if lnp0 is None:
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois)
 
-			print 'Starting opt loop with'
-			print '  p0', p0
-			print '  lnp0', lnp0
-			print '  chisqs', [(chi**2).sum() for chi in chis0]
-			print 'chis0:', chis0
+			# print 'Starting opt loop with'
+			# print '  p0', p0
+			# print '  lnp0', lnp0
+			# print '  chisqs', [(chi**2).sum() for chi in chis0]
+			# print 'chis0:', chis0
 
 			t0 = Time()
 			# Ugly: getUpdateDirection calls self.getImages(), and
@@ -1028,10 +1028,10 @@ class Tractor(MultiParams):
 				alpha = alphaBest
 				lnp0 = lnpBest
 				chis0 = chiBest
-				print 'Accepting alpha =', alpha
-				print 'new lnp0', lnp0
-				print 'new chisqs', [(chi**2).sum() for chi in chis0]
-				print 'new params', self.getParams()
+				# print 'Accepting alpha =', alpha
+				# print 'new lnp0', lnp0
+				# print 'new chisqs', [(chi**2).sum() for chi in chis0]
+				# print 'new params', self.getParams()
 			else:
 				dlogprob = 0.
 				alpha = 0.
@@ -1462,14 +1462,14 @@ class Tractor(MultiParams):
 		for img,row0 in imgoffs.items():
 			chi = chimap.get(img, None)
 			if chi is None:
-				print 'computing chi image'
+				#print 'computing chi image'
 				chi = self.getChiImage(img=img)
 			chi = chi.ravel()
 			NP = len(chi)
 			# we haven't touched these pix before
 			assert(np.all(b[row0 : row0 + NP] == 0))
 			assert(np.all(np.isfinite(chi)))
-			print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
+			#print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
 			b[row0 : row0 + NP] = chi
 
 		###### Zero out unused rows -- FIXME, is this useful??
@@ -1489,11 +1489,11 @@ class Tractor(MultiParams):
 		logmsg('LSQR: %i cols (%i unique), %i elements' %
 			   (Ncols, len(ucols), len(spvals)-1))
 
-		#print 'A matrix:'
-		#print A.todense()
-		print
-		print 'vector b:'
-		print b
+		# print 'A matrix:'
+		# print A.todense()
+		# print
+		# print 'vector b:'
+		# print b
 		
 		t0 = time.clock()
 		(X, istop, niters, r1norm, r2norm, anorm, acond,
@@ -1501,16 +1501,16 @@ class Tractor(MultiParams):
 		t1 = time.clock()
 		logmsg('  %.1f seconds' % (t1-t0))
 
-		print 'LSQR results:'
-		print '  istop =', istop
-		print '  niters =', niters
-		print '  r1norm =', r1norm
-		print '  r2norm =', r2norm
-		print '  anorm =', anorm
-		print '  acord =', acond
-		print '  arnorm =', arnorm
-		print '  xnorm =', xnorm
-		print '  var =', var
+		# print 'LSQR results:'
+		# print '  istop =', istop
+		# print '  niters =', niters
+		# print '  r1norm =', r1norm
+		# print '  r2norm =', r2norm
+		# print '  anorm =', anorm
+		# print '  acord =', acond
+		# print '  arnorm =', arnorm
+		# print '  xnorm =', xnorm
+		# print '  var =', var
 
 		#olderr = set_fp_err()
 		
@@ -1521,7 +1521,7 @@ class Tractor(MultiParams):
 		logverb('  X=', X)
 
 		#np.seterr(**olderr)
-		print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+		#print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 		return X
 
 	def changeInvvar(self, Q2=None):

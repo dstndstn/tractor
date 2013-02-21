@@ -281,13 +281,19 @@ def runone(tr, ps, band):
 	cat.thawPathsTo(band)
 	cat1 = cat.getParams()
 
+	mags0 = NanoMaggies.nanomaggiesToMag(np.array(cat0))
+	mags1 = NanoMaggies.nanomaggiesToMag(np.array(cat1))
+
 	T = tabledata()
-	T.cs82_imag = cat0
-	T.sdss_imag = cat1
+	T.cs82_imag = mags0
+	T.sdss_imag = mags1
 	T.writeto('mags.fits')
 
 	plt.clf()
-	plt.plot(cat0, cat1, 'r.')
+	I = (mags0 == mags1)
+	plt.plot(mags0[I], mags1[I], 'r.')
+	I = (mags0 != mags1)
+	plt.plot(mags0[I], mags1[I], 'b.')
 	plt.xlabel('i-band (CS82)')
 	plt.ylabel('i-band (%s)' % tim.name)
 	plt.axis([25,8, 25,8])
