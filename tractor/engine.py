@@ -835,8 +835,11 @@ class Tractor(MultiParams):
 		ASSUMES image parameters are frozen.
 
 		ASSUMES all source parameters except brightness are frozen.
+
+		ASSUMES the PSF and Sky models are position-independent!!
+
 		'''
-		from basics import LinearPhotoCal
+		from basics import LinearPhotoCal, ShiftedWcs
 		
 		imgs = self.getImages()
 		for img in imgs:
@@ -860,8 +863,9 @@ class Tractor(MultiParams):
 				roi = rois[i]
 				y0 = roi[0].start
 				x0 = roi[1].start
+				subwcs = ShiftedWcs(img.wcs, x0, y0)
 				subimg = Image(data=img.data[roi], invvar=img.invvar[roi],
-							   psf=img.psf, wcs=img.wcs, sky=img.sky,
+							   psf=img.psf, wcs=subwcs, sky=img.sky,
 							   photocal=img.photocal, name=img.name)
 				subimgs.append(subimg)
 			else:
@@ -889,12 +893,68 @@ class Tractor(MultiParams):
 		t0 = Time()
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
-		# FIXME -- getModelImage(subimg) rather than clipping afterwards?
-		for img in imgs:
-			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
+		if rois is None:
+			for img in imgs:
+				mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
+		else:
+			for img in subimgs:
+				mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
 		tmod = Time() - t0
 		print 'forced phot: getting initial model image:', tmod
 
+		# if rois is not None:
+		# 	import pylab as plt
+		# 	for m0,s0,roi in zip(mod0, smod0,rois):
+		# 		if m0.max() > 0:
+		# 			m0 = m0[roi]
+		# 			print 'm0 mean', m0.mean()
+		# 			print 'rms (m0 - s0)', np.sqrt(((m0 - s0)**2).mean())
+		# 
+		# 			plt.clf()
+		# 			plt.subplot(2,2,1)
+		# 			plt.imshow(m0, interpolation='nearest', origin='lower')
+		# 			plt.colorbar()
+		# 			plt.subplot(2,2,2)
+		# 			plt.imshow(s0, interpolation='nearest', origin='lower')
+		# 			plt.colorbar()
+		# 			plt.subplot(2,2,3)
+		# 			plt.imshow(s0-m0, interpolation='nearest', origin='lower')
+		# 			plt.colorbar()
+		# 			fn = 'submod-%02i.png' % self.submodnum
+		# 			plt.savefig(fn)
+		# 			print 'wrote', fn
+		# 
+		# 	for subimg,img,m0,s0,roi in zip(subimgs,imgs, mod0, smod0, rois):
+		# 		if m0.max() == 0:
+		# 			continue
+		# 		nsrcs = len(fsrcs)
+		# 		plt.clf()
+		# 		for i,src in enumerate(fsrcs):
+		# 			fp = self.getModelPatch(img, src, minsb=minsb)
+		# 			sp = self.getModelPatch(subimg, src, minsb=minsb)
+		# 			if fp is None or sp is None:
+		# 				continue
+		# 			# mm = np.zeros_like(m0)
+		# 			# fp.addTo(mm)
+		# 			# mm = mm[roi]
+		# 			# ss = np.zeros_like(s0)
+		# 			# sp.addTo(ss)
+		# 			y0 = roi[0].start
+		# 			x0 = roi[1].start
+		# 			sp.x0 += x0
+		# 			sp.y0 += y0
+		# 			dp = fp + sp*-1.
+		# 			
+		# 			plt.subplot(3,nsrcs, 1 + i)
+		# 			plt.imshow(fp.patch, interpolation='nearest', origin='lower')
+		# 			#plt.imshow(mm, interpolation='nearest', origin='lower')
+		# 			plt.subplot(3,nsrcs, 1 + i + nsrcs)
+		# 			plt.imshow(sp.patch, interpolation='nearest', origin='lower')
+		# 			#plt.imshow(ss, interpolation='nearest', origin='lower')
+		# 			plt.subplot(3,nsrcs, 1 + i + 2*nsrcs)
+		# 			plt.imshow(dp.patch, interpolation='nearest', origin='lower')
+		# 		plt.savefig('submodb-%02i.png' % self.submodnum)
+		# 		self.submodnum += 1
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
 		for i,(img,umods) in enumerate(zip(imgs, umodels)):
@@ -931,10 +991,11 @@ class Tractor(MultiParams):
 				if rois:
 					roi = rois[i]
 
-				if roi is not None:
-					mod = m0[roi].copy()
-				else:
-					mod = m0.copy()
+				# if roi is not None:
+				# 	mod = m0[roi].copy()
+				# else:
+				# 	mod = m0.copy()
+				mod = m0.copy()
 					
 				for b,um in zip(pa,umods):
 					if um is None:

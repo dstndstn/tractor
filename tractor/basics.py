@@ -634,6 +634,8 @@ class ConstantSky(ScalarParam):
 		p.setName('dsky')
 		return [p]
 	def addTo(self, img):
+		if self.val == 0:
+			return
 		img += self.val
 	def getParamNames(self):
 		return ['sky']

@@ -160,6 +160,8 @@ def runone(tr, ps, band, opt):
 
 	blindsteps = []
 
+	tr.submodnum = 0
+
 	for gi,gl in enumerate(Gorder):
 		print
 		# note, gslices is zero-indexed
