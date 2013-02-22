@@ -767,7 +767,11 @@ def get_tractor_image_dr8(*args, **kwargs):
 			return _get_tractor_image_dr8(*args, **kwargs)
 		except:
 			# Re-retrieve the data
-			(run,camcol,field,bandnum) = args
+			sdss = kwargs.get('sdss', None)
+			if sdss is None:
+				curl = kwargs.get('curl', False)
+				sdss = DR8(curl=curl)
+			(run,camcol,field,bandname) = args
 			for ft in ['psField', 'fpM', 'frame']:
 				fn = sdss.retrieve(ft, run, camcol, field, bandname,
 								   skipExisting=False)

@@ -80,8 +80,42 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 	return srcs, np.array(isrcs)
 
 
-def runone(tr, ps, band, opt):
+def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
+	print 'Runfield:', r,c,f,band
+	sdss = DR9(basedir='cs82data/dr9')
+	maglim = 24
+
+	margin = 10. / 3600.
+	print 'Cutting to sources in range of image.'
+	Ti = T[(T.ra  + margin >= r0) * (T.ra  - margin <= r1) *
+		   (T.dec + margin >= d0) * (T.dec - margin <= d1)]
+	print len(Ti), 'CS82 sources in range'
+
+	print 'Creating Tractor sources...'
+	cat,icat = get_cs82_sources(Ti, maglim=maglim)
+	print 'Got', len(cat), 'sources'
+
+	tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
+									nanomaggies=True, zrange=[-2,5],
+									invvarIgnoresSourceFlux=True)
+	(H,W) = tim.shape
+	tim.wcs.setConstantCd(W/2., H/2.)
+	tr = Tractor([tim], cat)
+	print tr
+
+	#iv = tim.invvar
+	#print 'invvar range:', iv[iv>0].min(), iv[iv>0].max()
+	#basename = 'cs82-%s-r%04ic%if%04ib%s' % (cs82field, r, c, f, band)
+	#fn = 'prof-cs82b-%s.dat' % (datetime.now().isoformat())
+	#locs = dict(tr=tr, ps=ps, band=band, opt=opt, basename=basename)
+	#cProfile.runctx('runone(tr,ps,band,opt,basename)', globals(), locs, fn)
+	#runone(tr, ps, band, opt, basename)
+	#args.append((tr, ps, band, opt, basename))
+	#def runone(tr, ps, band, opt):
+
 	from tractor.ttime import Time
+
+	ps = PlotSequence(basename)
 
 	tr.freezeParam('images')
 	cat = tr.catalog
@@ -157,8 +191,6 @@ def runone(tr, ps, band, opt):
 		chisq.append(c)
 	Gorder = np.argsort(-np.array(chisq))
 	print 'Sorting objects took', Time()-t0
-
-	tr.submodnum = 0
 
 	for gi,gl in enumerate(Gorder):
 		print
@@ -260,26 +292,31 @@ def runone(tr, ps, band, opt):
 	mags1 = NanoMaggies.nanomaggiesToMag(np.array(cat1))
 
 	T = tabledata()
-	T.cs82_imag = mags0
-	T.sdss_imag = mags1
-	T.writeto('mags.fits')
+	T.cs82_mag_i = mags0
+	T.set('sdss_mag_%s' % band, mags1)
+	T.cs82_index = icat
+	T.writeto('mags-%s.fits')
 
 	plt.clf()
 	I = (mags0 == mags1)
-	plt.plot(mags0[I], mags1[I], 'r.')
+	plt.plot(mags0[I], mags1[I], 'r.', alpha=0.5)
 	I = (mags0 != mags1)
-	plt.plot(mags0[I], mags1[I], 'b.')
-	plt.xlabel('i-band (CS82)')
-	plt.ylabel('i-band (%s)' % tim.name)
+	plt.plot(mags0[I], mags1[I], 'b.', alpha=0.5)
+	plt.xlabel('CS82 i-band (mag)')
+	plt.ylabel('SDSS %s-band (mag)' % band)
+	plt.title('Forced photometry of %s' % tim.name)
 	plt.axis([25,8, 25,8])
 	ps.savefig()
 
 	plt.clf()
-	for bs in blindsteps:
-		plt.semilogy(np.maximum(1e-6, bs), 'r-')
-	plt.xlabel('step')
-	plt.ylabel('dlnp')
-	plt.title('blind step results')
+	I = (mags0 == mags1)
+	plt.plot(mags1[I]-mags0[I], mags0[I], 'r.', alpha=0.5)
+	I = (mags0 != mags1)
+	plt.plot(mags1[I]-mags0[I], mags0[I], 'b.', alpha=0.5)
+	plt.xlabel('SDSS %s-band - CS82 i-band (mag)' % band)
+	plt.ylabel('CS82 i-band (mag)')
+	plt.title('Forced photometry of %s' % tim.name)
+	plt.axis([-8,8, 25,8])
 	ps.savefig()
 
 
@@ -288,7 +325,14 @@ def main(opt):
 
 	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
 				   hdu=2, column_map={'ALPHA_J2000':'ra',
-									  'DELTA_J2000':'dec'})
+									  'DELTA_J2000':'dec'},
+				   columns=[x.upper() for x in
+							['ALPHA_J2000', 'DELTA_J2000',
+							'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
+							 'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
+							 'disk_theta_world', 'spheroid_reff_world',
+							 'spheroid_aspect_world', 'spheroid_theta_world',
+							 'alphamodel_j2000', 'deltamodel_j2000']])
 	print 'RA', T.ra.min(), T.ra.max()
 	print 'Dec', T.dec.min(), T.dec.max()
 
@@ -325,52 +369,25 @@ def main(opt):
 
 
 
-	sdss = DR9(basedir='cs82data/dr9')
-
-	maglim = 24
-
-	#cat = get_cs82_sources(T)
-
-	ps = PlotSequence('cs82b')
-
+	args = []
 	for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
 								 F.ra0, F.ra1, F.dec0, F.dec1):
-		#for band in 'ugriz':
+		for band in 'ugriz':
+			basename = 'cs82-%s-r%04ic%if%04ib%s' % (cs82field, r, c, f, band)
+			args.append((r,c,f,band,basename, r0,r1,d0,d1, T, opt))
 
-		margin = 10. / 3600.
-		print 'Cutting to sources in range of image.'
-		Ti = T[(T.ra  + margin >= r0) * (T.ra  - margin <= r1) *
-			   (T.dec + margin >= d0) * (T.dec - margin <= d1)]
-		print len(Ti), 'CS82 sources in range'
+	mp = multiproc(opt.threads)
+	mp.map(runfield, args, wrap=True)
+	
 
-		print 'Creating Tractor sources...'
-		cat,icat = get_cs82_sources(Ti, maglim=maglim)
-		print 'Got', len(cat), 'sources'
-
-		for band in 'i':
-			tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
-											nanomaggies=True, zrange=[-2,5],
-											invvarIgnoresSourceFlux=True)
-			(H,W) = tim.shape
-			tim.wcs.setConstantCd(W/2., H/2.)
-			tr = Tractor([tim], cat)
-			print tr
-
-			iv = tim.invvar
-			print 'invvar range:', iv[iv>0].min(), iv[iv>0].max()
-
-			fn = 'prof-cs82b-%s.dat' % (datetime.now().isoformat())
-			locs = dict(tr=tr, ps=ps, band=band, opt=opt)
-			cProfile.runctx('runone(tr,ps,band,opt)', globals(), locs, fn)
-
-
-		break
 
 if __name__ == '__main__':
 	import optparse
 	parser = optparse.OptionParser('%prog [options]')
 	parser.add_option('--no-plots', dest='plots', default=True, action='store_false',
 					  help='Do not produce plots')
+	parser.add_option('--threads', dest='threads', type=int, default=1,
+					  help='Multiprocessing?')
 	opt,args = parser.parse_args()
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
 	main(opt)

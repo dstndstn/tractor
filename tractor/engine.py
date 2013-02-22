@@ -994,6 +994,10 @@ class Tractor(MultiParams):
 			topt = Time()-t0
 			print 'forced phot: opt:', topt
 
+			if len(X) == 0:
+				print 'Error getting update direction'
+				break
+			
 			t0 = Time()
 			## tryUpdates():
 			if alphas is None:
@@ -1002,8 +1006,8 @@ class Tractor(MultiParams):
 
 			# Check whether the update produces all positive fluxes: if so we
 			# should be able to take it with alpha=1 and quit.
-			#print 'p0:', p0
-			#print 'X:', X
+			print 'p0:', p0
+			print 'X:', X
 			if np.all(p0 + X >= 0.):
 				print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
@@ -1014,9 +1018,9 @@ class Tractor(MultiParams):
 			chiBest = None
 
 			for alpha in alphas:
-				logverb('  Stepping with alpha =', alpha)
+				#logverb('  Stepping with alpha =', alpha)
 				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois)
-				print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
+				#print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
 				if lnp > lnpBest:
@@ -1027,7 +1031,8 @@ class Tractor(MultiParams):
 
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
-				pa = [p + alphaBest * d for p,d in zip(p0, X)]
+				# Clamp fluxes up to zero
+				pa = [max(0, p + alphaBest * d) for p,d in zip(p0, X)]
 				self.setParams(pa)
 				dlogprob = lnpBest - lnp0
 				alpha = alphaBest
