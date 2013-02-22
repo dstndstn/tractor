@@ -158,8 +158,6 @@ def runone(tr, ps, band, opt):
 	Gorder = np.argsort(-np.array(chisq))
 	print 'Sorting objects took', Time()-t0
 
-	blindsteps = []
-
 	tr.submodnum = 0
 
 	for gi,gl in enumerate(Gorder):
@@ -191,11 +189,9 @@ def runone(tr, ps, band, opt):
 		tr.printThawedParams()
 
 		t0 = Time()
-		ims0,ims1,blindstep = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+		ims0,ims1 = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 															rois=[gslice])
 		print 'optimize_forced_photometry took', Time()-t0
-		if len(blindstep):
-			blindsteps.append(blindstep)
 
 		print 'After params:'
 		tr.printThawedParams()
@@ -220,23 +216,9 @@ def runone(tr, ps, band, opt):
 				ty.append(y)
 
 			plt.clf()
-			for bs in blindsteps:
-				plt.semilogy(np.maximum(1e-6, bs), 'r-')
-			plt.xlabel('step')
-			plt.ylabel('dlnp')
-			plt.title('blind step results')
-			ps.savefig()
-				
-			plt.clf()
 			plt.subplot(2,3,1)
-			#print 'gslice', gslice
 			sy,sx = gslice
-			#print 'sy', sy
-			#print 'sx', sx
-			#print 'gx,gy', gx,gy
-			#print 'tx,ty', tx,ty
 			x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
-			#print 'ext', [x0,x1,y0,y1]
 			margin = 25
 			H,W = img.shape
 			ext = [max(0, x0-margin), min(W-1, x1+margin),

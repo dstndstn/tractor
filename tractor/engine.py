@@ -902,59 +902,6 @@ class Tractor(MultiParams):
 		tmod = Time() - t0
 		print 'forced phot: getting initial model image:', tmod
 
-		# if rois is not None:
-		# 	import pylab as plt
-		# 	for m0,s0,roi in zip(mod0, smod0,rois):
-		# 		if m0.max() > 0:
-		# 			m0 = m0[roi]
-		# 			print 'm0 mean', m0.mean()
-		# 			print 'rms (m0 - s0)', np.sqrt(((m0 - s0)**2).mean())
-		# 
-		# 			plt.clf()
-		# 			plt.subplot(2,2,1)
-		# 			plt.imshow(m0, interpolation='nearest', origin='lower')
-		# 			plt.colorbar()
-		# 			plt.subplot(2,2,2)
-		# 			plt.imshow(s0, interpolation='nearest', origin='lower')
-		# 			plt.colorbar()
-		# 			plt.subplot(2,2,3)
-		# 			plt.imshow(s0-m0, interpolation='nearest', origin='lower')
-		# 			plt.colorbar()
-		# 			fn = 'submod-%02i.png' % self.submodnum
-		# 			plt.savefig(fn)
-		# 			print 'wrote', fn
-		# 
-		# 	for subimg,img,m0,s0,roi in zip(subimgs,imgs, mod0, smod0, rois):
-		# 		if m0.max() == 0:
-		# 			continue
-		# 		nsrcs = len(fsrcs)
-		# 		plt.clf()
-		# 		for i,src in enumerate(fsrcs):
-		# 			fp = self.getModelPatch(img, src, minsb=minsb)
-		# 			sp = self.getModelPatch(subimg, src, minsb=minsb)
-		# 			if fp is None or sp is None:
-		# 				continue
-		# 			# mm = np.zeros_like(m0)
-		# 			# fp.addTo(mm)
-		# 			# mm = mm[roi]
-		# 			# ss = np.zeros_like(s0)
-		# 			# sp.addTo(ss)
-		# 			y0 = roi[0].start
-		# 			x0 = roi[1].start
-		# 			sp.x0 += x0
-		# 			sp.y0 += y0
-		# 			dp = fp + sp*-1.
-		# 			
-		# 			plt.subplot(3,nsrcs, 1 + i)
-		# 			plt.imshow(fp.patch, interpolation='nearest', origin='lower')
-		# 			#plt.imshow(mm, interpolation='nearest', origin='lower')
-		# 			plt.subplot(3,nsrcs, 1 + i + nsrcs)
-		# 			plt.imshow(sp.patch, interpolation='nearest', origin='lower')
-		# 			#plt.imshow(ss, interpolation='nearest', origin='lower')
-		# 			plt.subplot(3,nsrcs, 1 + i + 2*nsrcs)
-		# 			plt.imshow(dp.patch, interpolation='nearest', origin='lower')
-		# 		plt.savefig('submodb-%02i.png' % self.submodnum)
-		# 		self.submodnum += 1
 		t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
 		for i,(img,umods) in enumerate(zip(imgs, umodels)):
@@ -991,10 +938,6 @@ class Tractor(MultiParams):
 				if rois:
 					roi = rois[i]
 
-				# if roi is not None:
-				# 	mod = m0[roi].copy()
-				# else:
-				# 	mod = m0.copy()
 				mod = m0.copy()
 					
 				for b,um in zip(pa,umods):
@@ -1020,9 +963,6 @@ class Tractor(MultiParams):
 		# debugging images
 		ims0 = None
 		imsBest = None
-
-		# debug blind-stepping
-		blindstep = []
 
 		lnp0 = None
 		chis0 = None
@@ -1085,9 +1025,6 @@ class Tractor(MultiParams):
 					chiBest = chis
 					imsBest = ims
 
-			if quitNow:
-				blindstep.append(lnp - lnp0)
-
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
 				pa = [p + alphaBest * d for p,d in zip(p0, X)]
@@ -1115,7 +1052,7 @@ class Tractor(MultiParams):
 
 			## FIXME -- remove sources with negative brightness from the opt?
 
-		return ims0,imsBest, blindstep
+		return ims0,imsBest
 
 
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
