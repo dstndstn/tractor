@@ -76,24 +76,14 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 			continue
 		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
 
-	print 'Sources:', len(srcs)
+	#print 'Sources:', len(srcs)
 	return srcs, np.array(isrcs)
 
 
-def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
+#def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
+def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	print 'Runfield:', r,c,f,band
 	sdss = DR9(basedir='cs82data/dr9')
-	maglim = 24
-
-	margin = 10. / 3600.
-	print 'Cutting to sources in range of image.'
-	Ti = T[(T.ra  + margin >= r0) * (T.ra  - margin <= r1) *
-		   (T.dec + margin >= d0) * (T.dec - margin <= d1)]
-	print len(Ti), 'CS82 sources in range'
-
-	print 'Creating Tractor sources...'
-	cat,icat = get_cs82_sources(Ti, maglim=maglim)
-	print 'Got', len(cat), 'sources'
 
 	tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
 									nanomaggies=True, zrange=[-2,5],
@@ -101,7 +91,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 	(H,W) = tim.shape
 	tim.wcs.setConstantCd(W/2., H/2.)
 	tr = Tractor([tim], cat)
-	print tr
+	#print tr
 
 	#iv = tim.invvar
 	#print 'invvar range:', iv[iv>0].min(), iv[iv>0].max()
@@ -115,6 +105,8 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 
 	from tractor.ttime import Time
 
+	t00 = Time()
+
 	ps = PlotSequence(basename)
 
 	tr.freezeParam('images')
@@ -125,9 +117,10 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 	cat.thawPathsTo(band)
 
 	cat0 = cat.getParams()
+	br0 = np.array([src.getBrightness() for src in cat])
 
 	sig = 1./np.median(tim.getInvError())
-	print 'Image sigma:', sig
+	#print 'Image sigma:', sig
 
 	#minsb = 0.001 * sig
 	#minsb = 1. * sig
@@ -135,11 +128,11 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 
 	img = tim.getImage()
 
-	print 'Finding overlapping sources...'
-	t0 = Time()
+	#print 'Finding overlapping sources...'
+	#t0 = Time()
 	groups,L = tr.getOverlappingSources(0, minsb=minsb)
-	print 'Overlapping sources took', Time()-t0
-	print 'Got', len(groups), 'groups of sources'
+	#print 'Overlapping sources took', Time()-t0
+	#print 'Got', len(groups), 'groups of sources'
 
 	zr = tim.zr
 	ima = dict(interpolation='nearest', origin='lower',
@@ -173,16 +166,16 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 		ps.savefig()
 
 	# Sort the groups by the chi-squared values they contain
-	print 'Getting chi image...'
-	t0 = Time()
+	#print 'Getting chi image...'
+	#t0 = Time()
 	chi = tr.getChiImage(0, minsb=minsb)
-	print 'Chi image took', Time()-t0
+	#print 'Chi image took', Time()-t0
 
-	t0 = Time()
+	#t0 = Time()
 	nl = L.max()
 	gslices = find_objects(L, nl)
-	print 'find_objects took', Time()-t0
-	t0 = Time()
+	#print 'find_objects took', Time()-t0
+	#t0 = Time()
 	chisq = []
 	for i,gs in enumerate(gslices):
 		subL = L[gs]
@@ -190,10 +183,10 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 		c = np.sum(subchi[subL == (i+1)]**2)
 		chisq.append(c)
 	Gorder = np.argsort(-np.array(chisq))
-	print 'Sorting objects took', Time()-t0
+	#print 'Sorting objects took', Time()-t0
 
 	for gi,gl in enumerate(Gorder):
-		print
+		#print
 		# note, gslices is zero-indexed
 		gslice = gslices[gl]
 		gl += 1
@@ -201,7 +194,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 			print 'Group', gl, 'not in groups array; skipping'
 			continue
 		gsrcs = groups[gl]
-		print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
+		#print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
 
 		tgroups = np.unique(L[gslice])
 		tsrcs = []
@@ -209,7 +202,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 			if not g in [gl,0]:
 				if g in groups:
 					tsrcs.extend(groups[g])
-		print 'sources in groups touching slice:', tsrcs
+		#print 'sources in groups touching slice:', tsrcs
 
 		fullcat = tr.catalog
 		subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
@@ -217,16 +210,16 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 			subcat.freezeParam(len(gsrcs) + i)
 		tr.catalog = subcat
 
-		print 'Thawed params:'
-		tr.printThawedParams()
+		#print 'Thawed params:'
+		#tr.printThawedParams()
 
-		t0 = Time()
+		#t0 = Time()
 		ims0,ims1 = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 															rois=[gslice])
-		print 'optimize_forced_photometry took', Time()-t0
+		#print 'optimize_forced_photometry took', Time()-t0
 
-		print 'After params:'
-		tr.printThawedParams()
+		#print 'After params:'
+		#tr.printThawedParams()
 
 		tr.catalog = fullcat
 
@@ -284,18 +277,21 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 				plt.title('fit chi')
 				plt.xticks([]); plt.yticks([])
 			ps.savefig()
-	
+
 	cat.thawPathsTo(band)
 	cat1 = cat.getParams()
+	br1 = np.array([src.getBrightness() for src in cat])
 
-	mags0 = NanoMaggies.nanomaggiesToMag(np.array(cat0))
-	mags1 = NanoMaggies.nanomaggiesToMag(np.array(cat1))
+	print 'Runfield:', r,c,f,band, 'took', Time()-t00
 
-	T = tabledata()
-	T.cs82_mag_i = mags0
-	T.set('sdss_mag_%s' % band, mags1)
-	T.cs82_index = icat
-	T.writeto('mags-%s.fits')
+	nm0 = np.array([b.getBand(band) for b in br0])
+	nm1 = np.array([b.getBand(band) for b in br1])
+
+	mags0 = NanoMaggies.nanomaggiesToMag(nm0)
+	mags1 = NanoMaggies.nanomaggiesToMag(nm1)
+
+	print 'mags0:', mags0
+	print 'mags1:', mags1
 
 	plt.clf()
 	I = (mags0 == mags1)
@@ -319,6 +315,15 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 	plt.axis([-8,8, 25,8])
 	ps.savefig()
 
+	T = tabledata()
+	T.cs82_mag_i = mags0
+	T.set('sdss_mag_%s' % band, mags1)
+	T.cs82_index = icat
+	fn = 'mags-%s.fits' % basename
+	print 'Writing:'
+	T.about()
+	T.writeto(fn)
+	print 'Wrote', fn
 
 def main(opt):
 	cs82field = 'S82p18p'
@@ -335,6 +340,7 @@ def main(opt):
 							 'alphamodel_j2000', 'deltamodel_j2000']])
 	print 'RA', T.ra.min(), T.ra.max()
 	print 'Dec', T.dec.min(), T.dec.max()
+	T.index = np.arange(len(T))
 
 	fn = 'sdssfield-%s.fits' % cs82field
 	if os.path.exists(fn):
@@ -368,16 +374,63 @@ def main(opt):
 		print 'Wrote', fn
 
 
+	mp = multiproc(opt.threads)
 
+	# Sort by distance from the center of the field.
+	ra  = (T.ra.min()  + T.ra.max() ) / 2.
+	dec = (T.dec.min() + T.dec.max()) / 2.
+	I = np.argsort( ((F.ra0  + F.ra1 )/2. - ra )**2 +
+					((F.dec0 + F.dec1)/2. - dec)**2 )
+	F.cut(I)
+
+	results = []
 	args = []
+	alldone = False
 	for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
 								 F.ra0, F.ra1, F.dec0, F.dec1):
-		for band in 'ugriz':
-			basename = 'cs82-%s-r%04ic%if%04ib%s' % (cs82field, r, c, f, band)
-			args.append((r,c,f,band,basename, r0,r1,d0,d1, T, opt))
 
-	mp = multiproc(opt.threads)
-	mp.map(runfield, args, wrap=True)
+		dobands = []
+		for band in 'ugriz':
+			basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
+			outfn = 'mags-%s.fits' % basename
+			if opt.skipExisting and os.path.exists(outfn):
+				print 'File', outfn, 'exists, skipping.'
+				continue
+			dobands.append(band)
+
+		if len(dobands) == 0:
+			continue
+
+		margin = 10. / 3600.
+		print 'Cutting to sources in range of image.'
+		Ti = T[(T.ra  + margin >= r0) * (T.ra  - margin <= r1) *
+			   (T.dec + margin >= d0) * (T.dec - margin <= d1)]
+		print len(Ti), 'CS82 sources in range'
+		print 'Creating Tractor sources...'
+		maglim = 24
+		cat,icat = get_cs82_sources(Ti, maglim=maglim)
+		print 'Got', len(cat), 'sources'
+
+		realinds = Ti.index[icat]
+
+		for band in dobands:
+			basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
+			res = mp.apply(runfield, ((r,c,f,band,basename, r0,r1,d0,d1, opt, cat,realinds),))
+			results.append(res)
+			if opt.nfields and len(results) >= opt.nfields:
+				alldone = True
+				break
+
+		if alldone:
+			break
+
+	print len(results), 'async jobs'
+	for r in results:
+		print '  waiting for', r
+		if r is None:
+			continue
+		r.wait()
+	print 'Done!'
 	
 
 
@@ -388,6 +441,10 @@ if __name__ == '__main__':
 					  help='Do not produce plots')
 	parser.add_option('--threads', dest='threads', type=int, default=1,
 					  help='Multiprocessing?')
+	parser.add_option('-s', '--skip', dest='skipExisting', action='store_true',
+					  help='Skip fields whose outputs already exist?')
+	parser.add_option('-n', dest='nfields', type=int, default=None,
+					  help='Run at most this number of fields')
 	opt,args = parser.parse_args()
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
 	main(opt)

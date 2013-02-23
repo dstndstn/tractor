@@ -848,7 +848,7 @@ class Tractor(MultiParams):
 			assert(img.getPhotoCal().getScale() == 1.)
 		if rois is not None:
 			assert(len(rois) == len(imgs))
-		t0 = Time()
+		#t0 = Time()
 		if minsb is None:
 			minsb = 0.
 
@@ -887,10 +887,10 @@ class Tractor(MultiParams):
 
 			assert(len(umods) == self.numberOfParams())
 			umodels.append(umods)
-		tmods = Time()-t0
-		print 'forced phot: getting unit-flux models:', tmods
+		#tmods = Time()-t0
+		#print 'forced phot: getting unit-flux models:', tmods
 
-		t0 = Time()
+		#t0 = Time()
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
 		if rois is None:
@@ -899,10 +899,10 @@ class Tractor(MultiParams):
 		else:
 			for img in subimgs:
 				mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
-		tmod = Time() - t0
-		print 'forced phot: getting initial model image:', tmod
+		#tmod = Time() - t0
+		#print 'forced phot: getting initial model image:', tmod
 
-		t0 = Time()
+		#t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
 		for i,(img,umods) in enumerate(zip(imgs, umodels)):
 			if rois is not None:
@@ -912,8 +912,8 @@ class Tractor(MultiParams):
 				if um is None:
 					continue
 				dd.append((um, img))
-		tderivs = Time() - t0
-		print 'forced phot: building derivs:', tderivs
+		#tderivs = Time() - t0
+		#print 'forced phot: building derivs:', tderivs
 		assert(len(derivs) == len(self.getParams()))
 
 		## ABOUT rois and derivs: we call
@@ -979,7 +979,7 @@ class Tractor(MultiParams):
 			# print '  chisqs', [(chi**2).sum() for chi in chis0]
 			# print 'chis0:', chis0
 
-			t0 = Time()
+			#t0 = Time()
 			# Ugly: getUpdateDirection calls self.getImages(), and
 			# ASSUMES they are the same as the images referred-to in
 			# the "derivs", to figure out which chi image goes with
@@ -991,8 +991,8 @@ class Tractor(MultiParams):
 										scale_columns=False, chiImages=chis0)
 			if rois is not None:
 				self.images = realims
-			topt = Time()-t0
-			print 'forced phot: opt:', topt
+			#topt = Time()-t0
+			#print 'forced phot: opt:', topt
 
 			if len(X) == 0:
 				print 'Error getting update direction'
@@ -1006,10 +1006,10 @@ class Tractor(MultiParams):
 
 			# Check whether the update produces all positive fluxes: if so we
 			# should be able to take it with alpha=1 and quit.
-			print 'p0:', p0
-			print 'X:', X
+			#print 'p0:', p0
+			#print 'X:', X
 			if np.all(p0 + X >= 0.):
-				print 'Update produces non-negative fluxes; accepting with alpha=1'
+				#print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
 				quitNow = True
 
@@ -1046,16 +1046,13 @@ class Tractor(MultiParams):
 				dlogprob = 0.
 				alpha = 0.
 			tstep = Time() - t0
-			print 'forced phot: line search:', tstep
-			print 'forced phot: alpha', alphaBest
-			print 'forced phot: delta-lnprob:', dlogprob
+			#print 'forced phot: line search:', tstep
+			#print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
 			if dlogprob < mindlnp:
 				break
 
 			if quitNow:
 				break
-
-			## FIXME -- remove sources with negative brightness from the opt?
 
 		return ims0,imsBest
 
