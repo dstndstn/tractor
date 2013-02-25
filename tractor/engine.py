@@ -836,7 +836,7 @@ class Tractor(MultiParams):
 			plt.savefig(plotfn)
 
 	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
-								   minsb=None,
+								   minsb=0.,
 								   mindlnp=1.,
 								   rois=None):
 		'''
@@ -859,8 +859,6 @@ class Tractor(MultiParams):
 		if rois is not None:
 			assert(len(rois) == len(imgs))
 		#t0 = Time()
-		if minsb is None:
-			minsb = 0.
 
 		umodels = []
 		subimgs = []
@@ -1582,7 +1580,7 @@ class Tractor(MultiParams):
 		return mod
 
 	#def getModelImageNoCache(self, img, srcs=None, sky=True):
-	def getModelImage(self, img, srcs=None, sky=True, minsb=None):
+	def getModelImage(self, img, srcs=None, sky=True, minsb=0.):
 		'''
 		Create a model image for the given "tractor image", including
 		the sky level.	If "srcs" is specified (a list of sources),
@@ -1624,13 +1622,9 @@ class Tractor(MultiParams):
 		return mod
 	'''
 
-	def getOverlappingSources(self, img, srcs=None, minsb=None):
+	def getOverlappingSources(self, img, srcs=None, minsb=0.):
 		mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
-		if minsb is None:
-			minflux = 0.
-		else:
-			minflux = minsb
-		L,n = label(mod > minflux, structure=np.ones((3,3), int))
+		L,n = label(mod > minsb, structure=np.ones((3,3), int))
 		#print 'Found', n, 'groups of sources'
 		assert(L.shape == mod.shape)
 		if srcs is None:
@@ -1650,7 +1644,7 @@ class Tractor(MultiParams):
 			lpatch = L[modpatch.getSlice(mod)]
 			#print 'mp', modpatch.shape
 			#print 'lpatch', lpatch.shape
-			ll = np.unique(lpatch[modpatch.patch > minflux])
+			ll = np.unique(lpatch[modpatch.patch > minsb])
 			#print 'labels:', ll, 'for source', src
 			# Not sure how this happens, but it does...
 			ll = [l for l in ll if l > 0]
@@ -1689,7 +1683,7 @@ class Tractor(MultiParams):
 			chis.append((img.getImage() - mod) * img.getInvError())
 		return chis
 
-	def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=None):
+	def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
 		if img is None:
 			img = self.getImage(imgi)
 		mod = self.getModelImage(img, srcs, minsb=minsb)

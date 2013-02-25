@@ -101,7 +101,7 @@ class Source(Params):
 	This is the duck-type definition of a Source (star, galaxy, etc)
 	that the Tractor uses.
 	'''
-	def getModelPatch(self, img, minsb=None):
+	def getModelPatch(self, img, minsb=0.):
 		'''
 		Returns a Patch object containing a rendering of this Source
 		into the given `Image` object.  This will probably use the
@@ -125,7 +125,7 @@ class Source(Params):
 	def getBrightnesses(self):
 		return []
 
-	def getUnitFluxModelPatches(self, img, minval=None):
+	def getUnitFluxModelPatches(self, img, minval=0.):
 		'''
 		Returns a list the same length as getBrightnesses(), each
 		containing a Patch whose sum is ~ unity.
@@ -238,14 +238,14 @@ class PSF(Params):
 	'''
 	Duck-type definition of a point-spread function.
 	'''
-	def getPointSourcePatch(self, px, py, minval=None):
+	def getPointSourcePatch(self, px, py, minval=0.):
 		'''
 		Returns a `Patch`, a rendering of a point source at the given
 		pixel coordinates.
 
 		The returned `Patch` should have unit "counts".
 
-		The "minval" arg says that we're willing to accept an approximation
+		The "minval" arg says that we are willing to accept an approximation
 		such that pixels with counts < minval can be omitted.
 		'''
 		pass

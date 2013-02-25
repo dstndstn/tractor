@@ -674,7 +674,7 @@ class PointSource(MultiParams):
 	#def hashkey(self):
 	#	return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
-	def getUnitFluxModelPatch(self, img, minval=None):
+	def getUnitFluxModelPatch(self, img, minval=0.):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
 		return patch
@@ -682,12 +682,11 @@ class PointSource(MultiParams):
 	def getUnitFluxModelPatches(self, *args, **kwargs):
 		return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
-	def getModelPatch(self, img, minsb=None):
+	def getModelPatch(self, img, minsb=0.):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		minval = None
-		if minsb is not None:
-			if counts > 0:
-				minval = minsb / counts
+		if counts <= 0:
+			return None
+		minval = minsb / counts
 		upatch = self.getUnitFluxModelPatch(img, minval=minval)
 		return upatch * counts
 
@@ -789,12 +788,9 @@ class GaussianMixturePSF(BaseParams):
 		# HACK!
 		return self.radius
 
-	#def getRadiusForApprox(self, minval):
-		#rr = np.max([max(v[0,0], v[1,1]     for v in self.mog.var])
-
 	# returns a Patch object.
-	def getPointSourcePatch(self, px, py, minval=None):
-		if minval is not None and minval > 0:
+	def getPointSourcePatch(self, px, py, minval=0.):
+		if minval > 0.:
 			r = 0.
 			for v in self.mog.var:
 				# overestimate
@@ -1065,7 +1061,7 @@ class NCircularGaussianPSF(MultiParams):
 
 	# returns a Patch object.
 	#### FIXME -- could use mixture_profiles!!
-	def getPointSourcePatch(self, px, py, minval=None):
+	def getPointSourcePatch(self, px, py, minval=0.):
 		ix = int(round(px))
 		iy = int(round(py))
 		dx = px - ix

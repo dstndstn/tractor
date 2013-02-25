@@ -56,7 +56,7 @@ class PsfEx(MultiParams):
 		# no args?
 		super(PsfEx, self).__init__()
 
-	def getPointSourcePatch(self, px, py, minval=None):
+	def getPointSourcePatch(self, px, py, minval=0.):
 		mog = self.mogAt(px, py)
 		return mog.getPointSourcePatch(px, py, minval=minval)
 

@@ -216,12 +216,11 @@ class Galaxy(MultiParams):
 		raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
 						   self.getName())
 
-	def getModelPatch(self, img, minsb=None):
+	def getModelPatch(self, img, minsb=0.):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		minval = 0.
-		if minsb is not None:
-			if counts > 0:
-				minval = minsb / counts
+		if counts <= 0:
+			return None
+		minval = minsb / counts
 		p1 = self.getUnitFluxModelPatch(img, minval=minval)
 		if p1 is None:
 			return None
@@ -345,10 +344,10 @@ class CompositeGalaxy(MultiParams):
 	def getBrightnesses(self):
 		return [self.brightnessExp, self.brightnessDev]
 	
-	def getModelPatch(self, img, minsb=None):
+	def getModelPatch(self, img, minsb=0.):
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
 		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		if minsb is None:
+		if minsb == 0.:
 			kw = {}
 		else:
 			kw = dict(minsb=minsb/2.)
@@ -360,8 +359,8 @@ class CompositeGalaxy(MultiParams):
 			return pe
 		return pe + pd
 
-	def getUnitFluxModelPatches(self, img, minval=None):
-		if minval is not None:
+	def getUnitFluxModelPatches(self, img, minval=0.):
+		if minval > 0:
 			# allow each component half the error
 			minval = minval * 0.5
 		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
@@ -467,9 +466,7 @@ class ProfileGalaxy(object):
 		_galcache.put(deps, (patch,minval))
 		return patch
 
-	def getUnitFluxModelPatches(self, img, minval=None):
-		if minval is None:
-			minval = 0.
+	def getUnitFluxModelPatches(self, img, minval=0.):
 		return [self.getUnitFluxModelPatch(img, minval=minval)]
 
 	def _realGetUnitFluxModelPatch(self, img, px, py, minval):
@@ -647,12 +644,11 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 	def getBrightnesses(self):
 		return [self.brightness]
 
-	def getModelPatch(self, img, minsb=None):
+	def getModelPatch(self, img, minsb=0.):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		minval = 0.
-		if minsb is not None:
-			if counts > 0:
-				minval = minsb / counts
+		if counts <= 0:
+			return None
+		minval = minsb / counts
 		p1 = self.getUnitFluxModelPatch(img, minval=minval)
 		if p1 is None:
 			return None
