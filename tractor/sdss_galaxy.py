@@ -212,9 +212,6 @@ class Galaxy(MultiParams):
 	def copy(self):
 		return None
 
-	def getProfile(self):
-		return None
-
 	def getUnitFluxModelPatch(self, img, **kwargs):
 		raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
 						   self.getName())
@@ -437,44 +434,29 @@ class CompositeGalaxy(MultiParams):
 
 		return derivs
 
-class HoggGalaxy(Galaxy):
-	#ps = PlotSequence('hg', format='%03i')
-
-	def __init__(self, pos, brightness, *args):
-		'''
-		HoggGalaxy(pos, brightness, GalaxyShape)
-		or
-		HoggGalaxy(pos, brightness, re, ab, phi)
-
-		re: [arcsec]
-		phi: [deg]
-		'''
-		if len(args) == 3:
-			shape = GalaxyShape(*args)
-		else:
-			assert(len(args) == 1)
-			shape = args[0]
-		super(HoggGalaxy, self).__init__(pos, brightness, shape)
-
-	def overlapsCircle(self, pos, radius):
-		cosdec = np.cos(np.deg2rad(pos.dec))
-		return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,
-						   pos.dec - self.pos.dec,
-						   radius, self.nre)
-
+class ProfileGalaxy(object):
+	'''
+	A mix-in class that renders itself based on a Mixture-of-Gaussians
+	profile.
+	'''
 	def getName(self):
-		return 'HoggGalaxy'
+		return 'ProfileGalaxy'
 
-	def copy(self):
-		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
-						  self.shape.copy())
+	# Here's the main method to override!
+	def getProfile(self):
+		return None
 
+	def _getUnitFluxDeps(self, img, px, py):
+		return None
+
+	def _getUnitFluxPatchSize(self, img, minval):
+		return 0
+	
 	def getUnitFluxModelPatch(self, img, px=None, py=None, minval=0.0):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		#
-		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
-					 img.getPsf().hashkey(), self.shape.hashkey()))
+		deps = self.getUnitFluxDeps(img, px, py)
 		try:
 			(cached,mv) = _galcache.get(deps)
 			if mv <= minval:
@@ -495,16 +477,7 @@ class HoggGalaxy(Galaxy):
 		cd = img.getWcs().cdAtPixel(px, py)
 
 		# now choose the patch size
-		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-		if self.ab <= 1:
-			abscale = 1.
-		else:
-			abscale = self.ab
-		halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
-		#print 'halfsize', halfsize, 'pixels'
-		psf = img.getPsf()
-		halfsize += psf.getRadius()
-		#print ' +psf -> ', halfsize, 'pixels'
+		halfsize = self._getUnitFluxPatchSize(img, minval)
 
 		# now evaluate the mixture on the patch pixels
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0, img.getWidth())
@@ -558,6 +531,56 @@ class HoggGalaxy(Galaxy):
 
 		return Patch(x0, y0, psfconvolvedimg)
 
+	
+class HoggGalaxy(Galaxy, ProfileGalaxy):
+	#ps = PlotSequence('hg', format='%03i')
+
+	def __init__(self, pos, brightness, *args):
+		'''
+		HoggGalaxy(pos, brightness, GalaxyShape)
+		or
+		HoggGalaxy(pos, brightness, re, ab, phi)
+
+		re: [arcsec]
+		phi: [deg]
+		'''
+		if len(args) == 3:
+			shape = GalaxyShape(*args)
+		else:
+			assert(len(args) == 1)
+			shape = args[0]
+		super(HoggGalaxy, self).__init__(pos, brightness, shape)
+
+	def overlapsCircle(self, pos, radius):
+		cosdec = np.cos(np.deg2rad(pos.dec))
+		return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,
+						   pos.dec - self.pos.dec,
+						   radius, self.nre)
+
+	def getName(self):
+		return 'HoggGalaxy'
+
+	def copy(self):
+		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
+						  self.shape.copy())
+
+	def _getUnitFluxDeps(self, img, px, py):
+		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
+					 img.getPsf().hashkey(), self.shape.hashkey()))
+
+	def _getUnitFluxPatchSize(self, img, minval):
+		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+		if self.ab <= 1:
+			abscale = 1.
+		else:
+			abscale = self.ab
+		halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
+		#print 'halfsize', halfsize, 'pixels'
+		psf = img.getPsf()
+		halfsize += psf.getRadius()
+		#print ' +psf -> ', halfsize, 'pixels'
+		return halfsize
+		
 
 class ExpGalaxy(HoggGalaxy):
 	nre = 4.
@@ -597,6 +620,186 @@ class DevGalaxy(HoggGalaxy):
 		return DevGalaxy(self.pos.copy(), self.brightness.copy(),
 						 self.shape.copy())
 
+
+class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
+	'''
+	A galaxy with Exponential and deVaucouleurs components
+	with a FIXED fraction of deV / (exp + deV) light.
+
+	The two components share a position (ie the centers are the same),
+	but have different shapes.  The galaxy has a single brightness
+	that is split between the components.
+
+	This is like CompositeGalaxy, but more useful for getting
+	consistent colors from forced photometry.
+	'''
+	def __init__(self, pos, brightness, fracDev, shapeExp, shapeDev):
+		MultiParams.__init__(self, pos, brightness, fracDev,
+							 shapeExp, shapeDev)
+		self.name = self.getName()
+
+	@staticmethod
+	def getNamedParams():
+		return dict(pos=0, brightness=1, fracDev=2, shapeExp=3, shapeDev=4)
+
+	def getName(self):
+		return 'FixedCompositeGalaxy'
+
+	def getPosition(self):
+		return self.pos
+
+	def __str__(self):
+		return (self.name + ' at ' + str(self.pos)
+				+ ' with ' + str(self.brightness) 
+				+ ', deV fraction %.3g, ' % self.fracDev
+				+ 'exp ' + str(self.shapeExp)
+				+ ' and deV ' + str(self.shapeDev))
+	def __repr__(self):
+		return (self.name + '(pos=' + repr(self.pos) +
+				', brightness=' + repr(self.brightness) +
+				', fracDev=' + repr(self.fracDev) + 
+				', shapeExp=' + repr(self.shapeExp) +
+				', shapeDev=' + repr(self.shapeDev))
+	def copy(self):
+		return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
+									self.fracDev, self.shapeExp.copy(),
+									self.shapeDev.copy())
+
+	def getBrightness(self):
+		return self.brightness
+
+	def getBrightnesses(self):
+		return [self.brightness]
+
+	def getModelPatch(self, img, minsb=None):
+		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+		minval = 0.
+		if minsb is not None:
+			if counts > 0:
+				minval = minsb / counts
+		p1 = self.getUnitFluxModelPatch(img, minval=minval)
+		if p1 is None:
+			return None
+		return p1 * counts
+
+	def getUnitFluxModelPatches(self, img, minval=0.):
+		return [self.getUnitFluxModelPatch(img, minval=minval)]
+
+	def getProfile(self):
+		f = self.fracDev
+		f = max(0., min(1., f))
+		if f == 0.:
+			return ExpGalaxy.getProfile()
+		elif f == 1.:
+			return DevGalaxy.getProfile()
+		e = ExpGalaxy.getProfile()
+		d = DevGalaxy.getProfile()
+		e.amp *= (1. - f)
+		d.amp *=  f
+		p = e + d
+		return p
+		
+	def getUnitFluxModelPatch(self, img, minval=0.):
+			
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		return (e.getUnitFluxModelPatches(img, minval=minval) +
+				d.getUnitFluxModelPatches(img, minval=minval))
+	
+	
+	def getModelPatch(self, img, minsb=None):
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		if minsb is None:
+			kw = {}
+		else:
+			kw = dict(minsb=minsb/2.)
+		pe = e.getModelPatch(img, **kw)
+		pd = d.getModelPatch(img, **kw)
+		if pe is None:
+			return pd
+		if pd is None:
+			return pe
+		return pe + pd
+
+	def getUnitFluxModelPatches(self, img, minval=None):
+		if minval is not None:
+			# allow each component half the error
+			minval = minval * 0.5
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		return (e.getUnitFluxModelPatches(img, minval=minval) +
+				d.getUnitFluxModelPatches(img, minval=minval))
+
+	def getUnitFluxModelPatch(self, img, px=None, py=None):
+		# this code is un-tested
+		assert(False)
+		fe = self.brightnessExp / (self.brightnessExp + self.brightnessDev)
+		fd = 1. - fe
+		assert(fe >= 0.)
+		assert(fe <= 1.)
+		e = ExpGalaxy(self.pos, fe, self.shapeExp)
+		d = DevGalaxy(self.pos, fd, self.shapeDev)
+		pe = e.getModelPatch(img, px, py)
+		pd = d.getModelPatch(img, px, py)
+		if pe is None:
+			return pd
+		if pd is None:
+			return pe
+		return pe + pd
+
+	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
+	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
+	# CompositeGalaxy.
+	def getParamDerivatives(self, img):
+		#print 'CompositeGalaxy: getParamDerivatives'
+		#print '  Exp brightness', self.brightnessExp, 'shape', self.shapeExp
+		#print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
+		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+		e.dname = 'comp.exp'
+		d.dname = 'comp.dev'
+		if self.isParamFrozen('pos'):
+			e.freezeParam('pos')
+			d.freezeParam('pos')
+		if self.isParamFrozen('brightnessExp'):
+			e.freezeParam('brightness')
+		if self.isParamFrozen('shapeExp'):
+			e.freezeParam('shape')
+		if self.isParamFrozen('brightnessDev'):
+			d.freezeParam('brightness')
+		if self.isParamFrozen('shapeDev'):
+			d.freezeParam('shape')
+
+		de = e.getParamDerivatives(img)
+		dd = d.getParamDerivatives(img)
+
+		if self.isParamFrozen('pos'):
+			derivs = de + dd
+		else:
+			derivs = []
+			# "pos" is shared between the models, so add the derivs.
+			npos = len(self.pos.getStepSizes())
+			for i in range(npos):
+				#dp = de[i] + dd[i]   -- but one or both could be None
+				dp = de[i]
+				if dd[i] is not None:
+					if dp is None:
+						dp = dd[i]
+					else:
+						dp += dd[i]
+				if dp is not None: 
+					dp.setName('d(comp)/d(pos%i)' % i)
+				derivs.append(dp)
+			derivs.extend(de[npos:])
+			derivs.extend(dd[npos:])
+
+		return derivs
+	
+	
+
+
+	
 
 if __name__ == '__main__':
 	from astrometry.util.plotutils import PlotSequence

@@ -83,11 +83,26 @@ class MixtureOfGaussians():
 	def extend(self, other):
 		assert(self.D == other.D)
 		self.K = self.K + other.K
-		self.amp = np.append(self.amp, other.amp)
-		self.mean = np.reshape(np.append(self.mean, other.mean), (self.K, self.D))
-		self.var = np.reshape(np.append(self.var, other.var), (self.K, self.D, self.D))
-		self.test
-
+		self.amp  = np.append(self.amp,  other.amp)
+		self.mean = np.append(self.mean, other.mean, axis=0)
+		self.var  = np.append(self.var,  other.var , axis=0)
+		assert(self.amp.shape  == (self.K,))
+		assert(self.mean.shape == (self.K, self.D))
+		assert(self.var.shape  == (self.K, self.D, self.D))
+		
+	def __add__(self, other):
+		assert(self.D == other.D)
+		K = self.K + other.K
+		amp  = np.append(self.amp,  other.amp)
+		mean = np.append(self.mean, other.mean, axis=0)
+		var  = np.append(self.var,  other.var , axis=0)
+		assert(self.amp.shape  == (K,))
+		assert(self.mean.shape == (K, D))
+		assert(self.var.shape  == (K, D, D))
+		s = MixtureOfGaussians(amp, mean, var)
+		s.normalize()
+		return s
+		
 	def apply_affine(self, shift, scale):
 		'''
 		shift: D-vector offset
