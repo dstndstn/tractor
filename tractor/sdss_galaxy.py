@@ -419,13 +419,7 @@ class CompositeGalaxy(MultiParams):
 			# "pos" is shared between the models, so add the derivs.
 			npos = len(self.pos.getStepSizes())
 			for i in range(npos):
-				#dp = de[i] + dd[i]   -- but one or both could be None
-				dp = de[i]
-				if dd[i] is not None:
-					if dp is None:
-						dp = dd[i]
-					else:
-						dp += dd[i]
+				dp = add_patches(de[i], dd[i])
 				if dp is not None: 
 					dp.setName('d(comp)/d(pos%i)' % i)
 				derivs.append(dp)
@@ -442,10 +436,16 @@ class ProfileGalaxy(object):
 	def getName(self):
 		return 'ProfileGalaxy'
 
-	# Here's the main method to override!
 	def getProfile(self):
 		return None
 
+	# Here's the main method to override;
+	def _getAffineProfile(self, img, px, py):
+		''' Returns a MixtureOfGaussians profile that has been
+		affine-transformed into the pixel space of the image.
+		'''
+		return None
+	
 	def _getUnitFluxDeps(self, img, px, py):
 		return None
 
@@ -473,31 +473,17 @@ class ProfileGalaxy(object):
 		return [self.getUnitFluxModelPatch(img, minval=minval)]
 
 	def _realGetUnitFluxModelPatch(self, img, px, py, minval):
-		# shift and squash
-		cd = img.getWcs().cdAtPixel(px, py)
-
 		# now choose the patch size
-		halfsize = self._getUnitFluxPatchSize(img, minval)
+		halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
 
-		# now evaluate the mixture on the patch pixels
+		# find overlapping pixels to render
 		(outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0, img.getWidth())
 		(outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0, img.getHeight())
 		if inx == [] or iny == []:
-			#print 'No overlap between model and image'
+			# no overlap
 			return None
 
-		galmix = self.getProfile()
-		Tinv = np.linalg.inv(self.shape.getTensor(cd))
-		amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
-
-		if False:
-			(eval, evec) = np.linalg.eig(amix.var[0])
-			print amix.var[0]
-			print 'true ab:', self.ab
-			print 'eigenval-based ab:', np.sqrt(eval[1]/eval[0])
-			print 'true phi:', self.phi
-			print 'eigenvec-based phi:', deg2rad(np.arctan2(evec[0,1], evec[0,0])), deg2rad(np.arctan2(evec[1,0], evec[0,0]))
-		amix.symmetrize()
+		amix = self._getAffineProfile(img, px, py)
 		# now convolve with the PSF
 		# We're making a strong assumption about the PSF here:
 		psfmix = psf.getMixtureOfGaussians()
@@ -507,31 +493,10 @@ class ProfileGalaxy(object):
 		y0 = outy.start
 		x1 = outx.stop
 		y1 = outy.stop
-
 		psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
-
-		#print 'psf sum of ampls:', np.sum(psfmix.amp)
-		#print 'unconvolved mixture sum of ampls:', np.sum(amix.amp)
-		#print 'convolved mixture sum of ampls:', np.sum(cmix.amp)
-		#print 'psf-conv img sum:', psfconvolvedimg.sum()
-		# now return a calibrated patch
-		#print 'x0,y0', x0,y0
-		#print 'patch shape', psfconvolvedimg.shape
-		#print 'img w,h', img.getWidth(), img.getHeight()
-
-		#print 'psf-convolved img sum:', psfconvolvedimg.sum()
-
-		# if False:
-		# 	plt.clf()
-		# 	plt.imshow(psfconvolvedimg*counts,
-		# 			   interpolation='nearest', origin='lower')
-		# 	plt.hot()
-		# 	plt.colorbar()
-		# 	#HoggGalaxy.ps.savefig()
-
 		return Patch(x0, y0, psfconvolvedimg)
 
-	
+
 class HoggGalaxy(Galaxy, ProfileGalaxy):
 	#ps = PlotSequence('hg', format='%03i')
 
@@ -564,23 +529,31 @@ class HoggGalaxy(Galaxy, ProfileGalaxy):
 		return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
 						  self.shape.copy())
 
+	def _getAffineProfile(self, img, px, py):
+		''' Returns a MixtureOfGaussians profile that has been
+		affine-transformed into the pixel space of the image.
+		'''
+		# shift and squash
+		cd = img.getWcs().cdAtPixel(px, py)
+		galmix = self.getProfile()
+		Tinv = np.linalg.inv(self.shape.getTensor(cd))
+		amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+		amix.symmetrize()
+		return amix
+	
 	def _getUnitFluxDeps(self, img, px, py):
-		deps = hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
+		return hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
 					 img.getPsf().hashkey(), self.shape.hashkey()))
 
-	def _getUnitFluxPatchSize(self, img, minval):
+	def _getUnitFluxPatchSize(self, img, px, py, minval):
+		cd = img.getWcs().cdAtPixel(px, py)
 		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-		if self.ab <= 1:
-			abscale = 1.
-		else:
-			abscale = self.ab
 		halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
 		#print 'halfsize', halfsize, 'pixels'
 		psf = img.getPsf()
 		halfsize += psf.getRadius()
 		#print ' +psf -> ', halfsize, 'pixels'
 		return halfsize
-		
 
 class ExpGalaxy(HoggGalaxy):
 	nre = 4.
@@ -621,7 +594,10 @@ class DevGalaxy(HoggGalaxy):
 						 self.shape.copy())
 
 
-class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
+class FracDev(ScalarParam):
+	stepsize = 0.01
+	
+class FixedCompositeGalaxy(MultiParams):
 	'''
 	A galaxy with Exponential and deVaucouleurs components
 	with a FIXED fraction of deV / (exp + deV) light.
@@ -634,7 +610,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 	consistent colors from forced photometry.
 	'''
 	def __init__(self, pos, brightness, fracDev, shapeExp, shapeDev):
-		MultiParams.__init__(self, pos, brightness, fracDev,
+		MultiParams.__init__(self, pos, brightness, FracDev(fracDev),
 							 shapeExp, shapeDev)
 		self.name = self.getName()
 
@@ -651,7 +627,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 	def __str__(self):
 		return (self.name + ' at ' + str(self.pos)
 				+ ' with ' + str(self.brightness) 
-				+ ', deV fraction %.3g, ' % self.fracDev
+				+ ', ' + str(self.fracDev)
 				+ 'exp ' + str(self.shapeExp)
 				+ ' and deV ' + str(self.shapeDev))
 	def __repr__(self):
@@ -662,7 +638,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 				', shapeDev=' + repr(self.shapeDev))
 	def copy(self):
 		return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
-									self.fracDev, self.shapeExp.copy(),
+									self.fracDev.getValue, self.shapeExp.copy(),
 									self.shapeDev.copy())
 
 	def getBrightness(self):
@@ -682,123 +658,117 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 			return None
 		return p1 * counts
 
-	def getUnitFluxModelPatches(self, img, minval=0.):
-		return [self.getUnitFluxModelPatch(img, minval=minval)]
-
-	def getProfile(self):
-		f = self.fracDev
+	def _getAffineProfile(self, img, px, py):
+		f = self.fracDev.getValue()
 		f = max(0., min(1., f))
-		if f == 0.:
-			return ExpGalaxy.getProfile()
-		elif f == 1.:
-			return DevGalaxy.getProfile()
-		e = ExpGalaxy.getProfile()
-		d = DevGalaxy.getProfile()
-		e.amp *= (1. - f)
-		d.amp *=  f
-		p = e + d
-		return p
-		
-	def getUnitFluxModelPatch(self, img, minval=0.):
-			
-		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		return (e.getUnitFluxModelPatches(img, minval=minval) +
-				d.getUnitFluxModelPatches(img, minval=minval))
+		profs = []
+		if f > 0.:
+			profs.append((f, DevGalaxy.getProfile(), self.shapeDev))
+		if f < 1.:
+			profs.append((1.-f, ExpGalaxy.getProfile(), self.shapeExp))
+
+		cd = img.getWcs().cdAtPixel(px, py)
+		mix = []
+		for f,p,s in profs:
+			Tinv = np.linalg.inv(self.shape.getTensor(cd))
+			amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+			amix.symmetrize()
+			amix.amp *= f
+			mix.append(amix)
+		if len(mix) == 1:
+			return mix[0]
+		return mix[0] + mix[1]
+
+	def _getUnitFluxPatchSize(self, img, px, py, minval):
+		cd = img.getWcs().cdAtPixel(px, py)
+		pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
+		s = self.shapeExp
+		r = ExpGalaxy.nre * s.re * max(s.ab, 1.)
+		s = self.shapeDev
+		r = max(r, DevGalaxy.nre * s.re * max(s.ab, 1.))
+		halfsize = max(1., r) / 3600. / pixscale
+		psf = img.getPsf()
+		halfsize += psf.getRadius()
+		return halfsize
 	
+	def _getUnitFluxDeps(self, img, px, py):
+		return hash(('unitpatch', self.getName(),
+					 px, py, img.getWcs().hashkey(),
+					 img.getPsf().hashkey(),
+					 self.shapeDev.hashkey(),
+					 self.shapeExp.hashkey()))
 	
-	def getModelPatch(self, img, minsb=None):
-		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		if minsb is None:
-			kw = {}
-		else:
-			kw = dict(minsb=minsb/2.)
-		pe = e.getModelPatch(img, **kw)
-		pd = d.getModelPatch(img, **kw)
-		if pe is None:
-			return pd
-		if pd is None:
-			return pe
-		return pe + pd
-
-	def getUnitFluxModelPatches(self, img, minval=None):
-		if minval is not None:
-			# allow each component half the error
-			minval = minval * 0.5
-		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		return (e.getUnitFluxModelPatches(img, minval=minval) +
-				d.getUnitFluxModelPatches(img, minval=minval))
-
-	def getUnitFluxModelPatch(self, img, px=None, py=None):
-		# this code is un-tested
-		assert(False)
-		fe = self.brightnessExp / (self.brightnessExp + self.brightnessDev)
-		fd = 1. - fe
-		assert(fe >= 0.)
-		assert(fe <= 1.)
-		e = ExpGalaxy(self.pos, fe, self.shapeExp)
-		d = DevGalaxy(self.pos, fd, self.shapeDev)
-		pe = e.getModelPatch(img, px, py)
-		pd = d.getModelPatch(img, px, py)
-		if pe is None:
-			return pd
-		if pd is None:
-			return pe
-		return pe + pd
-
-	# MAGIC: ORDERING OF EXP AND DEV PARAMETERS
-	# MAGIC: ASSUMES EXP AND DEV SHAPES SAME LENGTH
-	# CompositeGalaxy.
+	# WARNING, this code has not been tested.
 	def getParamDerivatives(self, img):
-		#print 'CompositeGalaxy: getParamDerivatives'
-		#print '  Exp brightness', self.brightnessExp, 'shape', self.shapeExp
-		#print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
-		e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
-		d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
-		e.dname = 'comp.exp'
-		d.dname = 'comp.dev'
+		### FIXME -- minsb would be useful here!
+
+		#pos0 = self.getPosition()
+		#(px0,py0) = img.getWcs().positionToPixel(pos0, self)
+		e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
+		d = DevGalaxy(self.pos, self.brightness, self.shapeDev)
+		e.dname = 'fcomp.exp'
+		d.dname = 'fcomp.dev'
+
+		f = self.fracDev.getValue()
+		f = max(0., min(1., f))
+
 		if self.isParamFrozen('pos'):
 			e.freezeParam('pos')
 			d.freezeParam('pos')
-		if self.isParamFrozen('brightnessExp'):
-			e.freezeParam('brightness')
 		if self.isParamFrozen('shapeExp'):
 			e.freezeParam('shape')
-		if self.isParamFrozen('brightnessDev'):
-			d.freezeParam('brightness')
 		if self.isParamFrozen('shapeDev'):
 			d.freezeParam('shape')
 
 		de = e.getParamDerivatives(img)
 		dd = d.getParamDerivatives(img)
 
-		if self.isParamFrozen('pos'):
-			derivs = de + dd
-		else:
-			derivs = []
+		# fracDev scaling
+		for d in de:
+			if d is not None:
+				d *= (1.-f)
+		for d in dd:
+			if d is not None:
+				d *= f
+		
+		derivs = []
+		i0 = 0
+		if not self.isParamFrozen('pos'):
 			# "pos" is shared between the models, so add the derivs.
-			npos = len(self.pos.getStepSizes())
+			npos = self.pos.numberOfParams()
 			for i in range(npos):
-				#dp = de[i] + dd[i]   -- but one or both could be None
-				dp = de[i]
-				if dd[i] is not None:
-					if dp is None:
-						dp = dd[i]
-					else:
-						dp += dd[i]
-				if dp is not None: 
-					dp.setName('d(comp)/d(pos%i)' % i)
-				derivs.append(dp)
-			derivs.extend(de[npos:])
-			derivs.extend(dd[npos:])
+				ii = i0+i
+				df = add_patch(de[ii], dd[ii])
+				if df is not None: 
+					df.setName('d(fcomp)/d(pos%i)' % i)
+				derivs.append(df)
+			i0 += npos
 
+		if not self.isParamFrozen('brightness'):
+			# shared between the models, so add the derivs.
+			nb = self.brightness.numberOfParams()
+			for i in range(nb):
+				ii = i0+i
+				df = add_patch(de[ii], dd[ii])
+				if df is not None: 
+					df.setName('d(fcomp)/d(bright%i)' % i)
+				derivs.append(df)
+			i0 += nb
+				
+		if not self.isParamFrozen('fracDev'):
+			ue = e.getUnitFluxModelPatch(img)
+			ud = d.getUnitFluxModelPatch(img)
+			counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+			df = (ud - ue) * counts
+			df.setName('d(fcomp)/d(fracDev)')
+			derivs.append(df)
+
+		if not self.isParamFrozen('shapeExp'):
+			derivs.extend(de[i0:])
+		if not self.isParamFrozen('shapeDev'):
+			derivs.extend(dd[i0:])
+			
 		return derivs
-	
-	
-
-
 	
 
 if __name__ == '__main__':

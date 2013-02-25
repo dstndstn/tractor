@@ -191,6 +191,16 @@ class Image(MultiParams):
 		return self.photocal
 
 
+# Adds two patches, handling the case when one is None
+def add_patches(pa, pb):
+	p = pa
+	if pb is not None:
+		if p is None:
+			p = pb
+		else:
+			p += pb
+	return p
+	
 class Patch(object):
 	'''
 	An image patch; a subimage.  In the Tractor we use these to hold
