@@ -1623,19 +1623,34 @@ class Tractor(MultiParams):
 	'''
 
 	def getOverlappingSources(self, img, srcs=None, minsb=0.):
-		mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
-		L,n = label(mod > minsb, structure=np.ones((3,3), int))
-		#print 'Found', n, 'groups of sources'
-		assert(L.shape == mod.shape)
-		if srcs is None:
-			srcs = self.catalog
+
 		if _isint(img):
 			img = self.getImage(img)
+		mod = np.zeros(img.getShape(), self.modtype)
+		if srcs is None:
+			srcs = self.catalog
+		patches = []
+		for src in srcs:
+			patch = self.getModelPatch(img, src, minsb=minsb)
+			patches.append(patch)
+			if patch is not None:
+				assert(np.all(patch.patch >= 0))
+				patch.addTo(mod)
+
+		#mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
+		bigmod = (mod > minsb)
+		bigmod = binary_dilation(bigmod)
+		L,n = label(bigmod, structure=np.ones((3,3), int))
+		#L,n = label(mod > minsb, structure=np.ones((5,5), int))
+		#print 'Found', n, 'groups of sources'
+		assert(L.shape == mod.shape)
 
 		srcgroups = {}
+		#equivgroups = {}
 		H,W = mod.shape
-		for i,src in enumerate(srcs):
-			modpatch = self.getModelPatch(img, src, minsb=minsb)
+		for i,modpatch in enumerate(patches):
+			#for i,src in enumerate(srcs):
+			# modpatch = self.getModelPatch(img, src, minsb=minsb)
 			#print 'modpatch', modpatch
 			if modpatch is None or not modpatch.clipTo(W,H):
 				# no overlap with image
@@ -1644,14 +1659,34 @@ class Tractor(MultiParams):
 			lpatch = L[modpatch.getSlice(mod)]
 			#print 'mp', modpatch.shape
 			#print 'lpatch', lpatch.shape
+			assert(lpatch.shape == modpatch.shape)
 			ll = np.unique(lpatch[modpatch.patch > minsb])
 			#print 'labels:', ll, 'for source', src
 			# Not sure how this happens, but it does...
-			ll = [l for l in ll if l > 0]
+			#ll = [l for l in ll if l > 0]
 			if len(ll) == 0:
 				# this sources contributes very little!
 				continue
-			assert(len(ll) == 1)
+
+			# if len(ll) != 1:
+			# 	import pylab as plt
+			# 	plt.clf()
+			# 	plt.subplot(2,2,1)
+			# 	plt.imshow(lpatch, origin='lower', interpolation='nearest')
+			# 	plt.subplot(2,2,2)
+			# 	plt.imshow(modpatch.patch, origin='lower', interpolation='nearest')
+			# 	plt.subplot(2,2,3)
+			# 	plt.imshow(modpatch.patch > minsb, origin='lower', interpolation='nearest')
+			# 	plt.subplot(2,2,4)
+			# 	plt.imshow(lpatch * (modpatch.patch > minsb), origin='lower', interpolation='nearest')
+			# 	plt.savefig('ll.png')
+			# 	sys.exit(-1)
+
+			if len(ll) > 1:
+				# This can happen when a source has two peaks (eg, a PSF)
+				# that are separated by a pixel and the saddle is below minval.
+				pass
+   			assert(len(ll) == 1)
 			ll = ll[0]
 			if not ll in srcgroups:
 				srcgroups[ll] = []

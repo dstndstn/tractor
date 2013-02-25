@@ -124,7 +124,8 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	cat.thawPathsTo(band)
 
 	cat0 = cat.getParams()
-	br0 = np.array([src.getBrightness() for src in cat])
+	br0 = [src.getBrightness().copy() for src in cat]
+	nm0 = np.array([b.getBand(band) for b in br0])
 
 	sig = 1./np.median(tim.getInvError())
 	#print 'Image sigma:', sig
@@ -287,12 +288,10 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 
 	cat.thawPathsTo(band)
 	cat1 = cat.getParams()
-	br1 = np.array([src.getBrightness() for src in cat])
+	br1 = [src.getBrightness().copy() for src in cat]
+	nm1 = np.array([b.getBand(band) for b in br1])
 
 	print 'Runfield:', r,c,f,band, 'took', Time()-t00
-
-	nm0 = np.array([b.getBand(band) for b in br0])
-	nm1 = np.array([b.getBand(band) for b in br1])
 
 	mags0 = NanoMaggies.nanomaggiesToMag(nm0)
 	mags1 = NanoMaggies.nanomaggiesToMag(nm1)
