@@ -648,3 +648,16 @@ subsets of overlapping sources and solve them simultaneously.
 	OR create a grid of sub-image Tractor images and just work at image scale
 	BUT still need source-in-image cuts
 
+
+# http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/  
+
+
+--------------------------------------------
+2013-02-18
+--------------------------------------------
+
+Check out a different test field: S82p18p, which has a low-z cluster.
+
+wget --user cs82 --password XXXXXX "http://che.cbpf.br/cs82/se_model_fits_V2.7/morphology_catalogs_V2.7.1/S82p18p_y.V2.7A.swarp.cut.deVexp.fit"
+
+

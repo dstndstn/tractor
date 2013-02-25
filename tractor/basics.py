@@ -788,6 +788,10 @@ class GaussianMixturePSF(BaseParams):
 		#return self.getNSigma * np.max(self.mog.
 		# HACK!
 		return self.radius
+
+	#def getRadiusForApprox(self, minval):
+		#rr = np.max([max(v[0,0], v[1,1]     for v in self.mog.var])
+
 	# returns a Patch object.
 	def getPointSourcePatch(self, px, py, minval=None):
 		if minval is not None and minval > 0:

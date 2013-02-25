@@ -374,6 +374,26 @@ def main(opt):
 		print 'Wrote', fn
 
 
+	if opt.cmd:
+
+		print len(np.unique(F.run)), 'unique runs'
+		
+		for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
+									 F.ra0, F.ra1, F.dec0, F.dec1):
+			for band in 'ugriz':
+				basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
+				fn = 'mags-%s.fits' % basename
+				M = fits_table(fn)
+				
+
+
+			
+
+		return
+
+
+
+		
 	mp = multiproc(opt.threads)
 
 	# Sort by distance from the center of the field.
@@ -445,6 +465,10 @@ if __name__ == '__main__':
 					  help='Skip fields whose outputs already exist?')
 	parser.add_option('-n', dest='nfields', type=int, default=None,
 					  help='Run at most this number of fields')
+
+	parser.add_option('--cmd', action='store_true',
+					  help='Produce summary CMD plots')
+
 	opt,args = parser.parse_args()
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
 	main(opt)

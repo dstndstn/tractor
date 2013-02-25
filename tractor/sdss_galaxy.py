@@ -637,15 +637,23 @@ if __name__ == '__main__':
 	
 	p1 = egal.getModelPatch(tim, 1e-3)
 
+	bright.setParams([100.])
+
+	p2 = egal.getModelPatch(tim, 1e-3)
+
 	print 'p0', p0.patch.sum()
 	print 'p1', p1.patch.sum()
+	print 'p2', p2.patch.sum()
 	
 	plt.clf()
 	ima = dict(interpolation='nearest', origin='lower')
-	plt.subplot(2,1,1)
+	plt.subplot(2,2,1)
 	plt.imshow(np.log10(np.maximum(1e-16, p0.patch)), **ima)
 	plt.colorbar()
-	plt.subplot(2,1,2)
+	plt.subplot(2,2,2)
 	plt.imshow(np.log10(np.maximum(1e-16, p1.patch)), **ima)
+	plt.colorbar()
+	plt.subplot(2,2,3)
+	plt.imshow(np.log10(np.maximum(1e-16, p2.patch)), **ima)
 	plt.colorbar()
 	ps.savefig()
