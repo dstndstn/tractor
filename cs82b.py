@@ -428,6 +428,8 @@ def main(opt):
 			NanoMaggies.magToNanomaggies(T.mag_disk[J]) +
 			NanoMaggies.magToNanomaggies(T.mag_spheroid[J]))
 
+		#ps = PlotSequence('cmd')
+
 		for band in 'ugriz':
 			smag = T.get('all_%s' % band)
 			
@@ -512,22 +514,26 @@ def main(opt):
 			plt.savefig('cm-stars-%s-3.png' % band)
 
 
-			xl,xh = -5,3
+			xl,xh = -4,4
 			yl,yh = 16,24
-			
-			plt.clf()
-			loghist(Ti.mag[K] - mn[K], Ti.mag[K], bins=200, range=((xl,xh),(yl,yh)))
-			plt.ylim(yh,yl)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-gals-%s-4.png' % band)
 
-			plt.clf()
-			loghist(Ti.mag[J] - mn[J], Ti.mag[J], bins=200, range=((xl,xh),(yl,yh)))
-			plt.ylim(yh,yl)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-stars-%s-4.png' % band)
+			G = np.flatnonzero(K)
+			
+			eflux = NanoMaggies.magToNanomaggies(Ti.mag_disk)
+			dflux = NanoMaggies.magToNanomaggies(Ti.mag_spheroid)
+			D = np.flatnonzero(K * (dflux > eflux * 10.))
+			E = np.flatnonzero(K * (eflux > dflux * 10.))
+			C = np.flatnonzero(K * (dflux <= eflux * 10.) * (eflux <= dflux * 10.))
+			
+			for j,(I,txt) in enumerate([ (G, 'galaxies'), (D, 'deV galaxies'), (E, 'exp galaxies'), (C, 'comp galaxies') ]):
+				plt.clf()
+				loghist(Ti.mag[I] - mn[I], Ti.mag[I], bins=200, range=((xl,xh),(yl,yh)))
+				plt.ylim(yh,yl)
+				plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+				plt.ylabel('CFHT i (mag)')
+				plt.title('%s forced photometry (%i %s)' % (cs82field, len(I), txt))
+				plt.savefig('cm-gals-%s-%i.png' % (band, 4+j))
+
 
 
 				
