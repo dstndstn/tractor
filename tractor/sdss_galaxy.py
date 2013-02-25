@@ -456,7 +456,7 @@ class ProfileGalaxy(object):
 		if px is None or py is None:
 			(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
 		#
-		deps = self.getUnitFluxDeps(img, px, py)
+		deps = self._getUnitFluxDeps(img, px, py)
 		try:
 			(cached,mv) = _galcache.get(deps)
 			if mv <= minval:
@@ -486,7 +486,7 @@ class ProfileGalaxy(object):
 		amix = self._getAffineProfile(img, px, py)
 		# now convolve with the PSF
 		# We're making a strong assumption about the PSF here:
-		psfmix = psf.getMixtureOfGaussians()
+		psfmix = img.getPsf().getMixtureOfGaussians()
 		psfmix.normalize()
 		cmix = amix.convolve(psfmix)
 		x0 = outx.start
@@ -497,7 +497,7 @@ class ProfileGalaxy(object):
 		return Patch(x0, y0, psfconvolvedimg)
 
 
-class HoggGalaxy(Galaxy, ProfileGalaxy):
+class HoggGalaxy(ProfileGalaxy, Galaxy):
 	#ps = PlotSequence('hg', format='%03i')
 
 	def __init__(self, pos, brightness, *args):
@@ -597,7 +597,7 @@ class DevGalaxy(HoggGalaxy):
 class FracDev(ScalarParam):
 	stepsize = 0.01
 	
-class FixedCompositeGalaxy(MultiParams):
+class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 	'''
 	A galaxy with Exponential and deVaucouleurs components
 	with a FIXED fraction of deV / (exp + deV) light.
@@ -663,15 +663,15 @@ class FixedCompositeGalaxy(MultiParams):
 		f = max(0., min(1., f))
 		profs = []
 		if f > 0.:
-			profs.append((f, DevGalaxy.getProfile(), self.shapeDev))
+			profs.append((f, DevGalaxy.profile, self.shapeDev))
 		if f < 1.:
-			profs.append((1.-f, ExpGalaxy.getProfile(), self.shapeExp))
+			profs.append((1.-f, ExpGalaxy.profile, self.shapeExp))
 
 		cd = img.getWcs().cdAtPixel(px, py)
 		mix = []
 		for f,p,s in profs:
-			Tinv = np.linalg.inv(self.shape.getTensor(cd))
-			amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
+			Tinv = np.linalg.inv(s.getTensor(cd))
+			amix = p.apply_affine(np.array([px,py]), Tinv.T)
 			amix.symmetrize()
 			amix.amp *= f
 			mix.append(amix)

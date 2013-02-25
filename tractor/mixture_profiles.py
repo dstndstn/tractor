@@ -92,13 +92,14 @@ class MixtureOfGaussians():
 		
 	def __add__(self, other):
 		assert(self.D == other.D)
+		D = self.D
 		K = self.K + other.K
 		amp  = np.append(self.amp,  other.amp)
 		mean = np.append(self.mean, other.mean, axis=0)
 		var  = np.append(self.var,  other.var , axis=0)
-		assert(self.amp.shape  == (K,))
-		assert(self.mean.shape == (K, D))
-		assert(self.var.shape  == (K, D, D))
+		assert(amp.shape  == (K,))
+		assert(mean.shape == (K, D))
+		assert(var.shape  == (K, D, D))
 		s = MixtureOfGaussians(amp, mean, var)
 		s.normalize()
 		return s
