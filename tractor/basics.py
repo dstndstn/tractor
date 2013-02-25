@@ -686,7 +686,8 @@ class PointSource(MultiParams):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		minval = None
 		if minsb is not None:
-			minval = minsb / counts
+			if counts > 0:
+				minval = minsb / counts
 		upatch = self.getUnitFluxModelPatch(img, minval=minval)
 		return upatch * counts
 
@@ -789,13 +790,15 @@ class GaussianMixturePSF(BaseParams):
 		return self.radius
 	# returns a Patch object.
 	def getPointSourcePatch(self, px, py, minval=None):
-		if minval is not None:
+		if minval is not None and minval > 0:
 			r = 0.
 			for v in self.mog.var:
 				# overestimate
 				vv = (v[0,0] + v[1,1])
 				norm = 2. * np.pi * np.linalg.det(v)
-				r = max(r, np.sqrt(vv * -2. * np.log(minval * norm)))
+				r2 = vv * -2. * np.log(minval * norm)
+				if r2 > 0:
+					r = max(r, np.sqrt(r2))
 			rr = int(np.ceil(r))
 			#print 'choosing r=', rr
 			cx = int(np.round(px))

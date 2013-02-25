@@ -1633,7 +1633,7 @@ class Tractor(MultiParams):
 		for i,src in enumerate(srcs):
 			modpatch = self.getModelPatch(img, src, minsb=minsb)
 			#print 'modpatch', modpatch
-			if not modpatch.clipTo(W,H):
+			if modpatch is None or not modpatch.clipTo(W,H):
 				# no overlap with image
 				continue
 			#print 'modpatch', modpatch
@@ -1642,6 +1642,8 @@ class Tractor(MultiParams):
 			#print 'lpatch', lpatch.shape
 			ll = np.unique(lpatch[modpatch.patch > minflux])
 			#print 'labels:', ll, 'for source', src
+			# Not sure how this happens, but it does...
+			ll = [l for l in ll if l > 0]
 			if len(ll) == 0:
 				# this sources contributes very little!
 				continue

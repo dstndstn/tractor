@@ -223,7 +223,8 @@ class Galaxy(MultiParams):
 		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
 		minval = 0.
 		if minsb is not None:
-			minval = minsb / counts
+			if counts > 0:
+				minval = minsb / counts
 		p1 = self.getUnitFluxModelPatch(img, minval=minval)
 		if p1 is None:
 			return None
