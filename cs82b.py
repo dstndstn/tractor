@@ -32,8 +32,6 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
 			#print 'PSF'
 			themag = t.mag_psf
-			#m = Mags(order=mags, **dict([(k, themag) for k in mags]))
-			#m = NanoMaggies.fromMag(m)
 			nm = NanoMaggies.magToNanomaggies(themag)
 			m = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 			srcs.append(PointSource(RaDecPos(t.ra, t.dec), m))
@@ -47,34 +45,43 @@ def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
 		# deV: spheroid
 		# exp: disk
 
-		themag = t.mag_spheroid
-		#m_dev = Mags(order=mags, **dict([(k, themag) for k in mags]))
-		#m_dev = NanoMaggies.fromMag(m_dev)
-		nm = NanoMaggies.magToNanomaggies(themag)
-		m_dev = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
-
-		themag = t.mag_disk
-		#m_exp = Mags(order=mags, **dict([(k, themag) for k in mags]))
-		#m_exp = NanoMaggies.fromMag(m_exp)
-		nm = NanoMaggies.magToNanomaggies(themag)
-		m_exp = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
+		dmag = t.mag_spheroid
+		emag = t.mag_disk
 
 		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
 
-		shape_exp = GalaxyShape(t.disk_scale_world * 1.68 * 3600., t.disk_aspect_world,
-								t.disk_theta_world + 90.)
-		shape_dev = GalaxyShape(t.spheroid_reff_world * 3600., t.spheroid_aspect_world,
-								t.spheroid_theta_world + 90.)
+		if dmag <= maglim:
+			shape_dev = GalaxyShape(t.spheroid_reff_world * 3600.,
+									t.spheroid_aspect_world,
+									t.spheroid_theta_world + 90.)
+
+		if emag <= maglim:
+			shape_exp = GalaxyShape(t.disk_scale_world * 1.68 * 3600.,
+									t.disk_aspect_world,
+									t.disk_theta_world + 90.)
+
 		pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
 
 		isrcs.append(i)
-		if t.mag_disk > maglim and t.mag_spheroid <= maglim:
+		if emag > maglim and dmag <= maglim:
+			nm = NanoMaggies.magToNanomaggies(dmag)
+			m_dev = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 			srcs.append(DevGalaxy(pos, m_dev, shape_dev))
 			continue
-		if t.mag_disk <= maglim and t.mag_spheroid > maglim:
+		if emag <= maglim and dmag > maglim:
+			nm = NanoMaggies.magToNanomaggies(emag)
+			m_exp = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
 			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
 			continue
-		srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+
+		#srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
+
+		nmd = NanoMaggies.magToNanomaggies(dmag)
+		nme = NanoMaggies.magToNanomaggies(emag)
+		nm = nmd + nme
+		fdev = (nmd / nm)
+		m = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
+		srcs.append(FixedCompositeGalaxy(pos, m, fdev, shape_exp, shape_dev))
 
 	#print 'Sources:', len(srcs)
 	return srcs, np.array(isrcs)
