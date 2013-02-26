@@ -887,9 +887,13 @@ class Tractor(MultiParams):
 				else:
 					mv = minsb / csum
 				ums = src.getUnitFluxModelPatches(img, minval=mv)
+				#ums = [um for um in ums if um is not None]
+				#if len(ums) == 0:
+				#	continue
 				for um in ums:
-					um.x0 -= x0
-					um.y0 -= y0
+					if um is not None:
+						um.x0 -= x0
+						um.y0 -= y0
 					#print 'unit-flux model', um
 				umods.extend(ums)
 

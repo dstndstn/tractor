@@ -634,23 +634,23 @@ def simulfit(opt, cs82field):
 
 	ps = PlotSequence('simul')
 
-	for dlo,dhi in zip(decs, decs[1:]):
+	for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
 		print 'Dec slice:', dlo, dhi
-		for rlo,rhi in zip(ras, ras[1:]):
+		for raslice,(rlo,rhi) in enumerate(zip(ras, ras[1:])):
 			print 'RA slice:', rlo, rhi
 
 			# in deg
 			margin = 15. / 3600.
 			Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
 				   ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi)]
-			Ti.marginal = np.logical_not((T.dec >= dlo) * (T.dec <= dhi) *
-										 (T.ra  >= rlo) * (T.ra  <= rhi))
+			Ti.marginal = np.logical_not((Ti.dec >= dlo) * (Ti.dec <= dhi) *
+										 (Ti.ra  >= rlo) * (Ti.ra  <= rhi))
 			print len(Ti), 'sources in RA,Dec slice'
+			print len(np.flatnonzero(Ti.marginal)), 'are in the margins'
 
 			Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
 				   np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
 			print len(Fi), 'fields in RA,Dec slice'
-
 
 			band = 'i'
 
@@ -683,6 +683,10 @@ def simulfit(opt, cs82field):
 			cat.freezeParamsRecursive('*')
 			cat.thawPathsTo(band)
 
+			#cat0 = cat.getParams()
+			br0 = [src.getBrightness().copy() for src in cat]
+			nm0 = np.array([b.getBand(band) for b in br0])
+
 			print 'Finding overlapping sources...'
 			tr = Tractor([faketim], cat)
 			groups,L = tr.getOverlappingSources(0, minsb=minsb)
@@ -704,11 +708,6 @@ def simulfit(opt, cs82field):
 				gflux.append(f)
 			Gorder = np.argsort(-np.array(gflux))
 
-
-
-			# HACK
-			Fi = Fi[:10]
-
 			tims = []
 			npix = 0
 			ie = []
@@ -716,7 +715,6 @@ def simulfit(opt, cs82field):
 				print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
 				tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
 												nanomaggies=True, zrange=[-2,5],
-												#roiradecbox=[ra0,ra1,dec0,dec1],
 												roiradecbox=[rlo,rhi,dlo,dhi],
 												invvarIgnoresSourceFlux=True)
 				if tim is None:
@@ -724,23 +722,20 @@ def simulfit(opt, cs82field):
 			
 				(H,W) = tim.shape
 				tim.wcs.setConstantCd(W/2., H/2.)
-				print 'CD matrix:', tim.wcs.constant_cd
+				#print 'CD matrix:', tim.wcs.constant_cd
 
 				del tim.origInvvar
 				del tim.starMask
 				del tim.mask
+				# needed for optimize_forced_photometry with rois
 				#del tim.invvar
 
-				#print 'Tim:', dir(tim)
 				e = np.median(tim.inverr)
-				#print 'Median inverr:', e
 				ie.append(e)
 
 				tims.append(tim)
 				npix += (H*W)
 				print 'got', (H*W), 'pixels, total', npix
-
-				#memusage()
 			
 			print 'Read', len(tims), 'images'
 			print 'total of', npix, 'pixels'
@@ -749,6 +744,9 @@ def simulfit(opt, cs82field):
 			ie = max(ie)
 			print 'max inverr:', ie
 
+			marginal = Ti.marginal[icat]
+			assert(len(icat) == len(cat))
+			assert(len(marginal) == len(cat))
 
 			for gi,gl in enumerate(Gorder):
 				print
@@ -758,21 +756,31 @@ def simulfit(opt, cs82field):
 				gslice = gslices[gl]
 				gsrcs = groups[gl]
 				print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
-				#for i in gsrcs:
-				#	print '  ', cat[i]
-
 				tgroups = np.unique(L[gslice])
 				tsrcs = []
 				for g in tgroups:
 					if not g in [gl,0]:
 						if g in groups:
 							tsrcs.extend(groups[g])
-				print 'sources in groups touching slice:', tsrcs
+
+				# make a copy
+				gsrcs = [i for i in gsrcs]
+				rm = []
+				for i in gsrcs:
+					if marginal[i]:
+						tsrcs.append(i)
+						rm.append(i)
+				for i in rm:
+					gsrcs.remove(i)
+				if len(gsrcs) == 0:
+					print 'All sources are in the margin region'
+					continue
+
+				#print 'sources in groups touching slice:', tsrcs
 
 				# Naively convert a slice in the "fake" image into a slice
 				# in each tim.
 				# This will need some work for datasets with more complicated geometry!
-				print 'gslice', gslice
 				sy,sx = gslice
 				x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
 				rd = []
@@ -801,10 +809,14 @@ def simulfit(opt, cs82field):
 						   np.clip(y0,   0, H),
 						   np.clip(y1+1, 0, H)]
 					if roi[0] == roi[1] or roi[2] == roi[3]:
-						print 'Empty roi'
+						#print 'Empty roi'
 						continue
+					print 'Keeping image (%i x %i) with roi' % (W,H), roi, 'size %i x %i' % (roi[1]-roi[0], roi[3]-roi[2])
 					mytims.append(tim)
 					myrois.append((slice(y0,y1), slice(x0,x1)))
+
+				if len(mytims) == 0:
+					continue
 
 				subcat = Catalog(*[cat[i] for i in gsrcs + tsrcs])
 				for i in range(len(tsrcs)):
@@ -823,14 +835,16 @@ def simulfit(opt, cs82field):
 				if ims1 is None:
 					continue
 
-				print 'ims0,ims1', len(ims0), len(ims1)
-				n = len(ims0)
-
-				imchi = dict(interpolation='nearest', origin='lower',
-							 vmin=-5, vmax=5, cmap='gray')
-
 				if opt.plots:
+					print 'ims0,ims1', len(ims0), len(ims1)
+					n = len(ims0)
+					imchi = dict(interpolation='nearest', origin='lower',
+								 vmin=-5, vmax=5, cmap='gray')
+					plt.figure(figsize=(20,5))
 					plt.clf()
+					plt.subplots_adjust(hspace=0.01, wspace=0.01,
+										left=0.1, right=0.96,
+										bottom=0.1, top=0.90)
 					for i,((data, mod0, chi0, roi),(data, mod1, chi1, roi)) in enumerate(zip(ims0,ims1)):
 
 						tim = mytims[i]
@@ -840,20 +854,40 @@ def simulfit(opt, cs82field):
 
 						plt.subplot(5, n, i+1)
 						plt.imshow(data, **ima)
+						plt.xticks([]); plt.yticks([])
 						plt.subplot(5, n, i+1+n)
 						plt.imshow(mod0, **ima)
+						plt.xticks([]); plt.yticks([])
 						plt.subplot(5, n, i+1+2*n)
 						plt.imshow(mod1, **ima)
+						plt.xticks([]); plt.yticks([])
 						plt.subplot(5, n, i+1+3*n)
 						plt.imshow(chi0, **imchi)
+						plt.xticks([]); plt.yticks([])
 						plt.subplot(5, n, i+1+4*n)
 						plt.imshow(chi1, **imchi)
+						plt.xticks([]); plt.yticks([])
 					ps.savefig()
 				
 
-			break
-		break
-			
+			#cat1 = cat.getParams()
+			br1 = [src.getBrightness().copy() for src in cat]
+			nm1 = np.array([b.getBand(band) for b in br1])
+
+			mags0 = NanoMaggies.nanomaggiesToMag(nm0)
+			mags1 = NanoMaggies.nanomaggiesToMag(nm1)
+
+			M = tabledata()
+			M.cs82_mag_i = mags0
+			M.cs82_nmag_i = nm0
+			M.set('sdss_mag_%s' % band, mags1)
+			M.set('sdss_nmag_%s' % band, nm1)
+			M.cs82_index = Ti.index[icat]
+			M.cs82_marginal = Ti.marginal[icat]
+			fn = 'smags-%s-%s-%i-%i.fits' % (cs82field, band, raslice, decslice)
+			M.writeto(fn)
+			print 'Wrote', fn
+
 		
 
 if __name__ == '__main__':
