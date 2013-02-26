@@ -15,6 +15,8 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.util import *
 from astrometry.sdss import *
+from astrometry.libkd.spherematch import *
+
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -331,7 +333,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	print 'Wrote', fn
 
 
-def getTables(cs82field, enclosed=True):
+def getTables(cs82field, enclosed=True, extra_cols=[]):
 	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
 				   hdu=2, column_map={'ALPHA_J2000':'ra',
 									  'DELTA_J2000':'dec'},
@@ -341,7 +343,7 @@ def getTables(cs82field, enclosed=True):
 							 'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
 							 'disk_theta_world', 'spheroid_reff_world',
 							 'spheroid_aspect_world', 'spheroid_theta_world',
-							 'alphamodel_j2000', 'deltamodel_j2000']])
+							 'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
 	ra0,ra1 = T.ra.min(), T.ra.max()
 	dec0,dec1 = T.dec.min(), T.dec.max()
 	print 'RA', ra0,ra1
@@ -888,8 +890,47 @@ def simulfit(opt, cs82field):
 			M.writeto(fn)
 			print 'Wrote', fn
 
-		
 
+def xmatch(opt, cs82field):
+	'''
+	select run,camcol,field, RA,Dec,probpsf, nchild,
+	psfmag_u,psfmag_g,psfmag_r,psfmag_i,psfmag_z,
+	modelmag_u, modelmag_g, modelmag_r, modelmag_i, modelmag_z
+	into mydb.MyTable_2 from PhotoObjAll
+	where ra between 15.77 and 16.77
+	and dec between -0.11 and 0.95
+	-> cas-DR7-S82-p18p.fits
+	'''
+	S = fits_table('cs82data/cas-DR7-S82-p18p.fits')
+	T,F = getTables(cs82field, extra_cols=['mag_model'])
+
+	print 'Got', len(S), 'CAS sources'
+	print 'unique runs:', np.unique(S.run)
+	print 'Got', len(T), 'CS82 sources'
+
+	I = np.logical_or(S.run == 106, S.run == 206)
+	S.cut(I)
+	print 'Cut to', len(S), 'Annis coadd sources'
+
+	R = 1. / 3600.
+	I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, R)
+	print 'Found', len(I), 'matches'
+
+	Si = S[I]
+	Ti = T[J]
+
+	xl,xh = -4,4
+	yl,yh = 16,24
+	for band in 'ugriz':
+		plt.clf()
+		loghist(Ti.mag_model - Si.get('modelmag_%s' % band), Ti.mag_model,
+				bins=200, range=((xl,xh),(yl,yh)))
+		plt.ylim(yh,yl)
+		plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+		plt.ylabel('CFHT i (mag)')
+		plt.title('DR7 CAS Annis coadd sources')
+		plt.savefig('xm-%s.png' % band)
+		
 if __name__ == '__main__':
 	import optparse
 	parser = optparse.OptionParser('%prog [options]')
@@ -905,6 +946,9 @@ if __name__ == '__main__':
 	parser.add_option('-S', dest='simul', action='store_true',
 					  help='Simultaneous fit?')
 
+	parser.add_option('-X', dest='xmatch', action='store_true',
+					  help='Cross-match to SDSS Annis coadd')
+
 	parser.add_option('--cmd', action='store_true',
 					  help='Produce summary CMD plots')
 
@@ -912,6 +956,10 @@ if __name__ == '__main__':
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
 
 	cs82field = 'S82p18p'
+
+	if opt.xmatch:
+		xmatch(opt, cs82field)
+		sys.exit(0)
 
 	if opt.cmd:
 		makecmd(opt, cs82field)
