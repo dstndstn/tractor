@@ -331,9 +331,8 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	T.writeto(fn)
 	print 'Wrote', fn
 
-def main(opt):
-	cs82field = 'S82p18p'
 
+def getTables(cs82field, enclosed=True):
 	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
 				   hdu=2, column_map={'ALPHA_J2000':'ra',
 									  'DELTA_J2000':'dec'},
@@ -355,7 +354,7 @@ def main(opt):
 	else:
 		F = fits_table('window_flist-DR9.fits')
 
-		# These run doesn't appear in DAS
+		# These runs don't appear in DAS
 		#F.cut((F.run != 4322) * (F.run != 4240) * (F.run != 4266))
 		F.cut(F.rerun != "157")
 
@@ -368,180 +367,178 @@ def main(opt):
 		F.ra1  = np.max(rd[:,0,:], axis=0)
 		F.dec0 = np.min(rd[:,1,:], axis=0)
 		F.dec1 = np.max(rd[:,1,:], axis=0)
-		##
+
 		I = np.flatnonzero((F.ra0 <= T.ra.max()) *
 						   (F.ra1 >= T.ra.min()) *
 						   (F.dec0 <= T.dec.max()) *
 						   (F.dec1 >= T.dec.min()))
 		print 'Overlapping fields:', len(I)
-		##
-		I = np.flatnonzero((F.ra0 >= T.ra.min()) *
-						   (F.ra1 <= T.ra.max()) *
-						   (F.dec0 >= T.dec.min()) *
-						   (F.dec1 <= T.dec.max()))
-		print 'Enclosed fields:', len(I)
+
 		F.cut(I)
+
+		F.enclosed = ((F.ra0 >= T.ra.min()) *
+					  (F.ra1 <= T.ra.max()) *
+					  (F.dec0 >= T.dec.min()) *
+					  (F.dec1 <= T.dec.max()))
+		
+		# Sort by distance from the center of the field.
+		ra  = (T.ra.min()  + T.ra.max() ) / 2.
+		dec = (T.dec.min() + T.dec.max()) / 2.
+		I = np.argsort( ((F.ra0  + F.ra1 )/2. - ra )**2 +
+						((F.dec0 + F.dec1)/2. - dec)**2 )
+		F.cut(I)
+
 		F.writeto(fn)
 		print 'Wrote', fn
 
-	# Sort by distance from the center of the field.
-	ra  = (T.ra.min()  + T.ra.max() ) / 2.
-	dec = (T.dec.min() + T.dec.max()) / 2.
-	I = np.argsort( ((F.ra0  + F.ra1 )/2. - ra )**2 +
-					((F.dec0 + F.dec1)/2. - dec)**2 )
-	F.cut(I)
-
-
-
-	if opt.cmd:
-
-		urun = np.unique(F.run)
-		print len(urun), 'unique runs'
-
-		rmap = dict([(r,i) for i,r in enumerate(urun)])
-
-		for band in 'ugriz':
-			T.set('all_%s' % band, np.zeros((len(T), len(urun)), np.float32))
-
-		for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
-									 F.ra0, F.ra1, F.dec0, F.dec1):
-			ri = rmap[r]
-			print 'Run', r, '->', ri
-			for band in 'ugriz':
-				basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
-				fn = 'mags-%s.fits' % basename
-				if not os.path.exists(fn):
-					print 'No such file', fn, '-- skipping'
-					continue
-				print 'Reading', fn
-				M = fits_table(fn)
-				print 'Got', len(M)
-				m = M.get('sdss_mag_%s' % band)
-				m[np.logical_not(np.isfinite(m))] = 0.
-				I = M.cs82_index
-				T.get('all_%s' % band)[I, ri] = m
-
-		T.mag = np.zeros_like(T.mag_psf)
-		T.mag[T.chi2_psf < T.chi2_model] = T.mag_psf
-		J = T.chi2_psf >= T.chi2_model
-		T.mag[J] = NanoMaggies.nanomaggiesToMag(
-			NanoMaggies.magToNanomaggies(T.mag_disk[J]) +
-			NanoMaggies.magToNanomaggies(T.mag_spheroid[J]))
-
-		#ps = PlotSequence('cmd')
-
-		for band in 'ugriz':
-			smag = T.get('all_%s' % band)
-			
-			mn = []
-			st = []
-			cc = []
-			ss = []
-			V = []
-			for i in range(len(T)):
-				J = np.flatnonzero(smag[i,:])
-				if len(J) == 0:
-					continue
-				V.append(i)
-				s = smag[i,J]
-				ss.append(s)
-				c = np.zeros_like(s) + T.mag[i]
-				cc.append(c)
-				mn.append(np.mean(s))
-				st.append(np.std(s))
-			V = np.array(V)
-			Ti = T[V]
-			J = (Ti.chi2_psf < Ti.chi2_model)
-			plt.clf()
-			plt.plot(np.hstack([c for c,s,psf in zip(cc,ss,J) if psf]),
-					 np.hstack([s for c,s,psf in zip(cc,ss,J) if psf]), 'b.', alpha=0.1, zorder=20)
-			plt.plot(np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]),
-					 np.hstack([s for c,s,psf in zip(cc,ss,J) if not psf]), 'b.', alpha=0.1, zorder=20)
-			mn = np.array(mn)
-			st = np.array(st)
-			plt.errorbar(Ti.mag[J], mn[J], yerr=st[J], fmt='.', color='r', alpha=0.5, zorder=25)
-			K = np.logical_not(J)
-			plt.errorbar(Ti.mag[K], mn[K], yerr=st[K], fmt='.', color='b', alpha=0.5, zorder=25)
-			plt.xlim(26, 8)
-			plt.ylim(26, 8)
-			plt.savefig('mm-%s.png' % band)
-
-			plt.clf()
-			plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if psf]),
-					 np.hstack([c for c,s,psf in zip(cc,ss,J) if psf]), 'b.', alpha=0.1, zorder=20)
-			plt.errorbar(Ti.mag[J] - mn[J], Ti.mag[J], xerr=st[J], fmt='.', color='b', alpha=0.5, zorder=25)
-			plt.ylim(26, 8)
-			plt.xlim(-10,10)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-stars-%s.png' % band)
-			
-			plt.clf()
-			plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if not psf]),
-					 np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]), 'r.', alpha=0.1, zorder=20)
-			plt.errorbar(Ti.mag[K] - mn[K], Ti.mag[K], xerr=st[K], fmt='.', color='r', alpha=0.5, zorder=25)
-			plt.ylim(26, 8)
-			plt.xlim(-10,10)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-gals-%s.png' % band)
-
-			plt.clf()
-			plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if not psf]),
-					 np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]), 'r.', alpha=0.1, zorder=20)
-			plt.ylim(26, 8)
-			plt.xlim(-10,10)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-gals-%s-1.png' % band)
-
-			plt.clf()
-			plt.errorbar(Ti.mag[K] - mn[K], Ti.mag[K], xerr=st[K], fmt='.', color='r', alpha=0.5, zorder=25)
-			plt.ylim(26, 8)
-			plt.xlim(-10,10)
-			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-			plt.ylabel('CFHT i (mag)')
-			plt.savefig('cm-gals-%s-2.png' % band)
-
-			plt.clf()
-			loghist(Ti.mag[K] - mn[K], Ti.mag[K], bins=200, range=((-10,10),(8,26)))
-			plt.ylim(26, 8)
-			plt.savefig('cm-gals-%s-3.png' % band)
-
-			plt.clf()
-			loghist(Ti.mag[J] - mn[J], Ti.mag[J], bins=200, range=((-10,10),(8,26)))
-			plt.ylim(26, 8)
-			plt.savefig('cm-stars-%s-3.png' % band)
-
-
-			xl,xh = -4,4
-			yl,yh = 16,24
-
-			G = np.flatnonzero(K)
-			
-			eflux = NanoMaggies.magToNanomaggies(Ti.mag_disk)
-			dflux = NanoMaggies.magToNanomaggies(Ti.mag_spheroid)
-			D = np.flatnonzero(K * (dflux > eflux * 10.))
-			E = np.flatnonzero(K * (eflux > dflux * 10.))
-			C = np.flatnonzero(K * (dflux <= eflux * 10.) * (eflux <= dflux * 10.))
-			
-			for j,(I,txt) in enumerate([ (G, 'galaxies'), (D, 'deV galaxies'), (E, 'exp galaxies'), (C, 'comp galaxies') ]):
-				plt.clf()
-				loghist(Ti.mag[I] - mn[I], Ti.mag[I], bins=200, range=((xl,xh),(yl,yh)))
-				plt.ylim(yh,yl)
-				plt.xlabel('CFHT i - SDSS %s (mag)' % band)
-				plt.ylabel('CFHT i (mag)')
-				plt.title('%s forced photometry (%i %s)' % (cs82field, len(I), txt))
-				plt.savefig('cm-gals-%s-%i.png' % (band, 4+j))
-
-
-
-				
-		return
-
-
-
+	if enclosed:
+		F.cut(F.enclosed)
+		print 'Enclosed fields:', len(F)
 		
+	return T,F
+
+def makecmd(opt, cs82field):
+	T,F = getTables(cs82field)
+	urun = np.unique(F.run)
+	print len(urun), 'unique runs'
+
+	rmap = dict([(r,i) for i,r in enumerate(urun)])
+
+	for band in 'ugriz':
+		T.set('all_%s' % band, np.zeros((len(T), len(urun)), np.float32))
+
+	for r,c,f,r0,r1,d0,d1 in zip(F.run, F.camcol, F.field,
+								 F.ra0, F.ra1, F.dec0, F.dec1):
+		ri = rmap[r]
+		print 'Run', r, '->', ri
+		for band in 'ugriz':
+			basename = 'cs82-%s-%04i-%i-%04i-%s' % (cs82field, r, c, f, band)
+			fn = 'mags-%s.fits' % basename
+			if not os.path.exists(fn):
+				print 'No such file', fn, '-- skipping'
+				continue
+			print 'Reading', fn
+			M = fits_table(fn)
+			print 'Got', len(M)
+			m = M.get('sdss_mag_%s' % band)
+			m[np.logical_not(np.isfinite(m))] = 0.
+			I = M.cs82_index
+			T.get('all_%s' % band)[I, ri] = m
+
+	T.mag = np.zeros_like(T.mag_psf)
+	T.mag[T.chi2_psf < T.chi2_model] = T.mag_psf
+	J = T.chi2_psf >= T.chi2_model
+	T.mag[J] = NanoMaggies.nanomaggiesToMag(
+		NanoMaggies.magToNanomaggies(T.mag_disk[J]) +
+		NanoMaggies.magToNanomaggies(T.mag_spheroid[J]))
+
+	for band in 'ugriz':
+		smag = T.get('all_%s' % band)
+		
+		mn = []
+		st = []
+		cc = []
+		ss = []
+		V = []
+		for i in range(len(T)):
+			J = np.flatnonzero(smag[i,:])
+			if len(J) == 0:
+				continue
+			V.append(i)
+			s = smag[i,J]
+			ss.append(s)
+			c = np.zeros_like(s) + T.mag[i]
+			cc.append(c)
+			mn.append(np.mean(s))
+			st.append(np.std(s))
+		V = np.array(V)
+		Ti = T[V]
+		J = (Ti.chi2_psf < Ti.chi2_model)
+		plt.clf()
+		plt.plot(np.hstack([c for c,s,psf in zip(cc,ss,J) if psf]),
+				 np.hstack([s for c,s,psf in zip(cc,ss,J) if psf]), 'b.', alpha=0.1, zorder=20)
+		plt.plot(np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]),
+				 np.hstack([s for c,s,psf in zip(cc,ss,J) if not psf]), 'b.', alpha=0.1, zorder=20)
+		mn = np.array(mn)
+		st = np.array(st)
+		plt.errorbar(Ti.mag[J], mn[J], yerr=st[J], fmt='.', color='r', alpha=0.5, zorder=25)
+		K = np.logical_not(J)
+		plt.errorbar(Ti.mag[K], mn[K], yerr=st[K], fmt='.', color='b', alpha=0.5, zorder=25)
+		plt.xlim(26, 8)
+		plt.ylim(26, 8)
+		plt.savefig('mm-%s.png' % band)
+
+		plt.clf()
+		plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if psf]),
+				 np.hstack([c for c,s,psf in zip(cc,ss,J) if psf]), 'b.', alpha=0.1, zorder=20)
+		plt.errorbar(Ti.mag[J] - mn[J], Ti.mag[J], xerr=st[J], fmt='.', color='b', alpha=0.5, zorder=25)
+		plt.ylim(26, 8)
+		plt.xlim(-10,10)
+		plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+		plt.ylabel('CFHT i (mag)')
+		plt.savefig('cm-stars-%s.png' % band)
+		
+		plt.clf()
+		plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if not psf]),
+				 np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]), 'r.', alpha=0.1, zorder=20)
+		plt.errorbar(Ti.mag[K] - mn[K], Ti.mag[K], xerr=st[K], fmt='.', color='r', alpha=0.5, zorder=25)
+		plt.ylim(26, 8)
+		plt.xlim(-10,10)
+		plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+		plt.ylabel('CFHT i (mag)')
+		plt.savefig('cm-gals-%s.png' % band)
+
+		plt.clf()
+		plt.plot(np.hstack([c - s for c,s,psf in zip(cc,ss,J) if not psf]),
+				 np.hstack([c for c,s,psf in zip(cc,ss,J) if not psf]), 'r.', alpha=0.1, zorder=20)
+		plt.ylim(26, 8)
+		plt.xlim(-10,10)
+		plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+		plt.ylabel('CFHT i (mag)')
+		plt.savefig('cm-gals-%s-1.png' % band)
+
+		plt.clf()
+		plt.errorbar(Ti.mag[K] - mn[K], Ti.mag[K], xerr=st[K], fmt='.', color='r', alpha=0.5, zorder=25)
+		plt.ylim(26, 8)
+		plt.xlim(-10,10)
+		plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+		plt.ylabel('CFHT i (mag)')
+		plt.savefig('cm-gals-%s-2.png' % band)
+
+		plt.clf()
+		loghist(Ti.mag[K] - mn[K], Ti.mag[K], bins=200, range=((-10,10),(8,26)))
+		plt.ylim(26, 8)
+		plt.savefig('cm-gals-%s-3.png' % band)
+
+		plt.clf()
+		loghist(Ti.mag[J] - mn[J], Ti.mag[J], bins=200, range=((-10,10),(8,26)))
+		plt.ylim(26, 8)
+		plt.savefig('cm-stars-%s-3.png' % band)
+
+
+		xl,xh = -4,4
+		yl,yh = 16,24
+
+		G = np.flatnonzero(K)
+		
+		eflux = NanoMaggies.magToNanomaggies(Ti.mag_disk)
+		dflux = NanoMaggies.magToNanomaggies(Ti.mag_spheroid)
+		D = np.flatnonzero(K * (dflux > eflux * 10.))
+		E = np.flatnonzero(K * (eflux > dflux * 10.))
+		C = np.flatnonzero(K * (dflux <= eflux * 10.) * (eflux <= dflux * 10.))
+		
+		for j,(I,txt) in enumerate([ (G, 'galaxies'), (D, 'deV galaxies'), (E, 'exp galaxies'), (C, 'comp galaxies') ]):
+			plt.clf()
+			loghist(Ti.mag[I] - mn[I], Ti.mag[I], bins=200, range=((xl,xh),(yl,yh)))
+			plt.ylim(yh,yl)
+			plt.xlabel('CFHT i - SDSS %s (mag)' % band)
+			plt.ylabel('CFHT i (mag)')
+			plt.title('%s forced photometry (%i %s)' % (cs82field, len(I), txt))
+			plt.savefig('cm-gals-%s-%i.png' % (band, 4+j))
+
+
+def main(opt, cs82field):
+	T,F = getTables(cs82field)
 	mp = multiproc(opt.threads)
 
 	results = []
@@ -595,6 +592,62 @@ def main(opt):
 	
 
 
+def simulfit(opt, cs82field):
+	T,F = getTables(cs82field, enclosed=False)
+
+	# We probably have to work in Dec slices to keep the memory reasonable
+	dec0 = T.dec.min()
+	dec1 = T.dec.max()
+	print 'Dec range:', dec0, dec1
+	#nslices = 4
+	#ddec = (dec1 - dec0) / nslices
+	#print 'ddec:', ddec
+
+	decs = np.linspace(dec0, dec1, 5)
+
+	sdss = DR9(basedir='cs82data/dr9')
+
+	### HACK -- ignore 0/360 issues
+	ra0 = T.ra.min()
+	ra1 = T.ra.max()
+	
+	for dlo,dhi in zip(decs, decs[1:]):
+		print 'Dec slice:', dlo, dhi
+		# in deg
+		margin = 0.5 / 60.
+		Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi)]
+		Ti.marginal = np.logical_not((T.dec >= dlo) * (T.dec <= dhi))
+		print len(Ti), 'sources in Dec slice'
+
+		Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo))]
+		print len(Fi), 'fields in Dec slice'
+
+		print 'Creating Tractor sources...'
+		maglim = 24
+		cat,icat = get_cs82_sources(Ti, maglim=maglim)
+		print 'Got', len(cat), 'sources'
+
+		band = 'i'
+		
+		tims = []
+		npix = 0
+		for r,c,f in zip(F.run, F.camcol, F.field):
+			tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
+											nanomaggies=True, zrange=[-2,5],
+											roiradecbox=[ra0,ra1,dec0,dec1],
+											invvarIgnoresSourceFlux=True)
+			if tim is None:
+				continue
+
+			(H,W) = tim.shape
+			tim.wcs.setConstantCd(W/2., H/2.)
+			tims.append(tim)
+			npix += (H*W)
+		print 'Read', len(tims), 'images'
+		print 'total of', len(npix), 'pixels'
+
+		
+
 if __name__ == '__main__':
 	import optparse
 	parser = optparse.OptionParser('%prog [options]')
@@ -615,5 +668,16 @@ if __name__ == '__main__':
 
 	opt,args = parser.parse_args()
 	#cProfile.run('main()', 'prof-cs82b-%s.dat' % (datetime.now().isoformat()))
-	main(opt)
+
+	cs82field = 'S82p18p'
+
+	if opt.cmd:
+		makecmd(opt, cs82field)
+		sys.exit(0)
+
+	if opt.simul:
+		simulfit(opt, cs82field)
+		sys.exit(0)
+
+	main(opt, cs82field)
 

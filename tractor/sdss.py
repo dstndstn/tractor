@@ -780,6 +780,7 @@ def get_tractor_image_dr8(*args, **kwargs):
 
 def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  roi=None, psf='kl-gm', roiradecsize=None,
+						  roiradecbox=None,
 						  savepsfimg=None, curl=False,
 						  nanomaggies=False,
 						  zrange=[-3,10],
