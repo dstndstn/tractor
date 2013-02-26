@@ -737,6 +737,11 @@ class GaussianMixturePSF(BaseParams):
 	'''
 	# Call into MOG to set params, or keep my own copy (via MultiParams)
 	def __init__(self, amp, mean, var):
+		'''
+		amp:  np array (size K) of Gaussian amplitudes
+		mean: np array (size K,2) of means
+		var:  np array (size K,2,2) of variances
+		'''
 		self.mog = mp.MixtureOfGaussians(amp, mean, var)
 		assert(self.mog.D == 2)
 		# !!

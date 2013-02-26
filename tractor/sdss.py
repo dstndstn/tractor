@@ -803,6 +803,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	"roiradecsize" = (ra, dec, half-size in pixels) indicates that you
 	want to grab a ROI around the given RA,Dec.
 
+	"roiradecbox" = (ra0, ra1, dec0, dec1) indicates that you
+	want to grab a ROI containing the given RA,Dec ranges.
+
 	Returns:
 	  (tractor.Image, dict)
 
@@ -885,12 +888,12 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		x1 = xy[:,0].max()
 		y0 = xy[:,1].min()
 		y1 = xy[:,1].max()
-		print 'ROI box RA,Dec (%.3f,%.3f)--(%.3f,%.3f) -> xy box (%i,%i)--(%i,%i)' % (ra0,dec0,ra1,dec1, x0,y0,x1,y1)
+		print 'ROI box RA (%.3f,%.3f), Dec (%.3f,%.3f) -> xy x (%i,%i), y (%i,%i)' % (ra0,ra1, dec0,dec1, x0,x1, y0,y1)
 		roi = [np.clip(x0,   0, W),
 			   np.clip(x1+1, 0, W),
 			   np.clip(y0,   0, H),
 			   np.clip(y1+1, 0, H)]
-		print 'ROI xy box clipped x [%i,%i), y [%i,%i)' % roi
+		print 'ROI xy box clipped x [%i,%i), y [%i,%i)' % tuple(roi)
 		if roi[0] == roi[1] or roi[2] == roi[3]:
 			print 'Empty roi'
 			return None,None

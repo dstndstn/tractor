@@ -20,6 +20,7 @@ from tractor.sdss import *
 from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
+from tractor.ttime import *
 
 import cProfile
 from datetime import datetime
@@ -109,8 +110,6 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	#runone(tr, ps, band, opt, basename)
 	#args.append((tr, ps, band, opt, basename))
 	#def runone(tr, ps, band, opt):
-
-	from tractor.ttime import Time
 
 	t00 = Time()
 
@@ -343,9 +342,17 @@ def getTables(cs82field, enclosed=True):
 							 'disk_theta_world', 'spheroid_reff_world',
 							 'spheroid_aspect_world', 'spheroid_theta_world',
 							 'alphamodel_j2000', 'deltamodel_j2000']])
-	print 'RA', T.ra.min(), T.ra.max()
-	print 'Dec', T.dec.min(), T.dec.max()
+	ra0,ra1 = T.ra.min(), T.ra.max()
+	dec0,dec1 = T.dec.min(), T.dec.max()
+	print 'RA', ra0,ra1
+	print 'Dec', dec0,dec1
 	T.index = np.arange(len(T))
+
+	# ASSUME no RA wrap-around in the catalog
+	trad = 0.5 * np.hypot(ra1 - ra0, dec1 - dec0)
+	tcen = radectoxyz((ra1+ra0)*0.5, (dec1+dec0)*0.5)
+
+	frad = 0.5 * np.hypot(13., 9.) / 60.
 
 	fn = 'sdssfield-%s.fits' % cs82field
 	if os.path.exists(fn):
@@ -372,8 +379,14 @@ def getTables(cs82field, enclosed=True):
 						   (F.ra1 >= T.ra.min()) *
 						   (F.dec0 <= T.dec.max()) *
 						   (F.dec1 >= T.dec.min()))
-		print 'Overlapping fields:', len(I)
+		print 'Possibly overlapping fields:', len(I)
+		F.cut(I)
 
+		# When will I ever learn not to cut on RA boxes when there is wrap-around?
+		xyz = radectoxyz(F.ra, F.dec)
+		r2 = np.sum((xyz - tcen)**2, axis=1)
+		I = np.flatnonzero(r2 < deg2distsq(trad + frad))
+		print 'Possibly overlapping fields:', len(I)
 		F.cut(I)
 
 		F.enclosed = ((F.ra0 >= T.ra.min()) *
@@ -603,49 +616,244 @@ def simulfit(opt, cs82field):
 	#ddec = (dec1 - dec0) / nslices
 	#print 'ddec:', ddec
 
-	decs = np.linspace(dec0, dec1, 5)
-
 	sdss = DR9(basedir='cs82data/dr9')
 
 	### HACK -- ignore 0/360 issues
 	ra0 = T.ra.min()
 	ra1 = T.ra.max()
-	
+	print 'RA range:', ra0, ra1
+	assert(ra1 - ra0 < 2.)
+
+	decs = np.linspace(dec0, dec1, 5)
+	ras  = np.linspace(ra0,  ra1, 5)
+
+	print 'Score range:', F.score.min(), F.score.max()
+	print 'Before score cut:', len(F)
+	F.cut(F.score > 0.5)
+	print 'Cut on score:', len(F)
+
+	ps = PlotSequence('simul')
+
 	for dlo,dhi in zip(decs, decs[1:]):
 		print 'Dec slice:', dlo, dhi
-		# in deg
-		margin = 0.5 / 60.
-		Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi)]
-		Ti.marginal = np.logical_not((T.dec >= dlo) * (T.dec <= dhi))
-		print len(Ti), 'sources in Dec slice'
+		for rlo,rhi in zip(ras, ras[1:]):
+			print 'RA slice:', rlo, rhi
 
-		Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo))]
-		print len(Fi), 'fields in Dec slice'
+			# in deg
+			margin = 15. / 3600.
+			Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
+				   ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi)]
+			Ti.marginal = np.logical_not((T.dec >= dlo) * (T.dec <= dhi) *
+										 (T.ra  >= rlo) * (T.ra  <= rhi))
+			print len(Ti), 'sources in RA,Dec slice'
 
-		print 'Creating Tractor sources...'
-		maglim = 24
-		cat,icat = get_cs82_sources(Ti, maglim=maglim)
-		print 'Got', len(cat), 'sources'
+			Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
+				   np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
+			print len(Fi), 'fields in RA,Dec slice'
 
-		band = 'i'
-		
-		tims = []
-		npix = 0
-		for r,c,f in zip(F.run, F.camcol, F.field):
-			tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
-											nanomaggies=True, zrange=[-2,5],
-											roiradecbox=[ra0,ra1,dec0,dec1],
-											invvarIgnoresSourceFlux=True)
-			if tim is None:
-				continue
 
-			(H,W) = tim.shape
-			tim.wcs.setConstantCd(W/2., H/2.)
-			tims.append(tim)
-			npix += (H*W)
-		print 'Read', len(tims), 'images'
-		print 'total of', len(npix), 'pixels'
+			band = 'i'
 
+			pixscale = 0.396 / 3600.
+			W = int((rhi - rlo) / pixscale)
+			H = int((dhi - dlo) / pixscale)
+			print 'Fake tim:', W, H
+			wcs = FitsWcs(Tan((rlo+rhi)/2., (dlo+dhi)/2., (W+1)/2., (H+1)/2.,
+							  0., pixscale, pixscale, 0, W, H))
+							  #-pixscale, 0, 0, pixscale, W, H))
+			fwhm = 1.5
+			psig = fwhm / 0.396 / 2.35
+			print 'PSF sigma:', psig
+			psf = GaussianMixturePSF(np.array([1.]), np.array([[0.,0.]]),
+									 np.array([[[psig**2, 0],[0,psig**2]]]))
+			ie = 25.
+			faketim = Image(data=np.zeros((H,W), np.float32),
+							invvar=np.zeros((H,W), np.float32) + (ie**2),
+							psf=psf, wcs=wcs, sky=ConstantSky(0.),
+							photocal=LinearPhotoCal(1., band=band),
+							name='fake')
+
+			sig = (1./ie)
+			minsb = 0.1 * sig
+
+			print 'Creating Tractor sources...'
+			maglim = 24
+			cat,icat = get_cs82_sources(Ti, maglim=maglim)
+			print 'Got', len(cat), 'sources'
+			cat.freezeParamsRecursive('*')
+			cat.thawPathsTo(band)
+
+			print 'Finding overlapping sources...'
+			tr = Tractor([faketim], cat)
+			groups,L = tr.getOverlappingSources(0, minsb=minsb)
+			print 'Got', len(groups), 'groups of sources'
+			nl = L.max()
+			gslices = find_objects(L, nl)
+			# find_objects returns a (zero-indexed) list corresponding to the
+			# (one-indexed) objects; make a map parallel to "groups" instead
+			gslices = dict([(i+1, gs) for i,gs in enumerate(gslices)])
+
+			# Order by model flux in group
+			gflux = []
+			for i in range(nl+1):
+				if not i in groups:
+					gflux.append(0.)
+					continue
+				gsrcs = groups[i]
+				f = sum([cat[i].getBrightness().getBand(band) for i in gsrcs])
+				gflux.append(f)
+			Gorder = np.argsort(-np.array(gflux))
+
+
+
+			# HACK
+			Fi = Fi[:10]
+
+			tims = []
+			npix = 0
+			ie = []
+			for i,(r,c,f) in enumerate(zip(Fi.run, Fi.camcol, Fi.field)):
+				print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
+				tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
+												nanomaggies=True, zrange=[-2,5],
+												#roiradecbox=[ra0,ra1,dec0,dec1],
+												roiradecbox=[rlo,rhi,dlo,dhi],
+												invvarIgnoresSourceFlux=True)
+				if tim is None:
+					continue
+			
+				(H,W) = tim.shape
+				tim.wcs.setConstantCd(W/2., H/2.)
+				print 'CD matrix:', tim.wcs.constant_cd
+
+				del tim.origInvvar
+				del tim.starMask
+				del tim.mask
+				#del tim.invvar
+
+				#print 'Tim:', dir(tim)
+				e = np.median(tim.inverr)
+				#print 'Median inverr:', e
+				ie.append(e)
+
+				tims.append(tim)
+				npix += (H*W)
+				print 'got', (H*W), 'pixels, total', npix
+
+				#memusage()
+			
+			print 'Read', len(tims), 'images'
+			print 'total of', npix, 'pixels'
+			memusage()
+
+			ie = max(ie)
+			print 'max inverr:', ie
+
+
+			for gi,gl in enumerate(Gorder):
+				print
+				if not gl in groups:
+					print 'Group', gl, 'not in groups array; skipping'
+					continue
+				gslice = gslices[gl]
+				gsrcs = groups[gl]
+				print 'Group number', (gi+1), 'of', len(Gorder), ', id', gl, ': sources', gsrcs
+				#for i in gsrcs:
+				#	print '  ', cat[i]
+
+				tgroups = np.unique(L[gslice])
+				tsrcs = []
+				for g in tgroups:
+					if not g in [gl,0]:
+						if g in groups:
+							tsrcs.extend(groups[g])
+				print 'sources in groups touching slice:', tsrcs
+
+				# Naively convert a slice in the "fake" image into a slice
+				# in each tim.
+				# This will need some work for datasets with more complicated geometry!
+				print 'gslice', gslice
+				sy,sx = gslice
+				x0,x1,y0,y1 = [sx.start, sx.stop, sy.start, sy.stop]
+				rd = []
+				for x,y in [(x0,y0),(x0,y1),(x1,y0),(x1,y1)]:
+					p = faketim.wcs.pixelToPosition(x, y)
+					rd.append((p.ra, p.dec))
+				rd = np.array(rd)
+				r0,r1 = rd[:,0].min(), rd[:,0].max()
+				d0,d1 = rd[:,1].min(), rd[:,1].max()
+
+				mytims = []
+				myrois = []
+				for tim in tims:
+					xy = []
+					for r,d in [(r0,d0),(r1,d0),(r0,d1),(r1,d1)]:
+						xy.append(tim.wcs.positionToPixel(RaDecPos(r,d)))
+					xy = np.array(xy)
+					xy = np.round(xy).astype(int)
+					x0 = xy[:,0].min()
+					x1 = xy[:,0].max()
+					y0 = xy[:,1].min()
+					y1 = xy[:,1].max()
+					H,W = tim.shape
+					roi = [np.clip(x0,   0, W),
+						   np.clip(x1+1, 0, W),
+						   np.clip(y0,   0, H),
+						   np.clip(y1+1, 0, H)]
+					if roi[0] == roi[1] or roi[2] == roi[3]:
+						print 'Empty roi'
+						continue
+					mytims.append(tim)
+					myrois.append((slice(y0,y1), slice(x0,x1)))
+
+				subcat = Catalog(*[cat[i] for i in gsrcs + tsrcs])
+				for i in range(len(tsrcs)):
+					subcat.freezeParam(len(gsrcs) + i)
+
+				tr = Tractor(mytims, subcat)
+				tr.freezeParam('images')
+				print tr
+				ims0,ims1 = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+														  rois=myrois)
+
+				#print 'ims0,ims1'
+				#print ims0
+				#print ims1
+
+				if ims1 is None:
+					continue
+
+				print 'ims0,ims1', len(ims0), len(ims1)
+				n = len(ims0)
+
+				imchi = dict(interpolation='nearest', origin='lower',
+							 vmin=-5, vmax=5, cmap='gray')
+
+				if opt.plots:
+					plt.clf()
+					for i,((data, mod0, chi0, roi),(data, mod1, chi1, roi)) in enumerate(zip(ims0,ims1)):
+
+						tim = mytims[i]
+						zr = tim.zr
+						ima = dict(interpolation='nearest', origin='lower',
+								   vmin=zr[0], vmax=zr[1], cmap='gray')
+
+						plt.subplot(5, n, i+1)
+						plt.imshow(data, **ima)
+						plt.subplot(5, n, i+1+n)
+						plt.imshow(mod0, **ima)
+						plt.subplot(5, n, i+1+2*n)
+						plt.imshow(mod1, **ima)
+						plt.subplot(5, n, i+1+3*n)
+						plt.imshow(chi0, **imchi)
+						plt.subplot(5, n, i+1+4*n)
+						plt.imshow(chi1, **imchi)
+					ps.savefig()
+				
+
+			break
+		break
+			
 		
 
 if __name__ == '__main__':
