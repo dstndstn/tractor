@@ -838,7 +838,8 @@ class Tractor(MultiParams):
 	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
 								   minsb=0.,
 								   mindlnp=1.,
-								   rois=None):
+								   rois=None,
+								   fitstats=False):
 		'''
 		ASSUMES linear brightnesses!
 
@@ -860,6 +861,13 @@ class Tractor(MultiParams):
 			assert(len(rois) == len(imgs))
 		#t0 = Time()
 
+
+		#
+		# Here we build up the "umodels" nested list, which has shape
+		# (if it were a numpy array) of (len(images), len(srcs))
+		# where each element is None, or a Patch with the unit-flux model
+		# of that source in that image.
+		#
 		umodels = []
 		subimgs = []
 		srcs = list(self.catalog.getThawedSources())
@@ -1066,7 +1074,31 @@ class Tractor(MultiParams):
 			if quitNow:
 				break
 
-		return ims0,imsBest
+		rtn = (ims0,imsBest)
+
+		if fitstats and imsBest is None:
+			rtn = rtn + (None,None)
+		elif fitstats:
+			chi2 = np.zeros(len(srcs))
+			npix = np.zeros(len(srcs), int)
+
+			for umods,(nil,nil,chi,nil) in zip(umodels, imsBest):
+				m = np.zeros_like(chi)
+				for i,um in enumerate(umods):
+					if um is None:
+						continue
+					# add to model just so that the m and chi are same shape.
+					um.addTo(m)
+					nz = np.flatnonzero(m > 0)
+					if len(nz) == 0:
+						continue
+					chi2[i] += np.sum(chi.flat[nz]**2)
+					npix[i] += len(nz)
+					m[:,:] = 0.
+			
+			rtn = rtn + (chi2,npix)
+
+		return rtn
 
 
 	def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
