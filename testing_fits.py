@@ -1,19 +1,20 @@
-from unpickle_scale import unpickle4color
+#testing large_galaxies.fits (the objects from rc3 catalog)
 from astrometry.util.file import *
 from astrometry.util.starutil_numpy import *
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_pdf import PdfPages
-import numpy as np
+import matplotlib.pyplot
 import pylab as plt
+import triangle 
 import pyfits as pyf
 from astropysics.obstools import *
 import operator
 import math
 import os
-import random
-from random import choice
-import itertools
+from matplotlib.ticker import MaxNLocator, AutoLocator
+
 
 if __name__ == '__main__':
     data=pyf.open('large_galaxies.fits')
@@ -21,41 +22,41 @@ if __name__ == '__main__':
     mags=data2.field('CG_TOTMAGS')
     extinction=data2.field('CG_EXTINCTION')
     name=data2.field('RC3_NAME')
+    print len(name)
+    assert(False)
     ra=data2.field('RC3_RA')
     ra2=data2.field('CG_RA')
     dec=data2.field('RC3_DEC')
+    dec2=data2.field('CG_DEC')
     sb=data2.field('CG I-SB')
     half_light=data2.field('CG_R50S')
     r90=data2.field('CG_R90S')
     concentration=data2.field('CG_CONC')
     gr_original=mags[:,1]-mags[:,2]
     ri_original=mags[:,2]-mags[:,3]
+    corrected_u=mags[:,0]-extinction[:,0]
     corrected_g=mags[:,1]-extinction[:,1]
     corrected_r=mags[:,2]-extinction[:,2]
     corrected_i=mags[:,3]-extinction[:,3]
+    corrected_z=mags[:,4]-extinction[:,4]
     gr_corrected=corrected_g-corrected_r
     ri_corrected=corrected_r-corrected_i
-    gi_corrected=corrected_g-corrected_i
-    print len(name)
-    print len(ra)
-    nsadata=pyf.open('nsa_galaxies.fits')
-    data3=nsadata[1].data
-    #cols=data3[1].columns
-    #print data3[6]
-    #print data3[6]
-    #print cols.names
-    
+    gi_corrected=corrected_g-corrected_i 
+    ug_corrected=corrected_u-corrected_g
+    iz_corrected=corrected_i-corrected_z
 
+    print half_light
+    assert(False)
 
     def mu_50(i,r):
         return i+2.5*(log10(pi*r**2))
 
     def quantile(x,q):
-        #print len(x)
         i=len(sorted(x))*q
         z=int(floor(i))
         #print z
-        return sorted(x)[z]
+        #print len(x)
+        return ((sorted(x))[z])
     
     def plotq(z):
         plt.axvline(x=quantile(z,0.25),color='black',alpha=0.5)
@@ -78,6 +79,8 @@ if __name__ == '__main__':
 
         b=[t for t in xrange(len(f)) if quantile(f,0.25) < f[t] < quantile(f,0.5)]
         sample1=sorted(g[b])
+
+        print len(sample1)
         print quantile(sample1,0.25)
         print quantile(sample1,0.5)
         print quantile(sample1,.75)
@@ -104,156 +107,57 @@ if __name__ == '__main__':
         plt.axhline(y=quantile(sample3,0.75),xmin=(quantile(f,0.75)-x1)/(x2-x1),xmax=1,color='black',alpha=0.5)        
 
         return None
-
+    
     galaxies=np.array([True for x in ra])
-    leoa=np.where(name=='LEO A')
-    ugc7332=np.where(name=='UGC 7332')
-    ugc9394=np.where(name=='UGC 9394')
-    ngc52=np.where(name=='NGC 52')
-    ngc1022=np.where(name=='NGC 1022')
-    a=[leoa,ugc7332,ugc9394,ngc52]
-    for x in a:
-        print gr_corrected[x], gi_corrected[x]
-    print half_light[:,3][ngc1022]
-    assert(False)
-    # size=np.where(half_light[:,3] < 60.)
-    # sblimit=np.where(sb < 23.)
-    # galaxies[size]=False
-    # galaxies[sblimit]=False
-    # print name[galaxies]
-    # grlimit=np.where(gr_corrected >.62)
-    # grlimit2=np.where(gr_corrected < .6)
-    # galaxies[grlimit]=False
-    # galaxies[grlimit2]=False
-    # gilimit=np.where(gi_corrected > 1.0)
-    # gilimit2=np.where(gi_corrected <0.95)
-    # galaxies[gilimit]=False
-    # galaxies[gilimit2]=False
-    # radius=np.where(half_light[:,2] > 150.)
+    mice=np.where(name=='NGC 4676A')
     # galaxies[radius]=False
-                                    
+    print gr_corrected[mice],gi_corrected[mice]
+    mice2=np.where(name=='NGC 4676B')
+    # galaxies[radius]=False
+    print gr_corrected[mice2],gi_corrected[mice2]
+    #assert(False)
     # plt.annotate('PGC 70104',xy=(0.2,-0.00762749),xytext=(0.4,0.0),arrowprops=dict(facecolor='black'))
     # plt.annotate('UGC 11861',xy=(1.119,.6218),xytext=(0.7,.6218),arrowprops=dict(facecolor='black'))
     # plt.annotate('MCG 1-57-?',xy=(.62,.850),xytext=(.4,.85),arrowprops=dict(facecolor='black'))
-    # plt.xlabel(r"$g-r$")
-    # plt.ylabel(r"$r-i$")
-    # plt.title('all RC3 galaxies to date')
-    # plt.legend()
-    # plt.savefig('allRC3_colorplot.pdf')
-    # os.system('cp allRC3_colorplot.pdf public_html/')
-    
+
+mag=[mags[:,0],mags[:,1],mags[:,2],mags[:,3],mags[:,4]]
+# os.chdir('RC3_Output/')
+# for t in mag:
+#     print 'next'
+
+#     select=[x for x in xrange(len(name)) if math.isinf(t[x])]
+#     for x in select:
+#         print name[x]
+#         replace=name[x].replace(' ','_')
+#         os.system('cp flip-%s.pdf ~/penguin/tractor/infflux/' %(replace))
+
+sb=[0 if math.isnan(x) else x for x in sb]
+sb=[0 if math.isinf(x) else x for x in sb]
+gr_corrected=[0 if math.isnan(x) else x for x in gr_corrected]
+gr_corrected=[0 if math.isinf(x) else x for x in gr_corrected]
+ug_corrected=[0 if math.isinf(x) else x for x in ug_corrected]
+ug_corrected=[0 if math.isnan(x) else x for x in ug_corrected]
+gi_corrected=[0 if math.isinf(x) else x for x in gi_corrected]
+gi_corrected=[0 if math.isnan(x) else x for x in gi_corrected]
+iz_corrected=[0 if math.isinf(x) else x for x in iz_corrected]
+iz_corrected=[0 if math.isnan(x) else x for x in iz_corrected]
+concentration[:,3]=[0 if math.isnan(x) else x for x in concentration[:,3]]
+concentration[:,3]=[0 if math.isinf(x) else x for x in concentration[:,3]]
+mags[:,3]=[0 if math.isinf(x) else x for x in mags[:,3]]
+mags[:,3]=[0 if math.isnan(x) else x for x in mags[:,3]]
+
 plt.figure(1)
-plt.subplots_adjust(wspace=0,hspace=0)
-matplotlib.rcParams['font.size'] = 9
-
-# plt.subplot(441)
-# plt.xlabel(r"$g-r$")
-# plt.ylabel(r"$\mu_i$")
-# plt.xlim(0.2,0.9)
-# plt.yticks([18,19,20,21,22],[18,19,20,21,22])
-# plt.ylim(17,23)
-# plt.plot(gr_corrected,sb,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gr_corrected)
-# qofq(gr_corrected,sb)
-
-
-# plt.subplot(442)
-# plt.tick_params(axis='both',labelbottom='off',labelleft='off')
-# plt.xlabel(r"$g-i$")
-# plt.xlim(0.3,1.4)
-# plt.ylim(17,23)
-# plt.plot(gi_corrected,sb,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gi_corrected)
-# qofq(gi_corrected,sb)
-
-# plt.subplot(443)
-# plt.tick_params(axis='both',labelbottom='off',labelleft='off')
-# plt.xlabel(r"$r-i$")
-# plt.xlim(0,80)
-# plt.ylim(17,23)
-# plt.plot(half_light[:,3],sb,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(half_light[:,3])
-# qofq(half_light[:,3],sb)
-
-# plt.subplot(444)
-# plt.tick_params(axis='both',labelleft='off')
-# plt.xticks([2.5,3.0,3.5,4.0,4.5],[2.5,3.0,3.5,4.0,4.5])
-# plt.xlabel(r"$C$")
-# plt.xlim(2,5)
-# plt.ylim(17,23)
-# plt.plot(concentration[:,3],sb,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(concentration[:,3])
-# qofq(concentration[:,3],sb)
-
-# plt.subplot(445)
-# plt.xlim(0.2,0.9)
-# plt.ylim(2,5)
-# plt.yticks([2.5,3.0,3.5,4.0,4.5],[2.5,3.0,3.5,4.0,4.5])
-# plt.ylabel(r"$C(r90/r50)$")
-# plt.plot(gr_corrected,concentration[:,3],'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gr_corrected)
-# qofq(gr_corrected,concentration[:,3])
-
-# plt.subplot(446)
-# plt.tick_params(axis='both',labelbottom='off',labelleft='off')
-# plt.xlim(0.3,1.4)
-# plt.ylim(2,5)
-# plt.xlabel(r"$g-r$")
-# plt.plot(gi_corrected,concentration[:,3],'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gi_corrected)
-# qofq(gi_corrected,concentration[:,3])
-
-# plt.subplot(447)
-# plt.tick_params(axis='both',labelleft='off')
-# plt.xlim(0,80)
-# plt.xticks([10,20,30,40,50,60,70],[10,20,30,40,50,60,70])
-# plt.ylim(2,5)
-# plt.xlabel(r"$half-light\,radius$")
-# plt.plot(half_light[:,3],concentration[:,3],'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(half_light[:,3])
-# qofq(half_light[:,3],concentration[:,3])
-
-# plt.subplot(449)
-# plt.xlim(0.2,0.9)
-# plt.ylim(0,80)
-# plt.yticks([10,20,30,40,50,60,70],[10,20,30,40,50,60,70])
-# plt.ylabel(r"$half-light\,radius$")
-# plt.plot(gr_corrected,half_light[:,3],'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gr_corrected)
-# qofq(gr_corrected,half_light[:,3])
-
-# plt.subplot(4,4,10)
-# plt.tick_params(axis='both',labelleft='off')
-# plt.xlim(0.3,1.4)
-# plt.ylim(0,80)
-# plt.xlabel(r"$g-i$")
-# plt.plot(gi_corrected,half_light[:,3],'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gi_corrected)
-# qofq(gi_corrected,half_light[:,3])
-
-# plt.subplot(4,4,13)
-# plt.xlim(0.2,0.9)
-# plt.xlabel(r"$g-r$")
-# plt.ylim(0.3,1.4)
-# plt.ylabel(r"$g-i$")
-# plt.plot(gr_corrected,gi_corrected,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gr_corrected)
-# qofq(gr_corrected,gi_corrected)
-# plt.suptitle('Comparison of all objects in RC3 to date')
-
-# #plt.savefig('triangle_rc3quantiles_3.pdf')
-# #os.system('cp triangle_rc3quantiles_3.pdf public_html/')
-
-
+plt.clf()
+plt.plot(ra,dec, 'o',ms=2,markeredgecolor='cyan',markeredgewidth=0.9,markerfacecolor='none')
+plt.title('RA vs. Dec from RC3')
+pdf2=PdfPages('color_color.pdf')
+pdf2.savefig()
 
 data = pyf.open("nsa-short.fits.gz")[1].data
 a=data.field('RA')
 b=data.field('DEC')
 y = data.field('SERSICFLUX')
 z = data.field('SERSIC_TH50')
-n=data.field('SERSIC_N')
-p50=data.field('PETROTH50')
-p90=data.field('PETROTH90')
 nsaid=data.field('NSAID')
 extinction=data.field('EXTINCTION')
 good=np.array([True for x in data.field('RA')])
@@ -264,15 +168,10 @@ good[indx2]=False
 indx3=np.where(z > 158)
 good[indx3]=False
 
-
 #fnugriz
 #0123456    
 def Mag1(y):
     return 22.5-2.5*np.log10(np.abs(y))     
-def SB(y):
-    return 2.5*np.log10(2*np.pi*y)
-def concentration(x,y):
-    return x/y
 
 #magnitudes
 umag=Mag1(y[:,2][good])
@@ -307,128 +206,147 @@ badgr=badg-badr
 badri=badr-badi
 badiz=badi-badz 
 
-# plt.figure(2)
-# plt.subplots_adjust(wspace=0,hspace=0)
+plt.clf()
+plt.subplots_adjust(wspace=0,hspace=0)
+plt.subplot(211)
+plt.xlim(0,1.1)
+plt.xlabel(r"$g-r$")
+plt.ylim(-.1,1.7)
+plt.ylabel(r"Tractor $g-i$")
+plt.plot(gr_corrected,gi_corrected,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
+plotq(gr_corrected)
+#qofq(gr_corrected,gi_corrected)
 
-# plt.subplot(211)
-# plt.xlim(0,1.1)
-# plt.xlabel(r"$g-r$")
-# plt.ylim(-.1,1.7)
-# plt.ylabel(r"Tractor $g-i$")
-# plt.plot(gr_corrected,gi_corrected,'o',ms=2,markeredgecolor='black',markeredgewidth=0.9,markerfacecolor='none')
-# plotq(gr_corrected)
-# qofq(gr_corrected,gi_corrected)
-
-# plt.subplot(212)
-# plt.plot(badgr,badgi,'m.', alpha=0.5)
-# plt.plot(gr, gi,'k.', alpha=0.5)
-# plt.xlabel(r"$g-r$")
-# plt.xlim(0,1.1)
-# plt.ylim(-.1,1.7)
-# plt.ylabel(r"NS Atlas $g-i$")
-# plotq(gr_corrected)
-# qofq(gr_corrected,gi_corrected)
-
-# #plt.savefig('color_color1_3.pdf')
-# #os.system('cp color_color1_3.pdf public_html')
-
-
-plt.figure(3)
+plt.subplot(212)
 plt.plot(badgr,badgi,'m.', alpha=0.5)
 plt.plot(gr, gi,'k.', alpha=0.5)
-plt.plot(gr_corrected,gi_corrected,'o',ms=2,markeredgecolor='blue',markeredgewidth=0.9,markerfacecolor='none')
 plt.xlabel(r"$g-r$")
-plt.ylabel(r"$g-i$")
 plt.xlim(0,1.1)
 plt.ylim(-.1,1.7)
+plt.ylabel(r"NS Atlas $g-i$")
 plotq(gr_corrected)
-qofq(gr_corrected,gi_corrected)
+#qofq(gr_corrected,gi_corrected)
+pdf2.savefig()
 
-plt.plot(unpickle4color('NGC_1022-scale1.pickle')[0],unpickle4color('NGC_1022-scale1.pickle')[1],'*', ms=8,markeredgecolor='yellow',markeredgewidth=0.9,markerfacecolor='none',label='NGC 1022 (1)')
+plt.clf()
+#plt.plot(badgr,badgi,'m.', alpha=0.5)
+#plt.plot(gr, gi,'k.', alpha=0.5)
+plt.plot(gr_corrected,gi_corrected,'k.',alpha=0.5)
+#'o',ms=2,markeredgecolor='blue',markeredgewidth=0.9,markerfacecolor='none')
+plt.xlabel(r"$g-r$")
+plt.ylabel(r"$g-i$")
+plt.plot(0.6119,1.0635,'g*',ms=10)
+plt.plot(.8090,1.2804,'r*',ms=10)
+plt.xlim(0,1.1)
+plt.ylim(-.1,1.7)
+plt.savefig('mice.pdf')
+os.system('cp mice.pdf public_html/')
+assert(False)
+#qofq(gr_corrected,gi_corrected)
 
-plt.plot(unpickle4color('NGC_1022-scale2.pickle')[0],unpickle4color('NGC_1022-scale2.pickle')[1],'*', ms=8,markeredgecolor='red',markeredgewidth=0.9,markerfacecolor='none',label='NGC 1022 (2)')
-
-plt.plot(unpickle4color('NGC_1022-scale4.pickle')[0],unpickle4color('NGC_1022-scale4.pickle')[1],'*', ms=8,markeredgecolor='orange',markeredgewidth=0.9,markerfacecolor='none',label='NGC 1022 (4)')
-
-plt.plot(unpickle4color('NGC_5457-scale2.pickle')[0],unpickle4color('NGC_5457-scale2.pickle')[1],'*', ms=8,markeredgecolor='cyan',markeredgewidth=0.9,markerfacecolor='none',label='M101 (2)')
-
-plt.plot(unpickle4color('NGC_5457-scale4.pickle')[0],unpickle4color('NGC_5457-scale4.pickle')[1],'*', ms=8,markeredgecolor='purple',markeredgewidth=0.9,markerfacecolor='none',label='M101 (4)')
-
-# plt.plot(gr_corrected[ugc7332],gi_corrected[ugc7332],'*', ms=8,markeredgecolor='yellow',markeredgewidth=0.9,markerfacecolor='none',label='UGC 7332')
-# plt.plot(gr_corrected[leoa],gi_corrected[leoa],'*', ms=8,markeredgecolor='red',markeredgewidth=0.9,markerfacecolor='none',label='LEO A')
-# plt.plot(gr_corrected[ngc52],gi_corrected[ngc52],'*', ms=8,markeredgecolor='orange',markeredgewidth=0.9,markerfacecolor='none',label='NGC 52')
 plt.legend(loc='lower right')
-
-# plt.savefig('color_color2_sb.pdf')
-# os.system('cp color_color2_sb.pdf public_html/')
-#os.chdir("../")
-plt.savefig('plot_scale.pdf')
-os.system('cp plot_scale.pdf public_html/')
+pdf2.savefig()
+pdf2.close()
+os.system('cp color_color.pdf public_html/')
 
 
-# plt.figure(4)
-# plt.plot(ra,dec, 'o',ms=2,markeredgecolor='cyan',markeredgewidth=0.9,markerfacecolor='none')
-# plt.title('RA vs. Dec from RC3')
-# #plt.savefig('ra_dec.pdf')
-# #os.system('cp ra_dec.pdf public_html/')
 
-plt.figure(5)
-plt.subplot(211)
-plt.xlabel(r"$r_{50,r}$(arcsec)")
-plt.ylabel(r"log(n)")
-plt.hist(half_light[:,2],bins=60,log=True)
-#plt.subplot(212)
-#plt.hist(half_light[:,2])
-pdf=PdfPages('r50r90.pdf')
-pdf.savefig()
+# plt.figure(3)
+# pdf3=PdfPages('corner_plots.pdf')
+# cornerdata=np.array((concentration[:,3],sb,gr_corrected,gi_corrected,half_light[:,3]),dtype=float) 
+# print len(cornerdata)
+# triangle.corner(cornerdata,labels=[r"$C_i$",r"$\mu_{50,i}$",r"$g-r$",r"$g-i$",r"$R_{50,i}$"], extents=[(2,5),(17,23),(0.2,0.9),(0.3,1.4),(0,100)], bins=80)
+# pdf3.savefig()
+
+# plt.clf()
+# cornerdata=np.array((corrected_i,ug_corrected,gr_corrected,gi_corrected,iz_corrected),dtype=float)
+# triangle.corner(cornerdata,labels=[r"$i-mag$",r"$u-g$",r"$g-r$",r"$g-i$",r"$i-z$"],extents=[(9,14.5),(0.5,2),(0.2,0.9),(0.3,1.4),(0,0.4)],bins=80)
+# pdf3.savefig()
+# pdf3.close()
+# os.system('cp corner_plots.pdf public_html/')
+
+
+nsa_data=pyf.open('nsa_galaxies.fits')
+nsa_data2=nsa_data[1].data
+nsa_mags=nsa_data2.field('CG_TOTMAGS')
+nsa_extinction=nsa_data2.field('CG_EXTINCTION')
+nsa_name=nsa_data2.field('NSA_NAME')
+
+nsa_ra=nsa_data2.field('NSA_RA')
+nsa_ra2=nsa_data2.field('CG_RA')
+nsa_dec=nsa_data2.field('NSA_DEC')
+nsa_dec2=nsa_data2.field('CG_DEC')
+nsa_sb=nsa_data2.field('CG I-SB')
+nsa_half_light=nsa_data2.field('CG_R50S')
+nsa_r90=nsa_data2.field('CG_R90S')
+nsa_concentration=nsa_data2.field('CG_CONC')
+
+nsa_corrected_u=nsa_mags[:,0]-nsa_extinction[:,0]
+nsa_corrected_g=nsa_mags[:,1]-nsa_extinction[:,1]
+nsa_corrected_r=nsa_mags[:,2]-nsa_extinction[:,2]
+nsa_corrected_i=nsa_mags[:,3]-nsa_extinction[:,3]
+nsa_corrected_z=nsa_mags[:,4]-nsa_extinction[:,4]
+nsa_gr_corrected=nsa_corrected_g-nsa_corrected_r
+nsa_ri_corrected=nsa_corrected_r-nsa_corrected_i
+nsa_gi_corrected=nsa_corrected_g-nsa_corrected_i 
+nsa_ug_corrected=nsa_corrected_u-nsa_corrected_g
+nsa_iz_corrected=nsa_corrected_i-nsa_corrected_z
+
+nsa_sb=[0 if math.isnan(x) else x for x in nsa_sb]
+nsa_sb=[0 if math.isinf(x) else x for x in nsa_sb]
+nsa_gr_corrected=[0 if math.isnan(x) else x for x in nsa_gr_corrected]
+nsa_gr_corrected=[0 if math.isinf(x) else x for x in nsa_gr_corrected]
+nsa_ug_corrected=[0 if math.isinf(x) else x for x in nsa_ug_corrected]
+nsa_ug_corrected=[0 if math.isnan(x) else x for x in nsa_ug_corrected]
+nsa_gi_corrected=[0 if math.isinf(x) else x for x in nsa_gi_corrected]
+nsa_gi_corrected=[0 if math.isnan(x) else x for x in nsa_gi_corrected]
+nsa_iz_corrected=[0 if math.isinf(x) else x for x in nsa_iz_corrected]
+nsa_iz_corrected=[0 if math.isnan(x) else x for x in nsa_iz_corrected]
+nsa_concentration[:,3]=[0 if math.isnan(x) else x for x in nsa_concentration[:,3]]
+nsa_concentration[:,3]=[0 if math.isinf(x) else x for x in nsa_concentration[:,3]]
+nsa_mags[:,3]=[0 if math.isinf(x) else x for x in nsa_mags[:,3]]
+nsa_mags[:,3]=[0 if math.isnan(x) else x for x in nsa_mags[:,3]]
+
+
+c1=[float(i) for i in concentration[:,3]]
+c2=[float(i) for i in nsa_concentration[:,3]]
+c1+=c2
+
+sb+=nsa_sb
+gr_corrected+=nsa_gr_corrected
+gi1=[float(i) for i in gi_corrected]
+gi2=[float(i) for i in nsa_gi_corrected]
+gi1+=gi2
+
+r1=[float(i) for i in half_light[:,3]]
+r2=[float(i) for i in nsa_half_light[:,3]]
+r1+=r2
+
+i1=[float(i) for i in corrected_i]
+i2=[float(i) for i in nsa_corrected_i]
+i1+=i2
+
+ug1=[float(i) for i in ug_corrected]
+ug2=[float(i) for i in nsa_ug_corrected]
+ug1+=ug2
+
+iz1=[float(i) for i in iz_corrected]
+iz2=[float(i) for i in nsa_iz_corrected]
+iz1+=iz2
+
+print len(gi1),len(r1),len(i1),len(ug1),len(iz1), len(sb)
+
+
+plt.figure(4)
+pdf4=PdfPages('corner_all.pdf')
+cornerdata=np.array((c1,sb,gr_corrected,gi1,r1),dtype=float) 
+print len(cornerdata)
+triangle.corner(cornerdata,labels=[r"$C_i$",r"$\mu_{50,i}$",r"$g-r$",r"$g-i$",r"$R_{50,i}$"], extents=[(2,5),(17,23),(0.2,0.9),(0.3,1.4),(0,100)], bins=80)
+pdf4.savefig()
 
 plt.clf()
-plt.hist(half_light[:,3],bins=60, log=True,color='green')
-plt.xlabel(r"$r_{50,i}$(arcsec)")
-plt.ylabel(r"log(n)")
-pdf.savefig()
-
-plt.clf()
-plt.hist(r90[:,2],bins=60,log=True,color='purple')
-plt.xlabel(r"$r_{90,r}$(arcsec)")
-plt.ylabel(r"log(n)")
-pdf.savefig()
-
-plt.clf()
-plt.hist(r90[:,3],bins=60,log=True,color='yellow')
-plt.xlabel(r"$r_{90,i}$(arcsec)")
-plt.ylabel(r"log(n)")
-pdf.savefig()
-
-plt.clf()
-plt.plot(half_light[:,2],r90[:,2], 'ro',alpha=0.5,ms=4)
-plt.xlabel(r"$r_{50,r}$(arcsec)")
-plt.ylabel(r"$r_{90,r}$(arcsec)")
-plt.xlim(0,150)
-plt.ylim(0,450)
-plotq(half_light[:,2])
-qofq(half_light[:,2],r90[:,2])
-pdf.savefig()
-
-plt.clf()
-plt.plot(half_light[:,3],r90[:,3], 'co',alpha=0.5,ms=4)
-plt.xlabel(r"$r_{50,i}$(arcsec)")
-plt.ylabel(r"$r_{90,i}$(arcsec)")
-plt.xlim(0,150)
-plt.ylim(0,400)
-plotq(half_light[:,3])
-qofq(half_light[:,3],r90[:,3])
-pdf.savefig()
-
-plt.clf()
-plt.plot(half_light[:,3],sb,'bo',alpha=0.5,ms=4)
-plt.ylabel(r"$\mu_{50,i}$")
-plt.xlabel(r"$r_{50,i}$(arcsec)")
-plt.xlim(0,150)
-plt.ylim(16,24)
-plotq(half_light[:,3])
-qofq(half_light[:,3],sb)
-pdf.savefig()
-
-pdf.close()
-os.system('cp r50r90.pdf public_html')
+cornerdata=np.array((i1,ug1,gr_corrected,gi1,iz1),dtype=float)
+triangle.corner(cornerdata,labels=[r"$i-mag$",r"$u-g$",r"$g-r$",r"$g-i$",r"$i-z$"],extents=[(9,14.5),(0.5,2),(0.2,0.9),(0.3,1.4),(0,0.4)],bins=80)
+pdf4.savefig()
+pdf4.close()
+os.system('cp corner_all.pdf public_html/')

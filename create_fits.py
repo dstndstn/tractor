@@ -9,12 +9,12 @@ import matplotlib
 import pylab as plt
 from astropysics.obstools import *
 
+
 def mu_50(i,r):
     return i+2.5*(log10(pi*r**2))
 
 def extinction(pos):
     #where pos is the position
-    
     #extinction values by filter for Sloan
     sloanu=5.155
     sloang=3.793
@@ -192,7 +192,7 @@ def makeNSAtlastable():
     col2=pyf.Column(name='NSA_RA',format='1E',array=a2)
     col3=pyf.Column(name='NSA_DEC',format='1E',array=a3)
     col4=pyf.Column(name='NSA_NSID',format='1E',array=a4)
-    col5=pyf.Column(name='NSA_SESIC_TH50',format='1E',array=a5)
+    col5=pyf.Column(name='NSA_SERSIC_TH50',format='1E',array=a5)
     col6=pyf.Column(name='CG_RA',format='1E',array=a6)
     col7=pyf.Column(name='CG_DEC',format='1E',array=a7)
     col8=pyf.Column(name='CG_R50S',format='5E',array=a8)
@@ -218,7 +218,7 @@ def makeNSAtlastable():
 
 
 def makeRC3table():
-    rc3=pyf.open('newrc3limited.fits')
+#    rc3=pyf.open('newrc3limited.fits')
     sloanu=5.155
     sloang=3.793
     sloanr=2.751
@@ -231,6 +231,7 @@ def makeRC3table():
     rc3_dec=[]
     rc3_log_ae=[]
     rc3_log_d25=[]
+    rc3_bv=[]
     cg_ra=[]
     cg_dec=[]
     cg_totmags=[]
@@ -268,6 +269,8 @@ def makeRC3table():
             dec = float(rc3['DEC'][0])
             log_ae = float(rc3['LOG_AE'][0])
             log_d25 = float(rc3['LOG_D25'][0])
+            bv=float(rc3['BV_COLOR_TOT'][0])
+            rc3_bv.append(bv)
             rc3_ra.append(ra)
             rc3_dec.append(dec)
             rc3_log_ae.append(log_ae)
@@ -366,6 +369,7 @@ def makeRC3table():
     a19=np.array(cg_expmags)
     a20=np.array(cg_extinction)
     a21=np.array(cg_mu50)
+    a22=np.array(rc3_bv)
     col1=pyf.Column(name='RC3_NAME',format='30A',array=a1)
     col2=pyf.Column(name='RC3_RA',format='1E',array=a2)
     col3=pyf.Column(name='RC3_DEC',format='1E',array=a3)
@@ -387,13 +391,14 @@ def makeRC3table():
     col19=pyf.Column(name='CG_EXPMAGS',format='5E',array=a19)
     col20=pyf.Column(name='CG_EXTINCTION',format='5E',array=a20)
     col21=pyf.Column(name='CG I-SB', format='1E',array=a21)
-    cols=pyf.ColDefs([col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21])
+    col22=pyf.Column(name='RC3_BV',format='1E',array=a22)
+    cols=pyf.ColDefs([col1,col2,col3,col4,col5,col6,col7,col8,col9,col10,col11,col12,col13,col14,col15,col16,col17,col18,col19,col20,col21,col22])
     tbhdu=pyf.new_table(cols)
     tbhdulist=pyf.HDUList([hdu,tbhdu])
-    os.chdir("/home/dwm261/")
-    tbhdulist.writeto('large_galaxies2.fits',clobber=True)
+    os.chdir("/home/ep1091/penguin/tractor")
+    tbhdulist.writeto('large_galaxies_bv.fits',clobber=True)
 
 #try to run on all types of pickle files with differents names while going back one directory
 
 if __name__ == '__main__':
-    makeNSAtlastable()
+    makeRC3table()
