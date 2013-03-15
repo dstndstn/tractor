@@ -1,6 +1,6 @@
 """
 This file is part of the Tractor project.
-Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Copyright 2011, 2012, 2013 Dustin Lang and David W. Hogg.
 Licensed under the GPLv2; see the file COPYING for details.
 
 `sdss.py`
@@ -249,7 +249,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 			objs.indices = np.arange(len(objs))
 		else:
 			_check_sdss_files(sdss, run, camcol, field, bandnum, ['photoObj'],
-							  tryOpen=True, retrieve=retrieve)
+							  tryopen=True, retrieve=retrieve)
 			objfn = sdss.getPath('photoObj', run, camcol, field)
 			
 			objs = fits_table(objfn)
