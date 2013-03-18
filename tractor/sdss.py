@@ -784,7 +784,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 						  savepsfimg=None, curl=False,
 						  nanomaggies=False,
 						  zrange=[-3,10],
-						  invvarIgnoresSourceFlux=False):
+						  invvarIgnoresSourceFlux=False,
+						  invvarAtCenter=False,
+						  imargs={}):
 	# retry_retrieve=True,
 	'''
 	Creates a tractor.Image given an SDSS field identifier.
@@ -923,9 +925,16 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	#assert(bigsky.shape == image.shape)
 
 	psfield = sdss.readPsField(run, camcol, field)
-	invvar = frame.getInvvar(psfield, bandnum, ignoreSourceFlux=invvarIgnoresSourceFlux)
+	iva = dict(ignoreSourceFlux=invvarIgnoresSourceFlux)
+	if invvarAtCenter:
+		if roi:
+			iva.update(constantSkyAt=((x0+x1)/2., (y0+y1)/2.))
+		else:
+			iva.update(constantSkyAt=(W/2., H/2.))
+	invvar = frame.getInvvar(psfield, bandnum, **iva)
 	invvar = invvar.astype(np.float32)
-	assert(invvar.shape == image.shape)
+	if not invvarAtCenter:
+		assert(invvar.shape == image.shape)
 
 	# Could get this from photoField instead
 	# http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
@@ -946,10 +955,15 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if roi is not None:
 		roislice = (slice(y0,y1), slice(x0,x1))
 		image = image[roislice].copy()
-		invvar = invvar[roislice].copy()
+		if invvarAtCenter:
+			pass
+		# invvar = invvar + np.zeros_like(image)
+		else:
+			invvar = invvar[roislice].copy()
 
-	for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
-		fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
+	if not invvarAtCenter:
+		for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
+			fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 
 	if psf == 'kl-gm':
 		from emfit import em_fit_2d
@@ -998,7 +1012,8 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
 				 sky=skyobj, photocal=photocal,
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
-					   (run, camcol, field, bandname)))
+					   (run, camcol, field, bandname)),
+				 **imargs)
 	timg.zr = zr
 	return timg,info
 

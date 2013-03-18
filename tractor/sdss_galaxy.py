@@ -593,6 +593,9 @@ class DevGalaxy(HoggGalaxy):
 
 class FracDev(ScalarParam):
 	stepsize = 0.01
+	def getClippedValue(self):
+		f = self.getValue()
+		return np.clip(f, 0., 1.)
 	
 class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 	'''
@@ -635,7 +638,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 				', shapeDev=' + repr(self.shapeDev))
 	def copy(self):
 		return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
-									self.fracDev.getValue, self.shapeExp.copy(),
+									self.fracDev.getValue(),
+									self.shapeExp.copy(),
 									self.shapeDev.copy())
 
 	def getBrightness(self):
@@ -655,8 +659,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 		return p1 * counts
 
 	def _getAffineProfile(self, img, px, py):
-		f = self.fracDev.getValue()
-		f = max(0., min(1., f))
+		f = self.fracDev.getClippedValue()
 		profs = []
 		if f > 0.:
 			profs.append((f, DevGalaxy.profile, self.shapeDev))
@@ -692,7 +695,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 					 px, py, img.getWcs().hashkey(),
 					 img.getPsf().hashkey(),
 					 self.shapeDev.hashkey(),
-					 self.shapeExp.hashkey()))
+					 self.shapeExp.hashkey(),
+					 self.fracDev.hashkey()))
 	
 	# WARNING, this code has not been tested.
 	def getParamDerivatives(self, img):
@@ -705,8 +709,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 		e.dname = 'fcomp.exp'
 		d.dname = 'fcomp.dev'
 
-		f = self.fracDev.getValue()
-		f = max(0., min(1., f))
+		f = self.fracDev.getClippedValue()
 
 		if self.isParamFrozen('pos'):
 			e.freezeParam('pos')
@@ -720,12 +723,12 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 		dd = d.getParamDerivatives(img)
 
 		# fracDev scaling
-		for d in de:
-			if d is not None:
-				d *= (1.-f)
-		for d in dd:
-			if d is not None:
-				d *= f
+		for deriv in de:
+			if deriv is not None:
+				deriv *= (1.-f)
+		for deriv in dd:
+			if deriv is not None:
+				deriv *= f
 		
 		derivs = []
 		i0 = 0
@@ -734,7 +737,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 			npos = self.pos.numberOfParams()
 			for i in range(npos):
 				ii = i0+i
-				df = add_patch(de[ii], dd[ii])
+				df = add_patches(de[ii], dd[ii])
 				if df is not None: 
 					df.setName('d(fcomp)/d(pos%i)' % i)
 				derivs.append(df)
@@ -745,7 +748,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 			nb = self.brightness.numberOfParams()
 			for i in range(nb):
 				ii = i0+i
-				df = add_patch(de[ii], dd[ii])
+				df = add_patches(de[ii], dd[ii])
 				if df is not None: 
 					df.setName('d(fcomp)/d(bright%i)' % i)
 				derivs.append(df)

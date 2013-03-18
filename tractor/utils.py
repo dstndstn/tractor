@@ -461,6 +461,40 @@ class ParamList(BaseParams, NamedParams):
 	def __iter__(self):
 		return ParamList.ParamListIter(self)
 
+class ArithmeticParams(object):
+	def __iadd__(self, other):
+		''' += '''
+		if hasattr(other, 'getParams'):
+			self.setParams([x + y for x,y in zip(self.getParams(), other.getParams())])
+		else:
+			self.setParams([x + y for x in self.getParams()])
+		return self
+
+	def __isub__(self, other):
+		''' += '''
+		if hasattr(other, 'getParams'):
+			self.setParams([x - y for x,y in zip(self.getParams(), other.getParams())])
+		else:
+			self.setParams([x - y for x in self.getParams()])
+		return self
+
+	def __imul__(self, other):
+		''' *= '''
+		if hasattr(other, 'getParams'):
+			self.setParams([x * y for x,y in zip(self.getParams(), other.getParams())])
+		else:
+			self.setParams([x * y for x in self.getParams()])
+		return self
+
+	def __imul__(self, other):
+		''' /= '''
+		if hasattr(other, 'getParams'):
+			self.setParams([x / y for x,y in zip(self.getParams(), other.getParams())])
+		else:
+			self.setParams([x / y for x in self.getParams()])
+		return self
+	
+	
 class MultiParams(BaseParams, NamedParams):
 	'''
 	An implementation of Params that combines component sub-Params.

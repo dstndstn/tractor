@@ -63,7 +63,7 @@ class Image(MultiParams):
 	can optimize them.
 	'''
 	def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
-				 photocal=None, name=None, **kwargs):
+				 photocal=None, name=None, domask=True, **kwargs):
 		'''
 		Args:
 		  * *data*: numpy array: the image pixels
@@ -81,7 +81,9 @@ class Image(MultiParams):
 		kwa = dict()
 		if 'dilation' in kwargs:
 			kwa.update(dilation=kwargs.pop('dilation'))
-		self.setMask(**kwa)
+		self.domask = domask
+		if domask:
+			self.setMask(**kwa)
 		self.setInvvar(self.origInvvar)
 		self.name = name
 		self.starMask = np.ones_like(self.data)
@@ -155,7 +157,8 @@ class Image(MultiParams):
 		return self.invvar
 	def setInvvar(self,invvar):
 		self.invvar = 1. * invvar
-		self.invvar[self.mask] = 0. 
+		if self.domask:
+			self.invvar[self.mask] = 0. 
 		self.inverr = np.sqrt(self.invvar)
 
 	def getMedianPixelNoise(self, nz=True):
