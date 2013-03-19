@@ -543,15 +543,10 @@ class ArithmeticParams(object):
 			self.setParams([x / other for x in self.getParams()])
 		return self
 	
-	def __rmul__(self, other):
-		''' X * '''
-		res = self.copy()
-		if hasattr(other, 'getParams'):
-			res.setParams([x * y for x,y in zip(res.getParams(), other.getParams())])
-		else:
-			res.setParams([x * other for x in res.getParams()])
-		return res
-	
+	__radd__ = __add__
+	__rsub__ = __sub__
+	__rmul__ = __mul__
+	__rdiv__ = __div__
 	
 class MultiParams(BaseParams, NamedParams):
 	'''

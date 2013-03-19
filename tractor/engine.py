@@ -98,6 +98,9 @@ class Image(MultiParams):
 	def getNamedParams():
 		return dict(psf=0, wcs=1, photocal=2, sky=3)
 
+	def getTime(self):
+		return self.time
+	
 	def getParamDerivatives(self, tractor, srcs):
 		'''
 		Returns a list of Patch objects, one per numberOfParams().
