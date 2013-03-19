@@ -18,6 +18,38 @@ from utils import *
 import mixture_profiles as mp
 import numpy as np
 
+from astrometry.util.starutil_numpy import *
+
+class TAITime(ScalarParam, ArithmeticParams):
+	'''
+	This is TAI as used in the SDSS 'frame' headers; eg
+
+	TAI     =        4507681767.55 / 1st row - 
+	Number of seconds since Nov 17 1858
+
+	And http://mirror.sdss3.org/datamodel/glossary.html#tai
+	says:
+
+	MJD = TAI/(24*3600)
+	'''
+	equinox = 53084.28 # mjd
+	daysperyear = 365.25
+
+	def __init__(self, t):
+		super(TAITime, self).__init__(t)
+
+	def toMjd(self):
+		return self.getValue() / (24.*3600.)
+
+	def getSunTheta(self):
+		mjd = self.toMjd()
+		th = 2. * np.pi * (mjd - TAITime.equinox) / TAITime.daysperyear
+		th = np.fmod(th, 2.*np.pi)
+		return th
+
+	def toYears(self):
+		return self.getValue() / (24.*3600. * TAITime.daysperyear)
+		
 class Mags(ParamList):
 	'''
 	An implementation of `Brightness` that stores magnitudes in
@@ -587,7 +619,7 @@ class PixPos(ParamList):
 	def getStepSizes(self, *args, **kwargs):
 		return [0.1, 0.1]
 
-class RaDecPos(ParamList, ArithmeticParam):
+class RaDecPos(ParamList, ArithmeticParams):
 	'''
 	A Position implementation using RA,Dec positions, in degrees.
 
@@ -736,10 +768,13 @@ class PointSource(MultiParams):
 	def overlapsCircle(self, pos, radius):
 		return self.pos.distanceFrom(pos) <= radius
 
+class Parallax(ScalarParam):
+	pass
 
 class MovingPointSource(PointSource):
 	def __init__(self, pos, brightness, pm, parallax, epoch=0.):
-		super(PointSource, self).__init__(pos, brightness, pm, parallax)
+		super(PointSource, self).__init__(pos, brightness, pm,
+										  Parallax(parallax))
 		self.epoch = epoch
 
 	@staticmethod
@@ -760,65 +795,86 @@ class MovingPointSource(PointSource):
 				repr(self.parallax) + ')')
 
 	def getPositionAtTime(self, t):
-		dt = t - self.epoch
-		p = self.pos.copy()
-		p.set
+		dt = (t - self.epoch).toYears()
+		# Assume "pos" is an RaDecPos
+		p = self.pos + dt * self.pm
+		#
+		suntheta = t.getSunTheta()
+
+		xyz = radectoxyz(p.ra, p.dec)
 		
+		# d(celestial coords)/d(parallax)
+		# - takes numerical derivatives when it could take analytic ones
+		# output is in [degrees / arcsec].	Yep.	Crazy but true.
+		# HACK: fmods dRA when it should do something continuous.
+		# rd2xyz(0,0) is a unit vector; 1/arcsecperrad is (a good approximation to)
+		# the distance on the unit sphere spanned by an angle of 1 arcsec.
+		# We take a step of that length and return the change in RA,Dec.
+		# It's about 1e-5 so we don't renormalize the xyz unit vector.
+		dxyz1 = radectoxyz(0., 0.) / arcsecperrad
+		# - imprecise angle of obliquity
+		# - implicitly assumes circular orbit
+		# output is in [degrees / arcsec].	Yep.	Crazy but true.
+		dxyz2 = radectoxyz(90., axistilt) / arcsecperrad
+
+		xyz += dxyz1 * np.cos(suntheta) + dxyz2 * np.sin(suntheta)
+		r,d = xyztoradec(xyz)
+		return RaDecPos(r,d)
 	
-	def getUnitFluxModelPatch(self, img, minval=0.):
-		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
-		return patch
-
-	def getUnitFluxModelPatches(self, *args, **kwargs):
-		return [self.getUnitFluxModelPatch(*args, **kwargs)]
-
-	def getModelPatch(self, img, minsb=0.):
-		counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-		if counts <= 0:
-			return None
-		minval = minsb / counts
-		upatch = self.getUnitFluxModelPatch(img, minval=minval)
-		return upatch * counts
-
-	def getParamDerivatives(self, img):
-		'''
-		returns [ Patch, Patch, ... ] of length numberOfParams().
-		'''
-		pos0 = self.getPosition()
-		(px0,py0) = img.getWcs().positionToPixel(pos0, self)
-		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
-		counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
-		derivs = []
-
-		# Position
-		if not self.isParamFrozen('pos'):
-			psteps = pos0.getStepSizes(img)
-			pvals = pos0.getParams()
-			for i,pstep in enumerate(psteps):
-				oldval = pos0.setParam(i, pvals[i] + pstep)
-				(px,py) = img.getWcs().positionToPixel(pos0, self)
-				patchx = img.getPsf().getPointSourcePatch(px, py)
-				pos0.setParam(i, oldval)
-				dx = (patchx - patch0) * (counts0 / pstep)
-				dx.setName('d(ptsrc)/d(pos%i)' % i)
-				derivs.append(dx)
-
-		# Brightness
-		if not self.isParamFrozen('brightness'):
-			bsteps = self.brightness.getStepSizes(img)
-			bvals = self.brightness.getParams()
-			for i,bstep in enumerate(bsteps):
-				oldval = self.brightness.setParam(i, bvals[i] + bstep)
-				countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
-				self.brightness.setParam(i, oldval)
-				df = patch0 * ((countsi - counts0) / bstep)
-				df.setName('d(ptsrc)/d(bright%i)' % i)
-				derivs.append(df)
-		return derivs
-
-	def overlapsCircle(self, pos, radius):
-		return self.pos.distanceFrom(pos) <= radius
+	# def getUnitFluxModelPatch(self, img, minval=0.):
+	# 	(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
+	# 	patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
+	# 	return patch
+	# 
+	# def getUnitFluxModelPatches(self, *args, **kwargs):
+	# 	return [self.getUnitFluxModelPatch(*args, **kwargs)]
+	# 
+	# def getModelPatch(self, img, minsb=0.):
+	# 	counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+	# 	if counts <= 0:
+	# 		return None
+	# 	minval = minsb / counts
+	# 	upatch = self.getUnitFluxModelPatch(img, minval=minval)
+	# 	return upatch * counts
+	# 
+	# def getParamDerivatives(self, img):
+	# 	'''
+	# 	returns [ Patch, Patch, ... ] of length numberOfParams().
+	# 	'''
+	# 	pos0 = self.getPosition()
+	# 	(px0,py0) = img.getWcs().positionToPixel(pos0, self)
+	# 	patch0 = img.getPsf().getPointSourcePatch(px0, py0)
+	# 	counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
+	# 	derivs = []
+	# 
+	# 	# Position
+	# 	if not self.isParamFrozen('pos'):
+	# 		psteps = pos0.getStepSizes(img)
+	# 		pvals = pos0.getParams()
+	# 		for i,pstep in enumerate(psteps):
+	# 			oldval = pos0.setParam(i, pvals[i] + pstep)
+	# 			(px,py) = img.getWcs().positionToPixel(pos0, self)
+	# 			patchx = img.getPsf().getPointSourcePatch(px, py)
+	# 			pos0.setParam(i, oldval)
+	# 			dx = (patchx - patch0) * (counts0 / pstep)
+	# 			dx.setName('d(ptsrc)/d(pos%i)' % i)
+	# 			derivs.append(dx)
+	# 
+	# 	# Brightness
+	# 	if not self.isParamFrozen('brightness'):
+	# 		bsteps = self.brightness.getStepSizes(img)
+	# 		bvals = self.brightness.getParams()
+	# 		for i,bstep in enumerate(bsteps):
+	# 			oldval = self.brightness.setParam(i, bvals[i] + bstep)
+	# 			countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+	# 			self.brightness.setParam(i, oldval)
+	# 			df = patch0 * ((countsi - counts0) / bstep)
+	# 			df.setName('d(ptsrc)/d(bright%i)' % i)
+	# 			derivs.append(df)
+	# 	return derivs
+	# 
+	# def overlapsCircle(self, pos, radius):
+	# 	return self.pos.distanceFrom(pos) <= radius
 
 
 

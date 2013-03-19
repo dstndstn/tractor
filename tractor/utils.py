@@ -1,6 +1,6 @@
 """
 This file is part of the Tractor project.
-Copyright 2011, 2012 Dustin Lang and David W. Hogg.
+Copyright 2011, 2012, 2013 Dustin Lang and David W. Hogg.
 Licensed under the GPLv2; see the file COPYING for details.
 
 `utils.py`
@@ -13,6 +13,8 @@ could be useful outside the Tractor context.
 """
 #from ducks import *
 import numpy as np
+
+import functools
 
 def listmax(X, default=0):
 	mx = [np.max(x) for x in X if len(x)]
@@ -99,6 +101,7 @@ class BaseParams(object):
 	def getLogPriorDerivatives(self):
 		return None
 
+@functools.total_ordering
 class ScalarParam(BaseParams):
 	'''
 	Implementation of "Params" for a single scalar (float) parameter,
@@ -112,6 +115,12 @@ class ScalarParam(BaseParams):
 		return getClassName(self) + ': ' + self.strformat % self.val
 	def __repr__(self):
 		return getClassName(self) + '(' + repr(self.val) + ')'
+
+	def __eq__(self, other):
+		return self.getValue() == other.getValue()
+	def __lt__(self, other):
+		return self.getValue() < other.getValue()
+
 	def copy(self):
 		return self.__class__(self.val)
 	def getParamNames(self):
@@ -462,20 +471,60 @@ class ParamList(BaseParams, NamedParams):
 		return ParamList.ParamListIter(self)
 
 class ArithmeticParams(object):
+	#def __eq__(self, other):
+	#	return np.all(self.getParams() == other.getParams())
+	#def __lt__(self, other):
+
+	def __add__(self, other):
+		''' + '''
+		res = self.copy()
+		if hasattr(other, 'getParams'):
+			res.setParams([x + y for x,y in zip(res.getParams(), other.getParams())])
+		else:
+			res.setParams([x + other for x in res.getParams()])
+		return res
+
+	def __sub__(self, other):
+		''' - '''
+		res = self.copy()
+		if hasattr(other, 'getParams'):
+			res.setParams([x - y for x,y in zip(res.getParams(), other.getParams())])
+		else:
+			res.setParams([x - other for x in res.getParams()])
+		return res
+
+	def __mul__(self, other):
+		''' *= '''
+		res = self.copy()
+		if hasattr(other, 'getParams'):
+			res.setParams([x * y for x,y in zip(res.getParams(), other.getParams())])
+		else:
+			res.setParams([x * other for x in res.getParams()])
+		return res
+
+	def __div__(self, other):
+		''' /= '''
+		res = self.copy()
+		if hasattr(other, 'getParams'):
+			res.setParams([x / y for x,y in zip(res.getParams(), other.getParams())])
+		else:
+			res.setParams([x / other for x in res.getParams()])
+		return res
+
 	def __iadd__(self, other):
 		''' += '''
 		if hasattr(other, 'getParams'):
 			self.setParams([x + y for x,y in zip(self.getParams(), other.getParams())])
 		else:
-			self.setParams([x + y for x in self.getParams()])
+			self.setParams([x + other for x in self.getParams()])
 		return self
 
 	def __isub__(self, other):
-		''' += '''
+		''' -= '''
 		if hasattr(other, 'getParams'):
 			self.setParams([x - y for x,y in zip(self.getParams(), other.getParams())])
 		else:
-			self.setParams([x - y for x in self.getParams()])
+			self.setParams([x - other for x in self.getParams()])
 		return self
 
 	def __imul__(self, other):
@@ -483,16 +532,25 @@ class ArithmeticParams(object):
 		if hasattr(other, 'getParams'):
 			self.setParams([x * y for x,y in zip(self.getParams(), other.getParams())])
 		else:
-			self.setParams([x * y for x in self.getParams()])
+			self.setParams([x * other for x in self.getParams()])
 		return self
 
-	def __imul__(self, other):
+	def __idiv__(self, other):
 		''' /= '''
 		if hasattr(other, 'getParams'):
 			self.setParams([x / y for x,y in zip(self.getParams(), other.getParams())])
 		else:
-			self.setParams([x / y for x in self.getParams()])
+			self.setParams([x / other for x in self.getParams()])
 		return self
+	
+	def __rmul__(self, other):
+		''' X * '''
+		res = self.copy()
+		if hasattr(other, 'getParams'):
+			res.setParams([x * y for x,y in zip(res.getParams(), other.getParams())])
+		else:
+			res.setParams([x * other for x in res.getParams()])
+		return res
 	
 	
 class MultiParams(BaseParams, NamedParams):

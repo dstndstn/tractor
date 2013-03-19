@@ -63,7 +63,7 @@ class Image(MultiParams):
 	can optimize them.
 	'''
 	def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
-				 photocal=None, name=None, domask=True, **kwargs):
+				 photocal=None, name=None, domask=True, time=None, **kwargs):
 		'''
 		Args:
 		  * *data*: numpy array: the image pixels
@@ -88,6 +88,7 @@ class Image(MultiParams):
 		self.name = name
 		self.starMask = np.ones_like(self.data)
 		self.zr = kwargs.pop('zr', None)
+		self.time = time
 		super(Image, self).__init__(psf, wcs, photocal, sky)
 
 	def __str__(self):

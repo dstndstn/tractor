@@ -1013,6 +1013,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 				 sky=skyobj, photocal=photocal,
 				 name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
 					   (run, camcol, field, bandname)),
+				 time=TAITime(tai),
 				 **imargs)
 	timg.zr = zr
 	return timg,info

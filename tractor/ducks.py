@@ -179,7 +179,23 @@ class Position(Params):
 	`Positions`, and `WCS` objects convert them into pixel coordinates
 	in a specific `Image`.
 	'''
+	pass
+	
+class Time(Params):
+	'''
+	Objects of type "Time" should define arithmetic operators (at least
+	__sub__, __add__, __isub__, __iadd__)
+	'''
+	#def __sub__(self, other):
+	#	pass
+	def getSunTheta(self):
+		''' Returns the angle of the Earth's (mean?) anomaly at this time;
+		ie, the time of year expressed as an angle in radians.'''
+		pass
 
+	def toYears():
+		pass
+	
 class WCS(Params):
 	'''
 	Duck-type definition of World Coordinate System.
