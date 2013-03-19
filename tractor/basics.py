@@ -774,13 +774,39 @@ class Parallax(ScalarParam, ArithmeticParams):
 	def __str__(self):
 		return 'Parallax: %.3f arcsec' % (self.getValue())
 
+	#### FIXME -- cos(Dec)
+class PMRaDec(RaDecPos):
+	@staticmethod
+	def getName():
+		return "PMRaDec"
+	def __str__(self):
+		return '%s: (%.3f, %.3f) "/yr' % (self.getName(),
+										  self.getRaArcsecPerYear(),
+										  self.getDecArcsecPerYear())
+	def __init__(self, *args, **kwargs):
+		self.addParamAliases(ra=0, dec=1)
+		super(PMRaDec,self).__init__(*args,**kwargs)
+		self.setStepSizes(1e-6)
+		
+	# def setStepSizes(self, delta):
+	#	self.stepsizes = [delta, delta]
+		
+	@staticmethod
+	def getNamedParams():
+		return dict(pmra=0, pmdec=1)
 
+	def getRaArcsecPerYear(self):
+		return self.pmra * 3600.
+	def getDecArcsecPerYear(self):
+		return self.pmdec * 3600.
+	
 class MovingPointSource(PointSource):
 	def __init__(self, pos, brightness, pm, parallax, epoch=0.):
 		# ASSUME 'pm' is the same type as 'pos'
-		assert(type(pos) == type(pm))
+		#assert(type(pos) == type(pm))
 		# More precisely, ...
 		assert(type(pos) is RaDecPos)
+		assert(type(pm) is PMRaDec)
 		super(PointSource, self).__init__(pos, brightness, pm,
 										  Parallax(parallax))
 		self.epoch = epoch
@@ -838,7 +864,9 @@ class MovingPointSource(PointSource):
 
 	def getParamDerivatives(self, img):
 	 	'''
-	 	returns [ Patch, Patch, ... ] of length numberOfParams().
+		MovingPointSource derivatives.
+
+		returns [ Patch, Patch, ... ] of length numberOfParams().
 	 	'''
 		t = img.getTime()
 		pos0 = self.getPositionAtTime(t)
@@ -846,7 +874,9 @@ class MovingPointSource(PointSource):
 		patch0 = img.getPsf().getPointSourcePatch(px0, py0)
 		counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
 		derivs = []
-	
+
+		#print 'initial pixel pos', px0, py0
+		
 		# Position
 
 		# FIXME -- could just compute positional derivatives once and
@@ -872,21 +902,21 @@ class MovingPointSource(PointSource):
 		# if not self.isParamFrozen('pos'):
 		# 	derivs.extend(pderivs)
 
-		def _add_posderivs(pos, name):
-			psteps = pos.getStepSizes(img)
-			pvals = pos.getParams()
+		def _add_posderivs(p, name):
+			psteps = p.getStepSizes(img)
+			pvals = p.getParams()
 			for i,pstep in enumerate(psteps):
-				oldval = pos.setParam(i, pvals[i] + pstep)
+				oldval = p.setParam(i, pvals[i] + pstep)
 				tpos = self.getPositionAtTime(t)
 				(px,py) = img.getWcs().positionToPixel(tpos, self)
+				#print 'stepping param', name, i, '-->', p, '--> pix pos', px,py
 				patchx = img.getPsf().getPointSourcePatch(px, py)
-				pos.setParam(i, oldval)
+				p.setParam(i, oldval)
 				dx = (patchx - patch0) * (counts0 / pstep)
 				dx.setName('d(ptsrc)/d(%s%i)' % (name, i))
 				derivs.append(dx)
 
 		if not self.isParamFrozen('pos'):
-			pos = self.pos
 			_add_posderivs(self.pos, 'pos')
 		
 		# Brightness

@@ -182,10 +182,11 @@ class NamedParams(object):
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
 
-	def addNamedParams(self, **d):
+	def _addNamedParams(self, alias, **d):
 		self.namedparams.update(d)
-		# create the reverse mapping: from parameter index to name.
-		self.paramnames.update(dict((v,k) for k,v in d.items()))
+		if not alias:
+			# create the reverse mapping: from parameter index to name.
+			self.paramnames.update(dict((v,k) for k,v in d.items()))
 
 		# Create a property for each named parameter.
 		for n,i in self.namedparams.items():
@@ -215,6 +216,13 @@ class NamedParams(object):
 
 			prop = property(getter, setter, None, 'named param %s' % n)
 			setattr(self.__class__, n, prop)
+		
+	def addParamAliases(self, **d):
+		self._addNamedParams(alias=True, **d)
+
+	def addNamedParams(self, **d):
+		self._addNamedParams(alias=False, **d)
+		
 
 	def _getNamedThing(self, nm):
 		return self._getThing(self.namedparams[nm])

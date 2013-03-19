@@ -1146,7 +1146,7 @@ class Tractor(MultiParams):
 	def getParameterScales(self):
 		print self.getName()+': Finding derivs...'
 		allderivs = self.getDerivs()
-		print 'Finding optimal update direction...'
+		print 'Finding column scales...'
 		s = self.getUpdateDirection(allderivs, scales_only=True)
 		return s
 
