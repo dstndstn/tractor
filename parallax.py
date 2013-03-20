@@ -313,7 +313,7 @@ def plot_images(tr, ptype='mod', mods=None):
 class SourceInfo(object):
 	def __init__(self, **kwargs):
 		for k,v in kwargs.items():
-			self.setattr(k, v)
+			setattr(self, k, v)
 
 def getSource(i):
 	srcs = []
@@ -334,7 +334,11 @@ def run_star(src, band, opt):
 	sdss = DR9(basedir='data-dr9')
 
 	stari = src.srci
-	ps = PlotSequence('parallax-%i-%s' % (stari, band))
+	tag = '%i-%s' % (stari, band)
+	if opt.freeze_parallax:
+		tag += '-p0'
+	
+	ps = PlotSequence('parallax-%s' % (tag))
 
 	ra = src.ra
 	dec = src.dec
@@ -342,6 +346,10 @@ def run_star(src, band, opt):
 	pmdec = src.pmdec
 	parallax = src.parallax
 
+	if opt.freeze_parallax:
+		print 'Freezing parallax to zero.'
+		parallax = 0.
+	
 	I = np.flatnonzero(np.hypot(T.ra - ra, T.dec - dec) < np.hypot(13.,9.)/(2.*60.))
 	print 'Got', len(I), 'fields possibly in range'
 	print 'Runs:', np.unique(T.run[I])
@@ -406,6 +414,10 @@ def run_star(src, band, opt):
 	tr.freezeParam('images')
 	print 'Tractor:', tr
 
+	mps.freezeParam('parallax')
+	print 'MPS args:'
+	mps.printThawedParams()
+	
 	PA = plot_images(tr, ptype='img')
 	plt.suptitle('%s band: data' % (band))
 	ps.savefig()
@@ -460,8 +472,6 @@ def run_star(src, band, opt):
 	p0 = np.array(tr.getParams())
 	ndim = len(p0)
 	nw = 50
-	print 'ndim', ndim
-	print 'nw', nw
 
 	sampler = emcee.EnsembleSampler(nw, ndim, tr, threads=8)
 	
@@ -547,10 +557,10 @@ def run_star(src, band, opt):
 
 		if (step+0) % 100 == 0:
 			pickle_to_file(dict(alllnp=alllnp, allp=allp, tr=tr),
-						   'parallax-star%i-%s-step%04i.pickle' % (stari, band, step))
+						   'parallax-star%s-step%04i.pickle' % (tag, step))
 		
 	pickle_to_file(dict(alllnp=alllnp, allp=allp, tr=tr),
-				   'parallax-star%i-%s-end.pickle' % (stari, band))
+				   'parallax-star%s-end.pickle' % (tag))
 
 			
 
@@ -563,8 +573,8 @@ if __name__ == '__main__':
 					  help='Make summary plots?')
 	parser.add_option('-s', '--source', dest='sources', action='append', type=int,
 					  help='Operate on the given (set of) sources')
-	parser.add_option('-P', dest='parallax', action='store_false', default=True,
-					  help='Freeze the parallax at zero?')
+	parser.add_option('-P', dest='freeze_parallax', action='store_true',
+					  default=False, help='Freeze the parallax at zero?')
 	parser.add_option('-b', dest='band', type=str, default='z', help='Band (default %default)')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
