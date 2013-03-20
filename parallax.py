@@ -8,6 +8,7 @@ SDSS2057-0050 314.48301 -0.83521203 -37.2+/-20 -30+/-27 33+/-10
 '''
 
 import matplotlib
+matplotlib.rc('text', usetex=True)
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
@@ -106,14 +107,18 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 		units = ''
 		xt = None
 		xtl = None
+		mfmt = '%g'
+		sfmt = '%g'
 		if i == 0:
 			# ra
 			pp = (pp - ra) * 3600.
 			units = '(arcsec - nominal)'
+			mfmt = sfmt = '%.3f'
 		elif i == 1:
 			# dec
 			pp = (pp - dec) * 3600.
 			units = '(arcsec - nominal)'
+			mfmt = sfmt = '%.3f'
 		elif i == 2:
 			# z
 			pp = NanoMaggies.nanomaggiesToMag(pp)
@@ -123,14 +128,17 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 						   np.ceil(pp.max() * 100)/100., 0.01)
 			#18.02, 18.06, 0.01)
 			xtl = ['%0.2f' % x for x in xt]
+			mfmt = sfmt = '%.3f'
 		elif i in [3, 4]:
 			# pmra, pmdec
 			pp = pp * 3600. * 1000.
 			units = '(mas/yr)'
+			mfmt = sfmt = '%.1f'
 		elif i == 5:
 			# parallax
 			pp = pp * 1000.
 			units = '(mas)'
+			mfmt = sfmt = '%.0f'
 
 		plt.clf()
 		for j in range(W):
@@ -142,12 +150,30 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 		plt.title('Source at RA,Dec=(%.3f,%.3f), %s band' % (ra, dec, band))
 		ps.savefig()
 
+		p = pp[-500:,:].ravel()
+		mn = np.mean(p)
+		st = np.std(p)
+			
 		plt.clf()
-		plt.hist(pp[-500:,:].ravel(), 100)
+		n,b,p = plt.hist(p, 100, histtype='step', color='b')
+		ax = plt.axis()
+		X = np.linspace(ax[0], ax[1], 100)
+		Y = np.exp(-0.5 * (X-mn)**2/(st**2))
+		Y /= sum(Y)
+		Y *= sum(n) * (b[1]-b[0]) / (X[1]-X[0])
+		plt.plot(X, Y, 'b-', lw=3, alpha=0.5)
 		plt.xlabel('%s %s' % (nm[i], units))
 		if xt is not None:
 			plt.xticks(xt, xtl)
-		plt.title('Source at RA,Dec=(%.3f,%.3f), %s band' % (ra, dec, band))
+		plt.title('RA,Dec=(%.3f,%.3f), %s band' % (ra, dec, band))
+		#plt.axis(ax)
+		plt.ylim(min(ax[2],0), 1.08 * max(max(n), max(Y)))
+		plt.xlim(ax[0],ax[1])
+		ax = plt.axis()
+		plt.text(ax[0] + 0.1 * (ax[1]-ax[0]), ax[2]+0.95*(ax[3]-ax[2]),
+				 (r'%%s = $%s \pm %s$ %%s' % (mfmt,sfmt)) % (nm[i], mn, st, units),
+				 bbox=dict(fc='w', alpha=0.5, ec='None'))
+		plt.axis(ax)
 		ps.savefig()
 		
 
@@ -220,7 +246,7 @@ def plot_images(tr, ptype='mod'):
 			plt.imshow(tim.getImage(), interpolation='nearest', origin='lower',
 					   vmin = zr[0], vmax = zr[1])
 		elif ptype == 'chi':
-			chi = tr.getChiImage(0)
+			chi = tr.getChiImage(j)
 			plt.imshow(chi, interpolation='nearest', origin='lower',
 					   vmin = -5, vmax=5)
 		else:
