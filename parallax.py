@@ -324,7 +324,7 @@ def getSource(i):
 							   parallax=parallax, srci=stari))
 	return srcs[i]
 
-def run_star(src, band, opt):
+def run_star(src, band, tag, opt):
 	window_flist_fn = 'window_flist-DR9.fits'
 	T = fits_table(window_flist_fn)
 	print 'Read', len(T), 'S82 fields'
@@ -334,9 +334,6 @@ def run_star(src, band, opt):
 	sdss = DR9(basedir='data-dr9')
 
 	stari = src.srci
-	tag = '%i-%s' % (stari, band)
-	if opt.freeze_parallax:
-		tag += '-p0'
 	
 	ps = PlotSequence('parallax-%s' % (tag))
 
@@ -414,7 +411,8 @@ def run_star(src, band, opt):
 	tr.freezeParam('images')
 	print 'Tractor:', tr
 
-	mps.freezeParam('parallax')
+	if opt.freeze_parallax:
+		mps.freezeParam('parallax')
 	print 'MPS args:'
 	mps.printThawedParams()
 	
@@ -589,17 +587,26 @@ if __name__ == '__main__':
 	plt.figure(figsize=(10,10))
 
 	srcs = [getSource(i) for i in opt.sources]
+
+	def get_tag(src, band, opt):
+		stari = src.srci
+		tag = '%i-%s' % (stari, band)
+		if opt.freeze_parallax:
+			tag += '-p0'
+		return tag
 	
 	if opt.plots:
-		band = 'z'
+		band = opt.band
 		for src in srcs:
-			plot_chain('parallax-star%i-%s-end.pickle' % (src.srci, band),
-					   PlotSequence('chain-%i%s' % (src.srci, band)),
+			tag = get_tag(src, band, opt)
+			plot_chain('parallax-star%s-end.pickle' % (tag),
+					   PlotSequence('chain-%s' % tag),
 					   src.ra, src.dec, band, src.srci)
 		sys.exit(0)
 
 	for src in srcs:
-		run_star(src, opt.band, opt)
+		tag = get_tag(src, band, opt)
+		run_star(src, opt.band, tag, opt)
 		
 
 	
