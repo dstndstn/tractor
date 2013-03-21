@@ -663,7 +663,7 @@ def get_tractor_image(run, camcol, field, bandname,
 	if psf == 'kl-gm':
 		from emfit import em_fit_2d
 		from fitpsf import em_init_params
-		
+
 		# Create Gaussian mixture model PSF approximation.
 		H,W = image.shape
 		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
@@ -904,6 +904,8 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		
 	if roi is not None:
 		x0,x1,y0,y1 = roi
+		W = x1 - x0
+		H = y1 - y0
 	else:
 		x0 = y0 = 0
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?

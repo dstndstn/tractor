@@ -9,6 +9,9 @@ SDSS2057-0050 314.48301 -0.83521203 -37.2+/-20 -30+/-27 33+/-10
 
 import matplotlib
 matplotlib.rc('text', usetex=True)
+matplotlib.rc('font', family='serif')
+matplotlib.rc('font', serif='computer modern roman')
+matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
@@ -162,10 +165,8 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 			# z
 			pp = NanoMaggies.nanomaggiesToMag(pp)
 			units = '(mag)'
-			#xt = np.arange(18.02, 18.06, 0.01)
 			xt = np.arange(np.floor(pp.min() * 100)/100.,
 						   np.ceil(pp.max() * 100)/100., 0.01)
-			#18.02, 18.06, 0.01)
 			xtl = ['%0.2f' % x for x in xt]
 			mfmt = sfmt = '%.3f'
 		elif i in [3, 4]:
@@ -205,7 +206,6 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 		if xt is not None:
 			plt.xticks(xt, xtl)
 		plt.title('RA,Dec=(%.3f,%.3f), %s band' % (ra, dec, band))
-		#plt.axis(ax)
 		plt.ylim(min(ax[2],0), 1.08 * max(max(n), max(Y)))
 		plt.xlim(ax[0],ax[1])
 		ax = plt.axis()
@@ -214,7 +214,6 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 				 bbox=dict(fc='w', alpha=0.5, ec='None'))
 		plt.axis(ax)
 		ps.savefig()
-		
 
 	tr.setParams(allp[-1, 0, :])
 	plot_images(tr, ptype='img')
@@ -560,9 +559,99 @@ def run_star(src, band, tag, opt):
 	pickle_to_file(dict(alllnp=alllnp, allp=allp, tr=tr),
 				   'parallax-star%s-end.pickle' % (tag))
 
-			
+
+def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
+	'''
+	Compare parallax (1) vs no-parallax (2).
+	'''
+	c1 = 'b'
+	c2 = 'r'	
+
+	X1 = unpickle_from_file(pfn1)
+	alllnp1 = np.array(X1['alllnp'])
+	allp1 = np.array(X1['allp'])
+	tr1 = X1['tr']
+
+	X2 = unpickle_from_file(pfn2)
+	alllnp2 = np.array(X2['alllnp'])
+	allp2 = np.array(X2['allp'])
+	tr2 = X2['tr']
+
+	ps = PlotSequence('compare1-%s-%s' % (tag1, tag2))
+	
+	print 'allp shape', allp1.shape
+	print 'all lnp shape', alllnp1.shape
+	
+	plt.clf()
+	n,b,p1 = plt.hist(alllnp1[-500:, :].ravel(), 100, histtype='step', color=c1)
+	n,b,p2 = plt.hist(alllnp2[-500:, :].ravel(), 100, histtype='step', color=c2)
+	plt.legend((p1[0], p2[0]), ('With parallax', 'No parallax'),
+			   loc='upper center')
+	plt.xlabel('log-prob of samples')
+	plt.ylabel('number of samples')
+	plt.title('Parallax vs No-Parallax comparison -- Source %i, %s band' % (src.srci, band))
+	ps.savefig()
+
+	# Plot samples in RA,Dec coords.
+	plt.clf()
+	for tr, allp, cc in [(tr1, allp1, c1), (tr2, allp2, c2)]:
+		tims = tr.getImages()
+		mps = tr.getCatalog()[0]
+		ra,dec = src.ra, src.dec
+		times = [tim.time for tim in tims]
+		t0 = min(times)
+		t1 = max(times)
+		print 'Times', t0, t1
+		sixmonths = (3600. * 24. * 180)
+		t0 = t0 - sixmonths
+		t1 = t1 + sixmonths
+		print 'Times', t0, t1
+		print 't0', t0.getValue(), t0.getParams()
+		TT = [TAITime(x) for x in np.linspace(t0.getValue(), t1.getValue(), 300)]
+		for i in range(10):
+			tr.setParams(allp[-1, i, :])
+			pp = [mps.getPositionAtTime(t) for t in TT]
+			rr,dd = np.array([p.ra for p in pp]), np.array([p.dec for p in pp])
+			plt.plot((rr-ra)*3600., (dd-dec)*3600., '-', color='k', alpha=0.2, zorder=20)
+			pp = [mps.getPositionAtTime(t) for t in times]
+			rr,dd = np.array([p.ra for p in pp]), np.array([p.dec for p in pp])
+			plt.plot((rr-ra)*3600., (dd-dec)*3600., '.', color=cc, alpha=0.2, zorder=30) #'o', ms=4, mec=cc, mfc='none', alpha=0.5, zorder=30)
+	plt.xlabel('RA - nominal (arcsec)')
+	plt.ylabel('Dec - nominal (arcsec)')
+	ps.savefig()
+
+	i1 = np.argmax(alllnp1.ravel())
+	i2 = np.argmax(alllnp2.ravel())
+	print 'max lnp1', alllnp1.flat[i1]
+	print 'max lnp2', alllnp2.flat[i2]
+	(s1,w1) = np.unravel_index(i1, (alllnp1.shape))
+	(s2,w2) = np.unravel_index(i2, (alllnp2.shape))
+	print 's1,w1', s1,w1
+	print 's2,w2', s2,w2
+
+	tr1.setParams(allp1[s1, w1, :])
+	tr2.setParams(allp2[s2, w2, :])
+
+	plot_images(tr1, ptype='mod+noise')
+	plt.suptitle('With Parallax')
+	ps.savefig()
+
+	plot_images(tr2, ptype='mod+noise')
+	plt.suptitle('Without Parallax')
+	ps.savefig()
+
+	plot_images(tr1, ptype='chi')
+	plt.suptitle('With Parallax')
+	ps.savefig()
+
+	plot_images(tr2, ptype='chi')
+	plt.suptitle('Without Parallax')
+	ps.savefig()
 
 
+	
+	
+	
 if __name__ == '__main__':
 	from optparse import OptionParser
 	import sys
@@ -577,14 +666,15 @@ if __name__ == '__main__':
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 
+	parser.add_option('--c1', dest='compare1', action='store_true',
+					  help='Compare parallax vs no-parallax results')
+	
 	opt,args = parser.parse_args()
 	if opt.verbose == 0:
 		lvl = logging.INFO
 	else:
 		lvl = logging.DEBUG
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
-	plt.figure(figsize=(10,10))
 
 	srcs = [getSource(i) for i in opt.sources]
 
@@ -594,12 +684,26 @@ if __name__ == '__main__':
 		if opt.freeze_parallax:
 			tag += '-p0'
 		return tag
+
+	ppat = 'parallax-star%s-end.pickle'
+	
+	if opt.compare1:
+		for src in srcs:
+			opt.freeze_parallax = False
+			tag1 = get_tag(src, opt.band, opt)
+			opt.freeze_parallax = True
+			tag2 = get_tag(src, opt.band, opt)
+			compare1(src, tag1, tag2, ppat % tag1, ppat % tag2, opt, opt.band)
+		sys.exit(0)
+
+	plt.figure(figsize=(10,10))
+	#plt.subplots_adjust(left=0.1, right=0.95, hspace=0.25, bottom=)
 	
 	if opt.plots:
 		band = opt.band
 		for src in srcs:
 			tag = get_tag(src, band, opt)
-			plot_chain('parallax-star%s-end.pickle' % (tag),
+			plot_chain(ppat % tag,
 					   PlotSequence('chain-%s' % tag),
 					   src.ra, src.dec, band, src.srci)
 		sys.exit(0)
