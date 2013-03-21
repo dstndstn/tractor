@@ -660,7 +660,7 @@ if __name__ == '__main__':
 					  help='Make summary plots?')
 	parser.add_option('-s', '--source', dest='sources', action='append', type=int,
 					  help='Operate on the given (set of) sources')
-	parser.add_option('-P', dest='freeze_parallax', action='store_true',
+	parser.add_option('-P', '-F', dest='freeze_parallax', action='store_true',
 					  default=False, help='Freeze the parallax at zero?')
 	parser.add_option('-b', dest='band', type=str, default='z', help='Band (default %default)')
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,

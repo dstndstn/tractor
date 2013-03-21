@@ -19,6 +19,7 @@ import mixture_profiles as mp
 import numpy as np
 
 from astrometry.util.starutil_numpy import *
+from astrometry.util.miscutils import *
 
 class TAITime(ScalarParam, ArithmeticParams):
 	'''
@@ -944,7 +945,52 @@ class MovingPointSource(PointSource):
 				
 		return derivs
 
+class PixelizedPSF(BaseParams):
+	'''
+	A PSF model based on an image postage stamp, which will be
+	sinc-shifted to subpixel positions.
 
+	(Actually Lanczos shifted, with order Lorder)
+	
+	This will allow only Point Sources to be rendered by the Tractor!
+
+	FIXME -- current this class claims to have no params.
+	'''
+	def __init__(self, img, Lorder=3):
+		self.img = img
+		H,W = img.shape
+		assert((H % 2) == 1)
+		assert((W % 2) == 1)
+		self.Lorder = Lorder
+		
+	def __str__(self):
+		return 'PixelizedPSF'
+
+	def hashkey(self):
+		return ('PixelizedPSF', tuple(self.img))
+
+	def copy(self):
+		return PixelizedPSF(self.img.copy())
+
+	def getRadius(self):
+		H,W = self.img.shape
+		return np.hypot(H,W)/2.
+
+	def getPointSourcePatch(self, px, py, minval=0.):
+		from scipy.ndimage.filters import correlate1d
+		H,W = self.img.shape
+		ix = int(np.round(px))
+		iy = int(np.round(py))
+		dx = px - ix
+		dy = py - iy
+		x0 = ix - W/2
+		y0 = iy - H/2
+		L = self.Lorder
+		Lx = lanczos_filter(L, np.arange(-L, L+1) + dx)
+		Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
+		sx      = correlate1d(self.img, Lx, axis=1, mode='constant')
+		shifted = correlate1d(sx,       Ly, axis=0, mode='constant')
+		return Patch(x0, y0, shifted)
 	
 class GaussianMixturePSF(BaseParams):
 	'''

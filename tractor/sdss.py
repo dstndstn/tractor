@@ -824,7 +824,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	else:
 		brightpsf = False
 
-	valid_psf = ['dg', 'kl-gm']
+	valid_psf = ['dg', 'kl-gm', 'kl-pix']
 	if psf not in valid_psf:
 		raise RuntimeError('PSF must be in ' + str(valid_psf))
 
@@ -904,8 +904,6 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		
 	if roi is not None:
 		x0,x1,y0,y1 = roi
-		W = x1 - x0
-		H = y1 - y0
 	else:
 		x0 = y0 = 0
 	# Mysterious half-pixel shift.  asTrans pixel coordinates?
@@ -962,17 +960,22 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 		# invvar = invvar + np.zeros_like(image)
 		else:
 			invvar = invvar[roislice].copy()
-
+		H,W = image.shape
+			
 	if not invvarAtCenter:
 		for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
 			fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 
-	if psf == 'kl-gm':
+	if psf == 'kl-pix':
+		# Pixelized KL-PSF
+		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
+		mypsf = PixelizedPSF(klpsf)
+		
+	elif psf == 'kl-gm':
 		from emfit import em_fit_2d
 		from fitpsf import em_init_params
 		
 		# Create Gaussian mixture model PSF approximation.
-		H,W = image.shape
 		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
 		S = klpsf.shape[0]
 		# number of Gaussian components
@@ -1145,7 +1148,7 @@ class SdssFluxPhotoCal(object):
 	scale = 1e6
 	def __init__(self, scale=None):
 		if scale is None:
-			scale = SdssPhotoCal.scale
+			scale = SdssFluxPhotoCal.scale
 		self.scale = scale
 	def brightnessToCounts(self, brightness):
 		'''
@@ -1158,9 +1161,9 @@ class SdssFlux(Flux):
 	def getStepSizes(self, *args, **kwargs):
 		return [1.]
 	def __str__(self):
-		return 'SdssFlux: %.1f' % (self.val * SdssPhotoCal.scale)
+		return 'SdssFlux: %.1f' % (self.val * SdssFluxPhotoCal.scale)
 	def __repr__(self):
-		return 'SdssFlux(%.1f)' % (self.val * SdssPhotoCal.scale)
+		return 'SdssFlux(%.1f)' % (self.val * SdssFluxPhotoCal.scale)
 	def hashkey(self):
 		return ('SdssFlux', self.val)
 	def copy(self):
