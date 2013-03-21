@@ -491,7 +491,7 @@ def run_star(src, band, tag, opt):
 		pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
 		#print 'lnprobs:', lnp
 
-		if step and (step % 50 == 0):
+		if step and (step % 100 == 0):
 			mods = [np.zeros_like(tim.getImage()) for tim in tims]
 			for k,(p,x) in enumerate(zip(lnp,pp)):
 				tr.setParams(x)
@@ -605,7 +605,7 @@ if __name__ == '__main__':
 		sys.exit(0)
 
 	for src in srcs:
-		tag = get_tag(src, band, opt)
+		tag = get_tag(src, opt.band, opt)
 		run_star(src, opt.band, tag, opt)
 		
 
