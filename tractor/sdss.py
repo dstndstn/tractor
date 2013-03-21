@@ -969,6 +969,17 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if psf == 'kl-pix':
 		# Pixelized KL-PSF
 		klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
+		# Trim symmetric zeros
+		sh,sw = klpsf.shape
+		while True:
+			if (np.all(klpsf[0,:] == 0.) and
+				np.all(klpsf[:,0] == 0.) and
+				np.all(klpsf[-1,:] == 0.) and
+				np.all(klpsf[:,-1] == 0.)):
+				klpsf = klpsf[1:-1, 1:-1]
+			else:
+				break
+
 		mypsf = PixelizedPSF(klpsf)
 		
 	elif psf == 'kl-gm':

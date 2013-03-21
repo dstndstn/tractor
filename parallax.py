@@ -357,11 +357,13 @@ def run_star(src, band, tag, opt):
 
 	nm = NanoMaggies.magToNanomaggies(20.)
 	pm = PMRaDec(pmra / (1000.*3600.), pmdec / (1000.*3600.))
-	#print 'Proper motion:', pm
 	mps = MovingPointSource(RaDecPos(ra, dec), NanoMaggies(**{band:nm}),
 							pm, parallax / 1000., epoch=tmid)
-	#print 'source:', mps
-		
+
+	psfmod = 'kl-gm'
+	if opt.pixpsf:
+		psfmod = 'kl-pix'
+	
 	tims = []
 	for ii in I:
 		t = T[ii]
@@ -371,7 +373,8 @@ def run_star(src, band, tag, opt):
 		tim,tinf = get_tractor_image_dr8(
 			t.run, t.camcol, t.field, band,
 			sdss=sdss, roiradecsize=(ra,dec,S),
-			nanomaggies=True, invvarIgnoresSourceFlux=True)
+			nanomaggies=True, invvarIgnoresSourceFlux=True,
+			psf=psfmod)
 		if tim is None:
 			continue
 		tim.score = t.score
@@ -666,6 +669,9 @@ if __name__ == '__main__':
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 
+	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
+					  help='Use pixelized KL PSF model')
+	
 	parser.add_option('--c1', dest='compare1', action='store_true',
 					  help='Compare parallax vs no-parallax results')
 	
@@ -681,6 +687,8 @@ if __name__ == '__main__':
 	def get_tag(src, band, opt):
 		stari = src.srci
 		tag = '%i-%s' % (stari, band)
+		if opt.pixpsf:
+			tag += '-pix'
 		if opt.freeze_parallax:
 			tag += '-p0'
 		return tag

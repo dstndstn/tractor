@@ -954,7 +954,7 @@ class PixelizedPSF(BaseParams):
 	
 	This will allow only Point Sources to be rendered by the Tractor!
 
-	FIXME -- current this class claims to have no params.
+	FIXME -- currently this class claims to have no params.
 	'''
 	def __init__(self, img, Lorder=3):
 		self.img = img
@@ -967,7 +967,7 @@ class PixelizedPSF(BaseParams):
 		return 'PixelizedPSF'
 
 	def hashkey(self):
-		return ('PixelizedPSF', tuple(self.img))
+		return ('PixelizedPSF', tuple(self.img.ravel()))
 
 	def copy(self):
 		return PixelizedPSF(self.img.copy())
@@ -990,6 +990,7 @@ class PixelizedPSF(BaseParams):
 		Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
 		sx      = correlate1d(self.img, Lx, axis=1, mode='constant')
 		shifted = correlate1d(sx,       Ly, axis=0, mode='constant')
+		shifted /= (Lx.sum() * Ly.sum())
 		return Patch(x0, y0, shifted)
 	
 class GaussianMixturePSF(BaseParams):
