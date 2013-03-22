@@ -355,7 +355,7 @@ class CatalogFakeSource(ParamsWrapper):
 			oldval = self.mps.setParam(i, vals[i] + step)
 			p = self.getModelPatch(img)
 			self.mps.setParam(i, oldval)
-			derivs.append(p - p0)
+			derivs.append((p - p0) / step)
 		return derivs
 	
 class CatalogFakeImage(BaseParams):
@@ -370,7 +370,7 @@ class CatalogFakeImage(BaseParams):
 		#self.invvar = np.array([[1./dra**2, 1./ddec**2]])
 		self.name = 'CatalogFakeImage: %i/%i/%i/%s' % rcfb
 		#self.zr = (-180, 180)
-		self.zr = (-2./3600., 2./3600.)
+		self.zr = (-1./3600., 1./3600.)
 
 	def hashkey(self): return (tuple(self.data.ravel()),
 							   tuple(self.inverr.ravel()),
@@ -435,7 +435,6 @@ def run_star(src, band, tag, opt):
 		psfmod = 'kl-pix'
 
 	tims = []
-	catsrcs = []
 	
 	for ii in I:
 		t = T[ii]
@@ -465,12 +464,52 @@ def run_star(src, band, tag, opt):
 			if y < 64. or y > 1425.:
 				print 'Duplicate field -- y=%f' % y
 				continue
-			catsrcs.append((cat[0], obj))
 
-			#####
-			#if len(catsrcs) == 5:
-			#	break
+			src = cat[0]
 
+
+			# sdss.retrieve('frame', t.run, t.camcol, t.field, 'r')
+			# frame = sdss.readFrame(t.run, t.camcol, t.field, 'r')
+			# ast = frame.getAsTrans()
+			# wcs = SdssWcs(ast)
+			# x,y = obj.colc[2], obj.rowc[2]
+			# pos = wcs.pixelToPosition(x, y)
+			# print 'r', 'pixel position ->', pos.ra, pos.dec
+			# print '          vs RA,Dec', obj.ra, obj.dec
+
+			# get the AsTrans
+			sdss.retrieve('frame', t.run, t.camcol, t.field, band)
+			frame = sdss.readFrame(t.run, t.camcol, t.field, band)
+			ast = frame.getAsTrans()
+
+			# r-i color
+			color = obj.psfmag[band_index('r')] - obj.psfmag[band_index('i')]
+			print 'color', color
+			
+			x,y = obj.colc[bandnum], obj.rowc[bandnum]
+
+			ra,dec = ast.pixel_to_radec(x, y, color=color)
+			pos = RaDecPos(ra, dec)
+			
+			print band, 'pixel position ->', pos.ra, pos.dec
+			print '          vs RA,Dec', obj.ra, obj.dec
+
+			wcs = SdssWcs(ast)
+			p2 = wcs.pixelToPosition(x, y)
+			print '          vs no-color WCS RA,Dec', p2.ra, p2.dec
+
+			
+			xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
+			print 'xerr,yerr', xe,ye
+			# isotropize, convert to ra,dec deg
+			dradec = ((xe + ye)/2.) * 0.396 / 3600.
+
+			# {RA,Dec}{,err} use the r-band values, which are much worse for these objects!
+			# obj.ra, obj.dec, obj.raerr / 3600., obj.decerr / 3600.,
+
+			t = TAITime(obj.tai[bandnum])
+			tims.append(CatalogFakeImage(pos.ra, pos.dec, dradec, dradec,
+										 t, (obj.run, obj.camcol, obj.field, band)))
 			continue
 
 		tim,tinf = get_tractor_image_dr9(
@@ -501,21 +540,7 @@ def run_star(src, band, tag, opt):
 		tim.rcf = (t.run, t.camcol, t.field)
 		tims.append(tim)
 
-	if opt.cat:
-		print 'Got', len(catsrcs), 'catalog sources'
-		times = [TAITime(obj.tai[bandnum]) for s,obj in catsrcs]
-
-		# Create a FAKE Tractor image for each catalog entry.
-		tims = []
-		for (src,obj),t in zip(catsrcs, times):
-			print 'dRA,dDec:', obj.raerr, obj.decerr, 'arcsec'
-			print 'dx,dy', obj.colcerr[bandnum] * 0.396, obj.rowcerr[bandnum] * 0.396, 'arcsec'
-			tims.append(CatalogFakeImage(obj.ra, obj.dec, obj.raerr / 3600., obj.decerr / 3600.,
-										 t, (obj.run, obj.camcol, obj.field, band)))
-		
-	else:
-		times = [tim.time for tim in tims]
-
+	times = [tim.time for tim in tims]
 	t0 = min(times)
 	print 't0:', t0
 	t1 = max(times)
@@ -524,7 +549,9 @@ def run_star(src, band, tag, opt):
 	print 'tmid:', tmid
 
 	# Re-create this object now that we have the real "tmid".
-	mps = MovingPointSource(RaDecPos(ra, dec), NanoMaggies(**{band:nm}),
+	pos = RaDecPos(ra, dec)
+	pos.setStepSizes(1e-6)
+	mps = MovingPointSource(pos, NanoMaggies(**{band:nm}),
 							pm, parallax / 1000., epoch=tmid)
 	src = mps
 
@@ -579,6 +606,17 @@ def run_star(src, band, tag, opt):
 	plt.suptitle('%s band: initial chi' % band)
 	ps.savefig()
 
+
+	mps.freezeParams('parallax', 'pm')
+	while True:
+		dlnp,X,alpha = tr.optimize()
+		print 'Stepping by', alpha, 'for dlnp', dlnp
+		if alpha == 0:
+			break
+		if dlnp < 1e-3:
+			break
+	mps.thawParams('parallax', 'pm')
+	print 'opt source 1:', src
 	while True:
 		dlnp,X,alpha = tr.optimize()
 		print 'Stepping by', alpha, 'for dlnp', dlnp
@@ -649,6 +687,7 @@ def run_star(src, band, tag, opt):
 					plt.subplot(nparams, nparams, k)
 					if i == j:
 						plt.hist(pp[:,i], 20)
+						print nm[i], ': mean', np.mean(pp[:,i]), 'std', np.std(pp[:,i])
 					else:
 						plt.plot(pp[:,j], pp[:,i], 'b.')
 

@@ -463,6 +463,10 @@ class Patch(object):
 		if self.patch is None:
 			return Patch(self.x0, self.y0, None)
 		return Patch(self.x0, self.y0, self.patch * flux)
+	def __div__(self, x):
+		if self.patch is None:
+			return Patch(self.x0, self.y0, None)
+		return Patch(self.x0, self.y0, self.patch / x)
 
 	def performArithmetic(self, other, opname, otype=float):
 		assert(isinstance(other, Patch))
