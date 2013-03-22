@@ -29,6 +29,7 @@ from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.pyfits_utils import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
+from astrometry.libkd.spherematch import match_radec
 
 ## FIXME -- these PSF params are not Params
 class SdssBrightPSF(ParamsWrapper):
@@ -160,7 +161,7 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
 		print 'Looking for file', fn
 		exists = os.path.exists(fn)
 		retrieveKwargs = {}
-		if tryopen:
+		if exists and tryopen:
 			# This doesn't catch *all* types of errors you can imagine...
 			try:
 				T = pyfits.open(fn)
@@ -213,10 +214,20 @@ def _getBrightness(counts, tsf, bands, extrabands):
 
 def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 				 objs=None,
-				 retrieve=True, curl=False, roi=None, bands=None,
+				 retrieve=True, curl=False, roi=None,
+				 radecrad=None,
+				 bands=None,
 				 badmag=25, nanomaggies=False,
 				 getobjs=False, getobjinds=False,
 				 extrabands=None):
+	'''
+	If set,
+
+	radecrad = (ra,dec,rad)
+
+	returns sources within "rad" degrees of the given RA,Dec (in degrees)
+	center.
+	'''
 	#	brightPointSourceThreshold=0.):
 
 	if sdss is None:
@@ -263,13 +274,21 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 		
 	if roi is not None:
 		x0,x1,y0,y1 = roi
-		# FIXME -- keep only the sources whose centers are within the ROI box.
-		# Should do some ellipse-overlaps geometry.
+		# FIXME -- we keep only the sources whose centers are within
+		# the ROI box.  Should instead do some ellipse-overlaps
+		# geometry.
 		x = objs.colc[:,bandnum]
 		y = objs.rowc[:,bandnum]
 		I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
 		objs.cut(I)
 
+	if radecrad is not None:
+		(ra,dec,rad) = radecrad
+		I,J,d = match_radec(ra, dec, objs.ra, objs.dec, rad)
+		objs.cut(J)
+		del I
+		del d
+		
 	# Only deblended children.
 	objs.cut(objs.nchild == 0)
 
@@ -425,7 +444,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 	if len(ikeep):
 		objs.cut(ikeep)
 	else:
-		objs = []
+	 	objs = []
 
 	if not (getobjs or getobjinds):
 		return sources
@@ -434,7 +453,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 	if getobjs:
 		rtn.append(allobjs)
 	if getobjinds:
-		rtn.append(np.array(obji))
+		rtn.append(objs.index if len(objs) else np.array([]))
 	return rtn
 
 

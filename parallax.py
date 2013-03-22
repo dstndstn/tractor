@@ -90,8 +90,12 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 
 	# number of steps, number of walkers, number of params
 	(N, W, P) = allp.shape
-	
+
 	mps = tr.getCatalog()[0]
+	if opt.cat:
+		# unwrap
+		mps = mps.mps
+		
 	nm = mps.getParamNames()
 	assert(len(nm) == P)
 	nm = [n.split('.')[-1] for n in nm]
@@ -123,15 +127,17 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 	ps.savefig()
 
 	PA = plot_images(tr, ptype='img')
-	rows = PA['rows']
-	cols = PA['cols']
-	for j,tim in enumerate(tims):
-		plt.subplot(rows, cols, j+1)
-		for i in range(10):
-			tr.setParams(allp[-1, i, :])
-			pos = mps.getPositionAtTime(tim.time)
-			x,y = tim.getWcs().positionToPixel(pos)
-			plt.plot(x, y, 'r.')
+
+	if not opt.cat:
+		rows = PA['rows']
+		cols = PA['cols']
+		for j,tim in enumerate(tims):
+			plt.subplot(rows, cols, j+1)
+			for i in range(10):
+				tr.setParams(allp[-1, i, :])
+				pos = mps.getPositionAtTime(tim.time)
+				x,y = tim.getWcs().positionToPixel(pos)
+				plt.plot(x, y, 'r.')
 	plt.suptitle('RA,Dec=(%.3f,%.3f), %s band' % (ra,dec,band))
 	ps.savefig()
 	
@@ -144,6 +150,8 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 	ps.savefig()
 	
 	for i in range(P):
+
+		print 'param', i, ':', nm[i]
 		
 		pp = allp[:,:,i]
 		units = ''
@@ -151,30 +159,27 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 		xtl = None
 		mfmt = '%g'
 		sfmt = '%g'
-		if i == 0:
-			# ra
+		if nm[i] == 'ra':
 			pp = (pp - ra) * 3600.
 			units = '(arcsec - nominal)'
 			mfmt = sfmt = '%.3f'
-		elif i == 1:
-			# dec
+		elif nm[i] == 'dec':
 			pp = (pp - dec) * 3600.
 			units = '(arcsec - nominal)'
 			mfmt = sfmt = '%.3f'
-		elif i == 2:
-			# z
+		elif nm[i] == 'z':
 			pp = NanoMaggies.nanomaggiesToMag(pp)
 			units = '(mag)'
 			xt = np.arange(np.floor(pp.min() * 100)/100.,
 						   np.ceil(pp.max() * 100)/100., 0.01)
 			xtl = ['%0.2f' % x for x in xt]
 			mfmt = sfmt = '%.3f'
-		elif i in [3, 4]:
+		elif nm[i] in ['pmra', 'pmdec']:
 			# pmra, pmdec
 			pp = pp * 3600. * 1000.
 			units = '(mas/yr)'
 			mfmt = sfmt = '%.1f'
-		elif i == 5:
+		elif nm[i].lower() == 'parallax':
 			# parallax
 			pp = pp * 1000.
 			units = '(mas)'
@@ -323,6 +328,70 @@ def getSource(i):
 							   parallax=parallax, srci=stari))
 	return srcs[i]
 
+
+
+
+
+
+class CatalogFakeSource(ParamsWrapper):
+	def __init__(self, mps):
+		super(CatalogFakeSource, self).__init__(mps)
+		self.mps = mps
+
+	def getModelPatch(self, img, **kwargs):
+		pos = self.mps.getPositionAtTime(img.time)
+		patch = np.array([[pos.ra - img.ra0, pos.dec - img.dec0]])
+		return Patch(0, 0, patch)
+
+	def getParamDerivatives(self, img):
+		'''
+		returns [ Patch, Patch, ... ] of length numberOfParams().
+		'''
+		derivs = []
+		p0 = self.getModelPatch(img)
+		steps = self.mps.getStepSizes(img)
+		vals = self.mps.getParams()
+		for i,step in enumerate(steps):
+			oldval = self.mps.setParam(i, vals[i] + step)
+			p = self.getModelPatch(img)
+			self.mps.setParam(i, oldval)
+			derivs.append(p - p0)
+		return derivs
+	
+class CatalogFakeImage(BaseParams):
+	def __init__(self, ra, dec, dra, ddec, time, rcfb):
+		self.ra0 = ra
+		self.dec0 = dec
+		self.sky = ConstantSky(0.)
+		self.time = time
+		#self.data = np.array([[ra, dec]])
+		self.data = np.array([[0., 0.]])
+		self.inverr = np.array([[1./dra, 1./ddec]])
+		#self.invvar = np.array([[1./dra**2, 1./ddec**2]])
+		self.name = 'CatalogFakeImage: %i/%i/%i/%s' % rcfb
+		#self.zr = (-180, 180)
+		self.zr = (-2./3600., 2./3600.)
+
+	def hashkey(self): return (tuple(self.data.ravel()),
+							   tuple(self.inverr.ravel()),
+							   self.time.hashkey())
+		
+	def getImage(self): return self.data
+
+	def getTime(self): return self.time
+
+	def getShape(self): return self.data.shape
+
+	shape = property(getShape, None, None, 'shape of this image: (H,W)')
+		
+	def getInvError(self): return self.inverr
+
+	# uh, you mean 2?
+	def numberOfPixels(self):
+		H,W = self.getShape()
+		return H*W
+
+
 def run_star(src, band, tag, opt):
 	window_flist_fn = 'window_flist-DR9.fits'
 	T = fits_table(window_flist_fn)
@@ -341,7 +410,8 @@ def run_star(src, band, tag, opt):
 	pmra = src.pmra
 	pmdec = src.pmdec
 	parallax = src.parallax
-
+	bandnum = band_index(band)
+	
 	if opt.freeze_parallax:
 		print 'Freezing parallax to zero.'
 		parallax = 0.
@@ -363,14 +433,47 @@ def run_star(src, band, tag, opt):
 	psfmod = 'kl-gm'
 	if opt.pixpsf:
 		psfmod = 'kl-pix'
-	
+
 	tims = []
+	catsrcs = []
+	
 	for ii in I:
 		t = T[ii]
 		print
 		print 'R/C/F', t.run, t.camcol, t.field
 
-		tim,tinf = get_tractor_image_dr8(
+		if opt.cat:
+			# search radius for catalog sources, in deg
+			rad = S * np.sqrt(2.) * 0.396 / 3600.
+			cat,objs,objI = get_tractor_sources_dr9(
+				t.run, t.camcol, t.field, bandname=band,
+				sdss=sdss, radecrad=(ra,dec,rad),
+				getobjs=True, getobjinds=True)
+			print 'Got', len(cat), 'sources;', len(objI)
+			if len(cat) == 0:
+				continue
+			if len(cat) > 1:
+				print 'Found too many objects!'
+				continue
+			assert(len(objI) == len(cat))
+			objs.cut(objI)
+			obj = objs[0]
+			print 'Score', obj.score
+			if obj.score < 0.5:
+				continue
+			y = obj.rowc[bandnum]
+			if y < 64. or y > 1425.:
+				print 'Duplicate field -- y=%f' % y
+				continue
+			catsrcs.append((cat[0], obj))
+
+			#####
+			#if len(catsrcs) == 5:
+			#	break
+
+			continue
+
+		tim,tinf = get_tractor_image_dr9(
 			t.run, t.camcol, t.field, band,
 			sdss=sdss, roiradecsize=(ra,dec,S),
 			nanomaggies=True, invvarIgnoresSourceFlux=True,
@@ -398,10 +501,24 @@ def run_star(src, band, tag, opt):
 		tim.rcf = (t.run, t.camcol, t.field)
 		tims.append(tim)
 
-	# print 'times', [tim.time for tim in tims]
-	t0 = min([tim.time for tim in tims])
+	if opt.cat:
+		print 'Got', len(catsrcs), 'catalog sources'
+		times = [TAITime(obj.tai[bandnum]) for s,obj in catsrcs]
+
+		# Create a FAKE Tractor image for each catalog entry.
+		tims = []
+		for (src,obj),t in zip(catsrcs, times):
+			print 'dRA,dDec:', obj.raerr, obj.decerr, 'arcsec'
+			print 'dx,dy', obj.colcerr[bandnum] * 0.396, obj.rowcerr[bandnum] * 0.396, 'arcsec'
+			tims.append(CatalogFakeImage(obj.ra, obj.dec, obj.raerr / 3600., obj.decerr / 3600.,
+										 t, (obj.run, obj.camcol, obj.field, band)))
+		
+	else:
+		times = [tim.time for tim in tims]
+
+	t0 = min(times)
 	print 't0:', t0
-	t1 = max([tim.time for tim in tims])
+	t1 = max(times)
 	print 't1:', t1
 	tmid = (t0 + t1)/2.
 	print 'tmid:', tmid
@@ -409,10 +526,19 @@ def run_star(src, band, tag, opt):
 	# Re-create this object now that we have the real "tmid".
 	mps = MovingPointSource(RaDecPos(ra, dec), NanoMaggies(**{band:nm}),
 							pm, parallax / 1000., epoch=tmid)
-	tr = Tractor(tims, [mps])
+	src = mps
+
+	if opt.cat:
+		src = CatalogFakeSource(mps)
+
+	tr = Tractor(tims, [src])
 	tr.freezeParam('images')
 	print 'Tractor:', tr
 
+	if opt.cat:
+		tr.modtype = np.float64
+		mps.freezeParam('brightness')
+		
 	if opt.freeze_parallax:
 		mps.freezeParam('parallax')
 	print 'MPS args:'
@@ -426,22 +552,24 @@ def run_star(src, band, tag, opt):
 	cols = PA['cols']
 
 	# Plot derivatives
-	DD = [mps.getParamDerivatives(tim) for tim in tims]
-	for i,nm in enumerate(mps.getParamNames()):
-		plt.clf()
-		for j,tim in enumerate(tims):
-			D = DD[j][i]
-			dd = np.zeros_like(tim.getImage())
-			D.addTo(dd)
-			mx = max(dd.max(), np.abs(dd.min()))
-			plt.subplot(rows, cols, j+1)
-			plt.imshow(dd, interpolation='nearest', origin='lower',
-					   vmin=-mx, vmax=mx)
-			plt.gray()
-			plt.xticks([]); plt.yticks([])
-			plt.title('%.2f yr' % ((tim.time - t0).toYears()))
-		plt.suptitle('%s band: derivs for param: %s' % (band, nm))
-		ps.savefig()
+	#if not opt.cat:
+	if True:
+		DD = [src.getParamDerivatives(tim) for tim in tims]
+		for i,nm in enumerate(src.getParamNames()):
+			plt.clf()
+			for j,tim in enumerate(tims):
+				D = DD[j][i]
+				dd = np.zeros_like(tim.getImage())
+				D.addTo(dd)
+				mx = max(dd.max(), np.abs(dd.min()))
+				plt.subplot(rows, cols, j+1)
+				plt.imshow(dd, interpolation='nearest', origin='lower',
+						   vmin=-mx, vmax=mx)
+				plt.gray()
+				plt.xticks([]); plt.yticks([])
+				plt.title('%.2f yr' % ((tim.time - t0).toYears()))
+				plt.suptitle('%s band: derivs for param: %s' % (band, nm))
+			ps.savefig()
 
 	plot_images(tr, ptype='mod')
 	plt.suptitle('%s band: initial model' % band)
@@ -459,7 +587,7 @@ def run_star(src, band, tag, opt):
 		if dlnp < 1e-3:
 			break
 
-	print 'opt source:', mps
+	print 'opt source:', src
 
 	plot_images(tr, ptype='mod')
 	plt.suptitle('%s band: opt model' % band)
@@ -503,11 +631,11 @@ def run_star(src, band, tag, opt):
 				mod /= len(lnp)
 
 			plot_images(tr, ptype='mod', mods=mods)
-			plt.suptitle('%s band: sample %i, sum' % (band, step))
+			plt.suptitle('%s band: sample %i, sum, model' % (band, step))
 			ps.savefig()
 			
 			plot_images(tr, ptype='chi', mods=mods)
-			plt.suptitle('%s band: sample %i, sum' % (band, step))
+			plt.suptitle('%s band: sample %i, sum, chi' % (band, step))
 			ps.savefig()
 				
 			#print 'pp', pp.shape
@@ -669,6 +797,9 @@ if __name__ == '__main__':
 	parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
 					  help='Make more verbose')
 
+	parser.add_option('--cat', dest='cat', action='store_true',
+					  help='Use photoObj catalogs rather than images?')
+	
 	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
 					  help='Use pixelized KL PSF model')
 	
@@ -689,6 +820,8 @@ if __name__ == '__main__':
 		tag = '%i-%s' % (stari, band)
 		if opt.pixpsf:
 			tag += '-pix'
+		if opt.cat:
+			tag += '-cat'
 		if opt.freeze_parallax:
 			tag += '-p0'
 		return tag
