@@ -18,10 +18,12 @@ on WISE All-Sky Single Exposure (L1b) Source Table
 UKIDSS query:
 http://surveys.roe.ac.uk:8080/wsa/SQL_form.jsp
 
-select d.ra,d.dec,d.multiframeid,d.filterid,d.xerr,d.yerr,
-m.frametype,m.mjdobs
+select d.ra,d.dec,d.multiframeid,d.filterid,d.xerr,d.yerr,d.psfmag, d.psfmagerr,
+d.isomag, d.apermag2, d.apermag2err,
+m.frametype, m.mjdobs, f.shortname
 from lasDetection as d
    JOIN multiframe as m on d.multiframeid = m.multiframeid
+   JOIN filter as f on d.filterid = f.filterid
 where ra between 52 and 53 and dec between -1 and 0
 and 
 abs(ra - 52.646659) + abs(dec + 0.42659916) < 0.003
@@ -157,8 +159,19 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 		ttimes = [TAITime(jdtomjd(t.jdate) * 24. * 3600.) for t in twomass]
 		t0 = min(t0, min(ttimes))
 		t1 = max(t1, max(ttimes))
+		twomass.writeto('2mass.fits')
 
-			
+	# if opt.usnob:
+	# 	T = fits_table('usnob10_hp413.fits')
+	# 	R = 10./3600.
+	# 	I = np.flatnonzero((np.abs(T.ra - ra) < R) * (np.abs(T.dec - dec) < R))
+	# 	print 'Found', len(I), 'USNOB'
+	# 	T.cut(I)
+	# 	T.about()
+	# 	usnob = T
+	# 	usnob[0].about()
+	# 	usnob.writeto('usnob-%i.fits' % stari)
+		
 	print 'Times', t0, t1
 	sixmonths = (3600. * 24. * 180)
 	t0 = t0 - sixmonths
@@ -275,11 +288,61 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 			plt.plot((np.array([[t.ra  + dr*nsig, t.ra  - dr*nsig],[t.ra,t.ra]]).T - ra )*3600.,
 					 (np.array([[t.dec, t.dec], [t.dec + dd*nsig, t.dec - dd*nsig]]).T - dec)*3600.,
 					 'c-', lw=2, alpha=0.5, zorder=30)
-			
+
+	# if opt.usnob:
+	# 	for t in usnob:
+	# 		plt.plot((t.ra - ra)*3600., (t.dec - dec)*3600.,
+	# 				 'ko', zorder=30)
+
 	plt.xlabel('RA - nominal (arcsec)')
 	plt.ylabel('Dec - nominal (arcsec)')
 	ps.savefig()
 
+	mags = []
+	for i,obj,r,d in pobjs:
+		for j,band in enumerate('ugriz'):
+			mags.append((band, obj.psfmag[j]))
+	if opt.twomass:
+		for t in twomass:
+			mags.append(('J', t.j_m))
+			mags.append(('H', t.h_m))
+			mags.append(('K', t.k_m))
+	if opt.ukidss:
+		for t in ukidss:
+			mags.append((t.shortname, t.apermag2))
+	if opt.wise:
+		for t in wise:
+			for w in range(1,4+1):
+				mags.append(('W%i' % w, t.get('w%impro' % w)))
+
+	print 'Got mags:'
+	for b,m in mags:
+		print b, m
+
+	plt.clf()
+	bandmap = { 'u': 354,
+				'g': 477,
+				'r': 623,
+				'i': 763,
+				'z': 913,
+				'Y': (970+1070)/2.,
+				'J': 1240,
+				'H': 1600,
+				'K': 2160,
+				'W1': 3400,
+				'W2': 4600,
+				'W3': 12000,
+				'W4': 22000,
+				}
+	w = np.array([bandmap.get(b) for b,m in mags])
+	plt.semilogx(w, [m for b,m in mags], 'ko', alpha=0.5)
+	plt.xticks(bandmap.values(), bandmap.keys())
+	plt.xlim(w.min() / 1.2, w.max() * 1.2)
+	plt.xlabel('Photometric Band')
+	plt.ylabel('Mag')
+	plt.title('SED for source at RA,Dec=(%.3f,%.3f)' % (ra, dec))
+	ps.savefig()
+		
 	# Plot the trajectories on a little RA,Dec zoomin of each object.
 	N = len(tims)
 	cols = int(np.ceil(np.sqrt(N)))
@@ -1070,6 +1133,8 @@ if __name__ == '__main__':
 					  help='Include UKIDSS data')
 	parser.add_option('--twomass', dest='twomass', action='store_true',
 					  help='Include 2MASS data')
+	# parser.add_option('--usnob', dest='usnob', action='store_true',
+	# 				  help='Include USNOB data')
 	
 	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
 					  help='Use pixelized KL PSF model')
