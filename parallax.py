@@ -7,6 +7,19 @@ SDSS0330-0025 52.646659 -0.42659916 414+/-30 -355+/-51 40+/-10
 SDSS2057-0050 314.48301 -0.83521203 -37.2+/-20 -30+/-27 33+/-10
 '''
 
+'''
+UKIDSS query:
+
+select d.ra,d.dec,d.multiframeid,d.filterid,
+m.frametype,m.mjdobs
+from lasDetection as d
+   JOIN multiframe as m on d.multiframeid = m.multiframeid
+where ra between 52 and 53 and dec between -1 and 0
+and 
+abs(ra - 52.646659) + abs(dec + 0.42659916) < 0.003
+'''
+
+
 import matplotlib
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('font', family='serif')
@@ -17,6 +30,7 @@ import pylab as plt
 import numpy as np
 
 from astrometry.util.fits import *
+from astrometry.util.gator import *
 from astrometry.util.file import *
 from astrometry.sdss import *
 from astrometry.util.plotutils import *
@@ -79,7 +93,7 @@ def test_moving_source():
 	ps.savefig()
 
 
-def plot_chain(fn, ps, ra, dec, band, stari):
+def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	X = unpickle_from_file(fn)
 	alllnp = np.array(X['alllnp'])
 	allp = np.array(X['allp'])
@@ -100,32 +114,163 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 	assert(len(nm) == P)
 	nm = [n.split('.')[-1] for n in nm]
 
-	# Plot samples in RA,Dec coords.
-
 	tims = tr.getImages()
 	times = [tim.time for tim in tims]
 	t0 = min(times)
 	t1 = max(times)
+
+	if opt.wise:
+		wise = gator2fits('wise_allsky.wise_allsky_4band_p1bs_psd29506.tbl')
+		print 'Read WISE table:'
+		wise.about()
+		wise.writeto('wise.fits')
+
+		wisetimes = [TAITime(w.mjd * 24. * 3600.) for w in wise]
+		t0 = min(t0, min(wisetimes))
+		t1 = max(t1, max(wisetimes))
+
 	print 'Times', t0, t1
 	sixmonths = (3600. * 24. * 180)
-	t0 -= sixmonths
-	t1 += sixmonths
+	t0 = t0 - sixmonths
+	t1 = t1 + sixmonths
 	print 'Times', t0, t1
 	TT = [TAITime(x) for x in np.linspace(t0.getValue(), t1.getValue(), 300)]
 
+	sdss = DR9(basedir='data-dr9')
+	bandnum = band_index(band)
+
+	pfn = 'pobjs-%s.pickle' % tag
+	if os.path.exists(pfn):
+		print 'Reading', pfn
+		pobjs = unpickle_from_file(pfn)
+	else:
+		pobjs = []
+		for i,tim in enumerate(tims):
+			r,c,f = tim.rcf
+			S = 15
+			rad = S * np.sqrt(2.) * 0.396 / 3600.
+			cat,objs,objI = get_tractor_sources_dr9(
+				r,c,f, bandname=band,
+				sdss=sdss, radecrad=(ra,dec,rad),
+				getobjs=True, getobjinds=True)
+			print 'Got', len(cat), 'sources;', len(objI)
+			if len(cat) == 0:
+				continue
+			if len(cat) > 1:
+				print 'Found too many objects!'
+				continue
+			assert(len(objI) == len(cat))
+			objs.cut(objI)
+			obj = objs[0]
+	
+			# get the AsTrans
+			sdss.retrieve('frame', r, c, f, band)
+			frame = sdss.readFrame(r, c, f, band)
+			ast = frame.getAsTrans()
+			# r-i color
+			color = obj.psfmag[band_index('r')] - obj.psfmag[band_index('i')]
+			print 'color', color
+			x,y = obj.colc[bandnum], obj.rowc[bandnum]
+			r0,d0 = ast.pixel_to_radec(x, y, color=color)
+			#pos = RaDecPos(ra, dec)
+			pobjs.append((i, obj, r0,d0))
+			
+		pickle_to_file(pobjs, pfn)
+	
+	# Plot samples in RA,Dec coords.
 	plt.clf()
 	for i in range(10):
 		tr.setParams(allp[-1, i, :])
 		pp = [mps.getPositionAtTime(t) for t in TT]
 		rr,dd = np.array([p.ra for p in pp]), np.array([p.dec for p in pp])
-		plt.plot((rr-ra)*3600., (dd-dec)*3600., '-', color='k', alpha=0.2)
+		plt.plot((rr-ra)*3600., (dd-dec)*3600., '-', color='k', alpha=0.2, zorder=10)
 		pp = [mps.getPositionAtTime(t) for t in times]
 		rr,dd = np.array([p.ra for p in pp]), np.array([p.dec for p in pp])
-		plt.plot((rr-ra)*3600., (dd-dec)*3600., 'b.') #'o', mec='k', mfc='b')
+		plt.plot((rr-ra)*3600., (dd-dec)*3600., 'b.', zorder=20) #'o', mec='k', mfc='b')
+
+	#plt.plot([(o.ra - ra)*3600. for i,o,r,d in pobjs],
+	#		 [(o.dec - dec)*3600. for i,o,r,d in pobjs], 'r.')
+	#plt.plot([(r - ra)*3600. for i,o,r,d in pobjs],
+	#		 [(d - dec)*3600. for i,o,r,d in pobjs], 'o', mec='g', mfc='none', ms=10, lw=2, zorder=15)
+
+	angle = np.linspace(0, 2.*np.pi, 30)
+	for i,obj,r,d in pobjs:
+		xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
+		print 'Pixel error:', (xe+ye)/2.
+
+		dradec = ((xe + ye)/2.) * 0.396 / 3600.
+		#r = r + np.sin(angle) * dradec
+		#d = d + np.cos(angle) * dradec
+		#plt.plot((r-ra)*3600., (d-dec)*3600., 'r-', lw=2, alpha=0.5, zorder=30)
+
+		# 3-sigma
+		dradec *= 3
+		
+		plt.plot((np.array([r + dradec, r - dradec]) - ra)*3600.,
+				 (np.array([d, d]) - dec)*3600.,
+				 'r-', lw=2, alpha=0.5, zorder=30)
+		plt.plot((np.array([r, r]) - ra)*3600.,
+				 (np.array([d + dradec, d - dradec]) - dec)*3600.,
+				 'r-', lw=2, alpha=0.5, zorder=30)
+		plt.plot((r - ra)*3600.,
+				 (d - dec)*3600.,
+				 'r.', zorder=30)
+
+
+	if opt.wise:
+		for w in wise:
+			dr = w.sigra / 3600.
+			dd = w.sigdec / 3600.
+			nsig = 1.
+			plt.plot((np.array([[w.ra  + dr*nsig, w.ra  - dr*nsig],[w.ra,w.ra]]).T - ra )*3600.,
+					 (np.array([[w.dec, w.dec], [w.dec + dd*nsig, w.dec - dd*nsig]]).T - dec)*3600.,
+					 'm-', lw=2, alpha=0.5, zorder=30)
+		
 	plt.xlabel('RA - nominal (arcsec)')
 	plt.ylabel('Dec - nominal (arcsec)')
 	ps.savefig()
 
+	# Plot the trajectories on a little RA,Dec zoomin of each object.
+	N = len(tims)
+	cols = int(np.ceil(np.sqrt(N)))
+	rows = int(np.ceil(N / float(cols)))
+
+	for k in [1]: #range(2):
+		plt.clf()
+		for i,obj,r0,d0 in pobjs:
+			tim = tims[i]
+			plt.subplot(rows, cols, i+1)
+			plt.plot(r0, d0, 'bo')
+	
+			xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
+			print 'Pixel error:', (xe+ye)/2.
+			dradec = ((xe + ye)/2.) * 0.396 / 3600.
+
+			angle = np.linspace(0, 2.*np.pi, 360)
+			plt.plot(r0 + np.sin(angle)*dradec,
+					 d0 + np.cos(angle)*dradec, 'b-', lw=2, alpha=0.5)
+			plt.plot(r0 + np.sin(angle)*dradec * 2,
+					 d0 + np.cos(angle)*dradec * 2, 'b-', lw=2, alpha=0.5)
+
+			for i in range(10):
+				tr.setParams(allp[-1, i, :])
+				pp = [mps.getPositionAtTime(t) for t in TT]
+				rr,dd = np.array([p.ra for p in pp]), np.array([p.dec for p in pp])
+				plt.plot(rr, dd, '-', color='k', alpha=0.2)
+
+				pp = mps.getPositionAtTime(tim.time)
+				plt.plot(pp.ra, pp.dec, 'b.')
+				
+			R = 0.396 / 3600.
+			if k == 1:
+				R *= 5 * (xe + ye) / 2.
+			plt.axis([r0-R, r0+R, d0-R, d0+R])
+			plt.xticks([]); plt.yticks([])
+			
+		ps.savefig()
+		
+		
+	
 	PA = plot_images(tr, ptype='img')
 
 	if not opt.cat:
@@ -148,12 +293,17 @@ def plot_chain(fn, ps, ra, dec, band, stari):
 	plt.ylabel('lnprob')
 	plt.title('Source at RA,Dec=(%.3f,%.3f), %s band' % (ra, dec, band))
 	ps.savefig()
+
+	nm.append('lnp')
 	
-	for i in range(P):
+	for i in range(P+1):
 
 		print 'param', i, ':', nm[i]
 		
-		pp = allp[:,:,i]
+		if i < P:
+			pp = allp[:,:,i]
+		else:
+			pp = alllnp
 		units = ''
 		xt = None
 		xtl = None
@@ -368,7 +518,8 @@ class CatalogFakeImage(BaseParams):
 		self.data = np.array([[0., 0.]])
 		self.inverr = np.array([[1./dra, 1./ddec]])
 		#self.invvar = np.array([[1./dra**2, 1./ddec**2]])
-		self.name = 'CatalogFakeImage: %i/%i/%i/%s' % rcfb
+		if rcfb:
+			self.name = 'CatalogFakeImage: %i/%i/%i/%s' % rcfb
 		#self.zr = (-180, 180)
 		self.zr = (-1./3600., 1./3600.)
 
@@ -405,6 +556,11 @@ def run_star(src, band, tag, opt):
 	
 	ps = PlotSequence('parallax-%s' % (tag))
 
+	if opt.wise:
+		wise = gator2fits('wise_allsky.wise_allsky_4band_p1bs_psd29506.tbl')
+		print 'Read WISE table:'
+		wise.about()
+		wise.writeto('wise.fits')
 	ra = src.ra
 	dec = src.dec
 	pmra = src.pmra
@@ -507,9 +663,12 @@ def run_star(src, band, tag, opt):
 			# {RA,Dec}{,err} use the r-band values, which are much worse for these objects!
 			# obj.ra, obj.dec, obj.raerr / 3600., obj.decerr / 3600.,
 
-			t = TAITime(obj.tai[bandnum])
-			tims.append(CatalogFakeImage(pos.ra, pos.dec, dradec, dradec,
-										 t, (obj.run, obj.camcol, obj.field, band)))
+			time = TAITime(obj.tai[bandnum])
+			tim = CatalogFakeImage(pos.ra, pos.dec, dradec, dradec,
+								   time, (obj.run, obj.camcol, obj.field, band))
+			tim.rcf = (t.run, t.camcol, t.field)
+			tim.score = t.score
+			tims.append(tim)
 			continue
 
 		tim,tinf = get_tractor_image_dr9(
@@ -539,6 +698,18 @@ def run_star(src, band, tag, opt):
 			
 		tim.rcf = (t.run, t.camcol, t.field)
 		tims.append(tim)
+
+
+
+	# if opt.wise:
+	# 	for iw,w in enumerate(wise):
+	# 
+	# 		time = TAITime(w.mjd * 24. * 3600.)
+	# 		tim = CatalogFakeImage(w.ra, w.dec,
+	# 							   w.sigra / 3600., w.sigdec / 3600.,
+	# 		 					   time, None)
+	# 		tim.name = 'WISE %i' % iw
+	# 		tims.append(tim)
 
 	times = [tim.time for tim in tims]
 	t0 = min(times)
@@ -802,6 +973,10 @@ def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
 	tr1.setParams(allp1[s1, w1, :])
 	tr2.setParams(allp2[s2, w2, :])
 
+	plot_images(tr1, ptype='img')
+	plt.suptitle('Data')
+	ps.savefig()
+
 	plot_images(tr1, ptype='mod+noise')
 	plt.suptitle('With Parallax')
 	ps.savefig()
@@ -838,6 +1013,9 @@ if __name__ == '__main__':
 
 	parser.add_option('--cat', dest='cat', action='store_true',
 					  help='Use photoObj catalogs rather than images?')
+
+	parser.add_option('--wise', dest='wise', action='store_true',
+					  help='Include WISE data; use with --cat')
 	
 	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
 					  help='Use pixelized KL PSF model')
@@ -861,12 +1039,14 @@ if __name__ == '__main__':
 			tag += '-pix'
 		if opt.cat:
 			tag += '-cat'
+		# if opt.wise:
+		# tag += '-wise'
 		if opt.freeze_parallax:
 			tag += '-p0'
 		return tag
 
 	ppat = 'parallax-star%s-end.pickle'
-	
+
 	if opt.compare1:
 		for src in srcs:
 			opt.freeze_parallax = False
@@ -885,7 +1065,7 @@ if __name__ == '__main__':
 			tag = get_tag(src, band, opt)
 			plot_chain(ppat % tag,
 					   PlotSequence('chain-%s' % tag),
-					   src.ra, src.dec, band, src.srci)
+					   src.ra, src.dec, band, src.srci, tag, opt)
 		sys.exit(0)
 
 	for src in srcs:
