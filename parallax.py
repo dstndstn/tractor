@@ -8,9 +8,17 @@ SDSS2057-0050 314.48301 -0.83521203 -37.2+/-20 -30+/-27 33+/-10
 '''
 
 '''
-UKIDSS query:
+WISE query:
+at
+http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-dd
+on WISE All-Sky Single Exposure (L1b) Source Table
+'''
 
-select d.ra,d.dec,d.multiframeid,d.filterid,
+'''
+UKIDSS query:
+http://surveys.roe.ac.uk:8080/wsa/SQL_form.jsp
+
+select d.ra,d.dec,d.multiframeid,d.filterid,d.xerr,d.yerr,
 m.frametype,m.mjdobs
 from lasDetection as d
    JOIN multiframe as m on d.multiframeid = m.multiframeid
@@ -119,6 +127,10 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	t0 = min(times)
 	t1 = max(times)
 
+	print 'SDSS parallax angles:'
+	for t in times:
+		print '  ', np.fmod(360. + np.rad2deg(t.getSunTheta()), 360.)
+		
 	if opt.wise:
 		wise = gator2fits('wise_allsky.wise_allsky_4band_p1bs_psd29506.tbl')
 		print 'Read WISE table:'
@@ -129,6 +141,24 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 		t0 = min(t0, min(wisetimes))
 		t1 = max(t1, max(wisetimes))
 
+	if opt.ukidss:
+		ukidss = fits_table('ukidss.fits')
+		utimes = [TAITime(u.mjdobs * 24. * 3600.) for u in ukidss]
+		t0 = min(t0, min(utimes))
+		t1 = max(t1, max(utimes))
+
+		print 'UKIDSS parallax angles:'
+		for t in utimes:
+			print '  ', np.rad2deg(t.getSunTheta())
+
+	if opt.twomass:
+		twomass = gator2fits('fp_2mass.fp_psc12438.tbl')
+		twomass.about()
+		ttimes = [TAITime(jdtomjd(t.jdate) * 24. * 3600.) for t in twomass]
+		t0 = min(t0, min(ttimes))
+		t1 = max(t1, max(ttimes))
+
+			
 	print 'Times', t0, t1
 	sixmonths = (3600. * 24. * 180)
 	t0 = t0 - sixmonths
@@ -196,7 +226,7 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 	angle = np.linspace(0, 2.*np.pi, 30)
 	for i,obj,r,d in pobjs:
 		xe,ye = obj.colcerr[bandnum], obj.rowcerr[bandnum]
-		print 'Pixel error:', (xe+ye)/2.
+		#print 'Pixel error:', (xe+ye)/2.
 
 		dradec = ((xe + ye)/2.) * 0.396 / 3600.
 		#r = r + np.sin(angle) * dradec
@@ -225,7 +255,27 @@ def plot_chain(fn, ps, ra, dec, band, stari, tag, opt):
 			plt.plot((np.array([[w.ra  + dr*nsig, w.ra  - dr*nsig],[w.ra,w.ra]]).T - ra )*3600.,
 					 (np.array([[w.dec, w.dec], [w.dec + dd*nsig, w.dec - dd*nsig]]).T - dec)*3600.,
 					 'm-', lw=2, alpha=0.5, zorder=30)
-		
+	if opt.ukidss:
+		for u in ukidss:
+			# They give RA,Dec in RADIANS.  Really...
+			u.ra  *= 180./np.pi
+			u.dec *= 180./np.pi
+			# MAGIC 0.4 arcsec/pix
+			dr = u.xerr * 0.4 / 3600.
+			dd = u.yerr * 0.4 / 3600.
+			nsig = 3.
+			plt.plot((np.array([[u.ra  + dr*nsig, u.ra  - dr*nsig],[u.ra,u.ra]]).T - ra )*3600.,
+					 (np.array([[u.dec, u.dec], [u.dec + dd*nsig, u.dec - dd*nsig]]).T - dec)*3600.,
+					 'g-', lw=2, alpha=0.5, zorder=30)
+
+	if opt.twomass:
+		for t in twomass:
+			dr = dd = t.err_maj / 3600.
+			nsig = 1.
+			plt.plot((np.array([[t.ra  + dr*nsig, t.ra  - dr*nsig],[t.ra,t.ra]]).T - ra )*3600.,
+					 (np.array([[t.dec, t.dec], [t.dec + dd*nsig, t.dec - dd*nsig]]).T - dec)*3600.,
+					 'c-', lw=2, alpha=0.5, zorder=30)
+			
 	plt.xlabel('RA - nominal (arcsec)')
 	plt.ylabel('Dec - nominal (arcsec)')
 	ps.savefig()
@@ -1015,7 +1065,11 @@ if __name__ == '__main__':
 					  help='Use photoObj catalogs rather than images?')
 
 	parser.add_option('--wise', dest='wise', action='store_true',
-					  help='Include WISE data; use with --cat')
+					  help='Include WISE data')
+	parser.add_option('--ukidss', dest='ukidss', action='store_true',
+					  help='Include UKIDSS data')
+	parser.add_option('--twomass', dest='twomass', action='store_true',
+					  help='Include 2MASS data')
 	
 	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
 					  help='Use pixelized KL PSF model')
