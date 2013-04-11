@@ -75,6 +75,8 @@ if __name__ == '__main__':
 	
 	newhdr = []
 	wcses = []
+	corners = []
+
 	for i in range(len(T)):
 		hdr = T.header[i]
 		hdr = [str(s) for s in hdr]
@@ -97,10 +99,17 @@ if __name__ == '__main__':
 		for x,y in [(1,1),(1,H),(W,H),(W,1)]:
 			rd.append(wcs.pixelxy2radec(x,y))
 		rd = np.array(rd)
-
+		corners.append(rd)
+		
 		if polygons_intersect(roipoly, rd):
 			wcses.append(wcs)
 
+	corners = np.vstack(corners)
+	print 'Corners', corners.shape
+
+	r0,r1 = corners[:,0].min(), corners[:,0].max()
+	d0,d1 = corners[:,1].min(), corners[:,1].max()
+	print 'RA,Dec extent', r0,r1, d0,d1
 
 	plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
 	out = plot.outline
