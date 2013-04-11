@@ -38,6 +38,7 @@ matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
+from glob import glob
 
 from astrometry.util.fits import *
 from astrometry.util.gator import *
@@ -45,7 +46,7 @@ from astrometry.util.file import *
 from astrometry.sdss import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
-from astrometry.util.util import Tan
+from astrometry.util.util import Tan, Sip
 from astrometry.libkd.spherematch import *
 
 from tractor import *
@@ -1106,9 +1107,37 @@ def compare1(src, tag1, tag2, pfn1, pfn2, opt, band):
 	plt.suptitle('Without Parallax')
 	ps.savefig()
 
+def run_ptf(src, tag, opt):
+	ps = PlotSequence('ptf-%s' % (tag))
 
-	
-	
+	stari = src.srci
+	fns = glob('ptf-%i/*.fits' % stari)
+	print 'Found files:', len(fns)
+	stamps = []
+	for fn in fns:
+		print '  ', fn
+		wcs = Sip(fn, 0)
+		x,y = wcs.radec2pixelxy(src.ra, src.dec)
+		print '  source at', x, y
+		img = pyfits.open(fn)[0].data
+		print '  image', img.shape
+		H,W = img.shape
+		ix = int(np.round(x))
+		iy = int(np.round(y))
+		S = 20
+		stamp = img[max(0, iy - S) : min(H, iy+S),
+					max(0, ix - S) : min(W, ix+S)]
+		stamps.append(stamp)
+
+	N = len(stamps)
+	cols = int(np.ceil(np.sqrt(N)))
+	rows = int(np.ceil(N / float(cols)))
+	plt.clf()
+	for i,stamp in enumerate(stamps):
+		plt.subplot(rows, cols, i+1)
+		plt.imshow(stamp, interpolation='nearest', origin='lower')
+	ps.savefig()
+
 	
 if __name__ == '__main__':
 	from optparse import OptionParser
@@ -1141,6 +1170,8 @@ if __name__ == '__main__':
 	
 	parser.add_option('--c1', dest='compare1', action='store_true',
 					  help='Compare parallax vs no-parallax results')
+
+	parser.add_option('--ptf', dest='ptf', action='store_true')
 	
 	opt,args = parser.parse_args()
 	if opt.verbose == 0:
@@ -1187,6 +1218,12 @@ if __name__ == '__main__':
 					   src.ra, src.dec, band, src.srci, tag, opt)
 		sys.exit(0)
 
+	if opt.ptf:
+		for src in srcs:
+			tag = get_tag(src, opt.band, opt)
+			run_ptf(src, tag, opt)
+		sys.exit(0)
+			
 	for src in srcs:
 		tag = get_tag(src, opt.band, opt)
 		run_star(src, opt.band, tag, opt)
