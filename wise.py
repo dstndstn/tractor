@@ -29,10 +29,15 @@ from tractor.fitpsf import em_init_params
 from matplotlib.nxutils import points_inside_poly
 
 def read_wise_level1b(basefn, radecroi=None, filtermap={},
-					  nanomaggies=False):
+					  nanomaggies=False, mask_gz=False, unc_gz=False,
+					  sipwcs=False):
 	intfn  = basefn + '-int-1b.fits'
 	maskfn = basefn + '-msk-1b.fits'
+	if mask_gz:
+		maskfn = maskfn + '.gz'
 	uncfn  = basefn + '-unc-1b.fits'
+	if unc_gz:
+		uncfn = uncfn + '.gz'
 
 	print 'intensity image', intfn
 	print 'mask image', maskfn
@@ -54,7 +59,12 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	mask = P[0].data
 	print 'Read', mask.shape, 'mask'
 
-	twcs = tractor.FitsWcs(intfn)
+	if sipwcs:
+		wcs = Sip(intfn, 0)
+		twcs = tractor.FitsWcs(wcs)
+	else:
+		twcs = tractor.FitsWcs(intfn)
+
 	#twcs = tractor.WcslibWcs(intfn)
 	print 'WCS', twcs
 
@@ -157,7 +167,8 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 
 	invvar = np.zeros_like(data)
 	invvar[goodmask] = 1./(unc[goodmask])**2
-	#invvar = 1./(unc)**2
+
+	print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
 
 	if not np.all(np.isfinite(invvar)):
 		print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))
@@ -289,6 +300,28 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
 read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
 
+
+def get_psf_model(band):
+	assert(band == 1)
+	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+	S = psf.shape[0]
+	# number of Gaussian components
+	K = 3
+	w,mu,sig = em_init_params(K, None, None, None)
+	II = psf.copy()
+	II = np.maximum(II, 0)
+	II /= II.sum()
+	xm,ym = -(S/2), -(S/2)
+	res = em_fit_2d(II, xm, ym, w, mu, sig)
+	if res != 0:
+		raise RuntimeError('Failed to fit PSF')
+	print 'W1 PSF:'
+	print '  w', w
+	print '  mu', mu
+	print '  sigma', sig
+	w1psf = GaussianMixturePSF(w, mu, sig)
+	w1psf.computeRadius()
+	return w1psf
 
 
 def main():
@@ -832,7 +865,7 @@ def wisemap():
 
 	for i in range(len(T)):
 		hdrstr = T.headerstr[i]
-		wcs = getWcsFromHeaderString(hdrstr)
+		wcs = anwcs(hdrstr)
 		out.wcs = wcs
 		out.fill = False
 		plot.plot('outline')
@@ -850,8 +883,9 @@ def wisemap():
 	i = J[i]
 	print 'ra,dec', ra,dec, 'closest', T.ra[i], T.dec[i]
 	hdrstr = T.headerstr[i]
-	hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
-	wcs = anwcs(hdrstr, -1, len(hdrstr))
+	if len(hdrstr) % 80:
+		hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
+	wcs = anwcs(hdrstr)
 	plot.color = 'blue'
 	plot.alpha = 0.2
 	plot.apply_settings()
@@ -915,11 +949,6 @@ def wise_psf_plots():
 		plt.imshow(np.log10(np.maximum(mod, 1e-8)), **ima)
 		plt.savefig('psf-k%i.png' % K)
 
-
-def getWcsFromHeaderString(hdrstr):
-	hdrstr = hdrstr + (' ' * (80 - (len(hdrstr)%80)))
-	wcs = anwcs(hdrstr, -1, len(hdrstr))
-	return wcs
 
 def plot_unmatched():
 	from bigboss_test import radecroi
@@ -1490,7 +1519,6 @@ def forced2():
 	print '  w', w
 	print '  mu', mu
 	print '  sigma', sig
-					   
 	w1psf = GaussianMixturePSF(w, mu, sig)
 	w1psf.computeRadius()
 

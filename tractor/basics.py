@@ -533,7 +533,7 @@ class FitsWcs(ParamList):
 			raise IndexError
 	def _getThings(self):
 		w = self.wcs
-		return w.crval + w.crpix + w.cd + [self.x0, self.y0]
+		return list(w.crval) + list(w.crpix) + list(w.cd) + [self.x0, self.y0]
 	def _numberOfThings(self):
 		return 10
 	def getStepSizes(self, *args, **kwargs):
