@@ -40,21 +40,17 @@ def get_l1b_file(basedir, scanid, frame, band):
 						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
 
 
-def main():
+def main(opt):
 	#ralo = 36
 	#rahi = 42
 	#declo = -1.25
 	#dechi = 1.25
 	#width = 7
-
-	#lvl = logging.INFO
-	lvl = logging.DEBUG
-	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 	  
-	ralo = 37.5 #38.25
-	rahi = 41.5 #40.75
-	declo = -1.5 #-0.75
-	dechi = 2.5 #1.75
+	ralo = 37.5
+	rahi = 41.5
+	declo = -1.5
+	dechi = 2.5
 	width = 2.5
 
 	rl,rh = 39,40
@@ -170,7 +166,7 @@ def main():
 	plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
 	out = plot.outline
 	plot.color = 'white'
-	plot.alpha = 0.05
+	plot.alpha = 0.07
 	plot.apply_settings()
 
 	for wcs in wcses:
@@ -196,6 +192,11 @@ def main():
 	out.wcs = cowcs
 	out.fill = False
 	plot.plot('outline')
+
+	if opt.sources:
+		rd = plot.radec
+		plot_radec_set_filename(rd, opt.sources)
+		plot.plot('radec')
 
 	pfn = ps.getnext()
 	plot.write(pfn)
@@ -374,43 +375,61 @@ def main():
 			print 'Wrote', pfn
 
 
+	if opt.sources:
 
+		S = fits_table(opt.sources)
+		print 'Read', len(S), 'sources from', opt.sources
+		cat = get_tractor_sources_dr9(None, None, None, bandname='r',
+									  objs=S, bands=[], nanomaggies=True,
+									  extrabands=[band])
+		print 'Got', len(cat), 'tractor sources'
+		cat = Catalog(*cat)
+		print cat
+		for src in cat:
+			print '  ', src
 
-	wfn = 'wise-sources-nearby.fits'
-	if os.path.exists(wfn):
-		print 'Reading existing file', wfn
-		W = fits_table(wfn)
-		print 'Got', len(W), 'with range RA', W.ra.min(), W.ra.max(), ', Dec', W.dec.min(), W.dec.max()
+		# ??
+		#WW = S
+		WW = tabledata()
+		
 	else:
-		# Range of WISE slices (inclusive) containing this Dec range.
-		ws0, ws1 = 26,27
-		WW = []
-		for w in range(ws0, ws1+1):
-			fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i-radec.fits' % w)
-			print 'Searching for sources in', fn
-			W = fits_table(fn)
-			I = np.flatnonzero((W.ra >= r0) * (W.ra <= r1) * (W.dec >= d0) * (W.dec <= d1))
-			fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i.fits' % w)
-			print 'Reading', len(I), 'rows from', fn
-			W = fits_table(fn, rows=I)
-			print 'Cut to', len(W), 'sources in range'
-			WW.append(W)
-		W = merge_tables(WW)
-		del WW
-		print 'Total of', len(W)
-		W.writeto(wfn)
-		print 'wrote', wfn
+		wfn = 'wise-sources-nearby.fits'
+		if os.path.exists(wfn):
+			print 'Reading existing file', wfn
+			W = fits_table(wfn)
+			print 'Got', len(W), 'with range RA', W.ra.min(), W.ra.max(), ', Dec', W.dec.min(), W.dec.max()
+		else:
+			# Range of WISE slices (inclusive) containing this Dec range.
+			ws0, ws1 = 26,27
+			WW = []
+			for w in range(ws0, ws1+1):
+				fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i-radec.fits' % w)
+				print 'Searching for sources in', fn
+				W = fits_table(fn)
+				I = np.flatnonzero((W.ra >= r0) * (W.ra <= r1) * (W.dec >= d0) * (W.dec <= d1))
+				fn = os.path.join(wisecatdir, 'wise-allsky-cat-part%02i.fits' % w)
+				print 'Reading', len(I), 'rows from', fn
+				W = fits_table(fn, rows=I)
+				print 'Cut to', len(W), 'sources in range'
+				WW.append(W)
+			W = merge_tables(WW)
+			del WW
+			print 'Total of', len(W)
+			W.writeto(wfn)
+			print 'wrote', wfn
+	
+		# DEBUG
+		W.cut((W.ra >= rl) * (W.ra <= rh) * (W.dec >= dl) * (W.dec <= dh))
+		print 'Cut to', len(W), 'in the central region'
+	
+		print 'Creating', len(W), 'Tractor sources'
+		cat = Catalog()
+		for i in range(len(W)):
+			w1 = W.w1mpro[i]
+			nm = NanoMaggies.magToNanomaggies(w1)
+			cat.append(PointSource(RaDecPos(W.ra[i], W.dec[i]), NanoMaggies(w1=nm)))
 
-	# DEBUG
-	W.cut((W.ra >= rl) * (W.ra <= rh) * (W.dec >= dl) * (W.dec <= dh))
-	print 'Cut to', len(W), 'in the central region'
-
-	print 'Creating', len(W), 'Tractor sources'
-	cat = Catalog()
-	for i in range(len(W)):
-		w1 = W.w1mpro[i]
-		nm = NanoMaggies.magToNanomaggies(w1)
-		cat.append(PointSource(RaDecPos(W.ra[i], W.dec[i]), NanoMaggies(w1=nm)))
+		WW = W
 
 	cat.freezeParamsRecursive('*')
 	cat.thawPathsTo(band)
@@ -419,8 +438,6 @@ def main():
 	br0 = [src.getBrightness().copy() for src in cat]
 	nm0 = np.array([b.getBand(band) for b in br0])
 
-	WW = W
-	#X = tabledata()
 	WW.nm0 = nm0
 
 	w1psf = wise.get_psf_model(bandnum)
@@ -470,14 +487,20 @@ def main():
 		print '  ', k, 'sources:', ng[k], 'groups'
 
 	nms = []
+	tims = []
+	allrois = {}
 
 	for imi,fn in enumerate(T.filename):
 		print 'File', fn
+
+		#if imi == 20:
+		#	break
 
 		tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
 									 nanomaggies=True, mask_gz=True, unc_gz=True,
 									 sipwcs=True)
 		tim.psf = w1psf
+		tims.append(tim)
 
 		ie = tim.getInvError()
 		nz = np.flatnonzero(ie)
@@ -493,7 +516,8 @@ def main():
 			if x >= 0 and y >= 0 and x < W and y < H:
 				nin += 1
 		print 'Number of sources inside image:', nin
-			
+
+		
 		tractor = Tractor([tim], cat)
 		tractor.freezeParam('images')
 		### ??
@@ -541,6 +565,13 @@ def main():
 
 			if np.all(tim.getInvError()[gslice] == 0):
 				print 'This whole object group has invvar = 0.'
+				continue
+
+			if not gl in allrois:
+				allrois[gl] = {}
+			allrois[gl][imi] = gslice
+
+			if not opt.individual:
 				continue
 
 			fullcat = tractor.catalog
@@ -602,57 +633,380 @@ def main():
 		WW.writeto(fn)
 		print 'Wrote', fn
 
-		print 'Plotting results...'
-		plt.clf()
-		print 'Plotting measurements...'
-		for nm in nms:
-			I = np.flatnonzero(nm != nm0)
-			plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.5)
 		if False:
-			nmx = np.array(nms)
-			mn = []
-			st = []
-			ii = []
-			for i,nm in enumerate(nm0):
-				I = np.flatnonzero(nmx[:,i] != nm)
-				if len(I) == 0:
-					continue
-				ii.append(i)
-				mn.append(np.mean(nmx[I,i]))
-				st.append(np.std (nmx[I,i]))
-			I = np.array(ii)
-			mn = np.array(mn)
-			st = np.array(st)
-			plt.loglog([nm0[I],nm0[I]], [np.maximum(1e-6, (mn-st) / nm0[I]),
-										 np.maximum(1e-6, (mn+st) / nm0[I])], 'b-', alpha=0.5)
-		plt.axhline(1., color='k', lw=2, alpha=0.5)
-		plt.xlabel('WISE brightness (nanomaggies)')
-		plt.ylabel('Tractor-measured brightness (nanomaggies)')
-		plt.ylim(0.1, 10.)
+			print 'Plotting results...'
+			plt.clf()
+			for nm in nms:
+				I = np.flatnonzero(nm != nm0)
+				plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.5)
+			if False:
+				nmx = np.array(nms)
+				mn = []
+				st = []
+				ii = []
+				for i,nm in enumerate(nm0):
+					I = np.flatnonzero(nmx[:,i] != nm)
+					if len(I) == 0:
+						continue
+					ii.append(i)
+					mn.append(np.mean(nmx[I,i]))
+					st.append(np.std (nmx[I,i]))
+				I = np.array(ii)
+				mn = np.array(mn)
+				st = np.array(st)
+				plt.loglog([nm0[I],nm0[I]], [np.maximum(1e-6, (mn-st) / nm0[I]),
+											 np.maximum(1e-6, (mn+st) / nm0[I])], 'b-', alpha=0.5)
+			plt.axhline(1., color='k', lw=2, alpha=0.5)
+			plt.xlabel('WISE brightness (nanomaggies)')
+			plt.ylabel('Tractor-measured brightness (nanomaggies)')
+			plt.ylim(0.1, 10.)
+			ps.savefig()
+
+
+	# Simultaneous photometry
+
+	#tractor = Tractor(tims, cat)
+	#tractor.freezeParam('images')
+	cat.setParams(cat0)
+
+	for gi in range(len(gslices)):
+		gl = gi
+		# note, gslices is zero-indexed
+		gslice = gslices[gl]
+		gl += 1
+		if not gl in groups:
+			print 'Group', gl, 'not in groups array; skipping'
+			continue
+		gsrcs = groups[gl]
+		tsrcs = tgroups[gl]
+
+		mytims = []
+		rois = []
+		if not gl in allrois:
+			print 'Group', gl, 'does not touch any images?'
+			continue
+
+		for imi,roi in allrois[gl].items():
+			mytims.append(tims[imi])
+			rois.append(roi)
+
+		print 'Group', gl, 'touches', len(mytims), 'images'
+
+		fullcat = cat
+		subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
+		for i in range(len(tsrcs)):
+			subcat.freezeParam(len(gsrcs) + i)
+
+		tractor = Tractor(mytims, subcat)
+		tractor.freezeParam('images')
+
+		print len(gsrcs), 'sources unfrozen; total', len(subcat)
+			
+		t0 = Time()
+		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+													   rois=rois)
+		print 'optimize_forced_photometry took', Time()-t0
+
+		N = len(mytims)
+		C = int(np.ceil(np.sqrt(N)))
+		R = int(np.ceil(N / float(C)))
+		plt.clf()
+		for i,(tim,roi) in enumerate(zip(mytims, rois)):
+			plt.subplot(R,C, i+1)
+			plt.imshow(tim.getImage()[roi], interpolation='nearest', origin='lower',
+					   vmin=tim.zr[0], vmax=tim.zr[1])
+			plt.gray()
+		plt.suptitle('Data')
 		ps.savefig()
+
+		print 'ims0:', ims0
+		print 'ims1:', ims1
+
+		plt.clf()
+		for i,(tim,im) in enumerate(zip(mytims, ims0)):
+			(img, mod, chi, roi) = im
+			plt.subplot(R,C, i+1)
+			plt.imshow(mod, interpolation='nearest', origin='lower',
+					   vmin=tim.zr[0], vmax=tim.zr[1])
+			plt.gray()
+		plt.suptitle('Initial model')
+		ps.savefig()
+
+		if ims1 is not None:
+			plt.clf()
+			for i,(tim,im) in enumerate(zip(mytims, ims1)):
+				(img, mod, chi, roi) = im
+				plt.subplot(R,C, i+1)
+				plt.imshow(mod, interpolation='nearest', origin='lower',
+						   vmin=tim.zr[0], vmax=tim.zr[1])
+				plt.gray()
+			plt.suptitle('Final model')
+			ps.savefig()
+
+
+		print 'Optimizing:'
+		cat.thawPathsTo('ra','dec')
+		p0 = cat.getParams()
+		cat.printThawedParams()
+		while True:
+			dlnp,X,alpha = tractor.optimize()
+			print 'dlnp', dlnp
+			print 'alpha', alpha
+			if dlnp < 0.1:
+				break
+		p1 = cat.getParams()
+
+		print 'Param changes:'
+		for nm,pp0,pp1 in zip(cat.getParamNames(), p0, p1):
+			print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
+
+		cat.freezeParamsRecursive('ra', 'dec')
+					   
+
+
+
+	cat.thawPathsTo(band)
+	cat1 = cat.getParams()
+	br1 = [src.getBrightness().copy() for src in cat]
+	nm1 = np.array([b.getBand(band) for b in br1])
+	WW.nmall = nm1
+
+	fn = 'measurements-all.fits'
+	WW.writeto(fn)
+	print 'Wrote', fn
+
+	
 
 
 if __name__ == '__main__':
 	import cProfile
 	from datetime import datetime
 
-	#cProfile.run('main()', 'prof-%s.dat' % (datetime.now().isoformat()))
-	#sys.exit(0)
+	import optparse
+	parser = optparse.OptionParser('%prog [options]')
+	parser.add_option('-v', dest='verbose', action='store_true')
+
+	parser.add_option('-s', dest='sources',
+					  help='Input SDSS source list')
+	parser.add_option('-i', dest='individual',
+					  help='Fit individual images?')
+
+	parser.add_option('-p', dest='plots', action='store_true',
+					  help='Make result plots?')
+	parser.add_option('-r', dest='result',
+					  help='result file to compare', default='measurements-257.fits')
+	parser.add_option('-m', dest='match', action='store_true',
+					  help='do RA,Dec match to compare results; else assume 1-to-1')
+	
+	opt,args = parser.parse_args()
+
+	if opt.verbose:
+		lvl = logging.DEBUG
+	else:
+		lvl = logging.INFO
+	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+	if not opt.plots:
+		profn = 'prof-%s.dat' % (datetime.now().isoformat())
+		cProfile.run('main(opt)', profn)
+		print 'Wrote profile to', profn
+		#main(opt)
+		sys.exit(0)
+
+	ps = PlotSequence('compare')
+
+
+	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+	print 'PSF image shape', psf.shape
+	H,W = psf.shape
+	X,Y = np.meshgrid(np.arange(W), np.arange(H))
+	mx = np.sum(X * psf) / np.sum(psf)
+	my = np.sum(Y * psf) / np.sum(psf)
+	print 'First moments:', mx, my
+
+
+	#S = fits_table('stripe82-19objs.fits', hdu=2)
+	S = fits_table('wise-sources-nearby.fits')
+	print 'Got', len(S)
+	S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
+	print 'Cut to', len(S)
+	
+	T = fits_table('wise-images-overlapping.fits')
+	T.filename = [fn.strip() for fn in T.filename]
+	for fn in T.filename:
+		im = pyfits.open(fn)[0].data
+		wcs = anwcs(fn, 0)
+		#print 'Got WCS', wcs.getHeaderString()
+		anwcs_print_stdout(wcs)
+
+		H,W = im.shape
+		m = 5
+
+		X,Y = np.meshgrid(np.linspace(0, W, 30), np.linspace(0, H, 30))
+		X = X.ravel()
+		Y = Y.ravel()
+		X2 = []
+		Y2 = []
+		for x,y in zip(X,Y):
+			r,d = wcs.pixelxy2radec(x,y)
+			ok,x2,y2 = wcs.radec2pixelxy(r,d)
+			X2.append(x2)
+			Y2.append(y2)
+		X2 = np.array(X2)
+		Y2 = np.array(Y2)
+		print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
+
+		plt.clf()
+		plt.plot(np.vstack((X, X + (X2 - X)*100.)),
+				 np.vstack((Y, Y + (Y2 - Y)*100.)), 'b-')
+		plt.plot(X, Y, 'b.')
+		plt.axis('scaled')
+		plt.title("WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+		plt.axis([-50, 1066, -50, 1066])
+		ps.savefig()
+
+		plt.clf()
+		n,b,p1 = plt.hist(X - X2, 100, range=(-1,1), histtype='step', color='b')
+		n,b,p2 = plt.hist(Y - Y2, 100, range=(-1,1), histtype='step', color='r')
+		plt.legend((p1,p2), ('dx','dy'))
+		plt.title('WISE WCS round-trip residuals')
+		ps.savefig()
+
+
+		sip = Sip(fn, 0)
+		print 'Read', sip
+
+		X3 = []
+		Y3 = []
+		for x,y in zip(X,Y):
+			r,d = sip.pixelxy2radec(x,y)
+			x2,y2 = sip.radec2pixelxy(r,d)
+			X3.append(x2)
+			Y3.append(y2)
+		X3 = np.array(X3)
+		Y3 = np.array(Y3)
+		print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
+
+		sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+		print 'After computing inverse polynomials:', sip
+
+		X4 = []
+		Y4 = []
+		for x,y in zip(X,Y):
+			r,d = sip.pixelxy2radec(x,y)
+			x2,y2 = sip.radec2pixelxy(r,d)
+			X4.append(x2)
+			Y4.append(y2)
+		X4 = np.array(X4)
+		Y4 = np.array(Y4)
+		print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
+
+
+		plt.clf()
+		plt.plot(np.vstack((X, X + (X4 - X)*1e6)),
+				 np.vstack((Y, Y + (Y4 - Y)*1e6)), 'b-')
+		plt.plot(X, Y, 'b.')
+		plt.axis('scaled')
+		plt.title("Refit WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+		plt.axis([-50, 1066, -50, 1066])
+		ps.savefig()
+
+		plt.clf()
+		n,b,p1 = plt.hist(X - X4, 100, range=(-1e-3,1e-3), histtype='step', color='b')
+		n,b,p2 = plt.hist(Y - Y4, 100, range=(-1e-3,1e-3), histtype='step', color='r')
+		plt.legend((p1,p2), ('dx','dy'))
+		plt.title('Refit WISE WCS round-trip residuals')
+		ps.savefig()
+
+
+		# sip.ap_order = 5
+		# sip.bp_order = 5
+		# sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+		# print 'After computing 5th-order  inverse polynomials:', sip
+		# X5 = []
+		# Y5 = []
+		# for x,y in zip(X,Y):
+		# 	r,d = sip.pixelxy2radec(x,y)
+		# 	x2,y2 = sip.radec2pixelxy(r,d)
+		# 	X5.append(x2)
+		# 	Y5.append(y2)
+		# X5 = np.array(X5)
+		# Y5 = np.array(Y5)
+		# print 'Round-trip error on x,y with 5th-order:', np.std(X5-X), np.std(Y5-Y)
+
+
+
+
+		xx,yy = [],[]
+		for r,d in zip(S.ra, S.dec):
+			ok,x,y = wcs.radec2pixelxy(r, d)
+			#if x >= 0 and y >= 0 and x < H and y < W:
+			if x >= m and y >= m and y < H-m and x < W-m:
+				xx.append(x-1)
+				yy.append(y-1)
+
+		plt.clf()
+		for i,(x,y) in enumerate(zip(xx,yy)):
+			if i == 16:
+				break
+			ix = int(np.round(x))
+			iy = int(np.round(y))
+			plt.subplot(4,4,i+1)
+			plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+					   vmin=15., vmax=75.)
+			plt.gray()
+			ax = plt.axis()
+			plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+			# ms=15, mew=2, alpha=0.6)
+			plt.axis(ax)
+
+		tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+		plt.suptitle('WISE ' + tt)
+		ps.savefig()
+
+
+
+		xx,yy = [],[]
+		for r,d in zip(S.ra, S.dec):
+			x,y = sip.radec2pixelxy(r, d)
+			#if x >= 0 and y >= 0 and x < H and y < W:
+			if x >= m and y >= m and y < H-m and x < W-m:
+				xx.append(x-1)
+				yy.append(y-1)
+
+		plt.clf()
+		for i,(x,y) in enumerate(zip(xx,yy)):
+			if i == 16:
+				break
+			ix = int(np.round(x))
+			iy = int(np.round(y))
+			plt.subplot(4,4,i+1)
+			plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+					   vmin=15., vmax=75.)
+			plt.gray()
+			ax = plt.axis()
+			plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+			# ms=15, mew=2, alpha=0.6)
+			plt.axis(ax)
+
+		tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+		plt.suptitle('WISE ' + tt + ' (re-fit)')
+		ps.savefig()
+
+
+		break
+
 	
 	T = fits_table('stripe82-19objs.fits', hdu=2)
-	W = fits_table('measurements-257.fits')
-	#W = fits_table('measurements-07.fits')
+	print 'Reading results file', opt.result
+	W = fits_table(opt.result)
 
 	print 'nm', W.nms.shape
 
-	R,C = W.nms.shape
-	#W.nms = W.nms.ravel().reshape(C,R).T   #(R,C)  # (C,R).T
-	print 'nm', W.nms.shape
-
-	plt.clf()
 	print 'Plotting measurements...'
-
+	plt.clf()
 	nm0 = W.nm0
+	R,C = W.nms.shape
 	for j in range(C):
 		nm = W.nms[:,j]
 		I = np.flatnonzero(nm != nm0)
@@ -678,31 +1032,33 @@ if __name__ == '__main__':
 	plt.xlabel('WISE brightness (nanomaggies)')
 	plt.ylabel('Tractor-measured brightness (nanomaggies)')
 	plt.ylim(0.1, 10.)
-	plt.savefig('comp1.png')
+	ps.savefig()
 
-
-
-	R = 4./3600.
-	I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, R, nearest=True)
-	print 'Matched', len(I)
-	T.cut(I)
-	W.cut(J)
+	if opt.match:
+		R = 4./3600.
+		I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, R, nearest=True)
+		print 'Matched', len(I)
+		T.cut(I)
+		W.cut(J)
+	else:
+		assert(len(T) == len(W))
 
 	plt.clf()
-	plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
-	print 'nm', W.nms.shape
+	p1 = plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
+
+	p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'mx', zorder=30)
+
 	R,C = W.nms.shape
+	mns = []
+	sts = []
 	for j in range(R):
 		nm = W.nms[j,:]
-		print 'nm', nm.shape
-		print 'nm0', W.nm0.shape
-
-		print 'nm', nm
-		print 'nm0', W.nm0[j]
-
 		I = np.flatnonzero(nm != W.nm0[j])
 		print 'Measured flux', j, 'in', len(I), 'images'
-		plt.loglog(T.wiseflux[j,0] + np.zeros(len(I)), nm[I], 'b.', alpha=0.05, zorder=25)
-	plt.savefig('comp.png')
+		mns.append(np.mean(nm[I]))
+		sts.append(np.std(nm[I]))
+		p3 = plt.loglog(T.wiseflux[j,0] + np.zeros(len(I)), nm[I], 'b.', alpha=0.5, zorder=25)
+	p4 = plt.errorbar(T.wiseflux[:,0], mns, yerr=sts, fmt='o', mec='b', mfc='none')
+	ps.savefig()
 
 	

@@ -342,11 +342,18 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 			return dbright, ebright
 	else:
 		def nmgy2bright(flux):
-			flux = flux[bandnums]
+			if len(bandnums):
+				flux = flux[bandnums]
+			else:
+				flux = flux[np.array([bandnum])]
 			bb = bandnames + extrabands
 			if nanomaggies:
 				if len(extrabands):
-					flux = np.append(flux, np.zeros(len(extrabands)))
+					if len(bandnums) == 0:
+						# Only "extrabands", no SDSS bands.
+						flux = np.zeros(len(extrabands)) + flux[0]
+					else:
+						flux = np.append(flux, np.zeros(len(extrabands)))
 				bright = NanoMaggies(order=bb,
 									 **dict(zip(bb, flux)))
 			else:
