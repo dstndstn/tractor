@@ -862,12 +862,19 @@ class Tractor(MultiParams):
 
 		'''
 		from basics import LinearPhotoCal, ShiftedWcs
+
+		scales = []
 		
 		imgs = self.getImages()
 		for img in imgs:
 			assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
 			### FIXME!!
-			assert(img.getPhotoCal().getScale() == 1.)
+			#assert(img.getPhotoCal().getScale() == 1.)
+
+			scales.append(img.getPhotoCal().getScale())
+
+		#print 'PhotoCal scales:', scales
+
 		if rois is not None:
 			assert(len(rois) == len(imgs))
 		#t0 = Time()
@@ -886,6 +893,10 @@ class Tractor(MultiParams):
 			umods = []
 			pcal = img.getPhotoCal()
 
+			nvalid = 0
+			nallzero = 0
+			nzero = 0
+			
 			if rois is not None:
 				roi = rois[i]
 				y0 = roi[0].start
@@ -909,12 +920,29 @@ class Tractor(MultiParams):
 				#ums = [um for um in ums if um is not None]
 				#if len(ums) == 0:
 				#	continue
+				isvalid = False
+				isallzero = False
+
 				for um in ums:
 					if um is not None:
 						um.x0 -= x0
 						um.y0 -= y0
+						isvalid = True
+						if um.patch.sum() == 0:
+							nzero += 1
+						else:
+							isallzero = False
 					#print 'unit-flux model', um
 				umods.extend(ums)
+
+				if isvalid:
+					nvalid += 1
+					if isallzero:
+						nallzero += 1
+
+			#print 'Img', i, 'has', nvalid, 'of', len(srcs), 'sources'
+			#print '  ', nallzero, 'of which are all zero'
+			#print '  ', nzero, 'components are zero'
 
 			assert(len(umods) == self.numberOfParams())
 			umodels.append(umods)
@@ -935,14 +963,14 @@ class Tractor(MultiParams):
 
 		#t0 = Time()
 		derivs = [ [] for i in range(self.numberOfParams()) ]
-		for i,(img,umods) in enumerate(zip(imgs, umodels)):
+		for i,(img,umods,scale) in enumerate(zip(imgs, umodels, scales)):
 			if rois is not None:
 				img = subimgs[i]
-				
+
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
-				dd.append((um, img))
+				dd.append((um * scale, img))
 		#tderivs = Time() - t0
 		#print 'forced phot: building derivs:', tderivs
 		assert(len(derivs) == len(self.getParams()))
@@ -956,7 +984,7 @@ class Tractor(MultiParams):
 		# We shift the unit-flux models (above, um.x0 -= x0) to be relative to the
 		# ROI.
 
-		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois):
+		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales):
 			ims = []
 			if X is None:
 				pa = p0
@@ -964,7 +992,7 @@ class Tractor(MultiParams):
 				pa = [p + alpha * d for p,d in zip(p0, X)]
 			chisq = 0.
 			chis = []
-			for i,(img,umods,m0) in enumerate(zip(imgs, umodels, mod0)):
+			for i,(img,umods,m0,scale) in enumerate(zip(imgs, umodels, mod0, scales)):
 				roi = None
 				if rois:
 					roi = rois[i]
@@ -974,7 +1002,7 @@ class Tractor(MultiParams):
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
-					counts = b
+					counts = b * scale
 					if counts <= 0.:
 						continue
 					(um * counts).addTo(mod)
@@ -1002,7 +1030,7 @@ class Tractor(MultiParams):
 		while True:
 			p0 = self.getParams()
 			if lnp0 is None:
-				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois)
+				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois, scales)
 
 			# print 'Starting opt loop with'
 			# print '  p0', p0
@@ -1050,7 +1078,7 @@ class Tractor(MultiParams):
 
 			for alpha in alphas:
 				#logverb('  Stepping with alpha =', alpha)
-				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois)
+				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois, scales)
 				#print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
@@ -1421,7 +1449,9 @@ class Tractor(MultiParams):
 			#	continue
 			mx = np.max(np.abs(vals))
 			if mx == 0:
-				print 'mx == 0'
+				print 'mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
+				print len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
+				print len(np.flatnonzero(vals)), 'non-zero products'
 				colscales.append(1.)
 				continue
 			# MAGIC number: near-zero matrix elements -> 0

@@ -435,13 +435,80 @@ class WcslibWcs(BaseParams):
 
 		return np.array([[(ra1 - ra0)*cosdec, (ra2 - ra0)*cosdec],
 				 [dec1 - dec0,        dec2 - dec0]])
-	
 
-class FitsWcs(ParamList):
+
+class ConstantFitsWcs(ParamList):
 	'''
 	A WCS implementation that wraps a FITS WCS object (with a pixel
 	offset).
+	'''
+	def __init__(self, wcs):
+		'''
+		Creates a new ``ConstantFitsWcs`` given an underlying WCS object.
+		'''
+		self.x0 = 0
+		self.y0 = 0
+		super(ConstantFitsWcs, self).__init__()
+		self.wcs = wcs
 
+	def hashkey(self):
+		return (self.x0, self.y0, id(self.wcs))
+
+	def copy(self):
+		return ConstantFitsWcs(self.wcs)
+		
+	def __str__(self):
+		return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
+				+ str(self.wcs))
+
+	def setX0Y0(self, x0, y0):
+		'''
+		Sets the pixel offset to apply to pixel coordinates before putting
+		them through the wrapped WCS.  Useful when using a cropped image.
+		'''
+		self.x0 = x0
+		self.y0 = y0
+
+	def positionToPixel(self, pos, src=None):
+		'''
+		Converts an :class:`tractor.RaDecPos` to a pixel position.
+		Returns: tuple of floats ``(x, y)``
+		'''
+		X = self.wcs.radec2pixelxy(pos.ra, pos.dec)
+		# handle X = (ok,x,y) and X = (x,y) return values
+		if len(X) == 3:
+			ok,x,y = X
+		else:
+			assert(len(X) == 2)
+			x,y = X
+		# MAGIC: subtract 1 to convert from FITS to zero-indexed pixels.
+		return x - 1 - self.x0, y - 1 - self.y0
+
+	def pixelToPosition(self, x, y, src=None):
+		'''
+		Converts floats ``x``, ``y`` to a
+		:class:`tractor.RaDecPos`.
+		'''
+		# MAGIC: add 1 to convert from zero-indexed to FITS pixels.
+		r,d = self.wcs.pixelxy2radec(x + 1 + self.x0, y + 1 + self.y0)
+		return RaDecPos(r,d)
+
+	def cdAtPixel(self, x, y):
+		'''
+		Returns the ``CD`` matrix at the given ``x,y`` pixel position.
+
+		(Returns the constant ``CD`` matrix elements)
+		'''
+		cd = self.wcs.get_cd()
+		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
+
+	def pixel_scale(self):
+		return self.wcs.pixel_scale()
+
+	
+### FIXME -- this should be called TanWcs!
+class FitsWcs(ConstantFitsWcs):
+	'''
 	The WCS object must be an astrometry.util.util.Tan object, or a
 	convincingly quacking duck.
 
@@ -481,10 +548,9 @@ class FitsWcs(ParamList):
 			from astrometry.util.util import Tan
 			wcs = Tan(wcs, hdu)
 
-		super(FitsWcs, self).__init__(self.x0, self.y0, wcs)
+		super(FitsWcs, self).__init__(wcs)
 		# ParamList keeps its params in a list; we don't want to do that.
 		del self.vals
-		self.wcs = wcs
 
 	def copy(self):
 		from astrometry.util.util import Tan
@@ -551,53 +617,6 @@ class FitsWcs(ParamList):
 	#	'''
 	#	return list(self._getLiquidArray(self._getThings()))
 
-	def __str__(self):
-		return ('FitsWcs: x0,y0 %.3f,%.3f, WCS ' % (self.x0,self.y0)
-				+ str(self.wcs))
-
-	def setX0Y0(self, x0, y0):
-		'''
-		Sets the pixel offset to apply to pixel coordinates before putting
-		them through the wrapped WCS.  Useful when using a cropped image.
-		'''
-		self.x0 = x0
-		self.y0 = y0
-
-	def positionToPixel(self, pos, src=None):
-		'''
-		Converts an :class:`tractor.RaDecPos` to a pixel position.
-		Returns: tuple of floats ``(x, y)``
-		'''
-		X = self.wcs.radec2pixelxy(pos.ra, pos.dec)
-		# handle X = (ok,x,y) and X = (x,y) return values
-		if len(X) == 3:
-			ok,x,y = X
-		else:
-			assert(len(X) == 2)
-			x,y = X
-		# MAGIC: subtract 1 to convert from FITS to zero-indexed pixels.
-		return x - 1 - self.x0, y - 1 - self.y0
-
-	def pixelToPosition(self, x, y, src=None):
-		'''
-		Converts floats ``x``, ``y`` to a
-		:class:`tractor.RaDecPos`.
-		'''
-		# MAGIC: add 1 to convert from zero-indexed to FITS pixels.
-		r,d = self.wcs.pixelxy2radec(x + 1 + self.x0, y + 1 + self.y0)
-		return RaDecPos(r,d)
-
-	def cdAtPixel(self, x, y):
-		'''
-		Returns the ``CD`` matrix at the given ``x,y`` pixel position.
-
-		(Returns the constant ``CD`` matrix elements)
-		'''
-		cd = self.wcs.get_cd()
-		return np.array([[cd[0], cd[1]], [cd[2],cd[3]]])
-
-	def pixel_scale(self):
-		return self.wcs.pixel_scale()
 
 
 class PixPos(ParamList):
