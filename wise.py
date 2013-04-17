@@ -10,6 +10,7 @@ import pylab as plt
 import numpy as np
 import sys
 from glob import glob
+import logging
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
@@ -28,6 +29,8 @@ from tractor.fitpsf import em_init_params
 
 from matplotlib.nxutils import points_inside_poly
 
+logger = logging.getLogger('wise')
+
 def read_wise_level1b(basefn, radecroi=None, filtermap={},
 					  nanomaggies=False, mask_gz=False, unc_gz=False,
 					  sipwcs=False):
@@ -39,25 +42,25 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	if unc_gz:
 		uncfn = uncfn + '.gz'
 
-	print 'intensity image', intfn
-	print 'mask image', maskfn
-	print 'uncertainty image', uncfn
+	logger.debug('intensity image   %s' % intfn)
+	logger.debug('mask image        %s' % maskfn)
+	logger.debug('uncertainty image %s' % uncfn)
 
 	P = pyfits.open(intfn)
 	ihdr = P[0].header
 	data = P[0].data
-	print 'Read', data.shape, 'intensity'
+	logger.debug('Read %s intensity' % (str(data.shape)))
 	band = ihdr['BAND']
 
 	P = pyfits.open(uncfn)
 	uhdr = P[0].header
 	unc = P[0].data
-	print 'Read', unc.shape, 'uncertainty'
+	logger.debug('Read %s uncertainty' % (str(unc.shape)))
 
 	P = pyfits.open(maskfn)
 	mhdr = P[0].header
 	mask = P[0].data
-	print 'Read', mask.shape, 'mask'
+	logger.debug('Read %s mask' % (str(mask.shape)))
 
 	if sipwcs:
 		wcs = Sip(intfn, 0)
@@ -65,15 +68,14 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	else:
 		twcs = tractor.FitsWcs(intfn)
 
-	#twcs = tractor.WcslibWcs(intfn)
-	print 'WCS', twcs
+	#print 'WCS', twcs
 
 	# HACK -- circular Gaussian PSF of fixed size...
 	# in arcsec 
 	fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
 	# -> sigma in pixels
 	sig = fwhms[band] / 2.35 / twcs.pixel_scale()
-	print 'PSF sigma', sig, 'pixels'
+	#print 'PSF sigma', sig, 'pixels'
 	tpsf = tractor.NCircularGaussianPSF([sig], [1.])
 
 	if radecroi is not None:
@@ -113,8 +115,8 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	else:
 		photocal = tractor.MagsPhotoCal(filter, zp)
 
-	print 'Image median:', np.median(data)
-	print 'unc median:', np.median(unc)
+	#print 'Image median:', np.median(data)
+	#print 'unc median:', np.median(unc)
 
 	sky = np.median(data)
 	tsky = tractor.ConstantSky(sky)
@@ -168,7 +170,7 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	invvar = np.zeros_like(data)
 	invvar[goodmask] = 1./(unc[goodmask])**2
 
-	print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
+	#print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
 
 	if not np.all(np.isfinite(invvar)):
 		print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))

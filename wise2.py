@@ -184,7 +184,7 @@ def coadd():
 	
 
 
-def main(opt):
+def main(opt, ps):
 	#ralo = 36
 	#rahi = 42
 	#declo = -1.25
@@ -204,7 +204,6 @@ def main(opt):
 	ra  = (ralo  + rahi ) / 2.
 	dec = (declo + dechi) / 2.
 
-	ps = PlotSequence('wise', format='%03i')
 	bandnum = 1
 	band = 'w%i' % bandnum
 	plt.figure(figsize=(12,12))
@@ -600,75 +599,45 @@ def main(opt):
 
 			tractor.catalog = fullcat
 
-		print 'Photometered', pgroups, 'groups containing', pobjs, 'objects'
+		# mod = tractor.getModelImage(0, minsb=minsb)
+		# noise = np.random.normal(size=mod.shape)
+		# noise[tim.getInvError() == 0] = 0.
+		# nz = (tim.getInvError() > 0)
+		# noise[nz] *= (1./tim.getInvError()[nz])
+		# ima = dict(interpolation='nearest', origin='lower',
+		# 		   vmin=tim.zr[0], vmax=tim.zr[1])
+		# imchi = dict(interpolation='nearest', origin='lower',
+		# 		   vmin=-5, vmax=5)
+		# plt.clf()
+		# plt.subplot(2,2,1)
+		# plt.imshow(tim.getImage(), **ima)
+		# plt.gray()
+		# plt.subplot(2,2,2)
+		# plt.imshow(mod, **ima)
+		# plt.gray()
+		# plt.subplot(2,2,3)
+		# plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
+		# plt.gray()
+		# plt.subplot(2,2,4)
+		# plt.imshow(mod + noise, **ima)
+		# plt.gray()
+		# plt.suptitle('W1, scan %s, frame %i' % (sid, fnum))
+		# ps.savefig()
 
-		if False:
-			mod = tractor.getModelImage(0, minsb=minsb)
-			noise = np.random.normal(size=mod.shape)
-			noise[tim.getInvError() == 0] = 0.
-			nz = (tim.getInvError() > 0)
-			noise[nz] *= (1./tim.getInvError()[nz])
-			ima = dict(interpolation='nearest', origin='lower',
-					   vmin=tim.zr[0], vmax=tim.zr[1])
-			imchi = dict(interpolation='nearest', origin='lower',
-					   vmin=-5, vmax=5)
-			plt.clf()
-			plt.subplot(2,2,1)
-			plt.imshow(tim.getImage(), **ima)
-			plt.gray()
-			plt.subplot(2,2,2)
-			plt.imshow(mod, **ima)
-			plt.gray()
-			plt.subplot(2,2,3)
-			plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
-			plt.gray()
-			plt.subplot(2,2,4)
-			plt.imshow(mod + noise, **ima)
-			plt.gray()
-			plt.suptitle('W1, scan %s, frame %i' % (sid, fnum))
-			ps.savefig()
+		if opt.individual:
+			print 'Photometered', pgroups, 'groups containing', pobjs, 'objects'
+	
+			cat.thawPathsTo(band)
+			cat1 = cat.getParams()
+			br1 = [src.getBrightness().copy() for src in cat]
+			nm1 = np.array([b.getBand(band) for b in br1])
+			nms.append(nm1)
+	
+			WW.nms = np.array(nms).T
+			fn = opt.output % imi
+			WW.writeto(fn)
+			print 'Wrote', fn
 
-		cat.thawPathsTo(band)
-		cat1 = cat.getParams()
-		br1 = [src.getBrightness().copy() for src in cat]
-		nm1 = np.array([b.getBand(band) for b in br1])
-		nms.append(nm1)
-
-		WW.nms = np.array(nms).T
-		# print 'nm0', WW.nm0.shape
-		# print 'nms', WW.nms.shape
-		fn = opt.output % imi
-		WW.writeto(fn)
-		print 'Wrote', fn
-
-		if False:
-			print 'Plotting results...'
-			plt.clf()
-			for nm in nms:
-				I = np.flatnonzero(nm != nm0)
-				plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.5)
-			if False:
-				nmx = np.array(nms)
-				mn = []
-				st = []
-				ii = []
-				for i,nm in enumerate(nm0):
-					I = np.flatnonzero(nmx[:,i] != nm)
-					if len(I) == 0:
-						continue
-					ii.append(i)
-					mn.append(np.mean(nmx[I,i]))
-					st.append(np.std (nmx[I,i]))
-				I = np.array(ii)
-				mn = np.array(mn)
-				st = np.array(st)
-				plt.loglog([nm0[I],nm0[I]], [np.maximum(1e-6, (mn-st) / nm0[I]),
-											 np.maximum(1e-6, (mn+st) / nm0[I])], 'b-', alpha=0.5)
-			plt.axhline(1., color='k', lw=2, alpha=0.5)
-			plt.xlabel('WISE brightness (nanomaggies)')
-			plt.ylabel('Tractor-measured brightness (nanomaggies)')
-			plt.ylim(0.1, 10.)
-			ps.savefig()
 
 
 	# Simultaneous photometry
@@ -724,64 +693,61 @@ def main(opt):
 														   rois=rois)
 			print 'optimize_forced_photometry took', Time()-t0
 
-		N = len(mytims)
-		C = int(np.ceil(np.sqrt(N)))
-		R = int(np.ceil(N / float(C)))
-		plt.clf()
-		#for i,(tim,roi) in enumerate(zip(mytims, rois)):
-		for i,(tim,im) in enumerate(zip(mytims, ims0)):
-			(img, mod, chi, roi) = im
-			plt.subplot(R,C, i+1)
-			plt.imshow(tim.getImage()[roi], interpolation='nearest', origin='lower',
-					   vmin=tim.zr[0], vmax=tim.zr[1])
-			plt.gray()
-		plt.suptitle('Data')
-		ps.savefig()
-
-		#print 'ims0:', ims0
-		#print 'ims1:', ims1
-
-		plt.clf()
-		for i,(tim,im) in enumerate(zip(mytims, ims0)):
-			(img, mod, chi, roi) = im
-			plt.subplot(R,C, i+1)
-			plt.imshow(mod, interpolation='nearest', origin='lower',
-					   vmin=tim.zr[0], vmax=tim.zr[1])
-			plt.gray()
-		plt.suptitle('Initial model')
-		ps.savefig()
-
-		imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
-
-		plt.clf()
-		for i,(tim,im) in enumerate(zip(mytims, ims0)):
-			(img, mod, chi, roi) = im
-			plt.subplot(R,C, i+1)
-			plt.imshow(chi, **imchi)
-			plt.gray()
-		plt.suptitle('Initial chi')
-		ps.savefig()
-
-		if ims1 is not None:
+			N = len(mytims)
+			C = int(np.ceil(np.sqrt(N)))
+			R = int(np.ceil(N / float(C)))
 			plt.clf()
-			for i,(tim,im) in enumerate(zip(mytims, ims1)):
+			# for i,(tim,roi) in enumerate(zip(mytims, rois)):
+			imas = {}
+			for i,(tim,im) in enumerate(zip(mytims, ims0)):
 				(img, mod, chi, roi) = im
+
+				imas[i] = dict(interpolation='nearest', origin='lower',
+							   vmin=tim.zr[0], vmax=tim.zr[1])
 				plt.subplot(R,C, i+1)
-				plt.imshow(mod, interpolation='nearest', origin='lower',
-						   vmin=tim.zr[0], vmax=tim.zr[1])
+				plt.imshow(tim.getImage()[roi], **imas[i])
 				plt.gray()
-			plt.suptitle('Final model')
+			plt.suptitle('Data')
 			ps.savefig()
 
 			plt.clf()
-			for i,(tim,im) in enumerate(zip(mytims, ims1)):
+			for i,(tim,im) in enumerate(zip(mytims, ims0)):
+				(img, mod, chi, roi) = im
+				plt.subplot(R,C, i+1)
+				plt.imshow(mod, **imas[i])
+				plt.gray()
+			plt.suptitle('Initial model')
+			ps.savefig()
+
+			imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+
+			plt.clf()
+			for i,(tim,im) in enumerate(zip(mytims, ims0)):
 				(img, mod, chi, roi) = im
 				plt.subplot(R,C, i+1)
 				plt.imshow(chi, **imchi)
 				plt.gray()
-				plt.suptitle('Final chi')
+			plt.suptitle('Initial chi')
 			ps.savefig()
 
+			if ims1 is not None:
+				plt.clf()
+				for i,(tim,im) in enumerate(zip(mytims, ims1)):
+					(img, mod, chi, roi) = im
+					plt.subplot(R,C, i+1)
+					plt.imshow(mod, **imas[i])
+					plt.gray()
+				plt.suptitle('Final model')
+				ps.savefig()
+
+				plt.clf()
+				for i,(tim,im) in enumerate(zip(mytims, ims1)):
+					(img, mod, chi, roi) = im
+					plt.subplot(R,C, i+1)
+					plt.imshow(chi, **imchi)
+					plt.gray()
+				plt.suptitle('Final chi')
+				ps.savefig()
 
 		N = len(mybadtims)
 		if N:
@@ -802,6 +768,46 @@ def main(opt):
 				plt.imshow(tim.getInvError()[roi], interpolation='nearest', origin='lower')
 				plt.gray()
 			plt.suptitle('Inverr in bad regions')
+			ps.savefig()
+
+
+		N = len(mybadtims) + len(mytims)
+		C = int(np.ceil(np.sqrt(N)))
+		R = int(np.ceil(N / float(C)))
+
+		for bit,txt in [
+			(0 ,  'static: excessively noisy due to high dark current alone'),
+			(1 ,  'static: generally noisy [includes bit 0]'),
+			(2 ,  'static: dead or very low responsivity'),
+			(3 ,  'static: low responsivity or low dark current'),
+			(4 ,  'static: high responsivity or high dark current'),
+			(5 ,  'static: saturated anywhere in ramp'),
+			(6 ,  'static: high, uncertain, or unreliable non-linearity'),
+			(7 ,  'static: known broken hardware pixel or excessively noisy responsivity estimate [may include bit 1]'),
+			(9 ,  'broken pixel or negative slope fit value'),
+			(10,  'saturated in sample read 1'),
+			(11,  'saturated in sample read 2'),
+			(12,  'saturated in sample read 3'),
+			(13,  'saturated in sample read 4'),
+			(14,  'saturated in sample read 5'),
+			(15,  'saturated in sample read 6'),
+			(16,  'saturated in sample read 7'),
+			(17,  'saturated in sample read 8'),
+			(18,  'saturated in sample read 9'),
+			(21,  'new/transient bad pixel from dynamic masking'),
+			(26,  'non-linearity correction unreliable'),
+			(27,  'contains cosmic-ray or outlier that cannot be classified (from temporal outlier rejection in multi-frame pipeline)'),
+			(28,  'contains positive or negative spike-outlier'),
+			]:
+			plt.clf()
+			for i,(tim,roi) in enumerate(zip(mybadtims + mytims, mybadrois + rois)):
+				plt.subplot(R,C, i+1)
+				mask = tim.maskplane[roi]
+				msk = (1 << bit)
+				plt.imshow(mask & msk, interpolation='nearest', origin='lower',
+						   vmin=0, vmax=1)
+				plt.gray()
+			plt.suptitle('Mask: ' + txt)
 			ps.savefig()
 
 
@@ -854,7 +860,8 @@ if __name__ == '__main__':
 					  help='Fit individual images?')
 	parser.add_option('-o', dest='output', default='measurements-%03i.fits',
 					  help='Filename pattern for outputs; default %default')
-
+	parser.add_option('-P', dest='ps', default='wise',
+					  help='Filename pattern for plots; default %default')
 
 	parser.add_option('-p', dest='plots', action='store_true',
 					  help='Make result plots?')
@@ -871,14 +878,15 @@ if __name__ == '__main__':
 		lvl = logging.INFO
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+
+	ps = PlotSequence(opt.ps, format='%03i')
+
 	if not opt.plots:
 		profn = 'prof-%s.dat' % (datetime.now().isoformat())
-		cProfile.run('main(opt)', profn)
+		cProfile.run('main(opt, ps)', profn)
 		print 'Wrote profile to', profn
 		#main(opt)
 		sys.exit(0)
-
-	ps = PlotSequence('compare')
 
 
 	if False:
