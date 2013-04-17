@@ -21,8 +21,9 @@ from astrometry.libkd.spherematch import match_radec
 from astrometry.util.util import * #Sip, anwcs, Tan
 from astrometry.blind.plotstuff import *
 from astrometry.util.resample import *
+from astrometry.util.multiproc import *
 
-from astrometry.util.sdss_radec_to_rcf import *
+#from astrometry.util.sdss_radec_to_rcf import *
 
 from tractor import *
 from tractor.sdss import *
@@ -38,6 +39,149 @@ def get_l1b_file(basedir, scanid, frame, band):
 	scangrp = scanid[-2:]
 	return os.path.join(basedir, 'wise1', '4band_p1bm_frm', scangrp, scanid,
 						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
+
+
+def coadd():
+	if False:
+		ps.skipto(100)
+	
+		coadd = np.zeros((S,S))
+		coaddw = np.zeros((S,S))
+		conn  = np.zeros((S,S))
+		connw = np.zeros((S,S))
+	
+		resam  = np.zeros((S,S))
+		resamw = np.zeros((S,S))
+		resamnn  = np.zeros((S,S))
+		resamnnw = np.zeros((S,S))
+	
+		ii = []
+		for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
+	
+			if i == 5:
+				break
+	
+			print 'scan,frame', sid, fnum
+			fn = get_l1b_file(sid, fnum, band)
+			print '-->', fn
+			assert(os.path.exists(fn))
+	
+			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
+										 nanomaggies=True, mask_gz=True, unc_gz=True,
+										 sipwcs=True)
+			awcs = anwcs_new_sip(tim.wcs.wcs)
+			sky = np.median(tim.getImage())
+	
+			im = (tim.getImage() - sky).astype(np.float32)
+			L = 3
+			Yo,Xo,Yi,Xi,rims = resample_with_wcs(cowcs, awcs, [im], L)
+			if Yo is None:
+				continue
+	
+			sys.exit(0)
+		
+			ii.append(i)
+	
+			w = np.median(tim.getInvvar())
+	
+			coadd [Yo,Xo] += rims[0] * w
+			coaddw[Yo,Xo] += w
+			conn  [Yo,Xo] += im[Yi,Xi]
+			connw [Yo,Xo] += 1
+	
+			resam   [:,:] = 0
+			resamw  [:,:] = 0
+			resamnn [:,:] = 0
+			resamnnw[:,:] = 0
+			resam   [Yo,Xo] = rims[0] * w
+			resamw  [Yo,Xo] = w
+			resamnn [Yo,Xo] = im[Yi,Xi]
+			resamnnw[Yo,Xo] = 1
+			
+			pyfits.writeto('resam-nn-%02i.fits' % i,    resamnn,  clobber=True)
+			pyfits.writeto('resam-nn-w-%02i.fits' % i,  resamnnw, clobber=True)
+			pyfits.writeto('resam-L-acc-%02i.fits' % i, resam,    clobber=True)
+			pyfits.writeto('resam-L-w-%02i.fits' % i,   resamw,   clobber=True)
+	
+			# plt.clf()
+			# plt.imshow(np.log10(np.maximum(tim.getInvvar(), w/100.)),
+			# 		   interpolation='nearest', origin='lower')
+			# plt.gray()
+			# plt.colorbar()
+			# plt.title('Weight map (log10)')
+			# ps.savefig()
+	
+			snn = conn / np.maximum(1., connw)
+			s = coadd / np.maximum(w, coaddw)
+	
+			ok = np.flatnonzero(connw > 0)
+			pl,ph = [np.percentile(snn.flat[ok], p) for p in [10,98]]
+			print 'plo,phi', pl,ph
+	
+			plt.clf()
+			plt.imshow(snn, interpolation='nearest', origin='lower',
+					   vmin=pl, vmax=ph)
+			plt.gray()
+			plt.colorbar()
+			plt.title('Coadd (nn) of %i WISE frames' % (i+1))
+			ps.savefig()
+	
+			plt.clf()
+			plt.imshow(s, interpolation='nearest', origin='lower',
+					   vmin=pl, vmax=ph)
+			plt.gray()
+			plt.colorbar()
+			plt.title('Coadd (L) of %i WISE frames' % (i+1))
+			ps.savefig()
+	
+			#plt.clf()
+			#plt.hist(snap.ravel(), 100, range=(pl,ph))
+			#ps.savefig()
+	
+		pyfits.writeto('coadd-nn.fits',    conn, clobber=True)
+		pyfits.writeto('coadd-nn-w.fits',  connw, clobber=True)
+		pyfits.writeto('coadd-L-acc.fits', coadd, clobber=True)
+		pyfits.writeto('coadd-L-w.fits',   coaddw, clobber=True)
+	
+		sys.exit(0)
+	
+		co = coadd_new_from_wcs(cowcs);
+		coadd_set_lanczos(co, 3);
+	
+		for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
+			print 'scan,frame', sid, fnum
+			fn = T.filename[i]
+	
+			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
+										 nanomaggies=True, mask_gz=True, unc_gz=True,
+										 sipwcs=True)
+			awcs = anwcs_new_sip(tim.wcs.wcs)
+			sky = np.median(tim.getImage())
+			
+			coadd_add_numpy(co, (tim.getImage() - sky).astype(np.float32),
+							tim.getInvvar().astype(np.float32), 1., awcs)
+	
+			snap = coadd_get_snapshot_numpy(co, -100.)
+			print 'Snapshot:', snap.min(), snap.max(), np.median(snap)
+	
+			ok = np.flatnonzero(snap > -100)
+			pl,ph = [np.percentile(snap.flat[ok], p) for p in [10,98]]
+			print 'plo,phi', pl,ph
+	
+			plt.clf()
+			plt.imshow(snap, interpolation='nearest', origin='lower',
+					   vmin=pl, vmax=ph)
+			plt.gray()
+			plt.colorbar()
+			plt.title('Coadd of %i WISE frames' % (i+1))
+			ps.savefig()
+	
+			plt.clf()
+			plt.hist(snap.ravel(), 100, range=(pl,ph))
+			ps.savefig()
+	
+		coadd_free(co)
+	
 
 
 def main(opt):
@@ -206,146 +350,6 @@ def main(opt):
 	I = np.argsort(np.hypot(T.ra - ra, T.dec - dec))
 	T.cut(I)
 
-	if False:
-		ps.skipto(100)
-	
-		coadd = np.zeros((S,S))
-		coaddw = np.zeros((S,S))
-		conn  = np.zeros((S,S))
-		connw = np.zeros((S,S))
-	
-		resam  = np.zeros((S,S))
-		resamw = np.zeros((S,S))
-		resamnn  = np.zeros((S,S))
-		resamnnw = np.zeros((S,S))
-	
-		ii = []
-		for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
-	
-			if i == 5:
-				break
-	
-			print 'scan,frame', sid, fnum
-			fn = get_l1b_file(sid, fnum, band)
-			print '-->', fn
-			assert(os.path.exists(fn))
-	
-			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
-										 nanomaggies=True, mask_gz=True, unc_gz=True,
-										 sipwcs=True)
-			awcs = anwcs_new_sip(tim.wcs.wcs)
-			sky = np.median(tim.getImage())
-	
-			im = (tim.getImage() - sky).astype(np.float32)
-			L = 3
-			Yo,Xo,Yi,Xi,rims = resample_with_wcs(cowcs, awcs, [im], L)
-			if Yo is None:
-				continue
-	
-			sys.exit(0)
-		
-			ii.append(i)
-	
-			w = np.median(tim.getInvvar())
-	
-			coadd [Yo,Xo] += rims[0] * w
-			coaddw[Yo,Xo] += w
-			conn  [Yo,Xo] += im[Yi,Xi]
-			connw [Yo,Xo] += 1
-	
-			resam   [:,:] = 0
-			resamw  [:,:] = 0
-			resamnn [:,:] = 0
-			resamnnw[:,:] = 0
-			resam   [Yo,Xo] = rims[0] * w
-			resamw  [Yo,Xo] = w
-			resamnn [Yo,Xo] = im[Yi,Xi]
-			resamnnw[Yo,Xo] = 1
-			
-			pyfits.writeto('resam-nn-%02i.fits' % i,    resamnn,  clobber=True)
-			pyfits.writeto('resam-nn-w-%02i.fits' % i,  resamnnw, clobber=True)
-			pyfits.writeto('resam-L-acc-%02i.fits' % i, resam,    clobber=True)
-			pyfits.writeto('resam-L-w-%02i.fits' % i,   resamw,   clobber=True)
-	
-			# plt.clf()
-			# plt.imshow(np.log10(np.maximum(tim.getInvvar(), w/100.)),
-			# 		   interpolation='nearest', origin='lower')
-			# plt.gray()
-			# plt.colorbar()
-			# plt.title('Weight map (log10)')
-			# ps.savefig()
-	
-			snn = conn / np.maximum(1., connw)
-			s = coadd / np.maximum(w, coaddw)
-	
-			ok = np.flatnonzero(connw > 0)
-			pl,ph = [np.percentile(snn.flat[ok], p) for p in [10,98]]
-			print 'plo,phi', pl,ph
-	
-			plt.clf()
-			plt.imshow(snn, interpolation='nearest', origin='lower',
-					   vmin=pl, vmax=ph)
-			plt.gray()
-			plt.colorbar()
-			plt.title('Coadd (nn) of %i WISE frames' % (i+1))
-			ps.savefig()
-	
-			plt.clf()
-			plt.imshow(s, interpolation='nearest', origin='lower',
-					   vmin=pl, vmax=ph)
-			plt.gray()
-			plt.colorbar()
-			plt.title('Coadd (L) of %i WISE frames' % (i+1))
-			ps.savefig()
-	
-			#plt.clf()
-			#plt.hist(snap.ravel(), 100, range=(pl,ph))
-			#ps.savefig()
-	
-		pyfits.writeto('coadd-nn.fits',    conn, clobber=True)
-		pyfits.writeto('coadd-nn-w.fits',  connw, clobber=True)
-		pyfits.writeto('coadd-L-acc.fits', coadd, clobber=True)
-		pyfits.writeto('coadd-L-w.fits',   coaddw, clobber=True)
-	
-		sys.exit(0)
-	
-		co = coadd_new_from_wcs(cowcs);
-		coadd_set_lanczos(co, 3);
-	
-		for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
-			print 'scan,frame', sid, fnum
-			fn = T.filename[i]
-	
-			tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
-										 nanomaggies=True, mask_gz=True, unc_gz=True,
-										 sipwcs=True)
-			awcs = anwcs_new_sip(tim.wcs.wcs)
-			sky = np.median(tim.getImage())
-			
-			coadd_add_numpy(co, (tim.getImage() - sky).astype(np.float32),
-							tim.getInvvar().astype(np.float32), 1., awcs)
-	
-			snap = coadd_get_snapshot_numpy(co, -100.)
-			print 'Snapshot:', snap.min(), snap.max(), np.median(snap)
-	
-			ok = np.flatnonzero(snap > -100)
-			pl,ph = [np.percentile(snap.flat[ok], p) for p in [10,98]]
-			print 'plo,phi', pl,ph
-	
-			plt.clf()
-			plt.imshow(snap, interpolation='nearest', origin='lower',
-					   vmin=pl, vmax=ph)
-			plt.gray()
-			plt.colorbar()
-			plt.title('Coadd of %i WISE frames' % (i+1))
-			ps.savefig()
-	
-			plt.clf()
-			plt.hist(snap.ravel(), 100, range=(pl,ph))
-			ps.savefig()
-	
-		coadd_free(co)
-
 	# Video!
 	if False:
 		plot.color = 'black'
@@ -357,16 +361,13 @@ def main(opt):
 		img.image_low = 0.
 		img.image_high = 1e3
 		img.resample = 1
-
 		for sid,fnum in zip(T.scan_id[I], T.frame_num[I]):
 			print 'scan,frame', sid, fnum
 			fn = get_l1b_file(sid, fnum, bandnum)
 			print '-->', fn
 			assert(os.path.exists(fn))
-
 			#I = pyfits.open(fn)[0].data
 			#print 'img min,max,median', I.min(), I.max(), np.median(I.ravel())
-
 			img.set_wcs_file(fn, 0)
 			img.set_file(fn)
 			plot.plot('image')
@@ -475,8 +476,6 @@ def main(opt):
 					tsrcs.extend(groups[g])
 		tgroups[gl] = tsrcs
 
-
-
 	print 'Group size histogram:'
 	ng = Counter()
 	for g in groups.values():
@@ -489,6 +488,8 @@ def main(opt):
 	nms = []
 	tims = []
 	allrois = {}
+	badrois = {}
+
 
 	for imi,fn in enumerate(T.filename):
 		print 'File', fn
@@ -517,6 +518,8 @@ def main(opt):
 				nin += 1
 		print 'Number of sources inside image:', nin
 
+		#imslices,cat1 = _fit_image(tim, cat, gslices, groups)
+		#_fit_image(tim, subcat, gslice)
 		
 		tractor = Tractor([tim], cat)
 		tractor.freezeParam('images')
@@ -565,6 +568,11 @@ def main(opt):
 
 			if np.all(tim.getInvError()[gslice] == 0):
 				print 'This whole object group has invvar = 0.'
+
+				if not gl in badrois:
+					badrois[gl] = {}
+				badrois[gl][imi] = gslice
+
 				continue
 
 			if not gl in allrois:
@@ -586,8 +594,8 @@ def main(opt):
 			pobjs += len(gsrcs)
 			
 			t0 = Time()
-			ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-														   rois=[gslice])
+			tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+											   rois=[gslice])
 			print 'optimize_forced_photometry took', Time()-t0
 
 			tractor.catalog = fullcat
@@ -629,7 +637,7 @@ def main(opt):
 		WW.nms = np.array(nms).T
 		# print 'nm0', WW.nm0.shape
 		# print 'nms', WW.nms.shape
-		fn = 'measurements-%02i.fits' % imi
+		fn = opt.output % imi
 		WW.writeto(fn)
 		print 'Wrote', fn
 
@@ -680,38 +688,49 @@ def main(opt):
 		gsrcs = groups[gl]
 		tsrcs = tgroups[gl]
 
-		mytims = []
-		rois = []
-		if not gl in allrois:
+		if (not gl in allrois) and (not gl in badrois):
 			print 'Group', gl, 'does not touch any images?'
 			continue
 
-		for imi,roi in allrois[gl].items():
-			mytims.append(tims[imi])
-			rois.append(roi)
+		mytims = []
+		rois = []
+		if gl in allrois:
+			for imi,roi in allrois[gl].items():
+				mytims.append(tims[imi])
+				rois.append(roi)
 
-		print 'Group', gl, 'touches', len(mytims), 'images'
+		mybadtims = []
+		mybadrois = []
+		if gl in badrois:
+			for imi,roi in badrois[gl].items():
+				mybadtims.append(tims[imi])
+				mybadrois.append(roi)
 
-		fullcat = cat
-		subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
-		for i in range(len(tsrcs)):
-			subcat.freezeParam(len(gsrcs) + i)
+		print 'Group', gl, 'touches', len(mytims), 'images and', len(mybadtims), 'bad ones'
 
-		tractor = Tractor(mytims, subcat)
-		tractor.freezeParam('images')
+		if len(mytims):
+			fullcat = cat
+			subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
+			for i in range(len(tsrcs)):
+				subcat.freezeParam(len(gsrcs) + i)
 
-		print len(gsrcs), 'sources unfrozen; total', len(subcat)
-			
-		t0 = Time()
-		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-													   rois=rois)
-		print 'optimize_forced_photometry took', Time()-t0
+			tractor = Tractor(mytims, subcat)
+			tractor.freezeParam('images')
+
+			print len(gsrcs), 'sources unfrozen; total', len(subcat)
+
+			t0 = Time()
+			ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+														   rois=rois)
+			print 'optimize_forced_photometry took', Time()-t0
 
 		N = len(mytims)
 		C = int(np.ceil(np.sqrt(N)))
 		R = int(np.ceil(N / float(C)))
 		plt.clf()
-		for i,(tim,roi) in enumerate(zip(mytims, rois)):
+		#for i,(tim,roi) in enumerate(zip(mytims, rois)):
+		for i,(tim,im) in enumerate(zip(mytims, ims0)):
+			(img, mod, chi, roi) = im
 			plt.subplot(R,C, i+1)
 			plt.imshow(tim.getImage()[roi], interpolation='nearest', origin='lower',
 					   vmin=tim.zr[0], vmax=tim.zr[1])
@@ -719,8 +738,8 @@ def main(opt):
 		plt.suptitle('Data')
 		ps.savefig()
 
-		print 'ims0:', ims0
-		print 'ims1:', ims1
+		#print 'ims0:', ims0
+		#print 'ims1:', ims1
 
 		plt.clf()
 		for i,(tim,im) in enumerate(zip(mytims, ims0)):
@@ -730,6 +749,17 @@ def main(opt):
 					   vmin=tim.zr[0], vmax=tim.zr[1])
 			plt.gray()
 		plt.suptitle('Initial model')
+		ps.savefig()
+
+		imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+
+		plt.clf()
+		for i,(tim,im) in enumerate(zip(mytims, ims0)):
+			(img, mod, chi, roi) = im
+			plt.subplot(R,C, i+1)
+			plt.imshow(chi, **imchi)
+			plt.gray()
+		plt.suptitle('Initial chi')
 		ps.savefig()
 
 		if ims1 is not None:
@@ -743,24 +773,56 @@ def main(opt):
 			plt.suptitle('Final model')
 			ps.savefig()
 
+			plt.clf()
+			for i,(tim,im) in enumerate(zip(mytims, ims1)):
+				(img, mod, chi, roi) = im
+				plt.subplot(R,C, i+1)
+				plt.imshow(chi, **imchi)
+				plt.gray()
+				plt.suptitle('Final chi')
+			ps.savefig()
 
-		print 'Optimizing:'
-		cat.thawPathsTo('ra','dec')
-		p0 = cat.getParams()
-		cat.printThawedParams()
-		while True:
-			dlnp,X,alpha = tractor.optimize()
-			print 'dlnp', dlnp
-			print 'alpha', alpha
-			if dlnp < 0.1:
-				break
-		p1 = cat.getParams()
 
-		print 'Param changes:'
-		for nm,pp0,pp1 in zip(cat.getParamNames(), p0, p1):
-			print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
+		N = len(mybadtims)
+		if N:
+			C = int(np.ceil(np.sqrt(N)))
+			R = int(np.ceil(N / float(C)))
+			plt.clf()
+			for i,(tim,roi) in enumerate(zip(mybadtims, mybadrois)):
+				plt.subplot(R,C, i+1)
+				plt.imshow(tim.getImage()[roi], interpolation='nearest', origin='lower',
+						   vmin=tim.zr[0], vmax=tim.zr[1])
+				plt.gray()
+			plt.suptitle('Data in bad regions')
+			ps.savefig()
 
-		cat.freezeParamsRecursive('ra', 'dec')
+			plt.clf()
+			for i,(tim,roi) in enumerate(zip(mybadtims, mybadrois)):
+				plt.subplot(R,C, i+1)
+				plt.imshow(tim.getInvError()[roi], interpolation='nearest', origin='lower')
+				plt.gray()
+			plt.suptitle('Inverr in bad regions')
+			ps.savefig()
+
+
+		if False:
+			print 'Optimizing:'
+			cat.thawPathsTo('ra','dec')
+			p0 = cat.getParams()
+			cat.printThawedParams()
+			while True:
+				dlnp,X,alpha = tractor.optimize()
+				print 'dlnp', dlnp
+				print 'alpha', alpha
+				if dlnp < 0.1:
+					break
+			p1 = cat.getParams()
+
+			print 'Param changes:'
+			for nm,pp0,pp1 in zip(cat.getParamNames(), p0, p1):
+				print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
+
+			cat.freezeParamsRecursive('ra', 'dec')
 					   
 
 
@@ -771,7 +833,7 @@ def main(opt):
 	nm1 = np.array([b.getBand(band) for b in br1])
 	WW.nmall = nm1
 
-	fn = 'measurements-all.fits'
+	fn = opt.output % 999 #'measurements-all.fits'
 	WW.writeto(fn)
 	print 'Wrote', fn
 
@@ -788,8 +850,11 @@ if __name__ == '__main__':
 
 	parser.add_option('-s', dest='sources',
 					  help='Input SDSS source list')
-	parser.add_option('-i', dest='individual',
+	parser.add_option('-i', dest='individual', action='store_true',
 					  help='Fit individual images?')
+	parser.add_option('-o', dest='output', default='measurements-%03i.fits',
+					  help='Filename pattern for outputs; default %default')
+
 
 	parser.add_option('-p', dest='plots', action='store_true',
 					  help='Make result plots?')
@@ -816,187 +881,186 @@ if __name__ == '__main__':
 	ps = PlotSequence('compare')
 
 
-	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
-	print 'PSF image shape', psf.shape
-	H,W = psf.shape
-	X,Y = np.meshgrid(np.arange(W), np.arange(H))
-	mx = np.sum(X * psf) / np.sum(psf)
-	my = np.sum(Y * psf) / np.sum(psf)
-	print 'First moments:', mx, my
+	if False:
+		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+		print 'PSF image shape', psf.shape
+		H,W = psf.shape
+		X,Y = np.meshgrid(np.arange(W), np.arange(H))
+		mx = np.sum(X * psf) / np.sum(psf)
+		my = np.sum(Y * psf) / np.sum(psf)
+		print 'First moments:', mx, my
+
+		#S = fits_table('stripe82-19objs.fits', hdu=2)
+		S = fits_table('wise-sources-nearby.fits')
+		print 'Got', len(S)
+		S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
+		print 'Cut to', len(S)
+
+		T = fits_table('wise-images-overlapping.fits')
+		T.filename = [fn.strip() for fn in T.filename]
+		for fn in T.filename:
+			im = pyfits.open(fn)[0].data
+			wcs = anwcs(fn, 0)
+			#print 'Got WCS', wcs.getHeaderString()
+			anwcs_print_stdout(wcs)
+
+			H,W = im.shape
+			m = 5
+
+			X,Y = np.meshgrid(np.linspace(0, W, 30), np.linspace(0, H, 30))
+			X = X.ravel()
+			Y = Y.ravel()
+			X2 = []
+			Y2 = []
+			for x,y in zip(X,Y):
+				r,d = wcs.pixelxy2radec(x,y)
+				ok,x2,y2 = wcs.radec2pixelxy(r,d)
+				X2.append(x2)
+				Y2.append(y2)
+			X2 = np.array(X2)
+			Y2 = np.array(Y2)
+			print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
+
+			plt.clf()
+			plt.plot(np.vstack((X, X + (X2 - X)*100.)),
+					 np.vstack((Y, Y + (Y2 - Y)*100.)), 'b-')
+			plt.plot(X, Y, 'b.')
+			plt.axis('scaled')
+			plt.title("WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+			plt.axis([-50, 1066, -50, 1066])
+			ps.savefig()
+
+			plt.clf()
+			n,b,p1 = plt.hist(X - X2, 100, range=(-1,1), histtype='step', color='b')
+			n,b,p2 = plt.hist(Y - Y2, 100, range=(-1,1), histtype='step', color='r')
+			plt.legend((p1,p2), ('dx','dy'))
+			plt.title('WISE WCS round-trip residuals')
+			ps.savefig()
 
 
-	#S = fits_table('stripe82-19objs.fits', hdu=2)
-	S = fits_table('wise-sources-nearby.fits')
-	print 'Got', len(S)
-	S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
-	print 'Cut to', len(S)
-	
-	T = fits_table('wise-images-overlapping.fits')
-	T.filename = [fn.strip() for fn in T.filename]
-	for fn in T.filename:
-		im = pyfits.open(fn)[0].data
-		wcs = anwcs(fn, 0)
-		#print 'Got WCS', wcs.getHeaderString()
-		anwcs_print_stdout(wcs)
+			sip = Sip(fn, 0)
+			print 'Read', sip
 
-		H,W = im.shape
-		m = 5
+			X3 = []
+			Y3 = []
+			for x,y in zip(X,Y):
+				r,d = sip.pixelxy2radec(x,y)
+				x2,y2 = sip.radec2pixelxy(r,d)
+				X3.append(x2)
+				Y3.append(y2)
+			X3 = np.array(X3)
+			Y3 = np.array(Y3)
+			print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
 
-		X,Y = np.meshgrid(np.linspace(0, W, 30), np.linspace(0, H, 30))
-		X = X.ravel()
-		Y = Y.ravel()
-		X2 = []
-		Y2 = []
-		for x,y in zip(X,Y):
-			r,d = wcs.pixelxy2radec(x,y)
-			ok,x2,y2 = wcs.radec2pixelxy(r,d)
-			X2.append(x2)
-			Y2.append(y2)
-		X2 = np.array(X2)
-		Y2 = np.array(Y2)
-		print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
+			sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+			print 'After computing inverse polynomials:', sip
 
-		plt.clf()
-		plt.plot(np.vstack((X, X + (X2 - X)*100.)),
-				 np.vstack((Y, Y + (Y2 - Y)*100.)), 'b-')
-		plt.plot(X, Y, 'b.')
-		plt.axis('scaled')
-		plt.title("WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
-		plt.axis([-50, 1066, -50, 1066])
-		ps.savefig()
-
-		plt.clf()
-		n,b,p1 = plt.hist(X - X2, 100, range=(-1,1), histtype='step', color='b')
-		n,b,p2 = plt.hist(Y - Y2, 100, range=(-1,1), histtype='step', color='r')
-		plt.legend((p1,p2), ('dx','dy'))
-		plt.title('WISE WCS round-trip residuals')
-		ps.savefig()
+			X4 = []
+			Y4 = []
+			for x,y in zip(X,Y):
+				r,d = sip.pixelxy2radec(x,y)
+				x2,y2 = sip.radec2pixelxy(r,d)
+				X4.append(x2)
+				Y4.append(y2)
+			X4 = np.array(X4)
+			Y4 = np.array(Y4)
+			print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
 
 
-		sip = Sip(fn, 0)
-		print 'Read', sip
+			plt.clf()
+			plt.plot(np.vstack((X, X + (X4 - X)*1e6)),
+					 np.vstack((Y, Y + (Y4 - Y)*1e6)), 'b-')
+			plt.plot(X, Y, 'b.')
+			plt.axis('scaled')
+			plt.title("Refit WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+			plt.axis([-50, 1066, -50, 1066])
+			ps.savefig()
 
-		X3 = []
-		Y3 = []
-		for x,y in zip(X,Y):
-			r,d = sip.pixelxy2radec(x,y)
-			x2,y2 = sip.radec2pixelxy(r,d)
-			X3.append(x2)
-			Y3.append(y2)
-		X3 = np.array(X3)
-		Y3 = np.array(Y3)
-		print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
-
-		sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
-		print 'After computing inverse polynomials:', sip
-
-		X4 = []
-		Y4 = []
-		for x,y in zip(X,Y):
-			r,d = sip.pixelxy2radec(x,y)
-			x2,y2 = sip.radec2pixelxy(r,d)
-			X4.append(x2)
-			Y4.append(y2)
-		X4 = np.array(X4)
-		Y4 = np.array(Y4)
-		print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
+			plt.clf()
+			n,b,p1 = plt.hist(X - X4, 100, range=(-1e-3,1e-3), histtype='step', color='b')
+			n,b,p2 = plt.hist(Y - Y4, 100, range=(-1e-3,1e-3), histtype='step', color='r')
+			plt.legend((p1,p2), ('dx','dy'))
+			plt.title('Refit WISE WCS round-trip residuals')
+			ps.savefig()
 
 
-		plt.clf()
-		plt.plot(np.vstack((X, X + (X4 - X)*1e6)),
-				 np.vstack((Y, Y + (Y4 - Y)*1e6)), 'b-')
-		plt.plot(X, Y, 'b.')
-		plt.axis('scaled')
-		plt.title("Refit WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
-		plt.axis([-50, 1066, -50, 1066])
-		ps.savefig()
-
-		plt.clf()
-		n,b,p1 = plt.hist(X - X4, 100, range=(-1e-3,1e-3), histtype='step', color='b')
-		n,b,p2 = plt.hist(Y - Y4, 100, range=(-1e-3,1e-3), histtype='step', color='r')
-		plt.legend((p1,p2), ('dx','dy'))
-		plt.title('Refit WISE WCS round-trip residuals')
-		ps.savefig()
-
-
-		# sip.ap_order = 5
-		# sip.bp_order = 5
-		# sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
-		# print 'After computing 5th-order  inverse polynomials:', sip
-		# X5 = []
-		# Y5 = []
-		# for x,y in zip(X,Y):
-		# 	r,d = sip.pixelxy2radec(x,y)
-		# 	x2,y2 = sip.radec2pixelxy(r,d)
-		# 	X5.append(x2)
-		# 	Y5.append(y2)
-		# X5 = np.array(X5)
-		# Y5 = np.array(Y5)
-		# print 'Round-trip error on x,y with 5th-order:', np.std(X5-X), np.std(Y5-Y)
-
-
-
-
-		xx,yy = [],[]
-		for r,d in zip(S.ra, S.dec):
-			ok,x,y = wcs.radec2pixelxy(r, d)
-			#if x >= 0 and y >= 0 and x < H and y < W:
-			if x >= m and y >= m and y < H-m and x < W-m:
-				xx.append(x-1)
-				yy.append(y-1)
-
-		plt.clf()
-		for i,(x,y) in enumerate(zip(xx,yy)):
-			if i == 16:
-				break
-			ix = int(np.round(x))
-			iy = int(np.round(y))
-			plt.subplot(4,4,i+1)
-			plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
-					   vmin=15., vmax=75.)
-			plt.gray()
-			ax = plt.axis()
-			plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
-			# ms=15, mew=2, alpha=0.6)
-			plt.axis(ax)
-
-		tt = fn.split('/')[-1].replace('-int-1b.fits', '')
-		plt.suptitle('WISE ' + tt)
-		ps.savefig()
+			# sip.ap_order = 5
+			# sip.bp_order = 5
+			# sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+			# print 'After computing 5th-order  inverse polynomials:', sip
+			# X5 = []
+			# Y5 = []
+			# for x,y in zip(X,Y):
+			# 	r,d = sip.pixelxy2radec(x,y)
+			# 	x2,y2 = sip.radec2pixelxy(r,d)
+			# 	X5.append(x2)
+			# 	Y5.append(y2)
+			# X5 = np.array(X5)
+			# Y5 = np.array(Y5)
+			# print 'Round-trip error on x,y with 5th-order:', np.std(X5-X), np.std(Y5-Y)
 
 
 
-		xx,yy = [],[]
-		for r,d in zip(S.ra, S.dec):
-			x,y = sip.radec2pixelxy(r, d)
-			#if x >= 0 and y >= 0 and x < H and y < W:
-			if x >= m and y >= m and y < H-m and x < W-m:
-				xx.append(x-1)
-				yy.append(y-1)
 
-		plt.clf()
-		for i,(x,y) in enumerate(zip(xx,yy)):
-			if i == 16:
-				break
-			ix = int(np.round(x))
-			iy = int(np.round(y))
-			plt.subplot(4,4,i+1)
-			plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
-					   vmin=15., vmax=75.)
-			plt.gray()
-			ax = plt.axis()
-			plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
-			# ms=15, mew=2, alpha=0.6)
-			plt.axis(ax)
+			xx,yy = [],[]
+			for r,d in zip(S.ra, S.dec):
+				ok,x,y = wcs.radec2pixelxy(r, d)
+				#if x >= 0 and y >= 0 and x < H and y < W:
+				if x >= m and y >= m and y < H-m and x < W-m:
+					xx.append(x-1)
+					yy.append(y-1)
 
-		tt = fn.split('/')[-1].replace('-int-1b.fits', '')
-		plt.suptitle('WISE ' + tt + ' (re-fit)')
-		ps.savefig()
+			plt.clf()
+			for i,(x,y) in enumerate(zip(xx,yy)):
+				if i == 16:
+					break
+				ix = int(np.round(x))
+				iy = int(np.round(y))
+				plt.subplot(4,4,i+1)
+				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+						   vmin=15., vmax=75.)
+				plt.gray()
+				ax = plt.axis()
+				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+				# ms=15, mew=2, alpha=0.6)
+				plt.axis(ax)
+
+			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+			plt.suptitle('WISE ' + tt)
+			ps.savefig()
 
 
-		break
 
-	
+			xx,yy = [],[]
+			for r,d in zip(S.ra, S.dec):
+				x,y = sip.radec2pixelxy(r, d)
+				#if x >= 0 and y >= 0 and x < H and y < W:
+				if x >= m and y >= m and y < H-m and x < W-m:
+					xx.append(x-1)
+					yy.append(y-1)
+
+			plt.clf()
+			for i,(x,y) in enumerate(zip(xx,yy)):
+				if i == 16:
+					break
+				ix = int(np.round(x))
+				iy = int(np.round(y))
+				plt.subplot(4,4,i+1)
+				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+						   vmin=15., vmax=75.)
+				plt.gray()
+				ax = plt.axis()
+				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+				# ms=15, mew=2, alpha=0.6)
+				plt.axis(ax)
+
+			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+			plt.suptitle('WISE ' + tt + ' (re-fit)')
+			ps.savefig()
+
+
+			break
+
 	T = fits_table('stripe82-19objs.fits', hdu=2)
 	print 'Reading results file', opt.result
 	W = fits_table(opt.result)
@@ -1045,20 +1109,74 @@ if __name__ == '__main__':
 
 	plt.clf()
 	p1 = plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
-
-	p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'mx', zorder=30)
-
+	if 'nmall' in W.get_columns():
+		p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'mx', zorder=30)
 	R,C = W.nms.shape
 	mns = []
 	sts = []
+	mx = []
 	for j in range(R):
 		nm = W.nms[j,:]
 		I = np.flatnonzero(nm != W.nm0[j])
 		print 'Measured flux', j, 'in', len(I), 'images'
+		if len(I) == 0:
+			continue
 		mns.append(np.mean(nm[I]))
 		sts.append(np.std(nm[I]))
+		mx.append(T.wiseflux[j,0])
 		p3 = plt.loglog(T.wiseflux[j,0] + np.zeros(len(I)), nm[I], 'b.', alpha=0.5, zorder=25)
-	p4 = plt.errorbar(T.wiseflux[:,0], mns, yerr=sts, fmt='o', mec='b', mfc='none')
+	if len(mx):
+		p4 = plt.errorbar(mx, mns, yerr=sts, fmt='o', mec='b', mfc='none')
+
+	ax = plt.axis()
+	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
+	plt.plot([lo,hi], [lo,hi], 'k-', lw=3, alpha=0.3)
+	plt.axis(ax)
+
+	plt.xlabel("Schlegel's measurements (nanomaggies)")
+	plt.ylabel("My measurements (nanomaggies)")
+
 	ps.savefig()
+
+
+	plt.clf()
+	rband = W.nm0
+	if 'nmall' in W.get_columns():
+		simul = W.nmall
+		I = np.flatnonzero(simul != rband)
+		xx = T.wiseflux[I,0]
+		simul = simul[I]
+		# p1 = plt.loglog(xx, W.nm0   / xx, 'r.', zorder=30)
+		p2 = plt.loglog(xx, simul / xx, 'b.', zorder=30)
+		sig = 1./np.sqrt(T.wiseflux_ivar[I,0])
+		p5 = plt.loglog([xx-sig, xx+sig], [simul / xx]*2, 'b-', zorder=29)
+
+	R,C = W.nms.shape
+	mns = []
+	sts = []
+	mx = []
+	for j in range(R):
+		nm = W.nms[j,:]
+		I = np.flatnonzero(nm != W.nm0[j])
+		print 'Measured flux', j, 'in', len(I), 'images'
+		if len(I) == 0:
+			continue
+		mns.append(np.mean(nm[I]))
+		sts.append(np.std(nm[I]))
+		mx.append(T.wiseflux[j,0])
+		xx = T.wiseflux[j,0] + np.zeros(len(I))
+		p3 = plt.loglog(xx, nm[I] / xx, 'b.', alpha=0.5, zorder=25)
+	if len(mx):
+		mns = np.array(mns)
+		mx = np.array(mx)
+		sts = np.array(sts)
+		p4 = plt.errorbar(mx, mns / mx, yerr = sts / mx, fmt='o', mec='b', mfc='none')
+
+	plt.axhline(1., color='k', lw=3, alpha=0.3)
+	plt.ylim(0.1, 10.)
+	plt.xlabel("Schlegel's measurements (nanomaggies)")
+	plt.ylabel("My measurements / Schlegel's")
+	ps.savefig()
+
 
 	
