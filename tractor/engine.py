@@ -850,7 +850,8 @@ class Tractor(MultiParams):
 								   minsb=0.,
 								   mindlnp=1.,
 								   rois=None,
-								   fitstats=False):
+								   fitstats=False,
+								   justims0=False):
 		'''
 		ASSUMES linear brightnesses!
 
@@ -1031,6 +1032,9 @@ class Tractor(MultiParams):
 			p0 = self.getParams()
 			if lnp0 is None:
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois, scales)
+
+			if justims0:
+				return lnp0,chis0,ims0
 
 			# print 'Starting opt loop with'
 			# print '  p0', p0
@@ -1635,6 +1639,13 @@ class Tractor(MultiParams):
 		return src.getModelPatch(img, **kwargs)
 
 	def getModelPatch(self, img, src, minsb=0., **kwargs):
+		# print
+		# print 'getModelPatch.'
+		# print 'src', src
+		# print '-> hashkey', src.hashkey()
+		# print 'img', img
+		# print '-> hashkey', img.hashkey()
+		# print
 		deps = (img.hashkey(), src.hashkey())
 		deps = hash(deps)
 		mv,mod = self.cache.get(deps, (0.,None))
@@ -1645,6 +1656,7 @@ class Tractor(MultiParams):
 			#		', source ' + str(src))
 			#logverb('	image hashkey ' + str(img.hashkey()))
 			#logverb('	source hashkey ' + str(src.hashkey()))
+			print 'Cache hit'
 			pass
 		else:
 			#logverb('	Cache miss for model patch: image ' + str(img) +
@@ -1709,13 +1721,22 @@ class Tractor(MultiParams):
 		patches = []
 		for src in srcs:
 			patch = self.getModelPatch(img, src, minsb=minsb)
+			print 'Source', src
+			print '--> patch', patch
 			patches.append(patch)
 			if patch is not None:
+				print '    sum', patch.patch.sum()
+				print '    max', patch.patch.max()
+				print '    min > 0', patch.patch[patch.patch > 0].min()
 				assert(np.all(patch.patch >= 0))
 				patch.addTo(mod)
 
 		#mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
 		bigmod = (mod > minsb)
+
+		print 'Mod: nonzero pixels', np.flatnonzero(mod)
+		print 'BigMod: nonzero pixels', np.flatnonzero(bigmod)
+
 		bigmod = binary_dilation(bigmod)
 		L,n = label(bigmod, structure=np.ones((3,3), int))
 		#L,n = label(mod > minsb, structure=np.ones((5,5), int))
@@ -1769,7 +1790,7 @@ class Tractor(MultiParams):
 				srcgroups[ll] = []
 			srcgroups[ll].append(i)
 		#return srcgroups.values() #, L
-		return srcgroups, L
+		return srcgroups, L, mod
 
 	def getModelImages(self):
 		if self.is_multiproc():

@@ -46,6 +46,8 @@ class Params(object):
 		''' Returns a *copy* of the current parameter values as an
 		iterable (eg, list)'''
 		return []
+	def getAllParams(self):
+		return self.getParams()
 	def getStepSizes(self, *args, **kwargs):
 		''' Returns "reasonable" step sizes for the parameters.'''
 		return []

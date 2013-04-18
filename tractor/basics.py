@@ -735,7 +735,9 @@ class PointSource(MultiParams):
 
 	def getUnitFluxModelPatch(self, img, minval=0.):
 		(px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
+		print 'PointSource.getUnitFluxModelPatch: pix pos', px,py
 		patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
+		print '  Patch', patch
 		return patch
 
 	def getUnitFluxModelPatches(self, *args, **kwargs):

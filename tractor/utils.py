@@ -41,7 +41,7 @@ class BaseParams(object):
 	def copy(self):
 		return self.__class__(*self.getParams())
 	def hashkey(self):
-		return (getClassName(self),) + tuple(self.getParams())
+		return (getClassName(self),) + tuple(self.getAllParams())
 	def __hash__(self):
 		return hash(self.hashkey())
 	def __eq__(self, other):
@@ -57,6 +57,8 @@ class BaseParams(object):
 		''' Returns a *copy* of the current parameter values as an
 		iterable (eg, list)'''
 		return []
+	def getAllParams(self):
+		return self.getParams()
 	def getStepSizes(self, *args, **kwargs):
 		'''
 		Returns "reasonable" step sizes for the parameters.
@@ -181,6 +183,10 @@ class NamedParams(object):
 		super(NamedParams,self).__init__()
 		# active/inactive
 		self.liquid = [True] * self._numberOfThings()
+
+	def getAllParams(self):
+		''' Returns all params, regardless of thawed/frozen status. '''
+		raise RuntimeError("Unimplemented getAllParams in " + str(self.__class__))
 
 	def _addNamedParams(self, alias, **d):
 		self.namedparams.update(d)
@@ -443,8 +449,11 @@ class ParamList(BaseParams, NamedParams):
 		'''
 		Returns a *copy* of the current active parameter values (list)
 		'''
-		#return list(self._getLiquidArray(self.vals))
 		return list(self._getLiquidArray(self._getThings()))
+
+	def getAllParams(self):
+		return list(self._getThings())
+
 	def getParam(self,i):
 		ii = self._indexLiquid(i)
 		return self._getThing(ii)
@@ -756,6 +765,15 @@ class MultiParams(BaseParams, NamedParams):
 		p = []
 		for s in self._getActiveSubs():
 			pp = s.getParams()
+			if pp is None:
+				continue
+			p.extend(pp)
+		return p
+
+	def getAllParams(self):
+		p = []
+		for s in self.subs:
+			pp = s.getAllParams()
 			if pp is None:
 				continue
 			p.extend(pp)
