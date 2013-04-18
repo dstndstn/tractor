@@ -577,7 +577,7 @@ class MultiParams(BaseParams, NamedParams):
 		super(MultiParams,self).__init__()
 
 	def copy(self):
-		print "copy:",self
+		#print "copy:",self
 		return self.__class__(*[s.copy() for s in self.subs])
 
 	# delegate list operations to self.subs.

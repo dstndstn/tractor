@@ -401,6 +401,7 @@ def main(opt, ps):
 			cat1,obj1,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
 												  objs=oo, radecrad=(r,d,rad), bands=[],
 												  nanomaggies=True, extrabands=[band],
+												  fixedComposites=True,
 												  getobjs=True, getobjinds=True)
 			print 'Got', len(cat1), 'SDSS sources nearby'
 			cats.append(cat1)
@@ -532,17 +533,17 @@ def main(opt, ps):
 	minsb = 0.1 * sig
 	#minsb = 0.
 
-	pc = faketim.getPhotoCal()
-	print 'Source counts:'
-	for src in cat:
-		print '  ', src
-		print '-->', pc.brightnessToCounts(src.getBrightness())
-		print '  -->', [pc.brightnessToCounts(br) for br in src.getBrightnesses()]
-	print 'Source pixel positions:'
-	wcs = faketim.getWcs()
-	for src in cat:
-		print '  ', src
-		print '--> x,y', wcs.positionToPixel(src.getPosition())
+	# pc = faketim.getPhotoCal()
+	# print 'Source counts:'
+	# for src in cat:
+	# 	print '  ', src
+	# 	print '-->', pc.brightnessToCounts(src.getBrightness())
+	# 	print '  -->', [pc.brightnessToCounts(br) for br in src.getBrightnesses()]
+	# print 'Source pixel positions:'
+	# wcs = faketim.getWcs()
+	# for src in cat:
+	# 	print '  ', src
+	# 	print '--> x,y', wcs.positionToPixel(src.getPosition())
 	
 
 	print 'Finding overlapping sources...'
@@ -556,26 +557,26 @@ def main(opt, ps):
 
 	print 'unique labels:', np.unique(L)
 
-	plt.clf()
-	plt.imshow(fakemod, interpolation='nearest', origin='lower',
-			   vmin=0, vmax=sig*3.)
-	plt.title('Fakemod')
-	ps.savefig()
-
-	for IM in [L, (L>0)]:
-		plt.clf()
-		plt.imshow(IM, interpolation='nearest', origin='lower')
-		plt.gray()
-		wcs = faketim.getWcs()
-		xy = []
-		for src in cat:
-			x,y = wcs.positionToPixel(src.getPosition())
-			xy.append((x,y))
-		xy = np.array(xy)
-		ax = plt.axis()
-		plt.plot(xy[:,0], xy[:,1], 'r+')
-		plt.title('Source groups')
-		ps.savefig()
+	# plt.clf()
+	# plt.imshow(fakemod, interpolation='nearest', origin='lower',
+	# 		   vmin=0, vmax=sig*3.)
+	# plt.title('Fakemod')
+	# ps.savefig()
+	# 
+	# for IM in [L, (L>0)]:
+	# 	plt.clf()
+	# 	plt.imshow(IM, interpolation='nearest', origin='lower')
+	# 	plt.gray()
+	# 	wcs = faketim.getWcs()
+	# 	xy = []
+	# 	for src in cat:
+	# 		x,y = wcs.positionToPixel(src.getPosition())
+	# 		xy.append((x,y))
+	# 	xy = np.array(xy)
+	# 	ax = plt.axis()
+	# 	plt.plot(xy[:,0], xy[:,1], 'r+')
+	# 	plt.title('Source groups')
+	# 	ps.savefig()
 
 	# Find sources touching each group's (rectangular) ROI
 	tgroups = {}
@@ -590,37 +591,37 @@ def main(opt, ps):
 		tgroups[gl] = tsrcs
 
 
-	for i,gslice in enumerate(gslices):
-		if not (i+1) in groups:
-			continue
-
-		plt.clf()
-		plt.imshow(IM[gslice], interpolation='nearest', origin='lower')
-		plt.gray()
-		wcs = faketim.getWcs()
-		xy = []
-		y0,x0 = gslice[0].start, gslice[1].start
-		for src in cat:
-			x,y = wcs.positionToPixel(src.getPosition())
-			xy.append((x-x0,y-y0))
-		xy = np.array(xy)
-
-		ax = plt.axis()
-
-		plt.plot(xy[:,0], xy[:,1], 'r+')
-
-		I = np.array(groups[i+1])
-		if len(I):
-			plt.plot(xy[I,0], xy[I,1], 'g.')
-
-		I = np.array(tgroups[i+1])
-		if len(I):
-			plt.plot(xy[I,0], xy[I,1], 'gx')
-
-		ps.savefig()
-
-		plt.axis(ax)
-		ps.savefig()
+	# for i,gslice in enumerate(gslices):
+	# 	if not (i+1) in groups:
+	# 		continue
+	# 
+	# 	plt.clf()
+	# 	plt.imshow(IM[gslice], interpolation='nearest', origin='lower')
+	# 	plt.gray()
+	# 	wcs = faketim.getWcs()
+	# 	xy = []
+	# 	y0,x0 = gslice[0].start, gslice[1].start
+	# 	for src in cat:
+	# 		x,y = wcs.positionToPixel(src.getPosition())
+	# 		xy.append((x-x0,y-y0))
+	# 	xy = np.array(xy)
+	# 
+	# 	ax = plt.axis()
+	# 
+	# 	plt.plot(xy[:,0], xy[:,1], 'r+')
+	# 
+	# 	I = np.array(groups[i+1])
+	# 	if len(I):
+	# 		plt.plot(xy[I,0], xy[I,1], 'g.')
+	# 
+	# 	I = np.array(tgroups[i+1])
+	# 	if len(I):
+	# 		plt.plot(xy[I,0], xy[I,1], 'gx')
+	# 
+	# 	ps.savefig()
+	# 
+	# 	plt.axis(ax)
+	# 	ps.savefig()
 
 
 
@@ -644,24 +645,8 @@ def main(opt, ps):
 		mp = multiproc(1)
 
 	tims = mp.map(_read_l1b, T.filename)
+
 	for imi,tim in enumerate(tims):
-
-		#for imi,fn in enumerate(T.filename):
-		#print 'Reading WISE file', imi, 'of', len(T), ':', fn
-		#if imi == 20:
-		#	break
-		# tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
-		# 							 nanomaggies=True, mask_gz=True, unc_gz=True,
-		# 							 sipwcs=True, constantInvvar=True)
-		# tims.append(tim)
-
-		# ie = tim.getInvError()
-		# nz = np.flatnonzero(ie)
-		# meanerr = 1. / np.median(ie.flat[nz])
-		# sig = meanerr
-		# print 'Sigma', sig
-		# tim.sig = sig
-
 		tim.psf = w1psf
 		H,W = tim.shape
 		nin = 0
@@ -671,9 +656,6 @@ def main(opt, ps):
 				nin += 1
 		print 'Number of sources inside image:', nin
 
-		#imslices,cat1 = _fit_image(tim, cat, gslices, groups)
-		#_fit_image(tim, subcat, gslice)
-		
 		tractor = Tractor([tim], cat)
 		tractor.freezeParam('images')
 		### ??
@@ -782,9 +764,7 @@ def main(opt, ps):
 			print 'Photometered', pgroups, 'groups containing', pobjs, 'objects'
 	
 			cat.thawPathsTo(band)
-			cat1 = cat.getParams()
-			br1 = [src.getBrightness().copy() for src in cat]
-			nm1 = np.array([b.getBand(band) for b in br1])
+			nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
 			nms.append(nm1)
 	
 			WW.nms = np.array(nms).T
@@ -833,8 +813,8 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 				xi,yi = wcs.positionToPixel(src.getPosition())
 				xy.append((xi - x0, yi - y0))
 			xys.append(xy)
-			print 'X,Y source positions in stamp of shape', stamps[-1].shape
-			print '  ', xy
+			#print 'X,Y source positions in stamp of shape', stamps[-1].shape
+			#print '  ', xy
 		R,C = _plot_grid(stamps, kwas)
 		for i,xy in enumerate(xys):
 			plt.subplot(R, C, i+1)
@@ -949,17 +929,17 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 				#fits[gl] = (tractor, len(gsrcs), rois, op1, op2)
 
 
-			print 'Plotting mods after simul photom'
-			#_plot_grid([mod for (img, mod, chi, roi) in ims0], imas)
-			_plot_grid2(ims0, subcat, mytims, imas)
-			plt.suptitle('Initial model: ' + tt)
-			ps.savefig()
-
-			print 'Plotting chis after simul photom'
-			#_plot_grid([chi for (img, mod, chi, roi) in ims0], imchis)
-			_plot_grid2(ims0, subcat, mytims, imchis, ptype='chi')
-			plt.suptitle('Initial chi: ' + tt)
-			ps.savefig()
+			# print 'Plotting mods after simul photom'
+			# #_plot_grid([mod for (img, mod, chi, roi) in ims0], imas)
+			# _plot_grid2(ims0, subcat, mytims, imas)
+			# plt.suptitle('Initial model: ' + tt)
+			# ps.savefig()
+			# 
+			# print 'Plotting chis after simul photom'
+			# #_plot_grid([chi for (img, mod, chi, roi) in ims0], imchis)
+			# _plot_grid2(ims0, subcat, mytims, imchis, ptype='chi')
+			# plt.suptitle('Initial chi: ' + tt)
+			# ps.savefig()
 
 			print 'After simultaenous photometry:'
 			subcat.printThawedParams()
@@ -972,9 +952,8 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 			cat.freezeParamsRecursive('*')
 			cat.thawPathsTo(band)
-			cat1 = cat.getParams()
-			br1 = [src.getBrightness().copy() for src in cat]
-			WW.nmall = np.array([b.getBand(band) for b in br1])
+			WW.nmall = np.array([src.getBrightness().getBand(band) for src in cat])
+
 
 
 		if len(mytims) and opt.opt:
@@ -1134,37 +1113,15 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 
 
-	# cat.freezeParamsRecursive('*')
-	# cat.thawPathsTo(band)
-	# cat1 = cat.getParams()
-	# br1 = [src.getBrightness().copy() for src in cat]
-	# nm1 = np.array([b.getBand(band) for b in br1])
-	# WW.nmall = nm1
-	# 
-
-
-	cat.setParams(catopt)
-	nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
-	WW.nmall = nm1
-
-	fn = opt.output % 998
-	WW.writeto(fn)
-	print 'Wrote', fn
-
-	#if opt.opt:
-	#	for tractor,NG,rois,op1,op2 in fits.values():
-	#	cat.freezeParamsRecursive('*')
-	#	cat.thawPathsTo(band)
-	#	cat1 = cat.getParams()
-	#	br1 = [src.getBrightness().copy() for src in cat]
-	#	nm1 = np.array([b.getBand(band) for b in br1])
-	#	WW.nmoptrd = nm1
-
 	if opt.opt:
+
+		fn = opt.output % 998
+		WW.writeto(fn)
+		print 'Wrote', fn
+
 		cat.thawPathsTo('ra','dec')
 		cat.setParams(catopt)
-		nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
-		WW.nmoptrd = nm1
+		WW.nmoptrd = np.array([src.getBrightness().getBand(band) for src in cat])
 		cat.freezeParamsRecursive(band, 'dec')
 		WW.raoptrd = np.array(cat.getParams())
 		cat.freezeParamsRecursive('ra')

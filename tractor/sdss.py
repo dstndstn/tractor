@@ -219,7 +219,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 				 bands=None,
 				 badmag=25, nanomaggies=False,
 				 getobjs=False, getobjinds=False,
-				 extrabands=None):
+				 extrabands=None,
+				 fixedComposites=False):
 	'''
 	If set,
 
@@ -416,7 +417,11 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 			assert(False)
 
 		if iscomp:
-			dbright,ebright = comp2bright(flux, Ldev[i], Lexp[i])
+			if fixedComposites:
+				bright = nmgy2bright(flux)
+				fdev = (Ldev[i] / (Ldev[i] + Lexp[i]))
+			else:
+				dbright,ebright = comp2bright(flux, Ldev[i], Lexp[i])
 		else:
 			bright = nmgy2bright(flux)
 
@@ -432,7 +437,10 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 			eshape = GalaxyShape(re, ab, phi)
 
 		if iscomp:
-			gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
+			if fixedComposites:
+				gal = FixedCompositeGalaxy(pos, bright, fdev, eshape, dshape)
+			else:
+				gal = CompositeGalaxy(pos, ebright, eshape, dbright, dshape)
 			ncomp += 1
 		elif hasdev:
 			gal = DevGalaxy(pos, bright, dshape)

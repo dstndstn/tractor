@@ -598,7 +598,6 @@ def getmodelimagefunc2((tr, im)):
 		print 'Exception in getmodelimagefun2:'
 		traceback.print_exc()
 		raise
-		
 
 class Tractor(MultiParams):
 	"""
@@ -878,9 +877,6 @@ class Tractor(MultiParams):
 
 		if rois is not None:
 			assert(len(rois) == len(imgs))
-		#t0 = Time()
-
-
 		#
 		# Here we build up the "umodels" nested list, which has shape
 		# (if it were a numpy array) of (len(images), len(srcs))
@@ -918,9 +914,7 @@ class Tractor(MultiParams):
 				else:
 					mv = minsb / csum
 				ums = src.getUnitFluxModelPatches(img, minval=mv)
-				#ums = [um for um in ums if um is not None]
-				#if len(ums) == 0:
-				#	continue
+
 				isvalid = False
 				isallzero = False
 
@@ -1028,7 +1022,14 @@ class Tractor(MultiParams):
 		chis0 = None
 		quitNow = False
 
+		## FIXME -- this should depend on the PhotoCal scalings!
+		damp0 = 1e-3
+		damping = damp
+
 		while True:
+			# A flag to try again even if the lnprob got worse
+			tryAgain = False
+
 			p0 = self.getParams()
 			if lnp0 is None:
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois, scales)
@@ -1050,8 +1051,11 @@ class Tractor(MultiParams):
 			if rois is not None:
 				realims = self.images
 				self.images = subimgs
-			X = self.getUpdateDirection(derivs, damp=damp, priors=priors,
+
+			print 'forced phot: getting update with damp=', damping
+			X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
 										scale_columns=False, chiImages=chis0)
+			print 'forced phot: update', X
 			if rois is not None:
 				self.images = realims
 			#topt = Time()-t0
@@ -1075,6 +1079,17 @@ class Tractor(MultiParams):
 				#print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
 				quitNow = True
+			else:
+				print 'Some negative fluxes requested:'
+				print 'Fluxes:', p0
+				print 'Update:', X
+				print 'Total :', p0+X
+				if damp == 0.0:
+					damping = damp0
+					damp0 *= 10.
+					print 'Setting damping to', damping
+					if damp0 < 1e3:
+						tryAgain = True
 
 			lnpBest = lnp0
 			alphaBest = None
@@ -1083,7 +1098,7 @@ class Tractor(MultiParams):
 			for alpha in alphas:
 				#logverb('  Stepping with alpha =', alpha)
 				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois, scales)
-				#print 'Stepped with alpha', alpha, 'for dlnp', lnp-lnp0
+				print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
 				if lnp > lnpBest:
@@ -1112,7 +1127,8 @@ class Tractor(MultiParams):
 			#print 'forced phot: line search:', tstep
 			#print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
 			if dlogprob < mindlnp:
-				break
+				if not tryAgain:
+					break
 
 			if quitNow:
 				break
@@ -1656,7 +1672,6 @@ class Tractor(MultiParams):
 			#		', source ' + str(src))
 			#logverb('	image hashkey ' + str(img.hashkey()))
 			#logverb('	source hashkey ' + str(src.hashkey()))
-			print 'Cache hit'
 			pass
 		else:
 			#logverb('	Cache miss for model patch: image ' + str(img) +
@@ -1721,22 +1736,20 @@ class Tractor(MultiParams):
 		patches = []
 		for src in srcs:
 			patch = self.getModelPatch(img, src, minsb=minsb)
-			print 'Source', src
-			print '--> patch', patch
+			#print 'Source', src
+			#print '--> patch', patch
 			patches.append(patch)
 			if patch is not None:
-				print '    sum', patch.patch.sum()
-				print '    max', patch.patch.max()
-				print '    min > 0', patch.patch[patch.patch > 0].min()
+				#print '    sum', patch.patch.sum()
+				#print '    max', patch.patch.max()
+				#print '    min > 0', patch.patch[patch.patch > 0].min()
 				assert(np.all(patch.patch >= 0))
 				patch.addTo(mod)
 
 		#mod = self.getModelImage(img, srcs=srcs, minsb=minsb, sky=False)
 		bigmod = (mod > minsb)
-
-		print 'Mod: nonzero pixels', np.flatnonzero(mod)
-		print 'BigMod: nonzero pixels', np.flatnonzero(bigmod)
-
+		# print 'Mod: nonzero pixels', len(np.flatnonzero(mod))
+		# print 'BigMod: nonzero pixels', len(np.flatnonzero(bigmod))
 		bigmod = binary_dilation(bigmod)
 		L,n = label(bigmod, structure=np.ones((3,3), int))
 		#L,n = label(mod > minsb, structure=np.ones((5,5), int))
