@@ -139,7 +139,7 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 
 	#print 'Finding overlapping sources...'
 	#t0 = Time()
-	groups,L = tr.getOverlappingSources(0, minsb=minsb)
+	groups,L,nil = tr.getOverlappingSources(0, minsb=minsb)
 	#print 'Overlapping sources took', Time()-t0
 	#print 'Got', len(groups), 'groups of sources'
 
@@ -893,7 +893,7 @@ def simulfit(opt, cs82field):
 
 			print 'Finding overlapping sources...'
 			tr = Tractor([faketim], cat)
-			groups,L = tr.getOverlappingSources(0, minsb=minsb)
+			groups,L,nil = tr.getOverlappingSources(0, minsb=minsb)
 			print 'Got', len(groups), 'groups of sources'
 			nl = L.max()
 			gslices = find_objects(L, nl)

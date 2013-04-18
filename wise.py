@@ -33,7 +33,7 @@ logger = logging.getLogger('wise')
 
 def read_wise_level1b(basefn, radecroi=None, filtermap={},
 					  nanomaggies=False, mask_gz=False, unc_gz=False,
-					  sipwcs=False):
+					  sipwcs=False, constantInvvar=False):
 	intfn  = basefn + '-int-1b.fits'
 	maskfn = basefn + '-msk-1b.fits'
 	if mask_gz:
@@ -121,9 +121,6 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	sky = np.median(data)
 	tsky = tractor.ConstantSky(sky)
 
-	sigma1 = np.median(unc)
-	zr = np.array([-3,10]) * sigma1 + sky
-
 	name = 'WISE ' + ihdr['FRSETID'] + ' W%i' % band
 
 	# Mask bits, from
@@ -161,22 +158,24 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	# 30 reserved
 	# 31 not used: sign bit
 
-	#goodmask = (mask == 0)
-
 	goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
 												10,11,12,13,14,15,16,17,18,
 												21,26,27,28]])) == 0)
+	sigma1 = np.median(unc[goodmask])
+	zr = np.array([-3,10]) * sigma1 + sky
 
 	invvar = np.zeros_like(data)
-	invvar[goodmask] = 1./(unc[goodmask])**2
+	if constantInvvar:
+		invvar[goodmask] = 1. / (sigma1**2)
+	else:
+		invvar[goodmask] = 1./ (unc[goodmask])**2
 
-	#print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
-
-	if not np.all(np.isfinite(invvar)):
-		print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))
-		bad = np.logical_not(np.isfinite(invvar))
-		invvar[bad] = 0.
-		data[bad] = sky
+		# print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
+		if not np.all(np.isfinite(invvar)):
+			# print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))
+			bad = np.logical_not(np.isfinite(invvar))
+			invvar[bad] = 0.
+			data[bad] = sky
 
 	# avoid NaNs
 	data[np.logical_not(goodmask)] = sky
@@ -184,6 +183,7 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	tim = tractor.Image(data=data, invvar=invvar, psf=tpsf, wcs=twcs,
 						sky=tsky, photocal=photocal, name=name, zr=zr)
 	tim.extent = [x0,x1,y0,y1]
+	tim.sigma1 = sigma1
 
 	# FIXME
 	tim.maskplane = mask

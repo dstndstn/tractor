@@ -15,6 +15,7 @@ from scipy.ndimage.measurements import label,find_objects
 from collections import Counter
 
 from astrometry.util.fits import *
+from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec
@@ -39,7 +40,6 @@ def get_l1b_file(basedir, scanid, frame, band):
 	scangrp = scanid[-2:]
 	return os.path.join(basedir, 'wise1', '4band_p1bm_frm', scangrp, scanid,
 						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
-
 
 def coadd():
 	if False:
@@ -182,6 +182,11 @@ def coadd():
 	
 		coadd_free(co)
 	
+
+def _read_l1b((fn)):
+	return wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
+								 nanomaggies=True, mask_gz=True, unc_gz=True,
+								 sipwcs=True, constantInvvar=True)
 
 
 def main(opt, ps):
@@ -379,18 +384,85 @@ def main(opt, ps):
 
 		S = fits_table(opt.sources)
 		print 'Read', len(S), 'sources from', opt.sources
-		cat = get_tractor_sources_dr9(None, None, None, bandname='r',
-									  objs=S, bands=[], nanomaggies=True,
-									  extrabands=[band])
+
+		# Find additional SDSS sources nearby = within R pixels radius.
+		R = 30.
+		rad = R * 0.396 / 3600.
+
+		cats = []
+		objs = []
+		sdss = DR9(basedir='data-dr9')
+		sband = 'r'
+		for run,camcol,field,r,d in zip(S.run, S.camcol, S.field, S.ra, S.dec):
+			fn = sdss.retrieve('photoObj', run, camcol, field, band=sband)
+			print 'Reading', fn
+			oo = fits_table(fn)
+			print 'Got', len(oo)
+			cat1,obj1,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
+												  objs=oo, radecrad=(r,d,rad), bands=[],
+												  nanomaggies=True, extrabands=[band],
+												  getobjs=True, getobjinds=True)
+			print 'Got', len(cat1), 'SDSS sources nearby'
+			cats.append(cat1)
+			objs.append(obj1[I])
+
+		# Merge into one big catalog.
+		cat = Catalog()
+		for c in cats:
+			for src in c:
+				cat.append(src)
+		S = merge_tables(objs)
+
+		print 'Merged catalog has', len(cat), 'entries'
+		print 'S table has', len(S)
+		assert(len(S) == len(cat))
+
+		# ??
+		WW = S
+		#WW = tabledata()
+
+		# cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+		# 							  objs=S, bands=[], nanomaggies=True,
+		# 							  extrabands=[band])
+
 		print 'Got', len(cat), 'tractor sources'
-		cat = Catalog(*cat)
+		#cat = Catalog(*cat)
 		print cat
 		for src in cat:
 			print '  ', src
 
-		# ??
-		#WW = S
-		WW = tabledata()
+		### FIXME -- match to WISE catalog to initialize mags?
+
+		# Initialize WISE mags to be at least detectable
+		# so that we identify the right pixel ROIs below.
+
+		#minbright = NanoMaggies.magToNanomaggies()
+		#minbright = 50.
+		minbright = 250.
+
+		cat.freezeParamsRecursive('*')
+		cat.thawPathsTo(band)
+		p0 = cat.getParams()
+		cat.setParams(np.maximum(minbright, p0))
+
+		print 'Set minimum W1 brightness:'
+		for src in cat:
+			print '  ', src
+
+		# Cut images that don't overlap.
+		ii = []
+		for i,wcs in enumerate(wcses):
+			isin = False
+			for r,d in zip(S.ra, S.dec):
+				if anwcs_radec_is_inside_image(wcs, r, d):
+					isin = True
+					break
+			if isin:
+				ii.append(i)
+		T.cut(np.array(ii))
+		print 'Cut to', len(T), 'images containing sources'
+
+
 		
 	else:
 		wfn = 'wise-sources-nearby.fits'
@@ -447,21 +519,63 @@ def main(opt, ps):
 	H,W = int(cowcs.imageh), int(cowcs.imagew)
 	# MAGIC -- sigma a bit smaller than typical images (4.0-ish)
 	sig = 3.5
+	# typical zeropoint
+	zp = 20.752
+	
 	faketim = Image(data=np.zeros((H,W), np.float32),
 					invvar=np.zeros((H,W), np.float32) + (1./sig**2),
 					psf=w1psf, wcs=ConstantFitsWcs(cowcs), sky=ConstantSky(0.),
-					photocal=LinearPhotoCal(1., band=band),
+					photocal = LinearPhotoCal(NanoMaggies.zeropointToScale(zp),
+											  band=band),
+					#photocal=LinearPhotoCal(1., band=band),
 					name='fake')
 	minsb = 0.1 * sig
+	#minsb = 0.
+
+	pc = faketim.getPhotoCal()
+	print 'Source counts:'
+	for src in cat:
+		print '  ', src
+		print '-->', pc.brightnessToCounts(src.getBrightness())
+		print '  -->', [pc.brightnessToCounts(br) for br in src.getBrightnesses()]
+	print 'Source pixel positions:'
+	wcs = faketim.getWcs()
+	for src in cat:
+		print '  ', src
+		print '--> x,y', wcs.positionToPixel(src.getPosition())
+	
 
 	print 'Finding overlapping sources...'
 	t0 = Time()
 	tractor = Tractor([faketim], cat)
-	groups,L = tractor.getOverlappingSources(0, minsb=minsb)
+	groups,L,fakemod = tractor.getOverlappingSources(0, minsb=minsb)
 	print 'Overlapping sources took', Time()-t0
 	print 'Got', len(groups), 'groups of sources'
 	nl = L.max()
 	gslices = find_objects(L, nl)
+
+	print 'unique labels:', np.unique(L)
+
+	plt.clf()
+	plt.imshow(fakemod, interpolation='nearest', origin='lower',
+			   vmin=0, vmax=sig*3.)
+	plt.title('Fakemod')
+	ps.savefig()
+
+	for IM in [L, (L>0)]:
+		plt.clf()
+		plt.imshow(IM, interpolation='nearest', origin='lower')
+		plt.gray()
+		wcs = faketim.getWcs()
+		xy = []
+		for src in cat:
+			x,y = wcs.positionToPixel(src.getPosition())
+			xy.append((x,y))
+		xy = np.array(xy)
+		ax = plt.axis()
+		plt.plot(xy[:,0], xy[:,1], 'r+')
+		plt.title('Source groups')
+		ps.savefig()
 
 	# Find sources touching each group's (rectangular) ROI
 	tgroups = {}
@@ -474,6 +588,41 @@ def main(opt, ps):
 				if g in groups:
 					tsrcs.extend(groups[g])
 		tgroups[gl] = tsrcs
+
+
+	for i,gslice in enumerate(gslices):
+		if not (i+1) in groups:
+			continue
+
+		plt.clf()
+		plt.imshow(IM[gslice], interpolation='nearest', origin='lower')
+		plt.gray()
+		wcs = faketim.getWcs()
+		xy = []
+		y0,x0 = gslice[0].start, gslice[1].start
+		for src in cat:
+			x,y = wcs.positionToPixel(src.getPosition())
+			xy.append((x-x0,y-y0))
+		xy = np.array(xy)
+
+		ax = plt.axis()
+
+		plt.plot(xy[:,0], xy[:,1], 'r+')
+
+		I = np.array(groups[i+1])
+		if len(I):
+			plt.plot(xy[I,0], xy[I,1], 'g.')
+
+		I = np.array(tgroups[i+1])
+		if len(I):
+			plt.plot(xy[I,0], xy[I,1], 'gx')
+
+		ps.savefig()
+
+		plt.axis(ax)
+		ps.savefig()
+
+
 
 	print 'Group size histogram:'
 	ng = Counter()
@@ -489,26 +638,31 @@ def main(opt, ps):
 	allrois = {}
 	badrois = {}
 
+	if opt.threads:
+		mp = multiproc(opt.threads)
+	else:
+		mp = multiproc(1)
 
-	for imi,fn in enumerate(T.filename):
-		print 'File', fn
+	tims = mp.map(_read_l1b, T.filename)
+	for imi,tim in enumerate(tims):
 
+		#for imi,fn in enumerate(T.filename):
+		#print 'Reading WISE file', imi, 'of', len(T), ':', fn
 		#if imi == 20:
 		#	break
+		# tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
+		# 							 nanomaggies=True, mask_gz=True, unc_gz=True,
+		# 							 sipwcs=True, constantInvvar=True)
+		# tims.append(tim)
 
-		tim = wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
-									 nanomaggies=True, mask_gz=True, unc_gz=True,
-									 sipwcs=True)
+		# ie = tim.getInvError()
+		# nz = np.flatnonzero(ie)
+		# meanerr = 1. / np.median(ie.flat[nz])
+		# sig = meanerr
+		# print 'Sigma', sig
+		# tim.sig = sig
+
 		tim.psf = w1psf
-		tims.append(tim)
-
-		ie = tim.getInvError()
-		nz = np.flatnonzero(ie)
-		meanerr = 1. / np.median(ie.flat[nz])
-		sig = meanerr
-		print 'Sigma', sig
-		tim.sig = sig
-
 		H,W = tim.shape
 		nin = 0
 		for src in cat:
@@ -638,24 +792,84 @@ def main(opt, ps):
 			WW.writeto(fn)
 			print 'Wrote', fn
 
+	return dict(cat0=cat0, WW=WW, band=band, tims=tims,
+				allrois=allrois, badrois=badrois, groups=groups,
+				tgroups=tgroups, minsb=minsb,
+				gslices=gslices, cat=cat)
 
+
+
+def simult_photom(cat0=None, WW=None, band=None, tims=None,
+				  allrois=None, badrois=None, groups=None,
+				  tgroups=None, minsb=None,
+				  gslices=None, cat=None,
+				  opt=None, ps=None):
+
+	def _plot_grid(ims, kwas):
+		N = len(ims)
+		C = int(np.ceil(np.sqrt(N)))
+		R = int(np.ceil(N / float(C)))
+		plt.clf()
+		for i,(im,kwa) in enumerate(zip(ims, kwas)):
+			plt.subplot(R,C, i+1)
+			#print 'plotting grid cell', i, 'img shape', im.shape
+			plt.imshow(im, **kwa)
+			plt.gray()
+			plt.xticks([]); plt.yticks([])
+		return R,C
+
+	def _plot_grid2(ims, cat, tims, kwas, ptype='mod'):
+		xys = []
+		stamps = []
+		for (img,mod,chi,roi),tim in zip(ims, tims):
+			if ptype == 'mod':
+				stamps.append(mod)
+			elif ptype == 'chi':
+				stamps.append(chi)
+			wcs = tim.getWcs()
+			y0,x0 = roi[0].start, roi[1].start
+			xy = []
+			for src in cat:
+				xi,yi = wcs.positionToPixel(src.getPosition())
+				xy.append((xi - x0, yi - y0))
+			xys.append(xy)
+			print 'X,Y source positions in stamp of shape', stamps[-1].shape
+			print '  ', xy
+		R,C = _plot_grid(stamps, kwas)
+		for i,xy in enumerate(xys):
+			plt.subplot(R, C, i+1)
+			ax = plt.axis()
+			xy = np.array(xy)
+			plt.plot(xy[:,0], xy[:,1], 'r+', lw=2)
+			plt.axis(ax)
+
+		
 
 	# Simultaneous photometry
 
-	#tractor = Tractor(tims, cat)
-	#tractor.freezeParam('images')
-	cat.setParams(cat0)
+	# Keep track of params after simultaneous photometry...
+	cat.freezeParamsRecursive('*')
+	cat.thawPathsTo(band)
+	catsim = cat.getParams()
+	if opt.opt:
+		# ... and also after RA,Dec opt.
+		cat.thawPathsTo('ra','dec')
+		catopt = cat.getParams()
+		cat.freezeParamsRecursive('*')
+		cat.thawPathsTo(band)
 
 	for gi in range(len(gslices)):
 		gl = gi
-		# note, gslices is zero-indexed
-		gslice = gslices[gl]
 		gl += 1
 		if not gl in groups:
 			print 'Group', gl, 'not in groups array; skipping'
 			continue
 		gsrcs = groups[gl]
 		tsrcs = tgroups[gl]
+
+		print 'Group', gl
+		print 'gsrcs:', gsrcs
+		print 'tsrcs:', tsrcs
 
 		if (not gl in allrois) and (not gl in badrois):
 			print 'Group', gl, 'does not touch any images?'
@@ -677,9 +891,16 @@ def main(opt, ps):
 
 		print 'Group', gl, 'touches', len(mytims), 'images and', len(mybadtims), 'bad ones'
 
+		tt = 'group %i: %i+%i sources' % (gl, len(gsrcs), len(tsrcs))
+
 		if len(mytims):
-			fullcat = cat
-			subcat = Catalog(*[fullcat[i] for i in gsrcs + tsrcs])
+
+			cat.setParams(catsim)
+
+			#print 'Restoring catsim:'
+			#cat.printThawedParams()
+
+			subcat = Catalog(*[cat[i] for i in gsrcs + tsrcs])
 			for i in range(len(tsrcs)):
 				subcat.freezeParam(len(gsrcs) + i)
 
@@ -688,69 +909,169 @@ def main(opt, ps):
 
 			print len(gsrcs), 'sources unfrozen; total', len(subcat)
 
+			print 'Before fitting:'
+			for src in subcat[:len(gsrcs)]:
+				print '  ', src
+				
 			t0 = Time()
 			ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 														   rois=rois)
 			print 'optimize_forced_photometry took', Time()-t0
 
-			N = len(mytims)
-			C = int(np.ceil(np.sqrt(N)))
-			R = int(np.ceil(N / float(C)))
-			plt.clf()
-			# for i,(tim,roi) in enumerate(zip(mytims, rois)):
-			imas = {}
-			for i,(tim,im) in enumerate(zip(mytims, ims0)):
-				(img, mod, chi, roi) = im
+			print 'After fitting:'
+			for src in subcat[:len(gsrcs)]:
+				print '  ', src
 
-				imas[i] = dict(interpolation='nearest', origin='lower',
-							   vmin=tim.zr[0], vmax=tim.zr[1])
-				plt.subplot(R,C, i+1)
-				plt.imshow(tim.getImage()[roi], **imas[i])
-				plt.gray()
-			plt.suptitle('Data')
-			ps.savefig()
-
-			plt.clf()
-			for i,(tim,im) in enumerate(zip(mytims, ims0)):
-				(img, mod, chi, roi) = im
-				plt.subplot(R,C, i+1)
-				plt.imshow(mod, **imas[i])
-				plt.gray()
-			plt.suptitle('Initial model')
-			ps.savefig()
-
+			imas = [dict(interpolation='nearest', origin='lower',
+						 vmin=tim.zr[0], vmax=tim.zr[1])
+					for tim in mytims]
 			imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+			imchis = [imchi] * len(mytims)
 
-			plt.clf()
-			for i,(tim,im) in enumerate(zip(mytims, ims0)):
-				(img, mod, chi, roi) = im
-				plt.subplot(R,C, i+1)
-				plt.imshow(chi, **imchi)
-				plt.gray()
-			plt.suptitle('Initial chi')
+			_plot_grid([img for (img, mod, chi, roi) in ims0], imas)
+			plt.suptitle('Data: ' + tt)
 			ps.savefig()
 
 			if ims1 is not None:
-				plt.clf()
-				for i,(tim,im) in enumerate(zip(mytims, ims1)):
-					(img, mod, chi, roi) = im
-					plt.subplot(R,C, i+1)
-					plt.imshow(mod, **imas[i])
-					plt.gray()
-				plt.suptitle('Final model')
+				#_plot_grid([mod for (img, mod, chi, roi) in ims1], imas)
+				_plot_grid2(ims1, subcat, mytims, imas)
+				plt.suptitle('Forced-phot model: ' + tt)
 				ps.savefig()
 
-				plt.clf()
-				for i,(tim,im) in enumerate(zip(mytims, ims1)):
-					(img, mod, chi, roi) = im
-					plt.subplot(R,C, i+1)
-					plt.imshow(chi, **imchi)
-					plt.gray()
-				plt.suptitle('Final chi')
+				#_plot_grid([chi for (img, mod, chi, roi) in ims1], imchis)
+				_plot_grid2(ims1, subcat, mytims, imchis, ptype='chi')
+				plt.suptitle('Forced-phot chi: ' + tt)
 				ps.savefig()
+
+			if opt.opt:
+				op1 = ps.getnext()
+				op2 = ps.getnext()
+				#fits[gl] = (tractor, len(gsrcs), rois, op1, op2)
+
+
+			print 'Plotting mods after simul photom'
+			#_plot_grid([mod for (img, mod, chi, roi) in ims0], imas)
+			_plot_grid2(ims0, subcat, mytims, imas)
+			plt.suptitle('Initial model: ' + tt)
+			ps.savefig()
+
+			print 'Plotting chis after simul photom'
+			#_plot_grid([chi for (img, mod, chi, roi) in ims0], imchis)
+			_plot_grid2(ims0, subcat, mytims, imchis, ptype='chi')
+			plt.suptitle('Initial chi: ' + tt)
+			ps.savefig()
+
+			print 'After simultaenous photometry:'
+			subcat.printThawedParams()
+
+			# Copy updated params to "catsim"
+			catsim = cat.getParams()
+
+			#print 'Saving catsim:'
+			#cat.printThawedParams()
+
+			cat.freezeParamsRecursive('*')
+			cat.thawPathsTo(band)
+			cat1 = cat.getParams()
+			br1 = [src.getBrightness().copy() for src in cat]
+			WW.nmall = np.array([b.getBand(band) for b in br1])
+
+
+		if len(mytims) and opt.opt:
+			print 'Optimizing RA,Dec'
+
+			subcat = tractor.catalog
+
+			# Copy updated forced-phot params from catsim to catopt.
+
+			#print 'Saving subcat forced-phot params:'
+			#subcat.printThawedParams()
+			fphot = subcat.getParams()
+
+			cat.thawPathsTo('ra','dec')
+			cat.setParams(catopt)
+
+			#print 'Copying forced-phot results to catopt:'
+			cat.freezeParamsRecursive('*')
+			cat.thawPathsTo(band)
+			cat.freezeAllBut(*gsrcs)
+			#cat.printThawedParams()
+			NP = cat.numberOfParams()
+			cat.setParams(fphot[:NP])
+			#print 'Result:'
+
+			#print 'Restoring catopt:'
+			#cat.printThawedParams()
+
+			cat.freezeParamsRecursive('*')
+			cat.thawPathsTo(band)
+			NG = len(gsrcs)
+			for i in range(NG):
+				subcat[i].thawPathsTo('ra','dec')
+			p0 = subcat.getParams()
+			print 'Optimizing params:'
+			subcat.printThawedParams()
+
+			thetims = tractor.images
+			subimgs = []
+			for i,img in enumerate(thetims):
+				roi = rois[i]
+				y0 = roi[0].start
+				x0 = roi[1].start
+				subwcs = ShiftedWcs(img.wcs, x0, y0)
+				subimg = Image(data=img.data[roi], invvar=img.invvar[roi],
+							   psf=img.psf, wcs=subwcs, sky=img.sky,
+							   photocal=img.photocal, name=img.name)
+				subimgs.append(subimg)
+			tractor.images = Images(*subimgs)
+
+			while True:
+				dlnp,X,alpha = tractor.optimize()
+				print 'dlnp', dlnp
+				print 'alpha', alpha
+				if dlnp < 0.1:
+					break
+
+			p1 = subcat.getParams()
+
+			print 'Param changes:'
+			for nm,pp0,pp1 in zip(subcat.getParamNames(), p0, p1):
+				print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
+
+
+			cat.thawPathsTo('ra','dec')
+			catopt = cat.getParams()
+
+			print 'Saving catopt:'
+			cat.printThawedParams()
+
+			cat.freezeParamsRecursive('ra', 'dec')
+
+			tractor.images = thetims
+
+			nil,nil,ims2 = tractor.optimize_forced_photometry(minsb=minsb, rois=rois,
+															  justims0=True)
+
+			print 'Plotting mods after RA,Dec opt'
+			#_plot_grid([mod for (img, mod, chi, roi) in ims2], imas)
+			_plot_grid2(ims2, subcat, mytims, imas)
+			plt.suptitle('RA,Dec-opt model: ' + tt)
+			plt.savefig(op1)
+			
+			print 'Plotting chis after RA,Dec opt'
+			#_plot_grid([chi for (img, mod, chi, roi) in ims2], imchis)
+			_plot_grid2(ims2, subcat, mytims, imchis, ptype='chi')
+			plt.suptitle('RA,Dec-opt chi: ' + tt)
+			plt.savefig(op2)
+
+
+
+
+
+
 
 		N = len(mybadtims)
-		if N:
+		if N and False:
 			C = int(np.ceil(np.sqrt(N)))
 			R = int(np.ceil(N / float(C)))
 			plt.clf()
@@ -770,79 +1091,90 @@ def main(opt, ps):
 			plt.suptitle('Inverr in bad regions')
 			ps.savefig()
 
+		if gi == 0 and opt.plotmask:
 
-		N = len(mybadtims) + len(mytims)
-		C = int(np.ceil(np.sqrt(N)))
-		R = int(np.ceil(N / float(C)))
-
-		for bit,txt in [
-			(0 ,  'static: excessively noisy due to high dark current alone'),
-			(1 ,  'static: generally noisy [includes bit 0]'),
-			(2 ,  'static: dead or very low responsivity'),
-			(3 ,  'static: low responsivity or low dark current'),
-			(4 ,  'static: high responsivity or high dark current'),
-			(5 ,  'static: saturated anywhere in ramp'),
-			(6 ,  'static: high, uncertain, or unreliable non-linearity'),
-			(7 ,  'static: known broken hardware pixel or excessively noisy responsivity estimate [may include bit 1]'),
-			(9 ,  'broken pixel or negative slope fit value'),
-			(10,  'saturated in sample read 1'),
-			(11,  'saturated in sample read 2'),
-			(12,  'saturated in sample read 3'),
-			(13,  'saturated in sample read 4'),
-			(14,  'saturated in sample read 5'),
-			(15,  'saturated in sample read 6'),
-			(16,  'saturated in sample read 7'),
-			(17,  'saturated in sample read 8'),
-			(18,  'saturated in sample read 9'),
-			(21,  'new/transient bad pixel from dynamic masking'),
-			(26,  'non-linearity correction unreliable'),
-			(27,  'contains cosmic-ray or outlier that cannot be classified (from temporal outlier rejection in multi-frame pipeline)'),
-			(28,  'contains positive or negative spike-outlier'),
-			]:
-			plt.clf()
-			for i,(tim,roi) in enumerate(zip(mybadtims + mytims, mybadrois + rois)):
-				plt.subplot(R,C, i+1)
-				mask = tim.maskplane[roi]
-				msk = (1 << bit)
-				plt.imshow(mask & msk, interpolation='nearest', origin='lower',
-						   vmin=0, vmax=1)
-				plt.gray()
-			plt.suptitle('Mask: ' + txt)
+			alltims = mybadtims+mytims
+			_plot_grid([tim.uncplane[roi] for tim,roi in zip(alltims,
+															 mybadrois + rois)],
+					   [dict(interpolation='nearest', origin='lower')]*len(alltims))
+			plt.suptitle('Uncertainty plane')
 			ps.savefig()
+	
+			for bit,txt in [
+				(0 ,  'static: excessively noisy due to high dark current alone'),
+				(1 ,  'static: generally noisy [includes bit 0]'),
+				(2 ,  'static: dead or very low responsivity'),
+				(3 ,  'static: low responsivity or low dark current'),
+				(4 ,  'static: high responsivity or high dark current'),
+				(5 ,  'static: saturated anywhere in ramp'),
+				(6 ,  'static: high, uncertain, or unreliable non-linearity'),
+				(7 ,  'static: known broken hardware pixel or excessively noisy responsivity estimate [may include bit 1]'),
+				(9 ,  'broken pixel or negative slope fit value'),
+				(10,  'saturated in sample read 1'),
+				(11,  'saturated in sample read 2'),
+				(12,  'saturated in sample read 3'),
+				(13,  'saturated in sample read 4'),
+				(14,  'saturated in sample read 5'),
+				(15,  'saturated in sample read 6'),
+				(16,  'saturated in sample read 7'),
+				(17,  'saturated in sample read 8'),
+				(18,  'saturated in sample read 9'),
+				(21,  'new/transient bad pixel from dynamic masking'),
+				(26,  'non-linearity correction unreliable'),
+				(27,  'contains cosmic-ray or outlier that cannot be classified (from temporal outlier rejection in multi-frame pipeline)'),
+				(28,  'contains positive or negative spike-outlier'),
+				]:
+
+				_plot_grid([tim.maskplane[roi] & (1 << bit)
+							for tim,roi in zip(alltims, mybadrois + rois)],
+					   [dict(interpolation='nearest', origin='lower',
+							 vmin=0, vmax=1)]*len(alltims))
+				plt.suptitle('Mask: ' + txt)
+				ps.savefig()
 
 
-		if False:
-			print 'Optimizing:'
-			cat.thawPathsTo('ra','dec')
-			p0 = cat.getParams()
-			cat.printThawedParams()
-			while True:
-				dlnp,X,alpha = tractor.optimize()
-				print 'dlnp', dlnp
-				print 'alpha', alpha
-				if dlnp < 0.1:
-					break
-			p1 = cat.getParams()
 
-			print 'Param changes:'
-			for nm,pp0,pp1 in zip(cat.getParamNames(), p0, p1):
-				print '  ', nm, pp0, 'to', pp1, '; delta', pp1-pp0
-
-			cat.freezeParamsRecursive('ra', 'dec')
-					   
+	# cat.freezeParamsRecursive('*')
+	# cat.thawPathsTo(band)
+	# cat1 = cat.getParams()
+	# br1 = [src.getBrightness().copy() for src in cat]
+	# nm1 = np.array([b.getBand(band) for b in br1])
+	# WW.nmall = nm1
+	# 
 
 
-
-	cat.thawPathsTo(band)
-	cat1 = cat.getParams()
-	br1 = [src.getBrightness().copy() for src in cat]
-	nm1 = np.array([b.getBand(band) for b in br1])
+	cat.setParams(catopt)
+	nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
 	WW.nmall = nm1
 
-	fn = opt.output % 999 #'measurements-all.fits'
+	fn = opt.output % 998
 	WW.writeto(fn)
 	print 'Wrote', fn
 
+	#if opt.opt:
+	#	for tractor,NG,rois,op1,op2 in fits.values():
+	#	cat.freezeParamsRecursive('*')
+	#	cat.thawPathsTo(band)
+	#	cat1 = cat.getParams()
+	#	br1 = [src.getBrightness().copy() for src in cat]
+	#	nm1 = np.array([b.getBand(band) for b in br1])
+	#	WW.nmoptrd = nm1
+
+	if opt.opt:
+		cat.thawPathsTo('ra','dec')
+		cat.setParams(catopt)
+		nm1 = np.array([src.getBrightness().getBand(band) for src in cat])
+		WW.nmoptrd = nm1
+		cat.freezeParamsRecursive(band, 'dec')
+		WW.raoptrd = np.array(cat.getParams())
+		cat.freezeParamsRecursive('ra')
+		cat.thawPathsTo('dec')
+		WW.decoptrd = np.array(cat.getParams())
+		cat.freezeParamsRecursive('dec')
+
+	fn = opt.output % 999
+	WW.writeto(fn)
+	print 'Wrote', fn
 	
 
 
@@ -854,6 +1186,8 @@ if __name__ == '__main__':
 	parser = optparse.OptionParser('%prog [options]')
 	parser.add_option('-v', dest='verbose', action='store_true')
 
+	parser.add_option('--threads', dest='threads', type=int, help='Multiproc')
+
 	parser.add_option('-s', dest='sources',
 					  help='Input SDSS source list')
 	parser.add_option('-i', dest='individual', action='store_true',
@@ -862,6 +1196,12 @@ if __name__ == '__main__':
 					  help='Filename pattern for outputs; default %default')
 	parser.add_option('-P', dest='ps', default='wise',
 					  help='Filename pattern for plots; default %default')
+	parser.add_option('-M', dest='plotmask', action='store_true',
+					  help='Plot mask plane bits?')
+	parser.add_option('-O', dest='opt', action='store_true',
+					  help='Optimize RA,Dec too (not just forced photom)?')
+	parser.add_option('-C', dest='cache',
+					  help='Cache file after individual-epoch measurements')
 
 	parser.add_option('-p', dest='plots', action='store_true',
 					  help='Make result plots?')
@@ -882,9 +1222,22 @@ if __name__ == '__main__':
 	ps = PlotSequence(opt.ps, format='%03i')
 
 	if not opt.plots:
-		profn = 'prof-%s.dat' % (datetime.now().isoformat())
-		cProfile.run('main(opt, ps)', profn)
-		print 'Wrote profile to', profn
+		if not opt.cache or not os.path.exists(opt.cache):
+			profn = 'prof-%s.dat' % (datetime.now().isoformat())
+			#cProfile.run('main(opt, ps)', profn)
+			print 'Wrote profile to', profn
+			X = main(opt, ps)
+
+			if opt.cache:
+				print 'Writing', opt.cache
+				pickle_to_file(X, opt.cache)
+
+		else:
+			print 'Reading from cache', opt.cache
+			X = unpickle_from_file(opt.cache)
+
+		simult_photom(ps=ps, opt=opt, **X)
+		
 		#main(opt)
 		sys.exit(0)
 
@@ -1073,38 +1426,36 @@ if __name__ == '__main__':
 	print 'Reading results file', opt.result
 	W = fits_table(opt.result)
 
-	print 'nm', W.nms.shape
-
-	print 'Plotting measurements...'
-	plt.clf()
-	nm0 = W.nm0
-	R,C = W.nms.shape
-	for j in range(C):
-		nm = W.nms[:,j]
-		I = np.flatnonzero(nm != nm0)
-		plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.01)
-	if False:
-		nmx = W.nms.T
-		mn = []
-		st = []
-		ii = []
-		for i,nm in enumerate(nm0):
-			I = np.flatnonzero(nmx[:,i] != nm)
-			if len(I) == 0:
-				continue
-			ii.append(i)
-			mn.append(np.mean(nmx[I,i]))
-			st.append(np.std (nmx[I,i]))
-		I = np.array(ii)
-		mn = np.array(mn)
-		st = np.array(st)
-		plt.loglog([nm0[I],nm0[I]], [np.maximum(1e-6, (mn-st) / nm0[I]),
-									 np.maximum(1e-6, (mn+st) / nm0[I])], 'b-', alpha=0.5)
-	plt.axhline(1., color='k', lw=2, alpha=0.5)
-	plt.xlabel('WISE brightness (nanomaggies)')
-	plt.ylabel('Tractor-measured brightness (nanomaggies)')
-	plt.ylim(0.1, 10.)
-	ps.savefig()
+	if 'nms' in W.get_columns():
+		plt.clf()
+		nm0 = W.nm0
+		R,C = W.nms.shape
+		for j in range(C):
+			nm = W.nms[:,j]
+			I = np.flatnonzero(nm != nm0)
+			plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.01)
+		if False:
+			nmx = W.nms.T
+			mn = []
+			st = []
+			ii = []
+			for i,nm in enumerate(nm0):
+				I = np.flatnonzero(nmx[:,i] != nm)
+				if len(I) == 0:
+					continue
+				ii.append(i)
+				mn.append(np.mean(nmx[I,i]))
+				st.append(np.std (nmx[I,i]))
+			I = np.array(ii)
+			mn = np.array(mn)
+			st = np.array(st)
+			plt.loglog([nm0[I],nm0[I]], [np.maximum(1e-6, (mn-st) / nm0[I]),
+										 np.maximum(1e-6, (mn+st) / nm0[I])], 'b-', alpha=0.5)
+		plt.axhline(1., color='k', lw=2, alpha=0.5)
+		plt.xlabel('WISE brightness (nanomaggies)')
+		plt.ylabel('Tractor-measured brightness / WISE brightness')
+		plt.ylim(0.1, 10.)
+		ps.savefig()
 
 	if opt.match:
 		R = 4./3600.
