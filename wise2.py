@@ -387,6 +387,7 @@ def main(opt, ps):
 
 		# Find additional SDSS sources nearby = within R pixels radius.
 		R = 30.
+		#R = 50.
 		rad = R * 0.396 / 3600.
 
 		cats = []
@@ -827,6 +828,18 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 
 	# Simultaneous photometry
 
+	if opt.osources:
+		O = fits_table(opt.osources)
+		ocat = Catalog()
+		print 'Other catalog:'
+		for i in range(len(O)):
+			w1 = O.wiseflux[i, 0]
+			s = PointSource(RaDecPos(O.ra[i], O.dec[i]), NanoMaggies(w1=w1))
+			ocat.append(s)
+		print ocat
+		ocat.freezeParamsRecursive('*')
+		ocat.thawPathsTo(band)
+
 	# Keep track of params after simultaneous photometry...
 	cat.freezeParamsRecursive('*')
 	cat.thawPathsTo(band)
@@ -923,6 +936,23 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 				plt.suptitle('Forced-phot chi: ' + tt)
 				ps.savefig()
 
+			if opt.osources:
+				cc = tractor.catalog
+				tractor.catalog = ocat
+				nil,nil,ims3 = tractor.optimize_forced_photometry(minsb=minsb, rois=rois,
+																  justims0=True)
+				tractor.catalog = cc
+
+				_plot_grid2(ims3, ocat, mytims, imas)
+				plt.suptitle("Schlegel's model: group %i" % gl)
+				ps.savefig()
+
+				_plot_grid2(ims3, ocat, mytims, imchis, ptype='chi')
+				plt.suptitle("Schlegel's chi: group %i" % gl)
+				ps.savefig()
+				
+
+
 			if opt.opt:
 				op1 = ps.getnext()
 				op2 = ps.getnext()
@@ -941,7 +971,7 @@ def simult_photom(cat0=None, WW=None, band=None, tims=None,
 			# plt.suptitle('Initial chi: ' + tt)
 			# ps.savefig()
 
-			print 'After simultaenous photometry:'
+			print 'After simultaneous photometry:'
 			subcat.printThawedParams()
 
 			# Copy updated params to "catsim"
@@ -1145,6 +1175,9 @@ if __name__ == '__main__':
 
 	parser.add_option('--threads', dest='threads', type=int, help='Multiproc')
 
+	parser.add_option('--osources', dest='osources',
+					  help='File containing competing measurements to produce a model image for')
+
 	parser.add_option('-s', dest='sources',
 					  help='Input SDSS source list')
 	parser.add_option('-i', dest='individual', action='store_true',
@@ -1166,6 +1199,8 @@ if __name__ == '__main__':
 					  help='result file to compare', default='measurements-257.fits')
 	parser.add_option('-m', dest='match', action='store_true',
 					  help='do RA,Dec match to compare results; else assume 1-to-1')
+	parser.add_option('-N', dest='nearest', action='store_true', default=False,
+					  help='Match nearest, or all?')
 	
 	opt,args = parser.parse_args()
 
@@ -1416,33 +1451,55 @@ if __name__ == '__main__':
 
 	if opt.match:
 		R = 4./3600.
-		I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, R, nearest=True)
+		#R = 10./3600.
+		I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, R, nearest=opt.nearest)
 		print 'Matched', len(I)
 		T.cut(I)
 		W.cut(J)
+		T.I = I
+		W.J = J
+
+		mgroups = {}
+		for row,(i,j) in enumerate(zip(T.I, W.J)):
+			# Group together objects in W that match a single object in T=Schlegel
+			if not i in mgroups:
+				mgroups[i] = []
+			mgroups[i].append(row)
+		mgroups = [np.array(v) for v in mgroups.values() if len(v) > 1]
+		print 'Match groups:', mgroups
+
 	else:
 		assert(len(T) == len(W))
 
 	plt.clf()
-	p1 = plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
+	#p1 = plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
 	if 'nmall' in W.get_columns():
-		p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'mx', zorder=30)
-	R,C = W.nms.shape
-	mns = []
-	sts = []
-	mx = []
-	for j in range(R):
-		nm = W.nms[j,:]
-		I = np.flatnonzero(nm != W.nm0[j])
-		print 'Measured flux', j, 'in', len(I), 'images'
-		if len(I) == 0:
-			continue
-		mns.append(np.mean(nm[I]))
-		sts.append(np.std(nm[I]))
-		mx.append(T.wiseflux[j,0])
-		p3 = plt.loglog(T.wiseflux[j,0] + np.zeros(len(I)), nm[I], 'b.', alpha=0.5, zorder=25)
-	if len(mx):
-		p4 = plt.errorbar(mx, mns, yerr=sts, fmt='o', mec='b', mfc='none')
+		p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'bo', zorder=30, alpha=0.7)
+
+		for I in mgroups:
+			plt.loglog(T.wiseflux[I,0], W.nmall[I], 'b-', zorder=30)
+
+	sig = 1./np.sqrt(T.wiseflux_ivar[:,0])
+	p5 = plt.errorbar(T.wiseflux[:,0], T.wiseflux[:,0], yerr=sig, fmt=None,
+					  color='k', alpha=0.5, ecolor='0.5')
+
+	if 'nms' in W.get_columns():
+		R,C = W.nms.shape
+		mns = []
+		sts = []
+		mx = []
+		for j in range(R):
+			nm = W.nms[j,:]
+			I = np.flatnonzero(nm != W.nm0[j])
+			print 'Measured flux', j, 'in', len(I), 'images'
+			if len(I) == 0:
+				continue
+			mns.append(np.mean(nm[I]))
+			sts.append(np.std(nm[I]))
+			mx.append(T.wiseflux[j,0])
+			p3 = plt.loglog(T.wiseflux[j,0] + np.zeros(len(I)), nm[I], 'b.', alpha=0.5, zorder=25)
+		if len(mx):
+			p4 = plt.errorbar(mx, mns, yerr=sts, fmt='o', mec='b', mfc='none')
 
 	ax = plt.axis()
 	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
@@ -1463,30 +1520,35 @@ if __name__ == '__main__':
 		xx = T.wiseflux[I,0]
 		simul = simul[I]
 		# p1 = plt.loglog(xx, W.nm0   / xx, 'r.', zorder=30)
-		p2 = plt.loglog(xx, simul / xx, 'b.', zorder=30)
+		p2 = plt.loglog(xx, simul / xx, 'bo', zorder=30, alpha=0.7)
 		sig = 1./np.sqrt(T.wiseflux_ivar[I,0])
 		p5 = plt.loglog([xx-sig, xx+sig], [simul / xx]*2, 'b-', zorder=29)
 
-	R,C = W.nms.shape
-	mns = []
-	sts = []
-	mx = []
-	for j in range(R):
-		nm = W.nms[j,:]
-		I = np.flatnonzero(nm != W.nm0[j])
-		print 'Measured flux', j, 'in', len(I), 'images'
-		if len(I) == 0:
-			continue
-		mns.append(np.mean(nm[I]))
-		sts.append(np.std(nm[I]))
-		mx.append(T.wiseflux[j,0])
-		xx = T.wiseflux[j,0] + np.zeros(len(I))
-		p3 = plt.loglog(xx, nm[I] / xx, 'b.', alpha=0.5, zorder=25)
-	if len(mx):
-		mns = np.array(mns)
-		mx = np.array(mx)
-		sts = np.array(sts)
-		p4 = plt.errorbar(mx, mns / mx, yerr = sts / mx, fmt='o', mec='b', mfc='none')
+		for I in mgroups:
+			plt.loglog(T.wiseflux[I,0], W.nmall[I]/T.wiseflux[I,0], 'b-', zorder=30)
+
+
+	if 'nms' in W.get_columns():
+		R,C = W.nms.shape
+		mns = []
+		sts = []
+		mx = []
+		for j in range(R):
+			nm = W.nms[j,:]
+			I = np.flatnonzero(nm != W.nm0[j])
+			print 'Measured flux', j, 'in', len(I), 'images'
+			if len(I) == 0:
+				continue
+			mns.append(np.mean(nm[I]))
+			sts.append(np.std(nm[I]))
+			mx.append(T.wiseflux[j,0])
+			xx = T.wiseflux[j,0] + np.zeros(len(I))
+			p3 = plt.loglog(xx, nm[I] / xx, 'b.', alpha=0.5, zorder=25)
+		if len(mx):
+			mns = np.array(mns)
+			mx = np.array(mx)
+			sts = np.array(sts)
+			p4 = plt.errorbar(mx, mns / mx, yerr = sts / mx, fmt='o', mec='b', mfc='none')
 
 	plt.axhline(1., color='k', lw=3, alpha=0.3)
 	plt.ylim(0.1, 10.)
