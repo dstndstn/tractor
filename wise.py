@@ -54,9 +54,6 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	else:
 		twcs = tractor.FitsWcs(intfn)
 
-	#print 'WCS', twcs
-
-
 	# Read enough of the image to get its size
 	Fint = fitsio.FITS(intfn)
 	H,W = Fint[0].get_info()['dims']
@@ -67,6 +64,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 		r,d,rad = radecrad
 		x,y = twcs.positionToPixel(tractor.RaDecPos(r,d))
 		pixrad = rad / (twcs.pixel_scale() / 3600.)
+		print 'Tractor WCS:', twcs
 		print 'RA,Dec,rad', r,d,rad, 'becomes x,y,pixrad', x,y,pixrad
 		roi = (x-pixrad, x+pixrad+1, y-pixrad, y+pixrad+1)
 

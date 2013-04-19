@@ -540,9 +540,11 @@ def main(opt, ps):
 
 
 	# Re-sort by distance to RA,Dec center...
-	I = np.argsort(np.hypot(T.ra - ra, T.dec - dec))
-	T.cut(I)
+	#I = np.argsort(np.hypot(T.ra - ra, T.dec - dec))
+	#T.cut(I)
+	# IF YOU DO THIS, MUST ALSO RE-SORT 'wcses'!
 
+	
 	if opt.sources:
 
 		# Look at a radius this big, in arcsec, around each source position.
@@ -583,13 +585,19 @@ def main(opt, ps):
 
 			ims = []
 			for j,wcs in enumerate(wcses):
-				if anwcs_radec_is_inside_image(wcs, r, d):
 
-					tim = wise.read_wise_level1b(
-						T.filename[j].replace('-int-1b.fits',''),
-						nanomaggies=True, mask_gz=True, unc_gz=True,
-						sipwcs=True, constantInvvar=True, radecrad=(ra,dec,Wrad))
-					ims.append(tim)
+				print 'Filename', T.filename[j]
+				ok,x,y = wcs.radec2pixelxy(r,d)
+				print 'WCS', j, '-> x,y:', x,y
+
+				if not anwcs_radec_is_inside_image(wcs, r, d):
+					continue
+
+				tim = wise.read_wise_level1b(
+					T.filename[j].replace('-int-1b.fits',''),
+					nanomaggies=True, mask_gz=True, unc_gz=True,
+					sipwcs=True, constantInvvar=True, radecrad=(r,d,Wrad))
+				ims.append(tim)
 			print 'Found', len(ims), 'images containing this source'
 
 			tr = Tractor(ims, cat1)
