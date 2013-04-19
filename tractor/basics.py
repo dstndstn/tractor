@@ -1011,7 +1011,10 @@ class PixelizedPSF(BaseParams):
 		Ly = lanczos_filter(L, np.arange(-L, L+1) + dy)
 		sx      = correlate1d(self.img, Lx, axis=1, mode='constant')
 		shifted = correlate1d(sx,       Ly, axis=0, mode='constant')
-		shifted /= (Lx.sum() * Ly.sum())
+		#shifted /= (Lx.sum() * Ly.sum())
+		#print 'Shifted PSF: range', shifted.min(), shifted.max()
+		shifted = np.maximum(shifted, 0.)
+		shifted /= shifted.sum()
 		return Patch(x0, y0, shifted)
 	
 class GaussianMixturePSF(BaseParams):

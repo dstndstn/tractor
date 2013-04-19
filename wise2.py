@@ -18,7 +18,7 @@ from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
-from astrometry.libkd.spherematch import match_radec
+from astrometry.libkd.spherematch import match_radec, cluster_radec
 from astrometry.util.util import * #Sip, anwcs, Tan
 from astrometry.blind.plotstuff import *
 from astrometry.util.resample import *
@@ -40,6 +40,32 @@ def get_l1b_file(basedir, scanid, frame, band):
 	scangrp = scanid[-2:]
 	return os.path.join(basedir, 'wise1', '4band_p1bm_frm', scangrp, scanid,
 						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
+
+def coadd_video():
+	# Video!
+	if False:
+		plot.color = 'black'
+		plot.plot('fill')
+		plot.color = 'white'
+		plot.op = CAIRO_OPERATOR_ADD
+		plot.apply_settings()
+		img = plot.image
+		img.image_low = 0.
+		img.image_high = 1e3
+		img.resample = 1
+		for sid,fnum in zip(T.scan_id[I], T.frame_num[I]):
+			print 'scan,frame', sid, fnum
+			fn = get_l1b_file(sid, fnum, bandnum)
+			print '-->', fn
+			assert(os.path.exists(fn))
+			#I = pyfits.open(fn)[0].data
+			#print 'img min,max,median', I.min(), I.max(), np.median(I.ravel())
+			img.set_wcs_file(fn, 0)
+			img.set_file(fn)
+			plot.plot('image')
+			pfn = ps.getnext()
+			plot.write(pfn)
+			print 'Wrote', pfn
 
 def wcs_checks():
 	if False:
@@ -367,8 +393,8 @@ def coadd():
 
 def _read_l1b((fn)):
 	return wise.read_wise_level1b(fn.replace('-int-1b.fits',''),
-								 nanomaggies=True, mask_gz=True, unc_gz=True,
-								 sipwcs=True, constantInvvar=True)
+								  nanomaggies=True, mask_gz=True, unc_gz=True,
+								  sipwcs=True, constantInvvar=True)
 
 
 def main(opt, ps):
@@ -438,36 +464,16 @@ def main(opt, ps):
 			TT.append(T)
 		T = merge_tables(TT)
 
-		if False:
-			T = fits_table(ifn, rows=I)
-			print 'Read', len(T), 'rows'
-			newhdr = []
-
 		wcses = []
 		corners = []
 		ii = []
 		for i in range(len(T)):
-
-			# hdr = T.header[i]
-			# hdr = [str(s) for s in hdr]
-			# hdr = (['SIMPLE  =                    T',
-			# 		'BITPIX  =                    8',
-			# 		'NAXIS   =                    0',
-			# 		] + hdr +
-			# 	   ['END'])
-			# hdr = [x + (' ' * (80-len(x))) for x in hdr]
-			# hdrstr = ''.join(hdr)
-			# newhdr.append(hdrstr)
-			#print hdrstr
-			#wcs = anwcs(hdrstr)
-
 			wcs = anwcs(T.filename[i], 0)
 			W,H = wcs.get_width(), wcs.get_height()
 			rd = []
 			for x,y in [(1,1),(1,H),(W,H),(W,1)]:
 				rd.append(wcs.pixelxy2radec(x,y))
 			rd = np.array(rd)
-
 			if polygons_intersect(roipoly, rd):
 				wcses.append(wcs)
 				corners.append(rd)
@@ -479,7 +485,6 @@ def main(opt, ps):
 
 		outlines = corners
 		corners = np.vstack(corners)
-		print 'Corners', corners.shape
 
 		nin = sum([1 if point_in_poly(ra,dec,ol) else 0 for ol in outlines])
 		print 'Number of images containing RA,Dec,', ra,dec, 'is', nin
@@ -492,80 +497,112 @@ def main(opt, ps):
 		print 'Wrote', ofn
 
 
-	print 'Plotting map...'
-	plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
-	out = plot.outline
-	plot.color = 'white'
-	plot.alpha = 0.07
-	plot.apply_settings()
-
-	for wcs in wcses:
-		out.wcs = wcs
-		out.fill = False
-		plot.plot('outline')
-		out.fill = True
-		plot.plot('outline')
-
 	# MAGIC 2.75: approximate pixel scale, "/pix
 	S = int(3600. / 2.75)
 	print 'Coadd size', S
 	cowcs = anwcs_create_box(ra, dec, 1., S, S)
 
-	plot.color = 'gray'
-	plot.alpha = 1.0
-	plot.lw = 1
-	plot.plot_grid(1, 1, 1, 1)
+	if False:
+		print 'Plotting map...'
+		plot = Plotstuff(outformat='png', ra=ra, dec=dec, width=width, size=(800,800))
+		out = plot.outline
+		plot.color = 'white'
+		plot.alpha = 0.07
+		plot.apply_settings()
 
-	plot.color = 'red'
-	plot.lw = 3
-	plot.alpha = 0.75
-	out.wcs = cowcs
-	out.fill = False
-	plot.plot('outline')
+		for wcs in wcses:
+			out.wcs = wcs
+			out.fill = False
+			plot.plot('outline')
+			out.fill = True
+			plot.plot('outline')
 
-	if opt.sources:
-		rd = plot.radec
-		plot_radec_set_filename(rd, opt.sources)
-		plot.plot('radec')
+		plot.color = 'gray'
+		plot.alpha = 1.0
+		plot.lw = 1
+		plot.plot_grid(1, 1, 1, 1)
 
-	pfn = ps.getnext()
-	plot.write(pfn)
-	print 'Wrote', pfn
+		plot.color = 'red'
+		plot.lw = 3
+		plot.alpha = 0.75
+		out.wcs = cowcs
+		out.fill = False
+		plot.plot('outline')
+
+		if opt.sources:
+			rd = plot.radec
+			plot_radec_set_filename(rd, opt.sources)
+			plot.plot('radec')
+
+		pfn = ps.getnext()
+		plot.write(pfn)
+		print 'Wrote', pfn
+
 
 	# Re-sort by distance to RA,Dec center...
 	I = np.argsort(np.hypot(T.ra - ra, T.dec - dec))
 	T.cut(I)
 
-	# Video!
-	if False:
-		plot.color = 'black'
-		plot.plot('fill')
-		plot.color = 'white'
-		plot.op = CAIRO_OPERATOR_ADD
-		plot.apply_settings()
-		img = plot.image
-		img.image_low = 0.
-		img.image_high = 1e3
-		img.resample = 1
-		for sid,fnum in zip(T.scan_id[I], T.frame_num[I]):
-			print 'scan,frame', sid, fnum
-			fn = get_l1b_file(sid, fnum, bandnum)
-			print '-->', fn
-			assert(os.path.exists(fn))
-			#I = pyfits.open(fn)[0].data
-			#print 'img min,max,median', I.min(), I.max(), np.median(I.ravel())
-			img.set_wcs_file(fn, 0)
-			img.set_file(fn)
-			plot.plot('image')
-			pfn = ps.getnext()
-			plot.write(pfn)
-			print 'Wrote', pfn
-
-
 	if opt.sources:
+
+		# Look at a radius this big, in arcsec, around each source position.
+		# 15" = about 6 WISE pixels
+		Wrad = 15. / 3600.
+
+		# Look for SDSS objects within this radius; Wrad + a margin
+		Srad = Wrad + 5./3600.
+
 
 		S = fits_table(opt.sources)
 		print 'Read', len(S), 'sources from', opt.sources
+
+		groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
+		print 'Source clusters:', groups
+		print 'Singletons:', singles
+
+		tractors = []
+
+		sdss = DR9(basedir='data-dr9')
+		sband = 'r'
+
+		for i in singles:
+			r,d = S.ra[i],S.dec[i]
+			print 'Source', i, 'at', r,d
+			fn = sdss.retrieve('photoObj', S.run[i], S.camcol[i], S.field[i], band=sband)
+			print 'Reading', fn
+			oo = fits_table(fn)
+			print 'Got', len(oo)
+			cat1,obj1,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
+												  objs=oo, radecrad=(r,d,Srad), bands=[],
+												  nanomaggies=True, extrabands=[band],
+												  fixedComposites=True,
+												  getobjs=True, getobjinds=True)
+			print 'Got', len(cat1), 'SDSS sources nearby'
+
+			# Find images that overlap?
+
+			ims = []
+			for j,wcs in enumerate(wcses):
+				if anwcs_radec_is_inside_image(wcs, r, d):
+
+					tim = wise.read_wise_level1b(
+						T.filename[j].replace('-int-1b.fits',''),
+						nanomaggies=True, mask_gz=True, unc_gz=True,
+						sipwcs=True, constantInvvar=True, radecrad=(ra,dec,Wrad))
+					ims.append(tim)
+			print 'Found', len(ims), 'images containing this source'
+
+			tr = Tractor(ims, cat1)
+			tractors.append(tr)
+			
+
+		if len(groups):
+			# TODO!
+			assert(False)
+
+		sys.exit(0)
+
+
 
 		# Find additional SDSS sources nearby = within R pixels radius.
 		R = 30.
@@ -574,8 +611,6 @@ def main(opt, ps):
 
 		cats = []
 		objs = []
-		sdss = DR9(basedir='data-dr9')
-		sband = 'r'
 		for run,camcol,field,r,d in zip(S.run, S.camcol, S.field, S.ra, S.dec):
 			fn = sdss.retrieve('photoObj', run, camcol, field, band=sband)
 			print 'Reading', fn

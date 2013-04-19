@@ -4,13 +4,14 @@ if __name__ == '__main__':
 
 import os
 import tempfile
-import tractor
-import pyfits
 import pylab as plt
 import numpy as np
 import sys
 from glob import glob
 import logging
+
+import pyfits
+import fitsio
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
@@ -20,6 +21,7 @@ from astrometry.util.util import Sip, anwcs, Tan
 
 from astrometry.util.sdss_radec_to_rcf import *
 
+import tractor
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -31,7 +33,7 @@ from matplotlib.nxutils import points_inside_poly
 
 logger = logging.getLogger('wise')
 
-def read_wise_level1b(basefn, radecroi=None, filtermap={},
+def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 					  nanomaggies=False, mask_gz=False, unc_gz=False,
 					  sipwcs=False, constantInvvar=False):
 	intfn  = basefn + '-int-1b.fits'
@@ -46,22 +48,6 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 	logger.debug('mask image        %s' % maskfn)
 	logger.debug('uncertainty image %s' % uncfn)
 
-	P = pyfits.open(intfn)
-	ihdr = P[0].header
-	data = P[0].data
-	logger.debug('Read %s intensity' % (str(data.shape)))
-	band = ihdr['BAND']
-
-	P = pyfits.open(uncfn)
-	uhdr = P[0].header
-	unc = P[0].data
-	logger.debug('Read %s uncertainty' % (str(unc.shape)))
-
-	P = pyfits.open(maskfn)
-	mhdr = P[0].header
-	mask = P[0].data
-	logger.debug('Read %s mask' % (str(mask.shape)))
-
 	if sipwcs:
 		wcs = Sip(intfn, 0)
 		twcs = tractor.FitsWcs(wcs)
@@ -70,13 +56,19 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 
 	#print 'WCS', twcs
 
-	# HACK -- circular Gaussian PSF of fixed size...
-	# in arcsec 
-	fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
-	# -> sigma in pixels
-	sig = fwhms[band] / 2.35 / twcs.pixel_scale()
-	#print 'PSF sigma', sig, 'pixels'
-	tpsf = tractor.NCircularGaussianPSF([sig], [1.])
+
+	# Read enough of the image to get its size
+	Fint = fitsio.FITS(intfn)
+	H,W = Fint[0].get_info()['dims']
+
+	roi = None
+
+	if radecrad is not None:
+		r,d,rad = radecrad
+		x,y = twcs.positionToPixel(tractor.RaDecPos(r,d))
+		pixrad = rad / (twcs.pixel_scale() / 3600.)
+		print 'RA,Dec,rad', r,d,rad, 'becomes x,y,pixrad', x,y,pixrad
+		roi = (x-pixrad, x+pixrad+1, y-pixrad, y+pixrad+1)
 
 	if radecroi is not None:
 		ralo,rahi, declo,dechi = radecroi
@@ -86,24 +78,54 @@ def read_wise_level1b(basefn, radecroi=None, filtermap={},
 		x0,x1 = xy[:,0].min(), xy[:,0].max()
 		y0,y1 = xy[:,1].min(), xy[:,1].max()
 		print 'RA,Dec ROI', ralo,rahi, declo,dechi, 'becomes x,y ROI', x0,x1,y0,y1
+		roi = (x0,x1+1, y0,y1+1)
 
+	if roi is not None:
+		x0,x1,y0,y1 = roi
+		x0 = int(np.floor(x0))
+		x1 = int(np.ceil (x1))
+		y0 = int(np.floor(y0))
+		y1 = int(np.ceil (y1))
+		roi = (x0,x1, y0,y1)
 		# Clip to image size...
-		H,W = data.shape
-		x0 = max(0, min(x0, W-1))
-		x1 = max(0, min(x1, W))
-		y0 = max(0, min(y0, H-1))
-		y1 = max(0, min(y1, H))
-		print ' clipped to', x0,x1,y0,y1
-
-		data = data[y0:y1, x0:x1]
-		unc = unc[y0:y1, x0:x1]
-		mask = mask[y0:y1, x0:x1]
+		x0 = np.clip(x0, 0, W)
+		x1 = np.clip(x1, 0, W)
+		y0 = np.clip(y0, 0, H)
+		y1 = np.clip(y1, 0, H)
+		if x0 == x1 or y0 == y1:
+			print 'ROI is empty'
+			return None
+		assert(x0 < x1)
+		assert(y0 < y1)
+		#roi = (x0,x1,y0,y1)
 		twcs.setX0Y0(x0,y0)
-		print 'Cut data to', data.shape
 
 	else:
-		H,W = data.shape
 		x0,x1,y0,y1 = 0,W, 0,H
+
+
+	ihdr = Fint[0].read_header()
+	data = Fint[0][y0:y1, x0:x1]
+	logger.debug('Read %s intensity' % (str(data.shape)))
+	band = ihdr['BAND']
+
+	F = fitsio.FITS(uncfn)
+	assert(F[0].get_info()['dims'] == [H,W])
+	unc = F[0][y0:y1, x0:x1]
+
+	F = fitsio.FITS(maskfn)
+	assert(F[0].get_info()['dims'] == [H,W])
+	mask = F[0][y0:y1, x0:x1]
+
+
+	# HACK -- circular Gaussian PSF of fixed size...
+	# in arcsec 
+	fwhms = { 1: 6.1, 2: 6.4, 3: 6.5, 4: 12.0 }
+	# -> sigma in pixels
+	sig = fwhms[band] / 2.35 / twcs.pixel_scale()
+	#print 'PSF sigma', sig, 'pixels'
+	tpsf = tractor.NCircularGaussianPSF([sig], [1.])
+
 
 	filter = 'w%i' % band
 	if filtermap:
@@ -308,7 +330,8 @@ def get_psf_model(band, pixpsf=False):
 	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
 
 	if pixpsf:
-		return PixelizedPSF(psf)
+		print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
+		return PixelizedPSF(np.maximum(psf, 0.))
 
 	S = psf.shape[0]
 	# number of Gaussian components
