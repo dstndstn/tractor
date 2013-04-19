@@ -43,7 +43,7 @@ def get_l1b_file(basedir, scanid, frame, band):
 
 
 
-def stage0(opt=None):
+def stage0(opt=None, ps=None):
 	bandnum = 1
 	band = 'w%i' % bandnum
 
@@ -184,14 +184,175 @@ def stage0(opt=None):
 	return dict(tractors=tractors, sources=S, bandnum=bandnum, band=band)
 
 
-def stage1(opt=None, tractors=None, **kwa):
+
+def _plot_grid(ims, kwas):
+	N = len(ims)
+	C = int(np.ceil(np.sqrt(N)))
+	R = int(np.ceil(N / float(C)))
+	plt.clf()
+	for i,(im,kwa) in enumerate(zip(ims, kwas)):
+		plt.subplot(R,C, i+1)
+		#print 'plotting grid cell', i, 'img shape', im.shape
+		plt.imshow(im, **kwa)
+		plt.gray()
+		plt.xticks([]); plt.yticks([])
+	return R,C
+
+def _plot_grid2(ims, cat, tims, kwas, ptype='mod'):
+	xys = []
+	stamps = []
+	for (img,mod,chi,roi),tim in zip(ims, tims):
+		if ptype == 'mod':
+			stamps.append(mod)
+		elif ptype == 'chi':
+			stamps.append(chi)
+		wcs = tim.getWcs()
+		if roi is None:
+			y0,x0 = 0,0
+		else:
+			y0,x0 = roi[0].start, roi[1].start
+		xy = []
+		for src in cat:
+			xi,yi = wcs.positionToPixel(src.getPosition())
+			xy.append((xi - x0, yi - y0))
+		xys.append(xy)
+		#print 'X,Y source positions in stamp of shape', stamps[-1].shape
+		#print '  ', xy
+	R,C = _plot_grid(stamps, kwas)
+	for i,xy in enumerate(xys):
+		plt.subplot(R, C, i+1)
+		ax = plt.axis()
+		xy = np.array(xy)
+		plt.plot(xy[:,0], xy[:,1], 'r+', lw=2)
+		plt.axis(ax)
+
+
+
+def stage1(opt=None, ps=None, tractors=None, band=None, **kwa):
+
+	#minsb = 0.25
+	minsb = 0.05
+
+	if opt.osources:
+		O = fits_table(opt.osources)
+		ocat = Catalog()
+		print 'Other catalog:'
+		for i in range(len(O)):
+			w1 = O.wiseflux[i, 0]
+			s = PointSource(RaDecPos(O.ra[i], O.dec[i]), NanoMaggies(w1=w1))
+			ocat.append(s)
+		print ocat
+		ocat.freezeParamsRecursive('*')
+		ocat.thawPathsTo(band)
+
 	print 'Got', len(tractors), 'tractors'
-	for tractor in tractors:
+	for ti,tractor in enumerate(tractors):
 		print '  ', tractor
-	
 
-	
+		tractor.freezeParam('images')
+		tims =tractor.images
+		cat = tractor.catalog
+		cat.freezeParamsRecursive('*')
+		cat.thawPathsTo(band)
 
+		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.)
+
+		imas = [dict(interpolation='nearest', origin='lower',
+					 vmin=tim.zr[0], vmax=tim.zr[1])
+				for tim in tims]
+		imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+		imchis = [imchi] * len(tims)
+
+		tt = 'source %i' % ti
+
+		_plot_grid([img for (img, mod, chi, roi) in ims0], imas)
+		plt.suptitle('Data: ' + tt)
+		ps.savefig()
+
+		if ims1 is not None:
+			_plot_grid2(ims1, cat, tims, imas)
+			plt.suptitle('Forced-phot model: ' + tt)
+			ps.savefig()
+
+			_plot_grid2(ims1, cat, tims, imchis, ptype='chi')
+			plt.suptitle('Forced-phot chi: ' + tt)
+			ps.savefig()
+
+		if opt.osources:
+			tractor.catalog = ocat
+			nil,nil,ims3 = tractor.optimize_forced_photometry(minsb=minsb,
+															  justims0=True)
+			tractor.catalog = cat
+
+			_plot_grid2(ims3, ocat, tims, imas)
+			plt.suptitle("Schlegel's model: group %i" % gl)
+			ps.savefig()
+
+			_plot_grid2(ims3, ocat, tims, imchis, ptype='chi')
+			plt.suptitle("Schlegel's chi: group %i" % gl)
+			ps.savefig()
+
+
+def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
+
+	assert(opt.osources)
+	O = fits_table(opt.osources)
+
+	W = fits_table('wise-sources-nearby.fits', columns=['ra','dec','w1mpro'])
+	print 'Read', len(W), 'WISE sources nearby'
+
+	zpoff = 0.2520
+	fscale = 10. ** (zpoff / 2.5)
+		
+	nms = []
+	rr,dd = [],[]
+	print 'Got', len(tractors), 'tractors'
+	for ti,tractor in enumerate(tractors):
+		#print '  ', tractor
+		cat = tractor.catalog
+		nm = np.array([src.getBrightness().getBand(band) for src in cat])
+		print 'My fluxes:', nm
+		nm *= fscale
+		print 'Scaled:', nm
+		nms.append(nm)
+		rr.append(np.array([src.getPosition().ra  for src in cat]))
+		dd.append(np.array([src.getPosition().dec for src in cat]))
+
+	X = O.wiseflux[:,0]
+	DX = 1./np.sqrt(O.wiseflux_ivar[:,0])
+
+	plt.clf()
+	for ti,(nm,r,d) in enumerate(zip(nms,rr,dd)):
+		x = X[ti]
+		xx = [x]*len(nm)
+		p1 = plt.loglog(xx, nm, 'b.', zorder=26)
+
+		plt.plot([x,x], [nm[nm>0].min(), nm.max()], 'b--', alpha=0.25, zorder=25)
+
+		R = 4./3600.
+		I,J,d = match_radec(O.ra[ti], O.dec[ti], r, d, R)
+		p2 = plt.loglog([x]*len(J), nm[J], 'bo', zorder=28)
+
+	I,J,d = match_radec(O.ra, O.dec, W.ra, W.dec, R)
+	wf = NanoMaggies.magToNanomaggies(W.w1mpro[J])
+	#p3 = plt.loglog(X[I], wf, 'rx', ms=8, zorder=30)
+	p3 = plt.loglog(X[I], wf, 'r.', ms=8, zorder=30)
+
+	nil,nil,p4 = plt.errorbar(X, X, yerr=DX, fmt=None, color='k', alpha=0.5, ecolor='0.5',
+							  lw=2, capsize=10)
+	
+	ax = plt.axis()
+	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
+	plt.plot([lo,hi], [lo,hi], 'k-', lw=3, alpha=0.3)
+	plt.axis(ax)
+
+	plt.xlabel("Schlegel's measurements (nanomaggies)")
+	plt.ylabel("My measurements (nanomaggies)")
+
+	plt.legend((p1, p2, p3, p4), ('Mine (all)', 'Mine (nearest)', 'WISE', 'Schlegel'),
+			   loc='upper left')
+
+	ps.savefig()
 
 
 
@@ -268,7 +429,7 @@ if __name__ == '__main__':
 	#runner = Caller('stage%i', (), opt=opt)
 	#runner = CallGlobal('stage%i', (), opt=opt)
 
-	runner = CallGlobal('stage%i', globals(), opt=opt)
+	runner = CallGlobal('stage%i', globals(), opt=opt, ps=ps)
 
 	runstage(opt.stage, opt.picklepat, runner, force=opt.force)
 
