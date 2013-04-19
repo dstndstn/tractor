@@ -285,11 +285,11 @@ def stage1(opt=None, ps=None, tractors=None, band=None, **kwa):
 			tractor.catalog = cat
 
 			_plot_grid2(ims3, ocat, tims, imas)
-			plt.suptitle("Schlegel's model: group %i" % gl)
+			plt.suptitle("Schlegel's model: " + tt)
 			ps.savefig()
 
 			_plot_grid2(ims3, ocat, tims, imchis, ptype='chi')
-			plt.suptitle("Schlegel's chi: group %i" % gl)
+			plt.suptitle("Schlegel's chi: " + tt)
 			ps.savefig()
 
 
@@ -303,6 +303,7 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 
 	zpoff = 0.2520
 	fscale = 10. ** (zpoff / 2.5)
+	print 'Flux scale', fscale
 		
 	nms = []
 	rr,dd = [],[]
@@ -311,9 +312,9 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 		#print '  ', tractor
 		cat = tractor.catalog
 		nm = np.array([src.getBrightness().getBand(band) for src in cat])
-		print 'My fluxes:', nm
+		#print 'My fluxes:', nm
 		nm *= fscale
-		print 'Scaled:', nm
+		#print 'Scaled:', nm
 		nms.append(nm)
 		rr.append(np.array([src.getPosition().ra  for src in cat]))
 		dd.append(np.array([src.getPosition().dec for src in cat]))
@@ -325,7 +326,7 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 	for ti,(nm,r,d) in enumerate(zip(nms,rr,dd)):
 		x = X[ti]
 		xx = [x]*len(nm)
-		p1 = plt.loglog(xx, nm, 'b.', zorder=26)
+		p1 = plt.loglog(xx, nm, 'b.', zorder=32)
 
 		plt.plot([x,x], [nm[nm>0].min(), nm.max()], 'b--', alpha=0.25, zorder=25)
 
@@ -335,15 +336,26 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 
 	I,J,d = match_radec(O.ra, O.dec, W.ra, W.dec, R)
 	wf = NanoMaggies.magToNanomaggies(W.w1mpro[J])
-	#p3 = plt.loglog(X[I], wf, 'rx', ms=8, zorder=30)
-	p3 = plt.loglog(X[I], wf, 'r.', ms=8, zorder=30)
+	p3 = plt.loglog(X[I], wf, 'rx', mew=1.5, ms=6, zorder=30)
+	#p3 = plt.loglog(X[I], wf, 'r.', ms=8, zorder=30)
 
 	nil,nil,p4 = plt.errorbar(X, X, yerr=DX, fmt=None, color='k', alpha=0.5, ecolor='0.5',
 							  lw=2, capsize=10)
+
+	plt.loglog(X, X/fscale, 'k-', alpha=0.1)
 	
 	ax = plt.axis()
 	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
 	plt.plot([lo,hi], [lo,hi], 'k-', lw=3, alpha=0.3)
+
+	J = np.argsort(X)
+	for j,i in enumerate(J):
+		#for i,x in enumerate(X):
+		x = X[i]
+		if x > 0:
+			y = ax[2]*(3 if ((j%2)==0) else 5)
+			plt.text(x, y, '%i' % i, color='k', fontsize=8, ha='center')
+			plt.plot([x,x], [x*0.1, y*1.1], 'k-', alpha=0.1)
 	plt.axis(ax)
 
 	plt.xlabel("Schlegel's measurements (nanomaggies)")
@@ -359,7 +371,8 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 if __name__ == '__main__':
 
 	#plt.figure(figsize=(12,12))
-	plt.figure(figsize=(10,10))
+	#plt.figure(figsize=(10,10))
+	plt.figure(figsize=(8,8))
 
 
 	import optparse
@@ -414,20 +427,7 @@ if __name__ == '__main__':
 		lvl = logging.INFO
 	logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-
 	ps = PlotSequence(opt.ps, format='%03i')
-
-	#print 'Locals:', locals().keys()
-	#print 'Globals:', globals().keys()
-
-
-	# class Caller(CallGlobal):
-	# 	def getfunc(self, stage):
-	# 		func = self.pat % stage
-	# 		func = eval(func)
-	# 		return func
-	#runner = Caller('stage%i', (), opt=opt)
-	#runner = CallGlobal('stage%i', (), opt=opt)
 
 	runner = CallGlobal('stage%i', globals(), opt=opt, ps=ps)
 
