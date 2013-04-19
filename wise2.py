@@ -41,6 +41,188 @@ def get_l1b_file(basedir, scanid, frame, band):
 	return os.path.join(basedir, 'wise1', '4band_p1bm_frm', scangrp, scanid,
 						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
 
+def wcs_checks():
+	if False:
+		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+		print 'PSF image shape', psf.shape
+		H,W = psf.shape
+		X,Y = np.meshgrid(np.arange(W), np.arange(H))
+		mx = np.sum(X * psf) / np.sum(psf)
+		my = np.sum(Y * psf) / np.sum(psf)
+		print 'First moments:', mx, my
+
+		#S = fits_table('stripe82-19objs.fits', hdu=2)
+		S = fits_table('wise-sources-nearby.fits')
+		print 'Got', len(S)
+		S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
+		print 'Cut to', len(S)
+
+		T = fits_table('wise-images-overlapping.fits')
+		T.filename = [fn.strip() for fn in T.filename]
+		for fn in T.filename:
+			im = pyfits.open(fn)[0].data
+			wcs = anwcs(fn, 0)
+			#print 'Got WCS', wcs.getHeaderString()
+			anwcs_print_stdout(wcs)
+
+			H,W = im.shape
+			m = 5
+
+			X,Y = np.meshgrid(np.linspace(0, W, 30), np.linspace(0, H, 30))
+			X = X.ravel()
+			Y = Y.ravel()
+			X2 = []
+			Y2 = []
+			for x,y in zip(X,Y):
+				r,d = wcs.pixelxy2radec(x,y)
+				ok,x2,y2 = wcs.radec2pixelxy(r,d)
+				X2.append(x2)
+				Y2.append(y2)
+			X2 = np.array(X2)
+			Y2 = np.array(Y2)
+			print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
+
+			plt.clf()
+			plt.plot(np.vstack((X, X + (X2 - X)*100.)),
+					 np.vstack((Y, Y + (Y2 - Y)*100.)), 'b-')
+			plt.plot(X, Y, 'b.')
+			plt.axis('scaled')
+			plt.title("WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+			plt.axis([-50, 1066, -50, 1066])
+			ps.savefig()
+
+			plt.clf()
+			n,b,p1 = plt.hist(X - X2, 100, range=(-1,1), histtype='step', color='b')
+			n,b,p2 = plt.hist(Y - Y2, 100, range=(-1,1), histtype='step', color='r')
+			plt.legend((p1,p2), ('dx','dy'))
+			plt.title('WISE WCS round-trip residuals')
+			ps.savefig()
+
+
+			sip = Sip(fn, 0)
+			print 'Read', sip
+
+			X3 = []
+			Y3 = []
+			for x,y in zip(X,Y):
+				r,d = sip.pixelxy2radec(x,y)
+				x2,y2 = sip.radec2pixelxy(r,d)
+				X3.append(x2)
+				Y3.append(y2)
+			X3 = np.array(X3)
+			Y3 = np.array(Y3)
+			print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
+
+			sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+			print 'After computing inverse polynomials:', sip
+
+			X4 = []
+			Y4 = []
+			for x,y in zip(X,Y):
+				r,d = sip.pixelxy2radec(x,y)
+				x2,y2 = sip.radec2pixelxy(r,d)
+				X4.append(x2)
+				Y4.append(y2)
+			X4 = np.array(X4)
+			Y4 = np.array(Y4)
+			print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
+
+
+			plt.clf()
+			plt.plot(np.vstack((X, X + (X4 - X)*1e6)),
+					 np.vstack((Y, Y + (Y4 - Y)*1e6)), 'b-')
+			plt.plot(X, Y, 'b.')
+			plt.axis('scaled')
+			plt.title("Refit WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
+			plt.axis([-50, 1066, -50, 1066])
+			ps.savefig()
+
+			plt.clf()
+			n,b,p1 = plt.hist(X - X4, 100, range=(-1e-3,1e-3), histtype='step', color='b')
+			n,b,p2 = plt.hist(Y - Y4, 100, range=(-1e-3,1e-3), histtype='step', color='r')
+			plt.legend((p1,p2), ('dx','dy'))
+			plt.title('Refit WISE WCS round-trip residuals')
+			ps.savefig()
+
+
+			# sip.ap_order = 5
+			# sip.bp_order = 5
+			# sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
+			# print 'After computing 5th-order  inverse polynomials:', sip
+			# X5 = []
+			# Y5 = []
+			# for x,y in zip(X,Y):
+			# 	r,d = sip.pixelxy2radec(x,y)
+			# 	x2,y2 = sip.radec2pixelxy(r,d)
+			# 	X5.append(x2)
+			# 	Y5.append(y2)
+			# X5 = np.array(X5)
+			# Y5 = np.array(Y5)
+			# print 'Round-trip error on x,y with 5th-order:', np.std(X5-X), np.std(Y5-Y)
+
+
+
+
+			xx,yy = [],[]
+			for r,d in zip(S.ra, S.dec):
+				ok,x,y = wcs.radec2pixelxy(r, d)
+				#if x >= 0 and y >= 0 and x < H and y < W:
+				if x >= m and y >= m and y < H-m and x < W-m:
+					xx.append(x-1)
+					yy.append(y-1)
+
+			plt.clf()
+			for i,(x,y) in enumerate(zip(xx,yy)):
+				if i == 16:
+					break
+				ix = int(np.round(x))
+				iy = int(np.round(y))
+				plt.subplot(4,4,i+1)
+				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+						   vmin=15., vmax=75.)
+				plt.gray()
+				ax = plt.axis()
+				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+				# ms=15, mew=2, alpha=0.6)
+				plt.axis(ax)
+
+			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+			plt.suptitle('WISE ' + tt)
+			ps.savefig()
+
+
+
+			xx,yy = [],[]
+			for r,d in zip(S.ra, S.dec):
+				x,y = sip.radec2pixelxy(r, d)
+				#if x >= 0 and y >= 0 and x < H and y < W:
+				if x >= m and y >= m and y < H-m and x < W-m:
+					xx.append(x-1)
+					yy.append(y-1)
+
+			plt.clf()
+			for i,(x,y) in enumerate(zip(xx,yy)):
+				if i == 16:
+					break
+				ix = int(np.round(x))
+				iy = int(np.round(y))
+				plt.subplot(4,4,i+1)
+				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
+						   vmin=15., vmax=75.)
+				plt.gray()
+				ax = plt.axis()
+				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
+				# ms=15, mew=2, alpha=0.6)
+				plt.axis(ax)
+
+			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
+			plt.suptitle('WISE ' + tt + ' (re-fit)')
+			ps.savefig()
+
+
+			break
+	
+
 def coadd():
 	if False:
 		ps.skipto(100)
@@ -1246,201 +1428,22 @@ if __name__ == '__main__':
 		#main(opt)
 		sys.exit(0)
 
-
-	if False:
-		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
-		print 'PSF image shape', psf.shape
-		H,W = psf.shape
-		X,Y = np.meshgrid(np.arange(W), np.arange(H))
-		mx = np.sum(X * psf) / np.sum(psf)
-		my = np.sum(Y * psf) / np.sum(psf)
-		print 'First moments:', mx, my
-
-		#S = fits_table('stripe82-19objs.fits', hdu=2)
-		S = fits_table('wise-sources-nearby.fits')
-		print 'Got', len(S)
-		S.cut((S.w1mpro >= 14) * (S.w1mpro < 15))
-		print 'Cut to', len(S)
-
-		T = fits_table('wise-images-overlapping.fits')
-		T.filename = [fn.strip() for fn in T.filename]
-		for fn in T.filename:
-			im = pyfits.open(fn)[0].data
-			wcs = anwcs(fn, 0)
-			#print 'Got WCS', wcs.getHeaderString()
-			anwcs_print_stdout(wcs)
-
-			H,W = im.shape
-			m = 5
-
-			X,Y = np.meshgrid(np.linspace(0, W, 30), np.linspace(0, H, 30))
-			X = X.ravel()
-			Y = Y.ravel()
-			X2 = []
-			Y2 = []
-			for x,y in zip(X,Y):
-				r,d = wcs.pixelxy2radec(x,y)
-				ok,x2,y2 = wcs.radec2pixelxy(r,d)
-				X2.append(x2)
-				Y2.append(y2)
-			X2 = np.array(X2)
-			Y2 = np.array(Y2)
-			print 'Round-trip error on x,y:', np.std(X2-X), np.std(Y2-Y)
-
-			plt.clf()
-			plt.plot(np.vstack((X, X + (X2 - X)*100.)),
-					 np.vstack((Y, Y + (Y2 - Y)*100.)), 'b-')
-			plt.plot(X, Y, 'b.')
-			plt.axis('scaled')
-			plt.title("WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
-			plt.axis([-50, 1066, -50, 1066])
-			ps.savefig()
-
-			plt.clf()
-			n,b,p1 = plt.hist(X - X2, 100, range=(-1,1), histtype='step', color='b')
-			n,b,p2 = plt.hist(Y - Y2, 100, range=(-1,1), histtype='step', color='r')
-			plt.legend((p1,p2), ('dx','dy'))
-			plt.title('WISE WCS round-trip residuals')
-			ps.savefig()
-
-
-			sip = Sip(fn, 0)
-			print 'Read', sip
-
-			X3 = []
-			Y3 = []
-			for x,y in zip(X,Y):
-				r,d = sip.pixelxy2radec(x,y)
-				x2,y2 = sip.radec2pixelxy(r,d)
-				X3.append(x2)
-				Y3.append(y2)
-			X3 = np.array(X3)
-			Y3 = np.array(Y3)
-			print 'Round-trip error:', np.std(X3-X), np.std(Y3-Y)
-
-			sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
-			print 'After computing inverse polynomials:', sip
-
-			X4 = []
-			Y4 = []
-			for x,y in zip(X,Y):
-				r,d = sip.pixelxy2radec(x,y)
-				x2,y2 = sip.radec2pixelxy(r,d)
-				X4.append(x2)
-				Y4.append(y2)
-			X4 = np.array(X4)
-			Y4 = np.array(Y4)
-			print 'Round-trip error on x,y with 4th-order:', np.std(X4-X), np.std(Y4-Y)
-
-
-			plt.clf()
-			plt.plot(np.vstack((X, X + (X4 - X)*1e6)),
-					 np.vstack((Y, Y + (Y4 - Y)*1e6)), 'b-')
-			plt.plot(X, Y, 'b.')
-			plt.axis('scaled')
-			plt.title("Refit WISE WCS round-trip (X,Y -> RA,Dec -> X',Y') residuals")
-			plt.axis([-50, 1066, -50, 1066])
-			ps.savefig()
-
-			plt.clf()
-			n,b,p1 = plt.hist(X - X4, 100, range=(-1e-3,1e-3), histtype='step', color='b')
-			n,b,p2 = plt.hist(Y - Y4, 100, range=(-1e-3,1e-3), histtype='step', color='r')
-			plt.legend((p1,p2), ('dx','dy'))
-			plt.title('Refit WISE WCS round-trip residuals')
-			ps.savefig()
-
-
-			# sip.ap_order = 5
-			# sip.bp_order = 5
-			# sip_compute_inverse_polynomials(sip, 30, 30, 0, 0, 0, 0)
-			# print 'After computing 5th-order  inverse polynomials:', sip
-			# X5 = []
-			# Y5 = []
-			# for x,y in zip(X,Y):
-			# 	r,d = sip.pixelxy2radec(x,y)
-			# 	x2,y2 = sip.radec2pixelxy(r,d)
-			# 	X5.append(x2)
-			# 	Y5.append(y2)
-			# X5 = np.array(X5)
-			# Y5 = np.array(Y5)
-			# print 'Round-trip error on x,y with 5th-order:', np.std(X5-X), np.std(Y5-Y)
-
-
-
-
-			xx,yy = [],[]
-			for r,d in zip(S.ra, S.dec):
-				ok,x,y = wcs.radec2pixelxy(r, d)
-				#if x >= 0 and y >= 0 and x < H and y < W:
-				if x >= m and y >= m and y < H-m and x < W-m:
-					xx.append(x-1)
-					yy.append(y-1)
-
-			plt.clf()
-			for i,(x,y) in enumerate(zip(xx,yy)):
-				if i == 16:
-					break
-				ix = int(np.round(x))
-				iy = int(np.round(y))
-				plt.subplot(4,4,i+1)
-				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
-						   vmin=15., vmax=75.)
-				plt.gray()
-				ax = plt.axis()
-				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
-				# ms=15, mew=2, alpha=0.6)
-				plt.axis(ax)
-
-			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
-			plt.suptitle('WISE ' + tt)
-			ps.savefig()
-
-
-
-			xx,yy = [],[]
-			for r,d in zip(S.ra, S.dec):
-				x,y = sip.radec2pixelxy(r, d)
-				#if x >= 0 and y >= 0 and x < H and y < W:
-				if x >= m and y >= m and y < H-m and x < W-m:
-					xx.append(x-1)
-					yy.append(y-1)
-
-			plt.clf()
-			for i,(x,y) in enumerate(zip(xx,yy)):
-				if i == 16:
-					break
-				ix = int(np.round(x))
-				iy = int(np.round(y))
-				plt.subplot(4,4,i+1)
-				plt.imshow(im[iy-m:iy+m+1, ix-m:ix+m+1], interpolation='nearest', origin='lower',
-						   vmin=15., vmax=75.)
-				plt.gray()
-				ax = plt.axis()
-				plt.plot(x - (ix-m), y - (iy - m), 'r+', mec='r', mfc='none', mew=2)
-				# ms=15, mew=2, alpha=0.6)
-				plt.axis(ax)
-
-			tt = fn.split('/')[-1].replace('-int-1b.fits', '')
-			plt.suptitle('WISE ' + tt + ' (re-fit)')
-			ps.savefig()
-
-
-			break
-
 	T = fits_table('stripe82-19objs.fits', hdu=2)
 	print 'Reading results file', opt.result
-	W = fits_table(opt.result)
+	R = fits_table(opt.result)
+	W = fits_table('wise-sources-nearby.fits', columns=['ra','dec','w1mpro'])
+	print 'Read', len(W), 'WISE sources nearby'
 
-	if 'nms' in W.get_columns():
+	if 'nms' in R.get_columns():
 		plt.clf()
-		nm0 = W.nm0
-		R,C = W.nms.shape
+		nm0 = R.nm0
+		R,C = R.nms.shape
 		for j in range(C):
-			nm = W.nms[:,j]
+			nm = R.nms[:,j]
 			I = np.flatnonzero(nm != nm0)
 			plt.loglog(nm0[I], np.maximum(1e-6, nm[I] / nm0[I]), 'b.', alpha=0.01)
 		if False:
-			nmx = W.nms.T
+			nmx = R.nms.T
 			mn = []
 			st = []
 			ii = []
@@ -1462,19 +1465,31 @@ if __name__ == '__main__':
 		plt.ylim(0.1, 10.)
 		ps.savefig()
 
+
+	# Match to WISE sources
+	r = 4./3600.
+	#I,J,d = match_radec(R.ra, R.dec, W.ra, W.dec, r)
+	#RW = R[I]
+	#WR = W[J]
+	I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, r)
+	TW = T[I]
+	WT = W[J]
+	WT.nm1 = NanoMaggies.magToNanomaggies(WT.w1mpro)
+	print 'Matched', len(TW), 'Schlegel sources to WISE'
+
 	if opt.match:
-		R = 4./3600.
-		#R = 10./3600.
-		I,J,d = match_radec(T.ra, T.dec, W.ra, W.dec, R, nearest=opt.nearest)
+		r = 4./3600.
+		#r = 10./3600.
+		I,J,d = match_radec(T.ra, T.dec, R.ra, R.dec, r, nearest=opt.nearest)
 		print 'Matched', len(I)
 		T.cut(I)
-		W.cut(J)
+		R.cut(J)
 		T.I = I
-		W.J = J
+		R.J = J
 
 		mgroups = {}
-		for row,(i,j) in enumerate(zip(T.I, W.J)):
-			# Group together objects in W that match a single object in T=Schlegel
+		for row,(i,j) in enumerate(zip(T.I, R.J)):
+			# Group together objects in R that match a single object in T=Schlegel
 			if not i in mgroups:
 				mgroups[i] = []
 			mgroups[i].append(row)
@@ -1482,28 +1497,33 @@ if __name__ == '__main__':
 		print 'Match groups:', mgroups
 
 	else:
-		assert(len(T) == len(W))
+		assert(len(T) == len(R))
+
+
+
 
 	plt.clf()
-	#p1 = plt.loglog(T.wiseflux[:,0], W.nm0, 'r.', zorder=30)
-	if 'nmall' in W.get_columns():
-		p2 = plt.loglog(T.wiseflux[:,0], W.nmall, 'bo', zorder=30, alpha=0.7)
+	#p1 = plt.loglog(T.wiseflux[:,0], R.nm0, 'r.', zorder=30)
+	if 'nmall' in R.get_columns():
+		p2 = plt.loglog(T.wiseflux[:,0], R.nmall, 'bo', zorder=30, alpha=0.7)
 
 		for I in mgroups:
-			plt.loglog(T.wiseflux[I,0], W.nmall[I], 'b-', zorder=30)
+			plt.loglog(T.wiseflux[I,0], R.nmall[I], 'b-', zorder=30)
 
 	sig = 1./np.sqrt(T.wiseflux_ivar[:,0])
 	p5 = plt.errorbar(T.wiseflux[:,0], T.wiseflux[:,0], yerr=sig, fmt=None,
 					  color='k', alpha=0.5, ecolor='0.5')
 
-	if 'nms' in W.get_columns():
-		R,C = W.nms.shape
+	p6 = plt.loglog(TW.wiseflux[:,0], WT.nm1, 'r+', zorder=30, mew=1, ms=8, alpha=0.7)
+
+	if 'nms' in R.get_columns():
+		R,C = R.nms.shape
 		mns = []
 		sts = []
 		mx = []
 		for j in range(R):
-			nm = W.nms[j,:]
-			I = np.flatnonzero(nm != W.nm0[j])
+			nm = R.nms[j,:]
+			I = np.flatnonzero(nm != R.nm0[j])
 			print 'Measured flux', j, 'in', len(I), 'images'
 			if len(I) == 0:
 				continue
@@ -1526,29 +1546,29 @@ if __name__ == '__main__':
 
 
 	plt.clf()
-	rband = W.nm0
-	if 'nmall' in W.get_columns():
-		simul = W.nmall
+	rband = R.nm0
+	if 'nmall' in R.get_columns():
+		simul = R.nmall
 		I = np.flatnonzero(simul != rband)
 		xx = T.wiseflux[I,0]
 		simul = simul[I]
-		# p1 = plt.loglog(xx, W.nm0   / xx, 'r.', zorder=30)
+		# p1 = plt.loglog(xx, R.nm0   / xx, 'r.', zorder=30)
 		p2 = plt.loglog(xx, simul / xx, 'bo', zorder=30, alpha=0.7)
 		sig = 1./np.sqrt(T.wiseflux_ivar[I,0])
 		p5 = plt.loglog([xx-sig, xx+sig], [simul / xx]*2, 'b-', zorder=29)
 
 		for I in mgroups:
-			plt.loglog(T.wiseflux[I,0], W.nmall[I]/T.wiseflux[I,0], 'b-', zorder=30)
+			plt.loglog(T.wiseflux[I,0], R.nmall[I]/T.wiseflux[I,0], 'b-', zorder=30)
 
 
-	if 'nms' in W.get_columns():
-		R,C = W.nms.shape
+	if 'nms' in R.get_columns():
+		R,C = R.nms.shape
 		mns = []
 		sts = []
 		mx = []
 		for j in range(R):
-			nm = W.nms[j,:]
-			I = np.flatnonzero(nm != W.nm0[j])
+			nm = R.nms[j,:]
+			I = np.flatnonzero(nm != R.nm0[j])
 			print 'Measured flux', j, 'in', len(I), 'images'
 			if len(I) == 0:
 				continue
