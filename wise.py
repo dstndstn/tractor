@@ -303,9 +303,13 @@ read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
 
 
-def get_psf_model(band):
+def get_psf_model(band, pixpsf=False):
 	assert(band == 1)
 	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+
+	if pixpsf:
+		return PixelizedPSF(psf)
+
 	S = psf.shape[0]
 	# number of Gaussian components
 	K = 3

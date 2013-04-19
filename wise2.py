@@ -419,6 +419,15 @@ def main(opt, ps):
 		print 'S table has', len(S)
 		assert(len(S) == len(cat))
 
+		if opt.ptsrc:
+			print 'Converting all sources to PointSources'
+			pcat = Catalog()
+			for src in cat:
+				ps = PointSource(src.getPosition(), src.getBrightness())
+				pcat.append(ps)
+			print 'PointSource catalog:', pcat
+			cat = pcat
+
 		# ??
 		WW = S
 		#WW = tabledata()
@@ -514,7 +523,7 @@ def main(opt, ps):
 
 	WW.nm0 = nm0
 
-	w1psf = wise.get_psf_model(bandnum)
+	w1psf = wise.get_psf_model(bandnum, opt.pixpsf)
 
 	# Create fake image in the "coadd" footprint in order to find overlapping
 	# sources.
@@ -1192,6 +1201,10 @@ if __name__ == '__main__':
 					  help='Optimize RA,Dec too (not just forced photom)?')
 	parser.add_option('-C', dest='cache',
 					  help='Cache file after individual-epoch measurements')
+	parser.add_option('--ptsrc', dest='ptsrc', action='store_true',
+					  help='Set all sources to point sources')
+	parser.add_option('--pixpsf', dest='pixpsf', action='store_true',
+					  help='Use pixelized PSF -- use with --ptsrc')
 
 	parser.add_option('-p', dest='plots', action='store_true',
 					  help='Make result plots?')
