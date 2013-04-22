@@ -42,6 +42,20 @@ def get_l1b_file(basedir, scanid, frame, band):
 
 
 
+#
+#   stage0 --
+#    - find overlapping images
+#    - find SDSS sources nearby
+#    - create Tractor objects for each cluster
+#
+#   stage1 --
+#    - run forced photometry, make plots
+#
+#   stage2 --
+#    - make comparison plots
+#
+
+
 
 def stage0(opt=None, ps=None):
 	bandnum = 1
@@ -228,7 +242,7 @@ def _plot_grid2(ims, cat, tims, kwas, ptype='mod'):
 
 
 
-def stage1(opt=None, ps=None, tractors=None, band=None, **kwa):
+def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 
 	#minsb = 0.25
 	minsb = 0.05
@@ -245,13 +259,29 @@ def stage1(opt=None, ps=None, tractors=None, band=None, **kwa):
 		ocat.freezeParamsRecursive('*')
 		ocat.thawPathsTo(band)
 
+	w1psf = wise.get_psf_model(bandnum, opt.pixpsf)
+
 	print 'Got', len(tractors), 'tractors'
 	for ti,tractor in enumerate(tractors):
 		print '  ', tractor
 
-		tractor.freezeParam('images')
-		tims =tractor.images
+		tims = tractor.images
 		cat = tractor.catalog
+
+		for tim in tims:
+			tim.psf = w1psf
+
+		if opt.ptsrc:
+			print 'Converting all sources to PointSources'
+			pcat = Catalog()
+			for src in cat:
+				pt = PointSource(src.getPosition(), src.getBrightness())
+				pcat.append(pt)
+			print 'PointSource catalog:', pcat
+			cat = pcat
+			tractor.catalog = cat
+
+		tractor.freezeParam('images')
 		cat.freezeParamsRecursive('*')
 		cat.thawPathsTo(band)
 
@@ -335,7 +365,7 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 		p2 = plt.loglog([x]*len(J), nm[J], 'bo', zorder=28)
 
 	I,J,d = match_radec(O.ra, O.dec, W.ra, W.dec, R)
-	wf = NanoMaggies.magToNanomaggies(W.w1mpro[J])
+	wf = NanoMaggies.magToNanomaggies(W.w1mpro[J]) * fscale
 	p3 = plt.loglog(X[I], wf, 'rx', mew=1.5, ms=6, zorder=30)
 	#p3 = plt.loglog(X[I], wf, 'r.', ms=8, zorder=30)
 
