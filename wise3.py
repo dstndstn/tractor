@@ -281,11 +281,22 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 			cat = pcat
 			tractor.catalog = cat
 
-		tractor.freezeParam('images')
+		#tractor.freezeParam('images')
+
+		tims.freezeParamsRecursive('*')
+		tims.thawAllParams()
+		for tim in tims:
+			tim.thawParam('sky')
+			# FIXME -- ConstantSky is a ScalarParams, with no thawAllRecursive() call.
+			#tim.getSky().thawAllRecursive()
 		cat.freezeParamsRecursive('*')
 		cat.thawPathsTo(band)
 
-		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.)
+		print 'Optimize_forced_photometry:'
+		tractor.printThawedParams()
+
+		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+													   sky=True)
 
 		imas = [dict(interpolation='nearest', origin='lower',
 					 vmin=tim.zr[0], vmax=tim.zr[1])
@@ -310,6 +321,7 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 
 		if opt.osources:
 			tractor.catalog = ocat
+			tractor.freezeParam('images')
 			nil,nil,ims3 = tractor.optimize_forced_photometry(minsb=minsb,
 															  justims0=True)
 			tractor.catalog = cat
@@ -352,6 +364,11 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 	X = O.wiseflux[:,0]
 	DX = 1./np.sqrt(O.wiseflux_ivar[:,0])
 
+
+
+
+
+
 	plt.clf()
 	for ti,(nm,r,d) in enumerate(zip(nms,rr,dd)):
 		x = X[ti]
@@ -372,7 +389,7 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 	nil,nil,p4 = plt.errorbar(X, X, yerr=DX, fmt=None, color='k', alpha=0.5, ecolor='0.5',
 							  lw=2, capsize=10)
 
-	plt.loglog(X, X/fscale, 'k-', alpha=0.1)
+	#plt.loglog(X, X/fscale, 'k-', alpha=0.1)
 	
 	ax = plt.axis()
 	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
@@ -395,6 +412,65 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 			   loc='upper left')
 
 	ps.savefig()
+
+
+
+
+	## Plot relative to Schlegel's measurements = 1
+
+	plt.clf()
+	for ti,(nm,r,d) in enumerate(zip(nms,rr,dd)):
+		x = X[ti]
+		xx = np.array([x]*len(nm))
+		# All sources
+		p1 = plt.loglog(xx, nm / xx, 'b.', zorder=32)
+		# Line connecting my sources
+		plt.plot([x,x], [nm[nm>0].min()/x, nm.max()/x], 'b--', alpha=0.25, zorder=25)
+		# My sources within R
+		R = 4./3600.
+		I,J,d = match_radec(O.ra[ti], O.dec[ti], r, d, R)
+		xx = np.array([x]*len(J))
+		p2 = plt.loglog(xx, nm[J] / xx, 'bo', zorder=28)
+	# WISE sources
+	I,J,d = match_radec(O.ra, O.dec, W.ra, W.dec, R)
+	wf = NanoMaggies.magToNanomaggies(W.w1mpro[J]) * fscale
+	p3 = plt.loglog(X[I], wf /X[I], 'rx', mew=1.5, ms=6, zorder=30)
+	# Schlegel errorbars
+	nil,nil,p4 = plt.errorbar(X, np.ones_like(X), yerr=DX/X, fmt=None, color='k',
+							  alpha=0.5, ecolor='0.5', lw=2, capsize=10)
+	ax = plt.axis()
+	# Horizontal line
+	lo,hi = min(ax[0],ax[2]), max(ax[1],ax[3])
+	plt.plot([lo,hi], [1., 1.], 'k-', lw=2, alpha=0.3)
+
+	# Label sources
+	J = np.argsort(X)
+	for j,i in enumerate(J):
+		x = X[i]
+		if x > 0:
+			y = ax[2]*(3 if ((j%2)==0) else 5)
+			plt.text(x, y, '%i' % i, color='k', fontsize=8, ha='center')
+			plt.plot([x,x], [0.1, 1.], 'k-', alpha=0.1)
+	plt.axis(ax)
+
+	plt.xlabel("Schlegel's measurements (nanomaggies)")
+	plt.ylabel("My measurements / Schlegel's")
+	plt.legend((p1, p2, p3, p4), ('Mine (all)', 'Mine (nearest)', 'WISE', 'Schlegel'),
+			   loc='upper left')
+	ps.savefig()
+
+	# Label again
+	for j,i in enumerate(J):
+		x = X[i]
+		if x > 0:
+			y = (0.55 if ((j%2)==0) else 0.6)
+			plt.text(x, y, '%i' % i, color='k', fontsize=8, ha='center')
+			plt.plot([x,x], [y, 1.], 'k-', alpha=0.1)
+	plt.axis([ax[0],ax[1], 0.5, 2.0])
+	ps.savefig()
+
+
+
 
 
 

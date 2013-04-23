@@ -845,10 +845,11 @@ class Tractor(MultiParams):
 				plt.ylabel('L-BFGS-B iteration number')
 			plt.savefig(plotfn)
 
-	def optimize_forced_photometry(self, alphas=None, damp=0, priors=True,
+	def optimize_forced_photometry(self, alphas=None, damp=0, priors=False,
 								   minsb=0.,
 								   mindlnp=1.,
 								   rois=None,
+								   sky=False,
 								   fitstats=False,
 								   justims0=False):
 		'''
@@ -860,20 +861,29 @@ class Tractor(MultiParams):
 
 		ASSUMES the PSF and Sky models are position-independent!!
 
+		PRIORS probably don't work because we don't setParams() when evaluating
+		likelihood or prior!
+
 		'''
 		from basics import LinearPhotoCal, ShiftedWcs
+
+		assert(not priors)
 
 		scales = []
 		
 		imgs = self.getImages()
 		for img in imgs:
 			assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
-			### FIXME!!
-			#assert(img.getPhotoCal().getScale() == 1.)
-
 			scales.append(img.getPhotoCal().getScale())
 
-		#print 'PhotoCal scales:', scales
+		# HACK -- if sky=True, assume we are fitting the sky in ALL images.
+		# We could ask which ones are thawed...
+		if sky:
+			for img in imgs:
+				# FIXME -- would be nice to allow multi-param linear sky models
+				assert(img.getSky().numberOfParams() == 1)
+
+		Nsourceparams = self.catalog.numberOfParams()
 
 		if rois is not None:
 			assert(len(rois) == len(imgs))
@@ -927,7 +937,6 @@ class Tractor(MultiParams):
 							nzero += 1
 						else:
 							isallzero = False
-					#print 'unit-flux model', um
 				umods.extend(ums)
 
 				if isvalid:
@@ -939,36 +948,70 @@ class Tractor(MultiParams):
 			#print '  ', nallzero, 'of which are all zero'
 			#print '  ', nzero, 'components are zero'
 
-			assert(len(umods) == self.numberOfParams())
+			assert(len(umods) == Nsourceparams)
 			umodels.append(umods)
 		#tmods = Time()-t0
 		#print 'forced phot: getting unit-flux models:', tmods
 
 		#t0 = Time()
+		if rois is None:
+			imlist = imgs
+		else:
+			imlist = subimgs
+		
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
-		if rois is None:
-			for img in imgs:
-				mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
-		else:
-			for img in subimgs:
-				mod0.append(self.getModelImage(img, fsrcs, minsb=minsb))
+		for img in imlist:
+			# Sky = not sky: I'm not just being contrary :)
+			# If we're fitting sky, we'll do a setParams() and get the sky models
+			# to render themselves when evaluating lnProbs, rather than pre-computing
+			# the nominal value here and then computing derivatives.
+			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb, sky=not sky))
+
 		#tmod = Time() - t0
 		#print 'forced phot: getting initial model image:', tmod
 
-		#t0 = Time()
-		derivs = [ [] for i in range(self.numberOfParams()) ]
-		for i,(img,umods,scale) in enumerate(zip(imgs, umodels, scales)):
-			if rois is not None:
-				img = subimgs[i]
+		if sky:
+			skyderivs = []
+			# build the derivative list as required by getUpdateDirection:
+			#    (param0) ->  [  (deriv, img), (deriv, img), ...   ], ... ],
+			for img in imlist:
+				dskys = img.getSky().getParamDerivatives(self, img, None)
+				print 'Image', img
+				print 'Derivatives', dskys
+				for dsky in dskys:
+					skyderivs.append([(dsky, img)])
+			Nsky = len(skyderivs)
+			print 'Nsky:', Nsky
+			print 'Image params:'
+			self.images.printThawedParams()
+			assert(Nsky == self.images.numberOfParams())
+			assert(Nsky + Nsourceparams == self.numberOfParams())
 
+		#t0 = Time()
+		derivs = [[] for i in range(Nsourceparams)]
+		for i,(img,umods,scale) in enumerate(zip(imlist, umodels, scales)):
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
 				dd.append((um * scale, img))
 		#tderivs = Time() - t0
 		#print 'forced phot: building derivs:', tderivs
-		assert(len(derivs) == len(self.getParams()))
+
+		if sky:
+
+			print 'Catalog params:', self.catalog.numberOfParams()
+			print 'Image params:', self.images.numberOfParams()
+			print 'Total # params:', self.numberOfParams()
+			print 'cat derivs:', len(derivs)
+			print 'sky derivs:', len(skyderivs)
+			print 'total # derivs:', len(derivs) + len(skyderivs)
+
+			# Sky derivatives are part of the image derivatives, so go first in
+			# the derivative list.
+			derivs = skyderivs + derivs
+
+		assert(len(derivs) == self.numberOfParams())
 
 		## ABOUT rois and derivs: we call
 		#   getUpdateDirection(derivs, ..., chiImages=[chis])
@@ -979,7 +1022,8 @@ class Tractor(MultiParams):
 		# We shift the unit-flux models (above, um.x0 -= x0) to be relative to the
 		# ROI.
 
-		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales):
+		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales,
+						 p0sky, Xsky, priors, sky):
 			ims = []
 			if X is None:
 				pa = p0
@@ -987,13 +1031,25 @@ class Tractor(MultiParams):
 				pa = [p + alpha * d for p,d in zip(p0, X)]
 			chisq = 0.
 			chis = []
+
+			if Xsky is not None:
+				self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+				# p0sky + alpha * Xsky)
+
+			# Recall that "umodels" is a complete matrix (shape (Nimage, Nsrcs))
+			# of patches, so we just go through each image, ignoring None entries
+			# and building up model images from the scaled unit-flux patches.
+			
 			for i,(img,umods,m0,scale) in enumerate(zip(imgs, umodels, mod0, scales)):
 				roi = None
 				if rois:
 					roi = rois[i]
 
 				mod = m0.copy()
-					
+
+				if sky:
+					img.getSky().addTo(mod)
+
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
@@ -1003,15 +1059,16 @@ class Tractor(MultiParams):
 					(um * counts).addTo(mod)
 
 				if roi is not None:
-					subchi = (img.getImage()[roi] - mod) * img.getInvError()[roi]
-					ims.append((img.getImage()[roi], mod, subchi, roi))
-					chi = subchi
+					chi = (img.getImage()[roi] - mod) * img.getInvError()[roi]
+					ims.append((img.getImage()[roi], mod, chi, roi))
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
 					ims.append((img.getImage(), mod, chi, None))
 				chisq += (chi**2).sum()
 				chis.append(chi)
-			lnp = -0.5 * chisq + tractor.getLogPrior()
+			lnp = -0.5 * chisq
+			if priors:
+				lnp += tractor.getLogPrior()
 			return lnp,chis,ims
 
 		# debugging images
@@ -1031,8 +1088,14 @@ class Tractor(MultiParams):
 			tryAgain = False
 
 			p0 = self.getParams()
+			if sky:
+				p0sky = p0[:Nsky]
+				p0 = p0[Nsky:]
+
 			if lnp0 is None:
-				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0, self, rois, scales)
+				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
+											   self, rois, scales, None, None, priors,
+											   sky)
 
 			if justims0:
 				return lnp0,chis0,ims0
@@ -1071,11 +1134,17 @@ class Tractor(MultiParams):
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
 
+			if sky:
+				Xsky = X[:Nsky]
+				X = X[Nsky:]
+			else:
+				p0sky = Xsky = None
+
 			# Check whether the update produces all positive fluxes: if so we
 			# should be able to take it with alpha=1 and quit.
 			#print 'p0:', p0
 			#print 'X:', X
-			if np.all(p0 + X >= 0.):
+			if np.all((p0 + X) >= 0.):
 				#print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
 				quitNow = True
@@ -1097,7 +1166,8 @@ class Tractor(MultiParams):
 
 			for alpha in alphas:
 				#logverb('  Stepping with alpha =', alpha)
-				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self, rois, scales)
+				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
+											rois, scales, p0sky, Xsky, priors, sky)
 				print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
@@ -1111,7 +1181,11 @@ class Tractor(MultiParams):
 			if alphaBest is not None:
 				# Clamp fluxes up to zero
 				pa = [max(0, p + alphaBest * d) for p,d in zip(p0, X)]
-				self.setParams(pa)
+				self.catalog.setParams(pa)
+
+				if sky:
+					self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+
 				dlogprob = lnpBest - lnp0
 				alpha = alphaBest
 				lnp0 = lnpBest
@@ -1123,6 +1197,12 @@ class Tractor(MultiParams):
 			else:
 				dlogprob = 0.
 				alpha = 0.
+
+				### ??
+				if sky:
+					# Revert -- recall that we change params while probing in lnpForUpdate()
+					self.images.setParams(p0sky)
+
 			tstep = Time() - t0
 			#print 'forced phot: line search:', tstep
 			#print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
