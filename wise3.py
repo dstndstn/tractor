@@ -300,15 +300,13 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		print 'Optimize_forced_photometry:'
 		tractor.printThawedParams()
 
-		#minFluxes = [tim.sigma1 * 5. for tim in tims]
-
 		## ASSUME LinearPhotoCal here -- minFlux is in nmgy
 		minFlux = -np.median([tim.sigma1 * 5. / tim.getPhotoCal().val for tim in tims])
 
 		print 'minFlux:', minFlux, 'nmgy'
 		
 		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-													   sky=True, minFluxes=minFluxes)
+													   sky=True, minFlux=minFlux)
 
 		imas = [dict(interpolation='nearest', origin='lower',
 					 vmin=tim.zr[0], vmax=tim.zr[1])

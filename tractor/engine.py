@@ -850,7 +850,7 @@ class Tractor(MultiParams):
 								   mindlnp=1.,
 								   rois=None,
 								   sky=False,
-								   minFluxes=None,
+								   minFlux=None,
 								   fitstats=False,
 								   justims0=False):
 		'''
@@ -889,10 +889,6 @@ class Tractor(MultiParams):
 
 		if rois is not None:
 			assert(len(rois) == len(imgs))
-
-		if minFluxes is not None:
-			minFluxes = np.array(minFluxes)
-			assert(len(minFluxes) == len(imgs))
 
 		#
 		# Here we build up the "umodels" nested list, which has shape
@@ -1026,7 +1022,7 @@ class Tractor(MultiParams):
 		# ROI.
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales,
-						 p0sky, Xsky, priors, sky, minFluxes):
+						 p0sky, Xsky, priors, sky, minFlux):
 			ims = []
 			if X is None:
 				pa = p0
@@ -1053,9 +1049,9 @@ class Tractor(MultiParams):
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
+					if minFlux is not None:
+						b = max(b, minFlux)
 					counts = b * scale
-					if minFluxes is not None:
-						counts = max(minFluxes[i], counts)
 					if counts == 0.:
 						continue
 					(um * counts).addTo(mod)
@@ -1098,7 +1094,7 @@ class Tractor(MultiParams):
 			if lnp0 is None:
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
 											   self, rois, scales, None, None, priors,
-											   sky, minFluxes)
+											   sky, minFlux)
 
 			if justims0:
 				return lnp0,chis0,ims0
@@ -1149,15 +1145,16 @@ class Tractor(MultiParams):
 
 			#print 'p0:', p0
 			#print 'X:', X
-			if (minFluxes is None) or np.all((p0 + X) >= minFluxes):
+			if (minFlux is None) or np.all((p0 + X) >= minFlux):
 				#print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
 				quitNow = True
 			else:
-				print 'Some negative fluxes requested:'
+				print 'Some too-negative fluxes requested:'
 				print 'Fluxes:', p0
 				print 'Update:', X
 				print 'Total :', p0+X
+				print 'MinFlux:', minFlux
 				if damp == 0.0:
 					damping = damp0
 					damp0 *= 10.
@@ -1173,7 +1170,7 @@ class Tractor(MultiParams):
 				#logverb('  Stepping with alpha =', alpha)
 				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
 											rois, scales, p0sky, Xsky, priors, sky,
-											positiveFlux)
+											minFlux)
 				print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break
@@ -1186,7 +1183,7 @@ class Tractor(MultiParams):
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
 				# Clamp fluxes up to zero
-				pa = [max(0, p + alphaBest * d) for p,d in zip(p0, X)]
+				pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
 				self.catalog.setParams(pa)
 
 				if sky:
@@ -1209,7 +1206,7 @@ class Tractor(MultiParams):
 					# Revert -- recall that we change params while probing in lnpForUpdate()
 					self.images.setParams(p0sky)
 
-			tstep = Time() - t0
+			#tstep = Time() - t0
 			#print 'forced phot: line search:', tstep
 			#print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
 			if dlogprob < mindlnp:
