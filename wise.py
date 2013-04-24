@@ -184,18 +184,23 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	sigma1 = np.median(unc[goodmask])
 	zr = np.array([-3,10]) * sigma1 + sky
 
-	invvar = np.zeros_like(data)
-	if constantInvvar:
-		invvar[goodmask] = 1. / (sigma1**2)
-	else:
-		invvar[goodmask] = 1./ (unc[goodmask])**2
+	# constant
+	cinvvar = np.zeros_like(data)
+	cinvvar[goodmask] = 1. / (sigma1**2)
+	# variying
+	vinvvar = np.zeros_like(data)
+	vinvvar[goodmask] = 1. / (unc[goodmask])**2
+	
+	bad = np.flatnonzero(np.logical_not(np.isfinite(vinvvar)))
+	if len(bad):
+		vinvvar.flat[bad] = 0.
+		cinvvar.flat[bad] = 0.
+		data.flat[bad] = sky
 
-		# print len(goodmask.flat)-sum(goodmask.flat), 'masked pixels'
-		if not np.all(np.isfinite(invvar)):
-			# print 'non-finite invvar pixels:', np.sum(np.logical_not(np.isfinite(invvar)))
-			bad = np.logical_not(np.isfinite(invvar))
-			invvar[bad] = 0.
-			data[bad] = sky
+	if constantInvvar:
+		invvar = cinvvar
+	else:
+		invvar = vinvvar
 
 	# avoid NaNs
 	data[np.logical_not(goodmask)] = sky
@@ -209,6 +214,10 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	tim.maskplane = mask
 	tim.uncplane = unc
 	tim.goodmask = goodmask
+
+	# carry both around for retrofitting
+	tim.vinvvar = vinvvar
+	tim.cinvvar = cinvvar
 
 	return tim
 
