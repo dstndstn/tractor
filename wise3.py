@@ -259,7 +259,7 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		ocat.freezeParamsRecursive('*')
 		ocat.thawPathsTo(band)
 
-	w1psf = wise.get_psf_model(bandnum, opt.pixpsf)
+	#w1psf = wise.get_psf_model(bandnum, opt.pixpsf)
 
 	print 'Got', len(tractors), 'tractors'
 	for ti,tractor in enumerate(tractors):
@@ -269,8 +269,13 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		cat = tractor.catalog
 
 		for tim in tims:
-			tim.psf = w1psf
-
+			x0,y0 = tim.getWcs().getX0Y0()
+			h,w = tim.shape
+			print 'Image bounds:', x0,y0, '+', w,h
+			#tim.psf = w1psf
+			tim.psf = wise.get_psf_model(bandnum, opt.pixpsf, xy=(x0+w/2, y0+h/2),
+										 positive=False)
+										 
 		if opt.ptsrc:
 			print 'Converting all sources to PointSources'
 			pcat = Catalog()
@@ -295,8 +300,15 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		print 'Optimize_forced_photometry:'
 		tractor.printThawedParams()
 
+		#minFluxes = [tim.sigma1 * 5. for tim in tims]
+
+		## ASSUME LinearPhotoCal here -- minFlux is in nmgy
+		minFlux = -np.median([tim.sigma1 * 5. / tim.getPhotoCal().val for tim in tims])
+
+		print 'minFlux:', minFlux, 'nmgy'
+		
 		ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-													   sky=True)
+													   sky=True, minFluxes=minFluxes)
 
 		imas = [dict(interpolation='nearest', origin='lower',
 					 vmin=tim.zr[0], vmax=tim.zr[1])

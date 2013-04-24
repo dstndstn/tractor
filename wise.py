@@ -323,13 +323,26 @@ read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
 
 
-def get_psf_model(band, pixpsf=False):
+def get_psf_model(band, pixpsf=False, xy=None, positive=True):
 	assert(band == 1)
-	psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+
+	if xy is None:
+		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+	else:
+		## ASSUME existence of wise-psf/wise-psf-w1-%d-%d.fits on a grid 50,150,...,950
+		x,y = xy
+		gx = np.clip((int(x)/100) * 100 + 50, 50, 950)
+		gy = np.clip((int(x)/100) * 100 + 50, 50, 950)
+		assert(gx % 100 == 50)
+		assert(gy % 100 == 50)
+		fn = 'wise-psf/wise-psf-w%i-%d-%d.fits' % (band, gx, gy)
+		psf = pyfits.open(fn)[0].data
 
 	if pixpsf:
 		print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
-		return PixelizedPSF(np.maximum(psf, 0.))
+		if positive:
+			psf = np.maximum(psf, 0.)
+		return PixelizedPSF(psf)
 
 	S = psf.shape[0]
 	# number of Gaussian components

@@ -850,27 +850,29 @@ class Tractor(MultiParams):
 								   mindlnp=1.,
 								   rois=None,
 								   sky=False,
+								   minFluxes=None,
 								   fitstats=False,
 								   justims0=False):
 		'''
 		ASSUMES linear brightnesses!
 
-		ASSUMES image parameters are frozen.
-
 		ASSUMES all source parameters except brightness are frozen.
+
+		If sky=False,
+		ASSUMES image parameters are frozen.
+		If sky=True,
+		ASSUMES only the sky parameters are unfrozen
 
 		ASSUMES the PSF and Sky models are position-independent!!
 
 		PRIORS probably don't work because we don't setParams() when evaluating
 		likelihood or prior!
-
 		'''
 		from basics import LinearPhotoCal, ShiftedWcs
 
 		assert(not priors)
 
 		scales = []
-		
 		imgs = self.getImages()
 		for img in imgs:
 			assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
@@ -887,6 +889,11 @@ class Tractor(MultiParams):
 
 		if rois is not None:
 			assert(len(rois) == len(imgs))
+
+		if minFluxes is not None:
+			minFluxes = np.array(minFluxes)
+			assert(len(minFluxes) == len(imgs))
+
 		#
 		# Here we build up the "umodels" nested list, which has shape
 		# (if it were a numpy array) of (len(images), len(srcs))
@@ -962,7 +969,7 @@ class Tractor(MultiParams):
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
 		for img in imlist:
-			# Sky = not sky: I'm not just being contrary :)
+			# "sky = not sky": I'm not just being contrary :)
 			# If we're fitting sky, we'll do a setParams() and get the sky models
 			# to render themselves when evaluating lnProbs, rather than pre-computing
 			# the nominal value here and then computing derivatives.
@@ -988,24 +995,20 @@ class Tractor(MultiParams):
 			assert(Nsky == self.images.numberOfParams())
 			assert(Nsky + Nsourceparams == self.numberOfParams())
 
-		#t0 = Time()
 		derivs = [[] for i in range(Nsourceparams)]
 		for i,(img,umods,scale) in enumerate(zip(imlist, umodels, scales)):
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
 				dd.append((um * scale, img))
-		#tderivs = Time() - t0
-		#print 'forced phot: building derivs:', tderivs
 
 		if sky:
-
-			print 'Catalog params:', self.catalog.numberOfParams()
-			print 'Image params:', self.images.numberOfParams()
-			print 'Total # params:', self.numberOfParams()
-			print 'cat derivs:', len(derivs)
-			print 'sky derivs:', len(skyderivs)
-			print 'total # derivs:', len(derivs) + len(skyderivs)
+			# print 'Catalog params:', self.catalog.numberOfParams()
+			# print 'Image params:', self.images.numberOfParams()
+			# print 'Total # params:', self.numberOfParams()
+			# print 'cat derivs:', len(derivs)
+			# print 'sky derivs:', len(skyderivs)
+			# print 'total # derivs:', len(derivs) + len(skyderivs)
 
 			# Sky derivatives are part of the image derivatives, so go first in
 			# the derivative list.
@@ -1013,7 +1016,7 @@ class Tractor(MultiParams):
 
 		assert(len(derivs) == self.numberOfParams())
 
-		## ABOUT rois and derivs: we call
+		# About rois and derivs: we call
 		#   getUpdateDirection(derivs, ..., chiImages=[chis])
 		# And this uses the "img" objects in "derivs" to decide on the region
 		# that is being optimized; the number of rows = total number of pixels.
@@ -1023,7 +1026,7 @@ class Tractor(MultiParams):
 		# ROI.
 
 		def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales,
-						 p0sky, Xsky, priors, sky):
+						 p0sky, Xsky, priors, sky, minFluxes):
 			ims = []
 			if X is None:
 				pa = p0
@@ -1034,27 +1037,26 @@ class Tractor(MultiParams):
 
 			if Xsky is not None:
 				self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
-				# p0sky + alpha * Xsky)
 
-			# Recall that "umodels" is a complete matrix (shape (Nimage, Nsrcs))
-			# of patches, so we just go through each image, ignoring None entries
-			# and building up model images from the scaled unit-flux patches.
+			# Recall that "umodels" is a full matrix (shape (Nimage,
+			# Nsrcs)) of patches, so we just go through each image,
+			# ignoring None entries and building up model images from
+			# the scaled unit-flux patches.
 			
 			for i,(img,umods,m0,scale) in enumerate(zip(imgs, umodels, mod0, scales)):
 				roi = None
 				if rois:
 					roi = rois[i]
-
 				mod = m0.copy()
-
 				if sky:
 					img.getSky().addTo(mod)
-
 				for b,um in zip(pa,umods):
 					if um is None:
 						continue
 					counts = b * scale
-					if counts <= 0.:
+					if minFluxes is not None:
+						counts = max(minFluxes[i], counts)
+					if counts == 0.:
 						continue
 					(um * counts).addTo(mod)
 
@@ -1064,6 +1066,7 @@ class Tractor(MultiParams):
 				else:
 					chi = (img.getImage() - mod) * img.getInvError()
 					ims.append((img.getImage(), mod, chi, None))
+
 				chisq += (chi**2).sum()
 				chis.append(chi)
 			lnp = -0.5 * chisq
@@ -1095,7 +1098,7 @@ class Tractor(MultiParams):
 			if lnp0 is None:
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
 											   self, rois, scales, None, None, priors,
-											   sky)
+											   sky, minFluxes)
 
 			if justims0:
 				return lnp0,chis0,ims0
@@ -1106,7 +1109,6 @@ class Tractor(MultiParams):
 			# print '  chisqs', [(chi**2).sum() for chi in chis0]
 			# print 'chis0:', chis0
 
-			#t0 = Time()
 			# Ugly: getUpdateDirection calls self.getImages(), and
 			# ASSUMES they are the same as the images referred-to in
 			# the "derivs", to figure out which chi image goes with
@@ -1116,35 +1118,38 @@ class Tractor(MultiParams):
 				self.images = subimgs
 
 			print 'forced phot: getting update with damp=', damping
+			#t0 = Time()
 			X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
 										scale_columns=False, chiImages=chis0)
+			#topt = Time()-t0
+			#print 'forced phot: opt:', topt
 			print 'forced phot: update', X
 			if rois is not None:
 				self.images = realims
-			#topt = Time()-t0
-			#print 'forced phot: opt:', topt
 
 			if len(X) == 0:
 				print 'Error getting update direction'
 				break
 			
-			t0 = Time()
 			## tryUpdates():
 			if alphas is None:
 				# 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
 				alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
 
 			if sky:
+				# Split the sky-update parameters from the source parameters
 				Xsky = X[:Nsky]
 				X = X[Nsky:]
 			else:
 				p0sky = Xsky = None
 
-			# Check whether the update produces all positive fluxes: if so we
-			# should be able to take it with alpha=1 and quit.
+			# Check whether the update produces all fluxes above the
+			# minimums: if so we should be able to take the step with
+			# alpha=1 and quit.
+
 			#print 'p0:', p0
 			#print 'X:', X
-			if np.all((p0 + X) >= 0.):
+			if (minFluxes is None) or np.all((p0 + X) >= minFluxes):
 				#print 'Update produces non-negative fluxes; accepting with alpha=1'
 				alphas = [1.]
 				quitNow = True
@@ -1167,7 +1172,8 @@ class Tractor(MultiParams):
 			for alpha in alphas:
 				#logverb('  Stepping with alpha =', alpha)
 				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
-											rois, scales, p0sky, Xsky, priors, sky)
+											rois, scales, p0sky, Xsky, priors, sky,
+											positiveFlux)
 				print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
 				if lnp < (lnpBest - 1.):
 					break

@@ -27,3 +27,30 @@ text2fits.py -s "|" -H "ra dec dra ddec w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2
 text2fits.py -s "|" -f "ddffffffffffffffffff" -H "ra dec dra ddec w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2sigmpro w2snr w2rchi2 w3mpro w3sigmpro w3snr w3rchi2 w4mpro w4sigmpro w4snr w4rchi2" wise-27-tag wise-27-tag.fits
 
 
+
+
+
+#  Going to great lengths to avoid learning IDL:
+# Evaluating Aaron's WISE PSF model on a grid:
+git clone git://github.com/ameisner/WISE.git wise-psf
+(for ((y=50; y<1000; y+=100)); do
+  for ((x=50; x<1000; x+=100)); do
+    printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
+	printf "mwrfits, psf, 'wise-psf-w1-%d-%d.fits'\n" $x $y
+  done
+done) | (cd wise-psf/pro; idl)
+ls wise-psf/pro/*.fits
+
+
+module load idl
+module load idlutils
+export WISE_DATA=$(pwd)/wise-psf/etc
+
+(for ((y=50; y<1000; y+=100)); do
+  for ((x=50; x<1000; x+=100)); do
+    printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
+	#printf "mwrfits, psf, 'wise-psf-w1-%03d-%03d.fits'\n" $x $y
+    printf "mwrfits, psf, 'wise-psf-w1.fits'\n" $x $y
+  done
+done) | (cd wise-psf/pro; idl)
+ls wise-psf/pro/*.fits

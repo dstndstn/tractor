@@ -461,6 +461,9 @@ class ConstantFitsWcs(ParamList):
 		return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
 				+ str(self.wcs))
 
+	def getX0Y0(self):
+		return self.x0,self.y0
+
 	def setX0Y0(self, x0, y0):
 		'''
 		Sets the pixel offset to apply to pixel coordinates before putting
