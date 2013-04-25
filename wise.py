@@ -35,7 +35,8 @@ logger = logging.getLogger('wise')
 
 def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 					  nanomaggies=False, mask_gz=False, unc_gz=False,
-					  sipwcs=False, constantInvvar=False):
+					  sipwcs=False, constantInvvar=False,
+					  roi = None):
 	intfn  = basefn + '-int-1b.fits'
 	maskfn = basefn + '-msk-1b.fits'
 	if mask_gz:
@@ -57,8 +58,6 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	# Read enough of the image to get its size
 	Fint = fitsio.FITS(intfn)
 	H,W = Fint[0].get_info()['dims']
-
-	roi = None
 
 	if radecrad is not None:
 		r,d,rad = radecrad

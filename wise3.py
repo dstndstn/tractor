@@ -57,7 +57,7 @@ def get_l1b_file(basedir, scanid, frame, band):
 
 
 
-def stage0(opt=None, ps=None):
+def stage0(opt=None, ps=None, **kwa):
 	bandnum = 1
 	band = 'w%i' % bandnum
 
@@ -767,6 +767,173 @@ def stage3(opt=None, ps=None, tractors=None, band=None, **kwa):
 		ps.savefig()
 
 
+
+
+
+def stage100(opt=None, ps=None, **kwa):
+	bandnum = 1
+	band = 'w%i' % bandnum
+
+	wisedatadirs = [('/clusterfs/riemann/raid007/bosswork/boss/wise_level1b', 'cryo'),
+					('/clusterfs/riemann/raid000/bosswork/boss/wise1ext', 'post-cryo')]
+
+	ralo,rahi,declo,dechi = 212.0, 212.5, 52.0, 52.5
+
+	roipoly = np.array([(ralo,declo),(ralo,dechi),(rahi,dechi),(rahi,declo)])
+
+	TT = []
+	for d,tag in wisedatadirs:
+		ifn = os.path.join(d, 'WISE-index-L1b.fits')
+		T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num'])
+		print 'Read', len(T), 'from WISE index', ifn
+
+		# Add a margin around the CRVAL so we catch all fields that touch the RA,Dec box.
+		margin = (1016. * 2.75 * np.sqrt(2.) / 3600.) / 2.
+		cosdec = np.cos(np.deg2rad((declo + dechi) / 2.))
+		print 'Margin:', margin, 'degrees'
+		print 'cosdec:', cosdec
+
+		r0 = ralo - margin/cosdec
+		r1 = rahi + margin/cosdec
+		d0 = declo - margin
+		d1 = dechi + margin
+
+		#I = np.flatnonzero((T.ra > ralo) * (T.ra < rahi) * (T.dec > declo) * (T.dec < dechi))
+		I = np.flatnonzero((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
+		print len(I), 'overlap RA,Dec box'
+		T.cut(I)
+		T.tag = [tag] * len(T)
+
+		fns = []
+		for sid,fnum in zip(T.scan_id, T.frame_num):
+			print 'scan,frame', sid, fnum
+			fn = get_l1b_file(d, sid, fnum, bandnum)
+			print '-->', fn
+			assert(os.path.exists(fn))
+			fns.append(fn)
+		T.filename = np.array(fns)
+		TT.append(T)
+	T = merge_tables(TT)
+
+	wcses = []
+	corners = []
+	ii = []
+	for i in range(len(T)):
+		#wcs = anwcs(T.filename[i], 0)
+		wcs = Sip(T.filename[i], 0)
+		W,H = wcs.get_width(), wcs.get_height()
+		rd = []
+		for x,y in [(1,1),(1,H),(W,H),(W,1)]:
+			rd.append(wcs.pixelxy2radec(x,y))
+		rd = np.array(rd)
+		if polygons_intersect(roipoly, rd):
+			wcses.append(wcs)
+			corners.append(rd)
+			ii.append(i)
+
+	print 'Found', len(wcses), 'overlapping'
+	I = np.array(ii)
+	T.cut(I)
+
+	outlines = corners
+	corners = np.vstack(corners)
+
+	r0,r1 = corners[:,0].min(), corners[:,0].max()
+	d0,d1 = corners[:,1].min(), corners[:,1].max()
+	print 'RA,Dec extent', r0,r1, d0,d1
+
+	if True:
+		plot = Plotstuff(outformat='png', ra=(r0+r1)/2., dec=(d0+d1)/2., width=d1-d0, size=(800,800))
+		out = plot.outline
+		plot.color = 'white'
+		plot.alpha = 0.07
+		plot.apply_settings()
+		for wcs in wcses:
+			out.wcs = anwcs_new_sip(wcs)
+			out.fill = False
+			plot.plot('outline')
+			out.fill = True
+			plot.plot('outline')
+		plot.color = 'gray'
+		plot.alpha = 1.0
+		plot.lw = 1
+		plot.plot_grid(1, 1, 1, 1)
+		pfn = ps.getnext()
+		plot.write(pfn)
+		print 'Wrote', pfn
+
+	return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
+				wcses=wcses)
+
+
+def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kwa):
+	#ralo,rahi,declo,dechi=rd
+	r0,r1,d0,d1 = rd
+
+	xyrois = []
+	subwcses = []
+
+	tims = []
+	
+	# Find the pixel ROI in each image containing the RA,Dec ROI.
+	for i,(Ti,wcs) in enumerate(zip(T,wcses)):
+		xy = []
+		for r,d in [(r0,d0),(r0,d1),(r1,d1),(r1,d0)]:
+			x,y = wcs.radec2pixelxy(r,d)
+			xy.append((x,y))
+		xy = np.array(xy)
+		x0,y0 = xy.min(axis=0)
+		x1,y1 = xy.max(axis=0)
+		W,H = wcs.get_width(), wcs.get_height()
+		x0 = np.clip(int(np.floor(x0)), 0, W-1)
+		y0 = np.clip(int(np.floor(y0)), 0, H-1)
+		x1 = np.clip(int(np.ceil (x1)), 0, W-1)
+		y1 = np.clip(int(np.ceil (y1)), 0, H-1)
+		assert(x0 < x1)
+		assert(y0 < y1)
+
+		subwcs = Sip(wcses[i])
+		print 'subwcs:', subwcs
+		subwcs.set_width(1+x1-x0)
+		subwcs.set_height(1+y1-y0)
+		crx,cry = subwcs.get_crpix()
+		subwcs.set_crpix((crx - x0, cry - y0))
+		print 'subwcs:', subwcs
+		xyrois.append([x0,x1,y0,y1])
+		subwcses.append(subwcs)
+
+		tim = wise.read_wise_level1b(Ti.filename.replace('-int-1b.fits',''),
+									 nanomaggies=True, mask_gz=True, unc_gz=True,
+									 sipwcs=True, constantInvvar=True,
+									 roi=[x0,x1,y0,y1])
+		print 'Read', tim
+		tims.append(tim)
+
+	if True:
+		plot = Plotstuff(outformat='png', ra=(r0+r1)/2., dec=(d0+d1)/2., width=d1-d0, size=(800,800))
+		out = plot.outline
+		plot.color = 'white'
+		plot.alpha = 0.07
+		plot.apply_settings()
+		for wcs in subwcses:
+			out.wcs = anwcs_new_sip(wcs)
+			out.fill = False
+			plot.plot('outline')
+			out.fill = True
+			plot.plot('outline')
+		plot.color = 'gray'
+		plot.alpha = 1.0
+		plot.lw = 1
+		plot.plot_grid(0.25, 0.25, 0.25, 0.25)
+		plot.raformat = '%.2f'
+		plot.decformat = '%.2f'
+		pfn = ps.getnext()
+		plot.write(pfn)
+		print 'Wrote', pfn
+
+
+
+
 if __name__ == '__main__':
 
 	#plt.figure(figsize=(12,12))
@@ -868,5 +1035,7 @@ if __name__ == '__main__':
 
 	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp)
 
-	runstage(opt.stage, opt.picklepat, runner, force=opt.force)
+	prereqs = { 100: None }
+
+	runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs)
 
