@@ -244,16 +244,16 @@ def _plot_grid2(ims, cat, tims, kwas, ptype='mod'):
 		plt.axis(ax)
 
 
-def _stage1fit((tractor, ti, minsb, ocat)):
+def _stage1fit((tractor, ti, minsb, ocat, minFlux)):
 	tims = tractor.images
 
 	print 'Optimize_forced_photometry:'
 	tractor.printThawedParams()
 
-	## ASSUME LinearPhotoCal here -- minFlux is in nmgy
-	minFlux = -np.median([tim.sigma1 * 5. / tim.getPhotoCal().val for tim in tims])
-
-	print 'minFlux:', minFlux, 'nmgy'
+	## ASSUME LinearPhotoCal here -- convert minFlux to nmgy
+	if minFlux is not None:
+		minFlux = -np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
+		print 'minFlux:', minFlux, 'nmgy'
 		
 	ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 												   sky=True, minFlux=minFlux)
@@ -312,7 +312,7 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		for tim in tims:
 			x0,y0 = tim.getWcs().getX0Y0()
 			h,w = tim.shape
-			print 'Image bounds:', x0,y0, '+', w,h
+			#print 'Image bounds:', x0,y0, '+', w,h
 			#tim.psf = w1psf
 			tim.psf = wise.get_psf_model(bandnum, opt.pixpsf, xy=(x0+w/2, y0+h/2),
 										 positive=False)
@@ -347,7 +347,7 @@ def stage1(opt=None, ps=None, tractors=None, band=None, bandnum=None, **kwa):
 		cat.freezeParamsRecursive('*')
 		cat.thawPathsTo(band)
 
-		args.append((tractor, ti, minsb, ocat))
+		args.append((tractor, ti, minsb, ocat, opt.minflux))
 
 	res = mp.map(_stage1fit, args)
 
@@ -713,6 +713,9 @@ if __name__ == '__main__':
 	parser.add_option('--minsb', dest='minsb', type=float, default=0.05,
 					  help='Minimum surface-brightness approximation, default %default')
 
+	parser.add_option('--minflux', dest='minflux', type=str, default="-5",
+					  help='Minimum flux a source is allowed to have, in sigma; default %default; "none" for no limit')
+
 	parser.add_option('-p', dest='plots', action='store_true',
 					  help='Make result plots?')
 	parser.add_option('-r', dest='result',
@@ -742,6 +745,11 @@ if __name__ == '__main__':
 	else:
 		mp = multiproc(1)
 
+	if opt.minflux in ['none','None']:
+		opt.minflux = None
+	else:
+		opt.minflux = float(opt.minflux)
+
 	class MyCaller(CallGlobal):
 		def getkwargs(self, stage, **kwargs):
 			kwa = self.kwargs.copy()
@@ -749,7 +757,7 @@ if __name__ == '__main__':
 			kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
 			return kwa
 
-	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp)  #, ps=ps)
+	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp)
 
 	runstage(opt.stage, opt.picklepat, runner, force=opt.force)
 

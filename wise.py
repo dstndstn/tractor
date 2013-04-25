@@ -348,7 +348,7 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True):
 		psf = pyfits.open(fn)[0].data
 
 	if pixpsf:
-		print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
+		#print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
 		if positive:
 			psf = np.maximum(psf, 0.)
 		return PixelizedPSF(psf)

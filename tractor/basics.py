@@ -1016,7 +1016,10 @@ class PixelizedPSF(BaseParams):
 		shifted = correlate1d(sx,       Ly, axis=0, mode='constant')
 		#shifted /= (Lx.sum() * Ly.sum())
 		#print 'Shifted PSF: range', shifted.min(), shifted.max()
-		shifted = np.maximum(shifted, 0.)
+
+		### ???
+		#shifted = np.maximum(shifted, 0.)
+
 		shifted /= shifted.sum()
 		return Patch(x0, y0, shifted)
 	

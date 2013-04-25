@@ -980,13 +980,13 @@ class Tractor(MultiParams):
 			#    (param0) ->  [  (deriv, img), (deriv, img), ...   ], ... ],
 			for img in imlist:
 				dskys = img.getSky().getParamDerivatives(self, img, None)
-				print 'Image', img
-				print 'Derivatives', dskys
+				#print 'Image', img
+				#print 'Derivatives', dskys
 				for dsky in dskys:
 					skyderivs.append([(dsky, img)])
 			Nsky = len(skyderivs)
-			print 'Nsky:', Nsky
-			print 'Image params:'
+			#print 'Nsky:', Nsky
+			#print 'Image params:'
 			self.images.printThawedParams()
 			assert(Nsky == self.images.numberOfParams())
 			assert(Nsky + Nsourceparams == self.numberOfParams())
