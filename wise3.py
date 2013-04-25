@@ -711,11 +711,33 @@ def stage3(opt=None, ps=None, tractors=None, band=None, **kwa):
 			print 'Sky:', sky
 
 			rdf = []
-			for src in cat:
+			for si,src in enumerate(cat):
 				pos = src.getPosition()
 				f = src.getBrightness().getBand(band)
 				print 'RA,Dec (%10.6f, %10.6f), Flux %12.6f' % (pos.ra, pos.dec, f * fscale)
 				rdf.append((pos.ra,pos.dec,f*fscale))
+
+				sk = tim.getSky().val
+				plt.clf()
+				mod = tractor.getModelImage(tim, [src], minsb=minsb, sky=False)
+				plt.subplot(1,2,1)
+				plt.imshow(mod, interpolation='nearest', origin='lower',
+						   vmin=tim.zr[0]-sk, vmax=tim.zr[1]-sk)
+				plt.subplot(1,2,2)
+				plt.imshow(tim.getImage(), interpolation='nearest', origin='lower',
+						   vmin=tim.zr[0], vmax=tim.zr[1])
+				ps.savefig()
+
+				umodp = src.getUnitFluxModelPatch(tim)
+				umod = np.zeros_like(mod)
+				umodp.addTo(umod)
+				
+				pyfits.writeto('source10-im%02i-mod%02i.fits' % (ii,si), mod, clobber=True)
+				pyfits.writeto('source10-im%02i-umod%02i.fits' % (ii,si), umod, clobber=True)
+
+			pyfits.writeto('source10-im%02i-data.fits' % ii, tim.getImage(), clobber=True)
+			pyfits.writeto('source10-im%02i-invvar.fits' % ii, tim.getInvvar(), clobber=True)
+
 			rdf = np.array(rdf)
 			ras.append(rdf[:,0])
 			decs.append(rdf[:,1])
