@@ -657,6 +657,93 @@ def stage2(opt=None, ps=None, tractors=None, band=None, **kwa):
 
 
 
+# Individual-image fits.
+
+def stage3(opt=None, ps=None, tractors=None, band=None, **kwa):
+	minsb = opt.minsb
+	minFlux = opt.minflux
+
+	for ti,tractor in enumerate(tractors):
+		print '  ', tractor
+		tims = tractor.images
+		cat = tractor.catalog
+
+		if ti != 10:
+			continue
+		for tim in tims:
+			print 'scale', tim.getPhotoCal().val
+
+		tractor.thawParam('images')
+
+		cat.freezeParamsRecursive('*')
+		cat.thawPathsTo(band)
+
+		names = []
+		skies = []
+		ras = []
+		decs = []
+		fluxes = []
+
+		for ii,tim in enumerate(tims):
+			tractor.images = Images(tim)
+			tim.freezeParamsRecursive('*')
+			tim.thawPathsTo('sky')
+
+			ims0,ims1 = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+														   sky=True, minFlux=minFlux)
+
+			#tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+			#								   sky=True, minFlux=minFlux)
+			#nm = np.array([src.getBrightness().getBand(band) for src in cat])
+			#fluxes.append(nm)
+
+			zpoff = 0.2520
+			fscale = 10. ** (zpoff / 2.5)
+
+			print 'Fscale', fscale
+
+			print
+			print 'Image', ii, tim.name
+			x0,y0 = tim.getWcs().getX0Y0()
+			h,w = tim.shape
+			print 'Image bounds:', x0,y0, '+', w,h
+			sky = (tim.getSky().val / tim.getPhotoCal().val * fscale)
+			print 'Sky:', sky
+
+			rdf = []
+			for src in cat:
+				pos = src.getPosition()
+				f = src.getBrightness().getBand(band)
+				print 'RA,Dec (%10.6f, %10.6f), Flux %12.6f' % (pos.ra, pos.dec, f * fscale)
+				rdf.append((pos.ra,pos.dec,f*fscale))
+			rdf = np.array(rdf)
+			ras.append(rdf[:,0])
+			decs.append(rdf[:,1])
+			fluxes.append(rdf[:,2])
+			names.append(tim.name)
+			skies.append(sky)
+			
+		T = tabledata()
+		T.name = np.array(names)
+		T.sky = np.array(skies)
+		T.ras = np.array(ras)
+		T.decs = np.array(decs)
+		T.fluxes = np.array(fluxes)
+		T.writeto('source10.fits')
+
+		fluxes = np.array(fluxes)
+		nims,nsrcs = fluxes.shape
+
+		plt.clf()
+		for i in range(nsrcs):
+			f = fluxes[:,i]
+			I = np.flatnonzero((f > 1) * (f < 1e4))
+			plt.semilogy(I, f[I], '.-')
+			#plt.semilogy(fluxes[:,i], 'b.-')
+		plt.xlabel('measurements in individual images')
+		plt.ylim(1., 10000.)
+		ps.savefig()
+
 
 if __name__ == '__main__':
 
