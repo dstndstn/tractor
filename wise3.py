@@ -907,6 +907,38 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 									 sipwcs=True, constantInvvar=True,
 									 roi=[x0,x1,y0,y1])
 		print 'Read', tim
+
+		# Mask pixels outside the RA,Dec ROI?
+		if x0 > 0 or y0 > 0 or x1 < W-1 or y1 < H-1:
+			print 'Image was clipped -- masking pixels outside ROI'
+			h,w = tim.shape
+			print 'Clipped size:', w,'x',h
+			wcs = tim.getWcs()
+			x0,y0 = wcs.getX0Y0()
+			XX,YY = np.meshgrid(np.arange(x0, x0+w), np.arange(y0, y0+h))
+
+			# t0 = Time()
+			# sipwcs = wcs.wcs
+			# print 'sip wcs:', sipwcs
+			# print 'XX', XX.shape
+			# rr,dd = sipwcs.pixelxy2radec(XX.ravel(),YY.ravel())
+			# print 'rr', rr.shape
+			# rr = rr.reshape(XX.shape)
+			# dd = dd.reshape(XX.shape)
+			# K = ((rr > r0) * (rr < r1) * (dd > d0) * (dd < d1))
+			# print sum(K.ravel()), 'pixels in bounds'
+			# print 'Took', Time()-t0
+
+			t0 = Time()
+			J = point_in_poly(XX.ravel(), YY.ravel(), xy)
+			print sum(J), 'pixels in bounds according to point_in_poly'
+			print 'That took', Time()-t0
+			K = J.reshape(XX.shape)
+
+			iv = tim.getInvvar()
+			tim.setInvvar(iv * K)
+			tim.rdmask = K
+
 		tims.append(tim)
 
 	if True:
@@ -931,6 +963,31 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 		plot.write(pfn)
 		print 'Wrote', pfn
 
+	return dict(opt101=opt, tims=tims)
+
+def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
+			 tims=None, **kwa):
+	r0,r1,d0,d1 = rd
+
+	# Read sources in range.
+
+	margin = 15. / 3600.
+	cosdec = np.cos(np.deg2rad((d0 + d1) / 2.))
+	mr = margin / cosdec
+	md = margin
+
+	S = fits_table(opt.sources, columns=['ra','dec'])
+	print 'Read', len(S), 'sources from', opt.sources
+	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
+					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
+	print 'Reading', len(I), 'in range'
+	S = fits_table(opt.sources, rows=I) #, columns=['ra','dec', ...])
+
+	Wrad = opt.wrad / 3600.
+	groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
+	print 'Source clusters:', groups
+	print 'Singletons:', singles
+
 
 
 
@@ -945,7 +1002,7 @@ if __name__ == '__main__':
 	parser = optparse.OptionParser('%prog [options]')
 	parser.add_option('-v', dest='verbose', action='store_true')
 
-	parser.add_option('--stage', dest='stage', type=int,
+	parser.add_option('-S', '--stage', dest='stage', type=int,
 					  default=0, help='Run to stage...')
 	parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
 					  help="Force re-running the given stage(s) -- don't read from pickle.")
