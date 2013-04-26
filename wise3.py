@@ -237,6 +237,8 @@ def _plot_grid2(ims, cat, tims, kwas, ptype='mod'):
 		#print '  ', xy
 	R,C = _plot_grid(stamps, kwas)
 	for i,xy in enumerate(xys):
+		if len(xy) == 0:
+			continue
 		plt.subplot(R, C, i+1)
 		ax = plt.axis()
 		xy = np.array(xy)
@@ -892,6 +894,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 		assert(x0 < x1)
 		assert(y0 < y1)
 
+		# This isn't really necessary...
 		subwcs = Sip(wcses[i])
 		print 'subwcs:', subwcs
 		subwcs.set_width(1+x1-x0)
@@ -930,6 +933,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 			# print 'Took', Time()-t0
 
 			t0 = Time()
+			# approximate, but *way* faster than doing full WCS per pixel!
 			J = point_in_poly(XX.ravel(), YY.ravel(), xy)
 			print sum(J), 'pixels in bounds according to point_in_poly'
 			print 'That took', Time()-t0
@@ -1038,6 +1042,233 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
 	print 'Forced phot took', Time()-t0
 
 
+def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
+
+	#  ra  = np.array([src.getPosition().ra  for src in tractor.catalog])
+	#  dec = np.array([src.getPosition().dec for src in tractor.catalog])
+	#  
+	#  Wrad = opt.wrad / 3600.
+	#  groups,singles = cluster_radec(ra, dec, Wrad, singles=True)
+	#  #print 'Source clusters:', groups
+	#  #print 'Singletons:', singles
+	#  print 'Source clusters:', len(groups)
+	#  print 'Singletons:', len(singles)
+	#  
+	#  print 'Group size histogram:'
+	#  ng = Counter()
+	#  for g in groups:
+	#  	ng[len(g)] += 1
+	#  kk = ng.keys()
+	#  kk.sort()
+	#  for k in kk:
+	#  	print '  ', k, 'sources:', ng[k], 'groups'
+
+	tims = tractor.images
+
+	tractor.freezeParam('images')
+
+	minFlux = opt.minflux
+	if minFlux is not None:
+		minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
+		print 'minFlux:', minFlux, 'nmgy'
+
+	t0 = Time()
+	ims0,ims1 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+												   sky=False, minFlux=minFlux)
+	print 'Forced phot took', Time()-t0
+
+
+def stage304(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
+
+	r0,r1,d0,d1 = rd
+	cat = tractor.catalog
+
+	ra  = np.array([src.getPosition().ra  for src in tractor.catalog])
+	dec = np.array([src.getPosition().dec for src in tractor.catalog])
+
+	# W = fits_table('/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part45-radec.fits')
+	# print 'Read', len(W), 'WISE'
+	# W.cut((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
+	# print 'Cut to', len(W), 'WISE'
+	# I,J,d = match_radec(ra, dec, W.ra, W.dec, 4./3600.)
+	# print len(I), 'matches to WISE sources'
+	
+	print 'Clustering with radius', opt.wrad, 'arcsec'
+	Wrad = opt.wrad / 3600.
+	groups,singles = cluster_radec(ra, dec, Wrad, singles=True)
+	#print 'Source clusters:', groups
+	#print 'Singletons:', singles
+	print 'Source clusters:', len(groups)
+	print 'Singletons:', len(singles)
+	
+	print 'Group size histogram:'
+	ng = Counter()
+	for g in groups:
+		ng[len(g)] += 1
+	kk = ng.keys()
+	kk.sort()
+	for k in kk:
+		print '  ', k, 'sources:', ng[k], 'groups'
+
+	tims = tractor.images
+	tractor.freezeParam('images')
+
+	minFlux = opt.minflux
+	if minFlux is not None:
+		minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
+		print 'minFlux:', minFlux, 'nmgy'
+
+	dpix = opt.wrad / 2.75
+
+	sgroups = [[i] for i in singles]
+
+	NG = len(sgroups) + len(groups)
+	
+	for gi,X in enumerate(sgroups + groups):
+
+		print 'Group', gi, 'of', NG, 'groups;', len(X), 'sources'
+
+		mysrcs = [cat[i] for i in X]
+		mytims = []
+		myrois = []
+		for tim in tims:
+			wcs = tim.getWcs()
+			xy = []
+			for src in mysrcs:
+				xy.append(wcs.positionToPixel(src.getPosition()))
+			xy = np.array(xy)
+			xi,yi = xy[:,0], xy[:,1]
+			H,W = tim.shape
+			x0 = np.clip(int(np.floor(xi.min() - dpix)), 0, W-1)
+			y0 = np.clip(int(np.floor(yi.min() - dpix)), 0, H-1)
+			x1 = np.clip(int(np.ceil (xi.max() + dpix)), 0, W-1)
+			y1 = np.clip(int(np.ceil (yi.max() + dpix)), 0, H-1)
+			if x0 == x1 or y0 == y1:
+				continue
+			#myrois.append([x0,x1,y0,y1])
+			myrois.append((slice(y0,y1+1), slice(x0,x1+1)))
+			mytims.append(tim)
+
+		# FIXME -- Find sources nearby!
+		
+		subtr = Tractor(mytims, mysrcs)
+		subtr.freezeParamsRecursive('*')
+		subtr.thawPathsTo(band)
+
+		t0 = Time()
+		ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+													 sky=False, minFlux=minFlux,
+													 rois=myrois)
+		print 'Forced phot took', Time()-t0
+
+
+def stage305(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
+	r0,r1,d0,d1 = rd
+	cat = tractor.catalog
+	tims = tractor.images
+
+	cat.freezeParamsRecursive('*')
+	tractor.thawPathsTo('sky')
+
+	for ti,tim in enumerate(tims):
+		print 'Image', ti, 'of', len(tims)
+
+		subtr = Tractor([tim], cat)
+		t0 = Time()
+		ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+													 sky=True, minFlux=None)
+		print 'Optimizing sky took', Time()-t0
+
+
+def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, **kwa):
+	r0,r1,d0,d1 = rd
+	cat = tractor.catalog
+	tims = tractor.images
+
+	cat.freezeParamsRecursive('*')
+	cat.thawPathsTo(band)
+	tractor.thawPathsTo('sky')
+
+	p0 = tractor.getParams()
+
+	perimparams = []
+	perimfit = []
+	perimsky = []
+
+	cat0 = cat.getParams()
+
+	for ti,tim in enumerate(tims):
+		print 'Image', ti, 'of', len(tims)
+
+		cat.setParams(cat0)
+
+		wcs = tim.getWcs()
+		H,W = tim.shape
+		margin = 5.
+		srcs, fsrcs = [],[]
+		ii = []
+		for i,src in enumerate(cat):
+			x,y = wcs.positionToPixel(src.getPosition())
+			if x > 0 and x < W and y > 0 and y < H:
+				srcs.append(src)
+				ii.append(i)
+			elif x > -margin and x < (W+margin) and y > -margin and y < (H+margin):
+				fsrcs.append(src)
+		print len(srcs), 'in bounds plus', len(fsrcs), 'nearby'
+		subcat = Catalog(*(srcs + fsrcs))
+		print len(subcat), 'in subcat'
+		for i in range(len(fsrcs)):
+			subcat.freezeParam(len(srcs) + i)
+
+		### We should do something about sources that live in regions of ~ 0 invvar!
+
+
+		subtr = Tractor([tim], subcat)
+		t0 = Time()
+		ims0,ims1 = subtr.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+													 sky=True, minFlux=None)
+		print 'Forced phot took', Time()-t0
+
+		continue
+
+		imas = [dict(interpolation='nearest', origin='lower',
+					 vmin=tim.zr[0], vmax=tim.zr[1])]
+		imchis = [dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)]
+		tt = tim.name
+
+		pcat = []
+		ptims = [tim]
+
+		_plot_grid([img for (img, mod, chi, roi) in ims0], imas)
+		plt.suptitle('Data: ' + tt)
+		ps.savefig()
+
+		_plot_grid2(ims0, pcat, ptims, imas)
+		plt.suptitle('Initial model: ' + tt)
+		ps.savefig()
+
+		_plot_grid2(ims0, pcat, ptims, imchis, ptype='chi')
+		plt.suptitle('Initial chi: ' + tt)
+		ps.savefig()
+
+		if ims1 is not None:
+			_plot_grid2(ims1, pcat, ptims, imas)
+			plt.suptitle('Forced-phot model: ' + tt)
+			ps.savefig()
+
+			_plot_grid2(ims1, pcat, ptims, imchis, ptype='chi')
+			plt.suptitle('Forced-phot chi: ' + tt)
+			ps.savefig()
+
+		perimparams.append(cat.getParams())
+		perimfit.append(ii)
+		perimsky.append(tim.getParams())
+
+	return dict(perimflux=perimparams,
+				periminds=perimfit,
+				perimsky=perimsky)
+				
+
 
 if __name__ == '__main__':
 
@@ -1140,7 +1371,10 @@ if __name__ == '__main__':
 
 	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp)
 
-	prereqs = { 100: None }
+	prereqs = { 100: None,
+				204: 103,
+				304: 103,
+				}
 
 	runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs)
 
