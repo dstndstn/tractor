@@ -331,18 +331,25 @@ read_wise_coadd = read_wise_level3
 read_wise_image = read_wise_level1b
 
 
-def get_psf_model(band, pixpsf=False, xy=None, positive=True):
+def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
 	assert(band == 1)
 
-	if xy is None:
-		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
-	else:
-		## ASSUME existence of wise-psf/wise-psf-w1-%d-%d.fits on a grid 50,150,...,950
+	if xy is not None:
 		x,y = xy
 		gx = np.clip((int(x)/100) * 100 + 50, 50, 950)
 		gy = np.clip((int(x)/100) * 100 + 50, 50, 950)
 		assert(gx % 100 == 50)
 		assert(gy % 100 == 50)
+		xy = (gx,gy)
+
+	key = (band, pixpsf, xy, positive)
+	if key in cache:
+		return cache[key]
+
+	if xy is None:
+		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+	else:
+		## ASSUME existence of wise-psf/wise-psf-w1-%d-%d.fits on a grid 50,150,...,950
 		fn = 'wise-psf/wise-psf-w%i-%d-%d.fits' % (band, gx, gy)
 		psf = pyfits.open(fn)[0].data
 
@@ -350,7 +357,9 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True):
 		#print 'Read PSF image:', psf.shape, 'range', psf.min(), psf.max()
 		if positive:
 			psf = np.maximum(psf, 0.)
-		return PixelizedPSF(psf)
+		psf = PixelizedPSF(psf)
+		cache[key] = psf
+		return psf
 
 	S = psf.shape[0]
 	# number of Gaussian components
@@ -367,9 +376,10 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True):
 	print '  w', w
 	print '  mu', mu
 	print '  sigma', sig
-	w1psf = GaussianMixturePSF(w, mu, sig)
-	w1psf.computeRadius()
-	return w1psf
+	psf = GaussianMixturePSF(w, mu, sig)
+	psf.computeRadius()
+	cache[key] = psf
+	return psf
 
 
 def main():

@@ -1110,10 +1110,10 @@ class GaussianMixturePSF(BaseParams):
 			x0,y0 = cx-rr, cy-rr
 			grid = self.mog.evaluate_grid_approx(-rr, rr, -rr, rr, dx, dy,  minval)
 
-			x1,y1 = cx+rr, cy+rr
-			XX,YY = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
-			gx = np.sum(grid * XX) / np.sum(grid)
-			gy = np.sum(grid * YY) / np.sum(grid)
+			# x1,y1 = cx+rr, cy+rr
+			# XX,YY = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
+			# gx = np.sum(grid * XX) / np.sum(grid)
+			# gy = np.sum(grid * YY) / np.sum(grid)
 
 			# print 'px %8.3f, py %8.3f' % (px,py)
 			# print 'gx %8.3f, gy %8.3f' % (gx,gy)

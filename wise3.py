@@ -863,7 +863,7 @@ def stage100(opt=None, ps=None, **kwa):
 		print 'Wrote', pfn
 
 	return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
-				wcses=wcses)
+				wcses=wcses, bandnum=bandnum, band=band)
 
 
 def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kwa):
@@ -966,7 +966,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 	return dict(opt101=opt, tims=tims)
 
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
-			 tims=None, **kwa):
+			 tims=None, band=None, **kwa):
 	r0,r1,d0,d1 = rd
 
 	# Read sources in range.
@@ -981,13 +981,61 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
 					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
 	print 'Reading', len(I), 'in range'
-	S = fits_table(opt.sources, rows=I) #, columns=['ra','dec', ...])
+	S = fits_table(opt.sources, rows=I,
+				   column_map=dict(r_dev='theta_dev',
+								   r_exp='theta_exp',
+								   fracpsf='fracdev'))
+	#S.about()
+	S.cmodelflux = S.modelflux
 
-	Wrad = opt.wrad / 3600.
-	groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
-	print 'Source clusters:', groups
-	print 'Singletons:', singles
+	# , columns=['ra','dec', ...])
 
+
+	# Wrad = opt.wrad / 3600.
+	# groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
+	# print 'Source clusters:', groups
+	# print 'Singletons:', singles
+
+	sband = 'r'
+
+	cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+								  objs=S, bands=[], nanomaggies=True, extrabands=[band],
+								  fixedComposites=True)
+
+	print 'Created', len(cat), 'Tractor sources'
+
+	tractor = Tractor(tims, cat)
+
+	return dict(opt102=opt, tractor=tractor)
+
+def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
+	tims = tractor.images
+	#cat = tractor.catalog
+
+	tractor.freezeParamsRecursive('*')
+	tractor.thawPathsTo(band)
+	tractor.thawPathsTo('sky')
+
+	psfcache = {}
+	for tim in tims:
+		x0,y0 = tim.getWcs().getX0Y0()
+		h,w = tim.shape
+		tim.psf = wise.get_psf_model(bandnum, opt.pixpsf, xy=(x0+w/2, y0+h/2),
+									 positive=False, cache=psfcache)
+	return dict(opt103=opt)
+
+def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
+	tims = tractor.images
+
+	minFlux = opt.minflux
+	if minFlux is not None:
+		minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
+		print 'minFlux:', minFlux, 'nmgy'
+
+	t0 = Time()
+	ims0,ims1 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+												   sky=True, minFlux=minFlux)
+	print 'Forced phot took', Time()-t0
 
 
 

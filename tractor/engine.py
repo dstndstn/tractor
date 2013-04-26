@@ -896,6 +896,7 @@ class Tractor(MultiParams):
 		# where each element is None, or a Patch with the unit-flux model
 		# of that source in that image.
 		#
+		t0 = Time()
 		umodels = []
 		subimgs = []
 		srcs = list(self.catalog.getThawedSources())
@@ -953,15 +954,15 @@ class Tractor(MultiParams):
 
 			assert(len(umods) == Nsourceparams)
 			umodels.append(umods)
-		#tmods = Time()-t0
-		#print 'forced phot: getting unit-flux models:', tmods
+		tmods = Time()-t0
+		print 'forced phot: getting unit-flux models:', tmods
 
-		#t0 = Time()
 		if rois is None:
 			imlist = imgs
 		else:
 			imlist = subimgs
 		
+		t0 = Time()
 		fsrcs = list(self.catalog.getFrozenSources())
 		mod0 = []
 		for img in imlist:
@@ -970,11 +971,11 @@ class Tractor(MultiParams):
 			# to render themselves when evaluating lnProbs, rather than pre-computing
 			# the nominal value here and then computing derivatives.
 			mod0.append(self.getModelImage(img, fsrcs, minsb=minsb, sky=not sky))
-
-		#tmod = Time() - t0
-		#print 'forced phot: getting initial model image:', tmod
+		tmod = Time() - t0
+		print 'forced phot: getting frozen-source model:', tmod
 
 		if sky:
+			t0 = Time()
 			skyderivs = []
 			# build the derivative list as required by getUpdateDirection:
 			#    (param0) ->  [  (deriv, img), (deriv, img), ...   ], ... ],
@@ -990,13 +991,16 @@ class Tractor(MultiParams):
 			self.images.printThawedParams()
 			assert(Nsky == self.images.numberOfParams())
 			assert(Nsky + Nsourceparams == self.numberOfParams())
+			print 'forced phot: sky derivs', Time()-t0
 
+		t0 = Time()
 		derivs = [[] for i in range(Nsourceparams)]
 		for i,(img,umods,scale) in enumerate(zip(imlist, umodels, scales)):
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
 				dd.append((um * scale, img))
+		print 'forced phot: derivs', Time()-t0
 
 		if sky:
 			# print 'Catalog params:', self.catalog.numberOfParams()
@@ -1005,7 +1009,6 @@ class Tractor(MultiParams):
 			# print 'cat derivs:', len(derivs)
 			# print 'sky derivs:', len(skyderivs)
 			# print 'total # derivs:', len(derivs) + len(skyderivs)
-
 			# Sky derivatives are part of the image derivatives, so go first in
 			# the derivative list.
 			derivs = skyderivs + derivs
@@ -1092,9 +1095,11 @@ class Tractor(MultiParams):
 				p0 = p0[Nsky:]
 
 			if lnp0 is None:
+				t0 = Time()
 				lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
 											   self, rois, scales, None, None, priors,
 											   sky, minFlux)
+				print 'forced phot: initial lnp', Time()-t0
 
 			if justims0:
 				return lnp0,chis0,ims0
@@ -1114,12 +1119,12 @@ class Tractor(MultiParams):
 				self.images = subimgs
 
 			print 'forced phot: getting update with damp=', damping
-			#t0 = Time()
+			t0 = Time()
 			X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
 										scale_columns=False, chiImages=chis0)
-			#topt = Time()-t0
-			#print 'forced phot: opt:', topt
-			print 'forced phot: update', X
+			topt = Time()-t0
+			print 'forced phot: opt:', topt
+			#print 'forced phot: update', X
 			if rois is not None:
 				self.images = realims
 
@@ -1167,11 +1172,12 @@ class Tractor(MultiParams):
 			chiBest = None
 
 			for alpha in alphas:
-				#logverb('  Stepping with alpha =', alpha)
+				t0 = Time()
 				lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
 											rois, scales, p0sky, Xsky, priors, sky,
 											minFlux)
 				print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
+				print 'Took', Time()-t0
 				if lnp < (lnpBest - 1.):
 					break
 				if lnp > lnpBest:
@@ -1183,7 +1189,10 @@ class Tractor(MultiParams):
 			#logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
 			if alphaBest is not None:
 				# Clamp fluxes up to zero
-				pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
+				if minFlux is not None:
+					pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
+				else:
+					pa = [p + alphaBest * d for p,d in zip(p0, X)]
 				self.catalog.setParams(pa)
 
 				if sky:
