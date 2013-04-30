@@ -1001,6 +1001,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 				   column_map=dict(r_dev='theta_dev',
 								   r_exp='theta_exp',
 								   fracpsf='fracdev'))
+	S.row = I
 	S.cmodelflux = S.modelflux
 
 	# Wrad = opt.wrad / 3600.
@@ -1010,16 +1011,19 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
 	sband = 'r'
 
-	cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
-								  objs=S, bands=[], nanomaggies=True, extrabands=[band],
-								  fixedComposites=True)
-
+	## NOTE, this method CUTS the "S" arg
+	cat,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
+									objs=S, bands=[], nanomaggies=True, extrabands=[band],
+									fixedComposites=True,
+									getobjinds=True)
 	print 'Created', len(cat), 'Tractor sources'
+
+	#SI = SI[I]
+	# S.cut(I) #-- already done in get_tractor_sources
 
 	tractor = Tractor(tims, cat)
 
-	return dict(opt102=opt, tractor=tractor)
-
+	return dict(opt102=opt, tractor=tractor, S=S)
 
 
 psfcache = {}
@@ -1039,7 +1043,8 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
 									 positive=False, cache=psfcache)
 	return dict(opt103=opt)
 
-def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None, **kwa):
+def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+			 S=None, **kwa):
 	tims = tractor.images
 
 	minFlux = opt.minflux
@@ -1054,11 +1059,14 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None, *
 	print 'Forced phot took', Time()-t0
 
 	cat = tractor.catalog
+
+	assert(len(cat) == len(S))
 	
 	R = tabledata()
 	R.ra  = np.array([src.getPosition().ra  for src in cat])
 	R.dec = np.array([src.getPosition().dec for src in cat])
 	R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
+	R.row = S.row
 
 	imstats = tabledata()
 
