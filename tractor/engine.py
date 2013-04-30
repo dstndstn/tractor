@@ -900,6 +900,10 @@ class Tractor(MultiParams):
 		umodels = []
 		subimgs = []
 		srcs = list(self.catalog.getThawedSources())
+
+		umodtosource = {}
+		umodsforsource = [[] for s in srcs]
+
 		for i,img in enumerate(imgs):
 			umods = []
 			pcal = img.getPhotoCal()
@@ -920,7 +924,7 @@ class Tractor(MultiParams):
 			else:
 				x0 = y0 = 0
 
-			for src in srcs:
+			for si,src in enumerate(srcs):
 				cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
 				csum = sum(cc)
 				if csum == 0:
@@ -932,15 +936,24 @@ class Tractor(MultiParams):
 				isvalid = False
 				isallzero = False
 
-				for um in ums:
-					if um is not None:
-						um.x0 -= x0
-						um.y0 -= y0
-						isvalid = True
-						if um.patch.sum() == 0:
-							nzero += 1
-						else:
-							isallzero = False
+				for ui,um in enumerate(ums):
+					if um is None:
+						continue
+					um.x0 -= x0
+					um.y0 -= y0
+					isvalid = True
+					if um.patch.sum() == 0:
+						nzero += 1
+					else:
+						isallzero = False
+
+
+				# first image only:
+				if i == 0:
+					for ui in range(len(ums)):
+						umodtosource[len(umods) + ui] = si
+						umodsforsource[si].append(len(umods) + ui)
+
 				umods.extend(ums)
 
 				if isvalid:
@@ -988,7 +1001,7 @@ class Tractor(MultiParams):
 			Nsky = len(skyderivs)
 			#print 'Nsky:', Nsky
 			#print 'Image params:'
-			self.images.printThawedParams()
+			#self.images.printThawedParams()
 			assert(Nsky == self.images.numberOfParams())
 			assert(Nsky + Nsourceparams == self.numberOfParams())
 			print 'forced phot: sky derivs', Time()-t0
@@ -1059,19 +1072,20 @@ class Tractor(MultiParams):
 						continue
 					(um * counts).addTo(mod)
 
+				ie = img.getInvError()
+				im = img.getImage()
 				if roi is not None:
-					chi = (img.getImage()[roi] - mod) * img.getInvError()[roi]
-					ims.append((img.getImage()[roi], mod, chi, roi))
-				else:
-					chi = (img.getImage() - mod) * img.getInvError()
-					ims.append((img.getImage(), mod, chi, None))
+					ie = ie[roi]
+					im = ie[roi]
+				chi = (im - mod) * ie
+				ims.append((im, mod, ie, chi, roi))
 
-				chisq += (chi**2).sum()
 				chis.append(chi)
+				chisq += (chi**2).sum()
 			lnp = -0.5 * chisq
 			if priors:
 				lnp += tractor.getLogPrior()
-			return lnp,chis,ims
+			return lnp,	chis, ims
 
 		# debugging images
 		ims0 = None
@@ -1228,26 +1242,83 @@ class Tractor(MultiParams):
 		rtn = (ims0,imsBest)
 
 		if fitstats and imsBest is None:
-			rtn = rtn + (None,None)
+			rtn = rtn + (None,)
 		elif fitstats:
-			chi2 = np.zeros(len(srcs))
-			npix = np.zeros(len(srcs), int)
+			class FitStats(object):
+				pass
+			fs = FitStats()
 
-			for umods,(nil,nil,chi,nil) in zip(umodels, imsBest):
-				m = np.zeros_like(chi)
-				for i,um in enumerate(umods):
-					if um is None:
+			# Per-image stats:
+			imchisq = []
+			imnpix = []
+			for img,mod,ie,chi,roi in imsBest:
+				imchisq.append((chi**2).sum())
+				imnpix.append((ie > 0).sum())
+			fs.imchisq = np.array(imchisq)
+			fs.imnpix = np.array(imnpix)
+
+			# Per-source stats:
+
+			# Weak!  Assume one component per source
+			#assert(len(umodels[0]) == len(srcs))
+			
+			# profile-weighted chi-squared (unit-model weighted chi-squared)
+			fs.prochi2 = np.zeros(len(srcs))
+
+			# profile-weighted number of pixels
+			fs.pronpix = np.zeros(len(srcs))
+
+			# profile-weighted sum of (flux from other sources / my flux)
+			fs.profracflux = np.zeros(len(srcs))
+			fs.proflux = np.zeros(len(srcs))
+
+			# total number of pixels touched by this source
+			fs.npix = np.zeros(len(srcs), int)
+
+			# subtract sky from models
+			for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
+				tim.getSky().addTo(mod, scale=-1.)
+
+			# Some fancy footwork to convert from umods to sources
+			# (eg, composite galaxies that can have multiple umods)
+			# for each source
+			for si,uis in enumerate(umodsforsource):
+				src = self.catalog[si]
+				# for each image
+				for umods,scale,tim,(img,mod,ie,chi,roi) in zip(umodels, scales, imlist, imsBest):
+					# just use 'scale'?
+					pcal = tim.getPhotoCal()
+					cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
+					csum = sum(cc)
+					if csum == 0:
 						continue
-					# add to model just so that the m and chi are same shape.
-					um.addTo(m)
-					nz = np.flatnonzero(m > 0)
+
+					srcmod = np.zeros_like(chi)
+					# for each component (usually just one)
+					for ui,counts in zip(uis, cc):
+						um = umods[ui]
+						if um is None:
+							continue
+						# accumulate this unit-flux model into srcmod
+						(um * counts).addTo(srcmod)
+
+					#ssum = srcmod.sum()
+					# Divide by total flux, not flux within this image; sum <= 1.
+					srcmod /= csum
+
+					nz = np.flatnonzero((srcmod > 0) * (ie > 0))
 					if len(nz) == 0:
 						continue
-					chi2[i] += np.sum(chi.flat[nz]**2)
-					npix[i] += len(nz)
-					m[:,:] = 0.
-			
-			rtn = rtn + (chi2,npix)
+
+					fs.prochi2[si] += np.sum(srcmod.flat[nz] * chi.flat[nz]**2)
+					fs.pronpix[si] += np.sum(srcmod.flat[nz])
+					# (mod - srcmod*csum) is the model for everybody else
+					fs.profracflux[si] += np.sum(((mod/csum - srcmod) * srcmod).flat[nz])
+					# scale to nanomaggies, weight by profile
+					fs.proflux[si] += np.sum((((mod - srcmod*csum) / scale) * srcmod).flat[nz])
+					fs.npix[si] += len(nz)
+
+			rtn = rtn + (fs,)
 
 		return rtn
 

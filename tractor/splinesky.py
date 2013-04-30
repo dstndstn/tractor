@@ -40,7 +40,7 @@ class SplineSky(ParamList):
 		'''
 		self.prior_smooth_sigma = sigma
 
-	def addTo(self, mod):
+	def addTo(self, mod, scale=1.):
 		H,W = mod.shape
 		X = np.arange(W)
 		Y = np.arange(H)
@@ -50,7 +50,7 @@ class SplineSky(ParamList):
 		S = self.spl(X, Y).T
 		#print 'mod', mod.shape
 		#print 'S', S.shape
-		mod += S
+		mod += (S * scale)
 
 	def getParamGrid(self):
 		arr = np.array(self.vals)

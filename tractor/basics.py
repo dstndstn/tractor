@@ -691,10 +691,10 @@ class ConstantSky(ScalarParam):
 		p = Patch(0, 0, np.ones(img.shape))
 		p.setName('dsky')
 		return [p]
-	def addTo(self, img):
+	def addTo(self, img, scale=1.):
 		if self.val == 0:
 			return
-		img += self.val
+		img += (self.val * scale)
 	def getParamNames(self):
 		return ['sky']
 

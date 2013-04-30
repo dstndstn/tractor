@@ -90,7 +90,7 @@ class Sky(Params):
 		parameter.
 		'''
 		return []
-	def addTo(self, mod):
+	def addTo(self, mod, scale=1.):
 		'''
 		Add the sky to the input synthetic image `mod`, a 2-D numpy
 		array.
