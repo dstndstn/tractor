@@ -1098,6 +1098,7 @@ class Tractor(MultiParams):
 		## FIXME -- this should depend on the PhotoCal scalings!
 		damp0 = 1e-3
 		damping = damp
+		V = None
 
 		while True:
 			# A flag to try again even if the lnprob got worse
@@ -1134,8 +1135,10 @@ class Tractor(MultiParams):
 
 			print 'forced phot: getting update with damp=', damping
 			t0 = Time()
-			X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
-										scale_columns=False, chiImages=chis0)
+			X,V = self.getUpdateDirection(derivs, damp=damping, priors=priors,
+										  scale_columns=False, chiImages=chis0,
+										  variance=True)
+			#print 'variance:', V
 			topt = Time()-t0
 			print 'forced phot: opt:', topt
 			#print 'forced phot: update', X
@@ -1239,7 +1242,7 @@ class Tractor(MultiParams):
 			if quitNow:
 				break
 
-		rtn = (ims0,imsBest)
+		rtn = (ims0,imsBest,V)
 
 		if fitstats and imsBest is None:
 			rtn = rtn + (None,)
@@ -1276,8 +1279,11 @@ class Tractor(MultiParams):
 			fs.npix = np.zeros(len(srcs), int)
 
 			# subtract sky from models
+			skies = []
 			for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
 				tim.getSky().addTo(mod, scale=-1.)
+				skies.append(tim.getSky().val)
+			fs.sky = np.array(skies)
 
 			# Some fancy footwork to convert from umods to sources
 			# (eg, composite galaxies that can have multiple umods)
@@ -1531,7 +1537,7 @@ class Tractor(MultiParams):
 
 	def getUpdateDirection(self, allderivs, damp=0., priors=True,
 						   scale_columns=True, scales_only=False,
-						   chiImages=None):
+						   chiImages=None, variance=False):
 
 		# allderivs: [
 		#	 (param0:)	[  (deriv, img), (deriv, img), ... ],
@@ -1756,6 +1762,8 @@ class Tractor(MultiParams):
 		assert(np.all(np.isfinite(b)))
 
 		lsqropts = dict(show=isverbose(), damp=damp)
+		if variance:
+			lsqropts.update(calc_var=True)
 
 		# lsqr can trigger floating-point errors
 		#np.seterr(all='warn')
@@ -1797,6 +1805,14 @@ class Tractor(MultiParams):
 
 		#np.seterr(**olderr)
 		#print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+
+		if variance:
+			if scale_columns:
+				### CHECK!!
+				print 'Warning: scale_columns and variance: CHECK THIS'
+				var /= colscales**2
+			return X,var
+
 		return X
 
 	def changeInvvar(self, Q2=None):

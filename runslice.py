@@ -21,18 +21,20 @@ import numpy as np
 import logging
 from wise3 import *
 
-# command-line args: WISE band, dec slice.
-
 NDEC = 50
 
 arr = os.environ.get('PBS_ARRAYID')
 if arr is None:
-	arr = 0
+	#arr = 0
+	arr = 125
 else:
 	arr = int(arr)
 	
-band = 1 + (arr / NDEC)
-dslice = arr % NDEC
+#band = 1 + (arr / NDEC)
+#dslice = arr % NDEC
+
+band = int(arr / 100)
+dslice = arr % 100
 
 print 'Band', band
 print 'Dec slice', dslice
@@ -48,7 +50,9 @@ opt.osources = None
 opt.sources = 'objs-eboss-w3-dr9.fits'
 opt.ptsrc = False
 opt.pixpsf = False
-opt.minsb = 0.05
+
+#opt.minsb = 0.05
+opt.minsb = 0.005
 
 lvl = logging.INFO
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
@@ -66,10 +70,12 @@ dlo,dhi = dd[dslice], dd[dslice+1]
 
 print 'My dec slice:', dlo, dhi
 
+basename = 'ebossw3-v2'
+
 di = dslice
 for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 
-	fn = 'ebossw3-r%02i-d%02i-w%i.fits' % (ri, di, opt.bandnum)
+	fn = '%s-r%02i-d%02i-w%i.fits' % (basename, ri, di, opt.bandnum)
 	if os.path.exists(fn):
 		print 'Output file exists:', fn
 		print 'Skipping'
@@ -96,7 +102,7 @@ for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 		print 'Wrote', fn
 
 		imst = P['imstats']
-		fn = 'ebossw3-r%02i-d%02i-w%i-imstats.fits' % (ri, di, opt.bandnum)
+		fn = '%s-r%02i-d%02i-w%i-imstats.fits' % (basename, ri, di, opt.bandnum)
 		imst.writeto(fn)
 		print 'Wrote', fn
 

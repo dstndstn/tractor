@@ -47,136 +47,158 @@ def grenumerate(it):
 		yield i,x
 	print()
 
-ps = PlotSequence('wisecheck')
+def merge_results(S, outfn):
+	## HACK!
+	NDEC = 50
+	r0,r1 = 210.593,  219.132
+	d0,d1 =  51.1822,  54.1822
+	dd = np.linspace(d0, d1, NDEC + 1)
+	rr = np.linspace(r0, r1, 91)
+	W = []
+	for band in [1,2]:
+		bname = 'w%i' % band
+		fns = glob('ebossw3-r??-d??-w%i.fits' % band)
+		TT = []
+		rex = re.compile(r'-r(?P<ri>\d\d)-d(?P<di>\d\d)-')
+		print('Reading', len(fns), 'W%i results' % band)
+		for i,fn in grenumerate(fns):
+			T = fits_table(fn)
+			# inside/outside the block that was being fit?
+			m = rex.search(fn)
+			if m is None:
+				raise RuntimeError('regex on filename did not match')
+			ri = int(m.group('ri'), 10)
+			di = int(m.group('di'), 10)
+			rlo,rhi = rr[ri], rr[ri+1]
+			dlo,dhi = dd[di], dd[di+1]
+			T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
+		
+			TT.append(T)
+		T = merge_tables(TT)
+		print('Read total of', len(T))
+	
+		T.cut(T.inblock)
+		print('Cut to', len(T), 'in block')
+	
+		W.append(T)
+	
+		## I messed up the indexing... spherematch to the rescue.
+		R = 0.001 / 3600.
+		I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, R)
+		print(len(I), 'matches of', len(T))
+		T.row[:] = -1	
+		T.row[I] = J
+	
+	W1,W2 = W
+	
+	NS = len(S)
+	SW = tabledata()
+	# X = np.zeros(NS)
+	# X[W1.row] = W1.ra
+	# X[W2.row] = W2.ra
+	# SW.ra2 = X
+	# X = np.zeros(NS)
+	# X[W1.row] = W1.dec
+	# X[W2.row] = W2.dec
+	# SW.dec2 = X
+	SW.ra  = S.ra
+	SW.dec = S.dec
+	for b,W in [('w1',W1),('w2',W2)]:
+		for k in ['prochi2','pronpix', 'profracflux','proflux','npix']:
+			Y = W.get(k)
+			X = np.zeros(NS, Y.dtype)
+			X[W.row] = Y
+			SW.set(b+'_'+k, X)
+	X = np.zeros(NS)
+	X[W1.row] = W1.w1
+	SW.w1 = X
+	X = np.zeros(NS)
+	X[W2.row] = W2.w2
+	SW.w2 = X
+	SW.writeto(outfn)
+	return SW
+
 
 S = fits_table('objs-eboss-w3-dr9.fits')
 print('Read', len(S))
 
-## HACK!
-NDEC = 50
-r0,r1 = 210.593,  219.132
-d0,d1 =  51.1822,  54.1822
-dd = np.linspace(d0, d1, NDEC + 1)
-rr = np.linspace(r0, r1, 91)
+fn = 'eboss-w3-wise-dr9.fits'
+if not os.path.exists(fn):
+	W = merge_results(S, fn)
+else:
+	W = fits_table(fn)
 
-W = []
-for band in [1,2]:
-	bname = 'w%i' % band
-	
-	fns = glob('ebossw3-r??-d??-w%i.fits' % band)
-	TT = []
-
-	rex = re.compile(r'-r(?P<ri>\d\d)-d(?P<di>\d\d)-')
-
-	print('Reading', len(fns), 'W%i results' % band)
-	for i,fn in grenumerate(fns):
-		T = fits_table(fn)
-
-		m = rex.search(fn)
-		if m is None:
-			raise RuntimeError('regex on filename did not match')
-		ri = int(m.group('ri'), 10)
-		di = int(m.group('di'), 10)
-		#print('ri', ri, 'di', di)
-		
-		rlo,rhi = rr[ri], rr[ri+1]
-		dlo,dhi = dd[di], dd[di+1]
-		T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
-	
-		TT.append(T)
-	T = merge_tables(TT)
-	print('Read total of', len(T))
-
-	T.cut(T.inblock)
-	print('Cut to', len(T), 'in block')
-
-	W.append(T)
-
-	R = 0.001 / 3600.
-	I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, R)
-	print(len(I), 'matches of', len(T))
-	T.row[:] = -1	
-	T.row[I] = J
-
-	# SS = S[T.row]
-	# rf = SS.modelflux[:,2]
-	# wf = T.get(bname)
-	# 
-	# loghist(rf, wf, 200)
-	# plt.xlabel('r flux (nmgy)')
-	# plt.ylabel(bname + ' flux (nmgy)')
-	# ps.savefig()
-	# 
-	# ok = np.flatnonzero((rf > 0) * (wf > 0))
-	# rmag = -2.5 * (np.log10(rf[ok]) - 9)
-	# wmag = -2.5 * (np.log10(wf[ok]) - 9)
-	# 
-	# plothist(wmag-rmag, rmag, 200)
-	# plt.ylabel('r (mag)')
-	# plt.xlabel('%s - r (mag)' % bname)
-	# ylo,yhi = plt.ylim()
-	# plt.ylim(yhi,ylo)
-	# ps.savefig()
-	# 
-	# plothist(wmag-rmag, rmag, 200, range=((-15,10),(15,25)))
-	# plt.ylabel('r (mag)')
-	# plt.xlabel('%s - r (mag)' % bname)
-	# ylo,yhi = plt.ylim()
-	# plt.ylim(yhi,ylo)
-	# ps.savefig()
-	# 
-	# loghist(wmag-rmag, rmag, 200, range=((-15,10),(15,25)))
-	# plt.ylabel('r (mag)')
-	# plt.xlabel('%s - r (mag)' % bname)
-	# ylo,yhi = plt.ylim()
-	# plt.ylim(yhi,ylo)
-	# ps.savefig()
+ps = PlotSequence('wisecheck')
 
 
-W1,W2 = W
 
-NS = len(S)
-SW = tabledata()
+import wise
+tpsf = wise.get_psf_model(1, pixpsf=True)
 
-X = np.zeros(NS)
-X[W1.row] = W1.ra
-X[W2.row] = W2.ra
-SW.ra2 = X
-X = np.zeros(NS)
-X[W1.row] = W1.dec
-X[W2.row] = W2.dec
-SW.dec2 = X
+psfp = tpsf.getPointSourcePatch(0, 0)
+psf = psfp.patch
 
-SW.ra  = S.ra
-SW.dec = S.dec
+psf /= psf.sum()
 
-for b,W in [('w1',W1),('w2',W2)]:
-	for k in ['prochi2','pronpix', 'profracflux','proflux','npix']:
-		Y = W.get(k)
-		X = np.zeros(NS, Y.dtype)
-		X[W.row] = Y
-		SW.set(b+'_'+k, X)
+plt.clf()
+plt.imshow(np.log10(np.maximum(1e-5, psf)), interpolation='nearest', origin='lower')
+ps.savefig()
 
-X = np.zeros(NS)
-X[W1.row] = W1.w1
-SW.w1 = X
-X = np.zeros(NS)
-X[W2.row] = W2.w2
-SW.w2 = X
-SW.writeto('eboss-w3-wise-dr9.fits')
+print('PSF norm:', np.sqrt(np.sum(np.maximum(0, psf)**2)))
+print('PSF max:', psf.max())
 
-SS = S
+sys.exit(0)
+
+
+# Some summary plots
+
+# plt.clf()
+# plt.hist(np.log10(np.maximum(1e-3, S.modelflux[:,2])), 100)
+# plt.xlabel('log modelflux r-band (nmgy)')
+# ps.savefig()
+
+plt.clf()
+plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9), 100, log=True,
+		 range=(10,30))
+plt.xlabel('modelflux r (mag)')
+ps.savefig()
+
+plt.clf()
+plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9), 100, log=True,
+		 range=(10,30))
+plt.xlabel('psfflux r (mag)')
+ps.savefig()
+
 for bname in ['w1','w2']:
-	rf = SS.modelflux[:,2]
-	wf = SW.get(bname)
+	rf = S.modelflux[:,2]
+	wf = W.get(bname)
 	I = np.flatnonzero(wf != 0)
 	rf = rf[I]
 	wf = wf[I]
-	
-	
-	loghist(rf, wf, 200)
-	plt.xlabel('r flux (nmgy)')
-	plt.ylabel(bname + ' flux (nmgy)')
+
+	plt.clf()
+	plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf))-9), 100, log=True)
+	plt.xlabel(bname + ' (mag)')
+	ps.savefig()
+
+	print('Unique objc_types:', np.unique(S.objc_type))
+
+	S.ispsf = (S.objc_type == 6)
+
+	plt.clf()
+	n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[S.ispsf[I]]))-9), 100, log=True,
+					  histtype='step', color='r')
+	n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[np.logical_not(S.ispsf[I])]))-9), 100, log=True,
+					  histtype='step', color='b')
+	plt.ylim(1, max(max(n1),max(n2))*1.2)
+	plt.xlabel(bname + ' (mag)')
+	plt.legend((p1,p2), ('Point srcs', 'Extended'), loc='upper left')
+	ps.savefig()
+
+	#loghist(rf, wf, 200)
+	loghist(np.log10(np.maximum(1e-3, rf)), np.log10(np.maximum(1e-3, wf)), 200)
+	plt.xlabel('log r flux (nmgy)')
+	plt.ylabel('log ' + bname + ' flux (nmgy)')
 	ps.savefig()
 
 	ok = np.flatnonzero((rf > 0) * (wf > 0))
@@ -204,15 +226,15 @@ for bname in ['w1','w2']:
 	plt.ylim(yhi,ylo)
 	ps.savefig()
 
-I = np.flatnonzero((SW.w1 > 0) * (SW.w2 > 0))
+I = np.flatnonzero((W.w1 > 0) * (W.w2 > 0))
 print('Found', len(I), 'with w1 and w2 pos')
 
 rf = S.modelflux[:,2]
-I = np.flatnonzero((SW.w1 > 0) * (SW.w2 > 0) * (rf > 0))
+I = np.flatnonzero((W.w1 > 0) * (W.w2 > 0) * (rf > 0))
 
 rf = rf[I]
-w1 = SW.w1[I]
-w2 = SW.w2[I]
+w1 = W.w1[I]
+w2 = W.w2[I]
 
 rmag  = -2.5 * (np.log10(rf) - 9)
 w1mag = -2.5 * (np.log10(w1) - 9)
@@ -250,48 +272,9 @@ plt.ylim(yhi,ylo)
 plt.title('r < 22, w1,w2 < 20, OBJTYPE=6')
 ps.savefig()
 
+sys.exit(0)
 
-# 
-# 
-# hasw1 = np.empty(len(S), int)
-# hasw1[:] = -1
-# hasw1[W1.row] = np.arange(len(W1))
-# 
-# hasw2 = np.empty(len(S), int)
-# hasw2[:] = -1
-# hasw2[W2.row] = np.arange(len(W2))
-# 
-# hasboth = ((hasw1 >= 0) * (hasw2 >= 0))
-# I1 = hasw1[hasboth]
-# I2 = hasw2[hasboth]
-# print(len(I1), len(I2), 'with both w1 and w2')
-# 
-# W1 = W1[I1]
-# W2 = W2[I2]
-# 
-# assert(np.all(W1.row == W2.row))
-# SS = S[W1.row]
-# rf = SS.modelflux[:,2]
-# wf1 = W1.w1
-# wf2 = W2.w2
-# 
-# pos = np.flatnonzero((wf1 > 0) * (wf2 > 0))
-# print(len(pos), 'with positive flux')
-# 
-# ok = np.flatnonzero((rf > 0) * (wf1 > 0) * (wf2 > 0))
-# rmag = -2.5 * (np.log10(rf[ok]) - 9)
-# w1mag = -2.5 * (np.log10(wf1[ok]) - 9)
-# w2mag = -2.5 * (np.log10(wf2[ok]) - 9)
-# 
-# loghist(w1mag - w2mag, rmag, 200, range=((-15,15),(15,25)))
-# plt.ylabel('r (mag)')
-# plt.xlabel('W1 - W2 (mag)')
-# ylo,yhi = plt.ylim()
-# plt.ylim(yhi,ylo)
-# ps.savefig()
-
-
-
+# Some plots looking at image statistics.
 
 for band in [1,2]:
 	fns = glob('ebossw3-r??-d??-w%i-imstats.fits' % band)

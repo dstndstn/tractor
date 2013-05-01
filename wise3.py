@@ -993,9 +993,6 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 	S = fits_table(opt.sources, columns=['ra','dec'])
 	print 'Read', len(S), 'sources from', opt.sources
 
-	### DEBUG
-	#Scopy = S.copy()
-
 	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
 					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
 	print 'Reading', len(I), 'in range'
@@ -1004,6 +1001,8 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 								   r_exp='theta_exp',
 								   fracpsf='fracdev'))
 	S.row = I
+	S.inblock = ((S.ra  >= r0) * (S.ra  < r1) *
+				 (S.dec >= d0) * (S.dec < d1))
 	S.cmodelflux = S.modelflux
 
 	# Wrad = opt.wrad / 3600.
@@ -1018,16 +1017,17 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 								  objs=S, bands=[], nanomaggies=True, extrabands=[band],
 								  fixedComposites=True)
 	print 'Created', len(cat), 'Tractor sources'
+	assert(len(cat) == len(S))
 
 	tractor = Tractor(tims, cat)
+	cat = tractor.catalog
 
-	# DEBUG
-	# r2 = np.array([src.getPosition().ra for src in cat])
-	# X = np.zeros(len(Scopy))
-	# X[S.row] = r2
-	# assert(np.all(np.logical_or(X == Scopy.ra, X == 0.)))
-	# sys.exit(0)
-	# 
+	## Give each source a minimum brightness
+	minbright = 250.
+	cat.freezeParamsRecursive('*')
+	cat.thawPathsTo(band)
+	p0 = cat.getParams()
+	cat.setParams(np.maximum(minbright, p0))
 
 	return dict(opt102=opt, tractor=tractor, S=S)
 
@@ -1059,19 +1059,27 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 		print 'minFlux:', minFlux, 'nmgy'
 
 	t0 = Time()
-	ims0,ims1,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
-													  sky=True, minFlux=minFlux,
-													  fitstats=True)
+	ims0,ims1,V,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+														sky=True, minFlux=minFlux,
+														fitstats=True)
 	print 'Forced phot took', Time()-t0
 
 	cat = tractor.catalog
 
 	assert(len(cat) == len(S))
+
+	# The parameters are stored in the order: sky, then fluxes
+	print 'Variance vector:', len(V)
+	print '# images:', len(tims)
+	print '# sources:', len(cat)
+	
+	vflux = V[-len(cat):]
 	
 	R = tabledata()
 	R.ra  = np.array([src.getPosition().ra  for src in cat])
 	R.dec = np.array([src.getPosition().dec for src in cat])
 	R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
+	R.set(band + '_var', vflux)
 	R.row = S.row
 
 	imstats = tabledata()
@@ -1081,8 +1089,10 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 			R.set(k, getattr(fs, k))
 
 		imstats = tabledata()
-		for k in ['imchisq', 'imnpix']:
-			imstats.set(k, getattr(fs, k))
+		for k in ['imchisq', 'imnpix', 'sky']:
+			X = getattr(fs, k)
+			imstats.set(k, X)
+			print 'image stats', k, '=', X
 		imstats.scan_id = T.scan_id
 		imstats.frame_num = T.frame_num
 
@@ -1504,7 +1514,19 @@ def main():
 
 		sys.exit(0)
 
-	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp)
+	# W3 area
+	r0,r1 = 210.593,  219.132
+	d0,d1 =  51.1822,  54.1822
+	dd = np.linspace(d0, d1, 51)
+	rr = np.linspace(r0, r1, 91)
+
+	ri = 25
+	di = 25
+	rlo,rhi = rr[ri],rr[ri+1]
+	dlo,dhi = dd[di],dd[di+1]
+
+	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,
+					  declo=dlo, dechi=dhi, ralo=rlo, rahi=rhi)
 
 	runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs,
 			 write=opt.write)
