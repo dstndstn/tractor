@@ -1059,27 +1059,26 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 		print 'minFlux:', minFlux, 'nmgy'
 
 	t0 = Time()
-	ims0,ims1,V,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
-														sky=True, minFlux=minFlux,
-														fitstats=True)
+	ims0,ims1,IV,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+														 sky=True, minFlux=minFlux,
+														 fitstats=True,
+														 variance=True)
 	print 'Forced phot took', Time()-t0
 
 	cat = tractor.catalog
-
 	assert(len(cat) == len(S))
+	assert(len(cat) == len(IV))
 
 	# The parameters are stored in the order: sky, then fluxes
-	print 'Variance vector:', len(V)
-	print '# images:', len(tims)
-	print '# sources:', len(cat)
-	
-	vflux = V[-len(cat):]
-	
+	#print 'Variance vector:', len(V)
+	#print '# images:', len(tims)
+	#print '# sources:', len(cat)
+
 	R = tabledata()
 	R.ra  = np.array([src.getPosition().ra  for src in cat])
 	R.dec = np.array([src.getPosition().dec for src in cat])
 	R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
-	R.set(band + '_var', vflux)
+	R.set(band + '_ivar', IV)
 	R.row = S.row
 	R.inblock = S.inblock.astype(np.uint8)
 
@@ -1093,7 +1092,7 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 		for k in ['imchisq', 'imnpix', 'sky']:
 			X = getattr(fs, k)
 			imstats.set(k, X)
-			print 'image stats', k, '=', X
+			#print 'image stats', k, '=', X
 		imstats.scan_id = T.scan_id
 		imstats.frame_num = T.frame_num
 

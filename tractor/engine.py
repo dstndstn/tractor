@@ -852,7 +852,9 @@ class Tractor(MultiParams):
 								   sky=False,
 								   minFlux=None,
 								   fitstats=False,
-								   justims0=False):
+								   justims0=False,
+								   variance=False,
+								   skyvariance=False):
 		'''
 		ASSUMES linear brightnesses!
 
@@ -1005,15 +1007,53 @@ class Tractor(MultiParams):
 			assert(Nsky == self.images.numberOfParams())
 			assert(Nsky + Nsourceparams == self.numberOfParams())
 			print 'forced phot: sky derivs', Time()-t0
+		else:
+			Nsky = 0
 
 		t0 = Time()
 		derivs = [[] for i in range(Nsourceparams)]
-		for i,(img,umods,scale) in enumerate(zip(imlist, umodels, scales)):
+		for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
 			for um,dd in zip(umods, derivs):
 				if um is None:
 					continue
-				dd.append((um * scale, img))
+				dd.append((um * scale, tim))
 		print 'forced phot: derivs', Time()-t0
+
+
+		#### NOTE, this is actually INVERSE variance
+		V = None
+
+		if variance:
+			NSV = 0
+			if sky and skyvariance:
+				NS = Nsky
+			else:
+				NS = 0
+			V = np.zeros(len(srcs) + NS)
+			if sky and skyvariance:
+				for di,(dsky,tim) in enumerate(skyderivs):
+					ie = tim.getInvError()
+					if dsky.shape == tim.shape:
+						dchi2 = np.sum((dsky.patch * ie)**2)
+					else:
+						mm = np.zeros(tim.shape)
+						dsky.addTo(mm)
+						dchi2 = np.sum((mm * ie)**2)
+					V[di] = dchi2
+				
+			for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
+				mm = np.zeros(tim.shape)
+				ie = tim.getInvError()
+				for ui,um in enumerate(umods):
+					if um is None:
+						continue
+					#print 'deriv: sum', um.patch.sum(), 'scale', scale, 'shape', um.shape,
+					um.addTo(mm)
+					dchi2 = np.sum((mm * scale * ie) ** 2)
+					#print 'dchi2', dchi2
+					V[NS + ui] += dchi2
+					mm[:,:] = 0.
+			#print 'var1:', V
 
 		if sky:
 			# print 'Catalog params:', self.catalog.numberOfParams()
@@ -1098,7 +1138,6 @@ class Tractor(MultiParams):
 		## FIXME -- this should depend on the PhotoCal scalings!
 		damp0 = 1e-3
 		damping = damp
-		V = None
 
 		while True:
 			# A flag to try again even if the lnprob got worse
@@ -1135,10 +1174,16 @@ class Tractor(MultiParams):
 
 			print 'forced phot: getting update with damp=', damping
 			t0 = Time()
-			X,V = self.getUpdateDirection(derivs, damp=damping, priors=priors,
-										  scale_columns=False, chiImages=chis0,
-										  variance=True)
-			#print 'variance:', V
+			# X,V = self.getUpdateDirection(derivs, damp=damping, priors=priors,
+			# 							  scale_columns=False, chiImages=chis0,
+			# 							  variance=True)
+			# print 'Source variance:', V[Nsky:]
+			# if not skyvariance: ...FIXME...
+
+			X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
+										scale_columns=False, chiImages=chis0)
+			# print 'Source variance:', V[Nsky:]
+
 			topt = Time()-t0
 			print 'forced phot: opt:', topt
 			#print 'forced phot: update', X

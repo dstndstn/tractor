@@ -133,6 +133,24 @@ def merge_results(S, basefn, outfn):
 	return SW
 
 
+ps = PlotSequence('wisecheck')
+
+
+
+# from x import *
+# plt.clf()
+# plt.plot(var1, var2, 'r.')
+# ps.savefig()
+
+# T = fits_table('ebossw3-v2-w1-forced.fits')
+# plt.clf()
+# #plt.plot(T.w1, T.w1_var, 'r.')
+# plt.loglog(T.w1, 1./np.sqrt(T.w1_var), 'r.')
+# plt.xlabel('w1 flux')
+# plt.ylabel('w1 flux sigma')
+# ps.savefig()
+# sys.exit(0)
+
 S = fits_table('objs-eboss-w3-dr9.fits')
 print('Read', len(S))
 
@@ -147,8 +165,6 @@ if not os.path.exists(fn):
 else:
 	print('Reading existing', fn)
 	W = fits_table(fn)
-
-ps = PlotSequence('wisecheck')
 
 
 
