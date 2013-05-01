@@ -70,28 +70,37 @@ def merge_results(S, basefn, outfn):
 		TT = []
 		print('Reading', len(fns), 'W%i results' % band)
 		for i,fn in grenumerate(fns):
-			T = fits_table(fn)
-			# inside/outside the block that was being fit?
-			ri,di = get_ridi(fn)
-			rlo,rhi = rr[ri], rr[ri+1]
-			dlo,dhi = dd[di], dd[di+1]
-			T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
+			try:
+				T = fits_table(fn)
+			except:
+				print('WARNING: failed to read', fn)
+				continue
+			
+			if not hasattr(T, 'inblock'):
+				print('WARNING: no "inblock" in', fn)
+				continue
+			# # inside/outside the block that was being fit?
+			# ri,di = get_ridi(fn)
+			# rlo,rhi = rr[ri], rr[ri+1]
+			# dlo,dhi = dd[di], dd[di+1]
+			# T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
 		
 			TT.append(T)
+		#if len(TT) == 0:
 		T = merge_tables(TT)
 		print('Read total of', len(T))
 	
-		T.cut(T.inblock)
+		T.cut(np.flatnonzero(T.inblock))
 		print('Cut to', len(T), 'in block')
 	
 		W.append(T)
 	
 		## I messed up the indexing... spherematch to the rescue.
-		R = 0.001 / 3600.
-		I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, R)
-		print(len(I), 'matches of', len(T))
-		T.row[:] = -1	
-		T.row[I] = J
+		# R = 0.001 / 3600.
+		# I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, R)
+		# print(len(I), 'matches of', len(T))
+		# T.row[:] = -1	
+		# T.row[I] = J
 	
 	W1,W2 = W
 	
@@ -135,6 +144,7 @@ basefn = 'ebossw3-v2'
 if not os.path.exists(fn):
 	W = merge_results(S, basefn, fn)
 else:
+	print('Reading existing', fn)
 	W = fits_table(fn)
 
 ps = PlotSequence('wisecheck')
@@ -165,16 +175,15 @@ print('PSF max:', psf.max())
 # ps.savefig()
 
 plt.clf()
-plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9), 100, log=True,
-		 range=(10,30))
-plt.xlabel('modelflux r (mag)')
+n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9), 100, log=True,
+				   range=(10,30), histtype='step', color='r')
+n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9), 100, log=True,
+				   range=(10,30), histtype='step', color='b')
+plt.xlabel('r (mag)')
+plt.legend((p1,p2),('Model flux', 'PSF flux'))
+plt.ylim(0.1, max(n1.max(), n2.max())*1.2)
 ps.savefig()
 
-plt.clf()
-plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9), 100, log=True,
-		 range=(10,30))
-plt.xlabel('psfflux r (mag)')
-ps.savefig()
 
 for bname in ['w1','w2']:
 	rf = S.modelflux[:,2]
@@ -182,6 +191,8 @@ for bname in ['w1','w2']:
 	I = np.flatnonzero(wf != 0)
 	rf = rf[I]
 	wf = wf[I]
+
+	print('Got', len(wf), 'non-zero', bname, 'measurements')
 
 	plt.clf()
 	plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf))-9), 100, log=True)
@@ -192,14 +203,16 @@ for bname in ['w1','w2']:
 
 	S.ispsf = (S.objc_type == 6)
 
-	plt.clf()
-	n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[S.ispsf[I]]))-9), 100, log=True,
-					  histtype='step', color='r')
-	n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[np.logical_not(S.ispsf[I])]))-9), 100, log=True,
-					  histtype='step', color='b')
-	plt.ylim(1, max(max(n1),max(n2))*1.2)
-	plt.xlabel(bname + ' (mag)')
-	plt.legend((p1,p2), ('Point srcs', 'Extended'), loc='upper left')
+
+	if sum(S.ispsf[I]) and sum(np.logical_not(S.ispsf[I])):
+		plt.clf()
+		n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[S.ispsf[I]]))-9), 100, log=True,
+						   histtype='step', color='r')
+		n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[np.logical_not(S.ispsf[I])]))-9), 100, log=True,
+						  histtype='step', color='b')
+		plt.ylim(1, max(max(n1),max(n2))*1.2)
+		plt.xlabel(bname + ' (mag)')
+		plt.legend((p1,p2), ('Point srcs', 'Extended'), loc='upper left')
 	ps.savefig()
 
 	#loghist(rf, wf, 200)
@@ -211,6 +224,14 @@ for bname in ['w1','w2']:
 	ok = np.flatnonzero((rf > 0) * (wf > 0))
 	rmag = -2.5 * (np.log10(rf[ok]) - 9)
 	wmag = -2.5 * (np.log10(wf[ok]) - 9)
+
+	lo,hi = 10,25
+	loghist(rmag, wmag, 200, range=((lo,hi),(lo,hi)))
+	plt.xlabel('r mag')
+	plt.ylabel(bname + ' mag')
+	plt.xlim(hi,lo)
+	plt.ylim(hi,lo)
+	ps.savefig()
 	
 	plothist(wmag-rmag, rmag, 200)
 	plt.ylabel('r (mag)')
@@ -297,6 +318,9 @@ for band in [1,2]:
 	for i,fn in grenumerate(fns):
 		T = fits_table(fn)
 		#print fn, '-->', len(T)
+
+		# Make maps of the sky estimates (by frame) in different blocks?
+		#ri,di = get_ridi(fn)
 
 		bchisq.append(T.imchisq.sum())
 		bnpix.append(T.imnpix.sum())
