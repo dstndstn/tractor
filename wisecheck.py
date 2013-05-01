@@ -56,11 +56,12 @@ def get_ridi(fn):
 	di = int(m.group('di'), 10)
 	return ri,di
 
+## HACK!
+NDEC = 50
+r0,r1 = 210.593,  219.132
+d0,d1 =  51.1822,  54.1822
+
 def merge_results(S, basefn, outfn):
-	## HACK!
-	NDEC = 50
-	r0,r1 = 210.593,  219.132
-	d0,d1 =  51.1822,  54.1822
 	dd = np.linspace(d0, d1, NDEC + 1)
 	rr = np.linspace(r0, r1, 91)
 	W = []
@@ -122,12 +123,12 @@ def merge_results(S, basefn, outfn):
 			X = np.zeros(NS, Y.dtype)
 			X[W.row] = Y
 			SW.set(b+'_'+k, X)
-	X = np.zeros(NS)
-	X[W1.row] = W1.w1
-	SW.w1 = X
-	X = np.zeros(NS)
-	X[W2.row] = W2.w2
-	SW.w2 = X
+
+		for k in [b, b+'_var']:
+			X = np.zeros(NS)
+			X[W.row] = W.get(k)
+			SW.set(k, X)
+
 	SW.writeto(outfn)
 	return SW
 
@@ -197,6 +198,18 @@ for bname in ['w1','w2']:
 	plt.clf()
 	plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf))-9), 100, log=True)
 	plt.xlabel(bname + ' (mag)')
+	ps.savefig()
+
+	plothist(np.log10(np.maximum(1e-3, wf)),
+			 np.log10(W.get(bname + '_var')[I]), 100)
+	plt.xlabel('log ' + bname + ' flux')
+	plt.ylabel('log ' + bname + '_var')
+	ps.savefig()
+
+	plothist(W.ra[I], W.dec[I], 200,
+			 range=((r0,r1),(d0,d1)))
+	setRadecAxes(r0,r1,d0,d1)
+	plt.title(bname + ' measurements')
 	ps.savefig()
 
 	print('Unique objc_types:', np.unique(S.objc_type))

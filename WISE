@@ -74,6 +74,6 @@ qstat -n -1 -u dstn -t | less
 
 
 
-At svn rev 22665:
+At svn rev 22666:
 qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w1v2 -o w1v2.log -q batch -t 100-150 ./runslice.py
 
