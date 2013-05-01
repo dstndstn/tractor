@@ -186,7 +186,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	# constant
 	cinvvar = np.zeros_like(data)
 	cinvvar[goodmask] = 1. / (sigma1**2)
-	# variying
+	# varying
 	vinvvar = np.zeros_like(data)
 	vinvvar[goodmask] = 1. / (unc[goodmask])**2
 	
@@ -332,7 +332,6 @@ read_wise_image = read_wise_level1b
 
 
 def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
-	assert(band == 1)
 
 	if xy is not None:
 		x,y = xy
@@ -347,10 +346,10 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
 		return cache[key]
 
 	if xy is None:
-		psf = pyfits.open('wise-psf-w1-500-500.fits')[0].data
+		psf = pyfits.open('wise-psf-w%i-500-500.fits' % band)[0].data
 	else:
-		## ASSUME existence of wise-psf/wise-psf-w1-%d-%d.fits on a grid 50,150,...,950
-		fn = 'wise-psf/wise-psf-w%i-%d-%d.fits' % (band, gx, gy)
+		## ASSUME existence of wise-psf/wise-psf-w%i-%i-%i.fits on a grid 50,150,...,950
+		fn = 'wise-psf/wise-psf-w%i-%i-%i.fits' % (band, gx, gy)
 		psf = pyfits.open(fn)[0].data
 
 	if pixpsf:

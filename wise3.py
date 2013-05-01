@@ -35,10 +35,9 @@ from tractor.ttime import *
 import wise
 
 def get_l1b_file(basedir, scanid, frame, band):
-	assert(band == 1)
 	scangrp = scanid[-2:]
-	return os.path.join(basedir, 'wise1', '4band_p1bm_frm', scangrp, scanid,
-						'%03i' % frame, '%s%03i-w1-int-1b.fits' % (scanid, frame))
+	return os.path.join(basedir, 'wise%i' % band, '4band_p1bm_frm', scangrp, scanid,
+						'%03i' % frame, '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
 
 
@@ -777,9 +776,11 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 	bandnum = opt.bandnum
 	band = 'w%i' % bandnum
 
-	wisedatadirs = [('/clusterfs/riemann/raid007/bosswork/boss/wise_level1b', 'cryo'),
-					('/clusterfs/riemann/raid000/bosswork/boss/wise1ext', 'post-cryo')]
-
+	#wisedatadirs = [('/clusterfs/riemann/raid007/bosswork/boss/wise_level1b', 'cryo'),
+	# 				('/clusterfs/riemann/raid000/bosswork/boss/wise1ext', 'post-cryo')]
+	
+	wisedatadirs = [('/clusterfs/riemann/raid000/bosswork/boss/wise1test/allsky', 'cryo'),
+					('/clusterfs/riemann/raid000/bosswork/boss/wise1test/prelim_postcryo', 'post-cryo'),]
 
 	# #ralo,rahi,declo,dechi = 212.0, 212.5, 52.0, 52.5
 	# cosdec = np.cos(np.deg2rad(52.))
@@ -787,7 +788,6 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 	# ralo,declo = 212.0, 52.0
 	# rahi  = ralo  + ddec / cosdec
 	# dechi = declo + ddec
-
 
 	print 'RA,Dec range', ralo, rahi, declo, dechi
 
@@ -803,7 +803,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 		margin = (1016. * 2.75 * np.sqrt(2.) / 3600.) / 2.
 		cosdec = np.cos(np.deg2rad((declo + dechi) / 2.))
 		print 'Margin:', margin, 'degrees'
-		print 'cosdec:', cosdec
+		#print 'cosdec:', cosdec
 
 		r0 = ralo - margin/cosdec
 		r1 = rahi + margin/cosdec
@@ -879,12 +879,10 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
 
 def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kwa):
-	#ralo,rahi,declo,dechi=rd
 	r0,r1,d0,d1 = rd
 
 	xyrois = []
 	subwcses = []
-
 	tims = []
 	
 	# Find the pixel ROI in each image containing the RA,Dec ROI.
@@ -994,6 +992,10 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
 	S = fits_table(opt.sources, columns=['ra','dec'])
 	print 'Read', len(S), 'sources from', opt.sources
+
+	### DEBUG
+	#Scopy = S.copy()
+
 	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
 					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
 	print 'Reading', len(I), 'in range'
@@ -1012,16 +1014,20 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 	sband = 'r'
 
 	## NOTE, this method CUTS the "S" arg
-	cat,I = get_tractor_sources_dr9(None, None, None, bandname=sband,
-									objs=S, bands=[], nanomaggies=True, extrabands=[band],
-									fixedComposites=True,
-									getobjinds=True)
+	cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+								  objs=S, bands=[], nanomaggies=True, extrabands=[band],
+								  fixedComposites=True)
 	print 'Created', len(cat), 'Tractor sources'
 
-	#SI = SI[I]
-	# S.cut(I) #-- already done in get_tractor_sources
-
 	tractor = Tractor(tims, cat)
+
+	# DEBUG
+	# r2 = np.array([src.getPosition().ra for src in cat])
+	# X = np.zeros(len(Scopy))
+	# X[S.row] = r2
+	# assert(np.all(np.logical_or(X == Scopy.ra, X == 0.)))
+	# sys.exit(0)
+	# 
 
 	return dict(opt102=opt, tractor=tractor, S=S)
 

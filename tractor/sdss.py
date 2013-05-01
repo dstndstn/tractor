@@ -455,7 +455,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
 	# if you want to cut the objs list to just the ones
 	# for which sources were created...
-	ikeep = np.unique(ikeep)
+	# The np.unique SORTs them.
+	#ikeep = np.unique(ikeep)
 	if len(ikeep):
 		objs.cut(ikeep)
 	else:

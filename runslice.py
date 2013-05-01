@@ -3,10 +3,13 @@
 import os
 import sys
 
+batch = False
+
 d = os.environ.get('PBS_O_WORKDIR')
 if d is not None:
 	os.chdir(d)
 	sys.path.append(os.getcwd())
+	batch = True
 
 # print 'args:', sys.argv
 # print 'environ:'
@@ -53,7 +56,6 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 # W3 area
 r0,r1 = 210.593,  219.132
 d0,d1 =  51.1822,  54.1822
-
 dd = np.linspace(d0, d1, NDEC + 1)
 rr = np.linspace(r0, r1, 91)
 
@@ -67,27 +69,44 @@ print 'My dec slice:', dlo, dhi
 di = dslice
 for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 
-	P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
-			 opt=opt)
-
-	R = stage100(**P)
-	P.update(R)
-	R = stage101(**P)
-	P.update(R)
-	R = stage102(**P)
-	P.update(R)
-	R = stage103(**P)
-	P.update(R)
-	R = stage104(**P)
-	P.update(R)
-
-	R = P['R']
 	fn = 'ebossw3-r%02i-d%02i-w%i.fits' % (ri, di, opt.bandnum)
-	R.writeto(fn)
-	print 'Wrote', fn
+	if os.path.exists(fn):
+		print 'Output file exists:', fn
+		print 'Skipping'
+		if batch:
+			continue
 
-	imst = P['imstats']
-	fn = 'ebossw3-r%02i-d%02i-w%i-imstats.fits' % (ri, di, opt.bandnum)
-	imst.writeto(fn)
-	print 'Wrote', fn
+	try:
+		P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
+				 opt=opt)
 
+		R = stage100(**P)
+		P.update(R)
+		R = stage101(**P)
+		P.update(R)
+		R = stage102(**P)
+		P.update(R)
+		R = stage103(**P)
+		P.update(R)
+		R = stage104(**P)
+		P.update(R)
+
+		R = P['R']
+		R.writeto(fn)
+		print 'Wrote', fn
+
+		imst = P['imstats']
+		fn = 'ebossw3-r%02i-d%02i-w%i-imstats.fits' % (ri, di, opt.bandnum)
+		imst.writeto(fn)
+		print 'Wrote', fn
+
+	except:
+		import traceback
+		print '---------------------------------------------------'
+		print 'FAILED: dec slice', dslice, 'ra slice', ri
+		print rlo,rhi, dlo,dhi
+		print '---------------------------------------------------'
+		traceback.print_exc()
+		print '---------------------------------------------------'
+		if not batch:
+			raise

@@ -33,14 +33,6 @@ text2fits.py -s "|" -f "ddffffffffffffffffff" -H "ra dec dra ddec w1mpro w1sigmp
 #  Going to great lengths to avoid learning IDL:
 # Evaluating Aaron's WISE PSF model on a grid:
 git clone git://github.com/ameisner/WISE.git wise-psf
-(for ((y=50; y<1000; y+=100)); do
-  for ((x=50; x<1000; x+=100)); do
-    printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
-	printf "mwrfits, psf, 'wise-psf-w1-%d-%d.fits'\n" $x $y
-  done
-done) | (cd wise-psf/pro; idl)
-ls wise-psf/pro/*.fits
-
 
 module load idl
 module load idlutils
@@ -49,8 +41,34 @@ export WISE_DATA=$(pwd)/wise-psf/etc
 (for ((y=50; y<1000; y+=100)); do
   for ((x=50; x<1000; x+=100)); do
     printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
-	#printf "mwrfits, psf, 'wise-psf-w1-%03d-%03d.fits'\n" $x $y
-    printf "mwrfits, psf, 'wise-psf-w1.fits'\n" $x $y
+	printf "mwrfits, psf, 'wise-psf-w1-%d-%d.fits'\n" $x $y
   done
 done) | (cd wise-psf/pro; idl)
 ls wise-psf/pro/*.fits
+
+(for ((y=50; y<1000; y+=100)); do
+  for ((x=50; x<1000; x+=100)); do
+    printf "psf = wise_psf_cutout(%d, %d, band=2, allsky=1)\n" $x $y
+	printf "mwrfits, psf, 'wise-psf-w2-%d-%d.fits'\n" $x $y
+  done
+done) | (cd wise-psf/pro; idl)
+ls wise-psf/pro/*.fits
+
+# (for ((y=50; y<1000; y+=100)); do
+#   for ((x=50; x<1000; x+=100)); do
+#     printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
+# 	#printf "mwrfits, psf, 'wise-psf-w1-%03d-%03d.fits'\n" $x $y
+#     printf "mwrfits, psf, 'wise-psf-w1.fits'\n" $x $y
+#   done
+# done) | (cd wise-psf/pro; idl)
+# ls wise-psf/pro/*.fits
+
+
+
+
+qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w1 -o w1.log -q batch -t 0-50 ./runslice.py
+
+qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w2 -o w2b.log -q batch -t 50-53,59-100 ./runslice.py
+
+qstat -n -1 -u dstn -t | less
+
