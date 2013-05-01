@@ -1081,6 +1081,7 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 	R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
 	R.set(band + '_var', vflux)
 	R.row = S.row
+	R.inblock = S.inblock
 
 	imstats = tabledata()
 

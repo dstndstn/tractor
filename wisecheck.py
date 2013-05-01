@@ -47,7 +47,16 @@ def grenumerate(it):
 		yield i,x
 	print()
 
-def merge_results(S, outfn):
+rex = re.compile(r'-r(?P<ri>\d\d)-d(?P<di>\d\d)-')
+def get_ridi(fn):
+	m = rex.search(fn)
+	if m is None:
+		raise RuntimeError('regex on filename did not match')
+	ri = int(m.group('ri'), 10)
+	di = int(m.group('di'), 10)
+	return ri,di
+
+def merge_results(S, basefn, outfn):
 	## HACK!
 	NDEC = 50
 	r0,r1 = 210.593,  219.132
@@ -57,18 +66,13 @@ def merge_results(S, outfn):
 	W = []
 	for band in [1,2]:
 		bname = 'w%i' % band
-		fns = glob('ebossw3-r??-d??-w%i.fits' % band)
+		fns = glob('%s-r??-d??-w%i.fits' % (basefn, band))
 		TT = []
-		rex = re.compile(r'-r(?P<ri>\d\d)-d(?P<di>\d\d)-')
 		print('Reading', len(fns), 'W%i results' % band)
 		for i,fn in grenumerate(fns):
 			T = fits_table(fn)
 			# inside/outside the block that was being fit?
-			m = rex.search(fn)
-			if m is None:
-				raise RuntimeError('regex on filename did not match')
-			ri = int(m.group('ri'), 10)
-			di = int(m.group('di'), 10)
+			ri,di = get_ridi(fn)
 			rlo,rhi = rr[ri], rr[ri+1]
 			dlo,dhi = dd[di], dd[di+1]
 			T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
@@ -122,9 +126,14 @@ def merge_results(S, outfn):
 S = fits_table('objs-eboss-w3-dr9.fits')
 print('Read', len(S))
 
-fn = 'eboss-w3-wise-dr9.fits'
+#fn = 'eboss-w3-wise-dr9.fits'
+#basefn = 'ebossw3'
+
+fn = 'eboss-w3-v2-wise-dr9.fits'
+basefn = 'ebossw3-v2'
+
 if not os.path.exists(fn):
-	W = merge_results(S, fn)
+	W = merge_results(S, basefn, fn)
 else:
 	W = fits_table(fn)
 
@@ -140,14 +149,12 @@ psf = psfp.patch
 
 psf /= psf.sum()
 
-plt.clf()
-plt.imshow(np.log10(np.maximum(1e-5, psf)), interpolation='nearest', origin='lower')
-ps.savefig()
+# plt.clf()
+# plt.imshow(np.log10(np.maximum(1e-5, psf)), interpolation='nearest', origin='lower')
+# ps.savefig()
 
 print('PSF norm:', np.sqrt(np.sum(np.maximum(0, psf)**2)))
 print('PSF max:', psf.max())
-
-sys.exit(0)
 
 
 # Some summary plots
@@ -272,12 +279,12 @@ plt.ylim(yhi,ylo)
 plt.title('r < 22, w1,w2 < 20, OBJTYPE=6')
 ps.savefig()
 
-sys.exit(0)
+
 
 # Some plots looking at image statistics.
 
 for band in [1,2]:
-	fns = glob('ebossw3-r??-d??-w%i-imstats.fits' % band)
+	fns = glob('%s-r??-d??-w%i-imstats.fits' % (basefn, band))
 	TT = []
 
 	# sum by block
