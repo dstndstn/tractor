@@ -86,8 +86,8 @@ for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 	### HACK -- mix-n-match the second-half run of v2
 	ofn = '%s-r%02i-d%02i-w%i.fits' % (oldbasename, ri, di, opt.bandnum)
 	if os.path.exists(ofn):
-		print 'Old output file exists:', fn
-		T = fits_table(fn)
+		print 'Old output file exists:', ofn
+		T = fits_table(ofn)
 		if hasattr(T, 'w1_ivar'):
 			print 'Has ivar column; copying'
 			T.writeto(fn)
