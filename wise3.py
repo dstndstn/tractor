@@ -1059,7 +1059,7 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
 	return dict(opt103=opt)
 
 def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-			 S=None, **kwa):
+			 S=None, ri=None, di=None, **kwa):
 	tims = tractor.images
 
 	minFlux = opt.minflux
@@ -1105,6 +1105,29 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 		imstats.scan_id = T.scan_id
 		imstats.frame_num = T.frame_num
 
+	if ps is not None:
+		pcat = []
+		ptims = tractor.images
+
+		imas = [dict(interpolation='nearest', origin='lower',
+					 vmin=tim.zr[0], vmax=tim.zr[1]) for tim in ptims]
+		imchis = [dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)]*len(ptims)
+
+		tt = 'Block ' + str(ri) + ', ' + str(di)
+	
+		_plot_grid([img for (img, mod, ie, chi, roi) in ims0], imas)
+		plt.suptitle('Data: ' + tt)
+		ps.savefig()
+
+		if ims1 is not None:
+			_plot_grid2(ims1, pcat, ptims, imas)
+			plt.suptitle('Forced-phot model: ' + tt)
+			ps.savefig()
+
+			_plot_grid2(ims1, pcat, ptims, imchis, ptype='chi')
+			plt.suptitle('Forced-phot chi: ' + tt)
+			ps.savefig()
+
 	return dict(R=R, imstats=imstats)
 
 
@@ -1133,28 +1156,6 @@ def OLDstage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa)
 	print 'Forced phot took', Time()-t0
 
 	#pcat = tractor.catalog
-	pcat = []
-	ptims = tractor.images
-
-	imas = [dict(interpolation='nearest', origin='lower',
-				 vmin=tim.zr[0], vmax=tim.zr[1]) for tim in ptims]
-	imchis = [dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)]*len(ptims)
-	
-
-	tt = 'Tiny grid cell'
-	
-	_plot_grid([img for (img, mod, ie, chi, roi) in ims0], imas)
-	plt.suptitle('Data: ' + tt)
-	ps.savefig()
-
-	if ims1 is not None:
-		_plot_grid2(ims1, pcat, ptims, imas)
-		plt.suptitle('Forced-phot model: ' + tt)
-		ps.savefig()
-
-		_plot_grid2(ims1, pcat, ptims, imchis, ptype='chi')
-		plt.suptitle('Forced-phot chi: ' + tt)
-		ps.savefig()
 
 
 
@@ -1397,6 +1398,11 @@ def main():
 	parser = optparse.OptionParser('%prog [options]')
 	parser.add_option('-v', dest='verbose', action='store_true')
 
+	parser.add_option('--ri', dest='ri', type=int,
+					  default=0, help='RA slice')
+	parser.add_option('--di', dest='di', type=int,
+					  default=0, help='Dec slice')
+
 	parser.add_option('-S', '--stage', dest='stage', type=int,
 					  default=0, help='Run to stage...')
 	parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
@@ -1529,13 +1535,14 @@ def main():
 	dd = np.linspace(d0, d1, 51)
 	rr = np.linspace(r0, r1, 91)
 
-	ri = 25
-	di = 25
+	ri = opt.ri
+	di = opt.di
 	rlo,rhi = rr[ri],rr[ri+1]
 	dlo,dhi = dd[di],dd[di+1]
 
 	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,
-					  declo=dlo, dechi=dhi, ralo=rlo, rahi=rhi)
+					  declo=dlo, dechi=dhi, ralo=rlo, rahi=rhi,
+					  ri=opt.ri, di=opt.di)
 
 	runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs,
 			 write=opt.write)

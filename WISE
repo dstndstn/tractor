@@ -83,6 +83,6 @@ qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v3 -o w1v3.log -q batch -t 10
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v3 -o w2v3.log -q batch -t 200-250 ./runslice.py
 
 
-v4: rev 22673
+v4: rev 22674
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v4 -o w1v4.log -q batch -t 100-190 ./runslice.py
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v4 -o w2v4.log -q batch -t 200-290 ./runslice.py
