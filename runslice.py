@@ -22,6 +22,7 @@ import logging
 from wise3 import *
 
 NDEC = 50
+NRA = 90
 
 arr = os.environ.get('PBS_ARRAYID')
 if arr is None:
@@ -30,11 +31,8 @@ if arr is None:
 else:
 	arr = int(arr)
 	
-#band = 1 + (arr / NDEC)
-#dslice = arr % NDEC
-
 band = int(arr / 100)
-dslice = arr % 100
+rslice = arr % 100
 
 print 'Band', band
 print 'Dec slice', dslice
@@ -60,21 +58,22 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 # W3 area
 r0,r1 = 210.593,  219.132
 d0,d1 =  51.1822,  54.1822
+
 dd = np.linspace(d0, d1, NDEC + 1)
-rr = np.linspace(r0, r1, 91)
+rr = np.linspace(r0, r1, NRA  + 1)
 
 print 'RA steps:', rr
 print 'Dec steps:', dd
 
-dlo,dhi = dd[dslice], dd[dslice+1]
+#dlo,dhi = dd[dslice], dd[dslice+1]
+#print 'My dec slice:', dlo, dhi
 
-print 'My dec slice:', dlo, dhi
+ri = rslice
+rlo,rhi = rr[rslice], rr[rslice+1]
 
-oldbasename = 'ebossw3-v2'
-basename = 'ebossw3-v3'
+basename = 'ebossw3-v4'
 
-di = dslice
-for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
+for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 
 	fn = '%s-r%02i-d%02i-w%i.fits' % (basename, ri, di, opt.bandnum)
 	if os.path.exists(fn):
@@ -82,17 +81,6 @@ for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 		print 'Skipping'
 		if batch:
 			continue
-
-	### HACK -- mix-n-match the second-half run of v2
-	ofn = '%s-r%02i-d%02i-w%i.fits' % (oldbasename, ri, di, opt.bandnum)
-	if os.path.exists(ofn):
-		print 'Old output file exists:', ofn
-		T = fits_table(ofn)
-		if hasattr(T, 'w1_ivar'):
-			print 'Has ivar column; copying'
-			T.writeto(fn)
-			continue
-
 
 	try:
 		P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
@@ -121,7 +109,7 @@ for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
 	except:
 		import traceback
 		print '---------------------------------------------------'
-		print 'FAILED: dec slice', dslice, 'ra slice', ri
+		print 'FAILED: dec slice', di, 'ra slice', ri
 		print rlo,rhi, dlo,dhi
 		print '---------------------------------------------------'
 		traceback.print_exc()

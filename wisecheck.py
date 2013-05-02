@@ -60,10 +60,11 @@ def get_ridi(fn):
 NDEC = 50
 r0,r1 = 210.593,  219.132
 d0,d1 =  51.1822,  54.1822
+NRA = 90
+dd = np.linspace(d0, d1, NDEC + 1)
+rr = np.linspace(r0, r1, NRA  + 1)
 
 def merge_results(S, basefn, outfn):
-	dd = np.linspace(d0, d1, NDEC + 1)
-	rr = np.linspace(r0, r1, 91)
 	W = []
 	for band in [1,2]:
 		bname = 'w%i' % band
@@ -171,8 +172,11 @@ print('Read', len(S))
 #fn = 'eboss-w3-wise-dr9.fits'
 #basefn = 'ebossw3'
 
-fn = 'eboss-w3-v2-wise-dr9.fits'
-basefn = 'ebossw3-v2'
+#fn = 'eboss-w3-v2-wise-dr9.fits'
+#basefn = 'ebossw3-v2'
+
+fn = 'eboss-w3-v3-wise-dr9.fits'
+basefn = 'ebossw3-v3'
 
 if not os.path.exists(fn):
 	W = merge_results(S, basefn, fn)
@@ -190,6 +194,10 @@ S.gpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,1]))-9)
 S.rpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9)
 S.ipsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,3]))-9)
 
+S.gmod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,1]))-9)
+S.rmod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9)
+S.imod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,3]))-9)
+
 print('g', S.gpsf.min(), S.gpsf.max())
 print('r', S.rpsf.min(), S.rpsf.max())
 print('i', S.ipsf.min(), S.ipsf.max())
@@ -202,7 +210,28 @@ if not os.path.exists(wfn):
 else:
 	print('Reading', wfn)
 	WC = fits_table(wfn)
-	
+
+swfn = 'eboss-w3-wise-cat-dr9.fits'
+if not os.path.exists(swfn):
+	R = 4./3600.
+	I,J,d = match_radec(S.ra, S.dec, WC.ra, WC.dec, R, nearest=True)
+	print(len(I), 'matches of SDSS to WISE catalog')
+	SWC = tabledata()
+	SWC.ra = S.ra
+	SWC.dec = S.dec
+	for k in WC.columns():
+		if k in ['ra','dec']:
+			outkey = k+'_wise'
+		else:
+			outkey = k
+		X = WC.get(k)
+		Y = np.zeros(len(S), X.dtype)
+		Y[I] = X[J]
+		SWC.set(outkey, Y)
+	SWC.writeto(swfn)
+else:
+	SWC = fits_table(swfn)
+
 
 import wise
 tpsf = wise.get_psf_model(1, pixpsf=True)
@@ -212,13 +241,33 @@ psf = psfp.patch
 
 psf /= psf.sum()
 
-# plt.clf()
-# plt.imshow(np.log10(np.maximum(1e-5, psf)), interpolation='nearest', origin='lower')
-# ps.savefig()
+plt.clf()
+plt.imshow(np.log10(np.maximum(1e-5, psf)), interpolation='nearest', origin='lower')
+plt.colorbar()
+ps.savefig()
+
+h,w = psf.shape
+cx,cy = w/2, h/2
+
+X,Y = np.meshgrid(np.arange(w), np.arange(h))
+R = np.sqrt((X - cx)**2 + (Y - cy)**2)
+plt.clf()
+plt.semilogy(R.ravel(), psf.ravel(), 'b.')
+plt.xlabel('Radius (pixels)')
+plt.ylabel('PSF value')
+plt.ylim(1e-8, 1.)
+ps.savefig()
+
+plt.clf()
+plt.loglog(R.ravel(), psf.ravel(), 'b.')
+plt.xlabel('Radius (pixels)')
+plt.ylabel('PSF value')
+plt.ylim(1e-8, 1.)
+ps.savefig()
+
 
 print('PSF norm:', np.sqrt(np.sum(np.maximum(0, psf)**2)))
 print('PSF max:', psf.max())
-
 
 # Some summary plots
 
@@ -228,14 +277,27 @@ print('PSF max:', psf.max())
 # ps.savefig()
 
 plt.clf()
-n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9), 100, log=True,
-				   range=(10,30), histtype='step', color='r')
-n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9), 100, log=True,
-				   range=(10,30), histtype='step', color='b')
+n1,b,p1 = plt.hist(S.rmod, 100, log=True, range=(10,30), histtype='step', color='r')
+n2,b,p2 = plt.hist(S.rpsf, 100, log=True, range=(10,30), histtype='step', color='b')
 plt.xlabel('r (mag)')
 plt.legend((p1,p2),('Model flux', 'PSF flux'))
 plt.ylim(0.1, max(n1.max(), n2.max())*1.2)
 ps.savefig()
+
+## Spatial variation in errors from micro-steradian blocks?
+
+# position within block in RA
+rblock = np.fmod(W.ra - r0, rr[1]-rr[0])
+for bname in ['w1','w2']:
+	wf = W.get(bname)
+	I = np.flatnonzero(wf != 0)
+	err = 1./np.sqrt(np.maximum(1e-16, W.get(bname + '_ivar')[I]))
+
+	loghist(rblock[I], np.log10(np.clip(err, 1., 1e3)), 200)
+	plt.xlabel('dRA within block')
+	plt.ylabel(bname + ' flux error')
+	ps.savefig()
+
 
 
 for bname in ['w1','w2']:
@@ -244,6 +306,8 @@ for bname in ['w1','w2']:
 	I = np.flatnonzero(wf != 0)
 	rf = rf[I]
 	wf = wf[I]
+	wmag = W.get(bname + 'mag')[I]
+	wferr = 1./np.sqrt(np.maximum(1e-16, W.get(bname + '_ivar')[I]))
 
 	print('Got', len(wf), 'non-zero', bname, 'measurements')
 
@@ -252,36 +316,30 @@ for bname in ['w1','w2']:
 	# plt.xlabel(bname + ' (mag)')
 	# ps.savefig()
 
-	loghist(np.log10(np.maximum(1e-3, wf)),
-			np.log10(np.clip(1./np.sqrt(np.maximum(1e-16, W.get(bname + '_ivar')[I])), 1., 1e3)), 100)
+	loghist(np.log10(np.maximum(1e-3, wf)), np.log10(np.clip(wferr, 1., 1e3)), 100)
 	plt.xlabel('log ' + bname + ' flux')
 	plt.ylabel('log ' + bname + ' flux err')
 	ps.savefig()
 
-	plothist(W.ra[I], W.dec[I], 200,
-			 range=((r0,r1),(d0,d1)))
+	plothist(W.ra[I], W.dec[I], 200, range=((r0,r1),(d0,d1)))
 	setRadecAxes(r0,r1,d0,d1)
 	plt.title(bname + ' measurements')
 	ps.savefig()
 
-	print('Unique objc_types:', np.unique(S.objc_type))
-
+	#print('Unique objc_types:', np.unique(S.objc_type))
 	S.ispsf = (S.objc_type == 6)
-
+	S.isgal = (S.objc_type == 3)
 
 	if sum(S.ispsf[I]) and sum(np.logical_not(S.ispsf[I])):
 		plt.clf()
-		n1,b,p1 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[S.ispsf[I]]))-9), 100, log=True,
-						   histtype='step', color='r')
-		n2,b,p2 = plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf[np.logical_not(S.ispsf[I])]))-9), 100, log=True,
-						  histtype='step', color='b')
+		n1,b,p1 = plt.hist(wmag[S.ispsf[I]], 100, log=True, histtype='step', color='r')
+		n2,b,p2 = plt.hist(wmag[np.logical_not(S.ispsf[I])], 100, log=True,
+						   histtype='step', color='b')
 		plt.ylim(1, max(max(n1),max(n2))*1.2)
 		plt.xlabel(bname + ' (mag)')
 		plt.legend((p1,p2), ('Point srcs', 'Extended'), loc='upper left')
 	ps.savefig()
 
-	#loghist(rf, wf, 200)
-	#loghist(np.log10(np.maximum(1e-3, rf)), np.log10(np.maximum(1e-3, wf)), 200)
 	loghist(np.log10(np.maximum(1e-3, rf)), np.log10(np.maximum(1e-3, wf)), 200)
 	plt.xlabel('log r flux (nmgy)')
 	plt.ylabel('log ' + bname + ' flux (nmgy)')
@@ -323,44 +381,97 @@ for bname in ['w1','w2']:
 
 
 plt.clf()
-n1,b,p1 = plt.hist(W.w1mag, 100, log=True,
-				   histtype='step', color='b', range=(5,29))
-n2,b,p2 = plt.hist(W.w2mag, 100, log=True,
-				   histtype='step', color='r', range=(5,29))
-
-n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True,
-				   histtype='step', color='c', range=(5,29))
-n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True,
-				   histtype='step', color='m', range=(5,29))
-
+n1,b,p1 = plt.hist(W.w1mag, 100, log=True, histtype='step', color='b', range=(5,29))
+n2,b,p2 = plt.hist(W.w2mag, 100, log=True, histtype='step', color='r', range=(5,29))
+n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True, histtype='step', color='c', range=(5,29))
+n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True, histtype='step', color='m', range=(5,29))
 plt.xlabel('WISE mag')
 plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
-#plt.ylim(0.1, max(n1.max(), n2.max())*1.2)
 plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
 plt.ylabel('Number of sources')
 plt.title('W3 area: WISE forced photometry mag distribution')
 ps.savefig()
 
+
+# Tractor -- WISE catalog comparison
+
 R = 4./3600.
+# NOTE, this matches all W entries (ie, same RA,Dec as SDSS), not just
+# the ones with photometry.
 I,J,d = match_radec(W.ra, W.dec, WC.ra, WC.dec, R, nearest=True)
 print(len(I), 'matches to WISE catalog')
 plt.clf()
 lo,hi = 8,20
-loghist(WC.w1mpro[J], W.w1mag[I], 200, range=((lo,hi),(lo,hi)))
-plt.xlabel('WISE catalog W1 mag (w1mpro)')
-plt.ylabel('Tractor W1 mag')
-plt.plot([lo,hi],[lo,hi],'b--')
-plt.axis([hi,lo,hi,lo])
+
+K = S.ispsf[I]
+L = S.isgal[I]
+for wb in ['w1','w2']:
+	for wcol in ['mpro', 'mag']:
+		for txt,cI,cJ in [('all',I,J), ('psf',I[K],J[K]), ('gal',I[L],J[L])]:
+			Wb = wb.upper()
+			loghist(WC.get(wb + wcol)[cJ], W.get(wb + 'mag')[cI], 200, range=((lo,hi),(lo,hi)))
+			plt.xlabel('WISE catalog %s mag (%s%s)' % (Wb, wb, wcol))
+			plt.ylabel('Tractor %s mag' % Wb)
+			plt.plot([lo,hi],[lo,hi],'b--')
+			plt.axis([hi,lo,hi,lo])
+			plt.title('Tractor vs WISE catalog: ' + txt)
+			ps.savefig()
+
+
+# Tractor/SDSS vs WISE/SDSS comparisons
+
+I2 = np.flatnonzero(np.logical_or(W.w1 > 0, W.w2 > 0))
+
+T = S[I2]
+T.add_columns_from(W[I2])
+
+C = WC[J]
+C.add_columns_from(S[I])
+
+print(len(T), 'Tractor-SDSS matches')
+print(len(C), 'WISE-SDSS matches')
+
+I = np.flatnonzero((T.gpsf != T.ipsf) * (T.w1mag < 25))
+
+plothist(T.gpsf[I] - T.ipsf[I], T.imod[I] - T.w1mag[I], 200, range=((-1,5),(0,7)))
+plt.xlabel('g - i (psf)')
+plt.ylabel('i - W1 (model)')
+plt.title('Tractor photometry')
 ps.savefig()
 
-plt.clf()
-loghist(WC.w2mpro[J], W.w2mag[I], 200, range=((lo,hi),(lo,hi)))
-plt.xlabel('WISE catalog W2 mag (w2mpro)')
-plt.ylabel('Tractor W2 mag')
-plt.plot([lo,hi],[lo,hi],'b--')
-plt.axis([hi,lo,hi,lo])
-plt.title('WISE forced photometry: W3 test region')
+plothist(C.gpsf - C.ipsf, C.ipsf - C.w1mag, 200, range=((-1,5),(0,7)))
+plt.xlabel('g - i (psf)')
+plt.ylabel('i - W1 (psf)')
+plt.title('WISE catalog photometry')
 ps.savefig()
+
+
+IT = np.logical_and(T.w1mag < 25, T.w2mag < 25)
+
+for l1,x1,l2,x2 in [('g (psf)', 'gpsf')*2, ('r (psf)', 'rpsf')*2,
+					('W1', 'w1mag', 'W1', 'w1mpro'),
+					('W2', 'w2mag', 'W2', 'w2mpro')]:
+
+	if l1.startswith('W'):
+		rng = ((10,20),(-2,2))
+	else:
+		rng = ((15,25),(-2,2))
+
+	plothist(T.get(x1)[IT], (T.w1mag - T.w2mag)[IT], 200,
+			 range=rng)
+	plt.xlabel(l1)
+	plt.ylabel('W1 - W2')
+	plt.title('Tractor photometry')
+	ps.savefig()
+	
+	plothist(C.get(x2), C.w1mpro - C.w2mpro, 200, range=rng)
+	plt.xlabel(l2)
+	plt.ylabel('W1 - W2')
+	plt.title('WISE catalog photometry')
+	ps.savefig()
+
+
+
 
 I = np.flatnonzero((W.w1 > 0) * (W.w2 > 0))
 print('Found', len(I), 'with w1 and w2 pos')
@@ -440,6 +551,10 @@ print(len(box2), 'in box2')
 		 
 sb1 = set(box1)
 sb2 = set(box2)
+
+#print(len(np.flatnonzero(inbox1 * inbox2)), 'in both')
+#print(len(np.flatnonzero(np.logical_or(inbox1, inbox2))), 'in either')
+
 
 either = sb1.union(sb2)
 print(len(either), 'in the union')

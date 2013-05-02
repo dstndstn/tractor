@@ -803,14 +803,12 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 		margin = (1016. * 2.75 * np.sqrt(2.) / 3600.) / 2.
 		cosdec = np.cos(np.deg2rad((declo + dechi) / 2.))
 		print 'Margin:', margin, 'degrees'
-		#print 'cosdec:', cosdec
 
 		r0 = ralo - margin/cosdec
 		r1 = rahi + margin/cosdec
 		d0 = declo - margin
 		d1 = dechi + margin
 
-		#I = np.flatnonzero((T.ra > ralo) * (T.ra < rahi) * (T.dec > declo) * (T.dec < dechi))
 		I = np.flatnonzero((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
 		print len(I), 'overlap RA,Dec box'
 		T.cut(I)
@@ -850,11 +848,11 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 	outlines = corners
 	corners = np.vstack(corners)
 
-	r0,r1 = corners[:,0].min(), corners[:,0].max()
-	d0,d1 = corners[:,1].min(), corners[:,1].max()
-	print 'RA,Dec extent', r0,r1, d0,d1
-
 	if ps:
+		r0,r1 = corners[:,0].min(), corners[:,0].max()
+		d0,d1 = corners[:,1].min(), corners[:,1].max()
+		print 'RA,Dec extent', r0,r1, d0,d1
+
 		plot = Plotstuff(outformat='png', ra=(r0+r1)/2., dec=(d0+d1)/2., width=d1-d0, size=(800,800))
 		out = plot.outline
 		plot.color = 'white'
@@ -884,11 +882,22 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 	xyrois = []
 	subwcses = []
 	tims = []
+
+	# Margin 1: grab WISE images that extend outside the RA,Dec box.
+
+	margin1 = 10./3600.
+
+	cosdec = np.cos(np.deg2rad((d0+d1)/2.))
+	
+	rm0 = r0 - margin1/cosdec
+	rm1 = r1 + margin1/cosdec
+	dm0 = d0 - margin1
+	dm1 = d1 + margin1
 	
 	# Find the pixel ROI in each image containing the RA,Dec ROI.
 	for i,(Ti,wcs) in enumerate(zip(T,wcses)):
 		xy = []
-		for r,d in [(r0,d0),(r0,d1),(r1,d1),(r1,d0)]:
+		for r,d in [(rm0,dm0),(rm0,dm1),(rm1,dm1),(rm1,dm0)]:
 			x,y = wcs.radec2pixelxy(r,d)
 			xy.append((x,y))
 		xy = np.array(xy)
@@ -977,25 +986,25 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 	# 	plot.write(pfn)
 	# 	print 'Wrote', pfn
 
-	return dict(opt101=opt, tims=tims)
+	return dict(opt101=opt, tims=tims, margin1=margin1)
 
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 			 tims=None, band=None, **kwa):
 	r0,r1,d0,d1 = rd
 
-	# Read sources in range.
-
-	margin = 15. / 3600.
-	cosdec = np.cos(np.deg2rad((d0 + d1) / 2.))
-	mr = margin / cosdec
-	md = margin
+	# Read SDSS sources in range.
 
 	S = fits_table(opt.sources, columns=['ra','dec'])
 	print 'Read', len(S), 'sources from', opt.sources
 
+	margin2 = margin1 * 2.
+	cosdec = np.cos(np.deg2rad((d0+d1)/2.))
+	mr = margin2 / cosdec
+	md = margin2
 	I = np.flatnonzero((S.ra  > (r0-mr)) * (S.ra  < (r1+mr)) *
 					   (S.dec > (d0-md)) * (S.dec < (d1+md)))
 	print 'Reading', len(I), 'in range'
+
 	S = fits_table(opt.sources, rows=I,
 				   column_map=dict(r_dev='theta_dev',
 								   r_exp='theta_exp',
@@ -1029,7 +1038,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 	p0 = cat.getParams()
 	cat.setParams(np.maximum(minbright, p0))
 
-	return dict(opt102=opt, tractor=tractor, S=S)
+	return dict(opt102=opt, tractor=tractor, S=S, margin2=margin2)
 
 
 psfcache = {}
