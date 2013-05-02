@@ -989,7 +989,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 	return dict(opt101=opt, tims=tims, margin1=margin1)
 
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
-			 tims=None, band=None, **kwa):
+			 tims=None, band=None, margin1=None, **kwa):
 	r0,r1,d0,d1 = rd
 
 	# Read SDSS sources in range.
