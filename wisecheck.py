@@ -77,17 +77,14 @@ def merge_results(S, basefn, outfn):
 				print('WARNING: failed to read', fn)
 				continue
 			
-			if not hasattr(T, 'inblock'):
-				print('WARNING: no "inblock" in', fn)
-				continue
-			# # inside/outside the block that was being fit?
-			# ri,di = get_ridi(fn)
-			# rlo,rhi = rr[ri], rr[ri+1]
-			# dlo,dhi = dd[di], dd[di+1]
-			# T.inblock = (T.ra >= rlo) * (T.ra < rhi) * (T.dec >= dlo) * (T.dec < dhi)
+			assert(hasattr(T, 'inblock'))
+
+			if hasattr(T, bname + '_var'):
+				T.delete_column(bname + '_var')
+				T.set(bname + '_ivar', np.zeros(len(T))-1.)
 		
 			TT.append(T)
-		#if len(TT) == 0:
+
 		T = merge_tables(TT)
 		print('Read total of', len(T))
 	
@@ -95,13 +92,6 @@ def merge_results(S, basefn, outfn):
 		print('Cut to', len(T), 'in block')
 	
 		W.append(T)
-	
-		## I messed up the indexing... spherematch to the rescue.
-		# R = 0.001 / 3600.
-		# I,J,d = match_radec(T.ra, T.dec, S.ra, S.dec, R)
-		# print(len(I), 'matches of', len(T))
-		# T.row[:] = -1	
-		# T.row[I] = J
 	
 	W1,W2 = W
 	
@@ -124,7 +114,7 @@ def merge_results(S, basefn, outfn):
 			X[W.row] = Y
 			SW.set(b+'_'+k, X)
 
-		for k in [b, b+'_var']:
+		for k in [b, b+'_ivar']:
 			X = np.zeros(NS)
 			X[W.row] = W.get(k)
 			SW.set(k, X)
@@ -132,6 +122,30 @@ def merge_results(S, basefn, outfn):
 	SW.writeto(outfn)
 	return SW
 
+
+def cut_wise_cat():
+	TT = []
+	for s in [45,46]:
+		
+		fn = '/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part%02i-radec.fits' % s
+		print('Reading', fn)
+		T = fits_table(fn)
+		I = np.flatnonzero((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
+
+		fn = '/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part%02i.fits' % s
+		print('Reading', fn)
+		T = fits_table(fn, rows=I, columns=['ra','dec','cntr',
+											'w1mpro', 'w1mag', 'w2mpro', 'w2mag'])
+
+		# fn = '/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part%02i.fits' % s
+		# print('Reading', fn)
+		# T = fits_table(fn, columns=['ra','dec','cntr',
+		# 							'w1mpro', 'w1mag', 'w2mpro', 'w2mag'])
+		# T.cut((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
+		print('Cut to', len(T))
+		TT.append(T)
+	W = merge_tables(TT)
+	return W
 
 ps = PlotSequence('wisecheck')
 
@@ -166,7 +180,29 @@ else:
 	print('Reading existing', fn)
 	W = fits_table(fn)
 
+W.w1mag = -2.5*(np.log10(np.maximum(1e-3, W.w1))-9)
+W.w2mag = -2.5*(np.log10(np.maximum(1e-3, W.w2))-9)
 
+print('w1mag', W.w1mag.min(), W.w1mag.max())
+print('w2mag', W.w2mag.min(), W.w2mag.max())
+
+S.gpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,1]))-9)
+S.rpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9)
+S.ipsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,3]))-9)
+
+print('g', S.gpsf.min(), S.gpsf.max())
+print('r', S.rpsf.min(), S.rpsf.max())
+print('i', S.ipsf.min(), S.ipsf.max())
+
+
+wfn = 'w3-wise.fits'
+if not os.path.exists(wfn):
+	WC = cut_wise_cat()
+	WC.writeto(wfn)
+else:
+	print('Reading', wfn)
+	WC = fits_table(wfn)
+	
 
 import wise
 tpsf = wise.get_psf_model(1, pixpsf=True)
@@ -211,15 +247,15 @@ for bname in ['w1','w2']:
 
 	print('Got', len(wf), 'non-zero', bname, 'measurements')
 
-	plt.clf()
-	plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf))-9), 100, log=True)
-	plt.xlabel(bname + ' (mag)')
-	ps.savefig()
+	# plt.clf()
+	# plt.hist(-2.5*(np.log10(np.maximum(1e-3, wf))-9), 100, log=True)
+	# plt.xlabel(bname + ' (mag)')
+	# ps.savefig()
 
-	plothist(np.log10(np.maximum(1e-3, wf)),
-			 np.log10(W.get(bname + '_var')[I]), 100)
+	loghist(np.log10(np.maximum(1e-3, wf)),
+			np.log10(np.clip(1./np.sqrt(np.maximum(1e-16, W.get(bname + '_ivar')[I])), 1., 1e3)), 100)
 	plt.xlabel('log ' + bname + ' flux')
-	plt.ylabel('log ' + bname + '_var')
+	plt.ylabel('log ' + bname + ' flux err')
 	ps.savefig()
 
 	plothist(W.ra[I], W.dec[I], 200,
@@ -245,6 +281,7 @@ for bname in ['w1','w2']:
 	ps.savefig()
 
 	#loghist(rf, wf, 200)
+	#loghist(np.log10(np.maximum(1e-3, rf)), np.log10(np.maximum(1e-3, wf)), 200)
 	loghist(np.log10(np.maximum(1e-3, rf)), np.log10(np.maximum(1e-3, wf)), 200)
 	plt.xlabel('log r flux (nmgy)')
 	plt.ylabel('log ' + bname + ' flux (nmgy)')
@@ -262,26 +299,68 @@ for bname in ['w1','w2']:
 	plt.ylim(hi,lo)
 	ps.savefig()
 	
-	plothist(wmag-rmag, rmag, 200)
+	# plothist(wmag-rmag, rmag, 200)
+	# plt.ylabel('r (mag)')
+	# plt.xlabel('%s - r (mag)' % bname)
+	# ylo,yhi = plt.ylim()
+	# plt.ylim(yhi,ylo)
+	# ps.savefig()
+	
+	plothist(wmag-rmag, rmag, 200, range=((-15,5),(15,25)))
 	plt.ylabel('r (mag)')
 	plt.xlabel('%s - r (mag)' % bname)
 	ylo,yhi = plt.ylim()
 	plt.ylim(yhi,ylo)
 	ps.savefig()
 	
-	plothist(wmag-rmag, rmag, 200, range=((-15,10),(15,25)))
+	loghist(wmag-rmag, rmag, 200, range=((-15,5),(15,25)))
 	plt.ylabel('r (mag)')
 	plt.xlabel('%s - r (mag)' % bname)
 	ylo,yhi = plt.ylim()
 	plt.ylim(yhi,ylo)
 	ps.savefig()
-	
-	loghist(wmag-rmag, rmag, 200, range=((-15,10),(15,25)))
-	plt.ylabel('r (mag)')
-	plt.xlabel('%s - r (mag)' % bname)
-	ylo,yhi = plt.ylim()
-	plt.ylim(yhi,ylo)
-	ps.savefig()
+
+
+
+plt.clf()
+n1,b,p1 = plt.hist(W.w1mag, 100, log=True,
+				   histtype='step', color='b', range=(5,29))
+n2,b,p2 = plt.hist(W.w2mag, 100, log=True,
+				   histtype='step', color='r', range=(5,29))
+
+n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True,
+				   histtype='step', color='c', range=(5,29))
+n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True,
+				   histtype='step', color='m', range=(5,29))
+
+plt.xlabel('WISE mag')
+plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+#plt.ylim(0.1, max(n1.max(), n2.max())*1.2)
+plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+plt.ylabel('Number of sources')
+plt.title('W3 area: WISE forced photometry mag distribution')
+ps.savefig()
+
+R = 4./3600.
+I,J,d = match_radec(W.ra, W.dec, WC.ra, WC.dec, R, nearest=True)
+print(len(I), 'matches to WISE catalog')
+plt.clf()
+lo,hi = 8,20
+loghist(WC.w1mpro[J], W.w1mag[I], 200, range=((lo,hi),(lo,hi)))
+plt.xlabel('WISE catalog W1 mag (w1mpro)')
+plt.ylabel('Tractor W1 mag')
+plt.plot([lo,hi],[lo,hi],'b--')
+plt.axis([hi,lo,hi,lo])
+ps.savefig()
+
+plt.clf()
+loghist(WC.w2mpro[J], W.w2mag[I], 200, range=((lo,hi),(lo,hi)))
+plt.xlabel('WISE catalog W2 mag (w2mpro)')
+plt.ylabel('Tractor W2 mag')
+plt.plot([lo,hi],[lo,hi],'b--')
+plt.axis([hi,lo,hi,lo])
+plt.title('WISE forced photometry: W3 test region')
+ps.savefig()
 
 I = np.flatnonzero((W.w1 > 0) * (W.w2 > 0))
 print('Found', len(I), 'with w1 and w2 pos')
@@ -307,27 +386,71 @@ print(len(K), 'also OBJTYPE=6')
 loghist(w1mag - w2mag, rmag, 200, range=((-15,15),(15,25)))
 plt.ylabel('r (mag)')
 plt.xlabel('W1 - W2 (mag)')
+#ax = plt.axis()
+#plt.axis(ax)
+plt.axvline(0.8, color=(0,0.5,1))
 ylo,yhi = plt.ylim()
 plt.ylim(yhi,ylo)
 ps.savefig()
 
-ok = np.flatnonzero((rmag < 22) * (w1mag < 20) * (w2mag < 20))
-loghist((w1mag - w2mag)[ok], rmag[ok], 200, range=((-15,15),(15,25)))
+ok = np.flatnonzero((S.rpsf > 17) * (S.rpsf < 22) *
+					(W.w1mag < 20) * (W.w2mag < 20))
+print(len(ok), 'are in basic cut')
+
+dw = (W.w1mag - W.w2mag)[ok]
+print('dw range', dw.min(), dw.max())
+print('r range', S.rpsf[ok].min(), S.rpsf[ok].max())
+
+
+loghist((W.w1mag - W.w2mag)[ok], S.rpsf[ok], 200, range=((-15,15),(15,25)))
 plt.ylabel('r (mag)')
 plt.xlabel('W1 - W2 (mag)')
+plt.axvline(0.8, color=(0,0.5,1))
 ylo,yhi = plt.ylim()
 plt.ylim(yhi,ylo)
-plt.title('r < 22, w1,w2 < 20')
+plt.title('17 < r < 22, w1,w2 < 20')
 ps.savefig()
 
-ok = np.flatnonzero((rmag < 22) * (w1mag < 20) * (w2mag < 20) * (S.objc_type[I] == 6))
-loghist((w1mag - w2mag)[ok], rmag[ok], 200, range=((-15,15),(15,25)))
+ok = np.flatnonzero((S.rpsf < 22) * (S.rpsf > 17) *
+					(W.w1mag < 20) * (W.w2mag < 20) *
+					(S.objc_type == 6))
+loghist((W.w1mag - W.w2mag)[ok], S.rpsf[ok], 200, range=((-15,15),(15,25)))
 plt.ylabel('r (mag)')
 plt.xlabel('W1 - W2 (mag)')
 ylo,yhi = plt.ylim()
+plt.axvline(0.8, color=(0,0.5,1))
 plt.ylim(yhi,ylo)
 plt.title('r < 22, w1,w2 < 20, OBJTYPE=6')
 ps.savefig()
+
+inbox1 = ((S.rpsf < 22) * (S.rpsf > 17) *
+		  (W.w1mag < 20) * (W.w2mag < 20) *
+		  (S.objc_type == 6) *
+		  (W.w1mag - W.w2mag > 0.8))
+box1 = np.flatnonzero(inbox1)
+print(len(box1), 'in box1')
+
+inbox2 = ((S.rpsf < 22) * (S.rpsf > 17) *
+		  (W.w1mag < 20) *
+		  (S.objc_type == 6) *
+		  ((S.rpsf - W.w1mag) - 2. > 1.5 * (S.gpsf - S.ipsf)) *
+		  ((S.gpsf - S.ipsf) < 1.))
+box2 = np.flatnonzero(inbox2)
+print(len(box2), 'in box2')
+		 
+sb1 = set(box1)
+sb2 = set(box2)
+
+either = sb1.union(sb2)
+print(len(either), 'in the union')
+
+both = sb1.intersection(sb2)
+print(len(both), 'in the intersection')
+
+
+
+ 
+
 
 
 
