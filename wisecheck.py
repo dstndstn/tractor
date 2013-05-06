@@ -349,10 +349,150 @@ def imgstats():
 		ps.savefig()
 	
 
+def fluxtomag(nmgy):
+	return -2.5 * (np.log10(np.maximum(1e-3, nmgy)) - 9.)
+
 
 #psfplots()
+#print('<html>')
 
-print('<html>')
+
+# duck-type command-line options
+class myopts(object):
+	pass
+
+def qsocuts(SW):
+	in1 = ( ((SW.gpsf - SW.ipsf) < 1.5) *
+			(SW.optpsf > 17.) *
+			(SW.optpsf < 22.) *
+			((SW.optmod - SW.wise) > ((SW.gpsf - SW.ipsf) + 3)) *
+			np.logical_or(SW.ispsf, (SW.optpsf - SW.optmod) < 0.1) )
+	I = np.flatnonzero(in1)
+	print('Selected', len(I))
+
+	in2 = in1 * (SW.w1mag < 25.) * (SW.w2mag < 25.)
+	I2 = np.flatnonzero(in2)
+	print('With w1,w2 < 25:', len(I2))
+
+	SW.w1rchi2 = SW.w1_prochi2 / SW.w1_pronpix
+
+	in3 = in2 * (SW.w1rchi2 < 10.)
+	I3 = np.flatnonzero(in3)
+	print('And chi2/pix < 10:', len(I3))
+
+	I = I2
+
+
+	worstI = I[np.argsort(-SW.w1rchi2[I])]
+	print('Worst:')
+
+	mp = multiproc(1)
+
+	for wi,i in enumerate(worstI):
+		print('  %8.3f, %8.3f,  chi2/npix %g' % (SW.ra[i], SW.dec[i], SW.w1rchi2[i]))
+
+		ra, dec = SW.ra[i], SW.dec[i]
+		ri = int((ra  - r0) / (rr[1]-rr[0]))
+		di = int((dec - d0) / (dd[1]-dd[0]))
+		print('  ri %i, di %i' % (ri,di))
+		
+		if SW.w1rchi2[i] > 25:
+			continue
+		opt = myopts()
+		basefn = 'eboss-w3-worst%04i-r%02i-d%02i' % (wi, ri,di)
+		opt.picklepat = '%s-stage%%0i.pickle' % basefn
+		opt.ps = basefn
+		opt.minflux = None
+		opt.bandnum = 1
+		opt.osources = None
+		opt.sources = 'objs-eboss-w3-dr9.fits'
+		opt.ptsrc = False
+		opt.pixpsf = False
+		# opt.minsb = 0.05
+		opt.minsb = 0.005
+		opt.write = True
+		opt.force = [205]
+		opt.ri = ri
+		opt.di = di
+
+		import wise3
+		import tractor
+		pcat = []
+		pcat.append(tractor.PointSource(RaDecPos(ra, dec), None))
+
+		R = wise3.runtostage(205, opt, mp, rr[ri],rr[ri+1],dd[di],dd[di+1],
+							 ttsuf='chi2/npix %g' % SW.w1rchi2[i],
+							 pcat=pcat, addSky=True)
+
+
+		### Try to use the stored solved values -- actually doesn't make things
+		### much faster.
+		# R = wise3.runtostage(103, opt, mp, rr[ri],rr[ri+1],dd[di],dd[di+1],
+		# 					 ttsuf='chi2/npix %g' % SW.w1rchi2[i],
+		# 					 pcat=pcat)
+		# t = R['tractor']
+		# T = fits_table('ebossw3-v4-r%02i-d%02i-w1.fits' % (ri, di))
+		# assert(len(t.catalog) == len(T))
+		# for i,src in enumerate(t.catalog):
+		# 	print('Source', src)
+		# 	assert(src.getPosition().ra  == T.ra [i])
+		# 	assert(src.getPosition().dec == T.dec[i])
+		# t.catalog.freezeParamsRecursive('*')
+		# t.catalog.thawPathsTo('w1')
+		# assert(len(t.catalog.getParams()) == len(T))
+		# t.catalog.setParams(T.w1)
+		# R2 = wise3.stage204(opt=opt, mp=mp, ri=opt.ri, di=opt.di, **R)
+		# R2['ims1'] = R2['ims0']
+		# ps = PlotSequence(basefn)
+		# R3 = wise3.stage205(opt=opt, mp=mp, ri=opt.ri, di=opt.di, ps=ps, **R2)
+
+
+	
+	plt.clf()
+	plt.hist(SW.w1mag, 100, range=(10,30), histtype='step', color='b', log=True)
+	plt.hist(SW.w1mag[I], 100, range=(10,30), histtype='step', color='r', log=True)
+	plt.xlabel('W1 mag')
+	ylo,yhi = plt.ylim()
+	plt.ylim(0.3, yhi)
+	ps.savefig()
+
+	plt.clf()
+	plt.hist(SW.w2mag, 100, range=(10,30), histtype='step', color='b', log=True)
+	plt.hist(SW.w2mag[I], 100, range=(10,30), histtype='step', color='r', log=True)
+	plt.xlabel('W2 mag')
+	ylo,yhi = plt.ylim()
+	plt.ylim(0.3, yhi)
+	ps.savefig()
+	
+	plt.clf()
+	plt.hist(np.log10(SW.w1_prochi2 / SW.w1_pronpix), 100, range=(0,3),
+			 log=True, histtype='step', color='b')
+	plt.hist(np.log10(SW.w1_prochi2[I] / SW.w1_pronpix[I]), 100, range=(0,3),
+			 log=True, histtype='step', color='r')
+	plt.xlabel('log chi2/npix')
+	ylo,yhi = plt.ylim()
+	plt.ylim(0.3, yhi)
+	ps.savefig()
+
+
+
+
+# T = tabledata()
+# T.even = (np.arange(10) % 2 == 0)
+# T.about()
+# T.writeto('even.fits')
+# T2 = fits_table('even.fits')
+# T2.about()
+# print(T2.even)
+# print(T2.even.astype(np.uint8))
+# assert(np.all(T2.even == T.even))
+
+matchedfn = 'sw.fits'
+if os.path.exists(matchedfn):
+	SW = fits_table(matchedfn)
+	qsocuts(SW)
+	sys.exit(0)
+
 
 basefn = 'ebossw3-v4'
 fn = 'eboss-w3-v4-wise-dr9.fits'
@@ -367,16 +507,9 @@ else:
 	W = fits_table(fn)
 
 
-
 #imgstats()
 #print('</html>')
 #sys.exit(0)
-
-
-
-
-
-
 
 # from x import *
 # plt.clf()
@@ -392,20 +525,18 @@ else:
 # ps.savefig()
 # sys.exit(0)
 
-
-W.w1mag = -2.5*(np.log10(np.maximum(1e-3, W.w1))-9)
-W.w2mag = -2.5*(np.log10(np.maximum(1e-3, W.w2))-9)
-
+W.w1mag = fluxtomag(W.w1)
+W.w2mag = fluxtomag(W.w2)
 print('w1mag', W.w1mag.min(), W.w1mag.max())
 print('w2mag', W.w2mag.min(), W.w2mag.max())
 
-S.gpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,1]))-9)
-S.rpsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,2]))-9)
-S.ipsf = -2.5*(np.log10(np.maximum(1e-3, S.psfflux[:,3]))-9)
+S.gpsf = fluxtomag(S.psfflux[:,1])
+S.rpsf = fluxtomag(S.psfflux[:,2])
+S.ipsf = fluxtomag(S.psfflux[:,3])
 
-S.gmod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,1]))-9)
-S.rmod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,2]))-9)
-S.imod = -2.5*(np.log10(np.maximum(1e-3, S.modelflux[:,3]))-9)
+S.gmod = fluxtomag(S.modelflux[:,1])
+S.rmod = fluxtomag(S.modelflux[:,2])
+S.imod = fluxtomag(S.modelflux[:,3])
 
 S.ispsf = (S.objc_type == 6)
 S.isgal = (S.objc_type == 3)
@@ -566,8 +697,50 @@ def tractor_vs_cat():
 
  
 
-tractor_vs_cat()
-#sys.exit(0)
+#tractor_vs_cat()
+
+I = np.flatnonzero((W.w1 + W.w2) > 0.)
+
+SW = S[I]
+SW.add_columns_from(W[I])
+print(len(SW), 'rows with WISE measurements')
+
+SW.optpsf = fluxtomag((SW.psfflux[:,1] * 0.8 +
+					   SW.psfflux[:,2] * 0.6 +
+					   SW.psfflux[:,3] * 1.0) / 2.4)
+SW.optmod = fluxtomag((SW.modelflux[:,1] * 0.8 +
+					   SW.modelflux[:,2] * 0.6 +
+					   SW.modelflux[:,3] * 1.0) / 2.4)
+SW.wise = fluxtomag((SW.w1 * 1.0 +
+					 SW.w2 * 0.5) / 1.5)
+
+print('optpsf:', SW.optpsf.min(), SW.optpsf.max())
+print('optmod:', SW.optmod.min(), SW.optmod.max())
+print('wise:', SW.wise.min(), SW.wise.max())
+
+# I = np.flatnonzero( ((SW.gpsf - SW.ipsf) < 1.5) )
+# print(len(I), 'pass g-i cut')
+# I = np.flatnonzero( ((SW.gpsf - SW.ipsf) < 1.5) *
+# 					(SW.optpsf > 17.) *
+# 					(SW.optpsf < 22.))
+# print(len(I), 'pass g-i and 17-22 cut')
+# I = np.flatnonzero( ((SW.gpsf - SW.ipsf) < 1.5) *
+# 					(SW.optpsf > 17.) *
+# 					(SW.optpsf < 22.) *
+# 					((SW.optmod - SW.wise) > ((SW.gpsf - SW.ipsf) + 3)))
+# print(len(I), 'pass g-i and 17-22 and opt-wise color cut')
+# I = np.flatnonzero( ((SW.gpsf - SW.ipsf) < 1.5) *
+# 					(SW.optpsf > 17.) *
+# 					(SW.optpsf < 22.) *
+# 					((SW.optmod - SW.wise) > ((SW.gpsf - SW.ipsf) + 3)) *
+# 					np.logical_or(SW.ispsf, (SW.optpsf - SW.optmod) < 0.1) )
+# print(len(I), 'pass g-i and 17-22 and opt-wise color and PSF cut')
+
+SW.writeto(matchedfn)
+
+qsocuts(SW)
+
+sys.exit(0)
 
 
 

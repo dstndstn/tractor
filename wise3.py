@@ -1059,7 +1059,8 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
 	return dict(opt103=opt)
 
 def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-			 S=None, ri=None, di=None, **kwa):
+			 S=None, ri=None, di=None,
+			 **kwa):
 	tims = tractor.images
 
 	minFlux = opt.minflux
@@ -1105,15 +1106,50 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 		imstats.scan_id = T.scan_id
 		imstats.frame_num = T.frame_num
 
+	return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1)
+
+
+
+def stage105(R=None, imstats=None, opt=None, **kwa):
+
+	fn = '%s-w%i-forced.fits' % (opt.name, opt.bandnum)
+	R.writeto(fn)
+	print 'Wrote', fn
+
+	fn = '%s-w%i-imstats.fits' % (opt.name, opt.bandnum)
+	imstats.writeto(fn)
+	print 'Wrote', fn
+
+
+
+def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+			 S=None, ri=None, di=None, **kwa):
+	nil,nil,ims0 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
+													  sky=True, minFlux=minFlux,
+													  justims0=True)
+	return dict(ims0=ims0)
+
+	
+
+def stage205(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+			 S=None, ri=None, di=None,
+			 ims0=None, ims1=None,
+			 ttsuf='', pcat=[], addSky=False,
+			 **kwa):
+
 	if ps is not None:
-		pcat = []
 		ptims = tractor.images
 
 		imas = [dict(interpolation='nearest', origin='lower',
 					 vmin=tim.zr[0], vmax=tim.zr[1]) for tim in ptims]
 		imchis = [dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)]*len(ptims)
 
-		tt = 'Block ' + str(ri) + ', ' + str(di)
+		tt = 'Block ' + str(ri) + ', ' + str(di) + ttsuf
+
+		if addSky:
+			# in engine.py, we subtracted the sky when computing per-image
+			for tim,(img,mod,ie,chi,roi) in zip(ptims, ims1):
+				tim.getSky().addTo(mod)
 	
 		_plot_grid([img for (img, mod, ie, chi, roi) in ims0], imas)
 		plt.suptitle('Data: ' + tt)
@@ -1128,58 +1164,13 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 			plt.suptitle('Forced-phot chi: ' + tt)
 			ps.savefig()
 
-	return dict(R=R, imstats=imstats)
 
+	
 
-def stage105(R=None, imstats=None, opt=None, **kwa):
-
-	fn = '%s-w%i-forced.fits' % (opt.name, opt.bandnum)
-	R.writeto(fn)
-	print 'Wrote', fn
-
-	fn = '%s-w%i-imstats.fits' % (opt.name, opt.bandnum)
-	imstats.writeto(fn)
-	print 'Wrote', fn
-
-
-def OLDstage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
-	tims = tractor.images
-
-	minFlux = opt.minflux
-	if minFlux is not None:
-		minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
-		print 'minFlux:', minFlux, 'nmgy'
-
-	t0 = Time()
-	ims0,ims1 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
-												   sky=True, minFlux=minFlux)
-	print 'Forced phot took', Time()-t0
-
-	#pcat = tractor.catalog
 
 
 
 def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
-
-	#  ra  = np.array([src.getPosition().ra  for src in tractor.catalog])
-	#  dec = np.array([src.getPosition().dec for src in tractor.catalog])
-	#  
-	#  Wrad = opt.wrad / 3600.
-	#  groups,singles = cluster_radec(ra, dec, Wrad, singles=True)
-	#  #print 'Source clusters:', groups
-	#  #print 'Singletons:', singles
-	#  print 'Source clusters:', len(groups)
-	#  print 'Singletons:', len(singles)
-	#  
-	#  print 'Group size histogram:'
-	#  ng = Counter()
-	#  for g in groups:
-	#  	ng[len(g)] += 1
-	#  kk = ng.keys()
-	#  kk.sort()
-	#  for k in kk:
-	#  	print '  ', k, 'sources:', ng[k], 'groups'
-
 	tims = tractor.images
 
 	tractor.freezeParam('images')
@@ -1488,17 +1479,6 @@ def main():
 	else:
 		opt.minflux = float(opt.minflux)
 
-	class MyCaller(CallGlobal):
-		def getkwargs(self, stage, **kwargs):
-			kwa = self.kwargs.copy()
-			kwa.update(kwargs)
-			kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
-			return kwa
-
-	prereqs = { 100: None,
-				204: 103,
-				304: 103,
-				}
 
 	if False:
 		# W3 area
@@ -1540,13 +1520,33 @@ def main():
 	rlo,rhi = rr[ri],rr[ri+1]
 	dlo,dhi = dd[di],dd[di+1]
 
+	runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi)
+
+
+
+
+def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
+
+	class MyCaller(CallGlobal):
+		def getkwargs(self, stage, **kwargs):
+			kwa = self.kwargs.copy()
+			kwa.update(kwargs)
+			kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
+			return kwa
+
+	prereqs = { 100: None,
+				204: 103,
+				205: 104,
+				304: 103,
+				}
+
 	runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,
 					  declo=dlo, dechi=dhi, ralo=rlo, rahi=rhi,
-					  ri=opt.ri, di=opt.di)
+					  ri=opt.ri, di=opt.di, **kwa)
 
-	runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs,
-			 write=opt.write)
-
+	R = runstage(stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs,
+				 write=opt.write)
+	return R
 
 def _runone((kwa)):
 	#print 'kwa:', kwa
