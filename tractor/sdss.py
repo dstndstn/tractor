@@ -220,7 +220,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 				 badmag=25, nanomaggies=False,
 				 getobjs=False, getobjinds=False,
 				 extrabands=None,
-				 fixedComposites=False):
+				 fixedComposites=False,
+				 forcePointSources=False):
 	'''
 	If set,
 
@@ -311,14 +312,19 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 	objs.theta_dev = np.maximum(objs.theta_dev, 1./30.)
 	objs.theta_exp = np.maximum(objs.theta_exp, 1./30.)
 
-	Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
-	Lgal  = (objs.prob_psf[:,bandnum] == 0)
-	if isdr7:
-		fracdev = objs.fracpsf[:,bandnum]
+	if forcePointSources:
+		Lstar = np.ones(len(objs), float)
+		Lgal = np.zeros(len(objs), float)
+		Ldev = Lexp = Lgal
 	else:
-		fracdev = objs.fracdev[:,bandnum]
-	Ldev = Lgal * fracdev
-	Lexp = Lgal * (1. - fracdev)
+		Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
+		Lgal  = (objs.prob_psf[:,bandnum] == 0)
+		if isdr7:
+			fracdev = objs.fracpsf[:,bandnum]
+		else:
+			fracdev = objs.fracdev[:,bandnum]
+		Ldev = Lgal * fracdev
+		Lexp = Lgal * (1. - fracdev)
 
 	if isdr7:
 		if nanomaggies:

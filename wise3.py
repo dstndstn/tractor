@@ -1024,7 +1024,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 	## NOTE, this method CUTS the "S" arg
 	cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
 								  objs=S, bands=[], nanomaggies=True, extrabands=[band],
-								  fixedComposites=True)
+								  fixedComposites=True, forcePointSources=opt.ptsrc)
 	print 'Created', len(cat), 'Tractor sources'
 	assert(len(cat) == len(S))
 
@@ -1109,13 +1109,17 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 	return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1)
 
 
+#def stage105(tractor=None, ims1=None, **kwa):
+#	for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
+		
 
-def stage105(R=None, imstats=None, opt=None, **kwa):
 
+	
+
+def stage105_OLD(R=None, imstats=None, opt=None, **kwa):
 	fn = '%s-w%i-forced.fits' % (opt.name, opt.bandnum)
 	R.writeto(fn)
 	print 'Wrote', fn
-
 	fn = '%s-w%i-imstats.fits' % (opt.name, opt.bandnum)
 	imstats.writeto(fn)
 	print 'Wrote', fn

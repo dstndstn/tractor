@@ -105,6 +105,29 @@ for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 		imst.writeto(fn)
 		print 'Wrote', fn
 
+		pfn = '%s-r%02i-d%02i-w%i.pickle' % (basename, ri, di, opt.bandnum)
+
+		tractor = P['tractor']
+		ims1 = P['ims1']
+
+		res1 = []
+		for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
+			#res1.append((tim.getWcs(), tim.getPhotoCal(), tim.getSky(), img, mod, ie, roi))
+			print 'Tim:', dir(tim)
+			for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
+					  'mask', 'maskplane', 'rdmask', 'uncplane', 'vinvvar']:
+				try:
+					delattr(tim, k)
+				except:
+					pass
+			print 'Tim:', dir(tim)
+			res1.append((tim, mod, roi))
+
+		PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
+				  bandnum=opt.bandnum)
+		pickle_to_file(PP, pfn)
+
+
 	except:
 		import traceback
 		print '---------------------------------------------------'

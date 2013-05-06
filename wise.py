@@ -323,7 +323,8 @@ def read_wise_level3(basefn, radecroi=None, filtermap={},
 	name = 'WISE ' + ihdr['COADDID'] + ' W%i' % band
 
 	tim = tractor.Image(data=data, invvar=1./(unc**2), psf=tpsf, wcs=twcs,
-						sky=tsky, photocal=photocal, name=name, zr=zr)
+						sky=tsky, photocal=photocal, name=name, zr=zr,
+						domask=False)
 	tim.extent = [x0,x1,y0,y1]
 	return tim
 

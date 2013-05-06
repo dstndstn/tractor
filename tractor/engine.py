@@ -1323,7 +1323,7 @@ class Tractor(MultiParams):
 			# total number of pixels touched by this source
 			fs.npix = np.zeros(len(srcs), int)
 
-			# subtract sky from models
+			# subtract sky from models before measuring others' flux within my profile
 			skies = []
 			for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
 				tim.getSky().addTo(mod, scale=-1.)
@@ -1368,6 +1368,10 @@ class Tractor(MultiParams):
 					# scale to nanomaggies, weight by profile
 					fs.proflux[si] += np.sum((((mod - srcmod*csum) / scale) * srcmod).flat[nz])
 					fs.npix[si] += len(nz)
+
+			# re-add sky
+			for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
+				tim.getSky().addTo(mod)
 
 			rtn = rtn + (fs,)
 
