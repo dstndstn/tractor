@@ -44,6 +44,9 @@ opt = myopts()
 
 basename = 'ebossw3-v5'
 
+if not batch:
+	basename = 'ebossw3-tst'
+
 opt.minflux = None
 opt.bandnum = band
 opt.osources = None
@@ -124,7 +127,7 @@ for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 			res1.append((tim, mod, roi))
 
 		PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
-				  bandnum=opt.bandnum)
+				  bandnum=opt.bandnum, S=P['S'])
 		pickle_to_file(PP, pfn)
 
 

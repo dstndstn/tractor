@@ -398,10 +398,11 @@ def qsocuts(SW):
 		
 		if SW.w1rchi2[i] > 25:
 			continue
+
 		opt = myopts()
-		basefn = 'eboss-w3-worst%04i-r%02i-d%02i' % (wi, ri,di)
-		opt.picklepat = '%s-stage%%0i.pickle' % basefn
-		opt.ps = basefn
+		wbasefn = 'eboss-w3-worst%04i-r%02i-d%02i' % (wi, ri,di)
+		opt.picklepat = '%s-stage%%0i.pickle' % wbasefn
+		opt.ps = wbasefn
 		opt.minflux = None
 		opt.bandnum = 1
 		opt.osources = None
@@ -443,7 +444,7 @@ def qsocuts(SW):
 		# t.catalog.setParams(T.w1)
 		# R2 = wise3.stage204(opt=opt, mp=mp, ri=opt.ri, di=opt.di, **R)
 		# R2['ims1'] = R2['ims0']
-		# ps = PlotSequence(basefn)
+		# ps = PlotSequence(wbasefn)
 		# R3 = wise3.stage205(opt=opt, mp=mp, ri=opt.ri, di=opt.di, ps=ps, **R2)
 
 
@@ -477,15 +478,216 @@ def qsocuts(SW):
 
 
 
-# T = tabledata()
-# T.even = (np.arange(10) % 2 == 0)
-# T.about()
-# T.writeto('even.fits')
-# T2 = fits_table('even.fits')
-# T2.about()
-# print(T2.even)
-# print(T2.even.astype(np.uint8))
-# assert(np.all(T2.even == T.even))
+
+basefn = 'ebossw3-v4'
+fn = 'eboss-w3-v4-wise-dr9.fits'
+
+
+
+basefn = 'ebossw3-tst'
+ri = 25
+di = 0
+pfn = '%s-r%02i-d%02i-w1.pickle' % (basefn, ri, di)
+P = unpickle_from_file(pfn)
+print('Got:', P.keys())
+
+#r0,r1,d0,d1 = P['rd']
+res1 = P['res1']
+S = P['S']
+cat = P['cat']
+for tim,mod,roi in res1:
+	tim.inverr = np.sqrt(tim.invvar)
+
+dra  = rr[1]-rr[0]
+ddec = dd[1]-dd[0]
+cosdec = np.cos(np.deg2rad((d0 + d1)/2.))
+
+rl,rh,dl,dh = rr[ri], rr[ri+1], dd[di], dd[di+1]
+ra =  (rl+rh)/2.
+dec = (dl+dh)/2.
+
+
+class TractorToFitsWcs(object):
+	'''
+	The Tractor WCS code operates in pixel coords; wrap to FITS coords
+	'''
+	def __init__(self, wcs):
+		self.wcs = wcs
+	def radec2pixelxy(self, ra, dec):
+		ra  = np.atleast_1d(ra)
+		dec = np.atleast_1d(dec)
+		x = np.zeros_like(ra)
+		y = np.zeros_like(dec)
+		for i,(r,d) in enumerate(zip(ra,dec)):
+			xi,yi = self.wcs.positionToPixel(RaDecPos(r,d))
+			x[i] = xi
+			y[i] = yi
+		#x,y = self.wcs.positionToPixel(RaDecPos(ra,dec))
+		return True, x+1., y+1.
+
+	def pixelxy2radec(self, x, y):
+		x = np.atleast_1d(x)
+		y = np.atleast_1d(y)
+		ra  = np.zeros_like(x)
+		dec = np.zeros_like(y)
+		for i,(xi,yi) in enumerate(zip(x,y)):
+			pos = self.wcs.pixelToPosition(xi-1., yi-1.)
+			ra[i] = pos.ra
+			dec[i] = pos.dec
+		return ra,dec
+		#return pos.ra, pos.dec
+
+
+if True:
+	SW, SH = int(dra * cosdec * 3600. / 2.75), int(ddec * 3600. / 2.75)
+	print('Coadd size', SW, SH)
+	cowcs = anwcs_create_box(ra, dec, dra * cosdec, SW, SH)
+	cowcs = anwcs_get_sip(cowcs)
+
+	xx,yy = [],[]
+	for src in cat:
+		pos = src.getPosition()
+		ok,x,y = cowcs.radec2pixelxy(pos.ra, pos.dec)
+		xx.append(x - 1.)
+		yy.append(y - 1.)
+
+	conn  = np.zeros((SH,SW))
+	connw = np.zeros((SH,SW))
+
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=-10, vmax=50)
+
+	CO1 = []
+	for tim,mod,roi in res1:
+		# plt.clf()
+		# plt.imshow(tim.getImage(), **ima)
+		# plt.gray()
+		# ax = plt.axis()
+		# xi,yi = [],[]
+		# for src in cat:
+		# 	pos = src.getPosition()
+		# 	x,y = tim.getWcs().positionToPixel(pos)
+		# 	xi.append(x)
+		# 	yi.append(y)
+		# plt.plot(xi,yi, 'r.')
+		# plt.axis(ax)
+		# ps.savefig()
+
+		wcs = TractorToFitsWcs(tim.getWcs())
+		wcs.imageh, wcs.imagew = tim.shape
+	
+   		# x0,y0 = tim.getWcs().getX0Y0()
+		# H,W = tim.shape
+		# wcs = wcs.get_subimage(x0, x0+W-1, y0, y0+H-1)
+	
+		Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
+		if Xi is None:
+			continue
+		sky = tim.getSky().val
+		ie = tim.getInvError()
+		pix = tim.getImage()
+		conn  [Yo,Xo] += ((pix[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+		connw [Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+	
+		co1  = np.zeros((SH,SW))
+		co1[Yo,Xo] = (pix[Yi,Xi] - sky)
+		CO1.append(co1)
+
+		# plt.clf()
+		# plt.imshow(co1, **ima)
+		# plt.xticks([]), plt.yticks([])
+		# plt.gray()
+		# ax = plt.axis()
+		# plt.plot(xx, yy, 'r.')
+		# plt.axis(ax)
+		# ps.savefig()
+
+	
+	plt.clf()
+	plt.imshow(conn / np.maximum(1, connw), **ima)
+	plt.xticks([]), plt.yticks([])
+	plt.gray()
+	ps.savefig()
+
+	ax = plt.axis()
+	plt.plot(xx, yy, 'r.')
+	plt.axis(ax)
+	ps.savefig()
+	
+	N = len(CO1)
+	C = int(np.ceil(np.sqrt(N)))
+	R = int(np.ceil(N / float(C)))
+	plt.clf()
+	for i,co1 in enumerate(CO1):
+		plt.subplot(R,C, i+1)
+		plt.imshow(co1, **ima)
+		plt.xticks([]), plt.yticks([])
+		plt.gray()
+	ps.savefig()
+
+
+	# for i,co1 in enumerate(CO1):
+	# 	plt.clf()
+	# 	plt.imshow(co1, **ima)
+	# 	plt.xticks([]), plt.yticks([])
+	# 	plt.gray()
+	# 
+	# 	ax = plt.axis()
+	# 	plt.plot(xx, yy, 'r.')
+	# 	plt.axis(ax)
+	# 	ps.savefig()
+
+
+
+pix = 0.396
+SW, SH = int(dra * cosdec * 3600. / pix), int(ddec * 3600. / pix)
+print('SDSS coadd size', SW, SH)
+cowcs = anwcs_create_box(ra, dec, dra * cosdec, SW, SH)
+cowcs = anwcs_get_sip(cowcs)
+conn  = np.zeros((SH,SW))
+connw = np.zeros((SH,SW))
+zr = None
+CO1 = []
+for r,c,f in np.unique(zip(S.run, S.camcol, S.field)):
+	print('Run, camcol, field', r,c,f)
+	tim,tinf = get_tractor_image_dr9(r, c, f, 'r', psf='dg')
+	print('got', tim)
+	if zr is None:
+		zr = tim.zr
+	wcs = TractorToFitsWcs(tim.getWcs())
+	wcs.imageh, wcs.imagew = tim.shape
+	Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
+	if Xi is None:
+		continue
+	pix = tim.getImage()
+	conn  [Yo,Xo] += pix[Yi,Xi]
+	connw [Yo,Xo] += 1
+
+	co1  = np.zeros((SH,SW))
+	co1[Yo,Xo] = pix[Yi,Xi]
+	CO1.append(co1)
+
+plt.clf()
+ima = dict(interpolation='nearest', origin='lower',
+		   vmin=zr[0], vmax=zr[1])
+plt.imshow(conn / np.maximum(1, connw), **ima)
+plt.xticks([]), plt.yticks([])
+plt.gray()
+ps.savefig()
+
+N = len(CO1)
+C = int(np.ceil(np.sqrt(N)))
+R = int(np.ceil(N / float(C)))
+plt.clf()
+for i,co1 in enumerate(CO1):
+	plt.subplot(R,C, i+1)
+	plt.imshow(co1, **ima)
+	plt.xticks([]), plt.yticks([])
+	plt.gray()
+ps.savefig()
+
+sys.exit(0)
+
 
 matchedfn = 'sw.fits'
 if os.path.exists(matchedfn):
@@ -494,8 +696,6 @@ if os.path.exists(matchedfn):
 	sys.exit(0)
 
 
-basefn = 'ebossw3-v4'
-fn = 'eboss-w3-v4-wise-dr9.fits'
 
 S = fits_table('objs-eboss-w3-dr9.fits')
 print('Read', len(S))
