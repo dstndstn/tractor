@@ -42,13 +42,16 @@ class myopts(object):
 	pass
 opt = myopts()
 
-basename = 'ebossw3-v4'
+basename = 'ebossw3-v5'
 
 opt.minflux = None
 opt.bandnum = band
 opt.osources = None
 opt.sources = 'objs-eboss-w3-dr9.fits'
-opt.ptsrc = False
+
+#opt.ptsrc = False
+opt.ptsrc = True
+
 opt.pixpsf = False
 
 #opt.minsb = 0.05
