@@ -136,7 +136,7 @@ def cut_wise_cat():
 		fn = '/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part%02i.fits' % s
 		print('Reading', fn)
 		T = fits_table(fn, rows=I, columns=['ra','dec','cntr',
-											'w1mpro', 'w1mag', 'w2mpro', 'w2mag'])
+											'w1mpro', 'w1sigmpro', 'w1mag', 'w1sigm', 'w2mpro', 'w2sigmpro', 'w2mag', 'w2sigm'])
 
 		# fn = '/home/boss/products/NULL/wise/trunk/fits/wise-allsky-cat-part%02i.fits' % s
 		# print('Reading', fn)
@@ -148,7 +148,8 @@ def cut_wise_cat():
 	W = merge_tables(TT)
 	return W
 
-ps = PlotSequence('wisecheck', suffixes=['png','eps'])
+ps = PlotSequence('wisecheck', suffixes=['png','eps','pdf'])
+#ps = PlotSequence('wisecheck', suffixes=['png'])
 
 
 
@@ -351,6 +352,9 @@ def imgstats():
 
 def fluxtomag(nmgy):
 	return -2.5 * (np.log10(np.maximum(1e-3, nmgy)) - 9.)
+
+def dfluxtodmag(nmgy, dnmgy):
+	return np.abs(-2.5 * (np.log10(1. + dnmgy / nmgy)))
 
 
 #psfplots()
@@ -1032,7 +1036,7 @@ def coadd_plots():
 
 
 
-coadd_plots()
+#coadd_plots()
 #sys.exit(0)
 
 
@@ -1071,6 +1075,10 @@ W.w2mag = fluxtomag(W.w2)
 print('w1mag', W.w1mag.min(), W.w1mag.max())
 print('w2mag', W.w2mag.min(), W.w2mag.max())
 
+W.w1magerr = dfluxtodmag(W.w1, 1./np.sqrt(W.w1_ivar))
+W.w2magerr = dfluxtodmag(W.w2, 1./np.sqrt(W.w2_ivar))
+
+
 S.gpsf = fluxtomag(S.psfflux[:,1])
 S.rpsf = fluxtomag(S.psfflux[:,2])
 S.ipsf = fluxtomag(S.psfflux[:,3])
@@ -1093,6 +1101,313 @@ if not os.path.exists(wfn):
 else:
 	print('Reading', wfn)
 	WC = fits_table(wfn)
+
+
+
+
+
+
+# Some summary plots
+
+
+I = np.flatnonzero((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
+print(len(I), 'of', len(W), 'W are in the RA,Dec box')
+W.cut(I)
+
+# H,xe,ye = np.histogram2d(W.ra, W.dec, 100, range=((r0,r1),(d0,d1)))
+# H = H.ravel()
+# print(sum(H>0), 'of', len(H), 'bins of W are non-zero')
+# frac = float(sum(H>0)) / len(H)
+# 
+# H,xe,ye = np.histogram2d(WC.ra, WC.dec, 100, range=((r0,r1),(d0,d1)))
+# H = H.ravel()
+# print(sum(H>0), 'of', len(H), 'bins of WC are non-zero')
+# frac2 = float(sum(H>0)) / len(H)
+frac = 1.
+
+# I = np.flatnonzero((WC.ra > r0) * (WC.ra < r1) * (WC.dec > d0) * (WC.dec < d1))
+# print(len(I), 'of', len(WC), 'WC are in the RA,Dec box')
+
+# plt.clf()
+# plothist(W.ra, W.dec, 100, range=((r0,r1),(d0,d1)))
+# ps.savefig()
+# 
+# plt.clf()
+# plothist(WC.ra, WC.dec, 100, range=((r0,r1),(d0,d1)))
+# ps.savefig()
+
+
+
+#xlo,xhi = 7,26
+xlo,xhi = 10,25
+
+
+
+R = 4.0
+I,J,d = match_radec(W.ra, W.dec, WC.ra, WC.dec, R, nearest=True)
+
+loghist(W.w1mag[I], WC.w1mpro[J], 200, range=((xlo,xhi),(xlo,xhi)))
+plt.plot([xlo,xhi],[xlo,xhi], '-', color='1')
+plt.xlabel('Tractor w1mag')
+plt.ylabel('Catalog w1mpro')
+plt.axis([xlo,xhi,xlo,xhi])
+ps.savefig()
+
+
+lo,hi = 0,0.25
+loghist(W.w1magerr[I], WC.w1sigmpro[J], 200, range=((lo,hi),(lo,hi)))
+plt.plot([lo,hi],[lo,hi], '-', color='1')
+plt.xlabel('Tractor w1mag err')
+plt.ylabel('Catalog w1sigmpro')
+plt.axis([lo,hi,lo,hi])
+ps.savefig()
+print('error hist')
+
+m = WC[J].w1mpro
+K = np.flatnonzero((m > 16) * (m < 17))
+
+lo,hi = 0,0.25
+loghist(W.w1magerr[I[K]], WC.w1sigmpro[J[K]], 200, range=((lo,hi),(lo,hi)))
+for d in [0., 0.01, 0.02, 0.03]:
+	plt.plot([lo,hi],[lo+d,hi+d], '-', color='1')
+plt.xlabel('Tractor w1mag err')
+plt.ylabel('Catalog w1sigmpro')
+plt.axis([lo,hi,lo,hi])
+plt.title('Mag 16-17')
+ps.savefig()
+print('error hist')
+
+
+K = np.flatnonzero((m > 16.5) * (m < 17.5))
+
+lo,hi = 0,0.25
+loghist(W.w1magerr[I[K]], WC.w1sigmpro[J[K]], 200, range=((lo,hi),(lo,hi)))
+for d in [0., 0.01, 0.02, 0.03]:
+	plt.plot([lo,hi],[lo+d,hi+d], '-', color='1')
+plt.xlabel('Tractor w1mag err')
+plt.ylabel('Catalog w1sigmpro')
+plt.axis([lo,hi,lo,hi])
+plt.title('Mag 16.5-17.5')
+ps.savefig()
+print('error hist')
+
+
+#sys.exit(0)
+
+
+
+plt.clf()
+
+#catsty = dict(linestyle='dashed', lw=2)
+#catsty = dict(lw=2, alpha=0.5)
+
+#catsty1 = dict(color='c', lw=3, alpha=0.3)
+#catsty2 = dict(color='m', lw=3, alpha=0.3)
+
+catsty1 = dict(color=(0.8,0.8,1.0), lw=3)
+catsty2 = dict(color=(1.0,0.8,0.8), lw=3)
+
+tsty1 = dict(color='b', lw=1, alpha=1.)
+tsty2 = dict(color='r', lw=1, alpha=1.)
+
+
+
+plt.clf()
+plt.hist(WC.w1sigmpro[J[K]], 100, range=(lo,hi), histtype='step', **catsty1)
+plt.hist(W.w1magerr[I[K]],   100, range=(lo,hi), histtype='step', **tsty1)
+plt.xlabel('w1 mag errors')
+ps.savefig()
+
+
+
+
+n1,b,p1 = plt.hist(W.w1mag,   100, log=True, histtype='step', range=(xlo,xhi), **tsty1)
+n2,b,p2 = plt.hist(W.w2mag,   100, log=True, histtype='step', range=(xlo,xhi), **tsty2)
+n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True, histtype='step', range=(xlo,xhi), **catsty1)
+n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True, histtype='step', range=(xlo,xhi), **catsty2)
+
+# Just for the legend...
+bx = (b[1:] + b[:-1]) / 2.
+p1 = plt.plot(bx[:1],n1[:1], '-', **tsty1)
+p2 = plt.plot(bx[:1],n1[:1], '-', **tsty2)
+p3 = plt.plot(bx[:1],n1[:1], '-', **catsty1)
+p4 = plt.plot(bx[:1],n1[:1], '-', **catsty2)
+
+plt.xlabel('WISE mag')
+plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+plt.ylabel('Number of sources')
+plt.title('W3 area: WISE forced photometry mag distribution')
+plt.xlim(xlo, xhi)
+ps.savefig()
+
+bx = (b[1:] + b[:-1]) / 2.
+
+def bxy(b, y):
+	return np.repeat(b, 2)[1:-1], np.repeat(y, 2)
+
+if False:
+	plt.clf()
+	bx,by = bxy(b, n1)
+	p1 = plt.semilogy(bx, by / frac, 'b-')
+	bx,by = bxy(b, n1)
+	p1 = plt.semilogy(bx, by, 'b-')
+	bx,by = bxy(b, n2)
+	p2 = plt.semilogy(bx, by / frac, 'r-')
+	bx,by = bxy(b, n3)
+	p3 = plt.semilogy(bx, by, 'c-', **catsty)
+	bx,by = bxy(b, n4)
+	p4 = plt.semilogy(bx, by, 'm-', **catsty)
+	plt.xlabel('WISE mag')
+	plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+	plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+	plt.xlim(xlo, xhi)
+	plt.ylabel('Number of sources')
+	plt.title('W3 area: WISE forced photometry mag distribution')
+	ps.savefig()
+	
+
+	plt.clf()
+	bx,by = bxy(b, n1)
+	p1 = plt.semilogy(bx, by / frac, 'b-')
+	#bx,by = bxy(b, n2)
+	#p2 = plt.semilogy(bx, by / frac, 'r-')
+	bx,by = bxy(b, n3)
+	p3 = plt.semilogy(bx, by, 'c-', **catsty)
+	#bx,by = bxy(b, n4)
+	#p4 = plt.semilogy(bx, by, 'm-', **catsty)
+	#plt.xlabel('WISE mag')
+	#plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+	plt.legend((p1,p3),('W1 (Tractor)', 'W1 (WISE cat)'), loc='lower right')
+	plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+	plt.xlim(xlo, xhi)
+	plt.ylabel('Number of sources')
+	plt.title('W3 area: WISE forced photometry mag distribution')
+	ps.savefig()
+	
+	#plt.xlim(14,15)
+	#ps.savefig()
+	
+
+
+
+I = np.argsort(WC.w1mpro)
+m1 = WC.w1mpro[I[10000]]
+print('10k-th w1mpro:', m1)
+I = np.argsort(W.w1mag)
+m2 = W.w1mag[I[10000]]
+print('10k-th w1mag:', m2)
+dm = m1-m2
+
+plt.clf()
+n1,b,p1 = plt.hist(W.w1mag + dm, 100, log=True, histtype='step', range=(xlo,xhi), **tsty1)
+n2,b,p2 = plt.hist(W.w2mag + dm, 100, log=True, histtype='step', range=(xlo,xhi), **tsty2)
+n3,b,p3 = plt.hist(WC.w1mpro,    100, log=True, histtype='step', range=(xlo,xhi), **catsty1)
+n4,b,p4 = plt.hist(WC.w2mpro,    100, log=True, histtype='step', range=(xlo,xhi), **catsty2)
+
+n3 = np.maximum(n3, 0.1)
+n4 = np.maximum(n4, 0.1)
+
+plt.clf()
+bx,by = bxy(b, n1)
+p1 = plt.semilogy(bx, by, '-', **tsty1)
+bx,by = bxy(b, n2)
+p2 = plt.semilogy(bx, by, '-', **tsty2)
+bx,by = bxy(b, n3)
+p3 = plt.semilogy(bx, by, '-', **catsty1)
+bx,by = bxy(b, n4)
+p4 = plt.semilogy(bx, by, '-', **catsty2)
+plt.xlabel('WISE mag')
+plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'), loc='lower right')
+plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+plt.xlim(xlo, xhi)
+plt.ylabel('Number of sources')
+plt.title('W3 area: WISE forced photometry mag distribution')
+ps.savefig()
+
+
+
+plt.clf()
+bx,by = bxy(b, n3)
+p3 = plt.semilogy(bx, by, '-', **catsty1)
+bx,by = bxy(b, n1)
+p1 = plt.semilogy(bx, by, '-', **tsty1)
+plt.xlabel('WISE mag')
+plt.legend((p1,p3),('W1 (Tractor)', 'W1 (WISE cat)'), loc='lower right')
+plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+plt.xlim(xlo, xhi)
+plt.ylabel('Number of sources')
+plt.title('W3 area: WISE forced photometry mag distribution')
+ps.savefig()
+
+if False:
+	## FINER BINS
+	bins = 200
+	
+	plt.clf()
+	n1,b,p1 = plt.hist(W.w1mag +dm,   bins, log=True, histtype='step', color='b', range=(xlo,xhi), **tsty)
+	n2,b,p2 = plt.hist(W.w2mag +dm,   bins, log=True, histtype='step', color='r', range=(xlo,xhi), **tsty)
+	n3,b,p3 = plt.hist(WC.w1mpro, bins, log=True, histtype='step', color='c', range=(xlo,xhi), **catsty)
+	n4,b,p4 = plt.hist(WC.w2mpro, bins, log=True, histtype='step', color='m', range=(xlo,xhi), **catsty)
+	
+	n3 = np.maximum(n3, 0.1)
+	n4 = np.maximum(n4, 0.1)
+	
+	def bxy(b, y):
+		return (b[:-1]+b[1:])/2., y
+	
+	plt.clf()
+	bx,by = bxy(b, n1)
+	p1 = plt.semilogy(bx, by, 'b-')
+	bx,by = bxy(b, n2)
+	p2 = plt.semilogy(bx, by, 'r-')
+	bx,by = bxy(b, n3)
+	p3 = plt.semilogy(bx, by, 'c-', **catsty)
+	bx,by = bxy(b, n4)
+	p4 = plt.semilogy(bx, by, 'm-', **catsty)
+	plt.xlabel('WISE mag')
+	plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'), loc='lower right')
+	#plt.legend((p1,p3),('W1 (Tractor)', 'W1 (WISE cat)'), loc='lower right')
+	plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+	plt.xlim(xlo, xhi)
+	plt.ylabel('Number of sources')
+	plt.title('W3 area: WISE forced photometry mag distribution')
+	ps.savefig()
+	
+	
+	
+	plt.clf()
+	bx,by = bxy(b, n1)
+	p1 = plt.semilogy(bx, by, 'b-')
+	#bx,by = bxy(b, n2)
+	#p2 = plt.semilogy(bx, by, 'r-')
+	bx,by = bxy(b, n3)
+	p3 = plt.semilogy(bx, by, 'c-', **catsty)
+	#bx,by = bxy(b, n4)
+	#p4 = plt.semilogy(bx, by, 'm-', **catsty)
+	plt.xlabel('WISE mag')
+	#plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+	plt.legend((p1,p3),('W1 (Tractor)', 'W1 (WISE cat)'), loc='lower right')
+	plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+	plt.xlim(xlo, xhi)
+	plt.ylabel('Number of sources')
+	plt.title('W3 area: WISE forced photometry mag distribution')
+	ps.savefig()
+
+
+
+
+
+
+sys.exit(0)
+
+
+
+
+
+
+
+
 
 swfn = 'eboss-w3-wise-cat-dr9.fits'
 if not os.path.exists(swfn):
@@ -1287,6 +1602,9 @@ print('wise:', SW.wise.min(), SW.wise.max())
 
 
 
+
+
+
 # Tractor -- WISE catalog comparison
 
 R = 4./3600.
@@ -1311,24 +1629,8 @@ for wb in ['w1','w2']:
 			plt.title('Tractor vs WISE catalog: ' + txt)
 			ps.savefig()
 
+
 # Some summary plots
-
-
-plt.clf()
-#n1,b,p1 = plt.hist(W.w1mag, 100, log=True, histtype='step', color='b', range=(5,29))
-#n2,b,p2 = plt.hist(W.w2mag, 100, log=True, histtype='step', color='r', range=(5,29))
-n1,b,p1 = plt.hist(W.w1mpro, 100, log=True, histtype='step', color='b', range=(5,29))
-n2,b,p2 = plt.hist(W.w2mpro, 100, log=True, histtype='step', color='r', range=(5,29))
-n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True, histtype='step', color='c', range=(5,29))
-n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True, histtype='step', color='m', range=(5,29))
-plt.xlabel('WISE mag')
-plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
-plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
-plt.ylabel('Number of sources')
-plt.title('W3 area: WISE forced photometry mag distribution')
-ps.savefig()
-
-
 
 
 # plt.clf()
