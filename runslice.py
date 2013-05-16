@@ -27,7 +27,9 @@ NRA = 90
 arr = os.environ.get('PBS_ARRAYID')
 if arr is None:
 	#arr = 0
-	arr = 125
+	#arr = 125
+	# HACK!
+	arr = 147
 else:
 	arr = int(arr)
 	
@@ -52,8 +54,9 @@ opt.bandnum = band
 opt.osources = None
 opt.sources = 'objs-eboss-w3-dr9.fits'
 
-#opt.ptsrc = False
-opt.ptsrc = True
+opt.ptsrc = False
+# v5
+#opt.ptsrc = True
 
 opt.pixpsf = False
 
@@ -83,6 +86,10 @@ for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 		print 'Skipping'
 		if batch:
 			continue
+
+	# HACK!!
+	if not batch and di != 25:
+		continue
 
 	try:
 		P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,

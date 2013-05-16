@@ -1307,9 +1307,13 @@ class SdssWcs(ParamList):
 		return self.astrans.cd_at_pixel(x + self.x0, y + self.y0)
 
 	# RA,Dec in deg to pixel x,y.
-	def positionToPixel(self, pos, src=None):
+	# HACK -- color -- debug
+	def positionToPixel(self, pos, src=None, color=0.):
 		## FIXME -- color.
-		x,y = self.astrans.radec_to_pixel_single(pos.ra, pos.dec)
+		if color != 0.:
+			x,y = self.astrans.radec_to_pixel_single_py(pos.ra, pos.dec, color)
+		else:
+			x,y = self.astrans.radec_to_pixel_single(pos.ra, pos.dec)
 		return x - self.x0, y - self.y0
 
 	# (x,y) to RA,Dec in deg

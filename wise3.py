@@ -898,7 +898,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 	for i,(Ti,wcs) in enumerate(zip(T,wcses)):
 		xy = []
 		for r,d in [(rm0,dm0),(rm0,dm1),(rm1,dm1),(rm1,dm0)]:
-			x,y = wcs.radec2pixelxy(r,d)
+			ok,x,y = wcs.radec2pixelxy(r,d)
 			xy.append((x,y))
 		xy = np.array(xy)
 		x0,y0 = xy.min(axis=0)

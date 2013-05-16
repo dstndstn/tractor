@@ -148,7 +148,7 @@ def cut_wise_cat():
 	W = merge_tables(TT)
 	return W
 
-ps = PlotSequence('wisecheck')
+ps = PlotSequence('wisecheck', suffixes=['png','eps'])
 
 
 
@@ -383,6 +383,69 @@ def qsocuts(SW):
 	I = I2
 
 
+
+	# Check against WISE catalog
+	#wfn = 'w3-wise.fits'
+	#WC = fits_table(wfn)
+
+	# SDSS matched to WISE catalog
+	swfn = 'eboss-w3-wise-cat-dr9.fits'
+	#SWC = fits_table(swfn)
+
+
+	S = fits_table('objs-eboss-w3-dr9.fits')
+	print('Read', len(S), 'SDSS objects')
+	wfn = 'w3-wise.fits'
+	WC = fits_table(wfn)
+	print('Read', len(WC), 'WISE catalog objects')
+
+	R = 4./3600.
+	I,J,d = match_radec(S.ra, S.dec, WC.ra, WC.dec, R, nearest=True)
+	print(len(I), 'matches of SDSS to WISE catalog')
+	SWC = S[I]
+	for k in WC.columns():
+		if k in ['ra','dec']:
+			outkey = k+'_wise'
+		else:
+			outkey = k
+		X = WC.get(k)
+		SWC.set(outkey, X[J])
+	SWC.writeto(swfn)
+
+	SWC.gpsf = fluxtomag(SWC.psfflux[:,1])
+	SWC.rpsf = fluxtomag(SWC.psfflux[:,2])
+	SWC.ipsf = fluxtomag(SWC.psfflux[:,3])
+	SWC.ispsf = (SWC.objc_type == 6)
+	SWC.isgal = (SWC.objc_type == 3)
+
+	SWC.optpsf = fluxtomag((SWC.psfflux[:,1] * 0.8 +
+							SWC.psfflux[:,2] * 0.6 +
+							SWC.psfflux[:,3] * 1.0) / 2.4)
+	SWC.optmod = fluxtomag((SWC.modelflux[:,1] * 0.8 +
+							SWC.modelflux[:,2] * 0.6 +
+							SWC.modelflux[:,3] * 1.0) / 2.4)
+	SWC.wise = fluxtomag((SWC.w1mpro * 1.0 +
+						  SWC.w2mpro * 0.5) / 1.5)
+
+
+	in1 = ( ((SWC.gpsf - SWC.ipsf) < 1.5) *
+			(SWC.optpsf > 17.) *
+			(SWC.optpsf < 22.) *
+			((SWC.optpsf - SWC.wise) > ((SWC.gpsf - SWC.ipsf) + 3)) *
+			np.logical_or(SWC.ispsf, (SWC.optpsf - SWC.optmod) < 0.1) )
+	I = np.flatnonzero(in1)
+	print('Selected', len(I), 'from WISE catalog')
+
+
+
+
+
+
+	sys.exit(0)
+
+
+
+
 	worstI = I[np.argsort(-SW.w1rchi2[I])]
 	print('Worst:')
 
@@ -479,66 +542,97 @@ def qsocuts(SW):
 
 
 
-basefn = 'ebossw3-v4'
+basefn = 'v4/ebossw3-v4'
 fn = 'eboss-w3-v4-wise-dr9.fits'
 
+# basefn = 'ebossw3-v5'
+# fn = 'eboss-w3-v5-wise-dr9.fits'
 
 
-basefn = 'ebossw3-tst'
-ri = 25
-di = 0
-pfn = '%s-r%02i-d%02i-w1.pickle' % (basefn, ri, di)
-P = unpickle_from_file(pfn)
-print('Got:', P.keys())
 
-#r0,r1,d0,d1 = P['rd']
-res1 = P['res1']
-S = P['S']
-cat = P['cat']
-for tim,mod,roi in res1:
-	tim.inverr = np.sqrt(tim.invvar)
-
-dra  = rr[1]-rr[0]
-ddec = dd[1]-dd[0]
-cosdec = np.cos(np.deg2rad((d0 + d1)/2.))
-
-rl,rh,dl,dh = rr[ri], rr[ri+1], dd[di], dd[di+1]
-ra =  (rl+rh)/2.
-dec = (dl+dh)/2.
+matchedfn = 'sw.fits'
+# if os.path.exists(matchedfn):
+# 	SW = fits_table(matchedfn)
+# 	qsocuts(SW)
+# 	sys.exit(0)
 
 
-class TractorToFitsWcs(object):
-	'''
-	The Tractor WCS code operates in pixel coords; wrap to FITS coords
-	'''
-	def __init__(self, wcs):
-		self.wcs = wcs
-	def radec2pixelxy(self, ra, dec):
-		ra  = np.atleast_1d(ra)
-		dec = np.atleast_1d(dec)
-		x = np.zeros_like(ra)
-		y = np.zeros_like(dec)
-		for i,(r,d) in enumerate(zip(ra,dec)):
-			xi,yi = self.wcs.positionToPixel(RaDecPos(r,d))
-			x[i] = xi
-			y[i] = yi
-		#x,y = self.wcs.positionToPixel(RaDecPos(ra,dec))
-		return True, x+1., y+1.
-
-	def pixelxy2radec(self, x, y):
-		x = np.atleast_1d(x)
-		y = np.atleast_1d(y)
-		ra  = np.zeros_like(x)
-		dec = np.zeros_like(y)
-		for i,(xi,yi) in enumerate(zip(x,y)):
-			pos = self.wcs.pixelToPosition(xi-1., yi-1.)
-			ra[i] = pos.ra
-			dec[i] = pos.dec
-		return ra,dec
-		#return pos.ra, pos.dec
 
 
-if True:
+def coadd_plots():
+
+	basefn = 'ebossw3-tst'
+
+	#basefn = 'v4/eboss-w3-v4'
+
+
+	ra,dec = 215.095, 52.72
+	ri = np.flatnonzero(rr < ra)[-1]
+	di = np.flatnonzero(dd < dec)[-1]
+
+	print('ri', ri, 'di', di)
+	print('ra', rr[ri],rr[ri+1], 'dec', dd[di], dd[di+1])
+
+	#ri = 25
+	#di = 0
+
+	pfn = '%s-r%02i-d%02i-w1.pickle' % (basefn, ri, di)
+	P = unpickle_from_file(pfn)
+	print('Got:', P.keys())
+	
+	#r0,r1,d0,d1 = P['rd']
+	res1 = P['res1']
+	S = P['S']
+	cat = P['cat']
+	for tim,mod,roi in res1:
+		tim.inverr = np.sqrt(tim.invvar)
+
+	for src in cat:
+		print('Source', src)
+	
+	dra  = rr[1]-rr[0]
+	ddec = dd[1]-dd[0]
+	cosdec = np.cos(np.deg2rad((d0 + d1)/2.))
+	
+	rl,rh,dl,dh = rr[ri], rr[ri+1], dd[di], dd[di+1]
+	ra =  (rl+rh)/2.
+	dec = (dl+dh)/2.
+
+	print('RA range for coadd block:', rl, rh)
+	print('Dec', dl,dh)
+	
+	class TractorToFitsWcs(object):
+		'''
+		The Tractor WCS code operates in pixel coords; wrap to FITS coords
+		'''
+		def __init__(self, wcs):
+			self.wcs = wcs
+		def radec2pixelxy(self, ra, dec):
+			ra  = np.atleast_1d(ra)
+			dec = np.atleast_1d(dec)
+			x = np.zeros_like(ra)
+			y = np.zeros_like(dec)
+			for i,(r,d) in enumerate(zip(ra,dec)):
+				xi,yi = self.wcs.positionToPixel(RaDecPos(r,d))
+				x[i] = xi
+				y[i] = yi
+			#x,y = self.wcs.positionToPixel(RaDecPos(ra,dec))
+			return True, x+1., y+1.
+	
+		def pixelxy2radec(self, x, y):
+			x = np.atleast_1d(x)
+			y = np.atleast_1d(y)
+			ra  = np.zeros_like(x)
+			dec = np.zeros_like(y)
+			for i,(xi,yi) in enumerate(zip(x,y)):
+				pos = self.wcs.pixelToPosition(xi-1., yi-1.)
+				ra[i] = pos.ra
+				dec[i] = pos.dec
+			return ra,dec
+			#return pos.ra, pos.dec
+
+
+	# if True:
 	SW, SH = int(dra * cosdec * 3600. / 2.75), int(ddec * 3600. / 2.75)
 	print('Coadd size', SW, SH)
 	cowcs = anwcs_create_box(ra, dec, dra * cosdec, SW, SH)
@@ -551,56 +645,74 @@ if True:
 		xx.append(x - 1.)
 		yy.append(y - 1.)
 
-	conn  = np.zeros((SH,SW))
-	connw = np.zeros((SH,SW))
+	wfn = 'w3-wise.fits'
+	WC = fits_table(wfn)
+	catx,caty = [],[]
+	for r,d in zip(WC.ra, WC.dec):
+		ok,x,y = cowcs.radec2pixelxy(r,d)
+		catx.append(x-1)
+		caty.append(y-1)
+
 
 	ima = dict(interpolation='nearest', origin='lower',
 			   vmin=-10, vmax=50)
+	wima = ima
 
-	CO1 = []
-	for tim,mod,roi in res1:
-		# plt.clf()
-		# plt.imshow(tim.getImage(), **ima)
-		# plt.gray()
-		# ax = plt.axis()
-		# xi,yi = [],[]
-		# for src in cat:
-		# 	pos = src.getPosition()
-		# 	x,y = tim.getWcs().positionToPixel(pos)
-		# 	xi.append(x)
-		# 	yi.append(y)
-		# plt.plot(xi,yi, 'r.')
-		# plt.axis(ax)
-		# ps.savefig()
+	pfn = 'coadd-wise.pickle'
+	if os.path.exists(pfn):
+		conn,connw = unpickle_from_file(pfn)
+	else:
+		conn  = np.zeros((SH,SW))
+		connw = np.zeros((SH,SW))
 
-		wcs = TractorToFitsWcs(tim.getWcs())
-		wcs.imageh, wcs.imagew = tim.shape
+		CO1 = []
+		for i,(tim,mod,roi) in enumerate(res1):
+			print('Resampling WISE img', i)
+			# plt.clf()
+			# plt.imshow(tim.getImage(), **ima)
+			# plt.gray()
+			# ax = plt.axis()
+			# xi,yi = [],[]
+			# for src in cat:
+			# 	pos = src.getPosition()
+			# 	x,y = tim.getWcs().positionToPixel(pos)
+			# 	xi.append(x)
+			# 	yi.append(y)
+			# plt.plot(xi,yi, 'r.')
+			# plt.axis(ax)
+			# ps.savefig()
 	
-   		# x0,y0 = tim.getWcs().getX0Y0()
-		# H,W = tim.shape
-		# wcs = wcs.get_subimage(x0, x0+W-1, y0, y0+H-1)
+			wcs = TractorToFitsWcs(tim.getWcs())
+			wcs.imageh, wcs.imagew = tim.shape
+		
+	   		# x0,y0 = tim.getWcs().getX0Y0()
+			# H,W = tim.shape
+			# wcs = wcs.get_subimage(x0, x0+W-1, y0, y0+H-1)
+		
+			Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
+			if Xi is None:
+				continue
+			sky = tim.getSky().val
+			ie = tim.getInvError()
+			pix = tim.getImage()
+			conn  [Yo,Xo] += ((pix[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+			connw [Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+		
+			co1  = np.zeros((SH,SW))
+			co1[Yo,Xo] = (pix[Yi,Xi] - sky)
+			CO1.append(co1)
 	
-		Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
-		if Xi is None:
-			continue
-		sky = tim.getSky().val
-		ie = tim.getInvError()
-		pix = tim.getImage()
-		conn  [Yo,Xo] += ((pix[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
-		connw [Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
-	
-		co1  = np.zeros((SH,SW))
-		co1[Yo,Xo] = (pix[Yi,Xi] - sky)
-		CO1.append(co1)
+			# plt.clf()
+			# plt.imshow(co1, **ima)
+			# plt.xticks([]), plt.yticks([])
+			# plt.gray()
+			# ax = plt.axis()
+			# plt.plot(xx, yy, 'r.')
+			# plt.axis(ax)
+			# ps.savefig()
 
-		# plt.clf()
-		# plt.imshow(co1, **ima)
-		# plt.xticks([]), plt.yticks([])
-		# plt.gray()
-		# ax = plt.axis()
-		# plt.plot(xx, yy, 'r.')
-		# plt.axis(ax)
-		# ps.savefig()
+
+		pickle_to_file((conn,connw), pfn)
 
 	
 	plt.clf()
@@ -611,19 +723,23 @@ if True:
 
 	ax = plt.axis()
 	plt.plot(xx, yy, 'r.')
+
+	plt.plot(catx, caty, 'gx')
+
 	plt.axis(ax)
 	ps.savefig()
+
 	
-	N = len(CO1)
-	C = int(np.ceil(np.sqrt(N)))
-	R = int(np.ceil(N / float(C)))
-	plt.clf()
-	for i,co1 in enumerate(CO1):
-		plt.subplot(R,C, i+1)
-		plt.imshow(co1, **ima)
-		plt.xticks([]), plt.yticks([])
-		plt.gray()
-	ps.savefig()
+	# N = len(CO1)
+	# C = int(np.ceil(np.sqrt(N)))
+	# R = int(np.ceil(N / float(C)))
+	# plt.clf()
+	# for i,co1 in enumerate(CO1):
+	# 	plt.subplot(R,C, i+1)
+	# 	plt.imshow(co1, **ima)
+	# 	plt.xticks([]), plt.yticks([])
+	# 	plt.gray()
+	# ps.savefig()
 
 
 	# for i,co1 in enumerate(CO1):
@@ -638,62 +754,287 @@ if True:
 	# 	ps.savefig()
 
 
+	pix = 0.396
+	SW, SH = int(dra * cosdec * 3600. / pix), int(ddec * 3600. / pix)
+	print('SDSS coadd size', SW, SH)
+	cowcs = anwcs_create_box(ra, dec, dra * cosdec, SW, SH)
+	cowcs = anwcs_get_sip(cowcs)
 
-pix = 0.396
-SW, SH = int(dra * cosdec * 3600. / pix), int(ddec * 3600. / pix)
-print('SDSS coadd size', SW, SH)
-cowcs = anwcs_create_box(ra, dec, dra * cosdec, SW, SH)
-cowcs = anwcs_get_sip(cowcs)
-conn  = np.zeros((SH,SW))
-connw = np.zeros((SH,SW))
-zr = None
-CO1 = []
-for r,c,f in np.unique(zip(S.run, S.camcol, S.field)):
-	print('Run, camcol, field', r,c,f)
-	tim,tinf = get_tractor_image_dr9(r, c, f, 'r', psf='dg')
-	print('got', tim)
-	if zr is None:
-		zr = tim.zr
-	wcs = TractorToFitsWcs(tim.getWcs())
-	wcs.imageh, wcs.imagew = tim.shape
-	Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
-	if Xi is None:
-		continue
-	pix = tim.getImage()
-	conn  [Yo,Xo] += pix[Yi,Xi]
-	connw [Yo,Xo] += 1
+	pfn = 'coadd-sdss.pickle'
+	if os.path.exists(pfn):
+		conn,connw,zr = unpickle_from_file(pfn)
+	else:
+		conn  = np.zeros((SH,SW))
+		connw = np.zeros((SH,SW))
 
-	co1  = np.zeros((SH,SW))
-	co1[Yo,Xo] = pix[Yi,Xi]
-	CO1.append(co1)
+		zr = None
+		CO1 = []
+		for r,c,f in np.unique(zip(S.run, S.camcol, S.field)):
+			print('Run, camcol, field', r,c,f)
+			tim,tinf = get_tractor_image_dr9(r, c, f, 'r', psf='dg')
+			print('got', tim)
+			if zr is None:
+				zr = tim.zr
+			wcs = TractorToFitsWcs(tim.getWcs())
+			wcs.imageh, wcs.imagew = tim.shape
+			Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
+			if Xi is None:
+				continue
+			pix = tim.getImage()
+			conn  [Yo,Xo] += pix[Yi,Xi]
+			connw [Yo,Xo] += 1
+		
+			co1  = np.zeros((SH,SW))
+			co1[Yo,Xo] = pix[Yi,Xi]
+			CO1.append(co1)
 
-plt.clf()
-ima = dict(interpolation='nearest', origin='lower',
-		   vmin=zr[0], vmax=zr[1])
-plt.imshow(conn / np.maximum(1, connw), **ima)
-plt.xticks([]), plt.yticks([])
-plt.gray()
-ps.savefig()
+		pickle_to_file((conn,connw,zr), pfn)
 
-N = len(CO1)
-C = int(np.ceil(np.sqrt(N)))
-R = int(np.ceil(N / float(C)))
-plt.clf()
-for i,co1 in enumerate(CO1):
-	plt.subplot(R,C, i+1)
-	plt.imshow(co1, **ima)
+	plt.clf()
+	ima = dict(interpolation='nearest', origin='lower',
+			   vmin=zr[0], vmax=zr[1])
+	plt.imshow(conn / np.maximum(1, connw), **ima)
 	plt.xticks([]), plt.yticks([])
 	plt.gray()
-ps.savefig()
+	ps.savefig()
+	
+	# N = len(CO1)
+	# C = int(np.ceil(np.sqrt(N)))
+	# R = int(np.ceil(N / float(C)))
+	# plt.clf()
+	# for i,co1 in enumerate(CO1):
+	# 	plt.subplot(R,C, i+1)
+	# 	plt.imshow(co1, **ima)
+	# 	plt.xticks([]), plt.yticks([])
+	# 	plt.gray()
+	# ps.savefig()
 
-sys.exit(0)
+
+	# label brightest sources
+	I = np.argsort(-S.psfflux[:,2])
+	for j,i in enumerate(I[:20]):
+		r,d = S.ra[i], S.dec[i]
+		ok,x,y = cowcs.radec2pixelxy(r,d)
+		plt.text(x, y, '%i' % j, color='r')
+	ps.savefig()
 
 
-matchedfn = 'sw.fits'
-if os.path.exists(matchedfn):
-	SW = fits_table(matchedfn)
-	qsocuts(SW)
-	sys.exit(0)
+	if False:
+		# Number 7 - nice galaxy
+		# Numbers 4,16,19 - blob
+		jj = [4,16,19]
+		srr = [S.ra [I[j]]  for j in jj]
+		sdd = [S.dec[I[j]]  for j in jj]
+		print('rr', srr)
+		print('dd', sdd)
+	
+		sz = int(0.8 * (max(sdd) - min(sdd)) / (0.396/3600.))
+		print('sz', sz)
+		#ra = np.mean(srr)
+		#dec = np.mean(sdd)
+		ra  = (max(srr) + min(srr)) / 2.
+		dec = (max(sdd) + min(sdd)) / 2.
+	
+		print('RA,Dec', ra,dec)
+	
+		#ii = I[4]
+		#ra,dec = S.ra[ii],S.dec[ii]
+		#sz = 15
+
+	sz = int(0.01 * (3600./0.396))
+	print('sz', sz)
+
+	for r,c,f in np.unique(zip(S.run, S.camcol, S.field)):
+		print('Run, camcol, field', r,c,f)
+
+	r,c,f = np.unique(zip(S.run, S.camcol, S.field)) [1]
+	tim,tinf = get_tractor_image_dr9(r, c, f, 'r', #psf='dg',
+									 roiradecsize=(ra,dec,sz))
+
+	roi = tinf['roi']
+	ssrcs = get_tractor_sources_dr9(r, c, f, 'r', roi=roi, nanomaggies=True)
+
+	tr = Tractor([tim], ssrcs)
+	mod = tr.getModelImage(0)
+
+	xx,yy = [],[]
+	for src in ssrcs:
+		x,y = tim.getWcs().positionToPixel(src.getPosition())
+		xx.append(x)
+		yy.append(y)
+
+	print('Initial models:')
+	for src in tr.catalog:
+		print('  ', src)
+	for src in tr.catalog:
+		print('  RA,Dec %.8f, %.8f' % (src.getPosition().ra, src.getPosition().dec))
+
+		x,y = tim.getWcs().positionToPixel(src.getPosition(), color=0.5)
+		print('  x,y %.6f, %.6f  w/color' % (x,y))
+		x,y = tim.getWcs().positionToPixel(src.getPosition(), color=0.)
+		print('  x,y %.6f, %.6f' % (x,y))
+
+	plt.figure(figsize=(2,2))
+	plt.clf()
+	plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
+
+	# plt.subplot(2,2,1)
+	plt.imshow(tim.getImage(), **ima)
+	plt.xticks([]), plt.yticks([])
+	ps.savefig()
+
+	# plt.subplot(2,2,2)
+	plt.imshow(mod, **ima)
+	ps.savefig()
+
+	# plt.subplot(2,2,3)
+	plt.imshow((tim.getImage() - mod) * tim.getInvError(), interpolation='nearest',
+	 		   origin='lower', vmin=-5, vmax=5)
+	ax = plt.axis()
+	plt.plot(xx, yy, 'rx')
+	plt.axis(ax)
+	ps.savefig()
+
+	plt.clim(vmin=-3, vmax=3)
+	ps.savefig()
+
+	tr.freezeAllRecursive()
+	tr.thawPathsTo('r')
+	tr.thawPathsTo('ra')
+	tr.thawPathsTo('dec')
+	while True:
+		dlnp,X,a = tr.optimize()
+		print('dlnp', dlnp)
+		if dlnp < 1.:
+			break
+
+	print('Final models:')
+	for src in tr.catalog:
+		print('  ', src)
+	for src in tr.catalog:
+		print('  RA,Dec %.8f, %.8f' % (src.getPosition().ra, src.getPosition().dec))
+
+		x,y = tim.getWcs().positionToPixel(src.getPosition(), color=0.5)
+		print('  x,y %.6f, %.6f  w/color' % (x,y))
+		x,y = tim.getWcs().positionToPixel(src.getPosition(), color=0.)
+		print('  x,y %.6f, %.6f' % (x,y))
+
+	mod = tr.getModelImage(0)
+
+	#plt.clf()
+	#plt.subplot(2,2,1)
+	#plt.imshow(tim.getImage(), **ima)
+	#plt.subplot(2,2,2)
+
+	plt.clf()
+	plt.imshow(mod, **ima)
+	plt.xticks([]), plt.yticks([])
+	ps.savefig()
+	
+	#plt.subplot(2,2,3)
+	#plt.imshow((tim.getImage() - mod) * tim.getInvError(), interpolation='nearest',
+	#		   origin='lower', vmin=-5, vmax=5)
+	#ps.savefig()
+
+	plt.imshow((tim.getImage() - mod) * tim.getInvError(), interpolation='nearest',
+	 		   origin='lower', vmin=-5, vmax=5)
+	ax = plt.axis()
+	plt.plot(xx, yy, 'rx')
+	plt.axis(ax)
+	ps.savefig()
+
+	plt.clim(vmin=-3, vmax=3)
+	ps.savefig()
+
+
+
+
+	SH,SW = tim.shape
+
+	cowcs = TractorToFitsWcs(tim.getWcs())
+	cowcs.imageh,cowcs.imagew = tim.shape
+
+	pfn = 'coadd-wise-2.pickle'
+	if os.path.exists(pfn):
+		conn,connw, comonn, comonnw, CO1 = unpickle_from_file(pfn)
+	else:
+		conn  = np.zeros((SH,SW))
+		connw = np.zeros((SH,SW))
+		comonn  = np.zeros((SH,SW))
+		comonnw = np.zeros((SH,SW))
+
+		CO1 = []
+		for i,(tim,mod,roi) in enumerate(res1):
+			wcs = TractorToFitsWcs(tim.getWcs())
+			wcs.imageh, wcs.imagew = tim.shape
+			Yo,Xo,Yi,Xi,ims = resample_with_wcs(cowcs, wcs, [], 0, spline=False)
+			if Xi is None:
+				continue
+			sky = tim.getSky().val
+			ie = tim.getInvError()
+			pix = tim.getImage()
+			conn  [Yo,Xo] += ((pix[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+			connw [Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+
+			comonn  [Yo,Xo] += ((mod[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+			comonnw [Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+
+			co1  = np.zeros((SH,SW))
+			co1w  = np.zeros((SH,SW))
+			mo1  = np.zeros((SH,SW))
+			mo1w  = np.zeros((SH,SW))
+			co1 [Yo,Xo] += ((pix[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+			co1w[Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+			mo1 [Yo,Xo] += ((mod[Yi,Xi] - sky) * (ie[Yi,Xi] > 0))
+			mo1w[Yo,Xo] += (1 * (ie[Yi,Xi] > 0))
+			CO1.append((co1,co1w, mo1,mo1w))
+
+		pickle_to_file((conn,connw, comonn, comonnw, CO1), pfn)
+
+
+	wima = dict(interpolation='nearest', origin='lower',
+			 #  vmin=-10, vmax=50)
+				vmin=0, vmax=20)
+
+	print(len(CO1), 'WISE images overlap')
+
+	for p in [10, 25, 50, 75, 90, 95, 99]:
+		print('Percentiles: ', p, np.percentile(conn/np.maximum(1,connw), p))
+
+	plt.clf()
+	plt.imshow(conn / np.maximum(1, connw), **wima)
+	plt.xticks([]), plt.yticks([])
+	plt.gray()
+	ps.savefig()
+
+	plt.clf()
+	plt.imshow(comonn / np.maximum(1, comonnw), **wima)
+	plt.xticks([]), plt.yticks([])
+	plt.gray()
+	ps.savefig()
+
+	#for (co1, co1w, mo1, mo1w) in CO1[:10]:
+	(co1, co1w, mo1, mo1w) = CO1[2]
+	if True:
+		plt.clf()
+		plt.imshow(co1, **wima)
+		plt.xticks([]), plt.yticks([])
+		plt.gray()
+		ps.savefig()
+
+		plt.clf()
+		plt.imshow(mo1, **wima)
+		plt.xticks([]), plt.yticks([])
+		plt.gray()
+		ps.savefig()
+
+
+
+
+
+coadd_plots()
+#sys.exit(0)
+
 
 
 
@@ -774,8 +1115,6 @@ if not os.path.exists(swfn):
 else:
 	SWC = fits_table(swfn)
 
-
-import wise
 
 
 def psfplots():
@@ -898,6 +1237,9 @@ def tractor_vs_cat():
  
 
 #tractor_vs_cat()
+#sys.exit(0)
+
+
 
 I = np.flatnonzero((W.w1 + W.w2) > 0.)
 
@@ -913,6 +1255,8 @@ SW.optmod = fluxtomag((SW.modelflux[:,1] * 0.8 +
 					   SW.modelflux[:,3] * 1.0) / 2.4)
 SW.wise = fluxtomag((SW.w1 * 1.0 +
 					 SW.w2 * 0.5) / 1.5)
+SW.writeto(matchedfn)
+
 
 print('optpsf:', SW.optpsf.min(), SW.optpsf.max())
 print('optmod:', SW.optmod.min(), SW.optmod.max())
@@ -936,11 +1280,10 @@ print('wise:', SW.wise.min(), SW.wise.max())
 # 					np.logical_or(SW.ispsf, (SW.optpsf - SW.optmod) < 0.1) )
 # print(len(I), 'pass g-i and 17-22 and opt-wise color and PSF cut')
 
-SW.writeto(matchedfn)
 
-qsocuts(SW)
 
-sys.exit(0)
+#qsocuts(SW)
+#sys.exit(0)
 
 
 
@@ -969,6 +1312,24 @@ for wb in ['w1','w2']:
 			ps.savefig()
 
 # Some summary plots
+
+
+plt.clf()
+#n1,b,p1 = plt.hist(W.w1mag, 100, log=True, histtype='step', color='b', range=(5,29))
+#n2,b,p2 = plt.hist(W.w2mag, 100, log=True, histtype='step', color='r', range=(5,29))
+n1,b,p1 = plt.hist(W.w1mpro, 100, log=True, histtype='step', color='b', range=(5,29))
+n2,b,p2 = plt.hist(W.w2mpro, 100, log=True, histtype='step', color='r', range=(5,29))
+n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True, histtype='step', color='c', range=(5,29))
+n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True, histtype='step', color='m', range=(5,29))
+plt.xlabel('WISE mag')
+plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
+plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
+plt.ylabel('Number of sources')
+plt.title('W3 area: WISE forced photometry mag distribution')
+ps.savefig()
+
+
+
 
 # plt.clf()
 # plt.hist(np.log10(np.maximum(1e-3, S.modelflux[:,2])), 100)
@@ -1076,17 +1437,6 @@ for bname in ['w1','w2']:
 
 
 
-plt.clf()
-n1,b,p1 = plt.hist(W.w1mag, 100, log=True, histtype='step', color='b', range=(5,29))
-n2,b,p2 = plt.hist(W.w2mag, 100, log=True, histtype='step', color='r', range=(5,29))
-n3,b,p3 = plt.hist(WC.w1mpro, 100, log=True, histtype='step', color='c', range=(5,29))
-n4,b,p4 = plt.hist(WC.w2mpro, 100, log=True, histtype='step', color='m', range=(5,29))
-plt.xlabel('WISE mag')
-plt.legend((p1,p2,p3,p4),('W1 (Tractor)','W2 (Tractor)', 'W1 (WISE cat)', 'W2 (WISE cat)'))
-plt.ylim(1, max(n1.max(), n2.max(), n3.max(), n4.max())*1.2)
-plt.ylabel('Number of sources')
-plt.title('W3 area: WISE forced photometry mag distribution')
-ps.savefig()
 
 
 
