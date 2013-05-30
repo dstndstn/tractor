@@ -116,11 +116,11 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 
-def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
+def generalRC3(name,ra,dec,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
     entry = getName(name,fn="mediumrc3.fits")
     print entry
-    ra = float(entry['RA'][0])
-    dec = float(entry['DEC'][0])
+    #ra = float(entry['RA'][0])
+    #dec = float(entry['DEC'][0])
     log_ae = float(entry['LOG_AE'][0])
     log_d25 = float(entry['LOG_D25'][0])
     print 'LOG_AE is %s' % log_ae
@@ -140,7 +140,7 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1
     
     general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
-def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
+def generalNSAtlas (nsid,ra,dec,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
     data = pyfits.open("nsa-short.fits.gz")[1].data
     e=data.field('NSAID')
 
@@ -154,7 +154,7 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,sc
 
     print "Radius is %e" % fieldradius
 
-    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
+    general("NSA_ID_%s" % nsid,ra,dec,fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
 
 

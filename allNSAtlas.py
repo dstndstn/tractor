@@ -15,10 +15,9 @@ from halflight import halflight
 
 def main():
     nsgals2=[]
-    f = open("targets.txt","r")
+    f = open("targets2.txt","r")
     for line in f:
         nsgals2.append(int(line))
-
     print nsgals2
     for entry in nsgals2:
         try:

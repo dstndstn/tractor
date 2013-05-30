@@ -25,7 +25,7 @@ def halflight(name,makePlots=False,direc='RC3_Output'):
     CG = unpickle_from_file("%s/%s.pickle" %(direc,name))
     ra,dec = CG.getPosition()
     maxradius=max(CG.shapeExp.re,CG.shapeDev.re)
-    assert(maxradius<300.)
+    assert(maxradius<500.)
     print "Working on %s" % name
     print CG
 

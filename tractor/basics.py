@@ -1440,7 +1440,7 @@ class ScaledPhotoCal(ParamsWrapper):
 
 class ScaledWcs(ParamsWrapper):
 	def __init__(self, wcs, factor):
-		super(ScaledWcs,self).__init__(photocal)
+		super(ScaledWcs,self).__init__(wcs)
 		self.factor = factor
 		self.wcs = wcs
 

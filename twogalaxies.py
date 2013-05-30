@@ -2,6 +2,7 @@
 # (this tells emacs to indent with spaces)
 import matplotlib
 matplotlib.use('Agg')
+
 import os
 import logging
 import urllib2
@@ -19,14 +20,17 @@ from tractor import *
 from tractor import sdss as st
 from tractor.saveImg import *
 from tractor import sdss_galaxy as sg
-from tractor import sdss as st
 from tractor import basics as ba
 from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getName
 from tractor.cache import *
 from astrometry.util.sdss_radec_to_rcf import *
+
+from halflight import halflight
+from addtodb import add_to_table
 import optparse
+import sys
 
 def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     from astrometry.util.util import Tan
@@ -116,49 +120,19 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 
-def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
-    entry = getName(name,fn="mediumrc3.fits")
-    print entry
-    ra = float(entry['RA'][0])
-    dec = float(entry['DEC'][0])
-    log_ae = float(entry['LOG_AE'][0])
-    log_d25 = float(entry['LOG_D25'][0])
-    print 'LOG_AE is %s' % log_ae
-    print 'LOG_D25 is %s' % log_d25
-
-#    if log_ae != 0:
-        #fieldradius = 10.*(10.**log_ae)/10.
-        #remradius = 10.*(10.**log_ae)/10.
-    if log_d25 !=0:
-        #print 'No log_AE, using d25'
-        fieldradius = (10.**log_d25)/10.
-        remradius = (10.**log_d25)/10.
-    else:
-        print 'No d_25, using default values'
-        fieldradius = 3.
-        remradius = 2.        
-    
-    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
-
-def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
-    data = pyfits.open("nsa-short.fits.gz")[1].data
-    e=data.field('NSAID')
-
-    mask = e == nsid
-    record = data[mask]
-
-    print record
-
-    if fieldradius==0:
-        fieldradius=record['SERSIC_TH50'][0]
-
-    print "Radius is %e" % fieldradius
-
-    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
-
-
-
-def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
+def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
+    name = "%s %s" % (name1,name2)
+    ra = float(ra1)
+    dec = float(dec1)
+    ra2 = float(ra2)
+    dec2 = float(dec2)
+    remradius = 6.
+    fieldradius = 6.
+    threads = None
+    itune1=5
+    itune2=5
+    ntune=0
+    nocache=True
     #Radius should be in arcminutes
     if threads:
         mp = multiproc(nthreads=threads)
@@ -172,6 +146,8 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print name
 
     prefix = '%s' % (name.replace(' ', '_'))
+    prefix1 = '%s' % (name1.replace(' ', '_'))
+    prefix2 = '%s' % (name2.replace(' ', '_'))
     print 'Removal Radius', remradius
     print 'Field Radius', fieldradius
     print 'RA,Dec', ra, dec
@@ -180,19 +156,15 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
     print rcfs
-    print len(rcfs)
     assert(len(rcfs)>0)
-    if 10 <= len(rcfs) < 20:
-        scale = 2
-    elif 20 <= len(rcfs) < 40:
-        scale = 4
-    elif 40 <= len(rcfs) < 80:
-        scale = 8
-    assert(len(rcfs)<80)
+    assert(len(rcfs)<15)
 
     sras, sdecs, smags = tychoMatch(ra,dec,(fieldradius*1.5)/60.)
 
-    imkw = dict(psf='kl-gm')
+    for sra,sdec,smag in zip(sras,sdecs,smags):
+        print sra,sdec,smag
+
+    imkw = dict(psf='dg')
     if dr9:
         getim = st.get_tractor_image_dr9
         getsrc = st.get_tractor_sources_dr9
@@ -207,7 +179,6 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         imkw.update(useMags=True)
 
     bands=['u','g','r','i','z']
-    #bands=['r']
     bandname = 'r'
     flipBands = ['r']
     print rcfs
@@ -222,19 +193,14 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
             continue
         if s is None:
             continue
-        if scale > 1:
-            for im in ims:
-                timgs.append(st.scale_sdss_image(im,scale))
-        else:
-            timgs.extend(ims)
+        timgs.extend(ims)
         allsources.extend(s)
         sources.append(s)
 
     #rds = [rcf[3:5] for rcf in rcfs]
-    #plotarea(ra, dec, fieldradius, name, prefix, timgs) #, rds)
-    
-    #lvl = logging.DEBUG
-    #logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
+    plotarea(ra, dec, fieldradius, name, prefix, timgs) #, rds)
+    lvl = logging.DEBUG
+    logging.basicConfig(level=lvl,format='%(message)s',stream=sys.stdout)
     tractor = st.Tractor(timgs, allsources, mp=mp)
 
     sa = dict(debug=True, plotAll=False,plotBands=False)
@@ -254,10 +220,10 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print bands
 
     print "Number of images: ", len(timgs)
-    #for timg,band in zip(timgs,bands):
-    #    data = timg.getImage()/np.sqrt(timg.getInvvar())
-    #    plt.hist(data,bins=100)
-    #    plt.savefig('hist-%s.png' % (band))
+#    for timg,band in zip(timgs,bands):
+#        data = timg.getImage()/np.sqrt(timg.getInvvar())
+#        plt.hist(data,bins=100)
+#        plt.savefig('hist-%s.png' % (band))
 
     saveAll('initial-'+prefix, tractor,**sa)
     #plotInvvar('initial-'+prefix,tractor)
@@ -265,6 +231,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     
 
     for sra,sdec,smag in zip(sras,sdecs,smags):
+        print sra,sdec,smag
 
         for img in tractor.getImages():
             wcs = img.getWcs()
@@ -281,6 +248,8 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         wcs = timg.getWcs()
         xtr,ytr = wcs.positionToPixel(RaDecPos(ra,dec))
     
+        print xtr,ytr
+
         xt = xtr 
         yt = ytr
         r = ((remradius*60.))/.396 #radius in pixels
@@ -295,11 +264,17 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     newShape = sg.GalaxyShape((remradius*60.)/10.,1.,0.)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
+    newShape2 = sg.GalaxyShape((remradius*60.)/10.,1.,0.)
+    newBright2 = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
+    EG2 = st.ExpGalaxy(RaDecPos(ra2,dec2),newBright2,newShape2)
     print EG
+    print EG2
     tractor.addSource(EG)
+    tractor.addSource(EG2)
 
 
     saveAll('added-'+prefix,tractor,**sa)
+
 
     #print 'Tractor has', tractor.getParamNames()
 
@@ -307,6 +282,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
         im.freezeAllParams()
         im.thawParam('sky')
     tractor.catalog.freezeAllBut(EG)
+    tractor.catalog.thawParams(EG2)
 
     #print 'Tractor has', tractor.getParamNames()
     #print 'values', tractor.getParams()
@@ -338,10 +314,28 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print CGBright1
 
     CG = st.CompositeGalaxy(CGPos,CGBright1,CGShape1,CGBright2,CGShape2)
+
+    CG2Pos = EG2.getPosition()
+    CG2Shape1 = EG2.getShape().copy()
+    CG2Shape2 = EG2.getShape().copy()
+    EG2Bright = EG2.getBrightness()
+
+    CG2u = EG2Bright[0] + 0.75
+    CG2g = EG2Bright[1] + 0.75
+    CG2r = EG2Bright[2] + 0.75
+    CG2i = EG2Bright[3] + 0.75
+    CG2z = EG2Bright[4] + 0.75
+    CG2Bright1 = ba.Mags(r=CG2r,g=CG2g,u=CG2u,z=CG2z,i=CG2i,order=['u','g','r','i','z'])
+    CG2Bright2 = ba.Mags(r=CG2r,g=CG2g,u=CG2u,z=CG2z,i=CG2i,order=['u','g','r','i','z'])
+    CG2 = st.CompositeGalaxy(CG2Pos,CG2Bright1,CG2Shape1,CG2Bright2,CG2Shape2)
+
     tractor.removeSource(EG)
+    tractor.removeSource(EG2)
     tractor.addSource(CG)
+    tractor.addSource(CG2)
 
     tractor.catalog.freezeAllBut(CG)
+    tractor.catalog.thawParams(CG2)
     print resource.getpagesize()
     print resource.getrusage(resource.RUSAGE_SELF)[2]
 
@@ -376,39 +370,19 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print CG.getBrightness()
 
     pfn = '%s.pickle' % prefix
-    pickle_to_file(CG,pfn)
+    pickle_to_file([CG,CG2],pfn)
 
     makeflipbook(prefix,len(tractor.getImages()),itune1,itune2,ntune)
 
+    pickle_to_file(CG,"%s.pickle" % prefix1)
+    pickle_to_file(CG2,"%s.pickle" % prefix2)
+    os.system('cp %s.pickle RC3_Output' % prefix1)
+    os.system('cp %s.pickle RC3_Output' % prefix2)
 
-def main():
-    import optparse
-    parser = optparse.OptionParser(usage='%prog [options] <name>')
-    parser.add_option('--threads', dest='threads', type=int, help='use multiprocessing')
-    parser.add_option('--itune1',dest='itune1',type=int,help='Individual tuning, first stage',default=5)
-    parser.add_option('--itune2',dest='itune2',type=int,help='Individual tuning, second stage',default=5)
-    parser.add_option('--ntune',dest='ntune',type=int,help='All objects tuning',default=0)
-    parser.add_option('--radius',dest='fradius',type=float,help='Search radius in arcseconds',default=1.)
-    parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
-    parser.add_option('--nsatlas',dest='nsatlas',action='store_true',default=False,help='Use argument as Nasa-Sloan Atlas id')
-
-    opt,args = parser.parse_args()
-    if len(args) != 1:
-        parser.print_help()
-        sys.exit(-1)
-
-    threads=opt.threads
-
-    
-    itune1 = opt.itune1
-    itune2 = opt.itune2
-    ntune = opt.ntune
-    nocache = opt.nocache
-    if opt.nsatlas:
-        generalNSAtlas(int (args[0]),threads,itune1,itune2,ntune,nocache,fieldradius=opt.fradius)
-    else:
-        name = args[0]
-        generalRC3(name,threads,itune1,itune2,ntune,nocache)
+    halflight('%s' % prefix1)
+    halflight('%s' % prefix2)
+    add_to_table('%s' % prefix1)
+    add_to_table('%s' % prefix2)
 
 
 

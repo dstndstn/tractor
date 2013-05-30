@@ -109,7 +109,6 @@ def makeNSAtlastable():
             exp_phi=CG.shapeExp.phi
             
             cg_ra.append(pos[0])
-            print cg_ra
             cg_dec.append(pos[1])
             cg_totmags.append(tot)
             cg_devmags.append(dev)
@@ -117,7 +116,6 @@ def makeNSAtlastable():
             cg_devab.append(dev_ab)
             cg_devphi.append(dev_phi)
             cg_expmags.append(exp)
-            print cg_expmags
             cg_expre.append(exp_re)
             cg_expab.append(exp_ab)
             cg_expphi.append(exp_phi)
@@ -145,8 +143,6 @@ def makeNSAtlastable():
             #print cg_extinction
             
             imag_corrected=tot[3]-correcti
-            print tot[3],correcti,imag_corrected
-            print r50s[3]
             y=mu_50(imag_corrected,r50s[3])
     
             cg_mu50.append(mu_50(imag_corrected,r50s[3]))

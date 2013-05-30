@@ -659,10 +659,8 @@ def get_tractor_image(run, camcol, field, bandname,
 			   np.clip(yc+S, 0, H)]
 		roi = [int(x) for x in roi]
 
-		if roi[0]==roi[1] or roi[2]==roi[3]:
-			print "ZERO ROI?", roi
-			return None,None
-
+		if (roi[0]==roi[1] or (roi[2]==roi[3])):
+			print "zero roi"
 		print 'roi', roi
 
 		info.update(roi=roi)
@@ -902,7 +900,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 	if roiradecsize is not None:
 		ra,dec,S = roiradecsize
 		fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-		#print 'ROI center RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
+		print 'ROI center RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
 		xc,yc = [int(np.round(p)) for p in fxc,fyc]
 
 		roi = [np.clip(xc-S, 0, W),
@@ -911,8 +909,8 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 			   np.clip(yc+S, 0, H)]
 		roi = [int(x) for x in roi]
 		if roi[0]==roi[1] or roi[2]==roi[3]:
-			#print "ZERO ROI?", roi
-			#print 'S = ', S, 'xc,yc = ', xc,yc
+			print "ZERO ROI?", roi
+			print 'S = ', S, 'xc,yc = ', xc,yc
 			#assert(False)
 			return None,None
 

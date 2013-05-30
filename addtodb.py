@@ -52,7 +52,7 @@ def add_to_table_nsatlas(name):
 
     name = name.replace('_',' ')
     rc3_name = name
-    rc3=getName(name)
+    rc3=getName(name,fn="mediumrc3.fits")
     rc3_ra = float(record['RA'][0])
     rc3_dec = float(record['DEC'][0])
     rc3_log_ae = float(0.)
@@ -118,7 +118,7 @@ def add_to_table(name):
 
     name = name.replace('_',' ')
     rc3_name = name
-    rc3=getName(name)
+    rc3=getName(name,fn="mediumrc3.fits")
     rc3_ra = float(rc3['RA'][0])
     rc3_dec = float(rc3['DEC'][0])
     rc3_log_ae = float(rc3['LOG_AE'][0])

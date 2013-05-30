@@ -14,7 +14,7 @@ from halflight import halflight
 from addtodb import add_to_table
 
 def main():
-    rc3 = pyfits.open('newrc3limited.fits')
+    rc3 = pyfits.open('mediumrc3.fits')
     entries=[]
     for entry in rc3[1].data:
         if entry['NAME'] != '':
@@ -37,8 +37,7 @@ def main():
             entries.append('%s' %name)
     things=[str(x) for x in entries]
     print len(things)
-    #things.reverse()
-
+    things.reverse()
     for entry in things:
         print entry
         newentry=entry.replace(' ', '_')

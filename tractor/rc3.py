@@ -21,9 +21,9 @@ def getNGC(ngc):
     return record
 
 
-def getName(name):
+def getName(name,fn="newrc3limited.fits"):
 
-    rc3 = pyfits.open("newrc3limited.fits")
+    rc3 = pyfits.open(fn)
 
     data = rc3[1].data
     names = data.field("NAME")
