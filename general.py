@@ -177,8 +177,10 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print 'RA,Dec', ra, dec
 
     print os.getcwd()
+    print ra,dec,math.hypot(fieldradius,13./2.)
 
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
+    assert(False)
     print rcfs
     print len(rcfs)
     assert(len(rcfs)>0)
@@ -407,7 +409,7 @@ def main():
     if opt.nsatlas:
         generalNSAtlas(int (args[0]),threads,itune1,itune2,ntune,nocache,fieldradius=opt.fradius)
     else:
-        name = args[0]
+        name = args[0].replace('_',' ')
         generalRC3(name,threads,itune1,itune2,ntune,nocache)
 
 

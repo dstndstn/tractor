@@ -138,7 +138,7 @@ def generalRC3(name,ra,dec,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,
         fieldradius = 3.
         remradius = 2.        
     
-    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
+    general(name,float(ra),float(dec),remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
 
 def generalNSAtlas (nsid,ra,dec,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
     data = pyfits.open("nsa-short.fits.gz")[1].data
@@ -177,7 +177,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
     print 'RA,Dec', ra, dec
 
     print os.getcwd()
-
+    print ra,dec,math.hypot(fieldradius,13./2.)
     rcfs = radec_to_sdss_rcf(ra,dec,radius=math.hypot(fieldradius,13./2.),tablefn="dr9fields.fits")
     print rcfs
     print len(rcfs)

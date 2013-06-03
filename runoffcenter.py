@@ -1,8 +1,9 @@
-from general import general
+from movegalaxy import generalRC3
 import sys
 
 f = open('offdata.txt','r')
 
 for line in f:
     name,ra,dec = line.split()
-    generalRC3(name,ra,dec)
+    print name,ra,dec
+    generalRC3(name.replace('_',' '),ra,dec)
