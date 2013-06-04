@@ -29,6 +29,15 @@ text2fits.py -s "|" -f "ddffffffffffffffffff" -H "ra dec dra ddec w1mpro w1sigmp
 
 
 
+Forced photometry run on targets from Schlegel, 2013-04-18
+
+svn rev 22604
+
+python -u wise2.py -s stripe82-19objs.fits -o meas-s82-19objs-%03i-b.fits -P s82b -v --threads 8 --osources stripe82-19objs-meas.fits > w1b.log 2>&1 &
+python -u wise2.py -p -r meas-s82-19objs-999-b.fits -m -P compare
+
+
+
 
 #  Going to great lengths to avoid learning IDL:
 # Evaluating Aaron's WISE PSF model on a grid:
