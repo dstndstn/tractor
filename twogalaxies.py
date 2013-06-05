@@ -58,7 +58,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
     plt.clf()
     I = plt.imread(imgfn)
     plt.imshow(I, interpolation='nearest', origin='lower')
-    x,y = wcs.radec2pixelxy(ra, dec)
+    temp,x,y = wcs.radec2pixelxy(ra, dec)
     R = radius * 60. / scale
     ax = plt.axis()
     plt.gca().add_artist(matplotlib.patches.Circle(xy=(x,y), radius=R, color='g',
@@ -71,7 +71,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
             px,py = [],[]
             for x,y in [(1,1),(W,1),(W,H),(1,H),(1,1)]:
                 rd = twcs.pixelToPosition(x,y)
-                xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
+                temp,xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
                 print 'x,y', x, y
                 x1,y1 = twcs.positionToPixel(rd)
                 print '  x1,y1', x1,y1
@@ -95,7 +95,7 @@ def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):
         px,py = [],[]
         for ra,dec in rds:
             print 'ra,dec', ra,dec
-            xx,yy = wcs.radec2pixelxy(ra, dec)
+            temp,xx,yy = wcs.radec2pixelxy(ra, dec)
             px.append(xx)
             py.append(yy)
         plt.plot(px, py, 'go')

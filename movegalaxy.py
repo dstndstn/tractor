@@ -21,7 +21,7 @@ from tractor.saveImg import *
 from tractor import sdss_galaxy as sg
 from tractor import sdss as st
 from tractor import basics as ba
-from tractor.overview import fieldPlot
+#from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getName
 from tractor.cache import *
