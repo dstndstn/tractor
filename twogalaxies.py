@@ -379,10 +379,10 @@ def twogalaxies(name1,ra1,dec1,name2,ra2,dec2):
     os.system('cp %s.pickle RC3_Output' % prefix1)
     os.system('cp %s.pickle RC3_Output' % prefix2)
 
-    halflight('%s' % prefix1)
-    halflight('%s' % prefix2)
-    add_to_table('%s' % prefix1)
-    add_to_table('%s' % prefix2)
+#    halflight('%s' % prefix1)
+#    halflight('%s' % prefix2)
+#    add_to_table('%s' % prefix1)
+#    add_to_table('%s' % prefix2)
 
 
 
