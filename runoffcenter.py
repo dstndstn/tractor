@@ -1,4 +1,4 @@
-from movegalaxy import generalRC3
+from general import generalRC3
 import sys
 
 f = open('offdata.txt','r')

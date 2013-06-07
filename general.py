@@ -116,20 +116,25 @@ def get_ims_and_srcs((r,c,f,rr,dd, bands, ra, dec, roipix, imkw, getim, getsrc))
     return (tims,s)
 
 
-def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
+def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,ra=None,dec=None,ab=1.,angle=0.,radius=None):
     entry = getName(name,fn="mediumrc3.fits")
     print entry
-    ra = float(entry['RA'][0])
-    dec = float(entry['DEC'][0])
+    if ra is None:
+        ra = entry['RA'][0]
+    if dec is None:
+        dec = entry['DEC'][0]
     log_ae = float(entry['LOG_AE'][0])
     log_d25 = float(entry['LOG_D25'][0])
     print 'LOG_AE is %s' % log_ae
     print 'LOG_D25 is %s' % log_d25
-
+    
+    if radius is not None:
+        fieldradius = float(radius)
+        remradius = float(radius)
 #    if log_ae != 0:
         #fieldradius = 10.*(10.**log_ae)/10.
         #remradius = 10.*(10.**log_ae)/10.
-    if log_d25 !=0:
+    elif log_d25 !=0:
         #print 'No log_AE, using d25'
         fieldradius = (10.**log_d25)/10.
         remradius = (10.**log_d25)/10.
@@ -138,7 +143,7 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1
         fieldradius = 3.
         remradius = 2.        
     
-    general(name,ra,dec,remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
+    general(name,float(ra),float(dec),remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale,ab=float(ab),angle=float(angle))
 
 def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
     data = pyfits.open("nsa-short.fits.gz")[1].data
@@ -158,7 +163,7 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,sc
 
 
 
-def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1):
+def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,ab=1.,angle=0.):
     #Radius should be in arcminutes
     if threads:
         mp = multiproc(nthreads=threads)
@@ -294,7 +299,7 @@ def general(name,ra,dec,remradius,fieldradius,threads=None,itune1=5,itune2=5,ntu
                 tractor.removeSource(src)
 
     #saveAll('removed-'+prefix, tractor,**sa)
-    newShape = sg.GalaxyShape((remradius*60.)/10.,1.,0.)
+    newShape = sg.GalaxyShape((remradius*60.)/10.,ab,angle)
     newBright = ba.Mags(r=15.0,g=15.0,u=15.0,z=15.0,i=15.0,order=['u','g','r','i','z'])
     EG = st.ExpGalaxy(RaDecPos(ra,dec),newBright,newShape)
     print EG
@@ -393,6 +398,10 @@ def main():
     parser.add_option('--radius',dest='fradius',type=float,help='Search radius in arcseconds',default=1.)
     parser.add_option('--nocache',dest='nocache',action='store_true',default=False,help='Disable caching for memory reasons')
     parser.add_option('--nsatlas',dest='nsatlas',action='store_true',default=False,help='Use argument as Nasa-Sloan Atlas id')
+    parser.add_option('--ab',dest='ab',type=float,help='ab ratio')
+    parser.add_option('--angle',dest='angle',type=float,help='initial angle')
+    parser.add_option('--ra',dest='ra',type=float,help='initial ra')
+    parser.add_option('--dec',dest='dec',type=float,help='initial dec')
 
     opt,args = parser.parse_args()
     if len(args) != 1:
@@ -406,11 +415,15 @@ def main():
     itune2 = opt.itune2
     ntune = opt.ntune
     nocache = opt.nocache
+    if ab is None:
+        ab=1.
+    if angle is None:
+        angle = 0.
     if opt.nsatlas:
         generalNSAtlas(int (args[0]),threads,itune1,itune2,ntune,nocache,fieldradius=opt.fradius)
     else:
         name = args[0].replace('_',' ')
-        generalRC3(name,threads,itune1,itune2,ntune,nocache)
+        generalRC3(name,threads,itune1,itune2,ntune,nocache,ra=ra,dec=dec,ab=ab,angle=angle)
 
 
 
