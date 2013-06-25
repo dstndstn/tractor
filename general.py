@@ -128,6 +128,7 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1
     print 'LOG_AE is %s' % log_ae
     print 'LOG_D25 is %s' % log_d25
     
+    
     if radius is not None:
         fieldradius = float(radius)
         remradius = float(radius)
@@ -145,7 +146,7 @@ def generalRC3(name,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1
     
     general(name,float(ra),float(dec),remradius,fieldradius,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale,ab=float(ab),angle=float(angle))
 
-def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0):
+def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,scale=1,fieldradius=0,ra=None,dec=None,ab=1,angle=0):
     data = pyfits.open("nsa-short.fits.gz")[1].data
     e=data.field('NSAID')
 
@@ -158,8 +159,12 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,sc
         fieldradius=record['SERSIC_TH50'][0]
 
     print "Radius is %e" % fieldradius
+    if ra is None:
+        ra = record['RA'][0]
+    if dec is None:
+        dec = record['DEC'][0]
 
-    general("NSA_ID_%s" % nsid,record['RA'][0],record['DEC'][0],fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale)
+    general("NSA_ID_%s" % nsid,float(ra),float(dec),fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale,ab=ab,angle=angle)
 
 
 
