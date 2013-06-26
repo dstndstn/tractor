@@ -28,8 +28,11 @@ if __name__ == '__main__':
     wcs = FitsWcs(Tan(ra, dec, (1.+W)/2., (1.+H)/2.,
                       pscale, 0., 0., pscale, W, H))
 
-    # image sensitivity:
+    # an arbitrary name for this image's bandpass; if we used Flux
+    # rather than NanoMaggies as the brightness class we wouldn't need this
+    # (but in SDSS we'll be using multi-band NanoMaggies)
     band = 'r'
+    # image sensitivity:
     photocal = LinearPhotoCal(10., band=band)
 
     # flat sky
@@ -47,13 +50,14 @@ if __name__ == '__main__':
     gal1 = ExpGalaxy(RaDecPos(ra - 10 * pscale, dec),
                      brightness(50.),
                      GalaxyShape(5., 0.5, 45.))
+
     gal2 = DevGalaxy(RaDecPos(ra + 10 * pscale, dec),
                      brightness(50.),
                      GalaxyShape(5., 0.25, 135.))
 
     gal3 = FixedCompositeGalaxy(RaDecPos(ra, dec + 10 * pscale),
                                 brightness(50.),
-                                0.6,
+                                0.6, # fraction of light in deV component
                                 GalaxyShape(5., 0.6, 30.),
                                 GalaxyShape(5., 0.3, 45.))
 
