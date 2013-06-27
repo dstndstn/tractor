@@ -772,10 +772,10 @@ def stage3(opt=None, ps=None, tractors=None, band=None, **kwa):
 
 
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
-             wisedatadirs=None,
              **kwa):
 	bandnum = opt.bandnum
 	band = 'w%i' % bandnum
+    wisedatadirs = opt.wisedatadirs
 
 	print 'RA,Dec range', ralo, rahi, declo, dechi
 
@@ -1407,9 +1407,10 @@ def main():
     basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
     wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
                     (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+
+    opt.wisedatadirs = wisedatadirs
     
-	runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi,
-               wisedatadirs=wisedatadirs)
+	runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi)
 
 
 

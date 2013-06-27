@@ -30,77 +30,108 @@ if d is not None:
 	sys.path.append(os.getcwd())
 	batch = True
 
-# print 'args:', sys.argv
-# print 'environ:'
-# for k,v in os.environ.items():
-# 	print '  ', k, '=', v
-# print
-
 import numpy as np
 import logging
 from wise3 import *
 
-NDEC = 50
-NRA = 90
-
 arr = os.environ.get('PBS_ARRAYID')
-if arr is None:
-	#arr = 0
-	#arr = 125
-	# HACK!
-	arr = 147
-else:
+if arr is not None:
 	arr = int(arr)
 	
-band = int(arr / 100)
-ri = arr % 100
-
-print 'Band', band
-print 'RA slice', ri
-
 # duck-type command-line options
 class myopts(object):
 	pass
 opt = myopts()
 
-basename = 'ebossw3-v5'
+if arr is None:
+    # which slice to do for interactive jobs
+    arr = 147
 
-if not batch:
-	basename = 'ebossw3-tst'
+if False:
+    # W3 area
+    opt.sources = 'objs-eboss-w3-dr9.fits'
+    NDEC = 50
+    NRA = 90
+    band = int(arr / 100)
+    ri = arr % 100
+    print 'Band', band
+    print 'RA slice', ri
 
-opt.minflux = None
-opt.bandnum = band
-opt.osources = None
-opt.sources = 'objs-eboss-w3-dr9.fits'
+    r0,r1 = 210.593,  219.132
+    d0,d1 =  51.1822,  54.1822
+    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
+    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
 
-opt.ptsrc = False
-# v5
-#opt.ptsrc = True
+    opt.minflux = None
+    opt.bandnum = band
+    opt.osources = None
+    opt.minsb = 0.005
+    opt.ptsrc = False
+    opt.pixpsf = False
+    
+    if False:
+        # eboss w3 v4
+        basename = 'ebossw3-v4'
+        opt.ptsrc = False
+        opt.pixpsf = False
 
-opt.pixpsf = False
+    if False:
+        # eboss w3 v5
+        basename = 'ebossw3-v5'
+        opt.ptsrc = True
 
-#opt.minsb = 0.05
-opt.minsb = 0.005
+    if not batch:
+        basename = 'ebossw3-tst'
+        opt.ptsrc = False
+        opt.pixpsf = False
+
+
+if True:
+    # Stripe82 QSO truth-table region
+    base = '/clusterfs/riemann/raid000/bosswork/boss/wise1ext/sdss_stripe82'
+    opt.sources = os.path.join(base, 'objs-eboss-stripe82-dr9.fits')
+
+    r0, r1 = 317.0, 330.0
+    d0, d1 = 0., 1.25
+
+    NRA = 260
+    NDEC = 25
+    
+    band = int(arr / 300)
+    ri = arr % 300
+    print 'Band', band
+    print 'RA slice', ri
+
+    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82'
+    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+
+    opt.minflux = None
+    opt.bandnum = band
+    opt.osources = None
+    opt.minsb = 0.005
+    opt.ptsrc = False
+    opt.pixpsf = False
+    
+    # v1
+    basename = 'eboss-s82-v1'
+    opt.ptsrc = False
+    opt.pixpsf = False
+
+    if not batch:
+        basename = 'eboss-s82-tst'
+        opt.ptsrc = False
+        opt.pixpsf = False
+        
 
 lvl = logging.INFO
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-# W3 area
-r0,r1 = 210.593,  219.132
-d0,d1 =  51.1822,  54.1822
-basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
-wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
-                (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
-
-
 dd = np.linspace(d0, d1, NDEC + 1)
 rr = np.linspace(r0, r1, NRA  + 1)
 
-#print 'RA steps:', rr
-#print 'Dec steps:', dd
-
 rlo,rhi = rr[ri], rr[ri+1]
-
 for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 
 	fn = '%s-r%02i-d%02i-w%i.fits' % (basename, ri, di, opt.bandnum)
@@ -111,8 +142,8 @@ for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 			continue
 
 	# HACK!!
-	if not batch and di != 25:
-		continue
+	#if not batch and di != 25:
+	#	continue
 
 	try:
 		P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
