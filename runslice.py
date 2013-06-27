@@ -26,9 +26,9 @@ batch = False
 
 d = os.environ.get('PBS_O_WORKDIR')
 if d is not None:
-	os.chdir(d)
-	sys.path.append(os.getcwd())
-	batch = True
+    os.chdir(d)
+    sys.path.append(os.getcwd())
+    batch = True
 
 import numpy as np
 import logging
@@ -36,11 +36,11 @@ from wise3 import *
 
 arr = os.environ.get('PBS_ARRAYID')
 if arr is not None:
-	arr = int(arr)
-	
+    arr = int(arr)
+    
 # duck-type command-line options
 class myopts(object):
-	pass
+    pass
 opt = myopts()
 
 if arr is None:
@@ -134,70 +134,70 @@ rr = np.linspace(r0, r1, NRA  + 1)
 rlo,rhi = rr[ri], rr[ri+1]
 for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 
-	fn = '%s-r%02i-d%02i-w%i.fits' % (basename, ri, di, opt.bandnum)
-	if os.path.exists(fn):
-		print 'Output file exists:', fn
-		print 'Skipping'
-		if batch:
-			continue
+    fn = '%s-r%02i-d%02i-w%i.fits' % (basename, ri, di, opt.bandnum)
+    if os.path.exists(fn):
+        print 'Output file exists:', fn
+        print 'Skipping'
+        if batch:
+            continue
 
-	# HACK!!
-	#if not batch and di != 25:
-	#	continue
+    # HACK!!
+    #if not batch and di != 25:
+    #   continue
 
-	try:
-		P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
-				 opt=opt)
+    try:
+        P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
+                 opt=opt)
 
-		R = stage100(**P)
-		P.update(R)
-		R = stage101(**P)
-		P.update(R)
-		R = stage102(**P)
-		P.update(R)
-		R = stage103(**P)
-		P.update(R)
-		R = stage104(**P)
-		P.update(R)
+        R = stage100(**P)
+        P.update(R)
+        R = stage101(**P)
+        P.update(R)
+        R = stage102(**P)
+        P.update(R)
+        R = stage103(**P)
+        P.update(R)
+        R = stage104(**P)
+        P.update(R)
 
-		R = P['R']
-		R.writeto(fn)
-		print 'Wrote', fn
+        R = P['R']
+        R.writeto(fn)
+        print 'Wrote', fn
 
-		imst = P['imstats']
-		fn = '%s-r%02i-d%02i-w%i-imstats.fits' % (basename, ri, di, opt.bandnum)
-		imst.writeto(fn)
-		print 'Wrote', fn
+        imst = P['imstats']
+        fn = '%s-r%02i-d%02i-w%i-imstats.fits' % (basename, ri, di, opt.bandnum)
+        imst.writeto(fn)
+        print 'Wrote', fn
 
-		pfn = '%s-r%02i-d%02i-w%i.pickle' % (basename, ri, di, opt.bandnum)
+        pfn = '%s-r%02i-d%02i-w%i.pickle' % (basename, ri, di, opt.bandnum)
 
-		tractor = P['tractor']
-		ims1 = P['ims1']
+        tractor = P['tractor']
+        ims1 = P['ims1']
 
-		res1 = []
-		for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
-			print 'Tim:', dir(tim)
-			for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
-					  'mask', 'maskplane', 'rdmask', 'uncplane', 'vinvvar']:
-				try:
-					delattr(tim, k)
-				except:
-					pass
-			print 'Tim:', dir(tim)
-			res1.append((tim, mod, roi))
+        res1 = []
+        for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
+            print 'Tim:', dir(tim)
+            for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
+                      'mask', 'maskplane', 'rdmask', 'uncplane', 'vinvvar']:
+                try:
+                    delattr(tim, k)
+                except:
+                    pass
+            print 'Tim:', dir(tim)
+            res1.append((tim, mod, roi))
 
-		PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
-				  bandnum=opt.bandnum, S=P['S'])
-		pickle_to_file(PP, pfn)
+        PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
+                  bandnum=opt.bandnum, S=P['S'])
+        pickle_to_file(PP, pfn)
 
 
-	except:
-		import traceback
-		print '---------------------------------------------------'
-		print 'FAILED: dec slice', di, 'ra slice', ri
-		print rlo,rhi, dlo,dhi
-		print '---------------------------------------------------'
-		traceback.print_exc()
-		print '---------------------------------------------------'
-		if not batch:
-			raise
+    except:
+        import traceback
+        print '---------------------------------------------------'
+        print 'FAILED: dec slice', di, 'ra slice', ri
+        print rlo,rhi, dlo,dhi
+        print '---------------------------------------------------'
+        traceback.print_exc()
+        print '---------------------------------------------------'
+        if not batch:
+            raise
