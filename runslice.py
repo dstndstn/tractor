@@ -88,6 +88,10 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 # W3 area
 r0,r1 = 210.593,  219.132
 d0,d1 =  51.1822,  54.1822
+basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
+wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+
 
 dd = np.linspace(d0, d1, NDEC + 1)
 rr = np.linspace(r0, r1, NRA  + 1)
@@ -141,7 +145,6 @@ for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
 
 		res1 = []
 		for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
-			#res1.append((tim.getWcs(), tim.getPhotoCal(), tim.getSky(), img, mod, ie, roi))
 			print 'Tim:', dir(tim)
 			for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
 					  'mask', 'maskplane', 'rdmask', 'uncplane', 'vinvvar']:

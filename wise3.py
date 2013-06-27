@@ -772,22 +772,10 @@ def stage3(opt=None, ps=None, tractors=None, band=None, **kwa):
 
 
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
-			 **kwa):
+             wisedatadirs=None,
+             **kwa):
 	bandnum = opt.bandnum
 	band = 'w%i' % bandnum
-
-	#wisedatadirs = [('/clusterfs/riemann/raid007/bosswork/boss/wise_level1b', 'cryo'),
-	# 				('/clusterfs/riemann/raid000/bosswork/boss/wise1ext', 'post-cryo')]
-	
-	wisedatadirs = [('/clusterfs/riemann/raid000/bosswork/boss/wise1test/allsky', 'cryo'),
-					('/clusterfs/riemann/raid000/bosswork/boss/wise1test/prelim_postcryo', 'post-cryo'),]
-
-	# #ralo,rahi,declo,dechi = 212.0, 212.5, 52.0, 52.5
-	# cosdec = np.cos(np.deg2rad(52.))
-	# ddec = 0.06
-	# ralo,declo = 212.0, 52.0
-	# rahi  = ralo  + ddec / cosdec
-	# dechi = declo + ddec
 
 	print 'RA,Dec range', ralo, rahi, declo, dechi
 
@@ -829,7 +817,6 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 	corners = []
 	ii = []
 	for i in range(len(T)):
-		#wcs = anwcs(T.filename[i], 0)
 		wcs = Sip(T.filename[i], 0)
 		W,H = wcs.get_width(), wcs.get_height()
 		rd = []
@@ -913,15 +900,6 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 		x1 += 1
 		y1 += 1
 		
-		# This isn't really necessary...
-		# subwcs = Sip(wcses[i])
-		# print 'subwcs:', subwcs
-		# #subwcs.set_width(1.+x1-x0)
-		# #subwcs.set_height(1.+y1-y0)
-		# crx,cry = subwcs.get_crpix()
-		# subwcs.set_crpix((crx - x0, cry - y0))
-		# print 'subwcs:', subwcs
-		#subwcses.append(subwcs)
 		xyrois.append([x0,x1,y0,y1])
 
 		tim = wise.read_wise_level1b(Ti.filename.replace('-int-1b.fits',''),
@@ -930,7 +908,7 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 									 roi=[x0,x1,y0,y1])
 		print 'Read', tim
 
-		# Mask pixels outside the RA,Dec ROI?
+		# Mask pixels outside the RA,Dec ROI
 		if x0 > 0 or y0 > 0 or x1 < W-1 or y1 < H-1:
 			print 'Image was clipped -- masking pixels outside ROI'
 			h,w = tim.shape
@@ -938,53 +916,14 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 			wcs = tim.getWcs()
 			x0,y0 = wcs.getX0Y0()
 			XX,YY = np.meshgrid(np.arange(x0, x0+w), np.arange(y0, y0+h))
-
-			# t0 = Time()
-			# sipwcs = wcs.wcs
-			# print 'sip wcs:', sipwcs
-			# print 'XX', XX.shape
-			# rr,dd = sipwcs.pixelxy2radec(XX.ravel(),YY.ravel())
-			# print 'rr', rr.shape
-			# rr = rr.reshape(XX.shape)
-			# dd = dd.reshape(XX.shape)
-			# K = ((rr > r0) * (rr < r1) * (dd > d0) * (dd < d1))
-			# print sum(K.ravel()), 'pixels in bounds'
-			# print 'Took', Time()-t0
-
-			#t0 = Time()
 			# approximate, but *way* faster than doing full WCS per pixel!
 			J = point_in_poly(XX.ravel(), YY.ravel(), xy)
-			#print sum(J), 'pixels in bounds according to point_in_poly'
-			#print 'That took', Time()-t0
 			K = J.reshape(XX.shape)
-
 			iv = tim.getInvvar()
 			tim.setInvvar(iv * K)
 			tim.rdmask = K
 
 		tims.append(tim)
-
-	# if ps:
-	# 	plot = Plotstuff(outformat='png', ra=(r0+r1)/2., dec=(d0+d1)/2., width=d1-d0, size=(800,800))
-	# 	out = plot.outline
-	# 	plot.color = 'white'
-	# 	plot.alpha = 0.07
-	# 	plot.apply_settings()
-	# 	for wcs in subwcses:
-	# 		out.wcs = anwcs_new_sip(wcs)
-	# 		out.fill = False
-	# 		plot.plot('outline')
-	# 		out.fill = True
-	# 		plot.plot('outline')
-	# 	plot.color = 'gray'
-	# 	plot.alpha = 1.0
-	# 	plot.lw = 1
-	# 	plot.plot_grid(0.25, 0.25, 0.25, 0.25)
-	# 	plot.raformat = '%.2f'
-	# 	plot.decformat = '%.2f'
-	# 	pfn = ps.getnext()
-	# 	plot.write(pfn)
-	# 	print 'Wrote', pfn
 
 	return dict(opt101=opt, tims=tims, margin1=margin1)
 
@@ -1014,11 +953,6 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 				 (S.dec >= d0) * (S.dec < d1))
 	S.cmodelflux = S.modelflux
 
-	# Wrad = opt.wrad / 3600.
-	# groups,singles = cluster_radec(S.ra, S.dec, Wrad, singles=True)
-	# print 'Source clusters:', groups
-	# print 'Singletons:', singles
-
 	sband = 'r'
 
 	## NOTE, this method CUTS the "S" arg
@@ -1045,12 +979,9 @@ psfcache = {}
 
 def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
 	tims = tractor.images
-	#cat = tractor.catalog
-
 	tractor.freezeParamsRecursive('*')
 	tractor.thawPathsTo(band)
 	tractor.thawPathsTo('sky')
-
 	for tim in tims:
 		x0,y0 = tim.getWcs().getX0Y0()
 		h,w = tim.shape
@@ -1109,13 +1040,6 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 	return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1)
 
 
-#def stage105(tractor=None, ims1=None, **kwa):
-#	for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
-		
-
-
-	
-
 def stage105_OLD(R=None, imstats=None, opt=None, **kwa):
 	fn = '%s-w%i-forced.fits' % (opt.name, opt.bandnum)
 	R.writeto(fn)
@@ -1125,15 +1049,6 @@ def stage105_OLD(R=None, imstats=None, opt=None, **kwa):
 	print 'Wrote', fn
 
 
-
-def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-			 S=None, ri=None, di=None, **kwa):
-	nil,nil,ims0 = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
-													  sky=True, minFlux=minFlux,
-													  justims0=True)
-	return dict(ims0=ims0)
-
-	
 
 def stage205(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 			 S=None, ri=None, di=None,
@@ -1167,11 +1082,6 @@ def stage205(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 			_plot_grid2(ims1, pcat, ptims, imchis, ptype='chi')
 			plt.suptitle('Forced-phot chi: ' + tt)
 			ps.savefig()
-
-
-	
-
-
 
 
 def stage204(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
@@ -1483,36 +1393,6 @@ def main():
 	else:
 		opt.minflux = float(opt.minflux)
 
-
-	if False:
-		# W3 area
-		r0,r1 = 210.593,  219.132
-		d0,d1 =  51.1822,  54.1822
-
-		dd = np.linspace(d0, d1, 51)
-		rr = np.linspace(r0, r1, 91)
-
-		#r0,r1 = 210.593,  210.8
-		#rr = np.linspace(r0, r1, 4)
-
-		print 'RA steps:', rr
-		print 'Dec steps:', dd
-
-		for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
-			args = []
-			for ri,(rlo,rhi) in enumerate(zip(rr[:-1], rr[1:])):
-				args.append(dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
-								 opt=opt, prereqs=prereqs))
-			RR = mp.map(_runone, args)
-
-			for ri,R in enumerate(RR):
-				fn = 'forced-r%02i-d%02i-w%i.fits' % (ri, di, opt.bandnum)
-				R.writeto(fn)
-				print 'Wrote', fn
-
-
-		sys.exit(0)
-
 	# W3 area
 	r0,r1 = 210.593,  219.132
 	d0,d1 =  51.1822,  54.1822
@@ -1524,8 +1404,12 @@ def main():
 	rlo,rhi = rr[ri],rr[ri+1]
 	dlo,dhi = dd[di],dd[di+1]
 
-	runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi)
-
+    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
+    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+    
+	runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi,
+               wisedatadirs=wisedatadirs)
 
 
 
@@ -1552,15 +1436,6 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
 				 write=opt.write)
 	return R
 
-def _runone((kwa)):
-	#print 'kwa:', kwa
-	opt = kwa.get('opt')
-	prereqs = kwa.pop('prereqs')
-	runner = CallGlobal('stage%i', globals(), **kwa)
-	R = runstage(opt.stage, opt.picklepat, runner, force=opt.force, prereqs=prereqs,
-				 write=opt.write)
-	return R['R']
-	
 if __name__ == '__main__':
 	main()
 	
