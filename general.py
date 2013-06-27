@@ -164,7 +164,7 @@ def generalNSAtlas (nsid,threads=None,itune1=5,itune2=5,ntune=0,nocache=False,sc
     if dec is None:
         dec = record['DEC'][0]
 
-    general("NSA_ID_%s" % nsid,float(ra),float(dec),fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale,ab=ab,angle=angle)
+    general("NSA_ID_%s" % nsid,float(ra),float(dec),fieldradius/60.,fieldradius/60.,threads=threads,itune1=itune1,itune2=itune2,ntune=ntune,nocache=nocache,scale=scale,ab=float(ab),angle=float(angle))
 
 
 
