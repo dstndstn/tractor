@@ -1,3 +1,4 @@
+
 WISE catalog tests
 
 Grab the Dec	-0.363600 < dec <= 2.225200 stripe,
@@ -96,8 +97,52 @@ v4: rev 22674
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v4 -o w1v4.log -q batch -t 100-190 ./runslice.py
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v4 -o w2v4.log -q batch -t 200-290 ./runslice.py
 
+(I think v4 went into the targeting for special plates boss209 / 7027-7032)
+
 
 v5: rev 22683  (ptsrc=True)
 
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v5 -o w1v5.log -q batch -t 100-190 ./runslice.py
 qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v5 -o w2v5.log -q batch -t 200-290 ./runslice.py
+
+
+
+
+-----------------------------
+Stripe 82 quasar test region:
+-----------------------------
+In leui of the copy jobs from IPAC for the WISE data still being in progress, I've put together
+files for the QSO test region in stripe 82.  This is bounded by
+   317 < RA < 330 deg
+   0 < Dec < +1.25 deg
+
+A file with all SDSS primary observations (RESOLVE_STATUS=SURVEY_PRIMARY)
+are here:
+   /clusterfs/riemann/raid000/bosswork/boss/wise1ext/sdss_stripe82
+where the files are
+   flist-eboss-stripe82.fits - SDSS field list
+   objs-eboss-stripe82-dr8.fits - All photo parameters for SDSS primary objects, DR8 astrometry
+   objs-eboss-stripe82-dr9.fits - All photo parameters for SDSS primary objects, DR9 astrometry
+
+The WISE Level 1b images (all bands, 26 GB total) are in these two directories:
+   /clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82/allsky
+   /clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82/prelim_postcryo
+Each directory has an index file of the files in that directory.
+
+This should all be the same formats as what we did for the CFHT-W3 test region.
+----
+
+----
+Re: W3 region:
+----
+This isn't quite the latest file, but Adam's file from a few days ago:
+   http://faraday.uwyo.edu/~admyers/eBOSS/ancil-QSO-eBOSS-W3-ADM-dr8.fits
+(and a copy on riemann.lbl.gov in our working directory on this).
+
+W3BITMASK contains the merged target bits as follows:
+     2^0: colorbox
+     2^1: xdqsoz
+     2^2: wise
+     2^3 CFHTvar
+     2^4: PTFvar
+----

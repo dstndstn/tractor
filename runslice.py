@@ -1,5 +1,24 @@
 #! /usr/bin/env python
 
+'''
+This is a PBS driver script we used on riemann to perform
+WISE-from-SDSS forced photometry.  
+
+Jobs are submitted like:
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v4 -o w1v4.log -q batch -t 100-190 ./runslice.py
+
+The "-t" option (job arrays) causes the PBS_ARRAYID environment
+variable to be set for each job.  We use that to determine which chunk
+of work that job is going to do.
+
+In the case of the eBOSS W3 test, we split the region into boxes in
+RA,Dec and used the job id for the Dec slice (90 slices).
+
+(I was also using this as a non-PBS command-line driver; batch=False
+then)
+
+'''
+
 import os
 import sys
 
