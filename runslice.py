@@ -24,28 +24,26 @@ import sys
 
 batch = False
 
+arr = os.environ.get('PBS_ARRAYID')
+if arr is not None:
+    arr = int(arr)
+    batch = True
+
+# This gets set when running runslice.py from the command-line within an interactive job...
 d = os.environ.get('PBS_O_WORKDIR')
-if d is not None:
+if batch and d is not None:
     os.chdir(d)
     sys.path.append(os.getcwd())
-    batch = True
 
 import numpy as np
 import logging
 from wise3 import *
 
-arr = os.environ.get('PBS_ARRAYID')
-if arr is not None:
-    arr = int(arr)
     
 # duck-type command-line options
 class myopts(object):
     pass
 opt = myopts()
-
-if arr is None:
-    # which slice to do for interactive jobs
-    arr = 147
 
 if False:
     # W3 area
@@ -60,8 +58,8 @@ if False:
     r0,r1 = 210.593,  219.132
     d0,d1 =  51.1822,  54.1822
     basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
-    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
-                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+    opt.wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                        (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
 
     opt.minflux = None
     opt.bandnum = band
@@ -69,7 +67,11 @@ if False:
     opt.minsb = 0.005
     opt.ptsrc = False
     opt.pixpsf = False
-    
+
+    if arr is None:
+        # which slice to do for interactive jobs
+        arr = 147
+
     if False:
         # eboss w3 v4
         basename = 'ebossw3-v4'
@@ -97,15 +99,19 @@ if True:
 
     NRA = 260
     NDEC = 25
-    
+
+    if arr is None:
+        # which slice to do for interactive jobs
+        arr = 300
+
     band = int(arr / 300)
     ri = arr % 300
     print 'Band', band
     print 'RA slice', ri
 
     basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82'
-    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
-                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+    opt.wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+                        (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
 
     opt.minflux = None
     opt.bandnum = band

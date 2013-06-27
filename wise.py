@@ -350,7 +350,7 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
 		psf = pyfits.open('wise-psf-w%i-500-500.fits' % band)[0].data
 	else:
 		## ASSUME existence of wise-psf/wise-psf-w%i-%i-%i.fits on a grid 50,150,...,950
-		fn = 'wise-psf/wise-psf-w%i-%i-%i.fits' % (band, gx, gy)
+		fn = 'wise-psf/wise-psf-w%i-%03i-%03i.fits' % (band, gx, gy)
 		psf = pyfits.open(fn)[0].data
 
 	if pixpsf:
