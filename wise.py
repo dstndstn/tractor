@@ -205,7 +205,8 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 	data[np.logical_not(goodmask)] = sky
 
 	tim = tractor.Image(data=data, invvar=invvar, psf=tpsf, wcs=twcs,
-						sky=tsky, photocal=photocal, name=name, zr=zr)
+						sky=tsky, photocal=photocal, name=name, zr=zr,
+                        domask=False)
 	tim.extent = [x0,x1,y0,y1]
 	tim.sigma1 = sigma1
 

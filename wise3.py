@@ -880,7 +880,8 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
     rm1 = r1 + margin1/cosdec
     dm0 = d0 - margin1
     dm1 = d1 + margin1
-    
+
+    ninroi = []
     # Find the pixel ROI in each image containing the RA,Dec ROI.
     for i,(Ti,wcs) in enumerate(zip(T,wcses)):
         xy = []
@@ -922,8 +923,15 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
             iv = tim.getInvvar()
             tim.setInvvar(iv * K)
             tim.rdmask = K
+            ninroi.append(np.sum(J))
+        else:
+            h,w = tim.shape
+            ninroi.append(w*h)
 
         tims.append(tim)
+
+    T.extents = np.array([tim.extent for tim in tims])
+    T.pixinroi = np.array(ninroi)
 
     return dict(opt101=opt, tims=tims, margin1=margin1)
 
