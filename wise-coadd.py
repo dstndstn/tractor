@@ -153,22 +153,49 @@ lanczos = (lancsum / np.maximum(lancwsum, 1e-6))
 sig = 1./np.sqrt(np.median(lancwsum[lancwsum > 0]))
 
 lvar = lancsum2 / (np.maximum(lancwsum, 1e-6)) - lanczos**2
+lstd = np.sqrt(lvar)
+
+plt.figure(figsize=(8,8))
 
 plt.clf()
 plt.subplot(2,2,1)
 plt.imshow(nn, interpolation='nearest', origin='lower',
            vmin=-2*sig, vmax=5*sig)
+plt.colorbar()
 plt.title('nearest neighbor')
+
 plt.subplot(2,2,2)
 plt.imshow(lanczos, interpolation='nearest', origin='lower',
            vmin=-2*sig, vmax=5*sig)
-plt.title('Lanczos-3')
+plt.colorbar()
+plt.title('Lanczos3')
 
 plt.subplot(2,2,4)
-plt.imshow(np.sqrt(lvar), interpolation='nearest', origin='lower')
+plt.imshow(lstd, interpolation='nearest', origin='lower')
+plt.colorbar()
 plt.title('std')
 
 ps.savefig()
+
+
+plt.clf()
+plt.subplot(2,2,1)
+plt.imshow(nn, interpolation='nearest', origin='lower')
+plt.colorbar()
+plt.title('nearest neighbor')
+
+plt.subplot(2,2,2)
+plt.imshow(lanczos, interpolation='nearest', origin='lower')
+plt.colorbar()
+plt.title('Lanczos3')
+
+plt.subplot(2,2,4)
+plt.imshow(lstd, interpolation='nearest', origin='lower')
+plt.colorbar()
+plt.title('std')
+
+ps.savefig()
+
 
 
 for (nnim, lancim, mask, sig1, name) in ims:
@@ -185,12 +212,20 @@ for (nnim, lancim, mask, sig1, name) in ims:
     plt.subplot(2,2,2)
     plt.imshow(lancim, interpolation='nearest', origin='lower',
                vmin=-2*sig1, vmax=5*sig1)
-    plt.title('Lanczos-3')
+    plt.title('Lanczos3')
 
     plt.subplot(2,2,3)
     plt.imshow((lancim - lanczos) * mask, interpolation='nearest', origin='lower',
                vmin=-3*sig1, vmax=3*sig1, cmap='gray')
-    plt.title('Lanczos-3 - avg')
+    plt.title('Lanczos3 - avg')
+
+    rchi2 = (np.sum(((lancim - lanczos) * mask / np.maximum(lstd, 1e-6)) ** 2) /
+             np.sum(mask))
+
+    plt.subplot(2,2,4)
+    plt.imshow((lancim - lanczos) * mask / np.maximum(lstd, 1e-6), interpolation='nearest', origin='lower',
+               vmin=-5, vmax=5, cmap='gray')
+    plt.title('rchi2(Lanczos3): %.2f' % rchi2)
 
     plt.suptitle(name)
 
