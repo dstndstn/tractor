@@ -42,18 +42,16 @@ ims = []
 
 lnp1 = 0.
 lnp2 = 0.
-
+npix1 = 0
+npix2 = 0
 
 
 
 
 for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
 
-    if i == 0:
-        continue
-
-    if i == 9:
-        break
+    #if i == 9:
+    #    break
     
     print ti.tag, tim.name
     x0,x1,y0,y1 = ti.extents
@@ -64,6 +62,7 @@ for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
 
     tim.setInvvar(tim.invvar)
     lnp1 += np.sum(((mod - tim.getImage()) * tim.getInvError())**2)
+    npix1 += np.sum(tim.getInvError() > 0)
 
     # Create sub-WCS
     wcs = tim.getWcs().wcs
@@ -133,6 +132,7 @@ for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
     rmod[yo,xo] = rpix[1]
 
     lnp2 += np.sum(((rmod - rpatch)**2 * iv))
+    npix2 += np.sum(iv > 0)
 
     #print 'Photocal:', tim.photocal
     print 'sig1:', tim.sigma1
@@ -162,90 +162,6 @@ for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
     ims.append((nnim, rpatch, (iv>0), sig1, tim.name, mod, rmod, tim.data, sky, tim.invvar, scale))
 
 
-    # resampling tests
-
-    # m2 = np.zeros_like(mod)
-    # m2[:, 50] = 100.
-    # 
-    # Lorder = 3
-    # yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [m2], Lorder)
-    # 
-    # rmod = np.zeros((S,S))
-    # rmod[yo,xo] = rpix[0]
-    # 
-    # plt.clf()
-    # plt.subplot(1,2,1)
-    # plt.imshow(m2, interpolation='nearest', origin='lower')
-    # plt.subplot(1,2,2)
-    # plt.imshow(rmod, interpolation='nearest', origin='lower')
-    # ps.savefig()
-    # 
-    # for dx in np.arange(-0.5, 0.5, 0.1):
-    #     m2 = np.zeros_like(mod)
-    #     h,w = mod.shape
-    #     X = np.arange(w)
-    #     
-    #     m2[:,:] = 100. * np.exp(-0.5 * (X[np.newaxis,:] + dx - 50)**2 / 2.**2)
-    #     
-    #     Lorder = 3
-    #     yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [m2], Lorder)
-    #     rmod = np.zeros((S,S))
-    #     rmod[yo,xo] = rpix[0]
-    # 
-    #     plt.clf()
-    #     plt.subplot(1,2,1)
-    #     plt.imshow(m2, interpolation='nearest', origin='lower')
-    #     plt.subplot(1,2,2)
-    #     plt.imshow(rmod, interpolation='nearest', origin='lower')
-    #     ps.savefig()
-    
-
-    # plt.clf()
-    # plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
-    #            vmin=-2*sig1, vmax=5*sig1)
-    # plt.title('orig mod')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(rmod, interpolation='nearest', origin='lower',
-    #            vmin=-2*sig1, vmax=5*sig1)
-    # plt.title('Lanczos3 mod')
-    # ps.savefig()
-    # 
-    # Lorder = 3
-    # yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=False)
-    # rmod = np.zeros((S,S))
-    # rmod[yo,xo] = rpix[0]
-    # rmod = (rmod - sky) * scale
-    # 
-    # plt.clf()
-    # plt.imshow(rmod, interpolation='nearest', origin='lower',
-    #            vmin=-2*sig1, vmax=5*sig1)
-    # plt.title('Lanczos3 mod (no spline)')
-    # ps.savefig()
-    # 
-    # for Lorder in [1, 2, 4, 5]:
-    #     yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder)
-    #     rmod = np.zeros((S,S))
-    #     rmod[yo,xo] = rpix[0]
-    #     rmod = (rmod - sky) * scale
-    #     
-    #     plt.clf()
-    #     plt.imshow(rmod, interpolation='nearest', origin='lower',
-    #                vmin=-2*sig1, vmax=5*sig1)
-    #     plt.title('Lanczos%i mod' % Lorder)
-    #     ps.savefig()
-    # 
-    # rmod = np.zeros((S,S))
-    # rmod[yo,xo] = mod[yi,xi]
-    # rmod = (rmod - sky) * scale
-    # plt.clf()
-    # plt.imshow(rmod, interpolation='nearest', origin='lower',
-    #            vmin=-2*sig1, vmax=5*sig1)
-    # plt.title('NN mod')
-    # ps.savefig()
-
-
 nn      = (nnsum   / np.maximum(nnwsum,   1e-6))
 lanczos = (lancsum / np.maximum(lancwsum, 1e-6))
 model   = (modsum  / np.maximum(lancwsum, 1e-6))
@@ -254,11 +170,14 @@ sig = 1./np.sqrt(np.median(lancwsum[lancwsum > 0]))
 print 'Coadd sig:', sig
 
 lnp3 = np.sum((model - lanczos)**2 * lancwsum)
+npix3 = np.sum(lancwsum > 0)
 
 print 'lnp1 (orig)  ', lnp1
+print '         npix', npix1
 print 'lnp2 (resamp)', lnp2
+print '         npix', npix2
 print 'lnp3 (coadd) ', lnp3
-
+print '         npix', npix3
 
 lvar = lancsum2 / (np.maximum(lancwsum, 1e-6)) - lanczos**2
 lstd = np.sqrt(lvar)
@@ -320,122 +239,129 @@ plt.title('Chi (b)')
 ps.savefig()
 
 
-ha = dict(bins=50, range=(-3*sig, 5*sig))
-hachi = dict(bins=50, range=(-5, 5))
-
-I = np.flatnonzero(lancwsum > 0)
-
-plt.clf()
-plt.subplot(2,2,1)
-plt.hist(lanczos.flat[I], **ha)
-plt.title('lanczos')
-plt.subplot(2,2,2)
-plt.hist(model.flat[I], **ha)
-plt.title('model')
-plt.subplot(2,2,3)
-plt.hist(((lanczos - model) / sig).flat[I], **hachi)
-plt.title('chi')
-ps.savefig()
+# ha = dict(bins=50, range=(-3*sig, 5*sig))
+# hachi = dict(bins=50, range=(-5, 5))
+# I = np.flatnonzero(lancwsum > 0)
+# plt.clf()
+# plt.subplot(2,2,1)
+# plt.hist(lanczos.flat[I], **ha)
+# plt.title('lanczos')
+# plt.subplot(2,2,2)
+# plt.hist(model.flat[I], **ha)
+# plt.title('model')
+# plt.subplot(2,2,3)
+# plt.hist(((lanczos - model) / sig).flat[I], **hachi)
+# plt.title('chi')
+# ps.savefig()
 
 
 for (nnim, lancim, mask, sig1, name, mod, rmod, img, sky, oiv, scale) in ims:
 
-    plt.clf()
-    plt.imshow((img - sky)*scale, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('orig data')
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow((img - sky)*scale, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('orig data')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(lancim, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('Lanczos data')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('orig mod')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(rmod, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('Lanczos mod')
+    # ps.savefig()
+
 
     plt.clf()
-    plt.imshow(lancim, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('Lanczos data')
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('orig mod')
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(rmod, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('Lanczos mod')
-    ps.savefig()
-
-
-    plt.clf()
-    plt.subplot(2,3,1)
+    plt.subplot(2,2,1)
     plt.imshow(lancim, interpolation='nearest', origin='lower',
                vmin=-2*sig1, vmax=5*sig1)
     plt.title('data')
-
-    plt.subplot(2,3,2)
+    
+    plt.subplot(2,2,2)
     plt.imshow(rmod, interpolation='nearest', origin='lower',
                vmin=-2*sig1, vmax=5*sig1)
     plt.title('mod')
-
-    plt.subplot(2,3,3)
-    plt.imshow((lancim - rmod) * mask / sig1, interpolation='nearest', origin='lower',
+    
+    plt.subplot(2,2,3)
+    chi = (lancim - rmod) * mask / sig1
+    plt.imshow(chi, interpolation='nearest', origin='lower',
                vmin=-5, vmax=5, cmap='gray')
-    plt.title('chi')
+    plt.title('chi: %.1f' % np.sum(chi**2))
 
-    plt.subplot(2,3,4)
-    plt.imshow((img - sky)*scale, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('orig data')
+    rchi2 = (np.sum(((lancim - lanczos) * mask / np.maximum(lstd, 1e-6)) ** 2) /
+             np.sum(mask))
 
-    plt.subplot(2,3,5)
-    plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('mod')
-
-    plt.subplot(2,3,6)
-    plt.imshow((img - mod) * np.sqrt(oiv), interpolation='nearest', origin='lower',
+    plt.subplot(2,2,4)
+    plt.imshow((lancim - lanczos) * mask / np.maximum(lstd, 1e-6), interpolation='nearest', origin='lower',
                vmin=-5, vmax=5, cmap='gray')
-    plt.title('chi')
+    plt.title('rchi2 vs coadd: %.2f' % rchi2)
 
+    # plt.subplot(2,3,4)
+    # plt.imshow((img - sky)*scale, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('orig data')
+    # 
+    # plt.subplot(2,3,5)
+    # plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
+    #            vmin=-2*sig1, vmax=5*sig1)
+    # plt.title('orig mod')
+    # 
+    # plt.subplot(2,3,6)
+    # plt.imshow((img - mod) * np.sqrt(oiv), interpolation='nearest', origin='lower',
+    #            vmin=-5, vmax=5, cmap='gray')
+    # plt.title('orig chi')
+    
     plt.suptitle(name)
-
+    
     ps.savefig()
-
-
-
-    plt.clf()
-
-    ha = dict(bins=50, range=(-3*sig1, 5*sig1))
-    hachi = dict(bins=50, range=(-5., 5.))
-
-    I = np.flatnonzero(mask)
-
-    plt.subplot(2,3,1)
-    plt.hist(lancim.flat[I], **ha)
-    plt.title('data')
-
-    plt.subplot(2,3,2)
-    plt.hist(rmod.flat[I], **ha)
-    plt.title('mod')
-
-    plt.subplot(2,3,3)
-    plt.hist((lancim - rmod).flat[I] / sig1, **hachi)
-    plt.title('chi')
-
-    plt.subplot(2,3,4)
-    plt.hist(((img - sky) * scale).ravel(), **ha)
-    plt.title('orig data')
-
-    plt.subplot(2,3,5)
-    plt.hist(((mod - sky) * scale).ravel(), **ha)
-    plt.title('mod')
-
-    plt.subplot(2,3,6)
-    plt.hist(((img - mod) * np.sqrt(oiv)).ravel(), **hachi)
-    plt.title('chi')
-
-    plt.suptitle(name)
-
-    ps.savefig()
+    # 
+    # 
+    # 
+    # plt.clf()
+    # 
+    # ha = dict(bins=50, range=(-3*sig1, 5*sig1))
+    # hachi = dict(bins=50, range=(-5., 5.))
+    # 
+    # I = np.flatnonzero(mask)
+    # 
+    # plt.subplot(2,3,1)
+    # plt.hist(lancim.flat[I], **ha)
+    # plt.title('data')
+    # 
+    # plt.subplot(2,3,2)
+    # plt.hist(rmod.flat[I], **ha)
+    # plt.title('mod')
+    # 
+    # plt.subplot(2,3,3)
+    # plt.hist((lancim - rmod).flat[I] / sig1, **hachi)
+    # plt.title('chi')
+    # 
+    # plt.subplot(2,3,4)
+    # plt.hist(((img - sky) * scale).ravel(), **ha)
+    # plt.title('orig data')
+    # 
+    # plt.subplot(2,3,5)
+    # plt.hist(((mod - sky) * scale).ravel(), **ha)
+    # plt.title('mod')
+    # 
+    # plt.subplot(2,3,6)
+    # plt.hist(((img - mod) * np.sqrt(oiv)).ravel(), **hachi)
+    # plt.title('chi')
+    # 
+    # plt.suptitle(name)
+    # 
+    # ps.savefig()
 
 
 
@@ -457,36 +383,36 @@ for (nnim, lancim, mask, sig1, name, mod, rmod, img, sky, oiv, scale) in ims:
 # 
 # ps.savefig()
 
-for (nnim, lancim, mask, sig1, name, nil, nil) in ims:
-
-    plt.clf()
-    plt.subplot(2,2,1)
-    plt.imshow(nnim, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('nearest neighbor')
-
-    #plt.subplot(2,2,2)
-    #plt.imshow(iv, interpolation='nearest', origin='lower')
-
-    plt.subplot(2,2,2)
-    plt.imshow(lancim, interpolation='nearest', origin='lower',
-               vmin=-2*sig1, vmax=5*sig1)
-    plt.title('Lanczos3')
-
-    plt.subplot(2,2,3)
-    plt.imshow((lancim - lanczos) * mask, interpolation='nearest', origin='lower',
-               vmin=-3*sig1, vmax=3*sig1, cmap='gray')
-    plt.title('Lanczos3 - avg')
-
-    rchi2 = (np.sum(((lancim - lanczos) * mask / np.maximum(lstd, 1e-6)) ** 2) /
-             np.sum(mask))
-
-    plt.subplot(2,2,4)
-    plt.imshow((lancim - lanczos) * mask / np.maximum(lstd, 1e-6), interpolation='nearest', origin='lower',
-               vmin=-5, vmax=5, cmap='gray')
-    plt.title('rchi2(Lanczos3): %.2f' % rchi2)
-
-    plt.suptitle(name)
-
-    ps.savefig()
+# for (nnim, lancim, mask, sig1, name, nil, nil) in ims:
+# 
+#     plt.clf()
+#     plt.subplot(2,2,1)
+#     plt.imshow(nnim, interpolation='nearest', origin='lower',
+#                vmin=-2*sig1, vmax=5*sig1)
+#     plt.title('nearest neighbor')
+# 
+#     #plt.subplot(2,2,2)
+#     #plt.imshow(iv, interpolation='nearest', origin='lower')
+# 
+#     plt.subplot(2,2,2)
+#     plt.imshow(lancim, interpolation='nearest', origin='lower',
+#                vmin=-2*sig1, vmax=5*sig1)
+#     plt.title('Lanczos3')
+# 
+#     plt.subplot(2,2,3)
+#     plt.imshow((lancim - lanczos) * mask, interpolation='nearest', origin='lower',
+#                vmin=-3*sig1, vmax=3*sig1, cmap='gray')
+#     plt.title('Lanczos3 - avg')
+# 
+#     rchi2 = (np.sum(((lancim - lanczos) * mask / np.maximum(lstd, 1e-6)) ** 2) /
+#              np.sum(mask))
+# 
+#     plt.subplot(2,2,4)
+#     plt.imshow((lancim - lanczos) * mask / np.maximum(lstd, 1e-6), interpolation='nearest', origin='lower',
+#                vmin=-5, vmax=5, cmap='gray')
+#     plt.title('rchi2(Lanczos3): %.2f' % rchi2)
+# 
+#     plt.suptitle(name)
+# 
+#     ps.savefig()
 
