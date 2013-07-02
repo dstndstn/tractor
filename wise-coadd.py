@@ -10,7 +10,10 @@ from astrometry.util.resample import *
 from runslice import *
 
 
-X = unpickle_from_file('eboss-s82-tst-r00-d00-w1.pickle')
+#X = unpickle_from_file('eboss-s82-tst-r00-d00-w1.pickle')
+#X = unpickle_from_file('ebossw3-tst-r47-d00-w1.pickle')
+X = unpickle_from_file('eboss-w3-tst-r48-d00-w1.pickle')
+
 r0,r1,d0,d1 = X['ralo'],X['rahi'],X['declo'],X['dechi']
 ra  = (r0+r1) / 2.
 dec = (d0+d1) / 2.
@@ -33,30 +36,33 @@ lancwsum = np.zeros_like(lancsum)
 nnsum    = np.zeros_like(lancsum)
 nnwsum   = np.zeros_like(lancsum)
 lancsum2 = np.zeros_like(lancsum)
+modsum  = np.zeros((S,S))
 
 ims = []
 
-for ti,(tim,nil,nil) in zip(T,R):
-    print ti.tag
+lnp1 = 0.
+lnp2 = 0.
+
+for ti,(tim,mod,nil) in zip(T,R):
+    print ti.tag, tim.name
     x0,x1,y0,y1 = ti.extents
-    print ti.pixinroi, (x1-x0)*(y1-y0),
-    I = np.flatnonzero(tim.invvar)
-    print len(I), 'non-zero invvar',
-    print '      ', (100. * len(I) / ti.pixinroi)
+    #print ti.pixinroi, (x1-x0)*(y1-y0),
+    #I = np.flatnonzero(tim.invvar)
+    #print len(I), 'non-zero invvar',
+    #print '      ', (100. * len(I) / ti.pixinroi)
 
-    #print 'wcs', tim.getWcs()
+    tim.setInvvar(tim.invvar)
+    lnp1 += np.sum(((mod - tim.getImage()) * tim.getInvError())**2)
+
+    # Create sub-WCS
     wcs = tim.getWcs().wcs
-    #print 'wcs', wcs
-    print type(wcs)
-
     wcs2 = Sip(wcs)
-    #print 'wcs copy', wcs2
     cpx,cpy = wcs2.crpix
     wcs2.set_crpix((cpx - x0, cpy - y0))
     h,w = tim.shape
     wcs2.set_width(w)
     wcs2.set_height(h)
-    print 'wcs copy', wcs2
+    #print 'wcs copy', wcs2
     
     yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[])
     if yo is None:
@@ -68,18 +74,7 @@ for ti,(tim,nil,nil) in zip(T,R):
     iv = np.zeros((S,S))
     iv[yo,xo] = tim.invvar[yi,xi]
 
-    # print 'tim.maskplane:', tim.maskplane.dtype, tim.maskplane.shape
-    # #I = np.flatnonzero(tim.invvar > 0)
-    # #M = tim.maskplane.flat[I]
-    # M = tim.maskplane.ravel()
-    # npix = len(M)
-    # print npix, 'mask pixels'
-    # for bit in range(32):
-    #     I = np.flatnonzero(M & (1 << bit))
-    #     if len(I) == 0:
-    #         continue
-    #     print '# with bit', bit, 'set:', len(I), ': %.1f %%' % (100. * len(I)/npix)
-
+    # Patch masked pixels so we can interpolate
     patchmask = (tim.invvar > 0)
     patchimg = tim.data.copy()
     rdmask = tim.rdmask
@@ -114,91 +109,236 @@ for ti,(tim,nil,nil) in zip(T,R):
         patchimg.flat[I] = (psum / np.maximum(pn, 1)).astype(patchimg.dtype)
         patchmask.flat[I] = (pn > 0)
 
+    # Resample
     Lorder = 3
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [patchimg], Lorder)
+    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [patchimg, mod], Lorder)
     if yo is None:
         continue
 
     rpatch = np.zeros((S,S))
     rpatch[yo,xo] = rpix[0]
 
-    print 'Photocal:', tim.photocal
+    rmod = np.zeros((S,S))
+    rmod[yo,xo] = rpix[1]
+
+    lnp2 += np.sum(((rmod - rpatch)**2 * iv))
+
+    #print 'Photocal:', tim.photocal
     print 'sig1:', tim.sigma1
     sig1 = tim.sigma1
 
-    print 'Sky:', tim.sky
+    #print 'Sky:', tim.sky
     sky = tim.getSky().getValue()
 
-    rpatch = (rpatch - sky) * tim.getPhotoCal().getScale()
+    scale = tim.getPhotoCal().getScale()
+    sig1 = sig1 * scale
+    print 'scale', scale, 'scaled sig1:', sig1
+    rpatch = (rpatch - sky) * scale
+    rmod = (rmod - sky) * scale
+    nnim = (nnim - sky) * scale
     w = (1. / sig1**2)
-
     ww = w * (iv > 0)
 
     lancsum  += (rpatch * ww)
     lancwsum += ww
     lancsum2 += ww * (rpatch **2)
 
-    nnim = (nnim - sky) * tim.getPhotoCal().getScale()
+    modsum += (rmod * ww)
 
     nnsum  += (nnim * ww)
     nnwsum += ww
 
-    ims.append((nnim, rpatch, (iv>0), sig1 * tim.getPhotoCal().getScale(), tim.name))
+    ims.append((nnim, rpatch, (iv>0), sig1, tim.name, mod, rmod, tim.data, sky, tim.invvar, scale))
 
 
-nn = (nnsum / np.maximum(nnwsum, 1e-6))
-
+nn      = (nnsum   / np.maximum(nnwsum,   1e-6))
 lanczos = (lancsum / np.maximum(lancwsum, 1e-6))
+model   = (modsum  / np.maximum(lancwsum, 1e-6))
 
 sig = 1./np.sqrt(np.median(lancwsum[lancwsum > 0]))
+print 'Coadd sig:', sig
+
+lnp3 = np.sum((model - lanczos)**2 * lancwsum)
+
+print 'lnp1 (orig)  ', lnp1
+print 'lnp2 (resamp)', lnp2
+print 'lnp3 (coadd) ', lnp3
+
 
 lvar = lancsum2 / (np.maximum(lancwsum, 1e-6)) - lanczos**2
 lstd = np.sqrt(lvar)
 
 plt.figure(figsize=(8,8))
 
+ima = dict(interpolation='nearest', origin='lower',
+           vmin=-2*sig, vmax=10*sig)
+
 plt.clf()
+plt.suptitle('Coadds')
 plt.subplot(2,2,1)
-plt.imshow(nn, interpolation='nearest', origin='lower',
-           vmin=-2*sig, vmax=5*sig)
+plt.imshow(nn, **ima)
 plt.colorbar()
 plt.title('nearest neighbor')
 
 plt.subplot(2,2,2)
-plt.imshow(lanczos, interpolation='nearest', origin='lower',
-           vmin=-2*sig, vmax=5*sig)
+plt.imshow(lanczos, **ima)
 plt.colorbar()
 plt.title('Lanczos3')
+
+plt.subplot(2,2,3)
+plt.imshow(model, **ima)
+plt.colorbar()
+plt.title('Model')
 
 plt.subplot(2,2,4)
 plt.imshow(lstd, interpolation='nearest', origin='lower')
 plt.colorbar()
 plt.title('std')
-
 ps.savefig()
+
 
 
 plt.clf()
+
 plt.subplot(2,2,1)
-plt.imshow(nn, interpolation='nearest', origin='lower')
+plt.imshow(lanczos, **ima)
 plt.colorbar()
-plt.title('nearest neighbor')
+plt.title('Data (Lanczos3)')
 
 plt.subplot(2,2,2)
-plt.imshow(lanczos, interpolation='nearest', origin='lower')
+plt.imshow(model, **ima)
 plt.colorbar()
-plt.title('Lanczos3')
+plt.title('Model')
+
+plt.subplot(2,2,3)
+plt.imshow((lanczos - model) * np.sqrt(lancwsum), interpolation='nearest', origin='lower',
+           vmin=-5., vmax=5.)
+plt.colorbar()
+plt.title('Chi')
 
 plt.subplot(2,2,4)
-plt.imshow(lstd, interpolation='nearest', origin='lower')
+plt.imshow((lanczos - model) * np.sqrt(lancwsum), interpolation='nearest', origin='lower',
+           vmin=-20., vmax=20.)
 plt.colorbar()
-plt.title('std')
+plt.title('Chi (b)')
 
 ps.savefig()
 
 
+ha = dict(bins=50, range=(-3*sig, 5*sig))
+hachi = dict(bins=50, range=(-5, 5))
 
-for (nnim, lancim, mask, sig1, name) in ims:
+I = np.flatnonzero(lancwsum > 0)
+
+plt.clf()
+plt.subplot(2,2,1)
+plt.hist(lanczos.flat[I], **ha)
+plt.title('lanczos')
+plt.subplot(2,2,2)
+plt.hist(model.flat[I], **ha)
+plt.title('model')
+plt.subplot(2,2,3)
+plt.hist(((lanczos - model) / sig).flat[I], **hachi)
+plt.title('chi')
+ps.savefig()
+
+
+for (nnim, lancim, mask, sig1, name, mod, rmod, img, sky, oiv, scale) in ims:
+
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(lancim, interpolation='nearest', origin='lower',
+               vmin=-2*sig1, vmax=5*sig1)
+    plt.title('data')
+
+    plt.subplot(2,3,2)
+    plt.imshow(rmod, interpolation='nearest', origin='lower',
+               vmin=-2*sig1, vmax=5*sig1)
+    plt.title('mod')
+
+    plt.subplot(2,3,3)
+    plt.imshow((lancim - rmod) * mask / sig1, interpolation='nearest', origin='lower',
+               vmin=-5, vmax=5, cmap='gray')
+    plt.title('chi')
+
+    plt.subplot(2,3,4)
+    plt.imshow((img - sky)*scale, interpolation='nearest', origin='lower',
+               vmin=-2*sig1, vmax=5*sig1)
+    plt.title('orig data')
+
+    plt.subplot(2,3,5)
+    plt.imshow((mod - sky)*scale, interpolation='nearest', origin='lower',
+               vmin=-2*sig1, vmax=5*sig1)
+    plt.title('mod')
+
+    plt.subplot(2,3,6)
+    plt.imshow((img - mod) * np.sqrt(oiv), interpolation='nearest', origin='lower',
+               vmin=-5, vmax=5, cmap='gray')
+    plt.title('chi')
+
+    plt.suptitle(name)
+
+    ps.savefig()
+
+
+
+    plt.clf()
+
+    ha = dict(bins=50, range=(-3*sig1, 5*sig1))
+    hachi = dict(bins=50, range=(-5., 5.))
+
+    I = np.flatnonzero(mask)
+
+    plt.subplot(2,3,1)
+    plt.hist(lancim.flat[I], **ha)
+    plt.title('data')
+
+    plt.subplot(2,3,2)
+    plt.hist(rmod.flat[I], **ha)
+    plt.title('mod')
+
+    plt.subplot(2,3,3)
+    plt.hist((lancim - rmod).flat[I] / sig1, **hachi)
+    plt.title('chi')
+
+
+    plt.subplot(2,3,4)
+    plt.hist(((img - sky) * scale).ravel(), **ha)
+    plt.title('orig data')
+
+    plt.subplot(2,3,5)
+    plt.hist(((mod - sky) * scale).ravel(), **ha)
+    plt.title('mod')
+
+    plt.subplot(2,3,6)
+    plt.hist(((img - mod) * np.sqrt(oiv)).ravel(), **hachi)
+    plt.title('chi')
+
+    plt.suptitle(name)
+
+    ps.savefig()
+
+
+
+# plt.clf()
+# plt.subplot(2,2,1)
+# plt.imshow(nn, interpolation='nearest', origin='lower')
+# plt.colorbar()
+# plt.title('nearest neighbor')
+# 
+# plt.subplot(2,2,2)
+# plt.imshow(lanczos, interpolation='nearest', origin='lower')
+# plt.colorbar()
+# plt.title('Lanczos3')
+# 
+# plt.subplot(2,2,4)
+# plt.imshow(lstd, interpolation='nearest', origin='lower')
+# plt.colorbar()
+# plt.title('std')
+# 
+# ps.savefig()
+
+for (nnim, lancim, mask, sig1, name, nil, nil) in ims:
 
     plt.clf()
     plt.subplot(2,2,1)

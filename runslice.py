@@ -50,6 +50,12 @@ if __name__ == '__main__':
     
     if True:
         # W3 area
+
+        if arr is None:
+            # which slice to do for interactive jobs
+            #arr = 147
+            arr = 148
+
         opt.sources = 'objs-eboss-w3-dr9.fits'
         NDEC = 50
         NRA = 90
@@ -71,16 +77,11 @@ if __name__ == '__main__':
         opt.ptsrc = False
         opt.pixpsf = False
     
-        if arr is None:
-            # which slice to do for interactive jobs
-            arr = 147
-    
         if False:
             # eboss w3 v4
             basename = 'ebossw3-v4'
             opt.ptsrc = False
             opt.pixpsf = False
-    
         if False:
             # eboss w3 v5
             basename = 'ebossw3-v5'
@@ -88,10 +89,10 @@ if __name__ == '__main__':
 
         if True:
             # eboss w3 v6  (after the fact)
-            basename = 'ebossw3-v6'
+            basename = 'eboss-w3-v6'
     
         if not batch:
-            basename = 'ebossw3-tst'
+            basename = 'eboss-w3-tst'
             opt.ptsrc = False
             opt.pixpsf = False
     

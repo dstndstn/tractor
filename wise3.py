@@ -990,11 +990,22 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
     tractor.freezeParamsRecursive('*')
     tractor.thawPathsTo(band)
     tractor.thawPathsTo('sky')
+
+    from wise_psf import WisePSF
+    # Load the spatially-varying PSF model
+    psf = WisePSF(bandnum, savedfn='w%ipsffit.fits' % bandnum)
+
+    # disabled
+    assert(not opt.pixpsf)
+
+    # Instantiate a (non-varying) mixture-of-Gaussians PSF at the
+    # middle of this patch
     for tim in tims:
         x0,y0 = tim.getWcs().getX0Y0()
         h,w = tim.shape
-        tim.psf = wise.get_psf_model(bandnum, opt.pixpsf, xy=(x0+w/2, y0+h/2),
-                                     positive=False, cache=psfcache)
+        x,y = x0+w/2, y0+h/2
+        tim.psf = psf.mogAt(x, y)
+
     return dict(opt103=opt)
 
 def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,

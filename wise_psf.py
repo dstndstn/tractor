@@ -49,6 +49,11 @@ class WisePSF(VaryingGaussianPSF):
             self.fitSavedData(pp2, XX, YY)
 
     def instantiateAt(self, x, y):
+        '''
+        This is used during fitting.  When used afterwards, you just
+        want to use the getPointSourcePatch() and similar methods
+        defined in the parent class.
+        '''
         # clip to nearest grid point...
         dx = (self.W - 1) / float(self.ngrid - 1)
         gx = dx * int(np.round(x / dx))
@@ -78,7 +83,7 @@ class WisePSF(VaryingGaussianPSF):
 if __name__ == '__main__':
 
     # How to load 'em...
-    # w = WisePSF(1, savedfn='w1fit.fits')
+    # w = WisePSF(1, savedfn='w1psffit.fits')
     # print 'Instantiate...'
     # im = w.getPointSourcePatch(50., 50.)
     # print im.shape
@@ -108,6 +113,6 @@ if __name__ == '__main__':
             pp2[i,:,:] = pp[:,:,i]
 
         T.data = pp2
-        T.writeto('w%ifit.fits' % band)
+        T.writeto('w%ipsffit.fits' % band)
 
 
