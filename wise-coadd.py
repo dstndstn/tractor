@@ -68,17 +68,17 @@ for ti,(tim,nil,nil) in zip(T,R):
     iv = np.zeros((S,S))
     iv[yo,xo] = tim.invvar[yi,xi]
 
-    print 'tim.maskplane:', tim.maskplane.dtype, tim.maskplane.shape
-    #I = np.flatnonzero(tim.invvar > 0)
-    #M = tim.maskplane.flat[I]
-    M = tim.maskplane.ravel()
-    npix = len(M)
-    print npix, 'mask pixels'
-    for bit in range(32):
-        I = np.flatnonzero(M & (1 << bit))
-        if len(I) == 0:
-            continue
-        print '# with bit', bit, 'set:', len(I), ': %.1f %%' % (100. * len(I)/npix)
+    # print 'tim.maskplane:', tim.maskplane.dtype, tim.maskplane.shape
+    # #I = np.flatnonzero(tim.invvar > 0)
+    # #M = tim.maskplane.flat[I]
+    # M = tim.maskplane.ravel()
+    # npix = len(M)
+    # print npix, 'mask pixels'
+    # for bit in range(32):
+    #     I = np.flatnonzero(M & (1 << bit))
+    #     if len(I) == 0:
+    #         continue
+    #     print '# with bit', bit, 'set:', len(I), ': %.1f %%' % (100. * len(I)/npix)
 
     patchmask = (tim.invvar > 0)
     patchimg = tim.data.copy()

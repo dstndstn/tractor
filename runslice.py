@@ -48,7 +48,7 @@ if __name__ == '__main__':
         
     opt = myopts()
     
-    if False:
+    if True:
         # W3 area
         opt.sources = 'objs-eboss-w3-dr9.fits'
         NDEC = 50
@@ -85,6 +85,10 @@ if __name__ == '__main__':
             # eboss w3 v5
             basename = 'ebossw3-v5'
             opt.ptsrc = True
+
+        if True:
+            # eboss w3 v6  (after the fact)
+            basename = 'ebossw3-v6'
     
         if not batch:
             basename = 'ebossw3-tst'
@@ -92,7 +96,7 @@ if __name__ == '__main__':
             opt.pixpsf = False
     
     
-    if True:
+    if False:
         # Stripe82 QSO truth-table region
         base = '/clusterfs/riemann/raid000/bosswork/boss/wise1ext/sdss_stripe82'
         opt.sources = os.path.join(base, 'objs-eboss-stripe82-dr9.fits')
@@ -189,7 +193,10 @@ if __name__ == '__main__':
                           'maskplane', 'rdmask', 'mask', 'uncplane', 'vinvvar']:
 
                     ### DEBUG
-                    continue
+                    #continue
+                    # Debug
+                    if k == 'rdmask':
+                        continue
                           
                     try:
                         delattr(tim, k)
