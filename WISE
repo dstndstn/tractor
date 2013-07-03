@@ -146,3 +146,18 @@ W3BITMASK contains the merged target bits as follows:
      2^3 CFHTvar
      2^4: PTFvar
 ----
+
+
+Coadds, and looking at WISE team's L1b frame inventory tables for quality metrics.
+
+text2fits.py -H "scan_id frame_num moon_sep saa_sep ra dec mjd dtanneal w1zero w2zero w3zero w4zero rbovera noisepix r_mean_20 qual_frame qc_fact qi_fact qn_fact qa_fact qual_scan qs1_fact qs5_fact qp_fact" -f "sjdddddddddddddjddddjddd" wise_allsky.wise_allsky_4band_p1bs_frm14116.tbl wise-allsky-l1b-meta.fits
+
+Trying IRSA's "program interface" -- need long timeouts on these!  Try text and xml outputs.
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_4band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_4band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_3band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_3band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_2band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_2band_p1bs_frm" &
+
+

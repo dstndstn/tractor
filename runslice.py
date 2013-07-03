@@ -63,12 +63,38 @@ if __name__ == '__main__':
         ri = arr % 100
         print 'Band', band
         print 'RA slice', ri
-    
+
         r0,r1 = 210.593,  219.132
         d0,d1 =  51.1822,  54.1822
         basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
         opt.wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
                             (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+
+        wsrcs = 'wise-objs-w3.fits'
+        if not os.path.exists(wsrcs):
+            #
+            from wise import wise_catalog_dec_range
+            for i,(dlo,dhi) in enumerate(wise_catalog_dec_range):
+                if dlo > d1 or dhi < d0:
+                    continue
+                fn = 'wise-cats/wise-allsky-cat-part%02i-radec.fits' % (i+1)
+                T = fits_table(fn)
+                I = np.flatnonzero((T.ra  >= r0) * (T.ra  <= r1) *
+                                   (T.dec >= d0) * (T.dec <= d1))
+                fn = 'wise-cats/wise-allsky-cat-part%02i.fits' % (i+1)
+                cols=['cntr', 'ra', 'dec', 'sigra', 'sigdec', 'cc_flags',
+                      'ext_flg', 'var_flg', 'moon_lev', 'ph_qual',
+                      'w1mpro', 'w1sigmpro', 'w1sat', 'w1nm', 'w1m', 
+                      'w1snr', 'w1cov', 'w1mag', 'w1sigm', 'w1flg',
+                      'w2mpro', 'w2sigmpro', 'w2sat', 'w2nm', 'w2m',
+                      'w2snr', 'w2cov', 'w2mag', 'w2sigm', 'w2flg',
+                      'w3mpro', 'w3sigmpro', 'w3sat', 'w3nm', 'w3m', 
+                      'w3snr', 'w3cov', 'w3mag', 'w3sigm', 'w3flg',
+                      'w4mpro', 'w4sigmpro', 'w4sat', 'w4nm', 'w4m',
+                      'w4snr', 'w4cov', 'w4mag', 'w4sigm', 'w4flg', ]
+                T = fits_table(fn, rows=I, columns=cols)
+                T.writeto(wsrcs)
+                print 'Wrote', wsrcs
     
         opt.minflux = None
         opt.bandnum = band
