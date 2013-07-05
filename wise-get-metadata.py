@@ -76,7 +76,8 @@ def getcat(cat):
 
     i = 0
     while True:
-        NC = 20
+        #NC = 20
+        NC = 10
         cn = colnames[:NC]
         colnames = colnames[NC:]
         if len(cn) == 0:
@@ -96,12 +97,22 @@ def getcat(cat):
         tree = ET.parse(catfn2)
         root = tree.getroot()
         print 'Parsed XML:', tree
+
+        print 'table:'
+        for x in root.iter('table'):
+            print x
+        print 'TABLE:'
+        for x in root.iter('TABLE'):
+            print x
+
+        for x in root:
+            print 'Root child:', x.tag
     
-        tab = list(root.iter('table'))[0]
+        tab = list(root.iter('TABLE'))[0]
         fieldnames = []
         fieldtypes = []
         typemap = dict(char=str, int=np.int64, double=np.float64, float=np.float64)
-        for f in tab.findall('field'):
+        for f in tab.findall('FIELD'):
             print 'Field', f.attrib
             nm = f.attrib['name']
             ty = f.attrib['datatype']
@@ -110,7 +121,7 @@ def getcat(cat):
         
         data = [[] for f in fieldnames]
         
-        datanode = root.find('tabledata')
+        datanode = list(root.iter('TABLEDATA'))[0]
         for tr in datanode:
             assert(len(tr) == len(fieldtypes))
             for td,typ,dd in zip(tr, fieldtypes, data):
