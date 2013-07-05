@@ -51,7 +51,7 @@ print 'Target WCS:', targetwcs
 class Duck(object):
     pass
 
-def _resample_one((ti, tim, mod)):
+def _resample_one((ti, tim, mod, targetwcs)):
     print ti.tag, tim.name
     x0,x1,y0,y1 = ti.extents
 
@@ -157,7 +157,7 @@ def _resample_one((ti, tim, mod)):
 
 
 
-def _resample_mod((ti, tim, mod)):
+def _resample_mod((ti, tim, mod, targetwcs)):
     print ti.tag, tim.name
     x0,x1,y0,y1 = ti.extents
     # Create sub-WCS
@@ -185,7 +185,7 @@ def _resample_mod((ti, tim, mod)):
     return rmod,ww
 
 
-def _rev_resample_mask((ti, tim, mask)):
+def _rev_resample_mask((ti, tim, mask, targetwcs)):
     print ti.tag, tim.name
     x0,x1,y0,y1 = ti.extents
     # Create sub-WCS
@@ -210,7 +210,7 @@ args = []
 for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
     #if i == 9:
     #    break
-    args.append((ti, tim, mod))
+    args.append((ti, tim, mod, targetwcs))
 
 mp = multiproc(16)
 ims = mp.map(_resample_one, args)
@@ -429,7 +429,7 @@ print 'Tractor catalog:'
 for src in cat:
     print '  ', src
 
-band = 'W%i' % bandnum
+band = 'w%i' % bandnum
 
 wcat = []
 for i in range(len(UW)):
@@ -443,12 +443,27 @@ for i in range(len(UW)):
 R = Res1
 args = []
 for i,(ti,(tim,mod,nil),d) in enumerate(zip(T,R,ims)):
-    args.append((ti, tim, d.mask))
+    args.append((ti, tim, d.mask, targetwcs))
 rmasks = mp.map(_rev_resample_mask, args)
 tims = []
-for mask,(tim,nil,nil) in zip(rmasks, R):
+for i,(mask,(tim,nil,nil)) in enumerate(zip(rmasks, R)):
     tims.append(tim)
-    tim.setInvvar(tim.invvar * mask)
+
+    if i < 10:
+        plt.clf()
+        plt.subplot(1,2,1)
+        plt.imshow(ims[i].mask)
+        plt.colorbar()
+        if mask is not None:
+            plt.subplot(1,2,2)
+            plt.imshow(mask)
+            plt.colorbar()
+        ps.savefig()
+
+    if mask is not None:
+        tim.setInvvar(tim.invvar * (mask > 0))
+    else:
+        tim.setInvvar(tim.invvar)
 
 # 3. Re-run forced photometry on individual images
 srcs = [src for src in cat] + wcat
@@ -470,8 +485,26 @@ ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
 print 'Forced phot took', Time()-t0
 
 args = []
-for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
-    args.append((ti, tim, mod))
+#for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
+for i,(ti, (tim,mod0,nil), (tim,mod,ie,chi,roi)) in enumerate(zip(T, R, ims1)):
+    args.append((ti, tim, mod, targetwcs))
+
+    if i < 10:
+        plt.clf()
+        plt.subplot(2,2,1)
+        plt.imshow(tim.data)
+        plt.colorbar()
+        plt.subplot(2,2,2)
+        plt.imshow(tim.invvar)
+        plt.colorbar()
+        plt.subplot(2,2,3)
+        plt.imshow(mod0)
+        plt.colorbar()
+        plt.subplot(2,2,4)
+        plt.imshow(mod)
+        plt.colorbar()
+        ps.savefig()
+    
 mims = mp.map(_resample_mod, args)
 
 modsum2 = np.zeros((S,S))
@@ -486,23 +519,23 @@ plt.clf()
 plt.imshow(cochi, interpolation='nearest', origin='lower',
            vmin=-10., vmax=10., cmap='gray')
 plt.title('Chi (before)')
-plt.savefig()
+ps.savefig()
 
 plt.clf()
 plt.imshow(cochi2, interpolation='nearest', origin='lower',
            vmin=-10., vmax=10., cmap='gray')
 plt.title('Chi (after)')
-plt.savefig()
+ps.savefig()
 
 plt.clf()
 plt.imshow(comod, **ima)
 plt.title('Model (before)')
-plt.savefig()
+ps.savefig()
 
 plt.clf()
 plt.imshow(comod2, **ima)
 plt.title('Model (after)')
-plt.savefig()
+ps.savefig()
 
 
 
