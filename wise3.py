@@ -1124,7 +1124,9 @@ def _resample_one((ti, tim, mod, targetwcs)):
     #print 'sig1:', tim.sigma1
     sig1 = tim.sigma1
     sky = tim.getSky().getValue()
-    scale = tim.getPhotoCal().getScale()
+    # photocal.getScale() takes nanomaggies to image counts; we want to convert
+    # images to nanomaggies (per pix)
+    scale = 1. / tim.getPhotoCal().getScale()
     sig1 = sig1 * scale
     #print 'scale', scale, 'scaled sig1:', sig1
     w = (1. / sig1**2)
@@ -1427,6 +1429,8 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cat = tractor.getCatalog()
     cochi = (coimg - comod) * np.sqrt(coinvvar)
 
+    cat1 = cat.copy()
+
     wfn = 'wise-objs-w3.fits'
 
     W = fits_table(wfn)
@@ -1489,24 +1493,25 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # 3. Re-run forced photometry on individual images
     srcs = [src for src in cat] + wcat
     tims = tractor.getImages()
-    tr = Tractor(tims, srcs)
-    print 'Created Tractor:', tr
+    tractor = Tractor(tims, srcs)
+    print 'Created Tractor:', tractor
     
-    tr.freezeParamsRecursive('*')
-    tr.thawPathsTo('sky')
-    tr.thawPathsTo(band)
+    tractor.freezeParamsRecursive('*')
+    tractor.thawPathsTo('sky')
+    tractor.thawPathsTo(band)
     
     minsb = 0.005
     minFlux = None
     
     t0 = Time()
-    ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-                                                    sky=True, minFlux=minFlux,
-                                                    fitstats=True,
-                                                    variance=True)
+    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+                                                         sky=True, minFlux=minFlux,
+                                                         fitstats=True,
+                                                         variance=True)
     print 'Forced phot took', Time()-t0
+    cat2 = tractor.getCatalog().copy()
 
-    return dict(ims2=ims1, tr=tr, W=W, UW=UW)
+    return dict(ims2=ims1, cat1=cat1, cat2=cat2, W=W, UW=UW, tractor=tractor)
 
 
 
@@ -1515,7 +1520,7 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              tractor=None, ims1=None,
              mp=None,
              coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
-             ims2=None, tr=None,
+             ims2=None,
              **kwa):
     r0,r1,d0,d1 = ralo,rahi,declo,dechi
     sdss = S
@@ -1528,7 +1533,7 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     for i,(ti, tim, (nil,mod,ie,chi,roi), (nil,mod0,nil,nil,nil)) in enumerate(zip(T, tims, ims2, ims1)):
 
         sky = tim.getSky().getValue()
-        scale = tim.getPhotoCal().getScale()
+        scale = 1. / tim.getPhotoCal().getScale()
         mod  = (mod - sky) * scale
 
         args.append((ti, tim, mod, cowcs))
@@ -1578,12 +1583,6 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ps.savefig()
 
     plt.clf()
-    plt.imshow(cochi2, interpolation='nearest', origin='lower', cmap='gray')
-    plt.title('Chi (after)')
-    plt.colorbar()
-    ps.savefig()
-    
-    plt.clf()
     plt.imshow(comod, **ima)
     plt.title('Model (before)')
     plt.colorbar()
@@ -1595,11 +1594,146 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     plt.colorbar()
     ps.savefig()
 
+    return dict(comod2=comod2)
+
+def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
+             tractor=None, ims1=None,
+             mp=None,
+             coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
+             comod2=None,
+             ims2=None, cat2=None,
+             UW=None,
+             **kwa):
+    r0,r1,d0,d1 = ralo,rahi,declo,dechi
+    sdss = S
+    cat = tractor.getCatalog()
+    S = cowcs.get_width()
+    tims = tractor.getImages()
+    cochi = (coimg - comod) * np.sqrt(coinvvar)
+    cochi2 = (coimg - comod2) * np.sqrt(coinvvar)
+
+    # 4. Run forced photometry on coadd
+    from wise_psf import WisePSF
+    psf = WisePSF(bandnum, savedfn='w%ipsffit.fits' % bandnum)
+
+    wcs = ConstantFitsWcs(cowcs)
+    pcal = LinearPhotoCal(1., band=band)
+    sky = ConstantSky(0.)
+    # HACK
+    psf = psf.mogAt(500., 500.)
+
+    coim = Image(data=coimg, invvar=coinvvar, wcs=wcs, photocal=pcal, sky=sky,
+                 psf=psf, name='coadd', domask=False)
+
+    tr = Tractor([coim], cat)
+    tr.freezeParamsRecursive('*')
+    tr.thawPathsTo('sky')
+    tr.thawPathsTo(band)
+
+    minsb = 0.005
+    minFlux = None
+    
+    t0 = Time()
+    ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+                                                    sky=True, minFlux=minFlux,
+                                                    fitstats=True,
+                                                    variance=True)
+    print 'Forced phot on coadd took', Time()-t0
+
+    cat3 = cat.copy()
+
+    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
+    ima = dict(interpolation='nearest', origin='lower',
+               vmin=-2*sig, vmax=10*sig)
+    imchi = dict(interpolation='nearest', origin='lower',
+                 vmin=-5, vmax=5, cmap='gray')
+
+    (im,mod0,ie,chi0,roi) = ims0[0]
+    (im,mod1,ie,chi1,roi) = ims1[0]
+
     plt.clf()
-    plt.imshow(comod2, interpolation='nearest', origin='lower', cmap='gray')
-    plt.title('Model (after)')
-    plt.colorbar()
+    plt.imshow(im, **ima)
+    plt.title('coadd: data')
     ps.savefig()
+
+    plt.clf()
+    plt.imshow(mod0, **ima)
+    plt.title('coadd: initial model')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(mod1, **ima)
+    plt.title('coadd: final model')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(chi0, **imchi)
+    plt.title('coadd: initial chi')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(chi1, **imchi)
+    plt.title('coadd: final chi')
+    ps.savefig()
+
+    m2,m3 = [],[]
+    for s2,s3 in zip(cat2, cat3):
+        m2.append(NanoMaggies.nanomaggiesToMag(s2.getBrightness().getBand(band)))
+        m3.append(NanoMaggies.nanomaggiesToMag(s3.getBrightness().getBand(band)))
+    m2 = np.array(m2)
+    m3 = np.array(m3)
+
+    plt.clf()
+    plt.plot(m2, m3, 'b.')
+    lo,hi = 12,24
+    plt.plot([lo,hi],[lo,hi], 'k-', lw=3, alpha=0.3)
+    plt.axis([lo,hi,lo,hi])
+    plt.xlabel('Individual images photometry (mag)')
+    plt.ylabel('Coadd photometry (mag)')
+    ps.savefig()
+
+    print 'SDSS sources:', len(sdss)
+    print 'UW sources:', len(UW)
+    print 'cat2:', len(cat2)
+    print 'cat3:', len(cat3)
+
+    rd = np.array([(s.getPosition().ra, s.getPosition().dec) for s in cat2])
+    ra,dec = rd[:,0], rd[:,1]
+    I = ((ra >= r0) * (ra <= r1) * (dec >= d0) * (dec <= d1))
+    inbounds = np.flatnonzero(I)
+    
+    plt.clf()
+    plt.plot(m2[I], (m3-m2)[I], 'b.')
+    I = np.logical_not(I)
+    plt.plot(m2[I], (m3-m2)[I], 'r.')
+    lo,hi = 12,24
+    plt.plot([lo,hi],[0, 0], 'k-', lw=3, alpha=0.3)
+    plt.axis([lo,hi,-2,2])
+    plt.xlabel('Individual images photometry (mag)')
+    plt.ylabel('Coadd photometry - Individual (mag)')
+    ps.savefig()
+
+
+    # Show locations of largest changes
+    
+    plt.clf()
+    plt.imshow(chi1, **imchi)
+    ax = plt.axis()
+    J = np.argsort(-np.abs((m3-m2)[inbounds]))
+    for j in J[:5]:
+        ii = inbounds[j]
+        pos = cat2[ii].getPosition()
+        x,y = coim.getWcs().positionToPixel(pos)
+        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+        plt.plot(x, y, 'r+', ms=15, lw=1.5)
+    plt.axis(ax)
+    ps.savefig()
+
+
+    return dict(ims3=ims1, cotr=tr, cat3=cat3)
+
+
 
 
 

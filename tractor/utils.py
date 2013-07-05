@@ -398,7 +398,9 @@ class ParamList(BaseParams, NamedParams):
 
     def copy(self):
         #return self.__class__(*self.getParams())
-        return self.__class__(*self._getThings())
+        cop = self.__class__(*self._getThings())
+        cop.liquid = [l for l in self.liquid]
+        return cop
 
     def getFormatString(self, i):
         return '%g'
