@@ -1208,8 +1208,6 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         res1.append((tim, mod, roi))
     R = res1
 
-    #ps = PlotSequence('co')
-
     S = 100
     pixscale = 2.75 / 3600.
     cowcs = Tan(ra, dec, (S+1)/2., (S+1)/2.,
@@ -1393,26 +1391,65 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     for i,(ti, tim, d) in enumerate(zip(T, tims, ims)):
         args.append((ti, tim, d.mask, cowcs))
     rmasks = mp.map(_rev_resample_mask, args)
-    #tims = []
-    #for i,(mask,(tim,nil,nil)) in enumerate(zip(rmasks, R)):
-    #tims.append(tim)
     for i,(mask,tim) in enumerate(zip(rmasks, tims)):
-        if i < 10:
-            plt.clf()
-            plt.subplot(1,2,1)
-            plt.imshow(ims[i].mask)
-            plt.colorbar()
-            if mask is not None:
-                plt.subplot(1,2,2)
-                plt.imshow(mask)
-                plt.colorbar()
-            ps.savefig()
+        # if i < 10:
+        #     plt.clf()
+        #     plt.subplot(1,2,1)
+        #     plt.imshow(ims[i].mask)
+        #     plt.colorbar()
+        #     if mask is not None:
+        #         plt.subplot(1,2,2)
+        #         plt.imshow(mask)
+        #         plt.colorbar()
+        #     ps.savefig()
     
         tim.coaddmask = mask
         if mask is not None:
             tim.setInvvar(tim.invvar * (mask > 0))
         else:
             tim.setInvvar(tim.invvar)
+
+
+        d = ims[i]
+        sig1 = tim.sigma1 * d.scale
+        R,C = 2,3
+        plt.clf()
+        plt.subplot(R,C,1)
+        plt.imshow(d.rimg, interpolation='nearest', origin='lower',
+                   vmin=-2*sig1, vmax=5*sig1)
+        plt.title('resamp data')
+    
+        plt.subplot(R,C,2)
+        plt.imshow(d.rmod, interpolation='nearest', origin='lower',
+                   vmin=-2*sig1, vmax=5*sig1)
+        plt.title('resamp mod')
+    
+        plt.subplot(R,C,3)
+        chi = (d.rimg - d.rmod) * d.mask / sig1
+        plt.imshow(chi, interpolation='nearest', origin='lower',
+                   vmin=-5, vmax=5, cmap='gray')
+        plt.title('chi2: %.1f' % np.sum(chi**2))
+
+        # grab original rchi
+        rchi = rchis[i]
+        rchi2 = np.sum(rchi**2) / np.sum(d.mask)
+
+        plt.subplot(R,C,4)
+        plt.imshow(rchi, interpolation='nearest', origin='lower',
+                   vmin=-5, vmax=5, cmap='gray')
+        plt.title('rchi2 vs coadd: %.2f' % rchi2)
+
+        plt.subplot(R,C,5)
+        plt.imshow(np.abs(rchi) > 5, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('abs(rchi) > 5')
+
+        plt.subplot(R,C,6)
+        plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('mask')
+
+        plt.suptitle(d.name)
+        ps.savefig()
+
     
     return dict(coimg=coimg, coinvvar=coinvvar, comod=comod, coppstd=coppstd,
                 cowcs=cowcs)
@@ -1512,8 +1549,6 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cat2 = tractor.getCatalog().copy()
 
     return dict(ims2=ims1, cat1=cat1, cat2=cat2, W=W, UW=UW, tractor=tractor)
-
-
 
 def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
