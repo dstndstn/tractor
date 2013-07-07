@@ -57,16 +57,11 @@ def getcat(cat, cols, NC):
         ffn2 = '%s-%i.fits' % (cat, i)
         i += 1
 
-        if os.path.exists(ffn2):
-            print 'File exists:', ffn2
-            fitsfns.append(ffn2)
-            continue
-
         if '4band_p1bs' in cat:
             # Keep at most one "l0file" column per chunk (they fail otherwise)
             cnorig = cn + colnames
             cn = []
-            for i in range(NC):
+            for ii in range(NC):
                 c = cnorig.pop(0)
                 cn.append(c)
                 if 'l0file' in c:
@@ -75,6 +70,12 @@ def getcat(cat, cols, NC):
                     break
             colnames = cnorig
             print 'Taking columns:', cn
+            print 'Leaving columns:', colnames
+
+        if os.path.exists(ffn2):
+            print 'File exists:', ffn2
+            fitsfns.append(ffn2)
+            continue
         
         cn += ['cntr']
 
@@ -173,29 +174,30 @@ def getcat(cat, cols, NC):
 threads = []
 
 
-cols = ['coadd_id', 'ra', 'dec', 'crota', 'moon_lev', 'w1moonrej', 'w2moonrej', 'w3moonrej', 'w4moonrej', 'w1numfrms', 'w2numfrms', 'w3numfrms', 'w4numfrms', 'naxis1', 'naxis2', 'crpix1', 'crpix2', 'ctype1', 'ctype2', 'bunit', 'cdelt1', 'cdelt2', 'mergetype', 'w1magzp', 'w2magzp', 'w3magzp', 'w4magzp', 'w1magzpunc', 'w2magzpunc', 'w3magzpunc', 'w4magzpunc', 'qual_coadd', 'qc_fact', 'qi_fact', 'qa_fact', 'cntr']
-NC = 100
-for cat in ['wise_allsky_4band_p3as_cdd',
-            'wise_allsky_3band_p3as_cdd',
-            'wise_allsky_2band_p3as_cdd',
-            ]:
-    #t = threading.Thread(target=getcat, args=(cat, cols, NC))
-    #t.start()
-    #threads.append(t)
-    getcat(cat,cols,NC)
+if False:
+    cols = ['coadd_id', 'ra', 'dec', 'crota', 'moon_lev', 'w1moonrej', 'w2moonrej', 'w3moonrej', 'w4moonrej', 'w1numfrms', 'w2numfrms', 'w3numfrms', 'w4numfrms', 'naxis1', 'naxis2', 'crpix1', 'crpix2', 'ctype1', 'ctype2', 'bunit', 'cdelt1', 'cdelt2', 'mergetype', 'w1magzp', 'w2magzp', 'w3magzp', 'w4magzp', 'w1magzpunc', 'w2magzpunc', 'w3magzpunc', 'w4magzpunc', 'qual_coadd', 'qc_fact', 'qi_fact', 'qa_fact', 'cntr']
+    NC = 100
+    for cat in ['wise_allsky_4band_p3as_cdd',
+                'wise_allsky_3band_p3as_cdd',
+                # 'wise_allsky_2band_p3as_cdd', No such table
+                ]:
+        t = threading.Thread(target=getcat, args=(cat, cols, NC))
+        t.start()
+        threads.append(t)
+        #getcat(cat,cols,NC)
 
-
-cols = None
-NC = 5
-for cat in [
-    #'wise_allsky_2band_p1bs_frm',
-    #'wise_allsky_3band_p1bs_frm',
-    #'wise_allsky_4band_p1bs_frm',
-    ]:
-    t = threading.Thread(target=getcat, args=(cat, cols, NC))
-    t.start()
-    threads.append(t)
-
+if True:
+    cols = None
+    NC = 5
+    for cat in [
+        #'wise_allsky_2band_p1bs_frm',
+        #'wise_allsky_3band_p1bs_frm',
+        'wise_allsky_4band_p1bs_frm',
+        ]:
+        t = threading.Thread(target=getcat, args=(cat, cols, NC))
+        t.start()
+        threads.append(t)
+    
 
 
 for t in threads:
