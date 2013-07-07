@@ -1702,16 +1702,20 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ra,dec = rd[:,0], rd[:,1]
     I = ((ra >= r0) * (ra <= r1) * (dec >= d0) * (dec <= d1))
     inbounds = np.flatnonzero(I)
+    J = np.arange(len(I)) < len(sdss)
     
     plt.clf()
-    plt.plot(m2[I], (m3-m2)[I], 'b.')
+    p1 = plt.plot(m2[I*J], (m3-m2)[I*J], 'b.')
+    nJ = np.logical_not(J)
+    p2 = plt.plot(m2[nJ], (m3-m2)[nJ], 'g.')
     I = np.logical_not(I)
-    plt.plot(m2[I], (m3-m2)[I], 'r.')
+    p3 = plt.plot(m2[I*J], (m3-m2)[I*J], 'r.')
     lo,hi = 12,24
     plt.plot([lo,hi],[0, 0], 'k-', lw=3, alpha=0.3)
     plt.axis([lo,hi,-2,2])
     plt.xlabel('Individual images photometry (mag)')
     plt.ylabel('Coadd photometry - Individual (mag)')
+    plt.legend((p1,p2,p3),('In bounds', 'WISE-only', 'Out-of-bounds'))
     ps.savefig()
 
 
@@ -1730,6 +1734,32 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     plt.axis(ax)
     ps.savefig()
 
+    plt.clf()
+    plt.imshow(mod1, **ima)
+    plt.gray()
+    ax = plt.axis()
+    J = np.argsort(-np.abs((m3-m2)[inbounds]))
+    for j in J[:5]:
+        ii = inbounds[j]
+        pos = cat2[ii].getPosition()
+        x,y = coim.getWcs().positionToPixel(pos)
+        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+        plt.plot(x, y, 'r+', ms=15, lw=1.5)
+    plt.axis(ax)
+    plt.title('coadd: model')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(comod2, **ima)
+    plt.gray()
+    plt.title('individual frames: model')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(im, **ima)
+    plt.gray()
+    plt.title('coadd: data')
+    ps.savefig()
 
     return dict(ims3=ims1, cotr=tr, cat3=cat3)
 
