@@ -1099,17 +1099,21 @@ def _resample_one((ti, tim, mod, targetwcs)):
         psum = np.zeros(len(I), patchimg.dtype)
         pn = np.zeros(len(I), int)
         ok = (iy > 0)
-        psum[ok] += patchimg[iy[ok]-1, ix[ok]]
-        pn[ok] += 1
+        psum[ok] += (patchimg [iy[ok]-1, ix[ok]] *
+                     patchmask[iy[ok]-1, ix[ok]])
+        pn[ok] +=    patchmask[iy[ok]-1, ix[ok]]
         ok = (iy < (h-1))
-        psum[ok] += patchimg[iy[ok]+1, ix[ok]]
-        pn[ok] += 1
+        psum[ok] += (patchimg [iy[ok]+1, ix[ok]] *
+                     patchmask[iy[ok]+1, ix[ok]])
+        pn[ok] +=    patchmask[iy[ok]+1, ix[ok]]
         ok = (ix > 0)
-        psum[ok] += patchimg[iy[ok], ix[ok]-1]
-        pn[ok] += 1
+        psum[ok] += (patchimg [iy[ok], ix[ok]-1] *
+                     patchmask[iy[ok], ix[ok]-1])
+        pn[ok] +=    patchmask[iy[ok], ix[ok]-1]
         ok = (ix < (w-1))
-        psum[ok] += patchimg[iy[ok], ix[ok]+1]
-        pn[ok] += 1
+        psum[ok] += (patchimg [iy[ok], ix[ok]+1] *
+                     patchmask[iy[ok], ix[ok]+1])
+        pn[ok] +=    patchmask[iy[ok], ix[ok]+1]
         patchimg.flat[I] = (psum / np.maximum(pn, 1)).astype(patchimg.dtype)
         patchmask.flat[I] = (pn > 0)
     # Resample
@@ -1301,7 +1305,11 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     #plt.colorbar()
     plt.title('Chi (b)')
     ps.savefig()
-    
+
+
+    # Using the difference between the coadd and the resampled
+    # individual images ("rchi"), mask additional pixels and redo the
+    # coadd.
     
     lancsum  = np.zeros((S,S))
     wsum     = np.zeros_like(lancsum)
@@ -1310,7 +1318,6 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     modsum   = np.zeros((S,S))
     
     rchis = []
-    
     for d in ims:
         rchi = (d.rimg - coimg) * d.mask / np.maximum(coppstd, 1e-6)
         badpix = (np.abs(rchi) >= 5.)

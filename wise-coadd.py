@@ -32,6 +32,3 @@ plt.axis([360,0,-90,90])
 ps.savefig()
 
 
-
-
-# for i,d in enumerate(ims):
