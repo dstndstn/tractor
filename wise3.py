@@ -1523,7 +1523,6 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cat1 = cat.copy()
 
     wfn = 'wise-objs-w3.fits'
-
     W = fits_table(wfn)
     print 'Read', len(W), 'from', wfn
     W.cut((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
@@ -2134,8 +2133,9 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
             yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs2, [], 0, spline=False)
             if yo is None:
                 continue
-            coadd[yo,xo] += tim.data[yi,xi]
-            con  [yo,xo] += 1
+            ok = (tim.invvar[yi,xi] > 0)
+            coadd[yo,xo] += (tim.data[yi,xi] * ok)
+            con  [yo,xo] += ok
         coadd /= np.maximum(con, 1)
 
         n = np.median(con)
@@ -2195,10 +2195,187 @@ def stage403(coadds=None, **kwa):
     #print 'Coadds:', coadds
     return dict(coadds=coadds)
 
+def stage404(coadds=None, ps=None, targetrd=None,
+             W=None, S=None, rd=None,
+             **kwa):
+    r0,r1,d0,d1 = rd
+
+    wfn = 'wise-objs-w3.fits'
+    W = fits_table(wfn)
+    print 'Read', len(W), 'from', wfn
+    W.cut((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
+    print 'Cut to', len(W), 'in RA,Dec box'
+    Wise = W
+
+    S.cut((S.ra > r0) * (S.ra < r1) * (S.dec > d0) * (S.dec < d1))
+    print 'Cut to', len(S), 'SDSS'
+    sdss = S
+
+    fine = 0.4/3600.
+    ss = []
+    for b in 'irg':
+        sx = [(im,mn,st,wcs) for src,band,pixscale,im,mn,st,wcs in coadds
+              if src == 'SDSS' and band == b and pixscale == fine]
+        assert(len(sx) == 1)
+        cowcs = sx[0][-1]
+        ss.append(sx[0][:3])
+        
+    si,sr,sg = ss
+    ww = []
+    for b in ['w1','w2']:
+        sx = [(im,mn,st) for src,band,pixscale,im,mn,st,wcs in coadds
+              if src == 'WISE' and band == b and pixscale == fine]
+        assert(len(sx) == 1)
+        ww.append(sx[0])
+    w1,w2 = ww
+
+    # Grab post-transient-pixel-masking coadds...
+    # P = unpickle_from_file('w3-target-10-w1-stage105.pickle')
+    # coimg = P['coimg']
+    # coinvvar = P['coinvvar']
+    # w1b = coimg
+    # w1b = (w1b, np.median(w1b), 1./np.sqrt(np.median(coinvvar)))
+    # # Merge W2 coadds into W1 results.
+    # P = unpickle_from_file('w3-target-10-w2-stage105.pickle')
+    # co = P['coimg']
+    # coiv = P['coinvvar']
+    # w2b = co
+    # w2b = (w2b, np.median(w2b), 1./np.sqrt(np.median(coiv)))
+
+    H,W = si[0].shape
+    print 'Coadd size', W, H
+
+    sRGB = np.zeros((H,W,3))
+    (im,mn,st) = si
+    r = im
+    print 'i-band std', st
+    sRGB[:,:,0] = (im - mn) / st
+    (im,mn,st) = sr
+    g = im
+    print 'r-band std', st
+    sRGB[:,:,1] = (im - mn) / st
+    (im,mn,st) = sg
+    b = im
+    print 'g-band std', st
+    sRGB[:,:,2] = (im - mn) / st
+
+    if False:
+        # plt.clf()
+        # plt.hist((r * 1.0).ravel(), bins=50, histtype='step', color='r')
+        # plt.hist((g * 1.5).ravel(), bins=50, histtype='step', color='g')
+        # plt.hist((b * 2.5).ravel(), bins=50, histtype='step', color='b')
+        # ps.savefig()
+    
+        #B = 0.02
+        B = 0.
+    
+        r = np.maximum(r * 1.0 + B, 0)
+        g = np.maximum(g * 1.5 + B, 0)
+        b = np.maximum(b * 2.5 + B, 0)
+        I = (r+g+b)/3.
+    
+        #alpha = 1.5
+        alpha = 2.5
+        Q = 20
+        m2 = 0.
+        fI = np.arcsinh(alpha * Q * (I - m2)) / np.sqrt(Q)
+        I += (I == 0.) * 1e-6
+        R = fI * r / I
+        G = fI * g / I
+        B = fI * b / I
+        maxrgb = reduce(np.maximum, [R,G,B])
+        J = (maxrgb > 1.)
+        R[J] = R[J]/maxrgb[J]
+        G[J] = G[J]/maxrgb[J]
+        B[J] = B[J]/maxrgb[J]
+        lupRGB = np.clip(np.dstack([R,G,B]), 0., 1.)
+
+        # plt.clf()
+        # plt.imshow(lupRGB, interpolation='nearest', origin='lower')
+        # ps.savefig()
+
+    # img = np.clip(sRGB / 5., 0., 1.)
+    # plt.clf()
+    # plt.imshow(img, interpolation='nearest', origin='lower')
+    # ps.savefig()
+
+    img = np.clip(sRGB / 10., 0., 1.)
+    plt.clf()
+    plt.imshow(img, interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    ok,x,y = wcs.radec2pixelxy(sdss.ra, sdss.dec)
+    ax = plt.axis()
+    plt.plot(x-1, y-1, 'r+', ms=10, lw=2)
+    plt.axis(ax)
+    ps.savefig()
+    
+    # img = plt.imread('sdss2.png')
+    # img = np.flipud(img)
+    # plt.clf()
+    # plt.imshow(img, interpolation='nearest', origin='lower')
+    # ps.savefig()
+
+    wRGB = np.zeros((H,W,3))
+    (im,mn,st) = w1
+    wRGB[:,:,2] = (im - mn) / st
+    (im,mn,st) = w2
+    wRGB[:,:,0] = (im - mn) / st
+    wRGB[:,:,1] = (wRGB[:,:,0] + wRGB[:,:,2]) / 2.
+
+    img = np.clip(wRGB / 5., 0., 1.)
+
+    plt.clf()
+    plt.imshow(img, interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    ok,x,y = wcs.radec2pixelxy(Wise.ra, Wise.dec)
+    ax = plt.axis()
+    plt.plot(x-1, y-1, 'r+', ms=10, lw=2)
+    plt.axis(ax)
+    ps.savefig()
+
+    print 'WISE mags: W1', Wise.w1mpro
+    print 'WISE mags: W2', Wise.w2mpro
+
+    print 'x', x
+    print 'y', y
+
+
+    plt.imshow(img, interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    img = np.clip(wRGB / 10., 0., 1.)
+    plt.clf()
+    plt.imshow(img, interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    # wRGB2 = np.zeros((H,W,3))
+    # (im,mn,st) = w1b
+    # wRGB2[:,:,2] = (im - mn) / st
+    # (im,mn,st) = w2b
+    # wRGB2[:,:,0] = (im - mn) / st
+    # wRGB2[:,:,1] = (wRGB2[:,:,0] + wRGB2[:,:,2]) / 2.
+    # img = np.clip(wRGB2 / 5., 0., 1.)
+    # plt.clf()
+    # plt.imshow(img, interpolation='nearest', origin='lower')
+    # ps.savefig()
+    # img = np.clip(wRGB2 / 10., 0., 1.)
+    # plt.clf()
+    # plt.imshow(img, interpolation='nearest', origin='lower')
+    # ps.savefig()
+
+
+    
+
+
+
 
 def stage509(cat1=None, cat2=None, cat3=None, bandnum=None,
              band=None, S=None,
              **kwa):
+    # Would it still pass the QSO selection cuts?  Write out FITS tables, run selection
+    # --> yes.
     for i,cat in [(1,cat1), (2,cat2), (3,cat3)]:
         R = tabledata()
         R.ra  = np.array([src.getPosition().ra  for src in cat])
@@ -2209,22 +2386,31 @@ def stage509(cat1=None, cat2=None, cat3=None, bandnum=None,
 
     S.writeto('w3-tr-sdss.fits')
 
-def stage510(S=None, targetrd=None, **kwa):
-    for cat in [1,2,3]:
-        W1,W2 = [fits_table('w3-tr-cat%i-w%i.fits' % (cat,bandnum)) for
-                 bandnum in [1,2]]
-
-        NS = len(S)
-        assert(np.all(W1.ra[:NS] == S.ra))
-        assert(np.all(W1.dec[:NS] == S.dec))
-        assert(np.all(W2.ra[:NS] == S.ra))
-        assert(np.all(W2.dec[:NS] == S.dec))
-
-        W1 = W1[:NS]
-        W2 = W2[:NS]
-
-        S.w1 = W1.w1
-        S.w2 = W2.w2
+def stage510(S=None, W=None, targetrd=None, **kwa):
+    for cat in [1,2,3, 4,5]:
+        if cat in [4,5]:
+            I,J,d = match_radec(S.ra, S.dec, W.ra, W.dec, 4./3600.)
+            print len(I), 'matches'
+            S.cut(I)
+            W.cut(J)
+            if cat == 4:
+                S.w1 = NanoMaggies.magToNanomaggies(W.w1mpro)
+                S.w2 = NanoMaggies.magToNanomaggies(W.w2mpro)
+            elif cat == 5:
+                S.w1 = NanoMaggies.magToNanomaggies(W.w1mag)
+                S.w2 = NanoMaggies.magToNanomaggies(W.w2mag)
+        else:
+            W1,W2 = [fits_table('w3-tr-cat%i-w%i.fits' % (cat,bandnum)) for
+                     bandnum in [1,2]]
+            NS = len(S)
+            assert(np.all(W1.ra[:NS] == S.ra))
+            assert(np.all(W1.dec[:NS] == S.dec))
+            assert(np.all(W2.ra[:NS] == S.ra))
+            assert(np.all(W2.dec[:NS] == S.dec))
+            W1 = W1[:NS]
+            W2 = W2[:NS]
+            S.w1 = W1.w1
+            S.w2 = W2.w2
 
         fluxtomag = NanoMaggies.nanomaggiesToMag
 
@@ -2507,7 +2693,8 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
                 204: 103,
                 205: 104,
                 304: 103,
-                402: 101,
+                #402: 101,
+                402: 105,
                 509: 108,
                 }
 
