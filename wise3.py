@@ -2099,7 +2099,7 @@ def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
 
 def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
              band=None, bandnum=None, tims=None,
-             rcf=None,
+             rcf=None, cat2=None,
              **kwa):
     r0,r1,d0,d1 = rd
     # Coadd images
@@ -2117,6 +2117,7 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
                     W, H)
         print 'Target WCS:', cowcs
         coadd = np.zeros((H,W))
+        comod = np.zeros((H,W))
         con   = np.zeros((H,W), int)
         for i,(tim) in enumerate(tims):
             print 'coadding', i
@@ -2136,7 +2137,13 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
             ok = (tim.invvar[yi,xi] > 0)
             coadd[yo,xo] += (tim.data[yi,xi] * ok)
             con  [yo,xo] += ok
+
+            tractor = Tractor([tim], cat2)
+            mod = tractor.getModelImage(0)
+            comod[yo,xo] += (mod[yi,xi] * ok)
+
         coadd /= np.maximum(con, 1)
+        comod /= np.maximum(con, 1)
 
         n = np.median(con)
         print 'median of', n, 'exposures'
@@ -2155,7 +2162,17 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
         plt.title('WISE coadd: %s' % band)
         ps.savefig()
 
+        plt.clf()
+        plt.imshow(comod, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=mn-2.*st, vmax=mn+20.*st)
+        plt.title('WISE model coadd: %s' % band)
+        ps.savefig()
+
         coadds.append(('WISE', band, pixscale, coadd, mn, st, cowcs))
+
+        coadds.append(('WISE model 2', band, pixscale, comod, mn, st, cowcs))
+
+
 
         if bandnum != 1:
             continue
@@ -2304,9 +2321,11 @@ def stage404(coadds=None, ps=None, targetrd=None,
     plt.imshow(img, interpolation='nearest', origin='lower')
     ps.savefig()
 
+    green = (0,1,0)
+
     ok,x,y = wcs.radec2pixelxy(sdss.ra, sdss.dec)
     ax = plt.axis()
-    plt.plot(x-1, y-1, 'r+', ms=10, lw=2)
+    plt.plot(x-1, y-1, 'o', mfc='none', mec=green, ms=30, mew=2)
     plt.axis(ax)
     ps.savefig()
     
@@ -2331,7 +2350,7 @@ def stage404(coadds=None, ps=None, targetrd=None,
 
     ok,x,y = wcs.radec2pixelxy(Wise.ra, Wise.dec)
     ax = plt.axis()
-    plt.plot(x-1, y-1, 'r+', ms=10, lw=2)
+    plt.plot(x-1, y-1, 'o', mfc='none', mec=green, ms=30, mew=2)
     plt.axis(ax)
     ps.savefig()
 
@@ -2340,10 +2359,6 @@ def stage404(coadds=None, ps=None, targetrd=None,
 
     print 'x', x
     print 'y', y
-
-
-    plt.imshow(img, interpolation='nearest', origin='lower')
-    ps.savefig()
 
     img = np.clip(wRGB / 10., 0., 1.)
     plt.clf()
@@ -2694,7 +2709,8 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
                 205: 104,
                 304: 103,
                 #402: 101,
-                402: 105,
+                #402: 105,
+                402: 108,
                 509: 108,
                 }
 
