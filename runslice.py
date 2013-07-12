@@ -54,7 +54,8 @@ if __name__ == '__main__':
         if arr is None:
             # which slice to do for interactive jobs
             #arr = 147
-            arr = 148
+            #arr = 148
+            arr = 149
 
         opt.sources = 'objs-eboss-w3-dr9.fits'
         NDEC = 50

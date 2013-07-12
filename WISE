@@ -99,6 +99,8 @@ qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v4 -o w2v4.log -q batch -t 20
 
 (I think v4 went into the targeting for special plates boss209 / 7027-7032)
 
+Results merged into output file in (horrid) wisecheck.py
+
 
 v5: rev 22683  (ptsrc=True)
 

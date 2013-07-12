@@ -36,7 +36,8 @@ import wise
 
 def get_l1b_file(basedir, scanid, frame, band):
     scangrp = scanid[-2:]
-    return os.path.join(basedir, 'wise%i' % band, '4band_p1bm_frm', scangrp, scanid,
+    #return os.path.join(basedir, 'wise%i' % band, '4band_p1bm_frm', scangrp, scanid,
+    return os.path.join(basedir, scangrp, scanid,
                         '%03i' % frame, '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
 
@@ -784,7 +785,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     TT = []
     for d,tag in wisedatadirs:
         ifn = os.path.join(d, 'WISE-index-L1b.fits')
-        T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num'])
+        T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num', 'band'])
         print 'Read', len(T), 'from WISE index', ifn
 
         # Add a margin around the CRVAL so we catch all fields that touch the RA,Dec box.
@@ -797,14 +798,32 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         d0 = declo - margin
         d1 = dechi + margin
 
+        I = np.flatnonzero(T.band == bandnum)
+        print len(I), 'band', band
+        T.cut(I)
         I = np.flatnonzero((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
         print len(I), 'overlap RA,Dec box'
         T.cut(I)
         T.tag = [tag] * len(T)
 
+        assert(len(np.unique([s + '%03i' % f for s,f in zip(T.scan_id, T.frame_num)])) == len(T))
+
+
+        Igood = []
+        for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
+            # HACK -- uncertainty image faulty
+            if ((sid == '11301b' and fnum == 57) or
+                (sid == '11304a' and fnum == 30)):
+                print 'WARNING: skipping bad data:', sid, fnum
+                continue
+            Igood.append(i)
+        if len(Igood) != len(T):
+            T.cut(np.array(Igood))
+
         fns = []
         for sid,fnum in zip(T.scan_id, T.frame_num):
             print 'scan,frame', sid, fnum
+
             fn = get_l1b_file(d, sid, fnum, bandnum)
             print '-->', fn
             assert(os.path.exists(fn))
@@ -863,7 +882,9 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                 wcses=wcses, bandnum=bandnum, band=band)
 
 
-def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kwa):
+def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
+             band=None, bandnum=None,
+             **kwa):
     r0,r1,d0,d1 = rd
 
     xyrois = []
@@ -935,8 +956,22 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None, **kw
 
     return dict(opt101=opt, tims=tims, margin1=margin1)
 
+# makes an SDSS WCS object look like an anwcs /  Tan / Sip
+class AsTransWrapper(object):
+    def __init__(self, wcs, w, h):
+        self.wcs = wcs
+        self.imagew = w
+        self.imageh = h
+    def pixelxy2radec(self, x, y):
+        r,d = self.wcs.pixel_to_radec(x-1, y-1)
+        return r, d
+    def radec2pixelxy(self, ra, dec):
+        x,y = self.wcs.radec_to_pixel(ra, dec)
+        return True, x+1, y+1
+
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
-             tims=None, band=None, margin1=None, **kwa):
+             tims=None, band=None, margin1=None,
+             **kwa):
     r0,r1,d0,d1 = rd
 
     # Read SDSS sources in range.
@@ -1017,6 +1052,18 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
         print 'minFlux:', minFlux, 'nmgy'
+
+
+    for tim in tims:
+        print 'Checking', tim
+        I = np.flatnonzero(np.logical_not(np.isfinite(tim.getImage())))
+        if len(I):
+            print 'Found', len(I), 'bad pixels'
+            tim.getImage().flat[I] = 0
+            iv = tim.getInvvar()
+            iv.flat[I] = 0.
+            tim.setInvvar(iv)
+        assert(np.all(np.isfinite(tim.getInvvar())))
 
     t0 = Time()
     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
@@ -2051,6 +2098,169 @@ def stage306(opt=None, ps=None, tractor=None, band=None, bandnum=None, rd=None, 
                 
 
 
+def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
+             band=None, bandnum=None, tims=None,
+             rcf=None,
+             **kwa):
+    r0,r1,d0,d1 = rd
+    # Coadd images
+    ra  = (r0 + r1) / 2.
+    dec = (d0 + d1) / 2.
+    cosd = np.cos(np.deg2rad(dec))
+
+    coadds = []
+
+    for coi,pixscale in enumerate([2.75 / 3600., 0.4 / 3600]):
+        W = int(np.ceil((r1 - r0) * cosd / pixscale))
+        H = int(np.ceil((d1 - d0) / pixscale))
+        cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2.,
+                    -pixscale, 0., 0., pixscale,
+                    W, H)
+        print 'Target WCS:', cowcs
+        coadd = np.zeros((H,W))
+        con   = np.zeros((H,W), int)
+        for i,(tim) in enumerate(tims):
+            print 'coadding', i
+            # Create sub-WCS
+            x0,x1,y0,y1 = tim.extent
+            wcs = tim.getWcs().wcs
+            wcs2 = Sip(wcs)
+            cpx,cpy = wcs2.crpix
+            wcs2.set_crpix((cpx - x0, cpy - y0))
+            h,w = tim.shape
+            wcs2.set_width(w)
+            wcs2.set_height(h)
+            print 'wcs2:', wcs2
+            yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs2, [], 0, spline=False)
+            if yo is None:
+                continue
+            coadd[yo,xo] += tim.data[yi,xi]
+            con  [yo,xo] += 1
+        coadd /= np.maximum(con, 1)
+
+        n = np.median(con)
+        print 'median of', n, 'exposures'
+        mn = np.median(coadd)
+        st = tims[0].sigma1 / np.sqrt(n)
+
+        plt.clf()
+        plt.imshow(coadd, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=mn-2.*st, vmax=mn+5.*st)
+        plt.title('WISE coadd: %s' % band)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(coadd, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=mn-2.*st, vmax=mn+20.*st)
+        plt.title('WISE coadd: %s' % band)
+        ps.savefig()
+
+        coadds.append(('WISE', band, pixscale, coadd, mn, st, cowcs))
+
+        if bandnum != 1:
+            continue
+
+        r,c,f = rcf
+        for sband in ['u','g','r','i','z']:
+            tim,inf = get_tractor_image_dr9(r,c,f, sband, psf='dg', nanomaggies=True)
+            mn = inf['sky']
+            st = inf['skysig']
+
+            print 'SDSS image:', tim
+            h,w = tim.getImage().shape
+            wcs = tim.getWcs()
+            wcs.astrans._cache_vals()
+            wcs = AsTransWrapper(wcs.astrans, w, h)
+            yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs, [],[], spline=False)
+            if yo is None:
+                print 'WARNING: No overlap with SDSS image?!'
+            sco = np.zeros((H,W))
+            sco[yo,xo] = tim.getImage()[yi,xi]
+                                    
+            plt.clf()
+            plt.imshow(sco, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn-2.*st, vmax=mn+5.*st)
+            plt.title('SDSS image: %s band' % sband)
+            ps.savefig()
+
+            coadds.append(('SDSS', sband, pixscale, sco, mn, st, cowcs))
+    return dict(coadds=coadds)
+
+
+def stage403(coadds=None, **kwa):
+    # Merge W2 coadds into W1 results.
+    P = unpickle_from_file('w3-target-10-w2-stage402.pickle')
+    co = P['coadds']
+    coadds += co
+    #print 'Coadds:', coadds
+    return dict(coadds=coadds)
+
+
+def stage509(cat1=None, cat2=None, cat3=None, bandnum=None,
+             band=None, S=None,
+             **kwa):
+    for i,cat in [(1,cat1), (2,cat2), (3,cat3)]:
+        R = tabledata()
+        R.ra  = np.array([src.getPosition().ra  for src in cat])
+        R.dec = np.array([src.getPosition().dec for src in cat])
+        R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
+        #R.set(band + '_ivar', IV)
+        R.writeto('w3-tr-cat%i-w%i.fits' % (i, bandnum))
+
+    S.writeto('w3-tr-sdss.fits')
+
+def stage510(S=None, targetrd=None, **kwa):
+    for cat in [1,2,3]:
+        W1,W2 = [fits_table('w3-tr-cat%i-w%i.fits' % (cat,bandnum)) for
+                 bandnum in [1,2]]
+
+        NS = len(S)
+        assert(np.all(W1.ra[:NS] == S.ra))
+        assert(np.all(W1.dec[:NS] == S.dec))
+        assert(np.all(W2.ra[:NS] == S.ra))
+        assert(np.all(W2.dec[:NS] == S.dec))
+
+        W1 = W1[:NS]
+        W2 = W2[:NS]
+
+        S.w1 = W1.w1
+        S.w2 = W2.w2
+
+        fluxtomag = NanoMaggies.nanomaggiesToMag
+
+        wmag = (S.w1 * 1.0 + S.w2 * 0.5) / 1.5
+        I = np.flatnonzero(wmag)
+        Si = S[I]
+
+        Si.wise = fluxtomag(wmag[I])
+        Si.optpsf = fluxtomag((Si.psfflux[:,1] * 0.8 +
+                               Si.psfflux[:,2] * 0.6 +
+                               Si.psfflux[:,3] * 1.0) / 2.4)
+        Si.optmod = fluxtomag((Si.modelflux[:,1] * 0.8 +
+                               Si.modelflux[:,2] * 0.6 +
+                               Si.modelflux[:,3] * 1.0) / 2.4)
+        Si.gpsf = fluxtomag(Si.psfflux[:,1])
+        Si.rpsf = fluxtomag(Si.psfflux[:,2])
+        Si.ipsf = fluxtomag(Si.psfflux[:,3])
+        Si.ispsf = (Si.objc_type == 6)
+        Si.isgal = (Si.objc_type == 3)
+
+        in1 = ( ((Si.gpsf - Si.ipsf) < 1.5) *
+                (Si.optpsf > 17.) *
+                (Si.optpsf < 22.) *
+                ((Si.optpsf - Si.wise) > ((Si.gpsf - Si.ipsf) + 3)) *
+                np.logical_or(Si.ispsf, (Si.optpsf - Si.optmod) < 0.1) )
+
+        (r,d) = targetrd
+
+        I,J,d = match_radec(Si.ra, S.dec, np.array([r]), np.array([d]), 1./3600.)
+        print 'Matched', len(I)
+        
+        print 'in1:', in1[I]
+
+        print 'W1', Si.w1[I], fluxtomag(Si.w1[I])
+        print 'W2', Si.w2[I], fluxtomag(Si.w2[I])
+        
 def main():
 
     #plt.figure(figsize=(12,12))
@@ -2158,16 +2368,127 @@ def main():
     dd = np.linspace(d0, d1, 51)
     rr = np.linspace(r0, r1, 91)
 
-    ri = opt.ri
-    di = opt.di
-    rlo,rhi = rr[ri],rr[ri+1]
-    dlo,dhi = dd[di],dd[di+1]
-
-    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
-    wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
-                    (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+    #basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
+    #wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+    #                (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
+    wisedatadirs = [(basedir, 'merged'),]
 
     opt.wisedatadirs = wisedatadirs
+
+
+    ri = opt.ri
+    di = opt.di
+    if ri == -1:
+
+        # T = fits_table('/clusterfs/riemann/raid006/bosswork/boss/spectro/redux/current/7027/v5_6_0/spZbest-7027-56448.fits')
+        # print 'Read', len(T), 'spZbest'
+        # P = fits_table('/clusterfs/riemann/raid006/bosswork/boss/spectro/redux/current/7027/spPlate-7027-56448.fits', hdu=5)
+        # print 'Read', len(P), 'spPlate'
+
+        T = fits_table('/home/schlegel/wise1ext/sdss/zans-plates7027-7032-zscan.fits', column_map={'class':'clazz'})
+        print 'Read', len(T), 'zscan'
+
+        I = np.flatnonzero(T.zwarning == 0)
+        print len(I), 'with Zwarning = 0'
+
+        print 'Classes:', np.unique(T.clazz)
+
+        qso = 'QSO   '
+        I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso))
+        print len(I), 'QSO with Zwarning = 0'
+
+        print 'Typescans:', np.unique(T.typescan)
+        qsoscan = 'QSO    '
+        I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan))
+        print len(I), 'QSO, scan QSO, with Zwarning = 0'
+
+        for zcut in [2, 2.3, 2.5]:
+            I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.z > zcut))
+            print len(I), 'QSO, scan QSO, with Zwarning = 0, z >', zcut
+
+            I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
+            print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
+
+        zcut = 2.3
+        I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
+        print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
+
+        T.cut(I)
+
+        # S = fits_table('ancil/objs-eboss-w3-dr9.fits')
+        # print 'read', len(S), 'SDSS objs'
+        # I,J,d = match_radec(T.plug_ra, T.plug_dec, S.ra, S.dec, 1./3600.)
+        # print len(I), 'match'
+        # print len(np.unique(I)), 'unique fibers'
+        # print len(np.unique(J)), 'unique SDSS'
+        # S.cut(J)
+        # T.cut(I)
+        
+        A = fits_table('ancil/ancil-QSO-eBOSS-W3-ADM-dr8.fits')
+        print 'Read', len(A), 'targets'
+        I,J,d = match_radec(T.plug_ra, T.plug_dec, A.ra, A.dec, 1./3600.)
+        print len(I), 'matched'
+        print len(np.unique(I)), 'unique fibers'
+        print len(np.unique(J)), 'unique targets'
+
+        A.cut(J)
+        #S.cut(I)
+        T.cut(I)
+        I = np.flatnonzero(A.w3bitmask == 4)
+        print 'Selected by WISE only:', len(I)
+
+        # ares = []
+        # for j,i in enumerate(I):
+        #     ra,dec = A.ra[i], A.dec[i]
+        #     print '<img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.2&width=200&height=200&opt=G"><br />' % (ra,dec)
+        # 
+        #     # plots zoom-in
+        #     #ra,dec = 214.770, 53.047
+        #     ddec = 0.01
+        #     dra = ddec / np.cos(np.deg2rad(dec))
+        #     rlo,rhi =  ra -  dra,  ra +  dra
+        #     dlo,dhi = dec - ddec, dec + ddec
+        # 
+        #     opt.name = 'w3-target-%02i' % j
+        #     opt.picklepat = opt.name + '-stage%0i.pickle'
+        #     opt.ps = opt.name
+        #     #ar = mp.apply(runtostage, (opt.stage, opt, mp, rlo,rhi,dlo,dhi), kwargs=dict(rcf=(A.run[i],A.camcol[i],A.field[i])))
+        #     ar = mp.apply(runtostage, (opt.stage, opt, None, rlo,rhi,dlo,dhi), kwargs=dict(rcf=(A.run[i],A.camcol[i],A.field[i])))
+        #     ares.append(ar)
+        # for ar in ares:
+        #     ar.get()
+
+        # nice one!
+        good = 10
+
+        j,i = good,I[good]
+        ra,dec = A.ra[i], A.dec[i]
+        print '<img src="http://skyservice.pha.jhu.edu/DR9/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.2&width=200&height=200&opt=G"><br />' % (ra,dec)
+        ddec = 0.007
+        dra = ddec / np.cos(np.deg2rad(dec))
+        rlo,rhi =  ra -  dra,  ra +  dra
+        dlo,dhi = dec - ddec, dec + ddec
+
+        #opt.name = 'w3-target-%02i-w1' % j
+        opt.name = 'w3-target-%02i-w%i' % (j, opt.bandnum)
+        opt.picklepat = opt.name + '-stage%0i.pickle'
+        opt.ps = opt.name
+        runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi, rcf=(A.run[i],A.camcol[i],A.field[i]),
+                   targetrd=(ra,dec))
+
+        # opt.bandnum = 2
+        # opt.name = 'w3-target-%02i-w2' % j
+        # opt.picklepat = opt.name + '-stage%0i.pickle'
+        # opt.ps = opt.name
+        # runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi, rcf=(A.run[i],A.camcol[i],A.field[i]))
+
+        sys.exit(0)
+        
+    else:
+        rlo,rhi = rr[ri],rr[ri+1]
+        dlo,dhi = dd[di],dd[di+1]
+
     
     runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi)
 
@@ -2186,6 +2507,8 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
                 204: 103,
                 205: 104,
                 304: 103,
+                402: 101,
+                509: 108,
                 }
 
     runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,
