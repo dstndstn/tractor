@@ -2213,10 +2213,24 @@ def stage403(coadds=None, **kwa):
     return dict(coadds=coadds)
 
 def stage404(coadds=None, ps=None, targetrd=None,
-             W=None, S=None, rd=None,
+             W=None, S=None, rd=None, rcf=None,
+             tims=None, band=None, cat2=None,
              **kwa):
     r0,r1,d0,d1 = rd
 
+    #print 'Available kwargs:', kwa.keys()
+
+    z = fits_table('zans-plates7027-7032-zscan.fits')
+    I,J,d = match_radec(z.plug_ra, z.plug_dec, targetrd[0], targetrd[1],
+                        1./3600.)
+    print 'N matches', len(I)
+    print 'zans', z[I[0]]
+    z[I[0]].about()
+    
+    plt.subplots_adjust(hspace=0, wspace=0,
+                        left=0, right=1,
+                        bottom=0, top=1)
+    
     wfn = 'wise-objs-w3.fits'
     W = fits_table(wfn)
     print 'Read', len(W), 'from', wfn
@@ -2228,11 +2242,20 @@ def stage404(coadds=None, ps=None, targetrd=None,
     print 'Cut to', len(S), 'SDSS'
     sdss = S
 
+    #sdss.about()
+    sdss.inblock = sdss.inblock.astype(np.uint8)
+    sdss.writeto('sdss-objs.fits')
+    
     fine = 0.4/3600.
     ss = []
+
+    CC = tabledata()
+    for i,c in enumerate(['name', 'band', 'pixscale', 'mean', 'std']):
+        CC.set(c, np.array([x[i] for x in coadds]))
+
     for b in 'irg':
-        sx = [(im,mn,st,wcs) for src,band,pixscale,im,mn,st,wcs in coadds
-              if src == 'SDSS' and band == b and pixscale == fine]
+        sx = [(im,mn,st,wcs) for src,bb,pixscale,im,mn,st,wcs in coadds
+              if src == 'SDSS' and bb == b and pixscale == fine]
         assert(len(sx) == 1)
         cowcs = sx[0][-1]
         ss.append(sx[0][:3])
@@ -2240,8 +2263,8 @@ def stage404(coadds=None, ps=None, targetrd=None,
     si,sr,sg = ss
     ww = []
     for b in ['w1','w2']:
-        sx = [(im,mn,st) for src,band,pixscale,im,mn,st,wcs in coadds
-              if src == 'WISE' and band == b and pixscale == fine]
+        sx = [(im,mn,st) for src,bb,pixscale,im,mn,st,wcs in coadds
+              if src == 'WISE' and bb == b and pixscale == fine]
         assert(len(sx) == 1)
         ww.append(sx[0])
     w1,w2 = ww
@@ -2316,16 +2339,17 @@ def stage404(coadds=None, ps=None, targetrd=None,
     # plt.imshow(img, interpolation='nearest', origin='lower')
     # ps.savefig()
 
-    img = np.clip(sRGB / 10., 0., 1.)
+    img = np.clip((sRGB + 2) / 12., 0., 1.)
     plt.clf()
     plt.imshow(img, interpolation='nearest', origin='lower')
+    plt.xticks([]); plt.yticks([])
     ps.savefig()
 
     green = (0,1,0)
 
-    ok,x,y = wcs.radec2pixelxy(sdss.ra, sdss.dec)
+    ok,sx,sy = wcs.radec2pixelxy(sdss.ra, sdss.dec)
     ax = plt.axis()
-    plt.plot(x-1, y-1, 'o', mfc='none', mec=green, ms=30, mew=2)
+    plt.plot(sx-1, sy-1, 'o', mfc='none', mec=green, ms=30, mew=2)
     plt.axis(ax)
     ps.savefig()
     
@@ -2342,10 +2366,11 @@ def stage404(coadds=None, ps=None, targetrd=None,
     wRGB[:,:,0] = (im - mn) / st
     wRGB[:,:,1] = (wRGB[:,:,0] + wRGB[:,:,2]) / 2.
 
-    img = np.clip(wRGB / 5., 0., 1.)
+    img = np.clip((wRGB + 1) / 6., 0., 1.)
 
     plt.clf()
     plt.imshow(img, interpolation='nearest', origin='lower')
+    plt.xticks([]); plt.yticks([])
     ps.savefig()
 
     ok,x,y = wcs.radec2pixelxy(Wise.ra, Wise.dec)
@@ -2359,11 +2384,11 @@ def stage404(coadds=None, ps=None, targetrd=None,
 
     print 'x', x
     print 'y', y
-
-    img = np.clip(wRGB / 10., 0., 1.)
-    plt.clf()
-    plt.imshow(img, interpolation='nearest', origin='lower')
-    ps.savefig()
+    
+    # img = np.clip(wRGB / 10., 0., 1.)
+    # plt.clf()
+    # plt.imshow(img, interpolation='nearest', origin='lower')
+    # ps.savefig()
 
     # wRGB2 = np.zeros((H,W,3))
     # (im,mn,st) = w1b
@@ -2380,12 +2405,146 @@ def stage404(coadds=None, ps=None, targetrd=None,
     # plt.imshow(img, interpolation='nearest', origin='lower')
     # ps.savefig()
 
+    (im,mn,st) = sr
 
+    ima = dict(interpolation='nearest', origin='lower', 
+               vmin=mn-1.*st, vmax=mn+5.*st, cmap='gray')
+    # SDSS r-band
+    plt.clf()
+    plt.imshow(im, **ima)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    sband = 'r'
+    # oof, the previous get_tractor_sources_dr9 did a *= -1 on the angles...
+    sdss.phi_dev_deg *= -1
+    sdss.phi_exp_deg *= -1
+    cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+                                  objs=sdss, bands=['r'], nanomaggies=True,
+                                  extrabands=[band],
+                                  fixedComposites=True, forcePointSources=False)
+    print 'Created', len(cat), 'Tractor sources'
+
+    r,c,f = rcf
+    stim,inf = get_tractor_image_dr9(r,c,f, sband, psf='dg', nanomaggies=True)
+    sig1 = inf['skysig']
+
+    H,W = im.shape
+    wcs = FitsWcs(cowcs)
+    tim = Image(data=np.zeros_like(im),invvar=np.zeros_like(im) + (1./sig1)**2,
+                wcs=wcs, photocal=stim.photocal, sky=stim.sky, psf=stim.psf,
+                domask=False)
+    tractor = Tractor([tim], cat)
+    rmodel = tractor.getModelImage(0)
     
+    # SDSS r-band model (on coadd wcs)
+    # + noise
+    plt.clf()
+    plt.imshow(rmodel + np.random.normal(size=rmodel.shape, scale=sig1), **ima)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
 
+    plt.clf()
+    plt.imshow(rmodel, **ima)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
 
+    # WISE, single exposure, model (resampled to coadd wcs)
+    for i,tim in enumerate(tims):
+        print '  ', i, tim.name, '# pix', len(np.flatnonzero(tim.invvar))
+    tim = tims[0]
+    print 'Catalog:'
+    for src in cat:
+        print '  ', src
+    tractor = Tractor([tim], cat)
+    cat = tractor.catalog
+    cat.freezeParamsRecursive('*')
+    cat.thawPathsTo(band)
+    p0 = cat.getParams()
+    #minbright = 250. # mag 16.5
+    minbright = 500. # mag 16.5
+    cat.setParams(np.maximum(minbright, p0))
 
+    wmod0 = tractor.getModelImage(0)
 
+    tractor.setCatalog(cat2)
+    wmod1 = tractor.getModelImage(0)
+    
+    sky = tim.getSky().getValue()
+    imw = dict(interpolation='nearest', origin='lower', cmap='gray',
+               vmin=sky - 1.*tim.sigma1, vmax=sky + 5.*tim.sigma1)
+    # plt.clf()
+    # plt.imshow(wmod0 + 3.*tim.sigma1 * (tim.invvar == 0), **imw)
+    # plt.xticks([]); plt.yticks([])
+    # ps.savefig()
+
+    print 'WISE x0,y0', tim.getWcs().getX0Y0()
+    x0,y0 = tim.getWcs().getX0Y0()
+    # Create sub-WCS
+    wcs = tim.getWcs().wcs
+    wcs2 = Sip(wcs)
+    cpx,cpy = wcs2.crpix
+    wcs2.set_crpix((cpx - x0, cpy - y0))
+    h,w = tim.shape
+    wcs2.set_width(w)
+    wcs2.set_height(h)
+
+    yo,xo,yi,xi,nil = resample_with_wcs(cowcs, wcs2, [],[])
+    if yo is None:
+        print 'WARNING: No overlap with WISE model?'
+    rwmod0 = np.zeros_like(rmodel)
+    rwmod1 = np.zeros_like(rmodel)
+    rwimg = np.zeros_like(rmodel)
+    rwmod0[yo,xo] = wmod0[yi,xi]
+    rwmod1[yo,xo] = wmod1[yi,xi]
+    rwimg[yo,xo] = tim.getImage()[yi,xi]
+    
+    plt.clf()
+    plt.imshow(rwmod0, **imw)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    imw2 = dict(interpolation='nearest', origin='lower', cmap='gray',
+                vmin=sky - 1.*tim.sigma1, vmax=sky + 5.*tim.sigma1)
+    
+    plt.clf()
+    plt.imshow(rwimg, **imw2)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(rwmod1, **imw2)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    print 'band', band
+    
+    I = np.flatnonzero((CC.name == 'WISE model 2') * (CC.pixscale == fine) *
+                       (CC.band == band))
+    assert(len(I) == 1)
+    nil,nil,nil,wcomod,mn,st,nil = coadds[I[0]]
+    I = np.flatnonzero((CC.name == 'WISE') * (CC.pixscale == fine) *
+                       (CC.band == band))
+    assert(len(I) == 1)
+    nil,nil,nil,wcoimg,mn,st,nil = coadds[I[0]]
+
+    imw = dict(interpolation='nearest', origin='lower', cmap='gray',
+               vmin=mn - 3.*st, vmax=mn + 15.*st)
+    
+    plt.clf()
+    plt.imshow(wcomod, **imw)
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(wcoimg, **imw)
+    ps.savefig()
+
+    ax = plt.axis()
+    plt.plot(sx-1, sy-1, 'o', mfc='none', mec=green, ms=30, mew=2)
+    plt.axis(ax)
+    ps.savefig()
+    
+    
 def stage509(cat1=None, cat2=None, cat3=None, bandnum=None,
              band=None, S=None,
              **kwa):
@@ -2580,7 +2739,7 @@ def main():
 
     ri = opt.ri
     di = opt.di
-    if ri == -1:
+    if ri == -1 and False:
 
         # T = fits_table('/clusterfs/riemann/raid006/bosswork/boss/spectro/redux/current/7027/v5_6_0/spZbest-7027-56448.fits')
         # print 'Read', len(T), 'spZbest'
@@ -2670,12 +2829,22 @@ def main():
         dra = ddec / np.cos(np.deg2rad(dec))
         rlo,rhi =  ra -  dra,  ra +  dra
         dlo,dhi = dec - ddec, dec + ddec
-
+        rcf = (A.run[i],A.camcol[i],A.field[i])
+        
+    elif ri == -1:
+        rlo,rhi = 218.035321632, 218.059043959
+        dlo,dhi =  53.8245423746, 53.8385423746
+        rcf = (3712, 6, 214)
+        j = 10
+        ra  = (rlo + rhi) / 2.
+        dec = (dlo + dhi) / 2.
+        
+    if ri == -1:
         #opt.name = 'w3-target-%02i-w1' % j
         opt.name = 'w3-target-%02i-w%i' % (j, opt.bandnum)
         opt.picklepat = opt.name + '-stage%0i.pickle'
         opt.ps = opt.name
-        runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi, rcf=(A.run[i],A.camcol[i],A.field[i]),
+        runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi, rcf=rcf,
                    targetrd=(ra,dec))
 
         # opt.bandnum = 2
