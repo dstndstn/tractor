@@ -1252,6 +1252,9 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              tractor=None, ims1=None,
              mp=None,
              **kwa):
+
+    print 'ims1:', ims1
+
     ra  = (ralo  + rahi)  / 2.
     dec = (declo + dechi) / 2.
     res1 = []
@@ -1381,6 +1384,8 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         lancsum2 += (d.rimg**2 * ww)
         modsum   += (d.rmod    * ww)
         wsum     += ww
+
+    coimg1 = coimg
     
     nn    = (nnsum   / np.maximum(wsum, 1e-6))
     coimg = (lancsum / np.maximum(wsum, 1e-6))
@@ -1437,7 +1442,6 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ps.savefig()
 
 
-
     # 2. Apply rchi masks to individual images
     tims = tractor.getImages()
 
@@ -1456,6 +1460,10 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         #         plt.imshow(mask)
         #         plt.colorbar()
         #     ps.savefig()
+
+        # LBNL
+        if i != 62:
+            continue
     
         tim.coaddmask = mask
         if mask is not None:
@@ -1503,6 +1511,33 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         plt.suptitle(d.name)
         ps.savefig()
+
+        if i == 62:
+            # LBNL plots
+            plt.subplots_adjust(hspace=0, wspace=0,
+                                left=0, right=1,
+                                bottom=0, top=1)
+            plt.clf()
+            plt.imshow(coimg1, cmap='gray', **ima)
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(coimg, cmap='gray', **ima)
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(d.rimg, interpolation='nearest', origin='lower',
+                       vmin=-2*sig1, vmax=5*sig1, cmap='gray')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(rchi, interpolation='nearest', origin='lower',
+                       vmin=-5, vmax=5, cmap='gray')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
+            ps.savefig()
 
     
     return dict(coimg=coimg, coinvvar=coinvvar, comod=comod, coppstd=coppstd,
@@ -2173,7 +2208,6 @@ def stage402(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
         coadds.append(('WISE model 2', band, pixscale, comod, mn, st, cowcs))
 
 
-
         if bandnum != 1:
             continue
 
@@ -2620,6 +2654,8 @@ def stage510(S=None, W=None, targetrd=None, **kwa):
 
         print 'W1', Si.w1[I], fluxtomag(Si.w1[I])
         print 'W2', Si.w2[I], fluxtomag(Si.w2[I])
+
+
         
 def main():
 
@@ -2840,6 +2876,10 @@ def main():
         dec = (dlo + dhi) / 2.
         
     if ri == -1:
+        print 'rlo,rhi', rlo,rhi
+        print 'dlo,dhi', dlo,dhi
+        print 'R,C,F', (A.run[i],A.camcol[i],A.field[i])
+        
         #opt.name = 'w3-target-%02i-w1' % j
         opt.name = 'w3-target-%02i-w%i' % (j, opt.bandnum)
         opt.picklepat = opt.name + '-stage%0i.pickle'
@@ -2854,6 +2894,15 @@ def main():
         # runtostage(opt.stage, opt, mp, rlo,rhi,dlo,dhi, rcf=(A.run[i],A.camcol[i],A.field[i]))
 
         sys.exit(0)
+
+    elif ri == -2:
+        # streak in 11317b060
+        ra,dec = 215.208333, 51.171111
+        ddec = 0.06
+        dra = ddec / np.cos(np.deg2rad(dec))
+        rlo,rhi =  ra -  dra,  ra +  dra
+        dlo,dhi = dec - ddec, dec + ddec
+        
         
     else:
         rlo,rhi = rr[ri],rr[ri+1]
