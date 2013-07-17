@@ -221,7 +221,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 				 getobjs=False, getobjinds=False,
 				 extrabands=None,
 				 fixedComposites=False,
-				 forcePointSources=False):
+				 forcePointSources=False,
+                 useObjcType=False):
 	'''
 	If set,
 
@@ -317,8 +318,12 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 		Lgal = np.zeros(len(objs), float)
 		Ldev = Lexp = Lgal
 	else:
-		Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
-		Lgal  = (objs.prob_psf[:,bandnum] == 0)
+        if useObjcType:
+            Lstar = (objs.objc_type == 6)
+            Lgal = (objs.objc_type == 3)
+        else:
+            Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
+            Lgal  = (objs.prob_psf[:,bandnum] == 0)
 		if isdr7:
 			fracdev = objs.fracpsf[:,bandnum]
 		else:

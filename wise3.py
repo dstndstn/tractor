@@ -36,8 +36,8 @@ import wise
 
 def get_l1b_file(basedir, scanid, frame, band):
     scangrp = scanid[-2:]
-    return os.path.join(basedir, scangrp, scanid,
-                        '%03i' % frame, '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
+    return os.path.join(basedir, scangrp, scanid, '%03i' % frame, 
+                        '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              **kwa):
@@ -267,8 +267,11 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
     ## NOTE, this method CUTS the "S" arg
     cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
-                                  objs=S, bands=[], nanomaggies=True, extrabands=[band],
-                                  fixedComposites=True, forcePointSources=opt.ptsrc)
+                                  objs=S, bands=[], nanomaggies=True,
+                                  extrabands=[band],
+                                  fixedComposites=True,
+                                  forcePointSources=opt.ptsrc,
+                                  useObjcType=True)
     print 'Created', len(cat), 'Tractor sources'
     assert(len(cat) == len(S))
 
@@ -285,9 +288,8 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
     return dict(opt102=opt, tractor=tractor, S=S, margin2=margin2)
 
 
-psfcache = {}
-
-def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None, **kwa):
+def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
+             **kwa):
     tims = tractor.images
     tractor.freezeParamsRecursive('*')
     tractor.thawPathsTo(band)
@@ -317,9 +319,9 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 
     minFlux = opt.minflux
     if minFlux is not None:
-        minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val for tim in tims])
+        minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
+                             for tim in tims])
         print 'minFlux:', minFlux, 'nmgy'
-
 
     for tim in tims:
         print 'Checking', tim
@@ -333,10 +335,9 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         assert(np.all(np.isfinite(tim.getInvvar())))
 
     t0 = Time()
-    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(minsb=opt.minsb, mindlnp=1.,
-                                                         sky=True, minFlux=minFlux,
-                                                         fitstats=True,
-                                                         variance=True)
+    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+        minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
+        fitstats=True, variance=True)
     print 'Forced phot took', Time()-t0
 
     cat = tractor.catalog
@@ -357,39 +358,38 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     R.inblock = S.inblock.astype(np.uint8)
 
     imstats = tabledata()
-
     if fs is not None:
         for k in ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
             R.set(k, getattr(fs, k))
 
-        imstats = tabledata()
         for k in ['imchisq', 'imnpix', 'sky']:
             X = getattr(fs, k)
             imstats.set(k, X)
-            #print 'image stats', k, '=', X
         imstats.scan_id = T.scan_id
         imstats.frame_num = T.frame_num
 
     return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1)
 
 
-
 class Duck(object):
     pass
 
-def _resample_one((ti, tim, mod, targetwcs)):
-    S = targetwcs.get_width()
-    print ti.tag, tim.name
-    x0,x1,y0,y1 = ti.extents
+def get_sip_subwcs(wcs, extent):
     # Create sub-WCS
-    wcs = tim.getWcs().wcs
+    (x0, x1, y0, y1) = extent
     wcs2 = Sip(wcs)
     cpx,cpy = wcs2.crpix
     wcs2.set_crpix((cpx - x0, cpy - y0))
-    h,w = tim.shape
+    h = (1 + y1 - y0)
+    w = (1 + x1 - x0)
     wcs2.set_width(w)
     wcs2.set_height(h)
-    #print 'wcs copy', wcs2
+    return wcs2
+
+def _resample_one((tim, mod, targetwcs)):
+    S = targetwcs.get_width()
+    print 'Resampling', tim.name
+    wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[])
     if yo is None:
         return None
@@ -398,41 +398,14 @@ def _resample_one((ti, tim, mod, targetwcs)):
     iv = np.zeros((S,S))
     iv[yo,xo] = tim.invvar[yi,xi]
     # Patch masked pixels so we can interpolate
-    patchmask = (tim.invvar > 0)
     patchimg = tim.data.copy()
-    rdmask = tim.rdmask
-    Nlast = -1
-    while True:
-        I = np.flatnonzero(rdmask * (patchmask == 0))
-        print len(I), 'pixels need patching'
-        if len(I) == 0:
-            break
-        assert(len(I) != Nlast)
-        Nlast = len(I)
-        iy,ix = np.unravel_index(I, tim.data.shape)
-        psum = np.zeros(len(I), patchimg.dtype)
-        pn = np.zeros(len(I), int)
-        ok = (iy > 0)
-        psum[ok] += (patchimg [iy[ok]-1, ix[ok]] *
-                     patchmask[iy[ok]-1, ix[ok]])
-        pn[ok] +=    patchmask[iy[ok]-1, ix[ok]]
-        ok = (iy < (h-1))
-        psum[ok] += (patchimg [iy[ok]+1, ix[ok]] *
-                     patchmask[iy[ok]+1, ix[ok]])
-        pn[ok] +=    patchmask[iy[ok]+1, ix[ok]]
-        ok = (ix > 0)
-        psum[ok] += (patchimg [iy[ok], ix[ok]-1] *
-                     patchmask[iy[ok], ix[ok]-1])
-        pn[ok] +=    patchmask[iy[ok], ix[ok]-1]
-        ok = (ix < (w-1))
-        psum[ok] += (patchimg [iy[ok], ix[ok]+1] *
-                     patchmask[iy[ok], ix[ok]+1])
-        pn[ok] +=    patchmask[iy[ok], ix[ok]+1]
-        patchimg.flat[I] = (psum / np.maximum(pn, 1)).astype(patchimg.dtype)
-        patchmask.flat[I] = (pn > 0)
+    ok = patch_image(patchimg, tim.invvar > 0,
+                     required=tim.rdmask)
+    assert(ok)
     # Resample
     Lorder = 3
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [patchimg, mod], Lorder)
+    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2,
+                                         [patchimg, mod], Lorder)
     if yo is None:
         return None
     rpatch = np.zeros((S,S))
@@ -467,22 +440,11 @@ def _resample_one((ti, tim, mod, targetwcs)):
     d.npix1 = np.sum(tim.getInvError() > 0)
     d.lnp2 = np.sum(((rmod - rpatch)**2 * iv))
     d.npix2 = np.sum(iv > 0)
-    
     return d
 
-def _resample_mod((ti, tim, mod, targetwcs)):
+def _resample_mod((tim, mod, targetwcs)):
     S = targetwcs.get_width()
-    print ti.tag, tim.name
-    x0,x1,y0,y1 = ti.extents
-    # Create sub-WCS
-    wcs = tim.getWcs().wcs
-    wcs2 = Sip(wcs)
-    cpx,cpy = wcs2.crpix
-    wcs2.set_crpix((cpx - x0, cpy - y0))
-    h,w = tim.shape
-    wcs2.set_width(w)
-    wcs2.set_height(h)
-    # Resample
+    wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     Lorder = 3
     yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder)
     if yo is None:
@@ -496,17 +458,8 @@ def _resample_mod((ti, tim, mod, targetwcs)):
     ww = w * (iv > 0)
     return rmod,ww
 
-def _rev_resample_mask((ti, tim, mask, targetwcs)):
-    print ti.tag, tim.name
-    x0,x1,y0,y1 = ti.extents
-    # Create sub-WCS
-    wcs = tim.getWcs().wcs
-    wcs2 = Sip(wcs)
-    cpx,cpy = wcs2.crpix
-    wcs2.set_crpix((cpx - x0, cpy - y0))
-    h,w = tim.shape
-    wcs2.set_width(w)
-    wcs2.set_height(h)
+def _rev_resample_mask((tim, mask, targetwcs)):
+    wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[])
     if yo is None:
         return None
@@ -519,9 +472,6 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              tractor=None, ims1=None,
              mp=None,
              **kwa):
-
-    print 'ims1:', ims1
-
     ra  = (ralo  + rahi)  / 2.
     dec = (declo + dechi) / 2.
     res1 = []
@@ -537,8 +487,8 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     print 'Target WCS:', cowcs
 
     args = []
-    for i,(ti,(tim,mod,nil)) in enumerate(zip(T,R)):
-        args.append((ti, tim, mod, cowcs))
+    for i,(tim,mod,nil) in enumerate(R):
+        args.append((tim, mod, cowcs))
     ims = mp.map(_resample_one, args)
 
     nnsum    = np.zeros((S,S))
@@ -713,8 +663,8 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     tims = tractor.getImages()
 
     args = []
-    for i,(ti, tim, d) in enumerate(zip(T, tims, ims)):
-        args.append((ti, tim, d.mask, cowcs))
+    for i,(tim, d) in enumerate(zip(tims, ims)):
+        args.append((tim, d.mask, cowcs))
     rmasks = mp.map(_rev_resample_mask, args)
     for i,(mask,tim) in enumerate(zip(rmasks, tims)):
         # if i < 10:
@@ -920,13 +870,13 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cochi = (coimg - comod) * np.sqrt(coinvvar)
 
     args = []
-    for i,(ti, tim, (nil,mod,ie,chi,roi), (nil,mod0,nil,nil,nil)) in enumerate(zip(T, tims, ims2, ims1)):
+    for i,(tim, (nil,mod,ie,chi,roi), (nil,mod0,nil,nil,nil)) in enumerate(zip(tims, ims2, ims1)):
 
         sky = tim.getSky().getValue()
         scale = 1. / tim.getPhotoCal().getScale()
         mod  = (mod - sky) * scale
 
-        args.append((ti, tim, mod, cowcs))
+        args.append((tim, mod, cowcs))
         
         if i < 10:
             plt.clf()
