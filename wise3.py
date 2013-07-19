@@ -39,6 +39,7 @@ def get_l1b_file(basedir, scanid, frame, band):
     return os.path.join(basedir, scangrp, scanid, '%03i' % frame, 
                         '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
+
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              **kwa):
     bandnum = opt.bandnum
@@ -145,8 +146,29 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plot.write(pfn)
         print 'Wrote', pfn
 
+
+    # Read WISE sources in the ROI
+    if opt.wsources is not None and os.path.exists(opt.wsources):
+        W = fits_table(opt.wsources)
+    else:
+        from wisecat import *
+        cols=['cntr', 'ra', 'dec', 'sigra', 'sigdec', 'cc_flags',
+              'ext_flg', 'var_flg', 'moon_lev', 'ph_qual',
+              'w1mpro', 'w1sigmpro', 'w1sat', 'w1nm', 'w1m', 
+              'w1snr', 'w1cov', 'w1mag', 'w1sigm', 'w1flg',
+              'w2mpro', 'w2sigmpro', 'w2sat', 'w2nm', 'w2m',
+              'w2snr', 'w2cov', 'w2mag', 'w2sigm', 'w2flg',
+              'w3mpro', 'w3sigmpro', 'w3sat', 'w3nm', 'w3m', 
+              'w3snr', 'w3cov', 'w3mag', 'w3sigm', 'w3flg',
+              'w4mpro', 'w4sigmpro', 'w4sat', 'w4nm', 'w4m',
+              'w4snr', 'w4cov', 'w4mag', 'w4sigm', 'w4flg', ]
+        W = wise_catalog_radecbox(ralo, rahi, declo, dechi, cols=cols)
+        if opt.wsources is not None:
+            W.writeto(opt.wsources)
+            print 'Wrote', wsrcs
+        
     return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
-                wcses=wcses, bandnum=bandnum, band=band)
+                wcses=wcses, bandnum=bandnum, band=band, W=W)
 
 
 def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
@@ -583,7 +605,6 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     plt.title('Chi (b)')
     ps.savefig()
 
-
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
@@ -773,7 +794,7 @@ def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
 def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
-             tractor=None, ims1=None,
+             tractor=None, ims1=None, W=None,
              mp=None,
              coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
              **kwa):
@@ -784,12 +805,6 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     cat1 = cat.copy()
 
-    wfn = 'wise-objs-w3.fits'
-    W = fits_table(wfn)
-    print 'Read', len(W), 'from', wfn
-    W.cut((W.ra > r0) * (W.ra < r1) * (W.dec > d0) * (W.dec < d1))
-    print 'Cut to', len(W), 'in RA,Dec box'
-    
     # Find WISE objs with no SDSS counterpart
     I,J,d = match_radec(W.ra, W.dec, sdss.ra, sdss.dec, 4./3600.)
     unmatched = np.ones(len(W), bool)
@@ -1926,6 +1941,10 @@ def main():
 
     parser.add_option('-s', dest='sources',
                       help='Input SDSS source list')
+
+    parser.add_option('-W', dest='wsources',
+                      help='WISE source list')
+
     parser.add_option('-i', dest='individual', action='store_true',
                       help='Fit individual images?')
 
@@ -2154,15 +2173,15 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
             kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
             return kwa
 
-    prereqs = { 100: None,
-                204: 103,
-                205: 104,
-                304: 103,
-                #402: 101,
-                #402: 105,
-                402: 108,
-                509: 108,
-                }
+    prereqs = { 
+        100: None,
+        204: 103,
+        205: 104,
+        304: 103,
+
+        402: 108,
+        509: 108,
+        }
 
     runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,
                       declo=dlo, dechi=dhi, ralo=rlo, rahi=rhi,
