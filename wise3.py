@@ -501,7 +501,7 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
     R.set(band + '_ivar', IV)
     R.row = np.hstack((S.row, np.array([-1] * len(UW))))
-    R.inblock = S.inblock.astype(np.uint8)
+    R.inblock = np.hstack((S.inblock, np.array([1] * len(UW)))).astype(np.uint8)
 
     imstats = tabledata()
     if fs is not None:
