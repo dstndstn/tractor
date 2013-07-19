@@ -29,14 +29,15 @@ import logging
 lvl = logging.INFO
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+import numpy as np
+from wise3 import *
+
 
 # duck-type command-line options
 class myopts(object):
     pass
 
 def main():
-    import numpy as np
-    from wise3 import stage100, stage101, stage102, stage103, stage104
 
     batch = False
     
@@ -72,10 +73,15 @@ def main():
 
         r0,r1 = 210.593,  219.132
         d0,d1 =  51.1822,  54.1822
-        basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
-        opt.wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
-                            (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
+
+        basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
+        opt.wisedatadirs = [(basedir, 'merged'),]
+
+        # basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise1test'
+        # opt.wisedatadirs = [(os.path.join(basedir, 'allsky'), 'cryo'),
+        #                     (os.path.join(basedir, 'prelim_postcryo'), 'post-cryo'),]
         opt.minflux = None
+        opt.wsources = 'wise-objs-w3.fits'
         opt.bandnum = band
         opt.osources = None
         opt.minsb = 0.005
@@ -169,16 +175,33 @@ def main():
         try:
             P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
                      opt=opt)
-    
+            ts0 = Time()
             R = stage100(**P)
+            print 'stage100:', Time()-ts0
             P.update(R)
+            ts0 = Time()
             R = stage101(**P)
+            print 'stage101:', Time()-ts0
             P.update(R)
+            ts0 = Time()
             R = stage102(**P)
+            print 'stage102:', Time()-ts0
             P.update(R)
+            ts0 = Time()
             R = stage103(**P)
+            print 'stage103:', Time()-ts0
             P.update(R)
+            ts0 = Time()
             R = stage104(**P)
+            print 'stage104:', Time()-ts0
+            P.update(R)
+            ts0 = Time()
+            R = stage105(**P)
+            print 'stage105:', Time()-ts0
+            P.update(R)
+            ts0 = Time()
+            R = stage106(**P)
+            print 'stage106:', Time()-ts0
             P.update(R)
     
             R = P['R']
@@ -245,7 +268,7 @@ def main():
 
 if __name__ == '__main__':
     import cProfile
-    import datetime
-	cProfile.run('main()', 'prof-runslice-%s.dat' % (datetime.now().isoformat()))
+    from datetime import datetime
+    cProfile.run('main()', 'prof-runslice-%s.dat' % (datetime.now().isoformat()))
 
     

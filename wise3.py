@@ -150,8 +150,9 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # Read WISE sources in the ROI
     if opt.wsources is not None and os.path.exists(opt.wsources):
         W = fits_table(opt.wsources)
+        W.cut((W.ra > ralo) * (W.ra < rahi) * (W.dec > declo) * (W.dec < dechi))
     else:
-        from wisecat import *
+        from wisecat import wise_catalog_radecbox
         cols=['cntr', 'ra', 'dec', 'sigra', 'sigdec', 'cc_flags',
               'ext_flg', 'var_flg', 'moon_lev', 'ph_qual',
               'w1mpro', 'w1sigmpro', 'w1sat', 'w1nm', 'w1m', 
@@ -361,20 +362,44 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     dec = (declo + dechi) / 2.
     W,H = (rahi - ralo) * np.cos(np.deg2rad(dec)) / pixscale, (dechi - declo) / pixscale
     W,H = int(np.ceil(W)), int(np.ceil(H))
-    cowcs = Tan(ra, dec, (S+1)/2., (S+1)/2., pixscale, 0., 0., pixscale, W,H)
+    cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2., pixscale, 0., 0., pixscale, W,H)
     print 'Target WCS:', cowcs
 
     tims = tractor.getImages()
 
+    for tim in tims:
+        print 'Valid pix:', np.sum(tim.invvar > 0)
+
     # Resample
-    ims = mp.map(_resample_one, [(tim, None, cowcs) for tim in tims])
+    if mp is None:
+        mp = multiproc()
+    ims1 = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
+    print 'ims1', ims1
+    ims2 = mp.map(_resample_one, [(tim, None, cowcs, False) for tim,im in zip(tims,ims1)
+                                  if im is None])
+    print 'ims2', ims2
+    ims = []
+    j = 0
+    for im in ims1:
+        if im is None:
+            ims.append(ims2[j])
+            j += 1
+        else:
+            ims.append(im)
+    print 'ims:', ims
+
     # Coadd
-    #nnsum    = np.zeros((S,S))
-    lancsum  = np.zeros((S,S))
-    lancsum2 = np.zeros((S,S))
-    wsum     = np.zeros((S,S))
-    for d in ims:
+    #nnsum    = np.zeros((H,W))
+    lancsum  = np.zeros((H,W))
+    lancsum2 = np.zeros((H,W))
+    wsum     = np.zeros((H,W))
+    for i,d in enumerate(ims):
         #nnsum    += (d.nnimg   * d.ww)
+        if d is None:
+            print 'No overlap:', tims[i]
+            print 'image shape:', tims[i].shape
+            print '# valid pix:', np.sum(tims[i].invvar > 0)
+            continue
         lancsum  += (d.rimg    * d.ww)
         lancsum2 += (d.rimg**2 * d.ww)
         wsum     += d.ww
@@ -392,11 +417,13 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
-    nnsum   [:,:] = 0
+    nnsum    = np.zeros((H,W))
     lancsum [:,:] = 0
     lancsum2[:,:] = 0
     wsum    [:,:] = 0
     for d in ims:
+        if d is None:
+            continue
         rchi = (d.rimg - coimg) * d.mask / np.maximum(coppstd, 1e-6)
         badpix = (np.abs(rchi) >= 5.)
         # grow by a small margin
@@ -426,10 +453,16 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     args = []
     for i,(tim, d) in enumerate(zip(tims, ims)):
+        if d is None:
+            args.append((tim, None, cowcs))
+            continue
         args.append((tim, d.mask, cowcs))
     rmasks = mp.map(_rev_resample_mask, args)
 
     for i,(mask,tim) in enumerate(zip(rmasks, tims)):
+        if mask is None:
+            tim.coaddmask = None
+            continue
         tim.coaddmask = mask
         tim.orig_invvar = tim.invvar
         if mask is not None:
@@ -444,7 +477,7 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                 resampled=d)
 
 def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-             S=None, ri=None, di=None,
+             S=None, ri=None, di=None, W=None,
              **kwa):
     tims = tractor.images
     cat = tractor.getCatalog()
@@ -525,22 +558,30 @@ def get_sip_subwcs(wcs, extent):
     wcs2 = Sip(wcs)
     cpx,cpy = wcs2.crpix
     wcs2.set_crpix((cpx - x0, cpy - y0))
-    h = (1 + y1 - y0)
-    w = (1 + x1 - x0)
-    wcs2.set_width(w)
-    wcs2.set_height(h)
+    w = (x1 - x0)
+    h = (y1 - y0)
+    wcs2.set_width(float(w))
+    wcs2.set_height(float(h))
     return wcs2
 
-def _resample_one((tim, mod, targetwcs)):
-    S = targetwcs.get_width()
+def _resample_one((tim, mod, targetwcs, spline)):
     print 'Resampling', tim.name
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
-    yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[])
+    yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[], spline=spline)
     if yo is None:
         return None
-    nnim = np.zeros((S,S))
+    W,H = targetwcs.get_width(), targetwcs.get_height()
+    nnim = np.zeros((H,W))
+    # print 'extent', tim.extent
+    # print 'tim shape', tim.shape, tim.data.shape
+    # print 'wcs2:', wcs2
+    # print 'xi', xi.min(), xi.max()
+    # print 'yi', yi.min(), yi.max()
+    # print 'target W,H', W,H
+    # print 'xo', xo.min(), xo.max()
+    # print 'yo', yo.min(), yo.max()
     nnim[yo,xo] = tim.data[yi,xi]
-    iv = np.zeros((S,S))
+    iv = np.zeros((H,W))
     iv[yo,xo] = tim.invvar[yi,xi]
     # Patch masked pixels so we can interpolate
     patchimg = tim.data.copy()
@@ -555,7 +596,7 @@ def _resample_one((tim, mod, targetwcs)):
     yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder)
     if yo is None:
         return None
-    rpatch = np.zeros((S,S))
+    rpatch = np.zeros((H,W))
     rpatch[yo,xo] = rpix[0]
 
     sig1 = tim.sigma1
@@ -567,7 +608,7 @@ def _resample_one((tim, mod, targetwcs)):
 
     rmod = None
     if mod is not None:
-        rmod = np.zeros((S,S))
+        rmod = np.zeros((H,W))
         rmod[yo,xo] = rpix[1]
         rmod = (rmod   - sky) * scale
     #print 'scale', scale, 'scaled sig1:', sig1
@@ -598,15 +639,15 @@ def _resample_one((tim, mod, targetwcs)):
     return d
 
 def _resample_mod((tim, mod, targetwcs)):
-    S = targetwcs.get_width()
+    W,H = targetwcs.get_width(), targetwcs.get_height()
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     Lorder = 3
     yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder)
     if yo is None:
         return None
-    rmod = np.zeros((S,S))
+    rmod = np.zeros((H,W))
     rmod[yo,xo] = rpix[0]
-    iv = np.zeros((S,S))
+    iv = np.zeros((H,W))
     iv[yo,xo] = tim.invvar[yi,xi]
     sig1 = tim.sigma1
     w = (1. / sig1**2)
@@ -614,10 +655,13 @@ def _resample_mod((tim, mod, targetwcs)):
     return rmod,ww
 
 def _rev_resample_mask((tim, mask, targetwcs)):
+    if mask is None:
+        return None
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[])
     if yo is None:
         return None
+    w,h = int(wcs2.get_width()), int(wcs2.get_height())
     rmask = np.zeros((h,w))
     rmask[yo,xo] = mask[yi, xi]
     return rmask

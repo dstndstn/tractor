@@ -11,7 +11,7 @@ def get_memusage():
     #print 'shared memory size:', ru.ru_ixrss
     #print 'unshared memory size:', ru.ru_idrss
     #print 'unshared stack size:', ru.ru_isrss
-    mu = dict(maxrss=maxrss)
+    mu = dict(maxrss=[maxrss, 'MB'])
 
     procfn = '/proc/%d/status' % os.getpid()
     try:
@@ -35,10 +35,20 @@ def memusage():
 class MemMeas(object):
     def __init__(self):
         self.mem0 = get_memusage()
-    def __sub__(self, other):
-        keys = self.mem0.keys()
-        keys.sort()
-        return ', '.join([] + ['%s: %s' % (k, self.mem0[k]) for k in keys])
+    def format_diff(self, other):
+        #keys = self.mem0.keys()
+        #keys.sort()
+        txt = []
+        #for k in keys:
+        for k in ['VmPeak', 'VmSize', 'VmRSS', 'VmData']:
+            val,unit = self.mem0[k]
+            if unit == 'kB':
+                val = int(val, 10)
+                val /= 1024.
+                unit == 'MB'
+                val = '%.0f' % val
+            txt.append('%s: %s %s' % (k, val, unit))
+        return ', '.join([] + txt)
         
 class Time(object):
     @staticmethod
