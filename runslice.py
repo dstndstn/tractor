@@ -22,12 +22,22 @@ then)
 import os
 import sys
 
+from tractor.ttime import *
+Time.add_measurement(MemMeas)
+
+import logging
+lvl = logging.INFO
+logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+
 # duck-type command-line options
 class myopts(object):
     pass
 
+def main():
+    import numpy as np
+    from wise3 import stage100, stage101, stage102, stage103, stage104
 
-if __name__ == '__main__':
     batch = False
     
     arr = os.environ.get('PBS_ARRAYID')
@@ -40,11 +50,6 @@ if __name__ == '__main__':
     if batch and d is not None:
         os.chdir(d)
         sys.path.append(os.getcwd())
-    
-    import numpy as np
-    import logging
-    from wise3 import *
-    
         
     opt = myopts()
     
@@ -166,11 +171,11 @@ if __name__ == '__main__':
             opt.pixpsf = False
             
     
-    lvl = logging.INFO
-    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
     
     dd = np.linspace(d0, d1, NDEC + 1)
     rr = np.linspace(r0, r1, NRA  + 1)
+
+    t0 = Time()
     
     rlo,rhi = rr[ri], rr[ri+1]
     for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
@@ -185,7 +190,9 @@ if __name__ == '__main__':
         # HACK!!
         #if not batch and di != 25:
         #   continue
-    
+
+        td0 = Time()
+        
         try:
             P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
                      opt=opt)
@@ -239,7 +246,11 @@ if __name__ == '__main__':
                       opt=opt,
                       T=P['T'])
             pickle_to_file(PP, pfn)
-    
+
+            print
+            print 'Dec slice time:', Time() - td0
+            print
+            
     
         except:
             import traceback
@@ -251,3 +262,17 @@ if __name__ == '__main__':
             print '---------------------------------------------------'
             if not batch:
                 raise
+
+
+    print
+    print 'RA slice time:', Time() - t0
+    print
+
+
+
+if __name__ == '__main__':
+    import cProfile
+    import datetime
+	cProfile.run('main()', 'prof-runslice-%s.dat' % (datetime.now().isoformat()))
+
+    

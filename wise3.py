@@ -310,6 +310,18 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
         x,y = x0+w/2, y0+h/2
         tim.psf = psf.mogAt(x, y)
 
+    # Mask inf pixels
+    for tim in tims:
+        # print 'Checking', tim
+        I = np.flatnonzero(np.logical_not(np.isfinite(tim.getImage())))
+        if len(I):
+            print 'Found', len(I), 'bad pixels in', tim.name
+            tim.getImage().flat[I] = 0
+            iv = tim.getInvvar()
+            iv.flat[I] = 0.
+            tim.setInvvar(iv)
+        assert(np.all(np.isfinite(tim.getInvvar())))
+        
     return dict(opt103=opt)
 
 def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
@@ -322,17 +334,6 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
                              for tim in tims])
         print 'minFlux:', minFlux, 'nmgy'
-
-    for tim in tims:
-        print 'Checking', tim
-        I = np.flatnonzero(np.logical_not(np.isfinite(tim.getImage())))
-        if len(I):
-            print 'Found', len(I), 'bad pixels'
-            tim.getImage().flat[I] = 0
-            iv = tim.getInvvar()
-            iv.flat[I] = 0.
-            tim.setInvvar(iv)
-        assert(np.all(np.isfinite(tim.getInvvar())))
 
     t0 = Time()
     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
@@ -404,21 +405,27 @@ def _resample_one((tim, mod, targetwcs)):
     assert(ok)
     # Resample
     Lorder = 3
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2,
-                                         [patchimg, mod], Lorder)
+    inims = [patchimg]
+    if mod is not None:
+        inims.append(mod)
+    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder)
     if yo is None:
         return None
     rpatch = np.zeros((S,S))
     rpatch[yo,xo] = rpix[0]
-    rmod = np.zeros((S,S))
-    rmod[yo,xo] = rpix[1]
-    #print 'sig1:', tim.sigma1
+
     sig1 = tim.sigma1
     sky = tim.getSky().getValue()
     # photocal.getScale() takes nanomaggies to image counts; we want to convert
     # images to nanomaggies (per pix)
     scale = 1. / tim.getPhotoCal().getScale()
     sig1 = sig1 * scale
+
+    rmod = None
+    if mod is not None:
+        rmod = np.zeros((S,S))
+        rmod[yo,xo] = rpix[1]
+        rmod = (rmod   - sky) * scale
     #print 'scale', scale, 'scaled sig1:', sig1
     w = (1. / sig1**2)
     ww = w * (iv > 0)
@@ -426,7 +433,7 @@ def _resample_one((tim, mod, targetwcs)):
     d = Duck()
     d.nnimg = (nnim   - sky) * scale
     d.rimg  = (rpatch - sky) * scale
-    d.rmod  = (rmod   - sky) * scale
+    d.rmod  =  rmod
     d.ww = ww
     d.mask = (iv > 0)
     d.sig1 = sig1
@@ -438,7 +445,10 @@ def _resample_one((tim, mod, targetwcs)):
     d.scale = scale
     d.lnp1 = np.sum(((mod - tim.getImage()) * tim.getInvError())**2)
     d.npix1 = np.sum(tim.getInvError() > 0)
-    d.lnp2 = np.sum(((rmod - rpatch)**2 * iv))
+    if rmod is not None:
+        d.lnp2 = np.sum(((rmod - rpatch)**2 * iv))
+    else:
+        d.lnp2 = 0.
     d.npix2 = np.sum(iv > 0)
     return d
 
@@ -1873,6 +1883,11 @@ def stage510(S=None, W=None, targetrd=None, **kwa):
         print 'W2', Si.w2[I], fluxtomag(Si.w2[I])
 
 
+# Plots for LBL talk
+def stage606():
+    pass
+
+        
         
 def main():
 
