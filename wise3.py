@@ -367,26 +367,10 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     tims = tractor.getImages()
 
-    for tim in tims:
-        print 'Valid pix:', np.sum(tim.invvar > 0)
-
     # Resample
     if mp is None:
         mp = multiproc()
-    ims1 = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
-    print 'ims1', ims1
-    ims2 = mp.map(_resample_one, [(tim, None, cowcs, False) for tim,im in zip(tims,ims1)
-                                  if im is None])
-    print 'ims2', ims2
-    ims = []
-    j = 0
-    for im in ims1:
-        if im is None:
-            ims.append(ims2[j])
-            j += 1
-        else:
-            ims.append(im)
-    print 'ims:', ims
+    ims = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
 
     # Coadd
     #nnsum    = np.zeros((H,W))
@@ -498,7 +482,7 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
                           NanoMaggies(**{band: nm}))
         wcat.append(src)
     srcs = [src for src in cat] + wcat
-    tractor.setCatalog(Catalog(srcs))
+    tractor.setCatalog(Catalog(*srcs))
 
     return dict(cat1=cat1, tractor=tractor, UW=UW)
 
@@ -506,6 +490,7 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
              S=None, ri=None, di=None, UW=None,
              **kwa):
+    tims = tractor.images
     minFlux = opt.minflux
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
@@ -513,6 +498,9 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         print 'minFlux:', minFlux, 'nmgy'
 
     t0 = Time()
+    tractor.freezeParamsRecursive('*')
+    tractor.thawPathsTo('sky')
+    tractor.thawPathsTo(band)
     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
         minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
         fitstats=True, variance=True)
