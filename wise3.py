@@ -325,7 +325,7 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
     assert(not opt.pixpsf)
 
     # Instantiate a (non-varying) mixture-of-Gaussians PSF at the
-    # middle of this patch
+    # middle of each image's patch
     for tim in tims:
         x0,y0 = tim.getWcs().getX0Y0()
         h,w = tim.shape
@@ -346,11 +346,133 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
         
     return dict(opt103=opt)
 
-def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
+             tractor=None, ims1=None,
+             mp=None,
+             **kwa):
+    '''
+    Build a co-add, find discrepant pixels in the individual exposures
+    and mask them, then redo the coadd.
+    '''
+    # Create WCS into which we will coadd
+    pixscale = 2.75 / 3600.
+    ra  = (ralo  + rahi)  / 2.
+    dec = (declo + dechi) / 2.
+    W,H = (rahi - ralo) * np.cos(np.deg2rad(dec)) / pixscale, (dechi - declo) / pixscale
+    W,H = int(np.ceil(W)), int(np.ceil(H))
+    cowcs = Tan(ra, dec, (S+1)/2., (S+1)/2., pixscale, 0., 0., pixscale, W,H)
+    print 'Target WCS:', cowcs
+
+    tims = tractor.getImages()
+
+    # Resample
+    ims = mp.map(_resample_one, [(tim, None, cowcs) for tim in tims])
+    # Coadd
+    #nnsum    = np.zeros((S,S))
+    lancsum  = np.zeros((S,S))
+    lancsum2 = np.zeros((S,S))
+    wsum     = np.zeros((S,S))
+    for d in ims:
+        #nnsum    += (d.nnimg   * d.ww)
+        lancsum  += (d.rimg    * d.ww)
+        lancsum2 += (d.rimg**2 * d.ww)
+        wsum     += d.ww
+    #nnimg   = (nnsum   / np.maximum(wsum, 1e-6))
+    coimg   = (lancsum / np.maximum(wsum, 1e-6))
+    coinvvar = wsum
+    coimg1 = coimg
+    
+    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
+    print 'Coadd sig:', sig
+    # Per-pixel std
+    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2)
+    coppstd1 = coppstd
+    
+    # Using the difference between the coadd and the resampled
+    # individual images ("rchi"), mask additional pixels and redo the
+    # coadd.
+    nnsum   [:,:] = 0
+    lancsum [:,:] = 0
+    lancsum2[:,:] = 0
+    wsum    [:,:] = 0
+    for d in ims:
+        rchi = (d.rimg - coimg) * d.mask / np.maximum(coppstd, 1e-6)
+        badpix = (np.abs(rchi) >= 5.)
+        # grow by a small margin
+        badpix = binary_dilation(badpix)
+        notbad = np.logical_not(badpix)
+        d.rchi = rchi
+        d.mask *= notbad
+        w = (1. / d.sig1**2)
+        ww = w * d.mask
+        # update d.ww?
+        nnsum    += (d.nnimg   * ww)
+        lancsum  += (d.rimg    * ww)
+        lancsum2 += (d.rimg**2 * ww)
+        wsum     += ww
+    conn  = (nnsum   / np.maximum(wsum, 1e-6))
+    coimg = (lancsum / np.maximum(wsum, 1e-6))
+    coinvvar = wsum
+
+    print 'Second-round coadd:'
+    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
+    print 'Coadd sig:', sig
+    # per-pixel variance
+    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2)
+
+    # 2. Apply rchi masks to individual images
+    tims = tractor.getImages()
+
+    args = []
+    for i,(tim, d) in enumerate(zip(tims, ims)):
+        args.append((tim, d.mask, cowcs))
+    rmasks = mp.map(_rev_resample_mask, args)
+
+    for i,(mask,tim) in enumerate(zip(rmasks, tims)):
+        tim.coaddmask = mask
+        tim.orig_invvar = tim.invvar
+        if mask is not None:
+            tim.setInvvar(tim.invvar * (mask > 0))
+        else:
+            tim.setInvvar(tim.invvar)
+
+    return dict(coimg=coimg, coinvvar=coinvvar, coppstd=coppstd,
+                conn=conn,
+                cowcs=cowcs, opt104=opt,
+                coimg1=coimg1, coppstd1=coppstd1,
+                resampled=d)
+
+def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
              S=None, ri=None, di=None,
              **kwa):
     tims = tractor.images
+    cat = tractor.getCatalog()
+    cat1 = cat.copy()
+    sdss = S
 
+    # Find WISE objs with no SDSS counterpart
+    I,J,d = match_radec(W.ra, W.dec, sdss.ra, sdss.dec, 4./3600.)
+    unmatched = np.ones(len(W), bool)
+    unmatched[I] = False
+    UW = W[unmatched]
+    # 1. Create tractor PointSource objects for each WISE-only object
+    wcat = []
+    for i in range(len(UW)):
+        mag = UW.get('w%impro' % bandnum)[i]
+        nm = NanoMaggies.magToNanomaggies(mag)
+        src = PointSource(RaDecPos(UW.ra[i], UW.dec[i]),
+                          NanoMaggies(**{band: nm}))
+        wcat.append(src)
+    srcs = [src for src in cat] + wcat
+    tractor.setCatalog(Catalog(srcs))
+
+    return dict(cat1=cat1, tractor=tractor, UW=UW)
+
+
+def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+             S=None, ri=None, di=None, UW=None,
+             **kwa):
     minFlux = opt.minflux
     if minFlux is not None:
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
@@ -364,7 +486,7 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     print 'Forced phot took', Time()-t0
 
     cat = tractor.catalog
-    assert(len(cat) == len(S))
+    assert(len(cat) == len(S) + len(UW))
     assert(len(cat) == len(IV))
 
     # The parameters are stored in the order: sky, then fluxes
@@ -375,16 +497,16 @@ def stage104(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     R = tabledata()
     R.ra  = np.array([src.getPosition().ra  for src in cat])
     R.dec = np.array([src.getPosition().dec for src in cat])
+    R.sdss = np.array([1] * len(S) + [0] * len(UW)).astype(np.uint8)
     R.set(band, np.array([src.getBrightness().getBand(band) for src in cat]))
     R.set(band + '_ivar', IV)
-    R.row = S.row
+    R.row = np.hstack((S.row, np.array([-1] * len(UW))))
     R.inblock = S.inblock.astype(np.uint8)
 
     imstats = tabledata()
     if fs is not None:
         for k in ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
             R.set(k, getattr(fs, k))
-
         for k in ['imchisq', 'imnpix', 'sky']:
             X = getattr(fs, k)
             imstats.set(k, X)
@@ -465,11 +587,12 @@ def _resample_one((tim, mod, targetwcs)):
     d.invvar = tim.invvar
     d.sky = sky
     d.scale = scale
-    d.lnp1 = np.sum(((mod - tim.getImage()) * tim.getInvError())**2)
     d.npix1 = np.sum(tim.getInvError() > 0)
     if rmod is not None:
+        d.lnp1 = np.sum(((mod - tim.getImage()) * tim.getInvError())**2)
         d.lnp2 = np.sum(((rmod - rpatch)**2 * iv))
     else:
+        d.lnp1 = 0.
         d.lnp2 = 0.
     d.npix2 = np.sum(iv > 0)
     return d
@@ -499,318 +622,17 @@ def _rev_resample_mask((tim, mask, targetwcs)):
     rmask[yo,xo] = mask[yi, xi]
     return rmask
 
-def stage105(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
-             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
-             tractor=None, ims1=None,
-             mp=None,
-             **kwa):
-    ra  = (ralo  + rahi)  / 2.
-    dec = (declo + dechi) / 2.
-    res1 = []
-    for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
-        res1.append((tim, mod, roi))
-    R = res1
-
-    S = 100
-    pixscale = 2.75 / 3600.
-    cowcs = Tan(ra, dec, (S+1)/2., (S+1)/2.,
-                    pixscale, 0., 0., pixscale,
-                    S, S)
-    print 'Target WCS:', cowcs
-
-    args = []
-    for i,(tim,mod,nil) in enumerate(R):
-        args.append((tim, mod, cowcs))
-    ims = mp.map(_resample_one, args)
-
-    nnsum    = np.zeros((S,S))
-    lancsum  = np.zeros((S,S))
-    lancsum2 = np.zeros((S,S))
-    modsum   = np.zeros((S,S))
-    wsum     = np.zeros((S,S))
-
-    lnp1 = 0.
-    lnp2 = 0.
-    npix1 = 0
-    npix2 = 0
-    
-    for d in ims:
-        nnsum    += (d.nnimg   * d.ww)
-        lancsum  += (d.rimg    * d.ww)
-        lancsum2 += (d.rimg**2 * d.ww)
-        modsum   += (d.rmod    * d.ww)
-        wsum     += d.ww
-        lnp1  += d.lnp1
-        npix1 += d.npix1
-        lnp2  += d.lnp2
-        npix2 += d.npix2
-    
-    nnimg   = (nnsum   / np.maximum(wsum, 1e-6))
-    coimg   = (lancsum / np.maximum(wsum, 1e-6))
-    comod   = (modsum  / np.maximum(wsum, 1e-6))
-    coinvvar = wsum
-    cochi = (coimg - comod) * np.sqrt(coinvvar)
-    
-    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    print 'Coadd sig:', sig
-    
-    lnp3 = np.sum(cochi**2)
-    npix3 = np.sum(coinvvar > 0)
-    
-    print 'lnp1 (orig)  ', lnp1
-    print '         npix', npix1
-    print 'lnp2 (resamp)', lnp2
-    print '         npix', npix2
-    print 'lnp3 (coadd) ', lnp3
-    print '         npix', npix3
-    
-    lvar = lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2
-    coppstd = np.sqrt(lvar)
-    
-    plt.figure(figsize=(8,8))
-    
-    ima = dict(interpolation='nearest', origin='lower',
-               vmin=-2*sig, vmax=10*sig)
-    
-    
-    R,C = 2,3
-    
-    plt.clf()
-    plt.suptitle('First-round Coadds')
-    plt.subplot(R,C,1)
-    plt.imshow(nnimg, **ima)
-    #plt.colorbar()
-    plt.title('NN data')
-    plt.subplot(R,C,2)
-    plt.imshow(coimg, **ima)
-    #plt.colorbar()
-    plt.title('Data')
-    plt.subplot(R,C,3)
-    plt.imshow(comod, **ima)
-    #plt.colorbar()
-    plt.title('Model')
-    plt.subplot(R,C,4)
-    plt.imshow(coppstd, interpolation='nearest', origin='lower')
-    #plt.colorbar()
-    plt.title('Coadd std')
-    plt.subplot(R,C,5)
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-5., vmax=5.)
-    #plt.colorbar()
-    plt.title('Chi')
-    plt.subplot(R,C,6)
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-20., vmax=20.)
-    #plt.colorbar()
-    plt.title('Chi (b)')
-    ps.savefig()
-
-    # Using the difference between the coadd and the resampled
-    # individual images ("rchi"), mask additional pixels and redo the
-    # coadd.
-    
-    lancsum  = np.zeros((S,S))
-    wsum     = np.zeros_like(lancsum)
-    nnsum    = np.zeros_like(lancsum)
-    lancsum2 = np.zeros_like(lancsum)
-    modsum   = np.zeros((S,S))
-    
-    rchis = []
-    for d in ims:
-        rchi = (d.rimg - coimg) * d.mask / np.maximum(coppstd, 1e-6)
-        badpix = (np.abs(rchi) >= 5.)
-        # grow by a small margin
-        badpix = binary_dilation(badpix)
-        notbad = np.logical_not(badpix)
-        rchis.append(rchi)
-        d.mask *= notbad
-        w = (1. / d.sig1**2)
-        ww = w * d.mask
-        # update d.ww?
-        nnsum    += (d.nnimg   * ww)
-        lancsum  += (d.rimg    * ww)
-        lancsum2 += (d.rimg**2 * ww)
-        modsum   += (d.rmod    * ww)
-        wsum     += ww
-
-    coimg1 = coimg
-    
-    nn    = (nnsum   / np.maximum(wsum, 1e-6))
-    coimg = (lancsum / np.maximum(wsum, 1e-6))
-    comod = (modsum  / np.maximum(wsum, 1e-6))
-    coinvvar = wsum
-    cochi = (coimg - comod) * np.sqrt(coinvvar)
-    
-    print 'Second-round coadd:'
-    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    print 'Coadd sig:', sig
-        
-    lnp3 = np.sum(cochi**2)
-    npix3 = np.sum(coinvvar > 0)
-    print 'lnp3 (coadd) ', lnp3
-    print '         npix', npix3
-    
-    # per-pixel variance
-    lvar = lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2
-    coppstd = np.sqrt(lvar)
-    
-    ima = dict(interpolation='nearest', origin='lower',
-               vmin=-2*sig, vmax=10*sig)
-    
-    R,C = 2,3
-    
-    plt.clf()
-    plt.suptitle('Second-round Coadds')
-    plt.subplot(R,C,1)
-    plt.imshow(nn, **ima)
-    # plt.colorbar()
-    plt.title('NN data')
-    plt.subplot(R,C,2)
-    plt.imshow(coimg, **ima)
-    # plt.colorbar()
-    plt.title('Data')
-    plt.subplot(R,C,3)
-    plt.imshow(comod, **ima)
-    # plt.colorbar()
-    plt.title('Model')
-    plt.subplot(R,C,4)
-    plt.imshow(coppstd, interpolation='nearest', origin='lower')
-    # plt.colorbar()
-    plt.title('Coadd std')
-    plt.subplot(R,C,5)
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-5., vmax=5.)
-    # plt.colorbar()
-    plt.title('Chi')
-    plt.subplot(R,C,6)
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-20., vmax=20.)
-    # plt.colorbar()
-    plt.title('Chi (b)')
-    ps.savefig()
 
 
-    # 2. Apply rchi masks to individual images
-    tims = tractor.getImages()
-
-    args = []
-    for i,(tim, d) in enumerate(zip(tims, ims)):
-        args.append((tim, d.mask, cowcs))
-    rmasks = mp.map(_rev_resample_mask, args)
-    for i,(mask,tim) in enumerate(zip(rmasks, tims)):
-        # if i < 10:
-        #     plt.clf()
-        #     plt.subplot(1,2,1)
-        #     plt.imshow(ims[i].mask)
-        #     plt.colorbar()
-        #     if mask is not None:
-        #         plt.subplot(1,2,2)
-        #         plt.imshow(mask)
-        #         plt.colorbar()
-        #     ps.savefig()
-
-        # LBNL
-        if i != 62:
-            continue
-    
-        tim.coaddmask = mask
-        if mask is not None:
-            tim.setInvvar(tim.invvar * (mask > 0))
-        else:
-            tim.setInvvar(tim.invvar)
-
-
-        d = ims[i]
-        sig1 = tim.sigma1 * d.scale
-        R,C = 2,3
-        plt.clf()
-        plt.subplot(R,C,1)
-        plt.imshow(d.rimg, interpolation='nearest', origin='lower',
-                   vmin=-2*sig1, vmax=5*sig1)
-        plt.title('resamp data')
-    
-        plt.subplot(R,C,2)
-        plt.imshow(d.rmod, interpolation='nearest', origin='lower',
-                   vmin=-2*sig1, vmax=5*sig1)
-        plt.title('resamp mod')
-    
-        plt.subplot(R,C,3)
-        chi = (d.rimg - d.rmod) * d.mask / sig1
-        plt.imshow(chi, interpolation='nearest', origin='lower',
-                   vmin=-5, vmax=5, cmap='gray')
-        plt.title('chi2: %.1f' % np.sum(chi**2))
-
-        # grab original rchi
-        rchi = rchis[i]
-        rchi2 = np.sum(rchi**2) / np.sum(d.mask)
-
-        plt.subplot(R,C,4)
-        plt.imshow(rchi, interpolation='nearest', origin='lower',
-                   vmin=-5, vmax=5, cmap='gray')
-        plt.title('rchi2 vs coadd: %.2f' % rchi2)
-
-        plt.subplot(R,C,5)
-        plt.imshow(np.abs(rchi) > 5, interpolation='nearest', origin='lower', cmap='gray')
-        plt.title('abs(rchi) > 5')
-
-        plt.subplot(R,C,6)
-        plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
-        plt.title('mask')
-
-        plt.suptitle(d.name)
-        ps.savefig()
-
-        if i == 62:
-            # LBNL plots
-            plt.subplots_adjust(hspace=0, wspace=0,
-                                left=0, right=1,
-                                bottom=0, top=1)
-            plt.clf()
-            plt.imshow(coimg1, cmap='gray', **ima)
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(coimg, cmap='gray', **ima)
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(d.rimg, interpolation='nearest', origin='lower',
-                       vmin=-2*sig1, vmax=5*sig1, cmap='gray')
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(rchi, interpolation='nearest', origin='lower',
-                       vmin=-5, vmax=5, cmap='gray')
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
-            ps.savefig()
-
-    
-    return dict(coimg=coimg, coinvvar=coinvvar, comod=comod, coppstd=coppstd,
-                cowcs=cowcs)
-
-
-def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+def stage106b(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
              tractor=None, ims1=None, W=None,
              mp=None,
              coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
              **kwa):
     r0,r1,d0,d1 = ralo,rahi,declo,dechi
-    sdss = S
-    cat = tractor.getCatalog()
     cochi = (coimg - comod) * np.sqrt(coinvvar)
 
-    cat1 = cat.copy()
-
-    # Find WISE objs with no SDSS counterpart
-    I,J,d = match_radec(W.ra, W.dec, sdss.ra, sdss.dec, 4./3600.)
-    unmatched = np.ones(len(W), bool)
-    unmatched[I] = False
-    UW = W[unmatched]
-    
     # Plot SDSS objects and WISE objects on residual image
     plt.clf()
     plt.imshow(cochi, interpolation='nearest', origin='lower',
@@ -841,28 +663,11 @@ def stage106(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ps.savefig()
     
     
-    # 1. Create tractor PointSource objects for each WISE-only object
-    
-    print 'Tractor catalog:'
-    for src in cat:
-        print '  ', src
-    
-    #band = 'w%i' % bandnum
-    
-    wcat = []
-    for i in range(len(UW)):
-        mag = UW.get('w%impro' % bandnum)[i]
-        nm = NanoMaggies.magToNanomaggies(mag)
-        src = PointSource(RaDecPos(UW.ra[i], UW.dec[i]),
-                          NanoMaggies(**{band: nm}))
-        wcat.append(src)
-    
     # 3. Re-run forced photometry on individual images
-    srcs = [src for src in cat] + wcat
+
     tims = tractor.getImages()
     tractor = Tractor(tims, srcs)
     print 'Created Tractor:', tractor
-    
     tractor.freezeParamsRecursive('*')
     tractor.thawPathsTo('sky')
     tractor.thawPathsTo(band)
@@ -1899,8 +1704,174 @@ def stage510(S=None, W=None, targetrd=None, **kwa):
 
 
 # Plots for LBL talk
+# FIXME -- copy'n'pasted, doesn't work
 def stage606():
-    pass
+
+    plt.figure(figsize=(8,8))
+    ima = dict(interpolation='nearest', origin='lower',
+               vmin=-2*sig, vmax=10*sig)
+    R,C = 2,3
+    plt.clf()
+    plt.suptitle('First-round Coadds')
+    plt.subplot(R,C,1)
+    plt.imshow(nnimg, **ima)
+    #plt.colorbar()
+    plt.title('NN data')
+    plt.subplot(R,C,2)
+    plt.imshow(coimg, **ima)
+    #plt.colorbar()
+    plt.title('Data')
+    plt.subplot(R,C,3)
+    plt.imshow(comod, **ima)
+    #plt.colorbar()
+    plt.title('Model')
+    plt.subplot(R,C,4)
+    plt.imshow(coppstd, interpolation='nearest', origin='lower')
+    #plt.colorbar()
+    plt.title('Coadd std')
+    plt.subplot(R,C,5)
+    plt.imshow(cochi, interpolation='nearest', origin='lower',
+               vmin=-5., vmax=5.)
+    #plt.colorbar()
+    plt.title('Chi')
+    plt.subplot(R,C,6)
+    plt.imshow(cochi, interpolation='nearest', origin='lower',
+               vmin=-20., vmax=20.)
+    #plt.colorbar()
+    plt.title('Chi (b)')
+    ps.savefig()
+    
+    ima = dict(interpolation='nearest', origin='lower',
+               vmin=-2*sig, vmax=10*sig)
+    
+    R,C = 2,3
+    
+    plt.clf()
+    plt.suptitle('Second-round Coadds')
+    plt.subplot(R,C,1)
+    plt.imshow(nn, **ima)
+    # plt.colorbar()
+    plt.title('NN data')
+    plt.subplot(R,C,2)
+    plt.imshow(coimg, **ima)
+    # plt.colorbar()
+    plt.title('Data')
+    plt.subplot(R,C,3)
+    plt.imshow(comod, **ima)
+    # plt.colorbar()
+    plt.title('Model')
+    plt.subplot(R,C,4)
+    plt.imshow(coppstd, interpolation='nearest', origin='lower')
+    # plt.colorbar()
+    plt.title('Coadd std')
+    plt.subplot(R,C,5)
+    plt.imshow(cochi, interpolation='nearest', origin='lower',
+               vmin=-5., vmax=5.)
+    # plt.colorbar()
+    plt.title('Chi')
+    plt.subplot(R,C,6)
+    plt.imshow(cochi, interpolation='nearest', origin='lower',
+               vmin=-20., vmax=20.)
+    # plt.colorbar()
+    plt.title('Chi (b)')
+    ps.savefig()
+
+    # 2. Apply rchi masks to individual images
+    tims = tractor.getImages()
+
+    args = []
+    for i,(tim, d) in enumerate(zip(tims, ims)):
+        args.append((tim, d.mask, cowcs))
+    rmasks = mp.map(_rev_resample_mask, args)
+    for i,(mask,tim) in enumerate(zip(rmasks, tims)):
+        # if i < 10:
+        #     plt.clf()
+        #     plt.subplot(1,2,1)
+        #     plt.imshow(ims[i].mask)
+        #     plt.colorbar()
+        #     if mask is not None:
+        #         plt.subplot(1,2,2)
+        #         plt.imshow(mask)
+        #         plt.colorbar()
+        #     ps.savefig()
+
+        # LBNL
+        if i != 62:
+            continue
+    
+        tim.coaddmask = mask
+        if mask is not None:
+            tim.setInvvar(tim.invvar * (mask > 0))
+        else:
+            tim.setInvvar(tim.invvar)
+
+
+        d = ims[i]
+        sig1 = tim.sigma1 * d.scale
+        R,C = 2,3
+        plt.clf()
+        plt.subplot(R,C,1)
+        plt.imshow(d.rimg, interpolation='nearest', origin='lower',
+                   vmin=-2*sig1, vmax=5*sig1)
+        plt.title('resamp data')
+    
+        plt.subplot(R,C,2)
+        plt.imshow(d.rmod, interpolation='nearest', origin='lower',
+                   vmin=-2*sig1, vmax=5*sig1)
+        plt.title('resamp mod')
+    
+        plt.subplot(R,C,3)
+        chi = (d.rimg - d.rmod) * d.mask / sig1
+        plt.imshow(chi, interpolation='nearest', origin='lower',
+                   vmin=-5, vmax=5, cmap='gray')
+        plt.title('chi2: %.1f' % np.sum(chi**2))
+
+        # grab original rchi
+        rchi = rchis[i]
+        rchi2 = np.sum(rchi**2) / np.sum(d.mask)
+
+        plt.subplot(R,C,4)
+        plt.imshow(rchi, interpolation='nearest', origin='lower',
+                   vmin=-5, vmax=5, cmap='gray')
+        plt.title('rchi2 vs coadd: %.2f' % rchi2)
+
+        plt.subplot(R,C,5)
+        plt.imshow(np.abs(rchi) > 5, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('abs(rchi) > 5')
+
+        plt.subplot(R,C,6)
+        plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('mask')
+
+        plt.suptitle(d.name)
+        ps.savefig()
+
+        if i == 62:
+            # LBNL plots
+            plt.subplots_adjust(hspace=0, wspace=0,
+                                left=0, right=1,
+                                bottom=0, top=1)
+            plt.clf()
+            plt.imshow(coimg1, cmap='gray', **ima)
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(coimg, cmap='gray', **ima)
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(d.rimg, interpolation='nearest', origin='lower',
+                       vmin=-2*sig1, vmax=5*sig1, cmap='gray')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(rchi, interpolation='nearest', origin='lower',
+                       vmin=-5, vmax=5, cmap='gray')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
+            ps.savefig()
 
         
         

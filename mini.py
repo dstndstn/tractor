@@ -70,6 +70,9 @@ if __name__ == '__main__':
     lnp = tr.getLogProb()
     print 'Logprob:', lnp
 
+    for nm,val in zip(tr.getParamNames(), tr.getParams()):
+        print '  ', nm, val
+    
 
     # Or, without creating a Tractor object:
 

@@ -2,31 +2,31 @@ import os
 import resource
 
 def get_memusage():
-	ru = resource.getrusage(resource.RUSAGE_SELF)
-	pgsize = resource.getpagesize()
+    ru = resource.getrusage(resource.RUSAGE_SELF)
+    pgsize = resource.getpagesize()
     maxrss = (ru.ru_maxrss * pgsize / 1e6)
-	#print 'shared memory size:', (ru.ru_ixrss / 1e6), 'MB'
-	#print 'unshared memory size:', (ru.ru_idrss / 1e6), 'MB'
-	#print 'unshared stack size:', (ru.ru_isrss / 1e6), 'MB'
-	#print 'shared memory size:', ru.ru_ixrss
-	#print 'unshared memory size:', ru.ru_idrss
-	#print 'unshared stack size:', ru.ru_isrss
+    #print 'shared memory size:', (ru.ru_ixrss / 1e6), 'MB'
+    #print 'unshared memory size:', (ru.ru_idrss / 1e6), 'MB'
+    #print 'unshared stack size:', (ru.ru_isrss / 1e6), 'MB'
+    #print 'shared memory size:', ru.ru_ixrss
+    #print 'unshared memory size:', ru.ru_idrss
+    #print 'unshared stack size:', ru.ru_isrss
     mu = dict(maxrss=maxrss)
 
     procfn = '/proc/%d/status' % os.getpid()
-	try:
-		t = open(procfn).readlines()
-		d = dict([(line.split()[0][:-1], line.split()[1:]) for line in t])
+    try:
+        t = open(procfn).readlines()
+        d = dict([(line.split()[0][:-1], line.split()[1:]) for line in t])
         mu.update(d)
-	except:
-		pass
+    except:
+        pass
 
     return mu
     
 def memusage():
     mu = get_memusage()
     print 'Memory usage:'
-	print 'max rss:', mu['maxrss'], 'MB'
+    print 'max rss:', mu['maxrss'], 'MB'
     for key in ['VmPeak', 'VmSize', 'VmRSS', 'VmData', 'VmStk'
                 # VmLck, VmHWM, VmExe, VmLib, VmPTE
                 ]:
@@ -41,29 +41,29 @@ class MemMeas(object):
         return ', '.join([] + ['%s: %s' % (k, self.mem0[k]) for k in keys])
         
 class Time(object):
-	@staticmethod
-	def add_measurement(m):
-		Time.measurements.append(m)
-	measurements = []
+    @staticmethod
+    def add_measurement(m):
+        Time.measurements.append(m)
+    measurements = []
 
-	def __init__(self):
-		import datetime
-		from time import clock
-		self.wall = datetime.datetime.now()
-		#self.cpu = time.clock()
-		self.cpu = clock()
-		self.meas = [m() for m in Time.measurements]
+    def __init__(self):
+        import datetime
+        from time import clock
+        self.wall = datetime.datetime.now()
+        #self.cpu = time.clock()
+        self.cpu = clock()
+        self.meas = [m() for m in Time.measurements]
 
-	def __sub__(self, other):
-		dwall = (self.wall - other.wall)
-		# python2.7
-		if hasattr(dwall, 'total_seconds'):
-			dwall = dwall.total_seconds()
-		else:
-			dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
-		dcpu = (self.cpu - other.cpu)
+    def __sub__(self, other):
+        dwall = (self.wall - other.wall)
+        # python2.7
+        if hasattr(dwall, 'total_seconds'):
+            dwall = dwall.total_seconds()
+        else:
+            dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
+        dcpu = (self.cpu - other.cpu)
 
-		meas = [m.format_diff(om) for m,om in zip(self.meas, other.meas)]
-		return ', '.join(['%f wall' % dwall, '%f cpu' % dcpu] + meas)
+        meas = [m.format_diff(om) for m,om in zip(self.meas, other.meas)]
+        return ', '.join(['%f wall' % dwall, '%f cpu' % dcpu] + meas)
 
 
