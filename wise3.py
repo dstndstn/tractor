@@ -650,66 +650,6 @@ def _rev_resample_mask((tim, mask, targetwcs)):
 
 
 
-def stage106b(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
-             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
-             tractor=None, ims1=None, W=None,
-             mp=None,
-             coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
-             **kwa):
-    r0,r1,d0,d1 = ralo,rahi,declo,dechi
-    cochi = (coimg - comod) * np.sqrt(coinvvar)
-
-    # Plot SDSS objects and WISE objects on residual image
-    plt.clf()
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-10., vmax=10., cmap='gray')
-    ax = plt.axis()
-    oxy = [cowcs.radec2pixelxy(r,d) for r,d in zip(W.ra, W.dec)]
-    X = np.array([x for ok,x,y in oxy])
-    Y = np.array([y for ok,x,y in oxy])
-    p1 = plt.plot(X-1, Y-1, 'r+')
-    oxy = [cowcs.radec2pixelxy(r,d) for r,d in zip(sdss.ra, sdss.dec)]
-    X = np.array([x for ok,x,y in oxy])
-    Y = np.array([y for ok,x,y in oxy])
-    p2 = plt.plot(X-1, Y-1, 'bx')
-    
-    oxy = [cowcs.radec2pixelxy(r,d) for r,d in zip(UW.ra, UW.dec)]
-    X = np.array([x for ok,x,y in oxy])
-    Y = np.array([y for ok,x,y in oxy])
-    p3 = plt.plot(X-1, Y-1, 'r+', lw=2, ms=12)
-    
-    plt.axis(ax)
-    plt.legend((p1,p2,p3), ('WISE', 'SDSS', 'WISE-only'))
-    ps.savefig()
-    
-    plt.clf()
-    plt.imshow(coppstd, interpolation='nearest', origin='lower')
-    #           vmin=0, vmax=5.*sig)
-    plt.title('Coadd per-pixel std')
-    ps.savefig()
-    
-    
-    # 3. Re-run forced photometry on individual images
-
-    tims = tractor.getImages()
-    tractor = Tractor(tims, srcs)
-    print 'Created Tractor:', tractor
-    tractor.freezeParamsRecursive('*')
-    tractor.thawPathsTo('sky')
-    tractor.thawPathsTo(band)
-    
-    minsb = 0.005
-    minFlux = None
-    
-    t0 = Time()
-    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-                                                         sky=True, minFlux=minFlux,
-                                                         fitstats=True,
-                                                         variance=True)
-    print 'Forced phot took', Time()-t0
-    cat2 = tractor.getCatalog().copy()
-
-    return dict(ims2=ims1, cat1=cat1, cat2=cat2, W=W, UW=UW, tractor=tractor)
 
 def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
@@ -2034,6 +1974,204 @@ def stage700(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
                 coppstd1=None,
                 ims0=None, ims1=None,
                 tims=None)
+
+
+def stage701(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             band=None, bandnum=None,
+             tractor=None, 
+             coimg=None, coinvvar=None, cowcs=None,
+             R=None,
+             **kwa):
+
+    # 4. Run forced photometry on coadd
+    from wise_psf import WisePSF
+    psf = WisePSF(bandnum, savedfn='w%ipsffit.fits' % bandnum)
+    wcs = ConstantFitsWcs(cowcs)
+    pcal = LinearPhotoCal(1., band=band)
+    sky = ConstantSky(0.)
+    # HACK
+    psf = psf.mogAt(500., 500.)
+
+    coim = Image(data=coimg, invvar=coinvvar, wcs=wcs, photocal=pcal, sky=sky,
+                 psf=psf, name='coadd', domask=False)
+
+    cat = tractor.getCatalog().copy()
+    tr = Tractor([coim], cat)
+    tr.freezeParamsRecursive('*')
+    tr.thawPathsTo('sky')
+    tr.thawPathsTo(band)
+
+    mod0 = tr.getModelImage(0)
+
+    minsb = 0.005
+    minFlux = None
+    t0 = Time()
+    ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+                                                    sky=True, minFlux=minFlux,
+                                                    fitstats=True,
+                                                    variance=True)
+    print 'Forced phot on coadd took', Time()-t0
+
+    if ps:
+        mod1 = tr.getModelImage(0)
+        chi0 = (coimg - mod0) * coim.getInvError()
+        chi1 = (coimg - mod1) * coim.getInvError()
+
+        cosig = 1./np.sqrt(np.median(coinvvar))
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-2*cosig, vmax=10*cosig)
+        imchi = dict(interpolation='nearest', origin='lower',
+                     vmin=-5., vmax=5., cmap='gray')
+        rows,cols = 2,3
+        plt.clf()
+        plt.subplot(rows,cols,1)
+        plt.imshow(coimg, **ima)
+        plt.gray()
+        plt.title('Coadd')
+        plt.subplot(rows,cols,2)
+        plt.imshow(mod0, **ima)
+        plt.gray()
+        plt.title('Model 0')
+        plt.subplot(rows,cols,3)
+        plt.imshow(chi0, **imchi)
+        plt.gray()
+        plt.title('Chi 0')
+        plt.subplot(rows,cols,5)
+        plt.imshow(mod1, **ima)
+        plt.gray()
+        plt.title('Model 1 (sky: %.1f)' % coim.getSky().getValue())
+        plt.subplot(rows,cols,6)
+        plt.imshow(chi1, **imchi)
+        plt.gray()
+        plt.title('Chi 1')
+        ps.savefig()
+
+        m1,m2 = [],[]
+        for s1,s2 in zip(tractor.getCatalog(), cat):
+            m1.append(NanoMaggies.nanomaggiesToMag(s1.getBrightness().getBand(band)))
+            m2.append(NanoMaggies.nanomaggiesToMag(s2.getBrightness().getBand(band)))
+        m1 = np.array(m1)
+        m2 = np.array(m2)
+
+        plt.clf()
+        I = (R.inblock > 0) * (R.sdss > 0)
+        p1 = plt.plot(m1[I], (m2-m1)[I], 'b.')
+        I = np.logical_not(R.inblock)
+        p2 = plt.plot(m1[I], (m2-m1)[I], 'g.')
+        I = np.logical_not(R.sdss)
+        p3 = plt.plot(m1[I], (m2-m1)[I], 'r.')
+        lo,hi = 12,24
+        plt.plot([lo,hi],[0, 0], 'k-', lw=3, alpha=0.3)
+        plt.axis([lo,hi,-2,2])
+        plt.xlabel('Individual images photometry (mag)')
+        plt.ylabel('Coadd photometry - Individual (mag)')
+        plt.legend((p1,p2,p3),('In bounds', 'WISE-only', 'Out-of-bounds'))
+        ps.savefig()
+
+    R.set('coadd_' + band, np.array([src.getBrightness().getBand(band) for src in cat]))
+    R.set('coadd_' + band + '_ivar', IV)
+
+    # for f1,f2,e1,e2 in zip(R.get(band), R.get('coadd_'+band),
+    #                        R.get(band+'_ivar'), R.get('coadd_'+band+'_ivar')):
+    #     print '  %8.2f, %8.2f, %8.2f, %8.2f' % (f1,f2,e1,e2)
+
+    return dict(cat2=cat, R=R, cotim=coim)
+
+def stage702(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             band=None, bandnum=None,
+             tractor=None, 
+             coimg=None, coinvvar=None, cowcs=None,
+             R=None,
+             cotim=None,
+             **kwa):
+
+    # Try treating some sources at point sources rather than galaxies:
+
+    # - for SDSS size < X
+    # - SDSS objs with no WISE match (ie, faint in WISE)?
+    # - SDSS objs with mag < XXX (ie, SDSS shapes dubious)
+
+    for tim in tractor.getImages():
+        tim.setInvvar(tim.invvar)
+
+    cat = tractor.getCatalog()
+    for src in cat:
+        if isinstance(src, FixedCompositeGalaxy):
+            print 'Comp', src.shapeDev.re, src.shapeExp.re
+        elif isinstance(src, ExpGalaxy):
+            print 'Exp', src.re
+        elif isinstance(src, DevGalaxy):
+            print 'Dev', src.re
+
+    pointsources = []
+    
+    nchanged = 0
+    for size in [ 0.1, 0.2, 0.4, 0.8 ]:
+        cati = []
+
+        for src in cat:
+            if isinstance(src, FixedCompositeGalaxy):
+                #print 'Comp', src.shapeDev.re, src.shapeExp.re
+                if src.shapeDev.re < size and src.shapeExp.re < size:
+                    cati.append(PointSource(src.pos, src.brightness))
+                    nchanged += 1
+                else:
+                    cati.append(src.copy())
+            elif isinstance(src, ExpGalaxy) or isinstance(src, DevGalaxy):
+                if src.re < size:
+                    cati.append(PointSource(src.pos, src.brightness))
+                    nchanged += 1
+                else:
+                    cati.append(src.copy())
+            else:
+                cati.append(src.copy())
+
+        print 'Changed', nchanged, 'galaxies to point sources'
+        if nchanged == 0:
+            continue
+
+        tr = Tractor(tractor.getImages(), cati)
+
+        t0 = Time()
+        tractor.freezeParamsRecursive('*')
+        tractor.thawPathsTo('sky')
+        tractor.thawPathsTo(band)
+        minsb = 0.005
+        minFlux = None
+        ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+            minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
+            fitstats=True, variance=True)
+        print 'Forced phot took', Time()-t0
+
+        lnp = tr.getLogProb()
+        print 'Log prob:', lnp
+
+        if ps:
+            mod = tr.getModelImage(cotim)
+            chi = (cotim.getImage() - mod) * cotim.getInvError()
+            cosig = 1./np.median(cotim.getInvError())
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=-2*cosig, vmax=10*cosig)
+            imchi = dict(interpolation='nearest', origin='lower',
+                         vmin=-5., vmax=5., cmap='gray')
+            rows,cols = 1,3
+            plt.clf()
+            plt.subplot(rows,cols,1)
+            plt.imshow(cotim.getImage(), **ima)
+            plt.gray()
+            plt.title('Coadd')
+            plt.subplot(rows,cols,2)
+            plt.imshow(mod, **ima)
+            plt.gray()
+            plt.title('Model')
+            plt.subplot(rows,cols,3)
+            plt.imshow(chi, **imchi)
+            plt.gray()
+            plt.title('Galaxies < %f -> ptsrcs; lnp %.1f' % (size, lnp))
+            ps.savefig()
+
+        pointsources.append(('size', size, cati, lnp))
+
 
         
 def main():
