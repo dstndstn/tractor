@@ -1944,9 +1944,7 @@ def stage700(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     for i,(d,tim, (nil,mod,nil,chi,nil)) in enumerate(zip(resampled, tims, ims1)):
         if d is None:
             continue
-
-        print 'd:', dir(d)
-
+        #print 'd:', dir(d)
         d.rimg = d.rimg.astype(np.float32)
         d.rchi = d.rchi.astype(np.float32)
         delattr(d, 'nnimg')
@@ -1955,32 +1953,27 @@ def stage700(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         delattr(d, 'mod')
         delattr(d, 'img')
 
-        print 'd:'
-        for x in dir(d):
-            if x.startswith('_'):
-                continue
-            try:
-                X = getattr(d, x)
-                dt = X.dtype
-                sh = None
-                try:
-                    sh = X.shape
-                except:
-                    pass
-                print '  ', x, dt,
-                if sh is not None:
-                    print sh
-                else:
-                    print
-            except:
-                continue
-
-
+        # print 'd:'
+        # for x in dir(d):
+        #     if x.startswith('_'):
+        #         continue
+        #     try:
+        #         X = getattr(d, x)
+        #         dt = X.dtype
+        #         sh = None
+        #         try:
+        #             sh = X.shape
+        #         except:
+        #             pass
+        #         print '  ', x, dt,
+        #         if sh is not None:
+        #             print sh
+        #         else:
+        #             print
+        #     except:
+        #         continue
         if tim.coaddmask is None:
             continue
-
-        print 'rimg:', d.rimg.dtype
-        print 'mask:', d.mask.dtype
 
         tim.coaddmask = tim.coaddmask.astype(bool)
         del tim.cinvvar
@@ -1993,32 +1986,6 @@ def stage700(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         del tim.vinvvar
         del tim.rdmask
         del tim.goodmask
-        #del tim.coaddmask
-        print 'coaddmask:', tim.coaddmask.dtype
-        print 'data', tim.data.dtype
-        print 'invvar', tim.invvar.dtype
-
-        print 'tim:', dir(tim)
-
-        for x in dir(tim):
-            if x.startswith('_'):
-                continue
-            try:
-                X = getattr(tim, x)
-                dt = X.dtype
-                sh = None
-                try:
-                    sh = X.shape
-                except:
-                    pass
-                print '  ', x, dt,
-                if sh is not None:
-                    print sh
-                else:
-                    print
-            except:
-                continue
-
 
         if i >= 10 or ps is None:
             del tim.coaddmask
