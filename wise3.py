@@ -314,14 +314,10 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
              **kwa):
     tims = tractor.images
-    tractor.freezeParamsRecursive('*')
-    tractor.thawPathsTo(band)
-    tractor.thawPathsTo('sky')
 
-    from wise_psf import WisePSF
     # Load the spatially-varying PSF model
+    from wise_psf import WisePSF
     psf = WisePSF(bandnum, savedfn='w%ipsffit.fits' % bandnum)
-
     # disabled
     assert(not opt.pixpsf)
 
@@ -338,7 +334,7 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
         # print 'Checking', tim
         I = np.flatnonzero(np.logical_not(np.isfinite(tim.getImage())))
         if len(I):
-            print 'Found', len(I), 'bad pixels in', tim.name
+            print 'Found', len(I), 'inf pixels in', tim.name
             tim.getImage().flat[I] = 0
             iv = tim.getInvvar()
             iv.flat[I] = 0.
@@ -368,8 +364,6 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     tims = tractor.getImages()
 
     # Resample
-    if mp is None:
-        mp = multiproc()
     ims = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
 
     # Coadd
@@ -458,7 +452,7 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                 conn=conn,
                 cowcs=cowcs, opt104=opt,
                 coimg1=coimg1, coppstd1=coppstd1,
-                resampled=d)
+                resampled=ims)
 
 def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
              S=None, ri=None, di=None, W=None,
@@ -1905,7 +1899,175 @@ def stage606():
             plt.imshow(d.mask, interpolation='nearest', origin='lower', cmap='gray')
             ps.savefig()
 
-        
+
+# plots from stage 10?; reduce pickle size
+def stage700(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
+             S=None, ri=None, di=None, UW=None,
+             coimg1=None, coinvvar=None, coimg=None, cowcs=None,
+             resampled=None,
+             ims1=None,
+             **kwa):
+
+    # for k,v in kwa.items():
+    #     print
+    #     print k, '='
+    #     print
+    #     print v
+    #     print
+
+    if ps:
+        cosig = 1./np.sqrt(np.median(coinvvar))
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-2*cosig, vmax=10*cosig)
+        plt.clf()
+        plt.imshow(coimg1, **ima)
+        plt.gray()
+        plt.title('Initial coadd')
+        ps.savefig()
+    
+        plt.clf()
+        plt.imshow(coimg, **ima)
+        plt.gray()
+        plt.title('Final coadd')
+        ps.savefig()
+    
+        ax = plt.axis()
+        ok,X,Y = cowcs.radec2pixelxy(S.ra, S.dec)
+        plt.plot(X-1, Y-1, 'b+')
+        ok,X,Y = cowcs.radec2pixelxy(UW.ra, UW.dec)
+        plt.plot(X-1, Y-1, 'r+')
+        plt.axis(ax)
+        ps.savefig()
+
+    tims = tractor.getImages()
+
+    for i,(d,tim, (nil,mod,nil,chi,nil)) in enumerate(zip(resampled, tims, ims1)):
+        if d is None:
+            continue
+
+        print 'd:', dir(d)
+
+        d.rimg = d.rimg.astype(np.float32)
+        d.rchi = d.rchi.astype(np.float32)
+        delattr(d, 'nnimg')
+        delattr(d, 'invvar')
+        delattr(d, 'ww')
+        delattr(d, 'mod')
+        delattr(d, 'img')
+
+        print 'd:'
+        for x in dir(d):
+            if x.startswith('_'):
+                continue
+            try:
+                X = getattr(d, x)
+                dt = X.dtype
+                sh = None
+                try:
+                    sh = X.shape
+                except:
+                    pass
+                print '  ', x, dt,
+                if sh is not None:
+                    print sh
+                else:
+                    print
+            except:
+                continue
+
+
+        if tim.coaddmask is None:
+            continue
+
+        print 'rimg:', d.rimg.dtype
+        print 'mask:', d.mask.dtype
+
+        tim.coaddmask = tim.coaddmask.astype(bool)
+        del tim.cinvvar
+        del tim.inverr
+        del tim.origInvvar
+        del tim.orig_invvar
+        del tim.starMask
+        del tim.uncplane
+        del tim.maskplane
+        del tim.vinvvar
+        del tim.rdmask
+        del tim.goodmask
+        #del tim.coaddmask
+        print 'coaddmask:', tim.coaddmask.dtype
+        print 'data', tim.data.dtype
+        print 'invvar', tim.invvar.dtype
+
+        print 'tim:', dir(tim)
+
+        for x in dir(tim):
+            if x.startswith('_'):
+                continue
+            try:
+                X = getattr(tim, x)
+                dt = X.dtype
+                sh = None
+                try:
+                    sh = X.shape
+                except:
+                    pass
+                print '  ', x, dt,
+                if sh is not None:
+                    print sh
+                else:
+                    print
+            except:
+                continue
+
+
+        if i >= 10 or ps is None:
+            del tim.coaddmask
+            del d.rchi
+            continue
+
+        sig = tim.sigma1
+        imm = dict(interpolation='nearest', origin='lower',
+                   vmin=0, vmax=1, cmap='gray')
+        imchi = dict(interpolation='nearest', origin='lower',
+                     vmin=-5., vmax=5., cmap='gray')
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-2*sig, vmax=10*sig, cmap='gray')
+
+        R,C = 2,3
+        plt.clf()
+        plt.subplot(R,C,1)
+        plt.imshow(d.rimg, **ima)
+        plt.title('resampled img')
+        plt.subplot(R,C,2)
+        plt.imshow(d.rchi, **imchi)
+        plt.title('chi vs coadd')
+        #plt.subplot(R,C,3)
+        #plt.imshow(tim.coaddmask, **imm)
+        #plt.title('masked from coadd')
+        plt.subplot(R,C,3)
+        plt.imshow(d.mask, **imm)
+        plt.title('masked')
+        plt.subplot(R,C,4)
+        plt.imshow(tim.data, **ima)
+        plt.title('image')
+        plt.subplot(R,C,5)
+        plt.imshow(mod, **ima)
+        plt.title('model')
+        plt.subplot(R,C,6)
+        plt.imshow(chi, **imchi)
+        plt.title('chi')
+        plt.suptitle(tim.name)
+        ps.savefig()
+
+        del tim.coaddmask
+        del d.rchi
+
+
+    return dict(tractor=tractor, resampled=resampled,
+                coppstd1=None,
+                ims0=None, ims1=None,
+                tims=None)
+
         
 def main():
 
@@ -2184,6 +2346,7 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
 
         402: 108,
         509: 108,
+        700: 106,
         }
 
     runner = MyCaller('stage%i', globals(), opt=opt, mp=mp,

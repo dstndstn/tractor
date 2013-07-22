@@ -22,6 +22,20 @@ def get_memusage():
         pass
 
     return mu
+
+def get_procio():
+    procfn = '/proc/%d/io' % os.getpid()
+    dd = dict()
+    try:
+        t = open(procfn).readlines()
+        for line in t:
+            words = line.split()
+            key = words[0].strip().strip(':')
+            val = int(words[1])
+            dd[key] = val
+    except:
+        pass
+    return dd
     
 def memusage():
     mu = get_memusage()
@@ -45,8 +59,29 @@ class MemMeas(object):
             if unit == 'kB':
                 val = int(val, 10)
                 val /= 1024.
-                unit == 'MB'
+                unit = 'MB'
                 val = '%.0f' % val
+            txt.append('%s: %s %s' % (k, val, unit))
+        return ', '.join([] + txt)
+
+class IoMeas(object):
+    def __init__(self):
+        self.io0 = get_procio()
+    def format_diff(self, other):
+        txt = []
+        d1 = self.io0
+        d0 = other.io0
+        for k in ['rchar', 'wchar', 'read_bytes', 'write_bytes']:
+            v1 = d1.get(k)
+            v0 = d0.get(k)
+            unit = 'bytes'
+            dv = float(v1 - v0)
+            for uu in ['kB', 'MB', 'GB']:
+                if dv < 2048:
+                    break
+                dv = dv / 1024.
+                unit = uu
+            val = '%.0f' % dv
             txt.append('%s: %s %s' % (k, val, unit))
         return ', '.join([] + txt)
         
@@ -74,6 +109,6 @@ class Time(object):
         dcpu = (self.cpu - other.cpu)
 
         meas = [m.format_diff(om) for m,om in zip(self.meas, other.meas)]
-        return ', '.join(['%f wall' % dwall, '%f cpu' % dcpu] + meas)
+        return ', '.join(['%.2f wall' % dwall, '%.2f cpu' % dcpu] + meas)
 
 

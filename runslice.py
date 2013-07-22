@@ -24,21 +24,22 @@ import sys
 
 from tractor.ttime import *
 Time.add_measurement(MemMeas)
+Time.add_measurement(IoMeas)
 
 import logging
 lvl = logging.INFO
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 import numpy as np
-from wise3 import *
 
+from astrometry.util.multiproc import multiproc
+from astrometry.util.file import *
 
 # duck-type command-line options
 class myopts(object):
     pass
 
 def main():
-
     batch = False
     
     arr = os.environ.get('PBS_ARRAYID')
@@ -53,6 +54,7 @@ def main():
         sys.path.append(os.getcwd())
         
     opt = myopts()
+    ps = None
     
     if True:
         # W3 area
@@ -107,7 +109,6 @@ def main():
             opt.ptsrc = False
             opt.pixpsf = False
     
-    
     if False:
         # Stripe82 QSO truth-table region
         base = '/clusterfs/riemann/raid000/bosswork/boss/wise1ext/sdss_stripe82'
@@ -149,12 +150,21 @@ def main():
             opt.ptsrc = False
             opt.pixpsf = False
             
-    
+    if not batch:
+        import matplotlib
+        matplotlib.use('Agg')
+        from astrometry.util.plotutils import PlotSequence
+        ps = PlotSequence(basename)
+
+    # Has to happen *after* matplotlib init...
+    import wise3
     
     dd = np.linspace(d0, d1, NDEC + 1)
     rr = np.linspace(r0, r1, NRA  + 1)
 
-    t0 = Time()
+    mp = multiproc()
+
+    tr0 = Time()
     
     rlo,rhi = rr[ri], rr[ri+1]
     for di,(dlo,dhi) in enumerate(zip(dd[:-1], dd[1:])):
@@ -174,36 +184,23 @@ def main():
         
         try:
             P = dict(ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
-                     opt=opt)
-            ts0 = Time()
-            R = stage100(**P)
-            print 'stage100:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage101(**P)
-            print 'stage101:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage102(**P)
-            print 'stage102:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage103(**P)
-            print 'stage103:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage104(**P)
-            print 'stage104:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage105(**P)
-            print 'stage105:', Time()-ts0
-            P.update(R)
-            ts0 = Time()
-            R = stage106(**P)
-            print 'stage106:', Time()-ts0
-            P.update(R)
+                     opt=opt, mp=mp, ps=ps)
+
+            t00 = Time()
+
+            for stage in [ 100, 101, 102, 103, 104, 105, 106, 700 ]:
+                f = eval('wise3.stage%i' % stage)
+                ts0 = Time()
+                R = f(**P)
+                dt = Time() - ts0
+                P.update(R)
+                P.update(**{ 't%i' % stage: dt })
+                print 'stage', stage, ':',  dt
+
+            dt = Time() - t00
+            P.update(**{ 'ttotal': dt })
     
+            # Grab result FITS structure
             R = P['R']
             R.writeto(fn)
             print 'Wrote', fn
@@ -215,33 +212,34 @@ def main():
     
             pfn = '%s-r%02i-d%02i-w%i.pickle' % (basename, ri, di, opt.bandnum)
     
-            tractor = P['tractor']
-            ims1 = P['ims1']
-    
-            res1 = []
-            for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
-                for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
-                          'maskplane', 'rdmask', 'mask', 'uncplane', 'vinvvar']:
+            # tractor = P['tractor']
+            # ims1 = P['ims1']
+            # res1 = []
+            # for tim,(img,mod,ie,chi,roi) in zip(tractor.images, ims1):
+            #     for k in ['origInvvar', 'starMask', 'inverr', 'cinvvar', 'goodmask',
+            #               'maskplane', 'rdmask', 'mask', 'uncplane', 'vinvvar']:
+            # 
+            #         ### DEBUG
+            #         #continue
+            #         # Debug
+            #         if k == 'rdmask':
+            #             continue
+            #               
+            #         try:
+            #             delattr(tim, k)
+            #         except:
+            #             pass
+            # 
+            #     res1.append((tim, mod, roi))
+            # 
+            # PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
+            #           bandnum=opt.bandnum, S=P['S'],
+            #           ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
+            #           opt=opt,
+            #           T=P['T'])
 
-                    ### DEBUG
-                    #continue
-                    # Debug
-                    if k == 'rdmask':
-                        continue
-                          
-                    try:
-                        delattr(tim, k)
-                    except:
-                        pass
 
-                res1.append((tim, mod, roi))
-    
-            PP = dict(res1=res1, cat=tractor.getCatalog(), rd=P['rd'], ri=ri, di=di,
-                      bandnum=opt.bandnum, S=P['S'],
-                      ralo=rlo, rahi=rhi, declo=dlo, dechi=dhi,
-                      opt=opt,
-                      T=P['T'])
-            pickle_to_file(PP, pfn)
+            pickle_to_file(P, pfn)
 
             print
             print 'Dec slice time:', Time() - td0
@@ -261,7 +259,7 @@ def main():
 
 
     print
-    print 'RA slice time:', Time() - t0
+    print 'RA slice time:', Time() - tr0
     print
 
 
