@@ -71,35 +71,32 @@ class IoMeas(object):
         txt = []
         d1 = self.io0
         d0 = other.io0
-        for k in ['rchar', 'wchar', 'read_bytes', 'write_bytes']:
+        for k,knice in [('rchar',None), ('wchar',None),
+                        ('read_bytes','rb'), ('write_bytes', 'wb')]:
             v1 = d1.get(k)
             v0 = d0.get(k)
-            unit = 'bytes'
+            unit = 'b'
             dv = float(v1 - v0)
             for uu in ['kB', 'MB', 'GB']:
                 if dv < 2048:
                     break
                 dv = dv / 1024.
                 unit = uu
-            val = '%.0f' % dv
-            txt.append('%s: %s %s' % (k, val, unit))
+            val = '%.3g' % dv
+            if knice is None:
+                kk = k
+            else:
+                kk = knice
+            txt.append('%s: %s %s' % (kk, val, unit))
         return ', '.join([] + txt)
-        
-class Time(object):
-    @staticmethod
-    def add_measurement(m):
-        Time.measurements.append(m)
-    measurements = []
 
+class CpuMeas(object):
     def __init__(self):
         import datetime
         from time import clock
         self.wall = datetime.datetime.now()
-        #self.cpu = time.clock()
         self.cpu = clock()
-        self.meas = [m() for m in Time.measurements]
-
-    def __sub__(self, other):
+    def format_diff(self, other):
         dwall = (self.wall - other.wall)
         # python2.7
         if hasattr(dwall, 'total_seconds'):
@@ -107,8 +104,21 @@ class Time(object):
         else:
             dwall = (dwall.microseconds + (dwall.seconds + dwall.days * 24. * 3600.) * 1e6) / 1e6
         dcpu = (self.cpu - other.cpu)
+        return 'Wall: %.2f s, CPU: %.2f s' % (dwall, dcpu)
+        
+class Time(object):
+    @staticmethod
+    def add_measurement(m):
+        Time.measurements.append(m)
+    measurements = [CpuMeas]
 
-        meas = [m.format_diff(om) for m,om in zip(self.meas, other.meas)]
-        return ', '.join(['%.2f wall' % dwall, '%.2f cpu' % dcpu] + meas)
+    def __init__(self):
+        self.meas = [m() for m in Time.measurements]
 
+    def __sub__(self, other):
+        '''
+        Returns a string representation of the difference: self - other
+        '''
+        meas = ', '.join([m.format_diff(om) for m,om in zip(self.meas, other.meas)])
+        return meas
 
