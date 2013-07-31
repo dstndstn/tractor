@@ -3,7 +3,7 @@ import numpy as np
 from astrometry.util.fits import *
 
 def wise_catalog_radecbox(r0, r1, d0, d1,
-                          path='wise-cats'):
+                          path='wise-cats', cols=None):
     TT = []
     for i,(dlo,dhi) in enumerate(wise_catalog_dec_range):
         if dlo > d1 or dhi < d0:

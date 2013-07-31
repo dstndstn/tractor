@@ -40,8 +40,13 @@ def get_l1b_file(basedir, scanid, frame, band):
                         '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
 
+
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              **kwa):
+    '''
+    Find WISE images in range
+    Find WISE sources in range
+    '''
     bandnum = opt.bandnum
     band = 'w%i' % bandnum
     wisedatadirs = opt.wisedatadirs
@@ -166,7 +171,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         W = wise_catalog_radecbox(ralo, rahi, declo, dechi, cols=cols)
         if opt.wsources is not None:
             W.writeto(opt.wsources)
-            print 'Wrote', wsrcs
+            print 'Wrote', opt.wsources
         
     return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
                 wcses=wcses, bandnum=bandnum, band=band, W=W)
@@ -284,17 +289,23 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
     S.row = I
     S.inblock = ((S.ra  >= r0) * (S.ra  < r1) *
                  (S.dec >= d0) * (S.dec < d1))
-    S.cmodelflux = S.modelflux
 
-    sband = 'r'
 
-    ## NOTE, this method CUTS the "S" arg
-    cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
-                                  objs=S, bands=[], nanomaggies=True,
-                                  extrabands=[band],
-                                  fixedComposites=True,
-                                  forcePointSources=opt.ptsrc,
-                                  useObjcType=True)
+    if opt.nonsdss:
+        cat = []
+        for r,d in zip(S.ra, S.dec):
+            cat.append(PointSource(RaDecPos(r,d), NanoMaggies(**{ band: 1. })))
+
+    else:
+        S.cmodelflux = S.modelflux
+        sband = 'r'
+        # NOTE, this method CUTS the "S" arg
+        cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+                                      objs=S, bands=[], nanomaggies=True,
+                                      extrabands=[band],
+                                      fixedComposites=True,
+                                      forcePointSources=opt.ptsrc,
+                                      useObjcType=True)
     print 'Created', len(cat), 'Tractor sources'
     assert(len(cat) == len(S))
 
@@ -366,6 +377,22 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # Resample
     ims = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
 
+    # If any fail due to resampling using a spline (because only a
+    # small fraction of the image hits the ROI), redo them.
+    # Necessary when running very small regions...
+    redo = []
+    for i,d in enumerate(ims):
+        if d is None:
+            redo.append([tims[i], None, cowcs, False])
+    if len(redo):
+        print 'Re-running resampling without spline for', len(redo), 'images'
+        ims2 = mp.map(_resample_one, redo)
+        j = 0
+        for i,d in enumerate(ims):
+            if d is None:
+                ims[i] = ims2[j]
+                j += 1
+
     # Coadd
     #nnsum    = np.zeros((H,W))
     lancsum  = np.zeros((H,W))
@@ -427,6 +454,7 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2)
 
     # 2. Apply rchi masks to individual images
+    print 'Applying rchi masks to images...'
     tims = tractor.getImages()
 
     args = []
@@ -482,7 +510,9 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 
 
 def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-             S=None, ri=None, di=None, UW=None,
+             S=None,
+             #ri=None, di=None,
+             UW=None,
              **kwa):
     tims = tractor.images
     minFlux = opt.minflux
@@ -509,6 +539,8 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     #print '# images:', len(tims)
     #print '# sources:', len(cat)
 
+    cat2 = cat.copy()
+
     R = tabledata()
     R.ra  = np.array([src.getPosition().ra  for src in cat])
     R.dec = np.array([src.getPosition().dec for src in cat])
@@ -528,7 +560,7 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         imstats.scan_id = T.scan_id
         imstats.frame_num = T.frame_num
 
-    return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1)
+    return dict(R=R, imstats=imstats, ims0=ims0, ims1=ims1, cat2=cat2)
 
 
 class Duck(object):
@@ -575,7 +607,7 @@ def _resample_one((tim, mod, targetwcs, spline)):
     inims = [patchimg]
     if mod is not None:
         inims.append(mod)
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder)
+    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder, spline=spline)
     if yo is None:
         return None
     rpatch = np.zeros((H,W))
@@ -620,13 +652,17 @@ def _resample_one((tim, mod, targetwcs, spline)):
     d.npix2 = np.sum(iv > 0)
     return d
 
-def _resample_mod((tim, mod, targetwcs)):
+def _resample_mod((tim, mod, targetwcs, spline)):
     W,H = targetwcs.get_width(), targetwcs.get_height()
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     Lorder = 3
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder)
+    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=spline)
     if yo is None:
-        return None
+        if spline:
+            print 'Retrying without spline...'
+            yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=False)
+        if yo is None:
+            return None
     rmod = np.zeros((H,W))
     rmod[yo,xo] = rpix[0]
     iv = np.zeros((H,W))
@@ -642,7 +678,11 @@ def _rev_resample_mask((tim, mask, targetwcs)):
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[])
     if yo is None:
-        return None
+        #
+        print 'Retrying without spline'
+        yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[], spline=False)
+        if yo is None:
+            return None
     w,h = int(wcs2.get_width()), int(wcs2.get_height())
     rmask = np.zeros((h,w))
     rmask[yo,xo] = mask[yi, xi]
@@ -655,24 +695,26 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
              tractor=None, ims1=None,
              mp=None,
-             coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
-             ims2=None,
+             coimg=None, coinvvar=None, coppstd=None, cowcs=None,
+             #comod=None,
+             #ims2=None,
              **kwa):
     r0,r1,d0,d1 = ralo,rahi,declo,dechi
     sdss = S
     cat = tractor.getCatalog()
-    S = cowcs.get_width()
+    W,H = cowcs.get_width(), cowcs.get_height()
     tims = tractor.getImages()
-    cochi = (coimg - comod) * np.sqrt(coinvvar)
+    #cochi = (coimg - comod) * np.sqrt(coinvvar)
 
     args = []
-    for i,(tim, (nil,mod,ie,chi,roi), (nil,mod0,nil,nil,nil)) in enumerate(zip(tims, ims2, ims1)):
+    #for i,(tim, (nil,mod,ie,chi,roi), (nil,mod0,nil,nil,nil)) in enumerate(zip(tims, ims2, ims1)):
+    for i,(tim, (nil,mod,ie,chi,roi)) in enumerate(zip(tims, ims1)):
 
         sky = tim.getSky().getValue()
         scale = 1. / tim.getPhotoCal().getScale()
         mod  = (mod - sky) * scale
 
-        args.append((tim, mod, cowcs))
+        args.append((tim, mod, cowcs, True))
         
         if i < 10:
             plt.clf()
@@ -682,9 +724,9 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
             plt.subplot(2,2,2)
             plt.imshow(tim.invvar)
             plt.colorbar()
-            plt.subplot(2,2,3)
-            plt.imshow(mod0)
-            plt.colorbar()
+            #plt.subplot(2,2,3)
+            #plt.imshow(mod0)
+            #plt.colorbar()
             plt.subplot(2,2,4)
             plt.imshow(mod)
             plt.colorbar()
@@ -692,8 +734,20 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     
     mims = mp.map(_resample_mod, args)
 
-    modsum2 = np.zeros((S,S))
-    wsum2 = np.zeros((S,S))
+    # redo = []
+    # for i,(mim,(t,m,c,nil)) in enumerate(zip(mims,args)):
+    #     if mim is None:
+    #         redo.append((t,m,c,False))
+    # if len(redo):
+    #     mims2 = mp.map(_resample_mod, redo)
+    #     j = 0
+    #     for i,mim in enumerate(mims):
+    #         if mim is None:
+    #             mims[i] = mims2[j]
+    #             j += 1
+
+    modsum2 = np.zeros((H,W))
+    wsum2 = np.zeros((H,W))
     for rmod,ww in mims:
         modsum2 += (rmod * ww)
         wsum2   += ww
@@ -704,12 +758,12 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ima = dict(interpolation='nearest', origin='lower',
                vmin=-2*sig, vmax=10*sig)
 
-    plt.clf()
-    plt.imshow(cochi, interpolation='nearest', origin='lower',
-               vmin=-10., vmax=10., cmap='gray')
-    plt.title('Chi (before)')
-    plt.colorbar()
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow(cochi, interpolation='nearest', origin='lower',
+    #            vmin=-10., vmax=10., cmap='gray')
+    # plt.title('Chi (before)')
+    # plt.colorbar()
+    # ps.savefig()
 
     plt.clf()
     plt.imshow(cochi2, interpolation='nearest', origin='lower',
@@ -718,11 +772,11 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     plt.colorbar()
     ps.savefig()
 
-    plt.clf()
-    plt.imshow(comod, **ima)
-    plt.title('Model (before)')
-    plt.colorbar()
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow(comod, **ima)
+    # plt.title('Model (before)')
+    # plt.colorbar()
+    # ps.savefig()
     
     plt.clf()
     plt.imshow(comod2, **ima)
@@ -746,7 +800,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     cat = tractor.getCatalog()
     S = cowcs.get_width()
     tims = tractor.getImages()
-    cochi = (coimg - comod) * np.sqrt(coinvvar)
+    #cochi = (coimg - comod) * np.sqrt(coinvvar)
     cochi2 = (coimg - comod2) * np.sqrt(coinvvar)
 
     # 4. Run forced photometry on coadd
@@ -2212,6 +2266,9 @@ def main():
     parser.add_option('-s', dest='sources',
                       help='Input SDSS source list')
 
+    parser.add_option('--not-sdss', dest='nonsdss', action='store_true',
+                      help='File given in "-s" are not SDSS objects; just read RA,Dec and make point sources')
+
     parser.add_option('-W', dest='wsources',
                       help='WISE source list')
 
@@ -2255,6 +2312,8 @@ def main():
                       help='do RA,Dec match to compare results; else assume 1-to-1')
     parser.add_option('-N', dest='nearest', action='store_true', default=False,
                       help='Match nearest, or all?')
+
+    #parser.add_option('--noResampleSpline', dest='resampleSpline', 
 
     opt,args = parser.parse_args()
 

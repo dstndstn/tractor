@@ -54,6 +54,7 @@ def main():
         sys.path.append(os.getcwd())
         
     opt = myopts()
+    opt.nonsdss = False
     ps = None
     
     if True:
