@@ -8,11 +8,13 @@ import pylab as plt
 import numpy as np
 
 from astrometry.util.fits import *
+from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 from astrometry.util.multiproc import *
 
 from wise3 import *
+from tractor import *
 
 class myopts(object):
     pass
@@ -39,7 +41,7 @@ if __name__ == '__main__':
     print 'RA range', r0,r1
     print 'Dec range', d0,d1
 
-    margin = 0.001
+    margin = 0.003
     dr = margin / np.cos(np.deg2rad((d0+d1)/2.))
     rlo = r0 - dr
     rhi = r1 + dr
@@ -70,8 +72,9 @@ if __name__ == '__main__':
     opt.minsb = 0.005
     opt.ptsrc = False
     opt.pixpsf = False
-    #opt.force = []
-    opt.force = [106, 107, 108]
+    opt.force = []
+    #opt.force = [104, 105, 106, 107, 108]
+    #opt.force = [108, 109]
 
     opt.write = True
     opt.ri = None
@@ -84,7 +87,7 @@ if __name__ == '__main__':
         opt.ps = opt.name
 
         try:
-            runtostage(108, opt, mp, rlo,rhi,dlo,dhi)
+            runtostage(110, opt, mp, rlo,rhi,dlo,dhi)
             runtostage(700, opt, mp, rlo,rhi,dlo,dhi)
         except:
             import traceback
@@ -92,4 +95,26 @@ if __name__ == '__main__':
             traceback.print_exc()
             print
             pass
-    
+
+    alltims = []
+    for band in [1,2,3,4]:
+        pfn = 'hennawi-w%i-stage101.pickle' % band
+        X = unpickle_from_file(pfn)
+        alltims.append(X['tims'])
+
+    plt.clf()
+    mjd2k = datetomjd(J2000)
+    y0 = TAITime(None, mjd=mjd2k).toYears()
+    lt,lp = [],[]
+    for band,tims,cc in zip([1,2,3,4], alltims, 'rgbm'):
+        times = np.array([(tim.time.toYears() - y0) + 2000. for tim in tims])
+        p1 = plt.plot(times - 2010, np.zeros(len(times)) + band, 'o', color=cc)
+        plt.axhline(band, color=cc, alpha=0.5)
+        lp.append(p1)
+        lt.append('W%i' % band)
+    plt.xlabel('Date of observation (years - 2010.0)')
+    plt.yticks([])
+    plt.ylim(-1, 5)
+    plt.legend(lp, lt)
+    ps.savefig()
+

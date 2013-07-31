@@ -222,7 +222,8 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
         tim = wise.read_wise_level1b(Ti.filename.replace('-int-1b.fits',''),
                                      nanomaggies=True, mask_gz=True, unc_gz=True,
                                      sipwcs=True, constantInvvar=True,
-                                     roi=[x0,x1,y0,y1])
+                                     roi=[x0,x1,y0,y1],
+                                     zrsigs = [-2, 5])
         print 'Read', tim
 
         # Mask pixels outside the RA,Dec ROI
@@ -476,6 +477,30 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         else:
             tim.setInvvar(tim.invvar)
 
+    if ps:
+        # Mosaic of all individual exposures
+        plt.clf()
+        plt.subplots_adjust(wspace=0.1, hspace=0.1, left=0.1, right=0.9,
+                            bottom=0.1, top=0.9)
+        nims = len(tims)
+        cols = int(np.ceil(np.sqrt(nims)))
+        rows = int(np.ceil(nims / float(cols)))
+        for i,(tim,d) in enumerate(zip(tims, ims)):
+            plt.subplot(rows, cols, i+1)
+            ima = dict(interpolation='nearest', origin='lower',
+                        vmin=-2.*d.sig1, vmax=5.*d.sig1, cmap='gray')
+            plt.imshow(d.rimg, **ima)
+            plt.xticks([]); plt.yticks([])
+        plt.suptitle('Individual exposures: %s' % band)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(coimg, interpolation='nearest', origin='lower',
+                   vmin=-2.*sig, vmax=5.*sig, cmap='gray')
+        plt.xticks([]); plt.yticks([])
+        plt.title('Coadd: %s' % band)
+        ps.savefig()
+
     return dict(coimg=coimg, coinvvar=coinvvar, coppstd=coppstd,
                 conn=conn,
                 cowcs=cowcs, opt104=opt,
@@ -712,24 +737,38 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         sky = tim.getSky().getValue()
         scale = 1. / tim.getPhotoCal().getScale()
-        mod  = (mod - sky) * scale
+        modx  = (mod - sky) * scale
 
-        args.append((tim, mod, cowcs, True))
+        args.append((tim, modx, cowcs, True))
         
         if i < 10:
+
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+            #vmin=tim.sky - tim.sigma1 * 2,
+            #vmax=tim.sky + tim.sigma1 * 5)
+
             plt.clf()
             plt.subplot(2,2,1)
-            plt.imshow(tim.data)
+            plt.imshow(tim.data, **ima)
+            plt.xticks([]); plt.yticks([])
+            plt.title('data')
             plt.colorbar()
             plt.subplot(2,2,2)
-            plt.imshow(tim.invvar)
+            plt.imshow(tim.invvar, interpolation='nearest', origin='lower',
+                       cmap='gray', vmin=0)
+            plt.xticks([]); plt.yticks([])
+            plt.title('invvar')
             plt.colorbar()
             #plt.subplot(2,2,3)
             #plt.imshow(mod0)
             #plt.colorbar()
             plt.subplot(2,2,4)
-            plt.imshow(mod)
+            plt.imshow(mod, **ima)
+            plt.xticks([]); plt.yticks([])
+            plt.title('model')
             plt.colorbar()
+            plt.suptitle(tim.name)
             ps.savefig()
     
     mims = mp.map(_resample_mod, args)
@@ -758,6 +797,12 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     ima = dict(interpolation='nearest', origin='lower',
                vmin=-2*sig, vmax=10*sig)
 
+    plt.clf()
+    plt.imshow(comod2, **ima)
+    plt.title('Coadded model')
+    plt.colorbar()
+    ps.savefig()
+
     # plt.clf()
     # plt.imshow(cochi, interpolation='nearest', origin='lower',
     #            vmin=-10., vmax=10., cmap='gray')
@@ -768,7 +813,7 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     plt.clf()
     plt.imshow(cochi2, interpolation='nearest', origin='lower',
                vmin=-10., vmax=10., cmap='gray')
-    plt.title('Chi (after)')
+    plt.title('Coadded chi')
     plt.colorbar()
     ps.savefig()
 
@@ -778,11 +823,6 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # plt.colorbar()
     # ps.savefig()
     
-    plt.clf()
-    plt.imshow(comod2, **ima)
-    plt.title('Model (after)')
-    plt.colorbar()
-    ps.savefig()
 
     return dict(comod2=comod2)
 
@@ -831,6 +871,8 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                                                     variance=True)
     print 'Forced phot on coadd took', Time()-t0
 
+    print 'Sky level in coadd fit:', coim.getSky()
+
     cat3 = cat.copy()
 
     sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
@@ -875,9 +917,12 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     m3 = np.array(m3)
 
     plt.clf()
-    plt.plot(m2, m3, 'b.')
-    lo,hi = 12,24
-    plt.plot([lo,hi],[lo,hi], 'k-', lw=3, alpha=0.3)
+    plt.plot(m2, m3, 'b.', ms=8)
+    if bandnum in [1,2]:
+        lo,hi = 12,24
+    else:
+        lo,hi = 8,20
+    plt.plot([lo,hi],[lo,hi], 'k-', lw=2, alpha=0.3)
     plt.axis([lo,hi,lo,hi])
     plt.xlabel('Individual images photometry (mag)')
     plt.ylabel('Coadd photometry (mag)')
@@ -895,13 +940,16 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     J = np.arange(len(I)) < len(sdss)
     
     plt.clf()
-    p1 = plt.plot(m2[I*J], (m3-m2)[I*J], 'b.')
+    p1 = plt.plot(m2[I*J], (m3-m2)[I*J], 'b.', ms=8)
     nJ = np.logical_not(J)
-    p2 = plt.plot(m2[nJ], (m3-m2)[nJ], 'g.')
+    p2 = plt.plot(m2[nJ], (m3-m2)[nJ], 'g.', ms=8)
     I = np.logical_not(I)
-    p3 = plt.plot(m2[I*J], (m3-m2)[I*J], 'r.')
-    lo,hi = 12,24
-    plt.plot([lo,hi],[0, 0], 'k-', lw=3, alpha=0.3)
+    p3 = plt.plot(m2[I*J], (m3-m2)[I*J], 'r.', ms=8)
+    if bandnum in [1,2]:
+        lo,hi = 12,24
+    else:
+        lo,hi = 8,20
+    plt.plot([lo,hi],[0, 0], 'k-', lw=2, alpha=0.3)
     plt.axis([lo,hi,-2,2])
     plt.xlabel('Individual images photometry (mag)')
     plt.ylabel('Coadd photometry - Individual (mag)')
@@ -954,6 +1002,126 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     return dict(ims3=ims1, cotr=tr, cat3=cat3)
 
 
+
+### Forced photometry on one epoch at a time
+def stage109(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
+             tractor=None, ims1=None,
+             mp=None,
+             coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
+             comod2=None,
+             ims2=None, cat2=None,
+             UW=None,
+             **kwa):
+    r0,r1,d0,d1 = ralo,rahi,declo,dechi
+
+    cat = tractor.getCatalog()
+    tims = tractor.getImages()
+
+    cats4 = []
+    for tim in tims:
+        # Reset all brightnesses before running?
+        cati = cat.copy()
+        cati.freezeParamsRecursive('*')
+        cati.thawPathsTo(band)
+        cati.setParams(np.array([100.] * cati.numberOfParams()))
+
+        tr = Tractor([tim], cati)
+        tr.freezeParamsRecursive('*')
+        tr.thawPathsTo('sky')
+        tr.thawPathsTo(band)
+
+        npix = sum(tim.getInvvar() > 0)
+        nparams = tr.numberOfParams()
+        print 'N pixels:', npix
+        print 'N params:', nparams
+
+        if npix < nparams:
+            cats4.append(tr.getCatalog())
+            continue
+
+        minsb = 0.005
+        minFlux = None
+        t0 = Time()
+        ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+                                                        sky=True, minFlux=minFlux,
+                                                        fitstats=True,
+                                                        variance=True)
+        print 'Forced phot on coadd took', Time()-t0
+        cats4.append(tr.getCatalog())
+
+    if ps:
+        m2,m4s = [],[]
+        for s2 in cat2:
+            m2.append(NanoMaggies.nanomaggiesToMag(s2.getBrightness().getBand(band)))
+        for cat4 in cats4:
+            m4 = []
+            for s in cat4:
+                m4.append(NanoMaggies.nanomaggiesToMag(s.getBrightness().getBand(band)))
+            m4s.append(np.array(m4))
+        m2 = np.array(m2)
+
+        plt.clf()
+        for m4 in m4s:
+            plt.plot(m2, m4, 'b.', ms=8)
+        if bandnum in [1,2]:
+            lo,hi = 12,24
+        else:
+            lo,hi = 8,20
+        plt.plot([lo,hi],[lo,hi], 'k-', lw=2, alpha=0.3)
+        plt.axis([lo,hi,lo,hi])
+        plt.xlabel('Simultaneous photometry (mag)')
+        plt.ylabel('Image-at-a-time photometry (mag)')
+        ps.savefig()
+
+    return dict(cats4=cats4)
+
+
+# Sampling with emcee
+def stage110(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
+             tractor=None, ims1=None,
+             mp=None,
+             coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
+             comod2=None,
+             ims2=None, cat2=None,
+             UW=None,
+             **kwa):
+    r0,r1,d0,d1 = ralo,rahi,declo,dechi
+
+    cat = tractor.getCatalog()
+    tims = tractor.getImages()
+
+    import emcee
+
+    tr = tractor
+    tr.freezeParamsRecursive('*')
+    tr.thawPathsTo('sky')
+    tr.thawPathsTo(band)
+
+    p0 = np.array(tr.getParams())
+    ndim = len(p0)
+    nw = 50
+    sampler = emcee.EnsembleSampler(nw, ndim, tr, threads=8)
+    steps = np.array(tr.getStepSizes())
+    colscales = tr.getParameterScales()
+    pp0 = np.vstack([p0 + 1e-4 * steps / colscales *
+                     np.random.normal(size=len(steps))
+                     for i in range(nw)])
+    alllnp = []
+    allp = []
+    lnp = None
+    pp = pp0
+    rstate = None
+    print 'N params', ndim, 'N walkers', nw
+    for step in range(1001):
+        print 'Taking emcee step', step
+        pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+        #print 'lnprobs:', lnp
+        alllnp.append(lnp.copy())
+        allp.append(pp.copy())
+
+    return dict(allp=allp, alllnp=alllnp)
 
 
 
