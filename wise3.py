@@ -40,13 +40,10 @@ def get_l1b_file(basedir, scanid, frame, band):
                         '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
 
 
-
+# Find WISE images in range
+# Read WISE sources in range
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              **kwa):
-    '''
-    Find WISE images in range
-    Find WISE sources in range
-    '''
     bandnum = opt.bandnum
     band = 'w%i' % bandnum
     wisedatadirs = opt.wisedatadirs
@@ -62,6 +59,7 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         print 'Read', len(T), 'from WISE index', ifn
 
         # Add a margin around the CRVAL so we catch all fields that touch the RA,Dec box.
+        # Magic numbers 1016 * 2.75 = image size * pixel scale of W1 = FOV
         margin = (1016. * 2.75 * np.sqrt(2.) / 3600.) / 2.
         cosdec = np.cos(np.deg2rad((declo + dechi) / 2.))
         print 'Margin:', margin, 'degrees'
@@ -176,7 +174,8 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     return dict(opt100=opt, rd=(ralo,rahi,declo,dechi), T=T, outlines=outlines,
                 wcses=wcses, bandnum=bandnum, band=band, W=W)
 
-
+# Read WISE images
+# Apply ROI mask
 def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
              band=None, bandnum=None,
              **kwa):
@@ -265,6 +264,8 @@ class AsTransWrapper(object):
         x,y = self.wcs.radec_to_pixel(ra, dec)
         return True, x+1, y+1
 
+# Read SDSS (or other given) sources in range
+# Create Tractor sources
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
              tims=None, band=None, margin1=None,
              **kwa):
@@ -322,7 +323,7 @@ def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
     return dict(opt102=opt, tractor=tractor, S=S, margin2=margin2)
 
-
+# Load PSF model
 def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
              **kwa):
     tims = tractor.images
@@ -355,6 +356,7 @@ def stage103(opt=None, ps=None, tractor=None, band=None, bandnum=None,
         
     return dict(opt103=opt)
 
+# Create coadd, mask discrepant pixels
 def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              R=None, imstats=None, T=None, S=None, bandnum=None, band=None,
              tractor=None, ims1=None,
@@ -366,6 +368,10 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     '''
     # Create WCS into which we will coadd
     pixscale = 2.75 / 3600.
+    # W4 is binned-down 2x2
+    if bandnum == 4:
+        pixscale *= 2
+
     ra  = (ralo  + rahi)  / 2.
     dec = (declo + dechi) / 2.
     W,H = (rahi - ralo) * np.cos(np.deg2rad(dec)) / pixscale, (dechi - declo) / pixscale
@@ -409,16 +415,32 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         lancsum  += (d.rimg    * d.ww)
         lancsum2 += (d.rimg**2 * d.ww)
         wsum     += d.ww
-    #nnimg   = (nnsum   / np.maximum(wsum, 1e-6))
-    coimg   = (lancsum / np.maximum(wsum, 1e-6))
+
+        # plt.clf()
+        # plt.subplot(1,2,1)
+        # plt.imshow(lancsum, interpolation='nearest', origin='lower')
+        # plt.colorbar()
+        # plt.subplot(1,2,2)
+        # plt.imshow(wsum, interpolation='nearest', origin='lower')
+        # plt.colorbar()
+        # plt.suptitle('coadd step %i' % i)
+        # ps.savefig()
+        # print 'median ww:', np.median(d.ww)
+        # print 'sig1:', d.sig1
+
+    # For W4, single-image ww is ~ 1e-10
+    tinyw = 1e-16
+    #nnimg   = (nnsum   / np.maximum(wsum, 1e-16))
+    coimg   = (lancsum / np.maximum(wsum, tinyw))
     coinvvar = wsum
     coimg1 = coimg
     
     sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
     print 'Coadd sig:', sig
     # Per-pixel std
-    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2)
+    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, tinyw)) - coimg**2)
     coppstd1 = coppstd
+    sig1 = sig
     
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
@@ -444,15 +466,15 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         lancsum  += (d.rimg    * ww)
         lancsum2 += (d.rimg**2 * ww)
         wsum     += ww
-    conn  = (nnsum   / np.maximum(wsum, 1e-6))
-    coimg = (lancsum / np.maximum(wsum, 1e-6))
+    conn  = (nnsum   / np.maximum(wsum, tinyw))
+    coimg = (lancsum / np.maximum(wsum, tinyw))
     coinvvar = wsum
 
     print 'Second-round coadd:'
     sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
     print 'Coadd sig:', sig
     # per-pixel variance
-    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, 1e-6)) - coimg**2)
+    coppstd = np.sqrt(lancsum2 / (np.maximum(wsum, tinyw)) - coimg**2)
 
     # 2. Apply rchi masks to individual images
     print 'Applying rchi masks to images...'
@@ -479,10 +501,10 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     if ps:
         # Mosaic of all individual exposures
-        plt.clf()
         nims = len(tims)
         cols = int(np.ceil(np.sqrt(nims)))
         rows = int(np.ceil(nims / float(cols)))
+        plt.clf()
         for i,(tim,d) in enumerate(zip(tims, ims)):
             plt.subplot(rows, cols, i+1)
             ima = dict(interpolation='nearest', origin='lower',
@@ -492,6 +514,88 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.suptitle('Individual exposures: %s' % band)
         ps.savefig()
 
+        wmax = np.max([d.ww.max() for d in ims])
+        plt.clf()
+        for i,(tim,d) in enumerate(zip(tims, ims)):
+            plt.subplot(rows, cols, i+1)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=0, vmax=wmax, cmap='gray')
+            plt.imshow(d.ww, **ima)
+            plt.xticks([]); plt.yticks([])
+        plt.suptitle('Individual weights: %s' % band)
+        ps.savefig()
+
+        # (non-resampled)
+        plt.clf()
+        for i,(tim,d) in enumerate(zip(tims, ims)):
+            plt.subplot(rows, cols, i+1)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+            plt.imshow(tim.getImage(), **ima)
+            plt.xticks([]); plt.yticks([])
+        plt.suptitle('Individual exposures (not resampled): %s' % band)
+        ps.savefig()
+
+        # invvars
+        plt.clf()
+        ivmax = np.max([tim.orig_invvar.max() for tim in tims])
+        print 'ivmax:', ivmax
+        for i,(tim,d) in enumerate(zip(tims, ims)):
+            plt.subplot(rows, cols, i+1)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=0, vmax=ivmax, cmap='gray')
+            #plt.imshow(tim.getInvvar(), **ima)
+            plt.imshow(tim.orig_invvar, **ima)
+            plt.xticks([]); plt.yticks([])
+        plt.suptitle('Individual invvars: %s' % band)
+        ps.savefig()
+
+        # mask bits
+        # for bit in range(32):
+        #     val = (1 << bit)
+        #     anyset = np.any([np.any(tim.maskplane & val)for tim in tims])
+        #     if not anyset:
+        #         print 'Mask bit', bit, ': none set'
+        #         continue
+        #     plt.clf()
+        #     for i,(tim,d) in enumerate(zip(tims, ims)):
+        #         plt.subplot(rows, cols, i+1)
+        #         ima = dict(interpolation='nearest', origin='lower',
+        #                    vmin=0, vmax=1, cmap='gray')
+        #         plt.imshow(tim.maskplane & val, **ima)
+        #         plt.xticks([]); plt.yticks([])
+        #     plt.suptitle('Individual mask bit %i: %s' % (bit, band))
+        #     ps.savefig()
+
+        for tim in tims:
+            print 'sigma1:', tim.sigma1
+            print 'goodmask pixels:', len(np.flatnonzero(tim.goodmask))
+            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.cinvvar))
+            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.vinvvar))
+            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.orig_invvar))
+            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.getInvvar()))
+            print dir(tim)
+
+        # First-round coadd
+        plt.clf()
+        plt.imshow(coimg1, interpolation='nearest', origin='lower',
+                   vmin=-2.*sig1, vmax=5.*sig1, cmap='gray')
+        plt.xticks([]); plt.yticks([])
+        plt.title('Initial Coadd: %s' % band)
+        ps.savefig()
+
+        # Mosaic of rchi images
+        plt.clf()
+        for i,(tim,d) in enumerate(zip(tims, ims)):
+            plt.subplot(rows, cols, i+1)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=-5, vmax=5, cmap='gray')
+            plt.imshow(d.rchi, **ima)
+            plt.xticks([]); plt.yticks([])
+        plt.suptitle('rchi: %s' % band)
+        ps.savefig()
+
+        # Coadd
         plt.clf()
         plt.imshow(coimg, interpolation='nearest', origin='lower',
                    vmin=-2.*sig, vmax=5.*sig, cmap='gray')
@@ -499,12 +603,15 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.title('Coadd: %s' % band)
         ps.savefig()
 
+
+
     return dict(coimg=coimg, coinvvar=coinvvar, coppstd=coppstd,
                 conn=conn,
                 cowcs=cowcs, opt104=opt,
                 coimg1=coimg1, coppstd1=coppstd1,
                 resampled=ims)
 
+# Add WISE objects with no "SDSS" counterpart
 def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
              S=None, ri=None, di=None, W=None,
              **kwa):
@@ -532,11 +639,9 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     return dict(cat1=cat1, tractor=tractor, UW=UW)
 
 
+# Run forced photometry (simultaneously on all exposures)
 def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-             S=None,
-             #ri=None, di=None,
-             UW=None,
-             **kwa):
+             S=None, UW=None, **kwa):
     tims = tractor.images
     minFlux = opt.minflux
     if minFlux is not None:

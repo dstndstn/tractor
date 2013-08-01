@@ -75,13 +75,15 @@ if __name__ == '__main__':
     opt.pixpsf = False
     opt.force = []
     #opt.force = [104, 105, 106, 107, 108]
-    opt.force = [108] #, 109]
-
+    #opt.force = [104]
+    opt.force = range(104, 109)
+    
     opt.write = True
     opt.ri = None
     opt.di = None
 
-    for band in [1,2,3,4]:
+    #for band in [1,2,3,4]:
+    for band in [4]:
         opt.bandnum = band
         opt.name = 'hennawi-w%i' % band
         opt.picklepat = opt.name + '-stage%0i.pickle'
