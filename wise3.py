@@ -514,41 +514,41 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.suptitle('Individual exposures: %s' % band)
         ps.savefig()
 
-        wmax = np.max([d.ww.max() for d in ims])
-        plt.clf()
-        for i,(tim,d) in enumerate(zip(tims, ims)):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=0, vmax=wmax, cmap='gray')
-            plt.imshow(d.ww, **ima)
-            plt.xticks([]); plt.yticks([])
-        plt.suptitle('Individual weights: %s' % band)
-        ps.savefig()
-
-        # (non-resampled)
-        plt.clf()
-        for i,(tim,d) in enumerate(zip(tims, ims)):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-            plt.imshow(tim.getImage(), **ima)
-            plt.xticks([]); plt.yticks([])
-        plt.suptitle('Individual exposures (not resampled): %s' % band)
-        ps.savefig()
-
-        # invvars
-        plt.clf()
-        ivmax = np.max([tim.orig_invvar.max() for tim in tims])
-        print 'ivmax:', ivmax
-        for i,(tim,d) in enumerate(zip(tims, ims)):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=0, vmax=ivmax, cmap='gray')
-            #plt.imshow(tim.getInvvar(), **ima)
-            plt.imshow(tim.orig_invvar, **ima)
-            plt.xticks([]); plt.yticks([])
-        plt.suptitle('Individual invvars: %s' % band)
-        ps.savefig()
+        # wmax = np.max([d.ww.max() for d in ims])
+        # plt.clf()
+        # for i,(tim,d) in enumerate(zip(tims, ims)):
+        #     plt.subplot(rows, cols, i+1)
+        #     ima = dict(interpolation='nearest', origin='lower',
+        #                vmin=0, vmax=wmax, cmap='gray')
+        #     plt.imshow(d.ww, **ima)
+        #     plt.xticks([]); plt.yticks([])
+        # plt.suptitle('Individual weights: %s' % band)
+        # ps.savefig()
+        # 
+        # # (non-resampled)
+        # plt.clf()
+        # for i,(tim,d) in enumerate(zip(tims, ims)):
+        #     plt.subplot(rows, cols, i+1)
+        #     ima = dict(interpolation='nearest', origin='lower',
+        #                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+        #     plt.imshow(tim.getImage(), **ima)
+        #     plt.xticks([]); plt.yticks([])
+        # plt.suptitle('Individual exposures (not resampled): %s' % band)
+        # ps.savefig()
+        # 
+        # # invvars
+        # plt.clf()
+        # ivmax = np.max([tim.orig_invvar.max() for tim in tims])
+        # print 'ivmax:', ivmax
+        # for i,(tim,d) in enumerate(zip(tims, ims)):
+        #     plt.subplot(rows, cols, i+1)
+        #     ima = dict(interpolation='nearest', origin='lower',
+        #                vmin=0, vmax=ivmax, cmap='gray')
+        #     #plt.imshow(tim.getInvvar(), **ima)
+        #     plt.imshow(tim.orig_invvar, **ima)
+        #     plt.xticks([]); plt.yticks([])
+        # plt.suptitle('Individual invvars: %s' % band)
+        # ps.savefig()
 
         # mask bits
         # for bit in range(32):
@@ -567,14 +567,13 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         #     plt.suptitle('Individual mask bit %i: %s' % (bit, band))
         #     ps.savefig()
 
-        for tim in tims:
-            print 'sigma1:', tim.sigma1
-            print 'goodmask pixels:', len(np.flatnonzero(tim.goodmask))
-            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.cinvvar))
-            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.vinvvar))
-            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.orig_invvar))
-            print 'invvar > 0 pixels:', len(np.flatnonzero(tim.getInvvar()))
-            print dir(tim)
+        # for tim in tims:
+        #     print 'sigma1:', tim.sigma1
+        #     print 'goodmask pixels:', len(np.flatnonzero(tim.goodmask))
+        #     print 'invvar > 0 pixels:', len(np.flatnonzero(tim.cinvvar))
+        #     print 'invvar > 0 pixels:', len(np.flatnonzero(tim.vinvvar))
+        #     print 'invvar > 0 pixels:', len(np.flatnonzero(tim.orig_invvar))
+        #     print 'invvar > 0 pixels:', len(np.flatnonzero(tim.getInvvar()))
 
         # First-round coadd
         plt.clf()
@@ -584,18 +583,18 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.title('Initial Coadd: %s' % band)
         ps.savefig()
 
-        # Mosaic of rchi images
-        plt.clf()
-        for i,(tim,d) in enumerate(zip(tims, ims)):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=-5, vmax=5, cmap='gray')
-            plt.imshow(d.rchi, **ima)
-            plt.xticks([]); plt.yticks([])
-        plt.suptitle('rchi: %s' % band)
-        ps.savefig()
+        # # Mosaic of rchi images
+        # plt.clf()
+        # for i,(tim,d) in enumerate(zip(tims, ims)):
+        #     plt.subplot(rows, cols, i+1)
+        #     ima = dict(interpolation='nearest', origin='lower',
+        #                vmin=-5, vmax=5, cmap='gray')
+        #     plt.imshow(d.rchi, **ima)
+        #     plt.xticks([]); plt.yticks([])
+        # plt.suptitle('rchi: %s' % band)
+        # ps.savefig()
 
-        # Coadd
+        # Second-round Coadd
         plt.clf()
         plt.imshow(coimg, interpolation='nearest', origin='lower',
                    vmin=-2.*sig, vmax=5.*sig, cmap='gray')
