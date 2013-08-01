@@ -480,8 +480,6 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     if ps:
         # Mosaic of all individual exposures
         plt.clf()
-        plt.subplots_adjust(wspace=0.1, hspace=0.1, left=0.1, right=0.9,
-                            bottom=0.1, top=0.9)
         nims = len(tims)
         cols = int(np.ceil(np.sqrt(nims)))
         rows = int(np.ceil(nims / float(cols)))
@@ -960,7 +958,12 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # Show locations of largest changes
     
     plt.clf()
-    plt.imshow(chi1, **imchi)
+    plt.imshow(im, **ima)
+    plt.xticks([]); plt.yticks([])
+    plt.gray()
+    plt.title('Coadd %s: data' % band)
+    ps.savefig()
+
     ax = plt.axis()
     J = np.argsort(-np.abs((m3-m2)[inbounds]))
     for j in J[:5]:
@@ -974,6 +977,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     plt.clf()
     plt.imshow(mod1, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.gray()
     ax = plt.axis()
     J = np.argsort(-np.abs((m3-m2)[inbounds]))
@@ -984,20 +988,32 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
         plt.plot(x, y, 'r+', ms=15, lw=1.5)
     plt.axis(ax)
-    plt.title('coadd: model')
+    plt.title('Coadd %s: model' % band)
     ps.savefig()
 
     plt.clf()
     plt.imshow(comod2, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.gray()
     plt.title('individual frames: model')
     ps.savefig()
 
     plt.clf()
-    plt.imshow(im, **ima)
-    plt.gray()
-    plt.title('coadd: data')
+    plt.imshow(chi1, **imchi)
+    plt.xticks([]); plt.yticks([])
+    ax = plt.axis()
+    J = np.argsort(-np.abs((m3-m2)[inbounds]))
+    for j in J[:5]:
+        ii = inbounds[j]
+        pos = cat2[ii].getPosition()
+        x,y = coim.getWcs().positionToPixel(pos)
+        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+        plt.plot(x, y, 'r+', ms=15, lw=1.5)
+    plt.axis(ax)
+    plt.title('Coadd %s: chi' % band)
     ps.savefig()
+
+
 
     return dict(ims3=ims1, cotr=tr, cat3=cat3)
 
@@ -1102,6 +1118,7 @@ def stage110(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     p0 = np.array(tr.getParams())
     ndim = len(p0)
     nw = 50
+    print 'N params', ndim, 'N walkers', nw
     sampler = emcee.EnsembleSampler(nw, ndim, tr, threads=8)
     steps = np.array(tr.getStepSizes())
     colscales = tr.getParameterScales()
@@ -1113,7 +1130,6 @@ def stage110(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     lnp = None
     pp = pp0
     rstate = None
-    print 'N params', ndim, 'N walkers', nw
     for step in range(1001):
         print 'Taking emcee step', step
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
