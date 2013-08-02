@@ -215,6 +215,7 @@ def _getBrightness(counts, tsf, bands, extrabands):
 def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  objs=None,
                  retrieve=True, curl=False, roi=None,
+                 radecroi=None,
                  radecrad=None,
                  bands=None,
                  badmag=25, nanomaggies=False,
@@ -284,6 +285,9 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         y = objs.rowc[:,bandnum]
         I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
         objs.cut(I)
+    if radecroi is not None:
+        r0,r1,d0,d1 = radecroi
+        objs.cut((objs.ra >= r0) * (objs.ra <= r1) * (objs.dec >= d0) * (objs.dec <= d1))
 
     if radecrad is not None:
         (ra,dec,rad) = radecrad

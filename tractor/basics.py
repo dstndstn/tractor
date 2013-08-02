@@ -36,6 +36,8 @@ class TAITime(ScalarParam, ArithmeticParams):
     equinox = 53084.28 # mjd
     daysperyear = 365.25
 
+    mjd2k = datetomjd(J2000)
+
     def __init__(self, t, mjd=None):
         if t is None and mjd is not None:
             t = mjd * 24. * 3600.
@@ -51,7 +53,13 @@ class TAITime(ScalarParam, ArithmeticParams):
         return th
 
     def toYears(self):
+        ''' years since Nov 17, 1858 ?'''
         return float(self.getValue() / (24.*3600. * TAITime.daysperyear))
+
+    def toYear(self):
+        ''' to proper year '''
+        return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
+
         
 class Mags(ParamList):
     '''

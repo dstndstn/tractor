@@ -12,8 +12,8 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 from astrometry.util.multiproc import *
-
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.libkd.spherematch import *
 from astrometry.sdss import *
 
 from wise3 import *
@@ -59,68 +59,53 @@ if __name__ == '__main__':
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    #W = fits_table('window_flist.fits')
-
     r = np.hypot(dhi - dlo, (rhi - rlo) * np.cos(np.deg2rad((d0+d1)/2.))) / 2.
-    RCF = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2., #, radius=r * 60.,
+    RCF = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2.,
                             tablefn='window_flist.fits')
-    # class MyDR9(DR9):
-    #     # rerun 157 isn't online...
-    #     def get_rerun(self, run, field=None):
-    #         #print 'get_rerun', run, field
-    #         rr = super(MyDR9, self).get_rerun(run, field=field)
-    #         #print 'rr', rr
-    #         if rr == '157':
-    #             return None
-    #         return rr
-
-    #sdss = MyDR9()
     sdss = DR9()
 
     bands = 'ugriz'
-    bands = ['r']
-    
+    #bands = ['r']
+
+    SS = []
+
     btims = {}
     for run,camcol,field,r,d in RCF:
-        print run, camcol, field
+        print 'RCF', run, camcol, field
         rr = sdss.get_rerun(run, field=field)
-        #print 'rerun', rr
         if rr in [None, '157']:
             continue
+
+        SS.extend(get_tractor_sources_dr9(run, camcol, field, sdss=sdss,
+                                          radecroi=[rlo,rhi,dlo,dhi],
+                                          nanomaggies=True, fixedComposites=True,
+                                          useObjcType=True))
         for band in bands:
-            #print 'band', band
             tim,inf = get_tractor_image_dr9(run, camcol, field, band, sdss=sdss,
                                             roiradecbox=[rlo,rhi,dlo,dhi],
                                             zrange=(-2,5), invvarIgnoresSourceFlux=True,
-                                            nanomaggies=True) #, psf='dg')
+                                            nanomaggies=True)
             print 'Got', tim
             print 'shape:', tim.shape
+            print 'Observed:', tim.time.toYear()
 
-            # wcs = tim.getWcs()
-            # x0,y0 = wcs.getX0Y0()
-            # x0,y0 = xy.min(axis=0)
-            # x1,y1 = xy.max(axis=0)
-            # W,H = int(wcs.get_width()), int(wcs.get_height())
-            # x0 = np.clip(int(np.floor(x0)), 0, W-1)
-            # y0 = np.clip(int(np.floor(y0)), 0, H-1)
-            # x1 = np.clip(int(np.ceil (x1)), 0, W-1)
-            # y1 = np.clip(int(np.ceil (y1)), 0, H-1)
-            # x1 += 1
-            # y1 += 1
+            print 'ROI', inf['roi']
+
+            # HACK -- remove images entirely in 128-pix overlap region
+            x0,x1,y0,y1 = inf['roi']
+            if y0 > 1361:
+                print 'Skipping image in overlap region'
+                continue
+
+            # Mask pixels outside ROI
             h,w = tim.shape
             wcs = tim.getWcs()
-            #x0,y0 = wcs.getX0Y0()
-            #x0,y0 = wcs.x0,wcs.y0
-            #XX,YY = np.meshgrid(np.arange(x0, x0+w), np.arange(y0, y0+h))
-            # approximate, but *way* faster than doing full WCS per pixel!
             XX,YY = np.meshgrid(np.arange(w), np.arange(h))
             xy = []
             for r,d in [(rlo,dlo),(rlo,dhi),(rhi,dhi),(rhi,dlo)]:
                 x,y = wcs.positionToPixel(RaDecPos(r,d))
                 xy.append((x,y))
             xy = np.array(xy)
-            print 'xy:', xy
-            print 'size:', tim.shape
             J = point_in_poly(XX.ravel(), YY.ravel(), xy)
             iv = tim.getInvvar()
             K = J.reshape(iv.shape)
@@ -134,7 +119,35 @@ if __name__ == '__main__':
     cat = []
     for r,d in zip(T.ra, T.dec):
         cat.append(PointSource(RaDecPos(r,d),
-                               NanoMaggies(**dict([(band,1) for band in bands]))))
+                               NanoMaggies(order=bands,
+                                           **dict([(band,1) for band in bands]))))
+
+    print 'Got total of', len(SS), 'SDSS sources'
+    # Remove duplicates
+    rr = np.array([s.getPosition().ra  for s in SS])
+    dd = np.array([s.getPosition().dec for s in SS])
+    I,J,d = match_radec(rr, dd, rr, dd, 1./3600., notself=True)
+    keep = np.ones(len(SS), bool)
+    keep[np.maximum(I,J)] = False
+    print 'Keeping', sum(keep), 'non-dup SDSS sources'
+    rr = rr[keep]
+    dd = dd[keep]
+    SS = [SS[i] for i in np.flatnonzero(keep)]
+
+    # Remove matches with the target list
+    I,J,d = match_radec(rr, dd, T.ra, T.dec, 1./3600.)
+    print len(I), 'SDSS sources matched with targets'
+    keep = np.ones(len(SS), bool)
+    keep[I] = False
+    SS = [SS[i] for i in np.flatnonzero(keep)]
+    print 'Kept', len(SS), 'SDSS sources'
+    sdssobjs = SS
+    
+    cat.extend(SS)
+    print 'Total of', len(cat), 'sources'
+    for src in cat:
+        print '  ', src
+    
 
     for band in bands:
         tims = btims[band]
@@ -157,35 +170,40 @@ if __name__ == '__main__':
             xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
                            for r,d in zip(T.ra, T.dec)])
             plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+
+            xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                           for s in sdssobjs])
+            plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
+
             plt.axis(ax)
         ps.savefig()
 
-        ivmax = np.max([tim.getInvvar().max() for tim in tims])
-        plt.clf()
-        for i,tim in enumerate(tims):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=0, vmax=ivmax, cmap='gray')
-            plt.imshow(tim.getInvvar(), **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title(tim.name)
-        plt.suptitle('Individual invvars: SDSS %s' % band)
-        ps.savefig()
+        # ivmax = np.max([tim.getInvvar().max() for tim in tims])
+        # plt.clf()
+        # for i,tim in enumerate(tims):
+        #     plt.subplot(rows, cols, i+1)
+        #     ima = dict(interpolation='nearest', origin='lower',
+        #                vmin=0, vmax=ivmax, cmap='gray')
+        #     plt.imshow(tim.getInvvar(), **ima)
+        #     plt.xticks([]); plt.yticks([])
+        #     plt.title(tim.name)
+        # plt.suptitle('Individual invvars: SDSS %s' % band)
+        # ps.savefig()
 
         tractor = Tractor(tims, cat)
         t0 = Time()
 
-        print 'Tractor: all params', tractor.numberOfParams()
-        for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
-            print '  ', nm, v
+        # print 'Tractor: all params', tractor.numberOfParams()
+        # for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
+        #     print '  ', nm, v
 
         tractor.freezeParamsRecursive('*')
         tractor.thawPathsTo('sky')
         tractor.thawPathsTo(band)
 
-        print 'Tractor: all params', tractor.numberOfParams()
-        for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
-            print '  ', nm, v
+        # print 'Tractor: all params', tractor.numberOfParams()
+        # for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
+        #     print '  ', nm, v
 
         ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
             minsb=1e-3, mindlnp=1., sky=True, minFlux=None,
@@ -209,15 +227,27 @@ if __name__ == '__main__':
             xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
                            for r,d in zip(T.ra, T.dec)])
             plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+            xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                           for s in sdssobjs])
+            plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
             plt.axis(ax)
         ps.savefig()
 
+        # Trim off just the targets (not the extra SDSS objects)
+        NT = len(T)
+        nm = np.array([src.getBrightness().getBand(band)
+                       for src in tractor.getCatalog()[:NT]])
+        nm_ivar = IV[:NT]
+
+        T.set('sdss_%s_nanomaggies' % band, nm)
+        T.set('sdss_%s_nanomaggies_invvar' % band, nm_ivar)
+        dnm = 1./np.sqrt(nm_ivar)
+        mag = NanoMaggies.nanomaggiesToMag(nm)
+        dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+        T.set('sdss_%s_mag' % band, mag)
+        T.set('sdss_%s_mag_err' % band, dmag)
 
 
-        
-
-            
-    sys.exit(0)
 
     basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
     wisedatadirs = [(basedir, 'merged'),]
@@ -234,7 +264,7 @@ if __name__ == '__main__':
     opt.force = []
     #opt.force = [104, 105, 106, 107, 108]
     #opt.force = [104]
-    opt.force = range(100, 109)
+    #opt.force = range(100, 109)
     
     opt.write = True
     opt.ri = None
