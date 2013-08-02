@@ -1277,21 +1277,29 @@ class NCircularGaussianPSF(MultiParams):
                 ', '.join(['%.3f'%w for w in self.weights]) +
                 ' ]')
 
+    # Get the real underlying ones without paying attention to frozen state
+    @property
+    def mysigmas(self):
+        return self.sigmas.vals
+    @property
+    def myweights(self):
+        return self.weights.vals
+
     def scale(self, factor):
         ''' Returns a new PSF that is *factor* times wider. '''
-        return NCircularGaussianPSF(np.array(self.weights) * factor, self.weights)
+        return NCircularGaussianPSF(np.array(self.mysigmas) * factor, self.myweights)
 
     def getMixtureOfGaussians(self):
-        return mp.MixtureOfGaussians(self.weights,
-                                     np.zeros((len(self.weights), 2)),
-                                     np.array(self.sigmas)**2)
+        return mp.MixtureOfGaussians(self.myweights,
+                                     np.zeros((len(self.myweights), 2)),
+                                     np.array(self.mysigmas)**2)
         
     def proposeIncreasedComplexity(self, img):
-        maxs = np.max(self.sigmas)
+        maxs = np.max(self.mysigmas)
         # MAGIC -- make new Gaussian with variance bigger than the biggest
         # so far
-        return NCircularGaussianPSF(list(self.sigmas) + [maxs + 1.],
-                            list(self.weights) + [0.05])
+        return NCircularGaussianPSF(list(self.mysigmas) + [maxs + 1.],
+                            list(self.myweights) + [0.05])
 
     def getStepSizes(self, *args, **kwargs):
         N = len(self.sigmas)
@@ -1357,7 +1365,7 @@ class NCircularGaussianPSF(MultiParams):
         return 5.
 
     def getRadius(self):
-        return max(self.minradius, max(self.sigmas) * self.getNSigma())
+        return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
     #### FIXME -- could use mixture_profiles!!
