@@ -219,7 +219,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  radecrad=None,
                  bands=None,
                  badmag=25, nanomaggies=False,
-                 getobjs=False, getobjinds=False,
+                 getobjs=False, getsourceobjs=False, getobjinds=False,
                  extrabands=None,
                  fixedComposites=False,
                  forcePointSources=False,
@@ -468,16 +468,14 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
     print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
     print ncomp, 'composite galaxies'
 
-    # if you want to cut the objs list to just the ones
-    # for which sources were created...
-    # The np.unique SORTs them.
-    #ikeep = np.unique(ikeep)
+    # cut the objs list to just the ones for which sources were
+    # created, and keep them in the same order as the sources
     if len(ikeep):
         objs.cut(ikeep)
     else:
         objs = []
 
-    if not (getobjs or getobjinds):
+    if not (getobjs or getobjinds or getsourceobjs):
         return sources
 
     rtn = [sources]
@@ -485,6 +483,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         rtn.append(allobjs)
     if getobjinds:
         rtn.append(objs.index if len(objs) else np.array([]))
+    if getsourceobjs:
+        rtn.append(objs)
     return rtn
 
 

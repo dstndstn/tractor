@@ -76,10 +76,11 @@ if __name__ == '__main__':
         if rr in [None, '157']:
             continue
 
-        SS.extend(get_tractor_sources_dr9(run, camcol, field, sdss=sdss,
+        SS.append(get_tractor_sources_dr9(run, camcol, field, sdss=sdss,
                                           radecroi=[rlo,rhi,dlo,dhi],
                                           nanomaggies=True, fixedComposites=True,
-                                          useObjcType=True))
+                                          useObjcType=True, getsourceobjs=True))
+
         for band in bands:
             tim,inf = get_tractor_image_dr9(run, camcol, field, band, sdss=sdss,
                                             roiradecbox=[rlo,rhi,dlo,dhi],
@@ -122,28 +123,60 @@ if __name__ == '__main__':
                                NanoMaggies(order=bands,
                                            **dict([(band,1) for band in bands]))))
 
+    # merge SDSS objects
+    Tsdss = merge_tables([S for srcs,S in SS])
+    Tsdss.index = np.arange(len(Tsdss))
+    ss = []
+    for srcs,S in SS:
+        ss.extend(srcs)
+    SS = ss
     print 'Got total of', len(SS), 'SDSS sources'
     # Remove duplicates
-    rr = np.array([s.getPosition().ra  for s in SS])
-    dd = np.array([s.getPosition().dec for s in SS])
-    I,J,d = match_radec(rr, dd, rr, dd, 1./3600., notself=True)
-    keep = np.ones(len(SS), bool)
+    I,J,d = match_radec(Tsdss.ra, Tsdss.dec, Tsdss.ra, Tsdss.dec,
+                        1./3600., notself=True)
+    keep = np.ones(len(Tsdss), bool)
     keep[np.maximum(I,J)] = False
     print 'Keeping', sum(keep), 'non-dup SDSS sources'
-    rr = rr[keep]
-    dd = dd[keep]
-    SS = [SS[i] for i in np.flatnonzero(keep)]
-
+    Tsdss.cut(keep)
     # Remove matches with the target list
-    I,J,d = match_radec(rr, dd, T.ra, T.dec, 1./3600.)
+    I,J,d = match_radec(Tsdss.ra, Tsdss.dec, T.ra, T.dec, 1./3600.)
     print len(I), 'SDSS sources matched with targets'
-    keep = np.ones(len(SS), bool)
+    keep = np.ones(len(Tsdss), bool)
     keep[I] = False
-    SS = [SS[i] for i in np.flatnonzero(keep)]
-    print 'Kept', len(SS), 'SDSS sources'
-    sdssobjs = SS
+    sdssmatch = Tsdss[I]
+    Tsdss.cut(keep)
+    print 'Kept', len(Tsdss), 'SDSS sources'
+    # source objects
+    sdssobjs = [SS[i] for i in Tsdss.index]
+
+    # Record SDSS catalog mags
+    print 'Matched sources:'
+    for j in J:
+        print '  ', SS[Tsdss.index[j]]
+
+    for band in bands:
+        iband = band_index(band)
+        nm = np.zeros(len(T))
+        nm[J] = sdssmatch.psfflux[:,iband]
+        nm_ivar = np.zeros(len(T))
+        nm_ivar[J] = sdssmatch.psfflux_ivar[:,iband]
+        dnm = 1./np.sqrt(nm_ivar)
+        mag = NanoMaggies.nanomaggiesToMag(nm)
+        dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+
+        # Luptitudes
+        # mag2 = np.zeros(len(T))
+        # dmag2 = np.zeros(len(T))
+        # mag2[J] = sdssmatch.psfmag[:,iband]
+        # dmag2[J] = sdssmatch.psfmagerr[:,iband]
+
+        T.set('sdss_cat_%s' % band, mag)
+        T.set('sdss_cat_%s_err' % band, dmag)
+        #T.set('sdss_cat2_%s' % band, mag2)
+        #T.set('sdss_cat2_%s_err' % band, dmag2)
+
     
-    cat.extend(SS)
+    cat.extend(sdssobjs)
     print 'Total of', len(cat), 'sources'
     for src in cat:
         print '  ', src
