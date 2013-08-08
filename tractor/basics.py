@@ -1234,15 +1234,30 @@ class GaussianMixturePSF(BaseParams):
         return old
 
     @staticmethod
-    def fromStamp(stamp, N=3):
-        from emfit import em_fit_2d
+    def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.):
+        '''
+        optional P0 = (w,mu,sig): initial parameter guess.
+
+        w has shape (N,)
+        mu has shape (N,2)
+        sig (actually variance!) has shape (N,2,2)
+
+        optional xy0 = int x0,y0 origin of stamp.
+        '''
+        from emfit import em_fit_2d, em_fit_2d_reg
         from fitpsf import em_init_params
-        w,mu,sig = em_init_params(N, None, None, None)
+        if P0 is not None:
+            w,mu,sig = P0
+        else:
+            w,mu,sig = em_init_params(N, None, None, None)
         stamp = stamp.copy()
         stamp /= stamp.sum()
         stamp = np.maximum(stamp, 0)
-        xm, ym = -(stamp.shape[0]/2), -(stamp.shape[1]/2)
-        em_fit_2d(stamp, xm, ym, w, mu, sig)
+        if xy0 is None:
+            xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
+        else:
+            xm, ym = xy0
+        em_fit_2d_reg(stamp, xm, ym, w, mu, sig, alpha)
         tpsf = GaussianMixturePSF(w, mu, sig)
         return tpsf
     

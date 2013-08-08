@@ -37,6 +37,23 @@ plt.suptitle('Distribution of stars and galaxies in color space')
 ps.savefig()
 
 plt.clf()
+plt.subplot(2,1,1)
+plothist(S.psfmag_r - S.psfmag_i, S.psfmag_g - S.psfmag_r, 200, range=((-4,4),(-2,3)),
+        doclf=False)
+plt.xlabel('r-i (mag)')
+plt.ylabel('g-r (mag)')
+plt.title('Stars')
+plt.subplot(2,1,2)
+plothist(G.cmodelmag_r - G.cmodelmag_i, G.cmodelmag_g - G.cmodelmag_r, 200, range=((-4,4),(-2,3)),
+        doclf=False)
+plt.xlabel('r-i (mag)')
+plt.ylabel('g-r (mag)')
+plt.title('Galaxies')
+plt.suptitle('Distribution of stars and galaxies in color space')
+ps.savefig()
+
+
+plt.clf()
 ha = dict(bins=100, range=(8,25), histtype='step')#, log=True)
 n1,b,p1 = plt.hist(S.psfmag_r, color='r', **ha)
 n2,b,p2 = plt.hist(G.cmodelmag_r, color='b', **ha)

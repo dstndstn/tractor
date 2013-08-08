@@ -21,14 +21,18 @@
 	printf(x, ## __VA_ARGS__)
 
 	// ASSUME "amp", "mean", and "var" have been initialized.
-    static int em_fit_2d(PyObject* np_img, int x0, int y0,
-						 PyObject* np_amp,
-						 PyObject* np_mean,
-						 PyObject* np_var) {
-        int i, N, K, k;
-		int ix, iy;
-		int NX, NY;
-		const int D = 2;
+
+    // _reg: Inverse-Wishart prior on variance (with hard-coded
+    // variance prior I), with strength alpha.
+    static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
+                             PyObject* np_amp,
+                             PyObject* np_mean,
+                             PyObject* np_var,
+                             double alpha) {
+        npy_intp i, N, K, k;
+		npy_intp ix, iy;
+		npy_intp NX, NY;
+		const npy_intp D = 2;
 		double* Z = NULL;
 		double* scale = NULL, *ivar = NULL;
 		int step;
@@ -198,7 +202,7 @@
 			}
 
 			// printf("M mu...\n");
-			// M: mu
+			// M step: mu
 			memset(mean, 0, K*D*sizeof(double));
 			for (k=0; k<K; k++) {
 				wsum[k] = 0;
@@ -218,10 +222,12 @@
 				mean[k*D + 1] /= wsum[k];
 			}
 
-			// M: var
+			// M step: var
 			// printf("M var...\n");
 			memset(var, 0, K*D*D*sizeof(double));
 			for (k=0; k<K; k++) {
+                var[k*D*D + 0] = alpha;
+                var[k*D*D + 3] = alpha;
 				i = 0;
 				for (iy=0; iy<NY; iy++) {
 					for (ix=0; ix<NX; ix++) {
@@ -239,10 +245,10 @@
 					}
 				}
 				for (i=0; i<(D*D); i++)
-					var[k*D*D + i] /= wsum[k];
+					var[k*D*D + i] /= (wsum[k] + alpha);
 			}
 
-			// M: amp
+			// M step: amp
 			// printf("M amp...\n");
 			for (k=0; k<K; k++)
 				amp[k] = wsum[k];
@@ -263,5 +269,13 @@
 		return result;
 	}
 
+
+
+    static int em_fit_2d(PyObject* np_img, int x0, int y0,
+						 PyObject* np_amp,
+						 PyObject* np_mean,
+						 PyObject* np_var) {
+        return em_fit_2d_reg(np_img, x0, y0, np_amp, np_mean, np_var, 0.0);
+    }
 
 	%}
