@@ -41,6 +41,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
                       ):
     intfn  = basefn + '-int-1b.fits'
     maskfn = basefn + '-msk-1b.fits'
+
     if mask_gz:
         maskfn = maskfn + '.gz'
     uncfn  = basefn + '-unc-1b.fits'
