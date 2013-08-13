@@ -49,14 +49,12 @@ def main():
           (T.dec + margin > d0) *
           (T.dec - margin < d1))
     print 'Cut to', len(T), 'Atlas tiles near RA,Dec box'
-    #T.xyz = radectoxyz(T.ra, T.dec)
     
     # Read WISE frame metadata
     wisedir = 'wise-frames'
     WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
     print 'Read', len(WISE), 'WISE L1b frames'
     #WISE.about()
-    #print 'frame range', WISE.frame_num.min(), WISE.frame_num.max()
     WISE.row = np.arange(len(WISE))
 
 
@@ -75,15 +73,12 @@ def main():
              (WISE.dec + margin > d0) *
              (WISE.dec - margin < d1))
     print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
-    #WISE.xyz = radectoxyz(WISE.ra, WISE.dec)
     
     outdir = 'wise-coadds'
     
     pixscale = 2.75 / 3600.
-    #W,H = 2048, 2048
-    W,H = 512, 512
-
-    band = 1
+    W,H = 2048, 2048
+    #W,H = 512, 512
 
     # Save the original array
     allWISE = WISE
@@ -97,104 +92,66 @@ def main():
         print 'copoly', copoly
     
         margin = 2.
-        # cut
-        WISE = allWISE
-        WISE = WISE[WISE.band == band]
-        WISE.cut(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec) < margin)
-        print 'Found', len(WISE), 'WISE frames in range and in band W%i' % band
-        # reorder by dist from center
-        I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
-        WISE.cut(I)
+        for band in [1,2,3,4]:
+            # cut
+            WISE = allWISE
+            WISE = WISE[WISE.band == band]
+            WISE.cut(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec) < margin)
+            print 'Found', len(WISE), 'WISE frames in range and in band W%i' % band
+            # reorder by dist from center
+            I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
+            WISE.cut(I)
+        
+            res = []
+            for wi,wise in enumerate(WISE):
+                print
+                print (wi+1), 'of', len(WISE)
+                intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+                print 'intfn', intfn
+                wcs = Sip(intfn)
+                #print 'Wcs:', wcs
+                h,w = wcs.get_height(), wcs.get_width()
+                poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
+                if not polygons_intersect(copoly, poly):
+                    print 'Image does not intersect target'
+                    res.append(None)
+                    continue
+                F = fitsio.FITS(intfn)
+                ihdr = F[0].read_header()
+                zp = ihdr['MAGZP']
+                res.append((intfn, wcs, w, h, poly, zp))
+        
+            I = np.flatnonzero(np.array([r is not None for r in res]))
+            WISE.cut(I)
+            print 'Cut to', len(WISE), 'intersecting target'
+            res = [r for r in res if r is not None]
+            WISE.intfn = np.array([r[0] for r in res])
+            #WISE.rdpoly = np.array([r[4] for r in res])
+            WISE.zeropoint = np.array([r[5] for r in res])
+        
+            print 'WISE table rows:', WISE.row
     
-        res = []
-        for wi,wise in enumerate(WISE):
-            print
-            print (wi+1), 'of', len(WISE)
-            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-            print 'intfn', intfn
-            wcs = Sip(intfn)
-            #print 'Wcs:', wcs
-            h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
-            if not polygons_intersect(copoly, poly):
-                print 'Image does not intersect target'
-                res.append(None)
-                continue
-            F = fitsio.FITS(intfn)
-            ihdr = F[0].read_header()
-            zp = ihdr['MAGZP']
-            res.append((intfn, wcs, w, h, poly, zp))
+            coim,coiv,copp,masks = coadd_wise(cowcs, WISE, ps, band)
     
-        I = np.flatnonzero(np.array([r is not None for r in res]))
-        WISE.cut(I)
-        print 'Cut to', len(WISE), 'intersecting target'
-        res = [r for r in res if r is not None]
-        WISE.intfn = np.array([r[0] for r in res])
-        #WISE.rdpoly = np.array([r[4] for r in res])
-        WISE.zeropoint = np.array([r[5] for r in res])
+            coadd_id = ti.coadd_id.replace('_ab41', '')
     
-        ofn = os.path.join(outdir, 'wise-frames-%s-w%i.fits' % (ti.coadd_id, band))
+            ofn = os.path.join(outdir, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
+            fitsio.write(ofn, coim, clobber=True)
+            ofn = os.path.join(outdir, 'coadd-%s-w%i-invvar.fits' % (coadd_id, band))
+            fitsio.write(ofn, coiv, clobber=True)
+            ofn = os.path.join(outdir, 'coadd-%s-w%i-ppstd.fits' % (coadd_id, band))
+            fitsio.write(ofn, copp, clobber=True)
     
-        zps = np.unique(WISE.zeropoint)
-        print 'Zeropoints:', zps
-        RR = []
-        # for zp in zps:
-        #     I = np.flatnonzero(WISE.zeropoint == zp)
-        #     I = I[:4]
-        #     print 'WISE table rows:', WISE.row[I]
-        #     RR.append(coadd_wise(cowcs, WISE[I], ps, band))
-
-        zpsplit = (zps[0] + zps[1])/2.
-        print 'zpsplit', zpsplit
-        I = np.flatnonzero(WISE.zeropoint < zpsplit)
-        J = np.flatnonzero(WISE.zeropoint >= zpsplit)
-        print len(I), 'less'
-        print len(J), 'greater'
-
-        n = min(len(I), len(J))
-        I = I[:n]
-        print 'WISE table rows:', WISE.row[I]
-        RR.append(coadd_wise(cowcs, WISE[I], ps, band))
-        J = J[:n]
-        print 'WISE table rows:', WISE.row[J]
-        RR.append(coadd_wise(cowcs, WISE[J], ps, band))
-
-        for i,(coimg,coinvvar,masks) in enumerate(RR):
-            fitsio.write(os.path.join(outdir, 'zp-%i-%s-w%i-img.fits' % (i, ti.coadd_id, band)), coimg)
-            fitsio.write(os.path.join(outdir, 'zp-%i-%s-w%i-invvar.fits' % (i, ti.coadd_id, band)), coinvvar)
-            # save (masks,sky)
-
-        # WISE.coadd_sky = np.array([sky for nil,sky,dsky in masks])
-        # WISE.coadd_dsky = np.array([dsky for nil,sky,dsky in masks])
-        # WISE.about()
-
-        WISE.writeto(ofn)
-
-        co0 = RR[0][0]
-        pp = [np.percentile(co0, p) for p in [25,99]]
-        ima = dict(interpolation='nearest', origin='lower', vmin=pp[0], vmax=pp[1])
-
-        for (coimg,nil,nil) in RR:
-            plt.clf()
-            plt.imshow(coimg, **ima)
-            plt.colorbar()
-            ps.savefig()
-
-        for (coimg,nil,nil) in RR[1:]:
-            plt.clf()
-            plt.imshow(coimg / co0, interpolation='nearest', origin='lower', vmin=0.95, vmax=1.05)
-            plt.colorbar()
-            ps.savefig()
-
-        # ofn = os.path.join(outdir, 'coadd-%s-w%i-img.fits' % (ti.coadd_id, band))
-        # fitsio.write(ofn, cowimg)
-        # ofn = os.path.join(outdir, 'coadd-%s-w%i-invvar.fits' % (ti.coadd_id, band))
-        # fitsio.write(ofn, cowinvvar)
-
-        # ofn = os.path.basename(maskfn).replace('-msk-1b.fits', '-msk-rchi-%s-1b.fits' % ti.coadd_id)
-        # ofn = os.path.join(outdir, ofn)
-        # fitsio.write(ofn, omask)
-        # print 'Wrote', ofn
+            WISE.coadd_sky = np.array([m[1] for m in masks])
+            WISE.coadd_dsky = np.array([m[2] for m in masks])
+    
+            for i,(omask, sky, dsky) in enumerate(masks):
+                ofn = os.path.basename(WISE.intfn[i]).replace('-int-', '-msk-rchi-%s-1b.fits' % (coadd_id))
+                ofn = os.path.join(outdir, ofn)
+                fitsio.write(ofn, omask, clobber=True)
+    
+            ofn = os.path.join(outdir, 'wise-frames-%s-w%i.fits' % (coadd_id, band))
+            WISE.writeto(ofn)
 
 
 def coadd_wise(cowcs, WISE, ps, band):
@@ -205,8 +162,6 @@ def coadd_wise(cowcs, WISE, ps, band):
     W = cowcs.get_width()
     H = cowcs.get_height()
 
-    #coimg = np.zeros((H,W))
-    #con   = np.zeros((H,W))
     coimg  = np.zeros((H,W))
     coimg2 = np.zeros((H,W))
     cow     = np.zeros((H,W))
@@ -232,22 +187,11 @@ def coadd_wise(cowcs, WISE, ps, band):
         print 'Wcs:', wcs
         h,w = wcs.get_height(), wcs.get_width()
         
-        # poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
-        # if not polygons_intersect(copoly, poly):
-        #     print 'Image does not intersect target'
-        #     continue
-
         F = fitsio.FITS(intfn)
         img = F[0].read()
         ihdr = F[0].read_header()
         mask = fitsio.FITS(maskfn)[0].read()
         unc  = fitsio.FITS(uncfn) [0].read()
-
-        # P = pyfits.open(intfn)
-        # img = P[0].data
-        # ihdr = P[0].header
-        # mask = pyfits.open(maskfn)[0].data
-        # unc = pyfits.open(uncfn)[0].data
 
         zp = ihdr['MAGZP']
         zpscale = NanoMaggies.zeropointToScale(zp)
@@ -256,19 +200,11 @@ def coadd_wise(cowcs, WISE, ps, band):
         goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
                                                     10,11,12,13,14,15,16,17,18,
                                                     21,26,27,28]])) == 0)
-        #iv = np.zeros_like(img)
-        #iv[goodmask] = 1. / (unc[goodmask])**2
-
-        #assert(np.all(unc > 0))
         goodmask[unc == 0] = False
-        #assert(np.all(np.isfinite(img[goodmask])))
         goodmask[np.logical_not(np.isfinite(img))] = False
-        #assert(np.all(np.isfinite(img[goodmask])))
-        #assert(np.all(np.isfinite(img)))
 
         # Patch masked pixels so we can interpolate
         patchimg = img.copy()
-        #ok = patch_image(patchimg, iv > 0)
         ok = patch_image(patchimg, goodmask)
         assert(ok)
         assert(np.all(np.isfinite(patchimg)))
@@ -296,17 +232,7 @@ def coadd_wise(cowcs, WISE, ps, band):
         rim = rims[0]
         assert(np.all(np.isfinite(rim)))
 
-        #riv = np.zeros_like(coimg)
-        #riv[Yo,Xo] = iv[Yi,Xi]
-
-        #coimg[Yo,Xo] += rim * zpscale
-        #con  [Yo,Xo] += 1
-
-        #cowimg[Yo,Xo] += rim * zpscale * riv[Yo,Xo]
-        #cow += riv
-
         print 'Pixels in range:', len(Yo)
-
         coimg [Yo,Xo] += w * rim
         coimg2[Yo,Xo] += w * (rim**2)
         cow   [Yo,Xo] += w
@@ -345,11 +271,11 @@ def coadd_wise(cowcs, WISE, ps, band):
     ima = dict(interpolation='nearest', origin='lower',
                vmin=comed - 3.*costd1, vmax=comed + 10.*costd1)
 
-    plt.clf()
-    plt.imshow(coimg1, **ima)
-    plt.colorbar()
-    plt.title('Coadd')
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow(coimg1, **ima)
+    # plt.colorbar()
+    # plt.title('Coadd')
+    # ps.savefig()
 
     # plt.clf()
     # plt.imshow(coppstd, interpolation='nearest', origin='lower')
@@ -360,7 +286,6 @@ def coadd_wise(cowcs, WISE, ps, band):
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
-    #nnsum    = np.zeros((H,W))
     coimg [:,:] = 0
     coimg2[:,:] = 0
     cow   [:,:] = 0
@@ -386,17 +311,17 @@ def coadd_wise(cowcs, WISE, ps, band):
         # plt.colorbar()
         # ps.savefig()
 
-        plt.clf()
-        plt.imshow(rimg - dsky - coimg1, **ima)
-        plt.title('rimg - dsky - coimg1')
-        plt.colorbar()
-        ps.savefig()
-
-        plt.clf()
-        plt.imshow(rchi, interpolation='nearest', origin='lower', vmin=-10, vmax=10)
-        plt.title('rchi')
-        plt.colorbar()
-        ps.savefig()
+        # plt.clf()
+        # plt.imshow(rimg - dsky - coimg1, **ima)
+        # plt.title('rimg - dsky - coimg1')
+        # plt.colorbar()
+        # ps.savefig()
+        # 
+        # plt.clf()
+        # plt.imshow(rchi, interpolation='nearest', origin='lower', vmin=-10, vmax=10)
+        # plt.title('rchi')
+        # plt.colorbar()
+        # ps.savefig()
 
         # plt.clf()
         # plt.imshow(badpix, interpolation='nearest', origin='lower', vmin=0, vmax=1,
@@ -414,12 +339,12 @@ def coadd_wise(cowcs, WISE, ps, band):
         # Bit 2: grown
         badpixmask += (2 * badpix)
 
-        plt.clf()
-        plt.imshow(badpixmask, interpolation='nearest', origin='lower', vmin=0, vmax=3,
-                   cmap='gray')
-        plt.title('badpixmask')
-        plt.colorbar()
-        ps.savefig()
+        # plt.clf()
+        # plt.imshow(badpixmask, interpolation='nearest', origin='lower', vmin=0, vmax=3,
+        #            cmap='gray')
+        # plt.title('badpixmask')
+        # plt.colorbar()
+        # ps.savefig()
 
         badpixmasks.append(badpixmask)
         notbad = np.logical_not(badpix)
@@ -442,17 +367,17 @@ def coadd_wise(cowcs, WISE, ps, band):
     coimg = (coimg / np.maximum(cow, tinyw))
     coinvvar = cow
 
-    plt.clf()
-    plt.imshow(coimg1, **ima)
-    plt.colorbar()
-    plt.title('Coadd round 1')
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(coimg, **ima)
-    plt.colorbar()
-    plt.title('Coadd round 2')
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow(coimg1, **ima)
+    # plt.colorbar()
+    # plt.title('Coadd round 1')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(coimg, **ima)
+    # plt.colorbar()
+    # plt.title('Coadd round 2')
+    # ps.savefig()
 
     #print 'Second-round coadd:'
     #sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
@@ -472,7 +397,7 @@ def coadd_wise(cowcs, WISE, ps, band):
 
         masks.append((omask, sky, dsky))
 
-    return coimg, coinvvar, masks
+    return coimg, coinvvar, coppstd, masks
 
 
 
