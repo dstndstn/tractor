@@ -72,6 +72,8 @@ def main():
                  [8273238, 8275835, 8281051, 8276780] +
                  [8271344, 8267564, 8265670, 8270399])
     I = np.array([5659184, 8273238, 3566872, 3561340, 8275835, 8281051, 5657601, 5660763, 8271344, 3631120])
+
+    I = np.array([3580337,3577177])
     #I = I[:4]
     # I = np.array([ 5659184,
     #                8895297,
@@ -214,13 +216,14 @@ def main():
 
             # table vs no-table: ~ zero difference except in cores of v.bright stars
 
-            coim,coiv,copp,masks = coadd_wise(cowcs, WISE, ps, band)
+            coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
 
             t2 = Time()
             print 'coadd_wise:'
             print t2 - t1
     
-            prefix = os.path.join(outdir, 'coadd-%s-w%i' % (coadd_id, band))
+            tag = 'coadd-%s-w%i' % (coadd_id, band)
+            prefix = os.path.join(outdir, tag)
                 
             ofn = prefix + '-img.fits'
             fitsio.write(ofn, coim.astype(np.float32), clobber=True)
@@ -229,23 +232,30 @@ def main():
             ofn = prefix + '-ppstd.fits'
             fitsio.write(ofn, copp.astype(np.float32), clobber=True)
 
+            ofn = prefix + '-img-w.fits'
+            fitsio.write(ofn, coimb.astype(np.float32), clobber=True)
+            ofn = prefix + '-invvar-w.fits'
+            fitsio.write(ofn, coivb.astype(np.float32), clobber=True)
+
             ii = []
             for i,(mm,r) in enumerate(zip(masks, res)):
                 if mm is None:
                     continue
                 ii.append(i)
 
-                ofn = WISE.intfn[i].replace('-int', '')
-                ofn = os.path.join(outdir, 'coadd-mask-' + coadd_id + '-' + os.path.basename(ofn))
+                maskdir = os.path.join(outdir, 'masks-' + tag)
+                if not os.path.exists(maskdir):
+                    os.mkdir(maskdir)
 
-                #(omask, sky, dsky, zp, ncoadd, nrchi) = mm
+                ofn = WISE.intfn[i].replace('-int', '')
+                ofn = os.path.join(maskdir, 'coadd-mask-' + coadd_id + '-' + os.path.basename(ofn))
+
                 (nil,wcs,w,h,poly) = r
                 fullmask = np.zeros((h,w), mm.omask.dtype)
                 x0,x1,y0,y1 = WISE.imextent[i,:]
                 fullmask[y0:y1+1, x0:x1+1] = mm.omask
 
                 fitsio.write(ofn, fullmask, clobber=True)
-                #fitsio.write(ofn, omask, clobber=True)
 
             WISE.cut(np.array(ii))
             masks = [masks[i] for i in ii]
@@ -326,6 +336,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
                                                     21,26,27,28]])) == 0)
         goodmask[unc == 0] = False
         goodmask[np.logical_not(np.isfinite(img))] = False
+        goodmask[np.logical_not(np.isfinite(unc))] = False
 
         sig1 = median_f(unc[goodmask])
         print 'sig1:', sig1
@@ -381,6 +392,8 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         rr.rmask[Yo, Xo] = True
         rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
         rr.rimg[Yo, Xo] = rim
+        rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+        rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
 
         rr.w = w
         rr.wcs = wcs
@@ -391,6 +404,8 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         rr.coextent = wise.coextent
         rr.cosubwcs = cosubwcs
         rimgs.append(rr)
+
+        del w
 
         #rimgs.append((rmask, rimg, w, maskfn, wcs, sky, zpscale, zp, len(Yo),
         #             wise.coextent, cosubwcs))
@@ -470,6 +485,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     coimg2[:,:] = 0
     cow   [:,:] = 0
 
+    coimgb = np.zeros_like(coimg)
+    cowb   = np.zeros_like(cow)
+
     masks = []
     ri = 0
     #for ri,rr in enumerate(rimgs):
@@ -490,13 +508,15 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         mm.zp = rr.zp
 
         cox0,cox1,coy0,coy1 = rr.coextent
-        subco = coimg1 [coy0:coy1+1, cox0:cox1+1]
+        subco = coimg1 [coy0:coy1+1, cox0:cox1+1].astype(np.float32)
         subw = cow1    [coy0:coy1+1, cox0:cox1+1]
         subpp = coppstd[coy0:coy1+1, cox0:cox1+1]
 
         # like in the WISE Atlas Images, estimate sky difference via difference
         # of medians in overlapping area... or is it median of differences?
         #dsky = np.median(rr.rimg[rr.rmask]) - np.median(subco[rr.rmask])
+        #fitsio.write('dsky.fits', rr.rimg[rr.rmask] - subco[rr.rmask], clobber=True)
+        print 'dsky...'
         dsky = median_f(rr.rimg[rr.rmask] - subco[rr.rmask])
         print 'Sky difference:', dsky
         dsky /= rr.zpscale
@@ -607,10 +627,11 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
         if not ok:
             print 'Writing out failing patch_image inputs'
-            fitsio.write('patch-image-img.fits', imgcopy)
-            fitsio.write('patch-image-mask.fits', maskcopy.astype(np.uint8))
-            fitsio.write('patch-image-required.fits', reqcopy)
-        assert(ok)
+            fitsio.write('patch-image-img.fits', imgcopy, clobber=True)
+            fitsio.write('patch-image-mask.fits', maskcopy.astype(np.uint8), clobber=True)
+            fitsio.write('patch-image-required.fits', reqcopy.astype(np.uint8), clobber=True)
+            masks.append(None)
+            continue
 
         # plt.clf()
         # plt.imshow(rimg - dsky, **ima)
@@ -618,9 +639,15 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         # plt.colorbar()
         # ps.savefig()
 
-        coimg [coy0: coy1+1, cox0: cox1+1] += w * rr.rimg
-        coimg2[coy0: coy1+1, cox0: cox1+1] += w * rr.rimg**2
+        coimg [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg
+        coimg2[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg**2
+        # About the [rr.rmask]: that is the area where [rr.rimg] != 0
         cow   [coy0: coy1+1, cox0: cox1+1][rr.rmask] += rr.w
+
+        rr.rmask2[badpix] = False
+
+        coimgb[coy0: coy1+1, cox0: cox1+1] += w * rr.rimg * rr.rmask2
+        cowb  [coy0: coy1+1, cox0: cox1+1] += w * rr.rmask2
 
         # print 'Applying rchi masks to images...'
         Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
@@ -640,6 +667,10 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
     coimg = (coimg / np.maximum(cow, tinyw))
     coinvvar = cow
+
+    coimgb = (coimgb / np.maximum(cowb, tinyw))
+    coinvvarb = cowb
+
     # print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
 
     # plt.clf()
@@ -665,7 +696,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     #costd1 = np.median(coppstd)
     #print 'Median coadd per-pixel std:', costd1
 
-    return coimg, coinvvar, coppstd, masks
+    return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks
 
 
 
