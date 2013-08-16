@@ -23,6 +23,9 @@ from tractor.ttime import *
 
 from wise3 import get_l1b_file
 
+#median_f = np.median
+median_f = flat_median_f
+
 class Duck():
     pass
 
@@ -68,7 +71,8 @@ def main():
                  [8343194, 8343192, 8342266, 8344122] +
                  [8273238, 8275835, 8281051, 8276780] +
                  [8271344, 8267564, 8265670, 8270399])
-    I = I[:4]
+    I = np.array([5659184, 8273238, 3566872, 3561340, 8275835, 8281051, 5657601, 5660763, 8271344, 3631120])
+    #I = I[:4]
     # I = np.array([ 5659184,
     #                8895297,
     #                3525776,
@@ -96,15 +100,20 @@ def main():
     print Time() - t00
 
     for ti in T:
+        print
+        coadd_id = ti.coadd_id.replace('_ab41', '')
+        print 'Starting coadd tile', coadd_id
         print 'RA,Dec', ti.ra, ti.dec
+        print
         cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
                     -pixscale, 0., 0., pixscale, W, H)
     
         copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
-        print 'copoly', copoly
+        #print 'copoly', copoly
     
         margin = 2.
-        for band in [1,2,3,4]:
+        #for band in [1,2,3,4]:
+        for band in [2]:
 
             t0 = Time()
 
@@ -204,15 +213,13 @@ def main():
             print t1 - t0
 
             # table vs no-table: ~ zero difference except in cores of v.bright stars
-            #for ttag,table in [('table',True),('notable',False)]:
-            #coim,coiv,copp,masks = coadd_wise(cowcs, WISE, ps, band, table=table)
+
             coim,coiv,copp,masks = coadd_wise(cowcs, WISE, ps, band)
 
             t2 = Time()
             print 'coadd_wise:'
             print t2 - t1
     
-            coadd_id = ti.coadd_id.replace('_ab41', '')
             prefix = os.path.join(outdir, 'coadd-%s-w%i' % (coadd_id, band))
                 
             ofn = prefix + '-img.fits'
@@ -229,7 +236,7 @@ def main():
                 ii.append(i)
 
                 ofn = WISE.intfn[i].replace('-int', '')
-                ofn = os.path.join(outdir, 'coadd-mask-' + coadd_id + os.path.basename(ofn))
+                ofn = os.path.join(outdir, 'coadd-mask-' + coadd_id + '-' + os.path.basename(ofn))
 
                 #(omask, sky, dsky, zp, ncoadd, nrchi) = mm
                 (nil,wcs,w,h,poly) = r
@@ -254,8 +261,8 @@ def main():
             WISE.writeto(ofn)
 
             ######## HACK
-            break
-        break
+            #break
+        #break
     ################
 
     print 'Whole shebang:'
@@ -308,7 +315,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         print 'Unc:', unc.shape, unc.dtype
         print 'Mask:', mask.shape, mask.dtype
 
-        wcs = wcs.get_subimage(x0, y0, 1+x1-x0, 1+y1-y0)
+        wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
 
         zp = ihdr['MAGZP']
         zpscale = NanoMaggies.zeropointToScale(zp)
@@ -320,7 +327,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         goodmask[unc == 0] = False
         goodmask[np.logical_not(np.isfinite(img))] = False
 
-        sig1 = np.median(unc[goodmask])
+        sig1 = median_f(unc[goodmask])
         print 'sig1:', sig1
 
         del mask
@@ -340,9 +347,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         #print 'Patched image:', img.min(), img.max()
 
         # HACK -- estimate sky level via clipped medians
-        med = np.median(img)
+        med = median_f(img)
         ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
-        sky = np.median(img.flat[ok])
+        sky = median_f(img.flat[ok])
         print 'Estimated sky level:', sky
 
         # Convert to nanomaggies
@@ -351,7 +358,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         # coadd subimage
         cox0,cox1,coy0,coy1 = wise.coextent
-        cosubwcs = cowcs.get_subimage(cox0, coy0, 1+cox1-cox0, 1+coy1-coy0)
+        cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L,
                                                  table=table)
@@ -439,10 +446,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     # Per-pixel std
     coppstd = np.sqrt(np.maximum(0, coimg2 / np.maximum(cow, tinyw) - coimg1**2))
     #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
-    costd1 = np.median(coppstd)
+    #costd1 = np.median(coppstd)
     #print 'Median coadd per-pixel std:', costd1
-    comed = np.median(coimg1)
-
+    #comed = np.median(coimg1)
     # ima = dict(interpolation='nearest', origin='lower',
     #            vmin=comed - 3.*costd1, vmax=comed + 10.*costd1)
     # plt.clf()
@@ -465,7 +471,12 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     cow   [:,:] = 0
 
     masks = []
-    for ri,rr in enumerate(rimgs):
+    ri = 0
+    #for ri,rr in enumerate(rimgs):
+    while len(rimgs):
+        rr = rimgs.pop(0)
+        ri += 1
+
         t00 = Time()
 
         if rr is None:
@@ -485,7 +496,8 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         # like in the WISE Atlas Images, estimate sky difference via difference
         # of medians in overlapping area... or is it median of differences?
-        dsky = np.median(rr.rimg[rr.rmask]) - np.median(subco[rr.rmask])
+        #dsky = np.median(rr.rimg[rr.rmask]) - np.median(subco[rr.rmask])
+        dsky = median_f(rr.rimg[rr.rmask] - subco[rr.rmask])
         print 'Sky difference:', dsky
         dsky /= rr.zpscale
         print 'scaled:', dsky
@@ -587,7 +599,17 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         # plt.colorbar()
         # ps.savefig()
 
+        # HACK--
+        imgcopy = rr.rimg.copy()
+        maskcopy = np.logical_not(badpix).copy()
+        reqcopy = badpix.copy()
+
         ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
+        if not ok:
+            print 'Writing out failing patch_image inputs'
+            fitsio.write('patch-image-img.fits', imgcopy)
+            fitsio.write('patch-image-mask.fits', maskcopy.astype(np.uint8))
+            fitsio.write('patch-image-required.fits', reqcopy)
         assert(ok)
 
         # plt.clf()
@@ -640,7 +662,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     # print 'Coadd per-pix variance:', var.min(), var.max(), 'mean', np.mean(var), 'median', np.median(var)
     coppstd = np.sqrt(np.maximum(0, var))
     #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
-    costd1 = np.median(coppstd)
+    #costd1 = np.median(coppstd)
     #print 'Median coadd per-pixel std:', costd1
 
     return coimg, coinvvar, coppstd, masks
