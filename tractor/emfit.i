@@ -118,6 +118,7 @@
 		for (step=0; step<1000; step++) {
 			double x,y;
 			double wsum[K];
+			double qsum = 0.0;
 
 			/*
 			printf("step=%i\n", step);
@@ -149,6 +150,7 @@
 				double* V = var + k*D*D;
 				double* I = ivar + k*D*D;
 				double det;
+				printf("var[%i]: %.3f,%.3f,%.3f,%.3f\n", k, V[0], V[1], V[2], V[3]);
 				det = V[0]*V[3] - V[1]*V[2];
 				if (det <= 0.0) {
 					printf("det = %g\n", det);
@@ -194,12 +196,19 @@
 					if (zsum == 0)
 						continue;
 					for (k=0; k<K; k++) {
-						Z[i*K + k] /= zsum;
-						// printf("normalized Z(i=%i, k=%i) = %g\n", i, k, Z[i*K+k]);
+					  if (Z[i*K+k] > 0) {
+					    qsum += log(Z[i*K+k]) * Z[i*K+k] / zsum;
+					    //printf("lnp %g, Zfrac %g, qsum %g\n", log(Z[i*K+k]), Z[i*K+k]/zsum, qsum);
+					  }
+					  Z[i*K + k] /= zsum;
+					  // printf("normalized Z(i=%i, k=%i) = %g\n", i, k, Z[i*K+k]);
 					}
 					//i++;
 				}
 			}
+
+			printf("Q: %g\n", qsum);
+			// Q = np.sum(fore*lfg + back*lbg)
 
 			// printf("M mu...\n");
 			// M step: mu
