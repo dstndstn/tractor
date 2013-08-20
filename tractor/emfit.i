@@ -28,7 +28,8 @@
                              PyObject* np_amp,
                              PyObject* np_mean,
                              PyObject* np_var,
-                             double alpha) {
+                             double alpha,
+			     int steps) {
         npy_intp i, N, K, k;
         npy_intp ix, iy;
         npy_intp NX, NY;
@@ -115,7 +116,7 @@
 
         // printf("NX=%i, NY=%i; N=%i\n", NX, NY, N);
 
-        for (step=0; step<1000; step++) {
+        for (step=0; step<steps; step++) {
             double x,y;
             double wsum[K];
             double qsum = 0.0;
@@ -150,7 +151,7 @@
                 double* V = var + k*D*D;
                 double* I = ivar + k*D*D;
                 double det;
-                printf("var[%i]: %.3f,%.3f,%.3f,%.3f\n", k, V[0], V[1], V[2], V[3]);
+                //printf("var[%i]: %.3f,%.3f,%.3f,%.3f\n", k, V[0], V[1], V[2], V[3]);
                 det = V[0]*V[3] - V[1]*V[2];
                 if (det <= 0.0) {
                     printf("det = %g\n", det);
@@ -197,7 +198,9 @@
                         continue;
                     for (k=0; k<K; k++) {
                       if (Z[i*K+k] > 0) {
-                        qsum += log(Z[i*K+k]) * Z[i*K+k] / zsum;
+			// umm, I'm not certain this is correct... for one, it doesn't
+			// seem to increase uniformly!
+                        qsum += log(Z[i*K+k]) * img[i] * Z[i*K+k] / zsum;
                         //printf("lnp %g, Zfrac %g, qsum %g\n", log(Z[i*K+k]), Z[i*K+k]/zsum, qsum);
                       }
                       Z[i*K + k] /= zsum;
@@ -207,7 +210,7 @@
                 }
             }
 
-            printf("Q: %g\n", qsum);
+            //printf("Q: %g\n", qsum);
             // Q = np.sum(fore*lfg + back*lbg)
 
             // printf("M mu...\n");
@@ -229,6 +232,7 @@
                 }
                 mean[k*D + 0] /= wsum[k];
                 mean[k*D + 1] /= wsum[k];
+                //printf("wsum[%i] = %g\n", k, wsum[k]);
             }
 
             // M step: var
@@ -284,7 +288,8 @@
                          PyObject* np_amp,
                          PyObject* np_mean,
                          PyObject* np_var) {
-        return em_fit_2d_reg(np_img, x0, y0, np_amp, np_mean, np_var, 0.0);
+      return em_fit_2d_reg(np_img, x0, y0, np_amp, np_mean, np_var, 0.0,
+			   1000);
     }
 
     %}

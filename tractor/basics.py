@@ -1234,7 +1234,8 @@ class GaussianMixturePSF(BaseParams):
         return old
 
     @staticmethod
-    def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.):
+    def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
+                  emsteps=1000):
         '''
         optional P0 = (w,mu,sig): initial parameter guess.
 
@@ -1257,7 +1258,7 @@ class GaussianMixturePSF(BaseParams):
             xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
         else:
             xm, ym = xy0
-        em_fit_2d_reg(stamp, xm, ym, w, mu, sig, alpha)
+        em_fit_2d_reg(stamp, xm, ym, w, mu, sig, alpha, emsteps)
         tpsf = GaussianMixturePSF(w, mu, sig)
         return tpsf
     
