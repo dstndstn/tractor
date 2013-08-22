@@ -14,7 +14,7 @@ __all__ = [
 	'PSF', 
 	# utils
 	'BaseParams', 'ScalarParam', 'ParamList', 'MultiParams',
-	'NamedParams',
+	'NamedParams', 'NpArrayParams',
 	# basics
 	'ConstantSky', 'PointSource',
 	'Flux', 'Mag', 'Mags', 'MagsPhotoCal',

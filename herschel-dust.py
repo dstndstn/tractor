@@ -137,28 +137,6 @@ class DustPhotoCal(ParamList):
 									   brightness.logtemperature,
 									   brightness.emissivity)
 
-class NpArrayParams(ParamList):
-	'''
-	An implementation of Params that holds values in an np.ndarray
-	'''
-	def __init__(self, a):
-		self.a = np.array(a)
-		super(NpArrayParams, self).__init__()
-		del self.vals
-		# from NamedParams...
-		# active/inactive
-		self.liquid = [True] * self._numberOfThings()
-
-	def __getattr__(self, name):
-		if name == 'vals':
-			return self.a.ravel()
-		if name in ['shape',]:
-			return getattr(self.a, name)
-		raise AttributeError() #name + ': no such attribute in NpArrayParams.__getattr__')
-
-	def __getstate__(self): return self.__dict__
-	def __setstate__(self, d): self.__dict__.update(d)
-
 
 class DustSheet(MultiParams):
 	'''

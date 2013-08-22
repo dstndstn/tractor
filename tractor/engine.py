@@ -1439,6 +1439,11 @@ class Tractor(MultiParams):
             pAfter = self.getLogProb()
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
+
+            if not np.isfinite(pAfter):
+                logmsg('  Got bad log-prob', pAfter)
+                break
+
             if pAfter < (pBest - 1.):
                 break
 
@@ -2096,7 +2101,7 @@ class Tractor(MultiParams):
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
         if img is None:
             img = self.getImage(imgi)
-        mod = self.getModelImage(img, srcs, minsb=minsb)
+        mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
         return (img.getImage() - mod) * img.getInvError()
 
     def getNdata(self):
