@@ -1378,7 +1378,8 @@ class Tractor(MultiParams):
         return rtn
 
 
-    def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True):
+    def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
+                 shared_params=True):
         '''
         Performs *one step* of linearized least-squares + line search.
         
@@ -1396,7 +1397,8 @@ class Tractor(MultiParams):
         print 'Finding optimal update direction...'
         t0 = Time()
         X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
-                                    scale_columns=scale_columns)
+                                    scale_columns=scale_columns,
+                                    shared_params=shared_params)
         #print Time() - t0
         topt = Time()-t0
         #print 'X:', X
@@ -1586,7 +1588,8 @@ class Tractor(MultiParams):
 
     def getUpdateDirection(self, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
-                           chiImages=None, variance=False):
+                           chiImages=None, variance=False,
+                           shared_params=True):
 
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -1613,6 +1616,18 @@ class Tractor(MultiParams):
         # Parameters to optimize go in the columns of matrix A
         # Pixels go in the rows.
 
+        if shared_params:
+            # Find shared parameters
+            p0 = self.getParams()
+            self.setParams(np.arange(len(p0)))
+            p1 = self.getParams()
+            self.setParams(p0)
+            U,I = np.unique(p1, return_inverse=True)
+            print len(p0), 'params;', len(U), 'unique'
+            paramindexmap = I
+            print 'paramindexmap:', paramindexmap
+            print 'p1:', p1
+            
         # Build the sparse matrix of derivatives:
         sprows = []
         spcols = []
@@ -1713,13 +1728,13 @@ class Tractor(MultiParams):
             else:
                 spvals.append(vals)
                 
-        colscale = np.array(colscales)
+        colscales = np.array(colscales)
         if scales_only:
-            return colscale
+            return colscales
 
         b = None
         if priors:
-            # We don't include the priors in the "colscale"
+            # We don't include the priors in the "colscales"
             # computation above, mostly because the priors are
             # returned as sparse additions to the matrix, and not
             # necessarily column-oriented the way the other params
@@ -1730,7 +1745,7 @@ class Tractor(MultiParams):
                 rA,cA,vA,pb = X
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
-                spvals.extend([vi / colscale[ci] for vi,ci in zip(vA,cA)])
+                spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
                 oldnrows = Nrows
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
@@ -1753,6 +1768,16 @@ class Tractor(MultiParams):
         assert(len(sprows) == len(spcols))
         assert(len(sprows) == len(spvals))
 
+        if shared_params:
+            # Apply shared parameter map
+            print 'Before applying shared parameter map:'
+            print 'spcols:', len(spcols), 'elements'
+            print '  ', len(set(spcols)), 'unique'
+            spcols = paramindexmap[spcols]
+            print 'After:'
+            print 'spcols:', len(spcols), 'elements'
+            print '  ', len(set(spcols)), 'unique'
+        
         logverb('  Number of sparse matrix elements:', len(sprows))
         urows = np.unique(sprows)
         ucols = np.unique(spcols)
@@ -1848,6 +1873,12 @@ class Tractor(MultiParams):
         
         logverb('scaled  X=', X)
         X = np.array(X)
+
+        if shared_params:
+            # Unapply shared parameter map -- result is duplicated
+            # result elements.
+            X = X[paramindexmap]
+
         if scale_columns:
             X /= colscales
         logverb('  X=', X)
@@ -1856,6 +1887,11 @@ class Tractor(MultiParams):
         #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
         if variance:
+
+            if shared_params:
+                # Unapply shared parameter map.
+                var = var[paramindexmap]
+            
             if scale_columns:
                 ### CHECK!!
                 print 'Warning: scale_columns and variance: CHECK THIS'
