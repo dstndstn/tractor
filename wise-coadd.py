@@ -32,18 +32,64 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 #median_f = np.median
 median_f = flat_median_f
 
+
+# GLOBALS
+outdir = 'wise-coadds'
+pixscale = 2.75 / 3600.
+W,H = 2048, 2048
+wisedir = 'wise-frames'
+bands = [1,2]
+
 class Duck():
     pass
+
+def get_atlas_tiles(r0,r1,d0,d1):
+    # Read Atlas Image table
+    T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
+    T.row = np.arange(len(T))
+    print 'Read', len(T), 'Atlas tiles'
+
+    margin = max(W,H) * pixscale / 2.
+    cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
+    mr = margin / cosdec
+    
+    T.cut((T.ra + mr > r0) *
+          (T.ra - mr < r1) *
+          (T.dec + margin > d0) *
+          (T.dec - margin < d1))
+    print 'Cut to', len(T), 'Atlas tiles near RA,Dec box'
+
+    T.coadd_id = np.array([c.replace('_ab41','') for c in T.coadd_id])
+
+    return T
+
+
+def get_wise_frames(r0,r1,d0,d1):
+    # Read WISE frame metadata
+    WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
+    print 'Read', len(WISE), 'WISE L1b frames'
+    WISE.row = np.arange(len(WISE))
+
+    # Testing subsets of rows...
+    #I = np.array([3580337,3577177])
+    #WISE.cut(I)
+
+    cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
+
+    margin = 2.
+    WISE.cut((WISE.ra + margin/cosdec > r0) *
+             (WISE.ra - margin/cosdec < r1) *
+             (WISE.dec + margin > d0) *
+             (WISE.dec - margin < d1))
+    print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
+
+    return WISE
+
 
 def main():
     t00 = Time()
 
     ps = PlotSequence('co')
-    
-    # Read Atlas Image table
-    T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
-    T.row = np.arange(len(T))
-    print 'Read', len(T), 'Atlas tiles'
     
     # plt.clf()
     # plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
@@ -61,43 +107,209 @@ def main():
     r0,r1 = 120.0, 200.0
     d0,d1 =  45.0,  60.0
 
-    outdir = 'wise-coadds'
-    pixscale = 2.75 / 3600.
-    W,H = 2048, 2048
-    wisedir = 'wise-frames'
-    bands = [1,2]
+    T = get_atlas_tiles(r0,r1,d0,d1)
+    allWISE = get_wise_frames(r0,r1,d0,d1)
 
-    #margin = 1.
-    margin = max(W,H) * pixscale / 2.
-    cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
-    mr = margin / cosdec
+    plot_region(r0,r1,d0,d1, T, allWISE, bands[0])
+
+    print 'Entering main loop:', Time() - t00
+    for ti in T:
+        print
+        print 'Starting coadd tile', ti.coadd_id
+        print 'RA,Dec', ti.ra, ti.dec
+        print
+        for band in bands:
+            one_coadd(ti, band, allWISE, ps)
+    print 'Whole enchilada:', Time() - t00
+
+
+def one_coadd(ti, band, WISE, ps):
+    print 'Coadd tile', ti.coadd_id
+    print 'RA,Dec', ti.ra, ti.dec
+    print 'Band', band
     
-    T.cut((T.ra + mr > r0) *
-          (T.ra - mr < r1) *
-          (T.dec + margin > d0) *
-          (T.dec - margin < d1))
-    print 'Cut to', len(T), 'Atlas tiles near RA,Dec box'
+    cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
+                -pixscale, 0., 0., pixscale, W, H)
     
-    # Read WISE frame metadata
-    WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
-    print 'Read', len(WISE), 'WISE L1b frames'
-    WISE.row = np.arange(len(WISE))
+    copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
+    
+    margin = (1.1 # safety margin
+              * (np.sqrt(2.) / 2.) # diagonal
+              * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
+              * pixscale) # in deg
+    print 'Margin:', margin
+    t0 = Time()
 
-    # Testing subsets of rows...
-    #I = np.array([3580337,3577177])
-    #WISE.cut(I)
+    # cut
+    WISE = WISE[WISE.band == band]
+    WISE.cut(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec) < margin)
+    print 'Found', len(WISE), 'WISE frames in range and in band W%i' % band
+    # reorder by dist from center
+    I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
+    WISE.cut(I)
 
-    margin = 2.
-    WISE.cut((WISE.ra + margin/cosdec > r0) *
-             (WISE.ra - margin/cosdec < r1) *
-             (WISE.dec + margin > d0) *
-             (WISE.dec - margin < d1))
-    print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
+    #WISE.cut(np.arange(20))
 
-    # Save the original array
-    allWISE = WISE
+    # *inclusive* coordinates of the bounding-box in the coadd of this image
+    # (x0,x1,y0,y1)
+    WISE.coextent = np.zeros((len(WISE), 4), int)
+    # *inclusive* coordinates of the bounding-box in the image overlapping coadd
+    WISE.imextent = np.zeros((len(WISE), 4), int)
+
+    res = []
+    for wi,wise in enumerate(WISE):
+        print
+        print (wi+1), 'of', len(WISE)
+        intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+        print 'intfn', intfn
+        wcs = Sip(intfn)
+
+        h,w = wcs.get_height(), wcs.get_width()
+        poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
+        if not polygons_intersect(copoly, poly):
+            print 'Image does not intersect target'
+            res.append(None)
+            continue
+        res.append((intfn, wcs, w, h, poly))
+
+        cpoly = clip_polygon(poly, copoly)
+
+        xy = np.array([cowcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
+        xy -= 1
+        x0,y0 = np.floor(xy.min(axis=0)).astype(int)
+        x1,y1 = np.ceil (xy.max(axis=0)).astype(int)
+        WISE.coextent[wi,:] = [np.clip(x0, 0, W-1),
+                               np.clip(x1, 0, W-1),
+                               np.clip(y0, 0, H-1),
+                               np.clip(y1, 0, H-1)]
+
+        xy = np.array([wcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
+        xy -= 1
+        x0,y0 = np.floor(xy.min(axis=0)).astype(int)
+        x1,y1 = np.ceil (xy.max(axis=0)).astype(int)
+        WISE.imextent[wi,:] = [np.clip(x0, 0, w-1),
+                               np.clip(x1, 0, w-1),
+                               np.clip(y0, 0, h-1),
+                               np.clip(y1, 0, h-1)]
+
+        print 'wi', wi
+        print 'row', WISE.row[wi]
+        print 'Image extent:', WISE.imextent[wi,:]
+
+    # plt.clf()
+    # jj = np.array([0,1,2,3,0])
+    # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
+    # for r in res:
+    #     if r is None:
+    #         continue
+    #     poly = r[-1]
+    #     plt.plot(poly[jj,0], poly[jj,1], 'r-', alpha=0.1)
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # jj = np.array([0,1,2,3,0])
+    # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
+    # for r in res:
+    #     if r is None:
+    #         continue
+    #     poly = r[-1]
+    #     try:
+    #         CC = clip_polygon(poly, copoly)
+    #         plt.plot([c[0] for c in CC] + [CC[0][0]], [c[1] for c in CC] + [CC[0][1]], 'r-', alpha=0.1)
+    #     except:
+    #         plt.plot(poly[jj,0], poly[jj,1], 'k-')
+    # ps.savefig()
+
+    I = np.flatnonzero(np.array([r is not None for r in res]))
+    WISE.cut(I)
+    print 'Cut to', len(WISE), 'intersecting target'
+    res = [r for r in res if r is not None]
+    WISE.intfn = np.array([r[0] for r in res])
+    WISE.wcs = np.array([r[1] for r in res])
+
+    #print 'WISE table rows:', WISE.row
+
+    t1 = Time()
+    print 'Up to coadd_wise:'
+    print t1 - t0
+
+    # table vs no-table: ~ zero difference except in cores of v.bright stars
+
+    try:
+        coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
+    except:
+        print 'coadd_wise failed:'
+        import traceback
+        traceback.print_exc()
+
+        print 'time up to failure:'
+        t2 = Time()
+        print t2 - t1
+
+        continue
+    t2 = Time()
+    print 'coadd_wise:'
+    print t2 - t1
+
+    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
+    prefix = os.path.join(outdir, tag)
+
+    f,wcsfn = tempfile.mkstemp()
+    os.close(f)
+    cowcs.write_to(wcsfn)
+    hdr = fitsio.read_header(wcsfn)
+    os.remove(wcsfn)
+        
+    ofn = prefix + '-img.fits'
+    fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
+    ofn = prefix + '-invvar.fits'
+    fitsio.write(ofn, coiv.astype(np.float32), header=hdr, clobber=True)
+    ofn = prefix + '-ppstd.fits'
+    fitsio.write(ofn, copp.astype(np.float32), header=hdr, clobber=True)
+
+    ofn = prefix + '-img-w.fits'
+    fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
+    ofn = prefix + '-invvar-w.fits'
+    fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
+
+    ii = []
+    for i,(mm,r) in enumerate(zip(masks, res)):
+        if mm is None:
+            continue
+        ii.append(i)
+
+        maskdir = os.path.join(outdir, 'masks-' + tag)
+        if not os.path.exists(maskdir):
+            os.mkdir(maskdir)
+
+        ofn = WISE.intfn[i].replace('-int', '')
+        ofn = os.path.join(maskdir, 'coadd-mask-' + ti.coadd_id + '-' + os.path.basename(ofn))
+
+        (nil,wcs,w,h,poly) = r
+        fullmask = np.zeros((h,w), mm.omask.dtype)
+        x0,x1,y0,y1 = WISE.imextent[i,:]
+        fullmask[y0:y1+1, x0:x1+1] = mm.omask
+
+        fitsio.write(ofn, fullmask, clobber=True)
+
+    WISE.cut(np.array(ii))
+    masks = [masks[i] for i in ii]
+
+    WISE.coadd_sky  = np.array([m.sky for m in masks])
+    WISE.coadd_dsky = np.array([m.dsky for m in masks])
+    WISE.zeropoint  = np.array([m.zp for m in masks])
+    WISE.npixoverlap = np.array([m.ncopix for m in masks])
+    WISE.npixpatched = np.array([m.npatched for m in masks])
+    WISE.npixrchi    = np.array([m.nrchipix for m in masks])
+
+    WISE.delete_column('wcs')
+
+    ofn = prefix + '-frames.fits'
+    WISE.writeto(ofn)
 
 
+
+def plot_region(r0,r1,d0,d1, T, WISE, band):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
     plot = Plotstuff(outformat='png', size=(800,800),
                      rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
@@ -120,13 +332,12 @@ def main():
                 plot.plot('outline')
         else:
             # cut
-            WISE = allWISE
-            band = bands[0]
             WISE = WISE[WISE.band == band]
             plot.alpha = (1./256.)
             out.fill = 1
             print 'Plotting', len(WISE), 'exposures'
             wcsparams = []
+            fns = []
             for wi,wise in enumerate(WISE):
                 print '.',
                 if wi % 100 == 0:
@@ -144,6 +355,7 @@ def main():
                     W.cd     = wp[:, 4:8]
                     W.imagew = wp[:, 8]
                     W.imageh = wp[:, 9]
+                    W.intfn = np.array(fns)
                     W.writeto('sequels-wcs.fits')
 
 
@@ -161,6 +373,7 @@ def main():
                 wcsparams.append((wcs.crpix[0], wcs.crpix[1], wcs.crval[0], wcs.crval[1],
                                   wcs.cd[0], wcs.cd[1], wcs.cd[2], wcs.cd[3],
                                   wcs.imagew, wcs.imageh))
+                fns.append(intfn)
 
             wp = np.array(wcsparams)
             W = fits_table()
@@ -169,6 +382,7 @@ def main():
             W.cd     = wp[:, 4:8]
             W.imagew = wp[:, 8]
             W.imageh = wp[:, 9]
+            W.intfn = np.array(fns)
             W.writeto('sequels-wcs.fits')
 
         grid = plot.grid
@@ -191,206 +405,6 @@ def main():
         fn = ps.getnext()
         plot.write(fn)
         print 'Wrote', fn
-
-
-    print 'Entering main loop:'
-    print Time() - t00
-
-    for ti in T:
-        print
-        coadd_id = ti.coadd_id.replace('_ab41', '')
-        print 'Starting coadd tile', coadd_id
-        print 'RA,Dec', ti.ra, ti.dec
-        print
-        cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
-                    -pixscale, 0., 0., pixscale, W, H)
-    
-        copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
-    
-        margin = (1.1 # safety margin
-                  * (np.sqrt(2.) / 2.) # diagonal
-                  * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
-                  * pixscale) # in deg
-        print 'Margin:', margin
-        for band in bands:
-            t0 = Time()
-
-            # cut
-            WISE = allWISE
-            WISE = WISE[WISE.band == band]
-            WISE.cut(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec) < margin)
-            print 'Found', len(WISE), 'WISE frames in range and in band W%i' % band
-            # reorder by dist from center
-            I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
-            WISE.cut(I)
-
-            #WISE.cut(np.arange(20))
-
-            # *inclusive* coordinates of the bounding-box in the coadd of this image
-            # (x0,x1,y0,y1)
-            WISE.coextent = np.zeros((len(WISE), 4), int)
-
-            # *inclusive* coordinates of the bounding-box in the image overlapping coadd
-            WISE.imextent = np.zeros((len(WISE), 4), int)
-
-            res = []
-            for wi,wise in enumerate(WISE):
-                print
-                print (wi+1), 'of', len(WISE)
-                intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-                print 'intfn', intfn
-                wcs = Sip(intfn)
-
-                h,w = wcs.get_height(), wcs.get_width()
-                poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
-                if not polygons_intersect(copoly, poly):
-                    print 'Image does not intersect target'
-                    res.append(None)
-                    continue
-                res.append((intfn, wcs, w, h, poly))
-
-                cpoly = clip_polygon(poly, copoly)
-
-                xy = np.array([cowcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
-                xy -= 1
-                x0,y0 = np.floor(xy.min(axis=0)).astype(int)
-                x1,y1 = np.ceil (xy.max(axis=0)).astype(int)
-                WISE.coextent[wi,:] = [np.clip(x0, 0, W-1),
-                                       np.clip(x1, 0, W-1),
-                                       np.clip(y0, 0, H-1),
-                                       np.clip(y1, 0, H-1)]
-
-                xy = np.array([wcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
-                xy -= 1
-                x0,y0 = np.floor(xy.min(axis=0)).astype(int)
-                x1,y1 = np.ceil (xy.max(axis=0)).astype(int)
-                WISE.imextent[wi,:] = [np.clip(x0, 0, w-1),
-                                       np.clip(x1, 0, w-1),
-                                       np.clip(y0, 0, h-1),
-                                       np.clip(y1, 0, h-1)]
-
-                print 'wi', wi
-                print 'row', WISE.row[wi]
-                print 'Image extent:', WISE.imextent[wi,:]
-
-            # plt.clf()
-            # jj = np.array([0,1,2,3,0])
-            # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
-            # for r in res:
-            #     if r is None:
-            #         continue
-            #     poly = r[-1]
-            #     plt.plot(poly[jj,0], poly[jj,1], 'r-', alpha=0.1)
-            # ps.savefig()
-            # 
-            # plt.clf()
-            # jj = np.array([0,1,2,3,0])
-            # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
-            # for r in res:
-            #     if r is None:
-            #         continue
-            #     poly = r[-1]
-            #     try:
-            #         CC = clip_polygon(poly, copoly)
-            #         plt.plot([c[0] for c in CC] + [CC[0][0]], [c[1] for c in CC] + [CC[0][1]], 'r-', alpha=0.1)
-            #     except:
-            #         plt.plot(poly[jj,0], poly[jj,1], 'k-')
-            # ps.savefig()
-        
-            I = np.flatnonzero(np.array([r is not None for r in res]))
-            WISE.cut(I)
-            print 'Cut to', len(WISE), 'intersecting target'
-            res = [r for r in res if r is not None]
-            WISE.intfn = np.array([r[0] for r in res])
-            WISE.wcs = np.array([r[1] for r in res])
-        
-            #print 'WISE table rows:', WISE.row
-
-            t1 = Time()
-            print 'Up to coadd_wise:'
-            print t1 - t0
-
-            # table vs no-table: ~ zero difference except in cores of v.bright stars
-
-            try:
-                coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
-            except:
-                print 'coadd_wise failed:'
-                import traceback
-                traceback.print_exc()
-
-                print 'time up to failure:'
-                t2 = Time()
-                print t2 - t1
-
-                continue
-            t2 = Time()
-            print 'coadd_wise:'
-            print t2 - t1
-    
-            tag = 'coadd-%s-w%i' % (coadd_id, band)
-            prefix = os.path.join(outdir, tag)
-
-            f,wcsfn = tempfile.mkstemp()
-            os.close(f)
-            cowcs.write_to(wcsfn)
-            hdr = fitsio.read_header(wcsfn)
-            os.remove(wcsfn)
-                
-            ofn = prefix + '-img.fits'
-            fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
-            ofn = prefix + '-invvar.fits'
-            fitsio.write(ofn, coiv.astype(np.float32), header=hdr, clobber=True)
-            ofn = prefix + '-ppstd.fits'
-            fitsio.write(ofn, copp.astype(np.float32), header=hdr, clobber=True)
-
-            ofn = prefix + '-img-w.fits'
-            fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
-            ofn = prefix + '-invvar-w.fits'
-            fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
-
-            ii = []
-            for i,(mm,r) in enumerate(zip(masks, res)):
-                if mm is None:
-                    continue
-                ii.append(i)
-
-                maskdir = os.path.join(outdir, 'masks-' + tag)
-                if not os.path.exists(maskdir):
-                    os.mkdir(maskdir)
-
-                ofn = WISE.intfn[i].replace('-int', '')
-                ofn = os.path.join(maskdir, 'coadd-mask-' + coadd_id + '-' + os.path.basename(ofn))
-
-                (nil,wcs,w,h,poly) = r
-                fullmask = np.zeros((h,w), mm.omask.dtype)
-                x0,x1,y0,y1 = WISE.imextent[i,:]
-                fullmask[y0:y1+1, x0:x1+1] = mm.omask
-
-                fitsio.write(ofn, fullmask, clobber=True)
-
-            WISE.cut(np.array(ii))
-            masks = [masks[i] for i in ii]
-
-            WISE.coadd_sky  = np.array([m.sky for m in masks])
-            WISE.coadd_dsky = np.array([m.dsky for m in masks])
-            WISE.zeropoint  = np.array([m.zp for m in masks])
-            WISE.npixoverlap = np.array([m.ncopix for m in masks])
-            WISE.npixpatched = np.array([m.npatched for m in masks])
-            WISE.npixrchi    = np.array([m.nrchipix for m in masks])
-
-            WISE.delete_column('wcs')
-
-            ofn = prefix + '-frames.fits'
-            WISE.writeto(ofn)
-
-
-            break
-        break
-
-
-    print 'Whole shebang:'
-    print Time() - t00
 
 
 def coadd_wise(cowcs, WISE, ps, band, table=True):
@@ -807,13 +821,46 @@ if __name__ == '__main__':
         os.chdir(d)
         sys.path.append(os.getcwd())
 
-
-    if False:
+    if not batch:
         import cProfile
         from datetime import tzinfo, timedelta, datetime
         pfn = 'prof-%s.dat' % (datetime.now().isoformat())
         cProfile.run('trymain()', pfn)
         print 'Wrote', pfn
+        sys.exit(0)
+        
+
+    dataset = 'sequels'
+
+    # SEQUELS
+    r0,r1 = 120.0, 200.0
+    d0,d1 =  45.0,  60.0
+
+    fn = '%s-atlas.fits' % dataset
+    if os.path.exists(fn):
+        T = fits_table(fn)
     else:
-        main()
+        T = get_atlas_tiles(r0,r1,d0,d1)
+        T.writeto(fn)
+
+    fn = '%s-frames.fits' % dataset
+    if os.path.exists(fn):
+        WISE = fits_table(fn)
+    else:
+        WISE = get_wise_frames(r0,r1,d0,d1)
+        WISE.writeto(fn)
+
+    #plot_region(r0,r1,d0,d1, T, allWISE, bands[0])
+
+    band = arr / 1000
+    assert(band in [1,2])
+    tile = arr % 1000
+    assert(tile < len(T))
+
+    print 'Doing coadd tile', T.coadd_id[tile], 'band', band
+
+    ps = PlotSequence(dataset)
+    t0 = Time()
+    one_coadd(T[tile], band, WISE, ps)
+    print 'Tile', T.coadd_id[tile, 'band', band, 'took:', Time()-t0
 
