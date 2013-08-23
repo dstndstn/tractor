@@ -2,10 +2,11 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
+import os
+import sys
+from scipy.ndimage.morphology import binary_dilation
 
 import fitsio
-
-from scipy.ndimage.morphology import binary_dilation
 
 from astrometry.util.file import *
 from astrometry.util.fits import *
@@ -15,13 +16,18 @@ from astrometry.util.miscutils import *
 from astrometry.util.util import *
 from astrometry.util.resample import *
 from astrometry.libkd.spherematch import *
-from runslice import *
 from astrometry.util.starutil_numpy import *
+
+from astrometry.blind.plotstuff import *
 
 from tractor import *
 from tractor.ttime import *
 
 from wise3 import get_l1b_file
+
+import logging
+lvl = logging.INFO
+logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 #median_f = np.median
 median_f = flat_median_f
@@ -35,31 +41,44 @@ def main():
     ps = PlotSequence('co')
     
     # Read Atlas Image table
-    T = fits_table('wise_allsky_4band_p3as_cdd.fits')
+    T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
     T.row = np.arange(len(T))
+    print 'Read', len(T), 'Atlas tiles'
     
-    plt.clf()
-    plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
-    plt.xlabel('RA (deg)')
-    plt.ylabel('Dec (deg)')
-    plt.title('Atlas tile centers')
-    plt.axis([360,0,-90,90])
-    ps.savefig()
+    # plt.clf()
+    # plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
+    # plt.xlabel('RA (deg)')
+    # plt.ylabel('Dec (deg)')
+    # plt.title('Atlas tile centers')
+    # plt.axis([360,0,-90,90])
+    # ps.savefig()
     
     # W3
-    r0,r1 = 210.593,  219.132
-    d0,d1 =  51.1822,  54.1822
+    #r0,r1 = 210.593,  219.132
+    #d0,d1 =  51.1822,  54.1822
+
+    # SEQUELS
+    r0,r1 = 120.0, 200.0
+    d0,d1 =  45.0,  60.0
+
+    outdir = 'wise-coadds'
+    pixscale = 2.75 / 3600.
+    W,H = 2048, 2048
+    wisedir = 'wise-frames'
+    bands = [1,2]
+
+    #margin = 1.
+    margin = max(W,H) * pixscale / 2.
+    cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
+    mr = margin / cosdec
     
-    margin = 1.
-    
-    T.cut((T.ra + margin > r0) *
-          (T.ra - margin < r1) *
+    T.cut((T.ra + mr > r0) *
+          (T.ra - mr < r1) *
           (T.dec + margin > d0) *
           (T.dec - margin < d1))
     print 'Cut to', len(T), 'Atlas tiles near RA,Dec box'
     
     # Read WISE frame metadata
-    wisedir = 'wise-frames'
     WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
     print 'Read', len(WISE), 'WISE L1b frames'
     WISE.row = np.arange(len(WISE))
@@ -69,20 +88,110 @@ def main():
     #WISE.cut(I)
 
     margin = 2.
-    WISE.cut((WISE.ra + margin > r0) *
-             (WISE.ra - margin < r1) *
+    WISE.cut((WISE.ra + margin/cosdec > r0) *
+             (WISE.ra - margin/cosdec < r1) *
              (WISE.dec + margin > d0) *
              (WISE.dec - margin < d1))
     print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
-    
-    outdir = 'wise-coadds'
-    
-    pixscale = 2.75 / 3600.
-    W,H = 2048, 2048
-    #W,H = 512, 512
 
     # Save the original array
     allWISE = WISE
+
+
+    maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
+    plot = Plotstuff(outformat='png', size=(800,800),
+                     rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
+
+    for i in range(2):
+        plot.color = 'verydarkblue'
+        plot.plot('fill')
+        plot.color = 'white'
+        out = plot.outline
+
+        if i == 0:
+            plot.alpha = 0.5
+            for ti in T:
+                cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
+                            -pixscale, 0., 0., pixscale, W, H)
+                out.wcs = anwcs_new_tan(cowcs)
+                out.fill = 1
+                plot.plot('outline')
+                out.fill = 0
+                plot.plot('outline')
+        else:
+            # cut
+            WISE = allWISE
+            band = bands[0]
+            WISE = WISE[WISE.band == band]
+            plot.alpha = (1./256.)
+            out.fill = 1
+            print 'Plotting', len(WISE), 'exposures'
+            wcsparams = []
+            for wi,wise in enumerate(WISE):
+                print '.',
+                if wi % 100 == 0:
+                    print wi, 'of', len(WISE)
+
+                if wi and wi % 1000 == 0:
+                    fn = ps.getnext()
+                    plot.write(fn)
+                    print 'Wrote', fn
+
+                    wp = np.array(wcsparams)
+                    W = fits_table()
+                    W.crpix  = wp[:, 0:2]
+                    W.crval  = wp[:, 2:4]
+                    W.cd     = wp[:, 4:8]
+                    W.imagew = wp[:, 8]
+                    W.imageh = wp[:, 9]
+                    W.writeto('sequels-wcs.fits')
+
+
+                intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+                #print 'intfn', intfn
+                try:
+                    wcs = Tan(intfn, 0, 1)
+                except:
+                    import traceback
+                    traceback.print_exc()
+                    continue
+                out.wcs = anwcs_new_tan(wcs)
+                plot.plot('outline')
+
+                wcsparams.append((wcs.crpix[0], wcs.crpix[1], wcs.crval[0], wcs.crval[1],
+                                  wcs.cd[0], wcs.cd[1], wcs.cd[2], wcs.cd[3],
+                                  wcs.imagew, wcs.imageh))
+
+            wp = np.array(wcsparams)
+            W = fits_table()
+            W.crpix  = wp[:, 0:2]
+            W.crval  = wp[:, 2:4]
+            W.cd     = wp[:, 4:8]
+            W.imagew = wp[:, 8]
+            W.imageh = wp[:, 9]
+            W.writeto('sequels-wcs.fits')
+
+        grid = plot.grid
+        grid.ralabeldir = 2
+        grid.ralo = 120
+        grid.rahi = 200
+        grid.declo = 30
+        grid.dechi = 60
+        plot.plot_grid(5, 5, 20, 10)
+        plot.color = 'red'
+        plot.apply_settings()
+        plot.line_constant_dec(d0, r0, r1)
+        plot.stroke()
+        plot.line_constant_ra(r1, d0, d1)
+        plot.stroke()
+        plot.line_constant_dec(d1, r1, r0)
+        plot.stroke()
+        plot.line_constant_ra(r0, d1, d0)
+        plot.stroke()
+        fn = ps.getnext()
+        plot.write(fn)
+        print 'Wrote', fn
+
 
     print 'Entering main loop:'
     print Time() - t00
@@ -98,10 +207,12 @@ def main():
     
         copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
     
-        margin = 2.
-        for band in [1,2]:
-        #for band in [1,2,3,4]:
-
+        margin = (1.1 # safety margin
+                  * (np.sqrt(2.) / 2.) # diagonal
+                  * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
+                  * pixscale) # in deg
+        print 'Margin:', margin
+        for band in bands:
             t0 = Time()
 
             # cut
@@ -219,18 +330,24 @@ def main():
     
             tag = 'coadd-%s-w%i' % (coadd_id, band)
             prefix = os.path.join(outdir, tag)
+
+            f,wcsfn = tempfile.mkstemp()
+            os.close(f)
+            cowcs.write_to(wcsfn)
+            hdr = fitsio.read_header(wcsfn)
+            os.remove(wcsfn)
                 
             ofn = prefix + '-img.fits'
-            fitsio.write(ofn, coim.astype(np.float32), clobber=True)
+            fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
             ofn = prefix + '-invvar.fits'
-            fitsio.write(ofn, coiv.astype(np.float32), clobber=True)
+            fitsio.write(ofn, coiv.astype(np.float32), header=hdr, clobber=True)
             ofn = prefix + '-ppstd.fits'
-            fitsio.write(ofn, copp.astype(np.float32), clobber=True)
+            fitsio.write(ofn, copp.astype(np.float32), header=hdr, clobber=True)
 
             ofn = prefix + '-img-w.fits'
-            fitsio.write(ofn, coimb.astype(np.float32), clobber=True)
+            fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
             ofn = prefix + '-invvar-w.fits'
-            fitsio.write(ofn, coivb.astype(np.float32), clobber=True)
+            fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
 
             ii = []
             for i,(mm,r) in enumerate(zip(masks, res)):
@@ -300,6 +417,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     while len(rimgs):
         rr = rimgs.pop(0)
         ri += 1
+
+        print
+        print 'Coadd round 2, image', (ri+1), 'of', len(WISE)
 
         t00 = Time()
 
@@ -449,7 +569,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         del badpix
         del badpixmask
 
-        print 'coadd_wise image', ri, 'second pass'
+        #print 'coadd_wise image', ri, 'second pass'
         print Time() - t00
 
     # print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
@@ -497,7 +617,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     for wi,wise in enumerate(WISE):
         t00 = Time()
         print
-        print (wi+1), 'of', len(WISE)
+        print 'Coadd round 1, image', (wi+1), 'of', len(WISE)
         intfn = wise.intfn
         uncfn = intfn.replace('-int-', '-unc-')
         if unc_gz:
@@ -520,9 +640,9 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
 
         wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
 
-        F = fitsio.FITS(intfn)
-        img = F[0][y0:y1+1, x0:x1+1]
-        ihdr = F[0].read_header()
+        with fitsio.FITS(intfn) as F:
+            img = F[0][y0:y1+1, x0:x1+1]
+            ihdr = F[0].read_header()
         mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
         unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
         print 'Img:', img.shape, img.dtype
@@ -559,7 +679,9 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         print 'Estimated sky level:', sky
 
         # Convert to nanomaggies
-        img = (img - sky) * zpscale
+        img -= sky
+        img *= zpscale
+        #img = (img - sky) * zpscale
         sig1 *= zpscale
 
         # coadd subimage
@@ -598,8 +720,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         rr.coextent = wise.coextent
         rr.cosubwcs = cosubwcs
         rimgs.append(rr)
-
-        del w
 
         # plt.clf()
         # plt.subplot(1,2,1)
@@ -676,7 +796,19 @@ if __name__ == '__main__':
 
     Time.add_measurement(MemMeas)
 
-    if True:
+    batch = False
+    arr = os.environ.get('PBS_ARRAYID')
+    if arr is not None:
+        arr = int(arr)
+        batch = True
+
+    d = os.environ.get('PBS_O_WORKDIR')
+    if batch and d is not None:
+        os.chdir(d)
+        sys.path.append(os.getcwd())
+
+
+    if False:
         import cProfile
         from datetime import tzinfo, timedelta, datetime
         pfn = 'prof-%s.dat' % (datetime.now().isoformat())

@@ -23,12 +23,12 @@ import os
 import sys
 
 from tractor.ttime import *
-Time.add_measurement(MemMeas)
-Time.add_measurement(IoMeas)
-
 import logging
-lvl = logging.INFO
-logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+if __name__ == '__main__':
+    Time.add_measurement(MemMeas)
+    Time.add_measurement(IoMeas)
+    lvl = logging.INFO
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 import numpy as np
 
