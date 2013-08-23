@@ -62,24 +62,10 @@ def main():
     wisedir = 'wise-frames'
     WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
     print 'Read', len(WISE), 'WISE L1b frames'
-    #WISE.about()
     WISE.row = np.arange(len(WISE))
 
-
-    ##### HACK
-    I = np.array([5659184, 3566872, 3561340, 5657601] +
-                 [8343194, 8343192, 8342266, 8344122] +
-                 [8273238, 8275835, 8281051, 8276780] +
-                 [8271344, 8267564, 8265670, 8270399])
-    I = np.array([5659184, 8273238, 3566872, 3561340, 8275835, 8281051, 5657601, 5660763, 8271344, 3631120])
-
-    I = np.array([3580337,3577177])
-    #I = I[:4]
-    # I = np.array([ 5659184,
-    #                8895297,
-    #                3525776,
-    #                8290996,
-    #                ])
+    # Testing subsets of rows...
+    #I = np.array([3580337,3577177])
     #WISE.cut(I)
 
     margin = 2.
@@ -111,11 +97,10 @@ def main():
                     -pixscale, 0., 0., pixscale, W, H)
     
         copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
-        #print 'copoly', copoly
     
         margin = 2.
+        for band in [1,2]:
         #for band in [1,2,3,4]:
-        for band in [2]:
 
             t0 = Time()
 
@@ -127,6 +112,8 @@ def main():
             # reorder by dist from center
             I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
             WISE.cut(I)
+
+            #WISE.cut(np.arange(20))
 
             # *inclusive* coordinates of the bounding-box in the coadd of this image
             # (x0,x1,y0,y1)
@@ -142,7 +129,7 @@ def main():
                 intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
                 print 'intfn', intfn
                 wcs = Sip(intfn)
-                #print 'Wcs:', wcs
+
                 h,w = wcs.get_height(), wcs.get_width()
                 poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
                 if not polygons_intersect(copoly, poly):
@@ -204,11 +191,9 @@ def main():
             print 'Cut to', len(WISE), 'intersecting target'
             res = [r for r in res if r is not None]
             WISE.intfn = np.array([r[0] for r in res])
-            #WISE.rdpoly = np.array([r[4] for r in res])
+            WISE.wcs = np.array([r[1] for r in res])
         
-            print 'WISE table rows:', WISE.row
-
-            #WISE.cut(np.arange(10))
+            #print 'WISE table rows:', WISE.row
 
             t1 = Time()
             print 'Up to coadd_wise:'
@@ -216,8 +201,18 @@ def main():
 
             # table vs no-table: ~ zero difference except in cores of v.bright stars
 
-            coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
+            try:
+                coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
+            except:
+                print 'coadd_wise failed:'
+                import traceback
+                traceback.print_exc()
 
+                print 'time up to failure:'
+                t2 = Time()
+                print t2 - t1
+
+                continue
             t2 = Time()
             print 'coadd_wise:'
             print t2 - t1
@@ -267,230 +262,41 @@ def main():
             WISE.npixpatched = np.array([m.npatched for m in masks])
             WISE.npixrchi    = np.array([m.nrchipix for m in masks])
 
+            WISE.delete_column('wcs')
+
             ofn = prefix + '-frames.fits'
             WISE.writeto(ofn)
 
-            ######## HACK
-            #break
-        #break
-    ################
+
+            break
+        break
+
 
     print 'Whole shebang:'
     print Time() - t00
 
 
 def coadd_wise(cowcs, WISE, ps, band, table=True):
-    mask_gz = True
-    unc_gz = True
     L = 3
-
     W = cowcs.get_width()
     H = cowcs.get_height()
-
-    coimg  = np.zeros((H,W))
-    coimg2 = np.zeros((H,W))
-    cow     = np.zeros((H,W))
-
-    rimgs = []
-    
-    for wi,wise in enumerate(WISE):
-        t00 = Time()
-        print
-        print (wi+1), 'of', len(WISE)
-        intfn = wise.intfn
-        uncfn = intfn.replace('-int-', '-unc-')
-        if unc_gz:
-            uncfn = uncfn + '.gz'
-        maskfn = intfn.replace('-int-', '-msk-')
-        if mask_gz:
-            maskfn = maskfn + '.gz'
-        print 'intfn', intfn
-        print 'uncfn', uncfn
-        print 'maskfn', maskfn
-
-        rr = Duck()
-
-        wcs = Sip(intfn)
-        print 'Wcs:', wcs
-        h,w = wcs.get_height(), wcs.get_width()
-
-        x0,x1,y0,y1 = wise.imextent
-
-        F = fitsio.FITS(intfn)
-        img = F[0][y0:y1+1, x0:x1+1]
-        ihdr = F[0].read_header()
-        mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
-        unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
-        print 'Img:', img.shape, img.dtype
-        print 'Unc:', unc.shape, unc.dtype
-        print 'Mask:', mask.shape, mask.dtype
-
-        wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
-
-        zp = ihdr['MAGZP']
-        zpscale = NanoMaggies.zeropointToScale(zp)
-        print 'Zeropoint:', zp, '-> scale', zpscale
-
-        goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
-                                                    10,11,12,13,14,15,16,17,18,
-                                                    21,26,27,28]])) == 0)
-        goodmask[unc == 0] = False
-        goodmask[np.logical_not(np.isfinite(img))] = False
-        goodmask[np.logical_not(np.isfinite(unc))] = False
-
-        sig1 = median_f(unc[goodmask])
-        print 'sig1:', sig1
-
-        del mask
-        del unc
-
-        #patchimg[np.logical_not(goodmask)] = 0.
-        #print 'Unpatched image:', patchimg.min(), patchimg.max()
-        #assert(np.all(np.isfinite(patchimg)))
-        #patchimg1 = patchimg.copy()
-
-        # Patch masked pixels so we can interpolate
-        rr.npatched = np.count_nonzero(np.logical_not(goodmask))
-        ok = patch_image(img, goodmask)
-        assert(ok)
-        assert(np.all(np.isfinite(img)))
-
-        #print 'Patched image:', img.min(), img.max()
-
-        # HACK -- estimate sky level via clipped medians
-        med = median_f(img)
-        ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
-        sky = median_f(img.flat[ok])
-        print 'Estimated sky level:', sky
-
-        # Convert to nanomaggies
-        img = (img - sky) * zpscale
-        sig1 *= zpscale
-
-        # coadd subimage
-        cox0,cox1,coy0,coy1 = wise.coextent
-        cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
-        try:
-            Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L,
-                                                 table=table)
-        except OverlapError:
-            print 'No overlap; skipping'
-            rimgs.append(None)
-            continue
-        rim = rims[0]
-        assert(np.all(np.isfinite(rim)))
-
-        print 'Pixels in range:', len(Yo)
-        #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
-        w = (1./sig1**2)
-        coimg [coy0 + Yo, cox0 + Xo] += w * rim
-        coimg2[coy0 + Yo, cox0 + Xo] += w * (rim**2)
-        cow   [coy0 + Yo, cox0 + Xo] += w
-
-        # save for later...
-        rr.rmask = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
-        rr.rmask[Yo, Xo] = True
-        rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
-        rr.rimg[Yo, Xo] = rim
-        rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
-        rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
-
-        rr.w = w
-        rr.wcs = wcs
-        rr.sky = sky
-        rr.zpscale = zpscale
-        rr.zp = zp
-        rr.ncopix = len(Yo)
-        rr.coextent = wise.coextent
-        rr.cosubwcs = cosubwcs
-        rimgs.append(rr)
-
-        del w
-
-        #rimgs.append((rmask, rimg, w, maskfn, wcs, sky, zpscale, zp, len(Yo),
-        #             wise.coextent, cosubwcs))
-
-        # plt.clf()
-        # plt.subplot(1,2,1)
-        # plt.imshow(coimg / np.maximum(cow, 1e-16), interpolation='nearest', origin='lower',
-        #            extent=[0, W, 0, H], vmin=0, vmax=10)
-        # plt.axis([0,W, 0, H])
-        # plt.subplot(1,2,2)
-        # plt.imshow(rimg, interpolation='nearest', origin='lower',
-        #            extent=[cox0, cox1, coy0, coy1], vmin=0, vmax=10)
-        # plt.axis([0,W, 0, H])
-        # ps.savefig()
-
-        print 'coadd_wise image', wi, 'first pass'
-        print Time() - t00
-
-
-    #print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
-    #print 'Coadd weight range:', cow.min(), cow.max(), 'median', np.median(cow)
-
     # For W4, single-image ww is ~ 1e-10
     tinyw = 1e-16
-    coimg1 = coimg / np.maximum(cow, tinyw)
-    cow1 = cow.copy()
-    #print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
 
-    # plt.clf()
-    # plt.imshow(coimg2 / np.maximum(cow,tinyw),
-    #            interpolation='nearest', origin='lower',
-    #            vmin=0, vmax=100)
-    # plt.colorbar()
-    # plt.title('coimg2 / cow')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(coimg1**2,
-    #            interpolation='nearest', origin='lower',
-    #            vmin=0, vmax=100)
-    # plt.colorbar()
-    # plt.title('coimg1**2')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(coimg2 / np.maximum(cow, tinyw) - coimg1**2,
-    #            interpolation='nearest', origin='lower',
-    #            vmin=-10, vmax=10)
-    # plt.colorbar()
-    # plt.title('coppvar')
-    # ps.savefig()
-
-    # Per-pixel std
-    coppstd = np.sqrt(np.maximum(0, coimg2 / np.maximum(cow, tinyw) - coimg1**2))
-    #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
-    #costd1 = np.median(coppstd)
-    #print 'Median coadd per-pixel std:', costd1
-    #comed = np.median(coimg1)
-    # ima = dict(interpolation='nearest', origin='lower',
-    #            vmin=comed - 3.*costd1, vmax=comed + 10.*costd1)
-    # plt.clf()
-    # plt.imshow(coimg1, **ima)
-    # plt.colorbar()
-    # plt.title('Coadd')
-    # ps.savefig()
-
-    # plt.clf()
-    # plt.imshow(coppstd, interpolation='nearest', origin='lower')
-    # plt.colorbar()
-    # plt.title('Coadd per-pixel std')
-    # ps.savefig()
+    rimgs, coimg1, cow1, coppstd1 = _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
+                                                       tinyw)
 
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
-    coimg [:,:] = 0
-    coimg2[:,:] = 0
-    cow   [:,:] = 0
-
+    coimg  = np.zeros((H,W))
+    coimg2 = np.zeros((H,W))
+    cow    = np.zeros((H,W))
     coimgb = np.zeros_like(coimg)
     cowb   = np.zeros_like(cow)
 
     masks = []
     ri = 0
-    #for ri,rr in enumerate(rimgs):
     while len(rimgs):
         rr = rimgs.pop(0)
         ri += 1
@@ -500,7 +306,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         if rr is None:
             masks.append(None)
             continue
-        #(rmask, rimg, w, nil, wcs, sky, zpscale, zp, nadded, coext, cosubwcs) = rimg
+
         mm = Duck()
         mm.npatched = rr.npatched
         mm.ncopix = rr.ncopix
@@ -508,26 +314,17 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         mm.zp = rr.zp
 
         cox0,cox1,coy0,coy1 = rr.coextent
-        subco = coimg1 [coy0:coy1+1, cox0:cox1+1].astype(np.float32)
-        subw = cow1    [coy0:coy1+1, cox0:cox1+1]
-        subpp = coppstd[coy0:coy1+1, cox0:cox1+1]
+        subco = coimg1  [coy0:coy1+1, cox0:cox1+1].astype(np.float32)
+        subw  = cow1    [coy0:coy1+1, cox0:cox1+1]
+        subpp = coppstd1[coy0:coy1+1, cox0:cox1+1]
 
-        # like in the WISE Atlas Images, estimate sky difference via difference
-        # of medians in overlapping area... or is it median of differences?
-        #dsky = np.median(rr.rimg[rr.rmask]) - np.median(subco[rr.rmask])
-        #fitsio.write('dsky.fits', rr.rimg[rr.rmask] - subco[rr.rmask], clobber=True)
-        print 'dsky...'
+        # like in the WISE Atlas Images, estimate sky difference via
+        # median difference in the overlapping area.
         dsky = median_f(rr.rimg[rr.rmask] - subco[rr.rmask])
         print 'Sky difference:', dsky
         dsky /= rr.zpscale
         print 'scaled:', dsky
         mm.dsky = dsky
-
-        # print 'rimg:', rimg.shape, rimg.min(), rimg.max()
-        # print 'subco:', subco.shape, subco.min(), subco.max()
-        # print 'subw:', subw.shape, subw.min(), subw.max()
-        # print 'rmask:', rmask.shape, rmask.min(), rmask.max()
-        # print 'subpp:', subpp.shape, subpp.min(), subpp.max()
 
         rchi = (rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) / np.maximum(subpp, 1e-6)
         #print 'rchi', rchi.min(), rchi.max()
@@ -619,17 +416,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         # plt.colorbar()
         # ps.savefig()
 
-        # HACK--
-        imgcopy = rr.rimg.copy()
-        maskcopy = np.logical_not(badpix).copy()
-        reqcopy = badpix.copy()
-
         ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
         if not ok:
-            print 'Writing out failing patch_image inputs'
-            fitsio.write('patch-image-img.fits', imgcopy, clobber=True)
-            fitsio.write('patch-image-mask.fits', maskcopy.astype(np.uint8), clobber=True)
-            fitsio.write('patch-image-required.fits', reqcopy.astype(np.uint8), clobber=True)
+            print 'patch_image failed; continuing'
             masks.append(None)
             continue
 
@@ -644,10 +433,11 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         # About the [rr.rmask]: that is the area where [rr.rimg] != 0
         cow   [coy0: coy1+1, cox0: cox1+1][rr.rmask] += rr.w
 
+        # Add rchi-masked pixels to the mask
         rr.rmask2[badpix] = False
 
-        coimgb[coy0: coy1+1, cox0: cox1+1] += w * rr.rimg * rr.rmask2
-        cowb  [coy0: coy1+1, cox0: cox1+1] += w * rr.rmask2
+        coimgb[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg * rr.rmask2
+        cowb  [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rmask2
 
         # print 'Applying rchi masks to images...'
         Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
@@ -664,13 +454,10 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
     # print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
     # print 'Coadd weight range:', cow.min(), cow.max(), 'median', np.median(cow)
-
-    coimg = (coimg / np.maximum(cow, tinyw))
+    coimg /= np.maximum(cow, tinyw)
     coinvvar = cow
-
-    coimgb = (coimgb / np.maximum(cowb, tinyw))
+    coimgb /= np.maximum(cowb, tinyw)
     coinvvarb = cowb
-
     # print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
 
     # plt.clf()
@@ -689,14 +476,192 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     #sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
     #print 'Coadd sig:', sig
     # per-pixel variance
-    var = coimg2 / (np.maximum(cow, tinyw)) - coimg**2
-    # print 'Coadd per-pix variance:', var.min(), var.max(), 'mean', np.mean(var), 'median', np.median(var)
-    coppstd = np.sqrt(np.maximum(0, var))
+    coppstd = np.sqrt(np.maximum(0, coimg2 / (np.maximum(cow, tinyw)) - coimg**2))
     #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
-    #costd1 = np.median(coppstd)
-    #print 'Median coadd per-pixel std:', costd1
 
     return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks
+
+
+def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
+                       tinyw):
+    mask_gz = True
+    unc_gz = True
+
+    W = cowcs.get_width()
+    H = cowcs.get_height()
+    coimg  = np.zeros((H,W))
+    coimg2 = np.zeros((H,W))
+    cow    = np.zeros((H,W))
+    rimgs = []
+    
+    for wi,wise in enumerate(WISE):
+        t00 = Time()
+        print
+        print (wi+1), 'of', len(WISE)
+        intfn = wise.intfn
+        uncfn = intfn.replace('-int-', '-unc-')
+        if unc_gz:
+            uncfn = uncfn + '.gz'
+        maskfn = intfn.replace('-int-', '-msk-')
+        if mask_gz:
+            maskfn = maskfn + '.gz'
+        print 'intfn', intfn
+        print 'uncfn', uncfn
+        print 'maskfn', maskfn
+
+        rr = Duck()
+
+        #wcs = Sip(intfn)
+        #print 'Wcs:', wcs
+        wcs = wise.wcs
+        h,w = wcs.get_height(), wcs.get_width()
+
+        x0,x1,y0,y1 = wise.imextent
+
+        wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
+
+        F = fitsio.FITS(intfn)
+        img = F[0][y0:y1+1, x0:x1+1]
+        ihdr = F[0].read_header()
+        mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
+        unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
+        print 'Img:', img.shape, img.dtype
+        print 'Unc:', unc.shape, unc.dtype
+        print 'Mask:', mask.shape, mask.dtype
+
+        zp = ihdr['MAGZP']
+        zpscale = NanoMaggies.zeropointToScale(zp)
+        print 'Zeropoint:', zp, '-> scale', zpscale
+
+        goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
+                                                    10,11,12,13,14,15,16,17,18,
+                                                    21,26,27,28]])) == 0)
+        goodmask[unc == 0] = False
+        goodmask[np.logical_not(np.isfinite(img))] = False
+        goodmask[np.logical_not(np.isfinite(unc))] = False
+
+        sig1 = median_f(unc[goodmask])
+        print 'sig1:', sig1
+
+        del mask
+        del unc
+
+        # Patch masked pixels so we can interpolate
+        rr.npatched = np.count_nonzero(np.logical_not(goodmask))
+        ok = patch_image(img, goodmask)
+        assert(ok)
+        assert(np.all(np.isfinite(img)))
+
+        # Estimate sky level via clipped medians
+        med = median_f(img)
+        ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
+        sky = median_f(img.flat[ok])
+        print 'Estimated sky level:', sky
+
+        # Convert to nanomaggies
+        img = (img - sky) * zpscale
+        sig1 *= zpscale
+
+        # coadd subimage
+        cox0,cox1,coy0,coy1 = wise.coextent
+        cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
+        try:
+            Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L, table=table)
+                                                 
+        except OverlapError:
+            print 'No overlap; skipping'
+            rimgs.append(None)
+            continue
+        rim = rims[0]
+        assert(np.all(np.isfinite(rim)))
+
+        print 'Pixels in range:', len(Yo)
+        #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
+        w = (1./sig1**2)
+        coimg [coy0 + Yo, cox0 + Xo] += w * rim
+        coimg2[coy0 + Yo, cox0 + Xo] += w * (rim**2)
+        cow   [coy0 + Yo, cox0 + Xo] += w
+
+        # save for later...
+        rr.rmask = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+        rr.rmask[Yo, Xo] = True
+        rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
+        rr.rimg[Yo, Xo] = rim
+        rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+        rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
+        rr.w = w
+        rr.wcs = wcs
+        rr.sky = sky
+        rr.zpscale = zpscale
+        rr.zp = zp
+        rr.ncopix = len(Yo)
+        rr.coextent = wise.coextent
+        rr.cosubwcs = cosubwcs
+        rimgs.append(rr)
+
+        del w
+
+        # plt.clf()
+        # plt.subplot(1,2,1)
+        # plt.imshow(coimg / np.maximum(cow, 1e-16), interpolation='nearest', origin='lower',
+        #            extent=[0, W, 0, H], vmin=0, vmax=10)
+        # plt.axis([0,W, 0, H])
+        # plt.subplot(1,2,2)
+        # plt.imshow(rimg, interpolation='nearest', origin='lower',
+        #            extent=[cox0, cox1, coy0, coy1], vmin=0, vmax=10)
+        # plt.axis([0,W, 0, H])
+        # ps.savefig()
+
+        print 'coadd_wise image', wi, 'first pass'
+        print Time() - t00
+
+    #print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
+    #print 'Coadd weight range:', cow.min(), cow.max(), 'median', np.median(cow)
+    coimg /= np.maximum(cow, tinyw)
+    #print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
+
+    # plt.clf()
+    # plt.imshow(coimg2 / np.maximum(cow,tinyw),
+    #            interpolation='nearest', origin='lower',
+    #            vmin=0, vmax=100)
+    # plt.colorbar()
+    # plt.title('coimg2 / cow')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(coimg1**2,
+    #            interpolation='nearest', origin='lower',
+    #            vmin=0, vmax=100)
+    # plt.colorbar()
+    # plt.title('coimg1**2')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(coimg2 / np.maximum(cow, tinyw) - coimg1**2,
+    #            interpolation='nearest', origin='lower',
+    #            vmin=-10, vmax=10)
+    # plt.colorbar()
+    # plt.title('coppvar')
+    # ps.savefig()
+
+    # Per-pixel std
+    coppstd = np.sqrt(np.maximum(0, coimg2 / np.maximum(cow, tinyw) - coimg**2))
+    # costd1 = np.median(coppstd)
+    # comed = np.median(coimg1)
+    # ima = dict(interpolation='nearest', origin='lower',
+    #            vmin=comed - 3.*costd1, vmax=comed + 10.*costd1)
+    # plt.clf()
+    # plt.imshow(coimg1, **ima)
+    # plt.colorbar()
+    # plt.title('Coadd')
+    # ps.savefig()
+    # plt.clf()
+    # plt.imshow(coppstd, interpolation='nearest', origin='lower')
+    # plt.colorbar()
+    # plt.title('Coadd per-pixel std')
+    # ps.savefig()
+
+    return rimgs, coimg, cow, coppstd
 
 
 

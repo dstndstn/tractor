@@ -14,7 +14,7 @@ ps = PlotSequence('co')
 for coadd in ['2195p545']:
 
     for band in [1]:
-        F = fits_table('coadd-%s-w%i-frames.fits' % (coadd,band))
+        F = fits_table('wise-coadds/coadd-%s-w%i-frames.fits' % (coadd,band))
 
         frame0 = F[0]
 
@@ -35,10 +35,13 @@ for coadd in ['2195p545']:
         I = np.argsort(-overlaps)
         for i in I[:5]:
             frame = '%s%03i' % (F.scan_id[i], F.frame_num[i])
-            imgfn = '%s-w%i-int-1b.fits' % (frame, band)
+            #imgfn = '%s-w%i-int-1b.fits' % (frame, band)
+            imgfn = F.intfn[i]
             img = fitsio.read(imgfn)
 
-            plo,phi = [np.percentile(img, p) for p in [25,98]]
+            okimg = img.flat[np.flatnonzero(np.isfinite(img))]
+            plo,phi = [np.percentile(okimg, p) for p in [25,99]]
+            print 'Percentiles', plo, phi
             ima = dict(interpolation='nearest', origin='lower',
                        vmin=plo, vmax=phi)
             plt.clf()
@@ -50,7 +53,7 @@ for coadd in ['2195p545']:
             frame = '%s%03i' % (F.scan_id[i], F.frame_num[i])
             #maskfn = '%s-w%i-msk-1b.fits.gz' % (frame, band)
             #mask = fitsio.read(maskfn)
-            comaskfn = 'coadd-mask-%s-%s-w%i-1b.fits' % (coadd, frame, band)
+            comaskfn = 'wise-coadds/masks-coadd-%s-w%i/coadd-mask-%s-%s-w%i-1b.fits' % (coadd, band, coadd, frame, band)
             comask = fitsio.read(comaskfn)
 
             #plt.clf()
@@ -63,12 +66,12 @@ for coadd in ['2195p545']:
             plt.clf()
             plt.imshow(comask > 0, interpolation='nearest', origin='lower',
                        vmin=0, vmax=1)
-            plt.axis(ax)
             plt.title('Coadd mask')
             ps.savefig()
 
 
-    for frame in ['05579a167']:
+    #for frame in ['05579a167']:
+    for frame in []:
         for band in [1]:
             imgfn = '%s-w%i-int-1b.fits' % (frame, band)
             img = fitsio.read(imgfn)
