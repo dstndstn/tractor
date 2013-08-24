@@ -4,6 +4,7 @@ import numpy as np
 import pylab as plt
 import os
 import sys
+import tempfile
 from scipy.ndimage.morphology import binary_dilation
 
 import fitsio
@@ -110,7 +111,7 @@ def main():
     T = get_atlas_tiles(r0,r1,d0,d1)
     allWISE = get_wise_frames(r0,r1,d0,d1)
 
-    plot_region(r0,r1,d0,d1, T, allWISE, bands[0])
+    plot_region(r0,r1,d0,d1, T, allWISE, bands[0], ps)
 
     print 'Entering main loop:', Time() - t00
     for ti in T:
@@ -127,7 +128,14 @@ def one_coadd(ti, band, WISE, ps):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
-    
+
+    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
+    prefix = os.path.join(outdir, tag)
+    ofn = prefix + '-img.fits'
+    if os.path.exists(ofn):
+        print 'Output file exists:', ofn
+        return
+
     cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
                 -pixscale, 0., 0., pixscale, W, H)
     
@@ -246,13 +254,10 @@ def one_coadd(ti, band, WISE, ps):
         t2 = Time()
         print t2 - t1
 
-        continue
+        return
     t2 = Time()
     print 'coadd_wise:'
     print t2 - t1
-
-    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
-    prefix = os.path.join(outdir, tag)
 
     f,wcsfn = tempfile.mkstemp()
     os.close(f)
@@ -260,6 +265,10 @@ def one_coadd(ti, band, WISE, ps):
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
         
+
+    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
+    prefix = os.path.join(outdir, tag)
+
     ofn = prefix + '-img.fits'
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-invvar.fits'
@@ -309,13 +318,16 @@ def one_coadd(ti, band, WISE, ps):
 
 
 
-def plot_region(r0,r1,d0,d1, T, WISE, band):
+def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
     plot = Plotstuff(outformat='png', size=(800,800),
                      rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
 
     for i in range(2):
-        plot.color = 'verydarkblue'
+        if i == 0:
+            plot.color = 'verydarkblue'
+        else:
+            plot.color = 'black'
         plot.plot('fill')
         plot.color = 'white'
         out = plot.outline
@@ -333,34 +345,33 @@ def plot_region(r0,r1,d0,d1, T, WISE, band):
         else:
             # cut
             WISE = WISE[WISE.band == band]
-            plot.alpha = (1./256.)
+            plot.alpha = (3./256.)
             out.fill = 1
             print 'Plotting', len(WISE), 'exposures'
             wcsparams = []
             fns = []
             for wi,wise in enumerate(WISE):
-                print '.',
-                if wi % 100 == 0:
+                if wi % 10 == 0:
+                    print '.',
+                if wi % 1000 == 0:
                     print wi, 'of', len(WISE)
 
-                if wi and wi % 1000 == 0:
+                if wi and wi % 10000 == 0:
                     fn = ps.getnext()
                     plot.write(fn)
                     print 'Wrote', fn
 
                     wp = np.array(wcsparams)
-                    W = fits_table()
-                    W.crpix  = wp[:, 0:2]
-                    W.crval  = wp[:, 2:4]
-                    W.cd     = wp[:, 4:8]
-                    W.imagew = wp[:, 8]
-                    W.imageh = wp[:, 9]
-                    W.intfn = np.array(fns)
-                    W.writeto('sequels-wcs.fits')
-
+                    WW = fits_table()
+                    WW.crpix  = wp[:, 0:2]
+                    WW.crval  = wp[:, 2:4]
+                    WW.cd     = wp[:, 4:8]
+                    WW.imagew = wp[:, 8]
+                    WW.imageh = wp[:, 9]
+                    WW.intfn = np.array(fns)
+                    WW.writeto('sequels-wcs.fits')
 
                 intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-                #print 'intfn', intfn
                 try:
                     wcs = Tan(intfn, 0, 1)
                 except:
@@ -376,15 +387,21 @@ def plot_region(r0,r1,d0,d1, T, WISE, band):
                 fns.append(intfn)
 
             wp = np.array(wcsparams)
-            W = fits_table()
-            W.crpix  = wp[:, 0:2]
-            W.crval  = wp[:, 2:4]
-            W.cd     = wp[:, 4:8]
-            W.imagew = wp[:, 8]
-            W.imageh = wp[:, 9]
-            W.intfn = np.array(fns)
-            W.writeto('sequels-wcs.fits')
+            WW = fits_table()
+            WW.crpix  = wp[:, 0:2]
+            WW.crval  = wp[:, 2:4]
+            WW.cd     = wp[:, 4:8]
+            WW.imagew = wp[:, 8]
+            WW.imageh = wp[:, 9]
+            WW.intfn = np.array(fns)
+            WW.writeto('sequels-wcs.fits')
 
+            fn = ps.getnext()
+            plot.write(fn)
+            print 'Wrote', fn
+
+        plot.color = 'gray'
+        plot.alpha = 1.
         grid = plot.grid
         grid.ralabeldir = 2
         grid.ralo = 120
@@ -828,7 +845,6 @@ if __name__ == '__main__':
         cProfile.run('trymain()', pfn)
         print 'Wrote', pfn
         sys.exit(0)
-        
 
     dataset = 'sequels'
 
@@ -838,6 +854,7 @@ if __name__ == '__main__':
 
     fn = '%s-atlas.fits' % dataset
     if os.path.exists(fn):
+        print 'Reading', fn
         T = fits_table(fn)
     else:
         T = get_atlas_tiles(r0,r1,d0,d1)
@@ -845,12 +862,15 @@ if __name__ == '__main__':
 
     fn = '%s-frames.fits' % dataset
     if os.path.exists(fn):
+        print 'Reading', fn
         WISE = fits_table(fn)
     else:
         WISE = get_wise_frames(r0,r1,d0,d1)
         WISE.writeto(fn)
 
-    #plot_region(r0,r1,d0,d1, T, allWISE, bands[0])
+    ps = PlotSequence(dataset)
+
+    #plot_region(r0,r1,d0,d1, T, WISE, bands[0], ps)
 
     band = arr / 1000
     assert(band in [1,2])
@@ -859,8 +879,7 @@ if __name__ == '__main__':
 
     print 'Doing coadd tile', T.coadd_id[tile], 'band', band
 
-    ps = PlotSequence(dataset)
     t0 = Time()
     one_coadd(T[tile], band, WISE, ps)
-    print 'Tile', T.coadd_id[tile, 'band', band, 'took:', Time()-t0
+    print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
