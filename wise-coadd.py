@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -8,6 +10,15 @@ import tempfile
 from scipy.ndimage.morphology import binary_dilation
 
 import fitsio
+
+
+if __name__ == '__main__':
+    arr = os.environ.get('PBS_ARRAYID')
+    d = os.environ.get('PBS_O_WORKDIR')
+    if arr is not None and d is not None:
+        os.chdir(d)
+        sys.path.append(os.getcwd())
+
 
 from astrometry.util.file import *
 from astrometry.util.fits import *
@@ -833,10 +844,10 @@ if __name__ == '__main__':
         arr = int(arr)
         batch = True
 
-    d = os.environ.get('PBS_O_WORKDIR')
-    if batch and d is not None:
-        os.chdir(d)
-        sys.path.append(os.getcwd())
+    # d = os.environ.get('PBS_O_WORKDIR')
+    # if batch and d is not None:
+    #     os.chdir(d)
+    #     sys.path.append(os.getcwd())
 
     if not batch:
         import cProfile
