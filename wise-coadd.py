@@ -49,8 +49,12 @@ median_f = flat_median_f
 outdir = 'wise-coadds'
 pixscale = 2.75 / 3600.
 W,H = 2048, 2048
-wisedir = 'wise-frames'
 bands = [1,2]
+# WISE Level 1b inputs
+wisedir = 'wise-frames'
+mask_gz = True
+unc_gz = True
+
 
 class Duck():
     pass
@@ -96,6 +100,37 @@ def get_wise_frames(r0,r1,d0,d1):
     print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
 
     return WISE
+
+def check_md5s(WISE):
+
+    from astrometry.util.run_command import run_command
+    from astrometry.util.file import read_file
+
+    for i in np.lexsort((WISE.band, WISE.frame_num, WISE.scan_id)):
+        intfn = get_l1b_file(wisedir, WISE.scan_id[i], WISE.frame_num[i], WISE.band[i])
+        uncfn = intfn.replace('-int-', '-unc-')
+        if unc_gz:
+            uncfn = uncfn + '.gz'
+        maskfn = intfn.replace('-int-', '-msk-')
+        if mask_gz:
+            maskfn = maskfn + '.gz'
+        #print 'intfn', intfn
+        #print 'uncfn', uncfn
+        #print 'maskfn', maskfn
+
+        instr = ''
+        for fn in [intfn,uncfn,maskfn]:
+            if not os.path.exists(fn):
+                print '%s: DOES NOT EXIST' % fn
+                continue
+            md5 = read_file(fn + '.md5')
+            instr += '%s  %s\n' % (md5, fn)
+        if len(instr):
+            cmd = "echo '%s' | md5sum -c" % instr
+            rtn,out,err = run_command(cmd)
+            print out, err
+            if rtn:
+                print 'ERROR: return code', rtn
 
 
 def main():
@@ -646,9 +681,6 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
 def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
                        tinyw):
-    mask_gz = True
-    unc_gz = True
-
     W = cowcs.get_width()
     H = cowcs.get_height()
     coimg  = np.zeros((H,W))
@@ -879,12 +911,30 @@ if __name__ == '__main__':
         WISE = get_wise_frames(r0,r1,d0,d1)
         WISE.writeto(fn)
 
+    #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
+    #check_md5s(WISE)
+
+    if False:
+        # Check which tiles still need to be done.
+        need = []
+        for i in range(len(T)):
+            for band in bands:
+                tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
+                prefix = os.path.join(outdir, tag)
+                ofn = prefix + '-img.fits'
+                if os.path.exists(ofn):
+                    print 'Output file exists:', ofn
+                    continue
+                need.append(band*1000 + i)
+        print ','.join(['%i' % i for i in need])
+        sys.exit(0)
+            
     ps = PlotSequence(dataset)
 
     #plot_region(r0,r1,d0,d1, T, WISE, bands[0], ps)
 
     band = arr / 1000
-    assert(band in [1,2])
+    assert(band in bands)
     tile = arr % 1000
     assert(tile < len(T))
 
