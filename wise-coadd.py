@@ -914,11 +914,11 @@ if __name__ == '__main__':
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
-    if False:
+    if True:
         # Check which tiles still need to be done.
         need = []
-        for i in range(len(T)):
-            for band in bands:
+        for band in bands:
+            for i in range(len(T)):
                 tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
                 prefix = os.path.join(outdir, tag)
                 ofn = prefix + '-img.fits'
@@ -926,7 +926,23 @@ if __name__ == '__main__':
                     print 'Output file exists:', ofn
                     continue
                 need.append(band*1000 + i)
-        print ','.join(['%i' % i for i in need])
+        # Collapse contiguous strings
+        strings = []
+        start = need.pop(0)
+        end = start
+        while len(need):
+            while len(need):
+                x = need.pop(0)
+                if x == start + 1:
+                    end = x
+                else:
+                    if start == end:
+                        strings.append('%i' % start)
+                    else:
+                        strings.append('%i-%i' % (start, end))
+                    start = end = x
+            
+        print ','.join(strings)
         sys.exit(0)
             
     ps = PlotSequence(dataset)
