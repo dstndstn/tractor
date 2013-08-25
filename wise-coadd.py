@@ -866,7 +866,21 @@ def trymain():
         import traceback
         traceback.print_exc()
 
+def _bounce_one_coadd(A):
+    one_coadd(*A)
+
 if __name__ == '__main__':
+    import optparse
+    from astrometry.util.multiproc import multiproc
+
+    parser = optparse.OptionParser('%prog [options]')
+    parser.add_option('--threads', dest='threads', type=int, help='Multiproc',
+                      default=None)
+    opt,args = parser.parse_args()
+    if opt.threads:
+        mp = multiproc(opt.threads)
+    else:
+        mp = multiproc()
 
     Time.add_measurement(MemMeas)
 
@@ -914,7 +928,7 @@ if __name__ == '__main__':
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
-    if True:
+    if arr == 0:
         # Check which tiles still need to be done.
         need = []
         for band in bands:
@@ -926,7 +940,8 @@ if __name__ == '__main__':
                     print 'Output file exists:', ofn
                     continue
                 need.append(band*1000 + i)
-        # Collapse contiguous strings
+        print ' '.join('%i' %i for i in need)
+        # Collapse contiguous ranges
         strings = []
         start = need.pop(0)
         end = start
@@ -946,6 +961,20 @@ if __name__ == '__main__':
         sys.exit(0)
             
     ps = PlotSequence(dataset)
+
+    if len(args):
+        A = []
+        for a in args:
+            tileid = int(a)
+            #print 'Running index', tileid
+            band = tileid / 1000
+            tileid = tileid % 1000
+            print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
+            A.append((T[tileid], band, WISE, ps))
+        mp.map(_bounce_one_coadd, A)
+
+        sys.exit(0)
+
 
     #plot_region(r0,r1,d0,d1, T, WISE, bands[0], ps)
 
