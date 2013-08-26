@@ -43,6 +43,7 @@ def get_l1b_file(basedir, scanid, frame, band):
 # Find WISE images in range
 # Read WISE sources in range
 def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
+             indexfn=None,
              **kwa):
     bandnum = opt.bandnum
     band = 'w%i' % bandnum
@@ -54,7 +55,10 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     TT = []
     for d,tag in wisedatadirs:
-        ifn = os.path.join(d, 'WISE-index-L1b.fits')
+        if indexfn is None:
+            ifn = os.path.join(d, 'WISE-index-L1b.fits')
+        else:
+            ifn = indexfn
         T = fits_table(ifn, columns=['ra','dec','scan_id','frame_num', 'band'])
         print 'Read', len(T), 'from WISE index', ifn
 
@@ -83,10 +87,10 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         Igood = []
         for i,(sid,fnum) in enumerate(zip(T.scan_id, T.frame_num)):
             # HACK -- uncertainty image faulty
-            if ((sid == '11301b' and fnum == 57) or
-                (sid == '11304a' and fnum == 30)):
-                print 'WARNING: skipping bad data:', sid, fnum
-                continue
+            #if ((sid == '11301b' and fnum == 57) or
+            #    (sid == '11304a' and fnum == 30)):
+            #    print 'WARNING: skipping bad data:', sid, fnum
+            #    continue
             Igood.append(i)
         if len(Igood) != len(T):
             T.cut(np.array(Igood))

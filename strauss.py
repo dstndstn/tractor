@@ -66,6 +66,9 @@ if __name__ == '__main__':
         dlo = d0 - margin
         dhi = d1 + margin
 
+        #indexfn = None
+        indexfn = 'WISE-index-L1b.fits'
+
         opt = myopts()
         opt.wisedatadirs = wisedatadirs
         opt.minflux = None
@@ -83,6 +86,24 @@ if __name__ == '__main__':
         opt.write = True
         opt.ri = None
         opt.di = None
+
+        if True:
+            # HACK -- got the WISE catalogs on riemann and the WISE exposures on NERSC...
+            from wisecat import wise_catalog_radecbox
+            cols=['cntr', 'ra', 'dec', 'sigra', 'sigdec', 'cc_flags',
+                  'ext_flg', 'var_flg', 'moon_lev', 'ph_qual',
+                  'w1mpro', 'w1sigmpro', 'w1sat', 'w1nm', 'w1m', 
+                  'w1snr', 'w1cov', 'w1mag', 'w1sigm', 'w1flg',
+                  'w2mpro', 'w2sigmpro', 'w2sat', 'w2nm', 'w2m',
+                  'w2snr', 'w2cov', 'w2mag', 'w2sigm', 'w2flg',
+                  'w3mpro', 'w3sigmpro', 'w3sat', 'w3nm', 'w3m', 
+                  'w3snr', 'w3cov', 'w3mag', 'w3sigm', 'w3flg',
+                  'w4mpro', 'w4sigmpro', 'w4sat', 'w4nm', 'w4m',
+                  'w4snr', 'w4cov', 'w4mag', 'w4sigm', 'w4flg', ]
+            W = wise_catalog_radecbox(rlo, rhi, dlo, dhi, cols=cols)
+            if opt.wsources is not None:
+                W.writeto(opt.wsources)
+                print 'Wrote', opt.wsources
     
         for band in [1,2,3,4]:
             opt.bandnum = band
@@ -92,7 +113,7 @@ if __name__ == '__main__':
     
             try:
                 #runtostage(110, opt, mp, rlo,rhi,dlo,dhi)
-                runtostage(108, opt, mp, rlo,rhi,dlo,dhi)
+                runtostage(108, opt, mp, rlo,rhi,dlo,dhi, indexfn=indexfn)
                 #runtostage(700, opt, mp, rlo,rhi,dlo,dhi)
             except:
                 import traceback
