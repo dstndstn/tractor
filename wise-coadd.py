@@ -49,7 +49,7 @@ median_f = flat_median_f
 outdir = 'wise-coadds'
 pixscale = 2.75 / 3600.
 W,H = 2048, 2048
-bands = [1,2]
+bands = [1,2,3,4]
 # WISE Level 1b inputs
 wisedir = 'wise-frames'
 mask_gz = True
@@ -157,7 +157,7 @@ def main():
     T = get_atlas_tiles(r0,r1,d0,d1)
     allWISE = get_wise_frames(r0,r1,d0,d1)
 
-    plot_region(r0,r1,d0,d1, T, allWISE, bands[0], ps)
+    plot_region(r0,r1,d0,d1, ps, T, allWISE[allWISE.band == bands[0]], None)
 
     print 'Entering main loop:', Time() - t00
     for ti in T:
@@ -347,6 +347,11 @@ def one_coadd(ti, band, WISE, ps):
 
         fitsio.write(ofn, fullmask, clobber=True)
 
+        cmd = 'gzip %s' % ofn
+        print 'Running:', cmd
+        rtn = os.system(cmd)
+        print 'Result:', rtn
+
     WISE.cut(np.array(ii))
     masks = [masks[i] for i in ii]
 
@@ -364,13 +369,13 @@ def one_coadd(ti, band, WISE, ps):
 
 
 
-def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
+def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
     plot = Plotstuff(outformat='png', size=(800,800),
                      rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
 
-    for i in range(2):
-        if i == 0:
+    for i in range(3):
+        if i in [0,2]:
             plot.color = 'verydarkblue'
         else:
             plot.color = 'black'
@@ -379,6 +384,8 @@ def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
         out = plot.outline
 
         if i == 0:
+            if T is None:
+                continue
             plot.alpha = 0.5
             for ti in T:
                 cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
@@ -388,9 +395,11 @@ def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
                 plot.plot('outline')
                 out.fill = 0
                 plot.plot('outline')
-        else:
+        elif i == 1:
+            if WISE is None:
+                continue
             # cut
-            WISE = WISE[WISE.band == band]
+            #WISE = WISE[WISE.band == band]
             plot.alpha = (3./256.)
             out.fill = 1
             print 'Plotting', len(WISE), 'exposures'
@@ -417,7 +426,7 @@ def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
                     WW.intfn = np.array(fns)
                     WW.writeto('sequels-wcs.fits')
 
-                intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+                intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, wise.band)
                 try:
                     wcs = Tan(intfn, 0, 1)
                 except:
@@ -445,6 +454,18 @@ def plot_region(r0,r1,d0,d1, T, WISE, band, ps):
             fn = ps.getnext()
             plot.write(fn)
             print 'Wrote', fn
+
+        elif i == 2:
+            if wcsfns is None:
+                continue
+            plot.alpha = 0.5
+            for fn in wcsfns:
+                out.set_wcs_file(fn, 0)
+                out.fill = 1
+                plot.plot('outline')
+                out.fill = 0
+                plot.plot('outline')
+
 
         plot.color = 'gray'
         plot.alpha = 1.
@@ -867,7 +888,12 @@ def trymain():
         traceback.print_exc()
 
 def _bounce_one_coadd(A):
-    one_coadd(*A)
+    try:
+        one_coadd(*A)
+    except:
+        import traceback
+        print 'one_coadd failed:'
+        traceback.print_exc()
 
 if __name__ == '__main__':
     import optparse
@@ -928,19 +954,44 @@ if __name__ == '__main__':
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
+    ps = PlotSequence(dataset)
+
     if arr == 0:
         # Check which tiles still need to be done.
         need = []
         for band in bands:
+            fns = []
             for i in range(len(T)):
                 tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
                 prefix = os.path.join(outdir, tag)
                 ofn = prefix + '-img.fits'
                 if os.path.exists(ofn):
                     print 'Output file exists:', ofn
+                    fns.append(ofn)
                     continue
                 need.append(band*1000 + i)
+
+            if band == bands[0]:
+                plot_region(r0,r1,d0,d1, ps, T, None, fns)
+            else:
+                plot_region(r0,r1,d0,d1, ps, None, None, fns)
+
         print ' '.join('%i' %i for i in need)
+
+        # write out scripts
+        for i in need:
+            script = '\n'.join(['#! /bin/bash',
+                                ('#PBS -N %s-%i' % (dataset, i)),
+                                '#PBS -l walltime=1:00:00',
+                                'cd $PBS_O_WORKDIR',
+                                ('export PBS_ARRAYID=%i' % i),
+                                './wise-coadd.py',
+                                ''])
+                                
+            sfn = 'pbs-%s-%i.sh' % (dataset, i)
+            write_file(script, sfn)
+            os.system('chmod 755 %s' % sfn)
+
         # Collapse contiguous ranges
         strings = []
         start = need.pop(0)
@@ -960,8 +1011,6 @@ if __name__ == '__main__':
         print ','.join(strings)
         sys.exit(0)
             
-    ps = PlotSequence(dataset)
-
     if len(args):
         A = []
         for a in args:
@@ -976,7 +1025,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
 
-    #plot_region(r0,r1,d0,d1, T, WISE, bands[0], ps)
+    #plot_region(r0,r1,d0,d1, ps, T, WISE, None)
 
     band = arr / 1000
     assert(band in bands)
