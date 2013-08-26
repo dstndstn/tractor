@@ -101,9 +101,15 @@ if __name__ == '__main__':
                   'w4mpro', 'w4sigmpro', 'w4sat', 'w4nm', 'w4m',
                   'w4snr', 'w4cov', 'w4mag', 'w4sigm', 'w4flg', ]
             W = wise_catalog_radecbox(rlo, rhi, dlo, dhi, cols=cols)
+            if W is None:
+                W = fits_table()
+                for c in cols:
+                    W.set(c, np.array([]))
             if opt.wsources is not None:
                 W.writeto(opt.wsources)
                 print 'Wrote', opt.wsources
+
+            continue
     
         for band in [1,2,3,4]:
             opt.bandnum = band

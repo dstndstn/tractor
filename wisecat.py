@@ -10,8 +10,12 @@ def wise_catalog_radecbox(r0, r1, d0, d1,
             continue
         fn = os.path.join(path, 'wise-allsky-cat-part%02i-radec.fits' % (i+1))
         T = fits_table(fn)
+        print 'Read', len(T), 'from', fn
         I = np.flatnonzero((T.ra  >= r0) * (T.ra  <= r1) *
                            (T.dec >= d0) * (T.dec <= d1))
+        print 'found', len(I), 'in range'
+        if len(I) == 0:
+            continue
         fn = os.path.join(path, 'wise-allsky-cat-part%02i.fits' % (i+1))
         T = fits_table(fn, rows=I, columns=cols)
         TT.append(T)
