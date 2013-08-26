@@ -1,7 +1,0 @@
-Type II quasars in SDSS to forced-photometer in WISE, from Michael Strauss
-
-email of 2013-08-23 from Strauss: attach dustin.lis
-
-text2fits.py -H "plate fiber mjd something ra dec" -f jjjddd dustin.lis strauss.fits
-
-
