@@ -772,7 +772,11 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         # Patch masked pixels so we can interpolate
         rr.npatched = np.count_nonzero(np.logical_not(goodmask))
         ok = patch_image(img, goodmask)
-        assert(ok)
+        if not ok:
+            print 'WARNING: Patching failed:'
+            print 'Image size:', img.shape
+            print 'Number to patch:', rr.npatched
+            continue
         assert(np.all(np.isfinite(img)))
 
         # Estimate sky level via clipped medians
