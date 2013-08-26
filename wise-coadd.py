@@ -658,9 +658,17 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         cowb  [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rmask2
 
         # print 'Applying rchi masks to images...'
-        Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
         mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()), badpixmask.dtype)
-        mm.omask[Yo,Xo] = badpixmask[Yi,Xi]
+        try:
+            Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
+            mm.omask[Yo,Xo] = badpixmask[Yi,Xi]
+        except OverlapError:
+            import traceback
+            print 'WARNING: Caught OverlapError resampling rchi mask'
+            print 'rr WCS', rr.wcs
+            print 'shape', mm.omask.shape
+            print 'cosubwcs:', rr.cosubwcs
+            traceback.print_exc()
 
         masks.append(mm)
 
@@ -982,7 +990,8 @@ if __name__ == '__main__':
         for i in need:
             script = '\n'.join(['#! /bin/bash',
                                 ('#PBS -N %s-%i' % (dataset, i)),
-                                '#PBS -l walltime=1:00:00',
+                                '#PBS -l cput=1:00:00',
+                                '#PBS -l pvmem=4gb',
                                 'cd $PBS_O_WORKDIR',
                                 ('export PBS_ARRAYID=%i' % i),
                                 './wise-coadd.py',
@@ -997,17 +1006,22 @@ if __name__ == '__main__':
         start = need.pop(0)
         end = start
         while len(need):
-            while len(need):
-                x = need.pop(0)
-                if x == start + 1:
-                    end = x
+            x = need.pop(0)
+            if x == end + 1:
+                # extend this run
+                end = x
+            else:
+                # run finished; output and start new one.
+                if start == end:
+                    strings.append('%i' % start)
                 else:
-                    if start == end:
-                        strings.append('%i' % start)
-                    else:
-                        strings.append('%i-%i' % (start, end))
-                    start = end = x
-            
+                    strings.append('%i-%i' % (start, end))
+                start = end = x
+        # done; output
+        if start == end:
+            strings.append('%i' % start)
+        else:
+            strings.append('%i-%i' % (start, end))
         print ','.join(strings)
         sys.exit(0)
             

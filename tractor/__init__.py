@@ -4,6 +4,7 @@ from basics import *
 #import sdss
 #import cfht
 from nasasloan import *
+from psfex import *
 
 from ttime import Time
 __all__ = [
@@ -31,4 +32,6 @@ __all__ = [
 	'Catalog', 'Tractor',
 	# ttime
 	'Time',
+    # psfex
+    'VaryingGaussianPSF', 'PsfEx',
 	]
