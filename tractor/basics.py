@@ -1466,14 +1466,19 @@ class ParamsWrapper(BaseParams):
 class ShiftedPsf(ParamsWrapper):
     def __init__(self, psf, x0, y0):
         super(ShiftedPsf, self).__init__(psf)
+        self.psf = psf
         self.x0 = x0
         self.y0 = y0
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
     def getPointSourcePatch(self, px, py, **kwargs):
-        return self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py, **kwargs)
-    
-        
+        p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py, **kwargs)
+        # Now we have to shift the patch back too
+        if p is None:
+            return None
+        p.x0 -= self.x0
+        p.y0 -= self.y0
+        return p
     
 class ScaledPhotoCal(ParamsWrapper):
     def __init__(self, photocal, factor):

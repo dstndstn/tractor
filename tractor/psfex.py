@@ -134,9 +134,6 @@ class VaryingGaussianPSF(MultiParams):
             self.splinedata = (pp, XX, YY)
 
 
-
-
-
 class PsfEx(VaryingGaussianPSF):
     def __init__(self, fn, W, H, ext=1,
                  scale=True,
