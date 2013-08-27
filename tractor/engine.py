@@ -1630,10 +1630,10 @@ class Tractor(MultiParams):
             p1 = self.getParams()
             self.setParams(p0)
             U,I = np.unique(p1, return_inverse=True)
-            print len(p0), 'params;', len(U), 'unique'
+            #print len(p0), 'params;', len(U), 'unique'
             paramindexmap = I
-            print 'paramindexmap:', paramindexmap
-            print 'p1:', p1
+            #print 'paramindexmap:', paramindexmap
+            #print 'p1:', p1
             
         # Build the sparse matrix of derivatives:
         sprows = []

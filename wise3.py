@@ -388,29 +388,11 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # Resample
     ims = mp.map(_resample_one, [(tim, None, cowcs, True) for tim in tims])
 
-    # If any fail due to resampling using a spline (because only a
-    # small fraction of the image hits the ROI), redo them.
-    # Necessary when running very small regions...
-    redo = []
-    for i,d in enumerate(ims):
-        if d is None:
-            redo.append([tims[i], None, cowcs, False])
-    if len(redo):
-        print 'Re-running resampling without spline for', len(redo), 'images'
-        ims2 = mp.map(_resample_one, redo)
-        j = 0
-        for i,d in enumerate(ims):
-            if d is None:
-                ims[i] = ims2[j]
-                j += 1
-
     # Coadd
-    #nnsum    = np.zeros((H,W))
     lancsum  = np.zeros((H,W))
     lancsum2 = np.zeros((H,W))
     wsum     = np.zeros((H,W))
     for i,d in enumerate(ims):
-        #nnsum    += (d.nnimg   * d.ww)
         if d is None:
             print 'No overlap:', tims[i]
             print 'image shape:', tims[i].shape
@@ -434,7 +416,6 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     # For W4, single-image ww is ~ 1e-10
     tinyw = 1e-16
-    #nnimg   = (nnsum   / np.maximum(wsum, 1e-16))
     coimg   = (lancsum / np.maximum(wsum, tinyw))
     coinvvar = wsum
     coimg1 = coimg
@@ -624,20 +605,23 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     sdss = S
 
     # Find WISE objs with no SDSS counterpart
-    I,J,d = match_radec(W.ra, W.dec, sdss.ra, sdss.dec, 4./3600.)
-    unmatched = np.ones(len(W), bool)
-    unmatched[I] = False
-    UW = W[unmatched]
-    # 1. Create tractor PointSource objects for each WISE-only object
-    wcat = []
-    for i in range(len(UW)):
-        mag = UW.get('w%impro' % bandnum)[i]
-        nm = NanoMaggies.magToNanomaggies(mag)
-        src = PointSource(RaDecPos(UW.ra[i], UW.dec[i]),
-                          NanoMaggies(**{band: nm}))
-        wcat.append(src)
-    srcs = [src for src in cat] + wcat
-    tractor.setCatalog(Catalog(*srcs))
+    if len(W):
+        I,J,d = match_radec(W.ra, W.dec, sdss.ra, sdss.dec, 4./3600.)
+        unmatched = np.ones(len(W), bool)
+        unmatched[I] = False
+        UW = W[unmatched]
+        # 1. Create tractor PointSource objects for each WISE-only object
+        wcat = []
+        for i in range(len(UW)):
+            mag = UW.get('w%impro' % bandnum)[i]
+            nm = NanoMaggies.magToNanomaggies(mag)
+            src = PointSource(RaDecPos(UW.ra[i], UW.dec[i]),
+                              NanoMaggies(**{band: nm}))
+            wcat.append(src)
+        srcs = [src for src in cat] + wcat
+        tractor.setCatalog(Catalog(*srcs))
+    else:
+        UW = W.copy()
 
     return dict(cat1=cat1, tractor=tractor, UW=UW)
 
@@ -651,6 +635,18 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         minFlux = np.median([tim.sigma1 * minFlux / tim.getPhotoCal().val
                              for tim in tims])
         print 'minFlux:', minFlux, 'nmgy'
+
+    goodtims = []
+    for tim in tims:
+        assert(np.all(np.isfinite(tim.getImage())))
+        assert(np.all(np.isfinite(tim.getInvvar())))
+        #print 'tim', tim.name, 'invvar', tim.getInvvar().min(), tim.getInvvar().max()
+        if tim.getInvvar().max() == 0:
+            print 'Dropping tim', tim.name, ': no non-zero invvar pixels'
+            continue
+        goodtims.append(tim)
+    tractor.setImages(Images(*goodtims))
+    tims = tractor.getImages()
 
     t0 = Time()
     tractor.freezeParamsRecursive('*')
@@ -700,14 +696,7 @@ class Duck(object):
 def get_sip_subwcs(wcs, extent):
     # Create sub-WCS
     (x0, x1, y0, y1) = extent
-    wcs2 = Sip(wcs)
-    cpx,cpy = wcs2.crpix
-    wcs2.set_crpix((cpx - x0, cpy - y0))
-    w = (x1 - x0)
-    h = (y1 - y0)
-    wcs2.set_width(float(w))
-    wcs2.set_height(float(h))
-    return wcs2
+    return wcs.get_subimage(int(x0), int(y0), int(x1-x0), int(y1-y0))
 
 def _resample_one((tim, mod, targetwcs, spline)):
     print 'Resampling', tim.name
@@ -732,14 +721,19 @@ def _resample_one((tim, mod, targetwcs, spline)):
     patchimg = tim.data.copy()
     ok = patch_image(patchimg, tim.invvar > 0,
                      required=tim.rdmask)
-    assert(ok)
+    if not ok:
+        print 'WARNING: patching failed.  Image size', patchimg.shape
+        print 'Wanted to patch', np.count_nonzero(tim.rdmask), 'pixels'
+        return None
+
     # Resample
     Lorder = 3
     inims = [patchimg]
     if mod is not None:
         inims.append(mod)
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder, spline=spline)
-    if yo is None:
+    try:
+        yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, inims, Lorder, spline=spline)
+    except OverlapError:
         return None
     rpatch = np.zeros((H,W))
     rpatch[yo,xo] = rpix[0]
@@ -787,13 +781,10 @@ def _resample_mod((tim, mod, targetwcs, spline)):
     W,H = targetwcs.get_width(), targetwcs.get_height()
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
     Lorder = 3
-    yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=spline)
-    if yo is None:
-        if spline:
-            print 'Retrying without spline...'
-            yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=False)
-        if yo is None:
-            return None
+    try:
+        yo,xo,yi,xi,rpix = resample_with_wcs(targetwcs, wcs2, [mod], Lorder, spline=spline)
+    except OverlapError:
+        return None
     rmod = np.zeros((H,W))
     rmod[yo,xo] = rpix[0]
     iv = np.zeros((H,W))
@@ -807,13 +798,10 @@ def _rev_resample_mask((tim, mask, targetwcs)):
     if mask is None:
         return None
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
-    yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[])
-    if yo is None:
-        #
-        print 'Retrying without spline'
-        yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[], spline=False)
-        if yo is None:
-            return None
+    try:
+        yo,xo,yi,xi,nil = resample_with_wcs(wcs2, targetwcs, [],[])
+    except OverlapError:
+        return None
     w,h = int(wcs2.get_width()), int(wcs2.get_height())
     rmask = np.zeros((h,w))
     rmask[yo,xo] = mask[yi, xi]
@@ -847,7 +835,7 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
         args.append((tim, modx, cowcs, True))
         
-        if i < 10:
+        if i < 10 and ps is not None:
 
             ima = dict(interpolation='nearest', origin='lower',
                        vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
@@ -899,35 +887,36 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     comod2 = modsum2 / np.maximum(wsum2, 1e-12)
     cochi2 = (coimg - comod2) * np.sqrt(coinvvar)
 
-    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    ima = dict(interpolation='nearest', origin='lower',
-               vmin=-2*sig, vmax=10*sig)
+    if ps is not None:
+        sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-2*sig, vmax=10*sig)
 
-    plt.clf()
-    plt.imshow(comod2, **ima)
-    plt.title('Coadded model')
-    plt.colorbar()
-    ps.savefig()
+        plt.clf()
+        plt.imshow(comod2, **ima)
+        plt.title('Coadded model')
+        plt.colorbar()
+        ps.savefig()
+        
+        # plt.clf()
+        # plt.imshow(cochi, interpolation='nearest', origin='lower',
+        #            vmin=-10., vmax=10., cmap='gray')
+        # plt.title('Chi (before)')
+        # plt.colorbar()
+        # ps.savefig()
 
-    # plt.clf()
-    # plt.imshow(cochi, interpolation='nearest', origin='lower',
-    #            vmin=-10., vmax=10., cmap='gray')
-    # plt.title('Chi (before)')
-    # plt.colorbar()
-    # ps.savefig()
+        plt.clf()
+        plt.imshow(cochi2, interpolation='nearest', origin='lower',
+                   vmin=-10., vmax=10., cmap='gray')
+        plt.title('Coadded chi')
+        plt.colorbar()
+        ps.savefig()
 
-    plt.clf()
-    plt.imshow(cochi2, interpolation='nearest', origin='lower',
-               vmin=-10., vmax=10., cmap='gray')
-    plt.title('Coadded chi')
-    plt.colorbar()
-    ps.savefig()
-
-    # plt.clf()
-    # plt.imshow(comod, **ima)
-    # plt.title('Model (before)')
-    # plt.colorbar()
-    # ps.savefig()
+        # plt.clf()
+        # plt.imshow(comod, **ima)
+        # plt.title('Model (before)')
+        # plt.colorbar()
+        # ps.savefig()
     
 
     return dict(comod2=comod2)
@@ -981,39 +970,40 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     cat3 = cat.copy()
 
-    sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    ima = dict(interpolation='nearest', origin='lower',
-               vmin=-2*sig, vmax=10*sig)
-    imchi = dict(interpolation='nearest', origin='lower',
-                 vmin=-5, vmax=5, cmap='gray')
+    if ps is not None:
+        sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=-2*sig, vmax=10*sig)
+        imchi = dict(interpolation='nearest', origin='lower',
+                     vmin=-5, vmax=5, cmap='gray')
 
-    (im,mod0,ie,chi0,roi) = ims0[0]
-    (im,mod1,ie,chi1,roi) = ims1[0]
+        (im,mod0,ie,chi0,roi) = ims0[0]
+        (im,mod1,ie,chi1,roi) = ims1[0]
 
-    plt.clf()
-    plt.imshow(im, **ima)
-    plt.title('coadd: data')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(im, **ima)
+        plt.title('coadd: data')
+        ps.savefig()
 
-    plt.clf()
-    plt.imshow(mod0, **ima)
-    plt.title('coadd: initial model')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(mod0, **ima)
+        plt.title('coadd: initial model')
+        ps.savefig()
 
-    plt.clf()
-    plt.imshow(mod1, **ima)
-    plt.title('coadd: final model')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(mod1, **ima)
+        plt.title('coadd: final model')
+        ps.savefig()
 
-    plt.clf()
-    plt.imshow(chi0, **imchi)
-    plt.title('coadd: initial chi')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(chi0, **imchi)
+        plt.title('coadd: initial chi')
+        ps.savefig()
 
-    plt.clf()
-    plt.imshow(chi1, **imchi)
-    plt.title('coadd: final chi')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(chi1, **imchi)
+        plt.title('coadd: final chi')
+        ps.savefig()
 
     m2,m3 = [],[]
     for s2,s3 in zip(cat2, cat3):
@@ -1022,17 +1012,18 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     m2 = np.array(m2)
     m3 = np.array(m3)
 
-    plt.clf()
-    plt.plot(m2, m3, 'b.', ms=8)
-    if bandnum in [1,2]:
-        lo,hi = 12,24
-    else:
-        lo,hi = 8,20
-    plt.plot([lo,hi],[lo,hi], 'k-', lw=2, alpha=0.3)
-    plt.axis([lo,hi,lo,hi])
-    plt.xlabel('Individual images photometry (mag)')
-    plt.ylabel('Coadd photometry (mag)')
-    ps.savefig()
+    if ps is not None:
+        plt.clf()
+        plt.plot(m2, m3, 'b.', ms=8)
+        if bandnum in [1,2]:
+            lo,hi = 12,24
+        else:
+            lo,hi = 8,20
+        plt.plot([lo,hi],[lo,hi], 'k-', lw=2, alpha=0.3)
+        plt.axis([lo,hi,lo,hi])
+        plt.xlabel('Individual images photometry (mag)')
+        plt.ylabel('Coadd photometry (mag)')
+        ps.savefig()
 
     print 'SDSS sources:', len(sdss)
     print 'UW sources:', len(UW)
@@ -1044,84 +1035,81 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     I = ((ra >= r0) * (ra <= r1) * (dec >= d0) * (dec <= d1))
     inbounds = np.flatnonzero(I)
     J = np.arange(len(I)) < len(sdss)
+
+    if ps is not None:
+        plt.clf()
+        p1 = plt.plot(m2[I*J], (m3-m2)[I*J], 'b.', ms=8)
+        nJ = np.logical_not(J)
+        p2 = plt.plot(m2[nJ], (m3-m2)[nJ], 'g.', ms=8)
+        I = np.logical_not(I)
+        p3 = plt.plot(m2[I*J], (m3-m2)[I*J], 'r.', ms=8)
+        if bandnum in [1,2]:
+            lo,hi = 12,24
+        else:
+            lo,hi = 8,20
+        plt.plot([lo,hi],[0, 0], 'k-', lw=2, alpha=0.3)
+        plt.axis([lo,hi,-2,2])
+        plt.xlabel('Individual images photometry (mag)')
+        plt.ylabel('Coadd photometry - Individual (mag)')
+        plt.legend((p1,p2,p3),('In bounds', 'WISE-only', 'Out-of-bounds'))
+        ps.savefig()
+
+        # Show locations of largest changes
     
-    plt.clf()
-    p1 = plt.plot(m2[I*J], (m3-m2)[I*J], 'b.', ms=8)
-    nJ = np.logical_not(J)
-    p2 = plt.plot(m2[nJ], (m3-m2)[nJ], 'g.', ms=8)
-    I = np.logical_not(I)
-    p3 = plt.plot(m2[I*J], (m3-m2)[I*J], 'r.', ms=8)
-    if bandnum in [1,2]:
-        lo,hi = 12,24
-    else:
-        lo,hi = 8,20
-    plt.plot([lo,hi],[0, 0], 'k-', lw=2, alpha=0.3)
-    plt.axis([lo,hi,-2,2])
-    plt.xlabel('Individual images photometry (mag)')
-    plt.ylabel('Coadd photometry - Individual (mag)')
-    plt.legend((p1,p2,p3),('In bounds', 'WISE-only', 'Out-of-bounds'))
-    ps.savefig()
+        plt.clf()
+        plt.imshow(im, **ima)
+        plt.xticks([]); plt.yticks([])
+        plt.gray()
+        plt.title('Coadd %s: data' % band)
+        ps.savefig()
+        ax = plt.axis()
+        J = np.argsort(-np.abs((m3-m2)[inbounds]))
+        for j in J[:5]:
+            ii = inbounds[j]
+            pos = cat2[ii].getPosition()
+            x,y = coim.getWcs().positionToPixel(pos)
+            plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+            plt.plot(x, y, 'r+', ms=15, lw=1.5)
+        plt.axis(ax)
+        ps.savefig()
 
+        plt.clf()
+        plt.imshow(mod1, **ima)
+        plt.xticks([]); plt.yticks([])
+        plt.gray()
+        ax = plt.axis()
+        J = np.argsort(-np.abs((m3-m2)[inbounds]))
+        for j in J[:5]:
+            ii = inbounds[j]
+            pos = cat2[ii].getPosition()
+            x,y = coim.getWcs().positionToPixel(pos)
+            plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+            plt.plot(x, y, 'r+', ms=15, lw=1.5)
+        plt.axis(ax)
+        plt.title('Coadd %s: model' % band)
+        ps.savefig()
 
-    # Show locations of largest changes
+        plt.clf()
+        plt.imshow(comod2, **ima)
+        plt.xticks([]); plt.yticks([])
+        plt.gray()
+        plt.title('individual frames: model')
+        ps.savefig()
     
-    plt.clf()
-    plt.imshow(im, **ima)
-    plt.xticks([]); plt.yticks([])
-    plt.gray()
-    plt.title('Coadd %s: data' % band)
-    ps.savefig()
-
-    ax = plt.axis()
-    J = np.argsort(-np.abs((m3-m2)[inbounds]))
-    for j in J[:5]:
-        ii = inbounds[j]
-        pos = cat2[ii].getPosition()
-        x,y = coim.getWcs().positionToPixel(pos)
-        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
-        plt.plot(x, y, 'r+', ms=15, lw=1.5)
-    plt.axis(ax)
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(mod1, **ima)
-    plt.xticks([]); plt.yticks([])
-    plt.gray()
-    ax = plt.axis()
-    J = np.argsort(-np.abs((m3-m2)[inbounds]))
-    for j in J[:5]:
-        ii = inbounds[j]
-        pos = cat2[ii].getPosition()
-        x,y = coim.getWcs().positionToPixel(pos)
-        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
-        plt.plot(x, y, 'r+', ms=15, lw=1.5)
-    plt.axis(ax)
-    plt.title('Coadd %s: model' % band)
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(comod2, **ima)
-    plt.xticks([]); plt.yticks([])
-    plt.gray()
-    plt.title('individual frames: model')
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(chi1, **imchi)
-    plt.xticks([]); plt.yticks([])
-    ax = plt.axis()
-    J = np.argsort(-np.abs((m3-m2)[inbounds]))
-    for j in J[:5]:
-        ii = inbounds[j]
-        pos = cat2[ii].getPosition()
-        x,y = coim.getWcs().positionToPixel(pos)
-        plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
-        plt.plot(x, y, 'r+', ms=15, lw=1.5)
-    plt.axis(ax)
-    plt.title('Coadd %s: chi' % band)
-    ps.savefig()
-
-
+        plt.clf()
+        plt.imshow(chi1, **imchi)
+        plt.xticks([]); plt.yticks([])
+        ax = plt.axis()
+        J = np.argsort(-np.abs((m3-m2)[inbounds]))
+        for j in J[:5]:
+            ii = inbounds[j]
+            pos = cat2[ii].getPosition()
+            x,y = coim.getWcs().positionToPixel(pos)
+            plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+            plt.plot(x, y, 'r+', ms=15, lw=1.5)
+        plt.axis(ax)
+        plt.title('Coadd %s: chi' % band)
+        ps.savefig()
 
     return dict(ims3=ims1, cotr=tr, cat3=cat3)
 
@@ -2791,7 +2779,8 @@ def runtostage(stage, opt, mp, rlo,rhi,dlo,dhi, **kwa):
         def getkwargs(self, stage, **kwargs):
             kwa = self.kwargs.copy()
             kwa.update(kwargs)
-            kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
+            if opt.ps is not None:
+                kwa.update(ps = PlotSequence(opt.ps + '-s%i' % stage, format='%03i'))
             return kwa
 
     prereqs = { 
