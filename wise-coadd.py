@@ -347,7 +347,7 @@ def one_coadd(ti, band, WISE, ps):
 
         fitsio.write(ofn, fullmask, clobber=True)
 
-        cmd = 'gzip %s' % ofn
+        cmd = 'gzip -f %s' % ofn
         print 'Running:', cmd
         rtn = os.system(cmd)
         print 'Result:', rtn
@@ -540,9 +540,6 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         # median difference in the overlapping area.
         dsky = median_f(rr.rimg[rr.rmask] - subco[rr.rmask])
         print 'Sky difference:', dsky
-        dsky /= rr.zpscale
-        print 'scaled:', dsky
-        mm.dsky = dsky
 
         rchi = (rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) / np.maximum(subpp, 1e-6)
         #print 'rchi', rchi.min(), rchi.max()
@@ -671,6 +668,10 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
             traceback.print_exc()
 
         masks.append(mm)
+
+        dsky /= rr.zpscale
+        print 'scaled:', dsky
+        mm.dsky = dsky
 
         del badpix
         del badpixmask
