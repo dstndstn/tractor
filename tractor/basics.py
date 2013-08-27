@@ -348,7 +348,7 @@ class NullWCS(BaseParams):
     def hashkey(self):
         return ('NullWCS',)
     def positionToPixel(self, pos, src=None):
-        return pos
+        return pos.x, pos.y
     def pixelToPosition(self, x, y, src=None):
         return x,y
     def cdAtPixel(self, x, y):

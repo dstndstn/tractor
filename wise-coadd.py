@@ -772,11 +772,17 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
 
         # Patch masked pixels so we can interpolate
         rr.npatched = np.count_nonzero(np.logical_not(goodmask))
+        print 'Pixels to patch:', rr.npatched
+        if rr.npatched > 100000:
+            print 'WARNING: too many pixels to patch:', rr.npatched
+            rimgs.append(None)
+            continue
         ok = patch_image(img, goodmask)
         if not ok:
             print 'WARNING: Patching failed:'
             print 'Image size:', img.shape
             print 'Number to patch:', rr.npatched
+            rimgs.append(None)
             continue
         assert(np.all(np.isfinite(img)))
 
@@ -915,6 +921,8 @@ if __name__ == '__main__':
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--threads', dest='threads', type=int, help='Multiproc',
                       default=None)
+    parser.add_option('--todo', dest='todo', action='store_true', default=False,
+                      help='Print and plot fields to-do')
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -929,18 +937,13 @@ if __name__ == '__main__':
         arr = int(arr)
         batch = True
 
-    # d = os.environ.get('PBS_O_WORKDIR')
-    # if batch and d is not None:
-    #     os.chdir(d)
-    #     sys.path.append(os.getcwd())
-
-    if not batch:
-        import cProfile
-        from datetime import tzinfo, timedelta, datetime
-        pfn = 'prof-%s.dat' % (datetime.now().isoformat())
-        cProfile.run('trymain()', pfn)
-        print 'Wrote', pfn
-        sys.exit(0)
+    # if not batch:
+    #     import cProfile
+    #     from datetime import tzinfo, timedelta, datetime
+    #     pfn = 'prof-%s.dat' % (datetime.now().isoformat())
+    #     cProfile.run('trymain()', pfn)
+    #     print 'Wrote', pfn
+    #     sys.exit(0)
 
     dataset = 'sequels'
 
@@ -969,7 +972,7 @@ if __name__ == '__main__':
 
     ps = PlotSequence(dataset)
 
-    if arr == 0:
+    if opt.todo:
         # Check which tiles still need to be done.
         need = []
         for band in bands:
@@ -1040,9 +1043,12 @@ if __name__ == '__main__':
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
             A.append((T[tileid], band, WISE, ps))
         mp.map(_bounce_one_coadd, A)
-
         sys.exit(0)
 
+    if arr is None:
+        print 'No tile(s) specified'
+        parser.print_help()
+        sys.exit(0)
 
     #plot_region(r0,r1,d0,d1, ps, T, WISE, None)
 

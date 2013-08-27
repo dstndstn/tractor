@@ -18,7 +18,7 @@ __all__ = [
 	'NamedParams', 'NpArrayParams',
 	# basics
 	'ConstantSky', 'PointSource',
-	'Flux', 'Mag', 'Mags', 'MagsPhotoCal',
+	'Flux', 'Fluxes', 'Mag', 'Mags', 'MagsPhotoCal',
 	'NanoMaggies',
 	'PixPos', 'RaDecPos',
 	'NullPhotoCal', 'LinearPhotoCal',

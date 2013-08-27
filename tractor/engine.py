@@ -1287,7 +1287,9 @@ class Tractor(MultiParams):
             if quitNow:
                 break
 
-        rtn = (ims0,imsBest,V)
+        rtn = (ims0,imsBest)
+        if variance:
+            rtn = rtn + (V,)
 
         if fitstats and imsBest is None:
             rtn = rtn + (None,)
