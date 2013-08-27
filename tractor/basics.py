@@ -1461,6 +1461,19 @@ class ParamsWrapper(BaseParams):
         return self.real.getParamNames()
     def getStepSizes(self, *args, **kwargs):
         return self.real.getStepSizes(*args, **kwargs)
+
+
+class ShiftedPsf(ParamsWrapper):
+    def __init__(self, psf, x0, y0):
+        super(ShiftedPsf, self).__init__(psf)
+        self.x0 = x0
+        self.y0 = y0
+    def hashkey(self):
+        return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
+    def getPointSourcePatch(self, px, py, **kwargs):
+        return self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py, **kwargs)
+    
+        
     
 class ScaledPhotoCal(ParamsWrapper):
     def __init__(self, photocal, factor):
