@@ -644,6 +644,11 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
         if tim.getInvvar().max() == 0:
             print 'Dropping tim', tim.name, ': no non-zero invvar pixels'
             continue
+
+        if not np.isfinite(tim.getSky().getValue()):
+            print 'Infinite sky value in', tim.name
+            tim.getSky().setValue(0.)
+
         goodtims.append(tim)
     tractor.setImages(Images(*goodtims))
     tims = tractor.getImages()
