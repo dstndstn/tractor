@@ -96,7 +96,7 @@ print 'Read img', img.shape, img.dtype
 H,W = img.shape
 
 posfn = 'scuss/p0214_0099_1.pos.fits'
-if not os.path.exists(posfn)
+if not os.path.exists(posfn):
     from astrometry.util.fits import streaming_text_table
     postxt = posfn.replace('.fits','')
     assert(os.path.exists(postxt))
