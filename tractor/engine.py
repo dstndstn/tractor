@@ -1098,8 +1098,10 @@ class Tractor(MultiParams):
                 if rois:
                     roi = rois[i]
                 mod = m0.copy()
+                assert(np.all(np.isfinite(mod)))
                 if sky:
                     img.getSky().addTo(mod)
+                    assert(np.all(np.isfinite(mod)))
                 for b,um in zip(pa,umods):
                     if um is None:
                         continue
@@ -1108,6 +1110,8 @@ class Tractor(MultiParams):
                     counts = b * scale
                     if counts == 0.:
                         continue
+                    assert(np.isfinite(counts))
+                    assert(np.all(np.isfinite(um.patch)))
                     (um * counts).addTo(mod)
 
                 ie = img.getInvError()
@@ -1116,6 +1120,21 @@ class Tractor(MultiParams):
                     ie = ie[roi]
                     im = ie[roi]
                 chi = (im - mod) * ie
+
+                # DEBUG
+                if not np.all(np.isfinite(chi)):
+                    print 'Chi has non-finite pixels:'
+                    print np.unique(chi[np.logical_not(np.isfinite(chi))])
+
+                    print 'Inv error range:', ie.min(), ie.max()
+                    print 'All finite:', np.all(np.isfinite(ie))
+                    print 'Mod range:', mod.min(), mod.max()
+                    print 'All finite:', np.all(np.isfinite(mod))
+                    print 'Img range:', im.min(), im.max()
+                    print 'All finite:', np.all(np.isfinite(im))
+
+                assert(np.all(np.isfinite(chi)))
+                
                 ims.append((im, mod, ie, chi, roi))
 
                 chis.append(chi)
@@ -1172,17 +1191,9 @@ class Tractor(MultiParams):
 
             logverb('forced phot: getting update with damp=', damping)
             t0 = Time()
-            # X,V = self.getUpdateDirection(derivs, damp=damping, priors=priors,
-            #                             scale_columns=False, chiImages=chis0,
-            #                             variance=True)
-            # print 'Source variance:', V[Nsky:]
-            # if not skyvariance: ...FIXME...
-
             X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
                                         scale_columns=False, chiImages=chis0,
                                         shared_params=shared_params)
-            # print 'Source variance:', V[Nsky:]
-
             topt = Time()-t0
             logverb('forced phot: opt:', topt)
             #print 'forced phot: update', X

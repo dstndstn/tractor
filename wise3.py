@@ -652,9 +652,37 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     tractor.freezeParamsRecursive('*')
     tractor.thawPathsTo('sky')
     tractor.thawPathsTo(band)
-    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-        minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
-        fitstats=True, variance=True)
+    try:
+        ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+            minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
+            fitstats=True, variance=True)
+    except:
+        import traceback
+        traceback.print_exc()
+
+        cat = tractor.getCatalog()
+        for tim in tims:
+            plt.clf()
+            plt.imshow(tim.getImage(), interpolation='nearest', origin='lower', cmap='gray')
+            plt.title('Image ' + tim.name)
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(tim.getInvvar(), interpolation='nearest', origin='lower', cmap='gray')
+            plt.colorbar()
+            plt.title('Invvar ' + tim.name)
+            x,y = [],[]
+            wcs = tim.getWcs()
+            for src in cat:
+                xx,yy = wcs.positionToPixel(src.getPosition())
+                x.append(xx)
+                y.append(yy)
+            ax = plt.axis()
+            plt.plot(x, y, 'ro')
+            plt.axis(ax)
+            ps.savefig()
+        raise
+
     print 'Forced phot took', Time()-t0
 
     cat = tractor.catalog
@@ -701,8 +729,9 @@ def get_sip_subwcs(wcs, extent):
 def _resample_one((tim, mod, targetwcs, spline)):
     print 'Resampling', tim.name
     wcs2 = get_sip_subwcs(tim.getWcs().wcs, tim.extent)
-    yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[], spline=spline)
-    if yo is None:
+    try:
+        yo,xo,yi,xi,nil = resample_with_wcs(targetwcs, wcs2, [],[], spline=spline)
+    except OverlapError:
         return None
     W,H = targetwcs.get_width(), targetwcs.get_height()
     nnim = np.zeros((H,W))
@@ -881,7 +910,10 @@ def stage107(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
     modsum2 = np.zeros((H,W))
     wsum2 = np.zeros((H,W))
-    for rmod,ww in mims:
+    for mim in mims:
+        if mim is None:
+            continue
+        rmod,ww = mim
         modsum2 += (rmod * ww)
         wsum2   += ww
     comod2 = modsum2 / np.maximum(wsum2, 1e-12)
@@ -948,6 +980,13 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     # HACK
     psf = psf.mogAt(500., 500.)
 
+    coimg = coimg.copy()
+    coinvvar = coinvvar.copy()
+    bad = np.flatnonzero(np.logical_not(np.isfinite(coimg)))
+    print 'Zeroing out', len(bad), 'non-finite pixels in coadd'
+    coimg.flat[bad] = 0.0
+    coinvvar.flat[bad] = 0.0
+
     coim = Image(data=coimg, invvar=coinvvar, wcs=wcs, photocal=pcal, sky=sky,
                  psf=psf, name='coadd', domask=False)
 
@@ -959,12 +998,39 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     minsb = 0.005
     minFlux = None
     
-    t0 = Time()
-    ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-                                                    sky=True, minFlux=minFlux,
-                                                    fitstats=True,
-                                                    variance=True)
-    print 'Forced phot on coadd took', Time()-t0
+    try:
+        t0 = Time()
+        ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
+                                                        sky=True, minFlux=minFlux,
+                                                        fitstats=True,
+                                                        variance=True)
+        print 'Forced phot on coadd took', Time()-t0
+    except:
+        import traceback
+        traceback.print_exc()
+
+        plt.clf()
+        plt.imshow(coimg, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('Coimg')
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(coinvvar, interpolation='nearest', origin='lower', cmap='gray')
+        plt.colorbar()
+        plt.title('Coinvvar')
+        ps.savefig()
+
+        x,y = [],[]
+        for src in cat:
+            xx,yy = wcs.positionToPixel(src.getPosition())
+            x.append(xx)
+            y.append(yy)
+        ax = plt.axis()
+        plt.plot(x, y, 'ro')
+        plt.axis(ax)
+        ps.savefig()
+
+        raise
 
     print 'Sky level in coadd fit:', coim.getSky()
 
@@ -978,7 +1044,8 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
                      vmin=-5, vmax=5, cmap='gray')
 
         (im,mod0,ie,chi0,roi) = ims0[0]
-        (im,mod1,ie,chi1,roi) = ims1[0]
+        if ims1 is not None:
+            (im,mod1,ie,chi1,roi) = ims1[0]
 
         plt.clf()
         plt.imshow(im, **ima)
@@ -990,20 +1057,22 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.title('coadd: initial model')
         ps.savefig()
 
-        plt.clf()
-        plt.imshow(mod1, **ima)
-        plt.title('coadd: final model')
-        ps.savefig()
+        if ims1 is not None:
+            plt.clf()
+            plt.imshow(mod1, **ima)
+            plt.title('coadd: final model')
+            ps.savefig()
 
         plt.clf()
         plt.imshow(chi0, **imchi)
         plt.title('coadd: initial chi')
         ps.savefig()
 
-        plt.clf()
-        plt.imshow(chi1, **imchi)
-        plt.title('coadd: final chi')
-        ps.savefig()
+        if ims1 is not None:
+            plt.clf()
+            plt.imshow(chi1, **imchi)
+            plt.title('coadd: final chi')
+            ps.savefig()
 
     m2,m3 = [],[]
     for s2,s3 in zip(cat2, cat3):
@@ -1073,21 +1142,22 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.axis(ax)
         ps.savefig()
 
-        plt.clf()
-        plt.imshow(mod1, **ima)
-        plt.xticks([]); plt.yticks([])
-        plt.gray()
-        ax = plt.axis()
-        J = np.argsort(-np.abs((m3-m2)[inbounds]))
-        for j in J[:5]:
-            ii = inbounds[j]
-            pos = cat2[ii].getPosition()
-            x,y = coim.getWcs().positionToPixel(pos)
-            plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
-            plt.plot(x, y, 'r+', ms=15, lw=1.5)
-        plt.axis(ax)
-        plt.title('Coadd %s: model' % band)
-        ps.savefig()
+        if ims1 is not None:
+            plt.clf()
+            plt.imshow(mod1, **ima)
+            plt.xticks([]); plt.yticks([])
+            plt.gray()
+            ax = plt.axis()
+            J = np.argsort(-np.abs((m3-m2)[inbounds]))
+            for j in J[:5]:
+                ii = inbounds[j]
+                pos = cat2[ii].getPosition()
+                x,y = coim.getWcs().positionToPixel(pos)
+                plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+                plt.plot(x, y, 'r+', ms=15, lw=1.5)
+            plt.axis(ax)
+            plt.title('Coadd %s: model' % band)
+            ps.savefig()
 
         plt.clf()
         plt.imshow(comod2, **ima)
@@ -1096,20 +1166,21 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         plt.title('individual frames: model')
         ps.savefig()
     
-        plt.clf()
-        plt.imshow(chi1, **imchi)
-        plt.xticks([]); plt.yticks([])
-        ax = plt.axis()
-        J = np.argsort(-np.abs((m3-m2)[inbounds]))
-        for j in J[:5]:
-            ii = inbounds[j]
-            pos = cat2[ii].getPosition()
-            x,y = coim.getWcs().positionToPixel(pos)
-            plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
-            plt.plot(x, y, 'r+', ms=15, lw=1.5)
-        plt.axis(ax)
-        plt.title('Coadd %s: chi' % band)
-        ps.savefig()
+        if ims1 is not None:
+            plt.clf()
+            plt.imshow(chi1, **imchi)
+            plt.xticks([]); plt.yticks([])
+            ax = plt.axis()
+            J = np.argsort(-np.abs((m3-m2)[inbounds]))
+            for j in J[:5]:
+                ii = inbounds[j]
+                pos = cat2[ii].getPosition()
+                x,y = coim.getWcs().positionToPixel(pos)
+                plt.text(x, y, '%.1f/%.1f' % (m2[ii], m3[ii]), color='r')
+                plt.plot(x, y, 'r+', ms=15, lw=1.5)
+            plt.axis(ax)
+            plt.title('Coadd %s: chi' % band)
+            ps.savefig()
 
     return dict(ims3=ims1, cotr=tr, cat3=cat3)
 
