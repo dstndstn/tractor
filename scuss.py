@@ -104,7 +104,7 @@ if not os.path.exists(posfn):
     d = np.float64
     f = np.float32
     types = [str,str,d,d,str,f,f]
-    T = streaming_text_table(postxt, headerline=hdr, coltype=types)
+    T = streaming_text_table(postxt, headerline=hdr, coltypes=types)
     T.writeto(posfn)
     
 T = fits_table(posfn)
