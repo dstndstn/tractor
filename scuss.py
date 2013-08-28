@@ -13,15 +13,12 @@ import fitsio
 from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
-from astrometry.util.starutil_numpy import *
-from astrometry.util.multiproc import *
-from astrometry.util.sdss_radec_to_rcf import *
-from astrometry.libkd.spherematch import *
-from astrometry.sdss import *
 
 from tractor import *
 
 '''
+scp -r scuss@202.127.24.6:todustin .
+mv todustin scuss
 
 for x in scuss/*.pos; do
   text2fits.py -H "ra dec x y objid sdss_psfmag_u sdss_psfmagerr_u" -f ssddsff $x $x.fits
@@ -98,7 +95,19 @@ img = fitsio.read('scuss/p0214_0099_1.fits')
 print 'Read img', img.shape, img.dtype
 H,W = img.shape
 
-T = fits_table('scuss/p0214_0099_1.pos.fits')
+posfn = 'scuss/p0214_0099_1.pos.fits'
+if not os.path.exists(posfn)
+    from astrometry.util.fits import streaming_text_table
+    postxt = posfn.replace('.fits','')
+    assert(os.path.exists(postxt))
+    hdr = 'ra dec x y objid sdss_psfmag_u sdss_psfmagerr_u'
+    d = np.float64
+    f = np.float32
+    types = [str,str,d,d,str,f,f]
+    T = streaming_text_table(postxt, headerline=hdr, coltype=types)
+    T.writeto(posfn)
+    
+T = fits_table(posfn)
 print 'Read sources', len(T)
 
 flag = fitsio.read('scuss/flag_1.fits')

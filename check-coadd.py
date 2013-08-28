@@ -11,9 +11,11 @@ from astrometry.util.fits import *
 
 ps = PlotSequence('co')
 
-for coadd in ['2195p545']:
+for coadd in ['1384p454',
+    #'2195p545',
+              ]:
 
-    for band in [1]:
+    for band in [4]: #[1]:
         F = fits_table('wise-coadds/coadd-%s-w%i-frames.fits' % (coadd,band))
 
         frame0 = F[0]
@@ -37,6 +39,7 @@ for coadd in ['2195p545']:
             frame = '%s%03i' % (F.scan_id[i], F.frame_num[i])
             #imgfn = '%s-w%i-int-1b.fits' % (frame, band)
             imgfn = F.intfn[i]
+            print 'Reading image', imgfn
             img = fitsio.read(imgfn)
 
             okimg = img.flat[np.flatnonzero(np.isfinite(img))]
@@ -53,6 +56,7 @@ for coadd in ['2195p545']:
             frame = '%s%03i' % (F.scan_id[i], F.frame_num[i])
             #maskfn = '%s-w%i-msk-1b.fits.gz' % (frame, band)
             #mask = fitsio.read(maskfn)
+            print 'Reading', comaskfn
             comaskfn = 'wise-coadds/masks-coadd-%s-w%i/coadd-mask-%s-%s-w%i-1b.fits' % (coadd, band, coadd, frame, band)
             comask = fitsio.read(comaskfn)
 
@@ -70,8 +74,7 @@ for coadd in ['2195p545']:
             ps.savefig()
 
 
-    #for frame in ['05579a167']:
-    for frame in []:
+    for frame in []: #'05579a167']:
         for band in [1]:
             imgfn = '%s-w%i-int-1b.fits' % (frame, band)
             img = fitsio.read(imgfn)
@@ -105,7 +108,7 @@ for coadd in ['2195p545']:
             ps.savefig()
             
 
-    for band in [1,2]: #,3,4]:
+    for band in [4]: #[1,2]: #,3,4]:
         fni = 'L3a/%s_ab41/%s_ab41-w%i-int-3.fits' % (coadd, coadd, band)
         I = fitsio.read(fni)
         fnj = 'coadd-%s-w%i-img.fits' % (coadd, band)
