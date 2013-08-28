@@ -1011,26 +1011,29 @@ if __name__ == '__main__':
 
         # Collapse contiguous ranges
         strings = []
-        start = need.pop(0)
-        end = start
-        while len(need):
-            x = need.pop(0)
-            if x == end + 1:
-                # extend this run
-                end = x
-            else:
-                # run finished; output and start new one.
-                if start == end:
-                    strings.append('%i' % start)
+        if len(need):
+            start = need.pop(0)
+            end = start
+            while len(need):
+                x = need.pop(0)
+                if x == end + 1:
+                    # extend this run
+                    end = x
                 else:
-                    strings.append('%i-%i' % (start, end))
-                start = end = x
-        # done; output
-        if start == end:
-            strings.append('%i' % start)
+                    # run finished; output and start new one.
+                    if start == end:
+                        strings.append('%i' % start)
+                    else:
+                        strings.append('%i-%i' % (start, end))
+                    start = end = x
+            # done; output
+            if start == end:
+                strings.append('%i' % start)
+            else:
+                strings.append('%i-%i' % (start, end))
+            print ','.join(strings)
         else:
-            strings.append('%i-%i' % (start, end))
-        print ','.join(strings)
+            print 'Done (party now)'
         sys.exit(0)
             
     if len(args):
