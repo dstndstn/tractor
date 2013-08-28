@@ -27,7 +27,7 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 if __name__ == '__main__':
     '''
     ln -s /clusterfs/riemann/raid006/dr10/boss/sweeps/dr9 sweeps
-    
+    ln -s /clusterfs/riemann/raid006/dr10/boss/photoObj/301 photoObjs    
     '''
     dataset = 'sequels'
     fn = '%s-atlas.fits' % dataset
@@ -36,6 +36,8 @@ if __name__ == '__main__':
 
     tiledir = 'wise-coadds'
     bands = [1,2,3,4]
+    sweepdir = 'sweeps'
+    photoobjdir = 'photoObjs'
     
     ps = PlotSequence(dataset)
 
@@ -43,8 +45,8 @@ if __name__ == '__main__':
     R0,R1 = 120.0, 200.0
     D0,D1 =  45.0,  60.0
     
-    gsweeps = fits_table('sweeps/datasweep-index-star.fits')
-    ssweeps = fits_table('sweeps/datasweep-index-gal.fits')
+    gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
+    ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
     print 'Read', len(gsweeps), 'galaxy sweep entries'
     print 'Read', len(ssweeps), 'star sweep entries'
     gsweeps.cut(gsweeps.nprimary > 0)
@@ -56,12 +58,13 @@ if __name__ == '__main__':
     ssweeps.cut((ssweeps.ra  > (R0-margin)) * (ssweeps.ra  < (R1+margin)) *
                 (ssweeps.dec > (D0-margin)) * (ssweeps.dec < (D1+margin)))
     print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on RA,Dec box'
-    gsweeps.isgal = np.ones(len(gsweeps))
-    ssweeps.isgal = np.zeros(len(ssweeps))
+    gsweeps.isgal = np.ones( len(gsweeps), int)
+    ssweeps.isgal = np.zeros(len(ssweeps), int)
     sweeps = merge_tables([gsweeps, ssweeps])
     print 'Merged:', len(sweeps)
     
     for tile in T:
+        S = None
         for band in bands:
             print
             print 'Coadd tile', tile.coadd_id
@@ -77,14 +80,47 @@ if __name__ == '__main__':
             ra,dec = wcs.radec_center()
             print 'Center:', ra,dec
 
-            margin = 0.
+            if S is None:
+                margin = 0.
+                # Add approx SDSS field size margin
+                margin += np.hypot(13., 9.)/60.
+                cosd = np.cos(np.deg2rad(sweeps.dec))            
+                S = sweeps[(sweeps.ra  > (r0-margin/cosd)) * (sweeps.ra  < (r1+margin/cosd)) *
+                           (sweeps.dec > (d0-margin))      * (sweeps.dec < (d1+margin))]
+                print 'Cut to', len(S), 'datasweeps in this tile'
 
-            # Add approx SDSS field size margin
-            margin += np.hypot(13., 9.)/60.
+            for sweep in S:
+                fn = 'calibObj-%06i-%i-%s.fits.gz' % (sweep.run, sweep.camcol, 'gal' if sweep.isgal else 'star')
+                fn = os.path.join(sweepdir, sweep.rerun, fn)
+                print 'Reading', fn, 'rows', sweep.istart, 'to', sweep.iend
 
-            cosd = np.cos(np.deg2rad(sweeps.dec))            
-            S = sweeps[(sweeps.ra  > (r0-margin/cosd)) * (sweeps.ra  < (r1+margin/cosd)) *
-                       (sweeps.dec > (d0-margin))      * (sweeps.dec < (d1+margin))]
-            print 'Cut to', len(S), 'datasweeps in this tile'
-            
-            
+                columns = ['ra','dec']
+                if sweep.isgal:
+                    columns += ['id'] #'theta_dev', 'theta_exp', 'id']
+
+                with fitsio.FITS(fn, lower=True) as F:
+                    T = F[1][columns][sweep.istart : sweep.iend+1]
+                    #print 'Read table', type(T), T.dtype
+                    #print dir(T)
+                    T = fits_table(T)
+                    #print 'Read table:', T
+                    #T.about()
+                    print 'Read', len(T)
+
+                if sweep.isgal:
+                    # Cross-reference to photoObj files to get the galaxy shape
+                    fn = 'photoObj-%06i-%i-%04i.fits' % (sweep.run, sweep.camcol, sweep.field)
+                    fn = os.path.join(photoobjdir, '%i'%sweep.run, '%i'%sweep.camcol, fn)
+                    print 'Reading photoObj', fn
+                    print 'ID range', T.id.min(), T.id.max()
+                    P = fits_table(fn, columns=['id', 'theta_dev', 'ab_dev', 'theta_exp',
+                                                'ab_exp', 'fracdev', 'phi_dev_deg', 'phi_exp_deg'],
+                                   rows=T.id-1)
+                    print 'Read', len(P), 'photoObj entries'
+                    print 'T.id:', T.id
+                    print 'P.id:', P.id
+                    assert(np.all(P.id == T.id))
+                    P.ra = T.ra
+                    P.dec = T.dec
+                    T = P
+
