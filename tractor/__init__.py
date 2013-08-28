@@ -24,7 +24,7 @@ __all__ = [
 	'NullPhotoCal', 'LinearPhotoCal',
 	'WCS', 'NullWCS',
 	'FitsWcs', 'WcslibWcs', 'ConstantFitsWcs',
-	'NCircularGaussianPSF', 'GaussianMixturePSF',
+	'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
 	'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
 	'ParamsWrapper',
 	# engine

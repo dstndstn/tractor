@@ -34,7 +34,12 @@ def main():
     parser.add_option('-s', dest='postxt', help='Source positions input text file')
     parser.add_option('-S', dest='statsfn', help='Output image statistis filename (FITS table); optional')
 
-    parser.add_option('-P', dest='plotbase', help='Plot base filename (default: %default)', default='scuss')
+    parser.add_option('-g', dest='gaussianpsf', action='store_true',
+                      default=False,
+                      help='Use multi-Gaussian approximation to PSF?')
+    
+    parser.add_option('-P', dest='plotbase', default='scuss',
+                      help='Plot base filename (default: %default)')
     opt,args = parser.parse_args()
 
     # Check command-line arguments
@@ -87,20 +92,21 @@ def main():
 
     print 'Reading PSF', opt.psffn
     psf = PsfEx(opt.psffn, W, H)
-    
-    picpsffn = opt.psffn + '.pickle'
-    if not os.path.exists(picpsffn):
-        psf.savesplinedata = True
-        print 'Fitting PSF model...'
-        psf.ensureFit()
-        pickle_to_file(psf.splinedata, picpsffn)
-        print 'Wrote', picpsffn
-    else:
-        print 'Reading PSF model parameters from', picpsffn
-        data = unpickle_from_file(picpsffn)
-        print 'Fitting PSF...'
-        psf.fitSavedData(*data)
-    
+
+    if opt.gaussianpsf:
+        picpsffn = opt.psffn + '.pickle'
+        if not os.path.exists(picpsffn):
+            psf.savesplinedata = True
+            print 'Fitting PSF model...'
+            psf.ensureFit()
+            pickle_to_file(psf.splinedata, picpsffn)
+            print 'Wrote', picpsffn
+        else:
+            print 'Reading PSF model parameters from', picpsffn
+            data = unpickle_from_file(picpsffn)
+            print 'Fitting PSF...'
+            psf.fitSavedData(*data)
+            
     print 'Computing image sigma...'
     plo,phi = [np.percentile(img[flag == 0], p) for p in [25,75]]
     # Wikipedia says:  IRQ -> sigma:
@@ -173,11 +179,19 @@ def main():
             iy0 = max(0, ylo - margin)
             iy1 = min(H, yhi + margin)
             S = (slice(iy0, iy1), slice(ix0, ix1))
-    
+
             img = fullimg[S]
             invvar = fullinvvar[S]
+
+            if not opt.gaussianpsf:
+                # Instantiate pixelized PSF at this cell center.
+                pixpsf = fullpsf.instantiateAt((xlo+xhi)/2., (ylo+yhi)/2.)
+                print 'Pixpsf:', pixpsf.shape
+                psf = PixelizedPSF(pixpsf)
+            else:
+                psf = fullpsf
             psf = ShiftedPsf(fullpsf, ix0, iy0)
-    
+            
             # sources nearby
             x0 = max(0, xlo - margin*2)
             x1 = min(W, xhi + margin*2)
