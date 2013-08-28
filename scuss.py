@@ -17,31 +17,300 @@ from astrometry.util.plotutils import *
 from tractor import *
 
 '''
+Example data:
 scp -r scuss@202.127.24.6:todustin .
 mv todustin scuss
-
-for x in scuss/*.pos; do
-  text2fits.py -H "ra dec x y objid sdss_psfmag_u sdss_psfmagerr_u" -f ssddsff $x $x.fits
-done
-
 '''
-outfn = 'tractor-scuss.fits'
-imstatsfn = 'tractor-scuss-imstats.fits'
 
-ps = PlotSequence('scuss')
 
-if os.path.exists(outfn):
+def main():
+    import optparse
 
+    parser = optparse.OptionParser('%prog [options]')
+    parser.add_option('-o', dest='outfn', help='Output filename (FITS table)')
+    parser.add_option('-i', dest='imgfn', help='Image input filename')
+    parser.add_option('-f', dest='flagfn', help='Flags input filename')
+    parser.add_option('-p', dest='psffn', help='PsfEx input filename')
+    parser.add_option('-s', dest='postxt', help='Source positions input text file')
+    parser.add_option('-S', dest='statsfn', help='Output image statistis filename (FITS table); optional')
+
+    parser.add_option('-P', dest='plotbase', help='Plot base filename (default: %default)', default='scuss')
+    opt,args = parser.parse_args()
+
+    # Check command-line arguments
+    if len(args):
+        print 'Extra arguments:', args
+        parser.print_help()
+        sys.exit(-1)
+    for fn,name,exists in [(opt.outfn, 'output filename (-o)', False),
+                           (opt.imgfn, 'image filename (-i)', True),
+                           (opt.flagfn, 'flag filename (-f)', True),
+                           (opt.psffn, 'PSF filename (-p)', True),
+                           (opt.postxt, 'Source positions filename (-s)', True),
+                           ]:
+        if fn is None:
+            print 'Must specify', name
+            sys.exit(-1)
+        if exists and not os.path.exists(fn):
+            print 'Input file', fn, 'does not exist'
+            sys.exit(-1)
+
+    # outfn = 'tractor-scuss.fits'
+    # imstatsfn = 'tractor-scuss-imstats.fits'
+    
+
+    # Read inputs
+    print 'Reading input image', opt.imgfn
+    img = fitsio.read(opt.imgfn)
+    print 'Read img', img.shape, img.dtype
+    H,W = img.shape
+    
+    posfn = opt.postxt + '.fits'
+    if not os.path.exists(posfn):
+        from astrometry.util.fits import streaming_text_table
+        hdr = 'ra dec x y objid sdss_psfmag_u sdss_psfmagerr_u'
+        d = np.float64
+        f = np.float32
+        types = [str,str,d,d,str,f,f]
+        print 'Reading positions', opt.postxt
+        T = streaming_text_table(opt.postxt, headerline=hdr, coltypes=types)
+        T.writeto(posfn)
+        print 'Wrote', posfn
+
+    print 'Reading positions', posfn
+    T = fits_table(posfn)
+    print 'Read', len(T), 'source positions'
+    
+    print 'Reading flags', opt.flagfn
+    flag = fitsio.read(opt.flagfn)
+    print 'Read flag', flag.shape, flag.dtype
+
+    print 'Reading PSF', opt.psffn
+    psf = PsfEx(opt.psffn, W, H)
+    
+    picpsffn = opt.psffn + '.pickle'
+    if not os.path.exists(picpsffn):
+        psf.savesplinedata = True
+        print 'Fitting PSF model...'
+        psf.ensureFit()
+        pickle_to_file(psf.splinedata, picpsffn)
+        print 'Wrote', picpsffn
+    else:
+        print 'Reading PSF model parameters from', picpsffn
+        data = unpickle_from_file(picpsffn)
+        print 'Fitting PSF...'
+        psf.fitSavedData(*data)
+    
+    print 'Computing image sigma...'
+    plo,phi = [np.percentile(img[flag == 0], p) for p in [25,75]]
+    # Wikipedia says:  IRQ -> sigma:
+    sigma = (phi - plo) / (0.6745 * 2)
+    print 'Sigma:', sigma
+    invvar = np.zeros_like(img) + (1./sigma**2)
+    invvar[flag != 0] = 0.
+    
+    # Estimate sky level from median -- not actually necessary, since
+    # we will fit it below...
+    med = np.median(img[flag == 0])
+    
+    band = 'u'
+    
+    # We will break the image into cells for speed -- save the
+    # original full-size inputs here.
+    fullinvvar = invvar
+    fullimg  = img
+    fullflag = flag
+    fullpsf  = psf
+    fullT = T
+
+    # We add a margin around each cell -- we want sources within the
+    # cell, we need to include a margin of image pixels touched by
+    # those sources, and also an additional margin of sources that
+    # touch those pixels.
+    margin = 10 # pixels
+    # Number of cells to split the image into
+    nx = 20
+    ny = 20
+    # cell positions
+    XX = np.round(np.linspace(0, W, nx+1)).astype(int)
+    YY = np.round(np.linspace(0, H, ny+1)).astype(int)
+    
+    results = []
+
+    # Image statistics
+    imstats = fits_table()
+    imstats.xlo = np.zeros(((len(YY)-1)*(len(XX)-1)), int)
+    imstats.xhi = np.zeros_like(imstats.xlo)
+    imstats.ylo = np.zeros_like(imstats.xlo)
+    imstats.yhi = np.zeros_like(imstats.xlo)
+    imstats.ninbox = np.zeros_like(imstats.xlo)
+    imstats.ntotal = np.zeros_like(imstats.xlo)
+    imstatkeys = ['imchisq', 'imnpix', 'sky']
+    for k in imstatkeys:
+        imstats.set(k, np.zeros(len(imstats)))
+    
+    # Plots:
+    ps = PlotSequence(opt.plotbase)
+    
+    # Loop over cells...
+    celli = -1
+    for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
+        for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
+            celli += 1
+            imstats.xlo[celli] = xlo
+            imstats.xhi[celli] = xhi
+            imstats.ylo[celli] = ylo
+            imstats.yhi[celli] = yhi
+            # We will fit for sources in the [xlo,xhi), [ylo,yhi) box.
+            # We add a margin in the image around that ROI
+            # Beyond that, we add a margin of extra sources
+    
+            # image region: [ix0,ix1)
+            ix0 = max(0, xlo - margin)
+            ix1 = min(W, xhi + margin)
+            iy0 = max(0, ylo - margin)
+            iy1 = min(H, yhi + margin)
+            S = (slice(iy0, iy1), slice(ix0, ix1))
+    
+            img = fullimg[S]
+            invvar = fullinvvar[S]
+            psf = ShiftedPsf(fullpsf, ix0, iy0)
+    
+            # sources nearby
+            x0 = max(0, xlo - margin*2)
+            x1 = min(W, xhi + margin*2)
+            y0 = max(0, ylo - margin*2)
+            y1 = min(H, yhi + margin*2)
+            
+            # (SCUSS uses FITS pixel indexing, so -1)
+            J = np.flatnonzero((fullT.x-1 >= x0) * (fullT.x-1 < x1) *
+                               (fullT.y-1 >= y0) * (fullT.y-1 < y1))
+            T = fullT[J].copy()
+            T.row = J
+    
+            # Remember which sources are within the cell (not the margin)
+            T.inbounds = ((T.x-1 >= xlo) * (T.x-1 < xhi) *
+                          (T.y-1 >= ylo) * (T.y-1 < yhi))
+            # Shift source positions so they are correct for this subimage (cell)
+            T.x -= ix0
+            T.y -= iy0
+    
+            imstats.ninbox[celli] = sum(T.inbounds)
+            imstats.ntotal[celli] = len(T)
+    
+            print 'Image subregion:', img.shape
+            print 'Number of sources in ROI:', sum(T.inbounds)
+            print 'Number of source in ROI + margin:', len(T)
+            #print 'Source positions: x', T.x.min(), T.x.max(), 'y', T.y.min(), T.y.max()
+
+            # Create tractor.Image object
+            tim = Image(data=img, invvar=invvar, psf=psf, wcs=NullWCS(),
+                        sky=ConstantSky(med), photocal=LinearPhotoCal(1., band=band),
+                        name=opt.imgfn, domask=False)
+    
+            # Create tractor catalog objects
+            cat = []
+            for i in range(len(T)):
+                # -1: SCUSS, apparently, uses FITS pixel conventions.
+                src = PointSource(PixPos(T.x[i] - 1, T.y[i] - 1),
+                                  Fluxes(**{band:100.}))
+                cat.append(src)
+
+            # Create Tractor object.
+            tractor = Tractor([tim], cat)
+
+            # print 'All params:'
+            # tractor.printThawedParams()
+            t0 = Time()
+            tractor.freezeParamsRecursive('*')
+            tractor.thawPathsTo('sky')
+            tractor.thawPathsTo(band)
+            # print 'Fitting params:'
+            # tractor.printThawedParams()
+
+            # Forced photometry
+            ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+                minsb=1e-3*sigma, mindlnp=1., sky=True, minFlux=None, variance=True,
+                fitstats=True)
+            
+            print 'Forced photometry took', Time()-t0
+            
+            # print 'Fit params:'
+            # tractor.printThawedParams()
+
+            # Record results
+            T.set('tractor_%s_counts' % band, np.array([src.getBrightness().getBand(band) for src in cat]))
+            T.set('tractor_%s_counts_invvar' % band, IV)
+            T.cell = np.zeros(len(T), int) + celli
+            if fs is not None:
+                # Per-source stats
+                for k in ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
+                    T.set(k, getattr(fs, k))
+                # Per-image stats
+                for k in imstatkeys:
+                    X = getattr(fs, k)
+                    imstats.get(k)[celli] = X[0]
+            results.append(T)
+
+            # Make plots for the first N cells
+            if celli >= 10:
+                continue
+    
+            mod = tractor.getModelImage(0)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=med + -2. * sigma, vmax=med + 5. * sigma)
+            plt.clf()
+            plt.imshow(img, **ima)
+            plt.title('Data')
+            ps.savefig()
+            
+            plt.clf()
+            plt.imshow(mod, **ima)
+            plt.title('Model')
+            ps.savefig()
+            
+            noise = np.random.normal(scale=sigma, size=img.shape)
+            plt.clf()
+            plt.imshow(mod + noise, **ima)
+            plt.title('Model + noise')
+            ps.savefig()
+            
+            chi = (img - mod) * tim.getInvError()
+            plt.clf()
+            plt.imshow(chi, interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+            plt.title('Chi')
+            ps.savefig()
+    
+
+    # Merge results from the cells
+    TT = merge_tables(results)
+    # Cut to just the sources within the cells
+    TT.cut(TT.inbounds)
+    # Sort them back into original order
+    TT.cut(np.argsort(TT.row))
+    TT.writeto(opt.outfn)
+    print 'Wrote results to', opt.outfn
+    
+    if opt.statsfn:
+        imstats.writeto(opt.statsfn)
+        print 'Wrote image statistics to', opt.statsfn)
+
+    plot_results(opt.outfn)
+
+
+    
+def plot_results(outfn):
     T = fits_table(outfn)
     print 'read', len(T)
 
+    # SDSS measurements
     mag = T.sdss_psfmag_u
     nm = NanoMaggies.magToNanomaggies(mag)
 
+    # Tractor measurements
     counts = T.tractor_u_counts
     dcounts = T.tractor_u_counts_invvar
     dcounts = 1./np.sqrt(dcounts)
-
 
     plt.clf()
     plt.errorbar(nm, counts, yerr=dcounts, fmt='o', ms=5)
@@ -86,254 +355,7 @@ if os.path.exists(outfn):
     plt.axhline(med, color='k', alpha=0.5)
     plt.axis(ax)
     ps.savefig()
-
-
-    sys.exit(0)
-
-
-img = fitsio.read('scuss/p0214_0099_1.fits')
-print 'Read img', img.shape, img.dtype
-H,W = img.shape
-
-posfn = 'scuss/p0214_0099_1.pos.fits'
-if not os.path.exists(posfn):
-    from astrometry.util.fits import streaming_text_table
-    postxt = posfn.replace('.fits','')
-    assert(os.path.exists(postxt))
-    hdr = 'ra dec x y objid sdss_psfmag_u sdss_psfmagerr_u'
-    d = np.float64
-    f = np.float32
-    types = [str,str,d,d,str,f,f]
-    T = streaming_text_table(postxt, headerline=hdr, coltypes=types)
-    T.writeto(posfn)
     
-T = fits_table(posfn)
-print 'Read sources', len(T)
-
-flag = fitsio.read('scuss/flag_1.fits')
-print 'Read flag', flag.shape, flag.dtype
-
-psffn = 'scuss/p0214_0099_1.psf'
-psf = PsfEx(psffn, W, H)
-print 'Read PSF', psf
-
-picpsffn = psffn + '.pickle'
-if not os.path.exists(picpsffn):
-    psf.savesplinedata = True
-    print 'Fitting PSF model...'
-    psf.ensureFit()
-    print 'done'
-    pickle_to_file(psf.splinedata, picpsffn)
-else:
-    print 'Reading PSF model parameters from', picpsffn
-    data = unpickle_from_file(picpsffn)
-    print 'Fitting PSF...'
-    psf.fitSavedData(*data)
-    print 'done'
-
-
-plo,phi = [np.percentile(img[flag == 0], p) for p in [25,75]]
-# Wikipedia says:  IRQ -> sigma:
-sigma = (phi - plo) / (0.6745 * 2)
-print 'Sigma:', sigma
-
-invvar = np.zeros_like(img) + (1./sigma**2)
-invvar[flag != 0] = 0.
-
-med = np.median(img[flag == 0])
-
-band = 'u'
-
-fullinvvar = invvar
-fullimg  = img
-fullflag = flag
-fullpsf  = psf
-fullT = T
-
-margin = 10 # pixels
-nx = 20
-ny = 20
-XX = np.round(np.linspace(0, W, nx)).astype(int)
-YY = np.round(np.linspace(0, H, ny)).astype(int)
-
-results = []
-
-imstats = fits_table()
-imstats.xlo = np.zeros(((len(YY)-1)*(len(XX)-1)), int)
-imstats.xhi = np.zeros_like(imstats.xlo)
-imstats.ylo = np.zeros_like(imstats.xlo)
-imstats.yhi = np.zeros_like(imstats.xlo)
-imstats.ninbox = np.zeros_like(imstats.xlo)
-imstats.ntotal = np.zeros_like(imstats.xlo)
-imstatkeys = ['imchisq', 'imnpix', 'sky']
-for k in imstatkeys:
-    imstats.set(k, np.zeros(len(imstats)))
-
-
-celli = -1
-for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
-    for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
-        celli += 1
-        imstats.xlo[celli] = xlo
-        imstats.xhi[celli] = xhi
-        imstats.ylo[celli] = ylo
-        imstats.yhi[celli] = yhi
-        # We will fit for sources in the [xlo,xhi), [ylo,yhi) box.
-        # We add a margin in the image around that ROI
-        # Beyond that, we add a margin of extra sources
-
-        # image region:
-        ix0 = max(0, xlo - margin)
-        ix1 = min(W, xhi + margin)
-        iy0 = max(0, ylo - margin)
-        iy1 = min(H, yhi + margin)
-        S = (slice(iy0, iy1), slice(ix0, ix1))
-
-        img = fullimg[S]
-        invvar = fullinvvar[S]
-        psf = ShiftedPsf(fullpsf, ix0, iy0)
-
-        # sources nearby
-        x0 = max(0, xlo - margin*2)
-        x1 = min(W, xhi + margin*2)
-        y0 = max(0, ylo - margin*2)
-        y1 = min(H, yhi + margin*2)
-        
-        # (SCUSS uses FITS pixel indexing)
-        J = np.flatnonzero((fullT.x-1 >= x0) * (fullT.x-1 < x1) *
-                           (fullT.y-1 >= y0) * (fullT.y-1 < y1))
-        T = fullT[J].copy()
-        T.row = J
-
-        T.inbounds = ((T.x-1 >= xlo) * (T.x-1 < xhi) *
-                      (T.y-1 >= ylo) * (T.y-1 < yhi))
-        # Put in-bounds ones first
-        T.cut(np.argsort(-1 * T.inbounds))
-
-        # Adjust for subimage
-        T.x -= ix0
-        T.y -= iy0
-
-        imstats.ninbox[celli] = sum(T.inbounds)
-        imstats.ntotal[celli] = len(T)
-
-        print 'Image subregion:', img.shape
-        print 'Number of sources in ROI:', sum(T.inbounds)
-        print 'Number of source in ROI + margin:', len(T)
-
-        print 'Source positions: x', T.x.min(), T.x.max(), 'y', T.y.min(), T.y.max()
-
-        tim = Image(data=img, invvar=invvar, psf=psf, wcs=NullWCS(),
-                    sky=ConstantSky(med), photocal=LinearPhotoCal(1., band=band),
-                    name='scuss 1', domask=False)
-
-        cat = []
-        for i in range(len(T)):
-            # -1: SCUSS, apparently, uses FITS pixel conventions.
-            src = PointSource(PixPos(T.x[i] - 1, T.y[i] - 1),
-                              Fluxes(**{band:100.}))
-            cat.append(src)
-        
-        tractor = Tractor([tim], cat)
-        
-        print 'All params:'
-        tractor.printThawedParams()
-        
-        t0 = Time()
-        tractor.freezeParamsRecursive('*')
-        tractor.thawPathsTo('sky')
-        tractor.thawPathsTo(band)
-        
-        print 'Fitting params:'
-        tractor.printThawedParams()
-        
-        ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-            minsb=1e-3*sigma, mindlnp=1., sky=True, minFlux=None, variance=True,
-            fitstats=True)
-        
-        print 'Forced phot took', Time()-t0
-        
-        print 'Fit params:'
-        tractor.printThawedParams()
-
-        T.set('tractor_%s_counts' % band, np.array([src.getBrightness().getBand(band) for src in cat]))
-        T.set('tractor_%s_counts_invvar' % band, IV)
-        T.cell = np.zeros(len(T), int) + celli
-        if fs is not None:
-            # Per-source stats
-            for k in ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
-                T.set(k, getattr(fs, k))
-
-            # Per-image stats
-            for k in imstatkeys:
-                X = getattr(fs, k)
-                #print 'image stats', k, '=', X
-                imstats.get(k)[celli] = X[0]
-
-        results.append(T)
-
-        if celli >= 10:
-            continue
-
-        mod = tractor.getModelImage(0)
-        ima = dict(interpolation='nearest', origin='lower',
-                   vmin=med + -2. * sigma, vmax=med + 5. * sigma)
-        plt.clf()
-        plt.imshow(img, **ima)
-        plt.title('Data')
-        ps.savefig()
-        
-        plt.clf()
-        plt.imshow(mod, **ima)
-        plt.title('Model')
-        ps.savefig()
-        
-        noise = np.random.normal(scale=sigma, size=img.shape)
-        plt.clf()
-        plt.imshow(mod + noise, **ima)
-        plt.title('Model + noise')
-        ps.savefig()
-        
-        chi = (img - mod) * tim.getInvError()
-        plt.clf()
-        plt.imshow(chi, interpolation='nearest', origin='lower', vmin=-5, vmax=5)
-        plt.title('Chi')
-        ps.savefig()
-
-TT = merge_tables(results)
-TT.cut(TT.inbounds)
-TT.cut(np.argsort(TT.row))
-TT.writeto(outfn)
-
-imstats.writeto(imstatsfn)
-
-
-if False:
-    print 'Fitting PSF model...'
-    psf.ensureFit()
-    print 'done'
+if __name__ == '__main__':
+    main()
     
-    plt.clf()
-    i=0
-    nw,nh = 3,3
-    for y in np.linspace(0, H, nh):
-        for x in np.linspace(0, W, nw):
-            print 'PSF X,Y', x,y
-            mog = psf.mogAt(x, y)
-            print 'MoG:', mog
-            patch = mog.getPointSourcePatch(x, y)
-            print 'Patch: sum', patch.patch.sum(), 'max', patch.patch.max()
-            plt.subplot(nh,nw, i+1)
-            plt.imshow(patch.patch, interpolation='nearest', origin='lower')
-            plt.colorbar()
-            i += 1
-    ps.savefig()
-
-# The image pixel PDF looks clean
-# plo,phi = [np.percentile(img.ravel(), p) for p in [1,99]]
-# plt.clf()
-# plt.hist(img.ravel(), 100, range=(plo,phi))
-# ps.savefig()
-
-
-
