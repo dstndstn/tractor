@@ -854,7 +854,8 @@ class Tractor(MultiParams):
                                    fitstats=False,
                                    justims0=False,
                                    variance=False,
-                                   skyvariance=False):
+                                   skyvariance=False,
+                                   shared_params=True):
         '''
         ASSUMES linear brightnesses!
 
@@ -970,7 +971,7 @@ class Tractor(MultiParams):
             assert(len(umods) == Nsourceparams)
             umodels.append(umods)
         tmods = Time()-t0
-        print 'forced phot: getting unit-flux models:', tmods
+        logverb('forced phot: getting unit-flux models:', tmods)
 
         if rois is None:
             imlist = imgs
@@ -987,7 +988,7 @@ class Tractor(MultiParams):
             # the nominal value here and then computing derivatives.
             mod0.append(self.getModelImage(img, fsrcs, minsb=minsb, sky=not sky))
         tmod = Time() - t0
-        print 'forced phot: getting frozen-source model:', tmod
+        logverb('forced phot: getting frozen-source model:', tmod)
 
         if sky:
             t0 = Time()
@@ -1006,7 +1007,7 @@ class Tractor(MultiParams):
             #self.images.printThawedParams()
             assert(Nsky == self.images.numberOfParams())
             assert(Nsky + Nsourceparams == self.numberOfParams())
-            print 'forced phot: sky derivs', Time()-t0
+            logverb('forced phot: sky derivs', Time()-t0)
         else:
             Nsky = 0
 
@@ -1017,19 +1018,16 @@ class Tractor(MultiParams):
                 if um is None:
                     continue
                 dd.append((um * scale, tim))
-        print 'forced phot: derivs', Time()-t0
+        logverb('forced phot: derivs', Time()-t0)
 
-
-        #### NOTE, this is actually INVERSE variance
-        V = None
-
+        # NOTE, this is INVERSE variance
+        IV = None
         if variance:
-            NSV = 0
             if sky and skyvariance:
                 NS = Nsky
             else:
                 NS = 0
-            V = np.zeros(len(srcs) + NS)
+            IV = np.zeros(len(srcs) + NS)
             if sky and skyvariance:
                 for di,(dsky,tim) in enumerate(skyderivs):
                     ie = tim.getInvError()
@@ -1039,7 +1037,7 @@ class Tractor(MultiParams):
                         mm = np.zeros(tim.shape)
                         dsky.addTo(mm)
                         dchi2 = np.sum((mm * ie)**2)
-                    V[di] = dchi2
+                    IV[di] = dchi2
                 
             for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
                 mm = np.zeros(tim.shape)
@@ -1051,9 +1049,9 @@ class Tractor(MultiParams):
                     um.addTo(mm)
                     dchi2 = np.sum((mm * scale * ie) ** 2)
                     #print 'dchi2', dchi2
-                    V[NS + ui] += dchi2
+                    IV[NS + ui] += dchi2
                     mm[:,:] = 0.
-            #print 'var1:', V
+            #print 'var1:', IV
 
         if sky:
             # print 'Catalog params:', self.catalog.numberOfParams()
@@ -1153,7 +1151,7 @@ class Tractor(MultiParams):
                 lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
                                                self, rois, scales, None, None, priors,
                                                sky, minFlux)
-                print 'forced phot: initial lnp', Time()-t0
+                logverb('forced phot: initial lnp', Time()-t0)
 
             if justims0:
                 return lnp0,chis0,ims0
@@ -1172,7 +1170,7 @@ class Tractor(MultiParams):
                 realims = self.images
                 self.images = subimgs
 
-            print 'forced phot: getting update with damp=', damping
+            logverb('forced phot: getting update with damp=', damping)
             t0 = Time()
             # X,V = self.getUpdateDirection(derivs, damp=damping, priors=priors,
             #                             scale_columns=False, chiImages=chis0,
@@ -1181,11 +1179,12 @@ class Tractor(MultiParams):
             # if not skyvariance: ...FIXME...
 
             X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
-                                        scale_columns=False, chiImages=chis0)
+                                        scale_columns=False, chiImages=chis0,
+                                        shared_params=shared_params)
             # print 'Source variance:', V[Nsky:]
 
             topt = Time()-t0
-            print 'forced phot: opt:', topt
+            logverb('forced phot: opt:', topt)
             #print 'forced phot: update', X
             if rois is not None:
                 self.images = realims
@@ -1238,8 +1237,8 @@ class Tractor(MultiParams):
                 lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
                                             rois, scales, p0sky, Xsky, priors, sky,
                                             minFlux)
-                print 'Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0
-                print 'Took', Time()-t0
+                logverb('Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0)
+                logverb('Took', Time()-t0)
                 if lnp < (lnpBest - 1.):
                     break
                 if lnp > lnpBest:
@@ -1289,7 +1288,7 @@ class Tractor(MultiParams):
 
         rtn = (ims0,imsBest)
         if variance:
-            rtn = rtn + (V,)
+            rtn = rtn + (IV,)
 
         if fitstats and imsBest is None:
             rtn = rtn + (None,)
@@ -1777,13 +1776,13 @@ class Tractor(MultiParams):
 
         if shared_params:
             # Apply shared parameter map
-            print 'Before applying shared parameter map:'
-            print 'spcols:', len(spcols), 'elements'
-            print '  ', len(set(spcols)), 'unique'
+            #print 'Before applying shared parameter map:'
+            #print 'spcols:', len(spcols), 'elements'
+            #print '  ', len(set(spcols)), 'unique'
             spcols = paramindexmap[spcols]
-            print 'After:'
-            print 'spcols:', len(spcols), 'elements'
-            print '  ', len(set(spcols)), 'unique'
+            #print 'After:'
+            #print 'spcols:', len(spcols), 'elements'
+            #print '  ', len(set(spcols)), 'unique'
         
         logverb('  Number of sparse matrix elements:', len(sprows))
         urows = np.unique(sprows)

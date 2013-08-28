@@ -129,8 +129,8 @@ def main():
     # touch those pixels.
     margin = 10 # pixels
     # Number of cells to split the image into
-    nx = 20
-    ny = 20
+    nx = 10
+    ny = 10
     # cell positions
     XX = np.round(np.linspace(0, W, nx+1)).astype(int)
     YY = np.round(np.linspace(0, H, ny+1)).astype(int)
@@ -161,6 +161,8 @@ def main():
             imstats.xhi[celli] = xhi
             imstats.ylo[celli] = ylo
             imstats.yhi[celli] = yhi
+            print
+            print 'Doing image cell %i: x=[%i,%i), y=[%i,%i)' % (celli, xlo,xhi,ylo,yhi)
             # We will fit for sources in the [xlo,xhi), [ylo,yhi) box.
             # We add a margin in the image around that ROI
             # Beyond that, we add a margin of extra sources
@@ -198,9 +200,9 @@ def main():
             imstats.ninbox[celli] = sum(T.inbounds)
             imstats.ntotal[celli] = len(T)
     
-            print 'Image subregion:', img.shape
+            # print 'Image subregion:', img.shape
             print 'Number of sources in ROI:', sum(T.inbounds)
-            print 'Number of source in ROI + margin:', len(T)
+            print 'Number of sources in ROI + margin:', len(T)
             #print 'Source positions: x', T.x.min(), T.x.max(), 'y', T.y.min(), T.y.max()
 
             # Create tractor.Image object
@@ -231,7 +233,7 @@ def main():
             # Forced photometry
             ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                 minsb=1e-3*sigma, mindlnp=1., sky=True, minFlux=None, variance=True,
-                fitstats=True)
+                fitstats=True, shared_params=False)
             
             print 'Forced photometry took', Time()-t0
             
@@ -286,20 +288,22 @@ def main():
     TT = merge_tables(results)
     # Cut to just the sources within the cells
     TT.cut(TT.inbounds)
+    TT.delete_column('inbounds')
     # Sort them back into original order
     TT.cut(np.argsort(TT.row))
+    #TT.delete_column('row')
     TT.writeto(opt.outfn)
     print 'Wrote results to', opt.outfn
     
     if opt.statsfn:
         imstats.writeto(opt.statsfn)
-        print 'Wrote image statistics to', opt.statsfn)
+        print 'Wrote image statistics to', opt.statsfn
 
-    plot_results(opt.outfn)
+    plot_results(opt.outfn, ps)
 
 
     
-def plot_results(outfn):
+def plot_results(outfn, ps):
     T = fits_table(outfn)
     print 'read', len(T)
 
@@ -312,21 +316,21 @@ def plot_results(outfn):
     dcounts = T.tractor_u_counts_invvar
     dcounts = 1./np.sqrt(dcounts)
 
-    plt.clf()
-    plt.errorbar(nm, counts, yerr=dcounts, fmt='o', ms=5)
-    plt.xlabel('SDSS nanomaggies')
-    plt.ylabel('Tractor counts')
-    plt.title('Tractor forced photometry of SCUSS data')
-    ps.savefig()
-
-    plt.clf()
-    plt.errorbar(np.maximum(1e-2, nm), np.maximum(1e-3, counts), yerr=dcounts, fmt='o', ms=5, alpha=0.5)
-    plt.xlabel('SDSS nanomaggies')
-    plt.ylabel('Tractor counts')
-    plt.title('Tractor forced photometry of SCUSS data')
-    plt.xscale('log')
-    plt.yscale('log')
-    ps.savefig()
+    # plt.clf()
+    # plt.errorbar(nm, counts, yerr=dcounts, fmt='o', ms=5)
+    # plt.xlabel('SDSS nanomaggies')
+    # plt.ylabel('Tractor counts')
+    # plt.title('Tractor forced photometry of SCUSS data')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.errorbar(np.maximum(1e-2, nm), np.maximum(1e-3, counts), yerr=dcounts, fmt='o', ms=5, alpha=0.5)
+    # plt.xlabel('SDSS nanomaggies')
+    # plt.ylabel('Tractor counts')
+    # plt.title('Tractor forced photometry of SCUSS data')
+    # plt.xscale('log')
+    # plt.yscale('log')
+    # ps.savefig()
 
     plt.clf()
     plt.loglog(np.maximum(1e-2, nm), np.maximum(1e-2, counts), 'b.', ms=5, alpha=0.5)
@@ -340,10 +344,10 @@ def plot_results(outfn):
     plt.ylim(0.8e-2, ax[3])
     ps.savefig()
 
-
+    # Cut to valid/bright ones
     I = np.flatnonzero((nm > 1e-2) * (counts > 1e-2))
-
     J = np.flatnonzero((nm > 1) * (counts > 1e-2))
+    # Estimate zeropoint
     med = np.median(counts[J] / nm[J])
 
     plt.clf()
