@@ -11,11 +11,15 @@ needs: sets of parameters stored in lists and such.  This framework
 could be useful outside the Tractor context.
 
 """
-#from ducks import *
 import numpy as np
 
-import functools
-
+try:
+    # New in python 2.7
+    import functools
+    total_ordering = functools.total_ordering
+except:
+    from total_ordering import total_ordering
+    
 def listmax(X, default=0):
     mx = [np.max(x) for x in X if len(x)]
     if len(mx) == 0:
@@ -103,7 +107,7 @@ class BaseParams(object):
     def getLogPriorDerivatives(self):
         return None
 
-@functools.total_ordering
+@total_ordering
 class ScalarParam(BaseParams):
     '''
     Implementation of "Params" for a single scalar (float) parameter,
