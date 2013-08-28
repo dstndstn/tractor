@@ -150,7 +150,9 @@ class ScalarParam(BaseParams):
         self.val = val
     def getValue(self):
         return self.val
-
+    def setValue(self, v):
+        self._set(v)
+    
 def _isint(i):
     #return type(i) in [int, np.int64]
     try:
