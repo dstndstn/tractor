@@ -285,6 +285,8 @@ def main():
             XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
             YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
+            mods = []
+
             celli = -1
             for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
                 for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
@@ -293,13 +295,14 @@ def main():
                     print
                     print 'Cell', celli, 'of', (opt.blocks**2), 'for', tile.coadd_id, 'band', wband
 
-                    margin = 4
+                    imargin = 4
+                    smargin = 8
 
                     # image region: [ix0,ix1)
-                    ix0 = max(0, xlo - margin)
-                    ix1 = min(W, xhi + margin)
-                    iy0 = max(0, ylo - margin)
-                    iy1 = min(H, yhi + margin)
+                    ix0 = max(0, xlo - imargin)
+                    ix1 = min(W, xhi + imargin)
+                    iy0 = max(0, ylo - imargin)
+                    iy1 = min(H, yhi + imargin)
                     slc = (slice(iy0, iy1), slice(ix0, ix1))
                     print 'Image ROI', ix0, ix1, iy0, iy1
                     img    = fullimg   [slc]
@@ -312,8 +315,8 @@ def main():
                                 name='Coadd %s W%i (%i,%i)' % (tile.coadd_id, band, xi,yi),
                                 domask=False)
 
-                    I = np.flatnonzero((sx >= (xlo-0.5-margin)) * (sx < (xhi-0.5+margin)) *
-                                       (sy >= (ylo-0.5-margin)) * (sy < (yhi-0.5+margin)))
+                    I = np.flatnonzero((sx >= (xlo-0.5-smargin)) * (sx < (xhi-0.5+smargin)) *
+                                       (sy >= (ylo-0.5-smargin)) * (sy < (yhi-0.5+smargin)))
                     inbox = ((sx[I] >= (xlo-0.5)) * (sx[I] < (xhi-0.5)) *
                              (sy[I] >= (ylo-0.5)) * (sy[I] < (yhi-0.5)))
 
@@ -326,8 +329,8 @@ def main():
 
                     assert(len(subcat) == len(I))
 
-                    J = np.flatnonzero((wx >= xlo - margin) * (wx < xhi + margin) *
-                                       (wy >= ylo - margin) * (wy < yhi + margin))
+                    J = np.flatnonzero((wx >= xlo - smargin) * (wx < xhi + smargin) *
+                                       (wy >= ylo - smargin) * (wy < yhi + smargin))
                     for i in J:
                         subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
                                                   NanoMaggies(**{wanyband:1.})))
@@ -350,6 +353,9 @@ def main():
                         fitstats=True, variance=True)
                     print 'That took', Time()-t0
 
+                    im,mod,ie,chi,roi = ims1[0]
+                    mods.append(mod)
+                    
                     fullIV[srci] = IV[:len(srci)]
 
                     for k in fskeys:
@@ -392,6 +398,11 @@ def main():
         PHOT.cut(inbounds)
 
         PHOT.writeto(opt.output % (tile.coadd_id))
+
+        ## HACK
+        fn = opt.output % (tile.coadd_id)
+        fn = fn.replace('.fits','.pickle')
+        pickle_to_file(mods, fn)
 
         print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
