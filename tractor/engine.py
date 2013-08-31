@@ -1416,6 +1416,7 @@ class Tractor(MultiParams):
         #print 'X:', X
         if len(X) == 0:
             return 0, X, 0.
+        print 'X: len', len(X), '; non-zero entries:', np.count_nonzero(X)
         print 'Finding optimal step size...'
         t0 = Time()
         (dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
@@ -1731,7 +1732,7 @@ class Tractor(MultiParams):
             vals = vals[I]
             scale = np.sqrt(np.dot(vals, vals))
             colscales[col] = scale
-            logverb('Column', col, 'scale:', scale)
+            #logverb('Column', col, 'scale:', scale)
             if scales_only:
                 continue
             sprows.append(rows)
@@ -1791,7 +1792,9 @@ class Tractor(MultiParams):
             #print 'After:'
             #print 'spcols:', len(spcols), 'elements'
             #print '  ', len(set(spcols)), 'unique'
-        
+            Ncols = np.max(spcols) + 1
+            print 'Set Ncols=', Ncols
+            
         logverb('  Number of sparse matrix elements:', len(sprows))
         urows = np.unique(sprows)
         ucols = np.unique(spcols)
@@ -1891,7 +1894,9 @@ class Tractor(MultiParams):
         if shared_params:
             # Unapply shared parameter map -- result is duplicated
             # result elements.
+            print 'shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
             X = X[paramindexmap]
+            print 'shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
 
         if scale_columns:
             X /= colscales
@@ -1901,7 +1906,6 @@ class Tractor(MultiParams):
         #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
         if variance:
-
             if shared_params:
                 # Unapply shared parameter map.
                 var = var[paramindexmap]
