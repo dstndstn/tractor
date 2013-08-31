@@ -233,6 +233,9 @@ class NamedParams(object):
         self._addNamedParams(alias=True, **d)
 
     def addNamedParams(self, **d):
+        '''
+        d: dict of (string, int) parameter names->indices
+        '''
         self._addNamedParams(alias=False, **d)
         
 

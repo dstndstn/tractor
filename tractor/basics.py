@@ -1033,7 +1033,8 @@ class PixelizedPSF(BaseParams):
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
     
-class GaussianMixturePSF(BaseParams):
+class GaussianMixturePSF(ParamList):
+    #BaseParams, NamedParams
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
@@ -1051,6 +1052,28 @@ class GaussianMixturePSF(BaseParams):
         self.radius = 25
         super(GaussianMixturePSF, self).__init__()
 
+        del self.vals
+        
+        K = self.mog.K
+        self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
+
+        names = {}
+        for k in range(K):
+            names['amp%i'%k] = k
+            names['mean%ix'%k] = K+(k*2)
+            names['mean%iy'%k] = K+(k*2)+1
+            names['var%ixx'%k] = K*3 + (k*3)
+            names['var%iyy'%k] = K*3 + (k*3)+1
+            names['var%ixy'%k] = K*3 + (k*3)+2
+        # print 'Setting param names:', names
+        self.addNamedParams(**names)
+
+    # HACK... incomplete
+    # def getLogPrior(self):
+    #     if np.any(self.mog.amp < 0):
+    #         return -1e100
+    #     return 0.
+    
     def computeRadius(self):
         import numpy.linalg
         # ?
@@ -1072,12 +1095,12 @@ class GaussianMixturePSF(BaseParams):
         return self.mog
     #def proposeIncreasedComplexity(self, img):
     #   raise
-    def getStepSizes(self, *args, **kwargs):
-        K = self.mog.K
-        # amp + mean + var
-        # FIXME: -1 for normalization?
-        #  : -K for variance symmetry
-        return [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
+    #def getStepSizes(self, *args, **kwargs):
+    #    K = self.mog.K
+    #    # amp + mean + var
+    #    # FIXME: -1 for normalization?
+    #    #  : -K for variance symmetry
+    #    return [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
 
     #def isValidParamStep(self, dparam):
     #   ## FIXME
@@ -1162,18 +1185,19 @@ class GaussianMixturePSF(BaseParams):
                                   self.mog.mean.copy(),
                                   self.mog.var.copy())
 
-    def numberOfParams(self):
+    #def numberOfParams(self):
+    def _numberOfThings(self):
         K = self.mog.K
         return K * (1 + 2 + 3)
 
-    def getParamNames(self):
-        K = self.mog.K
-        names = ['amp%i' % i for i in range(K)]
-        for i in range(K):
-            names.extend(['mean%i.x'%i, 'mean%i.y'%i])
-        for i in range(K):
-            names.extend(['var%i.xx'%i, 'var%i.yy'%i, 'var%i.xy'%i])
-        return names
+    # def getParamNames(self):
+    #     K = self.mog.K
+    #     names = ['amp%i' % i for i in range(K)]
+    #     for i in range(K):
+    #         names.extend(['mean%i.x'%i, 'mean%i.y'%i])
+    #     for i in range(K):
+    #         names.extend(['var%i.xx'%i, 'var%i.yy'%i, 'var%i.xy'%i])
+    #     return names
 
     # def stepParam(self, parami, delta):
     #   K = self.mog.K
@@ -1193,14 +1217,36 @@ class GaussianMixturePSF(BaseParams):
     #       self.mog.var[i,0,1] += deltai
     #       self.mog.var[i,1,0] += deltai
 
+    # def getParams(self):
+    #     '''
+    #     Returns a *copy* of the current active parameter values (list)
+    #     '''
+    #     return list(self._getLiquidArray(self._getThings()))
+    # def getParamNames(self):
+    #     n = []
+    #     for i,j in self._indexBoth():
+    #         nm = self.getNamedParamName(j)
+    #         if nm is None:
+    #             nm = 'param%i' % i
+    #         n.append(nm)
+    #     return n
+    # def getStepSizes(self, *args, **kwargs):
+    #     if hasattr(self, 'stepsizes'):
+    #         return list(self._getLiquidArray(self.stepsizes))
+    #     return [1.0] * self.numberOfParams()
+    
     # Returns a *copy* of the current parameter values (list)
-    def getParams(self):
+    #def getParams(self):
+    def _getThings(self):
         p = list(self.mog.amp) + list(self.mog.mean.ravel())
         for v in self.mog.var:
             p += (v[0,0], v[1,1], v[0,1])
         return p
+    def _getThing(self, i):
+        return self._getThings()[i]
 
-    def setParams(self, p):
+    # def setParams(self, p):
+    def _setThings(self, p):
         K = self.mog.K
         self.mog.amp = np.atleast_1d(p[:K])
         pp = p[K:]
@@ -1210,7 +1256,8 @@ class GaussianMixturePSF(BaseParams):
         self.mog.var[:,1,1] = pp[1::3]
         self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
 
-    def setParam(self, i, p):
+    # def setParam(self, i, p):
+    def _setThing(self, i, p):
         K = self.mog.K
         if i < K:
             old = self.mog.amp[i]

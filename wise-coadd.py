@@ -11,14 +11,12 @@ from scipy.ndimage.morphology import binary_dilation
 
 import fitsio
 
-
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
     d = os.environ.get('PBS_O_WORKDIR')
     if arr is not None and d is not None:
         os.chdir(d)
         sys.path.append(os.getcwd())
-
 
 from astrometry.util.file import *
 from astrometry.util.fits import *

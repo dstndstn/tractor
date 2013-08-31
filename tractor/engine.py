@@ -119,7 +119,7 @@ class Image(MultiParams):
                 derivs.extend(sd)
             else:
                 derivs.extend([False] * s.numberOfParams())
-        print 'Image.getParamDerivatives: returning', derivs
+        # print 'Image.getParamDerivatives: returning', derivs
         return derivs
 
     def getSky(self):
@@ -1640,7 +1640,7 @@ class Tractor(MultiParams):
             p1 = self.getParams()
             self.setParams(p0)
             U,I = np.unique(p1, return_inverse=True)
-            #print len(p0), 'params;', len(U), 'unique'
+            print len(p0), 'params;', len(U), 'unique'
             paramindexmap = I
             #print 'paramindexmap:', paramindexmap
             #print 'p1:', p1
@@ -1664,7 +1664,9 @@ class Tractor(MultiParams):
         del nextrow
         Ncols = len(allderivs)
 
-        colscales = []
+        # FIXME -- shared_params should share colscales!
+        
+        colscales = np.ones(len(allderivs))
         for col, param in enumerate(allderivs):
             RR = []
             VV = []
@@ -1698,7 +1700,6 @@ class Tractor(MultiParams):
 
             # massage, re-scale, and clean up matrix elements
             if len(VV) == 0:
-                colscales.append(1.)
                 continue
             rows = np.hstack(RR)
             VV = np.hstack(VV)
@@ -1715,14 +1716,12 @@ class Tractor(MultiParams):
 
             # shouldn't be necessary since we check len(nz)>0 above
             #if len(vals) == 0:
-            #   colscales.append(1.)
             #   continue
             mx = np.max(np.abs(vals))
             if mx == 0:
                 print 'mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
                 print len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
                 print len(np.flatnonzero(vals)), 'non-zero products'
-                colscales.append(1.)
                 continue
             # MAGIC number: near-zero matrix elements -> 0
             # 'mx' is the max value in this column.
@@ -1731,8 +1730,7 @@ class Tractor(MultiParams):
             rows = rows[I]
             vals = vals[I]
             scale = np.sqrt(np.dot(vals, vals))
-            colscales.append(scale)
-            assert(len(colscales) == (col+1))
+            colscales[col] = scale
             logverb('Column', col, 'scale:', scale)
             if scales_only:
                 continue
@@ -1745,7 +1743,6 @@ class Tractor(MultiParams):
             else:
                 spvals.append(vals)
                 
-        colscales = np.array(colscales)
         if scales_only:
             return colscales
 
