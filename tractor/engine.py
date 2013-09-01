@@ -146,6 +146,9 @@ class Image(MultiParams):
             return self.shape
         return self.data.shape
 
+    def getModelShape(self):
+        return self.getShape()
+    
     def hashkey(self):
         return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
                 self.sky.hashkey(), self.wcs.hashkey(),
@@ -1976,7 +1979,7 @@ class Tractor(MultiParams):
         if _isint(img):
             img = self.getImage(img)
         #print 'getModelImage: for image', img
-        mod = np.zeros(img.getShape(), self.modtype)
+        mod = np.zeros(img.getModelShape(), self.modtype)
         if sky:
             img.sky.addTo(mod)
         if srcs is None:
