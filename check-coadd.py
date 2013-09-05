@@ -2,12 +2,14 @@ import matplotlib
 matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
+import os
 
 import fitsio
 
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
+from astrometry.util.util import Tan
 
 ps = PlotSequence('co')
 
@@ -15,7 +17,7 @@ for coadd in ['1384p454',
     #'2195p545',
               ]:
 
-    for band in [4]: #[1]:
+    for band in []: #1,2,3,4]: #[1]:
         F = fits_table('wise-coadds/coadd-%s-w%i-frames.fits' % (coadd,band))
 
         frame0 = F[0]
@@ -108,16 +110,32 @@ for coadd in ['1384p454',
             ps.savefig()
             
 
-    for band in [4]: #[1,2]: #,3,4]:
+    II = []
+    JJ = []
+    KK = []
+    ppI = []
+    ppJ = []
+    for band in [1,2]:#,3,4]:
         fni = 'L3a/%s_ab41/%s_ab41-w%i-int-3.fits' % (coadd, coadd, band)
         I = fitsio.read(fni)
-        fnj = 'coadd-%s-w%i-img.fits' % (coadd, band)
+        fnj = 'wise-coadds/coadd-%s-w%i-img.fits' % (coadd, band)
         J = fitsio.read(fnj)
-        fnk = 'coadd-%s-w%i-img-w.fits' % (coadd, band)
+        fnk = 'wise-coadds/coadd-%s-w%i-img-w.fits' % (coadd, band)
         K = fitsio.read(fnk)
+
+        wcsJ = Tan(fnj)
+
+        II.append(I)
+        JJ.append(J)
+        KK.append(K)
         
         plt.clf()
         plo,phi = [np.percentile(I, p) for p in [25,99]]
+        pmid = np.percentile(I, 50)
+        p95 = np.percentile(I, 95)
+        ppI.append((plo,pmid, p95, phi))
+
+        print 'Percentiles', plo,phi
         imai = dict(interpolation='nearest', origin='lower',
                    vmin=plo, vmax=phi)
         plt.imshow(I, **imai)
@@ -126,12 +144,16 @@ for coadd in ['1384p454',
 
         plt.clf()
         plo,phi = [np.percentile(J, p) for p in [25,99]]
+        pmid = np.percentile(J, 50)
+        p95 = np.percentile(J, 95)
+        ppJ.append((plo,pmid,p95,phi))
+        print 'Percentiles', plo,phi
         imaj = dict(interpolation='nearest', origin='lower',
                    vmin=plo, vmax=phi)
         plt.imshow(J, **imaj)
         plt.title(fnj)
         ps.savefig()
-
+        
         plt.clf()
         plt.imshow(K, **imaj)
         plt.title(fnk)
@@ -139,11 +161,13 @@ for coadd in ['1384p454',
         
         hi,wi = I.shape
         hj,wj = J.shape
-
         flo,fhi = 0.45, 0.55
-
         slcI = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
         slcJ = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+
+        x,y = int(wj*(flo+fhi)/2.), int(hj*(flo+fhi)/2.)
+        print 'J: x,y =', x,y
+        print 'RA,Dec', wcsJ.pixelxy2radec(x,y)
 
         plt.clf()
         plt.imshow(I[slcI], **imai)
@@ -155,8 +179,90 @@ for coadd in ['1384p454',
         plt.title(fnj)
         ps.savefig()
 
+        print 'J size', J[slcJ].shape
+
         plt.clf()
         plt.imshow(K[slcJ], **imaj)
         plt.title(fnk)
         ps.savefig()
-        
+
+    flo,fhi = 0.45, 0.55
+    hi,wi = I.shape
+    hj,wj = J.shape
+    slcI = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
+    slcJ = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+
+    s = II[0][slcI]
+    HI,WI = s.shape
+    rgbI = np.zeros((HI, WI, 3))
+    p0,px,p1,px = ppI[0]
+    rgbI[:,:,0] = (II[0][slcI] - p0) / (p1-p0)
+    p0,px,p1,px = ppI[1]
+    rgbI[:,:,2] = (II[1][slcI] - p0) / (p1-p0)
+    rgbI[:,:,1] = (rgbI[:,:,0] + rgbI[:,:,2])/2.
+
+    plt.clf()
+    plt.imshow(np.clip(rgbI, 0., 1.), interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(np.sqrt(np.clip(rgbI, 0., 1.)), interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    s = JJ[0][slcJ]
+    HJ,WJ = s.shape
+    rgbJ = np.zeros((HJ, WJ, 3))
+    p0,px,p1,px = ppJ[0]
+    rgbJ[:,:,0] = (JJ[0][slcJ] - p0) / (p1-p0)
+    p0,px,p1,px = ppJ[1]
+    rgbJ[:,:,2] = (JJ[1][slcJ] - p0) / (p1-p0)
+    rgbJ[:,:,1] = (rgbJ[:,:,0] + rgbJ[:,:,2])/2.
+
+    plt.clf()
+    plt.imshow(np.clip(rgbJ, 0., 1.), interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(np.sqrt(np.clip(rgbJ, 0., 1.)), interpolation='nearest', origin='lower')
+    ps.savefig()
+
+    I = (np.sqrt(np.clip(rgbI, 0., 1.))*255.).astype(np.uint8)
+    I2 = np.zeros((3,HI,WI))
+    I2[0,:,:] = I[:,:,0]
+    I2[1,:,:] = I[:,:,1]
+    I2[2,:,:] = I[:,:,2]
+
+    J = (np.sqrt(np.clip(rgbJ, 0., 1.))*255.).astype(np.uint8)
+    J2 = np.zeros((3,HJ,WJ))
+    J2[0,:,:] = J[:,:,0]
+    J2[1,:,:] = J[:,:,1]
+    J2[2,:,:] = J[:,:,2]
+
+    fitsio.write('I.fits', I2, clobber=True)
+    fitsio.write('J.fits', J2, clobber=True)
+
+    for fn in ['I.fits', 'J.fits']:
+        os.system('an-fitstopnm -N 0 -X 255 -i %s -p 0 > r.pgm' % fn)
+        os.system('an-fitstopnm -N 0 -X 255 -i %s -p 1 > g.pgm' % fn)
+        os.system('an-fitstopnm -N 0 -X 255 -i %s -p 2 > b.pgm' % fn)
+        os.system('rgb3toppm r.pgm g.pnm b.pnm | pnmtopng > %s' % ps.getnext())
+    
+    cmd = 'an-fitstopnm -N 0 -X 255 -i I.fits | pnmtopng > %s' % ps.getnext()
+    os.system(cmd)
+    cmd = 'an-fitstopnm -N 0 -X 255 -i J.fits | pnmtopng > %s' % ps.getnext()
+    os.system(cmd)
+
+    plt.clf()
+    plt.figure(figsize=(6,6))
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+
+    plt.imshow(I, interpolation='nearest', origin='lower')
+    ps.savefig()
+    plt.imshow(J, interpolation='nearest', origin='lower')
+    ps.savefig()
+
+
+    # fn = ps.getnext()
+    # plt.imsave(fn, (np.sqrt(np.clip(rgbI, 0., 1.))*255.).astype(np.uint8))
+    # fn = ps.getnext()
+    # plt.imsave(fn, (np.sqrt(np.clip(rgbJ, 0., 1.))*255.).astype(np.uint8))

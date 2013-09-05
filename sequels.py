@@ -191,19 +191,20 @@ def main():
             WISE = fits_table(wfn)
             print 'Read', len(WISE), 'WISE sources nearby'
         else:
-            cols = ['ra','dec']
+            cols = ['ra','dec'] + ['w%impro'%band for band in [1,2,3,4]]
             WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
             WISE.writeto(wfn)
             print 'Found', len(WISE), 'WISE sources nearby'
 
-        unmatched = np.ones(len(WISE), bool)
-        I,J,d = match_radec(WISE.ra, WISE.dec, stars.ra, stars.dec, 4./3600.)
-        unmatched[I] = False
-        I,J,d = match_radec(WISE.ra, WISE.dec, gals.ra, gals.dec, 4./3600.)
-        unmatched[I] = False
-        UW = WISE[unmatched]
-        print 'Got', len(UW), 'unmatched WISE sources'
-        del WISE
+        # unmatched = np.ones(len(WISE), bool)
+        # I,J,d = match_radec(WISE.ra, WISE.dec, stars.ra, stars.dec, 4./3600.)
+        # unmatched[I] = False
+        # I,J,d = match_radec(WISE.ra, WISE.dec, gals.ra, gals.dec, 4./3600.)
+        # unmatched[I] = False
+        # UW = WISE[unmatched]
+        # print 'Got', len(UW), 'unmatched WISE sources'
+        # #del WISE
+        # WISE = WISE[np.logical_not(unmatched)]
 
         sband = 'r'
         wanyband = wband = 'w'
@@ -226,6 +227,19 @@ def main():
 
         PHOT.ra  = np.array([src.getPosition().ra  for src in cat])
         PHOT.dec = np.array([src.getPosition().dec for src in cat])
+
+        unmatched = np.ones(len(WISE), bool)
+        I,J,d = match_radec(WISE.ra, WISE.dec, PHOT.ra, PHOT.dec, 4./3600., nearest=True)
+        unmatched[I] = False
+        UW = WISE[unmatched]
+        print 'Got', len(UW), 'unmatched WISE sources'
+        #del WISE
+        #WISE = WISE[np.logical_not(unmatched)]
+        wiseflux = {}
+        ### FIXME -- mags aren't nanomaggies, dummy!
+        for band in bands:
+            wiseflux[band] = np.zeros(len(PHOT))
+            wiseflux[band][J] = WISE.get('w%impro' % band)[I]
 
         ### ASSUME the atlas tile WCSes are the same between bands!
         ok,sx,sy = wcs.radec2pixelxy(PHOT.ra, PHOT.dec)
@@ -295,8 +309,10 @@ def main():
                     print
                     print 'Cell', celli, 'of', (opt.blocks**2), 'for', tile.coadd_id, 'band', wband
 
-                    imargin = 4
-                    smargin = 8
+                    # imargin = 4
+                    # smargin = 8
+                    imargin = 8
+                    smargin = 16
 
                     # image region: [ix0,ix1)
                     ix0 = max(0, xlo - imargin)
@@ -324,16 +340,27 @@ def main():
                     
                     # sources in the ROI box
                     subcat = [cat[i] for i in srci]
-                    # sources in the margins
-                    subcat.extend([cat[i].copy() for i in I[np.logical_not(inbox)]])
-
-                    assert(len(subcat) == len(I))
-
                     J = np.flatnonzero((wx >= xlo - smargin) * (wx < xhi + smargin) *
                                        (wy >= ylo - smargin) * (wy < yhi + smargin))
-                    for i in J:
-                        subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
-                                                  NanoMaggies(**{wanyband:1.})))
+                    if True:
+                        # sources in the margins
+                        subcat.extend([cat[i].copy() for i in I[np.logical_not(inbox)]])
+                        assert(len(subcat) == len(I))
+                        for i in J:
+                            subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
+                                                      NanoMaggies(**{wanyband:1.})))
+                        
+                    if False:
+                        for i in I[np.logical_not(inbox)]:
+                            src = cat[i].copy()
+                            nm = wiseflux[band][i]
+                            src.setBrightness(NanoMaggies(**{wanyband:nm}))
+                            subcat.append(src)
+                        for i in J:
+                            nm = UW.get('w%impro' % band)[i]
+                            subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
+                                                      NanoMaggies(**{wanyband:nm})))
+
                     print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
                     print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
@@ -344,7 +371,11 @@ def main():
                     tractor.freezeParamsRecursive('*')
                     # tractor.thawPathsTo('sky')
                     tractor.thawPathsTo(wanyband)
-                    # Reset initial fluxes
+
+                    #tractor.catalog.freezeParams(*range(len(srci), len(subcat)))
+
+                    # Reset initial fluxes (note that this is only for the unfrozen ones)
+                    #tractor.setParams([1.] * tractor.numberOfParams()) #np.ones(tractor.numberOfParams()))
                     tractor.setParams(np.ones(tractor.numberOfParams()))
     
                     minsb = getattr(opt, 'minsb%i' % band)
