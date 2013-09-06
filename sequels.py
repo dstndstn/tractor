@@ -191,9 +191,27 @@ def main():
         dev = (gals.fracdev[:,b] >= 0.5)
         exp = (gals.fracdev[:,b] < 0.5)
         tsn = np.zeros(len(gals))
+        gals.theta_deverr[dev,b] = np.maximum(1e-6, gals.theta_deverr[dev,b])
+        gals.theta_experr[exp,b] = np.maximum(1e-5, gals.theta_experr[exp,b])
+        # theta_experr nonzero: 1.28507e-05
+        # theta_deverr nonzero: 1.92913e-06
         tsn[dev] = gals.theta_dev[dev,b] / gals.theta_deverr[dev,b]
         tsn[exp] = gals.theta_exp[exp,b] / gals.theta_experr[exp,b]
+        # print 'theta_experr range:', gals.theta_experr[exp,b].min(), gals.theta_experr[exp,b].max()
+        # print 'theta_deverr range:', gals.theta_deverr[dev,b].min(), gals.theta_deverr[dev,b].max()
+        # print 'theta_experr nonzero:', (gals.theta_experr[exp,b][gals.theta_experr[exp,b] > 0]).min()
+        # print 'theta_deverr nonzero:', (gals.theta_deverr[dev,b][gals.theta_deverr[dev,b] > 0]).min()
+        # I = (gals.theta_experr[exp,b] == 0)
+        # print sum(I), 'theta exp errors are zero'
+        # print 'thetas are, eg,', gals.theta_exp[exp[np.flatnonzero(I)[:50]],b]
+        # print 'modelfluxes are, eg,', gals.modelflux[exp[np.flatnonzero(I)[:50]],b]
 
+        assert(np.all(np.isfinite(gals.theta_dev[dev,b])))
+        assert(np.all(np.isfinite(gals.theta_exp[exp,b])))
+        assert(np.all(gals.theta_experr[exp,b] > 0))
+        assert(np.all(gals.theta_deverr[dev,b] > 0))
+
+        print len(gals), 'galaxies'
         bad = np.logical_or(tsn < 3., gals.modelflux[:,b] > 1e4)
         print 'Found', sum(bad), 'low theta S/N or huge-flux galaxies'
 
@@ -201,7 +219,7 @@ def main():
         gstars.ra  = gals.ra[bad]
         gstars.dec = gals.dec[bad]
         print 'Adding', len(gstars), 'bad galaxies to "stars"'
-        stars = merge_tables(stars, gstars)
+        stars = merge_tables([stars, gstars])
         gals.cut(np.logical_not(bad))
         print 'Cut to', len(gals), 'not-bad galaxies'
             
