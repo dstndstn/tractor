@@ -12,7 +12,8 @@ from astrometry.util.resample import *
 from astrometry.libkd.spherematch import *
 from astrometry.util.starutil_numpy import *
 
-import urllib2
+import sys
+#import urllib2
 
 import fitsio
 
@@ -48,10 +49,281 @@ def reassemble_chunks(mods, blocks, imargin):
     #print 'moda:', moda.shape
     return mod
 
+def wack(coadd_id, ps):
+    G = fits_table('sweeps-%s-gals.fits' % coadd_id)
+    print len(G), 'galaxies'
+    G.cut((G.theta_dev[:,2] > 0) * (G.theta_exp[:,2] > 0))
+    print len(G), 'galaxies with positive thetas'
+    G.cut(G.modelflux[:,2] > 0)
+    print len(G), 'galaxies with positive flux'
 
+    ###
+    G.rflux = np.array(G.modelflux[:,2], copy=True)
+    G.modelflux[:,2] = np.maximum(1e-2, G.modelflux[:,2])
+    G.modelflux[:,2] = np.minimum(1e4,  G.modelflux[:,2])
+    G.theta_dev[:,2] = np.maximum(1e-2, G.theta_dev[:,2])
+    G.theta_exp[:,2] = np.maximum(1e-2, G.theta_exp[:,2])
+
+    G.fluxstr = np.array(['%.0f' % f for f in G.rflux])
+    G.devaberrstr = np.array(['ab err %.2f' % f for f in G.ab_deverr[:,2]])
+    G.expaberrstr = np.array(['ab err %.2f' % f for f in G.ab_experr[:,2]])
+    
+    D = G[G.fracdev[:,2] > 0.5]
+    E = G[G.fracdev[:,2] <= 0.5]
+    print len(D), 'dev', len(E), 'exp'
+    # D.cut(D.theta_dev[:,2] > 0)
+    # E.cut(E.theta_exp[:,2] > 0)
+    # print len(D), 'dev', len(E), 'exp with positive theta'
+
+
+
+    # Plot some wacky objects
+    I = np.flatnonzero(D.modelflux[:,2] >= 1e3)
+    T = D[I]
+    T = T[np.argsort(T.rflux)]
+    T.title = T.fluxstr
+    print 'Bright dev: theta_dev=', T.theta_dev[:,2]
+    rows,cols = 4,6
+    plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.1, right=0.9,
+                        bottom=0.1, top=0.9)
+    plotobjs(rows, cols, T)
+    plt.suptitle('deV "galaxies" with modelflux > 1e3')
+    ps.savefig()
+
+    I = np.flatnonzero((D.theta_dev[:,2] > 25) * (D.modelflux[:,2] >= 1.))
+    T = D[I]
+    T.title = T.fluxstr
+    T = T[np.argsort(-T.rflux)]
+    plotobjs(rows, cols, T)
+    plt.suptitle('deVs with theta > 25" and flux > 1')
+    ps.savefig()
+
+    # I = np.flatnonzero((D.theta_dev[:,2] > 25) * (D.modelflux[:,2] >= 100.))
+    # T = D[I]
+    # T.title = T.fluxstr
+    # T.cut(np.argsort(-T.rflux))
+    # plotobjs(rows, cols, T)
+    # plt.suptitle('deVs with theta > 25" and flux > 100')
+    # ps.savefig()
+
+    I = np.flatnonzero((E.theta_exp[:,2] > 25) * (E.modelflux[:,2] >= 100.))
+    T = E[I]
+    T.title = T.fluxstr
+    T = T[np.argsort(-T.rflux)]
+    plotobjs(rows, cols, T)
+    plt.suptitle('exps with theta > 25" and flux > 100')
+    ps.savefig()
+
+    I = np.flatnonzero((D.theta_dev[:,2] > 5) * (D.theta_dev[:,2] < 10)
+                       * (D.modelflux[:,2] > 1.) * (D.modelflux[:,2] < 10.))
+    T = D[I]
+    T.title = T.fluxstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('deVs with theta [5,10] and flux [1,10]')
+    ps.savefig()
+
+
+    I = np.flatnonzero((D.theta_dev[:,2] > 10) * (D.theta_dev[:,2] < 20)
+                       * (D.modelflux[:,2] > 10.) * (D.modelflux[:,2] < 100.))
+    T = D[I]
+    T.title = T.fluxstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('deVs with theta [10,20] and flux [10,100]')
+    ps.savefig()
+    
+    
+    I = np.flatnonzero((E.ab_exp[:,2] < 0.07) * (E.modelflux[:,2] > 10.))
+    T = D[I]
+    T = T[np.argsort(-T.rflux)]
+    T.title = T.expaberrstr #T.fluxstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('exps with ab_exp < 0.07 and flux > 10')
+    ps.savefig()
+    
+    I = np.flatnonzero((D.ab_dev[:,2] < 0.07) * (D.modelflux[:,2] > 10.))
+    T = D[I]
+    T = T[np.argsort(-T.rflux)]
+    T.title = T.devaberrstr #T.fluxstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('deVs with ab_dev < 0.07 and flux > 10')
+    ps.savefig()
+
+
+
+    
+    # plt.clf()
+    # plt.hist(G.theta_dev[:,2], 50, histtype='step', color='r')
+    # plt.hist(D.theta_dev[:,2], 50, histtype='step', color='r')
+    # plt.hist(G.theta_exp[:,2], 50, histtype='step', color='b')
+    # plt.hist(E.theta_exp[:,2], 50, histtype='step', color='b')
+    # plt.xlabel('theta')
+    # ps.savefig()
+    
+    plt.clf()
+    #plt.hist(np.log10(G.theta_dev[:,2]), 50, histtype='step', color='r')
+    n,b,p1 = plt.hist(np.log10(D.theta_dev[:,2]), 50, histtype='step', color='r')
+    #plt.hist(np.log10(G.theta_exp[:,2]), 50, histtype='step', color='b')
+    n,b,p2 = plt.hist(np.log10(E.theta_exp[:,2]), 50, histtype='step', color='b')
+    plt.xlabel('log theta')
+    plt.title('Effective radii of galaxies')
+    plt.legend((p1[0], p2[0]), ('deV', 'exp'))
+    ps.savefig()
+    
+    plt.clf()
+    # plt.hist(G.ab_dev[:,2], 100, histtype='step', color='r')
+    # plt.hist(G.ab_exp[:,2], 100, histtype='step', color='b')
+    n,b,p1 = plt.hist(D.ab_dev[:,2], 100, histtype='step', color='r')
+    n,b,p2 = plt.hist(E.ab_exp[:,2], 100, histtype='step', color='b')
+    plt.legend((p1[0], p2[0]), ('deV', 'exp'))
+    plt.xlabel('ab')
+    plt.title('Axis ratios of galaxies')
+    ps.savefig()
+    
+    plt.clf()
+    plt.hist(np.log10(G.modelflux[:,2]), 100, histtype='step', color='r')
+    plt.xlabel('log modelflux')
+    ps.savefig()
+    
+    # plt.clf()
+    # loghist(D.theta_dev[:,2], D.modelflux[:,2], 100)
+    # plt.xlabel('theta_dev')
+    # plt.ylabel('modelflux')
+    # ps.savefig()
+    
+    plt.clf()
+    loghist(D.theta_dev[:,2], np.log10(D.modelflux[:,2]), 100)
+    plt.xlabel('theta_dev')
+    plt.ylabel('log modelflux')
+    plt.title('Brightness vs Effective radius')
+    ps.savefig()
+    
+    # plt.clf()
+    # loghist(E.theta_exp[:,2], E.modelflux[:,2], 100)
+    # plt.xlabel('theta_exp')
+    # plt.ylabel('modelflux')
+    # ps.savefig()
+    
+    plt.clf()
+    loghist(E.theta_exp[:,2], np.log10(E.modelflux[:,2]), 100)
+    plt.xlabel('theta_exp')
+    plt.ylabel('log modelflux')
+    plt.title('Brightness vs Effective radius')
+    ps.savefig()
+    
+    # plt.clf()
+    # loghist(E.ab_exp[:,2], E.modelflux[:,2], 100)
+    # plt.xlabel('ab_exp')
+    # plt.ylabel('modelflux')
+    # ps.savefig()
+    
+    plt.clf()
+    loghist(E.ab_exp[:,2], np.log10(E.modelflux[:,2]), 100)
+    plt.xlabel('ab_exp')
+    plt.ylabel('log modelflux')
+    plt.title('Brightness vs Axis ratio')
+    ps.savefig()
+
+    plt.clf()
+    loghist(D.ab_dev[:,2], np.log10(D.modelflux[:,2]), 100)
+    plt.xlabel('ab_dev')
+    plt.ylabel('log modelflux')
+    plt.title('Brightness vs Axis ratio')
+    ps.savefig()
+    
+    
+    plt.clf()
+    loghist(D.theta_dev[:,2], D.ab_dev[:,2], 100)
+    plt.xlabel('theta_dev')
+    plt.ylabel('ab_dev')
+    plt.title('Axis ratio vs Radius')
+    ps.savefig()
+    
+    plt.clf()
+    loghist(E.theta_exp[:,2], E.ab_exp[:,2], 100)
+    plt.xlabel('theta_exp')
+    plt.ylabel('ab_exp')
+    plt.title('Axis ratio vs Radius')
+    ps.savefig()
+    
+    plt.clf()
+    loghist(E.theta_exp[:,2], np.minimum(60., E.theta_experr[:,2]), 100)
+    plt.xlabel('theta_exp')
+    plt.ylabel('theta_exp err')
+    ps.savefig()
+    
+    plt.clf()
+    loghist(D.theta_dev[:,2], np.minimum(30., D.theta_deverr[:,2]), 100)
+    plt.xlabel('theta_dev')
+    plt.ylabel('theta_dev err')
+    ps.savefig()
+    
+    plt.clf()
+    loghist(E.ab_exp[:,2], np.minimum(1., E.ab_experr[:,2]), 100)
+    plt.xlabel('ab_exp')
+    plt.ylabel('ab_exp err')
+    ps.savefig()
+    
+    plt.clf()
+    loghist(D.ab_dev[:,2], np.minimum(1., D.ab_deverr[:,2]), 100)
+    plt.xlabel('ab_dev')
+    plt.ylabel('ab_dev err')
+    ps.savefig()
+    
+    
+    I = np.flatnonzero((D.ab_dev[:,2] < 0.1) * (D.theta_dev[:,2] > 2.))
+    T = D[I]
+    T = T[np.argsort(-T.rflux)]
+    T.title = T.fluxstr
+    print 'Flux:', T.rflux[:20]
+    print 'Flux str:', T.title[:20]
+
+    plotobjs(rows, cols, T)
+    plt.suptitle('deV galaxies with ab < 0.1, theta > 2"')
+    ps.savefig()
+
+    
+
+def plotobjs(rows, cols, T):
+    plt.clf()
+    for i in range(min(len(T), rows * cols)):
+        ra,dec = T.ra[i], T.dec[i]
+        #url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=1&width=128&height=128' % (ra,dec)
+        url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=0.4&width=128&height=128' % (ra,dec)
+        #fn = 'cutout-%g-%g.jpg' % (ra,dec)
+        fn = 'cutoutB-%g-%g.png' % (ra,dec)
+        if not os.path.exists(fn):
+            #cmd = 'wget "%s" -O "%s"' % (url, fn)
+            cmd = 'wget "%s" -O - | jpegtopnm | pnmtopng > "%s"' % (url, fn)
+            print cmd
+            os.system(cmd)
+        I = plt.imread(fn)
+        plt.subplot(rows, cols, i+1)
+        plt.imshow(I, interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
+        if 'title' in T.get_columns() and len(T.title[i]):
+            plt.title(T.title[i], fontsize=8)
+        
 
 
 ps = PlotSequence('comp')
+
+coadd_id = '1384p454'
+
+
+wack(coadd_id, ps)
+sys.exit(0)
+
+
+
+
+
+
+
+
+
+
+
+
 
 fna = 'phot-1384p454-b8.fits'
 fnb = 'phot-1384p454-b6.fits'
@@ -66,7 +338,6 @@ modsb,catsb,sxb,syb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))
 imargin = 12
 
 band = 1
-coadd_id = '1384p454'
 tiledir = 'wise-coadds'
 fn = os.path.join(tiledir, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
 print 'Reading', fn
@@ -94,149 +365,6 @@ plt.hist(img.ravel(), 100, range=(-0.5,1))
 plt.xlim(-0.5,1)
 ps.savefig()
 
-G = fits_table('sweeps-%s-gals.fits' % coadd_id)
-print len(G), 'galaxies'
-G.cut((G.theta_dev[:,2] > 0) * (G.theta_exp[:,2] > 0))
-print len(G), 'galaxies with positive thetas'
-G.cut(G.modelflux[:,2] > 0)
-print len(G), 'galaxies with positive flux'
-
-###
-G.modelflux[:,2] = np.maximum(1e-2, G.modelflux[:,2])
-G.modelflux[:,2] = np.minimum(1e4,  G.modelflux[:,2])
-G.theta_dev[:,2] = np.maximum(1e-2, G.theta_dev[:,2])
-G.theta_exp[:,2] = np.maximum(1e-2, G.theta_exp[:,2])
-
-D = G[G.fracdev[:,2] > 0.5]
-E = G[G.fracdev[:,2] <= 0.5]
-print len(D), 'dev', len(E), 'exp'
-D.cut(D.theta_dev[:,2] > 0)
-E.cut(E.theta_exp[:,2] > 0)
-print len(D), 'dev', len(E), 'exp with positive theta'
-
-# plt.clf()
-# plt.hist(G.theta_dev[:,2], 50, histtype='step', color='r')
-# plt.hist(D.theta_dev[:,2], 50, histtype='step', color='r')
-# plt.hist(G.theta_exp[:,2], 50, histtype='step', color='b')
-# plt.hist(E.theta_exp[:,2], 50, histtype='step', color='b')
-# plt.xlabel('theta')
-# ps.savefig()
-
-plt.clf()
-plt.hist(np.log10(G.theta_dev[:,2]), 50, histtype='step', color='r')
-plt.hist(np.log10(D.theta_dev[:,2]), 50, histtype='step', color='r')
-plt.hist(np.log10(G.theta_exp[:,2]), 50, histtype='step', color='b')
-plt.hist(np.log10(E.theta_exp[:,2]), 50, histtype='step', color='b')
-plt.xlabel('log theta')
-ps.savefig()
-
-plt.clf()
-plt.hist(G.ab_dev[:,2], 100, histtype='step', color='r')
-plt.hist(G.ab_exp[:,2], 100, histtype='step', color='b')
-plt.hist(D.ab_dev[:,2], 100, histtype='step', color='r')
-plt.hist(E.ab_exp[:,2], 100, histtype='step', color='b')
-plt.xlabel('ab')
-ps.savefig()
-
-plt.clf()
-plt.hist(np.log10(G.modelflux[:,2]), 100, histtype='step', color='r')
-plt.xlabel('log modelflux')
-ps.savefig()
-
-# plt.clf()
-# loghist(D.theta_dev[:,2], D.modelflux[:,2], 100)
-# plt.xlabel('theta_dev')
-# plt.ylabel('modelflux')
-# ps.savefig()
-
-plt.clf()
-loghist(D.theta_dev[:,2], np.log10(D.modelflux[:,2]), 100)
-plt.xlabel('theta_dev')
-plt.ylabel('log modelflux')
-ps.savefig()
-
-# plt.clf()
-# loghist(E.theta_exp[:,2], E.modelflux[:,2], 100)
-# plt.xlabel('theta_exp')
-# plt.ylabel('modelflux')
-# ps.savefig()
-
-plt.clf()
-loghist(E.theta_exp[:,2], np.log10(E.modelflux[:,2]), 100)
-plt.xlabel('theta_exp')
-plt.ylabel('log modelflux')
-ps.savefig()
-
-# plt.clf()
-# loghist(E.ab_exp[:,2], E.modelflux[:,2], 100)
-# plt.xlabel('ab_exp')
-# plt.ylabel('modelflux')
-# ps.savefig()
-
-plt.clf()
-loghist(E.ab_exp[:,2], np.log10(E.modelflux[:,2]), 100)
-plt.xlabel('ab_exp')
-plt.ylabel('log modelflux')
-ps.savefig()
-
-
-plt.clf()
-loghist(D.theta_dev[:,2], D.ab_dev[:,2], 100)
-plt.xlabel('theta_dev')
-plt.ylabel('ab_dev')
-ps.savefig()
-
-plt.clf()
-loghist(E.theta_exp[:,2], E.ab_exp[:,2], 100)
-plt.xlabel('theta_exp')
-plt.ylabel('ab_exp')
-ps.savefig()
-
-plt.clf()
-loghist(E.theta_exp[:,2], np.minimum(60., E.theta_experr[:,2]), 100)
-plt.xlabel('theta_exp')
-plt.ylabel('theta_exp err')
-ps.savefig()
-
-plt.clf()
-loghist(D.theta_dev[:,2], np.minimum(30., D.theta_deverr[:,2]), 100)
-plt.xlabel('theta_dev')
-plt.ylabel('theta_dev err')
-ps.savefig()
-
-plt.clf()
-loghist(E.ab_exp[:,2], np.minimum(1., E.ab_experr[:,2]), 100)
-plt.xlabel('ab_exp')
-plt.ylabel('ab_exp err')
-ps.savefig()
-
-plt.clf()
-loghist(D.ab_dev[:,2], np.minimum(1., D.ab_deverr[:,2]), 100)
-plt.xlabel('ab_dev')
-plt.ylabel('ab_dev err')
-ps.savefig()
-
-
-# Plot some wacky objects
-I = np.flatnonzero(D.modelflux[:,2] >= 1e4)
-T = D[I]
-print 'Bright dev: theta_dev=', T.theta_dev[:,2]
-rows,cols = 4,6
-plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.1, right=0.9,
-                    bottom=0.1, top=0.9)
-plt.clf()
-for i in range(min(len(T), rows * cols)):
-    ra,dec = T.ra[i], T.dec[i]
-    url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%g&dec=%g&scale=1&width=128&height=128' % (ra,dec)
-    fn = 'cutout-%g-%g.jpg' % (ra,dec)
-    if not os.path.exists(fn):
-        cmd = 'wget "%s" -O "%s"' % (url, fn)
-        print cmd
-        os.system(cmd)
-    I = plt.imread(fn)
-    plt.subplot(rows, cols, i+1)
-    plt.imshow(I, interpolation='nearest', origin='lower')
-ps.savefig()
 
 
 
