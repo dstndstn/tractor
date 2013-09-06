@@ -131,6 +131,9 @@ def main():
     # SEQUELS
     R0,R1 = 120.0, 200.0
     D0,D1 =  45.0,  60.0
+
+    sband = 'r'
+    bandnum = 'ugriz'.index(sband)
     
     gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
     ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
@@ -178,12 +181,30 @@ def main():
             gals  = fits_table(gsweepfn)
         else:
             gals,stars = read_sweeps(sweeps, r0,r1,d0,d1)
-            # gals.rename('theta_dev', 'r_dev')
-            # gals.rename('theta_exp', 'r_exp')
-
             stars.writeto(ssweepfn)
             gals.writeto(gsweepfn)
 
+
+        # Cut galaxies based on signal-to-noise of theta (effective radius)
+        # measurement.
+        b = bandnum
+        dev = (gals.fracdev[:,b] >= 0.5)
+        exp = (gals.fracdev[:,b] < 0.5)
+        tsn = np.zeros(len(gals))
+        tsn[dev] = gals.theta_dev[dev,b] / gals.theta_deverr[dev,b]
+        tsn[exp] = gals.theta_exp[exp,b] / gals.theta_experr[exp,b]
+
+        bad = np.logical_or(tsn < 3., gals.modelflux[:,b] > 1e4)
+        print 'Found', sum(bad), 'low theta S/N or huge-flux galaxies'
+
+        gstars = fits_table()
+        gstars.ra  = gals.ra[bad]
+        gstars.dec = gals.dec[bad]
+        print 'Adding', len(gstars), 'bad galaxies to "stars"'
+        stars = merge_tables(stars, gstars)
+        gals.cut(np.logical_not(bad))
+        print 'Cut to', len(gals), 'not-bad galaxies'
+            
         # hack
         gals.objc_type  = np.zeros(len(gals), int) + 3
         gals.psfflux    = np.ones((len(gals),5))
@@ -231,7 +252,6 @@ def main():
         stars.cut(I)
 
 
-        sband = 'r'
         wanyband = wband = 'w'
         print 'Creating tractor galaxies...'
         cat = get_tractor_sources_dr9(None, None, None, bandname=sband,

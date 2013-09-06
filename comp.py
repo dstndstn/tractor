@@ -75,8 +75,12 @@ def wack(coadd_id, ps):
     # E.cut(E.theta_exp[:,2] > 0)
     # print len(D), 'dev', len(E), 'exp with positive theta'
 
+    #wack1(ps, G, D, E)
+    ps.skipto(21)
+    wack2(ps, G, D, E)
 
-
+    
+def wack1(ps, G, D, E):
     # Plot some wacky objects
     I = np.flatnonzero(D.modelflux[:,2] >= 1e3)
     T = D[I]
@@ -281,8 +285,119 @@ def wack(coadd_id, ps):
     plt.suptitle('deV galaxies with ab < 0.1, theta > 2"')
     ps.savefig()
 
+def wack2(ps, G, D, E):
+    abexperr = np.minimum(1., E.ab_experr[:,2])
+    abdeverr = np.minimum(1., D.ab_deverr[:,2])
     
+    plt.clf()
+    loghist(np.log10(E.modelflux[:,2]), abexperr)
+    plt.xlabel('log model flux')
+    plt.ylabel('ab_exp err')
+    ps.savefig()
 
+    plt.clf()
+    loghist(np.log10(D.modelflux[:,2]), abdeverr)
+    plt.xlabel('log model flux')
+    plt.ylabel('ab_dev err')
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(E.modelflux[:,2]), np.minimum(5., E.theta_experr[:,2]))
+    plt.xlabel('log model flux')
+    plt.ylabel('theta_exp err')
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(D.modelflux[:,2]), np.minimum(10., D.theta_deverr[:,2]))
+    plt.xlabel('log model flux')
+    plt.ylabel('theta_dev err')
+    ps.savefig()
+
+
+    plt.clf()
+    loghist(np.log10(E.modelflux[:,2]),
+            np.log10(E.theta_exp[:,2] / E.theta_experr[:,2]))
+    plt.xlabel('log model flux')
+    plt.ylabel('log theta_exp S/N')
+    ax = plt.axis()
+    plt.plot([-2,4],[-2,4], 'b-')
+    plt.axhline(np.log10(5.), color='b')
+    plt.axhline(np.log10(3.), color='b')
+    plt.axhline(np.log10(1.), color='b')
+    plt.axis(ax)
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(D.modelflux[:,2]),
+            np.log10(D.theta_dev[:,2] / D.theta_deverr[:,2]))
+    plt.xlabel('log model flux')
+    plt.ylabel('log theta_dev S/N')
+    ax = plt.axis()
+    plt.plot([-2,4],[-2,4], 'b-')
+    plt.axhline(np.log10(5.), color='b')
+    plt.axhline(np.log10(3.), color='b')
+    plt.axhline(np.log10(1.), color='b')
+    plt.axis(ax)
+    ps.savefig()
+
+    Dsn = D.theta_dev[:,2] / D.theta_deverr[:,2]
+    Esn = E.theta_exp[:,2] / E.theta_experr[:,2]
+    ha = dict(range=(-2,2), bins=50, histtype='step')
+
+    plt.clf()
+    n,b,p1 = plt.hist(np.log10(D.theta_dev[:,2]), color='r', **ha)
+    I = np.flatnonzero(Dsn > 3.)
+    n,b,p2 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=2, alpha=0.5, **ha)
+    I = np.flatnonzero(Dsn > 5.)
+    n,b,p3 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=3, alpha=0.3, **ha)
+
+    n,b,p4 = plt.hist(np.log10(E.theta_exp[:,2]), color='b', **ha)
+    I = np.flatnonzero(Esn > 3.)
+    n,b,p5 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=2, alpha=0.5, **ha)
+    I = np.flatnonzero(Esn > 5.)
+    n,b,p6 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=3, alpha=0.3, **ha)
+    plt.xlabel('log theta')
+    plt.legend((p1[0],p2[0],p3[0],p4[0],p5[0],p6[0]),
+               ('deV (all)', 'deV (S/N > 3)', 'deV (S/N > 5)',
+                'exp (all)', 'exp (S/N > 3)', 'exp (S/N > 5)'))
+    plt.title('S/N cut effects on galaxy size distributions')
+    ps.savefig()
+
+    ha.update(normed=True)
+    
+    plt.clf()
+    n,b,p1 = plt.hist(np.log10(D.theta_dev[:,2]), color='r', **ha)
+    I = np.flatnonzero(Dsn > 3.)
+    n,b,p2 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=2, alpha=0.5, **ha)
+    I = np.flatnonzero(Dsn > 5.)
+    n,b,p3 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=3, alpha=0.3, **ha)
+
+    n,b,p4 = plt.hist(np.log10(E.theta_exp[:,2]), color='b', **ha)
+    I = np.flatnonzero(Esn > 3.)
+    n,b,p5 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=2, alpha=0.5, **ha)
+    I = np.flatnonzero(Esn > 5.)
+    n,b,p6 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=3, alpha=0.3, **ha)
+    plt.xlabel('log theta')
+    plt.legend((p1[0],p2[0],p3[0],p4[0],p5[0],p6[0]),
+               ('deV (all)', 'deV (S/N > 3)', 'deV (S/N > 5)',
+                'exp (all)', 'exp (S/N > 3)', 'exp (S/N > 5)'))
+    plt.title('S/N cut effects on galaxy size distributions')
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(Dsn), np.log10(Dabsn), 100)
+    plt.xlabel('log S/N in theta')
+    plt.ylabel('log 1/error in ab')
+    ps.savefig()  
+
+    plt.clf()
+    loghist(np.log10(Esn), np.log10(Eabsn), 100)
+    plt.xlabel('log S/N in theta')
+    plt.ylabel('log 1/error in ab')
+    ps.savefig()  
+
+
+    
 def plotobjs(rows, cols, T):
     plt.clf()
     for i in range(min(len(T), rows * cols)):
