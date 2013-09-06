@@ -1898,6 +1898,7 @@ class Tractor(MultiParams):
             # Unapply shared parameter map -- result is duplicated
             # result elements.
             print 'shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
+            print 'paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max()
             X = X[paramindexmap]
             print 'shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
 
