@@ -424,18 +424,9 @@ ps = PlotSequence('comp')
 
 coadd_id = '1384p454'
 
-
-wack(coadd_id, ps)
-sys.exit(0)
-
-
-
-
-
-
-
-
-
+#wack(coadd_id, ps)
+#sys.exit(0)
+ps.skipto(50)
 
 
 
@@ -473,16 +464,84 @@ Yb = np.round(np.linspace(0, H, blocksb+1)).astype(int)
 #modb = reassemble_chunks(modsb, blocksb, imargin)
 
 ima = dict(interpolation='nearest', origin='lower',
-           vmin=-0.01, vmax=0.5, cmap='gray')
+           vmin=-0.5, vmax=0.5, cmap='gray')
+           #vmin=-0.01, vmax=0.5, cmap='gray')
+
+imd = dict(interpolation='nearest', origin='lower',
+           vmin=-1e-2, vmax=1e-2, cmap='gray')
+
+# plt.clf()
+# plt.hist(img.ravel(), 100, range=(-0.5,1))
+# plt.xlim(-0.5,1)
+# ps.savefig()
+
+
+# ratio = Tb.w1_nanomaggies / Ta.w1_nanomaggies
+# I = np.argsort(-np.abs(np.maximum(ratio, 1./ratio)))
+# print 'Largest 
+
+diff = Tb.w1_nanomaggies - Ta.w1_nanomaggies
+I = np.argsort(-np.abs(diff))
+print 'Largest diffs:'
 
 plt.clf()
-plt.hist(img.ravel(), 100, range=(-0.5,1))
-plt.xlim(-0.5,1)
+plt.imshow(img, **ima)
+ax = plt.axis()
+plt.plot(Ta.x[I[:20]], Ta.y[I[:20]], 'ro')
+plt.axis(ax)
 ps.savefig()
 
+for i in I[2:7]:
+    ta = Ta[i]
+    tb = Tb[i]
+    print 'a', Ta.w1_nanomaggies[i], 'b', Tb.w1_nanomaggies[i]
 
+    print 'cells', ta.cell, tb.cell
+    x0 = min(ta.cell_x0, tb.cell_x0)
+    x1 = max(ta.cell_x1, tb.cell_x1)
+    y0 = min(ta.cell_y0, tb.cell_y0)
+    y1 = max(ta.cell_y1, tb.cell_y1)
+    ax = [x0, x1, y0, y1]
 
+    moda = modsa[ta.cell]
+    modb = modsb[tb.cell]
 
+    print 'moda', moda.shape
+    print 'modb', modb.shape
+
+    plt.clf()
+    plt.imshow(moda, extent=[ta.cell_x0, ta.cell_x1, ta.cell_y0, ta.cell_y1], **ima)
+    plt.plot(ta.x, ta.y, 'rx')
+    plt.axis(ax)
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(modb, extent=[tb.cell_x0, tb.cell_x1, tb.cell_y0, tb.cell_y1], **ima)
+    plt.plot(ta.x, ta.y, 'rx')
+    plt.axis(ax)
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(img, **ima)
+    plt.plot(ta.x, ta.y, 'rx')
+    plt.axis(ax)
+    ps.savefig()
+
+    dm = np.zeros_like(img)
+    dm[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] += moda
+    dm[tb.cell_y0:tb.cell_y1, tb.cell_x0:tb.cell_x1] -= modb
+    ma = np.zeros_like(img)
+    ma[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] = 1.
+    mb = np.zeros_like(img)
+    mb[tb.cell_y0:tb.cell_y1, tb.cell_x0:tb.cell_x1] = 1.
+    dm *= (ma * mb)
+    plt.clf()
+    plt.imshow(dm[y0:y1,x0:x1], extent=ax, **imd)
+    plt.plot(ta.x, ta.y, 'rx')
+    plt.axis(ax)
+    ps.savefig()
+
+sys.exit(0)
 
 
 
@@ -499,8 +558,6 @@ print 'sxa', sxa.shape
 HH = max(hha,hhb)
 WW = max(wwa,wwb)
 
-imd = dict(interpolation='nearest', origin='lower',
-           vmin=-1e-2, vmax=1e-2, cmap='gray')
 
 ra,da,srcsa,tim = catsa[0]
 rb,db,srcsb,tim = catsb[0]
@@ -577,12 +634,11 @@ for im,imargs,tt,cat in [(modsa[0], ima, 'Model A (%i), first block' % blocksa, 
 # plt.title('Data A, one block')
 # ps.savefig()
 
-
-plt.imshow(modsa[0][:hh,:ww] - modsb[0][:hh,:ww],
-           interpolation='nearest', origin='lower',
-           vmin=-1e-2, vmax=1e-2, cmap='gray')
-plt.title('Model A - Model B')
-ps.savefig()
+# plt.imshow(modsa[0][:hh,:ww] - modsb[0][:hh,:ww],
+#            interpolation='nearest', origin='lower',
+#            vmin=-1e-2, vmax=1e-2, cmap='gray')
+# plt.title('Model A - Model B')
+# ps.savefig()
 
 
 # for img,a in [(moda,ima),(modb,ima),(moda-modb, dict(interpolation='nearest', origin='lower',
@@ -629,25 +685,27 @@ plt.xscale('symlog')
 plt.yscale('symlog')
 ps.savefig()
 
+lo,hi = 0.5, 2.0
 plt.clf()
-plt.plot(Ta.w1_nanomaggies, Tb.w1_nanomaggies / Ta.w1_nanomaggies, 'b.')
+plt.plot(Ta.w1_nanomaggies, np.clip(Tb.w1_nanomaggies / Ta.w1_nanomaggies, lo, hi), 'b.')
 
-I = np.random.randint(len(Tb), size=(100,))
-d = 1./np.sqrt(Tb.w1_nanomaggies_ivar[I])
-y = Tb.w1_nanomaggies[I]
-x = Ta.w1_nanomaggies[I]
-plt.plot(np.vstack([x, x]), np.vstack([y-d, y+d]) / x, 'b-', alpha=0.5)
-
-I = np.flatnonzero(np.logical_or(y / x > 2, y/x < 0.5))
-d = 1./np.sqrt(Tb.w1_nanomaggies_ivar[I])
-y = Tb.w1_nanomaggies[I]
-x = Ta.w1_nanomaggies[I]
-plt.plot(np.vstack([x, x]), np.vstack([y-d, y+d]) / x, 'b-', alpha=0.5)
+# I = np.random.randint(len(Tb), size=(100,))
+# d = 1./np.sqrt(Tb.w1_nanomaggies_ivar[I])
+# y = Tb.w1_nanomaggies[I]
+# x = Ta.w1_nanomaggies[I]
+# plt.plot(np.vstack([x, x]), np.vstack([y-d, y+d]) / x, 'b-', alpha=0.5)
+# 
+# I = np.flatnonzero(np.logical_or(y / x > 2, y/x < 0.5))
+# d = 1./np.sqrt(Tb.w1_nanomaggies_ivar[I])
+# y = Tb.w1_nanomaggies[I]
+# x = Ta.w1_nanomaggies[I]
+# plt.plot(np.vstack([x, x]), np.vstack([y-d, y+d]) / x, 'b-', alpha=0.5)
 
 plt.xlabel('a (nm)')
 plt.ylabel('b/a (nm)')
 plt.xscale('symlog')
 #plt.yscale('symlog')
+plt.ylim(lo, hi)
 ps.savefig()
 
 ratio = Tb.w1_nanomaggies / Ta.w1_nanomaggies

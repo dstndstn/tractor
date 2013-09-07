@@ -315,6 +315,8 @@ def main():
         wx -= 1.
         wy -= 1.
 
+        PHOT.x = sx
+        PHOT.y = sy
 
         pixscale = wcs.pixel_scale()
         # crude source radii, in pixels
@@ -338,6 +340,12 @@ def main():
         print 'sourcerad:', len(sourcerad), sourcerad.shape, sourcerad.dtype
         print 'sx:', sx.shape, sx.dtype
         print 'sourcerad range:', min(sourcerad), max(sourcerad)
+
+        PHOT.cell = np.zeros(len(PHOT), int)
+        PHOT.cell_x0 = np.zeros(len(PHOT), int)
+        PHOT.cell_y0 = np.zeros(len(PHOT), int)
+        PHOT.cell_x1 = np.zeros(len(PHOT), int)
+        PHOT.cell_y1 = np.zeros(len(PHOT), int)
 
         inbounds = np.flatnonzero((sx >= -0.5) * (sx < W-0.5) *
                                   (sy >= -0.5) * (sy < H-0.5))
@@ -434,6 +442,12 @@ def main():
                              (sy[I] >= (ylo-0.5)) * (sy[I] < (yhi-0.5)))
 
                     srci = I[inbox]
+
+                    PHOT.cell[I[inbox]] = celli
+                    PHOT.cell_x0[I[inbox]] = ix0
+                    PHOT.cell_x1[I[inbox]] = ix1
+                    PHOT.cell_y0[I[inbox]] = iy0
+                    PHOT.cell_y1[I[inbox]] = iy1
                     
                     # sources in the ROI box
                     subcat = [cat[i] for i in srci]
