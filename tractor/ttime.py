@@ -55,6 +55,8 @@ class MemMeas(object):
         txt = []
         #for k in keys:
         for k in ['VmPeak', 'VmSize', 'VmRSS', 'VmData']:
+            if not k in self.mem0:
+                continue
             val,unit = self.mem0[k]
             if unit == 'kB':
                 val = int(val, 10)

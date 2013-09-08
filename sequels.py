@@ -91,6 +91,11 @@ def read_sweeps(sweeps, r0,r1,d0,d1):
             P.dec = T.dec
             T = P
 
+        T.run = np.zeros(len(T), int) + sweep.run
+        T.camcal = np.zeros(len(T), int) + sweep.camcol
+        T.isgal = np.zeros(len(T), np.uint8) + sweep.isgal
+        T.sweeprow = np.arange(sweepistart, sweep.iend+1)
+            
         if sweep.isgal:
             gals.append(T)
         else:
@@ -101,6 +106,26 @@ def read_sweeps(sweeps, r0,r1,d0,d1):
     print 'Total of', len(stars), 'stars and', len(gals), 'galaxies in this tile'
     return gals,stars
 
+
+def read_sweep_index(R0,R1,D0,D1):
+    gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
+    ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
+    print 'Read', len(gsweeps), 'galaxy sweep entries'
+    print 'Read', len(ssweeps), 'star sweep entries'
+    gsweeps.cut(gsweeps.nprimary > 0)
+    ssweeps.cut(ssweeps.nprimary > 0)
+    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on NPRIMARY'
+    margin = 1
+    gsweeps.cut((gsweeps.ra  > (R0-margin)) * (gsweeps.ra  < (R1+margin)) *
+                (gsweeps.dec > (D0-margin)) * (gsweeps.dec < (D1+margin)))
+    ssweeps.cut((ssweeps.ra  > (R0-margin)) * (ssweeps.ra  < (R1+margin)) *
+                (ssweeps.dec > (D0-margin)) * (ssweeps.dec < (D1+margin)))
+    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on RA,Dec box'
+    gsweeps.isgal = np.ones( len(gsweeps), int)
+    ssweeps.isgal = np.zeros(len(ssweeps), int)
+    sweeps = merge_tables([gsweeps, ssweeps])
+    print 'Merged:', len(sweeps)
+    return sweeps
 
 def main():
     import optparse
@@ -134,24 +159,8 @@ def main():
 
     sband = 'r'
     bandnum = 'ugriz'.index(sband)
-    
-    gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
-    ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
-    print 'Read', len(gsweeps), 'galaxy sweep entries'
-    print 'Read', len(ssweeps), 'star sweep entries'
-    gsweeps.cut(gsweeps.nprimary > 0)
-    ssweeps.cut(ssweeps.nprimary > 0)
-    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on NPRIMARY'
-    margin = 1
-    gsweeps.cut((gsweeps.ra  > (R0-margin)) * (gsweeps.ra  < (R1+margin)) *
-                (gsweeps.dec > (D0-margin)) * (gsweeps.dec < (D1+margin)))
-    ssweeps.cut((ssweeps.ra  > (R0-margin)) * (ssweeps.ra  < (R1+margin)) *
-                (ssweeps.dec > (D0-margin)) * (ssweeps.dec < (D1+margin)))
-    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on RA,Dec box'
-    gsweeps.isgal = np.ones( len(gsweeps), int)
-    ssweeps.isgal = np.zeros(len(ssweeps), int)
-    sweeps = merge_tables([gsweeps, ssweeps])
-    print 'Merged:', len(sweeps)
+
+    sweeps = None
     
     for tile in T:
         tt0 = Time()
@@ -176,10 +185,13 @@ def main():
 
         ssweepfn = 'sweeps-%s-stars.fits' % tile.coadd_id
         gsweepfn = 'sweeps-%s-gals.fits' % tile.coadd_id
+        print 'looking for', ssweepfn, 'and', gsweepfn
         if os.path.exists(ssweepfn) and os.path.exists(gsweepfn):
             stars = fits_table(ssweepfn)
             gals  = fits_table(gsweepfn)
         else:
+            if sweeps is None:
+                sweeps = read_sweep_index(R0,R1,D0,D1)
             gals,stars = read_sweeps(sweeps, r0,r1,d0,d1)
             stars.writeto(ssweepfn)
             gals.writeto(gsweepfn)
@@ -205,12 +217,6 @@ def main():
         # print sum(I), 'theta exp errors are zero'
         # print 'thetas are, eg,', gals.theta_exp[exp[np.flatnonzero(I)[:50]],b]
         # print 'modelfluxes are, eg,', gals.modelflux[exp[np.flatnonzero(I)[:50]],b]
-
-        assert(np.all(np.isfinite(gals.theta_dev[dev,b])))
-        assert(np.all(np.isfinite(gals.theta_exp[exp,b])))
-        assert(np.all(gals.theta_experr[exp,b] > 0))
-        assert(np.all(gals.theta_deverr[dev,b] > 0))
-
         print len(gals), 'galaxies'
         bad = np.logical_or(tsn < 3., gals.modelflux[:,b] > 1e4)
         print 'Found', sum(bad), 'low theta S/N or huge-flux galaxies'
@@ -226,13 +232,14 @@ def main():
         # hack
         gals.objc_type  = np.zeros(len(gals), int) + 3
         gals.psfflux    = np.ones((len(gals),5))
-        gals.cmodelflux = np.ones((len(gals),5))
-        gals.devflux    = np.ones((len(gals),5))
-        gals.expflux    = np.ones((len(gals),5))
-        gals.nchild     = np.zeros(len(gals), int)
-        gals.objc_flags = np.zeros(len(gals), int)
+        gals.cmodelflux = gals.psfflux
+        gals.devflux    = gals.psfflux
+        gals.expflux    = gals.psfflux
+        # gals.nchild     = np.zeros(len(gals), int)
+        # gals.objc_flags = np.zeros(len(gals), int)
 
         wfn = 'wise-sources-%s.fits' % (tile.coadd_id)
+        print 'looking for', wfn
         if os.path.exists(wfn):
             WISE = fits_table(wfn)
             print 'Read', len(WISE), 'WISE sources nearby'
@@ -241,17 +248,6 @@ def main():
             WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
             WISE.writeto(wfn)
             print 'Found', len(WISE), 'WISE sources nearby'
-
-        # unmatched = np.ones(len(WISE), bool)
-        # I,J,d = match_radec(WISE.ra, WISE.dec, stars.ra, stars.dec, 4./3600.)
-        # unmatched[I] = False
-        # I,J,d = match_radec(WISE.ra, WISE.dec, gals.ra, gals.dec, 4./3600.)
-        # unmatched[I] = False
-        # UW = WISE[unmatched]
-        # print 'Got', len(UW), 'unmatched WISE sources'
-        # #del WISE
-        # WISE = WISE[np.logical_not(unmatched)]
-
 
         ### HACK -- cut star/gal lists
         ok,gx,gy = wcs.radec2pixelxy(gals.ra, gals.dec)
@@ -276,8 +272,9 @@ def main():
                                          objs=gals, bands=[], nanomaggies=True,
                                          extrabands=[wband],
                                          fixedComposites=True,
-                                         useObjcType=True)
+                                         useObjcType=True, objCuts=False)
         ngals = len(cat)
+        assert(ngals == len(gals))
         print 'Adding tractor stars...'
         for i in range(len(stars)):
             cat.append(PointSource(RaDecPos(stars.ra[i], stars.dec[i]),
@@ -292,6 +289,8 @@ def main():
         PHOT.ra  = np.array([src.getPosition().ra  for src in cat])
         PHOT.dec = np.array([src.getPosition().dec for src in cat])
 
+        assert(np.all(PHOT.ra == np.append(gals.ra, stars.ra)))
+        
         unmatched = np.ones(len(WISE), bool)
         I,J,d = match_radec(WISE.ra, WISE.dec, PHOT.ra, PHOT.dec, 4./3600., nearest=True)
         unmatched[I] = False

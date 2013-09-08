@@ -223,7 +223,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  extrabands=None,
                  fixedComposites=False,
                  forcePointSources=False,
-                 useObjcType=False):
+                 useObjcType=False,
+                 objCuts=True):
     '''
     If set,
 
@@ -231,6 +232,10 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     returns sources within "rad" degrees of the given RA,Dec (in degrees)
     center.
+
+    WARNING, this method alters the "objs" argument, if given.
+    Consider calling objs.copy() before calling.
+    
     '''
     #   brightPointSourceThreshold=0.):
 
@@ -261,16 +266,15 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             
             objfn = sdss.getPath('tsObj', run, camcol, field,
                                  bandname, rerun=rerun)
-            objs.indices = np.arange(len(objs))
         else:
             _check_sdss_files(sdss, run, camcol, field, bandnum, ['photoObj'],
                               tryopen=True, retrieve=retrieve)
             objfn = sdss.getPath('photoObj', run, camcol, field)
             
-            objs = fits_table(objfn)
-            if objs is None:
-                print 'No sources in SDSS file', objfn
-                return []
+        objs = fits_table(objfn)
+        if objs is None:
+            print 'No sources in SDSS file', objfn
+            return []
 
     objs.index = np.arange(len(objs))
     if getobjs:
@@ -283,8 +287,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         # geometry.
         x = objs.colc[:,bandnum]
         y = objs.rowc[:,bandnum]
-        I = ((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
-        objs.cut(I)
+        objs.cut((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
+
     if radecroi is not None:
         r0,r1,d0,d1 = radecroi
         objs.cut((objs.ra >= r0) * (objs.ra <= r1) * (objs.dec >= d0) * (objs.dec <= d1))
@@ -296,12 +300,11 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         del I
         del d
         
-    # Only deblended children.
-    objs.cut(objs.nchild == 0)
-
-    # No BRIGHT sources
-    bright = photo_flags1_map.get('BRIGHT')
-    objs.cut((objs.objc_flags & bright) == 0)
+    if objCuts:
+        # Only deblended children;
+        # No BRIGHT sources
+        bright = photo_flags1_map.get('BRIGHT')
+        objs.cut((objs.nchild == 0) * ((objs.objc_flags & bright) == 0))
 
     if isdr7:
         objs.rename('phi_dev', 'phi_dev_deg')
@@ -395,29 +398,22 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
         
     sources = []
-    ikeep = []
-
-    # Add stars
-    I = np.flatnonzero(Lstar > 0)
-    print len(I), 'stars'
-    for i in I:
-        pos = RaDecPos(objs.ra[i], objs.dec[i])
-        flux = starflux[i,:]
-        bright = flux2bright(flux)
-        # This should work, I just don't feel like testing it now...
-        # if brightPointSourceThreshold:
-        #   ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
-        # else:
-        #   ps = PointSource(pos, bright)
-        ps = PointSource(pos, bright)
-        sources.append(ps)
-        ikeep.append(i)
-
-    # Add galaxies.
-    I = np.flatnonzero(Lgal > 0)
-    print len(I), 'galaxies'
+    nstars = 0
     ndev, nexp, ncomp = 0, 0, 0
-    for i in I:
+    for i in range(len(objs)):
+        if Lstar[i]:
+            pos = RaDecPos(objs.ra[i], objs.dec[i])
+            flux = starflux[i,:]
+            bright = flux2bright(flux)
+            # This should work, I just don't feel like testing it now...
+            # if brightPointSourceThreshold:
+            #   ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
+            # else:
+            #   ps = PointSource(pos, bright)
+            sources.append(PointSource(pos, bright))
+            nstars += 1
+            continue
+
         hasdev = (Ldev[i] > 0)
         hasexp = (Lexp[i] > 0)
         iscomp = (hasdev and hasexp)
@@ -464,16 +460,9 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             gal = ExpGalaxy(pos, bright, eshape)
             nexp += 1
         sources.append(gal)
-        ikeep.append(i)
-    print 'Created', ndev, 'pure deV', nexp, 'pure exp and',
-    print ncomp, 'composite galaxies'
 
-    # cut the objs list to just the ones for which sources were
-    # created, and keep them in the same order as the sources
-    if len(ikeep):
-        objs.cut(ikeep)
-    else:
-        objs = []
+    print 'Created', ndev, 'deV,', nexp, 'exp,', ncomp, 'composite',
+    print '(total %i) galaxies and %i stars' % (ndev+nexp+ncomp, nstars)
 
     if not (getobjs or getobjinds or getsourceobjs):
         return sources
