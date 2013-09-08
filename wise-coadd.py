@@ -131,41 +131,34 @@ def check_md5s(WISE):
                 print 'ERROR: return code', rtn
 
 
-def main():
-    t00 = Time()
-
-    ps = PlotSequence('co')
-    
-    # plt.clf()
-    # plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
-    # plt.xlabel('RA (deg)')
-    # plt.ylabel('Dec (deg)')
-    # plt.title('Atlas tile centers')
-    # plt.axis([360,0,-90,90])
-    # ps.savefig()
-    
-    # W3
-    #r0,r1 = 210.593,  219.132
-    #d0,d1 =  51.1822,  54.1822
-
-    # SEQUELS
-    r0,r1 = 120.0, 200.0
-    d0,d1 =  45.0,  60.0
-
-    T = get_atlas_tiles(r0,r1,d0,d1)
-    allWISE = get_wise_frames(r0,r1,d0,d1)
-
-    plot_region(r0,r1,d0,d1, ps, T, allWISE[allWISE.band == bands[0]], None)
-
-    print 'Entering main loop:', Time() - t00
-    for ti in T:
-        print
-        print 'Starting coadd tile', ti.coadd_id
-        print 'RA,Dec', ti.ra, ti.dec
-        print
-        for band in bands:
-            one_coadd(ti, band, allWISE, ps)
-    print 'Whole enchilada:', Time() - t00
+# def main():
+#     t00 = Time()
+#     ps = PlotSequence('co')
+#     # plt.clf()
+#     # plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
+#     # plt.xlabel('RA (deg)')
+#     # plt.ylabel('Dec (deg)')
+#     # plt.title('Atlas tile centers')
+#     # plt.axis([360,0,-90,90])
+#     # ps.savefig()
+#     # W3
+#     #r0,r1 = 210.593,  219.132
+#     #d0,d1 =  51.1822,  54.1822
+#     # SEQUELS
+#     r0,r1 = 120.0, 210.0
+#     d0,d1 =  45.0,  60.0
+#     T = get_atlas_tiles(r0,r1,d0,d1)
+#     allWISE = get_wise_frames(r0,r1,d0,d1)
+#     plot_region(r0,r1,d0,d1, ps, T, allWISE[allWISE.band == bands[0]], None)
+#     print 'Entering main loop:', Time() - t00
+#     for ti in T:
+#         print
+#         print 'Starting coadd tile', ti.coadd_id
+#         print 'RA,Dec', ti.ra, ti.dec
+#         print
+#         for band in bands:
+#             one_coadd(ti, band, allWISE, ps)
+#     print 'Whole enchilada:', Time() - t00
 
 
 def one_coadd(ti, band, WISE, ps):
@@ -946,7 +939,7 @@ if __name__ == '__main__':
     dataset = 'sequels'
 
     # SEQUELS
-    r0,r1 = 120.0, 200.0
+    r0,r1 = 120.0, 210.0
     d0,d1 =  45.0,  60.0
 
     fn = '%s-atlas.fits' % dataset
