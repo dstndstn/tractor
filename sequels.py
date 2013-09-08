@@ -16,6 +16,7 @@ from astrometry.util.util import *
 from astrometry.util.resample import *
 from astrometry.libkd.spherematch import *
 from astrometry.util.starutil_numpy import *
+from astrometry.util.sdss_radec_to_rcf import *
 
 from tractor import *
 from tractor.ttime import *
@@ -28,104 +29,142 @@ lvl = logging.INFO
 #lvl = logging.DEBUG
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-sweepdir = 'sweeps'
 tiledir = 'wise-coadds'
-photoobjdir = 'photoObjs'
+
+photoobjdir = 'photoObjs-new'
+resolvedir = 'photoResolve-new'
+
+#photoobjdir = 'photoObjs'
+#sweepdir = 'sweeps'
 
 Time.add_measurement(MemMeas)
 
-def read_sweeps(sweeps, r0,r1,d0,d1):
-    margin = 0.
-    # Add approx SDSS field size margin
-    margin += np.hypot(13., 9.)/60.
-    cosd = np.cos(np.deg2rad(sweeps.dec))            
-    S = sweeps[(sweeps.ra  > (r0-margin/cosd)) * (sweeps.ra  < (r1+margin/cosd)) *
-               (sweeps.dec > (d0-margin))      * (sweeps.dec < (d1+margin))]
-    print 'Cut to', len(S), 'datasweeps in this tile'
 
-    stars = []
-    gals = []
-    for si,sweep in enumerate(S):
-        print 'Datasweep', si+1, 'of', len(S)
-        fn = 'calibObj-%06i-%i-%s.fits.gz' % (sweep.run, sweep.camcol, 'gal' if sweep.isgal else 'star')
-        fn = os.path.join(sweepdir, sweep.rerun, fn)
-        print 'Reading', fn, 'rows', sweep.istart, 'to', sweep.iend
+def read_photoobjs(r0, r1, d0, d1):
 
-        columns = ['ra','dec']
-        if sweep.isgal:
-            columns += ['id'] #'theta_dev', 'theta_exp', 'id']
+    wfn = os.path.join(resolvedir, 'window_flist.fits')
+    #W = fits_table(wfn)
 
+    ra,dec = (r0+r1)/2., (d0+d1)/2.
 
-        with fitsio.FITS(fn, lower=True) as F:
-            T = F[1][columns][sweep.istart : sweep.iend+1]
-            #print 'Read table', type(T), T.dtype
-            #print dir(T)
-            T = fits_table(T)
-            #print 'Read table:', T
-            #T.about()
-            print 'Read', len(T)
+    rad = degrees_between(ra,dec, r0,d0)
+    rad += np.hypot(13., 9.)/60.
+    # a little extra margin
+    rad += 1./60.
 
-        # Cut to RA,Dec box
-        T.cut((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
-        print 'Cut to', len(T), 'in RA,Dec box'
-        if len(T) == 0:
+    #I = np.flatnonzero(distsq_between_radecs(ra, dec, W.ra, W.dec) <= rad)
+    #print 'Found', len(I), 'fields possibly in range'
+
+    RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
+    print 'Found', len(RCF), 'fields possibly in range'
+
+    TT = []
+    sdss = DR9()
+    for run,camcol,field,r,d in RCF:
+        print 'RCF', run, camcol, field
+        rr = sdss.get_rerun(run, field=field)
+        if rr in [None, '157']:
             continue
 
-        if sweep.isgal:
-            # Cross-reference to photoObj files to get the galaxy shape
-            fn = 'photoObj-%06i-%i-%04i.fits' % (sweep.run, sweep.camcol, sweep.field)
-            fn = os.path.join(photoobjdir, '%i'%sweep.run, '%i'%sweep.camcol, fn)
-            print 'Reading photoObj', fn
-            cols = ['id', 'theta_dev', 'ab_dev', 'theta_exp',
-                    'ab_exp', 'fracdev', 'phi_dev_deg', 'phi_exp_deg']
-            # DEBUG
-            cols += ['modelflux', 'modelflux_ivar',
-                     'devflux', 'devflux_ivar',
-                     'expflux', 'expflux_ivar']
-            cols += ['ab_experr', 'ab_deverr', 'theta_deverr', 'theta_experr']
-
-            P = fits_table(fn, columns=cols, rows=T.id-1)
-            print 'Read', len(P), 'photoObj entries'
-            assert(np.all(P.id == T.id))
-            P.ra = T.ra
-            P.dec = T.dec
-            T = P
-
-        T.run = np.zeros(len(T), int) + sweep.run
-        T.camcal = np.zeros(len(T), int) + sweep.camcol
-        T.isgal = np.zeros(len(T), np.uint8) + sweep.isgal
-        T.sweeprow = np.arange(sweepistart, sweep.iend+1)
-            
-        if sweep.isgal:
-            gals.append(T)
-        else:
-            stars.append(T)
-        
-    stars = merge_tables(stars)
-    gals =  merge_tables(gals)
-    print 'Total of', len(stars), 'stars and', len(gals), 'galaxies in this tile'
-    return gals,stars
+        fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
+                          'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
+        T = fits_table(fn)
+        print 'read', len(T), 'from', fn
+        TT.append(T)
 
 
-def read_sweep_index(R0,R1,D0,D1):
-    gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
-    ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
-    print 'Read', len(gsweeps), 'galaxy sweep entries'
-    print 'Read', len(ssweeps), 'star sweep entries'
-    gsweeps.cut(gsweeps.nprimary > 0)
-    ssweeps.cut(ssweeps.nprimary > 0)
-    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on NPRIMARY'
-    margin = 1
-    gsweeps.cut((gsweeps.ra  > (R0-margin)) * (gsweeps.ra  < (R1+margin)) *
-                (gsweeps.dec > (D0-margin)) * (gsweeps.dec < (D1+margin)))
-    ssweeps.cut((ssweeps.ra  > (R0-margin)) * (ssweeps.ra  < (R1+margin)) *
-                (ssweeps.dec > (D0-margin)) * (ssweeps.dec < (D1+margin)))
-    print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on RA,Dec box'
-    gsweeps.isgal = np.ones( len(gsweeps), int)
-    ssweeps.isgal = np.zeros(len(ssweeps), int)
-    sweeps = merge_tables([gsweeps, ssweeps])
-    print 'Merged:', len(sweeps)
-    return sweeps
+# def read_sweeps(sweeps, r0,r1,d0,d1):
+#     margin = 0.
+#     # Add approx SDSS field size margin
+#     margin += np.hypot(13., 9.)/60.
+#     cosd = np.cos(np.deg2rad(sweeps.dec))            
+#     S = sweeps[(sweeps.ra  > (r0-margin/cosd)) * (sweeps.ra  < (r1+margin/cosd)) *
+#                (sweeps.dec > (d0-margin))      * (sweeps.dec < (d1+margin))]
+#     print 'Cut to', len(S), 'datasweeps in this tile'
+# 
+#     stars = []
+#     gals = []
+#     for si,sweep in enumerate(S):
+#         print 'Datasweep', si+1, 'of', len(S)
+#         fn = 'calibObj-%06i-%i-%s.fits.gz' % (sweep.run, sweep.camcol, 'gal' if sweep.isgal else 'star')
+#         fn = os.path.join(sweepdir, sweep.rerun, fn)
+#         print 'Reading', fn, 'rows', sweep.istart, 'to', sweep.iend
+# 
+#         columns = ['ra','dec']
+#         if sweep.isgal:
+#             columns += ['id'] #'theta_dev', 'theta_exp', 'id']
+# 
+# 
+#         with fitsio.FITS(fn, lower=True) as F:
+#             T = F[1][columns][sweep.istart : sweep.iend+1]
+#             #print 'Read table', type(T), T.dtype
+#             #print dir(T)
+#             T = fits_table(T)
+#             #print 'Read table:', T
+#             #T.about()
+#             print 'Read', len(T)
+# 
+#         # Cut to RA,Dec box
+#         T.cut((T.ra > r0) * (T.ra < r1) * (T.dec > d0) * (T.dec < d1))
+#         print 'Cut to', len(T), 'in RA,Dec box'
+#         if len(T) == 0:
+#             continue
+# 
+#         if sweep.isgal:
+#             # Cross-reference to photoObj files to get the galaxy shape
+#             fn = 'photoObj-%06i-%i-%04i.fits' % (sweep.run, sweep.camcol, sweep.field)
+#             fn = os.path.join(photoobjdir, '%i'%sweep.run, '%i'%sweep.camcol, fn)
+#             print 'Reading photoObj', fn
+#             cols = ['id', 'theta_dev', 'ab_dev', 'theta_exp',
+#                     'ab_exp', 'fracdev', 'phi_dev_deg', 'phi_exp_deg']
+#             # DEBUG
+#             cols += ['modelflux', 'modelflux_ivar',
+#                      'devflux', 'devflux_ivar',
+#                      'expflux', 'expflux_ivar']
+#             cols += ['ab_experr', 'ab_deverr', 'theta_deverr', 'theta_experr']
+# 
+#             P = fits_table(fn, columns=cols, rows=T.id-1)
+#             print 'Read', len(P), 'photoObj entries'
+#             assert(np.all(P.id == T.id))
+#             P.ra = T.ra
+#             P.dec = T.dec
+#             T = P
+# 
+#         T.run = np.zeros(len(T), int) + sweep.run
+#         T.camcal = np.zeros(len(T), int) + sweep.camcol
+#         T.isgal = np.zeros(len(T), np.uint8) + sweep.isgal
+#         T.sweeprow = np.arange(sweepistart, sweep.iend+1)
+#             
+#         if sweep.isgal:
+#             gals.append(T)
+#         else:
+#             stars.append(T)
+#         
+#     stars = merge_tables(stars)
+#     gals =  merge_tables(gals)
+#     print 'Total of', len(stars), 'stars and', len(gals), 'galaxies in this tile'
+#     return gals,stars
+# 
+# 
+# def read_sweep_index(R0,R1,D0,D1):
+#     gsweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-gal.fits'))
+#     ssweeps = fits_table(os.path.join(sweepdir, 'datasweep-index-star.fits'))
+#     print 'Read', len(gsweeps), 'galaxy sweep entries'
+#     print 'Read', len(ssweeps), 'star sweep entries'
+#     gsweeps.cut(gsweeps.nprimary > 0)
+#     ssweeps.cut(ssweeps.nprimary > 0)
+#     print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on NPRIMARY'
+#     margin = 1
+#     gsweeps.cut((gsweeps.ra  > (R0-margin)) * (gsweeps.ra  < (R1+margin)) *
+#                 (gsweeps.dec > (D0-margin)) * (gsweeps.dec < (D1+margin)))
+#     ssweeps.cut((ssweeps.ra  > (R0-margin)) * (ssweeps.ra  < (R1+margin)) *
+#                 (ssweeps.dec > (D0-margin)) * (ssweeps.dec < (D1+margin)))
+#     print 'Cut to', len(gsweeps), 'gal and', len(ssweeps), 'star on RA,Dec box'
+#     gsweeps.isgal = np.ones( len(gsweeps), int)
+#     ssweeps.isgal = np.zeros(len(ssweeps), int)
+#     sweeps = merge_tables([gsweeps, ssweeps])
+#     print 'Merged:', len(sweeps)
+#     return sweeps
 
 def main():
     import optparse
@@ -154,7 +193,7 @@ def main():
     ps = PlotSequence(dataset)
 
     # SEQUELS
-    R0,R1 = 120.0, 200.0
+    R0,R1 = 120.0, 210.0
     D0,D1 =  45.0,  60.0
 
     sband = 'r'
@@ -181,6 +220,10 @@ def main():
 
         ### HACK!
         H,W = 1024,1024
+
+        objfn = 'photoobjs-%s.fits' % tile.coadd_id
+
+        read_photoobjs(r0, r1, d0, d1)
 
 
         ssweepfn = 'sweeps-%s-stars.fits' % tile.coadd_id
