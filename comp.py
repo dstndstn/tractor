@@ -488,9 +488,6 @@ def sky_foolin(img):
     
     sys.exit(0)
     
-    
-    
-    
     lo,hi = 0.1,0.8
     for step in range(3):
         q = np.round(np.linspace(lo * len(sim), hi * len(sim), 21)).astype(int)
@@ -579,7 +576,6 @@ coadd_id = '1384p454'
 #sys.exit(0)
 ps.skipto(50)
 
-
 band = 1
 tiledir = 'wise-coadds'
 fn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
@@ -605,7 +601,6 @@ modsb,catsb,tb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))
 
 imargin = 12
 
-
 # cell positions
 Xa = np.round(np.linspace(0, W, blocksa+1)).astype(int)
 Ya = np.round(np.linspace(0, H, blocksa+1)).astype(int)
@@ -622,11 +617,6 @@ ima = dict(interpolation='nearest', origin='lower',
 imd = dict(interpolation='nearest', origin='lower',
            vmin=-1e-2, vmax=1e-2, cmap='gray')
 
-
-# ratio = Tb.w1_nanomaggies / Ta.w1_nanomaggies
-# I = np.argsort(-np.abs(np.maximum(ratio, 1./ratio)))
-# print 'Largest 
-
 diff = Tb.w1_nanomaggies - Ta.w1_nanomaggies
 I = np.argsort(-np.abs(diff))
 print 'Largest diffs:', diff[I[:20]]
@@ -634,11 +624,13 @@ print 'Largest diffs:', diff[I[:20]]
 plt.clf()
 plt.imshow(img, **ima)
 ax = plt.axis()
-plt.plot(Ta.x[I[:20]], Ta.y[I[:20]], 'ro')
+plt.plot(Ta.x[I[:20]], Ta.y[I[:20]], 'ro', mec='r', mfc='none')
+for i,ii in enumerate(I[:20]):
+    plt.text(Ta.x[ii], Ta.y[ii], '%i' % i, color='r')
 plt.axis(ax)
 ps.savefig()
 
-for i in I[2:7]:
+for i in I[:3]:
     ta = Ta[i]
     tb = Tb[i]
     print 'a', Ta.w1_nanomaggies[i], 'b', Tb.w1_nanomaggies[i]
@@ -648,29 +640,68 @@ for i in I[2:7]:
     x1 = max(ta.cell_x1, tb.cell_x1)
     y0 = min(ta.cell_y0, tb.cell_y0)
     y1 = max(ta.cell_y1, tb.cell_y1)
-    ax = [x0, x1, y0, y1]
+    #ax = [x0, x1, y0, y1]
+    M = 20
+    ax = [x0-M, x1+M, y0-M, y1+M]
 
     moda = modsa[ta.cell]
     modb = modsb[tb.cell]
+    #cata, ntargeta, nboxa, tima = catsa[ta.cell]
+    #catb, ntargetb, nboxb, timb = catsb[tb.cell]
+    ina, marga, wxa, wya = catsa[ta.cell][:4]
+    inb, margb, wxb, wyb = catsb[tb.cell][:4]
 
     print 'moda', moda.shape
     print 'modb', modb.shape
 
     plt.clf()
+    plt.imshow(img, **ima)
+    plt.plot(ta.x, ta.y, 'rx')
+    plt.axis(ax)
+    ps.savefig()
+
+    plt.clf()
     plt.imshow(moda, extent=[ta.cell_x0, ta.cell_x1, ta.cell_y0, ta.cell_y1], **ima)
     plt.plot(ta.x, ta.y, 'rx')
+    for x in Xa:
+        plt.axvline(x, color='b')
+    for y in Ya:
+        plt.axhline(y, color='b')
+
+    print 'A:', len(ina), len(marga)
+    print 'WISE:', len(wxa)
+
+    print 'x,y', Ta.x[ina], Ta.y[ina]
+
+    #plt.plot(Ta.x[ina], Ta.y[ina], 'o', mec='g', mfc='none')
+    #plt.plot(Ta.x[marga], Ta.y[marga], 'o', mec='b', mfc='none')
+    plt.plot(wxa, wya, 'o', mec='m', mfc='none')
+    for I,cc in [(ina,'g'), (marga, 'b')]:
+        x,y,r = Ta.x[I], Ta.y[I], srada[I]
+        plt.plot(np.vstack([x-r, x+r]), np.vstack([y,y]), '-', color=cc)
+        plt.plot(np.vstack([x,x]), np.vstack([y-r, y+r]), '-', color=cc)
+        plt.plot(x, y, 'o', mec=cc, mfc='none')
+
     plt.axis(ax)
     ps.savefig()
 
     plt.clf()
     plt.imshow(modb, extent=[tb.cell_x0, tb.cell_x1, tb.cell_y0, tb.cell_y1], **ima)
     plt.plot(ta.x, ta.y, 'rx')
-    plt.axis(ax)
-    ps.savefig()
+    for x in Xb:
+        plt.axvline(x, color='b')
+    for y in Yb:
+        plt.axhline(y, color='b')
 
-    plt.clf()
-    plt.imshow(img, **ima)
-    plt.plot(ta.x, ta.y, 'rx')
+    #plt.plot(Tb.x[inb], Tb.y[inb], 'o', mec='g', mfc='none')
+    #plt.plot(Tb.x[margb], Tb.y[margb], 'o', mec='b', mfc='none')
+    plt.plot(wxb, wyb, 'o', mec='m', mfc='none')
+    for I,cc in [(inb,'g'), (margb, 'b')]:
+        x,y,r = Tb.x[I], Tb.y[I], sradb[I]
+        plt.plot(np.vstack([x-r, x+r]), np.vstack([y,y]), '-', color=cc)
+        plt.plot(np.vstack([x,x]), np.vstack([y-r, y+r]), '-', color=cc)
+        plt.plot(x, y, 'o', mec=cc, mfc='none')
+
     plt.axis(ax)
     ps.savefig()
 

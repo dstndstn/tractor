@@ -49,6 +49,41 @@ resolvedir = 'photoResolve-new'
 
 Time.add_measurement(MemMeas)
 
+def estimate_sky(img, iv):
+    sim = np.sort(img.ravel())
+    sigest = sim[int(0.5 * len(sim))] - sim[int(0.16 * len(sim))]
+    #print 'sig est', sigest
+    nsig = 0.1 * sigest
+
+    I = np.linspace(0.3*len(sim), 0.55*len(sim), 15).astype(int)
+    sumn = []
+    for ii in I:
+        X = sim[ii]
+        sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
+    sumn = np.array(sumn)
+
+    iscale = 0.5 * len(sim)
+    i0 = I[len(I)/2]
+    xi = (I - i0) / iscale
+
+    A = np.zeros((len(I), 3))
+    A[:,0] = 1.
+    A[:,1] = xi
+    A[:,2] = xi**2
+
+    b = sumn
+
+    res = np.linalg.lstsq(A, b)
+    X = res[0]
+    #print 'X', X
+    Imax = -X[1] / (2. * X[2])
+    Imax = (Imax * iscale) + i0
+    i = int(np.round(Imax))
+    #print 'Imax', Imax
+    mu = sim[i]
+    #print 'mu', mu
+    return mu
+
 
 def read_photoobjs(r0, r1, d0, d1, margin):
 
@@ -242,7 +277,7 @@ def main():
 
     bands = [1,2,3,4]
     
-    ps = PlotSequence(dataset)
+    ps = PlotSequence(dataset + '-phot')
 
     # SEQUELS
     R0,R1 = 120.0, 210.0
@@ -304,8 +339,10 @@ def main():
         T.treated_as_pointsource = badgals
         T.objc_type[badgals] = 6
 
+        defaultflux = 100.
+
         # hack
-        T.psfflux    = np.ones((len(T),5))
+        T.psfflux    = np.zeros((len(T),5)) + defaultflux
         T.cmodelflux = T.psfflux
         T.devflux    = T.psfflux
         T.expflux    = T.psfflux
@@ -383,9 +420,9 @@ def main():
             for j,f in zip(J, rhs):
                 lhs[j] += f
 
-        ok,wx,wy = wcs.radec2pixelxy(UW.ra, UW.dec)
-        wx -= 1.
-        wy -= 1.
+        ok,UW.x,UW.y = wcs.radec2pixelxy(UW.ra, UW.dec)
+        UW.x -= 1.
+        UW.y -= 1.
 
         T.coadd_id = np.array([tile.coadd_id] * len(T))
         T.cell = np.zeros(len(T), int)
@@ -421,6 +458,9 @@ def main():
             print 'Reading', ivfn
             iv = fitsio.read(ivfn)
 
+            minsb = getattr(opt, 'minsb%i' % band)
+            print 'Minsb:', minsb
+
             # HACK -- should we *average* the PSF over the whole image, maybe?
 
             # Load the spatially-varying PSF model
@@ -429,6 +469,55 @@ def main():
             # Instantiate a (non-varying) mixture-of-Gaussians PSF
             psf = psf.mogAt(W/2., H/2.)
 
+            ### HACK
+            R = 100
+            psf.radius = R
+            pat = psf.getPointSourcePatch(0., 0.)
+            assert(pat.x0 == pat.y0)
+            assert(pat.x0 == -R)
+            #print 'PSF shape', pat.shape
+            #print 'x0,y0', pat.x0, pat.y0
+            psfprofile = pat.patch[R, R:]
+            print 'Profile:', psfprofile
+
+            # Set WISE source radii based on flux
+            UW.rad = np.zeros(len(UW))
+            wnm = UW.get('w%inm' % band)
+            for r,pro in enumerate(psfprofile):
+                flux = minsb / pro
+                UW.rad[wnm > flux] = r
+            # plt.clf()
+            # plt.semilogy(UW.rad, wnm, 'b.')
+            # plt.xlabel('radius')
+            # plt.ylabel('flux')
+            # ps.savefig()
+            UW.rad = np.maximum(UW.rad + 1, 3.)
+
+            # Increase SDSS source radii based on WISE catalog-matched fluxes.
+            wf = wiseflux[band]
+            I = np.flatnonzero(wf > defaultflux)
+            wfi = wf[I]
+            rad = np.zeros(len(I))
+            drad = 0.
+            for r,pro in enumerate(psfprofile):
+                flux = minsb / pro
+                rad[wfi > flux] = r
+                if defaultflux > flux:
+                    drad = r
+            print 'default rad:', drad
+            srad2 = np.zeros(len(cat))
+            srad2[I] = rad
+            sourcerad = np.maximum(drad, np.maximum(sourcerad, srad2))
+
+            # Initialize fluxes
+            wf = wiseflux[band]
+            I = np.flatnonzero(wf > defaultflux)
+            print 'Initializing', len(I), 'fluxes based on catalog matches'
+            for i,flux in zip(I, wf[I]):
+                cat[i].getBrightness().setBand(wanyband, flux) #setParams([flux])
+                #print 'flux', flux, ' -> ', cat[i]
+                
+
             fullimg = img
             fullinvvar = iv
             fullIV = np.zeros(len(cat))
@@ -436,6 +525,10 @@ def main():
             fitstats = dict([(k, np.zeros(len(cat))) for k in fskeys])
 
             twcs = ConstantFitsWcs(wcs)
+
+            sky = estimate_sky(img, iv)
+            print 'Estimated sky', sky
+            tsky = ConstantSky(sky)
 
             # cell positions
             XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
@@ -452,11 +545,12 @@ def main():
                     print
                     print 'Cell', celli, 'of', (opt.blocks**2), 'for', tile.coadd_id, 'band', wband
 
-                    # imargin = 4
-                    # smargin = 8
                     imargin = 12
-                    #smargin = 16
-                    wmargin = 16
+                    # beyond the image margins ( + radius )
+                    smargin = 1
+                    wmargin = 1
+                    # smargin = 8
+                    # wmargin = 16
 
                     # image region: [ix0,ix1)
                     ix0 = max(0, xlo - imargin)
@@ -471,37 +565,39 @@ def main():
                     twcs.setX0Y0(ix0, iy0)
                     
                     tim = Image(data=img, invvar=invvar, psf=psf, wcs=twcs,
-                                sky=ConstantSky(0.), photocal=LinearPhotoCal(1., band=wanyband),
+                                sky=tsky, photocal=LinearPhotoCal(1., band=wanyband),
                                 name='Coadd %s W%i (%i,%i)' % (tile.coadd_id, band, xi,yi),
                                 domask=False)
 
-                    smargin = imargin + sourcerad
-
-                    I = np.flatnonzero(((T.x+smargin) >= (xlo-0.5)) * ((T.x-smargin) < (xhi-0.5)) *
-                                       ((T.y+smargin) >= (ylo-0.5)) * ((T.y-smargin) < (yhi-0.5)))
+                    # Relevant sources:
+                    m = smargin + sourcerad
+                    I = np.flatnonzero(((T.x+m) >= (ix0-0.5)) * ((T.x-m) < (ix1-0.5)) *
+                                       ((T.y+m) >= (iy0-0.5)) * ((T.y-m) < (iy1-0.5)))
 
                     inbox = ((T.x[I] >= (xlo-0.5)) * (T.x[I] < (xhi-0.5)) *
                              (T.y[I] >= (ylo-0.5)) * (T.y[I] < (yhi-0.5)))
 
                     srci = I[inbox]
+                    margi = I[np.logical_not(inbox)]
 
-                    T.cell[I[inbox]] = celli
-                    T.cell_x0[I[inbox]] = ix0
-                    T.cell_x1[I[inbox]] = ix1
-                    T.cell_y0[I[inbox]] = iy0
-                    T.cell_y1[I[inbox]] = iy1
+                    T.cell[srci] = celli
+                    T.cell_x0[srci] = ix0
+                    T.cell_x1[srci] = ix1
+                    T.cell_y0[srci] = iy0
+                    T.cell_y1[srci] = iy1
                     
                     # sources in the ROI box
                     subcat = [cat[i] for i in srci]
 
                     # include *copies* of sources in the margins
                     # (that way we automatically don't save the results)
-                    subcat.extend([cat[i].copy() for i in I[np.logical_not(inbox)]])
+                    subcat.extend([cat[i].copy() for i in margi])
                     assert(len(subcat) == len(I))
 
                     # add WISE-only sources in the expanded region
-                    J = np.flatnonzero((wx >= xlo - wmargin) * (wx < xhi + wmargin) *
-                                       (wy >= ylo - wmargin) * (wy < yhi + wmargin))
+                    m = wmargin + UW.rad
+                    J = np.flatnonzero(((UW.x+m) >= (ix0-0.5)) * ((UW.x-m) < (ix1-0.5)) *
+                                       ((UW.y+m) >= (iy0-0.5)) * ((UW.y-m) < (iy1-0.5)))
                     wnm = UW.get('w%inm' % band)
                     for i in J:
                         subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
@@ -517,8 +613,6 @@ def main():
                     # tractor.thawPathsTo('sky')
                     tractor.thawPathsTo(wanyband)
 
-                    minsb = getattr(opt, 'minsb%i' % band)
-                    print 'Minsb:', minsb
                     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                         minsb=minsb, mindlnp=1., sky=False, minFlux=None,
                         fitstats=True, variance=True, shared_params=False)
@@ -527,10 +621,13 @@ def main():
                     im,mod,ie,chi,roi = ims1[0]
 
                     mods.append(mod)
-                    cats.append(([src.getPosition().ra  for src in subcat],
-                                 [src.getPosition().dec for src in subcat],
-                                 [src.copy() for src in subcat], tim))
-                    
+                    cats.append((#[src.getPosition().ra  for src in subcat],
+                        #[src.getPosition().dec for src in subcat],
+                        #[src.copy() for src in subcat], len(srci), len(I),
+                        #tim))
+                        srci, margi, UW.x[J], UW.y[J],
+                        T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
+                        
                     fullIV[srci] = IV[:len(srci)]
 
                     for k in fskeys:
@@ -560,7 +657,8 @@ def main():
             # HACK
             break
 
-        T.cut(inbounds)
+        # HACK HACK HACK
+        #T.cut(inbounds)
         T.writeto(opt.output % (tile.coadd_id))
 
         ## HACK
