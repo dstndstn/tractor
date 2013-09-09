@@ -50,12 +50,36 @@ def reassemble_chunks(mods, blocks, imargin):
     return mod
 
 def wack(coadd_id, ps):
-    G = fits_table('sweeps-%s-gals.fits' % coadd_id)
+
+    #T = fits_table('photoobjs-%s.fits' % coadd_id)
+    T = fits_table('phot-%s-b8.fits' % coadd_id)
+    print 'Read', len(T), 'objects'
+    G = T[T.objc_type == 3]
     print len(G), 'galaxies'
+    # G = fits_table('sweeps-%s-gals.fits' % coadd_id)
+    # print len(G), 'galaxies'
     G.cut((G.theta_dev[:,2] > 0) * (G.theta_exp[:,2] > 0))
     print len(G), 'galaxies with positive thetas'
     G.cut(G.modelflux[:,2] > 0)
     print len(G), 'galaxies with positive flux'
+
+    b = 2
+    gal = (G.objc_type == 3)
+    dev = gal * (G.fracdev[:,b] >= 0.5)
+    exp = gal * (G.fracdev[:,b] <  0.5)
+    stars = (G.objc_type == 6)
+    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
+    print 'Total', len(G), 'sources'
+    thetasn = np.zeros(len(G))
+    G.theta_deverr[dev,b] = np.maximum(1e-6, G.theta_deverr[dev,b])
+    G.theta_experr[exp,b] = np.maximum(1e-5, G.theta_experr[exp,b])
+    # theta_experr nonzero: 1.28507e-05
+    # theta_deverr nonzero: 1.92913e-06
+    thetasn[dev] = G.theta_dev[dev,b] / G.theta_deverr[dev,b]
+    thetasn[exp] = G.theta_exp[exp,b] / G.theta_experr[exp,b]
+    print 'Theta S/N:', thetasn.min(), thetasn.max()
+    assert(np.all(thetasn > 3.))
+
 
     ###
     G.rflux = np.array(G.modelflux[:,2], copy=True)
@@ -67,13 +91,37 @@ def wack(coadd_id, ps):
     G.fluxstr = np.array(['%.0f' % f for f in G.rflux])
     G.devaberrstr = np.array(['ab err %.2f' % f for f in G.ab_deverr[:,2]])
     G.expaberrstr = np.array(['ab err %.2f' % f for f in G.ab_experr[:,2]])
-    
-    D = G[G.fracdev[:,2] > 0.5]
-    E = G[G.fracdev[:,2] <= 0.5]
-    print len(D), 'dev', len(E), 'exp'
+
+    Idev = (G.fracdev[:,2] > 0.5)
+    Iexp = (G.fracdev[:,2] <= 0.5)
     # D.cut(D.theta_dev[:,2] > 0)
     # E.cut(E.theta_exp[:,2] > 0)
     # print len(D), 'dev', len(E), 'exp with positive theta'
+
+    G.theta = np.zeros(len(G))
+    G.thetaerr = np.zeros(len(G))
+    G.theta[Idev] = G.theta_dev[Idev,2]
+    G.theta[Iexp] = G.theta_exp[Iexp,2]
+    G.thetaerr[Idev] = G.theta_deverr[Idev,2]
+    G.thetaerr[Iexp] = G.theta_experr[Iexp,2]
+
+    G.thetastr = np.array(['th %.2g +- %.2g' % (t, dt) for t,dt
+                           in zip(G.theta, G.thetaerr)])
+
+    G.ab = np.zeros(len(G))
+    G.aberr = np.zeros(len(G))
+    G.ab[Idev] = G.ab_dev[Idev,2]
+    G.ab[Iexp] = G.ab_exp[Iexp,2]
+    G.aberr[Idev] = G.ab_deverr[Idev,2]
+    G.aberr[Iexp] = G.ab_experr[Iexp,2]
+
+    G.abstr = np.array(['th %.2g +- %.2g' % (t, dt) for t,dt
+                           in zip(G.ab, G.aberr)])
+
+
+    D = G[Idev]
+    E = G[Iexp]
+    print len(D), 'dev', len(E), 'exp'
 
     #wack1(ps, G, D, E)
     ps.skipto(21)
@@ -286,37 +334,14 @@ def wack1(ps, G, D, E):
     ps.savefig()
 
 def wack2(ps, G, D, E):
-    abexperr = np.minimum(1., E.ab_experr[:,2])
-    abdeverr = np.minimum(1., D.ab_deverr[:,2])
-    
-    plt.clf()
-    loghist(np.log10(E.modelflux[:,2]), abexperr)
-    plt.xlabel('log model flux')
-    plt.ylabel('ab_exp err')
-    ps.savefig()
+    E.abexperr = np.minimum(1., E.ab_experr[:,2])
+    D.abdeverr = np.minimum(1., D.ab_deverr[:,2])
+
+    D.thetasn = D.theta_dev[:,2] / D.theta_deverr[:,2]
+    E.thetasn = E.theta_exp[:,2] / E.theta_experr[:,2]
 
     plt.clf()
-    loghist(np.log10(D.modelflux[:,2]), abdeverr)
-    plt.xlabel('log model flux')
-    plt.ylabel('ab_dev err')
-    ps.savefig()
-
-    plt.clf()
-    loghist(np.log10(E.modelflux[:,2]), np.minimum(5., E.theta_experr[:,2]))
-    plt.xlabel('log model flux')
-    plt.ylabel('theta_exp err')
-    ps.savefig()
-
-    plt.clf()
-    loghist(np.log10(D.modelflux[:,2]), np.minimum(10., D.theta_deverr[:,2]))
-    plt.xlabel('log model flux')
-    plt.ylabel('theta_dev err')
-    ps.savefig()
-
-
-    plt.clf()
-    loghist(np.log10(E.modelflux[:,2]),
-            np.log10(E.theta_exp[:,2] / E.theta_experr[:,2]))
+    loghist(np.log10(E.modelflux[:,2]), np.log10(E.thetasn))
     plt.xlabel('log model flux')
     plt.ylabel('log theta_exp S/N')
     ax = plt.axis()
@@ -328,8 +353,7 @@ def wack2(ps, G, D, E):
     ps.savefig()
 
     plt.clf()
-    loghist(np.log10(D.modelflux[:,2]),
-            np.log10(D.theta_dev[:,2] / D.theta_deverr[:,2]))
+    loghist(np.log10(D.modelflux[:,2]), np.log10(D.thetasn))
     plt.xlabel('log model flux')
     plt.ylabel('log theta_dev S/N')
     ax = plt.axis()
@@ -340,21 +364,118 @@ def wack2(ps, G, D, E):
     plt.axis(ax)
     ps.savefig()
 
-    Dsn = D.theta_dev[:,2] / D.theta_deverr[:,2]
-    Esn = E.theta_exp[:,2] / E.theta_experr[:,2]
+
+    rows,cols = 4,6
+    plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.1, right=0.9,
+                        bottom=0.1, top=0.9)
+    I = np.argsort(-(D.thetasn - D.modelflux[:,2]))
+    T = D[I]
+    T.title = T.thetastr
+    plotobjs(rows, cols, T)
+    plt.suptitle('deV galaxies with theta S/N > modelflux')
+    ps.savefig()
+
+    I = np.argsort(-(E.thetasn - E.modelflux[:,2]))
+    T = E[I]
+    T.title = T.thetastr
+    plotobjs(rows, cols, T)
+    plt.suptitle('exp galaxies with theta S/N > modelflux')
+    ps.savefig()
+
+    D.cut(D.thetasn < D.modelflux[:,2])
+    E.cut(E.thetasn < (10. * E.modelflux[:,2]))
+
+    print 'Cut to', len(D), 'and', len(E), 'dev/exp'
+
+    plt.clf()
+    loghist(np.log10(E.modelflux[:,2]), np.log10(E.theta))
+    plt.xlabel('log model flux')
+    plt.ylabel('log theta_exp')
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(D.modelflux[:,2]), np.log10(D.theta))
+    plt.xlabel('log model flux')
+    plt.ylabel('log theta_dev')
+    ps.savefig()
+
+
+
+    I = np.argsort(-D.theta_dev[:,2])
+    T = D[I]
+    print 'theta_devs:', T.theta[:20]
+    T.title = T.thetastr
+    plotobjs(rows, cols, T)
+    plt.suptitle('dev galaxies with large theta')
+    ps.savefig()
+
+    I = np.argsort(-E.theta_exp[:,2])
+    T = E[I]
+    print 'theta_exps:', T.theta[:20]
+    T.title = T.thetastr
+    plotobjs(rows, cols, T)
+    plt.suptitle('exp galaxies with large theta')
+    ps.savefig()
+
+
+    plt.clf()
+    loghist(np.log10(E.modelflux[:,2]), E.abexperr)
+    plt.xlabel('log model flux')
+    plt.ylabel('ab_exp err')
+    ps.savefig()
+
+    plt.clf()
+    loghist(np.log10(D.modelflux[:,2]), D.abdeverr)
+    plt.xlabel('log model flux')
+    plt.ylabel('ab_dev err')
+    ps.savefig()
+
+
+
+    I = np.argsort(D.aberr)
+    T = D[I]
+    T.title = T.abstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('dev galaxies with small a/b err')
+    ps.savefig()
+
+    I = np.argsort(E.aberr)
+    T = E[I]
+    T.title = T.abstr
+    plotobjs(rows, cols, T)
+    plt.suptitle('exp galaxies with small a/b err')
+    ps.savefig()
+
+
+
+
+
+    # plt.clf()
+    # loghist(np.log10(E.modelflux[:,2]), np.minimum(5., E.theta_experr[:,2]))
+    # plt.xlabel('log model flux')
+    # plt.ylabel('theta_exp err')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # loghist(np.log10(D.modelflux[:,2]), np.minimum(10., D.theta_deverr[:,2]))
+    # plt.xlabel('log model flux')
+    # plt.ylabel('theta_dev err')
+    # ps.savefig()
+
+
     ha = dict(range=(-2,2), bins=50, histtype='step')
 
     plt.clf()
     n,b,p1 = plt.hist(np.log10(D.theta_dev[:,2]), color='r', **ha)
-    I = np.flatnonzero(Dsn > 3.)
+    I = np.flatnonzero(D.thetasn > 3.)
     n,b,p2 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=2, alpha=0.5, **ha)
-    I = np.flatnonzero(Dsn > 5.)
+    I = np.flatnonzero(D.thetasn > 5.)
     n,b,p3 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=3, alpha=0.3, **ha)
 
     n,b,p4 = plt.hist(np.log10(E.theta_exp[:,2]), color='b', **ha)
-    I = np.flatnonzero(Esn > 3.)
+    I = np.flatnonzero(E.thetasn > 3.)
     n,b,p5 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=2, alpha=0.5, **ha)
-    I = np.flatnonzero(Esn > 5.)
+    I = np.flatnonzero(E.thetasn > 5.)
     n,b,p6 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=3, alpha=0.3, **ha)
     plt.xlabel('log theta')
     plt.legend((p1[0],p2[0],p3[0],p4[0],p5[0],p6[0]),
@@ -367,15 +488,15 @@ def wack2(ps, G, D, E):
     
     plt.clf()
     n,b,p1 = plt.hist(np.log10(D.theta_dev[:,2]), color='r', **ha)
-    I = np.flatnonzero(Dsn > 3.)
+    I = np.flatnonzero(D.thetasn > 3.)
     n,b,p2 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=2, alpha=0.5, **ha)
-    I = np.flatnonzero(Dsn > 5.)
+    I = np.flatnonzero(D.thetasn > 5.)
     n,b,p3 = plt.hist(np.log10(D.theta_dev[I,2]), color='r', lw=3, alpha=0.3, **ha)
 
     n,b,p4 = plt.hist(np.log10(E.theta_exp[:,2]), color='b', **ha)
-    I = np.flatnonzero(Esn > 3.)
+    I = np.flatnonzero(E.thetasn > 3.)
     n,b,p5 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=2, alpha=0.5, **ha)
-    I = np.flatnonzero(Esn > 5.)
+    I = np.flatnonzero(E.thetasn > 5.)
     n,b,p6 = plt.hist(np.log10(E.theta_exp[I,2]), color='b', lw=3, alpha=0.3, **ha)
     plt.xlabel('log theta')
     plt.legend((p1[0],p2[0],p3[0],p4[0],p5[0],p6[0]),
@@ -384,16 +505,19 @@ def wack2(ps, G, D, E):
     plt.title('S/N cut effects on galaxy size distributions')
     ps.savefig()
 
+    D.absn = 1. / np.maximum(1e-3, D.abdeverr)
+    E.absn = 1. / np.maximum(1e-3, E.abexperr)
+
     plt.clf()
-    loghist(np.log10(Dsn), np.log10(Dabsn), 100)
+    loghist(np.log10(D.thetasn), np.log10(D.absn), 100)
     plt.xlabel('log S/N in theta')
-    plt.ylabel('log 1/error in ab')
+    plt.ylabel('log 1/error in ab (~ log S/N in ab)')
     ps.savefig()  
 
     plt.clf()
-    loghist(np.log10(Esn), np.log10(Eabsn), 100)
+    loghist(np.log10(E.thetasn), np.log10(E.absn), 100)
     plt.xlabel('log S/N in theta')
-    plt.ylabel('log 1/error in ab')
+    plt.ylabel('log 1/error in ab (~ log S/N in ab)')
     ps.savefig()  
 
 
@@ -572,8 +696,9 @@ ps = PlotSequence('comp')
 
 coadd_id = '1384p454'
 
-#wack(coadd_id, ps)
-#sys.exit(0)
+wack(coadd_id, ps)
+sys.exit(0)
+
 ps.skipto(50)
 
 band = 1
@@ -610,6 +735,24 @@ Yb = np.round(np.linspace(0, H, blocksb+1)).astype(int)
 #moda = reassemble_chunks(modsa, blocksa, imargin)
 #modb = reassemble_chunks(modsb, blocksb, imargin)
 
+plt.clf()
+plt.plot(Ta.w1_nanomaggies, Tb.w1_nanomaggies, 'b.')
+plt.xlabel('run A flux (nanomaggies)')
+plt.ylabel('run B flux (nanomaggies)')
+plt.xscale('symlog')
+plt.yscale('symlog')
+ps.savefig()
+
+lo,hi = 0.5, 2.0
+plt.clf()
+plt.plot(Ta.w1_nanomaggies, np.clip(Tb.w1_nanomaggies / Ta.w1_nanomaggies, lo, hi), 'b.')
+plt.xlabel('a (nm)')
+plt.ylabel('b/a (nm)')
+plt.xscale('symlog')
+plt.ylim(lo, hi)
+ps.savefig()
+
+
 ima = dict(interpolation='nearest', origin='lower',
            vmin=-0.5, vmax=0.5, cmap='gray')
            #vmin=-0.01, vmax=0.5, cmap='gray')
@@ -630,12 +773,16 @@ for i,ii in enumerate(I[:20]):
 plt.axis(ax)
 ps.savefig()
 
-for i in I[:3]:
+
+
+for i in I[:10]:
     ta = Ta[i]
     tb = Tb[i]
+    print
+    print 'RA,Dec', ta.ra, ta.dec
     print 'a', Ta.w1_nanomaggies[i], 'b', Tb.w1_nanomaggies[i]
 
-    print 'cells', ta.cell, tb.cell
+    #print 'cells', ta.cell, tb.cell
     x0 = min(ta.cell_x0, tb.cell_x0)
     x1 = max(ta.cell_x1, tb.cell_x1)
     y0 = min(ta.cell_y0, tb.cell_y0)
@@ -651,8 +798,8 @@ for i in I[:3]:
     ina, marga, wxa, wya = catsa[ta.cell][:4]
     inb, margb, wxb, wyb = catsb[tb.cell][:4]
 
-    print 'moda', moda.shape
-    print 'modb', modb.shape
+    #print 'moda', moda.shape
+    #print 'modb', modb.shape
 
     plt.clf()
     plt.imshow(img, **ima)
@@ -664,18 +811,18 @@ for i in I[:3]:
     plt.imshow(moda, extent=[ta.cell_x0, ta.cell_x1, ta.cell_y0, ta.cell_y1], **ima)
     plt.plot(ta.x, ta.y, 'rx')
     for x in Xa:
-        plt.axvline(x, color='b')
+        plt.axvline(x, color='c')
     for y in Ya:
-        plt.axhline(y, color='b')
+        plt.axhline(y, color='c')
 
     print 'A:', len(ina), len(marga)
     print 'WISE:', len(wxa)
-
-    print 'x,y', Ta.x[ina], Ta.y[ina]
+    #print 'x,y', Ta.x[ina], Ta.y[ina]
 
     #plt.plot(Ta.x[ina], Ta.y[ina], 'o', mec='g', mfc='none')
     #plt.plot(Ta.x[marga], Ta.y[marga], 'o', mec='b', mfc='none')
     plt.plot(wxa, wya, 'o', mec='m', mfc='none')
+    #ptsrc = (Ta.objc_type[I] == 6)
     for I,cc in [(ina,'g'), (marga, 'b')]:
         x,y,r = Ta.x[I], Ta.y[I], srada[I]
         plt.plot(np.vstack([x-r, x+r]), np.vstack([y,y]), '-', color=cc)
@@ -689,9 +836,9 @@ for i in I[:3]:
     plt.imshow(modb, extent=[tb.cell_x0, tb.cell_x1, tb.cell_y0, tb.cell_y1], **ima)
     plt.plot(ta.x, ta.y, 'rx')
     for x in Xb:
-        plt.axvline(x, color='b')
+        plt.axvline(x, color='c')
     for y in Yb:
-        plt.axhline(y, color='b')
+        plt.axhline(y, color='c')
 
     #plt.plot(Tb.x[inb], Tb.y[inb], 'o', mec='g', mfc='none')
     #plt.plot(Tb.x[margb], Tb.y[margb], 'o', mec='b', mfc='none')
@@ -706,16 +853,20 @@ for i in I[:3]:
     ps.savefig()
 
     dm = np.zeros_like(img)
-    dm[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] += moda
-    dm[tb.cell_y0:tb.cell_y1, tb.cell_x0:tb.cell_x1] -= modb
     ma = np.zeros_like(img)
-    ma[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] = 1.
     mb = np.zeros_like(img)
+    dm[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] += moda
+    ma[ta.cell_y0:ta.cell_y1, ta.cell_x0:ta.cell_x1] = 1.
+    dm[tb.cell_y0:tb.cell_y1, tb.cell_x0:tb.cell_x1] -= modb
     mb[tb.cell_y0:tb.cell_y1, tb.cell_x0:tb.cell_x1] = 1.
     dm *= (ma * mb)
     plt.clf()
-    plt.imshow(dm[y0:y1,x0:x1], extent=ax, **imd)
+    plt.imshow(dm[y0:y1,x0:x1], extent=[x0,x1,y0,y1], **imd)
     plt.plot(ta.x, ta.y, 'rx')
+    for x in np.append(Xa, Xb):
+        plt.axvline(x, color='c')
+    for y in np.append(Ya, Yb):
+        plt.axhline(y, color='c')
     plt.axis(ax)
     ps.savefig()
 

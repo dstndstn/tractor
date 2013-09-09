@@ -331,11 +331,26 @@ def main():
         thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
         thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
 
+        aberrzero = np.zeros(len(T), bool)
+        aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
+        aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
+
+        maxtheta = np.zeros(len(T), bool)
+        maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
+        maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
+
         print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
         print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
-
-        badgals = gal * np.logical_or(thetasn < 3., T.modelflux[:,b] > 1e4)
-        print 'Found', sum(badgals), 'low theta S/N or huge-flux galaxies'
+        print sum(aberrzero), 'have zero a/b error'
+        print sum(maxtheta), 'have the maximum theta'
+        
+        badgals = gal * reduce(np.logical_or,
+                               [thetasn < 3.,
+                                T.modelflux[:,b] > 1e4,
+                                aberrzero,
+                                maxtheta,
+                                ])
+        print 'Found', sum(badgals), 'bad galaxies'
         T.treated_as_pointsource = badgals
         T.objc_type[badgals] = 6
 
@@ -478,7 +493,7 @@ def main():
             #print 'PSF shape', pat.shape
             #print 'x0,y0', pat.x0, pat.y0
             psfprofile = pat.patch[R, R:]
-            print 'Profile:', psfprofile
+            #print 'Profile:', psfprofile
 
             # Set WISE source radii based on flux
             UW.rad = np.zeros(len(UW))
