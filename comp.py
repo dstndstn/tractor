@@ -429,6 +429,45 @@ coadd_id = '1384p454'
 ps.skipto(50)
 
 
+band = 1
+tiledir = 'wise-coadds'
+fn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+print 'Reading', fn
+wcs = Tan(fn)
+H,W = wcs.get_height(), wcs.get_width()
+print 'Shape', H,W
+H,W = 1024,1024
+
+img = fitsio.read(fn)
+
+m = np.median(img)
+print 'median', m
+img -= m
+
+pp = []
+for p in range(35,55+1, 2):
+    p0 = np.percentile(img, p)
+    print 'percentile', p, p0
+    pp.append(p0)
+
+plt.clf()
+plt.hist(img.ravel(), 100, range=(-0.5,1), histtype='step')
+for p in pp:
+    plt.axvline(p, color='k')
+plt.xlim(-0.5,1)
+ps.savefig()
+
+plt.xlim(pp[0], pp[-1])
+ps.savefig()
+
+sys.exit(0)
+
+plt.clf()
+plt.hist(img.ravel(), 100, range=(-0.5,2), log=True)
+plt.xlim(-0.5,2)
+ps.savefig()
+
+
 
 
 fna = 'phot-1384p454-b8.fits'
@@ -438,21 +477,11 @@ Tb = fits_table(fnb)
 blocksa = 8
 blocksb = 6
 
-modsa,catsa,sxa,sya,srada = unpickle_from_file(fna.replace('.fits','.pickle'))
-modsb,catsb,sxb,syb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))
+modsa,catsa,ta,srada = unpickle_from_file(fna.replace('.fits','.pickle'))
+modsb,catsb,tb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))
 
 imargin = 12
 
-band = 1
-tiledir = 'wise-coadds'
-fn = os.path.join(tiledir, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
-print 'Reading', fn
-wcs = Tan(fn)
-H,W = wcs.get_height(), wcs.get_width()
-print 'Shape', H,W
-H,W = 1024,1024
-
-img = fitsio.read(fn)
 
 # cell positions
 Xa = np.round(np.linspace(0, W, blocksa+1)).astype(int)
@@ -470,11 +499,6 @@ ima = dict(interpolation='nearest', origin='lower',
 imd = dict(interpolation='nearest', origin='lower',
            vmin=-1e-2, vmax=1e-2, cmap='gray')
 
-# plt.clf()
-# plt.hist(img.ravel(), 100, range=(-0.5,1))
-# plt.xlim(-0.5,1)
-# ps.savefig()
-
 
 # ratio = Tb.w1_nanomaggies / Ta.w1_nanomaggies
 # I = np.argsort(-np.abs(np.maximum(ratio, 1./ratio)))
@@ -482,7 +506,7 @@ imd = dict(interpolation='nearest', origin='lower',
 
 diff = Tb.w1_nanomaggies - Ta.w1_nanomaggies
 I = np.argsort(-np.abs(diff))
-print 'Largest diffs:'
+print 'Largest diffs:', diff[I[:20]]
 
 plt.clf()
 plt.imshow(img, **ima)
@@ -553,8 +577,6 @@ ww = min(wwa,wwb)
 print 'A:', wwa,hha
 print 'B:', wwb,hhb
 
-print 'sxa', sxa.shape
-
 HH = max(hha,hhb)
 WW = max(wwa,wwb)
 
@@ -582,6 +604,11 @@ for i,j in zip(I,J):
     print srcsb[j]
 
 print
+
+sxa = Ta.x
+sya = Ta.y
+sxb = Tb.x
+syb = Tb.y
 
 for im,imargs,tt,cat in [(modsa[0], ima, 'Model A (%i), first block' % blocksa, catsa[0]),
                          (modsb[0], ima, 'Model B (%i), first block' % blocksb, catsb[0]),

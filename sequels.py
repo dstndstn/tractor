@@ -29,6 +29,16 @@ lvl = logging.INFO
 #lvl = logging.DEBUG
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+
+'''
+ln -s /clusterfs/riemann/raid006/dr10/boss/sweeps/dr9 sweeps
+ln -s /clusterfs/riemann/raid006/dr10/boss/photoObj/301 photoObjs    
+
+# later...
+ln -s /clusterfs/riemann/raid007/ebosswork/eboss/photoObj photoObjs-new
+ln -s /clusterfs/riemann/raid006/bosswork/boss/resolve/2013-07-29 photoResolve-new
+'''
+
 tiledir = 'wise-coadds'
 
 photoobjdir = 'photoObjs-new'
@@ -40,7 +50,7 @@ resolvedir = 'photoResolve-new'
 Time.add_measurement(MemMeas)
 
 
-def read_photoobjs(r0, r1, d0, d1):
+def read_photoobjs(r0, r1, d0, d1, margin):
 
     wfn = os.path.join(resolvedir, 'window_flist.fits')
     #W = fits_table(wfn)
@@ -50,13 +60,16 @@ def read_photoobjs(r0, r1, d0, d1):
     rad = degrees_between(ra,dec, r0,d0)
     rad += np.hypot(13., 9.)/60.
     # a little extra margin
-    rad += 1./60.
+    rad += margin
 
     #I = np.flatnonzero(distsq_between_radecs(ra, dec, W.ra, W.dec) <= rad)
     #print 'Found', len(I), 'fields possibly in range'
 
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
     print 'Found', len(RCF), 'fields possibly in range'
+
+    ddec = margin
+    dra  = margin / min([np.cos(np.deg2rad(x)) for x in [d0,d1]])
 
     TT = []
     sdss = DR9()
@@ -68,10 +81,23 @@ def read_photoobjs(r0, r1, d0, d1):
 
         fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
                           'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
+
+        cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
+                'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+                'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+                'resolve_status', 'nchild', 'flags',
+                ]
         T = fits_table(fn)
         print 'read', len(T), 'from', fn
+        T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
+              (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
+              ((T.resolve_status & 256) > 0))
+        if len(T) == 0:
+            continue
+        print 'cut to', len(T), 'in RA,Dec box and PRIMARY.'
         TT.append(T)
-
+    T = merge_tables(TT)
+    return T
 
 # def read_sweeps(sweeps, r0,r1,d0,d1):
 #     margin = 0.
@@ -166,6 +192,21 @@ def read_photoobjs(r0, r1, d0, d1):
 #     print 'Merged:', len(sweeps)
 #     return sweeps
 
+        # ssweepfn = 'sweeps-%s-stars.fits' % tile.coadd_id
+        # gsweepfn = 'sweeps-%s-gals.fits' % tile.coadd_id
+        # print 'looking for', ssweepfn, 'and', gsweepfn
+        # if os.path.exists(ssweepfn) and os.path.exists(gsweepfn):
+        #     stars = fits_table(ssweepfn)
+        #     gals  = fits_table(gsweepfn)
+        # else:
+        #     if sweeps is None:
+        #         sweeps = read_sweep_index(R0,R1,D0,D1)
+        #     gals,stars = read_sweeps(sweeps, r0,r1,d0,d1)
+        #     stars.writeto(ssweepfn)
+        #     gals.writeto(gsweepfn)
+
+
+
 def main():
     import optparse
 
@@ -179,14 +220,25 @@ def main():
     parser.add_option('-o', dest='output', default='phot-%s.fits')
     opt,args = parser.parse_args()
 
-    '''
-    ln -s /clusterfs/riemann/raid006/dr10/boss/sweeps/dr9 sweeps
-    ln -s /clusterfs/riemann/raid006/dr10/boss/photoObj/301 photoObjs    
-    '''
     dataset = 'sequels'
     fn = '%s-atlas.fits' % dataset
     print 'Reading', fn
     T = fits_table(fn)
+
+
+    # Read Atlas Image table
+    # A = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
+    # print len(A), 'atlas tiles'
+    # D = np.unique(A.dec)
+    # print len(D), 'unique Decs'
+    # print D
+    # print 'diffs:', np.diff(D)
+    # for d in D:
+    #     I = np.flatnonzero(A.dec == d)
+    #     R = np.unique(A.ra[I])
+    #     print 'Dec', d, 'has', len(R), 'unique RA:', R
+    #     print 'diffs', np.diff(R)
+
 
     bands = [1,2,3,4]
     
@@ -206,9 +258,6 @@ def main():
         print
         print 'Coadd tile', tile.coadd_id
 
-        # Our results table
-        PHOT = tabledata()
-
         fn = os.path.join(tiledir, 'coadd-%s-w%i-img.fits' % (tile.coadd_id, bands[0]))
         print 'Reading', fn
         wcs = Tan(fn)
@@ -222,64 +271,81 @@ def main():
         H,W = 1024,1024
 
         objfn = 'photoobjs-%s.fits' % tile.coadd_id
-
-        read_photoobjs(r0, r1, d0, d1)
-
-
-        ssweepfn = 'sweeps-%s-stars.fits' % tile.coadd_id
-        gsweepfn = 'sweeps-%s-gals.fits' % tile.coadd_id
-        print 'looking for', ssweepfn, 'and', gsweepfn
-        if os.path.exists(ssweepfn) and os.path.exists(gsweepfn):
-            stars = fits_table(ssweepfn)
-            gals  = fits_table(gsweepfn)
+        if os.path.exists(objfn):
+            print 'Reading', objfn
+            T = fits_table(objfn)
         else:
-            if sweeps is None:
-                sweeps = read_sweep_index(R0,R1,D0,D1)
-            gals,stars = read_sweeps(sweeps, r0,r1,d0,d1)
-            stars.writeto(ssweepfn)
-            gals.writeto(gsweepfn)
+            T = read_photoobjs(r0, r1, d0, d1, 1./60.)
+            T.writeto(objfn)
 
-
-        # Cut galaxies based on signal-to-noise of theta (effective radius)
-        # measurement.
+        # Cut galaxies based on signal-to-noise of theta (effective
+        # radius) measurement.
         b = bandnum
-        dev = (gals.fracdev[:,b] >= 0.5)
-        exp = (gals.fracdev[:,b] < 0.5)
-        tsn = np.zeros(len(gals))
-        gals.theta_deverr[dev,b] = np.maximum(1e-6, gals.theta_deverr[dev,b])
-        gals.theta_experr[exp,b] = np.maximum(1e-5, gals.theta_experr[exp,b])
+        gal = (T.objc_type == 3)
+        dev = gal * (T.fracdev[:,b] >= 0.5)
+        exp = gal * (T.fracdev[:,b] <  0.5)
+        stars = (T.objc_type == 6)
+        print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
+        print 'Total', len(T), 'sources'
+
+        thetasn = np.zeros(len(T))
+        T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
+        T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
         # theta_experr nonzero: 1.28507e-05
         # theta_deverr nonzero: 1.92913e-06
-        tsn[dev] = gals.theta_dev[dev,b] / gals.theta_deverr[dev,b]
-        tsn[exp] = gals.theta_exp[exp,b] / gals.theta_experr[exp,b]
-        # print 'theta_experr range:', gals.theta_experr[exp,b].min(), gals.theta_experr[exp,b].max()
-        # print 'theta_deverr range:', gals.theta_deverr[dev,b].min(), gals.theta_deverr[dev,b].max()
-        # print 'theta_experr nonzero:', (gals.theta_experr[exp,b][gals.theta_experr[exp,b] > 0]).min()
-        # print 'theta_deverr nonzero:', (gals.theta_deverr[dev,b][gals.theta_deverr[dev,b] > 0]).min()
-        # I = (gals.theta_experr[exp,b] == 0)
-        # print sum(I), 'theta exp errors are zero'
-        # print 'thetas are, eg,', gals.theta_exp[exp[np.flatnonzero(I)[:50]],b]
-        # print 'modelfluxes are, eg,', gals.modelflux[exp[np.flatnonzero(I)[:50]],b]
-        print len(gals), 'galaxies'
-        bad = np.logical_or(tsn < 3., gals.modelflux[:,b] > 1e4)
-        print 'Found', sum(bad), 'low theta S/N or huge-flux galaxies'
+        thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
+        thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
 
-        gstars = fits_table()
-        gstars.ra  = gals.ra[bad]
-        gstars.dec = gals.dec[bad]
-        print 'Adding', len(gstars), 'bad galaxies to "stars"'
-        stars = merge_tables([stars, gstars])
-        gals.cut(np.logical_not(bad))
-        print 'Cut to', len(gals), 'not-bad galaxies'
-            
+        print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
+        print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
+
+        badgals = gal * np.logical_or(thetasn < 3., T.modelflux[:,b] > 1e4)
+        print 'Found', sum(badgals), 'low theta S/N or huge-flux galaxies'
+        T.treated_as_pointsource = badgals
+        T.objc_type[badgals] = 6
+
         # hack
-        gals.objc_type  = np.zeros(len(gals), int) + 3
-        gals.psfflux    = np.ones((len(gals),5))
-        gals.cmodelflux = gals.psfflux
-        gals.devflux    = gals.psfflux
-        gals.expflux    = gals.psfflux
-        # gals.nchild     = np.zeros(len(gals), int)
-        # gals.objc_flags = np.zeros(len(gals), int)
+        T.psfflux    = np.ones((len(T),5))
+        T.cmodelflux = T.psfflux
+        T.devflux    = T.psfflux
+        T.expflux    = T.psfflux
+        # T.objc_type  = np.zeros(len(T), int) + 3
+        # T.nchild     = np.zeros(len(T), int)
+        # T.objc_flags = np.zeros(len(T), int)
+
+        ### HACK -- cut star/gal lists
+        ok,T.x,T.y = wcs.radec2pixelxy(T.ra, T.dec)
+        T.x -= 1.
+        T.y -= 1.
+        margin = 20.
+        I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
+                           (T.y >= -margin) * (T.y < H+margin))
+        T.cut(I)
+        print 'N objects:', len(T)
+
+        wanyband = wband = 'w'
+        print 'Creating tractor sources...'
+        cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
+                                      objs=T, bands=[], nanomaggies=True,
+                                      extrabands=[wband],
+                                      fixedComposites=True,
+                                      useObjcType=True) #, objCuts=False)
+        print 'Created', len(T), 'sources'
+        assert(len(cat) == len(T))
+
+        pixscale = wcs.pixel_scale()
+        # crude source radii, in pixels
+        sourcerad = np.zeros(len(cat))
+        for i in range(len(cat)):
+            src = cat[i]
+            if isinstance(src, PointSource):
+                continue
+            elif isinstance(src, HoggGalaxy):
+                sourcerad[i] = (src.nre * src.re / pixscale)
+            elif isinstance(src, FixedCompositeGalaxy):
+                sourcerad[i] = max(src.shapeExp.re * ExpGalaxy.nre,
+                                   src.shapeDev.re * DevGalaxy.nre) / pixscale
+        print 'sourcerad range:', min(sourcerad), max(sourcerad)
 
         wfn = 'wise-sources-%s.fits' % (tile.coadd_id)
         print 'looking for', wfn
@@ -292,105 +358,44 @@ def main():
             WISE.writeto(wfn)
             print 'Found', len(WISE), 'WISE sources nearby'
 
-        ### HACK -- cut star/gal lists
-        ok,gx,gy = wcs.radec2pixelxy(gals.ra, gals.dec)
-        gx -= 1.
-        gy -= 1.
-        margin = 20.
-        I = np.flatnonzero((gx >= -margin) * (gx < W+margin) *
-                           (gy >= -margin) * (gy < H+margin))
-        gals.cut(I)
-        ok,gx,gy = wcs.radec2pixelxy(stars.ra, stars.dec)
-        gx -= 1.
-        gy -= 1.
-        margin = 20.
-        I = np.flatnonzero((gx >= -margin) * (gx < W+margin) *
-                           (gy >= -margin) * (gy < H+margin))
-        stars.cut(I)
-
-
-        wanyband = wband = 'w'
-        print 'Creating tractor galaxies...'
-        cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
-                                         objs=gals, bands=[], nanomaggies=True,
-                                         extrabands=[wband],
-                                         fixedComposites=True,
-                                         useObjcType=True, objCuts=False)
-        ngals = len(cat)
-        assert(ngals == len(gals))
-        print 'Adding tractor stars...'
-        for i in range(len(stars)):
-            cat.append(PointSource(RaDecPos(stars.ra[i], stars.dec[i]),
-                                   NanoMaggies(**{wband:1.})))
-
-        # print 'Adding WISE stars...'
-        # wcat = []
-        # for i in range(len(UW)):
-        #     wcat.append(PointSource(RaDecPos(UW.ra[i], UW.dec[i]),
-        #                             NanoMaggies(**{wband:1.})))
-
-        PHOT.ra  = np.array([src.getPosition().ra  for src in cat])
-        PHOT.dec = np.array([src.getPosition().dec for src in cat])
-
-        assert(np.all(PHOT.ra == np.append(gals.ra, stars.ra)))
-        
-        unmatched = np.ones(len(WISE), bool)
-        I,J,d = match_radec(WISE.ra, WISE.dec, PHOT.ra, PHOT.dec, 4./3600., nearest=True)
-        unmatched[I] = False
         for band in bands:
             WISE.set('w%inm' % band,
                      NanoMaggies.magToNanomaggies(WISE.get('w%impro' % band)))
+
+        unmatched = np.ones(len(WISE), bool)
+        #I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 4./3600., nearest=True)
+        I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 4./3600.)
+        unmatched[I] = False
         UW = WISE[unmatched]
         print 'Got', len(UW), 'unmatched WISE sources'
-        #del WISE
-        #WISE = WISE[np.logical_not(unmatched)]
+
+        # Record WISE fluxes for catalog matches.
+        # (this provides decent initialization for 'minsb' approx.)
         wiseflux = {}
         for band in bands:
-            wiseflux[band] = np.zeros(len(PHOT))
-            wiseflux[band][J] = WISE.get('w%inm' % band)[I]
+            wiseflux[band] = np.zeros(len(T))
+            #wiseflux[band][J] = WISE.get('w%inm' % band)[I]
 
-        ### ASSUME the atlas tile WCSes are the same between bands!
-        ok,sx,sy = wcs.radec2pixelxy(PHOT.ra, PHOT.dec)
-        sx -= 1.
-        sy -= 1.
+            # X[I] += Y[J] with duplicate I doesn't work.
+            #wiseflux[band][J] += WISE.get('w%inm' % band)[I]
+            lhs = wiseflux[band]
+            rhs = WISE.get('w%inm' % band)[I]
+            for j,f in zip(J, rhs):
+                lhs[j] += f
+
         ok,wx,wy = wcs.radec2pixelxy(UW.ra, UW.dec)
         wx -= 1.
         wy -= 1.
 
-        PHOT.x = sx
-        PHOT.y = sy
+        T.coadd_id = np.array([tile.coadd_id] * len(T))
+        T.cell = np.zeros(len(T), int)
+        T.cell_x0 = np.zeros(len(T), int)
+        T.cell_y0 = np.zeros(len(T), int)
+        T.cell_x1 = np.zeros(len(T), int)
+        T.cell_y1 = np.zeros(len(T), int)
 
-        pixscale = wcs.pixel_scale()
-        # crude source radii, in pixels
-        sourcerad = []
-        for i in range(ngals):
-            src = cat[i]
-            if isinstance(src, HoggGalaxy):
-                #print '  Hogg:', src
-                sourcerad.append(src.nre * src.re / pixscale)
-            elif isinstance(src, FixedCompositeGalaxy):
-                #print '  Comp:', src
-                sourcerad.append(max(src.shapeExp.re * ExpGalaxy.nre,
-                                     src.shapeDev.re * DevGalaxy.nre) / pixscale)
-            else:
-                assert(False)
-        sourcerad.extend([0] * (len(cat)-ngals))
-        sourcerad = np.array(sourcerad)
-
-        print 'Cat:', len(cat)
-        print 'PHOT:', len(PHOT)
-        print 'sourcerad:', len(sourcerad), sourcerad.shape, sourcerad.dtype
-        print 'sx:', sx.shape, sx.dtype
-        print 'sourcerad range:', min(sourcerad), max(sourcerad)
-
-        PHOT.cell = np.zeros(len(PHOT), int)
-        PHOT.cell_x0 = np.zeros(len(PHOT), int)
-        PHOT.cell_y0 = np.zeros(len(PHOT), int)
-        PHOT.cell_x1 = np.zeros(len(PHOT), int)
-        PHOT.cell_y1 = np.zeros(len(PHOT), int)
-
-        inbounds = np.flatnonzero((sx >= -0.5) * (sx < W-0.5) *
-                                  (sy >= -0.5) * (sy < H-0.5))
+        inbounds = np.flatnonzero((T.x >= -0.5) * (T.x < W-0.5) *
+                                  (T.y >= -0.5) * (T.y < H-0.5))
 
         for band in bands:
             tb0 = Time()
@@ -399,19 +404,22 @@ def main():
             print 'Band', band
             wband = 'w%i' % band
 
-            fn = os.path.join(tiledir, 'coadd-%s-w%i-img.fits' % (tile.coadd_id, band))
-            print 'Reading', fn
-            wcs = Tan(fn)
+            #### FIXME -- "w" or unweighted?
+
+            imfn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
+            ivfn = os.path.join(tiledir, 'coadd-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
+
+            print 'Reading', imfn
+            wcs = Tan(imfn)
             r0,r1,d0,d1 = wcs.radec_bounds()
             print 'RA,Dec bounds:', r0,r1,d0,d1
             ra,dec = wcs.radec_center()
             print 'Center:', ra,dec
-            img = fitsio.read(fn)
+            img = fitsio.read(imfn)
             #H,W = img.shape
 
-            fn = os.path.join(tiledir, 'coadd-%s-w%i-invvar.fits' % (tile.coadd_id, band))
-            print 'Reading', fn
-            iv = fitsio.read(fn)
+            print 'Reading', ivfn
+            iv = fitsio.read(ivfn)
 
             # HACK -- should we *average* the PSF over the whole image, maybe?
 
@@ -421,17 +429,11 @@ def main():
             # Instantiate a (non-varying) mixture-of-Gaussians PSF
             psf = psf.mogAt(W/2., H/2.)
 
-            # tim = Image(data=img, invvar=iv, psf=psf, wcs=ConstantFitsWcs(wcs),
-            #             sky=ConstantSky(0.), photocal=LinearPhotoCal(1., band=wband),
-            #             name='Coadd %s W%i' % (tile.coadd_id, band), domask=False)
-
             fullimg = img
             fullinvvar = iv
             fullIV = np.zeros(len(cat))
             fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
             fitstats = dict([(k, np.zeros(len(cat))) for k in fskeys])
-
-            #ntimes = np.zeros(len(cat), int)
 
             twcs = ConstantFitsWcs(wcs)
 
@@ -475,48 +477,35 @@ def main():
 
                     smargin = imargin + sourcerad
 
-                    I = np.flatnonzero(((sx+smargin) >= (xlo-0.5)) * ((sx-smargin) < (xhi-0.5)) *
-                                       ((sy+smargin) >= (ylo-0.5)) * ((sy-smargin) < (yhi-0.5)))
-                    #I = np.flatnonzero((sx >= (xlo-0.5-smargin)) * (sx < (xhi-0.5+smargin)) *
-                    #                   (sy >= (ylo-0.5-smargin)) * (sy < (yhi-0.5+smargin)))
+                    I = np.flatnonzero(((T.x+smargin) >= (xlo-0.5)) * ((T.x-smargin) < (xhi-0.5)) *
+                                       ((T.y+smargin) >= (ylo-0.5)) * ((T.y-smargin) < (yhi-0.5)))
 
-                    inbox = ((sx[I] >= (xlo-0.5)) * (sx[I] < (xhi-0.5)) *
-                             (sy[I] >= (ylo-0.5)) * (sy[I] < (yhi-0.5)))
+                    inbox = ((T.x[I] >= (xlo-0.5)) * (T.x[I] < (xhi-0.5)) *
+                             (T.y[I] >= (ylo-0.5)) * (T.y[I] < (yhi-0.5)))
 
                     srci = I[inbox]
 
-                    PHOT.cell[I[inbox]] = celli
-                    PHOT.cell_x0[I[inbox]] = ix0
-                    PHOT.cell_x1[I[inbox]] = ix1
-                    PHOT.cell_y0[I[inbox]] = iy0
-                    PHOT.cell_y1[I[inbox]] = iy1
+                    T.cell[I[inbox]] = celli
+                    T.cell_x0[I[inbox]] = ix0
+                    T.cell_x1[I[inbox]] = ix1
+                    T.cell_y0[I[inbox]] = iy0
+                    T.cell_y1[I[inbox]] = iy1
                     
                     # sources in the ROI box
                     subcat = [cat[i] for i in srci]
 
-                    # WISE-only sources in the expanded region
+                    # include *copies* of sources in the margins
+                    # (that way we automatically don't save the results)
+                    subcat.extend([cat[i].copy() for i in I[np.logical_not(inbox)]])
+                    assert(len(subcat) == len(I))
+
+                    # add WISE-only sources in the expanded region
                     J = np.flatnonzero((wx >= xlo - wmargin) * (wx < xhi + wmargin) *
                                        (wy >= ylo - wmargin) * (wy < yhi + wmargin))
-                    if True:
-                        # include *copies* of sources in the margins
-                        subcat.extend([cat[i].copy() for i in I[np.logical_not(inbox)]])
-                        assert(len(subcat) == len(I))
-                        # add WISE-only point sources
-                        for i in J:
-                            subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
-                                                      NanoMaggies(**{wanyband:1.})))
-                        
-                    if False:
-                        for i in I[np.logical_not(inbox)]:
-                            src = cat[i].copy()
-                            nm = wiseflux[band][i]
-                            src.setBrightness(NanoMaggies(**{wanyband:nm}))
-                            subcat.append(src)
-                        for i in J:
-                            nm = UW.get('w%inm' % band)[i]
-                            subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
-                                                      NanoMaggies(**{wanyband:nm})))
-
+                    wnm = UW.get('w%inm' % band)
+                    for i in J:
+                        subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
+                                                  NanoMaggies(**{wanyband: wnm[i]})))
                     print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
                     print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
@@ -528,13 +517,6 @@ def main():
                     # tractor.thawPathsTo('sky')
                     tractor.thawPathsTo(wanyband)
 
-                    ###### Freeze sources outside the ROI?
-                    #tractor.catalog.freezeParams(*range(len(srci), len(subcat)))
-
-                    # Reset initial fluxes (note that this is only for the unfrozen ones)
-                    #tractor.setParams([1.] * tractor.numberOfParams()) #np.ones(tractor.numberOfParams()))
-                    tractor.setParams(np.ones(tractor.numberOfParams()))
-    
                     minsb = getattr(opt, 'minsb%i' % band)
                     print 'Minsb:', minsb
                     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
@@ -561,41 +543,30 @@ def main():
                     dcpu = (cpu.cpu - cpu0.cpu)
                     print 'So far:', Time()-tb0, '-> predict CPU time', (dcpu * (opt.blocks**2) / float(celli+1))
 
-                    #ntimes[srci] += 1
-
-            # print 'Number of times sources were fit:', np.unique(ntimes)
-            # print np.bincount(ntimes)
-            # PHOT.set(wband + '_ntimes', ntimes)
-
-            #print 'ntimes == inbounds?', np.sum(np.flatnonzero(ntimes) == inbounds)
-            #print 'of', len(inbounds)
-
             nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
             nm_ivar = fullIV
-            PHOT.set(wband + '_nanomaggies', nm)
-            PHOT.set(wband + '_nanomaggies_ivar', fullIV)
+            T.set(wband + '_nanomaggies', nm)
+            T.set(wband + '_nanomaggies_ivar', fullIV)
             dnm = 1./np.sqrt(nm_ivar)
             mag = NanoMaggies.nanomaggiesToMag(nm)
             dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
-            PHOT.set(wband + '_mag', mag)
-            PHOT.set(wband + '_mag_err', dmag)
+            T.set(wband + '_mag', mag)
+            T.set(wband + '_mag_err', dmag)
             for k in fskeys:
-                PHOT.set(wband + '_' + k, fitstats[k])
-            # pickle_to_file((ims0,ims1,IV,cat), 'phot-%s-%s.pickle' % (tile.coadd_id, wband))
+                T.set(wband + '_' + k, fitstats[k])
 
             print 'Tile', tile.coadd_id, 'band', wband, 'took', Time()-tb0
 
             # HACK
             break
 
-        PHOT.cut(inbounds)
-
-        PHOT.writeto(opt.output % (tile.coadd_id))
+        T.cut(inbounds)
+        T.writeto(opt.output % (tile.coadd_id))
 
         ## HACK
         fn = opt.output % (tile.coadd_id)
         fn = fn.replace('.fits','.pickle')
-        pickle_to_file((mods, cats, sx, sy, sourcerad), fn)
+        pickle_to_file((mods, cats, T, sourcerad), fn)
         print 'Pickled', fn
 
         print 'Tile', tile.coadd_id, 'took', Time()-tt0
