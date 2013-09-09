@@ -444,11 +444,133 @@ m = np.median(img)
 print 'median', m
 img -= m
 
-pp = []
-for p in range(35,55+1, 2):
-    p0 = np.percentile(img, p)
-    print 'percentile', p, p0
-    pp.append(p0)
+sim = np.sort(img.ravel())
+print 'sim', sim.shape, sim.dtype
+I = np.linspace(0, len(sim)-1, 500)
+
+sigest = sim[int(0.5 * len(sim))] - sim[int(0.16 * len(sim))]
+print 'sig est', sigest
+nsig = 0.1 * sigest
+
+I = np.linspace(0.25*len(sim), 0.55*len(sim), 11).astype(int)
+dn = []
+sumn = []
+for ii in I:
+    X = sim[ii]
+    # nlo = sum((sim > X-nsig) * (sim < X))
+    # nhi = sum((sim > X) * (sim < X+nsig))
+    # print 'nlo', nlo, 'nhi', nhi, 'diff', nlo-nhi
+    # dn.append(nlo - nhi)
+    #sumn.append(nlo+nhi)
+    sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
+
+#plt.clf()
+#plt.plot(I, dn, 'r-')
+#ps.savefig()
+plt.clf()
+plt.plot(I, sumn, 'r-')
+ps.savefig()
+
+sumn = np.array(sumn)
+
+iscale = 0.5 * len(sim)
+xi = (I-mean(I))/iscale
+
+A = np.zeros((len(I), 3))
+A[:,0] = 1.
+A[:,1] = xi
+A[:,2] = xi**2
+
+b = sumn
+
+res = np.linalg.lstsq(A, b)
+X = res[0]
+print 'X', X
+
+plt.clf()
+plt.plot(xi, sumn, 'r-')
+xx = np.linspace(xi[0], xi[-1], 200)
+plt.plot(xx, X[0] + X[1] * xx + X[2] * xx**2, 'b-')
+ps.savefig()
+
+Imax = - X[1] / (2. * X[2])
+Imax = (Imax * iscale) + mean(I)
+i = int(np.round(Imax))
+print 'Imax', Imax
+mu = sim[i]
+print 'mu', mu
+
+plt.clf()
+plt.hist(img.ravel() - mu, 100, range=(-0.5,1), histtype='step')
+plt.xlim(-0.5,1)
+ps.savefig()
+
+sys.exit(0)
+
+
+
+
+lo,hi = 0.1,0.8
+for step in range(3):
+    q = np.round(np.linspace(lo * len(sim), hi * len(sim), 21)).astype(int)
+    Q = sim[q]
+    # for i in range(len(Q)-5):
+    #     QQ = Q[i : i+5]
+    #     c = QQ[2]
+    #     print 'diff', c - QQ
+    #     d = c - QQ
+    #     print (d[0] + d[4]) / 2., (d[1] + d[3]) / 2.
+    
+    dd = []
+    for i in range(len(Q)-2):
+        #QQ = Q[i : i+3]
+        #print 'q', q[i], q[i+1], q[i+2]
+        #print 'Q', Q[i], Q[i+1], Q[i+2]
+        slope = (Q[i+2] - Q[i]) / float(q[i+2] - q[i])
+        #print 'slope', slope
+        Qmid = Q[i] + slope * (q[i+1] - q[i])
+        #print 'Qmid', Qmid
+        d = Q[i+1] - Qmid
+        print 'd', d
+        dd.append(d)
+    dd = np.array(dd)
+        
+    plt.clf()
+    plt.plot(q, Q, 'r.')
+    ps.savefig()
+    
+    plt.clf()
+    plt.plot(dd, 'r.')
+    plt.axhline(0.)
+    ps.savefig()
+    
+    I = np.flatnonzero((dd[:-1] > 0) * (dd[1:] < 0))
+    print 'I', I
+    I = I[0]
+    lo,hi = q[I] / float(len(sim)), q[I+1] / float(len(sim))
+    print 'lo,hi', lo,hi
+    Qmid = sim[(q[I]+q[I+1])/2]
+    print 'Q', Q[I], Qmid, Q[I+1]
+    
+    plt.clf()
+    plt.hist(img.ravel() - Qmid, 100, range=(-0.5,1), histtype='step')
+    plt.xlim(-0.5,1)
+    ps.savefig()
+
+
+# quant = I/float(len(sim))
+# plt.clf()
+# plt.plot(quant, sim[np.round(I).astype(int)], 'r-')
+# plt.yscale('symlog')
+# ps.savefig()
+# 
+sys.exit(0)
+
+# pp = []
+# for p in range(35,55+1, 2):
+#     p0 = np.percentile(img, p)
+#     print 'percentile', p, p0
+#     pp.append(p0)
 
 plt.clf()
 plt.hist(img.ravel(), 100, range=(-0.5,1), histtype='step')
