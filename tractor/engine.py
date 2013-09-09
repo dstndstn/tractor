@@ -931,12 +931,11 @@ class Tractor(MultiParams):
                 x0 = y0 = 0
 
             for si,src in enumerate(srcs):
-                cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
-                csum = sum(cc)
-                if csum == 0:
+                counts = sum([pcal.brightnessToCounts(b) for b in src.getBrightnesses()])
+                if counts <= 0:
                     mv = 0.
                 else:
-                    mv = minsb / csum
+                    mv = minsb / counts
                 ums = src.getUnitFluxModelPatches(img, minval=mv)
 
                 isvalid = False
@@ -1023,7 +1022,7 @@ class Tractor(MultiParams):
                 dd.append((um * scale, tim))
         logverb('forced phot: derivs', Time()-t0)
 
-        # NOTE, this is INVERSE variance
+        # Inverse variance
         IV = None
         if variance:
             if sky and skyvariance:

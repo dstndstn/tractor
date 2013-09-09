@@ -696,8 +696,8 @@ ps = PlotSequence('comp')
 
 coadd_id = '1384p454'
 
-wack(coadd_id, ps)
-sys.exit(0)
+#wack(coadd_id, ps)
+#sys.exit(0)
 
 ps.skipto(50)
 

@@ -339,16 +339,21 @@ def main():
         maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
         maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
 
+        # theta S/N > modelflux for dev, 10*modelflux for exp
+        bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
+
         print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
         print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
         print sum(aberrzero), 'have zero a/b error'
         print sum(maxtheta), 'have the maximum theta'
+        print sum(bigthetasn), 'have large theta S/N vs modelflux'
         
         badgals = gal * reduce(np.logical_or,
                                [thetasn < 3.,
                                 T.modelflux[:,b] > 1e4,
                                 aberrzero,
                                 maxtheta,
+                                bigthetasn,
                                 ])
         print 'Found', sum(badgals), 'bad galaxies'
         T.treated_as_pointsource = badgals
@@ -634,6 +639,22 @@ def main():
                     print 'That took', Time()-t0
 
                     im,mod,ie,chi,roi = ims1[0]
+
+
+                    # Rinse sources with negative flux and repeat!
+                    # subcat2 = [src for src in subcat if src.getBrightness().getBand(wanyband) > 0.]
+                    # print 'Cut from', len(subcat), 'to', len(subcat2), 'non-neg sources'
+                    # tractor = Tractor([tim], subcat2)
+                    # print 'Running forced photometry...'
+                    # t0 = Time()
+                    # tractor.freezeParamsRecursive('*')
+                    # # tractor.thawPathsTo('sky')
+                    # tractor.thawPathsTo(wanyband)
+                    # ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+                    #     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
+                    #     fitstats=True, variance=True, shared_params=False)
+                    # print 'That took', Time()-t0
+                    # im,mod,ie,chi,roi = ims1[0]
 
                     mods.append(mod)
                     cats.append((#[src.getPosition().ra  for src in subcat],
