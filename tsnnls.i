@@ -33,13 +33,12 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
     double rnorm;
     npy_intp Ncols;
     PyObject* np_x = NULL;
-    npy_intp dims;
-
 
     //printf("size of int: %i\n", sizeof(int));
     Ncols = PyArray_SIZE(np_colinds) - 1;
 
-    {
+    /*
+     {
         int* cind = PyArray_DATA(np_colinds);
         int* rows = PyArray_DATA(np_sprows);
         double* vals = PyArray_DATA(np_spvals);
@@ -50,7 +49,8 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
                 printf("  row %i, val %g\n", rows[j], vals[j]);
             }
         }
-    }
+     }
+     */
 
     A = calloc(1, sizeof(taucs_ccs_matrix));
     A->n = Ncols;
@@ -64,7 +64,8 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
 
     tol = -1.; // always take an LSQR step
 
-    {
+    /*
+     {
         int i;
         printf("A matrix:\n");
         taucs_print_ccs_matrix(A);
@@ -76,27 +77,33 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
         }
         printf("]\n");
     }
+     */
 
-    printf("t_snnls is %p\n", t_snnls);
-
+    //x = t_snnls_fallback(A, b, &rnorm, tol, 1);
     x = t_snnls(A, b, &rnorm, tol, 1);
-    printf("rnorm = %g\n", rnorm);
-
-    dims = Ncols;
-    np_x = PyArray_SimpleNewFromData(1, &dims, PyArray_DOUBLE, x);
-
-    /*{
+    free(A);
+    if (x) {
+        npy_intp dims = Ncols;
+        np_x = PyArray_SimpleNewFromData(1, &dims, PyArray_DOUBLE, x);
+        printf("rnorm = %g\n", rnorm);
+        /*
         int i;
-        x = t_lsqr(A, b);
-        printf("TSNNLS LSQR:\n");
         printf("x = [ ");
         for (i=0; i<Ncols; i++) {
             printf("%g ", x[i]);
         }
         printf("]\n");
-     }*/
-
-    free(A);
+         */
+        /*
+         {
+         int i;
+         x = t_lsqr(A, b);
+         printf("TSNNLS LSQR:\n");
+         }*/
+    } else {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "t_snnls failed: maybe matrix not pos def.");
+    }
     return np_x;
 }
 
