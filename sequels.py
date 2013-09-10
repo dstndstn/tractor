@@ -648,7 +648,7 @@ def main():
                     t0 = Time()
                     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                         minsb=minsb, mindlnp=1., sky=False, minFlux=None,
-                        fitstats=True, variance=True, shared_params=False,
+                        fitstats=True, variance=False, shared_params=False,
                         use_tsnnls=True)
                     print 'TSNNLS took', Time()-t0
 

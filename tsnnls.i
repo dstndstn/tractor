@@ -89,8 +89,8 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
      */
 
     // x = t_snnls_fallback(A, b, &rnorm, tol, 1);
-
     x = t_snnls(A, b, &rnorm, tol, 1);
+    //x = t_lsqr(A, b);
 
     free(A);
     if (x) {
