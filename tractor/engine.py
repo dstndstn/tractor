@@ -1917,10 +1917,10 @@ class Tractor(MultiParams):
                             bcomp, nrcomp, Nelements)
             print 'Got TSNNLS result:', X
 
-            print 'spcols:', spcols
-            print 'ucols:', ucols
-            print 'colI:', colI
-            print 'sorted_cols:', sorted_cols
+            # print 'spcols:', spcols
+            # print 'ucols:', ucols
+            # print 'colI:', colI
+            # print 'sorted_cols:', sorted_cols
             
             # Undo the column mappings
             X2 = np.zeros(len(allderivs))

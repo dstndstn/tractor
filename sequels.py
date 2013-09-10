@@ -633,12 +633,24 @@ def main():
                     # tractor.thawPathsTo('sky')
                     tractor.thawPathsTo(wanyband)
 
+                    # DEBUG
+                    p0 = tractor.getParams()
+
                     ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                         minsb=minsb, mindlnp=1., sky=False, minFlux=None,
                         fitstats=True, variance=True, shared_params=False)
                     print 'That took', Time()-t0
 
                     im,mod,ie,chi,roi = ims1[0]
+
+                    tractor.setParams(p0)
+
+                    t0 = Time()
+                    ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+                        minsb=minsb, mindlnp=1., sky=False, minFlux=None,
+                        fitstats=True, variance=True, shared_params=False,
+                        use_tsnnls=True)
+                    print 'TSNNLS took', Time()-t0
 
 
                     # Rinse sources with negative flux and repeat!

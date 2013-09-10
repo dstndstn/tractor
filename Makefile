@@ -12,7 +12,10 @@ LIBTSNNLS_LIB ?= -ltsnnls
 _tsnnls.so: tsnnls.i
 	swig -python $(NUMPY_INC) $(LIBTSNNLS_INC) $<
 	gcc -Wall -fPIC -c tsnnls_wrap.c $$(python-config --includes) $(NUMPY_INC) $(LIBTSNNLS_INC)
-	gcc -Wall -fPIC -o _tsnnls.so -shared tsnnls_wrap.o $(LIBTSNNLS_LIB) -lpython
+	gcc -Wall -fPIC -o _tsnnls.so -shared tsnnls_wrap.o $(LIBTSNNLS_LIB)
+
+#	gcc -Wall -fPIC -o $@ -shared tsnnls_wrap.o $$(python-config --ldflags) $(LIBTSNNLS_LIB)
+#	gcc -Wall -fPIC -o _tsnnls.so -shared tsnnls_wrap.o $(LIBTSNNLS_LIB) -lpython
 #	gcc -Wall -fPIC -o $@ -shared tsnnls_wrap.o -L$$(python-config --prefix)/lib $$(python-config --libs --ldflags) $(LIBTSNNLS_LIB)
 
 _denorm.so: denorm.i

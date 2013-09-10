@@ -37,20 +37,29 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
     //printf("size of int: %i\n", sizeof(int));
     Ncols = PyArray_SIZE(np_colinds) - 1;
 
-    /*
-     {
+
+    if (0) {
+        // Check requirement that A->rowind must be in ascending order
+        // for each column.
         int* cind = PyArray_DATA(np_colinds);
         int* rows = PyArray_DATA(np_sprows);
-        double* vals = PyArray_DATA(np_spvals);
+        //double* vals = PyArray_DATA(np_spvals);
         int i, j;
         for (i=0; i<Ncols; i++) {
-            printf("Column %i: %i to %i\n", i, cind[i], cind[i+1]);
-            for (j=cind[i]; j<cind[i+1]; j++) {
-                printf("  row %i, val %g\n", rows[j], vals[j]);
+            for (j=cind[i]; j<(cind[i+1] - 1); j++) {
+                if (rows[j] >= rows[j+1]) {
+                    printf("Row out of order: col %i, rows[%i,%i] = %i,%i\n",
+                           i, j, j+1, rows[j], rows[j+1]);
+                }
             }
+            /*
+             printf("Column %i: %i to %i\n", i, cind[i], cind[i+1]);
+             for (j=cind[i]; j<cind[i+1]; j++) {
+             printf("  row %i, val %g\n", rows[j], vals[j]);
+             }
+             */
         }
-     }
-     */
+    }
 
     A = calloc(1, sizeof(taucs_ccs_matrix));
     A->n = Ncols;
@@ -79,8 +88,10 @@ static PyObject* tsnnls_lsqr(PyObject* np_colinds,
     }
      */
 
-    //x = t_snnls_fallback(A, b, &rnorm, tol, 1);
+    // x = t_snnls_fallback(A, b, &rnorm, tol, 1);
+
     x = t_snnls(A, b, &rnorm, tol, 1);
+
     free(A);
     if (x) {
         npy_intp dims = Ncols;
