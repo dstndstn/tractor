@@ -695,6 +695,9 @@ def main():
 
         # HACK HACK HACK
         #T.cut(inbounds)
+
+        T.inbounds = inbounds
+
         T.writeto(opt.output % (tile.coadd_id))
 
         ## HACK
