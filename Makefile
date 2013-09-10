@@ -4,6 +4,13 @@ doc: html
 	cp -a _build/html .
 .PHONE: doc
 
+NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
+
+_tsnnls.so: tsnnls.i
+	swig -python $(NUMPY_INC) $<
+	gcc -Wall -fPIC -c tsnnls_wrap.c $$(python-config --includes) $(NUMPY_INC)
+	gcc -Wall -o $@ -shared tsnnls_wrap.o -L$$(python-config --prefix)/lib $$(python-config --libs --ldflags) -ltsnnls
+
 _denorm.so: denorm.i
 	swig -python $<
 	gcc -fPIC -c denorm_wrap.c $$(python-config --includes)

@@ -1609,7 +1609,8 @@ class Tractor(MultiParams):
     def getUpdateDirection(self, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
-                           shared_params=True):
+                           shared_params=True,
+                           use_tsnnls=False):
 
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -1737,10 +1738,12 @@ class Tractor(MultiParams):
             #logverb('Column', col, 'scale:', scale)
             if scales_only:
                 continue
+
             sprows.append(rows)
-            c = np.empty_like(rows)
-            c[:] = col
-            spcols.append(c)
+            spcols.append(col)
+            #c = np.empty_like(rows)
+            #c[:] = col
+            #spcols.append(c)
             if scale_columns:
                 spvals.append(vals / scale)
             else:
@@ -1759,6 +1762,13 @@ class Tractor(MultiParams):
             # not convinced it's worth the effort right now.
             X = self.getLogPriorDerivatives()
             if X is not None:
+
+                print
+                print 'Warning: using priors; dstn was monkeying with'
+                print 'the code and the getLogPriorDerivatives() API has'
+                print 'changed: cA must be *integers*, not np arrays'
+                print
+                
                 rA,cA,vA,pb = X
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
@@ -1779,12 +1789,12 @@ class Tractor(MultiParams):
             logverb("len(spcols) == 0")
             return []
 
-        sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
-        spcols = np.hstack(spcols)
-        spvals = np.hstack(spvals)
-        assert(len(sprows) == len(spcols))
-        assert(len(sprows) == len(spvals))
-
+        # 'spcols' has one integer per 'sprows' block.
+        # below we hstack the rows, but before doing that, remember how
+        # many rows are in each chunk.
+        spcols = np.array(spcols)
+        nrowspercol = np.array([len(x) for x in sprows])
+        
         if shared_params:
             # Apply shared parameter map
             #print 'Before applying shared parameter map:'
@@ -1796,28 +1806,6 @@ class Tractor(MultiParams):
             #print '  ', len(set(spcols)), 'unique'
             Ncols = np.max(spcols) + 1
             print 'Set Ncols=', Ncols
-            
-        logverb('  Number of sparse matrix elements:', len(sprows))
-        urows = np.unique(sprows)
-        ucols = np.unique(spcols)
-        logverb('  Unique rows (pixels):', len(urows))
-        logverb('  Unique columns (params):', len(ucols))
-        if len(urows) == 0 or len(ucols) == 0:
-            return []
-        logverb('  Max row:', urows[-1])
-        logverb('  Max column:', ucols[-1])
-        logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
-
-        assert(np.all(np.isfinite(spvals)))
-
-        # FIXME -- does it make LSQR faster if we remap the row and column
-        # indices so that no rows/cols are empty?
-
-        # FIXME -- we could probably construct the CSC matrix ourselves!
-
-        # Build sparse matrix
-        #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-        A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 
         # b = chi
         #
@@ -1845,7 +1833,6 @@ class Tractor(MultiParams):
             assert(np.all(np.isfinite(chi)))
             #print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
             b[row0 : row0 + NP] = chi
-
         ###### Zero out unused rows -- FIXME, is this useful??
         # print 'Nrows', Nrows, 'vs len(urows)', len(urows)
         # bnz = np.zeros(Nrows)
@@ -1853,6 +1840,109 @@ class Tractor(MultiParams):
         # print 'b', len(b), 'vs bnz', len(bnz)
         # b = bnz
         assert(np.all(np.isfinite(b)))
+
+        if use_tsnnls:
+            from tsnnls import tsnnls_lsqr
+
+            #logmsg('TSNNLS: %i cols (%i unique), %i elements' %
+            #       (Ncols, len(ucols), len(spvals)))
+            print 'spcols:', spcols.shape, spcols.dtype
+            #print 'spvals:', spvals.shape, spvals.dtype
+            print 'spvals:', len(spvals), 'chunks'
+            print '  total', sum(len(x) for x in spvals), 'elements'
+            print 'b:', b.shape, b.dtype
+            #print 'sprows:', sprows.shape, sprows.dtype
+            print 'sprows:', len(sprows), 'chunks'
+            print '  total', sum(len(x) for x in sprows), 'elements'
+
+            print 'spcols:', spcols
+            print 'sprows:', sprows
+            print 'spvals:', spvals
+            print 'b:', b
+            
+            ucols,I = np.unique(spcols, return_inverse=True)
+            J = np.argsort(I)
+
+            sorted_cols = I[J]
+            nel = [len(sprows[j]) for j in J]
+            sorted_rows = np.hstack([sprows[j].astype(np.int32) for j in J])
+            sorted_vals = np.hstack([spvals[j] for j in J])
+            #Nelements = sum(len(x) for x in spvals)
+            Nelements = sum(nel)
+            
+            colinds = np.zeros(len(ucols)+1, np.int32)
+            for c,n in zip(sorted_cols, nel):
+                colinds[c+1] += n
+            colinds = np.cumsum(colinds).astype(np.int32)
+            assert(colinds[-1] == Nelements)
+            #colinds = colinds[:-1]
+            
+            print 'sorted_cols:', sorted_cols
+            print 'column inds:', colinds
+            print 'sorted_rows:', sorted_rows
+            print 'sorted_vals:', sorted_vals
+
+            print 'colinds:', colinds.shape, colinds.dtype
+            print 'rows:', sorted_rows.shape, sorted_rows.dtype
+            print 'vals:', sorted_vals.shape, sorted_vals.dtype
+
+            # compress b and rows?
+            urows,K = np.unique(sorted_rows, return_inverse=True)
+            bcomp = b[urows]
+            rowcomp = K.astype(np.int32)
+
+            print 'Compressed rows:', rowcomp
+            print 'Compressed b:', bcomp
+
+            for c,(i0,i1) in enumerate(zip(colinds, colinds[1:])):
+                print 'Column', c, 'goes from', i0, 'to', i1
+                print 'rows:', rowcomp[i0:i1]
+                print 'vals:', sorted_vals[i0:i1]
+            
+            nrcomp = len(urows)
+            
+            #tsnnls_lsqr(colinds, sorted_rows, sorted_vals,
+            #            b, Nrows, Nelements)
+
+            X = tsnnls_lsqr(colinds, rowcomp, sorted_vals,
+                            bcomp, nrcomp, Nelements)
+            print 'Got TSNNLS:', X
+            
+            
+        spvals = np.hstack(spvals)
+        assert(np.all(np.isfinite(spvals)))
+
+        sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
+        assert(len(sprows) == len(spvals))
+            
+        # For LSQR, expand 'spcols' to be the same length as 'sprows'.
+        cc = np.empty(len(sprows))
+        i = 0
+        for c,n in zip(spcols, nrowspercol):
+            cc[i : i+n] = c
+            i += n
+        assert(i == len(sprows))
+        assert(len(sprows) == len(spcols))
+
+        logverb('  Number of sparse matrix elements:', len(sprows))
+        urows = np.unique(sprows)
+        ucols = np.unique(spcols)
+        logverb('  Unique rows (pixels):', len(urows))
+        logverb('  Unique columns (params):', len(ucols))
+        if len(urows) == 0 or len(ucols) == 0:
+            return []
+        logverb('  Max row:', urows[-1])
+        logverb('  Max column:', ucols[-1])
+        logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
+        
+        # FIXME -- does it make LSQR faster if we remap the row and column
+        # indices so that no rows/cols are empty?
+
+        # FIXME -- we could probably construct the CSC matrix ourselves!
+
+        # Build sparse matrix
+        #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+        A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
 
         lsqropts = dict(show=isverbose(), damp=damp)
         if variance:
