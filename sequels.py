@@ -385,8 +385,8 @@ def one_tile(tile, opt):
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
         YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
-        mods = []
-        cats = []
+        # mods = []
+        # cats = []
 
         celli = -1
         for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
@@ -495,13 +495,13 @@ def one_tile(tile, opt):
                 # print 'That took', Time()-t0
                 # im,mod,ie,chi,roi = ims1[0]
 
-                mods.append(mod)
-                cats.append((#[src.getPosition().ra  for src in subcat],
-                    #[src.getPosition().dec for src in subcat],
-                    #[src.copy() for src in subcat], len(srci), len(I),
-                    #tim))
-                    srci, margi, UW.x[J], UW.y[J],
-                    T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
+                # mods.append(mod)
+                # cats.append((#[src.getPosition().ra  for src in subcat],
+                #     #[src.getPosition().dec for src in subcat],
+                #     #[src.copy() for src in subcat], len(srci), len(I),
+                #     #tim))
+                #     srci, margi, UW.x[J], UW.y[J],
+                #     T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
                     
                 # Save fit stats
                 fullIV[srci] = IV[:len(srci)]

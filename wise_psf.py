@@ -92,6 +92,35 @@ if __name__ == '__main__':
     # plt.savefig('w1.png')
     # sys.exit(0)
 
+    H,W = 1016,1016
+    nx,ny = 11,11
+    YY = np.linspace(0, H, ny)
+    XX = np.linspace(0, W, nx)
+
+    import fitsio
+    
+    for band in [1,2,3,4]:
+        psfsum = 0.
+        for y in YY:
+            for x in XX:
+                fn = 'wise-psf/wise-psf-w%i-%f-%f.fits' % (band, x, y)
+                I = fitsio.read(fn)
+                psfsum = psfsum + I
+        psfsum /= psfsum.sum()
+
+        psf = GaussianMixturePSF.fromStamp(psfsum)
+        fn = 'wise-psf-avg-w%i.fits' % band
+        #fitsio.write(fn, psf, clobber=True)
+        #print 'Wrote', fn        
+        T = fits_table()
+        T.amp = psf.mog.amp
+        T.mean = psf.mog.mean
+        T.var = psf.mog.var
+        T.writeto(fn)
+
+    sys.exit(0)
+
+    
     # Fit
     for band in [1,2,3,4]:
         pfn = 'w%i.pickle' % band
