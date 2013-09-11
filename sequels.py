@@ -51,6 +51,9 @@ tiledir = 'wise-coadds'
 photoobjdir = 'photoObjs-new'
 resolvedir = 'photoResolve-new'
 
+outdir = 'sequels-phot'
+tempoutdir = 'sequels-phot-temp'
+
 Time.add_measurement(MemMeas)
 
 def estimate_sky(img, iv):
@@ -159,7 +162,7 @@ def one_tile(tile, opt, savepickle):
     print 'RA,Dec bounds:', r0,r1,d0,d1
     H,W = wcs.get_height(), wcs.get_width()
 
-    objfn = 'photoobjs-%s.fits' % tile.coadd_id
+    objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
         print 'Reading', objfn
         T = fits_table(objfn)
@@ -256,7 +259,7 @@ def one_tile(tile, opt, savepickle):
             #src.halfsize = sourcerad[i]
     print 'sourcerad range:', min(sourcerad), max(sourcerad)
 
-    wfn = 'wise-sources-%s.fits' % (tile.coadd_id)
+    wfn = os.path.join(sequels-phot-temp, 'wise-sources-%s.fits' % (tile.coadd_id))
     print 'looking for', wfn
     if os.path.exists(wfn):
         WISE = fits_table(wfn)
@@ -309,8 +312,6 @@ def one_tile(tile, opt, savepickle):
         print 'Coadd tile', tile.coadd_id
         print 'Band', band
         wband = 'w%i' % band
-
-        #### FIXME -- "w" or unweighted?
 
         imfn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
         ivfn = os.path.join(tiledir, 'coadd-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
@@ -581,7 +582,7 @@ def main():
     parser.add_option('--minsb4', dest='minsb4', default=1e-3, type=float)
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
-    parser.add_option('-o', dest='output', default='phot-%s.fits')
+    parser.add_option('-o', dest='output', default=os.path.join(outdir, 'phot-%s.fits'))
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
 
