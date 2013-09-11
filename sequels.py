@@ -127,6 +127,9 @@ def read_photoobjs(r0, r1, d0, d1, margin):
                 'resolve_status', 'nchild', 'flags', 'objc_flags',
                 ]
         T = fits_table(fn, columns=cols)
+        if T is None:
+            print 'read 0 from', fn
+            continue
         print 'read', len(T), 'from', fn
         T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
               (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
