@@ -312,13 +312,10 @@ def one_tile(tile, opt):
         minsb = getattr(opt, 'minsb%i' % band)
         print 'Minsb:', minsb
 
-        # HACK -- should we *average* the PSF over the whole image, maybe?
-
-        # Load the spatially-varying PSF model
-        from wise_psf import WisePSF
-        psf = WisePSF(band, savedfn='w%ipsffit.fits' % band)
+        # Load the average PSF model
+        P = fits_table('wise-psf-avg.fits', hdu=band)
         # Instantiate a (non-varying) mixture-of-Gaussians PSF
-        psf = psf.mogAt(W/2., H/2.)
+        psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
         # Render the PSF profile for figuring out source radius for
         # approximation purposes.
