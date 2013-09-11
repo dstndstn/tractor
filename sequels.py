@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
@@ -6,6 +8,15 @@ import os
 import sys
 
 import fitsio
+
+# qsub -d $(pwd) -N sequels -l "cput=2:00:00" -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-99 ./sequels.py
+
+if __name__ == '__main__':
+    arr = os.environ.get('PBS_ARRAYID')
+    d = os.environ.get('PBS_O_WORKDIR')
+    if arr is not None and d is not None:
+        os.chdir(d)
+        sys.path.append(os.getcwd())
 
 from astrometry.util.file import *
 from astrometry.util.fits import *
@@ -115,7 +126,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
                 'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
                 'resolve_status', 'nchild', 'flags',
                 ]
-        T = fits_table(fn)
+        T = fits_table(fn, columns=cols)
         print 'read', len(T), 'from', fn
         T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
               (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
