@@ -253,13 +253,18 @@ def main():
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
     parser.add_option('-o', dest='output', default='phot-%s.fits')
+    parser.add_option('-b', dest='bands', action='append', type=int, default=[],
+                      help='Add WISE band')
     opt,args = parser.parse_args()
 
+    if len(opt.bands) == 0:
+        opt.bands = [1,2]
+
+    # sequels-atlas.fits: written by wise-coadd.py
     dataset = 'sequels'
     fn = '%s-atlas.fits' % dataset
     print 'Reading', fn
     T = fits_table(fn)
-
 
     # Read Atlas Image table
     # A = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
@@ -274,20 +279,23 @@ def main():
     #     print 'Dec', d, 'has', len(R), 'unique RA:', R
     #     print 'diffs', np.diff(R)
 
-
-    bands = [1,2,3,4]
-    
     ps = PlotSequence(dataset + '-phot')
+
+    arr = os.environ.get('PBS_ARRAYID')
+    if arr is not None:
+        arr = int(arr)
+
 
     # SEQUELS
     R0,R1 = 120.0, 210.0
     D0,D1 =  45.0,  60.0
 
+    bands = opt.bands
+
     sband = 'r'
     bandnum = 'ugriz'.index(sband)
 
     sweeps = None
-    
     for tile in T:
         tt0 = Time()
         print

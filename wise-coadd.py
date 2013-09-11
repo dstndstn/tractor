@@ -57,6 +57,18 @@ unc_gz = True
 class Duck():
     pass
 
+def get_coadd_tile_wcs(ra, dec):
+    cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2.,
+                -pixscale, 0., 0., pixscale, W, H)
+    return cowcs
+
+def get_coadd_tile_radec_bounds(wcs):
+    xmid,ymid = (W+1)/2., (H+1)/2.
+    rr,dd = wcs.pixelxy2radec(np.array([1,xmid,W]*3), np.array([1,ymid,H]).repeat(3))
+    r0,r1 = rr.min(), rr.max()
+    d0,d1 = dd.min(), dd.max()
+    return r0,r1,d0,d1
+
 def get_atlas_tiles(r0,r1,d0,d1):
     # Read Atlas Image table
     T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
@@ -74,6 +86,19 @@ def get_atlas_tiles(r0,r1,d0,d1):
     print 'Cut to', len(T), 'Atlas tiles near RA,Dec box'
 
     T.coadd_id = np.array([c.replace('_ab41','') for c in T.coadd_id])
+
+    # Some of them don't *actually* touch our RA,Dec box...
+    print 'Checking tile RA,Dec bounds...'
+    keep = []
+    for i in range(len(T)):
+        wcs = get_coadd_tile_wcs(T.ra[i], T.dec[i])
+        R0,R1,D0,D1 = get_coadd_tile_radec_bounds(wcs)
+        if R1 < r0 or R0 > r1 or D1 < d0 or D0 > d1:
+            print 'Coadd tile', T.coadd_id[i], 'is outside RA,Dec box'
+            continue
+        keep.append(i)
+    T.cut(np.array(keep))
+    print 'Cut to', len(T), 'tiles'
 
     return T
 
@@ -161,7 +186,7 @@ def check_md5s(WISE):
 #     print 'Whole enchilada:', Time() - t00
 
 
-def one_coadd(ti, band, WISE, ps):
+def one_coadd(ti, band, WISE, ps, wishlist):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -173,9 +198,8 @@ def one_coadd(ti, band, WISE, ps):
         print 'Output file exists:', ofn
         return
 
-    cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
-                -pixscale, 0., 0., pixscale, W, H)
-    
+    cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
+
     copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
     
     margin = (1.1 # safety margin
@@ -192,6 +216,30 @@ def one_coadd(ti, band, WISE, ps):
     # reorder by dist from center
     I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
     WISE.cut(I)
+
+    # cut on RA,Dec box too
+    r0,r1,d0,d1 = get_coadd_tile_radec_bounds(cowcs)
+    dd = np.sqrt(2.) * (1016./2.) * pixscale
+    dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
+    print len(WISE), 'in circle'
+
+    # plt.clf()
+    # plt.plot([r0,r1,r1,r0,r0],[d0,d0,d1,d1,d0], 'k-')
+    # plt.plot(WISE.ra, WISE.dec, 'o', mec='r', mfc='none')
+
+    WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
+             (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
+    print 'cut to', len(WISE), 'in RA,Dec box'
+
+    # plt.plot(WISE.ra, WISE.dec, 'o', mec='b', mfc='none')
+    # ps.savefig()
+    if wishlist:
+        for wise in WISE:
+            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+            if not os.path.exists(intfn):
+                print 'Need:', intfn
+        return
+
 
     #WISE.cut(np.arange(20))
 
@@ -379,8 +427,7 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
                 continue
             plot.alpha = 0.5
             for ti in T:
-                cowcs = Tan(ti.ra, ti.dec, (W+1)/2., (H+1)/2.,
-                            -pixscale, 0., 0., pixscale, W, H)
+                cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
                 out.wcs = anwcs_new_tan(cowcs)
                 out.fill = 1
                 plot.plot('outline')
@@ -914,6 +961,8 @@ if __name__ == '__main__':
                       default=None)
     parser.add_option('--todo', dest='todo', action='store_true', default=False,
                       help='Print and plot fields to-do')
+    parser.add_option('-w', dest='wishlist', action='store_true', default=False,
+                      help='Print needed frames and exit?')
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -949,6 +998,7 @@ if __name__ == '__main__':
     else:
         T = get_atlas_tiles(r0,r1,d0,d1)
         T.writeto(fn)
+
 
     fn = '%s-frames.fits' % dataset
     if os.path.exists(fn):
@@ -1035,7 +1085,7 @@ if __name__ == '__main__':
             band = tileid / 1000
             tileid = tileid % 1000
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
-            A.append((T[tileid], band, WISE, ps))
+            A.append((T[tileid], band, WISE, ps, opt.wishlist))
         mp.map(_bounce_one_coadd, A)
         sys.exit(0)
 
@@ -1054,6 +1104,6 @@ if __name__ == '__main__':
     print 'Doing coadd tile', T.coadd_id[tile], 'band', band
 
     t0 = Time()
-    one_coadd(T[tile], band, WISE, ps)
+    one_coadd(T[tile], band, WISE, ps, False)
     print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
