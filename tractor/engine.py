@@ -1619,7 +1619,8 @@ class Tractor(MultiParams):
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
                            shared_params=True,
-                           use_tsnnls=False):
+                           use_tsnnls=False,
+                           use_ceres=False):
 
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -1851,6 +1852,10 @@ class Tractor(MultiParams):
         assert(np.all(np.isfinite(b)))
 
         use_lsqr = True
+
+        if use_ceres:
+            # Solver::Options::linear_solver_type to SPARSE_NORMAL_CHOLESKY 
+            pass
         
         if use_tsnnls:
             use_lsqr = False
