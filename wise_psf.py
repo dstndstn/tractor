@@ -92,31 +92,45 @@ if __name__ == '__main__':
     # plt.savefig('w1.png')
     # sys.exit(0)
 
-    H,W = 1016,1016
-    nx,ny = 11,11
-    YY = np.linspace(0, H, ny)
-    XX = np.linspace(0, W, nx)
 
     import fitsio
-    
+
     for band in [1,2,3,4]:
+
+        H,W = 1016,1016
+        nx,ny = 11,11
+        if band == 4:
+            H /= 2
+            W /= 2
+        YY = np.linspace(0, H, ny)
+        XX = np.linspace(0, W, nx)
+
+
         psfsum = 0.
         for y in YY:
             for x in XX:
-                fn = 'wise-psf/wise-psf-w%i-%f-%f.fits' % (band, x, y)
+                # clip to nearest grid point...
+                dx = (W - 1) / float(nx - 1)
+                dy = (H - 1) / float(ny - 1)
+                gx = dx * int(np.round(x / dx))
+                gy = dy * int(np.round(y / dy))
+
+                fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f.fits' % (band, gx, gy)
                 I = fitsio.read(fn)
                 psfsum = psfsum + I
         psfsum /= psfsum.sum()
 
         psf = GaussianMixturePSF.fromStamp(psfsum)
-        fn = 'wise-psf-avg-w%i.fits' % band
+        #fn = 'wise-psf-avg-w%i.fits' % band
+        fn = 'wise-psf-avg.fits'
         #fitsio.write(fn, psf, clobber=True)
         #print 'Wrote', fn        
         T = fits_table()
         T.amp = psf.mog.amp
         T.mean = psf.mog.mean
         T.var = psf.mog.var
-        T.writeto(fn)
+        append = (band > 1)
+        T.writeto(fn, append=append)
 
     sys.exit(0)
 
