@@ -216,14 +216,14 @@ def one_tile(tile, opt, savepickle):
     defaultflux = 100.
 
     # hack
-    T.psfflux    = np.zeros((len(T),5)) + defaultflux
+    T.psfflux    = np.zeros((len(T),5), np.float32) + defaultflux
     T.cmodelflux = T.psfflux
     T.devflux    = T.psfflux
     T.expflux    = T.psfflux
 
     ok,T.x,T.y = wcs.radec2pixelxy(T.ra, T.dec)
-    T.x -= 1.
-    T.y -= 1.
+    T.x = (T.x - 1.).astype(np.float32)
+    T.y = (T.y - 1.).astype(np.float32)
     margin = 20.
     I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
                        (T.y >= -margin) * (T.y < H+margin))
@@ -294,11 +294,11 @@ def one_tile(tile, opt, savepickle):
     UW.y -= 1.
 
     T.coadd_id = np.array([tile.coadd_id] * len(T))
-    T.cell = np.zeros(len(T), int)
-    T.cell_x0 = np.zeros(len(T), int)
-    T.cell_y0 = np.zeros(len(T), int)
-    T.cell_x1 = np.zeros(len(T), int)
-    T.cell_y1 = np.zeros(len(T), int)
+    T.cell = np.zeros(len(T), np.int16)
+    T.cell_x0 = np.zeros(len(T), np.int16)
+    T.cell_y0 = np.zeros(len(T), np.int16)
+    T.cell_x1 = np.zeros(len(T), np.int16)
+    T.cell_y1 = np.zeros(len(T), np.int16)
 
     inbounds = np.flatnonzero((T.x >= -0.5) * (T.x < W-0.5) *
                               (T.y >= -0.5) * (T.y < H-0.5))
@@ -536,19 +536,26 @@ def one_tile(tile, opt, savepickle):
 
         nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
         nm_ivar = fullIV
-        T.set(wband + '_nanomaggies', nm)
-        T.set(wband + '_nanomaggies_ivar', nm_ivar)
+        T.set(wband + '_nanomaggies', nm.astype(np.float32))
+        T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
         dnm = 1./np.sqrt(nm_ivar)
         mag = NanoMaggies.nanomaggiesToMag(nm)
         dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
-        T.set(wband + '_mag', mag)
-        T.set(wband + '_mag_err', dmag)
+        T.set(wband + '_mag', mag.astype(np.float32))
+        T.set(wband + '_mag_err', dmag.astype(np.float32))
         for k in fskeys:
-            T.set(wband + '_' + k, fitstats[k])
+            T.set(wband + '_' + k, fitstats[k].astype(np.float32))
 
         print 'Tile', tile.coadd_id, 'band', wband, 'took', Time()-tb0
 
     T.cut(inbounds)
+
+    T.delete_column('psfflux')
+    T.delete_column('cmodelflux')
+    T.delete_column('devflux')
+    T.delete_column('expflux')
+    T.delete_column('index')
+
     T.writeto(outfn)
 
     ## HACK
