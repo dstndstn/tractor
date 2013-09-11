@@ -1122,6 +1122,8 @@ class Tractor(MultiParams):
                     counts = b * scale
                     if counts == 0.:
                         continue
+                    if not np.isfinite(counts):
+                        print 'Warning: counts', counts, 'b', b, 'scale', scale
                     assert(np.isfinite(counts))
                     assert(np.all(np.isfinite(um.patch)))
                     (um * counts).addTo(mod)

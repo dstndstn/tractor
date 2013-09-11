@@ -432,6 +432,10 @@ def one_tile(tile, opt, savepickle):
                 invvar = fullinvvar[slc]
                 twcs.setX0Y0(ix0, iy0)
 
+                #I = np.flatnonzero(np.logical_not(np.isfinite(img)))
+                #invvar.flat[I] = 0.
+                #img.flat[I] = 0.
+
                 tim = Image(data=img, invvar=invvar, psf=psf, wcs=twcs,
                             sky=tsky, photocal=LinearPhotoCal(1., band=wanyband),
                             name='Coadd %s W%i (%i,%i)' % (tile.coadd_id, band, xi,yi),
@@ -558,7 +562,6 @@ def one_tile(tile, opt, savepickle):
 
     T.writeto(outfn)
 
-    ## HACK
     if savepickle:
         fn = opt.output % (tile.coadd_id)
         fn = fn.replace('.fits','.pickle')
