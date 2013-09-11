@@ -124,7 +124,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
         cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
                 'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
                 'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
-                'resolve_status', 'nchild', 'flags',
+                'resolve_status', 'nchild', 'flags', 'objc_flags',
                 ]
         T = fits_table(fn, columns=cols)
         print 'read', len(T), 'from', fn
