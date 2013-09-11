@@ -328,6 +328,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         if useObjcType:
             Lstar = (objs.objc_type == 6)
             Lgal = (objs.objc_type == 3)
+            objs.cut(np.logical_or(Lstar, Lgal))
         else:
             Lstar = (objs.prob_psf[:,bandnum] == 1) * 1.0
             Lgal  = (objs.prob_psf[:,bandnum] == 0)
