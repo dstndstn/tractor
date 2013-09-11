@@ -3,6 +3,7 @@ matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
 import os
+import sys
 
 import fitsio
 
@@ -12,6 +13,69 @@ from astrometry.util.fits import *
 from astrometry.util.util import Tan
 
 ps = PlotSequence('co')
+
+wisel3 = 'wise-L3'
+coadds = 'wise-coadds'
+
+lst = os.listdir(wisel3)
+lst.sort()
+for band in [1,2,3,4]:
+    for l3dir in lst:
+        print 'dir', l3dir
+        coadd = l3dir.replace('_ab41','')
+        l3fn = os.path.join(wisel3, l3dir, '%s-w%i-int-3.fits' % (l3dir, band))
+        if not os.path.exists(l3fn):
+            print 'Missing', l3fn
+            continue
+        cofn  = os.path.join(coadds, 'coadd-%s-w%i-img.fits'   % (coadd, band))
+        cowfn = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd, band))
+        if not os.path.exists(cofn) or not os.path.exists(cowfn):
+            print 'Missing', cofn, 'or', cowfn
+            continue
+
+        I = fitsio.read(l3fn)
+        J = fitsio.read(cofn)
+        K = fitsio.read(cowfn)
+
+        hi,wi = I.shape
+        hj,wj = J.shape
+        flo,fhi = 0.45, 0.55
+        slcI = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
+        slcJ = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+
+        ima = dict(interpolation='nearest', origin='lower', cmap='gray')
+
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        imai = ima.copy()
+        imai.update(vmin=plo, vmax=phi)
+
+        plt.clf()
+        plt.imshow(I[slcI], **imai)
+        plt.title('WISE team %s' % os.path.basename(l3fn))
+        ps.savefig()
+
+        plo,phi = [np.percentile(J, p) for p in [25,99]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+
+        plt.clf()
+        plt.imshow(J[slcJ], **imaj)
+        plt.title('My unweighted %s' % os.path.basename(cofn))
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(K[slcJ], **imaj)
+        plt.title('My weighted %s' % os.path.basename(cowfn))
+        ps.savefig()
+
+                            
+sys.exit(0)
+
+
+
+
+
+
 
 for coadd in ['1384p454',
     #'2195p545',

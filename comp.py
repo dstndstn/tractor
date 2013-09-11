@@ -701,7 +701,19 @@ coadd_id = '1384p454'
 
 ps.skipto(50)
 
-band = 1
+#band = 1
+band = 2
+
+
+blocksa = 8
+blocksb = 7
+#pat = 'phot-1384p454-b%i.fits'
+pat = 'phot-1384p454-w2-b%i.fits'
+fna = pat % blocksa
+fnb = pat % blocksb
+Ta = fits_table(fna)
+Tb = fits_table(fnb)
+
 tiledir = 'wise-coadds'
 fn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
 print 'Reading', fn
@@ -713,14 +725,6 @@ print 'Shape', H,W
 img = fitsio.read(fn)
 
 # sky_foolin(img)
-
-blocksa = 8
-blocksb = 7
-pat = 'phot-1384p454-b%i.fits'
-fna = pat % blocksa
-fnb = pat % blocksb
-Ta = fits_table(fna)
-Tb = fits_table(fnb)
 
 modsa,catsa,ta,srada = unpickle_from_file(fna.replace('.fits','.pickle'))
 modsb,catsb,tb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))
@@ -737,7 +741,9 @@ Yb = np.round(np.linspace(0, H, blocksb+1)).astype(int)
 #modb = reassemble_chunks(modsb, blocksb, imargin)
 
 plt.clf()
-plt.plot(Ta.w1_nanomaggies, Tb.w1_nanomaggies, 'b.')
+fluxa = Ta.get('w%i_nanomaggies' % band)
+fluxb = Tb.get('w%i_nanomaggies' % band)
+plt.plot(fluxa, fluxb, 'b.')
 plt.xlabel('run A flux (nanomaggies)')
 plt.ylabel('run B flux (nanomaggies)')
 plt.xscale('symlog')
@@ -746,7 +752,7 @@ ps.savefig()
 
 lo,hi = 0.5, 2.0
 plt.clf()
-plt.plot(Ta.w1_nanomaggies, np.clip(Tb.w1_nanomaggies / Ta.w1_nanomaggies, lo, hi), 'b.')
+plt.plot(fluxa, np.clip(fluxb / fluxa, lo, hi), 'b.')
 plt.xlabel('a (nm)')
 plt.ylabel('b/a (nm)')
 plt.xscale('symlog')
@@ -761,7 +767,7 @@ ima = dict(interpolation='nearest', origin='lower',
 imd = dict(interpolation='nearest', origin='lower',
            vmin=-1e-2, vmax=1e-2, cmap='gray')
 
-diff = Tb.w1_nanomaggies - Ta.w1_nanomaggies
+diff = fluxb - fluxa
 I = np.argsort(-np.abs(diff))
 print 'Largest diffs:', diff[I[:20]]
 
