@@ -127,7 +127,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
     T = merge_tables(TT)
     return T
 
-def one_tile(tile, opt):
+def one_tile(tile, opt, savepickle):
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
 
@@ -227,7 +227,7 @@ def one_tile(tile, opt):
     assert(len(cat) == len(T))
 
     pixscale = wcs.pixel_scale()
-    # crude source radii, in pixels
+    # crude intrinsic source radii, in pixels
     sourcerad = np.zeros(len(cat))
     for i in range(len(cat)):
         src = cat[i]
@@ -235,9 +235,11 @@ def one_tile(tile, opt):
             continue
         elif isinstance(src, HoggGalaxy):
             sourcerad[i] = (src.nre * src.re / pixscale)
+            #src.halfsize = sourcerad[i]
         elif isinstance(src, FixedCompositeGalaxy):
             sourcerad[i] = max(src.shapeExp.re * ExpGalaxy.nre,
                                src.shapeDev.re * DevGalaxy.nre) / pixscale
+            #src.halfsize = sourcerad[i]
     print 'sourcerad range:', min(sourcerad), max(sourcerad)
 
     wfn = 'wise-sources-%s.fits' % (tile.coadd_id)
@@ -317,7 +319,7 @@ def one_tile(tile, opt):
         # Instantiate a (non-varying) mixture-of-Gaussians PSF
         psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
-        # Render the PSF profile for figuring out source radius for
+        # Render the PSF profile for figuring out source radii for
         # approximation purposes.
         R = 100
         psf.radius = R
@@ -344,6 +346,9 @@ def one_tile(tile, opt):
         wf = wiseflux[band]
         I = np.flatnonzero(wf > defaultflux)
         wfi = wf[I]
+        print 'Initializing', len(I), 'fluxes based on catalog matches'
+        for i,flux in zip(I, wf[I]):
+            cat[i].getBrightness().setBand(wanyband, flux)
         rad = np.zeros(len(I))
         drad = 0.
         for r,pro in enumerate(psfprofile):
@@ -352,16 +357,19 @@ def one_tile(tile, opt):
             if defaultflux > flux:
                 drad = r
         print 'default source radius:', drad
+        # these are radii the SDSS sources would have based on their WISE
+        # catalog-matched PSF-source size.
         srad2 = np.zeros(len(cat))
         srad2[I] = rad
-        sourcerad = np.maximum(drad, np.maximum(sourcerad, srad2))
-
-        # Initialize fluxes
-        wf = wiseflux[band]
-        I = np.flatnonzero(wf > defaultflux)
-        print 'Initializing', len(I), 'fluxes based on catalog matches'
-        for i,flux in zip(I, wf[I]):
-            cat[i].getBrightness().setBand(wanyband, flux)
+        #sourcerad = np.maximum(drad, np.maximum(sourcerad, srad2))
+        for i in range(len(cat)):
+            src = cat[i]
+            R = max([drad, sourcerad[i], srad2[i]])
+            if isinstance(src, PointSource):
+                src.radius = R
+            elif (isinstance(src, HoggGalaxy) or
+                  isinstance(src, FixedCompositeGalaxy)):
+                src.halfsize = R
 
         # We're going to dice the image up into cells for
         # photometry... remember the whole image and initialize
@@ -382,8 +390,9 @@ def one_tile(tile, opt):
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
         YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
-        # mods = []
-        # cats = []
+        if savepickle:
+            mods = []
+            cats = []
 
         celli = -1
         for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
@@ -409,12 +418,6 @@ def one_tile(tile, opt):
                 invvar = fullinvvar[slc]
                 twcs.setX0Y0(ix0, iy0)
 
-                T.cell[srci] = celli
-                T.cell_x0[srci] = ix0
-                T.cell_x1[srci] = ix1
-                T.cell_y0[srci] = iy0
-                T.cell_y1[srci] = iy1
-                
                 tim = Image(data=img, invvar=invvar, psf=psf, wcs=twcs,
                             sky=tsky, photocal=LinearPhotoCal(1., band=wanyband),
                             name='Coadd %s W%i (%i,%i)' % (tile.coadd_id, band, xi,yi),
@@ -444,9 +447,11 @@ def one_tile(tile, opt):
                 J = np.flatnonzero(((UW.x+m) >= (ix0-0.5)) * ((UW.x-m) < (ix1-0.5)) *
                                    ((UW.y+m) >= (iy0-0.5)) * ((UW.y-m) < (iy1-0.5)))
                 wnm = UW.get('w%inm' % band)
-                for i in J:
-                    subcat.append(PointSource(RaDecPos(UW.ra[i], UW.ra[i]),
-                                              NanoMaggies(**{wanyband: wnm[i]})))
+                for j in J:
+                    ps = PointSource(RaDecPos(UW.ra[j], UW.ra[j]),
+                                              NanoMaggies(**{wanyband: wnm[j]}))
+                    ps.radius = UW.rad[j]
+                    subcat.append(ps)
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
                 print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
@@ -465,8 +470,6 @@ def one_tile(tile, opt):
                     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
                     fitstats=True, variance=True, shared_params=False)
                 print 'That took', Time()-t0
-
-                im,mod,ie,chi,roi = ims1[0]
 
                 # tractor.setParams(p0)
                 # 
@@ -492,14 +495,19 @@ def one_tile(tile, opt):
                 # print 'That took', Time()-t0
                 # im,mod,ie,chi,roi = ims1[0]
 
-                # mods.append(mod)
-                # cats.append((#[src.getPosition().ra  for src in subcat],
-                #     #[src.getPosition().dec for src in subcat],
-                #     #[src.copy() for src in subcat], len(srci), len(I),
-                #     #tim))
-                #     srci, margi, UW.x[J], UW.y[J],
-                #     T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
-                    
+                if savepickle:
+                    im,mod,ie,chi,roi = ims1[0]
+                    mods.append(mod)
+                    cats.append((
+                        srci, margi, UW.x[J], UW.y[J],
+                        T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
+
+                T.cell[srci] = celli
+                T.cell_x0[srci] = ix0
+                T.cell_x1[srci] = ix1
+                T.cell_y0[srci] = iy0
+                T.cell_y1[srci] = iy1
+
                 # Save fit stats
                 fullIV[srci] = IV[:len(srci)]
                 for k in fskeys:
@@ -530,10 +538,11 @@ def one_tile(tile, opt):
     T.writeto(outfn)
 
     ## HACK
-    # fn = opt.output % (tile.coadd_id)
-    # fn = fn.replace('.fits','.pickle')
-    # pickle_to_file((mods, cats, T, sourcerad), fn)
-    # print 'Pickled', fn
+    if savepickle:
+        fn = opt.output % (tile.coadd_id)
+        fn = fn.replace('.fits','.pickle')
+        pickle_to_file((mods, cats, T, sourcerad), fn)
+        print 'Pickled', fn
 
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
                 
@@ -551,6 +560,10 @@ def main():
     parser.add_option('-o', dest='output', default='phot-%s.fits')
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
+
+    parser.add_option('-p', dest='pickle', default=False, action='store_true',
+                      help='Save .pickle file for debugging purposes')
+
     opt,args = parser.parse_args()
 
     if len(opt.bands) == 0:
@@ -583,14 +596,14 @@ def main():
         arr = int(arr)
         tiles.append(arr)
     else:
-        if len(opt.args) == 0:
+        if len(args) == 0:
             tiles.append(0)
         else:
             for a in opt.args:
                 tiles.append(int(a))
 
     for i in tiles:
-        one_tile(T[i], opt)
+        one_tile(T[i], opt, opt.pickle)
 
 if __name__ == '__main__':
     main()

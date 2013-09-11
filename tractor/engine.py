@@ -943,6 +943,8 @@ class Tractor(MultiParams):
                 if counts <= 0:
                     mv = 0.
                 else:
+                    # we will scale the PSF by counts and we want that scaled min val
+                    # to be less than minsb
                     mv = minsb / counts
                 ums = src.getUnitFluxModelPatches(img, minval=mv)
 

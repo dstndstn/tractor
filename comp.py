@@ -708,18 +708,19 @@ print 'Reading', fn
 wcs = Tan(fn)
 H,W = wcs.get_height(), wcs.get_width()
 print 'Shape', H,W
-H,W = 1024,1024
+#H,W = 1024,1024
 
 img = fitsio.read(fn)
 
 # sky_foolin(img)
 
-fna = 'phot-1384p454-b8.fits'
-fnb = 'phot-1384p454-b6.fits'
+blocksa = 8
+blocksb = 7
+pat = 'phot-1384p454-b%i.fits'
+fna = pat % blocksa
+fnb = pat % blocksb
 Ta = fits_table(fna)
 Tb = fits_table(fnb)
-blocksa = 8
-blocksb = 6
 
 modsa,catsa,ta,srada = unpickle_from_file(fna.replace('.fits','.pickle'))
 modsb,catsb,tb,sradb = unpickle_from_file(fnb.replace('.fits','.pickle'))

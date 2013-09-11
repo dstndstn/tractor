@@ -218,9 +218,10 @@ class Galaxy(MultiParams):
 
     def getModelPatch(self, img, minsb=0.):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        if counts <= 0:
+        #if counts <= 0:
+        if counts == 0:
             return None
-        minval = minsb / counts
+        minval = minsb / abs(counts)
         p1 = self.getUnitFluxModelPatch(img, minval=minval)
         if p1 is None:
             return None
@@ -543,6 +544,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
                      img.getPsf().hashkey(), self.shape.hashkey()))
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
+        if hasattr(self, 'halfsize'):
+            return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
         halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
@@ -653,9 +656,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 
     def getModelPatch(self, img, minsb=0.):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        if counts <= 0:
+        #if counts <= 0:
+        if counts == 0:
             return None
-        minval = minsb / counts
+        minval = minsb / abs(counts)
         p1 = self.getUnitFluxModelPatch(img, minval=minval)
         if p1 is None:
             return None
@@ -682,6 +686,8 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
         return mix[0] + mix[1]
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
+        if hasattr(self, 'halfsize'):
+            return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
         s = self.shapeExp
