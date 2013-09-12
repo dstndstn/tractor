@@ -6,6 +6,7 @@ import numpy as np
 import pylab as plt
 import os
 import sys
+from glob import glob
 
 import fitsio
 
@@ -119,6 +120,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
         print 'RCF', run, camcol, field
         rr = sdss.get_rerun(run, field=field)
         if rr in [None, '157']:
+            print 'Rerun 157'
             continue
 
         fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
@@ -138,9 +140,9 @@ def read_photoobjs(r0, r1, d0, d1, margin):
         T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
               (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
               ((T.resolve_status & 256) > 0))
+        print 'cut to', len(T), 'in RA,Dec box and PRIMARY.'
         if len(T) == 0:
             continue
-        print 'cut to', len(T), 'in RA,Dec box and PRIMARY.'
         TT.append(T)
     T = merge_tables(TT)
     return T
@@ -597,6 +599,8 @@ def main():
     parser.add_option('-p', dest='pickle', default=False, action='store_true',
                       help='Save .pickle file for debugging purposes')
 
+    parser.add_option('--finish', default=False, action='store_true')
+
     opt,args = parser.parse_args()
 
     if len(opt.bands) == 0:
@@ -622,6 +626,72 @@ def main():
     #     print 'diffs', np.diff(R)
 
     ps = PlotSequence(dataset + '-phot')
+
+    if opt.finish:
+        # Find all *-phot.fits outputs
+        # Determine which photoObj files are involved
+        # Collate, and resolve objs measured in multiple tiles
+        # Expand into photoObj-parallel files
+        fns = glob(os.path.join(outdir, 'phot-*.fits'))
+        fns.sort()
+        print 'Found', len(fns), 'output files'
+        fieldmap = {}
+        
+        for fn in fns:
+            print 'Reading', fn
+            cols = ['ra','dec',
+                    'objid', 'index', 'x','y', 'id']
+            for band in opt.bands:
+                for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
+                          'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
+                    cols.append('w%i_%s' % (band, k))
+            rcfcols = ['run','camcol','field',]
+            try:
+                T = fits_table(fn, columns=cols + rcfcols)
+            except:
+                print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
+                T = fits_table(fn, columns=cols)
+                print 'Got', len(T), 'from', fn
+                pfn = fn.replace('phot-', 'photoobjs-').replace(outdir, tempoutdir)
+                print 'Reading', pfn
+                P = fits_table(pfn, columns=rcfcols + ['objid'])
+                print 'Got', len(P), 'from', pfn
+                print 'Applying objid map...'
+                objidmap = dict([(oid,i) for i,oid in enumerate(P.objid)])
+                I = np.array([objidmap[oid] for oid in T.objid])
+                P.cut(I)
+                # P.cut(T.index)
+                # for op,ot in zip(P.objid, T.objid):
+                #     print 'p,t', op,ot,
+                #     if op != ot:
+                #         print '       ***********',
+                #     print
+                assert(len(P) == len(T))
+                assert(np.all(P.objid == T.objid))
+                T.run = P.run
+                T.camcol = P.camcol
+                T.field = P.field
+                
+            print 'Read', len(T), 'entries'
+            rcf = np.unique(zip(T.run, T.camcol, T.field))
+            for r,c,f in rcf:
+                if not (r,c,f) in fieldmap:
+                    fieldmap[(r,c,f)] = []
+                Tsub = T[(T.run == r) * (T.camcol == c) * (T.field == f)]
+                for col in ['run','camcol','field']:
+                    Tsub.delete_column(col)
+                print 'Adding', len(Tsub), 'to', (r,c,f)
+                fieldmap[(r,c,f)].append(Tsub)
+
+            for (r,c,f),TT in fieldmap.items():
+                print len(TT), 'tiles for', (r,c,f)
+                if len(TT):
+                    # Resolve duplicate measurements (in multiple tiles)
+                    # based on || (x,y) - center ||
+                    # T = merge_tables(TT)
+                    pass
+
+        sys.exit(0)
 
     tiles = []
     arr = os.environ.get('PBS_ARRAYID')
