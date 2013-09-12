@@ -650,6 +650,27 @@ def main():
 
     if opt.summary:
         A = T
+
+        plt.clf()
+        missing = []
+        for i in range(len(A)):
+            r,d = A.ra[i], A.dec[i]
+            dd = 1024 * 2.75 / 3600.
+            dr = dd / np.cos(np.deg2rad(d))
+            outfn = opt.output % (A.coadd_id[i])
+            rr,dd = [r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd]
+            if not os.path.exists(outfn):
+                missing.append((i,rr,dd,r,d))
+            plt.plot(rr, dd, 'k-')
+        for i,rr,dd,r,d in missing:
+            plt.plot(rr, dd, 'r-')
+            plt.text(r, d, '%i' % i, rotation=90, color='b', va='center', ha='center')
+        plt.title('missing tiles')
+        ps.savefig()
+
+        print 'Missing tiles:', [m[0] for m in missing]
+
+
         rdfn = 'rd.fits'
         if not os.path.exists(rdfn):
             fns = glob(os.path.join(tempoutdir, 'photoobjs-*.fits'))
