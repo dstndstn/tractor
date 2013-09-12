@@ -823,7 +823,9 @@ def main():
                 pcols = P.get_columns()
                 for col in T.get_columns():
                     if col in pcols:
-                        P.get(col)[I] = T.get(col)
+                        pval = P.get(col)
+                        print '  ', col, pval.dtype
+                        pval[I] = (T.get(col)).astype(pval.dtype)
                     else:
                         tval = T.get(col)
                         X = np.zeros(N, tval.dtype)
