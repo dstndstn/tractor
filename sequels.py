@@ -128,6 +128,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
                 'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
                 'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
                 'resolve_status', 'nchild', 'flags', 'objc_flags',
+                'run','camcol','field','id'
                 ]
         T = fits_table(fn, columns=cols)
         if T is None:
@@ -169,6 +170,9 @@ def one_tile(tile, opt, savepickle):
     else:
         T = read_photoobjs(r0, r1, d0, d1, 1./60.)
         T.writeto(objfn)
+
+    if opt.photoObjsOnly:
+        return
 
     # Cut galaxies based on signal-to-noise of theta (effective
     # radius) measurement.
@@ -259,7 +263,7 @@ def one_tile(tile, opt, savepickle):
             #src.halfsize = sourcerad[i]
     print 'sourcerad range:', min(sourcerad), max(sourcerad)
 
-    wfn = os.path.join(sequels-phot-temp, 'wise-sources-%s.fits' % (tile.coadd_id))
+    wfn = os.path.join(tempoutdir, 'wise-sources-%s.fits' % (tile.coadd_id))
     print 'looking for', wfn
     if os.path.exists(wfn):
         WISE = fits_table(wfn)
@@ -559,7 +563,7 @@ def one_tile(tile, opt, savepickle):
     T.delete_column('cmodelflux')
     T.delete_column('devflux')
     T.delete_column('expflux')
-    T.delete_column('index')
+    #T.delete_column('index')
 
     T.writeto(outfn)
 
@@ -585,6 +589,10 @@ def main():
     parser.add_option('-o', dest='output', default=os.path.join(outdir, 'phot-%s.fits'))
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
+
+    parser.add_option('--photoobjs-only', dest='photoObjsOnly',
+                      action='store_true', default=False,
+                      help='Ensure photoobjs file exists and then quit?')
 
     parser.add_option('-p', dest='pickle', default=False, action='store_true',
                       help='Save .pickle file for debugging purposes')
@@ -624,8 +632,19 @@ def main():
         if len(args) == 0:
             tiles.append(0)
         else:
-            for a in opt.args:
-                tiles.append(int(a))
+            for a in args:
+                if '-' in a:
+                    aa = a.split('-')
+                    if len(aa) != 2:
+                        print 'With arg containing a dash, expect two parts'
+                        print aa
+                        sys.exit(-1)
+                    start = int(aa[0])
+                    end = int(aa[1])
+                    for i in range(start, end+1):
+                        tiles.append(i)
+                else:
+                    tiles.append(int(a))
 
     for i in tiles:
         one_tile(T[i], opt, opt.pickle)
