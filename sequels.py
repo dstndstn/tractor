@@ -742,8 +742,8 @@ def main():
             fns.sort()
             print 'Found', len(fns), 'photometry output files'
         fieldmap = {}
-        for fn in fns:
-            print 'Reading', fn
+        for ifn,fn in enumerate(fns):
+            print 'Reading', (ifn+1), 'of', len(fns), fn
             cols = ['ra','dec',
                     'objid', 'index', 'x','y', 
                     'treated_as_pointsource', 'coadd_id']
@@ -778,9 +778,9 @@ def main():
                 if not (run,camcol,field) in fieldmap:
                     fieldmap[(run,camcol,field)] = []
                 Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
+                #print len(Tsub), 'in', (run,camcol,field)
                 for col in ['run','camcol','field']:
                     Tsub.delete_column(col)
-                #print 'Adding', len(Tsub), 'to', (run,camcol,field)
                 fieldmap[(run,camcol,field)].append(Tsub)
 
         for (run,camcol,field),TT in fieldmap.items():
@@ -806,6 +806,7 @@ def main():
                 # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
                 cx,cy = 1023.5, 1023.5
             for T in TT:
+                coadd = T.coadd_id[0]
                 if len(TT) > 1:
                     I = T.id - 1
                     R2 = (T.x - cx)**2 + (T.y - cy)**2
@@ -814,7 +815,9 @@ def main():
                     P.R2[I] = R2[J]
                     #print len(I), 'are closest'
                     T.cut(J)
-                print '  ', len(T), 'from', T.coadd_id[0]
+                print '  ', len(T), 'from', coadd
+                if len(T) == 0:
+                    continue
                 I = T.id - 1
                 P.has_wise_phot[I] = True
                 pcols = P.get_columns()
