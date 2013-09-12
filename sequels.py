@@ -54,8 +54,14 @@ resolvedir = 'photoResolve-new'
 
 outdir = 'sequels-phot'
 tempoutdir = 'sequels-phot-temp'
+pobjoutdir = 'sequels-pobj'
 
 Time.add_measurement(MemMeas)
+
+def get_photoobj_filename(rr, run, camcol, field):
+    fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
+                      'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
+    return fn
 
 def estimate_sky(img, iv):
     sim = np.sort(img.ravel())
@@ -123,8 +129,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
             print 'Rerun 157'
             continue
 
-        fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
-                          'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
+        fn = get_photoobj_filename(rr, run, camcol, field)
 
         cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
                 'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
@@ -630,17 +635,18 @@ def main():
     if opt.finish:
         # Find all *-phot.fits outputs
         # Determine which photoObj files are involved
-        # Collate, and resolve objs measured in multiple tiles
+        # Collate and resolve objs measured in multiple tiles
         # Expand into photoObj-parallel files
         fns = glob(os.path.join(outdir, 'phot-*.fits'))
         fns.sort()
         print 'Found', len(fns), 'output files'
         fieldmap = {}
         
-        for fn in fns:
+        for fn in fns[:10]:
             print 'Reading', fn
             cols = ['ra','dec',
-                    'objid', 'index', 'x','y', 'id']
+                    'objid', 'index', 'x','y', 'id',
+                    'treated_as_pointsource', 'coadd_id']
             for band in opt.bands:
                 for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
                           'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
@@ -674,22 +680,79 @@ def main():
                 
             print 'Read', len(T), 'entries'
             rcf = np.unique(zip(T.run, T.camcol, T.field))
-            for r,c,f in rcf:
-                if not (r,c,f) in fieldmap:
-                    fieldmap[(r,c,f)] = []
-                Tsub = T[(T.run == r) * (T.camcol == c) * (T.field == f)]
-                for col in ['run','camcol','field']:
-                    Tsub.delete_column(col)
-                print 'Adding', len(Tsub), 'to', (r,c,f)
-                fieldmap[(r,c,f)].append(Tsub)
+            for run,camcol,field in rcf:
+                if not (run,camcol,field) in fieldmap:
+                    fieldmap[(run,camcol,field)] = []
+                Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
+                # DEBUG
+                #for col in ['run','camcol','field']:
+                #    Tsub.delete_column(col)
+                #print 'Adding', len(Tsub), 'to', (run,camcol,field)
+                fieldmap[(run,camcol,field)].append(Tsub)
 
-            for (r,c,f),TT in fieldmap.items():
-                print len(TT), 'tiles for', (r,c,f)
-                if len(TT):
-                    # Resolve duplicate measurements (in multiple tiles)
-                    # based on || (x,y) - center ||
-                    # T = merge_tables(TT)
-                    pass
+        for (run,camcol,field),TT in fieldmap.items():
+            print len(TT), 'tiles for', (run,camcol,field)
+
+            # HACK
+            rr = '301'
+            pofn = get_photoobj_filename(rr, run,camcol,field)
+            F = fitsio.FITS(pofn)
+            #print 'PhotoObj:', F
+            #print 'hdu 1:', F[1]
+            #print dir(F[1])
+            N = F[1].get_nrows()
+            print pofn, 'has', N, 'rows'
+
+            # DEBUG
+            POBJ = fits_table(pofn, columns=['objid'])
+            assert(len(POBJ) == N)
+
+            P = fits_table()
+            P.has_wise_phot = np.zeros(N, bool)
+            if len(TT) > 1:
+                # Resolve duplicate measurements (in multiple tiles)
+                # based on || (x,y) - center ||^2
+                P.R2 = np.empty(N, np.float32)
+                P.R2[:] = 1e9
+                # WISE coadd tile CRPIX-1
+                cx,cy = 1023.5, 1023.5
+            for T in TT:
+                print 'Inserting', len(T), 'from', (T.run[0], T.camcol[0], T.field[0])
+                if len(TT) > 1:
+                    I = T.id - 1
+                    R2 = (T.x - cx)**2 + (T.y - cy)**2
+                    J = (R2 < P.R2[I])
+                    I = I[J]
+                    P.R2[I] = R2[J]
+                    print len(I), 'are closest'
+                    T.cut(J)
+                I = T.id - 1
+                P.has_wise_phot[I] = True
+                pcols = P.get_columns()
+                for col in T.get_columns():
+                    if col in pcols:
+                        P.get(col)[I] = T.get(col)
+                    else:
+                        tval = T.get(col)
+                        X = np.zeros(N, tval.dtype)
+                        X[I] = tval
+                        P.set(col, X)
+
+                assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
+
+            P.delete_column('index')
+            P.delete_column('id')
+            if len(TT) > 1:
+                P.delete_column('R2')
+            
+            myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
+            if not os.path.exists(myoutdir):
+                os.makedirs(myoutdir)
+            outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
+            P.writeto(outfn)
+            print 'Wrote', outfn
+
+            assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
 
         sys.exit(0)
 
