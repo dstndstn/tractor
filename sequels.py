@@ -554,11 +554,21 @@ def one_tile(tile, opt, savepickle):
         nm_ivar = fullIV
         T.set(wband + '_nanomaggies', nm.astype(np.float32))
         T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
-        dnm = 1./np.sqrt(nm_ivar)
-        mag = NanoMaggies.nanomaggiesToMag(nm)
-        dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
-        T.set(wband + '_mag', mag.astype(np.float32))
-        T.set(wband + '_mag_err', dmag.astype(np.float32))
+        dnm = np.zeros(len(nm_ivar), np.float32)
+        okiv = (nm_ivar > 0)
+        dnm[okiv] = 1./np.sqrt(nm_ivar[okiv])
+        okflux = (nm > 0)
+        mag = np.zeros(len(nm), np.float32)
+        mag[okflux] = NanoMaggies.nanomaggiesToMag(nm[okflux])
+        dmag = np.zeros(len(nm), np.float32)
+        ok = (okiv * okflux)
+        dmag[ok] = np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])
+
+        mag[np.logical_not(okflux)] = np.nan
+        dmag[np.logical_not(ok)] = np.nan
+        
+        T.set(wband + '_mag', mag)
+        T.set(wband + '_mag_err', dmag)
         for k in fskeys:
             T.set(wband + '_' + k, fitstats[k].astype(np.float32))
 
@@ -637,12 +647,14 @@ def main():
         # Determine which photoObj files are involved
         # Collate and resolve objs measured in multiple tiles
         # Expand into photoObj-parallel files
-        fns = glob(os.path.join(outdir, 'phot-*.fits'))
-        fns.sort()
-        print 'Found', len(fns), 'output files'
+        if len(args):
+            fns = args
+        else:
+            fns = glob(os.path.join(outdir, 'phot-*.fits'))
+            fns.sort()
+            print 'Found', len(fns), 'photometry output files'
         fieldmap = {}
-        
-        for fn in fns[:10]:
+        for fn in fns:
             print 'Reading', fn
             cols = ['ra','dec',
                     'objid', 'index', 'x','y', 'id',
@@ -666,12 +678,6 @@ def main():
                 objidmap = dict([(oid,i) for i,oid in enumerate(P.objid)])
                 I = np.array([objidmap[oid] for oid in T.objid])
                 P.cut(I)
-                # P.cut(T.index)
-                # for op,ot in zip(P.objid, T.objid):
-                #     print 'p,t', op,ot,
-                #     if op != ot:
-                #         print '       ***********',
-                #     print
                 assert(len(P) == len(T))
                 assert(np.all(P.objid == T.objid))
                 T.run = P.run
@@ -684,28 +690,23 @@ def main():
                 if not (run,camcol,field) in fieldmap:
                     fieldmap[(run,camcol,field)] = []
                 Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
-                # DEBUG
-                #for col in ['run','camcol','field']:
-                #    Tsub.delete_column(col)
+                for col in ['run','camcol','field']:
+                    Tsub.delete_column(col)
                 #print 'Adding', len(Tsub), 'to', (run,camcol,field)
                 fieldmap[(run,camcol,field)].append(Tsub)
 
         for (run,camcol,field),TT in fieldmap.items():
             print len(TT), 'tiles for', (run,camcol,field)
-
             # HACK
             rr = '301'
             pofn = get_photoobj_filename(rr, run,camcol,field)
             F = fitsio.FITS(pofn)
-            #print 'PhotoObj:', F
-            #print 'hdu 1:', F[1]
-            #print dir(F[1])
             N = F[1].get_nrows()
-            print pofn, 'has', N, 'rows'
+            #print pofn, 'has', N, 'rows'
 
             # DEBUG
-            POBJ = fits_table(pofn, columns=['objid'])
-            assert(len(POBJ) == N)
+            #POBJ = fits_table(pofn, columns=['objid'])
+            #assert(len(POBJ) == N)
 
             P = fits_table()
             P.has_wise_phot = np.zeros(N, bool)
@@ -714,18 +715,18 @@ def main():
                 # based on || (x,y) - center ||^2
                 P.R2 = np.empty(N, np.float32)
                 P.R2[:] = 1e9
-                # WISE coadd tile CRPIX-1
+                # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
                 cx,cy = 1023.5, 1023.5
             for T in TT:
-                print 'Inserting', len(T), 'from', (T.run[0], T.camcol[0], T.field[0])
                 if len(TT) > 1:
                     I = T.id - 1
                     R2 = (T.x - cx)**2 + (T.y - cy)**2
                     J = (R2 < P.R2[I])
                     I = I[J]
                     P.R2[I] = R2[J]
-                    print len(I), 'are closest'
+                    #print len(I), 'are closest'
                     T.cut(J)
+                print '  ', len(T), 'from', T.coadd_id[0]
                 I = T.id - 1
                 P.has_wise_phot[I] = True
                 pcols = P.get_columns()
@@ -738,7 +739,7 @@ def main():
                         X[I] = tval
                         P.set(col, X)
 
-                assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
+                #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
 
             P.delete_column('index')
             P.delete_column('id')
