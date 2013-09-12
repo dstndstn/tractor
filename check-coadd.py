@@ -19,7 +19,17 @@ coadds = 'wise-coadds'
 
 lst = os.listdir(wisel3)
 lst.sort()
-for band in [1,2,3,4]:
+bands = [1,2,3,4]
+
+# HACK
+#lst = ['1917p454_ab41', '1273p575_ab41']
+#lst = ['1273p575_ab41']
+lst = ['1190p575_ab41']
+bands = [1,2]
+#bands = [2]
+
+
+for band in bands:
     for l3dir in lst:
         print 'dir', l3dir
         coadd = l3dir.replace('_ab41','')
@@ -37,6 +47,9 @@ for band in [1,2,3,4]:
         J = fitsio.read(cofn)
         K = fitsio.read(cowfn)
 
+        print 'coadd range:', J.min(), J.max()
+        print 'w coadd range:', K.min(), K.max()
+
         hi,wi = I.shape
         hj,wj = J.shape
         flo,fhi = 0.45, 0.55
@@ -48,6 +61,11 @@ for band in [1,2,3,4]:
         plo,phi = [np.percentile(I, p) for p in [25,99]]
         imai = ima.copy()
         imai.update(vmin=plo, vmax=phi)
+
+        plt.clf()
+        plt.imshow(I, **imai)
+        plt.title('WISE team %s' % os.path.basename(l3fn))
+        ps.savefig()
 
         plt.clf()
         plt.imshow(I[slcI], **imai)

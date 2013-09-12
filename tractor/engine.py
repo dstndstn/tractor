@@ -1266,6 +1266,7 @@ class Tractor(MultiParams):
                 logverb('Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0)
                 logverb('Took', Time()-t0)
                 if lnp < (lnpBest - 1.):
+                    logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)
                     break
                 if lnp > lnpBest:
                     alphaBest = alpha

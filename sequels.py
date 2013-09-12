@@ -37,9 +37,6 @@ from tractor.sdss import *
 from wisecat import wise_catalog_radecbox
 
 import logging
-lvl = logging.INFO
-#lvl = logging.DEBUG
-logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 
 '''
@@ -426,6 +423,10 @@ def one_tile(tile, opt, savepickle):
             for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
                 celli += 1
 
+                if opt.cell is not None and opt.cell != celli:
+                    print 'Skipping cell', celli
+                    continue
+
                 print
                 print 'Cell', celli, 'of', (opt.blocks**2), 'for', tile.coadd_id, 'band', wband
 
@@ -530,23 +531,28 @@ def one_tile(tile, opt, savepickle):
                 # im,mod,ie,chi,roi = ims1[0]
 
                 if savepickle:
-                    im,mod,ie,chi,roi = ims1[0]
+                    if ims1 is None:
+                        mod = None
+                    else:
+                        im,mod,ie,chi,roi = ims1[0]
                     mods.append(mod)
                     cats.append((
                         srci, margi, UW.x[J], UW.y[J],
-                        T.x[srci], T.y[srci], T.x[margi], T.y[margi]))
+                        T.x[srci], T.y[srci], T.x[margi], T.y[margi],
+                        [src.copy() for src in cat],
+                        [src.copy() for src in subcat]))
 
-                T.cell[srci] = celli
-                T.cell_x0[srci] = ix0
-                T.cell_x1[srci] = ix1
-                T.cell_y0[srci] = iy0
-                T.cell_y1[srci] = iy1
-
-                # Save fit stats
-                fullIV[srci] = IV[:len(srci)]
-                for k in fskeys:
-                    x = getattr(fs, k)
-                    fitstats[k][srci] = np.array(x)
+                if len(srci):
+                    T.cell[srci] = celli
+                    T.cell_x0[srci] = ix0
+                    T.cell_x1[srci] = ix1
+                    T.cell_y0[srci] = iy0
+                    T.cell_y1[srci] = iy1
+                    # Save fit stats
+                    fullIV[srci] = IV[:len(srci)]
+                    for k in fskeys:
+                        x = getattr(fs, k)
+                        fitstats[k][srci] = np.array(x)
 
                 cpu0 = tb0.meas[0]
                 t = Time()
@@ -618,14 +624,24 @@ def main():
     parser.add_option('-p', dest='pickle', default=False, action='store_true',
                       help='Save .pickle file for debugging purposes')
 
-    parser.add_option('--finish', default=False, action='store_true')
+    parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
-    parser.add_option('--summary', default=False, action='store_true')
+    parser.add_option('--summary', dest='summary', default=False, action='store_true')
+
+    parser.add_option('--cell', dest='cell', default=None, type=int,
+                      help='Just run one cell?')
+
+    parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
 
     if len(opt.bands) == 0:
         opt.bands = [1,2]
+
+    lvl = logging.INFO
+    if opt.verbose:
+        lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     # sequels-atlas.fits: written by wise-coadd.py
     dataset = 'sequels'
@@ -666,6 +682,7 @@ def main():
             plt.plot(rr, dd, 'r-')
             plt.text(r, d, '%i' % i, rotation=90, color='b', va='center', ha='center')
         plt.title('missing tiles')
+        plt.axis([118, 212, 44,61])
         ps.savefig()
 
         print 'Missing tiles:', [m[0] for m in missing]
