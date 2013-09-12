@@ -812,7 +812,7 @@ def main():
                     R2 = (T.x - cx)**2 + (T.y - cy)**2
                     J = (R2 < P.R2[I])
                     I = I[J]
-                    P.R2[I] = R2[J]
+                    P.R2[I] = R2[J].astype(np.float32)
                     #print len(I), 'are closest'
                     T.cut(J)
                 print '  ', len(T), 'from', coadd

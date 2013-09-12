@@ -3,6 +3,7 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
 
 import logging
+import sys
 
 import pylab as plt
 import numpy as np
@@ -19,6 +20,48 @@ from astrometry.sdss import *
 from wise3 import *
 from tractor import *
 
+def h2():
+    T = fits_table('qso_BOSS_SDSS_MYERS_v5_6_0.fits')
+    print 'Read', len(T), 'targets'
+    # Match to SEQUELS region.
+    T.cut((T.ra > 118) * (T.ra < 212) * (T.dec > 44) * (T.dec < 61))
+    print 'Cut to', len(T)
+
+    kd1 = tree_build_radec(T.ra, T.dec)
+
+    fns = glob(os.path.join('sequels-phot', 'phot-*.fits'))
+    fns.sort()
+    print 'Found', len(fns), 'SEQUELS photometry output files'
+
+    TT = []
+    for fn in fns:
+        print 'Reading', fn
+        P = fits_table(fn, columns=['ra','dec','treated_as_pointsource',
+                                    'x','y','coadd_id',
+                                    'w1_nanomaggies','w1_nanomaggies_ivar',
+                                    'w1_mag','w1_mag_err','w1_prochi2','w1_pronpix',
+                                    'w1_profracflux', 'w1_proflux', 'w1_npix',
+                                    'w2_nanomaggies','w2_nanomaggies_ivar',
+                                    'w2_mag','w2_mag_err','w2_prochi2','w2_pronpix',
+                                    'w2_profracflux', 'w2_proflux', 'w2_npix',
+                                    ])
+        print 'Got', len(P)
+        kd2 = tree_build_radec(P.ra, P.dec)
+
+        r = deg2dist(1. / 3600.)
+        I,J,d = trees_match(kd1, kd2, r, nearest=True)
+        print 'Matched', len(I)
+        tree_free(kd2)
+
+        P.cut(J)
+        P.match_dist = dist2arcsec(d)
+        P.qso_table_index = I
+        TT.append(P)
+    P = merge_tables(TT)
+    P.writeto('h2.fits')
+    
+
+
 class myopts(object):
     pass
 
@@ -26,6 +69,10 @@ class myopts(object):
 text2fits.py -S 1 agn_coords.txt agn.fits
 '''
 if __name__ == '__main__':
+    h2()
+    sys.exit(0)
+
+
     T = fits_table('agn.fits')
     T.ra  = np.array([hmsstring2ra(s) for s in T.final_ra])
     T.dec = np.array([dmsstring2dec(s) for s in T.final_dec])
