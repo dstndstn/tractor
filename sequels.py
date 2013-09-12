@@ -374,6 +374,7 @@ def one_tile(tile, opt, savepickle):
         wfi = wf[I]
         print 'Initializing', len(I), 'fluxes based on catalog matches'
         for i,flux in zip(I, wf[I]):
+            assert(np.isfinite(flux))
             cat[i].getBrightness().setBand(wanyband, flux)
         rad = np.zeros(len(I))
         drad = 0.
@@ -478,6 +479,9 @@ def one_tile(tile, opt, savepickle):
                                    ((UW.y+m) >= (iy0-0.5)) * ((UW.y-m) < (iy1-0.5)))
                 wnm = UW.get('w%inm' % band)
                 for j in J:
+                    if not np.isfinite(wnm[j]):
+                        continue
+                    #assert(np.isfinite(wnm[j]))
                     ps = PointSource(RaDecPos(UW.ra[j], UW.ra[j]),
                                               NanoMaggies(**{wanyband: wnm[j]}))
                     ps.radius = UW.rad[j]
@@ -556,13 +560,13 @@ def one_tile(tile, opt, savepickle):
         T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
         dnm = np.zeros(len(nm_ivar), np.float32)
         okiv = (nm_ivar > 0)
-        dnm[okiv] = 1./np.sqrt(nm_ivar[okiv])
+        dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
         okflux = (nm > 0)
         mag = np.zeros(len(nm), np.float32)
-        mag[okflux] = NanoMaggies.nanomaggiesToMag(nm[okflux])
+        mag[okflux] = (NanoMaggies.nanomaggiesToMag(nm[okflux])).astype(np.float32)
         dmag = np.zeros(len(nm), np.float32)
         ok = (okiv * okflux)
-        dmag[ok] = np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])
+        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])).astype(np.float32)
 
         mag[np.logical_not(okflux)] = np.nan
         dmag[np.logical_not(ok)] = np.nan
@@ -616,6 +620,8 @@ def main():
 
     parser.add_option('--finish', default=False, action='store_true')
 
+    parser.add_option('--summary', default=False, action='store_true')
+
     opt,args = parser.parse_args()
 
     if len(opt.bands) == 0:
@@ -641,6 +647,41 @@ def main():
     #     print 'diffs', np.diff(R)
 
     ps = PlotSequence(dataset + '-phot')
+
+    if opt.summary:
+        A = T
+        rdfn = 'rd.fits'
+        if not os.path.exists(rdfn):
+            fns = glob(os.path.join(tempoutdir, 'photoobjs-*.fits'))
+            fns.sort()
+            TT = []
+            for fn in fns:
+                T = fits_table(fn, columns=['ra','dec'])
+                print len(T), 'from', fn
+                TT.append(T)
+            T = merge_tables(TT)
+            print 'Total of', len(T)
+            T.writeto(rdfn)
+        else:
+            T = fits_table(rdfn)
+            print 'Got', len(T), 'from', rdfn
+        
+        plt.clf()
+        loghist(T.ra, T.dec, 500, range=((118,212),(44,61)))
+        plt.xlabel('RA')
+        plt.ylabel('Dec')
+        ps.savefig()
+
+        ax = plt.axis()
+        for i in range(len(A)):
+            r,d = A.ra[i], A.dec[i]
+            dd = 1024 * 2.75 / 3600.
+            dr = dd / np.cos(np.deg2rad(d))
+            plt.plot([r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd], 'r-')
+        plt.axis(ax)
+        ps.savefig()
+
+        sys.exit(0)
 
     if opt.finish:
         # Find all *-phot.fits outputs
