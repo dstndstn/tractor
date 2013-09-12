@@ -27,7 +27,8 @@ basedir = 'wise-frames'
 wisedatadirs = [(basedir, 'merged'),]
 
 #indexfn = None
-indexfn = os.path.join(basedir, 'WISE-index-L1b.fits')
+#indexfn = os.path.join(basedir, 'WISE-index-L1b.fits')
+indexfn = 'WISE-index-L1b.fits'
 
 datadir = 'strauss-data'
 

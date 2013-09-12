@@ -491,6 +491,8 @@ def stage104(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
         rows = int(np.ceil(nims / float(cols)))
         plt.clf()
         for i,(tim,d) in enumerate(zip(tims, ims)):
+            if d is None:
+                continue
             plt.subplot(rows, cols, i+1)
             ima = dict(interpolation='nearest', origin='lower',
                         vmin=-2.*d.sig1, vmax=5.*d.sig1, cmap='gray')
