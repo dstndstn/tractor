@@ -128,7 +128,7 @@ if __name__ == '__main__':
         dlo = d0 - margin
         dhi = d1 + margin
 
-        if False:
+        if True:
             # HACK -- got the WISE catalogs on riemann and the WISE exposures on NERSC...
             from wisecat import wise_catalog_radecbox
             cols=['cntr', 'ra', 'dec', 'sigra', 'sigdec', 'cc_flags',
@@ -146,10 +146,9 @@ if __name__ == '__main__':
                 W = fits_table()
                 for c in cols:
                     W.set(c, np.array([]))
-            if opt.wsources is not None:
-                W.writeto(opt.wsources)
-                print 'Wrote', opt.wsources
-
+            wfn = os.path.join(datadir, 'wise-objs-%s.fits' % dataset)
+            W.writeto(wfn)
+            print 'Wrote', wfn
             continue
     
         for band in [1,2,3,4]:
