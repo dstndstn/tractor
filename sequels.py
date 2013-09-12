@@ -745,13 +745,13 @@ def main():
         for fn in fns:
             print 'Reading', fn
             cols = ['ra','dec',
-                    'objid', 'index', 'x','y', 'id',
+                    'objid', 'index', 'x','y', 
                     'treated_as_pointsource', 'coadd_id']
             for band in opt.bands:
                 for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
                           'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
                     cols.append('w%i_%s' % (band, k))
-            rcfcols = ['run','camcol','field',]
+            rcfcols = ['run','camcol','field','id',]
             try:
                 T = fits_table(fn, columns=cols + rcfcols)
             except:
@@ -769,9 +769,8 @@ def main():
                 P.cut(I)
                 assert(len(P) == len(T))
                 assert(np.all(P.objid == T.objid))
-                T.run = P.run
-                T.camcol = P.camcol
-                T.field = P.field
+                for k in rcfcols:
+                    T.set(k, P.get(k))
                 
             print 'Read', len(T), 'entries'
             rcf = np.unique(zip(T.run, T.camcol, T.field))
@@ -842,7 +841,7 @@ def main():
             P.writeto(outfn)
             print 'Wrote', outfn
 
-            assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
+            #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
 
         sys.exit(0)
 
