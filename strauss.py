@@ -27,7 +27,7 @@ basedir = 'wise-frames'
 wisedatadirs = [(basedir, 'merged'),]
 
 #indexfn = None
-indexfn = 'WISE-index-L1b.fits'
+indexfn = os.path.join(basedir, 'WISE-index-L1b.fits')
 
 datadir = 'strauss-data'
 
@@ -77,11 +77,28 @@ Strauss
 email of 2013-08-23 from Strauss: attach dustin.lis
 
 text2fits.py -H "plate fiber mjd something ra dec" -f jjjddd dustin.lis strauss.fits
+
++ from Jenny Greene 2013-09-12:
+
+>>      SDSS1309_0205.dat 2.2325 197.8264 2.09655
+>>      SDSS2252_0108.dat 2.537 343.21960 1.14157
+
+cat > strauss2.txt <<EOF
+# z ra dec
+2.2325 197.8264 2.09655
+2.537 343.21960 1.14157
+EOF
+text2fits.py -f ddd strauss2.txt strauss2.fits
+
 '''
 if __name__ == '__main__':
 
-    sfn = 'strauss.fits'
-    fulldataset = 'strauss'
+    #sfn = 'strauss.fits'
+    #fulldataset = 'strauss'
+
+    sfn = 'strauss2.fits'
+    fulldataset = 'strauss2'
+
     TT = fits_table(sfn)
 
     #mp = multiproc(8)

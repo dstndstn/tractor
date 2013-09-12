@@ -542,6 +542,13 @@ def one_tile(tile, opt, savepickle):
                         [src.copy() for src in cat],
                         [src.copy() for src in subcat]))
 
+                if opt.pickle2:
+                    fn = opt.output % (tile.coadd_id)
+                    fn = fn.replace('.fits','-cell%02i.pickle' % celli)
+                    pickle_to_file((ims0, ims1, cat, subcat), fn)
+                    print 'Pickled', fn
+                    
+
                 if len(srci):
                     T.cell[srci] = celli
                     T.cell_x0[srci] = ix0
@@ -623,6 +630,8 @@ def main():
 
     parser.add_option('-p', dest='pickle', default=False, action='store_true',
                       help='Save .pickle file for debugging purposes')
+    parser.add_option('--pp', dest='pickle2', default=False, action='store_true',
+                      help='Save .pickle file for each cell?')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
@@ -747,6 +756,7 @@ def main():
                 T = fits_table(fn, columns=cols + rcfcols)
             except:
                 print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
+                print fn
                 T = fits_table(fn, columns=cols)
                 print 'Got', len(T), 'from', fn
                 pfn = fn.replace('phot-', 'photoobjs-').replace(outdir, tempoutdir)
