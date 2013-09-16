@@ -739,6 +739,12 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         zpscale = 1. / NanoMaggies.zeropointToScale(zp)
         print 'Zeropoint:', zp, '-> scale', zpscale
 
+        if band == 4:
+            # In W4, the WISE single-exposure images are binned down
+            # 2x2, so we are effectively splitting each pixel into 4
+            # sub-pixels.  Spread out the flux.
+            zpscale *= 0.25
+
         goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
                                                     10,11,12,13,14,15,16,17,18,
                                                     21,26,27,28]])) == 0)
