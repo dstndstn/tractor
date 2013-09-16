@@ -11,8 +11,9 @@ from ceres import *
 
 # H,W = 100,100
 # NS = 10
-H,W = 5,25
-NS = 10
+#H,W = 13,25
+H,W = 25,25
+NS = 25
 
 f = 100.
 img = np.zeros((H,W))
