@@ -588,66 +588,17 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         # plt.clf()
         # plt.imshow(rimg - dsky, **ima)
-        # plt.title('rimg - dsky')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(rimg - dsky, interpolation='nearest', origin='lower')
-        # plt.title('rimg - dsky')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(subco, **ima)
-        # plt.title('subco')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
-        # plt.imshow(subco, interpolation='nearest', origin='lower')
-        # plt.title('subco')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(rimg - dsky - subco, interpolation='nearest', origin='lower')
-        # plt.title('rimg - dsky - subco')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(rmask, interpolation='nearest', origin='lower')
-        # plt.title('rmask')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(subw > 0, interpolation='nearest', origin='lower')
-        # plt.title('subw > 0')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(subpp, interpolation='nearest', origin='lower')
-        # plt.title('subpp')
-        # plt.colorbar()
-        # ps.savefig()
-
-        # plt.clf()
         # plt.imshow(rimg - dsky - coimg1, **ima)
-        # plt.title('rimg - dsky - coimg1')
-        # plt.colorbar()
-        # ps.savefig()
-        # 
-        # plt.clf()
         # plt.imshow(rchi, interpolation='nearest', origin='lower')#, vmin=-10, vmax=10)
-        # plt.title('rchi')
-        # plt.colorbar()
-        # ps.savefig()
-
-        # plt.clf()
         # plt.imshow(badpix, interpolation='nearest', origin='lower', vmin=0, vmax=1,
+        #            cmap='gray')
+        # plt.imshow(badpixmask, interpolation='nearest', origin='lower', vmin=0, vmax=3,
         #            cmap='gray')
         # plt.title('badpix')
         # plt.colorbar()
@@ -661,13 +612,6 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         # Bit 2: grown
         badpixmask += (2 * badpix)
-
-        # plt.clf()
-        # plt.imshow(badpixmask, interpolation='nearest', origin='lower', vmin=0, vmax=3,
-        #            cmap='gray')
-        # plt.title('badpixmask')
-        # plt.colorbar()
-        # ps.savefig()
 
         ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
         if not ok:
@@ -840,7 +784,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L, table=table)
-                                                 
         except OverlapError:
             print 'No overlap; skipping'
             rimgs.append(None)
