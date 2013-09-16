@@ -792,7 +792,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         print 'Mask:', mask.shape, mask.dtype
 
         zp = ihdr['MAGZP']
-        zpscale = NanoMaggies.zeropointToScale(zp)
+        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
         print 'Zeropoint:', zp, '-> scale', zpscale
 
         goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
@@ -833,7 +833,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         # Convert to nanomaggies
         img -= sky
         img *= zpscale
-        #img = (img - sky) * zpscale
         sig1 *= zpscale
 
         # coadd subimage

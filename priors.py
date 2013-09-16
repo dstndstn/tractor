@@ -10,6 +10,16 @@ from astrometry.util.plotutils import *
 
 ps = PlotSequence('priors')
 
+G = fits_table('gals3.fits')
+
+loghist(G.devrad_r, G.modelmag_r, 200)
+ps.savefig()
+
+plt.clf()
+plt.hist(np.log10(G.devrad_r), 50)
+ps.savefig()
+
+
 S = fits_table('stars.fits')
 G = fits_table('gals.fits')
 
