@@ -30,7 +30,7 @@ static int ceres_forced_phot(PyObject* blocks,
                              PyObject* np_fluxes) {
     /*
      blocks: [ (data, sources), (data, sources), ... ]
-       data: (x0, y0, np_img, np_invvar)
+       data: (x0, y0, np_img, np_inverr)
        sources: [ (index, x0, y0, np_img), ... ]
      */
 
@@ -55,7 +55,7 @@ static int ceres_forced_phot(PyObject* blocks,
         PyObject* srclist;
         PyObject* obj;
         int x0, y0;
-        PyObject *img, *iv;
+        PyObject *img, *ierr;
         int w, h;
         int Nsources;
 
@@ -69,12 +69,12 @@ static int ceres_forced_phot(PyObject* blocks,
         x0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 0));
         y0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 1));
         img = PyTuple_GET_ITEM(obj, 2);
-        iv  = PyTuple_GET_ITEM(obj, 3);
+        ierr  = PyTuple_GET_ITEM(obj, 3);
         assert(PyArray_Check(img));
-        assert(PyArray_Check(iv));
+        assert(PyArray_Check(ierr));
         h = PyArray_DIM(img, 0);
         w = PyArray_DIM(img, 1);
-        Patch data(x0, y0, w, h, (double*)PyArray_DATA(img), (double*)PyArray_DATA(iv));
+        Patch data(x0, y0, w, h, (double*)PyArray_DATA(img), (double*)PyArray_DATA(ierr));
 
         std::vector<Patch> srcs;
         std::vector<double*> fluxes;
@@ -93,6 +93,8 @@ static int ceres_forced_phot(PyObject* blocks,
             index = PyInt_AsLong(PyTuple_GET_ITEM(obj, 0));
             x0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 1));
             y0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 2));
+            //assert(x0 >= 0);
+            //assert(y0 >= 0);
             img = PyTuple_GET_ITEM(obj, 3);
             assert(PyArray_Check(img));
             h = PyArray_DIM(img, 0);

@@ -1,7 +1,8 @@
 import sys
 import numpy as np
 import logging
-lvl = logging.DEBUG
+lvl = logging.INFO
+#lvl = logging.DEBUG
 logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 from tractor import *
@@ -40,18 +41,20 @@ mod += np.random.normal(size=mod.shape)
 
 tim1.data = mod
 
-
-
+H,W = mod.shape
 
 derivs = []
 for i,src in enumerate(srcs):
     patches = src.getUnitFluxModelPatches(tim1)
     assert(len(patches) == 1)
     patch = patches[0]
+
+    patch.clipTo(W,H)
+
     derivs.append((i, patch.x0, patch.y0, patch.patch.astype(np.float64)))
 
 iv = np.ones_like(mod)
-data = (0, 0, mod.astype(np.float64), iv.astype(np.float64))
+data = (0, 0, mod.astype(np.float64), np.sqrt(iv).astype(np.float64))
 blocks = [ (data, derivs) ]
 
 fluxes = np.zeros(len(srcs)) + 10.
@@ -59,4 +62,10 @@ fluxes = np.zeros(len(srcs)) + 10.
 print 'Ceres forced phot:'
 x = ceres_forced_phot(blocks, fluxes)
 print 'got', x
+
+print 'Fluxes:', fluxes
+
+tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
+X2 = tractor.optimize_forced_photometry()
+print 'optimize_forced_photometry() fluxes:', tractor.getParams()
 
