@@ -112,10 +112,70 @@ static int ceres_forced_phot(PyObject* blocks,
     // Run the solver!
     Solver::Options options;
     options.minimizer_progress_to_stdout = true;
+    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.jacobi_scaling = false;
+
+    // .linear_solver_type = SPARSE_NORMAL_CHOLESKY / DENSE_QR
+    // .trust_region_strategy_type = LEVENBERG_MARQUARDT / DOGLEG
+    // .dogleg_type = TRADITIONAL_DOGLEG / SUBSPACE_DOGLEG 
+
+    // linear subspaces
+    // .use_inner_iterations = true;
+    // .minimizer_type = TRUST_REGION / LINE_SEARCH
+    // .line_search_direction_type = LBFGS / STEEPEST_DESCENT / NONLINEAR_CONJUGATE_GRADIENT / BFGS
+    // .line_search_type = WOLFE / ARMIJO
+    // .nonlinear_conjugate_gradient_type = FLETCHER_REEVES / POLAK_RIBIRERE / HESTENES_STIEFEL
+    // .max_lbfs_rank = 20
+    // .use_approximate_eigenvalue_bfgs_scaling
+    // .line_search_interpolation_type = CUBIC / ...
+    // .min_line_search_step_size
+    // .line_search_sufficient_function_decrease
+    // .max_line_search_step_contraction
+    // .min_line_search_step_contraction
+    // .max_num_line_search_step_size_iterations
+    // .max_num_line_search_direction_restarts
+    // .line_search_sufficient_curvature_decrease
+    // .max_line_search_step_expansion
+    // .use_nonmonotonic_steps
+    // .max_consecutive_nonmonotonic_steps
+    // .max_num_iterations
+    // .max_solver_time_in_seconds
+    // .num_threads
+    // .initial_trust_region_radius
+    // .max_trust_region_radius
+    // .min_trust_region_radius
+    // .min_relative_decrease
+    // .min_lm_diagonal
+    // .max_lm_diagonal
+    // .max_num_consecutive_invalid_steps
+    // .function_tolerance = 1e-6
+    // .gradient_tolerance
+    // .parameter_tolerance = 1e-8
+    // .preconditioner_type
+    // .dense_linear_algebra_library_type
+    // .sparse_linear_algebra_library_type
+    // .num_linear_solver_threads
+    // .linear_solver_ordering
+    // .use_post_ordering
+    // .min_linear_solver_iterations
+    // .max_linear_solver_iterations
+    // .eta
+    //
+    // Jacobian is scaled by the norm of its columns before being passed to the linear solver. This improves the numerical conditioning of the normal equations.
+    // .jacobi_scaling = true
+    //
+    // .inner_itearation_tolerance
+    // .inner_iteration_ordering
+    // .logging_type
+    // .minimizer_progress_to_stdout
+    // .numeric_derivative_relative_step_size
+    
     Solver::Summary summary;
     Solve(options, &problem, &summary);
 
-    std::cout << summary.BriefReport() << "\n";
+    printf("%s\n", summary.BriefReport().c_str());
+    //std::cout << summary.BriefReport() << "\n";
+    //std::cout << summary.FullReport() << "\n";
 
     return 0;
 }

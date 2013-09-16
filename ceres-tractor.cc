@@ -24,16 +24,19 @@ ForcedPhotCostFunction::~ForcedPhotCostFunction() {}
 bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
                                       double* residuals,
                                       double** jacobians) const {
-    printf("ForcedPhotCostFunction::Evaluate\n");
     const std::vector<int16_t> bs = parameter_block_sizes();
-    printf("Parameter blocks:\n");
-    for (size_t i=0; i<bs.size(); i++) {
-        printf("  %i: [", (int)i);
-        for (int j=0; j<bs[i]; j++) {
-            printf(" %g,", parameters[i][j]);
-        }
-        printf(" ]\n");
-    }
+
+    /*
+     printf("ForcedPhotCostFunction::Evaluate\n");
+     printf("Parameter blocks:\n");
+     for (size_t i=0; i<bs.size(); i++) {
+     printf("  %i: [", (int)i);
+     for (int j=0; j<bs[i]; j++) {
+     printf(" %g,", parameters[i][j]);
+     }
+     printf(" ]\n");
+     }
+     */
 
     double* mod = (double*)calloc(_data.npix(), sizeof(double));
     for (size_t i=0; i<bs.size(); i++) {
@@ -48,8 +51,10 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
         int ylo = MAX(source._y0, _data._y0);
         int yhi = MIN(source._y0 + source._h, _data._y0 + _data._h);
 
-        printf("Adding source %i: x [%i, %i), y [%i, %i)\n",
-               (int)i, xlo, xhi, ylo, yhi);
+        /*
+         printf("Adding source %i: x [%i, %i), y [%i, %i)\n",
+         (int)i, xlo, xhi, ylo, yhi);
+         */
 
         int nx = xhi - xlo;
         for (int y=ylo; y<yhi; y++) {
@@ -67,14 +72,16 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
 
     free(mod);
 
-    printf("Returning residual:\n");
-    for (int y=0; y<_data._h; y++) {
-        printf("row %i: [ ", y);
-        for (int x=0; x<_data._w; x++) {
-            printf("%6.1f ", residuals[y * _data._w + x]);
-        }
-        printf(" ]\n");
-    }
+    /*
+     printf("Returning residual:\n");
+     for (int y=0; y<_data._h; y++) {
+     printf("row %i: [ ", y);
+     for (int x=0; x<_data._w; x++) {
+     printf("%6.1f ", residuals[y * _data._w + x]);
+     }
+     printf(" ]\n");
+     }
+     */
 
     for (size_t i=0; i<bs.size(); i++) {
         if (!jacobians || !jacobians[i])
@@ -96,14 +103,17 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
             }
         }
 
-        printf("Returning Jacobian:\n");
-        for (int y=0; y<_data._h; y++) {
-            printf("row %i: [ ", y);
-            for (int x=0; x<_data._w; x++) {
-                printf("%6.1f ", jacobians[i][y * _data._w + x]);
-            }
-            printf(" ]\n");
-        }
+        /*
+         printf("Returning Jacobian:\n");
+         for (int y=0; y<_data._h; y++) {
+         printf("row %i: [ ", y);
+         for (int x=0; x<_data._w; x++) {
+         printf("%6.1f ", jacobians[i][y * _data._w + x]);
+         }
+         printf(" ]\n");
+         }
+         */
+
     }
 
     return true;

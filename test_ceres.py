@@ -11,8 +11,8 @@ from ceres import *
 
 # H,W = 100,100
 # NS = 10
-H,W = 5,5
-NS = 2
+H,W = 5,25
+NS = 10
 
 f = 100.
 img = np.zeros((H,W))
@@ -39,23 +39,47 @@ for src in srcs:
 mod = tractor.getModelImage(0)
 mod += np.random.normal(size=mod.shape)
 
+iv = np.ones_like(mod)
+
 tim1.data = mod
 
 H,W = mod.shape
 
-derivs = []
+BH,BW = 5,5
+
+nbw = int(np.ceil(W / float(BW)))
+nbh = int(np.ceil(H / float(BH)))
+
+blocks = []
+for iy in range(nbh):
+    for ix in range(nbw):
+        x0 = ix * BW
+        y0 = iy * BH
+        slc = slice(y0, min(y0+BH, H)), slice(x0, min(x0+BW, W))
+        data = (x0, y0, mod[slc].astype(np.float64),
+                np.sqrt(iv[slc]).astype(np.float64))
+        blocks.append((data, []))
+
+# derivs = []
 for i,src in enumerate(srcs):
     patches = src.getUnitFluxModelPatches(tim1)
     assert(len(patches) == 1)
     patch = patches[0]
-
     patch.clipTo(W,H)
 
-    derivs.append((i, patch.x0, patch.y0, patch.patch.astype(np.float64)))
+    ph,pw = patch.shape
+    bx0 = np.clip(int(np.floor( patch.x0       / float(BW))), 0, nbw-1)
+    bx1 = np.clip(int(np.ceil ((patch.x0 + pw) / float(BW))), 0, nbw-1)
+    by0 = np.clip(int(np.floor( patch.y0       / float(BH))), 0, nbh-1)
+    by1 = np.clip(int(np.ceil ((patch.y0 + ph) / float(BH))), 0, nbh-1)
 
-iv = np.ones_like(mod)
-data = (0, 0, mod.astype(np.float64), np.sqrt(iv).astype(np.float64))
-blocks = [ (data, derivs) ]
+    print 'Patch touches x blocks [%i,%i], y blocks [%i,%i]' % (bx0, bx1, by0, by1)
+
+    for by in range(by0, by1+1):
+        for bx in range(bx0, bx1+1):
+            bi = by * nbw + bx
+            deriv = (i, patch.x0, patch.y0, patch.patch.astype(np.float64))
+            blocks[bi][1].append(deriv)
 
 fluxes = np.zeros(len(srcs)) + 10.
 
