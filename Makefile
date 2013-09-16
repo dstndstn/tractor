@@ -6,6 +6,19 @@ doc: html
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
+PYMOD_LIB ?= -lpython
+
+EIGEN_INC ?= -I/usr/local/include/eigen3
+
+CERES_INC ?= 
+CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
+
+_ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+	g++ -Wall -fPIC -c ceres_wrap.cxx $$(python-config --includes) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ -Wall -fPIC -c ceres-tractor.cc $(CERES_INC) $(EIGEN_INC)
+	g++ -Wall -fPIC -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
+
 LIBTSNNLS_INC ?=
 LIBTSNNLS_LIB ?= -ltsnnls
 

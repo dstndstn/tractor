@@ -1,33 +1,31 @@
+----------
+2013-09-16
+----------
 
-WISE catalog tests
+Discovered stupid zeropoint scale bug.  Re-running coadds.
 
-Grab the Dec	-0.363600 < dec <= 2.225200 stripe,
-http://irsadist.ipac.caltech.edu/wise-allsky/
+qsub -d $(pwd) -N coadd -l "cput=1:00:00" -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -t 1000-1409 ./wise-coadd.py
 
-Column descriptions here,
-http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec2_2a.html
+1000-1409: job 5772, rev 23478
 
+These seem to have run at low efficiency (cpu / wall about 10%) and were killed after 1 hour of WALL time.  Argh!
 
-echo "# desc ra dec sigra sigdec sigradec glon glat elon elat wx wy counter sourceid coaddid src w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2sigmpro w2snr w2rchi2 w3mpro w3sigmpro w3snr w3rchi2 w4mpro w4sigmpro w4snr w4rchi2 rchi2 nb na w1sat w2sat w3sat w4sat satnum ccflags extflag varflag phqual detbit moonlev w1nm w1m w2nm w2m w3nm w3m w4nm w4m w1cov w2cov w3cov w4cov w1frtr w2frtr w3frtr w4frtr w1ccmap w1ccmagstr w2ccmap w2ccmapstr w3ccmap w3ccmapstr w4ccmap w4ccmapstr w1flux w1sigflux w1sky w1sigsky w1conf w2flux w2sigflux w2sky w2sigsky w2conf w3flux w3sigflux w3sky w3sigsky w3conf w4flux w4sigflux w4sky w4sigsky w4conf w1mag w1sigmag w1flag w1mcor w2mag w2sigmag w2flag w2mcor w3mag w3sigmag w3flag w3mcor w4mag w4sigmag w4flag w4mcor w1mag1 w1sigmag1 w1flag1 w2mag1 w2sigmag1 w2flag1 w3mag1 w3sigmag1 w3flag1 w4mag1 w4sigmag1 w4flag1 w1mag2 w1sigmag2 w1flag2 w2mag2 w2sigmag2 w2flag2 w3mag2 w3sigmag2 w3flag2 w4mag2 w4sigmag2 w4flag2 w1mag3 w1sigmag3 w1flag3 w2mag3 w2sigmag3 w2flag3 w3mag3 w3sigmag3 w3flag3 w4mag3 w4sigmag3 w4flag3 w1mag4 w1sigmag4 w1flag4 w2mag4 w2sigmag4 w2flag4 w3mag4 w3sigmag4 w3flag4 w4mag4 w4sigmag4 w4flag4 w1mag5 w1sigmag5 w1flag5 w2mag5 w2sigmag5 w2flag5 w3mag5 w3sigmag5 w3flag5 w4mag5 w4sigmag5 w4flag5 w1mag6 w1sigmag6 w1flag6 w2mag6 w2sigmag6 w2flag6 w3mag6 w3sigmag6 w3flag6 w4mag6 w4sigmag6 w4flag6 w1mag7 w1sigmag7 w1flag7 w2mag7 w2sigmag7 w2flag7 w3mag7 w3sigmag7 w3flag7 w4mag7 w4sigmag7 w4flag7 w1mag8 w1sigmag8 w1flag8 w2mag8 w2sigmag8 w2flag8 w3mag8 w3sigmag8 w3flag8 w4mag8 w4sigmag8 w4flag8 w1magp w1sigp1 w1sigp2 w1dmag w1ndf w1mlq w1mjdmin w1mjdmax w1mjdmean w2magp w2sigp1 w2sigp2 w2dmag w2ndf w2mlq w2mjdmin w2mjdmax w2mjdmean w3magp w3sigp1 w3sigp2 w3dmag w3ndf w3mlq w3mjdmin w3mjdmax w3mjdmean w4magp w4sigp1 w4sigp2 w4dmag w4ndf w4mlq w4mjdmin w4mjdmax w4mjdmean rho12 rho23 rho34 q12 q23 q34 xscprox w1rsemi w1ba w1pa w1gmap w1gerr w1gflg w2rsemi w2ba w2pa w2gmap w2gerr w2gflg w3rsemi w3ba w3pa w3gmap w3gerr w3gflg w4rsemi w4ba w4pa w4gmap w4gerr w4gflg tmasskey r2mass ra2mass n2mass jm2mass jmsig2mass hm2mass hmsig2mass km2mass kmsig2mass bestusectr ngrp x y z sptind" | cat - 
+Only a few finished.  Re-run.
 
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=3gb" -o coadd.log -m abe -M dstn@cmu.edu -t 1000-1409 ./wise-coadd.py
 
-1 - desc ra dec sigra sigdec 
-6 - sigradec glon glat elon elat wx wy counter sourceid coaddid src
-17 - w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2sigmpro w2snr w2rchi2 w3mpro w3sigmpro w3snr w3rchi2 w4mpro w4sigmpro w4snr w4rchi2
-33 - rchi2 nb na w1sat w2sat w3sat w4sat satnum ccflags extflag varflag phqual detbit moonlev w1nm w1m w2nm w2m w3nm w3m w4nm w4m w1cov w2cov w3cov w4cov w1frtr w2frtr w3frtr w4frtr w1ccmap w1ccmagstr w2ccmap w2ccmapstr w3ccmap w3ccmapstr w4ccmap w4ccmapstr w1flux w1sigflux w1sky w1sigsky w1conf w2flux w2sigflux w2sky w2sigsky w2conf w3flux w3sigflux w3sky w3sigsky w3conf w4flux w4sigflux w4sky w4sigsky w4conf w1mag w1sigmag w1flag w1mcor w2mag w2sigmag w2flag w2mcor w3mag w3sigmag w3flag w3mcor w4mag w4sigmag w4flag w4mcor w1mag1 w1sigmag1 w1flag1 w2mag1 w2sigmag1 w2flag1 w3mag1 w3sigmag1 w3flag1 w4mag1 w4sigmag1 w4flag1 w1mag2 w1sigmag2 w1flag2 w2mag2 w2sigmag2 w2flag2 w3mag2 w3sigmag2 w3flag2 w4mag2 w4sigmag2 w4flag2 w1mag3 w1sigmag3 w1flag3 w2mag3 w2sigmag3 w2flag3 w3mag3 w3sigmag3 w3flag3 w4mag3 w4sigmag3 w4flag3 w1mag4 w1sigmag4 w1flag4 w2mag4 w2sigmag4 w2flag4 w3mag4 w3sigmag4 w3flag4 w4mag4 w4sigmag4 w4flag4 w1mag5 w1sigmag5 w1flag5 w2mag5 w2sigmag5 w2flag5 w3mag5 w3sigmag5 w3flag5 w4mag5 w4sigmag5 w4flag5 w1mag6 w1sigmag6 w1flag6 w2mag6 w2sigmag6 w2flag6 w3mag6 w3sigmag6 w3flag6 w4mag6 w4sigmag6 w4flag6 w1mag7 w1sigmag7 w1flag7 w2mag7 w2sigmag7 w2flag7 w3mag7 w3sigmag7 w3flag7 w4mag7 w4sigmag7 w4flag7 w1mag8 w1sigmag8 w1flag8 w2mag8 w2sigmag8 w2flag8 w3mag8 w3sigmag8 w3flag8 w4mag8 w4sigmag8 w4flag8 w1magp w1sigp1 w1sigp2 w1dmag w1ndf w1mlq w1mjdmin w1mjdmax w1mjdmean w2magp w2sigp1 w2sigp2 w2dmag w2ndf w2mlq w2mjdmin w2mjdmax w2mjdmean w3magp w3sigp1 w3sigp2 w3dmag w3ndf w3mlq w3mjdmin w3mjdmax w3mjdmean w4magp w4sigp1 w4sigp2 w4dmag w4ndf w4mlq w4mjdmin w4mjdmax w4mjdmean rho12 rho23 rho34 q12 q23 q34 xscprox w1rsemi w1ba w1pa w1gmap w1gerr w1gflg w2rsemi w2ba w2pa w2gmap w2gerr w2gflg w3rsemi w3ba w3pa w3gmap w3gerr w3gflg w4rsemi w4ba w4pa w4gmap w4gerr w4gflg tmasskey r2mass ra2mass n2mass jm2mass jmsig2mass hm2mass hmsig2mass km2mass kmsig2mass bestusectr ngrp x y z sptind
+1000-1409: job 5773, rev 23480 (no relevant differences from 23478)
 
+Oh, the mail settings are per-sub-job.  Oops.
 
-# dies... too much memory?
-text2fits.py -H "$(cat wisecols)" -s "|" wise-allsky-cat-part27 wise-cat27.fits > w.log
+qsub -d $(pwd) -N coadd-w2 -l "nodes=1:ppn=1" -l "pvmem=3gb" -o coadd-w2.log -m a -M dstn@cmu.edu -t 2000-2409 ./wise-coadd.py
 
-
-gawk -F "|" 'BEGIN{OFS="|"} { print $2, $3, $4, $5, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32 }' wise-allsky-cat-part27 > wise-27-tag
-
-text2fits.py -s "|" -H "ra dec dra ddec w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2sigmpro w2snr w2rchi2 w3mpro w3sigmpro w3snr w3rchi2 w4mpro w4sigmpro w4snr w4rchi2" wise-27-tag wise-27-tag.fits
-
-text2fits.py -s "|" -f "ddffffffffffffffffff" -H "ra dec dra ddec w1mpro w1sigmpro w1snr w1rchi2 w2mpro w2sigmpro w2snr w2rchi2 w3mpro w3sigmpro w3snr w3rchi2 w4mpro w4sigmpro w4snr w4rchi2" wise-27-tag wise-27-tag.fits
+2000-2409: job 5776, rev 23482 (no relevant differences from 23478)
 
 
+
+
+----------
 
 
 Forced photometry run on targets from Schlegel, 2013-04-18
