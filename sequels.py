@@ -616,8 +616,8 @@ def main():
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--minsb1', dest='minsb1', default=0.1, type=float)
     parser.add_option('--minsb2', dest='minsb2', default=0.1, type=float)
-    parser.add_option('--minsb3', dest='minsb3', default=1e-3, type=float)
-    parser.add_option('--minsb4', dest='minsb4', default=1e-3, type=float)
+    parser.add_option('--minsb3', dest='minsb3', default=0.1, type=float)
+    parser.add_option('--minsb4', dest='minsb4', default=0.1, type=float)
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
     parser.add_option('-o', dest='output', default=os.path.join(outdir, 'phot-%s.fits'))
