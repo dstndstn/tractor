@@ -414,6 +414,40 @@ def one_tile(tile, opt, savepickle, ps):
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
         YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
+        if ps:
+            sig1 = 1./np.sqrt(np.median(iv))
+            plt.clf()
+            plt.imshow(fullimg, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-3*sig1, vmax=10*sig1)
+            ax = plt.axis()
+            plt.colorbar()
+            for x in XX:
+                plt.plot([x,x], [0,H], 'r-', alpha=0.5)
+            for y in YY:
+                plt.plot([0,W], [y,y], 'r-', alpha=0.5)
+            plt.axis(ax)
+            ps.savefig()
+            
+            # xx,yy = [],[]
+            # cc = []
+            # for src in cat:
+            #     c = 'b'
+            #     if src.getBrightness().getBand(wanyband) > defaultflux:
+            #         c = 'g'
+            #     x,y = twcs.positionToPixel(src.getPosition())
+            #     xx.append(x)
+            #     yy.append(y)
+            #     cc.append(c)
+            # p1 = plt.scatter(xx, yy, c=cc, marker='+')
+            notI = np.flatnonzero(wf <= defaultflux)
+            plt.plot(T.x[notI], T.y[notI], 'b+')
+            plt.plot(T.x[I], T.y[I], 'g+')
+            plt.axis(ax)
+            ps.savefig()
+            plt.plot(UW.x, UW.y, 'r+')
+            plt.axis(ax)
+            ps.savefig()
+
         if savepickle:
             mods = []
             cats = []
@@ -479,14 +513,17 @@ def one_tile(tile, opt, savepickle, ps):
                 J = np.flatnonzero(((UW.x+m) >= (ix0-0.5)) * ((UW.x-m) < (ix1-0.5)) *
                                    ((UW.y+m) >= (iy0-0.5)) * ((UW.y-m) < (iy1-0.5)))
                 wnm = UW.get('w%inm' % band)
+                nomag = 0
                 for j in J:
                     if not np.isfinite(wnm[j]):
+                        nomag += 1
                         continue
                     #assert(np.isfinite(wnm[j]))
-                    ptsrc = PointSource(RaDecPos(UW.ra[j], UW.ra[j]),
+                    ptsrc = PointSource(RaDecPos(UW.ra[j], UW.dec[j]),
                                               NanoMaggies(**{wanyband: wnm[j]}))
                     ptsrc.radius = UW.rad[j]
                     subcat.append(ptsrc)
+                print 'WISE-only:', nomag, 'of', len(J), 'had invalid mags'
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
                 if ps:
@@ -500,16 +537,19 @@ def one_tile(tile, opt, savepickle, ps):
                         x,y = twcs.positionToPixel(src.getPosition())
                         xx.append(x)
                         yy.append(y)
-                    p1 = plt.plot(xx[:len(srci)], yy[:len(srci)], 'r+')
-                    p2 = plt.plot(xx[len(srci):len(I)], yy[len(srci):len(I)], 'b+')
-                    p3 = plt.plot(xx[len(I):], yy[len(I):], 'g+')
+                    p1 = plt.plot(xx[:len(srci)], yy[:len(srci)], 'b+')
+                    p2 = plt.plot(xx[len(srci):len(I)], yy[len(srci):len(I)], 'g+')
+                    p3 = plt.plot(xx[len(I):], yy[len(I):], 'r+')
+                    p4 = plt.plot(UW.x[np.logical_not(np.isfinite(wnm[J]))],
+                                  UW.y[np.logical_not(np.isfinite(wnm[J]))],
+                                  'y+')
                     ps.savefig()
 
-                    plt.clf()
-                    plt.imshow(invvar, interpolation='nearest', origin='lower')
-                    plt.colorbar()
-                    plt.title('invvar')
-                    ps.savefig()
+                    # plt.clf()
+                    # plt.imshow(invvar, interpolation='nearest', origin='lower')
+                    # plt.colorbar()
+                    # plt.title('invvar')
+                    # ps.savefig()
 
                 print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
                 tractor = Tractor([tim], subcat)
