@@ -11,7 +11,16 @@ PYMOD_LIB ?= -lpython
 EIGEN_INC ?= -I/usr/local/include/eigen3
 
 CERES_INC ?= 
-CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
+# ceres 1.6.0 was so easy...
+#CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
+# ceres 1.7.0 doesn't have the shared lib on my homebrew install...
+CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
+/usr/local/lib/libcxsparse.a \
+/usr/local/lib/libcholmod.a \
+/usr/local/lib/libcamd.a \
+/usr/local/lib/libcolamd.a \
+/usr/local/lib/libamd.a \
+-framework Accelerate
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<

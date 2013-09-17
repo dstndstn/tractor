@@ -6,16 +6,18 @@
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
+#include "glog/logging.h"
 %}
 
 %init %{
     // numpy
     import_array();
+
+    google::InitGoogleLogging("ceres.i");
 %}
 
 %{
 #include "ceres/ceres.h"
-#include "glog/logging.h"
 #include <vector>
     %}
 
@@ -33,17 +35,11 @@ static int ceres_forced_phot(PyObject* blocks,
        data: (x0, y0, np_img, np_inverr)
        sources: [ (index, x0, y0, np_img), ... ]
      */
-
-    /// FIXME -- Need to be able to specify that a source touches multiple
-    /// blocks!!!
-
     npy_intp Nblocks;
 
 	assert(PyList_Check(blocks));
     Nblocks = PyList_Size(blocks);
     printf("N blocks: %i\n", (int)Nblocks);
-
-    google::InitGoogleLogging("ceres.i");
 
     assert(PyArray_Check(np_fluxes));
     double* realfluxes = (double*)PyArray_DATA(np_fluxes);
@@ -112,10 +108,12 @@ static int ceres_forced_phot(PyObject* blocks,
     // Run the solver!
     Solver::Options options;
     options.minimizer_progress_to_stdout = true;
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    //options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.jacobi_scaling = false;
 
     // .linear_solver_type = SPARSE_NORMAL_CHOLESKY / DENSE_QR
+    // / DENSE_SCHUR / SPARSE_SCHUR
     // .trust_region_strategy_type = LEVENBERG_MARQUARDT / DOGLEG
     // .dogleg_type = TRADITIONAL_DOGLEG / SUBSPACE_DOGLEG 
 

@@ -22,6 +22,37 @@ qsub -d $(pwd) -N coadd-w2 -l "nodes=1:ppn=1" -l "pvmem=3gb" -o coadd-w2.log -m 
 
 2000-2409: job 5776, rev 23482 (no relevant differences from 23478)
 
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3409 ./wise-coadd.py
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3409 ./wise-coadd.py
+
+3000-3409: job 5779, rev 23482
+4000-4409: job 5780, rev 23482
+
+qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-409 ./sequels.py
+
+0-409: job 5781, rev 23488
+
+Some of the coadds didn't finish (along the stripe with higher
+coverage; probably timed out).  Re-run.
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1348,1350,1354,1364,1368,1380,2348,2350-2352,2354,2364,2367-2368,2380 ./wise-coadd.py
+
+job 5782, rev 23488
+
+-> all done.
+
+Photometry:
+
+Missing tiles: [56, 99, 171, 185, 189, 190, 191, 192, 193, 223, 229, 325, 348, 350, 351, 352, 354, 364, 367, 368, 380]
+
+Some are just from missing coadd tiles.
+
+qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 56,99,171,185,189,190,191,192,193,223,229,325,348,350,351,352,354,364,367,368,380 ./sequels.py
+
+job 5783, rev 23488
+
+Missing tiles: [56, 99, 171, 185, 189, 190, 191, 192, 193, 223, 229, 325]
+
 
 
 
