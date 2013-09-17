@@ -1059,11 +1059,12 @@ class Tractor(MultiParams):
                         continue
                     #print 'deriv: sum', um.patch.sum(), 'scale', scale, 'shape', um.shape,
                     um.addTo(mm)
-                    dchi2 = np.sum((mm * scale * ie) ** 2)
-                    #print 'dchi2', dchi2
+                    x0,y0 = um.x0,um.y0
+                    uh,uw = um.shape
+                    slc = slice(y0, y0+uh), slice(x0,x0+uw)
+                    dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
                     IV[NS + ui] += dchi2
-                    mm[:,:] = 0.
-            #print 'var1:', IV
+                    mm[slc] = 0.
 
         if sky:
             # print 'Catalog params:', self.catalog.numberOfParams()
