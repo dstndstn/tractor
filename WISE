@@ -53,6 +53,10 @@ job 5783, rev 23488
 
 Missing tiles: [56, 99, 171, 185, 189, 190, 191, 192, 193, 223, 229, 325]
 
+OOPS, found bug in adding unmatched WISE sources.  Fixed in rev 23492.  Create sequels-phot-3 dir and symlink.
+
+job 5785, rev 23492
+
 
 
 

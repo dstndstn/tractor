@@ -133,6 +133,7 @@ class CeresTractor(Tractor):
         logverb('forced phot: derivs', Time()-t0)
 
         # Inverse variance
+        t0 = Time()
         IV = None
         if variance:
             if sky and skyvariance:
@@ -158,19 +159,24 @@ class CeresTractor(Tractor):
                     if um is None:
                         continue
                     um.addTo(mm)
-                    dchi2 = np.sum((mm * scale * ie) ** 2)
+                    x0,y0 = um.x0,um.y0
+                    uh,uw = um.shape
+                    slc = slice(y0, y0+uh), slice(x0,x0+uw)
+                    dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
                     IV[NS + ui] += dchi2
-                    mm[:,:] = 0.
+                    mm[slc] = 0.
+                    
+        logverb('forced phot: invvar', Time()-t0)
+
+        t0 = Time()
+        
         if sky:
             # Sky derivatives are part of the image derivatives, so go first in
             # the derivative list.
             derivs = skyderivs + derivs
 
         assert(len(derivs) == self.numberOfParams())
-
-
         allderivs = derivs
-        
         #
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -188,9 +194,7 @@ class CeresTractor(Tractor):
             k += 1
 
         blockstart = {}
-
         BW,BH = self.BW, self.BH
-
         for i,derivs in enumerate(allderivs):
             parami = usedParamMap[i]
             for deriv,img in derivs:
@@ -211,14 +215,16 @@ class CeresTractor(Tractor):
                                    slice(x0, min(x0+BW, W)))
                             imi = imlist.index(img)
                             m0 = mod0[imi]
-                            resid = img.getImage()[slc] - m0[slc]
                             data = (x0, y0,
-                                    resid.astype(np.float64),
+                                    img.getImage()[slc].astype(np.float64),
+                                    m0[slc].astype(np.float64),
                                     img.getInvError()[slc].astype(np.float64))
                             blocks.append((data, []))
 
                 # Dice up the deriv
                 deriv.clipTo(W,H)
+                if deriv.patch is None:
+                    continue
                 ph,pw = deriv.shape
                 bx0 = np.clip(int(np.floor( deriv.x0       / float(BW))),
                               0, nbw-1)
@@ -235,28 +241,43 @@ class CeresTractor(Tractor):
                         dd = (parami, deriv.x0, deriv.y0,
                               deriv.patch.astype(np.float64))
                         blocks[b0 + bi][1].append(dd)
-
-        #fluxes = np.zeros(len(allderivs))
+        logverb('forced phot: dicing up', Time()-t0)
+                        
+        t0 = Time()
+        params = self.getParams()
+        ims0 = self._getims(params, imgs, umodels, mod0, scales,
+                            sky, minFlux)
+        logverb('forced phot: ims0', Time()-t0)
+                        
+        t0 = Time()
         fluxes = np.zeros(len(usedParamMap))
         print 'Ceres forced phot:'
+        print len(blocks), ('image blocks (%ix%i), %i params' %
+                            (self.BW,self.BH, len(fluxes)))
         x = ceres_forced_phot(blocks, fluxes)
-        print 'got', x
-
         print 'Fluxes:', fluxes
+        logverb('forced phot: ceres', Time()-t0)
 
+        t0 = Time()
         params = np.zeros(len(allderivs))
         for i,k in usedParamMap.items():
             params[i] = fluxes[k]
 
         self.setParams(params)
-            
-        rtn = (None, None) #ims0,imsBest)
+
+        ims1 = self._getims(params, imgs, umodels, mod0, scales,
+                            sky, minFlux)
+        imsBest = ims1
+        logverb('forced phot: ims1:', Time()-t0)
+        
+        rtn = (ims0,imsBest)
         if variance:
             rtn = rtn + (IV,)
 
         if fitstats and imsBest is None:
             rtn = rtn + (None,)
         elif fitstats:
+            t0 = Time()
             class FitStats(object):
                 pass
             fs = FitStats()
@@ -337,12 +358,42 @@ class CeresTractor(Tractor):
             # re-add sky
             for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
                 tim.getSky().addTo(mod)
+                
+            logverb('forced phot: fit stats:', Time()-t0)
 
+                
             rtn = rtn + (fs,)
 
         return rtn
         
 
+    def _getims(self, params, imgs, umodels, mod0, scales, sky, minFlux):
+        ims = []
+        pa = params
+        for i,(img,umods,m0,scale) in enumerate(zip(imgs, umodels, mod0, scales)):
+            mod = m0.copy()
+            if sky:
+                img.getSky().addTo(mod)
+            for b,um in zip(pa,umods):
+                if um is None:
+                    continue
+                if minFlux is not None:
+                    b = max(b, minFlux)
+                counts = b * scale
+                if counts == 0.:
+                    continue
+                if not np.isfinite(counts):
+                    print 'Warning: counts', counts, 'b', b, 'scale', scale
+                assert(np.isfinite(counts))
+                assert(np.all(np.isfinite(um.patch)))
+                (um * counts).addTo(mod)
+            ie = img.getInvError()
+            im = img.getImage()
+            chi = (im - mod) * ie
+            roi = None
+            ims.append((im, mod, ie, chi, roi))
+        return ims
+                
 
         
 

@@ -73,7 +73,10 @@ for seed in range(100):
             x0 = ix * BW
             y0 = iy * BH
             slc = slice(y0, min(y0+BH, H)), slice(x0, min(x0+BW, W))
-            data = (x0, y0, mod[slc].astype(np.float64),
+            dat = mod[slc].astype(np.float64)
+            #mod0 = np.zeros_like(dat)
+            mod0 = None
+            data = (x0, y0, dat, mod0,
                     np.sqrt(iv[slc]).astype(np.float64))
             blocks.append((data, []))
 
@@ -100,7 +103,7 @@ for seed in range(100):
     plt.imshow(mod, interpolation='nearest', origin='lower',
                extent=[0, W, 0, H], cmap='gray')
     for block in blocks:
-        ((x0,y0,img,iv), srclist) = block
+        ((x0,y0,img,mod0,iv), srclist) = block
         h,w = img.shape
         plt.plot([x0,x0+w,x0+w,x0,x0], [y0,y0,y0+h,y0+h,y0], 'r-', alpha=0.5)
         for (i,x0,y0,p) in srclist:

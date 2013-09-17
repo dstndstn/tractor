@@ -8,8 +8,10 @@ using ceres::Solve;
 class Patch {
  public:
 
- Patch(int x0, int y0, int w, int h, double* img, double* ierr=NULL) :
-    _x0(x0), _y0(y0), _w(w), _h(h), _img(img), _ierr(ierr) {}
+ Patch(int x0, int y0, int w, int h, double* img,
+       double* mod0=NULL, double* ierr=NULL) :
+    _x0(x0), _y0(y0), _w(w), _h(h), _img(img), _ierr(ierr),
+        _mod0(mod0) {}
 
     int npix() const {
         return _w * _h;
@@ -21,6 +23,7 @@ class Patch {
     int _h;
     double* _img;
     double* _ierr;
+    double* _mod0;
 };
 
 class ForcedPhotCostFunction : public CostFunction {

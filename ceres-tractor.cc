@@ -15,8 +15,10 @@ ForcedPhotCostFunction::ForcedPhotCostFunction(Patch data,
     for (size_t i=0; i<sources.size(); i++) {
         bs->push_back(1);
     }
-    printf("ForcedPhotCostFunction: npix %i, nsources %i\n",
-           num_residuals(), (int)parameter_block_sizes().size());
+    /*
+     printf("ForcedPhotCostFunction: npix %i, nsources %i\n",
+     num_residuals(), (int)parameter_block_sizes().size());
+     */
 }
 
 ForcedPhotCostFunction::~ForcedPhotCostFunction() {}
@@ -38,7 +40,14 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
      }
      */
 
-    double* mod = (double*)calloc(_data.npix(), sizeof(double));
+    double* mod;
+    if (_data._mod0) {
+        mod = (double*)malloc(_data.npix() * sizeof(double));
+        memcpy(mod, _data._mod0, _data.npix() * sizeof(double));
+    } else {
+        mod = (double*)calloc(_data.npix(), sizeof(double));
+    }
+
     for (size_t i=0; i<bs.size(); i++) {
         assert(bs[i] == 1);
         int j = 0;
@@ -58,8 +67,10 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
 
         int nx = xhi - xlo;
         for (int y=ylo; y<yhi; y++) {
-            double* orow =         mod + ((y -  _data._y0) *  _data._w) + (xlo -  _data._x0);
-            double* irow = source._img + ((y - source._y0) * source._w) + (xlo - source._x0);
+            double* orow =         mod + ((y -  _data._y0) *  _data._w) +
+                (xlo -  _data._x0);
+            double* irow = source._img + ((y - source._y0) * source._w) +
+                (xlo - source._x0);
             for (int x=0; x<nx; x++, orow++, irow++) {
                 (*orow) += (*irow) * flux;
             }
@@ -95,10 +106,13 @@ bool ForcedPhotCostFunction::Evaluate(double const* const* parameters,
         int yhi = MIN(source._y0 + source._h, _data._y0 + _data._h);
         int nx = xhi - xlo;
         for (int y=ylo; y<yhi; y++) {
-            double* orow = jacobians[i] + ((y -  _data._y0) *  _data._w) + (xlo -  _data._x0);
-            double* irow = source._img  + ((y - source._y0) * source._w) + (xlo - source._x0);
-            double* erow =  _data._ierr + ((y -  _data._y0) *  _data._w) + (xlo -  _data._x0);
-            for (int x=0; x<nx; x++, orow++, irow++) {
+            double* orow = jacobians[i] + ((y -  _data._y0) *  _data._w) +
+                (xlo -  _data._x0);
+            double* irow = source._img  + ((y - source._y0) * source._w) +
+                (xlo - source._x0);
+            double* erow =  _data._ierr + ((y -  _data._y0) *  _data._w) +
+                (xlo -  _data._x0);
+            for (int x=0; x<nx; x++, orow++, irow++, erow++) {
                 (*orow) = -1.0 * (*irow) * (*erow);
             }
         }
