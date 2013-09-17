@@ -1152,7 +1152,8 @@ class Tractor(MultiParams):
                 ims.append((im, mod, ie, chi, roi))
 
                 chis.append(chi)
-                chisq += (chi**2).sum()
+                #chisq += (chi**2).sum()
+                chisq += (chi.astype(np.float64)**2).sum()
             lnp = -0.5 * chisq
             if priors:
                 lnp += tractor.getLogPrior()
@@ -1184,7 +1185,7 @@ class Tractor(MultiParams):
                 lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
                                                self, rois, scales, None, None, priors,
                                                sky, minFlux)
-                logverb('forced phot: initial lnp', Time()-t0)
+                logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
 
             if justims0:
                 return lnp0,chis0,ims0
@@ -1263,7 +1264,7 @@ class Tractor(MultiParams):
                 lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
                                             rois, scales, p0sky, Xsky, priors, sky,
                                             minFlux)
-                logverb('Forced phot: stepped with alpha', alpha, 'for dlnp', lnp-lnp0)
+                logverb('Forced phot: stepped with alpha', alpha, 'for lnp', lnp, ', dlnp', lnp-lnp0)
                 logverb('Took', Time()-t0)
                 if lnp < (lnpBest - 1.):
                     logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)

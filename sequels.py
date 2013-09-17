@@ -10,7 +10,7 @@ from glob import glob
 
 import fitsio
 
-# qsub -d $(pwd) -N sequels -l "cput=2:00:00" -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-99 ./sequels.py
+# qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-99 ./sequels.py
 
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
@@ -149,7 +149,7 @@ def read_photoobjs(r0, r1, d0, d1, margin):
     T = merge_tables(TT)
     return T
 
-def one_tile(tile, opt, savepickle):
+def one_tile(tile, opt, savepickle, ps):
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
 
@@ -423,7 +423,7 @@ def one_tile(tile, opt, savepickle):
             for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
                 celli += 1
 
-                if opt.cell is not None and opt.cell != celli:
+                if len(opt.cells) and not celli in opt.cells:
                     print 'Skipping cell', celli
                     continue
 
@@ -483,11 +483,33 @@ def one_tile(tile, opt, savepickle):
                     if not np.isfinite(wnm[j]):
                         continue
                     #assert(np.isfinite(wnm[j]))
-                    ps = PointSource(RaDecPos(UW.ra[j], UW.ra[j]),
+                    ptsrc = PointSource(RaDecPos(UW.ra[j], UW.ra[j]),
                                               NanoMaggies(**{wanyband: wnm[j]}))
-                    ps.radius = UW.rad[j]
-                    subcat.append(ps)
+                    ptsrc.radius = UW.rad[j]
+                    subcat.append(ptsrc)
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
+
+                if ps:
+                    sig1 = 1./np.sqrt(np.median(invvar))
+                    plt.clf()
+                    plt.imshow(img, interpolation='nearest', origin='lower', cmap='gray',
+                               vmin=-3*sig1, vmax=10*sig1)
+                    plt.colorbar()
+                    xx,yy = [],[]
+                    for src in subcat:
+                        x,y = twcs.positionToPixel(src.getPosition())
+                        xx.append(x)
+                        yy.append(y)
+                    p1 = plt.plot(xx[:len(srci)], yy[:len(srci)], 'r+')
+                    p2 = plt.plot(xx[len(srci):len(I)], yy[len(srci):len(I)], 'b+')
+                    p3 = plt.plot(xx[len(I):], yy[len(I):], 'g+')
+                    ps.savefig()
+
+                    plt.clf()
+                    plt.imshow(invvar, interpolation='nearest', origin='lower')
+                    plt.colorbar()
+                    plt.title('invvar')
+                    ps.savefig()
 
                 print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
                 tractor = Tractor([tim], subcat)
@@ -632,13 +654,14 @@ def main():
                       help='Save .pickle file for debugging purposes')
     parser.add_option('--pp', dest='pickle2', default=False, action='store_true',
                       help='Save .pickle file for each cell?')
+    parser.add_option('--plots', dest='plots', default=False, action='store_true')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
     parser.add_option('--summary', dest='summary', default=False, action='store_true')
 
-    parser.add_option('--cell', dest='cell', default=None, type=int,
-                      help='Just run one cell?')
+    parser.add_option('--cell', dest='cells', default=[], type=int, action='append',
+                      help='Just run certain cells?')
 
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
@@ -874,7 +897,11 @@ def main():
                     tiles.append(int(a))
 
     for i in tiles:
-        one_tile(T[i], opt, opt.pickle)
+        if opt.plots:
+            plot = ps
+        else:
+            plot = None
+        one_tile(T[i], opt, opt.pickle, plot)
 
 if __name__ == '__main__':
     main()
