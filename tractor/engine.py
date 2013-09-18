@@ -848,13 +848,110 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
-    def ceres_optimize_forced_photometry(self,
-                                         minsb=0.,
-                                         sky=False,
-                                         fitstats=False,
-                                         variance=False,
-                                         skyvariance=False):
-        pass
+    def _ceres_forced_photom(self, allderivs, umodels,
+                             imlist, mod0, scales,
+                             sky, minFlux,
+                             BW, BH,
+                             ceresType = np.float32,
+                             ):
+        from ceres import ceres_forced_phot
+        #
+        # allderivs: [
+        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
+        #    (param1:)  [],
+        #    (param2:)  [  (deriv, img), ],
+        #
+        t0 = Time()
+        blocks = []
+
+        usedParamMap = {}
+        k = 0
+        for i,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
+            usedParamMap[i] = k
+            k += 1
+
+        blockstart = {}
+        if BW is None:
+            BW = 50
+        if BH is None:
+            BH = 50
+            
+        for i,derivs in enumerate(allderivs):
+            parami = usedParamMap[i]
+            for deriv,img in derivs:
+                H,W = img.shape
+                if img in blockstart:
+                    (b0,nbw,nbh) = blockstart[img]
+                else:
+                    # Dice up the image
+                    nbw = int(np.ceil(W / float(BW)))
+                    nbh = int(np.ceil(H / float(BH)))
+                    b0 = len(blocks)
+                    blockstart[img] = (b0, nbw, nbh)
+                    for iy in range(nbh):
+                        for ix in range(nbw):
+                            x0 = ix * BW
+                            y0 = iy * BH
+                            slc = (slice(y0, min(y0+BH, H)),
+                                   slice(x0, min(x0+BW, W)))
+                            imi = imlist.index(img)
+                            m0 = mod0[imi]
+                            data = (x0, y0,
+                                    img.getImage()[slc].astype(ceresType),
+                                    m0[slc].astype(ceresType),
+                                    img.getInvError()[slc].astype(ceresType))
+                            blocks.append((data, []))
+
+                # Dice up the deriv
+                deriv.clipTo(W,H)
+                if deriv.patch is None:
+                    continue
+                ph,pw = deriv.shape
+                bx0 = np.clip(int(np.floor( deriv.x0       / float(BW))),
+                              0, nbw-1)
+                bx1 = np.clip(int(np.ceil ((deriv.x0 + pw) / float(BW))),
+                              0, nbw-1)
+                by0 = np.clip(int(np.floor( deriv.y0       / float(BH))),
+                              0, nbh-1)
+                by1 = np.clip(int(np.ceil ((deriv.y0 + ph) / float(BH))),
+                              0, nbh-1)
+
+                for by in range(by0, by1+1):
+                    for bx in range(bx0, bx1+1):
+                        bi = by * nbw + bx
+                        dd = (parami, deriv.x0, deriv.y0,
+                              deriv.patch.astype(ceresType))
+                        blocks[b0 + bi][1].append(dd)
+        logverb('forced phot: dicing up', Time()-t0)
+                        
+        t0 = Time()
+        params = self.getParams()
+        ims0 = self._getims(params, imlist, umodels, mod0, scales,
+                            sky, minFlux, None)
+        logverb('forced phot: ims0', Time()-t0)
+                        
+        t0 = Time()
+        fluxes = np.zeros(len(usedParamMap))
+        print 'Ceres forced phot:'
+        print len(blocks), ('image blocks (%ix%i), %i params' %
+                            (BW, BH, len(fluxes)))
+        x = ceres_forced_phot(blocks, fluxes)
+        print 'Fluxes:', fluxes
+        logverb('forced phot: ceres', Time()-t0)
+
+        params = np.zeros(len(allderivs))
+        for i,k in usedParamMap.items():
+            params[i] = fluxes[k]
+        self.setParams(params)
+
+        t0 = Time()
+        ims1 = self._getims(params, imlist, umodels, mod0, scales,
+                            sky, minFlux, None)
+        imsBest = ims1
+        logverb('forced phot: ims1:', Time()-t0)
+        return ims0, imsBest
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
                       umodels, scales):
@@ -1055,8 +1152,247 @@ class Tractor(MultiParams):
             #print '  ', nzero, 'components are zero'
             umodels.append(umods)
         return umodels, umodtosource, umodsforsource
+
+    def _getims(self, fluxes, imgs, umodels, mod0, scales, sky, minFlux, rois):
+        ims = []
+        for i,(img,umods,m0,scale
+               ) in enumerate(zip(imgs, umodels, mod0, scales)):
+            roi = None
+            if rois:
+                roi = rois[i]
+            mod = m0.copy()
+            assert(np.all(np.isfinite(mod)))
+            if sky:
+                img.getSky().addTo(mod)
+                assert(np.all(np.isfinite(mod)))
+            for f,um in zip(fluxes,umods):
+                if um is None:
+                    continue
+                if minFlux is not None:
+                    f = max(f, minFlux)
+                counts = f * scale
+                if counts == 0.:
+                    continue
+                if not np.isfinite(counts):
+                    print 'Warning: counts', counts, 'f', f, 'scale', scale
+                assert(np.isfinite(counts))
+                assert(np.all(np.isfinite(um.patch)))
+                (um * counts).addTo(mod)
+
+            ie = img.getInvError()
+            im = img.getImage()
+            if roi is not None:
+                ie = ie[roi]
+                im = ie[roi]
+            chi = (im - mod) * ie
+
+            # DEBUG
+            if not np.all(np.isfinite(chi)):
+                print 'Chi has non-finite pixels:'
+                print np.unique(chi[np.logical_not(np.isfinite(chi))])
+                print 'Inv error range:', ie.min(), ie.max()
+                print 'All finite:', np.all(np.isfinite(ie))
+                print 'Mod range:', mod.min(), mod.max()
+                print 'All finite:', np.all(np.isfinite(mod))
+                print 'Img range:', im.min(), im.max()
+                print 'All finite:', np.all(np.isfinite(im))
+            assert(np.all(np.isfinite(chi)))
+            ims.append((im, mod, ie, chi, roi))
+        return ims
     
+    def _lnp_for_update(self, mod0, imgs, umodels, X, alpha, p0, rois,
+                        scales, p0sky, Xsky, priors, sky, minFlux):
+        if X is None:
+            pa = p0
+        else:
+            pa = [p + alpha * d for p,d in zip(p0, X)]
+        chisq = 0.
+        chis = []
+        if Xsky is not None:
+            self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+        # Recall that "umodels" is a full matrix (shape (Nimage,
+        # Nsrcs)) of patches, so we just go through each image,
+        # ignoring None entries and building up model images from
+        # the scaled unit-flux patches.
+
+        ims = self._getims(pa, imgs, umodels, mod0, scales, sky, minFlux, rois)
+        for nil,nil,nil,chi,roi in ims:
+            chis.append(chi)
+            chisq += (chi.astype(np.float64)**2).sum()
+        lnp = -0.5 * chisq
+        if priors:
+            lnp += self.getLogPrior()
+        return lnp, chis, ims
+
+    def _lsqr_forced_photom(self, derivs, mod0, imgs, umodels, rois, scales,
+                            priors, sky, minFlux, justims0, subimgs,
+                            damp, alphas, Nsky, mindlnp, shared_params,
+                            use_tsnnls):
+        # About rois and derivs: we call
+        #   getUpdateDirection(derivs, ..., chiImages=[chis])
+        # And this uses the "img" objects in "derivs" to decide on the region
+        # that is being optimized; the number of rows = total number of pixels.
+        # We have to make sure that "chiImages" matches that size.
+        #
+        # We shift the unit-flux models (above, um.x0 -= x0) to be
+        # relative to the ROI.
+
+        # debugging images
+        ims0 = None
+        imsBest = None
+
+        lnp0 = None
+        chis0 = None
+        quitNow = False
+
+        ## FIXME -- this should depend on the PhotoCal scalings!
+        damp0 = 1e-3
+        damping = damp
+
+        while True:
+            # A flag to try again even if the lnprob got worse
+            tryAgain = False
+
+            p0 = self.getParams()
+            if sky:
+                p0sky = p0[:Nsky]
+                p0 = p0[Nsky:]
+
+            if lnp0 is None:
+                t0 = Time()
+                lnp0,chis0,ims0 = self._lnp_for_update(
+                    mod0, imgs, umodels, None, None, p0, rois, scales,
+                    None, None, priors, sky, minFlux)
+                logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
+
+            if justims0:
+                return lnp0,chis0,ims0
+
+            # print 'Starting opt loop with'
+            # print '  p0', p0
+            # print '  lnp0', lnp0
+            # print '  chisqs', [(chi**2).sum() for chi in chis0]
+            # print 'chis0:', chis0
+
+            # Ugly: getUpdateDirection calls self.getImages(), and
+            # ASSUMES they are the same as the images referred-to in
+            # the "derivs", to figure out which chi image goes with
+            # which image.  Temporarily set images = subimages
+            if rois is not None:
+                realims = self.images
+                self.images = subimgs
+
+            logverb('forced phot: getting update with damp=', damping)
+            t0 = Time()
+            X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
+                                        scale_columns=False, chiImages=chis0,
+                                        shared_params=shared_params,
+                                        use_tsnnls=use_tsnnls)
+            topt = Time()-t0
+            logverb('forced phot: opt:', topt)
+            #print 'forced phot: update', X
+            if rois is not None:
+                self.images = realims
+
+            if len(X) == 0:
+                print 'Error getting update direction'
+                break
             
+            ## tryUpdates():
+            if alphas is None:
+                # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
+                alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
+
+            if sky:
+                # Split the sky-update parameters from the source parameters
+                Xsky = X[:Nsky]
+                X = X[Nsky:]
+            else:
+                p0sky = Xsky = None
+
+            # Check whether the update produces all fluxes above the
+            # minimums: if so we should be able to take the step with
+            # alpha=1 and quit.
+
+            if (minFlux is None) or np.all((p0 + X) >= minFlux):
+                #print 'Update produces non-negative fluxes; accepting with alpha=1'
+                alphas = [1.]
+                quitNow = True
+            else:
+                print 'Some too-negative fluxes requested:'
+                print 'Fluxes:', p0
+                print 'Update:', X
+                print 'Total :', p0+X
+                print 'MinFlux:', minFlux
+                if damp == 0.0:
+                    damping = damp0
+                    damp0 *= 10.
+                    print 'Setting damping to', damping
+                    if damp0 < 1e3:
+                        tryAgain = True
+
+            lnpBest = lnp0
+            alphaBest = None
+            chiBest = None
+
+            for alpha in alphas:
+                t0 = Time()
+                lnp,chis,ims = self._lnp_for_update(
+                    mod0, imgs, umodels, X, alpha, p0, rois, scales,
+                    p0sky, Xsky, priors, sky, minFlux)
+                logverb('Forced phot: stepped with alpha', alpha,
+                        'for lnp', lnp, ', dlnp', lnp-lnp0)
+                logverb('Took', Time()-t0)
+                if lnp < (lnpBest - 1.):
+                    logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)
+                    break
+                if lnp > lnpBest:
+                    alphaBest = alpha
+                    lnpBest = lnp
+                    chiBest = chis
+                    imsBest = ims
+
+            if alphaBest is not None:
+                # Clamp fluxes up to zero
+                if minFlux is not None:
+                    pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
+                else:
+                    pa = [p + alphaBest * d for p,d in zip(p0, X)]
+                self.catalog.setParams(pa)
+
+                if sky:
+                    self.images.setParams([p + alpha * d for p,d
+                                           in zip(p0sky, Xsky)])
+
+                dlogprob = lnpBest - lnp0
+                alpha = alphaBest
+                lnp0 = lnpBest
+                chis0 = chiBest
+                # print 'Accepting alpha =', alpha
+                # print 'new lnp0', lnp0
+                # print 'new chisqs', [(chi**2).sum() for chi in chis0]
+                # print 'new params', self.getParams()
+            else:
+                dlogprob = 0.
+                alpha = 0.
+
+                ### ??
+                if sky:
+                    # Revert -- recall that we change params while probing in
+                    # lnpForUpdate()
+                    self.images.setParams(p0sky)
+
+            #tstep = Time() - t0
+            #print 'forced phot: line search:', tstep
+            #print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
+            if dlogprob < mindlnp:
+                if not tryAgain:
+                    break
+
+            if quitNow:
+                break
+        return ims0,imsBest
+    
     def optimize_forced_photometry(self, alphas=None, damp=0, priors=False,
                                    minsb=0.,
                                    mindlnp=1.,
@@ -1068,7 +1404,10 @@ class Tractor(MultiParams):
                                    variance=False,
                                    skyvariance=False,
                                    shared_params=True,
-                                   use_tsnnls=False):
+                                   use_tsnnls=False,
+                                   use_ceres=False,
+                                   BW=None, BH=None,
+                                   ):
         '''
         Returns:
 
@@ -1188,242 +1527,18 @@ class Tractor(MultiParams):
 
         assert(len(derivs) == self.numberOfParams())
 
-        # About rois and derivs: we call
-        #   getUpdateDirection(derivs, ..., chiImages=[chis])
-        # And this uses the "img" objects in "derivs" to decide on the region
-        # that is being optimized; the number of rows = total number of pixels.
-        # We have to make sure that "chiImages" matches that size.
-        #
-        # We shift the unit-flux models (above, um.x0 -= x0) to be relative to the
-        # ROI.
+        if use_ceres:
+            (ims0,imsBest
+             ) = self._ceres_forced_photom(derivs, umodels, imlist, mod0, 
+                                           scales, sky, minFlux, BW, BH)
 
-        def lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, tractor, rois, scales,
-                         p0sky, Xsky, priors, sky, minFlux):
-            ims = []
-            if X is None:
-                pa = p0
-            else:
-                pa = [p + alpha * d for p,d in zip(p0, X)]
-            chisq = 0.
-            chis = []
-
-            if Xsky is not None:
-                self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
-
-            # Recall that "umodels" is a full matrix (shape (Nimage,
-            # Nsrcs)) of patches, so we just go through each image,
-            # ignoring None entries and building up model images from
-            # the scaled unit-flux patches.
-            
-            for i,(img,umods,m0,scale) in enumerate(zip(imgs, umodels, mod0, scales)):
-                roi = None
-                if rois:
-                    roi = rois[i]
-                mod = m0.copy()
-                assert(np.all(np.isfinite(mod)))
-                if sky:
-                    img.getSky().addTo(mod)
-                    assert(np.all(np.isfinite(mod)))
-                for b,um in zip(pa,umods):
-                    if um is None:
-                        continue
-                    if minFlux is not None:
-                        b = max(b, minFlux)
-                    counts = b * scale
-                    if counts == 0.:
-                        continue
-                    if not np.isfinite(counts):
-                        print 'Warning: counts', counts, 'b', b, 'scale', scale
-                    assert(np.isfinite(counts))
-                    assert(np.all(np.isfinite(um.patch)))
-                    (um * counts).addTo(mod)
-
-                ie = img.getInvError()
-                im = img.getImage()
-                if roi is not None:
-                    ie = ie[roi]
-                    im = ie[roi]
-                chi = (im - mod) * ie
-
-                # DEBUG
-                if not np.all(np.isfinite(chi)):
-                    print 'Chi has non-finite pixels:'
-                    print np.unique(chi[np.logical_not(np.isfinite(chi))])
-
-                    print 'Inv error range:', ie.min(), ie.max()
-                    print 'All finite:', np.all(np.isfinite(ie))
-                    print 'Mod range:', mod.min(), mod.max()
-                    print 'All finite:', np.all(np.isfinite(mod))
-                    print 'Img range:', im.min(), im.max()
-                    print 'All finite:', np.all(np.isfinite(im))
-
-                assert(np.all(np.isfinite(chi)))
+        else:
+            (ims0,imsBest
+            ) = self._lsqr_forced_photom(
+                derivs, mod0, imgs, umodels, rois, scales, priors, sky,
+                minFlux, justims0, subimgs, damp, alphas, Nsky, mindlnp,
+                shared_params, use_tsnnls)
                 
-                ims.append((im, mod, ie, chi, roi))
-
-                chis.append(chi)
-                #chisq += (chi**2).sum()
-                chisq += (chi.astype(np.float64)**2).sum()
-            lnp = -0.5 * chisq
-            if priors:
-                lnp += tractor.getLogPrior()
-            return lnp, chis, ims
-
-        # debugging images
-        ims0 = None
-        imsBest = None
-
-        lnp0 = None
-        chis0 = None
-        quitNow = False
-
-        ## FIXME -- this should depend on the PhotoCal scalings!
-        damp0 = 1e-3
-        damping = damp
-
-        while True:
-            # A flag to try again even if the lnprob got worse
-            tryAgain = False
-
-            p0 = self.getParams()
-            if sky:
-                p0sky = p0[:Nsky]
-                p0 = p0[Nsky:]
-
-            if lnp0 is None:
-                t0 = Time()
-                lnp0,chis0,ims0 = lnpForUpdate(mod0, imgs, umodels, None, None, p0,
-                                               self, rois, scales, None, None, priors,
-                                               sky, minFlux)
-                logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
-
-            if justims0:
-                return lnp0,chis0,ims0
-
-            # print 'Starting opt loop with'
-            # print '  p0', p0
-            # print '  lnp0', lnp0
-            # print '  chisqs', [(chi**2).sum() for chi in chis0]
-            # print 'chis0:', chis0
-
-            # Ugly: getUpdateDirection calls self.getImages(), and
-            # ASSUMES they are the same as the images referred-to in
-            # the "derivs", to figure out which chi image goes with
-            # which image.  Temporarily set images = subimages
-            if rois is not None:
-                realims = self.images
-                self.images = subimgs
-
-            logverb('forced phot: getting update with damp=', damping)
-            t0 = Time()
-            X = self.getUpdateDirection(derivs, damp=damping, priors=priors,
-                                        scale_columns=False, chiImages=chis0,
-                                        shared_params=shared_params,
-                                        use_tsnnls=use_tsnnls)
-            topt = Time()-t0
-            logverb('forced phot: opt:', topt)
-            #print 'forced phot: update', X
-            if rois is not None:
-                self.images = realims
-
-            if len(X) == 0:
-                print 'Error getting update direction'
-                break
-            
-            ## tryUpdates():
-            if alphas is None:
-                # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
-                alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
-
-            if sky:
-                # Split the sky-update parameters from the source parameters
-                Xsky = X[:Nsky]
-                X = X[Nsky:]
-            else:
-                p0sky = Xsky = None
-
-            # Check whether the update produces all fluxes above the
-            # minimums: if so we should be able to take the step with
-            # alpha=1 and quit.
-
-            #print 'p0:', p0
-            #print 'X:', X
-            if (minFlux is None) or np.all((p0 + X) >= minFlux):
-                #print 'Update produces non-negative fluxes; accepting with alpha=1'
-                alphas = [1.]
-                quitNow = True
-            else:
-                print 'Some too-negative fluxes requested:'
-                print 'Fluxes:', p0
-                print 'Update:', X
-                print 'Total :', p0+X
-                print 'MinFlux:', minFlux
-                if damp == 0.0:
-                    damping = damp0
-                    damp0 *= 10.
-                    print 'Setting damping to', damping
-                    if damp0 < 1e3:
-                        tryAgain = True
-
-            lnpBest = lnp0
-            alphaBest = None
-            chiBest = None
-
-            for alpha in alphas:
-                t0 = Time()
-                lnp,chis,ims = lnpForUpdate(mod0, imgs, umodels, X, alpha, p0, self,
-                                            rois, scales, p0sky, Xsky, priors, sky,
-                                            minFlux)
-                logverb('Forced phot: stepped with alpha', alpha, 'for lnp', lnp, ', dlnp', lnp-lnp0)
-                logverb('Took', Time()-t0)
-                if lnp < (lnpBest - 1.):
-                    logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)
-                    break
-                if lnp > lnpBest:
-                    alphaBest = alpha
-                    lnpBest = lnp
-                    chiBest = chis
-                    imsBest = ims
-
-            #logmsg('  Stepping by', alphaBest, 'for delta-logprob', lnpBest - lnp0)
-            if alphaBest is not None:
-                # Clamp fluxes up to zero
-                if minFlux is not None:
-                    pa = [max(minFlux, p + alphaBest * d) for p,d in zip(p0, X)]
-                else:
-                    pa = [p + alphaBest * d for p,d in zip(p0, X)]
-                self.catalog.setParams(pa)
-
-                if sky:
-                    self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
-
-                dlogprob = lnpBest - lnp0
-                alpha = alphaBest
-                lnp0 = lnpBest
-                chis0 = chiBest
-                # print 'Accepting alpha =', alpha
-                # print 'new lnp0', lnp0
-                # print 'new chisqs', [(chi**2).sum() for chi in chis0]
-                # print 'new params', self.getParams()
-            else:
-                dlogprob = 0.
-                alpha = 0.
-
-                ### ??
-                if sky:
-                    # Revert -- recall that we change params while probing in lnpForUpdate()
-                    self.images.setParams(p0sky)
-
-            #tstep = Time() - t0
-            #print 'forced phot: line search:', tstep
-            #print 'forced phot: alpha', alphaBest, 'for delta-lnprob', dlogprob
-            if dlogprob < mindlnp:
-                if not tryAgain:
-                    break
-
-            if quitNow:
-                break
-
         rtn = (ims0,imsBest)
         if variance:
             # Inverse variance

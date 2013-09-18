@@ -565,7 +565,8 @@ def one_tile(tile, opt, savepickle, ps):
 
                 ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
-                    fitstats=True, variance=True, shared_params=False)
+                    fitstats=True, variance=True, shared_params=False,
+                    use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock)
                 print 'That took', Time()-t0
 
                 # tractor.setParams(p0)
@@ -707,6 +708,11 @@ def main():
     parser.add_option('--cell', dest='cells', default=[], type=int, action='append',
                       help='Just run certain cells?')
 
+    parser.add_option('--ceres', dest='ceres', action='store_true', default=False,
+                      help='Use Ceres Solver?')
+    parser.add_option('--ceres-block', '-B', dest='ceresblock', type=int,
+                      help='Ceres image block size')
+    
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
