@@ -670,10 +670,11 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Pickled', fn
 
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
-                
+
 
 def main():
     import optparse
+    global outdir
 
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--minsb1', dest='minsb1', default=0.1, type=float)
@@ -682,7 +683,7 @@ def main():
     parser.add_option('--minsb4', dest='minsb4', default=0.1, type=float)
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
-    parser.add_option('-o', dest='output', default=os.path.join(outdir, 'phot-%s.fits'))
+    parser.add_option('-o', dest='output', default=None)
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
 
@@ -738,6 +739,9 @@ def main():
 
     if opt.summary:
         A = T
+
+        if opt.output is None:
+            opt.output = os.path.join(outdir, 'phot-%s.fits')
 
         plt.clf()
         missing = []
@@ -941,6 +945,17 @@ def main():
             plot = ps
         else:
             plot = None
+
+        # W3,W4
+        if i >= 1000:
+            i -= 1000
+            opt.bands = [3,4]
+            outdir = 'sequels-phot-w34'
+            if opt.output is None:
+                opt.output = os.path.join(outdir, 'phot-%s.fits')
+            print 'Changed bands to', opt.bands, 'and output dir to', outdir
+            print 'Output file pattern', opt.output
+
         one_tile(T[i], opt, opt.pickle, plot)
 
 if __name__ == '__main__':
