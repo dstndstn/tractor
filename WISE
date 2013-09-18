@@ -57,6 +57,15 @@ OOPS, found bug in adding unmatched WISE sources.  Fixed in rev 23492.  Create s
 
 job 5785, rev 23492
 
+Missing tiles: [189, 190, 191, 193]
+
+Good, those are just the ones outside the area where there are sources.
+
+python -u sequels.py --finish > finish.log 2>&1 &
+
+sequels-phot -> /home/dstn/testdir/sequels-phot-3/
+sequels-phot-temp -> /home/dstn/testdir/sequels-phot-temp/
+sequels-pobj -> /home/dstn/testdir/sequels-pobj-2/
 
 
 

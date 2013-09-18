@@ -13,14 +13,8 @@ def logmsg(*args):
 class CeresTractor(Tractor):
     def __init__(self, *args, **kwargs):
         super(CeresTractor, self).__init__(*args, **kwargs)
-        self.doingForcedPhot = False
         self.BW, self.BH = 50,50
         
-        # def optimize_forced_photometry(self, **kwargs):
-        # self.doingForcedPhot = True
-        # super(CeresTractor, self).optimize_forced_photometry(**kwargs)
-        # self.doingForcedPhot = False
-
     def optimize_forced_photometry(self, damp=0, priors=False,
                                    minsb=0.,
                                    mindlnp=1.,
@@ -132,42 +126,6 @@ class CeresTractor(Tractor):
                 dd.append((um * scale, tim))
         logverb('forced phot: derivs', Time()-t0)
 
-        # Inverse variance
-        t0 = Time()
-        IV = None
-        if variance:
-            if sky and skyvariance:
-                NS = Nsky
-            else:
-                NS = 0
-            IV = np.zeros(len(srcs) + NS)
-            if sky and skyvariance:
-                for di,(dsky,tim) in enumerate(skyderivs):
-                    ie = tim.getInvError()
-                    if dsky.shape == tim.shape:
-                        dchi2 = np.sum((dsky.patch * ie)**2)
-                    else:
-                        mm = np.zeros(tim.shape)
-                        dsky.addTo(mm)
-                        dchi2 = np.sum((mm * ie)**2)
-                    IV[di] = dchi2
-                
-            for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
-                mm = np.zeros(tim.shape)
-                ie = tim.getInvError()
-                for ui,um in enumerate(umods):
-                    if um is None:
-                        continue
-                    um.addTo(mm)
-                    x0,y0 = um.x0,um.y0
-                    uh,uw = um.shape
-                    slc = slice(y0, y0+uh), slice(x0,x0+uw)
-                    dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
-                    IV[NS + ui] += dchi2
-                    mm[slc] = 0.
-                    
-        logverb('forced phot: invvar', Time()-t0)
-
         t0 = Time()
         
         if sky:
@@ -177,6 +135,9 @@ class CeresTractor(Tractor):
 
         assert(len(derivs) == self.numberOfParams())
         allderivs = derivs
+
+        ceresType = np.float32
+
         #
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -216,9 +177,9 @@ class CeresTractor(Tractor):
                             imi = imlist.index(img)
                             m0 = mod0[imi]
                             data = (x0, y0,
-                                    img.getImage()[slc].astype(np.float64),
-                                    m0[slc].astype(np.float64),
-                                    img.getInvError()[slc].astype(np.float64))
+                                    img.getImage()[slc].astype(ceresType),
+                                    m0[slc].astype(ceresType),
+                                    img.getInvError()[slc].astype(ceresType))
                             blocks.append((data, []))
 
                 # Dice up the deriv
@@ -239,7 +200,7 @@ class CeresTractor(Tractor):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
                         dd = (parami, deriv.x0, deriv.y0,
-                              deriv.patch.astype(np.float64))
+                              deriv.patch.astype(ceresType))
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
@@ -272,6 +233,40 @@ class CeresTractor(Tractor):
         
         rtn = (ims0,imsBest)
         if variance:
+            # Inverse variance
+            t0 = Time()
+            IV = None
+            if sky and skyvariance:
+                NS = Nsky
+            else:
+                NS = 0
+            IV = np.zeros(len(srcs) + NS)
+            if sky and skyvariance:
+                for di,(dsky,tim) in enumerate(skyderivs):
+                    ie = tim.getInvError()
+                    if dsky.shape == tim.shape:
+                        dchi2 = np.sum((dsky.patch * ie)**2)
+                    else:
+                        mm = np.zeros(tim.shape)
+                        dsky.addTo(mm)
+                        dchi2 = np.sum((mm * ie)**2)
+                    IV[di] = dchi2
+                
+            for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
+                mm = np.zeros(tim.shape)
+                ie = tim.getInvError()
+                for ui,um in enumerate(umods):
+                    if um is None:
+                        continue
+                    um.addTo(mm)
+                    x0,y0 = um.x0,um.y0
+                    uh,uw = um.shape
+                    slc = slice(y0, y0+uh), slice(x0,x0+uw)
+                    dchi2 = np.sum((mm[slc] * scale * ie[slc]) ** 2)
+                    IV[NS + ui] += dchi2
+                    mm[slc] = 0.
+            logverb('forced phot: invvar', Time()-t0)
+
             rtn = rtn + (IV,)
 
         if fitstats and imsBest is None:
@@ -292,20 +287,14 @@ class CeresTractor(Tractor):
             fs.imnpix = np.array(imnpix)
 
             # Per-source stats:
-
-            # Weak!  Assume one component per source
-            #assert(len(umodels[0]) == len(srcs))
             
             # profile-weighted chi-squared (unit-model weighted chi-squared)
             fs.prochi2 = np.zeros(len(srcs))
-
             # profile-weighted number of pixels
             fs.pronpix = np.zeros(len(srcs))
-
             # profile-weighted sum of (flux from other sources / my flux)
             fs.profracflux = np.zeros(len(srcs))
             fs.proflux = np.zeros(len(srcs))
-
             # total number of pixels touched by this source
             fs.npix = np.zeros(len(srcs), int)
 
@@ -318,11 +307,17 @@ class CeresTractor(Tractor):
 
             # Some fancy footwork to convert from umods to sources
             # (eg, composite galaxies that can have multiple umods)
-            # for each source
+
+            # keep reusing these arrays
+            srcmods = [np.zeros_like(chi) for (img,mod,ie,chi,roi) in imsBest]
+            
+            # for each source:
             for si,uis in enumerate(umodsforsource):
+                print 'fit stats for source', si, 'of', len(umodsforsource)
                 src = self.catalog[si]
                 # for each image
-                for umods,scale,tim,(img,mod,ie,chi,roi) in zip(umodels, scales, imlist, imsBest):
+                for X in enumerate(zip(umodels, scales, imlist, imsBest)):
+                    imi,(umods,scale,tim,(img,mod,ie,chi,roi)) = X
                     # just use 'scale'?
                     pcal = tim.getPhotoCal()
                     cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
@@ -330,38 +325,55 @@ class CeresTractor(Tractor):
                     if csum == 0:
                         continue
 
-                    srcmod = np.zeros_like(chi)
+                    srcmod = srcmods[i]
+                    xlo,xhi,ylo,yhi = None,None,None,None
                     # for each component (usually just one)
                     for ui,counts in zip(uis, cc):
+                        if counts == 0:
+                            continue
                         um = umods[ui]
                         if um is None:
                             continue
+                        # track total ROI.
+                        x0,y0 = um.x0,um.y0
+                        uh,uw = um.shape
+                        if xlo is None or x0 < xlo:
+                            xlo = x0
+                        if xhi is None or x0 + uw > xhi:
+                            xhi = x0 + uw
+                        if ylo is None or y0 < ylo:
+                            ylo = y0
+                        if yhi is None or y0 + uh > yhi:
+                            yhi = y0 + uh
                         # accumulate this unit-flux model into srcmod
                         (um * counts).addTo(srcmod)
-
-                    #ssum = srcmod.sum()
                     # Divide by total flux, not flux within this image; sum <= 1.
-                    srcmod /= csum
+                    if xlo is None or xhi is None or ylo is None or yhi is None:
+                        continue
+                    slc = slice(ylo,yhi),slice(xlo,xhi)
+                    
+                    srcmod[slc] /= csum
 
-                    nz = np.flatnonzero((srcmod > 0) * (ie > 0))
+                    nz = np.flatnonzero((srcmod[slc] > 0) * (ie[slc] > 0))
                     if len(nz) == 0:
+                        srcmod[slc] = 0.
                         continue
 
-                    fs.prochi2[si] += np.sum(srcmod.flat[nz] * chi.flat[nz]**2)
-                    fs.pronpix[si] += np.sum(srcmod.flat[nz])
+                    fs.prochi2[si] += np.sum(srcmod[slc].flat[nz] * chi[slc].flat[nz]**2)
+                    fs.pronpix[si] += np.sum(srcmod[slc].flat[nz])
                     # (mod - srcmod*csum) is the model for everybody else
-                    fs.profracflux[si] += np.sum(((mod/csum - srcmod) * srcmod).flat[nz])
+                    fs.profracflux[si] += np.sum(((mod[slc] / csum - srcmod[slc]) * srcmod[slc]).flat[nz])
                     # scale to nanomaggies, weight by profile
-                    fs.proflux[si] += np.sum((((mod - srcmod*csum) / scale) * srcmod).flat[nz])
+                    fs.proflux[si] += np.sum((((mod[slc] - srcmod[slc]*csum) / scale) * srcmod[slc]).flat[nz])
                     fs.npix[si] += len(nz)
+                    srcmod[slc] = 0.
 
             # re-add sky
             for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
                 tim.getSky().addTo(mod)
-                
+
             logverb('forced phot: fit stats:', Time()-t0)
 
-                
             rtn = rtn + (fs,)
 
         return rtn
@@ -394,61 +406,3 @@ class CeresTractor(Tractor):
             ims.append((im, mod, ie, chi, roi))
         return ims
                 
-
-        
-
-        
-    # def getUpdateDirection(self, *args, **kwargs):
-    #     if not self.doingForcedPhot:
-    #         return super(CeresTractor, self).getUpdateDirection(*args, **kwargs)
-    #     return self.ceresGetUpdateDirection(*args, **kwargs)
-        
-    def ceresGetUpdateDirection(self, allderivs, damp=0., priors=True,
-                                scale_columns=True, scales_only=False,
-                                chiImages=None, variance=False,
-                                shared_params=True, **kwargs):
-        #
-        # allderivs: [
-        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
-        #    (param1:)  [],
-        #    (param2:)  [  (deriv, img), ],
-        #
-        blocks = []
-
-        usedParamMap = {}
-        k = 0
-        for i,derivs in enumerate(allderivs):
-            if len(derivs) == 0:
-                continue
-            usedParamMap[i] = k
-            k += 1
-
-        blockstart = {}
-
-        BW,BH = self.BW, self.BH
-
-        for i,derivs in enumerate(allderivs):
-            parami = usedParamMap[i]
-            for deriv,img in derivs:
-                if img in blockstart:
-                    (b0,nbw,nbh) = blockstart[img]
-                else:
-                    H,W = img.shape
-                    nbw = int(np.ceil(W / float(BW)))
-                    nbh = int(np.ceil(H / float(BH)))
-                    blockstart[img] = (len(blocks), nbw, nbh)
-
-                    for iy in range(nbh):
-                        for ix in range(nbw):
-                            x0 = ix * BW
-                            y0 = iy * BH
-                            slc = (slice(y0, min(y0+BH, H)),
-                                   slice(x0, min(x0+BW, W)))
-                            data = (x0, y0,
-                                    img.getImage()[slc].astype(np.float64),
-                                    img.getInvError()[slc].astype(np.float64))
-                            blocks.append((data, []))
-
-
-
-                    

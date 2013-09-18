@@ -73,11 +73,12 @@ for seed in range(100):
             x0 = ix * BW
             y0 = iy * BH
             slc = slice(y0, min(y0+BH, H)), slice(x0, min(x0+BW, W))
-            dat = mod[slc].astype(np.float64)
+            dat = mod[slc].astype(np.float32)
             #mod0 = np.zeros_like(dat)
             mod0 = None
+            print 'data type', dat.dtype
             data = (x0, y0, dat, mod0,
-                    np.sqrt(iv[slc]).astype(np.float64))
+                    np.sqrt(iv[slc]).astype(np.float32))
             blocks.append((data, []))
 
     for i,src in enumerate(srcs):
@@ -95,7 +96,7 @@ for seed in range(100):
         for by in range(by0, by1+1):
             for bx in range(bx0, bx1+1):
                 bi = by * nbw + bx
-                deriv = (i, patch.x0, patch.y0, patch.patch.astype(np.float64))
+                deriv = (i, patch.x0, patch.y0, patch.patch.astype(np.float32))
                 blocks[bi][1].append(deriv)
 
 

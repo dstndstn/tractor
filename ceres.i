@@ -19,17 +19,17 @@
 %{
 #include "ceres/ceres.h"
 #include <vector>
-    %}
 
-%inline %{
 #if 0
  } // fool emacs indenter
 #endif
 
 #include "ceres-tractor.h"
 
-static int ceres_forced_phot(PyObject* blocks,
-                             PyObject* np_fluxes) {
+template <typename T>
+static int real_ceres_forced_phot(PyObject* blocks,
+                                  PyObject* np_fluxes,
+                                  int npy_type) {
     /*
      blocks: [ (data, sources), (data, sources), ... ]
        data: (x0, y0, np_img, np_mod0, np_inverr)
@@ -42,11 +42,16 @@ static int ceres_forced_phot(PyObject* blocks,
     printf("N blocks: %i\n", (int)Nblocks);
 
     assert(PyArray_Check(np_fluxes));
+    assert(PyArray_TYPE(np_fluxes) == NPY_DOUBLE);
+    //assert(PyArray_ITEMSIZE(np_fluxes) == sizeof(double));
     double* realfluxes = (double*)PyArray_DATA(np_fluxes);
-    double* mod0data;
-
+    T* mod0data;
     Problem problem;
-    
+    int totaldatapix = 0;
+    int totalderivpix = 0;
+    int totalsources = 0;
+    //int maxsource = 0;
+
     for (int i=0; i<Nblocks; i++) {
         PyObject* block;
         PyObject* srclist;
@@ -77,16 +82,19 @@ static int ceres_forced_phot(PyObject* blocks,
             assert(PyArray_Check(mod0));
             assert(PyArray_DIM(mod0, 0) == h);
             assert(PyArray_DIM(mod0, 1) == w);
-            mod0data = (double*)PyArray_DATA(mod0);
+            assert(PyArray_TYPE(mod0) == npy_type);
+            mod0data = (T*)PyArray_DATA(mod0);
         }
         ierr  = PyTuple_GET_ITEM(obj, 4);
         assert(PyArray_Check(ierr));
         assert(PyArray_DIM(ierr, 0) == h);
         assert(PyArray_DIM(ierr, 1) == w);
-        Patch data(x0, y0, w, h, (double*)PyArray_DATA(img), mod0data,
-                   (double*)PyArray_DATA(ierr));
+        assert(PyArray_TYPE(img) == npy_type);
+        assert(PyArray_TYPE(ierr) == npy_type);
+        Patch<T> data(x0, y0, w, h, (T*)PyArray_DATA(img), mod0data,
+                   (T*)PyArray_DATA(ierr));
 
-        std::vector<Patch> srcs;
+        std::vector<Patch<T> > srcs;
         std::vector<double*> fluxes;
         
         srclist = PyTuple_GET_ITEM(block, 1);
@@ -103,6 +111,7 @@ static int ceres_forced_phot(PyObject* blocks,
             assert(PyInt_Check(PyTuple_GET_ITEM(obj, 1)));
             assert(PyInt_Check(PyTuple_GET_ITEM(obj, 2)));
             index = PyInt_AsLong(PyTuple_GET_ITEM(obj, 0));
+            //maxsource = MAX(maxsource, index);
             x0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 1));
             y0 = PyInt_AsLong(PyTuple_GET_ITEM(obj, 2));
             uimg = PyTuple_GET_ITEM(obj, 3);
@@ -114,14 +123,21 @@ static int ceres_forced_phot(PyObject* blocks,
              printf("param index %i: x0,y0 %i,%i, size %ix%i\n",
              index, x0, y0, w, h);
              */
-            srcs.push_back(Patch(x0, y0, uw, uh, (double*)PyArray_DATA(uimg)));
+            assert(PyArray_TYPE(uimg) == npy_type);
+            srcs.push_back(Patch<T>(x0, y0, uw, uh, (T*)PyArray_DATA(uimg)));
             fluxes.push_back(realfluxes + index);
         }
-        CostFunction* cost = new ForcedPhotCostFunction(data, srcs);
+        CostFunction* cost = new ForcedPhotCostFunction<T>(data, srcs);
         problem.AddResidualBlock(cost, NULL, fluxes);
         printf("added residual block with %i pixels and %i sources (%i pix derivatives)\n", (w*h), Nsources, nderivpix);
 
+        totaldatapix += (w*h);
+        totalderivpix += nderivpix;
+        totalsources += Nsources;
     }
+    int nfluxes = (int)PyArray_SIZE(np_fluxes);
+    printf("Ceres: %i blocks, total %i pixels, %i sources-in-blocks, %i sources, %i deriv elements\n",
+           (int)Nblocks, totaldatapix, totalsources, nfluxes, totalderivpix);
     
     // Run the solver!
     Solver::Options options;
@@ -196,7 +212,48 @@ static int ceres_forced_phot(PyObject* blocks,
     return 0;
 }
 
+template int real_ceres_forced_phot<float>(PyObject*, PyObject*, int);
+template int real_ceres_forced_phot<double>(PyObject*, PyObject*, int);
 
 
 %}
+
+%inline %{
+
+#if 0
+ } // fool emacs indenter
+#endif
+    
+
+static int ceres_forced_phot(PyObject* blocks,
+                             PyObject* np_fluxes) {
+	assert(PyList_Check(blocks));
+    assert(PyList_Size(blocks) > 0);
+    PyObject* block;
+    block = PyList_GET_ITEM(blocks, 0);
+    assert(PyTuple_Check(block));
+    assert(PyTuple_Size(block) == 2);
+    PyObject* obj;
+    // data
+    obj = PyTuple_GET_ITEM(block, 0);
+    assert(PyTuple_Check(obj));
+    assert(PyTuple_Size(obj) == 5);
+    PyObject* img;
+    img   = PyTuple_GET_ITEM(obj, 2);
+    assert(PyArray_Check(img));
+
+    if (PyArray_TYPE(img) == NPY_FLOAT) {
+        printf("Calling float version\n");
+        return real_ceres_forced_phot<float>(blocks, np_fluxes, NPY_FLOAT);
+    } else if (PyArray_TYPE(img) == NPY_DOUBLE) {
+        printf("Calling double version\n");
+        return real_ceres_forced_phot<double>(blocks, np_fluxes, NPY_DOUBLE);
+    }
+    printf("Unknown PyArray type %i\n", PyArray_TYPE(img));
+    return -1;
+}
+
+
+%}
+
 
