@@ -39,7 +39,7 @@ static int real_ceres_forced_phot(PyObject* blocks,
 
 	assert(PyList_Check(blocks));
     Nblocks = PyList_Size(blocks);
-    printf("N blocks: %i\n", (int)Nblocks);
+    //printf("N blocks: %i\n", (int)Nblocks);
 
     assert(PyArray_Check(np_fluxes));
     assert(PyArray_TYPE(np_fluxes) == NPY_DOUBLE);
@@ -129,7 +129,7 @@ static int real_ceres_forced_phot(PyObject* blocks,
         }
         CostFunction* cost = new ForcedPhotCostFunction<T>(data, srcs);
         problem.AddResidualBlock(cost, NULL, fluxes);
-        printf("added residual block with %i pixels and %i sources (%i pix derivatives)\n", (w*h), Nsources, nderivpix);
+        //printf("added residual block with %i pixels and %i sources (%i pix derivatives)\n", (w*h), Nsources, nderivpix);
 
         totaldatapix += (w*h);
         totalderivpix += nderivpix;

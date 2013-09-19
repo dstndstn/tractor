@@ -935,10 +935,10 @@ class Tractor(MultiParams):
         t0 = Time()
         fluxes = np.zeros(len(usedParamMap))
         print 'Ceres forced phot:'
-        print len(blocks), ('image blocks (%ix%i), %i params' %
-                            (BW, BH, len(fluxes)))
+        print len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes)))
         x = ceres_forced_phot(blocks, fluxes)
-        print 'Fluxes:', fluxes
+        assert(x == 0)
+        #print 'Fluxes:', fluxes
         logverb('forced phot: ceres', Time()-t0)
 
         params = np.zeros(len(allderivs))

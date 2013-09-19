@@ -13,6 +13,7 @@ EIGEN_INC ?= -I/usr/local/include/eigen3
 CERES_INC ?= 
 # ceres 1.6.0 was so easy...
 #CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
+
 # ceres 1.7.0 doesn't have the shared lib on my homebrew install...
 CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
 /usr/local/lib/libcxsparse.a \
@@ -21,6 +22,11 @@ CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
 /usr/local/lib/libcolamd.a \
 /usr/local/lib/libamd.a \
 -framework Accelerate
+
+# On Riemann:
+#SSlib=~/software/suitespares-4.1.2/lib
+#PYMOD_LIB="" CERES_LIB :="${HOME}/software/ceres-solver-1.7.0/lib/libceres.a $SSlib/lib{cholmod,amd,camd,colamd,ccolamd,suitesparseconfig,metis}.a ${ATLAS_DIR}/lib/lib{lapack,f77blas,atlas,cblas}.a -L${HOME}/software/glog-0.3.3/lib -lglog -lgfortran -lrt" CERES_INC="-I${HOME}/software/glog-0.3.3/include -I${HOME}/software/ceres-solver-1.7.0/include -I${HOME}/software/eigen" make _ceres.so
+
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
