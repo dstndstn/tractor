@@ -14,6 +14,9 @@ from astrometry.libkd.spherematch import *
 
 ps = PlotSequence('cdr', suffixes=['png','pdf'])
 
+plt.figure(figsize=(5,4))
+plt.subplots_adjust(left=0.1, right=0.95, bottom=0.1, top=0.92)
+
 A = fits_table('sequels-atlas.fits')
 PP = []
 WW = []
@@ -64,7 +67,7 @@ loghist(W.w1mpro[J], P.w1_mag[I], range=((lo,cathi),(lo,cathi)), bins=200,
 #plt.colorbar(antigray)
 plt.xlabel('WISE W1 mag')
 plt.ylabel('Tractor W1 mag')
-plt.title('WISE catalog vs Tractor forced photometry: bright end')
+plt.title('WISE catalog vs Tractor forced photometry')
 plt.axis([cathi,lo,cathi,lo])
 ps.savefig()
 
