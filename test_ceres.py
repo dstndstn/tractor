@@ -129,8 +129,8 @@ for seed in range(100):
     X2 = tractor.optimize_forced_photometry()
     print 'optimize_forced_photometry() fluxes:', tractor.getParams()
 
-    tractor.setParams(np.zeros(ct.numberOfParams()) + 10.)
+    tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
     X2 = tractor.optimize_forced_photometry(use_ceres=True)
-    print 'Ceres optimize_forced_photometry() fluxes:', ct.getParams()
+    print 'Ceres optimize_forced_photometry() fluxes:', tractor.getParams()
 
     
