@@ -14,8 +14,6 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 from tractor import *
 from ceres import *
 
-from ceresTractor import *
-
 # H,W = 100,100
 # NS = 10
 #H,W = 13,25
@@ -131,12 +129,8 @@ for seed in range(100):
     X2 = tractor.optimize_forced_photometry()
     print 'optimize_forced_photometry() fluxes:', tractor.getParams()
 
-    ct = CeresTractor([tim1], srcs)
-    ct.freezeParam('images')
-    for src in srcs:
-        src.freezeParam('pos')
-    ct.setParams(np.zeros(ct.numberOfParams()) + 10.)
-    X2 = ct.optimize_forced_photometry()
+    tractor.setParams(np.zeros(ct.numberOfParams()) + 10.)
+    X2 = tractor.optimize_forced_photometry(use_ceres=True)
     print 'Ceres optimize_forced_photometry() fluxes:', ct.getParams()
 
     
