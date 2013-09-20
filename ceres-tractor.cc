@@ -55,7 +55,6 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
         assert(bs[i] == 1);
         int j = 0;
         double flux = parameters[i][j];
-        // add source*flux to mod
         Patch<T> source = _sources[i];
 
         int xlo = MAX(source._x0, _data._x0);
@@ -68,14 +67,34 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
          (int)i, xlo, xhi, ylo, yhi);
          */
 
+        // Compute model & jacobians
         int nx = xhi - xlo;
         for (int y=ylo; y<yhi; y++) {
-            T* orow =         mod + ((y -  _data._y0) *  _data._w) +
+            T* modrow  =         mod + ((y -  _data._y0) *  _data._w) +
                 (xlo -  _data._x0);
-            T* irow = source._img + ((y - source._y0) * source._w) +
+            T* umodrow = source._img + ((y - source._y0) * source._w) +
                 (xlo - source._x0);
-            for (int x=0; x<nx; x++, orow++, irow++) {
-                (*orow) += (*irow) * flux;
+
+            if (!jacobians || !jacobians[i]) {
+                // Model: add source*flux to mod
+                for (int x=0; x<nx; x++, modrow++, umodrow++) {
+                    (*modrow) += (*umodrow) * flux;
+                }
+            } else {
+                // Jacobians: d(residual)/d(param)
+                //    = d( (data - model) * ierr ) /d(param)
+                //    = d( -model * ierr ) / d(param)
+                //    = -ierr * d( flux * umod ) / d(param)
+                //    = -ierr * umod * d(flux) / d(param)
+                double* jrow = jacobians[i] + ((y -  _data._y0) *  _data._w) +
+                    (xlo -  _data._x0);
+                T*      erow =  _data._ierr + ((y -  _data._y0) *  _data._w) +
+                    (xlo -  _data._x0);
+
+                for (int x=0; x<nx; x++, modrow++, umodrow++, jrow++, erow++) {
+                    (*modrow) += (*umodrow) * flux;
+                    (*jrow) = -1.0 * (*umodrow) * (*erow);
+                }
             }
         }
     }
@@ -101,40 +120,16 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
      printf(" ]\n");
      }
      */
-
-    for (size_t i=0; i<bs.size(); i++) {
-        if (!jacobians || !jacobians[i])
-            continue;
-        for (int k=0; k<_data.npix(); k++)
-            jacobians[i][k] = 0.;
-        Patch<T> source = _sources[i];
-        int xlo = MAX(source._x0, _data._x0);
-        int xhi = MIN(source._x0 + source._w, _data._x0 + _data._w);
-        int ylo = MAX(source._y0, _data._y0);
-        int yhi = MIN(source._y0 + source._h, _data._y0 + _data._h);
-        int nx = xhi - xlo;
-        for (int y=ylo; y<yhi; y++) {
-            double* orow = jacobians[i] + ((y -  _data._y0) *  _data._w) +
-                (xlo -  _data._x0);
-            T*      irow = source._img  + ((y - source._y0) * source._w) +
-                (xlo - source._x0);
-            T*      erow =  _data._ierr + ((y -  _data._y0) *  _data._w) +
-                (xlo -  _data._x0);
-            for (int x=0; x<nx; x++, orow++, irow++, erow++) {
-                (*orow) = -1.0 * (*irow) * (*erow);
-            }
-        }
-        /*
-         printf("Returning Jacobian:\n");
-         for (int y=0; y<_data._h; y++) {
-         printf("row %i: [ ", y);
-         for (int x=0; x<_data._w; x++) {
-         printf("%6.1f ", jacobians[i][y * _data._w + x]);
-         }
-         printf(" ]\n");
-         }
-         */
-    }
+    /*
+     printf("Returning Jacobian:\n");
+     for (int y=0; y<_data._h; y++) {
+     printf("row %i: [ ", y);
+     for (int x=0; x<_data._w; x++) {
+     printf("%6.1f ", jacobians[i][y * _data._w + x]);
+     }
+     printf(" ]\n");
+     }
+     */
     return true;
 }
 
