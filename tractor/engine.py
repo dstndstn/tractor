@@ -853,6 +853,7 @@ class Tractor(MultiParams):
                              sky, minFlux,
                              BW, BH,
                              ceresType = np.float32,
+                             nonneg = False,
                              ):
         from ceres import ceres_forced_phot
         #
@@ -936,7 +937,10 @@ class Tractor(MultiParams):
         fluxes = np.zeros(len(usedParamMap))
         print 'Ceres forced phot:'
         print len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes)))
-        x = ceres_forced_phot(blocks, fluxes)
+        nonneg = int(nonneg)
+        if nonneg:
+            fluxes += 1
+        x = ceres_forced_phot(blocks, fluxes, nonneg)
         assert(x == 0)
         #print 'Fluxes:', fluxes
         logverb('forced phot: ceres', Time()-t0)
@@ -1407,6 +1411,7 @@ class Tractor(MultiParams):
                                    use_tsnnls=False,
                                    use_ceres=False,
                                    BW=None, BH=None,
+                                   nonneg=False,
                                    ):
         '''
         Returns:
@@ -1530,7 +1535,8 @@ class Tractor(MultiParams):
         if use_ceres:
             (ims0,imsBest
              ) = self._ceres_forced_photom(derivs, umodels, imlist, mod0, 
-                                           scales, sky, minFlux, BW, BH)
+                                           scales, sky, minFlux, BW, BH,
+                 nonneg=nonneg)
 
         else:
             (ims0,imsBest

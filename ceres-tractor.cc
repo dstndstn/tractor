@@ -8,8 +8,9 @@
 
 template<typename T>
 ForcedPhotCostFunction<T>::ForcedPhotCostFunction(Patch<T> data,
-                                                  std::vector<Patch<T> > sources) :
-    _data(data), _sources(sources) {
+                                                  std::vector<Patch<T> > sources,
+                                                  int nonneg) :
+    _data(data), _sources(sources), _nonneg(nonneg) {
 
     set_num_residuals(data.npix());
     std::vector<int16_t>* bs = mutable_parameter_block_sizes();
@@ -54,7 +55,13 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
     for (size_t i=0; i<bs.size(); i++) {
         assert(bs[i] == 1);
         int j = 0;
-        double flux = parameters[i][j];
+
+        double flux;
+        if (_nonneg) {
+            flux = exp(parameters[i][j]);
+        } else {
+            flux = parameters[i][j];
+        }
         Patch<T> source = _sources[i];
 
         int xlo = MAX(source._x0, _data._x0);
@@ -91,9 +98,21 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
                 T*      erow =  _data._ierr + ((y -  _data._y0) *  _data._w) +
                     (xlo -  _data._x0);
 
-                for (int x=0; x<nx; x++, modrow++, umodrow++, jrow++, erow++) {
-                    (*modrow) += (*umodrow) * flux;
-                    (*jrow) = -1.0 * (*umodrow) * (*erow);
+                if (_nonneg) {
+                    // flux = exp(param)
+                    // d(flux)/d(param) = d(exp(param))/d(param)
+                    //                  = exp(param)
+                    //                  = flux
+                    for (int x=0; x<nx; x++, modrow++, umodrow++, jrow++, erow++) {
+                        double m = (*umodrow) * flux;
+                        (*modrow) += m;
+                        (*jrow) = -1.0 * m * (*erow);
+                    }
+                } else {
+                    for (int x=0; x<nx; x++, modrow++, umodrow++, jrow++, erow++) {
+                        (*modrow) += (*umodrow) * flux;
+                        (*jrow) = -1.0 * (*umodrow) * (*erow);
+                    }
                 }
             }
         }

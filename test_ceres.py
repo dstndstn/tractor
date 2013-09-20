@@ -117,12 +117,11 @@ for seed in range(100):
             plt.plot(x, y, 'b+', ms=12)
     plt.savefig('c%02i.png' % seed)
                 
-    fluxes = np.zeros(len(srcs)) + 10.
-
+    nonneg = 1
+    
     print 'Ceres forced phot:'
-    x = ceres_forced_phot(blocks, fluxes)
-    print 'got', x
-
+    fluxes = np.zeros(len(srcs)) + 10.
+    x = ceres_forced_phot(blocks, fluxes, nonneg)
     print 'Fluxes:', fluxes
 
     tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
@@ -130,7 +129,7 @@ for seed in range(100):
     print 'optimize_forced_photometry() fluxes:', tractor.getParams()
 
     tractor.setParams(np.zeros(tractor.numberOfParams()) + 10.)
-    X2 = tractor.optimize_forced_photometry(use_ceres=True)
+    X2 = tractor.optimize_forced_photometry(use_ceres=True, nonneg=nonneg)
     print 'Ceres optimize_forced_photometry() fluxes:', tractor.getParams()
 
     

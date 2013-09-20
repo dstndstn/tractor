@@ -33,7 +33,8 @@ class ForcedPhotCostFunction : public CostFunction {
     virtual ~ForcedPhotCostFunction();
 
     ForcedPhotCostFunction(Patch<T> data,
-                           std::vector<Patch<T> > sources
+                           std::vector<Patch<T> > sources,
+                           int nonneg
                            );
 
     virtual bool Evaluate(double const* const* parameters,
@@ -42,5 +43,7 @@ class ForcedPhotCostFunction : public CostFunction {
  protected:
     Patch<T> _data;
     std::vector<Patch<T> > _sources;
+
+    int _nonneg;
 };
 
