@@ -19,7 +19,7 @@ coadds = 'wise-coadds'
 
 from wise3 import get_l1b_file
 
-plt.subplots_adjust(bottom=0.01, top=0.9, left=0., right=1., wspace=0.05, hspace=0.2)
+#plt.subplots_adjust(bottom=0.01, top=0.9, left=0., right=1., wspace=0.05, hspace=0.2)
 
 for coadd_id,band in [('1384p454', 3)]:
     print coadd_id, band
@@ -49,6 +49,20 @@ for coadd_id,band in [('1384p454', 3)]:
     T = fits_table(fn)
     print len(T), 'frames'
     T.cut(np.lexsort((T.frame_num, T.scan_id)))
+
+    plt.clf()
+    n,b,p = plt.hist(np.log10(np.maximum(0.1, T.npixrchi)), bins=100, range=(-1,6),
+                     log=True)
+    plt.xlabel('log10( N pix with bad rchi )')
+    plt.ylabel('Number of images')
+    plt.ylim(0.1, np.max(n) + 5)
+    ps.savefig()
+
+    J = np.argsort(-T.npixrchi)
+    print 'Largest npixrchi:'
+    for n,s,f in zip(T.npixrchi[J], T.scan_id[J], T.frame_num[J[:20]]):
+        print '  n', n, 'scan', s, 'frame', f
+
     i0 = 0
     while i0 <= len(T):
         plt.clf()

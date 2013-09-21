@@ -372,6 +372,9 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
             continue
         ii.append(i)
 
+        if not mm.included:
+            continue
+
         maskdir = os.path.join(outdir, 'masks-' + tag)
         if not os.path.exists(maskdir):
             os.mkdir(maskdir)
@@ -400,6 +403,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     WISE.npixoverlap = np.array([m.ncopix for m in masks])
     WISE.npixpatched = np.array([m.npatched for m in masks])
     WISE.npixrchi    = np.array([m.nrchipix for m in masks])
+    WISE.included    = np.array([m.included for m in masks]).astype(np.uint8)
 
     WISE.delete_column('wcs')
 
@@ -553,11 +557,13 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     coimgb = np.zeros_like(coimg)
     cowb   = np.zeros_like(cow)
 
+    assert(len(rimgs) == len(WISE))
+
     masks = []
     ri = -1
     while len(rimgs):
-        rr = rimgs.pop(0)
         ri += 1
+        rr = rimgs.pop(0)
 
         print
         print 'Coadd round 2, image', (ri+1), 'of', len(WISE)
@@ -573,6 +579,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         mm.ncopix = rr.ncopix
         mm.sky = rr.sky
         mm.zp = rr.zp
+        mm.included = True
 
         cox0,cox1,coy0,coy1 = rr.coextent
         subco = coimg1  [coy0:coy1+1, cox0:cox1+1].astype(np.float32)
@@ -610,39 +617,12 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
 
         # Bit 1: rchi >= 5
         badpixmask = badpix.astype(np.uint8)
-
         # grow by a small margin
         badpix = binary_dilation(badpix)
-
         # Bit 2: grown
         badpixmask += (2 * badpix)
-
-        if ps:
-            orig_rimg = rr.rimg.copy()
-
-        ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
-        if not ok:
-            print 'patch_image failed; continuing'
-            masks.append(None)
-            continue
-
-        # plt.clf()
-        # plt.imshow(rimg - dsky, **ima)
-        # plt.title('patched rimg - dsky')
-        # plt.colorbar()
-        # ps.savefig()
-
-        coimg [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg
-        coimg2[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg**2
-        # About the [rr.rmask]: that is the area where [rr.rimg] != 0
-        cow   [coy0: coy1+1, cox0: cox1+1][rr.rmask] += rr.w
-
         # Add rchi-masked pixels to the mask
         rr.rmask2[badpix] = False
-
-        coimgb[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg * rr.rmask2
-        cowb  [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rmask2
-
         # print 'Applying rchi masks to images...'
         mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()), badpixmask.dtype)
         try:
@@ -656,8 +636,30 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
             print 'cosubwcs:', rr.cosubwcs
             traceback.print_exc()
 
-        masks.append(mm)
+        if ps:
+            orig_rimg = rr.rimg.copy()
 
+        #if mm.nrchipix > 1000:
+        if mm.nrchipix > mm.ncopix * 0.001:
+            print ('WARNING: dropping exposure scan %s frame %i band %i: # nrchi pixels %i' %
+                   (WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
+            mm.included = False
+
+        if mm.included:
+            ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
+            if not ok:
+                print 'patch_image failed; continuing'
+                masks.append(None)
+                continue
+
+            coimg [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg
+            coimg2[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg**2
+            # About the [rr.rmask]: that is the area where [rr.rimg] != 0
+            cow   [coy0: coy1+1, cox0: cox1+1][rr.rmask] += rr.w
+            coimgb[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg * rr.rmask2
+            cowb  [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rmask2
+        del badpix
+        del badpixmask
 
         if ps:
             R,C = 2,4
@@ -712,15 +714,16 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
                        vmin=plo, vmax=phi)
             plt.title('coimgb')
             
-            plt.suptitle('%s %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
+            inc = ''
+            if not mm.included:
+                inc = '(not incl)'
+            plt.suptitle('%s %i %s' % (WISE.scan_id[ri], WISE.frame_num[ri], inc))
             ps.savefig()
 
         dsky /= rr.zpscale
         print 'scaled:', dsky
         mm.dsky = dsky
-
-        del badpix
-        del badpixmask
+        masks.append(mm)
 
         #print 'coadd_wise image', ri, 'second pass'
         print Time() - t00
