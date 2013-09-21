@@ -53,6 +53,13 @@ static int real_ceres_forced_phot(PyObject* blocks,
     int totalderivpix = 0;
     int totalsources = 0;
 
+    if (nonneg) {
+        // params = log(flux)
+        for (int j=0; j<Nfluxes; j++) {
+            realfluxes[j] = log(MAX(realfluxes[j], 1e-6));
+        }
+    }
+
     for (int i=0; i<Nblocks; i++) {
         PyObject* block;
         PyObject* srclist;
@@ -129,13 +136,6 @@ static int real_ceres_forced_phot(PyObject* blocks,
             assert(PyArray_TYPE(uimg) == npy_type);
             srcs.push_back(Patch<T>(x0, y0, uw, uh, (T*)PyArray_DATA(uimg)));
             fluxes.push_back(realfluxes + index);
-        }
-
-        if (nonneg) {
-            // params = log(flux)
-            for (int j=0; j<Nfluxes; j++) {
-                realfluxes[j] = log(MAX(realfluxes[j], 1e-30));
-            }
         }
 
         CostFunction* cost = new ForcedPhotCostFunction<T>(data, srcs, nonneg);
