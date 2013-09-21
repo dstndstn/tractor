@@ -44,7 +44,7 @@ median_f = flat_median_f
 
 
 # GLOBALS
-outdir = 'wise-coadds'
+default_outdir = 'wise-coadds'
 pixscale = 2.75 / 3600.
 W,H = 2048, 2048
 bands = [1,2,3,4]
@@ -186,7 +186,7 @@ def check_md5s(WISE):
 #     print 'Whole enchilada:', Time() - t00
 
 
-def one_coadd(ti, band, WISE, ps, wishlist):
+def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -329,7 +329,7 @@ def one_coadd(ti, band, WISE, ps, wishlist):
     # table vs no-table: ~ zero difference except in cores of v.bright stars
 
     try:
-        coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band)
+        coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band, mp)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -529,15 +529,20 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
         print 'Wrote', fn
 
 
-def coadd_wise(cowcs, WISE, ps, band, table=True):
+def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
     # For W4, single-image ww is ~ 1e-10
     tinyw = 1e-16
 
+    # DEBUG
+    #WISE = WISE[:10]
+    # DEBUG
+    WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
+
     rimgs, coimg1, cow1, coppstd1 = _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
-                                                       tinyw)
+                                                       tinyw, mp)
 
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
@@ -549,7 +554,7 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     cowb   = np.zeros_like(cow)
 
     masks = []
-    ri = 0
+    ri = -1
     while len(rimgs):
         rr = rimgs.pop(0)
         ri += 1
@@ -586,7 +591,6 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
         #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
         mm.nrchipix = np.count_nonzero(badpix)
 
-        # plt.clf()
         # plt.imshow(rimg - dsky, **ima)
         # plt.imshow(rimg - dsky, interpolation='nearest', origin='lower')
         # plt.imshow(subco, **ima)
@@ -612,6 +616,9 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         # Bit 2: grown
         badpixmask += (2 * badpix)
+
+        if ps:
+            orig_rimg = rr.rimg.copy()
 
         ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
         if not ok:
@@ -651,6 +658,63 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
 
         masks.append(mm)
 
+
+        if ps:
+            R,C = 2,4
+            plt.clf()
+            plt.subplot(3,3,1)
+            I = orig_rimg - dsky
+            plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('rimg')
+            plt.subplot(3,3,2)
+            I = subco
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('subco')
+            plt.subplot(3,3,3)
+            I = subpp
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('subpp')
+            plt.subplot(3,3,4)
+            plt.imshow(rchi, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-5, vmax=5)
+            plt.title('rchi (%i)' % mm.nrchipix)
+
+            plt.subplot(3,3,5)
+            I = rr.img
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('img')
+
+            plt.subplot(3,3,6)
+            I = mm.omask
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=0, vmax=3)
+            plt.title('omask')
+
+            plt.subplot(3,3,7)
+            I = rr.rimg
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('patched rimg')
+
+            plt.subplot(3,3,8)
+            I = (coimgb / np.maximum(cowb, tinyw))
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.title('coimgb')
+            
+            plt.suptitle('%s %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
+            ps.savefig()
+
         dsky /= rr.zpscale
         print 'scaled:', dsky
         mm.dsky = dsky
@@ -668,159 +732,201 @@ def coadd_wise(cowcs, WISE, ps, band, table=True):
     coimgb /= np.maximum(cowb, tinyw)
     coinvvarb = cowb
     # print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
-
-    # plt.clf()
-    # plt.imshow(coimg1, **ima)
-    # plt.colorbar()
-    # plt.title('Coadd round 1')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(coimg, **ima)
-    # plt.colorbar()
-    # plt.title('Coadd round 2')
-    # ps.savefig()
-
-    #print 'Second-round coadd:'
-    #sig = 1./np.sqrt(np.median(coinvvar[coinvvar > 0]))
-    #print 'Coadd sig:', sig
     # per-pixel variance
     coppstd = np.sqrt(np.maximum(0, coimg2 / (np.maximum(cow, tinyw)) - coimg**2))
     #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
 
+    if ps:
+        plt.clf()
+        I = coimg1
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 1')
+        ps.savefig()
+
+        plt.clf()
+        I = coppstd1
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd per-pixel std 1')
+        ps.savefig()
+
+        plt.clf()
+        I = coimg
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 2')
+        ps.savefig()
+
+        plt.clf()
+        I = coimgb
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 2 (weighted)')
+        ps.savefig()
+
+        plt.clf()
+        I = coppstd
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 2 per-pixel std')
+        ps.savefig()
+
     return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks
 
 
+def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
+    t00 = Time()
+    print
+    print 'Coadd round 1, image', (i+1), 'of', N
+    intfn = wise.intfn
+    uncfn = intfn.replace('-int-', '-unc-')
+    if unc_gz:
+        uncfn = uncfn + '.gz'
+    maskfn = intfn.replace('-int-', '-msk-')
+    if mask_gz:
+        maskfn = maskfn + '.gz'
+    print 'intfn', intfn
+    print 'uncfn', uncfn
+    print 'maskfn', maskfn
+    rr = Duck()
+    #wcs = Sip(intfn)
+    #print 'Wcs:', wcs
+    wcs = wise.wcs
+    h,w = wcs.get_height(), wcs.get_width()
+
+    x0,x1,y0,y1 = wise.imextent
+    cox0,cox1,coy0,coy1 = wise.coextent
+
+    wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
+    with fitsio.FITS(intfn) as F:
+        img = F[0][y0:y1+1, x0:x1+1]
+        ihdr = F[0].read_header()
+    mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
+    unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
+    #print 'Img:', img.shape, img.dtype
+    #print 'Unc:', unc.shape, unc.dtype
+    #print 'Mask:', mask.shape, mask.dtype
+    zp = ihdr['MAGZP']
+    zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+    print 'Zeropoint:', zp, '-> scale', zpscale
+
+    if band == 4:
+        # In W4, the WISE single-exposure images are binned down
+        # 2x2, so we are effectively splitting each pixel into 4
+        # sub-pixels.  Spread out the flux.
+        zpscale *= 0.25
+
+    goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
+                                                10,11,12,13,14,15,16,17,18,
+                                                21,26,27,28]])) == 0)
+    goodmask[unc == 0] = False
+    goodmask[np.logical_not(np.isfinite(img))] = False
+    goodmask[np.logical_not(np.isfinite(unc))] = False
+
+    sig1 = median_f(unc[goodmask])
+    print 'sig1:', sig1
+
+    del mask
+    del unc
+
+    # Patch masked pixels so we can interpolate
+    rr.npatched = np.count_nonzero(np.logical_not(goodmask))
+    print 'Pixels to patch:', rr.npatched
+    if rr.npatched > 100000:
+        print 'WARNING: too many pixels to patch:', rr.npatched
+        return None
+    ok = patch_image(img, goodmask)
+    if not ok:
+        print 'WARNING: Patching failed:'
+        print 'Image size:', img.shape
+        print 'Number to patch:', rr.npatched
+        return None
+    assert(np.all(np.isfinite(img)))
+
+    # Estimate sky level via clipped medians
+    med = median_f(img)
+    ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
+    sky = median_f(img.flat[ok])
+    print 'Estimated sky level:', sky
+
+    # Convert to nanomaggies
+    img -= sky
+    img *= zpscale
+    sig1 *= zpscale
+
+    # coadd subimage
+    cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
+    try:
+        Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L, table=table)
+    except OverlapError:
+        print 'No overlap; skipping'
+        return None
+    rim = rims[0]
+    assert(np.all(np.isfinite(rim)))
+
+    print 'Pixels in range:', len(Yo)
+    #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
+    rr.w = (1./sig1**2)
+
+    if ps:
+        # save for later...
+        rr.img = img
+
+    rr.rmask = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+    rr.rmask[Yo, Xo] = True
+    rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
+    rr.rimg[Yo, Xo] = rim
+    rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+    rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
+    rr.w = w
+    rr.wcs = wcs
+    rr.sky = sky
+    rr.zpscale = zpscale
+    rr.zp = zp
+    rr.ncopix = len(Yo)
+    rr.coextent = wise.coextent
+    rr.cosubwcs = cosubwcs
+
+    print 'coadd_wise image', (i+1), 'first pass'
+    print Time() - t00
+
+    return rr
+
+
 def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
-                       tinyw):
+                       tinyw, mp):
     W = cowcs.get_width()
     H = cowcs.get_height()
     coimg  = np.zeros((H,W))
     coimg2 = np.zeros((H,W))
     cow    = np.zeros((H,W))
-    rimgs = []
-    
+
+    args = []
     for wi,wise in enumerate(WISE):
-        t00 = Time()
-        print
-        print 'Coadd round 1, image', (wi+1), 'of', len(WISE)
-        intfn = wise.intfn
-        uncfn = intfn.replace('-int-', '-unc-')
-        if unc_gz:
-            uncfn = uncfn + '.gz'
-        maskfn = intfn.replace('-int-', '-msk-')
-        if mask_gz:
-            maskfn = maskfn + '.gz'
-        print 'intfn', intfn
-        print 'uncfn', uncfn
-        print 'maskfn', maskfn
+        args.append((wi, len(WISE), wise, table, L, ps, band, cowcs))
+    rimgs = mp.map(_coadd_one_round1, args)
 
-        rr = Duck()
-
-        #wcs = Sip(intfn)
-        #print 'Wcs:', wcs
-        wcs = wise.wcs
-        h,w = wcs.get_height(), wcs.get_width()
-
-        x0,x1,y0,y1 = wise.imextent
-
-        wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
-
-        with fitsio.FITS(intfn) as F:
-            img = F[0][y0:y1+1, x0:x1+1]
-            ihdr = F[0].read_header()
-        mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
-        unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
-        print 'Img:', img.shape, img.dtype
-        print 'Unc:', unc.shape, unc.dtype
-        print 'Mask:', mask.shape, mask.dtype
-
-        zp = ihdr['MAGZP']
-        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
-        print 'Zeropoint:', zp, '-> scale', zpscale
-
-        if band == 4:
-            # In W4, the WISE single-exposure images are binned down
-            # 2x2, so we are effectively splitting each pixel into 4
-            # sub-pixels.  Spread out the flux.
-            zpscale *= 0.25
-
-        goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
-                                                    10,11,12,13,14,15,16,17,18,
-                                                    21,26,27,28]])) == 0)
-        goodmask[unc == 0] = False
-        goodmask[np.logical_not(np.isfinite(img))] = False
-        goodmask[np.logical_not(np.isfinite(unc))] = False
-
-        sig1 = median_f(unc[goodmask])
-        print 'sig1:', sig1
-
-        del mask
-        del unc
-
-        # Patch masked pixels so we can interpolate
-        rr.npatched = np.count_nonzero(np.logical_not(goodmask))
-        print 'Pixels to patch:', rr.npatched
-        if rr.npatched > 100000:
-            print 'WARNING: too many pixels to patch:', rr.npatched
-            rimgs.append(None)
-            continue
-        ok = patch_image(img, goodmask)
-        if not ok:
-            print 'WARNING: Patching failed:'
-            print 'Image size:', img.shape
-            print 'Number to patch:', rr.npatched
-            rimgs.append(None)
-            continue
-        assert(np.all(np.isfinite(img)))
-
-        # Estimate sky level via clipped medians
-        med = median_f(img)
-        ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
-        sky = median_f(img.flat[ok])
-        print 'Estimated sky level:', sky
-
-        # Convert to nanomaggies
-        img -= sky
-        img *= zpscale
-        sig1 *= zpscale
-
-        # coadd subimage
-        cox0,cox1,coy0,coy1 = wise.coextent
-        cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
-        try:
-            Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L, table=table)
-        except OverlapError:
-            print 'No overlap; skipping'
-            rimgs.append(None)
-            continue
-        rim = rims[0]
-        assert(np.all(np.isfinite(rim)))
-
-        print 'Pixels in range:', len(Yo)
-        #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
-        w = (1./sig1**2)
-        coimg [coy0 + Yo, cox0 + Xo] += w * rim
-        coimg2[coy0 + Yo, cox0 + Xo] += w * (rim**2)
-        cow   [coy0 + Yo, cox0 + Xo] += w
-
-        # save for later...
-        rr.rmask = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
-        rr.rmask[Yo, Xo] = True
-        rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
-        rr.rimg[Yo, Xo] = rim
-        rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
-        rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
-        rr.w = w
-        rr.wcs = wcs
-        rr.sky = sky
-        rr.zpscale = zpscale
-        rr.zp = zp
-        rr.ncopix = len(Yo)
-        rr.coextent = wise.coextent
-        rr.cosubwcs = cosubwcs
-        rimgs.append(rr)
-
+    for rr in rimgs:
+        cox0,cox1,coy0,coy1 = rr.coextent
+        slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
+        coimg [slc] += rr.w *  rr.rimg
+        coimg2[slc] += rr.w * (rr.rimg**2)
+        cow   [slc] += rr.w
+        # coimg [coy0 + Yo, cox0 + Xo] += rr.w * rim
+        # coimg2[coy0 + Yo, cox0 + Xo] += rr.w * (rim**2)
+        # cow   [coy0 + Yo, cox0 + Xo] += rr.w
+        #rimgs.append(rr)
         # plt.clf()
         # plt.subplot(1,2,1)
         # plt.imshow(coimg / np.maximum(cow, 1e-16), interpolation='nearest', origin='lower',
@@ -831,9 +937,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         #            extent=[cox0, cox1, coy0, coy1], vmin=0, vmax=10)
         # plt.axis([0,W, 0, H])
         # ps.savefig()
-
-        print 'coadd_wise image', wi, 'first pass'
-        print Time() - t00
 
     #print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
     #print 'Coadd weight range:', cow.min(), cow.max(), 'median', np.median(cow)
@@ -911,6 +1014,11 @@ if __name__ == '__main__':
                       help='Print and plot fields to-do')
     parser.add_option('-w', dest='wishlist', action='store_true', default=False,
                       help='Print needed frames and exit?')
+    parser.add_option('--plots', dest='plots', action='store_true', default=False)
+
+    parser.add_option('--outdir', dest='outdir', default=default_outdir,
+                      help='Output directory: default %default')
+
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -959,7 +1067,7 @@ if __name__ == '__main__':
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
-    ps = PlotSequence(dataset)
+    ps = PlotSequence(dataset, format='%03i')
 
     if opt.todo:
         # Check which tiles still need to be done.
@@ -968,7 +1076,7 @@ if __name__ == '__main__':
             fns = []
             for i in range(len(T)):
                 tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
-                prefix = os.path.join(outdir, tag)
+                prefix = os.path.join(opt.outdir, tag)
                 ofn = prefix + '-img.fits'
                 if os.path.exists(ofn):
                     print 'Output file exists:', ofn
@@ -1024,6 +1132,10 @@ if __name__ == '__main__':
         else:
             print 'Done (party now)'
         sys.exit(0)
+
+
+    if not opt.plots:
+        ps = None
             
     if len(args):
         A = []
@@ -1033,16 +1145,15 @@ if __name__ == '__main__':
             band = tileid / 1000
             tileid = tileid % 1000
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
-            A.append((T[tileid], band, WISE, ps, opt.wishlist))
-        mp.map(_bounce_one_coadd, A)
+            one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp)
+            #A.append((T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp))
+        #mp.map(_bounce_one_coadd, A)
         sys.exit(0)
 
     if arr is None:
         print 'No tile(s) specified'
         parser.print_help()
         sys.exit(0)
-
-    #plot_region(r0,r1,d0,d1, ps, T, WISE, None)
 
     band = arr / 1000
     assert(band in bands)
@@ -1052,6 +1163,6 @@ if __name__ == '__main__':
     print 'Doing coadd tile', T.coadd_id[tile], 'band', band
 
     t0 = Time()
-    one_coadd(T[tile], band, WISE, ps, False)
+    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp)
     print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 

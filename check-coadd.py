@@ -17,6 +17,152 @@ ps = PlotSequence('co')
 wisel3 = 'wise-L3'
 coadds = 'wise-coadds'
 
+from wise3 import get_l1b_file
+
+plt.subplots_adjust(bottom=0.01, top=0.9, left=0., right=1., wspace=0.05, hspace=0.2)
+
+for coadd_id,band in [('1384p454', 3)]:
+    print coadd_id, band
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+    J = fitsio.read(fn2)
+    binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+    plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+    plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
+               vmin=plo, vmax=phi)
+    plt.xticks([]); plt.yticks([])
+    plt.subplot(1,2,2)
+    #fn3 = os.path.join(coadds, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
+    fn3 = os.path.join(coadds, 'coadd-%s-w%i-ppstd.fits' % (coadd_id, band))
+    J = fitsio.read(fn3)
+    binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+    phi = np.percentile(binJ, 99)
+    plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
+               vmin=0, vmax=phi)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+
+    fn = os.path.join(coadds, 'coadd-%s-w%i-frames.fits' % (coadd_id, band))
+    T = fits_table(fn)
+    print len(T), 'frames'
+    T.cut(np.lexsort((T.frame_num, T.scan_id)))
+    i0 = 0
+    while i0 <= len(T):
+        plt.clf()
+        R,C = 4,6
+        for i in range(i0, i0+(R*C)):
+            if i >= len(T):
+                break
+            t = T[i]
+            fn = get_l1b_file('wise-frames', t.scan_id, t.frame_num, band)
+            print fn
+            I = fitsio.read(fn)
+            bad = np.flatnonzero(np.logical_not(np.isfinite(I)))
+            I.flat[bad] = 0.
+            print I.shape
+            binI = reduce(np.add, [I[j/4::4, j%4::4] for j in range(16)])
+            print binI.shape
+            plt.subplot(R,C,i-i0+1)
+            plo,phi = [np.percentile(binI, p) for p in [25,99]]
+            print 'p', plo,phi
+            plt.imshow(binI, interpolation='nearest', origin='lower',
+                       vmin=plo, vmax=phi, cmap='gray')
+            plt.xticks([]); plt.yticks([])
+            plt.title('%s %i' % (t.scan_id, t.frame_num))
+        plt.suptitle('%s W%i' % (coadd_id, band))
+        ps.savefig()
+        i0 += R*C
+
+
+
+sys.exit(0)
+
+
+
+
+T = fits_table('sequels-atlas.fits')
+# Download from IRSA:
+# for coadd_id in T.coadd_id:
+#     print 'Coadd id', coadd_id
+#     cmd = 'wget -r -N -nH -np -nv --cut-dirs=4 -A "*int-3.fits" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/"' % (coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+#     print 'Cmd:', cmd
+#     os.system(cmd)
+
+bands = [1,2,3,4]
+
+plt.figure(figsize=(12,4))
+plt.subplots_adjust(bottom=0.01, top=0.85, left=0., right=1., wspace=0.05)
+
+for coadd_id in T.coadd_id:
+    dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+    for band in bands:
+        fn1 = os.path.join(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
+        print fn1
+        if not os.path.exists(fn1):
+            print '-> does not exist'
+            continue
+        fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+        print fn2
+        if not os.path.exists(fn2):
+            print '-> does not exist'
+            continue
+
+        fn3 = os.path.join(coadds, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
+        print fn3
+        if not os.path.exists(fn3):
+            print '-> does not exist'
+            continue
+
+        I = fitsio.read(fn1)
+        J = fitsio.read(fn2)
+        K = fitsio.read(fn3)
+
+        binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)])
+        #binJ = reduce(np.add, [J[i/2::2, i%2::2] for i in range( 4)])
+        #binK = reduce(np.add, [K[i/2::2, i%2::2] for i in range( 4)])
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+        
+        ima = dict(interpolation='nearest', origin='lower', cmap='gray')
+
+        plo,phi = [np.percentile(binI, p) for p in [25,99]]
+        imai = ima.copy()
+        imai.update(vmin=plo, vmax=phi)
+
+        plt.clf()
+        plt.subplot(1,3,1)
+        plt.imshow(binI, **imai)
+        plt.xticks([]); plt.yticks([])
+        plt.title('WISE')
+        #plt.title('WISE team %s' % os.path.basename(fn1))
+        #ps.savefig()
+        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+        #plt.clf()
+        plt.subplot(1,3,2)
+        plt.imshow(binJ, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE weighted')
+        #plt.title('My %s' % os.path.basename(fn2))
+        #ps.savefig()
+        #plt.clf()
+        plt.subplot(1,3,3)
+        plt.imshow(binK, **imaj)
+        plt.xticks([]); plt.yticks([])
+        #plt.title('My %s' % os.path.basename(fn3))
+        plt.title('unWISE')
+        plt.suptitle('%s W%i' % (coadd_id, band))
+        ps.savefig()
+
+sys.exit(0)
+
+
+    
+
 lst = os.listdir(wisel3)
 lst.sort()
 bands = [1,2,3,4]

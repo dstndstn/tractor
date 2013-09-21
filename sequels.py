@@ -381,6 +381,7 @@ def one_tile(tile, opt, savepickle, ps):
             if defaultflux > flux:
                 drad = r
         print 'default source radius:', drad
+        drad = max(2, drad)
         # these are radii the SDSS sources would have based on their WISE
         # catalog-matched PSF-source size.
         srad2 = np.zeros(len(cat))
@@ -562,6 +563,7 @@ def one_tile(tile, opt, savepickle, ps):
 
                 # DEBUG
                 #p0 = tractor.getParams()
+                #print 'Initial fluxes:', p0
 
                 ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
                     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
@@ -569,6 +571,19 @@ def one_tile(tile, opt, savepickle, ps):
                     use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock,
                     nonneg=opt.nonneg)
                 print 'That took', Time()-t0
+                
+                #p1 = tractor.getParams()
+                #print 'Solved fluxes:', p1
+
+                if ps:
+                    sig1 = 1./np.sqrt(np.median(invvar))
+                    (dat,mod,ie,chi,roi) = ims1[0]
+                    plt.clf()
+                    plt.imshow(mod, interpolation='nearest', origin='lower', cmap='gray',
+                               vmin=-3*sig1, vmax=10*sig1)
+                    plt.colorbar()
+                    ps.savefig()
+
 
                 # tractor.setParams(p0)
                 # 

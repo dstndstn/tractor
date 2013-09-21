@@ -961,7 +961,7 @@ class Tractor(MultiParams):
         return ims0, imsBest
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
-                      umodels, scales):
+                      umodels, scales, nilcounts):
         class FitStats(object):
             pass
         fs = FitStats()
@@ -1013,7 +1013,9 @@ class Tractor(MultiParams):
                 csum = sum(cc)
                 if csum == 0:
                     continue
-
+                if csum < nilcounts:
+                    continue
+                
                 srcmod = srcmods[imi]
                 xlo,xhi,ylo,yhi = None,None,None,None
                 # for each component (usually just one)
@@ -1415,6 +1417,7 @@ class Tractor(MultiParams):
                                    use_ceres=False,
                                    BW=None, BH=None,
                                    nonneg=False,
+                                   nilcounts=1e-6,
                                    ):
         '''
         Returns:
@@ -1422,6 +1425,9 @@ class Tractor(MultiParams):
         (ims0, ims1,
         + inverse_variance,  (if variance=True)
         + fit_stats,)        (if fitstats=True)
+
+        ims0, ims1:
+        [ (img_data, mod, ie, chi, roi), ... ]
         
 
         ASSUMES linear brightnesses!
@@ -1559,7 +1565,7 @@ class Tractor(MultiParams):
             rtn = rtn + (None,)
         elif fitstats:
             fs = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
-                                    umodels, scales)
+                                    umodels, scales, nilcounts)
             rtn = rtn + (fs,)
 
         return rtn

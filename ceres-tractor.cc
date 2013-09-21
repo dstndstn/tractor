@@ -44,6 +44,8 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
      }
      */
 
+    //double maxJ = 0.;
+
     T* mod;
     if (_data._mod0) {
         mod = (T*)malloc(_data.npix() * sizeof(T));
@@ -75,6 +77,10 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
          */
 
         // Compute model & jacobians
+        if (jacobians && jacobians[i]) {
+            for (int k=0; k<_data.npix(); k++)
+                jacobians[i][k] = 0.;
+        }
         int nx = xhi - xlo;
         for (int y=ylo; y<yhi; y++) {
             T* modrow  =         mod + ((y -  _data._y0) *  _data._w) +
@@ -107,16 +113,21 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
                         double m = (*umodrow) * flux;
                         (*modrow) += m;
                         (*jrow) = -1.0 * m * (*erow);
+                        //maxJ = MAX(maxJ, fabs(*jrow));
                     }
                 } else {
                     for (int x=0; x<nx; x++, modrow++, umodrow++, jrow++, erow++) {
                         (*modrow) += (*umodrow) * flux;
                         (*jrow) = -1.0 * (*umodrow) * (*erow);
+                        //maxJ = MAX(maxJ, fabs(*jrow));
                     }
                 }
             }
         }
     }
+
+    //if (jacobians)
+    //printf("Max jacobian: %g\n", maxJ);
 
     T* dptr = _data._img;
     T* mptr = mod;
