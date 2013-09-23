@@ -130,8 +130,8 @@ for coadd_id in T.coadd_id:
             print '-> does not exist'
             continue
 
-        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
-        fn3 = os.path.join(dir2, 'coadd-%s-w%i-img-c.fits' % (coadd_id, band))
+        fn3 = os.path.join(dir2, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
+        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-img-c.fits' % (coadd_id, band))
         print fn3
         if not os.path.exists(fn3):
             print '-> does not exist'
@@ -186,7 +186,8 @@ for coadd_id in T.coadd_id:
             print '-> does not exist'
             continue
 
-        fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar-c.fits' % (coadd_id, band))
+        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar-c.fits' % (coadd_id, band))
+        fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar.fits' % (coadd_id, band))
         print fn3
         if not os.path.exists(fn3):
             print '-> does not exist'
@@ -204,14 +205,49 @@ for coadd_id in T.coadd_id:
         plt.subplot(1,3,2)
         plt.imshow(binJ, **imaj)
         plt.xticks([]); plt.yticks([])
-        plt.title('unWISE invvar')
+        plt.title('unWISE invvar (weighted)')
 
         plt.subplot(1,3,3)
         plt.imshow(binK, **imaj)
         plt.xticks([]); plt.yticks([])
-        plt.title('unWISE invvar c')
+        plt.title('unWISE invvar')
 
         ps.savefig()
+
+
+        fn2 = os.path.join(dir2, 'coadd-%s-w%i-n-w.fits' % (coadd_id, band))
+        print fn2
+        if not os.path.exists(fn2):
+            print '-> does not exist'
+            continue
+
+        fn3 = os.path.join(dir2, 'coadd-%s-w%i-n.fits' % (coadd_id, band))
+        print fn3
+        if not os.path.exists(fn3):
+            print '-> does not exist'
+            continue
+
+        J = fitsio.read(fn2)
+        K = fitsio.read(fn3)
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+
+        plo,phi = min(binJ.min(), binK.min()), max(binJ.max(),binK.max())
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+
+        plt.subplot(1,3,2)
+        plt.imshow(binJ, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE n (weighted)')
+
+        plt.subplot(1,3,3)
+        plt.imshow(binK, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE n')
+
+        ps.savefig()
+
 
 
 sys.exit(0)

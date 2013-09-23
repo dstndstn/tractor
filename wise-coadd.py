@@ -580,8 +580,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     # DEBUG
     #WISE = WISE[:10]
     # DEBUG -- scan closest to outlier 03833a
-    WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
-    WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
+    #WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
+    #WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
     #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
 
     (rimgs, coimg1, cow1, coppstd1, cowimgsq1
@@ -634,10 +634,10 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         cox0,cox1,coy0,coy1 = rr.coextent
         coslc = slice(coy0, coy1+1), slice(cox0, cox1+1)
         # Remove this image from the per-pixel std calculation...
-        subsq = cowimgsq1[coslc] - (rr.w * rr.rimg**2)
         subw  = np.maximum(cow1[coslc] - rr.w, tinyw)
-        subco = (cowimg1[coslc] - (rr.w * rr.rimg)) / subw
-        subpp = np.sqrt(np.maximum(0, subsq/subw - subco**2))
+        subco = (cowimg1  [coslc] - (rr.w * rr.rimg   )) / subw
+        subsq = (cowimgsq1[coslc] - (rr.w * rr.rimg**2)) / subw
+        subpp = np.sqrt(np.maximum(0, subsq - subco**2))
 
         # like in the WISE Atlas Images, estimate sky difference via
         # median difference in the overlapping area.
@@ -675,13 +675,13 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         if ps:
             orig_rimg = rr.rimg.copy()
 
-        if mm.nrchipix > mm.ncopix * 0.001:
+        if mm.nrchipix > mm.ncopix * 0.01:
             print ('WARNING: dropping exposure scan %s frame %i band %i: # nrchi pixels %i' %
                    (WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
             mm.included = False
 
         if mm.included:
-            ok = patch_image(rr.rimg, np.logical_not(badpix), required=badpix)
+            ok = patch_image(rr.rimg, np.logical_not(badpix), required=(badpix * rr.rmask))
             if not ok:
                 print 'patch_image failed; continuing'
                 masks.append(None)
@@ -689,16 +689,16 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
 
             rr.rimg[rr.rmask] -= dsky
 
-            coimg   [coslc] += rr.w * rr.rimg
-            coimgsq [coslc] += rr.w * rr.rimg**2
+            coimgsq [coslc] += rr.rmask * rr.w * rr.rimg**2
+            coimg   [coslc] += rr.rmask * rr.w * rr.rimg
             # About the [rr.rmask]: that is the area where [rr.rimg] != 0
-            cow     [coslc][rr.rmask] += rr.w
+            cow     [coslc] += rr.rmask * rr.w
             con     [coslc] += rr.rmask
             assert(np.all(rr.rimg[np.logical_not(rr.rmask)] == 0))
 
-            coimgsqb[coslc] += rr.w * rr.rmask2 * rr.rimg**2
-            coimgb  [coslc] += rr.w * rr.rmask2 * rr.rimg
-            cowb    [coslc] += rr.w * rr.rmask2
+            coimgsqb[coslc] += rr.rmask2 * rr.w * rr.rimg**2
+            coimgb  [coslc] += rr.rmask2 * rr.w * rr.rimg
+            cowb    [coslc] += rr.rmask2 * rr.w
             conb    [coslc] += rr.rmask2
 
         del badpix
@@ -896,6 +896,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     x0,x1,y0,y1 = wise.imextent
     cox0,cox1,coy0,coy1 = wise.coextent
 
+    coW = int(1 + cox1 - cox0)
+    coH = int(1 + coy1 - coy0)
+
     wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
     with fitsio.FITS(intfn) as F:
         img = F[0][y0:y1+1, x0:x1+1]
@@ -956,7 +959,7 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     sig1 *= zpscale
 
     # coadd subimage
-    cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), int(1+cox1-cox0), int(1+coy1-coy0))
+    cosubwcs = cowcs.get_subimage(int(cox0), int(coy0), coW, coH)
     try:
         Yo,Xo,Yi,Xi,rims = resample_with_wcs(cosubwcs, wcs, [img], L, table=table)
     except OverlapError:
@@ -974,11 +977,11 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
         # save for later...
         rr.img = img
 
-    rr.rmask = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+    rr.rmask = np.zeros((coH, coW), np.bool)
     rr.rmask[Yo, Xo] = True
-    rr.rimg = np.zeros((1+coy1-coy0, 1+cox1-cox0), img.dtype)
+    rr.rimg = np.zeros((coH, coW), img.dtype)
     rr.rimg[Yo, Xo] = rim
-    rr.rmask2 = np.zeros((1+coy1-coy0, 1+cox1-cox0), np.bool)
+    rr.rmask2 = np.zeros((coH, coW), np.bool)
     rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
     rr.w = w
     rr.wcs = wcs
