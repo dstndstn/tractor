@@ -46,7 +46,10 @@ median_f = flat_median_f
 # GLOBALS
 default_outdir = 'wise-coadds'
 pixscale = 2.75 / 3600.
+
 W,H = 2048, 2048
+#W,H = 1024,1024
+
 bands = [1,2,3,4]
 # WISE Level 1b inputs
 wisedir = 'wise-frames'
@@ -109,10 +112,6 @@ def get_wise_frames(r0,r1,d0,d1):
     print 'Read', len(WISE), 'WISE L1b frames'
     WISE.row = np.arange(len(WISE))
 
-    # Testing subsets of rows...
-    #I = np.array([3580337,3577177])
-    #WISE.cut(I)
-
     cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
 
     margin = 2.
@@ -121,6 +120,53 @@ def get_wise_frames(r0,r1,d0,d1):
              (WISE.dec + margin > d0) *
              (WISE.dec - margin < d1))
     print 'Cut to', len(WISE), 'WISE frames near RA,Dec box'
+
+    # Join to WISE Single-Frame Metadata Tables
+    WISE.qual_frame = np.zeros(len(WISE), np.int16) - 1
+    WISE.moon_masked = np.zeros(len(WISE), bool)
+    WISE.dtanneal = np.zeros(len(WISE), np.float32)
+
+    WISE.matched = np.zeros(len(WISE), bool)
+    
+    for nbands in [2,3,4]:
+        fn = os.path.join(wisedir, 'WISE-l1b-metadata-%iband.fits' % nbands)
+        T = fits_table(fn, columns=['ra', 'dec', 'scan_id', 'frame_num', 'qual_frame',
+                                    'moon_masked', 'dtanneal'])
+        print 'Read', len(T), 'from', fn
+        T.cut((T.ra  + 2.*margin/cosdec > r0) *
+              (T.ra  - 2.*margin/cosdec < r1) *
+              (T.dec + 2.*margin > d0) *
+              (T.dec - 2.*margin < d1))
+        print 'Cut to', len(T), 'near RA,Dec box'
+        if len(T) == 0:
+            continue
+
+        #I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 1./3600.)
+        I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 60./3600.)
+        print 'Matched', len(I)
+        K = np.flatnonzero((WISE.scan_id[I] == T.scan_id[J]) * (WISE.frame_num[I] == T.frame_num[J]))
+        I = I[K]
+        J = J[K]
+        print 'Cut to', len(I), 'matching scan/frame'
+
+        for band in [1,2,3,4]:
+            K = (WISE.band[I] == band)
+            print 'Band', band, ':', sum(K)
+            if sum(K) == 0:
+                continue
+            WISE.qual_frame [I[K]] = T.qual_frame [J[K]].astype(WISE.qual_frame.dtype)
+            moon = T.moon_masked[J[K]]
+            print 'Moon:', np.unique(moon)
+            print 'moon[%i]:' % (band-1), np.unique([m[band-1] for m in moon])
+            WISE.moon_masked[I[K]] = np.array([m[band-1] == '1' for m in moon]).astype(WISE.moon_masked.dtype)
+            WISE.dtanneal   [I[K]] = T.dtanneal   [J[K]].astype(WISE.dtanneal.dtype)
+            print 'moon_masked:', np.unique(WISE.moon_masked)
+
+            WISE.matched[I[K]] = True
+
+    print np.sum(WISE.matched), 'of', len(WISE), 'matched to metadata tables'
+    assert(np.sum(WISE.matched) == len(WISE))
+    WISE.delete_column('matched')
 
     return WISE
 
@@ -154,37 +200,6 @@ def check_md5s(WISE):
             print out, err
             if rtn:
                 print 'ERROR: return code', rtn
-
-
-# def main():
-#     t00 = Time()
-#     ps = PlotSequence('co')
-#     # plt.clf()
-#     # plt.plot(T.ra, T.dec, 'r.', ms=4, alpha=0.5)
-#     # plt.xlabel('RA (deg)')
-#     # plt.ylabel('Dec (deg)')
-#     # plt.title('Atlas tile centers')
-#     # plt.axis([360,0,-90,90])
-#     # ps.savefig()
-#     # W3
-#     #r0,r1 = 210.593,  219.132
-#     #d0,d1 =  51.1822,  54.1822
-#     # SEQUELS
-#     r0,r1 = 120.0, 210.0
-#     d0,d1 =  45.0,  60.0
-#     T = get_atlas_tiles(r0,r1,d0,d1)
-#     allWISE = get_wise_frames(r0,r1,d0,d1)
-#     plot_region(r0,r1,d0,d1, ps, T, allWISE[allWISE.band == bands[0]], None)
-#     print 'Entering main loop:', Time() - t00
-#     for ti in T:
-#         print
-#         print 'Starting coadd tile', ti.coadd_id
-#         print 'RA,Dec', ti.ra, ti.dec
-#         print
-#         for band in bands:
-#             one_coadd(ti, band, allWISE, ps)
-#     print 'Whole enchilada:', Time() - t00
-
 
 def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     print 'Coadd tile', ti.coadd_id
@@ -230,6 +245,24 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
     print 'cut to', len(WISE), 'in RA,Dec box'
+
+    print 'Qual_frame scores:', np.unique(WISE.qual_frame)
+    WISE.cut(WISE.qual_frame > 0)
+    print 'Cut out qual_frame = 0;', len(WISE), 'remaining'
+
+    print 'Moon_masked:', np.unique(WISE.moon_masked)
+    WISE.cut(WISE.moon_masked == False)
+    print 'Cut moon_masked:', len(WISE), 'remaining'
+
+    if band in [3,4]:
+        WISE.cut(WISE.dtanneal > 2000.)
+        print 'Cut out dtanneal <= 2000 seconds:', len(WISE), 'remaining'
+
+    if band == 4:
+        ok = np.array([np.logical_or(s < '03752a', s > '03761b')
+                       for s in WISE.scan_id])
+        WISE.cut(ok)
+        print 'Cut out bad scans in W4:', len(WISE), 'remaining'
 
     # plt.plot(WISE.ra, WISE.dec, 'o', mec='b', mfc='none')
     # ps.savefig()
@@ -329,7 +362,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     # table vs no-table: ~ zero difference except in cores of v.bright stars
 
     try:
-        coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band, mp)
+        coim,coiv,copp, coimb,coivb,masks, coimc,coivc = coadd_wise(cowcs, WISE, ps, band, mp)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -365,6 +398,11 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-invvar-w.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
+
+    ofn = prefix + '-img-c.fits'
+    fitsio.write(ofn, coimc.astype(np.float32), header=hdr, clobber=True)
+    ofn = prefix + '-invvar-c.fits'
+    fitsio.write(ofn, coivc.astype(np.float32), header=hdr, clobber=True)
 
     ii = []
     for i,(mm,r) in enumerate(zip(masks, res)):
@@ -542,11 +580,13 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
 
     # DEBUG
     #WISE = WISE[:10]
-    # DEBUG
-    WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
+    # DEBUG -- scan closest to outlier 03833a
+    WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
+    WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
+    #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
 
-    rimgs, coimg1, cow1, coppstd1 = _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
-                                                       tinyw, mp)
+    (rimgs, coimg1, cow1, coppstd1, coimgsq1
+     )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp)
 
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
@@ -557,7 +597,16 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     coimgb = np.zeros_like(coimg)
     cowb   = np.zeros_like(cow)
 
+    coimgc = np.zeros_like(coimg)
+    cowc   = np.zeros_like(cow)
+
     assert(len(rimgs) == len(WISE))
+
+    if ps:
+        rchihistrange = 6
+        rchihistargs = dict(range=(-rchihistrange,rchihistrange), bins=100)
+        rchihist = None
+        rchihistedges = None
 
     masks = []
     ri = -1
@@ -582,9 +631,16 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         mm.included = True
 
         cox0,cox1,coy0,coy1 = rr.coextent
-        subco = coimg1  [coy0:coy1+1, cox0:cox1+1].astype(np.float32)
-        subw  = cow1    [coy0:coy1+1, cox0:cox1+1]
-        subpp = coppstd1[coy0:coy1+1, cox0:cox1+1]
+        coslc = slice(coy0, coy1+1), slice(cox0, cox1+1)
+        subco = coimg1  [coslc].astype(np.float32)
+        subw  = cow1    [coslc]
+        subpp = coppstd1[coslc]
+
+        # Remove this image from the per-pixel std calculation...
+        subsq2 = coimgsq1[coslc] - (rr.w * rr.rimg**2)
+        subw2  = np.maximum(cow1[coslc] - rr.w, tinyw)
+        subim2 = (subco * subw - (rr.w * rr.rimg)) / subw2
+        subpp2 = np.sqrt(np.maximum(0, subsq2/subw2 - subim2**2))
 
         # like in the WISE Atlas Images, estimate sky difference via
         # median difference in the overlapping area.
@@ -597,6 +653,15 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         badpix = (np.abs(rchi) >= 5.)
         #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
         mm.nrchipix = np.count_nonzero(badpix)
+
+
+        dsky2 = median_f((rr.rimg[rr.rmask] - subim2[rr.rmask]).astype(np.float32))
+        rchi2 = (rr.rimg - dsky2 - subim2) * rr.rmask * (subw2 > 0) * (subpp2 > 0) / np.maximum(subpp2, 1e-6)
+        badpix2 = (np.abs(rchi2) >= 5.)
+        badpix2 = binary_dilation(badpix2)
+        
+        rr.rmask3 = rr.rmask2.copy()
+        rr.rmask3[badpix2] = False
 
         # plt.imshow(rimg - dsky, **ima)
         # plt.imshow(rimg - dsky, interpolation='nearest', origin='lower')
@@ -652,67 +717,128 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
                 masks.append(None)
                 continue
 
-            coimg [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg
-            coimg2[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg**2
+            rr.rimg -= dsky
+
+            coimg [coslc] += rr.w * rr.rimg
+            coimg2[coslc] += rr.w * rr.rimg**2
             # About the [rr.rmask]: that is the area where [rr.rimg] != 0
-            cow   [coy0: coy1+1, cox0: cox1+1][rr.rmask] += rr.w
-            coimgb[coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rimg * rr.rmask2
-            cowb  [coy0: coy1+1, cox0: cox1+1] += rr.w * rr.rmask2
+            cow   [coslc][rr.rmask] += rr.w
+            coimgb[coslc] += rr.w * rr.rimg * rr.rmask2
+            cowb  [coslc] += rr.w * rr.rmask2
+
+            coimgc[coslc] += rr.w * (rr.rimg + dsky - dsky2) * rr.rmask3
+            cowc  [coslc] += rr.w * rr.rmask3
+
         del badpix
         del badpixmask
 
         if ps:
-            R,C = 2,4
+            R,C = 3,4
             plt.clf()
-            plt.subplot(3,3,1)
+            plt.subplot(R,C,1)
             I = orig_rimg - dsky
             plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('rimg')
-            plt.subplot(3,3,2)
+            plt.subplot(R,C,2)
             I = subco
             plo,phi = [np.percentile(I, p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('subco')
-            plt.subplot(3,3,3)
+            plt.subplot(R,C,3)
             I = subpp
             plo,phi = [np.percentile(I, p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('subpp')
-            plt.subplot(3,3,4)
+            plt.subplot(R,C,4)
             plt.imshow(rchi, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=-5, vmax=5)
+            plt.xticks([]); plt.yticks([])
             plt.title('rchi (%i)' % mm.nrchipix)
 
-            plt.subplot(3,3,5)
+            plt.subplot(R,C,5)
             I = rr.img
             plo,phi = [np.percentile(I, p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('img')
 
-            plt.subplot(3,3,6)
+            plt.subplot(R,C,6)
             I = mm.omask
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=0, vmax=3)
+            plt.xticks([]); plt.yticks([])
             plt.title('omask')
 
-            plt.subplot(3,3,7)
+            plt.subplot(R,C,7)
             I = rr.rimg
             plo,phi = [np.percentile(I, p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('patched rimg')
 
-            plt.subplot(3,3,8)
+            plt.subplot(R,C,8)
             I = (coimgb / np.maximum(cowb, tinyw))
             plo,phi = [np.percentile(I, p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
             plt.title('coimgb')
+
+
+
+            I = (rchi != 0.)
+            n,e = np.histogram(np.clip(rchi[I], -rchihistrange, rchihistrange), **rchihistargs)
+            if rchihist is None:
+                rchihist, rchihistedges = n,e
+            else:
+                rchihist += n
+
+            I = (rchi2 != 0.)
+            n2,e2 = np.histogram(np.clip(rchi2[I], -rchihistrange, rchihistrange), **rchihistargs)
+
+            plt.subplot(R,C,9)
+            e = rchihistedges
+            e = (e[:-1]+e[1:])/2.
+            plt.semilogy(e, np.maximum(0.1, rchihist), 'b-')
+            plt.semilogy(e, np.maximum(0.1, n), 'b-')
+            plt.semilogy(e, np.maximum(0.1, n2), 'g-')
+            plt.axvline(5., color='r')
+            plt.xlim(-(rchihistrange+1), rchihistrange+1)
+            plt.yticks([])
+            plt.title('rchi')
+
+            plt.subplot(R,C,10)
+            I = subpp2
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
+            plt.title('subpp2')
+
+            plt.subplot(R,C,11)
+            plt.imshow(rchi2, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-5, vmax=5)
+            plt.xticks([]); plt.yticks([])
+            nbad2 = np.sum(np.abs(rchi2 > 5.))
+            npix = np.sum(rr.rmask * (subw2 > 0) * (subpp2 > 0))
+            plt.title('rchi2 (%i, %.1f%%)' % (nbad2, 100.*float(nbad2)/npix))
+
+            plt.subplot(R,C,12)
+            I = (coimgc / np.maximum(cowc, tinyw))
+            plo,phi = [np.percentile(I, p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
+            plt.title('coimgc')
             
             inc = ''
             if not mm.included:
@@ -734,6 +860,10 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     coinvvar = cow
     coimgb /= np.maximum(cowb, tinyw)
     coinvvarb = cowb
+
+    coimgc /= np.maximum(cowc, tinyw)
+    coinvvarc = cowc
+
     # print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
     # per-pixel variance
     coppstd = np.sqrt(np.maximum(0, coimg2 / (np.maximum(cow, tinyw)) - coimg**2))
@@ -776,6 +906,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         plt.title('Coadd round 2 (weighted)')
         ps.savefig()
 
+        imlo,imhi = plo,phi
+
         plt.clf()
         I = coppstd
         plo,phi = [np.percentile(I, p) for p in [25,99]]
@@ -785,7 +917,29 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         plt.title('Coadd round 2 per-pixel std')
         ps.savefig()
 
-    return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks
+
+
+        plt.clf()
+        I = coimgc
+        plo,phi = imlo,imhi
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 2(c) (weighted)')
+        ps.savefig()
+
+        plt.clf()
+        I = coimgc
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.colorbar()
+        plt.title('Coadd round 2(c) (weighted)')
+        ps.savefig()
+
+
+
+    return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks, coimgc, coinvvarc
 
 
 def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
@@ -802,12 +956,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     print 'intfn', intfn
     print 'uncfn', uncfn
     print 'maskfn', maskfn
-    rr = Duck()
-    #wcs = Sip(intfn)
-    #print 'Wcs:', wcs
+
     wcs = wise.wcs
     h,w = wcs.get_height(), wcs.get_width()
-
     x0,x1,y0,y1 = wise.imextent
     cox0,cox1,coy0,coy1 = wise.coextent
 
@@ -843,6 +994,8 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     del mask
     del unc
 
+    # our return value (quack):
+    rr = Duck()
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
     print 'Pixels to patch:', rr.npatched
@@ -880,6 +1033,7 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
     print 'Pixels in range:', len(Yo)
     #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
+    # Scalar!
     rr.w = (1./sig1**2)
 
     if ps:
@@ -921,8 +1075,12 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     rimgs = mp.map(_coadd_one_round1, args)
 
     for rr in rimgs:
+        if rr is None:
+            continue
         cox0,cox1,coy0,coy1 = rr.coextent
         slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
+
+        # note, rr.w is a scalar.
         coimg [slc] += rr.w *  rr.rimg
         coimg2[slc] += rr.w * (rr.rimg**2)
         cow   [slc] += rr.w
@@ -987,7 +1145,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     # plt.title('Coadd per-pixel std')
     # ps.savefig()
 
-    return rimgs, coimg, cow, coppstd
+    return rimgs, coimg, cow, coppstd, coimg2
 
 
 
@@ -1018,6 +1176,8 @@ if __name__ == '__main__':
     parser.add_option('-w', dest='wishlist', action='store_true', default=False,
                       help='Print needed frames and exit?')
     parser.add_option('--plots', dest='plots', action='store_true', default=False)
+
+    parser.add_option('--plot-prefix', dest='plotprefix', default=None)
 
     parser.add_option('--outdir', dest='outdir', default=default_outdir,
                       help='Output directory: default %default')
@@ -1070,7 +1230,9 @@ if __name__ == '__main__':
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
-    ps = PlotSequence(dataset, format='%03i')
+    if opt.plotprefix is None:
+        opt.plotprefix = dataset
+    ps = PlotSequence(opt.plotprefix, format='%03i')
 
     if opt.todo:
         # Check which tiles still need to be done.
@@ -1144,7 +1306,6 @@ if __name__ == '__main__':
         A = []
         for a in args:
             tileid = int(a)
-            #print 'Running index', tileid
             band = tileid / 1000
             tileid = tileid % 1000
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band

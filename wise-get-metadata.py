@@ -188,11 +188,12 @@ if False:
 
 if True:
     cols = None
-    NC = 5
+    #NC = 5
+    NC = 1
     for cat in [
-        #'wise_allsky_2band_p1bs_frm',
+        'wise_allsky_2band_p1bs_frm',
         #'wise_allsky_3band_p1bs_frm',
-        'wise_allsky_4band_p1bs_frm',
+        #'wise_allsky_4band_p1bs_frm',
         ]:
         t = threading.Thread(target=getcat, args=(cat, cols, NC))
         t.start()

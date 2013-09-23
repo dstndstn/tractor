@@ -19,80 +19,77 @@ coadds = 'wise-coadds'
 
 from wise3 import get_l1b_file
 
-#plt.subplots_adjust(bottom=0.01, top=0.9, left=0., right=1., wspace=0.05, hspace=0.2)
+def plot_exposures():
 
-for coadd_id,band in [('1384p454', 3)]:
-    print coadd_id, band
-
-    plt.clf()
-    plt.subplot(1,2,1)
-    fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
-    J = fitsio.read(fn2)
-    binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-    plo,phi = [np.percentile(binJ, p) for p in [25,99]]
-    plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
-               vmin=plo, vmax=phi)
-    plt.xticks([]); plt.yticks([])
-    plt.subplot(1,2,2)
-    #fn3 = os.path.join(coadds, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
-    fn3 = os.path.join(coadds, 'coadd-%s-w%i-ppstd.fits' % (coadd_id, band))
-    J = fitsio.read(fn3)
-    binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-    phi = np.percentile(binJ, 99)
-    plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
-               vmin=0, vmax=phi)
-    plt.xticks([]); plt.yticks([])
-    ps.savefig()
-
-
-    fn = os.path.join(coadds, 'coadd-%s-w%i-frames.fits' % (coadd_id, band))
-    T = fits_table(fn)
-    print len(T), 'frames'
-    T.cut(np.lexsort((T.frame_num, T.scan_id)))
-
-    plt.clf()
-    n,b,p = plt.hist(np.log10(np.maximum(0.1, T.npixrchi)), bins=100, range=(-1,6),
-                     log=True)
-    plt.xlabel('log10( N pix with bad rchi )')
-    plt.ylabel('Number of images')
-    plt.ylim(0.1, np.max(n) + 5)
-    ps.savefig()
-
-    J = np.argsort(-T.npixrchi)
-    print 'Largest npixrchi:'
-    for n,s,f in zip(T.npixrchi[J], T.scan_id[J], T.frame_num[J[:20]]):
-        print '  n', n, 'scan', s, 'frame', f
-
-    i0 = 0
-    while i0 <= len(T):
+    plt.subplots_adjust(bottom=0.01, top=0.9, left=0., right=1., wspace=0.05, hspace=0.2)
+    for coadd_id,band in [('1384p454', 3)]:
+        print coadd_id, band
+    
         plt.clf()
-        R,C = 4,6
-        for i in range(i0, i0+(R*C)):
-            if i >= len(T):
-                break
-            t = T[i]
-            fn = get_l1b_file('wise-frames', t.scan_id, t.frame_num, band)
-            print fn
-            I = fitsio.read(fn)
-            bad = np.flatnonzero(np.logical_not(np.isfinite(I)))
-            I.flat[bad] = 0.
-            print I.shape
-            binI = reduce(np.add, [I[j/4::4, j%4::4] for j in range(16)])
-            print binI.shape
-            plt.subplot(R,C,i-i0+1)
-            plo,phi = [np.percentile(binI, p) for p in [25,99]]
-            print 'p', plo,phi
-            plt.imshow(binI, interpolation='nearest', origin='lower',
-                       vmin=plo, vmax=phi, cmap='gray')
-            plt.xticks([]); plt.yticks([])
-            plt.title('%s %i' % (t.scan_id, t.frame_num))
-        plt.suptitle('%s W%i' % (coadd_id, band))
+        plt.subplot(1,2,1)
+        fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+        J = fitsio.read(fn2)
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+        plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.subplot(1,2,2)
+        #fn3 = os.path.join(coadds, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
+        fn3 = os.path.join(coadds, 'coadd-%s-w%i-ppstd.fits' % (coadd_id, band))
+        J = fitsio.read(fn3)
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        phi = np.percentile(binJ, 99)
+        plt.imshow(binJ, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=0, vmax=phi)
+        plt.xticks([]); plt.yticks([])
         ps.savefig()
-        i0 += R*C
-
-
-
-sys.exit(0)
+    
+    
+        fn = os.path.join(coadds, 'coadd-%s-w%i-frames.fits' % (coadd_id, band))
+        T = fits_table(fn)
+        print len(T), 'frames'
+        T.cut(np.lexsort((T.frame_num, T.scan_id)))
+    
+        plt.clf()
+        n,b,p = plt.hist(np.log10(np.maximum(0.1, T.npixrchi)), bins=100, range=(-1,6),
+                         log=True)
+        plt.xlabel('log10( N pix with bad rchi )')
+        plt.ylabel('Number of images')
+        plt.ylim(0.1, np.max(n) + 5)
+        ps.savefig()
+    
+        J = np.argsort(-T.npixrchi)
+        print 'Largest npixrchi:'
+        for n,s,f in zip(T.npixrchi[J], T.scan_id[J], T.frame_num[J[:20]]):
+            print '  n', n, 'scan', s, 'frame', f
+    
+        i0 = 0
+        while i0 <= len(T):
+            plt.clf()
+            R,C = 4,6
+            for i in range(i0, i0+(R*C)):
+                if i >= len(T):
+                    break
+                t = T[i]
+                fn = get_l1b_file('wise-frames', t.scan_id, t.frame_num, band)
+                print fn
+                I = fitsio.read(fn)
+                bad = np.flatnonzero(np.logical_not(np.isfinite(I)))
+                I.flat[bad] = 0.
+                print I.shape
+                binI = reduce(np.add, [I[j/4::4, j%4::4] for j in range(16)])
+                print binI.shape
+                plt.subplot(R,C,i-i0+1)
+                plo,phi = [np.percentile(binI, p) for p in [25,99]]
+                print 'p', plo,phi
+                plt.imshow(binI, interpolation='nearest', origin='lower',
+                           vmin=plo, vmax=phi, cmap='gray')
+                plt.xticks([]); plt.yticks([])
+                plt.title('%s %i' % (t.scan_id, t.frame_num))
+            plt.suptitle('%s W%i' % (coadd_id, band))
+            ps.savefig()
+            i0 += R*C
 
 
 
@@ -105,6 +102,7 @@ T = fits_table('sequels-atlas.fits')
 #     print 'Cmd:', cmd
 #     os.system(cmd)
 
+#T.cut(np.array([0]))
 bands = [1,2,3,4]
 
 plt.figure(figsize=(12,4))
@@ -118,13 +116,22 @@ for coadd_id in T.coadd_id:
         if not os.path.exists(fn1):
             print '-> does not exist'
             continue
-        fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+
+        # if band in [1,2]:
+        #     dir2 = 'wise-coadds'
+        # else:
+        #     dir2 = '.' #'wise-coadds-w3'
+        dir2 = 'c'
+
+        
+        fn2 = os.path.join(dir2, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
         print fn2
         if not os.path.exists(fn2):
             print '-> does not exist'
             continue
 
-        fn3 = os.path.join(coadds, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
+        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
+        fn3 = os.path.join(dir2, 'coadd-%s-w%i-img-c.fits' % (coadd_id, band))
         print fn3
         if not os.path.exists(fn3):
             print '-> does not exist'
@@ -171,6 +178,41 @@ for coadd_id in T.coadd_id:
         plt.title('unWISE')
         plt.suptitle('%s W%i' % (coadd_id, band))
         ps.savefig()
+
+
+        fn2 = os.path.join(dir2, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
+        print fn2
+        if not os.path.exists(fn2):
+            print '-> does not exist'
+            continue
+
+        fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar-c.fits' % (coadd_id, band))
+        print fn3
+        if not os.path.exists(fn3):
+            print '-> does not exist'
+            continue
+
+        J = fitsio.read(fn2)
+        K = fitsio.read(fn3)
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+
+        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+
+        plt.subplot(1,3,2)
+        plt.imshow(binJ, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE invvar')
+
+        plt.subplot(1,3,3)
+        plt.imshow(binK, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE invvar c')
+
+        ps.savefig()
+
 
 sys.exit(0)
 
