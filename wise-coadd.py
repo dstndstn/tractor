@@ -353,8 +353,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     WISE.intfn = np.array([r[0] for r in res])
     WISE.wcs = np.array([r[1] for r in res])
 
-    #print 'WISE table rows:', WISE.row
-
     t1 = Time()
     print 'Up to coadd_wise:'
     print t1 - t0
@@ -362,7 +360,8 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     # table vs no-table: ~ zero difference except in cores of v.bright stars
 
     try:
-        coim,coiv,copp, coimb,coivb,masks, coimc,coivc = coadd_wise(cowcs, WISE, ps, band, mp)
+        coim,coiv,copp, coimb,coivb,masks = coadd_wise(cowcs, WISE, ps, band, mp)
+        # , coimc,coivc
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -382,7 +381,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     cowcs.write_to(wcsfn)
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
-        
 
     tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
     prefix = os.path.join(outdir, tag)
@@ -399,10 +397,10 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     ofn = prefix + '-invvar-w.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
 
-    ofn = prefix + '-img-c.fits'
-    fitsio.write(ofn, coimc.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-invvar-c.fits'
-    fitsio.write(ofn, coivc.astype(np.float32), header=hdr, clobber=True)
+    # ofn = prefix + '-img-c.fits'
+    # fitsio.write(ofn, coimc.astype(np.float32), header=hdr, clobber=True)
+    # ofn = prefix + '-invvar-c.fits'
+    # fitsio.write(ofn, coivc.astype(np.float32), header=hdr, clobber=True)
 
     ii = []
     for i,(mm,r) in enumerate(zip(masks, res)):
@@ -585,20 +583,24 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
     #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
 
-    (rimgs, coimg1, cow1, coppstd1, coimgsq1
+    (rimgs, coimg1, cow1, coppstd1, cowimgsq1
      )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp)
 
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
-    coimg  = np.zeros((H,W))
-    coimg2 = np.zeros((H,W))
-    cow    = np.zeros((H,W))
-    coimgb = np.zeros_like(coimg)
-    cowb   = np.zeros_like(cow)
 
-    coimgc = np.zeros_like(coimg)
-    cowc   = np.zeros_like(cow)
+    coimg    = np.zeros((H,W))
+    coimgsq  = np.zeros((H,W))
+    cow      = np.zeros((H,W))
+    con      = np.zeros((H,W), np.int16)
+    coimgb   = np.zeros((H,W))
+    coimgsqb = np.zeros((H,W))
+    cowb     = np.zeros((H,W))
+    conb     = np.zeros((H,W), np.int16)
+
+    #coimgc = np.zeros_like(coimg)
+    #cowc   = np.zeros_like(cow)
 
     assert(len(rimgs) == len(WISE))
 
@@ -607,6 +609,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         rchihistargs = dict(range=(-rchihistrange,rchihistrange), bins=100)
         rchihist = None
         rchihistedges = None
+
+    cowimg1 = coimg1 * cow1
 
     masks = []
     ri = -1
@@ -632,19 +636,18 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
 
         cox0,cox1,coy0,coy1 = rr.coextent
         coslc = slice(coy0, coy1+1), slice(cox0, cox1+1)
-        subco = coimg1  [coslc].astype(np.float32)
-        subw  = cow1    [coslc]
-        subpp = coppstd1[coslc]
-
+        #subco = coimg1  [coslc].astype(np.float32)
+        #subw  = cow1    [coslc]
+        #subpp = coppstd1[coslc]
         # Remove this image from the per-pixel std calculation...
-        subsq2 = coimgsq1[coslc] - (rr.w * rr.rimg**2)
-        subw2  = np.maximum(cow1[coslc] - rr.w, tinyw)
-        subim2 = (subco * subw - (rr.w * rr.rimg)) / subw2
-        subpp2 = np.sqrt(np.maximum(0, subsq2/subw2 - subim2**2))
+        subsq2 = cowimgsq1[coslc] - (rr.w * rr.rimg**2)
+        subw  = np.maximum(cow1[coslc] - rr.w, tinyw)
+        subco = (cowimg1[coslc] - (rr.w * rr.rimg)) / subw
+        subpp = np.sqrt(np.maximum(0, subsq2/subw - subco**2))
 
         # like in the WISE Atlas Images, estimate sky difference via
         # median difference in the overlapping area.
-        dsky = median_f(rr.rimg[rr.rmask] - subco[rr.rmask])
+        dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
         print 'Sky difference:', dsky
 
         rchi = (rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) / np.maximum(subpp, 1e-6)
@@ -654,31 +657,12 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
         mm.nrchipix = np.count_nonzero(badpix)
 
-
-        dsky2 = median_f((rr.rimg[rr.rmask] - subim2[rr.rmask]).astype(np.float32))
-        rchi2 = (rr.rimg - dsky2 - subim2) * rr.rmask * (subw2 > 0) * (subpp2 > 0) / np.maximum(subpp2, 1e-6)
-        badpix2 = (np.abs(rchi2) >= 5.)
-        badpix2 = binary_dilation(badpix2)
-        
-        rr.rmask3 = rr.rmask2.copy()
-        rr.rmask3[badpix2] = False
-
-        # plt.imshow(rimg - dsky, **ima)
-        # plt.imshow(rimg - dsky, interpolation='nearest', origin='lower')
-        # plt.imshow(subco, **ima)
-        # plt.imshow(rimg - dsky - subco, interpolation='nearest', origin='lower')
-        # plt.imshow(rmask, interpolation='nearest', origin='lower')
-        # plt.imshow(subw > 0, interpolation='nearest', origin='lower')
-        # plt.imshow(subpp, interpolation='nearest', origin='lower')
-        # plt.imshow(rimg - dsky - coimg1, **ima)
-        # plt.imshow(rchi, interpolation='nearest', origin='lower')#, vmin=-10, vmax=10)
-        # plt.imshow(badpix, interpolation='nearest', origin='lower', vmin=0, vmax=1,
-        #            cmap='gray')
-        # plt.imshow(badpixmask, interpolation='nearest', origin='lower', vmin=0, vmax=3,
-        #            cmap='gray')
-        # plt.title('badpix')
-        # plt.colorbar()
-        # ps.savefig()
+        # dsky2 = median_f((rr.rimg[rr.rmask] - subim2[rr.rmask]).astype(np.float32))
+        # rchi2 = (rr.rimg - dsky2 - subim2) * rr.rmask * (subw2 > 0) * (subpp2 > 0) / np.maximum(subpp2, 1e-6)
+        # badpix2 = (np.abs(rchi2) >= 5.)
+        # badpix2 = binary_dilation(badpix2)
+        # rr.rmask3 = rr.rmask2.copy()
+        # rr.rmask3[badpix2] = False
 
         # Bit 1: rchi >= 5
         badpixmask = badpix.astype(np.uint8)
@@ -704,7 +688,6 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         if ps:
             orig_rimg = rr.rimg.copy()
 
-        #if mm.nrchipix > 1000:
         if mm.nrchipix > mm.ncopix * 0.001:
             print ('WARNING: dropping exposure scan %s frame %i band %i: # nrchi pixels %i' %
                    (WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
@@ -717,23 +700,23 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
                 masks.append(None)
                 continue
 
-            rr.rimg -= dsky
+            rr.rimg[rr.rmask] -= dsky
 
-            coimg [coslc] += rr.w * rr.rimg
-            coimg2[coslc] += rr.w * rr.rimg**2
+            coimg  [coslc] += rr.w * rr.rimg
+            coimgsq[coslc] += rr.w * rr.rimg**2
             # About the [rr.rmask]: that is the area where [rr.rimg] != 0
-            cow   [coslc][rr.rmask] += rr.w
-            coimgb[coslc] += rr.w * rr.rimg * rr.rmask2
-            cowb  [coslc] += rr.w * rr.rmask2
+            cow    [coslc][rr.rmask] += rr.w
+            coimgb [coslc] += rr.w * rr.rimg * rr.rmask2
+            cowb   [coslc] += rr.w * rr.rmask2
 
-            coimgc[coslc] += rr.w * (rr.rimg + dsky - dsky2) * rr.rmask3
-            cowc  [coslc] += rr.w * rr.rmask3
+            # coimgc[coslc] += rr.w * (rr.rimg + dsky - dsky2) * rr.rmask3
+            # cowc  [coslc] += rr.w * rr.rmask3
 
         del badpix
         del badpixmask
 
         if ps:
-            R,C = 3,4
+            R,C = 3,3
             plt.clf()
             plt.subplot(R,C,1)
             I = orig_rimg - dsky
@@ -802,43 +785,43 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
             else:
                 rchihist += n
 
-            I = (rchi2 != 0.)
-            n2,e2 = np.histogram(np.clip(rchi2[I], -rchihistrange, rchihistrange), **rchihistargs)
+            #I = (rchi2 != 0.)
+            #n2,e2 = np.histogram(np.clip(rchi2[I], -rchihistrange, rchihistrange), **rchihistargs)
 
             plt.subplot(R,C,9)
             e = rchihistedges
             e = (e[:-1]+e[1:])/2.
             plt.semilogy(e, np.maximum(0.1, rchihist), 'b-')
             plt.semilogy(e, np.maximum(0.1, n), 'b-')
-            plt.semilogy(e, np.maximum(0.1, n2), 'g-')
+            #plt.semilogy(e, np.maximum(0.1, n2), 'g-')
             plt.axvline(5., color='r')
             plt.xlim(-(rchihistrange+1), rchihistrange+1)
             plt.yticks([])
             plt.title('rchi')
 
-            plt.subplot(R,C,10)
-            I = subpp2
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('subpp2')
-
-            plt.subplot(R,C,11)
-            plt.imshow(rchi2, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=-5, vmax=5)
-            plt.xticks([]); plt.yticks([])
-            nbad2 = np.sum(np.abs(rchi2 > 5.))
-            npix = np.sum(rr.rmask * (subw2 > 0) * (subpp2 > 0))
-            plt.title('rchi2 (%i, %.1f%%)' % (nbad2, 100.*float(nbad2)/npix))
-
-            plt.subplot(R,C,12)
-            I = (coimgc / np.maximum(cowc, tinyw))
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('coimgc')
+            # plt.subplot(R,C,10)
+            # I = subpp2
+            # plo,phi = [np.percentile(I, p) for p in [25,99]]
+            # plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=plo, vmax=phi)
+            # plt.xticks([]); plt.yticks([])
+            # plt.title('subpp2')
+            # 
+            # plt.subplot(R,C,11)
+            # plt.imshow(rchi2, interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=-5, vmax=5)
+            # plt.xticks([]); plt.yticks([])
+            # nbad2 = np.sum(np.abs(rchi2 > 5.))
+            # npix = np.sum(rr.rmask * (subw2 > 0) * (subpp2 > 0))
+            # plt.title('rchi2 (%i, %.1f%%)' % (nbad2, 100.*float(nbad2)/npix))
+            # 
+            # plt.subplot(R,C,12)
+            # I = (coimgc / np.maximum(cowc, tinyw))
+            # plo,phi = [np.percentile(I, p) for p in [25,99]]
+            # plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=plo, vmax=phi)
+            # plt.xticks([]); plt.yticks([])
+            # plt.title('coimgc')
             
             inc = ''
             if not mm.included:
@@ -861,12 +844,12 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     coimgb /= np.maximum(cowb, tinyw)
     coinvvarb = cowb
 
-    coimgc /= np.maximum(cowc, tinyw)
-    coinvvarc = cowc
+    #coimgc /= np.maximum(cowc, tinyw)
+    #coinvvarc = cowc
 
     # print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
     # per-pixel variance
-    coppstd = np.sqrt(np.maximum(0, coimg2 / (np.maximum(cow, tinyw)) - coimg**2))
+    coppstd = np.sqrt(np.maximum(0, coimgsq / (np.maximum(cow, tinyw)) - coimg**2))
     #print 'Coadd per-pixel range:', coppstd.min(), coppstd.max()
 
     if ps:
@@ -917,29 +900,27 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         plt.title('Coadd round 2 per-pixel std')
         ps.savefig()
 
-
-
-        plt.clf()
-        I = coimgc
-        plo,phi = imlo,imhi
-        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                   vmin=plo, vmax=phi)
-        plt.colorbar()
-        plt.title('Coadd round 2(c) (weighted)')
-        ps.savefig()
-
-        plt.clf()
-        I = coimgc
-        plo,phi = [np.percentile(I, p) for p in [25,99]]
-        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                   vmin=plo, vmax=phi)
-        plt.colorbar()
-        plt.title('Coadd round 2(c) (weighted)')
-        ps.savefig()
+        # plt.clf()
+        # I = coimgc
+        # plo,phi = imlo,imhi
+        # plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+        #            vmin=plo, vmax=phi)
+        # plt.colorbar()
+        # plt.title('Coadd round 2(c) (weighted)')
+        # ps.savefig()
+        # 
+        # plt.clf()
+        # I = coimgc
+        # plo,phi = [np.percentile(I, p) for p in [25,99]]
+        # plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+        #            vmin=plo, vmax=phi)
+        # plt.colorbar()
+        # plt.title('Coadd round 2(c) (weighted)')
+        # ps.savefig()
 
 
 
-    return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks, coimgc, coinvvarc
+    return coimg, coinvvar, coppstd, coimgb, coinvvarb, masks #, coimgc, coinvvarc
 
 
 def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
@@ -1066,13 +1047,14 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     W = cowcs.get_width()
     H = cowcs.get_height()
     coimg  = np.zeros((H,W))
-    coimg2 = np.zeros((H,W))
+    coimgsq = np.zeros((H,W))
     cow    = np.zeros((H,W))
 
     args = []
     for wi,wise in enumerate(WISE):
         args.append((wi, len(WISE), wise, table, L, ps, band, cowcs))
     rimgs = mp.map(_coadd_one_round1, args)
+    del args
 
     for rr in rimgs:
         if rr is None:
@@ -1081,71 +1063,15 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
 
         # note, rr.w is a scalar.
-        coimg [slc] += rr.w *  rr.rimg
-        coimg2[slc] += rr.w * (rr.rimg**2)
-        cow   [slc] += rr.w
-        # coimg [coy0 + Yo, cox0 + Xo] += rr.w * rim
-        # coimg2[coy0 + Yo, cox0 + Xo] += rr.w * (rim**2)
-        # cow   [coy0 + Yo, cox0 + Xo] += rr.w
-        #rimgs.append(rr)
-        # plt.clf()
-        # plt.subplot(1,2,1)
-        # plt.imshow(coimg / np.maximum(cow, 1e-16), interpolation='nearest', origin='lower',
-        #            extent=[0, W, 0, H], vmin=0, vmax=10)
-        # plt.axis([0,W, 0, H])
-        # plt.subplot(1,2,2)
-        # plt.imshow(rimg, interpolation='nearest', origin='lower',
-        #            extent=[cox0, cox1, coy0, coy1], vmin=0, vmax=10)
-        # plt.axis([0,W, 0, H])
-        # ps.savefig()
+        coimg  [slc] += rr.w *  rr.rimg
+        coimgsq[slc] += rr.w * (rr.rimg**2)
+        cow    [slc] += rr.w
 
-    #print 'Coadd (before normalizing) range:', coimg.min(), coimg.max(), 'mean', np.mean(coimg), 'median', np.median(coimg)
-    #print 'Coadd weight range:', cow.min(), cow.max(), 'median', np.median(cow)
     coimg /= np.maximum(cow, tinyw)
-    #print 'Coadd range:', coimg1.min(), coimg1.max(), 'mean', np.mean(coimg1), 'median', np.median(coimg1)
-
-    # plt.clf()
-    # plt.imshow(coimg2 / np.maximum(cow,tinyw),
-    #            interpolation='nearest', origin='lower',
-    #            vmin=0, vmax=100)
-    # plt.colorbar()
-    # plt.title('coimg2 / cow')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(coimg1**2,
-    #            interpolation='nearest', origin='lower',
-    #            vmin=0, vmax=100)
-    # plt.colorbar()
-    # plt.title('coimg1**2')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(coimg2 / np.maximum(cow, tinyw) - coimg1**2,
-    #            interpolation='nearest', origin='lower',
-    #            vmin=-10, vmax=10)
-    # plt.colorbar()
-    # plt.title('coppvar')
-    # ps.savefig()
-
     # Per-pixel std
-    coppstd = np.sqrt(np.maximum(0, coimg2 / np.maximum(cow, tinyw) - coimg**2))
-    # costd1 = np.median(coppstd)
-    # comed = np.median(coimg1)
-    # ima = dict(interpolation='nearest', origin='lower',
-    #            vmin=comed - 3.*costd1, vmax=comed + 10.*costd1)
-    # plt.clf()
-    # plt.imshow(coimg1, **ima)
-    # plt.colorbar()
-    # plt.title('Coadd')
-    # ps.savefig()
-    # plt.clf()
-    # plt.imshow(coppstd, interpolation='nearest', origin='lower')
-    # plt.colorbar()
-    # plt.title('Coadd per-pixel std')
-    # ps.savefig()
+    coppstd = np.sqrt(np.maximum(0, coimgsq / np.maximum(cow, tinyw) - coimg**2))
 
-    return rimgs, coimg, cow, coppstd, coimg2
+    return rimgs, coimg, cow, coppstd, coimgsq
 
 
 
