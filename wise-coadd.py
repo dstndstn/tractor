@@ -594,7 +594,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     tinyw = 1e-16
 
     # DEBUG
-    WISE = WISE[:10]
+    #WISE = WISE[:10]
     # DEBUG -- scan closest to outlier 03833a
     #WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
     #WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
