@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from scipy.ndimage.morphology import binary_dilation
+import datetime
 
 import fitsio
 
@@ -25,6 +26,7 @@ from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.util import *
 from astrometry.util.resample import *
+from astrometry.util.run_command import *
 from astrometry.libkd.spherematch import *
 from astrometry.util.starutil_numpy import *
 
@@ -206,7 +208,20 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
 
-    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
+    version = {}
+    rtn,out,err = run_command('svn info')
+    assert(rtn == 0)
+    #print 'out:', out
+    #print 'err:', err
+    lines = out.split('\n')
+    lines = [l for l in lines if len(l)]
+    for l in lines:
+        words = l.split(':', 1)
+        words = [w.strip() for w in words]
+        version[words[0]] = words[1]
+    print 'SVN version info:', version
+
+    tag = 'unwise-%s-w%i' % (ti.coadd_id, band)
     prefix = os.path.join(outdir, tag)
     ofn = prefix + '-img.fits'
     if os.path.exists(ofn):
@@ -382,8 +397,9 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
 
-    tag = 'coadd-%s-w%i' % (ti.coadd_id, band)
-    prefix = os.path.join(outdir, tag)
+    hdr.add_record(dict(name='UNW_VER', value=version['Revision'], comment='unWISE code SVN revision'))
+    hdr.add_record(dict(name='UNW_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(), comment='unWISE run time'))
 
     ofn = prefix + '-img.fits'
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
@@ -417,7 +433,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
             os.mkdir(maskdir)
 
         ofn = WISE.intfn[i].replace('-int', '')
-        ofn = os.path.join(maskdir, 'coadd-mask-' + ti.coadd_id + '-' + os.path.basename(ofn))
+        ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-' + os.path.basename(ofn))
 
         (nil,wcs,w,h,poly) = r
         fullmask = np.zeros((h,w), mm.omask.dtype)
@@ -578,7 +594,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
     tinyw = 1e-16
 
     # DEBUG
-    #WISE = WISE[:10]
+    WISE = WISE[:10]
     # DEBUG -- scan closest to outlier 03833a
     #WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
     #WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
