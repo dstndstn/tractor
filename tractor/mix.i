@@ -29,6 +29,76 @@ static double eval_all(int K, double* scales, double* I, double* means,
     return r;
 }
 
+#define ERR(x, ...) printf(x, ## __VA_ARGS__)
+// PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
+
+static int get_np(PyObject* ob_amp,
+                   PyObject* ob_mean,
+                   PyObject* ob_var,
+                   PyObject* ob_result,
+                   int NX, int NY,
+                   int* K,
+                   PyObject **np_amp,
+                   PyObject **np_mean,
+                   PyObject **np_var,
+                   PyObject **np_result) {
+    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
+    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+    const int D = 2;
+
+    Py_INCREF(dtype);
+    Py_INCREF(dtype);
+    Py_INCREF(dtype);
+    Py_INCREF(dtype);
+    *np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
+    *np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
+    *np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
+    *np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
+    Py_CLEAR(dtype);
+
+    if (!(*np_amp && *np_mean && *np_var && *np_result)) {
+        if (!*np_amp) {
+            ERR("amp wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        if (!*np_mean) {
+            ERR("mean wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        if (!*np_var) {
+            ERR("var wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        if (!*np_result) {
+            ERR("result wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        return 1;
+    }
+    *K = (int)PyArray_DIM(*np_amp, 0);
+    if ((PyArray_DIM(*np_mean, 0) != *K) ||
+        (PyArray_DIM(*np_mean, 1) != D)) {
+        ERR("np_mean must be K x D");
+        return 1;
+    }
+    if ((PyArray_DIM(*np_var, 0) != *K) ||
+        (PyArray_DIM(*np_var, 1) != D) ||
+        (PyArray_DIM(*np_var, 2) != D)) {
+        ERR("np_var must be K x D x D");
+        return 1;
+    }
+    if ((PyArray_DIM(*np_result, 0) != NY) ||
+        (PyArray_DIM(*np_result, 1) != NX)) {
+        ERR("np_result must be size NY x NX (%i x %i), got %i x %i",
+            NY, NX, (int)PyArray_DIM(*np_result, 0),
+            (int)PyArray_DIM(*np_result, 1));
+        return 1;
+    }
+    return 0;
+}
+
+
     %}
 
 %init %{
@@ -41,9 +111,6 @@ static double eval_all(int K, double* scales, double* I, double* means,
 #if 0
  } // fool silly text editor indenters...
 #endif
-
-#define ERR(x, ...) printf(x, ## __VA_ARGS__)
-// PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
 
 static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
                       PyObject* ob_mean, PyObject* ob_var,
@@ -170,72 +237,6 @@ bailout:
     return rtn;
 }
 
-
-static int get_np(PyObject* ob_amp,
-                   PyObject* ob_mean,
-                   PyObject* ob_var,
-                   PyObject* ob_result,
-                   int NX, int NY,
-                   int* K,
-                   PyObject **np_amp,
-                   PyObject **np_mean,
-                   PyObject **np_var,
-                   PyObject **np_result) {
-    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
-    int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
-    int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
-    const int D = 2;
-
-    Py_INCREF(dtype);
-    Py_INCREF(dtype);
-    Py_INCREF(dtype);
-    Py_INCREF(dtype);
-    *np_amp = PyArray_FromAny(ob_amp, dtype, 1, 1, req, NULL);
-    *np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
-    *np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
-    *np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
-    Py_CLEAR(dtype);
-
-    if (!(*np_amp && *np_mean && *np_var && *np_result)) {
-        if (!*np_amp) {
-            ERR("amp wasn't the type expected");
-            Py_DECREF(dtype);
-        }
-        if (!*np_mean) {
-            ERR("mean wasn't the type expected");
-            Py_DECREF(dtype);
-        }
-        if (!*np_var) {
-            ERR("var wasn't the type expected");
-            Py_DECREF(dtype);
-        }
-        if (!*np_result) {
-            ERR("result wasn't the type expected");
-            Py_DECREF(dtype);
-        }
-        return 1;
-    }
-    *K = (int)PyArray_DIM(*np_amp, 0);
-    if ((PyArray_DIM(*np_mean, 0) != *K) ||
-        (PyArray_DIM(*np_mean, 1) != D)) {
-        ERR("np_mean must be K x D");
-        return 1;
-    }
-    if ((PyArray_DIM(*np_var, 0) != *K) ||
-        (PyArray_DIM(*np_var, 1) != D) ||
-        (PyArray_DIM(*np_var, 2) != D)) {
-        ERR("np_var must be K x D x D");
-        return 1;
-    }
-    if ((PyArray_DIM(*np_result, 0) != NY) ||
-        (PyArray_DIM(*np_result, 1) != NX)) {
-        ERR("np_result must be size NY x NX (%i x %i), got %i x %i",
-            NY, NX, (int)PyArray_DIM(*np_result, 0),
-            (int)PyArray_DIM(*np_result, 1));
-        return 1;
-    }
-    return 0;
-}
 
 
 
@@ -506,6 +507,8 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     // correct, since we should look at the max of the SUM of
     // components...
     maxpix = 0.;
+    xc = x0;
+    yc = y0;
     for (k=0; k<K; k++) {
         double val;
         int ix,iy;
@@ -518,7 +521,8 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             val = scales[k];
         } else {
             double maxd = -HUGE_VAL;
-            double maxx,maxy;
+            double maxx = x0;
+            double maxy = y0;
             double yy, xx, dd;
             double dx, dy;
             double* I = II + 3*k;
@@ -611,10 +615,12 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             ix = (int)lround(maxx);
             iy = (int)lround(maxy);
         }
+
         /*
          printf("component %i: max val %g at (%i,%i) (vs x [%i,%i), y [%i,%i)\n",
          k, val, ix, iy, x0, x1, y0, y1);
          */
+
         if (val > maxpix) {
             maxpix = val;
             xc = ix;
@@ -646,15 +652,22 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     { if ((i >= lo) && (i < hi)) { arr[i - lo] = 1; } }
 
     // Mark the eight neighbors around the central pixel as needing to be done.
-    SET(nextT, xc,   x0,x1);
-    SET(nextT, xc+1, x0,x1);
-    SET(nextT, xc-1, x0,x1);
-    SET(nextB, xc,   x0,x1);
-    SET(nextB, xc+1, x0,x1);
-    SET(nextB, xc-1, x0,x1);
-    SET(nextL, yc,   y0,y1);
-    SET(nextR, yc,   y0,y1);
-
+    if (yc > y0) {
+        SET(nextB, xc+1, x0,x1);
+        SET(nextB, xc,   x0,x1);
+        SET(nextB, xc-1, x0,x1);
+    }
+    if (yc < (y1-1)) {
+        SET(nextT, xc,   x0,x1);
+        SET(nextT, xc+1, x0,x1);
+        SET(nextT, xc-1, x0,x1);
+    }
+    if (xc > x0) {
+        SET(nextL, yc,   y0,y1);
+    }
+    if (xc < (x1-1)) {
+        SET(nextR, yc,   y0,y1);
+    }
     result[(yc - y0)*W + (xc - x0)] = eval_all(K, scales, II, mean, xc-fx, yc-fy);
 
     for (R=1;; R++) {
@@ -714,119 +727,125 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
 
         // top
         yy = yc + R;
-        rrow = result + (yy - y0)*W;
-        for (i=0; i<W; i++) {
-            double r;
-            if (!doT[i])
-                continue;
-            any = 1;
-            xx = x0 + i;
-            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            //result[(yy - y0)*W + (xx - x0)] = r;
-            rrow[i] = r;
-            //printf("top[xx=%i] = %g\n", xx, r);
-            if (r < minval)
-                continue;
-            // leftmost pixel of Top, and not at the left edge...
-            if ((xx == (xc - R)) && (xx > x0)) {
-                //printf("setting L\n");
-                SET(nextL, yy  , y0,y1);
-                SET(nextL, yy-1, y0,y1);
-            }
-            // rightmost pixel of Top, and not at the right edge...
-            if ((xx == (xc + R)) && (xx < (x1-1))) {
-                //printf("setting R\n");
-                SET(nextR, yy  , y0,y1);
-                SET(nextR, yy-1, y0,y1);
-            }
-            // not the top edge...
-            if (yy < (y1-1)) {
-                //printf("setting T\n");
-                SET(nextT, xx-1, x0,x1);
-                SET(nextT, xx  , x0,x1);
-                SET(nextT, xx+1, x0,x1);
+        if (yy < y1) {
+            rrow = result + (yy - y0)*W;
+            for (i=0; i<W; i++) {
+                double r;
+                if (!doT[i])
+                    continue;
+                any = 1;
+                xx = x0 + i;
+                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                //result[(yy - y0)*W + (xx - x0)] = r;
+                rrow[i] = r;
+                //printf("top[xx=%i] = %g\n", xx, r);
+                if (r < minval)
+                    continue;
+                // leftmost pixel of Top, and not at the left edge...
+                if ((xx == (xc - R)) && (xx > x0)) {
+                    //printf("setting L\n");
+                    SET(nextL, yy  , y0,y1);
+                    SET(nextL, yy-1, y0,y1);
+                }
+                // rightmost pixel of Top, and not at the right edge...
+                if ((xx == (xc + R)) && (xx < (x1-1))) {
+                    //printf("setting R\n");
+                    SET(nextR, yy  , y0,y1);
+                    SET(nextR, yy-1, y0,y1);
+                }
+                // not the top edge...
+                if (yy < (y1-1)) {
+                    //printf("setting T\n");
+                    SET(nextT, xx-1, x0,x1);
+                    SET(nextT, xx  , x0,x1);
+                    SET(nextT, xx+1, x0,x1);
+                }
             }
         }
-
         // bottom
         yy = yc - R;
-        rrow = result + (yy - y0)*W;
-        for (i=0; i<W; i++) {
-            double r;
-            if (!doB[i])
-                continue;
-            any = 1;
-            xx = x0 + i;
-            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            //result[(yy - y0)*W + (xx - x0)] = r;
-            rrow[i] = r;
-            //printf("bottom[xx=%i] = %g\n", xx, r);
-            if (r < minval)
-                continue;
-            // leftmost pixel in Bottom, and not left edge?
-            if ((xx == (xc - R)) && (xx > x0)) {
-                //printf("setting L\n");
-                SET(nextL, yy  , y0,y1);
-                SET(nextL, yy+1, y0,y1);
-            }
-            // rightmost pixel in Bottom, and not right edge?
-            if ((xx == (xc + R)) && (xx < (x1-1))) {
-                //printf("setting R\n");
-                SET(nextR, yy  , y0,y1);
-                SET(nextR, yy+1, y0,y1);
-            }
-            // not the bottom edge?
-            if (yy > y0) {
-                //printf("setting B\n");
-                SET(nextB, xx-1, x0,x1);
-                SET(nextB, xx  , x0,x1);
-                SET(nextB, xx+1, x0,x1);
+        if (yy >= y0) {
+            rrow = result + (yy - y0)*W;
+            for (i=0; i<W; i++) {
+                double r;
+                if (!doB[i])
+                    continue;
+                any = 1;
+                xx = x0 + i;
+                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                //result[(yy - y0)*W + (xx - x0)] = r;
+                rrow[i] = r;
+                //printf("bottom[xx=%i] = %g\n", xx, r);
+                if (r < minval)
+                    continue;
+                // leftmost pixel in Bottom, and not left edge?
+                if ((xx == (xc - R)) && (xx > x0)) {
+                    //printf("setting L\n");
+                    SET(nextL, yy  , y0,y1);
+                    SET(nextL, yy+1, y0,y1);
+                }
+                // rightmost pixel in Bottom, and not right edge?
+                if ((xx == (xc + R)) && (xx < (x1-1))) {
+                    //printf("setting R\n");
+                    SET(nextR, yy  , y0,y1);
+                    SET(nextR, yy+1, y0,y1);
+                }
+                // not the bottom edge?
+                if (yy > y0) {
+                    //printf("setting B\n");
+                    SET(nextB, xx-1, x0,x1);
+                    SET(nextB, xx  , x0,x1);
+                    SET(nextB, xx+1, x0,x1);
+                }
             }
         }
 
         // left
         xx = xc - R;
-        for (i=0; i<H; i++) {
-            double r;
-            if (!doL[i])
-                continue;
-            any = 1;
-            yy = y0 + i;
-            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            result[(yy - y0)*W + (xx - x0)] = r;
-            //printf("left[yy=%i] = %g\n", xx, r);
-            if (r < minval)
-                continue;
-            // not the left edge?
-            if (xx > x0) {
-                //printf("setting L\n");
-                SET(nextL, yy-1, y0,y1);
-                SET(nextL, yy  , y0,y1);
-                SET(nextL, yy+1, y0,y1);
+        if (xx >= x0) {
+            for (i=0; i<H; i++) {
+                double r;
+                if (!doL[i])
+                    continue;
+                any = 1;
+                yy = y0 + i;
+                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                result[(yy - y0)*W + (xx - x0)] = r;
+                //printf("left[yy=%i] = %g\n", xx, r);
+                if (r < minval)
+                    continue;
+                // not the left edge?
+                if (xx > x0) {
+                    //printf("setting L\n");
+                    SET(nextL, yy-1, y0,y1);
+                    SET(nextL, yy  , y0,y1);
+                    SET(nextL, yy+1, y0,y1);
+                }
             }
         }
         // right
         xx = xc + R;
-        for (i=0; i<H; i++) {
-            double r;
-            if (!doR[i])
-                continue;
-            any = 1;
-            yy = y0 + i;
-            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            result[(yy - y0)*W + (xx - x0)] = r;
-            //printf("right[yy=%i] = %g\n", yy, r);
-            if (r < minval)
-                continue;
-            // not the right edge?
-            if (xx < (x1-1)) {
-                //printf("setting R\n");
-                SET(nextR, yy-1, y0,y1);
-                SET(nextR, yy  , y0,y1);
-                SET(nextR, yy+1, y0,y1);
+        if (xx < x1) {
+            for (i=0; i<H; i++) {
+                double r;
+                if (!doR[i])
+                    continue;
+                any = 1;
+                yy = y0 + i;
+                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                result[(yy - y0)*W + (xx - x0)] = r;
+                //printf("right[yy=%i] = %g\n", yy, r);
+                if (r < minval)
+                    continue;
+                // not the right edge?
+                if (xx < (x1-1)) {
+                    //printf("setting R\n");
+                    SET(nextR, yy-1, y0,y1);
+                    SET(nextR, yy  , y0,y1);
+                    SET(nextR, yy+1, y0,y1);
+                }
             }
         }
-
         if (!any)
             break;
     }

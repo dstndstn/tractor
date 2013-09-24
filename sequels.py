@@ -167,6 +167,9 @@ def one_tile(tile, opt, savepickle, ps):
     print 'RA,Dec bounds:', r0,r1,d0,d1
     H,W = wcs.get_height(), wcs.get_width()
 
+    # HACK HACK HACK
+    #H,W = 512,512
+
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
         print 'Reading', objfn
@@ -224,7 +227,7 @@ def one_tile(tile, opt, savepickle, ps):
     T.treated_as_pointsource = badgals
     T.objc_type[badgals] = 6
 
-    defaultflux = 100.
+    defaultflux = 1.
 
     # hack
     T.psfflux    = np.zeros((len(T),5), np.float32) + defaultflux
@@ -977,7 +980,7 @@ def main():
             print 'Changed bands to', opt.bands, 'and output dir to', outdir
             print 'Output file pattern', opt.output
 
-        one_tile(T[i], opt, opt.pickle, plot, minradius)
+        one_tile(T[i], opt, opt.pickle, plot)
 
 if __name__ == '__main__':
     main()

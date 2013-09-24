@@ -880,6 +880,8 @@ class Tractor(MultiParams):
             BH = 50
             
         for i,derivs in enumerate(allderivs):
+            if len(derivs) == 0:
+                continue
             parami = usedParamMap[i]
             for deriv,img in derivs:
                 H,W = img.shape
