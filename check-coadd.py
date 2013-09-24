@@ -142,15 +142,12 @@ for coadd_id in T.coadd_id[:5]:
         J = fitsio.read(fn2)
         K = fitsio.read(fn3)
 
-        # binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)])
-        # #binJ = reduce(np.add, [J[i/2::2, i%2::2] for i in range( 4)])
-        # #binK = reduce(np.add, [K[i/2::2, i%2::2] for i in range( 4)])
-        # binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-        # binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
-
-        binI = I[::5,::5]
-        binJ = J[::4,::4]
-        binK = K[::4,::4]
+        binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)]) / 25.
+        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)]) / 16.
+        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)]) / 16.
+        # binI = I[::5,::5]
+        # binJ = J[::4,::4]
+        # binK = K[::4,::4]
 
         ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
@@ -208,8 +205,6 @@ for coadd_id in T.coadd_id[:5]:
             print 'Cmd:', cmd
             os.system(cmd)
 
-            continue
-
         L = fitsio.read(fn4)
         M = fitsio.read(fn5)
         unc = fitsio.read(ufn1)
@@ -266,14 +261,23 @@ for coadd_id in T.coadd_id[:5]:
         print 'chia:', chia.min(), chia.max()
         print 'chib:', chib.min(), chib.max()
 
-        plt.clf()
-        plt.subplot(1,3,2)
-        n,b,p = plt.hist(chia.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='r')
-        plt.ylim(0.1, max(n)*2)
-        plt.subplot(1,3,3)
-        n,b,p = plt.hist(chib.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='b')
-        plt.ylim(0.1, max(n)*2)
-        ps.savefig()
+        # plt.clf()
+        # plt.subplot(1,3,2)
+        # n,b,p = plt.hist(chia.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='r')
+        # plt.ylim(0.1, max(n)*2)
+        # plt.subplot(1,3,3)
+        # n,b,p = plt.hist(chib.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='b')
+        # plt.ylim(0.1, max(n)*2)
+        # ps.savefig()
+
+        fn1 = os.path.join(dir1, '%s_ab41-w%i-cov-3.fits.gz' % (coadd_id, band))
+        print fn1
+        if not os.path.exists(fn1):
+            print '-> does not exist'
+            cmd = ('wget -r -N -nH -np -nv --cut-dirs=5 -P %s "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/%s"' %
+                   (wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41', os.path.basename(fn1)))
+            print 'Cmd:', cmd
+            os.system(cmd)
 
         fn2 = os.path.join(dir2, 'unwise-%s-w%i-n-w.fits' % (coadd_id, band))
         print fn2
@@ -287,18 +291,26 @@ for coadd_id in T.coadd_id[:5]:
             print '-> does not exist'
             continue
 
+        I = fitsio.read(fn1)
         J = fitsio.read(fn2)
         K = fitsio.read(fn3)
         # binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
         # binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+        binI = I[::5,::5]
         binJ = J[::4,::4]
         binK = K[::4,::4]
 
-        plo,phi = min(binJ.min(), binK.min()), max(binJ.max(),binK.max())
+        plo,phi = min(binI.min(), binJ.min(), binK.min()), max(binI.max(), binJ.max(),binK.max())
         imaj = ima.copy()
-        imaj.update(vmin=plo, vmax=phi)
+        imaj.update(vmin=plo, vmax=phi, cmap='jet')
 
         plt.clf()
+
+        plt.subplot(1,3,1)
+        plt.imshow(binI, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('WISE cov')
+
         plt.subplot(1,3,2)
         plt.imshow(binJ, **imaj)
         plt.xticks([]); plt.yticks([])
