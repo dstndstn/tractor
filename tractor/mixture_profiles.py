@@ -201,7 +201,8 @@ class MixtureOfGaussians():
         '''
         minval: small value at which to stop evaluating
         '''
-        from mix import c_gauss_2d_approx
+        #from mix import c_gauss_2d_approx
+        from mix import c_gauss_2d_approx2
         assert(self.D == 2)
 
         result = np.zeros((y1-y0, x1-x0))
@@ -210,7 +211,8 @@ class MixtureOfGaussians():
         rtn = c_gauss_2d_approx2(x0, x1, y0, y1, dx, dy, minval,
                                  self.amp, self.mean,self.var, result)
         if rtn == -1:
-            raise RuntimeError('c_gauss_2d_approx failed')
+            #raise RuntimeError('c_gauss_2d_approx failed')
+            raise RuntimeError('c_gauss_2d_approx2 failed')
         return result
 
     def evaluate_grid_hogg(self, xlo, xhi, ylo, yhi):
