@@ -355,6 +355,10 @@ def one_tile(tile, opt, savepickle, ps):
         assert(pat.x0 == -R)
         psfprofile = pat.patch[R, R:]
 
+        # Reset default flux based on min radius
+        defaultflux = minsb / psfprofile[opt.minradius]
+        print 'Setting default flux', defaultflux
+
         # Set WISE source radii based on flux
         UW.rad = np.zeros(len(UW))
         wnm = UW.get('w%inm' % band)
@@ -371,6 +375,7 @@ def one_tile(tile, opt, savepickle, ps):
         for i,flux in zip(I, wf[I]):
             assert(np.isfinite(flux))
             cat[i].getBrightness().setBand(wanyband, flux)
+
         # Set SDSS radii based on WISE flux
         rad = np.zeros(len(I))
         for r,pro in enumerate(psfprofile):
@@ -383,6 +388,11 @@ def one_tile(tile, opt, savepickle, ps):
         # Set radii
         for i in range(len(cat)):
             src = cat[i]
+            # set fluxes
+            b = src.getBrightness()
+            if b.getBand(wanyband) <= defaultflux:
+                b.setBand(wanyband, defaultflux)
+                
             R = max([opt.minradius, sourcerad[i], srad2[i]])
             if isinstance(src, PointSource):
                 src.fixedRadius = R
