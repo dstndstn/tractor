@@ -7,6 +7,28 @@
 #include <math.h>
 #include <assert.h>
 #include <sys/param.h>
+
+static double eval_g(double I[3], double dx, double dy) {
+    double dsq = (I[0] * dx * dx +
+                  I[1] * dx * dy +
+                  I[2] * dy * dy);
+    if (dsq < -100)
+        // ~ 1e-44
+        return 0.0;
+    return exp(dsq);
+}
+
+
+static double eval_all(int K, double* scales, double* I, double* means,
+                       double x, double y) {
+    double r = 0;
+    int k;
+    for (k=0; k<K; k++) {
+        r += scales[k] * eval_g(I + 3*k, x - means[2*k+0], y - means[2*k+1]);
+    }
+    return r;
+}
+
     %}
 
 %init %{
@@ -75,13 +97,13 @@ static int c_gauss_2d(PyObject* ob_pos, PyObject* ob_amp,
         goto bailout;
     }
 
-    N = PyArray_DIM(np_pos, 0);
-    d = PyArray_DIM(np_pos, 1);
+    N = (int)PyArray_DIM(np_pos, 0);
+    d = (int)PyArray_DIM(np_pos, 1);
     if (d != D) {
         ERR("must be 2-D");
         goto bailout;
     }
-    K = PyArray_DIM(np_amp, 0);
+    K = (int)PyArray_DIM(np_amp, 0);
     //printf("K=%i\n", K);
     if ((PyArray_DIM(np_mean, 0) != K) ||
         (PyArray_DIM(np_mean, 1) != D)) {
@@ -193,7 +215,7 @@ static int get_np(PyObject* ob_amp,
         }
         return 1;
     }
-    *K = PyArray_DIM(*np_amp, 0);
+    *K = (int)PyArray_DIM(*np_amp, 0);
     if ((PyArray_DIM(*np_mean, 0) != *K) ||
         (PyArray_DIM(*np_mean, 1) != D)) {
         ERR("np_mean must be K x D");
@@ -294,16 +316,6 @@ bailout:
     return rtn;
 }
 
-static double eval_g(double I[4], double dx, double dy) {
-    double dsq = (I[0] * dx * dx +
-                  I[1] * dx * dy +
-                  I[3] * dy * dy);
-    if (dsq < -100)
-        // ~ 1e-44
-        return 0.0;
-    return exp(dsq);
-}
-
 static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
                              double fx, double fy,
                              double minval,
@@ -333,11 +345,11 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
 
     for (k=0; k<K; k++) {
         // We symmetrize the covariance matrix,
-        // so we don't actually set V[2] or I[2].
+        // so V,I just have three elements: x**2, xy, y**2.
         // We also scale the the I to make the Gaussian evaluation easier
         int dyabs;
-        double V[4];
-        double I[4];
+        double V[3];
+        double I[3];
         double det;
         double isc;
         double scale;
@@ -346,22 +358,22 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         int xc,yc;
         V[0] = var[k*D*D + 0];
         V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
-        V[3] = var[k*D*D + 3];
-        det = V[0]*V[3] - V[1]*V[1];
+        V[2] = var[k*D*D + 3];
+        det = V[0]*V[2] - V[1]*V[1];
         // we fold the -0.5 in the Gaussian exponent term in here...
         isc = -0.5 / det;
-        I[0] =  V[3] * isc;
+        I[0] =  V[2] * isc;
         // we also fold in the 2*dx*dy term here
         I[1] = -V[1] * isc * 2.0;
-        I[3] =  V[0] * isc;
+        I[2] =  V[0] * isc;
         scale = amp[k] / sqrt(tpd * det);
         mx = mean[k*D+0] + fx;
         my = mean[k*D+1] + fy;
         mv = minval * amp[k];
         //printf("minval %g: amp %g, allowing mv %g\n", minval, amp[k], mv);
         //printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
-        xc = MAX(x0, MIN(x1-1, lround(mx)));
-        yc = MAX(y0, MIN(y1-1, lround(my)));
+        xc = MAX(x0, MIN(x1-1, (int)lround(mx)));
+        yc = MAX(y0, MIN(y1-1, (int)lround(my)));
         //printf("mx,my (%.1f, %.1f)   xc,yc (%i,%i)\n", mx,my,xc,yc);
         for (dyabs=0; dyabs < MAX(y1-yc, 1+yc-y0); dyabs++) {
             int dysign;
@@ -381,7 +393,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
                 if ((y < y0) || (y >= y1))
                     continue;
                 // mean of conditional distribution of dx given dy
-                xm = lround(V[1] / V[3] * (y - my) + mx);
+                xm = (int)lround(V[1] / V[2] * (y - my) + mx);
                 xm = MAX(x0, MIN(x1-1, xm));
                 // eval at dx=0
                 // eval at dx = +- 1, ...
@@ -414,6 +426,425 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
     }
     rtn = 0;
 bailout:
+    Py_XDECREF(np_amp);
+    Py_XDECREF(np_mean);
+    Py_XDECREF(np_var);
+    Py_XDECREF(np_result);
+    return rtn;
+}
+
+
+
+static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
+                              double fx, double fy,
+                              double minval,
+                              PyObject* ob_amp,
+                              PyObject* ob_mean,
+                              PyObject* ob_var,
+                              PyObject* ob_result) {
+    double *amp, *mean, *var, *result;
+    const int D=2;
+    int K, k;
+    int rtn = -1;
+    PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
+    double tpd;
+    int W,H;
+    double *II = NULL;
+    double *VV = NULL;
+    double *scales = NULL;
+    double mx,my;
+    int xc,yc;
+    double maxpix;
+    uint8_t *doT=NULL, *doB=NULL, *doL=NULL, *doR=NULL;
+    uint8_t *nextT=NULL, *nextB=NULL, *nextL=NULL, *nextR=NULL;
+    int R;
+
+    W = x1 - x0;
+    H = y1 - y0;
+    tpd = pow(2.*M_PI, D);
+
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, W, H,
+               &K, &np_amp, &np_mean, &np_var, &np_result))
+        goto bailout;
+
+    amp = PyArray_DATA(np_amp);
+    mean = PyArray_DATA(np_mean);
+    var = PyArray_DATA(np_var);
+    result = PyArray_DATA(np_result);
+
+    II = malloc(sizeof(double) * 3 * K);
+    VV = malloc(sizeof(double) * 3 * K);
+    scales = malloc(sizeof(double) * K);
+
+    // We symmetrize the covariance matrix,
+    // so V,I just have three elements for each K: x**2, xy, y**2.
+    for (k=0; k<K; k++) {
+        // We also scale the the I to make the Gaussian evaluation easier
+        double det;
+        double isc;
+        double scale;
+        double* V = VV + 3*k;
+        double* I = II + 3*k;
+        V[0] =  var[k*D*D + 0];
+        V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
+        V[2] =  var[k*D*D + 3];
+        det = V[0]*V[2] - V[1]*V[1];
+        // we fold the -0.5 in the Gaussian exponent term in here...
+        isc = -0.5 / det;
+        I[0] =  V[2] * isc;
+        // we also fold in the 2*dx*dy term here
+        I[1] = -V[1] * isc * 2.0;
+        I[2] =  V[0] * isc;
+        scale = amp[k] / sqrt(tpd * det);
+        scales[k] = scale;
+    }
+
+    // Find (likely) max pixel.  This looks for the max pixel within
+    // the box bounds for each component separately.  This isn't
+    // correct, since we should look at the max of the SUM of
+    // components...
+    maxpix = 0.;
+    for (k=0; k<K; k++) {
+        double val;
+        int ix,iy;
+        mx = mean[k*D+0] + fx;
+        my = mean[k*D+1] + fy;
+        // inside postage stamp?
+        ix = (int)lround(mx);
+        iy = (int)lround(my);
+        if ((ix >= x0) && (ix < x1) && (iy >= y0) && (iy < y1)) {
+            val = scales[k];
+        } else {
+            double maxd = -HUGE_VAL;
+            double maxx,maxy;
+            double yy, xx, dd;
+            double dx, dy;
+            double* I = II + 3*k;
+            // outside postage stamp.  Min Mahalanobis distance along
+            // four corners of the box.
+            //
+            // The I array is the *negative* inverse-covariance
+            // so we want to *maximize*:
+            //    dd = I[0]dx**2 + I[1]dx dy + I[2] dy**2
+            //
+            // x = x0
+            // dx = x0 - mx,  dy = y - my
+            // dd = I[0]dx**2 + I[1]dx dy + I[2] dy**2
+            // d(dd)/dy = I[1]dx + 2 I[2] dy = 0
+            // dy = -I[1]*dx / (2*I[2])
+            // If within bounds, OR min of y0 or y1.
+            // x = x0
+            xx = x0;
+            dx = xx - mx;
+            dy = -I[1] * dx / (2. * I[2]);
+            yy = dy + my;
+            //if ((yy >= y0) && (yy <= (y1-1))) {
+            //} else
+            if (yy < y0) {
+                yy = y0;
+                dy = yy - my;
+            } else if (yy > (y1-1)) {
+                yy = y1-1;
+                dy = yy - my;
+            }
+            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            if (dd > maxd) {
+                maxd = dd;
+                maxx = xx;
+                maxy = yy;
+            }
+            // x = right edge
+            xx = x1-1;
+            dx = xx - mx;
+            dy = -I[1] * dx / (2. * I[2]);
+            yy = dy + my;
+            //if ((yy >= y0) && (yy <= (y1-1))) {
+            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            //} else
+            if (yy < y0) {
+                yy = y0;
+                dy = yy - my;
+            } else if (yy > (y1-1)) {
+                yy = y1-1;
+                dy = yy - my;
+            }
+            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            if (dd > maxd) {
+                maxd = dd;
+                maxx = xx;
+                maxy = yy;
+            }
+            // y = bottom edge
+            yy = y0;
+            dy = yy - my;
+            dx = -I[1] * dy / (2. * I[0]);
+            xx = dx + mx;
+            //if ((xx >= x0) && (xx <= (x1-1))) {
+            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            //} else
+            if (xx < x0) {
+                xx = x0;
+                dx = xx - mx;
+                //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            } else if (xx > (x1-1)) {
+                xx = x1-1;
+                dx = xx - mx;
+            }
+            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            if (dd > maxd) {
+                maxd = dd;
+                maxx = xx;
+                maxy = yy;
+            }
+            // y = top edge
+            yy = y1 - 1;
+            dy = yy - my;
+            dx = -I[1] * dy / (2. * I[0]);
+            xx = dx + mx;
+            //if ((xx >= x0) && (xx <= (x1-1))) {
+            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            //} else
+            if (xx < x0) {
+                xx = x0;
+                dx = xx - mx;
+                //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            } else if (xx > (x1-1)) {
+                xx = x1-1;
+                dx = xx - mx;
+            }
+            dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
+            if (dd > maxd) {
+                maxd = dd;
+                maxx = xx;
+                maxy = yy;
+            }
+            val = scales[k] * exp(maxd);
+            ix = (int)lround(maxx);
+            iy = (int)lround(maxy);
+        }
+        printf("component %i: max val %g at (%i,%i) (vs x [%i,%i), y [%i,%i)\n",
+               k, val, ix, iy, x0, x1, y0, y1);
+        if (val > maxpix) {
+            maxpix = val;
+            xc = ix;
+            yc = iy;
+        }
+        assert(xc >= x0);
+        assert(xc <  x1);
+        assert(yc >= y0);
+        assert(yc <  y1);
+    }
+
+    // Starting from the central pixel (xc,yc), evaluate expanding
+    // rings of pixels.  We mark pixels we want to evaluate in four
+    // arrays, for the top, bottom, left, and right of the ring.  For
+    // any pixel that evaluates above minval, we mark all its
+    // neighbors for evaluation next time.
+    doT   = calloc(W, 1);
+    doB   = calloc(W, 1);
+    doL   = calloc(H, 1);
+    doR   = calloc(H, 1);
+    nextT = calloc(W, 1);
+    nextB = calloc(W, 1);
+    nextL = calloc(H, 1);
+    nextR = calloc(H, 1);
+
+#define SET(arr, i, lo, hi)                     \
+    { if ((i >= lo) && (i < hi)) { arr[i - lo] = 1; } }
+
+    //arr[MIN(hi-1, MAX(lo, i)) - lo] = 1; }
+
+    SET(nextT, xc,   x0,x1);
+    SET(nextT, xc+1, x0,x1);
+    SET(nextT, xc-1, x0,x1);
+    SET(nextB, xc,   x0,x1);
+    SET(nextB, xc+1, x0,x1);
+    SET(nextB, xc-1, x0,x1);
+    SET(nextL, yc,   y0,y1);
+    //SET(nextL, yc+1, y0,y1);
+    //SET(nextL, yc-1, y0,y1);
+    SET(nextR, yc,   y0,y1);
+    //SET(nextR, yc+1, y0,y1);
+    //SET(nextR, yc-1, y0,y1);
+
+    result[(yc - y0)*W + (xc - x0)] = eval_all(K, scales, II, mean, xc-fx, yc-fy);
+
+    for (R=1;; R++) {
+        int any = 0;
+        int xx, yy;
+        int i;
+        memcpy(doT, nextT, W);
+        memcpy(doB, nextB, W);
+        memcpy(doL, nextL, H);
+        memcpy(doR, nextR, H);
+        memset(nextT, 0, W);
+        memset(nextB, 0, W);
+        memset(nextL, 0, H);
+        memset(nextR, 0, H);
+
+        printf("R = %i, xc,yc = (%i,%i)\n", R, xc, yc);
+        for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+            printf("%c", (doT[i] ? '*' : '-'));
+        }
+        printf("\n");
+        for (i=MIN(yc-y0+R-1, H-1); i>=MAX(yc-y0-R+1, 0); i--) {
+            printf("%c", (doL[i] ? '*' : '|'));
+            int j;
+            for (j=MAX(xc-x0-R, 0)+1; j<=MIN(xc-x0+R, W-1)-1; j++)
+                printf(" ");
+            printf("%c", (doR[i] ? '*' : '|'));
+            printf("\n");
+        }
+        for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+            printf("%c", (doB[i] ? '*' : '-'));
+        }
+        printf("\n");
+        printf("\n");
+
+        for (i=0; i<H; i++) {
+            int j;
+            for (j=0; j<W; j++) {
+                if (i == (yc+R-y0)) {
+                    printf("%c", (doT[j] ? '*' : '-'));
+                } else if (i == (yc-R-y0)) {
+                    printf("%c", (doB[j] ? '*' : '-'));
+                } else if (j == (xc-R-x0)) {
+                    printf("%c", (doL[i] ? '*' : '-'));
+                } else if (j == (xc+R-x0)) {
+                    printf("%c", (doR[i] ? '*' : '-'));
+                } else {
+                    printf(".");
+                }
+            }
+            printf("\n");
+        }
+        printf("\n");
+
+        // top
+        yy = yc + R;
+        for (i=0; i<W; i++) {
+            double r;
+            if (!doT[i])
+                continue;
+            any = 1;
+            xx = x0 + i;
+            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+            result[(yy - y0)*W + (xx - x0)] = r;
+            printf("top[xx=%i] = %g\n", xx, r);
+            if (r < minval)
+                continue;
+
+            if ((xx == (xc - R)) && (xx > x0)) {
+                printf("setting L\n");
+                SET(nextL, yy  , y0,y1);
+                SET(nextL, yy-1, y0,y1);
+            }
+            if ((xx == (xc + R)) && (xx < (x1-1))) {
+                printf("setting R\n");
+                SET(nextR, yy  , y0,y1);
+                SET(nextR, yy-1, y0,y1);
+            }
+            if (yy < (y1-1)) {
+                printf("setting T\n");
+                SET(nextT, xx-1, x0,x1);
+                SET(nextT, xx  , x0,x1);
+                SET(nextT, xx+1, x0,x1);
+            }
+        }
+
+        // bottom
+        yy = yc - R;
+        for (i=0; i<W; i++) {
+            double r;
+            if (!doB[i])
+                continue;
+            any = 1;
+            xx = x0 + i;
+            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+            result[(yy - y0)*W + (xx - x0)] = r;
+            printf("bottom[xx=%i] = %g\n", xx, r);
+            if (r < minval)
+                continue;
+            if ((xx == (xc - R)) && (xx > x0)) {
+                printf("setting L\n");
+                SET(nextL, yy  , y0,y1);
+                SET(nextL, yy+1, y0,y1);
+            }
+            if ((xx == (xc + R)) && (xx < (x1-1))) {
+                printf("setting R\n");
+                SET(nextR, yy  , y0,y1);
+                SET(nextR, yy+1, y0,y1);
+            }
+            if (yy > y0) {
+                printf("setting B\n");
+                SET(nextB, xx-1, x0,x1);
+                SET(nextB, xx  , x0,x1);
+                SET(nextB, xx+1, x0,x1);
+            }
+        }
+
+        // left
+        xx = xc - R;
+        for (i=0; i<H; i++) {
+            double r;
+            if (!doL[i])
+                continue;
+            any = 1;
+            yy = y0 + i;
+            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+            result[(yy - y0)*W + (xx - x0)] = r;
+            printf("left[yy=%i] = %g\n", xx, r);
+            if (r < minval)
+                continue;
+            if (xx > x0) {
+                printf("setting L\n");
+                SET(nextL, yy-1, y0,y1);
+                SET(nextL, yy  , y0,y1);
+                SET(nextL, yy+1, y0,y1);
+            }
+        }
+        // right
+        xx = xc + R;
+        for (i=0; i<H; i++) {
+            double r;
+            if (!doR[i])
+                continue;
+            any = 1;
+            yy = y0 + i;
+            r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+            result[(yy - y0)*W + (xx - x0)] = r;
+            printf("right[yy=%i] = %g\n", yy, r);
+            if (r < minval)
+                continue;
+            if (xx < (x1-1)) {
+                printf("setting R\n");
+                SET(nextR, yy-1, y0,y1);
+                SET(nextR, yy  , y0,y1);
+                SET(nextR, yy+1, y0,y1);
+            }
+        }
+
+        if (!any)
+            break;
+    }
+    rtn = 0;
+
+#undef SET
+
+bailout:
+    free(doT);
+    free(doB);
+    free(doL);
+    free(doR);
+    free(nextT);
+    free(nextB);
+    free(nextL);
+    free(nextR);
+
+    free(II);
+    free(VV);
+    free(scales);
+
     Py_XDECREF(np_amp);
     Py_XDECREF(np_mean);
     Py_XDECREF(np_var);

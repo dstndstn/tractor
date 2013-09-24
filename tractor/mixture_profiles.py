@@ -205,8 +205,10 @@ class MixtureOfGaussians():
         assert(self.D == 2)
 
         result = np.zeros((y1-y0, x1-x0))
-        rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval,
-                                self.amp, self.mean,self.var, result)
+        # rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval,
+        #                         self.amp, self.mean,self.var, result)
+        rtn = c_gauss_2d_approx2(x0, x1, y0, y1, dx, dy, minval,
+                                 self.amp, self.mean,self.var, result)
         if rtn == -1:
             raise RuntimeError('c_gauss_2d_approx failed')
         return result
@@ -317,7 +319,7 @@ def functional_test_patch_maker(fn, psf=None):
 if __name__ == '__main__':
     # functional test: c_gauss_2d_approx
 
-    from mix import c_gauss_2d_approx, c_gauss_2d_grid
+    from mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2
     # "More than enough"
 
     from astrometry.util.plotutils import PlotSequence
@@ -388,8 +390,8 @@ if __name__ == '__main__':
         else:
             break
 
+        print 'args (approx1):', x0, x1, y0, y1, dx, dy, minval, amp, mean, var
         rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result)
-                                
         if rtn == -1:
             raise RuntimeError('c_gauss_2d_approx failed')
 
@@ -399,14 +401,47 @@ if __name__ == '__main__':
             raise RuntimeError('c_gauss_2d_grid failed')
 
         print 'Max difference:', np.max(np.abs(r2 - result))
+
+        plt.clf()
+        plt.imshow(np.log10(np.maximum(minval * 1e-3, r2)),
+                   interpolation='nearest', origin='lower')
+        plt.colorbar()
+        plt.title('Grid')
+        ps.savefig()
         
         plt.clf()
         plt.imshow(np.log10(np.maximum(minval * 1e-3, result)),
                    interpolation='nearest', origin='lower')
         plt.colorbar()
+        plt.title('Approx 1')
         ps.savefig()
 
         assert(np.all(np.abs(r2 - result) < minval))
+
+        result2 = np.zeros((H, W))
+        print 'args (approx2):', x0, x1, y0, y1, dx, dy, minval, amp, mean, var
+        rtn = c_gauss_2d_approx2(x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result2)
+        if rtn == -1:
+            raise RuntimeError('c_gauss_2d_approx2 failed')
+
+        print 'Max difference 2:', np.max(np.abs(r2 - result2))
+        
+        plt.clf()
+        plt.imshow(np.log10(np.maximum(minval * 1e-3, result2)),
+                   interpolation='nearest', origin='lower')
+        plt.colorbar()
+        plt.title('Approx 2')
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(result2 - r2,
+                   interpolation='nearest', origin='lower')
+        plt.colorbar()
+        plt.title('Approx 2 - Grid')
+        ps.savefig()
+
+        
+        assert(np.all(np.abs(r2 - result2) < minval))
         
         # if j == 3:
         #   plt.clf()
