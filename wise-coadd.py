@@ -707,7 +707,6 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
 
             coimgsq [coslc] += rr.rmask * rr.w * rr.rimg**2
             coimg   [coslc] += rr.rmask * rr.w * rr.rimg
-            # About the [rr.rmask]: that is the area where [rr.rimg] != 0
             cow     [coslc] += rr.rmask * rr.w
             con     [coslc] += rr.rmask
             assert(np.all(rr.rimg[np.logical_not(rr.rmask)] == 0))
@@ -908,7 +907,6 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     print 'maskfn', maskfn
 
     wcs = wise.wcs
-    h,w = wcs.get_height(), wcs.get_width()
     x0,x1,y0,y1 = wise.imextent
     cox0,cox1,coy0,coy1 = wise.coextent
 
@@ -986,20 +984,19 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
     print 'Pixels in range:', len(Yo)
     #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
-    # Scalar!
-    rr.w = (1./sig1**2)
 
     if ps:
         # save for later...
         rr.img = img
 
+    # Scalar!
+    rr.w = (1./sig1**2)
     rr.rmask = np.zeros((coH, coW), np.bool)
     rr.rmask[Yo, Xo] = True
     rr.rimg = np.zeros((coH, coW), img.dtype)
     rr.rimg[Yo, Xo] = rim
     rr.rmask2 = np.zeros((coH, coW), np.bool)
     rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
-    rr.w = w
     rr.wcs = wcs
     rr.sky = sky
     rr.zpscale = zpscale
@@ -1035,8 +1032,8 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
 
         # note, rr.w is a scalar.
-        coimg  [slc] += rr.w *  rr.rimg
         coimgsq[slc] += rr.w * (rr.rimg**2)
+        coimg  [slc] += rr.w *  rr.rimg
         cow    [slc] += rr.w
 
     coimg /= np.maximum(cow, tinyw)
