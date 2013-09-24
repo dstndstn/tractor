@@ -256,7 +256,8 @@ class PSF(Params):
 	'''
 	Duck-type definition of a point-spread function.
 	'''
-	def getPointSourcePatch(self, px, py, minval=0.):
+	def getPointSourcePatch(self, px, py, minval=0.,
+                            extent=None):
 		'''
 		Returns a `Patch`, a rendering of a point source at the given
 		pixel coordinates.
@@ -265,6 +266,11 @@ class PSF(Params):
 
 		The "minval" arg says that we are willing to accept an approximation
 		such that pixels with counts < minval can be omitted.
+
+        The "extent" arg, [x0,x1, y0,y1], says that we are only
+        interested in pixels within the INCLUSIVE range [x0,x1],
+        [y0,y1]; this OPTIONALLY allows the PSF class to render a
+        smaller Patch.
 		'''
 		pass
 

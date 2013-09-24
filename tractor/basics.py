@@ -741,15 +741,13 @@ class PointSource(MultiParams):
     def __repr__(self):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
-    #def copy(self):
-    #   return PointSource(self.pos.copy(), self.brightness.copy())
-    #def hashkey(self):
-    #   return ('PointSource', self.pos.hashkey(), self.brightness.hashkey())
 
     def getUnitFluxModelPatch(self, img, minval=0.):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         # print 'PointSource.getUnitFluxModelPatch: pix pos', px,py
-        patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
+        H,W = img.shape
+        patch = img.getPsf().getPointSourcePatch(px, py, minval=minval,
+                                                 extent=[0,W-1,0,H-1])
         # print '  Patch', patch
         return patch
 
@@ -1010,7 +1008,7 @@ class PixelizedPSF(BaseParams):
         H,W = self.img.shape
         return np.hypot(H,W)/2.
 
-    def getPointSourcePatch(self, px, py, minval=0.):
+    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
         from scipy.ndimage.filters import correlate1d
         H,W = self.img.shape
         ix = int(np.round(px))
@@ -1073,7 +1071,20 @@ class GaussianMixturePSF(ParamList):
     #     if np.any(self.mog.amp < 0):
     #         return -1e100
     #     return 0.
+
+    def getMixtureOfGaussians(self):
+        return self.mog
+
+    def applyTo(self, image):
+        raise
     
+    def scaleBy(self, factor):
+        # Use not advised, ever
+        amp = self.mog.amp
+        mean = self.mog.mean * factor
+        var = self.mog.var * factor**2
+        return GaussianMixturePSF(amp, mean, var)
+
     def computeRadius(self):
         import numpy.linalg
         # ?
@@ -1084,43 +1095,15 @@ class GaussianMixturePSF(ParamList):
         #   print 'Eigs:', numpy.linalg.eigvalsh(v)
         return self.getNSigma() * np.sqrt(meig)
         
-    def scaleBy(self, factor):
-        # Use not advised, ever
-        amp = self.mog.amp
-        mean = self.mog.mean * factor
-        var = self.mog.var * factor**2
-        return GaussianMixturePSF(amp, mean, var)
-
-    def getMixtureOfGaussians(self):
-        return self.mog
-    #def proposeIncreasedComplexity(self, img):
-    #   raise
-    #def getStepSizes(self, *args, **kwargs):
-    #    K = self.mog.K
-    #    # amp + mean + var
-    #    # FIXME: -1 for normalization?
-    #    #  : -K for variance symmetry
-    #    return [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
-
-    #def isValidParamStep(self, dparam):
-    #   ## FIXME
-    #   return True
-    def applyTo(self, image):
-        raise
     def getNSigma(self):
         # MAGIC -- N sigma for rendering patches
         return 5.
+
     def getRadius(self):
-        # sqrt(det(var)) ?
-        # hmm, really, max(eigenvalue)
-        # well, enclosing circle of mu + Nsigma * eigs
-        #K = self.mog.K
-        #return self.getNSigma * np.max(self.mog.
-        # HACK!
         return self.radius
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0.):
+    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
         if minval > 0.:
             r = 0.
             for v in self.mog.var:
@@ -1440,7 +1423,7 @@ class NCircularGaussianPSF(MultiParams):
 
     # returns a Patch object.
     #### FIXME -- could use mixture_profiles!!
-    def getPointSourcePatch(self, px, py, minval=0.):
+    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
         ix = int(round(px))
         iy = int(round(py))
         dx = px - ix

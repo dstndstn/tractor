@@ -1,4 +1,36 @@
 ----------
+2013-09-23
+----------
+More trying to improve WISE coadds by dropping bad frames;
+
+wise-coadds -> /home/dstn/testdir/wise-coadds-3/
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1000-1099,2000-2099,3000-3099,4000-4099 ./wise-coadd.py
+svn rev 23539, job 5831[]
+
+-> look good!  Do the rest.
+
+qsub -p -10 -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1100-1409,2100-2409,3100-3409,4100-4109 ./wise-coadd.py
+svn rev 23545, job 5839[]
+
+Looking at minsb, non-neg:
+
+python -u sequels.py -b 1 --plots --blocks 1 --ceres -B 10 -o phot-%s-a1.fits --tiledir c/ > a1.log 2>&1 &
+python -u sequels.py -b 1 --plots --blocks 1 --ceres -B 10 -o c/phot-%s-b1.fits --tiledir c/ --nonneg > b1.log 2>&1 &
+python -u sequels.py -b 2 --blocks 1 --ceres -B 10 -o phot-%s-a2.fits --tiledir c/ > a2.log 2>&1 &
+python -u sequels.py -b 2 --blocks 1 --ceres -B 10 -o phot-%s-a2.fits --tiledir c/ --nonneg > b2.log 2>&1 &
+
+
+
+----------
+2013-09-20
+----------
+Trying to improve WISE coadds by dropping bad frames.
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3099,4000-4099 ./wise-coadd.py
+svn rev 23526, job 5813[]
+
+----------
 2013-09-16
 ----------
 

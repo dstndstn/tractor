@@ -81,8 +81,8 @@ class SdssBrightPSF(ParamsWrapper):
         P /= np.sum(P)
         return Patch(x0, y0, P)
 
-    def getPointSourcePatch(self, px, py, minval=0.):
-        return self.real.getPointSourcePatch(px, py, minval=minval)
+    def getPointSourcePatch(self, px, py, **kwargs):
+        return self.real.getPointSourcePatch(px, py, **kwargs)
         
 '''
 Warning: Bright point sources do NOT produce correct derivatives!!

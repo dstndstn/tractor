@@ -54,9 +54,9 @@ class VaryingGaussianPSF(MultiParams):
         if self.splines is None:
             self._fitParamGrid()
 
-    def getPointSourcePatch(self, px, py, minval=0.):
+    def getPointSourcePatch(self, px, py, **kwargs):
         mog = self.mogAt(px, py)
-        return mog.getPointSourcePatch(px, py, minval=minval)
+        return mog.getPointSourcePatch(px, py, **kwargs)
 
     def mogAt(self, x, y):
         '''
