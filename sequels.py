@@ -160,7 +160,7 @@ def one_tile(tile, opt, savepickle, ps):
     print
     print 'Coadd tile', tile.coadd_id
 
-    fn = os.path.join(tiledir, 'coadd-%s-w%i-img.fits' % (tile.coadd_id, bands[0]))
+    fn = os.path.join(tiledir, 'unwise-%s-w%i-img.fits' % (tile.coadd_id, bands[0]))
     print 'Reading', fn
     wcs = Tan(fn)
     r0,r1,d0,d1 = wcs.radec_bounds()
@@ -321,8 +321,8 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Band', band
         wband = 'w%i' % band
 
-        imfn = os.path.join(tiledir, 'coadd-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
-        ivfn = os.path.join(tiledir, 'coadd-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
+        imfn = os.path.join(tiledir, 'unwise-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
+        ivfn = os.path.join(tiledir, 'unwise-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
 
         print 'Reading', imfn
         wcs = Tan(imfn)
@@ -694,7 +694,9 @@ def one_tile(tile, opt, savepickle, ps):
 
 def main():
     import optparse
+
     global outdir
+    global tiledir
 
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--minsb1', dest='minsb1', default=0.1, type=float)
@@ -706,6 +708,8 @@ def main():
     parser.add_option('-o', dest='output', default=None)
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
+
+    parser.add_option('--tiledir', type=str, help='Set input wise-coadds/ dir')
 
     parser.add_option('--photoobjs-only', dest='photoObjsOnly',
                       action='store_true', default=False,
@@ -727,13 +731,16 @@ def main():
     parser.add_option('--ceres', dest='ceres', action='store_true', default=False,
                       help='Use Ceres Solver?')
     parser.add_option('--ceres-block', '-B', dest='ceresblock', type=int,
-                      help='Ceres image block size')
+                      help='Ceres image block size (default: 50)')
     parser.add_option('--nonneg', dest='nonneg', action='store_true', default=False,
                       help='With ceres, enable non-negative fluxes?')
     
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
+
+    if opt.tiledir:
+        tiledir = opt.tiledir
 
     if len(opt.bands) == 0:
         opt.bands = [1,2]

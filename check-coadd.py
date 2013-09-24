@@ -27,7 +27,7 @@ def plot_exposures():
     
         plt.clf()
         plt.subplot(1,2,1)
-        fn2 = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+        fn2 = os.path.join(coadds, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
         J = fitsio.read(fn2)
         binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
         plo,phi = [np.percentile(binJ, p) for p in [25,99]]
@@ -35,8 +35,8 @@ def plot_exposures():
                    vmin=plo, vmax=phi)
         plt.xticks([]); plt.yticks([])
         plt.subplot(1,2,2)
-        #fn3 = os.path.join(coadds, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
-        fn3 = os.path.join(coadds, 'coadd-%s-w%i-ppstd.fits' % (coadd_id, band))
+        #fn3 = os.path.join(coadds, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
+        fn3 = os.path.join(coadds, 'unwise-%s-w%i-ppstd.fits' % (coadd_id, band))
         J = fitsio.read(fn3)
         binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
         phi = np.percentile(binJ, 99)
@@ -46,7 +46,7 @@ def plot_exposures():
         ps.savefig()
     
     
-        fn = os.path.join(coadds, 'coadd-%s-w%i-frames.fits' % (coadd_id, band))
+        fn = os.path.join(coadds, 'unwise-%s-w%i-frames.fits' % (coadd_id, band))
         T = fits_table(fn)
         print len(T), 'frames'
         T.cut(np.lexsort((T.frame_num, T.scan_id)))
@@ -106,7 +106,8 @@ T = fits_table('sequels-atlas.fits')
 bands = [1,2,3,4]
 
 plt.figure(figsize=(12,4))
-plt.subplots_adjust(bottom=0.01, top=0.85, left=0., right=1., wspace=0.05)
+#plt.subplots_adjust(bottom=0.01, top=0.85, left=0., right=1., wspace=0.05)
+plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=1., wspace=0.05)
 
 for coadd_id in T.coadd_id:
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
@@ -124,14 +125,14 @@ for coadd_id in T.coadd_id:
         dir2 = 'c'
 
         
-        fn2 = os.path.join(dir2, 'coadd-%s-w%i-img-w.fits' % (coadd_id, band))
+        fn2 = os.path.join(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
         print fn2
         if not os.path.exists(fn2):
             print '-> does not exist'
             continue
 
-        fn3 = os.path.join(dir2, 'coadd-%s-w%i-img.fits' % (coadd_id, band))
-        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-img-c.fits' % (coadd_id, band))
+        fn3 = os.path.join(dir2, 'unwise-%s-w%i-img.fits' % (coadd_id, band))
+        #fn3 = os.path.join(dir2, 'unwise-%s-w%i-img-c.fits' % (coadd_id, band))
         print fn3
         if not os.path.exists(fn3):
             print '-> does not exist'
@@ -176,52 +177,74 @@ for coadd_id in T.coadd_id:
         plt.xticks([]); plt.yticks([])
         #plt.title('My %s' % os.path.basename(fn3))
         plt.title('unWISE')
+        plt.colorbar()
         plt.suptitle('%s W%i' % (coadd_id, band))
         ps.savefig()
 
 
-        fn2 = os.path.join(dir2, 'coadd-%s-w%i-invvar-w.fits' % (coadd_id, band))
-        print fn2
-        if not os.path.exists(fn2):
+        fn4 = os.path.join(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
+        print fn4
+        if not os.path.exists(fn4):
             print '-> does not exist'
             continue
 
-        #fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar-c.fits' % (coadd_id, band))
-        fn3 = os.path.join(dir2, 'coadd-%s-w%i-invvar.fits' % (coadd_id, band))
-        print fn3
-        if not os.path.exists(fn3):
+        fn5 = os.path.join(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
+        print fn5
+        if not os.path.exists(fn5):
             print '-> does not exist'
             continue
 
-        J = fitsio.read(fn2)
-        K = fitsio.read(fn3)
-        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+        L = fitsio.read(fn4)
+        M = fitsio.read(fn5)
 
-        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+        print 'sig1:', 1./np.sqrt(np.median(L))
+        print 'sig1:', 1./np.sqrt(np.median(M))
+
+        binL = reduce(np.add, [L[i/4::4, i%4::4] for i in range(16)])
+        binM = reduce(np.add, [M[i/4::4, i%4::4] for i in range(16)])
+
+        plo,phi = [np.percentile(binL, p) for p in [25,99]]
         imaj = ima.copy()
         imaj.update(vmin=plo, vmax=phi)
 
         plt.subplot(1,3,2)
-        plt.imshow(binJ, **imaj)
+        plt.imshow(binL, **imaj)
         plt.xticks([]); plt.yticks([])
         plt.title('unWISE invvar (weighted)')
 
         plt.subplot(1,3,3)
-        plt.imshow(binK, **imaj)
+        plt.imshow(binM, **imaj)
         plt.xticks([]); plt.yticks([])
+        plt.colorbar()
         plt.title('unWISE invvar')
 
         ps.savefig()
 
+        ## J: wim
+        ## K: im
+        ## L: wiv
+        ## M: iv
+        chia = J * np.sqrt(L)
+        chib = K * np.sqrt(M)
 
-        fn2 = os.path.join(dir2, 'coadd-%s-w%i-n-w.fits' % (coadd_id, band))
+        print 'chia:', chia.min(), chia.max()
+        print 'chib:', chib.min(), chib.max()
+
+        plt.subplot(1,3,2)
+        n,b,p = plt.hist(chia.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='r')
+        plt.ylim(0.1, max(n)*2)
+        plt.subplot(1,3,3)
+        n,b,p = plt.hist(chib.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='b')
+        plt.ylim(0.1, max(n)*2)
+        ps.savefig()
+
+        fn2 = os.path.join(dir2, 'unwise-%s-w%i-n-w.fits' % (coadd_id, band))
         print fn2
         if not os.path.exists(fn2):
             print '-> does not exist'
             continue
 
-        fn3 = os.path.join(dir2, 'coadd-%s-w%i-n.fits' % (coadd_id, band))
+        fn3 = os.path.join(dir2, 'unwise-%s-w%i-n.fits' % (coadd_id, band))
         print fn3
         if not os.path.exists(fn3):
             print '-> does not exist'
@@ -249,6 +272,9 @@ for coadd_id in T.coadd_id:
         ps.savefig()
 
 
+        break
+    break
+
 
 sys.exit(0)
 
@@ -275,8 +301,8 @@ for band in bands:
         if not os.path.exists(l3fn):
             print 'Missing', l3fn
             continue
-        cofn  = os.path.join(coadds, 'coadd-%s-w%i-img.fits'   % (coadd, band))
-        cowfn = os.path.join(coadds, 'coadd-%s-w%i-img-w.fits' % (coadd, band))
+        cofn  = os.path.join(coadds, 'unwise-%s-w%i-img.fits'   % (coadd, band))
+        cowfn = os.path.join(coadds, 'unwise-%s-w%i-img-w.fits' % (coadd, band))
         if not os.path.exists(cofn) or not os.path.exists(cowfn):
             print 'Missing', cofn, 'or', cowfn
             continue
@@ -338,7 +364,7 @@ for coadd in ['1384p454',
               ]:
 
     for band in []: #1,2,3,4]: #[1]:
-        F = fits_table('wise-coadds/coadd-%s-w%i-frames.fits' % (coadd,band))
+        F = fits_table('wise-coadds/unwise-%s-w%i-frames.fits' % (coadd,band))
 
         frame0 = F[0]
 
