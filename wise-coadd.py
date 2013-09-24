@@ -686,7 +686,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
             print 'rr WCS', rr.wcs
             print 'shape', mm.omask.shape
             print 'cosubwcs:', rr.cosubwcs
-            traceback.print_exc()
+            traceback.print_exc(None, sys.stdout)
 
         if ps:
             orig_rimg = rr.rimg.copy()

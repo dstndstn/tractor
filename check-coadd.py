@@ -107,9 +107,9 @@ bands = [1,2,3,4]
 
 plt.figure(figsize=(12,4))
 #plt.subplots_adjust(bottom=0.01, top=0.85, left=0., right=1., wspace=0.05)
-plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=1., wspace=0.05)
+plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=0.9, wspace=0.05)
 
-for coadd_id in T.coadd_id:
+for coadd_id in T.coadd_id[:5]:
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
     for band in bands:
         fn1 = os.path.join(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
@@ -119,10 +119,10 @@ for coadd_id in T.coadd_id:
             continue
 
         # if band in [1,2]:
-        #     dir2 = 'wise-coadds'
+        dir2 = 'wise-coadds'
         # else:
         #     dir2 = '.' #'wise-coadds-w3'
-        dir2 = 'c'
+        #dir2 = 'c'
 
         
         fn2 = os.path.join(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
@@ -142,12 +142,16 @@ for coadd_id in T.coadd_id:
         J = fitsio.read(fn2)
         K = fitsio.read(fn3)
 
-        binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)])
-        #binJ = reduce(np.add, [J[i/2::2, i%2::2] for i in range( 4)])
-        #binK = reduce(np.add, [K[i/2::2, i%2::2] for i in range( 4)])
-        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
-        
+        # binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)])
+        # #binJ = reduce(np.add, [J[i/2::2, i%2::2] for i in range( 4)])
+        # #binK = reduce(np.add, [K[i/2::2, i%2::2] for i in range( 4)])
+        # binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        # binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+
+        binI = I[::5,::5]
+        binJ = J[::4,::4]
+        binK = K[::4,::4]
+
         ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
         plo,phi = [np.percentile(binI, p) for p in [25,99]]
@@ -157,6 +161,7 @@ for coadd_id in T.coadd_id:
         plt.clf()
         plt.subplot(1,3,1)
         plt.imshow(binI, **imai)
+        plt.colorbar()
         plt.xticks([]); plt.yticks([])
         plt.title('WISE')
         #plt.title('WISE team %s' % os.path.basename(fn1))
@@ -194,14 +199,45 @@ for coadd_id in T.coadd_id:
             print '-> does not exist'
             continue
 
+        ufn1 = os.path.join(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+        print ufn1
+        if not os.path.exists(ufn1):
+            print '-> does not exist'
+            cmd = ('wget -r -N -nH -np -nv --cut-dirs=5 -P %s "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/%s"' %
+                   (wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41', os.path.basename(ufn1)))
+            print 'Cmd:', cmd
+            os.system(cmd)
+
+            continue
+
         L = fitsio.read(fn4)
         M = fitsio.read(fn5)
+        unc = fitsio.read(ufn1)
 
         print 'sig1:', 1./np.sqrt(np.median(L))
         print 'sig1:', 1./np.sqrt(np.median(M))
+        print 'unc:', np.median(unc)
 
-        binL = reduce(np.add, [L[i/4::4, i%4::4] for i in range(16)])
-        binM = reduce(np.add, [M[i/4::4, i%4::4] for i in range(16)])
+        L = 1./np.sqrt(L)
+        M = 1./np.sqrt(M)
+        # binL = reduce(np.add, [L[i/4::4, i%4::4] for i in range(16)])
+        # binM = reduce(np.add, [M[i/4::4, i%4::4] for i in range(16)])
+        # binunc = reduce(np.add, [unc[i/5::5, i%5::5] for i in range(25)])
+        binL = L[::4,::4]
+        binM = M[::4,::4]
+        binunc = unc[::5,::5]
+
+        plt.clf()
+
+        plo,phi = [np.percentile(binunc, p) for p in [25,99]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+
+        plt.subplot(1,3,1)
+        plt.imshow(binunc, **imaj)
+        plt.colorbar()
+        plt.xticks([]); plt.yticks([])
+        plt.title('WISE unc')
 
         plo,phi = [np.percentile(binL, p) for p in [25,99]]
         imaj = ima.copy()
@@ -210,26 +246,27 @@ for coadd_id in T.coadd_id:
         plt.subplot(1,3,2)
         plt.imshow(binL, **imaj)
         plt.xticks([]); plt.yticks([])
-        plt.title('unWISE invvar (weighted)')
+        plt.title('unWISE unc (weighted)')
 
         plt.subplot(1,3,3)
         plt.imshow(binM, **imaj)
-        plt.xticks([]); plt.yticks([])
         plt.colorbar()
-        plt.title('unWISE invvar')
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE unc')
 
         ps.savefig()
 
         ## J: wim
         ## K: im
-        ## L: wiv
-        ## M: iv
-        chia = J * np.sqrt(L)
-        chib = K * np.sqrt(M)
+        ## L: wiv -> sig
+        ## M: iv  -> sig
+        chia = J / L
+        chib = K / M
 
         print 'chia:', chia.min(), chia.max()
         print 'chib:', chib.min(), chib.max()
 
+        plt.clf()
         plt.subplot(1,3,2)
         n,b,p = plt.hist(chia.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='r')
         plt.ylim(0.1, max(n)*2)
@@ -252,13 +289,16 @@ for coadd_id in T.coadd_id:
 
         J = fitsio.read(fn2)
         K = fitsio.read(fn3)
-        binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
-        binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+        # binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)])
+        # binK = reduce(np.add, [K[i/4::4, i%4::4] for i in range(16)])
+        binJ = J[::4,::4]
+        binK = K[::4,::4]
 
         plo,phi = min(binJ.min(), binK.min()), max(binJ.max(),binK.max())
         imaj = ima.copy()
         imaj.update(vmin=plo, vmax=phi)
 
+        plt.clf()
         plt.subplot(1,3,2)
         plt.imshow(binJ, **imaj)
         plt.xticks([]); plt.yticks([])
@@ -266,14 +306,13 @@ for coadd_id in T.coadd_id:
 
         plt.subplot(1,3,3)
         plt.imshow(binK, **imaj)
+        plt.colorbar()
         plt.xticks([]); plt.yticks([])
         plt.title('unWISE n')
 
         ps.savefig()
 
-
-        break
-    break
+    #break
 
 
 sys.exit(0)
