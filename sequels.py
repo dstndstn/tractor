@@ -334,12 +334,13 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Reading', ivfn
         iv = fitsio.read(ivfn)
 
-        minsb = getattr(opt, 'minsb%i' % band)
-        print 'Minsb:', minsb
+        sig1 = 1./np.sqrt(np.median(iv))
+        minsig = getattr(opt, 'minsig%i' % band)
+        minsb = sig1 * minsig
+        print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
 
         # Load the average PSF model
         P = fits_table('wise-psf-avg.fits', hdu=band)
-        # Instantiate a (non-varying) mixture-of-Gaussians PSF
         psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
         # Render the PSF profile for figuring out source radii for
@@ -350,7 +351,6 @@ def one_tile(tile, opt, savepickle, ps):
         assert(pat.x0 == pat.y0)
         assert(pat.x0 == -R)
         psfprofile = pat.patch[R, R:]
-        #print 'Profile:', psfprofile
 
         # Set WISE source radii based on flux
         UW.rad = np.zeros(len(UW))
@@ -358,14 +358,9 @@ def one_tile(tile, opt, savepickle, ps):
         for r,pro in enumerate(psfprofile):
             flux = minsb / pro
             UW.rad[wnm > flux] = r
-        # plt.clf()
-        # plt.semilogy(UW.rad, wnm, 'b.')
-        # plt.xlabel('radius')
-        # plt.ylabel('flux')
-        # ps.savefig()
         UW.rad = np.maximum(UW.rad + 1, 3.)
 
-        # Increase SDSS source radii based on WISE catalog-matched fluxes.
+        # Set SDSS fluxes based on WISE catalog matches.
         wf = wiseflux[band]
         I = np.flatnonzero(wf > defaultflux)
         wfi = wf[I]
@@ -373,25 +368,21 @@ def one_tile(tile, opt, savepickle, ps):
         for i,flux in zip(I, wf[I]):
             assert(np.isfinite(flux))
             cat[i].getBrightness().setBand(wanyband, flux)
+        # Set SDSS radii based on WISE flux
         rad = np.zeros(len(I))
-        drad = 0.
         for r,pro in enumerate(psfprofile):
             flux = minsb / pro
             rad[wfi > flux] = r
-            if defaultflux > flux:
-                drad = r
-        print 'default source radius:', drad
-        drad = max(2, drad)
-        # these are radii the SDSS sources would have based on their WISE
-        # catalog-matched PSF-source size.
         srad2 = np.zeros(len(cat))
         srad2[I] = rad
-        #sourcerad = np.maximum(drad, np.maximum(sourcerad, srad2))
+        del rad
+
+        # Set radii
         for i in range(len(cat)):
             src = cat[i]
-            R = max([drad, sourcerad[i], srad2[i]])
+            R = max([opt.minradius, sourcerad[i], srad2[i]])
             if isinstance(src, PointSource):
-                src.radius = R
+                src.fixedRadius = R
             elif (isinstance(src, HoggGalaxy) or
                   isinstance(src, FixedCompositeGalaxy)):
                 src.halfsize = R
@@ -418,7 +409,8 @@ def one_tile(tile, opt, savepickle, ps):
         if ps:
             sig1 = 1./np.sqrt(np.median(iv))
             plt.clf()
-            plt.imshow(fullimg, interpolation='nearest', origin='lower', cmap='gray',
+            plt.imshow(fullimg, interpolation='nearest', origin='lower',
+                       cmap='gray',
                        vmin=-3*sig1, vmax=10*sig1)
             ax = plt.axis()
             plt.colorbar()
@@ -584,15 +576,7 @@ def one_tile(tile, opt, savepickle, ps):
                     plt.colorbar()
                     ps.savefig()
 
-
                 # tractor.setParams(p0)
-                # 
-                # t0 = Time()
-                # ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-                #     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
-                #     fitstats=True, variance=False, shared_params=False,
-                #     use_tsnnls=True)
-                # print 'TSNNLS took', Time()-t0
 
                 # Rinse sources with negative flux and repeat!
                 # subcat2 = [src for src in subcat if src.getBrightness().getBand(wanyband) > 0.]
@@ -699,10 +683,10 @@ def main():
     global tiledir
 
     parser = optparse.OptionParser('%prog [options]')
-    parser.add_option('--minsb1', dest='minsb1', default=0.1, type=float)
-    parser.add_option('--minsb2', dest='minsb2', default=0.1, type=float)
-    parser.add_option('--minsb3', dest='minsb3', default=0.1, type=float)
-    parser.add_option('--minsb4', dest='minsb4', default=0.1, type=float)
+    parser.add_option('--minsig1', dest='minsig1', default=0.1, type=float)
+    parser.add_option('--minsig2', dest='minsig2', default=0.1, type=float)
+    parser.add_option('--minsig3', dest='minsig3', default=0.1, type=float)
+    parser.add_option('--minsig4', dest='minsig4', default=0.1, type=float)
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
     parser.add_option('-o', dest='output', default=None)
@@ -734,6 +718,9 @@ def main():
                       help='Ceres image block size (default: 50)')
     parser.add_option('--nonneg', dest='nonneg', action='store_true', default=False,
                       help='With ceres, enable non-negative fluxes?')
+
+    parser.add_option('--minrad', dest='minradius', type=int, default=2,
+                      help='Minimum radius, in pixels, for evaluating source models; default %default')
     
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
@@ -990,7 +977,7 @@ def main():
             print 'Changed bands to', opt.bands, 'and output dir to', outdir
             print 'Output file pattern', opt.output
 
-        one_tile(T[i], opt, opt.pickle, plot)
+        one_tile(T[i], opt, opt.pickle, plot, minradius)
 
 if __name__ == '__main__':
     main()

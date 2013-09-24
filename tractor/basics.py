@@ -720,6 +720,9 @@ class PointSource(MultiParams):
         PointSource(pos, brightness)
         '''
         super(PointSource, self).__init__(pos, br)
+        # if not None, fixedRadius determines the size of unit-flux
+        # model Patches produced for this PointSource.
+        self.fixedRadius = None
     @staticmethod
     def getNamedParams():
         return dict(pos=0, brightness=1)
@@ -744,11 +747,10 @@ class PointSource(MultiParams):
 
     def getUnitFluxModelPatch(self, img, minval=0.):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
-        # print 'PointSource.getUnitFluxModelPatch: pix pos', px,py
         H,W = img.shape
         patch = img.getPsf().getPointSourcePatch(px, py, minval=minval,
-                                                 extent=[0,W-1,0,H-1])
-        # print '  Patch', patch
+                                                 extent=[0,W-1,0,H-1],
+                                                 radius=self.fixedRadius)
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -1048,7 +1050,7 @@ class GaussianMixturePSF(ParamList):
         assert(self.mog.D == 2)
         # !!
         self.radius = 25
-        self.fixedRadius = None
+        #self.fixedRadius = None
         super(GaussianMixturePSF, self).__init__()
 
         del self.vals
@@ -1104,11 +1106,11 @@ class GaussianMixturePSF(ParamList):
         return self.radius
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., extent=None, **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., extent=None,
+                            radius=None, **kwargs):
         if minval > 0.:
-            if self.fixedRadius is not None:
-                #rr = int(self.fixedRadius)
-                rr = self.fixedRadius
+            if radius is not None:
+                rr = radius
             else:
                 r = 0.
                 for v in self.mog.var:

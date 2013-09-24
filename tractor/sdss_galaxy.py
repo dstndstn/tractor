@@ -475,15 +475,18 @@ class ProfileGalaxy(object):
         halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
 
         # find overlapping pixels to render
-        (outx, inx) = get_overlapping_region(int(floor(px-halfsize)), int(ceil(px+halfsize+1)), 0, img.getWidth())
-        (outy, iny) = get_overlapping_region(int(floor(py-halfsize)), int(ceil(py+halfsize+1)), 0, img.getHeight())
+        (outx, inx) = get_overlapping_region(
+            int(floor(px-halfsize)), int(ceil(px+halfsize+1)),
+            0, img.getWidth())
+        (outy, iny) = get_overlapping_region(
+            int(floor(py-halfsize)), int(ceil(py+halfsize+1)),
+            0, img.getHeight())
         if inx == [] or iny == []:
             # no overlap
             return None
 
         amix = self._getAffineProfile(img, px, py)
-        # now convolve with the PSF
-        # We're making a strong assumption about the PSF here:
+        # now convolve with the PSF, analytically
         psfmix = img.getPsf().getMixtureOfGaussians()
         psfmix.normalize()
         cmix = amix.convolve(psfmix)
@@ -496,8 +499,6 @@ class ProfileGalaxy(object):
 
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
-    #ps = PlotSequence('hg', format='%03i')
-
     def __init__(self, pos, brightness, *args):
         '''
         HoggGalaxy(pos, brightness, GalaxyShape)
@@ -540,7 +541,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         return amix
     
     def _getUnitFluxDeps(self, img, px, py):
-        return hash(('unitpatch', self.getName(), px, py, img.getWcs().hashkey(),
+        return hash(('unitpatch', self.getName(), px, py,
+                     img.getWcs().hashkey(),
                      img.getPsf().hashkey(), self.shape.hashkey()))
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
@@ -548,11 +550,10 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        halfsize = max(1., self.nre * self.re * max(self.ab, 1.) / 3600. / pixscale)
-        #print 'halfsize', halfsize, 'pixels'
+        halfsize = max(1., self.nre * self.re *
+                       max(self.ab, 1.) / 3600. / pixscale)
         psf = img.getPsf()
         halfsize += psf.getRadius()
-        #print ' +psf -> ', halfsize, 'pixels'
         return halfsize
 
 class ExpGalaxy(HoggGalaxy):
@@ -631,14 +632,14 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
         return (self.name + ' at ' + str(self.pos)
                 + ' with ' + str(self.brightness) 
                 + ', ' + str(self.fracDev)
-                + 'exp ' + str(self.shapeExp)
-                + ' and deV ' + str(self.shapeDev))
+                + ', exp ' + str(self.shapeExp)
+                + ', deV ' + str(self.shapeDev))
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightness=' + repr(self.brightness) +
                 ', fracDev=' + repr(self.fracDev) + 
                 ', shapeExp=' + repr(self.shapeExp) +
-                ', shapeDev=' + repr(self.shapeDev))
+                ', shapeDev=' + repr(self.shapeDev) + ')')
     def copy(self):
         return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
                                     self.fracDev.getValue(),
@@ -656,7 +657,6 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 
     def getModelPatch(self, img, minsb=0.):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        #if counts <= 0:
         if counts == 0:
             return None
         minval = minsb / abs(counts)
@@ -710,7 +710,6 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
     # WARNING, this code has not been tested.
     def getParamDerivatives(self, img):
         ### FIXME -- minsb would be useful here!
-
         #pos0 = self.getPosition()
         #(px0,py0) = img.getWcs().positionToPixel(pos0, self)
         e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
