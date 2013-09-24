@@ -263,6 +263,8 @@ class Patch(object):
         for x in range(W, 0, -1):
             if not np.all(self.patch[:,x-1] == 0):
                 break
+            if x <= x0:
+                break
         x1 = x
 
         for y in range(H):
@@ -272,12 +274,17 @@ class Patch(object):
         for y in range(H, 0, -1):
             if not np.all(self.patch[y-1,:] == 0):
                 break
+            if y <= y0:
+                break
         y1 = y
 
         if x0 == 0 and y0 == 0 and x1 == W and y1 == H:
             return
 
         self.patch = self.patch[y0:y1, x0:x1]
+        H,W = self.patch.shape
+        if H == 0 or W == 0:
+            self.patch = None
         self.x0 += x0
         self.y0 += y0
 
@@ -848,90 +855,83 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
-    def _ceres_forced_photom(self, allderivs, umodels,
-                             imlist, mod0, scales,
+    def _ceres_forced_photom(self, umodels,
+                             imlist, mods0, scales,
                              sky, minFlux,
                              BW, BH,
                              ceresType = np.float32,
                              nonneg = False,
                              ):
         from ceres import ceres_forced_phot
-        #
-        # allderivs: [
-        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
-        #    (param1:)  [],
-        #    (param2:)  [  (deriv, img), ],
-        #
+
         t0 = Time()
         blocks = []
-
-        usedParamMap = {}
-        k = 0
-        for i,derivs in enumerate(allderivs):
-            if len(derivs) == 0:
-                continue
-            usedParamMap[i] = k
-            k += 1
-
         blockstart = {}
         if BW is None:
             BW = 50
         if BH is None:
             BH = 50
-            
-        for i,derivs in enumerate(allderivs):
-            if len(derivs) == 0:
-                continue
-            parami = usedParamMap[i]
-            for deriv,img in derivs:
-                H,W = img.shape
-                if img in blockstart:
-                    (b0,nbw,nbh) = blockstart[img]
-                else:
-                    # Dice up the image
-                    nbw = int(np.ceil(W / float(BW)))
-                    nbh = int(np.ceil(H / float(BH)))
-                    b0 = len(blocks)
-                    blockstart[img] = (b0, nbw, nbh)
-                    for iy in range(nbh):
-                        for ix in range(nbw):
-                            x0 = ix * BW
-                            y0 = iy * BH
-                            slc = (slice(y0, min(y0+BH, H)),
-                                   slice(x0, min(x0+BW, W)))
-                            imi = imlist.index(img)
-                            m0 = mod0[imi]
-                            data = (x0, y0,
-                                    img.getImage()[slc].astype(ceresType),
-                                    m0[slc].astype(ceresType),
-                                    img.getInvError()[slc].astype(ceresType))
-                            blocks.append((data, []))
+        usedParamMap = {}
+        nextparam = 0
+        # umodels[ images, srcs ]
+        for imi,(umods,img,scale,mod0) in enumerate(zip(umodels, imlist, scales, mods0)):
+            H,W = img.shape
+            if img in blockstart:
+                (b0,nbw,nbh) = blockstart[img]
+            else:
+                # Dice up the image
+                nbw = int(np.ceil(W / float(BW)))
+                nbh = int(np.ceil(H / float(BH)))
+                b0 = len(blocks)
+                blockstart[img] = (b0, nbw, nbh)
+                for iy in range(nbh):
+                    for ix in range(nbw):
+                        x0 = ix * BW
+                        y0 = iy * BH
+                        slc = (slice(y0, min(y0+BH, H)),
+                               slice(x0, min(x0+BW, W)))
+                        data = (x0, y0,
+                                img.getImage()[slc].astype(ceresType),
+                                mod0[slc].astype(ceresType),
+                                img.getInvError()[slc].astype(ceresType))
+                        blocks.append((data, []))
 
-                # Dice up the deriv
-                deriv.clipTo(W,H)
-                if deriv.patch is None:
+            for parami,umod in enumerate(umods):
+                if umod is None:
                     continue
-                ph,pw = deriv.shape
-                bx0 = np.clip(int(np.floor( deriv.x0       / float(BW))),
+                umod.clipTo(W,H)
+                umod.trimToNonZero()
+                if umod.patch is None:
+                    continue
+                # Dice up the model
+                ph,pw = umod.shape
+                bx0 = np.clip(int(np.floor( umod.x0       / float(BW))),
                               0, nbw-1)
-                bx1 = np.clip(int(np.ceil ((deriv.x0 + pw) / float(BW))),
+                bx1 = np.clip(int(np.ceil ((umod.x0 + pw) / float(BW))),
                               0, nbw-1)
-                by0 = np.clip(int(np.floor( deriv.y0       / float(BH))),
+                by0 = np.clip(int(np.floor( umod.y0       / float(BH))),
                               0, nbh-1)
-                by1 = np.clip(int(np.ceil ((deriv.y0 + ph) / float(BH))),
+                by1 = np.clip(int(np.ceil ((umod.y0 + ph) / float(BH))),
                               0, nbh-1)
+
+                if parami in usedParamMap:
+                    ceresparam = usedParamMap[parami]
+                else:
+                    usedParamMap[parami] = nextparam
+                    ceresparam = nextparam
+                    nextparam += 1
 
                 for by in range(by0, by1+1):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
-                        dd = (parami, deriv.x0, deriv.y0,
-                              deriv.patch.astype(ceresType))
+                        dd = (ceresparam, umod.x0, umod.y0,
+                              (umod.patch * scale).astype(ceresType))
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
         t0 = Time()
         params = self.getParams()
-        ims0 = self._getims(params, imlist, umodels, mod0, scales,
+        ims0 = self._getims(params, imlist, umodels, mods0, scales,
                             sky, minFlux, None)
         logverb('forced phot: ims0', Time()-t0)
                         
@@ -950,13 +950,13 @@ class Tractor(MultiParams):
         #print 'Fluxes:', fluxes
         logverb('forced phot: ceres', Time()-t0)
 
-        params = np.zeros(len(allderivs))
+        params = np.zeros(len(p0))
         for i,k in usedParamMap.items():
             params[i] = fluxes[k]
         self.setParams(params)
 
         t0 = Time()
-        ims1 = self._getims(params, imlist, umodels, mod0, scales,
+        ims1 = self._getims(params, imlist, umodels, mods0, scales,
                             sky, minFlux, None)
         imsBest = ims1
         logverb('forced phot: ims1:', Time()-t0)
@@ -1179,6 +1179,8 @@ class Tractor(MultiParams):
             for f,um in zip(fluxes,umods):
                 if um is None:
                     continue
+                if um.patch is None:
+                    continue
                 if minFlux is not None:
                     f = max(f, minFlux)
                 counts = f * scale
@@ -1188,6 +1190,7 @@ class Tractor(MultiParams):
                     print 'Warning: counts', counts, 'f', f, 'scale', scale
                 assert(np.isfinite(counts))
                 assert(np.all(np.isfinite(um.patch)))
+                #print 'Adding umod', um, 'with counts', counts, 'to mod', mod.shape
                 (um * counts).addTo(mod)
 
             ie = img.getInvError()
@@ -1521,35 +1524,32 @@ class Tractor(MultiParams):
         else:
             Nsky = 0
 
-        t0 = Time()
-        derivs = [[] for i in range(Nsourceparams)]
-        for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
-            for um,dd in zip(umods, derivs):
-                if um is None:
-                    continue
-                dd.append((um * scale, tim))
-        logverb('forced phot: derivs', Time()-t0)
-
-        if sky:
-            # print 'Catalog params:', self.catalog.numberOfParams()
-            # print 'Image params:', self.images.numberOfParams()
-            # print 'Total # params:', self.numberOfParams()
-            # print 'cat derivs:', len(derivs)
-            # print 'sky derivs:', len(skyderivs)
-            # print 'total # derivs:', len(derivs) + len(skyderivs)
-            # Sky derivatives are part of the image derivatives, so go first in
-            # the derivative list.
-            derivs = skyderivs + derivs
-
-        assert(len(derivs) == self.numberOfParams())
-
         if use_ceres:
             (ims0,imsBest
-             ) = self._ceres_forced_photom(derivs, umodels, imlist, mod0, 
+             ) = self._ceres_forced_photom(umodels, imlist, mod0, 
                                            scales, sky, minFlux, BW, BH,
                  nonneg=nonneg)
 
         else:
+            t0 = Time()
+            derivs = [[] for i in range(Nsourceparams)]
+            for i,(tim,umods,scale) in enumerate(zip(imlist, umodels, scales)):
+                for um,dd in zip(umods, derivs):
+                    if um is None:
+                        continue
+                    dd.append((um * scale, tim))
+            logverb('forced phot: derivs', Time()-t0)
+            if sky:
+                # print 'Catalog params:', self.catalog.numberOfParams()
+                # print 'Image params:', self.images.numberOfParams()
+                # print 'Total # params:', self.numberOfParams()
+                # print 'cat derivs:', len(derivs)
+                # print 'sky derivs:', len(skyderivs)
+                # print 'total # derivs:', len(derivs) + len(skyderivs)
+                # Sky derivatives are part of the image derivatives, so go first in
+                # the derivative list.
+                derivs = skyderivs + derivs
+            assert(len(derivs) == self.numberOfParams())
             (ims0,imsBest
             ) = self._lsqr_forced_photom(
                 derivs, mod0, imgs, umodels, rois, scales, priors, sky,
