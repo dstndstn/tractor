@@ -538,8 +538,6 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             dx = xx - mx;
             dy = -I[1] * dx / (2. * I[2]);
             yy = dy + my;
-            //if ((yy >= y0) && (yy <= (y1-1))) {
-            //} else
             if (yy < y0) {
                 yy = y0;
                 dy = yy - my;
@@ -558,9 +556,6 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             dx = xx - mx;
             dy = -I[1] * dx / (2. * I[2]);
             yy = dy + my;
-            //if ((yy >= y0) && (yy <= (y1-1))) {
-            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
-            //} else
             if (yy < y0) {
                 yy = y0;
                 dy = yy - my;
@@ -579,13 +574,9 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             dy = yy - my;
             dx = -I[1] * dy / (2. * I[0]);
             xx = dx + mx;
-            //if ((xx >= x0) && (xx <= (x1-1))) {
-            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
-            //} else
             if (xx < x0) {
                 xx = x0;
                 dx = xx - mx;
-                //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
             } else if (xx > (x1-1)) {
                 xx = x1-1;
                 dx = xx - mx;
@@ -601,13 +592,9 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             dy = yy - my;
             dx = -I[1] * dy / (2. * I[0]);
             xx = dx + mx;
-            //if ((xx >= x0) && (xx <= (x1-1))) {
-            //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
-            //} else
             if (xx < x0) {
                 xx = x0;
                 dx = xx - mx;
-                //dd = I[0]*dx*dx + I[1]*dx*dy + I[2]*dy*dy;
             } else if (xx > (x1-1)) {
                 xx = x1-1;
                 dx = xx - mx;
@@ -622,8 +609,10 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             ix = (int)lround(maxx);
             iy = (int)lround(maxy);
         }
-        printf("component %i: max val %g at (%i,%i) (vs x [%i,%i), y [%i,%i)\n",
-               k, val, ix, iy, x0, x1, y0, y1);
+        /*
+         printf("component %i: max val %g at (%i,%i) (vs x [%i,%i), y [%i,%i)\n",
+         k, val, ix, iy, x0, x1, y0, y1);
+         */
         if (val > maxpix) {
             maxpix = val;
             xc = ix;
@@ -640,6 +629,8 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     // arrays, for the top, bottom, left, and right of the ring.  For
     // any pixel that evaluates above minval, we mark all its
     // neighbors for evaluation next time.
+    // The "top" and "bottom" arrays take priority over the L,R.
+    // That is, we only mark pixel +R,+R in the TOP array, not the Left.
     doT   = calloc(W, 1);
     doB   = calloc(W, 1);
     doL   = calloc(H, 1);
@@ -652,8 +643,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
 #define SET(arr, i, lo, hi)                     \
     { if ((i >= lo) && (i < hi)) { arr[i - lo] = 1; } }
 
-    //arr[MIN(hi-1, MAX(lo, i)) - lo] = 1; }
-
+    // Mark the eight neighbors around the central pixel as needing to be done.
     SET(nextT, xc,   x0,x1);
     SET(nextT, xc+1, x0,x1);
     SET(nextT, xc-1, x0,x1);
@@ -661,11 +651,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     SET(nextB, xc+1, x0,x1);
     SET(nextB, xc-1, x0,x1);
     SET(nextL, yc,   y0,y1);
-    //SET(nextL, yc+1, y0,y1);
-    //SET(nextL, yc-1, y0,y1);
     SET(nextR, yc,   y0,y1);
-    //SET(nextR, yc+1, y0,y1);
-    //SET(nextR, yc-1, y0,y1);
 
     result[(yc - y0)*W + (xc - x0)] = eval_all(K, scales, II, mean, xc-fx, yc-fy);
 
@@ -673,6 +659,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
         int any = 0;
         int xx, yy;
         int i;
+        double* rrow;
         memcpy(doT, nextT, W);
         memcpy(doB, nextB, W);
         memcpy(doL, nextL, H);
@@ -682,46 +669,50 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
         memset(nextL, 0, H);
         memset(nextR, 0, H);
 
-        printf("R = %i, xc,yc = (%i,%i)\n", R, xc, yc);
-        for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
-            printf("%c", (doT[i] ? '*' : '-'));
-        }
-        printf("\n");
-        for (i=MIN(yc-y0+R-1, H-1); i>=MAX(yc-y0-R+1, 0); i--) {
-            printf("%c", (doL[i] ? '*' : '|'));
-            int j;
-            for (j=MAX(xc-x0-R, 0)+1; j<=MIN(xc-x0+R, W-1)-1; j++)
-                printf(" ");
-            printf("%c", (doR[i] ? '*' : '|'));
-            printf("\n");
-        }
-        for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
-            printf("%c", (doB[i] ? '*' : '-'));
-        }
-        printf("\n");
-        printf("\n");
+        // Beautiful ASCII art...
+        /*
+         printf("R = %i, xc,yc = (%i,%i)\n", R, xc, yc);
+         for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+         printf("%c", (doT[i] ? '*' : '-'));
+         }
+         printf("\n");
+         for (i=MIN(yc-y0+R-1, H-1); i>=MAX(yc-y0-R+1, 0); i--) {
+         printf("%c", (doL[i] ? '*' : '|'));
+         int j;
+         for (j=MAX(xc-x0-R, 0)+1; j<=MIN(xc-x0+R, W-1)-1; j++)
+         printf(" ");
+         printf("%c", (doR[i] ? '*' : '|'));
+         printf("\n");
+         }
+         for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+         printf("%c", (doB[i] ? '*' : '-'));
+         }
+         printf("\n");
+         printf("\n");
 
-        for (i=0; i<H; i++) {
-            int j;
-            for (j=0; j<W; j++) {
-                if (i == (yc+R-y0)) {
-                    printf("%c", (doT[j] ? '*' : '-'));
-                } else if (i == (yc-R-y0)) {
-                    printf("%c", (doB[j] ? '*' : '-'));
-                } else if (j == (xc-R-x0)) {
-                    printf("%c", (doL[i] ? '*' : '-'));
-                } else if (j == (xc+R-x0)) {
-                    printf("%c", (doR[i] ? '*' : '-'));
-                } else {
-                    printf(".");
-                }
-            }
-            printf("\n");
-        }
-        printf("\n");
+         for (i=0; i<H; i++) {
+         int j;
+         for (j=0; j<W; j++) {
+         if (i == (yc+R-y0)) {
+         printf("%c", (doT[j] ? '*' : '-'));
+         } else if (i == (yc-R-y0)) {
+         printf("%c", (doB[j] ? '*' : '-'));
+         } else if (j == (xc-R-x0)) {
+         printf("%c", (doL[i] ? '*' : '-'));
+         } else if (j == (xc+R-x0)) {
+         printf("%c", (doR[i] ? '*' : '-'));
+         } else {
+         printf(".");
+         }
+         }
+         printf("\n");
+         }
+         printf("\n");
+         */
 
         // top
         yy = yc + R;
+        rrow = result + (yy - y0)*W;
         for (i=0; i<W; i++) {
             double r;
             if (!doT[i])
@@ -729,23 +720,26 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             any = 1;
             xx = x0 + i;
             r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            result[(yy - y0)*W + (xx - x0)] = r;
-            printf("top[xx=%i] = %g\n", xx, r);
+            //result[(yy - y0)*W + (xx - x0)] = r;
+            rrow[i] = r;
+            //printf("top[xx=%i] = %g\n", xx, r);
             if (r < minval)
                 continue;
-
+            // leftmost pixel of Top, and not at the left edge...
             if ((xx == (xc - R)) && (xx > x0)) {
-                printf("setting L\n");
+                //printf("setting L\n");
                 SET(nextL, yy  , y0,y1);
                 SET(nextL, yy-1, y0,y1);
             }
+            // rightmost pixel of Top, and not at the right edge...
             if ((xx == (xc + R)) && (xx < (x1-1))) {
-                printf("setting R\n");
+                //printf("setting R\n");
                 SET(nextR, yy  , y0,y1);
                 SET(nextR, yy-1, y0,y1);
             }
+            // not the top edge...
             if (yy < (y1-1)) {
-                printf("setting T\n");
+                //printf("setting T\n");
                 SET(nextT, xx-1, x0,x1);
                 SET(nextT, xx  , x0,x1);
                 SET(nextT, xx+1, x0,x1);
@@ -754,6 +748,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
 
         // bottom
         yy = yc - R;
+        rrow = result + (yy - y0)*W;
         for (i=0; i<W; i++) {
             double r;
             if (!doB[i])
@@ -761,22 +756,26 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             any = 1;
             xx = x0 + i;
             r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-            result[(yy - y0)*W + (xx - x0)] = r;
-            printf("bottom[xx=%i] = %g\n", xx, r);
+            //result[(yy - y0)*W + (xx - x0)] = r;
+            rrow[i] = r;
+            //printf("bottom[xx=%i] = %g\n", xx, r);
             if (r < minval)
                 continue;
+            // leftmost pixel in Bottom, and not left edge?
             if ((xx == (xc - R)) && (xx > x0)) {
-                printf("setting L\n");
+                //printf("setting L\n");
                 SET(nextL, yy  , y0,y1);
                 SET(nextL, yy+1, y0,y1);
             }
+            // rightmost pixel in Bottom, and not right edge?
             if ((xx == (xc + R)) && (xx < (x1-1))) {
-                printf("setting R\n");
+                //printf("setting R\n");
                 SET(nextR, yy  , y0,y1);
                 SET(nextR, yy+1, y0,y1);
             }
+            // not the bottom edge?
             if (yy > y0) {
-                printf("setting B\n");
+                //printf("setting B\n");
                 SET(nextB, xx-1, x0,x1);
                 SET(nextB, xx  , x0,x1);
                 SET(nextB, xx+1, x0,x1);
@@ -793,11 +792,12 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             yy = y0 + i;
             r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
             result[(yy - y0)*W + (xx - x0)] = r;
-            printf("left[yy=%i] = %g\n", xx, r);
+            //printf("left[yy=%i] = %g\n", xx, r);
             if (r < minval)
                 continue;
+            // not the left edge?
             if (xx > x0) {
-                printf("setting L\n");
+                //printf("setting L\n");
                 SET(nextL, yy-1, y0,y1);
                 SET(nextL, yy  , y0,y1);
                 SET(nextL, yy+1, y0,y1);
@@ -813,11 +813,12 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
             yy = y0 + i;
             r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
             result[(yy - y0)*W + (xx - x0)] = r;
-            printf("right[yy=%i] = %g\n", yy, r);
+            //printf("right[yy=%i] = %g\n", yy, r);
             if (r < minval)
                 continue;
+            // not the right edge?
             if (xx < (x1-1)) {
-                printf("setting R\n");
+                //printf("setting R\n");
                 SET(nextR, yy-1, y0,y1);
                 SET(nextR, yy  , y0,y1);
                 SET(nextR, yy+1, y0,y1);
