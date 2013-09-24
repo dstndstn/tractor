@@ -92,6 +92,22 @@ def plot_exposures():
             i0 += R*C
 
 
+# T = fits_table('tab.fits')
+# T.cut(T.band == 3)
+# print len(T), 'in WISE coadd'
+# F = fits_table('wise-coadds/unwise-1384p454-w3-frames.fits')
+# print len(F), 'in unWISE coadd'
+# 
+# for s,f in zip(T.scan_id, T.frame_num):
+#     I = np.flatnonzero((F.scan_id == s) * (F.frame_num == f))
+#     if len(I) == 1:
+#         continue
+#     print 'scan/frame', s,f, ': not found'
+#     #W = fits_table('sequels-frames.fits')
+# sys.exit(0)
+
+
+
 
 
 T = fits_table('sequels-atlas.fits')
