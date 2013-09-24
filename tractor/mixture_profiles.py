@@ -197,9 +197,13 @@ class MixtureOfGaussians():
             raise RuntimeError('c_gauss_2d_grid failed')
         return result
 
-    def evaluate_grid_approx(self, x0, x1, y0, y1, dx, dy, minval):
+    def evaluate_grid_approx(self, x0, x1, y0, y1, cx, cy, minval):
         '''
         minval: small value at which to stop evaluating
+
+        [x0,x1): (int) X values to evaluate
+        [y0,y1): (int) Y values to evaluate
+        (cx,cy): (float) pixel center of the MoG
         '''
         #from mix import c_gauss_2d_approx
         from mix import c_gauss_2d_approx2
@@ -208,7 +212,7 @@ class MixtureOfGaussians():
         result = np.zeros((y1-y0, x1-x0))
         # rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval,
         #                         self.amp, self.mean,self.var, result)
-        rtn = c_gauss_2d_approx2(x0, x1, y0, y1, dx, dy, minval,
+        rtn = c_gauss_2d_approx2(x0, x1, y0, y1, cx, cy, minval,
                                  self.amp, self.mean,self.var, result)
         if rtn == -1:
             #raise RuntimeError('c_gauss_2d_approx failed')

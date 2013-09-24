@@ -1048,6 +1048,7 @@ class GaussianMixturePSF(ParamList):
         assert(self.mog.D == 2)
         # !!
         self.radius = 25
+        self.fixedRadius = None
         super(GaussianMixturePSF, self).__init__()
 
         del self.vals
@@ -1103,47 +1104,43 @@ class GaussianMixturePSF(ParamList):
         return self.radius
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., extent=None, **kwargs):
         if minval > 0.:
-            r = 0.
-            for v in self.mog.var:
-                # overestimate
-                vv = (v[0,0] + v[1,1])
-                norm = 2. * np.pi * np.linalg.det(v)
-                r2 = vv * -2. * np.log(minval * norm)
-                if r2 > 0:
-                    r = max(r, np.sqrt(r2))
-            rr = int(np.ceil(r))
-            #print 'choosing r=', rr
-            cx = int(np.round(px))
-            cy = int(np.round(py))
-            #x0,x1 = int(floor(px-r)), int(ceil(px+r))
-            #y0,y1 = int(floor(py-r)), int(ceil(py+r))
-            dx = px - cx
-            dy = py - cy
-            #dx = cx - px
-            #dy = cy - py
-            x0,y0 = cx-rr, cy-rr
-            grid = self.mog.evaluate_grid_approx(-rr, rr, -rr, rr, dx, dy,  minval)
+            if self.fixedRadius is not None:
+                #rr = int(self.fixedRadius)
+                rr = self.fixedRadius
+            else:
+                r = 0.
+                for v in self.mog.var:
+                    # overestimate
+                    vv = (v[0,0] + v[1,1])
+                    norm = 2. * np.pi * np.linalg.det(v)
+                    r2 = vv * -2. * np.log(minval * norm)
+                    if r2 > 0:
+                        r = max(r, np.sqrt(r2))
+                rr = int(np.ceil(r))
+                #print 'choosing r=', rr
 
-            # x1,y1 = cx+rr, cy+rr
-            # XX,YY = np.meshgrid(np.arange(x0, x1), np.arange(y0, y1))
-            # gx = np.sum(grid * XX) / np.sum(grid)
-            # gy = np.sum(grid * YY) / np.sum(grid)
-
-            # print 'px %8.3f, py %8.3f' % (px,py)
-            # print 'gx %8.3f, gy %8.3f' % (gx,gy)
-            # print 'dx %8.3f, dy %8.3f' % (dx,dy)
-
-            # r = self.getRadius()
-            # x0,x1 = int(floor(px-r)), int(ceil(px+r))
-            # y0,y1 = int(floor(py-r)), int(ceil(py+r))
-            # grid = self.mog.evaluate_grid(x0-px, x1-px, y0-py, y1-py)
-            # XX,YY = np.meshgrid(np.arange(x0, x1+1), np.arange(y0, y1+1))
-            # gx = np.sum(grid * XX) / np.sum(grid)
-            # gy = np.sum(grid * YY) / np.sum(grid)
-            # print 'Gx %8.3f, gy %8.3f' % (gx,gy)
-
+            x0 = int(floor(px - rr))
+            x1 = int(ceil (px + rr))
+            y0 = int(floor(py - rr))
+            y1 = int(ceil (py + rr))
+            # x1,y1: inclusive
+            if extent is not None:
+                # inclusive
+                [xl,xh,yl,yh] = extent
+                # clip
+                x0 = max(x0, xl)
+                x1 = min(x1, xh)
+                y0 = max(y0, yl)
+                y1 = min(y1, yh)
+            if x0 > x1:
+                return None
+            if y0 > y1:
+                return None
+                
+            grid = self.mog.evaluate_grid_approx(x0, x1+1, y0, y1+1,
+                                                 px, py, minval)
 
         else:
             r = self.getRadius()
@@ -1153,7 +1150,7 @@ class GaussianMixturePSF(ParamList):
         return Patch(x0, y0, grid)
 
     def __str__(self):
-        return (#'GaussianMixturePSF: ' + str(self.mog)
+        return (
             'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
             ', means=' + str(tuple(self.mog.mean.ravel())) +
             ', var=' + str(tuple(self.mog.var.ravel())))
@@ -1168,58 +1165,9 @@ class GaussianMixturePSF(ParamList):
                                   self.mog.mean.copy(),
                                   self.mog.var.copy())
 
-    #def numberOfParams(self):
     def _numberOfThings(self):
         K = self.mog.K
         return K * (1 + 2 + 3)
-
-    # def getParamNames(self):
-    #     K = self.mog.K
-    #     names = ['amp%i' % i for i in range(K)]
-    #     for i in range(K):
-    #         names.extend(['mean%i.x'%i, 'mean%i.y'%i])
-    #     for i in range(K):
-    #         names.extend(['var%i.xx'%i, 'var%i.yy'%i, 'var%i.xy'%i])
-    #     return names
-
-    # def stepParam(self, parami, delta):
-    #   K = self.mog.K
-    #   if parami < K:
-    #       self.mog.amp[parami] += delta
-    #       return
-    #   parami -= K
-    #   if parami < (K*2):
-    #       i,j = parami / 2, parami % 2
-    #       self.mog.mean[i,j] += delta
-    #       return
-    #   parami -= 2*K
-    #   i,j = parami / 3, parami % 3
-    #   if j in [0,1]:
-    #       self.mog.var[i,j,j] += deltai
-    #   else:
-    #       self.mog.var[i,0,1] += deltai
-    #       self.mog.var[i,1,0] += deltai
-
-    # def getParams(self):
-    #     '''
-    #     Returns a *copy* of the current active parameter values (list)
-    #     '''
-    #     return list(self._getLiquidArray(self._getThings()))
-    # def getParamNames(self):
-    #     n = []
-    #     for i,j in self._indexBoth():
-    #         nm = self.getNamedParamName(j)
-    #         if nm is None:
-    #             nm = 'param%i' % i
-    #         n.append(nm)
-    #     return n
-    # def getStepSizes(self, *args, **kwargs):
-    #     if hasattr(self, 'stepsizes'):
-    #         return list(self._getLiquidArray(self.stepsizes))
-    #     return [1.0] * self.numberOfParams()
-    
-    # Returns a *copy* of the current parameter values (list)
-    #def getParams(self):
     def _getThings(self):
         p = list(self.mog.amp) + list(self.mog.mean.ravel())
         for v in self.mog.var:
@@ -1227,8 +1175,6 @@ class GaussianMixturePSF(ParamList):
         return p
     def _getThing(self, i):
         return self._getThings()[i]
-
-    # def setParams(self, p):
     def _setThings(self, p):
         K = self.mog.K
         self.mog.amp = np.atleast_1d(p[:K])
@@ -1238,8 +1184,6 @@ class GaussianMixturePSF(ParamList):
         self.mog.var[:,0,0] = pp[::3]
         self.mog.var[:,1,1] = pp[1::3]
         self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
-
-    # def setParam(self, i, p):
     def _setThing(self, i, p):
         K = self.mog.K
         if i < K:

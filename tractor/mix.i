@@ -436,6 +436,8 @@ bailout:
 
 
 static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
+                              // (fx,fy): center position
+                              // which offsets "means"
                               double fx, double fy,
                               double minval,
                               PyObject* ob_amp,
