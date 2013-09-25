@@ -908,7 +908,7 @@ class Tractor(MultiParams):
 
         sky = (skyderivs is not None)
 
-        for (umods,img,scale,mod0, paramoffset) in Z:
+        for zi,(umods,img,scale,mod0, paramoffset) in enumerate(Z):
             H,W = img.shape
             if img in blockstart:
                 (b0,nbw,nbh) = blockstart[img]
@@ -933,6 +933,11 @@ class Tractor(MultiParams):
             for modi,umod in enumerate(umods):
                 if umod is None:
                     continue
+                # DEBUG
+                if len(umod.shape) != 2:
+                    print 'zi', zi
+                    print 'modi', modi
+                    print 'umod', umod
                 umod.clipTo(W,H)
                 umod.trimToNonZero()
                 if umod.patch is None:
@@ -987,15 +992,18 @@ class Tractor(MultiParams):
             x = ceres_forced_phot(blocks, fluxes, 0)
             assert(x == 0)
             logverb('forced phot: ceres initial run', Time()-t0)
+            t0 = Time()
 
         x = ceres_forced_phot(blocks, fluxes, nonneg)
         assert(x == 0)
         logverb('forced phot: ceres', Time()-t0)
 
+        t0 = Time()
         params = np.zeros(len(p0))
         for i,k in usedParamMap.items():
             params[i] = fluxes[k]
         self.setParams(params)
+        logverb('forced phot: unmapping params:', Time()-t0)
 
         if wantims1:
             t0 = Time()
@@ -1609,16 +1617,20 @@ class Tractor(MultiParams):
                 
         if variance:
             # Inverse variance
+            t0 = Time()
             result.IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, srcs,
                                      imlist, umodels, scales)
+            logverb('forced phot: variance:', Time()-t0)
 
         imsBest = getattr(result, 'ims1', None)
         if fitstats and imsBest is None:
             print 'Warning: fit stats not computed because imsBest is None'
             result.fitstats = None
         elif fitstats:
+            t0 = Time()
             result.fitstats = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
                                                  umodels, scales, nilcounts)
+            logverb('forced phot: fit stats:', Time()-t0)
         return result
 
 

@@ -429,19 +429,20 @@ def one_tile(tile, opt, savepickle, ps):
         sky = estimate_sky(img, iv)
         print 'Estimated sky', sky
 
+        imgoffset = 0.
         if opt.sky and opt.nonneg:
             # the non-negative constraint applies to the sky too!
-            # Artificially offset the sky value.
-            tsky = OffsetConstantSky(sky)
-            tsky.offset = np.abs(sky) + 10.*sig1
+            # Artificially offset the sky value, AND the image pixels.
+            offset = 10. * sig1
+            if sky < 0:
+                offset += -sky
 
-            print 'Sky:', tsky
-            sp = tsky.getParams()
-            print 'params:', sp
-            # tsky.setParams(sp)
-            # print 'Sky:', tsky
-        else:
-            tsky = ConstantSky(sky)
+            imgoffset = offset
+            sky += offset
+            img += offset
+            print 'Offsetting image by', offset
+            
+        tsky = ConstantSky(sky)
 
         # cell positions
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
@@ -450,7 +451,7 @@ def one_tile(tile, opt, savepickle, ps):
         if ps:
             #sig1 = 1./np.sqrt(np.median(iv))
             plt.clf()
-            plt.imshow(fullimg, interpolation='nearest', origin='lower',
+            plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
                        cmap='gray',
                        vmin=-3*sig1, vmax=10*sig1)
             ax = plt.axis()
@@ -563,8 +564,8 @@ def one_tile(tile, opt, savepickle, ps):
                 if ps:
                     #sig1 = 1./np.sqrt(np.median(invvar))
                     plt.clf()
-                    plt.imshow(img, interpolation='nearest', origin='lower', cmap='gray',
-                               vmin=-3*sig1, vmax=10*sig1)
+                    plt.imshow(img - imgoffset, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=-3*sig1, vmax=10*sig1)
                     plt.colorbar()
                     xx,yy = [],[]
                     for src in subcat:
@@ -591,8 +592,6 @@ def one_tile(tile, opt, savepickle, ps):
                 print 'Running forced photometry...'
                 t0 = Time()
                 tractor.freezeParamsRecursive('*')
-
-                imgoffsets = np.zeros(len(tractor.getImages()))
 
                 if opt.sky:
                     tractor.thawPathsTo('sky')
@@ -629,8 +628,8 @@ def one_tile(tile, opt, savepickle, ps):
                     #sig1 = 1./np.sqrt(np.median(invvar))
                     (dat,mod,ie,chi,roi) = ims1[0]
                     plt.clf()
-                    plt.imshow(mod, interpolation='nearest', origin='lower', cmap='gray',
-                               vmin=-3*sig1, vmax=10*sig1)
+                    plt.imshow(mod - imgoffset, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=-3*sig1, vmax=10*sig1)
                     plt.colorbar()
                     ps.savefig()
 
@@ -652,6 +651,7 @@ def one_tile(tile, opt, savepickle, ps):
                 # im,mod,ie,chi,roi = ims1[0]
 
                 if savepickle:
+                    # FIXME -- imgoffset
                     if ims1 is None:
                         mod = None
                     else:

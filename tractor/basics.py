@@ -696,7 +696,7 @@ class ConstantSky(ScalarParam):
     In counts
     '''
     def getParamDerivatives(self, tractor, img, srcs):
-        p = Patch(0, 0, np.ones_like(img))
+        p = Patch(0, 0, np.ones_like(img.getImage()))
         p.setName('dsky')
         return [p]
     def addTo(self, img, scale=1.):
@@ -707,26 +707,24 @@ class ConstantSky(ScalarParam):
         return ['sky']
 
 
-class OffsetConstantSky(ConstantSky):
-    '''
-    Presents an offset *in the parameter interface only*.
-    '''
-    def __init__(self, val):
-        super(OffsetConstantSky, self).__init__(val)
-        self.offset = 0.
-
-    def getParams(self):
-        return [self.val + self.offset]
-    def setParams(self, p):
-        assert(len(p) == 1)
-        self._set(p[0] - self.offset)
-    def setParam(self, i, p):
-        assert(i == 0)
-        oldval = self.val
-        self._set(p - self.offset)
-        return oldval + self.offset
-    
-
+# class OffsetConstantSky(ConstantSky):
+#     '''
+#     Presents an offset *in the parameter interface only*.
+#     '''
+#     def __init__(self, val):
+#         super(OffsetConstantSky, self).__init__(val)
+#         self.offset = 0.
+# 
+#     def getParams(self):
+#         return [self.val + self.offset]
+#     def setParams(self, p):
+#         assert(len(p) == 1)
+#         self._set(p[0] - self.offset)
+#     def setParam(self, i, p):
+#         assert(i == 0)
+#         oldval = self.val
+#         self._set(p - self.offset)
+#         return oldval + self.offset
     
 
 
