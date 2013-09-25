@@ -676,7 +676,7 @@ def one_tile(tile, opt, savepickle, ps):
     #T.delete_column('index')
 
     T.treated_as_pointsource = T.treated_as_pointsource.astype(np.uint8)
-    T.about()
+    #T.about()
     
     T.writeto(outfn)
 

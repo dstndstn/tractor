@@ -945,9 +945,14 @@ class Tractor(MultiParams):
             fluxes[k] = p0[i]
 
         nonneg = int(nonneg)
+        if nonneg:
+            # Initial run with nonneg=False, to get in the ballpark
+            x = ceres_forced_phot(blocks, fluxes, 0)
+            assert(x == 0)
+            logverb('forced phot: ceres initial run', Time()-t0)
+
         x = ceres_forced_phot(blocks, fluxes, nonneg)
         assert(x == 0)
-        #print 'Fluxes:', fluxes
         logverb('forced phot: ceres', Time()-t0)
 
         params = np.zeros(len(p0))
