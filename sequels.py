@@ -533,7 +533,7 @@ def one_tile(tile, opt, savepickle, ps):
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
                 if ps:
-                    sig1 = 1./np.sqrt(np.median(invvar))
+                    #sig1 = 1./np.sqrt(np.median(invvar))
                     plt.clf()
                     plt.imshow(img, interpolation='nearest', origin='lower', cmap='gray',
                                vmin=-3*sig1, vmax=10*sig1)
@@ -563,25 +563,38 @@ def one_tile(tile, opt, savepickle, ps):
                 print 'Running forced photometry...'
                 t0 = Time()
                 tractor.freezeParamsRecursive('*')
-                # tractor.thawPathsTo('sky')
+                if opt.sky:
+                    tractor.thawPathsTo('sky')
+                    print 'Initial sky values:'
+                    for tim in tractor.getImages():
+                        print tim.getSky()
                 tractor.thawPathsTo(wanyband)
 
                 # DEBUG
                 #p0 = tractor.getParams()
                 #print 'Initial fluxes:', p0
 
-                ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-                    minsb=minsb, mindlnp=1., sky=False, minFlux=None,
+                wantims = (savepickle or opt.pickle2 or (ps is not None))
+
+                R = tractor.optimize_forced_photometry(
+                    minsb=minsb, mindlnp=1., sky=opt.sky, minFlux=None,
                     fitstats=True, variance=True, shared_params=False,
                     use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock,
-                    nonneg=opt.nonneg)
+                    nonneg=opt.nonneg, wantims=wantims)
                 print 'That took', Time()-t0
-                
-                #p1 = tractor.getParams()
-                #print 'Solved fluxes:', p1
+
+                if wantims:
+                    ims0 = R.ims0
+                    ims1 = R.ims1
+                IV,fs = R.IV, R.fitstats
+
+                if opt.sky:
+                    print 'Fit sky values:'
+                    for tim in tractor.getImages():
+                        print tim.getSky()
 
                 if ps:
-                    sig1 = 1./np.sqrt(np.median(invvar))
+                    #sig1 = 1./np.sqrt(np.median(invvar))
                     (dat,mod,ie,chi,roi) = ims1[0]
                     plt.clf()
                     plt.imshow(mod, interpolation='nearest', origin='lower', cmap='gray',
@@ -734,6 +747,9 @@ def main():
 
     parser.add_option('--minrad', dest='minradius', type=int, default=2,
                       help='Minimum radius, in pixels, for evaluating source models; default %default')
+
+    parser.add_option('--sky', dest='sky', action='store_true', default=False,
+                      help='Fit sky level also?')
     
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 

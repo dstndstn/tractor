@@ -1034,7 +1034,6 @@ class PixelizedPSF(BaseParams):
         return Patch(x0, y0, shifted)
     
 class GaussianMixturePSF(ParamList):
-    #BaseParams, NamedParams
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)

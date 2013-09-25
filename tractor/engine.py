@@ -609,6 +609,10 @@ def getmodelimagefunc2((tr, im)):
         traceback.print_exc()
         raise
 
+class OptResult():
+    # quack
+    pass
+
 class Tractor(MultiParams):
     """
     Heavy farm machinery.
@@ -855,12 +859,14 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
-    def _ceres_forced_photom(self, umodels,
+    def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
-                             sky, minFlux,
+                             skyderivs, minFlux,
                              BW, BH,
                              ceresType = np.float32,
                              nonneg = False,
+                             wantims0 = True,
+                             wantims1 = True,
                              ):
         from ceres import ceres_forced_phot
 
@@ -873,8 +879,25 @@ class Tractor(MultiParams):
             BH = 50
         usedParamMap = {}
         nextparam = 0
-        # umodels[ images, srcs ]
-        for imi,(umods,img,scale,mod0) in enumerate(zip(umodels, imlist, scales, mods0)):
+        # umodels[ imagei, srci ] = Patch
+        Nsky = 0
+        Z = []
+        if skyderivs is not None:
+            # skyderivs = [ (param0:)[ (deriv,img), ], (param1:)[ (deriv,img), ], ...]
+            # Reorg them to be in img-major order
+            skymods = [ [] for im in imlist ]
+            for skyd in skyderivs:
+                for (deriv,img) in skyd:
+                    imi = imlist.index(img)
+                    skymods[imi].append(deriv)
+
+            for mods,im,mod0 in zip(skymods, imlist, mods0):
+                Z.append((mods, im, 1., mod0, Nsky))
+                Nsky += len(mods)
+
+        Z.extend(zip(umodels, imlist, scales, mods0, np.zeros(len(imlist),int)+Nsky))
+
+        for (umods,img,scale,mod0, paramoffset) in Z:
             H,W = img.shape
             if img in blockstart:
                 (b0,nbw,nbh) = blockstart[img]
@@ -896,7 +919,7 @@ class Tractor(MultiParams):
                                 img.getInvError()[slc].astype(ceresType))
                         blocks.append((data, []))
 
-            for parami,umod in enumerate(umods):
+            for modi,umod in enumerate(umods):
                 if umod is None:
                     continue
                 umod.clipTo(W,H)
@@ -914,6 +937,7 @@ class Tractor(MultiParams):
                 by1 = np.clip(int(np.ceil ((umod.y0 + ph) / float(BH))),
                               0, nbh-1)
 
+                parami = paramoffset + modi
                 if parami in usedParamMap:
                     ceresparam = usedParamMap[parami]
                 else:
@@ -921,20 +945,23 @@ class Tractor(MultiParams):
                     ceresparam = nextparam
                     nextparam += 1
 
+                cmod = (umod.patch * scale).astype(ceresType)
                 for by in range(by0, by1+1):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
-                        dd = (ceresparam, umod.x0, umod.y0,
-                              (umod.patch * scale).astype(ceresType))
+                        dd = (ceresparam, umod.x0, umod.y0, cmod)
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
-        t0 = Time()
-        params = self.getParams()
-        ims0 = self._getims(params, imlist, umodels, mods0, scales,
-                            sky, minFlux, None)
-        logverb('forced phot: ims0', Time()-t0)
-                        
+        sky = (skyderivs is not None)
+        rtn = []
+        if wantims0:
+            t0 = Time()
+            params = self.getParams()
+            result.ims0 = self._getims(params, imlist, umodels, mods0, scales,
+                                       sky, minFlux, None)
+            logverb('forced phot: ims0', Time()-t0)
+
         t0 = Time()
         fluxes = np.zeros(len(usedParamMap))
         print 'Ceres forced phot:'
@@ -960,12 +987,11 @@ class Tractor(MultiParams):
             params[i] = fluxes[k]
         self.setParams(params)
 
-        t0 = Time()
-        ims1 = self._getims(params, imlist, umodels, mods0, scales,
-                            sky, minFlux, None)
-        imsBest = ims1
-        logverb('forced phot: ims1:', Time()-t0)
-        return ims0, imsBest
+        if wantims1:
+            t0 = Time()
+            result.ims1 = self._getims(params, imlist, umodels, mods0, scales,
+                                       sky, minFlux, None)
+            logverb('forced phot: ims1:', Time()-t0)
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
                       umodels, scales, nilcounts):
@@ -1012,8 +1038,8 @@ class Tractor(MultiParams):
             #print 'fit stats for source', si, 'of', len(umodsforsource)
             src = self.catalog[si]
             # for each image
-            for X in enumerate(zip(umodels, scales, imlist, imsBest)):
-                imi,(umods,scale,tim,(img,mod,ie,chi,roi)) = X
+            for imi,(umods,scale,tim,(img,mod,ie,chi,roi)) in enumerate(
+                zip(umodels, scales, imlist, imsBest)):
                 # just use 'scale'?
                 pcal = tim.getPhotoCal()
                 cc = [pcal.brightnessToCounts(b) for b in src.getBrightnesses()]
@@ -1243,7 +1269,7 @@ class Tractor(MultiParams):
             lnp += self.getLogPrior()
         return lnp, chis, ims
 
-    def _lsqr_forced_photom(self, derivs, mod0, imgs, umodels, rois, scales,
+    def _lsqr_forced_photom(self, result, derivs, mod0, imgs, umodels, rois, scales,
                             priors, sky, minFlux, justims0, subimgs,
                             damp, alphas, Nsky, mindlnp, shared_params,
                             use_tsnnls):
@@ -1285,7 +1311,10 @@ class Tractor(MultiParams):
                 logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
 
             if justims0:
-                return lnp0,chis0,ims0
+                result.lnp0 = lnp0
+                result.chis0 = chis0
+                result.ims0 = ims0
+                return
 
             # print 'Starting opt loop with'
             # print '  p0', p0
@@ -1410,7 +1439,8 @@ class Tractor(MultiParams):
 
             if quitNow:
                 break
-        return ims0,imsBest
+        result.ims0 = ims0
+        result.ims1 = imsBest
     
     def optimize_forced_photometry(self, alphas=None, damp=0, priors=False,
                                    minsb=0.,
@@ -1428,13 +1458,14 @@ class Tractor(MultiParams):
                                    BW=None, BH=None,
                                    nonneg=False,
                                    nilcounts=1e-6,
+                                   wantims=True,
                                    ):
         '''
-        Returns:
+        Returns an "OptResult" duck with fields:
 
-        (ims0, ims1,
-        + inverse_variance,  (if variance=True)
-        + fit_stats,)        (if fitstats=True)
+        .ims0, .ims1         (if wantims=True)
+        .IV                  (if variance=True)
+        .fitstats            (if fitstats=True)
 
         ims0, ims1:
         [ (img_data, mod, ie, chi, roi), ... ]
@@ -1455,6 +1486,8 @@ class Tractor(MultiParams):
         likelihood or prior!
         '''
         from basics import LinearPhotoCal, ShiftedWcs
+
+        result = OptResult()
 
         assert(not priors)
         if rois is not None:
@@ -1529,11 +1562,15 @@ class Tractor(MultiParams):
         else:
             Nsky = 0
 
+        wantims0 = wantims1 = wantims
+        if fitstats:
+            wantims1 = True
+
         if use_ceres:
-            (ims0,imsBest
-             ) = self._ceres_forced_photom(umodels, imlist, mod0, 
-                                           scales, sky, minFlux, BW, BH,
-                 nonneg=nonneg)
+            self._ceres_forced_photom(result, umodels, imlist, mod0, 
+                                      scales, skyderivs, minFlux, BW, BH,
+                                      nonneg=nonneg, wantims0=wantims0,
+                                      wantims1=wantims1)
 
         else:
             t0 = Time()
@@ -1555,27 +1592,24 @@ class Tractor(MultiParams):
                 # the derivative list.
                 derivs = skyderivs + derivs
             assert(len(derivs) == self.numberOfParams())
-            (ims0,imsBest
-            ) = self._lsqr_forced_photom(
-                derivs, mod0, imgs, umodels, rois, scales, priors, sky,
+            self._lsqr_forced_photom(
+                result, derivs, mod0, imgs, umodels, rois, scales, priors, sky,
                 minFlux, justims0, subimgs, damp, alphas, Nsky, mindlnp,
                 shared_params, use_tsnnls)
                 
-        rtn = (ims0,imsBest)
         if variance:
             # Inverse variance
-            IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, srcs,
-                              imlist, umodels, scales)
-            rtn = rtn + (IV,)
+            result.IV = self._get_iv(sky, skyvariance, Nsky, skyderivs, srcs,
+                                     imlist, umodels, scales)
 
+        imsBest = getattr(result, 'ims1', None)
         if fitstats and imsBest is None:
-            rtn = rtn + (None,)
+            print 'Warning: fit stats not computed because imsBest is None'
+            result.fitstats = None
         elif fitstats:
-            fs = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
-                                    umodels, scales, nilcounts)
-            rtn = rtn + (fs,)
-
-        return rtn
+            result.fitstats = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
+                                                 umodels, scales, nilcounts)
+        return result
 
 
     def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
