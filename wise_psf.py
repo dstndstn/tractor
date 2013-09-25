@@ -22,7 +22,7 @@ from tractor.psfex import *
 
 
 class WisePSF(VaryingGaussianPSF):
-    def __init__(self, band, savedfn=None, ngrid=11):
+    def __init__(self, band, savedfn=None, ngrid=11, bright=False):
         '''
         band: integer 1-4
         '''
@@ -32,8 +32,8 @@ class WisePSF(VaryingGaussianPSF):
         if band == 4:
             S /= 2
         self.band = band
-
         self.ngrid = ngrid
+        self.bright = bright
         
         super(WisePSF, self).__init__(S, S, nx=self.ngrid, ny=self.ngrid)
 
@@ -59,7 +59,8 @@ class WisePSF(VaryingGaussianPSF):
         gx = dx * int(np.round(x / dx))
         gy = dx * int(np.round(y / dx))
 
-        fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f.fits' % (self.band, gx, gy)
+        btag = '-bright' if self.bright else ''
+        fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f%s.fits' % (self.band, gx, gy, btag)
         if not os.path.exists(fn):
             '''
             module load idl
@@ -67,8 +68,9 @@ class WisePSF(VaryingGaussianPSF):
             export WISE_DATA=$(pwd)/wise-psf/etc
             '''
             fullfn = os.path.abspath(fn)
-            idlcmd = ("mwrfits, wise_psf_cutout(%.1f, %.1f, band=%i, allsky=1), '%s'" % 
-                      (gx, gy, self.band, fullfn))
+            btag = ', BRIGHT=1' if self.bright else ''
+            idlcmd = ("mwrfits, wise_psf_cutout(%.1f, %.1f, band=%i, allsky=1%s), '%s'" % 
+                      (gx, gy, self.band, btag, fullfn))
             print 'IDL command:', idlcmd
             idl = os.path.join(os.environ['IDL_DIR'], 'bin', 'idl')
             cmd = 'cd wise-psf/pro; echo "%s" | %s' % (idlcmd, idl)
@@ -80,19 +82,9 @@ class WisePSF(VaryingGaussianPSF):
         return psf
 
 
-if __name__ == '__main__':
-
-    # How to load 'em...
-    # w = WisePSF(1, savedfn='w1psffit.fits')
-    # print 'Instantiate...'
-    # im = w.getPointSourcePatch(50., 50.)
-    # print im.shape
-    # plt.clf()
-    # plt.imshow(im.patch, interpolation='nearest', origin='lower')
-    # plt.savefig('w1.png')
-    # sys.exit(0)
 
 
+def create_average_psf_model():
     import fitsio
 
     for band in [1,2,3,4]:
@@ -132,17 +124,23 @@ if __name__ == '__main__':
         append = (band > 1)
         T.writeto(fn, append=append)
 
-    sys.exit(0)
 
-    
-    # Fit
+def create_wise_psf_models(bright, K=3):
+    tag = ''
+    if bright:
+        tag += '-bright'
+    if K != 3:
+        tag += '-K%i' % K
+        
     for band in [1,2,3,4]:
-        pfn = 'w%i.pickle' % band
+        pfn = 'w%i%s.pickle' % (band, tag)
         if os.path.exists(pfn):
             print 'Reading', pfn
             w = unpickle_from_file(pfn)
         else:
             w = WisePSF(band)
+            w.bright = bright
+            w.K = K
             w.savesplinedata = True
             w.ensureFit()
             pickle_to_file(w, pfn)
@@ -156,6 +154,72 @@ if __name__ == '__main__':
             pp2[i,:,:] = pp[:,:,i]
 
         T.data = pp2
-        T.writeto('w%ipsffit.fits' % band)
+        T.writeto('w%ipsffit%s.fits' % (band, tag))
 
 
+if __name__ == '__main__':
+
+    #create_wise_psf_models(True)
+    create_wise_psf_models(True, K=4)
+    sys.exit(0)
+    
+    #create_average_psf()
+    #sys.exit(0)
+
+
+    # How to load 'em...
+    # w = WisePSF(1, savedfn='w1psffit.fits')
+    # print 'Instantiate...'
+    # im = w.getPointSourcePatch(50., 50.)
+    # print im.shape
+    # plt.clf()
+    # plt.imshow(im.patch, interpolation='nearest', origin='lower')
+    # plt.savefig('w1.png')
+    # sys.exit(0)
+
+
+
+    w = WisePSF(1, savedfn='w1psffit.fits')
+    #w.radius = 100
+    pix = w.instantiateAt(50., 50.)
+    r = (pix.shape[0]-1)/2
+    mod = w.getPointSourcePatch(50., 50., radius=r)
+    print 'mod', mod.shape
+    print 'pix', pix.shape
+    w.bright = True
+    bpix = w.instantiateAt(50., 50.)
+    print 'bpix:', bpix.shape
+
+    s1 = mod.shape[0]
+    s2 = bpix.shape[1]
+    #bpix = bpix[(s2-s1)/2:, (s2-s1)/2:]
+    #bpix = bpix[:s1, :s1]
+
+    mod = mod.patch
+    mod /= mod.sum()
+    pix /= pix.sum()
+    bpix /= bpix.sum()
+    mx = max(mod.max(), pix.max())
+
+    plt.clf()
+    plt.subplot(2,3,1)
+    plt.imshow(mod, interpolation='nearest', origin='lower')
+    plt.subplot(2,3,2)
+    plt.imshow(pix, interpolation='nearest', origin='lower')
+    plt.subplot(2,3,3)
+    plt.imshow(bpix, interpolation='nearest', origin='lower')
+    plt.subplot(2,3,4)
+    ima = dict(interpolation='nearest', origin='lower',
+               vmin=-8, vmax=0)
+    plt.imshow(np.log10(np.maximum(1e-16, mod/mx)), **ima)
+    plt.subplot(2,3,5)
+    plt.imshow(np.log10(np.maximum(1e-16, pix/mx)), **ima)
+    plt.subplot(2,3,6)
+    plt.imshow(np.log10(np.maximum(1e-16, bpix/mx)), **ima)
+    # plt.imshow(np.log10(np.abs((bpix - pix)/mx)), interpolation='nearest',
+    #            origin='lower', vmin=-8, vmax=0)
+    plt.savefig('w1.png')
+    sys.exit(0)
+
+
+    

@@ -691,14 +691,12 @@ class RaDecPos(ParamList, ArithmeticParams):
         return degrees_between(self.ra, self.dec, pos.ra, pos.dec)
 
 
-
-    
 class ConstantSky(ScalarParam):
     '''
     In counts
     '''
     def getParamDerivatives(self, tractor, img, srcs):
-        p = Patch(0, 0, np.ones(img.shape))
+        p = Patch(0, 0, np.ones_like(img))
         p.setName('dsky')
         return [p]
     def addTo(self, img, scale=1.):
@@ -707,6 +705,29 @@ class ConstantSky(ScalarParam):
         img += (self.val * scale)
     def getParamNames(self):
         return ['sky']
+
+
+class OffsetConstantSky(ConstantSky):
+    '''
+    Presents an offset *in the parameter interface only*.
+    '''
+    def __init__(self, val):
+        super(OffsetConstantSky, self).__init__(val)
+        self.offset = 0.
+
+    def getParams(self):
+        return [self.val + self.offset]
+    def setParams(self, p):
+        assert(len(p) == 1)
+        self._set(p[0] - self.offset)
+    def setParam(self, i, p):
+        assert(i == 0)
+        oldval = self.val
+        self._set(p - self.offset)
+        return oldval + self.offset
+    
+
+    
 
 
 class PointSource(MultiParams):
@@ -1047,9 +1068,7 @@ class GaussianMixturePSF(ParamList):
         '''
         self.mog = mp.MixtureOfGaussians(amp, mean, var)
         assert(self.mog.D == 2)
-        # !!
         self.radius = 25
-        #self.fixedRadius = None
         super(GaussianMixturePSF, self).__init__()
 
         del self.vals
@@ -1144,7 +1163,10 @@ class GaussianMixturePSF(ParamList):
                                                  px, py, minval)
 
         else:
-            r = self.getRadius()
+            if radius is None:
+                r = self.getRadius()
+            else:
+                r = radius
             x0,x1 = int(floor(px-r)), int(ceil(px+r))
             y0,y1 = int(floor(py-r)), int(ceil(py+r))
             grid = self.mog.evaluate_grid(x0-px, x1-px, y0-py, y1-py)

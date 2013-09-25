@@ -363,13 +363,22 @@ class Patch(object):
         if self.y0 >= H:
             self.patch = None
             return False
+        # debug
+        o0 = (self.x0, self.y0, self.patch.shape)
         if self.x0 < 0:
             self.patch = self.patch[:, -self.x0:]
             self.x0 = 0
         if self.y0 < 0:
             self.patch = self.patch[-self.y0:, :]
             self.y0 = 0
-        (h,w) = self.shape
+        # debug
+        S = self.patch.shape
+        if len(S) != 2:
+            print 'clipTo: shape', self.patch.shape
+            print 'original offset and patch shape:', o0
+            print 'current offset and patch shape:', self.x0, self.y0, self.patch.shape
+
+        (h,w) = self.patch.shape
         if (self.x0 + w) > W:
             self.patch = self.patch[:, :(W - self.x0)]
         if (self.y0 + h) > H:
@@ -897,6 +906,8 @@ class Tractor(MultiParams):
 
         Z.extend(zip(umodels, imlist, scales, mods0, np.zeros(len(imlist),int)+Nsky))
 
+        sky = (skyderivs is not None)
+
         for (umods,img,scale,mod0, paramoffset) in Z:
             H,W = img.shape
             if img in blockstart:
@@ -953,7 +964,6 @@ class Tractor(MultiParams):
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
-        sky = (skyderivs is not None)
         rtn = []
         if wantims0:
             t0 = Time()
