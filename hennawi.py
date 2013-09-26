@@ -127,52 +127,9 @@ def h3():
 
 
 
-class myopts(object):
-    pass
-
-'''
-text2fits.py -S 1 agn_coords.txt agn.fits
-'''
-if __name__ == '__main__':
-    #h2()
-    h3()
-    sys.exit(0)
-
-
-    T = fits_table('agn.fits')
-    T.ra  = np.array([hmsstring2ra(s) for s in T.final_ra])
-    T.dec = np.array([dmsstring2dec(s) for s in T.final_dec])
-
-    print 'RA', T.ra
-    print 'Dec', T.dec
-
-    ps = PlotSequence('hennawi')
-
-    r0,r1 = T.ra.min(),  T.ra.max()
-    d0,d1 = T.dec.min(), T.dec.max()
-    print 'RA range', r0,r1
-    print 'Dec range', d0,d1
-
-    margin = 0.003
-    dr = margin / np.cos(np.deg2rad((d0+d1)/2.))
-    rlo = r0 - dr
-    rhi = r1 + dr
-    dlo = d0 - margin
-    dhi = d1 + margin
-
-    sfn = 'agn2.fits'
-    resfn = 'agn3.fits'
-
-    T.writeto(sfn)
-
-    #mp = multiproc(8)
-    mp = multiproc(1)
-
-    #lvl = logging.INFO
-    lvl = logging.DEBUG
-    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-
-    r = np.hypot(dhi - dlo, (rhi - rlo) * np.cos(np.deg2rad((d0+d1)/2.))) / 2.
+def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
+    dec = (dlo + dhi)/2.
+    r = np.hypot(dhi - dlo, (rhi - rlo) * np.cos(np.deg2rad(dec))) / 2.
     RCF = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2.,
                             tablefn='window_flist.fits')
     sdss = DR9()
@@ -395,6 +352,61 @@ if __name__ == '__main__':
 
 
 
+class myopts(object):
+    pass
+
+'''
+text2fits.py -S 1 agn_coords.txt agn.fits
+'''
+if __name__ == '__main__':
+    #h2()
+    #h3()
+    #sys.exit(0)
+
+
+    # T = fits_table('agn.fits')
+    # T.ra  = np.array([hmsstring2ra(s) for s in T.final_ra])
+    # T.dec = np.array([dmsstring2dec(s) for s in T.final_dec])
+    # sfn = 'agn2.fits'
+    # T.writeto(sfn)
+    # do_sdss = True
+    # resfn = 'agn3.fits'
+    # wsources = 'wise-objs-hennawi.fits'
+    sfn = 'elgordo.fits'
+    T = fits_table(sfn)
+    wsources = 'wise-objs-elgordo.fits'
+    do_sdss = False
+    
+    resfn = 'elgordo-wise.fits'
+
+    print 'RA', T.ra
+    print 'Dec', T.dec
+
+    ps = PlotSequence('hennawi')
+
+    r0,r1 = T.ra.min(),  T.ra.max()
+    d0,d1 = T.dec.min(), T.dec.max()
+    print 'RA range', r0,r1
+    print 'Dec range', d0,d1
+
+    margin = 0.003
+    dr = margin / np.cos(np.deg2rad((d0+d1)/2.))
+    rlo = r0 - dr
+    rhi = r1 + dr
+    dlo = d0 - margin
+    dhi = d1 + margin
+
+    #mp = multiproc(8)
+    mp = multiproc(1)
+
+    #lvl = logging.INFO
+    lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+    if do_sdss:
+        sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T)
+
+
     basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
     wisedatadirs = [(basedir, 'merged'),]
     opt = myopts()
@@ -402,7 +414,7 @@ if __name__ == '__main__':
     opt.minflux = None
     opt.sources = sfn
     opt.nonsdss = True
-    opt.wsources = 'wise-objs-hennawi.fits'
+    opt.wsources = wsources
     opt.osources = None
     opt.minsb = 0.005
     opt.ptsrc = False

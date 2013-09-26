@@ -660,9 +660,16 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     tractor.thawPathsTo('sky')
     tractor.thawPathsTo(band)
     try:
-        ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
+        #ims0,ims1,IV,fs
+        cblock = 10
+        R = tractor.optimize_forced_photometry(
             minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
-            fitstats=True, variance=True)
+            fitstats=True, variance=True,
+            shared_params=False, use_ceres=True, BW=cblock, BH=cblock)
+        ims0 = R.ims0
+        ims1 = R.ims1
+        IV = R.IV
+        fs = R.fitstats
     except:
         import traceback
         traceback.print_exc()
@@ -1007,10 +1014,14 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     
     try:
         t0 = Time()
-        ims0,ims1,IV,fs = tr.optimize_forced_photometry(minsb=minsb, mindlnp=1.,
-                                                        sky=True, minFlux=minFlux,
-                                                        fitstats=True,
-                                                        variance=True)
+        cblock = 10
+        R = tr.optimize_forced_photometry(
+            minsb=minsb, mindlnp=1.,
+            sky=True, minFlux=minFlux,
+            fitstats=True, variance=True,
+            shared_params=False, use_ceres=True, BW=cblock, BH=cblock)
+        ims0,ims1 = R.ims0, R.ims1
+        IV,fs = R.IV, R.fitstats
         print 'Forced phot on coadd took', Time()-t0
     except:
         import traceback
