@@ -203,7 +203,7 @@ def check_md5s(WISE):
             if rtn:
                 print 'ERROR: return code', rtn
 
-def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
+def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -247,16 +247,14 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
     WISE.cut(I)
 
-    # cut on RA,Dec box too
-    r0,r1,d0,d1 = get_coadd_tile_radec_bounds(cowcs)
-    dd = np.sqrt(2.) * (1016./2.) * pixscale
-    dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
-    print len(WISE), 'in circle'
-
     # plt.clf()
     # plt.plot([r0,r1,r1,r0,r0],[d0,d0,d1,d1,d0], 'k-')
     # plt.plot(WISE.ra, WISE.dec, 'o', mec='r', mfc='none')
 
+    # cut on RA,Dec box too
+    r0,r1,d0,d1 = get_coadd_tile_radec_bounds(cowcs)
+    dd = np.sqrt(2.) * (1016./2.) * pixscale * 1.01 # safety
+    dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
     print 'cut to', len(WISE), 'in RA,Dec box'
@@ -287,7 +285,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
             if not os.path.exists(intfn):
                 print 'Need:', intfn
         return
-
 
     #WISE.cut(np.arange(20))
 
@@ -375,8 +372,8 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     # table vs no-table: ~ zero difference except in cores of v.bright stars
 
     try:
-        (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks
-         )= coadd_wise(cowcs, WISE, ps, band, mp)
+        (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube,
+         )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -418,6 +415,10 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp):
     fitsio.write(ofn, coppb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-n-w.fits'
     fitsio.write(ofn, conb.astype(np.int16), header=hdr, clobber=True)
+
+    if do_cube:
+        ofn = prefix + '-cube.fits'
+        fitsio.write(ofn, cube.astype(np.float32), header=hdr, clobber=True)
 
     ii = []
     for i,(mm,r) in enumerate(zip(masks, res)):
@@ -586,7 +587,7 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
         print 'Wrote', fn
 
 
-def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
+def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
@@ -624,6 +625,11 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         rchihistargs = dict(range=(-rchihistrange,rchihistrange), bins=100)
         rchihist = None
         rchihistedges = None
+
+    cube = None
+    if do_cube:
+        cube = np.zeros((len(rimgs), H, W), np.float32)
+        cubei = 0
 
     masks = []
     ri = -1
@@ -715,6 +721,11 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
             coimgb  [coslc] += rr.rmask2 * rr.w * rr.rimg
             cowb    [coslc] += rr.rmask2 * rr.w
             conb    [coslc] += rr.rmask2
+
+            if do_cube:
+                cube[(cubei,) + coslc] = (rr.rmask2 * rr.rimg).astype(cube.dtype)
+                cubei += 1
+
 
         del badpix
         del badpixmask
@@ -888,7 +899,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, table=True):
         ps.savefig()
 
 
-    return coimg, coinvvar, coppstd, con, coimgb, coinvvarb, coppstdb, conb, masks
+    return coimg, coinvvar, coppstd, con, coimgb, coinvvarb, coppstdb, conb, masks, cube
 
 
 def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
@@ -1059,7 +1070,7 @@ def _bounce_one_coadd(A):
         print 'one_coadd failed:'
         traceback.print_exc()
 
-if __name__ == '__main__':
+def main():
     import optparse
     from astrometry.util.multiproc import multiproc
 
@@ -1077,11 +1088,20 @@ if __name__ == '__main__':
     parser.add_option('--outdir', dest='outdir', default=default_outdir,
                       help='Output directory: default %default')
 
+    parser.add_option('--size', dest='size', default=None, type=int,
+                      help='Set output image size -- DEBUGGING ONLY!')
+    parser.add_option('--cube', dest='cube', action='store_true', default=False,
+                      help='Save & write out image cube')
+
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
     else:
         mp = multiproc()
+
+    if opt.size:
+        global W,H
+        W = H = opt.size
 
     Time.add_measurement(MemMeas)
 
@@ -1204,7 +1224,8 @@ if __name__ == '__main__':
             band = tileid / 1000
             tileid = tileid % 1000
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
-            one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp)
+            one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
+                      opt.cube)
             #A.append((T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp))
         #mp.map(_bounce_one_coadd, A)
         sys.exit(0)
@@ -1222,6 +1243,10 @@ if __name__ == '__main__':
     print 'Doing coadd tile', T.coadd_id[tile], 'band', band
 
     t0 = Time()
-    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp)
+    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp, opt.cube)
     print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
+
+if __name__ == '__main__':
+    main()
+    

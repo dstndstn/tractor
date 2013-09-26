@@ -96,7 +96,15 @@ def estimate_sky(img, iv):
     return mu
 
 
-def read_photoobjs(r0, r1, d0, d1, margin):
+def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
+
+    if cols is None:
+        cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
+                'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+                'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+                'resolve_status', 'nchild', 'flags', 'objc_flags',
+                'run','camcol','field','id'
+                ]
 
     wfn = os.path.join(resolvedir, 'window_flist.fits')
     #W = fits_table(wfn)
@@ -128,12 +136,6 @@ def read_photoobjs(r0, r1, d0, d1, margin):
 
         fn = get_photoobj_filename(rr, run, camcol, field)
 
-        cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
-                'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
-                'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
-                'resolve_status', 'nchild', 'flags', 'objc_flags',
-                'run','camcol','field','id'
-                ]
         T = fits_table(fn, columns=cols)
         if T is None:
             print 'read 0 from', fn
@@ -479,6 +481,30 @@ def one_tile(tile, opt, savepickle, ps):
             ps.savefig()
 
             plt.clf()
+            plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
+                       cmap='gray',
+                       vmin=-3*sig1, vmax=10*sig1)
+            ax = plt.axis()
+            plt.colorbar()
+            for x in XX:
+                plt.plot([x,x], [0,H], 'r-', alpha=0.5)
+            for y in YY:
+                plt.plot([0,W], [y,y], 'r-', alpha=0.5)
+            plt.axis(ax)
+            ps.savefig()
+            
+            print 'Median # ims:', np.median(nims)
+            ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
+
+            plt.clf()
+            plt.imshow(((fullimg - imgoffset) / ppn),
+                       interpolation='nearest', origin='lower',
+                       cmap='jet', vmin=-3)
+            plt.title('Img / PPstdn')
+            plt.colorbar()
+            ps.savefig()
+
+            plt.clf()
             loghist((fullimg - imgoffset).ravel(), pp.ravel(), bins=200)
             plt.xlabel('img pix')
             plt.ylabel('pp std')
@@ -497,8 +523,6 @@ def one_tile(tile, opt, savepickle, ps):
             plt.ylabel('log pp std')
             ps.savefig()
 
-            print 'Median # ims:', np.median(nims)
-            ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
             pnlo,pnhi = [np.percentile(ppn.ravel(), p) for p in [1,99.9]]
             print 'ppn percentiles:', pnlo,pnhi
             print 'ppn max', ppn.max()
@@ -570,19 +594,6 @@ def one_tile(tile, opt, savepickle, ps):
             ps.savefig()
 
 
-            plt.clf()
-            plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
-                       cmap='gray',
-                       vmin=-3*sig1, vmax=10*sig1)
-            ax = plt.axis()
-            plt.colorbar()
-            for x in XX:
-                plt.plot([x,x], [0,H], 'r-', alpha=0.5)
-            for y in YY:
-                plt.plot([0,W], [y,y], 'r-', alpha=0.5)
-            plt.axis(ax)
-            ps.savefig()
-            
             # xx,yy = [],[]
             # cc = []
             # for src in cat:
@@ -781,6 +792,10 @@ def one_tile(tile, opt, savepickle, ps):
                     plt.ylim(0.1, mx)
                     plt.axvline(0, color='r')
                     ps.savefig()
+
+                    fn = ps.basefn + '-chi.fits'
+                    fitsio.write(fn, chi, clobber=True)
+                    print 'Wrote', fn
 
                 # tractor.setParams(p0)
 
