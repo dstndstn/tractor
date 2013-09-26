@@ -328,6 +328,8 @@ def one_tile(tile, opt, savepickle, ps):
 
         imfn = os.path.join(tiledir, 'unwise-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
         ivfn = os.path.join(tiledir, 'unwise-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
+        ppfn = os.path.join(tiledir, 'unwise-%s-w%i-ppstd-w.fits' % (tile.coadd_id, band))
+        nifn = os.path.join(tiledir, 'unwise-%s-w%i-n-w.fits' % (tile.coadd_id, band))
 
         print 'Reading', imfn
         wcs = Tan(imfn)
@@ -338,6 +340,10 @@ def one_tile(tile, opt, savepickle, ps):
         img = fitsio.read(imfn)
         print 'Reading', ivfn
         iv = fitsio.read(ivfn)
+        print 'Reading', ppfn
+        pp = fitsio.read(ppfn)
+        print 'Reading', nifn
+        nims = fitsio.read(nifn)
 
         sig1 = 1./np.sqrt(np.median(iv))
         minsig = getattr(opt, 'minsig%i' % band)
@@ -356,7 +362,7 @@ def one_tile(tile, opt, savepickle, ps):
         assert(pat.x0 == pat.y0)
         assert(pat.x0 == -R)
         psfprofile = pat.patch[R, R:]
-        print 'PSF profile:', psfprofile
+        #print 'PSF profile:', psfprofile
 
         # Reset default flux based on min radius
         defaultflux = minsb / psfprofile[opt.minradius]
@@ -370,11 +376,11 @@ def one_tile(tile, opt, savepickle, ps):
             UW.rad[wnm > flux] = r
         UW.rad = np.maximum(UW.rad + 1, 3)
 
-        bc = np.bincount(UW.rad)
-        print 'UW radii histogram:'
-        for i,n in enumerate(bc):
-            if n:
-                print ' ', i, ':', n
+        # bc = np.bincount(UW.rad)
+        # print 'UW radii histogram:'
+        # for i,n in enumerate(bc):
+        #     if n:
+        #         print ' ', i, ':', n
 
         # Set SDSS fluxes based on WISE catalog matches.
         wf = wiseflux[band]
@@ -394,11 +400,11 @@ def one_tile(tile, opt, savepickle, ps):
         srad2[I] = rad
         del rad
 
-        bc = np.bincount(srad2)
-        print 'SDSS radii based on fluxes of WISE matches:'
-        for i,n in enumerate(bc):
-            if n:
-                print ' ', i, ':', n
+        # bc = np.bincount(srad2)
+        # print 'SDSS radii based on fluxes of WISE matches:'
+        # for i,n in enumerate(bc):
+        #     if n:
+        #         print ' ', i, ':', n
 
         # Set radii
         for i in range(len(cat)):
@@ -444,12 +450,126 @@ def one_tile(tile, opt, savepickle, ps):
             
         tsky = ConstantSky(sky)
 
+
+        pix = (fullimg - imgoffset)
+        iv3 = 1./(1./iv + np.maximum(0, pix/50. - sig1)**2)
+        iv4 = 1./(1./iv + np.maximum(0, pix/50. - sig1))
+        ### HACK HACK HACK HACK
+        #fullinvvar = iv3
+        fullinvvar = iv4
+
         # cell positions
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
         YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
         if ps:
-            #sig1 = 1./np.sqrt(np.median(iv))
+            plt.clf()
+            n,b,p = plt.hist((fullimg - imgoffset).ravel(), bins=100,
+                             range=(-10*sig1, 20*sig1), log=True,
+                             histtype='step', color='b')
+            mx = max(n)
+            plt.ylim(0.1, mx)
+            plt.axvline(sky, color='r')
+            ps.savefig()
+
+            plt.clf()
+            plt.imshow(np.log10(pp), interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=0)
+            plt.title('log Per-pixel std')
+            ps.savefig()
+
+            plt.clf()
+            loghist((fullimg - imgoffset).ravel(), pp.ravel(), bins=200)
+            plt.xlabel('img pix')
+            plt.ylabel('pp std')
+            ps.savefig()
+
+            plo,phi = [np.percentile(pp.ravel(), p) for p in [1,99.9]]
+            print 'pp percentiles:', plo,phi
+
+            print 'pp max', pp.max()
+            phi = pp.max()
+
+            plt.clf()
+            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+                    np.log10(np.clip(pp.ravel(), plo, phi)), bins=200)
+            plt.xlabel('log img pix')
+            plt.ylabel('log pp std')
+            ps.savefig()
+
+            print 'Median # ims:', np.median(nims)
+            ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
+            pnlo,pnhi = [np.percentile(ppn.ravel(), p) for p in [1,99.9]]
+            print 'ppn percentiles:', pnlo,pnhi
+            print 'ppn max', ppn.max()
+            pnhi = ppn.max()
+
+            iv2 = 1./(1./iv + np.maximum(0, ppn - sig1)**2)
+            
+            plt.clf()
+            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+                    np.log10(np.clip(ppn.ravel(), pnlo, pnhi)), bins=200)
+            ax = plt.axis()
+            plt.axhline(np.log10(sig1), color='g')
+            x0,x1 = plt.xlim()
+            x = np.linspace(x0, x1, 500)
+            plt.plot(x, x-1, 'b-')
+            plt.plot(x, x-2, 'b-')
+            plt.plot(x, x/2., 'w-')
+            plt.axis(ax)
+            plt.xlabel('log img pix')
+            plt.ylabel('log ppn std')
+            ps.savefig()
+
+
+            plt.clf()
+            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+                    np.log10(np.clip(np.sqrt(1./iv2.ravel()), pnlo, pnhi)), bins=200)
+            ax = plt.axis()
+            plt.axhline(np.log10(sig1), color='g')
+            x0,x1 = plt.xlim()
+            x = np.linspace(x0, x1, 500)
+            plt.plot(x, x-1, 'b-')
+            plt.plot(x, x-2, 'b-')
+            plt.plot(x, x/2., 'w-')
+            plt.axis(ax)
+            plt.xlabel('log img pix')
+            plt.ylabel('log sqrt(iv2)')
+            ps.savefig()
+
+
+            plt.clf()
+            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+                    np.log10(np.clip(np.sqrt(1./iv3.ravel()), pnlo, pnhi)), bins=200)
+            ax = plt.axis()
+            plt.axhline(np.log10(sig1), color='g')
+            x0,x1 = plt.xlim()
+            x = np.linspace(x0, x1, 500)
+            plt.plot(x, x-1, 'b-')
+            plt.plot(x, x-2, 'b-')
+            plt.plot(x, x/2., 'w-')
+            plt.axis(ax)
+            plt.xlabel('log img pix')
+            plt.ylabel('log sqrt(iv3)')
+            ps.savefig()
+
+
+            plt.clf()
+            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+                    np.log10(np.clip(np.sqrt(1./iv4.ravel()), pnlo, pnhi)), bins=200)
+            ax = plt.axis()
+            plt.axhline(np.log10(sig1), color='g')
+            x0,x1 = plt.xlim()
+            x = np.linspace(x0, x1, 500)
+            plt.plot(x, x-1, 'b-')
+            plt.plot(x, x-2, 'b-')
+            plt.plot(x, x/2., 'w-')
+            plt.axis(ax)
+            plt.xlabel('log img pix')
+            plt.ylabel('log sqrt(iv4)')
+            ps.savefig()
+
+
             plt.clf()
             plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
                        cmap='gray',
@@ -474,14 +594,15 @@ def one_tile(tile, opt, savepickle, ps):
             #     yy.append(y)
             #     cc.append(c)
             # p1 = plt.scatter(xx, yy, c=cc, marker='+')
-            notI = np.flatnonzero(wf <= defaultflux)
-            plt.plot(T.x[notI], T.y[notI], 'b+')
-            plt.plot(T.x[I], T.y[I], 'g+')
-            plt.axis(ax)
-            ps.savefig()
-            plt.plot(UW.x, UW.y, 'r+')
-            plt.axis(ax)
-            ps.savefig()
+
+            # notI = np.flatnonzero(wf <= defaultflux)
+            # plt.plot(T.x[notI], T.y[notI], 'b+')
+            # plt.plot(T.x[I], T.y[I], 'g+')
+            # plt.axis(ax)
+            # ps.savefig()
+            # plt.plot(UW.x, UW.y, 'r+')
+            # plt.axis(ax)
+            # ps.savefig()
 
         if savepickle:
             mods = []
@@ -561,30 +682,29 @@ def one_tile(tile, opt, savepickle, ps):
                 print 'WISE-only:', nomag, 'of', len(J), 'had invalid mags'
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
-                if ps:
-                    #sig1 = 1./np.sqrt(np.median(invvar))
-                    plt.clf()
-                    plt.imshow(img - imgoffset, interpolation='nearest', origin='lower',
-                               cmap='gray', vmin=-3*sig1, vmax=10*sig1)
-                    plt.colorbar()
-                    xx,yy = [],[]
-                    for src in subcat:
-                        x,y = twcs.positionToPixel(src.getPosition())
-                        xx.append(x)
-                        yy.append(y)
-                    p1 = plt.plot(xx[:len(srci)], yy[:len(srci)], 'b+')
-                    p2 = plt.plot(xx[len(srci):len(I)], yy[len(srci):len(I)], 'g+')
-                    p3 = plt.plot(xx[len(I):], yy[len(I):], 'r+')
-                    p4 = plt.plot(UW.x[np.logical_not(np.isfinite(wnm[J]))],
-                                  UW.y[np.logical_not(np.isfinite(wnm[J]))],
-                                  'y+')
-                    ps.savefig()
-
-                    # plt.clf()
-                    # plt.imshow(invvar, interpolation='nearest', origin='lower')
-                    # plt.colorbar()
-                    # plt.title('invvar')
-                    # ps.savefig()
+                # if ps:
+                #     plt.clf()
+                #     plt.imshow(img - imgoffset, interpolation='nearest', origin='lower',
+                #                cmap='gray', vmin=-3*sig1, vmax=10*sig1)
+                #     plt.colorbar()
+                #     xx,yy = [],[]
+                #     for src in subcat:
+                #         x,y = twcs.positionToPixel(src.getPosition())
+                #         xx.append(x)
+                #         yy.append(y)
+                #     p1 = plt.plot(xx[:len(srci)], yy[:len(srci)], 'b+')
+                #     p2 = plt.plot(xx[len(srci):len(I)], yy[len(srci):len(I)], 'g+')
+                #     p3 = plt.plot(xx[len(I):], yy[len(I):], 'r+')
+                #     p4 = plt.plot(UW.x[np.logical_not(np.isfinite(wnm[J]))],
+                #                   UW.y[np.logical_not(np.isfinite(wnm[J]))],
+                #                   'y+')
+                #     ps.savefig()
+                # 
+                #     # plt.clf()
+                #     # plt.imshow(invvar, interpolation='nearest', origin='lower')
+                #     # plt.colorbar()
+                #     # plt.title('invvar')
+                #     # ps.savefig()
 
                 print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
                 tractor = Tractor([tim], subcat)
@@ -625,12 +745,41 @@ def one_tile(tile, opt, savepickle, ps):
                         print tim.getSky()
 
                 if ps:
-                    #sig1 = 1./np.sqrt(np.median(invvar))
                     (dat,mod,ie,chi,roi) = ims1[0]
                     plt.clf()
                     plt.imshow(mod - imgoffset, interpolation='nearest', origin='lower',
                                cmap='gray', vmin=-3*sig1, vmax=10*sig1)
                     plt.colorbar()
+                    ps.savefig()
+
+                    plt.clf()
+                    plt.imshow(chi, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=-5, vmax=+5)
+                    plt.colorbar()
+                    plt.title('Chi')
+                    ps.savefig()
+
+                    plt.clf()
+                    plt.imshow(np.round(chi), interpolation='nearest', origin='lower',
+                               cmap='jet', vmin=-5, vmax=+5)
+                    plt.colorbar()
+                    plt.title('Chi')
+                    ps.savefig()
+
+                    plt.clf()
+                    plt.imshow(chi, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=-20, vmax=+20)
+                    plt.colorbar()
+                    plt.title('Chi')
+                    ps.savefig()
+
+                    plt.clf()
+                    n,b,p = plt.hist(chi.ravel(), bins=100,
+                                     range=(-10, 10), log=True,
+                                     histtype='step', color='b')
+                    mx = max(n)
+                    plt.ylim(0.1, mx)
+                    plt.axvline(0, color='r')
                     ps.savefig()
 
                 # tractor.setParams(p0)
@@ -710,6 +859,20 @@ def one_tile(tile, opt, savepickle, ps):
         for k in fskeys:
             T.set(wband + '_' + k, fitstats[k].astype(np.float32))
 
+        if ps:
+            I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 4./3600.)
+
+            plt.clf()
+            lo,hi = 10,25
+            cathi = 18
+            loghist(WISE.get('w%impro'%band)[I], T.get(wband+'_mag')[J],
+                    range=((lo,cathi),(lo,cathi)), bins=200)
+            plt.xlabel('WISE W1 mag')
+            plt.ylabel('Tractor W1 mag')
+            plt.title('WISE catalog vs Tractor forced photometry')
+            plt.axis([cathi,lo,cathi,lo])
+            ps.savefig()
+
         print 'Tile', tile.coadd_id, 'band', wband, 'took', Time()-tb0
 
     T.cut(inbounds)
@@ -762,6 +925,8 @@ def main():
     parser.add_option('--pp', dest='pickle2', default=False, action='store_true',
                       help='Save .pickle file for each cell?')
     parser.add_option('--plots', dest='plots', default=False, action='store_true')
+
+    parser.add_option('--plotbase', dest='plotbase', help='Base filename for plots')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
@@ -817,7 +982,10 @@ def main():
     #     print 'Dec', d, 'has', len(R), 'unique RA:', R
     #     print 'diffs', np.diff(R)
 
-    ps = PlotSequence(dataset + '-phot')
+    if opt.plotbase is None:
+        opt.plotbase = dataset = '-phot'
+
+    ps = PlotSequence(opt.plotbase)
 
     if opt.summary:
         A = T
