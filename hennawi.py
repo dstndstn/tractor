@@ -372,15 +372,24 @@ if __name__ == '__main__':
     # do_sdss = True
     # resfn = 'agn3.fits'
     # wsources = 'wise-objs-hennawi.fits'
+
     sfn = 'elgordo.fits'
-    T = fits_table(sfn)
-    wsources = 'wise-objs-elgordo.fits'
-    do_sdss = False
-    
     resfn = 'elgordo-wise.fits'
 
-    print 'RA', T.ra
-    print 'Dec', T.dec
+    wsources = 'wise-objs-elgordo.fits'
+    do_sdss = False
+    ceres = False
+
+    indexfn = 'WISE-index-L1b.fits'
+    #indexfn = None
+    basedir = 'wise-frames'
+    #basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
+    wisedatadirs = [(basedir, 'merged'),]
+
+
+    T = fits_table(sfn)
+    #print 'RA', T.ra
+    #print 'Dec', T.dec
 
     ps = PlotSequence('hennawi')
 
@@ -407,8 +416,6 @@ if __name__ == '__main__':
         sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T)
 
 
-    basedir = '/clusterfs/riemann/raid000/bosswork/boss/wise_frames'
-    wisedatadirs = [(basedir, 'merged'),]
     opt = myopts()
     opt.wisedatadirs = wisedatadirs
     opt.minflux = None
@@ -436,7 +443,7 @@ if __name__ == '__main__':
 
         try:
             #runtostage(110, opt, mp, rlo,rhi,dlo,dhi)
-            runtostage(108, opt, mp, rlo,rhi,dlo,dhi)
+            runtostage(108, opt, mp, rlo,rhi,dlo,dhi, indexfn=indexfn, ceres=ceres)
             #runtostage(700, opt, mp, rlo,rhi,dlo,dhi)
         except:
             import traceback
@@ -477,6 +484,10 @@ if __name__ == '__main__':
         pfn = 'hennawi-w%i-stage106.pickle' % band
         X = unpickle_from_file(pfn)
         R = X['R']
+        print 'R', len(R)
+        print 'T', len(T)
+        assert(sum(R.sdss) == len(T))
+        R.cut(R.sdss > 0)
         assert(len(R) == len(T))
         nm = R.get('w%i' % band)
         nm_ivar = R.get('w%i_ivar' % band)

@@ -155,6 +155,8 @@ def stage100(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
 
 
     # Read WISE sources in the ROI
+    if opt.wsources is not None:
+        print 'Looking for WISE sources in', opt.wsources
     if opt.wsources is not None and os.path.exists(opt.wsources):
         W = fits_table(opt.wsources)
         W.cut((W.ra > ralo) * (W.ra < rahi) * (W.dec > declo) * (W.dec < dechi))
@@ -630,7 +632,7 @@ def stage105(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
 
 # Run forced photometry (simultaneously on all exposures)
 def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
-             S=None, UW=None, **kwa):
+             S=None, UW=None, ceres=True, **kwa):
     tims = tractor.images
     minFlux = opt.minflux
     if minFlux is not None:
@@ -661,11 +663,15 @@ def stage106(opt=None, ps=None, tractor=None, band=None, bandnum=None, T=None,
     tractor.thawPathsTo(band)
     try:
         #ims0,ims1,IV,fs
-        cblock = 10
+        kwa = {}
+        if ceres:
+            cblock = 10
+            kwa.update(use_ceres=True, BW=cblock, BH=cblock)
+            
         R = tractor.optimize_forced_photometry(
             minsb=opt.minsb, mindlnp=1., sky=True, minFlux=minFlux,
             fitstats=True, variance=True,
-            shared_params=False, use_ceres=True, BW=cblock, BH=cblock)
+            shared_params=False, **kwa)
         ims0 = R.ims0
         ims1 = R.ims1
         IV = R.IV
@@ -974,7 +980,7 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
              coimg=None, coinvvar=None, comod=None, coppstd=None, cowcs=None,
              comod2=None,
              ims2=None, cat2=None,
-             UW=None,
+             UW=None, ceres=None,
              **kwa):
     r0,r1,d0,d1 = ralo,rahi,declo,dechi
     sdss = S
@@ -1014,12 +1020,16 @@ def stage108(opt=None, ps=None, ralo=None, rahi=None, declo=None, dechi=None,
     
     try:
         t0 = Time()
-        cblock = 10
+        kwa = {}
+        if ceres:
+            cblock = 10
+            kwa.update(use_ceres=True, BW=cblock, BH=cblock)
+
         R = tr.optimize_forced_photometry(
             minsb=minsb, mindlnp=1.,
             sky=True, minFlux=minFlux,
             fitstats=True, variance=True,
-            shared_params=False, use_ceres=True, BW=cblock, BH=cblock)
+            shared_params=False, **kwa)
         ims0,ims1 = R.ims0, R.ims1
         IV,fs = R.IV, R.fitstats
         print 'Forced phot on coadd took', Time()-t0
