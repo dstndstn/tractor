@@ -1226,6 +1226,8 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         coimg  [slc] += rr.w *  rr.rimg
         cow    [slc] += rr.w *  rr.rmask
 
+    print 'Min cow (round 1):', cow.min()
+        
     coimg /= np.maximum(cow, tinyw)
     # Per-pixel std
     coppstd = np.sqrt(np.maximum(0, coimgsq / np.maximum(cow, tinyw) - coimg**2))
