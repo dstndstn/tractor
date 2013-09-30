@@ -887,29 +887,29 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         del badpix
         del badpixmask
 
-        if ps:
-            nnn = np.zeros((H,W), np.int16)
-            nnn[coslc] = rr.rmask
-            nnn = nnn[2000:, 200:800]
-            if len(np.unique(nnn)) > 1:
-                plt.clf()
-                plt.subplot(3,1,1)
-                plt.imshow(nnn, interpolation='nearest', origin='lower',
-                           cmap='gray')
-                plt.subplot(3,1,2)
-                plt.plot(nnn[-1,:], 'r-', lw=3, alpha=0.5)
-                plt.plot(nnn[-2,:], 'b-')
-                plt.ylim(-0.1, 1.1)
-                plt.title('L1b scan %s frame %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
-                plt.subplot(3,1,3)
-                plt.plot(con[-1,200:800], 'r-', lw=3, alpha=0.5)
-                plt.plot(con[-2,200:800], 'b-')
-                yl,yh = plt.ylim()
-                #plt.ylim(-0.1, yh+0.5)
-                plt.ylim(yl-0.5, yh+0.5)
-                ps.savefig()
+        # if ps:
+        #     nnn = np.zeros((H,W), np.int16)
+        #     nnn[coslc] = rr.rmask
+        #     nnn = nnn[2000:, 200:800]
+        #     if len(np.unique(nnn)) > 1:
+        #         plt.clf()
+        #         plt.subplot(3,1,1)
+        #         plt.imshow(nnn, interpolation='nearest', origin='lower',
+        #                    cmap='gray')
+        #         plt.subplot(3,1,2)
+        #         plt.plot(nnn[-1,:], 'r-', lw=3, alpha=0.5)
+        #         plt.plot(nnn[-2,:], 'b-')
+        #         plt.ylim(-0.1, 1.1)
+        #         plt.title('L1b scan %s frame %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
+        #         plt.subplot(3,1,3)
+        #         plt.plot(con[-1,200:800], 'r-', lw=3, alpha=0.5)
+        #         plt.plot(con[-2,200:800], 'b-')
+        #         yl,yh = plt.ylim()
+        #         #plt.ylim(-0.1, yh+0.5)
+        #         plt.ylim(yl-0.5, yh+0.5)
+        #         ps.savefig()
 
-        if ps and False:
+        if ps:
             R,C = 3,3
             plt.clf()
             plt.subplot(R,C,1)
