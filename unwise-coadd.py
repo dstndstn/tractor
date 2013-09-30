@@ -744,6 +744,189 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
         print 'Wrote', fn
 
 
+def _coadd_one_round2((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
+    if rr is None:
+        return None
+    t00 = Time()
+    mm = Duck()
+    mm.npatched = rr.npatched
+    mm.ncopix = rr.ncopix
+    mm.sky = rr.sky
+    mm.zp = rr.zp
+    mm.included = True
+
+    cox0,cox1,coy0,coy1 = rr.coextent
+    coslc = slice(coy0, coy1+1), slice(cox0, cox1+1)
+    # Remove this image from the per-pixel std calculation...
+    subw  = np.maximum(cow1[coslc] - rr.w, tinyw)
+    subco = (cowimg1  [coslc] - (rr.w * rr.rimg   )) / subw
+    subsq = (cowimgsq1[coslc] - (rr.w * rr.rimg**2)) / subw
+    subpp = np.sqrt(np.maximum(0, subsq - subco**2))
+
+    # like in the WISE Atlas Images, estimate sky difference via
+    # median difference in the overlapping area.
+    dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
+    print 'Sky difference:', dsky
+
+    rchi = ((rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) /
+            np.maximum(subpp, 1e-6))
+    #print 'rchi', rchi.min(), rchi.max()
+    assert(np.all(np.isfinite(rchi)))
+    badpix = (np.abs(rchi) >= 5.)
+    #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
+    mm.nrchipix = np.count_nonzero(badpix)
+
+    # Bit 1: abs(rchi) >= 5
+    badpixmask = badpix.astype(np.uint8)
+    # grow by a small margin
+    badpix = binary_dilation(badpix)
+    # Bit 2: grown
+    badpixmask += (2 * badpix)
+    # Add rchi-masked pixels to the mask
+    rr.rmask2[badpix] = False
+    # print 'Applying rchi masks to images...'
+    mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()),
+                        badpixmask.dtype)
+    try:
+        Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
+        mm.omask[Yo,Xo] = badpixmask[Yi,Xi]
+    except OverlapError:
+        import traceback
+        print 'WARNING: Caught OverlapError resampling rchi mask'
+        print 'rr WCS', rr.wcs
+        print 'shape', mm.omask.shape
+        print 'cosubwcs:', rr.cosubwcs
+        traceback.print_exc(None, sys.stdout)
+
+    if mm.nrchipix > mm.ncopix * 0.01:
+        print (('WARNING: dropping exposure scan %s frame %i band %i:' +
+                + '# nrchi pixels %i') % (
+                    WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
+        mm.included = False
+
+    if mm.included:
+        ok = patch_image(rr.rimg, np.logical_not(badpix),
+                         required=(badpix * rr.rmask))
+        if not ok:
+            print 'patch_image failed'
+            return None
+
+        rimg = (rr.rimg - dsky)
+        #rr.rimg[rr.rmask] -= dsky
+
+        mm.coslc = coslc
+        mm.coimgsq = rr.rmask * rr.w * rimg**2
+        mm.coimg   = rr.rmask * rr.w * rimg
+        mm.cow     = rr.rmask * rr.w
+        mm.con     = rr.rmask
+        mm.rmask2  = rr.rmask2
+        # mm.coimgsqb = rr.rmask2 * rr.w * rimg**2
+        # mm.coimgb   = rr.rmask2 * rr.w * rimg
+        # mm.cowb     = rr.rmask2 * rr.w
+        # mm.conb     = rr.rmask2
+
+    dsky /= rr.zpscale
+    print 'scaled:', dsky
+    mm.dsky = dsky
+
+        
+    if plotfn:
+
+        # HACK
+        rchihistrange = 6
+        rchihistargs = dict(range=(-rchihistrange,rchihistrange), bins=100)
+        rchihist = None
+        rchihistedges = None
+
+        R,C = 3,3
+        plt.clf()
+        plt.subplot(R,C,1)
+        I = rr.rimg - dsky
+        plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.title('rimg')
+        plt.subplot(R,C,2)
+        I = subco
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.title('subco')
+        plt.subplot(R,C,3)
+        I = subpp
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.title('subpp')
+        plt.subplot(R,C,4)
+        plt.imshow(rchi, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=-5, vmax=5)
+        plt.xticks([]); plt.yticks([])
+        plt.title('rchi (%i)' % mm.nrchipix)
+
+        plt.subplot(R,C,5)
+        I = rr.img
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.title('img')
+
+        plt.subplot(R,C,6)
+        I = mm.omask
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=0, vmax=3)
+        plt.xticks([]); plt.yticks([])
+        plt.title('omask')
+
+        plt.subplot(R,C,7)
+        I = rr.rimg
+        plo,phi = [np.percentile(I, p) for p in [25,99]]
+        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        plt.xticks([]); plt.yticks([])
+        plt.title('patched rimg')
+
+        # plt.subplot(R,C,8)
+        # I = (coimgb / np.maximum(cowb, tinyw))
+        # plo,phi = [np.percentile(I, p) for p in [25,99]]
+        # plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+        #            vmin=plo, vmax=phi)
+        # plt.xticks([]); plt.yticks([])
+        # plt.title('coimgb')
+
+        I = (rchi != 0.)
+        n,e = np.histogram(np.clip(rchi[I], -rchihistrange, rchihistrange),
+                           **rchihistargs)
+        if rchihist is None:
+            rchihist, rchihistedges = n,e
+        else:
+            rchihist += n
+
+        plt.subplot(R,C,9)
+        e = rchihistedges
+        e = (e[:-1]+e[1:])/2.
+        #plt.semilogy(e, np.maximum(0.1, rchihist), 'b-')
+        plt.semilogy(e, np.maximum(0.1, n), 'b-')
+        plt.axvline(5., color='r')
+        plt.xlim(-(rchihistrange+1), rchihistrange+1)
+        plt.yticks([])
+        plt.title('rchi')
+
+        inc = ''
+        if not mm.included:
+            inc = '(not incl)'
+        plt.suptitle('%s %i %s' % (WISE.scan_id[ri], WISE.frame_num[ri], inc))
+        plt.savefig(plotfn)
+
+    print Time() - t00
+        
+    return mm
+        
+
 def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     L = 3
     W = cowcs.get_width()
@@ -766,6 +949,41 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
 
+    assert(len(rimgs) == len(WISE))
+
+    cube = None
+    if do_cube:
+        cube = np.zeros((len(rimgs), H, W), np.float32)
+        cubei = 0
+
+
+    # If we're not multiprocessing, do the loop manually to reduce
+    # memory usage (we don't need to keep all "rr" inputs and "masks"
+    # outputs in memory at once).
+    if not mp.pool:
+        masks = []
+        ri = -1
+        while len(rimgs):
+            ri += 1
+            rr = rimgs.pop(0)
+            print
+            print 'Coadd round 2, image', (ri+1), 'of', len(WISE)
+            if ps:
+                plotfn = ps.getnext()
+            else:
+                plotfn = None
+            masks.append(_coadd_one_round2(
+                (rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)))
+    else:
+        args = []
+        for rr in rimgs:
+            if ps:
+                plotfn = ps.getnext()
+            else:
+                plotfn = None
+            args.append((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
+        masks = mp.map(_coadd_one_round2, args)
+
     coimg    = np.zeros((H,W))
     coimgsq  = np.zeros((H,W))
     cow      = np.zeros((H,W))
@@ -775,230 +993,21 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     cowb     = np.zeros((H,W))
     conb     = np.zeros((H,W), np.int16)
 
-    assert(len(rimgs) == len(WISE))
-
-    if ps:
-        rchihistrange = 6
-        rchihistargs = dict(range=(-rchihistrange,rchihistrange), bins=100)
-        rchihist = None
-        rchihistedges = None
-
-    cube = None
-    if do_cube:
-        cube = np.zeros((len(rimgs), H, W), np.float32)
-        cubei = 0
-
-    masks = []
-    ri = -1
-    while len(rimgs):
-        ri += 1
-        rr = rimgs.pop(0)
-
-        print
-        print 'Coadd round 2, image', (ri+1), 'of', len(WISE)
-
-        t00 = Time()
-
-        if rr is None:
-            masks.append(None)
+    for mm in masks:
+        if mm is None or not mm.included:
             continue
-
-        mm = Duck()
-        mm.npatched = rr.npatched
-        mm.ncopix = rr.ncopix
-        mm.sky = rr.sky
-        mm.zp = rr.zp
-        mm.included = True
-
-        cox0,cox1,coy0,coy1 = rr.coextent
-        coslc = slice(coy0, coy1+1), slice(cox0, cox1+1)
-        # Remove this image from the per-pixel std calculation...
-        subw  = np.maximum(cow1[coslc] - rr.w, tinyw)
-        subco = (cowimg1  [coslc] - (rr.w * rr.rimg   )) / subw
-        subsq = (cowimgsq1[coslc] - (rr.w * rr.rimg**2)) / subw
-        subpp = np.sqrt(np.maximum(0, subsq - subco**2))
-
-        # like in the WISE Atlas Images, estimate sky difference via
-        # median difference in the overlapping area.
-        dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
-        print 'Sky difference:', dsky
-
-        rchi = (rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) / np.maximum(subpp, 1e-6)
-        #print 'rchi', rchi.min(), rchi.max()
-        assert(np.all(np.isfinite(rchi)))
-        badpix = (np.abs(rchi) >= 5.)
-        #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
-        mm.nrchipix = np.count_nonzero(badpix)
-
-        # Bit 1: abs(rchi) >= 5
-        badpixmask = badpix.astype(np.uint8)
-        # grow by a small margin
-        badpix = binary_dilation(badpix)
-        # Bit 2: grown
-        badpixmask += (2 * badpix)
-        # Add rchi-masked pixels to the mask
-        rr.rmask2[badpix] = False
-        # print 'Applying rchi masks to images...'
-        mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()), badpixmask.dtype)
-        try:
-            Yo,Xo,Yi,Xi,nil = resample_with_wcs(rr.wcs, rr.cosubwcs, [], None)
-            mm.omask[Yo,Xo] = badpixmask[Yi,Xi]
-        except OverlapError:
-            import traceback
-            print 'WARNING: Caught OverlapError resampling rchi mask'
-            print 'rr WCS', rr.wcs
-            print 'shape', mm.omask.shape
-            print 'cosubwcs:', rr.cosubwcs
-            traceback.print_exc(None, sys.stdout)
-
-        if ps:
-            orig_rimg = rr.rimg.copy()
-
-        if mm.nrchipix > mm.ncopix * 0.01:
-            print ('WARNING: dropping exposure scan %s frame %i band %i: # nrchi pixels %i' %
-                   (WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
-            mm.included = False
-
-        if mm.included:
-            ok = patch_image(rr.rimg, np.logical_not(badpix), required=(badpix * rr.rmask))
-            if not ok:
-                print 'patch_image failed; continuing'
-                masks.append(None)
-                continue
-
-            rr.rimg[rr.rmask] -= dsky
-
-            coimgsq [coslc] += rr.rmask * rr.w * rr.rimg**2
-            coimg   [coslc] += rr.rmask * rr.w * rr.rimg
-            cow     [coslc] += rr.rmask * rr.w
-            con     [coslc] += rr.rmask
-            assert(np.all(rr.rimg[np.logical_not(rr.rmask)] == 0))
-
-            coimgsqb[coslc] += rr.rmask2 * rr.w * rr.rimg**2
-            coimgb  [coslc] += rr.rmask2 * rr.w * rr.rimg
-            cowb    [coslc] += rr.rmask2 * rr.w
-            conb    [coslc] += rr.rmask2
-
-            if do_cube:
-                cube[(cubei,) + coslc] = (rr.rmask2 * rr.rimg).astype(cube.dtype)
-                cubei += 1
-
-
-        del badpix
-        del badpixmask
-
-        # if ps:
-        #     nnn = np.zeros((H,W), np.int16)
-        #     nnn[coslc] = rr.rmask
-        #     nnn = nnn[2000:, 200:800]
-        #     if len(np.unique(nnn)) > 1:
-        #         plt.clf()
-        #         plt.subplot(3,1,1)
-        #         plt.imshow(nnn, interpolation='nearest', origin='lower',
-        #                    cmap='gray')
-        #         plt.subplot(3,1,2)
-        #         plt.plot(nnn[-1,:], 'r-', lw=3, alpha=0.5)
-        #         plt.plot(nnn[-2,:], 'b-')
-        #         plt.ylim(-0.1, 1.1)
-        #         plt.title('L1b scan %s frame %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
-        #         plt.subplot(3,1,3)
-        #         plt.plot(con[-1,200:800], 'r-', lw=3, alpha=0.5)
-        #         plt.plot(con[-2,200:800], 'b-')
-        #         yl,yh = plt.ylim()
-        #         #plt.ylim(-0.1, yh+0.5)
-        #         plt.ylim(yl-0.5, yh+0.5)
-        #         ps.savefig()
-
-        if ps:
-            R,C = 3,3
-            plt.clf()
-            plt.subplot(R,C,1)
-            I = orig_rimg - dsky
-            plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('rimg')
-            plt.subplot(R,C,2)
-            I = subco
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('subco')
-            plt.subplot(R,C,3)
-            I = subpp
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('subpp')
-            plt.subplot(R,C,4)
-            plt.imshow(rchi, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=-5, vmax=5)
-            plt.xticks([]); plt.yticks([])
-            plt.title('rchi (%i)' % mm.nrchipix)
-
-            plt.subplot(R,C,5)
-            I = rr.img
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('img')
-
-            plt.subplot(R,C,6)
-            I = mm.omask
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=0, vmax=3)
-            plt.xticks([]); plt.yticks([])
-            plt.title('omask')
-
-            plt.subplot(R,C,7)
-            I = rr.rimg
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('patched rimg')
-
-            plt.subplot(R,C,8)
-            I = (coimgb / np.maximum(cowb, tinyw))
-            plo,phi = [np.percentile(I, p) for p in [25,99]]
-            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('coimgb')
-
-            I = (rchi != 0.)
-            n,e = np.histogram(np.clip(rchi[I], -rchihistrange, rchihistrange), **rchihistargs)
-            if rchihist is None:
-                rchihist, rchihistedges = n,e
-            else:
-                rchihist += n
-
-            plt.subplot(R,C,9)
-            e = rchihistedges
-            e = (e[:-1]+e[1:])/2.
-            plt.semilogy(e, np.maximum(0.1, rchihist), 'b-')
-            plt.semilogy(e, np.maximum(0.1, n), 'b-')
-            plt.axvline(5., color='r')
-            plt.xlim(-(rchihistrange+1), rchihistrange+1)
-            plt.yticks([])
-            plt.title('rchi')
-
-            inc = ''
-            if not mm.included:
-                inc = '(not incl)'
-            plt.suptitle('%s %i %s' % (WISE.scan_id[ri], WISE.frame_num[ri], inc))
-            ps.savefig()
-
-        dsky /= rr.zpscale
-        print 'scaled:', dsky
-        mm.dsky = dsky
-        masks.append(mm)
-
-        print Time() - t00
+        coimgsq [mm.coslc] += mm.coimgsq
+        coimg   [mm.coslc] += mm.coimg
+        cow     [mm.coslc] += mm.cow
+        con     [mm.coslc] += mm.con
+        coimgsqb[mm.coslc] += mm.rmask2 * mm.coimgsq
+        coimgb  [mm.coslc] += mm.rmask2 * mm.coimg
+        cowb    [mm.coslc] += mm.rmask2 * mm.cow
+        conb    [mm.coslc] += mm.rmask2 * mm.con
+        
+        if do_cube:
+            cube[(cubei,) + coslc] = (mm.coimgb).astype(cube.dtype)
+            cubei += 1
 
     coimg /= np.maximum(cow, tinyw)
     coinvvar = cow
