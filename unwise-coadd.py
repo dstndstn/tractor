@@ -370,7 +370,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     print 'Qual_frame scores:', np.unique(WISE.qual_frame)
     WISE.cut(WISE.qual_frame > 0)
     print 'Cut out qual_frame = 0;', len(WISE), 'remaining'
-
+    
     print 'Moon_masked:', np.unique(WISE.moon_masked)
     WISE.cut(WISE.moon_masked == False)
     print 'Cut moon_masked:', len(WISE), 'remaining'
@@ -1224,7 +1224,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         # note, rr.w is a scalar.
         coimgsq[slc] += rr.w * (rr.rimg**2)
         coimg  [slc] += rr.w *  rr.rimg
-        cow    [slc] += rr.w
+        cow    [slc] += rr.w *  rr.rmask
 
     coimg /= np.maximum(cow, tinyw)
     # Per-pixel std
