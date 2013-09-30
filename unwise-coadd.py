@@ -744,9 +744,10 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
         print 'Wrote', fn
 
 
-def _coadd_one_round2((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
+def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
     if rr is None:
         return None
+    print 'Coadd round 2, image', (ri+1), 'of', N
     t00 = Time()
     mm = Duck()
     mm.npatched = rr.npatched
@@ -799,9 +800,9 @@ def _coadd_one_round2((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
         traceback.print_exc(None, sys.stdout)
 
     if mm.nrchipix > mm.ncopix * 0.01:
-        print (('WARNING: dropping exposure scan %s frame %i band %i:' +
-                + '# nrchi pixels %i') % (
-                    WISE.scan_id[ri], WISE.frame_num[ri], band, mm.nrchipix))
+        print ('WARNING: dropping exposure %s: n rchi pixels %i / %i' %
+               (scanid, mm.nrchipix, mm.ncopix))
+                                        
         mm.included = False
 
     if mm.included:
@@ -919,11 +920,10 @@ def _coadd_one_round2((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
         inc = ''
         if not mm.included:
             inc = '(not incl)'
-        plt.suptitle('%s %i %s' % (WISE.scan_id[ri], WISE.frame_num[ri], inc))
+        plt.suptitle('%s %s' % (scanid, inc))
         plt.savefig(plotfn)
 
-    print Time() - t00
-        
+    print 'Coadd round 2, image', (ri+1), 'of', N, ':\n', Time() - t00
     return mm
         
 
@@ -966,22 +966,25 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         while len(rimgs):
             ri += 1
             rr = rimgs.pop(0)
-            print
-            print 'Coadd round 2, image', (ri+1), 'of', len(WISE)
             if ps:
                 plotfn = ps.getnext()
             else:
                 plotfn = None
+            scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
+                                                   band)
             masks.append(_coadd_one_round2(
-                (rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)))
+                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)))
     else:
         args = []
-        for rr in rimgs:
+        N = len(WISE)
+        for ri,rr in enumerate(rimgs):
             if ps:
                 plotfn = ps.getnext()
             else:
                 plotfn = None
-            args.append((rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
+            scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
+                                                   band)
+            args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
         masks = mp.map(_coadd_one_round2, args)
 
     coimg    = np.zeros((H,W))

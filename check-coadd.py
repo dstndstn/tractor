@@ -123,7 +123,8 @@ bands = [1,2,3,4]
 
 plt.figure(figsize=(12,4))
 #plt.subplots_adjust(bottom=0.01, top=0.85, left=0., right=1., wspace=0.05)
-plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=0.9, wspace=0.05)
+#plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=0.9, wspace=0.05)
+plt.subplots_adjust(bottom=0.1, top=0.85, left=0.05, right=0.9, wspace=0.15)
 
 for coadd_id in T.coadd_id[:5]:
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
@@ -225,7 +226,8 @@ for coadd_id in T.coadd_id[:5]:
         M = fitsio.read(fn5)
         unc = fitsio.read(ufn1)
 
-        print 'sig1:', 1./np.sqrt(np.median(L))
+        sig1w = 1./np.sqrt(np.median(L))
+        print 'sig1w:', sig1w
         print 'sig1:', 1./np.sqrt(np.median(M))
         print 'unc:', np.median(unc)
 
@@ -285,6 +287,29 @@ for coadd_id in T.coadd_id[:5]:
         # n,b,p = plt.hist(chib.ravel(), bins=100, log=True, range=(-20,20), histtype='step', color='b')
         # plt.ylim(0.1, max(n)*2)
         # ps.savefig()
+
+
+        fn6 = os.path.join(dir2, 'unwise-%s-w%i-ppstd-w.fits' % (coadd_id, band))
+        print fn6
+        if not os.path.exists(fn6):
+            print '-> does not exist'
+            continue
+        ppstd = fitsio.read(fn6)
+
+
+        plt.clf()
+        plt.subplot(1,3,1)
+        loghist(np.clip(np.log10(I.ravel()), -2,4), np.clip(np.log10(unc.ravel()), -2, 4), doclf=False, docolorbar=False)
+        plt.title('WISE int vs unc')
+        plt.subplot(1,3,2)
+        loghist(np.clip(np.log10(J.ravel()), -1, 5), np.clip(np.log10(L.ravel()), -1, 5), doclf=False, docolorbar=False)
+        plt.title('unWISE img vs 1/sqrt(iv)')
+        plt.subplot(1,3,3)
+        loghist(np.clip(np.log10(J.ravel()), -1, 5), np.clip(np.log10(ppstd.ravel()), -1, 5), doclf=False, docolorbar=False)
+        plt.title('unWISE img vs ppstd')
+        ps.savefig()
+
+
 
         fn1 = os.path.join(dir1, '%s_ab41-w%i-cov-3.fits.gz' % (coadd_id, band))
         print fn1
