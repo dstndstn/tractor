@@ -297,10 +297,14 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     WISE = WISE[WISE.band == band]
     WISE.cut(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec) < margin)
     print 'Found', len(WISE), 'WISE frames in range and in band W%i' % band
-    # reorder by dist from center
-    I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
-    WISE.cut(I)
 
+    # reorder by dist from center
+    #I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
+    #WISE.cut(I)
+    # DEBUG
+    I = np.argsort(-WISE.dec)
+    WISE.cut(I)
+    
     if ps:
         plt.clf()
         plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
@@ -480,6 +484,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         print 'wi', wi
         print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
+        print 'Coadd extent:', WISE.coextent[wi,:]
 
     if ps:
         print 'Number intersecting:', ninter
@@ -883,6 +888,28 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         del badpixmask
 
         if ps:
+            nnn = np.zeros((H,W), np.int16)
+            nnn[coslc] = rr.rmask
+            nnn = nnn[2000:, 200:800]
+            if len(np.unique(nnn)) > 1:
+                plt.clf()
+                plt.subplot(3,1,1)
+                plt.imshow(nnn, interpolation='nearest', origin='lower',
+                           cmap='gray')
+                plt.subplot(3,1,2)
+                plt.plot(nnn[-1,:], 'r-', lw=3, alpha=0.5)
+                plt.plot(nnn[-2,:], 'b-')
+                plt.ylim(-0.1, 1.1)
+                plt.title('L1b scan %s frame %i' % (WISE.scan_id[ri], WISE.frame_num[ri]))
+                plt.subplot(3,1,3)
+                plt.plot(con[-1,200:800], 'r-', lw=3, alpha=0.5)
+                plt.plot(con[-2,200:800], 'b-')
+                yl,yh = plt.ylim()
+                #plt.ylim(-0.1, yh+0.5)
+                plt.ylim(yl-0.5, yh+0.5)
+                ps.savefig()
+
+        if ps and False:
             R,C = 3,3
             plt.clf()
             plt.subplot(R,C,1)
