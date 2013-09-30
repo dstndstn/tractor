@@ -275,7 +275,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
 
-    copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2.)))
+    copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
     print 'Copoly:', copoly
 
     if ps:
@@ -313,7 +313,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
             wcs = Sip(intfn)
             h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
             intersects = polygons_intersect(copoly, poly)
             inter[wi] = intersects
             cc = 'b'
@@ -348,7 +348,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
             wcs = Sip(intfn)
             h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
             intersects = polygons_intersect(copoly, poly)
             inter[wi] = intersects
             cc = 'b'
@@ -393,7 +393,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
             wcs = Sip(intfn)
             h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
             intersects = polygons_intersect(copoly, poly)
             inter[wi] = intersects
             cc = 'b'
@@ -436,7 +436,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         wcs = Sip(intfn)
 
         h,w = wcs.get_height(), wcs.get_width()
-        poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+        poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
         intersects = polygons_intersect(copoly, poly)
 
         if ps:
