@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
-import matplotlib
-matplotlib.use('Agg')
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
 import os
@@ -37,23 +38,22 @@ from tractor.sdss import *
 from wisecat import wise_catalog_radecbox
 
 import logging
-
-
 '''
 ln -s /clusterfs/riemann/raid007/ebosswork/eboss/photoObj photoObjs-new
 ln -s /clusterfs/riemann/raid006/bosswork/boss/resolve/2013-07-29 photoResolve-new
 '''
 
-tiledir = 'wise-coadds'
-
 photoobjdir = 'photoObjs-new'
 resolvedir = 'photoResolve-new'
 
-outdir = 'sequels-phot'
-tempoutdir = 'sequels-phot-temp'
-pobjoutdir = 'sequels-pobj'
+if __name__ == '__main__':
+    tiledir = 'wise-coadds'
 
-Time.add_measurement(MemMeas)
+    outdir = 'sequels-phot'
+    tempoutdir = 'sequels-phot-temp'
+    pobjoutdir = 'sequels-pobj'
+
+    Time.add_measurement(MemMeas)
 
 def get_photoobj_filename(rr, run, camcol, field):
     fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
@@ -97,6 +97,7 @@ def estimate_sky(img, iv):
 
 
 def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
+    log = logging.getLogger('sequels.read_photoobjs')
 
     if cols is None:
         cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
@@ -120,7 +121,7 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
     #print 'Found', len(I), 'fields possibly in range'
 
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
-    print 'Found', len(RCF), 'fields possibly in range'
+    log.debug('Found', len(RCF), 'fields possibly in range')
 
     ddec = margin
     dra  = margin / min([np.cos(np.deg2rad(x)) for x in [d0,d1]])
@@ -128,23 +129,23 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
     TT = []
     sdss = DR9()
     for run,camcol,field,r,d in RCF:
-        print 'RCF', run, camcol, field
+        log.debug('RCF', run, camcol, field)
         rr = sdss.get_rerun(run, field=field)
         if rr in [None, '157']:
-            print 'Rerun 157'
+            log.debug('Rerun 157')
             continue
 
         fn = get_photoobj_filename(rr, run, camcol, field)
 
         T = fits_table(fn, columns=cols)
         if T is None:
-            print 'read 0 from', fn
+            log.debug('read 0 from', fn)
             continue
-        print 'read', len(T), 'from', fn
+        log.debug('read', len(T), 'from', fn)
         T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
               (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
               ((T.resolve_status & 256) > 0))
-        print 'cut to', len(T), 'in RA,Dec box and PRIMARY.'
+        log.debug('cut to', len(T), 'in RA,Dec box and PRIMARY.')
         if len(T) == 0:
             continue
         TT.append(T)

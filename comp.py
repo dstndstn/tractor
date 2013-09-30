@@ -690,11 +690,22 @@ def sky_foolin(img):
     plt.hist(img.ravel(), 100, range=(-0.5,2), log=True)
     plt.xlim(-0.5,2)
     ps.savefig()
+
+
+
+
                 
 
 ps = PlotSequence('comp')
 
 coadd_id = '1384p454'
+
+
+
+
+
+
+sys.exit(0)
 
 #wack(coadd_id, ps)
 #sys.exit(0)

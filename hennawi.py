@@ -65,65 +65,81 @@ def h3():
     from sequels import read_photoobjs
     from wisecat import wise_catalog_radecbox
 
-    d0 = 19.
-    d1 = 20.
-    r0 = 120.
-    r1 = 121.
+    lvl = logging.INFO
+    #lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    print 'Reading photoObjs...'
-    fn = 'h3-sdss-r%.0f-d%.0f.fits' % (r0, d0)
-    if not os.path.exists(fn):
-        cols = ['objid', 'ra', 'dec', 'objc_type',
-                #'modelflux', 'modelflux_ivar',
-                #'psfflux', 'psfflux_ivar',
-                'modelmag', 'modelmagerr',
-                'psfmag', 'psfmagerr',
-                'resolve_status', 'nchild', 'flags', 'objc_flags',
-                'run','camcol','field','id']
-        SDSS = read_photoobjs(r0, r1, d0, d1, 0.01, cols=cols)
-        print 'Got', len(SDSS)
-        SDSS.writeto(fn)
-    else:
-        print 'Reading', fn
-        SDSS = fits_table(fn)
-        print 'Got', len(SDSS)
+    dirname = 'h3'
 
-    wfn = 'h3-wise-r%.0f-d%.0f.fits' % (r0,d0)
-    print 'looking for', wfn
-    if os.path.exists(wfn):
-        WISE = fits_table(wfn)
-        print 'Read', len(WISE), 'WISE sources nearby'
-    else:
-        cols = (['ra','dec','cntr'] + ['w%impro'%band for band in [1,2,3,4]] +
-                ['w%isigmpro'%band for band in [1,2,3,4]] +
-                ['w%isnr'%band for band in [1,2,3,4]])
-        WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
-        WISE.writeto(wfn)
-        print 'Found', len(WISE), 'WISE sources nearby'
+    # d0 = 19.
+    # d1 = 20.
+    # r0 = 120.
+    # r1 = 121.
+    DD = np.arange(0, 10+1)
+    RR = np.arange(120, 240+1)
 
-    WISE.cut(WISE.w4snr >= 5)
-    print 'Cut to', len(WISE), 'on W4snr'
+    RRDD = []
+    for d0,d1 in zip(DD, DD[1:]):
+        for r0,r1 in zip(RR, RR[1:]):
+            RRDD.append((r0,r1,d0,d1))
 
-    I,J,d = match_radec(WISE.ra, WISE.dec, SDSS.ra, SDSS.dec, 4./3600., nearest=True)
-    print 'Matched', len(I)
-
-    WISE.match_dist = np.zeros(len(WISE))
-    WISE.match_dist[I] = d
-    WISE.matched = np.zeros(len(WISE), bool)
-    WISE.matched[I] = True
-    for c in SDSS.get_columns():
-        print 'SDSS column', c
-        S = SDSS.get(c)
-        sh = (len(WISE),)
-        if len(S.shape) > 1:
-            sh = sh + S.shape[1:]
-        X = np.zeros(sh, S.dtype)
-        X[I] = S[J]
-        WISE.set('sdss_' + c, X)
-
-    fn = 'h3-merged-r%.0f-d%.0f.fits' % (r0,d0)
-    WISE.writeto(fn)
-    print 'Wrote', fn
+    for r0,r1,d0,d1 in RRDD:
+        print 'Reading photoObjs...'
+        fn = os.path.join(dirname, 'h3-sdss-r%.0f-d%.0f.fits' % (r0, d0))
+        if not os.path.exists(fn):
+            cols = ['objid', 'ra', 'dec', 'objc_type',
+                    #'modelflux', 'modelflux_ivar',
+                    #'psfflux', 'psfflux_ivar',
+                    'modelmag', 'modelmagerr',
+                    'psfmag', 'psfmagerr',
+                    'resolve_status', 'nchild', 'flags', 'objc_flags',
+                    'run','camcol','field','id']
+            SDSS = read_photoobjs(r0, r1, d0, d1, 0.01, cols=cols)
+            print 'Got', len(SDSS)
+            SDSS.writeto(fn)
+        else:
+            print 'Reading', fn
+            SDSS = fits_table(fn)
+            print 'Got', len(SDSS)
+    
+        wfn = os.path.join(dirname, 'h3-wise-r%.0f-d%.0f.fits' % (r0,d0))
+        print 'looking for', wfn
+        if os.path.exists(wfn):
+            WISE = fits_table(wfn)
+            print 'Read', len(WISE), 'WISE sources nearby'
+        else:
+            cols = (['ra','dec','cntr'] + ['w%impro'%band for band in [1,2,3,4]] +
+                    ['w%isigmpro'%band for band in [1,2,3,4]] +
+                    ['w%isnr'%band for band in [1,2,3,4]])
+            WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
+            WISE.writeto(wfn)
+            print 'Found', len(WISE), 'WISE sources nearby'
+    
+        WISE.cut(WISE.w4snr >= 5)
+        print 'Cut to', len(WISE), 'on W4snr'
+        WISE.cut((WISE.w1snr >= 5) * (WISE.w2snr >= 5))
+        print 'Cut to', len(WISE), 'on W[12]snr'
+        
+        I,J,d = match_radec(WISE.ra, WISE.dec, SDSS.ra, SDSS.dec, 1./3600., nearest=True)
+        print 'Matched', len(I)
+    
+        WISE.match_dist = np.zeros(len(WISE))
+        WISE.match_dist[I] = d
+        WISE.matched = np.zeros(len(WISE), bool)
+        WISE.matched[I] = True
+        for c in SDSS.get_columns():
+            print 'SDSS column', c
+            S = SDSS.get(c)
+            sh = (len(WISE),)
+            if len(S.shape) > 1:
+                sh = sh + S.shape[1:]
+            X = np.zeros(sh, S.dtype)
+            X[I] = S[J]
+            WISE.set('sdss_' + c, X)
+    
+        fn = os.path.join(dirname, 'h3-merged-r%.0f-d%.0f.fits' % (r0,d0))
+        WISE.writeto(fn)
+        print 'Wrote', fn
 
 
 
@@ -360,8 +376,8 @@ text2fits.py -S 1 agn_coords.txt agn.fits
 '''
 if __name__ == '__main__':
     #h2()
-    #h3()
-    #sys.exit(0)
+    h3()
+    sys.exit(0)
 
 
     # T = fits_table('agn.fits')
