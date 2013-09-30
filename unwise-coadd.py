@@ -71,8 +71,8 @@ def walk_wcs_boundary(wcs, step=1024):
     W = wcs.get_width()
     H = wcs.get_height()
     xx,yy = [],[]
-    xwalk = np.linspace(1, W, int(np.ceil(W/float(step))))
-    ywalk = np.linspace(1, H, int(np.ceil(H/float(step))))
+    xwalk = np.linspace(1, W, int(np.ceil(W/float(step)))+1)
+    ywalk = np.linspace(1, H, int(np.ceil(H/float(step)))+1)
     #
     x = 1
     y = ywalk[:-1]
@@ -82,17 +82,17 @@ def walk_wcs_boundary(wcs, step=1024):
     y = H
     x = xwalk[:-1]
     xx.append(x)
-    yy.append(np.zeros_like(xwalk) + y)
+    yy.append(np.zeros_like(x) + y)
     #
     x = W
-    y = reversed(ywalk[:-1]
+    y = list(reversed(ywalk))[:-1]
     xx.append(np.zeros_like(y) + x)
     yy.append(y)
-    #
+    # (note, NOT closed)
     y = 1
-    x = reversed(xwalk)
+    x = list(reversed(xwalk))[:-1]
     xx.append(x)
-    yy.append(np.zeros_like(xwalk) + y)
+    yy.append(np.zeros_like(x) + y)
     rr,dd = wcs.pixelxy2radec(np.hstack(xx), np.hstack(yy))
     return rr,dd
 
@@ -263,7 +263,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
 
-    copoly = np.array(zip(walk_wcs_boundary(cowcs, step=W/2.)))
+    copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2.)))
     print 'Copoly:', copoly
     print 'vs old', np.array([cowcs.pixelxy2radec(x,y)
                               for x,y in [(1,1), (W,1), (W,H), (1,H)]])
@@ -337,7 +337,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         wcs = Sip(intfn)
 
         h,w = wcs.get_height(), wcs.get_width()
-        poly = np.array(zip(walk_wcs_boundary(wcs, step=w/2.)))
+        poly = np.array(zip(*walk_wcs_boundary(wcs, step=w/2.)))
         if not polygons_intersect(copoly, poly):
             print 'Image does not intersect target'
             res.append(None)
@@ -345,6 +345,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         res.append((intfn, wcs, w, h, poly))
 
         cpoly = clip_polygon(poly, copoly)
+        print 'Clipped polygon:', cpoly
 
         xy = np.array([cowcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
         xy -= 1
