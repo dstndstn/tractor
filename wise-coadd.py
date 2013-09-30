@@ -67,14 +67,48 @@ def get_coadd_tile_wcs(ra, dec):
                 -pixscale, 0., 0., pixscale, W, H)
     return cowcs
 
-def get_coadd_tile_radec_bounds(wcs):
-    xmid,ymid = (W+1)/2., (H+1)/2.
-    rr,dd = wcs.pixelxy2radec(np.array([1,xmid,W]*3), np.array([1,ymid,H]).repeat(3))
+def walk_wcs_boundary(wcs, step=1024):
+    W = wcs.get_width()
+    H = wcs.get_height()
+    xx,yy = [],[]
+    xwalk = np.linspace(1, W, int(np.ceil(W/float(step))))
+    ywalk = np.linspace(1, H, int(np.ceil(H/float(step))))
+    #
+    x = 1
+    y = ywalk[:-1]
+    xx.append(np.zeros_like(y) + 1)
+    yy.append(y)
+    #
+    y = H
+    x = xwalk[:-1]
+    xx.append(x)
+    yy.append(np.zeros_like(xwalk) + y)
+    #
+    x = W
+    y = reversed(ywalk[:-1]
+    xx.append(np.zeros_like(y) + x)
+    yy.append(y)
+    #
+    y = 1
+    x = reversed(xwalk)
+    xx.append(x)
+    yy.append(np.zeros_like(xwalk) + y)
+    rr,dd = wcs.pixelxy2radec(np.hstack(xx), np.hstack(yy))
+    return rr,dd
+
+def get_wcs_radec_bounds(wcs):
+    # xmid,ymid = (W+1)/2., (H+1)/2.
+    # rr,dd = wcs.pixelxy2radec(np.array([1,xmid,W]*3),
+    #                           np.array([1,ymid,H]).repeat(3))
+    rr,dd = walk_wcs_boundary(wcs)
     r0,r1 = rr.min(), rr.max()
     d0,d1 = dd.min(), dd.max()
     return r0,r1,d0,d1
 
 def get_atlas_tiles(r0,r1,d0,d1):
+    '''
+    Select Atlas Image tiles touching a desired RA,Dec box.
+    '''
     # Read Atlas Image table
     T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
     T.row = np.arange(len(T))
@@ -97,7 +131,7 @@ def get_atlas_tiles(r0,r1,d0,d1):
     keep = []
     for i in range(len(T)):
         wcs = get_coadd_tile_wcs(T.ra[i], T.dec[i])
-        R0,R1,D0,D1 = get_coadd_tile_radec_bounds(wcs)
+        R0,R1,D0,D1 = get_wcs_radec_bounds(wcs)
         if R1 < r0 or R0 > r1 or D1 < d0 or D0 > d1:
             print 'Coadd tile', T.coadd_id[i], 'is outside RA,Dec box'
             continue
@@ -108,15 +142,17 @@ def get_atlas_tiles(r0,r1,d0,d1):
     return T
 
 
-def get_wise_frames(r0,r1,d0,d1):
+def get_wise_frames(r0,r1,d0,d1, margin=2.):
+    '''
+    Returns WISE frames touching the given RA,Dec box plus margin.
+    '''
     # Read WISE frame metadata
     WISE = fits_table(os.path.join(wisedir, 'WISE-index-L1b.fits'))
     print 'Read', len(WISE), 'WISE L1b frames'
     WISE.row = np.arange(len(WISE))
 
+    # Coarse cut on RA,Dec box.
     cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
-
-    margin = 2.
     WISE.cut((WISE.ra + margin/cosdec > r0) *
              (WISE.ra - margin/cosdec < r1) *
              (WISE.dec + margin > d0) *
@@ -132,9 +168,10 @@ def get_wise_frames(r0,r1,d0,d1):
     
     for nbands in [2,3,4]:
         fn = os.path.join(wisedir, 'WISE-l1b-metadata-%iband.fits' % nbands)
-        T = fits_table(fn, columns=['ra', 'dec', 'scan_id', 'frame_num', 'qual_frame',
-                                    'moon_masked', 'dtanneal'])
+        T = fits_table(fn, columns=['ra', 'dec', 'scan_id', 'frame_num',
+                                    'qual_frame', 'moon_masked', 'dtanneal'])
         print 'Read', len(T), 'from', fn
+        # Cut with extra large margins
         T.cut((T.ra  + 2.*margin/cosdec > r0) *
               (T.ra  - 2.*margin/cosdec < r1) *
               (T.dec + 2.*margin > d0) *
@@ -143,10 +180,10 @@ def get_wise_frames(r0,r1,d0,d1):
         if len(T) == 0:
             continue
 
-        #I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 1./3600.)
         I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 60./3600.)
         print 'Matched', len(I)
-        K = np.flatnonzero((WISE.scan_id[I] == T.scan_id[J]) * (WISE.frame_num[I] == T.frame_num[J]))
+        K = np.flatnonzero((WISE.scan_id  [I] == T.scan_id  [J]) *
+                           (WISE.frame_num[I] == T.frame_num[J]))
         I = I[K]
         J = J[K]
         print 'Cut to', len(I), 'matching scan/frame'
@@ -161,15 +198,13 @@ def get_wise_frames(r0,r1,d0,d1):
             print 'Moon:', np.unique(moon)
             print 'moon[%i]:' % (band-1), np.unique([m[band-1] for m in moon])
             WISE.moon_masked[I[K]] = np.array([m[band-1] == '1' for m in moon]).astype(WISE.moon_masked.dtype)
-            WISE.dtanneal   [I[K]] = T.dtanneal   [J[K]].astype(WISE.dtanneal.dtype)
+            WISE.dtanneal   [I[K]] = T.dtanneal[J[K]].astype(WISE.dtanneal.dtype)
             print 'moon_masked:', np.unique(WISE.moon_masked)
-
             WISE.matched[I[K]] = True
 
     print np.sum(WISE.matched), 'of', len(WISE), 'matched to metadata tables'
     assert(np.sum(WISE.matched) == len(WISE))
     WISE.delete_column('matched')
-
     return WISE
 
 def check_md5s(WISE):
@@ -211,8 +246,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     version = {}
     rtn,out,err = run_command('svn info')
     assert(rtn == 0)
-    #print 'out:', out
-    #print 'err:', err
     lines = out.split('\n')
     lines = [l for l in lines if len(l)]
     for l in lines:
@@ -230,7 +263,10 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
 
-    copoly = np.array([cowcs.pixelxy2radec(x,y) for x,y in [(1,1), (W,1), (W,H), (1,H)]])
+    copoly = np.array(zip(walk_wcs_boundary(cowcs, step=W/2.)))
+    print 'Copoly:', copoly
+    print 'vs old', np.array([cowcs.pixelxy2radec(x,y)
+                              for x,y in [(1,1), (W,1), (W,H), (1,H)]])
     
     margin = (1.1 # safety margin
               * (np.sqrt(2.) / 2.) # diagonal
@@ -252,7 +288,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     # plt.plot(WISE.ra, WISE.dec, 'o', mec='r', mfc='none')
 
     # cut on RA,Dec box too
-    r0,r1,d0,d1 = get_coadd_tile_radec_bounds(cowcs)
+    r0,r1,d0,d1 = get_wcs_radec_bounds(cowcs)
     dd = np.sqrt(2.) * (1016./2.) * pixscale * 1.01 # safety
     dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
@@ -286,8 +322,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
                 print 'Need:', intfn
         return
 
-    #WISE.cut(np.arange(20))
-
     # *inclusive* coordinates of the bounding-box in the coadd of this image
     # (x0,x1,y0,y1)
     WISE.coextent = np.zeros((len(WISE), 4), int)
@@ -303,7 +337,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         wcs = Sip(intfn)
 
         h,w = wcs.get_height(), wcs.get_width()
-        poly = np.array([wcs.pixelxy2radec(x,y) for x,y in [(1,1), (w,1), (w,h), (1,h)]])
+        poly = np.array(zip(walk_wcs_boundary(wcs, step=w/2.)))
         if not polygons_intersect(copoly, poly):
             print 'Image does not intersect target'
             res.append(None)
@@ -369,8 +403,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     print 'Up to coadd_wise:'
     print t1 - t0
 
-    # table vs no-table: ~ zero difference except in cores of v.bright stars
-
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube,
          )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube)
@@ -378,11 +410,9 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         print 'coadd_wise failed:'
         import traceback
         traceback.print_exc()
-
         print 'time up to failure:'
         t2 = Time()
         print t2 - t1
-
         return
     t2 = Time()
     print 'coadd_wise:'
@@ -394,9 +424,11 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
 
-    hdr.add_record(dict(name='UNW_VER', value=version['Revision'], comment='unWISE code SVN revision'))
+    hdr.add_record(dict(name='UNW_VER', value=version['Revision'],
+                        comment='unWISE code SVN revision'))
     hdr.add_record(dict(name='UNW_URL', value=version['URL'], comment='SVN URL'))
-    hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(), comment='unWISE run time'))
+    hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(),
+                        comment='unWISE run time'))
 
     ofn = prefix + '-img.fits'
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
@@ -434,13 +466,12 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
             os.mkdir(maskdir)
 
         ofn = WISE.intfn[i].replace('-int', '')
-        ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-' + os.path.basename(ofn))
-
+        ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-'
+                           + os.path.basename(ofn))
         (nil,wcs,w,h,poly) = r
         fullmask = np.zeros((h,w), mm.omask.dtype)
         x0,x1,y0,y1 = WISE.imextent[i,:]
         fullmask[y0:y1+1, x0:x1+1] = mm.omask
-
         fitsio.write(ofn, fullmask, clobber=True)
 
         cmd = 'gzip -f %s' % ofn

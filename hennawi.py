@@ -65,6 +65,19 @@ def h3():
     from sequels import read_photoobjs
     from wisecat import wise_catalog_radecbox
 
+    '''
+    collect results via:
+    cp h3/h3-merged-r120-d0.fits h3.fits
+    for ((r=121;r<240; r++)); do echo $r; tabmerge h3/h3-merged-r${r}-d0.fits+1 h3.fits+1; done
+    for ((d=1;d<10;d++)); do for ((r=121;r<240; r++)); do echo $d $r; tabmerge h3/h3-merged-r${r}-d${d}.fits+1 h3.fits+1; done; done
+    liststruc h3.fits
+    '''
+    
+    d0 = 19.
+    d1 = 20.
+    r0 = 120.
+    r1 = 121.
+
     lvl = logging.INFO
     #lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
