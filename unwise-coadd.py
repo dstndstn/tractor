@@ -67,32 +67,42 @@ def get_coadd_tile_wcs(ra, dec):
                 -pixscale, 0., 0., pixscale, W, H)
     return cowcs
 
-def walk_wcs_boundary(wcs, step=1024):
+def walk_wcs_boundary(wcs, step=1024, margin=0):
     '''
     Walk the image boundary counter-clockwise.
     '''
     W = wcs.get_width()
     H = wcs.get_height()
+    xlo = 1
+    xhi = W
+    ylo = 1
+    yhi = H
+    if margin:
+        xlo -= margin
+        ylo -= margin
+        xhi += margin
+        yhi += margin
+    
     xx,yy = [],[]
-    xwalk = np.linspace(1, W, int(np.ceil(W/float(step)))+1)
-    ywalk = np.linspace(1, H, int(np.ceil(H/float(step)))+1)
+    xwalk = np.linspace(xlo, xhi, int(np.ceil((1+xhi-xlo)/float(step)))+1)
+    ywalk = np.linspace(ylo, yhi, int(np.ceil((1+yhi-ylo)/float(step)))+1)
     # bottom edge
     x = xwalk[:-1]
-    y = 1
+    y = ylo
     xx.append(x)
     yy.append(np.zeros_like(x) + y)
     # right edge
-    x = W
+    x = xhi
     y = ywalk[:-1]
     xx.append(np.zeros_like(y) + x)
     yy.append(y)
     # top edge
     x = list(reversed(xwalk))[:-1]
-    y = H
+    y = yhi
     xx.append(x)
     yy.append(np.zeros_like(x) + y)
     # left edge
-    x = 1
+    x = xlo
     y = list(reversed(ywalk))[:-1]
     # (note, NOT closed)
     xx.append(np.zeros_like(y) + x)
@@ -102,9 +112,6 @@ def walk_wcs_boundary(wcs, step=1024):
     return rr,dd
 
 def get_wcs_radec_bounds(wcs):
-    # xmid,ymid = (W+1)/2., (H+1)/2.
-    # rr,dd = wcs.pixelxy2radec(np.array([1,xmid,W]*3),
-    #                           np.array([1,ymid,H]).repeat(3))
     rr,dd = walk_wcs_boundary(wcs)
     r0,r1 = rr.min(), rr.max()
     d0,d1 = dd.min(), dd.max()
@@ -269,7 +276,15 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
 
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2.)))
-    #print 'Copoly:', copoly
+    print 'Copoly:', copoly
+
+    if ps:
+        plt.clf()
+        plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
+        plt.plot(np.append(copoly[:,0],copoly[0,0]),
+                 np.append(copoly[:,1],copoly[0,1]), 'r-')
+        plt.title('Before cuts')
+        ps.savefig()
     
     margin = (1.1 # safety margin
               * (np.sqrt(2.) / 2.) # diagonal
@@ -286,17 +301,67 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
     WISE.cut(I)
 
-    # plt.clf()
-    # plt.plot([r0,r1,r1,r0,r0],[d0,d0,d1,d1,d0], 'k-')
-    # plt.plot(WISE.ra, WISE.dec, 'o', mec='r', mfc='none')
+    if ps:
+        plt.clf()
+        plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
+        plt.plot(np.append(copoly[:,0],copoly[0,0]),
+                 np.append(copoly[:,1],copoly[0,1]), 'r-')
+        plt.title('Circle cut')
+
+        inter = np.zeros(len(WISE), bool)
+        for wi,wise in enumerate(WISE):
+            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+            wcs = Sip(intfn)
+            h,w = wcs.get_height(), wcs.get_width()
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            intersects = polygons_intersect(copoly, poly)
+            inter[wi] = intersects
+            cc = 'b'
+            alpha = 0.1
+            if not intersects:
+                cc = 'r'
+                alpha = 0.5
+            plt.plot(np.append(poly[:,0],poly[0,0]),
+                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
+        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
+        print sum(inter), 'intersecting fields'
+        ps.savefig()
 
     # cut on RA,Dec box too
-    r0,r1,d0,d1 = get_wcs_radec_bounds(cowcs)
+    r0,d0 = copoly.min(axis=0)
+    r1,d1 = copoly.max(axis=0)
     dd = np.sqrt(2.) * (1016./2.) * pixscale * 1.01 # safety
     dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
     print 'cut to', len(WISE), 'in RA,Dec box'
+
+    if ps:
+        plt.clf()
+        plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
+        plt.plot(np.append(copoly[:,0],copoly[0,0]),
+                 np.append(copoly[:,1],copoly[0,1]), 'r-')
+        plt.title('Box cut')
+
+        inter = np.zeros(len(WISE), bool)
+        for wi,wise in enumerate(WISE):
+            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+            wcs = Sip(intfn)
+            h,w = wcs.get_height(), wcs.get_width()
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            intersects = polygons_intersect(copoly, poly)
+            inter[wi] = intersects
+            cc = 'b'
+            alpha = 0.1
+            if not intersects:
+                cc = 'r'
+                alpha = 0.5
+            plt.plot(np.append(poly[:,0],poly[0,0]),
+                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
+        print sum(inter), 'intersecting fields'
+        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
+
+        ps.savefig()
 
     print 'Qual_frame scores:', np.unique(WISE.qual_frame)
     WISE.cut(WISE.qual_frame > 0)
@@ -316,8 +381,33 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         WISE.cut(ok)
         print 'Cut out bad scans in W4:', len(WISE), 'remaining'
 
-    # plt.plot(WISE.ra, WISE.dec, 'o', mec='b', mfc='none')
-    # ps.savefig()
+    if ps:
+        plt.clf()
+        plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
+        plt.plot(np.append(copoly[:,0],copoly[0,0]),
+                 np.append(copoly[:,1],copoly[0,1]), 'r-')
+        plt.title('Quality cuts')
+
+        inter = np.zeros(len(WISE), bool)
+        for wi,wise in enumerate(WISE):
+            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+            wcs = Sip(intfn)
+            h,w = wcs.get_height(), wcs.get_width()
+            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+            intersects = polygons_intersect(copoly, poly)
+            inter[wi] = intersects
+            cc = 'b'
+            alpha = 0.1
+            if not intersects:
+                cc = 'r'
+                alpha = 0.5
+            plt.plot(np.append(poly[:,0],poly[0,0]),
+                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
+        print sum(inter), 'intersecting fields'
+        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
+
+        ps.savefig()
+
     if wishlist:
         for wise in WISE:
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
@@ -331,6 +421,12 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     # *inclusive* coordinates of the bounding-box in the image overlapping coadd
     WISE.imextent = np.zeros((len(WISE), 4), int)
 
+    if ps:
+        plt.clf()
+        plt.plot(np.append(copoly[:,0],copoly[0,0]),
+                 np.append(copoly[:,1],copoly[0,1]), 'r-')
+        ninter = 0
+
     res = []
     for wi,wise in enumerate(WISE):
         print
@@ -340,9 +436,22 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         wcs = Sip(intfn)
 
         h,w = wcs.get_height(), wcs.get_width()
-        poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w)))
+        poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=3)))
+        intersects = polygons_intersect(copoly, poly)
+
+        if ps:
+            cc = 'b'
+            alpha = 0.1
+            if not intersects:
+                cc = 'r'
+                alpha = 0.5
+            else:
+                ninter += 1
+            plt.plot(np.append(poly[:,0],poly[0,0]),
+                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
+
         #print 'poly:', poly
-        if not polygons_intersect(copoly, poly):
+        if not intersects:
             print 'Image does not intersect target'
             res.append(None)
             continue
@@ -371,6 +480,14 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         print 'wi', wi
         print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
+
+    if ps:
+        print 'Number intersecting:', ninter
+        ps.savefig()
+
+        m = 0.05
+        plt.axis([r0-m, r1+m, d0-m, d1+m])
+        ps.savefig()
 
     # plt.clf()
     # jj = np.array([0,1,2,3,0])
