@@ -925,6 +925,44 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
 
     print 'Coadd round 2, image', (ri+1), 'of', N, ':\n', Time() - t00
     return mm
+
+class coaddacc():
+    def __init__(self, H,W, do_cube=False, nims=0):
+        self.coimg    = np.zeros((H,W))
+        self.coimgsq  = np.zeros((H,W))
+        self.cow      = np.zeros((H,W))
+        self.con      = np.zeros((H,W), np.int16)
+        self.coimgb   = np.zeros((H,W))
+        self.coimgsqb = np.zeros((H,W))
+        self.cowb     = np.zeros((H,W))
+        self.conb     = np.zeros((H,W), np.int16)
+
+        if do_cube:
+            self.cube = np.zeros((nims, H, W), np.float32)
+            self.cubei = 0
+        else:
+            self.cube = None
+            
+    def acc(self, mm, del=False):
+        if mm is None or not mm.included:
+            return
+        self.coimgsq [mm.coslc] += mm.coimgsq
+        self.coimg   [mm.coslc] += mm.coimg
+        self.cow     [mm.coslc] += mm.cow
+        self.con     [mm.coslc] += mm.con
+        self.coimgsqb[mm.coslc] += mm.rmask2 * mm.coimgsq
+        self.coimgb  [mm.coslc] += mm.rmask2 * mm.coimg
+        self.cowb    [mm.coslc] += mm.rmask2 * mm.cow
+        self.conb    [mm.coslc] += mm.rmask2 * mm.con
+        if self.cube is not None:
+            self.cube[(self.cubei,) + mm.coslc] = (mm.coimgb).astype(self.cube.dtype)
+            self.cubei += 1
+        if del:
+            del mm.coimgsq
+            del mm.coimg
+            del mm.cow
+            del mm.con
+            del mm.rmask2
         
 
 def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
@@ -951,16 +989,11 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
 
     assert(len(rimgs) == len(WISE))
 
-    cube = None
-    if do_cube:
-        cube = np.zeros((len(rimgs), H, W), np.float32)
-        cubei = 0
-
-
     # If we're not multiprocessing, do the loop manually to reduce
     # memory usage (we don't need to keep all "rr" inputs and "masks"
     # outputs in memory at once).
     if not mp.pool:
+        coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         masks = []
         ri = -1
         while len(rimgs):
@@ -972,8 +1005,10 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
                 plotfn = None
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
-            masks.append(_coadd_one_round2(
-                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)))
+            mm = _coadd_one_round2(
+                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
+            coadd.acc(mm, del=True)
+            masks.append(mm)
     else:
         args = []
         N = len(WISE)
@@ -986,31 +1021,19 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
                                                    band)
             args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
         masks = mp.map(_coadd_one_round2, args)
+        coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
+        for mm in masks:
+            coadd.acc(mm, del=True)
 
-    coimg    = np.zeros((H,W))
-    coimgsq  = np.zeros((H,W))
-    cow      = np.zeros((H,W))
-    con      = np.zeros((H,W), np.int16)
-    coimgb   = np.zeros((H,W))
-    coimgsqb = np.zeros((H,W))
-    cowb     = np.zeros((H,W))
-    conb     = np.zeros((H,W), np.int16)
-
-    for mm in masks:
-        if mm is None or not mm.included:
-            continue
-        coimgsq [mm.coslc] += mm.coimgsq
-        coimg   [mm.coslc] += mm.coimg
-        cow     [mm.coslc] += mm.cow
-        con     [mm.coslc] += mm.con
-        coimgsqb[mm.coslc] += mm.rmask2 * mm.coimgsq
-        coimgb  [mm.coslc] += mm.rmask2 * mm.coimg
-        cowb    [mm.coslc] += mm.rmask2 * mm.cow
-        conb    [mm.coslc] += mm.rmask2 * mm.con
-        
-        if do_cube:
-            cube[(cubei,) + coslc] = (mm.coimgb).astype(cube.dtype)
-            cubei += 1
+    coimg    = coadd.coimg
+    coimgsq  = coadd.coimgsq
+    cow      = coadd.cow
+    con      = coadd.con
+    coimgb   = coadd.coimgb
+    coimgsqb = coadd.coimgsqb
+    cowb     = coadd.cowb
+    conb     = coadd.conb
+    cube     = coadd.cube
 
     coimg /= np.maximum(cow, tinyw)
     coinvvar = cow

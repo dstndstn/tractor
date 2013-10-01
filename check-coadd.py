@@ -10,7 +10,7 @@ import fitsio
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
-from astrometry.util.util import Tan
+from astrometry.util.util import Tan, Sip
 
 ps = PlotSequence('co')
 
@@ -106,8 +106,53 @@ def plot_exposures():
 #     #W = fits_table('sequels-frames.fits')
 # sys.exit(0)
 
+def pixel_area():
+    wcs = Sip('wise-frames/2a/03242a/215/03242a215-w1-int-1b.fits')
+    W,H = wcs.get_width(), wcs.get_height()
+    print 'W,H', W,H
+    #xx,yy = np.meshgrid(np.arange(0, W, 10), np.arange(0, H, 10))
+    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+    rr,dd = wcs.pixelxy2radec(xx, yy)
+    rr -= wcs.crval[0]
+    rr *= np.cos(np.deg2rad(dd))
+    dd -= wcs.crval[1]
+    
+    # (zero,zero) r,d
+    zzr = rr[:-1, :-1]
+    zzd = dd[:-1, :-1]
+    ozr = rr[:-1, 1:]
+    ozd = dd[:-1, 1:]
+    zor = rr[1:, :-1]
+    zod = dd[1:, :-1]
+    oor = rr[1:, 1:]
+    ood = dd[1:, 1:]
+    
+    a = np.hypot(zor - zzr, zod - zzd)
+    A = np.hypot(oor - ozr, ood - ozd)
+    b = np.hypot(ozr - zzr, ozd - zzd)
+    B = np.hypot(oor - zor, ood - zod)
+    C = np.hypot(ozr - zor, ozd - zod)
+    c = C
+    
+    s = (a + b + c)/2.
+    S = (A + B + C)/2.
+    
+    area = np.sqrt(s * (s-a) * (s-b) * (s-c)) + np.sqrt(S * (S-A) * (S-B) * (S-C))
+    
+    plt.clf()
+    plt.imshow(area, interpolation='nearest', origin='lower')
+    plt.title('Pixel area')
+    plt.colorbar()
+    ps.savefig()
+
+# plt.clf()
+# plt.plot(rr.ravel(), dd.ravel(), 'r.')
+# plt.axis('scaled')
+# ps.savefig()
 
 
+
+#sys.exit(0)
 
 
 T = fits_table('sequels-atlas.fits')
@@ -126,38 +171,41 @@ plt.figure(figsize=(12,4))
 #plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=0.9, wspace=0.05)
 plt.subplots_adjust(bottom=0.1, top=0.85, left=0.05, right=0.9, wspace=0.15)
 
+def read(dirnm, fn):
+    pth = os.path.join(dirnm, fn)
+    print pth
+    return fitsio.read(pth)
+
 for coadd_id in T.coadd_id[:5]:
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+
     for band in bands:
-        fn1 = os.path.join(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
-        print fn1
-        if not os.path.exists(fn1):
-            print '-> does not exist'
+
+        dir2 = 'e'
+
+        try:
+            wiseim = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
+            imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
+            im     = read(dir2, 'unwise-%s-w%i-img.fits' % (coadd_id, band))
+
+            unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+            ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
+            iv     = read(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
+
+            # cmd = ('wget -r -N -nH -np -nv --cut-dirs=5 -P %s "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/%s"' %
+            #        (wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41', os.path.basename(ufn1)))
+            # print 'Cmd:', cmd
+            # os.system(cmd)
+
+        except:
             continue
 
-        # if band in [1,2]:
-        dir2 = 'wise-coadds'
-        # else:
-        #     dir2 = '.' #'wise-coadds-w3'
-        #dir2 = 'c'
-
+        I = wiseim
+        J = imw
+        K = im
         
-        fn2 = os.path.join(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
-        print fn2
-        if not os.path.exists(fn2):
-            print '-> does not exist'
-            continue
-
-        fn3 = os.path.join(dir2, 'unwise-%s-w%i-img.fits' % (coadd_id, band))
-        #fn3 = os.path.join(dir2, 'unwise-%s-w%i-img-c.fits' % (coadd_id, band))
-        print fn3
-        if not os.path.exists(fn3):
-            print '-> does not exist'
-            continue
-
-        I = fitsio.read(fn1)
-        J = fitsio.read(fn2)
-        K = fitsio.read(fn3)
+        L = ivw
+        M = iv
 
         binI = reduce(np.add, [I[i/5::5, i%5::5] for i in range(25)]) / 25.
         binJ = reduce(np.add, [J[i/4::4, i%4::4] for i in range(16)]) / 16.
@@ -165,12 +213,15 @@ for coadd_id in T.coadd_id[:5]:
         # binI = I[::5,::5]
         # binJ = J[::4,::4]
         # binK = K[::4,::4]
-
+        
         ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
         plo,phi = [np.percentile(binI, p) for p in [25,99]]
         imai = ima.copy()
         imai.update(vmin=plo, vmax=phi)
+        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
 
         plt.clf()
         plt.subplot(1,3,1)
@@ -178,58 +229,45 @@ for coadd_id in T.coadd_id[:5]:
         plt.colorbar()
         plt.xticks([]); plt.yticks([])
         plt.title('WISE')
-        #plt.title('WISE team %s' % os.path.basename(fn1))
-        #ps.savefig()
-        plo,phi = [np.percentile(binJ, p) for p in [25,99]]
-        imaj = ima.copy()
-        imaj.update(vmin=plo, vmax=phi)
-        #plt.clf()
         plt.subplot(1,3,2)
         plt.imshow(binJ, **imaj)
         plt.xticks([]); plt.yticks([])
         plt.title('unWISE weighted')
-        #plt.title('My %s' % os.path.basename(fn2))
-        #ps.savefig()
-        #plt.clf()
         plt.subplot(1,3,3)
         plt.imshow(binK, **imaj)
         plt.xticks([]); plt.yticks([])
-        #plt.title('My %s' % os.path.basename(fn3))
         plt.title('unWISE')
         plt.colorbar()
         plt.suptitle('%s W%i' % (coadd_id, band))
         ps.savefig()
 
 
-        fn4 = os.path.join(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
-        print fn4
-        if not os.path.exists(fn4):
-            print '-> does not exist'
-            continue
-
-        fn5 = os.path.join(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
-        print fn5
-        if not os.path.exists(fn5):
-            print '-> does not exist'
-            continue
-
-        ufn1 = os.path.join(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
-        print ufn1
-        if not os.path.exists(ufn1):
-            print '-> does not exist'
-            cmd = ('wget -r -N -nH -np -nv --cut-dirs=5 -P %s "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/%s"' %
-                   (wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41', os.path.basename(ufn1)))
-            print 'Cmd:', cmd
-            os.system(cmd)
-
-        L = fitsio.read(fn4)
-        M = fitsio.read(fn5)
-        unc = fitsio.read(ufn1)
-
-        sig1w = 1./np.sqrt(np.median(L))
+        sig1w = 1./np.sqrt(np.median(ivw))
+        sig1 = 1./np.sqrt(np.median(iv))
+        unc1 = np.median(unc)
         print 'sig1w:', sig1w
-        print 'sig1:', 1./np.sqrt(np.median(M))
-        print 'unc:', np.median(unc)
+        print 'sig1:', sig1
+        print 'unc:', unc1
+
+        med = np.median(wiseim)
+
+        plt.clf()
+        lo,hi = -5,10
+        ha = dict(bins=100, histtype='step', range=(lo,hi), log=True)
+        plt.hist((im / sig1).ravel(), color='g', **ha)
+        plt.hist((imw / sig1w).ravel(), color='b', **ha)
+        plt.hist(((wiseim - med) / unc1).ravel(), color='r', **ha)
+        yl,yh = plt.ylim()
+        plt.ylim(0.1, yh)
+        plt.xlim(lo,hi)
+        ps.savefig()
+
+        # plt.clf()
+        # loghist(im.ravel(), imw.ravel(), range=[[-10*sig1,10*sig1]]*2, bins=200)
+        # plt.xlabel('im')
+        # plt.ylabel('imw')
+        # ps.savefig()
+
 
         L = 1./np.sqrt(L)
         M = 1./np.sqrt(M)
@@ -239,6 +277,7 @@ for coadd_id in T.coadd_id[:5]:
         binL = L[::4,::4]
         binM = M[::4,::4]
         binunc = unc[::5,::5]
+
 
         plt.clf()
 
