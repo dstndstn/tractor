@@ -61,39 +61,41 @@ def get_photoobj_filename(rr, run, camcol, field):
     return fn
 
 def estimate_sky(img, iv):
-    sim = np.sort(img.ravel())
-    sigest = sim[int(0.5 * len(sim))] - sim[int(0.16 * len(sim))]
-    #print 'sig est', sigest
-    nsig = 0.1 * sigest
 
-    I = np.linspace(0.3*len(sim), 0.55*len(sim), 15).astype(int)
-    sumn = []
-    for ii in I:
-        X = sim[ii]
-        sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
-    sumn = np.array(sumn)
+    # sim = np.sort(img.ravel())
+    # sigest = sim[int(0.5 * len(sim))] - sim[int(0.16 * len(sim))]
+    # #print 'sig est', sigest
+    # nsig = 0.1 * sigest
 
-    iscale = 0.5 * len(sim)
-    i0 = I[len(I)/2]
-    xi = (I - i0) / iscale
+    # I = np.linspace(0.3*len(sim), 0.55*len(sim), 15).astype(int)
+    # sumn = []
+    # for ii in I:
+    #     X = sim[ii]
+    #     sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
+    # sumn = np.array(sumn)
+
+    binedges = np.linspace(sim[int(0.3*len(sim))], sim[int(0.55*len(sim))], 25)
+    counts = np.histogram(sim, bins=binedges)
+    bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.
+
+    bscale = 0.5 * (bincenters[-1] - bincenters[0])
+    b0 = bincenters[len(bincenters)/2]
+    xi = (bincenters - b0) / bscale
 
     A = np.zeros((len(I), 3))
     A[:,0] = 1.
     A[:,1] = xi
     A[:,2] = xi**2
-
-    b = sumn
+    b = np.log10(np.maximum(1, counts))
 
     res = np.linalg.lstsq(A, b)
     X = res[0]
-    #print 'X', X
-    Imax = -X[1] / (2. * X[2])
-    Imax = (Imax * iscale) + i0
-    i = int(np.round(Imax))
-    #print 'Imax', Imax
-    mu = sim[i]
-    #print 'mu', mu
-    return mu
+
+    maxbin = -X[1] / (2. * X[2])
+    maxbin = (maxbin * bscale) + b0
+    #i = int(np.round(Imax))
+    #mu = sim[i]
+    return maxbin
 
 
 def read_photoobjs(r0, r1, d0, d1, margin, cols=None):

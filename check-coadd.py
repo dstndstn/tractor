@@ -250,14 +250,19 @@ for coadd_id in T.coadd_id[:5]:
         print 'unc:', unc1
 
         med = np.median(wiseim)
+        sigw = 1./np.sqrt(ivw)
 
         plt.clf()
-        lo,hi = -5,10
+        lo,hi = -8,10
         ha = dict(bins=100, histtype='step', range=(lo,hi), log=True)
-        plt.hist((im / sig1).ravel(), color='g', **ha)
-        plt.hist((imw / sig1w).ravel(), color='b', **ha)
+        plt.hist((im / sig1).ravel(), color='g', lw=2, **ha)
+        n,b,p = plt.hist((imw / sig1w).ravel(), color='b', **ha)
+        plt.hist((imw / sigw).ravel(), color='c', **ha)
         plt.hist(((wiseim - med) / unc1).ravel(), color='r', **ha)
+        plt.hist(((wiseim - med) / unc).ravel(), color='m', **ha)
         yl,yh = plt.ylim()
+        xx = np.linspace(lo, hi, 300)
+        plt.plot(xx, max(n) * np.exp(-(xx**2)/(2.)), 'r--')
         plt.ylim(0.1, yh)
         plt.xlim(lo,hi)
         ps.savefig()

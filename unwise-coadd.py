@@ -274,9 +274,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         return
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
-
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
-    print 'Copoly:', copoly
 
     if ps:
         plt.clf()
@@ -290,7 +288,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
               * (np.sqrt(2.) / 2.) # diagonal
               * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
               * pixscale) # in deg
-    print 'Margin:', margin
+    #print 'Margin:', margin
     t0 = Time()
 
     # cut
@@ -302,8 +300,8 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     #I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
     #WISE.cut(I)
     # DEBUG
-    I = np.argsort(-WISE.dec)
-    WISE.cut(I)
+    #I = np.argsort(-WISE.dec)
+    #WISE.cut(I)
     
     if ps:
         plt.clf()
@@ -311,24 +309,23 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         plt.plot(np.append(copoly[:,0],copoly[0,0]),
                  np.append(copoly[:,1],copoly[0,1]), 'r-')
         plt.title('Circle cut')
-
-        inter = np.zeros(len(WISE), bool)
-        for wi,wise in enumerate(WISE):
-            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-            wcs = Sip(intfn)
-            h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
-            intersects = polygons_intersect(copoly, poly)
-            inter[wi] = intersects
-            cc = 'b'
-            alpha = 0.1
-            if not intersects:
-                cc = 'r'
-                alpha = 0.5
-            plt.plot(np.append(poly[:,0],poly[0,0]),
-                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
-        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
-        print sum(inter), 'intersecting fields'
+        # inter = np.zeros(len(WISE), bool)
+        # for wi,wise in enumerate(WISE):
+        #     intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
+        #     wcs = Sip(intfn)
+        #     h,w = wcs.get_height(), wcs.get_width()
+        #     poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
+        #     intersects = polygons_intersect(copoly, poly)
+        #     inter[wi] = intersects
+        #     cc = 'b'
+        #     alpha = 0.1
+        #     if not intersects:
+        #         cc = 'r'
+        #         alpha = 0.5
+        #     plt.plot(np.append(poly[:,0],poly[0,0]),
+        #              np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
+        # plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
+        # print sum(inter), 'intersecting fields'
         ps.savefig()
 
     # cut on RA,Dec box too
@@ -346,25 +343,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         plt.plot(np.append(copoly[:,0],copoly[0,0]),
                  np.append(copoly[:,1],copoly[0,1]), 'r-')
         plt.title('Box cut')
-
-        inter = np.zeros(len(WISE), bool)
-        for wi,wise in enumerate(WISE):
-            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-            wcs = Sip(intfn)
-            h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
-            intersects = polygons_intersect(copoly, poly)
-            inter[wi] = intersects
-            cc = 'b'
-            alpha = 0.1
-            if not intersects:
-                cc = 'r'
-                alpha = 0.5
-            plt.plot(np.append(poly[:,0],poly[0,0]),
-                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
-        print sum(inter), 'intersecting fields'
-        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
-
         ps.savefig()
 
     print 'Qual_frame scores:', np.unique(WISE.qual_frame)
@@ -391,25 +369,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
         plt.plot(np.append(copoly[:,0],copoly[0,0]),
                  np.append(copoly[:,1],copoly[0,1]), 'r-')
         plt.title('Quality cuts')
-
-        inter = np.zeros(len(WISE), bool)
-        for wi,wise in enumerate(WISE):
-            intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-            wcs = Sip(intfn)
-            h,w = wcs.get_height(), wcs.get_width()
-            poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
-            intersects = polygons_intersect(copoly, poly)
-            inter[wi] = intersects
-            cc = 'b'
-            alpha = 0.1
-            if not intersects:
-                cc = 'r'
-                alpha = 0.5
-            plt.plot(np.append(poly[:,0],poly[0,0]),
-                     np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
-        print sum(inter), 'intersecting fields'
-        plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
-
         ps.savefig()
 
     if wishlist:
@@ -744,6 +703,15 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
         print 'Wrote', fn
 
 
+def _bounce_one_round2(*A):
+    try:
+        return _coadd_one_round2(*A)
+    except:
+        import traceback
+        print '_coadd_one_round2 failed:'
+        traceback.print_exc()
+        raise
+
 def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
     if rr is None:
         return None
@@ -826,10 +794,7 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         # mm.cowb     = rr.rmask2 * rr.w
         # mm.conb     = rr.rmask2
 
-    dsky /= rr.zpscale
-    print 'scaled:', dsky
-    mm.dsky = dsky
-
+    mm.dsky = dsky / rr.zpscale
         
     if plotfn:
 
@@ -843,11 +808,17 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         plt.clf()
         plt.subplot(R,C,1)
         I = rr.rimg - dsky
-        plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
-        plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
-                   vmin=plo, vmax=phi)
-        plt.xticks([]); plt.yticks([])
-        plt.title('rimg')
+        print 'rimg shape', rr.rimg.shape
+        print 'rmask shape', rr.rmask.shape
+        print 'rmask elements set:', np.sum(rr.rmask)
+        print 'len I[rmask]:', len(I[rr.rmask])
+        if len(I[rr.rmask]):
+            plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
+            plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.xticks([]); plt.yticks([])
+            plt.title('rimg')
+
         plt.subplot(R,C,2)
         I = subco
         plo,phi = [np.percentile(I, p) for p in [25,99]]
@@ -943,7 +914,7 @@ class coaddacc():
         else:
             self.cube = None
             
-    def acc(self, mm, del=False):
+    def acc(self, mm, delmm=False):
         if mm is None or not mm.included:
             return
         self.coimgsq [mm.coslc] += mm.coimgsq
@@ -957,7 +928,7 @@ class coaddacc():
         if self.cube is not None:
             self.cube[(self.cubei,) + mm.coslc] = (mm.coimgb).astype(self.cube.dtype)
             self.cubei += 1
-        if del:
+        if delmm:
             del mm.coimgsq
             del mm.coimg
             del mm.cow
@@ -1007,7 +978,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
                                                    band)
             mm = _coadd_one_round2(
                 (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
-            coadd.acc(mm, del=True)
+            coadd.acc(mm, delmm=True)
             masks.append(mm)
     else:
         args = []
@@ -1020,10 +991,11 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
             args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
-        masks = mp.map(_coadd_one_round2, args)
+        #masks = mp.map(_coadd_one_round2, args)
+        masks = mp.map(_bounce_one_round2, args)
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         for mm in masks:
-            coadd.acc(mm, del=True)
+            coadd.acc(mm, delmm=True)
 
     coimg    = coadd.coimg
     coimgsq  = coadd.coimgsq
@@ -1116,6 +1088,49 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     return coimg, coinvvar, coppstd, con, coimgb, coinvvarb, coppstdb, conb, masks, cube
 
 
+def estimate_sky(img, lo, hi, omit=None, return_fit=False):
+    binedges = np.linspace(lo, hi, 25)
+    counts,e = np.histogram(img.ravel(), bins=binedges)
+    bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.
+
+    if omit is not None:
+        # Omit the bin containing value 'omit'
+        okI = np.logical_not((binedges[:-1] < omit) * (omit < binedges[1:]))
+        bincenters = bincenters[okI]
+        counts = counts[okI]
+
+    # log-deviation of a bin from the mean of its neighbors --
+    b = np.log10(np.maximum(1, counts))
+
+    de = (b[1:-1] - (b[:-2] + b[2:])/2)
+    maxde = np.max(de)
+    print 'Max deviation:', maxde
+    okI = np.append(np.append([True], (de < 0.1)), [True])
+    bincenters = bincenters[okI]
+    b = b[okI]
+
+    xscale = 0.5 * (hi - lo)
+    x0 = (hi + lo) / 2.
+    x = (bincenters - x0) / xscale
+
+
+
+
+    A = np.zeros((len(x), 3))
+    A[:,0] = 1.
+    A[:,1] = x
+    A[:,2] = x**2
+    res = np.linalg.lstsq(A, b)
+    X = res[0]
+    mx = -X[1] / (2. * X[2])
+    mx = (mx * xscale) + x0
+
+    if return_fit:
+        bfit = X[0] + X[1] * x + X[2] * x**2
+        return (x * xscale + x0, b, bfit, mx)
+
+    return mx
+
 def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     t00 = Time()
     print
@@ -1140,6 +1155,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
     wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
     with fitsio.FITS(intfn) as F:
+
+        fullimg = F[0].read()
+
         img = F[0][y0:y1+1, x0:x1+1]
         ihdr = F[0].read_header()
     mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
@@ -1147,6 +1165,7 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     #print 'Img:', img.shape, img.dtype
     #print 'Unc:', unc.shape, unc.dtype
     #print 'Mask:', mask.shape, mask.dtype
+
     zp = ihdr['MAGZP']
     zpscale = 1. / NanoMaggies.zeropointToScale(zp)
     print 'Zeropoint:', zp, '-> scale', zpscale
@@ -1157,9 +1176,14 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
         # sub-pixels.  Spread out the flux.
         zpscale *= 0.25
 
-    goodmask = ((mask & sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9,
-                                                10,11,12,13,14,15,16,17,18,
-                                                21,26,27,28]])) == 0)
+    # 3-band cryo phase:
+    #### 19 pixel is "hard-saturated"; see note [4] above
+    #### 23 for W3 only: static-split droop residual present
+
+    maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
+                                       10,11,12,13,14,15,16,17,18,
+                                       21,26,27,28]])
+    goodmask = ((mask & maskbits) == 0)
     goodmask[unc == 0] = False
     goodmask[np.logical_not(np.isfinite(img))] = False
     goodmask[np.logical_not(np.isfinite(unc))] = False
@@ -1172,6 +1196,38 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
     # our return value (quack):
     rr = Duck()
+
+    fullmask = fitsio.FITS(maskfn)[0].read()
+    fullunc  = fitsio.FITS(uncfn) [0].read()
+    fullok = ((fullmask & maskbits) == 0)
+    fullok[fullunc == 0] = False
+    fullok[np.logical_not(np.isfinite(fullimg))] = False
+    fullok[np.logical_not(np.isfinite(fullunc))] = False
+    med = median_f(fullimg[fullok])
+    #print 'median:', med
+    nmed = np.sum(fullimg[fullok] == med)
+    print 'number of pixels == median: %i' % nmed
+
+    from collections import Counter
+    print 'counting pixel values...'
+    #c = Counter(fullimg.flat)
+    H,W = fullimg.shape
+    c = Counter(fullimg[H/2 - 10:H/2 + 11, :].flat)
+    for val,n in c.most_common(10):
+        print 'pix', val, ':', n, 'occurrences'
+
+    # add a bit of noise to smooth out "dynacal" artifacts
+    fim = fullimg[fullok]
+    fim += np.random.normal(scale=0.1*sig1, size=fim.shape) 
+    if ps:
+        vals,counts,fitcounts,sky = estimate_sky(fim, med-2.*sig1, med+2.*sig1, return_fit=True)
+        # omit=med, 
+        rr.hist = np.histogram(fullimg[fullok], range=(med-2.*sig1, med+2.*sig1), bins=100)
+        rr.skyest = sky
+        rr.skyfit = (vals, counts, fitcounts)
+    else:
+        sky = estimate_sky(fim, med-2.*sig1, med+2.*sig1)
+
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
     print 'Pixels to patch:', rr.npatched
@@ -1187,10 +1243,10 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     assert(np.all(np.isfinite(img)))
 
     # Estimate sky level via clipped medians
-    med = median_f(img)
-    ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
-    sky = median_f(img.flat[ok])
-    print 'Estimated sky level:', sky
+    #med = median_f(img)
+    #ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
+    #sky = median_f(img.flat[ok])
+    #print 'Estimated sky level:', sky
 
     # Convert to nanomaggies
     img -= sky
@@ -1262,7 +1318,47 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         cow    [slc] += rr.w *  rr.rmask
 
     print 'Min cow (round 1):', cow.min()
-        
+
+    if ps:
+        plt.clf()
+        for rr in rimgs:
+            if rr is None:
+                continue
+            n,e = rr.hist
+            e = (e[:-1] + e[1:])/2.
+            plt.plot(e - rr.skyest, n, 'b-', alpha=0.1)
+            plt.axvline(e[0] - rr.skyest, color='r', alpha=0.1)
+            plt.axvline(e[-1] - rr.skyest, color='r', alpha=0.1)
+        plt.xlabel('image - sky')
+        ps.savefig()
+        plt.yscale('log')
+        ps.savefig()
+
+        plt.clf()
+        for rr in rimgs:
+            if rr is None:
+                continue
+            n,e = rr.hist
+            ee = e.repeat(2)[1:-1]
+            nn = n.repeat(2)
+            plt.plot(ee - rr.skyest, nn, 'b-', alpha=0.1)
+        plt.xlabel('image - sky')
+        ps.savefig()
+        plt.yscale('log')
+        ps.savefig()
+
+        plt.clf()
+        for rr in rimgs:
+            if rr is None:
+                continue
+            vals, counts, fitcounts = rr.skyfit
+            plt.plot(vals - rr.skyest, counts, 'b-', alpha=0.1)
+            plt.plot(vals - rr.skyest, fitcounts, 'r-', alpha=0.1)
+        plt.xlabel('image - sky')
+        ps.savefig()
+
+
+
     coimg /= np.maximum(cow, tinyw)
     # Per-pixel std
     coppstd = np.sqrt(np.maximum(0, coimgsq / np.maximum(cow, tinyw) - coimg**2))
