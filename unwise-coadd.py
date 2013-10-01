@@ -994,6 +994,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
             args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
         #masks = mp.map(_coadd_one_round2, args)
         masks = mp.map(_bounce_one_round2, args)
+        del args
         print 'Accumulating second-round coadds...'
         t0 = Time()
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
@@ -1451,6 +1452,13 @@ def main():
         r0,r1 =  9.0, 12.5
         d0,d1 = 40.5, 42.5
         
+    elif dataset == 'npole':
+        # North ecliptic pole
+        # (270.0, 66.56)
+        r0,r1 = 265.0, 275.0
+        d0,d1 =  64.6,  68.6
+    else:
+        assert(False)
 
     fn = '%s-atlas.fits' % dataset
     if os.path.exists(fn):
