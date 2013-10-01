@@ -74,6 +74,7 @@ def estimate_sky(img, iv):
     #     sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
     # sumn = np.array(sumn)
 
+    #binedges = np.linspace(sim[int(0.3*len(sim))], sim[int(0.55*len(sim))], 25)
     binedges = np.linspace(sim[int(0.3*len(sim))], sim[int(0.55*len(sim))], 25)
     counts = np.histogram(sim, bins=binedges)
     bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.

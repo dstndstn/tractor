@@ -734,8 +734,14 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
 
     # like in the WISE Atlas Images, estimate sky difference via
     # median difference in the overlapping area.
+
     dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
     print 'Sky difference:', dsky
+
+    # DEBUG
+    dsky = 0.
+    print 'WARNING: setting dsky = 0'
+
 
     rchi = ((rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) /
             np.maximum(subpp, 1e-6))
@@ -781,7 +787,6 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
             return None
 
         rimg = (rr.rimg - dsky)
-        #rr.rimg[rr.rmask] -= dsky
 
         mm.coslc = coslc
         mm.coimgsq = rr.rmask * rr.w * rimg**2
@@ -789,10 +794,6 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         mm.cow     = rr.rmask * rr.w
         mm.con     = rr.rmask
         mm.rmask2  = rr.rmask2
-        # mm.coimgsqb = rr.rmask2 * rr.w * rimg**2
-        # mm.coimgb   = rr.rmask2 * rr.w * rimg
-        # mm.cowb     = rr.rmask2 * rr.w
-        # mm.conb     = rr.rmask2
 
     mm.dsky = dsky / rr.zpscale
         
@@ -808,10 +809,10 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         plt.clf()
         plt.subplot(R,C,1)
         I = rr.rimg - dsky
-        print 'rimg shape', rr.rimg.shape
-        print 'rmask shape', rr.rmask.shape
-        print 'rmask elements set:', np.sum(rr.rmask)
-        print 'len I[rmask]:', len(I[rr.rmask])
+        # print 'rimg shape', rr.rimg.shape
+        # print 'rmask shape', rr.rmask.shape
+        # print 'rmask elements set:', np.sum(rr.rmask)
+        # print 'len I[rmask]:', len(I[rr.rmask])
         if len(I[rr.rmask]):
             plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
@@ -993,9 +994,12 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
             args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
         #masks = mp.map(_coadd_one_round2, args)
         masks = mp.map(_bounce_one_round2, args)
+        print 'Accumulating second-round coadds...'
+        t0 = Time()
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         for mm in masks:
             coadd.acc(mm, delmm=True)
+        print Time()-t0
 
     coimg    = coadd.coimg
     coimgsq  = coadd.coimgsq
@@ -1088,7 +1092,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     return coimg, coinvvar, coppstd, con, coimgb, coinvvarb, coppstdb, conb, masks, cube
 
 
-def estimate_sky(img, lo, hi, omit=None, return_fit=False):
+def estimate_sky(img, lo, hi, omit=None, maxdev=0., return_fit=False):
     binedges = np.linspace(lo, hi, 25)
     counts,e = np.histogram(img.ravel(), bins=binedges)
     bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.
@@ -1099,22 +1103,19 @@ def estimate_sky(img, lo, hi, omit=None, return_fit=False):
         bincenters = bincenters[okI]
         counts = counts[okI]
 
-    # log-deviation of a bin from the mean of its neighbors --
     b = np.log10(np.maximum(1, counts))
 
-    de = (b[1:-1] - (b[:-2] + b[2:])/2)
-    maxde = np.max(de)
-    print 'Max deviation:', maxde
-    okI = np.append(np.append([True], (de < 0.1)), [True])
-    bincenters = bincenters[okI]
-    b = b[okI]
+    if maxdev > 0:
+        # log-deviation of a bin from the mean of its neighbors --
+        de = (b[1:-1] - (b[:-2] + b[2:])/2)
+        print 'Max deviation:', np.max(de)
+        okI = np.append(np.append([True], (de < maxdev)), [True])
+        bincenters = bincenters[okI]
+        b = b[okI]
 
     xscale = 0.5 * (hi - lo)
     x0 = (hi + lo) / 2.
     x = (bincenters - x0) / xscale
-
-
-
 
     A = np.zeros((len(x), 3))
     A[:,0] = 1.
@@ -1204,29 +1205,31 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     fullok[np.logical_not(np.isfinite(fullimg))] = False
     fullok[np.logical_not(np.isfinite(fullunc))] = False
     med = median_f(fullimg[fullok])
-    #print 'median:', med
-    nmed = np.sum(fullimg[fullok] == med)
-    print 'number of pixels == median: %i' % nmed
 
-    from collections import Counter
-    print 'counting pixel values...'
-    #c = Counter(fullimg.flat)
-    H,W = fullimg.shape
-    c = Counter(fullimg[H/2 - 10:H/2 + 11, :].flat)
-    for val,n in c.most_common(10):
-        print 'pix', val, ':', n, 'occurrences'
+    #print 'median:', med
+    # nmed = np.sum(fullimg[fullok] == med)
+    # print 'number of pixels == median: %i' % nmed
+    # 
+    # from collections import Counter
+    # print 'counting pixel values...'
+    # #c = Counter(fullimg.flat)
+    # H,W = fullimg.shape
+    # c = Counter(fullimg[H/2 - 10:H/2 + 11, :].flat)
+    # for val,n in c.most_common(10):
+    #     print 'pix', val, ':', n, 'occurrences'
 
     # add a bit of noise to smooth out "dynacal" artifacts
     fim = fullimg[fullok]
-    fim += np.random.normal(scale=0.1*sig1, size=fim.shape) 
+    #fim += np.random.normal(scale=0.1*sig1, size=fim.shape)
+    fim += np.random.normal(scale=sig1, size=fim.shape) 
     if ps:
-        vals,counts,fitcounts,sky = estimate_sky(fim, med-2.*sig1, med+2.*sig1, return_fit=True)
+        vals,counts,fitcounts,sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1, return_fit=True)
         # omit=med, 
         rr.hist = np.histogram(fullimg[fullok], range=(med-2.*sig1, med+2.*sig1), bins=100)
         rr.skyest = sky
         rr.skyfit = (vals, counts, fitcounts)
     else:
-        sky = estimate_sky(fim, med-2.*sig1, med+2.*sig1)
+        sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1)
 
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
@@ -1306,6 +1309,8 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     rimgs = mp.map(_coadd_one_round1, args)
     del args
 
+    print 'Accumulating first-round coadds...'
+    t0 = Time()
     for rr in rimgs:
         if rr is None:
             continue
@@ -1316,23 +1321,24 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         coimgsq[slc] += rr.w * (rr.rimg**2)
         coimg  [slc] += rr.w *  rr.rimg
         cow    [slc] += rr.w *  rr.rmask
+    print Time()-t0
 
     print 'Min cow (round 1):', cow.min()
 
     if ps:
-        plt.clf()
-        for rr in rimgs:
-            if rr is None:
-                continue
-            n,e = rr.hist
-            e = (e[:-1] + e[1:])/2.
-            plt.plot(e - rr.skyest, n, 'b-', alpha=0.1)
-            plt.axvline(e[0] - rr.skyest, color='r', alpha=0.1)
-            plt.axvline(e[-1] - rr.skyest, color='r', alpha=0.1)
-        plt.xlabel('image - sky')
-        ps.savefig()
-        plt.yscale('log')
-        ps.savefig()
+        # plt.clf()
+        # for rr in rimgs:
+        #     if rr is None:
+        #         continue
+        #     n,e = rr.hist
+        #     e = (e[:-1] + e[1:])/2.
+        #     plt.plot(e - rr.skyest, n, 'b-', alpha=0.1)
+        #     plt.axvline(e[0] - rr.skyest, color='r', alpha=0.1)
+        #     plt.axvline(e[-1] - rr.skyest, color='r', alpha=0.1)
+        # plt.xlabel('image - sky')
+        # ps.savefig()
+        # plt.yscale('log')
+        # ps.savefig()
 
         plt.clf()
         for rr in rimgs:
@@ -1405,6 +1411,9 @@ def main():
     parser.add_option('--cube', dest='cube', action='store_true', default=False,
                       help='Save & write out image cube')
 
+    parser.add_option('--dataset', dest='dataset', default='sequels',
+                      help='Dataset (region of sky) to coadd')
+
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -1431,11 +1440,17 @@ def main():
     #     print 'Wrote', pfn
     #     sys.exit(0)
 
-    dataset = 'sequels'
+    dataset = opt.dataset
 
-    # SEQUELS
-    r0,r1 = 120.0, 210.0
-    d0,d1 =  45.0,  60.0
+    if dataset == 'sequels':
+        # SEQUELS
+        r0,r1 = 120.0, 210.0
+        d0,d1 =  45.0,  60.0
+
+    elif dataset == 'm31':
+        r0,r1 =  9.0, 12.5
+        d0,d1 = 40.5, 42.5
+        
 
     fn = '%s-atlas.fits' % dataset
     if os.path.exists(fn):
@@ -1528,7 +1543,11 @@ def main():
 
     if not opt.plots:
         ps = None
-            
+
+    if not os.path.exists(opt.outdir):
+        print 'Creating output directory', opt.outdir
+        os.makedirs(opt.outdir)
+
     if len(args):
         A = []
         for a in args:
