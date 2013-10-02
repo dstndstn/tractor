@@ -242,6 +242,36 @@ for coadd_id in T.coadd_id[:5]:
         ps.savefig()
 
 
+        # Emphasize the sky levels
+        
+        plo,phi = [np.percentile(binI, p) for p in [1,70]]
+        imai = ima.copy()
+        imai.update(vmin=plo, vmax=phi)
+        plo,phi = [np.percentile(binJ, p) for p in [1,70]]
+        imaj = ima.copy()
+        imaj.update(vmin=plo, vmax=phi)
+
+        plt.clf()
+        plt.subplot(1,3,1)
+        plt.imshow(binI, **imai)
+        plt.colorbar()
+        plt.xticks([]); plt.yticks([])
+        plt.title('WISE')
+        plt.subplot(1,3,2)
+        plt.imshow(binJ, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE weighted')
+        plt.subplot(1,3,3)
+        plt.imshow(binK, **imaj)
+        plt.xticks([]); plt.yticks([])
+        plt.title('unWISE')
+        plt.colorbar()
+        plt.suptitle('%s W%i' % (coadd_id, band))
+        ps.savefig()
+
+
+
+
         sig1w = 1./np.sqrt(np.median(ivw))
         sig1 = 1./np.sqrt(np.median(iv))
         unc1 = np.median(unc)
