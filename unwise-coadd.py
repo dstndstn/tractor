@@ -1093,6 +1093,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
 
 
 def estimate_sky(img, lo, hi, omit=None, maxdev=0., return_fit=False):
+    # Estimate sky level by: compute the histogram within [lo,hi], fit
+    # a parabola to the log-counts, return the argmax of that parabola.
     binedges = np.linspace(lo, hi, 25)
     counts,e = np.histogram(img.ravel(), bins=binedges)
     bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.
@@ -1155,14 +1157,19 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     coH = int(1 + coy1 - coy0)
 
     wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
+    # We read the full images for sky-estimation purposes -- really necessary?
+    slc = (slice(y0,y1+1), slice(x0,x1+1))
     with fitsio.FITS(intfn) as F:
-
         fullimg = F[0].read()
-
-        img = F[0][y0:y1+1, x0:x1+1]
+        #img = F[0][y0:y1+1, x0:x1+1]
         ihdr = F[0].read_header()
-    mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
-    unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
+    fullmask = fitsio.FITS(maskfn)[0].read()
+    fullunc  = fitsio.FITS(uncfn) [0].read()
+    img  = fullimg [slc]
+    mask = fullmask[slc]
+    unc  = fullunc [slc]
+    # mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
+    # unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
     #print 'Img:', img.shape, img.dtype
     #print 'Unc:', unc.shape, unc.dtype
     #print 'Mask:', mask.shape, mask.dtype
@@ -1191,66 +1198,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
     sig1 = median_f(unc[goodmask])
     print 'sig1:', sig1
-
     del mask
     del unc
 
-    # our return value (quack):
-    rr = Duck()
-
-    fullmask = fitsio.FITS(maskfn)[0].read()
-    fullunc  = fitsio.FITS(uncfn) [0].read()
-    fullok = ((fullmask & maskbits) == 0)
-    fullok[fullunc == 0] = False
-    fullok[np.logical_not(np.isfinite(fullimg))] = False
-    fullok[np.logical_not(np.isfinite(fullunc))] = False
-    med = median_f(fullimg[fullok])
-
-    #print 'median:', med
-    # nmed = np.sum(fullimg[fullok] == med)
-    # print 'number of pixels == median: %i' % nmed
-    # 
-    from collections import Counter
-    print 'counting pixel values...'
-    H,W = fullimg.shape
-
-    #c = Counter(fullimg.flat)
-    #c = Counter(fullimg[H/2 - 10:H/2 + 11, :].flat)
-
-    #for val,n in c.most_common(10):
-    #    print 'pix', val, ':', n, 'occurrences'
-    # mode,n = c.most_common(1)[0]
-    # if n > 100:
-    #     omit = mode
-    omit = None
-
-    # add a bit of noise to smooth out "dynacal" artifacts
-    fim = fullimg[fullok]
-    #fim += np.random.normal(scale=0.1*sig1, size=fim.shape)
-    fim += np.random.normal(scale=sig1, size=fim.shape) 
-
-    #c = Counter(fullimg[::5, ::5].flat)
-    # for val,n in c.most_common(100):
-    #     #if n < 100:
-    #     if n < 4:
-    #         break
-    #     print 'Removing value', val, ': occurs', n, 'times'
-    #     fim = fim[fim != val]
-
-    if ps:
-        vals,counts,fitcounts,sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1, omit=omit, return_fit=True)
-        #vals,counts,fitcounts,sky = estimate_sky(fim, med-2.5*sig1, med-0.5*sig1, omit=omit, return_fit=True)
-        rr.hist = np.histogram(fullimg[fullok], range=(med-2.*sig1, med+2.*sig1), bins=100)
-        rr.skyest = sky
-        rr.skyfit = (vals, counts, fitcounts)
-    else:
-        sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1, omit=omit)
-    del fim
-    del fullunc
-    del fullok
-    del fullimg
-    del fullmask
-    
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
     print 'Pixels to patch:', rr.npatched
@@ -1265,12 +1215,33 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
         return None
     assert(np.all(np.isfinite(img)))
 
-    # Estimate sky level via clipped medians
-    #med = median_f(img)
-    #ok = np.flatnonzero(np.abs(img - med) < 3.*sig1)
-    #sky = median_f(img.flat[ok])
-    #print 'Estimated sky level:', sky
+    # our return value (quack):
+    rr = Duck()
 
+    # Estimate sky level
+    fullok = ((fullmask & maskbits) == 0)
+    fullok[fullunc == 0] = False
+    fullok[np.logical_not(np.isfinite(fullimg))] = False
+    fullok[np.logical_not(np.isfinite(fullunc))] = False
+    # approx median
+    med = median_f(fullimg[::4,::4][fullok[::4,::4]])
+    # add some noise to smooth out "dynacal" artifacts
+    fim = fullimg[fullok]
+    fim += np.random.normal(scale=sig1, size=fim.shape) 
+    omit = None
+    if ps:
+        vals,counts,fitcounts,sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1, omit=omit, return_fit=True)
+        rr.hist = np.histogram(fullimg[fullok], range=(med-2.*sig1, med+2.*sig1), bins=100)
+        rr.skyest = sky
+        rr.skyfit = (vals, counts, fitcounts)
+    else:
+        sky = estimate_sky(fim, med-2.*sig1, med+1.*sig1, omit=omit)
+    del fim
+    del fullunc
+    del fullok
+    del fullimg
+    del fullmask
+    
     # Convert to nanomaggies
     img -= sky
     img *= zpscale
