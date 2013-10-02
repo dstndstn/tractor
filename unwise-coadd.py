@@ -1027,7 +1027,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     # approx median
     med = median_f(coimgb[::4,::4].astype(np.float32))
     sig1 = 1./np.sqrt(median_f(coinvvarb[::4,::4].astype(np.float32)))
-    sky = estimate_sky(coimgb.flat, med-2.*sig1, med+1.*sig1, omit=None)
+    sky = estimate_sky(coimgb, med-2.*sig1, med+1.*sig1, omit=None)
     print 'Estimated coadd sky:', sky
     coimg  -= sky
     coimgb -= sky
