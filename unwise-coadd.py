@@ -488,7 +488,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     print t1 - t0
 
     try:
-        (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube,
+        (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
          )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube)
     except:
         print 'coadd_wise failed:'
@@ -508,6 +508,8 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
 
+    hdr.add_record(dict(name='UNW_SKY', value=cosky,
+                        comment='Background value subtracted from coadd img'))
     hdr.add_record(dict(name='UNW_VER', value=version['Revision'],
                         comment='unWISE code SVN revision'))
     hdr.add_record(dict(name='UNW_URL', value=version['URL'], comment='SVN URL'))
@@ -1021,6 +1023,15 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     coppstd  = np.sqrt(np.maximum(0, coimgsq  / (np.maximum(cow,  tinyw)) - coimg **2))
     coppstdb = np.sqrt(np.maximum(0, coimgsqb / (np.maximum(cowb, tinyw)) - coimgb**2))
 
+    # re-estimate and subtract sky from the coadd.
+    # approx median
+    med = median_f(coimgb[::4,::4].astype(np.float32))
+    sig1 = 1./np.sqrt(median_f(coinvvarb[::4,::4].astype(np.float32)))
+    sky = estimate_sky(coimgb.flat, med-2.*sig1, med+1.*sig1, omit=None)
+    print 'Estimated coadd sky:', sky
+    coimg  -= sky
+    coimgb -= sky
+
     if ps:
         plt.clf()
         I = coimg1
@@ -1089,7 +1100,9 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         ps.savefig()
 
 
-    return coimg, coinvvar, coppstd, con, coimgb, coinvvarb, coppstdb, conb, masks, cube
+    return (coimg,  coinvvar,  coppstd,  con,
+            coimgb, coinvvarb, coppstdb, conb,
+            masks, cube, sky)
 
 
 def estimate_sky(img, lo, hi, omit=None, maxdev=0., return_fit=False):
@@ -1201,6 +1214,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     del mask
     del unc
 
+    # our return value (quack):
+    rr = Duck()
+
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
     print 'Pixels to patch:', rr.npatched
@@ -1215,16 +1231,13 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
         return None
     assert(np.all(np.isfinite(img)))
 
-    # our return value (quack):
-    rr = Duck()
-
     # Estimate sky level
     fullok = ((fullmask & maskbits) == 0)
     fullok[fullunc == 0] = False
     fullok[np.logical_not(np.isfinite(fullimg))] = False
     fullok[np.logical_not(np.isfinite(fullunc))] = False
     # approx median
-    med = median_f(fullimg[::4,::4][fullok[::4,::4]])
+    med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
     # add some noise to smooth out "dynacal" artifacts
     fim = fullimg[fullok]
     fim += np.random.normal(scale=sig1, size=fim.shape) 
