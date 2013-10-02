@@ -151,8 +151,107 @@ def pixel_area():
 # ps.savefig()
 
 
+def paper_plots(coadd_id, band):
+    figsize = (4,4)
+    plt.figure(figsize=figsize)
+    spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+    plt.subplots_adjust(**spa)
 
-#sys.exit(0)
+    dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+    dir2 = 'e'
+    
+    wiseim = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
+    imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
+    im     = read(dir2, 'unwise-%s-w%i-img.fits' % (coadd_id, band))
+
+    unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+    ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
+    iv     = read(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
+
+    wisen  = read(dir1, '%s_ab41-w%i-cov-3.fits.gz' % (coadd_id, band))
+    un     = read(dir2, 'unwise-%s-w%i-n.fits' % (coadd_id, band))
+    unw    = read(dir2, 'unwise-%s-w%i-n-w.fits' % (coadd_id, band))
+
+    binwise = reduce(np.add, [wiseim[i/5::5, i%5::5] for i in range(25)]) / 25.
+    binim   = reduce(np.add, [im    [i/4::4, i%4::4] for i in range(16)]) / 16.
+    binimw  = reduce(np.add, [imw   [i/4::4, i%4::4] for i in range(16)]) / 16.
+
+    ima = dict(interpolation='nearest', origin='lower', cmap='gray')
+
+    def myimshow(img):
+        plo,phi = [np.percentile(img, p) for p in [25,99]]
+        imai = ima.copy()
+        imai.update(vmin=plo, vmax=phi)
+        plt.clf()
+        plt.imshow(img, **imai)
+        plt.xticks([]); plt.yticks([])
+
+    for img in [binwise, binim, binimw]:
+        myimshow(img)
+        ps.savefig()
+        
+    hi,wi = wiseim.shape
+    hj,wj = imw.shape
+    flo,fhi = 0.45, 0.55
+    slcW = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
+    slcU = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+
+    subwise = wiseim[slcW]
+    subimw  = imw[slcU]
+    subim   = im [slcU]
+
+    for img in [subwise, subim, subimw]:
+        myimshow(img)
+        ps.savefig()
+
+    mx = max(wisen.max(), un.max(), unw.max())
+    na = ima.copy()
+    na.update(vmin=0, vmax=mx, cmap='jet')
+    plt.clf()
+    plt.imshow(wisen, **na)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(un, **na)
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
+    w,h = figsize
+    plt.figure(figsize=(w+1,h))
+    plt.subplots_adjust(**spa)
+
+    plt.clf()
+    plt.imshow(unw, **na)
+    plt.xticks([]); plt.yticks([])
+
+    parent = plt.gca()
+    pb = parent.get_position(original=True).frozen()
+    print 'pb', pb
+    # new parent box, padding, child box
+    frac = 0.15
+    pad  = 0.05
+    (pbnew, padbox, cbox) = pb.splitx(1.0-(frac+pad), 1.0-frac)
+    print 'pbnew', pbnew
+    print 'padbox', padbox
+    print 'cbox', cbox
+    cbox = cbox.anchored('C', cbox)
+    parent.set_position(pbnew)
+    parent.set_anchor((1.0, 0.5))
+    cax = parent.get_figure().add_axes(cbox)
+    aspect = 20
+    cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
+    parent.get_figure().sca(parent)
+
+    plt.colorbar(cax=cax)
+    ps.savefig()
+
+
+def read(dirnm, fn):
+    pth = os.path.join(dirnm, fn)
+    print pth
+    return fitsio.read(pth)
+
 
 
 T = fits_table('sequels-atlas.fits')
@@ -163,6 +262,9 @@ T = fits_table('sequels-atlas.fits')
 #     print 'Cmd:', cmd
 #     os.system(cmd)
 
+paper_plots(T.coadd_id[0], 1)
+sys.exit(0)
+
 #T.cut(np.array([0]))
 bands = [1,2,3,4]
 
@@ -171,10 +273,6 @@ plt.figure(figsize=(12,4))
 #plt.subplots_adjust(bottom=0.1, top=0.85, left=0., right=0.9, wspace=0.05)
 plt.subplots_adjust(bottom=0.1, top=0.85, left=0.05, right=0.9, wspace=0.15)
 
-def read(dirnm, fn):
-    pth = os.path.join(dirnm, fn)
-    print pth
-    return fitsio.read(pth)
 
 for coadd_id in T.coadd_id[:5]:
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
