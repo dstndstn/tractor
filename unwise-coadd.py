@@ -1531,6 +1531,7 @@ def main():
     parser.add_option('-w', dest='wishlist', action='store_true', default=False,
                       help='Print needed frames and exit?')
     parser.add_option('--plots', dest='plots', action='store_true', default=False)
+    parser.add_option('--pdf', dest='pdf', action='store_true', default=False)
 
     parser.add_option('--plot-prefix', dest='plotprefix', default=None)
 
@@ -1613,6 +1614,8 @@ def main():
     if opt.plotprefix is None:
         opt.plotprefix = dataset
     ps = PlotSequence(opt.plotprefix, format='%03i')
+    if opt.pdf:
+        ps.suffixes = ['png','pdf']
 
     if opt.todo:
         # Check which tiles still need to be done.
