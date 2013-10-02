@@ -962,6 +962,61 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
 
     assert(len(rimgs) == len(WISE))
 
+    if ps:
+        # Plots of round-one per-image results.
+        plt.figure(figsize=(4,4))
+        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        ngood = 0
+        for rr in rimgs:
+            if ngood >= 5:
+                break
+            if rr is None:
+                continue
+            if rr.ncopix < 0.25 * W*H:
+                continue
+            ngood += 1
+
+            plt.clf()
+            cim = np.zeros((H,W))
+            cox0,cox1,coy0,coy1 = rr.coextent
+            slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
+            cim[slc] = rr.rimg
+            sig1 = 1./np.sqrt(rr.w)
+            plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-1.*sig1, vmax=5.*sig1)
+            ps.savefig()
+
+            cmask = np.zeros((H,W), bool)
+            cmask[slc] = rr.rmask
+            plt.clf()
+            plt.imshow(cmask, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=0, vmax=1)
+            ps.savefig()
+
+            cmask[slc] = rr.rmask2
+            plt.clf()
+            plt.imshow(cmask, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=0, vmax=1)
+            ps.savefig()
+
+        sig1 = 1./np.sqrt(np.median(cow1))
+        plt.clf()
+        plt.imshow(coimg1, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=-1.*sig1, vmax=5.*sig1)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(cow1, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=0, vmax=cow1.max())
+        ps.savefig()
+
+        coppstd  = np.sqrt(np.maximum(0, cowimgsq1  / (np.maximum(cow1,  tinyw)) - coimg1 **2))
+        mx = np.percentile(coppstd.ravel(), 95)
+        plt.clf()
+        plt.imshow(coppstd, interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=0, vmax=mx)
+        ps.savefig()
+
     # If we're not multiprocessing, do the loop manually to reduce
     # memory usage (we don't need to keep all "rr" inputs and "masks"
     # outputs in memory at once).
@@ -1422,8 +1477,8 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
             n,e = np.histogram(rim, range=ha['range'], bins=ha['bins'])
             lo = 3e-3
             nnn = np.maximum(3e-3, n/float(sum(n)))
-            print 'e', e
-            print 'nnn', nnn
+            #print 'e', e
+            #print 'nnn', nnn
             nn.append((nnn,e))
             plt.semilogy((e[:-1]+e[1:])/2., nnn, 'b-', alpha=0.1)
         plt.xlabel('rimg (-sky)')
