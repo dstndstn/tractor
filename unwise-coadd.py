@@ -965,7 +965,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     if ps:
         # Plots of round-one per-image results.
         plt.figure(figsize=(4,4))
-        plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+        plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
         ngood = 0
         for rr in rimgs:
             if ngood >= 5:
@@ -974,6 +974,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
                 continue
             if rr.ncopix < 0.25 * W*H:
                 continue
+            #print 'rmask', np.sum(rr.rmask), 'vs rmask2', np.sum(rr.rmask2), 'diff', np.sum(rr.rmask)-np.sum(rr.rmask2)
             ngood += 1
 
             plt.clf()
@@ -1011,7 +1012,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         ps.savefig()
 
         coppstd  = np.sqrt(np.maximum(0, cowimgsq1  / (np.maximum(cow1,  tinyw)) - coimg1 **2))
-        mx = np.percentile(coppstd.ravel(), 95)
+        mx = np.percentile(coppstd.ravel(), 99)
         plt.clf()
         plt.imshow(coppstd, interpolation='nearest', origin='lower', cmap='gray',
                    vmin=0, vmax=mx)
@@ -1278,7 +1279,7 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     if rr.npatched > 100000:
         print 'WARNING: too many pixels to patch:', rr.npatched
         return None
-    ok = patch_image(img, goodmask)
+    ok = patch_image(img, goodmask.copy())
     if not ok:
         print 'WARNING: Patching failed:'
         print 'Image size:', img.shape
