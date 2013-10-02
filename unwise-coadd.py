@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage.measurements import label, center_of_mass
 import datetime
 
 import fitsio
@@ -250,7 +251,7 @@ def check_md5s(WISE):
             if rtn:
                 print 'ERROR: return code', rtn
 
-def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
+def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -489,7 +490,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube):
 
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
-         )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube)
+         )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=plots2)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -713,7 +714,7 @@ def _bounce_one_round2(*A):
         traceback.print_exc()
         raise
 
-def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn)):
+def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1)):
     if rr is None:
         return None
     print 'Coadd round 2, image', (ri+1), 'of', N
@@ -780,6 +781,14 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
                                         
         mm.included = False
 
+    if ps1:
+        # save for later
+        mm.rchi = rchi
+        mm.badpix = badpix
+        if mm.included:
+            mm.rimg_orig = rr.rimg.copy()
+            mm.rmask_orig = rr.rmask.copy()
+
     if mm.included:
         ok = patch_image(rr.rimg, np.logical_not(badpix),
                          required=(badpix * rr.rmask))
@@ -797,6 +806,7 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         mm.rmask2  = rr.rmask2
 
     mm.dsky = dsky / rr.zpscale
+
         
     if plotfn:
 
@@ -938,7 +948,7 @@ class coaddacc():
             del mm.rmask2
         
 
-def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
+def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
@@ -967,7 +977,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         plt.figure(figsize=(4,4))
         plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
         ngood = 0
-        for rr in rimgs:
+        for i,rr in enumerate(rimgs):
             if ngood >= 5:
                 break
             if rr is None:
@@ -977,11 +987,15 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
             #print 'rmask', np.sum(rr.rmask), 'vs rmask2', np.sum(rr.rmask2), 'diff', np.sum(rr.rmask)-np.sum(rr.rmask2)
             ngood += 1
 
+            print 'Plotting rr', i
+
             plt.clf()
             cim = np.zeros((H,W))
+            # Make untouched pixels white.
+            cim += 1e10
             cox0,cox1,coy0,coy1 = rr.coextent
             slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
-            cim[slc] = rr.rimg
+            cim[slc][rr.rmask] = rr.rimg[rr.rmask]
             sig1 = 1./np.sqrt(rr.w)
             plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=-1.*sig1, vmax=5.*sig1)
@@ -990,12 +1004,15 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
             cmask = np.zeros((H,W), bool)
             cmask[slc] = rr.rmask
             plt.clf()
+            # invert
+            #plt.imshow(np.logical_not(cmask), interpolation='nearest', origin='lower', cmap='gray',
             plt.imshow(cmask, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=0, vmax=1)
             ps.savefig()
 
             cmask[slc] = rr.rmask2
             plt.clf()
+            #plt.imshow(np.logical_not(cmask), interpolation='nearest', origin='lower', cmap='gray',
             plt.imshow(cmask, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=0, vmax=1)
             ps.savefig()
@@ -1021,6 +1038,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
     # If we're not multiprocessing, do the loop manually to reduce
     # memory usage (we don't need to keep all "rr" inputs and "masks"
     # outputs in memory at once).
+    ps1 = (ps is not None)
+    delmm = (ps is None)
     if not mp.pool:
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         masks = []
@@ -1028,27 +1047,27 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         while len(rimgs):
             ri += 1
             rr = rimgs.pop(0)
-            if ps:
+            if ps and plots2:
                 plotfn = ps.getnext()
             else:
                 plotfn = None
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
             mm = _coadd_one_round2(
-                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
-            coadd.acc(mm, delmm=True)
+                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1))
+            coadd.acc(mm, delmm=delmm)
             masks.append(mm)
     else:
         args = []
         N = len(WISE)
         for ri,rr in enumerate(rimgs):
-            if ps:
+            if ps and plots2:
                 plotfn = ps.getnext()
             else:
                 plotfn = None
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
-            args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn))
+            args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1))
         #masks = mp.map(_coadd_one_round2, args)
         masks = mp.map(_bounce_one_round2, args)
         del args
@@ -1056,8 +1075,80 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, table=True):
         t0 = Time()
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         for mm in masks:
-            coadd.acc(mm, delmm=True)
+            coadd.acc(mm, delmm=delmm)
         print Time()-t0
+
+    if ps:
+        ngood = 0
+        for i,mm in enumerate(masks):
+            if ngood >= 5:
+                break
+            if mm is None or not mm.included:
+                continue
+            if sum(mm.badpix) == 0:
+                continue
+            if mm.ncopix < 0.25 * W*H:
+                continue
+            ngood += 1
+
+            print 'Plotting mm', i
+
+            cim = np.zeros((H,W))
+            cim += 1e6
+            cim[mm.coslc][mm.rmask_orig] = mm.rimg_orig[mm.rmask_orig]
+            w = np.max(mm.cow)
+            sig1 = 1./np.sqrt(w)
+
+            cbadpix = np.zeros((H,W))
+            cbadpix[mm.coslc][mm.con] = mm.badpix[mm.con]
+            blobs,nblobs = label(cbadpix, np.ones((3,3),int))
+            blobcms = center_of_mass(cbadpix, labels=blobs, index=range(nblobs+1))
+
+            plt.clf()
+            plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-1.*sig1, vmax=5.*sig1)
+            ax = plt.axis()
+            for y,x in blobcms:
+                plt.plot(x, y, 'o', mec='r', mew=2, mfc='none', ms=15)
+            plt.axis(ax)
+            ps.savefig()
+
+            cim[mm.coslc][mm.rmask_orig] = mm.rimg_orig[mm.rmask_orig] - coimg1[mm.rmask_orig]
+            plt.clf()
+            plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-3.*sig1, vmax=3.*sig1)
+            ps.savefig()
+
+            crchi = np.zeros((H,W))
+            crchi[mm.coslc] = mm.rchi
+            plt.clf()
+            plt.imshow(crchi, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=-5, vmax=5)
+            ps.savefig()
+
+            cbadpix[:,:] = 0.5
+            cbadpix[mm.coslc][mm.con] = (1 - mm.badpix[mm.con])
+            plt.clf()
+            plt.imshow(cbadpix, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=0, vmax=1)
+            ps.savefig()
+
+            #print 'nblobs', nblobs
+            #print 'blobcms', blobcms
+            #if nblobs == 1:
+            #    blobcms = [blobcms]
+                
+            # Patched image
+            # cim += 1e6
+            # w = np.max(mm.cow)
+            # cim[mm.coslc][mm.con] = mm.coimg[mm.con] / w
+            # sig1 = 1./np.sqrt(w)
+            # plt.clf()
+            # plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=-1.*sig1, vmax=5.*sig1)
+            # ps.savefig()
+
+
 
     coimg    = coadd.coimg
     coimgsq  = coadd.coimgsq
@@ -1532,6 +1623,7 @@ def main():
     parser.add_option('-w', dest='wishlist', action='store_true', default=False,
                       help='Print needed frames and exit?')
     parser.add_option('--plots', dest='plots', action='store_true', default=False)
+    parser.add_option('--plots2', dest='plots2', action='store_true', default=False)
     parser.add_option('--pdf', dest='pdf', action='store_true', default=False)
 
     parser.add_option('--plot-prefix', dest='plotprefix', default=None)
@@ -1698,7 +1790,7 @@ def main():
             tileid = tileid % 1000
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
             one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
-                      opt.cube)
+                      opt.cube, opt.plots2)
             #A.append((T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp))
         #mp.map(_bounce_one_coadd, A)
         sys.exit(0)
@@ -1716,7 +1808,7 @@ def main():
     print 'Doing coadd tile', T.coadd_id[tile], 'band', band
 
     t0 = Time()
-    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp, opt.cube)
+    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp, opt.cube, opt.plots2)
     print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
 
