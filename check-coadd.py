@@ -179,7 +179,8 @@ def paper_plots(coadd_id, band):
     ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
     def myimshow(img):
-        plo,phi = [np.percentile(img, p) for p in [25,99]]
+        #plo,phi = [np.percentile(img, p) for p in [25,99]]
+        plo,phi = [np.percentile(img, p) for p in [25,95]]
         imai = ima.copy()
         imai.update(vmin=plo, vmax=phi)
         plt.clf()
