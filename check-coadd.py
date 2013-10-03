@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rc('text', usetex=True)
 import numpy as np
 import pylab as plt
 import os
@@ -189,66 +190,137 @@ def paper_plots(coadd_id, band):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    for img in [binwise, binim, binimw]:
-        myimshow(img)
+    if True:
+        for img in [binwise, binim, binimw]:
+            myimshow(img)
+            ps.savefig()
+            
+        hi,wi = wiseim.shape
+        hj,wj = imw.shape
+        #flo,fhi = 0.45, 0.55
+        flo,fhi = 0.45, 0.50
+        slcW = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
+        slcU = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+    
+        subwise = wiseim[slcW]
+        subimw  = imw[slcU]
+        subim   = im [slcU]
+    
+        for img in [subwise, subim, subimw]:
+            myimshow(img)
+            ps.savefig()
+    
+        mx = max(wisen.max(), un.max(), unw.max())
+        na = ima.copy()
+        na.update(vmin=0, vmax=mx, cmap='jet')
+        plt.clf()
+        plt.imshow(wisen, **na)
+        plt.xticks([]); plt.yticks([])
         ps.savefig()
-        
-    hi,wi = wiseim.shape
-    hj,wj = imw.shape
-    #flo,fhi = 0.45, 0.55
-    flo,fhi = 0.45, 0.50
-    slcW = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
-    slcU = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
-
-    subwise = wiseim[slcW]
-    subimw  = imw[slcU]
-    subim   = im [slcU]
-
-    for img in [subwise, subim, subimw]:
-        myimshow(img)
+    
+        plt.clf()
+        plt.imshow(un, **na)
+        plt.xticks([]); plt.yticks([])
         ps.savefig()
+    
+        w,h = figsize
+        plt.figure(figsize=(w+1,h))
+        plt.subplots_adjust(**spa)
+    
+        plt.clf()
+        plt.imshow(unw, **na)
+        plt.xticks([]); plt.yticks([])
+    
+        parent = plt.gca()
+        pb = parent.get_position(original=True).frozen()
+        print 'pb', pb
+        # new parent box, padding, child box
+        frac = 0.15
+        pad  = 0.05
+        (pbnew, padbox, cbox) = pb.splitx(1.0-(frac+pad), 1.0-frac)
+        print 'pbnew', pbnew
+        print 'padbox', padbox
+        print 'cbox', cbox
+        cbox = cbox.anchored('C', cbox)
+        parent.set_position(pbnew)
+        parent.set_anchor((1.0, 0.5))
+        cax = parent.get_figure().add_axes(cbox)
+        aspect = 20
+        cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
+        parent.get_figure().sca(parent)
+    
+        plt.colorbar(cax=cax)
+        ps.savefig()
+    
+    
+    # Sky / Error properties
 
-    mx = max(wisen.max(), un.max(), unw.max())
-    na = ima.copy()
-    na.update(vmin=0, vmax=mx, cmap='jet')
+    from tractor import GaussianMixturePSF
+    from unwise_coadd import estimate_sky
+
+    P = fits_table('wise-psf-avg.fits', hdu=band)
+    psf = GaussianMixturePSF(P.amp, P.mean, P.var)
+    R = 100
+    psf.radius = R
+    pat = psf.getPointSourcePatch(0., 0.)
+    pat = pat.patch
+    pat /= pat.sum()
+    psfnorm = np.sqrt(np.sum(pat**2))
+    print 'PSF norm:', psfnorm
+
+    bigfigsize = (8,6)
+    bigspa = dict(left=0.1, right=0.98, bottom=0.1, top=0.98)
+
+    plt.figure(figsize=bigfigsize)
+    plt.subplots_adjust(**bigspa)
+
+    wisemed = np.median(wiseim[::4,::4])
+    wisesig = np.median(unc[::4,::4])
+
+    wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+    print 'WISE sky estimate:', wisesky
+    
+    sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
+
+    wisechi = ((wiseim-wisesky) / unc).ravel()
+    wisechi2 = 2. * ((wiseim-wisesky) / (unc/psfnorm)).ravel()
+
+    chiw = (imw / sigw).ravel()
+    lo,hi = -6,12
+    ha = dict(range=(lo,hi), bins=100, log=True, histtype='step')
+    ha1 = dict(range=(lo,hi), bins=100)
+    #print 'WISE chi', wisechi.min(), wisechi.max()
     plt.clf()
-    plt.imshow(wisen, **na)
-    plt.xticks([]); plt.yticks([])
+    # n,b,p1 = plt.hist(wisechi, color='r', lw=3, alpha=0.5, **ha)
+    # n,b,p1b = plt.hist(wisechi2, color='m', lw=2, alpha=0.7, **ha)
+    # nw,b,p2 = plt.hist(chiw, color='b', **ha)
+    h1,e = np.histogram(wisechi, **ha1)
+    h2,e = np.histogram(wisechi2, **ha1)
+    h3,e = np.histogram(chiw, **ha1)
+    nw = h3
+    nwise = h2
+    ee = e.repeat(2)[1:-1]
+    p1 = plt.plot(ee, (h1/1.).repeat(2), color='r', lw=3, alpha=0.5)
+    p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
+    p3 = plt.plot(ee, h3.repeat(2), color='b')
+    plt.yscale('log')
+
+    xx = np.linspace(lo, hi, 300)
+    plt.plot(xx, max(nw) * np.exp(-(xx**2)/(2.)), 'b-', alpha=0.5)
+    plt.plot(xx, max(nwise) * np.exp(-(xx**2)/(2.)), 'm-', alpha=0.5)
+
+    plt.xlabel('Pixel / Uncertainty ($\sigma$)')
+    plt.ylabel('Number of pixels')
+    #plt.legend((p1,p2), ('WISE', 'unWISE'))
+    plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
+    yl,yh = plt.ylim()
+    plt.ylim(3, yh)
+    plt.xlim(lo,hi)
+    plt.axvline(0, color='k', alpha=0.1)
     ps.savefig()
+    
 
-    plt.clf()
-    plt.imshow(un, **na)
-    plt.xticks([]); plt.yticks([])
-    ps.savefig()
 
-    w,h = figsize
-    plt.figure(figsize=(w+1,h))
-    plt.subplots_adjust(**spa)
-
-    plt.clf()
-    plt.imshow(unw, **na)
-    plt.xticks([]); plt.yticks([])
-
-    parent = plt.gca()
-    pb = parent.get_position(original=True).frozen()
-    print 'pb', pb
-    # new parent box, padding, child box
-    frac = 0.15
-    pad  = 0.05
-    (pbnew, padbox, cbox) = pb.splitx(1.0-(frac+pad), 1.0-frac)
-    print 'pbnew', pbnew
-    print 'padbox', padbox
-    print 'cbox', cbox
-    cbox = cbox.anchored('C', cbox)
-    parent.set_position(pbnew)
-    parent.set_anchor((1.0, 0.5))
-    cax = parent.get_figure().add_axes(cbox)
-    aspect = 20
-    cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
-    parent.get_figure().sca(parent)
-
-    plt.colorbar(cax=cax)
-    ps.savefig()
 
 
 def read(dirnm, fn):
@@ -258,6 +330,8 @@ def read(dirnm, fn):
 
 
 T = fits_table('sequels-atlas.fits')
+
+ps.suffixes = ['png','pdf']
 
 paper_plots(T.coadd_id[0], 1)
 #pixel_area()
