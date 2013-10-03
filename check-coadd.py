@@ -156,20 +156,26 @@ def pixel_area():
 
 def paper_plots(coadd_id, band):
     figsize = (4,4)
-    plt.figure(figsize=figsize)
     spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+
+    bigfigsize = (8,6)
+    bigspa = dict(left=0.1, right=0.98, bottom=0.1, top=0.98)
+
+    plt.figure(figsize=figsize)
     plt.subplots_adjust(**spa)
 
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
     dir2 = 'e'
     
-    wiseim = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band))
+    wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band), header=True)
     imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
     im     = read(dir2, 'unwise-%s-w%i-img.fits' % (coadd_id, band))
 
     unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
     ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
     iv     = read(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
+
+    ppstdw = read(dir2, 'unwise-%s-w%i-ppstd-w.fits' % (coadd_id, band))
 
     wisen  = read(dir1, '%s_ab41-w%i-cov-3.fits.gz' % (coadd_id, band))
     un     = read(dir2, 'unwise-%s-w%i-n.fits' % (coadd_id, band))
@@ -190,7 +196,7 @@ def paper_plots(coadd_id, band):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    if True:
+    if False:
         for img in [binwise, binim, binimw]:
             myimshow(img)
             ps.savefig()
@@ -252,86 +258,163 @@ def paper_plots(coadd_id, band):
         plt.colorbar(cax=cax)
         ps.savefig()
     
+
+    if True:
+        from tractor import GaussianMixturePSF, NanoMaggies
+        from unwise_coadd import estimate_sky
+
+        wisemed = np.median(wiseim[::4,::4])
+        wisesig = np.median(unc[::4,::4])
+        wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+        print 'WISE sky estimate:', wisesky
+
+        P = fits_table('wise-psf-avg.fits', hdu=band)
+        psf = GaussianMixturePSF(P.amp, P.mean, P.var)
+        R = 100
+        psf.radius = R
+        pat = psf.getPointSourcePatch(0., 0.)
+        pat = pat.patch
+        pat /= pat.sum()
+        psfnorm = np.sqrt(np.sum(pat**2))
+        print 'PSF norm (native pixel scale):', psfnorm
+        psfnorm2 = psfnorm / 2.
+        print 'PSF norm (finer pixel scale):', psfnorm2
+        
+        sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
+
+        wise_unc_fudge = 2.
+
     
-    # Sky / Error properties
-
-    from tractor import GaussianMixturePSF
-    from unwise_coadd import estimate_sky
-
-    P = fits_table('wise-psf-avg.fits', hdu=band)
-    psf = GaussianMixturePSF(P.amp, P.mean, P.var)
-    R = 100
-    psf.radius = R
-    pat = psf.getPointSourcePatch(0., 0.)
-    pat = pat.patch
-    pat /= pat.sum()
-    psfnorm = np.sqrt(np.sum(pat**2))
-    print 'PSF norm:', psfnorm
-
-    bigfigsize = (8,6)
-    bigspa = dict(left=0.1, right=0.98, bottom=0.1, top=0.98)
-
-    plt.figure(figsize=bigfigsize)
-    plt.subplots_adjust(**bigspa)
-
-    wisemed = np.median(wiseim[::4,::4])
-    wisesig = np.median(unc[::4,::4])
-
-    wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
-    print 'WISE sky estimate:', wisesky
+    if False:
+        # Sky / Error properties
     
-    sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
+        plt.figure(figsize=bigfigsize)
+        plt.subplots_adjust(**bigspa)
+        wisechi = ((wiseim-wisesky) / unc).ravel()
+        #wisechi2 = 2. * ((wiseim-wisesky) / (unc/psfnorm)).ravel()
+        #wisechi2 = (2.*psfnorm * (wiseim-wisesky) / unc).ravel()
+        #wisechi2 = 0.5 * ((wiseim-wisesky) / unc).ravel()
+        wisechi2 = ((wiseim-wisesky) / (wise_unc_fudge * unc)).ravel()
 
-    wisechi = ((wiseim-wisesky) / unc).ravel()
-    wisechi2 = 2. * ((wiseim-wisesky) / (unc/psfnorm)).ravel()
-
-    chiw = (imw / sigw).ravel()
-    lo,hi = -6,12
-    ha = dict(range=(lo,hi), bins=100, log=True, histtype='step')
-    ha1 = dict(range=(lo,hi), bins=100)
-    #print 'WISE chi', wisechi.min(), wisechi.max()
-    plt.clf()
-    # n,b,p1 = plt.hist(wisechi, color='r', lw=3, alpha=0.5, **ha)
-    # n,b,p1b = plt.hist(wisechi2, color='m', lw=2, alpha=0.7, **ha)
-    # nw,b,p2 = plt.hist(chiw, color='b', **ha)
-    h1,e = np.histogram(wisechi, **ha1)
-    h2,e = np.histogram(wisechi2, **ha1)
-    h3,e = np.histogram(chiw, **ha1)
-    nw = h3
-    nwise = h2
-    ee = e.repeat(2)[1:-1]
-    p1 = plt.plot(ee, (h1/1.).repeat(2), color='r', lw=3, alpha=0.5)
-    p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
-    p3 = plt.plot(ee, h3.repeat(2), color='b')
-    plt.yscale('log')
-
-    xx = np.linspace(lo, hi, 300)
-    plt.plot(xx, max(nw) * np.exp(-(xx**2)/(2.)), 'b-', alpha=0.5)
-    plt.plot(xx, max(nwise) * np.exp(-(xx**2)/(2.)), 'm-', alpha=0.5)
-
-    plt.xlabel('Pixel / Uncertainty ($\sigma$)')
-    plt.ylabel('Number of pixels')
-    #plt.legend((p1,p2), ('WISE', 'unWISE'))
-    plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
-    yl,yh = plt.ylim()
-    plt.ylim(3, yh)
-    plt.xlim(lo,hi)
-    plt.axvline(0, color='k', alpha=0.1)
-    ps.savefig()
+        chiw = (imw / sigw).ravel()
+        lo,hi = -6,12
+        ha = dict(range=(lo,hi), bins=100, log=True, histtype='step')
+        ha1 = dict(range=(lo,hi), bins=100)
+        plt.clf()
+        h1,e = np.histogram(wisechi, **ha1)
+        h2,e = np.histogram(wisechi2, **ha1)
+        h3,e = np.histogram(chiw, **ha1)
+        nw = h3
+        nwise = h2
+        ee = e.repeat(2)[1:-1]
+        p1 = plt.plot(ee, (h1/1.).repeat(2), color='r', lw=3, alpha=0.5)
+        p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
+        p3 = plt.plot(ee, h3.repeat(2), color='b')
+        plt.yscale('log')
+        xx = np.linspace(lo, hi, 300)
+        plt.plot(xx, max(nw) * np.exp(-(xx**2)/(2.)), 'b-', alpha=0.5)
+        plt.plot(xx, max(nwise) * np.exp(-(xx**2)/(2.)), 'm-', alpha=0.5)
+        plt.xlabel('Pixel / Uncertainty ($\sigma$)')
+        plt.ylabel('Number of pixels')
+        plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
+        #plt.legend((p1,p2), ('WISE', 'WISE corr'))
+        yl,yh = plt.ylim()
+        plt.ylim(3, yh)
+        plt.xlim(lo,hi)
+        plt.axvline(0, color='k', alpha=0.1)
+        ps.savefig()
     
+    if True:
+        
+        plt.figure(figsize=bigfigsize)
+        plt.subplots_adjust(**bigspa)
+
+        zp = wisehdr['MAGZP']
+        print 'WISE image zeropoint:', zp
+        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+        print 'zpscale', zpscale
+
+        wiseflux = (wiseim - wisesky) * zpscale
+        #wiseerr  = (unc * zpscale / (2. * psfnorm)).ravel()
+        wiseerr  = unc * zpscale
+
+        wiseflux /= psfnorm
+        wiseerr *= wise_unc_fudge / psfnorm
+
+        print 'zpscale for 22.5:', 1./NanoMaggies.zeropointToScale(22.5)
+
+        print 'median wise flux: ', np.median(wiseflux)
+        print 'median wise error:', np.median(wiseerr)
+
+        unflux = imw.ravel()
+        #unerr  = sigw
+        unerr = (ppstdw / np.sqrt(unw.astype(np.float32))).ravel()
+
+        print 'median unwise flux: ', np.median(unflux)
+        print 'median unwise error:', np.median(unerr)
+
+        print 'median n:', np.median(unw)
+
+        flo,fhi = 10.**-2, 10.**5.
+        elo,ehi = 10.**-0., 10.**2.
+
+        wf = wiseflux[::2, ::2].ravel()
+
+        plt.clf()
+        loghist(np.log10(wf), np.log10(unflux), range=[[np.log10(flo),np.log10(fhi)]]*2,
+                nbins=200, hot=False, doclf=False,
+                docolorbar=False, imshowargs=dict(cmap=antigray))
+        plt.xlabel('log WISE flux')
+        plt.ylabel('log unWISE flux')
+        ps.savefig()
+
+        wiseflux = wiseflux.ravel()
+        wiseerr  = wiseerr.ravel()
+
+        ha = dict(hot=False, doclf=False, nbins=200,
+                  range=((np.log10(flo),np.log10(fhi)), (np.log10(elo),np.log10(ehi))),
+                  docolorbar=False, imshowargs=dict(cmap=antigray))
+
+        plt.clf()
+        loghist(np.log10(np.clip(wiseflux, flo,fhi)),
+                np.log10(np.clip(wiseerr,  elo,ehi)), **ha)
+        plt.xlabel('log WISE flux')
+        plt.ylabel('log WISE error')
+        ps.savefig()
+
+        plt.clf()
+        loghist(np.log10(np.clip(unflux, flo,fhi)),
+                np.log10(np.clip(unerr,  elo,ehi)), **ha)
+        plt.xlabel('log unWISE flux')
+        plt.ylabel('log unWISE error')
+        ps.savefig()
+
+
+        plt.clf()
+        plt.hist(wiseflux / wiseerr, range=(-6,10), log=True, bins=100,
+                 histtype='step', color='r')
+        plt.hist(unflux / unerr, range=(-6,10), log=True, bins=100,
+                 histtype='step', color='b')
+        yl,yh = plt.ylim()
+        plt.ylim(0.1, yh)
+        ps.savefig()
+        
 
 
 
-
-def read(dirnm, fn):
+# getfn=False,
+def read(dirnm, fn, header=False):
     pth = os.path.join(dirnm, fn)
     print pth
-    return fitsio.read(pth)
+    data = fitsio.read(pth, header=header)
+    #if getfn:
+    #    return data,pth
+    return data
 
 
 T = fits_table('sequels-atlas.fits')
 
-ps.suffixes = ['png','pdf']
+#ps.suffixes = ['png','pdf']
 
 paper_plots(T.coadd_id[0], 1)
 #pixel_area()

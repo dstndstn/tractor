@@ -509,6 +509,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     hdr = fitsio.read_header(wcsfn)
     os.remove(wcsfn)
 
+    hdr.add_record(dict(name='MAGZP', value=22.5, comment='Magnitude zeropoint (in Vega mag)'))
     hdr.add_record(dict(name='UNW_SKY', value=cosky,
                         comment='Background value subtracted from coadd img'))
     hdr.add_record(dict(name='UNW_VER', value=version['Revision'],
@@ -576,6 +577,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     WISE.npixpatched = np.array([m.npatched for m in masks])
     WISE.npixrchi    = np.array([m.nrchipix for m in masks])
     WISE.included    = np.array([m.included for m in masks]).astype(np.uint8)
+    WISE.weight      = np.array([m.w for m in masks]).astype(np.float32)
 
     WISE.delete_column('wcs')
 
@@ -724,6 +726,7 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
     mm.ncopix = rr.ncopix
     mm.sky = rr.sky
     mm.zp = rr.zp
+    mm.w = rr.w
     mm.included = True
 
     cox0,cox1,coy0,coy1 = rr.coextent
