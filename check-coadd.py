@@ -196,7 +196,7 @@ def paper_plots(coadd_id, band):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    if False:
+    if True:
         for img in [binwise, binim, binimw]:
             myimshow(img)
             ps.savefig()
@@ -285,7 +285,7 @@ def paper_plots(coadd_id, band):
         wise_unc_fudge = 2.
 
     
-    if False:
+    if True:
         # Sky / Error properties
     
         plt.figure(figsize=bigfigsize)
@@ -446,7 +446,7 @@ def read(dirnm, fn, header=False):
 
 T = fits_table('sequels-atlas.fits')
 
-#ps.suffixes = ['png','pdf']
+ps.suffixes = ['png','pdf']
 
 paper_plots(T.coadd_id[0], 1)
 #pixel_area()
