@@ -107,43 +107,45 @@ def plot_exposures():
 # sys.exit(0)
 
 def pixel_area():
-    wcs = Sip('wise-frames/2a/03242a/215/03242a215-w1-int-1b.fits')
-    W,H = wcs.get_width(), wcs.get_height()
-    print 'W,H', W,H
-    #xx,yy = np.meshgrid(np.arange(0, W, 10), np.arange(0, H, 10))
-    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
-    rr,dd = wcs.pixelxy2radec(xx, yy)
-    rr -= wcs.crval[0]
-    rr *= np.cos(np.deg2rad(dd))
-    dd -= wcs.crval[1]
-    
-    # (zero,zero) r,d
-    zzr = rr[:-1, :-1]
-    zzd = dd[:-1, :-1]
-    ozr = rr[:-1, 1:]
-    ozd = dd[:-1, 1:]
-    zor = rr[1:, :-1]
-    zod = dd[1:, :-1]
-    oor = rr[1:, 1:]
-    ood = dd[1:, 1:]
-    
-    a = np.hypot(zor - zzr, zod - zzd)
-    A = np.hypot(oor - ozr, ood - ozd)
-    b = np.hypot(ozr - zzr, ozd - zzd)
-    B = np.hypot(oor - zor, ood - zod)
-    C = np.hypot(ozr - zor, ozd - zod)
-    c = C
-    
-    s = (a + b + c)/2.
-    S = (A + B + C)/2.
-    
-    area = np.sqrt(s * (s-a) * (s-b) * (s-c)) + np.sqrt(S * (S-A) * (S-B) * (S-C))
-    
-    plt.clf()
-    plt.imshow(area, interpolation='nearest', origin='lower')
-    plt.title('Pixel area')
-    plt.colorbar()
-    ps.savefig()
+    for wcs in [Sip('wise-frames/2a/03242a/215/03242a215-w1-int-1b.fits'),
+                Tan('wise-coadds/unwise-1384p454-w1-img.fits'),
+                ]:
+        W,H = wcs.get_width(), wcs.get_height()
+        print 'W,H', W,H
+        #xx,yy = np.meshgrid(np.arange(0, W, 10), np.arange(0, H, 10))
+        xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+        rr,dd = wcs.pixelxy2radec(xx, yy)
+        rr -= wcs.crval[0]
+        rr *= np.cos(np.deg2rad(dd))
+        dd -= wcs.crval[1]
+        
+        # (zero,zero) r,d
+        zzr = rr[:-1, :-1]
+        zzd = dd[:-1, :-1]
+        ozr = rr[:-1, 1:]
+        ozd = dd[:-1, 1:]
+        zor = rr[1:, :-1]
+        zod = dd[1:, :-1]
+        oor = rr[1:, 1:]
+        ood = dd[1:, 1:]
+        
+        a = np.hypot(zor - zzr, zod - zzd)
+        A = np.hypot(oor - ozr, ood - ozd)
+        b = np.hypot(ozr - zzr, ozd - zzd)
+        B = np.hypot(oor - zor, ood - zod)
+        C = np.hypot(ozr - zor, ozd - zod)
+        c = C
+        
+        s = (a + b + c)/2.
+        S = (A + B + C)/2.
+        
+        area = np.sqrt(s * (s-a) * (s-b) * (s-c)) + np.sqrt(S * (S-A) * (S-B) * (S-C))
+        
+        plt.clf()
+        plt.imshow(area, interpolation='nearest', origin='lower')
+        plt.title('Pixel area')
+        plt.colorbar()
+        ps.savefig()
 
 # plt.clf()
 # plt.plot(rr.ravel(), dd.ravel(), 'r.')
@@ -193,7 +195,8 @@ def paper_plots(coadd_id, band):
         
     hi,wi = wiseim.shape
     hj,wj = imw.shape
-    flo,fhi = 0.45, 0.55
+    #flo,fhi = 0.45, 0.55
+    flo,fhi = 0.45, 0.50
     slcW = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
     slcU = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
 
@@ -254,8 +257,13 @@ def read(dirnm, fn):
     return fitsio.read(pth)
 
 
-
 T = fits_table('sequels-atlas.fits')
+
+paper_plots(T.coadd_id[0], 1)
+#pixel_area()
+sys.exit(0)
+
+
 # Download from IRSA:
 # for coadd_id in T.coadd_id:
 #     print 'Coadd id', coadd_id
@@ -263,8 +271,6 @@ T = fits_table('sequels-atlas.fits')
 #     print 'Cmd:', cmd
 #     os.system(cmd)
 
-paper_plots(T.coadd_id[0], 1)
-sys.exit(0)
 
 #T.cut(np.array([0]))
 bands = [1,2,3,4]
