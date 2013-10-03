@@ -341,32 +341,33 @@ def paper_plots(coadd_id, band):
         wiseflux /= psfnorm
         wiseerr *= wise_unc_fudge / psfnorm
 
-        print 'zpscale for 22.5:', 1./NanoMaggies.zeropointToScale(22.5)
+        wiseerr1 = np.median(wiseerr)
 
-        print 'median wise flux: ', np.median(wiseflux)
-        print 'median wise error:', np.median(wiseerr)
+        #print 'zpscale for 22.5:', 1./NanoMaggies.zeropointToScale(22.5)
+        # print 'median wise flux: ', np.median(wiseflux)
+        # print 'median wise error:', wiseerr1
 
         unflux = imw.ravel()
-        #unerr  = sigw
         unerr = (ppstdw / np.sqrt(unw.astype(np.float32))).ravel()
 
-        print 'median unwise flux: ', np.median(unflux)
-        print 'median unwise error:', np.median(unerr)
+        # print 'median unwise flux: ', np.median(unflux)
+        # print 'median unwise error:', np.median(unerr)
+        # print 'median n:', np.median(unw)
 
-        print 'median n:', np.median(unw)
+        logflo,logfhi = -2, 5.
+        logelo,logehi = 0., 3.
 
-        flo,fhi = 10.**-2, 10.**5.
-        elo,ehi = 10.**-0., 10.**2.
+        flo,fhi = 10.**logflo, 10.**logfhi
+        elo,ehi = 10.**logelo, 10.**logehi
 
-        wf = wiseflux[::2, ::2].ravel()
-
-        plt.clf()
-        loghist(np.log10(wf), np.log10(unflux), range=[[np.log10(flo),np.log10(fhi)]]*2,
-                nbins=200, hot=False, doclf=False,
-                docolorbar=False, imshowargs=dict(cmap=antigray))
-        plt.xlabel('log WISE flux')
-        plt.ylabel('log unWISE flux')
-        ps.savefig()
+        # wf = wiseflux[::2, ::2].ravel()
+        # plt.clf()
+        # loghist(np.log10(wf), np.log10(unflux), range=[[np.log10(flo),np.log10(fhi)]]*2,
+        #         nbins=200, hot=False, doclf=False,
+        #         docolorbar=False, imshowargs=dict(cmap=antigray))
+        # plt.xlabel('log WISE flux')
+        # plt.ylabel('log unWISE flux')
+        # ps.savefig()
 
         wiseflux = wiseflux.ravel()
         wiseerr  = wiseerr.ravel()
@@ -378,15 +379,46 @@ def paper_plots(coadd_id, band):
         plt.clf()
         loghist(np.log10(np.clip(wiseflux, flo,fhi)),
                 np.log10(np.clip(wiseerr,  elo,ehi)), **ha)
-        plt.xlabel('log WISE flux')
-        plt.ylabel('log WISE error')
+        #plt.xlabel('log WISE flux')
+        #plt.ylabel('log WISE error')
+        plt.xlabel('WISE flux')
+        plt.ylabel('WISE flux uncertainty')
+        ax = plt.axis()
+        xx = np.linspace(np.log10(flo), np.log10(fhi), 500)
+        #yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.1 * 10.**xx)))
+        # yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.3 * 10.**xx)))
+        # plt.plot(xx, yy, 'b-')
+        # yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.03 * 10.**xx)))
+        # plt.plot(xx, yy, 'b-')
+        # yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.015 * 10.**xx)))
+        # plt.plot(xx, yy, 'b-')
+        #yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.01 * 10.**xx)))
+        yy = np.log10(np.hypot(wiseerr1, np.sqrt(0.02 * 10.**xx)))
+        plt.plot(xx, yy, 'r-', lw=2)
+        plt.axis(ax)
+        logf = np.arange(logflo,logfhi+1)
+        plt.xticks(logf, ['$10^{%i}$' % x for x in logf])
+        loge = np.arange(logelo,logehi+1)
+        plt.yticks(loge, ['$10^{%i}$' % x for x in loge])
         ps.savefig()
 
         plt.clf()
         loghist(np.log10(np.clip(unflux, flo,fhi)),
                 np.log10(np.clip(unerr,  elo,ehi)), **ha)
-        plt.xlabel('log unWISE flux')
-        plt.ylabel('log unWISE error')
+        #plt.xlabel('log unWISE flux')
+        #plt.ylabel('log unWISE error')
+        plt.xlabel('unWISE flux')
+        plt.ylabel('unWISE sample standard deviation')
+        #yy = np.log10(np.hypot(np.hypot(wiseerr1, np.sqrt(0.1 * 10.**xx)), 1e-2*(10.**xx)))
+        #yy = np.log10(np.hypot(np.hypot(wiseerr1, np.sqrt(0.02 * 10.**xx)), 2e-2*(10.**xx)))
+        yy = np.log10(np.hypot(np.hypot(wiseerr1, np.sqrt(0.02 * 10.**xx)), 3e-2*(10.**xx)))
+        ax = plt.axis()
+        plt.plot(xx, yy, 'r-', lw=2)
+        plt.axis(ax)
+        logf = np.arange(logflo,logfhi+1)
+        plt.xticks(logf, ['$10^{%i}$' % x for x in logf])
+        loge = np.arange(logelo,logehi+1)
+        plt.yticks(loge, ['$10^{%i}$' % x for x in loge])
         ps.savefig()
 
 
