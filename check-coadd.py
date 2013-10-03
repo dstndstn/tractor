@@ -1,6 +1,8 @@
 import matplotlib
 matplotlib.use('Agg')
 matplotlib.rc('text', usetex=True)
+matplotlib.rc('font', serif='computer modern roman')
+matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
 import numpy as np
 import pylab as plt
 import os
@@ -158,6 +160,10 @@ def paper_plots(coadd_id, band):
     figsize = (4,4)
     spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
 
+    #medfigsize = (6,4)
+    medfigsize = (5,3.5)
+    medspa = dict(left=0.12, right=0.96, bottom=0.12, top=0.96)
+
     bigfigsize = (8,6)
     bigspa = dict(left=0.1, right=0.98, bottom=0.1, top=0.98)
 
@@ -197,6 +203,8 @@ def paper_plots(coadd_id, band):
         plt.xticks([]); plt.yticks([])
 
     if True:
+        ps.skip(9)
+    else:
         for img in [binwise, binim, binimw]:
             myimshow(img)
             ps.savefig()
@@ -286,6 +294,8 @@ def paper_plots(coadd_id, band):
 
     
     if True:
+        ps.skip(1)
+    else:
         # Sky / Error properties
     
         plt.figure(figsize=bigfigsize)
@@ -326,8 +336,8 @@ def paper_plots(coadd_id, band):
     
     if True:
         
-        plt.figure(figsize=bigfigsize)
-        plt.subplots_adjust(**bigspa)
+        plt.figure(figsize=medfigsize)
+        plt.subplots_adjust(**medspa)
 
         zp = wisehdr['MAGZP']
         print 'WISE image zeropoint:', zp
