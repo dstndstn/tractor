@@ -739,10 +739,8 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
 
     # like in the WISE Atlas Images, estimate sky difference via
     # median difference in the overlapping area.
-
-    dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
-    print 'Sky difference:', dsky
-
+    # dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
+    # print 'Sky difference:', dsky
     # DEBUG
     dsky = 0.
     print 'WARNING: setting dsky = 0'

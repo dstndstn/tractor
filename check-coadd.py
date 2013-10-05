@@ -446,11 +446,18 @@ def composite(coadd_id):
     from unwise_coadd import estimate_sky
     from tractor import GaussianMixturePSF, NanoMaggies
 
+    plt.figure(figsize=(4,4))
+    #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+    spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+    plt.subplots_adjust(**spa)
+    
     wiseims = []
     imws = []
     ims = []
 
-    flo,fhi = 0.45, 0.55
+    #flo,fhi = 0.45, 0.55
+    flo,fhi = 0.45, 0.52
+    #flo,fhi = 0.45, 0.5
 
     for band in [1,2]:
 
@@ -492,6 +499,10 @@ def composite(coadd_id):
     imws    = [i[slcJ] for i in imws]
     ims     = [i[slcJ] for i in ims]
 
+    # soften W2
+    for im in [wiseims, imws, ims]:
+        im[1] /= 3.
+    
     wisecomp = _comp(wiseims)
     compw = _comp(imws)
     comp = _comp(ims)
@@ -501,7 +512,12 @@ def composite(coadd_id):
 
     for im in [wisecomp, compw, comp]:
         plt.clf()
-        plt.imshow(np.clip(im/100., 0., 1.), interpolation='nearest', origin='lower')
+        #plt.imshow(np.clip(np.sqrt(im/25.), 0., 1.), interpolation='nearest', origin='lower')
+        #plt.imshow(np.clip((im/25.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
+        #plt.imshow(np.clip((im/300.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
+        #plt.imshow(np.clip((im/200.)**0.4, 0., 1.), interpolation='nearest', origin='lower')
+        plt.imshow(np.clip((im/100.)**0.4, 0., 1.), interpolation='nearest', origin='lower')
+        plt.xticks([]); plt.yticks([])
         ps.savefig()
 
 
