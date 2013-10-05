@@ -511,6 +511,7 @@ def composite(coadd_id):
     wisecomp *= 4.
 
     for im in [wisecomp, compw, comp]:
+        print 'shape', im.shape
         plt.clf()
         #plt.imshow(np.clip(np.sqrt(im/25.), 0., 1.), interpolation='nearest', origin='lower')
         #plt.imshow(np.clip((im/25.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
