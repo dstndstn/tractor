@@ -442,6 +442,67 @@ def paper_plots(coadd_id, band):
         ps.savefig()
         
 
+def composite(coadd_id):
+    from unwise_coadd import estimate_sky
+    from tractor import GaussianMixturePSF, NanoMaggies
+
+    wiseims = []
+    imws = []
+    ims = []
+
+    flo,fhi = 0.45, 0.55
+
+    for band in [1,2]:
+
+        dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+        dir2 = 'e'
+
+
+        wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits'   % (coadd_id, band),
+                              header=True)
+        unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+        wisemed = np.median(wiseim[::4,::4])
+        wisesig = np.median(unc[::4,::4])
+        wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+        wiseim -= wisesky
+        # adjust zeropoints
+        zp = wisehdr['MAGZP']
+        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+        wiseim *= zpscale
+
+        wiseims.append(wiseim)
+        imws   .append(read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band)))
+        ims    .append(read(dir2, 'unwise-%s-w%i-img.fits'   % (coadd_id, band)))
+
+    def _comp(imlist):
+        s = imlist[0]
+        HI,WI = s.shape
+        rgb = np.zeros((HI, WI, 3))
+        rgb[:,:,0] = imlist[0]
+        rgb[:,:,2] = imlist[1]
+        rgb[:,:,1] = (rgb[:,:,0] + rgb[:,:,2])/2.
+        return rgb
+
+    hi,wi = wiseims[0].shape
+    hj,wj = imws[0].shape
+    slcI = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
+    slcJ = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
+
+    wiseims = [i[slcI] for i in wiseims]
+    imws    = [i[slcJ] for i in imws]
+    ims     = [i[slcJ] for i in ims]
+
+    wisecomp = _comp(wiseims)
+    compw = _comp(imws)
+    comp = _comp(ims)
+
+    # compensate for WISE psf norm
+    wisecomp *= 4.
+
+    for im in [wisecomp, compw, comp]:
+        plt.clf()
+        plt.imshow(np.clip(im/100., 0., 1.), interpolation='nearest', origin='lower')
+        ps.savefig()
 
 
 # getfn=False,
@@ -458,7 +519,8 @@ T = fits_table('sequels-atlas.fits')
 
 ps.suffixes = ['png','pdf']
 
-paper_plots(T.coadd_id[0], 1)
+#paper_plots(T.coadd_id[0], 1)
+composite(T.coadd_id[0])
 #pixel_area()
 sys.exit(0)
 
