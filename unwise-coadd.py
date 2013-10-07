@@ -272,7 +272,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     ofn = prefix + '-img.fits'
     if os.path.exists(ofn):
         print 'Output file exists:', ofn
-        return
+        return 0
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
@@ -377,7 +377,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
             if not os.path.exists(intfn):
                 print 'Need:', intfn
-        return
+        return 0
 
     # *inclusive* coordinates of the bounding-box in the coadd of this image
     # (x0,x1,y0,y1)
@@ -391,13 +391,21 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     #              np.append(copoly[:,1],copoly[0,1]), 'r-')
     #     ninter = 0
 
+    failedfiles = []
+
     res = []
     for wi,wise in enumerate(WISE):
         print
         print (wi+1), 'of', len(WISE)
         intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
         print 'intfn', intfn
-        wcs = Sip(intfn)
+        try:
+            wcs = Sip(intfn)
+        except RuntimeError:
+            import traceback
+            traceback.print_exc()
+            failedfiles.append(intfn)
+            continue
 
         h,w = wcs.get_height(), wcs.get_width()
         poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
@@ -445,6 +453,12 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
         print 'Coadd extent:', WISE.coextent[wi,:]
+
+    if len(failedfiles):
+        print len(failedfiles), 'failed:'
+        for f in failedfiles:
+            print '  ', f
+        return -1
 
     # if ps:
     #     print 'Number intersecting:', ninter
@@ -532,7 +546,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     ofn = prefix + '-invvar-w.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-ppstd-w.fits'
-    fitsio.write(ofn, coppb.astype(np.float32), header=hdr, clobber=True)
+    fitsio.write(ofn, coppob.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-n-w.fits'
     fitsio.write(ofn, conb.astype(np.int16), header=hdr, clobber=True)
 
@@ -585,6 +599,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     WISE.writeto(ofn)
 
 
+    return 0
 
 def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
@@ -1606,7 +1621,7 @@ def trymain():
 
 def _bounce_one_coadd(A):
     try:
-        one_coadd(*A)
+        return one_coadd(*A)
     except:
         import traceback
         print 'one_coadd failed:'
@@ -1692,7 +1707,6 @@ def main():
     else:
         T = get_atlas_tiles(r0,r1,d0,d1)
         T.writeto(fn)
-
 
     fn = '%s-frames.fits' % dataset
     if os.path.exists(fn):
