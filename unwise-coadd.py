@@ -551,7 +551,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     ofn = prefix + '-invvar-w.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-ppstd-w.fits'
-    fitsio.write(ofn, coppob.astype(np.float32), header=hdr, clobber=True)
+    fitsio.write(ofn, coppb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-n-w.fits'
     fitsio.write(ofn, conb.astype(np.int16), header=hdr, clobber=True)
 
