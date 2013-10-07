@@ -392,8 +392,9 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     #     ninter = 0
 
     failedfiles = []
-
     res = []
+    pixinrange = 0.
+
     for wi,wise in enumerate(WISE):
         print
         print (wi+1), 'of', len(WISE)
@@ -453,6 +454,10 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
         print 'Coadd extent:', WISE.coextent[wi,:]
+
+        e = WISE.coextent[wi,:]
+        pixinrange += (1+e[1]-e[0]) * (1+e[3]-e[2])
+        print 'Total pixels in coadd space:', pixinrange
 
     if len(failedfiles):
         print len(failedfiles), 'failed:'
@@ -1714,7 +1719,10 @@ def main():
         WISE = fits_table(fn)
     else:
         WISE = get_wise_frames(r0,r1,d0,d1)
+        # bool -> uint8 to avoid confusing fitsio
+        WISE.moon_masked = WISE.moon_masked.astype(np.uint8)
         WISE.writeto(fn)
+    WISE.moon_masked = (WISE.moon_masked != 0)
 
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
