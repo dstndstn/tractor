@@ -1365,7 +1365,6 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     rr.coextent = wise.coextent
     rr.cosubwcs = cosubwcs
 
-    print 'coadd_wise image', (i+1), 'first pass'
     print Time() - t00
 
     return rr
@@ -1726,7 +1725,7 @@ def main():
         t0 = Time()
         one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
                   opt.cube, opt.plots2, opt.frame0, opt.nframes)
-        print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
+        print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
 
 if __name__ == '__main__':
     main()
