@@ -49,9 +49,7 @@ median_f = flat_median_f
 # GLOBALS
 default_outdir = 'wise-coadds'
 pixscale = 2.75 / 3600.
-
 W,H = 2048, 2048
-#W,H = 1024,1024
 
 bands = [1,2,3,4]
 # WISE Level 1b inputs
@@ -277,19 +275,10 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
 
-    # if ps:
-    #     plt.clf()
-    #     plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
-    #     plt.plot(np.append(copoly[:,0],copoly[0,0]),
-    #              np.append(copoly[:,1],copoly[0,1]), 'r-')
-    #     plt.title('Before cuts')
-    #     ps.savefig()
-    
     margin = (1.1 # safety margin
               * (np.sqrt(2.) / 2.) # diagonal
               * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
               * pixscale) # in deg
-    #print 'Margin:', margin
     t0 = Time()
 
     # cut
@@ -300,34 +289,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     # reorder by dist from center
     #I = np.argsort(degrees_between(ti.ra, ti.dec, WISE.ra, WISE.dec))
     #WISE.cut(I)
-    # DEBUG
-    #I = np.argsort(-WISE.dec)
-    #WISE.cut(I)
-    
-    # if ps:
-    #     plt.clf()
-    #     plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
-    #     plt.plot(np.append(copoly[:,0],copoly[0,0]),
-    #              np.append(copoly[:,1],copoly[0,1]), 'r-')
-    #     plt.title('Circle cut')
-    #     # inter = np.zeros(len(WISE), bool)
-    #     # for wi,wise in enumerate(WISE):
-    #     #     intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
-    #     #     wcs = Sip(intfn)
-    #     #     h,w = wcs.get_height(), wcs.get_width()
-    #     #     poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
-    #     #     intersects = polygons_intersect(copoly, poly)
-    #     #     inter[wi] = intersects
-    #     #     cc = 'b'
-    #     #     alpha = 0.1
-    #     #     if not intersects:
-    #     #         cc = 'r'
-    #     #         alpha = 0.5
-    #     #     plt.plot(np.append(poly[:,0],poly[0,0]),
-    #     #              np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
-    #     # plt.plot(WISE.ra[inter==False], WISE.dec[inter==False], 'r.', ms=10, alpha=0.5)
-    #     # print sum(inter), 'intersecting fields'
-    #     ps.savefig()
 
     # cut on RA,Dec box too
     r0,d0 = copoly.min(axis=0)
@@ -337,14 +298,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
     print 'cut to', len(WISE), 'in RA,Dec box'
-
-    # if ps:
-    #     plt.clf()
-    #     plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
-    #     plt.plot(np.append(copoly[:,0],copoly[0,0]),
-    #              np.append(copoly[:,1],copoly[0,1]), 'r-')
-    #     plt.title('Box cut')
-    #     ps.savefig()
 
     print 'Qual_frame scores:', np.unique(WISE.qual_frame)
     WISE.cut(WISE.qual_frame > 0)
@@ -364,14 +317,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         WISE.cut(ok)
         print 'Cut out bad scans in W4:', len(WISE), 'remaining'
 
-    # if ps:
-    #     plt.clf()
-    #     plt.plot(WISE.ra, WISE.dec, 'b.', ms=10, alpha=0.5)
-    #     plt.plot(np.append(copoly[:,0],copoly[0,0]),
-    #              np.append(copoly[:,1],copoly[0,1]), 'r-')
-    #     plt.title('Quality cuts')
-    #     ps.savefig()
-
     if wishlist:
         for wise in WISE:
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
@@ -384,12 +329,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
     WISE.coextent = np.zeros((len(WISE), 4), int)
     # *inclusive* coordinates of the bounding-box in the image overlapping coadd
     WISE.imextent = np.zeros((len(WISE), 4), int)
-
-    # if ps:
-    #     plt.clf()
-    #     plt.plot(np.append(copoly[:,0],copoly[0,0]),
-    #              np.append(copoly[:,1],copoly[0,1]), 'r-')
-    #     ninter = 0
 
     failedfiles = []
     res = []
@@ -412,18 +351,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         poly = np.array(zip(*walk_wcs_boundary(wcs, step=2.*w, margin=10)))
         intersects = polygons_intersect(copoly, poly)
 
-        # if ps:
-        #     cc = 'b'
-        #     alpha = 0.1
-        #     if not intersects:
-        #         cc = 'r'
-        #         alpha = 0.5
-        #     else:
-        #         ninter += 1
-        #     plt.plot(np.append(poly[:,0],poly[0,0]),
-        #              np.append(poly[:,1],poly[0,1]), '-', color=cc, alpha=alpha)
-
-        #print 'poly:', poly
         if not intersects:
             print 'Image does not intersect target'
             res.append(None)
@@ -431,7 +358,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         res.append((intfn, wcs, w, h, poly))
 
         cpoly = clip_polygon(copoly, poly)
-        #print 'Clipped polygon:', cpoly
         xy = np.array([cowcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
         xy -= 1
         x0,y0 = np.floor(xy.min(axis=0)).astype(int)
@@ -464,37 +390,6 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         for f in failedfiles:
             print '  ', f
         return -1
-
-    # if ps:
-    #     print 'Number intersecting:', ninter
-    #     ps.savefig()
-    #     m = 0.05
-    #     plt.axis([r0-m, r1+m, d0-m, d1+m])
-    #     ps.savefig()
-
-    # plt.clf()
-    # jj = np.array([0,1,2,3,0])
-    # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
-    # for r in res:
-    #     if r is None:
-    #         continue
-    #     poly = r[-1]
-    #     plt.plot(poly[jj,0], poly[jj,1], 'r-', alpha=0.1)
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # jj = np.array([0,1,2,3,0])
-    # plt.plot(copoly[jj,0], copoly[jj,1], 'b-')
-    # for r in res:
-    #     if r is None:
-    #         continue
-    #     poly = r[-1]
-    #     try:
-    #         CC = clip_polygon(poly, copoly)
-    #         plt.plot([c[0] for c in CC] + [CC[0][0]], [c[1] for c in CC] + [CC[0][1]], 'r-', alpha=0.1)
-    #     except:
-    #         plt.plot(poly[jj,0], poly[jj,1], 'k-')
-    # ps.savefig()
 
     I = np.flatnonzero(np.array([r is not None for r in res]))
     WISE.cut(I)
