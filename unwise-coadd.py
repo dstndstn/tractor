@@ -45,13 +45,7 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 #median_f = np.median
 median_f = flat_median_f
 
-
-# GLOBALS
-default_outdir = 'wise-coadds'
-pixscale = 2.75 / 3600.
-W,H = 2048, 2048
-
-bands = [1,2,3,4]
+# GLOBALS:
 # WISE Level 1b inputs
 wisedir = 'wise-frames'
 mask_gz = True
@@ -61,9 +55,13 @@ unc_gz = True
 class Duck():
     pass
 
-def get_coadd_tile_wcs(ra, dec):
+def get_coadd_tile_wcs(ra, dec, W, H, pixscale):
+    '''
+    Returns a Tan WCS object at the given RA,Dec center, axis aligned, with the
+    given pixel W,H and pixel scale in arcsec/pixel.
+    '''
     cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2.,
-                -pixscale, 0., 0., pixscale, W, H)
+                -pixscale/3600., 0., 0., pixscale/3600., W, H)
     return cowcs
 
 def walk_wcs_boundary(wcs, step=1024, margin=0):
@@ -116,16 +114,18 @@ def get_wcs_radec_bounds(wcs):
     d0,d1 = dd.min(), dd.max()
     return r0,r1,d0,d1
 
-def get_atlas_tiles(r0,r1,d0,d1):
+def get_atlas_tiles(r0,r1,d0,d1, W,H,pixscale):
     '''
     Select Atlas Image tiles touching a desired RA,Dec box.
+
+    pixscale in arcsec/pixel
     '''
     # Read Atlas Image table
     T = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
     T.row = np.arange(len(T))
     print 'Read', len(T), 'Atlas tiles'
 
-    margin = max(W,H) * pixscale / 2.
+    margin = (max(W,H) / 2.) * (pixscale / 3600.)
     cosdec = np.cos(np.deg2rad(max(abs(d0),abs(d1))))
     mr = margin / cosdec
     
@@ -141,7 +141,7 @@ def get_atlas_tiles(r0,r1,d0,d1):
     print 'Checking tile RA,Dec bounds...'
     keep = []
     for i in range(len(T)):
-        wcs = get_coadd_tile_wcs(T.ra[i], T.dec[i])
+        wcs = get_coadd_tile_wcs(T.ra[i], T.dec[i], W, H, pixscale)
         R0,R1,D0,D1 = get_wcs_radec_bounds(wcs)
         if R1 < r0 or R0 > r1 or D1 < d0 or D0 > d1:
             print 'Coadd tile', T.coadd_id[i], 'is outside RA,Dec box'
@@ -249,7 +249,8 @@ def check_md5s(WISE):
             if rtn:
                 print 'ERROR: return code', rtn
 
-def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2,
+def one_coadd(ti, band, W, H, pixscale, WISE,
+              ps, wishlist, outdir, mp, do_cube, plots2,
               frame0, nframes):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
@@ -273,13 +274,13 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2,
         print 'Output file exists:', ofn
         return 0
 
-    cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
+    cowcs = get_coadd_tile_wcs(ti.ra, ti.dec, W, H, pixscale)
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
 
     margin = (1.1 # safety margin
               * (np.sqrt(2.) / 2.) # diagonal
               * (max(W,H) + 1016) # WISE FOV, coadd FOV side length
-              * pixscale) # in deg
+              * pixscale/3600.) # in deg
     t0 = Time()
 
     # cut
@@ -294,7 +295,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2,
     # cut on RA,Dec box too
     r0,d0 = copoly.min(axis=0)
     r1,d1 = copoly.max(axis=0)
-    dd = np.sqrt(2.) * (1016./2.) * pixscale * 1.01 # safety
+    dd = np.sqrt(2.) * (1016./2.) * (pixscale/3600.) * 1.01 # safety
     dr = dd / min([np.cos(np.deg2rad(d)) for d in [d0,d1]])
     WISE.cut((WISE.ra  + dr >= r0) * (WISE.ra  - dr <= r1) *
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
@@ -510,7 +511,7 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2,
 
     return 0
 
-def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
+def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns, W, H, pixscale):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
     plot = Plotstuff(outformat='png', size=(800,800),
                      rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
@@ -529,7 +530,7 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns):
                 continue
             plot.alpha = 0.5
             for ti in T:
-                cowcs = get_coadd_tile_wcs(ti.ra, ti.dec)
+                cowcs = get_coadd_tile_wcs(ti.ra, ti.dec, W, H, pixscale)
                 out.wcs = anwcs_new_tan(cowcs)
                 out.fill = 1
                 plot.plot('outline')
@@ -1535,7 +1536,7 @@ def _bounce_one_coadd(A):
         print 'one_coadd failed:'
         traceback.print_exc()
 
-def todo():
+def todo(W, H, pixscale, bands=[1,2,3,4]):
     # Check which tiles still need to be done.
     need = []
     for band in bands:
@@ -1551,9 +1552,9 @@ def todo():
             need.append(band*1000 + i)
 
         if band == bands[0]:
-            plot_region(r0,r1,d0,d1, ps, T, None, fns)
+            plot_region(r0,r1,d0,d1, ps, T, None, fns, W, H, pixscale)
         else:
-            plot_region(r0,r1,d0,d1, ps, None, None, fns)
+            plot_region(r0,r1,d0,d1, ps, None, None, fns, W, H, pixscale)
 
     print ' '.join('%i' %i for i in need)
 
@@ -1616,11 +1617,13 @@ def main():
 
     parser.add_option('--plot-prefix', dest='plotprefix', default=None)
 
-    parser.add_option('--outdir', dest='outdir', default=default_outdir,
+    parser.add_option('--outdir', '-o', dest='outdir', default='unwise-coadds',
                       help='Output directory: default %default')
 
-    parser.add_option('--size', dest='size', default=None, type=int,
+    parser.add_option('--size', dest='size', default=2048, type=int,
                       help='Set output image size -- DEBUGGING ONLY!')
+    parser.add_option('--pixscale', dest='pixscale', type=float, default=2.75,
+                      help='Set coadd pixel scale, default %default arcsec/pixel')
     parser.add_option('--cube', dest='cube', action='store_true', default=False,
                       help='Save & write out image cube')
 
@@ -1637,10 +1640,6 @@ def main():
         mp = multiproc(opt.threads)
     else:
         mp = multiproc()
-
-    if opt.size:
-        global W,H
-        W = H = opt.size
 
     batch = False
     arr = os.environ.get('PBS_ARRAYID')
@@ -1674,12 +1673,14 @@ def main():
     else:
         assert(False)
 
+    W = H = opt.size
+
     fn = '%s-atlas.fits' % dataset
     if os.path.exists(fn):
         print 'Reading', fn
         T = fits_table(fn)
     else:
-        T = get_atlas_tiles(r0,r1,d0,d1)
+        T = get_atlas_tiles(r0,r1,d0,d1, W,H, opt.pixscale)
         T.writeto(fn)
 
     fn = '%s-frames.fits' % dataset
@@ -1703,7 +1704,7 @@ def main():
         ps.suffixes = ['png','pdf']
 
     if opt.todo:
-        todo()
+        todo(W, H, opt.pixscale)
         sys.exit(0)
 
     if not opt.plots:
@@ -1723,7 +1724,8 @@ def main():
         assert(tileid < len(T))
         print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
         t0 = Time()
-        one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
+        one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
+                  opt.wishlist, opt.outdir, mp,
                   opt.cube, opt.plots2, opt.frame0, opt.nframes)
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
 
