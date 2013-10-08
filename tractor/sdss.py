@@ -400,8 +400,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
         
     sources = []
-    nstars = 0
-    ndev, nexp, ncomp = 0, 0, 0
+    nstars, ndev, nexp, ncomp = 0, 0, 0, 0
+    isources = []
     for i in range(len(objs)):
         if Lstar[i]:
             pos = RaDecPos(objs.ra[i], objs.dec[i])
@@ -414,6 +414,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             #   ps = PointSource(pos, bright)
             sources.append(PointSource(pos, bright))
             nstars += 1
+            isources.append(i)
             continue
 
         hasdev = (Ldev[i] > 0)
@@ -427,16 +428,18 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         elif hasexp:
             flux = expflux[i,:]
         else:
-            assert(False)
+            print 'Skipping object with Lstar = %g, Ldev = %g, Lexp = %g (fracdev=%g)' % (Lstar[i], Ldev[i], Lexp[i], fracdev[i])
+            continue
 
+        isources.append(i)
         if iscomp:
             if fixedComposites:
-                bright = nmgy2bright(flux)
+                bright = flux2bright(flux)
                 fdev = (Ldev[i] / (Ldev[i] + Lexp[i]))
             else:
                 dbright,ebright = comp2bright(flux, Ldev[i], Lexp[i])
         else:
-            bright = nmgy2bright(flux)
+            bright = flux2bright(flux)
 
         if hasdev:
             re  = objs.theta_dev  [i,bandnum]
@@ -465,10 +468,13 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     print 'Created', ndev, 'deV,', nexp, 'exp,', ncomp, 'composite',
     print '(total %i) galaxies and %i stars' % (ndev+nexp+ncomp, nstars)
-
+    
     if not (getobjs or getobjinds or getsourceobjs):
         return sources
 
+    if nstars + ndev + nexp + ncomp < len(objs):
+        objs = objs[np.array(isources)]
+    
     rtn = [sources]
     if getobjs:
         rtn.append(allobjs)
