@@ -1527,6 +1527,70 @@ def _bounce_one_coadd(A):
         print 'one_coadd failed:'
         traceback.print_exc()
 
+def todo():
+    # Check which tiles still need to be done.
+    need = []
+    for band in bands:
+        fns = []
+        for i in range(len(T)):
+            tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
+            prefix = os.path.join(opt.outdir, tag)
+            ofn = prefix + '-img.fits'
+            if os.path.exists(ofn):
+                print 'Output file exists:', ofn
+                fns.append(ofn)
+                continue
+            need.append(band*1000 + i)
+
+        if band == bands[0]:
+            plot_region(r0,r1,d0,d1, ps, T, None, fns)
+        else:
+            plot_region(r0,r1,d0,d1, ps, None, None, fns)
+
+    print ' '.join('%i' %i for i in need)
+
+    # write out scripts
+    for i in need:
+        script = '\n'.join(['#! /bin/bash',
+                            ('#PBS -N %s-%i' % (dataset, i)),
+                            '#PBS -l cput=1:00:00',
+                            '#PBS -l pvmem=4gb',
+                            'cd $PBS_O_WORKDIR',
+                            ('export PBS_ARRAYID=%i' % i),
+                            './wise-coadd.py',
+                            ''])
+                            
+        sfn = 'pbs-%s-%i.sh' % (dataset, i)
+        write_file(script, sfn)
+        os.system('chmod 755 %s' % sfn)
+
+    # Collapse contiguous ranges
+    strings = []
+    if len(need):
+        start = need.pop(0)
+        end = start
+        while len(need):
+            x = need.pop(0)
+            if x == end + 1:
+                # extend this run
+                end = x
+            else:
+                # run finished; output and start new one.
+                if start == end:
+                    strings.append('%i' % start)
+                else:
+                    strings.append('%i-%i' % (start, end))
+                start = end = x
+        # done; output
+        if start == end:
+            strings.append('%i' % start)
+        else:
+            strings.append('%i-%i' % (start, end))
+        print ','.join(strings)
+    else:
+        print 'Done (party now)'
+    
+
 def main():
     import optparse
     from astrometry.util.multiproc import multiproc
@@ -1565,21 +1629,18 @@ def main():
         global W,H
         W = H = opt.size
 
-    Time.add_measurement(MemMeas)
-
     batch = False
     arr = os.environ.get('PBS_ARRAYID')
     if arr is not None:
         arr = int(arr)
         batch = True
 
-    # if not batch:
-    #     import cProfile
-    #     from datetime import tzinfo, timedelta, datetime
-    #     pfn = 'prof-%s.dat' % (datetime.now().isoformat())
-    #     cProfile.run('trymain()', pfn)
-    #     print 'Wrote', pfn
-    #     sys.exit(0)
+    if len(args) == 0 and arr is None:
+        print 'No tile(s) specified'
+        parser.print_help()
+        sys.exit(-1)
+
+    Time.add_measurement(MemMeas)
 
     dataset = opt.dataset
 
@@ -1629,69 +1690,8 @@ def main():
         ps.suffixes = ['png','pdf']
 
     if opt.todo:
-        # Check which tiles still need to be done.
-        need = []
-        for band in bands:
-            fns = []
-            for i in range(len(T)):
-                tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
-                prefix = os.path.join(opt.outdir, tag)
-                ofn = prefix + '-img.fits'
-                if os.path.exists(ofn):
-                    print 'Output file exists:', ofn
-                    fns.append(ofn)
-                    continue
-                need.append(band*1000 + i)
-
-            if band == bands[0]:
-                plot_region(r0,r1,d0,d1, ps, T, None, fns)
-            else:
-                plot_region(r0,r1,d0,d1, ps, None, None, fns)
-
-        print ' '.join('%i' %i for i in need)
-
-        # write out scripts
-        for i in need:
-            script = '\n'.join(['#! /bin/bash',
-                                ('#PBS -N %s-%i' % (dataset, i)),
-                                '#PBS -l cput=1:00:00',
-                                '#PBS -l pvmem=4gb',
-                                'cd $PBS_O_WORKDIR',
-                                ('export PBS_ARRAYID=%i' % i),
-                                './wise-coadd.py',
-                                ''])
-                                
-            sfn = 'pbs-%s-%i.sh' % (dataset, i)
-            write_file(script, sfn)
-            os.system('chmod 755 %s' % sfn)
-
-        # Collapse contiguous ranges
-        strings = []
-        if len(need):
-            start = need.pop(0)
-            end = start
-            while len(need):
-                x = need.pop(0)
-                if x == end + 1:
-                    # extend this run
-                    end = x
-                else:
-                    # run finished; output and start new one.
-                    if start == end:
-                        strings.append('%i' % start)
-                    else:
-                        strings.append('%i-%i' % (start, end))
-                    start = end = x
-            # done; output
-            if start == end:
-                strings.append('%i' % start)
-            else:
-                strings.append('%i-%i' % (start, end))
-            print ','.join(strings)
-        else:
-            print 'Done (party now)'
+        todo()
         sys.exit(0)
-
 
     if not opt.plots:
         ps = None
@@ -1700,35 +1700,20 @@ def main():
         print 'Creating output directory', opt.outdir
         os.makedirs(opt.outdir)
 
+    if not len(args):
+        args.append(arr)
+
     if len(args):
-        A = []
         for a in args:
             tileid = int(a)
             band = tileid / 1000
             tileid = tileid % 1000
+            assert(tileid < len(T))
             print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
+            t0 = Time()
             one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
                       opt.cube, opt.plots2)
-            #A.append((T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp))
-        #mp.map(_bounce_one_coadd, A)
-        sys.exit(0)
-
-    if arr is None:
-        print 'No tile(s) specified'
-        parser.print_help()
-        sys.exit(0)
-
-    band = arr / 1000
-    assert(band in bands)
-    tile = arr % 1000
-    assert(tile < len(T))
-
-    print 'Doing coadd tile', T.coadd_id[tile], 'band', band
-
-    t0 = Time()
-    one_coadd(T[tile], band, WISE, ps, False, opt.outdir, mp, opt.cube, opt.plots2)
-    print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
-
+            print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
 if __name__ == '__main__':
     main()
