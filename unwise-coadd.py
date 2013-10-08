@@ -249,7 +249,8 @@ def check_md5s(WISE):
             if rtn:
                 print 'ERROR: return code', rtn
 
-def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
+def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2,
+              frame0, nframes):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -317,6 +318,14 @@ def one_coadd(ti, band, WISE, ps, wishlist, outdir, mp, do_cube, plots2):
         WISE.cut(ok)
         print 'Cut out bad scans in W4:', len(WISE), 'remaining'
 
+    if frame0 or nframes:
+        i0 = frame0
+        if nframes:
+            WISE = WISE[frame0:frame0 + nframes]
+        else:
+            WISE = WISE[frame0:]
+        print 'Cut to', len(WISE), 'frames starting from index', frame0
+        
     if wishlist:
         for wise in WISE:
             intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
@@ -1619,6 +1628,11 @@ def main():
     parser.add_option('--dataset', dest='dataset', default='sequels',
                       help='Dataset (region of sky) to coadd')
 
+    parser.add_option('--frame0', dest='frame0', default=0, type=int,
+                      help='Only use a subset of the frames: starting with frame0')
+    parser.add_option('--nframes', dest='nframes', default=0, type=int,
+                      help='Only use a subset of the frames: number nframes')
+
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -1703,17 +1717,16 @@ def main():
     if not len(args):
         args.append(arr)
 
-    if len(args):
-        for a in args:
-            tileid = int(a)
-            band = tileid / 1000
-            tileid = tileid % 1000
-            assert(tileid < len(T))
-            print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
-            t0 = Time()
-            one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
-                      opt.cube, opt.plots2)
-            print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
+    for a in args:
+        tileid = int(a)
+        band = tileid / 1000
+        tileid = tileid % 1000
+        assert(tileid < len(T))
+        print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
+        t0 = Time()
+        one_coadd(T[tileid], band, WISE, ps, opt.wishlist, opt.outdir, mp,
+                  opt.cube, opt.plots2, opt.frame0, opt.nframes)
+        print 'Tile', T.coadd_id[tile], 'band', band, 'took:', Time()-t0
 
 if __name__ == '__main__':
     main()
