@@ -251,7 +251,7 @@ def check_md5s(WISE):
 
 def one_coadd(ti, band, W, H, pixscale, WISE,
               ps, wishlist, outdir, mp, do_cube, plots2,
-              frame0, nframes):
+              frame0, nframes, force):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -272,7 +272,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     ofn = prefix + '-img.fits'
     if os.path.exists(ofn):
         print 'Output file exists:', ofn
-        return 0
+        if not force:
+            return 0
 
     cowcs = get_coadd_tile_wcs(ti.ra, ti.dec, W, H, pixscale)
     copoly = np.array(zip(*walk_wcs_boundary(cowcs, step=W/2., margin=10)))
@@ -306,8 +307,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     print 'Cut out qual_frame = 0;', len(WISE), 'remaining'
     
     print 'Moon_masked:', np.unique(WISE.moon_masked)
-    WISE.cut(WISE.moon_masked == False)
-    print 'Cut moon_masked:', len(WISE), 'remaining'
+    # WISE.cut(WISE.moon_masked == False)
+    # print 'Cut moon_masked:', len(WISE), 'remaining'
+    # DEBUG -- sort by mooniness
+    WISE.cut(np.argsort(WISE.moon_masked))
 
     if band in [3,4]:
         WISE.cut(WISE.dtanneal > 2000.)
@@ -899,6 +902,77 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
     assert(len(rimgs) == len(WISE))
 
     if ps:
+        # Plot round-one images
+        plt.figure(figsize=(8,8))
+        plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99,
+                            hspace=0.05, wspace=0.05)
+        ngood = len([x for x in rimgs if x is not None])
+        cols = int(np.ceil(np.sqrt(float(ngood))))
+        rows = int(np.ceil(ngood / float(cols)))
+        print 'ngood', ngood, 'rows,cols', rows,cols
+        plt.clf()
+        i = 0
+        for j,rr in enumerate(rimgs):
+            if rr is None:
+                continue
+            plt.subplot(rows, cols, i+1)
+            i += 1
+            print 'Subplot', i, 'moon:', WISE.moon_masked[j]
+            sig1 = np.sqrt(1./rr.w)
+            plt.imshow(rr.rimg, interpolation='nearest', origin='lower',
+                       vmin=-2.*sig1, vmax=3.*sig1)
+            plt.xticks([]); plt.yticks([])
+        ps.savefig()
+
+        plt.clf()
+        i = 0
+        for j,rr in enumerate(rimgs):
+            if rr is None:
+                continue
+            plt.subplot(rows, cols, i+1)
+            i += 1
+            sig1 = np.sqrt(1./rr.w)
+            plt.imshow(rr.img, interpolation='nearest', origin='lower',
+                       vmin=-2.*sig1, vmax=3.*sig1)
+            plt.xticks([]); plt.yticks([])
+        ps.savefig()
+
+        plt.clf()
+        ploti = 0
+        for j,rr in enumerate(rimgs):
+            if rr is None:
+                continue
+            fullimg = fitsio.read(WISE.intfn[j])
+            fullimg -= rr.sky
+            ploti += 1
+            plt.subplot(rows, cols, ploti)
+            print 'zpscale', rr.zpscale
+            sig1 = np.sqrt(1./rr.w) / rr.zpscale
+            plt.imshow(fullimg, interpolation='nearest', origin='lower',
+                       vmin=-2.*sig1, vmax=3.*sig1)
+            plt.xticks([]); plt.yticks([])
+        ps.savefig()
+
+        plt.clf()
+        ploti = 0
+        for j,rr in enumerate(rimgs):
+            if rr is None:
+                continue
+            fullimg = fitsio.read(WISE.intfn[j])
+            binned = reduce(np.add, [fullimg[i/4::4, i%4::4] for i in range(16)])
+            binned /= 16.
+            binned -= rr.sky
+            ploti += 1
+            plt.subplot(rows, cols, ploti)
+            sig1 = np.sqrt(1./rr.w) / rr.zpscale
+            plt.imshow(binned, interpolation='nearest', origin='lower',
+                       vmin=-2.*sig1, vmax=3.*sig1)
+            plt.xticks([]); plt.yticks([])
+        ps.savefig()
+
+
+        sys.exit(0)
+        
         # Plots of round-one per-image results.
         plt.figure(figsize=(4,4))
         plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
@@ -1379,6 +1453,81 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     coimgsq = np.zeros((H,W))
     cow    = np.zeros((H,W))
 
+
+    for wise in WISE:
+        fullimg = fitsio.read(wise.intfn)
+        intfn = wise.intfn
+        uncfn = intfn.replace('-int-', '-unc-')
+        if unc_gz:
+            uncfn = uncfn + '.gz'
+        maskfn = intfn.replace('-int-', '-msk-')
+        if mask_gz:
+            maskfn = maskfn + '.gz'
+        fullunc  = fitsio.FITS(uncfn) [0].read()
+        fullmask = fitsio.FITS(maskfn)[0].read()
+        maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
+                                           10,11,12,13,14,15,16,17,18,
+                                           21,26,27,28]])
+        
+        fullok = ((fullmask & maskbits) == 0)
+        fullok[fullunc == 0] = False
+        fullok[np.logical_not(np.isfinite(fullimg))] = False
+        fullok[np.logical_not(np.isfinite(fullunc))] = False
+        # approx std,median
+        sig1 = median_f(fullunc[::4,::4][fullok[::4,::4]].astype(np.float32))
+        med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
+        # add some noise to smooth out "dynacal" artifacts
+        fullimg += np.random.normal(scale=sig1, size=fullimg.shape)
+
+        binned = reduce(np.add, [fullimg[i/4::4, i%4::4] for i in range(16)])
+        binned /= 16.
+
+        plt.clf()
+        plt.subplot(2,2,1)
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=med-3.*sig1, vmax=med+3.*sig1)
+        plt.imshow(binned, **ima)
+        plt.colorbar()
+
+        for nnum,nsub in enumerate([5, 10]):
+            S = fullimg.shape[0]
+            ii = np.linspace(0, S, nsub+1).astype(int)
+            jj = np.linspace(0, S, nsub+1).astype(int)
+
+            blocksky = np.zeros_like(fullimg)
+            subskies = np.zeros((len(ii)-1, len(jj)-1))
+
+            for inum,(ilo,ihi) in enumerate(zip(ii, ii[1:])):
+                for jnum,(jlo,jhi) in enumerate(zip(jj, jj[1:])):
+                    imgsub = fullimg[ilo:ihi, jlo:jhi]
+                    #uncsub = fullunc[ilo:ihi, jlo:jhi]
+                    ssky = estimate_sky(imgsub, med - 2.*sig1, med + 1.*sig1)
+
+                    blocksky[ilo:ihi, jlo:jhi] = ssky
+                    subskies[inum, jnum] = ssky
+
+            # plt.clf()
+            # plt.imshow(blocksky, interpolation='nearest', origin='lower')
+            # plt.colorbar()
+            # ps.savefig()
+            # plt.clf()
+            # plt.imshow(subskies, interpolation='nearest', origin='lower')
+            # plt.colorbar()
+            # ps.savefig()
+
+            import scipy.interpolate as interp
+            spline = interp.RectBivariateSpline((jj[:-1] + jj[1:])/2., (ii[:-1] + ii[1:])/2., subskies.T)
+
+            splsky = spline(np.arange(S), np.arange(S)).T
+
+            plt.subplot(2,2, nnum + 3)
+            plt.imshow(splsky, **ima)
+            plt.colorbar()
+        plt.suptitle('%s %i' % (wise.scan_id, wise.frame_num))
+        ps.savefig()
+
+                    
+
     args = []
     for wi,wise in enumerate(WISE):
         args.append((wi, len(WISE), wise, table, L, ps, band, cowcs))
@@ -1635,6 +1784,9 @@ def main():
     parser.add_option('--nframes', dest='nframes', default=0, type=int,
                       help='Only use a subset of the frames: number nframes')
 
+    parser.add_option('--force', dest='force', action='store_true', default=False,
+                      help='Run even if output file already exists?')
+
     opt,args = parser.parse_args()
     if opt.threads:
         mp = multiproc(opt.threads)
@@ -1656,6 +1808,8 @@ def main():
 
     dataset = opt.dataset
 
+    randomize = False
+
     if dataset == 'sequels':
         # SEQUELS
         r0,r1 = 120.0, 210.0
@@ -1665,11 +1819,13 @@ def main():
         r0,r1 =  9.0, 12.5
         d0,d1 = 40.5, 42.5
         
-    elif dataset == 'npole':
+    elif dataset in ['npole', 'npole-rand']:
         # North ecliptic pole
         # (270.0, 66.56)
         r0,r1 = 265.0, 275.0
         d0,d1 =  64.6,  68.6
+        if dataset == 'npole-rand':
+            randomize = True
     else:
         assert(False)
 
@@ -1691,6 +1847,11 @@ def main():
         WISE = get_wise_frames(r0,r1,d0,d1)
         # bool -> uint8 to avoid confusing fitsio
         WISE.moon_masked = WISE.moon_masked.astype(np.uint8)
+
+        if randomize:
+            print 'Randomizing frame order...'
+            WISE.cut(np.random.permutation(len(WISE)))
+
         WISE.writeto(fn)
     WISE.moon_masked = (WISE.moon_masked != 0)
 
@@ -1726,7 +1887,7 @@ def main():
         t0 = Time()
         one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
                   opt.wishlist, opt.outdir, mp,
-                  opt.cube, opt.plots2, opt.frame0, opt.nframes)
+                  opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force)
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
 
 if __name__ == '__main__':

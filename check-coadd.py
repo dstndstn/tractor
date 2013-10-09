@@ -293,7 +293,7 @@ def paper_plots(coadd_id, band):
         wise_unc_fudge = 2.
 
     
-    if True:
+    if False:
         ps.skip(1)
     else:
         # Sky / Error properties
@@ -326,8 +326,36 @@ def paper_plots(coadd_id, band):
         plt.plot(xx, max(nwise) * np.exp(-(xx**2)/(2.)), 'm-', alpha=0.5)
         plt.xlabel('Pixel / Uncertainty ($\sigma$)')
         plt.ylabel('Number of pixels')
-        plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
-        #plt.legend((p1,p2), ('WISE', 'WISE corr'))
+        #plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
+
+        emode = e[np.argmax(h3)]
+        print 'e mode', emode
+        wc = (wiseim-wisesky) / unc
+        print 'wc', wc.shape
+        pp = []
+        for ii,cc in [
+            (np.linspace(0, wc.shape[0], 11), 'r'),
+            (np.linspace(0, wc.shape[0], 21), 'g'),
+            ]:
+            nmx = []
+            for ilo,ihi in zip(ii, ii[1:]):
+                for jlo,jhi in zip(ii, ii[1:]):
+                    wsub = wiseim[ilo:ihi, jlo:jhi]
+                    usub = unc[ilo:ihi, jlo:jhi]
+                    ssky = wisesky
+                    # ssky = estimate_sky(wsub, wisemed-2.*wisesig, wisemed+1.*wisesig)
+                    h,e = np.histogram(((wsub - ssky)/usub).ravel(), **ha1)
+                    imax = np.argmax(h)
+                    de = emode - e[imax]
+                    #de = 0
+                    plt.plot(ee + de, (h/1.).repeat(2), color=cc, lw=1, alpha=0.1)
+                    nmx.append(max(h))
+            p4 = plt.plot(xx, np.median(nmx) * np.exp(-(xx**2)/(2.)), '-', color=cc, alpha=0.5)
+            plt.plot(xx, np.median(nmx) * np.exp(-(xx**2)/(2. * 2**2)), '-', color=cc, alpha=0.5)
+            pp.append(p4)
+        
+        plt.legend((p1,p2,p3,pp[0],pp[1]), ('WISE', 'WISE corr', 'unWISE', '10x10 sub', '20x20 sub'))
+
         yl,yh = plt.ylim()
         plt.ylim(3, yh)
         plt.xlim(lo,hi)
@@ -522,6 +550,35 @@ def composite(coadd_id):
         ps.savefig()
 
 
+def northpole_plots():
+    for dirpat in ['n%i', 'nr%i',]:
+        for n in range(0, 23):
+            dir1 = dirpat % n
+            fn = os.path.join(dir1, 'unwise-2709p666-w1-img-w.fits')
+            if not os.path.exists(fn):
+                print 'Skipping', fn
+                continue
+            print 'Reading', fn
+            I = fitsio.read(fn)
+    
+            fn = os.path.join(dir1, 'unwise-2709p666-w1-n-w.fits')
+            N = fitsio.read(fn)
+            print 'Median N:', np.median(N)
+            print 'Median non-zero N:', np.median(N[N > 0])
+    
+            plo,phi = [np.percentile(I, p) for p in [25,95]]
+            print 'Percentiles', plo,phi
+            ima = dict(interpolation='nearest', origin='lower', vmin=plo, vmax=phi, cmap='gray')
+    
+            plt.clf()
+            plt.imshow(I, **ima)
+            ps.savefig()
+    
+            plt.clf()
+            plt.imshow(I[1000:1201,1000:1201], **ima)
+            ps.savefig()
+
+
 # getfn=False,
 def read(dirnm, fn, header=False):
     pth = os.path.join(dirnm, fn)
@@ -531,12 +588,14 @@ def read(dirnm, fn, header=False):
     #    return data,pth
     return data
 
+#ps.suffixes = ['png','pdf']
+
+northpole_plots()
+sys.exit(0)
 
 T = fits_table('sequels-atlas.fits')
+paper_plots(T.coadd_id[0], 1)
 
-ps.suffixes = ['png','pdf']
-
-#paper_plots(T.coadd_id[0], 1)
 composite(T.coadd_id[0])
 #pixel_area()
 sys.exit(0)
