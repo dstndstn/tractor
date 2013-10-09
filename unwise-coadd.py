@@ -325,42 +325,50 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
              (WISE.dec + dd >= d0) * (WISE.dec - dd <= d1))
     print 'cut to', len(WISE), 'in RA,Dec box'
 
+    WISE.use = np.ones(len(WISE), bool)
+
     print 'Qual_frame scores:', np.unique(WISE.qual_frame)
-    WISE.cut(WISE.qual_frame > 0)
-    print 'Cut out qual_frame = 0;', len(WISE), 'remaining'
-    
-    print 'Moon_masked:', np.unique(WISE.moon_masked)
-    # WISE.cut(WISE.moon_masked == False)
-    # print 'Cut moon_masked:', len(WISE), 'remaining'
-    # DEBUG -- sort by mooniness
-    #WISE.cut(np.argsort(WISE.moon_masked))
+    WISE.use *= (WISE.qual_frame > 0)
+    print 'Cut out qual_frame = 0;', sum(WISE.use), 'remaining'
 
     if band in [3,4]:
-        WISE.cut(WISE.dtanneal > 2000.)
-        print 'Cut out dtanneal <= 2000 seconds:', len(WISE), 'remaining'
+        WISE.use *= (WISE.dtanneal > 2000.)
+        print 'Cut out dtanneal <= 2000 seconds:', sum(WISE.use), 'remaining'
 
     if band == 4:
         ok = np.array([np.logical_or(s < '03752a', s > '03761b')
                        for s in WISE.scan_id])
-        WISE.cut(ok)
-        print 'Cut out bad scans in W4:', len(WISE), 'remaining'
+        WISE.use *= ok
+        print 'Cut out bad scans in W4:', sum(WISE.use), 'remaining'
 
     if band in [3,4]:
+        print 'Moon_masked:', np.unique(WISE.moon_masked)
+        # WISE.cut(WISE.moon_masked == False)
+        # print 'Cut moon_masked:', len(WISE), 'remaining'
+        # DEBUG -- sort by mooniness
+        # WISE.cut(np.argsort(WISE.moon_masked))
+
         # Cut on moon, based on (robust) measure of pixelwise standard deviations
-        nomoon = np.logical_not(WISE.moon_masked)
-        print sum(nomoon), 'of', len(WISE), 'frames are not moon_masked'
-        nomoonstdevs = WISE.intmed16p[nomoon]
-        med = np.median(nomoonstdevs)
-        mad = 1.4826 * np.median(np.abs(nomoonstdevs - med))
-        print 'Median', med, 'MAD', mad
-        moonstdevs = WISE.intmed16p[WISE.moon_masked]
-        okmoon = (moonstdevs - med)/mad < 5.
-        print sum(np.logical_not(okmoon)), 'of', len(okmoon), 'moon-masked frames have large pixel variance'
-        keep = np.ones(len(WISE), bool)
-        keep[WISE.moon_masked] = okmoon
-        WISE.cut(keep)
-        print 'Cut to', len(WISE), 'on moon'
-        del keep
+        if sum(WISE.moon_masked[WISE.use]):
+            moon = WISE.moon_masked[WISE.use]
+            nomoon = np.logical_not(moon)
+            print sum(nomoon), 'of', sum(WISE.use), 'frames are not moon_masked'
+            nomoonstdevs = WISE.intmed16p[WISE.use][nomoon]
+            med = np.median(nomoonstdevs)
+            mad = 1.4826 * np.median(np.abs(nomoonstdevs - med))
+            print 'Median', med, 'MAD', mad
+            moonstdevs = WISE.intmed16p[WISE.use][moon]
+            okmoon = (moonstdevs - med)/mad < 5.
+            print sum(np.logical_not(okmoon)), 'of', len(okmoon), 'moon-masked frames have large pixel variance'
+            WISE.use[WISE.use][moon] *= okmoon
+            print 'Cut to', sum(WISE.use), 'on moon'
+            del moon
+            del nomoon
+            del nomoonstdevs
+            del med
+            del mad
+            del moonstdevs
+            del okmoon
 
     if frame0 or nframes:
         i0 = frame0
@@ -383,11 +391,17 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     # *inclusive* coordinates of the bounding-box in the image overlapping coadd
     WISE.imextent = np.zeros((len(WISE), 4), int)
 
+    WISE.imagew = np.zeros(len(WISE), int)
+    WISE.imageh = np.zeros(len(WISE), int)
+    WISE.intfn  = np.zeros(len(WISE), object)
+    WISE.wcs    = np.zeros(len(WISE), object)
+
     failedfiles = []
-    res = []
     pixinrange = 0.
 
     for wi,wise in enumerate(WISE):
+        if not wise.use:
+            continue
         print
         print (wi+1), 'of', len(WISE)
         intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
@@ -406,9 +420,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
         if not intersects:
             print 'Image does not intersect target'
-            res.append(None)
+            WISE.use[wi] = False
             continue
-        res.append((intfn, wcs, w, h, poly))
 
         cpoly = clip_polygon(copoly, poly)
         xy = np.array([cowcs.radec2pixelxy(r,d)[1:] for r,d in cpoly])
@@ -429,8 +442,13 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                                np.clip(y0, 0, h-1),
                                np.clip(y1, 0, h-1)]
 
-        print 'wi', wi
-        print 'row', WISE.row[wi]
+        WISE.intfn[wi] = intfn
+        WISE.imagew[wi] = w
+        WISE.imageh[wi] = h
+        WISE.wcs[wi] = wcs
+
+        #print 'wi', wi
+        #print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
         print 'Coadd extent:', WISE.coextent[wi,:]
 
@@ -444,12 +462,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
             print '  ', f
         return -1
 
-    I = np.flatnonzero(np.array([r is not None for r in res]))
-    WISE.cut(I)
-    print 'Cut to', len(WISE), 'intersecting target'
-    res = [r for r in res if r is not None]
-    WISE.intfn = np.array([r[0] for r in res])
-    WISE.wcs = np.array([r[1] for r in res])
+    # convert from object array to string array; '' rather than '0'
+    WISE.intfn = np.array([{0:''}.get(s,s) for s in WISE.intfn])
+
+    print 'Cut to', sum(WISE.use), 'intersecting target'
 
     t1 = Time()
     print 'Up to coadd_wise:'
@@ -457,7 +473,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
-         )= coadd_wise(cowcs, WISE, ps, band, mp1, mp2, do_cube, plots2=plots2)
+         )= coadd_wise(cowcs, WISE[WISE.use], ps, band, mp1, mp2, do_cube, plots2=plots2)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -482,7 +498,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     hdr.add_record(dict(name='UNW_VER', value=version['Revision'],
                         comment='unWISE code SVN revision'))
     hdr.add_record(dict(name='UNW_DVER', value=1,
-                        comment='unWISE data model version')
+                        comment='unWISE data model version'))
     hdr.add_record(dict(name='UNW_URL', value=version['URL'], comment='SVN URL'))
     hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(),
                         comment='unWISE run time'))
@@ -509,25 +525,44 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         ofn = prefix + '-cube.fits'
         fitsio.write(ofn, cube.astype(np.float32), header=hdr, clobber=True)
 
-    ii = []
-    for i,(mm,r) in enumerate(zip(masks, res)):
+    WISE.included = np.zeros(len(WISE), bool)
+    WISE.sky1 = np.zeros(len(WISE), np.float32)
+    WISE.sky2 = np.zeros(len(WISE), np.float32)
+    WISE.zeropoint = np.zeros(len(WISE), np.float32)
+    WISE.npixoverlap = np.zeros(len(WISE), np.int32)
+    WISE.npixpatched = np.zeros(len(WISE), np.int32)
+    WISE.npixrchi    = np.zeros(len(WISE), np.int32)
+    WISE.weight      = np.zeros(len(WISE), np.float32)
+
+    Iused = np.flatnonzero(WISE.use)
+    assert(len(Iused) == len(masks))
+
+    for i,mm in enumerate(masks):
         if mm is None:
             continue
-        ii.append(i)
-
         if not mm.included:
             continue
+
+        ii = Iused[i]
+        WISE.included[ii] = True
+        WISE.sky1[ii] = mm.sky
+        WISE.sky2[ii] = mm.dsky
+        WISE.zeropoint[ii] = mm.zp
+        WISE.npixoverlap[ii] = mm.ncopix
+        WISE.npixpatched[ii] = mm.npatched
+        WISE.npixrchi[ii] = mm.nrchipix
+        WISE.weight[ii] = mm.w
 
         maskdir = os.path.join(outdir, 'masks-' + tag)
         if not os.path.exists(maskdir):
             os.mkdir(maskdir)
 
-        ofn = WISE.intfn[i].replace('-int', '')
+        ofn = WISE.intfn[ii].replace('-int', '')
         ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-'
                            + os.path.basename(ofn))
-        (nil,wcs,w,h,poly) = r
+        w,h = WISE.imagew[ii],WISE.imageh[ii]
         fullmask = np.zeros((h,w), mm.omask.dtype)
-        x0,x1,y0,y1 = WISE.imextent[i,:]
+        x0,x1,y0,y1 = WISE.imextent[ii,:]
         fullmask[y0:y1+1, x0:x1+1] = mm.omask
         fitsio.write(ofn, fullmask, clobber=True)
 
@@ -536,23 +571,12 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         rtn = os.system(cmd)
         print 'Result:', rtn
 
-    WISE.cut(np.array(ii))
-    masks = [masks[i] for i in ii]
-
-    WISE.coadd_sky  = np.array([m.sky for m in masks])
-    WISE.coadd_dsky = np.array([m.dsky for m in masks])
-    WISE.zeropoint  = np.array([m.zp for m in masks])
-    WISE.npixoverlap = np.array([m.ncopix for m in masks])
-    WISE.npixpatched = np.array([m.npatched for m in masks])
-    WISE.npixrchi    = np.array([m.nrchipix for m in masks])
-    WISE.included    = np.array([m.included for m in masks]).astype(np.uint8)
-    WISE.weight      = np.array([m.w for m in masks]).astype(np.float32)
-
     WISE.delete_column('wcs')
+    # fitsio
+    WISE.included = WISE.included.astype(np.uint8)
 
     ofn = prefix + '-frames.fits'
     WISE.writeto(ofn)
-
 
     return 0
 
