@@ -352,6 +352,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         if sum(WISE.moon_masked[WISE.use]):
             moon = WISE.moon_masked[WISE.use]
             nomoon = np.logical_not(moon)
+            Imoon = np.flatnonzero(WISE.use)[moon]
+            assert(sum(moon) == len(Imoon))
             print sum(nomoon), 'of', sum(WISE.use), 'frames are not moon_masked'
             nomoonstdevs = WISE.intmed16p[WISE.use][nomoon]
             med = np.median(nomoonstdevs)
@@ -360,8 +362,9 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
             moonstdevs = WISE.intmed16p[WISE.use][moon]
             okmoon = (moonstdevs - med)/mad < 5.
             print sum(np.logical_not(okmoon)), 'of', len(okmoon), 'moon-masked frames have large pixel variance'
-            WISE.use[WISE.use][moon] *= okmoon
+            WISE.use[Imoon] *= okmoon
             print 'Cut to', sum(WISE.use), 'on moon'
+            del Imoon
             del moon
             del nomoon
             del nomoonstdevs
@@ -399,11 +402,14 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     failedfiles = []
     pixinrange = 0.
 
+    nu = 0
+    NU = sum(WISE.use)
     for wi,wise in enumerate(WISE):
         if not wise.use:
             continue
         print
-        print (wi+1), 'of', len(WISE)
+        nu += 1
+        print nu, 'of', NU
         intfn = get_l1b_file(wisedir, wise.scan_id, wise.frame_num, band)
         print 'intfn', intfn
         try:
