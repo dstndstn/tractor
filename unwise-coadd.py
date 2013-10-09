@@ -1529,42 +1529,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     coimgsq = np.zeros((H,W))
     cow    = np.zeros((H,W))
 
-    if ps:
-        nomoonstdevs  = WISE.intstddev[np.logical_not(WISE.moon_masked)]
-        nomoonstdev2s = WISE.intmed16p[np.logical_not(WISE.moon_masked)]
-        moonstdevs  = WISE.intstddev[WISE.moon_masked]
-        moonstdev2s = WISE.intmed16p[WISE.moon_masked]
-    
-        print 'No-moon stdevs:', nomoonstdevs
-        print 'Yes-moon stdevs:', moonstdevs
-        print 'No-moon stdev2s:', nomoonstdev2s
-        print 'Yes-moon stdev2s:', moonstdev2s
-        print 'No-moon stdevs: median', np.median(nomoonstdevs)
-        print 'Yes-moon stdevs: median', np.median(moonstdevs)
-        print 'No-moon stdev2s: median', np.median(nomoonstdev2s)
-        print 'Yes-moon stdev2s: median', np.median(moonstdev2s)
-    
-        med = np.median(nomoonstdevs)
-        mad = 1.4826 * np.median(np.abs(nomoonstdevs - med))
-        med2 = np.median(nomoonstdev2s)
-        mad2 = 1.4826 * np.median(np.abs(nomoonstdev2s - med2))
-    
-        plt.clf()
-        plt.subplot(2,1,1)
-        ha = dict(histtype='step', range=(0,100), bins=50)
-        plt.hist(nomoonstdevs, color='b', lw=3, **ha)
-        plt.hist(moonstdevs, color='r', **ha)
-        plt.axvline(med, color='k')
-        plt.axvline(med+3.*mad, color='k')
-        plt.axvline(med+5.*mad, color='k')
-        plt.subplot(2,1,2)
-        plt.hist(nomoonstdev2s, color='b', lw=3, **ha)
-        plt.hist(moonstdev2s, color='r', **ha)
-        plt.axvline(med2, color='k')
-        plt.axvline(med2+3.*mad2, color='k')
-        plt.axvline(med2+5.*mad2, color='k')
-        ps.savefig()
-
     # Experiments with fitting background level (for moon, etc)
     if ps and False:
         for wise in WISE:
