@@ -250,7 +250,7 @@ def check_md5s(WISE):
                 print 'ERROR: return code', rtn
 
 def one_coadd(ti, band, W, H, pixscale, WISE,
-              ps, wishlist, outdir, mp, do_cube, plots2,
+              ps, wishlist, outdir, mp1, mp2, do_cube, plots2,
               frame0, nframes, force):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
@@ -417,7 +417,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
-         )= coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=plots2)
+         )= coadd_wise(cowcs, WISE, ps, band, mp1, mp2, do_cube, plots2=plots2)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -877,7 +877,8 @@ class coaddacc():
             del mm.rmask2
         
 
-def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
+def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
+               do_cube, plots2=False, table=True):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
@@ -892,7 +893,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
     #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
 
     (rimgs, coimg1, cow1, coppstd1, cowimgsq1
-     )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp)
+     )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp1)
     cowimg1 = coimg1 * cow1
 
     # Using the difference between the coadd and the resampled
@@ -1040,7 +1041,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
     # outputs in memory at once).
     ps1 = (ps is not None)
     delmm = (ps is None)
-    if not mp.pool:
+    if not mp2.pool:
         coadd = coaddacc(H, W, do_cube=do_cube, nims=len(rimgs))
         masks = []
         ri = -1
@@ -1069,7 +1070,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp, do_cube, plots2=False, table=True):
                                                    band)
             args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1))
         #masks = mp.map(_coadd_one_round2, args)
-        masks = mp.map(_bounce_one_round2, args)
+        masks = mp2.map(_bounce_one_round2, args)
         del args
         print 'Accumulating second-round coadds...'
         t0 = Time()
@@ -1756,6 +1757,9 @@ def main():
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--threads', dest='threads', type=int, help='Multiproc',
                       default=None)
+    parser.add_option('--threads1', dest='threads1', type=int, help='Multithreading during round 1',
+                      default=None)
+
     parser.add_option('--todo', dest='todo', action='store_true', default=False,
                       help='Print and plot fields to-do')
     parser.add_option('-w', dest='wishlist', action='store_true', default=False,
@@ -1788,10 +1792,15 @@ def main():
                       help='Run even if output file already exists?')
 
     opt,args = parser.parse_args()
+
     if opt.threads:
-        mp = multiproc(opt.threads)
+        mp2 = multiproc(opt.threads)
     else:
-        mp = multiproc()
+        mp2 = multiproc()
+    if opt.threads1 is None:
+        mp1 = mp2
+    else:
+        mp1 = multiproc(opt.threads1)
 
     batch = False
     arr = os.environ.get('PBS_ARRAYID')
@@ -1815,6 +1824,10 @@ def main():
         r0,r1 = 120.0, 210.0
         d0,d1 =  45.0,  60.0
 
+    elif dataset == 'w3':
+        r0,r1 = 210.593,  219.132
+        d0,d1 =  51.1822,  54.1822
+        
     elif dataset == 'm31':
         r0,r1 =  9.0, 12.5
         d0,d1 = 40.5, 42.5
@@ -1886,7 +1899,7 @@ def main():
         print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
         t0 = Time()
         one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
-                  opt.wishlist, opt.outdir, mp,
+                  opt.wishlist, opt.outdir, mp1, mp2,
                   opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force)
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
 

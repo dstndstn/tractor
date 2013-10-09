@@ -13,6 +13,13 @@ import fitsio
 
 # qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-99 ./sequels.py
 
+''' CFHT-LS W3 test area
+http://terapix.iap.fr/article.php?id_article=841
+wget 'ftp://ftpix.iap.fr/pub/CFHTLS-zphot-T0007/photozCFHTLS-W3_270912.out.gz'
+gunzip photozCFHTLS-W3_270912.out.gz 
+text2fits.py -n "*********" -f sddjjffffffjfjffffffjfffjffffffffffffffffff -H "id ra dec flag stargal r2 photoz zpdf zpdf_l68 zpdf_u168 chi2_zpdf mod ebv nbfilt zmin zl68 zu68 chi2_best zp_2 chi2_2 mods chis zq chiq modq u g r i z y eu eg er ei ez ey mu mg mr mi mz my" photozCFHTLS-W3_270912.out photozCFHTLS-W3_270912.fits
+'''
+
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
     d = os.environ.get('PBS_O_WORKDIR')
