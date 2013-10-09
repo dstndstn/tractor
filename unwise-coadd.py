@@ -274,7 +274,7 @@ def check_md5s(WISE):
 
 def one_coadd(ti, band, W, H, pixscale, WISE,
               ps, wishlist, outdir, mp1, mp2, do_cube, plots2,
-              frame0, nframes, force):
+              frame0, nframes, force, medfilt):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -479,7 +479,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
-         )= coadd_wise(cowcs, WISE[WISE.use], ps, band, mp1, mp2, do_cube, plots2=plots2)
+         )= coadd_wise(cowcs, WISE[WISE.use], ps, band, mp1, mp2, do_cube, medfilt,
+                       plots2=plots2)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -950,7 +951,7 @@ class coaddacc():
         
 
 def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
-               do_cube, plots2=False, table=True):
+               do_cube, medfilt, plots2=False, table=True):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
@@ -965,7 +966,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
     #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
 
     (rimgs, coimg1, cow1, coppstd1, cowimgsq1
-     )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp1)
+     )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp1, medfilt)
     cowimg1 = coimg1 * cow1
 
     # Using the difference between the coadd and the resampled
@@ -1370,7 +1371,7 @@ def estimate_sky(img, lo, hi, omit=None, maxdev=0., return_fit=False):
 
     return mx
 
-def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
+def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
     t00 = Time()
     print
     print 'Coadd round 1, image', (i+1), 'of', N
@@ -1459,6 +1460,16 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
     fullok[fullunc == 0] = False
     fullok[np.logical_not(np.isfinite(fullimg))] = False
     fullok[np.logical_not(np.isfinite(fullunc))] = False
+
+    if medfilt:
+        from scipy.ndimage.filters import median_filter
+        tmf0 = Time()
+        ok = patch_image(fullimg, fullok.copy())
+        mf = median_filter(fullimg, size=medfilt)
+        fullimg -= mf
+        img = fullimg[slc]
+        print 'Median filtering with box size', medfilt, 'took', Time()-tmf0
+
     # approx median
     med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
     # add some noise to smooth out "dynacal" artifacts
@@ -1522,14 +1533,14 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs)):
 
 
 def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
-                       tinyw, mp):
+                       tinyw, mp, medfilt):
     W = cowcs.get_width()
     H = cowcs.get_height()
     coimg  = np.zeros((H,W))
     coimgsq = np.zeros((H,W))
     cow    = np.zeros((H,W))
 
-    # Experiments with fitting background level (for moon, etc)
+    # Experiment with fitting background level (for moon, etc)
     if ps and False:
         for wise in WISE:
             fullimg = fitsio.read(wise.intfn)
@@ -1618,7 +1629,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
 
     args = []
     for wi,wise in enumerate(WISE):
-        args.append((wi, len(WISE), wise, table, L, ps, band, cowcs))
+        args.append((wi, len(WISE), wise, table, L, ps, band, cowcs, medfilt))
     rimgs = mp.map(_coadd_one_round1, args)
     del args
 
@@ -1875,6 +1886,9 @@ def main():
     parser.add_option('--nframes', dest='nframes', default=0, type=int,
                       help='Only use a subset of the frames: number nframes')
 
+    parser.add_option('--medfilt', dest='medfilt', type=int, default=0,
+                      help='Median filter with a box this size, to remove varying background; probably want this odd')
+
     parser.add_option('--force', dest='force', action='store_true', default=False,
                       help='Run even if output file already exists?')
 
@@ -1987,7 +2001,8 @@ def main():
         t0 = Time()
         one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
                   opt.wishlist, opt.outdir, mp1, mp2,
-                  opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force)
+                  opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force,
+                  opt.medfilt)
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
 
 if __name__ == '__main__':
