@@ -175,12 +175,26 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
     WISE.moon_masked = np.zeros(len(WISE), bool)
     WISE.dtanneal = np.zeros(len(WISE), np.float32)
 
+    # for band in [1,2,3,4]:
+    #     WISE.set('w%iintmedian'%band, np.zeros(len(WISE), np.float32))
+    #     WISE.set('w%iintstddev'%band, np.zeros(len(WISE), np.float32))
+    #     WISE.set('w%iintmed16p'%band, np.zeros(len(WISE), np.float32))
+    WISE.intmedian = np.zeros(len(WISE), np.float32)
+    WISE.intstddev = np.zeros(len(WISE), np.float32)
+    WISE.intmed16p = np.zeros(len(WISE), np.float32)
+
     WISE.matched = np.zeros(len(WISE), bool)
     
     for nbands in [2,3,4]:
         fn = os.path.join(wisedir, 'WISE-l1b-metadata-%iband.fits' % nbands)
+
+        bb = [1,2,3,4][:nbands]
+
         T = fits_table(fn, columns=['ra', 'dec', 'scan_id', 'frame_num',
-                                    'qual_frame', 'moon_masked', 'dtanneal'])
+                                    'qual_frame', 'moon_masked', 'dtanneal', ] +
+                       ['w%iintmed16ptile' % b for b in bb] +
+                       ['w%iintmedian' % b for b in bb] +
+                       ['w%iintstddev' % b for b in bb])
         print 'Read', len(T), 'from', fn
         # Cut with extra large margins
         T.cut((T.ra  + 2.*margin/cosdec > r0) *
@@ -199,7 +213,7 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
         J = J[K]
         print 'Cut to', len(I), 'matching scan/frame'
 
-        for band in [1,2,3,4]:
+        for band in bb:
             K = (WISE.band[I] == band)
             print 'Band', band, ':', sum(K)
             if sum(K) == 0:
@@ -211,6 +225,15 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
             WISE.moon_masked[I[K]] = np.array([m[band-1] == '1' for m in moon]).astype(WISE.moon_masked.dtype)
             WISE.dtanneal   [I[K]] = T.dtanneal[J[K]].astype(WISE.dtanneal.dtype)
             print 'moon_masked:', np.unique(WISE.moon_masked)
+
+            # WISE.get('w%iintmedian' % band)[I[K]] = T.get('w%iintmedian' % band)[J[K]].astype(np.float32)
+            # WISE.get('w%iintstddev' % band)[I[K]] = T.get('w%iintstddev' % band)[J[K]].astype(np.float32)
+            # WISE.get('w%iintmed16p' % band)[I[K]] = T.get('w%iintmed16ptile' % band)[J[K]].astype(np.float32)
+
+            WISE.intmedian[I[K]] = T.get('w%iintmedian' % band)[J[K]].astype(np.float32)
+            WISE.intstddev[I[K]] = T.get('w%iintstddev' % band)[J[K]].astype(np.float32)
+            WISE.intmed16p[I[K]] = T.get('w%iintmed16ptile' % band)[J[K]].astype(np.float32)
+
             WISE.matched[I[K]] = True
 
     print np.sum(WISE.matched), 'of', len(WISE), 'matched to metadata tables'
@@ -310,7 +333,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     # WISE.cut(WISE.moon_masked == False)
     # print 'Cut moon_masked:', len(WISE), 'remaining'
     # DEBUG -- sort by mooniness
-    WISE.cut(np.argsort(WISE.moon_masked))
+    #WISE.cut(np.argsort(WISE.moon_masked))
 
     if band in [3,4]:
         WISE.cut(WISE.dtanneal > 2000.)
@@ -321,6 +344,23 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                        for s in WISE.scan_id])
         WISE.cut(ok)
         print 'Cut out bad scans in W4:', len(WISE), 'remaining'
+
+    if band in [3,4]:
+        # Cut on moon, based on (robust) measure of pixelwise standard deviations
+        nomoon = np.logical_not(WISE.moon_masked)
+        print sum(nomoon), 'of', len(WISE), 'frames are not moon_masked'
+        nomoonstdevs = WISE.intmed16p[nomoon]
+        med = np.median(nomoonstdevs)
+        mad = 1.4826 * np.median(np.abs(nomoonstdevs - med))
+        print 'Median', med, 'MAD', mad
+        moonstdevs = WISE.intmed16p[WISE.moon_masked]
+        okmoon = (moonstdevs - med)/mad < 5.
+        print sum(np.logical_not(okmoon)), 'of', len(okmoon), 'moon-masked frames have large pixel variance'
+        keep = np.ones(len(WISE), bool)
+        keep[WISE.moon_masked] = okmoon
+        WISE.cut(keep)
+        print 'Cut to', len(WISE), 'on moon'
+        del keep
 
     if frame0 or nframes:
         i0 = frame0
@@ -971,9 +1011,6 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
             plt.xticks([]); plt.yticks([])
         ps.savefig()
 
-
-        sys.exit(0)
-        
         # Plots of round-one per-image results.
         plt.figure(figsize=(4,4))
         plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
@@ -1454,78 +1491,126 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
     coimgsq = np.zeros((H,W))
     cow    = np.zeros((H,W))
 
-
-    for wise in WISE:
-        fullimg = fitsio.read(wise.intfn)
-        intfn = wise.intfn
-        uncfn = intfn.replace('-int-', '-unc-')
-        if unc_gz:
-            uncfn = uncfn + '.gz'
-        maskfn = intfn.replace('-int-', '-msk-')
-        if mask_gz:
-            maskfn = maskfn + '.gz'
-        fullunc  = fitsio.FITS(uncfn) [0].read()
-        fullmask = fitsio.FITS(maskfn)[0].read()
-        maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
-                                           10,11,12,13,14,15,16,17,18,
-                                           21,26,27,28]])
-        
-        fullok = ((fullmask & maskbits) == 0)
-        fullok[fullunc == 0] = False
-        fullok[np.logical_not(np.isfinite(fullimg))] = False
-        fullok[np.logical_not(np.isfinite(fullunc))] = False
-        # approx std,median
-        sig1 = median_f(fullunc[::4,::4][fullok[::4,::4]].astype(np.float32))
-        med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
-        # add some noise to smooth out "dynacal" artifacts
-        fullimg += np.random.normal(scale=sig1, size=fullimg.shape)
-
-        binned = reduce(np.add, [fullimg[i/4::4, i%4::4] for i in range(16)])
-        binned /= 16.
-
+    if ps:
+        nomoonstdevs  = WISE.intstddev[np.logical_not(WISE.moon_masked)]
+        nomoonstdev2s = WISE.intmed16p[np.logical_not(WISE.moon_masked)]
+        moonstdevs  = WISE.intstddev[WISE.moon_masked]
+        moonstdev2s = WISE.intmed16p[WISE.moon_masked]
+    
+        print 'No-moon stdevs:', nomoonstdevs
+        print 'Yes-moon stdevs:', moonstdevs
+        print 'No-moon stdev2s:', nomoonstdev2s
+        print 'Yes-moon stdev2s:', moonstdev2s
+        print 'No-moon stdevs: median', np.median(nomoonstdevs)
+        print 'Yes-moon stdevs: median', np.median(moonstdevs)
+        print 'No-moon stdev2s: median', np.median(nomoonstdev2s)
+        print 'Yes-moon stdev2s: median', np.median(moonstdev2s)
+    
+        med = np.median(nomoonstdevs)
+        mad = 1.4826 * np.median(np.abs(nomoonstdevs - med))
+        med2 = np.median(nomoonstdev2s)
+        mad2 = 1.4826 * np.median(np.abs(nomoonstdev2s - med2))
+    
         plt.clf()
-        plt.subplot(2,2,1)
-        ima = dict(interpolation='nearest', origin='lower',
-                   vmin=med-3.*sig1, vmax=med+3.*sig1)
-        plt.imshow(binned, **ima)
-        plt.colorbar()
-
-        for nnum,nsub in enumerate([5, 10]):
-            S = fullimg.shape[0]
-            ii = np.linspace(0, S, nsub+1).astype(int)
-            jj = np.linspace(0, S, nsub+1).astype(int)
-
-            blocksky = np.zeros_like(fullimg)
-            subskies = np.zeros((len(ii)-1, len(jj)-1))
-
-            for inum,(ilo,ihi) in enumerate(zip(ii, ii[1:])):
-                for jnum,(jlo,jhi) in enumerate(zip(jj, jj[1:])):
-                    imgsub = fullimg[ilo:ihi, jlo:jhi]
-                    #uncsub = fullunc[ilo:ihi, jlo:jhi]
-                    ssky = estimate_sky(imgsub, med - 2.*sig1, med + 1.*sig1)
-
-                    blocksky[ilo:ihi, jlo:jhi] = ssky
-                    subskies[inum, jnum] = ssky
-
-            # plt.clf()
-            # plt.imshow(blocksky, interpolation='nearest', origin='lower')
-            # plt.colorbar()
-            # ps.savefig()
-            # plt.clf()
-            # plt.imshow(subskies, interpolation='nearest', origin='lower')
-            # plt.colorbar()
-            # ps.savefig()
-
-            import scipy.interpolate as interp
-            spline = interp.RectBivariateSpline((jj[:-1] + jj[1:])/2., (ii[:-1] + ii[1:])/2., subskies.T)
-
-            splsky = spline(np.arange(S), np.arange(S)).T
-
-            plt.subplot(2,2, nnum + 3)
-            plt.imshow(splsky, **ima)
-            plt.colorbar()
-        plt.suptitle('%s %i' % (wise.scan_id, wise.frame_num))
+        plt.subplot(2,1,1)
+        ha = dict(histtype='step', range=(0,100), bins=50)
+        plt.hist(nomoonstdevs, color='b', lw=3, **ha)
+        plt.hist(moonstdevs, color='r', **ha)
+        plt.axvline(med, color='k')
+        plt.axvline(med+3.*mad, color='k')
+        plt.axvline(med+5.*mad, color='k')
+        plt.subplot(2,1,2)
+        plt.hist(nomoonstdev2s, color='b', lw=3, **ha)
+        plt.hist(moonstdev2s, color='r', **ha)
+        plt.axvline(med2, color='k')
+        plt.axvline(med2+3.*mad2, color='k')
+        plt.axvline(med2+5.*mad2, color='k')
         ps.savefig()
+
+    # Experiments with fitting background level (for moon, etc)
+    if ps and False:
+        for wise in WISE:
+            fullimg = fitsio.read(wise.intfn)
+            intfn = wise.intfn
+            uncfn = intfn.replace('-int-', '-unc-')
+            if unc_gz:
+                uncfn = uncfn + '.gz'
+            maskfn = intfn.replace('-int-', '-msk-')
+            if mask_gz:
+                maskfn = maskfn + '.gz'
+            fullunc  = fitsio.FITS(uncfn) [0].read()
+            fullmask = fitsio.FITS(maskfn)[0].read()
+            maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
+                                               10,11,12,13,14,15,16,17,18,
+                                               21,26,27,28]])
+            
+            fullok = ((fullmask & maskbits) == 0)
+            fullok[fullunc == 0] = False
+            fullok[np.logical_not(np.isfinite(fullimg))] = False
+            fullok[np.logical_not(np.isfinite(fullunc))] = False
+            # approx std,median
+            sig1 = median_f(fullunc[::4,::4][fullok[::4,::4]].astype(np.float32))
+            med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
+            # add some noise to smooth out "dynacal" artifacts
+            fullimg += np.random.normal(scale=sig1, size=fullimg.shape)
+    
+            ok = patch_image(fullimg, fullok.copy())
+    
+            binned = reduce(np.add, [fullimg[i/4::4, i%4::4] for i in range(16)])
+            binned /= 16.
+    
+            plt.clf()
+            plt.subplot(2,2,1)
+            ima = dict(interpolation='nearest', origin='lower',
+                       vmin=med-2.*sig1, vmax=med+2.*sig1)
+            plt.imshow(binned, **ima)
+            plt.colorbar()
+    
+            from scipy.ndimage.filters import median_filter
+    
+            #mf = median_filter(fullimg, size=100)
+            bmf = median_filter(binned, size=25)
+            plt.subplot(2,2,2)
+            #plt.imshow(binned - bmf + med, **ima)
+            plt.imshow(bmf, **ima)
+            plt.colorbar()
+    
+            for nnum,nsub in enumerate([5, 10]):
+                S = fullimg.shape[0]
+                ii = np.linspace(0, S, nsub+1).astype(int)
+                jj = np.linspace(0, S, nsub+1).astype(int)
+    
+                blocksky = np.zeros_like(fullimg)
+                subskies = np.zeros((len(ii)-1, len(jj)-1))
+    
+                for inum,(ilo,ihi) in enumerate(zip(ii, ii[1:])):
+                    for jnum,(jlo,jhi) in enumerate(zip(jj, jj[1:])):
+                        imgsub = fullimg[ilo:ihi, jlo:jhi]
+                        #uncsub = fullunc[ilo:ihi, jlo:jhi]
+                        ssky = estimate_sky(imgsub, med - 2.*sig1, med + 1.*sig1)
+    
+                        blocksky[ilo:ihi, jlo:jhi] = ssky
+                        subskies[inum, jnum] = ssky
+    
+                # plt.clf()
+                # plt.imshow(blocksky, interpolation='nearest', origin='lower')
+                # plt.colorbar()
+                # ps.savefig()
+                # plt.clf()
+                # plt.imshow(subskies, interpolation='nearest', origin='lower')
+                # plt.colorbar()
+                # ps.savefig()
+    
+                import scipy.interpolate as interp
+                spline = interp.RectBivariateSpline((jj[:-1] + jj[1:])/2., (ii[:-1] + ii[1:])/2., subskies.T)
+    
+                splsky = spline(np.arange(S), np.arange(S)).T
+    
+                plt.subplot(2,2, nnum + 3)
+                plt.imshow(splsky, **ima)
+                plt.colorbar()
+            plt.suptitle('%s %i' % (wise.scan_id, wise.frame_num))
+            ps.savefig()
 
                     
 
