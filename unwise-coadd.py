@@ -481,6 +481,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                         comment='Background value subtracted from coadd img'))
     hdr.add_record(dict(name='UNW_VER', value=version['Revision'],
                         comment='unWISE code SVN revision'))
+    hdr.add_record(dict(name='UNW_DVER', value=1,
+                        comment='unWISE data model version')
     hdr.add_record(dict(name='UNW_URL', value=version['URL'], comment='SVN URL'))
     hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(),
                         comment='unWISE run time'))
@@ -489,7 +491,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-invvar.fits'
     fitsio.write(ofn, coiv.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-ppstd.fits'
+    ofn = prefix + '-std.fits'
     fitsio.write(ofn, copp.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-n.fits'
     fitsio.write(ofn, con.astype(np.int16), header=hdr, clobber=True)
@@ -498,7 +500,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-invvar-w.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-ppstd-w.fits'
+    ofn = prefix + '-std-w.fits'
     fitsio.write(ofn, coppb.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-n-w.fits'
     fitsio.write(ofn, conb.astype(np.int16), header=hdr, clobber=True)
@@ -1207,6 +1209,12 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
     # per-pixel variance
     coppstd  = np.sqrt(np.maximum(0, coimgsq  / (np.maximum(cow,  tinyw)) - coimg **2))
     coppstdb = np.sqrt(np.maximum(0, coimgsqb / (np.maximum(cowb, tinyw)) - coimgb**2))
+
+    # normalize by number of frames to produce an estimate of the
+    # stddev in the *coadd* rather than in the individual frames.
+    # This is the sqrt of the unbiased estimator of the variance
+    coppstd  /= np.sqrt(np.maximum(1., (con  - 1).astype(float)))
+    coppstdb /= np.sqrt(np.maximum(1., (conb - 1).astype(float)))
 
     # re-estimate and subtract sky from the coadd.
     # approx median
