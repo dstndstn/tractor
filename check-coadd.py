@@ -15,7 +15,6 @@ from astrometry.util.miscutils import *
 from astrometry.util.fits import *
 from astrometry.util.util import Tan, Sip
 
-ps = PlotSequence('co')
 
 wisel3 = 'wise-L3'
 coadds = 'wise-coadds'
@@ -156,7 +155,7 @@ def pixel_area():
 # ps.savefig()
 
 
-def paper_plots(coadd_id, band):
+def paper_plots(coadd_id, band, dir2='e'):
     figsize = (4,4)
     spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
 
@@ -171,7 +170,7 @@ def paper_plots(coadd_id, band):
     plt.subplots_adjust(**spa)
 
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
-    dir2 = 'e'
+    #dir2 = 'e'
     
     wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band), header=True)
     imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
@@ -181,7 +180,7 @@ def paper_plots(coadd_id, band):
     ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
     iv     = read(dir2, 'unwise-%s-w%i-invvar.fits' % (coadd_id, band))
 
-    ppstdw = read(dir2, 'unwise-%s-w%i-ppstd-w.fits' % (coadd_id, band))
+    ppstdw = read(dir2, 'unwise-%s-w%i-std-w.fits' % (coadd_id, band))
 
     wisen  = read(dir1, '%s_ab41-w%i-cov-3.fits.gz' % (coadd_id, band))
     un     = read(dir2, 'unwise-%s-w%i-n.fits' % (coadd_id, band))
@@ -202,7 +201,7 @@ def paper_plots(coadd_id, band):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    if True:
+    if False:
         ps.skip(9)
     else:
         for img in [binwise, binim, binimw]:
@@ -293,7 +292,7 @@ def paper_plots(coadd_id, band):
         wise_unc_fudge = 2.
 
     
-    if False:
+    if True:
         ps.skip(1)
     else:
         # Sky / Error properties
@@ -386,7 +385,8 @@ def paper_plots(coadd_id, band):
         # print 'median wise error:', wiseerr1
 
         unflux = imw.ravel()
-        unerr = (ppstdw / np.sqrt(unw.astype(np.float32))).ravel()
+        #unerr = (ppstdw / np.sqrt(unw.astype(np.float32))).ravel()
+        unerr = ppstdw.ravel()
 
         # print 'median unwise flux: ', np.median(unflux)
         # print 'median unwise error:', np.median(unerr)
@@ -469,11 +469,10 @@ def paper_plots(coadd_id, band):
         plt.ylim(0.1, yh)
         ps.savefig()
         
+from unwise_coadd import estimate_sky
+from tractor import GaussianMixturePSF, NanoMaggies
 
 def composite(coadd_id):
-    from unwise_coadd import estimate_sky
-    from tractor import GaussianMixturePSF, NanoMaggies
-
     plt.figure(figsize=(4,4))
     #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
     spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
@@ -579,6 +578,84 @@ def northpole_plots():
             ps.savefig()
 
 
+
+def medfilt_bg_plots():
+    figsize = (4,4)
+    spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+
+    plt.figure(figsize=figsize)
+    plt.subplots_adjust(**spa)
+
+    coadd_id = '1384p454'
+    for band in [3,4]:
+        ims = []
+
+        dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+        wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band), header=True)
+        unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+
+        print 'Estimating WISE bg...'
+        wisemed = np.median(wiseim[::4,::4])
+        wisesig = np.median(unc[::4,::4])
+        wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+        zp = wisehdr['MAGZP']
+        print 'WISE image zeropoint:', zp
+        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+        print 'zpscale', zpscale
+        wiseflux = (wiseim - wisesky) * zpscale
+        binwise = reduce(np.add, [wiseflux[i/5::5, i%5::5] for i in range(25)]) / 25.
+        ims.append(binwise)
+
+        for dir2 in ['e','f']:
+            imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
+            binimw  = reduce(np.add, [imw   [i/4::4, i%4::4] for i in range(16)]) / 16.
+            ims.append(binimw)
+
+        img = ims[-1]
+        plo,phi = [np.percentile(img, p) for p in [25,99]]
+        ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=plo, vmax=phi)
+        # approximate correction for PSF norm
+        #ims.append(binwise / 0.25)
+
+        pcts = []
+        for img in ims:
+            # plt.clf()
+            # plt.imshow(img, **ima)
+            # plt.xticks([]); plt.yticks([])
+            # ps.savefig()
+
+            plo,phi = [np.percentile(img, p) for p in [25,99]]
+            pcts.append((plo,phi))
+            ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=plo, vmax=phi)
+            plt.clf()
+            plt.imshow(img, **ima)
+            plt.xticks([]); plt.yticks([])
+            ps.savefig()
+
+
+        filt = ims[-1]
+        nofilt = ims[-2]
+
+        #lo,hi = pcts[-1]
+        #print 'lo,hi', lo,hi
+        #lo = hi / 1e6
+        hi = max(nofilt.max(), filt.max())
+        lo = hi / 1e4
+        
+        plt.clf()
+        rr = [np.log10(lo), np.log10(hi)]
+        loghist(np.log10(np.maximum(lo, nofilt)).ravel(), np.log10(np.maximum(lo, filt.ravel())), 200,
+                range=[rr,rr])
+        ax = plt.axis()
+        plt.plot(rr, rr, 'b-')
+        plt.axis(ax)
+        plt.xlabel('No median filter')
+        plt.ylabel('Median filter')
+        ps.savefig()
+
+
 # getfn=False,
 def read(dirnm, fn, header=False):
     pth = os.path.join(dirnm, fn)
@@ -588,9 +665,15 @@ def read(dirnm, fn, header=False):
     #    return data,pth
     return data
 
-#ps.suffixes = ['png','pdf']
+#ps = PlotSequence('co')
+ps = PlotSequence('medfilt')
+ps.suffixes = ['png','pdf']
 
-northpole_plots()
+#northpole_plots()
+#T = fits_table('sequels-atlas.fits')
+#paper_plots(T.coadd_id[0], 3, dir2='f')
+#paper_plots(T.coadd_id[0], 4, dir2='f')
+medfilt_bg_plots()
 sys.exit(0)
 
 T = fits_table('sequels-atlas.fits')
