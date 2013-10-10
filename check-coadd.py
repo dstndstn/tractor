@@ -1,8 +1,11 @@
+print 'import matplotlib...'
 import matplotlib
+print 'setup tex...'
 matplotlib.use('Agg')
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('font', serif='computer modern roman')
 matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
+print 'system imports...'
 import numpy as np
 import pylab as plt
 import os
@@ -10,6 +13,7 @@ import sys
 
 import fitsio
 
+print 'import astrom'
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
@@ -19,6 +23,7 @@ from astrometry.util.util import Tan, Sip
 wisel3 = 'wise-L3'
 coadds = 'wise-coadds'
 
+print 'import w3'
 from wise3 import get_l1b_file
 
 def plot_exposures():
@@ -468,8 +473,10 @@ def paper_plots(coadd_id, band, dir2='e'):
         yl,yh = plt.ylim()
         plt.ylim(0.1, yh)
         ps.savefig()
-        
+
+print 'import unwise_coadd'
 from unwise_coadd import estimate_sky
+print 'import tractor'
 from tractor import GaussianMixturePSF, NanoMaggies
 
 def composite(coadd_id):
@@ -586,11 +593,12 @@ def medfilt_bg_plots():
     medfigsize = (5,4)
     medspa = dict(left=0.12, right=0.98, bottom=0.12, top=0.96)
 
-
+    print 'bg plots'
     coadd_id = '1384p454'
     for band in [3,4]:
         ims = []
 
+        print 'reading WISE'
         dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
         wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band), header=True)
         unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
@@ -607,11 +615,15 @@ def medfilt_bg_plots():
         binwise = reduce(np.add, [wiseflux[i/5::5, i%5::5] for i in range(25)]) / 25.
         ims.append(binwise)
 
+        fullims = []
         for dir2 in ['e','f']:
             imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
             binimw  = reduce(np.add, [imw   [i/4::4, i%4::4] for i in range(16)]) / 16.
             ims.append(binimw)
 
+            #ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
+            #fullims.append((imw,ivw))
+            fullims.append(imw)
         img = ims[-1]
         plo,phi = [np.percentile(img, p) for p in [25,99]]
         ima = dict(interpolation='nearest', origin='lower', cmap='gray',
@@ -639,10 +651,15 @@ def medfilt_bg_plots():
             ps.savefig()
 
 
-        filt = ims[-1]
-        nofilt = ims[-2]
+        # nofilt,nofiltiv = fullims[0]
+        # filt,filtiv = fullims[1]
+        # sig1 = 1./np.sqrt(np.median(nofiltiv))
+        # print 'No-filt sig1:', sig1
+        # sig1 = 1./np.sqrt(np.median(filtiv))
+        # print 'Filt sig1:', sig1
 
-        #lo,hi = pcts[-1]
+        nofilt,filt = fullims
+
         #print 'lo,hi', lo,hi
         #lo = hi / 1e6
         hi = max(nofilt.max(), filt.max())
@@ -659,12 +676,34 @@ def medfilt_bg_plots():
         plt.plot(rr, rr, '--', color=(0,1,0))
         plt.axis(ax)
         plt.xlabel('W%i: Pixel value' % band)
-        plt.ylabel('W%i: Median filtered pixel value')
+        plt.ylabel('W%i: Median filtered pixel value' % band)
         tt = np.arange(1,7)
         plt.xticks(tt, ['$10^{%i}$' % t for t in tt])
         plt.yticks(tt, ['$10^{%i}$' % t for t in tt])
         ps.savefig()
 
+        # lo,hi = -6,8
+        # 
+        # ha = dict(range=(lo,hi), bins=100)
+        # plt.clf()
+        # h1,e = np.histogram((nofilt/sig1).ravel(), **ha)
+        # h2,e = np.histogram((filt/sig1).ravel(), **ha)
+        # ee = e.repeat(2)[1:-1]
+        # p1 = plt.plot(ee, (h1).repeat(2), color='r', lw=2, alpha=0.75)
+        # p2 = plt.plot(ee, (h2).repeat(2), color='b', lw=2, alpha=0.75)
+        # plt.yscale('log')
+        # xx = np.linspace(lo, hi, 300)
+        # plt.plot(xx, max(h1) * np.exp(-(xx**2)/(2.)), 'b-', alpha=0.5)
+        # plt.plot(xx, max(h2) * np.exp(-(xx**2)/(2.)), 'r-', alpha=0.5)
+        # plt.xlabel('Pixel / Uncertainty ($\sigma$)')
+        # plt.ylabel('Number of pixels')
+        # plt.legend((p1,p2), ('No filter', 'Median filter'))
+        # yl,yh = plt.ylim()
+        # plt.ylim(3, yh)
+        # plt.xlim(lo,hi)
+        # plt.axvline(0, color='k', alpha=0.1)
+        # ps.savefig()
+        
 
 # getfn=False,
 def read(dirnm, fn, header=False):
