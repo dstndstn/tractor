@@ -957,7 +957,7 @@ class coaddacc():
         
 
 def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
-               do_cube, medfilt, plots2=False, table=True):
+               do_cube, medfilt, plots2=False, table=True, do_dsky=False):
     L = 3
     W = cowcs.get_width()
     H = cowcs.get_height()
