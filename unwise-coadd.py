@@ -175,15 +175,15 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
     WISE.moon_masked = np.zeros(len(WISE), bool)
     WISE.dtanneal = np.zeros(len(WISE), np.float32)
 
-    # for band in [1,2,3,4]:
-    #     WISE.set('w%iintmedian'%band, np.zeros(len(WISE), np.float32))
-    #     WISE.set('w%iintstddev'%band, np.zeros(len(WISE), np.float32))
-    #     WISE.set('w%iintmed16p'%band, np.zeros(len(WISE), np.float32))
+    # pixel distribution stats (use for moon masking)
     WISE.intmedian = np.zeros(len(WISE), np.float32)
     WISE.intstddev = np.zeros(len(WISE), np.float32)
     WISE.intmed16p = np.zeros(len(WISE), np.float32)
 
     WISE.matched = np.zeros(len(WISE), bool)
+
+    # 4-band, 3-band, or 2-band phase
+    WISE.phase = np.zeros(len(WISE), np.uint8)
     
     for nbands in [2,3,4]:
         fn = os.path.join(wisedir, 'WISE-l1b-metadata-%iband.fits' % nbands)
@@ -218,23 +218,20 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
             print 'Band', band, ':', sum(K)
             if sum(K) == 0:
                 continue
-            WISE.qual_frame [I[K]] = T.qual_frame [J[K]].astype(WISE.qual_frame.dtype)
-            moon = T.moon_masked[J[K]]
-            print 'Moon:', np.unique(moon)
-            print 'moon[%i]:' % (band-1), np.unique([m[band-1] for m in moon])
-            WISE.moon_masked[I[K]] = np.array([m[band-1] == '1' for m in moon]).astype(WISE.moon_masked.dtype)
-            WISE.dtanneal   [I[K]] = T.dtanneal[J[K]].astype(WISE.dtanneal.dtype)
-            print 'moon_masked:', np.unique(WISE.moon_masked)
-
-            # WISE.get('w%iintmedian' % band)[I[K]] = T.get('w%iintmedian' % band)[J[K]].astype(np.float32)
-            # WISE.get('w%iintstddev' % band)[I[K]] = T.get('w%iintstddev' % band)[J[K]].astype(np.float32)
-            # WISE.get('w%iintmed16p' % band)[I[K]] = T.get('w%iintmed16ptile' % band)[J[K]].astype(np.float32)
-
-            WISE.intmedian[I[K]] = T.get('w%iintmedian' % band)[J[K]].astype(np.float32)
-            WISE.intstddev[I[K]] = T.get('w%iintstddev' % band)[J[K]].astype(np.float32)
-            WISE.intmed16p[I[K]] = T.get('w%iintmed16ptile' % band)[J[K]].astype(np.float32)
-
-            WISE.matched[I[K]] = True
+            II = I[K]
+            JJ = J[K]
+            WISE.qual_frame [II] = T.qual_frame [JJ].astype(WISE.qual_frame.dtype)
+            moon = T.moon_masked[JJ]
+            #print 'Moon:', np.unique(moon)
+            #print 'moon[%i]:' % (band-1), np.unique([m[band-1] for m in moon])
+            WISE.moon_masked[II] = np.array([m[band-1] == '1' for m in moon]).astype(WISE.moon_masked.dtype)
+            WISE.dtanneal   [II] = T.dtanneal[JJ].astype(WISE.dtanneal.dtype)
+            #print 'moon_masked:', np.unique(WISE.moon_masked)
+            WISE.intmedian[II] = T.get('w%iintmedian' % band)[JJ].astype(np.float32)
+            WISE.intstddev[II] = T.get('w%iintstddev' % band)[JJ].astype(np.float32)
+            WISE.intmed16p[II] = T.get('w%iintmed16ptile' % band)[JJ].astype(np.float32)
+            WISE.matched[II] = True
+            WISE.phase[II] = nbands
 
     print np.sum(WISE.matched), 'of', len(WISE), 'matched to metadata tables'
     assert(np.sum(WISE.matched) == len(WISE))
@@ -466,6 +463,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         print len(failedfiles), 'failed:'
         for f in failedfiles:
             print '  ', f
+        print
+        for f in failedfiles:
+            print ('(wget -r -N -nH -np -nv --cut-dirs=4 -A "*w%i*" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p1bm_frm/%s")' %
+                   (band, os.path.dirname(f).replace(wisedir + '/', '')))
         return -1
 
     # convert from object array to string array; '' rather than '0'
@@ -1421,13 +1422,18 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
         # sub-pixels.  Spread out the flux.
         zpscale *= 0.25
 
-    # 3-band cryo phase:
-    #### 19 pixel is "hard-saturated"; see note [4] above
-    #### 23 for W3 only: static-split droop residual present
+    badbits = [0,1,2,3,4,5,6,7, 9, 
+               10,11,12,13,14,15,16,17,18,
+               21,26,27,28]
+    if wise.phase == 3:
+        # 3-band cryo phase:
+        ## 19 pixel is "hard-saturated"
+        ## 23 for W3 only: static-split droop residual present
+        badbits.append(19)
+        if band == 3:
+            badbits.append(23)
 
-    maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
-                                       10,11,12,13,14,15,16,17,18,
-                                       21,26,27,28]])
+    maskbits = sum([1<<bit for bit in badbits])
     goodmask = ((mask & maskbits) == 0)
     goodmask[unc == 0] = False
     goodmask[np.logical_not(np.isfinite(img))] = False
@@ -1444,7 +1450,8 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
     # Patch masked pixels so we can interpolate
     rr.npatched = np.count_nonzero(np.logical_not(goodmask))
     print 'Pixels to patch:', rr.npatched
-    if rr.npatched > 100000:
+    # Many of the post-cryo frames have ~160,000 masked!
+    if rr.npatched > 200000:
         print 'WARNING: too many pixels to patch:', rr.npatched
         return None
     ok = patch_image(img, goodmask.copy())
@@ -1913,6 +1920,9 @@ def main():
         print 'No tile(s) specified'
         parser.print_help()
         sys.exit(-1)
+
+    print 'unwise-coadd.py starting: args:', sys.argv
+    print 'PBS_ARRAYID:', arr
 
     Time.add_measurement(MemMeas)
 
