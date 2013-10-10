@@ -1147,7 +1147,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
                 plotfn = None
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
-            args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1))
+            args.append((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1,
+                         do_dsky))
         #masks = mp.map(_coadd_one_round2, args)
         masks = mp2.map(_bounce_one_round2, args)
         del args
