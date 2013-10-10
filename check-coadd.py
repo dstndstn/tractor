@@ -583,8 +583,9 @@ def medfilt_bg_plots():
     figsize = (4,4)
     spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
 
-    plt.figure(figsize=figsize)
-    plt.subplots_adjust(**spa)
+    medfigsize = (5,4)
+    medspa = dict(left=0.12, right=0.98, bottom=0.12, top=0.96)
+
 
     coadd_id = '1384p454'
     for band in [3,4]:
@@ -618,6 +619,9 @@ def medfilt_bg_plots():
         # approximate correction for PSF norm
         #ims.append(binwise / 0.25)
 
+        plt.figure(figsize=figsize)
+        plt.subplots_adjust(**spa)
+
         pcts = []
         for img in ims:
             # plt.clf()
@@ -642,17 +646,23 @@ def medfilt_bg_plots():
         #print 'lo,hi', lo,hi
         #lo = hi / 1e6
         hi = max(nofilt.max(), filt.max())
-        lo = hi / 1e4
-        
+        lo = hi / 1e6
+
+        plt.figure(figsize=medfigsize)
+        plt.subplots_adjust(**medspa)
+
         plt.clf()
         rr = [np.log10(lo), np.log10(hi)]
         loghist(np.log10(np.maximum(lo, nofilt)).ravel(), np.log10(np.maximum(lo, filt.ravel())), 200,
                 range=[rr,rr])
         ax = plt.axis()
-        plt.plot(rr, rr, 'b-')
+        plt.plot(rr, rr, '--', color=(0,1,0))
         plt.axis(ax)
-        plt.xlabel('No median filter')
-        plt.ylabel('Median filter')
+        plt.xlabel('Pixel value')
+        plt.ylabel('Median filtered pixel value')
+        tt = np.arange(1,7)
+        plt.xticks(tt, ['$10^{%i}$' % t for t in tt])
+        plt.yticks(tt, ['$10^{%i}$' % t for t in tt])
         ps.savefig()
 
 
