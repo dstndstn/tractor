@@ -718,7 +718,8 @@ def _bounce_one_round2(*A):
         traceback.print_exc()
         raise
 
-def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1)):
+def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1,
+                       do_dsky)):
     if rr is None:
         return None
     print 'Coadd round 2, image', (ri+1), 'of', N
@@ -739,16 +740,17 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
     subsq = (cowimgsq1[coslc] - (rr.w * rr.rimg**2)) / subw
     subpp = np.sqrt(np.maximum(0, subsq - subco**2))
 
+    mask = (rr.rmask & 1).astype(bool)
+
     # like in the WISE Atlas Images, estimate sky difference via
     # median difference in the overlapping area.
-    # dsky = median_f((rr.rimg[rr.rmask] - subco[rr.rmask]).astype(np.float32))
-    # print 'Sky difference:', dsky
-    # DEBUG
-    dsky = 0.
-    print 'WARNING: setting dsky = 0'
+    if do_dsky:
+        dsky = median_f((rr.rimg[mask] - subco[mask]).astype(np.float32))
+        print 'Sky difference:', dsky
+    else:
+        dsky = 0.
 
-
-    rchi = ((rr.rimg - dsky - subco) * rr.rmask * (subw > 0) * (subpp > 0) /
+    rchi = ((rr.rimg - dsky - subco) * mask * (subw > 0) * (subpp > 0) /
             np.maximum(subpp, 1e-6))
     #print 'rchi', rchi.min(), rchi.max()
     assert(np.all(np.isfinite(rchi)))
@@ -763,7 +765,10 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
     # Bit 2: grown
     badpixmask += (2 * badpix)
     # Add rchi-masked pixels to the mask
-    rr.rmask2[badpix] = False
+    #rr.rmask2[badpix] = False
+    # Clear bit 2...
+    rr.rmask[badpix] &= ~2
+    
     # print 'Applying rchi masks to images...'
     mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()),
                         badpixmask.dtype)
@@ -793,8 +798,7 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
             mm.rmask_orig = rr.rmask.copy()
 
     if mm.included:
-        ok = patch_image(rr.rimg, np.logical_not(badpix),
-                         required=(badpix * rr.rmask))
+        ok = patch_image(rr.rimg, np.logical_not(badpix), required=(badpix * mask))
         if not ok:
             print 'patch_image failed'
             return None
@@ -802,11 +806,11 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         rimg = (rr.rimg - dsky)
 
         mm.coslc = coslc
-        mm.coimgsq = rr.rmask * rr.w * rimg**2
-        mm.coimg   = rr.rmask * rr.w * rimg
-        mm.cow     = rr.rmask * rr.w
-        mm.con     = rr.rmask
-        mm.rmask2  = rr.rmask2
+        mm.coimgsq = mask * rr.w * rimg**2
+        mm.coimg   = mask * rr.w * rimg
+        mm.cow     = mask * rr.w
+        mm.con     = mask
+        mm.rmask2  = (rr.rmask & 2).astype(bool)
 
     mm.dsky = dsky / rr.zpscale
 
@@ -827,8 +831,9 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         # print 'rmask shape', rr.rmask.shape
         # print 'rmask elements set:', np.sum(rr.rmask)
         # print 'len I[rmask]:', len(I[rr.rmask])
-        if len(I[rr.rmask]):
-            plo,phi = [np.percentile(I[rr.rmask], p) for p in [25,99]]
+        mask = (rr.rmask & 1).astype(bool)
+        if len(I[mask]):
+            plo,phi = [np.percentile(I[mask], p) for p in [25,99]]
             plt.imshow(I, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=plo, vmax=phi)
             plt.xticks([]); plt.yticks([])
@@ -1067,14 +1072,15 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
             cim += 1e10
             cox0,cox1,coy0,coy1 = rr.coextent
             slc = slice(coy0,coy1+1), slice(cox0,cox1+1)
-            cim[slc][rr.rmask] = rr.rimg[rr.rmask]
+            mask = (rr.rmask & 1).astype(bool)
+            cim[slc][mask] = rr.rimg[mask]
             sig1 = 1./np.sqrt(rr.w)
             plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
                        vmin=-1.*sig1, vmax=5.*sig1)
             ps.savefig()
 
             cmask = np.zeros((H,W), bool)
-            cmask[slc] = rr.rmask
+            cmask[slc] = mask
             plt.clf()
             # invert
             #plt.imshow(np.logical_not(cmask), interpolation='nearest', origin='lower', cmap='gray',
@@ -1082,7 +1088,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
                        vmin=0, vmax=1)
             ps.savefig()
 
-            cmask[slc] = rr.rmask2
+            mask2 = (rr.rmask & 2).astype(bool)
+            cmask[slc] = mask2
             plt.clf()
             #plt.imshow(np.logical_not(cmask), interpolation='nearest', origin='lower', cmap='gray',
             plt.imshow(cmask, interpolation='nearest', origin='lower', cmap='gray',
@@ -1126,7 +1133,8 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
             scanid = 'scan %s frame %i band %i' % (WISE.scan_id[ri], WISE.frame_num[ri],
                                                    band)
             mm = _coadd_one_round2(
-                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1))
+                (ri, len(WISE), scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotfn, ps1,
+                 do_dsky))
             coadd.acc(mm, delmm=delmm)
             masks.append(mm)
     else:
@@ -1469,11 +1477,18 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
     fullok[np.logical_not(np.isfinite(fullunc))] = False
 
     if medfilt:
-        from scipy.ndimage.filters import median_filter
         tmf0 = Time()
-        ok = patch_image(fullimg, fullok.copy())
-        mf = median_filter(fullimg, size=medfilt)
+        # bin to reduce cost of median filter....?
+        #B = 4
+        #ok = patch_image(fullimg, fullok.copy())
+        #from scipy.ndimage.filters import median_filter
+        #mf = median_filter(fullimg, size=medfilt)
+        #fullimg -= mf
+
+        mf = np.zeros_like(fullimg)
+        ok = median_smooth(fullimg, np.logical_not(fullok), int(medfilt), mf)
         fullimg -= mf
+
         img = fullimg[slc]
         print 'Median filtering with box size', medfilt, 'took', Time()-tmf0
 
@@ -1520,12 +1535,12 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
 
     # Scalar!
     rr.w = (1./sig1**2)
-    rr.rmask = np.zeros((coH, coW), np.bool)
-    rr.rmask[Yo, Xo] = True
     rr.rimg = np.zeros((coH, coW), img.dtype)
     rr.rimg[Yo, Xo] = rim
-    rr.rmask2 = np.zeros((coH, coW), np.bool)
-    rr.rmask2[Yo, Xo] = goodmask[Yi, Xi]
+    rr.rmask = np.zeros((coH, coW), np.uint8)
+    # bit 0: old rmask
+    # bit 1: old rmask2
+    rr.rmask[Yo, Xo] = 1 + 2*goodmask[Yi, Xi]
     rr.wcs = wcs
     rr.sky = sky
     rr.zpscale = zpscale
@@ -1651,7 +1666,7 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         # note, rr.w is a scalar.
         coimgsq[slc] += rr.w * (rr.rimg**2)
         coimg  [slc] += rr.w *  rr.rimg
-        cow    [slc] += rr.w *  rr.rmask
+        cow    [slc] += rr.w * (rr.rmask & 1)
     print Time()-t0
 
     print 'Min cow (round 1):', cow.min()
@@ -1741,7 +1756,8 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         for rr in rimgs:
             if rr is None:
                 continue
-            rim = rr.rimg[rr.rmask]
+            mask = (rr.rmask & 1).astype(bool)
+            rim = rr.rimg[mask]
             if len(rim) == 0:
                 continue
             #n,b,p = plt.hist(rim, alpha=0.1, **ha)
