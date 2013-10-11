@@ -512,6 +512,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     hdr.add_record(dict(name='UNW_DATE', value=datetime.datetime.now().isoformat(),
                         comment='unWISE run time'))
 
+    hdr.add_record(dict(name='UNW_FR0', value=frame0, comment='unWISE frame start'))
+    hdr.add_record(dict(name='UNW_FRN', value=nframes, comment='unWISE N frames'))
+    hdr.add_record(dict(name='UNW_MEDF', value=medfilt, comment='unWISE median filter sz'))
+
     ofn = prefix + '-img.fits'
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
     ofn = prefix + '-invvar.fits'
@@ -562,7 +566,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         WISE.npixrchi[ii] = mm.nrchipix
         WISE.weight[ii] = mm.w
 
-        maskdir = os.path.join(outdir, prefix + '-mask')
+        maskdir = os.path.join(outdir, tag + '-mask')
         if not os.path.exists(maskdir):
             os.mkdir(maskdir)
 
@@ -574,6 +578,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         x0,x1,y0,y1 = WISE.imextent[ii,:]
         fullmask[y0:y1+1, x0:x1+1] = mm.omask
         fitsio.write(ofn, fullmask, clobber=True)
+        print 'Wrote mask', (i+1), 'of', len(masks), ':', ofn
 
     WISE.delete_column('wcs')
     # fitsio
@@ -910,7 +915,8 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         plt.suptitle('%s %s' % (scanid, inc))
         plt.savefig(plotfn)
 
-    print 'Coadd round 2, image', (ri+1), 'of', N, ':\n', Time() - t00
+    #print 'Coadd round 2, image', (ri+1), 'of', N, ':\n',
+    print Time() - t00
     return mm
 
 class coaddacc():
@@ -1950,6 +1956,9 @@ def main():
 
     print 'unwise-coadd.py starting: args:', sys.argv
     print 'PBS_ARRAYID:', arr
+
+    print 'opt:', opt
+    print dir(opt)
 
     Time.add_measurement(MemMeas)
 
