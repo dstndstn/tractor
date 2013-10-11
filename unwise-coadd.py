@@ -562,7 +562,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         WISE.npixrchi[ii] = mm.nrchipix
         WISE.weight[ii] = mm.w
 
-        maskdir = os.path.join(outdir, 'masks-' + tag)
+        maskdir = os.path.join(outdir, prefix + '-mask')
         if not os.path.exists(maskdir):
             os.mkdir(maskdir)
 
