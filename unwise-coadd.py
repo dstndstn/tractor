@@ -392,8 +392,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     # *inclusive* coordinates of the bounding-box in the image overlapping coadd
     WISE.imextent = np.zeros((len(WISE), 4), int)
 
-    WISE.imagew = np.zeros(len(WISE), int)
-    WISE.imageh = np.zeros(len(WISE), int)
+    WISE.imagew = np.zeros(len(WISE), np.int)
+    WISE.imageh = np.zeros(len(WISE), np.int)
     WISE.intfn  = np.zeros(len(WISE), object)
     WISE.wcs    = np.zeros(len(WISE), object)
 
@@ -581,8 +581,18 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         print 'Wrote mask', (i+1), 'of', len(masks), ':', ofn
 
     WISE.delete_column('wcs')
-    # fitsio
-    WISE.included = WISE.included.astype(np.uint8)
+
+    # downcast datatypes,
+    # and work around fitsio's issues with "bool"...
+    for c,t in [('included', np.uint8),
+                ('use', np.uint8),
+                ('moon_masked', np.uint8),
+                ('imagew', np.int16),
+                ('imageh', np.int16),
+                ('coextent', np.int16),
+                ('imextent', np.int16),
+                ]:
+        WISE.set(c, WISE.get(c).astype(t))
 
     ofn = prefix + '-frames.fits'
     WISE.writeto(ofn)
