@@ -550,6 +550,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     Iused = np.flatnonzero(WISE.use)
     assert(len(Iused) == len(masks))
 
+    maskdir = os.path.join(outdir, tag + '-mask')
+    if not os.path.exists(maskdir):
+        os.mkdir(maskdir)
+
     for i,mm in enumerate(masks):
         if mm is None:
             continue
@@ -565,10 +569,6 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         WISE.npixpatched[ii] = mm.npatched
         WISE.npixrchi[ii] = mm.nrchipix
         WISE.weight[ii] = mm.w
-
-        maskdir = os.path.join(outdir, tag + '-mask')
-        if not os.path.exists(maskdir):
-            os.mkdir(maskdir)
 
         ofn = WISE.intfn[ii].replace('-int', '')
         ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-'
