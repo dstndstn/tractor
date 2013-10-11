@@ -10,6 +10,7 @@ import tempfile
 from scipy.ndimage.morphology import binary_dilation
 from scipy.ndimage.measurements import label, center_of_mass
 import datetime
+import gc
 
 import fitsio
 
@@ -567,17 +568,12 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
         ofn = WISE.intfn[ii].replace('-int', '')
         ofn = os.path.join(maskdir, 'unwise-mask-' + ti.coadd_id + '-'
-                           + os.path.basename(ofn))
+                           + os.path.basename(ofn) + '.gz')
         w,h = WISE.imagew[ii],WISE.imageh[ii]
         fullmask = np.zeros((h,w), mm.omask.dtype)
         x0,x1,y0,y1 = WISE.imextent[ii,:]
         fullmask[y0:y1+1, x0:x1+1] = mm.omask
         fitsio.write(ofn, fullmask, clobber=True)
-
-        cmd = 'gzip -f %s' % ofn
-        print 'Running:', cmd
-        rtn = os.system(cmd)
-        print 'Result:', rtn
 
     WISE.delete_column('wcs')
     # fitsio
@@ -975,6 +971,10 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
      )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp1, medfilt)
     cowimg1 = coimg1 * cow1
 
+    if mp1 != mp2:
+        print 'Shutting down multiprocessing pool 1'
+        mp1.close()
+
     # Using the difference between the coadd and the resampled
     # individual images ("rchi"), mask additional pixels and redo the
     # coadd.
@@ -1114,9 +1114,14 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
                    vmin=0, vmax=mx)
         ps.savefig()
 
+
     # If we're not multiprocessing, do the loop manually to reduce
     # memory usage (we don't need to keep all "rr" inputs and "masks"
     # outputs in memory at once).
+    t0 = Time()
+    print 'Before garbage collection:', Time()-t0
+    gc.collect()
+    print 'After garbage collection:', Time()-t0
     ps1 = (ps is not None)
     delmm = (ps is None)
     if not mp2.pool:
@@ -1158,6 +1163,11 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
         for mm in masks:
             coadd.acc(mm, delmm=delmm)
         print Time()-t0
+
+    t0 = Time()
+    print 'Before garbage collection:', Time()-t0
+    gc.collect()
+    print 'After garbage collection:', Time()-t0
 
     if ps:
         ngood = 0
