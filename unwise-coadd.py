@@ -272,7 +272,7 @@ def check_md5s(WISE):
 
 def one_coadd(ti, band, W, H, pixscale, WISE,
               ps, wishlist, outdir, mp1, mp2, do_cube, plots2,
-              frame0, nframes, force, medfilt):
+              frame0, nframes, force, medfilt, maxmem):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -386,6 +386,15 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                 print 'Need:', intfn
         return 0
 
+    #
+    if maxmem:
+        mem = 1. + (len(WISE) * 1e6/2. * 5. / 1e9)
+        print 'Estimated mem usage:', mem
+        if mem > maxmem:
+            print 'Estimated memory usage:', mem, 'GB > max', maxmem
+            return -1
+
+
     # *inclusive* coordinates of the bounding-box in the coadd of this image
     # (x0,x1,y0,y1)
     WISE.coextent = np.zeros((len(WISE), 4), int)
@@ -469,6 +478,13 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
             print ('(wget -r -N -nH -np -nv --cut-dirs=4 -A "*w%i*" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p1bm_frm/%s")' %
                    (band, os.path.dirname(f).replace(wisedir + '/', '')))
         return -1
+
+    if maxmem:
+        mem = 1. + (pixinrange * 5. / 1e9)
+        print 'Estimated mem usage:', mem
+        if mem > maxmem:
+            print 'Estimated memory usage:', mem, 'GB > max', maxmem
+            return -1
 
     # convert from object array to string array; '' rather than '0'
     WISE.intfn = np.array([{0:''}.get(s,s) for s in WISE.intfn])
@@ -599,10 +615,10 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
     return 0
 
-def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns, W, H, pixscale):
+def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns, W, H, pixscale, margin=1.05):
     maxcosdec = np.cos(np.deg2rad(min(abs(d0),abs(d1))))
     plot = Plotstuff(outformat='png', size=(800,800),
-                     rdw=((r0+r1)/2., (d0+d1)/2., 1.05*max(d1-d0, (r1-r0)*maxcosdec)))
+                     rdw=((r0+r1)/2., (d0+d1)/2., margin*max(d1-d0, (r1-r0)*maxcosdec)))
 
     for i in range(3):
         if i in [0,2]:
@@ -616,14 +632,19 @@ def plot_region(r0,r1,d0,d1, ps, T, WISE, wcsfns, W, H, pixscale):
         if i == 0:
             if T is None:
                 continue
-            plot.alpha = 0.5
-            for ti in T:
+            for i,ti in enumerate(T):
                 cowcs = get_coadd_tile_wcs(ti.ra, ti.dec, W, H, pixscale)
+                plot.alpha = 0.5
                 out.wcs = anwcs_new_tan(cowcs)
                 out.fill = 1
                 plot.plot('outline')
                 out.fill = 0
                 plot.plot('outline')
+
+                plot.alpha = 1.
+                rc,dc = cowcs.radec_center()
+                plot.text_radec(rc, dc, '%i' % i)
+
         elif i == 1:
             if WISE is None:
                 continue
@@ -1834,14 +1855,15 @@ def _bounce_one_coadd(A):
         print 'one_coadd failed:'
         traceback.print_exc()
 
-def todo(W, H, pixscale, bands=[1,2,3,4]):
+def todo(T, W, H, pixscale, outdir, r0,r1,d0,d1, ps, dataset, bands=[1,2,3,4],
+         margin=1.05):
     # Check which tiles still need to be done.
     need = []
     for band in bands:
         fns = []
         for i in range(len(T)):
-            tag = 'coadd-%s-w%i' % (T.coadd_id[i], band)
-            prefix = os.path.join(opt.outdir, tag)
+            tag = 'unwise-%s-w%i' % (T.coadd_id[i], band)
+            prefix = os.path.join(outdir, tag)
             ofn = prefix + '-img.fits'
             if os.path.exists(ofn):
                 print 'Output file exists:', ofn
@@ -1850,9 +1872,9 @@ def todo(W, H, pixscale, bands=[1,2,3,4]):
             need.append(band*1000 + i)
 
         if band == bands[0]:
-            plot_region(r0,r1,d0,d1, ps, T, None, fns, W, H, pixscale)
+            plot_region(r0,r1,d0,d1, ps, T, None, fns, W, H, pixscale, margin=margin)
         else:
-            plot_region(r0,r1,d0,d1, ps, None, None, fns, W, H, pixscale)
+            plot_region(r0,r1,d0,d1, ps, None, None, fns, W, H, pixscale, margin=margin)
 
     print ' '.join('%i' %i for i in need)
 
@@ -1942,6 +1964,9 @@ def main():
     parser.add_option('--force', dest='force', action='store_true', default=False,
                       help='Run even if output file already exists?')
 
+    parser.add_option('--maxmem', dest='maxmem', type=float, default=0,
+                      help='Quit if predicted memory usage > n GB')
+
     opt,args = parser.parse_args()
 
     if opt.threads:
@@ -1959,7 +1984,7 @@ def main():
         arr = int(arr)
         batch = True
 
-    if len(args) == 0 and arr is None:
+    if len(args) == 0 and arr is None and not opt.todo:
         print 'No tile(s) specified'
         parser.print_help()
         sys.exit(-1)
@@ -1975,12 +2000,12 @@ def main():
     dataset = opt.dataset
 
     randomize = False
+    pmargin = 1.05
 
     if dataset == 'sequels':
         # SEQUELS
         r0,r1 = 120.0, 210.0
         d0,d1 =  45.0,  60.0
-
     elif dataset == 'w3':
         r0,r1 = 210.593,  219.132
         d0,d1 =  51.1822,  54.1822
@@ -1996,6 +2021,7 @@ def main():
         d0,d1 =  64.6,  68.6
         if dataset == 'npole-rand':
             randomize = True
+        pmargin = 1.5
     else:
         assert(False)
 
@@ -2008,6 +2034,19 @@ def main():
     else:
         T = get_atlas_tiles(r0,r1,d0,d1, W,H, opt.pixscale)
         T.writeto(fn)
+
+    if opt.plotprefix is None:
+        opt.plotprefix = dataset
+    ps = PlotSequence(opt.plotprefix, format='%03i')
+    if opt.pdf:
+        ps.suffixes = ['png','pdf']
+
+    if opt.todo:
+        todo(T, W, H, opt.pixscale, opt.outdir, r0,r1,d0,d1, ps, dataset, margin=pmargin)
+        return 0
+
+    if not opt.plots:
+        ps = None
 
     fn = '%s-frames.fits' % dataset
     if os.path.exists(fn):
@@ -2028,19 +2067,6 @@ def main():
     #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
     #check_md5s(WISE)
 
-    if opt.plotprefix is None:
-        opt.plotprefix = dataset
-    ps = PlotSequence(opt.plotprefix, format='%03i')
-    if opt.pdf:
-        ps.suffixes = ['png','pdf']
-
-    if opt.todo:
-        todo(W, H, opt.pixscale)
-        sys.exit(0)
-
-    if not opt.plots:
-        ps = None
-
     if not os.path.exists(opt.outdir):
         print 'Creating output directory', opt.outdir
         os.makedirs(opt.outdir)
@@ -2055,12 +2081,14 @@ def main():
         assert(tileid < len(T))
         print 'Doing coadd tile', T.coadd_id[tileid], 'band', band
         t0 = Time()
-        one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
-                  opt.wishlist, opt.outdir, mp1, mp2,
-                  opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force,
-                  opt.medfilt)
+        if one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
+                     opt.wishlist, opt.outdir, mp1, mp2,
+                     opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force,
+                     opt.medfilt, opt.maxmem):
+            return -1
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
+    return 0
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
     
