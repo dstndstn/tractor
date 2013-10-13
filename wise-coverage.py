@@ -19,13 +19,21 @@ from astrometry.blind.plotstuff import *
 if __name__ == '__main__':
     W,H = 4000,2000
     plot = Plotstuff(size=(W,H), outformat='png')
-    plot.wcs = anwcs_create_allsky_hammer_aitoff(0., 0., W, H)
+    plot.wcs = anwcs_create_allsky_hammer_aitoff(180., 0., W, H)
     out = plot.outline
     out.stepsize = 508
     out.fill = 1
 
-    im = np.zeros((H,W,4), np.uint8)
+    #im = np.zeros((H,W,4), np.uint8)
 
+    wcs = Tan()
+    out.wcs = anwcs_new_tan(wcs)
+    print 'out.wcs', out.wcs
+    wcs = anwcs_get_sip(out.wcs)
+    print 'wcs', wcs
+    wcs = wcs.wcstan
+    print 'wcs', wcs
+    
     ps = PlotSequence('cov')
     for nbands in [4,3,2]:
         bb = [1,2,3,4][:nbands]
@@ -42,7 +50,7 @@ if __name__ == '__main__':
             print 'Reading', fn
             T = fits_table(fn, columns=cols)
             print 'Read', len(T), 'from', fn
-            wcs = Tan()
+            #wcs = Tan()
 
             arrs = [T.get(c).astype(float) for c in cols]
             #r1,d1,r2,d2,r3,d3,r4,d4 = arrs
@@ -55,7 +63,7 @@ if __name__ == '__main__':
             N = len(T)
             for i in xrange(N):
                 wcs.set(*[a[i] for a in arrs])
-                out.wcs = anwcs_new_tan(wcs)
+                #out.wcs = anwcs_new_tan(wcs)
                 plot.plot('outline')
 
                 # plot.move_to_radec(r1[i], d1[i])
@@ -69,12 +77,12 @@ if __name__ == '__main__':
 
                 if i and i % 10000 == 0 or i == N-1:
                     print 'exposure', i, 'of', N
-                    #im = plot.get_image_as_numpy()
-                    plot.get_image_as_numpy(out=im)
-                    #print 'im:', im.shape
-                    print 'max:', im.max()
-                    im = im[:,:,0]
-                    count += im
+                    im = plot.get_image_as_numpy()
+                    #plot.get_image_as_numpy(out=im)
+                    print 'im:', im.shape
+                    print 'max:', im[:,:,0].max()
+                    #im = im[:,:,0]
+                    count += im[:,:,0]
                     del im
                     print 'total max:', count.max()
                     plot.clear()
