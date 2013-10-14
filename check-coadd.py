@@ -225,7 +225,8 @@ def paper_plots(coadd_id, band, dir2='e'):
             myimshow(img)
             ps.savefig()
     
-        mx = max(wisen.max(), un.max(), unw.max())
+        #mx = max(wisen.max(), un.max(), unw.max())
+        mx = 60.
         na = ima.copy()
         na.update(vmin=0, vmax=mx, cmap='jet')
         plt.clf()
@@ -248,14 +249,14 @@ def paper_plots(coadd_id, band, dir2='e'):
     
         parent = plt.gca()
         pb = parent.get_position(original=True).frozen()
-        print 'pb', pb
+        #print 'pb', pb
         # new parent box, padding, child box
         frac = 0.15
         pad  = 0.05
         (pbnew, padbox, cbox) = pb.splitx(1.0-(frac+pad), 1.0-frac)
-        print 'pbnew', pbnew
-        print 'padbox', padbox
-        print 'cbox', cbox
+        # print 'pbnew', pbnew
+        # print 'padbox', padbox
+        # print 'cbox', cbox
         cbox = cbox.anchored('C', cbox)
         parent.set_position(pbnew)
         parent.set_anchor((1.0, 0.5))
@@ -263,8 +264,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         aspect = 20
         cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
         parent.get_figure().sca(parent)
-    
-        plt.colorbar(cax=cax, ticks=[0,15,30,60])
+        plt.colorbar(cax=cax, ticks=[0,15,30,45,60])
         ps.savefig()
     
 
