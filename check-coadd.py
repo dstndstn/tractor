@@ -172,7 +172,6 @@ def paper_plots(coadd_id, band, dir2='e'):
     plt.subplots_adjust(**spa)
 
     dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
-    #dir2 = 'e'
     
     wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits' % (coadd_id, band), header=True)
     imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
@@ -194,8 +193,7 @@ def paper_plots(coadd_id, band, dir2='e'):
 
     ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
-    def myimshow(img):
-        #plo,phi = [np.percentile(img, p) for p in [25,99]]
+    def myimshow(img, pp=[25,95]):
         plo,phi = [np.percentile(img, p) for p in [25,95]]
         imai = ima.copy()
         imai.update(vmin=plo, vmax=phi)
@@ -289,12 +287,36 @@ def paper_plots(coadd_id, band, dir2='e'):
         wise_unc_fudge = 2.
 
         sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
-    
+        sigw1 = np.median(sigw)
+        print 'sigw:', sigw1
+        
+        zp = wisehdr['MAGZP']
+        print 'WISE image zeropoint:', zp
+        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+        print 'zpscale', zpscale
+        
     if False:
         ps.skip(1)
     else:
         # Sky / Error properties
-    
+
+        # plt.figure(figsize=figsize)
+        # plt.subplots_adjust(**spa)
+        # 
+        # b = 15
+        # xbinwise = reduce(np.add, [wiseim[i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
+        # b = 8
+        # xbinim   = reduce(np.add, [im    [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
+        # xbinimw  = reduce(np.add, [imw   [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
+        # 
+        # #for img in [(binwise - wisesky) * zpscale / psfnorm, binim, binimw]:
+        # for img in [(xbinwise - wisesky) * zpscale / psfnorm, xbinim, xbinimw]:
+        #     plt.clf()
+        #     plt.imshow(img, vmin=-3.*sigw1, vmax=3.*sigw1, **ima)
+        #     #plt.imshow(img, vmin=-2.*sigw1, vmax=2.*sigw1, **ima)
+        #     plt.xticks([]); plt.yticks([])
+        #     ps.savefig()
+        
         plt.figure(figsize=bigfigsize)
         plt.subplots_adjust(**bigspa)
         wisechi = ((wiseim-wisesky) / unc).ravel()
@@ -366,11 +388,6 @@ def paper_plots(coadd_id, band, dir2='e'):
         
         plt.figure(figsize=medfigsize)
         plt.subplots_adjust(**medspa)
-
-        zp = wisehdr['MAGZP']
-        print 'WISE image zeropoint:', zp
-        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
-        print 'zpscale', zpscale
 
         wiseflux = (wiseim - wisesky) * zpscale
         #wiseerr  = (unc * zpscale / (2. * psfnorm)).ravel()
