@@ -159,7 +159,7 @@ def pixel_area():
 
 def paper_plots(coadd_id, band, dir2='e'):
     figsize = (4,4)
-    spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+    spa = dict(left=0.01, right=0.99, bottom=0.02, top=0.99)
 
     #medfigsize = (6,4)
     medfigsize = (5,3.5)
@@ -226,7 +226,7 @@ def paper_plots(coadd_id, band, dir2='e'):
             ps.savefig()
     
         #mx = max(wisen.max(), un.max(), unw.max())
-        mx = 60.
+        mx = 62.
         na = ima.copy()
         na.update(vmin=0, vmax=mx, cmap='jet')
         plt.clf()
@@ -303,36 +303,39 @@ def paper_plots(coadd_id, band, dir2='e'):
         #wisechi2 = 0.5 * ((wiseim-wisesky) / unc).ravel()
         wisechi2 = ((wiseim-wisesky) / (wise_unc_fudge * unc)).ravel()
 
+        #galpha = 0.3
+        gsty = dict(linestyle='-', color='k', alpha=0.3)
+        
         chiw = (imw / sigw).ravel()
         lo,hi = -6,12
         ha = dict(range=(lo,hi), bins=100, log=True, histtype='step')
         ha1 = dict(range=(lo,hi), bins=100)
         plt.clf()
         h1,e = np.histogram(wisechi, **ha1)
-        h2,e = np.histogram(wisechi2, **ha1)
+        #h2,e = np.histogram(wisechi2, **ha1)
         h3,e = np.histogram(chiw, **ha1)
         nw = h3
-        nwise = h2
+        nwise = h1
+        #nwise = h2
         ee = e.repeat(2)[1:-1]
-        p1 = plt.plot(ee, (h1/1.).repeat(2), color='r', lw=3, alpha=0.5)
-        p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
-        p3 = plt.plot(ee, h3.repeat(2), color='b')
+        p1 = plt.plot(ee, (h1/1.).repeat(2), zorder=25, color='r', lw=2, alpha=0.5)
+        #p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
+        p3 = plt.plot(ee, h3.repeat(2), zorder=25, color='b')
         plt.yscale('log')
         xx = np.linspace(lo, hi, 300)
-        plt.plot(xx, max(nw) * np.exp(-(xx**2)/(2.)), 'b-', alpha=0.5)
-        plt.plot(xx, max(nwise) * np.exp(-(xx**2)/(2.)), 'm-', alpha=0.5)
+        plt.plot(xx, max(nw)*np.exp(-0.5*(xx**2)), **gsty)
+        plt.plot(xx, max(nwise)*np.exp(-0.5*(xx**2)/(2.**2)), **gsty)
         plt.xlabel('Pixel / Uncertainty ($\sigma$)')
         plt.ylabel('Number of pixels')
         #plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
 
-        emode = e[np.argmax(h3)]
-        print 'e mode', emode
         wc = (wiseim-wisesky) / unc
         print 'wc', wc.shape
         pp = []
         for ii,cc in [
-            (np.linspace(0, wc.shape[0], 11), 'r'),
-            (np.linspace(0, wc.shape[0], 21), 'g'),
+            (np.linspace(0, wc.shape[0],  6), 'm'),
+            #(np.linspace(0, wc.shape[0], 11), 'r'),
+            #(np.linspace(0, wc.shape[0], 21), 'g'),
             ]:
             nmx = []
             for ilo,ihi in zip(ii, ii[1:]):
@@ -340,18 +343,23 @@ def paper_plots(coadd_id, band, dir2='e'):
                     wsub = wiseim[ilo:ihi, jlo:jhi]
                     usub = unc[ilo:ihi, jlo:jhi]
                     ssky = wisesky
-                    # ssky = estimate_sky(wsub, wisemed-2.*wisesig, wisemed+1.*wisesig)
+                    #ssky = estimate_sky(wsub, wisemed-2.*wisesig, wisemed+1.*wisesig)
                     h,e = np.histogram(((wsub - ssky)/usub).ravel(), **ha1)
                     imax = np.argmax(h)
-                    de = emode - e[imax]
-                    #de = 0
-                    plt.plot(ee + de, (h/1.).repeat(2), color=cc, lw=1, alpha=0.1)
+                    ew = (e[1]-e[0])/2.
+                    de = -(e[imax] + ew)
+                    p4 = plt.plot(ee + de, h.repeat(2), color=cc, lw=1, alpha=0.25)
+                    #plt.plot(e[:-1] + de + ew, h, color=cc, lw=1, alpha=0.5)
                     nmx.append(max(h))
-            p4 = plt.plot(xx, np.median(nmx) * np.exp(-(xx**2)/(2.)), '-', color=cc, alpha=0.5)
-            plt.plot(xx, np.median(nmx) * np.exp(-(xx**2)/(2. * 2**2)), '-', color=cc, alpha=0.5)
-            pp.append(p4)
+            pp.append(p4[0])
+            for s in [1., np.sqrt(2.), 2.]:
+                plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/s**2),
+                         zorder=20, **gsty)
+                #plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/(2**2)), '-', color=cc, alpha=galpha)
+                #plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/(2.)), '-', color=cc, alpha=galpha)
         
-        plt.legend((p1,p2,p3,pp[0],pp[1]), ('WISE', 'WISE corr', 'unWISE', '10x10 sub', '20x20 sub'))
+        plt.legend([p1[0],p3[0]]+pp, ('WISE', 'unWISE', '5x5 sub WISE'))
+        #, '10x10 sub', '20x20 sub'))
 
         yl,yh = plt.ylim()
         plt.ylim(3, yh)
