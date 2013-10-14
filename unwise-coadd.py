@@ -237,6 +237,10 @@ def get_wise_frames(r0,r1,d0,d1, margin=2.):
     print np.sum(WISE.matched), 'of', len(WISE), 'matched to metadata tables'
     assert(np.sum(WISE.matched) == len(WISE))
     WISE.delete_column('matched')
+
+    # Reorder by scan, frame, band
+    WISE.cut(np.lexsort((WISE.band, WISE.frame_num, WISE.scan_id)))
+
     return WISE
 
 def check_md5s(WISE):
@@ -288,9 +292,14 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         version[words[0]] = words[1]
     print 'SVN version info:', version
 
+    # base/RRR/RRRRsDDD/unwise-*
+    outdir = os.path.join(outdir, ti.coadd_id[:3], ti.coadd_id)
+    if not os.path.exists(outdir):
+        print 'mkdir', outdir
+        os.makedirs(outdir)
     tag = 'unwise-%s-w%i' % (ti.coadd_id, band)
     prefix = os.path.join(outdir, tag)
-    ofn = prefix + '-img.fits'
+    ofn = prefix + '-img-m.fits'
     if os.path.exists(ofn):
         print 'Output file exists:', ofn
         if not force:
@@ -340,12 +349,6 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         print 'Cut out bad scans in W4:', sum(WISE.use), 'remaining'
 
     if band in [3,4]:
-        print 'Moon_masked:', np.unique(WISE.moon_masked)
-        # WISE.cut(WISE.moon_masked == False)
-        # print 'Cut moon_masked:', len(WISE), 'remaining'
-        # DEBUG -- sort by mooniness
-        # WISE.cut(np.argsort(WISE.moon_masked))
-
         # Cut on moon, based on (robust) measure of pixelwise standard deviations
         if sum(WISE.moon_masked[WISE.use]):
             moon = WISE.moon_masked[WISE.use]
@@ -386,7 +389,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                 print 'Need:', intfn
         return 0
 
-    #
+    # Estimate memory usage and bail out if too high.
     if maxmem:
         mem = 1. + (len(WISE) * 1e6/2. * 5. / 1e9)
         print 'Estimated mem usage:', mem
@@ -459,12 +462,12 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
         WISE.imagew[wi] = w
         WISE.imageh[wi] = h
         WISE.wcs[wi] = wcs
-
-        #print 'wi', wi
-        #print 'row', WISE.row[wi]
         print 'Image extent:', WISE.imextent[wi,:]
         print 'Coadd extent:', WISE.coextent[wi,:]
 
+        # Count total coadd-space bounding-box size -- this x 5 bytes
+        # is the memory toll of our round-1 coadds, which is basically
+        # the memory peak usage.
         e = WISE.coextent[wi,:]
         pixinrange += (1+e[1]-e[0]) * (1+e[3]-e[2])
         print 'Total pixels in coadd space:', pixinrange
@@ -479,6 +482,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
                    (band, os.path.dirname(f).replace(wisedir + '/', '')))
         return -1
 
+    # Now we can make a more informed estimate of memore use.
     if maxmem:
         mem = 1. + (pixinrange * 5. / 1e9)
         print 'Estimated mem usage:', mem
@@ -489,7 +493,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     # convert from object array to string array; '' rather than '0'
     WISE.intfn = np.array([{0:''}.get(s,s) for s in WISE.intfn])
 
-    print 'Cut to', sum(WISE.use), 'intersecting target'
+    print 'Cut to', sum(WISE.use), 'frames intersecting target'
 
     t1 = Time()
     print 'Up to coadd_wise:'
@@ -532,22 +536,22 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     hdr.add_record(dict(name='UNW_FRN', value=nframes, comment='unWISE N frames'))
     hdr.add_record(dict(name='UNW_MEDF', value=medfilt, comment='unWISE median filter sz'))
 
-    ofn = prefix + '-img.fits'
+    ofn = prefix + '-img-u.fits'
     fitsio.write(ofn, coim.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-invvar.fits'
+    ofn = prefix + '-invvar-u.fits'
     fitsio.write(ofn, coiv.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-std.fits'
+    ofn = prefix + '-std-u.fits'
     fitsio.write(ofn, copp.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-n.fits'
+    ofn = prefix + '-n-u.fits'
     fitsio.write(ofn, con.astype(np.int16), header=hdr, clobber=True)
 
-    ofn = prefix + '-img-w.fits'
+    ofn = prefix + '-img-m.fits'
     fitsio.write(ofn, coimb.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-invvar-w.fits'
+    ofn = prefix + '-invvar-m.fits'
     fitsio.write(ofn, coivb.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-std-w.fits'
+    ofn = prefix + '-std-m.fits'
     fitsio.write(ofn, coppb.astype(np.float32), header=hdr, clobber=True)
-    ofn = prefix + '-n-w.fits'
+    ofn = prefix + '-n-m.fits'
     fitsio.write(ofn, conb.astype(np.int16), header=hdr, clobber=True)
 
     if do_cube:
@@ -598,8 +602,8 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
 
     WISE.delete_column('wcs')
 
-    # downcast datatypes,
-    # and work around fitsio's issues with "bool"...
+    # downcast datatypes, and work around fitsio's issues with
+    # "bool" columns
     for c,t in [('included', np.uint8),
                 ('use', np.uint8),
                 ('moon_masked', np.uint8),
@@ -784,7 +788,6 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
 
     rchi = ((rr.rimg - dsky - subco) * mask * (subw > 0) * (subpp > 0) /
             np.maximum(subpp, 1e-6))
-    #print 'rchi', rchi.min(), rchi.max()
     assert(np.all(np.isfinite(rchi)))
     badpix = (np.abs(rchi) >= 5.)
     #print 'Number of rchi-bad pixels:', np.count_nonzero(badpix)
@@ -797,11 +800,8 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
     # Bit 2: grown
     badpixmask += (2 * badpix)
     # Add rchi-masked pixels to the mask
-    #rr.rmask2[badpix] = False
-    # Clear bit 2...
+    # (clear bit 2)
     rr.rmask[badpix] &= ~2
-    
-    # print 'Applying rchi masks to images...'
     mm.omask = np.zeros((rr.wcs.get_height(), rr.wcs.get_width()),
                         badpixmask.dtype)
     try:
@@ -818,7 +818,6 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
     if mm.nrchipix > mm.ncopix * 0.01:
         print ('WARNING: dropping exposure %s: n rchi pixels %i / %i' %
                (scanid, mm.nrchipix, mm.ncopix))
-                                        
         mm.included = False
 
     if ps1:
@@ -845,7 +844,6 @@ def _coadd_one_round2((ri, N, scanid, rr, cow1, cowimg1, cowimgsq1, tinyw, plotf
         mm.rmask2  = (rr.rmask & 2).astype(bool)
 
     mm.dsky = dsky / rr.zpscale
-
         
     if plotfn:
 
@@ -997,26 +995,14 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
     # For W4, single-image ww is ~ 1e-10
     tinyw = 1e-16
 
-    # DEBUG
-    #WISE = WISE[:10]
-    # DEBUG -- scan closest to outlier 03833a
-    #WISE.hexscan = np.array([int(s, 16) for s in WISE.scan_id])
-    #WISE.cut(np.lexsort((WISE.frame_num, np.abs(WISE.hexscan - int('03833a', 16)))))
-    #WISE.cut(np.lexsort((WISE.frame_num, WISE.scan_id)))
-
     (rimgs, coimg1, cow1, coppstd1, cowimgsq1
      )= _coadd_wise_round1(cowcs, WISE, ps, band, table, L, tinyw, mp1, medfilt)
     cowimg1 = coimg1 * cow1
+    assert(len(rimgs) == len(WISE))
 
     if mp1 != mp2:
         print 'Shutting down multiprocessing pool 1'
         mp1.close()
-
-    # Using the difference between the coadd and the resampled
-    # individual images ("rchi"), mask additional pixels and redo the
-    # coadd.
-
-    assert(len(rimgs) == len(WISE))
 
     if ps:
         # Plot round-one images
@@ -1261,23 +1247,6 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
                        vmin=0, vmax=1)
             ps.savefig()
 
-            #print 'nblobs', nblobs
-            #print 'blobcms', blobcms
-            #if nblobs == 1:
-            #    blobcms = [blobcms]
-                
-            # Patched image
-            # cim += 1e6
-            # w = np.max(mm.cow)
-            # cim[mm.coslc][mm.con] = mm.coimg[mm.con] / w
-            # sig1 = 1./np.sqrt(w)
-            # plt.clf()
-            # plt.imshow(cim, interpolation='nearest', origin='lower', cmap='gray',
-            #            vmin=-1.*sig1, vmax=5.*sig1)
-            # ps.savefig()
-
-
-
     coimg    = coadd.coimg
     coimgsq  = coadd.coimgsq
     cow      = coadd.cow
@@ -1305,7 +1274,7 @@ def coadd_wise(cowcs, WISE, ps, band, mp1, mp2,
     coppstdb /= np.sqrt(np.maximum(1., (conb - 1).astype(float)))
 
     # re-estimate and subtract sky from the coadd.
-    # approx median
+    # approx median:
     med = median_f(coimgb[::4,::4].astype(np.float32))
     sig1 = 1./np.sqrt(median_f(coinvvarb[::4,::4].astype(np.float32)))
     sky = estimate_sky(coimgb, med-2.*sig1, med+1.*sig1, omit=None)
@@ -1445,28 +1414,20 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
 
     wcs = wise.wcs
     x0,x1,y0,y1 = wise.imextent
-    cox0,cox1,coy0,coy1 = wise.coextent
+    wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
+    slc = (slice(y0,y1+1), slice(x0,x1+1))
 
+    cox0,cox1,coy0,coy1 = wise.coextent
     coW = int(1 + cox1 - cox0)
     coH = int(1 + coy1 - coy0)
 
-    wcs = wcs.get_subimage(int(x0), int(y0), int(1+x1-x0), int(1+y1-y0))
     # We read the full images for sky-estimation purposes -- really necessary?
-    slc = (slice(y0,y1+1), slice(x0,x1+1))
-    with fitsio.FITS(intfn) as F:
-        fullimg = F[0].read()
-        #img = F[0][y0:y1+1, x0:x1+1]
-        ihdr = F[0].read_header()
-    fullmask = fitsio.FITS(maskfn)[0].read()
-    fullunc  = fitsio.FITS(uncfn) [0].read()
+    fullimg,ihdr = fitsio.read(intfn, header=True)
+    fullmask = fitsio.read(maskfn)
+    fullunc  = fitsio.read(uncfn )
     img  = fullimg [slc]
     mask = fullmask[slc]
     unc  = fullunc [slc]
-    # mask = fitsio.FITS(maskfn)[0][y0:y1+1, x0:x1+1]
-    # unc  = fitsio.FITS(uncfn) [0][y0:y1+1, x0:x1+1]
-    #print 'Img:', img.shape, img.dtype
-    #print 'Unc:', unc.shape, unc.dtype
-    #print 'Mask:', mask.shape, mask.dtype
 
     zp = ihdr['MAGZP']
     zpscale = 1. / NanoMaggies.zeropointToScale(zp)
@@ -1532,11 +1493,9 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
         #from scipy.ndimage.filters import median_filter
         #mf = median_filter(fullimg, size=medfilt)
         #fullimg -= mf
-
         mf = np.zeros_like(fullimg)
         ok = median_smooth(fullimg, np.logical_not(fullok), int(medfilt), mf)
         fullimg -= mf
-
         img = fullimg[slc]
         print 'Median filtering with box size', medfilt, 'took', Time()-tmf0
 
@@ -1573,9 +1532,7 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
         return None
     rim = rims[0]
     assert(np.all(np.isfinite(rim)))
-
     print 'Pixels in range:', len(Yo)
-    #print 'Added to coadd: range', rim.min(), rim.max(), 'mean', np.mean(rim), 'median', np.median(rim)
 
     if ps:
         # save for later...
@@ -1598,7 +1555,6 @@ def _coadd_one_round1((i, N, wise, table, L, ps, band, cowcs, medfilt)):
     rr.cosubwcs = cosubwcs
 
     print Time() - t00
-
     return rr
 
 
@@ -1606,96 +1562,9 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
                        tinyw, mp, medfilt):
     W = cowcs.get_width()
     H = cowcs.get_height()
-    coimg  = np.zeros((H,W))
+    coimg   = np.zeros((H,W))
     coimgsq = np.zeros((H,W))
-    cow    = np.zeros((H,W))
-
-    # Experiment with fitting background level (for moon, etc)
-    if ps and False:
-        for wise in WISE:
-            fullimg = fitsio.read(wise.intfn)
-            intfn = wise.intfn
-            uncfn = intfn.replace('-int-', '-unc-')
-            if unc_gz:
-                uncfn = uncfn + '.gz'
-            maskfn = intfn.replace('-int-', '-msk-')
-            if mask_gz:
-                maskfn = maskfn + '.gz'
-            fullunc  = fitsio.FITS(uncfn) [0].read()
-            fullmask = fitsio.FITS(maskfn)[0].read()
-            maskbits = sum([1<<bit for bit in [0,1,2,3,4,5,6,7, 9, 
-                                               10,11,12,13,14,15,16,17,18,
-                                               21,26,27,28]])
-            
-            fullok = ((fullmask & maskbits) == 0)
-            fullok[fullunc == 0] = False
-            fullok[np.logical_not(np.isfinite(fullimg))] = False
-            fullok[np.logical_not(np.isfinite(fullunc))] = False
-            # approx std,median
-            sig1 = median_f(fullunc[::4,::4][fullok[::4,::4]].astype(np.float32))
-            med = median_f(fullimg[::4,::4][fullok[::4,::4]].astype(np.float32))
-            # add some noise to smooth out "dynacal" artifacts
-            fullimg += np.random.normal(scale=sig1, size=fullimg.shape)
-    
-            ok = patch_image(fullimg, fullok.copy())
-    
-            binned = reduce(np.add, [fullimg[i/4::4, i%4::4] for i in range(16)])
-            binned /= 16.
-    
-            plt.clf()
-            plt.subplot(2,2,1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=med-2.*sig1, vmax=med+2.*sig1)
-            plt.imshow(binned, **ima)
-            plt.colorbar()
-    
-            from scipy.ndimage.filters import median_filter
-    
-            #mf = median_filter(fullimg, size=100)
-            bmf = median_filter(binned, size=25)
-            plt.subplot(2,2,2)
-            #plt.imshow(binned - bmf + med, **ima)
-            plt.imshow(bmf, **ima)
-            plt.colorbar()
-    
-            for nnum,nsub in enumerate([5, 10]):
-                S = fullimg.shape[0]
-                ii = np.linspace(0, S, nsub+1).astype(int)
-                jj = np.linspace(0, S, nsub+1).astype(int)
-    
-                blocksky = np.zeros_like(fullimg)
-                subskies = np.zeros((len(ii)-1, len(jj)-1))
-    
-                for inum,(ilo,ihi) in enumerate(zip(ii, ii[1:])):
-                    for jnum,(jlo,jhi) in enumerate(zip(jj, jj[1:])):
-                        imgsub = fullimg[ilo:ihi, jlo:jhi]
-                        #uncsub = fullunc[ilo:ihi, jlo:jhi]
-                        ssky = estimate_sky(imgsub, med - 2.*sig1, med + 1.*sig1)
-    
-                        blocksky[ilo:ihi, jlo:jhi] = ssky
-                        subskies[inum, jnum] = ssky
-    
-                # plt.clf()
-                # plt.imshow(blocksky, interpolation='nearest', origin='lower')
-                # plt.colorbar()
-                # ps.savefig()
-                # plt.clf()
-                # plt.imshow(subskies, interpolation='nearest', origin='lower')
-                # plt.colorbar()
-                # ps.savefig()
-    
-                import scipy.interpolate as interp
-                spline = interp.RectBivariateSpline((jj[:-1] + jj[1:])/2., (ii[:-1] + ii[1:])/2., subskies.T)
-    
-                splsky = spline(np.arange(S), np.arange(S)).T
-    
-                plt.subplot(2,2, nnum + 3)
-                plt.imshow(splsky, **ima)
-                plt.colorbar()
-            plt.suptitle('%s %i' % (wise.scan_id, wise.frame_num))
-            ps.savefig()
-
-                    
+    cow     = np.zeros((H,W))
 
     args = []
     for wi,wise in enumerate(WISE):
@@ -1716,8 +1585,6 @@ def _coadd_wise_round1(cowcs, WISE, ps, band, table, L,
         coimg  [slc] += rr.w *  rr.rimg
         cow    [slc] += rr.w * (rr.rmask & 1)
     print Time()-t0
-
-    print 'Min cow (round 1):', cow.min()
 
     coimg /= np.maximum(cow, tinyw)
     # Per-pixel std
@@ -2063,9 +1930,6 @@ def main():
 
         WISE.writeto(fn)
     WISE.moon_masked = (WISE.moon_masked != 0)
-
-    #WISE.cut(np.logical_or(WISE.band == 1, WISE.band == 2))
-    #check_md5s(WISE)
 
     if not os.path.exists(opt.outdir):
         print 'Creating output directory', opt.outdir

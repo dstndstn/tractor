@@ -1,11 +1,8 @@
-print 'import matplotlib...'
 import matplotlib
 matplotlib.use('Agg')
-# print 'setup tex...'
-# matplotlib.rc('text', usetex=True)
-# matplotlib.rc('font', serif='computer modern roman')
-# matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
-print 'system imports...'
+matplotlib.rc('text', usetex=True)
+matplotlib.rc('font', serif='computer modern roman')
+matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
 import numpy as np
 import pylab as plt
 import os
@@ -13,7 +10,6 @@ import sys
 
 import fitsio
 
-print 'import astrom'
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
@@ -23,8 +19,9 @@ from astrometry.util.util import Tan, Sip
 wisel3 = 'wise-L3'
 coadds = 'wise-coadds'
 
-print 'import w3'
 from wise3 import get_l1b_file
+from unwise_coadd import estimate_sky
+from tractor import GaussianMixturePSF, NanoMaggies
 
 def plot_exposures():
 
@@ -267,19 +264,16 @@ def paper_plots(coadd_id, band, dir2='e'):
         cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
         parent.get_figure().sca(parent)
     
-        plt.colorbar(cax=cax)
+        plt.colorbar(cax=cax, ticks=[0,15,30,60])
         ps.savefig()
     
 
     if True:
-        from tractor import GaussianMixturePSF, NanoMaggies
-        from unwise_coadd import estimate_sky
-
         wisemed = np.median(wiseim[::4,::4])
         wisesig = np.median(unc[::4,::4])
         wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
         print 'WISE sky estimate:', wisesky
-
+        
         P = fits_table('wise-psf-avg.fits', hdu=band)
         psf = GaussianMixturePSF(P.amp, P.mean, P.var)
         R = 100
@@ -289,15 +283,14 @@ def paper_plots(coadd_id, band, dir2='e'):
         pat /= pat.sum()
         psfnorm = np.sqrt(np.sum(pat**2))
         print 'PSF norm (native pixel scale):', psfnorm
-        psfnorm2 = psfnorm / 2.
-        print 'PSF norm (finer pixel scale):', psfnorm2
-        
-        sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
+        #psfnorm2 = psfnorm / 2.
+        #print 'PSF norm (finer pixel scale):', psfnorm2
 
         wise_unc_fudge = 2.
 
+        sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
     
-    if True:
+    if False:
         ps.skip(1)
     else:
         # Sky / Error properties
@@ -473,11 +466,6 @@ def paper_plots(coadd_id, band, dir2='e'):
         yl,yh = plt.ylim()
         plt.ylim(0.1, yh)
         ps.savefig()
-
-print 'import unwise_coadd'
-from unwise_coadd import estimate_sky
-print 'import tractor'
-from tractor import GaussianMixturePSF, NanoMaggies
 
 def composite(coadd_id, dir2='e', medpct=50, offset=0.):
 
@@ -780,23 +768,23 @@ ps = PlotSequence('co')
 #ps = PlotSequence('medfilt')
 ps.suffixes = ['png','pdf']
 
-T = fits_table('npole-atlas.fits')
+#T = fits_table('npole-atlas.fits')
 #download_tiles(T)
-composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.)
+#composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.)
 #composite(T.coadd_id[3], dir2='npole')
-sys.exit(0)
+#sys.exit(0)
 
 #northpole_plots()
 #T = fits_table('sequels-atlas.fits')
 #paper_plots(T.coadd_id[0], 3, dir2='f')
 #paper_plots(T.coadd_id[0], 4, dir2='f')
-medfilt_bg_plots()
-sys.exit(0)
+#medfilt_bg_plots()
+#sys.exit(0)
 
 T = fits_table('sequels-atlas.fits')
 paper_plots(T.coadd_id[0], 1)
 
-composite(T.coadd_id[0])
+#composite(T.coadd_id[0])
 #pixel_area()
 sys.exit(0)
 
