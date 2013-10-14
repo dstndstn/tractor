@@ -203,7 +203,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    if False:
+    if True:
         ps.skip(9)
     else:
         for img in [binwise, binim, binimw]:
@@ -304,7 +304,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         wisechi2 = ((wiseim-wisesky) / (wise_unc_fudge * unc)).ravel()
 
         #galpha = 0.3
-        gsty = dict(linestyle='-', color='k', alpha=0.3)
+        gsty = dict(linestyle='-', alpha=0.3)
         
         chiw = (imw / sigw).ravel()
         lo,hi = -6,12
@@ -318,16 +318,15 @@ def paper_plots(coadd_id, band, dir2='e'):
         nwise = h1
         #nwise = h2
         ee = e.repeat(2)[1:-1]
-        p1 = plt.plot(ee, (h1/1.).repeat(2), zorder=25, color='r', lw=2, alpha=0.5)
+        p1 = plt.plot(ee, (h1/1.).repeat(2), zorder=25, color='r', lw=3, alpha=0.5)
         #p2 = plt.plot(ee, (h2/1.).repeat(2), color='m', lw=2, alpha=0.75)
-        p3 = plt.plot(ee, h3.repeat(2), zorder=25, color='b')
+        p3 = plt.plot(ee, h3.repeat(2), zorder=25, color='b', lw=2, alpha=0.75)
         plt.yscale('log')
         xx = np.linspace(lo, hi, 300)
-        plt.plot(xx, max(nw)*np.exp(-0.5*(xx**2)), **gsty)
-        plt.plot(xx, max(nwise)*np.exp(-0.5*(xx**2)/(2.**2)), **gsty)
+        plt.plot(xx, max(nwise)*np.exp(-0.5*(xx**2)/(2.**2)), color='r', **gsty)
+        plt.plot(xx, max(nw)*np.exp(-0.5*(xx**2)), color='b', **gsty)
         plt.xlabel('Pixel / Uncertainty ($\sigma$)')
         plt.ylabel('Number of pixels')
-        #plt.legend((p1,p2,p3), ('WISE', 'WISE corr', 'unWISE'))
 
         wc = (wiseim-wisesky) / unc
         print 'wc', wc.shape
@@ -348,21 +347,17 @@ def paper_plots(coadd_id, band, dir2='e'):
                     imax = np.argmax(h)
                     ew = (e[1]-e[0])/2.
                     de = -(e[imax] + ew)
-                    p4 = plt.plot(ee + de, h.repeat(2), color=cc, lw=1, alpha=0.25)
+                    plt.plot(ee + de, h.repeat(2), color=cc, lw=1, alpha=0.25)
                     #plt.plot(e[:-1] + de + ew, h, color=cc, lw=1, alpha=0.5)
                     nmx.append(max(h))
+            # for legend only
+            p4 = plt.plot([0],[1e10], color=cc)
             pp.append(p4[0])
             for s in [1., np.sqrt(2.), 2.]:
                 plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/s**2),
-                         zorder=20, **gsty)
-                #plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/(2**2)), '-', color=cc, alpha=galpha)
-                #plt.plot(xx, np.median(nmx)*np.exp(-0.5*(xx**2)/(2.)), '-', color=cc, alpha=galpha)
-        
+                         zorder=20, color='k', **gsty)
         plt.legend([p1[0],p3[0]]+pp, ('WISE', 'unWISE', '5x5 sub WISE'))
-        #, '10x10 sub', '20x20 sub'))
-
-        yl,yh = plt.ylim()
-        plt.ylim(3, yh)
+        plt.ylim(3, 1e6)
         plt.xlim(lo,hi)
         plt.axvline(0, color='k', alpha=0.1)
         ps.savefig()
