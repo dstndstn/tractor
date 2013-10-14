@@ -276,7 +276,7 @@ def check_md5s(WISE):
 
 def one_coadd(ti, band, W, H, pixscale, WISE,
               ps, wishlist, outdir, mp1, mp2, do_cube, plots2,
-              frame0, nframes, force, medfilt, maxmem):
+              frame0, nframes, force, medfilt, maxmem, do_dsky):
     print 'Coadd tile', ti.coadd_id
     print 'RA,Dec', ti.ra, ti.dec
     print 'Band', band
@@ -502,7 +502,7 @@ def one_coadd(ti, band, W, H, pixscale, WISE,
     try:
         (coim,coiv,copp,con, coimb,coivb,coppb,conb,masks, cube, cosky
          )= coadd_wise(cowcs, WISE[WISE.use], ps, band, mp1, mp2, do_cube, medfilt,
-                       plots2=plots2)
+                       plots2=plots2, do_dsky=do_dsky)
     except:
         print 'coadd_wise failed:'
         import traceback
@@ -1834,6 +1834,9 @@ def main():
     parser.add_option('--maxmem', dest='maxmem', type=float, default=0,
                       help='Quit if predicted memory usage > n GB')
 
+    parser.add_option('--dsky', dest='dsky', action='store_true', default=False,
+                      help='Do background-matching by matching medians')
+    
     opt,args = parser.parse_args()
 
     if opt.threads:
@@ -1948,7 +1951,7 @@ def main():
         if one_coadd(T[tileid], band, W, H, opt.pixscale, WISE, ps,
                      opt.wishlist, opt.outdir, mp1, mp2,
                      opt.cube, opt.plots2, opt.frame0, opt.nframes, opt.force,
-                     opt.medfilt, opt.maxmem):
+                     opt.medfilt, opt.maxmem, opt.dsky):
             return -1
         print 'Tile', T.coadd_id[tileid], 'band', band, 'took:', Time()-t0
     return 0
