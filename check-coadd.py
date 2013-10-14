@@ -303,14 +303,16 @@ def paper_plots(coadd_id, band, dir2='e'):
         # plt.figure(figsize=figsize)
         # plt.subplots_adjust(**spa)
         # 
+        # dskyim = fitsio.read('g/138/1384p454/unwise-1384p454-w1-img-m.fits')
         # b = 15
         # xbinwise = reduce(np.add, [wiseim[i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
         # b = 8
-        # xbinim   = reduce(np.add, [im    [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
+        # #xbinim   = reduce(np.add, [im    [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
         # xbinimw  = reduce(np.add, [imw   [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
+        # xbindsky = reduce(np.add, [dskyim [i/b::b, i%b::b] for i in range(b*b)]) / float(b*b)
         # 
         # #for img in [(binwise - wisesky) * zpscale / psfnorm, binim, binimw]:
-        # for img in [(xbinwise - wisesky) * zpscale / psfnorm, xbinim, xbinimw]:
+        # for img in [(xbinwise - wisesky) * zpscale / psfnorm, xbinimw, xbindsky]:
         #     plt.clf()
         #     plt.imshow(img, vmin=-3.*sigw1, vmax=3.*sigw1, **ima)
         #     #plt.imshow(img, vmin=-2.*sigw1, vmax=2.*sigw1, **ima)
