@@ -1,10 +1,10 @@
 print 'import matplotlib...'
 import matplotlib
-print 'setup tex...'
 matplotlib.use('Agg')
-matplotlib.rc('text', usetex=True)
-matplotlib.rc('font', serif='computer modern roman')
-matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
+# print 'setup tex...'
+# matplotlib.rc('text', usetex=True)
+# matplotlib.rc('font', serif='computer modern roman')
+# matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
 print 'system imports...'
 import numpy as np
 import pylab as plt
@@ -479,12 +479,9 @@ from unwise_coadd import estimate_sky
 print 'import tractor'
 from tractor import GaussianMixturePSF, NanoMaggies
 
-def composite(coadd_id):
-    plt.figure(figsize=(4,4))
-    #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
-    spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
-    plt.subplots_adjust(**spa)
-    
+def composite(coadd_id, dir2='e', medpct=50, offset=0.):
+
+    print 'Composites for tile', coadd_id
     wiseims = []
     imws = []
     ims = []
@@ -496,24 +493,51 @@ def composite(coadd_id):
     for band in [1,2]:
 
         dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
-        dir2 = 'e'
+        #dir2 = 'e'
 
 
         wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits'   % (coadd_id, band),
                               header=True)
         unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
-        wisemed = np.median(wiseim[::4,::4])
+        #wisemed = np.median(wiseim[::4,::4])
+        wisemed = np.percentile(wiseim[::4,::4], medpct)
         wisesig = np.median(unc[::4,::4])
-        wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+        #wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+        x,c,fc,wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig,
+                                      return_fit=True)
+        print 'WISE sky', wisesky
         wiseim -= wisesky
         # adjust zeropoints
         zp = wisehdr['MAGZP']
         zpscale = 1. / NanoMaggies.zeropointToScale(zp)
         wiseim *= zpscale
 
+        # plt.clf()
+        # plt.plot(x, c, 'ro', alpha=0.5)
+        # plt.plot(x, fc, 'b-', alpha=0.5)
+        # plt.title('WISE W%i' % band)
+        # ps.savefig()
+
         wiseims.append(wiseim)
         imws   .append(read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band)))
         ims    .append(read(dir2, 'unwise-%s-w%i-img.fits'   % (coadd_id, band)))
+
+        for im in [imws[-1], ims[-1]]:
+            med = np.percentile(im[::4,::4], medpct)
+            #med = np.median(im[::4,::4])
+            sig = wisesig * zpscale
+            x,c,fc,sky = estimate_sky(im, med-2.*sig, med+1.*sig,
+                                      return_fit=True)
+            print 'med', med, 'sig', sig
+            print 'estimated sky', sky
+            im -= sky
+
+            # plt.clf()
+            # plt.plot(x, c, 'ro', alpha=0.5)
+            # plt.plot(x, fc, 'b-', alpha=0.5)
+            # plt.title('unWISE W%i' % band)
+            # ps.savefig()
+
 
     def _comp(imlist):
         s = imlist[0]
@@ -533,9 +557,19 @@ def composite(coadd_id):
     imws    = [i[slcJ] for i in imws]
     ims     = [i[slcJ] for i in ims]
 
+    # for imlist in [wiseims, imws, ims]:
+    #     plt.clf()
+    #     for im,cc in zip(imlist, ['b','r']):
+    #         plt.hist(im.ravel(), bins=100, histtype='step', color=cc,
+    #                  range=(-5,30))
+    #     plt.xlim(-5,30)
+    #     ps.savefig()
+
     # soften W2
     for im in [wiseims, imws, ims]:
-        im[1] /= 3.
+        #im[1] /= 3.
+        im[1] /= 2
+        #im[1] /= 1.5
     
     wisecomp = _comp(wiseims)
     compw = _comp(imws)
@@ -544,6 +578,11 @@ def composite(coadd_id):
     # compensate for WISE psf norm
     wisecomp *= 4.
 
+    plt.figure(figsize=(4,4))
+    #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+    spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+    plt.subplots_adjust(**spa)
+
     for im in [wisecomp, compw, comp]:
         print 'shape', im.shape
         plt.clf()
@@ -551,9 +590,22 @@ def composite(coadd_id):
         #plt.imshow(np.clip((im/25.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
         #plt.imshow(np.clip((im/300.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
         #plt.imshow(np.clip((im/200.)**0.4, 0., 1.), interpolation='nearest', origin='lower')
-        plt.imshow(np.clip((im/100.)**0.4, 0., 1.), interpolation='nearest', origin='lower')
+
+        im += offset
+
+        #im = (im/100.)**0.4
+
+        im = np.sqrt(im/25.)
+        plt.imshow(np.clip(im, 0., 1.), interpolation='nearest', origin='lower')
         plt.xticks([]); plt.yticks([])
         ps.savefig()
+
+        # im[:,:,1] = (im[:,:,0] + im[:,:,2])/2.
+        # plt.clf()
+        # plt.imshow(np.clip(im, 0., 1.), interpolation='nearest', origin='lower')
+        # plt.xticks([]); plt.yticks([])
+        # ps.savefig()
+
 
 
 def northpole_plots():
@@ -714,9 +766,25 @@ def read(dirnm, fn, header=False):
     #    return data,pth
     return data
 
-#ps = PlotSequence('co')
-ps = PlotSequence('medfilt')
+def download_tiles(T):
+    # Download from IRSA:
+    for coadd_id in T.coadd_id:
+        print 'Coadd id', coadd_id
+        #cmd = 'wget -r -N -nH -np -nv --cut-dirs=4 -A "*int-3.fits" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/"' % (coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+        cmd = 'wget -r -N -nH -np -nv --cut-dirs=4 -A "*unc-3.fits.gz" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/"' % (coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+        print 'Cmd:', cmd
+        os.system(cmd)
+    
+
+ps = PlotSequence('co')
+#ps = PlotSequence('medfilt')
 ps.suffixes = ['png','pdf']
+
+T = fits_table('npole-atlas.fits')
+#download_tiles(T)
+composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.)
+#composite(T.coadd_id[3], dir2='npole')
+sys.exit(0)
 
 #northpole_plots()
 #T = fits_table('sequels-atlas.fits')
@@ -733,12 +801,6 @@ composite(T.coadd_id[0])
 sys.exit(0)
 
 
-# Download from IRSA:
-# for coadd_id in T.coadd_id:
-#     print 'Coadd id', coadd_id
-#     cmd = 'wget -r -N -nH -np -nv --cut-dirs=4 -A "*int-3.fits" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/"' % (coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
-#     print 'Cmd:', cmd
-#     os.system(cmd)
 
 
 #T.cut(np.array([0]))

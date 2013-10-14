@@ -1,11 +1,18 @@
 #! /usr/bin/env python
 
+import os
+import sys
+
+if __name__ == '__main__':
+    d = os.environ.get('PBS_O_WORKDIR')
+    if d is not None:
+        os.chdir(d)
+        sys.path.append(os.getcwd())
+
 import matplotlib
 matplotlib.use('Agg')
 import numpy as np
 import pylab as plt
-import os
-import sys
 import fitsio
 
 from astrometry.util.file import *
@@ -16,6 +23,7 @@ from astrometry.util.miscutils import *
 from astrometry.util.util import *
 from astrometry.blind.plotstuff import *
 
+
 if __name__ == '__main__':
     W,H = 4000,2000
     plot = Plotstuff(size=(W,H), outformat='png')
@@ -24,75 +32,94 @@ if __name__ == '__main__':
     out.stepsize = 2000
     out.fill = 1
     
-    #im = np.zeros((H,W,4), np.uint8)
-
     wcs = Tan()
     out.wcs = anwcs_new_tan(wcs)
     wcs = anwcs_get_sip(out.wcs)
     wcs = wcs.wcstan
+
+    totals = [np.zeros((H,W), int) for b in range(4)]
     
     ps = PlotSequence('cov')
     for nbands in [4,3,2]:
-        #for nbands in [4]:
         bb = [1,2,3,4][:nbands]
         for band in bb:
-            #band = 1
-            #for fn in ['4band.fits', '4band2.fits']:
+
+            ofn = 'cov-n%i-b%i.fits' % (nbands, band)
+            if os.path.exists(ofn):
+                print 'Exists:', ofn
+                count = fitsio.read(ofn)
+                print 'Read', count.shape, count.dtype, 'max', count.max()
+                totals[band-1] += count
+
+                plt.clf()
+                plt.imshow(count, interpolation='nearest', origin='lower',
+                           vmin=0, vmax=100, cmap='gray')
+                plt.colorbar()
+                ps.savefig()
+                continue
+
             count = np.zeros((H,W), np.int16)
             fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
             cols = [('w%i'%band)+c for c in
                     ['crval1','crval2','crpix1','crpix2',
                      'cd1_1','cd1_2','cd2_1','cd2_2', 'naxis1','naxis2']]
-            #cols = [('w%i'%band)+c for c in
-            #        ['ra1','dec1','ra2','dec2','ra3','dec3','ra4','dec4']]
             print 'Reading', fn
             T = fits_table(fn, columns=cols)
             print 'Read', len(T), 'from', fn
-
             arrs = [T.get(c).astype(float) for c in cols]
-            #r1,d1,r2,d2,r3,d3,r4,d4 = arrs
 
             plot.clear()
             plot.color = 'white'
             plot.alpha = 1./255.
-            #plot.alpha = 1.
             plot.op = CAIRO_OPERATOR_ADD
 
             N = len(T)
             for i in xrange(N):
-                #print
-                #print 'WCS', i
+                if arrs[-1][i] == -1:
+                    continue
                 wcs.set(*[a[i] for a in arrs])
                 plot.plot('outline')
 
-                # plot.move_to_radec(r1[i], d1[i])
-                # plot.line_to_radec(r2[i], d2[i])
-                # plot.line_to_radec(r3[i], d3[i])
-                # plot.line_to_radec(r4[i], d4[i])
-                # plot.close_path()
-                # plot.fill()
-
                 if i and i % 10000 == 0 or i == N-1:
-                    #fn = ps.getnext()
-                    #plot.write(fn)
                     print 'exposure', i, 'of', N
                     im = plot.get_image_as_numpy()
-                    #plot.get_image_as_numpy(out=im)
-                    print 'im:', im.shape
                     print 'max:', im[:,:,0].max()
-                    #im = im[:,:,0]
                     count += im[:,:,0]
                     del im
                     print 'total max:', count.max()
                     plot.clear()
                     
-            ofn = 'cov-n%i-b%i.fits' % (nbands, band)
             fitsio.write(ofn, count, clobber=True)
             print 'Wrote', ofn
 
+            totals[band-1] += count
+
             plt.clf()
             plt.imshow(count, interpolation='nearest', origin='lower',
-                       vmin=0, vmax=1, cmap='gray')
+                       vmin=0, vmax=100, cmap='gray')
+            plt.colorbar()
             ps.savefig()
             
-            #sys.exit(0)
+            del T
+            del arrs
+
+
+
+
+    M = reduce(np.logical_or, [t > 0 for t in totals])
+
+    for tot in totals:
+        plt.clf()
+        plt.imshow(tot, interpolation='nearest', origin='lower',
+                   vmin=0, vmax=100, cmap='gray')
+        plt.colorbar()
+        ps.savefig()
+
+    plt.clf()
+    mx = 60
+    for tot,cc in zip(totals, 'bgrm'):
+        plt.hist(np.minimum(tot[M], mx), range=(0,mx),
+                 bins=mx+1, histtype='step', color=cc)
+    ps.savefig()
+
+        
