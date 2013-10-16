@@ -126,15 +126,13 @@ def image_way():
 def healpix_way():
     Nside = 200
     NHP = 12 * Nside**2
-    r0,r1,d0,d1 = [np.zeros(NHP) for i in range(4)]
-
+    #r0,r1,d0,d1 = [np.zeros(NHP) for i in range(4)]
     ra,dec = [np.zeros(NHP) for i in range(2)]
-    
     counts = [np.zeros(NHP) for i in range(4)]
     
     print 'Healpix ranges for', NHP
     for hp in range(NHP):
-        r0[hp],r1[hp],d0[hp],d1[hp] = healpix_radec_bounds(hp, Nside)
+        #r0[hp],r1[hp],d0[hp],d1[hp] = healpix_radec_bounds(hp, Nside)
         ra[hp],dec[hp] = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
         
     wcs = Tan()
