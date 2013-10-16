@@ -22,6 +22,7 @@ from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.util import *
 from astrometry.blind.plotstuff import *
+from astrometry.libkd.spherematch import *
 
 
 def image_way():
@@ -133,14 +134,14 @@ def healpix_way():
     print 'Healpix ranges for', NHP
     for hp in range(NHP):
         #r0[hp],r1[hp],d0[hp],d1[hp] = healpix_radec_bounds(hp, Nside)
-        ra[hp],dec[hp] = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
+        ra[hp],dec[hp] = healpix_to_radecdeg(hp, Nside, 0.5, 0.5)
         
     wcs = Tan()
     for nbands in [4,3,2]:
         bb = [1,2,3,4][:nbands]
 
         fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
-        cols = 'ra','dec'
+        cols = ['ra','dec']
         print 'Reading', fn
         T = fits_table(fn, columns=cols)
         print 'Read', len(T), 'from', fn
