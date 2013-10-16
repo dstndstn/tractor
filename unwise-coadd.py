@@ -1826,7 +1826,7 @@ def main():
                       help='Only use a subset of the frames: number nframes')
 
     parser.add_option('--medfilt', dest='medfilt', type=int, default=0,
-                      help='Median filter with a box this size, to remove varying background; probably want this odd')
+                      help='Median filter with a box (half) this size (+1), to remove varying background.')
 
     parser.add_option('--force', dest='force', action='store_true', default=False,
                       help='Run even if output file already exists?')

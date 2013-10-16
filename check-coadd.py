@@ -156,10 +156,17 @@ def pixel_area():
 # plt.axis('scaled')
 # ps.savefig()
 
+def binimg(img, b):
+    hh,ww = img.shape
+    hh = int(hh / b) * b
+    ww = int(ww / b) * b
+    return (reduce(np.add, [img[i/b:hh:b, i%b:ww:b] for i in range(b*b)]) /
+            float(b*b))
 
 def paper_plots(coadd_id, band, dir2='e'):
     figsize = (4,4)
-    spa = dict(left=0.01, right=0.99, bottom=0.02, top=0.99)
+    spa = dict(left=0.01, right=0.99, bottom=0.02, top=0.99,
+               wspace=0.05, hspace=0.05)
 
     #medfigsize = (6,4)
     medfigsize = (5,3.5)
@@ -191,6 +198,32 @@ def paper_plots(coadd_id, band, dir2='e'):
     binim   = reduce(np.add, [im    [i/4::4, i%4::4] for i in range(16)]) / 16.
     binimw  = reduce(np.add, [imw   [i/4::4, i%4::4] for i in range(16)]) / 16.
 
+    sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
+    sigw1 = np.median(sigw)
+    print 'sigw:', sigw1
+
+    wisemed = np.median(wiseim[::4,::4])
+    wisesig = np.median(unc[::4,::4])
+    wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
+    print 'WISE sky estimate:', wisesky
+
+    zp = wisehdr['MAGZP']
+    print 'WISE image zeropoint:', zp
+    zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+    print 'zpscale', zpscale
+
+    P = fits_table('wise-psf-avg.fits', hdu=band)
+    psf = GaussianMixturePSF(P.amp, P.mean, P.var)
+    R = 100
+    psf.radius = R
+    pat = psf.getPointSourcePatch(0., 0.)
+    pat = pat.patch
+    pat /= pat.sum()
+    psfnorm = np.sqrt(np.sum(pat**2))
+    print 'PSF norm (native pixel scale):', psfnorm
+
+    wise_unc_fudge = 2.
+    
     ima = dict(interpolation='nearest', origin='lower', cmap='gray')
 
     def myimshow(img, pp=[25,95]):
@@ -222,7 +255,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         for img in [subwise, subim, subimw]:
             myimshow(img)
             ps.savefig()
-    
+
         #mx = max(wisen.max(), un.max(), unw.max())
         mx = 62.
         na = ima.copy()
@@ -266,36 +299,8 @@ def paper_plots(coadd_id, band, dir2='e'):
         ps.savefig()
     
 
+
     if True:
-        wisemed = np.median(wiseim[::4,::4])
-        wisesig = np.median(unc[::4,::4])
-        wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
-        print 'WISE sky estimate:', wisesky
-        
-        P = fits_table('wise-psf-avg.fits', hdu=band)
-        psf = GaussianMixturePSF(P.amp, P.mean, P.var)
-        R = 100
-        psf.radius = R
-        pat = psf.getPointSourcePatch(0., 0.)
-        pat = pat.patch
-        pat /= pat.sum()
-        psfnorm = np.sqrt(np.sum(pat**2))
-        print 'PSF norm (native pixel scale):', psfnorm
-        #psfnorm2 = psfnorm / 2.
-        #print 'PSF norm (finer pixel scale):', psfnorm2
-
-        wise_unc_fudge = 2.
-
-        sigw = 1./np.sqrt(np.maximum(ivw, 1e-16))
-        sigw1 = np.median(sigw)
-        print 'sigw:', sigw1
-        
-        zp = wisehdr['MAGZP']
-        print 'WISE image zeropoint:', zp
-        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
-        print 'zpscale', zpscale
-        
-    if False:
         ps.skip(1)
     else:
         # Sky / Error properties
@@ -387,7 +392,8 @@ def paper_plots(coadd_id, band, dir2='e'):
         ps.savefig()
     
     if True:
-        
+        ps.skip(2)
+    else:
         plt.figure(figsize=medfigsize)
         plt.subplots_adjust(**medspa)
 
@@ -480,15 +486,60 @@ def paper_plots(coadd_id, band, dir2='e'):
         ps.savefig()
 
 
-        plt.clf()
-        plt.hist(wiseflux / wiseerr, range=(-6,10), log=True, bins=100,
-                 histtype='step', color='r')
-        plt.hist(unflux / unerr, range=(-6,10), log=True, bins=100,
-                 histtype='step', color='b')
-        yl,yh = plt.ylim()
-        plt.ylim(0.1, yh)
-        ps.savefig()
+        # plt.clf()
+        # plt.hist(wiseflux / wiseerr, range=(-6,10), log=True, bins=100,
+        #          histtype='step', color='r')
+        # plt.hist(unflux / unerr, range=(-6,10), log=True, bins=100,
+        #          histtype='step', color='b')
+        # yl,yh = plt.ylim()
+        # plt.ylim(0.1, yh)
+        # ps.savefig()
 
+    if True:
+        plt.figure(figsize=figsize)
+        plt.subplots_adjust(**spa)
+
+        hi,wi = wiseim.shape
+        hj,wj = imw.shape
+
+        # franges = [ (0.0,0.05), (0.45,0.5), (0.94,0.99) ]
+        franges = [ (0.0,0.1), (0.45,0.55), (0.89,0.99) ]
+        imargs = ima.copy()
+        # imargs.update(vmin=-3.*sigw1, vmax=3.*sigw1)
+        imargs.update(vmin=-2.*sigw1, vmax=2.*sigw1,
+                      cmap='jet')
+        plt.clf()
+        k = 1
+        for yflo,yfhi in reversed(franges):
+            for xflo,xfhi in franges:
+                plt.subplot(len(franges),len(franges), k)
+                k += 1
+                slcW = (slice(int(hi*yflo), int(hi*yfhi)+1),
+                        slice(int(wi*xflo), int(wi*xfhi)+1))
+                subwise = wiseim[slcW]
+                # bin
+                # subwise = binimg(subwise, 2)
+                subwise = binimg(subwise, 4)
+                plt.imshow((subwise - wisesky) * zpscale / psfnorm, **imargs)
+                plt.xticks([]); plt.yticks([])
+        ps.savefig()
+        plt.clf()
+        k = 1
+        for yflo,yfhi in reversed(franges):
+            for xflo,xfhi in franges:
+                plt.subplot(len(franges),len(franges), k)
+                k += 1
+                slcU = (slice(int(hj*yflo), int(hj*yfhi)+1),
+                        slice(int(wj*xflo), int(wj*xfhi)+1))
+                subimw = imw[slcU]
+                subimw = binimg(subimw, 2)
+                plt.imshow(subimw, **imargs)
+                plt.xticks([]); plt.yticks([])
+        ps.savefig()
+            
+
+
+        
 def composite(coadd_id, dir2='e', medpct=50, offset=0.):
 
     print 'Composites for tile', coadd_id
