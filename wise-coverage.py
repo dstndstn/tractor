@@ -24,7 +24,7 @@ from astrometry.util.util import *
 from astrometry.blind.plotstuff import *
 
 
-if __name__ == '__main__':
+def image_way():
     W,H = 4000,2000
     plot = Plotstuff(size=(W,H), outformat='png')
     plot.wcs = anwcs_create_allsky_hammer_aitoff(180., 0., W, H)
@@ -123,3 +123,65 @@ if __name__ == '__main__':
     ps.savefig()
 
         
+def healpix_way():
+    Nside = 200
+    NHP = 12 * Nside**2
+    r0,r1,d0,d1 = [np.zeros(NHP) for i in range(4)]
+
+    ra,dec = [np.zeros(NHP) for i in range(2)]
+    
+    counts = [np.zeros(NHP) for i in range(4)]
+    
+    print 'Healpix ranges for', NHP
+    for hp in range(NHP):
+        r0[hp],r1[hp],d0[hp],d1[hp] = healpix_radec_bounds(hp, Nside)
+        ra[hp],dec[hp] = healpix_to_radecdeg(hp, nside, 0.5, 0.5)
+        
+    wcs = Tan()
+    for nbands in [4,3,2]:
+        bb = [1,2,3,4][:nbands]
+
+        fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
+        cols = 'ra','dec'
+        print 'Reading', fn
+        T = fits_table(fn, columns=cols)
+        print 'Read', len(T), 'from', fn
+
+        I,J,d = match_radec(T.ra, T.dec, ra, dec, 1.)
+        print 'Matched', len(I)
+        
+        for band in bb:
+            #fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
+            cols = [('w%i'%band)+c for c in
+                    ['crval1','crval2','crpix1','crpix2',
+                     'cd1_1','cd1_2','cd2_1','cd2_2', 'naxis1','naxis2']]
+            print 'Reading', fn
+            T = fits_table(fn, columns=cols, rows=I)
+            print 'Read', len(T), 'from', fn
+            arrs = [T.get(c).astype(float) for c in cols]
+
+            N = len(T)
+            for i in xrange(N):
+                if arrs[-1][i] == -1:
+                    continue
+                wcs.set(*[a[i] for a in arrs])
+                #rlo,rhi,dlo,dhi = wcs.radec_bounds()
+                #I = np.flatnonzero(
+
+                JJ = np.unique(J[I == i])
+                print 'WCS', i, ':', len(JJ), 'matched'
+                for j in JJ:
+                    if wcs.is_inside(ra[j], dec[j]):
+                        counts[band-1][j] += 1
+
+    for i,c in enumerate(counts):
+        fn = 'coverage-hp-w%i.fits' % (i+1)
+        fitsio.write(fn, c, clobber=True)
+        print 'Wrote', fn
+
+                
+                
+    
+if __name__ == '__main__':
+    healpix_way()
+    

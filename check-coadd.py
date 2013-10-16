@@ -835,11 +835,47 @@ def download_tiles(T):
         cmd = 'wget -r -N -nH -np -nv --cut-dirs=4 -A "*unc-3.fits.gz" "http://irsa.ipac.caltech.edu/ibe/data/wise/merge/merge_p3am_cdd/%s/%s/%s/"' % (coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
         print 'Cmd:', cmd
         os.system(cmd)
+
+def coverage_plots():
+    totals = None
+
+    for nbands in [2,3,4]:
+        bb = [1,2,3,4][:nbands]
+        for band in bb:
+            fn = 'cov-n%i-b%i.fits' % (nbands, band)
+            I = fitsio.read(fn)
+            print I.shape
+            if totals is None:
+                H,W = I.shape
+                totals = [np.zeros((H,W), int) for b in range(4)]
+            totals[band-1] += I
+
+    M = reduce(np.logical_or, [t > 0 for t in totals])
     
+    for t,cc in zip(totals, 'bgrm'):
+        plt.clf()
+        plt.hist(t[M].ravel(), range=(0,60), bins=61, histtype='step',
+                 color=cc, log=True)
+        plt.ylim(0.3, 1e6)
+        ps.savefig()
+
+    for t,cc in zip(totals, 'bgrm'):
+        bt = binimg(t, 10)
+        plt.clf()
+        plt.imshow(bt, interpolation='nearest', origin='lower',
+                   cmap='hot', vmin=0, vmax=100)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        ps.savefig()
+
+        
 
 ps = PlotSequence('co')
 #ps = PlotSequence('medfilt')
 ps.suffixes = ['png','pdf']
+
+coverage_plots()
+sys.exit(0)
 
 #T = fits_table('npole-atlas.fits')
 #download_tiles(T)
