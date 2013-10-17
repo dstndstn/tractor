@@ -163,7 +163,8 @@ def binimg(img, b):
     return (reduce(np.add, [img[i/b:hh:b, i%b:ww:b] for i in range(b*b)]) /
             float(b*b))
 
-def paper_plots(coadd_id, band, dir2='e'):
+def paper_plots(coadd_id, band, dir2='e',
+                part1=True, part2=True, part3=True):
     figsize = (4,4)
     spa = dict(left=0.01, right=0.99, bottom=0.02, top=0.99,
                wspace=0.05, hspace=0.05)
@@ -234,7 +235,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         plt.imshow(img, **imai)
         plt.xticks([]); plt.yticks([])
 
-    if True:
+    if not part1:
         ps.skip(9)
     else:
         for img in [binwise, binim, binimw]:
@@ -256,6 +257,10 @@ def paper_plots(coadd_id, band, dir2='e'):
             myimshow(img)
             ps.savefig()
 
+        print 'Median coverage: WISE:', np.median(wisen)
+        print 'Median coverage: unWISE w:', np.median(unw)
+        print 'Median coverage: unWISE:', np.median(un)
+
         #mx = max(wisen.max(), un.max(), unw.max())
         mx = 62.
         na = ima.copy()
@@ -264,7 +269,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         plt.imshow(wisen, **na)
         plt.xticks([]); plt.yticks([])
         ps.savefig()
-    
+
         plt.clf()
         plt.imshow(un, **na)
         plt.xticks([]); plt.yticks([])
@@ -300,7 +305,7 @@ def paper_plots(coadd_id, band, dir2='e'):
     
 
 
-    if True:
+    if not part2:
         ps.skip(1)
     else:
         # Sky / Error properties
@@ -391,7 +396,7 @@ def paper_plots(coadd_id, band, dir2='e'):
         plt.axvline(0, color='k', alpha=0.1)
         ps.savefig()
     
-    if True:
+    if not part3:
         ps.skip(2)
     else:
         plt.figure(figsize=medfigsize)
@@ -856,7 +861,7 @@ def medfilt_bg_plots():
     spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
 
     medfigsize = (5,4)
-    medspa = dict(left=0.12, right=0.98, bottom=0.12, top=0.96)
+    medspa = dict(left=0.12, right=0.96, bottom=0.12, top=0.96)
 
     print 'bg plots'
     coadd_id = '1384p454'
@@ -879,22 +884,24 @@ def medfilt_bg_plots():
         wiseflux = (wiseim - wisesky) * zpscale
         binwise = reduce(np.add, [wiseflux[i/5::5, i%5::5] for i in range(25)]) / 25.
         ims.append(binwise)
+        # approximate correction for PSF norm
+        binwise *= 4.
 
         fullims = []
         for dir2 in ['e','f']:
             imw    = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
             binimw  = reduce(np.add, [imw   [i/4::4, i%4::4] for i in range(16)]) / 16.
             ims.append(binimw)
-
             #ivw    = read(dir2, 'unwise-%s-w%i-invvar-w.fits' % (coadd_id, band))
             #fullims.append((imw,ivw))
             fullims.append(imw)
-        img = ims[-1]
-        plo,phi = [np.percentile(img, p) for p in [25,99]]
+
+        #img = ims[-1]
+        img = ims[0]
+        #plo,phi = [np.percentile(img, p) for p in [25,99]]
+        plo,phi = [np.percentile(img, p) for p in [5,95]]
         ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                    vmin=plo, vmax=phi)
-        # approximate correction for PSF norm
-        #ims.append(binwise / 0.25)
 
         plt.figure(figsize=figsize)
         plt.subplots_adjust(**spa)
@@ -906,10 +913,14 @@ def medfilt_bg_plots():
             # plt.xticks([]); plt.yticks([])
             # ps.savefig()
 
-            plo,phi = [np.percentile(img, p) for p in [25,99]]
+            #plo,phi = [np.percentile(img, p) for p in [25,99]]
+            plo,phi = [np.percentile(img, p) for p in [5,95]]
+
+            print 'Percentiles:', plo, phi
+
             pcts.append((plo,phi))
-            ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=plo, vmax=phi)
+            # ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=plo, vmax=phi)
             plt.clf()
             plt.imshow(img, **ima)
             plt.xticks([]); plt.yticks([])
@@ -936,9 +947,10 @@ def medfilt_bg_plots():
         plt.clf()
         rr = [np.log10(lo), np.log10(hi)]
         loghist(np.log10(np.maximum(lo, nofilt)).ravel(), np.log10(np.maximum(lo, filt.ravel())), 200,
-                range=[rr,rr])
+                range=[rr,rr], hot=False, imshowargs=dict(cmap=antigray))
         ax = plt.axis()
-        plt.plot(rr, rr, '--', color=(0,1,0))
+        #plt.plot(rr, rr, '--', color=(0,1,0))
+        plt.plot(rr, rr, '--', color='r')
         plt.axis(ax)
         plt.xlabel('W%i: Pixel value' % band)
         plt.ylabel('W%i: Median filtered pixel value' % band)
@@ -1038,11 +1050,14 @@ def coverage_plots():
         
 
 ps = PlotSequence('co')
-#ps = PlotSequence('medfilt')
+ps = PlotSequence('medfilt')
+
 ps.suffixes = ['png','pdf']
 
+medfilt_bg_plots()
+
 #coverage_plots()
-#sys.exit(0)
+sys.exit(0)
 
 T = fits_table('npole-atlas.fits')
 #download_tiles(T)
@@ -1073,11 +1088,10 @@ sys.exit(0)
 #T = fits_table('sequels-atlas.fits')
 #paper_plots(T.coadd_id[0], 3, dir2='f')
 #paper_plots(T.coadd_id[0], 4, dir2='f')
-#medfilt_bg_plots()
 #sys.exit(0)
 
-T = fits_table('sequels-atlas.fits')
-paper_plots(T.coadd_id[0], 1)
+#T = fits_table('sequels-atlas.fits')
+#paper_plots(T.coadd_id[0], 1)
 
 #composite(T.coadd_id[0])
 #pixel_area()
