@@ -137,7 +137,7 @@ def healpix_way():
         ra[hp],dec[hp] = healpix_to_radecdeg(hp, Nside, 0.5, 0.5)
         
     wcs = Tan()
-    for nbands in [4,3,2]:
+    for nbands in [2,3,4]:#4,3,2]:
         bb = [1,2,3,4][:nbands]
 
         fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
@@ -146,8 +146,14 @@ def healpix_way():
         T = fits_table(fn, columns=cols)
         print 'Read', len(T), 'from', fn
 
-        I,J,d = match_radec(T.ra, T.dec, ra, dec, 1.)
-        print 'Matched', len(I)
+        #I,J,d = match_radec(T.ra, T.dec, ra, dec, 0.6)
+        #print 'Matched', len(I)
+        #UI = np.unique(I)
+        #print len(UI), 'unique WCS'
+
+        M = match_radec(T.ra, T.dec, ra, dec, 0.6, indexlist=True)
+        print 'Matched:', [m for m in M if m is not None], 'WCS'
+        print 'total of', sum([len(m) if m is not None else 0 for m in M])
         
         for band in bb:
             #fn = 'wise-frames/WISE-l1b-metadata-%iband.fits' % nbands
@@ -155,11 +161,12 @@ def healpix_way():
                     ['crval1','crval2','crpix1','crpix2',
                      'cd1_1','cd1_2','cd2_1','cd2_2', 'naxis1','naxis2']]
             print 'Reading', fn
-            T = fits_table(fn, columns=cols, rows=I)
+            T = fits_table(fn, columns=cols, rows=UI)
             print 'Read', len(T), 'from', fn
             arrs = [T.get(c).astype(float) for c in cols]
 
             N = len(T)
+            n0 = counts[band-1].sum()
             for i in xrange(N):
                 if arrs[-1][i] == -1:
                     continue
@@ -167,12 +174,16 @@ def healpix_way():
                 #rlo,rhi,dlo,dhi = wcs.radec_bounds()
                 #I = np.flatnonzero(
 
-                JJ = np.unique(J[I == i])
-                print 'WCS', i, ':', len(JJ), 'matched'
+                JJ = np.unique(J[I == UI[i]])
+                print 'WCS', i, ':', len(JJ), 'matched',
+                nin = 0
                 for j in JJ:
                     if wcs.is_inside(ra[j], dec[j]):
                         counts[band-1][j] += 1
-
+                        nin += 1
+                print ' ', nin, 'inside'
+            print 'Added a total of', counts[band-1].sum() - n0
+                        
     for i,c in enumerate(counts):
         fn = 'coverage-hp-w%i.fits' % (i+1)
         fitsio.write(fn, c, clobber=True)
