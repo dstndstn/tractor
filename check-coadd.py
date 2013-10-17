@@ -10,6 +10,7 @@ import sys
 
 import fitsio
 
+from astrometry.util.stages import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
@@ -537,164 +538,278 @@ def paper_plots(coadd_id, band, dir2='e'):
         ps.savefig()
             
 
+class CompositeStage(object):
+    def __init__(self):
+        pass
+    def __call__(self, stage, **kwargs):
+        f = { 0:self.stage0, 1:self.stage1 }[stage]
+        return f(**kwargs)
+    def stage0(self, bands=None, coadd_id=None, medpct=None, dir2=None,
+               fxlo=None, fxhi=None, fylo=None, fyhi=None,
+               **kwargs):
+        wiseims = []
+        imws = []
+        ims = []
+        #hi,wi = wiseims[0].shape
+        #hj,wj = imws[0].shape
+        hi,wi = 4095,4095
+        hj,wj = 2048,2048
+        slcI = (slice(int(hi*fylo), int(hi*fyhi)+1),
+                slice(int(wi*fxlo), int(wi*fxhi)+1))
+        slcJ = (slice(int(hj*fylo), int(hj*fyhi)+1),
+                slice(int(wj*fxlo), int(wj*fxhi)+1))
+        # print 'slices:', slcI, slcJ
+        
+        for band in bands:
+            dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
+            wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits'   % (coadd_id, band),
+                                  header=True)
+            unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
+            wisemed = np.percentile(wiseim[::4,::4], medpct)
+            wisesig = np.median(unc[::4,::4])
+            x,c,fc,wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig,
+                                          return_fit=True)
+            print 'WISE sky', wisesky
+
+            wiseim = wiseim[slcI]
+            wiseim -= wisesky
+            # adjust zeropoints
+            zp = wisehdr['MAGZP']
+            zpscale = 1. / NanoMaggies.zeropointToScale(zp)
+            wiseim *= zpscale
+            wisesig *= zpscale
+            
+            # plt.clf()
+            # plt.plot(x, c, 'ro', alpha=0.5)
+            # plt.plot(x, fc, 'b-', alpha=0.5)
+            # plt.title('WISE W%i' % band)
+            # ps.savefig()
+    
+            sky = estimate_sky(wiseim, -2.*wisesig, 1.*wisesig)
+            print 'wise sky 2:', sky
+            wiseim -= sky
+            wiseims.append(wiseim)
+    
+            im = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
+            imws.append(im[slcJ])
+            im = read(dir2, 'unwise-%s-w%i-img.fits'   % (coadd_id, band))
+            ims.append(im[slcJ])
+    
+            std = read(dir2, 'unwise-%s-w%i-std-w.fits' % (coadd_id, band))
+            sig = np.median(std[::4,::4])
+            print 'median std:', sig
+            
+            for im in [imws[-1], ims[-1]]:
+                for j in range(2):
+                    med = np.percentile(im, medpct)
+    
+                    # percentile ranges to include in sky fit
+                    plo,phi = 5,60
+                    
+                    rlo,rhi = [np.percentile(im, p) for p in (plo,phi)]
+                    #rlo,rhi = (med-2.*sig, med+1.*sig)
+                    x,c,fc,sky = estimate_sky(im, rlo,rhi,
+                                              return_fit=True)
+                    
+                    # plt.clf()
+                    # plt.hist(im.ravel(), range=(np.percentile(im, 0),
+                    #                             np.percentile(im, 90)),
+                    #         bins=100, histtype='step', color='b')
+                    # plt.axvline(rlo, color='g')
+                    # plt.axvline(rhi, color='g')
+                    # plt.axvline(sky, color='r')
+                    # ps.savefig()
+                    print 'med', med, 'sig', sig
+                    print 'estimated sky', sky
+                    im -= sky
+                    # plt.clf()
+                    # plt.plot(x, c, 'ro', alpha=0.5)
+                    # plt.plot(x, fc, 'b-', alpha=0.5)
+                    # plt.title('unWISE W%i' % band)
+                    # ps.savefig()
+
+        return dict(wiseims=wiseims, imws=imws, ims=ims)
+                    
+    def stage1(self, wiseims=None, imws=None, ims=None, bands=None,
+               compoffset=None, **kwargs):
+        # soften W2
+        # for im in [wiseims, imws, ims]:
+        #     #im[1] /= 3.
+        #     #im[1] /= 2
+        #     #im[1] /= 1.5
+        #     pass
+    
+        if len(bands) == 3:
+            # soften W3
+            for im in [wiseims, imws, ims]:
+                im[2] /= 10.
+    
+        # compensate for WISE psf norm
+        for im in wiseims:
+            im *= 4.
+    
+        # histograms
+        if False:
+            medfigsize = (5,3.5)
+            medspa = dict(left=0.12, right=0.96, bottom=0.12, top=0.96)
+            plt.figure(figsize=medfigsize)
+            plt.subplots_adjust(**medspa)
+            for imlist in [wiseims, imws, ims]:
+                plt.clf()
+                for im,cc,scale in zip(imlist, 'bgr', [1.,1.,0.2]):
+                    plt.hist((im*scale).ravel(), range=(-5,20), histtype='step',
+                             bins=100)
+                ps.savefig()
+
+        # plt.figure(figsize=(8,8))
+        # #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+        # spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+        # plt.subplots_adjust(**spa)
+
+        # for im in [wiseims, imws, ims]:
+        #     plt.clf()
+        #     for i,Q in enumerate([3, 10, 30, 100]):
+        #         plt.subplot(2,2, i+1)
+        #         L = _lupton_comp([i/100 for i in im], Q=Q)
+        #         plt.imshow(L, interpolation='nearest', origin='lower')
+        #         plt.xticks([]); plt.yticks([])
+        #     ps.savefig()
+
+        # plt.figure(figsize=(4,4))
+        # #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
+        # spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+        # plt.subplots_adjust(**spa)
+
+        for im in [wiseims, imws, ims]:
+
+            plt.clf()
+
+            k = 1
+
+            # QQ = [10,20]
+            # SS = [100,200]
+            #QQ = [15,20,25]
+            #SS = [50,100,200]
+            QQ = [20]
+            SS = [100]
+            for Q in QQ:
+                for S in SS:
+            
+                    if len(im) != 3:
+                        L = _lupton_comp([i/S for i in im], Q=Q)
+                    else:
+                        b,g,r = im
+                        # R = g * 0.4 + r * 0.6
+                        # G = b * 0.2 + g * 0.8
+                        # B = b
+                        R = g * 0.8 + r * 0.5
+                        G = b * 0.4 + g * 0.6
+                        B = b * 1.0
+                        L = _lupton_comp([i/S for i in [B,G,R]], Q=Q)
+
+                    plt.subplot(len(QQ), len(SS), k)
+                    k += 1
+
+                    plt.imshow(L, interpolation='nearest', origin='lower')
+                    plt.xticks([]); plt.yticks([])
+            ps.savefig()
+            
+
+        # for im in [wiseims, imws, ims]:
+        #     comp = _comp(im)
+        #     plt.clf()
+        # 
+        #     comp += compoffset
+        #     #comp = (comp/200.)**0.3
+        #     #comp = (comp/100.)**0.4
+        #     comp = (comp/200.)**0.4
+        #     #comp = (comp/300.)**0.5
+        #     #comp = (comp/300.)
+        #     #comp = np.sqrt(comp/25.)
+        # 
+        #     plt.imshow(np.clip(comp, 0., 1.),
+        #                interpolation='nearest', origin='lower')
+        #     plt.xticks([]); plt.yticks([])
+        #     ps.savefig()
+        
+
+def _comp(imlist):
+    s = imlist[0]
+    HI,WI = s.shape
+    rgb = np.zeros((HI, WI, 3))
+    if len(imlist) == 2:
+        rgb[:,:,0] = imlist[1]
+        rgb[:,:,2] = imlist[0]
+        rgb[:,:,1] = (rgb[:,:,0] + rgb[:,:,2])/2.
+    elif len(imlist) == 3:
+        # rgb[:,:,0] = imlist[2]
+        # rgb[:,:,1] = imlist[1]
+        # rgb[:,:,2] = imlist[0]
+        r,g,b = imlist[2], imlist[1], imlist[0]
+        rgb[:,:,0] = g * 0.4 + r * 0.6
+        rgb[:,:,1] = b * 0.2 + g * 0.8
+        rgb[:,:,2] = b
+    return rgb
+
+def _lupton_comp(imlist, alpha=1.5, Q=30):
+    s = imlist[0]
+    HI,WI = s.shape
+    rgb = np.zeros((HI, WI, 3))
+    if len(imlist) == 2:
+        r = imlist[1]
+        b = imlist[0]
+        g = (r+b)/2.
+    elif len(imlist) == 3:
+        r,g,b = imlist[2], imlist[1], imlist[0]
+    else:
+        print len(imlist), 'images'
+        assert(False)
+        
+    m = -2e-2
+
+    r = np.maximum(0, r - m)
+    g = np.maximum(0, g - m)
+    b = np.maximum(0, b - m)
+    I = (r+g+b)/3.
+    m2 = 0.
+    fI = np.arcsinh(alpha * Q * (I - m2)) / np.sqrt(Q)
+    I += (I == 0.) * 1e-6
+    R = fI * r / I
+    G = fI * g / I
+    B = fI * b / I
+    maxrgb = reduce(np.maximum, [R,G,B])
+    J = (maxrgb > 1.)
+    # R[J] = R[J]/maxrgb[J]
+    # G[J] = G[J]/maxrgb[J]
+    # B[J] = B[J]/maxrgb[J]
+    RGB = np.dstack([R,G,B])
+    RGB = np.clip(RGB, 0., 1.)
+
+    return RGB
 
         
-def composite(coadd_id, dir2='e', medpct=50, offset=0., bands=[1,2]):
+        
+def composite(coadd_id, dir2='e', medpct=50, offset=0., bands=[1,2],
+              cname='comp',
+              df = 0.07,
+              fxlo = 0.43, fylo = 0.51,
+              fxhi = None, fyhi = None
+              ):
+
+    if fxhi is None:
+        fxhi = fxlo + df
+    if fyhi is None:
+        fyhi = fylo + df
 
     print 'Composites for tile', coadd_id
-    wiseims = []
-    imws = []
-    ims = []
 
-    #flo,fhi = 0.45, 0.55
-    #flo,fhi = 0.45, 0.5
-
-    #flo,fhi = 0.45, 0.52
-    df = 0.07
-    fxlo, fylo = 0.43, 0.51
-    fxhi, fyhi = fxlo + df, fylo + df
-
-    #hi,wi = wiseims[0].shape
-    #hj,wj = imws[0].shape
-    hi,wi = 4095,4095
-    hj,wj = 2048,2048
-    #slcI = slice(int(hi*flo), int(hi*fhi)+1), slice(int(wi*flo), int(wi*fhi)+1)
-    #slcJ = slice(int(hj*flo), int(hj*fhi)+1), slice(int(wj*flo), int(wj*fhi)+1)
-    slcI = slice(int(hi*fylo), int(hi*fyhi)+1), slice(int(wi*fxlo), int(wi*fxhi)+1)
-    slcJ = slice(int(hj*fylo), int(hj*fyhi)+1), slice(int(wj*fxlo), int(wj*fxhi)+1)
-
-    print 'slices:', slcI, slcJ
+    args = dict(coadd_id=coadd_id, dir2=dir2, bands=bands, medpct=medpct,
+                compoffset=offset, fxlo=fxlo, fxhi=fxhi, fylo=fylo, fyhi=fyhi)
     
-    for band in bands:
+    runstage(1, 'comp-%s-stage%%02i.pickle' % cname, CompositeStage(),
+             force=[1], initial_args=args)
+    return
 
-        dir1 = os.path.join(wisel3, coadd_id[:2], coadd_id[:4], coadd_id + '_ab41')
-        #dir2 = 'e'
-
-
-        wiseim,wisehdr = read(dir1, '%s_ab41-w%i-int-3.fits'   % (coadd_id, band),
-                              header=True)
-        unc    = read(dir1, '%s_ab41-w%i-unc-3.fits.gz' % (coadd_id, band))
-        #wisemed = np.median(wiseim[::4,::4])
-        wisemed = np.percentile(wiseim[::4,::4], medpct)
-        wisesig = np.median(unc[::4,::4])
-        #wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig)
-        x,c,fc,wisesky = estimate_sky(wiseim, wisemed-2.*wisesig, wisemed+1.*wisesig,
-                                      return_fit=True)
-        print 'WISE sky', wisesky
-        wiseim -= wisesky
-        # adjust zeropoints
-        zp = wisehdr['MAGZP']
-        zpscale = 1. / NanoMaggies.zeropointToScale(zp)
-        wiseim *= zpscale
-        wisesig *= zpscale
-        
-        # plt.clf()
-        # plt.plot(x, c, 'ro', alpha=0.5)
-        # plt.plot(x, fc, 'b-', alpha=0.5)
-        # plt.title('WISE W%i' % band)
-        # ps.savefig()
-
-        wiseim = wiseim[slcI]
-
-        sky = estimate_sky(wiseim, -2.*wisesig, 1.*wisesig)
-        print 'wise sky 2:', sky
-        wiseim -= sky
-        
-        wiseims.append(wiseim)
-
-        im = read(dir2, 'unwise-%s-w%i-img-w.fits' % (coadd_id, band))
-        imws.append(im[slcJ])
-        im = read(dir2, 'unwise-%s-w%i-img.fits'   % (coadd_id, band))
-        ims.append(im[slcJ])
-
-        std = read(dir2, 'unwise-%s-w%i-std-w.fits' % (coadd_id, band))
-        sig = np.median(std[::4,::4])
-        print 'median std:', sig
-        
-        for im in [imws[-1], ims[-1]]:
-            for j in range(2):
-                med = np.percentile(im, medpct)
-
-                # percentile ranges to include in sky fit
-                plo,phi = 5,60
-                
-                rlo,rhi = [np.percentile(im, p) for p in (plo,phi)]
-                #rlo,rhi = (med-2.*sig, med+1.*sig)
-                x,c,fc,sky = estimate_sky(im, rlo,rhi,
-                                          return_fit=True)
-                
-                # plt.clf()
-                # plt.hist(im.ravel(), range=(np.percentile(im, 0),
-                #                             np.percentile(im, 90)),
-                #         bins=100, histtype='step', color='b')
-                # plt.axvline(rlo, color='g')
-                # plt.axvline(rhi, color='g')
-                # plt.axvline(sky, color='r')
-                # ps.savefig()
-                print 'med', med, 'sig', sig
-                print 'estimated sky', sky
-                im -= sky
-                
-                # plt.clf()
-                # plt.plot(x, c, 'ro', alpha=0.5)
-                # plt.plot(x, fc, 'b-', alpha=0.5)
-                # plt.title('unWISE W%i' % band)
-                # ps.savefig()
-
-    def _comp(imlist):
-        s = imlist[0]
-        HI,WI = s.shape
-        rgb = np.zeros((HI, WI, 3))
-        if len(imlist) == 2:
-            rgb[:,:,0] = imlist[1]
-            rgb[:,:,2] = imlist[0]
-            rgb[:,:,1] = (rgb[:,:,0] + rgb[:,:,2])/2.
-        elif len(imlist) == 3:
-            # rgb[:,:,0] = imlist[2]
-            # rgb[:,:,1] = imlist[1]
-            # rgb[:,:,2] = imlist[0]
-            r,g,b = imlist[2], imlist[1], imlist[0]
-            rgb[:,:,0] = g * 0.4 + r * 0.6
-            rgb[:,:,1] = b * 0.2 + g * 0.8
-            rgb[:,:,2] = b
-        return rgb
-
-    def _lupton_comp(imlist):
-        s = imlist[0]
-        HI,WI = s.shape
-        rgb = np.zeros((HI, WI, 3))
-        if len(imlist) == 2:
-            r = imlist[1]
-            b = imlist[0]
-            g = (r+b)/2.
-        elif len(imlist) == 3:
-            r,g,b = imlist[2], imlist[1], imlist[0]
-
-        m = -2e-2
-        alpha = 1.5
-        Q = 30
-
-        r = np.maximum(0, r - m)
-        g = np.maximum(0, g - m)
-        b = np.maximum(0, b - m)
-        I = (r+g+b)/3.
-        m2 = 0.
-        fI = np.arcsinh(alpha * Q * (I - m2)) / np.sqrt(Q)
-        I += (I == 0.) * 1e-6
-        R = fI * r / I
-        G = fI * g / I
-        B = fI * b / I
-        maxrgb = reduce(np.maximum, [R,G,B])
-        J = (maxrgb > 1.)
-        # R[J] = R[J]/maxrgb[J]
-        # G[J] = G[J]/maxrgb[J]
-        # B[J] = B[J]/maxrgb[J]
-        RGB = np.dstack([R,G,B])
-        RGB = np.clip(RGB, 0., 1.)
-
-        return RGB
-
-    
     # for imlist in [wiseims, imws, ims]:
     #     plt.clf()
     #     for im,cc in zip(imlist, ['b','r']):
@@ -703,81 +818,6 @@ def composite(coadd_id, dir2='e', medpct=50, offset=0., bands=[1,2]):
     #     plt.xlim(-5,30)
     #     ps.savefig()
 
-    # soften W2
-    for im in [wiseims, imws, ims]:
-        #im[1] /= 3.
-        #im[1] /= 2
-        #im[1] /= 1.5
-        pass
-
-    if len(bands) == 3:
-        # soften W3
-        for im in [wiseims, imws, ims]:
-            im[2] /= 5.
-
-    # compensate for WISE psf norm
-    for im in wiseims:
-        im *= 4.
-
-    # histograms
-    # medfigsize = (5,3.5)
-    # medspa = dict(left=0.12, right=0.96, bottom=0.12, top=0.96)
-    # plt.figure(figsize=medfigsize)
-    # plt.subplots_adjust(**medspa)
-    # for imlist in [wiseims, imws]:
-    #     plt.clf()
-    #     for im,cc,scale in zip(imlist, 'bgr', [1.,1.,0.2]):
-    #         plt.hist((im*scale).ravel(), range=(-5,20), histtype='step',
-    #                  bins=100)
-    #     ps.savefig()
-
-    plt.figure(figsize=(4,4))
-    #spa = dict(left=0.01, right=0.99, bottom=0.01, top=0.99)
-    spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
-    plt.subplots_adjust(**spa)
-
-    for im in [wiseims, imws, ims]:
-        L = _lupton_comp([i/100 for i in im])
-        plt.clf()
-        plt.imshow(L, interpolation='nearest', origin='lower')
-        plt.xticks([]); plt.yticks([])
-        ps.savefig()
-        
-    
-    wisecomp = _comp(wiseims)
-    compw = _comp(imws)
-    comp = _comp(ims)
-
-    for im in [wisecomp, compw, comp]:
-        print 'shape', im.shape
-        plt.clf()
-        #plt.imshow(np.clip(np.sqrt(im/25.), 0., 1.), interpolation='nearest', origin='lower')
-        #plt.imshow(np.clip((im/25.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
-        #plt.imshow(np.clip((im/300.)**0.3, 0., 1.), interpolation='nearest', origin='lower')
-        #plt.imshow(np.clip((im/200.)**0.4, 0., 1.), interpolation='nearest', origin='lower')
-
-        im += offset
-
-        #im = (im/200.)**0.3
-        #im = (im/100.)**0.4
-        im = (im/200.)**0.4
-        #im = (im/300.)**0.5
-        #im = (im/300.)
-        #im = np.sqrt(im/25.)
-
-        #if len(im) == 2:
-        #    im[:,:,2] = (im[:,:,0] + im[:,:,2] / 2.)
-
-        plt.imshow(np.clip(im, 0., 1.),
-                   interpolation='nearest', origin='lower')
-        plt.xticks([]); plt.yticks([])
-        ps.savefig()
-
-        # im[:,:,1] = (im[:,:,0] + im[:,:,2])/2.
-        # plt.clf()
-        # plt.imshow(np.clip(im, 0., 1.), interpolation='nearest', origin='lower')
-        # plt.xticks([]); plt.yticks([])
-        # ps.savefig()
 
 
 
@@ -1007,8 +1047,24 @@ ps.suffixes = ['png','pdf']
 T = fits_table('npole-atlas.fits')
 #download_tiles(T)
 #ps.skip(3)
-composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.)
-composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1., bands=[1,2,3])
+
+plt.figure(figsize=(4,4))
+spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+plt.subplots_adjust(**spa)
+
+composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.,
+          cname='npole2')
+composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1., bands=[1,2,3],
+          cname='npole3')
+
+plt.figure(figsize=(6,4))
+spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
+plt.subplots_adjust(**spa)
+
+composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1., bands=[1,2,3],
+          cname='npole4',
+          fxlo=0.43, fxhi=0.535, fylo=0.51, fyhi=0.58)
+
 sys.exit(0)
 #composite(T.coadd_id[3], dir2='npole')
 #sys.exit(0)
