@@ -837,8 +837,23 @@ def download_tiles(T):
         os.system(cmd)
 
 def coverage_plots():
-    totals = None
 
+    for band,cc in zip([1,2,3,4], 'bgrm'):
+        counts = fitsio.read('coverage-hp-w%i.fits' % band)
+
+        print 'W',band
+        print 'min:', counts.min()
+        for p in [1,2,5,10,50,90,95,98,99]:
+            print 'percentile', p, ':', np.percentile(counts, p), 'exposures'
+        print 'max:', counts.max()
+
+        plt.clf()
+        plt.hist(counts, range=(0,60), bins=61, histtype='step',
+                 color=cc, log=True)
+        plt.ylim(0.3, 1e6)
+        ps.savefig()
+    
+    totals = None
     for nbands in [2,3,4]:
         bb = [1,2,3,4][:nbands]
         for band in bb:
