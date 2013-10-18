@@ -3,6 +3,8 @@ matplotlib.use('Agg')
 matplotlib.rc('text', usetex=True)
 matplotlib.rc('font', serif='computer modern roman')
 matplotlib.rc('font', **{'sans-serif': 'computer modern sans serif'})
+import matplotlib.cm
+from matplotlib.ticker import FixedFormatter
 import numpy as np
 import pylab as plt
 import os
@@ -14,7 +16,8 @@ from astrometry.util.stages import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.util.fits import *
-from astrometry.util.util import Tan, Sip
+#from astrometry.util.util import Tan, Sip
+from astrometry.util.util import *
 
 wisel3 = 'wise-L3'
 coadds = 'wise-coadds'
@@ -1002,6 +1005,130 @@ def download_tiles(T):
 
 def coverage_plots():
 
+    #log_init(2)
+
+    W,H = 800,400
+    #W,H = 400,200
+    wcs = anwcs_create_allsky_hammer_aitoff2(180., 0., W, H)
+    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+    print 'xx,yy', xx.shape, yy.shape
+    #rr,dd = wcs.pixelxy2radec(xx.ravel()+1., yy.ravel()+1.)
+    ok,rr,dd = wcs.pixelxy2radec(xx+1., yy+1.)
+    print 'rr,dd', rr.shape, dd.shape, rr.dtype, dd.dtype
+    print 'ok', ok.shape, ok.dtype
+
+    rr = rr[ok==0]
+    dd = dd[ok==0]
+
+    Nside = 200
+    hps = np.array([radecdegtohealpix(r, d, Nside) for r,d in zip(rr, dd)])
+
+    counts = np.zeros(xx.shape, int)
+
+    # ok,x,y = wcs.radec2pixelxy(180., 0.)
+    # counts[y,x] = 1.
+    # plt.clf()
+    # plt.imshow(counts, interpolation='nearest', origin='lower')
+    # ps.savefig()
+    # 
+    # ok,x,y = wcs.radec2pixelxy(180., 60.)
+    # counts[y,x] = 1.
+    # plt.clf()
+    # plt.imshow(counts, interpolation='nearest', origin='lower')
+    # ps.savefig()
+    # 
+    # ok,x,y = wcs.radec2pixelxy(180., -60.)
+    # counts[y,x] = 1.
+    # plt.clf()
+    # plt.imshow(counts, interpolation='nearest', origin='lower')
+    # ps.savefig()
+    # 
+    # ok,x,y = wcs.radec2pixelxy(120., 0.)
+    # counts[y,x] = 1.
+    # plt.clf()
+    # plt.imshow(counts, interpolation='nearest', origin='lower')
+    # ps.savefig()
+    
+    
+    
+    cmap = matplotlib.cm.spectral
+    mn,mx = 0.,100.
+    
+    for band in [1,2,3,4]:
+        hpcounts = fitsio.read('coverage-hp-w%i.fits' % band)
+        assert(len(hpcounts) == 12*Nside**2)
+        counts[ok==0] = hpcounts[hps]
+    
+        plt.clf()
+        plt.imshow(counts, interpolation='nearest', origin='lower',
+                   vmin=0, vmax=100, cmap='spectral')
+        plt.title('W%i' % band)
+        ps.savefig()
+
+        rgb = cmap(np.clip( (counts - mn) / (mx - mn), 0, 1))
+        for i in range(4):
+            rgb[:,:,i][ok != 0] = 1
+        print 'rgb', rgb.shape, rgb.dtype, rgb.min(), rgb.max()    
+        # Trim off all-white parts
+        while True:
+            if not np.all(rgb[:,0,0] == 1):
+                break
+            rgb = rgb[:,1:,:]
+        while True:
+            if not np.all(rgb[:,-1,0] == 1):
+                break
+            rgb = rgb[:,:-1,:]
+        while True:
+            if not np.all(rgb[0,:,0] == 1):
+                break
+            rgb = rgb[1:,:,:]
+        while True:
+            if not np.all(rgb[-1,:,0] == 1):
+                break
+            rgb = rgb[:-1,:,:]
+    
+        print 'rgb', rgb.shape, rgb.dtype, rgb.min(), rgb.max()    
+            
+        dpi=100.
+        frac = 0.06
+        pad  = 0.02
+        if band == 4:
+            WW = W * (1.+frac+pad)
+        else:
+            WW = W
+        plt.figure(figsize=(WW/dpi, H/dpi), dpi=dpi)
+        spa = dict(left=0, right=1, bottom=0.02, top=0.97)
+        plt.subplots_adjust(**spa)
+    
+        plt.clf()
+        plt.imshow(rgb, interpolation='nearest', origin='lower')
+        plt.gca().set_frame_on(False)
+        plt.xticks([]); plt.yticks([])
+
+        if band == 4:
+            parent = plt.gca()
+            pb = parent.get_position(original=True).frozen()
+            (pbnew, padbox, cbox) = pb.splitx(1.0-(frac+pad), 1.0-frac)
+            cbox = cbox.anchored('C', cbox)
+            parent.set_position(pbnew)
+            parent.set_anchor((1.0, 0.5))
+            cax = parent.get_figure().add_axes(cbox)
+            aspect = 20
+            cax.set_aspect(aspect, anchor=((0.0, 0.5)), adjustable='box')
+            parent.get_figure().sca(parent)
+            tt = [0,25,50,75,100]
+            plt.colorbar(cax=cax, ticks=(np.array(tt)-mn)/(mx-mn),
+                         format=FixedFormatter(['$%i$'%i for i in tt]))
+        
+        ps.savefig()
+
+    # for fn in ps.getnext():
+    #     plt.imsave(fn, rgb, origin='lower')
+    #     print 'wrote', fn
+    
+    return
+    
+    
     for band,cc in zip([1,2,3,4], 'bgrm'):
         counts = fitsio.read('coverage-hp-w%i.fits' % band)
 
@@ -1050,13 +1177,14 @@ def coverage_plots():
         
 
 ps = PlotSequence('co')
-ps = PlotSequence('medfilt')
-
+ps = PlotSequence('cov')
+#ps = PlotSequence('medfilt')
 ps.suffixes = ['png','pdf']
 
-medfilt_bg_plots()
+coverage_plots()
+sys.exit(0)
 
-#coverage_plots()
+medfilt_bg_plots()
 sys.exit(0)
 
 T = fits_table('npole-atlas.fits')

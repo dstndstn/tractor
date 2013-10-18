@@ -29,7 +29,7 @@ from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 
-from matplotlib.nxutils import points_inside_poly
+#from matplotlib.nxutils import points_inside_poly
 
 logger = logging.getLogger('wise')
 
