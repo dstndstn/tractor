@@ -639,14 +639,14 @@ class CompositeStage(object):
         return dict(wiseims=wiseims, imws=imws, ims=ims)
                     
     def stage1(self, wiseims=None, imws=None, ims=None, bands=None,
-               compoffset=None, **kwargs):
+               compoffset=None, inset=None, **kwargs):
         # soften W2
         # for im in [wiseims, imws, ims]:
         #     #im[1] /= 3.
         #     #im[1] /= 2
         #     #im[1] /= 1.5
         #     pass
-    
+
         if len(bands) == 3:
             # soften W3
             for im in [wiseims, imws, ims]:
@@ -688,7 +688,7 @@ class CompositeStage(object):
         # spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
         # plt.subplots_adjust(**spa)
 
-        for im in [wiseims, imws, ims]:
+        for im,sc in zip([wiseims, imws, ims], [2,1,1]):
 
             plt.clf()
 
@@ -718,8 +718,80 @@ class CompositeStage(object):
                     plt.subplot(len(QQ), len(SS), k)
                     k += 1
 
+                    H,W,nil = L.shape
+                    mn = min(H,W)
+                    L = L[:mn,:mn]
+                    
                     plt.imshow(L, interpolation='nearest', origin='lower')
                     plt.xticks([]); plt.yticks([])
+
+                    print 'Inset:', inset
+                    if inset is not None:
+                        h,w,planes = L.shape
+                        print 'w,h', w,h
+                        ax = plt.axes([0.69, 0.01, 0.3, 0.3])
+                        plt.sca(ax)
+                        plt.setp(ax.spines.values(), color='w')
+                        xi = [int(np.round(i*w)) for i in inset[:2]]
+                        yi = [int(np.round(i*h)) for i in inset[2:]]
+                        dx = xi[1]-xi[0]
+                        dy = yi[1]-yi[0]
+                        dd = max(dx,dy)
+                        Lsub = L[yi[0]:yi[0]+dd+1,xi[0]:xi[0]+dd+1]
+
+                        if sc == 999:
+                            print 'subshape', Lsub.shape
+                            print dd
+                            print 'R', R.shape
+                            sh,sw,planes = Lsub.shape
+                            xx,yy = np.meshgrid(np.linspace(-0.5, sw-0.5, 2*sw),
+                                                np.linspace(-0.5, sh-0.5, 2*sh))
+                            print 'xx', xx.shape
+                            xx = xx.ravel()
+                            yy = yy.ravel()
+                            ix = np.round(xx).astype(np.int32)
+                            iy = np.round(yy).astype(np.int32)
+                            dx = (xx - ix).astype(np.float32)
+                            dy = (yy - iy).astype(np.float32)
+
+                            print 'ix', ix.shape
+                            print 'ix', ix.min(), ix.max()
+                            print 'iy', iy.min(), iy.max()
+                            print 'dx', dx.min(), dx.max()
+                            print 'dy', dy.min(), dy.max()
+                            
+                            #R = np.zeros((sh*2,sw*2,planes), np.float32)
+                            #RR = [R[:,:,i].ravel() for i in range(planes)]
+                            #print 'RR', RR[0].shape
+                            RR = [np.zeros(sh*2*sw*2, np.float32) for i in range(planes)]
+                            LL = [Lsub[:,:,i] for i in range(planes)]
+                            #print 'RR', RR
+                            #print 'LL', LL
+
+                            #ok = lanczos3_interpolate(
+                            #    ix, iy, dx, dy, RR, LL)
+
+                            # for L,R in zip(LL,RR):
+                            #     ok = lanczos3_interpolate(
+                            #         ix, iy, dx, dy, [R], [L])
+                            LL = [L[:,:,i] for i in range(planes)]
+
+                            from astrometry.util.resample import _lanczos_interpolate
+
+                            f = lanczos3_interpolate
+                            f = _lanczos_interpolate
+                            
+                            for L,R in zip(LL,RR):
+                                #ok = f(xi[0]+ix, yi[0]+iy, dx, dy, [R], [L])
+                                ok = f(3, xi[0]+ix, yi[0]+iy, dx, dy, [R], [L],
+                                       table=False)
+
+                            R = np.dstack([R.reshape((sh*2,sw*2)) for R in RR])
+                            Lsub = R
+                            
+                        plt.imshow(Lsub, interpolation='nearest', origin='lower')
+                        plt.xticks([]); plt.yticks([])
+
             ps.savefig()
             
 
@@ -801,7 +873,8 @@ def composite(coadd_id, dir2='e', medpct=50, offset=0., bands=[1,2],
               cname='comp',
               df = 0.07,
               fxlo = 0.43, fylo = 0.51,
-              fxhi = None, fyhi = None
+              fxhi = None, fyhi = None,
+              inset=None
               ):
 
     if fxhi is None:
@@ -811,11 +884,13 @@ def composite(coadd_id, dir2='e', medpct=50, offset=0., bands=[1,2],
 
     print 'Composites for tile', coadd_id
 
-    args = dict(coadd_id=coadd_id, dir2=dir2, bands=bands, medpct=medpct,
-                compoffset=offset, fxlo=fxlo, fxhi=fxhi, fylo=fylo, fyhi=fyhi)
+    iargs = dict(coadd_id=coadd_id, dir2=dir2, bands=bands, medpct=medpct,
+                compoffset=offset)
+    args = dict(fxlo=fxlo, fxhi=fxhi, fylo=fylo, fyhi=fyhi,
+                inset=inset)
     
     runstage(1, 'comp-%s-stage%%02i.pickle' % cname, CompositeStage(),
-             force=[1], initial_args=args)
+             force=[1], initial_args=iargs, **args)
     return
 
     # for imlist in [wiseims, imws, ims]:
@@ -1177,28 +1252,29 @@ def coverage_plots():
         
 
 ps = PlotSequence('co')
-ps = PlotSequence('cov')
+#ps = PlotSequence('cov')
 #ps = PlotSequence('medfilt')
 ps.suffixes = ['png','pdf']
 
-coverage_plots()
-sys.exit(0)
-
-medfilt_bg_plots()
-sys.exit(0)
+#coverage_plots()
+#medfilt_bg_plots()
+#sys.exit(0)
 
 T = fits_table('npole-atlas.fits')
 #download_tiles(T)
 #ps.skip(3)
 
-plt.figure(figsize=(4,4))
+plt.figure(figsize=(4,4))#, edgecolor='w')
 spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
 plt.subplots_adjust(**spa)
 
 composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.,
           cname='npole2')
 composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1., bands=[1,2,3],
-          cname='npole3')
+          cname='npole3',
+          inset=[156/400., (156+37)/400., 1.-(54+37)/400., 1.-(54/400.)])
+#inset=[i/float(400.) for i in [98, 98+44, 198, 198+44]])
+sys.exit(0)
 
 plt.figure(figsize=(6,4))
 spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
