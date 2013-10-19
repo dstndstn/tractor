@@ -702,9 +702,10 @@ class CompositeStage(object):
             SS = [100]
             for Q in QQ:
                 for S in SS:
-            
+
+                    kwa = dict(Q=Q, clip=False)
                     if len(im) != 3:
-                        L = _lupton_comp([i/S for i in im], Q=Q)
+                        L = _lupton_comp([i/S for i in im], **kwa)
                     else:
                         b,g,r = im
                         # R = g * 0.4 + r * 0.6
@@ -713,7 +714,7 @@ class CompositeStage(object):
                         R = g * 0.8 + r * 0.5
                         G = b * 0.4 + g * 0.6
                         B = b * 1.0
-                        L = _lupton_comp([i/S for i in [B,G,R]], Q=Q)
+                        L = _lupton_comp([i/S for i in [B,G,R]], **kwa)
 
                     plt.subplot(len(QQ), len(SS), k)
                     k += 1
@@ -722,74 +723,50 @@ class CompositeStage(object):
                     mn = min(H,W)
                     L = L[:mn,:mn]
                     
-                    plt.imshow(L, interpolation='nearest', origin='lower')
+                    plt.imshow(np.clip(L, 0, 1),
+                               interpolation='nearest', origin='lower')
                     plt.xticks([]); plt.yticks([])
 
                     print 'Inset:', inset
                     if inset is not None:
                         h,w,planes = L.shape
                         print 'w,h', w,h
-                        ax = plt.axes([0.69, 0.01, 0.3, 0.3])
-                        plt.sca(ax)
-                        plt.setp(ax.spines.values(), color='w')
                         xi = [int(np.round(i*w)) for i in inset[:2]]
                         yi = [int(np.round(i*h)) for i in inset[2:]]
                         dx = xi[1]-xi[0]
                         dy = yi[1]-yi[0]
                         dd = max(dx,dy)
                         Lsub = L[yi[0]:yi[0]+dd+1,xi[0]:xi[0]+dd+1]
+                        
+                        ax = plt.axis()
+                        xl,xh = xi[0], xi[0]+dd
+                        yl,yh = yi[0], yi[0]+dd
+                        plt.plot([xl,xl,xh,xh,xl], [yl,yh,yh,yl,yl], 'w-')
+                        plt.axis(ax)
 
-                        if sc == 999:
-                            print 'subshape', Lsub.shape
-                            print dd
-                            print 'R', R.shape
+                        ax = plt.axes([0.69, 0.01, 0.3, 0.3])
+                        plt.sca(ax)
+                        plt.setp(ax.spines.values(), color='w')
+                        
+                        if sc == 1:
+                            # Lanczos sub-sample so it has the same pixel resolution
+                            # as the WISE image.
                             sh,sw,planes = Lsub.shape
                             xx,yy = np.meshgrid(np.linspace(-0.5, sw-0.5, 2*sw),
                                                 np.linspace(-0.5, sh-0.5, 2*sh))
-                            print 'xx', xx.shape
                             xx = xx.ravel()
                             yy = yy.ravel()
                             ix = np.round(xx).astype(np.int32)
                             iy = np.round(yy).astype(np.int32)
                             dx = (xx - ix).astype(np.float32)
                             dy = (yy - iy).astype(np.float32)
-
-                            print 'ix', ix.shape
-                            print 'ix', ix.min(), ix.max()
-                            print 'iy', iy.min(), iy.max()
-                            print 'dx', dx.min(), dx.max()
-                            print 'dy', dy.min(), dy.max()
-                            
-                            #R = np.zeros((sh*2,sw*2,planes), np.float32)
-                            #RR = [R[:,:,i].ravel() for i in range(planes)]
-                            #print 'RR', RR[0].shape
                             RR = [np.zeros(sh*2*sw*2, np.float32) for i in range(planes)]
-                            LL = [Lsub[:,:,i] for i in range(planes)]
-                            #print 'RR', RR
-                            #print 'LL', LL
-
-                            #ok = lanczos3_interpolate(
-                            #    ix, iy, dx, dy, RR, LL)
-
-                            # for L,R in zip(LL,RR):
-                            #     ok = lanczos3_interpolate(
-                            #         ix, iy, dx, dy, [R], [L])
                             LL = [L[:,:,i] for i in range(planes)]
-
-                            from astrometry.util.resample import _lanczos_interpolate
-
-                            f = lanczos3_interpolate
-                            f = _lanczos_interpolate
+                            lanczos3_interpolate(xi[0]+ix, yi[0]+iy, dx, dy, RR, LL)
+                            Lsub = np.dstack([R.reshape((sh*2,sw*2)) for R in RR])
                             
-                            for L,R in zip(LL,RR):
-                                #ok = f(xi[0]+ix, yi[0]+iy, dx, dy, [R], [L])
-                                ok = f(3, xi[0]+ix, yi[0]+iy, dx, dy, [R], [L],
-                                       table=False)
-
-                            R = np.dstack([R.reshape((sh*2,sw*2)) for R in RR])
-                            Lsub = R
-                            
-                        plt.imshow(Lsub, interpolation='nearest', origin='lower')
+                        plt.imshow(np.clip(Lsub, 0, 1),
+                                   interpolation='nearest', origin='lower')
                         plt.xticks([]); plt.yticks([])
 
             ps.savefig()
@@ -831,7 +808,7 @@ def _comp(imlist):
         rgb[:,:,2] = b
     return rgb
 
-def _lupton_comp(imlist, alpha=1.5, Q=30):
+def _lupton_comp(imlist, alpha=1.5, Q=30, clip=True):
     s = imlist[0]
     HI,WI = s.shape
     rgb = np.zeros((HI, WI, 3))
@@ -863,8 +840,8 @@ def _lupton_comp(imlist, alpha=1.5, Q=30):
     # G[J] = G[J]/maxrgb[J]
     # B[J] = B[J]/maxrgb[J]
     RGB = np.dstack([R,G,B])
-    RGB = np.clip(RGB, 0., 1.)
-
+    if clip:
+        RGB = np.clip(RGB, 0., 1.)
     return RGB
 
         
