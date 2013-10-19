@@ -29,13 +29,10 @@ from astrometry.util.miscutils import *
 from astrometry.util.util import *
 from astrometry.util.resample import *
 from astrometry.util.run_command import *
-from astrometry.libkd.spherematch import *
 from astrometry.util.starutil_numpy import *
-
+from astrometry.libkd.spherematch import *
 from astrometry.blind.plotstuff import *
-
-from tractor import *
-from tractor.ttime import *
+from astrometry.util.time import *
 
 from wise3 import get_l1b_file
 
@@ -47,11 +44,10 @@ logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 median_f = flat_median_f
 
 # GLOBALS:
-# WISE Level 1b inputs
+# Location of WISE Level 1b inputs
 wisedir = 'wise-frames'
 mask_gz = True
 unc_gz = True
-
 
 class Duck():
     pass

@@ -1246,7 +1246,9 @@ spa = dict(left=0.005, right=0.995, bottom=0.005, top=0.995)
 plt.subplots_adjust(**spa)
 
 composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1.,
-          cname='npole2')
+          cname='npole2',
+          inset=[156/400., (156+37)/400., 1.-(54+37)/400., 1.-(54/400.)])
+
 composite(T.coadd_id[6], dir2='npole', medpct=30, offset=1., bands=[1,2,3],
           cname='npole3',
           inset=[156/400., (156+37)/400., 1.-(54+37)/400., 1.-(54/400.)])
