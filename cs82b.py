@@ -15,6 +15,7 @@ from astrometry.util.multiproc import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.util import *
+from astrometry.util.time import *
 from astrometry.sdss import *
 from astrometry.libkd.spherematch import *
 
@@ -23,7 +24,6 @@ from tractor.sdss import *
 from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
-from tractor.ttime import *
 
 import cProfile
 from datetime import datetime

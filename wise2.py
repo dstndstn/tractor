@@ -19,19 +19,17 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec, cluster_radec
-from astrometry.util.util import * #Sip, anwcs, Tan
+from astrometry.util.util import *
 from astrometry.blind.plotstuff import *
 from astrometry.util.resample import *
 from astrometry.util.multiproc import *
-
-#from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.time import *
 
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
-from tractor.ttime import *
 
 import wise
 

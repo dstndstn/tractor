@@ -27,12 +27,9 @@ from scipy.ndimage.measurements import label
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
-#from .utils import MultiParams, _isint, listmax
-#from .cache import *
-#from .ttime import Time
+from astrometry.util.time import *
 from utils import MultiParams, _isint, listmax
 from cache import *
-from ttime import Time
 
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])

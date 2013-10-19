@@ -1,12 +1,9 @@
 from engine import *
 from ducks import *
 from basics import *
-#import sdss
-#import cfht
 from nasasloan import *
 from psfex import *
 
-from ttime import Time
 __all__ = [
 	# modules
 	'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
@@ -30,8 +27,6 @@ __all__ = [
 	# engine
 	'Patch', 'Image', 'Images',
 	'Catalog', 'Tractor',
-	# ttime
-	'Time',
     # psfex
     'VaryingGaussianPSF', 'PsfEx',
 	]

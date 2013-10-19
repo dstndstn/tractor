@@ -7,7 +7,7 @@ import numpy as np
 from tractor import *
 from tractor import sdss as st
 from tractor.cache import *
-from tractor.ttime import *
+from astrometry.util.time import *
 import gc
 #gc.set_debug(gc.DEBUG_LEAK)
 #gc.enable()

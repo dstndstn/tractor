@@ -37,9 +37,9 @@ from astrometry.util.resample import *
 from astrometry.libkd.spherematch import *
 from astrometry.util.starutil_numpy import *
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.time import *
 
 from tractor import *
-from tractor.ttime import *
 from tractor.sdss import *
 
 from wisecat import wise_catalog_radecbox
