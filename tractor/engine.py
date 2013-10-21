@@ -27,7 +27,7 @@ from scipy.ndimage.measurements import label
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
-from astrometry.util.time import *
+from astrometry.util.ttime import *
 from utils import MultiParams, _isint, listmax
 from cache import *
 

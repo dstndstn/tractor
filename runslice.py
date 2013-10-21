@@ -22,7 +22,7 @@ then)
 import os
 import sys
 
-from astrometry.util.time import *
+from astrometry.util.ttime import *
 import logging
 if __name__ == '__main__':
     Time.add_measurement(MemMeas)

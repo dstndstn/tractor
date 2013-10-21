@@ -15,7 +15,7 @@ from astrometry.util.multiproc import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.util import *
-from astrometry.util.time import *
+from astrometry.util.ttime import *
 from astrometry.sdss import *
 from astrometry.libkd.spherematch import *
 

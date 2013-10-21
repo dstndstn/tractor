@@ -23,7 +23,7 @@ from astrometry.util.util import *
 from astrometry.blind.plotstuff import *
 from astrometry.util.resample import *
 from astrometry.util.multiproc import *
-from astrometry.util.time import *
+from astrometry.util.ttime import *
 
 from tractor import *
 from tractor.sdss import *
