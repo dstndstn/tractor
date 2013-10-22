@@ -56,55 +56,19 @@ resolvedir = 'photoResolve-new'
 if __name__ == '__main__':
     tiledir = 'wise-coadds'
 
-    outdir = 'sequels-phot'
-    tempoutdir = 'sequels-phot-temp'
-    pobjoutdir = 'sequels-pobj'
+    outdir = '%s-phot'
+    tempoutdir = '%s-phot-temp'
+    pobjoutdir = '%s-pobj'
 
     Time.add_measurement(MemMeas)
+
+def get_tile_dir(basedir, coadd_id):
+    return os.path.join(basedir, coadd_id[:3], coadd_id)
 
 def get_photoobj_filename(rr, run, camcol, field):
     fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
                       'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
     return fn
-
-def estimate_sky(img, iv):
-
-    # sim = np.sort(img.ravel())
-    # sigest = sim[int(0.5 * len(sim))] - sim[int(0.16 * len(sim))]
-    # #print 'sig est', sigest
-    # nsig = 0.1 * sigest
-
-    # I = np.linspace(0.3*len(sim), 0.55*len(sim), 15).astype(int)
-    # sumn = []
-    # for ii in I:
-    #     X = sim[ii]
-    #     sumn.append(sum((sim > X-nsig) * (sim < X+nsig)))
-    # sumn = np.array(sumn)
-
-    #binedges = np.linspace(sim[int(0.3*len(sim))], sim[int(0.55*len(sim))], 25)
-    binedges = np.linspace(sim[int(0.3*len(sim))], sim[int(0.55*len(sim))], 25)
-    counts = np.histogram(sim, bins=binedges)
-    bincenters = binedges[:-1] + (binedges[1]-binedges[0])/2.
-
-    bscale = 0.5 * (bincenters[-1] - bincenters[0])
-    b0 = bincenters[len(bincenters)/2]
-    xi = (bincenters - b0) / bscale
-
-    A = np.zeros((len(I), 3))
-    A[:,0] = 1.
-    A[:,1] = xi
-    A[:,2] = xi**2
-    b = np.log10(np.maximum(1, counts))
-
-    res = np.linalg.lstsq(A, b)
-    X = res[0]
-
-    maxbin = -X[1] / (2. * X[2])
-    maxbin = (maxbin * bscale) + b0
-    #i = int(np.round(Imax))
-    #mu = sim[i]
-    return maxbin
-
 
 def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
     log = logging.getLogger('sequels.read_photoobjs')
@@ -165,6 +129,7 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
 def one_tile(tile, opt, savepickle, ps):
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
+    savewise_outfn = opt.save_wise_output % (tile.coadd_id)
 
     sband = 'r'
     bandnum = 'ugriz'.index(sband)
@@ -173,7 +138,8 @@ def one_tile(tile, opt, savepickle, ps):
     print
     print 'Coadd tile', tile.coadd_id
 
-    fn = os.path.join(tiledir, 'unwise-%s-w%i-img.fits' % (tile.coadd_id, bands[0]))
+    thisdir = get_tile_dir(tiledir, tile.coadd_id)
+    fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' % (tile.coadd_id, bands[0]))
     print 'Reading', fn
     wcs = Tan(fn)
     r0,r1,d0,d1 = wcs.radec_bounds()
@@ -188,6 +154,7 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Reading', objfn
         T = fits_table(objfn)
     else:
+        print 'Did not find', objfn, '-- reading photoObjs'
         T = read_photoobjs(r0, r1, d0, d1, 1./60.)
         T.writeto(objfn)
 
@@ -305,6 +272,12 @@ def one_tile(tile, opt, savepickle, ps):
     UW = WISE[unmatched]
     print 'Got', len(UW), 'unmatched WISE sources'
 
+    if opt.savewise:
+        fitwiseflux = {}
+        for band in bands:
+            fitwiseflux[band] = np.zeros(len(UW))
+        
+
     # Record WISE fluxes for catalog matches.
     # (this provides decent initialization for 'minsb' approx.)
     wiseflux = {}
@@ -339,10 +312,10 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Band', band
         wband = 'w%i' % band
 
-        imfn = os.path.join(tiledir, 'unwise-%s-w%i-img-w.fits'    % (tile.coadd_id, band))
-        ivfn = os.path.join(tiledir, 'unwise-%s-w%i-invvar-w.fits' % (tile.coadd_id, band))
-        ppfn = os.path.join(tiledir, 'unwise-%s-w%i-ppstd-w.fits' % (tile.coadd_id, band))
-        nifn = os.path.join(tiledir, 'unwise-%s-w%i-n-w.fits' % (tile.coadd_id, band))
+        imfn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits'    % (tile.coadd_id, band))
+        ivfn = os.path.join(thisdir, 'unwise-%s-w%i-invvar-m.fits' % (tile.coadd_id, band))
+        ppfn = os.path.join(thisdir, 'unwise-%s-w%i-std-m.fits'    % (tile.coadd_id, band))
+        nifn = os.path.join(thisdir, 'unwise-%s-w%i-n-m.fits'      % (tile.coadd_id, band))
 
         print 'Reading', imfn
         wcs = Tan(imfn)
@@ -445,9 +418,10 @@ def one_tile(tile, opt, savepickle, ps):
 
         twcs = ConstantFitsWcs(wcs)
 
-        sky = estimate_sky(img, iv)
-        print 'Estimated sky', sky
-
+        #sky = estimate_sky(img, iv)
+        #print 'Estimated sky', sky
+        sky = 0.
+        
         imgoffset = 0.
         if opt.sky and opt.nonneg:
             # the non-negative constraint applies to the sky too!
@@ -463,13 +437,12 @@ def one_tile(tile, opt, savepickle, ps):
             
         tsky = ConstantSky(sky)
 
-
         pix = (fullimg - imgoffset)
         iv3 = 1./(1./iv + np.maximum(0, pix/50. - sig1)**2)
         iv4 = 1./(1./iv + np.maximum(0, pix/50. - sig1))
         ### HACK HACK HACK HACK
         #fullinvvar = iv3
-        fullinvvar = iv4
+        #fullinvvar = iv4
 
         # cell positions
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
@@ -690,9 +663,14 @@ def one_tile(tile, opt, savepickle, ps):
                 m = wmargin + UW.rad
                 J = np.flatnonzero(((UW.x+m) >= (ix0-0.5)) * ((UW.x-m) < (ix1-0.5)) *
                                    ((UW.y+m) >= (iy0-0.5)) * ((UW.y-m) < (iy1-0.5)))
+
+                if opt.savewise:
+                    jinbox = ((UW.x[J] >= (xlo-0.5)) * (UW.x[J] < (xhi-0.5)) *
+                              (UW.y[J] >= (ylo-0.5)) * (UW.y[J] < (yhi-0.5)))
+                    uwcat = []
                 wnm = UW.get('w%inm' % band)
                 nomag = 0
-                for j in J:
+                for ji,j in enumerate(J):
                     if not np.isfinite(wnm[j]):
                         nomag += 1
                         continue
@@ -701,6 +679,9 @@ def one_tile(tile, opt, savepickle, ps):
                                               NanoMaggies(**{wanyband: wnm[j]}))
                     ptsrc.radius = UW.rad[j]
                     subcat.append(ptsrc)
+                    if jinbox[ji]:
+                        uwcat.append((j, ptsrc))
+                        
                 print 'WISE-only:', nomag, 'of', len(J), 'had invalid mags'
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
 
@@ -765,6 +746,10 @@ def one_tile(tile, opt, savepickle, ps):
                     print 'Fit sky values:'
                     for tim in tractor.getImages():
                         print tim.getSky()
+
+                if opt.savewise:
+                    for (j,src) in uwcat:
+                        fitwiseflux[band][j] = src.getBrightness().getBand(wanyband)
 
                 if ps:
                     (dat,mod,ie,chi,roi) = ims1[0]
@@ -914,6 +899,13 @@ def one_tile(tile, opt, savepickle, ps):
     
     T.writeto(outfn)
 
+
+    if opt.savewise:
+        for band in bands:
+            UW.set('fit_flux_w%i' % band, fitwiseflux[band])
+        UW.writeto(savewise_outfn)
+        print 'Wrote', savewise_outfn
+
     if savepickle:
         fn = opt.output % (tile.coadd_id)
         fn = fn.replace('.fits','.pickle')
@@ -923,10 +915,183 @@ def one_tile(tile, opt, savepickle, ps):
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
 
+def summary(A, opt, ps):
+    plt.clf()
+    missing = []
+    for i in range(len(A)):
+        r,d = A.ra[i], A.dec[i]
+        dd = 1024 * 2.75 / 3600.
+        dr = dd / np.cos(np.deg2rad(d))
+        outfn = opt.output % (A.coadd_id[i])
+        rr,dd = [r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd]
+        if not os.path.exists(outfn):
+            missing.append((i,rr,dd,r,d))
+        plt.plot(rr, dd, 'k-')
+    for i,rr,dd,r,d in missing:
+        plt.plot(rr, dd, 'r-')
+        plt.text(r, d, '%i' % i, rotation=90, color='b', va='center', ha='center')
+    plt.title('missing tiles')
+    plt.axis([118, 212, 44,61])
+    ps.savefig()
+
+    print 'Missing tiles:', [m[0] for m in missing]
+
+    rdfn = 'rd.fits'
+    if not os.path.exists(rdfn):
+        fns = glob(os.path.join(tempoutdir, 'photoobjs-*.fits'))
+        fns.sort()
+        TT = []
+        for fn in fns:
+            T = fits_table(fn, columns=['ra','dec'])
+            print len(T), 'from', fn
+            TT.append(T)
+        T = merge_tables(TT)
+        print 'Total of', len(T)
+        T.writeto(rdfn)
+    else:
+        T = fits_table(rdfn)
+        print 'Got', len(T), 'from', rdfn
+    
+    plt.clf()
+    loghist(T.ra, T.dec, 500, range=((118,212),(44,61)))
+    plt.xlabel('RA')
+    plt.ylabel('Dec')
+    ps.savefig()
+
+    ax = plt.axis()
+    for i in range(len(A)):
+        r,d = A.ra[i], A.dec[i]
+        dd = 1024 * 2.75 / 3600.
+        dr = dd / np.cos(np.deg2rad(d))
+        plt.plot([r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd], 'r-')
+    plt.axis(ax)
+    ps.savefig()
+
+def finish(T, opt, args, ps):
+    # Find all *-phot.fits outputs
+    # Determine which photoObj files are involved
+    # Collate and resolve objs measured in multiple tiles
+    # Expand into photoObj-parallel files
+    if len(args):
+        fns = args
+    else:
+        fns = glob(os.path.join(outdir, 'phot-*.fits'))
+        fns.sort()
+        print 'Found', len(fns), 'photometry output files'
+    fieldmap = {}
+    for ifn,fn in enumerate(fns):
+        print 'Reading', (ifn+1), 'of', len(fns), fn
+        cols = ['ra','dec',
+                'objid', 'index', 'x','y', 
+                'treated_as_pointsource', 'coadd_id']
+        for band in opt.bands:
+            for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
+                      'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
+                cols.append('w%i_%s' % (band, k))
+        rcfcols = ['run','camcol','field','id',]
+        try:
+            T = fits_table(fn, columns=cols + rcfcols)
+        except:
+            print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
+            print fn
+            T = fits_table(fn, columns=cols)
+            print 'Got', len(T), 'from', fn
+            pfn = fn.replace('phot-', 'photoobjs-').replace(outdir, tempoutdir)
+            print 'Reading', pfn
+            P = fits_table(pfn, columns=rcfcols + ['objid'])
+            print 'Got', len(P), 'from', pfn
+            print 'Applying objid map...'
+            objidmap = dict([(oid,i) for i,oid in enumerate(P.objid)])
+            I = np.array([objidmap[oid] for oid in T.objid])
+            P.cut(I)
+            assert(len(P) == len(T))
+            assert(np.all(P.objid == T.objid))
+            for k in rcfcols:
+                T.set(k, P.get(k))
+            
+        print 'Read', len(T), 'entries'
+        rcf = np.unique(zip(T.run, T.camcol, T.field))
+        for run,camcol,field in rcf:
+            if not (run,camcol,field) in fieldmap:
+                fieldmap[(run,camcol,field)] = []
+            Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
+            #print len(Tsub), 'in', (run,camcol,field)
+            for col in ['run','camcol','field']:
+                Tsub.delete_column(col)
+            fieldmap[(run,camcol,field)].append(Tsub)
+
+    for (run,camcol,field),TT in fieldmap.items():
+        print len(TT), 'tiles for', (run,camcol,field)
+        # HACK
+        rr = '301'
+        pofn = get_photoobj_filename(rr, run,camcol,field)
+        F = fitsio.FITS(pofn)
+        N = F[1].get_nrows()
+        #print pofn, 'has', N, 'rows'
+
+        # DEBUG
+        #POBJ = fits_table(pofn, columns=['objid'])
+        #assert(len(POBJ) == N)
+
+        P = fits_table()
+        P.has_wise_phot = np.zeros(N, bool)
+        if len(TT) > 1:
+            # Resolve duplicate measurements (in multiple tiles)
+            # based on || (x,y) - center ||^2
+            P.R2 = np.empty(N, np.float32)
+            P.R2[:] = 1e9
+            # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
+            cx,cy = 1023.5, 1023.5
+        for T in TT:
+            coadd = T.coadd_id[0]
+            if len(TT) > 1:
+                I = T.id - 1
+                R2 = (T.x - cx)**2 + (T.y - cy)**2
+                J = (R2 < P.R2[I])
+                I = I[J]
+                P.R2[I] = R2[J].astype(np.float32)
+                #print len(I), 'are closest'
+                T.cut(J)
+            print '  ', len(T), 'from', coadd
+            if len(T) == 0:
+                continue
+            I = T.id - 1
+            P.has_wise_phot[I] = True
+            pcols = P.get_columns()
+            for col in T.get_columns():
+                if col in pcols:
+                    pval = P.get(col)
+                    print '  ', col, pval.dtype
+                    pval[I] = (T.get(col)).astype(pval.dtype)
+                else:
+                    tval = T.get(col)
+                    X = np.zeros(N, tval.dtype)
+                    X[I] = tval
+                    P.set(col, X)
+
+            #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
+
+        P.delete_column('index')
+        P.delete_column('id')
+        if len(TT) > 1:
+            P.delete_column('R2')
+        
+        myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
+        if not os.path.exists(myoutdir):
+            os.makedirs(myoutdir)
+        outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
+        P.writeto(outfn)
+        print 'Wrote', outfn
+
+        #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
+
+
 def main():
     import optparse
 
     global outdir
+    global tempoutdir
+    global pobjoutdir
     global tiledir
 
     parser = optparse.OptionParser('%prog [options]')
@@ -936,6 +1101,7 @@ def main():
     parser.add_option('--minsig4', dest='minsig4', default=0.1, type=float)
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
+    parser.add_option('-d', dest='outdir', default=None)
     parser.add_option('-o', dest='output', default=None)
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
@@ -973,7 +1139,14 @@ def main():
 
     parser.add_option('--sky', dest='sky', action='store_true', default=False,
                       help='Fit sky level also?')
-    
+
+    parser.add_option('--save-wise', dest='savewise', action='store_true', default=False,
+                      help='Save WISE catalog source fits also?')
+    parser.add_option('--save-wise-out', dest='save_wise_output', default=None)
+
+    parser.add_option('--dataset', dest='dataset', default='sequels',
+                      help='Dataset (region of sky) to work on')
+
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
@@ -990,207 +1163,31 @@ def main():
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     # sequels-atlas.fits: written by wise-coadd.py
-    dataset = 'sequels'
-    fn = '%s-atlas.fits' % dataset
+    fn = '%s-atlas.fits' % opt.dataset
     print 'Reading', fn
     T = fits_table(fn)
 
-    # Read Atlas Image table
-    # A = fits_table('wise_allsky_4band_p3as_cdd.fits', columns=['coadd_id', 'ra', 'dec'])
-    # print len(A), 'atlas tiles'
-    # D = np.unique(A.dec)
-    # print len(D), 'unique Decs'
-    # print D
-    # print 'diffs:', np.diff(D)
-    # for d in D:
-    #     I = np.flatnonzero(A.dec == d)
-    #     R = np.unique(A.ra[I])
-    #     print 'Dec', d, 'has', len(R), 'unique RA:', R
-    #     print 'diffs', np.diff(R)
-
     if opt.plotbase is None:
-        opt.plotbase = dataset = '-phot'
-
+        opt.plotbase = opt.dataset + '-phot'
     ps = PlotSequence(opt.plotbase)
 
+    outdir     = outdir     % opt.dataset
+    tempoutdir = tempoutdir % opt.dataset
+    pobjoutdir = pobjoutdir % opt.dataset
+
+    if opt.outdir is not None:
+        outdir = opt.outdir
+    if opt.output is None:
+        opt.output = os.path.join(outdir, 'phot-%s.fits')
+    if opt.save_wise_output is None:
+        opt.save_wise_output = opt.output.replace('phot-', 'phot-wise-')
+
     if opt.summary:
-        A = T
-
-        if opt.output is None:
-            opt.output = os.path.join(outdir, 'phot-%s.fits')
-
-        plt.clf()
-        missing = []
-        for i in range(len(A)):
-            r,d = A.ra[i], A.dec[i]
-            dd = 1024 * 2.75 / 3600.
-            dr = dd / np.cos(np.deg2rad(d))
-            outfn = opt.output % (A.coadd_id[i])
-            rr,dd = [r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd]
-            if not os.path.exists(outfn):
-                missing.append((i,rr,dd,r,d))
-            plt.plot(rr, dd, 'k-')
-        for i,rr,dd,r,d in missing:
-            plt.plot(rr, dd, 'r-')
-            plt.text(r, d, '%i' % i, rotation=90, color='b', va='center', ha='center')
-        plt.title('missing tiles')
-        plt.axis([118, 212, 44,61])
-        ps.savefig()
-
-        print 'Missing tiles:', [m[0] for m in missing]
-
-
-        rdfn = 'rd.fits'
-        if not os.path.exists(rdfn):
-            fns = glob(os.path.join(tempoutdir, 'photoobjs-*.fits'))
-            fns.sort()
-            TT = []
-            for fn in fns:
-                T = fits_table(fn, columns=['ra','dec'])
-                print len(T), 'from', fn
-                TT.append(T)
-            T = merge_tables(TT)
-            print 'Total of', len(T)
-            T.writeto(rdfn)
-        else:
-            T = fits_table(rdfn)
-            print 'Got', len(T), 'from', rdfn
-        
-        plt.clf()
-        loghist(T.ra, T.dec, 500, range=((118,212),(44,61)))
-        plt.xlabel('RA')
-        plt.ylabel('Dec')
-        ps.savefig()
-
-        ax = plt.axis()
-        for i in range(len(A)):
-            r,d = A.ra[i], A.dec[i]
-            dd = 1024 * 2.75 / 3600.
-            dr = dd / np.cos(np.deg2rad(d))
-            plt.plot([r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd], 'r-')
-        plt.axis(ax)
-        ps.savefig()
-
+        summary(T, opt, ps)
         sys.exit(0)
 
     if opt.finish:
-        # Find all *-phot.fits outputs
-        # Determine which photoObj files are involved
-        # Collate and resolve objs measured in multiple tiles
-        # Expand into photoObj-parallel files
-        if len(args):
-            fns = args
-        else:
-            fns = glob(os.path.join(outdir, 'phot-*.fits'))
-            fns.sort()
-            print 'Found', len(fns), 'photometry output files'
-        fieldmap = {}
-        for ifn,fn in enumerate(fns):
-            print 'Reading', (ifn+1), 'of', len(fns), fn
-            cols = ['ra','dec',
-                    'objid', 'index', 'x','y', 
-                    'treated_as_pointsource', 'coadd_id']
-            for band in opt.bands:
-                for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
-                          'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
-                    cols.append('w%i_%s' % (band, k))
-            rcfcols = ['run','camcol','field','id',]
-            try:
-                T = fits_table(fn, columns=cols + rcfcols)
-            except:
-                print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
-                print fn
-                T = fits_table(fn, columns=cols)
-                print 'Got', len(T), 'from', fn
-                pfn = fn.replace('phot-', 'photoobjs-').replace(outdir, tempoutdir)
-                print 'Reading', pfn
-                P = fits_table(pfn, columns=rcfcols + ['objid'])
-                print 'Got', len(P), 'from', pfn
-                print 'Applying objid map...'
-                objidmap = dict([(oid,i) for i,oid in enumerate(P.objid)])
-                I = np.array([objidmap[oid] for oid in T.objid])
-                P.cut(I)
-                assert(len(P) == len(T))
-                assert(np.all(P.objid == T.objid))
-                for k in rcfcols:
-                    T.set(k, P.get(k))
-                
-            print 'Read', len(T), 'entries'
-            rcf = np.unique(zip(T.run, T.camcol, T.field))
-            for run,camcol,field in rcf:
-                if not (run,camcol,field) in fieldmap:
-                    fieldmap[(run,camcol,field)] = []
-                Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
-                #print len(Tsub), 'in', (run,camcol,field)
-                for col in ['run','camcol','field']:
-                    Tsub.delete_column(col)
-                fieldmap[(run,camcol,field)].append(Tsub)
-
-        for (run,camcol,field),TT in fieldmap.items():
-            print len(TT), 'tiles for', (run,camcol,field)
-            # HACK
-            rr = '301'
-            pofn = get_photoobj_filename(rr, run,camcol,field)
-            F = fitsio.FITS(pofn)
-            N = F[1].get_nrows()
-            #print pofn, 'has', N, 'rows'
-
-            # DEBUG
-            #POBJ = fits_table(pofn, columns=['objid'])
-            #assert(len(POBJ) == N)
-
-            P = fits_table()
-            P.has_wise_phot = np.zeros(N, bool)
-            if len(TT) > 1:
-                # Resolve duplicate measurements (in multiple tiles)
-                # based on || (x,y) - center ||^2
-                P.R2 = np.empty(N, np.float32)
-                P.R2[:] = 1e9
-                # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
-                cx,cy = 1023.5, 1023.5
-            for T in TT:
-                coadd = T.coadd_id[0]
-                if len(TT) > 1:
-                    I = T.id - 1
-                    R2 = (T.x - cx)**2 + (T.y - cy)**2
-                    J = (R2 < P.R2[I])
-                    I = I[J]
-                    P.R2[I] = R2[J].astype(np.float32)
-                    #print len(I), 'are closest'
-                    T.cut(J)
-                print '  ', len(T), 'from', coadd
-                if len(T) == 0:
-                    continue
-                I = T.id - 1
-                P.has_wise_phot[I] = True
-                pcols = P.get_columns()
-                for col in T.get_columns():
-                    if col in pcols:
-                        pval = P.get(col)
-                        print '  ', col, pval.dtype
-                        pval[I] = (T.get(col)).astype(pval.dtype)
-                    else:
-                        tval = T.get(col)
-                        X = np.zeros(N, tval.dtype)
-                        X[I] = tval
-                        P.set(col, X)
-
-                #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
-
-            P.delete_column('index')
-            P.delete_column('id')
-            if len(TT) > 1:
-                P.delete_column('R2')
-            
-            myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
-            if not os.path.exists(myoutdir):
-                os.makedirs(myoutdir)
-            outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
-            P.writeto(outfn)
-            print 'Wrote', outfn
-
-            #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
-
+        finish(T, opt, args, ps)
         sys.exit(0)
 
     tiles = []
