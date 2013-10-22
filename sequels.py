@@ -1157,6 +1157,14 @@ def main():
     if len(opt.bands) == 0:
         opt.bands = [1,2]
 
+    # Allow specifying bands like "123"
+    bb = []
+    for band in opt.bands:
+        for s in str(band):
+            bb.append(int(s))
+    opt.bands = bb
+    print 'Bands', opt.bands
+
     lvl = logging.INFO
     if opt.verbose:
         lvl = logging.DEBUG
