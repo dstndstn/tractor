@@ -975,9 +975,10 @@ def finish(T, opt, args, ps):
     if len(args):
         fns = args
     else:
-        fns = glob(os.path.join(outdir, 'phot-*.fits'))
+        fns = glob(os.path.join(outdir, 'phot-????????.fits'))
         fns.sort()
         print 'Found', len(fns), 'photometry output files'
+    flats = []
     fieldmap = {}
     for ifn,fn in enumerate(fns):
         print 'Reading', (ifn+1), 'of', len(fns), fn
@@ -1010,6 +1011,11 @@ def finish(T, opt, args, ps):
                 T.set(k, P.get(k))
             
         print 'Read', len(T), 'entries'
+
+        if opt.flat is not None:
+            flats.append(T)
+            continue
+
         rcf = np.unique(zip(T.run, T.camcol, T.field))
         for run,camcol,field in rcf:
             if not (run,camcol,field) in fieldmap:
@@ -1019,6 +1025,28 @@ def finish(T, opt, args, ps):
             for col in ['run','camcol','field']:
                 Tsub.delete_column(col)
             fieldmap[(run,camcol,field)].append(Tsub)
+
+    # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
+    # (and x,y are based on the first-band (W1 usually) WCS)
+    cx,cy = 1023.5, 1023.5
+
+    if opt.flat is not None:
+        F = merge_tables(flats)
+        print 'Total of', len(F), 'measurements'
+        r2 = (F.x - cx)**2 + (F.y - cy)**2
+        I,J,d = match_radec(F.ra, F.dec, F.ra, F.dec, 1e-6, notself=True)
+        print 'Matched', len(I), 'duplicates'
+        keep = np.ones(len(F), bool)
+        keep[I] = False
+        keep[J] = False
+        keep[np.where(r2[I] < r2[J], I, J)] = True
+        F.cut(keep)
+        print 'Cut to', len(F)
+        F.delete_column('index')
+        F.delete_column('x')
+        F.delete_column('y')
+        F.writeto(opt.flat)
+        return
 
     for (run,camcol,field),TT in fieldmap.items():
         print len(TT), 'tiles for', (run,camcol,field)
@@ -1040,8 +1068,6 @@ def finish(T, opt, args, ps):
             # based on || (x,y) - center ||^2
             P.R2 = np.empty(N, np.float32)
             P.R2[:] = 1e9
-            # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
-            cx,cy = 1023.5, 1023.5
         for T in TT:
             coadd = T.coadd_id[0]
             if len(TT) > 1:
@@ -1075,7 +1101,7 @@ def finish(T, opt, args, ps):
         P.delete_column('id')
         if len(TT) > 1:
             P.delete_column('R2')
-        
+
         myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
         if not os.path.exists(myoutdir):
             os.makedirs(myoutdir)
@@ -1084,7 +1110,6 @@ def finish(T, opt, args, ps):
         print 'Wrote', outfn
 
         #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
-
 
 def main():
     import optparse
@@ -1121,6 +1146,8 @@ def main():
     parser.add_option('--plotbase', dest='plotbase', help='Base filename for plots')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
+    parser.add_option('--flat', dest='flat', type='str', default=None,
+                      help='Just write a flat-file of (deduplicated) results, not photoObj-parallels')
 
     parser.add_option('--summary', dest='summary', default=False, action='store_true')
 
