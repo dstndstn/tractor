@@ -224,7 +224,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  fixedComposites=False,
                  forcePointSources=False,
                  useObjcType=False,
-                 objCuts=True):
+                 objCuts=True,
+                 classmap={}):
     '''
     If set,
 
@@ -402,6 +403,9 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
     sources = []
     nstars, ndev, nexp, ncomp = 0, 0, 0, 0
     isources = []
+
+    ptsrcclass = classmap.get(PointSource, PointSource)
+
     for i in range(len(objs)):
         if Lstar[i]:
             pos = RaDecPos(objs.ra[i], objs.dec[i])
@@ -412,7 +416,7 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             #   ps = SdssPointSource(pos, bright, thresh=brightPointSourceThreshold)
             # else:
             #   ps = PointSource(pos, bright)
-            sources.append(PointSource(pos, bright))
+            sources.append(ptsrcclass(pos, bright))
             nstars += 1
             isources.append(i)
             continue

@@ -82,17 +82,12 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
                 ]
 
     wfn = os.path.join(resolvedir, 'window_flist.fits')
-    #W = fits_table(wfn)
 
     ra,dec = (r0+r1)/2., (d0+d1)/2.
-
     rad = degrees_between(ra,dec, r0,d0)
     rad += np.hypot(13., 9.)/60.
     # a little extra margin
     rad += margin
-
-    #I = np.flatnonzero(distsq_between_radecs(ra, dec, W.ra, W.dec) <= rad)
-    #print 'Found', len(I), 'fields possibly in range'
 
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
     log.debug('Found', len(RCF), 'fields possibly in range')
@@ -126,6 +121,75 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
     T = merge_tables(TT)
     return T
 
+class BrightPointSource(PointSource):
+    '''
+    A class to use a pre-computed (constant) model, if available.
+    '''
+    def __init__(self, *args):
+        super(BrightPointSource, self).__init__(*args)
+        self.pixmodel = None
+    def getUnitFluxModelPatch(self, *args, **kwargs):
+        if self.pixmodel is not None:
+            return self.pixmodel
+        return super(BrightPointSource, self).getUnitFluxModelPatch(*args, **kwargs)
+
+def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs):
+    mag = WISE.get('w%impro' % band)
+    I = np.flatnonzero(mag < brightcut)
+    if len(I) == 0:
+        return
+    BW = WISE[I]
+    BW.nm = NanoMaggies.magToNanomaggies(mag[I])
+    print len(I), 'catalog sources brighter than mag', brightcut
+    I,J,d = match_radec(BW.ra, BW.dec, T.ra, T.dec, 4./3600., nearest=True)
+    print 'Matched to', len(I), 'catalog sources (nearest)'
+    if len(I) == 0:
+        return
+
+    fn = 'wise-psf-avg-pix-bright.fits'
+    psfimg = fitsio.read(fn, ext=band-1).astype(np.float32)
+    psfimg = np.maximum(0, psfimg)
+    psfimg /= psfimg.sum()
+    print 'PSF image', psfimg.shape
+    print 'PSF image range:', psfimg.min(), psfimg.max()
+    ph,pw = psfimg.shape
+    pcx,pcy = ph/2, pw/2
+    assert(ph == pw)
+    phalf = ph/2
+
+    ## HACK -- read an L1b frame to get the field rotation...
+    thisdir = get_tile_dir(tiledir, tile.coadd_id)
+    framesfn = os.path.join(thisdir, 'unwise-%s-w%i-frames.fits' % (tile.coadd_id, band))
+    F = fits_table(framesfn)
+    print 'intfn', F.intfn[0]
+    #fwcs = fits_table(F.intfn[
+    wisedir = 'wise-frames'
+    scanid,frame = F.scan_id[0], F.frame_num[0]
+    scangrp = scanid[-2:]
+    fn = os.path.join(wisedir, scangrp, scanid, '%03i' % frame, 
+                      '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
+    fwcs = Tan(fn)
+    # Keep CD matrix, set CRVAL/CRPIX to star position
+    fwcs.set_crpix(pcx+1, pcy+1)
+    fwcs.set_imagesize(float(pw), float(ph))
+
+    for i,j in zip(I, J):
+        if not isinstance(cat[j], BrightPointSource):
+            print 'Bright source matched non-point source', cat[j]
+            continue
+
+        fwcs.set_crval(BW.ra[i], BW.dec[i])
+        L=3
+        Yo,Xo,Yi,Xi,rims = resample_with_wcs(wcs, fwcs, [psfimg], L)
+        x0,x1 = int(Xo.min()), int(Xo.max())
+        y0,y1 = int(Yo.min()), int(Yo.max())
+        mod = np.zeros((1+y1-y0, 1+x1-x0), np.float32)
+        mod[Yo-y0, Xo-x0] += rims[0]
+
+        pat = Patch(x0, y0, mod)
+        cat[j].pixmodel = pat
+    
+
 def one_tile(tile, opt, savepickle, ps):
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
@@ -145,9 +209,6 @@ def one_tile(tile, opt, savepickle, ps):
     r0,r1,d0,d1 = wcs.radec_bounds()
     print 'RA,Dec bounds:', r0,r1,d0,d1
     H,W = wcs.get_height(), wcs.get_width()
-
-    # HACK HACK HACK
-    #H,W = 512,512
 
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
@@ -230,7 +291,8 @@ def one_tile(tile, opt, savepickle, ps):
                                   objs=T, bands=[], nanomaggies=True,
                                   extrabands=[wband],
                                   fixedComposites=True,
-                                  useObjcType=True)
+                                  useObjcType=True,
+                                  classmap={PointSource: BrightPointSource})
     print 'Created', len(T), 'sources'
     assert(len(cat) == len(T))
 
@@ -243,13 +305,12 @@ def one_tile(tile, opt, savepickle, ps):
             continue
         elif isinstance(src, HoggGalaxy):
             sourcerad[i] = (src.nre * src.re / pixscale)
-            #src.halfsize = sourcerad[i]
         elif isinstance(src, FixedCompositeGalaxy):
             sourcerad[i] = max(src.shapeExp.re * ExpGalaxy.nre,
                                src.shapeDev.re * DevGalaxy.nre) / pixscale
-            #src.halfsize = sourcerad[i]
     print 'sourcerad range:', min(sourcerad), max(sourcerad)
 
+    # Find WISE-only catalog sources
     wfn = os.path.join(tempoutdir, 'wise-sources-%s.fits' % (tile.coadd_id))
     print 'looking for', wfn
     if os.path.exists(wfn):
@@ -262,9 +323,11 @@ def one_tile(tile, opt, savepickle, ps):
         print 'Found', len(WISE), 'WISE sources nearby'
 
     for band in bands:
-        nm = NanoMaggies.magToNanomaggies(WISE.get('w%impro' % band))
+        mag = WISE.get('w%impro' % band)
+        nm = NanoMaggies.magToNanomaggies(mag)
         WISE.set('w%inm' % band, nm)
         print 'Band', band, 'max WISE catalog flux:', max(nm)
+        print '  (min mag:', mag.min(), ')'
 
     unmatched = np.ones(len(WISE), bool)
     I,J,d = match_radec(WISE.ra, WISE.dec, T.ra, T.dec, 4./3600.)
@@ -276,7 +339,6 @@ def one_tile(tile, opt, savepickle, ps):
         fitwiseflux = {}
         for band in bands:
             fitwiseflux[band] = np.zeros(len(UW))
-        
 
     # Record WISE fluxes for catalog matches.
     # (this provides decent initialization for 'minsb' approx.)
@@ -362,12 +424,6 @@ def one_tile(tile, opt, savepickle, ps):
             UW.rad[wnm > flux] = r
         UW.rad = np.maximum(UW.rad + 1, 3)
 
-        # bc = np.bincount(UW.rad)
-        # print 'UW radii histogram:'
-        # for i,n in enumerate(bc):
-        #     if n:
-        #         print ' ', i, ':', n
-
         # Set SDSS fluxes based on WISE catalog matches.
         wf = wiseflux[band]
         I = np.flatnonzero(wf > defaultflux)
@@ -386,11 +442,9 @@ def one_tile(tile, opt, savepickle, ps):
         srad2[I] = rad
         del rad
 
-        # bc = np.bincount(srad2)
-        # print 'SDSS radii based on fluxes of WISE matches:'
-        # for i,n in enumerate(bc):
-        #     if n:
-        #         print ' ', i, ':', n
+        bright_mods = ((band == 1) and (opt.bright1 is not None))
+        if bright_mods:
+            set_bright_psf_mods(cat, WISE, T, opt.bright1, band, tile, wcs)
 
         # Set radii
         for i in range(len(cat)):
@@ -437,32 +491,124 @@ def one_tile(tile, opt, savepickle, ps):
             
         tsky = ConstantSky(sky)
 
-        pix = (fullimg - imgoffset)
-        iv3 = 1./(1./iv + np.maximum(0, pix/50. - sig1)**2)
-        iv4 = 1./(1./iv + np.maximum(0, pix/50. - sig1))
-        ### HACK HACK HACK HACK
-        #fullinvvar = iv3
-        #fullinvvar = iv4
+        if opt.errfrac > 0:
+            pix = (fullimg - imgoffset)
+            iv2 = 1./(1./iv + (pix * opt.errfrac)**2)
+            print 'Increasing error estimate by', opt.errfrac, 'of image flux'
+            fullinvvar = iv2
 
         # cell positions
         XX = np.round(np.linspace(0, W, opt.blocks+1)).astype(int)
         YY = np.round(np.linspace(0, H, opt.blocks+1)).astype(int)
 
         if ps:
+
+            tag = '%s W%i' % (tile.coadd_id, band)
+            
             plt.clf()
             n,b,p = plt.hist((fullimg - imgoffset).ravel(), bins=100,
                              range=(-10*sig1, 20*sig1), log=True,
                              histtype='step', color='b')
             mx = max(n)
             plt.ylim(0.1, mx)
+            plt.xlim(-10*sig1, 20*sig1)
             plt.axvline(sky, color='r')
+            plt.title('%s: Pixel histogram' % tag)
+            ps.savefig()
+
+            if band == 1 and opt.bright1 is not None:
+                #from wise_psf import 
+                fn = 'wise-psf-avg-pix-bright.fits'
+                psfimg = fitsio.read(fn, ext=band-1).astype(np.float32)
+                psfimg = np.maximum(0, psfimg)
+                psfimg /= psfimg.sum()
+                print 'PSF image', psfimg.shape
+                print 'PSF image range:', psfimg.min(), psfimg.max()
+                ph,pw = psfimg.shape
+                pcx,pcy = ph/2, pw/2
+                assert(ph == pw)
+                phalf = ph/2
+
+                framesfn = os.path.join(thisdir, 'unwise-%s-w%i-frames.fits' % (tile.coadd_id, band))
+                F = fits_table(framesfn)
+                print 'intfn', F.intfn[0]
+                #fwcs = fits_table(F.intfn[
+                wisedir = 'wise-frames'
+                scanid,frame = F.scan_id[0], F.frame_num[0]
+                scangrp = scanid[-2:]
+                fn = os.path.join(wisedir, scangrp, scanid, '%03i' % frame, 
+                                  '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
+                fwcs = Tan(fn)
+                # Keep CD matrix, set CRVAL/CRPIX to star position
+                fwcs.set_crpix(pcx+1, pcy+1)
+                fwcs.set_imagesize(float(pw), float(ph))
+
+                mag = WISE.get('w%impro' % band)
+                I = np.flatnonzero(mag < opt.bright1)
+                nm = NanoMaggies.magToNanomaggies(mag)
+                print len(I), 'catalog sources brighter than mag', opt.bright1
+                mod = np.zeros_like(fullimg)
+
+                MI,MJ,d = match_radec(WISE.ra[I], WISE.dec[I], T.ra, T.dec, 4./3600.,
+                                      nearest=True)
+                print 'Matched', len(MI), '(', len(np.unique(MI)), 'unique) of the bright WISE sources'
+
+                for i in I:
+                    fwcs.set_crval(WISE.ra[i], WISE.dec[i])
+                    L=3
+                    Yo,Xo,Yi,Xi,rims = resample_with_wcs(wcs, fwcs, [psfimg], L)
+                    mod[Yo,Xo] += rims[0] * nm[i]
+
+                    # ok,x,y = wcs.radec2pixelxy(WISE.ra[i], WISE.dec[i])
+                    # x -= 1.
+                    # y -= 1.
+                    # print 'x,y', x,y
+                    # print 'mag', mag[i]
+                    # print 'nm', nm[i]
+                    # ix = int(np.round(x))
+                    # iy = int(np.round(y))
+                    # dx = x - ix
+                    # dy = y - iy
+                    # 
+                    # x0 = max(0,   ix - phalf)
+                    # x1 = min(W-1, ix + phalf)
+                    # y0 = max(0,   iy - phalf)
+                    # y1 = min(H-1, iy + phalf)
+                    # print 'mod x,y range', x0,x1, y0,y1
+                    # xx,yy = np.meshgrid(np.arange(x0, x1+1), np.arange(y0, y1+1))
+                    # xx = xx.ravel().astype(np.int32)
+                    # yy = yy.ravel().astype(np.int32)
+                    # rx = xx - (ix-phalf)
+                    # ry = yy - (iy-phalf)
+                    # print 'resampled x,y range', rx.min(),rx.max(), ry.min(),ry.max()
+                    # rpsf = np.zeros(len(rx), np.float32)
+                    # rtn = lanczos3_interpolate(rx, ry,
+                    #                            np.zeros(len(rx),np.float32)+dx,
+                    #                            np.zeros(len(rx),np.float32)+dy,
+                    #                            [rpsf], [psfimg])
+                    # mod[yy.ravel(),xx.ravel()] += rpsf * nm[i]
+
+            plt.clf()
+            plt.imshow(mod, interpolation='nearest', origin='lower',
+                       cmap='gray',
+                       vmin=-3*sig1, vmax=10*sig1)
+            plt.colorbar()
+            plt.title('%s: bright star models' % tag)
             ps.savefig()
 
             plt.clf()
-            plt.imshow(np.log10(pp), interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=0)
-            plt.title('log Per-pixel std')
+            plt.imshow(fullimg - imgoffset - mod, interpolation='nearest', origin='lower',
+                       cmap='gray',
+                       vmin=-3*sig1, vmax=10*sig1)
+            plt.colorbar()
+            plt.title('%s: data - bright star models' % tag)
             ps.savefig()
+
+            # plt.clf()
+            # plt.imshow(np.log10(pp), interpolation='nearest', origin='lower', cmap='gray',
+            #            vmin=0)
+            # plt.title('log Per-pixel std')
+            # ps.savefig()
 
             plt.clf()
             plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
@@ -474,108 +620,113 @@ def one_tile(tile, opt, savepickle, ps):
                 plt.plot([x,x], [0,H], 'r-', alpha=0.5)
             for y in YY:
                 plt.plot([0,W], [y,y], 'r-', alpha=0.5)
+                celli = -1
+                for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
+                    for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
+                        celli += 1
+                        plt.text((xlo+xhi)/2., (ylo+yhi)/2., '%i' % celli, color='r')
             plt.axis(ax)
+            plt.title('%s: cells' % tag)
             ps.savefig()
             
             print 'Median # ims:', np.median(nims)
             ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
 
-            plt.clf()
-            plt.imshow(((fullimg - imgoffset) / ppn),
-                       interpolation='nearest', origin='lower',
-                       cmap='jet', vmin=-3)
-            plt.title('Img / PPstdn')
-            plt.colorbar()
-            ps.savefig()
+            # plt.clf()
+            # plt.imshow(((fullimg - imgoffset) / ppn),
+            #            interpolation='nearest', origin='lower',
+            #            cmap='jet', vmin=-3)
+            # plt.title('Img / PPstdn')
+            # plt.colorbar()
+            # ps.savefig()
+            # 
+            # plt.clf()
+            # loghist((fullimg - imgoffset).ravel(), pp.ravel(), bins=200)
+            # plt.xlabel('img pix')
+            # plt.ylabel('pp std')
+            # ps.savefig()
+            # 
+            # plo,phi = [np.percentile(pp.ravel(), p) for p in [1,99.9]]
+            # print 'pp percentiles:', plo,phi
+            # 
+            # print 'pp max', pp.max()
+            # phi = pp.max()
+            # 
+            # plt.clf()
+            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+            #         np.log10(np.clip(pp.ravel(), plo, phi)), bins=200)
+            # plt.xlabel('log img pix')
+            # plt.ylabel('log pp std')
+            # ps.savefig()
+            # 
+            # pnlo,pnhi = [np.percentile(ppn.ravel(), p) for p in [1,99.9]]
+            # print 'ppn percentiles:', pnlo,pnhi
+            # print 'ppn max', ppn.max()
+            # pnhi = ppn.max()
+            # 
+            # #iv2 = 1./(1./iv + np.maximum(0, ppn - sig1)**2)
+            # 
+            # plt.clf()
+            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+            #         np.log10(np.clip(ppn.ravel(), pnlo, pnhi)), bins=200)
+            # ax = plt.axis()
+            # plt.axhline(np.log10(sig1), color='g')
+            # x0,x1 = plt.xlim()
+            # x = np.linspace(x0, x1, 500)
+            # plt.plot(x, x-1, 'b-')
+            # plt.plot(x, x-2, 'b-')
+            # plt.plot(x, x/2., 'w-')
+            # plt.axis(ax)
+            # plt.xlabel('log img pix')
+            # plt.ylabel('log ppn std')
+            # ps.savefig()
 
-            plt.clf()
-            loghist((fullimg - imgoffset).ravel(), pp.ravel(), bins=200)
-            plt.xlabel('img pix')
-            plt.ylabel('pp std')
-            ps.savefig()
-
-            plo,phi = [np.percentile(pp.ravel(), p) for p in [1,99.9]]
-            print 'pp percentiles:', plo,phi
-
-            print 'pp max', pp.max()
-            phi = pp.max()
-
-            plt.clf()
-            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-                    np.log10(np.clip(pp.ravel(), plo, phi)), bins=200)
-            plt.xlabel('log img pix')
-            plt.ylabel('log pp std')
-            ps.savefig()
-
-            pnlo,pnhi = [np.percentile(ppn.ravel(), p) for p in [1,99.9]]
-            print 'ppn percentiles:', pnlo,pnhi
-            print 'ppn max', ppn.max()
-            pnhi = ppn.max()
-
-            iv2 = 1./(1./iv + np.maximum(0, ppn - sig1)**2)
-            
-            plt.clf()
-            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-                    np.log10(np.clip(ppn.ravel(), pnlo, pnhi)), bins=200)
-            ax = plt.axis()
-            plt.axhline(np.log10(sig1), color='g')
-            x0,x1 = plt.xlim()
-            x = np.linspace(x0, x1, 500)
-            plt.plot(x, x-1, 'b-')
-            plt.plot(x, x-2, 'b-')
-            plt.plot(x, x/2., 'w-')
-            plt.axis(ax)
-            plt.xlabel('log img pix')
-            plt.ylabel('log ppn std')
-            ps.savefig()
-
-
-            plt.clf()
-            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-                    np.log10(np.clip(np.sqrt(1./iv2.ravel()), pnlo, pnhi)), bins=200)
-            ax = plt.axis()
-            plt.axhline(np.log10(sig1), color='g')
-            x0,x1 = plt.xlim()
-            x = np.linspace(x0, x1, 500)
-            plt.plot(x, x-1, 'b-')
-            plt.plot(x, x-2, 'b-')
-            plt.plot(x, x/2., 'w-')
-            plt.axis(ax)
-            plt.xlabel('log img pix')
-            plt.ylabel('log sqrt(iv2)')
-            ps.savefig()
-
-
-            plt.clf()
-            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-                    np.log10(np.clip(np.sqrt(1./iv3.ravel()), pnlo, pnhi)), bins=200)
-            ax = plt.axis()
-            plt.axhline(np.log10(sig1), color='g')
-            x0,x1 = plt.xlim()
-            x = np.linspace(x0, x1, 500)
-            plt.plot(x, x-1, 'b-')
-            plt.plot(x, x-2, 'b-')
-            plt.plot(x, x/2., 'w-')
-            plt.axis(ax)
-            plt.xlabel('log img pix')
-            plt.ylabel('log sqrt(iv3)')
-            ps.savefig()
-
-
-            plt.clf()
-            loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-                    np.log10(np.clip(np.sqrt(1./iv4.ravel()), pnlo, pnhi)), bins=200)
-            ax = plt.axis()
-            plt.axhline(np.log10(sig1), color='g')
-            x0,x1 = plt.xlim()
-            x = np.linspace(x0, x1, 500)
-            plt.plot(x, x-1, 'b-')
-            plt.plot(x, x-2, 'b-')
-            plt.plot(x, x/2., 'w-')
-            plt.axis(ax)
-            plt.xlabel('log img pix')
-            plt.ylabel('log sqrt(iv4)')
-            ps.savefig()
+            # plt.clf()
+            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+            #         np.log10(np.clip(np.sqrt(1./iv2.ravel()), pnlo, pnhi)), bins=200)
+            # ax = plt.axis()
+            # plt.axhline(np.log10(sig1), color='g')
+            # x0,x1 = plt.xlim()
+            # x = np.linspace(x0, x1, 500)
+            # plt.plot(x, x-1, 'b-')
+            # plt.plot(x, x-2, 'b-')
+            # plt.plot(x, x/2., 'w-')
+            # plt.axis(ax)
+            # plt.xlabel('log img pix')
+            # plt.ylabel('log sqrt(iv2)')
+            # ps.savefig()
+            # 
+            # 
+            # plt.clf()
+            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+            #         np.log10(np.clip(np.sqrt(1./iv3.ravel()), pnlo, pnhi)), bins=200)
+            # ax = plt.axis()
+            # plt.axhline(np.log10(sig1), color='g')
+            # x0,x1 = plt.xlim()
+            # x = np.linspace(x0, x1, 500)
+            # plt.plot(x, x-1, 'b-')
+            # plt.plot(x, x-2, 'b-')
+            # plt.plot(x, x/2., 'w-')
+            # plt.axis(ax)
+            # plt.xlabel('log img pix')
+            # plt.ylabel('log sqrt(iv3)')
+            # ps.savefig()
+            # 
+            # 
+            # plt.clf()
+            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
+            #         np.log10(np.clip(np.sqrt(1./iv4.ravel()), pnlo, pnhi)), bins=200)
+            # ax = plt.axis()
+            # plt.axhline(np.log10(sig1), color='g')
+            # x0,x1 = plt.xlim()
+            # x = np.linspace(x0, x1, 500)
+            # plt.plot(x, x-1, 'b-')
+            # plt.plot(x, x-2, 'b-')
+            # plt.plot(x, x/2., 'w-')
+            # plt.axis(ax)
+            # plt.xlabel('log img pix')
+            # plt.ylabel('log sqrt(iv4)')
+            # ps.savefig()
 
 
             # xx,yy = [],[]
@@ -631,10 +782,6 @@ def one_tile(tile, opt, savepickle, ps):
                 invvar = fullinvvar[slc]
                 twcs.setX0Y0(ix0, iy0)
 
-                #I = np.flatnonzero(np.logical_not(np.isfinite(img)))
-                #invvar.flat[I] = 0.
-                #img.flat[I] = 0.
-
                 tim = Image(data=img, invvar=invvar, psf=psf, wcs=twcs,
                             sky=tsky, photocal=LinearPhotoCal(1., band=wanyband),
                             name='Coadd %s W%i (%i,%i)' % (tile.coadd_id, band, xi,yi),
@@ -674,13 +821,13 @@ def one_tile(tile, opt, savepickle, ps):
                     if not np.isfinite(wnm[j]):
                         nomag += 1
                         continue
-                    #assert(np.isfinite(wnm[j]))
                     ptsrc = PointSource(RaDecPos(UW.ra[j], UW.dec[j]),
                                               NanoMaggies(**{wanyband: wnm[j]}))
                     ptsrc.radius = UW.rad[j]
                     subcat.append(ptsrc)
-                    if jinbox[ji]:
-                        uwcat.append((j, ptsrc))
+                    if opt.savewise:
+                        if jinbox[ji]:
+                            uwcat.append((j, ptsrc))
                         
                 print 'WISE-only:', nomag, 'of', len(J), 'had invalid mags'
                 print 'Sources:', len(srci), 'in the box,', len(I)-len(srci), 'in the margins, and', len(J), 'WISE-only'
@@ -724,10 +871,6 @@ def one_tile(tile, opt, savepickle, ps):
 
                 tractor.thawPathsTo(wanyband)
 
-                # DEBUG
-                #p0 = tractor.getParams()
-                #print 'Initial fluxes:', p0
-
                 wantims = (savepickle or opt.pickle2 or (ps is not None))
 
                 R = tractor.optimize_forced_photometry(
@@ -752,32 +895,44 @@ def one_tile(tile, opt, savepickle, ps):
                         fitwiseflux[band][j] = src.getBrightness().getBand(wanyband)
 
                 if ps:
+
+                    tag = '%s W%i cell %i/%i' % (tile.coadd_id, band, celli, opt.blocks**2)
+
                     (dat,mod,ie,chi,roi) = ims1[0]
+
+                    plt.clf()
+                    plt.imshow(dat - imgoffset, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=-3*sig1, vmax=10*sig1)
+                    plt.colorbar()
+                    plt.title('%s: data' % tag)
+                    ps.savefig()
+
                     plt.clf()
                     plt.imshow(mod - imgoffset, interpolation='nearest', origin='lower',
                                cmap='gray', vmin=-3*sig1, vmax=10*sig1)
                     plt.colorbar()
+                    plt.title('%s: model' % tag)
                     ps.savefig()
 
                     plt.clf()
                     plt.imshow(chi, interpolation='nearest', origin='lower',
                                cmap='gray', vmin=-5, vmax=+5)
                     plt.colorbar()
-                    plt.title('Chi')
+                    plt.title('%s: chi' % tag)
                     ps.savefig()
 
-                    plt.clf()
-                    plt.imshow(np.round(chi), interpolation='nearest', origin='lower',
-                               cmap='jet', vmin=-5, vmax=+5)
-                    plt.colorbar()
-                    plt.title('Chi')
-                    ps.savefig()
+                    # plt.clf()
+                    # plt.imshow(np.round(chi), interpolation='nearest', origin='lower',
+                    #            cmap='jet', vmin=-5, vmax=+5)
+                    # plt.colorbar()
+                    # plt.title('Chi')
+                    # ps.savefig()
 
                     plt.clf()
                     plt.imshow(chi, interpolation='nearest', origin='lower',
                                cmap='gray', vmin=-20, vmax=+20)
                     plt.colorbar()
-                    plt.title('Chi')
+                    plt.title('%s: chi 2' % tag)
                     ps.savefig()
 
                     plt.clf()
@@ -787,28 +942,12 @@ def one_tile(tile, opt, savepickle, ps):
                     mx = max(n)
                     plt.ylim(0.1, mx)
                     plt.axvline(0, color='r')
+                    plt.title('%s: chi' % tag)
                     ps.savefig()
 
-                    fn = ps.basefn + '-chi.fits'
-                    fitsio.write(fn, chi, clobber=True)
-                    print 'Wrote', fn
-
-                # tractor.setParams(p0)
-
-                # Rinse sources with negative flux and repeat!
-                # subcat2 = [src for src in subcat if src.getBrightness().getBand(wanyband) > 0.]
-                # print 'Cut from', len(subcat), 'to', len(subcat2), 'non-neg sources'
-                # tractor = Tractor([tim], subcat2)
-                # print 'Running forced photometry...'
-                # t0 = Time()
-                # tractor.freezeParamsRecursive('*')
-                # # tractor.thawPathsTo('sky')
-                # tractor.thawPathsTo(wanyband)
-                # ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-                #     minsb=minsb, mindlnp=1., sky=False, minFlux=None,
-                #     fitstats=True, variance=True, shared_params=False)
-                # print 'That took', Time()-t0
-                # im,mod,ie,chi,roi = ims1[0]
+                    # fn = ps.basefn + '-chi.fits'
+                    # fitsio.write(fn, chi, clobber=True)
+                    # print 'Wrote', fn
 
                 if savepickle:
                     # FIXME -- imgoffset
@@ -847,6 +986,12 @@ def one_tile(tile, opt, savepickle, ps):
                 cpu = t.meas[0]
                 dcpu = (cpu.cpu - cpu0.cpu)
                 print 'So far:', Time()-tb0, '-> predict CPU time', (dcpu * (opt.blocks**2) / float(celli+1))
+
+        if bright_mods:
+            # Reset pixelized models
+            for src in cat:
+                if isinstance(src, BrightPointSource):
+                    src.pixmodel = None
 
         nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
         nm_ivar = fullIV
@@ -892,13 +1037,9 @@ def one_tile(tile, opt, savepickle, ps):
     T.delete_column('cmodelflux')
     T.delete_column('devflux')
     T.delete_column('expflux')
-    #T.delete_column('index')
-
     T.treated_as_pointsource = T.treated_as_pointsource.astype(np.uint8)
-    #T.about()
     
     T.writeto(outfn)
-
 
     if opt.savewise:
         for band in bands:
@@ -1055,11 +1196,6 @@ def finish(T, opt, args, ps):
         pofn = get_photoobj_filename(rr, run,camcol,field)
         F = fitsio.FITS(pofn)
         N = F[1].get_nrows()
-        #print pofn, 'has', N, 'rows'
-
-        # DEBUG
-        #POBJ = fits_table(pofn, columns=['objid'])
-        #assert(len(POBJ) == N)
 
         P = fits_table()
         P.has_wise_phot = np.zeros(N, bool)
@@ -1095,8 +1231,6 @@ def finish(T, opt, args, ps):
                     X[I] = tval
                     P.set(col, X)
 
-            #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
-
         P.delete_column('index')
         P.delete_column('id')
         if len(TT) > 1:
@@ -1108,8 +1242,6 @@ def finish(T, opt, args, ps):
         outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
         P.writeto(outfn)
         print 'Wrote', outfn
-
-        #assert(np.all(POBJ.objid[P.has_wise_phot] == P.objid[P.has_wise_phot]))
 
 def main():
     import optparse
@@ -1173,6 +1305,12 @@ def main():
 
     parser.add_option('--dataset', dest='dataset', default='sequels',
                       help='Dataset (region of sky) to work on')
+
+    parser.add_option('--errfrac', dest='errfrac', type=float,
+                      help='Add this fraction of flux to the error model.')
+
+    parser.add_option('--bright1', dest='bright1', type=float, default=None,
+                      help='Subtract WISE model PSF for stars brighter than this in W1')
 
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 

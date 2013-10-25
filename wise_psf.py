@@ -84,8 +84,10 @@ class WisePSF(VaryingGaussianPSF):
 
 
 
-def create_average_psf_model():
+def create_average_psf_model(bright=False):
     import fitsio
+
+    btag = '-bright' if bright else ''
 
     for band in [1,2,3,4]:
 
@@ -107,10 +109,14 @@ def create_average_psf_model():
                 gx = dx * int(np.round(x / dx))
                 gy = dy * int(np.round(y / dy))
 
-                fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f.fits' % (band, gx, gy)
+                fn = 'wise-psf/wise-psf-w%i-%.1f-%.1f%s.fits' % (band, gx, gy, btag)
+                print 'Reading', fn
                 I = fitsio.read(fn)
                 psfsum = psfsum + I
         psfsum /= psfsum.sum()
+        fitsio.write('wise-psf-avg-pix%s.fits' % btag, psfsum, clobber=(band == 1))
+        ### HACK
+        continue
 
         psf = GaussianMixturePSF.fromStamp(psfsum)
         #fn = 'wise-psf-avg-w%i.fits' % band
@@ -159,12 +165,14 @@ def create_wise_psf_models(bright, K=3):
 
 if __name__ == '__main__':
 
+    create_average_psf_model()
+    create_average_psf_model(bright=True)
+    sys.exit(0)
+
     #create_wise_psf_models(True)
     create_wise_psf_models(True, K=4)
     sys.exit(0)
     
-    #create_average_psf()
-    #sys.exit(0)
 
 
     # How to load 'em...
