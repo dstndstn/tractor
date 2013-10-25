@@ -253,6 +253,8 @@ class Patch(object):
         if self.patch is None:
             return
         H,W = self.patch.shape
+        if W == 0 or H == 0:
+            return
         for x in range(W):
             if not np.all(self.patch[:,x] == 0):
                 break
@@ -873,7 +875,12 @@ class Tractor(MultiParams):
                              nonneg = False,
                              wantims0 = True,
                              wantims1 = True,
+                             negfluxval = None,
                              ):
+        '''
+        negfluxval: when 'nonneg' is set, the flux value to give sources that went
+        negative in an unconstrained fit.
+        '''
         from ceres import ceres_forced_phot
 
         t0 = Time()
@@ -990,6 +997,8 @@ class Tractor(MultiParams):
             assert(x == 0)
             logverb('forced phot: ceres initial run', Time()-t0)
             t0 = Time()
+            if negfluxval is not None:
+                fluxes = np.maximum(fluxes, negfluxval)
 
         x = ceres_forced_phot(blocks, fluxes, nonneg)
         assert(x == 0)
@@ -1474,6 +1483,7 @@ class Tractor(MultiParams):
                                    nonneg=False,
                                    nilcounts=1e-6,
                                    wantims=True,
+                                   negfluxval=None,
                                    ):
         '''
         Returns an "OptResult" duck with fields:
@@ -1585,7 +1595,7 @@ class Tractor(MultiParams):
             self._ceres_forced_photom(result, umodels, imlist, mod0, 
                                       scales, skyderivs, minFlux, BW, BH,
                                       nonneg=nonneg, wantims0=wantims0,
-                                      wantims1=wantims1)
+                                      wantims1=wantims1, negfluxval=negfluxval)
 
         else:
             t0 = Time()

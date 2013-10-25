@@ -74,7 +74,7 @@ static int real_ceres_forced_phot(PyObject* blocks,
         assert(PyTuple_Check(block));
         assert(PyTuple_Size(block) == 2);
 
-        // data
+        // data = (x0, y0, image, mod0, inverror)
         obj = PyTuple_GET_ITEM(block, 0);
         assert(PyTuple_Check(obj));
         assert(PyTuple_Size(obj) == 5);
@@ -155,7 +155,9 @@ static int real_ceres_forced_phot(PyObject* blocks,
     options.minimizer_progress_to_stdout = true;
     //options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
+
     options.jacobi_scaling = false;
+    //options.jacobi_scaling = true;
 
     // .linear_solver_type = SPARSE_NORMAL_CHOLESKY / DENSE_QR
     // / DENSE_SCHUR / SPARSE_SCHUR

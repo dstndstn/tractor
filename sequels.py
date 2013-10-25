@@ -133,7 +133,7 @@ class BrightPointSource(PointSource):
             return self.pixmodel
         return super(BrightPointSource, self).getUnitFluxModelPatch(*args, **kwargs)
 
-def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs):
+def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
     mag = WISE.get('w%impro' % band)
     I = np.flatnonzero(mag < brightcut)
     if len(I) == 0:
@@ -188,7 +188,9 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs):
 
         pat = Patch(x0, y0, mod)
         cat[j].pixmodel = pat
-    
+
+        cat[j].fixedRadius = phalf
+        sourcerad[j] = max(sourcerad[j], phalf)
 
 def one_tile(tile, opt, savepickle, ps):
     bands = opt.bands
@@ -442,10 +444,6 @@ def one_tile(tile, opt, savepickle, ps):
         srad2[I] = rad
         del rad
 
-        bright_mods = ((band == 1) and (opt.bright1 is not None))
-        if bright_mods:
-            set_bright_psf_mods(cat, WISE, T, opt.bright1, band, tile, wcs)
-
         # Set radii
         for i in range(len(cat)):
             src = cat[i]
@@ -455,11 +453,18 @@ def one_tile(tile, opt, savepickle, ps):
                 b.setBand(wanyband, defaultflux)
                 
             R = max([opt.minradius, sourcerad[i], srad2[i]])
+            # ??  This is used to select which sources are in-range
+            sourcerad[i] = R
             if isinstance(src, PointSource):
                 src.fixedRadius = R
             elif (isinstance(src, HoggGalaxy) or
                   isinstance(src, FixedCompositeGalaxy)):
                 src.halfsize = R
+
+        # Use pixelized PSF models for bright sources?
+        bright_mods = ((band == 1) and (opt.bright1 is not None))
+        if bright_mods:
+            set_bright_psf_mods(cat, WISE, T, opt.bright1, band, tile, wcs, sourcerad)
 
         # We're going to dice the image up into cells for
         # photometry... remember the whole image and initialize
@@ -493,7 +498,9 @@ def one_tile(tile, opt, savepickle, ps):
 
         if opt.errfrac > 0:
             pix = (fullimg - imgoffset)
-            iv2 = 1./(1./iv + (pix * opt.errfrac)**2)
+            nz = (fullinvvar > 0)
+            iv2 = np.zeros_like(fullinvvar)
+            iv2[nz] = 1./(1./fullinvvar[nz] + (pix[nz] * opt.errfrac)**2)
             print 'Increasing error estimate by', opt.errfrac, 'of image flux'
             fullinvvar = iv2
 
@@ -588,21 +595,21 @@ def one_tile(tile, opt, savepickle, ps):
                     #                            [rpsf], [psfimg])
                     # mod[yy.ravel(),xx.ravel()] += rpsf * nm[i]
 
-            plt.clf()
-            plt.imshow(mod, interpolation='nearest', origin='lower',
-                       cmap='gray',
-                       vmin=-3*sig1, vmax=10*sig1)
-            plt.colorbar()
-            plt.title('%s: bright star models' % tag)
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(fullimg - imgoffset - mod, interpolation='nearest', origin='lower',
-                       cmap='gray',
-                       vmin=-3*sig1, vmax=10*sig1)
-            plt.colorbar()
-            plt.title('%s: data - bright star models' % tag)
-            ps.savefig()
+                plt.clf()
+                plt.imshow(mod, interpolation='nearest', origin='lower',
+                           cmap='gray',
+                           vmin=-3*sig1, vmax=10*sig1)
+                plt.colorbar()
+                plt.title('%s: bright star models' % tag)
+                ps.savefig()
+    
+                plt.clf()
+                plt.imshow(fullimg - imgoffset - mod, interpolation='nearest', origin='lower',
+                           cmap='gray',
+                           vmin=-3*sig1, vmax=10*sig1)
+                plt.colorbar()
+                plt.title('%s: data - bright star models' % tag)
+                ps.savefig()
 
             # plt.clf()
             # plt.imshow(np.log10(pp), interpolation='nearest', origin='lower', cmap='gray',
@@ -624,14 +631,28 @@ def one_tile(tile, opt, savepickle, ps):
                 for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
                     for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
                         celli += 1
-                        plt.text((xlo+xhi)/2., (ylo+yhi)/2., '%i' % celli, color='r')
+                        xc,yc = (xlo+xhi)/2., (ylo+yhi)/2.
+                        plt.text(xc, yc, '%i' % celli, color='r')
+
+                        print 'Cell', celli, 'xc,yc', xc,yc
+                        print 'W, H', xhi-xlo, yhi-ylo
+                        print 'RA,Dec center', wcs.pixelxy2radec(xc+1, yc+1)
+
+            if bright_mods:
+                mag = WISE.get('w%impro' % band)
+                I = np.flatnonzero(mag < opt.bright1)
+                for i in I:
+                    ok,x,y = wcs.radec2pixelxy(WISE.ra[i], WISE.dec[i])
+                    plt.text(x-1, y-1, '%.1f' % mag[i], color='g')
+
             plt.axis(ax)
             plt.title('%s: cells' % tag)
+
+
             ps.savefig()
             
             print 'Median # ims:', np.median(nims)
-            ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
-
+            #ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
             # plt.clf()
             # plt.imshow(((fullimg - imgoffset) / ppn),
             #            interpolation='nearest', origin='lower',
@@ -877,7 +898,7 @@ def one_tile(tile, opt, savepickle, ps):
                     minsb=minsb, mindlnp=1., sky=opt.sky, minFlux=None,
                     fitstats=True, variance=True, shared_params=False,
                     use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock,
-                    nonneg=opt.nonneg, wantims=wantims)
+                    wantims=wantims, nonneg=opt.nonneg, negfluxval=0.1*sig1)
                 print 'That took', Time()-t0
 
                 if wantims:
@@ -905,6 +926,13 @@ def one_tile(tile, opt, savepickle, ps):
                                cmap='gray', vmin=-3*sig1, vmax=10*sig1)
                     plt.colorbar()
                     plt.title('%s: data' % tag)
+                    ps.savefig()
+
+                    plt.clf()
+                    plt.imshow(1./ie, interpolation='nearest', origin='lower',
+                               cmap='gray', vmin=0, vmax=10*sig1)
+                    plt.colorbar()
+                    plt.title('%s: sigma' % tag)
                     ps.savefig()
 
                     plt.clf()
