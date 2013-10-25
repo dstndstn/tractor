@@ -197,6 +197,9 @@ def one_tile(tile, opt, savepickle, ps):
     outfn = opt.output % (tile.coadd_id)
     savewise_outfn = opt.save_wise_output % (tile.coadd_id)
 
+    version = get_svn_version()
+    print 'SVN version info:', version
+
     sband = 'r'
     bandnum = 'ugriz'.index(sband)
 
@@ -1066,8 +1069,28 @@ def one_tile(tile, opt, savepickle, ps):
     T.delete_column('devflux')
     T.delete_column('expflux')
     T.treated_as_pointsource = T.treated_as_pointsource.astype(np.uint8)
+
+    hdr = fitsio.FITSHDR()
+    hdr.add_record(dict(name='SEQ_VER', value=version['Revision'],
+                        comment='SVN revision'))
+    hdr.add_record(dict(name='SEQ_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='SEQ_DATE', value=datetime.datetime.now().isoformat(),
+                        comment='forced phot run time'))
+    hdr.add_record(dict(name='SEQ_NNEG', value=opt.nonneg, comment='non-negative?'))
+    hdr.add_record(dict(name='SEQ_SKY', value=opt.sky, comment='fit sky?'))
+    for b in bands:
+        minsig = getattr(opt, 'minsig%i' % band)
+        hdr.add_record(dict(name='SEQ_MNS%i' % band, value=minsig,
+                            comment='min surf brightness in sig, band %i' % band))
+    hdr.add_record(dict(name='SEQ_BL', value=opt.blocks, comment='image blocks'))
+    hdr.add_record(dict(name='SEQ_CERE', value=opt.ceres, comment='use Ceres?'))
+    hdr.add_record(dict(name='SEQ_ERRF', value=opt.errfrac, comment='error flux fraction'))
+    if opt.ceres:
+        hdr.add_record(dict(name='SEQ_CEBL', value=opt.ceresblock,
+                        comment='Ceres blocksize'))
     
-    T.writeto(outfn)
+    T.writeto(outfn, header=hdr)
+    print 'Wrote', outfn
 
     if opt.savewise:
         for band in bands:
