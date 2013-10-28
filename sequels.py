@@ -192,7 +192,7 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
         cat[j].fixedRadius = phalf
         sourcerad[j] = max(sourcerad[j], phalf)
 
-def one_tile(tile, opt, savepickle, ps):
+def one_tile(tile, opt, savepickle, ps, tiles):
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
     savewise_outfn = opt.save_wise_output % (tile.coadd_id)
@@ -1104,6 +1104,16 @@ def one_tile(tile, opt, savepickle, ps):
         pickle_to_file((mods, cats, T, sourcerad), fn)
         print 'Pickled', fn
 
+    if opt.splitrcf:
+        # -Write out any run,camcol,field that is totally contained
+        # within this coadd tile, and does not touch any other coadd
+        # tile.
+
+        # -Write out the remaining objects to be --finish'd later.
+        pass
+        
+
+
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
 
@@ -1357,9 +1367,6 @@ def main():
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
-    #parser.add_option('--extra-dir', dest='extradir', default=None,
-    #                  help='With --finish, also read parallel files from this directory')
-
     parser.add_option('--flat', dest='flat', type='str', default=None,
                       help='Just write a flat-file of (deduplicated) results, not photoObj-parallels')
 
@@ -1487,7 +1494,7 @@ def main():
             print 'Changed bands to', opt.bands, 'and output dir to', outdir
             print 'Output file pattern', opt.output
 
-        one_tile(T[i], opt, opt.pickle, plot)
+        one_tile(T[i], opt, opt.pickle, plot, T)
 
 if __name__ == '__main__':
     main()
