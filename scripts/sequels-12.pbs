@@ -1,0 +1,14 @@
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=2:00:00
+#PBS -N sequels
+###PBS -p -10
+#PBS -q batch
+#PBS -o sequels-logs
+#PBS -e sequels-logs
+
+### ln -s /clusterfs/riemann/raid000/dstn/sequels-phot-4 sequels-phot
+### ln -s /clusterfs/riemann/raid000/dstn/sequels-phot-4-logs/ sequels-logs
+
+cd /home/dstn/tractor
+python -u sequels.py -d sequels-phot --blocks 1 --ceres -B 8 --nonneg --dataset sequels
+

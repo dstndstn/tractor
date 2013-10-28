@@ -1116,6 +1116,7 @@ def summary(A, opt, ps):
         dr = dd / np.cos(np.deg2rad(d))
         outfn = opt.output % (A.coadd_id[i])
         rr,dd = [r-dr,r-dr,r+dr,r+dr,r-dr], [d-dd,d+dd,d+dd,d-dd,d-dd]
+        print 'Looking for', outfn
         if not os.path.exists(outfn):
             missing.append((i,rr,dd,r,d))
         plt.plot(rr, dd, 'k-')
@@ -1329,6 +1330,10 @@ def main():
     parser.add_option('--plotbase', dest='plotbase', help='Base filename for plots')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
+
+    #parser.add_option('--extra-dir', dest='extradir', default=None,
+    #                  help='With --finish, also read parallel files from this directory')
+
     parser.add_option('--flat', dest='flat', type='str', default=None,
                       help='Just write a flat-file of (deduplicated) results, not photoObj-parallels')
 
