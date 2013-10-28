@@ -1241,13 +1241,31 @@ def finish(T, opt, args, ps):
         F.writeto(opt.flat)
         return
 
-    for (run,camcol,field),TT in fieldmap.items():
+    pfn = 'photoobj-lengths.pickle'
+    if os.path.exists(pfn):
+        print 'Reading photoObj lengths from', pfn
+        pobjlengths = unpickle_from_file(pfn)
+    else:
+        pobjlengths = {}
+
+    for i,((run,camcol,field),TT) in enumerate(fieldmap.items()):
+        print
+        print (i+1), 'of', len(fieldmap), ': R,C,F', (run,camcol,field)
         print len(TT), 'tiles for', (run,camcol,field)
+
         # HACK
         rr = '301'
-        pofn = get_photoobj_filename(rr, run,camcol,field)
-        F = fitsio.FITS(pofn)
-        N = F[1].get_nrows()
+
+        key = (rr,run,camcol,field)
+        N = pobjlengths.get(key, None)
+        if N is None:
+            pofn = get_photoobj_filename(rr, run,camcol,field)
+            F = fitsio.FITS(pofn)
+            N = F[1].get_nrows()
+            pobjlengths[key] = N
+        if i % 1000 == 0:
+            pickle_to_file(pobjlengths, pfn)
+            print 'Wrote', pfn
 
         P = fits_table()
         P.has_wise_phot = np.zeros(N, bool)
@@ -1294,6 +1312,8 @@ def finish(T, opt, args, ps):
         outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
         P.writeto(outfn)
         print 'Wrote', outfn
+    pickle_to_file(pobjlengths, pfn)
+    print 'Wrote', pfn
 
 def main():
     import optparse
