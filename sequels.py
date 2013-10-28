@@ -1248,7 +1248,11 @@ def finish(T, opt, args, ps):
     else:
         pobjlengths = {}
 
-    for i,((run,camcol,field),TT) in enumerate(fieldmap.items()):
+    keys = fieldmap.keys()
+    keys.sort()
+    #for i,((run,camcol,field),TT) in enumerate(fieldmap.items()):
+    for i,(run,camcol,field) in enumerate(keys):
+        TT = fieldmap.get((run,camcol,field))
         print
         print (i+1), 'of', len(fieldmap), ': R,C,F', (run,camcol,field)
         print len(TT), 'tiles for', (run,camcol,field)
