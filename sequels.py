@@ -1335,6 +1335,8 @@ def main():
     parser.add_option('--blocks', dest='blocks', default=10, type=int,
                       help='NxN number of blocks to cut the image into')
     parser.add_option('-d', dest='outdir', default=None)
+    parser.add_option('--pobj', dest='pobjdir', default=None,
+                      help='Output directory for photoObj-parallels')
     parser.add_option('-o', dest='output', default=None)
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
@@ -1427,6 +1429,9 @@ def main():
     outdir     = outdir     % opt.dataset
     tempoutdir = tempoutdir % opt.dataset
     pobjoutdir = pobjoutdir % opt.dataset
+
+    if opt.pobjdir is not None:
+        pobjoutdir = opt.pobjdir
 
     if opt.outdir is not None:
         outdir = opt.outdir
