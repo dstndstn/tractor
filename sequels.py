@@ -197,7 +197,7 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
         cat[j].fixedRadius = phalf
         sourcerad[j] = max(sourcerad[j], phalf)
 
-def _get_photoobjs(tile, r0,r1,d0,d1):
+def _get_photoobjs(tile, r0,r1,d0,d1, bandnum):
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
         print 'Reading', objfn
