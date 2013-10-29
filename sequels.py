@@ -192,29 +192,7 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
         cat[j].fixedRadius = phalf
         sourcerad[j] = max(sourcerad[j], phalf)
 
-def one_tile(tile, opt, savepickle, ps, tiles):
-    bands = opt.bands
-    outfn = opt.output % (tile.coadd_id)
-    savewise_outfn = opt.save_wise_output % (tile.coadd_id)
-
-    version = get_svn_version()
-    print 'SVN version info:', version
-
-    sband = 'r'
-    bandnum = 'ugriz'.index(sband)
-
-    tt0 = Time()
-    print
-    print 'Coadd tile', tile.coadd_id
-
-    thisdir = get_tile_dir(tiledir, tile.coadd_id)
-    fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' % (tile.coadd_id, bands[0]))
-    print 'Reading', fn
-    wcs = Tan(fn)
-    r0,r1,d0,d1 = wcs.radec_bounds()
-    print 'RA,Dec bounds:', r0,r1,d0,d1
-    H,W = wcs.get_height(), wcs.get_width()
-
+def _get_photoobjs(tile, r0,r1,d0,d1):
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
         print 'Reading', objfn
@@ -223,9 +201,6 @@ def one_tile(tile, opt, savepickle, ps, tiles):
         print 'Did not find', objfn, '-- reading photoObjs'
         T = read_photoobjs(r0, r1, d0, d1, 1./60.)
         T.writeto(objfn)
-
-    if opt.photoObjsOnly:
-        return
 
     # Cut galaxies based on signal-to-noise of theta (effective
     # radius) measurement.
@@ -272,6 +247,36 @@ def one_tile(tile, opt, savepickle, ps, tiles):
     print 'Found', sum(badgals), 'bad galaxies'
     T.treated_as_pointsource = badgals
     T.objc_type[badgals] = 6
+    return T
+
+def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, cat=None):
+
+    bands = opt.bands
+    outfn = opt.output % (tile.coadd_id)
+    savewise_outfn = opt.save_wise_output % (tile.coadd_id)
+
+    version = get_svn_version()
+    print 'SVN version info:', version
+
+    sband = 'r'
+    bandnum = 'ugriz'.index(sband)
+
+    tt0 = Time()
+    print
+    print 'Coadd tile', tile.coadd_id
+
+    thisdir = get_tile_dir(tiledir, tile.coadd_id)
+    fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' % (tile.coadd_id, bands[0]))
+    print 'Reading', fn
+    wcs = Tan(fn)
+    r0,r1,d0,d1 = wcs.radec_bounds()
+    print 'RA,Dec bounds:', r0,r1,d0,d1
+    H,W = wcs.get_height(), wcs.get_width()
+
+    if T is None:
+        T = _get_photoobjs(tile, r0,r1,d0,d1, bandnum)
+        if opt.photoObjsOnly:
+            return
 
     defaultflux = 1.
 
@@ -290,14 +295,23 @@ def one_tile(tile, opt, savepickle, ps, tiles):
     T.cut(I)
     print 'N objects:', len(T)
 
+    # Use pixelized PSF models for bright sources?
+    bright_mods = ((1 in bands) and (opt.bright1 is not None))
+
     wanyband = wband = 'w'
+
+    #if cat is None:
+    classmap = {}
+    if bright_mods:
+        classmap = {PointSource: BrightPointSource}
+
     print 'Creating tractor sources...'
     cat = get_tractor_sources_dr9(None, None, None, bandname=sband,
                                   objs=T, bands=[], nanomaggies=True,
                                   extrabands=[wband],
                                   fixedComposites=True,
                                   useObjcType=True,
-                                  classmap={PointSource: BrightPointSource})
+                                  classmap=classmap)
     print 'Created', len(T), 'sources'
     assert(len(cat) == len(T))
 
@@ -466,6 +480,7 @@ def one_tile(tile, opt, savepickle, ps, tiles):
 
         # Use pixelized PSF models for bright sources?
         bright_mods = ((band == 1) and (opt.bright1 is not None))
+
         if bright_mods:
             set_bright_psf_mods(cat, WISE, T, opt.bright1, band, tile, wcs, sourcerad)
 
@@ -931,12 +946,12 @@ def one_tile(tile, opt, savepickle, ps, tiles):
                     plt.title('%s: data' % tag)
                     ps.savefig()
 
-                    plt.clf()
-                    plt.imshow(1./ie, interpolation='nearest', origin='lower',
-                               cmap='gray', vmin=0, vmax=10*sig1)
-                    plt.colorbar()
-                    plt.title('%s: sigma' % tag)
-                    ps.savefig()
+                    # plt.clf()
+                    # plt.imshow(1./ie, interpolation='nearest', origin='lower',
+                    #            cmap='gray', vmin=0, vmax=10*sig1)
+                    # plt.colorbar()
+                    # plt.title('%s: sigma' % tag)
+                    # ps.savefig()
 
                     plt.clf()
                     plt.imshow(mod - imgoffset, interpolation='nearest', origin='lower',
@@ -1194,7 +1209,7 @@ def finish(T, opt, args, ps):
                 cols.append('w%i_%s' % (band, k))
         rcfcols = ['run','camcol','field','id',]
         try:
-            T = fits_table(fn, columns=cols + rcfcols)
+            T = fits_table(fn, columns=cols + rcfcols + opt.ftag)
         except:
             print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
             print fn
@@ -1367,6 +1382,9 @@ def main():
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
 
+    parser.add_option('--ftag', dest='ftag', action='append', default=[],
+                      help='Tag-along extra columns in --finish phase')
+
     parser.add_option('--flat', dest='flat', type='str', default=None,
                       help='Just write a flat-file of (deduplicated) results, not photoObj-parallels')
 
@@ -1494,7 +1512,7 @@ def main():
             print 'Changed bands to', opt.bands, 'and output dir to', outdir
             print 'Output file pattern', opt.output
 
-        one_tile(T[i], opt, opt.pickle, plot, T)
+        one_tile(T[i], opt, opt.pickle, plot, T, tiledir, tempoutdir)
 
 if __name__ == '__main__':
     main()
