@@ -81,6 +81,11 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
                 'run','camcol','field','id'
                 ]
 
+        # Nic Ross says it would be useful to have these in the outputs...
+        cols += ['psfflux', 'psfflux_ivar', 'cmodelflux', 'cmodelflux_ivar',
+                 'modelflux', 'modelflux_ivar']
+
+
     wfn = os.path.join(resolvedir, 'window_flist.fits')
 
     ra,dec = (r0+r1)/2., (d0+d1)/2.
