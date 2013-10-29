@@ -569,159 +569,40 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
             # plt.title('log Per-pixel std')
             # ps.savefig()
 
-            plt.clf()
-            plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
-                       cmap='gray',
-                       vmin=-3*sig1, vmax=10*sig1)
-            ax = plt.axis()
-            plt.colorbar()
-            for x in XX:
-                plt.plot([x,x], [0,H], 'r-', alpha=0.5)
-            for y in YY:
-                plt.plot([0,W], [y,y], 'r-', alpha=0.5)
-                celli = -1
-                for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
-                    for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
-                        celli += 1
-                        xc,yc = (xlo+xhi)/2., (ylo+yhi)/2.
-                        plt.text(xc, yc, '%i' % celli, color='r')
-
-                        print 'Cell', celli, 'xc,yc', xc,yc
-                        print 'W, H', xhi-xlo, yhi-ylo
-                        print 'RA,Dec center', wcs.pixelxy2radec(xc+1, yc+1)
-
-            if bright_mods:
-                mag = WISE.get('w%impro' % band)
-                I = np.flatnonzero(mag < opt.bright1)
-                for i in I:
-                    ok,x,y = wcs.radec2pixelxy(WISE.ra[i], WISE.dec[i])
-                    plt.text(x-1, y-1, '%.1f' % mag[i], color='g')
-
-            plt.axis(ax)
-            plt.title('%s: cells' % tag)
-
-
-            ps.savefig()
+            if opt.blocks > 1:
+                plt.clf()
+                plt.imshow(fullimg - imgoffset, interpolation='nearest', origin='lower',
+                           cmap='gray',
+                           vmin=-3*sig1, vmax=10*sig1)
+                ax = plt.axis()
+                plt.colorbar()
+                for x in XX:
+                    plt.plot([x,x], [0,H], 'r-', alpha=0.5)
+                for y in YY:
+                    plt.plot([0,W], [y,y], 'r-', alpha=0.5)
+                    celli = -1
+                    for yi,(ylo,yhi) in enumerate(zip(YY, YY[1:])):
+                        for xi,(xlo,xhi) in enumerate(zip(XX, XX[1:])):
+                            celli += 1
+                            xc,yc = (xlo+xhi)/2., (ylo+yhi)/2.
+                            plt.text(xc, yc, '%i' % celli, color='r')
+    
+                            print 'Cell', celli, 'xc,yc', xc,yc
+                            print 'W, H', xhi-xlo, yhi-ylo
+                            print 'RA,Dec center', wcs.pixelxy2radec(xc+1, yc+1)
+    
+                if bright_mods:
+                    mag = WISE.get('w%impro' % band)
+                    I = np.flatnonzero(mag < opt.bright1)
+                    for i in I:
+                        ok,x,y = wcs.radec2pixelxy(WISE.ra[i], WISE.dec[i])
+                        plt.text(x-1, y-1, '%.1f' % mag[i], color='g')
+    
+                plt.axis(ax)
+                plt.title('%s: cells' % tag)
+                ps.savefig()
             
             print 'Median # ims:', np.median(nims)
-            #ppn = pp / np.sqrt(np.maximum(nims - 1, 1))
-            # plt.clf()
-            # plt.imshow(((fullimg - imgoffset) / ppn),
-            #            interpolation='nearest', origin='lower',
-            #            cmap='jet', vmin=-3)
-            # plt.title('Img / PPstdn')
-            # plt.colorbar()
-            # ps.savefig()
-            # 
-            # plt.clf()
-            # loghist((fullimg - imgoffset).ravel(), pp.ravel(), bins=200)
-            # plt.xlabel('img pix')
-            # plt.ylabel('pp std')
-            # ps.savefig()
-            # 
-            # plo,phi = [np.percentile(pp.ravel(), p) for p in [1,99.9]]
-            # print 'pp percentiles:', plo,phi
-            # 
-            # print 'pp max', pp.max()
-            # phi = pp.max()
-            # 
-            # plt.clf()
-            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-            #         np.log10(np.clip(pp.ravel(), plo, phi)), bins=200)
-            # plt.xlabel('log img pix')
-            # plt.ylabel('log pp std')
-            # ps.savefig()
-            # 
-            # pnlo,pnhi = [np.percentile(ppn.ravel(), p) for p in [1,99.9]]
-            # print 'ppn percentiles:', pnlo,pnhi
-            # print 'ppn max', ppn.max()
-            # pnhi = ppn.max()
-            # 
-            # #iv2 = 1./(1./iv + np.maximum(0, ppn - sig1)**2)
-            # 
-            # plt.clf()
-            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-            #         np.log10(np.clip(ppn.ravel(), pnlo, pnhi)), bins=200)
-            # ax = plt.axis()
-            # plt.axhline(np.log10(sig1), color='g')
-            # x0,x1 = plt.xlim()
-            # x = np.linspace(x0, x1, 500)
-            # plt.plot(x, x-1, 'b-')
-            # plt.plot(x, x-2, 'b-')
-            # plt.plot(x, x/2., 'w-')
-            # plt.axis(ax)
-            # plt.xlabel('log img pix')
-            # plt.ylabel('log ppn std')
-            # ps.savefig()
-
-            # plt.clf()
-            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-            #         np.log10(np.clip(np.sqrt(1./iv2.ravel()), pnlo, pnhi)), bins=200)
-            # ax = plt.axis()
-            # plt.axhline(np.log10(sig1), color='g')
-            # x0,x1 = plt.xlim()
-            # x = np.linspace(x0, x1, 500)
-            # plt.plot(x, x-1, 'b-')
-            # plt.plot(x, x-2, 'b-')
-            # plt.plot(x, x/2., 'w-')
-            # plt.axis(ax)
-            # plt.xlabel('log img pix')
-            # plt.ylabel('log sqrt(iv2)')
-            # ps.savefig()
-            # 
-            # 
-            # plt.clf()
-            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-            #         np.log10(np.clip(np.sqrt(1./iv3.ravel()), pnlo, pnhi)), bins=200)
-            # ax = plt.axis()
-            # plt.axhline(np.log10(sig1), color='g')
-            # x0,x1 = plt.xlim()
-            # x = np.linspace(x0, x1, 500)
-            # plt.plot(x, x-1, 'b-')
-            # plt.plot(x, x-2, 'b-')
-            # plt.plot(x, x/2., 'w-')
-            # plt.axis(ax)
-            # plt.xlabel('log img pix')
-            # plt.ylabel('log sqrt(iv3)')
-            # ps.savefig()
-            # 
-            # 
-            # plt.clf()
-            # loghist(np.log10(np.clip((fullimg - imgoffset).ravel(), 0.1*sig1, 1e6*sig1)),
-            #         np.log10(np.clip(np.sqrt(1./iv4.ravel()), pnlo, pnhi)), bins=200)
-            # ax = plt.axis()
-            # plt.axhline(np.log10(sig1), color='g')
-            # x0,x1 = plt.xlim()
-            # x = np.linspace(x0, x1, 500)
-            # plt.plot(x, x-1, 'b-')
-            # plt.plot(x, x-2, 'b-')
-            # plt.plot(x, x/2., 'w-')
-            # plt.axis(ax)
-            # plt.xlabel('log img pix')
-            # plt.ylabel('log sqrt(iv4)')
-            # ps.savefig()
-
-
-            # xx,yy = [],[]
-            # cc = []
-            # for src in cat:
-            #     c = 'b'
-            #     if src.getBrightness().getBand(wanyband) > defaultflux:
-            #         c = 'g'
-            #     x,y = twcs.positionToPixel(src.getPosition())
-            #     xx.append(x)
-            #     yy.append(y)
-            #     cc.append(c)
-            # p1 = plt.scatter(xx, yy, c=cc, marker='+')
-
-            # notI = np.flatnonzero(wf <= defaultflux)
-            # plt.plot(T.x[notI], T.y[notI], 'b+')
-            # plt.plot(T.x[I], T.y[I], 'g+')
-            # plt.axis(ax)
-            # ps.savefig()
-            # plt.plot(UW.x, UW.y, 'r+')
-            # plt.axis(ax)
-            # ps.savefig()
 
         if savepickle:
             mods = []
@@ -822,12 +703,6 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                 #                   UW.y[np.logical_not(np.isfinite(wnm[J]))],
                 #                   'y+')
                 #     ps.savefig()
-                # 
-                #     # plt.clf()
-                #     # plt.imshow(invvar, interpolation='nearest', origin='lower')
-                #     # plt.colorbar()
-                #     # plt.title('invvar')
-                #     # ps.savefig()
 
                 print 'Creating a Tractor with image', tim.shape, 'and', len(subcat), 'sources'
                 tractor = Tractor([tim], subcat)
