@@ -541,77 +541,11 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
             plt.title('%s: Pixel histogram' % tag)
             ps.savefig()
 
-            if band == 1 and opt.bright1 is not None:
-                #from wise_psf import 
-                fn = 'wise-psf-avg-pix-bright.fits'
-                psfimg = fitsio.read(fn, ext=band-1).astype(np.float32)
-                psfimg = np.maximum(0, psfimg)
-                psfimg /= psfimg.sum()
-                print 'PSF image', psfimg.shape
-                print 'PSF image range:', psfimg.min(), psfimg.max()
-                ph,pw = psfimg.shape
-                pcx,pcy = ph/2, pw/2
-                assert(ph == pw)
-                phalf = ph/2
-
-                framesfn = os.path.join(thisdir, 'unwise-%s-w%i-frames.fits' % (tile.coadd_id, band))
-                F = fits_table(framesfn)
-                print 'intfn', F.intfn[0]
-                #fwcs = fits_table(F.intfn[
-                wisedir = 'wise-frames'
-                scanid,frame = F.scan_id[0], F.frame_num[0]
-                scangrp = scanid[-2:]
-                fn = os.path.join(wisedir, scangrp, scanid, '%03i' % frame, 
-                                  '%s%03i-w%i-int-1b.fits' % (scanid, frame, band))
-                fwcs = Tan(fn)
-                # Keep CD matrix, set CRVAL/CRPIX to star position
-                fwcs.set_crpix(pcx+1, pcy+1)
-                fwcs.set_imagesize(float(pw), float(ph))
-
-                mag = WISE.get('w%impro' % band)
-                I = np.flatnonzero(mag < opt.bright1)
-                nm = NanoMaggies.magToNanomaggies(mag)
-                print len(I), 'catalog sources brighter than mag', opt.bright1
+            if bright_mods:
                 mod = np.zeros_like(fullimg)
-
-                MI,MJ,d = match_radec(WISE.ra[I], WISE.dec[I], T.ra, T.dec, 4./3600.,
-                                      nearest=True)
-                print 'Matched', len(MI), '(', len(np.unique(MI)), 'unique) of the bright WISE sources'
-
-                for i in I:
-                    fwcs.set_crval(WISE.ra[i], WISE.dec[i])
-                    L=3
-                    Yo,Xo,Yi,Xi,rims = resample_with_wcs(wcs, fwcs, [psfimg], L)
-                    mod[Yo,Xo] += rims[0] * nm[i]
-
-                    # ok,x,y = wcs.radec2pixelxy(WISE.ra[i], WISE.dec[i])
-                    # x -= 1.
-                    # y -= 1.
-                    # print 'x,y', x,y
-                    # print 'mag', mag[i]
-                    # print 'nm', nm[i]
-                    # ix = int(np.round(x))
-                    # iy = int(np.round(y))
-                    # dx = x - ix
-                    # dy = y - iy
-                    # 
-                    # x0 = max(0,   ix - phalf)
-                    # x1 = min(W-1, ix + phalf)
-                    # y0 = max(0,   iy - phalf)
-                    # y1 = min(H-1, iy + phalf)
-                    # print 'mod x,y range', x0,x1, y0,y1
-                    # xx,yy = np.meshgrid(np.arange(x0, x1+1), np.arange(y0, y1+1))
-                    # xx = xx.ravel().astype(np.int32)
-                    # yy = yy.ravel().astype(np.int32)
-                    # rx = xx - (ix-phalf)
-                    # ry = yy - (iy-phalf)
-                    # print 'resampled x,y range', rx.min(),rx.max(), ry.min(),ry.max()
-                    # rpsf = np.zeros(len(rx), np.float32)
-                    # rtn = lanczos3_interpolate(rx, ry,
-                    #                            np.zeros(len(rx),np.float32)+dx,
-                    #                            np.zeros(len(rx),np.float32)+dy,
-                    #                            [rpsf], [psfimg])
-                    # mod[yy.ravel(),xx.ravel()] += rpsf * nm[i]
+                for src in cat:
+                    if src.pixmodel:
+                        src.pixmodel.add(mod, scale=src.getBrightness().getBand(wanyband))
 
                 plt.clf()
                 plt.imshow(mod, interpolation='nearest', origin='lower',
