@@ -804,6 +804,21 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                     # fitsio.write(fn, chi, clobber=True)
                     # print 'Wrote', fn
 
+                ## DEBUG
+                (dat,mod,ie,chi,roi) = ims1[0]
+                fn = os.path.join(opt.outdir, '%s-w%i-chi.fits' % (tile.coadd_id, band))
+                fitsio.write(fn, chi)
+                print 'wrote', fn
+                fn = os.path.join(opt.outdir, '%s-w%i-data.fits' % (tile.coadd_id, band))
+                fitsio.write(fn, dat)
+                print 'wrote', fn
+                fn = os.path.join(opt.outdir, '%s-w%i-mod.fits' % (tile.coadd_id, band))
+                fitsio.write(fn, mod)
+                print 'wrote', fn
+                fn = os.path.join(opt.outdir, '%s-w%i-ierr.fits' % (tile.coadd_id, band))
+                fitsio.write(fn, ie)
+                print 'wrote', fn
+
                 if savepickle:
                     # FIXME -- imgoffset
                     if ims1 is None:
@@ -1269,6 +1284,10 @@ def main():
 
     if opt.outdir is not None:
         outdir = opt.outdir
+    else:
+        # default
+        opt.outdir = outdir
+        
     if opt.output is None:
         opt.output = os.path.join(outdir, 'phot-%s.fits')
     if opt.save_wise_output is None:

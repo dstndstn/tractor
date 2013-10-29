@@ -58,7 +58,7 @@ opt.bright1 = None
 opt.minradius = 2
 opt.photoObjsOnly = False
 opt.output = 'cosmos-phot-%s.fits'
-
+opt.outdir = '.'
 tiledir = 'wise-coadds'
 outdir = '.'
 tempoutdir = 'phot-temp'
