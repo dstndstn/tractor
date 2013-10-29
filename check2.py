@@ -43,17 +43,15 @@ W.x -= 1.
 W.y -= 1.
 
 I = np.argsort(-T.get('w%i_prochi2' % band) / T.get('w%i_pronpix' % band))
-print 'T:', len(T), 'I', len(I), 'max', I.max()
 
 rows,cols = 8,8
-
 for pnum in range(3):
     plt.clf()
     plt.subplots_adjust(bottom=0.01, top=0.99, left=0.01, right=0.99, wspace=0.1, hspace=0.1)
     for k in range(rows*cols):
         plt.subplot(rows, cols, k+1)
         ii = I[k]
-        print 'k', k, 'ii', ii
+        print '.',
         x,y = T.x[ii], T.y[ii]
         slc = (slice(y-N, y+N+1), slice(x-N, x+N+1))
 
@@ -82,5 +80,6 @@ for pnum in range(3):
         S = W[(W.x > x-N) * (W.x < x+N) * (W.y > y-N) * (W.y < y+N)]
         plt.plot(S.x, S.y, 'gx')#, mec='g', mfc='none')
         plt.axis(ax)
+    print
     ps.savefig()
     

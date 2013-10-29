@@ -1079,9 +1079,10 @@ def finish(T, opt, args, ps):
         I,J,d = match_radec(F.ra, F.dec, F.ra, F.dec, 1e-6, notself=True)
         print 'Matched', len(I), 'duplicates'
         keep = np.ones(len(F), bool)
-        keep[I] = False
-        keep[J] = False
-        keep[np.where(r2[I] < r2[J], I, J)] = True
+        #keep[I] = False
+        #keep[J] = False
+        #keep[np.where(r2[I] < r2[J], I, J)] = True
+        keep[np.where(r2[I] > r2[J], I, J)] = False
         F.cut(keep)
         print 'Cut to', len(F)
         F.delete_column('index')
