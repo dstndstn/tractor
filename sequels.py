@@ -123,8 +123,11 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
         if len(T) == 0:
             continue
         TT.append(T)
+    if not len(TT):
+        return None
     T = merge_tables(TT)
     return T
+    
 
 class BrightPointSource(PointSource):
     '''
@@ -197,16 +200,23 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
         cat[j].fixedRadius = phalf
         sourcerad[j] = max(sourcerad[j], phalf)
 
-def _get_photoobjs(tile, r0,r1,d0,d1, bandnum):
+def _get_photoobjs(tile, r0,r1,d0,d1, bandnum, existOnly):
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
+        if existOnly:
+            print 'Exists:', objfn
+            return
         print 'Reading', objfn
         T = fits_table(objfn)
     else:
         print 'Did not find', objfn, '-- reading photoObjs'
         T = read_photoobjs(r0, r1, d0, d1, 1./60.)
+        if T is None:
+            return None
         T.writeto(objfn)
-
+        print 'Wrote', objfn
+        if existOnly:
+            return
     # Cut galaxies based on signal-to-noise of theta (effective
     # radius) measurement.
     b = bandnum
@@ -279,7 +289,9 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
     H,W = wcs.get_height(), wcs.get_width()
 
     if T is None:
-        T = _get_photoobjs(tile, r0,r1,d0,d1, bandnum)
+        T = _get_photoobjs(tile, r0,r1,d0,d1, bandnum, opt.photoObjsOnly)
+        if T is None:
+            print 'Empty tile'
         if opt.photoObjsOnly:
             return
 
@@ -1337,15 +1349,17 @@ def main():
             plot = None
 
         # W3,W4
-        if i >= 1000:
-            i -= 1000
-            opt.bands = [3,4]
-            outdir = 'sequels-phot-w34'
-            if opt.output is None:
-                opt.output = os.path.join(outdir, 'phot-%s.fits')
-            print 'Changed bands to', opt.bands, 'and output dir to', outdir
-            print 'Output file pattern', opt.output
+        # if i >= 1000:
+        #     i -= 1000
+        #     opt.bands = [3,4]
+        #     outdir = 'sequels-phot-w34'
+        #     if opt.output is None:
+        #         opt.output = os.path.join(outdir, 'phot-%s.fits')
+        #     print 'Changed bands to', opt.bands, 'and output dir to', outdir
+        #     print 'Output file pattern', opt.output
 
+        print
+        print 'Tile index', i
         one_tile(T[i], opt, opt.pickle, plot, T, tiledir, tempoutdir)
 
 if __name__ == '__main__':
