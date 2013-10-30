@@ -822,19 +822,20 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                     # print 'Wrote', fn
 
                 ## DEBUG
-                (dat,mod,ie,chi,roi) = ims1[0]
-                fn = os.path.join(opt.outdir, '%s-w%i-chi.fits' % (tile.coadd_id, band))
-                fitsio.write(fn, chi)
-                print 'wrote', fn
-                fn = os.path.join(opt.outdir, '%s-w%i-data.fits' % (tile.coadd_id, band))
-                fitsio.write(fn, dat)
-                print 'wrote', fn
-                fn = os.path.join(opt.outdir, '%s-w%i-mod.fits' % (tile.coadd_id, band))
-                fitsio.write(fn, mod)
-                print 'wrote', fn
-                fn = os.path.join(opt.outdir, '%s-w%i-ierr.fits' % (tile.coadd_id, band))
-                fitsio.write(fn, ie)
-                print 'wrote', fn
+                if False:
+                    (dat,mod,ie,chi,roi) = ims1[0]
+                    fn = os.path.join(opt.outdir, '%s-w%i-chi.fits' % (tile.coadd_id, band))
+                    fitsio.write(fn, chi)
+                    print 'wrote', fn
+                    fn = os.path.join(opt.outdir, '%s-w%i-data.fits' % (tile.coadd_id, band))
+                    fitsio.write(fn, dat)
+                    print 'wrote', fn
+                    fn = os.path.join(opt.outdir, '%s-w%i-mod.fits' % (tile.coadd_id, band))
+                    fitsio.write(fn, mod)
+                    print 'wrote', fn
+                    fn = os.path.join(opt.outdir, '%s-w%i-ierr.fits' % (tile.coadd_id, band))
+                    fitsio.write(fn, ie)
+                    print 'wrote', fn
 
                 if savepickle:
                     # FIXME -- imgoffset
