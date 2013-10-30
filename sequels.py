@@ -1262,6 +1262,9 @@ def main():
     parser.add_option('--bright1', dest='bright1', type=float, default=None,
                       help='Subtract WISE model PSF for stars brighter than this in W1')
 
+    parser.add_option('--split', dest='splitrcf', action='store_true', default=False,
+                      help='Split outputs into run/camcol/field right away?')
+
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
