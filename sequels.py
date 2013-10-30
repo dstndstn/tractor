@@ -11,7 +11,21 @@ from glob import glob
 
 import fitsio
 
-# qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-99 ./sequels.py
+'''
+SEQUELS target selection, "v5", 2013-10-29
+scripts/sequels-12.pbs:
+    python -u sequels.py -d data/sequels-phot-5 --blocks 1 --ceres -B 8 --dataset sequels -b 1234
+python -u sequels.py -d data/sequels-phot-5 --finish --dataset sequels --pobj data/sequels-pobj-5/
+
+wise-coadds -> /clusterfs/riemann/raid000/dstn/unwise/unwise/
+data -> /clusterfs/riemann/raid000/dstn
+
+(for x in data/sequels-phot-5/*.fits; do echo; echo $x; listhead $x | grep SEQ_; done) > sequels-phot-versions.txt
+gzip sequels-phot-versions.txt
+
+(for x in wise-coadds/*/*/*-img-m.fits; do echo; echo $x; listhead $x | grep UNW; done) > sequels-unwise-versions.txt
+gzip sequels-unwise-versions.txt
+'''
 
 ''' CFHT-LS W3 test area
 http://terapix.iap.fr/article.php?id_article=841
@@ -81,7 +95,7 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
                 'run','camcol','field','id'
                 ]
 
-        # Nic Ross says it would be useful to have these in the outputs...
+        # useful to have these in the outputs...
         cols += ['psfflux', 'psfflux_ivar', 'cmodelflux', 'cmodelflux_ivar',
                  'modelflux', 'modelflux_ivar']
 
@@ -935,7 +949,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                         comment='forced phot run time'))
     hdr.add_record(dict(name='SEQ_NNEG', value=opt.nonneg, comment='non-negative?'))
     hdr.add_record(dict(name='SEQ_SKY', value=opt.sky, comment='fit sky?'))
-    for b in bands:
+    for band in bands:
         minsig = getattr(opt, 'minsig%i' % band)
         hdr.add_record(dict(name='SEQ_MNS%i' % band, value=minsig,
                             comment='min surf brightness in sig, band %i' % band))
@@ -1130,8 +1144,12 @@ def finish(T, opt, args, ps):
 
         key = (rr,run,camcol,field)
         N = pobjlengths.get(key, None)
+        print 'Key', key, '->', N
         if N is None:
             pofn = get_photoobj_filename(rr, run,camcol,field)
+            if not os.path.exists(pofn):
+                pofn = pofn.replace(photoobjdir, 'photoObj.v4b')
+                print 'Trying', pofn
             F = fitsio.FITS(pofn)
             N = F[1].get_nrows()
             pobjlengths[key] = N
