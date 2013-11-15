@@ -2794,91 +2794,315 @@ def main():
 
         I = np.flatnonzero(A.w3bitmask == 4)
         print 'Selected by WISE only:', len(I)
+        A.cut(I)
+        T.cut(I)
+        T.ra = T.plug_ra
+        T.dec = T.plug_dec
 
-        for j,i in enumerate(I):
-            ra,dec = A.ra[i], A.dec[i]
-            jfn = 'sdss-%i.jpg' % (j)
-            if os.path.exists(jfn):
-                continue
-            url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.4&width=200&height=200&opt=G' % (ra,dec)
-            cmd = 'wget "%s" -O %s' % (url, jfn)
-            os.system(cmd)
-            print j, 'RA,Dec', ra, dec
-            
-        print '|              ra|              dec|'
-        print '|          double|           double|'
-        print '|             deg|              deg|'
-        for j,i in enumerate(I):
-            ra,dec = A.ra[i], A.dec[i]
-            print ' %16.12f %16.12f' % (ra,dec)
-        print
+        # #for j,i in enumerate(I):
+        # for j,i in enumerate(range(len(T))):
+        #     ra,dec = T.ra[i], T.dec[i]
+        #     jfn = 'sdss-%i.jpg' % (j)
+        #     if os.path.exists(jfn):
+        #         continue
+        #     url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.4&width=200&height=200&opt=G' % (ra,dec)
+        #     cmd = 'wget "%s" -O %s' % (url, jfn)
+        #     os.system(cmd)
+        #     print j, 'RA,Dec', ra, dec
+        #     
+        # print '|              ra|              dec|'
+        # print '|          double|           double|'
+        # print '|             deg|              deg|'
+        # for j,i in enumerate(range(len(T))):
+        #     ra,dec = T.ra[i], T.dec[i]
+        #     print ' %16.12f %16.12f' % (ra,dec)
+        # print
 
         import fitsio
 
         atlas = fits_table('w3-atlas.fits')
-        for j,i in enumerate(I):
-            ra,dec = A.ra[i], A.dec[i]
-            W,H = 2048,2048
+        for j,i in enumerate(range(len(T))):
+
+            if j != 9:
+                continue
+
+            ra,dec = T.ra[i], T.dec[i]
             pixscale = 2.75
             for k,(rc,dc) in enumerate(zip(atlas.ra, atlas.dec)):
+                W,H = 2048,2048
                 cowcs = Tan(rc, dc, (W+1)/2., (H+1)/2.,
                             -pixscale/3600., 0., 0., pixscale/3600., W, H)
-                if cowcs.is_inside(ra, dec):
-                    co = atlas.coadd_id[k]
-                    print 'source', j, 'tile index', k, co
-                    imgs = []
-                    ok, x,y = cowcs.radec2pixelxy(ra, dec)
-                    print 'x,y', x,y
-                    x = int(np.round(x)-1)
-                    y = int(np.round(y)-1)
-                    S = 15
-                    slc = (slice(max(0, y-S), min(H, y+S+1)),
-                           slice(max(0, x-S), min(W, x+S+1)))
+                if not cowcs.is_inside(ra, dec):
+                    continue
+                
+                co = atlas.coadd_id[k]
+                print 'source', j, 'RA,Dec', ra, dec, 'tile index', k, co
+                imgs = []
+                ok, x,y = cowcs.radec2pixelxy(ra, dec)
+                print 'x,y', x,y
+                x = int(np.round(x)-1)
+                y = int(np.round(y)-1)
+                S = 6
+                ix0 = max(0, x-S)
+                iy0 = max(0, y-S)
+                slc = (slice(max(0, y-S), min(H, y+S+1)),
+                       slice(max(0, x-S), min(W, x+S+1)))
+                imextent = [slc[1].start - 0.5, slc[1].stop - 0.5,
+                            slc[0].start - 0.5, slc[0].stop - 0.5]
+
+                # Get matching SDSS image
+                rs,ds = cowcs.pixelxy2radec(ix0+S + 1, iy0+S + 1)
+                SW,SH = 180,180
+                pscale = (2*S+1) * 2.75 / SW
+
+                pngfn = 'sdss-%i.png' % j
+                if not os.path.exists(pngfn):
+                    jfn = 'sdss-%i.jpg' % (j)
+                    url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=%f&width=%i&height=%i' % (rs,ds,pscale,SW,SH)
+                    cmd = 'wget "%s" -O %s' % (url, jfn)
+                    os.system(cmd)
+                    cmd = 'jpegtopnm %s | pnmtopng > %s' % ('sdss-%i.jpg' % j, 'sdss-%i.png' % j)
+                    os.system(cmd)
+
+                for band in [1,2]:
+                    fn = 'unwise-coadds/%s/%s/unwise-%s-w%i-img-m.fits' % (co[:3], co, co, band)
+                    if not os.path.exists(fn):
+                        print 'Does not exist:', fn
+                        continue
+                    img = fitsio.read(fn)
+                    subimg = img[slc]
+                    #print 'Subimg:', subimg.shape
+                    imgs.append(subimg)
+
+                if len(imgs) != 2:
+                    continue
+                sdss = plt.imread(pngfn)
+
+                mods = []
+                for band in [1,2]:
+                    modfn = 'fit-%s-w%i-mod.fits' % (co, band)
+                    if os.path.exists(modfn):
+                        mod = fitsio.read(modfn)
+                        #print 'Read mod', modfn, mod.shape
+                        mod = mod[slc]
+                        #print 'cut to', mod.shape
+                        mods.append(mod)
+
+                chis = []
+                for band in [1,2]:
+                    chifn = 'fit-%s-w%i-chi.fits' % (co, band)
+                    if os.path.exists(chifn):
+                        chi = fitsio.read(chifn)
+                        chi = chi[slc]
+                        chis.append(chi)
+
+
+                wsrcs = None
+                wfn = 'w3-phot-temp/wise-sources-%s.fits' % co
+                if os.path.exists(wfn):
+                    W = fits_table(wfn)
+                    W.cut(degrees_between(ra, dec, W.ra, W.dec) < S*2*2.75/3600.)
+                    ok,x,y = cowcs.radec2pixelxy(W.ra, W.dec)
+                    wsrcs = (x,y, (W.w1mpro, W.w2mpro))
+
+
+                ima = dict(interpolation='nearest', origin='lower',
+                           vmin=-2, vmax=50., cmap='gray', extent=imextent)
+
+
+                phot = None
+                pfn = 'w3-phot/phot-%s.fits' % co
+                if os.path.exists(pfn):
+                    P = fits_table(pfn)
+                    P.cut(degrees_between(ra, dec, P.ra, P.dec) < S*2*2.75/3600.)
+                    ok,x,y = cowcs.radec2pixelxy(P.ra, P.dec)
+                    phot = (x, y, (P.w1_mag, P.w2_mag))
+
+                    mod2 = []
+
+                    imods = []
+
+                    #
                     for band in [1,2]:
-                        fn = 'unwise-coadds/%s/%s/unwise-%s-w%i-img-m.fits' % (co[:3], co, co, band)
-                        if not os.path.exists(fn):
-                            print 'Does not exist:', fn
-                            continue
-                        img = fitsio.read(fn)
-                        subimg = img[slc]
-                        print 'Slice:', slc
-                        print 'Subimg:', subimg.shape
-                        imgs.append(subimg)
+                        img = imgs[band-1]
+                        psf = fits_table('wise-psf-avg.fits', hdu=band)
+                        psf = GaussianMixturePSF(psf.amp, psf.mean, psf.var)
+                        twcs = ConstantFitsWcs(cowcs)
+                        twcs.setX0Y0(ix0, iy0)
+                        tsky = ConstantSky(0.)
+                        wanyband = 'w'
+                        tim = Image(data=img, invvar=np.ones_like(img), psf=psf, wcs=twcs,
+                                    sky=tsky, photocal=LinearPhotoCal(1., band=wanyband),
+                                    domask=False)
+                        cat = []
+                        iskip = []
+                        nm = P.get('w%i_nanomaggies' % band)
+                        for ii,(r,d,w) in enumerate(zip(P.ra, P.dec, nm)):
+                            dd = (np.abs(r-ra) + np.abs(d-dec)) * 3600.
+                            print 'dist', dd
+                            if dd < 0.5:
+                                print 'Skipping', r, d
+                                iskip.append(ii)
+                                continue
+                            cat.append(PointSource(RaDecPos(r,d),
+                                                   NanoMaggies(**{wanyband: w})))
+                        tr = Tractor([tim], cat)
+                        mod2.append(tr.getModelImage(0))
 
-                    if len(imgs) == 2:
-                        pngfn = 'sdss-%i.png' % j
-                        if not os.path.exists(pngfn):
-                            cmd = 'jpegtopnm %s | pnmtopng > %s' % ('sdss-%i.jpg' % j, 'sdss-%i.png' % j)
-                            os.system(cmd)
-                        sdss = plt.imread(pngfn)
+                        bandmods = []
+                        plt.figure(figsize=(4,4))
+                        cat = [PointSource(RaDecPos(r,d),
+                                           NanoMaggies(**{wanyband: w}))
+                               for r,d,w in zip(P.ra[iskip], P.dec[iskip], nm[iskip])] + cat
 
-                        print 'sdss', sdss.dtype
+                        for si,src in enumerate(cat):
+                            tr = Tractor([tim], [src])
+                            imod = tr.getModelImage(0)
+                            bandmods.append(imod)
+                            plt.clf()
+                            plt.imshow(imod, **ima)
+                            plt.title('source %i band w%i' % (si, band))
+                            plt.savefig('imod-%i-%02i-w%i.png' % (j, si, band))
+                        imods.append(bandmods)
 
-                        mods = []
-                        for band in [1,2]:
-                            modfn = 'fit-%s-w%i-mod.fits' % (co, band)
-                            if os.path.exists(modfn):
-                                mod = fitsio.read(modfn)
-                                print 'Read mod', modfn, mod.shape
-                                mod = mod[slc]
-                                print 'cut to', mod
-                                mods.append(mod)
-                                
-                        ima = dict(interpolation='nearest', origin='lower',
-                                   vmin=-2, vmax=100., cmap='gray')
 
-                        plt.clf()
-                        plt.subplot(2,3,1)
-                        plt.imshow(np.clip(sdss*3, 0, 1))
-                        plt.subplot(2,3,2)
-                        plt.imshow(imgs[0], **ima)
-                        plt.subplot(2,3,3)
-                        plt.imshow(imgs[1], **ima)
-                        for k,m in enumerate(mods):
-                            print 'mod', m.shape
-                            plt.subplot(2,3,5+k)
-                            plt.imshow(m, **ima)
-                        plt.savefig('both-%i.png' % j)
+                #for jj,(mods1,mods2) in enumerate(zip(*imods)):
+                mods1,mods2 = imods
+                print 'mods1:', len(mods1), 'mods2:', len(mods2)
+                rgbs = []
+                for ii,(mod1,mod2) in enumerate(zip(mods1 + [mods[0], imgs[0]],
+                                                    mods2 + [mods[1], imgs[1]])):
+                    mh,mw = mod1.shape
+                    rgb = np.zeros((mh,mw,3), np.float32)
+                    #rgb[:,:,0] = (mod2  + 2.) / 30.
+                    #rgb[:,:,2] = (mod1  + 2.) / 30.
+                    rgb[:,:,0] = (mod2  + 10.) / 50.
+                    rgb[:,:,2] = (mod1  + 10.) / 50.
+                    rgb[:,:,1] = (rgb[:,:,0] + rgb[:,:,2]) / 2.
+                    rgbs.append(rgb)
+
+                # plt.clf()
+                # plt.imshow(np.clip(rgb, 0, 1), interpolation='nearest', origin='lower')
+                # fn = 'imod-%i-%02i.png' % (j, ii)
+                # plt.savefig(fn)
+                # print 'wrote', fn
+
+                plt.figure(figsize=(3,3))
+                plt.subplots_adjust(left=0.005, right=0.995,
+                                    bottom=0.005, top=0.995)
+                                    
+
+                plt.clf()
+                plt.imshow(np.clip(sdss*6, 0, 1))
+                plt.savefig('imod-%i-sdss.pdf' % j)
+
+                datargb = rgbs[-1]
+                modrgb = rgbs[-2]
+                targetrgb = rgbs[0]
+
+                mima = dict(interpolation='nearest', origin='lower',
+                            extent=imextent)
+
+                plt.clf()
+                plt.imshow(np.clip(datargb, 0, 1), **mima)
+                ax = plt.axis()
+                x,y,w = wsrcs
+                plt.plot(x-1, y-1, 'x', mec='r', mfc='none', ms=20, mew=3)
+                plt.axis(ax)
+                plt.savefig('imod-%i-data.pdf' % j)
+
+                plt.clf()
+                plt.imshow(np.clip(modrgb, 0, 1), **mima)
+                ax = plt.axis()
+                ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                plt.plot(x-1, y-1, 'o', mec='g', mfc='none', ms=20, mew=3)
+                x2,y2,ww = phot
+                I = np.flatnonzero((x2-x)**2 + (y2-y)**2 > 1.)
+                plt.plot(x2[I]-1, y2[I]-1, 'g+', ms=20, mew=3)
+                plt.axis(ax)
+                plt.savefig('imod-%i-mod.pdf' % j)
+
+                plt.clf()
+                plt.imshow(np.clip(targetrgb, 0, 1), **mima)
+                #ax = plt.axis()
+                #ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                #plt.plot(x-1, y-1, 'o', mec='b', mfc='none', ms=20, mew=3)
+                #plt.axis(ax)
+                plt.savefig('imod-%i-target.pdf' % j)
+
+                # fn = 'imod-%i-%02i.png' % (j, ii)
+                # plt.savefig(fn)
+                # print 'wrote', fn
+
+
+
+
+                imd = ima.copy()
+                imd.update(vmin=-50, vmax=50)
+                imchi = ima.copy()
+                imchi.update(vmin=-5, vmax=5)
+
+                plt.figure(figsize=(8,8))
+
+                plt.clf()
+                plt.subplot(3,3,1)
+                plt.imshow(np.clip(sdss*3, 0, 1))
+
+                for k,im in enumerate(imgs):
+                    plt.subplot(3,3,2+k)
+                    plt.imshow(im, **ima)
+                    if wsrcs is not None:
+                        ax = plt.axis()
+                        x,y,ww = wsrcs
+                        plt.plot(x-1, y-1, 'o', mec='r', mfc='none')
+                        w = ww[k]
+                        for x,y,m in zip(x,y,w):
+                            if not np.isfinite(m):
+                                continue
+                            plt.text(x-1, y-1, '%.1f' % m, color='r')
+                        plt.axis(ax)
+                plt.subplot(3,3,3)
+                plt.imshow(imgs[1], **ima)
+                for k,m in enumerate(mods):
+                    print 'mod', m.shape
+                    plt.subplot(3,3,5+k)
+                    plt.imshow(m, **ima)
+                    ax = plt.axis()
+                    ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                    plt.plot(x-1, y-1, 'o', mec='b', mfc='none')
+                    if phot is not None:
+                        x,y,ww = phot
+                        plt.plot(x-1, y-1, 'b+')
+                        w = ww[k]
+                        for x,y,m in zip(x,y,w):
+                            if not np.isfinite(m):
+                                continue
+                            plt.text(x-1, y-1, '%.1f' % m, color='g', rotation=90)
+                    plt.axis(ax)
+
+                    if phot is not None:
+                        for i,(sp,m2) in enumerate(zip([4, 7], mod2)):
+                            plt.subplot(3,3,sp)
+                            plt.imshow(imgs[i] - m2, **imd)
+                            ax = plt.axis()
+                            ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                            plt.plot(x-1, y-1, 'o', mec='b', mfc='none')
+                            plt.axis(ax)
+                        
+                for k,m in enumerate(chis):
+                    plt.subplot(3,3,8+k)
+                    plt.imshow(m, **imchi)
+                    ax = plt.axis()
+                    ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                    plt.plot(x-1, y-1, 'o', mec='b', mfc='none')
+                    if phot is not None:
+                        x,y,ww = phot
+                        plt.plot(x-1, y-1, 'b+')
+                        #w = ww[k]
+                        #for x,y,m in zip(x,y,w):
+                        #    plt.text(x-1, y-1, '%.1f' % m, color='g')
+                    plt.axis(ax)
+                plt.savefig('both-%i.png' % j)
             
 
 
