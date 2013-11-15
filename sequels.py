@@ -750,7 +750,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
 
                 tractor.thawPathsTo(wanyband)
 
-                wantims = (savepickle or opt.pickle2 or (ps is not None))
+                wantims = (savepickle or opt.pickle2 or (ps is not None) or opt.save_fits)
 
                 R = tractor.optimize_forced_photometry(
                     minsb=minsb, mindlnp=1., sky=opt.sky, minFlux=None,
@@ -772,6 +772,14 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                 if opt.savewise:
                     for (j,src) in uwcat:
                         fitwiseflux[band][j] = src.getBrightness().getBand(wanyband)
+
+                if opt.save_fits:
+                    (dat,mod,ie,chi,roi) = ims1[0]
+
+                    tag = 'fit-%s-w%i' % (tile.coadd_id, band)
+                    fitsio.write('%s-data.fits' % tag, dat, clobber=True)
+                    fitsio.write('%s-mod.fits' % tag,  mod, clobber=True)
+                    fitsio.write('%s-chi.fits' % tag,  chi, clobber=True)
 
                 if ps:
 
@@ -834,22 +842,6 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
                     # fn = ps.basefn + '-chi.fits'
                     # fitsio.write(fn, chi, clobber=True)
                     # print 'Wrote', fn
-
-                ## DEBUG
-                if False:
-                    (dat,mod,ie,chi,roi) = ims1[0]
-                    fn = os.path.join(opt.outdir, '%s-w%i-chi.fits' % (tile.coadd_id, band))
-                    fitsio.write(fn, chi)
-                    print 'wrote', fn
-                    fn = os.path.join(opt.outdir, '%s-w%i-data.fits' % (tile.coadd_id, band))
-                    fitsio.write(fn, dat)
-                    print 'wrote', fn
-                    fn = os.path.join(opt.outdir, '%s-w%i-mod.fits' % (tile.coadd_id, band))
-                    fitsio.write(fn, mod)
-                    print 'wrote', fn
-                    fn = os.path.join(opt.outdir, '%s-w%i-ierr.fits' % (tile.coadd_id, band))
-                    fitsio.write(fn, ie)
-                    print 'wrote', fn
 
                 if savepickle:
                     # FIXME -- imgoffset
@@ -1238,6 +1230,8 @@ def main():
     parser.add_option('--pp', dest='pickle2', default=False, action='store_true',
                       help='Save .pickle file for each cell?')
     parser.add_option('--plots', dest='plots', default=False, action='store_true')
+
+    parser.add_option('--save-fits', dest='save_fits', default=False, action='store_true')
 
     parser.add_option('--plotbase', dest='plotbase', help='Base filename for plots')
 

@@ -2734,7 +2734,7 @@ def main():
 
     ri = opt.ri
     di = opt.di
-    if ri == -1 and False:
+    if ri == -1 and True:
 
         # T = fits_table('/clusterfs/riemann/raid006/bosswork/boss/spectro/redux/current/7027/v5_6_0/spZbest-7027-56448.fits')
         # print 'Read', len(T), 'spZbest'
@@ -2765,7 +2765,8 @@ def main():
             I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
             print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
 
-        zcut = 2.3
+        #zcut = 2.3
+        zcut = 2.0
         I = np.flatnonzero((T.zwarning == 0) * (T.clazz == qso) * (T.typescan == qsoscan) * (T.zscan > zcut))
         print len(I), 'QSO, scan QSO, with Zwarning = 0, z and zscan >', zcut
 
@@ -2790,9 +2791,98 @@ def main():
         A.cut(J)
         #S.cut(I)
         T.cut(I)
+
         I = np.flatnonzero(A.w3bitmask == 4)
         print 'Selected by WISE only:', len(I)
 
+        for j,i in enumerate(I):
+            ra,dec = A.ra[i], A.dec[i]
+            jfn = 'sdss-%i.jpg' % (j)
+            if os.path.exists(jfn):
+                continue
+            url = 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%f&dec=%f&scale=0.4&width=200&height=200&opt=G' % (ra,dec)
+            cmd = 'wget "%s" -O %s' % (url, jfn)
+            os.system(cmd)
+            print j, 'RA,Dec', ra, dec
+            
+        print '|              ra|              dec|'
+        print '|          double|           double|'
+        print '|             deg|              deg|'
+        for j,i in enumerate(I):
+            ra,dec = A.ra[i], A.dec[i]
+            print ' %16.12f %16.12f' % (ra,dec)
+        print
+
+        import fitsio
+
+        atlas = fits_table('w3-atlas.fits')
+        for j,i in enumerate(I):
+            ra,dec = A.ra[i], A.dec[i]
+            W,H = 2048,2048
+            pixscale = 2.75
+            for k,(rc,dc) in enumerate(zip(atlas.ra, atlas.dec)):
+                cowcs = Tan(rc, dc, (W+1)/2., (H+1)/2.,
+                            -pixscale/3600., 0., 0., pixscale/3600., W, H)
+                if cowcs.is_inside(ra, dec):
+                    co = atlas.coadd_id[k]
+                    print 'source', j, 'tile index', k, co
+                    imgs = []
+                    ok, x,y = cowcs.radec2pixelxy(ra, dec)
+                    print 'x,y', x,y
+                    x = int(np.round(x)-1)
+                    y = int(np.round(y)-1)
+                    S = 15
+                    slc = (slice(max(0, y-S), min(H, y+S+1)),
+                           slice(max(0, x-S), min(W, x+S+1)))
+                    for band in [1,2]:
+                        fn = 'unwise-coadds/%s/%s/unwise-%s-w%i-img-m.fits' % (co[:3], co, co, band)
+                        if not os.path.exists(fn):
+                            print 'Does not exist:', fn
+                            continue
+                        img = fitsio.read(fn)
+                        subimg = img[slc]
+                        print 'Slice:', slc
+                        print 'Subimg:', subimg.shape
+                        imgs.append(subimg)
+
+                    if len(imgs) == 2:
+                        pngfn = 'sdss-%i.png' % j
+                        if not os.path.exists(pngfn):
+                            cmd = 'jpegtopnm %s | pnmtopng > %s' % ('sdss-%i.jpg' % j, 'sdss-%i.png' % j)
+                            os.system(cmd)
+                        sdss = plt.imread(pngfn)
+
+                        print 'sdss', sdss.dtype
+
+                        mods = []
+                        for band in [1,2]:
+                            modfn = 'fit-%s-w%i-mod.fits' % (co, band)
+                            if os.path.exists(modfn):
+                                mod = fitsio.read(modfn)
+                                print 'Read mod', modfn, mod.shape
+                                mod = mod[slc]
+                                print 'cut to', mod
+                                mods.append(mod)
+                                
+                        ima = dict(interpolation='nearest', origin='lower',
+                                   vmin=-2, vmax=100., cmap='gray')
+
+                        plt.clf()
+                        plt.subplot(2,3,1)
+                        plt.imshow(np.clip(sdss*3, 0, 1))
+                        plt.subplot(2,3,2)
+                        plt.imshow(imgs[0], **ima)
+                        plt.subplot(2,3,3)
+                        plt.imshow(imgs[1], **ima)
+                        for k,m in enumerate(mods):
+                            print 'mod', m.shape
+                            plt.subplot(2,3,5+k)
+                            plt.imshow(m, **ima)
+                        plt.savefig('both-%i.png' % j)
+            
+
+
+        
         # ares = []
         # for j,i in enumerate(I):
         #     ra,dec = A.ra[i], A.dec[i]
