@@ -2826,6 +2826,12 @@ def main():
             if j != 9:
                 continue
 
+            print
+            print 'source', j
+            print
+            T[i].about()
+            print
+
             ra,dec = T.ra[i], T.dec[i]
             pixscale = 2.75
             for k,(rc,dc) in enumerate(zip(atlas.ra, atlas.dec)):
@@ -2849,9 +2855,14 @@ def main():
                        slice(max(0, x-S), min(W, x+S+1)))
                 imextent = [slc[1].start - 0.5, slc[1].stop - 0.5,
                             slc[0].start - 0.5, slc[0].stop - 0.5]
+                # imextent = [slc[1].start - 1, slc[1].stop - 1,
+                #             slc[0].start - 1, slc[0].stop - 1]
+                #imextent = [slc[1].start - 1, slc[1].stop - 1,
+                #            slc[0].start - 1, slc[0].stop - 1]
 
                 # Get matching SDSS image
                 rs,ds = cowcs.pixelxy2radec(ix0+S + 1, iy0+S + 1)
+                #rs,ds = ra,dec
                 SW,SH = 180,180
                 pscale = (2*S+1) * 2.75 / SW
 
@@ -2988,12 +2999,15 @@ def main():
                 # print 'wrote', fn
 
                 plt.figure(figsize=(3,3))
-                plt.subplots_adjust(left=0.005, right=0.995,
-                                    bottom=0.005, top=0.995)
+                plt.subplots_adjust(left=0.01, right=0.99,
+                                    bottom=0.01, top=0.99)
                                     
-
                 plt.clf()
-                plt.imshow(np.clip(sdss*6, 0, 1))
+                plt.imshow(np.clip(sdss*6, 0, 1), interpolation='nearest', extent=imextent)
+                # ax = plt.axis()
+                # ok,x,y = cowcs.radec2pixelxy(ra, dec)
+                # plt.plot(x-1, y-1, 'o', mec='g', mfc='none', ms=20, mew=3)
+                # plt.axis(ax)
                 plt.savefig('imod-%i-sdss.pdf' % j)
 
                 datargb = rgbs[-1]
@@ -3008,6 +3022,10 @@ def main():
                 ax = plt.axis()
                 x,y,w = wsrcs
                 plt.plot(x-1, y-1, 'x', mec='r', mfc='none', ms=20, mew=3)
+
+                plt.plot(ix0, iy0, 'r+')
+                plt.plot(ix0 + 2*S, iy0 + 2*S, 'r+')
+
                 plt.axis(ax)
                 plt.savefig('imod-%i-data.pdf' % j)
 

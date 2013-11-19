@@ -1210,7 +1210,7 @@ def main():
     parser.add_option('--minsig2', dest='minsig2', default=0.1, type=float)
     parser.add_option('--minsig3', dest='minsig3', default=0.1, type=float)
     parser.add_option('--minsig4', dest='minsig4', default=0.1, type=float)
-    parser.add_option('--blocks', dest='blocks', default=10, type=int,
+    parser.add_option('--blocks', dest='blocks', default=1, type=int,
                       help='NxN number of blocks to cut the image into')
     parser.add_option('-d', dest='outdir', default=None)
     parser.add_option('--pobj', dest='pobjdir', default=None,
@@ -1248,10 +1248,13 @@ def main():
     parser.add_option('--cell', dest='cells', default=[], type=int, action='append',
                       help='Just run certain cells?')
 
-    parser.add_option('--ceres', dest='ceres', action='store_true', default=False,
-                      help='Use Ceres Solver?')
-    parser.add_option('--ceres-block', '-B', dest='ceresblock', type=int,
-                      help='Ceres image block size (default: 50)')
+    # parser.add_option('--ceres', dest='ceres', action='store_true', default=False,
+    #                   help='Use Ceres Solver?')
+    parser.add_option('--no-ceres', dest='ceres', action='store_false', default=True,
+                       help='Use scipy lsqr rather than Ceres Solver?')
+
+    parser.add_option('--ceres-block', '-B', dest='ceresblock', type=int, default=10,
+                      help='Ceres image block size (default: %default)')
     parser.add_option('--nonneg', dest='nonneg', action='store_true', default=False,
                       help='With ceres, enable non-negative fluxes?')
 
