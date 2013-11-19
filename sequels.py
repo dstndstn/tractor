@@ -1351,6 +1351,13 @@ def main():
         finish(T, opt, args, ps)
         sys.exit(0)
 
+    for dirnm in [outdir, tempoutdir, pobjoutdir]:
+        if not os.path.exists(dirnm):
+            try:
+                os.makedirs(dirnm)
+            except:
+                pass
+
     tiles = []
     arr = os.environ.get('PBS_ARRAYID')
     if arr is not None:

@@ -31,6 +31,14 @@ python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --r
 python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 40.5 1000 > 40.log 2>&1 &
 python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 41.5 1000 > 41.log 2>&1 &
 
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 36.5 2000 > 362.log 2>&1 &
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 37.5 2000 > 372.log 2>&1 &
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 38.5 2000 > 382.log 2>&1 &
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 39.5 2000 > 392.log 2>&1 &
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 40.5 2000 > 402.log 2>&1 &
+python -u unwise-coadd.py --width 3300 --height 1350 -o data/deepqso --dec=0 --ra 41.5 2000 > 412.log 2>&1 &
+
+
 And defined a custom -atlas.fits:
 
 # ra dec coadd_id
@@ -45,7 +53,14 @@ text2fits.py deepqso.txt deepqso-atlas.fits
 
 Then run this script to create photometry files, and run sequels.py as usual,
 
+python deepqso.py
 
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 0 > 0.log 2>&1 &
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 1 > 1.log 2>&1 &
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 2 > 2.log 2>&1 &
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 3 > 3.log 2>&1 &
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 4 > 4.log 2>&1 &
+python -u sequels.py -d deepqso --tiledir=data/unwise/deepqso --dataset deepqso 5 > 5.log 2>&1 &
 
 '''
 
