@@ -278,7 +278,7 @@ def _get_photoobjs(tile, r0,r1,d0,d1, bandnum, existOnly):
     T.objc_type[badgals] = 6
     return T
 
-def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, cat=None):
+def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
 
     bands = opt.bands
     outfn = opt.output % (tile.coadd_id)
@@ -296,8 +296,14 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None): #, 
 
     thisdir = get_tile_dir(tiledir, tile.coadd_id)
     fn = os.path.join(thisdir, 'unwise-%s-w%i-img-m.fits' % (tile.coadd_id, bands[0]))
-    print 'Reading', fn
-    wcs = Tan(fn)
+    if os.path.exists(fn):
+        print 'Reading', fn
+        wcs = Tan(fn)
+    else:
+        print 'File', fn, 'does not exist; faking WCS'
+        from unwise_coadd import get_coadd_tile_wcs
+        wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
+
     r0,r1,d0,d1 = wcs.radec_bounds()
     print 'RA,Dec bounds:', r0,r1,d0,d1
     H,W = wcs.get_height(), wcs.get_width()
