@@ -3023,8 +3023,8 @@ def main():
                 x,y,w = wsrcs
                 plt.plot(x-1, y-1, 'x', mec='r', mfc='none', ms=20, mew=3)
 
-                plt.plot(ix0, iy0, 'r+')
-                plt.plot(ix0 + 2*S, iy0 + 2*S, 'r+')
+                # plt.plot(ix0, iy0, 'r+')
+                # plt.plot(ix0 + 2*S, iy0 + 2*S, 'r+')
 
                 plt.axis(ax)
                 plt.savefig('imod-%i-data.pdf' % j)
