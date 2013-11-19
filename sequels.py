@@ -34,6 +34,10 @@ gunzip photozCFHTLS-W3_270912.out.gz
 text2fits.py -n "*********" -f sddjjffffffjfjffffffjfffjffffffffffffffffff -H "id ra dec flag stargal r2 photoz zpdf zpdf_l68 zpdf_u168 chi2_zpdf mod ebv nbfilt zmin zl68 zu68 chi2_best zp_2 chi2_2 mods chis zq chiq modq u g r i z y eu eg er ei ez ey mu mg mr mi mz my" photozCFHTLS-W3_270912.out photozCFHTLS-W3_270912.fits
 '''
 
+''' Stripe82 deep QSO plates (RA 36-42): see deepqso.py for notes.
+'''
+
+
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
     d = os.environ.get('PBS_O_WORKDIR')
@@ -1286,6 +1290,9 @@ def main():
     parser.add_option('--split', dest='splitrcf', action='store_true', default=False,
                       help='Split outputs into run/camcol/field right away?')
 
+    parser.add_option('--tile', dest='tile',
+                      help='Run a single tile')
+
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
     opt,args = parser.parse_args()
@@ -1372,17 +1379,6 @@ def main():
             plot = ps
         else:
             plot = None
-
-        # W3,W4
-        # if i >= 1000:
-        #     i -= 1000
-        #     opt.bands = [3,4]
-        #     outdir = 'sequels-phot-w34'
-        #     if opt.output is None:
-        #         opt.output = os.path.join(outdir, 'phot-%s.fits')
-        #     print 'Changed bands to', opt.bands, 'and output dir to', outdir
-        #     print 'Output file pattern', opt.output
-
         print
         print 'Tile index', i
         one_tile(T[i], opt, opt.pickle, plot, T, tiledir, tempoutdir)
