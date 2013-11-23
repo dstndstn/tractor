@@ -815,6 +815,11 @@ def get_tractor_image_dr8(*args, **kwargs):
         try:
             return _get_tractor_image_dr8(*args, **kwargs)
         except:
+            import traceback
+            print 'First get_tractor_image_dr8() failed -- trying to re-retrieve data'
+            print traceback.print_exc()
+            print
+            
             # Re-retrieve the data
             sdss = kwargs.get('sdss', None)
             if sdss is None:

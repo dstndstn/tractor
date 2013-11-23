@@ -156,15 +156,15 @@ def h3():
 
 
 
-def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
+def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
+                     bands = 'ugriz',
+                     sdss = DR9(),
+                     fitsky=False):
     dec = (dlo + dhi)/2.
     r = np.hypot(dhi - dlo, (rhi - rlo) * np.cos(np.deg2rad(dec))) / 2.
     RCF = radec_to_sdss_rcf((r0+r1)/2., (d0+d1)/2.,
                             tablefn='window_flist.fits')
-    sdss = DR9()
-
-    bands = 'ugriz'
-    #bands = ['r']
+    print 'Run,Camcol,Fields:', RCF
 
     SS = []
 
@@ -185,9 +185,11 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
                                             roiradecbox=[rlo,rhi,dlo,dhi],
                                             zrange=(-2,5), invvarIgnoresSourceFlux=True,
                                             nanomaggies=True)
-            print 'Got', tim
-            print 'shape:', tim.shape
-            print 'Observed:', tim.time.toYear()
+            print 'Got tim', tim
+            if tim is None:
+                continue
+            #print 'shape:', tim.shape
+            #print 'Observed:', tim.time.toYear()
 
             print 'ROI', inf['roi']
 
@@ -230,97 +232,95 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
         ss.extend(srcs)
     SS = ss
     print 'Got total of', len(SS), 'SDSS sources'
-    # Remove duplicates
-    I,J,d = match_radec(Tsdss.ra, Tsdss.dec, Tsdss.ra, Tsdss.dec,
-                        1./3600., notself=True)
-    keep = np.ones(len(Tsdss), bool)
-    keep[np.maximum(I,J)] = False
-    print 'Keeping', sum(keep), 'non-dup SDSS sources'
-    Tsdss.cut(keep)
-    # Remove matches with the target list
-    I,J,d = match_radec(Tsdss.ra, Tsdss.dec, T.ra, T.dec, 1./3600.)
-    print len(I), 'SDSS sources matched with targets'
-    keep = np.ones(len(Tsdss), bool)
-    keep[I] = False
-    sdssmatch = Tsdss[I]
-    Tsdss.cut(keep)
-    print 'Kept', len(Tsdss), 'SDSS sources'
-    # source objects
-    sdssobjs = [SS[i] for i in Tsdss.index]
+    if len(SS):
+        # Remove duplicates
+        I,J,d = match_radec(Tsdss.ra, Tsdss.dec, Tsdss.ra, Tsdss.dec,
+                            1./3600., notself=True)
+        keep = np.ones(len(Tsdss), bool)
+        keep[np.maximum(I,J)] = False
+        print 'Keeping', sum(keep), 'non-dup SDSS sources'
+        Tsdss.cut(keep)
 
-    # Record SDSS catalog mags
-    print 'Matched sources:'
-    for j in J:
-        print '  ', SS[Tsdss.index[j]]
+        # Remove matches with the target list
+        I,J,d = match_radec(Tsdss.ra, Tsdss.dec, T.ra, T.dec, 1./3600.)
+        print len(I), 'SDSS sources matched with targets'
+        keep = np.ones(len(Tsdss), bool)
+        keep[I] = False
+        sdssmatch = Tsdss[I]
+        Tsdss.cut(keep)
+        print 'Kept', len(Tsdss), 'SDSS sources'
 
-    for band in bands:
-        iband = band_index(band)
-        nm = np.zeros(len(T))
-        nm[J] = sdssmatch.psfflux[:,iband]
-        nm_ivar = np.zeros(len(T))
-        nm_ivar[J] = sdssmatch.psfflux_ivar[:,iband]
-        dnm = 1./np.sqrt(nm_ivar)
-        mag = NanoMaggies.nanomaggiesToMag(nm)
-        dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+        # source objects
+        sdssobjs = [SS[i] for i in Tsdss.index]
 
-        # Luptitudes
-        # mag2 = np.zeros(len(T))
-        # dmag2 = np.zeros(len(T))
-        # mag2[J] = sdssmatch.psfmag[:,iband]
-        # dmag2[J] = sdssmatch.psfmagerr[:,iband]
-
-        T.set('sdss_cat_%s' % band, mag)
-        T.set('sdss_cat_%s_err' % band, dmag)
-        #T.set('sdss_cat2_%s' % band, mag2)
-        #T.set('sdss_cat2_%s_err' % band, dmag2)
-
+        # Record SDSS catalog mags
+        print 'Matched sources:'
+        for j in J:
+            print '  ', SS[Tsdss.index[j]]
     
-    cat.extend(sdssobjs)
+        for band in bands:
+            iband = band_index(band)
+            nm = np.zeros(len(T))
+            nm[J] = sdssmatch.psfflux[:,iband]
+            nm_ivar = np.zeros(len(T))
+            nm_ivar[J] = sdssmatch.psfflux_ivar[:,iband]
+            dnm = 1./np.sqrt(nm_ivar)
+            mag = NanoMaggies.nanomaggiesToMag(nm)
+            dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+    
+            # Luptitudes
+            # mag2 = np.zeros(len(T))
+            # dmag2 = np.zeros(len(T))
+            # mag2[J] = sdssmatch.psfmag[:,iband]
+            # dmag2[J] = sdssmatch.psfmagerr[:,iband]
+    
+            T.set('sdss_cat_%s' % band, mag)
+            T.set('sdss_cat_%s_err' % band, dmag)
+            #T.set('sdss_cat2_%s' % band, mag2)
+            #T.set('sdss_cat2_%s_err' % band, dmag2)
+    
+        
+        cat.extend(sdssobjs)
+
+    else:
+        sdssobjs = []
+
     print 'Total of', len(cat), 'sources'
     for src in cat:
         print '  ', src
     
 
     for band in bands:
-        tims = btims[band]
-        nims = len(tims)
-        cols = int(np.ceil(np.sqrt(nims)))
-        rows = int(np.ceil(nims / float(cols)))
-        plt.clf()
-        for i,tim in enumerate(tims):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-            plt.imshow(tim.getImage(), **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title(tim.name)
-        plt.suptitle('Individual exposures: SDSS %s' % band)
-        ps.savefig()
-        for i,tim in enumerate(tims):
-            plt.subplot(rows, cols, i+1)
-            ax = plt.axis()
-            xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
-                           for r,d in zip(T.ra, T.dec)])
-            plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
 
-            xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
-                           for s in sdssobjs])
-            plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
-
-            plt.axis(ax)
-        ps.savefig()
-
-        # ivmax = np.max([tim.getInvvar().max() for tim in tims])
-        # plt.clf()
-        # for i,tim in enumerate(tims):
-        #     plt.subplot(rows, cols, i+1)
-        #     ima = dict(interpolation='nearest', origin='lower',
-        #                vmin=0, vmax=ivmax, cmap='gray')
-        #     plt.imshow(tim.getInvvar(), **ima)
-        #     plt.xticks([]); plt.yticks([])
-        #     plt.title(tim.name)
-        # plt.suptitle('Individual invvars: SDSS %s' % band)
-        # ps.savefig()
+        if ps:
+            tims = btims[band]
+            nims = len(tims)
+            cols = int(np.ceil(np.sqrt(nims)))
+            rows = int(np.ceil(nims / float(cols)))
+            plt.clf()
+            for i,tim in enumerate(tims):
+                plt.subplot(rows, cols, i+1)
+                ima = dict(interpolation='nearest', origin='lower',
+                           vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                plt.imshow(tim.getImage(), **ima)
+                plt.xticks([]); plt.yticks([])
+                plt.title(tim.name)
+            plt.suptitle('Individual exposures: SDSS %s' % band)
+            ps.savefig()
+            for i,tim in enumerate(tims):
+                plt.subplot(rows, cols, i+1)
+                ax = plt.axis()
+                xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
+                               for r,d in zip(T.ra, T.dec)])
+                plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+    
+                if len(sdssobjs):
+                    xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                                   for s in sdssobjs])
+                    plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
+    
+                plt.axis(ax)
+            ps.savefig()
 
         tractor = Tractor(tims, cat)
         t0 = Time()
@@ -330,40 +330,57 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
         #     print '  ', nm, v
 
         tractor.freezeParamsRecursive('*')
-        tractor.thawPathsTo('sky')
+        if fitsky:
+            tractor.thawPathsTo('sky')
         tractor.thawPathsTo(band)
 
         # print 'Tractor: all params', tractor.numberOfParams()
         # for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
         #     print '  ', nm, v
 
-        ims0,ims1,IV,fs = tractor.optimize_forced_photometry(
-            minsb=1e-3, mindlnp=1., sky=True, minFlux=None,
-            fitstats=True, variance=True)
-        print 'Forced phot took', Time()-t0
+        # ceres block size
+        sz = 10
 
-        plt.clf()
-        for i,tim in enumerate(tims):
-            plt.subplot(rows, cols, i+1)
-            ima = dict(interpolation='nearest', origin='lower',
-                       vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-            mod = tractor.getModelImage(i)
-            plt.imshow(mod, **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title(tim.name)
-        plt.suptitle('Models: SDSS %s' % band)
-        ps.savefig()
-        for i,tim in enumerate(tims):
-            plt.subplot(rows, cols, i+1)
-            ax = plt.axis()
-            xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
-                           for r,d in zip(T.ra, T.dec)])
-            plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
-            xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
-                           for s in sdssobjs])
-            plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
-            plt.axis(ax)
-        ps.savefig()
+        wantims = (ps is not None)
+        
+        R = tractor.optimize_forced_photometry(
+            minsb=1e-3, mindlnp=1., minFlux=None,
+            sky=fitsky,
+            fitstats=True, variance=True,
+            shared_params=False,
+            use_ceres=True,
+            BW=sz, BH=sz, wantims=wantims)
+        print 'Forced phot took', Time()-t0
+        IV = R.IV
+        fs = R.fitstats
+        if wantims:
+            ims0 = R.ims0
+            ims1 = R.ims1
+
+        if ps:
+            plt.clf()
+            for i,tim in enumerate(tims):
+                plt.subplot(rows, cols, i+1)
+                ima = dict(interpolation='nearest', origin='lower',
+                           vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                mod = tractor.getModelImage(i)
+                plt.imshow(mod, **ima)
+                plt.xticks([]); plt.yticks([])
+                plt.title(tim.name)
+            plt.suptitle('Models: SDSS %s' % band)
+            ps.savefig()
+            for i,tim in enumerate(tims):
+                plt.subplot(rows, cols, i+1)
+                ax = plt.axis()
+                xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
+                               for r,d in zip(T.ra, T.dec)])
+                plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+                if len(sdssobjs):
+                    xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                                   for s in sdssobjs])
+                    plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
+                plt.axis(ax)
+            ps.savefig()
 
         # Trim off just the targets (not the extra SDSS objects)
         NT = len(T)
@@ -381,6 +398,47 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T):
 
 
 
+def redqsos():
+    # W4 detections without SDSS matches.
+    T = fits_table('w4targets.fits')
+    ps = PlotSequence('redqso')
+
+    sdss = DR9()
+    sdss.useLocalTree()
+
+    mp = multiproc(1)
+
+    lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+    newcols = {}
+
+    for i,(ra,dec) in enumerate(zip(T.ra, T.dec)):
+        print 'RA,Dec', ra, dec
+        r0,r1 = ra,ra
+        d0,d1 = dec,dec
+
+        #margin = 0.003
+        # ~9 SDSS pixel half-box
+        margin = 0.001
+        
+        dr = margin / np.cos(np.deg2rad((d0+d1)/2.))
+        rlo = r0 - dr
+        rhi = r1 + dr
+        dlo = d0 - margin
+        dhi = d1 + margin
+
+        t = T[np.array([i])]
+        sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, t, ps,
+                         sdss=sdss)
+        for key in t.columns():
+            val = t.get(key)
+            if not key in newcols:
+                newcols[key] = np.zeros(len(T), val.dtype)
+            newcols[key][i] = val
+
+    T.writeto('wisew4phot.fits')
+
 class myopts(object):
     pass
 
@@ -389,7 +447,10 @@ text2fits.py -S 1 agn_coords.txt agn.fits
 '''
 if __name__ == '__main__':
     #h2()
-    h3()
+    #h3()
+
+    redqsos()
+
     sys.exit(0)
 
 
