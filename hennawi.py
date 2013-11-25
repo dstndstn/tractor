@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -172,13 +174,17 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
     for run,camcol,field,r,d in RCF:
         print 'RCF', run, camcol, field
         rr = sdss.get_rerun(run, field=field)
+        print 'Rerun', rr
         if rr in [None, '157']:
             continue
 
-        SS.append(get_tractor_sources_dr9(run, camcol, field, sdss=sdss,
-                                          radecroi=[rlo,rhi,dlo,dhi],
-                                          nanomaggies=True, fixedComposites=True,
-                                          useObjcType=True, getsourceobjs=True))
+        s = get_tractor_sources_dr9(run, camcol, field, sdss=sdss,
+                                    radecroi=[rlo,rhi,dlo,dhi],
+                                    nanomaggies=True, fixedComposites=True,
+                                    useObjcType=True, getsourceobjs=True)
+        if s == []:
+            continue
+        SS.append(s)
 
         for band in bands:
             tim,inf = get_tractor_image_dr9(run, camcol, field, band, sdss=sdss,
@@ -190,8 +196,7 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                 continue
             #print 'shape:', tim.shape
             #print 'Observed:', tim.time.toYear()
-
-            print 'ROI', inf['roi']
+            #print 'ROI', inf['roi']
 
             # HACK -- remove images entirely in 128-pix overlap region
             x0,x1,y0,y1 = inf['roi']
@@ -218,6 +223,9 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                 btims[band] = []
             btims[band].append(tim)
 
+    if len(SS) == 0:
+        return
+    
     cat = []
     for r,d in zip(T.ra, T.dec):
         cat.append(PointSource(RaDecPos(r,d),
@@ -292,8 +300,11 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
 
     for band in bands:
 
+        if not band in btims:
+            continue
+
+        tims = btims[band]
         if ps:
-            tims = btims[band]
             nims = len(tims)
             cols = int(np.ceil(np.sqrt(nims)))
             rows = int(np.ceil(nims / float(cols)))
@@ -348,11 +359,13 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
             sky=fitsky,
             fitstats=True, variance=True,
             shared_params=False,
+            wantims=wantims,
             use_ceres=True,
-            BW=sz, BH=sz, wantims=wantims)
+            #use_ceres=False,
+            BW=sz, BH=sz)
         print 'Forced phot took', Time()-t0
         IV = R.IV
-        fs = R.fitstats
+        fitstats = R.fitstats
         if wantims:
             ims0 = R.ims0
             ims1 = R.ims1
@@ -396,24 +409,44 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
         T.set('sdss_%s_mag' % band, mag)
         T.set('sdss_%s_mag_err' % band, dmag)
 
+        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+        for k in fskeys:
+            T.set(k + '_' + band, getattr(fitstats, k).astype(np.float32))
+
 
 
 def redqsos():
     # W4 detections without SDSS matches.
     T = fits_table('w4targets.fits')
-    ps = PlotSequence('redqso')
+    #ps = PlotSequence('redqso')
+    ps = None
 
+    arr = os.environ.get('PBS_ARRAYID')
+    tag = ''
+    if arr is not None:
+        arr = int(arr)
+        chunk = 1000
+        T = T[arr * chunk: (arr+1) * chunk]
+        print 'Cut to chunk', (arr * chunk)
+        tag = '-%02i' % arr
+    
     sdss = DR9()
     sdss.useLocalTree()
 
     mp = multiproc(1)
 
-    lvl = logging.DEBUG
+    #lvl = logging.DEBUG
+    lvl = logging.INFO
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     newcols = {}
+    origcols = T.get_columns()
+    
+    T.done = np.zeros(len(T), np.uint8)
 
     for i,(ra,dec) in enumerate(zip(T.ra, T.dec)):
+        print
+        print i
         print 'RA,Dec', ra, dec
         r0,r1 = ra,ra
         d0,d1 = dec,dec
@@ -428,16 +461,30 @@ def redqsos():
         dlo = d0 - margin
         dhi = d1 + margin
 
+        #sky = True
+        sky = False
+
         t = T[np.array([i])]
         sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, t, ps,
-                         sdss=sdss)
-        for key in t.columns():
+                         sdss=sdss, fitsky=sky)
+        print 'Columns:', t.get_columns()
+        t.about()
+        
+        for key in t.get_columns():
+            if key in origcols:
+                continue
             val = t.get(key)
             if not key in newcols:
                 newcols[key] = np.zeros(len(T), val.dtype)
-            newcols[key][i] = val
+                T.set(key, newcols[key])
+            print 'set', key, i, '=', val[0]
+            newcols[key][i] = val[0]
+        T.done[i] = 1
 
-    T.writeto('wisew4phot.fits')
+        if i and i % 100 == 0:
+            T.writeto('wisew4phot-interim%s.fits' % tag)
+            
+    T.writeto('wisew4phot%s.fits' % tag)
 
 class myopts(object):
     pass
