@@ -26,7 +26,7 @@ from basics import *
 from sdss_galaxy import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
-from astrometry.util.pyfits_utils import *
+from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
