@@ -22,6 +22,8 @@ from astrometry.sdss import *
 from wise3 import *
 from tractor import *
 
+import fitsio
+
 def h2():
     T = fits_table('qso_BOSS_SDSS_MYERS_v5_6_0.fits')
     print 'Read', len(T), 'targets'
@@ -189,8 +191,11 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
         for band in bands:
             tim,inf = get_tractor_image_dr9(run, camcol, field, band, sdss=sdss,
                                             roiradecbox=[rlo,rhi,dlo,dhi],
-                                            zrange=(-2,5), invvarIgnoresSourceFlux=True,
-                                            nanomaggies=True)
+                                            zrange=(-2,5),
+                                            invvarIgnoresSourceFlux=True,
+                                            invvarAtCenterImage=True,
+                                            nanomaggies=True,
+                                            psf='dg')
             print 'Got tim', tim
             if tim is None:
                 continue
@@ -317,7 +322,7 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                 plt.xticks([]); plt.yticks([])
                 plt.title(tim.name)
             plt.suptitle('Individual exposures: SDSS %s' % band)
-            ps.savefig()
+            #ps.savefig()
             for i,tim in enumerate(tims):
                 plt.subplot(rows, cols, i+1)
                 ax = plt.axis()
@@ -331,6 +336,21 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                     plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
     
                 plt.axis(ax)
+            ps.savefig()
+
+
+            # invvar
+            plt.clf()
+            for i,tim in enumerate(tims):
+                plt.subplot(rows, cols, i+1)
+                ima = dict(interpolation='nearest', origin='lower',
+                           vmin=0, cmap='gray')
+                iv = tim.getInvvar()
+                plt.imshow(iv, **ima)
+                plt.xticks([]); plt.yticks([])
+                plt.title(tim.name)
+                plt.colorbar()
+            plt.suptitle('Invvars: SDSS %s' % band)
             ps.savefig()
 
         tractor = Tractor(tims, cat)
@@ -353,85 +373,106 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
         sz = 10
 
         wantims = (ps is not None)
-        
-        R = tractor.optimize_forced_photometry(
-            minsb=1e-3, mindlnp=1., minFlux=None,
-            sky=fitsky,
-            fitstats=True, variance=True,
-            shared_params=False,
-            wantims=wantims,
-            use_ceres=True,
-            #use_ceres=False,
-            BW=sz, BH=sz)
-        print 'Forced phot took', Time()-t0
-        IV = R.IV
-        fitstats = R.fitstats
-        if wantims:
-            ims0 = R.ims0
-            ims1 = R.ims1
 
-        if ps:
-            plt.clf()
-            for i,tim in enumerate(tims):
-                plt.subplot(rows, cols, i+1)
-                ima = dict(interpolation='nearest', origin='lower',
-                           vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-                mod = tractor.getModelImage(i)
-                plt.imshow(mod, **ima)
-                plt.xticks([]); plt.yticks([])
-                plt.title(tim.name)
-            plt.suptitle('Models: SDSS %s' % band)
-            ps.savefig()
-            for i,tim in enumerate(tims):
-                plt.subplot(rows, cols, i+1)
-                ax = plt.axis()
-                xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
-                               for r,d in zip(T.ra, T.dec)])
-                plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
-                if len(sdssobjs):
-                    xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
-                                   for s in sdssobjs])
-                    plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
-                plt.axis(ax)
-            ps.savefig()
+        for fiti, tag in enumerate(['', '_b']):
 
-        # Trim off just the targets (not the extra SDSS objects)
-        NT = len(T)
-        nm = np.array([src.getBrightness().getBand(band)
-                       for src in tractor.getCatalog()[:NT]])
-        nm_ivar = IV[:NT]
+            pargs = dict(minsb=1e-3, mindlnp=1., minFlux=None,
+                         sky=fitsky, fitstats=True, variance=True,
+                         shared_params=False, wantims=wantims)
 
-        T.set('sdss_%s_nanomaggies' % band, nm)
-        T.set('sdss_%s_nanomaggies_invvar' % band, nm_ivar)
-        dnm = 1./np.sqrt(nm_ivar)
-        mag = NanoMaggies.nanomaggiesToMag(nm)
-        dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
-        T.set('sdss_%s_mag' % band, mag)
-        T.set('sdss_%s_mag_err' % band, dmag)
+            t0 = Time()
+            if fiti == 0:
+                R = tractor.optimize_forced_photometry(
+                    use_ceres=True,
+                    BW=sz, BH=sz, **pargs)
+            else:
+                R = tractor.optimize_forced_photometry(**pargs)
+                    
+            print 'Forced phot took', Time()-t0
 
-        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
-        for k in fskeys:
-            T.set(k + '_' + band, getattr(fitstats, k).astype(np.float32))
+            IV = R.IV
+            fitstats = R.fitstats
+            if wantims:
+                ims0 = R.ims0
+                ims1 = R.ims1
+
+            if ps:
+                plt.clf()
+                for i,tim in enumerate(tims):
+                    plt.subplot(rows, cols, i+1)
+                    ima = dict(interpolation='nearest', origin='lower',
+                               vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                    mod = tractor.getModelImage(i)
+                    plt.imshow(mod, **ima)
+                    plt.xticks([]); plt.yticks([])
+                    plt.title(tim.name)
+                plt.suptitle('Models: SDSS %s' % band)
+                #ps.savefig()
+                for i,tim in enumerate(tims):
+                    plt.subplot(rows, cols, i+1)
+                    ax = plt.axis()
+                    xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
+                                   for r,d in zip(T.ra, T.dec)])
+                    plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+                    if len(sdssobjs):
+                        xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                                       for s in sdssobjs])
+                        plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
+                    plt.axis(ax)
+                ps.savefig()
+
+
+    
+            # Trim off just the targets (omit the extra SDSS objects)
+            NT = len(T)
+            nm = np.array([src.getBrightness().getBand(band)
+                           for src in tractor.getCatalog()[:NT]])
+            nm_ivar = IV[:NT]
+    
+            T.set('sdss_%s_nanomaggies%s' % (band, tag), nm)
+            T.set('sdss_%s_nanomaggies_invvar%s' % (band, tag), nm_ivar)
+            dnm = 1./np.sqrt(nm_ivar)
+            mag = NanoMaggies.nanomaggiesToMag(nm)
+            dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+            T.set('sdss_%s_mag%s' % (band, tag), mag)
+            T.set('sdss_%s_mag_err%s' % (band, tag), dmag)
+    
+            if fitstats is not None:
+                fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+                for k in fskeys:
+                    T.set(k + '_' + band + tag, getattr(fitstats, k).astype(np.float32))
+
+            #if fitsky:
+            #    for imgj,tim in enumerate(tims):
+            #        T.set('sky_%s_%i%s' % (band, imgj, tag), np.array([tim.getSky().val] * len(T)))
+
+            # ceres
+            if fiti == 0:
+                stat = R.ceres_status
+                func_tol = (stat['termination'] == 2)
+                steps = stat['steps_successful']
+                T.set('fit_ok_%s%s' % (band, tag), np.array([(func_tol and steps > 0)] * len(T)))
 
 
 
 def redqsos():
     # W4 detections without SDSS matches.
     T = fits_table('w4targets.fits')
-    #ps = PlotSequence('redqso')
     ps = None
+    ps = PlotSequence('redqso')
 
     arr = os.environ.get('PBS_ARRAYID')
     tag = ''
     if arr is not None:
         arr = int(arr)
-        chunk = 1000
+        chunk = 100
         T = T[arr * chunk: (arr+1) * chunk]
         print 'Cut to chunk', (arr * chunk)
-        tag = '-%02i' % arr
+        tag = '-%03i' % arr
     
     sdss = DR9()
     sdss.useLocalTree()
+    sdss.saveUnzippedFiles('data/unzip')
 
     mp = multiproc(1)
 
@@ -443,6 +484,16 @@ def redqsos():
     origcols = T.get_columns()
     
     T.done = np.zeros(len(T), np.uint8)
+
+    version = get_svn_version()
+    print 'SVN version info:', version
+
+    hdr = fitsio.FITSHDR()
+    hdr.add_record(dict(name='PHOT_VER', value=version['Revision'],
+                        comment='SVN revision'))
+    hdr.add_record(dict(name='PHOT_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='PHOT_DAT', value=datetime.datetime.now().isoformat(),
+                        comment='forced phot run time'))
 
     for i,(ra,dec) in enumerate(zip(T.ra, T.dec)):
         print
@@ -461,8 +512,8 @@ def redqsos():
         dlo = d0 - margin
         dhi = d1 + margin
 
-        #sky = True
-        sky = False
+        sky = True
+        #sky = False
 
         t = T[np.array([i])]
         sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, t, ps,
@@ -481,10 +532,13 @@ def redqsos():
             newcols[key][i] = val[0]
         T.done[i] = 1
 
-        if i and i % 100 == 0:
-            T.writeto('wisew4phot-interim%s.fits' % tag)
+        #if i and i % 100 == 0:
+        if True:
+            fn = 'wisew4phot-interim%s.fits' % tag
+            T.writeto(fn, header=hdr)
+            print 'Wrote', fn
             
-    T.writeto('wisew4phot%s.fits' % tag)
+    T.writeto('wisew4phot%s.fits' % tag, header=hdr)
 
 class myopts(object):
     pass
@@ -499,6 +553,19 @@ if __name__ == '__main__':
     redqsos()
 
     sys.exit(0)
+
+    # (from w4.py)
+    from astrometry.util.starutil_numpy import *
+    T = fits_table('wisew4_nomatch.fits')
+    l,b = radectolb(T.ra, T.dec)
+    T.cut(np.abs(b) > 10.)
+    l,b = radectolb(T.ra, T.dec)
+    gdist = np.hypot(l, b)
+    T.cut(gdist > 30.)
+    u,v = radectoecliptic(T.ra, T.dec)
+    T.cut(np.abs(v) > 5)
+    T.cut((T.ra > 125) * (T.ra < 225) * (T.dec > 0) * (T.dec < 60))
+
 
 
     # T = fits_table('agn.fits')

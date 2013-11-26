@@ -28,10 +28,10 @@
 #include "ceres-tractor.h"
 
 template <typename T>
-static int real_ceres_forced_phot(PyObject* blocks,
-                                  PyObject* np_fluxes,
-                                  int npy_type,
-                                  int nonneg) {
+static PyObject* real_ceres_forced_phot(PyObject* blocks,
+                                        PyObject* np_fluxes,
+                                        int npy_type,
+                                        int nonneg) {
     // Note, if you change this function signature, you also need
     // to change the template instantiations below!
     /*
@@ -228,11 +228,22 @@ static int real_ceres_forced_phot(PyObject* blocks,
         }
     }
 
-    return 0;
+    return Py_BuildValue("{sisssdsdsdsssssisisi}",
+                         "termination", int(summary.termination_type),
+                         "error", summary.error.c_str(),
+                         "initial_cost", summary.initial_cost,
+                         "final_cost", summary.final_cost,
+                         "fixed_cost", summary.fixed_cost,
+                         "brief_report", summary.BriefReport().c_str(),
+                         "full_report", summary.FullReport().c_str(),
+                         "steps_successful", summary.num_successful_steps,
+                         "steps_unsuccessful", summary.num_unsuccessful_steps,
+                         "steps_inner", summary.num_inner_iteration_steps);
+                         
 }
 
-template int real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int);
-template int real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int);
+template PyObject* real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int);
+template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int);
 
 
 %}
@@ -244,9 +255,9 @@ template int real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int);
 #endif
     
 
-static int ceres_forced_phot(PyObject* blocks,
-                             PyObject* np_fluxes,
-                             int nonneg) {
+static PyObject* ceres_forced_phot(PyObject* blocks,
+                                   PyObject* np_fluxes,
+                                   int nonneg) {
 	assert(PyList_Check(blocks));
     assert(PyList_Size(blocks) > 0);
     PyObject* block;
@@ -272,7 +283,8 @@ static int ceres_forced_phot(PyObject* blocks,
                                               nonneg);
     }
     printf("Unknown PyArray type %i\n", PyArray_TYPE(img));
-    return -1;
+
+    Py_RETURN_NONE;
 }
 
 

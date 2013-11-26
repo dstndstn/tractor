@@ -840,6 +840,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
                           zrange=[-3,10],
                           invvarIgnoresSourceFlux=False,
                           invvarAtCenter=False,
+                          invvarAtCenterImage=False,
                           imargs={}):
     # retry_retrieve=True,
     '''
@@ -862,8 +863,12 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     "roiradecbox" = (ra0, ra1, dec0, dec1) indicates that you
     want to grab a ROI containing the given RA,Dec ranges.
 
-    Returns:
-      (tractor.Image, dict)
+    "invvarAtCentr" -- get a scalar constant inverse-variance
+
+    "invvarAtCenterImage" -- get a scalar constant inverse-variance
+    but still make an image out of it.
+
+    Returns: (tractor.Image, dict)
 
     dict contains useful details like:
       'sky'
@@ -893,11 +898,11 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
     # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html
     frame = sdss.readFrame(run, camcol, field, bandname, filename=fn)
-    image = frame.getImage().astype(np.float32)
-    #print 'Image:', image.dtype
-    #print 'mean:', np.mean(image.ravel())
-    (H,W) = image.shape
-    #print 'shape:', W,H
+
+    #image = frame.getImage().astype(np.float32)
+    #(H,W) = image.shape
+
+    H,W = frame.getImageShape()
     
     info = dict()
     hdr = frame.getHeader()
@@ -975,8 +980,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
 
     calibvec = frame.getCalibVec()
 
-    #bigsky = frame.getSky()
-    #assert(bigsky.shape == image.shape)
+    invvarAtCenter = invvarAtCenter or invvarAtCenterImage
 
     psfield = sdss.readPsField(run, camcol, field)
     iva = dict(ignoreSourceFlux=invvarIgnoresSourceFlux)
@@ -988,7 +992,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     invvar = frame.getInvvar(psfield, bandnum, **iva)
     invvar = invvar.astype(np.float32)
     if not invvarAtCenter:
-        assert(invvar.shape == image.shape)
+        assert(invvar.shape == (H,W))
 
     # Could get this from photoField instead
     # http://data.sdss3.org/datamodel/files/BOSS_PHOTOOBJ/RERUN/RUN/photoField.html
@@ -1006,17 +1010,22 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     # http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/fpM.html
     fpM = sdss.readFpM(run, camcol, field, bandname)
 
-    if roi is not None:
+    if roi is None:
+        image = frame.getImage()
+
+    else:
         roislice = (slice(y0,y1), slice(x0,x1))
-        image = image[roislice].copy()
-        if invvarAtCenter:
+        image = frame.getImageSlice(roislice).astype(np.float32)
+        if invvarAtCenterImage:
+            invvar = invvar + np.zeros(image.shape, np.float32)
+        elif invvarAtCenter:
             pass
-        # invvar = invvar + np.zeros_like(image)
         else:
             invvar = invvar[roislice].copy()
+
         H,W = image.shape
             
-    if not invvarAtCenter:
+    if (not invvarAtCenter) or invvarAtCenterImage:
         for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
             fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 

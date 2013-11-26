@@ -1001,7 +1001,7 @@ class Tractor(MultiParams):
                 fluxes = np.maximum(fluxes, negfluxval)
 
         x = ceres_forced_phot(blocks, fluxes, nonneg)
-        assert(x == 0)
+        #print 'Ceres forced phot:', x
         logverb('forced phot: ceres', Time()-t0)
 
         t0 = Time()
@@ -1016,6 +1016,7 @@ class Tractor(MultiParams):
             result.ims1 = self._getims(params, imlist, umodels, mods0, scales,
                                        sky, minFlux, None)
             logverb('forced phot: ims1:', Time()-t0)
+        return x
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
                       umodels, scales, nilcounts):
@@ -1201,6 +1202,12 @@ class Tractor(MultiParams):
                         nzero += 1
                     else:
                         isallzero = False
+
+                    if not np.all(np.isfinite(um.patch)):
+                        print 'Non-finite patch for source', src
+                        print 'In image', img
+                        assert(False)
+
                 # first image only:
                 if i == 0:
                     for ui in range(len(ums)):
@@ -1592,10 +1599,11 @@ class Tractor(MultiParams):
             wantims1 = True
 
         if use_ceres:
-            self._ceres_forced_photom(result, umodels, imlist, mod0, 
-                                      scales, skyderivs, minFlux, BW, BH,
-                                      nonneg=nonneg, wantims0=wantims0,
-                                      wantims1=wantims1, negfluxval=negfluxval)
+            x = self._ceres_forced_photom(result, umodels, imlist, mod0, 
+                                          scales, skyderivs, minFlux, BW, BH,
+                                          nonneg=nonneg, wantims0=wantims0,
+                                          wantims1=wantims1, negfluxval=negfluxval)
+            result.ceres_status = x
 
         else:
             t0 = Time()

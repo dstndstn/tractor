@@ -1308,9 +1308,12 @@ class NCircularGaussianPSF(MultiParams):
         ''' Returns a new PSF that is *factor* times wider. '''
         return NCircularGaussianPSF(np.array(self.mysigmas) * factor, self.myweights)
 
-    def getMixtureOfGaussians(self):
+    def getMixtureOfGaussians(self, mean=None):
+        mymeans = np.zeros((len(self.myweights), 2))
+        if mean is not None:
+            mymeans += mean
         return mp.MixtureOfGaussians(self.myweights,
-                                     np.zeros((len(self.myweights), 2)),
+                                     mymeans,
                                      np.array(self.mysigmas)**2)
         
     def proposeIncreasedComplexity(self, img):
@@ -1387,26 +1390,18 @@ class NCircularGaussianPSF(MultiParams):
         return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
-    #### FIXME -- could use mixture_profiles!!
     def getPointSourcePatch(self, px, py, minval=0., **kwargs):
         ix = int(round(px))
         iy = int(round(py))
-        dx = px - ix
-        dy = py - iy
-
         rad = int(ceil(self.getRadius()))
-        sz = 2*rad + 1
-        X,Y = np.meshgrid(np.arange(sz).astype(float), np.arange(sz).astype(float))
-        X -= dx + rad
-        Y -= dy + rad
-        patch = np.zeros((sz,sz))
         x0 = ix - rad
+        x1 = ix + rad + 1
         y0 = iy - rad
-        R2 = (X**2 + Y**2)
-        for s,w in zip(self.sigmas, self.weights):
-            patch += w / (2.*pi*s**2) * np.exp(-0.5 * R2 / (s**2))
-        patch /= sum(self.weights)
-        #print 'sum of PSF patch:', patch.sum()
+        y1 = iy + rad + 1
+        mix = self.getMixtureOfGaussians(np.array([px,py]))
+        patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
+        # Note: sum(self.weights) can be zero if parameters are frozen!!!
+        patch /= sum(mix.amp)
         return Patch(x0, y0, patch)
 
 
