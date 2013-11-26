@@ -459,7 +459,7 @@ def redqsos():
     # W4 detections without SDSS matches.
     T = fits_table('w4targets.fits')
     ps = None
-    ps = PlotSequence('redqso')
+    #ps = PlotSequence('redqso')
 
     arr = os.environ.get('PBS_ARRAYID')
     tag = ''
@@ -533,7 +533,7 @@ def redqsos():
         T.done[i] = 1
 
         #if i and i % 100 == 0:
-        if True:
+        if False:
             fn = 'wisew4phot-interim%s.fits' % tag
             T.writeto(fn, header=hdr)
             print 'Wrote', fn
