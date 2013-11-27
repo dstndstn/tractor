@@ -386,7 +386,15 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                     use_ceres=True,
                     BW=sz, BH=sz, **pargs)
             else:
-                R = tractor.optimize_forced_photometry(**pargs)
+                optworked = False
+                try:
+                    R = tractor.optimize_forced_photometry(**pargs)
+                    optworked = True
+                except:
+                    import traceback
+                    print 'WARNING: optimize_forced_photometry failed:'
+                    traceback.print_exc()
+                    print
                     
             print 'Forced phot took', Time()-t0
 
@@ -452,6 +460,9 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                 func_tol = (stat['termination'] == 2)
                 steps = stat['steps_successful']
                 T.set('fit_ok_%s%s' % (band, tag), np.array([(func_tol and steps > 0)] * len(T)))
+            else:
+                T.set('fit_ok_%s%s' % (band, tag), np.array([optworked] * len(T)))
+
 
 
 
