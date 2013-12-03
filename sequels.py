@@ -17,6 +17,9 @@ scripts/sequels-12.pbs:
     python -u sequels.py -d data/sequels-phot-5 --blocks 1 --ceres -B 8 --dataset sequels -b 1234
 python -u sequels.py -d data/sequels-phot-5 --finish --dataset sequels --pobj data/sequels-pobj-5/
 
+# bonus flat file:
+python -u sequels.py --dataset sequels -d data/sequels-phot-5 --finish --flat sequels-phot-v5.fits
+
 wise-coadds -> /clusterfs/riemann/raid000/dstn/unwise/unwise/
 data -> /clusterfs/riemann/raid000/dstn
 
@@ -1060,12 +1063,15 @@ def finish(T, opt, args, ps):
         print 'Reading', (ifn+1), 'of', len(fns), fn
         cols = ['ra','dec',
                 'objid', 'index', 'x','y', 
-                'treated_as_pointsource', 'coadd_id']
+                'treated_as_pointsource', 'coadd_id', 'modelflux']
         for band in opt.bands:
             for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
                       'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
                 cols.append('w%i_%s' % (band, k))
         rcfcols = ['run','camcol','field','id',]
+
+        # columns to drop from the photoObj-parallels
+        dropcols = rcfcols + ['modelflux']
         try:
             T = fits_table(fn, columns=cols + rcfcols + opt.ftag)
         except:
@@ -1098,7 +1104,7 @@ def finish(T, opt, args, ps):
                 fieldmap[(run,camcol,field)] = []
             Tsub = T[(T.run == run) * (T.camcol == camcol) * (T.field == field)]
             #print len(Tsub), 'in', (run,camcol,field)
-            for col in ['run','camcol','field']:
+            for col in dropcols:
                 Tsub.delete_column(col)
             fieldmap[(run,camcol,field)].append(Tsub)
 
