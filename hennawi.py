@@ -562,6 +562,35 @@ if __name__ == '__main__':
     #h3()
 
     redqsos()
+    sys.exit(0)
+
+    # merge
+    TT = []
+    allcols = set()
+    coltypes = dict()
+    for i in range(132):
+        fn = 'wisew4phot-%03i.fits' % i
+        T = fits_table(fn)
+        print 'read', len(T), 'from', fn
+        #T.about()
+        TT.append(T)
+        newcols = set(T.get_columns()) - allcols
+        for c in newcols:
+            coltypes[c] = T.get(c).dtype
+        allcols.update(newcols)
+
+    for i,T in enumerate(TT):
+        diff = allcols - set(T.get_columns())
+        if len(diff) == 0:
+            continue
+        print
+        print 'File', i
+        for c in diff:
+            print 'Set', c, 'to all zero'
+            T.set(c, np.zeros(len(T), coltypes[c]))
+
+    T = merge_tables(TT)
+    T.writeto('wisew4phot-2.fits')
 
     sys.exit(0)
 
