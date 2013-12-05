@@ -1104,6 +1104,10 @@ class GaussianMixturePSF(ParamList):
         var = self.mog.var * factor**2
         return GaussianMixturePSF(amp, mean, var)
 
+    def shiftBy(self, dx, dy):
+        self.mog.mean[:,0] += dx
+        self.mog.mean[:,1] += dy
+    
     def computeRadius(self):
         import numpy.linalg
         # ?
