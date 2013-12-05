@@ -1,0 +1,11 @@
+*.pyc
+*~
+tractor/*.pyc
+tractor/*.so
+tractor/build/
+tractor/emfit.py
+tractor/emfit_wrap.c
+tractor/mix.py
+tractor/mix_wrap.c
+doc/_build/
+html/
