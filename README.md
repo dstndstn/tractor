@@ -1,6 +1,6 @@
 # the Tractor
 
-probabilistic astronomical source detection
+Probabilistic astronomical source detection & measurement
 
 ## authors & license
 
@@ -13,8 +13,10 @@ Licensed under GPLv2; see LICENSE.
     make
     python setup.py
 
-- Recent scipy is required for scipy.sparse.linalg.lsqr (> 0.7; 0.9 works).
-  --> this requires recent numpy (>= 1.4)
+Prereqs:
+
+* scipy (> 0.7; 0.9 works)
+* numpy (>= 1.4)
 
 ## documentation:
 
