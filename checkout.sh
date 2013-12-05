@@ -3,8 +3,9 @@ set -e
 
 mkdir tractor
 cd tractor
+pwd
 
-svn co http://astrometry.net/svn/trunk/projects/tractor .
+git clone https://github.com/dstndstn/tractor.git .
 svn co -N http://astrometry.net/svn/trunk/src/astrometry
 (cd astrometry && svn up util)
 (cd astrometry && svn up libkd)
