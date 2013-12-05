@@ -24,8 +24,10 @@ if __name__ == '__main__':
     ps = PlotSequence('great')
 
     # which input data?
-    branch = 'great3/multiepoch/ground/constant'
-    food = 'dimsum'
+    #branch = 'great3/multiepoch/ground/constant'
+    #food = 'dimsum'
+    branch = 'great3/control/ground/constant'
+    food = 'vanilla'
     subfield = 0
     epoch = 0
 
@@ -146,6 +148,10 @@ if __name__ == '__main__':
     plt.title('Chi')
     ps.savefig()
 
+    print 'All params:'
+    print tractor.printThawedParams()
+    print
+        
     # Freeze all the image calibration parameters.
     tractor.freezeParam('images')
 
