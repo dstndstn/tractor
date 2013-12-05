@@ -1,11 +1,9 @@
 all: mix emfit #refcnt
 
-doc: html
+doc:
+	$(MAKE) -C doc -f Makefile.sphinx html PYTHONPATH=$(shell pwd):${PYTHONPATH}
 	cp -a doc/_build/html .
 .PHONY: doc
-
-html:
-	$(MAKE) -C doc -f Makefile.sphinx html
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
