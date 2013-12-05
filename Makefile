@@ -1,8 +1,11 @@
 all: mix emfit #refcnt
 
 doc: html
-	cp -a _build/html .
-.PHONE: doc
+	cp -a doc/_build/html .
+.PHONY: doc
+
+html:
+	$(MAKE) -C doc -f Makefile.sphinx html
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
@@ -86,4 +89,3 @@ emfit: tractor/_emfit.so tractor/emfit.py
 .PHONY: emfit
 
 
-include Makefile.sphinx
