@@ -1,0 +1,663 @@
+dstn's CS82 tests
+
+-------------------------------------------
+2012-02-29
+-------------------------------------------
+Test catalogs from:
+http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/morphology_catalogs/
+
+Notes:
+-----------------------------------------------------------------------
+Date: Wed, 8 Feb 2012 14:07:58 -0200
+From: Roberto Pereira <vilela.roberto@gmail.com>
+
+CHI2_MODEL Reduced Chi2 of the fit
+FLUX_MODEL Flux from model-fitting [count]
+FLUXERR_MODEL RMS error on model-fitting flux [count]
+MAG_MODEL Magnitude from model-fitting [mag]
+MAGERR_MODEL RMS error on model-fitting magnitude [mag]
+
+Parameters with the word DISK refer to a exp profile, for instance:
+
+DISK_SCALE_IMAGE         Disk scalelength from fitting                             [pixel]
+DISK_SCALEERR_IMAGE      RMS error on fitted disk scalelength                      [pixel]
+DISK_SCALE_WORLD         Disk scalelength from fitting (world coords)              [deg]
+DISK_SCALEERR_WORLD      RMS error on fitted disk scalelength (world coords)       [deg]
+DISK_ASPECT_IMAGE        Disk aspect ratio from fitting                          
+DISK_ASPECTERR_IMAGE     RMS error on fitted disk aspect ratio                   
+DISK_ASPECT_WORLD        Disk aspect ratio from fitting                          
+DISK_ASPECTERR_WORLD     RMS error on disk aspect ratio                          
+DISK_INCLINATION         Disk inclination from fitting                             [deg]
+DISK_INCLINATIONERR      RMS error on disk inclination from fitting                [deg]
+DISK_THETA_IMAGE         Disk position angle (CCW/x) from fitting                  [deg]
+DISK_THETAERR_IMAGE      RMS error on fitted disk position angle                   [deg]
+
+Respectively, parameters for a deV fit have the word SPHEROID, for instance:
+...
+-----------------------------------------------------------------------
+
+RA,Dec range: < [333.75, 334.8], [-0.15, 0.95]
+
+SDSS Stripe82 fields: 4 camcols goes right through the area; 2 have partial overlap.
+
+Trim to a central region:  334.4, 0.3
+(22:17:36, 00:18:00)
+10 arcmin -> 160 SDSS fields in one strip
+84 of which actually contain the target RA,Dec center.
+
+CS82 data: 4 x 410 s exposures, i band, 23.5 mag depth galaxies, 24 mag point sources.
+0.6" median seeing
+from
+bccp.lbl.gov/~sudeep/BCLWSchedule_files/alexieTalk.pdf
+
+The CADC search form seems to be interpreting decimal degrees incorrectly?
+
+http://www2.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/cadcbin/cfht/wdbi.cgi/cfht/cfhtls/form
+
+RA: 22 17 36
+Dec: 00 18 00
+Filter: i'
+Search box: 00 30 00
+
+-> 14 fields
+
+Survey    FILE ID     Target Name     RA (J2000)    DEC (J2000)     Exposure Time  Observation Date    Public Date           Filter  Image Quality  Photometric  QSO Status
+Wide      863049p     W4.+1-1         22 17 02.14   +00 24 00.0          615.1     Aug 21 2006 9:28AM  Sep 21 2007 10:00AM   I.MP9701  0.610  Y  VALIDATED
+Wide      860598p     W4.+1-1         22 17 05.23   +00 24 30.0          615.1     Aug 1 2006 11:25AM  Sep 1 2007 10:00AM    I.MP9701  0.730  Y  VALIDATED
+Wide      860599p     W4.+1-1         22 17 04.77   +00 24 00.0          615.1     Aug 1 2006 11:36AM  Sep 1 2007 10:00AM    I.MP9701  0.730  Y  VALIDATED
+Wide      860595p     W4.+1-1         22 17 04.31   +00 22 30.0          615.1     Aug 1 2006 10:51AM  Sep 1 2007 10:00AM    I.MP9701  0.750  Y  VALIDATED
+Wide      863050p     W4.+1-1         22 17 04.14   +00 22 00.0          615.1     Aug 21 2006 9:39AM  Sep 21 2007 10:00AM   I.MP9701  0.580  Y  VALIDATED
+Wide      863047p     W4.+1-1         22 17 07.23   +00 23 30.0          615.1     Aug 21 2006 8:53AM  Sep 21 2007 10:00AM   I.MP9701  0.530  Y  VALIDATED
+Wide      860600p     W4.+1-1         22 17 06.77   +00 22 00.0          615.1     Aug 1 2006 11:47AM  Sep 1 2007 10:00AM    I.MP9701  0.740  Y  VALIDATED
+Wide      860596p     W4.+1-1         22 17 06.31   +00 21 30.0          615.1     Aug 1 2006 11:02AM  Sep 1 2007 10:00AM    I.MP9701  0.710  Y  VALIDATED
+Wide      863048p     W4.+1-1         22 17 02.61   +00 24 30.0          615.1     Aug 21 2006 9:17AM  Sep 21 2007 10:00AM   I.MP9701  0.540  Y  VALIDATED
+Wide      863045p     W4.+1-1         22 17 04.30   +00 22 30.0          615.1     Aug 21 2006 8:31AM  Sep 21 2007 10:00AM   I.MP9701  0.530  Y  VALIDATED
+Wide      860594p     W4.+1-1         22 17 05.77   +00 23 00.1          615.1     Aug 1 2006 10:40AM  Sep 1 2007 10:00AM    I.MP9701  0.900  Y  VALIDATED
+Wide      863044p     W4.+1-1         22 17 05.77   +00 23 00.0          615.1     Aug 21 2006 8:19AM  Sep 21 2007 10:00AM   I.MP9701  0.550  Y  VALIDATED
+Wide      863046p     W4.+1-1         22 17 06.30   +00 21 30.0          615.1     Aug 21 2006 8:42AM  Sep 21 2007 10:00AM   I.MP9701  0.500  Y  VALIDATED
+Wide      860597p     W4.+1-1         22 17 07.24   +00 23 30.0          615.1     Aug 1 2006 11:13AM  Sep 1 2007 10:00AM    I.MP9701  0.660  Y  VALIDATED
+
+
+Need ~3 or 4 to match CS82 depth.  Which ones?
+
+1,2,4,5 -- Aug 1/21 split, some range of seeing
+
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/863049p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/860598p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/860595p
+    http://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/data/pub/CFHT/863050p
+
+-> cs82data
+
+36 x (2k x 4k extensions)
+
+They're rice compressed.
+
+for x in cs82data/86*p.fits; do imcopy $x $x.u; done
+for x in cs82data/86*p.fits; do mv $x.u $x; done
+
+extension 21 (in all four images) covers my test area.
+
+for x in cs82data/86*p.fits; do echo imcopy $x+22 $(echo $x | sed s/.fits//g)-21.fits; done
+
+
+
+-------------------------------------------
+2012-03-01
+-------------------------------------------
+
+Tweaking script to run LSST stack on CFHT-LS images for PSF estimate, etc;
+sesame3, screen cs82, code run-lsst-2.py
+
+loadLSST
+setup pipe_tasks
+python run-lsst-2.py --ra 334.4 --dec 0.3 860595p-21.fits 860595p-21
+
+for x in 860598p-21 863049p-21 863050p-21; do #860595p-21
+  python run-lsst-2.py --ra 334.4 --dec 0.3 $x.fits $x;
+done
+
+worked:
+860595
+863050
+other two failed with TOO MANY CR PIXELS
+
+863049p     22 17 02.14   +00 24 00.0     615.1     Aug 21 2006 9:28AM  I.MP9701  0.610
+860598p     22 17 05.23   +00 24 30.0     615.1     Aug 1 2006 11:25AM  I.MP9701  0.730
+860595p     22 17 04.31   +00 22 30.0     615.1     Aug 1 2006 10:51AM  I.MP9701  0.750
+863050p     22 17 04.14   +00 22 00.0     615.1     Aug 21 2006 9:39AM  I.MP9701  0.580
+
+crank up maxCRpix and they work (with ~ same number of CRs detected)
+
+Looking at the images, there are still some cosmics unremoved though...
+
+for x in 860598p-21 863049p-21; do
+  python run-lsst-2.py --ra 334.4 --dec 0.3 $x.fits $x;
+done
+
+
+Some SDSS fields have ~no detected objects; eg 5759/4/231/i, 6548/4/265/i
+
+Actually, looks like it's mostly just sky brightness.
+
+Can't see a consistent cut I could use to isolate them; eg,
+for x in cs82data/tsField-006548-4-0265.fit cs82data/tsField-005759-4-0231.fit cs82data/tsField-005770-4-0211.fit; do
+  echo $x; tablist $x"[col quality;status;psp_status;aa;kk;airmass;sky;sky_psp;numStars;aaErr]";
+done
+
+
+-------------------------------------------
+2012-04-13
+-------------------------------------------
+Fitting CFHT WCS shift; finding: (dRA,dDec), first 4 are CFHT, second 4 SDSS.
+
+dWCS (arcsec): [ 0.38468431 -0.15141637  0.32301263 -0.07405491  0.29655179 -0.17967437
+  0.32631883 -0.19337567  0.          0.          0.04882045  0.08531917
+  0.06159949  0.07945703  0.07220552  0.0957091 ]
+
+ie, CFHT:
+
+[ 0.38468431, -0.15141637 ]
+[ 0.32301263, -0.07405491 ]
+[ 0.29655179, -0.17967437 ]
+[ 0.32631883, -0.19337567 ]
+
+SDSS: ~ 0
+[ 0.         , 0.         ]
+[ 0.04882045 , 0.08531917 ]
+[ 0.06159949 , 0.07945703 ]
+[ 0.07220552  0.0957091   ]
+
+
+-------------------------------------------
+2012-04-17
+-------------------------------------------
+
+Try making CFHT "i" a different band from SDSS "i", for testing.
+
+All gri images: -> nearly 250 images!
+(219 SDSS images)
+(483 MB pickle!)
+
+python -u cs82.py -f 0 -s 0 > log0 2>&1 &
+at 20604
+python -u cs82.py -s 1 -f 1 > log1 2>&1 &
+at 20605
+python -u cs82.py -s 3 -f 2 -f 3 > log23 2>&1 &
+at 20605
+(crashed during stage 3)
+python -u cs82.py -s 3 -f 3 > log3 2>&1 &
+at 20606
+30 walkers, bright sources: MCMC steps taking 200 sec wall time.
+
+Meanwhile...
+
+ln -s tractor02.pickle tractor05.pickle
+python -u cs82.py -s 6 -f 6 > log6 2>&1 &
+at 20607
+Cut to: Tractor with 51 sources and 1 images (CFHT 863050p21)
+MCMC took 2.585344 wall
+
+rm tractor05.pickle
+python -u cs82.py -s 3 -f 3 > log3 2>&1 &
+at 20608
+-> gets an inf/nan, wanders off into left field
+80->90: big change
+
+at 20610
+fixed step size tweaking & resampling logic.  Now consistently improving logprob from -650k to -620k in 200 steps.
+at 20611
+optimization (first of all sources, then of individual sources) blows away sampling.
+at 20612
+
+python -u cs82.py -s 4 -f 4 > log4 2>&1 &
+at 20613
+
+nice python -u cs82.py -s 5 -f 5 --threads 8 > log5 2>&1 &
+at 20629
+
+python -u cs82.py -s 7 -f 7  > log7 2>&1 &
+at 20644
+
+
+pooltest.py:
+   pickled 34 objs, 60,769,807 bytes, 0.116506 s CPU
+ unpickled 30 objs, 24,339,497 bytes, 0.0158684 s CPU
+
+   pickled 31 objs, 44.157 MB, 0.0927482 s CPU
+ unpickled 27 objs, 22.179 MB, 0.0136151 s CPU
+
+   pickled 31 objs, 23.9961 MB, 0.084888 s CPU
+ unpickled 27 objs, 22.179 MB,  0.014848 s CPU
+
+   pickled 31 objs,  0.234687 MB, 0.0401144 s CPU
+ unpickled 27 objs, 22.179    MB, 0.0114594 s CPU
+
+
+
+Todo:
+-regularizing: use STEP SIZES, don't scale columns
+-how to tune step sizes w.r.t walkers stdevs???
+-think about "maximum plausible step size" for params?
+-priors
+
+
+=================== 2012-05-10 =========================
+
+near-term plan:
+
+-CFHT and SDSS have a small astrometric shift
+  -input catalogs match SDSS but not CFHT
+  -get around that by asking them for better calibrations of the CFHT imaging
+  -also CRs, etc
+
+-simplest possible: forced photometry: freeze the input catalog
+ (galaxy shapes), fit the SDSS ugriz mags.
+
+-jointly on all SDSS images; or individually
+
+-issue: quality assessment on the SDSS fields (have one from Schlegel, but pretty harsh cut)
+
+
+
+-------------------------------------------
+2012-05-21
+-------------------------------------------
+
+Grab re-reduced CFHTLS images from
+
+http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/
+
+863049
+860598
+860595
+863050
+
+Their different CCD numbering scheme -> chip 13 contains (334.4, 0.3).
+
+The .weight.fits WCS are wrong (CRVALs are bogus); .sub.fits are
+right... ish.  They have a diagonal CD matrix, so I'm going to need
+the SCAMP-updated headers.
+
+Yargh, they're also a different size;
+
+CFHT orig:
+   NAXIS1 = 2112
+   NAXIS2 = 4644
+
+CS82:
+   NAXIS1 = 2043
+   NAXIS2 = 4606
+
+HISTORY preprocess: THELI Pipeline Version: 0.10.3
+HISTORY preprocess: called at 2006-05-26T20:55:32
+HISTORY image has been trimmed
+HISTORY trim sextion: Xmin = 35; Xmax = 2077; Ymin = 3; Ymax = 4608
+
+
+Thomas sent Scamp headers:
+
+$ tar xvzf CS82_headers_V2.7A.tgz ./W4p1m1
+./W4p1m1/i/headers_V2.7A/
+
+
+Catalogs:
+
+http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/
+
+Move old ones:
+mkdir cs82data/v1
+mv cs82data/W4p1m1_i.V2.7A.swarp.cut.vig15_* cs82data/v1
+
+wget --user cs82 --password XXXXXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/W4p1m1_i.V2.7A.swarp.cut.deV.fit
+{exp, deVexp}
+
+(but wait for Alexie's combined catalogs?)
+
+(Hendrik: ~3 hours per tile for exp / dev, 6-7 for exp+dev)
+
+------------------------------------------------------------------
+--> deV + exp:
+    Change all SPHEROID* --> cModel_deV_*
+    Change all DISK* --> cModel_exp_*
+    Add cModel_ to the beginning of all variable *_MODEL
+Also:
+- MAG_DISK ->  cModel_MAG_DISK
+- MAG_SPHEROID ->  cModel_MAG_SPHEROID
+- cModel_ to ALPHAMODEL_SKY, DELTAMODEL_SKY, AMODEL_WORLD, BMODEL_WORLD, THETAMODEL_WORLD,  FWHMPSF_WORLD
+---------------------------------
+
+Which columns to pick up
+====================
+
+For all files:
+----------------
+CHI2_MODEL
+FLAGS_MODEL
+MAG_MODEL 
+MAGERR_MODEL
+ALPHAMODEL_SKY  
+DELTAMODEL_SKY  
+AMODEL_WORLD
+BMODEL_WORLD
+THETAMODEL_WORLD
+FWHMPSF_WORLD
+SPREAD_MODEL
+
+for Exp and Exp+deV
+------------------------------
+MAG_DISK
+DISK_SCALE_WORLD
+DISK_ASPECT_WORLD
+DISK_THETA_WORLD   
+
+for deV and Exp+deV
+-----------------------------
+MAG_SPHEROID
+SPHEROID_REFF_WORLD 
+SPHEROID_ASPECT_WORLD
+SPHEROID_THETA_WORLD   
+------------------------------------------------------------------
+
+HDU #3  Binary Table:  149 columns x 212778 rows
+ COL NAME             FORMAT
+  26 BACKGROUND       1E              
+  27 THRESHOLD        1E              
+  36 X_IMAGE          1E              
+  37 Y_IMAGE          1E              
+  40 ALPHA_J2000      1D              
+  41 DELTA_J2000      1D              
+  42 CXX_IMAGE        1E              
+  43 CYY_IMAGE        1E              
+  44 CXY_IMAGE        1E              
+  45 A_IMAGE          1E              
+  46 B_IMAGE          1E              
+  47 THETA_IMAGE      1E              
+  48 A_WORLD          1E              
+  49 B_WORLD          1E              
+  50 THETA_WORLD      1E              
+  51 THETA_J2000      1E              
+  56 FLAGS            1I              
+  58 FWHM_WORLD       1E              
+  62 CLASS_STAR       1E              
+  67 MAG_PSF          1E              
+  70 CHI2_PSF         1E              
+
+  71 FLAGS_MODEL      1B              
+  72 NITER_MODEL      1I              
+  89 AMODEL_WORLD     1E              
+  90 BMODEL_WORLD     1E              
+  91 THETAMODEL_WORLD 1E              
+  95 SPREAD_MODEL     1E              
+  97 ALPHAMODEL_J2000 1D              
+  98 DELTAMODEL_J2000 1D              
+  99 CHI2_MODEL       1E              
+ 102 MAG_MODEL        1E              
+
+ 106 MAG_SPHEROID     1E              
+ 116 SPHEROID_REFF_WORLD 1E              
+ 120 SPHEROID_ASPECT_WORLD 1E              
+ 124 SPHEROID_THETA_WORLD 1E              
+
+ 128 MAG_DISK         1E              
+ 138 DISK_SCALE_WORLD 1E              
+ 142 DISK_ASPECT_WORLD 1E              
+ 144 DISK_INCLINATION 1E              
+ 148 DISK_THETA_WORLD 1E              
+
+
+-------------------------------------------
+2012-05-22
+-------------------------------------------
+
+Choose a slightly different area, to get the whole height of the SDSS images.
+Aim for ~2048 x 2048 SDSS pixels.
+
+The CFHT images are shifted slightly (and significantly dithered) so
+for some of the exposures up to 1/3 of the image is off our area.
+
+The CFHT images are about the full height and half the width, so shift
+the area over so that they cover the "right" half; we can pick up a
+neighbouring CCD later if necessary.
+
+New region:  (334.320, 0.315) += 0.12 deg
+
+FIXME: We should trim the SDSS images from 1489 to -128 = 1361
+
+-> get the overlapping camcol from the other strip (~200-pix overlap; camcols 4 & 5)
+-> want it?  (I cut it out for now)
+
+
+-> Tractor with 12088 sources and 382 images (4 CFHT)
+
+select * from PhotoPrimary where ra between 334.20 and 334.44
+  and dec between 0.195 and 0.435
+---> cas-primary-DR8.fits
+
+
+Try using CFHT coadd instead:
+
+wget --user cs82shear --password XXX http://vn90.phas.ubc.ca/CS82/CS82_data_products/coadd_V2.7A/flag_V2.7A/W4p1m1_i.V2.7A.swarp.cut.flag.fits.gz
+wget --user cs82shear --password XXX http://vn90.phas.ubc.ca/CS82/CS82_data_products/coadd_V2.7A/weight_V2.7A/W4p1m1_i.V2.7A.swarp.cut.weight.fits.gz
+wget --user cs82 --password XXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/coadd_V2.7A_9/images_V2.7A/W4p1m1_i.V2.7A.swarp.cut.fits
+
+
+mag = MAGZP - 2.5*log10(counts)
+
+The weight image is propto 1/var.  I find that   median(weight) ~= 1/(image estimated std)**2
+
+so the propto is an =; weight = invvar in image units.
+
+The PSF model for the coadd, evaluated at 9x9 positions, is here:
+  http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/snap_W4p1m1_i.V2.7A.swarp.cut.fits
+
+1-component Gaussian PSF approximation gets ~10% error
+2-component Gaussian PSF approximation gets ~ 2% error
+3-component Gaussian PSF approximation gets ~ 0.5% error
+
+Ok, the coadd model looks good!  But looks like a ~ 1-pixel shift.... oh, my bad in FitsWcs?
+
+
+
+-------------------------------------------
+2012-05-31
+-------------------------------------------
+
+hmm, optimizing all at once hurts...
+
+ 36757  0.00000e+00   1.433e+03  1.433e+03    3.9e-01  8.8e-09   5.2e+02  6.2e+06
+ 
+LSQR finished
+The least-squares solution is good enough, given atol     
+ 
+istop =       2   r1norm = 1.4e+03   anorm = 5.2e+02   arnorm = 6.6e-03
+itn   =   36757   r2norm = 1.4e+03   acond = 6.2e+06   xnorm  = 1.2e+05
+ 
+  17195.1 seconds
+scaled   X= [ 0.  0.  0. ...,  0.  0.  0.]
+  X= [ 0.  0.  0. ...,  0.  0.  0.]
+
+Finding optimal step size...
+  log-prob before: -6826028.15209
+  Stepping with alpha = 0.01
+overflow encountered in double_scalars
+invalid value encountered in multiply
+  delta log-prob: nan
+  Stepping with alpha = 0.125
+invalid value encountered in multiply
+  delta log-prob: nan
+  Stepping with alpha = 0.25
+  delta log-prob: nan
+  Stepping with alpha = 0.5
+  delta log-prob: nan
+  Stepping with alpha = 1.0
+  delta log-prob: nan
+  Stepping with alpha = 2.0
+  delta log-prob: nan
+  Stepping with alpha = 4.0
+  delta log-prob: nan
+Finished opt2.
+  Tderiv 21.178869 wall, 21.180000 cpu
+  Topt   17214.232143 wall, 17212.710000 cpu
+  Tstep  64.888621 wall, 64.880000 cpu
+
+  17195.1 seconds
+
+--------------------------------------------
+2012-06-27
+--------------------------------------------
+Emails from team:
+
+"
+Just for info, the completeness of the images varies between
+mag_auto=23 and mag_auto=24 depending on the seeing of the image. I
+wouldn't trust anything in the catalog that is much fainter than
+mag_auto=24.
+
+For example, you might remove objects with low S/N where S/N could be
+defined as FLUX_MODEL/FLUXERR_MODEL. I bet a lot of the thin disk
+would go away if you made a cut of say, SN>3.
+
+If you add noise to the model image, these galaxies might look more
+similar.
+
+
+"For this particular tile, our nominal limiting magnitude (90% completeness) is 23.8."
+
+To see if the "strange" objects are not due to spurious or noisy
+detections, you could try a S/N > 5 (i.e. MAGERR_AUTO < 0.2172) or
+even S/N > 10 cut.
+
+In the tests we performed, we have seen that the morphology is much
+more robust in this case.  You could also make cuts discarding objects
+with FLAGS != 0.
+
+Also, it may be worth applying the masks provided by Alexie to avoid objects close to bright stars, borders, etc. (see
+http://twiki.linea.gov.br/bin/view/CS82/DataAccess#Masks).
+We may provide a "filtered" catalog if needed.
+
+Dustin, would it be possible for you to create the same model image
+(and histograms) for a single-component deV (or exp) profile and see
+what comes out?
+"
+
+
+Grab single-component catalogs... oh, I've got them already.
+
+-rw-r--r-- 1 dstn dstn  170928000 May 15 11:42 W4p1m1_i.V2.7A.swarp.cut.deVexp.fit
+-rw-r--r-- 1 dstn dstn  150497280 May 15 22:54 W4p1m1_i.V2.7A.swarp.cut.deV.fit
+-rw-r--r-- 1 dstn dstn  152199360 May 15 16:24 W4p1m1_i.V2.7A.swarp.cut.exp.fit
+-rw-r--r-- 1 dstn dstn 1764011520 Oct  5  2011 W4p1m1_i.V2.7A.swarp.cut.fits
+-rw-r--r-- 1 dstn dstn  441011520 Aug 24  2011 W4p1m1_i.V2.7A.swarp.cut.flag.fits
+-rw-r--r-- 1 dstn dstn 1764011520 Sep 19  2011 W4p1m1_i.V2.7A.swarp.cut.weight.fits
+
+wget --user cs82 --password XXXXXX http://che.cbpf.br/cs82/cs82_data/CS82_data_products/SE_outputs/W4_morphology/W4p1m1_i.V2.7A.swarp.cut.deV.fit
+{exp, deVexp}
+
+-Adding noise doesn't really change the visual impression that the
+ fits are wrong.
+
+--------------------------------------------
+2012-06-28
+--------------------------------------------
+
+ARGH, deV is SPHEROID,  exp is DISK, not vice versa.
+
+Now fits look generally good.
+
+--------------------------------------------
+2012-08-28
+--------------------------------------------
+
+Ran CS82 catalog vs CS82 co-add images, and found 0.5-mag offset
+between SDSS stars and CS82 mag_psf.  Emailed team.
+
+--------------------------------------------
+2012-09-10
+--------------------------------------------
+
+No news re half-mag offset.  Just compensate for it and move on.
+
+Move on to what, exactly?  What is the critical path for having forced
+photometry results on the whole CS82 area?
+
+-single-image, object-by-object then full-field fits, flux only
+-(work in fluxes rather than mags)
+-(measure errors?)
+-report mean/sample variance
+-outlier images?  Compare vs Schlegel's SCORE
+-output catalogs
+
+run_1/camcol_1/field_1 mag_[ugriz]_1
+
+-measure speed, figure out how to parallelize, talk to Schlegel re: NERSCing
+
+Next steps:
+
+-all images in a band simultaneously
+-re-fit CS82 mags vs CS82 coadds
+-(re-fit shapes)
+
+
+--------------------------------------------
+2012-10-06
+--------------------------------------------
+
+Finished converting to NanoMaggies.  Only problem: wants to take some
+fluxes negative when fitting CS82 catalog vs CS82 coadd.  First opt
+step takes alpha=1. for huge dlnp.  (900 CPU sec on my laptop, (1800
+wall) and ~12 GB or more of memory for the joint opt.  (~2048x2048
+SDSS pixels).  Subsequent optimization step: almost no change.
+  Finding optimal step size...
+  Stepping by 0.25 for delta-logprob 0.396217003465
+
+Would be much better to do either searchlight optimization, or find
+subsets of overlapping sources and solve them simultaneously.
+
+-Need to impose positive flux constraints.  Detect when a composite
+ component wants to go negative and remove it?  Add damping, priors,
+ and iterate?
+
+-Can I somehow isolate just the image regions to be optimized (so that
+ I only render the sources in the region and only compute the lnprob
+ in that region?)  Or just suck it up and work at image-at-a-time
+ resolution?
+
+ --hmm, could find sources touching a healpix grid, and blank out the
+ axis-aligned bounding box in each image.  (Set invvar = 0)
+
+--find healpix corners in image
+--find bounding box
+--find sources overlapping
+
+-Will source-at-a-time converge?
+
+-Opt all image in a given band simultaneously
+
+
+-Bright stars -- adaptive size of Patch=======
+
+
+
+
+
+-optsources_searchlight:
+
+	large-Nside healpixes
+	image grid -- subimages
+	OR create a grid of sub-image Tractor images and just work at image scale
+	BUT still need source-in-image cuts
+
+
+# http://vn90.phas.ubc.ca/CS82/CS82_data_products/singleframe_V2.7/W4p1m1/i/single_V2.7A/  
+
+
+--------------------------------------------
+2013-02-18
+--------------------------------------------
+
+Check out a different test field: S82p18p, which has a low-z cluster.
+
+wget --user cs82 --password XXXXXX "http://che.cbpf.br/cs82/se_model_fits_V2.7/morphology_catalogs_V2.7.1/S82p18p_y.V2.7A.swarp.cut.deVexp.fit"
+
+

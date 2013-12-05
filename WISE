@@ -1,0 +1,322 @@
+w2a:
+Tile 1384p454 took Wall: 326.00 s, CPU: 105.43 s, VmPeak: 5337 MB, VmSize: 4699 MB, VmRSS: 3351 MB, VmData: 4397 MB
+
+----------
+2013-09-23
+----------
+More trying to improve WISE coadds by dropping bad frames;
+
+wise-coadds -> /home/dstn/testdir/wise-coadds-3/
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1000-1099,2000-2099,3000-3099,4000-4099 ./wise-coadd.py
+svn rev 23539, job 5831[]
+
+-> look good!  Do the rest.
+
+qsub -p -10 -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1100-1409,2100-2409,3100-3409,4100-4109 ./wise-coadd.py
+svn rev 23545, job 5839[]
+
+Looking at minsb, non-neg:
+
+python -u sequels.py -b 1 --plots --blocks 1 --ceres -B 10 -o phot-%s-a1.fits --tiledir c/ > a1.log 2>&1 &
+python -u sequels.py -b 1 --plots --blocks 1 --ceres -B 10 -o c/phot-%s-b1.fits --tiledir c/ --nonneg > b1.log 2>&1 &
+python -u sequels.py -b 2 --blocks 1 --ceres -B 10 -o phot-%s-a2.fits --tiledir c/ > a2.log 2>&1 &
+python -u sequels.py -b 2 --blocks 1 --ceres -B 10 -o phot-%s-a2.fits --tiledir c/ --nonneg > b2.log 2>&1 &
+
+
+
+----------
+2013-09-20
+----------
+Trying to improve WISE coadds by dropping bad frames.
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3099,4000-4099 ./wise-coadd.py
+svn rev 23526, job 5813[]
+
+----------
+2013-09-16
+----------
+
+Discovered stupid zeropoint scale bug.  Re-running coadds.
+
+qsub -d $(pwd) -N coadd -l "cput=1:00:00" -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -t 1000-1409 ./wise-coadd.py
+
+1000-1409: job 5772, rev 23478
+
+These seem to have run at low efficiency (cpu / wall about 10%) and were killed after 1 hour of WALL time.  Argh!
+
+Only a few finished.  Re-run.
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=3gb" -o coadd.log -m abe -M dstn@cmu.edu -t 1000-1409 ./wise-coadd.py
+
+1000-1409: job 5773, rev 23480 (no relevant differences from 23478)
+
+Oh, the mail settings are per-sub-job.  Oops.
+
+qsub -d $(pwd) -N coadd-w2 -l "nodes=1:ppn=1" -l "pvmem=3gb" -o coadd-w2.log -m a -M dstn@cmu.edu -t 2000-2409 ./wise-coadd.py
+
+2000-2409: job 5776, rev 23482 (no relevant differences from 23478)
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3409 ./wise-coadd.py
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=4gb" -o coadd.log -m a -M dstn@cmu.edu -t 3000-3409 ./wise-coadd.py
+
+3000-3409: job 5779, rev 23482
+4000-4409: job 5780, rev 23482
+
+qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 0-409 ./sequels.py
+
+0-409: job 5781, rev 23488
+
+Some of the coadds didn't finish (along the stripe with higher
+coverage; probably timed out).  Re-run.
+
+qsub -d $(pwd) -N coadd -l "nodes=1:ppn=1" -l "pvmem=8gb" -o coadd.log -m a -M dstn@cmu.edu -t 1348,1350,1354,1364,1368,1380,2348,2350-2352,2354,2364,2367-2368,2380 ./wise-coadd.py
+
+job 5782, rev 23488
+
+-> all done.
+
+Photometry:
+
+Missing tiles: [56, 99, 171, 185, 189, 190, 191, 192, 193, 223, 229, 325, 348, 350, 351, 352, 354, 364, 367, 368, 380]
+
+Some are just from missing coadd tiles.
+
+qsub -d $(pwd) -N sequels -l "nodes=1:ppn=1" -l "pvmem=4gb" -o sequels.log -t 56,99,171,185,189,190,191,192,193,223,229,325,348,350,351,352,354,364,367,368,380 ./sequels.py
+
+job 5783, rev 23488
+
+Missing tiles: [56, 99, 171, 185, 189, 190, 191, 192, 193, 223, 229, 325]
+
+OOPS, found bug in adding unmatched WISE sources.  Fixed in rev 23492.  Create sequels-phot-3 dir and symlink.
+
+job 5785, rev 23492
+
+Missing tiles: [189, 190, 191, 193]
+
+Good, those are just the ones outside the area where there are sources.
+
+python -u sequels.py --finish > finish.log 2>&1 &
+
+sequels-phot -> /home/dstn/testdir/sequels-phot-3/
+sequels-phot-temp -> /home/dstn/testdir/sequels-phot-temp/
+sequels-pobj -> /home/dstn/testdir/sequels-pobj-2/
+
+
+
+----------
+
+
+Forced photometry run on targets from Schlegel, 2013-04-18
+
+svn rev 22604
+
+python -u wise2.py -s stripe82-19objs.fits -o meas-s82-19objs-%03i-b.fits -P s82b -v --threads 8 --osources stripe82-19objs-meas.fits > w1b.log 2>&1 &
+python -u wise2.py -p -r meas-s82-19objs-999-b.fits -m -P compare
+
+
+
+
+#  Going to great lengths to avoid learning IDL:
+# Evaluating Aaron's WISE PSF model on a grid:
+git clone git://github.com/ameisner/WISE.git wise-psf
+
+module load idl
+module load idlutils
+export WISE_DATA=$(pwd)/wise-psf/etc
+
+(for ((y=50; y<1000; y+=100)); do
+  for ((x=50; x<1000; x+=100)); do
+    printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
+	printf "mwrfits, psf, 'wise-psf-w1-%d-%d.fits'\n" $x $y
+  done
+done) | (cd wise-psf/pro; idl)
+ls wise-psf/pro/*.fits
+
+(for ((y=50; y<1000; y+=100)); do
+  for ((x=50; x<1000; x+=100)); do
+    printf "psf = wise_psf_cutout(%d, %d, band=2, allsky=1)\n" $x $y
+	printf "mwrfits, psf, 'wise-psf-w2-%d-%d.fits'\n" $x $y
+  done
+done) | (cd wise-psf/pro; idl)
+ls wise-psf/pro/*.fits
+
+# (for ((y=50; y<1000; y+=100)); do
+#   for ((x=50; x<1000; x+=100)); do
+#     printf "psf = wise_psf_cutout(%d, %d, band=1, allsky=1)\n" $x $y
+# 	#printf "mwrfits, psf, 'wise-psf-w1-%03d-%03d.fits'\n" $x $y
+#     printf "mwrfits, psf, 'wise-psf-w1.fits'\n" $x $y
+#   done
+# done) | (cd wise-psf/pro; idl)
+# ls wise-psf/pro/*.fits
+
+
+
+
+qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w1 -o w1.log -q batch -t 0-50 ./runslice.py
+
+qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w2 -o w2b.log -q batch -t 50-53,59-100 ./runslice.py
+
+qstat -n -1 -u dstn -t | less
+
+
+
+At svn rev 22666:
+qsub -l "nodes=1:ppn=1" -l "walltime=2:00:00" -N w1v2 -o w1v2.log -q batch -t 100-150 ./runslice.py
+
+
+v3: rev 22670
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v3 -o w1v3.log -q batch -t 100-150 ./runslice.py
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v3 -o w2v3.log -q batch -t 200-250 ./runslice.py
+
+
+v4: rev 22674
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v4 -o w1v4.log -q batch -t 100-190 ./runslice.py
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v4 -o w2v4.log -q batch -t 200-290 ./runslice.py
+
+(I think v4 went into the targeting for special plates boss209 / 7027-7032)
+
+Results merged into output file in (horrid) wisecheck.py
+
+
+v5: rev 22683  (ptsrc=True)
+
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w1v5 -o w1v5.log -q batch -t 100-190 ./runslice.py
+qsub -l "nodes=1:ppn=1" -l "walltime=3:00:00" -N w2v5 -o w2v5.log -q batch -t 200-290 ./runslice.py
+
+
+
+
+-----------------------------
+Stripe 82 quasar test region:
+-----------------------------
+In leui of the copy jobs from IPAC for the WISE data still being in progress, I've put together
+files for the QSO test region in stripe 82.  This is bounded by
+   317 < RA < 330 deg
+   0 < Dec < +1.25 deg
+
+A file with all SDSS primary observations (RESOLVE_STATUS=SURVEY_PRIMARY)
+are here:
+   /clusterfs/riemann/raid000/bosswork/boss/wise1ext/sdss_stripe82
+where the files are
+   flist-eboss-stripe82.fits - SDSS field list
+   objs-eboss-stripe82-dr8.fits - All photo parameters for SDSS primary objects, DR8 astrometry
+   objs-eboss-stripe82-dr9.fits - All photo parameters for SDSS primary objects, DR9 astrometry
+
+The WISE Level 1b images (all bands, 26 GB total) are in these two directories:
+   /clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82/allsky
+   /clusterfs/riemann/raid000/bosswork/boss/wise1test_stripe82/prelim_postcryo
+Each directory has an index file of the files in that directory.
+
+This should all be the same formats as what we did for the CFHT-W3 test region.
+----
+
+----
+Re: W3 region:
+----
+This isn't quite the latest file, but Adam's file from a few days ago:
+   http://faraday.uwyo.edu/~admyers/eBOSS/ancil-QSO-eBOSS-W3-ADM-dr8.fits
+(and a copy on riemann.lbl.gov in our working directory on this).
+
+W3BITMASK contains the merged target bits as follows:
+     2^0: colorbox
+     2^1: xdqsoz
+     2^2: wise
+     2^3 CFHTvar
+     2^4: PTFvar
+----
+
+
+Coadds, and looking at WISE team's L1b frame inventory tables for quality metrics.
+
+text2fits.py -H "scan_id frame_num moon_sep saa_sep ra dec mjd dtanneal w1zero w2zero w3zero w4zero rbovera noisepix r_mean_20 qual_frame qc_fact qi_fact qn_fact qa_fact qual_scan qs1_fact qs5_fact qp_fact" -f "sjdddddddddddddjddddjddd" wise_allsky.wise_allsky_4band_p1bs_frm14116.tbl wise-allsky-l1b-meta.fits
+
+Trying IRSA's "program interface" -- need long timeouts on these!  Try text and xml outputs.
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_4band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_4band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_3band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_3band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=3&spatial=NONE&catalog=wise_allsky_2band_p1bs_frm" &
+  wget --timeout 0 -q "http://irsa.ipac.caltech.edu/cgi-bin/Gator/nph-query?outfmt=1&spatial=NONE&catalog=wise_allsky_2band_p1bs_frm" &
+
+
+
+
+----------
+2013-08-23
+----------
+qsub -d $(pwd) -N sequels-w1 -l "nodes=1:ppn=1" -l "walltime=1:00:00" -o sequels-w1.log -q batch -t 1000-1366 ./wise-coadd.py
+
+qsub -d $(pwd) -N sequels-w2 -l "walltime=1:00:00" -o sequels-w2.log -q batch -t 2000-2366 ./wise-coadd.py
+
+# get some of that fast-queue time
+qsub -d $(pwd) -N sequels-w2-b -l "walltime=30:00" -o sequels-w2-b.log -q fast -t 2350-2366 ./wise-coadd.py
+qsub -d $(pwd) -N sequels-w2-b -l "walltime=30:00" -o sequels-w2-b.log -q fast -t 2300-2349 ./wise-coadd.py
+
+qsub -d $(pwd) -N sequels-w3 -l "walltime=30:00" -o sequels-w3.log -q fast -t 3000-3366 ./wise-coadd.py
+qsub -d $(pwd) -N sequels-w4 -l "walltime=30:00" -o sequels-w4.log -t 4000-4366 ./wise-coadd.py
+
+
+To-do:
+qsub -d $(pwd) -N sequels-w1 -l "walltime=1:00:00" -o sequels-w1c.log -q big -t 1000-1366 ./wise-coadd.py
+
+1028,1057,1065,1122,1219,1223,1242,1263,1335,1345,1356
+
+2000,2004,2009,2011-2012,2021,2023-2024,2026-2027,2028-2029,2030,2032,2034,2036-2037,2041,2044,2048,2051,2054,2057,2060,2062,2064-2065,2071,2077,2080-2081,2084-2085,2090-2091,2095,2097,2101,2105,2113,2120,2130,2132,2135,2140,2162,2164,2167,2171-2172,2173-2174,2175-2176,2179,2181,2183-2184,2185-2186,2187-2188,2189-2190,2191-2192,2193-2194,2195-2196,2202,2206-2207,2212-2213,2217-2218,2220,2228,2231,2234,2238,2242,2247,2257,2259,2266,2272,2276,2284,2290-2291,2296,2302,2307,2312,2318,2322,2326,2328,2331,2335-2336,2337-2338,2347-2348,2349,2355,2358-2359,2363-2364,2365
+
+
+# mop up...
+qsub -d $(pwd) -N sequels-c -l "walltime=30:00" -o sequels-c.log -q fast -t 1028,1048,1057,1065,1122,1177,1194,1197-1198,1200,1202-1203,1205,1207-1208,1209-1210,1213-1214,1219,1223,1228,1238,1242,1263-1264,1265,1335,1345,1356,2000-2001,2002-2003,2004-2005,2006-2007,2008-2009,2011-2012,2013-2014,2015,2018,2020-2021,2023-2024,2026-2027,2028-2029,2030,2032,2034,2036-2037,2041,2044,2048,2051,2054-2055,2057-2058,2060,2062,2064-2065,2071,2077,2080-2081,2084-2085,2090-2091,2095,2097,2101-2102,2105,2107,2110-2111,2113,2115,2118-2119,2120,2122,2125-2126,2128-2129,2130-2131,2132-2133,2134-2135,2136-2137,2139-2140,2141-2142,2145,2147,2150,2152,2154,2156,2158-2159,2160-2161,2162-2163,2164-2165,2167-2168,2170-2171,2172-2173,2174-2175,2176,2178-2179,2180-2181,2182-2183,2184-2185,2186-2187,2188-2189,2190-2191,2192-2193,2194-2195,2196-2197,2198,2200,2202-2203,2204-2205,2206-2207,2209-2210,2212-2213,2217-2218,2219-2220,2221,2224,2228-2229,2230-2231,2232-2233,2234-2235,2237-2238,2239-2240,2241-2242,2243-2244,2246-2247,2248-2249,2250-2251,2254-2255,2256-2257,2259-2260,2262-2263,2264-2265,2266,2268,2270-2271,2272-2273,2274,2276-2277,2278,2280,2282-2283,2284,2286,2288,2290-2291,2292,2294,2296-2297,2299,2301-2302,2304,2306-2307,2308,2310-2311,2312-2313,2315,2317-2318,2319-2320,2321-2322,2323,2325-2326,2327-2328,2331-2332,2335-2336,2337-2338,2339-2340,2347-2348,2349,2351,2355-2356,2358-2359,2360-2361,2363-2364 ./wise-coadd.py
+(at rev 23316)
+
+qstat -f -n -1 -t -r -u dstn
+
+
+Queue broke -- doing manually:
+
+node 52:
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 8 1028 1048 1057 1065 1122 1177 1194 1197 1198 1200 1202 1203 1205 1207 1208 1209 1210 1213 1214 1219 1223 1228 1238 1242 1263 1264 1265 1335 1345 1356 2000 2001 > log.n52 2>&1 &
+
+node 51:
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 8 2002 2003 2004 2005 2006 2007 2008 2009 2011 2012 2013 2014 2015 2018 2020 2021 2023 2024 2026 2027 2028 2029 2030 2032 2034 2036 2037 2041 2044 2048 2051 2054  > log.n51 2>&1 &
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 8 2173 2174 2175 2176 2178 2179 2180 2181 2182 2183 2184 2185 2186 2187 2188 2189 2190 2191 2192 2193 2194 2195 2196 2197 2198 2200 2202 2203 2204 2205 2206 2207   > log.n51b 2>&1 &
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 8 2209 2210 2212 2213 2217 2218 2219 2220 2221 2224 2228 2229 2230 2231 2232 2233 2234 2235 2237 2238 2239 2240 2241 2242 2243 2244 2246 2247 2248 2249 2250 2251  > log.n51c 2>&1 &
+ 
+node 8:
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 4 2055 2057 2058 2060 2062 2064 2065 2071 2077 2080 2081 2084 2085 2090 2091 2095 2097 2101 2102 2105 2107 2110 2111 2113 2115 2118 2119 2120 2122 2125 2126 2128   > log.n8 2>&1 &
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 4 2254 2255 2256 2257 2259 2260 2262 2263 2264 2265 2266 2268 2270 2271 2272 2273 2274 2276 2277 2278 2280 2282 2283 2284 2286 2288 2290 2291 2292 2294 2296 2297 > log.n8b 2>&1 &
+
+node 7:
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 4 2129 2130 2131 2132 2133 2134 2135 2136 2137 2139 2140 2141 2142 2145 2147 2150 2152 2154 2156 2158 2159 2160 2161 2162 2163 2164 2165 2167 2168 2170 2171 2172   > log.n7 2>&1 &
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 4 2299 2301 2302 2304 2306 2307 2308 2310 2311 2312 2313 2315 2317 2318 2319 2320 2321 2322 2323 2325 2326 2327 2328 2331 2332 2335 2336 2337 2338 2339 2340 2347  2348 2349 2351 2355 2356 2358 2359 2360 2361 2363 2364 2365 > log.n7b 2>&1 &
+
+PBS_ARRAYID=1 PBS_O_WORKDIR=$(pwd) python -u wise-coadd.py --threads 8
+  > log.n8 2>&1 &
+
+-------------------------
+running
+52:
+1028 1048 1057 1065 1122 1177 1194 1197 1198 1200 1202 1203 1205 1207 1208 1209 1210 1213 1214 1219 1223 1228 1238 1242 1263 1264 1265 1335 1345 1356 2000 2001 
+51:
+2209 2210 2212 2213 2217 2218 2219 2220 2221 2224 2228 2229 2230 2231 2232 2233 2234 2235 2237 2238 2239 2240 2241 2242 2243 2244 2246 2247 2248 2249 2250 2251
+8:
+2254 2255 2256 2257 2259 2260 2262 2263 2264 2265 2266 2268 2270 2271 2272 2273 2274 2276 2277 2278 2280 2282 2283 2284 2286 2288 2290 2291 2292 2294 2296 2297 
+7:
+2299 2301 2302 2304 2306 2307 2308 2310 2311 2312 2313 2315 2317 2318 2319 2320 2321 2322 2323 2325 2326 2327 2328 2331 2332 2335 2336 2337 2338 2339 2340 2347  2348 2349 2351 2355 2356 2358 2359 2360 2361 2363 2364 2365
+-------------------------
+done
+2002 2003 2004 2005 2006 2007 2008 2009 2011 2012 2013 2014 2015 2018 2020 2021 2023 2024 2026 2027 2028 2029 2030 2032 2034 2036 2037 2041 2044 2048 2051 2054
+2173 2174 2175 2176 2178 2179 2180 2181 2182 2183 2184 2185 2186 2187 2188 2189 2190 2191 2192 2193 2194 2195 2196 2197 2198 2200 2202 2203 2204 2205 2206 2207 
+2055 2057 2058 2060 2062 2064 2065 2071 2077 2080 2081 2084 2085 2090 2091 2095 2097 2101 2102 2105 2107 2110 2111 2113 2115 2118 2119 2120 2122 2125 2126 2128 
+2129 2130 2131 2132 2133 2134 2135 2136 2137 2139 2140 2141 2142 2145 2147 2150 2152 2154 2156 2158 2159 2160 2161 2162 2163 2164 2165 2167 2168 2170 2171 2172 
+-------------------------
+
+

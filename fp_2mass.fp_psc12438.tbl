@@ -1,0 +1,51 @@
+\fixlen = T
+\RowsRetrieved =                1 
+\ORIGIN  = 'IPAC Infrared Science Archive (IRSA), Caltech/JPL'
+\DATETIME= '2013-03-26 12:36:03'
+\DataTag = 'ADS/IRSA.Gator#2013/0326/123603_12438'
+\DATABASE= '2MASS All-Sky Point Source Catalog (PSC) (fp_psc)'
+\EQUINOX = 'J2000'
+\SKYAREA = 'within 10 arcsec of  ra=52.64666 dec=-0.42660 Eq J2000 '
+\StatusFile = '/workspace/TMP_jVPlTC_27234/Gator/irsa/12438/log.12438.html'
+\SQL     = 'WHERE (no constraints) 
+\SQL     = 'SELECT (15 column names follow in next row.)'
+\ 
+\ ra (deg) 
+\ ___ right ascension (J2000 decimal deg)
+\ dec (deg) 
+\ ___ declination (J2000 decimal deg)
+\ err_maj (arcsec) 
+\ ___ major axis of 1-sigma error ellipse
+\ err_min (arcsec) 
+\ ___ minor axis of 1-sigma error ellipse
+\ err_ang (deg) 
+\ ___ angle of error ellipse major axis (E of N)
+\ j_m (mag) 
+\ ___ J band selected "default" magnitude
+\ j_cmsig (mag) 
+\ ___ corrected J band photometric uncertainty
+\ h_m (mag) 
+\ ___ H band selected "default" magnitude
+\ h_cmsig (mag) 
+\ ___ corrected H band photometric uncertainty
+\ k_m (mag) 
+\ ___ K band selected "default" magnitude
+\ k_cmsig (mag) 
+\ ___ corrected K band photometric uncertainty
+\ jdate (jdate) 
+\ ___ julian date of source measurement to +/- 30 sec
+\ rd_flg 
+\ ___ source of JHK "default" mags (AKA "read flag")
+\ angle (deg) 
+\ ___ Position Angle in degree.
+\ dist (arcsec) 
+\ ___ Distance between the target position and each source in arcsec.
+\ 
+\ j_h ->  Reference:    Input column(s): j_m, h_m, k_m, rd_flg
+\ h_k ->  Reference:    Input column(s): j_m, h_m, k_m, rd_flg
+\ j_k ->  Reference:    Input column(s): j_m, h_m, k_m, rd_flg
+|         ra|       dec|err_maj|err_min|err_ang|   j_m|j_cmsig|   h_m|h_cmsig|   k_m|k_cmsig|       jdate|rd_flg|        dist|       angle|      j_h|      h_k|      j_k|
+|     double|    double| double| double|    int|double| double|double| double|double| double|      double|  char|      double|      double|   double|   double|   double|
+|        deg|       deg| arcsec| arcsec|    deg|   mag|    mag|   mag|    mag|   mag|    mag|       jdate|      |      arcsec|         deg|         |         |         |
+|       null|      null|   null|   null|   null|  null|   null|  null|   null|  null|   null|        null|  null|        null|        null|        -|        -|        -|
+   52.646294  -0.426287    0.08    0.08       5 15.311   0.049 14.420   0.042 13.837   0.046 2451080.7834    222     1.733682   310.537555    0.8910    0.5830    1.4740 
