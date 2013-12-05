@@ -8,10 +8,16 @@ Copyright 2011-2013 Dustin Lang (CMU) & David W. Hogg (NYU)
 
 Licensed under GPLv2; see LICENSE.
 
-## install notes:
+## install
 
-    make
-    python setup.py
+To check out and build the code in a *tractor* directory:
+
+    wget -O - https://raw.github.com/dstndstn/tractor/master/checkout.sh | bash
+
+To install:
+
+    cd tractor
+    python setup.py install # --prefix=/some/place    or maybe --home=/your/place
 
 Prereqs:
 
