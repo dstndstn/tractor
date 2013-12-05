@@ -11,6 +11,8 @@ David W. Hogg (NYU)
 
 Copyright 2011, 2012 Dustin Lang & David W. Hogg
 
+Licensed under GPLv2; see LICENSE.
+
 ## install notes:
 
 - Because we suck, you need to run `make` before running `python setup.py`.
