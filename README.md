@@ -33,6 +33,11 @@ Prereqs:
 * scipy (> 0.7; 0.9 works)
 * numpy (>= 1.4)
 
+Other packages used in various places include:
+
+* fitsio: https://github.com/esheldon/fitsio
+* emcee: http://dan.iel.fm/emcee/current
+
 ## documentation:
 
 Horribly incomplete, but online at http://thetractor.org/doc
