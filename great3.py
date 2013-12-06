@@ -156,7 +156,7 @@ if __name__ == '__main__':
     tractor.freezeParam('images')
 
     # Freeze the galaxy position for the initial optimization
-    gal.freezeParam('pos')
+    #gal.freezeParam('pos')
     
     # Do a few rounds of optimization (each .optimize() is a single
     # linearized least squares step.
@@ -214,7 +214,7 @@ if __name__ == '__main__':
     lnp = None
     pp = pp0
     rstate = None
-    for step in range(100):
+    for step in range(200):
         print 'Taking step', step
         #print 'pp shape', pp.shape
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
@@ -238,9 +238,13 @@ if __name__ == '__main__':
     for i,nm in enumerate(tractor.getParamNames()):
         pp = allp[:,:,i].ravel()
         lo,hi = [np.percentile(pp,x) for x in [5,95]]
+        mid = (lo + hi)/2.
+        lo = mid + (lo-mid)*2
+        hi = mid + (hi-mid)*2
         plt.clf()
         plt.subplot(2,1,1)
         plt.hist(pp, 50, range=(lo,hi))
+        plt.xlim(lo,hi)
         plt.subplot(2,1,2)
         plt.plot(allp[:,:,i], 'k-', alpha=0.5)
         plt.xlabel('emcee step')
