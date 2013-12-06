@@ -13,10 +13,18 @@ Licensed under GPLv2; see LICENSE.
 To check out and build the code in a *tractor* directory:
 
     wget -O - https://raw.github.com/dstndstn/tractor/master/checkout.sh | bash
-
-To install:
-
     cd tractor
+
+Or if you prefer:
+
+    # Grab and install the Astrometry.net code (http://astrometry.net/downloads)
+    git clone git@github.com:dstndstn/tractor.git
+    cd tractor
+    make
+
+It is possible to run directly out of the checked-out *tractor*
+directory.  But if you want to install it:
+
     make
     python setup.py install # --prefix=/some/place    or maybe --home=/your/place
 
