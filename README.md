@@ -17,6 +17,7 @@ To check out and build the code in a *tractor* directory:
 To install:
 
     cd tractor
+    make
     python setup.py install # --prefix=/some/place    or maybe --home=/your/place
 
 Prereqs:
