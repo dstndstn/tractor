@@ -28,7 +28,7 @@ if __name__ == '__main__':
     #food = 'dimsum'
     branch = 'great3/control/ground/constant'
     food = 'vanilla'
-    subfield = 0
+    subfield = 1
     epoch = 0
 
     tag = '%03i-%i' % (subfield, epoch)
@@ -36,6 +36,16 @@ if __name__ == '__main__':
     # paths
     imgfn  = os.path.join(branch, 'image-%s.fits' % tag)
     starfn = os.path.join(branch, 'starfield_image-%s.fits' % tag)
+
+    fns = [imgfn, starfn]
+    if not all([os.path.exists(x) for x in fns]):
+        try:
+            os.makedirs(branch)
+        except:
+            pass
+        for fn in fns:
+            if not os.path.exists(fn):
+                os.system('wget -O %s http://broiler.astrometry.net/~dstn/%s' % (fn, fn))
 
     img = fitsio.read(imgfn)
     print 'Image size', img.shape
