@@ -1,0 +1,405 @@
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/1999A%26A...352..355K
+
+   Title:
+   Weak weak lensing: correcting weak shear measurements accurately for
+   PSF anisotropy
+   Authors:
+   Kuijken, Konrad
+   Publication:
+   Astronomy and Astrophysics, v.352, p.355-362 (1999) (A&A Homepage)
+ 
+   We have developed a new technique for weak lensing analysis,
+   specifically designed to correct accurately for the effect of the point
+   spread function (PSF) on the shapes of small galaxy images. This method
+   does not rely on weighted second moments of detected images, which we
+   show can leave residuals at the level of a percent in the shear;
+   rather, we directly fit observed galaxy images as PSF-convolved,
+   sheared circular sources. We show by means of simulations that this
+   technique is able to recover shears with systematic errors well below
+   the percent level for representative PSF shapes, while its noise
+   properties are similar to existing methods.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2002sgdh.conf...38B
+
+   Title:
+   Bayesian Galaxy Shape Estimation
+   Authors:
+   Bridle, S. L.; Kneib, J.-P.; Bardeau, S.; Gull, S. F.
+   Publication:
+   THE SHAPES OF GALAXIES AND THEIR DARK HALOS. Proceedings of the Yale
+   Cosmology Workshop. Held 28-30 May 2001 in New Haven, Connecticut, USA.
+   Edited by Priyamvada Natarajan (Yale University, USA) . Published by
+   World Scientific Publishing Co. Pte. Ltd., 2002. ISBN #9789812778017,
+   pp. 38-46
+ 
+   The accurate measurement of galaxy ellipticities is vital for weak
+   lensing studies, in particular cosmic shear. We describe a Bayesian
+   approach to this problem in which galaxies are parameterized as sums of
+   Gaussians, convolved with a PSF which is also a sum of Gaussians,
+   following Kuijken (1999). We calculate the uncertainties in the output
+   parameters using a Markov Chain Monte Carlo approach. We show that for
+   a simple simulation, the ellipticity estimates do not give a biased
+   result when averaged by statistical weight. It is shown that the
+   uncertainties in the ellipticities are not increased by allowing
+   freedom in the galaxy radial profile, or by allowing the photon shot
+   noise level to be a free parameter. Finally we confirm the result of
+   Kuijken (1999) that on changing the ellipticity of two point spread
+   function Gaussian components, the reconstructed galaxy ellipticity is
+   unbiased.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2007MNRAS.382..315M
+
+   Title:
+   Bayesian galaxy shape measurement for weak lensing surveys - I.
+   Methodology and a fast-fitting algorithm
+   Authors:
+   Miller, L.; Kitching, T. D.; Heymans, C.; Heavens, A. F.;
+   van Waerbeke, L.
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 382, Issue 1,
+   pp. 315-324. (MNRAS Homepage)
+ 
+   The principles of measuring the shapes of galaxies by a model-fitting
+   approach are discussed in the context of shape measurement for surveys
+   of weak gravitational lensing. It is argued that such an approach
+   should be optimal, allowing measurement with maximal signal-to-noise
+   ratio, coupled with estimation of measurement errors. The distinction
+   between likelihood-based and Bayesian methods is discussed. Systematic
+   biases in the Bayesian method may be evaluated as part of the fitting
+   process, and overall such an approach should yield unbiased shear
+   estimation without requiring external calibration from simulations. The
+   principal disadvantage of model fitting for large surveys is the
+   computational time required, but here an algorithm is presented that
+   enables large surveys to be analysed in feasible computation times. The
+   method and algorithm is tested on simulated galaxies from the Shear
+   TEsting Programme (STEP).
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2013MNRAS.429.2858M
+
+   Title:
+   Bayesian galaxy shape measurement for weak lensing surveys - III.
+   Application to the Canada-France-Hawaii Telescope Lensing Survey
+   Authors:
+   Miller, L.; Heymans, C.; Kitching, T. D.; van Waerbeke, L.; Erben, T.;
+   Hildebrandt, H.; Hoekstra, H.; Mellier, Y.; Rowe, B. T. P.; Coupon, J.;
+   Dietrich, J. P.; Fu, L.; Harnois-Déraps, J.; Hudson, M. J.;
+   Kilbinger, M.; Kuijken, K.; Schrabback, T.; Semboloni, E.; Vafaei, S.;
+   Velander, M.
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 429, Issue 4,
+   p.2858-2880 (MNRAS Homepage)
+ 
+   A likelihood-based method for measuring weak gravitational lensing
+   shear in deep galaxy surveys is described and applied to the
+   Canada-France-Hawaii Telescope (CFHT) Lensing Survey (CFHTLenS).
+   CFHTLenS comprises 154 deg^2 of multi-colour optical data from the CFHT
+   Legacy Survey, with lensing measurements being made in the i^' band to
+   a depth i'[AB] < 24.7, for galaxies with signal-to-noise ratio nu[SN]
+   >~ 10. The method is based on the lensfit algorithm described in
+   earlier papers, but here we describe a full analysis pipeline that
+   takes into account the properties of real surveys. The method creates
+   pixel-based models of the varying point spread function (PSF) in
+   individual image exposures. It fits PSF-convolved two-component (disc
+   plus bulge) models to measure the ellipticity of each galaxy, with
+   Bayesian marginalization over model nuisance parameters of galaxy
+   position, size, brightness and bulge fraction. The method allows
+   optimal joint measurement of multiple, dithered image exposures, taking
+   into account imaging distortion and the alignment of the multiple
+   measurements. We discuss the effects of noise bias on the likelihood
+   distribution of galaxy ellipticity. Two sets of image simulations that
+   mirror the observed properties of CFHTLenS have been created to
+   establish the method's accuracy and to derive an empirical correction
+   for the effects of noise bias.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2012MNRAS.424.2757M
+
+   Title:
+   Means of confusion: how pixel noise affects shear estimates for weak
+   gravitational lensing
+   Authors:
+   Melchior, P.; Viola, M.
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 424, Issue 4,
+   pp. 2757-2769. (MNRAS Homepage)
+ 
+   Weak-lensing shear estimates show a troublesome dependence on the
+   apparent brightness of the galaxies used to measure the ellipticity: in
+   several studies, the amplitude of the inferred shear falls sharply with
+   decreasing source significance. This dependence limits the overall
+   ability of upcoming large weak-lensing surveys to constrain
+   cosmological parameters.
+
+   We seek to provide a concise overview of the impact of pixel noise on
+   weak-lensing measurements, covering the entire path from noisy images
+   to shear estimates. We show that there are at least three distinct
+   layers, where pixel noise not only obscures but also biases the outcome
+   of the measurements: (1) the propagation of pixel noise to the
+   non-linear observable ellipticity; (2) the response of the
+   shape-measurement methods to limited amount of information extractable
+   from noisy images and (3) the reaction of shear estimation statistics
+   to the presence of noise and outliers in the measured ellipticities.
+
+   We identify and discuss several fundamental problems and show that each
+   of them is able to introduce biases in the range of a few tens to a few
+   per cent for galaxies with typical significance levels. Furthermore,
+   all of these biases do not only depend on the brightness of galaxies
+   but also depend on their ellipticity, with more elliptical galaxies
+   often being harder to measure correctly. We also discuss existing
+   possibilities to mitigate and novel ideas to avoid the biases induced
+   by pixel noise. We present a new shear estimator that shows a more
+   robust performance for noisy ellipticity samples. Finally, we release
+   the open-source PYTHON code to predict and efficiently sample from the
+   noisy ellipticity distribution and the shear estimators used in this
+   work at https://github.com/pmelchior/epsnoise.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2010MNRAS.404..458V
+
+   Title:
+   Limitations of model-fitting methods for lensing shear estimation
+   Authors:
+   Voigt, L. M.; Bridle, S. L.
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 404, Issue 1,
+   pp. 458-467. (MNRAS Homepage)
+ 
+   Gravitational lensing shear has the potential to be the most powerful
+   tool for constraining the nature of dark energy. However, accurate
+   measurement of galaxy shear is crucial and has been shown to be
+   non-trivial by the Shear TEsting Programme. Here, we demonstrate a
+   fundamental limit to the accuracy achievable by model-fitting
+   techniques, if oversimplistic models are used. We show that even if
+   galaxies have elliptical isophotes, model-fitting methods which assume
+   elliptical isophotes can have significant biases if they use the wrong
+   profile. We use noise-free simulations to show that on allowing
+   sufficient flexibility in the profile the biases can be made
+   negligible. This is no longer the case if elliptical isophote models
+   are used to fit galaxies made up of a bulge plus a disc, if these two
+   components have different ellipticities. The limiting accuracy is
+   dependent on the galaxy shape, but we find the most significant biases
+   (~1 per cent of the shear) for simple spiral-like galaxies. The
+   implications for a given cosmic shear survey will depend on the actual
+   distribution of galaxy morphologies in the Universe, taking into
+   account the survey selection function and the point spread function.
+   However, our results suggest that the impact on cosmic shear results
+   from current and near future surveys may be negligible. Meanwhile,
+   these results should encourage the development of existing approaches
+   which are less sensitive to morphology, as well as methods which use
+   priors on galaxy shapes learnt from deep surveys.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2012MNRAS.425.1951R
+
+   Title:
+   Noise bias in weak lensing shape measurements
+   Authors:
+   Refregier, Alexandre; Kacprzak, Tomasz; Amara, Adam; Bridle, Sarah;
+   Rowe, Barnaby
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 425, Issue 3,
+   pp. 1951-1957. (MNRAS Homepage)
+ 
+   Weak lensing experiments are a powerful probe into cosmology through
+   their measurement of the mass distribution of the universe. A challenge
+   for this technique is to control systematic errors that occur when
+   measuring the shapes of distant galaxies. In this paper, we investigate
+   noise bias, a systematic error that arises from second-order noise
+   terms in the shape measurement process. We first derive analytical
+   expressions for the bias of general maximum-likelihood estimators in
+   the presence of additive noise. We then find analytical expressions for
+   a simplified toy model in which galaxies are modelled and fitted with a
+   Gaussian with its size as a single free parameter. Even for this very
+   simple case we find a significant effect. We also extend our analysis
+   to a more realistic six-parameter elliptical Gaussian model. We find
+   that the noise bias is generically of the order of the inverse-squared
+   signal-to-noise ratio (SNR) of the galaxies and is thus of the order of
+   a percent for galaxies of SNR 10, i.e. comparable to the weak lensing
+   shear signal. This is nearly two orders of magnitude greater than the
+   systematic requirements for future all-sky weak lensing surveys. We
+   discuss possible ways to circumvent this effect, including a
+   calibration method using simulations discussed in an associated paper.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2012MNRAS.427.2711K
+
+   Title:
+   Measurement and calibration of noise bias in weak lensing galaxy shape
+   estimation
+   Authors:
+   Kacprzak, Tomasz; Zuntz, Joe; Rowe, Barnaby; Bridle, Sarah;
+   Refregier, Alexandre; Amara, Adam; Voigt, Lisa; Hirsch, Michael
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 427, Issue 4,
+   pp. 2711-2722. (MNRAS Homepage)
+ 
+   Weak gravitational lensing has the potential to constrain cosmological
+   parameters to high precision. However, as shown by the Shear Testing
+   Programmes and Gravitational lensing Accuracy Testing challenges,
+   measuring galaxy shears is a non-trivial task: various methods
+   introduce different systematic biases which have to be accounted for.
+   We investigate how pixel noise on the image affects the bias on shear
+   estimates from a maximum likelihood forward model-fitting approach
+   using a sum of co-elliptical Sérsic profiles, in complement to the
+   theoretical approach of an associated paper. We evaluate the bias using
+   a simple but realistic galaxy model and find that the effects of noise
+   alone can cause biases of the order of 1-10 per cent on measured
+   shears, which is significant for current and future lensing surveys. We
+   evaluate a simulation-based calibration method to create a bias model
+   as a function of galaxy properties and observing conditions. This model
+   is then used to correct the simulated measurements. We demonstrate
+   that, for the simple case in which the correct range of galaxy models
+   is used in the fit, the calibration method can reduce noise bias to the
+   level required for estimating cosmic shear in upcoming lensing surveys.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2013MNRAS.434.1604Z
+
+   Title:
+   IM3SHAPE: a maximum likelihood galaxy shear measurement code for cosmic
+   gravitational lensing
+   Authors:
+   Zuntz, Joe; Kacprzak, Tomasz; Voigt, Lisa; Hirsch, Michael;
+   Rowe, Barnaby; Bridle, Sarah
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 434, Issue 2,
+   p.1604-1618 (MNRAS Homepage)
+ 
+   We present and describe IM3SHAPE, a new publicly available galaxy shape
+   measurement code for weak gravitational lensing shear. IM3SHAPE
+   performs a maximum likelihood fit of a bulge-plus-disc galaxy model to
+   noisy images, incorporating an applied point spread function. We detail
+   challenges faced and choices made in its design and implementation, and
+   then discuss various limitations that affect this and other maximum
+   likelihood methods. We assess the bias arising from fitting an
+   incorrect galaxy model using simple noise-free images and find that it
+   should not be a concern for current cosmic shear surveys. We test
+   IM3SHAPE on the Gravitational Lensing Accuracy Testing 2008 (GREAT08)
+   challenge image simulations, and meet the requirements for upcoming
+   cosmic shear surveys in the case that the simulations are encompassed
+   by the fitted model, using a simple correction for image noise bias.
+   For the fiducial branch of GREAT08 we obtain a negligible additive
+   shear bias and sub-two per cent level multiplicative bias, which is
+   suitable for analysis of current surveys. We fall short of the sub-per
+   cent level requirement for upcoming surveys, which we attribute to a
+   combination of noise bias and the mismatch between our galaxy model and
+   the model used in the GREAT08 simulations. We meet the requirements for
+   current surveys across all branches of GREAT08, except those with small
+   or high noise galaxies, which we would cut from our analysis. Using the
+   GREAT08 metric we we obtain a score of Q = 717 for the usable branches,
+   relative to the goal of Q = 1000 for future experiments. The code is
+   freely available from https://bitbucket.org/joezuntz/im3shape
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2013arXiv1308.4663K
+
+   Title:
+   S\'{e}rsic galaxy models in weak lensing shape measurement: model bias,
+   noise bias and their interaction
+   Authors:
+   Kacprzak, Tomasz; Bridle, Sarah; Rowe, Barnaby; Voigt, Lisa;
+   Zuntz, Joe; Hirsch, Michael; MacCrann, Niall
+   Publication:
+   eprint arXiv:1308.4663
+ 
+   Cosmic shear is a powerful probe of cosmological parameters, but its
+   potential can be fully utilised only if galaxy shapes are measured with
+   great accuracy. Two major effects have been identified which are likely
+   to account for most of the bias for maximum likelihood methods in
+   recent shear measurement challenges. Model bias occurs when the true
+   galaxy shape is not well represented by the fitted model. Noise bias
+   occurs due to the non-linear relationship between image pixels and
+   galaxy shape. In this paper we investigate the potential interplay
+   between these two effects when an imperfect model is used in the
+   presence of high noise. We present analytical expressions for this
+   bias, which depends on the residual difference between the model and
+   real data. They can lead to biases not accounted for in previous
+   calibration schemes. By measuring the model bias, noise bias and their
+   interaction, we provide a complete statistical framework for measuring
+   galaxy shapes with model fitting methods from GRavitational lEnsing
+   Accuracy Testing (GREAT) like images. We demonstrate the noise and
+   model interaction bias using a simple toy model, which indicates that
+   this effect can potentially be significant. Using real galaxy images
+   from the Cosmological Evolution Survey (COSMOS) we quantify the
+   strength of the model bias, noise bias and their interaction. We find
+   that the interaction term is often a similar size to the model bias
+   term, and is smaller than the requirements of the current and shortly
+   upcoming galaxy surveys.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2010MNRAS.406.2793B
+
+   Title:
+   Shape measurement biases from underfitting and ellipticity gradients
+   Authors:
+   Bernstein, Gary M.
+   Publication:
+   Monthly Notices of the Royal Astronomical Society, Volume 406, Issue 4,
+   pp. 2793-2804. (MNRAS Homepage)
+ 
+   Precision weak gravitational lensing experiments require measurements
+   of galaxy shapes accurate to <1 part in 1000. We investigate
+   measurement biases, noted by Voigt & Bridle and Melchior et al., that
+   are common to shape measurement methodologies that rely upon fitting
+   elliptical-isophote galaxy models to observed data. The first bias
+   arises when the true galaxy shapes do not match the models being fit.
+   We show that this `underfitting bias' is due, at root, to these
+   methods' attempts to use information at high spatial frequencies that
+   have been destroyed by the convolution with the point spread function
+   (PSF) and/or by sampling. We propose a new shape-measurement technique
+   that is explicitly confined to observable regions of k-space. A second
+   bias arises for galaxies whose ellipticity varies with radius. For most
+   shape-measurement methods, such galaxies are subject to `ellipticity
+   gradient bias'. We show how to reduce such biases by factors of 20-100
+   within the new shape-measurement method. The resulting shear estimator
+   has multiplicative errors <1 part in 10^3 for high signal-to-noise
+   ratio images, even for highly asymmetric galaxies. Without any training
+   or recalibration, the new method obtains Q = 3000 in the GREAT08
+   Challenge of blind shear reconstruction on low-noise galaxies, several
+   times better than any previous method.
+
+********************************************************************************
+   http://adsabs.harvard.edu/abs/2013arXiv1304.1843B
+
+   Title:
+   Bayesian Lensing Shear Measurement
+   Authors:
+   Bernstein, Gary M.; Armstrong, Robert
+   Publication:
+   eprint arXiv:1304.1843
+ 
+   We derive an estimator of weak gravitational lensing shear from
+   background galaxy images that avoids noise-induced biases through a
+   rigorous Bayesian treatment of the measurement. The derived shear
+   estimator disposes with the assignment of ellipticities to individual
+   galaxies that is typical of previous approaches to galaxy lensing.
+   Shear estimates from the mean of the Bayesian posterior are unbiased in
+   the limit of large number of background galaxies, regardless of the
+   noise level on individual galaxies. The Bayesian formalism requires a
+   prior describing the (noiseless) distribution of the target galaxy
+   population over some parameter space; this prior can be constructed
+   from low-noise images of a subsample of the target population,
+   attainable from long integrations of a fraction of the survey field. We
+   find two ways to combine this exact treatment of noise with rigorous
+   treatment of the effects of the instrumental point-spread function and
+   sampling. The Bayesian model fitting (BMF) method assigns a likelihood
+   of the pixel data to galaxy models (e.g. Sersic ellipses). The Bayesian
+   Fourier domain (BFD) method compresses the pixel data to a small set of
+   weighted moments calculated after PSF correction in Fourier space. A
+   numerical test using a simplified model of a biased galaxy measurement
+   process demonstrates that the Bayesian formalism recovers applied
+   shears to $<1$ part in $10^3$ accuracy and provides accurate
+   uncertainty estimates. BFD is the first shear measurement algorithm
+   that is model-free and requires no approximations or ad hoc assumptions
+   in correcting for the effects of PSF, noise, or sampling on the galaxy
+   images. These algorithms are good candidates for attaining the
+   part-per-thousand shear inference required for hemisphere-scale weak
+   gravitational lensing surveys. (abridged)
+
+********************************************************************************
+
