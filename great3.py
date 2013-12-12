@@ -20,7 +20,6 @@ if __name__ == '__main__':
     # Great3 postage stamp size
     SS = 48
 
-
     ps = PlotSequence('great')
 
     # which input data?
@@ -47,9 +46,9 @@ if __name__ == '__main__':
             if not os.path.exists(fn):
                 os.system('wget -O %s http://broiler.astrometry.net/~dstn/%s' % (fn, fn))
 
-    img = fitsio.read(imgfn)
+    img = fitsio.read(imgfn).astype(np.float32)
     print 'Image size', img.shape
-    stars = fitsio.read(starfn)
+    stars = fitsio.read(starfn).astype(np.float32)
     print 'Starfield size', stars.shape
 
     # first star is "centered" in the 48x48 subimage (not centered on a pixel)
@@ -67,11 +66,12 @@ if __name__ == '__main__':
 
     # histogram pixel values and noise estimate.
     plt.clf()
-    n,b,p = plt.hist(img.ravel(), 100, range=(-0.1, 0.1),
+    lo,hi = -5.*sig1, 5.*sig1
+    n,b,p = plt.hist(img.ravel(), 100, range=(lo, hi),
                      histtype='step', color='r')
-    xx = np.linspace(-0.1, 0.1, 500)
+    xx = np.linspace(lo, hi, 500)
     plt.plot(xx, max(n) * np.exp(-xx**2 / (2.*sig1**2)), 'k-')
-    plt.xlim(-0.1, 0.1)
+    plt.xlim(lo, hi)
     plt.title('Pixel histogram for image')
     ps.savefig()
 
@@ -79,7 +79,8 @@ if __name__ == '__main__':
     fluxes = []
     for stampy in range(100):
         for stampx in range(100):
-            fluxes.append(np.sum(img[stampy*SS:(stampy+1)*SS, stampx*SS:(stampx+1)*SS]))
+            fluxes.append(np.sum(img[stampy*SS:(stampy+1)*SS,
+                                     stampx*SS:(stampx+1)*SS]))
     plt.clf()
     plt.hist(fluxes, 50)
     plt.title('Sum of flux per postage stamp')
@@ -112,14 +113,21 @@ if __name__ == '__main__':
 
     # Plot star postage stamp and model
     plt.clf()
-    plt.subplot(1,2,1)
+    plt.subplot(2,2,1)
     psfima = dict(interpolation='nearest', origin='lower',
                   cmap='gray', vmin=-6, vmax=0)
     plt.imshow(np.log10(star), **psfima)
     plt.title('PSF stamp')
-    plt.subplot(1,2,2)
+    plt.subplot(2,2,2)
     plt.imshow(np.log10(psfmodel.patch), **psfima)
     plt.title('PSF model')
+    plt.subplot(2,2,3)
+    dpsf = star - psfmodel.patch
+    mx = dpsf.max()
+    plt.imshow(dpsf, interpolation='nearest', origin='lower',
+               vmin=-mx, vmax=mx)
+    plt.colorbar()
+    plt.title('Stamp - Model')
     ps.savefig()
 
     # create tractor Image object.
@@ -131,7 +139,7 @@ if __name__ == '__main__':
 
     # Create an initial galaxy model object.
     re, ab, phi = 1., 0.5, 0.
-    gal = ExpGalaxy(PixPos(SS/2-1., SS/2-1.), Flux(1.), re, ab, phi)
+    gal = ExpGalaxy(PixPos(SS/2-1., SS/2-1.), Flux(20. * sig1), re, ab, phi)
     print 'Initial', gal
 
     # Create Tractor object from list of images and list of sources
