@@ -113,21 +113,22 @@ if __name__ == '__main__':
 
     # Plot star postage stamp and model
     plt.clf()
-    plt.subplot(2,2,1)
+    plt.subplot(1,2,1)
     psfima = dict(interpolation='nearest', origin='lower',
                   cmap='gray', vmin=-6, vmax=0)
     plt.imshow(np.log10(star), **psfima)
     plt.title('PSF stamp')
-    plt.subplot(2,2,2)
+    plt.subplot(1,2,2)
     plt.imshow(np.log10(psfmodel.patch), **psfima)
     plt.title('PSF model')
-    plt.subplot(2,2,3)
-    dpsf = star - psfmodel.patch
-    mx = dpsf.max()
-    plt.imshow(dpsf, interpolation='nearest', origin='lower',
-               vmin=-mx, vmax=mx)
-    plt.colorbar()
-    plt.title('Stamp - Model')
+    #plt.subplot(2,2,3)
+    # d'oh, the star and model patch aren't the same size.
+    # dpsf = star - psfmodel.patch
+    # mx = dpsf.max()
+    # plt.imshow(dpsf, interpolation='nearest', origin='lower',
+    #            vmin=-mx, vmax=mx)
+    # plt.colorbar()
+    # plt.title('Stamp - Model')
     ps.savefig()
 
     # create tractor Image object.
