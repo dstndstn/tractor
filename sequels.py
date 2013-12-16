@@ -993,6 +993,42 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
 
+def todo(A, opt, ps):
+    need = []
+    for i in range(len(A)):
+        outfn = opt.output % (A.coadd_id[i])
+        print 'Looking for', outfn
+        if not os.path.exists(outfn):
+            need.append(i)
+    print ' '.join('%i' %i for i in need)
+            
+    # Collapse contiguous ranges
+    strings = []
+    if len(need):
+        start = need.pop(0)
+        end = start
+        while len(need):
+            x = need.pop(0)
+            if x == end + 1:
+                # extend this run
+                end = x
+            else:
+                # run finished; output and start new one.
+                if start == end:
+                    strings.append('%i' % start)
+                else:
+                    strings.append('%i-%i' % (start, end))
+                start = end = x
+        # done; output
+        if start == end:
+            strings.append('%i' % start)
+        else:
+            strings.append('%i-%i' % (start, end))
+        print ','.join(strings)
+    else:
+        print 'Done (party now)'
+
+        
 def summary(A, opt, ps):
     plt.clf()
     missing = []
@@ -1260,6 +1296,7 @@ def main():
                       help='Just write a flat-file of (deduplicated) results, not photoObj-parallels')
 
     parser.add_option('--summary', dest='summary', default=False, action='store_true')
+    parser.add_option('--todo', dest='todo', default=False, action='store_true')
 
     parser.add_option('--cell', dest='cells', default=[], type=int, action='append',
                       help='Just run certain cells?')
@@ -1353,6 +1390,10 @@ def main():
         summary(T, opt, ps)
         sys.exit(0)
 
+    if opt.todo:
+        todo(T, opt, ps)
+        sys.exit(0)
+        
     if opt.finish:
         finish(T, opt, args, ps)
         sys.exit(0)
