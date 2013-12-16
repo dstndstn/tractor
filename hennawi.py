@@ -561,8 +561,8 @@ if __name__ == '__main__':
     #h2()
     #h3()
 
-    redqsos()
-    sys.exit(0)
+    #redqsos()
+    #sys.exit(0)
 
     # merge
     TT = []
