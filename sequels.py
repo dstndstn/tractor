@@ -96,19 +96,28 @@ def get_photoobj_length(rerun, run, camcol, field, save=True):
         c.execute('create table photoObjs (rerun text, run integer, ' +
                   'camcol integer, field integer, N integer)')
         conn.commit()
-        
-    c.execute("select N from photoObjs where rerun=? and run=? and camcol=? "
-              + "and field=?", rerun, run, camcol, field)
+
+    print 'Getting photoObj length for', rerun, run, camcol, field
+    #print type(rerun), type(run), type(camcol), type(field)
+
+    # Ensure types (when read from FITS tables, they can be np.int16, eg)
+    run = int(run)
+    camcol = int(camcol)
+    field = int(field)
+    rerun = str(rerun)
+
+    c.execute('select N from photoObjs where rerun=? and run=? and camcol=? '
+              + 'and field=?', (rerun, run, camcol, field))
     row = c.fetchone()
     if row is None:
         # This photoObj is unknown
-        pofn = get_photoobj_filename(rr, run,camcol,field)
+        pofn = get_photoobj_filename(rerun, run,camcol,field)
         F = fitsio.FITS(pofn)
         N = F[1].get_nrows()
 
         if save:
-            c.execute("insert into photoObjs values (?,?,?,?,?)",
-                      rerun, run, camcol, field, N)
+            c.execute('insert into photoObjs values (?,?,?,?,?)',
+                      (rerun, run, camcol, field, N))
             conn.commit()
     else:
         print 'Row:', row
@@ -1027,16 +1036,22 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     # tile.
     from unwise_coadd import get_coadd_tile_wcs, walk_wcs_boundary
 
+    print 'Splitting tile', tile.coadd_id
+    
     # Find nearby tiles
-    I,J,d = match_radec(tiles.ra, tiles.dec, [tile.ra], [tile.dec], 2.5)
+    I,J,d = match_radec(tiles.ra, tiles.dec,
+                        np.array([tile.ra]), np.array([tile.dec]), 2.5)
     neartiles = tiles[I]
-    print len(neartiles), 'tiles nearby'
+    #print len(neartiles), 'tiles nearby:', neartiles.coadd_id
+    neartiles.cut(neartiles.coadd_id != tile.coadd_id)
+    print len(neartiles), 'tiles nearby, not me:', neartiles.coadd_id
+    
 
     # Decribe all boundaries in Intermediate World Coords with respect
     # to this tile's WCS.
     
     rr,dd = walk_wcs_boundary(wcs)
-    uu,vv = wcs.radec2iwc(rr, dd)
+    ok,uu,vv = wcs.radec2iwc(rr, dd)
     mybounds = np.array(zip(uu,vv))
     print 'My bounds:', mybounds
         
@@ -1044,7 +1059,7 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     for t in neartiles:
         w = get_coadd_tile_wcs(t.ra, t.dec)
         rr,dd = walk_wcs_boundary(w)
-        uu,vv = wcs.radec2iwc(rr, dd)
+        ok,uu,vv = wcs.radec2iwc(rr, dd)
         bounds.append(np.array(zip(uu,vv)))
 
     RCF = np.unique(zip(T.run, T.camcol, T.field))
@@ -1068,21 +1083,28 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
         wi = W[I[0]]
         rd = np.array([munu_to_radec_deg(mu, nu, wi.node, wi.incl)
                        for mu,nu in [(wi.mu_start, wi.nu_start),
-                                     (wu.mu_start, wi.nu_end),
-                                     (wu.mu_end,   wi.nu_end),
-                                     (wu.mu_end,   wi.nu_start)]])
-        uu,vv = wcs.radec2iwc(rd[:,0], rd[:,1])
+                                     (wi.mu_start, wi.nu_end),
+                                     (wi.mu_end,   wi.nu_end),
+                                     (wi.mu_end,   wi.nu_start)]])
+        ok,uu,vv = wcs.radec2iwc(rd[:,0], rd[:,1])
         poly = np.array(zip(uu,vv))
-        print 'Field polygon:', poly
-
+        # print 'Field polygon:', poly
+        # print 'My bounds:', mybounds
+        # print 'bounds:', bounds
         assert(polygons_intersect(poly, mybounds))
 
         J = np.flatnonzero((T.run == run) * (T.camcol == camcol) *
                            (T.field == field))
 
-        if any([polygons_intersect(poly, b) for b in bounds]):
-            print 'this field straddles tiles'
-            straddle[J] = True
+        strads = False
+        for b in bounds:
+            #print 'bounds', b
+            if polygons_intersect(poly, b):
+                print 'Field', run, camcol, field, 'straddles tiles'
+                straddle[J] = True
+                strads = True
+                break
+        if strads:
             continue
 
         print 'Field', run, camcol, field, 'totally within tile', tile.coadd_id
@@ -1096,12 +1118,14 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
         N = get_photoobj_length(rr, run, camcol, field)
         print 'PhotoObj has', N, 'rows'
 
+        Ti = T[J]
+        
         P = fits_table()
         P.has_wise_phot = np.zeros(N, bool)
-        I = T.id - 1
+        I = Ti.id - 1
         P.has_wise_phot[I] = True
-        for col in T.get_columns():
-            tval = T.get(col)
+        for col in Ti.get_columns():
+            tval = Ti.get(col)
             X = np.zeros(N, tval.dtype)
             X[I] = tval
             P.set(col, X)
@@ -1226,14 +1250,17 @@ def finish(T, opt, args, ps):
     if opt.splitrcf:
         from unwise_coadd import get_coadd_tile_wcs
         for i in range(len(T)):
+            outfn = opt.output % T.coadd_id[i]
+            if not outfn in fns:
+                continue
+            print 'File', outfn
             tile = T[i]
             wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
-            outfn = opt.output % tile.coadd_id
             unsplitoutfn = opt.unsplitoutput % tile.coadd_id
             objs = fits_table(outfn)
             print 'Read', len(objs), 'from', outfn
             print 'Writing unsplit to', unsplitoutfn
-            splitrcf(tile, T, wcs, unsplitoutfn)
+            splitrcf(tile, T, wcs, objs, unsplitoutfn)
         return
 
     flats = []
