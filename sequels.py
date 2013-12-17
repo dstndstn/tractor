@@ -83,6 +83,40 @@ if __name__ == '__main__':
 
     Time.add_measurement(MemMeas)
 
+photoobj_length_db = 'photoobj-lengths.sqlite3'
+def get_photoobj_length(rerun, run, camcol, field, save=True):
+    import sqlite3
+    timeout = 60.
+    create = not os.path.exists(photoobj_length_db)
+
+    conn = sqlite3.connect(photoobj_length_db, timeout)
+    c = conn.cursor()
+    if create:
+        print 'Creating db table in', photoobj_length_db
+        c.execute('create table photoObjs (rerun text, run integer, ' +
+                  'camcol integer, field integer, N integer)')
+        conn.commit()
+        
+    c.execute("select N from photoObjs where rerun=? and run=? and camcol=? "
+              + "and field=?", rerun, run, camcol, field)
+    row = c.fetchone()
+    if row is None:
+        # This photoObj is unknown
+        pofn = get_photoobj_filename(rr, run,camcol,field)
+        F = fitsio.FITS(pofn)
+        N = F[1].get_nrows()
+
+        if save:
+            c.execute("insert into photoObjs values (?,?,?,?,?)",
+                      rerun, run, camcol, field, N)
+            conn.commit()
+    else:
+        print 'Row:', row
+        N = row[0]
+    conn.close()
+    return N
+
+
 def get_tile_dir(basedir, coadd_id):
     return os.path.join(basedir, coadd_id[:3], coadd_id)
 
@@ -143,6 +177,7 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
         log.debug('cut to', len(T), 'in RA,Dec box and PRIMARY.')
         if len(T) == 0:
             continue
+
         TT.append(T)
     if not len(TT):
         return None
@@ -981,17 +1016,110 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
         print 'Pickled', fn
 
     if opt.splitrcf:
-        # -Write out any run,camcol,field that is totally contained
-        # within this coadd tile, and does not touch any other coadd
-        # tile.
-
-        # -Write out the remaining objects to be --finish'd later.
-        pass
-        
-
+        unsplitoutfn = opt.unsplitoutput % (tile.coadd_id)
+        splitrcf(tile, tiles, wcs, T, unsplitoutfn)
 
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
+def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
+    # -Write out any run,camcol,field that is totally contained
+    # within this coadd tile, and does not touch any other coadd
+    # tile.
+    from unwise_coadd import get_coadd_tile_wcs, walk_wcs_boundary
+
+    # Find nearby tiles
+    I,J,d = match_radec(tiles.ra, tiles.dec, [tile.ra], [tile.dec], 2.5)
+    neartiles = tiles[I]
+    print len(neartiles), 'tiles nearby'
+
+    # Decribe all boundaries in Intermediate World Coords with respect
+    # to this tile's WCS.
+    
+    rr,dd = walk_wcs_boundary(wcs)
+    uu,vv = wcs.radec2iwc(rr, dd)
+    mybounds = np.array(zip(uu,vv))
+    print 'My bounds:', mybounds
+        
+    bounds = []
+    for t in neartiles:
+        w = get_coadd_tile_wcs(t.ra, t.dec)
+        rr,dd = walk_wcs_boundary(w)
+        uu,vv = wcs.radec2iwc(rr, dd)
+        bounds.append(np.array(zip(uu,vv)))
+
+    RCF = np.unique(zip(T.run, T.camcol, T.field))
+    print 'Unique run/camcol/field:', RCF
+
+    wfn = os.path.join(resolvedir, 'window_flist.fits')
+    # For --split: figure out which fields are completely within the tile.
+    W = fits_table(wfn, columns=['node', 'incl', 'mu_start', 'mu_end',
+                                 'nu_start', 'nu_end', 'ra', 'dec',
+                                 'rerun', 'run', 'camcol', 'field'])
+    straddle = np.zeros(len(T), bool)
+
+    # HACK -- rerun
+    rr = '301'
+
+    for run,camcol,field in RCF:
+            
+        I = np.flatnonzero((W.run == run) * (W.camcol == camcol) *
+                           (W.field == field) * (W.rerun == rr))
+        assert(len(I) == 1)
+        wi = W[I[0]]
+        rd = np.array([munu_to_radec_deg(mu, nu, wi.node, wi.incl)
+                       for mu,nu in [(wi.mu_start, wi.nu_start),
+                                     (wu.mu_start, wi.nu_end),
+                                     (wu.mu_end,   wi.nu_end),
+                                     (wu.mu_end,   wi.nu_start)]])
+        uu,vv = wcs.radec2iwc(rd[:,0], rd[:,1])
+        poly = np.array(zip(uu,vv))
+        print 'Field polygon:', poly
+
+        assert(polygons_intersect(poly, mybounds))
+
+        J = np.flatnonzero((T.run == run) * (T.camcol == camcol) *
+                           (T.field == field))
+
+        if any([polygons_intersect(poly, b) for b in bounds]):
+            print 'this field straddles tiles'
+            straddle[J] = True
+            continue
+
+        print 'Field', run, camcol, field, 'totally within tile', tile.coadd_id
+
+        myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
+        if not os.path.exists(myoutdir):
+            os.makedirs(myoutdir)
+        outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' %
+                             (run, camcol, field))
+
+        N = get_photoobj_length(rr, run, camcol, field)
+        print 'PhotoObj has', N, 'rows'
+
+        P = fits_table()
+        P.has_wise_phot = np.zeros(N, bool)
+        I = T.id - 1
+        P.has_wise_phot[I] = True
+        for col in T.get_columns():
+            tval = T.get(col)
+            X = np.zeros(N, tval.dtype)
+            X[I] = tval
+            P.set(col, X)
+        P.delete_column('index')
+        P.delete_column('id')
+        
+        P.writeto(outfn)
+        print 'Wrote', outfn
+
+    # -Write out the remaining objects to be --finish'd later.
+    S = T[straddle]
+    print len(S), 'objects straddle tiles'
+    if len(S):
+        S.writeto(unsplitoutfn)
+        print 'Wrote to', unsplitoutfn
+
+    
+    
 
 def todo(A, opt, ps):
     need = []
@@ -1093,6 +1221,21 @@ def finish(T, opt, args, ps):
         fns = glob(os.path.join(outdir, 'phot-????????.fits'))
         fns.sort()
         print 'Found', len(fns), 'photometry output files'
+
+
+    if opt.splitrcf:
+        from unwise_coadd import get_coadd_tile_wcs
+        for i in range(len(T)):
+            tile = T[i]
+            wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
+            outfn = opt.output % tile.coadd_id
+            unsplitoutfn = opt.unsplitoutput % tile.coadd_id
+            objs = fits_table(outfn)
+            print 'Read', len(objs), 'from', outfn
+            print 'Writing unsplit to', unsplitoutfn
+            splitrcf(tile, T, wcs, unsplitoutfn)
+        return
+
     flats = []
     fieldmap = {}
     for ifn,fn in enumerate(fns):
@@ -1191,9 +1334,6 @@ def finish(T, opt, args, ps):
         print 'Key', key, '->', N
         if N is None:
             pofn = get_photoobj_filename(rr, run,camcol,field)
-            if not os.path.exists(pofn):
-                pofn = pofn.replace(photoobjdir, 'photoObj.v4b')
-                print 'Trying', pofn
             F = fitsio.FITS(pofn)
             N = F[1].get_nrows()
             pobjlengths[key] = N
@@ -1340,6 +1480,8 @@ def main():
 
     opt,args = parser.parse_args()
 
+    opt.unsplitoutput = None
+    
     if opt.tiledir:
         tiledir = opt.tiledir
 
@@ -1383,6 +1525,8 @@ def main():
         
     if opt.output is None:
         opt.output = os.path.join(outdir, 'phot-%s.fits')
+    if opt.unsplitoutput is None:
+        opt.unsplitoutput = os.path.join(outdir, 'phot-unsplit-%s.fits')
     if opt.save_wise_output is None:
         opt.save_wise_output = opt.output.replace('phot-', 'phot-wise-')
 
