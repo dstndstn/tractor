@@ -85,6 +85,13 @@ With --finish --split:
    --will overwrite existing "pobj" output files!
    --will write OUTDIR/phot-unsplit-*.fits files
 
+
+If you use --split when running tiles, it will still write out the
+normal OUTDIR/phot-TILE.fits files, as well as
+POBJ/RERUN/RUN/CAMCOL/photoWiseForced-R-C-F.fits files, and
+OUTDIR/phot-unsplit-TILE.fits.  After all tiles have finished, one
+must still run --finish on the phot-unsplit-TILE.fits files.
+   
 '''
 
 
