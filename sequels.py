@@ -40,6 +40,53 @@ text2fits.py -n "*********" -f sddjjffffffjfjffffffjfffjffffffffffffffffff -H "i
 ''' Stripe82 deep QSO plates (RA 36-42): see deepqso.py for notes.
 '''
 
+'''
+Relevant files/directories are:
+
+DATASET-atlas.fits
+  the coadd tiles to process
+
+(--tiledir)
+tiledir ("wise-coadds")/xxx/xxxx[pm]xxx/unwise-xxxx[pm]xxx-wW-img-m.fits
+                             and {invvar,std,n}-m.fits
+  WISE coadd tiles
+
+photoobjdir ("photoObjs-new")
+  SDSS photoObj files
+
+resolvedir ("photoResolve-new")/window_flist.fits
+  SDSS resolve files
+
+tempoutdir ("DATASET-phot-temp")/photoobjs-TILE.fits
+                                /wise-sources-TILE.fits
+  SDSS photoObjs files, and WISE catalog sources
+  
+(-d)
+outdir ("DATASET-phot")/phot-TILE.fits
+                       /phot-unsplit-TILE.fits
+                       /phot-wise-TILE.fits
+  phot-TILE.fits: WISE forced photometry for photoobjs-TILE.fits objects
+  phot-unsplit-TILE.fits: objects that straddle tiles
+  phot-wise-TILE.fits: photometry for WISE-only sources too
+
+(--pobj)
+pobjoutdir ("DATASET-pobj")/RERUN/RUN/CAMCOL/photoWiseForced-R-C-F.fits
+  phot-TILE.fits entries split back into SDSS fields
+
+photoobj-lengths.sqlite3
+  Database holding the length of PhotoObj files
+
+
+About --split:
+
+With --finish --split:
+   --NOTE that while you can specify the filenames to split, they MUST be in the
+     expected output directory.
+   --will overwrite existing "pobj" output files!
+   --will write OUTDIR/phot-unsplit-*.fits files
+
+'''
+
 
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
@@ -1042,9 +1089,8 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     I,J,d = match_radec(tiles.ra, tiles.dec,
                         np.array([tile.ra]), np.array([tile.dec]), 2.5)
     neartiles = tiles[I]
-    #print len(neartiles), 'tiles nearby:', neartiles.coadd_id
     neartiles.cut(neartiles.coadd_id != tile.coadd_id)
-    print len(neartiles), 'tiles nearby, not me:', neartiles.coadd_id
+    print len(neartiles), 'tiles nearby:', neartiles.coadd_id
     
 
     # Decribe all boundaries in Intermediate World Coords with respect
@@ -1053,7 +1099,6 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     rr,dd = walk_wcs_boundary(wcs)
     ok,uu,vv = wcs.radec2iwc(rr, dd)
     mybounds = np.array(zip(uu,vv))
-    print 'My bounds:', mybounds
         
     bounds = []
     for t in neartiles:
@@ -1088,9 +1133,6 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
                                      (wi.mu_end,   wi.nu_start)]])
         ok,uu,vv = wcs.radec2iwc(rd[:,0], rd[:,1])
         poly = np.array(zip(uu,vv))
-        # print 'Field polygon:', poly
-        # print 'My bounds:', mybounds
-        # print 'bounds:', bounds
         assert(polygons_intersect(poly, mybounds))
 
         J = np.flatnonzero((T.run == run) * (T.camcol == camcol) *
@@ -1098,7 +1140,6 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
 
         strads = False
         for b in bounds:
-            #print 'bounds', b
             if polygons_intersect(poly, b):
                 print 'Field', run, camcol, field, 'straddles tiles'
                 straddle[J] = True
@@ -1468,8 +1509,6 @@ def main():
     parser.add_option('--cell', dest='cells', default=[], type=int, action='append',
                       help='Just run certain cells?')
 
-    # parser.add_option('--ceres', dest='ceres', action='store_true', default=False,
-    #                   help='Use Ceres Solver?')
     parser.add_option('--no-ceres', dest='ceres', action='store_false', default=True,
                        help='Use scipy lsqr rather than Ceres Solver?')
 
