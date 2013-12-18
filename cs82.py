@@ -165,6 +165,9 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
 def main(opt, cs82field):
     bands = opt.bands
 
+    version = get_svn_version()
+    print 'SVN version info:', version
+    
     T,F = getTables(cs82field, enclosed=False)
 
 	# We probably have to work in Dec slices to keep the memory reasonable
@@ -175,7 +178,10 @@ def main(opt, cs82field):
 	#ddec = (dec1 - dec0) / nslices
 	#print 'ddec:', ddec
 
-	sdss = DR9(basedir='cs82data/dr9')
+    #sdss = DR9(basedir='cs82data/dr9')
+    sdss = DR9()
+    sdss.useLocalTree()
+    sdss.saveUnzippedFiles('data/unzip')
 
 	### HACK -- ignore 0/360 issues
 	ra0 = T.ra.min()
@@ -276,6 +282,9 @@ if __name__ == '__main__':
     parser.add_option('-b', dest='bands', type=str, default='ugriz',
                       help='SDSS bands (default %default)')
 	opt,args = parser.parse_args()
+
+    lvl = logging.INFO
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
 	cs82field = 'S82p18p'
 	main(opt, cs82field)
