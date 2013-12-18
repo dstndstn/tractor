@@ -186,9 +186,10 @@ def main(opt, cs82field):
     #print 'ddec:', ddec
 
     #sdss = DR9(basedir='cs82data/dr9')
-    sdss = DR9()
-    sdss.useLocalTree()
-    sdss.saveUnzippedFiles('data/unzip')
+    sdss = DR9(basedir='data/unzip')
+    if opt.local:
+        sdss.useLocalTree()
+        sdss.saveUnzippedFiles('data/unzip')
 
     ### HACK -- ignore 0/360 issues
     ra0 = T.ra.min()
@@ -314,9 +315,16 @@ def main(opt, cs82field):
 
 if __name__ == '__main__':
     import optparse
+    sdss = DR9()
+    url = sdss.dasurl
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('-b', dest='bands', type=str, default='ugriz',
                       help='SDSS bands (default %default)')
+    parser.add_option('-l', dest='local', action='store_true', default=False,
+                      help='Use local SDSS tree?')
+    parser.add_option('--das', default=url,
+                      help='SDSS DAS url: default %default')
+
     opt,args = parser.parse_args()
 
     lvl = logging.INFO

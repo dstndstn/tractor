@@ -6,9 +6,10 @@ doc: html
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
-PYMOD_LIB ?= -lpython
+PYMOD_LIB ?= $(shell python-config --libs) #-lpython
+PYMOD_INC ?= $(shell python-config --includes)
 
-EIGEN_INC ?= -I/usr/local/include/eigen3
+EIGEN_INC ?= $(shell pkg-config --cflags eigen3)
 
 CERES_INC ?= 
 # ceres 1.6.0 was so easy...
@@ -30,7 +31,7 @@ CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
-	g++ -Wall -fPIC -c ceres_wrap.cxx $$(python-config --includes) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ -Wall -fPIC -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
 	g++ -Wall -fPIC -c ceres-tractor.cc $(CERES_INC) $(EIGEN_INC)
 	g++ -Wall -fPIC -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
 
