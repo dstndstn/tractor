@@ -1,94 +1,8 @@
-import os
-import logging
-import matplotlib
-matplotlib.use('Agg')
-import numpy as np
-import pylab as plt
 import multiprocessing
-from glob import glob
 from scipy.ndimage.measurements import label,find_objects
-
-from astrometry.util.pyfits_utils import *
-from astrometry.util.sdss_radec_to_rcf import *
 from astrometry.util.multiproc import *
-from astrometry.util.file import *
-from astrometry.util.plotutils import *
-from astrometry.util.util import *
-from astrometry.util.ttime import *
-from astrometry.sdss import *
-from astrometry.libkd.spherematch import *
-
-from tractor import *
-from tractor.sdss import *
-from tractor.sdss_galaxy import *
-from tractor.emfit import em_fit_2d
-from tractor.fitpsf import em_init_params
-
 import cProfile
 from datetime import datetime
-
-
-def get_cs82_sources(T, maglim=25, mags=['u','g','r','i','z']):
-	srcs = Catalog()
-	isrcs = []
-	for i,t in enumerate(T):
-		if t.chi2_psf < t.chi2_model and t.mag_psf <= maglim:
-			#print 'PSF'
-			themag = t.mag_psf
-			nm = NanoMaggies.magToNanomaggies(themag)
-			m = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
-			srcs.append(PointSource(RaDecPos(t.ra, t.dec), m))
-			isrcs.append(i)
-			continue
-
-		if t.mag_disk > maglim and t.mag_spheroid > maglim:
-			#print 'Faint'
-			continue
-
-		# deV: spheroid
-		# exp: disk
-
-		dmag = t.mag_spheroid
-		emag = t.mag_disk
-
-		# SPHEROID_REFF [for Sersic index n= 1] = 1.68 * DISK_SCALE
-
-		if dmag <= maglim:
-			shape_dev = GalaxyShape(t.spheroid_reff_world * 3600.,
-									t.spheroid_aspect_world,
-									t.spheroid_theta_world + 90.)
-
-		if emag <= maglim:
-			shape_exp = GalaxyShape(t.disk_scale_world * 1.68 * 3600.,
-									t.disk_aspect_world,
-									t.disk_theta_world + 90.)
-
-		pos = RaDecPos(t.alphamodel_j2000, t.deltamodel_j2000)
-
-		isrcs.append(i)
-		if emag > maglim and dmag <= maglim:
-			nm = NanoMaggies.magToNanomaggies(dmag)
-			m_dev = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
-			srcs.append(DevGalaxy(pos, m_dev, shape_dev))
-			continue
-		if emag <= maglim and dmag > maglim:
-			nm = NanoMaggies.magToNanomaggies(emag)
-			m_exp = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
-			srcs.append(ExpGalaxy(pos, m_exp, shape_exp))
-			continue
-
-		#srcs.append(CompositeGalaxy(pos, m_exp, shape_exp, m_dev, shape_dev))
-
-		nmd = NanoMaggies.magToNanomaggies(dmag)
-		nme = NanoMaggies.magToNanomaggies(emag)
-		nm = nmd + nme
-		fdev = (nmd / nm)
-		m = NanoMaggies(order=mags, **dict([(k, nm) for k in mags]))
-		srcs.append(FixedCompositeGalaxy(pos, m, fdev, shape_exp, shape_dev))
-
-	#print 'Sources:', len(srcs)
-	return srcs, np.array(isrcs)
-
 
 #def runfield((r, c, f, band, basename, r0,r1,d0,d1, T, opt)):
 def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
@@ -331,86 +245,6 @@ def runfield((r, c, f, band, basename, r0,r1,d0,d1, opt, cat,icat)):
 	T.about()
 	T.writeto(fn)
 	print 'Wrote', fn
-
-
-def getTables(cs82field, enclosed=True, extra_cols=[]):
-	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
-				   hdu=2, column_map={'ALPHA_J2000':'ra',
-									  'DELTA_J2000':'dec'},
-				   columns=[x.upper() for x in
-							['ALPHA_J2000', 'DELTA_J2000',
-							'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
-							 'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
-							 'disk_theta_world', 'spheroid_reff_world',
-							 'spheroid_aspect_world', 'spheroid_theta_world',
-							 'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
-	ra0,ra1 = T.ra.min(), T.ra.max()
-	dec0,dec1 = T.dec.min(), T.dec.max()
-	print 'RA', ra0,ra1
-	print 'Dec', dec0,dec1
-	T.index = np.arange(len(T))
-
-	# ASSUME no RA wrap-around in the catalog
-	trad = 0.5 * np.hypot(ra1 - ra0, dec1 - dec0)
-	tcen = radectoxyz((ra1+ra0)*0.5, (dec1+dec0)*0.5)
-
-	frad = 0.5 * np.hypot(13., 9.) / 60.
-
-	fn = 'sdssfield-%s.fits' % cs82field
-	if os.path.exists(fn):
-		print 'Reading', fn
-		F = fits_table(fn)
-	else:
-		F = fits_table('window_flist-DR9.fits')
-
-		# These runs don't appear in DAS
-		#F.cut((F.run != 4322) * (F.run != 4240) * (F.run != 4266))
-		F.cut(F.rerun != "157")
-
-		# For Stripe 82, mu-nu is aligned with RA,Dec.
-		rd = []
-		rd.append(munu_to_radec_deg(F.mu_start, F.nu_start, F.node, F.incl))
-		rd.append(munu_to_radec_deg(F.mu_end,   F.nu_end,   F.node, F.incl))
-		rd = np.array(rd)
-		F.ra0  = np.min(rd[:,0,:], axis=0)
-		F.ra1  = np.max(rd[:,0,:], axis=0)
-		F.dec0 = np.min(rd[:,1,:], axis=0)
-		F.dec1 = np.max(rd[:,1,:], axis=0)
-
-		I = np.flatnonzero((F.ra0 <= T.ra.max()) *
-						   (F.ra1 >= T.ra.min()) *
-						   (F.dec0 <= T.dec.max()) *
-						   (F.dec1 >= T.dec.min()))
-		print 'Possibly overlapping fields:', len(I)
-		F.cut(I)
-
-		# When will I ever learn not to cut on RA boxes when there is wrap-around?
-		xyz = radectoxyz(F.ra, F.dec)
-		r2 = np.sum((xyz - tcen)**2, axis=1)
-		I = np.flatnonzero(r2 < deg2distsq(trad + frad))
-		print 'Possibly overlapping fields:', len(I)
-		F.cut(I)
-
-		F.enclosed = ((F.ra0 >= T.ra.min()) *
-					  (F.ra1 <= T.ra.max()) *
-					  (F.dec0 >= T.dec.min()) *
-					  (F.dec1 <= T.dec.max()))
-		
-		# Sort by distance from the center of the field.
-		ra  = (T.ra.min()  + T.ra.max() ) / 2.
-		dec = (T.dec.min() + T.dec.max()) / 2.
-		I = np.argsort( ((F.ra0  + F.ra1 )/2. - ra )**2 +
-						((F.dec0 + F.dec1)/2. - dec)**2 )
-		F.cut(I)
-
-		F.writeto(fn)
-		print 'Wrote', fn
-
-	if enclosed:
-		F.cut(F.enclosed)
-		print 'Enclosed fields:', len(F)
-		
-	return T,F
 
 def makecmd(opt, cs82field):
 	T,F = getTables(cs82field)
@@ -810,55 +644,14 @@ def _simul_one(opt, cs82field, Ti, Fi, sdss, ps, band, raslice, rlo, rhi,
 	print 'Wrote', fn
 	
 	
-
-
 def simulfit(opt, cs82field):
-	T,F = getTables(cs82field, enclosed=False)
+    #...
 
-	# We probably have to work in Dec slices to keep the memory reasonable
-	dec0 = T.dec.min()
-	dec1 = T.dec.max()
-	print 'Dec range:', dec0, dec1
-	#nslices = 4
-	#ddec = (dec1 - dec0) / nslices
-	#print 'ddec:', ddec
+    ps = PlotSequence('simul')
 
-	sdss = DR9(basedir='cs82data/dr9')
-
-	### HACK -- ignore 0/360 issues
-	ra0 = T.ra.min()
-	ra1 = T.ra.max()
-	print 'RA range:', ra0, ra1
-	assert(ra1 - ra0 < 2.)
-
-	decs = np.linspace(dec0, dec1, 5)
-	ras  = np.linspace(ra0,  ra1, 5)
-
-	print 'Score range:', F.score.min(), F.score.max()
-	print 'Before score cut:', len(F)
-	F.cut(F.score > 0.5)
-	print 'Cut on score:', len(F)
-
-	ps = PlotSequence('simul')
-
-	for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
-		print 'Dec slice:', dlo, dhi
-		for raslice,(rlo,rhi) in enumerate(zip(ras, ras[1:])):
-			print 'RA slice:', rlo, rhi
-
-			# in deg
-			margin = 15. / 3600.
-			Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
-				   ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi)]
-			Ti.marginal = np.logical_not((Ti.dec >= dlo) * (Ti.dec <= dhi) *
-										 (Ti.ra  >= rlo) * (Ti.ra  <= rhi))
-			print len(Ti), 'sources in RA,Dec slice'
-			print len(np.flatnonzero(Ti.marginal)), 'are in the margins'
-
-			Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
-				   np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
-			print len(Fi), 'fields in RA,Dec slice'
-
+    if True:
+        if True:
+    
 			band = 'i'
 
 			pixscale = 0.396 / 3600.
@@ -883,14 +676,8 @@ def simulfit(opt, cs82field):
 			sig = (1./ie)
 			minsb = 0.1 * sig
 
-			print 'Creating Tractor sources...'
-			maglim = 24
-			cat,icat = get_cs82_sources(Ti, maglim=maglim)
-			print 'Got', len(cat), 'sources'
-			cat.freezeParamsRecursive('*')
-			cat.thawPathsTo(band)
-
-
+            #...
+            
 			print 'Finding overlapping sources...'
 			tr = Tractor([faketim], cat)
 			groups,L,nil = tr.getOverlappingSources(0, minsb=minsb)
