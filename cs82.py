@@ -21,6 +21,8 @@ from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 
+data_dir = 'data/cs82'
+
 def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 	srcs = Catalog()
 	isrcs = []
@@ -83,16 +85,16 @@ def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 
 
 def getTables(cs82field, enclosed=True, extra_cols=[]):
-	T = fits_table('cs82data/%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field,
-				   hdu=2, column_map={'ALPHA_J2000':'ra',
-									  'DELTA_J2000':'dec'},
-				   columns=[x.upper() for x in
-							['ALPHA_J2000', 'DELTA_J2000',
-							'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
-							 'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
-							 'disk_theta_world', 'spheroid_reff_world',
-							 'spheroid_aspect_world', 'spheroid_theta_world',
-							 'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
+	T = fits_table(os.path.join(data_dir, '%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field),
+            hdu=2, column_map={'ALPHA_J2000':'ra',
+                               'DELTA_J2000':'dec'},
+            columns=[x.upper() for x in
+                     ['ALPHA_J2000', 'DELTA_J2000',
+                      'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
+                      'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
+                      'disk_theta_world', 'spheroid_reff_world',
+                      'spheroid_aspect_world', 'spheroid_theta_world',
+                      'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
 	ra0,ra1 = T.ra.min(), T.ra.max()
 	dec0,dec1 = T.dec.min(), T.dec.max()
 	print 'RA', ra0,ra1
