@@ -93,6 +93,12 @@ OUTDIR/phot-unsplit-TILE.fits.  After all tiles have finished, one
 must still run --finish on the phot-unsplit-TILE.fits files.
    
 '''
+'''
+About field_primary.fits: from DR10 CAS:
+"select rerun, run, camcol, field, primaryArea from Field"
+
+If primaryArea = 0, can be ignored when reading photoObjs.
+'''
 
 
 if __name__ == '__main__':
@@ -188,7 +194,16 @@ def get_photoobj_filename(rr, run, camcol, field):
                       'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
     return fn
 
-def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
+print 'Reading field_primary.fits ...'
+F = fits_table('field_primary.fits')
+fieldAreas = dict([((int(rr),int(r),int(c),int(f)),a) for rr,r,c,f,a
+                   in zip(F.rerun, F.run, F.camcol, F.field, F.primaryarea)])
+del F
+
+def read_photoobjs(wcs, margin, cols=None):
+    '''
+    Read photoObjs that are inside the given 'wcs', plus 'margin' in degrees.
+    '''
     log = logging.getLogger('sequels.read_photoobjs')
 
     if cols is None:
@@ -206,38 +221,51 @@ def read_photoobjs(r0, r1, d0, d1, margin, cols=None):
 
     wfn = os.path.join(resolvedir, 'window_flist.fits')
 
-    ra,dec = (r0+r1)/2., (d0+d1)/2.
-    rad = degrees_between(ra,dec, r0,d0)
-    rad += np.hypot(13., 9.)/60.
+    ra,dec = wcs.radec_center()
+    rad = wcs.radius()
+    rad += np.hypot(13., 9.) / 2 / 60.
     # a little extra margin
     rad += margin
 
+    print 'Searching for run,camcol,fields with radius', rad, 'deg'
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
-    log.debug('Found', len(RCF), 'fields possibly in range')
+    log.debug('Found %i fields possibly in range' % len(RCF))
 
-    ddec = margin
-    dra  = margin / min([np.cos(np.deg2rad(x)) for x in [d0,d1]])
-
+    pixmargin = margin * 3600. / wcs.pixel_scale()
+    W,H = wcs.get_width(), wcs.get_height()
+    
     TT = []
     sdss = DR9()
     for run,camcol,field,r,d in RCF:
-        log.debug('RCF', run, camcol, field)
+        log.debug('RCF %i/%i/%i' % (run, camcol, field))
         rr = sdss.get_rerun(run, field=field)
         if rr in [None, '157']:
             log.debug('Rerun 157')
+            continue
+
+        pa = fieldAreas.get((int(rr),int(run),int(camcol),int(field)), None)
+        if pa == 0:
+            log.debug('RCF %i/%i/%i has primaryArea %s; skipping' % (run,camcol,field,pa))
             continue
 
         fn = get_photoobj_filename(rr, run, camcol, field)
 
         T = fits_table(fn, columns=cols)
         if T is None:
-            log.debug('read 0 from', fn)
+            log.debug('read 0 from %s' % fn)
             continue
-        log.debug('read', len(T), 'from', fn)
-        T.cut((T.ra  >= (r0-dra )) * (T.ra  <= (r1+dra)) *
-              (T.dec >= (d0-ddec)) * (T.dec <= (d1+ddec)) *
-              ((T.resolve_status & 256) > 0))
-        log.debug('cut to', len(T), 'in RA,Dec box and PRIMARY.')
+        log.debug('read %i from %s' % (len(T), fn))
+
+        # while we're reading it, record its length for later...
+        get_photoobj_length(rr, run, camcol, field)
+
+        ok,x,y = wcs.radec2pixelxy(T.ra, T.dec)
+        x -= 1
+        y -= 1
+        T.cut((x > -pixmargin) * (x < (W + pixmargin)) *
+              (y > -pixmargin) * (y < (H + pixmargin)) *
+              (T.resolve_status & 256) > 0)
+        log.debug('cut to %i within target area and PRIMARY.' % len(T))
         if len(T) == 0:
             continue
 
@@ -319,7 +347,7 @@ def set_bright_psf_mods(cat, WISE, T, brightcut, band, tile, wcs, sourcerad):
         cat[j].fixedRadius = phalf
         sourcerad[j] = max(sourcerad[j], phalf)
 
-def _get_photoobjs(tile, r0,r1,d0,d1, bandnum, existOnly):
+def _get_photoobjs(tile, wcs, bandnum, existOnly):
     objfn = os.path.join(tempoutdir, 'photoobjs-%s.fits' % tile.coadd_id)
     if os.path.exists(objfn):
         if existOnly:
@@ -329,7 +357,7 @@ def _get_photoobjs(tile, r0,r1,d0,d1, bandnum, existOnly):
         T = fits_table(objfn)
     else:
         print 'Did not find', objfn, '-- reading photoObjs'
-        T = read_photoobjs(r0, r1, d0, d1, 1./60.)
+        T = read_photoobjs(wcs, 1./60.)
         if T is None:
             return None
         T.writeto(objfn)
@@ -414,7 +442,7 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
     H,W = wcs.get_height(), wcs.get_width()
 
     if T is None:
-        T = _get_photoobjs(tile, r0,r1,d0,d1, bandnum, opt.photoObjsOnly)
+        T = _get_photoobjs(tile, wcs, bandnum, opt.photoObjsOnly)
         if T is None:
             print 'Empty tile'
         if opt.photoObjsOnly:
@@ -479,7 +507,15 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
         print 'Read', len(WISE), 'WISE sources nearby'
     else:
         cols = ['ra','dec'] + ['w%impro'%band for band in [1,2,3,4]]
-        WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
+
+        print 'wise_catalog_radecbox:', r0,r1,d0,d1
+        if r1 - r0 > 180:
+            # assume wrap-around; glue together 0-r0 and r1-360
+            Wa = wise_catalog_radecbox(0., r0, d0, d1, cols=cols)
+            Wb = wise_catalog_radecbox(r1, 360., d0, d1, cols=cols)
+            WISE = merge_tables([Wa, Wb])
+        else:
+            WISE = wise_catalog_radecbox(r0, r1, d0, d1, cols=cols)
         WISE.writeto(wfn)
         print 'Found', len(WISE), 'WISE sources nearby'
 
@@ -1084,6 +1120,19 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
 
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
+def _bounce_split((tile, T, wcs, outfn, unsplitoutfn)):
+    try:
+        print 'Reading', outfn
+        objs = fits_table(outfn)
+        print 'Read', len(objs), 'from', outfn
+        print 'Writing unsplit to', unsplitoutfn
+        splitrcf(tile, T, wcs, objs, unsplitoutfn)
+    except:
+        import traceback
+        print 'Exception processing', tile.coadd_id
+        traceback.print_exc()
+        #raise
+
 def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     # -Write out any run,camcol,field that is totally contained
     # within this coadd tile, and does not touch any other coadd
@@ -1140,7 +1189,7 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
                                      (wi.mu_end,   wi.nu_start)]])
         ok,uu,vv = wcs.radec2iwc(rd[:,0], rd[:,1])
         poly = np.array(zip(uu,vv))
-        assert(polygons_intersect(poly, mybounds))
+        #assert(polygons_intersect(poly, mybounds))
 
         J = np.flatnonzero((T.run == run) * (T.camcol == camcol) *
                            (T.field == field))
@@ -1297,18 +1346,35 @@ def finish(T, opt, args, ps):
 
     if opt.splitrcf:
         from unwise_coadd import get_coadd_tile_wcs
+
+        mp = multiproc(1)
+        args = []
         for i in range(len(T)):
             outfn = opt.output % T.coadd_id[i]
             if not outfn in fns:
                 continue
+            unsplitoutfn = opt.unsplitoutput % T.coadd_id[i]
+            if os.path.exists(unsplitoutfn):
+                print 'Exists:', unsplitoutfn
+                continue
             print 'File', outfn
             tile = T[i]
             wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
-            unsplitoutfn = opt.unsplitoutput % tile.coadd_id
-            objs = fits_table(outfn)
-            print 'Read', len(objs), 'from', outfn
-            print 'Writing unsplit to', unsplitoutfn
-            splitrcf(tile, T, wcs, objs, unsplitoutfn)
+            args.append((tile, T, wcs, outfn, unsplitoutfn))
+        mp.map(_bounce_split, args)
+
+        # for i in range(len(T)):
+        #     outfn = opt.output % T.coadd_id[i]
+        #     if not outfn in fns:
+        #         continue
+        #     print 'File', outfn
+        #     tile = T[i]
+        #     wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
+        #     unsplitoutfn = opt.unsplitoutput % tile.coadd_id
+        #     objs = fits_table(outfn)
+        #     print 'Read', len(objs), 'from', outfn
+        #     print 'Writing unsplit to', unsplitoutfn
+        #     splitrcf(tile, T, wcs, objs, unsplitoutfn)
         return
 
     flats = []

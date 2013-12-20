@@ -4,6 +4,8 @@ from astrometry.util.fits import *
 
 def wise_catalog_radecbox(r0, r1, d0, d1,
                           path='wise-cats', cols=None):
+    if r1 - r0 > 180:
+        print 'WARNING: wise_catalog_radecbox: RA range', r0, 'to', r1, ': maybe wrap-around?'
     TT = []
     for i,(dlo,dhi) in enumerate(wise_catalog_dec_range):
         if dlo > d1 or dhi < d0:

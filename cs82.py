@@ -168,6 +168,8 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
 
 
 def main(opt, cs82field):
+    t0 = Time()
+    
     bands = opt.bands
 
     ps = PlotSequence('cs82')
@@ -206,18 +208,24 @@ def main(opt, cs82field):
     ps.savefig()
 
 
+    #decs = np.linspace(dec0, dec1, 20)
+    #ras  = np.linspace(ra0,  ra1, 20)
     decs = np.linspace(dec0, dec1, 5)
-    ras  = np.linspace(ra0,  ra1, 5)
+    ras  = np.linspace(ra0,  ra1, 20)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
     F.cut(F.score > 0.5)
     print 'Cut on score:', len(F)
-    
+
+    Tcats = []
+
     for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
         print 'Dec slice:', dlo, dhi
         for raslice,(rlo,rhi) in enumerate(zip(ras, ras[1:])):
             print 'RA slice:', rlo, rhi
+
+            tslice0 = Time()
 
             # in deg
             margin = 15. / 3600.
@@ -244,6 +252,9 @@ def main(opt, cs82field):
             maglim = 24
             cat,icat = get_cs82_sources(Ti, maglim=maglim, bands=bands)
             print 'Got', len(cat), 'sources'
+            Tcat = Ti[icat]
+            print len(Tcat), 'in table'
+            Tcats.append(Tcat)
 
             # FIXME -- initialize fluxes by matching to SDSS sources?
             # FIXME -- freeze marginal sources!
@@ -281,40 +292,140 @@ def main(opt, cs82field):
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
 
-                plt.clf()
-                plothist(Ti.ra, Ti.dec, 200, imshowargs=dict(cmap='gray'))
-                plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')
-                for tim in tims:
-                    H,W = tim.shape
-                    rd0 = tim.getWcs().pixelToPosition(0,0)
-                    rd1 = tim.getWcs().pixelToPosition(W-1,H-1)
-                    plt.plot([rd0.ra,rd0.ra,rd1.ra,rd1.ra,rd0.ra], [rd0.dec,rd1.dec,rd1.dec,rd0.dec,rd0.dec], 'b-', alpha=0.5)
-                plt.title('%s slice d%i r%i: %i SDSS fields' % (cs82field, decslice, raslice, len(tims)))
-                ps.savefig()
+                if False:
+                    plt.clf()
+                    plothist(Ti.ra, Ti.dec, 200, imshowargs=dict(cmap='gray'))
+                    plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')
+                    for tim in tims:
+                        H,W = tim.shape
+                        rd0 = tim.getWcs().pixelToPosition(0,0)
+                        rd1 = tim.getWcs().pixelToPosition(W-1,H-1)
+                        plt.plot([rd0.ra,rd0.ra,rd1.ra,rd1.ra,rd0.ra], [rd0.dec,rd1.dec,rd1.dec,rd0.dec,rd0.dec], 'b-', alpha=0.5)
+                    plt.title('%s slice d%i r%i: %i SDSS fields' % (cs82field, decslice, raslice, len(tims)))
+                    ps.savefig()
 
-                #minsig = getattr(opt, 'minsig%i' % band)
-                #minsb = sig1 * minsig
                 sig1 = np.median(sigs)
                 minsig = 0.1
                 minsb= minsig * sig1
                 print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
                 
-                tr = Tractor(tims, cat)
-                tr.freezeParam('images')
+                tractor = Tractor(tims, cat)
+                tractor.freezeParam('images')
                 sz = 8
-                phot = tr.optimize_forced_photometry(
-                    minsb=minsb, mindlnp=1.,
+                wantims = True
+
+                tp0 = Time()
+
+                R = tractor.optimize_forced_photometry(
+                    minsb=minsb, mindlnp=1., wantims=wantims,
                     fitstats=True, variance=True,
                     shared_params=False, use_ceres=True,
                     BW=sz, BH=sz)
 
-                print 'Forced phot finished'
-                
+                print 'Forced phot finished:', Time()-tp0
 
-                
+                IV = R.IV
+                fitstats = R.fitstats
+
+                nm = np.array([src.getBrightness().getBand(band)
+                               for src in tractor.getCatalog()])
+                nm_ivar = IV
+                assert(len(nm) == len(Tcat))
+                assert(len(nm_ivar) == len(Tcat))
+
+                tag = ''
+
+                Tcat.set('sdss_%s_nanomaggies%s' % (band, tag), nm)
+                Tcat.set('sdss_%s_nanomaggies_invvar%s' % (band, tag), nm_ivar)
+                dnm = 1./np.sqrt(nm_ivar)
+                mag = NanoMaggies.nanomaggiesToMag(nm)
+                dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
+                Tcat.set('sdss_%s_mag%s' % (band, tag), mag)
+                Tcat.set('sdss_%s_mag_err%s' % (band, tag), dmag)
+                if fitstats is not None:
+                    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+                    for k in fskeys:
+                        Tcat.set(k + '_' + band + tag, getattr(fitstats, k).astype(np.float32))
+                stat = R.ceres_status
+                func_tol = (stat['termination'] == 2)
+                steps = stat['steps_successful']
+                Tcat.set('fit_ok_%s%s' % (band, tag), np.array([(func_tol and steps > 0)] * len(T)))
+                if wantims:
+                    ims0 = R.ims0
+                    ims1 = R.ims1
+
+                    nims = len(tims)
+                    cols = int(np.ceil(np.sqrt(nims)))
+                    rows = int(np.ceil(nims / float(cols)))
+                    
+                    plt.clf()
+                    for i,tim in enumerate(tims):
+                        plt.subplot(rows, cols, i+1)
+                        ima = dict(interpolation='nearest', origin='lower',
+                                   vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                        img = tim.getImage()
+                        plt.imshow(img, **ima)
+                        plt.xticks([]); plt.yticks([])
+                        plt.title(tim.name)
+                    plt.suptitle('Data: SDSS %s' % band)
+                    ps.savefig()
+
+                    plt.clf()
+                    for i,tim in enumerate(tims):
+                        plt.subplot(rows, cols, i+1)
+                        ima = dict(interpolation='nearest', origin='lower',
+                                   vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                        mod = tractor.getModelImage(i)
+                        plt.imshow(mod, **ima)
+                        plt.xticks([]); plt.yticks([])
+                        plt.title(tim.name)
+                    plt.suptitle('Models: SDSS %s' % band)
+                    # for i,tim in enumerate(tims):
+                    #     plt.subplot(rows, cols, i+1)
+                    #     ax = plt.axis()
+                    #     xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
+                    #                    for r,d in zip(T.ra, T.dec)])
+                    #     plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
+                    #     if len(sdssobjs):
+                    #         xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
+                    #                        for s in sdssobjs])
+                    #         plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
+                    #     plt.axis(ax)
+                    ps.savefig()
+
+            print 'Slice:', Time()-tslice0
+            print 'Total:', Time()-t0
+
+        Tall = merge_tables(Tcats)
+        print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
+        Tcols = T.get_columns()
+        Tx = T.copy()
+        for c in Tall.get_columns():
+            if c in Tcols:
+                continue
+            X = np.zeros_like(len(T), Tall.get(c).dtype)
+            X[Tall.index] = Tall.get(c)
+            Tx.set(c, Tall)
+        Tx.writeto('cs82-phot-%s-slice%i.fits' % decslice)
+        del Tx
+
+
+    Tall = merge_tables(Tcats)
+    print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
+    Tcols = T.get_columns()
+    for c in Tall.get_columns():
+        if c in Tcols:
+            continue
+        X = np.zeros_like(len(T), Tall.get(c).dtype)
+        X[Tall.index] = Tall.get(c)
+        T.set(c, Tall)
+
+    return T
+
 
 if __name__ == '__main__':
     import optparse
+    Time.add_measurement(MemMeas)
     sdss = DR9()
     url = sdss.dasurl
     parser = optparse.OptionParser('%prog [options]')
@@ -331,4 +442,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     cs82field = 'S82p18p'
-    main(opt, cs82field)
+    T = main(opt, cs82field)
+    fn = 'cs82-phot-%s.fits' % cs82field
+    T.writeto(fn)
+    print 'Wrote', fn
+    

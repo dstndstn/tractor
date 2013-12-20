@@ -1,0 +1,9 @@
+#PBS -l walltime=12:00:00
+#PBS -N hennawi
+#PBS -q batch
+#PBS -o data/hennawi-logs-b
+#PBS -e data/hennawi-logs-b
+
+cd ${HOME}/tractor
+python -u hennawi.py
+
