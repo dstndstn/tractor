@@ -210,8 +210,8 @@ def main(opt, cs82field):
 
     #decs = np.linspace(dec0, dec1, 20)
     #ras  = np.linspace(ra0,  ra1, 20)
-    decs = np.linspace(dec0, dec1, 5)
-    ras  = np.linspace(ra0,  ra1, 20)
+    decs = np.linspace(dec0, dec1, 2)
+    ras  = np.linspace(ra0,  ra1, 41)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
@@ -263,6 +263,8 @@ def main(opt, cs82field):
                 cat.freezeParamsRecursive('*')
                 cat.thawPathsTo(band)
 
+                tb0 = Time()
+
                 tims = []
                 sigs = []
                 npix = 0
@@ -274,6 +276,9 @@ def main(opt, cs82field):
                                                     invvarIgnoresSourceFlux=True)
                     if tim is None:
                         continue
+
+                    # Get SDSS sources to fill in holes....?
+
                     (H,W) = tim.shape
                     print 'Tim', tim.shape
                     tim.wcs.setConstantCd(W/2., H/2.)
@@ -283,11 +288,10 @@ def main(opt, cs82field):
                     # needed for optimize_forced_photometry with rois
                     #del tim.invvar
                     tims.append(tim)
+                    sigs.append(1./np.sqrt(np.median(tim.invvar)))
                     npix += (H*W)
                     print 'got', (H*W), 'pixels, total', npix
-
-                    sigs.append(1./np.sqrt(np.median(tim.invvar)))
-
+                    print 'Read image', i+1, 'in band', band, ':', Time()-tb0
 
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
@@ -315,6 +319,8 @@ def main(opt, cs82field):
                 wantims = True
 
                 tp0 = Time()
+                print 'Starting forced phot:', Time()-tb0
+                print '(since start of band)'
 
                 R = tractor.optimize_forced_photometry(
                     minsb=minsb, mindlnp=1., wantims=wantims,
@@ -322,7 +328,7 @@ def main(opt, cs82field):
                     shared_params=False, use_ceres=True,
                     BW=sz, BH=sz)
 
-                print 'Forced phot finished:', Time()-tp0
+                print 'Forced phot finished:', Time()-tb0
 
                 IV = R.IV
                 fitstats = R.fitstats
@@ -371,14 +377,23 @@ def main(opt, cs82field):
                     ps.savefig()
 
                     plt.clf()
-                    for i,tim in enumerate(tims):
+                    print 'ims1:', len(ims1)
+                    print 'tims:', len(tims)
+                    # for i,tim in enumerate(tims):
+                    #     plt.subplot(rows, cols, i+1)
+                    #     ima = dict(interpolation='nearest', origin='lower',
+                    #                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+                    #     mod = tractor.getModelImage(i)
+                    #     plt.imshow(mod, **ima)
+                    #     plt.xticks([]); plt.yticks([])
+                    #     plt.title(tim.name)
+                    for i,(im,mod,ie,chi,roi) in enumerate(ims1):
                         plt.subplot(rows, cols, i+1)
                         ima = dict(interpolation='nearest', origin='lower',
                                    vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-                        mod = tractor.getModelImage(i)
                         plt.imshow(mod, **ima)
                         plt.xticks([]); plt.yticks([])
-                        plt.title(tim.name)
+                        plt.title(tims[i].name)
                     plt.suptitle('Models: SDSS %s' % band)
                     # for i,tim in enumerate(tims):
                     #     plt.subplot(rows, cols, i+1)
@@ -393,21 +408,28 @@ def main(opt, cs82field):
                     #     plt.axis(ax)
                     ps.savefig()
 
+                    del ims0
+                    del ims1
+                del R
+                del tims
+                del tractor
+            
             print 'Slice:', Time()-tslice0
             print 'Total:', Time()-t0
 
-        Tall = merge_tables(Tcats)
-        print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
-        Tcols = T.get_columns()
-        Tx = T.copy()
-        for c in Tall.get_columns():
-            if c in Tcols:
-                continue
-            X = np.zeros_like(len(T), Tall.get(c).dtype)
-            X[Tall.index] = Tall.get(c)
-            Tx.set(c, Tall)
-        Tx.writeto('cs82-phot-%s-slice%i.fits' % decslice)
-        del Tx
+            Tall = merge_tables(Tcats)
+            print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
+            Tcols = T.get_columns()
+            Tx = T.copy()
+            for c in Tall.get_columns():
+                if c in Tcols:
+                    continue
+                X = np.zeros_like(len(T), Tall.get(c).dtype)
+                X[Tall.index] = Tall.get(c)
+                Tx.set(c, Tall)
+            Tx.writeto('cs82-phot-%s-slice%i.fits' %
+                       (cs82field, decslice * (len(ras)-1) + raslice))
+            del Tx
 
 
     Tall = merge_tables(Tcats)
@@ -420,8 +442,10 @@ def main(opt, cs82field):
         X[Tall.index] = Tall.get(c)
         T.set(c, Tall)
 
-    return T
-
+    fn = 'cs82-phot-%s.fits' % cs82field
+    T.writeto(fn)
+    print 'Wrote', fn
+    return
 
 if __name__ == '__main__':
     import optparse
@@ -443,7 +467,4 @@ if __name__ == '__main__':
 
     cs82field = 'S82p18p'
     T = main(opt, cs82field)
-    fn = 'cs82-phot-%s.fits' % cs82field
-    T.writeto(fn)
-    print 'Wrote', fn
     

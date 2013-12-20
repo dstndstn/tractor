@@ -557,6 +557,11 @@ def redqsos():
 class myopts(object):
     pass
 
+def finish_redqsos():
+    TT = [fits_table('wisew4phot-%03i.fits' % i) for i in range(642)]
+    T = merge_tables(TT, columns='fillzero')
+    T.writeto('wisew4phot.fits')
+
 '''
 text2fits.py -S 1 agn_coords.txt agn.fits
 '''
@@ -564,7 +569,9 @@ if __name__ == '__main__':
     #h2()
     #h3()
 
-    redqsos()
+    #redqsos()
+    finish_redqsos()
+
     sys.exit(0)
 
     # merge
