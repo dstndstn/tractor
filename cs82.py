@@ -21,6 +21,8 @@ from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 
+from photoobjs import *
+
 data_dir = 'data/cs82'
 window_flist = 'window_flist.fits'
 
@@ -118,7 +120,6 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
         F = fits_table(window_flist)
 
         # These runs don't appear in DAS
-        #F.cut((F.run != 4322) * (F.run != 4240) * (F.run != 4266))
         F.cut(F.rerun != "157")
 
         # For Stripe 82, mu-nu is aligned with RA,Dec.
@@ -179,15 +180,6 @@ def main(opt, cs82field):
     
     T,F = getTables(cs82field, enclosed=False)
 
-    # We probably have to work in Dec slices to keep the memory reasonable
-    dec0 = T.dec.min()
-    dec1 = T.dec.max()
-    print 'Dec range:', dec0, dec1
-    #nslices = 4
-    #ddec = (dec1 - dec0) / nslices
-    #print 'ddec:', ddec
-
-    #sdss = DR9(basedir='cs82data/dr9')
     sdss = DR9(basedir='data/unzip')
     if opt.local:
         sdss.useLocalTree()
@@ -196,8 +188,25 @@ def main(opt, cs82field):
     ### HACK -- ignore 0/360 issues
     ra0 = T.ra.min()
     ra1 = T.ra.max()
+    dec0 = T.dec.min()
+    dec1 = T.dec.max()
     print 'RA range:', ra0, ra1
+    print 'Dec range:', dec0, dec1
+    # check for wrap-around
     assert(ra1 - ra0 < 2.)
+
+    # Read SDSS objects to initialize fluxes (and fill in holes?)
+    # create fake WCS for this area...
+    pixscale = 1./3600.
+    decpix = int(np.ceil((dec1 - dec0) / pixscale))
+    # HACK -- ignoring cos(dec)
+    rapix = int(np.ceil((ra1 - ra0) / pixscale))
+    wcs = Tan((ra0 + ra1)/2., (dec0+dec1)/2., rapix/2 + 1, decpix/2 + 1,
+              pixscale, 0., 0., pixscale, rapix, decpix)
+    pa = PrimaryArea()
+    S = read_photoobjs(sdss, wcs, 1./3600., pa=pa, cols=['ra','dec','cmodelflux',
+                                                         'resolve_status'])
+    print 'Read', len(S), 'SDSS objects'
 
     plt.clf()
     plothist(T.ra, T.dec, 200, imshowargs=dict(cmap='gray'))
@@ -211,12 +220,16 @@ def main(opt, cs82field):
     #decs = np.linspace(dec0, dec1, 20)
     #ras  = np.linspace(ra0,  ra1, 20)
     decs = np.linspace(dec0, dec1, 2)
-    ras  = np.linspace(ra0,  ra1, 41)
+    #ras  = np.linspace(ra0,  ra1, 41)
+    # DEBUG -- ++quickness
+    ras  = np.linspace(ra0,  ra1, 101)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
     F.cut(F.score > 0.5)
     print 'Cut on score:', len(F)
+
+    T.phot_done = np.zeros(len(T), bool)
 
     Tcats = []
 
@@ -256,7 +269,20 @@ def main(opt, cs82field):
             print len(Tcat), 'in table'
             Tcats.append(Tcat)
 
-            # FIXME -- initialize fluxes by matching to SDSS sources?
+            print 'Matching to SDSS sources...'
+            print 'N cat', len(Tcat)
+            print 'N SDSS', len(S)
+            I,J,d = match_radec(Tcat.ra, Tcat.dec, S.ra, S.dec, 1./3600., nearest=True)
+            print 'found', len(I), 'matches'
+            # initialize fluxes based on SDSS matches
+            flux = S.cmodelflux
+            for i,j in zip(I, J):
+                #print 'src', cat[i]
+                for band in bands:
+                    bi = 'ugriz'.index(band)
+                    setattr(cat[i].getBrightness(), band, flux[j, bi])
+                #print 'src', cat[i]
+
             # FIXME -- freeze marginal sources!
             
             for band in bands:
@@ -419,16 +445,35 @@ def main(opt, cs82field):
 
             Tall = merge_tables(Tcats)
             print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
+            print 'Tall:', len(Tall)
+            Tall.about()
+            print 'T:', len(T)
+            T.about()
             Tcols = T.get_columns()
             Tx = T.copy()
             for c in Tall.get_columns():
                 if c in Tcols:
+                    #print 'Skipping column', c
+                    print 'Updating column', c
+                    Tx.get(c)[Tall.index] = Tall.get(c)
                     continue
-                X = np.zeros_like(len(T), Tall.get(c).dtype)
+                print 'Setting column', c
+                X = np.zeros(len(T), Tall.get(c).dtype)
+                print 'col', c, 'X:', len(X), X.dtype
+                print 'index:', len(Tall.index), Tall.index.dtype
                 X[Tall.index] = Tall.get(c)
-                Tx.set(c, Tall)
-            Tx.writeto('cs82-phot-%s-slice%i.fits' %
-                       (cs82field, decslice * (len(ras)-1) + raslice))
+                Tx.set(c, X)
+            Tx.phot_done[Tall.index] = True
+            fn = 'cs82-phot-%s-slice%i.fits' % (cs82field, decslice * (len(ras)-1) + raslice)
+            Tx.writeto(fn)
+            Tx.about()
+            print 'Wrote', fn
+            Tx.cut(Tx.phot_done)
+            fn = 'cs82-phot-%s-slice%i-cut.fits' % (cs82field, decslice * (len(ras)-1) + raslice)
+            Tx.writeto(fn)
+            Tx.about()
+            print 'Wrote', fn
+                
             del Tx
 
 
@@ -462,7 +507,8 @@ if __name__ == '__main__':
 
     opt,args = parser.parse_args()
 
-    lvl = logging.INFO
+    #lvl = logging.INFO
+    lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     cs82field = 'S82p18p'
