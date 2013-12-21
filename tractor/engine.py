@@ -1103,17 +1103,17 @@ class Tractor(MultiParams):
                 
                 srcmod[slc] /= csum
 
-                nz = np.flatnonzero((srcmod[slc] > 0) * (ie[slc] > 0))
+                nz = np.flatnonzero((srcmod[slc] != 0) * (ie[slc] > 0))
                 if len(nz) == 0:
                     srcmod[slc] = 0.
                     continue
 
-                fs.prochi2[si] += np.sum(srcmod[slc].flat[nz] * chi[slc].flat[nz]**2)
-                fs.pronpix[si] += np.sum(srcmod[slc].flat[nz])
+                fs.prochi2[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * chi[slc].flat[nz]**2)
+                fs.pronpix[si] += np.sum(np.abs(srcmod[slc].flat[nz]))
                 # (mod - srcmod*csum) is the model for everybody else
-                fs.profracflux[si] += np.sum(((mod[slc] / csum - srcmod[slc]) * srcmod[slc]).flat[nz])
+                fs.profracflux[si] += np.sum((np.abs(mod[slc] / csum - srcmod[slc]) * np.abs(srcmod[slc])).flat[nz])
                 # scale to nanomaggies, weight by profile
-                fs.proflux[si] += np.sum((((mod[slc] - srcmod[slc]*csum) / scale) * srcmod[slc]).flat[nz])
+                fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*csum) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
                 srcmod[slc] = 0.
 
@@ -1488,7 +1488,8 @@ class Tractor(MultiParams):
                                    use_ceres=False,
                                    BW=None, BH=None,
                                    nonneg=False,
-                                   nilcounts=1e-6,
+                                   #nilcounts=1e-6,
+                                   nilcounts=-1e30,
                                    wantims=True,
                                    negfluxval=None,
                                    ):
