@@ -1,6 +1,7 @@
 import logging
 from astrometry.util.fits import *
 from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.util.run_command import run_command
 
 #### From sequels.py ####
 
@@ -62,7 +63,27 @@ def read_photoobjs(sdss, wcs, margin, cols=None, pa=None, wfn='window_flist.fits
                 continue
 
         fn = get_photoobj_filename(rr, run, camcol, field)
-
+        if not os.path.exists(fn):
+            url = sdss.get_url('photoObj', run, camcol, field)
+            cmd = "wget --continue -nv -O %(outfn)s '%(url)s'"
+            cmd = cmd % dict(outfn=fn, url=url)
+            dirnm = os.path.dirname(fn)
+            print 'Directory:', dirnm
+            if not os.path.exists(dirnm):
+                print 'Creating', dirnm
+                try:
+                    os.makedirs(dirnm)
+                except:
+                    pass
+            log.debug('Retrieving photoObj from %s to %s' % (url, fn))
+            (rtn,out,err) = run_command(cmd)
+            if rtn:
+                print 'Command failed: command', cmd
+                print 'Output:', out
+                print 'Error:', err
+                print 'Return val:', rtn
+                return None
+        
         T = fits_table(fn, columns=cols)
         if T is None:
             log.debug('read 0 from %s' % fn)
