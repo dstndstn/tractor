@@ -231,7 +231,7 @@ def main(opt, cs82field):
 
     T.phot_done = np.zeros(len(T), bool)
 
-    Tcats = []
+    T.marginal = np.zeros(len(T), bool)
 
     for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
         print 'Dec slice:', dlo, dhi
@@ -242,52 +242,71 @@ def main(opt, cs82field):
 
             # in deg
             margin = 15. / 3600.
-            Ti = T[((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
-                   ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi)]
-            Ti.marginal = np.logical_not((Ti.dec >= dlo) * (Ti.dec <= dhi) *
-                                         (Ti.ra  >= rlo) * (Ti.ra  <= rhi))
-            print len(Ti), 'sources in RA,Dec slice'
-            print len(np.flatnonzero(Ti.marginal)), 'are in the margins'
+            Ibox = np.flatnonzero(
+                ((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
+                ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi))
+            T.marginal[:] = False
+            T.marginal[Ibox] = np.logical_not(
+                (T.dec[Ibox] >= dlo) * (T.dec[Ibox] <= dhi) *
+                (T.ra [Ibox] >= rlo) * (T.ra [Ibox] <= rhi))
+            print len(Ibox), 'sources in RA,Dec slice'
+            print len(np.flatnonzero(T.marginal)), 'are in the margins'
 
             Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
                    np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
             print len(Fi), 'fields in RA,Dec slice'
 
             plt.clf()
-            plothist(Ti.ra, Ti.dec, 200, imshowargs=dict(cmap='gray'))
+            plothist(T.ra[Ibox], T.dec[Ibox], 200,imshowargs=dict(cmap='gray'))
             plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')
             for f in Fi:
-                plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0], [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0], 'b-', alpha=0.5)
-            plt.title('%s slice d%i r%i: %i SDSS fields' % (cs82field, decslice, raslice, len(Fi)))
+                plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0],
+                         [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0], 'b-', alpha=0.5)
+            plt.title('%s slice d%i r%i: %i SDSS fields' %
+                      (cs82field, decslice, raslice, len(Fi)))
             ps.savefig()
 
             print 'Creating Tractor sources...'
             maglim = 24
-            cat,icat = get_cs82_sources(Ti, maglim=maglim, bands=bands)
+            cat,icat = get_cs82_sources(T[Ibox], maglim=maglim, bands=bands)
             print 'Got', len(cat), 'sources'
-            Tcat = Ti[icat]
-            print len(Tcat), 'in table'
-            Tcats.append(Tcat)
+            # Icat: index into T, row-parallel to cat
+            Icat = Ibox[icat]
+            print len(Icat), 'sources created'
 
+            # Match to SDSS sources only for those catalog objects
+            # that haven't already been photometered in a previous
+            # slice.
+            Imatch = Icat[np.logical_not(T.phot_done[Icat])]
+            print len(Imatch), 'to match to SDSS'
+            
             print 'Matching to SDSS sources...'
-            print 'N cat', len(Tcat)
             print 'N SDSS', len(S)
-            I,J,d = match_radec(Tcat.ra, Tcat.dec, S.ra, S.dec, 1./3600., nearest=True)
+            I,J,d = match_radec(T.ra[Imatch], T.dec[Imatch], S.ra, S.dec,
+                                1./3600., nearest=True)
             print 'found', len(I), 'matches'
             # initialize fluxes based on SDSS matches
             flux = S.cmodelflux
             for i,j in zip(I, J):
-                #print 'src', cat[i]
                 for band in bands:
                     bi = 'ugriz'.index(band)
                     setattr(cat[i].getBrightness(), band, flux[j, bi])
-                #print 'src', cat[i]
 
-            # FIXME -- freeze marginal sources!
-            
+            Ifreeze = np.flatnonzero(T.marginal[Icat])
+            print 'Freezing', len(Ifreeze), 'sources'
+            Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
+            print len(Ifit), 'sources being fit'
+                    
             for band in bands:
                 cat.freezeParamsRecursive('*')
                 cat.thawPathsTo(band)
+
+                # Now freeze sources in the margins.
+                print 'Before freezing marginal sources:',
+                print len(cat.getParams()), 'params'
+                cat.freezeParams(Ifreeze)
+                print 'After freezing marginal sources:',
+                print len(cat.getParams()), 'params'
 
                 tb0 = Time()
 
@@ -296,10 +315,12 @@ def main(opt, cs82field):
                 npix = 0
                 for i,(r,c,f) in enumerate(zip(Fi.run, Fi.camcol, Fi.field)):
                     print 'Reading', (i+1), 'of', len(Fi), ':', r,c,f,band
-                    tim,inf = get_tractor_image_dr9(r, c, f, band, sdss=sdss,
-                                                    nanomaggies=True, zrange=[-2,5],
-                                                    roiradecbox=[rlo,rhi,dlo,dhi],
-                                                    invvarIgnoresSourceFlux=True)
+                    tim,inf = get_tractor_image_dr9(
+                        r, c, f, band, sdss=sdss,
+                        nanomaggies=True, zrange=[-2,5],
+                        roiradecbox=[rlo,rhi,dlo,dhi],
+                        invvarIgnoresSourceFlux=True)
+
                     if tim is None:
                         continue
 
@@ -330,8 +351,11 @@ def main(opt, cs82field):
                         H,W = tim.shape
                         rd0 = tim.getWcs().pixelToPosition(0,0)
                         rd1 = tim.getWcs().pixelToPosition(W-1,H-1)
-                        plt.plot([rd0.ra,rd0.ra,rd1.ra,rd1.ra,rd0.ra], [rd0.dec,rd1.dec,rd1.dec,rd0.dec,rd0.dec], 'b-', alpha=0.5)
-                    plt.title('%s slice d%i r%i: %i SDSS fields' % (cs82field, decslice, raslice, len(tims)))
+                        plt.plot([rd0.ra,rd0.ra,rd1.ra,rd1.ra,rd0.ra], 
+                                 [rd0.dec,rd1.dec,rd1.dec,rd0.dec,rd0.dec],
+                                 'b-', alpha=0.5)
+                    plt.title('%s slice d%i r%i: %i SDSS fields' %
+                              (cs82field, decslice, raslice, len(tims)))
                     ps.savefig()
 
                 sig1 = np.median(sigs)
@@ -367,21 +391,30 @@ def main(opt, cs82field):
 
                 tag = ''
 
-                Tcat.set('sdss_%s_nanomaggies%s' % (band, tag), nm)
-                Tcat.set('sdss_%s_nanomaggies_invvar%s' % (band, tag), nm_ivar)
+                X = T.get('sdss_%s_nanomaggies%s' % (band, tag))
+                X[Ifit] = nm
+                X = T.get('sdss_%s_nanomaggies_invvar%s' % (band, tag))
+                X[Ifit] = nm_ivar
                 dnm = 1./np.sqrt(nm_ivar)
                 mag = NanoMaggies.nanomaggiesToMag(nm)
                 dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
-                Tcat.set('sdss_%s_mag%s' % (band, tag), mag)
-                Tcat.set('sdss_%s_mag_err%s' % (band, tag), dmag)
+                X = T.get('sdss_%s_mag%s' % (band, tag))
+                X[Ifit] = mag
+                X = T.get('sdss_%s_mag_err%s' % (band, tag))
+                X[Ifit] = dmag
                 if fitstats is not None:
-                    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+                    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux',
+                              'npix']
                     for k in fskeys:
-                        Tcat.set(k + '_' + band + tag, getattr(fitstats, k).astype(np.float32))
+                        X = T.get(k + '_' + band + tag)
+                        X[Ifit] = getattr(fitstats, k).astype(np.float32)
+
                 stat = R.ceres_status
                 func_tol = (stat['termination'] == 2)
                 steps = stat['steps_successful']
-                Tcat.set('fit_ok_%s%s' % (band, tag), np.array([(func_tol and steps > 0)] * len(T)))
+                X = T.get('fit_ok_%s%s' % (band, tag))
+                X[Ifit] = np.array([(func_tol and steps > 0)] * len(T))
+                         
                 if wantims:
                     ims0 = R.ims0
                     ims1 = R.ims1
@@ -439,53 +472,26 @@ def main(opt, cs82field):
                 del R
                 del tims
                 del tractor
-            
+
+            # All bands done for this slice.
+                
             print 'Slice:', Time()-tslice0
             print 'Total:', Time()-t0
 
-            Tall = merge_tables(Tcats)
-            print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
-            print 'Tall:', len(Tall)
-            Tall.about()
-            print 'T:', len(T)
+            T.phot_done[Ifit] = True
+            
+            fn = ('cs82-phot-%s-slice%i.fits' %
+                  (cs82field, decslice * (len(ras)-1) + raslice))
+            T.writeto(fn)
             T.about()
-            Tcols = T.get_columns()
-            Tx = T.copy()
-            for c in Tall.get_columns():
-                if c in Tcols:
-                    #print 'Skipping column', c
-                    print 'Updating column', c
-                    Tx.get(c)[Tall.index] = Tall.get(c)
-                    continue
-                print 'Setting column', c
-                X = np.zeros(len(T), Tall.get(c).dtype)
-                print 'col', c, 'X:', len(X), X.dtype
-                print 'index:', len(Tall.index), Tall.index.dtype
-                X[Tall.index] = Tall.get(c)
-                Tx.set(c, X)
-            Tx.phot_done[Tall.index] = True
-            fn = 'cs82-phot-%s-slice%i.fits' % (cs82field, decslice * (len(ras)-1) + raslice)
-            Tx.writeto(fn)
-            Tx.about()
             print 'Wrote', fn
-            Tx.cut(Tx.phot_done)
-            fn = 'cs82-phot-%s-slice%i-cut.fits' % (cs82field, decslice * (len(ras)-1) + raslice)
-            Tx.writeto(fn)
-            Tx.about()
+            Tdone = T[T.phot_done]
+            fn = ('cs82-phot-%s-slice%i-cut.fits' %
+                  (cs82field, decslice * (len(ras)-1) + raslice))
+            Tdone.writeto(fn)
+            Tdone.about()
+            del Tdone
             print 'Wrote', fn
-                
-            del Tx
-
-
-    Tall = merge_tables(Tcats)
-    print 'Total of', len(Tall), 'results vs', len(T), 'in catalog'
-    Tcols = T.get_columns()
-    for c in Tall.get_columns():
-        if c in Tcols:
-            continue
-        X = np.zeros_like(len(T), Tall.get(c).dtype)
-        X[Tall.index] = Tall.get(c)
-        T.set(c, Tall)
 
     fn = 'cs82-phot-%s.fits' % cs82field
     T.writeto(fn)
