@@ -219,9 +219,11 @@ def main(opt, cs82field):
 
     #decs = np.linspace(dec0, dec1, 20)
     #ras  = np.linspace(ra0,  ra1, 20)
-    decs = np.linspace(dec0, dec1, 2)
+
+    #decs = np.linspace(dec0, dec1, 2)
     #ras  = np.linspace(ra0,  ra1, 41)
     # DEBUG -- ++quickness
+    decs = np.linspace(dec0, dec1, 11)
     ras  = np.linspace(ra0,  ra1, 101)
 
     print 'Score range:', F.score.min(), F.score.max()
@@ -232,6 +234,18 @@ def main(opt, cs82field):
     T.phot_done = np.zeros(len(T), bool)
 
     T.marginal = np.zeros(len(T), bool)
+
+    # fitstats keys
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+
+    for band in bands:
+        for c in (['sdss_%s_nanomaggies' % band,
+                   'sdss_%s_nanomaggies_invvar' % band,
+                   'sdss_%s_mag' % band,
+                   'sdss_%s_mag_err' % band,] +
+                  [k + '_' + band for k in fskeys]):
+            T.set(c, np.zeros(len(T), np.float32))
+        T.set('fit_ok_%s' % band, np.zeros(len(T), bool))
 
     for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
         print 'Dec slice:', dlo, dhi
@@ -292,8 +306,11 @@ def main(opt, cs82field):
                     bi = 'ugriz'.index(band)
                     setattr(cat[i].getBrightness(), band, flux[j, bi])
 
+            # index into cat of sources to freeze
             Ifreeze = np.flatnonzero(T.marginal[Icat])
             print 'Freezing', len(Ifreeze), 'sources'
+            Ithaw = np.flatnonzero(np.logical_not(T.marginal[Icat]))
+            # index into T of sources being fit
             Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
             print len(Ifit), 'sources being fit'
                     
@@ -304,7 +321,8 @@ def main(opt, cs82field):
                 # Now freeze sources in the margins.
                 print 'Before freezing marginal sources:',
                 print len(cat.getParams()), 'params'
-                cat.freezeParams(Ifreeze)
+                for i in Ifreeze:
+                    cat.freezeParam(i)
                 print 'After freezing marginal sources:',
                 print len(cat.getParams()), 'params'
 
@@ -382,32 +400,35 @@ def main(opt, cs82field):
 
                 IV = R.IV
                 fitstats = R.fitstats
-
                 nm = np.array([src.getBrightness().getBand(band)
-                               for src in tractor.getCatalog()])
-                nm_ivar = IV
-                assert(len(nm) == len(Tcat))
-                assert(len(nm_ivar) == len(Tcat))
+                               for src in tractor.getCatalog().getThawedSources()]
+                              ).astype(np.float32)
+                nm_ivar = IV.astype(np.float32)
+
+                print 'nm:', len(nm)
+                print 'nm_ivar:', len(nm_ivar)
+                print 'Ifit:', len(Ifit)
 
                 tag = ''
-
                 X = T.get('sdss_%s_nanomaggies%s' % (band, tag))
                 X[Ifit] = nm
                 X = T.get('sdss_%s_nanomaggies_invvar%s' % (band, tag))
                 X[Ifit] = nm_ivar
                 dnm = 1./np.sqrt(nm_ivar)
                 mag = NanoMaggies.nanomaggiesToMag(nm)
+                print 'dnm:', len(dnm)
+                print 'mag:', len(mag)
                 dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
                 X = T.get('sdss_%s_mag%s' % (band, tag))
                 X[Ifit] = mag
                 X = T.get('sdss_%s_mag_err%s' % (band, tag))
                 X[Ifit] = dmag
                 if fitstats is not None:
-                    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux',
-                              'npix']
                     for k in fskeys:
                         X = T.get(k + '_' + band + tag)
-                        X[Ifit] = getattr(fitstats, k).astype(np.float32)
+                        Y = getattr(fitstats, k).astype(np.float32)
+                        print 'fit stats', k, ':', len(Y)
+                        X[Ifit] = Y
 
                 stat = R.ceres_status
                 func_tol = (stat['termination'] == 2)
@@ -492,6 +513,10 @@ def main(opt, cs82field):
             Tdone.about()
             del Tdone
             print 'Wrote', fn
+
+    T.delete_column('marginal')
+    T.delete_column('alphamodel_j2000')
+    T.delete_column('deltamodel_j2000')
 
     fn = 'cs82-phot-%s.fits' % cs82field
     T.writeto(fn)
