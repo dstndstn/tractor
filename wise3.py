@@ -257,19 +257,6 @@ def stage101(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,
 
     return dict(opt101=opt, tims=tims, margin1=margin1)
 
-# makes an SDSS WCS object look like an anwcs /  Tan / Sip
-class AsTransWrapper(object):
-    def __init__(self, wcs, w, h):
-        self.wcs = wcs
-        self.imagew = w
-        self.imageh = h
-    def pixelxy2radec(self, x, y):
-        r,d = self.wcs.pixel_to_radec(x-1, y-1)
-        return r, d
-    def radec2pixelxy(self, ra, dec):
-        x,y = self.wcs.radec_to_pixel(ra, dec)
-        return True, x+1, y+1
-
 # Read SDSS (or other given) sources in range
 # Create Tractor sources
 def stage102(opt=None, ps=None, T=None, outlines=None, wcses=None, rd=None,

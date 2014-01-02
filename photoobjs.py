@@ -44,24 +44,27 @@ def read_photoobjs(sdss, wcs, margin, cols=None, pa=None, wfn='window_flist.fits
     print 'Searching for run,camcol,fields with radius', rad, 'deg'
     RCF = radec_to_sdss_rcf(ra, dec, radius=rad*60., tablefn=wfn)
     log.debug('Found %i fields possibly in range' % len(RCF))
-
+    RCF = [(run,camcol,field) for (run,camcol,field,r,d) in RCF]
+    
     pixmargin = margin * 3600. / wcs.pixel_scale()
     W,H = wcs.get_width(), wcs.get_height()
+
+    RR = '301'
+    
+    RCF = [(run,camcol,field) for (run,camcol,field) in RCF
+           if (sdss.get_rerun(run, field=field) == RR)]
+    log.debug('Found %i fields with rerun = %s' % (len(RCF), RR))
+
+    if pa is not None:
+        rr = RR
+        RCF = [(run,camcol,field) for (run,camcol,field) in RCF
+               if (pa.get(rr, run, camcol, field) > 0)]
+        log.debug('Found %i fields with positive primaryArea' % (len(RCF)))
     
     TT = []
-    for run,camcol,field,r,d in RCF:
+    for run,camcol,field in RCF:
         log.debug('RCF %i/%i/%i' % (run, camcol, field))
         rr = sdss.get_rerun(run, field=field)
-        if rr in [None, '157']:
-            log.debug('Rerun 157')
-            continue
-
-        if pa is not None:
-            if pa.get(rr, run, camcol, field) == 0:
-                log.debug('RCF %i/%i/%i has primaryArea = 0; skipping' %
-                          (run,camcol,field))
-                continue
-
         fn = get_photoobj_filename(rr, run, camcol, field)
         if not os.path.exists(fn):
             url = sdss.get_url('photoObj', run, camcol, field)
