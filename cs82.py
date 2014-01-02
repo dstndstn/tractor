@@ -169,13 +169,17 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
     return T,F
 
 
-def main(opt, cs82field):
+def main(opt, cs82field, prefix):
     t0 = Time()
     
     bands = opt.bands
 
-    ps = PlotSequence('cs82')
-    plots = True
+    if opt.plots:
+        ps = PlotSequence(opt.prefix)
+        plots = True
+    else:
+        ps = None
+        plots = False
     
     version = get_svn_version()
     print 'SVN version info:', version
@@ -210,25 +214,17 @@ def main(opt, cs82field):
                        cols=['ra','dec','cmodelflux', 'resolve_status'])
     print 'Read', len(S), 'SDSS objects'
 
-    plt.clf()
-    plothist(T.ra, T.dec, 200, imshowargs=dict(cmap='gray'))
-    #plt.plot([ra0,ra0,ra1,ra1,ra0], [dec0,dec1,dec1,dec0,dec0], 'r-')
-    for f in F:
-        plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0], [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0], 'b-', alpha=0.5)
-    # plt.xlabel('RA (deg)')
-    # plt.ylabel('Dec (deg)')
-    plt.title('%s: %i SDSS fields' % (cs82field, len(F)))
-    setRadecAxes(ra0,ra1,dec0,dec1)
-    ps.savefig()
+    if ps:
+        plt.clf()
+        plothist(T.ra, T.dec, 200, imshowargs=dict(cmap='gray'))
+        for f in F:
+            plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0], [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0], 'b-', alpha=0.5)
+        plt.title('%s: %i SDSS fields' % (cs82field, len(F)))
+        setRadecAxes(ra0,ra1,dec0,dec1)
+        ps.savefig()
 
-
-    decs = np.linspace(dec0, dec1, 2)
-    ras  = np.linspace(ra0,  ra1, 41)
-    # DEBUG -- ++quickness
-    #decs = np.linspace(dec0, dec1, 51)
-    #ras  = np.linspace(ra0,  ra1,  51)
-    #decs = np.linspace(dec0, dec1, 26)
-    #ras  = np.linspace(ra0,  ra1,  26)
+    decs = np.linspace(dec0, dec1, 1 + opt.decs)
+    ras  = np.linspace(ra0,  ra1,  1 + opt.ras)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
@@ -236,7 +232,6 @@ def main(opt, cs82field):
     print 'Cut on score:', len(F)
 
     T.phot_done = np.zeros(len(T), bool)
-
     T.marginal = np.zeros(len(T), bool)
 
     # fitstats keys
@@ -297,6 +292,7 @@ def main(opt, cs82field):
             print 'Got', len(cat), 'sources'
             # Icat: index into T, row-parallel to cat
             Icat = Ibox[icat]
+            del icat
             print len(Icat), 'sources created'
 
             # Match to SDSS sources only for those catalog objects
@@ -317,24 +313,26 @@ def main(opt, cs82field):
                                 1./3600., nearest=True)
             print 'found', len(I), 'matches'
             # initialize fluxes based on SDSS matches -- useful for "minsb" approx.
-            flux = S.cmodelflux
             for i,j in zip(I, J):
                 if not setflux[i]:
                     continue
                 for band in bands:
                     bi = 'ugriz'.index(band)
-                    setattr(cat[i].getBrightness(), band, flux[j, bi])
+                    setattr(cat[i].getBrightness(), band, S.cmodelflux[j, bi])
+            del setflux
+            del J
+            del d
 
             # index into cat of sources to freeze
             Ifreeze = np.flatnonzero(T.marginal[Icat])
             print 'Freezing', len(Ifreeze), 'sources'
             # index into cat of sources to thaw
-            Ithaw = np.flatnonzero(np.logical_not(T.marginal[Icat]))
+            #Ithaw = np.flatnonzero(np.logical_not(T.marginal[Icat]))
             # index into T of sources being fit
             Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
             print len(Ifit), 'sources being fit'
 
-            if plots:
+            if ps:
                 # Create a fake WCS for this subregion -- for plots only
                 pixscale = 0.4/3600.
                 decpix = int(np.ceil((dhi - dlo) / pixscale))
@@ -406,7 +404,7 @@ def main(opt, cs82field):
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
 
-                if plots:
+                if ps:
                     coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                     ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
                     for tim in tims:
@@ -458,7 +456,7 @@ def main(opt, cs82field):
                 tractor = Tractor(tims, cat)
                 tractor.freezeParam('images')
                 sz = 8
-                wantims = plots
+                wantims = (ps is not None)
 
                 tp0 = Time()
                 print 'Starting forced phot:', Time()-tb0
@@ -479,10 +477,6 @@ def main(opt, cs82field):
                               ).astype(np.float32)
                 nm_ivar = IV.astype(np.float32)
 
-                print 'nm:', len(nm)
-                print 'nm_ivar:', len(nm_ivar)
-                print 'Ifit:', len(Ifit)
-
                 tag = ''
                 X = T.get('sdss_%s_nanomaggies%s' % (band, tag))
                 X[Ifit] = nm
@@ -490,8 +484,6 @@ def main(opt, cs82field):
                 X[Ifit] = nm_ivar
                 dnm = 1./np.sqrt(nm_ivar)
                 mag = NanoMaggies.nanomaggiesToMag(nm)
-                print 'dnm:', len(dnm)
-                print 'mag:', len(mag)
                 dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
                 X = T.get('sdss_%s_mag%s' % (band, tag))
                 X[Ifit] = mag
@@ -500,9 +492,7 @@ def main(opt, cs82field):
                 if fitstats is not None:
                     for k in fskeys:
                         X = T.get(k + '_' + band + tag)
-                        Y = getattr(fitstats, k).astype(np.float32)
-                        print 'fit stats', k, ':', len(Y)
-                        X[Ifit] = Y
+                        X[Ifit] = getattr(fitstats, k).astype(np.float32)
 
                 stat = R.ceres_status
                 func_tol = (stat['termination'] == 2)
@@ -570,6 +560,7 @@ def main(opt, cs82field):
                     ps.savefig()
                     del ims0
                     del ims1
+
                 del R
                 del tims
                 del tractor
@@ -581,14 +572,14 @@ def main(opt, cs82field):
 
             T.phot_done[Ifit] = True
             
-            fn = ('cs82-phot-%s-slice%i.fits' %
-                  (cs82field, decslice * (len(ras)-1) + raslice))
+            fn = ('%s-phot-%s-slice%i.fits' %
+                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
             T.writeto(fn)
             T.about()
             print 'Wrote', fn
             Tdone = T[T.phot_done]
-            fn = ('cs82-phot-%s-slice%i-cut.fits' %
-                  (cs82field, decslice * (len(ras)-1) + raslice))
+            fn = ('%s-phot-%s-slice%i-cut.fits' %
+                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
             Tdone.writeto(fn)
             Tdone.about()
             del Tdone
@@ -598,7 +589,7 @@ def main(opt, cs82field):
     T.delete_column('alphamodel_j2000')
     T.delete_column('deltamodel_j2000')
 
-    fn = 'cs82-phot-%s.fits' % cs82field
+    fn = '%s-phot-%s.fits' % (opt.prefix, cs82field)
     T.writeto(fn)
     print 'Wrote', fn
     return
@@ -615,6 +606,15 @@ if __name__ == '__main__':
                       help='Use local SDSS tree?')
     parser.add_option('--das', default=url,
                       help='SDSS DAS url: default %default')
+    parser.add_option('--prefix', default='cs82',
+                      help='Filename prefix for plots and outputs')
+    parser.add_option('--plots', action='store_true', default=False,
+                      help='Create plots of results?')
+
+    parser.add_option('--decs', type='int', default=1,
+                      help='Number of Dec slices')
+    parser.add_option('--ras', type='int', default=40,
+                      help='Number of RA slices')
 
     opt,args = parser.parse_args()
 
