@@ -222,9 +222,6 @@ def main(opt, cs82field):
     ps.savefig()
 
 
-    #decs = np.linspace(dec0, dec1, 20)
-    #ras  = np.linspace(ra0,  ra1, 20)
-
     #decs = np.linspace(dec0, dec1, 2)
     #ras  = np.linspace(ra0,  ra1, 41)
     # DEBUG -- ++quickness
@@ -308,21 +305,24 @@ def main(opt, cs82field):
             # that haven't already been photometered in a previous
             # slice, because we're going to use the SDSS matches to
             # set the initial fluxes.
-            Imatch = Icat[np.logical_not(T.phot_done[Icat])]
-            print len(Imatch), 'to match to SDSS'
 
+            # For 'cat' objects, should we set the flux?
+            setflux = np.logical_not(T.phot_done[Icat])
+            
             # Get SDSS sources to fill in holes....?
             # Sin = S[((S.dec + margin) >= dlo) * ((S.dec - margin) <= dhi) *
             # ((S.ra  + margin) >= rlo) * ((S.ra  - margin) <= rhi)]
             
             print 'Matching to SDSS sources...'
             print 'N SDSS', len(S)
-            I,J,d = match_radec(T.ra[Imatch], T.dec[Imatch], S.ra, S.dec,
+            I,J,d = match_radec(T.ra[Icat], T.dec[Icat], S.ra, S.dec,
                                 1./3600., nearest=True)
             print 'found', len(I), 'matches'
             # initialize fluxes based on SDSS matches -- useful for "minsb" approx.
             flux = S.cmodelflux
             for i,j in zip(I, J):
+                if not setflux[i]:
+                    continue
                 for band in bands:
                     bi = 'ugriz'.index(band)
                     setattr(cat[i].getBrightness(), band, flux[j, bi])
@@ -346,14 +346,20 @@ def main(opt, cs82field):
                           pixscale, 0., 0., pixscale, rapix, decpix)
                 # plot sources
                 plt.clf()
-                plt.plot(T.ra[Icat], T.dec[Icat], 'k.')
-                plt.plot(T.ra[Imatch], T.dec[Imatch], 'o', mec='g', mfc='none')
-                plt.plot(T.ra[Imatch[I]], T.dec[Imatch[I]], 'o', mec='r', mfc='none')
-                plt.plot(S.ra, S.dec, 'rx', alpha=0.2)
-                plt.plot(T.ra[Ifit], T.dec[Ifit], 'mx')
+                p1 = plt.plot(T.ra[Icat], T.dec[Icat], 'k.')
+                p1b = plt.plot(T.ra [Icat[T.phot_done[Icat]]],
+                               T.dec[Icat[T.phot_done[Icat]]], 'r.')
+                p2 = plt.plot(T.ra[Icat[I]], T.dec[Icat[I]], 'o',
+                              mec='r', mfc='none')
+                p3 = plt.plot(S.ra, S.dec, 'rx')
+                p4 = plt.plot(T.ra[Ifit], T.dec[Ifit], 'o', mec='g', mew=1.5,
+                              mfc='none', ms=8)
+                plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')   
                 m = 0.003
-                plt.axis([rlo-m, rhi+m, dlo-m, dhi+m])
                 plt.title('ra slice %i, dec slice %i' % (raslice, decslice))
+                plt.figlegend([p1[0],p1b[0],p2[0],p3[0],p4[0]],
+                              ('Cat', 'Phot done', 'Matched to SDSS', 'SDSS', 'To fit'),
+                              'upper right')
                 setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
                 ps.savefig()
             
