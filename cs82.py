@@ -175,7 +175,8 @@ def main(opt, cs82field):
     bands = opt.bands
 
     ps = PlotSequence('cs82')
-
+    plots = True
+    
     version = get_svn_version()
     print 'SVN version info:', version
     
@@ -229,8 +230,10 @@ def main(opt, cs82field):
     # DEBUG -- ++quickness
     #decs = np.linspace(dec0, dec1, 11)
     #ras  = np.linspace(ra0,  ra1, 101)
-    decs = np.linspace(dec0, dec1, 51)
-    ras  = np.linspace(ra0,  ra1,  51)
+    #decs = np.linspace(dec0, dec1, 51)
+    #ras  = np.linspace(ra0,  ra1,  51)
+    decs = np.linspace(dec0, dec1, 26)
+    ras  = np.linspace(ra0,  ra1,  26)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
@@ -277,17 +280,21 @@ def main(opt, cs82field):
                    np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
             print len(Fi), 'fields in RA,Dec slice'
 
-            plt.clf()
-            plothist(T.ra[Ibox], T.dec[Ibox], 200, range=((rlo,rhi),(dlo,dhi)),
-                     imshowargs=dict(cmap='gray'))
-            plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')
-            for f in Fi:
-                plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0],
-                         [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0], 'b-', alpha=0.5)
-            plt.title('%s slice d%i r%i: %i SDSS fields' %
-                      (cs82field, decslice, raslice, len(Fi)))
-            setRadecAxes(rlo,rhi,dlo,dhi)
-            ps.savefig()
+            if False:
+                plt.clf()
+                if len(Ibox):
+                    plothist(T.ra[Ibox], T.dec[Ibox], 200,
+                             range=((rlo,rhi),(dlo,dhi)),
+                             imshowargs=dict(cmap='gray'))
+                plt.plot([rlo,rlo,rhi,rhi,rlo], [dlo,dhi,dhi,dlo,dlo], 'r-')
+                for f in Fi:
+                    plt.plot([f.ra0,f.ra0,f.ra1,f.ra1,f.ra0],
+                             [f.dec0,f.dec1,f.dec1,f.dec0,f.dec0],
+                             'b-', alpha=0.5)
+                plt.title('%s slice d%i r%i: %i SDSS fields' %
+                          (cs82field, decslice, raslice, len(Fi)))
+                setRadecAxes(rlo,rhi,dlo,dhi)
+                ps.savefig()
 
             print 'Creating Tractor sources...'
             maglim = 24
@@ -299,16 +306,21 @@ def main(opt, cs82field):
 
             # Match to SDSS sources only for those catalog objects
             # that haven't already been photometered in a previous
-                # slice.
+            # slice, because we're going to use the SDSS matches to
+            # set the initial fluxes.
             Imatch = Icat[np.logical_not(T.phot_done[Icat])]
             print len(Imatch), 'to match to SDSS'
+
+            # Get SDSS sources to fill in holes....?
+            # Sin = S[((S.dec + margin) >= dlo) * ((S.dec - margin) <= dhi) *
+            # ((S.ra  + margin) >= rlo) * ((S.ra  - margin) <= rhi)]
             
             print 'Matching to SDSS sources...'
             print 'N SDSS', len(S)
             I,J,d = match_radec(T.ra[Imatch], T.dec[Imatch], S.ra, S.dec,
                                 1./3600., nearest=True)
             print 'found', len(I), 'matches'
-            # initialize fluxes based on SDSS matches
+            # initialize fluxes based on SDSS matches -- useful for "minsb" approx.
             flux = S.cmodelflux
             for i,j in zip(I, J):
                 for band in bands:
@@ -324,17 +336,15 @@ def main(opt, cs82field):
             Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
             print len(Ifit), 'sources being fit'
 
-
-            # Create a fake WCS for this subregion -- for plots only
-            pixscale = 0.4/3600.
-            decpix = int(np.ceil((dhi - dlo) / pixscale))
-            # HACK -- ignoring cos(dec)
-            rapix = int(np.ceil((rhi - rlo) / pixscale))
-            wcs = Tan((rlo+rhi)/2., (dlo+dhi)/2., rapix/2 + 1, decpix/2 + 1,
-                      pixscale, 0., 0., pixscale, rapix, decpix)
-
-            # plot sources
-            if True:
+            if plots:
+                # Create a fake WCS for this subregion -- for plots only
+                pixscale = 0.4/3600.
+                decpix = int(np.ceil((dhi - dlo) / pixscale))
+                # HACK -- ignoring cos(dec)
+                rapix = int(np.ceil((rhi - rlo) / pixscale))
+                wcs = Tan((rlo+rhi)/2., (dlo+dhi)/2., rapix/2 + 1, decpix/2 + 1,
+                          pixscale, 0., 0., pixscale, rapix, decpix)
+                # plot sources
                 plt.clf()
                 plt.plot(T.ra[Icat], T.dec[Icat], 'k.')
                 plt.plot(T.ra[Imatch], T.dec[Imatch], 'o', mec='g', mfc='none')
@@ -375,8 +385,6 @@ def main(opt, cs82field):
                     if tim is None:
                         continue
 
-                    # Get SDSS sources to fill in holes....?
-
                     (H,W) = tim.shape
                     print 'Tim', tim.shape
                     tim.wcs.setConstantCd(W/2., H/2.)
@@ -394,7 +402,7 @@ def main(opt, cs82field):
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
 
-                if True:
+                if plots:
                     coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                     ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
                     for tim in tims:
@@ -414,10 +422,10 @@ def main(opt, cs82field):
                     coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
                     print len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max())
                     plt.clf()
-                    plt.imshow(coadd, interpolation='nearest', origin='lower',
-                               extent=[rlo,rhi,dlo,dhi])#, vmin=-0.1, vmax=1.)
+                    coa = dict(interpolation='nearest', origin='lower',
+                               extent=[rlo,rhi,dlo,dhi], vmin=-0.05, vmax=0.5)
+                    plt.imshow(coadd, **coa)
                     m = 0.003
-                    #plt.axis([rlo-m, rhi+m, dlo-m, dhi+m])
                     plt.title('coadd: ra slice %i, dec slice %i'%
                               (raslice, decslice))
                     setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
@@ -446,7 +454,7 @@ def main(opt, cs82field):
                 tractor = Tractor(tims, cat)
                 tractor.freezeParam('images')
                 sz = 8
-                wantims = True
+                wantims = plots
 
                 tp0 = Time()
                 print 'Starting forced phot:', Time()-tb0
@@ -505,6 +513,34 @@ def main(opt, cs82field):
                     nims = len(tims)
                     cols = int(np.ceil(np.sqrt(nims)))
                     rows = int(np.ceil(nims / float(cols)))
+
+                    #for imnum,ims in enumerate([ims0, ims1]):
+                    for imnum,ims in [(1,ims1)]:
+                        coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
+                        ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
+                        for i,(im,mod,ie,chi,roi) in enumerate(ims):
+                            tim = tims[i]
+                            (H,W) = tim.shape
+                            try:
+                                wcswrap = AsTransWrapper(
+                                    tim.wcs.astrans, W,H, tim.wcs.x0, tim.wcs.y0)
+                                Yo,Xo,Yi,Xi,nil = resample_with_wcs(
+                                    wcs, wcswrap, [], 3)
+                            except:
+                                import traceback
+                                print 'Failed to resample:'
+                                traceback.print_exc()
+                                continue
+                            coadd[Yo,Xo] += mod[Yi,Xi]
+                            ncoadd[Yo,Xo] += 1
+                        coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
+                        plt.clf()
+                        plt.imshow(coadd, **coa)
+                        m = 0.003
+                        plt.title('mod%i: ra slice %i, dec slice %i'%
+                                  (imnum, raslice, decslice))
+                        setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
+                        ps.savefig()
                     
                     plt.clf()
                     for i,tim in enumerate(tims):
@@ -519,16 +555,6 @@ def main(opt, cs82field):
                     ps.savefig()
 
                     plt.clf()
-                    print 'ims1:', len(ims1)
-                    print 'tims:', len(tims)
-                    # for i,tim in enumerate(tims):
-                    #     plt.subplot(rows, cols, i+1)
-                    #     ima = dict(interpolation='nearest', origin='lower',
-                    #                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
-                    #     mod = tractor.getModelImage(i)
-                    #     plt.imshow(mod, **ima)
-                    #     plt.xticks([]); plt.yticks([])
-                    #     plt.title(tim.name)
                     for i,(im,mod,ie,chi,roi) in enumerate(ims1):
                         plt.subplot(rows, cols, i+1)
                         ima = dict(interpolation='nearest', origin='lower',
@@ -537,19 +563,7 @@ def main(opt, cs82field):
                         plt.xticks([]); plt.yticks([])
                         plt.title(tims[i].name)
                     plt.suptitle('Models: SDSS %s' % band)
-                    # for i,tim in enumerate(tims):
-                    #     plt.subplot(rows, cols, i+1)
-                    #     ax = plt.axis()
-                    #     xy = np.array([tim.getWcs().positionToPixel(RaDecPos(r,d))
-                    #                    for r,d in zip(T.ra, T.dec)])
-                    #     plt.plot(xy[:,0], xy[:,1], 'r+', ms=15, mew=1.)
-                    #     if len(sdssobjs):
-                    #         xy = np.array([tim.getWcs().positionToPixel(s.getPosition())
-                    #                        for s in sdssobjs])
-                    #         plt.plot(xy[:,0], xy[:,1], 'gx', ms=10, mew=1.)
-                    #     plt.axis(ax)
                     ps.savefig()
-
                     del ims0
                     del ims1
                 del R
