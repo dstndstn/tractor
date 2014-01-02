@@ -222,15 +222,13 @@ def main(opt, cs82field):
     ps.savefig()
 
 
-    #decs = np.linspace(dec0, dec1, 2)
-    #ras  = np.linspace(ra0,  ra1, 41)
+    decs = np.linspace(dec0, dec1, 2)
+    ras  = np.linspace(ra0,  ra1, 41)
     # DEBUG -- ++quickness
-    #decs = np.linspace(dec0, dec1, 11)
-    #ras  = np.linspace(ra0,  ra1, 101)
     #decs = np.linspace(dec0, dec1, 51)
     #ras  = np.linspace(ra0,  ra1,  51)
-    decs = np.linspace(dec0, dec1, 26)
-    ras  = np.linspace(ra0,  ra1,  26)
+    #decs = np.linspace(dec0, dec1, 26)
+    #ras  = np.linspace(ra0,  ra1,  26)
 
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
