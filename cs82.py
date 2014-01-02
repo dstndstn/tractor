@@ -169,17 +169,15 @@ def getTables(cs82field, enclosed=True, extra_cols=[]):
     return T,F
 
 
-def main(opt, cs82field, prefix):
+def main(opt, cs82field):
     t0 = Time()
     
     bands = opt.bands
 
     if opt.plots:
         ps = PlotSequence(opt.prefix)
-        plots = True
     else:
         ps = None
-        plots = False
     
     version = get_svn_version()
     print 'SVN version info:', version
