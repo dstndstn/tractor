@@ -34,6 +34,7 @@ def get_cs82_masks(cs82field):
     f = open(fn, 'rb')
     polys = []
     for line in f:
+        line = line.strip()
         if line.startswith('#'):
             continue
         if not line.startswith('polygon'):
@@ -51,9 +52,8 @@ def get_cs82_masks(cs82field):
             d = float(coords[1])
             coords = coords[2:]
             poly.append((r,d))
-        print '  polygon with', len(poly), 'vertices'
+        #print '  polygon with', len(poly), 'vertices'
         polys.append(np.array(poly))
-        
     print 'Read', len(polys), 'polygons'
     return polys
         
@@ -301,13 +301,14 @@ def main(opt, cs82field):
             tslice0 = Time()
 
             # Cut to masks overlapping this slice.
-            # masksi = []
-            # for m in masks:
-            #     mr0,md0 = np.min(m, axis=0)
-            #     mr1,md1 = np.max(m, axis=0)
-            #     if mr1 < rlo or mr0 > rhi or md1 < dlo or md0 > dhi:
-            #         continue
-            #     masksi.append(m)
+            masksi = []
+            for m in masks:
+                mr0,md0 = np.min(m, axis=0)
+                mr1,md1 = np.max(m, axis=0)
+                if mr1 < rlo or mr0 > rhi or md1 < dlo or md0 > dhi:
+                    continue
+                masksi.append(m)
+            print len(masksi), 'masks overlap this slice'
             
             Ibox = np.flatnonzero(
                 ((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
@@ -447,6 +448,7 @@ def main(opt, cs82field):
                     del tim.origInvvar
                     del tim.starMask
                     del tim.mask
+                    tim.domask = False
                     # needed for optimize_forced_photometry with rois
                     #del tim.invvar
                     tims.append(tim)
@@ -455,24 +457,35 @@ def main(opt, cs82field):
                     print 'got', (H*W), 'pixels, total', npix
                     print 'Read image', i+1, 'in band', band, ':', Time()-tb0
 
+                    tm0 = Time()
                     # Apply CS82 masks
                     astrans = tim.wcs.astrans
                     xx,yy = np.meshgrid(np.arange(W), np.arange(H))
-                    for m in masks:
+                    masked = np.zeros((H,W), bool)
+                    for m in masksi:
                         mx,my = astrans.radec_to_pixel(m[:,0], m[:,1])
                         mx -= tim.wcs.x0
                         my -= tim.wcs.y0
-                        if max(mx) < 0 or max(my) < 0:
+                        mx0,my0 = int(np.floor(np.min(mx))), int(np.floor(np.min(my)))
+                        if mx0 > W or my0 > H:
                             continue
-                        if min(mx) > W or min(my) > H:
+                        mx1,my1 = int(np.ceil(np.max(mx))), int(np.ceil(np.max(my)))
+                        if mx1 < 0 or my1 < 0:
                             continue
-                        masked = point_in_poly(xx, yy, np.vstack((mx,my)).T)
-                        if not np.any(masked):
-                            continue
-                        print 'Masking', np.sum(masked), 'pixels'
-                        tim.invvar[masked] = 0.
+
+                        xlo = max(0, mx0)
+                        xhi = min(W, mx1)
+                        ylo = max(0, my0)
+                        yhi = min(H, my1)
+                        slc = slice(ylo,yhi), slice(xlo,xhi)
+
+                        masked[slc] |= point_in_poly(xx[slc], yy[slc],
+                                                     np.vstack((mx,my)).T)
+                    print 'Masking', np.sum(masked), 'pixels'
+                    tim.invvar[masked] = 0.
                     tim.setInvvar(tim.invvar)
-                    print 'Total of', np.flatnonzero(tim.invvar > 0), 'unmasked pixels'
+                    print 'Total of', np.sum(tim.invvar > 0), 'unmasked pixels'
+                    print 'Masking took:', Time()-tm0
                     
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
