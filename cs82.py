@@ -27,6 +27,36 @@ from photoobjs import *
 data_dir = 'data/cs82'
 window_flist = 'window_flist.fits'
 
+def get_cs82_masks(cs82field):
+    # from http://vn90.phas.ubc.ca/CS82/masks/
+    fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_y_wcs.reg' % cs82field)
+    print 'Reading', fn
+    f = open(fn, 'rb')
+    polys = []
+    for line in f:
+        if line.startswith('#'):
+            continue
+        if not line.startswith('polygon'):
+            print 'Ignoring line:', line
+            continue
+        word = line.split()[0]
+        assert(word[-1] == ')')
+        word = word[len('polygon(') : -1]
+        coords = word.split(',')
+        assert(len(coords) > 0)
+        assert((len(coords) % 2) == 0)
+        poly = []
+        while len(coords):
+            r = float(coords[0])
+            d = float(coords[1])
+            coords = coords[2:]
+            poly.append((r,d))
+        print '  polygon with', len(poly), 'vertices'
+        polys.append(np.array(poly))
+        
+    print 'Read', len(polys), 'polygons'
+    return polys
+        
 def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
     srcs = Catalog()
     isrcs = []
@@ -89,7 +119,7 @@ def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 
 
 def getTables(cs82field, enclosed=True, extra_cols=[]):
-    fn = os.path.join(data_dir, 'masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field)
+    fn = os.path.join(data_dir, 'cats', 'masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field)
     print 'Reading', fn
     T = fits_table(fn,
             hdu=2, column_map={'ALPHA_J2000':'ra',
@@ -184,6 +214,8 @@ def main(opt, cs82field):
     
     T,F = getTables(cs82field, enclosed=False)
 
+    masks = get_cs82_masks(cs82field)
+    
     sdss = DR9(basedir='data/unzip')
     if opt.local:
         sdss.useLocalTree()
@@ -265,9 +297,18 @@ def main(opt, cs82field):
                 rhi += margin
 
             print 'Expanded margins to RA', rlo,rhi, 'Dec', dlo,dhi
-
+            
             tslice0 = Time()
 
+            # Cut to masks overlapping this slice.
+            # masksi = []
+            # for m in masks:
+            #     mr0,md0 = np.min(m, axis=0)
+            #     mr1,md1 = np.max(m, axis=0)
+            #     if mr1 < rlo or mr0 > rhi or md1 < dlo or md0 > dhi:
+            #         continue
+            #     masksi.append(m)
+            
             Ibox = np.flatnonzero(
                 ((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
                 ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi))
@@ -414,6 +455,25 @@ def main(opt, cs82field):
                     print 'got', (H*W), 'pixels, total', npix
                     print 'Read image', i+1, 'in band', band, ':', Time()-tb0
 
+                    # Apply CS82 masks
+                    astrans = tim.wcs.astrans
+                    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+                    for m in masks:
+                        mx,my = astrans.radec_to_pixel(m[:,0], m[:,1])
+                        mx -= tim.wcs.x0
+                        my -= tim.wcs.y0
+                        if max(mx) < 0 or max(my) < 0:
+                            continue
+                        if min(mx) > W or min(my) > H:
+                            continue
+                        masked = point_in_poly(xx, yy, np.vstack((mx,my)).T)
+                        if not np.any(masked):
+                            continue
+                        print 'Masking', np.sum(masked), 'pixels'
+                        tim.invvar[masked] = 0.
+                    tim.setInvvar(tim.invvar)
+                    print 'Total of', np.flatnonzero(tim.invvar > 0), 'unmasked pixels'
+                    
                 print 'Read', len(tims), 'images'
                 print 'total of', npix, 'pixels'
 
@@ -688,5 +748,5 @@ if __name__ == '__main__':
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     cs82field = 'S82p18p'
+
     T = main(opt, cs82field)
-    
