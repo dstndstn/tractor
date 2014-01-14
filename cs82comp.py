@@ -105,22 +105,29 @@ if __name__ == '__main__':
 
     ps = PlotSequence('cs82comp')
     
-    T1 = fits_table('cs82a-phot-S82p18p.fits')
-    T2 = fits_table('cs82b-phot-S82p18p.fits')
+    #T1 = fits_table('cs82a-phot-S82p18p.fits')
+    #T2 = fits_table('cs82b-phot-S82p18p.fits')
+    #nra1,ndec1 = (50, 1)
+    #nra2,ndec2 = (10, 10)
+    
+    T1 = fits_table('cs82c-phot-S82p18p-slice4.fits')
+    T2 = fits_table('cs82d-phot-S82p18p-slice21.fits')
+    nra1,ndec1 = (50, 1)
+    nra2,ndec2 = (50, 4)
 
     # RA,Dec boundaries used in these photometry runs:
     r0,r1 = 15.783169965, 16.7623649628
     d0,d1 = -0.0919737024789, 0.939468218607
-    rab = np.linspace(r0, r1, 10+1)
-    decb = np.linspace(d0, d1, 10+1)
-    raa = np.linspace(r0, r1, 50+1)
-    deca = np.linspace(d0, d1, 1+1)
+    raa  = np.linspace(r0, r1, nra1  +1)
+    deca = np.linspace(d0, d1, ndec1 +1)
+    rab  = np.linspace(r0, r1, nra2  +1)
+    decb = np.linspace(d0, d1, ndec2 +1)
 
     def gridlines():
         for x in rab:
-            plt.axvline(x, color='r', alpha=0.5)
+            plt.axvline(x, color='b', alpha=0.5)
         for x in decb:
-            plt.axhline(x, color='r', alpha=0.5)
+            plt.axhline(x, color='b', alpha=0.5)
         for x in raa:
             plt.axvline(x, color=(0,1,0), alpha=0.5)
         for x in deca:
@@ -128,9 +135,14 @@ if __name__ == '__main__':
         
     
     print 'phot_done:', np.unique(T1.phot_done)
-    assert(np.all(T1.phot_done == T2.phot_done))
-    T1.cut(T1.phot_done)
-    T2.cut(T2.phot_done)
+    # assert(np.all(T1.phot_done == T2.phot_done))
+    # T1.cut(T1.phot_done)
+    # T2.cut(T2.phot_done)
+
+    I = np.logical_and(T1.phot_done, T2.phot_done)
+    T1.cut(I)
+    T2.cut(I)
+
     print len(T1), len(T2), 'with photometry done'
 
     print np.unique(T1.fit_ok_i.astype(np.uint8))
@@ -138,15 +150,23 @@ if __name__ == '__main__':
     print sum(T1.fit_ok_i), 'with fit_ok'
     print sum(T2.fit_ok_i), 'with fit_ok'
 
-    #comp1(T1, T2, ps)
+    print 'RA,Dec bounds of sources with photometry done:', T1.ra.min(), T1.ra.max(), T1.dec.min(), T1.dec.max()
+
+    comp1(T1, T2, ps)
 
     plt.figure(figsize=(12,12))
 
     # wcs of area to look at
     pixscale = 0.4 / 3600.
+    ra0,dec0 = 16.3, 0.1
     W,H = 1800,1800
-    #W,H = 900,900
-    wcs = Tan(16.3, 0.1, W/2+1, H/2+1, pixscale, 0., 0., pixscale, W, H)
+
+    ra0  = (T1.ra.min() + T1.ra.max()) / 2.
+    dec0 = (T1.dec.min()+ T1.dec.max())/ 2.
+    W = int((T1.ra.max()  - T1.ra.min() ) / pixscale)
+    H = int((T1.dec.max() - T1.dec.min()) / pixscale)
+    
+    wcs = Tan(ra0, dec0, W/2+1, H/2+1, pixscale, 0., 0., pixscale, W, H)
 
     r0,r1,d0,d1 = wcs.radec_bounds()
     print 'RA,Dec bounds of coadd:', r0,r1,d0,d1
