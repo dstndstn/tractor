@@ -5,6 +5,10 @@ import pylab as plt
 import os
 import logging
 from glob import glob
+import datetime
+import socket
+
+import fitsio
 
 from astrometry.util.fits import *
 from astrometry.util.sdss_radec_to_rcf import *
@@ -211,7 +215,16 @@ def main(opt, cs82field):
     
     version = get_svn_version()
     print 'SVN version info:', version
-    
+
+    hdr = fitsio.FITSHDR()
+    hdr.add_record(dict(name='PHO_VER', value=version['Revision'],
+                        comment='cs82.py photometry code SVN revision'))
+    hdr.add_record(dict(name='PHO_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='PHO_DATE', value=datetime.datetime.now().isoformat(),
+                        comment='cs82.py photometry run time'))
+    hdr.add_record(dict(name='PHO_MACH', value=socket.getfqdn(),
+                        comment='machine where phot was run'))
+
     T,F = getTables(cs82field, enclosed=False)
 
     masks = get_cs82_masks(cs82field)
@@ -722,7 +735,7 @@ def main(opt, cs82field):
             
             fn = ('%s-phot-%s-slice%i.fits' %
                   (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
-            T.writeto(fn)
+            T.writeto(fn, header=hdr)
             T.about()
             print 'Wrote', fn
             Tdone = T[T.phot_done]
@@ -738,7 +751,7 @@ def main(opt, cs82field):
     T.delete_column('deltamodel_j2000')
 
     fn = '%s-phot-%s.fits' % (opt.prefix, cs82field)
-    T.writeto(fn)
+    T.writeto(fn, header=hdr)
     print 'Wrote', fn
     return
 
