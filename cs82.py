@@ -480,6 +480,7 @@ def main(opt, cs82field):
                 if ps:
                     coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                     ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
+                    coiv = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                     for tim in tims:
                         (H,W) = tim.shape
                         try:
@@ -493,6 +494,7 @@ def main(opt, cs82field):
                             traceback.print_exc()
                             continue
                         coadd[Yo,Xo] += tim.getImage()[Yi,Xi]
+                        coiv[Yo,Xo] += tim.getInvvar()[Yi,Xi]
                         ncoadd[Yo,Xo] += 1
                     coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
                     print len(tims), 'tims; ncoadd range %i %i; coadd range %g, %g' % (ncoadd.min(), ncoadd.max(), coadd.min(), coadd.max())
@@ -505,7 +507,15 @@ def main(opt, cs82field):
                               (raslice, decslice))
                     setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
                     ps.savefig()
-                
+
+                    plt.clf()
+                    plt.imshow(coiv, interpolation='nearest', origin='lower',
+                               extent=[rlo,rhi,dlo,dhi], vmin=0)
+                    plt.title('sum of invvars: ra slice %i, dec slice %i'%
+                              (raslice, decslice))
+                    setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
+                    ps.savefig()
+                    
                 if False:
                     plt.clf()
                     plothist(Ti.ra, Ti.dec, 200, imshowargs=dict(cmap='gray'))
