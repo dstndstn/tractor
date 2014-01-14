@@ -224,6 +224,10 @@ def main(opt, cs82field):
     decs = np.linspace(dec0, dec1, 1 + opt.decs)
     ras  = np.linspace(ra0,  ra1,  1 + opt.ras)
 
+    margin = 8. / 3600.
+
+    addmargin = True
+
     print 'Score range:', F.score.min(), F.score.max()
     print 'Before score cut:', len(F)
     F.cut(F.score > 0.5)
@@ -231,6 +235,7 @@ def main(opt, cs82field):
 
     T.phot_done = np.zeros(len(T), bool)
     T.marginal = np.zeros(len(T), bool)
+    T.margindist = np.zeros(len(T), np.float32)
 
     # fitstats keys
     fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
@@ -247,13 +252,22 @@ def main(opt, cs82field):
 
     for decslice,(dlo,dhi) in enumerate(zip(decs, decs[1:])):
         print 'Dec slice:', dlo, dhi
+
+        if addmargin:
+            dlo -= margin
+            dhi += margin
+
         for raslice,(rlo,rhi) in enumerate(zip(ras, ras[1:])):
             print 'RA slice:', rlo, rhi
 
+            if addmargin:
+                rlo -= margin
+                rhi += margin
+
+            print 'Expanded margins to RA', rlo,rhi, 'Dec', dlo,dhi
+
             tslice0 = Time()
 
-            # in deg
-            margin = 15. / 3600.
             Ibox = np.flatnonzero(
                 ((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
                 ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi))
@@ -310,7 +324,8 @@ def main(opt, cs82field):
             I,J,d = match_radec(T.ra[Icat], T.dec[Icat], S.ra, S.dec,
                                 1./3600., nearest=True)
             print 'found', len(I), 'matches'
-            # initialize fluxes based on SDSS matches -- useful for "minsb" approx.
+            # initialize fluxes based on SDSS matches -- useful for
+            # "minsb" approx, and for sources in the margins.
             for i,j in zip(I, J):
                 if not setflux[i]:
                     continue
@@ -475,29 +490,52 @@ def main(opt, cs82field):
                               ).astype(np.float32)
                 nm_ivar = IV.astype(np.float32)
 
+                # Save results for sources that are further from the
+                # margins than previous measurements.
+
+                # "Ifit" is an index into T of sources being fit, ie,
+                # thawed sources, parallel to the thawed sources
+                assert(len(Ifit) == len(nm))
+
+                # ~Distance to nearest margin
+                mdist = np.hypot(np.minimum(np.abs(T.ra [Ifit] - rlo),
+                                            np.abs(T.ra [Ifit] - rhi)),
+                                 np.minimum(np.abs(T.dec[Ifit] - dlo),
+                                            np.abs(T.dec[Ifit] - dhi)))
+                K = (mdist >= T.margindist[Ifit])
+                Isave = Ifit[K]
+                print 'Saving results for', len(Isave), 'sources based on margin dist'
+                T.margindist[Isave] = (mdist[K]).astype(np.float32)
+                del mdist
+
+                nm = nm[K]
+                nm_ivar = nm_ivar[K]
+
+                assert(len(nm) == len(Isave))
+
                 tag = ''
                 X = T.get('sdss_%s_nanomaggies%s' % (band, tag))
-                X[Ifit] = nm
+                X[Isave] = nm
                 X = T.get('sdss_%s_nanomaggies_invvar%s' % (band, tag))
-                X[Ifit] = nm_ivar
+                X[Isave] = nm_ivar
                 dnm = 1./np.sqrt(nm_ivar)
                 mag = NanoMaggies.nanomaggiesToMag(nm)
                 dmag = np.abs((-2.5 / np.log(10.)) * dnm / nm)
                 X = T.get('sdss_%s_mag%s' % (band, tag))
-                X[Ifit] = mag
+                X[Isave] = mag
                 X = T.get('sdss_%s_mag_err%s' % (band, tag))
-                X[Ifit] = dmag
+                X[Isave] = dmag
                 if fitstats is not None:
                     for k in fskeys:
                         X = T.get(k + '_' + band + tag)
-                        X[Ifit] = getattr(fitstats, k).astype(np.float32)
+                        X[Isave] = getattr(fitstats, k).astype(np.float32)[K]
 
                 stat = R.ceres_status
                 func_tol = (stat['termination'] == 2)
                 steps = stat['steps_successful']
                 X = T.get('fit_ok_%s%s' % (band, tag))
-                X[Ifit] = np.array([(func_tol and steps > 0)] * len(T))
-                         
+                X[Isave] = (func_tol and steps > 0)
+
                 if wantims:
                     ims0 = R.ims0
                     ims1 = R.ims1
@@ -508,8 +546,12 @@ def main(opt, cs82field):
 
                     #for imnum,ims in enumerate([ims0, ims1]):
                     for imnum,ims in [(1,ims1)]:
+
                         coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                         ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
+                        cochi = np.zeros((wcs.imageh, wcs.imagew), np.float32)
+                        cochi2 = np.zeros((wcs.imageh, wcs.imagew), np.float32)
+
                         for i,(im,mod,ie,chi,roi) in enumerate(ims):
                             tim = tims[i]
                             (H,W) = tim.shape
@@ -525,11 +567,36 @@ def main(opt, cs82field):
                                 continue
                             coadd[Yo,Xo] += mod[Yi,Xi]
                             ncoadd[Yo,Xo] += 1
+
+                            cochi[Yo,Xo] += chi[Yi,Xi]
+                            cochi2[Yo,Xo] += chi[Yi,Xi]**2
+
                         coadd = coadd / np.maximum(1, ncoadd).astype(np.float32)
+                        cochi = cochi / np.maximum(1, ncoadd).astype(np.float32)
+                        cochi2 = cochi2 / np.maximum(1, ncoadd).astype(np.float32)
+
                         plt.clf()
                         plt.imshow(coadd, **coa)
                         m = 0.003
                         plt.title('mod%i: ra slice %i, dec slice %i'%
+                                  (imnum, raslice, decslice))
+                        setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
+                        ps.savefig()
+
+                        plt.clf()
+                        plt.imshow(cochi, interpolation='nearest', origin='lower',
+                                   extent=[rlo,rhi,dlo,dhi], vmin=-3, vmax=3)
+                        m = 0.003
+                        plt.title('chi%i: ra slice %i, dec slice %i'%
+                                  (imnum, raslice, decslice))
+                        setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
+                        ps.savefig()
+
+                        plt.clf()
+                        plt.imshow(np.sqrt(cochi2), interpolation='nearest', origin='lower',
+                                   extent=[rlo,rhi,dlo,dhi], vmin=0, vmax=3)
+                        m = 0.003
+                        plt.title('rms chi%i: ra slice %i, dec slice %i'%
                                   (imnum, raslice, decslice))
                         setRadecAxes(rlo-m,rhi+m,dlo-m,dhi+m)
                         ps.savefig()
