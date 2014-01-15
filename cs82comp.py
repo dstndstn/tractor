@@ -106,6 +106,143 @@ if __name__ == '__main__':
     # nra2,ndec2 = (50, 4)
 
     cs82field = 'S82p18p'
+
+    bands = 'ugriz'
+    colors = 'bgrmk'
+    T = None
+    for band in bands:
+        Ti = fits_table('cs82-%s--phot-%s.fits' % (band, cs82field))
+        if T is None:
+            T = Ti
+        else:
+            T.add_columns_from(Ti)
+    T.writeto('cs82-phot-%s.fits' % cs82field)
+
+    print len(T), 'sources'
+    T.cut(T.phot_done)
+    print len(T), 'with phot done'
+
+    plt.clf()
+    lp = []
+    for band,cc in zip(bands, colors):
+        x = T.get('sdss_%s_nanomaggies' % band)
+        n,b,p = plt.hist(x, 100, color=cc, histtype='step', range=(-1, 5))
+        lp.append(p[0])
+    plt.xlabel('Flux (nanomaggies)')
+    mags = [21, 22, 23]
+    for m in mags:
+        nm = NanoMaggies.magToNanomaggies(m)
+        plt.axvline(nm, color='k', alpha=0.2)
+        plt.text(nm, 6000, ' %i' % m, ha='left')
+    plt.axvline(0, color='k', alpha=0.2)
+    # xl = plt.xlim()
+    # a = plt.twiny()
+    # plt.xticks([NanoMaggies.magToNanomaggies(m) for m in mags],
+    #            ['%i' % m for m in mags])
+    # plt.xlim(xl)
+    plt.legend(lp, [b for b in bands], loc='upper right')
+    plt.title('CS82/SDSS forced photometry')
+    ps.savefig()
+
+
+    plt.clf()
+    lp = []
+    for band,cc in zip(bands, colors):
+        x = T.get('sdss_%s_mag' % band)
+        x = x[np.isfinite(x)]
+        n,b,p = plt.hist(x, 30, color=cc, histtype='step', range=(20,26))
+        lp.append(p[0])
+    plt.xlabel('Mag')
+    plt.legend(lp, [b for b in bands], loc='upper right')
+    plt.title('CS82/SDSS forced photometry')
+    ps.savefig()
+
+    plt.clf()
+    Ipsf = np.flatnonzero(T.chi2_psf < T.chi2_model)
+    sdss = T.sdss_i_mag[Ipsf]
+    cfht = T.mag_psf[Ipsf]
+    loghist(cfht, sdss - cfht, 100, range=((18, 24),(-1,1)))
+    plt.xlabel('CS82 i-band (mag)')
+    plt.ylabel('SDSS i - CS82 i (mag)')
+    plt.title('CS82/SDSS forced photometry: PSFs')
+    ps.savefig()
+
+    plt.clf()
+    Imod = np.flatnonzero(T.chi2_model < T.chi2_psf)
+    sdss = T.sdss_i_mag[Imod]
+    cfht = NanoMaggies.nanomaggiesToMag(
+        NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
+        NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
+    loghist(cfht, sdss - cfht, 100, range=((18, 24),(-1,1)))
+    plt.xlabel('CS82 i-band (mag)')
+    plt.ylabel('SDSS i - CS82 i (mag)')
+    plt.title('CS82/SDSS forced photometry: Galaxies')
+    ps.savefig()
+
+
+    for band,yr in zip('ugrz', [(-1,6), (-1,3), (-1,2), (-2,1)]):
+        yl,yh = yr
+        yt = np.arange(yl, yh+1)
+        plt.clf()
+        Ipsf = np.flatnonzero(T.chi2_psf < T.chi2_model)
+        sdss = T.get('sdss_%s_mag' % band)[Ipsf]
+        cfht = T.mag_psf[Ipsf]
+        plt.subplot(2,1,1)
+        loghist(cfht, sdss - cfht, 100, range=((18, 24),yr), doclf=False)
+        plt.yticks(yt)
+        plt.ylabel('SDSS %s - CS82 i (mag)' % band)
+        plt.title('PSFs')
+        plt.subplot(2,1,2)
+        Imod = np.flatnonzero(T.chi2_model < T.chi2_psf)
+        sdss = T.get('sdss_%s_mag' % band)[Imod]
+        cfht = NanoMaggies.nanomaggiesToMag(
+            NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
+            NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
+        loghist(cfht, sdss - cfht, 100, range=((18, 24),yr), doclf=False)
+        plt.yticks(yt)
+        plt.ylabel('SDSS %s - CS82 i (mag)' % band)
+        plt.xlabel('CS82 i-band (mag)')
+        plt.title('Galaxies')
+        ps.savefig()
+    
+
+    g = T.sdss_g_mag
+    r = T.sdss_r_mag
+    i = T.sdss_i_mag
+    z = T.sdss_z_mag
+    # plt.clf()
+    # loghist(g-r, r-i, 100, range=((-2,4),(-2,4)))
+    # plt.xlabel('SDSS g-r (mag)')
+    # plt.ylabel('SDSS r-i (mag)')
+    # ps.savefig()
+
+    plt.clf()
+    I = np.flatnonzero(r < 21)
+    loghist((g-r)[I], (r-i)[I], 100, #range=((-2,4),(-2,4)))
+            range=((-1,3),(-1,3)))
+    plt.xlabel('SDSS g-r (mag)')
+    plt.ylabel('SDSS r-i (mag)')
+    plt.title('r < 21')
+    ps.savefig()
+
+    plt.clf()
+    I = np.flatnonzero((r > 22) * (r < 23))
+    loghist((g-r)[I], (r-i)[I], 100, #range=((-2,4),(-2,4)))
+            range=((-1,3),(-1,3)))
+    plt.xlabel('SDSS g-r (mag)')
+    plt.ylabel('SDSS r-i (mag)')
+    plt.title('r in [22,23]')
+    ps.savefig()
+
+    # plt.clf()
+    # loghist(r-i, i-z, 100, range=((-2,4),(-2,4)))
+    # plt.xlabel('SDSS r-i (mag)')
+    # plt.ylabel('SDSS i-z (mag)')
+    # ps.savefig()
+    # 
+    # 
+    # sys.exit(0)
+
     
     T1 = fits_table('cs82-i--phot-S82p18p.fits')
     T2 = fits_table('cs82-i2--phot-S82p18p.fits')
