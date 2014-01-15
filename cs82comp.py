@@ -28,7 +28,7 @@ from tractor.sdss import *
 
 from cs82 import *
 
-def comp1(T1, T2, ps):
+def comp1(T1, T2, ps, r0,r1,d0,d1,raa,deca,rab,decb):
     plt.clf()
     lo,hi = -10,100
     loghist(T1.sdss_i_nanomaggies, T2.sdss_i_nanomaggies, 200,
@@ -60,21 +60,11 @@ def comp1(T1, T2, ps):
         plt.title('Mag1 in [%.1f, %.1f]' % (mlo,mhi))
         ps.savefig()
         
-    
-    r0,r1 = 15.783169965, 16.7623649628
-    d0,d1 = -0.0919737024789, 0.939468218607
-
-    rab = np.linspace(r0, r1, 10+1)
-    decb = np.linspace(d0, d1, 10+1)
-
-    raa = np.linspace(r0, r1, 50+1)
-    deca = np.linspace(d0, d1, 1+1)
-
     dnm = (T1.sdss_i_nanomaggies - T2.sdss_i_nanomaggies) / np.hypot(dnm1,dnm2)
     I = np.flatnonzero(dnm > 3.)
     plt.clf()
     plt.plot(T1.ra[I], T1.dec[I], 'r.')
-    ax = plt.axis()
+    #ax = plt.axis()
     for x in rab:
         plt.axvline(x, color='r', alpha=0.1)
     for x in decb:
@@ -83,7 +73,7 @@ def comp1(T1, T2, ps):
         plt.axvline(x, color='b', alpha=0.1)
     for x in deca:
         plt.axhline(x, color='b', alpha=0.1)
-    plt.axis(ax)
+    plt.axis([r0,r1,d0,d1])
     plt.title('large dnm')
     ps.savefig()
 
@@ -110,8 +100,15 @@ if __name__ == '__main__':
     #nra1,ndec1 = (50, 1)
     #nra2,ndec2 = (10, 10)
     
-    T1 = fits_table('cs82c-phot-S82p18p-slice4.fits')
-    T2 = fits_table('cs82d-phot-S82p18p-slice21.fits')
+    # T1 = fits_table('cs82c-phot-S82p18p-slice4.fits')
+    # T2 = fits_table('cs82d-phot-S82p18p-slice21.fits')
+    # nra1,ndec1 = (50, 1)
+    # nra2,ndec2 = (50, 4)
+
+    cs82field = 'S82p18p'
+    
+    T1 = fits_table('cs82-i--phot-S82p18p.fits')
+    T2 = fits_table('cs82-i2--phot-S82p18p.fits')
     nra1,ndec1 = (50, 1)
     nra2,ndec2 = (50, 4)
 
@@ -152,26 +149,24 @@ if __name__ == '__main__':
 
     print 'RA,Dec bounds of sources with photometry done:', T1.ra.min(), T1.ra.max(), T1.dec.min(), T1.dec.max()
 
-    comp1(T1, T2, ps)
+    comp1(T1, T2, ps, r0,r1,d0,d1,raa,deca,rab,decb)
 
     plt.figure(figsize=(12,12))
 
     # wcs of area to look at
     pixscale = 0.4 / 3600.
-    ra0,dec0 = 16.3, 0.1
+    ra0,dec0 = 16.4, 0.1
     W,H = 1800,1800
 
-    ra0  = (T1.ra.min() + T1.ra.max()) / 2.
-    dec0 = (T1.dec.min()+ T1.dec.max())/ 2.
-    W = int((T1.ra.max()  - T1.ra.min() ) / pixscale)
-    H = int((T1.dec.max() - T1.dec.min()) / pixscale)
+    # ra0  = (T1.ra.min() + T1.ra.max()) / 2.
+    # dec0 = (T1.dec.min()+ T1.dec.max())/ 2.
+    # W = int((T1.ra.max()  - T1.ra.min() ) / pixscale)
+    # H = int((T1.dec.max() - T1.dec.min()) / pixscale)
     
     wcs = Tan(ra0, dec0, W/2+1, H/2+1, pixscale, 0., 0., pixscale, W, H)
 
     r0,r1,d0,d1 = wcs.radec_bounds()
     print 'RA,Dec bounds of coadd:', r0,r1,d0,d1
-    
-    cs82field = 'S82p18p'
     
     # coadd of SDSS images
     T = fits_table('sdssfield-%s.fits' % cs82field)
@@ -235,7 +230,7 @@ if __name__ == '__main__':
     plt.title('SDSS coadd: %s band' % band)
     ps.savefig()
     
-    fn = 'data/cs82/masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field
+    fn = 'data/cs82/cats/masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field
     extra_cols = []
     T = fits_table(fn, hdu=2,
             column_map={'ALPHA_J2000':'ra', 'DELTA_J2000':'dec'},
