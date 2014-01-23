@@ -24,6 +24,50 @@ if __name__ == '__main__':
     #    lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
+    gfn = 'galparams-100.fits'
+    if os.path.exists(gfn):
+        ps = PlotSequence('gals')
+        T = fits_table(gfn)
+        print 'Read', len(T), 'from', gfn
+        plt.figure(figsize=(12,8))
+        plt.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.92,
+                            wspace=0.25, hspace=0.25)
+        rows,cols = 2,3
+        plt.clf()
+        plt.suptitle('Galaxy properties from "vanilla" branch: 10,000 galaxies')
+        plt.subplot(rows,cols, 1)
+        plt.hist(T.re, 50, histtype='step', color='b')
+        plt.xlim(0, 1.4)
+        plt.xlabel('r_e (arcsec)')
+        plt.yticks([])
+        
+        plt.subplot(rows,cols, 2)
+        plt.hist(T.flux, 50, histtype='step', color='b')
+        plt.xlabel('flux')
+        plt.xlim(0, 200)
+        plt.yticks([])
+
+        plt.subplot(rows,cols, 3)
+        plt.hist(T.e1, 50, histtype='step', color='r')
+        plt.hist(T.e2, 50, histtype='step', color='b')
+        plt.xlabel('e1, e2')
+        plt.yticks([])
+
+        plt.subplot(rows,cols, 4)
+        plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b')
+        plt.xlabel('e')
+        plt.yticks([])
+
+        plt.subplot(rows,cols, 5)
+        theta = np.rad2deg(np.arctan2(T.e2, T.e1)) / 2.
+        plt.hist(theta, 50, histtype='step', color='b', range=(-90,90))
+        plt.xlabel('theta (deg)')
+        plt.xlim(-90, 90)
+        plt.yticks([])
+
+        ps.savefig()
+        sys.exit(0)
+        
     # Great3 ground-based images have this pixel scale.
     pixscale = 0.2
     # Great3 postage stamp size
