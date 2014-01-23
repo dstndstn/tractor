@@ -37,6 +37,15 @@ class EllipseE(ParamList):
     def __str__(self):
         return self.getName() + ': ' + repr(self)
 
+    @property
+    def re(self):
+        return np.exp(self.logr)
+
+    def getStepSizes(self, *args, **kwargs):
+        if hasattr(self, 'stepsizes'):
+            return list(self._getLiquidArray(self.stepsizes))
+        return [0.1] * self.numberOfParams()
+
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
@@ -51,7 +60,10 @@ class EllipseE(ParamList):
         
         e = np.sqrt(e1**2 + e2**2)
         e = 1. - np.exp(-e)
-        ab = (1.+e)/(1.-e)
+        if e == 1.:
+            ab = 20.
+        else:
+            ab = min(20., (1.+e)/(1.-e))
         r_deg = np.exp(self.logr) / 3600.
         
         # G takes unit vectors (in r_e) to degrees (~intermediate world coords)

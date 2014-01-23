@@ -21,7 +21,7 @@ if __name__ == '__main__':
     SS = 48
 
     ps = PlotSequence('great')
-    ps.suffixes = ['png', 'pdf']
+    ps.suffixes = ['png']#, 'pdf']
     
     # which input data?
     #branch = 'great3/multiepoch/ground/constant'
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     print 'MAD', mad, '-> sigma', sig1
 
     plt.figure(figsize=(5,5))
-    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95,
+    plt.subplots_adjust(left=0.12, right=0.95, bottom=0.05, top=0.92,
                         wspace=0.25, hspace=0.25)
     
     # histogram pixel values and noise estimate.
@@ -121,22 +121,26 @@ if __name__ == '__main__':
 
     # Plot star postage stamp and model
     plt.clf()
-    plt.subplot(1,2,1)
+    plt.subplot(2,2,1)
     psfima = dict(interpolation='nearest', origin='lower',
                   cmap='gray', vmin=-6, vmax=0)
     plt.imshow(np.log10(star), **psfima)
-    plt.title('PSF stamp')
-    plt.subplot(1,2,2)
+    plt.title('log(PSF stamp)')
+    plt.subplot(2,2,2)
     plt.imshow(np.log10(psfmodel.patch), **psfima)
-    plt.title('PSF model')
-    #plt.subplot(2,2,3)
-    # d'oh, the star and model patch aren't the same size.
-    # dpsf = star - psfmodel.patch
-    # mx = dpsf.max()
-    # plt.imshow(dpsf, interpolation='nearest', origin='lower',
-    #            vmin=-mx, vmax=mx)
-    # plt.colorbar()
-    # plt.title('Stamp - Model')
+    plt.title('log(PSF model)')
+
+    plt.subplot(2,2,3)
+    sh,sw = star.shape
+    pimg = np.zeros_like(star)
+    m2 = psf.getPointSourcePatch(sw/2.-0.5, sh/2.-0.5, radius=24)
+    m2.addTo(pimg)
+    dpsf = pimg - star
+    mx = np.abs(dpsf).max()
+    plt.imshow(dpsf, interpolation='nearest', origin='lower',
+               vmin=-mx, vmax=mx, cmap='RdBu')
+    plt.title('Model - Stamp')
+    plt.colorbar()
     ps.savefig()
 
     # create tractor Image object.
@@ -147,8 +151,16 @@ if __name__ == '__main__':
                 domask=False, zr=[-2.*sig1, 3.*sig1])
 
     # Create an initial galaxy model object.
-    re, ab, phi = 1., 0.5, 0.
-    gal = ExpGalaxy(PixPos(SS/2-1., SS/2-1.), Flux(20. * sig1), re, ab, phi)
+    e = EllipseE(0., 0., 0.)
+    # Initialize with a rough measure of the PSF flux.
+    mimg = np.zeros_like(img)
+    m2 = psf.getPointSourcePatch(SS/2-1., SS/2-1., radius=24)
+    m2.addTo(mimg)
+    flux = np.sum(mimg * img) / np.sum(mimg**2)
+    print 'PSF flux:', flux
+    flux = Flux(flux)
+    flux.stepsize = sig1
+    gal = ExpGalaxy(PixPos(SS/2-1., SS/2-1.), flux, e)
     print 'Initial', gal
 
     # Create Tractor object from list of images and list of sources
@@ -240,7 +252,7 @@ if __name__ == '__main__':
     # (hard-coded) step sizes.
     steps = np.array(tractor.getStepSizes())
     # Initial parameters for walkers
-    pp0 = np.vstack([p0 + 1e-2 * steps * np.random.normal(size=len(steps))
+    pp0 = np.vstack([p0 + 1e-1 * steps * np.random.normal(size=len(steps))
                      for i in range(nw)])
 
     alllnp = []
@@ -269,6 +281,7 @@ if __name__ == '__main__':
 
     # Plot parameter distributions
     allp = np.array(allp)
+    burn = 50
     print 'All params:', allp.shape
     for i,nm in enumerate(tractor.getParamNames()):
         pp = allp[:,:,i].ravel()
@@ -278,7 +291,7 @@ if __name__ == '__main__':
         hi = mid + (hi-mid)*2
         plt.clf()
         plt.subplot(2,1,1)
-        plt.hist(pp, 50, range=(lo,hi))
+        plt.hist(allp[burn:,:,i].ravel(), 50, range=(lo,hi))
         plt.xlim(lo,hi)
         plt.subplot(2,1,2)
         plt.plot(allp[:,:,i], 'k-', alpha=0.5)
@@ -287,39 +300,60 @@ if __name__ == '__main__':
         plt.suptitle(nm)
         ps.savefig()
 
-    # Plot (some) parameter pairs
-    re = allp[50:,:,3].ravel()
-    ab = allp[50:,:,4].ravel()
-    rerange = 1.95, 2.3
-    abrange = 0.55, 0.75
-
-    reticks = [2.0, 2.1, 2.2, 2.3]
-    abticks = [0.6, 0.7]
-    
+    # Plot a sampling of ellipse parameters
+    ellp = allp[-1, :, -3:]
+    print 'ellp:', ellp.shape
+    E = EllipseE(0.,0.,0.)
+    angle = np.linspace(0., 2.*np.pi, 100)
+    xx,yy = np.sin(angle), np.cos(angle)
+    xy = np.vstack((xx,yy)) * 3600.
     plt.clf()
-    plt.subplot(2,2,1)
-    plt.hist(re, 25, range=rerange)
-    plt.xlabel('r_e')
-    plt.xlim(rerange)
-    plt.xticks(reticks)
-    plt.yticks([])
-    
-    plt.subplot(2,2,2)
-    plt.plot(ab, re, 'b.', alpha=0.2)
-    plt.ylim(rerange)
-    plt.ylabel('r_e')
-    plt.yticks(reticks)
-    plt.xlim(abrange)
-    plt.xlabel('a/b')
-    plt.xticks(abticks)
-    
-    plt.subplot(2,2,4)
-    plt.hist(ab, 25, range=abrange)
-    plt.xlim(abrange)
-    plt.xlabel('a/b')
-    plt.xticks(abticks)
-    plt.yticks([])
-
+    for ell in ellp:
+        E.setParams(ell)
+        T = E.getRaDecBasis()
+        txy = np.dot(T, xy)
+        plt.plot(txy[0,:], txy[1,:], '-', color='b', alpha=0.1)
+    plt.title('sample of galaxy ellipses')
+    plt.xlabel('dx (arcsec)')
+    plt.ylabel('dy (arcsec)')
+    mx = np.max(np.abs(plt.axis()))
+    plt.axis([-mx,mx,-mx,mx])
+    plt.axis('scaled')
     ps.savefig()
+        
+    # # Plot (some) parameter pairs
+    # re = allp[burn:,:,3].ravel()
+    # ab = allp[burn:,:,4].ravel()
+    # rerange = 1.95, 2.3
+    # abrange = 0.55, 0.75
+    # 
+    # reticks = [2.0, 2.1, 2.2, 2.3]
+    # abticks = [0.6, 0.7]
+    # 
+    # plt.clf()
+    # plt.subplot(2,2,1)
+    # plt.hist(re, 25, range=rerange)
+    # plt.xlabel('r_e')
+    # plt.xlim(rerange)
+    # plt.xticks(reticks)
+    # plt.yticks([])
+    # 
+    # plt.subplot(2,2,2)
+    # plt.plot(ab, re, 'b.', alpha=0.2)
+    # plt.ylim(rerange)
+    # plt.ylabel('r_e')
+    # plt.yticks(reticks)
+    # plt.xlim(abrange)
+    # plt.xlabel('a/b')
+    # plt.xticks(abticks)
+    # 
+    # plt.subplot(2,2,4)
+    # plt.hist(ab, 25, range=abrange)
+    # plt.xlim(abrange)
+    # plt.xlabel('a/b')
+    # plt.xticks(abticks)
+    # plt.yticks([])
+    # 
+    # ps.savefig()
     
         

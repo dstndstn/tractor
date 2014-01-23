@@ -539,7 +539,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
         amix.symmetrize()
         return amix
-    
+
     def _getUnitFluxDeps(self, img, px, py):
         return hash(('unitpatch', self.getName(), px, py,
                      img.getWcs().hashkey(),
@@ -550,8 +550,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        halfsize = max(1., self.nre * self.re *
-                       max(self.ab, 1.) / 3600. / pixscale)
+        halfsize = max(1., self.nre * self.re # * max(self.ab, 1.)
+                       / 3600. / pixscale)
         psf = img.getPsf()
         halfsize += psf.getRadius()
         return halfsize
