@@ -16,12 +16,14 @@ from tractor.sdss_galaxy import *
 
 import emcee
 
+import scipy.stats
+
 if __name__ == '__main__':
     import sys
     import logging
-    #lvl = logging.INFO
     lvl = logging.WARN
-    #    lvl = logging.DEBUG
+    #lvl = logging.INFO
+    #lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     gpat = 'deepparams-%03i.fits'
@@ -35,7 +37,7 @@ if __name__ == '__main__':
                             wspace=0.25, hspace=0.25)
         rows,cols = 2,3
         plt.clf()
-        plt.suptitle('Galaxy properties from "vanilla" branch: 10,000 galaxies')
+        plt.suptitle('Galaxy properties from "deep vanilla" branch: 10,000 galaxies')
         plt.subplot(rows,cols, 1)
         plt.hist(T.re, 50, histtype='step', color='b')
         plt.xlim(0, 1.4)
@@ -49,16 +51,39 @@ if __name__ == '__main__':
         plt.yticks([])
 
         plt.subplot(rows,cols, 3)
-        plt.hist(T.e1, 50, histtype='step', color='r')
-        plt.hist(T.e2, 50, histtype='step', color='b')
+        lo,hi = -1,1
+        n1,b1,p1 = plt.hist(T.e1, 50, histtype='step', color='r', range=(lo,hi))
+        n2,b2,p2 = plt.hist(T.e2, 50, histtype='step', color='b', range=(lo,hi))
+        b = b1[1]-b1[0]
+        mean1 = np.mean(T.e1)
+        std1 = np.std(T.e1)
+        mean2 = np.mean(T.e2)
+        std2 = np.std(T.e2)
+        xx = np.linspace(lo, hi, 500)
+        plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std1) * np.exp(-0.5 * (xx-mean1)**2 / std1**2), 'r-', lw=2, alpha=0.5)
+        plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std2) * np.exp(-0.5 * (xx-mean2)**2 / std2**2), 'b-', lw=2, alpha=0.5)
+        print 'Mean, std e1', mean1, std1
+        print 'Mean, std e2', mean2, std2
         plt.xlabel('e1, e2')
+        plt.xlim(lo,hi)
         plt.yticks([])
 
         plt.subplot(rows,cols, 4)
-        plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b')
+        lo,hi = 0,1
+        n,b,p = plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b',
+                         range=(0,1))
+        xx = np.linspace(lo, hi, 500)
+        f = scipy.stats.chi(2)
+        sig = np.mean([std1,std2])
+        yy = f.pdf(xx / sig)
+        yy *= len(T) * (b[1]-b[0]) / sig
+        plt.plot(xx, yy, lw=2, color='b', alpha=0.5)
+
         plt.xlabel('e')
         plt.yticks([])
-
+        plt.xlim(lo,hi)
+        
+        
         plt.subplot(rows,cols, 5)
         theta = np.rad2deg(np.arctan2(T.e2, T.e1)) / 2.
         plt.hist(theta, 50, histtype='step', color='b', range=(-90,90))
