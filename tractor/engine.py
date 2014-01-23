@@ -1656,7 +1656,7 @@ class Tractor(MultiParams):
         
         Returns (delta-logprob, parameter update X, alpha stepsize)
         '''
-        print self.getName()+': Finding derivs...'
+        logverb(self.getName()+': Finding derivs...')
         t0 = Time()
         allderivs = self.getDerivs()
         tderivs = Time()-t0
@@ -1665,7 +1665,7 @@ class Tractor(MultiParams):
         #for d in allderivs:
         #   for (p,im) in d:
         #       print 'patch mean', np.mean(p.patch)
-        print 'Finding optimal update direction...'
+        logverb('Finding optimal update direction...')
         t0 = Time()
         X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
                                     scale_columns=scale_columns,
@@ -1675,16 +1675,16 @@ class Tractor(MultiParams):
         #print 'X:', X
         if len(X) == 0:
             return 0, X, 0.
-        print 'X: len', len(X), '; non-zero entries:', np.count_nonzero(X)
-        print 'Finding optimal step size...'
+        logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
+        logverb('Finding optimal step size...')
         t0 = Time()
         (dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
         tstep = Time() - t0
-        print 'Finished opt2.'
-        print '  alpha =',alpha
-        print '  Tderiv', tderivs
-        print '  Topt  ', topt
-        print '  Tstep ', tstep
+        logverb('Finished opt2.')
+        logverb('  alpha =',alpha)
+        logverb('  Tderiv', tderivs)
+        logverb('  Topt  ', topt)
+        logverb('  Tstep ', tstep)
         return dlogprob, X, alpha
 
     def getParameterScales(self):
@@ -1784,7 +1784,7 @@ class Tractor(MultiParams):
                 needparams.append(need)
                     
         # initial models...
-        print 'Getting', len(needimjs), 'initial models for image derivatives'
+        logverb('Getting', len(needimjs), 'initial models for image derivatives')
         mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in needimjs])
         # stepping each (needed) param...
         args = []
@@ -1801,7 +1801,7 @@ class Tractor(MultiParams):
             for i in params:
                 args.append((self, imj, i, p0[i], ss[i]))
         # reverse the args so we can pop() below.
-        print 'Stepping in', len(args), 'model parameters for derivatives'
+        logverb('Stepping in', len(args), 'model parameters for derivatives')
         mod1s = self._map_async(getmodelimagestep, reversed(args))
 
         # Next, derivs for the sources.
@@ -1902,7 +1902,7 @@ class Tractor(MultiParams):
             p1 = self.getParams()
             self.setParams(p0)
             U,I = np.unique(p1, return_inverse=True)
-            print len(p0), 'params;', len(U), 'unique'
+            logverb(len(p0), 'params;', len(U), 'unique')
             paramindexmap = I
             #print 'paramindexmap:', paramindexmap
             #print 'p1:', p1
@@ -1981,9 +1981,9 @@ class Tractor(MultiParams):
             #   continue
             mx = np.max(np.abs(vals))
             if mx == 0:
-                print 'mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
-                print len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
-                print len(np.flatnonzero(vals)), 'non-zero products'
+                logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
+                       len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
+                       len(np.flatnonzero(vals)), 'non-zero products')
                 continue
             # MAGIC number: near-zero matrix elements -> 0
             # 'mx' is the max value in this column.
@@ -2063,7 +2063,7 @@ class Tractor(MultiParams):
             #print 'spcols:', len(spcols), 'elements'
             #print '  ', len(set(spcols)), 'unique'
             Ncols = np.max(spcols) + 1
-            print 'Set Ncols=', Ncols
+            logverb('Set Ncols=', Ncols)
 
         # b = chi
         #
@@ -2261,10 +2261,10 @@ class Tractor(MultiParams):
         if shared_params:
             # Unapply shared parameter map -- result is duplicated
             # result elements.
-            print 'shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
-            print 'paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max()
+            logverb('shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
+            logverb('paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max())
             X = X[paramindexmap]
-            print 'shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries'
+            logverb('shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
 
         if scale_columns:
             X /= colscales
