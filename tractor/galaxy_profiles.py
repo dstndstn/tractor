@@ -1,4 +1,4 @@
- from numpy import exp, power, atleast_1d, isscalar
+from numpy import exp, power, atleast_1d, isscalar
 
 ### copied from photo: makeprof.c and phFitobj.h
 
