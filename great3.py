@@ -24,7 +24,8 @@ if __name__ == '__main__':
     #    lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    gfn = 'galparams-100.fits'
+    gpat = 'deepparams-%03i.fits'
+    gfn = gpat % 100
     if os.path.exists(gfn):
         ps = PlotSequence('gals')
         T = fits_table(gfn)
@@ -84,11 +85,12 @@ if __name__ == '__main__':
     subfield = 1
     epoch = 0
 
+    pretag = 'deep_'
     tag = '%03i-%i' % (subfield, epoch)
     
     # paths
-    imgfn  = os.path.join(branch, 'image-%s.fits' % tag)
-    starfn = os.path.join(branch, 'starfield_image-%s.fits' % tag)
+    imgfn  = os.path.join(branch, '%simage-%s.fits' % (pretag, tag))
+    starfn = os.path.join(branch, '%sstarfield_image-%s.fits' % (pretag, tag))
 
     #imgfn = 'demo2.fits'
     #starfn = 'demo2_epsf.fits'
@@ -330,7 +332,7 @@ if __name__ == '__main__':
             T.flux = op[:,2]
             T.logprob = op[:,6]
             
-            T.writeto('galparams-%03i.fits' % ((stamp+1)/100))
+            T.writeto(gpat % ((stamp+1)/100))
             
             plt.subplots_adjust(left=0.12, right=0.95, bottom=0.12, top=0.92,
                                 wspace=0.25, hspace=0.25)
