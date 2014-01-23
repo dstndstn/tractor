@@ -21,7 +21,8 @@ if __name__ == '__main__':
     SS = 48
 
     ps = PlotSequence('great')
-
+    ps.suffixes = ['png', 'pdf']
+    
     # which input data?
     #branch = 'great3/multiepoch/ground/constant'
     #food = 'dimsum'
@@ -35,6 +36,9 @@ if __name__ == '__main__':
     # paths
     imgfn  = os.path.join(branch, 'image-%s.fits' % tag)
     starfn = os.path.join(branch, 'starfield_image-%s.fits' % tag)
+
+    imgfn = 'demo2.fits'
+    starfn = 'demo2_epsf.fits'
 
     fns = [imgfn, starfn]
     if not all([os.path.exists(x) for x in fns]):
@@ -64,6 +68,10 @@ if __name__ == '__main__':
     sig1 = 1.4826 * mad / np.sqrt(2.)
     print 'MAD', mad, '-> sigma', sig1
 
+    plt.figure(figsize=(5,5))
+    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95,
+                        wspace=0.25, hspace=0.25)
+    
     # histogram pixel values and noise estimate.
     plt.clf()
     lo,hi = -5.*sig1, 5.*sig1
@@ -155,15 +163,19 @@ if __name__ == '__main__':
     plt.subplot(2,2,1)
     plt.imshow(img, **ima)
     plt.title('Image')
+    plt.xticks([]); plt.yticks([])
     plt.subplot(2,2,2)
     plt.imshow(mod, **ima)
     plt.title('Initial model')
+    plt.xticks([]); plt.yticks([])
     plt.subplot(2,2,3)
     plt.imshow(mod+noise, **ima)
     plt.title('Model + noise')
+    plt.xticks([]); plt.yticks([])
     plt.subplot(2,2,4)
     # show mod - img to match "red-to-blue" colormap.
     plt.imshow(-(img - mod)/sig1, **imchi)
+    plt.xticks([]); plt.yticks([])
     plt.title('Chi')
     ps.savefig()
 
@@ -192,16 +204,20 @@ if __name__ == '__main__':
     plt.clf()
     plt.subplot(2,2,1)
     plt.imshow(img, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.title('Image')
     plt.subplot(2,2,2)
     plt.imshow(mod, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.title('Opt Model')
     plt.subplot(2,2,3)
     plt.imshow(mod+noise, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.title('Model + noise')
     plt.subplot(2,2,4)
     # show mod - img to match "red-to-blue" colormap.
     plt.imshow(-(img - mod)/sig1, **imchi)
+    plt.xticks([]); plt.yticks([])
     plt.title('Chi')
     ps.savefig()
 
@@ -270,3 +286,40 @@ if __name__ == '__main__':
         plt.ylim(lo,hi)
         plt.suptitle(nm)
         ps.savefig()
+
+    # Plot (some) parameter pairs
+    re = allp[50:,:,3].ravel()
+    ab = allp[50:,:,4].ravel()
+    rerange = 1.95, 2.3
+    abrange = 0.55, 0.75
+
+    reticks = [2.0, 2.1, 2.2, 2.3]
+    abticks = [0.6, 0.7]
+    
+    plt.clf()
+    plt.subplot(2,2,1)
+    plt.hist(re, 25, range=rerange)
+    plt.xlabel('r_e')
+    plt.xlim(rerange)
+    plt.xticks(reticks)
+    plt.yticks([])
+    
+    plt.subplot(2,2,2)
+    plt.plot(ab, re, 'b.', alpha=0.2)
+    plt.ylim(rerange)
+    plt.ylabel('r_e')
+    plt.yticks(reticks)
+    plt.xlim(abrange)
+    plt.xlabel('a/b')
+    plt.xticks(abticks)
+    
+    plt.subplot(2,2,4)
+    plt.hist(ab, 25, range=abrange)
+    plt.xlim(abrange)
+    plt.xlabel('a/b')
+    plt.xticks(abticks)
+    plt.yticks([])
+
+    ps.savefig()
+    
+        
