@@ -22,11 +22,35 @@ if __name__ == '__main__':
     import sys
     import logging
     lvl = logging.WARN
-    #lvl = logging.INFO
-    #lvl = logging.DEBUG
+
+    import optparse
+    parser = optparse.OptionParser()
+    
+    parser.add_option('-v', '--verbose', dest='verbose', action='count',
+                      default=0, help='Make more verbose')
+    parser.add_option('-f', dest='field', default=0, type=int,
+                      help='Field number')
+    parser.add_option('--deep', action='store_true', default=False,
+                      help='Read deep images?')
+    
+    opt,args = parser.parse_args()
+    
+    if opt.verbose == 1:
+        lvl = logging.INFO
+    if opt.verbose > 1:
+        lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    gpat = 'deepparams-%03i.fits'
+    # which input data?
+    #branch = 'great3/multiepoch/ground/constant'
+    #food = 'dimsum'
+    branch = 'great3/control/ground/constant'
+    food = 'vanilla'
+    
+    if opt.deep:
+        gpat = 'deepparams-%s-f%i-%%03i.fits' % (food, opt.field)
+    else:
+        gpat = 'galparams-%s-f%i-%%03i.fits' % (food, opt.field)
     gfn = gpat % 100
     if os.path.exists(gfn):
         ps = PlotSequence('gals')
@@ -37,7 +61,7 @@ if __name__ == '__main__':
                             wspace=0.25, hspace=0.25)
         rows,cols = 2,3
         plt.clf()
-        plt.suptitle('Galaxy properties from "deep vanilla" branch: 10,000 galaxies')
+        plt.suptitle('Galaxy properties from "deep vanilla" branch, field %i: 10,000 galaxies' % opt.field)
         plt.subplot(rows,cols, 1)
         plt.hist(T.re, 50, histtype='step', color='b')
         plt.xlim(0, 1.4)
@@ -59,6 +83,7 @@ if __name__ == '__main__':
         std1 = np.std(T.e1)
         mean2 = np.mean(T.e2)
         std2 = np.std(T.e2)
+
         xx = np.linspace(lo, hi, 500)
         plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std1) * np.exp(-0.5 * (xx-mean1)**2 / std1**2), 'r-', lw=2, alpha=0.5)
         plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std2) * np.exp(-0.5 * (xx-mean2)**2 / std2**2), 'b-', lw=2, alpha=0.5)
@@ -68,6 +93,46 @@ if __name__ == '__main__':
         plt.xlim(lo,hi)
         plt.yticks([])
 
+        plt.subplot(rows, cols, 6)
+        n1,b1,p1 = plt.hist(T.e1, 50, histtype='step', color='r', range=(lo,hi))
+        n2,b2,p2 = plt.hist(T.e2, 50, histtype='step', color='b', range=(lo,hi))
+        B = b1[1]-b1[0]
+        plt.xlabel('e1, e2: 2-Gaussian fit')
+        plt.xlim(lo,hi)
+        plt.yticks([])
+
+        K = 2
+        ww1 = np.ones(K) / float(K)
+        mm1 = np.zeros(K) + mean1
+        vv1 = np.arange(K) + std1
+        from tractor.emfit import *
+        r = em_fit_1d_samples(T.e1, ww1, mm1, vv1)
+        ww2 = np.ones(K) / float(K)
+        mm2 = np.zeros(K) + mean2
+        vv2 = np.arange(K) + std2
+        r = em_fit_1d_samples(T.e2, ww2, mm2, vv2)
+
+        print 'e1:'
+        print '  w', ww1
+        print '  mu', mm1
+        print '  std', np.sqrt(vv1)
+
+        print 'e2:'
+        print '  w', ww2
+        print '  mu', mm2
+        print '  std', np.sqrt(vv2)
+
+        N = len(T)
+        
+        gfit = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
+                np.exp(-0.5 * (xx-m)**2/s**2)
+                for (a,m,s) in zip(ww1, mm1, np.sqrt(vv1))]
+        plt.plot(xx, reduce(np.add, gfit), 'r-', lw=2, alpha=0.5)
+        gfit = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
+                np.exp(-0.5 * (xx-m)**2/s**2)
+                for (a,m,s) in zip(ww2, mm2, np.sqrt(vv2))]
+        plt.plot(xx, reduce(np.add, gfit), 'b-', lw=2, alpha=0.5)
+        
         plt.subplot(rows,cols, 4)
         lo,hi = 0,1
         n,b,p = plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b',
@@ -102,16 +167,14 @@ if __name__ == '__main__':
     ps = PlotSequence('great')
     ps.suffixes = ['png']#, 'pdf']
     
-    # which input data?
-    #branch = 'great3/multiepoch/ground/constant'
-    #food = 'dimsum'
-    branch = 'great3/control/ground/constant'
-    food = 'vanilla'
-    subfield = 1
     epoch = 0
 
-    pretag = 'deep_'
-    tag = '%03i-%i' % (subfield, epoch)
+    if opt.deep:
+        pretag = 'deep_'
+    else:
+        pretag = ''
+
+    tag = '%03i-%i' % (opt.field, epoch)
     
     # paths
     imgfn  = os.path.join(branch, '%simage-%s.fits' % (pretag, tag))
@@ -130,8 +193,10 @@ if __name__ == '__main__':
             if not os.path.exists(fn):
                 os.system('wget -O %s http://broiler.astrometry.net/~dstn/%s' % (fn, fn))
 
+    print 'Reading', imgfn
     img = fitsio.read(imgfn).astype(np.float32)
     print 'Image size', img.shape
+    print 'Reading', starfn
     stars = fitsio.read(starfn).astype(np.float32)
     print 'Starfield size', stars.shape
 
