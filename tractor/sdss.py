@@ -1003,6 +1003,10 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     meancalib = np.mean(calibvec)
     skysig = sqrt((meansky / gain) + darkvar) * meancalib
 
+    # Calculate the Poisson-distributed number of electrons detected by the instrument
+    dn = frame.getImage() / frame.getCalibVec() + frame.getSky()
+    nelec = dn * gain
+
     info.update(sky=sky, skysig=skysig)
     zr = np.array(zrange)*skysig + sky
     info.update(zr=zr)
@@ -1016,6 +1020,8 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     else:
         roislice = (slice(y0,y1), slice(x0,x1))
         image = frame.getImageSlice(roislice).astype(np.float32)
+        dn = dn[roislice].copy()
+        nelec = nelec[roislice].copy()
         if invvarAtCenterImage:
             invvar = invvar + np.zeros(image.shape, np.float32)
         elif invvarAtCenter:
@@ -1024,7 +1030,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
             invvar = invvar[roislice].copy()
 
         H,W = image.shape
-            
+
+    info.update(dn=dn, nelec=nelec)
+
     if (not invvarAtCenter) or invvarAtCenterImage:
         for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
             fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
