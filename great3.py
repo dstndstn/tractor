@@ -13,11 +13,17 @@ from astrometry.util.fits import *
 
 from tractor import *
 from tractor.sdss_galaxy import *
+from tractor.emfit import *
 
 import emcee
 
 import scipy.stats
 
+def eval_mog(xx, ww, mm, vv):
+    return reduce(np.add, [a / (np.sqrt(2.*np.pi) * s) * 
+                           np.exp(-0.5 * (xx-m)**2/s**2)
+                           for (a,m,s) in zip(ww, mm, np.sqrt(vv))])
+    
 if __name__ == '__main__':
     import sys
     import logging
@@ -56,60 +62,116 @@ if __name__ == '__main__':
         ps = PlotSequence('gals')
         T = fits_table(gfn)
         print 'Read', len(T), 'from', gfn
-        plt.figure(figsize=(12,8))
+        #plt.figure(figsize=(12,8))
+        plt.figure(figsize=(9,6))
         plt.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.92,
                             wspace=0.25, hspace=0.25)
         rows,cols = 2,3
         plt.clf()
         plt.suptitle('Galaxy properties from "deep vanilla" branch, field %i: 10,000 galaxies' % opt.field)
         plt.subplot(rows,cols, 1)
-        plt.hist(T.re, 50, histtype='step', color='b')
-        plt.xlim(0, 1.4)
+        lo,hi = 0, 1.4
+        n,b,p = plt.hist(T.re, 50, histtype='step', color='b', range=(lo,hi))
+        B = b[1]-b[0]
+        xx = np.linspace(lo, hi, 500)
+        
+        p = scipy.stats.lognorm.fit(T.re, floc=0.2)
+        print 'lognorm params', p
+        dist = scipy.stats.lognorm(*p)
+        yy = dist.pdf(xx) * len(T) * B
+        I = np.isfinite(yy)
+        xx,yy = xx[I], yy[I]
+        plt.plot(xx, yy, 'b-', lw=2, alpha=0.5)
+
+        p = scipy.stats.invgamma.fit(T.re, fscale=3.)
+        print 'invgamma params', p
+        #dist = scipy.stats.invgamma(*p)
+        dist = scipy.stats.invgamma(3., scale=0.5)
+        yy = dist.pdf(xx) * len(T) * B
+        I = np.isfinite(yy)
+        xx,yy = xx[I], yy[I]
+        plt.plot(xx, yy, 'm-', lw=2, alpha=0.5)
+        
+        K = 3
+        ww1 = np.ones(K) / float(K)
+        mm1 = np.array([0.3, 0.4, 0.5])
+        vv1 = np.ones(K)
+        r = em_fit_1d_samples(T.re, ww1, mm1, vv1)
+        yy = eval_mog(xx, ww1, mm1, vv1)
+        plt.plot(xx, yy*len(T)*B, 'g-', lw=2, alpha=0.5)
+        
+        plt.xlim(lo, hi)
         plt.xlabel('r_e (arcsec)')
         plt.yticks([])
+
+
+        plt.subplot(rows,cols, 6)
+        lo,hi = 0, 1.4
+        n,b,p = plt.hist(T.re, 50, histtype='step', color='b', range=(lo,hi),
+                         log=True)
+        B = b[1]-b[0]
+        plt.xlabel('r_e (arcsec)')
+        plt.xlim(lo, hi)
+        yl,yh = plt.ylim()
+        plt.ylim(0.1, yh)
+
+        plt.subplot(rows,cols, 5)
+        lo,hi = np.log(0.1), np.log(1.4)
+        n,b,p = plt.hist(np.log(T.re), 50, histtype='step', color='b', range=(lo,hi))
+        B = b[1]-b[0]
+        plt.xlabel('log r_e (arcsec)')
+        plt.xlim(lo, hi)
+
+        
         
         plt.subplot(rows,cols, 2)
-        plt.hist(T.flux, 50, histtype='step', color='b')
+        lo,hi = 0, 150
+        n,b,p = plt.hist(T.flux, 50, histtype='step', color='b', range=(lo,hi))
+        B = b[1]-b[0]
         plt.xlabel('flux')
+        xx = np.linspace(lo, hi, 500)
+
+        #p = scipy.stats.invgamma.fit(T.flux, floc=0.)
+        #print 'flux invgamma params', p
+        #dist = scipy.stats.invgamma(3., scale=0.5)
+        dist = scipy.stats.invgamma(3., scale=50.)
+        yy = dist.pdf(xx) * len(T) * B
+        I = np.isfinite(yy)
+        xx,yy = xx[I], yy[I]
+        plt.plot(xx, yy, 'm-', lw=2, alpha=0.5)
+
         plt.xlim(0, 200)
         plt.yticks([])
+        
+        plt.subplot(rows,cols, 4)
+        # lo,hi = np.log(10.), np.log(150)
+        # plt.hist(np.log(T.flux), 50, histtype='step', color='b', range=(lo,hi))
+        # plt.xlabel('log(flux)')
+        # plt.xlim(lo, hi)
+        # plt.yticks([])
+        lo,hi = 0, 150
+        plt.hist(T.flux, 50, histtype='step', color='b', range=(lo,hi),
+                 log=True)
+        plt.xlabel('flux')
+        plt.xlim(lo, hi)
 
+        
         plt.subplot(rows,cols, 3)
         lo,hi = -1,1
         n1,b1,p1 = plt.hist(T.e1, 50, histtype='step', color='r', range=(lo,hi))
         n2,b2,p2 = plt.hist(T.e2, 50, histtype='step', color='b', range=(lo,hi))
-        b = b1[1]-b1[0]
-        mean1 = np.mean(T.e1)
-        std1 = np.std(T.e1)
-        mean2 = np.mean(T.e2)
-        std2 = np.std(T.e2)
-
-        xx = np.linspace(lo, hi, 500)
-        plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std1) * np.exp(-0.5 * (xx-mean1)**2 / std1**2), 'r-', lw=2, alpha=0.5)
-        plt.plot(xx, len(T) * b / (np.sqrt(2.*np.pi)*std2) * np.exp(-0.5 * (xx-mean2)**2 / std2**2), 'b-', lw=2, alpha=0.5)
-        print 'Mean, std e1', mean1, std1
-        print 'Mean, std e2', mean2, std2
-        plt.xlabel('e1, e2')
-        plt.xlim(lo,hi)
-        plt.yticks([])
-
-        plt.subplot(rows, cols, 6)
-        n1,b1,p1 = plt.hist(T.e1, 50, histtype='step', color='r', range=(lo,hi))
-        n2,b2,p2 = plt.hist(T.e2, 50, histtype='step', color='b', range=(lo,hi))
         B = b1[1]-b1[0]
         plt.xlabel('e1, e2: 2-Gaussian fit')
-        plt.xlim(lo,hi)
-        plt.yticks([])
+        xx = np.linspace(lo, hi, 500)
 
         K = 2
         ww1 = np.ones(K) / float(K)
-        mm1 = np.zeros(K) + mean1
-        vv1 = np.arange(K) + std1
-        from tractor.emfit import *
+        mm1 = np.zeros(K)
+        vv1 = np.arange(K) + np.std(T.e1)
         r = em_fit_1d_samples(T.e1, ww1, mm1, vv1)
         ww2 = np.ones(K) / float(K)
-        mm2 = np.zeros(K) + mean2
-        vv2 = np.arange(K) + std2
+        mm2 = np.zeros(K)
+        vv2 = np.arange(K) + np.std(T.e2)
         r = em_fit_1d_samples(T.e2, ww2, mm2, vv2)
 
         print 'e1:'
@@ -122,39 +184,38 @@ if __name__ == '__main__':
         print '  mu', mm2
         print '  std', np.sqrt(vv2)
 
-        N = len(T)
-        
-        gfit = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
-                np.exp(-0.5 * (xx-m)**2/s**2)
-                for (a,m,s) in zip(ww1, mm1, np.sqrt(vv1))]
-        plt.plot(xx, reduce(np.add, gfit), 'r-', lw=2, alpha=0.5)
-        gfit = [a * N*B / (np.sqrt(2.*np.pi) * s) * 
-                np.exp(-0.5 * (xx-m)**2/s**2)
-                for (a,m,s) in zip(ww2, mm2, np.sqrt(vv2))]
-        plt.plot(xx, reduce(np.add, gfit), 'b-', lw=2, alpha=0.5)
-        
-        plt.subplot(rows,cols, 4)
-        lo,hi = 0,1
-        n,b,p = plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b',
-                         range=(0,1))
-        xx = np.linspace(lo, hi, 500)
-        f = scipy.stats.chi(2)
-        sig = np.mean([std1,std2])
-        yy = f.pdf(xx / sig)
-        yy *= len(T) * (b[1]-b[0]) / sig
-        plt.plot(xx, yy, lw=2, color='b', alpha=0.5)
-
-        plt.xlabel('e')
-        plt.yticks([])
+        gfit = eval_mog(xx, ww1, mm1, vv1) * len(T)*B
+        plt.plot(xx, gfit, 'r-', lw=2, alpha=0.5)
+        gfit = eval_mog(xx, ww2, mm2, vv2) * len(T)*B
+        plt.plot(xx, gfit, 'b-', lw=2, alpha=0.5)
         plt.xlim(lo,hi)
-        
-        
-        plt.subplot(rows,cols, 5)
-        theta = np.rad2deg(np.arctan2(T.e2, T.e1)) / 2.
-        plt.hist(theta, 50, histtype='step', color='b', range=(-90,90))
-        plt.xlabel('theta (deg)')
-        plt.xlim(-90, 90)
         plt.yticks([])
+
+        
+        if False:
+            plt.subplot(rows,cols, 4)
+            lo,hi = 0,1
+            n,b,p = plt.hist(np.hypot(T.e1, T.e2), 50, histtype='step', color='b',
+                             range=(0,1))
+            # xx = np.linspace(lo, hi, 500)
+            # f = scipy.stats.chi(2)
+            # sig = np.mean([std1,std2])
+            # yy = f.pdf(xx / sig)
+            # yy *= len(T) * (b[1]-b[0]) / sig
+            # plt.plot(xx, yy, lw=2, color='b', alpha=0.5)
+    
+            plt.xlabel('e')
+            plt.yticks([])
+            plt.xlim(lo,hi)
+        
+        
+        if False:
+            plt.subplot(rows,cols, 5)
+            theta = np.rad2deg(np.arctan2(T.e2, T.e1)) / 2.
+            plt.hist(theta, 50, histtype='step', color='b', range=(-90,90))
+            plt.xlabel('theta (deg)')
+            plt.xlim(-90, 90)
+            plt.yticks([])
 
         ps.savefig()
         sys.exit(0)

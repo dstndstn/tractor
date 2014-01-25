@@ -1650,7 +1650,7 @@ class Tractor(MultiParams):
 
 
     def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
-                 shared_params=True):
+                 shared_params=True, variance=False):
         '''
         Performs *one step* of linearized least-squares + line search.
         
@@ -1669,7 +1669,10 @@ class Tractor(MultiParams):
         t0 = Time()
         X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
                                     scale_columns=scale_columns,
-                                    shared_params=shared_params)
+                                    shared_params=shared_params,
+                                    variance=variance)
+        if variance:
+            X,var = X
         #print Time() - t0
         topt = Time()-t0
         #print 'X:', X
@@ -1685,6 +1688,8 @@ class Tractor(MultiParams):
         logverb('  Tderiv', tderivs)
         logverb('  Topt  ', topt)
         logverb('  Tstep ', tstep)
+        if variance:
+            return dlogprob, X, alpha, var
         return dlogprob, X, alpha
 
     def getParameterScales(self):
