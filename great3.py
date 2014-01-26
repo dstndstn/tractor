@@ -63,9 +63,29 @@ if __name__ == '__main__':
         T = fits_table(gfn)
         print 'Read', len(T), 'from', gfn
         #plt.figure(figsize=(12,8))
+
+        import triangle
+        X = np.vstack((T.flux, T.re, T.e1, T.e2)).T
+        fig = triangle.corner(X, labels=['flux', 'r_e', 'e1', 'e2'],
+                              extents=[(0., 100.), (0.2, 0.9),
+                                       (-1,1), (-1,1)])
+        plt.suptitle('Measured galaxy properties -- "deep vanilla", field %i' % opt.field)
+        ps.savefig()
+
+        X = np.vstack((T.flux, T.re, np.hypot(T.e1, T.e2))).T
+        plt.clf()
+        fig = triangle.corner(X, labels=['flux', 'r_e', 'e'],
+                              extents=[(0., 100.), (0.2, 0.9), (0,1)])
+        plt.suptitle('Measured galaxy properties -- "deep vanilla", field %i' % opt.field)
+        ps.savefig()
+
+
         plt.figure(figsize=(9,6))
         plt.subplots_adjust(left=0.05, right=0.95, bottom=0.1, top=0.92,
                             wspace=0.25, hspace=0.25)
+
+
+
         rows,cols = 2,3
         plt.clf()
         plt.suptitle('Galaxy properties from "deep vanilla" branch, field %i: 10,000 galaxies' % opt.field)
