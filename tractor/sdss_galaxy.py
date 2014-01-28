@@ -156,8 +156,8 @@ class GalaxyShape(ParamList):
     #   return np.min((dradec - np.array([dra,ddec]))**2 <= radius**2)
 
 class Galaxy(MultiParams):
-    def __init__(self, pos, brightness, shape):
-        super(Galaxy, self).__init__(pos, brightness, shape)
+    def __init__(self, *args):
+        super(Galaxy, self).__init__(*args)
         self.name = self.getName()
         self.dname = self.getDName()
 
@@ -499,22 +499,6 @@ class ProfileGalaxy(object):
 
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
-    def __init__(self, pos, brightness, *args):
-        '''
-        HoggGalaxy(pos, brightness, GalaxyShape)
-        or
-        HoggGalaxy(pos, brightness, re, ab, phi)
-
-        re: [arcsec]
-        phi: [deg]
-        '''
-        if len(args) == 3:
-            shape = GalaxyShape(*args)
-        else:
-            assert(len(args) == 1)
-            shape = args[0]
-        super(HoggGalaxy, self).__init__(pos, brightness, shape)
-
     def overlapsCircle(self, pos, radius):
         cosdec = np.cos(np.deg2rad(pos.dec))
         return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,

@@ -1561,9 +1561,9 @@ class SDSSTractor(Tractor):
         '''
         if isinstance(source, PointSource):
             eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           1., 0.5, 0.)
+                            GalaxyShape(1., 0.5, 0.))
             dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           1., 0.5, 0.)
+                           GalaxyShape(1., 0.5, 0.))
             #print 'Changing:'
             #print '  from ', source
             #print '  into', eg
@@ -1571,13 +1571,13 @@ class SDSSTractor(Tractor):
 
         elif isinstance(source, ExpGalaxy):
             dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           source.re, source.ab, source.phi)
+                            GalaxyShape(source.re, source.ab, source.phi))
             ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
             return [ [], [ps], [dg] ]
 
         elif isinstance(source, DevGalaxy):
             eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           source.re, source.ab, source.phi)
+                           GalaxyShape(source.re, source.ab, source.phi))
             ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
             return [ [], [ps], [eg] ]
 
