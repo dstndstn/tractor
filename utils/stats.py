@@ -1,7 +1,10 @@
 import pstats
 
 if __name__ == '__main__':
-	import optparse
+    '''
+    Print some stats from python CPU profiling data files
+    '''
+    import optparse
 	import sys
 	parser = optparse.OptionParser(usage='%prog <profile.dat>')
 	opt,args = parser.parse_args()
