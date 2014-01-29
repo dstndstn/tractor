@@ -107,7 +107,9 @@ class SersicMixture(object):
         vars = np.array([f(sindex) for f in self.vars])
         amps /= amps.sum()
         return mp.MixtureOfGaussians(amps, np.zeros((len(amps),2)), vars)
-    
+
+class SersicIndex(ScalarParam):
+    stepsize = 0.01
 
 class SersicGalaxy(HoggGalaxy):
     nre = 8.
@@ -145,6 +147,40 @@ class SersicGalaxy(HoggGalaxy):
                      self.shape.hashkey(),
                      self.sersicindex.hashkey()))
 
+    def getParamDerivatives(self, img):
+        # superclass produces derivatives wrt pos, brightness, and shape.
+        derivs = super(SersicGalaxy, self).getParamDerivatives(img)
+
+        pos0 = self.getPosition()
+        (px0,py0) = img.getWcs().positionToPixel(pos0, self)
+        patch0 = self.getUnitFluxModelPatch(img, px0, py0)
+        if patch0 is None:
+            derivs.append(None)
+            return derivs
+        counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+
+        # derivatives wrt Sersic index
+        isteps = self.sersicindex.getStepSizes()
+        if not self.isParamFrozen('sersicindex'):
+            inames = self.sersicindex.getParamNames()
+            oldvals = self.sersicindex.getParams()
+            for i,istep in enumerate(isteps):
+                oldval = self.sersicindex.setParam(i, oldvals[i]+istep)
+                patchx = self.getUnitFluxModelPatch(img, px0, py0)
+                self.sersicindex.setParam(i, oldval)
+                if patchx is None:
+                    print 'patchx is None:'
+                    print '  ', self
+                    print '  stepping galaxy sersicindex', self.sersicindex.getParamNames()[i]
+                    print '  stepped', isteps[i]
+                    print '  to', self.sersicindex.getParams()[i]
+                    derivs.append(None)
+
+                dx = (patchx - patch0) * (counts / istep)
+                dx.setName('d(%s)/d(%s)' % (self.dname, inames[i]))
+                derivs.append(dx)
+        return derivs
+
 
 if __name__ == '__main__':
     from basics import *
@@ -153,7 +189,7 @@ if __name__ == '__main__':
     s = SersicGalaxy(PixPos(100., 100.),
                      Flux(1000.),
                      EllipseE(2., 0.5, 0.5),
-                     ScalarParam(2.5))
+                     SersicIndex(2.5))
     print s
     print s.getProfile()
 

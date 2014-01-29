@@ -15,6 +15,7 @@ from astrometry.util.fits import *
 
 from tractor import *
 from tractor.sdss_galaxy import *
+from tractor.sersic import *
 from tractor.emfit import *
 
 import emcee
@@ -374,7 +375,7 @@ if __name__ == '__main__':
     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                vmin=-2*sig1, vmax=3*sig1)
 
-    optparams = []
+    #optparams = []
     
     for stamp in range(100*100):
         print 'Postage stamp', stamp
@@ -400,33 +401,20 @@ if __name__ == '__main__':
                     name='%s %s %i,%i' % (food, tag, stampx, stampy),
                     domask=False, zr=[-2.*sig1, 3.*sig1])
 
-        # Create an initial galaxy model object.
-        e = EllipseESoft(0., 0., 0.)
-        # rough flux estimate (sky = 0)
-        flux = np.sum(subimg)
-        #print 'Flux:', flux
-        flux = Flux(flux)
-        flux.stepsize = sig1
-        gal = ExpGalaxy(PixPos(SS/2-1., SS/2-1.), flux, e)
-        #print 'Initial', gal
-
-        # Create Tractor object from list of images and list of sources
-        tractor = Tractor([tim], [gal])
-
-        if plots:
-            # Plot initial model image
+        def plotmodel(tractor, sig1, tt):
             mod = tractor.getModelImage(0)
-            noise = np.random.normal(size=subimg.shape) * sig1
+            data = tractor.getImage(0).getImage()
+            noise = np.random.normal(size=data.shape) * sig1
             imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
                          vmin=-3, vmax=3)
             plt.clf()
             plt.subplot(2,2,1)
-            plt.imshow(subimg, **ima)
+            plt.imshow(data, **ima)
             plt.title('Image')
             plt.xticks([]); plt.yticks([])
             plt.subplot(2,2,2)
             plt.imshow(mod, **ima)
-            plt.title('Initial model')
+            plt.title('Model')
             plt.xticks([]); plt.yticks([])
             plt.subplot(2,2,3)
             plt.imshow(mod+noise, **ima)
@@ -434,123 +422,192 @@ if __name__ == '__main__':
             plt.xticks([]); plt.yticks([])
             plt.subplot(2,2,4)
             # show mod - img to match "red-to-blue" colormap.
-            plt.imshow(-(subimg - mod)/sig1, **imchi)
+            plt.imshow(-(data - mod)/sig1, **imchi)
             plt.xticks([]); plt.yticks([])
             plt.title('Chi')
+            plt.suptitle(tt)
             ps.savefig()
 
-        # print 'All params:'
-        # print tractor.printThawedParams()
-        # print
-        
+
+        gals = []
+        for clazz in [ExpGalaxy, DevGalaxy]:
+            # Create an initial galaxy model object.
+            e = EllipseESoft(0., 0., 0.)
+            # rough flux estimate (sky = 0)
+            flux = np.sum(subimg)
+            flux = Flux(flux)
+            flux.stepsize = sig1
+            gal = clazz(PixPos(SS/2-1., SS/2-1.), flux, e)
+            gals.append(gal)
+
+        galvars = []
+        gallnprobs = []
+
+        # Above we initialized Exp and Dev galaxies.  We want to optimize
+        # each of those, and then use the optimized results to initialize
+        # Composite and Sersic models.
+        for igal in range(4):
+            gal = gals[igal]
+            
+            # Create Tractor object from list of images and list of sources
+            tractor = Tractor([tim], [gal])
+            # Freeze all the image calibration parameters.
+            tractor.freezeParam('images')
+
+            if plots:
+                # Plot initial model image
+                plotmodel(tractor, sig1, 'Initial ' + gal.getName())
+
+
+            print 'Galaxy:', gal
+            print 'Initial logprob:', tractor.getLogProb()
+                
+            # Do a few rounds of optimization (each .optimize() is a single
+            # linearized least squares step.
+            # print 'Optimizing params:'
+            # print tractor.printThawedParams()
+            for i in range(100):
+                # print 'Optimization step', i
+                # FIXME -- does variance=True cost anything?
+                dlnp,X,alpha,var = tractor.optimize(shared_params=False,
+                                                    variance=True)
+                # print 'dlnp', dlnp
+                # print 'alpha', alpha
+                print 'After opt step:', gal
+                if dlnp < 1e-3:
+                    break
+
+            print 'Opt gal:', gal
+            print 'Final logprob:', tractor.getLogProb()
+
+            if plots:
+                # Plot initial model image
+                plotmodel(tractor, sig1, 'Opt ' + gal.getName())
+
+            lnp = tractor.getLogProb()
+            #optparams.append(gal.getParams())
+            galvars.append(var)
+            gallnprobs.append(lnp)
+
+            print str(type(gal)), 'logprob', lnp
+
+            # After optimize Exp and Dev, initialize the Comp and Sersic gals.
+            if igal == 1:
+                # Now create and optimize an Exp+Dev model
+                egal,dgal = gals
+                elnp,dlnp = gallnprobs[:2]
+                cgal = CompositeGalaxy(PixPos((egal.pos.x + dgal.pos.x) / 2.,
+                                              (egal.pos.y + dgal.pos.y) / 2.),
+                                       Flux(egal.brightness.val / 2.),
+                                       egal.shape.copy(),
+                                       Flux(dgal.brightness.val / 2.),
+                                       dgal.shape.copy())
+                print 'Created composite galaxy:', cgal
+                gals.append(cgal)
+
+                # # Composite initialized at the better of Dev/Exp
+                # if elnp > dlnp:
+                #     cgal = CompositeGalaxy(egal.pos.copy(),
+                #                            egal.brightness.copy(),
+                #                            egal.shape.copy(),
+                #                            Flux(0.),
+                #                            dgal.shape.copy())
+                # else:
+                #     cgal = CompositeGalaxy(dgal.pos.copy(),
+                #                            Flux(0.),
+                #                            egal.shape.copy(),
+                #                            dgal.brightness.copy(),
+                #                            dgal.shape.copy())
+                # print 'Created composite galaxy #2:', cgal
+                # gals.append(cgal)
+
+                # General Sersic model -- which fit better, Dev or Exp?
+                if elnp > dlnp:
+                    sgal = SersicGalaxy(egal.pos.copy(),
+                                        egal.brightness.copy(),
+                                        egal.shape.copy(),
+                                        SersicIndex(1.))
+                else:
+                    sgal = SersicGalaxy(dgal.pos.copy(),
+                                        dgal.brightness.copy(),
+                                        dgal.shape.copy(),
+                                        SersicIndex(4.))
+                print 'Created Sersic galaxy:', sgal
+                gals.append(sgal)
+
+
+
+        # Model selection by some dumb-ass BIC shit
+        # MAGIC 1000.
+        BICpenalties = np.log(1000.) * np.array([len(gal.getParams()) for gal in gals])
+        ibest = np.argmax(2. * np.array(gallnprobs) - BICpenalties)
+
+        gal = gals[ibest]
+        var = galvars[ibest]
+        tractor = Tractor([tim], [gal])
         # Freeze all the image calibration parameters.
         tractor.freezeParam('images')
 
-        # Freeze the galaxy position for the initial optimization
-        #gal.freezeParam('pos')
-    
-        # Do a few rounds of optimization (each .optimize() is a single
-        # linearized least squares step.
-        # print 'Optimizing params:'
-        # print tractor.printThawedParams()
-        for i in range(10):
-            #print 'Optimization step', i
-            ## FIXME -- does variance=True cost anything?
-            dlnp,X,alpha,var = tractor.optimize(shared_params=False,
-                                                variance=True)
-            #print 'dlnp', dlnp
-            #print 'alpha', alpha
-            #print 'Optimized:', gal
-            if dlnp < 0.1:
-                break
-            
-        if plots:
-            # Plot the optimized model
-            mod = tractor.getModelImage(0)
-            plt.clf()
-            plt.subplot(2,2,1)
-            plt.imshow(subimg, **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title('Image')
-            plt.subplot(2,2,2)
-            plt.imshow(mod, **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title('Opt Model')
-            plt.subplot(2,2,3)
-            plt.imshow(mod+noise, **ima)
-            plt.xticks([]); plt.yticks([])
-            plt.title('Model + noise')
-            plt.subplot(2,2,4)
-            # show mod - img to match "red-to-blue" colormap.
-            plt.imshow(-(subimg - mod)/sig1, **imchi)
-            plt.xticks([]); plt.yticks([])
-            plt.title('Chi')
-            ps.savefig()
+        print 'Chose best galaxy:', gal
 
-        optparams.append(gal.getParams() + [tractor.getLogProb()])
+        del gals
 
-        if stamp % 100 == 99:
-        
-            op = np.array(optparams)
-            print 'optparams:', op.shape
-            pnames = gal.getParamNames()
-            print 'Param names:', pnames
-
-            re = np.exp(op[:,3])
-            fakee1 = op[:,4]
-            fakee2 = op[:,5]
-            theta = np.arctan2(fakee2, fakee1) / 2.
-            e = np.sqrt(fakee1**2 + fakee2**2)
-            e = 1. - np.exp(-e)
-            e1 = e * np.cos(2.*theta)
-            e2 = e * np.sin(2.*theta)
-            
-            T = fits_table()
-            T.fakee1 = fakee1
-            T.fakee2 = fakee2
-            T.e1 = e1
-            T.e2 = e2
-            T.re = re
-            T.x = op[:,0]
-            T.y = op[:,1]
-            T.flux = op[:,2]
-            T.logprob = op[:,6]
-            
-            T.writeto(gpat % ((stamp+1)/100))
-            
-            plt.subplots_adjust(left=0.12, right=0.95, bottom=0.12, top=0.92,
-                                wspace=0.25, hspace=0.25)
-
-            plt.clf()
-            plt.subplot(2,2,1)
-            plt.hist(re, 50, histtype='step')
-            plt.xlabel('re (arcsec)')
-
-            plt.subplot(2,2,2)
-            plt.hist(e1, 50, histtype='step')
-            plt.xlabel('e1')
-
-            plt.subplot(2,2,3)
-            plt.hist(e2, 50, histtype='step')
-            plt.xlabel('e2')
-            
-            plt.subplot(2,2,4)
-            plt.plot(e1, e2, 'b.', alpha=0.5)
-            plt.xlabel('e1')
-            plt.ylabel('e2')
-            ps.savefig()
-        
+        # if stamp % 100 == 99:
+        #     op = np.array(optparams)
+        #     print 'optparams:', op.shape
+        #     pnames = gal.getParamNames()
+        #     print 'Param names:', pnames
+        # 
+        #     re = np.exp(op[:,3])
+        #     fakee1 = op[:,4]
+        #     fakee2 = op[:,5]
+        #     theta = np.arctan2(fakee2, fakee1) / 2.
+        #     e = np.sqrt(fakee1**2 + fakee2**2)
+        #     e = 1. - np.exp(-e)
+        #     e1 = e * np.cos(2.*theta)
+        #     e2 = e * np.sin(2.*theta)
+        #     
+        #     T = fits_table()
+        #     T.fakee1 = fakee1
+        #     T.fakee2 = fakee2
+        #     T.e1 = e1
+        #     T.e2 = e2
+        #     T.re = re
+        #     T.x = op[:,0]
+        #     T.y = op[:,1]
+        #     T.flux = op[:,2]
+        #     T.logprob = op[:,6]
+        #     
+        #     T.writeto(gpat % ((stamp+1)/100))
+        #     
+        #     plt.subplots_adjust(left=0.12, right=0.95, bottom=0.12, top=0.92,
+        #                         wspace=0.25, hspace=0.25)
+        # 
+        #     plt.clf()
+        #     plt.subplot(2,2,1)
+        #     plt.hist(re, 50, histtype='step')
+        #     plt.xlabel('re (arcsec)')
+        # 
+        #     plt.subplot(2,2,2)
+        #     plt.hist(e1, 50, histtype='step')
+        #     plt.xlabel('e1')
+        # 
+        #     plt.subplot(2,2,3)
+        #     plt.hist(e2, 50, histtype='step')
+        #     plt.xlabel('e2')
+        #     
+        #     plt.subplot(2,2,4)
+        #     plt.plot(e1, e2, 'b.', alpha=0.5)
+        #     plt.xlabel('e1')
+        #     plt.ylabel('e2')
+        #     ps.savefig()
 
         if not opt.sample:
             continue
 
-        # Now thaw the positions and sample...
-        #gal.thawParam('pos')
-
         print 'Params:'
         tractor.printThawedParams()
         print 'Variance:', var
-        
 
         # Switch shape parameter space here -- variance too
         # This p0/p1/changed is a hack to know which elements of 'var' to change.

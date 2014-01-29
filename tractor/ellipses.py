@@ -156,6 +156,10 @@ if __name__ == '__main__':
         for e1,e2 in zip(E1.ravel(), E2.ravel()):
             e = EllipseESoft(logre, e1, e2)
             print e
+
+            #ec = e.copy()
+            #print 'Copy:', ec
+
             T = e.getRaDecBasis()
             #print 'T', T
             txy = np.dot(T, xy)
