@@ -52,6 +52,11 @@ class EllipseE(ParamList):
             return list(self._getLiquidArray(self.stepsizes))
         return [0.1] * self.numberOfParams()
 
+    def getLogPrior(self):
+        if (self.e1**2 + self.e2**2) >= 1.:
+            return -np.inf
+        return 0.
+
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
@@ -131,6 +136,9 @@ class EllipseESoft(EllipseE):
     @property
     def softe(self):
         return np.hypot(self.e1, self.e2)
+
+    def getLogPrior(self):
+        return 0.
 
 if __name__ == '__main__':
     ps = PlotSequence('ell')
