@@ -6,7 +6,7 @@ import pylab as plt
 
 import fitsio
 
-#import h5py
+import h5py
 
 # for PlotSequence
 from astrometry.util.plotutils import *
@@ -42,10 +42,17 @@ if __name__ == '__main__':
                       help='Read deep images?')
     parser.add_option('--sample', action='store_true', default=False,
                       help='Emcee sampling?')
+    parser.add_option('--samples', type=int, default=0,
+                      help='Number of samples')
     parser.add_option('--threads', type=int,
                       help='Emcee multiprocessing threads')
-    
     opt,args = parser.parse_args()
+
+    if opt.samples:
+        opt.sample = True
+    else:
+        # Default
+        opt.samples = 200
     
     if opt.verbose == 1:
         lvl = logging.INFO
@@ -58,11 +65,12 @@ if __name__ == '__main__':
     #food = 'dimsum'
     branch = 'great3/control/ground/constant'
     food = 'vanilla'
-    
+
+    deeptag = ''
     if opt.deep:
-        gpat = 'deepparams-%s-f%i-%%03i.fits' % (food, opt.field)
-    else:
-        gpat = 'galparams-%s-f%i-%%03i.fits' % (food, opt.field)
+        deeptag = 'deep-'
+    
+    gpat = 'galparams-%s%s-f%i-%%03i.fits' % (deeptag, food, opt.field)
     gfn = gpat % 100
     if os.path.exists(gfn):
         ps = PlotSequence('gals')
@@ -590,7 +598,7 @@ if __name__ == '__main__':
         lnp = None
         pp = pp0
         rstate = None
-        for step in range(200):
+        for step in range(opt.samples):
             print 'Taking step', step
             #print 'pp shape', pp.shape
             pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
@@ -599,6 +607,25 @@ if __name__ == '__main__':
             # store all the params
             alllnp.append(lnp.copy())
             allp.append(pp.copy())
+
+        allp = np.array(allp)
+        alllnp = np.array(alllnp)
+
+        # Save samples
+        fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
+        print 'Saving samples in', fn
+        f = h5py.File(fn, 'w', libver='latest')
+        f.attrs['food'] = food
+        f.attrs['field'] = opt.field
+        gg = f.create_group('gal%05i' % stamp)
+        gg.attrs['type'] = str(type(gal))
+        gg.attrs['shapetype'] = str(type(gal.shape))
+        gg.attrs['paramnames'] = np.array(tractor.getParamNames())
+        gg.create_dataset('optimized', data=p0)
+        gg.create_dataset('samples', data=allp)
+        gg.create_dataset('sampleslnp', data=alllnp)
+        f.close()
+        del f
     
         # Plot logprobs
         plt.clf()
@@ -609,7 +636,6 @@ if __name__ == '__main__':
         ps.savefig()
     
         # Plot parameter distributions
-        allp = np.array(allp)
         burn = 50
         print 'All params:', allp.shape
         for i,nm in enumerate(tractor.getParamNames()):
