@@ -448,20 +448,8 @@ if __name__ == '__main__':
         for i in range(10):
             #print 'Optimization step', i
             ## FIXME -- does variance=True cost anything?
-
-            pa = tractor.getParams()
-
             dlnp,X,alpha,var = tractor.optimize(shared_params=False,
                                                 variance=True)
-
-            print 'Variance A', var
-
-            tractor.setParams(pa)
-
-            dlnp,X,alpha,var = tractor.optimize(shared_params=False,
-                                                variance=True, scale_columns=False)
-            print 'Variance B', var
-
             #print 'dlnp', dlnp
             #print 'alpha', alpha
             #print 'Optimized:', gal

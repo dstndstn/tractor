@@ -2284,8 +2284,6 @@ class Tractor(MultiParams):
                 var = var[paramindexmap]
             
             if scale_columns:
-                ### CHECK!!
-                print 'Warning: scale_columns and variance: CHECK THIS'
                 var /= colscales**2
             return X,var
 
