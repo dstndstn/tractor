@@ -6,6 +6,8 @@ import pylab as plt
 
 import fitsio
 
+#import h5py
+
 # for PlotSequence
 from astrometry.util.plotutils import *
 from astrometry.util.file import *
@@ -38,6 +40,10 @@ if __name__ == '__main__':
                       help='Field number')
     parser.add_option('--deep', action='store_true', default=False,
                       help='Read deep images?')
+    parser.add_option('--sample', action='store_true', default=False,
+                      help='Emcee sampling?')
+    parser.add_option('--threads', type=int,
+                      help='Emcee multiprocessing threads')
     
     opt,args = parser.parse_args()
     
@@ -360,8 +366,6 @@ if __name__ == '__main__':
     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                vmin=-2*sig1, vmax=3*sig1)
 
-    dosample = False
-
     optparams = []
     
     for stamp in range(100*100):
@@ -389,7 +393,7 @@ if __name__ == '__main__':
                     domask=False, zr=[-2.*sig1, 3.*sig1])
 
         # Create an initial galaxy model object.
-        e = EllipseE(0., 0., 0.)
+        e = EllipseESoft(0., 0., 0.)
         # rough flux estimate (sky = 0)
         flux = np.sum(subimg)
         #print 'Flux:', flux
@@ -443,7 +447,21 @@ if __name__ == '__main__':
         # print tractor.printThawedParams()
         for i in range(10):
             #print 'Optimization step', i
-            dlnp,X,alpha = tractor.optimize(shared_params=False)
+            ## FIXME -- does variance=True cost anything?
+
+            pa = tractor.getParams()
+
+            dlnp,X,alpha,var = tractor.optimize(shared_params=False,
+                                                variance=True)
+
+            print 'Variance A', var
+
+            tractor.setParams(pa)
+
+            dlnp,X,alpha,var = tractor.optimize(shared_params=False,
+                                                variance=True, scale_columns=False)
+            print 'Variance B', var
+
             #print 'dlnp', dlnp
             #print 'alpha', alpha
             #print 'Optimized:', gal
@@ -474,7 +492,6 @@ if __name__ == '__main__':
             ps.savefig()
 
         optparams.append(gal.getParams() + [tractor.getLogProb()])
-
 
         if stamp % 100 == 99:
         
@@ -528,13 +545,42 @@ if __name__ == '__main__':
             ps.savefig()
         
 
-        
-        if not dosample:
+        if not opt.sample:
             continue
 
         # Now thaw the positions and sample...
-        gal.thawParam('pos')
+        #gal.thawParam('pos')
 
+        print 'Params:'
+        tractor.printThawedParams()
+        print 'Variance:', var
+        
+
+        # Switch shape parameter space here -- variance too
+        # This p0/p1/changed is a hack to know which elements of 'var' to change.
+        p0 = np.array(tractor.getParams())
+        softe = gal.shape.softe
+        # Actually switch the parameter space
+        gal.shape = EllipseE.fromEllipseESoft(gal.shape)
+        p1 = np.array(tractor.getParams())
+        # ASSUME that changing to EllipseE parameterization actually
+        # changes the values.
+        # Could do something like: gal.shape.setParams([-np.inf] * 3) to be sure.
+        changed = np.flatnonzero(p0 != p1)
+        assert(len(changed) == 3)
+        # ASSUME ordering re, e1, e2
+        # We changed from log(re) to re.
+        var[changed[0]] *= gal.shape.re**2
+        # We changed from soft-e to e.
+        # If soft-e is huge, var(soft-e) is huge; e is ~1 and var(e) gets hugely shrunk.
+        efac = np.exp(-2. * softe)
+        var[changed[1]] *= efac
+        var[changed[2]] *= efac
+
+        print 'Params:'
+        tractor.printThawedParams()
+        print 'Variance:', var
+        
         # Initial parameter vector:
         p0 = np.array(tractor.getParams())
         ndim = len(p0)
@@ -542,17 +588,14 @@ if __name__ == '__main__':
         nw = max(50, 2*ndim)
         print 'ndim', ndim
         print 'nw', nw
-        nthreads = 1
+        # variance is "var"
 
         # Create emcee sampler
-        sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=nthreads)
+        sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=opt.threads)
 
-        # Jitter the walker parameter values according to their
-        # (hard-coded) step sizes.
-        steps = np.array(tractor.getStepSizes())
-        # Initial parameters for walkers
-        pp0 = np.vstack([p0 + 1e-1 * steps * np.random.normal(size=len(steps))
-                         for i in range(nw)])
+        # Initial walker params
+        # MAGIC 0.5 on variance -- @HoggHulk says SMASH VARIANCE BECAUSE THERE COVARIANCE
+        pp0 = emcee.EnsembleSampler.sampleBall(p0, 0.5 * np.sqrt(var), nw)
         alllnp = []
         allp = []
     

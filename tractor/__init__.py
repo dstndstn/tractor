@@ -31,5 +31,5 @@ __all__ = [
     # psfex
     'VaryingGaussianPSF', 'PsfEx',
     # ellipses
-    'EllipseE',
+    'EllipseE', 'EllipseESoft',
     ]

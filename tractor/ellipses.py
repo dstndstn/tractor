@@ -8,18 +8,11 @@ if __name__ == '__main__':
 import numpy as np
 
 from tractor import *
-    
+
+
 class EllipseE(ParamList):
     '''
-    This is an alternate implementation of the ellipse describing a
-    galaxy shape, and can be used as a drop-in replacement of the
-    "GalaxyShape" class used in the tractor.sdss_galaxy ExpGalaxy and
-    DevGalaxy classes.
-
-    The parameters are a tweak on the usual ellipticity parameters
-    e1,e2, plus log(effective radius).  The tweak is that we map 'e'
-    through a sigmoid-like 1-exp(-e) function so that there are no
-    forbidden regions in the parameter space.
+    Ellipse parameterization with r, e1, e2.
     '''
     @staticmethod
     def getName():
@@ -27,19 +20,32 @@ class EllipseE(ParamList):
 
     @staticmethod
     def getNamedParams():
-        # log r: log of effective radius in arcsec
+        # re: effective radius in arcsec
         # e1: e cos 2 theta, dimensionless
         # e2: e sin 2 theta, dimensionless
-        return dict(logr=0, e1=1, e2=2)
+        return dict(re=0, e1=1, e2=2)
 
-    def __repr__(self):
-        return 'log r=%g, e1=%g, e2=%g' % (self.logr, self.e1, self.e2)
-    def __str__(self):
-        return self.getName() + ': ' + repr(self)
+    @staticmethod
+    def fromEllipseESoft(esoft):
+        re = esoft.re
+        e = esoft.e
+        theta = esoft.theta
+        e1 = e * np.cos(2. * theta)
+        e2 = e * np.sin(2. * theta)
+        return EllipseE(re, e1, e2)
 
     @property
-    def re(self):
-        return np.exp(self.logr)
+    def e(self):
+        return np.hypot(self.e1, self.e2)
+
+    @property
+    def theta(self):
+        return np.arctan2(self.e2, self.e1) / 2.
+
+    def __repr__(self):
+        return 're=%g, e1=%g, e2=%g' % (self.re, self.e1, self.e2)
+    def __str__(self):
+        return self.getName() + ': ' + repr(self)
 
     def getStepSizes(self, *args, **kwargs):
         if hasattr(self, 'stepsizes'):
@@ -53,18 +59,26 @@ class EllipseE(ParamList):
         e1 = self.e1
         e2 = self.e2
 
-        # FIXME -- some trig here... or redefine e1,e2 to be e sin/cos theta?
         theta = np.arctan2(e2, e1) / 2.
         ct = np.cos(theta)
         st = np.sin(theta)
-        
-        e = np.sqrt(e1**2 + e2**2)
-        e = 1. - np.exp(-e)
-        if e == 1.:
+
+        # Using this (untested) function could eliminate the arctan2/cos/sin above.
+        # Faster?  Maybe.
+        # def halfangletrig(ecos2theta,esin2theta):
+        #     e =np.hypot(ecos2theta, esin2theta)
+        #     costheta = np.sqrt(0.5 * (1. + ecostwotheta / e))
+        #     if esin2theta < 0.:
+        #         costheta *= -1.
+        #     sintheta = np.sqrt(0.5 * (1. - ecostwotheta / e))
+        #     return costheta, sintheta
+
+        e = self.e
+        if e >= 1.:
             ab = 20.
         else:
             ab = min(20., (1.+e)/(1.-e))
-        r_deg = np.exp(self.logr) / 3600.
+        r_deg = self.re / 3600.
         
         # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
         G = r_deg * np.array([[ ct / ab, st],
@@ -79,8 +93,44 @@ class EllipseE(ParamList):
         T = np.dot(np.linalg.inv(G), cd)
         return T
 
+class EllipseESoft(EllipseE):
+    '''
+    This is an alternate implementation of the ellipse describing a
+    galaxy shape, and can be used as a drop-in replacement of the
+    "GalaxyShape" class used in the tractor.sdss_galaxy ExpGalaxy and
+    DevGalaxy classes.
 
+    The parameters are a tweak on the usual ellipticity parameters
+    e1,e2, plus log(effective radius).  The tweak is that we map 'e'
+    through a sigmoid-like 1-exp(-e) function so that there are no
+    forbidden regions in the parameter space.
+    '''
+    @staticmethod
+    def getName():
+        return "EllipseESoft"
 
+    @staticmethod
+    def getNamedParams():
+        # log r: log of effective radius in arcsec
+        # e1: e cos 2 theta, dimensionless
+        # e2: e sin 2 theta, dimensionless
+        return dict(logre=0, e1=1, e2=2)
+
+    def __repr__(self):
+        return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.e1, self.e2)
+
+    @property
+    def re(self):
+        return np.exp(self.logre)
+
+    @property
+    def e(self):
+        e = np.hypot(self.e1, self.e2)
+        return 1. - np.exp(-e)
+
+    @property
+    def softe(self):
+        return np.hypot(self.e1, self.e2)
 
 if __name__ == '__main__':
     ps = PlotSequence('ell')
@@ -94,9 +144,9 @@ if __name__ == '__main__':
     E1,E2 = np.meshgrid(np.linspace(-1.2, 1.2, n2), np.linspace(-1.2, 1.2, n2))
     
     plt.clf()
-    for logr,cc in zip([4,5,6], 'rgb'):
+    for logre,cc in zip([4,5,6], 'rgb'):
         for e1,e2 in zip(E1.ravel(), E2.ravel()):
-            e = EllipseE(logr, e1, e2)
+            e = EllipseESoft(logre, e1, e2)
             print e
             T = e.getRaDecBasis()
             #print 'T', T
@@ -106,7 +156,29 @@ if __name__ == '__main__':
     plt.xlabel('"e1"')
     plt.ylabel('"e2"')
     plt.axis('scaled')
+    plt.title('EllipseESoft')
     ps.savefig()
+
+
+    plt.clf()
+    for re,cc in zip([np.exp(4.), np.exp(5.), np.exp(6.)], 'rgb'):
+        for e1,e2 in zip(E1.ravel(), E2.ravel()):
+            e = EllipseE(re, e1, e2)
+            print e
+            T = e.getRaDecBasis()
+            #print 'T', T
+            txy = np.dot(T, xy)
+            #print 'txy', txy.shape
+            plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)
+    plt.xlabel('e1')
+    plt.ylabel('e2')
+    plt.axis('scaled')
+    plt.title('EllipseE')
+    ps.savefig()
+
+
+
+
 
     W,H = 500,500
     img = np.zeros((H,W), np.float32)
@@ -119,17 +191,17 @@ if __name__ == '__main__':
                 domask=False, zr=[-2.*sig1, 3.*sig1])
 
     cat = []
-    logr = 3.
+    logre = 3.
     x = np.linspace(0, W, n1, endpoint=False)
     x += (x[1]-x[0])/2.
     y = np.linspace(0, H, n2, endpoint=False)
     y += (y[1]-y[0])/2.
     xx,yy = np.meshgrid(x, y)
     for e1,e2,x,y in zip(E1.ravel(), E2.ravel(), xx.ravel(), yy.ravel()):
-        e = EllipseE(logr, e1, e2)
+        e = EllipseESoft(logre, e1, e2)
         gal = ExpGalaxy(PixPos(x, y), Flux(500.*sig1), e)
         # FIXME -- if 'halfsize' is not set, checks e.ab, e.re, etc.
-        gal.halfsize = int(np.ceil(gal.nre * np.exp(logr) / (pixscale/3600.)))
+        gal.halfsize = int(np.ceil(gal.nre * np.exp(logre) / (pixscale/3600.)))
         print 'Galaxy', gal
         cat.append(gal)
 
@@ -137,7 +209,7 @@ if __name__ == '__main__':
         # e = np.sqrt(e1**2 + e2**2)
         # e = 1. - np.exp(-e)
         # ab = (1.+e)/(1.-e)
-        # r = np.exp(logr)
+        # r = np.exp(logre)
         # gal = ExpGalaxy(PixPos(x, y), Flux(50.*sig1), GalaxyShape(r,ab,theta))
         # gal.halfsize = 20.
         # cat2.append(gal)
