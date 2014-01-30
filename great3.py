@@ -429,6 +429,8 @@ if __name__ == '__main__':
             ps.savefig()
 
 
+        halfsize = (SS / 2) + 2
+
         gals = []
         for clazz in [ExpGalaxy, DevGalaxy]:
             # Create an initial galaxy model object.
@@ -438,6 +440,7 @@ if __name__ == '__main__':
             flux = Flux(flux)
             flux.stepsize = sig1
             gal = clazz(PixPos(SS/2-1., SS/2-1.), flux, e)
+            gal.halfsize = halfsize
             gals.append(gal)
 
         galvars = []
@@ -503,6 +506,7 @@ if __name__ == '__main__':
                                        Flux(dgal.brightness.val / 2.),
                                        dgal.shape.copy())
                 print 'Created composite galaxy:', cgal
+                cgal.halfsize = halfsize
                 gals.append(cgal)
 
                 # # Composite initialized at the better of Dev/Exp
@@ -533,6 +537,7 @@ if __name__ == '__main__':
                                         dgal.shape.copy(),
                                         SersicIndex(4.))
                 print 'Created Sersic galaxy:', sgal
+                sgal.halfsize = halfsize
                 gals.append(sgal)
 
 

@@ -352,6 +352,8 @@ class CompositeGalaxy(MultiParams):
             kw = {}
         else:
             kw = dict(minsb=minsb/2.)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, **kw)
         pd = d.getModelPatch(img, **kw)
         if pe is None:
@@ -366,6 +368,8 @@ class CompositeGalaxy(MultiParams):
             minval = minval * 0.5
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         return (e.getUnitFluxModelPatches(img, minval=minval) +
                 d.getUnitFluxModelPatches(img, minval=minval))
 
@@ -378,6 +382,8 @@ class CompositeGalaxy(MultiParams):
         assert(fe <= 1.)
         e = ExpGalaxy(self.pos, fe, self.shapeExp)
         d = DevGalaxy(self.pos, fd, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, px, py)
         pd = d.getModelPatch(img, px, py)
         if pe is None:
@@ -395,6 +401,8 @@ class CompositeGalaxy(MultiParams):
         #print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         e.dname = 'comp.exp'
         d.dname = 'comp.dev'
         if self.isParamFrozen('pos'):
@@ -485,7 +493,14 @@ class ProfileGalaxy(object):
             # no overlap
             return None
 
-        amix = self._getAffineProfile(img, px, py)
+        try:
+            amix = self._getAffineProfile(img, px, py)
+        except:
+            import traceback
+            print 'Failed to _getAffineProfile:'
+            traceback.print_exc()
+            return None
+        
         # now convolve with the PSF, analytically
         psfmix = img.getPsf().getMixtureOfGaussians()
         psfmix.normalize()
