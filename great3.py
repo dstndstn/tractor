@@ -4,29 +4,49 @@ if __name__ == '__main__':
 import numpy as np
 import pylab as plt
 
-import fitsio
+#import gc
 
+import fitsio
 import h5py
+# SIGRT
+import emcee
+import scipy.stats
 
 # for PlotSequence
 from astrometry.util.plotutils import *
 from astrometry.util.file import *
 from astrometry.util.fits import *
+from astrometry.util.ttime import *
+
+Time.add_measurement(MemMeas)
 
 from tractor import *
 from tractor.sdss_galaxy import *
 from tractor.sersic import *
 from tractor.emfit import *
 
-import emcee
-
-import scipy.stats
-
 def eval_mog(xx, ww, mm, vv):
     return reduce(np.add, [a / (np.sqrt(2.*np.pi) * s) * 
                            np.exp(-0.5 * (xx-m)**2/s**2)
                            for (a,m,s) in zip(ww, mm, np.sqrt(vv))])
-    
+
+def sampleBall(p0, stdev, nw):
+    '''
+    Produce a ball of walkers around an initial parameter value 'p0'
+    with axis-aligned standard deviation 'stdev', for 'nw' walkers.
+    '''
+    assert(len(p0) == len(stdev))
+    return np.vstack([p0 + stdev * np.random.normal(size=len(p0))
+                      for i in range(nw)])    
+
+class ClippedSersicIndex(SersicIndex):
+    def getLogPrior(self):
+        n = self.val
+        # FIXME -- great3 handbook says 0.1 to 6 (pg.24)
+        if n < 0.5 or n > 6.:
+            return -np.inf
+        return 0.
+
 if __name__ == '__main__':
     import sys
     import logging
@@ -47,6 +67,11 @@ if __name__ == '__main__':
                       help='Number of samples')
     parser.add_option('--threads', type=int,
                       help='Emcee multiprocessing threads')
+    parser.add_option('--start', type=int, default=0,
+                      help='Start at this galaxy index number')
+    parser.add_option('--ngals', type=int, default=0,
+                      help='Run this number of galaxies')
+
     opt,args = parser.parse_args()
 
     if opt.samples:
@@ -309,7 +334,7 @@ if __name__ == '__main__':
     sig1 = 1.4826 * mad / np.sqrt(2.)
     print 'MAD', mad, '-> sigma', sig1
 
-    plt.figure(figsize=(5,5))
+    plt.figure(num=1, figsize=(5,5))
     plt.subplots_adjust(left=0.12, right=0.95, bottom=0.05, top=0.92,
                         wspace=0.25, hspace=0.25)
     
@@ -331,8 +356,8 @@ if __name__ == '__main__':
             fluxes.append(np.sum(img[stampy*SS:(stampy+1)*SS,
                                      stampx*SS:(stampx+1)*SS]))
     plt.clf()
-    plt.hist(fluxes, 50)
-    plt.title('Sum of flux per postage stamp')
+    plt.hist(np.log10(fluxes), 50)
+    plt.title('log10( sum of flux ) per postage stamp')
     ps.savefig()
 
     # Create tractor PSF model for the starfield image
@@ -375,18 +400,41 @@ if __name__ == '__main__':
     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                vmin=-2*sig1, vmax=3*sig1)
 
-    #optparams = []
-    
-    for stamp in range(100*100):
+    t0 = Time()
+
+    #gc.set_debug(gc.DEBUG_LEAK)
+    #oldgarbage = set()
+
+    invvar = None
+
+    end = 100*100
+    if opt.ngals:
+        end = opt.start + opt.ngals
+    for stamp in range(opt.start, end):
         print 'Postage stamp', stamp
-        #if stamp > 100:
-        #    break
+
+        print Time()-t0
+
+        if False:
+            gc.collect()
+            print 'Garbage:'
+            # print gc.garbage
+            for x in gc.garbage:
+                h = id(x)
+                if h in oldgarbage:
+                    continue
+                oldgarbage.add(h)
+                print 'New garbage:', type(x), str(x)[:100]
+
+        #plots = stamp < 5
+        plots = False
+
         # Grab one postage stamp
         stampx,stampy = stamp % 100, stamp / 100
         subimg = img[stampy*SS:(stampy+1)*SS, stampx*SS:(stampx+1)*SS]
+        if invvar is None:
+            invvar = np.ones_like(subimg) * (1./sig1**2)
 
-        plots = stamp < 5
-        
         # if plots:
         #     plt.clf()
         #     plt.imshow(subimg, **ima)
@@ -394,7 +442,7 @@ if __name__ == '__main__':
         #     ps.savefig()
 
         # create tractor Image object.
-        tim = Image(data=subimg, invvar=np.ones_like(subimg)*(1./sig1**2),
+        tim = Image(data=subimg, invvar=invvar,
                     psf=psf, wcs=NullWCS(pixscale=pixscale),
                     sky=ConstantSky(0.),
                     photocal=LinearPhotoCal(1.),
@@ -428,9 +476,7 @@ if __name__ == '__main__':
             plt.suptitle(tt)
             ps.savefig()
 
-
         halfsize = (SS / 2) + 2
-
         gals = []
         for clazz in [ExpGalaxy, DevGalaxy]:
             # Create an initial galaxy model object.
@@ -451,7 +497,6 @@ if __name__ == '__main__':
         # Composite and Sersic models.
         for igal in range(4):
             gal = gals[igal]
-            
             # Create Tractor object from list of images and list of sources
             tractor = Tractor([tim], [gal])
             # Freeze all the image calibration parameters.
@@ -460,7 +505,6 @@ if __name__ == '__main__':
             if plots:
                 # Plot initial model image
                 plotmodel(tractor, sig1, 'Initial ' + gal.getName())
-
 
             print 'Galaxy:', gal
             print 'Initial logprob:', tractor.getLogProb()
@@ -488,7 +532,6 @@ if __name__ == '__main__':
                 plotmodel(tractor, sig1, 'Opt ' + gal.getName())
 
             lnp = tractor.getLogProb()
-            #optparams.append(gal.getParams())
             galvars.append(var)
             gallnprobs.append(lnp)
 
@@ -530,12 +573,12 @@ if __name__ == '__main__':
                     sgal = SersicGalaxy(egal.pos.copy(),
                                         egal.brightness.copy(),
                                         egal.shape.copy(),
-                                        SersicIndex(1.))
+                                        ClippedSersicIndex(1.))
                 else:
                     sgal = SersicGalaxy(dgal.pos.copy(),
                                         dgal.brightness.copy(),
                                         dgal.shape.copy(),
-                                        SersicIndex(4.))
+                                        ClippedSersicIndex(4.))
                 print 'Created Sersic galaxy:', sgal
                 sgal.halfsize = halfsize
                 gals.append(sgal)
@@ -556,56 +599,8 @@ if __name__ == '__main__':
         print 'Chose best galaxy:', gal
 
         del gals
-
-        # if stamp % 100 == 99:
-        #     op = np.array(optparams)
-        #     print 'optparams:', op.shape
-        #     pnames = gal.getParamNames()
-        #     print 'Param names:', pnames
-        # 
-        #     re = np.exp(op[:,3])
-        #     fakee1 = op[:,4]
-        #     fakee2 = op[:,5]
-        #     theta = np.arctan2(fakee2, fakee1) / 2.
-        #     e = np.sqrt(fakee1**2 + fakee2**2)
-        #     e = 1. - np.exp(-e)
-        #     e1 = e * np.cos(2.*theta)
-        #     e2 = e * np.sin(2.*theta)
-        #     
-        #     T = fits_table()
-        #     T.fakee1 = fakee1
-        #     T.fakee2 = fakee2
-        #     T.e1 = e1
-        #     T.e2 = e2
-        #     T.re = re
-        #     T.x = op[:,0]
-        #     T.y = op[:,1]
-        #     T.flux = op[:,2]
-        #     T.logprob = op[:,6]
-        #     
-        #     T.writeto(gpat % ((stamp+1)/100))
-        #     
-        #     plt.subplots_adjust(left=0.12, right=0.95, bottom=0.12, top=0.92,
-        #                         wspace=0.25, hspace=0.25)
-        # 
-        #     plt.clf()
-        #     plt.subplot(2,2,1)
-        #     plt.hist(re, 50, histtype='step')
-        #     plt.xlabel('re (arcsec)')
-        # 
-        #     plt.subplot(2,2,2)
-        #     plt.hist(e1, 50, histtype='step')
-        #     plt.xlabel('e1')
-        # 
-        #     plt.subplot(2,2,3)
-        #     plt.hist(e2, 50, histtype='step')
-        #     plt.xlabel('e2')
-        #     
-        #     plt.subplot(2,2,4)
-        #     plt.plot(e1, e2, 'b.', alpha=0.5)
-        #     plt.xlabel('e1')
-        #     plt.ylabel('e2')
-        #     ps.savefig()
+        del galvars
+        del gallnprobs
 
         if not opt.sample:
             continue
@@ -614,26 +609,46 @@ if __name__ == '__main__':
         tractor.printThawedParams()
         print 'Variance:', var
 
+        def switchShape(tractor, shape, var):
+            # This p0/p1/changed is a hack to know which elements of 'var' to change.
+            p0 = np.array(tractor.getParams())
+            softe = shape.softe
+            # Actually switch the parameter space
+            newshape = EllipseE.fromEllipseESoft(shape, maxe=0.99)
+            shape.setParams([-np.inf] * shape.numberOfParams())
+            p1 = np.array(tractor.getParams())
+            # ASSUME that changing to EllipseE parameterization actually
+            # changes the values.
+            # Could do something like: gal.shape.setParams([-np.inf] * 3) to be sure.
+            changed = np.flatnonzero(p0 != p1)
+            print 'shape param indices:', changed
+            assert(len(changed) == 3)
+            # ASSUME ordering re, e1, e2
+            # We changed from log(re) to re.
+            var[changed[0]] *= newshape.re**2
+            # We changed from soft-e to e.
+            # If soft-e is huge, var(soft-e) is huge; e is ~1 and var(e) gets hugely shrunk.
+            efac = np.exp(-2. * softe)
+            var[changed[1]] *= efac
+            var[changed[2]] *= efac
+            # Impose a minimum and maximum variance on e
+            minv, maxv = 1e-6, 1.
+            var[changed[1]] = np.clip(var[changed[1]], minv, maxv)
+            var[changed[2]] = np.clip(var[changed[2]], minv, maxv)
+            return newshape
+            
         # Switch shape parameter space here -- variance too
-        # This p0/p1/changed is a hack to know which elements of 'var' to change.
-        p0 = np.array(tractor.getParams())
-        softe = gal.shape.softe
-        # Actually switch the parameter space
-        gal.shape = EllipseE.fromEllipseESoft(gal.shape)
-        p1 = np.array(tractor.getParams())
-        # ASSUME that changing to EllipseE parameterization actually
-        # changes the values.
-        # Could do something like: gal.shape.setParams([-np.inf] * 3) to be sure.
-        changed = np.flatnonzero(p0 != p1)
-        assert(len(changed) == 3)
-        # ASSUME ordering re, e1, e2
-        # We changed from log(re) to re.
-        var[changed[0]] *= gal.shape.re**2
-        # We changed from soft-e to e.
-        # If soft-e is huge, var(soft-e) is huge; e is ~1 and var(e) gets hugely shrunk.
-        efac = np.exp(-2. * softe)
-        var[changed[1]] *= efac
-        var[changed[2]] *= efac
+        if type(gal) == CompositeGalaxy:
+            print 'shapeExp', gal.shapeExp
+            gal.shapeExp = switchShape(tractor, gal.shapeExp, var)
+            print 'shapeExp', gal.shapeExp
+            print 'shapeDev', gal.shapeDev
+            gal.shapeDev = switchShape(tractor, gal.shapeDev, var)
+            print 'shapeDev', gal.shapeDev
+            shape = gal.shapeExp
+        else:
+            gal.shape = switchShape(tractor, gal.shape, var)
+            shape = gal.shape
 
         print 'Params:'
         tractor.printThawedParams()
@@ -652,126 +667,126 @@ if __name__ == '__main__':
         sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=opt.threads)
 
         # Initial walker params
-        # MAGIC 0.5 on variance -- @HoggHulk says SMASH VARIANCE BECAUSE THERE COVARIANCE
-        pp0 = emcee.EnsembleSampler.sampleBall(p0, 0.5 * np.sqrt(var), nw)
+        # MAGIC 0.5 on variance
+        # @HoggHulk says SMASH VARIANCE BECAUSE THERE COVARIANCE
+        pp = sampleBall(p0, 0.5 * np.sqrt(var), nw)
         alllnp = []
         allp = []
+
+        print 'pp', pp.shape
+        for i,nm in enumerate(tractor.getParamNames()):
+            print 'Param', nm
+            print pp[:,i]
     
         lnp = None
-        pp = pp0
         rstate = None
         for step in range(opt.samples):
-            print 'Taking step', step
+            #print 'Taking step', step
             #print 'pp shape', pp.shape
             pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-            print 'Max lnprob:', np.max(lnp)
+            imax = np.argmax(lnp)
+            gal.setParams(pp[imax,:])
+            print 'Step', step, 'max lnprob:', lnp[imax], gal
             #print 'lnprobs:', lnp
             # store all the params
             alllnp.append(lnp.copy())
             allp.append(pp.copy())
 
+        del sampler
+        del lnp
+        del pp
+        del rstate
+        del var
+
         allp = np.array(allp)
         alllnp = np.array(alllnp)
 
         # Save samples
-        fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
-        print 'Saving samples in', fn
-        f = h5py.File(fn, 'w', libver='latest')
-        f.attrs['food'] = food
-        f.attrs['field'] = opt.field
-        gg = f.create_group('gal%05i' % stamp)
-        gg.attrs['type'] = str(type(gal))
-        gg.attrs['shapetype'] = str(type(gal.shape))
-        gg.attrs['paramnames'] = np.array(tractor.getParamNames())
-        gg.create_dataset('optimized', data=p0)
-        gg.create_dataset('samples', data=allp)
-        gg.create_dataset('sampleslnp', data=alllnp)
-        f.close()
-        del f
+        if True:
+            fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
+            print 'Saving samples in', fn
+            f = h5py.File(fn, 'w', libver='latest')
+            f.attrs['food'] = food
+            f.attrs['field'] = opt.field
+            gg = f.create_group('gal%05i' % stamp)
+            gg.attrs['type'] = str(type(gal))
+            gg.attrs['type2'] = gal.getName()
+            gg.attrs['shapetype'] = str(type(shape))
+            gg.attrs['paramnames'] = np.array(tractor.getParamNames())
+            gg.create_dataset('optimized', data=p0)
+            gg.create_dataset('samples', data=allp)
+            gg.create_dataset('sampleslnp', data=alllnp)
+            f.close()
+            del gg
+            del f
     
-        # Plot logprobs
-        plt.clf()
-        plt.plot(alllnp, 'k', alpha=0.5)
-        mx = np.max([p.max() for p in alllnp])
-        plt.ylim(mx-20, mx+5)
-        plt.title('logprob')
-        ps.savefig()
-    
-        # Plot parameter distributions
-        burn = 50
-        print 'All params:', allp.shape
-        for i,nm in enumerate(tractor.getParamNames()):
-            pp = allp[:,:,i].ravel()
-            lo,hi = [np.percentile(pp,x) for x in [5,95]]
-            mid = (lo + hi)/2.
-            lo = mid + (lo-mid)*2
-            hi = mid + (hi-mid)*2
+        if plots:
+            # Plot logprobs
             plt.clf()
-            plt.subplot(2,1,1)
-            plt.hist(allp[burn:,:,i].ravel(), 50, range=(lo,hi))
-            plt.xlim(lo,hi)
-            plt.subplot(2,1,2)
-            plt.plot(allp[:,:,i], 'k-', alpha=0.5)
-            plt.xlabel('emcee step')
-            plt.ylim(lo,hi)
-            plt.suptitle(nm)
+            plt.plot(alllnp, 'k', alpha=0.5)
+            mx = np.max([p.max() for p in alllnp])
+            plt.ylim(mx-20, mx+5)
+            plt.title('logprob')
+            ps.savefig()
+        
+            # Plot parameter distributions
+            burn = 50
+            print 'All params:', allp.shape
+            for i,nm in enumerate(tractor.getParamNames()):
+                pp = allp[:,:,i].ravel()
+                lo,hi = [np.percentile(pp,x) for x in [5,95]]
+                mid = (lo + hi)/2.
+                lo = mid + (lo-mid)*2
+                hi = mid + (hi-mid)*2
+                plt.clf()
+                plt.subplot(2,1,1)
+                plt.hist(allp[burn:,:,i].ravel(), 50, range=(lo,hi))
+                plt.xlim(lo,hi)
+                plt.subplot(2,1,2)
+                plt.plot(allp[:,:,i], 'k-', alpha=0.5)
+                plt.xlabel('emcee step')
+                plt.ylim(lo,hi)
+                plt.suptitle(nm)
+                ps.savefig()
+    
+            # Plot a sampling of ellipse parameters
+            ellp = allp[-1, :, -3:]
+            print 'ellp:', ellp.shape
+            E = EllipseE(0.,0.,0.)
+            angle = np.linspace(0., 2.*np.pi, 100)
+            xx,yy = np.sin(angle), np.cos(angle)
+            xy = np.vstack((xx,yy)) * 3600.
+            plt.clf()
+            plt.subplot(1,2,1)
+            plt.imshow(subimg, **ima)
+            plt.subplot(1,2,2)
+            for ell in ellp:
+                E.setParams(ell)
+                T = E.getRaDecBasis()
+                txy = np.dot(T, xy)
+                plt.plot(txy[0,:], txy[1,:], '-', color='b', alpha=0.1)
+            plt.title('sample of galaxy ellipses')
+            plt.xlabel('dx (arcsec)')
+            plt.ylabel('dy (arcsec)')
+            mx = np.max(np.abs(plt.axis()))
+            plt.axis([-mx,mx,-mx,mx])
+            plt.axis('scaled')
             ps.savefig()
     
-        # Plot a sampling of ellipse parameters
-        ellp = allp[-1, :, -3:]
-        print 'ellp:', ellp.shape
-        E = EllipseE(0.,0.,0.)
-        angle = np.linspace(0., 2.*np.pi, 100)
-        xx,yy = np.sin(angle), np.cos(angle)
-        xy = np.vstack((xx,yy)) * 3600.
-        plt.clf()
-        for ell in ellp:
-            E.setParams(ell)
-            T = E.getRaDecBasis()
-            txy = np.dot(T, xy)
-            plt.plot(txy[0,:], txy[1,:], '-', color='b', alpha=0.1)
-        plt.title('sample of galaxy ellipses')
-        plt.xlabel('dx (arcsec)')
-        plt.ylabel('dy (arcsec)')
-        mx = np.max(np.abs(plt.axis()))
-        plt.axis([-mx,mx,-mx,mx])
-        plt.axis('scaled')
-        ps.savefig()
-            
-        # # Plot (some) parameter pairs
-        # re = allp[burn:,:,3].ravel()
-        # ab = allp[burn:,:,4].ravel()
-        # rerange = 1.95, 2.3
-        # abrange = 0.55, 0.75
-        # 
-        # reticks = [2.0, 2.1, 2.2, 2.3]
-        # abticks = [0.6, 0.7]
-        # 
-        # plt.clf()
-        # plt.subplot(2,2,1)
-        # plt.hist(re, 25, range=rerange)
-        # plt.xlabel('r_e')
-        # plt.xlim(rerange)
-        # plt.xticks(reticks)
-        # plt.yticks([])
-        # 
-        # plt.subplot(2,2,2)
-        # plt.plot(ab, re, 'b.', alpha=0.2)
-        # plt.ylim(rerange)
-        # plt.ylabel('r_e')
-        # plt.yticks(reticks)
-        # plt.xlim(abrange)
-        # plt.xlabel('a/b')
-        # plt.xticks(abticks)
-        # 
-        # plt.subplot(2,2,4)
-        # plt.hist(ab, 25, range=abrange)
-        # plt.xlim(abrange)
-        # plt.xlabel('a/b')
-        # plt.xticks(abticks)
-        # plt.yticks([])
-        # 
-        # ps.savefig()
+            import triangle
+            nkeep = allp.shape[0] - burn
+            X = allp[burn:, :,:].reshape((nkeep * nw, ndim))
+            plt.figure(2)
+            plt.clf()
+            triangle.corner(X, labels=gal.getParamNames(), plot_contours=False)
+            plt.suptitle('%s%s field %i gal %i samples' % (deeptag, food, opt.field, stamp))
+            ps.savefig()
+            plt.clf()
+            plt.figure(1)
+            plt.clf()
 
-    
-        
+
+        del allp
+        del alllnp
+        del tractor
+        del gal

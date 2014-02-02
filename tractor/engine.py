@@ -2246,6 +2246,9 @@ class Tractor(MultiParams):
              arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
             t1 = time.clock()
             logmsg('  %.1f seconds' % (t1-t0))
+
+            del A
+            del b
     
             # print 'LSQR results:'
             # print '  istop =', istop
@@ -2505,7 +2508,15 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        return self.getLogLikelihood() + self.getLogPrior()
+        lnp = self.getLogLikelihood() + self.getLogPrior()
+        if np.isnan(lnp):
+            print 'Tractor.getLogProb() returning NaN.'
+            print 'Params:'
+            print self.printThawedParams()
+            print 'log likelihood:', self.getLogLikelihood()
+            print 'log prior:', self.getLogPrior()
+            return -np.inf
+        return lnp
 
     def getBbox(self, img, srcs):
         nzsum = None

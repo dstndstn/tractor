@@ -26,9 +26,9 @@ class EllipseE(ParamList):
         return dict(re=0, e1=1, e2=2)
 
     @staticmethod
-    def fromEllipseESoft(esoft):
+    def fromEllipseESoft(esoft, maxe=1.0):
         re = esoft.re
-        e = esoft.e
+        e = min(maxe, esoft.e)
         theta = esoft.theta
         e1 = e * np.cos(2. * theta)
         e2 = e * np.sin(2. * theta)
