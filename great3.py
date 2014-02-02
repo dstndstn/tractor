@@ -4,11 +4,8 @@ if __name__ == '__main__':
 import numpy as np
 import pylab as plt
 
-#import gc
-
 import fitsio
 import h5py
-# SIGRT
 import emcee
 import scipy.stats
 
@@ -401,10 +398,6 @@ if __name__ == '__main__':
                vmin=-2*sig1, vmax=3*sig1)
 
     t0 = Time()
-
-    #gc.set_debug(gc.DEBUG_LEAK)
-    #oldgarbage = set()
-
     invvar = None
 
     end = 100*100
@@ -412,19 +405,7 @@ if __name__ == '__main__':
         end = opt.start + opt.ngals
     for stamp in range(opt.start, end):
         print 'Postage stamp', stamp
-
         print Time()-t0
-
-        if False:
-            gc.collect()
-            print 'Garbage:'
-            # print gc.garbage
-            for x in gc.garbage:
-                h = id(x)
-                if h in oldgarbage:
-                    continue
-                oldgarbage.add(h)
-                print 'New garbage:', type(x), str(x)[:100]
 
         #plots = stamp < 5
         plots = False
@@ -552,22 +533,6 @@ if __name__ == '__main__':
                 cgal.halfsize = halfsize
                 gals.append(cgal)
 
-                # # Composite initialized at the better of Dev/Exp
-                # if elnp > dlnp:
-                #     cgal = CompositeGalaxy(egal.pos.copy(),
-                #                            egal.brightness.copy(),
-                #                            egal.shape.copy(),
-                #                            Flux(0.),
-                #                            dgal.shape.copy())
-                # else:
-                #     cgal = CompositeGalaxy(dgal.pos.copy(),
-                #                            Flux(0.),
-                #                            egal.shape.copy(),
-                #                            dgal.brightness.copy(),
-                #                            dgal.shape.copy())
-                # print 'Created composite galaxy #2:', cgal
-                # gals.append(cgal)
-
                 # General Sersic model -- which fit better, Dev or Exp?
                 if elnp > dlnp:
                     sgal = SersicGalaxy(egal.pos.copy(),
@@ -682,7 +647,6 @@ if __name__ == '__main__':
         rstate = None
         for step in range(opt.samples):
             #print 'Taking step', step
-            #print 'pp shape', pp.shape
             pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
             imax = np.argmax(lnp)
             gal.setParams(pp[imax,:])
