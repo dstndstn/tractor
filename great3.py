@@ -44,7 +44,7 @@ class ClippedSersicIndex(SersicIndex):
             return -np.inf
         return 0.
 
-if __name__ == '__main__':
+def main():
     import sys
     import logging
     lvl = logging.WARN
@@ -68,7 +68,8 @@ if __name__ == '__main__':
                       help='Start at this galaxy index number')
     parser.add_option('--ngals', type=int, default=0,
                       help='Run this number of galaxies')
-
+    parser.add_option('--force', action='store_true',
+                      help='Run even if output (HDF5) file exists?')
     opt,args = parser.parse_args()
 
     if opt.samples:
@@ -407,6 +408,11 @@ if __name__ == '__main__':
         print 'Postage stamp', stamp
         print Time()-t0
 
+        h5fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
+        if os.path.exists(h5fn) and not opt.force:
+            print 'File exists:', h5fn
+            continue
+
         #plots = stamp < 5
         plots = False
 
@@ -667,9 +673,8 @@ if __name__ == '__main__':
 
         # Save samples
         if True:
-            fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, opt.field, stamp)
-            print 'Saving samples in', fn
-            f = h5py.File(fn, 'w', libver='latest')
+            print 'Saving samples in', h5fn
+            f = h5py.File(h5fn, 'w', libver='latest')
             f.attrs['food'] = food
             f.attrs['field'] = opt.field
             gg = f.create_group('gal%05i' % stamp)
@@ -754,3 +759,75 @@ if __name__ == '__main__':
         del alllnp
         del tractor
         del gal
+
+
+def collate_samples():
+    deeptag = ''
+    food = 'vanilla'
+    field = 0
+
+    galprops = dict((g, ([], [])) for g in
+                    ['ExpGalaxy', 'DevGalaxy', 'CompositeGalaxy', 'SersicGalaxy'])
+    paramnames = {}
+
+    for stamp in range(10000):
+        h5fn = 'galsamples-%s%s-f%i-g%05i.h5' % (deeptag, food, field, stamp)
+        print 'Reading', h5fn
+        f = h5py.File(h5fn, 'r')
+        gg = f['gal%05i' % stamp]
+        gtype = gg.attrs['type2']
+        if not gtype in paramnames:
+            paramnames[gtype] = gg.attrs['paramnames']
+            print 'Params', gtype, paramnames[gtype]
+        opts,samples = galprops[gtype]
+        gopt = gg['optimized']
+        gopt = np.array(gopt)
+        #print 'opt', gopt.shape
+        opts.append((stamp,gopt))
+        gsam = gg['samples']
+        #print 'samples', gsam.shape
+        gsam = gsam[np.arange(104,200,5), ...]
+        #print 'samples', gsam.shape
+        gsam = np.vstack([gs for gs in gsam])
+        #print 'samples', gsam.shape
+        samples.append((stamp,gsam))
+        f.close()
+        del f
+        #if stamp == 100:
+        #    break
+
+    for gtype,(opts, samples) in galprops.items():
+        if len(opts) == 0:
+            print 'No', gtype
+            continue
+        opt = np.array([opt for stamp,opt in opts])
+        stamps = np.array([stamp for stamp,o in opts])
+
+        hdr = fitsio.FITSHDR()
+        hdr['FIELD'] = field
+        hdr['FOOD'] = food
+
+        T = fits_table()
+        T.stamp = stamps
+        print 'opt', opt.shape
+        for i,nm in enumerate(paramnames[gtype]):
+            T.set(nm, opt[:,i])
+        fn = ('gals-opt-%s-%s%s-f%i.fits' %
+                   (gtype.replace('Galaxy','').lower(), deeptag, food, field))
+        T.writeto(fn, header=hdr)
+        print 'Wrote', fn
+
+        samples = np.array([samp for stamp,samp in samples])
+        T = fits_table()
+        T.stamp = stamps
+        for i,nm in enumerate(paramnames[gtype]):
+            T.set(nm, samples[:,:,i])
+        fn = ('gals-samples-%s-%s%s-f%i.fits' %
+              (gtype.replace('Galaxy','').lower(), deeptag, food, field))
+        T.writeto(fn, header=hdr)
+        print 'Wrote', fn
+
+
+
+if __name__ == '__main__':
+    main()
