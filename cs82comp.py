@@ -1,6 +1,6 @@
 if __name__ == '__main__':
-	import matplotlib
-	matplotlib.use('Agg')
+    import matplotlib
+    matplotlib.use('Agg')
 
 import os
 import logging
@@ -109,17 +109,23 @@ if __name__ == '__main__':
 
     bands = 'ugriz'
     colors = 'bgrmk'
-    T = None
-    for band in bands:
-        Ti = fits_table('cs82-%s--phot-%s.fits' % (band, cs82field))
-        if T is None:
-            T = Ti
-        else:
-            T.add_columns_from(Ti)
-    T.writeto('cs82-phot-%s.fits' % cs82field)
+
+    mfn = 'cs82-phot-%s.fits' % cs82field
+    if os.path.exists(mfn):
+        T = fits_table(mfn)
+        print 'Read', len(T), 'from', mfn
+    else:
+        T = None
+        for band in bands:
+            Ti = fits_table('cs82-%s--phot-%s.fits' % (band, cs82field))
+            if T is None:
+                T = Ti
+            else:
+                T.add_columns_from(Ti)
+        T.writeto(mfn)
 
     print len(T), 'sources'
-    T.cut(T.phot_done)
+    T.cut(T.phot_done > 0)
     print len(T), 'with phot done'
 
     plt.clf()
@@ -199,6 +205,37 @@ if __name__ == '__main__':
             NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
             NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
         loghist(cfht, sdss - cfht, 100, range=((18, 24),yr), doclf=False)
+        ax = plt.axis()
+
+        magbins = np.arange(18, 25)
+        bins = []
+        means = []
+        stds = []
+        meds = []
+        qlos = []
+        qhis = []
+        for blo,bhi in zip(magbins, magbins[1:]):
+            I = np.flatnonzero((cfht >= blo) * (cfht < bhi))
+            dmag = sdss[I] - cfht[I]
+            bins.append((blo + bhi)/2.)
+            means.append(np.mean(dmag))
+            stds.append(np.std(dmag))
+            meds.append(np.median(dmag))
+            qlos.append(np.percentile(dmag, 15.9))
+            qhis.append(np.percentile(dmag, 84.1))
+
+        means = np.array(means)
+        stds = np.array(stds)
+        
+        plt.plot(bins, means, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+        plt.plot(bins, means+stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+        plt.plot(bins, means-stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+
+        plt.plot(bins, meds, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+        plt.plot(bins, qlos, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+        plt.plot(bins, qhis, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+
+        plt.axis(ax)
         plt.yticks(yt)
         plt.ylabel('SDSS %s - CS82 i (mag)' % band)
         plt.xlabel('CS82 i-band (mag)')
