@@ -777,10 +777,12 @@ class PointSource(MultiParams):
 
     def getModelPatch(self, img, minsb=0.):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        if counts <= 0:
+        if counts == 0:
             return None
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval)
+        if upatch is None:
+            return None
         return upatch * counts
 
     def getParamDerivatives(self, img):

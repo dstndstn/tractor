@@ -31,6 +31,21 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
 
+# makes an SDSS WCS object look like an anwcs /  Tan / Sip
+class AsTransWrapper(object):
+    def __init__(self, wcs, w, h, x0=0, y0=0):
+        self.wcs = wcs
+        self.imagew = w
+        self.imageh = h
+        self.x0 = x0
+        self.y0 = y0
+    def pixelxy2radec(self, x, y):
+        r,d = self.wcs.pixel_to_radec(x+self.x0-1, y+self.y0-1)
+        return r, d
+    def radec2pixelxy(self, ra, dec):
+        x,y = self.wcs.radec_to_pixel(ra, dec)
+        return True, x-self.x0+1, y-self.y0+1
+
 ## FIXME -- these PSF params are not Params
 class SdssBrightPSF(ParamsWrapper):
     def __init__(self, real, a1, s1, a2, s2, a3, sigmap, beta):
@@ -704,6 +719,9 @@ def get_tractor_image(run, camcol, field, bandname,
     skyerr = psfield.getSkyErr(bandnum)
     invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
+    dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
+    info.update(dgpsf=dgpsf)
+    
     if roi is not None:
         roislice = (slice(y0,y1), slice(x0,x1))
         image = image[roislice].copy()
@@ -742,11 +760,10 @@ def get_tractor_image(run, camcol, field, bandname,
             print 'PSF model fit', psf, 'failed!  Returning DG model instead'
             psf = 'dg'
     if psf == 'dg':
-        dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
         print 'Creating double-Gaussian PSF approximation'
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])
-
+        
     timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
                  sky=skyobj, photocal=photocal,
                  name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
@@ -1029,6 +1046,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
             fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 
+    dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
+    info.update(dgpsf=dgpsf)
+            
     if psf == 'kl-pix':
         # Pixelized KL-PSF
         klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
@@ -1077,7 +1097,6 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
             print 'PSF model fit', psf, 'failed!  Returning DG model instead'
             psf = 'dg'
     if psf == 'dg':
-        dgpsf = psfield.getDoubleGaussian(bandnum)
         print 'Creating double-Gaussian PSF approximation'
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])

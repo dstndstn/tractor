@@ -7,10 +7,11 @@ c_swig_module = Extension('_mix',
 						  sources = ['mix_wrap.c' ],
 						  include_dirs = numpy_inc,
 						  extra_objects = [],
-						  undef_macros=['NDEBUG'],
-						  #extra_compile_args=['-O0','-g'],
-						  #extra_link_args=['-O0', '-g'],
-						  )
+    )
+#undef_macros=['NDEBUG'],
+#extra_compile_args=['-O0','-g'],
+#extra_link_args=['-O0', '-g'],
+
 
 setup(name = 'Gaussian mixtures',
 	  version = '1.0',
