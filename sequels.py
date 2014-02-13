@@ -28,6 +28,110 @@ gzip sequels-phot-versions.txt
 
 (for x in wise-coadds/*/*/*-img-m.fits; do echo; echo $x; listhead $x | grep UNW; done) > sequels-unwise-versions.txt
 gzip sequels-unwise-versions.txt
+
+# Later, whole SDSS footprint:
+scripts/sequels-12.pbs, as before.
+
+python -u sequels.py --dataset sdss --finish data/sequels-phot-5/phot-unsplit-*.fits > fin.log
+(at r24313)
+
+Later, found that at least one tile failed: 2586p651 (index 6327).
+
+mkdir data/redo
+cp data/sequels-phot-5/phot-2586p651.fits data/redo/
+python -u sequels.py --dataset sdss -d data/redo --pobj data/redo --finish --split data/redo/phot-2586p651.fits > redo-1.log 2>&1 &
+cp data/sequels-phot-5/phot-unsplit-{2551p651,2543p636,2560p666,2576p636,2635p666,2621p651,2609p636,2597p666}.fits data/redo/
+python -u sequels.py --dataset sdss -d data/redo --pobj data/redo --finish data/redo/phot-unsplit-*.fits > redo-2.log 2>&1
+
+Hand-edit list of files produced, cutting down to just the run/camcol/fields touched by 2586p651 (listed in redo-1.log)
+Copy those files into place.
+
+Next, Adam found that one source from photoObj 1365/6/68 is missing.
+Turns out my WISE/SDSS search radius was a touch too small and I just
+barely missed WISE tile 1621p681 (and 7 other tiles) which contains
+that source.  Tweak unwise/sdss-footprint-wise.py, creating
+sdss2-atlas.fits.
+python -u sequels.py --dataset sdss2 -d data/redo --pobj data/redo --tempdir data/redo -v --split 7175 --tiledir data/unwise/unwise-nersc/ > redo-3.log 2>&1
+cp data/sequels-phot-5/phot-unsplit-{1670p666,1632p666,1661p681,1595p666,1582p681,1590p696}.fits data/redo
+python -u sequels.py --dataset sdss -d data/redo --pobj data/redo --finish data/redo/phot-unsplit-*.fits > redo-4.log 2>&1
+
+These new tiles affect the splitting of existing tiles -- their
+neighbors previously did not exist (in the atlas file) so did not
+split SDSS fields.
+
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split \
+data/sequels-phot-5/phot-????????.fits data/redo/phot-????????.fits > fin3.log 2>&1 &
+
+ls data/sequels-phot-5/phot-????????.fits data/redo/phot-????????.fits > lst
+tail -n    +1 lst | head -n 1000 > lst.1
+tail -n +1001 lst | head -n 1000 > lst.2
+tail -n +2001 lst | head -n 1000 > lst.3
+tail -n +3001 lst | head -n 1000 > lst.4
+tail -n +4001 lst | head -n 1000 > lst.5
+tail -n +5001 lst | head -n 1000 > lst.6
+tail -n +6001 lst | head -n 1000 > lst.7
+tail -n +7001 lst | head -n 1000 > lst.8
+
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.1) > fin3-1.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.2) > fin3-2.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.3) > fin3-3.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.4) > fin3-4.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.5) > fin3-5.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.6) > fin3-6.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.7) > fin3-7.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish --split $(cat lst.8) > fin3-8.log 2>&1 &
+
+python -u sequels.py --dataset sdss2 -d data/redo3 --pobj data/redo3 --tempdir data/redo3 --finish data/redo3/phot-unsplit-*.fits --no-threads > fin4.log 2>&1 &
+
+python -u check-wise.py > chk5.log 2>&1 &
+# starting from the end,
+python -u check-wise.py > chk6.log 2>&1 &
+
+One glitch turned up: 2566/2/329, where one tile thinks the field is
+totally within, so writes the output during splitting.  Another tile
+contains a single source (at y coord -0.2), so overwrites the output
+file. Patch up:
+
+python -u sequels.py --dataset sdss2 -d data/redo4 --pobj data/redo4 --tempdir data/redo4 --finish --split data/sequels-phot-5/phot-0031p136.fits --no-threads > fin5.log
+python -u sequels.py --dataset sdss2 -d data/redo4 --pobj data/redo4 --tempdir data/redo4 --finish data/redo4/phot-unsplit-0031p136.fits data/redo3/phot-unsplit-0031p151.fits --no-threads > fin6.log 2>&1 &
+
+ cp data/redo3/301/2566/2/photoWiseForced-002566-2-0329.fits data/redo4/redo3-photoWiseForced-002566-2-0329.fits
+ cp data/redo4/301/2566/2/photoWiseForced-002566-2-0329.fits data/redo3/301/2566/2/
+
+Argh, 4334/3/15 -- tile 0461p106 -- phot output file was written, but
+empty; photoobjs non-empty.  Log file looks like it timed out?
+
+cp sdss-phot-temp/photoobjs-0461p106.fits data/redo5/
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 -v --split --tiledir data/unwise/unwise/ 955 > redo-5.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish data/redo3/phot-unsplit-{0476p106,0459p090,0474p090,0446p106,0463p121,0478p121}.fits data/redo5/phot-unsplit-0461p106.fits --no-threads > redo-5b.log 2>&1 &
+
+ cp -a data/redo3/301/4334 data/redo5/run-4334-redo3
+ cp data/redo5/301/4334/3/photoWiseForced-004334-3-00{13,14,15,16,17}.fits data/redo3/301/4334/3/
+ cp data/redo5/301/4334/4/photoWiseForced-004334-4-00{11,18,19}.fits data/redo3/301/4334/4/
+ cp data/redo5/301/4334/5/photoWiseForced-004334-5-0020.fits data/redo3/301/4334/5/
+ cp data/redo5/301/4334/6/photoWiseForced-004334-6-00{11,18,19,20}.fits data/redo3/301/4334/6/
+
+And 4874/4/698 --
+
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish --split data/sequels-phot-5/phot-0408p000.fits --no-threads > fin7.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish data/redo5/phot-unsplit-0408p000.fits data/redo3/phot-unsplit-0423p000.fits --no-threads > fin8.log 2>&1 &
+
+ cp data/redo3/301/4874/4/photoWiseForced-004874-4-0698.fits data/redo5/
+ cp data/redo5/301/4874/4/photoWiseForced-004874-4-0698.fits data/redo3/301/4874/4/
+
+And 3630/2/220 --
+
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish --split data/sequels-phot-5/phot-1501p090.fits --no-threads > fin9.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish data/redo5/phot-unsplit-1501p090.fits data/redo3/phot-unsplit-{1492p106,1485p090}.fits --no-threads > fin10.log 2>&1 &
+
+ cp data/redo3/301/3630/2/photoWiseForced-003630-2-0220.fits data/redo5/
+ cp data/redo5/301/3630/2/photoWiseForced-003630-2-0220.fits data/redo3/301/3630/2/
+
+And 4136/3/206 and 4136/5/206
+
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish --split data/sequels-phot-5/phot-0574p000.fits --no-threads > fin11.log 2>&1 &
+python -u sequels.py --dataset sdss2 -d data/redo5 --pobj data/redo5 --tempdir data/redo5 --finish data/redo5/phot-unsplit-0574p000.fits data/redo3/phot-unsplit-0589p000.fits --no-threads > fin12.log 2>&1 &
+
 '''
 
 ''' CFHT-LS W3 test area
@@ -80,8 +184,6 @@ photoobj-lengths.sqlite3
 About --split:
 
 With --finish --split:
-   --NOTE that while you can specify the filenames to split, they MUST be in the
-     expected output directory.
    --will overwrite existing "pobj" output files!
    --will write OUTDIR/phot-unsplit-*.fits files
 
@@ -98,8 +200,9 @@ About field_primary.fits: from DR10 CAS:
 "select rerun, run, camcol, field, primaryArea from Field"
 
 If primaryArea = 0, can be ignored when reading photoObjs.
+----> This turns out to be untrue -- fields eg 1365/6/68 with a single
+      PRIMARY object will have area of zero.
 '''
-
 
 if __name__ == '__main__':
     arr = os.environ.get('PBS_ARRAYID')
@@ -144,7 +247,7 @@ if __name__ == '__main__':
     Time.add_measurement(MemMeas)
 
 photoobj_length_db = 'photoobj-lengths.sqlite3'
-def get_photoobj_length(rerun, run, camcol, field, save=True):
+def get_photoobj_length(rerun, run, camcol, field, save=True, all=False):
     import sqlite3
     timeout = 60.
     create = not os.path.exists(photoobj_length_db)
@@ -156,6 +259,14 @@ def get_photoobj_length(rerun, run, camcol, field, save=True):
         c.execute('create table photoObjs (rerun text, run integer, ' +
                   'camcol integer, field integer, N integer)')
         conn.commit()
+
+    if all:
+        print 'Fetching all photoObj lengths'
+        pobjs = {}
+        for row in c.execute('select rerun, run, camcol, field, N from photoObjs'):
+            rerun, run, camcol, field, N = row
+            pobjs[(int(rerun), int(run), int(camcol), int(field))] = int(N)
+        return pobjs
 
     print 'Getting photoObj length for', rerun, run, camcol, field
     #print type(rerun), type(run), type(camcol), type(field)
@@ -193,12 +304,6 @@ def get_photoobj_filename(rr, run, camcol, field):
     fn = os.path.join(photoobjdir, rr, '%i'%run, '%i'%camcol,
                       'photoObj-%06i-%i-%04i.fits' % (run, camcol, field))
     return fn
-
-print 'Reading field_primary.fits ...'
-F = fits_table('field_primary.fits')
-fieldAreas = dict([((int(rr),int(r),int(c),int(f)),a) for rr,r,c,f,a
-                   in zip(F.rerun, F.run, F.camcol, F.field, F.primaryarea)])
-del F
 
 def read_photoobjs(wcs, margin, cols=None):
     '''
@@ -241,11 +346,6 @@ def read_photoobjs(wcs, margin, cols=None):
         rr = sdss.get_rerun(run, field=field)
         if rr in [None, '157']:
             log.debug('Rerun 157')
-            continue
-
-        pa = fieldAreas.get((int(rr),int(run),int(camcol),int(field)), None)
-        if pa == 0:
-            log.debug('RCF %i/%i/%i has primaryArea %s; skipping' % (run,camcol,field,pa))
             continue
 
         fn = get_photoobj_filename(rr, run, camcol, field)
@@ -445,8 +545,12 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
         T = _get_photoobjs(tile, wcs, bandnum, opt.photoObjsOnly)
         if T is None:
             print 'Empty tile'
+            return
         if opt.photoObjsOnly:
             return
+    print len(T), 'objects'
+    if len(T) == 0:
+        return
 
     defaultflux = 1.
 
@@ -463,7 +567,9 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
     I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
                        (T.y >= -margin) * (T.y < H+margin))
     T.cut(I)
-    print 'N objects:', len(T)
+    print 'Cut to margins: N objects:', len(T)
+    if len(T) == 0:
+        return
 
     # Use pixelized PSF models for bright sources?
     bright_mods = ((1 in bands) and (opt.bright1 is not None))
@@ -542,6 +648,8 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
     wiseflux = {}
     for band in bands:
         wiseflux[band] = np.zeros(len(T))
+        if len(I) == 0:
+            continue
         # X[I] += Y[J] with duplicate I doesn't work.
         #wiseflux[band][J] += WISE.get('w%inm' % band)[I]
         lhs = wiseflux[band]
@@ -1116,24 +1224,28 @@ def one_tile(tile, opt, savepickle, ps, tiles, tiledir, tempoutdir, T=None):
 
     if opt.splitrcf:
         unsplitoutfn = opt.unsplitoutput % (tile.coadd_id)
-        splitrcf(tile, tiles, wcs, T, unsplitoutfn)
+        cols,dropcols = _get_output_column_names(opt.bands)
+        for c in T.get_columns():
+            if not c in cols:
+                T.delete_column(c)
+        splitrcf(tile, tiles, wcs, T, unsplitoutfn, dropcols)
 
     print 'Tile', tile.coadd_id, 'took', Time()-tt0
 
-def _bounce_split((tile, T, wcs, outfn, unsplitoutfn)):
+def _bounce_split((tile, T, wcs, outfn, unsplitoutfn, cols, dropcols)):
     try:
         print 'Reading', outfn
-        objs = fits_table(outfn)
+        objs = fits_table(outfn, columns=cols)
         print 'Read', len(objs), 'from', outfn
         print 'Writing unsplit to', unsplitoutfn
-        splitrcf(tile, T, wcs, objs, unsplitoutfn)
+        splitrcf(tile, T, wcs, objs, unsplitoutfn, dropcols)
     except:
         import traceback
         print 'Exception processing', tile.coadd_id
         traceback.print_exc()
         #raise
 
-def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
+def splitrcf(tile, tiles, wcs, T, unsplitoutfn, dropcols):
     # -Write out any run,camcol,field that is totally contained
     # within this coadd tile, and does not touch any other coadd
     # tile.
@@ -1147,7 +1259,6 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     neartiles = tiles[I]
     neartiles.cut(neartiles.coadd_id != tile.coadd_id)
     print len(neartiles), 'tiles nearby:', neartiles.coadd_id
-    
 
     # Decribe all boundaries in Intermediate World Coords with respect
     # to this tile's WCS.
@@ -1208,7 +1319,13 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
 
         myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
         if not os.path.exists(myoutdir):
-            os.makedirs(myoutdir)
+            try:
+                os.makedirs(myoutdir)
+            except:
+                import traceback
+                print 'Exception creating dir', myoutdir
+                traceback.print_exc()
+                
         outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' %
                              (run, camcol, field))
 
@@ -1222,6 +1339,8 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
         I = Ti.id - 1
         P.has_wise_phot[I] = True
         for col in Ti.get_columns():
+            if col in dropcols:
+                continue
             tval = Ti.get(col)
             X = np.zeros(N, tval.dtype)
             X[I] = tval
@@ -1236,16 +1355,18 @@ def splitrcf(tile, tiles, wcs, T, unsplitoutfn):
     S = T[straddle]
     print len(S), 'objects straddle tiles'
     if len(S):
+        rcf = np.unique(zip(S.run, S.camcol, S.field))
+        print 'Unique rcf of straddled sources:', rcf
         S.writeto(unsplitoutfn)
         print 'Wrote to', unsplitoutfn
-
-    
+    print 'Done'
     
 
 def todo(A, opt, ps):
     need = []
     for i in range(len(A)):
         outfn = opt.output % (A.coadd_id[i])
+        #outfn = opt.unsplitoutput % (A.coadd_id[i])
         print 'Looking for', outfn
         if not os.path.exists(outfn):
             need.append(i)
@@ -1331,7 +1452,22 @@ def summary(A, opt, ps):
     plt.axis(ax)
     ps.savefig()
 
-def finish(T, opt, args, ps):
+def _get_output_column_names(bands):
+    cols = ['ra','dec', 'objid', 'index', 'x','y', 
+            'treated_as_pointsource', 'coadd_id', 'modelflux']
+    for band in bands:
+        for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
+                  'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
+            cols.append('w%i_%s' % (band, k))
+    cols.extend(['run','camcol','field','id'])
+    # columns to drop from the photoObj-parallels
+    dropcols = ['run', 'camcol', 'field', 'modelflux']
+    return cols, dropcols
+
+def finish(A, opt, args, ps):
+    '''
+    A: atlas
+    '''
     # Find all *-phot.fits outputs
     # Determine which photoObj files are involved
     # Collate and resolve objs measured in multiple tiles
@@ -1343,75 +1479,46 @@ def finish(T, opt, args, ps):
         fns.sort()
         print 'Found', len(fns), 'photometry output files'
 
+    cols,dropcols = _get_output_column_names(opt.bands)
 
     if opt.splitrcf:
         from unwise_coadd import get_coadd_tile_wcs
-
-        mp = multiproc(1)
         args = []
-        for i in range(len(T)):
-            outfn = opt.output % T.coadd_id[i]
-            if not outfn in fns:
+        for i in range(len(A)):
+            #outfn = opt.output % A.coadd_id[i]
+            #if not outfn in fns:
+            #    continue
+            outfn = None
+            coadd_id = A.coadd_id[i]
+            for fn in fns:
+                if coadd_id in fn:
+                    outfn = fn
+                    break
+            if outfn is None:
+                print 'Did not find input file for', coadd_id
                 continue
-            unsplitoutfn = opt.unsplitoutput % T.coadd_id[i]
+            unsplitoutfn = opt.unsplitoutput % A.coadd_id[i]
             if os.path.exists(unsplitoutfn):
                 print 'Exists:', unsplitoutfn
                 continue
             print 'File', outfn
-            tile = T[i]
+            tile = A[i]
             wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
-            args.append((tile, T, wcs, outfn, unsplitoutfn))
-        mp.map(_bounce_split, args)
+            args.append((tile, A, wcs, outfn, unsplitoutfn, cols, dropcols))
 
-        # for i in range(len(T)):
-        #     outfn = opt.output % T.coadd_id[i]
-        #     if not outfn in fns:
-        #         continue
-        #     print 'File', outfn
-        #     tile = T[i]
-        #     wcs = get_coadd_tile_wcs(tile.ra, tile.dec)
-        #     unsplitoutfn = opt.unsplitoutput % tile.coadd_id
-        #     objs = fits_table(outfn)
-        #     print 'Read', len(objs), 'from', outfn
-        #     print 'Writing unsplit to', unsplitoutfn
-        #     splitrcf(tile, T, wcs, objs, unsplitoutfn)
+        if opt.no_threads:
+            map(_bounce_split, args)
+        else:
+            mp = multiproc(1)
+            mp.map(_bounce_split, args)
         return
 
     flats = []
     fieldmap = {}
     for ifn,fn in enumerate(fns):
+        print
         print 'Reading', (ifn+1), 'of', len(fns), fn
-        cols = ['ra','dec',
-                'objid', 'index', 'x','y', 
-                'treated_as_pointsource', 'coadd_id', 'modelflux']
-        for band in opt.bands:
-            for k in ['nanomaggies', 'nanomaggies_ivar', 'mag', 'mag_err',
-                      'prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']:
-                cols.append('w%i_%s' % (band, k))
-        rcfcols = ['run','camcol','field','id',]
-
-        # columns to drop from the photoObj-parallels
-        dropcols = rcfcols + ['modelflux']
-        try:
-            T = fits_table(fn, columns=cols + rcfcols + opt.ftag)
-        except:
-            print 'Run,camcol,field columns not found; reading photoobjs file to get them.'
-            print fn
-            T = fits_table(fn, columns=cols)
-            print 'Got', len(T), 'from', fn
-            pfn = fn.replace('phot-', 'photoobjs-').replace(outdir, tempoutdir)
-            print 'Reading', pfn
-            P = fits_table(pfn, columns=rcfcols + ['objid'])
-            print 'Got', len(P), 'from', pfn
-            print 'Applying objid map...'
-            objidmap = dict([(oid,i) for i,oid in enumerate(P.objid)])
-            I = np.array([objidmap[oid] for oid in T.objid])
-            P.cut(I)
-            assert(len(P) == len(T))
-            assert(np.all(P.objid == T.objid))
-            for k in rcfcols:
-                T.set(k, P.get(k))
-            
+        T = fits_table(fn, columns=cols + opt.ftag)
         print 'Read', len(T), 'entries'
 
         if opt.flat is not None:
@@ -1426,6 +1533,7 @@ def finish(T, opt, args, ps):
             #print len(Tsub), 'in', (run,camcol,field)
             for col in dropcols:
                 Tsub.delete_column(col)
+            print '  ', len(Tsub), 'in', run,camcol,field, ', joining', [t.coadd_id[0] for t in fieldmap[(run,camcol,field)]]
             fieldmap[(run,camcol,field)].append(Tsub)
 
     # WISE coadd tile CRPIX-1 (x,y in the phot-*.fits files are 0-indexed)
@@ -1439,9 +1547,6 @@ def finish(T, opt, args, ps):
         I,J,d = match_radec(F.ra, F.dec, F.ra, F.dec, 1e-6, notself=True)
         print 'Matched', len(I), 'duplicates'
         keep = np.ones(len(F), bool)
-        #keep[I] = False
-        #keep[J] = False
-        #keep[np.where(r2[I] < r2[J], I, J)] = True
         keep[np.where(r2[I] > r2[J], I, J)] = False
         F.cut(keep)
         print 'Cut to', len(F)
@@ -1451,84 +1556,161 @@ def finish(T, opt, args, ps):
         F.writeto(opt.flat)
         return
 
-    pfn = 'photoobj-lengths.pickle'
-    if os.path.exists(pfn):
-        print 'Reading photoObj lengths from', pfn
-        pobjlengths = unpickle_from_file(pfn)
-    else:
-        pobjlengths = {}
-
     keys = fieldmap.keys()
     keys.sort()
-    #for i,((run,camcol,field),TT) in enumerate(fieldmap.items()):
+
+    # HACK
+    rr = '301'
+
+    lengths = get_photoobj_length(None, None, None, None, all=True)
+    print 'Got', len(lengths), 'photoObj lengths'
+    
+    args = []
     for i,(run,camcol,field) in enumerate(keys):
         TT = fieldmap.get((run,camcol,field))
-        print
-        print (i+1), 'of', len(fieldmap), ': R,C,F', (run,camcol,field)
-        print len(TT), 'tiles for', (run,camcol,field)
-
-        # HACK
-        rr = '301'
-
-        key = (rr,run,camcol,field)
-        N = pobjlengths.get(key, None)
-        print 'Key', key, '->', N
+        N = lengths.get((int(rr), int(run), int(camcol), int(field)), None)
         if N is None:
-            pofn = get_photoobj_filename(rr, run,camcol,field)
-            F = fitsio.FITS(pofn)
-            N = F[1].get_nrows()
-            pobjlengths[key] = N
-        if i % 1000 == 0:
-            pickle_to_file(pobjlengths, pfn)
-            print 'Wrote', pfn
-
-        P = fits_table()
-        P.has_wise_phot = np.zeros(N, bool)
-        if len(TT) > 1:
-            # Resolve duplicate measurements (in multiple tiles)
-            # based on || (x,y) - center ||^2
-            P.R2 = np.empty(N, np.float32)
-            P.R2[:] = 1e9
-        for T in TT:
-            coadd = T.coadd_id[0]
-            if len(TT) > 1:
-                I = T.id - 1
-                R2 = (T.x - cx)**2 + (T.y - cy)**2
-                J = (R2 < P.R2[I])
-                I = I[J]
-                P.R2[I] = R2[J].astype(np.float32)
-                #print len(I), 'are closest'
-                T.cut(J)
-            print '  ', len(T), 'from', coadd
-            if len(T) == 0:
-                continue
-            I = T.id - 1
-            P.has_wise_phot[I] = True
-            pcols = P.get_columns()
-            for col in T.get_columns():
-                if col in pcols:
-                    pval = P.get(col)
-                    print '  ', col, pval.dtype
-                    pval[I] = (T.get(col)).astype(pval.dtype)
-                else:
-                    tval = T.get(col)
-                    X = np.zeros(N, tval.dtype)
-                    X[I] = tval
-                    P.set(col, X)
-
-        P.delete_column('index')
-        P.delete_column('id')
-        if len(TT) > 1:
-            P.delete_column('R2')
-
+            N = get_photoobj_length(rr, run, camcol, field)
         myoutdir = os.path.join(pobjoutdir, rr, '%i'%run, '%i'%camcol)
         if not os.path.exists(myoutdir):
             os.makedirs(myoutdir)
         outfn = os.path.join(myoutdir, 'photoWiseForced-%06i-%i-%04i.fits' % (run, camcol, field))
-        P.writeto(outfn)
-        print 'Wrote', outfn
-    pickle_to_file(pobjlengths, pfn)
-    print 'Wrote', pfn
+        args.append((i, len(fieldmap), TT, N, rr, run, camcol, field, outfn, cx, cy))
+
+    if opt.no_threads:
+        map(_finish_one, args)
+    else:
+        mp = multiproc(8)
+        mp.map(_finish_one, args)
+    print 'Done'
+
+def _finish_one((i, Ntotal, TT, N, rr, run, camcol, field, outfn, cx, cy)):
+    print
+    print (i+1), 'of', Ntotal, ': R,C,F', (run,camcol,field)
+    print len(TT), 'tiles for', (run,camcol,field)
+
+    resolve = (len(TT) > 1)
+
+    if os.path.exists(outfn):
+        print 'Output file already exists.  Updating.'
+        P = fits_table(outfn)
+        assert(N == len(P))
+        print 'Read', N, 'from', outfn
+
+        P.R2 = np.empty(N, np.float32)
+        P.R2[:] = 1e9
+        I = np.flatnonzero((P.x != 0) * (P.y != 0))
+        P.R2[I] = (P.x[I] - cx)**2 + (P.y[I] - cy)**2
+        resolve = True
+
+    else:
+        P = fits_table()
+        P.has_wise_phot = np.zeros(N, bool)
+        if resolve:
+            # Resolve duplicate measurements (in multiple tiles)
+            # based on || (x,y) - center ||^2
+            P.R2 = np.empty(N, np.float32)
+            P.R2[:] = 1e9
+
+    for T in TT:
+        coadd = T.coadd_id[0]
+        if resolve:
+            #print 'Coadd', coadd, ': T:'
+            #T.about()
+            I = T.id - 1
+            R2 = (T.x - cx)**2 + (T.y - cy)**2
+            J = (R2 < P.R2[I])
+            I = I[J]
+            P.R2[I] = R2[J].astype(np.float32)
+            print '  tile', coadd, ':', len(I), 'are closest'
+            T.cut(J)
+            # Note here that we just choose which indices will be
+            # *overwritten* by this "T" -- only those closer than any
+            # existing 'T'; and those rows may be in turn overwritten
+            # by a later one.
+        print '  ', len(T), 'from', coadd
+        if len(T) == 0:
+            continue
+        #print 'Coadd', coadd, ': T:'
+        #T.about()
+        I = T.id - 1
+        P.has_wise_phot[I] = True
+        pcols = P.get_columns()
+        for col in T.get_columns():
+            if col in pcols:
+                pval = P.get(col)
+                #print '  ', col, pval.dtype
+                pval[I] = (T.get(col)).astype(pval.dtype)
+            else:
+                tval = T.get(col)
+                X = np.zeros(N, tval.dtype)
+                X[I] = tval
+                P.set(col, X)
+
+    for delcol in ['index', 'id']:
+        if delcol in P.get_columns():
+            P.delete_column(delcol)
+    if resolve:
+        P.delete_column('R2')
+        ##
+        coadds = np.unique(P.coadd_id)
+        print 'Coadds:', coadds
+        for c in coadds:
+            I = np.flatnonzero((P.coadd_id == c))
+            print '  ', len(I), 'from', c
+    P.writeto(outfn)
+    print 'Wrote', outfn
+
+def check(T, opt, args, ps):
+    print 'Walking', pobjoutdir
+    decstep = 0.1
+    rastep = 0.1
+    ralo,rahi = 0., 360.
+    declo,dechi = -30., 90.
+    Nra = int((rahi - ralo) / rastep)
+    Ndec = int((dechi - declo) / decstep)
+    hist = np.zeros((Ndec, Nra), np.int16)
+
+    def binimg(img, b):
+        hh,ww = img.shape
+        hh = int(hh / b) * b
+        ww = int(ww / b) * b
+        binx = reduce(np.add, [img[:, i:hh:b] for i in range(b)])
+        return reduce(np.add, [img[i:ww:b, :] for i in range(b)])
+
+    plt.figure(figsize=(12,5))
+    def _plotit():
+        fitsio.write('sdss-phot-density.fits', hist, clobber=True)
+        plt.clf()
+        plt.imshow(binimg(hist, 8), interpolation='nearest', origin='lower',
+                   extent=(ralo,rahi,declo,dechi))
+        plt.colorbar()
+        plt.xlabel('RA (deg)')
+        plt.ylabel('Dec (deg)')
+        ps.savefig()
+
+    n = 0
+    for dirpath,dirnames,fns in os.walk(pobjoutdir, followlinks=True):
+        dirnames.sort()
+        fns.sort()
+        for fn in fns:
+            pth = os.path.join(dirpath, fn)
+            print 'Reading', (n+1), pth
+            T = fits_table(pth, columns=['ra','dec','has_wise_phot'])
+            T.has_wise_phot = (T.has_wise_phot.astype(np.uint8) == ord('T'))
+            #print 'has_wise_phot:', np.unique(T.has_wise_phot)
+            #print 'has_wise_phot:', np.unique(T.has_wise_phot.astype(np.uint8))
+            print '    Got', len(T), ',', sum(T.has_wise_phot), 'with photometry'
+            T.cut(T.has_wise_phot)
+            if len(T) == 0:
+                continue
+            for ira,idec in zip(((T.ra  - ralo )/ rastep).astype(int),
+                                ((T.dec - declo)/decstep).astype(int)):
+                hist[idec,ira] += 1
+            n += 1
+            if n and n % 1000 == 0:
+                _plotit()
+    _plotit()
 
 def main():
     import optparse
@@ -1545,10 +1727,13 @@ def main():
     parser.add_option('--minsig4', dest='minsig4', default=0.1, type=float)
     parser.add_option('--blocks', dest='blocks', default=1, type=int,
                       help='NxN number of blocks to cut the image into')
-    parser.add_option('-d', dest='outdir', default=None)
+    parser.add_option('-d', dest='outdir', default=None,
+                      help='Output directory')
+    parser.add_option('--tempdir', default=None,
+                      help='"Temp"-file output directory')
     parser.add_option('--pobj', dest='pobjdir', default=None,
                       help='Output directory for photoObj-parallels')
-    parser.add_option('-o', dest='output', default=None)
+    parser.add_option('-o', dest='output', default=None, help='Output filename pattern')
     parser.add_option('-b', dest='bands', action='append', type=int, default=[],
                       help='Add WISE band (default: 1,2)')
 
@@ -1569,6 +1754,8 @@ def main():
     parser.add_option('--plotbase', dest='plotbase', help='Base filename for plots')
 
     parser.add_option('--finish', dest='finish', default=False, action='store_true')
+
+    parser.add_option('--check', dest='check', default=False, action='store_true')
 
     parser.add_option('--ftag', dest='ftag', action='append', default=[],
                       help='Tag-along extra columns in --finish phase')
@@ -1617,6 +1804,8 @@ def main():
 
     parser.add_option('-v', dest='verbose', default=False, action='store_true')
 
+    parser.add_option('--no-threads', action='store_true')
+
     opt,args = parser.parse_args()
 
     opt.unsplitoutput = None
@@ -1661,6 +1850,12 @@ def main():
     else:
         # default
         opt.outdir = outdir
+
+    if opt.tempdir is not None:
+        tempoutdir = opt.tempdir
+    else:
+        # default
+        opt.tempdir = tempoutdir
         
     if opt.output is None:
         opt.output = os.path.join(outdir, 'phot-%s.fits')
@@ -1681,6 +1876,10 @@ def main():
         finish(T, opt, args, ps)
         sys.exit(0)
 
+    if opt.check:
+        check(T, opt, args, ps)
+        sys.exit(0)
+        
     for dirnm in [outdir, tempoutdir, pobjoutdir]:
         if not os.path.exists(dirnm):
             try:

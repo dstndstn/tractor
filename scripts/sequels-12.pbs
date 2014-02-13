@@ -2,14 +2,12 @@
 #PBS -l walltime=12:00:00
 #PBS -N sdss
 #PBS -p -10
-###PBS -q batch
+#PBS -q batch
 #PBS -q data_io
-
-###PBS -o data/sequels-phot-5-logs
-###PBS -e data/sequels-phot-5-logs
-
 #PBS -o data/logs
 #PBS -e data/logs
+###PBS -o data/sequels-phot-5-logs
+###PBS -e data/sequels-phot-5-logs
 
 #cd ${HOME}/tractor
 echo "Running on $(hostname)"
