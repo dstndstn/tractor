@@ -18,7 +18,7 @@ _mix.so: mix_wrap.c setup-mix.py
 	cp build/lib/_mix.so $@
 
 emfit.py emfit_wrap.c: emfit.i
-	cd tractor && swig -python -I. emfit.i
+	swig -python -I. emfit.i
 
 _emfit.so: emfit_wrap.c setup-emfit.py
 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
