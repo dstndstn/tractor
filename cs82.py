@@ -323,6 +323,7 @@ def main(opt, cs82field):
                 masksi.append(m)
             print len(masksi), 'masks overlap this slice'
             
+            # Cut to CS82 sources overlapping
             Ibox = np.flatnonzero(
                 ((T.dec + margin) >= dlo) * ((T.dec - margin) <= dhi) *
                 ((T.ra  + margin) >= rlo) * ((T.ra  - margin) <= rhi))
@@ -333,6 +334,7 @@ def main(opt, cs82field):
             print len(Ibox), 'sources in RA,Dec slice'
             print len(np.flatnonzero(T.marginal)), 'are in the margins'
 
+            # Cut to SDSS fields overlapping
             Fi = F[np.logical_not(np.logical_or(F.dec0 > dhi, F.dec1 < dlo)) *
                    np.logical_not(np.logical_or(F.ra0  > rhi, F.ra1  < rlo))]
             print len(Fi), 'fields in RA,Dec slice'
@@ -370,10 +372,6 @@ def main(opt, cs82field):
             # For 'cat' objects, should we set the flux?
             setflux = np.logical_not(T.phot_done[Icat])
             
-            # Get SDSS sources to fill in holes....?
-            # Sin = S[((S.dec + margin) >= dlo) * ((S.dec - margin) <= dhi) *
-            # ((S.ra  + margin) >= rlo) * ((S.ra  - margin) <= rhi)]
-            
             print 'Matching to SDSS sources...'
             print 'N SDSS', len(S)
             I,J,d = match_radec(T.ra[Icat], T.dec[Icat], S.ra, S.dec,
@@ -394,8 +392,6 @@ def main(opt, cs82field):
             # index into cat of sources to freeze
             Ifreeze = np.flatnonzero(T.marginal[Icat])
             print 'Freezing', len(Ifreeze), 'sources'
-            # index into cat of sources to thaw
-            #Ithaw = np.flatnonzero(np.logical_not(T.marginal[Icat]))
             # index into T of sources being fit
             Ifit = Icat[np.flatnonzero(np.logical_not(T.marginal[Icat]))]
             print len(Ifit), 'sources being fit'
@@ -441,6 +437,7 @@ def main(opt, cs82field):
 
                 tb0 = Time()
 
+                # Read SDSS images...
                 tims = []
                 sigs = []
                 npix = 0
@@ -451,10 +448,8 @@ def main(opt, cs82field):
                         nanomaggies=True, zrange=[-2,5],
                         roiradecbox=[rlo,rhi,dlo,dhi],
                         invvarIgnoresSourceFlux=True)
-
                     if tim is None:
                         continue
-
                     (H,W) = tim.shape
                     print 'Tim', tim.shape
                     tim.wcs.setConstantCd(W/2., H/2.)
@@ -462,8 +457,6 @@ def main(opt, cs82field):
                     del tim.starMask
                     del tim.mask
                     tim.domask = False
-                    # needed for optimize_forced_photometry with rois
-                    #del tim.invvar
                     tims.append(tim)
                     sigs.append(1./np.sqrt(np.median(tim.invvar)))
                     npix += (H*W)
@@ -471,7 +464,7 @@ def main(opt, cs82field):
                     print 'Read image', i+1, 'in band', band, ':', Time()-tb0
 
                     tm0 = Time()
-                    # Apply CS82 masks
+                    # Apply CS82 masks to SDSS images
                     astrans = tim.wcs.astrans
                     xx,yy = np.meshgrid(np.arange(W), np.arange(H))
                     masked = np.zeros((H,W), bool)
@@ -557,9 +550,10 @@ def main(opt, cs82field):
                               (cs82field, decslice, raslice, len(tims)))
                     ps.savefig()
 
+                # Choose surface-brightness approximation level
                 sig1 = np.median(sigs)
                 minsig = 0.1
-                minsb= minsig * sig1
+                minsb = minsig * sig1
                 print 'Sigma1:', sig1, 'minsig', minsig, 'minsb', minsb
                 
                 tractor = Tractor(tims, cat)
@@ -571,6 +565,7 @@ def main(opt, cs82field):
                 print 'Starting forced phot:', Time()-tb0
                 print '(since start of band)'
 
+                # Here we go...!
                 R = tractor.optimize_forced_photometry(
                     minsb=minsb, mindlnp=1., wantims=wantims,
                     fitstats=True, variance=True,
@@ -635,19 +630,15 @@ def main(opt, cs82field):
                 if wantims:
                     ims0 = R.ims0
                     ims1 = R.ims1
-
                     nims = len(tims)
                     cols = int(np.ceil(np.sqrt(nims)))
                     rows = int(np.ceil(nims / float(cols)))
 
-                    #for imnum,ims in enumerate([ims0, ims1]):
                     for imnum,ims in [(1,ims1)]:
-
                         coadd = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                         ncoadd = np.zeros((wcs.imageh, wcs.imagew), np.int32)
                         cochi = np.zeros((wcs.imageh, wcs.imagew), np.float32)
                         cochi2 = np.zeros((wcs.imageh, wcs.imagew), np.float32)
-
                         for i,(im,mod,ie,chi,roi) in enumerate(ims):
                             tim = tims[i]
                             (H,W) = tim.shape
@@ -663,7 +654,6 @@ def main(opt, cs82field):
                                 continue
                             coadd[Yo,Xo] += mod[Yi,Xi]
                             ncoadd[Yo,Xo] += 1
-
                             cochi[Yo,Xo] += chi[Yi,Xi]
                             cochi2[Yo,Xo] += chi[Yi,Xi]**2
 
