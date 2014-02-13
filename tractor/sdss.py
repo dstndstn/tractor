@@ -17,7 +17,6 @@ import sys
 from math import pi, sqrt, ceil, floor
 from datetime import datetime
 
-import pyfits
 import pylab as plt
 import numpy as np
 
@@ -177,6 +176,7 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
         exists = os.path.exists(fn)
         retrieveKwargs = {}
         if exists and tryopen:
+            import pyfits
             # This doesn't catch *all* types of errors you can imagine...
             try:
                 T = pyfits.open(fn)
