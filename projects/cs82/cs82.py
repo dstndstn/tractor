@@ -213,13 +213,15 @@ def main(opt, cs82field):
     else:
         ps = None
     
-    version = get_svn_version()
-    print 'SVN version info:', version
+    version = get_git_version()
+    print 'git version info:', version
 
     hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='PHO_VER', value=version['Revision'],
-                        comment='cs82.py photometry code SVN revision'))
-    hdr.add_record(dict(name='PHO_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='PHO_VER', value=version['commit'],
+                        comment='cs82.py code version (git commit)'))
+    if 'describe' in version:
+        hdr.add_record(dict(name='PHO_GIT', value=version['describe'],
+                            comment='cs82.py code version (git describe)'))
     hdr.add_record(dict(name='PHO_DATE', value=datetime.datetime.now().isoformat(),
                         comment='cs82.py photometry run time'))
     hdr.add_record(dict(name='PHO_MACH', value=socket.getfqdn(),
@@ -723,24 +725,25 @@ def main(opt, cs82field):
 
             T.phot_done[Ifit] = True
             
-            fn = ('%s-phot-%s-slice%i.fits' %
-                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
-            T.writeto(fn, header=hdr)
-            T.about()
-            print 'Wrote', fn
-            Tdone = T[T.phot_done]
-            fn = ('%s-phot-%s-slice%i-cut.fits' %
-                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
-            Tdone.writeto(fn)
-            Tdone.about()
-            del Tdone
-            print 'Wrote', fn
+            if False:
+                fn = ('%s-phot-%s-slice%i.fits' %
+                      (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
+                T.writeto(fn, header=hdr)
+                T.about()
+                print 'Wrote', fn
+                Tdone = T[T.phot_done]
+                fn = ('%s-phot-%s-slice%i-cut.fits' %
+                      (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
+                Tdone.writeto(fn)
+                Tdone.about()
+                del Tdone
+                print 'Wrote', fn
 
     T.delete_column('marginal')
     T.delete_column('alphamodel_j2000')
     T.delete_column('deltamodel_j2000')
 
-    fn = '%s-phot-%s.fits' % (opt.prefix, cs82field)
+    fn = '%s-phot-%s-%s.fits' % (opt.prefix, cs82field, opt.bands)
     T.writeto(fn, header=hdr)
     print 'Wrote', fn
     return
@@ -773,6 +776,23 @@ if __name__ == '__main__':
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    cs82field = 'S82p18p'
+    if len(args) == 0:
+        fields = ['S82p18p']
+    else:
+        fields = args
 
-    T = main(opt, cs82field)
+
+    arr = os.environ.get('PBS_ARRAYID')
+    if arr is None:
+        work = [(field, opt.bands) for field in fields]
+    else:
+        work = []
+        for f in fields:
+            for b in opt.bands:
+                work.append((f, b))
+        arr = int(arr)
+        work = work[arr]
+
+    for field,bands in work:
+        opt.bands = bands
+        T = main(opt, field)
