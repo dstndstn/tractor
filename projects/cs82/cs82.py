@@ -20,6 +20,9 @@ from astrometry.util.resample import *
 from astrometry.sdss import *
 from astrometry.libkd.spherematch import *
 
+import sys
+sys.path.append(os.getcwd())
+
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -30,6 +33,11 @@ from photoobjs import *
 
 data_dir = 'data/cs82'
 window_flist = 'window_flist.fits'
+
+'''
+Files from scp from che:
+CS82/semorphology/products/2013_06_30_catalogs/morphology_catalogs_V2.7.3/deVexp_masked/
+'''
 
 def get_cs82_masks(cs82field):
     # from http://vn90.phas.ubc.ca/CS82/masks/
@@ -791,8 +799,9 @@ if __name__ == '__main__':
             for b in opt.bands:
                 work.append((f, b))
         arr = int(arr)
-        work = work[arr]
+        work = [work[arr]]
 
     for field,bands in work:
+        print 'Field', field, 'bands', bands
         opt.bands = bands
         T = main(opt, field)

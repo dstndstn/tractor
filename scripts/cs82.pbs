@@ -10,7 +10,9 @@
 
 echo HOME dir is $HOME
 
-cd /home/dstn/tractor-trunk
-BAND=i
-python -u cs82.py -l -b $BAND --prefix cs82-${BAND}2- --decs 4 --ras 50
+#cd /home/dstn/tractor-trunk
+#BAND=i
+#python -u cs82.py -l -b $BAND --prefix cs82-${BAND}2- --decs 4 --ras 50
 
+cd /home/dstn/tractor-git
+python -u cs82.py -l S82p40p S82p41p S82p42p S82p43p --decs 4 --ras 50
