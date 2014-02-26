@@ -207,7 +207,7 @@ class Galaxy(MultiParams):
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightness=' + repr(self.brightness) +
-                ', re=%.1f, ab=%.2f, phi=%.1f)' % (self.re, self.ab, self.phi))
+                ', shape=' + repr(self.shape))
 
     def copy(self):
         return None
