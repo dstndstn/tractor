@@ -21,6 +21,23 @@ import numpy as np
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
+# ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
+# class TractorWCSWrapper(object):
+#     def __init__(self, wcs, w, h, x0=0, y0=0):
+#         self.wcs = wcs
+#         self.imagew = w
+#         self.imageh = h
+#         self.x0 = x0
+#         self.y0 = y0
+#     def pixelxy2radec(self, x, y):
+#         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
+#         return rd.ra, rd.dec
+#     def radec2pixelxy(self, ra, dec):
+#         x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
+#         return True, x-self.x0+1, y-self.y0+1
+
+
+
 class TAITime(ScalarParam, ArithmeticParams):
     '''
     This is TAI as used in the SDSS 'frame' headers; eg

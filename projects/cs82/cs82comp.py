@@ -107,6 +107,26 @@ if __name__ == '__main__':
 
     cs82field = 'S82p18p'
 
+    C = fits_table('data/cs82/cats/masked.S82p18p_y.V2.7A.swarp.cut.deVexp.fit', hdu=2)
+    C.about()
+    plt.clf()
+    plt.hist(C.spread_model, 100, range=(-0.02,0.04), histtype='step', color='b')
+
+    plt.hist(C.spread_model[C.mag_auto < 22], 100, range=(-0.02,0.04),
+             histtype='step', color='r')
+
+    plt.hist(C.spread_model[(C.mag_auto < 22) * (C.class_star > 0.95)],
+             100, range=(-0.02,0.04),
+             histtype='step', color='m')
+
+    sstar = C.spread_model[(C.mag_auto < 22) * (C.class_star > 0.95)]
+    print 'sstar: mean:', np.mean(sstar)
+    print 'sstar: std:', np.std(sstar)
+
+    plt.xlabel('spread_model')
+    plt.xlim(-0.02, 0.04)
+    ps.savefig()
+
     bands = 'ugriz'
     colors = 'bgrmk'
 
@@ -125,20 +145,16 @@ if __name__ == '__main__':
         T.writeto(mfn)
 
     print len(T), 'sources'
-    print 'phot_done:', np.unique(T.phot_done)
-    if 70 in np.unique(T.phot_done):
-        T.cut(T.phot_done == 84)
-    else:
-        T.cut(T.phot_done )
-    print len(T), 'with phot done'
 
-    #print 'fit_ok_i:', np.unique(T.fit_ok_i)
+    T.spread_model = C.spread_model
+
+    T.cut(T.phot_done > 0)
+    print len(T), 'with phot done'
 
     plt.clf()
     lp = []
     for band,cc in zip(bands, colors):
         x = T.get('sdss_%s_nanomaggies' % band)
-        #ok = T.get('fit_ok_%i' % band)
         n,b,p = plt.hist(x, 100, color=cc, histtype='step', range=(-1, 5))
         lp.append(p[0])
     plt.xlabel('Flux (nanomaggies)')
@@ -171,7 +187,9 @@ if __name__ == '__main__':
     ps.savefig()
 
     plt.clf()
-    Ipsf = np.flatnonzero(T.chi2_psf < T.chi2_model)
+    #Ipsf = np.flatnonzero(T.chi2_psf < T.chi2_model)
+    Ipsf = np.flatnonzero(np.abs(T.spread_model) < 2. * 0.0018)
+
     sdss = T.sdss_i_mag[Ipsf]
     cfht = T.mag_psf[Ipsf]
     loghist(cfht, sdss - cfht, 100, range=((18, 24),(-1,1)))
@@ -180,18 +198,6 @@ if __name__ == '__main__':
     plt.title('CS82/SDSS forced photometry: PSFs')
     ps.savefig()
 
-    # plt.clf()
-    # Imod = np.flatnonzero(T.chi2_model < T.chi2_psf)
-    # sdss = T.sdss_i_mag[Imod]
-    # cfht = NanoMaggies.nanomaggiesToMag(
-    #     NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
-    #     NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
-    # loghist(cfht, sdss - cfht, 100)
-    # plt.xlabel('CS82 i-band (mag)')
-    # plt.ylabel('SDSS i - CS82 i (mag)')
-    # plt.title('CS82/SDSS forced photometry: Galaxies')
-    # ps.savefig()
-
     plt.clf()
     Imod = np.flatnonzero(T.chi2_model < T.chi2_psf)
     sdss = T.sdss_i_mag[Imod]
@@ -199,41 +205,6 @@ if __name__ == '__main__':
         NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
         NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
     loghist(cfht, sdss - cfht, 100, range=((18, 24),(-1,1)))
-
-    ax = plt.axis()
-    magbins = np.arange(18, 25)
-    bins = []
-    means = []
-    stds = []
-    meds = []
-    qlos = []
-    qhis = []
-    for blo,bhi in zip(magbins, magbins[1:]):
-        I = np.flatnonzero((cfht >= blo) * (cfht < bhi))
-        dmag = sdss[I] - cfht[I]
-        I = np.isfinite(dmag)
-        dmag = dmag[I]
-        print 'dmag', dmag.min(), dmag.max()
-        bins.append((blo + bhi)/2.)
-        means.append(np.mean(dmag))
-        print 'mean', means[-1]
-        stds.append(np.std(dmag))
-        meds.append(np.median(dmag))
-        qlos.append(np.percentile(dmag, 15.9))
-        qhis.append(np.percentile(dmag, 84.1))
-    means = np.array(means)
-    stds = np.array(stds)
-    plt.plot(bins, means, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
-    plt.plot(bins, means+stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
-    plt.plot(bins, means-stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
-    plt.plot(bins, meds, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
-    plt.plot(bins, qlos, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
-    plt.plot(bins, qhis, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
-    plt.axis(ax)
-
-    print 'Medians:', meds
-    print 'Qhi-Qlo/2:', (np.array(qhis) - np.array(qlos)) / 2.
-
     plt.xlabel('CS82 i-band (mag)')
     plt.ylabel('SDSS i - CS82 i (mag)')
     plt.title('CS82/SDSS forced photometry: Galaxies')
@@ -259,6 +230,37 @@ if __name__ == '__main__':
             NanoMaggies.magToNanomaggies(T.mag_disk[Imod]) +
             NanoMaggies.magToNanomaggies(T.mag_spheroid[Imod]))
         loghist(cfht, sdss - cfht, 100, range=((18, 24),yr), doclf=False)
+        ax = plt.axis()
+
+        magbins = np.arange(18, 25)
+        bins = []
+        means = []
+        stds = []
+        meds = []
+        qlos = []
+        qhis = []
+        for blo,bhi in zip(magbins, magbins[1:]):
+            I = np.flatnonzero((cfht >= blo) * (cfht < bhi))
+            dmag = sdss[I] - cfht[I]
+            bins.append((blo + bhi)/2.)
+            means.append(np.mean(dmag))
+            stds.append(np.std(dmag))
+            meds.append(np.median(dmag))
+            qlos.append(np.percentile(dmag, 15.9))
+            qhis.append(np.percentile(dmag, 84.1))
+
+        means = np.array(means)
+        stds = np.array(stds)
+        
+        plt.plot(bins, means, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+        plt.plot(bins, means+stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+        plt.plot(bins, means-stds, '-', color=(0.5,0.5,1), lw=3, alpha=0.7)
+
+        plt.plot(bins, meds, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+        plt.plot(bins, qlos, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+        plt.plot(bins, qhis, '-', color=(0.25,1,0.25), lw=3, alpha=0.7)
+
+        plt.axis(ax)
         plt.yticks(yt)
         plt.ylabel('SDSS %s - CS82 i (mag)' % band)
         plt.xlabel('CS82 i-band (mag)')
