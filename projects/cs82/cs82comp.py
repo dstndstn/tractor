@@ -105,9 +105,9 @@ if __name__ == '__main__':
     # nra1,ndec1 = (50, 1)
     # nra2,ndec2 = (50, 4)
 
-    cs82field = 'S82p18p'
+    cs82field = 'S82p40p'
 
-    C = fits_table('data/cs82/cats/masked.S82p18p_y.V2.7A.swarp.cut.deVexp.fit', hdu=2)
+    C = fits_table('data/cs82/cats/masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field, hdu=2)
     C.about()
     plt.clf()
     plt.hist(C.spread_model, 100, range=(-0.02,0.04), histtype='step', color='b')
@@ -131,6 +131,7 @@ if __name__ == '__main__':
     colors = 'bgrmk'
 
     mfn = 'cs82-phot-%s.fits' % cs82field
+    print 'Looking for', mfn
     if os.path.exists(mfn):
         T = fits_table(mfn)
         print 'Read', len(T), 'from', mfn
@@ -305,6 +306,7 @@ if __name__ == '__main__':
     # 
     # sys.exit(0)
 
+    sys.exit(0)
     
     T1 = fits_table('cs82-i--phot-S82p18p.fits')
     T2 = fits_table('cs82-i2--phot-S82p18p.fits')
