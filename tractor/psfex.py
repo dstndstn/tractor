@@ -5,7 +5,6 @@ import numpy.linalg
 #from scipy.ndimage.interpolation import affine_transform
 
 from astrometry.util.fits import *
-from astrometry.util.plotutils import *
 
 from tractor.basics import *
 from tractor.utils import *
@@ -224,6 +223,7 @@ class PsfEx(VaryingGaussianPSF):
         return psf
 
 if __name__ == '__main__':
+    from astrometry.util.plotutils import *
     import sys
     import matplotlib
     matplotlib.use('Agg')
