@@ -20,10 +20,11 @@ import gc
 import numpy as np
 #import pylab as plt
 
-from scipy.sparse import csr_matrix, csc_matrix
-from scipy.sparse.linalg import lsqr
-from scipy.ndimage.morphology import binary_dilation
-from scipy.ndimage.measurements import label
+# Scipy deps -- pushed down to where they are used.
+# from scipy.sparse import csr_matrix, csc_matrix
+# from scipy.sparse.linalg import lsqr
+# from scipy.ndimage.morphology import binary_dilation
+# from scipy.ndimage.measurements import label
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
@@ -178,6 +179,7 @@ class Image(MultiParams):
     def setMask(self, dilation=3):
         self.mask = (self.origInvvar <= 0.)
         if dilation > 0:
+            from scipy.ndimage.morphology import binary_dilation
             self.mask = binary_dilation(self.mask,iterations=dilation)
 
     def getStarMask(self):
@@ -2189,6 +2191,9 @@ class Tractor(MultiParams):
             del X2
             
         if use_lsqr:
+            from scipy.sparse import csr_matrix, csc_matrix
+            from scipy.sparse.linalg import lsqr
+
             spvals = np.hstack(spvals)
             assert(np.all(np.isfinite(spvals)))
     
@@ -2384,6 +2389,8 @@ class Tractor(MultiParams):
     '''
 
     def getOverlappingSources(self, img, srcs=None, minsb=0.):
+        from scipy.ndimage.morphology import binary_dilation
+        from scipy.ndimage.measurements import label
 
         if _isint(img):
             img = self.getImage(img)
