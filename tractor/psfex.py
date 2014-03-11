@@ -1,8 +1,9 @@
 import numpy as np
 import numpy.linalg
-#import scipy.interpolate as interp
-import scipy.interpolate
-from scipy.ndimage.interpolation import affine_transform
+
+#import scipy.interpolate
+#from scipy.ndimage.interpolation import affine_transform
+
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 
@@ -36,6 +37,7 @@ class VaryingGaussianPSF(MultiParams):
         self.savesplinedata = False
 
     def fitSavedData(self, pp, XX, YY):
+        import scipy.interpolate
         # One spline per parameter
         splines = []
         N = len(pp[0][0])
@@ -189,6 +191,7 @@ class PsfEx(VaryingGaussianPSF):
         return GaussianMixturePSF(w, mu, sig)
 
     def instantiateAt(self, x, y):
+        from scipy.ndimage.interpolation import affine_transform
         psf = np.zeros_like(self.psfbases[0])
         #print 'psf', psf.shape
         dx = (x - self.x0) / self.xscale
