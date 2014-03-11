@@ -30,7 +30,7 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
 
-# makes an SDSS WCS object look like an anwcs /  Tan / Sip
+# makes an SDSS AsTrans WCS object look like an anwcs /  Tan / Sip
 class AsTransWrapper(object):
     def __init__(self, wcs, w, h, x0=0, y0=0):
         self.wcs = wcs

@@ -20,6 +20,9 @@ from astrometry.util.resample import *
 from astrometry.sdss import *
 from astrometry.libkd.spherematch import *
 
+import sys
+sys.path.append(os.getcwd())
+
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -31,9 +34,19 @@ from photoobjs import *
 data_dir = 'data/cs82'
 window_flist = 'window_flist.fits'
 
+'''
+Files from scp from che:
+CS82/semorphology/products/2013_06_30_catalogs/morphology_catalogs_V2.7.3/deVexp_masked/
+'''
+
 def get_cs82_masks(cs82field):
     # from http://vn90.phas.ubc.ca/CS82/masks/
-    fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_y_wcs.reg' % cs82field)
+    fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_*_wcs.reg' % cs82field)
+    print 'Reading', fn
+    # glob the "?" for band name -- W4 are "i", S82 are "y"
+    fns = glob(fn)
+    assert(len(fns) == 1)
+    fn = fns[0]
     print 'Reading', fn
     f = open(fn, 'rb')
     polys = []
@@ -123,7 +136,12 @@ def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 
 
 def getTables(cs82field, enclosed=True, extra_cols=[]):
-    fn = os.path.join(data_dir, 'cats', 'masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field)
+    fn = os.path.join(data_dir, 'cats', 'masked.%s_?.V2.7A.swarp.cut.deVexp.fit' % cs82field)
+    print 'Reading', fn
+    # glob the "?" for band name -- W4 are "i", S82 are "y"
+    fns = glob(fn)
+    assert(len(fns) == 1)
+    fn = fns[0]
     print 'Reading', fn
     T = fits_table(fn,
             hdu=2, column_map={'ALPHA_J2000':'ra',
@@ -213,13 +231,15 @@ def main(opt, cs82field):
     else:
         ps = None
     
-    version = get_svn_version()
-    print 'SVN version info:', version
+    version = get_git_version()
+    print 'git version info:', version
 
     hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='PHO_VER', value=version['Revision'],
-                        comment='cs82.py photometry code SVN revision'))
-    hdr.add_record(dict(name='PHO_URL', value=version['URL'], comment='SVN URL'))
+    hdr.add_record(dict(name='PHO_VER', value=version['commit'],
+                        comment='cs82.py code version (git commit)'))
+    if 'describe' in version:
+        hdr.add_record(dict(name='PHO_GIT', value=version['describe'],
+                            comment='cs82.py code version (git describe)'))
     hdr.add_record(dict(name='PHO_DATE', value=datetime.datetime.now().isoformat(),
                         comment='cs82.py photometry run time'))
     hdr.add_record(dict(name='PHO_MACH', value=socket.getfqdn(),
@@ -723,24 +743,25 @@ def main(opt, cs82field):
 
             T.phot_done[Ifit] = True
             
-            fn = ('%s-phot-%s-slice%i.fits' %
-                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
-            T.writeto(fn, header=hdr)
-            T.about()
-            print 'Wrote', fn
-            Tdone = T[T.phot_done]
-            fn = ('%s-phot-%s-slice%i-cut.fits' %
-                  (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
-            Tdone.writeto(fn)
-            Tdone.about()
-            del Tdone
-            print 'Wrote', fn
+            if False:
+                fn = ('%s-phot-%s-slice%i.fits' %
+                      (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
+                T.writeto(fn, header=hdr)
+                T.about()
+                print 'Wrote', fn
+                Tdone = T[T.phot_done]
+                fn = ('%s-phot-%s-slice%i-cut.fits' %
+                      (opt.prefix, cs82field, decslice * (len(ras)-1) + raslice))
+                Tdone.writeto(fn)
+                Tdone.about()
+                del Tdone
+                print 'Wrote', fn
 
     T.delete_column('marginal')
     T.delete_column('alphamodel_j2000')
     T.delete_column('deltamodel_j2000')
 
-    fn = '%s-phot-%s.fits' % (opt.prefix, cs82field)
+    fn = '%s-phot-%s-%s.fits' % (opt.prefix, cs82field, opt.bands)
     T.writeto(fn, header=hdr)
     print 'Wrote', fn
     return
@@ -773,6 +794,24 @@ if __name__ == '__main__':
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    cs82field = 'S82p18p'
+    if len(args) == 0:
+        fields = ['S82p18p']
+    else:
+        fields = args
 
-    T = main(opt, cs82field)
+
+    arr = os.environ.get('PBS_ARRAYID')
+    if arr is None:
+        work = [(field, opt.bands) for field in fields]
+    else:
+        work = []
+        for f in fields:
+            for b in opt.bands:
+                work.append((f, b))
+        arr = int(arr)
+        work = [work[arr]]
+
+    for field,bands in work:
+        print 'Field', field, 'bands', bands
+        opt.bands = bands
+        T = main(opt, field)
