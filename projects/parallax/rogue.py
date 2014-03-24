@@ -55,7 +55,7 @@ def get_tim(w, roi):
                             constantInvvar=True)
     return tim
 
-def all_plots(tractor, ps, S, ima):
+def all_plots(tractor, ps, S, ima, fakewcs):
     tims = tractor.getImages()
 
     for i,tim in enumerate(tims):
@@ -99,7 +99,7 @@ def all_plots(tractor, ps, S, ima):
         ps.savefig()
     
 
-def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
+def epoch_coadd_plots(tractor, ps, S, ima, yearcut, fakewcs):
 
     bimg  = np.zeros((S,S))
     bmod  = np.zeros((S,S))
@@ -176,6 +176,35 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
     plt.imshow(achi, **ca)
 
     ps.savefig()
+
+
+def plot_tracks(src, fakewcs, spa=None, **kwargs):
+    tt = np.linspace(2010., 2015., 100)
+    t0 = TAITime(None, mjd=TAITime.mjd2k + 365.25*10)
+    #rd0 = src.getPositionAtTime(t0)
+    #print 'rd0:', rd0
+    xx,yy = [],[]
+    for t in tt:
+        #print 'Time', t
+        rd = src.getPositionAtTime(t0 + (t - 2010.)*365.25*24.*3600.)
+        ra,dec = rd.ra, rd.dec
+        #print 'Delta-RA,delta-Dec:', ra-rd0.ra, dec-rd0.dec
+        ok,x,y = fakewcs.radec2pixelxy(ra,dec)
+        #xx.append(x - 0.5)
+        #yy.append(y - 0.5)
+        xx.append(x - 1.)
+        yy.append(y - 1.)
+
+    #print 'xx,yy', xx,yy
+
+    if spa is None:
+        spa = [None,None,None]
+    for rows,cols,sub in spa:
+        if sub is not None:
+            plt.subplot(rows,cols,sub)
+        ax = plt.axis()
+        plt.plot(xx, yy, 'k-', **kwargs)
+        plt.axis(ax)
 
 if __name__ == '__main__':
     import logging
@@ -301,7 +330,7 @@ if __name__ == '__main__':
     tractor.optimize_forced_photometry()
     print 'After  fitting:', tractor.getParams()
 
-    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
     #all_plots(tractor, ps, S, ima)
 
     print 'Fitting PM/Parallax...'
@@ -317,6 +346,12 @@ if __name__ == '__main__':
     print 'Optimize:', dlnp
     print 'var:', var
 
+    print 'Source', src
+
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
+    plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)])
+    ps.savefig()
+
     print 'Sampling:'
     tractor.catalog.thawPathsTo('parallax')
     tractor.catalog[0].freezeAllParams()
@@ -325,8 +360,6 @@ if __name__ == '__main__':
     dlnp,X,alpha,var = tractor.optimize(shared_params=False, variance=True, damp=1e-3)
     print 'Optimize:', dlnp
     print 'var:', var
-
-    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
 
     tractor.printThawedParams()
 
@@ -340,6 +373,14 @@ if __name__ == '__main__':
     
     # Create emcee sampler
     sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=nthreads)
+
+    # cheat-initialize the parallax distribution
+    var[-1] = (0.025)**2
+    p0[-1] = 0.025
+
+    print 'Cheating for parallax:'
+    print 'p0', p0
+    print 'var', var
 
     # Initial walker params
     pp = sampleBall(p0, 0.5 * np.sqrt(var), nw)
@@ -357,23 +398,47 @@ if __name__ == '__main__':
         print 'Re-drawing', nre, 'initial samples'
         pp[redraw,:] = sampleBall(p0, 0.5*np.sqrt(var), nre)
 
-    nsteps = 50
+    #nsteps = 50
+    #burn = 20
+    nsteps = 100
+    burn = 25
                 
     alllnp = np.zeros((nsteps,nw))
     allp = np.zeros((nsteps,nw,ndim))
+
+    bestp = None
+    bestlnp = -1e30
 
     lnp = None
     rstate = None
     for step in range(nsteps):
         print 'Taking step', step
         pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
-        print 'Max lnprob:', np.max(lnp)
+        #print 'Max lnprob:', np.max(lnp)
         imax = np.argmax(lnp)
-        print pp[imax,:]
+        print 'Max lnp:', lnp[imax], pp[imax,:]
+        if lnp[imax] > bestlnp:
+            bestlnp = lnp[imax]
+            bestp = pp[imax,:]
+            
         alllnp[step,:] = lnp
         allp[step,:,:] = pp
 
-    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
+    tractor.setParams(bestp)
+
+    # Best track
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
+    plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)])
+    ps.savefig()
+
+    # Sampling of tracks
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
+    for w in range(nw):
+        tractor.setParams(pp[w,:])
+        plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)], alpha=0.2)
+    ps.savefig()
+
+    tractor.setParams(bestp)
 
     # Plot logprobs
     plt.clf()
@@ -384,7 +449,6 @@ if __name__ == '__main__':
     ps.savefig()
 
     # Plot parameter distributions
-    burn = 20
     print 'All params:', allp.shape
     for i,nm in enumerate(tractor.getParamNames()):
         pp = allp[:,:,i].ravel()
