@@ -895,10 +895,6 @@ class MovingPointSource(PointSource):
     def getSourceType(self):
         return 'MovingPointSource'
 
-    # def hashkey(self):
-    #     return ('MovingPointSource', self.pos.hashkey(), self.brightness.hashkey(),
-    #             self.pm.hashkey(), self.parallax.hashkey())
-
     def __str__(self):
         return (self.getSourceType() + ' at ' + str(self.pos) +
                 ' with ' + str(self.brightness) + ', pm ' + str(self.pm) +
@@ -915,9 +911,9 @@ class MovingPointSource(PointSource):
         p = self.pos + dt * self.pm
         suntheta = t.getSunTheta()
 
-        print 'dt', dt, 'pos', self.pos, 'pm', self.pm, 'dt*pm:', dt * self.pm
-        print 'p0: (%.8f, %.8f)' % (self.pos.ra, self.pos.dec)
-        print 'p1: (%.8f, %.8f)' % (p.ra, p.dec)
+        # print 'dt', dt, 'pos', self.pos, 'pm', self.pm, 'dt*pm:', dt * self.pm
+        # print 'p0: (%.8f, %.8f)' % (self.pos.ra, self.pos.dec)
+        # print 'p1: (%.8f, %.8f)' % (p.ra, p.dec)
 
         xyz = radectoxyz(p.ra, p.dec)
         xyz = xyz[0]
@@ -962,8 +958,8 @@ class MovingPointSource(PointSource):
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
         derivs = []
 
-        print 'MovingPointSource.getParamDerivs:'
-        print 'initial pixel pos', px0, py0
+        #print 'MovingPointSource.getParamDerivs:'
+        #print 'initial pixel pos', px0, py0
         
         # Position
 
@@ -999,20 +995,20 @@ class MovingPointSource(PointSource):
                 tpos = self.getPositionAtTime(t)
                 (px,py) = img.getWcs().positionToPixel(tpos, self)
 
-                print 'stepping param', name, i, '-->', p, '--> pos', tpos, 'pix pos', px,py
+                # print 'stepping param', name, i, '-->', p, '--> pos', tpos, 'pix pos', px,py
                 patchx = img.getPsf().getPointSourcePatch(px, py)
                 p.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(%s%i)' % (name, i))
-                print 'deriv', dx.patch.min(), dx.patch.max()
+                # print 'deriv', dx.patch.min(), dx.patch.max()
                 derivs.append(dx)
 
-        print 'Finding RA,Dec derivatives'
+        # print 'Finding RA,Dec derivatives'
         if not self.isParamFrozen('pos'):
             _add_posderivs(self.pos, 'pos')
         
         # Brightness
-        print 'Finding Brightness derivatives'
+        # print 'Finding Brightness derivatives'
         if not self.isParamFrozen('brightness'):
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
@@ -1024,7 +1020,7 @@ class MovingPointSource(PointSource):
                 df.setName('d(ptsrc)/d(bright%i)' % i)
                 derivs.append(df)
 
-        print 'Finding Proper Motion derivatives'
+        # print 'Finding Proper Motion derivatives'
         if not self.isParamFrozen('pm'):
             #   # ASSUME 'pm' is the same type as 'pos'
             #   dt = (t - self.epoch).toYears()
@@ -1033,7 +1029,7 @@ class MovingPointSource(PointSource):
             #       derivs.append(dd)
             _add_posderivs(self.pm, 'pm')
 
-        print 'Finding Parallax derivatives'
+        # print 'Finding Parallax derivatives'
         if not self.isParamFrozen('parallax'):
             _add_posderivs(self.parallax, 'parallax')
                 

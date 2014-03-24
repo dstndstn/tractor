@@ -105,10 +105,12 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
     bmod  = np.zeros((S,S))
     bnum  = np.zeros((S,S))
     bchisq = np.zeros((S,S))
+    bchi  = np.zeros((S,S))
     aimg  = np.zeros((S,S))
     amod  = np.zeros((S,S))
     anum  = np.zeros((S,S))
     achisq = np.zeros((S,S))
+    achi  = np.zeros((S,S))
 
     tims = tractor.getImages()
     for i,tim in enumerate(tims):
@@ -122,12 +124,13 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
         Yo,Xo,Yi,Xi,[rim,rmod] = resample_with_wcs(fakewcs, wrap, [tim.data, mod], 3)
 
         if tim.time.toYear() > yearcut:
-            im,mod,num,chisq = (aimg, amod, anum, achisq)
+            im,mod,num,chisq,chi = (aimg, amod, anum, achisq, achi)
         else:
-            im,mod,num,chisq = (bimg, bmod, bnum, bchisq)
+            im,mod,num,chisq,chi = (bimg, bmod, bnum, bchisq, bchi)
         im[Yo,Xo]  += rim
         mod[Yo,Xo] += rmod
         num[Yo,Xo] += 1.
+        chi[Yo,Xo] += ((rim - rmod) * tim.getInvError()[Yi,Xi])
         chisq[Yo,Xo] += ((rim - rmod)**2 * tim.getInvvar()[Yi,Xi])
 
     bimg /= np.maximum(bnum, 1)
@@ -135,8 +138,18 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
     bmod /= np.maximum(bnum, 1)
     amod /= np.maximum(anum, 1)
 
-    chimax = max(achisq.max(), bchisq.max())
-    ca = dict(interpolation='nearest', origin='lower', vmin=0, vmax=chimax)
+    #print 'N', anum.max(), bnum.max()
+    #print 'mean N', anum.mean(), bnum.mean()
+
+    achi /= np.maximum(anum, 1)
+    bchi /= np.maximum(bnum, 1)
+
+    nn = np.mean([anum.mean(), bnum.mean()])
+
+    #chimax = max(achisq.max(), bchisq.max())
+    #ca = dict(interpolation='nearest', origin='lower', vmin=0, vmax=chimax)
+    c2a = dict(interpolation='nearest', origin='lower', vmin=0, vmax=16*nn)
+    ca = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=3)
 
     plt.clf()
 
@@ -145,18 +158,22 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut):
 
     plt.subplot(2,3,2)
     plt.imshow(bmod, **ima)
+    plt.title('First epoch')
 
     plt.subplot(2,3,3)
-    plt.imshow(bchisq, **ca)
+    #plt.imshow(bchisq, **c2a)
+    plt.imshow(bchi, **ca)
 
     plt.subplot(2,3,4)
     plt.imshow(aimg, **ima)
 
     plt.subplot(2,3,5)
     plt.imshow(amod, **ima)
+    plt.title('Second epoch')
 
     plt.subplot(2,3,6)
-    plt.imshow(achisq, **ca)
+    #plt.imshow(achisq, **c2a)
+    plt.imshow(achi, **ca)
 
     ps.savefig()
 
@@ -257,6 +274,8 @@ if __name__ == '__main__':
     pm.setStepSizes(1e-4)
     parallax = 0.
 
+    epochyr = 2010.5
+
     epoch = TAITime(None, mjd=datetomjd(datetime.datetime(2010, 9, 1)))
     print 'Epoch:', epoch.toYear()
     
@@ -279,27 +298,30 @@ if __name__ == '__main__':
     tractor.optimize_forced_photometry()
     print 'After  fitting:', tractor.getParams()
 
-    epoch_coadd_plots(tractor, ps, S, ima, 2010.5)
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
     #all_plots(tractor, ps, S, ima)
 
     print 'Fitting PM/Parallax...'
-    tractor.catalog.thawPathsTo('pmra','pmdec','parallax')
+    tractor.catalog.thawPathsTo('pmra', 'pmdec', 'parallax')
+    src = tractor.catalog[-1]
+    src.thawPathsTo('ra', 'dec')
     tractor.printThawedParams()
 
-    src = tractor.catalog[-1]
-
     print 'Source', src
-
-    print 'hashkey:', src.hashkey()
-    # print 'Derivatives:'
-    # for d in src.getParamDerivatives(tractor.images[0]):
-    #     print d
-    #     print d.patch.min(), d.patch.max()
-
 
     dlnp,X,alpha,var = tractor.optimize(shared_params=False, variance=True, damp=1e-3)
     print 'Optimize:', dlnp
     print 'var:', var
+
+    print 'Sampling:'
+    tractor.catalog[0].freezeAllParams()
+    tractor.catalog[1].freezeAllParams()
+
+    dlnp,X,alpha,var = tractor.optimize(shared_params=False, variance=True, damp=1e-3)
+    print 'Optimize:', dlnp
+    print 'var:', var
+
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
 
     tractor.printThawedParams()
 
@@ -308,6 +330,8 @@ if __name__ == '__main__':
     nthreads = 10
 
     p0 = tractor.getParams()
+
+    print 'p0', p0
     
     # Create emcee sampler
     sampler = emcee.EnsembleSampler(nw, ndim, tractor, threads=nthreads)
@@ -330,6 +354,8 @@ if __name__ == '__main__':
         print pp[imax,:]
         alllnp[step,:] = lnp
         allp[step,:,:] = pp
+
+    epoch_coadd_plots(tractor, ps, S, ima, epochyr)
 
     # Plot logprobs
     plt.clf()
