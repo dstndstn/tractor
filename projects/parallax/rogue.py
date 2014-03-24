@@ -29,19 +29,21 @@ if __name__ == '__main__':
     sz = 0.01
 
     wisedir = 'wise-frames'
-    fn = 'rogue-frames.fits'
-    if os.path.exists(fn):
-        W = fits_table(fn)
+    wfn = 'rogue-frames.fits'
+    if os.path.exists(wfn):
+        W = fits_table(wfn)
     else:
         W = get_wise_frames(r-sz, r+sz, d-sz, d+sz, margin=1.2)
-        W.writeto(fn)
+        W.writeto(wfn)
     print len(W), 'WISE frames'
 
     band = 2
     W.cut(W.band == band)
+    roi = [r-sz, r+sz, d-sz, d+sz]
 
-    if True:
-        for w in W:
+    if not 'inroi' in W.get_columns():
+        W.inroi = np.zeros(len(W), bool)
+        for i,w in enumerate(W):
             fn = get_l1b_file(wisedir, w.scan_id, w.frame_num, band)
             print fn
 
@@ -54,8 +56,6 @@ if __name__ == '__main__':
                     print cmd
                     os.system(cmd)
 
-            roi = [r-sz, r+sz, d-sz, d+sz]
-
             tim = read_wise_level1b(basefn, radecroi=roi, nanomaggies=True,
                                     mask_gz=True, unc_gz=True)
             
@@ -63,3 +63,16 @@ if __name__ == '__main__':
             if tim is None:
                 continue
             
+            W.inroi[i] = True
+        W.writeto(wfn)
+    
+    W.cut(W.inroi)
+
+    tims = []
+    for i,w in enumerate(W):
+        fn = get_l1b_file(wisedir, w.scan_id, w.frame_num, band)
+        basefn = fn.replace('-int-1b.fits', '')
+        tim = read_wise_level1b(basefn, radecroi=roi, nanomaggies=True,
+                                mask_gz=True, unc_gz=True)
+        print 'Got', tim
+        tims.append(tim)
