@@ -1861,6 +1861,18 @@ class Tractor(MultiParams):
                 for k,deriv in enumerate(derivs):
                     if deriv is None:
                         continue
+                    # if deriv is False:
+                    #     # compute it now
+                    #   (THIS IS WRONG; mod0s only has initial models for images
+                    #    that need it -- those that are unfrozen)
+                    #     mod0 = mod0s[i]
+                    #     nm = src.getParamNames()[k]
+                    #     step = src.getStepSizes()[k]
+                    #     mod1 = tra.getModelImage(img)
+                    #     d = Patch(0, 0, (mod1 - mod0) / step)
+                    #     d.name = 'd(src(im%i))/d(%s)' % (i, nm)
+                    #     deriv = d
+                        
                     if not np.all(np.isfinite(deriv.patch.ravel())):
                         print 'Derivative for source', src
                         print 'deriv index', i

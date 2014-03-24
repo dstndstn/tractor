@@ -22,19 +22,19 @@ from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
 # ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
-# class TractorWCSWrapper(object):
-#     def __init__(self, wcs, w, h, x0=0, y0=0):
-#         self.wcs = wcs
-#         self.imagew = w
-#         self.imageh = h
-#         self.x0 = x0
-#         self.y0 = y0
-#     def pixelxy2radec(self, x, y):
-#         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
-#         return rd.ra, rd.dec
-#     def radec2pixelxy(self, ra, dec):
-#         x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
-#         return True, x-self.x0+1, y-self.y0+1
+class TractorWCSWrapper(object):
+    def __init__(self, wcs, w, h, x0=0, y0=0):
+        self.wcs = wcs
+        self.imagew = w
+        self.imageh = h
+        self.x0 = x0
+        self.y0 = y0
+    def pixelxy2radec(self, x, y):
+        rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
+        return rd.ra, rd.dec
+    def radec2pixelxy(self, ra, dec):
+        x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
+        return True, x-self.x0+1, y-self.y0+1
 
 
 
@@ -853,9 +853,9 @@ class PMRaDec(RaDecPos):
     def getName():
         return "PMRaDec"
     def __str__(self):
-        return '%s: (%.3f, %.3f) "/yr' % (self.getName(),
-                                          self.getRaArcsecPerYear(),
-                                          self.getDecArcsecPerYear())
+        return '%s: (%.2f, %.2f) mas/yr' % (self.getName(),
+                                            1000. * self. getRaArcsecPerYear(),
+                                            1000. * self.getDecArcsecPerYear())
     def __init__(self, *args, **kwargs):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
@@ -872,6 +872,10 @@ class PMRaDec(RaDecPos):
         return self.pmra * 3600.
     def getDecArcsecPerYear(self):
         return self.pmdec * 3600.
+
+    def getParamDerivatives(self, img):
+        return [None]*self.numberOfParams()
+
     
 class MovingPointSource(PointSource):
     def __init__(self, pos, brightness, pm, parallax, epoch=0.):
@@ -891,6 +895,10 @@ class MovingPointSource(PointSource):
     def getSourceType(self):
         return 'MovingPointSource'
 
+    # def hashkey(self):
+    #     return ('MovingPointSource', self.pos.hashkey(), self.brightness.hashkey(),
+    #             self.pm.hashkey(), self.parallax.hashkey())
+
     def __str__(self):
         return (self.getSourceType() + ' at ' + str(self.pos) +
                 ' with ' + str(self.brightness) + ', pm ' + str(self.pm) +
@@ -906,6 +914,10 @@ class MovingPointSource(PointSource):
         # Assume "pos" is an RaDecPos
         p = self.pos + dt * self.pm
         suntheta = t.getSunTheta()
+
+        print 'dt', dt, 'pos', self.pos, 'pm', self.pm, 'dt*pm:', dt * self.pm
+        print 'p0: (%.8f, %.8f)' % (self.pos.ra, self.pos.dec)
+        print 'p1: (%.8f, %.8f)' % (p.ra, p.dec)
 
         xyz = radectoxyz(p.ra, p.dec)
         xyz = xyz[0]
@@ -941,6 +953,8 @@ class MovingPointSource(PointSource):
 
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
+        #return [False]*self.numberOfParams()
+
         t = img.getTime()
         pos0 = self.getPositionAtTime(t)
         (px0,py0) = img.getWcs().positionToPixel(pos0, self)
@@ -948,7 +962,8 @@ class MovingPointSource(PointSource):
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
         derivs = []
 
-        #print 'initial pixel pos', px0, py0
+        print 'MovingPointSource.getParamDerivs:'
+        print 'initial pixel pos', px0, py0
         
         # Position
 
@@ -976,23 +991,28 @@ class MovingPointSource(PointSource):
         #   derivs.extend(pderivs)
 
         def _add_posderivs(p, name):
+            # uses "globals": t, patch0, counts0
             psteps = p.getStepSizes(img)
             pvals = p.getParams()
             for i,pstep in enumerate(psteps):
                 oldval = p.setParam(i, pvals[i] + pstep)
                 tpos = self.getPositionAtTime(t)
                 (px,py) = img.getWcs().positionToPixel(tpos, self)
-                #print 'stepping param', name, i, '-->', p, '--> pix pos', px,py
+
+                print 'stepping param', name, i, '-->', p, '--> pos', tpos, 'pix pos', px,py
                 patchx = img.getPsf().getPointSourcePatch(px, py)
                 p.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(%s%i)' % (name, i))
+                print 'deriv', dx.patch.min(), dx.patch.max()
                 derivs.append(dx)
 
+        print 'Finding RA,Dec derivatives'
         if not self.isParamFrozen('pos'):
             _add_posderivs(self.pos, 'pos')
         
         # Brightness
+        print 'Finding Brightness derivatives'
         if not self.isParamFrozen('brightness'):
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
@@ -1004,6 +1024,7 @@ class MovingPointSource(PointSource):
                 df.setName('d(ptsrc)/d(bright%i)' % i)
                 derivs.append(df)
 
+        print 'Finding Proper Motion derivatives'
         if not self.isParamFrozen('pm'):
             #   # ASSUME 'pm' is the same type as 'pos'
             #   dt = (t - self.epoch).toYears()
@@ -1012,6 +1033,7 @@ class MovingPointSource(PointSource):
             #       derivs.append(dd)
             _add_posderivs(self.pm, 'pm')
 
+        print 'Finding Parallax derivatives'
         if not self.isParamFrozen('parallax'):
             _add_posderivs(self.parallax, 'parallax')
                 

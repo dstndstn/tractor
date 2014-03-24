@@ -102,7 +102,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
 
     else:
         x0,x1,y0,y1 = 0,W, 0,H
-
+        roi = (x0,x1,y0,y1)
 
     ihdr = Fint[0].read_header()
     data = Fint[0][y0:y1, x0:x1]
@@ -215,6 +215,7 @@ def read_wise_level1b(basefn, radecroi=None, radecrad=None, filtermap={},
                         domask=False)
     tim.extent = [x0,x1,y0,y1]
     tim.sigma1 = sigma1
+    #tim.roi = roi
 
     # FIXME
     tim.maskplane = mask
