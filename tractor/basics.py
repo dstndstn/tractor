@@ -847,6 +847,15 @@ class Parallax(ScalarParam, ArithmeticParams):
     def __str__(self):
         return 'Parallax: %.3f arcsec' % (self.getValue())
 
+class ParallaxWithPrior(Parallax):
+    def getLogPrior(self):
+        p = self.getValue()
+        if p < 0:
+            return -np.inf
+        # Lutz & Kelker (1973) PASP 85 573
+        # in the fuckin' introduction!
+        return -4. * np.log(p)
+
     #### FIXME -- cos(Dec)
 class PMRaDec(RaDecPos):
     @staticmethod

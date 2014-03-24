@@ -257,7 +257,7 @@ if __name__ == '__main__':
         tims.append(tim)
         
         M = fitsio.read(maskfn)
-        print 'read mask', M.shape, M.dtype
+        #print 'read mask', M.shape, M.dtype
         x0,x1,y0,y1 = tim.extent
         M = M[y0:y1, x0:x1]
         masked = (M > 0)
@@ -289,6 +289,9 @@ if __name__ == '__main__':
                           pm, parallax, epoch=epoch),
         ]
 
+    src = srcs[-1]
+    src.parallax = ParallaxWithPrior(0.)
+
     tractor = Tractor(tims, srcs)
     tractor.freezeParams('images')
     tractor.printThawedParams()
@@ -302,7 +305,8 @@ if __name__ == '__main__':
     #all_plots(tractor, ps, S, ima)
 
     print 'Fitting PM/Parallax...'
-    tractor.catalog.thawPathsTo('pmra', 'pmdec', 'parallax')
+    #tractor.catalog.thawPathsTo('pmra', 'pmdec', 'parallax')
+    tractor.catalog.thawPathsTo('pmra', 'pmdec')
     src = tractor.catalog[-1]
     src.thawPathsTo('ra', 'dec')
     tractor.printThawedParams()
@@ -314,6 +318,7 @@ if __name__ == '__main__':
     print 'var:', var
 
     print 'Sampling:'
+    tractor.catalog.thawPathsTo('parallax')
     tractor.catalog[0].freezeAllParams()
     tractor.catalog[1].freezeAllParams()
 
@@ -338,6 +343,19 @@ if __name__ == '__main__':
 
     # Initial walker params
     pp = sampleBall(p0, 0.5 * np.sqrt(var), nw)
+
+    print 'pp', pp.shape
+
+    redraw = np.ones(nw, bool)
+    while True:
+        for i in np.flatnonzero(redraw):
+            if np.isfinite(tractor(pp[i,:])):
+                redraw[i] = False
+        nre = np.sum(redraw)
+        if nre == 0:
+            break
+        print 'Re-drawing', nre, 'initial samples'
+        pp[redraw,:] = sampleBall(p0, 0.5*np.sqrt(var), nre)
 
     nsteps = 50
                 
