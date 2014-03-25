@@ -179,23 +179,21 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut, fakewcs):
 
 
 def plot_tracks(src, fakewcs, spa=None, **kwargs):
-    tt = np.linspace(2010., 2015., 100)
+    tt = np.linspace(2010., 2015., 61)
     t0 = TAITime(None, mjd=TAITime.mjd2k + 365.25*10)
     #rd0 = src.getPositionAtTime(t0)
     #print 'rd0:', rd0
     xx,yy = [],[]
+    rr,dd = [],[]
     for t in tt:
         #print 'Time', t
         rd = src.getPositionAtTime(t0 + (t - 2010.)*365.25*24.*3600.)
         ra,dec = rd.ra, rd.dec
-        #print 'Delta-RA,delta-Dec:', ra-rd0.ra, dec-rd0.dec
+        rr.append(ra)
+        dd.append(dec)
         ok,x,y = fakewcs.radec2pixelxy(ra,dec)
-        #xx.append(x - 0.5)
-        #yy.append(y - 0.5)
         xx.append(x - 1.)
         yy.append(y - 1.)
-
-    #print 'xx,yy', xx,yy
 
     if spa is None:
         spa = [None,None,None]
@@ -205,6 +203,8 @@ def plot_tracks(src, fakewcs, spa=None, **kwargs):
         ax = plt.axis()
         plt.plot(xx, yy, 'k-', **kwargs)
         plt.axis(ax)
+
+    return rr,dd,tt
 
 if __name__ == '__main__':
     import logging
@@ -433,10 +433,38 @@ if __name__ == '__main__':
 
     # Sampling of tracks
     epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
+    rrdd = []
     for w in range(nw):
         tractor.setParams(pp[w,:])
-        plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)], alpha=0.2)
+        rr,dd,tt = plot_tracks(src, fakewcs, spa=[(2,3,2),(2,3,5)], alpha=0.2)
+        rrdd.append((rr,dd))
     ps.savefig()
+
+    plt.clf()
+    for i,(rr,dd) in enumerate(rrdd):
+        plt.plot(rr, dd, 'k-', alpha=0.5)
+    for i,(rr,dd) in enumerate(rrdd):
+        plt.plot(rr[::12], dd[::12], 'k.', alpha=0.5)
+    rr = np.array([rr for rr,dd in rrdd])
+    dd = np.array([dd for nil,dd in rrdd])
+    for r,d,t in zip(np.mean(rr, axis=0), np.mean(dd, axis=0), tt)[::12]:
+        plt.text(r, d + 0.0005, '%i' % t, color='b',
+                 bbox=dict(facecolor='w', alpha=0.75, edgecolor='none'))
+    margin = 1e-4
+    setRadecAxes(min([min(rr) for rr,dd in rrdd]) - margin,
+                 max([max(rr) for rr,dd in rrdd]) + margin,
+                 min([min(dd) for rr,dd in rrdd]) - margin,
+                 max([max(dd) for rr,dd in rrdd]) + margin)
+    ps.savefig()
+
+    print 'March 2014 estimated RA,Decs:'
+    ii = 50
+    rx = np.array([rr[ii] for rr,dd in rrdd])
+    dx = np.array([dd[ii] for rr,dd in rrdd])
+    print rx
+    print dx
+    print 'Mean', rx.mean(), dx.mean()
+    print 'Std',  rx.std(),  dx.std()
 
     tractor.setParams(bestp)
 
