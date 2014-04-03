@@ -242,6 +242,9 @@ class Galaxy(MultiParams):
         psteps = pos0.getStepSizes()
         if not self.isParamFrozen('pos'):
             params = pos0.getParams()
+            if counts == 0:
+                derivs.extend([None] * len(params))
+                psteps = []
             for i,pstep in enumerate(psteps):
                 oldval = pos0.setParam(i, params[i]+pstep)
                 (px,py) = img.getWcs().positionToPixel(pos0, self)
@@ -273,6 +276,9 @@ class Galaxy(MultiParams):
             oldvals = self.shape.getParams()
             # print 'Galaxy.getParamDerivatives:', self.getName()
             # print '  oldvals:', oldvals
+            if counts == 0:
+                derivs.extend([None] * len(oldvals))
+                gsteps = []
             for i,gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i]+gstep)
                 #print '  stepped', gnames[i], 'by', gsteps[i],
