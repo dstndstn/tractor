@@ -2,15 +2,15 @@ import os
 import numpy as np
 from astrometry.util.fits import *
 
-def wise_catalog_radecbox(r0, r1, d0, d1,
-                          path='wise-cats', cols=None):
+def _read_wise_cats(r0,r1,d0,d1,
+                   pattern, rdpattern, decranges, cols=None):
     if r1 - r0 > 180:
         print 'WARNING: wise_catalog_radecbox: RA range', r0, 'to', r1, ': maybe wrap-around?'
     TT = []
-    for i,(dlo,dhi) in enumerate(wise_catalog_dec_range):
+    for i,(dlo,dhi) in enumerate(decranges):
         if dlo > d1 or dhi < d0:
             continue
-        fn = os.path.join(path, 'wise-allsky-cat-part%02i-radec.fits' % (i+1))
+        fn = rdpattern % (i+1)
         T = fits_table(fn)
         print 'Read', len(T), 'from', fn
         I = np.flatnonzero((T.ra  >= r0) * (T.ra  <= r1) *
@@ -18,7 +18,7 @@ def wise_catalog_radecbox(r0, r1, d0, d1,
         print 'found', len(I), 'in range'
         if len(I) == 0:
             continue
-        fn = os.path.join(path, 'wise-allsky-cat-part%02i.fits' % (i+1))
+        fn = pattern % (i+1)
         T = fits_table(fn, rows=I, columns=cols)
         TT.append(T)
     if len(TT) == 0:
@@ -26,6 +26,14 @@ def wise_catalog_radecbox(r0, r1, d0, d1,
     if len(TT) == 1:
         return TT[0]
     return merge_tables(TT)
+    
+
+def wise_catalog_radecbox(r0, r1, d0, d1,
+                          path='wise-cats', cols=None):
+    return _read_wise_cats(r0,r1,d0,d1,
+                           os.path.join(path, 'wise-allsky-cat-part%02i.fits'),
+                           os.path.join(path, 'wise-allsky-cat-part%02i-radec.fits'),
+                           wise_catalog_dec_range, cols=cols)
 
 wise_catalog_dec_range = [
     (-90.,        -74.4136),
