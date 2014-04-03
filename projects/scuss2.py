@@ -21,6 +21,7 @@ median_f = flat_median_f
 percentile_f = flat_percentile_f
 
 from tractor import *
+from tractor.sdss import *
 
 '''
 sex data/scuss-w1-images/stacked/a0073.fit -c CS82.sex -CATALOG_NAME a0073.se.fits -WEIGHT_IMAGE data/scuss-w1-images/stacked/b_a0073.fit -CHECKIMAGE_TYPE NONE
@@ -242,13 +243,11 @@ def main():
                         name=opt.imgfn, domask=False)
     
             # Create tractor catalog objects
-            cat = []
-            for i in range(len(T)):
-                # -1: SCUSS, apparently, uses FITS pixel conventions.
-                src = PointSource(PixPos(T.x[i] - 1, T.y[i] - 1),
-                                  Fluxes(**{band:100.}))
-                cat.append(src)
-
+            cat = get_tractor_sources_dr9(None, None, None, bandname='u', sdss=sdss,
+                                          objs=T, bands=['u'], nanomaggies=True,
+                                          fixedComposites=True, useObjcType=True)
+            print 'Got', len(cat), 'Tractor sources'
+            
             # Create Tractor object.
             tractor = Tractor([tim], cat)
 
