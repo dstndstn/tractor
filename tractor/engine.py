@@ -2531,7 +2531,10 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        lnp = self.getLogLikelihood() + self.getLogPrior()
+        lnp = self.getLogPrior()
+        if lnp == -np.inf:
+            return lnp
+        lnp += self.getLogLikelihood()
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'
