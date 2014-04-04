@@ -251,6 +251,17 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     WARNING, this method alters the "objs" argument, if given.
     Consider calling objs.copy() before calling.
+
+    -"bandname" is the SDSS band used to cut on position, select
+     star/gal/exp/dev, and set galaxy shapes.
+
+    -"bands" are the bands to include in the returned Source objects;
+     they will be initialized from the SDSS bands.
+
+    -"extrabands" are also included in the returned Source objects;
+     they will be initialized to the SDSS flux for either the first of
+     "bands", if given, or "bandname".
+
     
     '''
     #   brightPointSourceThreshold=0.):

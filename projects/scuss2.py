@@ -57,6 +57,13 @@ def main():
                       help='Plot base filename (default: %default)')
     parser.add_option('-l', dest='local', action='store_true', default=False,
                       help='Use local SDSS tree?')
+
+    # TESTING
+    parser.add_option('--sub', dest='sub', action='store_true',
+                      help='Cut to small sub-image for testing')
+    parser.add_option('--res', dest='res', action='store_true',
+                      help='Just plot results from previous run')
+
     opt,args = parser.parse_args()
 
     # Check command-line arguments
@@ -80,9 +87,14 @@ def main():
     lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    sdss = DR9(basedir='data/unzip')
+    if opt.res:
+        ps = PlotSequence(opt.plotbase)
+        plot_results(opt.outfn, ps)
+        sys.exit(0)
+
+    sdss = DR9(basedir='.')#data/unzip')
     if opt.local:
-        sdss.useLocalTree()
+        sdss.useLocalTree(pobj='photoObjs-new')
         sdss.saveUnzippedFiles('data/unzip')
 
     # Read inputs
@@ -107,8 +119,9 @@ def main():
     flag = fitsio.read(opt.flagfn)
     print 'Read flag', flag.shape, flag.dtype
 
-    # HACK
-    imslice = (slice(0, 800), slice(0, 800))
+    imslice = None
+    if opt.sub:
+        imslice = (slice(0, 800), slice(0, 800))
     if imslice is not None:
         img = img[imslice]
         H,W = img.shape
@@ -138,7 +151,7 @@ def main():
     print 'PSF', x.shape
     x = x.shape[0]
     #psf.radius = (x+1)/2.
-    psf.radius = 10
+    psf.radius = 20
     
     print 'Computing image sigma...'
     if opt.flagzero:
@@ -185,12 +198,14 @@ def main():
     # those sources, and also an additional margin of sources that
     # touch those pixels.
     margin = 10 # pixels
+
     # Number of cells to split the image into
     imh,imw = img.shape
     nx = int(np.round(imw / 400.))
     ny = int(np.round(imh / 400.))
     #nx = ny = 20
     #nx = ny = 1
+
     # cell positions
     XX = np.round(np.linspace(0, W, nx+1)).astype(int)
     YY = np.round(np.linspace(0, H, ny+1)).astype(int)
@@ -284,11 +299,18 @@ def main():
                         name=opt.imgfn, domask=False)
     
             # Create tractor catalog objects
-            cat = get_tractor_sources_dr9(None, None, None, bandname=opt.band,
-                                          sdss=sdss, objs=T, bands=[band],
-                                          nanomaggies=True,
-                                          fixedComposites=True, useObjcType=True)
+            cat,catI = get_tractor_sources_dr9(
+                None, None, None, bandname=opt.band,
+                sdss=sdss, objs=T.copy(), bands=[band],
+                nanomaggies=True, fixedComposites=True, useObjcType=True,
+                getobjinds=True)
             print 'Got', len(cat), 'Tractor sources'
+
+            assert(len(cat) == len(catI))
+
+            # for r,d,src in zip(T.ra[catI], T.dec[catI], cat):
+            #     print 'Source', src.getPosition()
+            #     print '    vs', r, d
             
             # Create Tractor object.
             tractor = Tractor([tim], cat)
@@ -306,8 +328,8 @@ def main():
             minsig = 0.1
 
             # making plots?
-            if celli <= 10:
-                mod0 = tractor.getModelImage(0)
+            #if celli <= 10:
+            #    mod0 = tractor.getModelImage(0)
 
             # Forced photometry
             X = tractor.optimize_forced_photometry(
@@ -324,8 +346,24 @@ def main():
             # tractor.printThawedParams()
 
             # Record results
-            T.set('tractor_%s_counts' % band, np.array([src.getBrightness().getBand(band) for src in cat]))
-            T.set('tractor_%s_counts_invvar' % band, IV)
+            X = np.zeros(len(T), np.float32)
+            X[catI] = np.array([src.getBrightness().getBand(band) for src in cat]).astype(np.float32)
+            T.set('tractor_%s_nanomaggies' % band, X)
+            X = np.zeros(len(T), np.float32)
+            X[catI] = IV.astype(np.float32)
+            T.set('tractor_%s_nanomaggies_invvar' % band, X)
+            X = np.zeros(len(T), bool)
+            X[catI] = True
+            T.set('tractor_%s_has_phot' % band, X)
+
+            # DEBUG
+            X = np.zeros(len(T), np.float64)
+            X[catI] = np.array([src.getPosition().ra for src in cat])
+            T.tractor_ra = X
+            X = np.zeros(len(T), np.float64)
+            X[catI] = np.array([src.getPosition().dec for src in cat])
+            T.tractor_dec = X
+
             T.cell = np.zeros(len(T), int) + celli
             if fs is not None:
                 # Per-source stats
@@ -335,7 +373,33 @@ def main():
                 for k in imstatkeys:
                     X = getattr(fs, k)
                     imstats.get(k)[celli] = X[0]
-            results.append(T)
+
+            #T.about()
+            # DEBUG
+            ## KK = np.flatnonzero(T.tractor_u_nanomaggies[catI] > 3.)
+            ## T.cut(catI[KK])
+            ## cat = [cat[k] for k in KK]
+            ## catI = np.arange(len(cat))
+            ## #T.about()
+            ## print T.tractor_u_nanomaggies
+            ## print T.psfflux[:,0]
+
+            results.append(T.copy())
+
+            # tc = T.copy()
+            # print 'tc'
+            # print tc.tractor_u_nanomaggies
+            # print tc.psfflux[:,0]
+            # plot_results(None, ps, tc)
+            # mc = merge_tables([x.copy() for x in results])
+            # print 'Results:'
+            # for x in results:
+            #     print x.tractor_u_nanomaggies
+            #     print x.psfflux[:,0]
+            # print 'Merged'
+            # print mc.tractor_u_nanomaggies
+            # print mc.psfflux[:,0]
+            # plot_results(None, ps, mc)
 
             # Make plots for the first N cells
             if celli >= 10:
@@ -359,11 +423,56 @@ def main():
             plt.title('Data + SDSS sources ~ (%.3f, %.3f)' % (rc,dc))
             ps.savefig()
 
-            plt.clf()
-            plt.imshow(mod0, **ima)
-            plt.title('Initial Model')
-            #plt.colorbar()
+            flim = 2.5
+            I = np.flatnonzero(T.psfflux[catI,0] > flim)
+            for ii in I:
+                tind = catI[ii]
+                src = cat[ii]
+                fluxes = [T.psfflux[tind,0], src.getBrightness().getBand(band)]
+                print 'Fluxes', fluxes
+                mags = [-2.5*(np.log10(flux)-9) for flux in fluxes]
+                print 'Mags', mags
+
+                t = ''
+                if type(src) == ExpGalaxy:
+                    t = 'E'
+                elif type(src) == DevGalaxy:
+                    t = 'D'
+                elif type(src) == PointSource:
+                    t = 'S'
+                elif type(src) == FixedCompositeGalaxy:
+                    t = 'C'
+                else:
+                    t = str(type(src))
+
+                plt.text(T.x[tind], T.y[tind]+3, '%.1f / %.1f %s' % (mags[0], mags[1], t), color='r',
+                         va='bottom',
+                         bbox=dict(facecolor='k', alpha=0.5))
+                plt.plot(T.x[tind]-1, T.y[tind]-1, 'rx')
+
+            for i,src in enumerate(cat):
+                flux = src.getBrightness().getBand(band)
+                if flux < flim:
+                    continue
+                tind = catI[i]
+                fluxes = [T.psfflux[tind,0], flux]
+                print 'RA,Dec', T.ra[tind],T.dec[tind]
+                print src.getPosition()
+                print 'Fluxes', fluxes
+                mags = [-2.5*(np.log10(flux)-9) for flux in fluxes]
+                print 'Mags', mags
+                plt.text(T.x[tind], T.y[tind]-3, '%.1f / %.1f' % (mags[0], mags[1]), color='g',
+                         va='top', bbox=dict(facecolor='k', alpha=0.5))
+                plt.plot(T.x[tind]-1, T.y[tind]-1, 'g.')
+                         
+            plt.axis(ax)
             ps.savefig()
+
+            # plt.clf()
+            # plt.imshow(mod0, **ima)
+            # plt.title('Initial Model')
+            # #plt.colorbar()
+            # ps.savefig()
 
             # plt.clf()
             # plt.imshow(mod0, interpolation='nearest', origin='lower',
@@ -410,18 +519,25 @@ def main():
 
 
     
-def plot_results(outfn, ps):
-    T = fits_table(outfn)
-    print 'read', len(T)
+def plot_results(outfn, ps, T=None):
+    if T is None:
+        T = fits_table(outfn)
+        print 'read', len(T)
+
+    I = np.flatnonzero(T.tractor_u_has_phot)
+    print 'Plotting', len(I), 'with phot'
+
+    stars = (T.objc_type[I] == 6)
+    gals  = (T.objc_type[I] == 3)
 
     # SDSS measurements
-    nm = np.zeros(len(T))
-    nm[T.objc_type == 6] = T.psfflux[:,0]
-    nm[T.objc_type == 3] = T.modelflux[:,0]
+    nm = np.zeros(len(I))
+    nm[stars] = T.psfflux  [I[stars],0]
+    nm[gals ] = T.modelflux[I[gals ],0]
 
     # Tractor measurements
-    counts = T.tractor_u_counts
-    dcounts = T.tractor_u_counts_invvar
+    counts  = T.tractor_u_nanomaggies[I]
+    dcounts = T.tractor_u_nanomaggies_invvar[I]
     dcounts = 1./np.sqrt(dcounts)
 
     # plt.clf()
@@ -441,32 +557,65 @@ def plot_results(outfn, ps):
     # ps.savefig()
 
     plt.clf()
-    plt.loglog(np.maximum(1e-2, nm), np.maximum(1e-2, counts), 'b.', ms=5, alpha=0.5)
+    plt.loglog(np.maximum(1e-2, nm[stars]), np.maximum(1e-2, counts[stars]), 'b.', ms=5, alpha=0.5)
+    plt.loglog(np.maximum(1e-2, nm[gals] ), np.maximum(1e-2, counts[gals ]), 'g.', ms=5, alpha=0.5)
     plt.xlabel('SDSS nanomaggies')
-    plt.ylabel('Tractor counts')
+    plt.ylabel('Tractor nanomaggies')
     plt.title('Tractor forced photometry of SCUSS data')
     ax = plt.axis()
     plt.axhline(1e-2, color='r', alpha=0.5)
     plt.axvline(1e-2, color='r', alpha=0.5)
+    mx = max(ax[1],ax[3])
+    plt.plot([1e-2,mx], [1e-2,mx], 'b-', alpha=0.25, lw=2)
+
+    for mag in [24,23,22,21,20,19,18,17,16,15,14,13,12]:
+
+        tnm = 10.**((mag - 22.5)/-2.5)
+
+        if (mag > 12):
+            nmlo = tnm / np.sqrt(2.5)
+            nmhi = tnm * np.sqrt(2.5)
+            K = np.flatnonzero((counts > nmlo) * (counts < nmhi))
+            dc = np.median(dcounts[K])
+            plt.errorbar([tnm], [tnm], yerr=dc, fmt='r-', ecolor='r', elinewidth=2,
+                         capsize=5)
+
+        plt.axvline(tnm, color='k', alpha=0.25)
+        plt.text(tnm*1.05, 3e4, '%i mag' % mag, ha='left', rotation=90, color='0.5')
+
     plt.xlim(0.8e-2, ax[1])
     plt.ylim(0.8e-2, ax[3])
     ps.savefig()
 
-    # Cut to valid/bright ones
-    I = np.flatnonzero((nm > 1e-2) * (counts > 1e-2))
-    J = np.flatnonzero((nm > 1) * (counts > 1e-2))
-    # Estimate zeropoint
-    med = np.median(counts[J] / nm[J])
+    # lo,hi = -2,5
+    # plt.clf()
+    # loghist(np.clip(np.log10(nm),lo,hi), np.clip(np.log10(counts), lo, hi), 200,
+    #         range=((lo-0.1,hi+0.1),(lo-0.1,hi+0.1)))
+    # plt.xlabel('SDSS nanomaggies')
+    # plt.ylabel('Tractor nanomaggies')
+    # plt.title('Tractor forced photometry of SCUSS data')
+    # ps.savefig()
 
-    plt.clf()
-    plt.loglog(nm[I], counts[I]/nm[I], 'b.', ms=5, alpha=0.5)
-    plt.xlabel('SDSS nanomaggies')
-    plt.ylabel('Tractor counts / SDSS nanomaggies')
-    plt.title('Tractor forced photometry of SCUSS data')
-    ax = plt.axis()
-    plt.axhline(med, color='k', alpha=0.5)
-    plt.axis(ax)
-    ps.savefig()
+    if True:
+        # Cut to valid/bright ones
+        I = np.flatnonzero((nm > 1e-2) * (counts > 1e-2))
+        J = np.flatnonzero((nm > 1) * (counts > 1e-2))
+        # Estimate zeropoint
+        med = np.median(counts[J] / nm[J])
+    
+        plt.clf()
+        plt.loglog(nm[I], counts[I]/nm[I], 'b.', ms=5, alpha=0.25)
+        plt.xlabel('SDSS nanomaggies')
+        plt.ylabel('Tractor nanomaggies / SDSS nanomaggies')
+        plt.title('Tractor forced photometry of SCUSS data')
+        ax = plt.axis()
+        #plt.axhline(med, color='k', alpha=0.5)
+        plt.axhline(1, color='k', alpha=0.5)
+        plt.axis(ax)
+        plt.ylim(0.1, 10.)
+        ps.savefig()
+
+
     
 if __name__ == '__main__':
     main()
