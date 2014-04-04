@@ -382,12 +382,15 @@ class WcslibWcs(BaseParams):
     FIXME: we could implement anwcs_copy() using wcscopy().
     
     '''
-    def __init__(self, filename, hdu=0):
+    def __init__(self, filename, hdu=0, wcs=None):
         self.x0 = 0.
         self.y0 = 0.
-        from astrometry.util.util import anwcs
-        wcs = anwcs(filename, hdu)
-        self.wcs = wcs
+        if wcs is not None:
+            self.wcs = wcs
+        else:
+            from astrometry.util.util import anwcs
+            wcs = anwcs(filename, hdu)
+            self.wcs = wcs
 
     # pickling
     def __getstate__(self):
@@ -445,7 +448,7 @@ class WcslibWcs(BaseParams):
 
     def pixelToPosition(self, x, y, src=None):
         # MAGIC: 1 for FITS coords.
-        ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
         return RaDecPos(ra, dec)
 
     def cdAtPixel(self, x, y):
@@ -454,9 +457,9 @@ class WcslibWcs(BaseParams):
 
         (Returns the constant ``CD`` matrix elements)
         '''
-        ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
-        ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
-        ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
+        ok,ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
+        ok,ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
 
         cosdec = np.cos(np.deg2rad(dec0))
 
@@ -1137,7 +1140,7 @@ class GaussianMixturePSF(ParamList):
     #         return -1e100
     #     return 0.
 
-    def getMixtureOfGaussians(self):
+    def getMixtureOfGaussians(self, mean=None):
         return self.mog
 
     def applyTo(self, image):
@@ -1448,7 +1451,7 @@ class NCircularGaussianPSF(MultiParams):
         x1 = ix + rad + 1
         y0 = iy - rad
         y1 = iy + rad + 1
-        mix = self.getMixtureOfGaussians(np.array([px,py]))
+        mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
         patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
         # Note: sum(self.weights) can be zero if parameters are frozen!!!
         patch /= sum(mix.amp)
@@ -1519,6 +1522,11 @@ class ShiftedPsf(ParamsWrapper):
         p.x0 -= self.x0
         p.y0 -= self.y0
         return p
+    def getRadius(self):
+        return self.psf.getRadius()
+    def getMixtureOfGaussians(self, **kwargs):
+        return self.psf.getMixtureOfGaussians(**kwargs)
+
     
 class ScaledPhotoCal(ParamsWrapper):
     def __init__(self, photocal, factor):

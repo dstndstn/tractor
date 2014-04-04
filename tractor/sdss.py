@@ -59,8 +59,8 @@ class SdssBrightPSF(ParamsWrapper):
 
     def getRadius(self):
         return self.real.getRadius()
-    def getMixtureOfGaussians(self):
-        return self.real.getMixtureOfGaussians()
+    def getMixtureOfGaussians(self, **kwargs):
+        return self.real.getMixtureOfGaussians(**kwargs)
         
     def getBrightPointSourcePatch(self, px, py, dc):
         if dc > self.a3:

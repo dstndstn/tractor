@@ -971,7 +971,10 @@ class Tractor(MultiParams):
                 for by in range(by0, by1+1):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
-                        dd = (ceresparam, umod.x0, umod.y0, cmod)
+                        #if type(umod.x0) != int or type(umod.y0) != int:
+                        #    print 'umod:', umod.x0, umod.y0, type(umod.x0), type(umod.y0)
+                        #    print 'umod:', umod
+                        dd = (ceresparam, int(umod.x0), int(umod.y0), cmod)
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
