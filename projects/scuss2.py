@@ -674,25 +674,76 @@ def plot_results(outfn, ps, T=None):
 
 
     C = fits_table('data/scuss-w1-images/photozCFHTLS-W1_270912.fits',
-                   columns=['alpha','delta','u','eu', 'g'])
-    # (don't .cut(): const T)
+                   columns=['alpha','delta','u','eu', 'g', 'stargal'])
+    Cfull = C
+    Tfull = T
+
+    #plt.clf()
+    #ha = dict(range=((19,26),(-3,0)))#, doclf=False)
+    ha = dict(range=((19,26),(np.log10(5e-2), np.log10(0.3))))
+    #plt.subplot(2,2,1)
+    loghist(Cfull.u, np.log10(Cfull.eu), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.title('CFHT')
+    yt = [0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3]
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    ps.savefig()
+    #plt.subplot(2,2,2)
+    su = -2.5*(np.log10(Tfull.modelflux[:,0])-9)
+    se = np.abs((-2.5 / np.log(10.)) * (1./np.sqrt(Tfull.modelflux_ivar[:,0])) / Tfull.modelflux[:,0])
+    loghist(su, np.log10(se), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    plt.title('SDSS')
+    ps.savefig()
+    c = Tfull.tractor_u_nanomaggies
+    d = 1./np.sqrt(Tfull.tractor_u_nanomaggies_invvar)
+    tu = -2.5 * (np.log10(c) - 9)
+    te = np.abs((-2.5 / np.log(10.)) * d / c)
+    #plt.subplot(2,2,3)
+    loghist(tu, np.log10(te), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    plt.title('SCUSS')
+    ps.savefig()
+    
+
+
+    # (don't use T.cut(): const T)
     T = T[T.tractor_u_has_phot]
+
+    print 'C stargal:', np.unique(C.stargal)
 
     I,J,d = match_radec(T.ra, T.dec, C.alpha, C.delta, 1./3600.)
 
     C = C[J]
     T = T[I]
 
-    stars = (T.objc_type == 6)
-    gals  = (T.objc_type == 3)
+    #stars = (T.objc_type == 6)
+    #gals  = (T.objc_type == 3)
+
+    stars = (C.stargal == 0)
+    gals  = (C.stargal == 1)
+
     counts  = T.tractor_u_nanomaggies
     dcounts = T.tractor_u_nanomaggies_invvar
     dcounts = 1./np.sqrt(dcounts)
 
+    sdssu = -2.5*(np.log10(T.modelflux[:,0])-9)
     tmag = -2.5 * (np.log10(counts) - 9)
     dt = np.abs((-2.5 / np.log(10.)) * dcounts / counts)
 
-    cmag = C.u + 0.241 * (C.u - C.g)
+    #cmag = C.u + 0.241 * (C.u - C.g)
+
+    sdssu = -2.5*(np.log10(T.psfflux[:,0])-9)
+    sdssg = -2.5*(np.log10(T.psfflux[:,1])-9)
+    #sdssu = -2.5*(np.log10(T.modelflux[:,0])-9)
+    #sdssg = -2.5*(np.log10(T.modelflux[:,1])-9)
+    #cmag = C.u + 0.241 * (sdssu - sdssg)
+    cmag = C.u
 
     xxmag = np.arange(13, 26)
     dx = []
