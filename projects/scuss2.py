@@ -618,7 +618,7 @@ def plot_results(outfn, ps, T=None):
     plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
     plt.axis([hi,lo,hi,lo])
     plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
-    plt.errorbar(xxmag, xxmag, dt, fmt=None, ecolor='r', elinewidth=2, capsize=3)
+    plt.errorbar(xxmag, xxmag, dt, fmt=None, ecolor='r', elinewidth =2, capsize=3)
     plt.plot([xxmag,xxmag],[xxmag-dt, xxmag+dt], 'r-')
     ps.savefig()
 
@@ -632,7 +632,7 @@ def plot_results(outfn, ps, T=None):
     p1 = plt.plot(smag[stars], tmag[stars] - smag[stars], 'b.', ms=5, alpha=0.5)
     p2 = plt.plot(smag[gals] , tmag[gals ] - smag[gals ], 'g.', ms=5, alpha=0.5)
     plt.xlabel('SDSS mag')
-    plt.ylabel('Tractor mag')
+    plt.ylabel('Tractor mag - SDSS mag')
     plt.title('Tractor forced photometry of SCUSS data')
     plt.axhline(0, color='b', alpha=0.25, lw=2)
     plt.axis([hi,lo,-1,1])
@@ -671,6 +671,73 @@ def plot_results(outfn, ps, T=None):
         plt.axis(ax)
         plt.ylim(0.1, 10.)
         ps.savefig()
+
+
+    C = fits_table('data/scuss-w1-images/photozCFHTLS-W1_270912.fits',
+                   columns=['alpha','delta','u','eu', 'g'])
+    # (don't .cut(): const T)
+    T = T[T.tractor_u_has_phot]
+
+    I,J,d = match_radec(T.ra, T.dec, C.alpha, C.delta, 1./3600.)
+
+    C = C[J]
+    T = T[I]
+
+    stars = (T.objc_type == 6)
+    gals  = (T.objc_type == 3)
+    counts  = T.tractor_u_nanomaggies
+    dcounts = T.tractor_u_nanomaggies_invvar
+    dcounts = 1./np.sqrt(dcounts)
+
+    tmag = -2.5 * (np.log10(counts) - 9)
+    dt = np.abs((-2.5 / np.log(10.)) * dcounts / counts)
+
+    cmag = C.u + 0.241 * (C.u - C.g)
+
+    xxmag = np.arange(13, 26)
+    dx = []
+    dc = []
+    for xx in xxmag:
+        ii = np.flatnonzero((tmag > xx-0.5) * (tmag < xx+0.5))
+        dx.append(np.median(dt[ii]))
+        ii = np.flatnonzero((cmag > xx-0.5) * (cmag < xx+0.5))
+        dc.append(np.median(C.eu[ii]))
+    dc = np.array(dc)
+    dx = np.array(dx)
+    
+    plt.clf()
+    lo,hi = 13, 26
+    p1 = plt.plot(cmag[stars], tmag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(cmag[gals] , tmag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('CFHTLS mag')
+    plt.ylabel('Tractor mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
+    plt.axis([hi,lo,hi,lo])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, xxmag, dx, fmt=None, ecolor='r', elinewidth =2, capsize=3)
+    plt.plot([xxmag,xxmag],[xxmag-dx, xxmag+dx], 'r-')
+    dd = 0.1
+    plt.errorbar(xxmag+dd, xxmag, dc, fmt=None, ecolor='m', elinewidth =2, capsize=3)
+    plt.plot([xxmag+dd,xxmag+dd],[xxmag-dc, xxmag+dc], 'm-')
+    ps.savefig()
+
+    plt.clf()
+    p1 = plt.plot(cmag[stars], tmag[stars] - cmag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(cmag[gals] , tmag[gals ] - cmag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('CFHTLS mag')
+    plt.ylabel('Tractor mag - CFHTLS mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.axhline(0, color='b', alpha=0.25, lw=2)
+    plt.axis([hi,lo,-1,1.5])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, np.zeros_like(xxmag), dx, fmt=None, ecolor='r', elinewidth=2, capsize=3)
+    plt.plot([xxmag,xxmag],[-dx, +dx], 'r-')
+    plt.errorbar(xxmag+dd, np.zeros_like(xxmag), dc, fmt=None, ecolor='m', elinewidth =2, capsize=3)
+    plt.plot([xxmag+dd,xxmag+dd],[-dc, +dc], 'm-')
+    ps.savefig()
+
+    
 
 
     
