@@ -159,8 +159,6 @@ class Fluxes(Mags):
     An implementation of `Brightness` that stores fluxes in multiple
     bands.
     '''
-    #getBand = Mags.getMag
-    #getFlux = Mags.getMag
     def __add__(self, other):
         kwargs = {}
         for band in self.order:

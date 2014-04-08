@@ -179,7 +179,15 @@ def main():
     # Get SDSS sources within the image...
 
     print 'Reading SDSS objects...'
-    T = read_photoobjs_in_wcs(wcs, 1./60., sdss=sdss)
+    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+            'devflux', 'expflux',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id',
+            'psfflux', 'psfflux_ivar', 'cmodelflux', 'cmodelflux_ivar',
+            'modelflux', 'modelflux_ivar']
+    T = read_photoobjs_in_wcs(wcs, 1./60., sdss=sdss, cols=cols)
     print 'Got', len(T), 'SDSS objs'
 
     T.treated_as_pointsource = treat_as_pointsource(T, band_index(opt.band))
@@ -568,24 +576,73 @@ def plot_results(outfn, ps, T=None):
     mx = max(ax[1],ax[3])
     plt.plot([1e-2,mx], [1e-2,mx], 'b-', alpha=0.25, lw=2)
 
+    xx, dc = [],[]
     for mag in [24,23,22,21,20,19,18,17,16,15,14,13,12]:
-
         tnm = 10.**((mag - 22.5)/-2.5)
-
         if (mag > 12):
             nmlo = tnm / np.sqrt(2.5)
             nmhi = tnm * np.sqrt(2.5)
             K = np.flatnonzero((counts > nmlo) * (counts < nmhi))
-            dc = np.median(dcounts[K])
-            plt.errorbar([tnm], [tnm], yerr=dc, fmt='r-', ecolor='r', elinewidth=2,
-                         capsize=5)
-
+            xx.append(tnm)
+            dc.append(np.median(dcounts[K]))
         plt.axvline(tnm, color='k', alpha=0.25)
         plt.text(tnm*1.05, 3e4, '%i mag' % mag, ha='left', rotation=90, color='0.5')
+    plt.errorbar(xx, xx, yerr=dc, fmt=None, ecolor='r', elinewidth=2,
+                 capsize=3) #, capthick=2)
+    xx = np.array(xx)
+    dc = np.array(dc)
+    plt.plot([xx,xx],[xx-dc, xx+dc], 'r-')
+
+    mm = np.arange(11, 27)
+    nn = 10.**((mm - 22.5)/-2.5)
+    plt.xticks(nn, ['%i' % i for i in mm])
+    plt.yticks(nn, ['%i' % i for i in mm])
 
     plt.xlim(0.8e-2, ax[1])
     plt.ylim(0.8e-2, ax[3])
     ps.savefig()
+
+
+
+    plt.clf()
+    lo,hi = 11, 26
+    smag = np.clip(-2.5 * (np.log10(nm)     - 9), lo,hi)
+    tmag = np.clip(-2.5 * (np.log10(counts) - 9), lo,hi)
+    dt = np.abs((-2.5 / np.log(10.)) * dc / xx)
+    xxmag = -2.5 * (np.log10(xx)-9)
+    p1 = plt.plot(smag[stars], tmag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(smag[gals] , tmag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('SDSS mag')
+    plt.ylabel('Tractor mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
+    plt.axis([hi,lo,hi,lo])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, xxmag, dt, fmt=None, ecolor='r', elinewidth =2, capsize=3)
+    plt.plot([xxmag,xxmag],[xxmag-dt, xxmag+dt], 'r-')
+    ps.savefig()
+
+
+    plt.clf()
+    lo,hi = 11, 26
+    smag = -2.5 * (np.log10(nm)     - 9)
+    tmag = -2.5 * (np.log10(counts) - 9)
+    dt = np.abs((-2.5 / np.log(10.)) * dc / xx)
+    xxmag = -2.5 * (np.log10(xx)-9)
+    p1 = plt.plot(smag[stars], tmag[stars] - smag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(smag[gals] , tmag[gals ] - smag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('SDSS mag')
+    plt.ylabel('Tractor mag - SDSS mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.axhline(0, color='b', alpha=0.25, lw=2)
+    plt.axis([hi,lo,-1,1])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, np.zeros_like(xxmag), dt, fmt=None, ecolor='r', elinewidth=2, capsize=3)
+    plt.plot([xxmag,xxmag],[-dt, +dt], 'r-')
+    ps.savefig()
+
+
+
 
     # lo,hi = -2,5
     # plt.clf()
@@ -614,6 +671,124 @@ def plot_results(outfn, ps, T=None):
         plt.axis(ax)
         plt.ylim(0.1, 10.)
         ps.savefig()
+
+
+    C = fits_table('data/scuss-w1-images/photozCFHTLS-W1_270912.fits',
+                   columns=['alpha','delta','u','eu', 'g', 'stargal'])
+    Cfull = C
+    Tfull = T
+
+    #plt.clf()
+    #ha = dict(range=((19,26),(-3,0)))#, doclf=False)
+    ha = dict(range=((19,26),(np.log10(5e-2), np.log10(0.3))))
+    #plt.subplot(2,2,1)
+    loghist(Cfull.u, np.log10(Cfull.eu), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.title('CFHT')
+    yt = [0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3]
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    ps.savefig()
+    #plt.subplot(2,2,2)
+    su = -2.5*(np.log10(Tfull.modelflux[:,0])-9)
+    se = np.abs((-2.5 / np.log(10.)) * (1./np.sqrt(Tfull.modelflux_ivar[:,0])) / Tfull.modelflux[:,0])
+    loghist(su, np.log10(se), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    plt.title('SDSS')
+    ps.savefig()
+    c = Tfull.tractor_u_nanomaggies
+    d = 1./np.sqrt(Tfull.tractor_u_nanomaggies_invvar)
+    tu = -2.5 * (np.log10(c) - 9)
+    te = np.abs((-2.5 / np.log(10.)) * d / c)
+    #plt.subplot(2,2,3)
+    loghist(tu, np.log10(te), 100, **ha)
+    plt.xlabel('u (mag)')
+    plt.ylabel('u error (mag)')
+    plt.yticks(np.log10(yt), ['%g'%y for y in yt])
+    plt.title('SCUSS')
+    ps.savefig()
+    
+
+
+    # (don't use T.cut(): const T)
+    T = T[T.tractor_u_has_phot]
+
+    print 'C stargal:', np.unique(C.stargal)
+
+    I,J,d = match_radec(T.ra, T.dec, C.alpha, C.delta, 1./3600.)
+
+    C = C[J]
+    T = T[I]
+
+    #stars = (T.objc_type == 6)
+    #gals  = (T.objc_type == 3)
+
+    stars = (C.stargal == 0)
+    gals  = (C.stargal == 1)
+
+    counts  = T.tractor_u_nanomaggies
+    dcounts = T.tractor_u_nanomaggies_invvar
+    dcounts = 1./np.sqrt(dcounts)
+
+    sdssu = -2.5*(np.log10(T.modelflux[:,0])-9)
+    tmag = -2.5 * (np.log10(counts) - 9)
+    dt = np.abs((-2.5 / np.log(10.)) * dcounts / counts)
+
+    #cmag = C.u + 0.241 * (C.u - C.g)
+
+    sdssu = -2.5*(np.log10(T.psfflux[:,0])-9)
+    sdssg = -2.5*(np.log10(T.psfflux[:,1])-9)
+    #sdssu = -2.5*(np.log10(T.modelflux[:,0])-9)
+    #sdssg = -2.5*(np.log10(T.modelflux[:,1])-9)
+    #cmag = C.u + 0.241 * (sdssu - sdssg)
+    cmag = C.u
+
+    xxmag = np.arange(13, 26)
+    dx = []
+    dc = []
+    for xx in xxmag:
+        ii = np.flatnonzero((tmag > xx-0.5) * (tmag < xx+0.5))
+        dx.append(np.median(dt[ii]))
+        ii = np.flatnonzero((cmag > xx-0.5) * (cmag < xx+0.5))
+        dc.append(np.median(C.eu[ii]))
+    dc = np.array(dc)
+    dx = np.array(dx)
+    
+    plt.clf()
+    lo,hi = 13, 26
+    p1 = plt.plot(cmag[stars], tmag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(cmag[gals] , tmag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('CFHTLS mag')
+    plt.ylabel('Tractor mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
+    plt.axis([hi,lo,hi,lo])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, xxmag, dx, fmt=None, ecolor='r', elinewidth =2, capsize=3)
+    plt.plot([xxmag,xxmag],[xxmag-dx, xxmag+dx], 'r-')
+    dd = 0.1
+    plt.errorbar(xxmag+dd, xxmag, dc, fmt=None, ecolor='m', elinewidth =2, capsize=3)
+    plt.plot([xxmag+dd,xxmag+dd],[xxmag-dc, xxmag+dc], 'm-')
+    ps.savefig()
+
+    plt.clf()
+    p1 = plt.plot(cmag[stars], tmag[stars] - cmag[stars], 'b.', ms=5, alpha=0.5)
+    p2 = plt.plot(cmag[gals] , tmag[gals ] - cmag[gals ], 'g.', ms=5, alpha=0.5)
+    plt.xlabel('CFHTLS mag')
+    plt.ylabel('Tractor mag - CFHTLS mag')
+    plt.title('Tractor forced photometry of SCUSS data')
+    plt.axhline(0, color='b', alpha=0.25, lw=2)
+    plt.axis([hi,lo,-1,1.5])
+    plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
+    plt.errorbar(xxmag, np.zeros_like(xxmag), dx, fmt=None, ecolor='r', elinewidth=2, capsize=3)
+    plt.plot([xxmag,xxmag],[-dx, +dx], 'r-')
+    plt.errorbar(xxmag+dd, np.zeros_like(xxmag), dc, fmt=None, ecolor='m', elinewidth =2, capsize=3)
+    plt.plot([xxmag+dd,xxmag+dd],[-dc, +dc], 'm-')
+    ps.savefig()
+
+    
 
 
     
