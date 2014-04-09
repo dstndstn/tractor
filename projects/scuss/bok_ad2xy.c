@@ -1,3 +1,5 @@
+#include <string.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 char c1[14],c2[14],head[72][80];
@@ -5,6 +7,9 @@ double a8[8],b8[8],pi,cx,cy;
 FILE *fp,*fp1;
 int  n1,n2;
 #define bok 48.
+
+void astprs2(double ra1, double dc1, double ep1,
+             double* ra2, double* dc2, double ep2);
 
 main(ac,av)
 int ac; char *av[];
@@ -44,6 +49,14 @@ int ac; char *av[];
   for(i=0;i<8;i++)sscanf(&head[k+i][10],"%le",&a8[i]);
   xytoad(a8,b8);
 
+  printf("A8:\n");
+  for (i=0; i<8; i++)
+      printf("  %g\n", a8[i]);
+
+  printf("B8:\n");
+  for (i=0; i<8; i++)
+      printf("  %g\n", b8[i]);
+
   if(ac==2){
 l30:
     fgets(a,50,fp1); if(feof(fp1))exit(0);
@@ -51,8 +64,11 @@ l30:
     if(strlen(a)<3)goto l30;
     sscanf(a,"%s %s",f1,a);
     chs(f1,&xa); chs(a,&xd);
+    printf("xa,xd %g,%g\n", xa, xd);
     astprs2(xa,xd,epoch,&alpha,&delta,2000.);
+    printf("precessed (%g) to %g,%g\n", epoch, alpha, delta);
     rad_xy(a8[6],a8[7],alpha,delta,&x,&y);
+    printf("x,y %g,%g\n", x, y);
     toms2(alpha,c1,1);  toms2(delta,c2,0);
     printf("%s %s (%6.1lf)--->%9.2lf %9.2lf\n",c1,c2,epoch,x,y);
     goto l30;
@@ -94,9 +110,9 @@ double *x,*a;
   a[5]= (x[4]*x[1]-x[0]*x[5])/z;
 }
 
-void
-astprs2(ra1, dc1, ep1, ra2, dc2, ep2)   // RA in hour, DEC in degree
-double  ra1,dc1,ep1,*ra2,*dc2,ep2;      // only ra2,dc2   is output
+void astprs2(double ra1, double dc1, double ep1,
+             double* ra2, double* dc2, double ep2)
+// RA in hour, DEC in degree
 {
   double r0[3],r1[3],p[3][3],arc;
   double r2,d2;
