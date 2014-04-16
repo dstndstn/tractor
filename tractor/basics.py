@@ -355,17 +355,19 @@ class NullWCS(BaseParams):
     The "identity" WCS -- useful when you are using raw pixel
     positions rather than RA,Decs.
     '''
-    def __init__(self, pixscale=1.):
+    def __init__(self, pixscale=1., dx=0., dy=0.):
         '''
         pixscale: [arcsec/pix]
         '''
         self.pixscale = pixscale
+        self.dx = dx
+        self.dy = dy
     def hashkey(self):
-        return ('NullWCS',)
+        return ('NullWCS', self.dx, self.dy)
     def positionToPixel(self, pos, src=None):
-        return pos.x, pos.y
+        return pos.x + self.dx, pos.y + self.dy
     def pixelToPosition(self, x, y, src=None):
-        return x,y
+        return x - self.dx, y - self.dy
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
