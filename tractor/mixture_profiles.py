@@ -189,8 +189,8 @@ class MixtureOfGaussians():
     def evaluate_grid_dstn(self, xlo, xhi, ylo, yhi, xstep=1., ystep=1.):
         from mix import c_gauss_2d_grid
         assert(self.D == 2)
-        NX = int(round(xhi - xlo + 1))
-        NY = int(round(yhi - ylo + 1))
+        NX = int(round(xhi - xlo + 1) / float(xstep))
+        NY = int(round(yhi - ylo + 1) / float(ystep))
         result = np.zeros((NY, NX))
         rtn = c_gauss_2d_grid(xlo, xstep, NX, ylo, ystep, NY,
                               self.amp, self.mean,self.var, result)

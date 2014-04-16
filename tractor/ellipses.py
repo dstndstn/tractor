@@ -50,7 +50,16 @@ class EllipseE(ParamList):
     def getStepSizes(self, *args, **kwargs):
         if hasattr(self, 'stepsizes'):
             return list(self._getLiquidArray(self.stepsizes))
-        return [0.1] * self.numberOfParams()
+        ss = []
+        # re thawed?
+        if not self.isParamFrozen('re'):
+            ss.append(0.01)
+        # e1,e2 thawed?  Step toward |e|=0
+        if not self.isParamFrozen('e1'):
+            ss.append(0.01 if self.e1 <= 0 else -0.01)
+        if not self.isParamFrozen('e2'):
+            ss.append(0.01 if self.e2 <= 0 else -0.01)
+        return ss
 
     def getLogPrior(self):
         if (self.e1**2 + self.e2**2) >= 1.:
@@ -79,10 +88,11 @@ class EllipseE(ParamList):
         #     return costheta, sintheta
 
         e = self.e
+        maxab = 1000.
         if e >= 1.:
-            ab = 20.
+            ab = maxab
         else:
-            ab = min(20., (1.+e)/(1.-e))
+            ab = min(maxab, (1.+e)/(1.-e))
         r_deg = self.re / 3600.
         
         # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
@@ -120,6 +130,11 @@ class EllipseESoft(EllipseE):
         # e1: e cos 2 theta, dimensionless
         # e2: e sin 2 theta, dimensionless
         return dict(logre=0, e1=1, e2=2)
+
+    def getStepSizes(self, *args, **kwargs):
+        if hasattr(self, 'stepsizes'):
+            return list(self._getLiquidArray(self.stepsizes))
+        return [0.01] * self.numberOfParams()
 
     def __repr__(self):
         return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.e1, self.e2)

@@ -1656,7 +1656,7 @@ class Tractor(MultiParams):
 
 
     def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
-                 shared_params=True, variance=False):
+                 shared_params=True, variance=False, just_variance=False):
         '''
         Performs *one step* of linearized least-squares + line search.
         
@@ -1679,6 +1679,8 @@ class Tractor(MultiParams):
                                     variance=variance)
         if variance:
             X,var = X
+            if just_variance:
+                return var
         #print Time() - t0
         topt = Time()-t0
         #print 'X:', X
