@@ -62,7 +62,7 @@ class EllipseE(ParamList):
         return ss
 
     def getLogPrior(self):
-        if (self.e1**2 + self.e2**2) >= 1.:
+        if (self.e1**2 + self.e2**2) >= 1. or self.re < 0:
             return -np.inf
         return 0.
 
