@@ -264,12 +264,6 @@ class Flux(ScalarParam):
         new.val *= factor
         return new
     __rmul__ = __mul__
-    # enforce limit: Flux > 0
-    def _set(self, val):
-        if val < 0:
-            #print 'Clamping Flux from', p[0], 'to zero'
-            pass
-        self.val = max(0., val)
 
 class MagsPhotoCal(ParamList):
     '''
