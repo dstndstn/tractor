@@ -867,7 +867,7 @@ class MultiParams(BaseParams, NamedParams):
             pb.extend(b)
 
             c0 += s.numberOfParams()
-            r0 += listmax(r)
+            r0 += listmax(r,-1) + 1
 
         if rA == []:
             return None

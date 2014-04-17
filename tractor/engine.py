@@ -2046,13 +2046,14 @@ class Tractor(MultiParams):
             X = self.getLogPriorDerivatives()
             if X is not None:
 
-                print
-                print 'Warning: using priors; dstn was monkeying with'
-                print 'the code and the getLogPriorDerivatives() API has'
-                print 'changed: cA must be *integers*, not np arrays'
-                print
-                
+                # print
+                # print 'Warning: using priors; dstn was monkeying with'
+                # print 'the code and the getLogPriorDerivatives() API has'
+                # print 'changed: cA must be *integers*, not np arrays'
+                # print
+
                 rA,cA,vA,pb = X
+
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
@@ -2060,11 +2061,11 @@ class Tractor(MultiParams):
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
                 logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-                #print 'cA', cA
-                #print 'max', np.max(cA)
-                #print 'max', np.max(cA)+1
-                #print 'Ncols', Ncols
-                Ncols = max(Ncols, listmax(cA, -1) + 1)
+                if len(cA) == 0:
+                    Ncols = 0
+                else:
+                    Ncols = 1 + max(cA)
+
                 b = np.zeros(Nrows)
                 b[oldnrows:] = np.hstack(pb)
 
@@ -2144,11 +2145,6 @@ class Tractor(MultiParams):
             print 'sprows:', len(sprows), 'chunks'
             print '  total', sum(len(x) for x in sprows), 'elements'
 
-            # print 'spcols:', spcols
-            # print 'sprows:', sprows
-            # print 'spvals:', spvals
-            # print 'b:', b
-            
             ucols,colI = np.unique(spcols, return_inverse=True)
             J = np.argsort(colI)
 
@@ -2195,11 +2191,6 @@ class Tractor(MultiParams):
                             bcomp, nrcomp, Nelements)
             print 'Got TSNNLS result:', X
 
-            # print 'spcols:', spcols
-            # print 'ucols:', ucols
-            # print 'colI:', colI
-            # print 'sorted_cols:', sorted_cols
-            
             # Undo the column mappings
             X2 = np.zeros(len(allderivs))
             #X2[colI] = X
@@ -2226,7 +2217,7 @@ class Tractor(MultiParams):
             spcols = cc
             assert(i == len(sprows))
             assert(len(sprows) == len(spcols))
-    
+
             logverb('  Number of sparse matrix elements:', len(sprows))
             urows = np.unique(sprows)
             ucols = np.unique(spcols)
