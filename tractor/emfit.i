@@ -22,6 +22,224 @@
 
     // ASSUME "amp", "mean", and "var" have been initialized.
 
+
+    // _reg: Inverse-Wishart prior on variance (with hard-coded
+    // variance prior I), with strength alpha.
+    static int em_fit_1d_samples_reg(PyObject* np_x,
+                                     PyObject* np_amp,
+                                     PyObject* np_mean,
+                                     PyObject* np_var,
+                                     double alpha,
+                                     int steps) {
+        npy_intp i, N, K, k;
+        const npy_intp D = 1;
+        double* Z = NULL;
+        double* scale = NULL, *ivar = NULL;
+        int step;
+        double tpd;
+        int result;
+
+        PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+        int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
+        int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
+
+        double* amp;
+        double* mean;
+        double* var;
+        double* X;
+
+        tpd = pow(2.*M_PI, D);
+
+        Py_INCREF(dtype);
+        np_x = PyArray_FromAny(np_x, dtype, 1, 1, req, NULL);
+        if (!np_x) {
+            ERR("x wasn't the type expected");
+            Py_DECREF(dtype);
+            return -1;
+        }
+        Py_INCREF(dtype);
+        np_amp = PyArray_FromAny(np_amp, dtype, 1, 1, reqout, NULL);
+        if (!np_amp) {
+            ERR("amp wasn't the type expected");
+            Py_DECREF(np_x);
+            Py_DECREF(dtype);
+            return -1;
+        }
+        Py_INCREF(dtype);
+        np_mean = PyArray_FromAny(np_mean, dtype, 1, 1, reqout, NULL);
+        if (!np_mean) {
+            ERR("mean wasn't the type expected");
+            Py_DECREF(np_x);
+            Py_DECREF(np_amp);
+            Py_DECREF(dtype);
+            return -1;
+        }
+        Py_INCREF(dtype);
+        np_var = PyArray_FromAny(np_var, dtype, 1, 1, reqout, NULL);
+        if (!np_var) {
+            ERR("var wasn't the type expected");
+            Py_DECREF(np_x);
+            Py_DECREF(np_amp);
+            Py_DECREF(np_mean);
+            Py_DECREF(dtype);
+            return -1;
+        }
+
+        K = PyArray_DIM(np_amp, 0);
+        // printf("K=%i\n", K);
+        if (PyArray_DIM(np_mean, 0) != K) {
+            ERR("np_mean must have len K");
+            return -1;
+        }
+        if (PyArray_DIM(np_var, 0) != K) {
+            ERR("np_var must have len K");
+            return -1;
+        }
+        N = PyArray_DIM(np_x, 0);
+        amp  = PyArray_DATA(np_amp);
+        mean = PyArray_DATA(np_mean);
+        var  = PyArray_DATA(np_var);
+        X  = PyArray_DATA(np_x);
+
+        Z = malloc(K * N * sizeof(double));
+        assert(Z);
+        scale = malloc(K * sizeof(double));
+        ivar = malloc(K * sizeof(double));
+        assert(scale && ivar);
+
+        for (step=0; step<steps; step++) {
+            double wsum[K];
+            double qsum = 0.0;
+
+            /*
+            printf("step=%i\n", step);
+            printf("weights ");
+            for (k=0; k<K; k++)
+                printf("%g ", amp[k]);
+            printf("\n");
+            printf("means ");
+            for (k=0; k<K; k++) {
+                printf("[ ");
+                for (d=0; d<D; d++)
+                    printf("%g ", mean[k*D+d]);
+                printf("] ");
+            }
+            printf("\n");
+            printf("vars ");
+            for (k=0; k<K; k++) {
+                printf("[ ");
+                for (d=0; d<D*D; d++)
+                    printf("%g ", var[k*D*D+d]);
+                printf("] ");
+            }
+            printf("\n");
+             */
+
+            memset(Z, 0, K*N*sizeof(double));
+            for (k=0; k<K; k++) {
+                ivar[k] = 1./var[k];
+                scale[k] = amp[k] / sqrt(tpd * var[k]);
+            }
+
+            // printf("E step...\n");
+            for (i=0; i<N; i++) {
+                double zi;
+                double zsum = 0;
+                for (k=0; k<K; k++) {
+                    double mahal;
+                    double d;
+                    d = X[i] - mean[k];
+                    mahal = ivar[k] * d*d;
+                    if (mahal >= 100)
+                        continue;
+                    zi = scale[k] * exp(-0.5 * mahal);
+                    Z[i*K + k] = zi;
+                    // printf("Z(i=%i, k=%i) = %g\n", i, k, zi);
+                    zsum += zi;
+                    //assert(i == (iy*NX + ix));
+                }
+                // printf("i=%i, ix,iy=%i,%i  zsum=%g\n", i, ix, iy, zsum);
+                if (zsum == 0)
+                    continue;
+                for (k=0; k<K; k++) {
+                    if (Z[i*K+k] > 0) {
+                        qsum += log(Z[i*K+k]) * Z[i*K+k] / zsum;
+                    }
+                    Z[i*K + k] /= zsum;
+                }
+            }
+            //printf("Q: %g\n", qsum);
+
+            // M step: mu
+            memset(mean, 0, K*D*sizeof(double));
+            for (k=0; k<K; k++) {
+                wsum[k] = 0;
+                for (i=0; i<N; i++) {
+                    double wi = Z[i*K + k];
+                    double d;
+                    mean[k*D + 0] += wi * X[i];
+                    d = 
+                    wsum[k] += wi;
+                }
+                mean[k*D + 0] /= wsum[k];
+                //printf("wsum[%i] = %g\n", k, wsum[k]);
+            }
+
+            // M step: var
+            // printf("M var...\n");
+            memset(var, 0, K*D*D*sizeof(double));
+            for (k=0; k<K; k++) {
+                var[k*D*D + 0] = alpha;
+                for (i=0; i<N; i++) {
+                    double d, wi;
+                    d = X[i] - mean[k*D+0];
+                    wi = Z[i*K + k];
+                    var[k*D*D + 0] += wi * d*d;
+                }
+                for (i=0; i<(D*D); i++)
+                    var[k*D*D + i] /= (wsum[k] + alpha);
+            }
+
+            // M step: amp
+            // printf("M amp...\n");
+            for (k=0; k<K; k++)
+                amp[k] = wsum[k] / (double)N;
+        }
+        result = 0;
+        
+        //cleanup:
+        free(Z);
+        free(scale);
+        free(ivar);
+
+        Py_DECREF(np_x);
+        Py_DECREF(np_amp);
+        Py_DECREF(np_mean);
+        Py_DECREF(np_var);
+        Py_DECREF(dtype);
+
+        return result;
+    }
+
+
+
+    static int em_fit_1d_samples(PyObject* np_x,
+                                 PyObject* np_amp,
+                                 PyObject* np_mean,
+                                 PyObject* np_var) {
+        return em_fit_1d_samples_reg(np_x, np_amp, np_mean, np_var, 0.0,
+                                     1000);
+    }
+
+
+
+
+
+
+
+
+
+
     // _reg: Inverse-Wishart prior on variance (with hard-coded
     // variance prior I), with strength alpha.
     static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,

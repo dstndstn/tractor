@@ -1,5 +1,8 @@
 *.pyc
 *~
+*.png
+*.pdf
+*.fits
 tractor/*.pyc
 tractor/*.so
 tractor/build/

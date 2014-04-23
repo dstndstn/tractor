@@ -156,8 +156,8 @@ class GalaxyShape(ParamList):
     #   return np.min((dradec - np.array([dra,ddec]))**2 <= radius**2)
 
 class Galaxy(MultiParams):
-    def __init__(self, pos, brightness, shape):
-        super(Galaxy, self).__init__(pos, brightness, shape)
+    def __init__(self, *args):
+        super(Galaxy, self).__init__(*args)
         self.name = self.getName()
         self.dname = self.getDName()
 
@@ -207,7 +207,7 @@ class Galaxy(MultiParams):
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightness=' + repr(self.brightness) +
-                ', re=%.1f, ab=%.2f, phi=%.1f)' % (self.re, self.ab, self.phi))
+                ', shape=' + repr(self.shape))
 
     def copy(self):
         return None
@@ -242,6 +242,9 @@ class Galaxy(MultiParams):
         psteps = pos0.getStepSizes()
         if not self.isParamFrozen('pos'):
             params = pos0.getParams()
+            if counts == 0:
+                derivs.extend([None] * len(params))
+                psteps = []
             for i,pstep in enumerate(psteps):
                 oldval = pos0.setParam(i, params[i]+pstep)
                 (px,py) = img.getWcs().positionToPixel(pos0, self)
@@ -273,6 +276,9 @@ class Galaxy(MultiParams):
             oldvals = self.shape.getParams()
             # print 'Galaxy.getParamDerivatives:', self.getName()
             # print '  oldvals:', oldvals
+            if counts == 0:
+                derivs.extend([None] * len(oldvals))
+                gsteps = []
             for i,gstep in enumerate(gsteps):
                 oldval = self.shape.setParam(i, oldvals[i]+gstep)
                 #print '  stepped', gnames[i], 'by', gsteps[i],
@@ -352,6 +358,8 @@ class CompositeGalaxy(MultiParams):
             kw = {}
         else:
             kw = dict(minsb=minsb/2.)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, **kw)
         pd = d.getModelPatch(img, **kw)
         if pe is None:
@@ -366,6 +374,8 @@ class CompositeGalaxy(MultiParams):
             minval = minval * 0.5
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         return (e.getUnitFluxModelPatches(img, minval=minval) +
                 d.getUnitFluxModelPatches(img, minval=minval))
 
@@ -378,6 +388,8 @@ class CompositeGalaxy(MultiParams):
         assert(fe <= 1.)
         e = ExpGalaxy(self.pos, fe, self.shapeExp)
         d = DevGalaxy(self.pos, fd, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, px, py)
         pd = d.getModelPatch(img, px, py)
         if pe is None:
@@ -395,6 +407,8 @@ class CompositeGalaxy(MultiParams):
         #print '  Dev brightness', self.brightnessDev, 'shape', self.shapeDev
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
+        if hasattr(self, 'halfsize'):
+            e.halfsize = d.halfsize = self.halfsize
         e.dname = 'comp.exp'
         d.dname = 'comp.dev'
         if self.isParamFrozen('pos'):
@@ -485,9 +499,16 @@ class ProfileGalaxy(object):
             # no overlap
             return None
 
-        amix = self._getAffineProfile(img, px, py)
+        try:
+            amix = self._getAffineProfile(img, px, py)
+        except:
+            import traceback
+            print 'Failed to _getAffineProfile:'
+            traceback.print_exc()
+            return None
+        
         # now convolve with the PSF, analytically
-        psfmix = img.getPsf().getMixtureOfGaussians()
+        psfmix = img.getPsf().getMixtureOfGaussians(mean=np.array([px,py]))
         psfmix.normalize()
         cmix = amix.convolve(psfmix)
         x0 = outx.start
@@ -499,22 +520,6 @@ class ProfileGalaxy(object):
 
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
-    def __init__(self, pos, brightness, *args):
-        '''
-        HoggGalaxy(pos, brightness, GalaxyShape)
-        or
-        HoggGalaxy(pos, brightness, re, ab, phi)
-
-        re: [arcsec]
-        phi: [deg]
-        '''
-        if len(args) == 3:
-            shape = GalaxyShape(*args)
-        else:
-            assert(len(args) == 1)
-            shape = args[0]
-        super(HoggGalaxy, self).__init__(pos, brightness, shape)
-
     def overlapsCircle(self, pos, radius):
         cosdec = np.cos(np.deg2rad(pos.dec))
         return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,
@@ -539,7 +544,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         amix = galmix.apply_affine(np.array([px,py]), Tinv.T)
         amix.symmetrize()
         return amix
-    
+
     def _getUnitFluxDeps(self, img, px, py):
         return hash(('unitpatch', self.getName(), px, py,
                      img.getWcs().hashkey(),
@@ -550,8 +555,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        halfsize = max(1., self.nre * self.re *
-                       max(self.ab, 1.) / 3600. / pixscale)
+        halfsize = max(1., self.nre * self.re # * max(self.ab, 1.)
+                       / 3600. / pixscale)
         psf = img.getPsf()
         halfsize += psf.getRadius()
         return halfsize

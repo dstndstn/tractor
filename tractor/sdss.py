@@ -17,7 +17,6 @@ import sys
 from math import pi, sqrt, ceil, floor
 from datetime import datetime
 
-import pyfits
 import pylab as plt
 import numpy as np
 
@@ -30,6 +29,21 @@ from astrometry.util.fits import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
+
+# makes an SDSS AsTrans WCS object look like an anwcs /  Tan / Sip
+class AsTransWrapper(object):
+    def __init__(self, wcs, w, h, x0=0, y0=0):
+        self.wcs = wcs
+        self.imagew = w
+        self.imageh = h
+        self.x0 = x0
+        self.y0 = y0
+    def pixelxy2radec(self, x, y):
+        r,d = self.wcs.pixel_to_radec(x+self.x0-1, y+self.y0-1)
+        return r, d
+    def radec2pixelxy(self, ra, dec):
+        x,y = self.wcs.radec_to_pixel(ra, dec)
+        return True, x-self.x0+1, y-self.y0+1
 
 ## FIXME -- these PSF params are not Params
 class SdssBrightPSF(ParamsWrapper):
@@ -45,8 +59,8 @@ class SdssBrightPSF(ParamsWrapper):
 
     def getRadius(self):
         return self.real.getRadius()
-    def getMixtureOfGaussians(self):
-        return self.real.getMixtureOfGaussians()
+    def getMixtureOfGaussians(self, **kwargs):
+        return self.real.getMixtureOfGaussians(**kwargs)
         
     def getBrightPointSourcePatch(self, px, py, dc):
         if dc > self.a3:
@@ -162,6 +176,7 @@ def _check_sdss_files(sdss, run, camcol, field, bandname, filetypes,
         exists = os.path.exists(fn)
         retrieveKwargs = {}
         if exists and tryopen:
+            import pyfits
             # This doesn't catch *all* types of errors you can imagine...
             try:
                 T = pyfits.open(fn)
@@ -236,6 +251,17 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
 
     WARNING, this method alters the "objs" argument, if given.
     Consider calling objs.copy() before calling.
+
+    -"bandname" is the SDSS band used to cut on position, select
+     star/gal/exp/dev, and set galaxy shapes.
+
+    -"bands" are the bands to include in the returned Source objects;
+     they will be initialized from the SDSS bands.
+
+    -"extrabands" are also included in the returned Source objects;
+     they will be initialized to the SDSS flux for either the first of
+     "bands", if given, or "bandname".
+
     
     '''
     #   brightPointSourceThreshold=0.):
@@ -704,6 +730,9 @@ def get_tractor_image(run, camcol, field, bandname,
     skyerr = psfield.getSkyErr(bandnum)
     invvar = sdss.getInvvar(fpC, fpM, gain, darkvar, sky, skyerr)
 
+    dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
+    info.update(dgpsf=dgpsf)
+    
     if roi is not None:
         roislice = (slice(y0,y1), slice(x0,x1))
         image = image[roislice].copy()
@@ -742,11 +771,10 @@ def get_tractor_image(run, camcol, field, bandname,
             print 'PSF model fit', psf, 'failed!  Returning DG model instead'
             psf = 'dg'
     if psf == 'dg':
-        dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
         print 'Creating double-Gaussian PSF approximation'
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])
-
+        
     timg = Image(data=image, invvar=invvar, psf=mypsf, wcs=wcs,
                  sky=skyobj, photocal=photocal,
                  name=('SDSS (r/c/f/b=%i/%i/%i/%s)' %
@@ -1029,6 +1057,9 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
         for plane in [ 'INTERP', 'SATUR', 'CR', 'GHOST' ]:
             fpM.setMaskedPixels(plane, invvar, 0, roi=roi)
 
+    dgpsf = psfield.getDoubleGaussian(bandnum, normalize=True)
+    info.update(dgpsf=dgpsf)
+            
     if psf == 'kl-pix':
         # Pixelized KL-PSF
         klpsf = psfield.getPsfAtPoints(bandnum, x0+W/2, y0+H/2)
@@ -1077,7 +1108,6 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
             print 'PSF model fit', psf, 'failed!  Returning DG model instead'
             psf = 'dg'
     if psf == 'dg':
-        dgpsf = psfield.getDoubleGaussian(bandnum)
         print 'Creating double-Gaussian PSF approximation'
         (a,s1, b,s2) = dgpsf
         mypsf = NCircularGaussianPSF([s1, s2], [a, b])
@@ -1561,9 +1591,9 @@ class SDSSTractor(Tractor):
         '''
         if isinstance(source, PointSource):
             eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           1., 0.5, 0.)
+                            GalaxyShape(1., 0.5, 0.))
             dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           1., 0.5, 0.)
+                           GalaxyShape(1., 0.5, 0.))
             #print 'Changing:'
             #print '  from ', source
             #print '  into', eg
@@ -1571,13 +1601,13 @@ class SDSSTractor(Tractor):
 
         elif isinstance(source, ExpGalaxy):
             dg = DevGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           source.re, source.ab, source.phi)
+                            GalaxyShape(source.re, source.ab, source.phi))
             ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
             return [ [], [ps], [dg] ]
 
         elif isinstance(source, DevGalaxy):
             eg = ExpGalaxy(source.getPosition().copy(), source.getBrightness().copy(),
-                           source.re, source.ab, source.phi)
+                           GalaxyShape(source.re, source.ab, source.phi))
             ps = PointSource(source.getPosition().copy(), source.getBrightness().copy())
             return [ [], [ps], [eg] ]
 

@@ -356,18 +356,14 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
         tractor = Tractor(tims, cat)
         t0 = Time()
 
-        # print 'Tractor: all params', tractor.numberOfParams()
-        # for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
-        #     print '  ', nm, v
-
         tractor.freezeParamsRecursive('*')
         if fitsky:
             tractor.thawPathsTo('sky')
         tractor.thawPathsTo(band)
 
-        # print 'Tractor: all params', tractor.numberOfParams()
-        # for nm,v in zip(tractor.getParamNames(), tractor.getParams()):
-        #     print '  ', nm, v
+        # Note that we have 5-band NanoMaggies objects, so the bands
+        # don't affect each other (ie, no need to worry about
+        # re-setting them to a default value)
 
         # ceres block size
         sz = 10
@@ -450,9 +446,15 @@ def sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, T, ps,
                 for k in fskeys:
                     T.set(k + '_' + band + tag, getattr(fitstats, k).astype(np.float32))
 
-            #if fitsky:
-            #    for imgj,tim in enumerate(tims):
-            #        T.set('sky_%s_%i%s' % (band, imgj, tag), np.array([tim.getSky().val] * len(T)))
+            if fitsky:
+                skies = np.array([tim.getSky().val for tim in tims])
+                z = np.zeros(len(T), int)
+                T.set('sky_%s_%s_n' % (band, tag), z + len(skies))
+                z = np.zeros(len(T), np.float32)
+                T.set('sky_%s_%s_mean' % (band, tag), z + np.mean(skies))
+                T.set('sky_%s_%s_min'  % (band, tag), z + np.min(skies))
+                T.set('sky_%s_%s_max'  % (band, tag), z + np.max(skies))
+                T.set('sky_%s_%s_med'  % (band, tag), z + np.median(skies))
 
             # ceres
             if fiti == 0:
@@ -473,10 +475,11 @@ def redqsos():
     #ps = PlotSequence('redqso')
 
     arr = os.environ.get('PBS_ARRAYID')
-    tag = ''
+    tag = '-b'
     if arr is not None:
         arr = int(arr)
-        chunk = 100
+        #chunk = 100
+        chunk = 50
         T = T[arr * chunk: (arr+1) * chunk]
         print 'Cut to chunk', (arr * chunk)
         tag = '-%03i' % arr
@@ -529,8 +532,8 @@ def redqsos():
         t = T[np.array([i])]
         sdss_forced_phot(r0,r1,d0,d1, rlo, rhi, dlo, dhi, t, ps,
                          sdss=sdss, fitsky=sky)
-        print 'Columns:', t.get_columns()
-        t.about()
+        #print 'Columns:', t.get_columns()
+        #t.about()
         
         for key in t.get_columns():
             if key in origcols:
@@ -554,14 +557,19 @@ def redqsos():
 class myopts(object):
     pass
 
+def finish_redqsos():
+    TT = [fits_table('wisew4phot-%03i.fits' % i) for i in range(642)]
+    T = merge_tables(TT, columns='fillzero')
+    T.writeto('wisew4phot.fits')
+
 '''
 text2fits.py -S 1 agn_coords.txt agn.fits
 '''
 if __name__ == '__main__':
     #h2()
     #h3()
-
-    redqsos()
+    #redqsos()
+    finish_redqsos()
     sys.exit(0)
 
     # merge
