@@ -1041,6 +1041,115 @@ class MovingPointSource(PointSource):
                 
         return derivs
 
+# ----------------------------------------------------------------------------
+
+class Lightcurve(MultiParams):
+    '''
+    BUGS:
+    - Never tested nor even run.
+    - Don't understand `getNamedParams()` nor how to use it.
+    '''
+	def __init__(self,brightnesses,images):
+        self.Nepochs = len(images)
+        self.times = np.array([image.getTime() for image in images])
+        self.bands = np.array([image.getBand() for image in images])
+        self.brightnesses = brightnesses
+        assert len(self.times) == len(self.brightnesses)
+        assert len(self.bands) == len(self.brightnesses)
+        return
+
+    @staticmethod
+    def getNamedParams():
+        return dict(brightnesses=0)
+        # Is this valid? "brightnesses" is a list 
+        # of multiparams, not a multiparams...
+        
+    def __str__(self):
+        return "hello world"
+        
+    def __repr__(self):
+        return "hello world (repr)"
+        
+    def getBrightness(self, band, time):
+        index = np.where((self.bands == band) * (self.times == time))
+        assert len(index[0]) == 1
+        return self.brightnesses[index]
+
+    def getDerivatives(self, band, time):
+        return ((self.bands == band) * (self.times == time)).astype(float)
+
+# ----------------------------------------------------------------------------
+
+class VariablePointSource(PointSource):
+    '''
+    PURPOSE
+      Define a point source object with brightness that can vary from
+      epoch to epoch, according to its multiband lightcurve.
+
+    COMMENTS
+      Variability is implemented as...
+      
+    INPUTS
+      pos - a Position object
+      lightcurve - a Lightcurve object
+      
+    '''
+    def __init__(self, pos, lightcurve):
+        assert(type(pos) is RaDecPos)
+        super(PointSource, self).__init__(pos, lightcurve)
+
+    @staticmethod
+    def getNamedParams():
+        return dict(pos=0, lightcurve=1)
+
+    def getSourceType(self):
+        return 'VariablePointSource'
+
+    def __str__(self):
+        return (self.getSourceType() + ' at ' + str(self.pos) +
+                ' with lightcurve ' + str(self.lightcurve))
+
+    def __repr__(self):
+        return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
+                repr(self.lightcurve) + ')')
+
+    def getBrightness(self):
+        assert False
+
+    def getBrightnessAtTime(self, band, time):
+        return self.lightcurve.getBrightness(band,time)
+    
+    def getPointSourceRelevantToImage(self, image):
+    	return PointSource(self.pos,
+        				   self.getBrightnessAtTime(image.getBand(),
+                                                    image.getTime()))
+
+    def getParamDerivatives(self, img):
+        '''
+        VariablePointSource derivatives.
+
+        returns [ Patch, Patch, ... ] of length numberOfParams().
+        
+        BUGS:
+        - MOST of the returned Patch objects are full zeros, which is dumb.
+        - Should we replace these with False or 0.?
+        '''
+        ps = self.getPointSourceRelevantToImage(img)
+        derivs = []
+        if not self.isParamFrozen('pos'):
+        	ps.freezeAll()
+            ps.thaw('pos')
+            derivs.extend(ps.getParamDerivatives())
+        if not self.isParamFrozen('lightcurve'):
+            ps.freezeAll()
+            ps.thaw('brightness')
+            bderiv = ps.getParamDerivatives()
+            dbdlc = self.lightcurve.getDerivatives(img)
+            derivs.extend([dd * bderiv for dd in dbdlc])
+        return derivs
+
+# ----------------------------------------------------------------------------
+
 class PixelizedPSF(BaseParams):
     '''
     A PSF model based on an image postage stamp, which will be
