@@ -42,7 +42,7 @@ class TAITime(ScalarParam, ArithmeticParams):
     '''
     This is TAI as used in the SDSS 'frame' headers; eg
 
-    TAI     =        4507681767.55 / 1st row - 
+    TAI     =        4507681767.55 / 1st row -
     Number of seconds since Nov 17 1858
 
     And http://mirror.sdss3.org/datamodel/glossary.html#tai
@@ -77,7 +77,7 @@ class TAITime(ScalarParam, ArithmeticParams):
         ''' to proper year '''
         return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
 
-        
+
 class Mags(ParamList):
     '''
     An implementation of `Brightness` that stores magnitudes in
@@ -133,13 +133,13 @@ class Mags(ParamList):
 
     def copy(self):
         return self*1.
-      
+
     def __mul__(self, factor):
         # Return the magnitude that corresponds to the flux rescaled by factor.
             # Flux is positive (and log(-ve) is not permitted), so we take the abs
             # of the input scale factor to prevent embarrassment.
             # Negative magnifications appear in gravitational lensing, but they just label
-        # the "parity" of the source, not its brightness. So, we treat factor=-3 the 
+        # the "parity" of the source, not its brightness. So, we treat factor=-3 the
         # same as factor=3, for example.
         kwargs = {}
         for band in self.order:
@@ -179,7 +179,7 @@ class Fluxes(Mags):
 
     def setBand(self, band, val):
         self.setMag(band, val)
-    setFlux = setBand   
+    setFlux = setBand
 
 class FluxesPhotoCal(BaseParams):
     def __init__(self, band):
@@ -342,7 +342,7 @@ class LinearPhotoCal(ScalarParam):
             #print 'Clamping counts up to zero:', counts, 'for brightness', brightness
             return 0.
         return counts
-        
+
 
 class NullWCS(BaseParams):
     '''
@@ -374,7 +374,7 @@ class WcslibWcs(BaseParams):
     rather than x0,y0.
 
     FIXME: we could implement anwcs_copy() using wcscopy().
-    
+
     '''
     def __init__(self, filename, hdu=0, wcs=None):
         self.x0 = 0.
@@ -409,7 +409,7 @@ class WcslibWcs(BaseParams):
         #print 'Unpickling: wcslib header string length:', len(hdrstr)
         self.wcs = anwcs_from_string(hdrstr)
         #print 'unpickling done'
-        
+
     def copy(self):
         raise RuntimeError('unimplemented')
 
@@ -480,7 +480,7 @@ class ConstantFitsWcs(ParamList):
 
     def copy(self):
         return ConstantFitsWcs(self.wcs)
-        
+
     def __str__(self):
         return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
                 + str(self.wcs))
@@ -532,7 +532,7 @@ class ConstantFitsWcs(ParamList):
     def pixel_scale(self):
         return self.wcs.pixel_scale()
 
-    
+
 ### FIXME -- this should be called TanWcs!
 class FitsWcs(ConstantFitsWcs):
     '''
@@ -728,7 +728,7 @@ class ConstantSky(ScalarParam):
 #     def __init__(self, val):
 #         super(OffsetConstantSky, self).__init__(val)
 #         self.offset = 0.
-# 
+#
 #     def getParams(self):
 #         return [self.val + self.offset]
 #     def setParams(self, p):
@@ -739,7 +739,7 @@ class ConstantSky(ScalarParam):
 #         oldval = self.val
 #         self._set(p - self.offset)
 #         return oldval + self.offset
-    
+
 
 
 class PointSource(MultiParams):
@@ -866,10 +866,10 @@ class PMRaDec(RaDecPos):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
         self.setStepSizes(1e-6)
-        
+
     # def setStepSizes(self, delta):
     #   self.stepsizes = [delta, delta]
-        
+
     @staticmethod
     def getNamedParams():
         return dict(pmra=0, pmdec=1)
@@ -882,7 +882,7 @@ class PMRaDec(RaDecPos):
     def getParamDerivatives(self, img):
         return [None]*self.numberOfParams()
 
-    
+
 class MovingPointSource(PointSource):
     def __init__(self, pos, brightness, pm, parallax, epoch=0.):
         # ASSUME 'pm' is the same type as 'pos'
@@ -942,7 +942,7 @@ class MovingPointSource(PointSource):
                                            dxyz2 * np.sin(suntheta))
         r,d = xyztoradec(xyz)
         return RaDecPos(r,d)
-    
+
     def getUnitFluxModelPatch(self, img, minval=0.):
         pos = self.getPositionAtTime(img.getTime())
         (px,py) = img.getWcs().positionToPixel(pos)
@@ -966,7 +966,7 @@ class MovingPointSource(PointSource):
 
         #print 'MovingPointSource.getParamDerivs:'
         #print 'initial pixel pos', px0, py0
-        
+
         # Position
 
         # FIXME -- could just compute positional derivatives once and
@@ -978,7 +978,7 @@ class MovingPointSource(PointSource):
         # if ((not self.isParamFrozen('pos')) or
         #   (not self.isParamFrozen('pm')) or
         #   (not self.isParamFrozen('parallax'))):
-        #   
+        #
         #   psteps = pos0.getStepSizes(img)
         #   pvals = pos0.getParams()
         #   for i,pstep in enumerate(psteps):
@@ -1012,7 +1012,7 @@ class MovingPointSource(PointSource):
         # print 'Finding RA,Dec derivatives'
         if not self.isParamFrozen('pos'):
             _add_posderivs(self.pos, 'pos')
-        
+
         # Brightness
         # print 'Finding Brightness derivatives'
         if not self.isParamFrozen('brightness'):
@@ -1038,46 +1038,96 @@ class MovingPointSource(PointSource):
         # print 'Finding Parallax derivatives'
         if not self.isParamFrozen('parallax'):
             _add_posderivs(self.parallax, 'parallax')
-                
+
         return derivs
 
 # ----------------------------------------------------------------------------
 
-class Lightcurve(MultiParams):
+class Lightcurve(ParamList):
     '''
-    BUGS:
-    - Never tested nor even run.
-    - Don't understand `getNamedParams()` nor how to use it.
+    An implementation of `Brightness` that stores magnitudes in
+    multiple bands at multiple times.
     '''
-	def __init__(self,brightnesses,images):
-        self.Nepochs = len(images)
+    def __init__(self,mags,images):
+        assert len(mags) == len(images)
         self.times = np.array([image.getTime() for image in images])
-        self.bands = np.array([image.getBand() for image in images])
-        self.brightnesses = brightnesses
-        assert len(self.times) == len(self.brightnesses)
-        assert len(self.bands) == len(self.brightnesses)
-        return
+        self.bands = np.array([image.getPhotoCal().band for image in images])
+        super(Lightcurve,self).__init__(*mags) # Copy from `Mags`
+        self.addNamedParams(**dict((self._paramName(i),i) for i in range(len(self.times))))
+        self.stepsizes = [0.01] * self.numberOfParams() # MAGIC Copy from `Mags`
 
-    @staticmethod
-    def getNamedParams():
-        return dict(brightnesses=0)
-        # Is this valid? "brightnesses" is a list 
-        # of multiparams, not a multiparams...
-        
-    def __str__(self):
-        return "hello world"
-        
-    def __repr__(self):
-        return "hello world (repr)"
-        
-    def getBrightness(self, band, time):
+    def _paramName(self, timeindex):
+        return "%s%03d" % (self.bands[timeindex], timeindex)
+
+    def getIndex(self, band, time):
         index = np.where((self.bands == band) * (self.times == time))
+        print "In lightcurve.getIndex, index = ",index
+        print "  band, self.bands = ",band, self.bands
+        print "  time, self.times = ",time, self.times
         assert len(index[0]) == 1
-        return self.brightnesses[index]
+        return index
 
-    def getDerivatives(self, band, time):
-        return ((self.bands == band) * (self.times == time)).astype(float)
+    def getMag(self, band, time):
+        ''' Bandname: string
+        Returns: mag in the given band at the given time.
+        '''
+        return getattr(self, self._paramName(self.getIndex(band, time)))
+        # Oh the horror
 
+# class OldLightcurve(MultiParams):
+#     '''
+#     BUGS:
+#     - Doesn't run:
+#          File "LensTractor.py", line 310, in main
+#            lightcurve = tractor.Lightcurve(magnitudes.copy(),dataset)
+#          File "/Users/pjm/work/tractor/tractor/basics.py", line 1055, in __init__
+#            self.brightness = brightness # eg, a "Mags" object...
+#          File "/Users/pjm/work/tractor/tractor/utils.py", line 230, in <lambda>
+#            return lambda x,v: x._setNamedThing(nm, v)
+#          File "/Users/pjm/work/tractor/tractor/utils.py", line 250, in _setNamedThing
+#            return self._setThing(self.namedparams[nm], v)
+#          File "/Users/pjm/work/tractor/tractor/utils.py", line 684, in _setThing
+#            self.subs[i] = val
+#        AttributeError: 'Lightcurve' object has no attribute 'subs'
+#     - Don't understand `getNamedParams()` nor how to use it.
+#     '''
+#     def __init__(self,brightness,images):
+#         self.Nepochs = len(images)
+# 
+#         print brightness
+#         self.brightness = brightness # eg, a "Mags" object...
+#         # First make sure we really are getting a *lightcurve* - one image per
+#         # epoch, model has one brightness per image:
+#         assert len(self.brightness) == len(images)
+# 
+#         self.times = np.array([image.getTime() for image in images])
+#         self.bands = np.array([image.getPhotoCal().band for image in images])
+# 
+#         assert len(self.times) == len(self.brightness)
+#         assert len(self.bands) == len(self.brightness)
+# 
+#         return
+# 
+#     @staticmethod
+#     def getNamedParams():
+#         return dict(brightness=0)
+#         # Is this valid? "brightness" is a Mags object,
+#         # not a multiparams...
+# 
+#     def __str__(self):
+#         return "hello world"
+# 
+#     def __repr__(self):
+#         return "hello world (repr)"
+# 
+#     def getBrightness(self, band, time):
+#         index = np.where((self.bands == band) * (self.times == time))
+#         assert len(index[0]) == 1
+#         return self.brightness[index]
+# 
+#     def getDerivatives(self, band, time):
+#         return ((self.bands == band) * (self.times == time)).astype(float)
+# 
 # ----------------------------------------------------------------------------
 
 class VariablePointSource(PointSource):
@@ -1088,11 +1138,11 @@ class VariablePointSource(PointSource):
 
     COMMENTS
       Variability is implemented as...
-      
+
     INPUTS
       pos - a Position object
       lightcurve - a Lightcurve object
-      
+
     '''
     def __init__(self, pos, lightcurve):
         assert(type(pos) is RaDecPos)
@@ -1117,19 +1167,29 @@ class VariablePointSource(PointSource):
         assert False
 
     def getBrightnessAtTime(self, band, time):
-        return self.lightcurve.getBrightness(band,time)
-    
+        return self.lightcurve.getMag(band,time)
+
     def getPointSourceRelevantToImage(self, image):
-    	return PointSource(self.pos,
-        				   self.getBrightnessAtTime(image.getBand(),
+        return PointSource(self.pos,
+                           self.getBrightnessAtTime(image.getPhotoCal().band,
                                                     image.getTime()))
+
+    def getModelPatch(self, image, minsb=0.):
+        counts = image.getPhotoCal().brightnessToCounts(self.getBrightnessAtTime(image.getPhotoCal().band,image.getTime()))
+        if counts == 0:
+            return None
+        minval = minsb / counts
+        upatch = self.getUnitFluxModelPatch(image, minval=minval)
+        if upatch is None:
+            return None
+        return upatch * counts
 
     def getParamDerivatives(self, img):
         '''
         VariablePointSource derivatives.
 
         returns [ Patch, Patch, ... ] of length numberOfParams().
-        
+
         BUGS:
         - MOST of the returned Patch objects are full zeros, which is dumb.
         - Should we replace these with False or 0.?
@@ -1137,15 +1197,15 @@ class VariablePointSource(PointSource):
         ps = self.getPointSourceRelevantToImage(img)
         derivs = []
         if not self.isParamFrozen('pos'):
-        	ps.freezeAll()
+            ps.freezeAll()
             ps.thaw('pos')
             derivs.extend(ps.getParamDerivatives())
         if not self.isParamFrozen('lightcurve'):
+            lcderivs = [0.] * self.lightcurve.numberOfParams() # does this work?
             ps.freezeAll()
             ps.thaw('brightness')
-            bderiv = ps.getParamDerivatives()
-            dbdlc = self.lightcurve.getDerivatives(img)
-            derivs.extend([dd * bderiv for dd in dbdlc])
+            lcderivs[self.lightcurve.getIndex(img.getPhotoCal().band, img.getTime())] = ps.getParamDerivatives()
+            derivs.extend(lcderivs)
         return derivs
 
 # ----------------------------------------------------------------------------
@@ -1156,7 +1216,7 @@ class PixelizedPSF(BaseParams):
     sinc-shifted to subpixel positions.
 
     (Actually Lanczos shifted, with order Lorder)
-    
+
     This will allow only Point Sources to be rendered by the Tractor!
 
     FIXME -- currently this class claims to have no params.
@@ -1167,7 +1227,7 @@ class PixelizedPSF(BaseParams):
         assert((H % 2) == 1)
         assert((W % 2) == 1)
         self.Lorder = Lorder
-        
+
     def __str__(self):
         return 'PixelizedPSF'
 
@@ -1203,7 +1263,7 @@ class PixelizedPSF(BaseParams):
 
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
-    
+
 class GaussianMixturePSF(ParamList):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
@@ -1222,7 +1282,7 @@ class GaussianMixturePSF(ParamList):
         super(GaussianMixturePSF, self).__init__()
 
         del self.vals
-        
+
         K = self.mog.K
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
 
@@ -1248,7 +1308,7 @@ class GaussianMixturePSF(ParamList):
 
     def applyTo(self, image):
         raise
-    
+
     def scaleBy(self, factor):
         # Use not advised, ever
         amp = self.mog.amp
@@ -1259,7 +1319,7 @@ class GaussianMixturePSF(ParamList):
     def shiftBy(self, dx, dy):
         self.mog.mean[:,0] += dx
         self.mog.mean[:,1] += dy
-    
+
     def computeRadius(self):
         import numpy.linalg
         # ?
@@ -1269,7 +1329,7 @@ class GaussianMixturePSF(ParamList):
         #   print 'Var', v
         #   print 'Eigs:', numpy.linalg.eigvalsh(v)
         return self.getNSigma() * np.sqrt(meig)
-        
+
     def getNSigma(self):
         # MAGIC -- N sigma for rendering patches
         return 5.
@@ -1312,7 +1372,7 @@ class GaussianMixturePSF(ParamList):
                 return None
             if y0 > y1:
                 return None
-                
+
             grid = self.mog.evaluate_grid_approx(x0, x1+1, y0, y1+1,
                                                  px, py, minval)
 
@@ -1336,7 +1396,7 @@ class GaussianMixturePSF(ParamList):
                 tuple(self.mog.amp),
                 tuple(self.mog.mean.ravel()),
                 tuple(self.mog.var.ravel()),)
-    
+
     def copy(self):
         return GaussianMixturePSF(self.mog.amp.copy(),
                                   self.mog.mean.copy(),
@@ -1412,7 +1472,7 @@ class GaussianMixturePSF(ParamList):
         em_fit_2d_reg(stamp, xm, ym, w, mu, sig, alpha, emsteps)
         tpsf = GaussianMixturePSF(w, mu, sig)
         return tpsf
-    
+
 class NCircularGaussianPSF(MultiParams):
     '''
     A PSF model using N concentric, circular Gaussians.
@@ -1433,7 +1493,7 @@ class NCircularGaussianPSF(MultiParams):
         assert(len(sigmas) == len(weights))
         super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
         self.minradius = 1.
-        
+
     @staticmethod
     def getNamedParams():
         return dict(sigmas=0, weights=1)
@@ -1471,7 +1531,7 @@ class NCircularGaussianPSF(MultiParams):
         return mp.MixtureOfGaussians(self.myweights,
                                      mymeans,
                                      np.array(self.mysigmas)**2)
-        
+
     def proposeIncreasedComplexity(self, img):
         maxs = np.max(self.mysigmas)
         # MAGIC -- make new Gaussian with variance bigger than the biggest
@@ -1520,7 +1580,7 @@ class NCircularGaussianPSF(MultiParams):
         # print 'Hashkey', hk
         # print hash(hk)
         return hk
-    
+
     def copy(self):
         cc = NCircularGaussianPSF(list([s for s in self.sigmas]),
                                   list([w for w in self.weights]))
@@ -1531,7 +1591,7 @@ class NCircularGaussianPSF(MultiParams):
         from scipy.ndimage.filters import gaussian_filter
         # gaussian_filter normalizes the Gaussian; the output has ~ the
         # same sum as the input.
-        
+
         res = np.zeros_like(image)
         for s,w in zip(self.sigmas, self.weights):
             res += w * gaussian_filter(image, s)
@@ -1577,12 +1637,12 @@ class NCircularGaussianPSF(MultiParams):
 #       super(SubImage, self).__init__(data=data, invvar=invvar, psf=psf,
 #                                      wcs=wcs, sky=sky, photocal=photocal,
 #                                      name='sub'+im.name)
-# 
+#
 # class SubSky(object):
 #   def __init__(self, sky, roi):
 #       self.sky = sky
 #       self.roi = roi
-# 
+#
 #   #def getParamDerivatives(self, img):
 #   def addTo(self, mod):
 
@@ -1630,7 +1690,7 @@ class ShiftedPsf(ParamsWrapper):
     def getMixtureOfGaussians(self, **kwargs):
         return self.psf.getMixtureOfGaussians(**kwargs)
 
-    
+
 class ScaledPhotoCal(ParamsWrapper):
     def __init__(self, photocal, factor):
         super(ScaledPhotoCal,self).__init__(photocal)
