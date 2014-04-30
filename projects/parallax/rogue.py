@@ -7,8 +7,8 @@ import pylab as plt
 import os
 import datetime
 
-import emcee
-import triangle
+#import emcee
+#import triangle
 
 import fitsio
 
@@ -208,10 +208,30 @@ def plot_tracks(src, fakewcs, spa=None, **kwargs):
 
     return rr,dd,tt
 
-def search(ps):
-    II = [fitsio.read('e%i/134/1342m076/unwise-1342m076-w2-img-m.fits' % e) for e in [0,1]]
-    PP = [fitsio.read('e%i/134/1342m076/unwise-1342m076-w2-std-m.fits' % e) for e in [0,1]]
+from detection import *
+
+def search(tile):
+
+    if os.path.exists('rogue-%s-02.png' % tile) and not os.path.exists('rogue-%s-03.png' % tile):
+        print 'Skipping', tile
+        return
+
+    fn = os.path.join(tile[:3], tile, 'unwise-%s-w2-%%s-m.fits' % tile)
+
+    try:
+        II = [fitsio.read(os.path.join('e%i' % e, fn%'img')) for e in [1,2]]
+        PP = [fitsio.read(os.path.join('e%i' % e, fn%'std')) for e in [1,2]]
+        wcs = Tan(os.path.join('e%i' % 1, fn%'img'))
+    except:
+        import traceback
+        print
+        print 'Failed to read data for tile', tile
+        traceback.print_exc()
+        print
+        return
     H,W = II[0].shape
+
+    ps = PlotSequence('rogue-%s' % tile)
 
     aa = dict(interpolation='nearest', origin='lower')
     ima = dict(interpolation='nearest', origin='lower',
@@ -247,13 +267,13 @@ def search(ps):
     plt.title('X')
     ps.savefig()
 
-    plt.clf()
-    plt.hist(np.minimum(100, PP[0].ravel()), 100, range=(0,100),
-             histtype='step', color='r')
-    plt.hist(np.minimum(100, PP[1].ravel()), 100, range=(0,100),
-             histtype='step', color='b')
-    plt.title('Per-pixel std')
-    ps.savefig()
+    # plt.clf()
+    # plt.hist(np.minimum(100, PP[0].ravel()), 100, range=(0,100),
+    #          histtype='step', color='r')
+    # plt.hist(np.minimum(100, PP[1].ravel()), 100, range=(0,100),
+    #          histtype='step', color='b')
+    # plt.title('Per-pixel std')
+    # ps.savefig()
     
     #Y = ((II[0] - II[1]) / np.hypot(PP[0], PP[1]))
     #Y = gaussian_filter(
@@ -265,8 +285,6 @@ def search(ps):
     #print 'xx', xx
     #print 'yy', yy
 
-    from detection import *
-    
     hot = (X > xthresh)
     peak = find_peaks(hot, X)
     dilate=2
@@ -320,6 +338,9 @@ def search(ps):
         keep.append(i)
 
     keep = np.array(keep)
+    if len(keep) == 0:
+        print 'No objects passed cuts'
+        return
     xx = xx[keep]
     yy = yy[keep]
 
@@ -340,11 +361,13 @@ def search(ps):
         yhi.append(np.max(Y[slc2]))
     plt.clf()
     plt.plot(ylo,yhi, 'r.')
+    plt.axis('scaled')
     ps.savefig()
 
     for i,(x,y) in enumerate(zip(xx,yy)[:50]):
         print x,y
         rows,cols = 2,3
+        ra,dec = wcs.pixelxy2radec(x+1, y+1)
         
         slc = slice(y-S, y+S+1), slice(x-S, x+S+1)
         slc2 = slice(y-3, y+3+1), slice(x-3, x+3+1)
@@ -358,38 +381,44 @@ def search(ps):
 
         plt.subplot(rows,cols,1)
         plt.imshow(II[0][slc], **ima)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('epoch 1')
         
         plt.subplot(rows,cols,2)
         plt.imshow(II[1][slc], **ima)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('epoch 2')
 
         plt.subplot(rows,cols,3)
         plt.imshow(PP[0][slc], **aa)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('std 1')
 
         plt.subplot(rows,cols,6)
         plt.imshow(PP[1][slc], **aa)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('std 2')
         
         plt.subplot(rows,cols,4)
         plt.imshow(X[slc], **aa)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('X')
 
         plt.subplot(rows,cols,5)
         plt.imshow(Y[slc], **aa)
+        plt.xticks([]); plt.yticks([])
         plt.colorbar()
         plt.title('Y')
 
-        plt.suptitle('Flux: %4.0f, Range: %.2g %.2g' % (mx, miny,maxy))
+        #plt.suptitle('Tile %s, Flux: %4.0f, Range: %.2g %.2g' % (tile,mx,miny,maxy))
+        plt.suptitle('Tile %s, RA,Dec (%.4f, %.4f)' % (tile, ra, dec))
         
         ps.savefig()
-
 
         
 if __name__ == '__main__':
@@ -402,9 +431,9 @@ if __name__ == '__main__':
     #sz = 0.01
     sz = 0.006
 
-    ps = PlotSequence('rogue')
-
-    search(ps)
+    A = fits_table('three-atlas.fits')
+    for tile in A.coadd_id:
+        search(tile)
     
     # II = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-img-m.fits' % e) for e in [0,1]]
     # PP = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-std-m.fits' % e) for e in [0,1]]
