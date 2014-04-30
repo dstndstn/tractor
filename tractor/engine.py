@@ -1024,7 +1024,15 @@ class Tractor(MultiParams):
         return x
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
-                      umodels, scales, nilcounts):
+                      umodels, scales, nilcounts, extras=[]):
+        '''
+        extras: [ ('key', [eim0,eim1,eim2]), ... ]
+
+        Extra fields to add to the "FitStats" object, populated by
+        taking the profile-weighted sum of 'eim*'.  The number of
+        these images *must* match the number and shape of Tractor
+        images.
+        '''
         class FitStats(object):
             pass
         fs = FitStats()
@@ -1050,7 +1058,11 @@ class Tractor(MultiParams):
         # total number of pixels touched by this source
         fs.npix = np.zeros(len(srcs), int)
 
-        # subtract sky from models before measuring others' flux within my profile
+        for key,x in extras:
+            setattr(fs, key, np.zeros(len(srcs)))
+
+        # subtract sky from models before measuring others' flux
+        # within my profile
         skies = []
         for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
             tim.getSky().addTo(mod, scale=-1.)
@@ -1120,6 +1132,11 @@ class Tractor(MultiParams):
                 # scale to nanomaggies, weight by profile
                 fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*csum) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
+
+                for key,extraims in extras:
+                    x = getattr(fs, key)
+                    x[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * extraims[imi][slc].flat[nz])
+
                 srcmod[slc] = 0.
 
         # re-add sky
