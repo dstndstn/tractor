@@ -1033,6 +1033,9 @@ class Tractor(MultiParams):
         these images *must* match the number and shape of Tractor
         images.
         '''
+        if extras is None:
+            extras = []
+
         class FitStats(object):
             pass
         fs = FitStats()
@@ -1502,6 +1505,7 @@ class Tractor(MultiParams):
                                    sky=False,
                                    minFlux=None,
                                    fitstats=False,
+                                   fitstat_extras=None,
                                    justims0=False,
                                    variance=False,
                                    skyvariance=False,
@@ -1667,7 +1671,7 @@ class Tractor(MultiParams):
         elif fitstats:
             t0 = Time()
             result.fitstats = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
-                                                 umodels, scales, nilcounts)
+                                                 umodels, scales, nilcounts, extras=fitstat_extras)
             logverb('forced phot: fit stats:', Time()-t0)
         return result
 
