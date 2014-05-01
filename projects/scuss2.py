@@ -740,22 +740,30 @@ def plot_results(outfn, ps, T=None):
     sdssu = -2.5*(np.log10(T.psfflux[:,0])-9)
     sdssg = -2.5*(np.log10(T.psfflux[:,1])-9)
 
+    sdssugal = -2.5*(np.log10(T.modelflux[:,0])-9)
+
     #sdssu = -2.5*(np.log10(T.modelflux[:,0])-9)
     #sdssg = -2.5*(np.log10(T.modelflux[:,1])-9)
     #cmag = C.u
     #cmag = C.u + 0.241 * (sdssu - sdssg)
     #cmag += (4.705 * C.ebv)
 
-    def _comp_plot(cmag, smag, tt):
+    def _comp_plot(smag, cmag, tt, xname='SDSS', yname='CFHTLS'):
         plt.clf()
         lo,hi = 13, 26
-        p1 = plt.plot(cmag[stars], smag[stars], 'b.', ms=5, alpha=0.5)
-        p2 = plt.plot(cmag[gals] , smag[gals ], 'g.', ms=5, alpha=0.5)
-        plt.xlabel('CFHTLS u mag')
-        plt.ylabel('SDSS u mag')
-        plt.title('CFHTLS vs SDSS' + tt)
-        plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
-        plt.axis([hi,lo,hi,lo])
+        # p1 = plt.plot(cmag[stars], smag[stars], 'b.', ms=5, alpha=0.5)
+        # p2 = plt.plot(cmag[gals] , smag[gals ], 'g.', ms=5, alpha=0.5)
+        # plt.xlabel('CFHTLS u mag')
+        # plt.ylabel('SDSS u mag')
+        p1 = plt.plot(smag[stars], cmag[stars] - smag[stars], 'b.', ms=5, alpha=0.5)
+        p2 = plt.plot(smag[gals ], cmag[gals]  - smag[gals ], 'g.', ms=5, alpha=0.5)
+        plt.xlabel('%s u mag' % xname)
+        plt.ylabel('%s u mag - %s u mag' % (yname,xname))
+        plt.title(tt)
+        #plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.25, lw=2)
+        #plt.axis([hi,lo,hi,lo])
+        plt.axhline(0, color='b', alpha=0.25, lw=2)
+        plt.axis([hi,lo,-2,2])
         plt.legend((p1[0],p2[0]), ('Stars','Galaxies'), loc='lower right')
         ps.savefig()
 
@@ -765,19 +773,46 @@ def plot_results(outfn, ps, T=None):
     eu = 4.705 * C.ebv
     ct = 0.241 * (sdssu - sdssg)
 
-    _comp_plot(smag, cmag, ' -- raw')
+    sboth = np.zeros_like(smag)
+    sboth[stars] = sdssu[stars]
+    sboth[gals] = sdssugal[gals]
 
-    _comp_plot(smag, cmag + eu, ' -- un-extincted')
+    _comp_plot(smag, cmag, 'CFHTLS vs SDSS -- raw (PSF)')
 
-    _comp_plot(smag, cmag + ct, ' -- color term')
+    _comp_plot(sdssugal, cmag, 'CFHTLS vs SDSS -- raw (model)')
 
-    _comp_plot(smag, cmag + ct + eu, ' -- un-extincted, color term')
+    _comp_plot(sboth, cmag, 'CFHTLS vs SDSS -- raw')
 
-    _comp_plot(smag, cmag - eu, ' -- -un-extincted')
+    _comp_plot(sboth, cmag + eu, 'CFHTLS vs SDSS -- un-extincted')
 
-    _comp_plot(smag, cmag + ct - eu, ' -- -un-extincted, color term')
+    _comp_plot(sboth, cmag + ct, 'CFHTLS vs SDSS -- color term')
 
+    #_comp_plot(sboth, cmag + ct + eu, 'CFHTLS vs SDSS -- un-extincted, color term')
+    #_comp_plot(sboth, cmag - eu, 'CFHTLS vs SDSS -- -un-extincted')
+    #_comp_plot(sboth, cmag + ct - eu, 'CFHTLS vs SDSS -- -un-extincted, color term')
 
+    _comp_plot(cmag + ct, tmag, 'CFHTLS+ct vs Tractor(SCUSS)',
+               xname='CFHTLS', yname='Tractor(SCUSS)')
+    _comp_plot(cmag, tmag, 'CFHTLS vs Tractor(SCUSS)',
+               xname='CFHTLS', yname='Tractor(SCUSS)')
+    _comp_plot(sboth, tmag, 'SDSS vs Tractor(SCUSS)',
+               xname='SDSS', yname='Tractored SCUSS')
+
+    plt.clf()
+    keep = ((cmag > 17) * (cmag < 22))
+    plt.plot((sdssu-sdssg)[keep * stars], (tmag - cmag)[keep * stars], 'b.',
+             ms=5, alpha=0.5)
+    plt.plot((sdssu-sdssg)[keep *  gals], (tmag - cmag)[keep *  gals], 'g.',
+             ms=5, alpha=0.5)
+    plt.xlabel('SDSS u-g')
+    plt.ylabel('Tractor(SCUSS) - CFHTLS')
+    plt.axis([-1,4,-1,1])
+    ps.savefig()
+    
+    # I = np.flatnonzero((sboth < 16) * ((cmag + ct - sboth) > 0.25))
+    # for r,d in zip(T.ra[I], T.dec[I]):
+    #     print 'RA,Dec', r,d
+    #     print 'http://skyservice.pha.jhu.edu/DR10/ImgCutout/getjpeg.aspx?ra=%.5f&dec=%.5f&width=100&height=100' % (r,d)
 
     # ???
     # sdssu -= T.extinction[:,0]
