@@ -12,6 +12,7 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 
 import tractor
+import fitsio
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -115,14 +116,9 @@ def create_average_psf_model(bright=False):
                 psfsum = psfsum + I
         psfsum /= psfsum.sum()
         fitsio.write('wise-psf-avg-pix%s.fits' % btag, psfsum, clobber=(band == 1))
-        ### HACK
-        continue
 
         psf = GaussianMixturePSF.fromStamp(psfsum)
-        #fn = 'wise-psf-avg-w%i.fits' % band
         fn = 'wise-psf-avg.fits'
-        #fitsio.write(fn, psf, clobber=True)
-        #print 'Wrote', fn        
         T = fits_table()
         T.amp = psf.mog.amp
         T.mean = psf.mog.mean
@@ -165,8 +161,114 @@ def create_wise_psf_models(bright, K=3):
 
 if __name__ == '__main__':
 
-    create_average_psf_model()
-    create_average_psf_model(bright=True)
+    #create_average_psf_model()
+    #create_average_psf_model(bright=True)
+
+    from astrometry.util.util import *
+
+    band = 4
+    pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
+    fit = fits_table('wise-psf-avg.fits', hdu=band)
+
+    scale = 1.
+
+    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+
+    h,w = pix.shape
+    # Render the model PSF to check that it looks okay
+    psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
+
+    slc = slice(h/2-8, h/2+8), slice(w/2-8, w/2+8)
+
+    opix = pix
+    pix /= pix.sum()
+    pix = pix[slc]
+
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+
+    mx = mod.max()
+
+    ps = PlotSequence('psf')
+    plt.clf()
+    plt.imshow(pix, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(mod, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(pix-mod, interpolation='nearest', origin='lower', vmin=-0.1*mx, vmax=0.1*mx)
+    ps.savefig()
+
+
+    # Lanczos sub-sample
+    sh,sw = opix.shape
+    scale = 2
+    # xx,yy = np.meshgrid(np.linspace(-0.5, sw-0.5, scale*sw),
+    #                     np.linspace(-0.5, sh-0.5, scale*sh))
+    xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
+                        np.arange(0, sh, 1./scale)[:-1])
+    lh,lw = xx.shape
+    xx = xx.ravel()
+    yy = yy.ravel()
+    ix = np.round(xx).astype(np.int32)
+    iy = np.round(yy).astype(np.int32)
+    dx = (xx - ix).astype(np.float32)
+    dy = (yy - iy).astype(np.float32)
+    RR = [np.zeros(lh*lw, np.float32)]
+    LL = [opix]
+    lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
+    lpix = RR[0].reshape((lh,lw))
+    #lh,lw = lpix.shape
+    print 'new size', lh,lw
+    print 'vs', lpix.shape
+    
+    slc = slice(lh/2-16, lh/2+16), slice(lw/2-16, lw/2+16)
+
+    print 'lpix sum', lpix.sum()
+    lpix = lpix / lpix.sum()
+    lpix = lpix[slc]
+
+    scale = 2.
+    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+    # Render the model PSF to check that it looks okay
+    psfmodel = psf.getPointSourcePatch(0., 0., radius=lh/2)
+
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+    mx = mod.max()
+
+
+    plt.clf()
+    plt.imshow(lpix, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(mod, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(lpix-mod, interpolation='nearest', origin='lower', vmin=-0.1*mx, vmax=0.1*mx)
+    ps.savefig()
+                                                                                                                
+
+    psfx = GaussianMixturePSF.fromStamp(lpix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
+    psfmodel = psfx.getPointSourcePatch(0., 0., radius=lh/2)
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+    mx = mod.max()
+
+    plt.clf()
+    plt.imshow(lpix, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(mod, interpolation='nearest', origin='lower', vmin=0, vmax=mx)
+    ps.savefig()
+    plt.clf()
+    plt.imshow(lpix-mod, interpolation='nearest', origin='lower', vmin=-0.1*mx, vmax=0.1*mx)
+    ps.savefig()
+
     sys.exit(0)
 
     #create_wise_psf_models(True)
