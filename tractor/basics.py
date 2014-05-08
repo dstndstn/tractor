@@ -1135,7 +1135,9 @@ class GaussianMixturePSF(ParamList):
     #     return 0.
 
     def getMixtureOfGaussians(self, mean=None):
-        return self.mog
+        mog = self.mog
+        mog.symmetrize()
+        return mog
 
     def applyTo(self, image):
         raise
@@ -1171,6 +1173,7 @@ class GaussianMixturePSF(ParamList):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None,
                             radius=None, **kwargs):
+        self.mog.symmetrize()
         if minval > 0.:
             if radius is not None:
                 rr = radius
