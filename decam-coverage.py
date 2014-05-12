@@ -81,7 +81,7 @@ T.filter = filts
 ufilts = np.unique(T.filter)
 print 'Unique filters:', ufilts
 
-ps = PlotSequence('decam')
+ps = PlotSequence('decov')
 
 plt.clf()
 plt.plot(T.ra, T.dec, 'b.')
