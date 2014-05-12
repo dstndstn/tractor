@@ -54,8 +54,19 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{abstract}
-We demonstrate the Tractor's performace in several different
-settings, including galaxy shape and photometry inference.
+
+We present a new open-source software package, The Tractor, which enables
+probabilistic modeling of astronomical images.  We use a mixture of Gaussians
+to describe both galaxies and point spread functions, and compare these models
+directly to the pixels of all available images via the joint likelihood
+function. The code includes a simple bit robust optimiser, for locating the
+peak of the posterior PDF for the model parameters, and can also call an MCMC
+sampler for characterising the full distribution.
+We demonstrate the Tractor's performace in several
+different settings, including galaxy shape and photometry inference, in
+heterogeneous datasets involving multiple bandpasses, observing epochs,
+instrumentation, and observing conditions. We show that...
+
 % We don't go into much detail, simply referring to MBI1.  I think we have lots of other
 % content, so there's no need to talk about our Great3 efforts in any depth.
 \end{abstract}
