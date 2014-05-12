@@ -7,8 +7,8 @@ import pylab as plt
 import os
 import datetime
 
-import emcee
-import triangle
+#import emcee
+#import triangle
 
 import fitsio
 
@@ -24,6 +24,8 @@ from astrometry.util.starutil_numpy import *
 from astrometry.util.ttime import *
 from astrometry.libkd.spherematch import *
 from astrometry.blind.plotstuff import *
+
+from scipy.ndimage.filters import *
 
 from unwise_coadd import get_wise_frames, get_l1b_file
 from wise.wise import *
@@ -206,6 +208,219 @@ def plot_tracks(src, fakewcs, spa=None, **kwargs):
 
     return rr,dd,tt
 
+from detection import *
+
+def search(tile):
+
+    if os.path.exists('rogue-%s-02.png' % tile) and not os.path.exists('rogue-%s-03.png' % tile):
+        print 'Skipping', tile
+        return
+
+    fn = os.path.join(tile[:3], tile, 'unwise-%s-w2-%%s-m.fits' % tile)
+
+    try:
+        II = [fitsio.read(os.path.join('e%i' % e, fn%'img')) for e in [1,2]]
+        PP = [fitsio.read(os.path.join('e%i' % e, fn%'std')) for e in [1,2]]
+        wcs = Tan(os.path.join('e%i' % 1, fn%'img'))
+    except:
+        import traceback
+        print
+        print 'Failed to read data for tile', tile
+        traceback.print_exc()
+        print
+        return
+    H,W = II[0].shape
+
+    ps = PlotSequence('rogue-%s' % tile)
+
+    aa = dict(interpolation='nearest', origin='lower')
+    ima = dict(interpolation='nearest', origin='lower',
+               vmin=-100, vmax=500)
+
+    plt.clf()
+    plt.imshow(II[0], **ima)
+    plt.title('Epoch 1')
+    ps.savefig()
+    plt.clf()
+    plt.imshow(II[1], **ima)
+    plt.title('Epoch 2')
+    ps.savefig()
+
+    # X = gaussian_filter(np.abs((II[0] - II[1]) / np.hypot(PP[0], PP[1])), 1.0)
+    # plt.clf()
+    # plt.imshow(X, interpolation='nearest', origin='lower')
+    # plt.title('Blurred abs difference / per-pixel-std')
+    # ps.savefig()
+
+    # Y = (II[0] - II[1]) / reduce(np.hypot, [PP[0], PP[1], np.hypot(100,II[0]), np.hypot(100,II[1]) ])
+    Y = (II[0] - II[1]) / reduce(np.hypot, [PP[0], PP[1]])
+    X = gaussian_filter(np.abs(Y), 1.0)
+
+    xthresh = 3.
+    
+    print 'Value at rogue:', X[1452, 1596]
+
+    print 'pp at rogue:', [pp[1452,1596] for pp in PP]
+    
+    plt.clf()
+    plt.imshow(X, interpolation='nearest', origin='lower')
+    plt.title('X')
+    ps.savefig()
+
+    # plt.clf()
+    # plt.hist(np.minimum(100, PP[0].ravel()), 100, range=(0,100),
+    #          histtype='step', color='r')
+    # plt.hist(np.minimum(100, PP[1].ravel()), 100, range=(0,100),
+    #          histtype='step', color='b')
+    # plt.title('Per-pixel std')
+    # ps.savefig()
+    
+    #Y = ((II[0] - II[1]) / np.hypot(PP[0], PP[1]))
+    #Y = gaussian_filter(
+    #    (II[0] - II[1]) / np.hypot(100, np.hypot(II[0], II[1]))
+    #    , 1.0)
+
+    #I = np.argsort(-X.ravel())
+    #yy,xx = np.unravel_index(I[:25], X.shape)
+    #print 'xx', xx
+    #print 'yy', yy
+
+    hot = (X > xthresh)
+    peak = find_peaks(hot, X)
+    dilate=2
+    hot = binary_dilation(hot, structure=np.ones((3,3)), iterations=dilate)
+    blobs,nblobs = label(hot, np.ones((3,3), int))
+    blobslices = find_objects(blobs)
+    # Find maximum pixel within each blob.
+    BX,BY = [],[]
+    BV = []
+    for b,slc in enumerate(blobslices):
+        sy,sx = slc
+        y0,y1 = sy.start, sy.stop
+        x0,x1 = sx.start, sx.stop
+        bl = blobs[slc]
+        i = np.argmax((bl == (b+1)) * X[slc])
+        iy,ix = np.unravel_index(i, dims=bl.shape)
+        by = iy + y0
+        bx = ix + x0
+        BX.append(bx)
+        BY.append(by)
+        BV.append(X[by,bx])
+    BX = np.array(BX)
+    BY = np.array(BY)
+    BV = np.array(BV)
+    I = np.argsort(-BV)
+    xx,yy = BX[I],BY[I]
+
+    keep = []
+    S = 15
+    for i,(x,y) in enumerate(zip(xx,yy)):
+        #print x,y
+        if x < S or y < S or x+S >= W or y+S >= H:
+            continue
+
+        slc = slice(y-S, y+S+1), slice(x-S, x+S+1)
+        slc2 = slice(y-3, y+3+1), slice(x-3, x+3+1)
+
+        mx = np.max((II[0][slc] + II[1][slc])/2.)
+        #print 'Max within slice:', mx
+        #if mx > 5e3:
+        if mx > 2e3:
+            continue
+
+        mx2 = np.max((II[0][slc2] + II[1][slc2])/2.)
+        print 'Flux near object:', mx2
+        if mx2 < 250:
+            continue
+        
+        #miny = np.min(Y[slc2])
+        #maxy = np.max(Y[slc2])
+        keep.append(i)
+
+    keep = np.array(keep)
+    if len(keep) == 0:
+        print 'No objects passed cuts'
+        return
+    xx = xx[keep]
+    yy = yy[keep]
+
+    plt.clf()
+    plt.imshow(X, interpolation='nearest', origin='lower', cmap='gray')
+    plt.title('X')
+    ax = plt.axis()
+    plt.plot(xx, yy, 'r+')
+    plt.plot(1596, 1452, 'o', mec=(0,1,0), mfc='none')
+    plt.axis(ax)
+    ps.savefig()
+
+    ylo,yhi = [],[]
+    for i in range(min(len(xx), 100)):
+        x,y = xx[i],yy[i]
+        slc2 = slice(y-3, y+3+1), slice(x-3, x+3+1)
+        ylo.append(np.min(Y[slc2]))
+        yhi.append(np.max(Y[slc2]))
+    plt.clf()
+    plt.plot(ylo,yhi, 'r.')
+    plt.axis('scaled')
+    ps.savefig()
+
+    for i,(x,y) in enumerate(zip(xx,yy)[:50]):
+        print x,y
+        rows,cols = 2,3
+        ra,dec = wcs.pixelxy2radec(x+1, y+1)
+        
+        slc = slice(y-S, y+S+1), slice(x-S, x+S+1)
+        slc2 = slice(y-3, y+3+1), slice(x-3, x+3+1)
+
+        mx = max(np.max(II[0][slc]), np.max(II[1][slc]))
+        print 'Max within slice:', mx
+        miny = np.min(Y[slc2])
+        maxy = np.max(Y[slc2])
+        
+        plt.clf()
+
+        plt.subplot(rows,cols,1)
+        plt.imshow(II[0][slc], **ima)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('epoch 1')
+        
+        plt.subplot(rows,cols,2)
+        plt.imshow(II[1][slc], **ima)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('epoch 2')
+
+        plt.subplot(rows,cols,3)
+        plt.imshow(PP[0][slc], **aa)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('std 1')
+
+        plt.subplot(rows,cols,6)
+        plt.imshow(PP[1][slc], **aa)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('std 2')
+        
+        plt.subplot(rows,cols,4)
+        plt.imshow(X[slc], **aa)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('X')
+
+        plt.subplot(rows,cols,5)
+        plt.imshow(Y[slc], **aa)
+        plt.xticks([]); plt.yticks([])
+        plt.colorbar()
+        plt.title('Y')
+
+        #plt.suptitle('Tile %s, Flux: %4.0f, Range: %.2g %.2g' % (tile,mx,miny,maxy))
+        plt.suptitle('Tile %s, RA,Dec (%.4f, %.4f)' % (tile, ra, dec))
+        
+        ps.savefig()
+
+        
 if __name__ == '__main__':
     import logging
     lvl = logging.INFO
@@ -216,8 +431,62 @@ if __name__ == '__main__':
     #sz = 0.01
     sz = 0.006
 
-    ps = PlotSequence('rogue')
+    A = fits_table('three-atlas.fits')
+    for tile in A.coadd_id:
+        search(tile)
+    
+    # II = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-img-m.fits' % e) for e in [0,1]]
+    # PP = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-std-m.fits' % e) for e in [0,1]]
+    # 
+    # plt.clf()
+    # plt.imshow(II[0], interpolation='nearest', origin='lower', vmin=-100, vmax=500)
+    # plt.title('Epoch 1')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(II[1], interpolation='nearest', origin='lower', vmin=-100, vmax=500)
+    # plt.title('Epoch 2')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(II[0] - II[1], interpolation='nearest', origin='lower', vmin=-300, vmax=300)
+    # plt.title('Raw difference')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(np.abs(II[0] - II[1]), interpolation='nearest', origin='lower', vmin=0, vmax=300)
+    # plt.title('Abs raw difference')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(gaussian_filter(np.abs(II[0] - II[1]), 1.), interpolation='nearest', origin='lower', vmin=0, vmax=300)
+    # plt.title('Blurred abs raw difference')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(gaussian_filter(np.abs(II[0] - II[1]), 0.5), interpolation='nearest', origin='lower', vmin=0, vmax=300)
+    # plt.title('Blurred abs raw difference')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow((II[0] - II[1]) / np.hypot(PP[0], PP[1]), interpolation='nearest', origin='lower')
+    # plt.title('Difference / Per-pixel-std')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(gaussian_filter(np.abs((II[0] - II[1]) / np.hypot(PP[0], PP[1])), 1.0), interpolation='nearest', origin='lower')
+    # plt.title('Blurred abs difference / per-pixel-std')
+    # ps.savefig()
+    # 
+    # II = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-img-u.fits' % e) for e in [0,1]]
+    # PP = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-std-u.fits' % e) for e in [0,1]]
+    # 
+    # plt.clf()
+    # plt.imshow((II[0] - II[1]) / np.hypot(PP[0], PP[1]), interpolation='nearest', origin='lower')
+    # ps.savefig()
 
+    sys.exit(0)
+    
     wfn = 'rogue-frames.fits'
     if os.path.exists(wfn):
         W = fits_table(wfn)

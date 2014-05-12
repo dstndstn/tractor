@@ -12,6 +12,7 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 
 import tractor
+import fitsio
 from tractor import *
 from tractor.sdss import *
 from tractor.sdss_galaxy import *
@@ -115,14 +116,9 @@ def create_average_psf_model(bright=False):
                 psfsum = psfsum + I
         psfsum /= psfsum.sum()
         fitsio.write('wise-psf-avg-pix%s.fits' % btag, psfsum, clobber=(band == 1))
-        ### HACK
-        continue
 
         psf = GaussianMixturePSF.fromStamp(psfsum)
-        #fn = 'wise-psf-avg-w%i.fits' % band
         fn = 'wise-psf-avg.fits'
-        #fitsio.write(fn, psf, clobber=True)
-        #print 'Wrote', fn        
         T = fits_table()
         T.amp = psf.mog.amp
         T.mean = psf.mog.mean
@@ -165,8 +161,325 @@ def create_wise_psf_models(bright, K=3):
 
 if __name__ == '__main__':
 
-    create_average_psf_model()
-    create_average_psf_model(bright=True)
+    #create_average_psf_model()
+    #create_average_psf_model(bright=True)
+
+    from astrometry.util.util import *
+
+    band = 4
+    pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
+    fit = fits_table('wise-psf-avg.fits', hdu=band)
+
+    scale = 1.
+
+    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+
+    h,w = pix.shape
+    # Render the model PSF to check that it looks okay
+    psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
+
+    slc = slice(h/2-8, h/2+8), slice(w/2-8, w/2+8)
+
+    opix = pix
+    pix /= pix.sum()
+    pix = pix[slc]
+
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+
+    mx = mod.max()
+
+    def plot_psf(img, mod):
+        mx = max(img.max(), mod.max()) * 1.05
+        plt.clf()
+        plt.subplot(2,2,1)
+        plt.imshow(img, interpolation='nearest', origin='lower',
+                   vmin=0, vmax=mx)
+        plt.colorbar()
+        plt.subplot(2,2,2)
+        plt.imshow(mod, interpolation='nearest', origin='lower',
+                   vmin=0, vmax=mx)
+        plt.colorbar()
+        plt.subplot(2,2,3)
+        plt.imshow(img - mod, interpolation='nearest', origin='lower',
+                   vmin=-0.1*mx, vmax=0.1*mx)
+    
+    ps = PlotSequence('psf')
+
+    plot_psf(pix, mod)
+    ps.savefig()
+
+    # Lanczos sub-sample
+    sh,sw = opix.shape
+    scale = 2
+    # xx,yy = np.meshgrid(np.linspace(-0.5, sw-0.5, scale*sw),
+    #                     np.linspace(-0.5, sh-0.5, scale*sh))
+    xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
+                        np.arange(0, sh, 1./scale)[:-1])
+    lh,lw = xx.shape
+    xx = xx.ravel()
+    yy = yy.ravel()
+    ix = np.round(xx).astype(np.int32)
+    iy = np.round(yy).astype(np.int32)
+    dx = (xx - ix).astype(np.float32)
+    dy = (yy - iy).astype(np.float32)
+    RR = [np.zeros(lh*lw, np.float32)]
+    LL = [opix]
+    lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
+    lpix = RR[0].reshape((lh,lw))
+    #lh,lw = lpix.shape
+    print 'new size', lh,lw
+    print 'vs', lpix.shape
+    
+    slc = slice(lh/2-16, lh/2+16), slice(lw/2-16, lw/2+16)
+
+    print 'lpix sum', lpix.sum()
+    lpix = lpix / lpix.sum()
+    lpix = lpix[slc]
+
+    scale = 2.
+    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+    # Render the model PSF to check that it looks okay
+    psfmodel = psf.getPointSourcePatch(0., 0., radius=lh/2)
+
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+    mx = mod.max()
+
+    plot_psf(lpix, mod)
+    ps.savefig()
+
+    psfx = GaussianMixturePSF.fromStamp(lpix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
+    psfmodel = psfx.getPointSourcePatch(0., 0., radius=lh/2)
+    mod = psfmodel.patch
+    mod /= mod.sum()
+    mod = mod[slc]
+    mx = mod.max()
+
+    plot_psf(lpix, mod)
+    ps.savefig()
+    
+    print 'Fit PSF params:', psfx
+
+    h,w = lpix.shape
+
+    class MyGaussianMixturePSF(GaussianMixturePSF):
+        def getLogPrior(self):
+            if np.any(self.mog.amp < 0.):
+                return -np.inf
+            for k in range(self.mog.K):
+                if np.linalg.det(self.mog.var[k]) <= 0:
+                    return -np.inf
+            return 0
+
+    mypsf = MyGaussianMixturePSF(psfx.mog.amp, psf.mog.mean, psf.mog.var)
+        
+    tim = Image(data=lpix, invvar=1e6 * np.ones_like(lpix),
+                wcs=NullWCS(), photocal=LinearPhotoCal(1.),
+                psf=mypsf, sky=ConstantSky(0.))
+
+    src = PointSource(PixPos(w/2., h/2.), Flux(1.))
+
+    tractor = Tractor([tim], [src])
+
+    mx = lpix.max() * 1.1
+    print 'mx:', mx
+    
+    mod = tractor.getModelImage(0)
+
+    print 'lpix sum', lpix.sum()
+    print 'mod sum', mod.sum()
+    
+    plot_psf(lpix, mod)
+    ps.savefig()
+
+    print 'All Params:'
+    tractor.printThawedParams()
+    
+    tim.freezeAllBut('psf')
+    #tractor.freezeParam('catalog')
+    #tractor.thawPathsTo('brightness')
+    src.freezeAllBut('brightness')
+
+    tractor.freezeParam('images')
+    tractor.optimize_forced_photometry()
+    tractor.thawParam('images')
+    
+    print 'Params:'
+    tractor.printThawedParams()
+
+    for i in range(10):
+        dlnp,X,alpha = tractor.optimize()
+        print 'dlnp', dlnp
+        print 'alpha', alpha
+        print 'Sum of PSF amps:', mypsf.mog.amp.sum(), np.sum(np.abs(mypsf.mog.amp))
+        
+    print 'lpix sum', lpix.sum()
+    print 'mod sum', mod.sum()
+        
+    mod = tractor.getModelImage(0)
+
+    plot_psf(lpix, mod)
+    ps.savefig()
+
+    if False:
+        # Try concentric gaussian PSF
+        sigmas = []
+        for k in range(mypsf.mog.K):
+            v = mypsf.mog.var[k,:,:]
+            sigmas.append(np.sqrt(np.sqrt(v[0,0] * v[1,1])))
+        gpsf = NCircularGaussianPSF(sigmas, mypsf.mog.amp)
+    
+        tim.psf = gpsf
+    
+        print 'Params:'
+        tractor.printThawedParams()
+    
+        for i in range(10):
+            dlnp,X,alpha = tractor.optimize()
+            print 'dlnp', dlnp
+            print 'alpha', alpha
+            print 'PSF', tim.psf
+    
+        mod = tractor.getModelImage(0)
+    
+        plot_psf(lpix, mod)
+        plt.suptitle('Concentric MOG')
+        ps.savefig()
+
+        tim.psf = mypsf
+
+    tractor.freezeParam('catalog')
+    var = tractor.optimize(variance=True, just_variance=True)
+
+    print 'Initializing sampler at:'
+    tractor.printThawedParams()
+    print 'Stddevs', np.sqrt(var)
+    
+    import emcee
+
+    def sampleBall(p0, stdev, nw):
+        '''
+        Produce a ball of walkers around an initial parameter value 'p0'
+        with axis-aligned standard deviation 'stdev', for 'nw' walkers.
+        '''
+        assert(len(p0) == len(stdev))
+        return np.vstack([p0 + stdev * np.random.normal(size=len(p0))
+                          for i in range(nw)])    
+
+    nw = 100
+    p0 = tractor.getParams()
+    ndim = len(p0)
+    
+    sampler = emcee.EnsembleSampler(nw, ndim, tractor)
+
+    var *= 1e-10
+    
+    # Calculate initial lnp, and ensure that all are finite.
+    pp = sampleBall(p0, np.sqrt(var), nw)
+    todo = None
+    while True:
+        if todo is None:
+            lnp,nil = sampler._get_lnprob(pos=pp)
+        else:
+            lnp[todo],nil = sampler._get_lnprob(pos=pp[todo,:])
+        todo = np.flatnonzero(np.logical_not(np.isfinite(lnp)))
+        if len(todo) == 0:
+            break
+        print 'Re-drawing', len(todo), 'initial parameters'
+        pp[todo,:] = sampleBall(p0, 0.5 * np.sqrt(var), len(todo))
+    lnp0 = lnp
+
+    bestlnp = -1e100
+    bestp = None
+    
+    alllnp = []
+    allp = []
+    lnp = None
+    rstate = None
+    for step in range(1000):
+        print 'Taking step', step
+        pp,lnp,rstate = sampler.run_mcmc(pp, 1, lnprob0=lnp, rstate0=rstate)
+        imax = np.argmax(lnp)
+        print 'Max lnp', lnp[imax]
+        if lnp[imax] > bestlnp:
+            bestlnp = lnp[imax]
+            bestp = pp[imax,:]
+            print 'New best params', bestp
+
+        alllnp.append(lnp.copy())
+        allp.append(pp.copy())
+
+    allp = np.array(allp)
+    alllnp = np.array(alllnp)
+        
+    print 'Best params', bestp
+    tractor.setParams(bestp)
+
+    mod = tractor.getModelImage(0)
+
+    plot_psf(lpix, mod)
+    plt.suptitle('Best sample')
+    ps.savefig()
+
+    h,w = lpix.shape
+    xx,yy = np.meshgrid(np.arange(w), np.arange(h))
+
+    print 'Pix mean', np.sum(xx * lpix)/np.sum(lpix), np.sum(yy * lpix)/np.sum(lpix)
+    print 'Mod mean', np.sum(xx * mod)/np.sum(mod), np.sum(yy * mod)/np.sum(mod)
+
+
+    amps = mypsf.mog.amp.copy()
+
+    for i,a in enumerate(amps):
+        mypsf.mog.amp[:] = 0
+        mypsf.mog.amp[i] = a
+
+        mod = tractor.getModelImage(0)
+        plot_psf(lpix, mod)
+        plt.suptitle('Component %i' % i)
+        ps.savefig()
+
+        mypsf.mog.amp[:] = amps
+
+    # Plot logprobs
+    plt.clf()
+    plt.plot(alllnp, 'k', alpha=0.5)
+    mx = np.max([p.max() for p in alllnp])
+    plt.ylim(mx-20, mx+5)
+    plt.title('logprob')
+    ps.savefig()
+
+    # Plot parameter distributions
+    burn = 0
+    print 'All params:', allp.shape
+    for i,nm in enumerate(tractor.getParamNames()):
+        pp = allp[:,:,i].ravel()
+        lo,hi = [np.percentile(pp,x) for x in [5,95]]
+        mid = (lo + hi)/2.
+        lo = mid + (lo-mid)*2
+        hi = mid + (hi-mid)*2
+        plt.clf()
+        plt.subplot(2,1,1)
+        plt.hist(allp[burn:,:,i].ravel(), 50, range=(lo,hi))
+        plt.xlim(lo,hi)
+        plt.subplot(2,1,2)
+        plt.plot(allp[:,:,i], 'k-', alpha=0.5)
+        plt.xlabel('emcee step')
+        plt.ylim(lo,hi)
+        plt.suptitle(nm)
+        ps.savefig()
+        
+    import triangle
+    burn = 0
+    nkeep = allp.shape[0] - burn
+    X = allp[burn:, :,:].reshape((nkeep * nw, ndim))
+    plt.clf()
+    triangle.corner(X, labels=tractor.getParamNames(), plot_contours=False)
+    ps.savefig()
+    
     sys.exit(0)
 
     #create_wise_psf_models(True)
