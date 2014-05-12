@@ -12,3 +12,7 @@ tractor/mix.py
 tractor/mix_wrap.c
 doc/_build/
 html/
+astrometry
+*.log
+*.aux
+*.dvi
