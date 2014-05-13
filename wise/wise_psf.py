@@ -164,72 +164,64 @@ if __name__ == '__main__':
     #create_average_psf_model()
     #create_average_psf_model(bright=True)
 
-    from astrometry.util.util import *
-
-    band = 4
-    pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
-    fit = fits_table('wise-psf-avg.fits', hdu=band)
-
-    scale = 1.
-
-    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
-
-    h,w = pix.shape
-    # Render the model PSF to check that it looks okay
-    psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
-
-    #slc = slice(h/2-8, h/2+8), slice(w/2-8, w/2+8)
-    S = 15
-    slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
-        
-
-    opix = pix
-    print 'Original pixels sum:', opix.sum()
-    pix /= pix.sum()
-    pix = pix[slc]
-    
-    mod = psfmodel.patch
-    mod /= mod.sum()
-    mod = mod[slc]
-
-    mx = mod.max()
-
-    def plot_psf(img, mod, psf, flux=1.):
+    def _plot_psf(img, mod, psf, flux=1.):
+        if plotslice is not None:
+            #print 'img', img.shape, 'mod', mod.shape
+            img = img[plotslice]
+            mod = mod[plotslice]
+            #print 'plotslice:', plotslice
+            #print 'img', img.shape, 'mod', mod.shape
+            
         mx = img.max() * 1.1
+        logmx = np.log10(mx)
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=0, vmax=mx)
+        imlog = dict(interpolation='nearest', origin='lower',
+                     vmin=logmx-4, vmax=logmx)
         plt.clf()
-        plt.subplot(2,3,1)
-        plt.imshow(img, interpolation='nearest', origin='lower',
-                   vmin=0, vmax=mx)
-        plt.xticks([]); plt.yticks([])
-        plt.subplot(2,3,2)
-        plt.imshow(mod, interpolation='nearest', origin='lower',
-                   vmin=0, vmax=mx)
+        plt.subplot(3,3,1)
+        plt.imshow(img, **ima)
         plt.xticks([]); plt.yticks([])
 
+        plt.subplot(3,3,4)
+        plt.imshow(np.log10(img), **imlog)
+        plt.xticks([]); plt.yticks([])
+
+        plt.subplot(3,3,2)
+        plt.imshow(mod, **ima)
+        plt.xticks([]); plt.yticks([])
+
+        plt.subplot(3,3,5)
+        plt.imshow(np.log10(mod), **imlog)
+        plt.xticks([]); plt.yticks([])
+        
         if psf is not None:
-            plt.subplot(2,3,3)
-            plt.imshow(mod, interpolation='nearest', origin='lower',
-                       vmin=0, vmax=mx)
-            plt.xticks([]); plt.yticks([])
+            for sp in [3,6]:
+                plt.subplot(3,3,sp)
+                if sp == 3:
+                    plt.imshow(mod, **ima)
+                else:
+                    plt.imshow(np.log10(mod), **imlog)
+                plt.xticks([]); plt.yticks([])
 
-            ax = plt.axis()
-            vv = psf.mog.var
-            mu = psf.mog.mean
-            K = psf.mog.K
-            h,w = mod.shape
-            for k in range(K):
-                v = vv[k,:,:]
-                u,s,v = np.linalg.svd(v)
-                angle = np.linspace(0., 2.*np.pi, 200)
-                u1 = u[0,:]
-                u2 = u[1,:]
-                s1,s2 = np.sqrt(s)
-                xy = (u1[np.newaxis,:] * s1 * np.cos(angle)[:,np.newaxis] +
-                      u2[np.newaxis,:] * s2 * np.sin(angle)[:,np.newaxis])
-                plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], 'w-')
-            plt.axis(ax)
+                ax = plt.axis()
+                vv = psf.mog.var
+                mu = psf.mog.mean
+                K = psf.mog.K
+                h,w = mod.shape
+                for k in range(K):
+                    v = vv[k,:,:]
+                    u,s,v = np.linalg.svd(v)
+                    angle = np.linspace(0., 2.*np.pi, 200)
+                    u1 = u[0,:]
+                    u2 = u[1,:]
+                    s1,s2 = np.sqrt(s)
+                    xy = (u1[np.newaxis,:] * s1 * np.cos(angle)[:,np.newaxis] +
+                          u2[np.newaxis,:] * s2 * np.sin(angle)[:,np.newaxis])
+                    plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], 'w-')
+                plt.axis(ax)
 
-        plt.subplot(2,3,6)
+        plt.subplot(3,3,9)
         plt.imshow(img - mod, interpolation='nearest', origin='lower',
                    vmin=-0.1*mx, vmax=0.1*mx)
         plt.xticks([]); plt.yticks([])
@@ -246,7 +238,7 @@ if __name__ == '__main__':
         else:
             slc = slice(0, h)
             x0 = 0
-        plt.subplot(2,3,4)
+        plt.subplot(3,3,7)
         plt.plot(img[y,slc], 'r-')
         plt.plot(mod[y,slc], 'b-', alpha=0.5, lw=3)
         plt.axhline(shift, color='k')
@@ -277,136 +269,202 @@ if __name__ == '__main__':
         plt.xticks([]); plt.yticks([])
         plt.ylim(0, 2.*shift)
         
-        plt.subplot(2,3,5)
+        plt.subplot(3,3,8)
         plt.axhline(0., color='k')
         plt.plot(mod[y,slc] - img[y,slc], 'b-', alpha=0.5, lw=3)
         plt.axhline(shift*0.1, color='k')
         plt.plot(mod[slc,x] - img[slc,x] + shift*0.1, 'b-', alpha=0.5, lw=3)
         plt.xticks([]); plt.yticks([])
-            
+        return
+        
+    
+    from astrometry.util.util import *
+
     ps = PlotSequence('psf')
-
-    plot_psf(pix, mod, psf)
-    plt.suptitle('Orig')
-    ps.savefig()
-
-    # Lanczos sub-sample
-    sh,sw = opix.shape
-    scale = 2
-    # xx,yy = np.meshgrid(np.linspace(-0.5, sw-0.5, scale*sw),
-    #                     np.linspace(-0.5, sh-0.5, scale*sh))
-    xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
-                        np.arange(0, sh, 1./scale)[:-1])
-    lh,lw = xx.shape
-    xx = xx.ravel()
-    yy = yy.ravel()
-    ix = np.round(xx).astype(np.int32)
-    iy = np.round(yy).astype(np.int32)
-    dx = (xx - ix).astype(np.float32)
-    dy = (yy - iy).astype(np.float32)
-    RR = [np.zeros(lh*lw, np.float32)]
-    LL = [opix]
-    lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
-    lpix = RR[0].reshape((lh,lw))
-    #lh,lw = lpix.shape
-    print 'new size', lh,lw
-    print 'vs', lpix.shape
     
-    #slc = slice(lh/2-16, lh/2+16), slice(lw/2-16, lw/2+16)
-    S = 32
-    slc = slice(lh/2-S, lh/2+S+1), slice(lw/2-S, lw/2+S+1)
-
-    print 'lpix sum', lpix.sum()
-    lpix = lpix / lpix.sum()
-    lpix = lpix[slc]
-
-    print 'sliced lpix sum', lpix.sum()
+    for band in [4,3,2,1]:
+        print
+        print 'W%i' % band
+        print
+        
+        #pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
+        pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
+        fit = fits_table('wise-psf-avg.fits', hdu=band)
     
-    scale = 2.
-    psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
-    # Render the model PSF to check that it looks okay
-    psfmodel = psf.getPointSourcePatch(0., 0., radius=lh/2)
-
-    mod = psfmodel.patch
-    mod /= mod.sum()
-    mod = mod[slc]
-
-    plot_psf(lpix, mod, psf)
-    plt.suptitle('Scaled')
-    ps.savefig()
-
-    psfx = GaussianMixturePSF.fromStamp(lpix/lpix.sum(), P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
-    psfmodel = psfx.getPointSourcePatch(0., 0., radius=lh/2)
-    mod = psfmodel.patch
-    mod /= mod.sum()
-    mod = mod[slc]
-
-    mod *= lpix.sum()
+        scale = 1.
+        plotslice = None
     
-    plot_psf(lpix, mod, psfx, flux=lpix.sum())
-    plt.suptitle('fromStamp')
-    ps.savefig()
-    
-    print 'Fit PSF params:', psfx
+        print 'Pix shape', pix.shape
+        h,w = pix.shape
 
-    class MyGaussianMixturePSF(GaussianMixturePSF):
-        def getLogPrior(self):
-            if np.any(self.mog.amp < 0.):
-                return -np.inf
-            for k in range(self.mog.K):
-                if np.linalg.det(self.mog.var[k]) <= 0:
+        S = 140
+        slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
+
+        opix = pix
+        print 'Original pixels sum:', opix.sum()
+        pix /= pix.sum()
+        pix = pix[slc]
+        print 'Sliced pix sum', pix.sum()
+
+        psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+        psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
+        mod = psfmodel.patch
+        print 'Orig mod sum', mod.sum()
+        mod = mod[slc]
+        print 'Sliced mod sum', mod.sum()
+        print 'Amps:', np.sum(psf.mog.amp)
+        
+        _plot_psf(pix, mod, psf)
+        plt.suptitle('W%i: Orig' % band)
+        ps.savefig()
+                
+        # Lanczos sub-sample
+        if band == 4:
+            scale = 2
+            sh,sw = opix.shape
+            xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
+                                np.arange(0, sh, 1./scale)[:-1])
+            lh,lw = xx.shape
+            xx = xx.ravel()
+            yy = yy.ravel()
+            ix = np.round(xx).astype(np.int32)
+            iy = np.round(yy).astype(np.int32)
+            dx = (xx - ix).astype(np.float32)
+            dy = (yy - iy).astype(np.float32)
+            RR = [np.zeros(lh*lw, np.float32)]
+            LL = [opix]
+            lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
+            lpix = RR[0].reshape((lh,lw))
+            print 'new size', lh,lw
+            print 'vs', lpix.shape
+
+            pix = lpix
+            pix /= (scale**2)
+            h,w = pix.shape
+
+            S = 140
+            slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
+            print 'Resampled pix sum', pix.sum()
+            pix = pix[slc]
+            print 'sliced pix sum', pix.sum()
+
+            psf = GaussianMixturePSF(fit.amp, fit.mean * scale, fit.var * scale**2)
+            psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
+            mod = psfmodel.patch
+            print 'Scaled mod sum', mod.sum()
+            #mod /= mod.sum()
+            mod = mod[slc]
+            print 'Sliced mod sum', mod.sum()
+
+            _plot_psf(pix, mod, psf)
+            plt.suptitle('W%i: Scaled' % band)
+            ps.savefig()
+
+            
+        # plot
+        ss = 30
+        plotslice = slice(S-ss, -(S-ss)), slice(S-ss, -(S-ss))
+        
+        # psfx = GaussianMixturePSF.fromStamp(lpix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
+        # psfmodel = psfx.getPointSourcePatch(0., 0., radius=h/2)
+        # mod = psfmodel.patch
+        # print 'From (un-normalized) stamp: mod sum', mod.sum()
+        # #mod /= mod.sum()
+        # mod = mod[slc]
+        # print 'Sliced mod sum:', mod.sum()
+        # #mod *= lpix.sum()
+        # _plot_psf(lpix, mod, psfx, flux=lpix.sum())
+        # plt.suptitle('fromStamp (unorm)')
+        # ps.savefig()
+        
+        #psfx = GaussianMixturePSF.fromStamp(lpix/lpix.sum(), P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
+        psfx = GaussianMixturePSF.fromStamp(pix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
+        psfmodel = psfx.getPointSourcePatch(0., 0., radius=h/2)
+        mod = psfmodel.patch
+        print 'From stamp: mod sum', mod.sum()
+        #mod /= mod.sum()
+        mod = mod[slc]
+        print 'Sliced mod sum:', mod.sum()
+        #mod *= lpix.sum()
+        _plot_psf(pix, mod, psfx) #, flux=lpix.sum())
+        plt.suptitle('W%i: fromStamp: %g' % (band, np.sum(psfx.mog.amp)))
+        ps.savefig()
+        
+        print 'Stamp-Fit PSF params:', psfx
+    
+        class MyGaussianMixturePSF(GaussianMixturePSF):
+            def getLogPrior(self):
+                if np.any(self.mog.amp < 0.):
                     return -np.inf
-            return 0
-
-    mypsf = MyGaussianMixturePSF(psfx.mog.amp, psf.mog.mean, psf.mog.var)
+                for k in range(self.mog.K):
+                    if np.linalg.det(self.mog.var[k]) <= 0:
+                        return -np.inf
+                return 0
+    
+        sh,sw = pix.shape
+            
+        mypsf = MyGaussianMixturePSF(psfx.mog.amp, psf.mog.mean, psf.mog.var)
+        mypsf.radius = sh/2
         
-    tim = Image(data=lpix, invvar=1e6 * np.ones_like(lpix),
-                wcs=NullWCS(), photocal=LinearPhotoCal(1.),
-                psf=mypsf, sky=ConstantSky(0.))
-
-    h,w = lpix.shape
-    src = PointSource(PixPos(w/2, h/2), Flux(lpix.sum()))
-
-    tractor = Tractor([tim], [src])
+        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix),
+                    wcs=NullWCS(), photocal=LinearPhotoCal(1.),
+                    psf=mypsf, sky=ConstantSky(0.))
     
-    print 'All Params:'
-    tractor.printThawedParams()
-    
-    tim.freezeAllBut('psf')
-    src.freezeAllBut('brightness')
-
-    tractor.freezeParam('images')
-    tractor.optimize_forced_photometry()
-    tractor.thawParam('images')
-
-    print 'Params:'
-    tractor.printThawedParams()
-
-    for i in range(10):
-        dlnp,X,alpha = tractor.optimize()
-        print 'dlnp', dlnp
-        print 'alpha', alpha
-        print 'Sum of PSF amps:', mypsf.mog.amp.sum(), np.sum(np.abs(mypsf.mog.amp))
+        h,w = pix.shape
+        #src = PointSource(PixPos(w/2, h/2), Flux(lpix.sum()))
+        src = PointSource(PixPos(w/2, h/2), Flux(1.0))
         
-    mod = tractor.getModelImage(0)
-
-    print 'PSF3(opt): flux', src.brightness
+        tractor = Tractor([tim], [src])
+        
+        #print 'All Params:'
+        #tractor.printThawedParams()
+        
+        tim.freezeAllBut('psf')
+        tractor.freezeParam('catalog')
+        
+        # src.freezeAllBut('brightness')
+        # tractor.freezeParam('images')
+        # tractor.optimize_forced_photometry()
+        # tractor.thawParam('images')
+        # print 'Source flux after forced-photom fit:', src.getBrightness()
     
-    plot_psf(lpix, mod, mypsf, flux=src.brightness.getValue())
-    plt.suptitle('psf3 (opt)')
-    ps.savefig()
+        print 'Params:'
+        tractor.printThawedParams()
+    
+        for i in range(20):
+            dlnp,X,alpha = tractor.optimize(damp=1.)
+            print 'dlnp', dlnp
+            if dlnp < 0.01:
+                break
+            #print 'alpha', alpha
+            #print 'Sum of PSF amps:', mypsf.mog.amp.sum(), np.sum(np.abs(mypsf.mog.amp))
+            
+        print 'PSF3(opt): flux', src.brightness
+        print 'PSF amps:', np.sum(mypsf.mog.amp)
+    
+        print 'PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.mog.amp)
+        print 'pix sum:', pix.sum()
+        
+        mod = tractor.getModelImage(0)
+        _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
+        plt.suptitle('W%i psf3 (opt): %g' % (band, np.sum(mypsf.mog.amp)))
+        ps.savefig()
+    
+        T = fits_table()
+        T.amp  = mypsf.mog.amp
+        T.mean = mypsf.mog.mean
+        T.var  = mypsf.mog.var
+        T.writeto('psf3-w%i.fits' % band)
 
-    T = fits_table()
-    T.amp  = mypsf.mog.amp
-    T.mean = mypsf.mog.mean
-    T.var  = mypsf.mog.var
-    T.writeto('mypsf.fits')
 
+    sys.exit(0)
+        
     psf2 = GaussianMixturePSF(mypsf.mog.amp[:2]/mypsf.mog.amp[:2].sum(),
                               mypsf.mog.mean[:2,:], mypsf.mog.var[:2,:,:])
+    psf2.radius = sh/2
     tim.psf = psf2
     mod = tractor.getModelImage(0)
-    plot_psf(lpix, mod, psf2, flux=src.brightness.getValue())
+    _plot_psf(lpix, mod, psf2, flux=src.brightness.getValue())
     plt.suptitle('psf2 (init)')
     ps.savefig()
 
@@ -430,7 +488,7 @@ if __name__ == '__main__':
         tractor.freezeParam('catalog')
         
     mod = tractor.getModelImage(0)
-    plot_psf(lpix, mod, psf2, flux=src.brightness.getValue())
+    _plot_psf(lpix, mod, psf2, flux=src.brightness.getValue())
     plt.suptitle('psf2 (opt)')
     ps.savefig()
 
@@ -450,7 +508,7 @@ if __name__ == '__main__':
     tim.psf = psf4
     mod = tractor.getModelImage(0)
 
-    plot_psf(lpix, mod, psf4)
+    _plot_psf(lpix, mod, psf4)
     ps.savefig()
 
     for i in range(100):
@@ -459,7 +517,7 @@ if __name__ == '__main__':
         print 'alpha', alpha
         print 'Sum of PSF amps:', mypsf.mog.amp.sum(), np.sum(np.abs(mypsf.mog.amp))
 
-    plot_psf(lpix, mod, psf4)
+    _plot_psf(lpix, mod, psf4)
     ps.savefig()
         
     
@@ -488,7 +546,7 @@ if __name__ == '__main__':
     
         mod = tractor.getModelImage(0)
     
-        plot_psf(lpix, mod)
+        _plot_psf(lpix, mod)
         plt.suptitle('Concentric MOG')
         ps.savefig()
 
@@ -565,7 +623,7 @@ if __name__ == '__main__':
 
     mod = tractor.getModelImage(0)
 
-    plot_psf(lpix, mod)
+    _plot_psf(lpix, mod)
     plt.suptitle('Best sample')
     ps.savefig()
 
@@ -583,7 +641,7 @@ if __name__ == '__main__':
         mypsf.mog.amp[i] = a
 
         mod = tractor.getModelImage(0)
-        plot_psf(lpix, mod)
+        _plot_psf(lpix, mod)
         plt.suptitle('Component %i' % i)
         ps.savefig()
 
