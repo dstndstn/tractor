@@ -178,6 +178,8 @@ if __name__ == '__main__':
                    vmin=0, vmax=mx)
         imlog = dict(interpolation='nearest', origin='lower',
                      vmin=logmx-4, vmax=logmx)
+        imdiff = dict(interpolation='nearest', origin='lower',
+                      vmin=-0.05*mx, vmax=0.05*mx, cmap='RdBu')
         plt.clf()
         plt.subplot(3,3,1)
         plt.imshow(img, **ima)
@@ -194,14 +196,27 @@ if __name__ == '__main__':
         plt.subplot(3,3,5)
         plt.imshow(np.log10(mod), **imlog)
         plt.xticks([]); plt.yticks([])
+
+        dd = 10
+
+        plt.subplot(3,3,9)
+        plt.imshow(img - mod, **imdiff)
+        plt.xticks([]); plt.yticks([])
+        h,w = img.shape
+        plt.axis([w/2-dd, w/2+dd, h/2-dd, h/2+dd])
         
         if psf is not None:
-            for sp in [3,6]:
+            for sp in [3,6,9]:
                 plt.subplot(3,3,sp)
                 if sp == 3:
                     plt.imshow(mod, **ima)
+                    cc = 'w'
+                    aa = 1.
                 else:
-                    plt.imshow(np.log10(mod), **imlog)
+                    #plt.imshow(np.log10(mod), **imlog)
+                    plt.imshow(img - mod, **imdiff)
+                    cc = 'g'
+                    aa = 1.#0.5
                 plt.xticks([]); plt.yticks([])
 
                 ax = plt.axis()
@@ -218,20 +233,15 @@ if __name__ == '__main__':
                     s1,s2 = np.sqrt(s)
                     xy = (u1[np.newaxis,:] * s1 * np.cos(angle)[:,np.newaxis] +
                           u2[np.newaxis,:] * s2 * np.sin(angle)[:,np.newaxis])
-                    plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], 'w-')
+                    plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], '-',
+                             color=cc, alpha=aa)
                 plt.axis(ax)
 
-        plt.subplot(3,3,9)
-        plt.imshow(img - mod, interpolation='nearest', origin='lower',
-                   vmin=-0.1*mx, vmax=0.1*mx)
-        plt.xticks([]); plt.yticks([])
-
+        
         shift = max(img.max(), mod.max())*1.05
         
         maxpix = np.argmax(img)
         y,x = np.unravel_index(maxpix, img.shape)
-        dd = 10
-        h,w = img.shape
         if h >= (dd*2+1):
             slc = slice(h/2-dd, h/2+dd+1)
             x0 = h/2-dd
@@ -244,37 +254,39 @@ if __name__ == '__main__':
         plt.axhline(shift, color='k')
         plt.plot(img[slc,x]+shift, 'r-')
         plt.plot(mod[slc,x]+shift, 'b-', alpha=0.5, lw=3)
-        if psf is not None:
-            ax = plt.axis()
-            xx = np.linspace(ax[0], ax[1], 100)
-            modx = np.zeros_like(xx)
-            mody = np.zeros_like(xx)
-            for k in range(K):
-                v = vv[k,:,:]
-                vx = v[0,0]
-                mux = psf.mog.mean[k,0]
-                vy = v[1,1]
-                muy = psf.mog.mean[k,1]
-                a = psf.mog.amp[k]
-                a *= flux
-                compx = a/(2.*np.pi*vx) * np.exp(-0.5* (xx - (x-x0+mux))**2 / vx)
-                compy = a/(2.*np.pi*vy) * np.exp(-0.5* (xx - (y-x0+muy))**2 / vy)
-                modx += compx
-                mody += compy
-                plt.plot(xx, compx, 'b-')
-                plt.plot(xx, compy + shift, 'b-')
-            plt.plot(xx, modx, 'b-')
-            plt.plot(xx, mody + shift, 'b-')
-            plt.axis(ax)
+        # if psf is not None:
+        #     ax = plt.axis()
+        #     xx = np.linspace(ax[0], ax[1], 100)
+        #     modx = np.zeros_like(xx)
+        #     mody = np.zeros_like(xx)
+        #     for k in range(K):
+        #         v = vv[k,:,:]
+        #         vx = v[0,0]
+        #         mux = psf.mog.mean[k,0]
+        #         vy = v[1,1]
+        #         muy = psf.mog.mean[k,1]
+        #         a = psf.mog.amp[k]
+        #         a *= flux
+        #         compx = a/(2.*np.pi*vx) * np.exp(-0.5* (xx - (x-x0+mux))**2 / vx)
+        #         compy = a/(2.*np.pi*vy) * np.exp(-0.5* (xx - (y-x0+muy))**2 / vy)
+        #         modx += compx
+        #         mody += compy
+        #         plt.plot(xx, compx, 'b-')
+        #         plt.plot(xx, compy + shift, 'b-')
+        #     plt.plot(xx, modx, 'b-')
+        #     plt.plot(xx, mody + shift, 'b-')
+        #     plt.axis(ax)
         plt.xticks([]); plt.yticks([])
         plt.ylim(0, 2.*shift)
-        
+
+        dshift = 0.05*shift
         plt.subplot(3,3,8)
-        plt.axhline(0., color='k')
-        plt.plot(mod[y,slc] - img[y,slc], 'b-', alpha=0.5, lw=3)
-        plt.axhline(shift*0.1, color='k')
-        plt.plot(mod[slc,x] - img[slc,x] + shift*0.1, 'b-', alpha=0.5, lw=3)
+        plt.axhline(dshift, color='k')
+        plt.plot(mod[y,slc] - img[y,slc] + dshift, 'b-', alpha=0.5, lw=3)
+        plt.axhline(dshift*3, color='k')
+        plt.plot(mod[slc,x] - img[slc,x] + dshift*3, 'b-', alpha=0.5, lw=3)
         plt.xticks([]); plt.yticks([])
+        plt.ylim(0, 4*dshift)
         return
         
     
@@ -292,14 +304,17 @@ if __name__ == '__main__':
         fit = fits_table('wise-psf-avg.fits', hdu=band)
     
         scale = 1.
-        plotslice = None
     
         print 'Pix shape', pix.shape
         h,w = pix.shape
 
-        S = 140
+        #S = 100
+        S = h/2
         slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
 
+        plotss = 30
+        plotslice = slice(S-plotss, -(S-plotss)), slice(S-plotss, -(S-plotss))
+        
         opix = pix
         print 'Original pixels sum:', opix.sum()
         pix /= pix.sum()
@@ -342,7 +357,7 @@ if __name__ == '__main__':
             pix /= (scale**2)
             h,w = pix.shape
 
-            S = 140
+            #S = 140
             slc = slice(h/2-S, h/2+S+1), slice(w/2-S, w/2+S+1)
             print 'Resampled pix sum', pix.sum()
             pix = pix[slc]
@@ -360,11 +375,13 @@ if __name__ == '__main__':
             plt.suptitle('W%i: Scaled' % band)
             ps.savefig()
 
+            # plot
+            #plotss = 30
+            #plotslice = slice(S-plotss, -(S-plotss)), slice(S-plotss, -(S-plotss))
+
+            plotslice = slice(S-plotss,-(S-plotss)),slice(S-plotss,-(S-plotss))
+
             
-        # plot
-        ss = 30
-        plotslice = slice(S-ss, -(S-ss)), slice(S-ss, -(S-ss))
-        
         # psfx = GaussianMixturePSF.fromStamp(lpix, P0=(fit.amp, fit.mean*scale, fit.var*scale**2))
         # psfmodel = psfx.getPointSourcePatch(0., 0., radius=h/2)
         # mod = psfmodel.patch
@@ -387,7 +404,9 @@ if __name__ == '__main__':
         print 'Sliced mod sum:', mod.sum()
         #mod *= lpix.sum()
         _plot_psf(pix, mod, psfx) #, flux=lpix.sum())
-        plt.suptitle('W%i: fromStamp: %g' % (band, np.sum(psfx.mog.amp)))
+        plt.suptitle('W%i: fromStamp: %g = %s, res %.3f' %
+                     (band, np.sum(psfx.mog.amp), ','.join(['%.3f'%a for a in psfx.mog.amp]),
+                      np.sum(pix - mod)))
         ps.savefig()
         
         print 'Stamp-Fit PSF params:', psfx
@@ -431,10 +450,10 @@ if __name__ == '__main__':
         print 'Params:'
         tractor.printThawedParams()
     
-        for i in range(20):
-            dlnp,X,alpha = tractor.optimize(damp=1.)
+        for i in range(100):
+            dlnp,X,alpha = tractor.optimize(damp=0.1)
             print 'dlnp', dlnp
-            if dlnp < 0.01:
+            if dlnp < 0.001:
                 break
             #print 'alpha', alpha
             #print 'Sum of PSF amps:', mypsf.mog.amp.sum(), np.sum(np.abs(mypsf.mog.amp))
@@ -447,7 +466,8 @@ if __name__ == '__main__':
         
         mod = tractor.getModelImage(0)
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
-        plt.suptitle('W%i psf3 (opt): %g' % (band, np.sum(mypsf.mog.amp)))
+        plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
+                     (band, np.sum(mypsf.mog.amp), ','.join(['%.3f'%a for a in mypsf.mog.amp]), np.sum(pix-mod)))
         ps.savefig()
     
         T = fits_table()

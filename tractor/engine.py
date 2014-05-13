@@ -599,7 +599,7 @@ def getmodelimagestep((tr, j, k, p0, step)):
     im.setParam(k, p0)
     return mod
 def getmodelimagefunc((tr, imj)):
-    print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
+    #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
 def getsrcderivs((src, img)):
     return src.getParamDerivatives(img)
