@@ -52,6 +52,30 @@ import numpy as np
 from astrometry.util.siap import *
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
+from astrometry.util.starutil_numpy import *
+
+ps = PlotSequence('decov')
+
+T = fits_table('schlegel-z.fits')
+T.ra = np.array([float(s) for s in T.ra])
+T.dec = np.array([float(s) for s in T.dec])
+T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
+T.about()
+print len(T), 'in range'
+print T.filename
+print T.ra
+print T.dec
+
+plt.clf()
+for fn in T.filename:
+    pth = '/global/project/projectdirs/desi/imaging/redux/decam/proc/' + fn
+    wcs = Sip(pth)
+    r0,r1,d0,d1 = wcs.radec_bounds()
+    plt.plot([r0,r1,r1,r0,r0], [d0,d0,d1,d1,d0], 'b-', alpha=0.25)
+ps.savefig()
+
+# sys.exit(0)
+
 
 decfn = 'decam.fits'
 if not os.path.exists(decfn):
@@ -81,8 +105,6 @@ T.filter = filts
 ufilts = np.unique(T.filter)
 print 'Unique filters:', ufilts
 
-ps = PlotSequence('decov')
-
 plt.clf()
 plt.plot(T.ra, T.dec, 'b.')
 plt.xlabel('RA (deg)')
@@ -108,6 +130,13 @@ ps.savefig()
 # HACK
 ufilts = ['u','g','r','i','z','Y']
 
+# ('DEEP2-F1', 214.25, 52.5),
+# ('DEEP2-F3', 253.5, 0),
+deeps = [('COSMOS', 150.116667, 2.205833),
+         ('DEEP2-F3', 352.5, 0),
+         ('DEEP2-F4', 37.5, 0),
+         ]
+
 for f in ufilts:
     I = np.flatnonzero(T.filter == f)
 
@@ -118,9 +147,37 @@ for f in ufilts:
     plt.ylabel('Dec (deg)')
     plt.title('DECam exposure time: filter %s' % f)
     ax = plt.axis()
-    ra,dec = 150.116667, 2.205833
-    plt.plot(ra,dec,'o', color='w', mec='w', mfc='none', ms=10)
-    plt.text(ra+1, dec+1, 'COSMOS', color='w')
+    for name,ra,dec in deeps:
+        plt.plot(ra,dec,'o', color='w', mec='w', mfc='none', ms=10)
+        plt.text(ra+1, dec+1, name, color='w')
     plt.axis(ax)
     ps.savefig()
+    
+
+for name,ra,dec in deeps:
+    I = np.flatnonzero(degrees_between(ra, dec, T.ra, T.dec) < 1.)
+    print len(I), 'near', name
+    Ti = T[I]
+
+    for f in ufilts:
+        I = np.flatnonzero(Ti.filter == f)
+
+        print 'Filter', f
+        print 'PI', [s.strip() for s in Ti.dtpi[I]]
+        print 'Exposure', Ti.exposure[I]
+        print 'Seeing', Ti.seeing[I]
+        #print 'Obstype', Ti.obstype[I]
+        #print 'Obsmode', Ti.obsmode[I]
+        #print 'Proctype', Ti.proctype[I]
+        #print 'Prodtype', Ti.prodtype[I]
+        print 'Archive_file', [s.strip() for s in Ti.archive_file[I]]
+
+        plt.clf()
+        loghist(Ti.ra[I], Ti.dec[I], 200,
+                range=((ra-1,ra+1),(dec-1,dec+1)), weights=Ti.exposure[I])
+        plt.xlabel('RA (deg)')
+        plt.ylabel('Dec (deg)')
+        plt.title('%s: DECam exposure time: filter %s' % (name, f))
+        ps.savefig()
+
     

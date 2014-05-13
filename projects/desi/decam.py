@@ -85,9 +85,11 @@ def read_decam_image(basefn, skysubtract=True):
         orig_img = img.copy()
         img -= bg
         sky = 0.
+        sky1 = X[0] + X[1]*W/2. + X[2]*H/2.
     else:
         sky = np.median(img.ravel())
         print 'Median:', sky
+        sky1 = sky
         
     diffs = img[:-5:10,:-5:10] - img[5::10,5::10]
     mad = np.median(np.abs(diffs).ravel())
@@ -107,17 +109,73 @@ def read_decam_image(basefn, skysubtract=True):
     tim.orig_img = orig_img
     tim.filter = filt
     tim.sig1 = sig1
+    tim.sky1 = sky1
+    tim.zp = zp
     return tim
     
 
 if __name__ == '__main__':
-    tim = read_decam_image('proc/20130330/C01/zband/DECam_00192399.01.p.w')
+    import optparse
+    parser = optparse.OptionParser('%prog [options]')
+    parser.add_option('--se', action='store_true')
+    opt,args = parser.parse_args()
+
+    decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
+    tim = read_decam_image(decbase)
     print 'Got', tim
 
     basefn = 'decam-00192399.01'
     picklefn = basefn + '.pickle'
-    objfn = basefn + '-sdss.fits'
 
+    secatfn = decbase + '.morph.fits'
+
+    sdssobjfn = basefn + '-sdss.fits'
+    seobjfn = basefn + '-se.fits'
+    
+    # SourceExtractor, or SDSS?
+    secat = opt.se
+
+    if secat:
+        objfn = seobjfn
+        catname = 'SExtractor'
+        ps = PlotSequence('decam-se')
+    else:
+        objfn = sdssobjfn
+        catname = 'SDSS'
+        ps = PlotSequence('decam-sdss')
+
+    sdss = DR9(basedir='dr9')
+    sip = tim.wcs.wcs
+    if secat:
+        T = fits_table(secatfn, hdu=2,
+                       column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'},)
+        print len(T), 'sources in SExtractor catalog'
+
+        T.mag_psf      += tim.zp
+        T.mag_spheroid += tim.zp
+        T.mag_disk     += tim.zp
+        
+        from projects.cs82.cs82 import get_cs82_sources
+        cat,catI = get_cs82_sources(T, bands=['z'])
+
+    else:
+        if not os.path.exists(objfn):
+            margin = 5./3600.
+            objs = read_photoobjs_in_wcs(sip, margin, sdss=sdss)
+            objs.writeto(objfn)
+        else:
+            objs = fits_table(objfn)
+
+            print len(objs), 'SDSS photoObjs'
+            r0,r1,d0,d1 = sip.radec_bounds()
+            cat = get_tractor_sources_dr9(
+                None, None, None, objs=objs, sdss=sdss,
+                radecroi=[r0,r1,d0,d1], bands=['z'],
+                nanomaggies=True, fixedComposites=True,
+                useObjcType=True)
+
+    print len(cat), 'sources'
+        
     if os.path.exists(picklefn):
         print 'Reading', picklefn
         X = unpickle_from_file(picklefn)
@@ -130,37 +188,33 @@ if __name__ == '__main__':
         
     
     def imshow(img, **kwargs):
-        x = plt.imshow(np.rot90(img), **kwargs)
+        #x = plt.imshow(np.rot90(img), **kwargs)
+        x = plt.imshow(img.T, **kwargs)
         return x
         
-    ps = PlotSequence('decam')
-
     #slc = slice(0,2000),slice(0,1000)
     slc = slice(0,2000),slice(1000,2000)
     
-    med = np.median(tim.orig_img.ravel())
-    plt.clf()
-    plt.imshow(tim.orig_img, interpolation='nearest', origin='lower',
-               vmin=tim.zr[0]+med, vmax=tim.zr[1]+med)
-    plt.title('Original image')
-    ps.savefig()
+    # plt.clf()
+    # plt.imshow(tim.orig_img, interpolation='nearest', origin='lower',
+    #            vmin=tim.zr[0]+med, vmax=tim.zr[1]+med)
+    # plt.title('Original image')
+    # ps.savefig()
 
-    plt.clf()
-    imshow(tim.orig_img, interpolation='nearest', origin='lower',
-               vmin=tim.zr[0]+med, vmax=tim.zr[1]+med)
-    plt.title('Original image')
-    ps.savefig()
-
-    plt.clf()
-    imshow(tim.orig_img - tim.data, interpolation='nearest', origin='lower',
-               vmin=tim.zr[0]+med, vmax=tim.zr[1]+med)
-    plt.title('Background estimate')
-    ps.savefig()
-    
-    
-    plt.clf()
     ima = dict(interpolation='nearest', origin='lower',
                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+    
+    # plt.clf()
+    # imshow(tim.orig_img-tim.sky1, **ima)
+    # plt.title('Original image')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # imshow(tim.orig_img-tim.data-tim.sky1, **ima)
+    # plt.title('Background estimate')
+    # ps.savefig()
+    
+    plt.clf()
     imshow(tim.data, **ima)
     plt.title('Image')
     ps.savefig()
@@ -190,24 +244,7 @@ if __name__ == '__main__':
     # plt.title('Inverse-error')
     # ps.savefig()
 
-    
-    sdss = DR9(basedir='dr9')
-    sip = tim.wcs.wcs
-    if not os.path.exists(objfn):
-        margin = 5./3600.
-        objs = read_photoobjs_in_wcs(sip, margin, sdss=sdss)
-        objs.writeto(objfn)
-    else:
-        objs = fits_table(objfn)
         
-    print len(objs), 'SDSS photoObjs'
-    r0,r1,d0,d1 = sip.radec_bounds()
-
-    cat = get_tractor_sources_dr9(None, None, None, objs=objs, sdss=sdss,
-                                  radecroi=[r0,r1,d0,d1], bands=['z'],
-                                  nanomaggies=True, fixedComposites=True,
-                                  useObjcType=True)
-    print len(cat), 'sources'
     
     tractor = Tractor([tim], cat)
 
@@ -267,6 +304,19 @@ if __name__ == '__main__':
     tflux = np.array([sum(b.getFlux(tim.filter)
                           for b in src.getBrightnesses())
                       for src in cat])
+
+    smag = -2.5 * (np.log10(sdssflux) - 9.)
+    tmag = -2.5 * (np.log10(   tflux) - 9.)
+
+    T = fits_table()
+    T.ra = np.array([src.getPosition().ra for src in cat])
+    T.dec = np.array([src.getPosition().dec for src in cat])
+    T.flux = tflux
+    T.mag = tmag
+    if secat:
+        T.writeto(basefn + '-se-phot.fits')
+    else:
+        T.writeto(basefn + '-phot.fits')
     
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
@@ -276,7 +326,7 @@ if __name__ == '__main__':
     I = np.argsort(-np.abs(chi1.ravel()))
     print 'Worst chi pixels:', chi1.flat[I[:20]]
     
-    fitsio.write(basefn + '-mod1.fits', mod0, clobber=True)
+    fitsio.write(basefn + '-mod1.fits', mod1, clobber=True)
 
     plt.clf()
     imshow(mod, **ima)
@@ -307,7 +357,7 @@ if __name__ == '__main__':
     lo,hi = -1e-1, 1e5
     plt.plot(sdssflux, tflux, 'b.', alpha=0.5)
     plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
-    plt.xlabel('SDSS z flux (nanomaggies)')
+    plt.xlabel('%s z flux (nanomaggies)' % catname)
     plt.ylabel('DECam z flux (nanomaggies)')
     plt.xscale('symlog')
     plt.yscale('symlog')
@@ -315,19 +365,33 @@ if __name__ == '__main__':
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
 
-    smag = -2.5 * (np.log10(sdssflux) - 9.)
-    tmag = -2.5 * (np.log10(   tflux) - 9.)
-    
     plt.clf()
     lo,hi = 10,25
     plt.plot(smag, tmag, 'b.', alpha=0.5)
     plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
-    plt.xlabel('SDSS z (mag)')
+    plt.xlabel('%s z (mag)' % catname)
     plt.ylabel('DECam z (mag)')
     plt.axis([hi,lo,hi,lo])
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
 
+    S = fits_table(sdssobjfn)
+    # stars
+    S.cut(S.objc_type == 6)
+
+    I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, 1./3600)
+    S.cut(I)
+    g = S.psfmag[:,1]
+    r = S.psfmag[:,2]
+    z = T.mag[J]
+    plt.clf()
+    plt.plot(g-r, r-z, 'b.', alpha=0.25)
+    plt.axis([0, 2, -1, 3])
+    plt.xlabel('SDSS g-r')
+    plt.ylabel('SDSS r - DECam z')
+    plt.title('Forced photometry using %s catalog (%i stars)' % (catname, len(S)))
+    ps.savefig()
+    
     if False:
         H,W = tim.shape
         for y0 in np.arange(0, H, 256):
