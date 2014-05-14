@@ -17,7 +17,10 @@ To check out and build the code in a *tractor* directory:
 
 Or if you prefer:
 
+    #
     # Grab and install the Astrometry.net code (http://astrometry.net/downloads)
+    # and then...
+    #
     git clone git@github.com:dstndstn/tractor.git
     cd tractor
     make
@@ -28,10 +31,16 @@ directory.  But if you want to install it:
     make
     python setup.py install # --prefix=/some/place    or maybe --home=/your/place
 
+There is a test script that renders SDSS images:
+
+    python example/tractor-sdss-synth.py
+
+
 Prereqs:
 
 * scipy (> 0.7; 0.9 works)
 * numpy (>= 1.4)
+* astrometry.net (often svn trunk is required)
 
 Other packages used in various places include:
 
