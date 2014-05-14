@@ -53,26 +53,28 @@ from astrometry.util.siap import *
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
+from astrometry.util.util import *
 
 ps = PlotSequence('decov')
 
-T = fits_table('schlegel-z.fits')
-T.ra = np.array([float(s) for s in T.ra])
-T.dec = np.array([float(s) for s in T.dec])
-T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
-T.about()
-print len(T), 'in range'
-print T.filename
-print T.ra
-print T.dec
-
-plt.clf()
-for fn in T.filename:
-    pth = '/global/project/projectdirs/desi/imaging/redux/decam/proc/' + fn
-    wcs = Sip(pth)
-    r0,r1,d0,d1 = wcs.radec_bounds()
-    plt.plot([r0,r1,r1,r0,r0], [d0,d0,d1,d1,d0], 'b-', alpha=0.25)
-ps.savefig()
+if False:
+    T = fits_table('schlegel-z.fits')
+    T.ra = np.array([float(s) for s in T.ra])
+    T.dec = np.array([float(s) for s in T.dec])
+    T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
+    T.about()
+    print len(T), 'in range'
+    print T.filename
+    print T.ra
+    print T.dec
+    
+    plt.clf()
+    for fn in T.filename:
+        pth = '/global/project/projectdirs/desi/imaging/redux/decam/proc/' + fn
+        wcs = Sip(pth)
+        r0,r1,d0,d1 = wcs.radec_bounds()
+        plt.plot([r0,r1,r1,r0,r0], [d0,d0,d1,d1,d0], 'b-', alpha=0.25)
+    ps.savefig()
 
 # sys.exit(0)
 
@@ -135,6 +137,7 @@ ufilts = ['u','g','r','i','z','Y']
 deeps = [('COSMOS', 150.116667, 2.205833),
          ('DEEP2-F3', 352.5, 0),
          ('DEEP2-F4', 37.5, 0),
+         ('Deep QSO', 39, 0),
          ]
 
 for f in ufilts:
