@@ -14,6 +14,7 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
                              **kwargs):
     '''
     masked: read "-m" images, or "-u"?
+
     bandname: PhotoCal band name to use: default: "w%i" % band
     '''
 
@@ -80,6 +81,6 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
                 name='unWISE %s W%i' % (tile, band), domask=False)
     tim.sig1 = sig1
     tim.roi = roi
-
+    tim.nims = nims
     return tim
 
