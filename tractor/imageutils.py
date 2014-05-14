@@ -54,6 +54,5 @@ def interpret_roi(wcs, (H,W), roi=None, roiradecsize=None, roiradecbox=None,
         x0 = y0 = 0
         x1 = W
         y1 = H
-    #roislice = (slice(y0,y1), slice(x0,x1))
 
-    return (x0,x1,y0,y1)
+    return (x0,x1,y0,y1), ((x0 != 0) or (y0 != 0) or (x1 != W) or (y1 != H))

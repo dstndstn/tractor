@@ -1,8 +1,10 @@
+import os
 import numpy as np
 import pyfits
 import fitsio
 
 from astrometry.util.util import Tan
+from astrometry.util.fits import *
 from tractor import *
 
 def get_unwise_tile_dir(basedir, coadd_id):
@@ -30,18 +32,19 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
 
     print 'Reading', imfn
     wcs = Tan(imfn)
+    twcs = ConstantFitsWcs(wcs)
 
     img = fitsio.FITS(imfn)[0]
-    H,W = self.image_proxy.get_info()['dims']
+    H,W = img.get_info()['dims']
     H,W = int(H), int(W)
 
-    roi = interpret_roi(wcs, (H,W), **kwargs)
+    roi,nil = interpret_roi(twcs, (H,W), **kwargs)
     if roi is None:
         # No overlap with ROI
         return None
 
     (x0,x1,y0,y1) = roi
-    wcs.setX0Y0(x0,y0)
+    twcs.setX0Y0(x0,y0)
     roislice = (slice(y0,y1), slice(x0,x1))
 
     img = img[roislice]
@@ -62,7 +65,6 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     P = fits_table(psffn, hdu=band)
     psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
-    twcs = ConstantFitsWcs(wcs)
     sky = 0.
     tsky = ConstantSky(sky)
 

@@ -945,58 +945,15 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     #print 'Created SDSS Wcs:', wcs
     #print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
 
-    if roiradecsize is not None:
-        ra,dec,S = roiradecsize
-        fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-        print 'ROI center RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
-        xc,yc = [int(np.round(p)) for p in fxc,fyc]
+    roi,hasroi = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
+                               roiradecbox=roiradecbox)
+    if roi is None:
+        return None,None
+    info.update(roi=roi)
+    x0,x1,y0,y1 = roi
 
-        roi = [np.clip(xc-S, 0, W),
-               np.clip(xc+S, 0, W),
-               np.clip(yc-S, 0, H),
-               np.clip(yc+S, 0, H)]
-        roi = [int(x) for x in roi]
-        if roi[0]==roi[1] or roi[2]==roi[3]:
-            print "ZERO ROI?", roi
-            print 'S = ', S, 'xc,yc = ', xc,yc
-            #assert(False)
-            return None,None
-
-        #print 'roi', roi
-        #roi = [max(0, xc-S), min(W, xc+S), max(0, yc-S), min(H, yc+S)]
-        info.update(roi=roi)
-
-    if roiradecbox is not None:
-        ra0,ra1,dec0,dec1 = roiradecbox
-        xy = []
-        for r,d in [(ra0,dec0),(ra1,dec0),(ra0,dec1),(ra1,dec1)]:
-            xy.append(wcs.positionToPixel(RaDecPos(r,d)))
-        xy = np.array(xy)
-        xy = np.round(xy).astype(int)
-        x0 = xy[:,0].min()
-        x1 = xy[:,0].max()
-        y0 = xy[:,1].min()
-        y1 = xy[:,1].max()
-        #print 'ROI box RA (%.3f,%.3f), Dec (%.3f,%.3f) -> xy x (%i,%i), y (%i,%i)' % (ra0,ra1, dec0,dec1, x0,x1, y0,y1)
-        roi = [np.clip(x0,   0, W),
-               np.clip(x1+1, 0, W),
-               np.clip(y0,   0, H),
-               np.clip(y1+1, 0, H)]
-        #print 'ROI xy box clipped x [%i,%i), y [%i,%i)' % tuple(roi)
-        if roi[0] == roi[1] or roi[2] == roi[3]:
-            #print 'Empty roi'
-            return None,None
-        info.update(roi=roi)
-
-        
-    if roi is not None:
-        x0,x1,y0,y1 = roi
-    else:
-        x0 = y0 = 0
     # Mysterious half-pixel shift.  asTrans pixel coordinates?
     wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
-
-    #print 'Band name:', bandname
 
     if nanomaggies:
         photocal = LinearPhotoCal(1., band=bandname)
@@ -1013,7 +970,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     psfield = sdss.readPsField(run, camcol, field)
     iva = dict(ignoreSourceFlux=invvarIgnoresSourceFlux)
     if invvarAtCenter:
-        if roi:
+        if hasroi:
             iva.update(constantSkyAt=((x0+x1)/2., (y0+y1)/2.))
         else:
             iva.update(constantSkyAt=(W/2., H/2.))
@@ -1038,7 +995,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     # http://data.sdss3.org/datamodel/files/PHOTO_REDUX/RERUN/RUN/objcs/CAMCOL/fpM.html
     fpM = sdss.readFpM(run, camcol, field, bandname)
 
-    if roi is None:
+    if not hasroi:
         image = frame.getImage()
 
     else:
@@ -1050,7 +1007,6 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
             pass
         else:
             invvar = invvar[roislice].copy()
-
         H,W = image.shape
             
     if (not invvarAtCenter) or invvarAtCenterImage:
