@@ -509,7 +509,7 @@ class ProfileGalaxy(object):
         
         # now convolve with the PSF, analytically
         psfmix = img.getPsf().getMixtureOfGaussians(mean=np.array([px,py]))
-        psfmix.normalize()
+        #psfmix.normalize()
         cmix = amix.convolve(psfmix)
         x0 = outx.start
         y0 = outy.start

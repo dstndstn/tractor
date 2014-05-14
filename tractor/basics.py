@@ -1327,7 +1327,15 @@ class NCircularGaussianPSF(MultiParams):
         assert(len(sigmas) == len(weights))
         super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
         self.minradius = 1.
-        
+
+    @property
+    def amp(self):
+        return self.weights
+
+    @property
+    def mog(self):
+        return self.getMixtureOfGaussians()
+    
     @staticmethod
     def getNamedParams():
         return dict(sigmas=0, weights=1)
@@ -1399,33 +1407,22 @@ class NCircularGaussianPSF(MultiParams):
         #return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
         '''
 
-    def normalize(self):
-        mx = max(self.weights)
-        self.weights.setParams([w/mx for w in self.weights])
+    # def normalize(self):
+    #     mx = max(self.weights)
+    #     self.weights.setParams([w/mx for w in self.weights])
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
-        #hk = ('NCircularGaussianPSF',
-        #     tuple(x for x in self.sigmas),
-        #     tuple(x for x in self.weights))
-        # print 'sigmas', self.sigmas
-        # print 'sigmas type', type(self.sigmas)
-        # print 'sigmas[0]', self.sigmas[0]
-        # print 'Hashkey', hk
-        # print hash(hk)
         return hk
     
     def copy(self):
-        cc = NCircularGaussianPSF(list([s for s in self.sigmas]),
-                                  list([w for w in self.weights]))
-        #print 'NCirc copy', cc
-        return cc
+        return NCircularGaussianPSF(list([s for s in self.sigmas]),
+                                    list([w for w in self.weights]))
 
     def applyTo(self, image):
         from scipy.ndimage.filters import gaussian_filter
         # gaussian_filter normalizes the Gaussian; the output has ~ the
         # same sum as the input.
-        
         res = np.zeros_like(image)
         for s,w in zip(self.sigmas, self.weights):
             res += w * gaussian_filter(image, s)
@@ -1451,7 +1448,7 @@ class NCircularGaussianPSF(MultiParams):
         mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
         patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
         # Note: sum(self.weights) can be zero if parameters are frozen!!!
-        patch /= sum(mix.amp)
+        #patch /= sum(mix.amp)
         return Patch(x0, y0, patch)
 
 
