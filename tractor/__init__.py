@@ -4,6 +4,7 @@ from basics import *
 from nasasloan import *
 from psfex import *
 from ellipses import *
+from imageutils import *
 
 __all__ = [
     # modules
@@ -32,4 +33,6 @@ __all__ = [
     'VaryingGaussianPSF', 'PsfEx',
     # ellipses
     'EllipseE', 'EllipseESoft',
+    # imageutils
+    'interpret_roi',
     ]
