@@ -51,107 +51,104 @@ if __name__ == '__main__':
     print len(A), 'tiles overlap:', A.coadd_id
     tiles = A.coadd_id
 
-    band = 1
-    tims = []
-    for tile in tiles:
-        tim = get_unwise_tractor_image(tiledir, tile, band,
-                                       roiradecbox=[ralo, rahi, declo, dechi],
-                                       bandname='w')
-        tim.psf.radius = 25
-        tims.append(tim)
-        print 'tim', tim
-        print 'tim ROI', tim.roi
-        #print 'tim shape', tim.shape
-        #print 'Full image bounds:', tim.wcs.wcs.radec_bounds()
-
-    
-    plt.clf()
-    plt.plot(T.ra, T.dec, 'r.', alpha=0.1)
-    for tim in tims:
-        h,w = tim.shape
-        xy = [(0,0),(0,h),(w,h),(w,0),(0,0)]
-        rd = [tim.wcs.pixelToPosition(x,y) for x,y in xy]
-        rr = [x.ra for x in rd]
-        dd = [x.dec for x in rd]
-        plt.plot(rr,dd, 'b-')
-    ps.savefig()
-    
-
     T.cut(T.magr < 24.1)
-    #T.cut(T.magr < 20.)
+    #T.cut(T.magr < 21.)
     T.cut(T.magr > 0.)
     print len(T), 'sources in mag range'
     print 'Mag range r', T.magr.min(), T.magr.max()
 
-    cat = []
-    flux = NanoMaggies.magToNanomaggies(T.magr)
-    for i in range(len(T)):
-        cat.append(PointSource(RaDecPos(T.ra[i], T.dec[i]),
-                               NanoMaggies(w=flux[i] * 40.)))
+    for band in [1,2]:
+        tims = []
+        for tile in tiles:
+            tim = get_unwise_tractor_image(tiledir, tile, band,
+                                           roiradecbox=[ralo, rahi, declo, dechi],
+                                           bandname='w')
+            tim.psf.radius = 25
+            tims.append(tim)
+            print 'tim', tim
+            #print 'tim ROI', tim.roi
 
-    tractor = Tractor(tims, cat)
-    tractor.freezeParamsRecursive('*')
-    tractor.thawPathsTo('w')
+        if band == 1:
+            plt.clf()
+            plt.plot(T.ra, T.dec, 'r.', alpha=0.1)
+            for tim in tims:
+                h,w = tim.shape
+                xy = [(0,0),(0,h),(w,h),(w,0),(0,0)]
+                rd = [tim.wcs.pixelToPosition(x,y) for x,y in xy]
+                rr = [x.ra for x in rd]
+                dd = [x.dec for x in rd]
+                plt.plot(rr,dd, 'b-')
+            ps.savefig()
 
-    t0 = Time()
+        cat = []
+        flux = NanoMaggies.magToNanomaggies(T.magr)
+        for i in range(len(T)):
+            cat.append(PointSource(RaDecPos(T.ra[i], T.dec[i]),
+                                   NanoMaggies(w=flux[i] * 40.)))
 
-    minsb = 0.1 * tims[0].sig1
+        fitsky = False
 
-    R = tractor.optimize_forced_photometry(
-        minsb=minsb, mindlnp=1., fitstats=True,
-        fitstat_extras=[('pronexp', [tim.nims for tim in tims])],
-        variance=True, shared_params=False,
-        use_ceres=True, BW=8, BH=8, wantims=True)
+        tractor = Tractor(tims, cat)
+        tractor.freezeParamsRecursive('*')
+        tractor.thawPathsTo('w')
+        if fitsky:
+            tractor.thawPathsTo('sky')
 
-    print 'That took', Time()-t0
+        t0 = Time()
 
-    for im0,im1 in zip(R.ims0, R.ims1):
-        (dat,mod,ie,chi,roi) = im0
+        minsb = 0.1 * tims[0].sig1
+        R = tractor.optimize_forced_photometry(
+            minsb=minsb, mindlnp=1., fitstats=True,
+            fitstat_extras=[('pronexp', [tim.nims for tim in tims])],
+            variance=True, shared_params=False,
+            use_ceres=True, BW=8, BH=8, wantims=True,
+            sky=fitsky)
+        print 'That took', Time()-t0
 
-        ima = dict(interpolation='nearest', origin='lower', vmin=-1, vmax=10)
-        plt.clf()
-        plt.imshow(dat, **ima)
-        plt.title(tim.name)
-        ps.savefig()
+        for im0,im1 in zip(R.ims0, R.ims1):
+            #(dat,mod,ie,chi,roi) = im0
+            (dat,mod,ie,chi,roi) = im1
 
-        plt.clf()
-        plt.imshow(mod, **ima)
-        plt.title(tim.name + ': initial model')
-        ps.savefig()
+            ima = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=50)
+            plt.clf()
+            plt.imshow(dat, **ima)
+            plt.title(tim.name)
+            ps.savefig()
 
-        (dat,mod,ie,chi,roi) = im1
+            # plt.clf()
+            # plt.imshow(mod, **ima)
+            # plt.title(tim.name + ': initial model')
+            # ps.savefig()
 
-        plt.clf()
-        plt.imshow(mod, **ima)
-        plt.title(tim.name + ': fit model')
-        ps.savefig()
+            plt.clf()
+            plt.imshow(mod, **ima)
+            plt.title(tim.name + ': fit model')
+            ps.savefig()
 
-
-
-    nm = np.array([src.getBrightness().getBand('w') for src in cat])
-    nm_ivar = R.IV
-
-    wband = 'w%i' % band
-    T.set(wband + '_nanomaggies', nm.astype(np.float32))
-    T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
-    dnm = np.zeros(len(nm_ivar), np.float32)
-    okiv = (nm_ivar > 0)
-    dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
-    okflux = (nm > 0)
-    mag = np.zeros(len(nm), np.float32)
-    mag[okflux] = (NanoMaggies.nanomaggiesToMag(nm[okflux])).astype(np.float32)
-    dmag = np.zeros(len(nm), np.float32)
-    ok = (okiv * okflux)
-    dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])).astype(np.float32)
-
-    mag[np.logical_not(okflux)] = np.nan
-    dmag[np.logical_not(ok)] = np.nan
-        
-    T.set(wband + '_mag', mag)
-    T.set(wband + '_mag_err', dmag)
-    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
-    for k in fskeys:
-        T.set(wband + '_' + k, getattr(R.fitstats, k).astype(np.float32))
+        nm = np.array([src.getBrightness().getBand('w') for src in cat])
+        nm_ivar = R.IV
+    
+        wband = 'w%i' % band
+        T.set(wband + '_nanomaggies', nm.astype(np.float32))
+        T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
+        dnm = np.zeros(len(nm_ivar), np.float32)
+        okiv = (nm_ivar > 0)
+        dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
+        okflux = (nm > 0)
+        mag = np.zeros(len(nm), np.float32)
+        mag[okflux] = (NanoMaggies.nanomaggiesToMag(nm[okflux])).astype(np.float32)
+        dmag = np.zeros(len(nm), np.float32)
+        ok = (okiv * okflux)
+        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])).astype(np.float32)
+    
+        mag[np.logical_not(okflux)] = np.nan
+        dmag[np.logical_not(ok)] = np.nan
+            
+        T.set(wband + '_mag', mag)
+        T.set(wband + '_mag_err', dmag)
+        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
+        for k in fskeys:
+            T.set(wband + '_' + k, getattr(R.fitstats, k).astype(np.float32))
 
     T.writeto('deep2-wise.fits')
 
