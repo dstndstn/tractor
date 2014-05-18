@@ -1,3 +1,6 @@
+#include <Python.h>
+#include <numpy/arrayobject.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/param.h>
@@ -169,3 +172,59 @@ template class Patch<float>;
 template class Patch<double>;
 template class ForcedPhotCostFunction<float>;
 template class ForcedPhotCostFunction<double>;
+
+
+
+
+ImageCostFunction::ImageCostFunction(PyObject* tractor,
+                                     int imagei, int nparams) :
+    _tractor(tractor), _imagei(imagei), _nparams(nparams), _image(NULL),
+    _npix(0) {
+
+    //PyObject* tractorGetImage = PyObject_GetAttrString(tractor, "getImage");
+    //assert(tractorGetImage);
+    //assert(PyCallable_Check(tractorGetImage);
+
+    PyObject* ret;
+
+    _image = PyObject_CallMethod(_tractor, (char*)"getImage",
+                                 (char*)"i", _imagei);
+    //PyInt_FromLong(_imagei), NULL);
+
+    ret = PyObject_CallMethod(_image, (char*)"numberOfPixels", NULL);
+    _npix = PyInt_AsLong(ret);
+    Py_DECREF(ret);
+    //NULL);
+
+    printf("Image %i: number of pixels %i\n", _imagei, _npix);
+
+    set_num_residuals(_npix);
+    std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+    bs->push_back(_nparams);
+    /*
+     for (int i=0; i<_nparams; i++) {
+     bs->push_back(1);
+     }
+     */
+}
+
+ImageCostFunction::~ImageCostFunction() {
+    Py_XDECREF(_image);
+}
+
+bool ImageCostFunction::Evaluate(double const* const* parameters,
+                                 double* residuals,
+                                 double** jacobians) const {
+
+    const std::vector<int16_t> bs = parameter_block_sizes();
+    printf("ImageCostFunction::Evaluate\n");
+    printf("Parameter blocks:\n");
+    for (size_t i=0; i<bs.size(); i++) {
+        printf("  %i: [", (int)i);
+        for (int j=0; j<bs[i]; j++) {
+            printf(" %g,", parameters[i][j]);
+        }
+        printf(" ]\n");
+    }
+    return false;
+}

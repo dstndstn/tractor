@@ -47,3 +47,26 @@ class ForcedPhotCostFunction : public CostFunction {
     int _nonneg;
 };
 
+
+
+
+
+
+
+
+class ImageCostFunction : public CostFunction {
+ public:
+    virtual ~ImageCostFunction();
+
+    ImageCostFunction(PyObject* tractor, int imagei, int nparams);
+
+    virtual bool Evaluate(double const* const* parameters,
+                          double* residuals,
+                          double** jacobians) const;
+ protected:
+    PyObject* _tractor;
+    int _imagei;
+    PyObject* _image;
+    int _npix;
+    int _nparams;
+};

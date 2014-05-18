@@ -869,6 +869,14 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
+    def _ceres_opt(self):
+        from ceres import ceres_opt
+
+        params = np.array(self.getParams())
+        R = ceres_opt(self, self.getNImages(), params)
+        print 'ceres_opt result:', R
+        
+            
     def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
                              skyderivs, minFlux,

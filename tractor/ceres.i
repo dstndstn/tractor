@@ -288,6 +288,57 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 }
 
 
+static PyObject* ceres_opt(PyObject* tractor, int nims,
+                           PyObject* np_params) {
+    Problem problem;
+    int i;
+    double* params;
+    int nparams;
+
+    assert(PyArray_Check(np_params));
+    assert(PyArray_TYPE(np_params) == NPY_DOUBLE);
+    nparams = (int)PyArray_Size(np_params);
+    params = (double*)PyArray_DATA(np_params);
+
+    printf("ceres_opt, tractor = 0x%p, nims %i, nparams %i\n",
+           tractor, nims, nparams);
+
+    //params = malloc(sizeof(double) * nparams);
+    std::vector<double*> allparams;
+    allparams.push_back(params);
+
+    for (i=0; i<nims; i++) {
+        CostFunction* cost = new ImageCostFunction(tractor, i, nparams);
+        problem.AddResidualBlock(cost, NULL, allparams);
+    }
+
+    // Run the solver!
+    Solver::Options options;
+    options.minimizer_progress_to_stdout = true;
+    options.linear_solver_type = ceres::SPARSE_SCHUR;
+    options.jacobi_scaling = true;
+
+    Solver::Summary summary;
+    Solve(options, &problem, &summary);
+    printf("%s\n", summary.BriefReport().c_str());
+
+    return Py_BuildValue("{sisssdsdsdsssssisisi}",
+                         "termination", int(summary.termination_type),
+                         "error", summary.error.c_str(),
+                         "initial_cost", summary.initial_cost,
+                         "final_cost", summary.final_cost,
+                         "fixed_cost", summary.fixed_cost,
+                         "brief_report", summary.BriefReport().c_str(),
+                         "full_report", summary.FullReport().c_str(),
+                         "steps_successful", summary.num_successful_steps,
+                         "steps_unsuccessful", summary.num_unsuccessful_steps,
+                         "steps_inner", summary.num_inner_iteration_steps);
+}
+
+
+
+
+
 %}
 
 
