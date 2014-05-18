@@ -178,8 +178,8 @@ template class ForcedPhotCostFunction<double>;
 
 ImageCostFunction::ImageCostFunction(PyObject* tractor,
                                      int imagei, int nparams) :
-    _tractor(tractor), _imagei(imagei), _nparams(nparams), _image(NULL),
-    _npix(0) {
+    _tractor(tractor), _imagei(imagei), _image(NULL),
+    _npix(0), _nparams(nparams) {
 
     //PyObject* tractorGetImage = PyObject_GetAttrString(tractor, "getImage");
     //assert(tractorGetImage);
@@ -226,5 +226,34 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
         }
         printf(" ]\n");
     }
-    return false;
+
+    npy_intp dims[1];
+    dims[0] = _nparams;
+
+    PyObject* np_params = PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE,
+                                                    (void*)(parameters[0]));
+    PyObject* np_chi;
+    printf("Calling getChiImage(%i)\n", _imagei);
+    np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage", (char*)"i",
+                                 _imagei);
+    Py_DECREF(np_params);
+    if (!np_chi) {
+        printf("getChiImage() failed\n");
+        return false;
+    }
+    if (PyArray_TYPE(np_chi) != NPY_DOUBLE) {
+        printf("expected getChiImage() to return double\n");
+        Py_DECREF(np_chi);
+        return false;
+    }
+    printf("Got chi image of size: %i\n", (int)PyArray_Size(np_chi));
+
+    double* chi = (double*)PyArray_DATA(np_chi);
+    // FIXME -- ASSUME contiguous C-style...
+
+    memcpy(residuals, chi, sizeof(double) * _npix);
+    
+    Py_DECREF(np_chi);
+
+    return true;
 }

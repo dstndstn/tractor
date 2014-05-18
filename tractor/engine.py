@@ -2531,10 +2531,14 @@ class Tractor(MultiParams):
         return chis
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
+        print 'getChiImage: imgi', imgi
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        return (img.getImage() - mod) * img.getInvError()
+        print 'mod', mod.shape, mod.dtype
+        chi = (img.getImage() - mod) * img.getInvError()
+        print 'chi', chi.shape, chi.dtype
+        return chi
 
     def getNdata(self):
         count = 0
