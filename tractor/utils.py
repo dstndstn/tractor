@@ -80,6 +80,8 @@ class BaseParams(object):
         assert(len(p) == self.numberOfParams())
         for ii,pp in enumerate(p):
             self.setParam(ii, pp)
+    def setAllParams(self, p):
+        return self.setParams(p)
     def setParam(self, i, p):
         '''
         NOTE, you MUST implement either "setParams" or "setParam",
@@ -193,6 +195,9 @@ class NamedParams(object):
     def getAllParams(self):
         ''' Returns all params, regardless of thawed/frozen status. '''
         raise RuntimeError("Unimplemented getAllParams in " + str(self.__class__))
+    def setAllParams(self, p):
+        ''' Returns all params, regardless of thawed/frozen status. '''
+        raise RuntimeError("Unimplemented setAllParams in " + str(self.__class__))
 
     def _addNamedParams(self, alias, **d):
         self.namedparams.update(d)
@@ -466,6 +471,10 @@ class ParamList(BaseParams, NamedParams):
     def getAllParams(self):
         return list(self._getThings())
 
+    def setAllParams(self, p):
+        for i,pp in enumerate(p):
+            self._setThing(i, pp)
+
     def getParam(self,i):
         ii = self._indexLiquid(i)
         return self._getThing(ii)
@@ -507,69 +516,77 @@ class ArithmeticParams(object):
     def __add__(self, other):
         ''' + '''
         res = self.copy()
-        if hasattr(other, 'getParams'):
-            res.setParams([x + y for x,y in zip(res.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            res.setAllParams([x + y for x,y in zip(res.getAllParams(),
+                                                   other.getAllParams())])
         else:
-            res.setParams([x + other for x in res.getParams()])
+            res.setAllParams([x + other for x in res.getAllParams()])
         return res
 
     def __sub__(self, other):
         ''' - '''
         res = self.copy()
-        if hasattr(other, 'getParams'):
-            res.setParams([x - y for x,y in zip(res.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            res.setAllParams([x - y for x,y in zip(res.getAllParams(),
+                                                   other.getAllParams())])
         else:
-            res.setParams([x - other for x in res.getParams()])
+            res.setAllParams([x - other for x in res.getAllParams()])
         return res
 
     def __mul__(self, other):
         ''' *= '''
         res = self.copy()
-        if hasattr(other, 'getParams'):
-            res.setParams([x * y for x,y in zip(res.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            res.setAllParams([x * y for x,y in zip(res.getAllParams(),
+                                                   other.getAllParams())])
         else:
-            res.setParams([x * other for x in res.getParams()])
+            res.setAllParams([x * other for x in res.getAllParams()])
         return res
 
     def __div__(self, other):
         ''' /= '''
         res = self.copy()
-        if hasattr(other, 'getParams'):
-            res.setParams([x / y for x,y in zip(res.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            res.setAllParams([x / y for x,y in zip(res.getAllParams(),
+                                                   other.getAllParams())])
         else:
-            res.setParams([x / other for x in res.getParams()])
+            res.setAllParams([x / other for x in res.getAllParams()])
         return res
 
     def __iadd__(self, other):
         ''' += '''
-        if hasattr(other, 'getParams'):
-            self.setParams([x + y for x,y in zip(self.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            self.setAllParams([x + y for x,y in zip(self.getAllParams(),
+                                                    other.getAllParams())])
         else:
-            self.setParams([x + other for x in self.getParams()])
+            self.setAllParams([x + other for x in self.getAllParams()])
         return self
 
     def __isub__(self, other):
         ''' -= '''
-        if hasattr(other, 'getParams'):
-            self.setParams([x - y for x,y in zip(self.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            self.setAllParams([x - y for x,y in zip(self.getAllParams(),
+                                                    other.getAllParams())])
         else:
-            self.setParams([x - other for x in self.getParams()])
+            self.setAllParams([x - other for x in self.getAllParams()])
         return self
 
     def __imul__(self, other):
         ''' *= '''
-        if hasattr(other, 'getParams'):
-            self.setParams([x * y for x,y in zip(self.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            self.setAllParams([x * y for x,y in zip(self.getAllParams(),
+                                                    other.getAllParams())])
         else:
-            self.setParams([x * other for x in self.getParams()])
+            self.setAllParams([x * other for x in self.getAllParams()])
         return self
 
     def __idiv__(self, other):
         ''' /= '''
-        if hasattr(other, 'getParams'):
-            self.setParams([x / y for x,y in zip(self.getParams(), other.getParams())])
+        if hasattr(other, 'getAllParams'):
+            self.setAllParams([x / y for x,y in zip(self.getAllParams(),
+                                                    other.getAllParams())])
         else:
-            self.setParams([x / other for x in self.getParams()])
+            self.setAllParams([x / other for x in self.getAllParams()])
         return self
     
     __radd__ = __add__
@@ -791,6 +808,13 @@ class MultiParams(BaseParams, NamedParams):
             p.extend(pp)
         return p
 
+    def setAllParams(self, p):
+        i = 0
+        for s in self.subs:
+            n = s.numberOfParams()
+            s.setAllParams(p[i:i+n])
+            i += n
+
     def setParams(self, p):
         i = 0
         for s in self._getActiveSubs():
@@ -843,7 +867,7 @@ class MultiParams(BaseParams, NamedParams):
             pb.extend(b)
 
             c0 += s.numberOfParams()
-            r0 += listmax(r)
+            r0 += listmax(r,-1) + 1
 
         if rA == []:
             return None
@@ -853,24 +877,24 @@ class MultiParams(BaseParams, NamedParams):
 
 
 class NpArrayParams(ParamList):
-	'''
-	An implementation of Params that holds values in an np.ndarray
-	'''
-	def __init__(self, a):
-		self.a = np.array(a)
-		super(NpArrayParams, self).__init__()
-		del self.vals
-		# from NamedParams...
-		# active/inactive
-		self.liquid = [True] * self._numberOfThings()
+    '''
+    An implementation of Params that holds values in an np.ndarray
+    '''
+    def __init__(self, a):
+        self.a = np.array(a)
+        super(NpArrayParams, self).__init__()
+        del self.vals
+        # from NamedParams...
+        # active/inactive
+        self.liquid = [True] * self._numberOfThings()
 
-	def __getattr__(self, name):
-		if name == 'vals':
-			return self.a.ravel()
-		if name in ['shape',]:
-			return getattr(self.a, name)
-		raise AttributeError() #name + ': no such attribute in NpArrayParams.__getattr__')
+    def __getattr__(self, name):
+        if name == 'vals':
+            return self.a.ravel()
+        if name in ['shape',]:
+            return getattr(self.a, name)
+        raise AttributeError() #name + ': no such attribute in NpArrayParams.__getattr__')
 
-	def __getstate__(self): return self.__dict__
-	def __setstate__(self, d): self.__dict__.update(d)
+    def __getstate__(self): return self.__dict__
+    def __setstate__(self, d): self.__dict__.update(d)
 

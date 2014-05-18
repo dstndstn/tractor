@@ -41,7 +41,12 @@ CS82/semorphology/products/2013_06_30_catalogs/morphology_catalogs_V2.7.3/deVexp
 
 def get_cs82_masks(cs82field):
     # from http://vn90.phas.ubc.ca/CS82/masks/
-    fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_y_wcs.reg' % cs82field)
+    fn = os.path.join(data_dir, 'masks', '%s_lensingfinal_*_wcs.reg' % cs82field)
+    print 'Reading', fn
+    # glob the "?" for band name -- W4 are "i", S82 are "y"
+    fns = glob(fn)
+    assert(len(fns) == 1)
+    fn = fns[0]
     print 'Reading', fn
     f = open(fn, 'rb')
     polys = []
@@ -131,7 +136,12 @@ def get_cs82_sources(T, maglim=25, bands=['u','g','r','i','z']):
 
 
 def getTables(cs82field, enclosed=True, extra_cols=[]):
-    fn = os.path.join(data_dir, 'cats', 'masked.%s_y.V2.7A.swarp.cut.deVexp.fit' % cs82field)
+    fn = os.path.join(data_dir, 'cats', 'masked.%s_?.V2.7A.swarp.cut.deVexp.fit' % cs82field)
+    print 'Reading', fn
+    # glob the "?" for band name -- W4 are "i", S82 are "y"
+    fns = glob(fn)
+    assert(len(fns) == 1)
+    fn = fns[0]
     print 'Reading', fn
     T = fits_table(fn,
             hdu=2, column_map={'ALPHA_J2000':'ra',

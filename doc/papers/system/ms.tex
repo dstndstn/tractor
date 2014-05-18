@@ -1,6 +1,6 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 
-% GREAT3 Weak Lensing Challenge Entry
+% The Tractor Paper
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -19,20 +19,20 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\title[Short title]
-{The long version of the title of this paper}
+\title[The Tractor]
+{The Tractor: a code for probabilistic modeling of astronomical images}
     
 \author[All of us]{%
-  First Author,$^{1}$\thanks{\email}
-  Second Author,$^{2}$
+  Dustin Lang,$^{1}$\thanks{\email}
+  David W. Hogg,$^{2}$
   Third Author,$^{3}$
 \newauthor{%
   Fourth Author,$^{4}$
   Fifth Author,$^{5}$
   Sixth Author.$^{6}$}
   \medskip\\
-  $^1$\firstplace\\
-  $^2$\secondplace\\
+  $^1$\cmu\\
+  $^2$\nyu\\
   $^3$\thirdplace\\
   $^4$\fourthplace\\
   $^5$\fifthplace\\
@@ -54,11 +54,41 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \begin{abstract}
-Write this first.
+
+We present a new open-source software package, The Tractor, which
+enables probabilistic modeling of astronomical images.  The approach
+is \emph{generative}: the aim is to produce a pixel-space models of
+the observed images given parameters that describe the astronomical
+sources and the calibration properties of the images.  We typically
+assume pixelwise independent Gaussian noise, so the log-likelihood is
+a chi-squared distribution.
+%
+General S\'ersic galaxy models are supported.  We make heavy use of
+mixture-of-Gaussian approximations, relying on the analytic
+convolution of Gaussian representations of the point-spread function
+and galaxy profile to enable rapid pixel-by-pixel rendering of the
+model images.
+%
+%  We use a mixture of Gaussians
+%to describe both galaxies and point spread functions, and compare these models
+%directly to the pixels of all available images via the joint likelihood
+%function.
+%
+The code includes a simple optimiser for locating the peak of the
+posterior probability for the model parameters, and can also call an
+MCMC sampler for characterising the full distribution.  This allows,
+among other things, calibration and other nuisance parameters to be
+marginalized out.  We demonstrate the Tractor's performace in several
+different settings, including galaxy shape and photometry inference,
+in heterogeneous datasets involving multiple bandpasses, observing
+epochs, instrumentation, and observing conditions. We show that...
+
+% We don't go into much detail, simply referring to MBI1.  I think we have lots of other
+% content, so there's no need to talk about our Great3 efforts in any depth.
 \end{abstract}
 
 \begin{keywords}
-  Need keywords.
+methods: data analysis --- surveys --- techniques: image processing
 \end{keywords}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

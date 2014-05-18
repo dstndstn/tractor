@@ -21,6 +21,23 @@ import numpy as np
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
+# ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
+class TractorWCSWrapper(object):
+    def __init__(self, wcs, w, h, x0=0, y0=0):
+        self.wcs = wcs
+        self.imagew = w
+        self.imageh = h
+        self.x0 = x0
+        self.y0 = y0
+    def pixelxy2radec(self, x, y):
+        rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
+        return rd.ra, rd.dec
+    def radec2pixelxy(self, ra, dec):
+        x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
+        return True, x-self.x0+1, y-self.y0+1
+
+
+
 class TAITime(ScalarParam, ArithmeticParams):
     '''
     This is TAI as used in the SDSS 'frame' headers; eg
@@ -142,8 +159,6 @@ class Fluxes(Mags):
     An implementation of `Brightness` that stores fluxes in multiple
     bands.
     '''
-    #getBand = Mags.getMag
-    #getFlux = Mags.getMag
     def __add__(self, other):
         kwargs = {}
         for band in self.order:
@@ -249,12 +264,6 @@ class Flux(ScalarParam):
         new.val *= factor
         return new
     __rmul__ = __mul__
-    # enforce limit: Flux > 0
-    def _set(self, val):
-        if val < 0:
-            #print 'Clamping Flux from', p[0], 'to zero'
-            pass
-        self.val = max(0., val)
 
 class MagsPhotoCal(ParamList):
     '''
@@ -340,17 +349,19 @@ class NullWCS(BaseParams):
     The "identity" WCS -- useful when you are using raw pixel
     positions rather than RA,Decs.
     '''
-    def __init__(self, pixscale=1.):
+    def __init__(self, pixscale=1., dx=0., dy=0.):
         '''
         pixscale: [arcsec/pix]
         '''
         self.pixscale = pixscale
+        self.dx = dx
+        self.dy = dy
     def hashkey(self):
-        return ('NullWCS',)
+        return ('NullWCS', self.dx, self.dy)
     def positionToPixel(self, pos, src=None):
-        return pos.x, pos.y
+        return pos.x + self.dx, pos.y + self.dy
     def pixelToPosition(self, x, y, src=None):
-        return x,y
+        return x - self.dx, y - self.dy
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
@@ -365,12 +376,15 @@ class WcslibWcs(BaseParams):
     FIXME: we could implement anwcs_copy() using wcscopy().
     
     '''
-    def __init__(self, filename, hdu=0):
+    def __init__(self, filename, hdu=0, wcs=None):
         self.x0 = 0.
         self.y0 = 0.
-        from astrometry.util.util import anwcs
-        wcs = anwcs(filename, hdu)
-        self.wcs = wcs
+        if wcs is not None:
+            self.wcs = wcs
+        else:
+            from astrometry.util.util import anwcs
+            wcs = anwcs(filename, hdu)
+            self.wcs = wcs
 
     # pickling
     def __getstate__(self):
@@ -428,7 +442,7 @@ class WcslibWcs(BaseParams):
 
     def pixelToPosition(self, x, y, src=None):
         # MAGIC: 1 for FITS coords.
-        ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
         return RaDecPos(ra, dec)
 
     def cdAtPixel(self, x, y):
@@ -437,9 +451,9 @@ class WcslibWcs(BaseParams):
 
         (Returns the constant ``CD`` matrix elements)
         '''
-        ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
-        ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
-        ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
+        ok,ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
+        ok,ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
 
         cosdec = np.cos(np.deg2rad(dec0))
 
@@ -830,15 +844,24 @@ class Parallax(ScalarParam, ArithmeticParams):
     def __str__(self):
         return 'Parallax: %.3f arcsec' % (self.getValue())
 
+class ParallaxWithPrior(Parallax):
+    def getLogPrior(self):
+        p = self.getValue()
+        if p < 0:
+            return -np.inf
+        # Lutz & Kelker (1973) PASP 85 573
+        # in the fuckin' introduction!
+        return -4. * np.log(p)
+
     #### FIXME -- cos(Dec)
 class PMRaDec(RaDecPos):
     @staticmethod
     def getName():
         return "PMRaDec"
     def __str__(self):
-        return '%s: (%.3f, %.3f) "/yr' % (self.getName(),
-                                          self.getRaArcsecPerYear(),
-                                          self.getDecArcsecPerYear())
+        return '%s: (%.2f, %.2f) mas/yr' % (self.getName(),
+                                            1000. * self. getRaArcsecPerYear(),
+                                            1000. * self.getDecArcsecPerYear())
     def __init__(self, *args, **kwargs):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
@@ -855,6 +878,10 @@ class PMRaDec(RaDecPos):
         return self.pmra * 3600.
     def getDecArcsecPerYear(self):
         return self.pmdec * 3600.
+
+    def getParamDerivatives(self, img):
+        return [None]*self.numberOfParams()
+
     
 class MovingPointSource(PointSource):
     def __init__(self, pos, brightness, pm, parallax, epoch=0.):
@@ -890,6 +917,10 @@ class MovingPointSource(PointSource):
         p = self.pos + dt * self.pm
         suntheta = t.getSunTheta()
 
+        # print 'dt', dt, 'pos', self.pos, 'pm', self.pm, 'dt*pm:', dt * self.pm
+        # print 'p0: (%.8f, %.8f)' % (self.pos.ra, self.pos.dec)
+        # print 'p1: (%.8f, %.8f)' % (p.ra, p.dec)
+
         xyz = radectoxyz(p.ra, p.dec)
         xyz = xyz[0]
         # d(celestial coords)/d(parallax)
@@ -924,6 +955,8 @@ class MovingPointSource(PointSource):
 
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
+        #return [False]*self.numberOfParams()
+
         t = img.getTime()
         pos0 = self.getPositionAtTime(t)
         (px0,py0) = img.getWcs().positionToPixel(pos0, self)
@@ -931,6 +964,7 @@ class MovingPointSource(PointSource):
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
         derivs = []
 
+        #print 'MovingPointSource.getParamDerivs:'
         #print 'initial pixel pos', px0, py0
         
         # Position
@@ -959,23 +993,28 @@ class MovingPointSource(PointSource):
         #   derivs.extend(pderivs)
 
         def _add_posderivs(p, name):
+            # uses "globals": t, patch0, counts0
             psteps = p.getStepSizes(img)
             pvals = p.getParams()
             for i,pstep in enumerate(psteps):
                 oldval = p.setParam(i, pvals[i] + pstep)
                 tpos = self.getPositionAtTime(t)
                 (px,py) = img.getWcs().positionToPixel(tpos, self)
-                #print 'stepping param', name, i, '-->', p, '--> pix pos', px,py
+
+                # print 'stepping param', name, i, '-->', p, '--> pos', tpos, 'pix pos', px,py
                 patchx = img.getPsf().getPointSourcePatch(px, py)
                 p.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(%s%i)' % (name, i))
+                # print 'deriv', dx.patch.min(), dx.patch.max()
                 derivs.append(dx)
 
+        # print 'Finding RA,Dec derivatives'
         if not self.isParamFrozen('pos'):
             _add_posderivs(self.pos, 'pos')
         
         # Brightness
+        # print 'Finding Brightness derivatives'
         if not self.isParamFrozen('brightness'):
             bsteps = self.brightness.getStepSizes(img)
             bvals = self.brightness.getParams()
@@ -987,6 +1026,7 @@ class MovingPointSource(PointSource):
                 df.setName('d(ptsrc)/d(bright%i)' % i)
                 derivs.append(df)
 
+        # print 'Finding Proper Motion derivatives'
         if not self.isParamFrozen('pm'):
             #   # ASSUME 'pm' is the same type as 'pos'
             #   dt = (t - self.epoch).toYears()
@@ -995,6 +1035,7 @@ class MovingPointSource(PointSource):
             #       derivs.append(dd)
             _add_posderivs(self.pm, 'pm')
 
+        # print 'Finding Parallax derivatives'
         if not self.isParamFrozen('parallax'):
             _add_posderivs(self.parallax, 'parallax')
                 
@@ -1093,8 +1134,10 @@ class GaussianMixturePSF(ParamList):
     #         return -1e100
     #     return 0.
 
-    def getMixtureOfGaussians(self):
-        return self.mog
+    def getMixtureOfGaussians(self, mean=None):
+        mog = self.mog
+        mog.symmetrize()
+        return mog
 
     def applyTo(self, image):
         raise
@@ -1130,6 +1173,7 @@ class GaussianMixturePSF(ParamList):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None,
                             radius=None, **kwargs):
+        self.mog.symmetrize()
         if minval > 0.:
             if radius is not None:
                 rr = radius
@@ -1283,7 +1327,15 @@ class NCircularGaussianPSF(MultiParams):
         assert(len(sigmas) == len(weights))
         super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
         self.minradius = 1.
-        
+
+    @property
+    def amp(self):
+        return self.weights
+
+    @property
+    def mog(self):
+        return self.getMixtureOfGaussians()
+    
     @staticmethod
     def getNamedParams():
         return dict(sigmas=0, weights=1)
@@ -1355,33 +1407,22 @@ class NCircularGaussianPSF(MultiParams):
         #return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
         '''
 
-    def normalize(self):
-        mx = max(self.weights)
-        self.weights.setParams([w/mx for w in self.weights])
+    # def normalize(self):
+    #     mx = max(self.weights)
+    #     self.weights.setParams([w/mx for w in self.weights])
 
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
-        #hk = ('NCircularGaussianPSF',
-        #     tuple(x for x in self.sigmas),
-        #     tuple(x for x in self.weights))
-        # print 'sigmas', self.sigmas
-        # print 'sigmas type', type(self.sigmas)
-        # print 'sigmas[0]', self.sigmas[0]
-        # print 'Hashkey', hk
-        # print hash(hk)
         return hk
     
     def copy(self):
-        cc = NCircularGaussianPSF(list([s for s in self.sigmas]),
-                                  list([w for w in self.weights]))
-        #print 'NCirc copy', cc
-        return cc
+        return NCircularGaussianPSF(list([s for s in self.sigmas]),
+                                    list([w for w in self.weights]))
 
     def applyTo(self, image):
         from scipy.ndimage.filters import gaussian_filter
         # gaussian_filter normalizes the Gaussian; the output has ~ the
         # same sum as the input.
-        
         res = np.zeros_like(image)
         for s,w in zip(self.sigmas, self.weights):
             res += w * gaussian_filter(image, s)
@@ -1404,10 +1445,10 @@ class NCircularGaussianPSF(MultiParams):
         x1 = ix + rad + 1
         y0 = iy - rad
         y1 = iy + rad + 1
-        mix = self.getMixtureOfGaussians(np.array([px,py]))
+        mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
         patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
         # Note: sum(self.weights) can be zero if parameters are frozen!!!
-        patch /= sum(mix.amp)
+        #patch /= sum(mix.amp)
         return Patch(x0, y0, patch)
 
 
@@ -1475,6 +1516,11 @@ class ShiftedPsf(ParamsWrapper):
         p.x0 -= self.x0
         p.y0 -= self.y0
         return p
+    def getRadius(self):
+        return self.psf.getRadius()
+    def getMixtureOfGaussians(self, **kwargs):
+        return self.psf.getMixtureOfGaussians(**kwargs)
+
     
 class ScaledPhotoCal(ParamsWrapper):
     def __init__(self, photocal, factor):

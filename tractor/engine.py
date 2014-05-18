@@ -20,10 +20,11 @@ import gc
 import numpy as np
 #import pylab as plt
 
-from scipy.sparse import csr_matrix, csc_matrix
-from scipy.sparse.linalg import lsqr
-from scipy.ndimage.morphology import binary_dilation
-from scipy.ndimage.measurements import label
+# Scipy deps -- pushed down to where they are used.
+# from scipy.sparse import csr_matrix, csc_matrix
+# from scipy.sparse.linalg import lsqr
+# from scipy.ndimage.morphology import binary_dilation
+# from scipy.ndimage.measurements import label
 
 from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
@@ -178,6 +179,7 @@ class Image(MultiParams):
     def setMask(self, dilation=3):
         self.mask = (self.origInvvar <= 0.)
         if dilation > 0:
+            from scipy.ndimage.morphology import binary_dilation
             self.mask = binary_dilation(self.mask,iterations=dilation)
 
     def getStarMask(self):
@@ -873,6 +875,14 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
+    def _ceres_opt(self):
+        from ceres import ceres_opt
+
+        params = np.array(self.getParams())
+        R = ceres_opt(self, self.getNImages(), params)
+        print 'ceres_opt result:', R
+        
+            
     def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
                              skyderivs, minFlux,
@@ -975,7 +985,10 @@ class Tractor(MultiParams):
                 for by in range(by0, by1+1):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
-                        dd = (ceresparam, umod.x0, umod.y0, cmod)
+                        #if type(umod.x0) != int or type(umod.y0) != int:
+                        #    print 'umod:', umod.x0, umod.y0, type(umod.x0), type(umod.y0)
+                        #    print 'umod:', umod
+                        dd = (ceresparam, int(umod.x0), int(umod.y0), cmod)
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
@@ -1025,7 +1038,18 @@ class Tractor(MultiParams):
         return x
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
-                      umodels, scales, nilcounts):
+                      umodels, scales, nilcounts, extras=[]):
+        '''
+        extras: [ ('key', [eim0,eim1,eim2]), ... ]
+
+        Extra fields to add to the "FitStats" object, populated by
+        taking the profile-weighted sum of 'eim*'.  The number of
+        these images *must* match the number and shape of Tractor
+        images.
+        '''
+        if extras is None:
+            extras = []
+
         class FitStats(object):
             pass
         fs = FitStats()
@@ -1051,7 +1075,11 @@ class Tractor(MultiParams):
         # total number of pixels touched by this source
         fs.npix = np.zeros(len(srcs), int)
 
-        # subtract sky from models before measuring others' flux within my profile
+        for key,x in extras:
+            setattr(fs, key, np.zeros(len(srcs)))
+
+        # subtract sky from models before measuring others' flux
+        # within my profile
         skies = []
         for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
             tim.getSky().addTo(mod, scale=-1.)
@@ -1121,6 +1149,11 @@ class Tractor(MultiParams):
                 # scale to nanomaggies, weight by profile
                 fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*csum) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
+
+                for key,extraims in extras:
+                    x = getattr(fs, key)
+                    x[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * extraims[imi][slc].flat[nz])
+
                 srcmod[slc] = 0.
 
         # re-add sky
@@ -1486,6 +1519,7 @@ class Tractor(MultiParams):
                                    sky=False,
                                    minFlux=None,
                                    fitstats=False,
+                                   fitstat_extras=None,
                                    justims0=False,
                                    variance=False,
                                    skyvariance=False,
@@ -1651,13 +1685,13 @@ class Tractor(MultiParams):
         elif fitstats:
             t0 = Time()
             result.fitstats = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
-                                                 umodels, scales, nilcounts)
+                                                 umodels, scales, nilcounts, extras=fitstat_extras)
             logverb('forced phot: fit stats:', Time()-t0)
         return result
 
 
     def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
-                 shared_params=True, variance=False):
+                 shared_params=True, variance=False, just_variance=False):
         '''
         Performs *one step* of linearized least-squares + line search.
         
@@ -1680,6 +1714,8 @@ class Tractor(MultiParams):
                                     variance=variance)
         if variance:
             X,var = X
+            if just_variance:
+                return var
         #print Time() - t0
         topt = Time()-t0
         #print 'X:', X
@@ -1865,6 +1901,18 @@ class Tractor(MultiParams):
                 for k,deriv in enumerate(derivs):
                     if deriv is None:
                         continue
+                    # if deriv is False:
+                    #     # compute it now
+                    #   (THIS IS WRONG; mod0s only has initial models for images
+                    #    that need it -- those that are unfrozen)
+                    #     mod0 = mod0s[i]
+                    #     nm = src.getParamNames()[k]
+                    #     step = src.getStepSizes()[k]
+                    #     mod1 = tra.getModelImage(img)
+                    #     d = Patch(0, 0, (mod1 - mod0) / step)
+                    #     d.name = 'd(src(im%i))/d(%s)' % (i, nm)
+                    #     deriv = d
+                        
                     if not np.all(np.isfinite(deriv.patch.ravel())):
                         print 'Derivative for source', src
                         print 'deriv index', i
@@ -2033,13 +2081,14 @@ class Tractor(MultiParams):
             X = self.getLogPriorDerivatives()
             if X is not None:
 
-                print
-                print 'Warning: using priors; dstn was monkeying with'
-                print 'the code and the getLogPriorDerivatives() API has'
-                print 'changed: cA must be *integers*, not np arrays'
-                print
-                
+                # print
+                # print 'Warning: using priors; dstn was monkeying with'
+                # print 'the code and the getLogPriorDerivatives() API has'
+                # print 'changed: cA must be *integers*, not np arrays'
+                # print
+
                 rA,cA,vA,pb = X
+
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
@@ -2047,11 +2096,11 @@ class Tractor(MultiParams):
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
                 logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-                #print 'cA', cA
-                #print 'max', np.max(cA)
-                #print 'max', np.max(cA)+1
-                #print 'Ncols', Ncols
-                Ncols = max(Ncols, listmax(cA, -1) + 1)
+                if len(cA) == 0:
+                    Ncols = 0
+                else:
+                    Ncols = 1 + max(cA)
+
                 b = np.zeros(Nrows)
                 b[oldnrows:] = np.hstack(pb)
 
@@ -2131,11 +2180,6 @@ class Tractor(MultiParams):
             print 'sprows:', len(sprows), 'chunks'
             print '  total', sum(len(x) for x in sprows), 'elements'
 
-            # print 'spcols:', spcols
-            # print 'sprows:', sprows
-            # print 'spvals:', spvals
-            # print 'b:', b
-            
             ucols,colI = np.unique(spcols, return_inverse=True)
             J = np.argsort(colI)
 
@@ -2182,11 +2226,6 @@ class Tractor(MultiParams):
                             bcomp, nrcomp, Nelements)
             print 'Got TSNNLS result:', X
 
-            # print 'spcols:', spcols
-            # print 'ucols:', ucols
-            # print 'colI:', colI
-            # print 'sorted_cols:', sorted_cols
-            
             # Undo the column mappings
             X2 = np.zeros(len(allderivs))
             #X2[colI] = X
@@ -2195,6 +2234,9 @@ class Tractor(MultiParams):
             del X2
             
         if use_lsqr:
+            from scipy.sparse import csr_matrix, csc_matrix
+            from scipy.sparse.linalg import lsqr
+
             spvals = np.hstack(spvals)
             assert(np.all(np.isfinite(spvals)))
     
@@ -2210,7 +2252,7 @@ class Tractor(MultiParams):
             spcols = cc
             assert(i == len(sprows))
             assert(len(sprows) == len(spcols))
-    
+
             logverb('  Number of sparse matrix elements:', len(sprows))
             urows = np.unique(sprows)
             ucols = np.unique(spcols)
@@ -2390,6 +2432,8 @@ class Tractor(MultiParams):
     '''
 
     def getOverlappingSources(self, img, srcs=None, minsb=0.):
+        from scipy.ndimage.morphology import binary_dilation
+        from scipy.ndimage.measurements import label
 
         if _isint(img):
             img = self.getImage(img)
@@ -2493,10 +2537,14 @@ class Tractor(MultiParams):
         return chis
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
+        print 'getChiImage: imgi', imgi
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        return (img.getImage() - mod) * img.getInvError()
+        print 'mod', mod.shape, mod.dtype
+        chi = (img.getImage() - mod) * img.getInvError()
+        print 'chi', chi.shape, chi.dtype
+        return chi
 
     def getNdata(self):
         count = 0
@@ -2515,7 +2563,10 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        lnp = self.getLogLikelihood() + self.getLogPrior()
+        lnp = self.getLogPrior()
+        if lnp == -np.inf:
+            return lnp
+        lnp += self.getLogLikelihood()
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'

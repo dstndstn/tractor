@@ -1,3 +1,6 @@
+#include <Python.h>
+#include <numpy/arrayobject.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/param.h>
@@ -169,3 +172,88 @@ template class Patch<float>;
 template class Patch<double>;
 template class ForcedPhotCostFunction<float>;
 template class ForcedPhotCostFunction<double>;
+
+
+
+
+ImageCostFunction::ImageCostFunction(PyObject* tractor,
+                                     int imagei, int nparams) :
+    _tractor(tractor), _imagei(imagei), _image(NULL),
+    _npix(0), _nparams(nparams) {
+
+    //PyObject* tractorGetImage = PyObject_GetAttrString(tractor, "getImage");
+    //assert(tractorGetImage);
+    //assert(PyCallable_Check(tractorGetImage);
+
+    PyObject* ret;
+
+    _image = PyObject_CallMethod(_tractor, (char*)"getImage",
+                                 (char*)"i", _imagei);
+    //PyInt_FromLong(_imagei), NULL);
+
+    ret = PyObject_CallMethod(_image, (char*)"numberOfPixels", NULL);
+    _npix = PyInt_AsLong(ret);
+    Py_DECREF(ret);
+    //NULL);
+
+    printf("Image %i: number of pixels %i\n", _imagei, _npix);
+
+    set_num_residuals(_npix);
+    std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+    bs->push_back(_nparams);
+    /*
+     for (int i=0; i<_nparams; i++) {
+     bs->push_back(1);
+     }
+     */
+}
+
+ImageCostFunction::~ImageCostFunction() {
+    Py_XDECREF(_image);
+}
+
+bool ImageCostFunction::Evaluate(double const* const* parameters,
+                                 double* residuals,
+                                 double** jacobians) const {
+
+    const std::vector<int16_t> bs = parameter_block_sizes();
+    printf("ImageCostFunction::Evaluate\n");
+    printf("Parameter blocks:\n");
+    for (size_t i=0; i<bs.size(); i++) {
+        printf("  %i: [", (int)i);
+        for (int j=0; j<bs[i]; j++) {
+            printf(" %g,", parameters[i][j]);
+        }
+        printf(" ]\n");
+    }
+
+    npy_intp dims[1];
+    dims[0] = _nparams;
+
+    PyObject* np_params = PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE,
+                                                    (void*)(parameters[0]));
+    PyObject* np_chi;
+    printf("Calling getChiImage(%i)\n", _imagei);
+    np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage", (char*)"i",
+                                 _imagei);
+    Py_DECREF(np_params);
+    if (!np_chi) {
+        printf("getChiImage() failed\n");
+        return false;
+    }
+    if (PyArray_TYPE(np_chi) != NPY_DOUBLE) {
+        printf("expected getChiImage() to return double\n");
+        Py_DECREF(np_chi);
+        return false;
+    }
+    printf("Got chi image of size: %i\n", (int)PyArray_Size(np_chi));
+
+    double* chi = (double*)PyArray_DATA(np_chi);
+    // FIXME -- ASSUME contiguous C-style...
+
+    memcpy(residuals, chi, sizeof(double) * _npix);
+    
+    Py_DECREF(np_chi);
+
+    return true;
+}
