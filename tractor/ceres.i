@@ -3,6 +3,7 @@
 %include <typemaps.i>
 
 %{
+#define PY_ARRAY_UNIQUE_SYMBOL tractorceres_ARRAY_API
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
