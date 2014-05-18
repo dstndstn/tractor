@@ -597,7 +597,7 @@ def getmodelimagestep((tr, j, k, p0, step)):
     im.setParam(k, p0)
     return mod
 def getmodelimagefunc((tr, imj)):
-    print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
+    #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
 def getsrcderivs((src, img)):
     return src.getParamDerivatives(img)
@@ -669,7 +669,13 @@ class Tractor(MultiParams):
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
-        s += ' (' + ', '.join([im.name for im in self.images]) + ')'
+        names = []
+        for im in self.images:
+            if im.name is None:
+                names.append('[unnamed]')
+            else:
+                names.append(im.name)
+        s += ' (' + ', '.join(names) + ')'
         return s
 
     def is_multiproc(self):
