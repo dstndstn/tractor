@@ -45,12 +45,17 @@ tim = Image(data=img, invvar=np.zeros_like(img) + 1./sig1**2,
 
 src = PointSource(PixPos(W/2, H/2), Flux(100.))
 
-tractor = MyTractor([tim], [src])
+tractor = Tractor([tim], [src])
 mod = tractor.getModelImage(0)
 
 tim.data = mod + np.random.normal(scale=sig1, size=mod.shape)
 src.brightness = Flux(10.)
 src.pos = PixPos(W/2 - 1, H/2 - 1)
+
+print 'All params:'
+tractor.printThawedParams()
+
+tim.freezeParams('psf', 'photocal')
 
 print 'Thawed param:'
 tractor.printThawedParams()
@@ -68,3 +73,7 @@ print '_ceres_opt finished'
 print 'Params:', tractor.getParams()
 lnp1 = tractor.getLogProb()
 print 'Logprob:', lnp1
+
+print 'Thawed param:'
+tractor.printThawedParams()
+

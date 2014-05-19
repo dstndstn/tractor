@@ -111,7 +111,7 @@ class Image(MultiParams):
         derivs = []
         for s in self._getActiveSubs():
             if hasattr(s, 'getParamDerivatives'):
-                print 'Calling getParamDerivatives on', s
+                #print 'Calling getParamDerivatives on', s
                 sd = s.getParamDerivatives(tractor, self, srcs)
                 assert(len(sd) == s.numberOfParams())
                 derivs.extend(sd)
@@ -880,7 +880,10 @@ class Tractor(MultiParams):
 
         params = np.array(self.getParams())
         R = ceres_opt(self, self.getNImages(), params)
-        print 'ceres_opt result:', R
+        print 'ceres_opt result:'
+        for k,v in R.items():
+            print k, v
+        return R
         
             
     def _ceres_forced_photom(self, result, umodels,
@@ -2595,13 +2598,10 @@ class Tractor(MultiParams):
         return chis
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
-        print 'getChiImage: imgi', imgi
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        print 'mod', mod.shape, mod.dtype
         chi = (img.getImage() - mod) * img.getInvError()
-        print 'chi', chi.shape, chi.dtype
         return chi
 
     def getNdata(self):

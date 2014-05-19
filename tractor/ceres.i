@@ -289,8 +289,13 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 }
 
 
+// Generic optimization
+
 static PyObject* ceres_opt(PyObject* tractor, int nims,
                            PyObject* np_params) {
+    /*
+     np_params: numpy array, type double, length number of params.
+     */
     Problem problem;
     int i;
     double* params;
@@ -301,20 +306,17 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     nparams = (int)PyArray_Size(np_params);
     params = (double*)PyArray_DATA(np_params);
 
-    printf("ceres_opt, tractor = 0x%p, nims %i, nparams %i\n",
-           tractor, nims, nparams);
+    printf("ceres_opt, nims %i, nparams %i\n", nims, nparams);
 
-    //params = malloc(sizeof(double) * nparams);
     std::vector<double*> allparams;
     //allparams.push_back(params);
+    // Single-param blocks
     for (i=0; i<nparams; i++)
-      allparams.push_back(params + i);
-
-    //printf("params: %p\n", params);
+        allparams.push_back(params + i);
 
     for (i=0; i<nims; i++) {
-      CostFunction* cost = new ImageCostFunction(tractor, i, nparams, np_params);
-      problem.AddResidualBlock(cost, NULL, allparams);
+        CostFunction* cost = new ImageCostFunction(tractor, i, nparams, np_params);
+        problem.AddResidualBlock(cost, NULL, allparams);
     }
 
     // Run the solver!

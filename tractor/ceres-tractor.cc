@@ -182,7 +182,7 @@ template class ForcedPhotCostFunction<double>;
 
 ImageCostFunction::ImageCostFunction(PyObject* tractor,
                                      int imagei, int nparams,
-				     PyObject* np_params) :
+                                     PyObject* np_params) :
     _tractor(tractor), _imagei(imagei), _image(NULL),
     _npix(0), _nparams(nparams), _W(0), _H(0), _np_params(np_params) {
 
@@ -202,9 +202,8 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     set_num_residuals(_npix);
     std::vector<int16_t>* bs = mutable_parameter_block_sizes();
     for (int i=0; i<_nparams; i++) {
-      bs->push_back(1);
+        bs->push_back(1);
     }
-    //bs->push_back(_nparams);
 }
 
 ImageCostFunction::~ImageCostFunction() {
@@ -216,79 +215,52 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
                                  double** jacobians) const {
 
     const std::vector<int16_t> bs = parameter_block_sizes();
-    printf("ImageCostFunction::Evaluate\n");
-    printf("Parameter blocks: (%i)\n", (int)(bs.size()));
-    for (size_t i=0; i<bs.size(); i++) {
-      //printf("  %i: %p\n", i, parameters[i]);
-      printf("  %i: n=%i, [", (int)i, (int)bs[i]);
-      for (int j=0; j<bs[i]; j++) {
-	printf(" %g,", parameters[i][j]);
-      }
-      printf(" ]\n");
-    }
-
-    //double* pblock = (double*)(parameters[0]);
-    //PyObject* np_params = PyArray_SimpleNewFromData(1, &dim, NPY_DOUBLE, pblock);
-    //PyObject* np_params = PyArray_SimpleNew(1, &dim, NPY_DOUBLE);
-
-    npy_intp dim = _nparams;
-    printf("_nparams: %i\n", _nparams);
+    //printf("ImageCostFunction::Evaluate\n");
+    /*
+     printf("Parameter blocks: (%i)\n", (int)(bs.size()));
+     for (size_t i=0; i<bs.size(); i++) {
+     printf("  %i: n=%i, [", (int)i, (int)bs[i]);
+     for (int j=0; j<bs[i]; j++) {
+     printf(" %g,", parameters[i][j]);
+     }
+     printf(" ]\n");
+     }
+     */
+    // Copy from "parameters" into "_np_params"
     int e0 = 0;
     double* pdata = (double*)PyArray_DATA(_np_params);
     for (size_t i=0; i<parameter_block_sizes().size(); i++) {
-      int n = parameter_block_sizes()[i];
-      memcpy(pdata + e0, parameters[i], n * sizeof(double));
-      e0 += n;
+        int n = parameter_block_sizes()[i];
+        memcpy(pdata + e0, parameters[i], n * sizeof(double));
+        e0 += n;
     }
     assert(e0 == _nparams);
 
-    /*
-      printf("parameters:\n");
-      {
-      int e0 = 0;
-      double* pdata = (double*)PyArray_DATA(_np_params);
-      for (size_t i=0; i<parameter_block_sizes().size(); i++) {
-      int n = parameter_block_sizes()[i];
-      printf("[ ");
-      for (int j=0; j<n; j++)
-      printf("%g ", parameters[i][j]);
-      printf("] ");
-      
-      printf("[ ");
-      for (int j=0; j<n; j++)
-      printf("%g ", pdata[e0 + j]);
-      printf("] ");
-      
-	e0 += n;
-	}
-	}
-    */
+    /*{
+     double* pdata = (double*)PyArray_DATA(_np_params);
+     printf("np_params = [ ");
+     for (int i=0; i<_nparams; i++) {
+     printf("%g ", pdata[i]);
+     }
+     printf("]\n");
+     }
+     */
 
-    {
-      double* pdata = (double*)PyArray_DATA(_np_params);
-      //printf("pdata: %p\n", pdata);
-      printf("np_params = [ ");
-      for (int i=0; i<_nparams; i++) {
-	printf("%g ", pdata[i]);
-      }
-      printf("]\n");
-    }
-
-    // Set params
-    printf("Calling setParams()\n");
+    // Call _tractor.setParams(_np_params)
     PyObject* setparams = PyString_FromString((char*)"setParams");
     PyObject* ret = PyObject_CallMethodObjArgs(_tractor, setparams,
-					       _np_params, NULL);
+                                               _np_params, NULL);
     Py_DECREF(setparams);
     if (!ret) {
-      printf("failed to setParams()\n");
-      return false;
+        printf("failed to setParams()\n");
+        return false;
     }
 
     // Get residuals (chi image)
     PyObject* np_chi;
-    printf("Calling getChiImage(%i)\n", _imagei);
-    np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage", (char*)"i", _imagei);
+    //printf("Calling getChiImage(%i)\n", _imagei);
+    np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage",
+                                 (char*)"i", _imagei);
     if (!np_chi) {
         printf("getChiImage() failed\n");
         return false;
@@ -298,18 +270,17 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
         Py_DECREF(np_chi);
         return false;
     }
-    printf("Got chi image of size: %i\n", (int)PyArray_Size(np_chi));
+    //printf("Got chi image of size: %i\n", (int)PyArray_Size(np_chi));
 
     double* chi = (double*)PyArray_DATA(np_chi);
     // FIXME -- ASSUME contiguous C-style...
     memcpy(residuals, chi, sizeof(double) * _npix);
-    
     Py_DECREF(np_chi);
 
     // Get Jacobian (derivatives)
     if (!jacobians) {
-      printf("Jacobians not requested\n");
-      return true;
+        //printf("Jacobians not requested\n");
+        return true;
     }
 
     // FIXME -- we don't include priors here!
@@ -322,7 +293,7 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
         return false;
     }
     int n = (int)PyList_Size(allderivs);
-    printf("Got %i derivatives\n", n);
+    //printf("Got %i derivatives\n", n);
     for (int i=0; i<n; i++) {
         PyObject* deriv = PyList_GetItem(allderivs, i);
         if (!PyTuple_Check(deriv)) {
@@ -353,11 +324,11 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
         int dW = PyArray_DIM(np_deriv, 1);
         double* deriv_data = (double*)PyArray_DATA(np_deriv);
 
-        printf("jacobian %i: x0,y0 %i,%i, W,H %i,%i\n", j, x0, y0, dW, dH);
+        //printf("jacobian %i: x0,y0 %i,%i, W,H %i,%i\n", j, x0, y0, dW, dH);
 
         double* J = jacobians[j];
 
-        // Init with zeros
+        // Pad with zeros
         if (y0)
             memset(J, 0, y0*_W*sizeof(double));
         if (y0 + dH < _H)
@@ -368,16 +339,12 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
             if (x0)
                 memset(row0, 0, x0*sizeof(double));
             row0 += x0;
-
-            //memcpy(row0, deriv_data + k*dW, dW * sizeof(double));
-	    for (int m=0; m<dW; m++)
-	      row0[m] = - deriv_data[k*dW + m];
-	    
-
+            // Copy
+            for (int m=0; m<dW; m++)
+                row0[m] = -deriv_data[k*dW + m];
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
         }
-
     }
     Py_DECREF(allderivs);
 
