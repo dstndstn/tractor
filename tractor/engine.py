@@ -1923,6 +1923,61 @@ class Tractor(MultiParams):
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
 
+    def _getOneImageDerivs(self, imgi):
+        # Returns:
+        #     [  (param-index, patch), ... ]
+        # not necessarily in order of param-index
+        allderivs = []
+
+        # First, derivs for Image parameters (because 'images' comes
+        # first in the tractor's parameters)
+        parami = 0
+        img = self.images[imgi]
+        cat = self.catalog
+        if not self.isParamFrozen('images'):
+            for i in self.images.getThawedParamIndices():
+                if i == imgi:
+                    # Give the image a chance to compute its own derivs
+                    derivs = img.getParamDerivatives(self, cat)
+                    needj = []
+                    for j,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        if deriv is False:
+                            needj.append(j)
+                            continue
+                        allderivs.append((parami + j, deriv))
+
+                    if len(needj):
+                        mod0 = self.getModelImage(i)
+                        p0 = img.getParams()
+                        ss = img.getStepSizes()
+                    for j in needj:
+                        step = ss[j]
+                        img.setParam(j, p0[j]+step)
+                        modj = self.getModelImage(i)
+                        img.setParam(j, p0[j])
+                        deriv = Patch(0, 0, (modj - mod0) / step)
+                        allderivs.append((parami + j, deriv))
+
+                parami += self.images[i].numberOfParams()
+
+            assert(parami == self.images.numberOfParams())
+            
+        srcs = list(self.catalog.getThawedSources())
+        for src in srcs:
+            derivs = src.getParamDerivatives(img)
+            for j,deriv in enumerate(derivs):
+                if deriv is None:
+                    continue
+                allderivs.append((parami + j, deriv))
+            parami += src.numberOfParams()
+
+        assert(parami == self.numberOfParams())
+        # Unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        return [(ind, d.x0, d.y0, d.patch.astype(np.float64))
+                for ind,d in allderivs]
+    
     def getUpdateDirection(self, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,

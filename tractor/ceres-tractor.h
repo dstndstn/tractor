@@ -69,4 +69,6 @@ class ImageCostFunction : public CostFunction {
     PyObject* _image;
     int _npix;
     int _nparams;
+    int _W;
+    int _H;
 };

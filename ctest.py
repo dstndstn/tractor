@@ -28,6 +28,9 @@ print 'Params:', tractor.getParams()
 lnp0 = tractor.getLogProb()
 print 'Logprob:', lnp0
 
+print 'Testing _getOneImageDerivs...'
+tractor._getOneImageDerivs(0)
+
 print 'Calling _ceres_opt...'
 tractor._ceres_opt()
 

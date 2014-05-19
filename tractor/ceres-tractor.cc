@@ -183,16 +183,22 @@ template class ForcedPhotCostFunction<double>;
 ImageCostFunction::ImageCostFunction(PyObject* tractor,
                                      int imagei, int nparams) :
     _tractor(tractor), _imagei(imagei), _image(NULL),
-    _npix(0), _nparams(nparams) {
+    _npix(0), _nparams(nparams), _W(0), _H(0) {
 
     _image = PyObject_CallMethod(_tractor, (char*)"getImage",
                                  (char*)"i", _imagei);
     PyObject* ret;
-    ret = PyObject_CallMethod(_image, (char*)"numberOfPixels", NULL);
-    _npix = PyInt_AsLong(ret);
+    //ret = PyObject_CallMethod(_image, (char*)"numberOfPixels", NULL);
+    //_npix = PyInt_AsLong(ret);
+    ret = PyObject_CallMethod(_image, (char*)"getWidth", NULL);
+    _W = PyInt_AsLong(ret);
     Py_DECREF(ret);
+    ret = PyObject_CallMethod(_image, (char*)"getHeight", NULL);
+    _H = PyInt_AsLong(ret);
+    Py_DECREF(ret);
+    _npix = _W * _H;
 
-    printf("Image %i: number of pixels %i\n", _imagei, _npix);
+    printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
 
     set_num_residuals(_npix);
     std::vector<int16_t>* bs = mutable_parameter_block_sizes();
@@ -223,6 +229,8 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
 
     double* pblock = (double*)(parameters[0]);
     PyObject* np_params = PyArray_SimpleNewFromData(1, &dim, NPY_DOUBLE, pblock);
+
+    // Get residuals (chi image)
     PyObject* np_chi;
     printf("Calling getChiImage(%i)\n", _imagei);
     np_chi = PyObject_CallMethod(_tractor, (char*)"getChiImage", (char*)"i", _imagei);
@@ -240,10 +248,75 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
 
     double* chi = (double*)PyArray_DATA(np_chi);
     // FIXME -- ASSUME contiguous C-style...
-
     memcpy(residuals, chi, sizeof(double) * _npix);
     
     Py_DECREF(np_chi);
+
+    // Get Jacobian (derivatives)
+
+    // FIXME -- we don't include priors here!
+
+    PyObject* allderivs = PyObject_CallMethod(
+        _tractor, (char*)"_getOneImageDerivs", (char*)"i", _imagei);
+    if (!PyList_Check(allderivs)) {
+        printf("Expecting allderivs to be a list\n");
+        Py_XDECREF(allderivs);
+        return false;
+    }
+    int n = (int)PyList_Size(allderivs);
+    printf("Got %i derivatives\n", n);
+    for (int i=0; i<n; i++) {
+        PyObject* deriv = PyList_GetItem(allderivs, i);
+        if (!PyTuple_Check(deriv)) {
+            printf("Expected allderivs element %i to be a tuple\n", i);
+            Py_DECREF(allderivs);
+            return false;
+        }
+        int j = PyInt_AsLong(PyTuple_GetItem(deriv, 0));
+
+        if (!jacobians[j])
+            continue;
+
+        int x0 = PyInt_AsLong(PyTuple_GetItem(deriv, 1));
+        int y0 = PyInt_AsLong(PyTuple_GetItem(deriv, 2));
+        PyObject* np_deriv = PyTuple_GetItem(deriv, 3);
+        if (!PyArray_Check(np_deriv)) {
+            printf("Expected third element of allderivs element %i to be an array\n", i);
+            Py_DECREF(allderivs);
+            return false;
+        }
+
+        if (PyArray_NDIM(np_deriv) != 2) {
+            printf("Expected 2-d derivative image\n");
+            Py_DECREF(allderivs);
+            return false;
+        }
+        int dH = PyArray_DIM(np_deriv, 0);
+        int dW = PyArray_DIM(np_deriv, 1);
+        double* deriv_data = (double*)PyArray_DATA(np_deriv);
+
+        printf("jacobian %i: x0,y0 %i,%i, W,H %i,%i\n", j, x0, y0, dW, dH);
+
+        double* J = jacobians[j];
+
+        // Init with zeros
+        if (y0)
+            memset(J, 0, y0*_W*sizeof(double));
+        if (y0 + dH < _H)
+            memset(J + (y0+dH)*_W, 0, (_H-(y0+dH))*_W*sizeof(double));
+
+        for (int k=0; k<dH; k++) {
+            double* row0 = J + (y0+k)*_W;
+            if (x0)
+                memset(row0, 0, x0*sizeof(double));
+            row0 += x0;
+            memcpy(row0, deriv_data + k*dW, dW * sizeof(double));
+            if (x0 + dW < _W)
+                memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
+        }
+
+    }
+    Py_DECREF(allderivs);
 
     return true;
 }
