@@ -1974,7 +1974,10 @@ class Tractor(MultiParams):
             parami += src.numberOfParams()
 
         assert(parami == self.numberOfParams())
-        # Unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        H,W = img.shape
+        for ind,d in allderivs:
+            d.clipTo(W,H)
         return [(ind, d.x0, d.y0, d.patch.astype(np.float64))
                 for ind,d in allderivs]
     

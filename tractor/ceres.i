@@ -306,11 +306,15 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
 
     //params = malloc(sizeof(double) * nparams);
     std::vector<double*> allparams;
-    allparams.push_back(params);
+    //allparams.push_back(params);
+    for (i=0; i<nparams; i++)
+      allparams.push_back(params + i);
+
+    //printf("params: %p\n", params);
 
     for (i=0; i<nims; i++) {
-        CostFunction* cost = new ImageCostFunction(tractor, i, nparams);
-        problem.AddResidualBlock(cost, NULL, allparams);
+      CostFunction* cost = new ImageCostFunction(tractor, i, nparams, np_params);
+      problem.AddResidualBlock(cost, NULL, allparams);
     }
 
     // Run the solver!
