@@ -111,7 +111,7 @@ class Image(MultiParams):
         derivs = []
         for s in self._getActiveSubs():
             if hasattr(s, 'getParamDerivatives'):
-                print 'Calling getParamDerivatives on', s
+                #print 'Calling getParamDerivatives on', s
                 sd = s.getParamDerivatives(tractor, self, srcs)
                 assert(len(sd) == s.numberOfParams())
                 derivs.extend(sd)
@@ -599,7 +599,7 @@ def getmodelimagestep((tr, j, k, p0, step)):
     im.setParam(k, p0)
     return mod
 def getmodelimagefunc((tr, imj)):
-    print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
+    #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
 def getsrcderivs((src, img)):
     return src.getParamDerivatives(img)
@@ -671,7 +671,13 @@ class Tractor(MultiParams):
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
-        s += ' (' + ', '.join([im.name for im in self.images]) + ')'
+        names = []
+        for im in self.images:
+            if im.name is None:
+                names.append('[unnamed]')
+            else:
+                names.append(im.name)
+        s += ' (' + ', '.join(names) + ')'
         return s
 
     def is_multiproc(self):
@@ -869,6 +875,17 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
+    def _ceres_opt(self):
+        from ceres import ceres_opt
+
+        params = np.array(self.getParams())
+        R = ceres_opt(self, self.getNImages(), params)
+        print 'ceres_opt result:'
+        for k,v in R.items():
+            print k, v
+        return R
+        
+            
     def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
                              skyderivs, minFlux,
@@ -1909,6 +1926,64 @@ class Tractor(MultiParams):
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
 
+    def _getOneImageDerivs(self, imgi):
+        # Returns:
+        #     [  (param-index, patch), ... ]
+        # not necessarily in order of param-index
+        allderivs = []
+
+        # First, derivs for Image parameters (because 'images' comes
+        # first in the tractor's parameters)
+        parami = 0
+        img = self.images[imgi]
+        cat = self.catalog
+        if not self.isParamFrozen('images'):
+            for i in self.images.getThawedParamIndices():
+                if i == imgi:
+                    # Give the image a chance to compute its own derivs
+                    derivs = img.getParamDerivatives(self, cat)
+                    needj = []
+                    for j,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        if deriv is False:
+                            needj.append(j)
+                            continue
+                        allderivs.append((parami + j, deriv))
+
+                    if len(needj):
+                        mod0 = self.getModelImage(i)
+                        p0 = img.getParams()
+                        ss = img.getStepSizes()
+                    for j in needj:
+                        step = ss[j]
+                        img.setParam(j, p0[j]+step)
+                        modj = self.getModelImage(i)
+                        img.setParam(j, p0[j])
+                        deriv = Patch(0, 0, (modj - mod0) / step)
+                        allderivs.append((parami + j, deriv))
+
+                parami += self.images[i].numberOfParams()
+
+            assert(parami == self.images.numberOfParams())
+            
+        srcs = list(self.catalog.getThawedSources())
+        for src in srcs:
+            derivs = src.getParamDerivatives(img)
+            for j,deriv in enumerate(derivs):
+                if deriv is None:
+                    continue
+                allderivs.append((parami + j, deriv))
+            parami += src.numberOfParams()
+
+        assert(parami == self.numberOfParams())
+        # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        H,W = img.shape
+        for ind,d in allderivs:
+            d.clipTo(W,H)
+        return [(ind, d.x0, d.y0, d.patch.astype(np.float64))
+                for ind,d in allderivs]
+    
     def getUpdateDirection(self, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
@@ -2526,7 +2601,8 @@ class Tractor(MultiParams):
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        return (img.getImage() - mod) * img.getInvError()
+        chi = (img.getImage() - mod) * img.getInvError()
+        return chi
 
     def getNdata(self):
         count = 0

@@ -68,11 +68,18 @@ CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
 # export CERES_LIB="/usr/local/ceres-solver-1.8.0/lib/libceres.a -lglog /usr/local/lib/libcxsparse.a /usr/local/lib/libcholmod.a /usr/local/lib/libcamd.a /usr/local/lib/libcolamd.a /usr/local/lib/libamd.a -lgomp /usr/lib/liblapack.a /usr/lib/libf77blas.a /usr/lib/libatlas.a /usr/lib/libcblas.a -lgfortran"
 # export CERES_INC="-I/usr/local/ceres-solver-1.8.0/include"
 
+ceres.py: ceres.i
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+
+CXXFLAGS := -Wall -fPIC
+# DEBUG
+CXXFLAGS += -O0 -g
+
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
-	g++ -Wall -fPIC -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
-	g++ -Wall -fPIC -c ceres-tractor.cc $(CERES_INC) $(EIGEN_INC)
-	g++ -Wall -fPIC -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
+	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ $(CXXFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
 
 LIBTSNNLS_INC ?=
 LIBTSNNLS_LIB ?= -ltsnnls
