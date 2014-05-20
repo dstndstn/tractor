@@ -25,17 +25,16 @@ from wise.unwise import *
 
 import logging
 
-if __name__ == '__main__':
+def deep2(deep2field, ps):
     tiledir = 'wise-coadds'
 
-    ps = PlotSequence('deep2')
-
-    T = fits_table('pcat.11.fits')
+    T = fits_table('pcat.%i.fits' % deep2field)
     print 'Read', len(T), 'sources'
 
     # DEEP2, Field 1 part 1
     #ralo, rahi  = 213.2, 214.5
     #declo,dechi =  51.9,  52.4
+
     ralo, rahi = T.ra.min(), T.ra.max()
     declo,dechi = T.dec.min(), T.dec.max()
     print 'RA,Dec range', ralo,rahi, declo,dechi
@@ -45,7 +44,6 @@ if __name__ == '__main__':
     dra  = ddec / np.cos(np.deg2rad((declo+dechi)/2.))
 
     A = fits_table(os.path.join(tiledir, 'tiles.fits'))
-    #T.cut((T.ra > 210) * (T.ra < 220) * (T.dec > 50) * (T.dec < 55))
     A.cut((A.ra  + dra  > ralo ) * (A.ra  - dra  < rahi ) *
           (A.dec + ddec > declo) * (A.dec - ddec < dechi))
     print len(A), 'tiles overlap:', A.coadd_id
@@ -66,7 +64,6 @@ if __name__ == '__main__':
             tim.psf.radius = 25
             tims.append(tim)
             print 'tim', tim
-            #print 'tim ROI', tim.roi
 
         if band == 1:
             plt.clf()
@@ -150,6 +147,13 @@ if __name__ == '__main__':
         for k in fskeys:
             T.set(wband + '_' + k, getattr(R.fitstats, k).astype(np.float32))
 
-    T.writeto('deep2-wise.fits')
+    T.writeto('deep2-wise-%i.fits' % deep2field)
+
+
+
+if __name__ == '__main__':
+    ps = PlotSequence('deep2')
+    for cat in [11, 12, 13, 14, 21, 22, 23, 31, 32, 33, 41, 42, 43]:
+        deep2(cat, ps)
 
 
