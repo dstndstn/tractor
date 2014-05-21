@@ -6,6 +6,7 @@ from numpy.distutils.misc_util import get_numpy_include_dirs
 numpy_inc = get_numpy_include_dirs()
 
 import sys
+from subprocess import check_output
 
 eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
@@ -72,8 +73,9 @@ setup(
     version="git",
     author="Dustin Lang (CMU) and David W. Hogg (NYU)",
     author_email="dstn@cmu.edu",
-    packages=["tractor"],
+    packages=['tractor', 'wise'],
     ext_modules = mods,
+    data_files=[('lib/python/wise', ['wise/wise-psf-avg.fits'])],
     url="http://theTractor.org/",
     license="GPLv2",
     description="probabilistic astronomical image analysis",
