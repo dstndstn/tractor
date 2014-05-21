@@ -10,8 +10,11 @@ from subprocess import check_output
 
 eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
-    eigen_inc = check_output('pkg-config --cflags eigen3')
-
+    try:
+        eigen_inc = check_output('pkg-config --cflags eigen3')
+    except:
+        pass
+    
 ceres_inc = os.environ.get('CERES_INC', None)
 
 ceres_lib = os.environ.get('CERES_LIB', None)
