@@ -5,17 +5,8 @@ from distutils.dist import Distribution
 from numpy.distutils.misc_util import get_numpy_include_dirs
 numpy_inc = get_numpy_include_dirs()
 
-import os
 import sys
-from subprocess import check_output
 
-#print 'bools:', dir(build_ext)
-#print build_ext.boolean_options
-
-# pymod_lib = os.environ.get('PYMOD_LIB', None)
-# if pymod_lib is None:
-#     pymod_lib = ('-L' + check_output('python-config --prefix') + '/lib' +
-#                  ' ' + check_output('python-config --libs'))
 eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
     eigen_inc = check_output('pkg-config --cflags eigen3')
@@ -23,7 +14,6 @@ if eigen_inc is None:
 ceres_inc = os.environ.get('CERES_INC', None)
 
 ceres_lib = os.environ.get('CERES_LIB', None)
-
 
 inc = [eigen_inc]
 if ceres_inc is not None:
@@ -60,42 +50,6 @@ module_em = Extension('tractor._emfit',
                              #extra_link_args=['-O0', '-g'],
                              )
 
-class mybuild(build_ext):
-
-    #boolean_options = build_ext.boolean_options + ['with-ceres']
-    user_options = build_ext.user_options + [('with-ceres', None,
-                                              'Build Ceres module'),]
-
-    def __init__(self, *args, **kwargs):
-        print 'mybuild(), args', args, 'kwargs', kwargs
-        #super(mybuild,self).__init__(*args, **kwargs)
-        build_ext.__init__(self, *args, **kwargs)
-
-    def initialize_options(self):
-        #super(mybuild, self).initialize_options()
-        build_ext.initialize_options(self)
-        self.with_ceres = False
-
-    #def finalize_options(self):
-    #if self.with_ceres:
-
-    def build_extensions(self):
-        print 'MyBuild: build_extensions', self.extensions
-        self.check_extensions_list(self.extensions)
-        #super(mybuild, self).build_extensions()
-        #build_ext.build_extensions(self)
-        print 'With Ceres:', self.with_ceres
-        for ext in self.extensions:
-            if ext == module_ceres and not self.with_ceres:
-                print 'Skipping Ceres'
-                continue
-            self.build_extension(ext)
-
-    def run(self):
-        print 'MyBuild: run()'
-        #super(mybuild, self).run()
-        build_ext.run(self)
-
 class MyDistribution(Distribution):
     display_options = Distribution.display_options + [
         ('with-ceres', None, 'build Ceres module?'),
@@ -114,9 +68,6 @@ if key in sys.argv:
 
 setup(
     distclass=MyDistribution,
-    #options={'build_ext':{'swig_opts':'-c++'}},
-    #cmdclass={'build_ext': mybuild},
-
     name="the Tractor",
     version="n/a",
     author="Dustin Lang (CMU) and David W. Hogg (NYU)",
