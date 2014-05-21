@@ -1396,7 +1396,7 @@ import pylab as plt
 import multiprocessing
 from glob import glob
 from astrometry.util.pyfits_utils import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.multiproc import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import ArcsinhNormalize

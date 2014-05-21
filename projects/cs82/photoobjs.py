@@ -1,6 +1,6 @@
 import logging
 from astrometry.util.fits import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.run_command import run_command
 
 #### From sequels.py ####

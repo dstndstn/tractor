@@ -26,7 +26,7 @@ from tractor.tychodata import tychoMatch
 from tractor.rc3 import getNGC
 from tractor.cache import *
 from astrometry.util.ngc2000 import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 import optparse
 
 def plotarea(ra, dec, radius, ngcnum, tims=None, rds=[]):

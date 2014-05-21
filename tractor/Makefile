@@ -29,7 +29,7 @@ _emfit.so: emfit_wrap.c setup-emfit.py
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
-PYMOD_LIB ?= $(shell python-config --libs) #-lpython
+PYMOD_LIB ?= -L$(shell python-config --prefix)/lib $(shell python-config --libs)
 PYMOD_INC ?= $(shell python-config --includes)
 
 EIGEN_INC ?= $(shell pkg-config --cflags eigen3)
@@ -73,13 +73,15 @@ ceres.py: ceres.i
 
 CXXFLAGS := -Wall -fPIC
 # DEBUG
-CXXFLAGS += -O0 -g
+#CXXFLAGS += -O0 -g
+#CXXLINKFLAGS := -Wl,--no-undefined
+CXXLINKFLAGS :=
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
 	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
 	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
-	g++ $(CXXFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
+	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
 
 LIBTSNNLS_INC ?=
 LIBTSNNLS_LIB ?= -ltsnnls
