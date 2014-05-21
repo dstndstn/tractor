@@ -12,7 +12,7 @@ import math
 from astrometry.util.file import *
 from astrometry.util.plotutils import ArcsinhNormalize
 from astrometry.util.starutil_numpy import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 
 from tractor import *
 from tractor import sdss as st

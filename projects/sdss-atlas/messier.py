@@ -65,7 +65,7 @@ from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getNGC
 from astrometry.util.ngc2000 import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 import optparse
 
 

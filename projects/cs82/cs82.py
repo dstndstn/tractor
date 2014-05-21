@@ -11,7 +11,7 @@ import socket
 import fitsio
 
 from astrometry.util.fits import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.util import *

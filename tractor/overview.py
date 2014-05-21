@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.ngc2000 import *
 import os
 from tractor import *

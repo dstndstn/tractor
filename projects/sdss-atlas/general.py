@@ -25,7 +25,7 @@ from tractor import basics as ba
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getName
 from tractor.cache import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 import optparse
 
 def plotarea(ra, dec, radius, name, prefix, tims=None, rds=[]):

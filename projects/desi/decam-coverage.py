@@ -61,51 +61,22 @@ if False:
     T = fits_table('schlegel-z.fits')
     T.ra = np.array([float(s) for s in T.ra])
     T.dec = np.array([float(s) for s in T.dec])
-    
-    #T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
-    T.cut((T.ra > 350) * (T.ra < 355) * (T.dec > -2) * (T.dec < 2))
-    
+    T.cut((T.ra > 148) * (T.ra < 152) * (T.dec > 0) * (T.dec < 4))
+    T.about()
     print len(T), 'in range'
     print T.filename
     print T.ra
     print T.dec
     
-    #ralo,rahi = 149.25, 151.0
-    #declo,dechi = 1.5, 3.0
-    ralo,rahi = 351.37, 353.62
-    declo,dechi = -0.11, 0.44
-    
-    overlap = []
-    
     plt.clf()
-    for i,fn in enumerate(T.filename):
-        pth = '/global/project/projectdirs/desi/imaging/redux/decam/proc/' + fn
-        wcs = Sip(pth)
-        r0,r1,d0,d1 = wcs.radec_bounds()
-        plt.plot([r0,r1,r1,r0,r0], [d0,d0,d1,d1,d0], 'b-', alpha=0.25)
-    
-        if r1 < ralo or r0 > rahi:
-            continue
-        if d1 < declo or d0 > dechi:
-            continue
-        overlap.append(i)
-    ps.savefig()
-    
-    overlap = np.array(overlap)
-    T.cut(overlap)
-    print
-    print 'Overlapping:', len(T)
-    print T.filename
-    print T.ra
-    print T.dec
-    
-    plt.clf()
-    for i,fn in enumerate(T.filename):
+    for fn in T.filename:
         pth = '/global/project/projectdirs/desi/imaging/redux/decam/proc/' + fn
         wcs = Sip(pth)
         r0,r1,d0,d1 = wcs.radec_bounds()
         plt.plot([r0,r1,r1,r0,r0], [d0,d0,d1,d1,d0], 'b-', alpha=0.25)
     ps.savefig()
+
+# sys.exit(0)
 
 
 decfn = 'decam.fits'

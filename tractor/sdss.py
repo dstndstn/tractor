@@ -22,6 +22,7 @@ import numpy as np
 
 from engine import *
 from basics import *
+from imageutils import *
 from sdss_galaxy import *
 
 from astrometry.sdss import * #DR7, band_name, band_index

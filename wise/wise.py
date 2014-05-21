@@ -19,7 +19,7 @@ from astrometry.util.miscutils import *
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.util import Sip, anwcs, Tan
 
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 
 import tractor
 from tractor import *

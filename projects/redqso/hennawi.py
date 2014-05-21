@@ -15,7 +15,7 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 from astrometry.util.multiproc import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.libkd.spherematch import *
 from astrometry.sdss import *
 

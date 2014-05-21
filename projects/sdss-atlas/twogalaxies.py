@@ -25,7 +25,7 @@ from tractor.overview import fieldPlot
 from tractor.tychodata import tychoMatch
 from tractor.rc3 import getName
 from tractor.cache import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 
 from halflight import halflight
 from addtodb import add_to_table
