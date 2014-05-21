@@ -1,10 +1,12 @@
 from distutils.core import setup, Extension
 from distutils.command.build_ext import *
+from distutils.dist import Distribution
 
 from numpy.distutils.misc_util import get_numpy_include_dirs
 numpy_inc = get_numpy_include_dirs()
 
 import os
+import sys
 from subprocess import check_output
 
 #print 'bools:', dir(build_ext)
@@ -94,16 +96,33 @@ class mybuild(build_ext):
         #super(mybuild, self).run()
         build_ext.run(self)
 
+class MyDistribution(Distribution):
+    display_options = Distribution.display_options + [
+        ('with-ceres', None, 'build Ceres module?'),
+        ]
+
+
+## Distutils is so awkward to work with that THIS is the easiest way to add
+# an extra command-line arg!
+
+mods = [module_mix, module_em]
+key = '--with-ceres'
+if key in sys.argv:
+    sys.argv.remove(key)
+    mods.append(module_ceres)
+
 
 setup(
+    distclass=MyDistribution,
     #options={'build_ext':{'swig_opts':'-c++'}},
-    cmdclass={'build_ext': mybuild},
+    #cmdclass={'build_ext': mybuild},
+
     name="the Tractor",
     version="n/a",
     author="Dustin Lang (CMU) and David W. Hogg (NYU)",
     author_email="dstn@cmu.edu",
     packages=["tractor"],
-    ext_modules = [module_mix, module_em, module_ceres],
+    ext_modules = mods,
     url="http://theTractor.org/",
     license="GPLv2",
     description="probabilistic astronomical image analysis",
