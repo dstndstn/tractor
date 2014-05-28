@@ -15,14 +15,37 @@ from astrometry.sdss import *
 from tractor import *
 from tractor.sdss import *
 
-def read_decam_image(basefn, skysubtract=True):
+from scipy.ndimage.filters import *
+from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage.morphology import binary_dilation, binary_closing
+from scipy.ndimage.morphology import binary_fill_holes
+
+def read_decam_image(basefn, skysubtract=True, slc=None):
+    '''
+    slc: slice of image to read
+    '''
     imgfn  = basefn + '.fits'
     maskfn = basefn + '.bpm.fits'
     psffn  = basefn + '.cat.psf'
 
-    print 'Reading', imgfn
-    img,hdr = fitsio.read(imgfn, header=True)
-    print 'Got', img.shape, img.dtype
+    print 'Reading', imgfn, 'and', maskfn
+    f = fitsio.FITS(imgfn)
+    m = fitsio.FITS(maskfn)
+    hdr = f[0].read_header()
+    if slc is not None:
+        img = f[0][slc]
+        mask = m[0][slc]
+        y0,x0 = slc[0].start, slc[1].start
+    else:
+        img = f[0].read()
+        mask = m[0].read()
+        y0,x0 = 0,0
+    #img,hdr = fitsio.read(imgfn, header=True)
+    print 'Got image', img.shape, img.dtype
+    print 'Mask', mask.shape, mask.dtype
+    print 'values', np.unique(mask)
+    print 'Mask=0:', sum(mask == 0)
+
     name = hdr['FILENAME'].replace('.fits','').replace('_', ' ')
     filt = hdr['FILTER'].split()[0]
     sat = hdr['SATURATE']
@@ -38,19 +61,15 @@ def read_decam_image(basefn, skysubtract=True):
     print 'Reading PSF', psffn
     psf = PsfEx(psffn, W, H)
     print 'Got PSF', psf
-    
-    print 'Reading', maskfn
-    mask = fitsio.read(maskfn)
-    print 'Mask', mask.shape, mask.dtype
-    print 'values', np.unique(mask)
-    print 'Mask=0:', sum(mask == 0)
-
+    if x0 or y0:
+        psf = ShiftedPsf(psf, x0, y0)
+        
     saturated = (img >= sat)
     
     if skysubtract:
         # Remove x/y gradient estimated in ~500-pixel^2 squares
-        nx = int(np.round(float(W) / 512))
-        ny = int(np.round(float(H) / 512))
+        nx = int(np.ceil(float(W) / 512))
+        ny = int(np.ceil(float(H) / 512))
         xx = np.linspace(0, W, nx+1)
         yy = np.linspace(0, H, ny+1)
         subs = np.zeros((len(yy)-1, len(xx)-1))
@@ -62,8 +81,8 @@ def read_decam_image(basefn, skysubtract=True):
         xx,yy = np.meshgrid(xx[:-1],yy[:-1])
         A = np.zeros((len(xx.ravel()), 3))
         A[:,0] = 1.
-        dx = float(W) / float(nx-1)
-        dy = float(H) / float(ny-1)
+        dx = float(W) / float(nx)
+        dy = float(H) / float(ny)
         A[:,1] = 0.5*dx + xx.ravel()
         A[:,2] = 0.5*dy + yy.ravel()
         b = subs.ravel()
@@ -101,8 +120,11 @@ def read_decam_image(basefn, skysubtract=True):
 
     #print 'Image: max', img.max()
     
-    tim = Image(img, invvar=invvar,
-                wcs=ConstantFitsWcs(sip),
+    wcs = ConstantFitsWcs(sip)
+    if x0 or y0:
+        wcs.setX0Y0(x0,y0)
+        
+    tim = Image(img, invvar=invvar, wcs=wcs,
                 photocal=LinearPhotoCal(zpscale, band=filt),
                 psf=psf, sky=ConstantSky(sky), name=name)
     tim.zr = [sky-3.*sig1, sky+5.*sig1]
@@ -118,23 +140,43 @@ if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser('%prog [options]')
     parser.add_option('--se', action='store_true')
+    parser.add_option('--x0', type=int, help='Read sub-image', default=0)
+    parser.add_option('--y0', type=int, help='Read sub-image', default=0)
+    parser.add_option('-W', type=int, help='Read sub-image', default=0)
+    parser.add_option('-H', type=int, help='Read sub-image', default=0)
     opt,args = parser.parse_args()
 
+    if opt.W or opt.H or opt.x0 or opt.y0:
+        x1,y1 = -1,-1
+        if opt.H:
+            y1 = opt.y0 + opt.H
+        if opt.W:
+            x1 = opt.x0 + opt.W
+        slc = slice(opt.y0, y1), slice(opt.x0, x1)
+    else:
+        slc = None
     decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
-    tim = read_decam_image(decbase)
-    print 'Got', tim
+    tim = read_decam_image(decbase, slc=slc)
+    print 'Got', tim, tim.shape
 
     basefn = 'decam-00192399.01'
     picklefn = basefn + '.pickle'
-
     secatfn = decbase + '.morph.fits'
-
     sdssobjfn = basefn + '-sdss.fits'
     seobjfn = basefn + '-se.fits'
-    
+
+    if os.path.exists(picklefn):
+        print 'Reading', picklefn
+        X = unpickle_from_file(picklefn)
+        tim.psf = X['psf']
+    else:
+        tim.psf.ensureFit()
+        X = dict(psf=tim.psf)
+        pickle_to_file(X, picklefn)
+        print 'Wrote', picklefn
+
     # SourceExtractor, or SDSS?
     secat = opt.se
-
     if secat:
         objfn = seobjfn
         catname = 'SExtractor'
@@ -176,24 +218,34 @@ if __name__ == '__main__':
 
     print len(cat), 'sources'
         
-    if os.path.exists(picklefn):
-        print 'Reading', picklefn
-        X = unpickle_from_file(picklefn)
-        tim.psf = X['psf']
-    else:
-        tim.psf.ensureFit()
-        X = dict(psf=tim.psf)
-        pickle_to_file(X, picklefn)
-        print 'Wrote', picklefn
-        
+    # very rough FWHM
+    psfim = tim.getPsf().getPointSourcePatch(0., 0.)
+    mx = psfim.patch.max()
+    area = np.sum(psfim.patch > 0.5*mx)
+    fwhm = 2. * np.sqrt(area / np.pi)
+    print 'PSF FWHM', fwhm
+    psfsig = fwhm/2.35
     
+    #ph,pw = psfim.shape
+    #pimg = (np.exp(-0.5 * (np.arange(pw)-pw/2)**2 / psfsig**2)[np.newaxis,:] *
+    #        np.exp(-0.5 * (np.arange(ph)-ph/2)**2 / psfsig**2)[:,np.newaxis])
+    psfnorm = np.sqrt(gaussian_filter(psfim.patch, psfsig).max())
+    
+    # run rough detection alg on image
+    detimg = gaussian_filter(tim.getImage(), psfsig)
+    nsigma = 5.
+    thresh = nsigma * tim.sig1 / psfnorm
+    hot = (detimg > thresh)
+    # expand by fwhm
+    hot = binary_dilation(hot, iterations=int(fwhm))
+
     def imshow(img, **kwargs):
         #x = plt.imshow(np.rot90(img), **kwargs)
         x = plt.imshow(img.T, **kwargs)
         return x
         
     #slc = slice(0,2000),slice(0,1000)
-    slc = slice(0,2000),slice(1000,2000)
+    #slc = slice(0,2000),slice(1000,2000)
     
     # plt.clf()
     # plt.imshow(tim.orig_img, interpolation='nearest', origin='lower',
@@ -220,10 +272,17 @@ if __name__ == '__main__':
     ps.savefig()
 
     plt.clf()
+    imshow(hot, interpolation='nearest', origin='lower', cmap='gray')
+    plt.title('Detected')
+    ps.savefig()
+    
+    plt.clf()
     imx = dict(interpolation='nearest', origin='lower')
     imshow(tim.getInvError() == 0, cmap='gray', **imx)
     plt.title('Masked')
     ps.savefig()
+
+    sys.exit(0)
     
     # plt.clf()
     # imshow(tim.data[slc], **ima)

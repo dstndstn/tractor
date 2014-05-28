@@ -13,7 +13,7 @@ Welcome to the Tractor's documentation!
    oaq
    reference
    tutorial
-
+   ceres
 
 
 
