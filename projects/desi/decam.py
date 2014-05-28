@@ -235,14 +235,14 @@ if __name__ == '__main__':
     fwhm = 2. * np.sqrt(area / np.pi)
     print 'PSF FWHM', fwhm
     psfsig = fwhm/2.35
-    
-    #ph,pw = psfim.shape
-    #pimg = (np.exp(-0.5 * (np.arange(pw)-pw/2)**2 / psfsig**2)[np.newaxis,:] *
-    #        np.exp(-0.5 * (np.arange(ph)-ph/2)**2 / psfsig**2)[:,np.newaxis])
     psfnorm = np.sqrt(gaussian_filter(psfim.patch, psfsig).max())
-    
+
+    print 'PSF norm:', psfnorm
+
     # run rough detection alg on image
-    detimg = gaussian_filter(tim.getImage(), psfsig)
+    img = tim.getImage().copy()
+    img[(tim.getInvError() == 0)] = 0.
+    detimg = gaussian_filter(img, psfsig) / psfnorm**2
     nsigma = 5.
     thresh = nsigma * tim.sig1 / psfnorm
     hot = (detimg > thresh)
