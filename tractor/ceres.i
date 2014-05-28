@@ -309,7 +309,6 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     printf("ceres_opt, nims %i, nparams %i\n", nims, nparams);
 
     std::vector<double*> allparams;
-    //allparams.push_back(params);
     // Single-param blocks
     for (i=0; i<nparams; i++)
         allparams.push_back(params + i);

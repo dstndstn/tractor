@@ -243,28 +243,19 @@ if __name__ == '__main__':
     img = tim.getImage().copy()
     img[(tim.getInvError() == 0)] = 0.
     detimg = gaussian_filter(img, psfsig) / psfnorm**2
-    nsigma = 5.
+    nsigma = 4.
     thresh = nsigma * tim.sig1 / psfnorm
     hot = (detimg > thresh)
     # expand by fwhm
     hot = binary_dilation(hot, iterations=int(fwhm))
 
     def imshow(img, **kwargs):
-        #x = plt.imshow(np.rot90(img), **kwargs)
         x = plt.imshow(img.T, **kwargs)
         return x
         
-    #slc = slice(0,2000),slice(0,1000)
-    #slc = slice(0,2000),slice(1000,2000)
-    
-    # plt.clf()
-    # plt.imshow(tim.orig_img, interpolation='nearest', origin='lower',
-    #            vmin=tim.zr[0]+med, vmax=tim.zr[1]+med)
-    # plt.title('Original image')
-    # ps.savefig()
-
     ima = dict(interpolation='nearest', origin='lower',
                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
+    imx = dict(interpolation='nearest', origin='lower', cmap='gray')
     
     # plt.clf()
     # imshow(tim.orig_img-tim.sky1, **ima)
@@ -282,7 +273,7 @@ if __name__ == '__main__':
     ps.savefig()
 
     plt.clf()
-    imshow(hot, interpolation='nearest', origin='lower', cmap='gray')
+    imshow(hot, **imx)
     plt.title('Detected')
     ps.savefig()
     
@@ -292,29 +283,6 @@ if __name__ == '__main__':
     plt.title('Masked')
     ps.savefig()
 
-    sys.exit(0)
-    
-    # plt.clf()
-    # imshow(tim.data[slc], **ima)
-    # plt.title('Image')
-    # ps.savefig()
-
-    # plt.clf()
-    # imshow(tim.getInvError(), interpolation='nearest', origin='lower',
-    #        vmin=0, vmax=1.1/tim.sig1)
-    # plt.colorbar()
-    # plt.title('Inverse-error')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # imshow(tim.getInvError()[slc], interpolation='nearest', origin='lower',
-    #        vmin=0, vmax=1.1/tim.sig1)
-    # plt.colorbar()
-    # plt.title('Inverse-error')
-    # ps.savefig()
-
-        
-    
     tractor = Tractor([tim], cat)
 
     mod = tractor.getModelImage(0)
@@ -322,18 +290,13 @@ if __name__ == '__main__':
     mod0 = mod
     chi0 = chi
 
-    fitsio.write(basefn + '-image.fits', tim.data, clobber=True)
-    fitsio.write(basefn + '-mod0.fits', mod0, clobber=True)
+    #fitsio.write(basefn + '-image.fits', tim.data, clobber=True)
+    #fitsio.write(basefn + '-mod0.fits', mod0, clobber=True)
     
     plt.clf()
     imshow(mod, **ima)
     plt.title('Tractor model image: Initial')
     ps.savefig()
-
-    # plt.clf()
-    # imshow(mod[slc], **ima)
-    # plt.title('Tractor model image: Initial')
-    # ps.savefig()
 
     imchi = dict(interpolation='nearest', origin='lower',
                  vmin=-5, vmax=5, cmap='RdBu')
@@ -346,21 +309,16 @@ if __name__ == '__main__':
     plt.title('Image - Model chi: Initial')
     ps.savefig()
 
-    plt.clf()
-    imshow(-chi, **imchi2)
-    plt.title('Image - Model chi: Initial')
-    ps.savefig()
-    
     # plt.clf()
-    # imshow(-chi[slc], **imchi)
+    # imshow(-chi, **imchi2)
     # plt.title('Image - Model chi: Initial')
     # ps.savefig()
     
     tractor.freezeParamsRecursive('*')
     tractor.thawPathsTo(tim.filter)
 
-    print 'Fitting params:'
-    tractor.printThawedParams()
+    #print 'Fitting params:'
+    #tractor.printThawedParams()
     
     sdssflux = np.array([sum(b.getFlux(tim.filter)
                              for b in src.getBrightnesses())
@@ -395,7 +353,7 @@ if __name__ == '__main__':
     I = np.argsort(-np.abs(chi1.ravel()))
     print 'Worst chi pixels:', chi1.flat[I[:20]]
     
-    fitsio.write(basefn + '-mod1.fits', mod1, clobber=True)
+    #fitsio.write(basefn + '-mod1.fits', mod1, clobber=True)
 
     plt.clf()
     imshow(mod, **ima)
@@ -411,16 +369,6 @@ if __name__ == '__main__':
     imshow(-chi, **imchi2)
     plt.title('Image - Model chi: Forced photom')
     ps.savefig()
-    
-    # plt.clf()
-    # imshow(mod[slc], **ima)
-    # plt.title('Tractor model image: Forced photom')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # imshow(-chi[slc], **imchi)
-    # plt.title('Image - Model chi: Forced photom')
-    # ps.savefig()
     
     plt.clf()
     lo,hi = -1e-1, 1e5
@@ -465,7 +413,7 @@ if __name__ == '__main__':
         H,W = tim.shape
         for y0 in np.arange(0, H, 256):
             for x0 in np.arange(0, W, 256):
-                slc = slice(y0, y0+256), slice(x0, x0+256)
+                subslc = slice(y0, y0+256), slice(x0, x0+256)
                 imsa = ima.copy()
                 imsa.update(extent=[x0,x0+256,y0,y0+256])
     
@@ -477,23 +425,161 @@ if __name__ == '__main__':
                 
                 plt.clf()
                 plt.subplot(2,3,1)
-                plt.imshow(tim.data[slc], **imsa)
+                plt.imshow(tim.data[subslc], **imsa)
                 plt.subplot(2,3,2)
-                plt.imshow(mod0[slc], **imsa)
+                plt.imshow(mod0[subslc], **imsa)
                 plt.subplot(2,3,3)
-                plt.imshow(mod1[slc], **imsa)
+                plt.imshow(mod1[subslc], **imsa)
                 plt.subplot(2,3,4)
-                n1,b,p = plt.hist(np.clip(chi0[slc], -6,6).ravel(), 50,
+                n1,b,p = plt.hist(np.clip(chi0[subslc], -6,6).ravel(), 50,
                                   range=(-6,6),
                                   log=True, histtype='step', color='r')
-                n2,b,p = plt.hist(np.clip(chi1[slc], -6,6).ravel(), 50,
+                n2,b,p = plt.hist(np.clip(chi1[subslc], -6,6).ravel(), 50,
                                   range=(-6,6),
                                   log=True, histtype='step', color='b')
                 plt.axis([-6.1, 6.1, 0.1, 1.2*max(max(n1),max(n2))])
                 plt.subplot(2,3,5)
-                plt.imshow(-chi0[slc], **imchi)
-                plt.title('chi2: %g' % np.sum(chi0[slc]**2))
+                plt.imshow(-chi0[subslc], **imchi)
+                plt.title('chi2: %g' % np.sum(chi0[subslc]**2))
                 plt.subplot(2,3,6)
-                plt.imshow(-chi1[slc], **imchi)
-                plt.title('chi2: %g' % np.sum(chi1[slc]**2))
+                plt.imshow(-chi1[subslc], **imchi)
+                plt.title('chi2: %g' % np.sum(chi1[subslc]**2))
                 ps.savefig()
+
+
+    # Run detection alg on model image as well
+    detimg = gaussian_filter(mod1, psfsig) / psfnorm**2
+    modhot = (detimg > thresh)
+    # expand by fwhm
+    modhot = binary_dilation(modhot, iterations=int(fwhm))
+
+    plt.clf()
+    imshow(modhot, interpolation='nearest', origin='lower', cmap='gray')
+    plt.title('Mod Detected')
+    ps.savefig()
+
+    uhot = np.logical_or(hot, modhot)
+    
+    plt.clf()
+    imshow(uhot, interpolation='nearest', origin='lower', cmap='gray')
+    plt.title('Union Detected')
+    ps.savefig()
+
+    blobs,nblobs = label(uhot)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+
+    # Also find the sources *within* each blob.
+    #ra  = np.array([src.getPosition().ra  for src in cat])
+    #dec = np.array([src.getPosition().dec for src in cat])
+    wcs = tim.getWcs()
+    xy = np.array([wcs.positionToPixel(src.getPosition()) for src in cat])
+    xy = np.round(xy).astype(int)
+    x = xy[:,0]
+    y = xy[:,1]
+    print 'x,y', x.shape, x.dtype, y.shape, y.dtype
+    
+    # Sort by chi-squared contributed by each blob.
+    blobchisq = []
+    blobsrcs = []
+    for b,bslc in enumerate(blobslices):
+        sy,sx = bslc
+        y0,y1 = sy.start, sy.stop
+        x0,x1 = sx.start, sx.stop
+        bl = blobs[bslc]
+        # chisq contributed by this blob
+        chisq = np.sum((bl == (b+1)) * chi1[bslc]**2)
+        blobchisq.append(chisq)
+        # sources within this blob.
+        I = np.flatnonzero((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
+        if len(I):
+            #I = I[bl[y[I],x[I]] == (b+1)]
+            I = I[blobs[y[I],x[I]] == (b+1)]
+        if len(I):
+            blobsrcs.append([cat[i] for i in I])
+        else:
+            # this should be surprising...
+            blobsrcs.append([])
+    blobchisq = np.array(blobchisq)
+
+    class ChattyTractor(Tractor):
+        def setParams(self, p):
+            print 'SetParams:', ', '.join(['%.5f' % pp for pp in p])
+            super(ChattyTractor, self).setParams(p)
+
+        def _getOneImageDerivs(self, i):
+            print 'GetOneImageDerivs:', i
+            X = super(ChattyTractor, self)._getOneImageDerivs(i)
+            print 'Got:', X
+            return X
+            
+    for b in np.argsort(-blobchisq)[:5]:
+        bslc = blobslices[b]
+        bsrcs = blobsrcs[b]
+
+        subiv = tim.getInvvar()[bslc]
+        subiv[blobs[bslc] != (b+1)] = 0.
+
+        subimg = tim.getImage()[bslc]
+        
+        plt.clf()
+        plt.subplot(2,2,1)
+        imshow(subimg, **ima)
+        plt.subplot(2,2,2)
+        imshow(subiv, **imx)
+        plt.subplot(2,2,3)
+        imshow(mod[bslc], **ima)
+        plt.subplot(2,2,4)
+        imshow(chi[bslc] * (subiv > 0), **imchi)
+        ps.savefig()
+
+        sy,sx = bslc
+        y0,y1 = sy.start, sy.stop
+        x0,x1 = sx.start, sx.stop
+
+        subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
+        subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
+
+        subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
+                       sky=tim.getSky(), photocal=tim.getPhotoCal())
+        subtr = ChattyTractor([subtim], blobsrcs[b])
+        subtr.modtype = np.float64
+        subtr.freezeParam('images')
+        subtr.catalog.thawAllRecursive()
+
+        print 'Calling ceres optimization on subimage of size', subtim.shape,
+        print 'and', len(blobsrcs[b]), 'sources'
+        print 'Fitting params:'
+        subtr.printThawedParams()
+
+        submod = subtr.getModelImage(0)
+        subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
+
+        plt.clf()
+        plt.subplot(2,2,1)
+        imshow(subtim.getImage(), **ima)
+        plt.subplot(2,2,2)
+        imshow(subiv, **imx)
+        plt.subplot(2,2,3)
+        imshow(submod, **ima)
+        plt.subplot(2,2,4)
+        imshow(subchi, **imchi)
+        ps.savefig()
+        
+        subtr._ceres_opt()
+
+        submod = subtr.getModelImage(0)
+        subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
+
+        plt.clf()
+        plt.subplot(2,2,1)
+        imshow(subtim.getImage(), **ima)
+        plt.subplot(2,2,2)
+        imshow(subiv, **imx)
+        plt.subplot(2,2,3)
+        imshow(submod, **ima)
+        plt.subplot(2,2,4)
+        imshow(subchi, **imchi)
+        ps.savefig()
+
+        

@@ -285,6 +285,8 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
 
     // FIXME -- we don't include priors here!
 
+    // NOTE -- _getOneImageDerivs() returns -dCHI / dParam, not the usual
+    // dModel / dParam!
     PyObject* allderivs = PyObject_CallMethod(
         _tractor, (char*)"_getOneImageDerivs", (char*)"i", _imagei);
     if (!PyList_Check(allderivs)) {
