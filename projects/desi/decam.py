@@ -32,12 +32,17 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     f = fitsio.FITS(imgfn)
     m = fitsio.FITS(maskfn)
     hdr = f[0].read_header()
+    fullimg = None
     if slc is not None:
+        if skysubtract:
+            # Also read full image for sky estimation
+            fullimg = f[0].read()
         img = f[0][slc]
         mask = m[0][slc]
         y0,x0 = slc[0].start, slc[1].start
     else:
         img = f[0].read()
+        fullimg = img
         mask = m[0].read()
         y0,x0 = 0,0
     #img,hdr = fitsio.read(imgfn, header=True)
@@ -68,21 +73,22 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     
     if skysubtract:
         # Remove x/y gradient estimated in ~500-pixel^2 squares
-        nx = int(np.ceil(float(W) / 512))
-        ny = int(np.ceil(float(H) / 512))
-        xx = np.linspace(0, W, nx+1)
-        yy = np.linspace(0, H, ny+1)
+        fH,fW = fullimg.shape
+        nx = int(np.ceil(float(fW) / 512))
+        ny = int(np.ceil(float(fH) / 512))
+        xx = np.linspace(0, fW, nx+1)
+        yy = np.linspace(0, fH, ny+1)
         subs = np.zeros((len(yy)-1, len(xx)-1))
         for iy,(ylo,yhi) in enumerate(zip(yy, yy[1:])):
             for ix,(xlo,xhi) in enumerate(zip(xx, xx[1:])):
-                subim = img[ylo:yhi, xlo:xhi]
+                subim = fullimg[ylo:yhi, xlo:xhi]
                 subs[iy,ix] = np.median(subim.ravel())
 
         xx,yy = np.meshgrid(xx[:-1],yy[:-1])
         A = np.zeros((len(xx.ravel()), 3))
         A[:,0] = 1.
-        dx = float(W) / float(nx)
-        dy = float(H) / float(ny)
+        dx = float(fW) / float(nx)
+        dy = float(fH) / float(ny)
         A[:,1] = 0.5*dx + xx.ravel()
         A[:,2] = 0.5*dy + yy.ravel()
         b = subs.ravel()
@@ -91,11 +97,11 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
         print 'Sky gradient:', X
 
         bg = np.zeros_like(img) + X[0]
-        bg += (X[1] * np.arange(W))[np.newaxis,:]
-        bg += (X[2] * np.arange(H))[:,np.newaxis]
+        bg += (X[1] * (x0 + np.arange(W)))[np.newaxis,:]
+        bg += (X[2] * (y0 + np.arange(H)))[:,np.newaxis]
 
-        bx = (X[1] * np.arange(W))
-        by = (X[2] * np.arange(H))
+        bx = (X[1] * (x0 + np.arange(W)))
+        by = (X[2] * (y0 + np.arange(H)))
         print 'Background x contribution:', bx.shape, bx.min(), bx.max()
         print 'Background y contribution:', by.shape, by.min(), by.max()
 
@@ -104,13 +110,17 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
         orig_img = img.copy()
         img -= bg
         sky = 0.
-        sky1 = X[0] + X[1]*W/2. + X[2]*H/2.
+        sky1 = X[0] + X[1]*(x0 + W/2.) + X[2]*(y0 + H/2.)
     else:
         sky = np.median(img.ravel())
         print 'Median:', sky
         sky1 = sky
-        
-    diffs = img[:-5:10,:-5:10] - img[5::10,5::10]
+
+    if fullimg is not None:
+        dim = fullimg
+    else:
+        dim = img
+    diffs = dim[:-5:10,:-5:10] - dim[5::10,5::10]
     mad = np.median(np.abs(diffs).ravel())
     sig1 = 1.4826 * mad / np.sqrt(2.)
     print 'MAD', mad, '-> sigma', sig1
