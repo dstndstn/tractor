@@ -61,7 +61,7 @@ class Image(MultiParams):
     can optimize them.
     '''
     def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
-                 photocal=None, name=None, domask=True, time=None, **kwargs):
+                 photocal=None, name=None, domask=False, time=None, **kwargs):
         '''
         Args:
           * *data*: numpy array: the image pixels
@@ -885,6 +885,76 @@ class Tractor(MultiParams):
             print k, v
         return R
         
+    # This function is called-back by _ceres_opt; it is called from
+    # ceres-tractor.cc via ceres.i .
+    def _getOneImageDerivs(self, imgi):
+        # Returns:
+        #     [  (param-index, patch), ... ]
+        # not necessarily in order of param-index
+        #
+        # NOTE, this scales the derivatives by inverse-error to yield
+        # derivatives of -CHI with respect to PARAMs; NOT the model
+        # image wrt params.
+        #
+        allderivs = []
+
+        # First, derivs for Image parameters (because 'images' comes
+        # first in the tractor's parameters)
+        parami = 0
+        img = self.images[imgi]
+        cat = self.catalog
+        if not self.isParamFrozen('images'):
+            for i in self.images.getThawedParamIndices():
+                if i == imgi:
+                    # Give the image a chance to compute its own derivs
+                    derivs = img.getParamDerivatives(self, cat)
+                    needj = []
+                    for j,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        if deriv is False:
+                            needj.append(j)
+                            continue
+                        allderivs.append((parami + j, deriv))
+
+                    if len(needj):
+                        mod0 = self.getModelImage(i)
+                        p0 = img.getParams()
+                        ss = img.getStepSizes()
+                    for j in needj:
+                        step = ss[j]
+                        img.setParam(j, p0[j]+step)
+                        modj = self.getModelImage(i)
+                        img.setParam(j, p0[j])
+                        deriv = Patch(0, 0, (modj - mod0) / step)
+                        allderivs.append((parami + j, deriv))
+
+                parami += self.images[i].numberOfParams()
+
+            assert(parami == self.images.numberOfParams())
+            
+        srcs = list(self.catalog.getThawedSources())
+        for src in srcs:
+            derivs = src.getParamDerivatives(img)
+            for j,deriv in enumerate(derivs):
+                if deriv is None:
+                    continue
+                allderivs.append((parami + j, deriv))
+            parami += src.numberOfParams()
+
+        assert(parami == self.numberOfParams())
+        # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        # Also scale by inverse-error to get units of -dChi here.
+        ie = img.getInvError()
+        H,W = img.shape
+        chiderivs = []
+        for ind,d in allderivs:
+            d.clipTo(W,H)
+            deriv = d.patch.astype(np.float64) * ie[d.getSlice()]
+            chiderivs.append((ind, d.x0, d.y0, deriv))
+            
+        return chiderivs
+    
             
     def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
@@ -1926,64 +1996,6 @@ class Tractor(MultiParams):
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
 
-    def _getOneImageDerivs(self, imgi):
-        # Returns:
-        #     [  (param-index, patch), ... ]
-        # not necessarily in order of param-index
-        allderivs = []
-
-        # First, derivs for Image parameters (because 'images' comes
-        # first in the tractor's parameters)
-        parami = 0
-        img = self.images[imgi]
-        cat = self.catalog
-        if not self.isParamFrozen('images'):
-            for i in self.images.getThawedParamIndices():
-                if i == imgi:
-                    # Give the image a chance to compute its own derivs
-                    derivs = img.getParamDerivatives(self, cat)
-                    needj = []
-                    for j,deriv in enumerate(derivs):
-                        if deriv is None:
-                            continue
-                        if deriv is False:
-                            needj.append(j)
-                            continue
-                        allderivs.append((parami + j, deriv))
-
-                    if len(needj):
-                        mod0 = self.getModelImage(i)
-                        p0 = img.getParams()
-                        ss = img.getStepSizes()
-                    for j in needj:
-                        step = ss[j]
-                        img.setParam(j, p0[j]+step)
-                        modj = self.getModelImage(i)
-                        img.setParam(j, p0[j])
-                        deriv = Patch(0, 0, (modj - mod0) / step)
-                        allderivs.append((parami + j, deriv))
-
-                parami += self.images[i].numberOfParams()
-
-            assert(parami == self.images.numberOfParams())
-            
-        srcs = list(self.catalog.getThawedSources())
-        for src in srcs:
-            derivs = src.getParamDerivatives(img)
-            for j,deriv in enumerate(derivs):
-                if deriv is None:
-                    continue
-                allderivs.append((parami + j, deriv))
-            parami += src.numberOfParams()
-
-        assert(parami == self.numberOfParams())
-        # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
-        H,W = img.shape
-        for ind,d in allderivs:
-            d.clipTo(W,H)
-        return [(ind, d.x0, d.y0, d.patch.astype(np.float64))
-                for ind,d in allderivs]
-    
     def getUpdateDirection(self, allderivs, damp=0., priors=True,
                            scale_columns=True, scales_only=False,
                            chiImages=None, variance=False,
