@@ -285,7 +285,7 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
 
     // FIXME -- we don't include priors here!
 
-    // NOTE -- _getOneImageDerivs() returns -dCHI / dParam, not the usual
+    // NOTE -- _getOneImageDerivs() returns dCHI / dParam, not the usual
     // dModel / dParam!
     PyObject* allderivs = PyObject_CallMethod(
         _tractor, (char*)"_getOneImageDerivs", (char*)"i", _imagei);
@@ -342,8 +342,9 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
                 memset(row0, 0, x0*sizeof(double));
             row0 += x0;
             // Copy
-            for (int m=0; m<dW; m++)
-                row0[m] = -deriv_data[k*dW + m];
+            //for (int m=0; m<dW; m++)
+            //    row0[m] = -deriv_data[k*dW + m];
+            memcpy(row0, deriv_data + k*dW, dW * sizeof(double));
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
         }

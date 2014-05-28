@@ -892,9 +892,9 @@ class Tractor(MultiParams):
         #     [  (param-index, patch), ... ]
         # not necessarily in order of param-index
         #
-        # NOTE, this scales the derivatives by inverse-error to yield
-        # derivatives of -CHI with respect to PARAMs; NOT the model
-        # image wrt params.
+        # NOTE, this scales the derivatives by inverse-error and -1 to
+        # yield derivatives of CHI with respect to PARAMs; NOT the
+        # model image wrt params.
         #
         allderivs = []
 
@@ -944,13 +944,13 @@ class Tractor(MultiParams):
 
         assert(parami == self.numberOfParams())
         # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
-        # Also scale by inverse-error to get units of -dChi here.
+        # Also scale by -1 * inverse-error to get units of dChi here.
         ie = img.getInvError()
         H,W = img.shape
         chiderivs = []
         for ind,d in allderivs:
             d.clipTo(W,H)
-            deriv = d.patch.astype(np.float64) * ie[d.getSlice()]
+            deriv = -1. * d.patch.astype(np.float64) * ie[d.getSlice()]
             chiderivs.append((ind, d.x0, d.y0, deriv))
             
         return chiderivs
