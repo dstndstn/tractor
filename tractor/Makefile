@@ -39,13 +39,22 @@ CERES_INC ?=
 #CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
 
 # ceres 1.7.0 doesn't have the shared lib on my homebrew install...
-CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
+# CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
+# /usr/local/lib/libcxsparse.a \
+# /usr/local/lib/libcholmod.a \
+# /usr/local/lib/libcamd.a \
+# /usr/local/lib/libcolamd.a \
+# /usr/local/lib/libamd.a \
+# -framework Accelerate
+
+CERES_LIB ?= -L/usr/local/lib -lceres -lglog \
 /usr/local/lib/libcxsparse.a \
 /usr/local/lib/libcholmod.a \
 /usr/local/lib/libcamd.a \
 /usr/local/lib/libcolamd.a \
 /usr/local/lib/libamd.a \
 -framework Accelerate
+
 
 # On Riemann:
 #SSlib=~/software/suitespares-4.1.2/lib
@@ -73,7 +82,7 @@ ceres.py: ceres.i
 
 CXXFLAGS := -Wall -fPIC
 # DEBUG
-#CXXFLAGS += -O0 -g
+CXXFLAGS += -O0 -g
 #CXXLINKFLAGS := -Wl,--no-undefined
 CXXLINKFLAGS :=
 

@@ -229,9 +229,15 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         }
     }
 
+
+    // CERES 1.9.0
+    const char* errstring = summary.message.c_str();
+    // CERES 1.8.0
+    //const char* errstring = summary.error.c_str();
+
     return Py_BuildValue("{sisssdsdsdsssssisisi}",
                          "termination", int(summary.termination_type),
-                         "error", summary.error.c_str(),
+                         "error", errstring,
                          "initial_cost", summary.initial_cost,
                          "final_cost", summary.final_cost,
                          "fixed_cost", summary.fixed_cost,
@@ -328,9 +334,14 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     Solve(options, &problem, &summary);
     printf("%s\n", summary.BriefReport().c_str());
 
+    // CERES 1.9.0
+    const char* errstring = summary.message.c_str();
+    // CERES 1.8.0
+    //const char* errstring = summary.error.c_str();
+
     return Py_BuildValue("{sisssdsdsdsssssisisi}",
                          "termination", int(summary.termination_type),
-                         "error", summary.error.c_str(),
+                         "error", errstring,
                          "initial_cost", summary.initial_cost,
                          "final_cost", summary.final_cost,
                          "fixed_cost", summary.fixed_cost,

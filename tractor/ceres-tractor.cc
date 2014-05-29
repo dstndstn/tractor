@@ -20,7 +20,10 @@ ForcedPhotCostFunction<T>::ForcedPhotCostFunction(Patch<T> data,
     _data(data), _sources(sources), _nonneg(nonneg) {
 
     set_num_residuals(data.npix());
-    std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+
+    //std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+    std::vector<int32_t>* bs = mutable_parameter_block_sizes();
+
     for (size_t i=0; i<sources.size(); i++) {
         bs->push_back(1);
     }
@@ -37,7 +40,8 @@ template<typename T>
 bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
                                          double* residuals,
                                          double** jacobians) const {
-    const std::vector<int16_t> bs = parameter_block_sizes();
+    //const std::vector<int16_t> bs = parameter_block_sizes();
+    const std::vector<int32_t> bs = parameter_block_sizes();
 
     /*
      printf("ForcedPhotCostFunction::Evaluate\n");
@@ -200,7 +204,8 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
 
     set_num_residuals(_npix);
-    std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+    //std::vector<int16_t>* bs = mutable_parameter_block_sizes();
+    std::vector<int32_t>* bs = mutable_parameter_block_sizes();
     for (int i=0; i<_nparams; i++) {
         bs->push_back(1);
     }
@@ -214,7 +219,9 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
                                  double* residuals,
                                  double** jacobians) const {
 
-    const std::vector<int16_t> bs = parameter_block_sizes();
+    //const std::vector<int16_t> bs = parameter_block_sizes();
+    const std::vector<int32_t> bs = parameter_block_sizes();
+
     //printf("ImageCostFunction::Evaluate\n");
     /*
      printf("Parameter blocks: (%i)\n", (int)(bs.size()));
@@ -343,7 +350,7 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
             row0 += x0;
             // Copy
             //for (int m=0; m<dW; m++)
-            //    row0[m] = -deriv_data[k*dW + m];
+            //row0[m] = deriv_data[k*dW + m];
             memcpy(row0, deriv_data + k*dW, dW * sizeof(double));
             if (x0 + dW < _W)
                 memset(row0 + dW, 0, (_W - (x0+dW)) * sizeof(double));
