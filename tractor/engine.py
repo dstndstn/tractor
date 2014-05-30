@@ -880,9 +880,9 @@ class Tractor(MultiParams):
 
         params = np.array(self.getParams())
         R = ceres_opt(self, self.getNImages(), params)
-        print 'ceres_opt result:'
-        for k,v in R.items():
-            print k, v
+        # print 'ceres_opt result:'
+        # for k,v in R.items():
+        #     print k, v
         return R
         
     # This function is called-back by _ceres_opt; it is called from
@@ -950,6 +950,8 @@ class Tractor(MultiParams):
         chiderivs = []
         for ind,d in allderivs:
             d.clipTo(W,H)
+            if d.patch is None:
+                continue
             deriv = -1. * d.patch.astype(np.float64) * ie[d.getSlice()]
             chiderivs.append((ind, d.x0, d.y0, deriv))
             

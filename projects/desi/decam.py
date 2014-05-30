@@ -7,6 +7,7 @@ import pylab as plt
 import fitsio
 
 from astrometry.util.util import *
+from astrometry.util.resample import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.sdss.fields import *
@@ -133,7 +134,15 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     wcs = ConstantFitsWcs(sip)
     if x0 or y0:
         wcs.setX0Y0(x0,y0)
-        
+
+    # Scale images to Nanomaggies
+    img /= zpscale
+    invvar *= zpscale**2
+    sky /= zpscale
+    sig1 /= zpscale
+    sky1 /= zpscale
+    zpscale = 1.
+
     tim = Image(img, invvar=invvar, wcs=wcs,
                 photocal=LinearPhotoCal(zpscale, band=filt),
                 psf=psf, sky=ConstantSky(sky), name=name)
@@ -173,7 +182,8 @@ if __name__ == '__main__':
     picklefn = basefn + '.pickle'
     secatfn = decbase + '.morph.fits'
     sdssobjfn = basefn + '-sdss.fits'
-    seobjfn = basefn + '-se.fits'
+    #seobjfn = basefn + '-se.fits'
+    seobjfn = decbase + '.cat.fits'
 
     if os.path.exists(picklefn):
         print 'Reading', picklefn
@@ -195,8 +205,33 @@ if __name__ == '__main__':
         objfn = sdssobjfn
         catname = 'SDSS'
         ps = PlotSequence('decam-sdss')
+    ps.format = '%03i'
 
+    # FIXME -- looks like a small astrometric shift between SourceExtractor
+    # catalog and SDSS.
+    if True:
+        SEcat = fits_table(seobjfn, hdu=2)
+        SEcat.ra  = SEcat.alpha_j2000
+        SEcat.dec = SEcat.delta_j2000
+        SDSScat = fits_table(sdssobjfn)
+        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec, 1.0/3600.)
+        plt.clf()
+        plt.plot(3600.*(SEcat.ra[I] - SDSScat.ra[J]), 3600.*(SEcat.dec[I] - SDSScat.dec[J]), 'b.')
+        plt.xlabel('dRA (arcsec)')
+        plt.ylabel('dDec (arcsec)')
+        plt.axis([-0.6,0.6,-0.6,0.6])
+        ps.savefig()
+        #sys.exit(0)
+
+        if secat:
+            dra = ddec = 0.
+        else:
+            dra  = np.median(SEcat.ra [I] - SDSScat.ra [J])
+            ddec = np.median(SEcat.dec[I] - SDSScat.dec[J])
+        
     sdss = DR9(basedir='dr9')
+    sdss.saveUnzippedFiles('dr9')
+
     sip = tim.wcs.wcs
     if secat:
         T = fits_table(secatfn, hdu=2,
@@ -218,16 +253,55 @@ if __name__ == '__main__':
         else:
             objs = fits_table(objfn)
 
-            print len(objs), 'SDSS photoObjs'
-            r0,r1,d0,d1 = sip.radec_bounds()
-            cat = get_tractor_sources_dr9(
-                None, None, None, objs=objs, sdss=sdss,
-                radecroi=[r0,r1,d0,d1], bands=['z'],
-                nanomaggies=True, fixedComposites=True,
-                useObjcType=True)
+        print 'dRA,dDec', 3600.*dra, 3600.*ddec
+        # objs.ra  += dra
+        # objs.dec += ddec
 
-    print len(cat), 'sources'
+        # UGH!
+        objs.ra += 0.15 / 3600.
+
+        #print 'Zip:', zip(objs.run, objs.camcol, objs.field)
+        #rcfs = np.unique(zip(objs.run, objs.camcol, objs.field))
+        #print 'RCF', rcfs
+
+        print 'run', objs.run.min(), objs.run.max()
+        print 'camcol', objs.camcol.min(), objs.camcol.max()
+        print 'field', objs.field.min(), objs.field.max()
         
+        rcfnum = (objs.run.astype(np.int32) * 10000 +
+                  objs.camcol.astype(np.int32) * 1000 +
+                  objs.field)
+        rcfnum = np.unique(rcfnum)
+        rcfs = zip(rcfnum / 10000, rcfnum % 10000 / 1000, rcfnum % 1000)
+        print 'RCF', rcfs
+
+        
+        # SEcat = fits_table(seobjfn, hdu=2)
+        # SEcat.ra  = SEcat.alpha_j2000
+        # SEcat.dec = SEcat.delta_j2000
+        # I,J,d = match_radec(SEcat.ra, SEcat.dec, objs.ra, objs.dec, 1.0/3600.)
+        # plt.clf()
+        # plt.plot(3600.*(SEcat.ra[I] - objs.ra[J]), 3600.*(SEcat.dec[I] - objs.dec[J]), 'b.')
+        # plt.xlabel('dRA (arcsec)')
+        # plt.ylabel('dDec (arcsec)')
+        # plt.axis([-0.6,0.6,-0.6,0.6])
+        # ps.savefig()
+
+        
+        print len(objs), 'SDSS photoObjs'
+        r0,r1,d0,d1 = sip.radec_bounds()
+        cat = get_tractor_sources_dr9(
+            None, None, None, objs=objs, sdss=sdss,
+            radecroi=[r0,r1,d0,d1], bands=['z'],
+            nanomaggies=True, fixedComposites=True,
+            useObjcType=True)
+
+        #radec0 = np.array([(src.getPosition().ra, src.getPosition().dec)
+        #                   for src in cat])
+        
+    print len(cat), 'sources'
+
+    
     # very rough FWHM
     psfim = tim.getPsf().getPointSourcePatch(0., 0.)
     mx = psfim.patch.max()
@@ -392,23 +466,24 @@ if __name__ == '__main__':
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
 
-    S = fits_table(sdssobjfn)
-    # stars
-    S.cut(S.objc_type == 6)
-
-    I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, 1./3600)
-    S.cut(I)
-    g = S.psfmag[:,1]
-    r = S.psfmag[:,2]
-    z = T.mag[J]
-    plt.clf()
-    plt.plot(g-r, r-z, 'b.', alpha=0.25)
-    plt.axis([0, 2, -1, 3])
-    plt.xlabel('SDSS g-r')
-    plt.ylabel('SDSS r - DECam z')
-    plt.title('Forced photometry using %s catalog (%i stars)' % (catname, len(S)))
-    ps.savefig()
+    if False:
+        S = fits_table(sdssobjfn)
+        # stars
+        S.cut(S.objc_type == 6)
     
+        I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, 1./3600)
+        S.cut(I)
+        g = S.psfmag[:,1]
+        r = S.psfmag[:,2]
+        z = T.mag[J]
+        plt.clf()
+        plt.plot(g-r, r-z, 'b.', alpha=0.25)
+        plt.axis([0, 2, -1, 3])
+        plt.xlabel('SDSS g-r')
+        plt.ylabel('SDSS r - DECam z')
+        plt.title('Forced photometry using %s catalog (%i stars)' % (catname, len(S)))
+        ps.savefig()
+
     if False:
         H,W = tim.shape
         for y0 in np.arange(0, H, 256):
@@ -453,17 +528,17 @@ if __name__ == '__main__':
     # expand by fwhm
     modhot = binary_dilation(modhot, iterations=int(fwhm))
 
-    plt.clf()
-    imshow(modhot, interpolation='nearest', origin='lower', cmap='gray')
-    plt.title('Mod Detected')
-    ps.savefig()
+    # plt.clf()
+    # imshow(modhot, interpolation='nearest', origin='lower', cmap='gray')
+    # plt.title('Mod Detected')
+    # ps.savefig()
 
     uhot = np.logical_or(hot, modhot)
     
-    plt.clf()
-    imshow(uhot, interpolation='nearest', origin='lower', cmap='gray')
-    plt.title('Union Detected')
-    ps.savefig()
+    # plt.clf()
+    # imshow(uhot, interpolation='nearest', origin='lower', cmap='gray')
+    # plt.title('Union Detected')
+    # ps.savefig()
 
     blobs,nblobs = label(uhot)
     print 'N detected blobs:', nblobs
@@ -504,34 +579,58 @@ if __name__ == '__main__':
 
     class ChattyTractor(Tractor):
         def setParams(self, p):
-            print 'SetParams:', ', '.join(['%.5f' % pp for pp in p])
+            #print 'SetParams:', ', '.join(['%.5f' % pp for pp in p])
             super(ChattyTractor, self).setParams(p)
 
         def _getOneImageDerivs(self, i):
             print 'GetOneImageDerivs:', i
             X = super(ChattyTractor, self)._getOneImageDerivs(i)
-            print 'Got:', X
+            print
+            if X is None:
+                print 'Got', X
+            else:
+                for ind,x0,y0,der in X:
+                    print '  Ind', ind, 'x0y0', x0,y0, 'der', der.shape, der.dtype
+            print
             return X
-            
-    for b in np.argsort(-blobchisq)[:5]:
+
+    radec0 = []
+    radec1 = []
+
+    def sqimshow(img, **kwa):
+        mn = kwa.pop('vmin')
+        mx = kwa.pop('vmax')
+        imshow(np.sqrt(img - mn), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
+
+    imsq = dict(interpolation='nearest', origin='lower',
+                vmin=tim.zr[0], vmax=25.*tim.zr[1], cmap='gray')
+
+    for ii,b in enumerate(np.argsort(-blobchisq)):
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]
 
+        #if ii >= 50:
+        #    break
+        
+        print
+        print 'Blob', ii, 'of', len(blobchisq), 'index', b
+        print 
+        
         subiv = tim.getInvvar()[bslc]
         subiv[blobs[bslc] != (b+1)] = 0.
 
         subimg = tim.getImage()[bslc]
         
-        plt.clf()
-        plt.subplot(2,2,1)
-        imshow(subimg, **ima)
-        plt.subplot(2,2,2)
-        imshow(subiv, **imx)
-        plt.subplot(2,2,3)
-        imshow(mod[bslc], **ima)
-        plt.subplot(2,2,4)
-        imshow(chi[bslc] * (subiv > 0), **imchi)
-        ps.savefig()
+        # plt.clf()
+        # plt.subplot(2,2,1)
+        # imshow(subimg, **ima)
+        # plt.subplot(2,2,2)
+        # imshow(subiv, **imx)
+        # plt.subplot(2,2,3)
+        # imshow(mod[bslc], **ima)
+        # plt.subplot(2,2,4)
+        # imshow(chi[bslc] * (subiv > 0), **imchi)
+        # ps.savefig()
 
         sy,sx = bslc
         y0,y1 = sy.start, sy.stop
@@ -540,9 +639,74 @@ if __name__ == '__main__':
         subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
         subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
 
+        ###
+        if ii < 25:
+            subh,subw = subimg.shape
+            rwcs = TractorWCSWrapper(subwcs, subw,subh)
+            rerun = '301'
+            resams = []
+            for band in ['z','r']:
+                resam = np.zeros_like(subimg)
+                nresam = np.zeros(subimg.shape, int)
+                s1s = []
+                for run,camcol,field in rcfs:
+                    #print 'Run, camcol, field', run, camcol, field
+                    sdss.retrieve('frame', run, camcol, field=field, band=band,
+                                  rerun=rerun)
+                    frame = sdss.readFrame(run, camcol, field, band)
+                    #print 'Got frame', frame
+                    sw,sh = 2048,1489
+                    ast = frame.getAsTrans()
+                    swcs = AsTransWrapper(ast, sw,sh)
+                    try:
+                        Yo,Xo,Yi,Xi,nil = resample_with_wcs(rwcs, swcs, [], 3)
+                    except OverlapError:
+                        continue
+                    simg = frame.getImage()
+                    sh,sw = simg.shape
+                    
+                    resam[Yo,Xo] += simg[Yi,Xi]
+                    nresam[Yo,Xo] += 1
+    
+                    sdss.retrieve('psField', run, camcol, field=field, band=band,
+                                  rerun=rerun)
+                    psfield = sdss.readPsField(run, camcol, field)
+                    bandnum = band_index(band)
+                    iv = frame.getInvvar(psfield, bandnum, ignoreSourceFlux=True,
+                                         constantSkyAt=(sh/2,sw/2))
+                    #print 'invvar', iv
+                    s1s.append(np.sqrt(1./iv))
+                resam /= nresam
+                s1 = np.median(s1s)
+                resams.append((nresam, resam, band, s1))
+                if band == 'z':
+                    z1 = s1
+                
+            imsdss = dict(interpolation='nearest', origin='lower', cmap='gray',
+                          vmin=-3.*z1, vmax=5.*z1)
+            plt.clf()
+            plt.subplot(2,3,1)
+            imshow(subimg, **ima)
+            plt.title('DECam z')
+            plt.subplot(2,3,4)
+            imshow(subimg, **imsdss)
+            plt.title('DECam z')
+            for i,(nresam, resam, band, s1) in enumerate(resams):
+                if np.all(nresam == 0):
+                    continue
+                mn,mx = [np.percentile(resam[nresam>0], p) for p in [25,98]]
+                plt.subplot(2,3, 2+i)
+                imshow(resam, **ima)
+                plt.title('SDSS %s' % band)
+                plt.subplot(2,3, 5+i)
+                imshow(resam, **imsdss)
+                plt.title('SDSS %s' % band)
+            ps.savefig()
+
         subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
                        sky=tim.getSky(), photocal=tim.getPhotoCal())
-        subtr = ChattyTractor([subtim], blobsrcs[b])
+        #subtr = ChattyTractor([subtim], blobsrcs[b])
+        subtr = Tractor([subtim], blobsrcs[b])
         subtr.modtype = np.float64
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
@@ -555,31 +719,90 @@ if __name__ == '__main__':
         submod = subtr.getModelImage(0)
         subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
 
-        plt.clf()
-        plt.subplot(2,2,1)
-        imshow(subtim.getImage(), **ima)
-        plt.subplot(2,2,2)
-        imshow(subiv, **imx)
-        plt.subplot(2,2,3)
-        imshow(submod, **ima)
-        plt.subplot(2,2,4)
-        imshow(subchi, **imchi)
-        ps.savefig()
+        if ii < 25:
+            # plt.clf()
+            # plt.subplot(2,2,1)
+            # imshow(subtim.getImage(), **ima)
+            # plt.subplot(2,2,2)
+            # imshow(subiv, **imx)
+            # plt.subplot(2,2,3)
+            # imshow(submod, **ima)
+            # plt.subplot(2,2,4)
+            # imshow(subchi, **imchi)
+            # ps.savefig()
+            plt.clf()
+            plt.subplot(2,3,1)
+            imshow(subtim.getImage(), **ima)
+            plt.subplot(2,3,2)
+            imshow(submod, **ima)
+            plt.subplot(2,3,3)
+            imshow(subchi, **imchi)
+            plt.subplot(2,3,4)
+            sqimshow(subtim.getImage(), **imsq)
+            plt.subplot(2,3,5)
+            sqimshow(submod, **imsq)
+            ps.savefig()
+
+        
+        radec0.extend([(src.getPosition().ra, src.getPosition().dec)
+                       for src in bsrcs])
         
         subtr._ceres_opt()
 
+        radec1.extend([(src.getPosition().ra, src.getPosition().dec)
+                       for src in bsrcs])
+        
         submod = subtr.getModelImage(0)
         subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
 
-        plt.clf()
-        plt.subplot(2,2,1)
-        imshow(subtim.getImage(), **ima)
-        plt.subplot(2,2,2)
-        imshow(subiv, **imx)
-        plt.subplot(2,2,3)
-        imshow(submod, **ima)
-        plt.subplot(2,2,4)
-        imshow(subchi, **imchi)
-        ps.savefig()
+        # plt.clf()
+        # plt.subplot(2,2,1)
+        # imshow(subtim.getImage(), **ima)
+        # plt.subplot(2,2,2)
+        # imshow(subiv, **imx)
+        # plt.subplot(2,2,3)
+        # imshow(submod, **ima)
+        # plt.subplot(2,2,4)
+        # imshow(subchi, **imchi)
+        # ps.savefig()
 
+        if ii < 25:
+            plt.clf()
+            plt.subplot(2,3,1)
+            imshow(subtim.getImage(), **ima)
+            plt.subplot(2,3,2)
+            imshow(submod, **ima)
+            plt.subplot(2,3,3)
+            imshow(subchi, **imchi)
+            plt.subplot(2,3,4)
+            sqimshow(subtim.getImage(), **imsq)
+            plt.subplot(2,3,5)
+            sqimshow(submod, **imsq)
+            ps.savefig()
         
+    radec0 = np.array(radec0)
+    radec1 = np.array(radec1)
+
+    plt.clf()
+    plt.plot(3600. * (radec1[:,0] - radec0[:,0]),
+             3600. * (radec1[:,1] - radec0[:,1]), 'b.')
+    plt.xlabel('dRA (arcsec)')
+    plt.ylabel('dDec (arcsec)')
+    plt.axis([-0.6,0.6,-0.6,0.6])
+    ps.savefig()
+    
+             
+    tflux = np.array([sum(b.getFlux(tim.filter)
+                          for b in src.getBrightnesses())
+                      for src in cat])
+    tmag = -2.5 * (np.log10(   tflux) - 9.)
+
+    plt.clf()
+    lo,hi = 10,25
+    plt.plot(smag, tmag, 'b.', alpha=0.5)
+    plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
+    plt.xlabel('%s z (mag)' % catname)
+    plt.ylabel('DECam z (mag)')
+    plt.axis([hi,lo,hi,lo])
+    plt.title('Tractor forced photometry of DECam data')
+    ps.savefig()

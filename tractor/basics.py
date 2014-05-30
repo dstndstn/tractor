@@ -1571,3 +1571,9 @@ class ShiftedWcs(ParamsWrapper):
     def positionToPixel(self, pos, src=None):
         x,y = self.wcs.positionToPixel(pos, src=src)
         return (x - self.x0, y - self.y0)
+
+    def pixelToPosition(self, x, y, src=None):
+        pos = self.wcs.pixelToPosition(x+self.x0, y+self.y0, src=src)
+        return pos
+
+    
