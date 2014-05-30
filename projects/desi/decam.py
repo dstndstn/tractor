@@ -20,6 +20,7 @@ from scipy.ndimage.filters import *
 from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing
 from scipy.ndimage.morphology import binary_fill_holes
+from scipy.ndimage.interpolation import shift
 
 def read_decam_image(basefn, skysubtract=True, slc=None):
     '''
@@ -141,6 +142,8 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     sky /= zpscale
     sig1 /= zpscale
     sky1 /= zpscale
+
+    orig_zpscale = zpscale
     zpscale = 1.
 
     tim = Image(img, invvar=invvar, wcs=wcs,
@@ -152,6 +155,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     tim.sig1 = sig1
     tim.sky1 = sky1
     tim.zp = zp
+    tim.ozpscale = orig_zpscale
     return tim
     
 
@@ -244,7 +248,8 @@ if __name__ == '__main__':
         
         from projects.cs82.cs82 import get_cs82_sources
         cat,catI = get_cs82_sources(T, bands=['z'])
-
+        T.cut(catI)
+        
     else:
         if not os.path.exists(objfn):
             margin = 5./3600.
@@ -301,6 +306,162 @@ if __name__ == '__main__':
         
     print len(cat), 'sources'
 
+    def imshow(img, **kwargs):
+        x = plt.imshow(img.T, **kwargs)
+        plt.xticks([])
+        plt.yticks([])
+        return x
+
+    def sqimshow(img, **kwa):
+        mn = kwa.pop('vmin')
+        mx = kwa.pop('vmax')
+        imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
+    
+    if secat:
+        H,W = tim.shape
+        I = np.argsort(T.mag_psf)
+        ims = []
+        ratios = []
+        for i in I[:20]:
+            print
+            x,y = T.x_image[i], T.y_image[i]
+            ix,iy = int(np.round(x)), int(np.round(y))
+
+            psfim = tim.getPsf().getPointSourcePatch(x-1,y-1)
+            ph,pw = psfim.shape
+            print 'PSF shape', pw,ph
+            S = ph/2
+            if ix < S or ix > (W-S) or iy < S or iy > (H-S):
+                continue
+            #subim = tim.getImage()[iy-S:iy+S+1, ix-S:ix+S+1]
+            x0,y0 = psfim.x0, psfim.y0
+            subim = tim.getImage()[y0:y0+ph, x0:x0+pw]
+
+            pixim = tim.getPsf().instantiateAt(x-1, y-1)
+            print 'pixim', pixim.sum()
+            
+            mn,mx = [np.percentile(subim, p) for p in [25,100]]
+            zp = tim.ozpscale
+            print 'subim sum', np.sum(subim)
+            print 'flux', T.flux_psf[i]
+            print 'zpscale', zp
+            flux = T.flux_psf[i] / zp
+            print 'flux/zpscale', flux
+            print 'psfim sum', psfim.patch.sum()
+
+            dy = y - iy
+            dx = x - ix
+            
+            ims.append((subim, psfim, flux, mn,mx, pixim,dx,dy))
+            ratios.append(subim.sum() / flux)
+
+        ratio = np.median(ratios)
+        for subim, psfim, flux, mn,mx, pixim,dx,dy in ims:
+            ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn, vmax=mx)
+            dd = (mx - mn) * 0.05
+            imdiff = dict(interpolation='nearest', origin='lower', cmap='gray',
+                          vmin=-dd, vmax=dd)
+
+            mod = psfim.patch * flux * ratio
+            pixmod = pixim * flux * ratio
+
+            if dx < 0:
+                dx += 1
+            if dy < 0:
+                dy += 1
+
+            spix = shift(pixmod, (dy,dx))
+            ph,pw = spix.shape
+            fh,fw = mod.shape
+            sx = (fw - pw)/2
+            sy = (fh - ph)/2
+            xx,yy = np.meshgrid(np.arange(pw), np.arange(ph))
+            pixx = np.sum(xx * pixmod) / pixmod.sum()
+            pixy = np.sum(yy * pixmod) / pixmod.sum()
+
+            shiftpix = np.zeros_like(mod)
+            shiftpix[sy:sy+ph, sx:sx+pw] = spix
+
+            xx,yy = np.meshgrid(np.arange(fw), np.arange(fh))
+            modx = np.sum(xx * mod) / mod.sum()
+            mody = np.sum(yy * mod) / mod.sum()
+            shx = np.sum(xx * shiftpix) / shiftpix.sum()
+            shy = np.sum(yy * shiftpix) / shiftpix.sum()
+
+            imx = np.sum(xx * subim) / subim.sum()
+            imy = np.sum(yy * subim) / subim.sum()
+            
+            print
+            print 'Dx,Dy', dx,dy
+            print 'Model    centroid %.5f, %.5f' % (modx,mody)
+            print 'Shiftpix centroid %.5f, %.5f' % (shx, shy )
+            print 'Image    centroid %.5f, %.5f' % (imx,imy)
+            #print 'Pixim    centroid %.5f, %.5f' % (pixx,pixy)
+
+            print 'Image - Model     %.5f, %.5f' % (imx-shx,imy-shy)
+
+            #shiftpix2 = shift(shiftpix, (imy-shy, imx-shx))
+            shiftpix2 = shift(shiftpix,
+                              (-(pixy-np.round(pixy)), -(pixx-np.round(pixx))))
+
+            plt.clf()
+            plt.suptitle('dx,dy %.2f,%.2f' % (dx,dy))
+
+            plt.subplot(3,4,1)
+            imshow(subim, **ima)
+            plt.title('image')
+
+            plt.subplot(3,4,5)
+            imshow(mod, **ima)
+            plt.title('G model')
+
+            plt.subplot(3,4,9)
+            imshow(subim - mod, **imdiff)
+            plt.title('G resid')
+
+            #plt.subplot(3,4,3)
+            #imshow(subim, **ima)
+            plt.subplot(3,4,3)
+            imshow(pixmod, **ima)
+            plt.title('Pixelize mod')
+            plt.subplot(3,4,7)
+            imshow(shiftpix, **ima)
+            plt.title('Shifted pix mod')
+            plt.subplot(3,4,11)
+            imshow(subim - shiftpix, **imdiff)
+            plt.title('Shifted pix resid')
+
+            plt.subplot(3,4,10)
+            imshow(subim - shiftpix2, **imdiff)
+            plt.title('Shifted pix2 resid')
+
+            
+            plt.subplot(3,4,12)
+            imshow(shiftpix - mod, **imdiff)
+            plt.title('Shifted pix - G mod')
+
+            
+            #plt.subplot(3,4,11)
+            #imshow(subim - pixmod, **imdiff)
+
+            plt.subplot(3,4,4)
+            sqimshow(subim, **ima)
+            plt.title('Image')
+            plt.subplot(3,4,8)
+            sqimshow(pixmod, **ima)
+            plt.title('Pix mod')
+
+            
+            plt.subplot(3,4,2)
+            sqimshow(subim, **ima)
+            plt.title('Image')
+            plt.subplot(3,4,6)
+            sqimshow(mod, **ima)
+            plt.title('G mod')
+            ps.savefig()
+        sys.exit(0)
+    
     
     # very rough FWHM
     psfim = tim.getPsf().getPointSourcePatch(0., 0.)
@@ -323,10 +484,6 @@ if __name__ == '__main__':
     # expand by fwhm
     hot = binary_dilation(hot, iterations=int(fwhm))
 
-    def imshow(img, **kwargs):
-        x = plt.imshow(img.T, **kwargs)
-        return x
-        
     ima = dict(interpolation='nearest', origin='lower',
                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
     imx = dict(interpolation='nearest', origin='lower', cmap='gray')
@@ -596,11 +753,6 @@ if __name__ == '__main__':
 
     radec0 = []
     radec1 = []
-
-    def sqimshow(img, **kwa):
-        mn = kwa.pop('vmin')
-        mx = kwa.pop('vmax')
-        imshow(np.sqrt(img - mn), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
 
     imsq = dict(interpolation='nearest', origin='lower',
                 vmin=tim.zr[0], vmax=25.*tim.zr[1], cmap='gray')
