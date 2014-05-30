@@ -605,6 +605,7 @@ if __name__ == '__main__':
     imsq = dict(interpolation='nearest', origin='lower',
                 vmin=tim.zr[0], vmax=25.*tim.zr[1], cmap='gray')
 
+    #for ii,b in [(1330, 1492)]:
     for ii,b in enumerate(np.argsort(-blobchisq)):
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]

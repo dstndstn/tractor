@@ -768,12 +768,21 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             i0 += nb
                 
         if not self.isParamFrozen('fracDev'):
-            ue = e.getUnitFluxModelPatch(img)
-            ud = d.getUnitFluxModelPatch(img)
             counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-            df = (ud - ue) * counts
-            df.setName('d(fcomp)/d(fracDev)')
-            derivs.append(df)
+            if counts == 0.:
+                derivs.append(None)
+            else:
+                ue = e.getUnitFluxModelPatch(img)
+                ud = d.getUnitFluxModelPatch(img)
+                if ue is not None:
+                    ue *= -1
+                df = add_patches(ud, ue)
+                if df is None:
+                    derivs.append(None)
+                else:
+                    df *= counts
+                    df.setName('d(fcomp)/d(fracDev)')
+                    derivs.append(df)
 
         if not self.isParamFrozen('shapeExp'):
             derivs.extend(de[i0:])
