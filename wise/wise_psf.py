@@ -297,6 +297,92 @@ if __name__ == '__main__':
     from astrometry.util.util import *
 
     ps = PlotSequence('psf')
+
+    # AllWISE PSF models
+    for band in [1,2,3,4]:
+        print
+        print 'W%i' % band
+        print
+
+        pix = reduce(np.add, [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' % (band, 1+(i/9), 1+(i%9))) for i in range(9*9)])
+        print 'Pix', pix.shape
+        h,w = pix.shape
+        print 'Pix sum', pix.sum()
+        print 'Pix max', pix.max()
+        pix /= pix.sum()
+        
+        psf = GaussianMixturePSF.fromStamp(pix)
+        print 'Fit PSF', psf
+        psfmodel = psf.getPointSourcePatch(0., 0., radius=h/2)
+        mod = psfmodel.patch
+        print 'Orig mod sum', mod.sum()
+
+        S = h/2
+        plotss = 30
+        plotslice = slice(S-plotss, -(S-plotss)), slice(S-plotss, -(S-plotss))
+        
+        _plot_psf(pix, mod, psf)
+        plt.suptitle('W%i: from stamp' % band)
+        ps.savefig()
+
+        # Try concentric gaussian PSF
+        sh,sw = pix.shape
+        sigmas = []
+        for k in range(psf.mog.K):
+            v = psf.mog.var[k,:,:]
+            sigmas.append(np.sqrt(np.sqrt(v[0,0] * v[1,1])))
+        gpsf = NCircularGaussianPSF(sigmas, psf.mog.amp)
+        gpsf.radius = sh/2
+        mypsf = gpsf
+        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix),
+                    wcs=NullWCS(), photocal=LinearPhotoCal(1.),
+                    psf=mypsf, sky=ConstantSky(0.))
+        cx,cy = sw/2, sh/2
+        src = PointSource(PixPos(cx, cy), Flux(1.0))
+        
+        tractor = Tractor([tim], [src])
+        
+        tim.freezeAllBut('psf')
+        #tractor.freezeParam('catalog')
+        src.freezeAllBut('pos')
+
+        print 'Optimizing Params:'
+        tractor.printThawedParams()
+    
+        for i in range(100):
+            dlnp,X,alpha = tractor.optimize(damp=0.1)
+            print 'dlnp', dlnp
+            if dlnp < 0.001:
+                break
+
+        print 'PSF3(opt): flux', src.brightness
+        print 'PSF amps:', np.sum(mypsf.amp)
+        print 'PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp)
+        print 'pix sum:', pix.sum()
+
+        print 'Optimize source:', src
+        print 'Optimized PSF:', mypsf
+        
+        mod = tractor.getModelImage(0)
+        print 'Mod sum:', mod.sum()
+        _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
+        plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
+                     (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
+        ps.savefig()
+
+        mypsf.weights.setParams(np.array(mypsf.weights.getParams()) /
+                                sum(mypsf.weights.getParams()))
+        print 'Normalized PSF weights:', mypsf
+        mod = tractor.getModelImage(0)
+        print 'Mod sum:', mod.sum()
+        _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
+        plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
+                     (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
+        ps.savefig()
+            
+        sys.exit(0)
+
+    # Meisner's PSF models
     
     #for band in [4,3,2,1]:
     for band in [1,2,3,4]:
