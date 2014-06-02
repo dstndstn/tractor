@@ -393,12 +393,12 @@ The plots look like:
 The "before" image---our initial Tractor model has the source a little
 too low and to the left, which you can see in the "chi" image.
 
-.. image:: 1.png
+.. image:: _static/1.png
 
 The "after" image---the source position has been adjusted and the
 "chi" image looks like a noise field.
 
-.. image:: 2.png
+.. image:: _static/2.png
 
 The "derivatives" image---the initial model, and its derivatives with
 respect to each of the parameters being fit.  The fitter finds a
@@ -407,4 +407,4 @@ residuals, then does line-search (since the minimum in the linearized
 problem may not coincide with the minimum in the real non-linear
 problem).
 
-.. image:: 3.png
+.. image:: _static/3.png
