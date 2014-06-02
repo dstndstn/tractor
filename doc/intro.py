@@ -88,7 +88,7 @@ cat.printThawedParams()
 
 
 
-if True:
+if False:
     import numpy as np
     import pylab as plt
     from tractor import *
@@ -196,4 +196,149 @@ if True:
     plt.savefig('3.png')
 
     
+    
+if True:
+    import numpy as np
+    import pylab as plt
+    from tractor import *
+
+    def imshow(x, **kwa):
+        plt.imshow(x, **kwa)
+        plt.xticks([]); plt.yticks([])
+    
+    # Size of image, centroids and fluxes of sources
+    W,H = 25,25
+    stars = [((12.8, 14.3), 12.), ((15.0, 11.0), 15.)]
+    # PSF sizes
+    psfsigmas = [2., 1.]
+    # Per-pixel image noise
+    noisesigmas = [0.01, 0.02]
+    # Create synthetic Gaussian star images
+    trueimages = []
+    images = []
+    for psfsigma, noisesigma in zip(psfsigmas, noisesigmas):
+        trueimage = np.zeros((H,W))
+        for (cx,cy),flux in stars:
+            G = np.exp(((np.arange(W)-cx)[np.newaxis,:]**2 +
+                        (np.arange(H)-cy)[:,np.newaxis]**2)/(-2.*psfsigma**2))
+            trueimage += flux * G/G.sum()
+        image = trueimage + noisesigma * np.random.normal(size=trueimage.shape)
+        trueimages.append(trueimage)
+        images.append(image)
+        
+    # Create Tractor Images
+    tims = [Image(data=image, invvar=np.ones_like(image) / (noisesigma**2),
+                  psf=NCircularGaussianPSF([psfsigma], [1.]),
+                  wcs=NullWCS(), photocal=NullPhotoCal(),
+                  sky=ConstantSky(0.))
+                  for image, noisesigma, psfsigma
+                  in zip(images, noisesigmas, psfsigmas)]
+
+    # Create Tractor sourcess with approximate position and flux
+    cat = [PointSource(PixPos(W/2.-1, H/2.-1), Flux(10.)),
+           PointSource(PixPos(W/2.+1, H/2.+1), Flux(10.))]
+
+    # Create Tractor object itself
+    tractor = Tractor(tims, cat)
+
+    # Render the model images
+    mods0 = [tractor.getModelImage(i) for i in range(2)]
+    chis0 = [tractor.getChiImage(i)   for i in range(2)]
+
+    # Plots
+    ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+               vmin=-2*noisesigma, vmax=20*noisesigma)
+    imchi = dict(interpolation='nearest', origin='lower', cmap='gray',
+                 vmin=-5, vmax=5)
+    def plot_src_pos(srcs):
+        ax = plt.axis()
+        plt.plot([src.getPosition().x for src in srcs],
+                 [src.getPosition().y for src in srcs], 'r+')
+        plt.axis(ax)
+    def plot_true_pos(stars):
+        ax = plt.axis()
+        plt.plot([cx for (cx,cy),flux in stars],
+                 [cy for (cx,cy),flux in stars], 'o', mec='r', mfc='none')
+        plt.axis(ax)
+        
+    plt.clf()
+    for i,(trueim,im,mod,chi) in enumerate(zip(trueimages,images,mods0,chis0)):
+        plt.subplot(2,4, 4*i+1)
+        imshow(trueim, **ima)
+        plot_true_pos(stars)
+        plt.title('True image')
+        plt.subplot(2,4, 4*i+2)
+        imshow(im, **ima)
+        plot_true_pos(stars)
+        plt.title('Image')
+        plt.subplot(2,4, 4*i+3)
+        imshow(mod, **ima)
+        plot_src_pos(cat)
+        plt.title('Tractor model')
+        plt.subplot(2,4, 4*i+4)
+        imshow(chi, **imchi)
+        plot_src_pos(cat)
+        plt.title('Chi')
+    plt.savefig('4.png')
+    
+    # Freeze all image calibration params -- just fit source params
+    tractor.freezeParam('images')
+
+    # Plot derivatives...
+    derivs = tractor.getDerivs()
+    def showpatch(patch, ima):
+        im = patch.patch
+        h,w = im.shape
+        ext = [patch.x0-0.5,patch.x0+w-0.5, patch.y0-0.5,patch.y0+h-0.5]
+        imshow(im, extent=ext, **ima)
+        plt.title(patch.name.replace('d(ptsrc)', 'd'))
+    imderiv = dict(interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=-0.05, vmax=0.05)
+    plt.clf()
+    for i,mod0 in enumerate(mods0):
+        plt.subplot(4,4, 8*i+1)
+        imshow(mod0, **ima)
+        plot_src_pos(cat)
+        ax = plt.axis()
+        plt.title('Initial Tractor model')
+        for j in range(6):
+            plt.subplot(4,4, 8*i + (j/3)*4 + j%3 + 2)
+            showpatch(derivs[j][i][0], imderiv)
+            plt.axis(ax)
+            plot_src_pos([cat[j/3]])
+    plt.savefig('5.png')
+
+    # Take several linearized least squares steps
+    for i in range(10):
+        dlnp,X,alpha = tractor.optimize()
+        print 'dlnp', dlnp
+        if dlnp < 1e-3:
+            break
+
+    # Get the fit model and residual images for plotting
+    mods = [tractor.getModelImage(i) for i in range(2)]
+    chis = [tractor.getChiImage(i)   for i in range(2)]
+    # Plots
+    plt.clf()
+    for i,(trueim,im,mod,chi) in enumerate(zip(trueimages,images,mods,chis)):
+        plt.subplot(2,4, 4*i+1)
+        imshow(trueim, **ima)
+        plot_true_pos(stars)
+        plt.title('True image')
+        plt.subplot(2,4, 4*i+2)
+        imshow(im, **ima)
+        plot_true_pos(stars)
+        plt.title('Image')
+        plt.subplot(2,4, 4*i+3)
+        imshow(mod, **ima)
+        plot_src_pos(cat)
+        plot_true_pos(stars)
+        plt.title('Tractor model')
+        plt.subplot(2,4, 4*i+4)
+        imshow(chi, **imchi)
+        plot_src_pos(cat)
+        plt.title('Chi')
+    plt.savefig('6.png')
+    
+
     
