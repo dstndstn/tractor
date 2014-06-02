@@ -1094,6 +1094,32 @@ class PixelizedPSF(BaseParams):
 
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
+
+    ## FIXME -- cache
+    def getFourierTransform(self, radius):
+        ## FIXME -- power-of-2 MINUS one to keep things odd...?
+        sz = 2**int(np.ceil(np.log2(radius*2.))) - 1
+
+        H,W = self.img.shape
+        subimg = self.img
+        pad = np.zeros((sz,sz))
+        if sz > H:
+            y0 = (sz - H)/2
+        else:
+            y0 = 0
+            d = (H - sz)/2
+            subimg = subimg[d:-d, :]
+        if sz > W:
+            x0 = (sz - W)/2
+        else:
+            y0 = 0
+            d = (W - sz)/2
+            subimg = subimg[:, d:-d]
+        sh,sw = subimg.shape
+        pad[y0:y0+sh, x0:x0+sw] = subimg
+        P = np.fft.rfft2(pad)
+        return P
+            
     
 class GaussianMixturePSF(ParamList):
     '''

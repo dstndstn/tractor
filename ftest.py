@@ -12,7 +12,8 @@ ps = PlotSequence('ftest')
 
 psfsig = 2.
 #W,H = 51,51
-W,H = 101,101
+#W,H = 101,101
+W,H = 101,81
 cx,cy = W/2, H/2
 
 psfim = np.exp(((np.arange(W)-cx)[np.newaxis,:]**2 +
@@ -32,6 +33,18 @@ plt.subplot(1,3,2)
 plt.imshow(P.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(P.imag, **ima)
+ps.savefig()
+
+padpsf = np.zeros((H*3, W*3))
+padpsf[H:2*H, W:2*W] = psfim
+P2 = np.fft.rfft2(padpsf)
+plt.clf()
+plt.subplot(1,3,1)
+plt.imshow(padpsf, **ima)
+plt.subplot(1,3,2)
+plt.imshow(P2.real, **ima)
+plt.subplot(1,3,3)
+plt.imshow(P2.imag, **ima)
 ps.savefig()
 
 gx,gy = W/2 + 0.3, H/2 + 0.5
@@ -75,12 +88,14 @@ mx,my = gx,gy
 gmog = gal._getAffineProfile(tim, mx, my)
 
 w = np.fft.rfftfreq(W)
-v = np.fft.fftfreq(W)
+v = np.fft.fftfreq(H)
 print 'Frequencies:', len(w), 'x', len(v)
 
-ww,vv = np.meshgrid(w, v)
+print 'w', w
+print 'v', v
 
-print 'ww,vv', ww.shape, vv.shape
+#ww,vv = np.meshgrid(w, v)
+#print 'ww,vv', ww.shape, vv.shape
 
 Fsum = None
 for k in range(gmog.K):
@@ -102,8 +117,13 @@ for k in range(gmog.K):
     d *= 0.5
     
     det = a*d - b**2
-    F = (np.exp(-np.pi**2/det * (a * vv**2 + d*ww**2 - 2*b*vv*ww))
-         * np.exp(2.*np.pi* 1j * (mux*ww + muy*vv)))
+    #F = (np.exp(-np.pi**2/det * (a * vv**2 + d*ww**2 - 2*b*vv*ww))
+    #     * np.exp(2.*np.pi* 1j * (mux*ww + muy*vv)))
+    F = (np.exp(-np.pi**2/det *
+                (a * v[:,np.newaxis]**2 +
+                 d * w[np.newaxis,:]**2 -
+                 2*b*v[:,np.newaxis]*w[np.newaxis,:]))
+         * np.exp(2.*np.pi* 1j * (mux*w[np.newaxis,:] + muy*v[:,np.newaxis])))
     
     if Fsum is None:
         Fsum = amp * F
@@ -225,4 +245,24 @@ plt.subplot(1,3,3)
 plt.imshow(R.imag, vmin=-mx, vmax=mx, **ima)
 ps.savefig()
 
+
+##
+
+psf1 = tim.getPsf()
+u1 = gal.getUnitFluxModelPatch(tim)
+
+psf2 = PixelizedPSF(psfim)
+tim.psf = psf2
+u2 = gal.getUnitFluxModelPatch(tim)
+
+plt.clf()
+plt.subplot(1,2,1)
+x0,y0,im = u1.x0, u1.y0, u1.patch
+ph,pw = im.shape
+plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
+plt.subplot(1,2,2)
+x0,y0,im = u2.x0, u2.y0, u2.patch
+ph,pw = im.shape
+plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
+ps.savefig()
 

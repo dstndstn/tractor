@@ -506,18 +506,53 @@ class ProfileGalaxy(object):
             print 'Failed to _getAffineProfile:'
             traceback.print_exc()
             return None
-        
-        # now convolve with the PSF, analytically
-        psfmix = img.getPsf().getMixtureOfGaussians()
-        #psfmix.normalize()
-        cmix = amix.convolve(psfmix)
-        x0 = outx.start
-        y0 = outy.start
-        x1 = outx.stop
-        y1 = outy.stop
-        psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
-        return Patch(x0, y0, psfconvolvedimg)
 
+        x0,x1 = outx.start, outx.stop
+        y0,y1 = outy.start, outy.stop
+        psf = img.getPsf()
+        if hasattr(psf, 'getMixtureOfGaussians'):
+            # now convolve with the PSF, analytically
+            psfmix = psf.getMixtureOfGaussians()
+            #psfmix.normalize()
+            cmix = amix.convolve(psfmix)
+            psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
+            return Patch(x0, y0, psfconvolvedimg)
+        else:
+            P = psf.getFourierTransform(halfsize)
+            H,W = P.shape
+            w = np.fft.rfftfreq(W)
+            v = np.fft.fftfreq(H)
+
+            cx = W/2
+            cy = H/2
+            
+            Fsum = None
+            for k in range(amix.K):
+                V = amix.var[k,:,:]
+                iv = np.linalg.inv(V)
+                mu = amix.mean[k,:]
+
+                ### FIXME
+                mux = -(mu[0] - x0 - cx)
+                muy = -(mu[1] - y0 - cy)
+
+                amp = amix.amp[k]
+                a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
+                det = a*d - b**2
+                F = (np.exp(-np.pi**2/det *
+                            (a * v[:,np.newaxis]**2 +
+                             d * w[np.newaxis,:]**2 -
+                             2*b*v[:,np.newaxis]*w[np.newaxis,:]))
+                             * np.exp(2.*np.pi* 1j * (mux*w[np.newaxis,:] + 
+                                                      muy*v[:,np.newaxis])))
+                if Fsum is None:
+                    Fsum = amp * F
+                else:
+                    Fsum += amp * F
+
+            G = np.fft.irfft2(Fsum, s=(H,W))
+            return Patch(x0, y0, G)
+                    
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
     def overlapsCircle(self, pos, radius):
