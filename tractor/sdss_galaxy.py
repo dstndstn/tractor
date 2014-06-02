@@ -519,22 +519,26 @@ class ProfileGalaxy(object):
             return Patch(x0, y0, psfconvolvedimg)
         else:
             P = psf.getFourierTransform(halfsize)
+            px0,py0 = P.x0, P.y0
             H,W = P.shape
             w = np.fft.rfftfreq(W)
             v = np.fft.fftfreq(H)
 
-            cx = W/2
-            cy = H/2
-            
             Fsum = None
             for k in range(amix.K):
                 V = amix.var[k,:,:]
                 iv = np.linalg.inv(V)
                 mu = amix.mean[k,:]
 
+                print 'mu', mu
+                print 'PSF x0,y0', px0,py0
+                print 'x0,y0', x0,y0
+                print 'halfsize', halfsize
+                print 'px,py', px,py
+                
                 ### FIXME
-                mux = -(mu[0] - x0 - cx)
-                muy = -(mu[1] - y0 - cy)
+                mux = -(mu[0] - x0 + px0)
+                muy = -(mu[1] - y0 + py0)
 
                 amp = amix.amp[k]
                 a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
@@ -550,7 +554,7 @@ class ProfileGalaxy(object):
                 else:
                     Fsum += amp * F
 
-            G = np.fft.irfft2(Fsum, s=(H,W))
+            G = np.fft.irfft2(Fsum, s=(y1-y0, x1-x0))
             return Patch(x0, y0, G)
                     
 

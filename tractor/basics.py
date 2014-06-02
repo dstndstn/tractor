@@ -1118,7 +1118,7 @@ class PixelizedPSF(BaseParams):
         sh,sw = subimg.shape
         pad[y0:y0+sh, x0:x0+sw] = subimg
         P = np.fft.rfft2(pad)
-        return P
+        return Patch(-sz/2, -sz/2, P)
             
     
 class GaussianMixturePSF(ParamList):
