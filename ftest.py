@@ -34,7 +34,10 @@ plt.subplot(1,3,3)
 plt.imshow(P.imag, **ima)
 ps.savefig()
 
-gal = ExpGalaxy(PixPos(cx,cy), Flux(1.), GalaxyShape(5., 0.5, 30.))
+gx,gy = W/2 + 0.3, H/2 + 0.5
+#gx,gy = W/2 + 0.3, H/2 + 0.
+
+gal = ExpGalaxy(PixPos(gx,gy), Flux(1.), GalaxyShape(5., 0.5, 30.))
 
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
             wcs=NullWCS(), psf=NCircularGaussianPSF([0.5], [1.]),
@@ -44,14 +47,6 @@ tractor = Tractor([tim], [gal])
 
 mod = tractor.getModelImage(0)
 print 'mod', mod.shape
-
-# print 'Galaxy:', gal
-# mx,my = tim.getWcs().positionToPixel(gal.getPosition())
-# mog = tim.getPsf().getMixtureOfGaussians()
-# print 'Galaxy pix pos:', mx, my
-# print 'MoG PSF:', mog
-# pro = gal._getAffineProfile(tim, mx, my)
-# print 'Galaxy affine profile:', pro
 
 G = np.fft.rfft2(mod)
 print 'G', G.shape
@@ -65,7 +60,6 @@ plt.subplot(1,3,3)
 plt.imshow(G.imag, **ima)
 ps.savefig()
 
-
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
             wcs=NullWCS(), psf=NCircularGaussianPSF([psfsig], [1.]),
             photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
@@ -76,7 +70,8 @@ G2 = np.fft.rfft2(mod2)
 print 'mod2', mod2.shape
 print 'G2', G2.shape
 
-mx,my = 0.,0.
+#mx,my = 0.,0.
+mx,my = gx,gy
 gmog = gal._getAffineProfile(tim, mx, my)
 
 w = np.fft.rfftfreq(W)
@@ -93,27 +88,22 @@ for k in range(gmog.K):
     iv = np.linalg.inv(V)
     mu = gmog.mean[k,:]
     amp = gmog.amp[k]
-    #print 'Variance', V
-    #print 'iv', iv
     a,b,d = iv[0,0], iv[0,1], iv[1,1]
 
-    assert(np.all(mu == 0))
+    #assert(np.all(mu == 0))
+
+    mux = -(mu[0] - cx)
+    muy = -(mu[1] - cy)
+
+    print 'mu', mux, muy
     
     a *= 0.5
     b *= 0.5
     d *= 0.5
     
     det = a*d - b**2
-    #F = (np.pi / np.sqrt(det) *
-    F = np.exp(-np.pi**2/det * (a * vv**2 + d*ww**2 - 2*b*vv*ww))
-    # * np.exp(2.*np.pi* 1j * (mu[0]*vv + mu[1]*ww)))
-
-    #F /= (2. * np.pi * np.sqrt(np.linalg.det(V)))
-
-    #print 'det V', np.linalg.det(V)
-    #print 'det iv', np.linalg.det(iv)
-    
-    print 'F', F.shape
+    F = (np.exp(-np.pi**2/det * (a * vv**2 + d*ww**2 - 2*b*vv*ww))
+         * np.exp(2.*np.pi* 1j * (mux*ww + muy*vv)))
     
     if Fsum is None:
         Fsum = amp * F
@@ -132,17 +122,16 @@ for k in range(gmog.K):
         plt.imshow(Fsum.imag, **ima)
         ps.savefig()
 
-    FF = np.fft.irfft2(Fsum, s=(H,W))
-
-    plt.clf()
-    plt.subplot(1,3,1)
-    plt.imshow(FF, **ima)
-    plt.subplot(1,3,2)
-    plt.imshow(Fsum.real, **ima)
-    plt.subplot(1,3,3)
-    plt.imshow(Fsum.imag, **ima)
-    ps.savefig()
-    
+    if False:
+        FF = np.fft.irfft2(Fsum, s=(H,W))
+        plt.clf()
+        plt.subplot(1,3,1)
+        plt.imshow(FF, **ima)
+        plt.subplot(1,3,2)
+        plt.imshow(Fsum.real, **ima)
+        plt.subplot(1,3,3)
+        plt.imshow(Fsum.imag, **ima)
+        ps.savefig()
         
 print 'abs max Fsum.imag:', np.abs(Fsum.imag).max()
     
@@ -216,7 +205,9 @@ mx = np.abs(resid).max()
 plt.imshow(resid, vmin=-mx, vmax=mx, **ima)
 
 plt.subplot(2,2,4)
-plt.imshow(np.log10(resid/mx), vmin=-6, vmax=0, **ima)
+log = np.log10(np.abs(resid)/mx)
+#plt.imshow(np.where(np.sign(resid) > 0, log, -log), vmin=-6, vmax=6, **ima)
+plt.imshow(log, vmin=-6, vmax=0, **ima)
 
 ps.savefig()
 
