@@ -12,9 +12,10 @@ Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
 """
 from math import ceil, floor, pi, sqrt, exp
 
-from engine import *
-#from ducks import *
-from utils import *
+from .engine import *
+from .utils import *
+from . import ducks
+
 import mixture_profiles as mp
 import numpy as np
 
@@ -705,6 +706,9 @@ class RaDecPos(ParamList, ArithmeticParams):
         return degrees_between(self.ra, self.dec, pos.ra, pos.dec)
 
 
+class NullSky(BaseParams, ducks.Sky):
+    pass
+    
 class ConstantSky(ScalarParam):
     '''
     In counts
