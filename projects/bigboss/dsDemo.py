@@ -13,7 +13,7 @@ from astrometry.util.file import *
 from tractor import *
 from tractor import sdss as st
 from tractor import cfht as cf
-from tractor import sdss_galaxy as stgal
+from tractor import galaxy as stgal
 from astrometry.sdss import *
 
 class ScaledWCS(object):

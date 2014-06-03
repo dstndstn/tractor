@@ -3,7 +3,7 @@ if __name__ == '__main__':
     matplotlib.use('Agg')
     import pylab as plt
     from astrometry.util.plotutils import *
-    from tractor.sdss_galaxy import *
+    from tractor.galaxy import *
 
 import numpy as np
 
@@ -112,7 +112,7 @@ class EllipseESoft(EllipseE):
     '''
     This is an alternate implementation of the ellipse describing a
     galaxy shape, and can be used as a drop-in replacement of the
-    "GalaxyShape" class used in the tractor.sdss_galaxy ExpGalaxy and
+    "GalaxyShape" class used in the tractor.galaxy ExpGalaxy and
     DevGalaxy classes.
 
     The parameters are a tweak on the usual ellipticity parameters

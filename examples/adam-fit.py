@@ -14,7 +14,7 @@ from astrometry.util.file import *
 
 from tractor import *
 from tractor import sdss as st
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 # Assumes one image.
 def save(idstr, tractor, zr):

@@ -366,27 +366,16 @@ class Tractor(MultiParams):
 
     # For use from emcee
     def __call__(self, X):
-        # print self.getName()+'.__call__: I am pid', os.getpid()
         self.setParams(X)
-        lnp = self.getLogProb()
-        # print self.cache
-        # from .sdss_galaxy import get_galaxy_cache
-        # print 'Galaxy cache:', get_galaxy_cache()
-        # print 'Items:'
-        # self.cache.printItems()
-        # print
-        return lnp
+        return self.getLogProb()
 
     # For pickling
     def __getstate__(self):
-        #print 'pickling tractor in pid', os.getpid()
         S = (self.getImages(), self.getCatalog(), self.liquid)
         if self.pickleCache:
             S = S + (self.cache,)
-        #print 'Tractor.__getstate__:', S
         return S
     def __setstate__(self, state):
-        #print 'unpickling tractor in pid', os.getpid()
         args = {}
         if len(state) == 3:
             (images, catalog, liquid) = state

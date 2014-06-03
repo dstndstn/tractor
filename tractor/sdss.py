@@ -20,10 +20,10 @@ from datetime import datetime
 import pylab as plt
 import numpy as np
 
-from engine import *
-from basics import *
-from imageutils import *
-from sdss_galaxy import *
+from .engine import *
+from .basics import *
+from .imageutils import *
+from .galaxy import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
 from astrometry.util.fits import *

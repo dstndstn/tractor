@@ -1,16 +1,10 @@
 import numpy as np
-import numpy.linalg
 
-#import scipy.interpolate
-#from scipy.ndimage.interpolation import affine_transform
-
-from astrometry.util.fits import *
-
-from tractor.basics import *
-from tractor.utils import *
-from tractor.emfit import em_fit_2d
-from tractor.fitpsf import em_init_params
-import mixture_profiles as mp
+from .basics import *
+from .utils import *
+from .emfit import em_fit_2d
+from .fitpsf import em_init_params
+from . import mixture_profiles as mp
 
 class VaryingGaussianPSF(MultiParams):
     '''
@@ -159,10 +153,12 @@ class PsfEx(VaryingGaussianPSF):
         scale (boolean): resample the eigen-PSFs (True), or scale the
               fit parameters (False)?  
         '''
+        from astrometry.util.fits import fits_table
+
         T = fits_table(fn, ext=ext)
         ims = T.psf_mask[0]
         print 'Got', ims.shape, 'PSF images'
-        hdr = pyfits.open(fn)[ext].header
+        hdr = T.get_header()
         # PSF distortion bases are polynomials of x,y
         assert(hdr['POLNAME1'] == 'X_IMAGE')
         assert(hdr['POLNAME2'] == 'Y_IMAGE')

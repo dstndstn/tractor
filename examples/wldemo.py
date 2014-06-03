@@ -4,7 +4,7 @@ import pylab as plt
 import numpy as np
 
 from tractor import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 class WeakLensWcs(ParamsWrapper):
 	def __init__(self, wcs):

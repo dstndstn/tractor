@@ -1,14 +1,14 @@
 from engine import *
 from ducks import *
 from basics import *
-from nasasloan import *
+#from nasasloan import *
 from psfex import *
 from ellipses import *
 from imageutils import *
 
 __all__ = [
     # modules
-    'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
+    'sdss', 'fitpsf', 'emfit', 'galaxy',
     # ducks
     'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
     'PSF', 

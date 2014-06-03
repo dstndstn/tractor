@@ -2,7 +2,7 @@ import numpy as np
 
 from astrometry.util.util import Tan
 
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.engine import *
 from tractor.basics import *
 

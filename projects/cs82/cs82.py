@@ -25,7 +25,7 @@ sys.path.append(os.getcwd())
 
 from tractor import *
 from tractor.sdss import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 

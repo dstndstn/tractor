@@ -15,16 +15,9 @@ import fitsio
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 
-# from astrometry.util.miscutils import *
-# from astrometry.libkd.spherematch import match_radec
-# from astrometry.util.util import Sip, anwcs, Tan
-
 import tractor
 from tractor import *
 from tractor.sdss import *
-# from tractor.sdss_galaxy import *
-# from tractor.emfit import em_fit_2d
-# from tractor.fitpsf import em_init_params
 
 def galex_read_image(basefn, radecroi=None, nanomaggies=True,
 					 band='NUV'):

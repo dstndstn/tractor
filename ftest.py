@@ -7,7 +7,7 @@ import sys
 from astrometry.util.plotutils import *
 
 from tractor import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 def video():
     ps = PlotSequence('ftest', format='%04i')

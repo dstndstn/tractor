@@ -86,7 +86,7 @@ from astrometry.util.stages import *
 from tractor.utils import *
 from tractor import sdss as st
 from tractor import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.splinesky import SplineSky
 from tractor.sdss import SdssPointSource, SdssBrightPSF
 

@@ -1,5 +1,5 @@
 from tractor import MultiParams, PointSource, ParamList, RaDecPos, Mags
-from tractor.sdss_galaxy import DevGalaxy, GalaxyShape
+from tractor.galaxy import DevGalaxy, GalaxyShape
 
 class LensedQuasar(MultiParams):
 	@staticmethod

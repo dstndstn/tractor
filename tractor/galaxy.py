@@ -51,8 +51,10 @@ class GalaxyShape(ParamList):
         phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
         '''
         return dict(re=0, ab=1, phi=2)
+
     def __repr__(self):
         return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
+
     def __str__(self):
         return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
 
@@ -140,6 +142,9 @@ class GalaxyShape(ParamList):
         return T
 
 class Galaxy(MultiParams):
+    '''
+    Generic Galaxy profile with position, brightness, and shape.
+    '''
     def __init__(self, *args):
         super(Galaxy, self).__init__(*args)
         self.name = self.getName()
@@ -309,16 +314,13 @@ class CompositeGalaxy(MultiParams):
         return (self.name + ' at ' + str(self.pos)
                 + ' with Exp ' + str(self.brightnessExp) + ' ' + str(self.shapeExp)
                 + ' and deV ' + str(self.brightnessDev) + ' ' + str(self.shapeDev))
+
     def __repr__(self):
         return (self.name + '(pos=' + repr(self.pos) +
                 ', brightnessExp=' + repr(self.brightnessExp) +
                 ', shapeExp=' + repr(self.shapeExp) + 
                 ', brightnessDev=' + repr(self.brightnessDev) +
                 ', shapeDev=' + repr(self.shapeDev))
-    def copy(self):
-        return CompositeGalaxy(self.pos.copy(), self.brightnessExp.copy(),
-                               self.shapeExp.copy(), self.brightnessDev.copy(),
-                               self.shapeDev.copy())
 
     def getBrightness(self):
         ''' This makes some assumptions about the ``Brightness`` / ``PhotoCal`` and

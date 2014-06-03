@@ -24,7 +24,7 @@ from astrometry.sdss.fields import *
 import tractor
 from tractor import *
 from tractor.sdss import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
@@ -391,7 +391,7 @@ def get_psf_model(band, pixpsf=False, xy=None, positive=True, cache={}):
 
 
 def main():
-    # from tractor.sdss_galaxy import *
+    # from tractor.galaxy import *
     # import sys
     # 
     # ell = GalaxyShape(10., 0.5, 45)

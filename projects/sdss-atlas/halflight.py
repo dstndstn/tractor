@@ -14,7 +14,7 @@ from astrometry.util.file import *
 from tractor import *
 from tractor import sdss as st
 from tractor.saveImg import *
-from tractor import sdss_galaxy as sg
+from tractor import galaxy as sg
 from tractor import basics as ba
 from tractor import engine as en
 from astrometry.util.util import Tan

@@ -14,8 +14,6 @@ from astrometry.util.plotutils import *
 import tractor
 import fitsio
 from tractor import *
-from tractor.sdss import *
-from tractor.sdss_galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 

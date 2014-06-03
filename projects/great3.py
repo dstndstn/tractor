@@ -18,7 +18,7 @@ from astrometry.util.ttime import *
 Time.add_measurement(MemMeas)
 
 from tractor import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.sersic import *
 from tractor.emfit import *
 
