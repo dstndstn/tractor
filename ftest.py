@@ -9,7 +9,7 @@ from astrometry.util.plotutils import *
 from tractor import *
 from tractor.sdss_galaxy import *
 
-ps = PlotSequence('ftest')
+ps = PlotSequence('ftest', format='%04i')
 
 psfsig = 2.
 #W,H = 51,51
@@ -27,15 +27,16 @@ print 'P shape', P.shape
 
 ima = dict(interpolation='nearest', origin='lower')
 
-plt.clf()
-plt.subplot(1,3,1)
-plt.imshow(psfim, **ima)
-plt.subplot(1,3,2)
-plt.imshow(P.real, **ima)
-plt.subplot(1,3,3)
-plt.imshow(P.imag, **ima)
-plt.suptitle('PSF')
-ps.savefig()
+if False:
+    plt.clf()
+    plt.subplot(1,3,1)
+    plt.imshow(psfim, **ima)
+    plt.subplot(1,3,2)
+    plt.imshow(P.real, **ima)
+    plt.subplot(1,3,3)
+    plt.imshow(P.imag, **ima)
+    plt.suptitle('PSF')
+    ps.savefig()
 
 # padpsf = np.zeros((H*3, W*3))
 # padpsf[H:2*H, W:2*W] = psfim
@@ -66,15 +67,16 @@ print 'mod', mod.shape
 G = np.fft.rfft2(mod)
 print 'G', G.shape
 
-plt.clf()
-plt.subplot(1,3,1)
-plt.imshow(mod, **ima)
-plt.subplot(1,3,2)
-plt.imshow(G.real, **ima)
-plt.subplot(1,3,3)
-plt.imshow(G.imag, **ima)
-plt.suptitle('Galaxy (conv narrow PSF)')
-ps.savefig()
+if False:
+    plt.clf()
+    plt.subplot(1,3,1)
+    plt.imshow(mod, **ima)
+    plt.subplot(1,3,2)
+    plt.imshow(G.real, **ima)
+    plt.subplot(1,3,3)
+    plt.imshow(G.imag, **ima)
+    plt.suptitle('Galaxy (conv narrow PSF)')
+    ps.savefig()
 
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
             wcs=NullWCS(), psf=NCircularGaussianPSF([psfsig], [1.]),
@@ -84,6 +86,115 @@ mod2 = tractor.getModelImage(0)
 G2 = np.fft.rfft2(mod2)
 print 'mod2', mod2.shape
 print 'G2', G2.shape
+
+
+print
+print
+
+galparams = gal.getParams()
+
+# swirly residual pattern
+if True:
+
+    P = np.fft.rfft2(psfim)
+    print 'P:', P.shape
+    w = np.fft.rfftfreq(W)
+    v = np.fft.fftfreq(H)
+
+    plt.figure(figsize=(5.1,4.05))
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1, hspace=0, wspace=0)
+    
+    #for phi in np.linspace(30., 30.00001, 100):
+    #for re in np.linspace(5., 5.001, 100):
+    #    gal.shape.re = re
+    for phi in np.linspace(30., 30.0001, 1000):
+        gal.shape.phi = phi
+    
+        mod1 = tractor.getModelImage(0)
+        F1 = np.fft.rfft2(mod1)
+
+        mx,my = gx - cx, gy - cy
+        gmog = gal._getAffineProfile(tim, mx, my)
+        Fsum = gmog.getFourierTransform(w, v)
+        F2 = Fsum * P
+        mod2 = np.fft.irfft2(F2, s=mod1.shape)
+        
+        # print 'mod1', mod1.shape
+        # print 'F1', F1.shape
+        # print 'F2', F2.shape
+        # print 'F1 sum', np.hypot(F1.real, F1.imag).sum()
+        # print 'F2 sum', np.hypot(F2.real, F2.imag).sum()
+        # print 'Mod1 sum', mod1.sum()
+        # print 'Mod2 sum', mod2.sum()
+
+        # plt.clf()
+        # plt.subplot(2,2,1)
+        # plt.imshow(Fsum.real, **ima)
+        # plt.subplot(2,2,2)
+        # plt.imshow(Fsum.imag, **ima)
+        # plt.subplot(2,2,3)
+        # plt.imshow(P.real, **ima)
+        # plt.subplot(2,2,4)
+        # plt.imshow(P.imag, **ima)
+        # ps.savefig()
+
+        plt.clf()
+        mx = np.hypot(F1.real, F1.imag).max()
+        # plt.subplot(1,2,1)
+        # #plt.imshow(np.log10(np.abs(F1.real - F2.real) / mx), vmin=-12, vmax=0, **ima)
+        # plt.imshow(np.fliplr(np.log10(np.abs(F1.real - F2.real) / mx)),
+        #            vmin=vmin, vmax=vmax, **ima)
+        # plt.xticks([]); plt.yticks([])
+        # plt.subplot(1,2,2)
+        # plt.imshow(np.log10(np.abs(F1.imag - F2.imag) / mx),
+        #            vmin=vmin, vmax=vmax, **ima)
+
+        lim = np.fliplr(np.log10(np.abs(F1.real - F2.real) / mx))
+        rim = np.log10(np.abs(F1.imag - F2.imag) / mx)
+        M = np.hstack((lim, rim))
+        print 'M', M.shape
+        #vmin,vmax = -12, -2
+        #plt.imshow(M, vmin=vmin, vmax=vmax, **ima)
+
+        vmin,vmax = 7, 11
+        plt.imshow(-M, vmin=vmin, vmax=vmax, cmap='hot', **ima)
+
+        plt.xticks([]); plt.yticks([])
+        ps.savefig()
+
+        # avconv -r 20 -i ftest-%04d.png -b:v 2000k /tmp/err.mp4
+        
+        if False:
+            plt.clf()
+            plt.subplot(2,3,1)
+            plt.imshow(np.log10(np.abs(F1.real) / mx), vmin=-6, vmax=0, **ima)
+            plt.subplot(2,3,4)
+            plt.imshow(np.log10(np.abs(F1.imag) / mx), vmin=-6, vmax=0, **ima)
+            plt.subplot(2,3,2)
+            plt.imshow(np.log10(np.abs(F2.real) / mx), vmin=-6, vmax=0, **ima)
+            plt.subplot(2,3,5)
+            plt.imshow(np.log10(np.abs(F2.imag) / mx), vmin=-6, vmax=0, **ima)
+            plt.subplot(2,3,3)
+            plt.imshow(np.log10(np.abs(F1.real - F2.real) / mx), vmin=-12, vmax=0, **ima)
+            plt.subplot(2,3,6)
+            plt.imshow(np.log10(np.abs(F1.imag - F2.imag) / mx), vmin=-12, vmax=0, **ima)
+            ps.savefig()
+            # 
+            plt.clf()
+            plt.subplot(2,2,1)
+            mx = np.max(mod1.max(), mod2.max())
+            plt.imshow(mod1 / mx, **ima)
+            plt.subplot(2,2,2)
+            plt.imshow(mod2 / mx, **ima)
+            plt.subplot(2,2,3)
+            plt.imshow((mod1-mod2) / mx, **ima)
+            plt.suptitle('models')
+            ps.savefig()
+
+    
+gal.setParams(galparams)
+
+sys.exit(0)
 
 print
 print

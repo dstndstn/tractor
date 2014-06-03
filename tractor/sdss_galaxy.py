@@ -487,7 +487,6 @@ class ProfileGalaxy(object):
     def _realGetUnitFluxModelPatch(self, img, px, py, minval):
         # now choose the patch size
         halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-        print 'Halfsize:', halfsize
         
         # find overlapping pixels to render
         (outx, inx) = get_overlapping_region(
@@ -526,27 +525,12 @@ class ProfileGalaxy(object):
             muy = dy - iy0
 
             amix = self._getAffineProfile(img, mux, muy)
-            
-            Fsum = None
-            for k in range(amix.K):
-                V = amix.var[k,:,:]
-                iv = np.linalg.inv(V)
-                mu = amix.mean[k,:]
-
-                amp = amix.amp[k]
-                a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
-                det = a*d - b**2
-                F = (np.exp(-np.pi**2/det *
-                            (a * v[:,np.newaxis]**2 +
-                             d * w[np.newaxis,:]**2 -
-                             2*b*v[:,np.newaxis]*w[np.newaxis,:]))
-                             * np.exp(-2.*np.pi* 1j *(mu[0]*w[np.newaxis,:] + 
-                                                      mu[1]*v[:,np.newaxis])))
-                if Fsum is None:
-                    Fsum = amp * F
-                else:
-                    Fsum += amp * F
-
+            Fsum = amix.getFourierTransform(w, v)
+            ## HACK
+            # if hasattr(self, 'getFFTModel'):
+            #     #return Patch(0, 0, Fsum * P)
+            #     return Fsum, P
+                
             # FIXME -- could adjust the ifft shape...
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
             # Clip down to suggested "halfsize"

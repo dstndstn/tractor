@@ -139,6 +139,27 @@ class MixtureOfGaussians():
             newk = nextnewk
         return MixtureOfGaussians(newamp, newmean, newvar)
 
+    def getFourierTransform(self, w, v):
+        Fsum = None
+        for k in range(self.K):
+            V = self.var[k,:,:]
+            iv = np.linalg.inv(V)
+            mu = self.mean[k,:]
+            amp = self.amp[k]
+            a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
+            det = a*d - b**2
+            F = (np.exp(-np.pi**2/det *
+                        (a * v[:,np.newaxis]**2 +
+                         d * w[np.newaxis,:]**2 -
+                         2*b*v[:,np.newaxis]*w[np.newaxis,:]))
+                         * np.exp(-2.*np.pi* 1j *(mu[0]*w[np.newaxis,:] + 
+                                                  mu[1]*v[:,np.newaxis])))
+            if Fsum is None:
+                Fsum = amp * F
+            else:
+                Fsum += amp * F
+        return Fsum        
+    
     # ideally pos is a numpy array shape (N, self.D)
     # returns a numpy array shape (N)
     # may fail for self.D == 1
