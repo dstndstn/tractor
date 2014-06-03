@@ -60,12 +60,20 @@ ps = PlotSequence('ftest', format='%04i')
 
 psfsig = 2.
 #W,H = 51,51
-#W,H = 101,101
 W,H = 101,81
 cx,cy = W/2, H/2
 
-psfim = np.exp(((np.arange(W)-cx)[np.newaxis,:]**2 +
-                (np.arange(H)-cy)[:,np.newaxis]**2)/(-2.*psfsig**2))
+
+#psfmodel = NCircularGaussianPSF([psfsig], [1.])
+
+#V = np.array([ [[ 2., -0.3 ], [-0.3, 4.]] ])
+V = np.array([ [[ 2., -1. ], [-1., 4.]] ])
+psfmodel = GaussianMixturePSF(np.array([1.]), np.zeros((1,2)), V)
+
+psfpatch = psfmodel.getPointSourcePatch(cx, cy, radius=max(W/2, H/2))
+psfim = np.zeros((H,W))
+psfpatch.addTo(psfim)
+
 psfim /= psfim.sum()
 print 'psfim shape', psfim.shape
 
@@ -74,13 +82,20 @@ print 'P shape', P.shape
 
 ima = dict(interpolation='nearest', origin='lower')
 
-if False:
+# psfim2 = np.exp(((np.arange(W)-cx)[np.newaxis,:]**2 +
+#                  (np.arange(H)-cy)[:,np.newaxis]**2)/(-2.*psfsig**2))
+# psfim2 /= psfim2.sum()
+
+if True:
     plt.clf()
-    plt.subplot(1,3,1)
+    plt.subplot(2,2,1)
     plt.imshow(psfim, **ima)
-    plt.subplot(1,3,2)
+    #plt.subplot(2,2,2)
+    #plt.imshow(psfim2, **ima)
+    #plt.imshow(psfim - psfim2, **ima)
+    plt.subplot(2,2,3)
     plt.imshow(P.real, **ima)
-    plt.subplot(1,3,3)
+    plt.subplot(2,2,4)
     plt.imshow(P.imag, **ima)
     plt.suptitle('PSF')
     ps.savefig()
@@ -125,7 +140,7 @@ if False:
     ps.savefig()
 
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
-            wcs=NullWCS(), psf=NCircularGaussianPSF([psfsig], [1.]),
+            wcs=NullWCS(), psf=psfmodel,
             photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
 tractor = Tractor([tim], [gal])
 mod2 = tractor.getModelImage(0)
@@ -275,20 +290,32 @@ ps.savefig()
 u2 = gal.getUnitFluxModelPatch(tim)
 
 plt.clf()
-plt.subplot(1,3,1)
+plt.subplot(2,3,1)
 x0,y0,im = u1.x0, u1.y0, u1.patch
 ph,pw = im.shape
 print 'u1:', im.sum()
 plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
 plt.title('Gauss')
 ax = plt.axis()
-plt.subplot(1,3,2)
+mx = im.max()
+
+plt.subplot(2,3,4)
+plt.imshow(np.log10(np.abs(im/mx)), vmin=-10, vmax=0, extent=[x0,x0+pw, y0,y0+ph], **ima)
+plt.title('Gauss')
+plt.axis(ax)
+
+plt.subplot(2,3,2)
 x0,y0,im = u2.x0, u2.y0, u2.patch
 ph,pw = im.shape
 print 'u2:', im.sum()
 plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
 plt.axis(ax)
 plt.title('Fourier')
+
+plt.subplot(2,3,5)
+plt.imshow(np.log10(np.abs(im/mx)), vmin=-10, vmax=0, extent=[x0,x0+pw, y0,y0+ph], **ima)
+plt.title('Fourier')
+plt.axis(ax)
 
 x0 = min(u1.x0, u2.x0)
 y0 = min(u1.x0, u2.x0)
@@ -298,10 +325,10 @@ diff = np.zeros((y1-y0, x1-x0))
 u1.addTo(diff)
 u2.addTo(diff, scale=-1)
 mx = np.abs(diff).max()
-plt.subplot(1,3,3)
+plt.subplot(2,3,3)
 plt.imshow(diff, extent=[x0,x1,y0,y1], vmin=-mx, vmax=mx, **ima)
 plt.axis(ax)
-plt.title('diff')
+plt.title('diff: %.3g' % mx)
 plt.suptitle('galaxy unit flux models')
 ps.savefig()
 

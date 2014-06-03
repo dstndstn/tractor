@@ -1462,10 +1462,13 @@ class NCircularGaussianPSF(MultiParams):
         return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., radius=None, **kwargs):
         ix = int(round(px))
         iy = int(round(py))
-        rad = int(ceil(self.getRadius()))
+        if radius is None:
+            rad = int(ceil(self.getRadius()))
+        else:
+            rad = radius
         x0 = ix - rad
         x1 = ix + rad + 1
         y0 = iy - rad
