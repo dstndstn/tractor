@@ -359,7 +359,29 @@ class NamedParams(object):
         i = self.getNamedParamIndex(paramname)
         assert(i is not None)
         return not self.liquid[i]
+    def isParamThawed(self, paramname):
+        i = self.getNamedParamIndex(paramname)
+        assert(i is not None)
+        return self.liquid[i]
 
+    def getLiquidIndex(self, paramname):
+        '''
+        Returns the index, among the thawed parameters, of the given
+        named parameter.  Returns -1 if the parameter is frozen.
+        Raises KeyError if the parameter is not found.
+
+        For example, if names 'a','c', and 'e' are thawed,
+
+        getLiquidIndex('c') returns 1
+        getLiquidIndex('b') returns -1
+        '''
+        i = self.getNamedParamIndex(paramname)
+        if i is None:
+            raise KeyError('No such parameter "%s"', paramname)
+        if not self.liquid[i]:
+            return -1
+        return sum(self.liquid[:i])
+        
     def _enumerateLiquidArray(self, array):
         for i,v in enumerate(self.liquid):
             if v:
