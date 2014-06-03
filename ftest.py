@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
+import sys
 
 from astrometry.util.plotutils import *
 
@@ -35,17 +36,17 @@ plt.subplot(1,3,3)
 plt.imshow(P.imag, **ima)
 ps.savefig()
 
-padpsf = np.zeros((H*3, W*3))
-padpsf[H:2*H, W:2*W] = psfim
-P2 = np.fft.rfft2(padpsf)
-plt.clf()
-plt.subplot(1,3,1)
-plt.imshow(padpsf, **ima)
-plt.subplot(1,3,2)
-plt.imshow(P2.real, **ima)
-plt.subplot(1,3,3)
-plt.imshow(P2.imag, **ima)
-ps.savefig()
+# padpsf = np.zeros((H*3, W*3))
+# padpsf[H:2*H, W:2*W] = psfim
+# P2 = np.fft.rfft2(padpsf)
+# plt.clf()
+# plt.subplot(1,3,1)
+# plt.imshow(padpsf, **ima)
+# plt.subplot(1,3,2)
+# plt.imshow(P2.real, **ima)
+# plt.subplot(1,3,3)
+# plt.imshow(P2.imag, **ima)
+# ps.savefig()
 
 gx,gy = W/2 + 0.3, H/2 + 0.5
 #gx,gy = W/2 + 0.3, H/2 + 0.
@@ -82,6 +83,177 @@ G2 = np.fft.rfft2(mod2)
 
 print 'mod2', mod2.shape
 print 'G2', G2.shape
+
+
+
+
+print
+print
+##
+
+psf1 = tim.getPsf()
+u1 = gal.getUnitFluxModelPatch(tim)
+
+psf2 = PixelizedPSF(psfim)
+tim.psf = psf2
+
+halfsize = 80.
+P,px0,py0,pshape = psf2.getFourierTransform(halfsize)
+
+print 'PSF x0,y0', px0, py0
+
+pad = np.fft.irfft2(P, s=pshape)
+plt.clf()
+plt.subplot(1,3,1)
+plt.imshow(P.real, **ima)
+plt.subplot(1,3,2)
+plt.imshow(P.imag, **ima)
+plt.subplot(1,3,3)
+plt.imshow(pad, **ima)
+plt.suptitle('padded PSF')
+ps.savefig()
+
+print 'PSF shape', pshape
+pH,pW = pshape
+print 'F(PSF) shape:', P.shape
+w = np.fft.rfftfreq(pW)
+v = np.fft.fftfreq(pH)
+#amix = gal._getAffineProfile(tim, gx, gy)
+
+dx = gx - px0
+dy = gy - py0
+ix0 = int(np.round(dx))
+iy0 = int(np.round(dy))
+mux = dx - ix0
+muy = dy - iy0
+print 'ix0,iy0', ix0,iy0
+print 'mux,muy', mux,muy
+
+amix = gal._getAffineProfile(tim, mux, muy)
+#x0,y0 = 0,0
+print 'w', len(w), 'v', len(v)
+Fsum = None
+for k in range(amix.K):
+    V = amix.var[k,:,:]
+    iv = np.linalg.inv(V)
+    mu = amix.mean[k,:]
+
+    ### FIXME
+    #mux = -(mu[0] - px0)
+    #muy = -(mu[1] - py0)
+    # mux = (gx - px0)
+    # muy = (gy - py0)
+    mux = -mu[0]
+    muy = -mu[1]
+    
+    amp = amix.amp[k]
+    a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
+    det = a*d - b**2
+    F = (np.exp(-np.pi**2/det *
+                (a * v[:,np.newaxis]**2 +
+                 d * w[np.newaxis,:]**2 -
+                 2*b*v[:,np.newaxis]*w[np.newaxis,:]))
+                 * np.exp(2.*np.pi* 1j * (mux*w[np.newaxis,:] + 
+                                          muy*v[:,np.newaxis])))
+    if Fsum is None:
+        Fsum = amp * F
+    else:
+        Fsum += amp * F
+
+y1 = 100
+x1 = 120
+
+print 'Fsum shape', Fsum.shape
+G = np.fft.irfft2(Fsum, s=pshape)
+gh,gw = G.shape
+
+plt.clf()
+plt.subplot(1,3,1)
+plt.imshow(Fsum.real, **ima)
+plt.subplot(1,3,2)
+plt.imshow(Fsum.imag, **ima)
+plt.suptitle('Galaxy')
+plt.subplot(1,3,3)
+plt.imshow(G, **ima)#extent=[ix0,ix0+gw, iy0,iy0+gh], **ima)
+ps.savefig()
+
+FC = Fsum * P
+
+C = np.fft.irfft2(FC, s=pshape)
+ch,cw = C.shape
+print 'C shape', C.shape
+
+plt.clf()
+plt.subplot(1,3,1)
+plt.imshow(FC.real, **ima)
+plt.subplot(1,3,2)
+plt.imshow(FC.imag, **ima)
+plt.subplot(1,3,3)
+plt.imshow(C, extent=[ix0,ix0+cw, iy0,iy0+ch], **ima)
+plt.suptitle('Galaxy conv PSF')
+ps.savefig()
+
+plt.clf()
+plt.imshow(C, extent=[ix0,ix0+cw, iy0,iy0+ch], **ima)
+plt.suptitle('Galaxy conv PSF')
+ps.savefig()
+
+if ix0 < 0:
+    C = C[:,-ix0:]
+    ix0 = 0
+if iy0 < 0:
+    C = C[-iy0:,:]
+    iy0 = 0
+ch,cw = C.shape
+
+plt.clf()
+plt.imshow(C, extent=[ix0,ix0+cw, iy0,iy0+ch], **ima)
+plt.suptitle('Galaxy conv PSF')
+ps.savefig()
+
+ihalfsize = int(np.round(halfsize))
+if cw > (gx + ihalfsize):
+    C = C[:,:-(cw - (gx+ihalfsize))]
+if ch > (gy + ihalfsize):
+    C = C[:-(ch - (gy+ihalfsize)),:]
+ch,cw = C.shape
+
+plt.clf()
+plt.imshow(C, extent=[ix0,ix0+cw, iy0,iy0+ch], **ima)
+plt.suptitle('Galaxy conv PSF')
+ps.savefig()
+
+mh,mw = mod2.shape
+C = C[:mh,:mw]
+plt.clf()
+plt.imshow(C-mod2, **ima)
+plt.suptitle('Galaxy conv PSF - model')
+ps.savefig()
+
+
+sys.exit(0)
+
+
+u2 = gal.getUnitFluxModelPatch(tim)
+
+plt.clf()
+plt.subplot(1,2,1)
+x0,y0,im = u1.x0, u1.y0, u1.patch
+ph,pw = im.shape
+plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
+plt.subplot(1,2,2)
+x0,y0,im = u2.x0, u2.y0, u2.patch
+ph,pw = im.shape
+plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
+ps.savefig()
+
+
+tim.psf = psf1
+
+sys.exit(0)
+
+
+
 
 #mx,my = 0.,0.
 mx,my = gx,gy
@@ -246,23 +418,4 @@ plt.imshow(R.imag, vmin=-mx, vmax=mx, **ima)
 ps.savefig()
 
 
-##
-
-psf1 = tim.getPsf()
-u1 = gal.getUnitFluxModelPatch(tim)
-
-psf2 = PixelizedPSF(psfim)
-tim.psf = psf2
-u2 = gal.getUnitFluxModelPatch(tim)
-
-plt.clf()
-plt.subplot(1,2,1)
-x0,y0,im = u1.x0, u1.y0, u1.patch
-ph,pw = im.shape
-plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
-plt.subplot(1,2,2)
-x0,y0,im = u2.x0, u2.y0, u2.patch
-ph,pw = im.shape
-plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
-ps.savefig()
 
