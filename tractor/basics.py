@@ -35,6 +35,8 @@ class GaussianPriors(object):
         chisq = 0.
         for name,mu,sigma in self.terms:
             i = self.param.getNamedParamIndex(name)
+            if i is None:
+                raise KeyError('Parameter not found: "%s"' % name)
             chisq += (p[i] - mu)**2 / sigma**2
         return -0.5 * chisq
 
