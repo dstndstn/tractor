@@ -526,10 +526,6 @@ class ProfileGalaxy(object):
 
             amix = self._getAffineProfile(img, mux, muy)
             Fsum = amix.getFourierTransform(w, v)
-            ## HACK
-            # if hasattr(self, 'getFFTModel'):
-            #     #return Patch(0, 0, Fsum * P)
-            #     return Fsum, P
                 
             # FIXME -- could adjust the ifft shape...
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
