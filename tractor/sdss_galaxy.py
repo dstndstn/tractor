@@ -3,23 +3,21 @@ This file is part of the Tractor project.
 Copyright 2011, 2012, 2013 Dustin Lang and David W. Hogg.
 Licensed under the GPLv2; see the file COPYING for details.
 
-`sdss_galaxy.py`
+`galaxy.py`
 ================
 
-SDSS exponential and deVaucouleurs galaxy model classes.
+Exponential and deVaucouleurs galaxy model classes.
 
-These models are not specific to SDSS *images*, they just use a
-slightly modified definition of the exp and dev profiles from SDSS
-Photo.
+These use the slightly modified versions of the exp and dev profiles
+from the SDSS /Photo/ software; we use multi-Gaussian approximations
+of these.
 """
 import numpy as np
 
-import mixture_profiles as mp
-from engine import *
-from utils import *
-
-from cache import *
-from astrometry.util.plotutils import PlotSequence
+from . import mixture_profiles as mp
+from .engine import *
+from .utils import *
+from .cache import *
 
 _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
@@ -35,23 +33,28 @@ def disable_galaxy_cache():
     _galcache = NullCache()
 
 class GalaxyShape(ParamList):
+    '''
+    A naive representation of an ellipse (describing a galaxy shape),
+    using effective radius (in arcsec), axis ratio, and position angle.
+
+    For better ellipse parameterizations, see ellipses.py
+    '''
     @staticmethod
     def getName():
         return "Galaxy Shape"
+
     @staticmethod
     def getNamedParams():
-        # re: arcsec
-        # ab: axis ratio, dimensionless, in [0,1]
-        # phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
+        '''
+        re: arcsec
+        ab: axis ratio, dimensionless, in [0,1]
+        phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
+        '''
         return dict(re=0, ab=1, phi=2)
     def __repr__(self):
         return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
     def __str__(self):
         return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
-    #def copy(self):
-    #   return GalaxyShape(*self.vals)
-    #def getParamNames(self):
-    #   return ['re', 'ab', 'phi']
 
     def getStepSizes(self, *args, **kwargs):
         abstep = 0.01
@@ -111,7 +114,8 @@ class GalaxyShape(ParamList):
         return oldval
 
     def getRaDecBasis(self):
-        ''' Returns a transformation matrix that takes vectors in r_e
+        '''
+        Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
         '''
         # convert re, ab, phi into a transformation matrix
@@ -134,26 +138,6 @@ class GalaxyShape(ParamList):
         # T takes pixels to unit vectors.
         T = np.dot(np.linalg.inv(G), cd)
         return T
-
-    def mayOverlapCircle(self, dra, ddec, radius, nre):
-        # is it outside the bounding circle?
-        re_deg = max(1./30, self.re) / 3600. * nre
-        dd = np.hypot(dra,ddec)
-        if dd > (re_deg + radius):
-            #print 'outside bounding circle'
-            return False
-        return True
-    # is it inside the bounding circle of the squished circle?
-    # if dd < (re_deg * self.ab + radius):
-    #   #print 'inside inner bounding circle'
-    #   return True
-    #   G = self.getRaDecBasis()
-    #   angles = np.linspace(0., 2.*np.pi, 36, endpoint=False)
-    #   vv = np.vstack([np.cos(angles), np.sin(angles)])
-    #   print vv.shape
-    #   dradec = np.dot(vv.T, G)
-    #   print dradec.shape
-    #   return np.min((dradec - np.array([dra,ddec]))**2 <= radius**2)
 
 class Galaxy(MultiParams):
     def __init__(self, *args):
@@ -310,13 +294,6 @@ class CompositeGalaxy(MultiParams):
     def __init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev):
         MultiParams.__init__(self, pos, brightnessExp, shapeExp, brightnessDev, shapeDev)
         self.name = self.getName()
-
-    def overlapsCircle(self, pos, radius):
-        cosdec = np.cos(np.deg2rad(pos.dec))
-        dr = (pos.ra - self.pos.ra)*cosdec
-        dd = pos.dec - self.pos.dec
-        return (self.shapeDev.mayOverlapCircle(dr, dd, radius, DevGalaxy.nre) or
-            self.shapeExp.mayOverlapCircle(dr, dd, radius, ExpGalaxy.nre))
 
     @staticmethod
     def getNamedParams():
@@ -545,11 +522,6 @@ class ProfileGalaxy(object):
                     
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):
-    def overlapsCircle(self, pos, radius):
-        cosdec = np.cos(np.deg2rad(pos.dec))
-        return self.shape.mayOverlapCircle((pos.ra - self.pos.ra)*cosdec,
-                           pos.dec - self.pos.dec,
-                           radius, self.nre)
 
     def getName(self):
         return 'HoggGalaxy'

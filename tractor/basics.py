@@ -839,9 +839,6 @@ class PointSource(MultiParams):
                 derivs.append(df)
         return derivs
 
-    def overlapsCircle(self, pos, radius):
-        return self.pos.distanceFrom(pos) <= radius
-
 class Parallax(ScalarParam, ArithmeticParams):
     ''' in arcesc '''
     stepsize = 1e-3
