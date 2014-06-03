@@ -61,10 +61,10 @@ class EllipseE(ParamList):
             ss.append(0.01 if self.e2 <= 0 else -0.01)
         return ss
 
-    def getLogPrior(self):
+    def isLegal(self):
         if (self.e1**2 + self.e2**2) >= 1. or self.re < 0:
-            return -np.inf
-        return 0.
+            return False
+        return True
 
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
@@ -152,9 +152,11 @@ class EllipseESoft(EllipseE):
     def softe(self):
         return np.hypot(self.e1, self.e2)
 
-    def getLogPrior(self):
-        return 0.
-
+    # Have to override this because all parameter values are legal, unlike
+    # the superclass.
+    def isLegal(self):
+        return True
+    
 if __name__ == '__main__':
     ps = PlotSequence('ell')
     

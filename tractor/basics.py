@@ -22,43 +22,6 @@ import numpy as np
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
-class GaussianPriors(object):
-    def __init__(self, param):
-        self.terms = []
-        self.param = param
-
-    def add(self, name, mu, sigma):
-        self.terms.append((name, mu, sigma))
-
-    def getLogPrior(self):
-        p = self.param.getAllParams()
-        chisq = 0.
-        for name,mu,sigma in self.terms:
-            i = self.param.getNamedParamIndex(name)
-            if i is None:
-                raise KeyError('Parameter not found: "%s"' % name)
-            chisq += (p[i] - mu)**2 / sigma**2
-        return -0.5 * chisq
-
-    def getDerivs(self):
-        rows = []
-        cols = []
-        vals = []
-        bs = []
-        row0 = 0
-        p = self.param.getParams()
-        for name,mu,sigma in self.terms:
-            i = self.param.getLiquidIndex(name)
-            # frozen:
-            if i == -1:
-                continue
-            cols.append(i)
-            vals.append(np.array([1. / sigma]))
-            rows.append(np.array([row0]))
-            bs.append(np.array([-(p[i] - mu) / sigma]))
-            row0 += 1
-        return rows, cols, vals, bs
-
 # ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
 class TractorWCSWrapper(object):
     def __init__(self, wcs, w, h, x0=0, y0=0):

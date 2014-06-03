@@ -34,6 +34,109 @@ def getClassName(obj):
     return obj.__class__.__name__
 
 
+class _GaussianPriors(object):
+    '''
+    A class to support Gaussian priors in ParamList objects.  This
+    class holds the actual list of terms in the prior and computes the
+    required logProb and derivatives.  The GaussianPriorsMixin class
+    below glues this to the Params interface.
+    '''
+    def __init__(self, param):
+        self.terms = []
+        self.param = param
+
+    def __str__(self):
+        s = ('GaussianPriors: [ ' +
+             ', '.join(['(%s ~ N(mu=%.3g, sig=%.3g)' %
+                        (nm,mu,sig) for nm,i,mu,sig in self.terms]) + ' ]')
+        return s
+        
+    def add(self, name, mu, sigma):
+        i = self.param.getNamedParamIndex(name)
+        if i is None:
+            raise KeyError('GaussianPriors.add: parameter not found: "%s"' % name)
+        self.terms.append((name, i, mu, sigma))
+
+    def getLogPrior(self):
+        p = self.param.getAllParams()
+        chisq = 0.
+        for name,i,mu,sigma in self.terms:
+            chisq += (p[i] - mu)**2 / sigma**2
+        return -0.5 * chisq
+
+    def getDerivs(self):
+        rows = []
+        cols = []
+        vals = []
+        bs = []
+        row0 = 0
+        p = self.param.getParams()
+        for name,j,mu,sigma in self.terms:
+            i = self.param.getLiquidIndexOfIndex(j)
+            # frozen:
+            if i == -1:
+                continue
+            cols.append(i)
+            vals.append(np.array([1. / sigma]))
+            rows.append(np.array([row0]))
+            bs.append(np.array([-(p[i] - mu) / sigma]))
+            row0 += 1
+        return rows, cols, vals, bs
+
+class GaussianPriorsMixin(object):
+    '''
+    A mix-in class for ParamList-like classes, to make it easy to support
+    Gaussian priors.
+    '''
+    def __init__(self, *args, **kwargs):
+        super(GaussianPriorsMixin, self).__init__(*args, **kwargs)
+        self.gpriors = _GaussianPriors(self)
+
+    def addGaussianPrior(self, name, mu, sigma):
+        self.gpriors.add(name, mu, sigma)
+
+    def getLogPriorDerivatives(self):
+        '''
+        Returns the log prior derivatives in a sparse matrix form as
+        required by the Tractor when optimizing.
+
+        You might want to override like this:
+
+        X = self.getGaussianLogPriorDerivatives()
+        Y = << other log prior derivatives >>
+        return [x+y for x,y in zip(X,Y)]
+        '''
+        return self.getGaussianLogPriorDerivatives()
+
+    def isLegal(self):
+        '''
+        Returns True if the current parameter values are legal; ie,
+        have > 0 prior.
+        '''
+        return True
+    
+    def getGaussianLogPriorDerivatives(self):
+        return self.gpriors.getDerivs()
+
+    def getLogPrior(self):
+        '''
+        Returns the log prior at the current parameter values.
+        
+        If you want to disallow entirely regions of parameter space,
+        override the isLegal() method; this method will then return
+        -np.inf .
+
+        If you need to do something more elaborate, you probably want
+        to add getGaussianLogPrior() to your fancy prior so that
+        Gaussian priors still work.
+        '''
+        if not self.isLegal():
+            return -np.inf
+        return self.getGaussianLogPrior()
+
+    def getGaussianLogPrior(self):
+        return self.gpriors.getLogPrior()
+
 class BaseParams(object):
     '''
     A basic implementation of the `Params` duck type.
@@ -164,7 +267,7 @@ def _isint(i):
 
 class NamedParams(object):
     '''
-    A mix-in class.
+    A mix-in class for Params subclassers.
 
     Allows names to be attached to parameters.
 
@@ -364,6 +467,16 @@ class NamedParams(object):
         assert(i is not None)
         return self.liquid[i]
 
+    def getLiquidIndexOfIndex(self, i):
+        '''
+        Return the index, among the thawed parameters, of the given
+        parameter index (in all parameters).  Returns -1 if the
+        parameter is frozen.
+        '''
+        if not self.liquid[i]:
+            return -1
+        return sum(self.liquid[:i])
+
     def getLiquidIndex(self, paramname):
         '''
         Returns the index, among the thawed parameters, of the given
@@ -421,7 +534,7 @@ class NamedParams(object):
                 yield (i, j)
                 i += 1
 
-class ParamList(BaseParams, NamedParams):
+class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     '''
     An implementation of Params that holds values in a list.
     '''
@@ -429,7 +542,6 @@ class ParamList(BaseParams, NamedParams):
         #print 'ParamList __init__()'
         # FIXME -- kwargs with named params?
         self.vals = list(args)
-        #print 'Creating ParamList', self.__class__, '->', self.vals
         super(ParamList,self).__init__()
 
     def copy(self):

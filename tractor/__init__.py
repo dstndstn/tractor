@@ -26,7 +26,7 @@ __all__ = [
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
     'ParamsWrapper',
-    'GaussianPriors',
+    #'GaussianPriors',
     # engine
     'Patch', 'Image', 'Images',
     'Catalog', 'Tractor',
