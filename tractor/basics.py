@@ -1057,8 +1057,6 @@ class PixelizedPSF(BaseParams):
         H,W = img.shape
         assert((H % 2) == 1)
         assert((W % 2) == 1)
-        # for Fourier stuff
-        #assert(W == H)
         self.Lorder = Lorder
         
     def __str__(self):
@@ -1119,13 +1117,8 @@ class PixelizedPSF(BaseParams):
             subimg = subimg[:, d:-d]
         sh,sw = subimg.shape
         pad[y0:y0+sh, x0:x0+sw] = subimg
-
-        #pad = np.fft.fftshift(pad)
-
         P = np.fft.rfft2(pad)
-        #return Patch(-sz/2, -sz/2, P)
-        #return Patch(0, 0, P), pad.shape
-        return P, sz/2, sz/2, pad.shape
+        return P, (sz/2, sz/2), pad.shape
     
 class GaussianMixturePSF(ParamList):
     '''

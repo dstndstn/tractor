@@ -232,6 +232,13 @@ class Patch(object):
             except:
                 pass
 
+    @property
+    def y1(self):
+        return self.y0 + self.patch.shape[0]
+    @property
+    def x1(self):
+        return self.x0 + self.patch.shape[1]
+            
     def __str__(self):
         s = 'Patch: '
         name = getattr(self, 'name', '')

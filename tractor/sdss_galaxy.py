@@ -487,7 +487,8 @@ class ProfileGalaxy(object):
     def _realGetUnitFluxModelPatch(self, img, px, py, minval):
         # now choose the patch size
         halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
+        print 'Halfsize:', halfsize
+        
         # find overlapping pixels to render
         (outx, inx) = get_overlapping_region(
             int(floor(px-halfsize)), int(ceil(px+halfsize+1)),
@@ -499,18 +500,11 @@ class ProfileGalaxy(object):
             # no overlap
             return None
 
-        try:
-            amix = self._getAffineProfile(img, px, py)
-        except:
-            import traceback
-            print 'Failed to _getAffineProfile:'
-            traceback.print_exc()
-            return None
-
         x0,x1 = outx.start, outx.stop
         y0,y1 = outy.start, outy.stop
         psf = img.getPsf()
         if hasattr(psf, 'getMixtureOfGaussians'):
+            amix = self._getAffineProfile(img, px, py)
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians()
             #psfmix.normalize()
@@ -518,27 +512,26 @@ class ProfileGalaxy(object):
             psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
             return Patch(x0, y0, psfconvolvedimg)
         else:
-            P = psf.getFourierTransform(halfsize)
-            px0,py0 = P.x0, P.y0
-            H,W = P.shape
-            w = np.fft.rfftfreq(W)
-            v = np.fft.fftfreq(H)
+            P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
+            w = np.fft.rfftfreq(pW)
+            v = np.fft.fftfreq(pH)
 
+            dx = px - px0
+            dy = py - py0
+            # Put the integer portion of the offset into Patch x0,y0
+            ix0 = int(np.round(dx))
+            iy0 = int(np.round(dy))
+            # Put the subpixel portion into the galaxy FFT.
+            mux = dx - ix0
+            muy = dy - iy0
+
+            amix = self._getAffineProfile(img, mux, muy)
+            
             Fsum = None
             for k in range(amix.K):
                 V = amix.var[k,:,:]
                 iv = np.linalg.inv(V)
                 mu = amix.mean[k,:]
-
-                print 'mu', mu
-                print 'PSF x0,y0', px0,py0
-                print 'x0,y0', x0,y0
-                print 'halfsize', halfsize
-                print 'px,py', px,py
-                
-                ### FIXME
-                mux = -(mu[0] - x0 + px0)
-                muy = -(mu[1] - y0 + py0)
 
                 amp = amix.amp[k]
                 a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
@@ -547,15 +540,28 @@ class ProfileGalaxy(object):
                             (a * v[:,np.newaxis]**2 +
                              d * w[np.newaxis,:]**2 -
                              2*b*v[:,np.newaxis]*w[np.newaxis,:]))
-                             * np.exp(2.*np.pi* 1j * (mux*w[np.newaxis,:] + 
-                                                      muy*v[:,np.newaxis])))
+                             * np.exp(-2.*np.pi* 1j *(mu[0]*w[np.newaxis,:] + 
+                                                      mu[1]*v[:,np.newaxis])))
                 if Fsum is None:
                     Fsum = amp * F
                 else:
                     Fsum += amp * F
 
-            G = np.fft.irfft2(Fsum, s=(y1-y0, x1-x0))
-            return Patch(x0, y0, G)
+            # FIXME -- could adjust the ifft shape...
+            G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+            # Clip down to suggested "halfsize"
+            if x0 > ix0:
+                G = G[:,x0 - ix0:]
+                ix0 = x0
+            if y0 > iy0:
+                G = G[y0 - iy0:, :]
+                iy0 = y0
+            gh,gw = G.shape
+            if gw+ix0 > x1:
+                G = G[:,:x1-ix0]
+            if gh+iy0 > y1:
+                G = G[:y1-iy0,:]
+            return Patch(ix0, iy0, G)
                     
 
 class HoggGalaxy(ProfileGalaxy, Galaxy):

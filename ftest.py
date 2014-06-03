@@ -34,6 +34,7 @@ plt.subplot(1,3,2)
 plt.imshow(P.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(P.imag, **ima)
+plt.suptitle('PSF')
 ps.savefig()
 
 # padpsf = np.zeros((H*3, W*3))
@@ -72,6 +73,7 @@ plt.subplot(1,3,2)
 plt.imshow(G.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(G.imag, **ima)
+plt.suptitle('Galaxy (conv narrow PSF)')
 ps.savefig()
 
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
@@ -80,12 +82,8 @@ tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
 tractor = Tractor([tim], [gal])
 mod2 = tractor.getModelImage(0)
 G2 = np.fft.rfft2(mod2)
-
 print 'mod2', mod2.shape
 print 'G2', G2.shape
-
-
-
 
 print
 print
@@ -94,11 +92,14 @@ print
 psf1 = tim.getPsf()
 u1 = gal.getUnitFluxModelPatch(tim)
 
-psf2 = PixelizedPSF(psfim)
+psf2 = PixelizedPSF(psfim[cy-20:cy+20+1, cx-20:cx+20+1])
+
+print 'Pixelized PSF shape:', psf2.img.shape
+
 tim.psf = psf2
 
 halfsize = 80.
-P,px0,py0,pshape = psf2.getFourierTransform(halfsize)
+P,(px0,py0),pshape = psf2.getFourierTransform(halfsize)
 
 print 'PSF x0,y0', px0, py0
 
@@ -118,7 +119,6 @@ pH,pW = pshape
 print 'F(PSF) shape:', P.shape
 w = np.fft.rfftfreq(pW)
 v = np.fft.fftfreq(pH)
-#amix = gal._getAffineProfile(tim, gx, gy)
 
 dx = gx - px0
 dy = gy - py0
@@ -130,7 +130,6 @@ print 'ix0,iy0', ix0,iy0
 print 'mux,muy', mux,muy
 
 amix = gal._getAffineProfile(tim, mux, muy)
-#x0,y0 = 0,0
 print 'w', len(w), 'v', len(v)
 Fsum = None
 for k in range(amix.K):
@@ -138,11 +137,6 @@ for k in range(amix.K):
     iv = np.linalg.inv(V)
     mu = amix.mean[k,:]
 
-    ### FIXME
-    #mux = -(mu[0] - px0)
-    #muy = -(mu[1] - py0)
-    # mux = (gx - px0)
-    # muy = (gy - py0)
     mux = -mu[0]
     muy = -mu[1]
     
@@ -231,28 +225,43 @@ plt.suptitle('Galaxy conv PSF - model')
 ps.savefig()
 
 
-sys.exit(0)
-
-
 u2 = gal.getUnitFluxModelPatch(tim)
 
 plt.clf()
-plt.subplot(1,2,1)
+plt.subplot(1,3,1)
 x0,y0,im = u1.x0, u1.y0, u1.patch
 ph,pw = im.shape
+print 'u1:', im.sum()
 plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
-plt.subplot(1,2,2)
+plt.title('Gauss')
+ax = plt.axis()
+plt.subplot(1,3,2)
 x0,y0,im = u2.x0, u2.y0, u2.patch
 ph,pw = im.shape
+print 'u2:', im.sum()
 plt.imshow(im, extent=[x0,x0+pw, y0,y0+ph], **ima)
-ps.savefig()
+plt.axis(ax)
+plt.title('Fourier')
 
+x0 = min(u1.x0, u2.x0)
+y0 = min(u1.x0, u2.x0)
+x1 = max(u1.x1, u2.x1)
+y1 = max(u1.y1, u2.y1)
+diff = np.zeros((y1-y0, x1-x0))
+u1.addTo(diff)
+u2.addTo(diff, scale=-1)
+mx = np.abs(diff).max()
+plt.subplot(1,3,3)
+plt.imshow(diff, extent=[x0,x1,y0,y1], vmin=-mx, vmax=mx, **ima)
+plt.axis(ax)
+plt.title('diff')
+plt.suptitle('galaxy unit flux models')
+ps.savefig()
 
 tim.psf = psf1
 
-sys.exit(0)
-
-
+print
+print
 
 
 #mx,my = 0.,0.
@@ -263,9 +272,8 @@ w = np.fft.rfftfreq(W)
 v = np.fft.fftfreq(H)
 print 'Frequencies:', len(w), 'x', len(v)
 
-print 'w', w
-print 'v', v
-
+#print 'w', w
+#print 'v', v
 #ww,vv = np.meshgrid(w, v)
 #print 'ww,vv', ww.shape, vv.shape
 
@@ -277,11 +285,8 @@ for k in range(gmog.K):
     amp = gmog.amp[k]
     a,b,d = iv[0,0], iv[0,1], iv[1,1]
 
-    #assert(np.all(mu == 0))
-
     mux = -(mu[0] - cx)
     muy = -(mu[1] - cy)
-
     print 'mu', mux, muy
     
     a *= 0.5
@@ -337,7 +342,13 @@ plt.subplot(1,3,2)
 plt.imshow(Fsum.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(Fsum.imag, **ima)
+plt.suptitle('Fsum (galaxy)')
 ps.savefig()
+
+print 'Fsum:', Fsum.shape
+
+P = np.fft.rfft2(psfim)
+print 'P:', P.shape
 
 CF = Fsum * P
 C = np.fft.irfft2(CF, s=(H,W))
@@ -351,6 +362,7 @@ plt.subplot(1,3,2)
 plt.imshow(CF.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(CF.imag, **ima)
+plt.suptitle('C (galaxy conv PSF)')
 ps.savefig()
 
 plt.clf()
@@ -360,6 +372,7 @@ plt.subplot(1,3,2)
 plt.imshow(G2.real, **ima)
 plt.subplot(1,3,3)
 plt.imshow(G2.imag, **ima)
+plt.suptitle('Gaussian model')
 ps.savefig()
 
 
