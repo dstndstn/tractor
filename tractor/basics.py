@@ -1021,10 +1021,8 @@ class PixelizedPSF(BaseParams):
     A PSF model based on an image postage stamp, which will be
     sinc-shifted to subpixel positions.
 
-    (Actually Lanczos shifted, with order Lorder)
+    Galaxies will be rendering using FFT convolution.
     
-    This will allow only Point Sources to be rendered by the Tractor!
-
     FIXME -- currently this class claims to have no params.
     '''
     def __init__(self, img, Lorder=3):
@@ -1033,6 +1031,7 @@ class PixelizedPSF(BaseParams):
         assert((H % 2) == 1)
         assert((W % 2) == 1)
         self.Lorder = Lorder
+        self.fftcache = {}
         
     def __str__(self):
         return 'PixelizedPSF'
@@ -1070,11 +1069,13 @@ class PixelizedPSF(BaseParams):
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
 
-    ## FIXME -- cache
     def getFourierTransform(self, radius):
         ## FIXME -- power-of-2 MINUS one to keep things odd...?
         sz = 2**int(np.ceil(np.log2(radius*2.))) - 1
 
+        if sz in self.fftcache:
+            return self.fftcache[sz]
+        
         H,W = self.img.shape
         subimg = self.img
         pad = np.zeros((sz,sz))
@@ -1093,7 +1094,9 @@ class PixelizedPSF(BaseParams):
         sh,sw = subimg.shape
         pad[y0:y0+sh, x0:x0+sw] = subimg
         P = np.fft.rfft2(pad)
-        return P, (sz/2, sz/2), pad.shape
+        rtn = P, (sz/2, sz/2), pad.shape
+        self.fftcache[sz] = rtn
+        return rtn
     
 class GaussianMixturePSF(ParamList):
     '''

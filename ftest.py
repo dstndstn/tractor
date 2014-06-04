@@ -67,8 +67,14 @@ cx,cy = W/2, H/2
 #psfmodel = NCircularGaussianPSF([psfsig], [1.])
 
 #V = np.array([ [[ 2., -0.3 ], [-0.3, 4.]] ])
-V = np.array([ [[ 2., -1. ], [-1., 4.]] ])
-psfmodel = GaussianMixturePSF(np.array([1.]), np.zeros((1,2)), V)
+#V = np.array([ [[ 2., -1. ], [-1., 4.]] ])
+#psfmodel = GaussianMixturePSF(np.array([1.]), np.zeros((1,2)), V)
+
+# asymmetric multi-component Gaussian
+V = np.array([ [[ 2., -1. ], [-1., 4.]],
+               [[ 1., 0.], [0., 1.]] ])
+mus = np.array([ [0.,0.], [1.,1.]])
+psfmodel = GaussianMixturePSF(np.array([0.6, 0.4]), mus, V)
 
 psfpatch = psfmodel.getPointSourcePatch(cx, cy, radius=max(W/2, H/2))
 psfim = np.zeros((H,W))

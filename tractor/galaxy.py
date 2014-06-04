@@ -482,6 +482,9 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
                           self.shape.copy())
 
+    def getRadius(self):
+        return self.nre * self.shape.re
+    
     def _getAffineProfile(self, img, px, py):
         ''' Returns a MixtureOfGaussians profile that has been
         affine-transformed into the pixel space of the image.
@@ -504,8 +507,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
             return self.halfsize
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
-        halfsize = max(1., self.nre * self.re # * max(self.ab, 1.)
-                       / 3600. / pixscale)
+        halfsize = max(1., self.getRadius() / 3600. / pixscale)
         psf = img.getPsf()
         halfsize += psf.getRadius()
         return halfsize
