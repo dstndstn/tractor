@@ -25,12 +25,15 @@ def get_galaxy_cache():
 
 def set_galaxy_cache_size(N):
     global _galcache
-    _galcache.clear()
+    if _galcache is not None:
+        _galcache.clear()
     _galcache = Cache(maxsize=N)
 
 def disable_galaxy_cache():
     global _galcache
-    _galcache = NullCache()
+    if _galcache is not None:
+        _galcache.clear()
+    _galcache = None
 
 class GalaxyShape(ParamList):
     '''
@@ -399,6 +402,9 @@ class ProfileGalaxy(object):
         if px is None or py is None:
             (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         #
+        if _galcache is None:
+            return self._realGetUnitFluxModelPatch(img, px, py, minval)
+        
         deps = self._getUnitFluxDeps(img, px, py)
         try:
             (cached,mv) = _galcache.get(deps)
