@@ -1820,13 +1820,6 @@ class Tractor(MultiParams):
             # not convinced it's worth the effort right now.
             X = self.getLogPriorDerivatives()
             if X is not None:
-
-                # print
-                # print 'Warning: using priors; dstn was monkeying with'
-                # print 'the code and the getLogPriorDerivatives() API has'
-                # print 'changed: cA must be *integers*, not np arrays'
-                # print
-
                 rA,cA,vA,pb = X
 
                 sprows.extend([ri + Nrows for ri in rA])
@@ -1836,10 +1829,10 @@ class Tractor(MultiParams):
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
                 logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-                if len(cA) == 0:
-                    Ncols = 0
-                else:
-                    Ncols = 1 + max(cA)
+                # if len(cA) == 0:
+                #     Ncols = 0
+                # else:
+                #     Ncols = 1 + max(cA)
 
                 b = np.zeros(Nrows)
                 b[oldnrows:] = np.hstack(pb)

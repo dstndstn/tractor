@@ -309,7 +309,7 @@ class NamedParams(object):
         ss = getattr(self, 'stepsizes', None)
         if ss is None:
             ss = self.getAllStepSizes(*args, **kwargs)
-        return list(self._getLiquidArray(self.ss))
+        return list(self._getLiquidArray(ss))
 
     def getAllStepSizes(self, *args, **kwargs):
         '''
@@ -628,11 +628,6 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     def getParam(self,i):
         ii = self._indexLiquid(i)
         return self._getThing(ii)
-
-    def getStepSizes(self, *args, **kwargs):
-        if hasattr(self, 'stepsizes'):
-            return list(self._getLiquidArray(self.stepsizes))
-        return [1.0] * self.numberOfParams()
 
     def __len__(self):
         ''' len(): of liquid params '''
@@ -1022,8 +1017,6 @@ class MultiParams(BaseParams, NamedParams):
         if rA == []:
             return None
         return rA,cA,vA,pb
-
-
 
 
 class NpArrayParams(ParamList):

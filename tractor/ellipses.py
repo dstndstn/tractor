@@ -47,24 +47,16 @@ class EllipseE(ParamList):
     def __str__(self):
         return self.getName() + ': ' + repr(self)
 
-    def getStepSizes(self, *args, **kwargs):
-        if hasattr(self, 'stepsizes'):
-            return list(self._getLiquidArray(self.stepsizes))
-        ss = []
-        # re thawed?
-        if not self.isParamFrozen('re'):
-            ss.append(0.01)
-        # e1,e2 thawed?  Step toward |e|=0
-        if not self.isParamFrozen('e1'):
-            ss.append(0.01 if self.e1 <= 0 else -0.01)
-        if not self.isParamFrozen('e2'):
-            ss.append(0.01 if self.e2 <= 0 else -0.01)
+    def getAllStepSizes(self, *args, **kwargs):
+        # re
+        # e1,e2: step toward e=0
+        ss = [ 0.01,
+               0.01 if self.e1 <= 0 else -0.01,
+               0.01 if self.e2 <= 0 else -0.01 ]
         return ss
 
     def isLegal(self):
-        if (self.e1**2 + self.e2**2) >= 1. or self.re < 0:
-            return False
-        return True
+        return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)
 
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
@@ -131,10 +123,8 @@ class EllipseESoft(EllipseE):
         # e2: e sin 2 theta, dimensionless
         return dict(logre=0, e1=1, e2=2)
 
-    def getStepSizes(self, *args, **kwargs):
-        if hasattr(self, 'stepsizes'):
-            return list(self._getLiquidArray(self.stepsizes))
-        return [0.01] * self.numberOfParams()
+    def getAllStepSizes(self, *args, **kwargs):
+        return [0.01] * 3
 
     def __repr__(self):
         return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.e1, self.e2)
