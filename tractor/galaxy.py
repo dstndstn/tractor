@@ -25,14 +25,10 @@ def get_galaxy_cache():
 
 def set_galaxy_cache_size(N):
     global _galcache
-    if _galcache is not None:
-        _galcache.clear()
     _galcache = Cache(maxsize=N)
 
 def disable_galaxy_cache():
     global _galcache
-    if _galcache is not None:
-        _galcache.clear()
     _galcache = None
 
 class GalaxyShape(ParamList):

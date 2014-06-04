@@ -329,11 +329,8 @@ class Tractor(MultiParams):
         super(Tractor,self).__init__(images, catalog)
         self._setup(mp=mp)
 
-    # def __del__(self):
-    #   # dstn is not sure this is necessary / useful
-    #   if self.cache is not None:
-    #       self.cache.clear()
-    #   del self.cache
+    def disable_cache(self):
+        self.cache = None
 
     def _setup(self, mp=None, cache=None, pickleCache=False):
         if mp is None:
@@ -2093,35 +2090,22 @@ class Tractor(MultiParams):
         return src.getModelPatch(img, **kwargs)
 
     def getModelPatch(self, img, src, minsb=0., **kwargs):
-        # print
-        # print 'getModelPatch.'
-        # print 'src', src
-        # print '-> hashkey', src.hashkey()
-        # print 'img', img
-        # print '-> hashkey', img.hashkey()
-        # print
+        if self.cache is None:
+            # shortcut
+            return src.getModelPatch(img, **kwargs)
+
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
         mv,mod = self.cache.get(deps, (0.,None))
         if mv > minsb:
             mod = None
         if mod is not None:
-            #logverb('  Cache hit for model patch: image ' + str(img) +
-            #       ', source ' + str(src))
-            #logverb('  image hashkey ' + str(img.hashkey()))
-            #logverb('  source hashkey ' + str(src.hashkey()))
             pass
         else:
-            #logverb('  Cache miss for model patch: image ' + str(img) +
-            #       ', source ' + str(src))
-            #logverb('  image hashkey ' + str(img.hashkey()))
-            #logverb('  source hashkey ' + str(src.hashkey()))
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
-            #print 'Caching model image'
             self.cache.put(deps, (minsb,mod))
         return mod
 
-    #def getModelImageNoCache(self, img, srcs=None, sky=True):
     def getModelImage(self, img, srcs=None, sky=True, minsb=0.):
         '''
         Create a model image for the given "tractor image", including
@@ -2131,7 +2115,6 @@ class Tractor(MultiParams):
         '''
         if _isint(img):
             img = self.getImage(img)
-        #print 'getModelImage: for image', img
         mod = np.zeros(img.getModelShape(), self.modtype)
         if sky:
             img.sky.addTo(mod)
@@ -2140,29 +2123,9 @@ class Tractor(MultiParams):
         for src in srcs:
             patch = self.getModelPatch(img, src, minsb=minsb)
             if patch is None:
-                #print 'None patch: src is', src
-                #print 'position is', img.getWcs().positionToPixel(src.pos, src)
                 continue
             patch.addTo(mod)
         return mod
-
-    #def getModelImage(self, img, srcs=None, sky=True):
-    #   return self.getModelImageNoCache(img, srcs=srcs, sky=sky)
-    '''
-    def getModelImage(self, img):
-        # dependencies of this model image:
-        deps = (img.hashkey(), self.catalog.hashkey())
-        deps = hash(deps)
-        mod = self.cache.get(deps, None)
-        if mod is not None:
-            #print '  Cache hit!'
-            mod = mod.copy()
-        else:
-            mod = self.getModelImageNoCache(img)
-            #print 'Caching model image'
-            self.cache[deps] = mod
-        return mod
-    '''
 
     def getOverlappingSources(self, img, srcs=None, minsb=0.):
         from scipy.ndimage.morphology import binary_dilation
