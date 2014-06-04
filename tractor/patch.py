@@ -1,3 +1,5 @@
+import numpy as np
+
 from astrometry.util.miscutils import get_overlapping_region
 
 # Adds two patches, handling the case when one is None
