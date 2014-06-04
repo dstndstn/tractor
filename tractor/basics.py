@@ -1069,13 +1069,15 @@ class PixelizedPSF(BaseParams):
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
 
-    def getFourierTransform(self, radius):
+    def getFourierTransformSize(self, radius):
         ## FIXME -- power-of-2 MINUS one to keep things odd...?
         sz = 2**int(np.ceil(np.log2(radius*2.))) - 1
-
+        return sz
+    
+    def getFourierTransform(self, radius):
+        sz = self.getFourierTransformSize(radius)
         if sz in self.fftcache:
             return self.fftcache[sz]
-        
         H,W = self.img.shape
         subimg = self.img
         pad = np.zeros((sz,sz))
@@ -1088,7 +1090,7 @@ class PixelizedPSF(BaseParams):
         if sz > W:
             x0 = (sz - W)/2
         else:
-            y0 = 0
+            x0 = 0
             d = (W - sz)/2
             subimg = subimg[:, d:-d]
         sh,sw = subimg.shape

@@ -58,10 +58,8 @@ class MixtureOfGaussians():
             for d in range(self.D):
                 self.var[:,d,d] = var
         else:
-            # atleast_3d makes bizarre choices about which axes to expand...
-            #self.var = np.atleast_3d(np.array(var))
-            #print 'var', self.var.shape
             self.var = np.array(var).astype(float)
+
     def symmetrize(self):
         for i in range(self.D):
             for j in range(i):
@@ -141,9 +139,16 @@ class MixtureOfGaussians():
 
     def getFourierTransform(self, w, v):
         Fsum = None
+
+        if not hasattr(self, 'ivar'):
+            self.ivar = np.zeros((self.K, self.D, self.D))
+            for k in range(self.K):
+                self.ivar[k,:,:] = np.linalg.inv(self.var[k,:,:])
+
         for k in range(self.K):
-            V = self.var[k,:,:]
-            iv = np.linalg.inv(V)
+            #V = self.var[k,:,:]
+            #iv = np.linalg.inv(V)
+            iv = self.ivar[k,:,:]
             mu = self.mean[k,:]
             amp = self.amp[k]
             a,b,d = 0.5 * iv[0,0], 0.5 * iv[0,1], 0.5 * iv[1,1]
