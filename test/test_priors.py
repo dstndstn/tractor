@@ -62,21 +62,14 @@ if False:
     print 'alpha', alpha
     print p.getLogPrior()
 
-#class MyEESoft(GaussianPriorsMixin, EllipseESoft):
-#    pass
-
 g = ExpGalaxy(PixPos(4., 7.), Flux(100.), EllipseESoft(0., 0.5, 0.5))
-#g = ExpGalaxy(PixPos(4., 7.), Flux(100.), MyEESoft(0., 0.5, 0.5))
-
 g.shape.addGaussianPrior('e1', 0., 0.25)
 g.shape.addGaussianPrior('e2', 0., 0.25)
 
 print 'priors:', g.shape.gpriors
-
 print 'G:', g
 print 'G prior:', g.getLogPrior()
 print 'G prior derivs:', g.getLogPriorDerivatives()
-
 
 tractor = Tractor([], [g])
 dlnp,X,alpha = tractor.optimize()
@@ -87,3 +80,21 @@ print 'alpha', alpha
 print g
 print 'Log prior:', g.getLogPrior()
 
+print 'Step sizes:', zip(g.getParamNames(), g.getStepSizes())
+g.shape.freezeParam('e1')
+g.stepsizes = [1e-3]*3
+print 'Step sizes:', zip(g.getParamNames(), g.getStepSizes())
+
+rd = RaDecPos(13.5, 88.0)
+print 'Step sizes:', zip(rd.getParamNames(), rd.getStepSizes())
+
+psf = NCircularGaussianPSF([0.5, 0.5], [1., 2.])
+print 'PSF step sizes:', zip(psf.getParamNames(), psf.getStepSizes())
+psf.sigmas.stepsizes = [1e-3]*2
+print 'PSF step sizes:', zip(psf.getParamNames(), psf.getStepSizes())
+psf.freezeParam('sigmas')
+print 'PSF step sizes:', zip(psf.getParamNames(), psf.getStepSizes())
+psf.freezeParam('weights')
+print 'PSF step sizes:', zip(psf.getParamNames(), psf.getStepSizes())
+psf.thawAllParams()
+print 'PSF step sizes:', zip(psf.getParamNames(), psf.getStepSizes())

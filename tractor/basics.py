@@ -103,7 +103,7 @@ class Mags(ParamList):
         super(Mags,self).__init__(*vals)
         self.order = keys
         self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
-        self.stepsizes = [0.01] * self.numberOfParams()
+        self.stepsizes = [-0.01] * self.numberOfParams()
 
     def getMag(self, bandname):
         ''' Bandname: string
@@ -253,7 +253,7 @@ class Mag(ScalarParam):
     '''
     An implementation of `Brightness` that stores a single magnitude.
     '''
-    stepsize = 0.01
+    stepsize = -0.01
     strformat = '%.3f'
 
 class Flux(ScalarParam):
@@ -639,14 +639,6 @@ class FitsWcs(ConstantFitsWcs):
         ss = [dcrval, dcrval, 1., 1., dcd, dcd, dcd, dcd, 1., 1.]
         return list(self._getLiquidArray(ss))
 
-    # def getParams(self):
-    #   '''
-    #   Returns a *copy* of the current active parameter values (list)
-    #   '''
-    #   return list(self._getLiquidArray(self._getThings()))
-
-
-
 class PixPos(ParamList):
     '''
     A Position implementation using pixel positions.
@@ -654,20 +646,15 @@ class PixPos(ParamList):
     @staticmethod
     def getNamedParams():
         return dict(x=0, y=1)
+    def __init__(self, *args):
+        super(PixPos, self).__init__(*args)
+        self.stepsize = [0.1, 0.1]
     def __str__(self):
         return 'pixel (%.2f, %.2f)' % (self.x, self.y)
-    #def __repr__(self):
-    #   return 'PixPos(%.4f, %.4f)' % (self.x, self.y)
-    #def copy(self):
-    #   return PixPos(self.x, self.y)
-    #def hashkey(self):
-    #   return ('PixPos', self.x, self.y)
     def getDimension(self):
         return 2
-    def getStepSizes(self, *args, **kwargs):
-        return [0.1, 0.1]
 
-class RaDecPos(ParamList, ArithmeticParams):
+class RaDecPos(ArithmeticParams, ParamList):
     '''
     A Position implementation using RA,Dec positions, in degrees.
 
@@ -684,20 +671,10 @@ class RaDecPos(ParamList, ArithmeticParams):
     def __str__(self):
         return '%s: RA, Dec = (%.5f, %.5f)' % (self.getName(), self.ra, self.dec)
     def __init__(self, *args, **kwargs):
-        self.stepsizes = [0,0]  # in case the superclass constructor cares
-                        # about the length?
         super(RaDecPos,self).__init__(*args,**kwargs)
         self.setStepSizes(1e-4)
-    #def __repr__(self):
-    #   return 'RaDecPos(%.5f, %.5f)' % (self.ra, self.dec)
-    #def copy(self):
-    #   return RaDecPos(self.ra, self.dec)
-    #def hashkey(self):
-    #   return ('RaDecPos', self.ra, self.dec)
     def getDimension(self):
         return 2
-    def getStepSizes(self, *args, **kwargs):
-        return self.stepsizes
     def setStepSizes(self, delta):
         self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
 
@@ -743,7 +720,6 @@ class ConstantSky(ScalarParam):
 #         oldval = self.val
 #         self._set(p - self.offset)
 #         return oldval + self.offset
-    
 
 
 class PointSource(MultiParams):
@@ -839,7 +815,7 @@ class PointSource(MultiParams):
                 derivs.append(df)
         return derivs
 
-class Parallax(ScalarParam, ArithmeticParams):
+class Parallax(ArithmeticParams, ScalarParam):
     ''' in arcesc '''
     stepsize = 1e-3
     def __str__(self):
@@ -854,6 +830,10 @@ class ParallaxWithPrior(Parallax):
         # in the fuckin' introduction!
         return -4. * np.log(p)
 
+    def isLegal(self):
+        p = self.getValue()
+        return (p >= 0)
+    
     #### FIXME -- cos(Dec)
 class PMRaDec(RaDecPos):
     @staticmethod
@@ -867,9 +847,6 @@ class PMRaDec(RaDecPos):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
         self.setStepSizes(1e-6)
-        
-    # def setStepSizes(self, delta):
-    #   self.stepsizes = [delta, delta]
         
     @staticmethod
     def getNamedParams():
@@ -886,9 +863,7 @@ class PMRaDec(RaDecPos):
     
 class MovingPointSource(PointSource):
     def __init__(self, pos, brightness, pm, parallax, epoch=0.):
-        # ASSUME 'pm' is the same type as 'pos'
-        #assert(type(pos) == type(pm))
-        # More precisely, ...
+        # Assume types...
         assert(type(pos) is RaDecPos)
         assert(type(pm) is PMRaDec)
         super(PointSource, self).__init__(pos, brightness, pm,
@@ -956,7 +931,6 @@ class MovingPointSource(PointSource):
 
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
-        #return [False]*self.numberOfParams()
 
         t = img.getTime()
         pos0 = self.getPositionAtTime(t)
@@ -1351,7 +1325,11 @@ class NCircularGaussianPSF(MultiParams):
         eg,   NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
         '''
         assert(len(sigmas) == len(weights))
-        super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
+        psigmas = ParamList(*sigmas)
+        psigmas.stepsizes = [0.01] * len(sigmas)
+        pweights = ParamList(*weights)
+        pweights.stepsizes = [0.01] * len(weights)
+        super(NCircularGaussianPSF, self).__init__(psigmas, pweights)
         self.minradius = 1.
 
     @property
@@ -1400,43 +1378,6 @@ class NCircularGaussianPSF(MultiParams):
                                      mymeans,
                                      np.array(self.mysigmas)**2)
         
-    def proposeIncreasedComplexity(self, img):
-        maxs = np.max(self.mysigmas)
-        # MAGIC -- make new Gaussian with variance bigger than the biggest
-        # so far
-        return NCircularGaussianPSF(list(self.mysigmas) + [maxs + 1.],
-                            list(self.myweights) + [0.05])
-
-    def getStepSizes(self, *args, **kwargs):
-        N = len(self.sigmas)
-        ss = []
-        if not self.isParamFrozen('sigmas'):
-            ss.extend([0.01]*N)
-        if not self.isParamFrozen('weights'):
-            ss.extend([0.01]*N)
-        return ss
-
-    '''
-    def isValidParamStep(self, dparam):
-        NS = len(self.sigmas)
-        assert(len(dparam) == 2*NS)
-        dsig = dparam[:NS]
-        dw = dparam[NS:]
-        for s,ds in zip(self.sigmas, dsig):
-            # MAGIC
-            if s + ds < 0.1:
-                return False
-        for w,dw in zip(self.weights, dw):
-            if w + dw < 0:
-                return False
-        return True
-        #return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
-        '''
-
-    # def normalize(self):
-    #     mx = max(self.weights)
-    #     self.weights.setParams([w/mx for w in self.weights])
-
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
         return hk

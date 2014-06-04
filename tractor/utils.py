@@ -170,7 +170,10 @@ class BaseParams(object):
         '''
         Returns "reasonable" step sizes for the parameters.
         '''
-        return []
+        ss = getattr(self, 'stepsizes', None)
+        if ss is not None:
+            return ss
+        return [1.] * self.numberOfParams()
     def setParams(self, p):
         '''
         NOTE, you MUST implement either "setParams" or "setParam",
@@ -302,6 +305,19 @@ class NamedParams(object):
         ''' Returns all params, regardless of thawed/frozen status. '''
         raise RuntimeError("Unimplemented setAllParams in " + str(self.__class__))
 
+    def getStepSizes(self, *args, **kwargs):
+        ss = getattr(self, 'stepsizes', None)
+        if ss is None:
+            ss = self.getAllStepSizes(*args, **kwargs)
+        return list(self._getLiquidArray(self.ss))
+
+    def getAllStepSizes(self, *args, **kwargs):
+        '''
+        Returns "reasonable" step sizes for the parameters, ignoring
+        frozen/thawed state.
+        '''
+        return [1.] * len(self.getAllParams())
+    
     def _addNamedParams(self, alias, **d):
         self.namedparams.update(d)
         if not alias:

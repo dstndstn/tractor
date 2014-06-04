@@ -58,62 +58,11 @@ class GalaxyShape(ParamList):
     def __str__(self):
         return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
 
-    def getStepSizes(self, *args, **kwargs):
+    def getAllStepSizes(self, *args, **kwargs):
         abstep = 0.01
         if self.ab >= (1 - abstep):
             abstep = -abstep
-        return list(self._getLiquidArray([ 1., abstep, 1. ]))
-
-    def setre(self, re):
-        if re < (1./30.):
-            #print 'Clamping re from', re, 'to 1/30'
-            pass
-        self.re = max(1./30., re)
-    def setab(self, ab):
-        if ab > 1.:
-            #print 'Converting ab from', ab, 'to', 1./ab
-            self.setab(1./ab)
-            self.setphi(self.phi+90.)
-        elif ab < (1./30.):
-            #print 'Clamping ab from', ab, 'to 1/30'
-            self.ab = 1./30
-        else:
-            self.ab = ab
-    def setphi(self, phi):
-        # limit phi to [-180,180]
-        self.phi = np.fmod(phi, 360.)
-        if self.phi < -180.:
-            self.phi += 360.
-        if self.phi > 180.:
-            self.phi -= 360.
-
-    # Note about flipping the galaxy when ab>1:
-    #
-    # -you might worry that the caller would choose a new ab>1 and
-    #  phi, then call setab() then setphi() -- so then the phi would
-    #  be reverted.
-    #
-    # -but in Tractor.tryParamUpdates, it only calls getParams() and
-    #  setParams() to revert to original params.
-    #
-    # -stepping params one at a time works fine, so it's all ok.
-
-    def setParams(self, p):
-        assert(len(p) == 3)
-        self.setre(p[0])
-        self.setab(p[1])
-        self.setphi(p[2])
-    def setParam(self, i, p):
-        oldval = self.vals[i]
-        if i == 0:
-            self.setre(p)
-        elif i == 1:
-            self.setab(p)
-        elif i == 2:
-            self.setphi(p)
-        else:
-            raise RuntimeError('GalaxyShape: unknown param index: ' + str(i))
-        return oldval
+        return [ 0.1, abstep, 1. ]
 
     def getRaDecBasis(self):
         '''
@@ -154,17 +103,19 @@ class Galaxy(MultiParams):
     def getNamedParams():
         return dict(pos=0, brightness=1, shape=2)
 
-    def _setRe (self, re ): self.shape.re  = re
-    def _setAb (self, ab ): self.shape.ab  = ab
-    def _setPhi(self, phi): self.shape.phi = phi
-
-    # define pass-through names
-    re = property(lambda x: x.shape.re, _setRe, None,
-                  'galaxy effective radius')
-    ab = property(lambda x: x.shape.ab, _setAb, None,
-                  'galaxy axis ratio')
-    phi = property(lambda x: x.shape.phi, _setPhi, None,
-                   'galaxy position angle')
+    # These assume a specific ellipse parameterization, and only provide a
+    # bit of syntactic sugar
+    # def _setRe (self, re ): self.shape.re  = re
+    # def _setAb (self, ab ): self.shape.ab  = ab
+    # def _setPhi(self, phi): self.shape.phi = phi
+    # 
+    # # define pass-through names
+    # re = property(lambda x: x.shape.re, _setRe, None,
+    #               'galaxy effective radius')
+    # ab = property(lambda x: x.shape.ab, _setAb, None,
+    #               'galaxy axis ratio')
+    # phi = property(lambda x: x.shape.phi, _setPhi, None,
+    #                'galaxy position angle')
 
     def getName(self):
         return 'Galaxy'
@@ -207,7 +158,6 @@ class Galaxy(MultiParams):
 
     def getModelPatch(self, img, minsb=0.):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        #if counts <= 0:
         if counts == 0:
             return None
         minval = minsb / abs(counts)
