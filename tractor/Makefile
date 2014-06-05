@@ -3,11 +3,23 @@ all: mix ceres
 ceres: _ceres.so ceres.py
 .PHONY: ceres
 
+mpf: mp_fourier
+.PHONY: mpf
+mp_fourier: _mp_fourier.so mp_fourier.py
+.PHONY: mp_fourier
+
 mix: _mix.so mix.py
 .PHONY: mix
 
 emfit: _emfit.so emfit.py
 .PHONY: emfit
+
+mp_fourier.py mp_fourier_wrap.c: mp_fourier.i
+	swig -python -I. mp_fourier.i
+
+_mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
+	python setup-mpf.py build --force --build-base build --build-platlib build/lib
+	cp build/lib/_mp_fourier.so $@
 
 
 mix.py mix_wrap.c: mix.i

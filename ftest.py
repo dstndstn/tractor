@@ -55,6 +55,9 @@ def video():
         ps.savefig()
         # avconv -r 20 -i ftest-%04d.png -b:v 2000k /tmp/err.mp4
 
+
+
+
     
 ps = PlotSequence('ftest', format='%04i')
 
@@ -92,7 +95,7 @@ ima = dict(interpolation='nearest', origin='lower')
 #                  (np.arange(H)-cy)[:,np.newaxis]**2)/(-2.*psfsig**2))
 # psfim2 /= psfim2.sum()
 
-if True:
+if False:
     plt.clf()
     plt.subplot(2,2,1)
     plt.imshow(psfim, **ima)
@@ -125,6 +128,51 @@ gal = ExpGalaxy(PixPos(gx,gy), Flux(1.), GalaxyShape(5., 0.5, 30.))
 tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
             wcs=NullWCS(), psf=NCircularGaussianPSF([0.5], [1.]),
             photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
+
+
+psf2 = PixelizedPSF(psfim[cy-20:cy+20+1, cx-20:cx+20+1])
+tim.psf = psf2
+#1mod = gal.getModelPatch(tim)
+
+#from tractor.mixture_profiles import *
+
+mux,muy = 0.4, 0.5
+#halfsize = 4
+halfsize = 50
+amix = gal._getAffineProfile(tim, mux, muy)
+#amix = MixtureOfGaussians(amix.amp[:2], amix.mean[:2,:], amix.var[:2,:,:])
+P,(px0,py0),(pH,pW) = tim.getPsf().getFourierTransform(halfsize)
+w = np.fft.rfftfreq(pW)
+v = np.fft.fftfreq(pH)
+print 'w', w
+print 'v', v
+F1 = amix.getFourierTransform(w, v, use_mp_fourier=False)
+F2 = amix.getFourierTransform(w, v, use_mp_fourier=True)
+
+print F1[:5,:5]
+print F2[:5,:5]
+
+print 'F1:', F1.dtype, F1.shape
+print 'F2:', F2.dtype, F2.shape
+diff = F1 - F2
+print 'max diff', np.max(np.abs(diff))
+
+mx = max(np.hypot(F1.real, F1.imag).max(), np.hypot(F2.real, F2.imag).max())
+plt.clf()
+plt.subplot(2,2,1)
+plt.imshow(F1.real, vmin=-mx, vmax=mx, **ima)
+plt.title('True real')
+plt.subplot(2,2,2)
+plt.imshow(F1.imag, vmin=-mx, vmax=mx, **ima)
+plt.title('True imag')
+
+plt.subplot(2,2,3)
+plt.imshow(F2.real, vmin=-mx, vmax=mx, **ima)
+plt.subplot(2,2,4)
+plt.imshow(F2.imag, vmin=-mx, vmax=mx, **ima)
+ps.savefig()
+sys.exit(0)
+        
 
 tractor = Tractor([tim], [gal])
 
