@@ -41,17 +41,6 @@ static PyObject* mixture_profile_fourier_transform(
         return NULL;
     }
 
-    /*
-     PyObject* arr;
-     PyArray_Descr* dtype = PyArray_DescrFromType(NPY_DOUBLE);
-     int req = NPY_C_CONTIGUOUS | NPY_ALIGNED | NPY_NOTSWAPPED
-     | NPY_ELEMENTSTRIDES;
-    Py_INCREF(dtype);
-    arr = PyArray_FromAny(np_amps, dtype, 1, 1, req, NULL);
-    K = PyArray_DIM(arr, 0);
-    amps = PyArray_DATA(arr);
-     */
-
     if ((PyArray_TYPE(np_amps) != NPY_DOUBLE) ||
         (PyArray_TYPE(np_means ) != NPY_DOUBLE) ||
         (PyArray_TYPE(np_vars) != NPY_DOUBLE) ||
@@ -119,69 +108,48 @@ static PyObject* mixture_profile_fourier_transform(
     }
 
     for (k=0; k<K; k++) {
+        if ((means[k*D] != means[0]) ||
+            (means[k*D+1] != means[1])) {
+            PyErr_SetString(PyExc_ValueError, "Assume all means are equal");
+            return NULL;
+        }
+    }
+
+    double* factors = malloc(K*3 * sizeof(double));
+    for (k=0; k<K; k++) {
         double* V = vars + k*D*D;
         double det;
-        double a,b,d, amp;
-        double* ff = f;
-        //printf("k=%i: mean %g, %g\n", (int)k, means[k*D], means[k*D+1]);
+        double a,b,d;
         det = V[0]*V[3] - V[1]*V[2];
         a = 0.5 *  V[3]/det;
         b = 0.5 * -V[1]/det;
         d = 0.5 *  V[0]/det;
         det = a*d - b*b;
-        amp = amps[k];
-        /*
-         double prefactor = - M_PI * M_PI / det;
-         for (i=0; i<NW; i++)
-         wfactor[i] = prefactor * d * ww[i] * ww[i];
-         for (i=0; i<NV; i++)
-         vfactor[i] = prefactor * a * vv[i] * vv[i];
-         prefactor *= 2. * b;
-         */
-        double mu0 = means[k*D];
-        double mu1 = means[k*D+1];
-        for (i=0; i<NV; i++) {
-            for (j=0; j<NW; j++) {
-                //double s = amp * exp(vfactor[i] + wfactor[j]
-                //- prefactor * vv[i] * ww[j]);
-                double s = amp * exp(-M_PI*M_PI/det *
-                                     (a * vv[i]*vv[i] +
-                                      d * ww[j]*ww[j] -
-                                      2*b*vv[i]*ww[j]));
-                (*ff) += s;
-                ff++;
-                ff++;
-                /*
-                 //double real,imag;
-                 //sincos(angle, &imag, &real);
-                 //(*ff) += s * real;
-                 (*ff) += s * cos(angle);
-                 ff++;
-                 //(*ff) += s * imag;
-                 (*ff) += s * sin(angle);
-                 ff++;
-                 */
-                //if (j<5 && i<5)
-                //printf("%g ", s);
-                //printf("%g ", s*cos(angle));
-            }
-            //if (i<5)
-            //printf("\n");
-        }
+        factors[k*3 + 0] = -a * M_PI * M_PI / det;
+        factors[k*3 + 1] = -d * M_PI * M_PI / det;
+        factors[k*3 + 2] = 2*b* M_PI * M_PI / det;
     }
 
-    double* ff = f;
     double mu0 = means[0];
     double mu1 = means[1];
+    double* ff = f;
     for (i=0; i<NV; i++) {
         for (j=0; j<NW; j++) {
+            double s = 0;
+            for (k=0; k<K; k++) {
+                s += amps[k] * exp(factors[k*3 +0] * vv[i]*vv[i] +
+                                   factors[k*3 +1] * ww[j]*ww[j] +
+                                   factors[k*3 +2] * vv[i]*ww[j]);
+            }
             double angle = -2. * M_PI * (mu0 * ww[j] + mu1 * vv[i]);
-            ff[1] = ff[0] * sin(angle);
-            ff[0] *= cos(angle);
+            ff[0] = s * cos(angle);
+            ff[1] = s * sin(angle);
             ff++;
             ff++;
         }
     }
+    free(factors);
+
     return np_F;
 }
 

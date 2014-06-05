@@ -141,11 +141,10 @@ class MixtureOfGaussians():
             newk = nextnewk
         return MixtureOfGaussians(newamp, newmean, newvar)
 
-    def getFourierTransform(self, w, v, use_mp_fourier=False):
+    def getFourierTransform(self, w, v, use_mp_fourier=True):
         if mp_fourier and use_mp_fourier:
             f = mp_fourier.mixture_profile_fourier_transform(
                 self.amp, self.mean, self.var, w, v)
-            print 'mp_fourier: returning', f.dtype, f.shape
             return f
 
         Fsum = None
