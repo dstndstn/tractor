@@ -1,4 +1,4 @@
-all: mix ceres
+all: mix ceres mpf
 
 ceres: _ceres.so ceres.py
 .PHONY: ceres
