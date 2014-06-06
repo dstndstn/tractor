@@ -159,6 +159,13 @@ def create_wise_psf_models(bright, K=3):
 
 if __name__ == '__main__':
 
+    import logging
+    lev = level=logging.DEBUG
+    lev = level=logging.INFO
+    lev = level=logging.WARN
+    logging.basicConfig(format="%(message)s", level=lev,
+                        stream=sys.stdout)
+
     #create_average_psf_model()
     #create_average_psf_model(bright=True)
 
@@ -297,12 +304,16 @@ if __name__ == '__main__':
     ps = PlotSequence('psf')
 
     # AllWISE PSF models
+    #for band in [4]:
     for band in [1,2,3,4]:
         print
         print 'W%i' % band
         print
 
-        pix = reduce(np.add, [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' % (band, 1+(i/9), 1+(i%9))) for i in range(9*9)])
+        pix = reduce(np.add,
+                     [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' %
+                                  (band, 1+(i/9), 1+(i%9)))
+                                  for i in range(9*9)])
         print 'Pix', pix.shape
         h,w = pix.shape
         print 'Pix sum', pix.sum()
@@ -329,12 +340,46 @@ if __name__ == '__main__':
         for k in range(psf.mog.K):
             v = psf.mog.var[k,:,:]
             sigmas.append(np.sqrt(np.sqrt(v[0,0] * v[1,1])))
-        gpsf = NCircularGaussianPSF(sigmas, psf.mog.amp)
+
+        
+        print 'Initializing concentric Gaussian model with sigmas', sigmas
+        print 'And weights', psf.mog.amp
+
+        # (Initial) W1:
+        # sig [7.1729391870564569, 24.098952864976805, 108.78869923786333]
+        # weights [ 0.80355109  0.15602835  0.04195982]
+        # sigmas [ 6.928, 17.091, 45.745 ], weights [ 0.760, 0.154, 0.073 ]
+        
+        # W2:
+        # sig [8.2356371659198189, 25.741694812001221, 110.17431488810806]
+        # weights [ 0.80636191  0.1563742   0.03926182]
+        # sigmas [ 7.177, 10.636, 30.247 ], weights [ 0.500, 0.341, 0.134 ]
+
+        # W3:
+        # sig [6.860124763919889, 19.160849966251824, 134.20812055907825]
+        # weights [ 0.28227047  0.55080156  0.16706357]
+        # sigmas [ 6.850, 18.922, 109.121 ], weights [ 0.276, 0.554, 0.148 ]
+
+        # W4:
+        # [4.6423676603462001, 5.31542132669962, 18.375512539373585]
+        # weights [ 0.10764341  0.26915295  0.62320374]
+        # (Opt)
+        # sigmas [ 6.293, 6.314, 20.932 ], weights [ 0.129, 0.309, 0.598 ]
+
+        weights = psf.mog.amp
+
+        # HACK
+        if band == 4:
+            sigmas =  [ 2., 6., 25. ]
+            weights = [ 0.5, 0.25, 0.25 ]
+        else:
+            sigmas =  [ 8., 24., 100. ]
+            weights = [ 0.5, 0.25, 0.25 ]
+        
+        gpsf = NCircularGaussianPSF(sigmas, weights)
         gpsf.radius = sh/2
         mypsf = gpsf
-        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix),
-                    wcs=NullWCS(), photocal=LinearPhotoCal(1.),
-                    psf=mypsf, sky=ConstantSky(0.))
+        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix), psf=mypsf)
         cx,cy = sw/2, sh/2
         src = PointSource(PixPos(cx, cy), Flux(1.0))
         
@@ -350,6 +395,7 @@ if __name__ == '__main__':
         for i in range(100):
             dlnp,X,alpha = tractor.optimize(damp=0.1)
             print 'dlnp', dlnp
+            print 'PSF', mypsf
             if dlnp < 0.001:
                 break
 
@@ -363,11 +409,29 @@ if __name__ == '__main__':
         
         mod = tractor.getModelImage(0)
         print 'Mod sum:', mod.sum()
+        print 'Mod min:', mod.min()
+        print 'Mod max:', mod.max()
+
         _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
 
+
+        # These postage stamps are subsampled at 8x the 2.75"/pix,
+        # except for the W4 one, which is at 4x that.
+        scale = 8
+        if band == 4:
+            scale = 4
+        
+        T = fits_table()
+        T.amp  = mypsf.mog.amp
+        T.mean = mypsf.mog.mean / scale
+        T.var  = mypsf.mog.var / scale**2
+        T.writeto('psf-allwise-con3-w%i.fits' % band)
+        T.writeto('psf-allwise-con3.fits', append=(band != 1))
+
+        
         mypsf.weights.setParams(np.array(mypsf.weights.getParams()) /
                                 sum(mypsf.weights.getParams()))
         print 'Normalized PSF weights:', mypsf
@@ -377,8 +441,9 @@ if __name__ == '__main__':
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
-            
-        sys.exit(0)
+
+        
+    sys.exit(0)
 
     # Meisner's PSF models
     

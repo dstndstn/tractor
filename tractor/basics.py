@@ -1406,6 +1406,8 @@ class NCircularGaussianPSF(MultiParams):
         return 5.
 
     def getRadius(self):
+        if hasattr(self, 'radius'):
+            return self.radius
         return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
