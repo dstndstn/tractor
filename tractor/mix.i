@@ -370,7 +370,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         scale = amp[k] / sqrt(tpd * det);
         mx = mean[k*D+0] + fx;
         my = mean[k*D+1] + fy;
-        mv = minval * amp[k];
+        mv = minval * fabs(amp[k]);
         //printf("minval %g: amp %g, allowing mv %g\n", minval, amp[k], mv);
         //printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
         xc = MAX(x0, MIN(x1-1, (int)lround(mx)));
