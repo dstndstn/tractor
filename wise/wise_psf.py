@@ -298,6 +298,26 @@ def _allwise_psf_models():
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
 
+def _lanczos_subsample(opix, scale):
+    sh,sw = opix.shape
+    xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
+                        np.arange(0, sh, 1./scale)[:-1])
+    lh,lw = xx.shape
+    xx = xx.ravel()
+    yy = yy.ravel()
+    ix = np.round(xx).astype(np.int32)
+    iy = np.round(yy).astype(np.int32)
+    dx = (xx - ix).astype(np.float32)
+    dy = (yy - iy).astype(np.float32)
+    RR = [np.zeros(lh*lw, np.float32)]
+    LL = [opix]
+    lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
+    lpix = RR[0].reshape((lh,lw))
+    print 'new size', lh,lw
+    print 'vs', lpix.shape
+    lpix /= (scale**2)
+    return lpix
+        
 def _meisner_psf_models():
     global plotslice
     # Meisner's PSF models
@@ -348,26 +368,8 @@ def _meisner_psf_models():
                 
         # Lanczos sub-sample
         if band == 4:
-            scale = 2
-            sh,sw = opix.shape
-            xx,yy = np.meshgrid(np.arange(0, sw, 1./scale)[:-1],
-                                np.arange(0, sh, 1./scale)[:-1])
-            lh,lw = xx.shape
-            xx = xx.ravel()
-            yy = yy.ravel()
-            ix = np.round(xx).astype(np.int32)
-            iy = np.round(yy).astype(np.int32)
-            dx = (xx - ix).astype(np.float32)
-            dy = (yy - iy).astype(np.float32)
-            RR = [np.zeros(lh*lw, np.float32)]
-            LL = [opix]
-            lanczos3_interpolate(ix, iy, dx, dy, RR, LL)
-            lpix = RR[0].reshape((lh,lw))
-            print 'new size', lh,lw
-            print 'vs', lpix.shape
-
+            lpix = _lanczos_subsample(opix, 2)
             pix = lpix
-            pix /= (scale**2)
             h,w = pix.shape
 
             #S = 140
@@ -507,6 +509,7 @@ if __name__ == '__main__':
 
     #create_average_psf_model()
     #create_average_psf_model(bright=True)
+
     plotslice = None
     
     def _plot_psf(img, mod, psf, flux=1.):
@@ -643,7 +646,47 @@ if __name__ == '__main__':
 
     ps = PlotSequence('psf')
 
-    _meisner_psf_models()
+    # Compare AllWISE vs Meisner PSF model images.
+
+    plt.clf()
+    for band in [1,2,3,4]:
+        #S = 10
+        S = 5
+
+        plt.subplot(3,4, band)
+        pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
+        h,w = pix.shape
+        plt.imshow(pix, interpolation='nearest', origin='lower')
+        plt.axis([w/2-S, w/2+S, h/2-S, h/2+S])
+
+        plt.subplot(3,4, 4 + band)
+        subim = pix[h/2-S : h/2+S, w/2-S : w/2+S]
+        scale = 8
+        if band == 4:
+            scale = 16
+        pix = _lanczos_subsample(subim, scale)
+        scale = 8
+        h,w = pix.shape
+        plt.imshow(pix, interpolation='nearest', origin='lower')
+        plt.axis([w/2-S*scale, w/2+S*scale, h/2-S*scale, h/2+S*scale])
+        
+        plt.subplot(3,4, 8 + band)
+        pix = reduce(np.add,
+                     [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' %
+                                  (band, 1+(i/9), 1+(i%9)))
+                                  for i in range(9*9)])
+        h,w = pix.shape
+        scale = 8
+        if band == 4:
+            scale = 4
+
+        plt.imshow(pix, interpolation='nearest', origin='lower')
+        plt.axis([w/2-S*scale, w/2+S*scale, h/2-S*scale, h/2+S*scale])
+
+    ps.savefig()
+
+    
+    #_meisner_psf_models()
         
     sys.exit(0)
         
