@@ -157,154 +157,10 @@ def create_wise_psf_models(bright, K=3):
         T.writeto('w%ipsffit%s.fits' % (band, tag))
 
 
-if __name__ == '__main__':
 
-    import logging
-    lev = level=logging.DEBUG
-    lev = level=logging.INFO
-    lev = level=logging.WARN
-    logging.basicConfig(format="%(message)s", level=lev,
-                        stream=sys.stdout)
-
-    #create_average_psf_model()
-    #create_average_psf_model(bright=True)
-
-    def _plot_psf(img, mod, psf, flux=1.):
-        if plotslice is not None:
-            img = img[plotslice]
-            mod = mod[plotslice]
-            
-        mx = img.max() * 1.1
-        logmx = np.log10(mx)
-        ima = dict(interpolation='nearest', origin='lower',
-                   vmin=0, vmax=mx)
-        imlog = dict(interpolation='nearest', origin='lower',
-                     vmin=logmx-4, vmax=logmx)
-        imdiff = dict(interpolation='nearest', origin='lower',
-                      vmin=-0.05*mx, vmax=0.05*mx, cmap='RdBu')
-        plt.clf()
-        plt.subplot(3,3,1)
-        plt.imshow(img, **ima)
-        plt.xticks([]); plt.yticks([])
-
-        plt.subplot(3,3,4)
-        plt.imshow(np.log10(img), **imlog)
-        plt.xticks([]); plt.yticks([])
-
-        plt.subplot(3,3,2)
-        plt.imshow(mod, **ima)
-        plt.xticks([]); plt.yticks([])
-
-        plt.subplot(3,3,5)
-        plt.imshow(np.log10(mod), **imlog)
-        plt.xticks([]); plt.yticks([])
-
-        dd = 10
-
-        plt.subplot(3,3,9)
-        plt.imshow(img - mod, **imdiff)
-        plt.xticks([]); plt.yticks([])
-        h,w = img.shape
-        plt.axis([w/2-dd, w/2+dd, h/2-dd, h/2+dd])
-        
-        if psf is not None:
-            for sp in [3,6,9]:
-                plt.subplot(3,3,sp)
-                if sp == 3:
-                    plt.imshow(mod, **ima)
-                    cc = 'w'
-                    aa = 1.
-                else:
-                    #plt.imshow(np.log10(mod), **imlog)
-                    plt.imshow(img - mod, **imdiff)
-                    cc = 'g'
-                    aa = 1.#0.5
-                plt.xticks([]); plt.yticks([])
-
-                ax = plt.axis()
-                #if isinstance(psf, GaussianMixturePSF):
-                vv = psf.mog.var
-                mu = psf.mog.mean
-                K = psf.mog.K
-                # elif isinstance(psf, NCircularGaussianPSF):
-                #     K = len(psf.sigmas.getParams())
-                #     vv = np.zeros((K,2,2))
-                #     vv[:,0,0] = vv[:,1,1] = psf.sigmas.getParams()**2
-                #     mu = np.zeros((K,2))
-                    
-                h,w = mod.shape
-                for k in range(K):
-                    v = vv[k,:,:]
-                    u,s,v = np.linalg.svd(v)
-                    angle = np.linspace(0., 2.*np.pi, 200)
-                    u1 = u[0,:]
-                    u2 = u[1,:]
-                    s1,s2 = np.sqrt(s)
-                    xy = (u1[np.newaxis,:] * s1 * np.cos(angle)[:,np.newaxis] +
-                          u2[np.newaxis,:] * s2 * np.sin(angle)[:,np.newaxis])
-                    plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], '-',
-                             color=cc, alpha=aa)
-                plt.axis(ax)
-
-        
-        shift = max(img.max(), mod.max())*1.05
-        
-        maxpix = np.argmax(img)
-        y,x = np.unravel_index(maxpix, img.shape)
-        if h >= (dd*2+1):
-            slc = slice(h/2-dd, h/2+dd+1)
-            x0 = h/2-dd
-        else:
-            slc = slice(0, h)
-            x0 = 0
-        plt.subplot(3,3,7)
-        plt.plot(img[y,slc], 'r-')
-        plt.plot(mod[y,slc], 'b-', alpha=0.5, lw=3)
-        plt.axhline(shift, color='k')
-        plt.plot(img[slc,x]+shift, 'r-')
-        plt.plot(mod[slc,x]+shift, 'b-', alpha=0.5, lw=3)
-        # if psf is not None:
-        #     ax = plt.axis()
-        #     xx = np.linspace(ax[0], ax[1], 100)
-        #     modx = np.zeros_like(xx)
-        #     mody = np.zeros_like(xx)
-        #     for k in range(K):
-        #         v = vv[k,:,:]
-        #         vx = v[0,0]
-        #         mux = psf.mog.mean[k,0]
-        #         vy = v[1,1]
-        #         muy = psf.mog.mean[k,1]
-        #         a = psf.mog.amp[k]
-        #         a *= flux
-        #         compx = a/(2.*np.pi*vx) * np.exp(-0.5* (xx - (x-x0+mux))**2 / vx)
-        #         compy = a/(2.*np.pi*vy) * np.exp(-0.5* (xx - (y-x0+muy))**2 / vy)
-        #         modx += compx
-        #         mody += compy
-        #         plt.plot(xx, compx, 'b-')
-        #         plt.plot(xx, compy + shift, 'b-')
-        #     plt.plot(xx, modx, 'b-')
-        #     plt.plot(xx, mody + shift, 'b-')
-        #     plt.axis(ax)
-        plt.xticks([]); plt.yticks([])
-        plt.ylim(0, 2.*shift)
-
-        dshift = 0.05*shift
-        plt.subplot(3,3,8)
-        plt.axhline(dshift, color='k')
-        plt.plot(mod[y,slc] - img[y,slc] + dshift, 'b-', alpha=0.5, lw=3)
-        plt.axhline(dshift*3, color='k')
-        plt.plot(mod[slc,x] - img[slc,x] + dshift*3, 'b-', alpha=0.5, lw=3)
-        plt.xticks([]); plt.yticks([])
-        plt.ylim(0, 4*dshift)
-        return
-        
-    
-    from astrometry.util.util import *
-
-    ps = PlotSequence('psf')
-
+def _allwise_psf_models():
+    global plotslice
     # AllWISE PSF models
-    #for band in [4]:
     for band in [1,2,3,4]:
         print
         print 'W%i' % band
@@ -442,20 +298,19 @@ if __name__ == '__main__':
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
 
-        
-    sys.exit(0)
-
+def _meisner_psf_models():
+    global plotslice
     # Meisner's PSF models
-    
-    #for band in [4,3,2,1]:
+    #for band in [4]:
     for band in [1,2,3,4]:
         print
         print 'W%i' % band
         print
         
-        pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
-        #pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
+        #pix = fitsio.read('wise-psf-avg-pix.fits', ext=band-1)
+        pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
         fit = fits_table('wise-psf-avg.fits', hdu=band)
+        #fit = fits_table('psf-allwise-con3.fits', hdu=band)
     
         scale = 1.
     
@@ -548,37 +403,35 @@ if __name__ == '__main__':
         
         print 'Stamp-Fit PSF params:', psfx
     
-        class MyGaussianMixturePSF(GaussianMixturePSF):
-            def getLogPrior(self):
-                if np.any(self.mog.amp < 0.):
-                    return -np.inf
-                for k in range(self.mog.K):
-                    if np.linalg.det(self.mog.var[k]) <= 0:
-                        return -np.inf
-                return 0
-
-            @property
-            def amp(self):
-                return self.mog.amp
-            
-        sh,sw = pix.shape
-            
+        # class MyGaussianMixturePSF(GaussianMixturePSF):
+        #     def getLogPrior(self):
+        #         if np.any(self.mog.amp < 0.):
+        #             return -np.inf
+        #         for k in range(self.mog.K):
+        #             if np.linalg.det(self.mog.var[k]) <= 0:
+        #                 return -np.inf
+        #         return 0
+        # 
+        #     @property
+        #     def amp(self):
+        #         return self.mog.amp
+        #     
         # mypsf = MyGaussianMixturePSF(psfx.mog.amp, psfx.mog.mean, psfx.mog.var)
         # mypsf.radius = sh/2
+
+        sh,sw = pix.shape
 
         # Try concentric gaussian PSF
         sigmas = []
         for k in range(psfx.mog.K):
             v = psfx.mog.var[k,:,:]
-            sigmas.append(np.sqrt(np.sqrt(v[0,0] * v[1,1])))
+            sigmas.append(np.sqrt(np.sqrt(np.abs(v[0,0] * v[1,1]))))
+        print 'Initializing concentric Gaussian PSF with sigmas', sigmas
         gpsf = NCircularGaussianPSF(sigmas, psfx.mog.amp)
         gpsf.radius = sh/2
         mypsf = gpsf
-
         
-        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix),
-                    wcs=NullWCS(), photocal=LinearPhotoCal(1.),
-                    psf=mypsf, sky=ConstantSky(0.))
+        tim = Image(data=pix, invvar=1e6 * np.ones_like(pix), psf=mypsf)
 
         # xx,yy = np.meshgrid(np.arange(sw), np.arange(sh))
         # cx,cy = np.sum(xx*pix)/np.sum(pix), np.sum(yy*pix)/np.sum(pix)
@@ -623,6 +476,14 @@ if __name__ == '__main__':
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
 
+        # Write before normalizing!
+        T = fits_table()
+        T.amp  = mypsf.mog.amp
+        T.mean = mypsf.mog.mean
+        T.var  = mypsf.mog.var
+        T.writeto('psf3-w%i.fits' % band)
+        T.writeto('psf3.fits', append=(band != 1))
+        
         mypsf.weights.setParams(np.array(mypsf.weights.getParams()) /
                                 sum(mypsf.weights.getParams()))
         print 'Normalized PSF weights:', mypsf
@@ -633,13 +494,157 @@ if __name__ == '__main__':
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
         
-        T = fits_table()
-        T.amp  = mypsf.mog.amp
-        T.mean = mypsf.mog.mean
-        T.var  = mypsf.mog.var
-        T.writeto('psf3-w%i.fits' % band)
-        T.writeto('psf3.fits', append=(band != 1))
 
+
+if __name__ == '__main__':
+
+    import logging
+    lev = level=logging.DEBUG
+    lev = level=logging.INFO
+    lev = level=logging.WARN
+    logging.basicConfig(format="%(message)s", level=lev,
+                        stream=sys.stdout)
+
+    #create_average_psf_model()
+    #create_average_psf_model(bright=True)
+    plotslice = None
+    
+    def _plot_psf(img, mod, psf, flux=1.):
+        if plotslice is not None:
+            img = img[plotslice]
+            mod = mod[plotslice]
+            
+        mx = img.max() * 1.1
+        logmx = np.log10(mx)
+        ima = dict(interpolation='nearest', origin='lower',
+                   vmin=0, vmax=mx)
+        imlog = dict(interpolation='nearest', origin='lower',
+                     vmin=logmx-4, vmax=logmx)
+        imdiff = dict(interpolation='nearest', origin='lower',
+                      vmin=-0.05*mx, vmax=0.05*mx, cmap='RdBu')
+        plt.clf()
+        plt.subplot(3,3,1)
+        plt.imshow(img, **ima)
+        plt.xticks([]); plt.yticks([])
+
+        plt.subplot(3,3,4)
+        plt.imshow(np.log10(img), **imlog)
+        plt.xticks([]); plt.yticks([])
+
+        plt.subplot(3,3,2)
+        plt.imshow(mod, **ima)
+        plt.xticks([]); plt.yticks([])
+
+        plt.subplot(3,3,5)
+        plt.imshow(np.log10(mod), **imlog)
+        plt.xticks([]); plt.yticks([])
+
+        dd = 10
+
+        plt.subplot(3,3,9)
+        plt.imshow(img - mod, **imdiff)
+        plt.xticks([]); plt.yticks([])
+        h,w = img.shape
+        plt.axis([w/2-dd, w/2+dd, h/2-dd, h/2+dd])
+        
+        if psf is not None:
+            for sp in [3,6,9]:
+                plt.subplot(3,3,sp)
+                if sp == 3:
+                    plt.imshow(mod, **ima)
+                    cc = 'w'
+                    aa = 1.
+                else:
+                    #plt.imshow(np.log10(mod), **imlog)
+                    plt.imshow(img - mod, **imdiff)
+                    cc = 'g'
+                    aa = 1.#0.5
+                plt.xticks([]); plt.yticks([])
+
+                ax = plt.axis()
+                #if isinstance(psf, GaussianMixturePSF):
+                vv = psf.mog.var
+                mu = psf.mog.mean
+                K = psf.mog.K
+                # elif isinstance(psf, NCircularGaussianPSF):
+                #     K = len(psf.sigmas.getParams())
+                #     vv = np.zeros((K,2,2))
+                #     vv[:,0,0] = vv[:,1,1] = psf.sigmas.getParams()**2
+                #     mu = np.zeros((K,2))
+                    
+                h,w = mod.shape
+                for k in range(K):
+                    v = vv[k,:,:]
+                    u,s,v = np.linalg.svd(v)
+                    angle = np.linspace(0., 2.*np.pi, 200)
+                    u1 = u[0,:]
+                    u2 = u[1,:]
+                    s1,s2 = np.sqrt(s)
+                    xy = (u1[np.newaxis,:] * s1 * np.cos(angle)[:,np.newaxis] +
+                          u2[np.newaxis,:] * s2 * np.sin(angle)[:,np.newaxis])
+                    plt.plot(xy[:,0]+w/2+mu[k,0], xy[:,1]+h/2+mu[k,1], '-',
+                             color=cc, alpha=aa)
+                plt.axis(ax)
+
+        
+        shift = max(img.max(), mod.max())*1.05
+        
+        maxpix = np.argmax(img)
+        y,x = np.unravel_index(maxpix, img.shape)
+        if h >= (dd*2+1):
+            slc = slice(h/2-dd, h/2+dd+1)
+            x0 = h/2-dd
+        else:
+            slc = slice(0, h)
+            x0 = 0
+        plt.subplot(3,3,7)
+        plt.plot(img[y,slc], 'r-')
+        plt.plot(mod[y,slc], 'b-', alpha=0.5, lw=3)
+        plt.axhline(shift, color='k')
+        plt.plot(img[slc,x]+shift, 'r-')
+        plt.plot(mod[slc,x]+shift, 'b-', alpha=0.5, lw=3)
+        # if psf is not None:
+        #     ax = plt.axis()
+        #     xx = np.linspace(ax[0], ax[1], 100)
+        #     modx = np.zeros_like(xx)
+        #     mody = np.zeros_like(xx)
+        #     for k in range(K):
+        #         v = vv[k,:,:]
+        #         vx = v[0,0]
+        #         mux = psf.mog.mean[k,0]
+        #         vy = v[1,1]
+        #         muy = psf.mog.mean[k,1]
+        #         a = psf.mog.amp[k]
+        #         a *= flux
+        #         compx = a/(2.*np.pi*vx) * np.exp(-0.5* (xx - (x-x0+mux))**2 / vx)
+        #         compy = a/(2.*np.pi*vy) * np.exp(-0.5* (xx - (y-x0+muy))**2 / vy)
+        #         modx += compx
+        #         mody += compy
+        #         plt.plot(xx, compx, 'b-')
+        #         plt.plot(xx, compy + shift, 'b-')
+        #     plt.plot(xx, modx, 'b-')
+        #     plt.plot(xx, mody + shift, 'b-')
+        #     plt.axis(ax)
+        plt.xticks([]); plt.yticks([])
+        plt.ylim(0, 2.*shift)
+
+        dshift = 0.05*shift
+        plt.subplot(3,3,8)
+        plt.axhline(dshift, color='k')
+        plt.plot(mod[y,slc] - img[y,slc] + dshift, 'b-', alpha=0.5, lw=3)
+        plt.axhline(dshift*3, color='k')
+        plt.plot(mod[slc,x] - img[slc,x] + dshift*3, 'b-', alpha=0.5, lw=3)
+        plt.xticks([]); plt.yticks([])
+        plt.ylim(0, 4*dshift)
+        return
+        
+    
+    from astrometry.util.util import *
+
+    ps = PlotSequence('psf')
+
+    _meisner_psf_models()
+        
     sys.exit(0)
         
     psf2 = GaussianMixturePSF(mypsf.mog.amp[:2]/mypsf.mog.amp[:2].sum(),
