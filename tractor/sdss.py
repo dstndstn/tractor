@@ -1120,6 +1120,13 @@ class SdssNanomaggiesPhotoCal(BaseParams):
         #print 'nmgy', nmgy
         #print 'nmgy2', nmgy2
         return nmgy
+    def countsToMag(self, nmgy):
+        # Attention: "mag" here is a simple scalar, not a Mag object...
+        if nmgy <= 0.0:
+            mag = 50.0 # MAGIC
+        else:
+            mag = 22.5 - 2.5*np.log10(nmgy)
+        return mag
 
 class SdssMagsPhotoCal(BaseParams):
     '''
