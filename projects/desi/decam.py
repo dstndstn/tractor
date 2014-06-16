@@ -55,8 +55,10 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
 
     name = hdr['FILENAME'].replace('.fits','').replace('_', ' ')
     filt = hdr['FILTER'].split()[0]
-    sat = hdr['SATURATE']
-    zp = hdr['UB1_ZP']
+    sat = hdr.get('SATURATE', None)
+    zp = hdr.get('MAG_ZP', None)
+    if zp is None:
+        zp = hdr['UB1_ZP']
     zpscale = NanoMaggies.zeropointToScale(zp)
     print 'Name', name, 'filter', filt, 'zp', zp
     
@@ -71,8 +73,6 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     if x0 or y0:
         psf = ShiftedPsf(psf, x0, y0)
         
-    saturated = (img >= sat)
-    
     if skysubtract:
         # Remove x/y gradient estimated in ~500-pixel^2 squares
         fH,fW = fullimg.shape
@@ -128,7 +128,9 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     print 'MAD', mad, '-> sigma', sig1
     invvar = np.zeros_like(img) + 1./sig1**2
     invvar[mask != 0] = 0.
-    invvar[saturated] = 0.
+    if sat is not None:
+        saturated = (img >= sat)
+        invvar[saturated] = 0.
 
     #print 'Image: max', img.max()
     
@@ -161,7 +163,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
 
 if __name__ == '__main__':
     import optparse
-    parser = optparse.OptionParser('%prog [options]')
+    parser = optparse.OptionParser('%prog [options] [base input filename]')
     parser.add_option('--se', action='store_true')
     parser.add_option('--x0', type=int, help='Read sub-image', default=0)
     parser.add_option('--y0', type=int, help='Read sub-image', default=0)
@@ -178,11 +180,16 @@ if __name__ == '__main__':
         slc = slice(opt.y0, y1), slice(opt.x0, x1)
     else:
         slc = None
-    decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
+
+    if len(args):
+        decbase = args[0]
+    else:
+        decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
+
     tim = read_decam_image(decbase, slc=slc)
     print 'Got', tim, tim.shape
 
-    basefn = 'decam-00192399.01'
+    basefn = os.path.basename(decbase).lower().replace('.p.w', '')
     picklefn = basefn + '.pickle'
     secatfn = decbase + '.morph.fits'
     sdssobjfn = basefn + '-sdss.fits'
@@ -211,30 +218,11 @@ if __name__ == '__main__':
         ps = PlotSequence('decam-sdss')
     ps.format = '%03i'
 
-    # FIXME -- looks like a small astrometric shift between SourceExtractor
-    # catalog and SDSS.
-    if True:
-        SEcat = fits_table(seobjfn, hdu=2)
-        SEcat.ra  = SEcat.alpha_j2000
-        SEcat.dec = SEcat.delta_j2000
-        SDSScat = fits_table(sdssobjfn)
-        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec, 1.0/3600.)
-        plt.clf()
-        plt.plot(3600.*(SEcat.ra[I] - SDSScat.ra[J]), 3600.*(SEcat.dec[I] - SDSScat.dec[J]), 'b.')
-        plt.xlabel('dRA (arcsec)')
-        plt.ylabel('dDec (arcsec)')
-        plt.axis([-0.6,0.6,-0.6,0.6])
-        ps.savefig()
-        #sys.exit(0)
-
-        if secat:
-            dra = ddec = 0.
-        else:
-            dra  = np.median(SEcat.ra [I] - SDSScat.ra [J])
-            ddec = np.median(SEcat.dec[I] - SDSScat.dec[J])
-        
     sdss = DR9(basedir='dr9')
     sdss.saveUnzippedFiles('dr9')
+    if os.environ.get('BOSS_PHOTOOBJ') is not None:
+        print 'Using local tree for SDSS files'
+        sdss.useLocalTree()
 
     sip = tim.wcs.wcs
     if secat:
@@ -253,17 +241,13 @@ if __name__ == '__main__':
     else:
         if not os.path.exists(objfn):
             margin = 5./3600.
+
+            print 'SIP:', sip
+
             objs = read_photoobjs_in_wcs(sip, margin, sdss=sdss)
             objs.writeto(objfn)
         else:
             objs = fits_table(objfn)
-
-        print 'dRA,dDec', 3600.*dra, 3600.*ddec
-        # objs.ra  += dra
-        # objs.dec += ddec
-
-        # UGH!
-        objs.ra += 0.15 / 3600.
 
         #print 'Zip:', zip(objs.run, objs.camcol, objs.field)
         #rcfs = np.unique(zip(objs.run, objs.camcol, objs.field))
@@ -297,7 +281,7 @@ if __name__ == '__main__':
         r0,r1,d0,d1 = sip.radec_bounds()
         cat = get_tractor_sources_dr9(
             None, None, None, objs=objs, sdss=sdss,
-            radecroi=[r0,r1,d0,d1], bands=['z'],
+            radecroi=[r0,r1,d0,d1], bands=[tim.filter],
             nanomaggies=True, fixedComposites=True,
             useObjcType=True)
 
@@ -305,6 +289,31 @@ if __name__ == '__main__':
         #                   for src in cat])
         
     print len(cat), 'sources'
+
+
+    # FIXME -- looks like a small astrometric shift between SourceExtractor
+    # catalog and SDSS.
+    if True:
+        SEcat = fits_table(seobjfn, hdu=2)
+        SEcat.ra  = SEcat.alpha_j2000
+        SEcat.dec = SEcat.delta_j2000
+        SDSScat = fits_table(sdssobjfn)
+        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec, 1.0/3600.)
+        plt.clf()
+        plt.plot(3600.*(SEcat.ra[I] - SDSScat.ra[J]), 3600.*(SEcat.dec[I] - SDSScat.dec[J]), 'b.')
+        plt.xlabel('dRA (arcsec)')
+        plt.ylabel('dDec (arcsec)')
+        plt.axis([-0.6,0.6,-0.6,0.6])
+        ps.savefig()
+        #sys.exit(0)
+
+        if secat:
+            dra = ddec = 0.
+        else:
+            dra  = np.median(SEcat.ra [I] - SDSScat.ra [J])
+            ddec = np.median(SEcat.dec[I] - SDSScat.dec[J])
+        
+
 
     def imshow(img, **kwargs):
         x = plt.imshow(img.T, **kwargs)

@@ -160,8 +160,8 @@ class PsfEx(VaryingGaussianPSF):
         print 'Got', ims.shape, 'PSF images'
         hdr = T.get_header()
         # PSF distortion bases are polynomials of x,y
-        assert(hdr['POLNAME1'] == 'X_IMAGE')
-        assert(hdr['POLNAME2'] == 'Y_IMAGE')
+        assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
+        assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
         assert(hdr['POLGRP1'] == 1)
         assert(hdr['POLGRP2'] == 1)
         assert(hdr['POLNGRP' ] == 1)
