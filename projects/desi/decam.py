@@ -6,6 +6,7 @@ import pylab as plt
 
 import fitsio
 
+from astrometry.libkd.spherematch import *
 from astrometry.util.util import *
 from astrometry.util.resample import *
 from astrometry.util.file import *
@@ -22,6 +23,93 @@ from scipy.ndimage.morphology import binary_dilation, binary_closing
 from scipy.ndimage.morphology import binary_fill_holes
 from scipy.ndimage.interpolation import shift
 
+
+def gauss2d(X, mu, sigma):
+    N,two = X.shape
+    assert(two == 2)
+    C,two = mu.shape
+    assert(two == 2)
+    rtn = np.zeros((N,C))
+    for c in range(C):
+        e = -np.sum((X - mu[c,:])**2, axis=1) / (2.*sigma[c]**2)
+        I = (e > -700)  # -> ~ 1e-304
+        rtn[I,c] = 1./(2.*pi*sigma[c]**2) * np.exp(e[I])
+    return rtn
+
+def em_step(X, weights, mu, sigma, background, B):
+    '''
+    mu: shape (C,2) or (2,)
+    sigma: shape (C,) or scalar
+    weights: shape (C,) or 1.
+    C: number of Gaussian components
+
+    X: (N,2)
+    '''
+    mu_orig = mu
+
+    mu = np.atleast_2d(mu)
+    sigma = np.atleast_1d(sigma)
+    weights = np.atleast_1d(weights)
+    weights /= np.sum(weights)
+
+    print '    em_step: weights', weights, 'mu', mu, 'sigma', sigma, 'background fraction', B
+    # E:
+    # fg = p( Y, Z=f | theta ) = p( Y | Z=f, theta ) p( Z=f | theta )
+    fg = gauss2d(X, mu, sigma) * (1. - B) * weights
+    # fg shape is (N,C)
+    # bg = p( Y, Z=b | theta ) = p( Y | Z=b, theta ) p( Z=b | theta )
+    bg = background * B
+    assert(all(np.isfinite(fg.ravel())))
+    assert(all(np.isfinite(np.atleast_1d(bg))))
+    # normalize:
+    sfg = np.sum(fg, axis=1)
+    # fore = p( Z=f | Y, theta )
+    fore = fg / (sfg + bg)[:,np.newaxis]
+    # back = p( Z=b | Y, theta )
+    back = bg / (sfg + bg)
+    assert(all(np.isfinite(fore.ravel())))
+    assert(all(np.isfinite(back.ravel())))
+
+    # M:
+    # maximize mu, sigma:
+    #mu = np.sum(fore[:,np.newaxis] * X, axis=0) / np.sum(fore)
+    mu = np.dot(fore.T, X) / np.sum(fore)
+    # 2.*sum(fore) because X,mu are 2-dimensional.
+    #sigma = np.sqrt(np.sum(fore[:,np.newaxis] * (X - mu)**2) / (2.*np.sum(fore)))
+    C = len(sigma)
+    for c in range(C):
+        sigma[c] = np.sqrt(np.sum(fore[:,c][:,np.newaxis] * (X - mu[c,:])**2)
+                           / (2. * np.sum(fore[:,c])))
+    #print 'mu', mu, 'sigma', sigma
+    if np.min(sigma) == 0:
+        return (mu, sigma, B, -1e6, np.zeros(len(X)))
+    assert(np.all(sigma > 0))
+
+    # maximize weights:
+    weights = np.mean(fore, axis=0)
+    weights /= np.sum(weights)
+
+    # maximize B.
+    # B = p( Z=b | theta )
+    B = np.mean(back)
+
+    # avoid multiplying 0 * -inf = NaN
+    I = (fg > 0)
+    lfg = np.zeros_like(fg)
+    lfg[I] = np.log(fg[I])
+
+    lbg = np.log(bg * np.ones_like(fg))
+    lbg[np.flatnonzero(np.isfinite(lbg) == False)] = 0.
+
+    # Total expected log-likelihood
+    Q = np.sum(fore*lfg + back[:,np.newaxis]*lbg)
+
+    print 'Fore', fore.shape
+    if len(mu_orig.shape) == 1:
+        return (1., mu[0,:], sigma[0], B, Q, fore[:,0])
+    return (weights, mu, sigma, B, Q, fore)
+
+
 def read_decam_image(basefn, skysubtract=True, slc=None):
     '''
     slc: slice of image to read
@@ -29,8 +117,11 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     imgfn  = basefn + '.fits'
     maskfn = basefn + '.bpm.fits'
     psffn  = basefn + '.cat.psf'
-
     print 'Reading', imgfn, 'and', maskfn
+
+    wcsfn = os.path.join('data/decam/astrom', os.path.basename(imgfn).replace('.fits','.wcs'))
+    print 'Reading WCS from', wcsfn
+
     f = fitsio.FITS(imgfn)
     m = fitsio.FITS(maskfn)
     hdr = f[0].read_header()
@@ -62,7 +153,8 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     zpscale = NanoMaggies.zeropointToScale(zp)
     print 'Name', name, 'filter', filt, 'zp', zp
     
-    sip = Sip(imgfn)
+    #sip = Sip(imgfn)
+    sip = Sip(wcsfn)
     print 'SIP', sip
     print 'RA,Dec bounds', sip.radec_bounds()
     
@@ -156,9 +248,22 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     tim.filter = filt
     tim.sig1 = sig1
     tim.sky1 = sky1
+    tim.skyval = sky
     tim.zp = zp
     tim.ozpscale = orig_zpscale
     return tim
+    
+
+def imshow(img, **kwargs):
+    x = plt.imshow(img.T, **kwargs)
+    plt.xticks([])
+    plt.yticks([])
+    return x
+
+def sqimshow(img, **kwa):
+    mn = kwa.pop('vmin')
+    mx = kwa.pop('vmax')
+    imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
     
 
 if __name__ == '__main__':
@@ -291,41 +396,142 @@ if __name__ == '__main__':
     print len(cat), 'sources'
 
 
-    # FIXME -- looks like a small astrometric shift between SourceExtractor
-    # catalog and SDSS.
+    # FIXME -- check astrometry
     if True:
         SEcat = fits_table(seobjfn, hdu=2)
         SEcat.ra  = SEcat.alpha_j2000
         SEcat.dec = SEcat.delta_j2000
         SDSScat = fits_table(sdssobjfn)
-        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec, 1.0/3600.)
+        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec, 4.0/3600.)
+        print len(I), 'matches'
+
+        # The SExtractor catalogs are way wrong
+        # plt.clf()
+        # plt.plot(3600.*(SEcat.ra[I] - SDSScat.ra[J]), 3600.*(SEcat.dec[I] - SDSScat.dec[J]), 'b.')
+        # plt.xlabel('dRA (arcsec)')
+        # plt.ylabel('dDec (arcsec)')
+        # #plt.axis([-0.6,0.6,-0.6,0.6])
+        # plt.title('SE cat RA,Dec')
+        # ps.savefig()
+
+        # rr,dd = sip.pixelxy2radec(SEcat.x_image, SEcat.y_image)
+        # I,J,d = match_radec(rr, dd, SDSScat.ra, SDSScat.dec, 4.0/3600.)
+        # print len(I), 'matches'
+        # 
+        # # SE x,y coords seem to be = FITS convention (1-indexed)
+        # 
+        # plt.clf()
+        # plt.plot(3600.*(rr[I] - SDSScat.ra[J]), 3600.*(dd[I] - SDSScat.dec[J]), 'b.')
+        # plt.xlabel('dRA (arcsec)')
+        # plt.ylabel('dDec (arcsec)')
+        # plt.title('SIP(SE cat x,y) - SDSS RA,Dec')
+        # plt.axhline(0, color='k', alpha=0.5)
+        # plt.axvline(0, color='k', alpha=0.5)
+        # plt.axis('scaled')
+        # plt.axis([-0.6,0.6,-0.6,0.6])
+        # ps.savefig()
+
+        ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
+        I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
+        print len(I), 'matches'
+
+        # plt.clf()
+        # plt.plot(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], 'b.')
+        # plt.xlabel('dx (pix)')
+        # plt.ylabel('dy (pix)')
+        # plt.axhline(0, color='k', alpha=0.5)
+        # plt.axvline(0, color='k', alpha=0.5)
+        # plt.title('SE cat x,y - SIP(SDSS)')
+        # plt.axis('scaled')
+        # plt.axis([-2,2,-2,2])
+        # ps.savefig()
+
+        # Push the SE x,y -> rr,dd coords back through to xx',yy'
+        # Differences are milli-pixels
+        # ok,xx,yy = sip.radec2pixelxy(rr, dd)
+        # plt.clf()
+        # plt.plot(SEcat.x_image - xx, SEcat.y_image - yy, 'b.')
+        # plt.xlabel('dx (pix)')
+        # plt.ylabel('dy (pix)')
+        # plt.title('SIP xy->rd->xy residuals')
+        # ps.savefig()
+
+
+
+        # Try doing the EM tune-up thing.
+        #plt.plot(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], 'b.')
+
+        X = np.vstack((xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J])).T
+        weights = [1.]
+        sigma = 2.
+        mu = np.array([0.,0.])
+        bg = 0.01
+        B = 0.5
+
+        for i in range(20):
+            weights,mu,sigma,B,Q,fore = em_step(X, weights, mu, sigma, bg, B)
+        print 'Sigma', sigma
+        print 'Mu', mu
+        print 'B', B
+
+
         plt.clf()
-        plt.plot(3600.*(SEcat.ra[I] - SDSScat.ra[J]), 3600.*(SEcat.dec[I] - SDSScat.dec[J]), 'b.')
-        plt.xlabel('dRA (arcsec)')
-        plt.ylabel('dDec (arcsec)')
-        plt.axis([-0.6,0.6,-0.6,0.6])
+        plt.scatter(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], c=fore,
+                    edgecolors='none', alpha=0.5)
+        plt.colorbar()
+        plt.plot(mu[0], mu[1], 'kx', ms=15, mew=3)
+        angle = np.linspace(0, 2.*np.pi, 200)
+        plt.plot(mu[0] + sigma * np.sin(angle), mu[1] + sigma * np.cos(angle), 'k-')
+        plt.xlabel('dx (pix)')
+        plt.ylabel('dy (pix)')
+        plt.axhline(0, color='k', alpha=0.5)
+        plt.axvline(0, color='k', alpha=0.5)
+        plt.axis('scaled')
+        plt.axis([-2,2,-2,2])
         ps.savefig()
-        #sys.exit(0)
 
-        if secat:
-            dra = ddec = 0.
-        else:
-            dra  = np.median(SEcat.ra [I] - SDSScat.ra [J])
-            ddec = np.median(SEcat.dec[I] - SDSScat.dec[J])
-        
+        crpix = sip.crpix
+        print 'CRPIX', crpix
+        sip.set_crpix((crpix[0] - mu[0], crpix[1] - mu[1]))
+
+        ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
+        I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
+        print len(I), 'matches'
+
+        plt.clf()
+        plt.plot(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], 'b.')
+        plt.xlabel('dx (pix)')
+        plt.ylabel('dy (pix)')
+        plt.axhline(0, color='k', alpha=0.5)
+        plt.axvline(0, color='k', alpha=0.5)
+        plt.title('SE cat x,y - SIP(SDSS)')
+        plt.axis('scaled')
+        plt.axis([-2,2,-2,2])
+        ps.savefig()
+
+        if False:
+            # Show zoom-ins of images + sources
+            ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=tim.zr[0], vmax=tim.skyval + 10.*tim.sig1)
+            plt.clf()
+            plt.imshow(tim.getImage(), **ima)
+            ax = plt.axis()
+            plt.plot(SEcat.x_image-1, SEcat.y_image-1, 'o', mec='r', mfc='none', ms=12)
+            plt.axis(ax)
+            ps.savefig()
+            #plt.plot(xx, yy, 'g+', mfc='none')
+            plt.plot(xx, yy, '+', mec=(0,1,0), mfc='none', ms=12)
+            ps.savefig()
+            plt.axis([0,1000,0,500])
+            ps.savefig()
+            plt.axis([1000,2000,0,500])
+            ps.savefig()
+            plt.axis([0,1000,500,1000])
+            ps.savefig()
+            plt.axis([1000,2000,500,1000])
+            ps.savefig()
 
 
-    def imshow(img, **kwargs):
-        x = plt.imshow(img.T, **kwargs)
-        plt.xticks([])
-        plt.yticks([])
-        return x
-
-    def sqimshow(img, **kwa):
-        mn = kwa.pop('vmin')
-        mx = kwa.pop('vmax')
-        imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
-    
     if secat:
         H,W = tim.shape
         I = np.argsort(T.mag_psf)
