@@ -17,6 +17,9 @@ from astrometry.sdss import *
 from tractor import *
 from tractor.sdss import *
 
+from tractor.emfit import em_fit_2d
+from tractor.fitpsf import em_init_params
+
 from scipy.ndimage.filters import *
 from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing
@@ -160,7 +163,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
     
     H,W = img.shape
     print 'Reading PSF', psffn
-    psf = PsfEx(psffn, W, H)
+    psf = PsfEx(psffn, W, H, scale=False, nx=9, ny=17)
     print 'Got PSF', psf
     if x0 or y0:
         psf = ShiftedPsf(psf, x0, y0)
@@ -537,6 +540,30 @@ if __name__ == '__main__':
 
     print 'PSF', psf
     print type(psf)
+    print 'PSF scale:', psf.scale
+    print 'PSF sampling:', psf.sampling
+
+    # H,W = tim.shape
+    # xx,yy = np.meshgrid(np.linspace(0, W, 20), np.linspace(0, H, 40))
+    # mogs = [psf.mogAt(x,y) for x,y in zip(xx.ravel(), yy.ravel())]
+    # for i,nm in enumerate(mogs[0].getParamNames()):
+    #     pp = [mog.getParams()[i] for mog in mogs]
+    #     pp = np.array(pp).reshape(xx.shape)
+    #     plt.clf()
+    #     plt.imshow(pp,  interpolation='nearest', origin='lower')
+    #     plt.colorbar()
+    #     plt.title('Parameter: %s' % nm)
+    #     ps.savefig()
+    # for i,spl in enumerate(psf.splines):
+    #     plt.clf()
+    #     #vals = spl(xx,yy)
+    #     vals = spl(np.linspace(0, W, 20), np.linspace(0, H, 40))
+    #     #print 'xx,yy,vals', xx.shape, yy.shape, vals.shape
+    #     print 'vals', vals.shape
+    #     plt.imshow(vals, interpolation='nearest', origin='lower')
+    #     plt.colorbar()
+    #     plt.title('Parameter %i' % i)
+    #     ps.savefig()
 
     #flux = np.array([tim.photocal.brightnessToCounts(src.getBrightness())
     #                 for src in cat])
@@ -560,7 +587,7 @@ if __name__ == '__main__':
 
         print 'Subimage max', subim.max()
 
-        psfimg = psf.instantiateAt(ix, iy)
+        psfimg = psf.instantiateAt(ix, iy, nativeScale=True)
 
         subim /= subim.sum()
         psfimg /= psfimg.sum()
@@ -602,8 +629,7 @@ if __name__ == '__main__':
 
         mog = psf.mogAt(x, y)
         print 'PSF MOG:', mog
-
-        patch = psf.getPointSourcePatch(x, y)
+        patch = mog.getPointSourcePatch(x, y)
         print 'Patch', patch.x0, patch.y0, patch.patch.shape
         patch.x0 -= (ix - S)
         patch.y0 -= (iy - S)
@@ -614,15 +640,37 @@ if __name__ == '__main__':
         print 'Gauss sum', patch.patch.sum()
         print 'Gauss max', psfg.max()
 
+        im = np.maximum(psfimg, 0)
+        PS = im.shape[0]
+        xm,ym = -(PS/2), -(PS/2)
+        K = 3
+        w,mu,var = em_init_params(K, None, None, None)
+        em_fit_2d(im, xm, ym, w, mu, var)
+        #print 'Re-fit params:', w, mu, var
+        repsf = GaussianMixturePSF(w, mu, var)
+        print 'Re-fit MOG:', repsf
+        
+        patch = repsf.getPointSourcePatch(x, y)
+        print 'Patch', patch.x0, patch.y0, patch.patch.shape
+        patch.x0 -= (ix - S)
+        patch.y0 -= (iy - S)
+        psfg2 = np.zeros_like(subim)
+        patch.addTo(psfg2)
+        psfg2 /= psfg2.sum()
+
         plt.subplot(2,3,3)
-        plt.imshow(psfg, **ima)
-        plt.title('PSF Gaussian')
+        #plt.imshow(psfg, **ima)
+        #plt.title('PSF Gaussian')
+        plt.imshow(psfg2, **ima)
+        plt.title('Refit Gaussian')
 
 
         plt.subplot(2,3,6)
-        plt.imshow(-(subim - psfsub), interpolation='nearest', origin='lower',
-                   cmap='RdBu')
-        plt.title('Image - PsfPix')
+        plt.imshow(psfg, **ima)
+        plt.title('PSF Gaussian')
+        #plt.imshow(-(subim - psfsub), interpolation='nearest', origin='lower',
+        #           cmap='RdBu')
+        #plt.title('Image - PsfPix')
                    
         ima.update(vmin=0, vmax=np.sqrt(mx * 1.05))
 

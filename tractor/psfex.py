@@ -70,7 +70,7 @@ class VaryingGaussianPSF(MultiParams):
 
     def scaledMogParamsAt(self, x, y):
         w,mu,var = self.mogParamsAt(x, y)
-        if self.scale:
+        if not self.scale:
             # We didn't downsample the PSF in pixel space, so
             # scale down the MOG params.
             sfactor = self.sampling
@@ -208,7 +208,7 @@ class PsfEx(VaryingGaussianPSF):
         w,mu,var = self.scaledMogParamsAt(x, y)
         return GaussianMixturePSF(w, mu, var)
 
-    def instantiateAt(self, x, y):
+    def instantiateAt(self, x, y, nativeScale=False):
         from scipy.ndimage.interpolation import affine_transform
         psf = np.zeros_like(self.psfbases[0])
         #print 'psf', psf.shape
@@ -233,7 +233,7 @@ class PsfEx(VaryingGaussianPSF):
                 #print 'psf sum', psf.sum()
         #print 'min', psf.min(), 'max', psf.max()
 
-        if self.scale and self.sampling != 1:
+        if (self.scale or nativeScale) and self.sampling != 1:
             ny,nx = psf.shape
             spsf = affine_transform(psf, [1./self.sampling]*2,
                                     offset=nx/2 * (self.sampling - 1.))
