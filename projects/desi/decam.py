@@ -532,6 +532,111 @@ if __name__ == '__main__':
             ps.savefig()
 
 
+    # Check out the PSF models.
+    psf = tim.psf
+
+    print 'PSF', psf
+    print type(psf)
+
+    #flux = np.array([tim.photocal.brightnessToCounts(src.getBrightness())
+    #                 for src in cat])
+    flux = SEcat.flux_auto
+
+    ima = dict(interpolation='nearest', origin='lower', cmap='gray')
+               #vmin=tim.zr[0], vmax=tim.skyval + 20.*tim.sig1)
+
+    H,W = tim.shape
+    S = 20
+    I = np.argsort(-flux)
+    for i in I[:20]:
+        #x,y = tim.wcs.positionToPixel(cat[i].getPosition())
+        x,y = SEcat.x_image[i] - 1, SEcat.y_image[i] - 1
+        if x < S or y < S or x+S >= W or y+S >= H:
+            continue
+        ix,iy = int(np.round(x)), int(np.round(y))
+        subim = tim.getImage()[iy-S:iy+S+1, ix-S:ix+S+1]
+        ext = [ix-S, ix+S, iy-S, iy+S]
+        subiv = tim.getInvvar()[iy-S:iy+S+1, ix-S:ix+S+1]
+
+        print 'Subimage max', subim.max()
+
+        psfimg = psf.instantiateAt(ix, iy)
+
+        subim /= subim.sum()
+        psfimg /= psfimg.sum()
+        mx = max(subim.max(), psfimg.max())
+        ima.update(vmin=-0.05*mx, vmax=mx)
+
+        sh,sw = subim.shape
+        #subrgb = np.zeros((h,w,3))
+        subrgb = plt.cm.gray((subim - ima['vmin']) / (ima['vmax'] - ima['vmin']))
+        print 'subrgb', subrgb.shape
+        bad = (1,0,0)
+        for i in range(3):
+            subrgb[:,:,i][subiv == 0] = bad[i]
+
+        plt.clf()
+        plt.subplot(2,3,1)
+        #plt.imshow(subim, extent=ext, **ima)
+        plt.imshow(subrgb, extent=ext, **ima)
+        ax = plt.axis()
+        plt.plot(x, y, 'o', mfc='none', mec='r', ms=12)
+        plt.axis(ax)
+        plt.title('Image')
+        plt.subplot(2,3,2)
+        #plt.imshow(psfimg, **ima)
+        #plt.title('Image')
+
+        pixpsf = PixelizedPSF(psfimg)
+        patch = pixpsf.getPointSourcePatch(x - (ix-S), y - (iy-S))
+        print 'Patch', patch.x0, patch.y0, patch.patch.shape
+
+        psfsub = np.zeros_like(subim)
+        patch.addTo(psfsub)
+        psfsub /= psfsub.sum()
+        print 'Pix sum', patch.patch.sum()
+        print 'Pix max', psfsub.max()
+
+        plt.imshow(psfsub, **ima)
+        plt.title('PSF pix')
+
+        mog = psf.mogAt(x, y)
+        print 'PSF MOG:', mog
+
+        patch = psf.getPointSourcePatch(x, y)
+        print 'Patch', patch.x0, patch.y0, patch.patch.shape
+        patch.x0 -= (ix - S)
+        patch.y0 -= (iy - S)
+        psfg = np.zeros_like(subim)
+        patch.addTo(psfg)
+        psfg /= psfg.sum()
+
+        print 'Gauss sum', patch.patch.sum()
+        print 'Gauss max', psfg.max()
+
+        plt.subplot(2,3,3)
+        plt.imshow(psfg, **ima)
+        plt.title('PSF Gaussian')
+
+
+        plt.subplot(2,3,6)
+        plt.imshow(-(subim - psfsub), interpolation='nearest', origin='lower',
+                   cmap='RdBu')
+        plt.title('Image - PsfPix')
+                   
+        ima.update(vmin=0, vmax=np.sqrt(mx * 1.05))
+
+        plt.subplot(2,3,4)
+        plt.imshow(np.sqrt(subim + 0.05*mx), extent=ext, **ima)
+        plt.title('sqrt Image')
+        plt.subplot(2,3,5)
+        #plt.imshow(np.sqrt(psfimg + 0.05*mx), **ima)
+        plt.imshow(np.sqrt(psfsub + 0.05*mx), **ima)
+        plt.title('sqrt PSF pix')
+        
+        ps.savefig()
+        
+
     if secat:
         H,W = tim.shape
         I = np.argsort(T.mag_psf)
