@@ -299,122 +299,20 @@ class OptResult():
     # quack
     pass
 
-class Tractor(MultiParams):
-    """
-    Heavy farm machinery.
-
-    As you might guess from the name, this is the main class of the
-    Tractor framework.  A Tractor has a set of Images and a set of
-    Sources, and has methods to optimize the parameters of those
-    Images and Sources.
-
-    """
-    @staticmethod
-    def getName():
-        return 'Tractor'
-    
-    @staticmethod
-    def getNamedParams():
-        return dict(images=0, catalog=1)
-
-    def __init__(self, images=[], catalog=[], mp=None):
-        '''
-        - `images:` list of Image objects (data)
-        - `catalog:` list of Source objects
-        '''
-        if not isinstance(images, Images):
-            images = Images(*images)
-        if not isinstance(catalog, Catalog):
-            catalog = Catalog(*catalog)
-        super(Tractor,self).__init__(images, catalog)
-        self._setup(mp=mp)
-
-    def disable_cache(self):
-        self.cache = None
-
-    def _setup(self, mp=None, cache=None, pickleCache=False):
-        if mp is None:
-            mp = multiproc()
-        self.mp = mp
-        self.modtype = np.float32
-        if cache is None:
-            cache = Cache()
-        self.cache = cache
-        self.pickleCache = pickleCache
-
-    def __str__(self):
-        s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
-        names = []
-        for im in self.images:
-            if im.name is None:
-                names.append('[unnamed]')
-            else:
-                names.append(im.name)
-        s += ' (' + ', '.join(names) + ')'
-        return s
-
-    def is_multiproc(self):
-        return self.mp.pool is not None
-
-    def _map(self, func, iterable):
-        return self.mp.map(func, iterable)
-    def _map_async(self, func, iterable):
-        return self.mp.map_async(func, iterable)
-
+class DieselEngine(MultiParams):
     # For use from emcee
     def __call__(self, X):
         self.setParams(X)
         return self.getLogProb()
 
-    # For pickling
-    def __getstate__(self):
-        S = (self.getImages(), self.getCatalog(), self.liquid)
-        if self.pickleCache:
-            S = S + (self.cache,)
-        return S
-    def __setstate__(self, state):
-        args = {}
-        if len(state) == 3:
-            (images, catalog, liquid) = state
-        elif len(state) == 4:
-            (images, catalog, liquid, cache) = state
-            args.update(cache=cache, pickleCache=pickleCache)
-        self.subs = [images, catalog]
-        self.liquid = liquid
-        self._setup(**args)
-
-    def getNImages(self):
-        return len(self.images)
-
-    def getImage(self, imgi):
-        return self.images[imgi]
-
-    def getImages(self):
-        return self.images
-
-    def getCatalog(self):
-        return self.catalog
-
-    def setCatalog(self, srcs):
-        # FIXME -- ensure that "srcs" is a Catalog?  Or duck-type it?
-        self.catalog = srcs
-
-    def setImages(self, ims):
-        self.images = ims
-
-    def addImage(self, img):
-        self.images.append(img)
-
-    def addSource(self, src):
-        self.catalog.append(src)
-
-    def addSources(self, srcs):
-        self.catalog.extend(srcs)
-
-    def removeSource(self, src):
-        self.catalog.remove(src)
-
     def computeParameterErrors(self, symmetric=False):
+        '''
+        Compute 1-sigma error bars on each parameter by sweeping the
+        parameter until we see a delta-chi-squared of 1.
+        
+        NOTE: this is will be quite expensive!  It's kind of nutty,
+        really.  Better to use optimize(variance=True).
+        '''
         if not symmetric:
             return self._param_errors_1()
 
@@ -536,6 +434,659 @@ class Tractor(MultiParams):
                 plt.plot(XX[:,i], np.arange(N), 'r-')
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
+
+    def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
+                 shared_params=True, variance=False, just_variance=False):
+        '''
+        Performs *one step* of linearized least-squares + line search.
+        
+        Returns (delta-logprob, parameter update X, alpha stepsize)
+        '''
+        logverb(self.getName()+': Finding derivs...')
+        t0 = Time()
+        allderivs = self.getDerivs()
+        tderivs = Time()-t0
+        #print Time() - t0
+        #print 'allderivs:', allderivs
+        #for d in allderivs:
+        #   for (p,im) in d:
+        #       print 'patch mean', np.mean(p.patch)
+        logverb('Finding optimal update direction...')
+        t0 = Time()
+        X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
+                                    scale_columns=scale_columns,
+                                    shared_params=shared_params,
+                                    variance=variance)
+        if variance:
+            X,var = X
+            if just_variance:
+                return var
+        #print Time() - t0
+        topt = Time()-t0
+        #print 'X:', X
+        if len(X) == 0:
+            return 0, X, 0.
+        logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
+        logverb('Finding optimal step size...')
+        t0 = Time()
+        (dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
+        tstep = Time() - t0
+        logverb('Finished opt2.')
+        logverb('  alpha =',alpha)
+        logverb('  Tderiv', tderivs)
+        logverb('  Topt  ', topt)
+        logverb('  Tstep ', tstep)
+        if variance:
+            return dlogprob, X, alpha, var
+        return dlogprob, X, alpha
+
+    def getParameterScales(self):
+        print self.getName()+': Finding derivs...'
+        allderivs = self.getDerivs()
+        print 'Finding column scales...'
+        s = self.getUpdateDirection(allderivs, scales_only=True)
+        return s
+
+    def tryUpdates(self, X, alphas=None):
+        if alphas is None:
+            # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
+            alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
+
+        pBefore = self.getLogProb()
+        logverb('  log-prob before:', pBefore)
+        pBest = pBefore
+        alphaBest = None
+        p0 = self.getParams()
+        for alpha in alphas:
+            logverb('  Stepping with alpha =', alpha)
+            pa = [p + alpha * d for p,d in zip(p0, X)]
+            self.setParams(pa)
+            pAfter = self.getLogProb()
+            logverb('  Log-prob after:', pAfter)
+            logverb('  delta log-prob:', pAfter - pBefore)
+
+            if not np.isfinite(pAfter):
+                logmsg('  Got bad log-prob', pAfter)
+                break
+
+            if pAfter < (pBest - 1.):
+                break
+
+            if pAfter > pBest:
+                alphaBest = alpha
+                pBest = pAfter
+        
+        if alphaBest is None or alphaBest == 0:
+            print "Warning: optimization is borking"
+            print "Parameter direction =",X
+            print "Parameters and step sizes:"
+            for n,p,s in zip(self.getParamNames(), self.getParams(), self.getStepSizes()):
+                print n, p, s
+        if alphaBest is None:
+            self.setParams(p0)
+            return 0, 0.
+
+        logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+        pa = [p + alphaBest * d for p,d in zip(p0, X)]
+        self.setParams(pa)
+        return pBest - pBefore, alphaBest
+
+    
+    
+    def getUpdateDirection(self, allderivs, damp=0., priors=True,
+                           scale_columns=True, scales_only=False,
+                           chiImages=None, variance=False,
+                           shared_params=True,
+                           use_tsnnls=False,
+                           use_ceres=False):
+
+        # allderivs: [
+        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
+        #    (param1:)  [],
+        #    (param2:)  [  (deriv, img), ],
+        # ]
+        # The "img"s may repeat
+        # "deriv" are Patch objects.
+
+        # Each position in the "allderivs" array corresponds to a
+        # model parameter that we are optimizing
+
+        # We want to minimize:
+        #   || chi + (d(chi)/d(params)) * dparams ||^2
+        # So  b = chi
+        #     A = -d(chi)/d(params)
+        #     x = dparams
+        #
+        # chi = (data - model) / std = (data - model) * inverr
+        # derivs = d(model)/d(param)
+        # A matrix = -d(chi)/d(param)
+        #          = + (derivs) * inverr
+
+        # Parameters to optimize go in the columns of matrix A
+        # Pixels go in the rows.
+
+        if shared_params:
+            # Find shared parameters
+            p0 = self.getParams()
+            self.setParams(np.arange(len(p0)))
+            p1 = self.getParams()
+            self.setParams(p0)
+            U,I = np.unique(p1, return_inverse=True)
+            logverb(len(p0), 'params;', len(U), 'unique')
+            paramindexmap = I
+            #print 'paramindexmap:', paramindexmap
+            #print 'p1:', p1
+            
+        # Build the sparse matrix of derivatives:
+        sprows = []
+        spcols = []
+        spvals = []
+
+        # Keep track of row offsets for each image.
+        imgoffs = {}
+        nextrow = 0
+        for param in allderivs:
+            for deriv,img in param:
+                if img in imgoffs:
+                    continue
+                imgoffs[img] = nextrow
+                #print 'Putting image', img.name, 'at row offset', nextrow
+                nextrow += img.numberOfPixels()
+        Nrows = nextrow
+        del nextrow
+        Ncols = len(allderivs)
+
+        # FIXME -- shared_params should share colscales!
+        
+        colscales = np.ones(len(allderivs))
+        for col, param in enumerate(allderivs):
+            RR = []
+            VV = []
+            WW = []
+            for (deriv, img) in param:
+                inverrs = img.getInvError()
+                (H,W) = img.shape
+                row0 = imgoffs[img]
+                deriv.clipTo(W, H)
+                pix = deriv.getPixelIndices(img)
+                if len(pix) == 0:
+                    #print 'This param does not influence this image!'
+                    continue
+
+                assert(np.all(pix < img.numberOfPixels()))
+                # (grab non-zero indices)
+                dimg = deriv.getImage()
+                nz = np.flatnonzero(dimg)
+                #print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
+                if len(nz) == 0:
+                    continue
+                rows = row0 + pix[nz]
+                #print 'Adding derivative', deriv.getName(), 'for image', img.name
+                vals = dimg.ravel()[nz]
+                w = inverrs[deriv.getSlice(img)].ravel()[nz]
+                assert(vals.shape == w.shape)
+                if not scales_only:
+                    RR.append(rows)
+                    VV.append(vals)
+                    WW.append(w)
+
+            # massage, re-scale, and clean up matrix elements
+            if len(VV) == 0:
+                continue
+            rows = np.hstack(RR)
+            VV = np.hstack(VV)
+            WW = np.hstack(WW)
+            #vals = np.hstack(VV) * np.hstack(WW)
+            #print 'VV absmin:', np.min(np.abs(VV))
+            #print 'WW absmin:', np.min(np.abs(WW))
+            #print 'VV type', VV.dtype
+            #print 'WW type', WW.dtype
+            vals = VV * WW
+            #print 'vals absmin:', np.min(np.abs(vals))
+            #print 'vals absmax:', np.max(np.abs(vals))
+            #print 'vals type', vals.dtype
+
+            # shouldn't be necessary since we check len(nz)>0 above
+            #if len(vals) == 0:
+            #   continue
+            mx = np.max(np.abs(vals))
+            if mx == 0:
+                logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
+                       len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
+                       len(np.flatnonzero(vals)), 'non-zero products')
+                continue
+            # MAGIC number: near-zero matrix elements -> 0
+            # 'mx' is the max value in this column.
+            FACTOR = 1.e-10
+            I = (np.abs(vals) > (FACTOR * mx))
+            rows = rows[I]
+            vals = vals[I]
+            scale = np.sqrt(np.dot(vals, vals))
+            colscales[col] = scale
+            #logverb('Column', col, 'scale:', scale)
+            if scales_only:
+                continue
+
+            sprows.append(rows)
+            spcols.append(col)
+            #c = np.empty_like(rows)
+            #c[:] = col
+            #spcols.append(c)
+            if scale_columns:
+                spvals.append(vals / scale)
+            else:
+                spvals.append(vals)
+                
+        if scales_only:
+            return colscales
+
+        b = None
+        if priors:
+            # We don't include the priors in the "colscales"
+            # computation above, mostly because the priors are
+            # returned as sparse additions to the matrix, and not
+            # necessarily column-oriented the way the other params
+            # are.  It would be possible to make it work, but dstn is
+            # not convinced it's worth the effort right now.
+            X = self.getLogPriorDerivatives()
+            if X is not None:
+                rA,cA,vA,pb = X
+
+                sprows.extend([ri + Nrows for ri in rA])
+                spcols.extend(cA)
+                spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
+                oldnrows = Nrows
+                nr = listmax(rA, -1) + 1
+                Nrows += nr
+                logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
+                # if len(cA) == 0:
+                #     Ncols = 0
+                # else:
+                #     Ncols = 1 + max(cA)
+
+                b = np.zeros(Nrows)
+                b[oldnrows:] = np.hstack(pb)
+
+        if len(spcols) == 0:
+            logverb("len(spcols) == 0")
+            return []
+
+        # 'spcols' has one integer per 'sprows' block.
+        # below we hstack the rows, but before doing that, remember how
+        # many rows are in each chunk.
+        spcols = np.array(spcols)
+        nrowspercol = np.array([len(x) for x in sprows])
+        
+        if shared_params:
+            # Apply shared parameter map
+            #print 'Before applying shared parameter map:'
+            #print 'spcols:', len(spcols), 'elements'
+            #print '  ', len(set(spcols)), 'unique'
+            spcols = paramindexmap[spcols]
+            #print 'After:'
+            #print 'spcols:', len(spcols), 'elements'
+            #print '  ', len(set(spcols)), 'unique'
+            Ncols = np.max(spcols) + 1
+            logverb('Set Ncols=', Ncols)
+
+        # b = chi
+        #
+        # FIXME -- we could be much smarter here about computing
+        # just the regions we need!
+        #
+        if b is None:
+            b = np.zeros(Nrows)
+
+        chimap = {}
+        if chiImages is not None:
+            for img,chi in zip(self.getImages(), chiImages):
+                chimap[img] = chi
+                
+        # iterating this way avoids setting the elements more than once
+        for img,row0 in imgoffs.items():
+            chi = chimap.get(img, None)
+            if chi is None:
+                #print 'computing chi image'
+                chi = self.getChiImage(img=img)
+            chi = chi.ravel()
+            NP = len(chi)
+            # we haven't touched these pix before
+            assert(np.all(b[row0 : row0 + NP] == 0))
+            assert(np.all(np.isfinite(chi)))
+            #print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
+            b[row0 : row0 + NP] = chi
+        ###### Zero out unused rows -- FIXME, is this useful??
+        # print 'Nrows', Nrows, 'vs len(urows)', len(urows)
+        # bnz = np.zeros(Nrows)
+        # bnz[urows] = b[urows]
+        # print 'b', len(b), 'vs bnz', len(bnz)
+        # b = bnz
+        assert(np.all(np.isfinite(b)))
+
+        use_lsqr = True
+
+        if use_ceres:
+            # Solver::Options::linear_solver_type to SPARSE_NORMAL_CHOLESKY 
+            pass
+        
+        if use_tsnnls:
+            use_lsqr = False
+            from tsnnls import tsnnls_lsqr
+            #logmsg('TSNNLS: %i cols (%i unique), %i elements' %
+            #       (Ncols, len(ucols), len(spvals)))
+            print 'spcols:', spcols.shape, spcols.dtype
+            #print 'spvals:', spvals.shape, spvals.dtype
+            print 'spvals:', len(spvals), 'chunks'
+            print '  total', sum(len(x) for x in spvals), 'elements'
+            print 'b:', b.shape, b.dtype
+            #print 'sprows:', sprows.shape, sprows.dtype
+            print 'sprows:', len(sprows), 'chunks'
+            print '  total', sum(len(x) for x in sprows), 'elements'
+
+            ucols,colI = np.unique(spcols, return_inverse=True)
+            J = np.argsort(colI)
+
+            sorted_cols = colI[J]
+            nel = [len(sprows[j]) for j in J]
+            sorted_rows = np.hstack([sprows[j].astype(np.int32) for j in J])
+            sorted_vals = np.hstack([spvals[j] for j in J])
+            #Nelements = sum(len(x) for x in spvals)
+            Nelements = sum(nel)
+            
+            colinds = np.zeros(len(ucols)+1, np.int32)
+            for c,n in zip(sorted_cols, nel):
+                colinds[c+1] += n
+            colinds = np.cumsum(colinds).astype(np.int32)
+            assert(colinds[-1] == Nelements)
+            #colinds = colinds[:-1]
+            
+            # print 'sorted_cols:', sorted_cols
+            # print 'column inds:', colinds
+            # print 'sorted_rows:', sorted_rows
+            # print 'sorted_vals:', sorted_vals
+            print 'colinds:', colinds.shape, colinds.dtype
+            print 'rows:', sorted_rows.shape, sorted_rows.dtype
+            print 'vals:', sorted_vals.shape, sorted_vals.dtype
+
+            # compress b and rows?
+            urows,K = np.unique(sorted_rows, return_inverse=True)
+            bcomp = b[urows]
+            rowcomp = K.astype(np.int32)
+
+            # print 'Compressed rows:', rowcomp
+            # print 'Compressed b:', bcomp
+            # for c,(i0,i1) in enumerate(zip(colinds, colinds[1:])):
+            #     print 'Column', c, 'goes from', i0, 'to', i1
+            #     print 'rows:', rowcomp[i0:i1]
+            #     print 'vals:', sorted_vals[i0:i1]
+            
+            nrcomp = len(urows)
+            
+            #tsnnls_lsqr(colinds, sorted_rows, sorted_vals,
+            #            b, Nrows, Nelements)
+
+            X = tsnnls_lsqr(colinds, rowcomp, sorted_vals,
+                            bcomp, nrcomp, Nelements)
+            print 'Got TSNNLS result:', X
+
+            # Undo the column mappings
+            X2 = np.zeros(len(allderivs))
+            #X2[colI] = X
+            X2[ucols] = X
+            X = X2
+            del X2
+            
+        if use_lsqr:
+            from scipy.sparse import csr_matrix, csc_matrix
+            from scipy.sparse.linalg import lsqr
+
+            spvals = np.hstack(spvals)
+            assert(np.all(np.isfinite(spvals)))
+    
+            sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
+            assert(len(sprows) == len(spvals))
+                
+            # For LSQR, expand 'spcols' to be the same length as 'sprows'.
+            cc = np.empty(len(sprows))
+            i = 0
+            for c,n in zip(spcols, nrowspercol):
+                cc[i : i+n] = c
+                i += n
+            spcols = cc
+            assert(i == len(sprows))
+            assert(len(sprows) == len(spcols))
+
+            logverb('  Number of sparse matrix elements:', len(sprows))
+            urows = np.unique(sprows)
+            ucols = np.unique(spcols)
+            logverb('  Unique rows (pixels):', len(urows))
+            logverb('  Unique columns (params):', len(ucols))
+            if len(urows) == 0 or len(ucols) == 0:
+                return []
+            logverb('  Max row:', urows[-1])
+            logverb('  Max column:', ucols[-1])
+            logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
+            
+            # FIXME -- does it make LSQR faster if we remap the row and column
+            # indices so that no rows/cols are empty?
+    
+            # FIXME -- we could probably construct the CSC matrix ourselves!
+    
+            # Build sparse matrix
+            #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+            A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
+    
+            lsqropts = dict(show=isverbose(), damp=damp)
+            if variance:
+                lsqropts.update(calc_var=True)
+    
+            # lsqr can trigger floating-point errors
+            #np.seterr(all='warn')
+            
+            # Run lsqr()
+            logmsg('LSQR: %i cols (%i unique), %i elements' %
+                   (Ncols, len(ucols), len(spvals)-1))
+    
+            # print 'A matrix:'
+            # print A.todense()
+            # print
+            # print 'vector b:'
+            # print b
+            
+            t0 = time.clock()
+            (X, istop, niters, r1norm, r2norm, anorm, acond,
+             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+            t1 = time.clock()
+            logmsg('  %.1f seconds' % (t1-t0))
+
+            del A
+            del b
+    
+            # print 'LSQR results:'
+            # print '  istop =', istop
+            # print '  niters =', niters
+            # print '  r1norm =', r1norm
+            # print '  r2norm =', r2norm
+            # print '  anorm =', anorm
+            # print '  acord =', acond
+            # print '  arnorm =', arnorm
+            # print '  xnorm =', xnorm
+            # print '  var =', var
+    
+            #olderr = set_fp_err()
+        
+        logverb('scaled  X=', X)
+        X = np.array(X)
+
+        if shared_params:
+            # Unapply shared parameter map -- result is duplicated
+            # result elements.
+            logverb('shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
+            logverb('paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max())
+            X = X[paramindexmap]
+            logverb('shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
+
+        if scale_columns:
+            X /= colscales
+        logverb('  X=', X)
+
+        #np.seterr(**olderr)
+        #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
+
+        if variance:
+            if shared_params:
+                # Unapply shared parameter map.
+                var = var[paramindexmap]
+            
+            if scale_columns:
+                var /= colscales**2
+            return X,var
+
+        return X
+
+    def getDerivs(self):
+        # Returns:
+        # allderivs: [
+        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
+        #    (param1:)  [],
+        #    (param2:)  [  (deriv, img), ],
+        # ]
+
+        # FIXME!
+        allderivs = []
+        return allderivs
+
+    def getLogLikelihood(self):
+        return 0.
+
+    def getLogProb(self):
+        '''
+        return the posterior PDF, evaluated at the parametrs
+        '''
+        lnp = self.getLogPrior()
+        if lnp == -np.inf:
+            return lnp
+        lnp += self.getLogLikelihood()
+        if np.isnan(lnp):
+            print 'Tractor.getLogProb() returning NaN.'
+            print 'Params:'
+            print self.printThawedParams()
+            print 'log likelihood:', self.getLogLikelihood()
+            print 'log prior:', self.getLogPrior()
+            return -np.inf
+        return lnp
+
+    
+    
+class Tractor(DieselEngine):
+    """
+    Heavy farm machinery.
+
+    As you might guess from the name, this is the main class of the
+    Tractor framework.  A Tractor has a set of Images and a set of
+    Sources, and has methods to optimize the parameters of those
+    Images and Sources.
+
+    """
+    @staticmethod
+    def getName():
+        return 'Tractor'
+    
+    @staticmethod
+    def getNamedParams():
+        return dict(images=0, catalog=1)
+
+    def __init__(self, images=[], catalog=[], mp=None):
+        '''
+        - `images:` list of Image objects (data)
+        - `catalog:` list of Source objects
+        '''
+        if not isinstance(images, Images):
+            images = Images(*images)
+        if not isinstance(catalog, Catalog):
+            catalog = Catalog(*catalog)
+        super(Tractor,self).__init__(images, catalog)
+        self._setup(mp=mp)
+
+    def disable_cache(self):
+        self.cache = None
+
+    def _setup(self, mp=None, cache=None, pickleCache=False):
+        if mp is None:
+            mp = multiproc()
+        self.mp = mp
+        self.modtype = np.float32
+        if cache is None:
+            cache = Cache()
+        self.cache = cache
+        self.pickleCache = pickleCache
+
+    def __str__(self):
+        s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
+        names = []
+        for im in self.images:
+            if im.name is None:
+                names.append('[unnamed]')
+            else:
+                names.append(im.name)
+        s += ' (' + ', '.join(names) + ')'
+        return s
+
+    def is_multiproc(self):
+        return self.mp.pool is not None
+
+    def _map(self, func, iterable):
+        return self.mp.map(func, iterable)
+    def _map_async(self, func, iterable):
+        return self.mp.map_async(func, iterable)
+
+    # For pickling
+    def __getstate__(self):
+        S = (self.getImages(), self.getCatalog(), self.liquid)
+        if self.pickleCache:
+            S = S + (self.cache,)
+        return S
+    def __setstate__(self, state):
+        args = {}
+        if len(state) == 3:
+            (images, catalog, liquid) = state
+        elif len(state) == 4:
+            (images, catalog, liquid, cache) = state
+            args.update(cache=cache, pickleCache=pickleCache)
+        self.subs = [images, catalog]
+        self.liquid = liquid
+        self._setup(**args)
+
+    def getNImages(self):
+        return len(self.images)
+
+    def getImage(self, imgi):
+        return self.images[imgi]
+
+    def getImages(self):
+        return self.images
+
+    def getCatalog(self):
+        return self.catalog
+
+    def setCatalog(self, srcs):
+        # FIXME -- ensure that "srcs" is a Catalog?  Or duck-type it?
+        self.catalog = srcs
+
+    def setImages(self, ims):
+        self.images = ims
+
+    def addImage(self, img):
+        self.images.append(img)
+
+    def addSource(self, src):
+        self.catalog.append(src)
+
+    def addSources(self, srcs):
+        self.catalog.extend(srcs)
+
+    def removeSource(self, src):
+        self.catalog.remove(src)
 
     def _ceres_opt(self):
         from ceres import ceres_opt
@@ -1052,6 +1603,7 @@ class Tractor(MultiParams):
             ims.append((im, mod, ie, chi, roi))
         return ims
     
+    # used only by _lsqr_forced_photom
     def _lnp_for_update(self, mod0, imgs, umodels, X, alpha, p0, rois,
                         scales, p0sky, Xsky, priors, sky, minFlux):
         if X is None:
@@ -1426,104 +1978,6 @@ class Tractor(MultiParams):
             logverb('forced phot: fit stats:', Time()-t0)
         return result
 
-
-    def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
-                 shared_params=True, variance=False, just_variance=False):
-        '''
-        Performs *one step* of linearized least-squares + line search.
-        
-        Returns (delta-logprob, parameter update X, alpha stepsize)
-        '''
-        logverb(self.getName()+': Finding derivs...')
-        t0 = Time()
-        allderivs = self.getDerivs()
-        tderivs = Time()-t0
-        #print Time() - t0
-        #print 'allderivs:', allderivs
-        #for d in allderivs:
-        #   for (p,im) in d:
-        #       print 'patch mean', np.mean(p.patch)
-        logverb('Finding optimal update direction...')
-        t0 = Time()
-        X = self.getUpdateDirection(allderivs, damp=damp, priors=priors,
-                                    scale_columns=scale_columns,
-                                    shared_params=shared_params,
-                                    variance=variance)
-        if variance:
-            X,var = X
-            if just_variance:
-                return var
-        #print Time() - t0
-        topt = Time()-t0
-        #print 'X:', X
-        if len(X) == 0:
-            return 0, X, 0.
-        logverb('X: len', len(X), '; non-zero entries:', np.count_nonzero(X))
-        logverb('Finding optimal step size...')
-        t0 = Time()
-        (dlogprob, alpha) = self.tryUpdates(X, alphas=alphas)
-        tstep = Time() - t0
-        logverb('Finished opt2.')
-        logverb('  alpha =',alpha)
-        logverb('  Tderiv', tderivs)
-        logverb('  Topt  ', topt)
-        logverb('  Tstep ', tstep)
-        if variance:
-            return dlogprob, X, alpha, var
-        return dlogprob, X, alpha
-
-    def getParameterScales(self):
-        print self.getName()+': Finding derivs...'
-        allderivs = self.getDerivs()
-        print 'Finding column scales...'
-        s = self.getUpdateDirection(allderivs, scales_only=True)
-        return s
-
-    def tryUpdates(self, X, alphas=None):
-        if alphas is None:
-            # 1/1024 to 1 in factors of 2, + sqrt(2.) + 2.
-            alphas = np.append(2.**np.arange(-10, 1), [np.sqrt(2.), 2.])
-
-        pBefore = self.getLogProb()
-        logverb('  log-prob before:', pBefore)
-        pBest = pBefore
-        alphaBest = None
-        p0 = self.getParams()
-        for alpha in alphas:
-            logverb('  Stepping with alpha =', alpha)
-            pa = [p + alpha * d for p,d in zip(p0, X)]
-            self.setParams(pa)
-            pAfter = self.getLogProb()
-            logverb('  Log-prob after:', pAfter)
-            logverb('  delta log-prob:', pAfter - pBefore)
-
-            if not np.isfinite(pAfter):
-                logmsg('  Got bad log-prob', pAfter)
-                break
-
-            if pAfter < (pBest - 1.):
-                break
-
-            if pAfter > pBest:
-                alphaBest = alpha
-                pBest = pAfter
-        
-        if alphaBest is None or alphaBest == 0:
-            print "Warning: optimization is borking"
-            print "Parameter direction =",X
-            print "Parameters and step sizes:"
-            for n,p,s in zip(self.getParamNames(), self.getParams(), self.getStepSizes()):
-                print n, p, s
-        if alphaBest is None:
-            self.setParams(p0)
-            return 0, 0.
-
-        logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
-        pa = [p + alphaBest * d for p,d in zip(p0, X)]
-        self.setParams(pa)
-        return pBest - pBefore, alphaBest
-
-
     def getDerivs(self):
         # Returns:
         # allderivs: [
@@ -1659,417 +2113,6 @@ class Tractor(MultiParams):
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
-
-    def getUpdateDirection(self, allderivs, damp=0., priors=True,
-                           scale_columns=True, scales_only=False,
-                           chiImages=None, variance=False,
-                           shared_params=True,
-                           use_tsnnls=False,
-                           use_ceres=False):
-
-        # allderivs: [
-        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
-        #    (param1:)  [],
-        #    (param2:)  [  (deriv, img), ],
-        # ]
-        # The "img"s may repeat
-        # "deriv" are Patch objects.
-
-        # Each position in the "allderivs" array corresponds to a
-        # model parameter that we are optimizing
-
-        # We want to minimize:
-        #   || chi + (d(chi)/d(params)) * dparams ||^2
-        # So  b = chi
-        #     A = -d(chi)/d(params)
-        #     x = dparams
-        #
-        # chi = (data - model) / std = (data - model) * inverr
-        # derivs = d(model)/d(param)
-        # A matrix = -d(chi)/d(param)
-        #          = + (derivs) * inverr
-
-        # Parameters to optimize go in the columns of matrix A
-        # Pixels go in the rows.
-
-        if shared_params:
-            # Find shared parameters
-            p0 = self.getParams()
-            self.setParams(np.arange(len(p0)))
-            p1 = self.getParams()
-            self.setParams(p0)
-            U,I = np.unique(p1, return_inverse=True)
-            logverb(len(p0), 'params;', len(U), 'unique')
-            paramindexmap = I
-            #print 'paramindexmap:', paramindexmap
-            #print 'p1:', p1
-            
-        # Build the sparse matrix of derivatives:
-        sprows = []
-        spcols = []
-        spvals = []
-
-        # Keep track of row offsets for each image.
-        imgoffs = {}
-        nextrow = 0
-        for param in allderivs:
-            for deriv,img in param:
-                if img in imgoffs:
-                    continue
-                imgoffs[img] = nextrow
-                #print 'Putting image', img.name, 'at row offset', nextrow
-                nextrow += img.numberOfPixels()
-        Nrows = nextrow
-        del nextrow
-        Ncols = len(allderivs)
-
-        # FIXME -- shared_params should share colscales!
-        
-        colscales = np.ones(len(allderivs))
-        for col, param in enumerate(allderivs):
-            RR = []
-            VV = []
-            WW = []
-            for (deriv, img) in param:
-                inverrs = img.getInvError()
-                (H,W) = img.shape
-                row0 = imgoffs[img]
-                deriv.clipTo(W, H)
-                pix = deriv.getPixelIndices(img)
-                if len(pix) == 0:
-                    #print 'This param does not influence this image!'
-                    continue
-
-                assert(np.all(pix < img.numberOfPixels()))
-                # (grab non-zero indices)
-                dimg = deriv.getImage()
-                nz = np.flatnonzero(dimg)
-                #print '  source', j, 'derivative', p, 'has', len(nz), 'non-zero entries'
-                if len(nz) == 0:
-                    continue
-                rows = row0 + pix[nz]
-                #print 'Adding derivative', deriv.getName(), 'for image', img.name
-                vals = dimg.ravel()[nz]
-                w = inverrs[deriv.getSlice(img)].ravel()[nz]
-                assert(vals.shape == w.shape)
-                if not scales_only:
-                    RR.append(rows)
-                    VV.append(vals)
-                    WW.append(w)
-
-            # massage, re-scale, and clean up matrix elements
-            if len(VV) == 0:
-                continue
-            rows = np.hstack(RR)
-            VV = np.hstack(VV)
-            WW = np.hstack(WW)
-            #vals = np.hstack(VV) * np.hstack(WW)
-            #print 'VV absmin:', np.min(np.abs(VV))
-            #print 'WW absmin:', np.min(np.abs(WW))
-            #print 'VV type', VV.dtype
-            #print 'WW type', WW.dtype
-            vals = VV * WW
-            #print 'vals absmin:', np.min(np.abs(vals))
-            #print 'vals absmax:', np.max(np.abs(vals))
-            #print 'vals type', vals.dtype
-
-            # shouldn't be necessary since we check len(nz)>0 above
-            #if len(vals) == 0:
-            #   continue
-            mx = np.max(np.abs(vals))
-            if mx == 0:
-                logmsg('mx == 0:', len(np.flatnonzero(VV)), 'of', len(VV), 'non-zero derivatives,',
-                       len(np.flatnonzero(WW)), 'of', len(WW), 'non-zero weights;',
-                       len(np.flatnonzero(vals)), 'non-zero products')
-                continue
-            # MAGIC number: near-zero matrix elements -> 0
-            # 'mx' is the max value in this column.
-            FACTOR = 1.e-10
-            I = (np.abs(vals) > (FACTOR * mx))
-            rows = rows[I]
-            vals = vals[I]
-            scale = np.sqrt(np.dot(vals, vals))
-            colscales[col] = scale
-            #logverb('Column', col, 'scale:', scale)
-            if scales_only:
-                continue
-
-            sprows.append(rows)
-            spcols.append(col)
-            #c = np.empty_like(rows)
-            #c[:] = col
-            #spcols.append(c)
-            if scale_columns:
-                spvals.append(vals / scale)
-            else:
-                spvals.append(vals)
-                
-        if scales_only:
-            return colscales
-
-        b = None
-        if priors:
-            # We don't include the priors in the "colscales"
-            # computation above, mostly because the priors are
-            # returned as sparse additions to the matrix, and not
-            # necessarily column-oriented the way the other params
-            # are.  It would be possible to make it work, but dstn is
-            # not convinced it's worth the effort right now.
-            X = self.getLogPriorDerivatives()
-            if X is not None:
-                rA,cA,vA,pb = X
-
-                sprows.extend([ri + Nrows for ri in rA])
-                spcols.extend(cA)
-                spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
-                oldnrows = Nrows
-                nr = listmax(rA, -1) + 1
-                Nrows += nr
-                logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-                # if len(cA) == 0:
-                #     Ncols = 0
-                # else:
-                #     Ncols = 1 + max(cA)
-
-                b = np.zeros(Nrows)
-                b[oldnrows:] = np.hstack(pb)
-
-        if len(spcols) == 0:
-            logverb("len(spcols) == 0")
-            return []
-
-        # 'spcols' has one integer per 'sprows' block.
-        # below we hstack the rows, but before doing that, remember how
-        # many rows are in each chunk.
-        spcols = np.array(spcols)
-        nrowspercol = np.array([len(x) for x in sprows])
-        
-        if shared_params:
-            # Apply shared parameter map
-            #print 'Before applying shared parameter map:'
-            #print 'spcols:', len(spcols), 'elements'
-            #print '  ', len(set(spcols)), 'unique'
-            spcols = paramindexmap[spcols]
-            #print 'After:'
-            #print 'spcols:', len(spcols), 'elements'
-            #print '  ', len(set(spcols)), 'unique'
-            Ncols = np.max(spcols) + 1
-            logverb('Set Ncols=', Ncols)
-
-        # b = chi
-        #
-        # FIXME -- we could be much smarter here about computing
-        # just the regions we need!
-        #
-        if b is None:
-            b = np.zeros(Nrows)
-
-        chimap = {}
-        if chiImages is not None:
-            for img,chi in zip(self.getImages(), chiImages):
-                chimap[img] = chi
-                
-        # iterating this way avoids setting the elements more than once
-        for img,row0 in imgoffs.items():
-            chi = chimap.get(img, None)
-            if chi is None:
-                #print 'computing chi image'
-                chi = self.getChiImage(img=img)
-            chi = chi.ravel()
-            NP = len(chi)
-            # we haven't touched these pix before
-            assert(np.all(b[row0 : row0 + NP] == 0))
-            assert(np.all(np.isfinite(chi)))
-            #print 'Setting [%i:%i) from chi img' % (row0, row0+NP)
-            b[row0 : row0 + NP] = chi
-        ###### Zero out unused rows -- FIXME, is this useful??
-        # print 'Nrows', Nrows, 'vs len(urows)', len(urows)
-        # bnz = np.zeros(Nrows)
-        # bnz[urows] = b[urows]
-        # print 'b', len(b), 'vs bnz', len(bnz)
-        # b = bnz
-        assert(np.all(np.isfinite(b)))
-
-        use_lsqr = True
-
-        if use_ceres:
-            # Solver::Options::linear_solver_type to SPARSE_NORMAL_CHOLESKY 
-            pass
-        
-        if use_tsnnls:
-            use_lsqr = False
-            from tsnnls import tsnnls_lsqr
-            #logmsg('TSNNLS: %i cols (%i unique), %i elements' %
-            #       (Ncols, len(ucols), len(spvals)))
-            print 'spcols:', spcols.shape, spcols.dtype
-            #print 'spvals:', spvals.shape, spvals.dtype
-            print 'spvals:', len(spvals), 'chunks'
-            print '  total', sum(len(x) for x in spvals), 'elements'
-            print 'b:', b.shape, b.dtype
-            #print 'sprows:', sprows.shape, sprows.dtype
-            print 'sprows:', len(sprows), 'chunks'
-            print '  total', sum(len(x) for x in sprows), 'elements'
-
-            ucols,colI = np.unique(spcols, return_inverse=True)
-            J = np.argsort(colI)
-
-            sorted_cols = colI[J]
-            nel = [len(sprows[j]) for j in J]
-            sorted_rows = np.hstack([sprows[j].astype(np.int32) for j in J])
-            sorted_vals = np.hstack([spvals[j] for j in J])
-            #Nelements = sum(len(x) for x in spvals)
-            Nelements = sum(nel)
-            
-            colinds = np.zeros(len(ucols)+1, np.int32)
-            for c,n in zip(sorted_cols, nel):
-                colinds[c+1] += n
-            colinds = np.cumsum(colinds).astype(np.int32)
-            assert(colinds[-1] == Nelements)
-            #colinds = colinds[:-1]
-            
-            # print 'sorted_cols:', sorted_cols
-            # print 'column inds:', colinds
-            # print 'sorted_rows:', sorted_rows
-            # print 'sorted_vals:', sorted_vals
-            print 'colinds:', colinds.shape, colinds.dtype
-            print 'rows:', sorted_rows.shape, sorted_rows.dtype
-            print 'vals:', sorted_vals.shape, sorted_vals.dtype
-
-            # compress b and rows?
-            urows,K = np.unique(sorted_rows, return_inverse=True)
-            bcomp = b[urows]
-            rowcomp = K.astype(np.int32)
-
-            # print 'Compressed rows:', rowcomp
-            # print 'Compressed b:', bcomp
-            # for c,(i0,i1) in enumerate(zip(colinds, colinds[1:])):
-            #     print 'Column', c, 'goes from', i0, 'to', i1
-            #     print 'rows:', rowcomp[i0:i1]
-            #     print 'vals:', sorted_vals[i0:i1]
-            
-            nrcomp = len(urows)
-            
-            #tsnnls_lsqr(colinds, sorted_rows, sorted_vals,
-            #            b, Nrows, Nelements)
-
-            X = tsnnls_lsqr(colinds, rowcomp, sorted_vals,
-                            bcomp, nrcomp, Nelements)
-            print 'Got TSNNLS result:', X
-
-            # Undo the column mappings
-            X2 = np.zeros(len(allderivs))
-            #X2[colI] = X
-            X2[ucols] = X
-            X = X2
-            del X2
-            
-        if use_lsqr:
-            from scipy.sparse import csr_matrix, csc_matrix
-            from scipy.sparse.linalg import lsqr
-
-            spvals = np.hstack(spvals)
-            assert(np.all(np.isfinite(spvals)))
-    
-            sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
-            assert(len(sprows) == len(spvals))
-                
-            # For LSQR, expand 'spcols' to be the same length as 'sprows'.
-            cc = np.empty(len(sprows))
-            i = 0
-            for c,n in zip(spcols, nrowspercol):
-                cc[i : i+n] = c
-                i += n
-            spcols = cc
-            assert(i == len(sprows))
-            assert(len(sprows) == len(spcols))
-
-            logverb('  Number of sparse matrix elements:', len(sprows))
-            urows = np.unique(sprows)
-            ucols = np.unique(spcols)
-            logverb('  Unique rows (pixels):', len(urows))
-            logverb('  Unique columns (params):', len(ucols))
-            if len(urows) == 0 or len(ucols) == 0:
-                return []
-            logverb('  Max row:', urows[-1])
-            logverb('  Max column:', ucols[-1])
-            logverb('  Sparsity factor (possible elements / filled elements):', float(len(urows) * len(ucols)) / float(len(sprows)))
-            
-            # FIXME -- does it make LSQR faster if we remap the row and column
-            # indices so that no rows/cols are empty?
-    
-            # FIXME -- we could probably construct the CSC matrix ourselves!
-    
-            # Build sparse matrix
-            #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-            A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-    
-            lsqropts = dict(show=isverbose(), damp=damp)
-            if variance:
-                lsqropts.update(calc_var=True)
-    
-            # lsqr can trigger floating-point errors
-            #np.seterr(all='warn')
-            
-            # Run lsqr()
-            logmsg('LSQR: %i cols (%i unique), %i elements' %
-                   (Ncols, len(ucols), len(spvals)-1))
-    
-            # print 'A matrix:'
-            # print A.todense()
-            # print
-            # print 'vector b:'
-            # print b
-            
-            t0 = time.clock()
-            (X, istop, niters, r1norm, r2norm, anorm, acond,
-             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
-            t1 = time.clock()
-            logmsg('  %.1f seconds' % (t1-t0))
-
-            del A
-            del b
-    
-            # print 'LSQR results:'
-            # print '  istop =', istop
-            # print '  niters =', niters
-            # print '  r1norm =', r1norm
-            # print '  r2norm =', r2norm
-            # print '  anorm =', anorm
-            # print '  acord =', acond
-            # print '  arnorm =', arnorm
-            # print '  xnorm =', xnorm
-            # print '  var =', var
-    
-            #olderr = set_fp_err()
-        
-        logverb('scaled  X=', X)
-        X = np.array(X)
-
-        if shared_params:
-            # Unapply shared parameter map -- result is duplicated
-            # result elements.
-            logverb('shared_params: before, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
-            logverb('paramindexmap: len', len(paramindexmap), 'range', paramindexmap.min(), paramindexmap.max())
-            X = X[paramindexmap]
-            logverb('shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
-
-        if scale_columns:
-            X /= colscales
-        logverb('  X=', X)
-
-        #np.seterr(**olderr)
-        #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
-
-        if variance:
-            if shared_params:
-                # Unapply shared parameter map.
-                var = var[paramindexmap]
-            
-            if scale_columns:
-                var /= colscales**2
-            return X,var
-
-        return X
 
     def changeInvvar(self, Q2=None):
         '''
@@ -2251,312 +2294,4 @@ class Tractor(MultiParams):
         for i,chi in enumerate(self.getChiImages()):
             chisq += (chi.astype(float) ** 2).sum()
         return -0.5 * chisq
-
-    def getLogProb(self):
-        '''
-        return the posterior PDF, evaluated at the parametrs
-        '''
-        lnp = self.getLogPrior()
-        if lnp == -np.inf:
-            return lnp
-        lnp += self.getLogLikelihood()
-        if np.isnan(lnp):
-            print 'Tractor.getLogProb() returning NaN.'
-            print 'Params:'
-            print self.printThawedParams()
-            print 'log likelihood:', self.getLogLikelihood()
-            print 'log prior:', self.getLogPrior()
-            return -np.inf
-        return lnp
-
-    def getBbox(self, img, srcs):
-        nzsum = None
-        # find bbox
-        for src in srcs:
-            p = self.getModelPatch(img, src)
-            if p is None:
-                continue
-            nz = p.getNonZeroMask()
-            nz.patch = nz.patch.astype(np.int)
-            if nzsum is None:
-                nzsum = nz
-            else:
-                nzsum += nz
-            # ie = tim.getInvError()
-            # p2 = np.zeros_like(ie)
-            # p.addTo(p2)
-            # effect = np.sum(p2)
-            # print 'Source:', src
-            # print 'Total chi contribution:', effect, 'sigma'
-        nzsum.trimToNonZero()
-        roi = nzsum.getExtent()
-        return roi
-    
-    def createNewSource(self, img, x, y, height):
-        return None
-
-    def debugNewSource(self, *args, **kwargs):
-        pass
-
-    def createSource(self, nbatch=1, imgi=None, jointopt=False,
-                     avoidExisting=True):
-        logverb('createSource')
-        '''
-        -synthesize images
-        -look for "promising" x,y image locations with positive residuals
-        - (not near existing sources)
-        ---chi image, PSF smooth, propose positions?
-        -instantiate new source (Position, brightness)
-        -local optimizeAtFixedComplexity
-        '''
-        if imgi is None:
-            imgi = range(self.getNImages())
-        
-        for i in imgi:
-            for b in range(nbatch):
-                chi = self.getChiImage(i)
-                img = self.getImage(i)
-
-                if avoidExisting:
-                    # block out regions around existing Sources.
-                    for j,src in enumerate(self.catalog):
-                        patch = self.getModelPatch(img, src)
-                        (H,W) = img.shape
-                        if not patch.clipTo(W, H):
-                            continue
-                        chi[patch.getSlice()] = 0.
-
-                # PSF-correlate
-                sm = img.getPsf().applyTo(chi)
-                debugargs = dict(imgi=i, img=img, chiimg=chi, smoothed=sm)
-                self.debugNewSource(type='chi-smoothed', **debugargs)
-
-                # Try to create sources in the highest-valued pixels.
-                # FIXME -- should do peak-finding (ie, non-maximal rejection)
-                II = np.argsort(-sm.ravel())
-                # MAGIC: number of pixels to try.
-                for ii,I in enumerate(II[:10]):
-                    (H,W) = sm.shape
-                    ix = I%W
-                    iy = I/W
-                    # this is just the peak pixel height difference...
-                    ht = (img.getImage() - self.getModelImage(img))[iy,ix]
-                    logverb('Requesting new source at x,y', (ix,iy))
-                    src = self.createNewSource(img, ix, iy, ht)
-                    logverb('Got:', src)
-                    debugargs['src'] = src
-                    self.debugNewSource(type='newsrc-0', **debugargs)
-                    # try adding the new source...
-                    pBefore = self.getLogProb()
-                    logverb('log-prob before:', pBefore)
-                    if jointopt:
-                        oldcat = self.catalog.deepcopy()
-
-                    self.catalog.append(src)
-
-                    # individually optimizing the newly-added
-                    # source...
-                    for ostep in range(20):
-                        logverb('Optimizing the new source (step %i)...' % (ostep+1))
-                        dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
-                        logverb('After:', src)
-                        self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
-                                            **debugargs)
-                        if dlnprob < 1.:
-                            logverb('failed to improve the new source enough (d lnprob = %g)' % dlnprob)
-                            break
-
-                    # Try changing the newly-added source type?
-                    # print 'Trying to change the source type of the newly-added source'
-                    # self.changeSourceTypes(srcs=[src])
-                    
-                    if jointopt:
-                        # then the whole catalog
-                        logverb('Optimizing the catalog with the new source...')
-                        self.optimizeCatalogAtFixedComplexityStep()
-
-                    pAfter = self.getLogProb()
-                    logverb('delta log-prob:', (pAfter - pBefore))
-
-                    if pAfter > pBefore:
-                        logverb('Keeping new source')
-                        break
-
-                    else:
-                        logverb('Rejecting new source')
-                        # revert the catalog
-                        if jointopt:
-                            self.catalog = oldcat
-                        else:
-                            self.catalog.pop()
-
-
-    def increasePsfComplexity(self, imagei):
-        print 'Increasing complexity of PSF in image', imagei
-        pBefore = self.getLogProb()
-        img = self.getImage(imagei)
-        psf = img.getPsf()
-        psfk = psf.proposeIncreasedComplexity(img)
-
-        print 'Trying to increase PSF complexity'
-        print 'from:', psf
-        print 'to  :', psfk
-
-        img.setPsf(psfk)
-        pAfter = self.getLogProb()
-
-        print 'Before increasing PSF complexity: log-prob', pBefore
-        print 'After  increasing PSF complexity: log-prob', pAfter
-
-        self.optimizePsfAtFixedComplexityStep(imagei)
-        pAfter2 = self.getLogProb()
-
-        print 'Before increasing PSF complexity: log-prob', pBefore
-        print 'After  increasing PSF complexity: log-prob', pAfter
-        print 'After  tuning:                    log-prob', pAfter2
-
-        # HACKY: want to be better, and to have successfully optimized...
-        if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
-            print 'Accepting PSF change!'
-        else:
-            print 'Rejecting PSF change!'
-            img.setPsf(psf)
-
-        print 'PSF is', img.getPsf()
-
-    def increaseAllPsfComplexity(self):
-        for i in range(len(self.images)):
-            self.increasePsfComplexity(i)
-
-    def changeSource(self, source):
-        '''
-        Proposes a list of alternatives, where each is a lists of new
-        Sources that the given Source could be changed into.
-        '''
-        return []
-
-    def debugChangeSources(self, **kwargs):
-        pass
-
-    def changeSourceTypes(self, srcs=None, jointopt=False):
-        '''
-        Returns a list of booleans of length "srcs": whether the
-        sources were changed or not.
-        '''
-        logverb('changeSourceTypes')
-        pBefore = self.getLogProb()
-        logverb('log-prob before:', pBefore)
-
-        didchange = []
-
-        oldcat = self.catalog
-        ncat = len(oldcat)
-
-        # We can't just loop over "srcs" -- because when we accept a
-        # change, the catalog changes!
-        # FIXME -- with this structure, we try to change new sources that
-        # we have just added.
-        i = -1
-        ii = -1
-        while True:
-            i += 1
-            logverb('changeSourceTypes: source', i)
-            self.catalog = oldcat
-
-            if srcs is None:
-                # go through self.catalog using "ii" as the index.
-                # (which is updated within the loop when self.catalog is mutated)
-                ii += 1
-                if ii >= len(self.catalog):
-                    break
-                if ii >= ncat:
-                    break
-                logverb('  changing source index', ii)
-                src = self.catalog[ii]
-                logmsg('Considering change to source:', src)
-            else:
-                if i >= len(srcs):
-                    break
-                src = srcs[i]
-
-            # Prevent too-easy switches due to the current source not being optimized.
-            pBefore = self.getLogProb()
-            logverb('Optimizing source before trying to change it...')
-            self.optimizeCatalogLoop(srcs=[src], sky=False)
-            logmsg('After optimizing source:', src)
-            pAfter = self.getLogProb()
-            logverb('delta-log-prob:', pAfter - pBefore)
-            pBefore = pAfter
-
-            bestlogprob = pBefore
-            bestalt = -1
-            bestparams = None
-
-            alts = self.changeSource(src)
-            self.debugChangeSources(step='start', src=src, alts=alts)
-            srcind = oldcat.index(src)
-            for j,newsrcs in enumerate(alts):
-                newcat = oldcat.deepcopy()
-                rsrc = newcat.pop(srcind)
-                newcat.extend(newsrcs)
-                logverb('Trying change:')
-                logverb('  from', src)
-                logverb('  to  ', newsrcs)
-                self.catalog = newcat
-
-                self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
-
-                # first try individually optimizing the newly-added
-                # sources...
-                self.optimizeCatalogLoop(srcs=newsrcs, sky=False)
-                logverb('After optimizing new sources:')
-                for ns in newsrcs:
-                    logverb('  ', ns)
-                self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
-                if jointopt:
-                    self.optimizeCatalogAtFixedComplexityStep(sky=False)
-
-                pAfter = self.getLogProb()
-                logverb('delta-log-prob:', pAfter - pBefore)
-
-                self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
-
-                if pAfter > bestlogprob:
-                    logverb('Best change so far!')
-                    bestlogprob = pAfter
-                    bestalt = j
-                    bestparams = newcat.getParams()
-
-            if bestparams is not None:
-                #print 'Switching to new catalog!'
-                # We want to update "oldcat" in-place (rather than
-                # setting "self.catalog = bestcat") so that the source
-                # object identities don't change -- so that the outer
-                # loop "for src in self.catalog" still works.  We need
-                # to updated the structure and params.
-                oldcat.remove(src)
-                ii -= 1
-                ncat -= 1
-                oldcat.extend(alts[bestalt])
-                oldcat.setAllParams(bestparams)
-                self.catalog = oldcat
-                pBefore = bestlogprob
-
-                logmsg('')
-                logmsg('Accepted change:')
-                logmsg('from:', src)
-                if len(alts[bestalt]) == 1:
-                    logmsg('to:', alts[bestalt][0])
-                else:
-                    logmsg('to:', alts[bestalt])
-
-                assert(self.getLogProb() == pBefore)
-                self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
-                didchange.append(True)
-            else:
-                self.debugChangeSources(step='keep', src=src)
-                didchange.append(False)
-
-        self.catalog = oldcat
-        return didchange
 
