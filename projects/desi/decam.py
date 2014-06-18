@@ -603,14 +603,14 @@ if __name__ == '__main__':
             subrgb[:,:,i][subiv == 0] = bad[i]
 
         plt.clf()
-        plt.subplot(2,3,1)
+        plt.subplot(2,4,1)
         #plt.imshow(subim, extent=ext, **ima)
         plt.imshow(subrgb, extent=ext, **ima)
         ax = plt.axis()
         plt.plot(x, y, 'o', mfc='none', mec='r', ms=12)
         plt.axis(ax)
         plt.title('Image')
-        plt.subplot(2,3,2)
+        plt.subplot(2,4,2)
         #plt.imshow(psfimg, **ima)
         #plt.title('Image')
 
@@ -640,44 +640,45 @@ if __name__ == '__main__':
         print 'Gauss sum', patch.patch.sum()
         print 'Gauss max', psfg.max()
 
-        im = np.maximum(psfimg, 0)
-        PS = im.shape[0]
-        xm,ym = -(PS/2), -(PS/2)
-        K = 3
-        w,mu,var = em_init_params(K, None, None, None)
-        em_fit_2d(im, xm, ym, w, mu, var)
-        #print 'Re-fit params:', w, mu, var
-        repsf = GaussianMixturePSF(w, mu, var)
-        print 'Re-fit MOG:', repsf
-        
-        patch = repsf.getPointSourcePatch(x, y)
-        print 'Patch', patch.x0, patch.y0, patch.patch.shape
-        patch.x0 -= (ix - S)
-        patch.y0 -= (iy - S)
-        psfg2 = np.zeros_like(subim)
-        patch.addTo(psfg2)
-        psfg2 /= psfg2.sum()
+        # Re-fit the PSF image as MoG
+        # im = np.maximum(psfimg, 0)
+        # PS = im.shape[0]
+        # xm,ym = -(PS/2), -(PS/2)
+        # K = 3
+        # w,mu,var = em_init_params(K, None, None, None)
+        # em_fit_2d(im, xm, ym, w, mu, var)
+        # #print 'Re-fit params:', w, mu, var
+        # repsf = GaussianMixturePSF(w, mu, var)
+        # print 'Re-fit MOG:', repsf
+        # patch = repsf.getPointSourcePatch(x, y)
+        # print 'Patch', patch.x0, patch.y0, patch.patch.shape
+        # patch.x0 -= (ix - S)
+        # patch.y0 -= (iy - S)
+        # psfg2 = np.zeros_like(subim)
+        # patch.addTo(psfg2)
+        # psfg2 /= psfg2.sum()
 
-        plt.subplot(2,3,3)
-        #plt.imshow(psfg, **ima)
-        #plt.title('PSF Gaussian')
-        plt.imshow(psfg2, **ima)
-        plt.title('Refit Gaussian')
-
-
-        plt.subplot(2,3,6)
+        plt.subplot(2,4,3)
         plt.imshow(psfg, **ima)
         plt.title('PSF Gaussian')
-        #plt.imshow(-(subim - psfsub), interpolation='nearest', origin='lower',
-        #           cmap='RdBu')
-        #plt.title('Image - PsfPix')
+
+
+        plt.subplot(2,4,7)
+        plt.imshow(-(subim - psfsub), interpolation='nearest', origin='lower',
+                   cmap='RdBu')
+        plt.title('Image - PsfPix')
+
+        plt.subplot(2,4,8)
+        plt.imshow(-(subim - psfg), interpolation='nearest', origin='lower',
+                   cmap='RdBu')
+        plt.title('Image - PsfG')
                    
         ima.update(vmin=0, vmax=np.sqrt(mx * 1.05))
 
-        plt.subplot(2,3,4)
+        plt.subplot(2,4,5)
         plt.imshow(np.sqrt(subim + 0.05*mx), extent=ext, **ima)
         plt.title('sqrt Image')
-        plt.subplot(2,3,5)
+        plt.subplot(2,4,6)
         #plt.imshow(np.sqrt(psfimg + 0.05*mx), **ima)
         plt.imshow(np.sqrt(psfsub + 0.05*mx), **ima)
         plt.title('sqrt PSF pix')
