@@ -1312,6 +1312,19 @@ if __name__ == '__main__':
     plt.ylabel('dDec (arcsec)')
     plt.axis([-0.6,0.6,-0.6,0.6])
     ps.savefig()
+
+    mod = tractor.getModelImage(0)
+    chi = (tim.data - mod) * tim.getInvError()
+
+    plt.clf()
+    imshow(mod, **ima)
+    plt.title('Tractor model image: Full opt')
+    ps.savefig()
+
+    plt.clf()
+    imshow(-chi, **imchi)
+    plt.title('Image - Model chi: Full opt')
+    ps.savefig()
     
              
     tflux = np.array([sum(b.getFlux(tim.filter)
