@@ -1009,6 +1009,7 @@ if __name__ == '__main__':
     mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
 
     T = catsources.copy()
+    T.set('sdss_%s_nanomaggies' % tim.filter, sdssflux)
     T.set('decam_%s_nanomaggies' % tim.filter, flux)
     T.set('decam_%s_nanomaggies_invvar' % tim.filter, flux_iv)
     T.set('decam_%s_mag'  % tim.filter, mag)
@@ -1063,8 +1064,8 @@ if __name__ == '__main__':
     lo,hi = -1e-1, 1e5
     plt.plot(sdssflux, tflux, 'b.', alpha=0.5)
     plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
-    plt.xlabel('%s z flux (nanomaggies)' % catname)
-    plt.ylabel('DECam z flux (nanomaggies)')
+    plt.xlabel('%s %s flux (nanomaggies)' % (catname, tim.filter))
+    plt.ylabel('DECam %s flux (nanomaggies)' % tim.filter)
     plt.xscale('symlog')
     plt.yscale('symlog')
     plt.axis([1e-1, 1e5, 1e-1, 1e5])
@@ -1075,8 +1076,8 @@ if __name__ == '__main__':
     lo,hi = 10,25
     plt.plot(smag, tmag, 'b.', alpha=0.5)
     plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
-    plt.xlabel('%s z (mag)' % catname)
-    plt.ylabel('DECam z (mag)')
+    plt.xlabel('%s %s (mag)' % (catname, tim.filter))
+    plt.ylabel('DECam %s (mag)' % tim.filter)
     plt.axis([hi,lo,hi,lo])
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
@@ -1455,8 +1456,8 @@ if __name__ == '__main__':
     lo,hi = 10,25
     plt.plot(smag, tmag, 'b.', alpha=0.5)
     plt.plot([lo,hi], [lo,hi], 'k-', alpha=0.5)
-    plt.xlabel('%s z (mag)' % catname)
-    plt.ylabel('DECam z (mag)')
+    plt.xlabel('%s %s (mag)' % (catname, tim.filter))
+    plt.ylabel('DECam %s (mag)' % tim.filter)
     plt.axis([hi,lo,hi,lo])
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
