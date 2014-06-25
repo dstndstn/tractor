@@ -267,7 +267,34 @@ def sqimshow(img, **kwa):
     mn = kwa.pop('vmin')
     mx = kwa.pop('vmax')
     imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
-    
+
+def get_tractor_params(T, cat, pat):
+    typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
+                FixedCompositeGalaxy: 'C' }
+    T.set(pat % 'type', np.array([typemap[type(src)] for src in cat]))
+
+    T.set(pat % 'ra',  np.array([src.getPosition().ra  for src in cat]))
+    T.set(pat % 'dec', np.array([src.getPosition().dec for src in cat]))
+
+    shapeExp = np.zeros((len(T), 3))
+    shapeDev = np.zeros((len(T), 3))
+    fracDev  = np.zeros(len(T))
+
+    for i,src in enumerate(cat):
+        if isinstance(src, ExpGalaxy):
+            shapeExp[i,:] = src.shape.getAllParams()
+        elif isinstance(src, DevGalaxy):
+            shapeDev[i,:] = src.shape.getAllParams()
+            fracDev[i] = 1.
+        elif isinstance(src, FixedCompositeGalaxy):
+            shapeExp[i,:] = src.shapeExp.getAllParams()
+            shapeDev[i,:] = src.shapeDev.getAllParams()
+            fracDev[i] = src.fracDev.getValue()
+
+    T.set(pat % 'shapeExp', shapeExp)
+    T.set(pat % 'shapeDev', shapeDev)
+    T.set(pat % 'fracDev', fracDev)
+    return
 
 if __name__ == '__main__':
     import optparse
@@ -345,6 +372,7 @@ if __name__ == '__main__':
         from projects.cs82.cs82 import get_cs82_sources
         cat,catI = get_cs82_sources(T, bands=['z'])
         T.cut(catI)
+        catsources = T
         
     else:
         if not os.path.exists(objfn):
@@ -352,7 +380,17 @@ if __name__ == '__main__':
 
             print 'SIP:', sip
 
-            objs = read_photoobjs_in_wcs(sip, margin, sdss=sdss)
+            cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+                    'modelflux', 'modelflux_ivar',
+                    'psfflux', 'psfflux_ivar',
+                    'cmodelflux', 'cmodelflux_ivar',
+                    'devflux', 'expflux',
+                    'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+                    'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+                    'resolve_status', 'nchild', 'flags', 'objc_flags',
+                    'run','camcol','field','id'
+                    ]
+            objs = read_photoobjs_in_wcs(sip, margin, sdss=sdss, cols=cols)
             objs.writeto(objfn)
         else:
             objs = fits_table(objfn)
@@ -393,10 +431,44 @@ if __name__ == '__main__':
             nanomaggies=True, fixedComposites=True,
             useObjcType=True)
 
-        #radec0 = np.array([(src.getPosition().ra, src.getPosition().dec)
-        #                   for src in cat])
+        catsources = objs
         
     print len(cat), 'sources'
+
+
+    typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
+                FixedCompositeGalaxy: 'C' }
+    #T.tractor_type = np.array([typemap[type(src)] for src in cat])
+
+    hdr = fitsio.FITSHDR()
+    # Find a source of each type and query its parameter names
+    for t,ts in typemap.items():
+        for src in cat:
+            if type(src) == t:
+                print 'Parameters for', t, src
+                sc = src.copy()
+                #print 'Copy is', sc
+                #print type(sc)
+                #print dir(sc)
+                sc.thawAllRecursive()
+                for i,nm in enumerate(sc.getParamNames()):
+                    hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
+                                        comment='Tractor param name'))
+
+                def flatten_node(node):
+                    return reduce(lambda x,y: x+y, [flatten_node(c) for c in node[1:]],
+                                  [node[0]])
+
+                tree = getParamTypeTree(sc)
+                print 'Source param types:', tree
+                types = flatten_node(tree)
+                print 'Flat:', types
+                for i,t in enumerate(types):
+                    hdr.add_record(dict(name='TR_%s_T%i' % (ts, i), value=t.replace("'", '"'),
+                                        comment='Tractor param types'))
+                break
+    print 'Header:', hdr
+
 
 
     # FIXME -- check astrometry
@@ -575,7 +647,8 @@ if __name__ == '__main__':
     H,W = tim.shape
     S = 20
     I = np.argsort(-flux)
-    for i in I[:20]:
+    while False:
+    #for i in I[:20]:
         #x,y = tim.wcs.positionToPixel(cat[i].getPosition())
         x,y = SEcat.x_image[i] - 1, SEcat.y_image[i] - 1
         if x < S or y < S or x+S >= W or y+S >= H:
@@ -925,36 +998,52 @@ if __name__ == '__main__':
                          for src in cat])
     
     print 'Opt forced photom...'
-    tractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
-                                       BW=8,BH=8, wantims=False)
+    R = tractor.optimize_forced_photometry(
+        shared_params=False, wantims=False, fitstats=True, variance=True,
+        use_ceres=True, BW=8,BH=8)
+    flux_iv,fs = R.IV, R.fitstats
 
-    tflux = np.array([sum(b.getFlux(tim.filter)
-                          for b in src.getBrightnesses())
-                      for src in cat])
+    flux = np.array([sum(b.getFlux(tim.filter)
+                         for b in src.getBrightnesses())
+                     for src in cat])
+    mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
 
+    T = catsources.copy()
+    T.set('decam_%s_nanomaggies' % tim.filter, flux)
+    T.set('decam_%s_nanomaggies_invvar' % tim.filter, flux_iv)
+    T.set('decam_%s_mag'  % tim.filter, mag)
+    T.set('decam_%s_mag_err'  % tim.filter, dmag)
+
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+    for k in fskeys:
+        x = getattr(fs, k)
+        x = np.array(x).astype(np.float32)
+        T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
+                    
     smag = -2.5 * (np.log10(sdssflux) - 9.)
-    tmag = -2.5 * (np.log10(   tflux) - 9.)
+    tmag = mag
+    tflux = flux
 
-    T = fits_table()
-    T.ra = np.array([src.getPosition().ra for src in cat])
-    T.dec = np.array([src.getPosition().dec for src in cat])
-    T.flux = tflux
-    T.mag = tmag
+    # T = fits_table()
+
+    get_tractor_params(T, cat, 'tractor_%s_init')
+
     if secat:
-        T.writeto(basefn + '-se-phot.fits')
+        T.writeto(basefn + '-se-phot-1.fits', header=hdr)
     else:
-        T.writeto(basefn + '-phot.fits')
+        T.writeto(basefn + '-phot-1.fits', header=hdr)
     
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
     mod1 = mod
     chi1 = chi
 
+    fitsio.write(basefn + '-mod1.fits', mod1, clobber=True)
+    fitsio.write(basefn + '-chi1.fits', chi1, clobber=True)
+
     I = np.argsort(-np.abs(chi1.ravel()))
     print 'Worst chi pixels:', chi1.flat[I[:20]]
     
-    #fitsio.write(basefn + '-mod1.fits', mod1, clobber=True)
-
     plt.clf()
     imshow(mod, **ima)
     plt.title('Tractor model image: Forced photom')
@@ -1315,6 +1404,37 @@ if __name__ == '__main__':
 
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
+    mod2 = mod
+    chi2 = chi
+
+    fitsio.write(basefn + '-mod2.fits', mod2, clobber=True)
+    fitsio.write(basefn + '-chi2.fits', chi2, clobber=True)
+
+    # FIXME -- We use the flux inverse-variance from before --
+    # incorrect if the profiles have changed.
+
+    flux = np.array([sum(b.getFlux(tim.filter)
+                         for b in src.getBrightnesses())
+                     for src in cat])
+    mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+
+    T = catsources.copy()
+    T.set('decam_%s_nanomaggies' % tim.filter, flux)
+    T.set('decam_%s_nanomaggies_invvar' % tim.filter, flux_iv)
+    T.set('decam_%s_mag'  % tim.filter, mag)
+    T.set('decam_%s_mag_err'  % tim.filter, dmag)
+
+    # fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+    # for k in fskeys:
+    #     x = getattr(fs, k)
+    #     x = np.array(x).astype(np.float32)
+    #     T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
+    get_tractor_params(T, cat, 'tractor_%s')
+
+    if secat:
+        T.writeto(basefn + '-se-phot-2.fits', header=hdr)
+    else:
+        T.writeto(basefn + '-phot-2.fits', header=hdr)
 
     plt.clf()
     imshow(mod, **ima)
@@ -1325,7 +1445,6 @@ if __name__ == '__main__':
     imshow(-chi, **imchi)
     plt.title('Image - Model chi: Full opt')
     ps.savefig()
-    
              
     tflux = np.array([sum(b.getFlux(tim.filter)
                           for b in src.getBrightnesses())

@@ -146,7 +146,7 @@ class BaseParams(object):
     def __str__(self):
         return getClassName(self) + ': ' + str(self.getParams())
     def copy(self):
-        return self.__class__(*self.getParams())
+        return self.__class__(*self.getAllParams())
     def hashkey(self):
         return (getClassName(self),) + tuple(self.getAllParams())
     def __hash__(self):
@@ -562,7 +562,8 @@ class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
 
     def copy(self):
         #return self.__class__(*self.getParams())
-        cop = self.__class__(*self._getThings())
+        #cop = self.__class__(*self._getThings())
+        cop = super(ParamList, self).copy()
         cop.liquid = [l for l in self.liquid]
         return cop
 
