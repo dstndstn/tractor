@@ -11,15 +11,15 @@ from subprocess import check_output
 eigen_inc = os.environ.get('EIGEN_INC', None)
 if eigen_inc is None:
     try:
-        eigen_inc = check_output('pkg-config --cflags eigen3')
+        eigen_inc = check_output(['pkg-config', '--cflags', 'eigen3']).strip()
     except:
-        pass
+        eigen_inc = ''
+inc = eigen_inc.split()
     
 ceres_inc = os.environ.get('CERES_INC', None)
 
 ceres_lib = os.environ.get('CERES_LIB', None)
 
-inc = [eigen_inc]
 if ceres_inc is not None:
     inc.append(ceres_inc)
 

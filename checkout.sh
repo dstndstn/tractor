@@ -6,17 +6,14 @@ cd tractor
 pwd
 
 git clone https://github.com/dstndstn/tractor.git .
-svn co -N http://astrometry.net/svn/trunk/src/astrometry
-(cd astrometry && svn up util)
-(cd astrometry && svn up libkd)
-(cd astrometry && svn up qfits-an)
-(cd astrometry && svn up catalogs)
-(cd astrometry && svn up gsl-an)
-(cd astrometry && svn up sdss)
 
+wget "http://astrometry.net/downloads/astrometry.net-0.50.tar.gz"
+tar xzf astrometry.net-0.50.tar.gz
+mv astrometry.net-0.50 astrometry
 (cd astrometry && make pyutil)
 (cd astrometry/libkd && make pyspherematch)
 (cd astrometry/sdss && make)
+
 make
 
 echo 'Setting up FITSIO:'
