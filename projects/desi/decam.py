@@ -8,6 +8,7 @@ import fitsio
 
 from astrometry.libkd.spherematch import *
 from astrometry.util.util import *
+from astrometry.util.ttime import *
 from astrometry.util.resample import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
@@ -958,18 +959,19 @@ if __name__ == '__main__':
 
     tractor = Tractor([tim], cat)
 
+    print 'Rendering initial model image (no optimization)...'
+    t0 = Time()
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
     mod0 = mod
     chi0 = chi
-
     #fitsio.write(basefn + '-image.fits', tim.data, clobber=True)
     #fitsio.write(basefn + '-mod0.fits', mod0, clobber=True)
-    
     plt.clf()
     imshow(mod, **ima)
     plt.title('Tractor model image: Initial')
     ps.savefig()
+    print 'That took', Time()-t0
 
     imchi = dict(interpolation='nearest', origin='lower',
                  vmin=-5, vmax=5, cmap='RdBu')
@@ -996,9 +998,53 @@ if __name__ == '__main__':
     sdssflux = np.array([sum(b.getFlux(tim.filter)
                              for b in src.getBrightnesses())
                          for src in cat])
+
+    # Render PSF profile to determine good source radii
+    R = 100
+    print 'PSF type:', type(psf)
+    psf.radius = R
+    pat = psf.getPointSourcePatch(0., 0.)
+    print 'PSF patch: x0,y0', pat.x0,pat.y0, 'shape', pat.patch.shape
+    assert(pat.x0 == pat.y0)
+    assert(pat.x0 == -R)
+    # max of +dx, -dx, +dy, -dy directions.
+    psfprofile = reduce(np.maximum, [pat.patch[R, R:],
+                                     pat.patch[R, R::-1],
+                                     pat.patch[R:, R],
+                                     pat.patch[R::-1, R]])
+    # Set minimum flux to correspond to minimum radius
+
+    # Number of sigma to render profiles to
+    minsig = 0.1
+    # -> min surface brightness
+    minsb = tim.sig1 * minsig
+    print 'Sigma1:', tim.sig1, 'minsig', minsig, 'minsb', minsb
+
+    minradius = 3
+    defaultflux = minsb / psfprofile[minradius]
+    print 'Setting default flux', defaultflux
+    
+    # Set source radii based on initial fluxes
+    rad = np.zeros(len(cat), int)
+    for r,pro in enumerate(psfprofile):
+        flux = minsb / pro
+        rad[sdssflux > flux] = r
+    # Set radii
+    for i in range(len(cat)):
+        src = cat[i]
+        # set fluxes
+        b = src.getBrightness()
+        if b.getFlux(tim.filter) <= defaultflux:
+            b.setFlux(tim.filter, defaultflux)
+        R = max(minradius, rad[i])
+        if isinstance(src, PointSource):
+            src.fixedRadius = R
+        elif isinstance(src, (HoggGalaxy, FixedCompositeGalaxy)):
+            src.halfsize = R
     
     print 'Opt forced photom...'
     R = tractor.optimize_forced_photometry(
+        minsb=minsb,
         shared_params=False, wantims=False, fitstats=True, variance=True,
         use_ceres=True, BW=8,BH=8)
     flux_iv,fs = R.IV, R.fitstats
@@ -1161,14 +1207,11 @@ if __name__ == '__main__':
     blobslices = find_objects(blobs)
 
     # Also find the sources *within* each blob.
-    #ra  = np.array([src.getPosition().ra  for src in cat])
-    #dec = np.array([src.getPosition().dec for src in cat])
     wcs = tim.getWcs()
     xy = np.array([wcs.positionToPixel(src.getPosition()) for src in cat])
     xy = np.round(xy).astype(int)
     x = xy[:,0]
     y = xy[:,1]
-    print 'x,y', x.shape, x.dtype, y.shape, y.dtype
     
     # Sort by chi-squared contributed by each blob.
     blobchisq = []
@@ -1181,11 +1224,12 @@ if __name__ == '__main__':
         # chisq contributed by this blob
         chisq = np.sum((bl == (b+1)) * chi1[bslc]**2)
         blobchisq.append(chisq)
-        # sources within this blob.
+        # sources within this blob's rectangular bounding-box
         I = np.flatnonzero((x >= x0) * (x < x1) * (y >= y0) * (y < y1))
         if len(I):
-            #I = I[bl[y[I],x[I]] == (b+1)]
+            # sources within this blob proper
             I = I[blobs[y[I],x[I]] == (b+1)]
+
         if len(I):
             blobsrcs.append([cat[i] for i in I])
         else:
@@ -1216,14 +1260,10 @@ if __name__ == '__main__':
     imsq = dict(interpolation='nearest', origin='lower',
                 vmin=tim.zr[0], vmax=25.*tim.zr[1], cmap='gray')
 
-    #for ii,b in [(1330, 1492)]:
     for ii,b in enumerate(np.argsort(-blobchisq)):
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]
 
-        #if ii >= 50:
-        #    break
-        
         print
         print 'Blob', ii, 'of', len(blobchisq), 'index', b
         print 
@@ -1251,13 +1291,15 @@ if __name__ == '__main__':
         subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
         subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
 
+        doplot = ii < 25 or len(blobsrcs[b]) == 0
+
         ###
-        if ii < 25:
+        if dolpot:
             subh,subw = subimg.shape
             rwcs = TractorWCSWrapper(subwcs, subw,subh)
             rerun = '301'
             resams = []
-            for band in ['z','r']:
+            for band in ['g', 'r', 'z']:
                 resam = np.zeros_like(subimg)
                 nresam = np.zeros(subimg.shape, int)
                 s1s = []
@@ -1299,18 +1341,17 @@ if __name__ == '__main__':
             plt.clf()
             plt.subplot(2,3,1)
             imshow(subimg, **ima)
-            plt.title('DECam z')
-            plt.subplot(2,3,4)
+            plt.title('DECam %s' % tim.filter)
+            plt.subplot(2,3,2)
             imshow(subimg, **imsdss)
-            plt.title('DECam z')
+            plt.title('DECam %s'% tim.filter)
             for i,(nresam, resam, band, s1) in enumerate(resams):
                 if np.all(nresam == 0):
                     continue
                 mn,mx = [np.percentile(resam[nresam>0], p) for p in [25,98]]
-                plt.subplot(2,3, 2+i)
-                imshow(resam, **ima)
-                plt.title('SDSS %s' % band)
-                plt.subplot(2,3, 5+i)
+                plt.subplot(2,3, 4+i)
+                #imshow(resam, **ima)
+                #plt.title('SDSS %s' % band)
                 imshow(resam, **imsdss)
                 plt.title('SDSS %s' % band)
             ps.savefig()
@@ -1331,7 +1372,7 @@ if __name__ == '__main__':
         submod = subtr.getModelImage(0)
         subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
 
-        if ii < 25:
+        if doplot:
             # plt.clf()
             # plt.subplot(2,2,1)
             # imshow(subtim.getImage(), **ima)
@@ -1420,6 +1461,7 @@ if __name__ == '__main__':
     mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
 
     T = catsources.copy()
+    T.set('sdss_%s_nanomaggies' % tim.filter, sdssflux)
     T.set('decam_%s_nanomaggies' % tim.filter, flux)
     T.set('decam_%s_nanomaggies_invvar' % tim.filter, flux_iv)
     T.set('decam_%s_mag'  % tim.filter, mag)
