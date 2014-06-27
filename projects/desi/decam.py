@@ -431,6 +431,8 @@ if __name__ == '__main__':
             radecroi=[r0,r1,d0,d1], bands=[tim.filter],
             nanomaggies=True, fixedComposites=True,
             useObjcType=True)
+        
+            #ellipse=EllipseESoft.fromRAbPhi)
 
         catsources = objs
         
@@ -1071,8 +1073,6 @@ if __name__ == '__main__':
     tmag = mag
     tflux = flux
 
-    # T = fits_table()
-
     get_tractor_params(T, cat, 'tractor_%s_init')
 
     if secat:
@@ -1260,6 +1260,8 @@ if __name__ == '__main__':
     imsq = dict(interpolation='nearest', origin='lower',
                 vmin=tim.zr[0], vmax=25.*tim.zr[1], cmap='gray')
 
+    ndecamonly = 0
+
     for ii,b in enumerate(np.argsort(-blobchisq)):
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]
@@ -1291,10 +1293,14 @@ if __name__ == '__main__':
         subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
         subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
 
-        doplot = ii < 25 or len(blobsrcs[b]) == 0
+        doplot = (ii < 25) or (len(blobsrcs[b]) == 0 and ndecamonly < 25)
 
         ###
-        if dolpot:
+        if doplot:
+
+            if ii >= 25:
+                ndecamonly += 1
+
             subh,subw = subimg.shape
             rwcs = TractorWCSWrapper(subwcs, subw,subh)
             rerun = '301'

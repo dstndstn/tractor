@@ -123,6 +123,30 @@ class EllipseESoft(EllipseE):
         # e2: e sin 2 theta, dimensionless
         return dict(logre=0, e1=1, e2=2)
 
+    @staticmethod
+    def fromRAbPhi(r, ba, phi):
+        #
+        ab = 1./ba
+        e = (ab - 1) / (ab + 1)
+        print 'e', e
+
+        ab2 = (1.+e) / (1.-e)
+        print 'ab2', ab2
+        
+        ee = -np.log(1 - e)
+        print 'ee', ee
+
+        eb = 1. - np.exp(-ee)
+        print 'e2', eb
+
+        r *= ab
+
+        # ee1 = ee * np.cos(2. * (90. - phi))
+        # ee2 = ee * np.sin(2. * (90. - phi))
+        ee1 = ee * np.cos(2.*phi)
+        ee2 = ee * np.sin(2.*phi)
+        return EllipseESoft(np.log(r), ee1, ee2)
+
     def getAllStepSizes(self, *args, **kwargs):
         return [0.01] * 3
 
@@ -148,6 +172,34 @@ class EllipseESoft(EllipseE):
         return True
     
 if __name__ == '__main__':
+
+    r,ab,phi = 1., 0.5, 55.
+
+    ell = GalaxyShape(r, ab, phi)
+    print 'ell:', ell
+    ebasis = ell.getRaDecBasis()
+    print 'basis:', ebasis
+
+    esoft = EllipseESoft.fromRAbPhi(r, ab, phi)
+
+    print 'soft:', esoft
+    sbasis = esoft.getRaDecBasis()
+    print 'basis:', sbasis
+
+    angle = np.linspace(0., 2.*np.pi, 100)
+    xx,yy = np.sin(angle), np.cos(angle)
+    xy = np.vstack((xx,yy)) * 3600.
+
+    plt.clf()
+    txy = np.dot(ebasis, xy)
+    plt.plot(txy[0,:], txy[1,:], 'r-', alpha=0.5)
+    txy = np.dot(sbasis, xy)
+    plt.plot(txy[0,:], txy[1,:], 'b-', alpha=0.5)
+    plt.axis('equal')
+    plt.savefig('e.png')
+
+    sys.exit(0)
+    
     ps = PlotSequence('ell')
     
     angle = np.linspace(0., 2.*np.pi, 20)
