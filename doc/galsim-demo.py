@@ -9,12 +9,13 @@ if True:
     from tractor import *
     from tractor.galaxy import *
 
+    mydir = os.path.dirname(__file__)
+
     tims = []
     bands = 'ugrizy'
-    # We're going to wimp out and keep only 'nepochs' from each band.
     nepochs = 3
     for band in bands:
-        fn = 'output_%s/gal_%s_0.0_0.2.fits' % (band, band)
+        fn = os.path.join(mydir, 'galsim', 'output', 'demo12b_%s.fits' % band)
         print 'Band', band
         print 'Reading', fn
         cube,hdr = fitsio.read(fn, header=True)
@@ -23,14 +24,14 @@ if True:
         pixscale = hdr['GS_SCALE']
         print 'Pixel scale:', pixscale, 'arcsec/pix'
 
-        cube = cube[:nepochs,:,:]
-
         #pixnoise = 0.1
         pixnoise = 0.02
         psf_fwhm = 0.6 / pixscale
         psf_sigma = psf_fwhm / 2.35
 
         nims,h,w = cube.shape
+        assert(nims == nepochs)
+
         for i in range(nims):
             image = cube[i,:,:]
             tim = Image(data=image, invvar=np.ones_like(image) / pixnoise**2,
