@@ -241,7 +241,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  forcePointSources=False,
                  useObjcType=False,
                  objCuts=True,
-                 classmap={}):
+                 classmap={},
+                 ellipse=GalaxyShape):
     '''
     If set,
 
@@ -476,12 +477,12 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
             re  = objs.theta_dev  [i,bandnum]
             ab  = objs.ab_dev     [i,bandnum]
             phi = objs.phi_dev_deg[i,bandnum]
-            dshape = GalaxyShape(re, ab, phi)
+            dshape = ellipse(re, ab, phi)
         if hasexp:
             re  = objs.theta_exp  [i,bandnum]
             ab  = objs.ab_exp     [i,bandnum]
             phi = objs.phi_exp_deg[i,bandnum]
-            eshape = GalaxyShape(re, ab, phi)
+            eshape = ellipse(re, ab, phi)
 
         if iscomp:
             if fixedComposites:
