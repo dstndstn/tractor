@@ -8,7 +8,7 @@ from imageutils import *
 
 __all__ = [
     # modules
-    'sdss', 'fitpsf', 'emfit', 'galaxy',
+    'sdss', 'fitpsf', 'emfit', 'galaxy', 'sersic',
     # ducks
     'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
     'PSF', 
@@ -20,7 +20,7 @@ __all__ = [
     'Flux', 'Fluxes', 'Mag', 'Mags', 'MagsPhotoCal',
     'NanoMaggies',
     'PixPos', 'RaDecPos',
-    'NullPhotoCal', 'LinearPhotoCal',
+    'NullPhotoCal', 'LinearPhotoCal', 'FluxesPhotoCal',
     'WCS', 'NullWCS',
     'FitsWcs', 'WcslibWcs', 'ConstantFitsWcs',
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
