@@ -67,6 +67,10 @@ def main(argv):
     datapath = os.path.abspath(os.path.join(path, "data/"))
     outpath = os.path.abspath(os.path.join(path, "output/"))
 
+    if not os.path.exists(outpath):
+        print 'Creating', outpath
+        os.makedirs(outpath)
+
     # In non-script code, use getLogger(__name__) at module scope instead.
     logging.basicConfig(format="%(message)s", level=logging.INFO, stream=sys.stdout)
     logger = logging.getLogger("demo12")
@@ -117,45 +121,6 @@ def main(argv):
     pixel_scale = 0.2 # arcseconds
 
     #-----------------------------------------------------------------------------------------------
-    # Part A: chromatic de Vaucouleurs galaxy
-
-    # Here we create a chromatic version of a de Vaucouleurs profile using the Chromatic class.
-    # This class lets one create chromatic versions of any galsim GSObject class.  The first
-    # argument is the GSObject instance to be chromaticized, and the second argument is the
-    # profile's SED.
-
-    logger.info('')
-    logger.info('Starting part A: chromatic De Vaucouleurs galaxy')
-    redshift = 0.8
-    mono_gal = galsim.DeVaucouleurs(half_light_radius=0.5)
-    SED = SEDs['CWW_E_ext'].atRedshift(redshift)
-    gal = galsim.Chromatic(mono_gal, SED)
-
-    # You can still shear, shift, and dilate the resulting chromatic object.
-    gal = gal.shear(g1=0.5, g2=0.3).dilate(1.05).shift((0.0, 0.1))
-    logger.debug('Created Chromatic')
-
-    # convolve with PSF to make final profile
-    PSF = galsim.Moffat(fwhm=0.6, beta=2.5)
-    final = galsim.Convolve([gal, PSF])
-    logger.debug('Created final profile')
-
-    # draw profile through LSST filters
-    gaussian_noise = galsim.GaussianNoise(rng, sigma=0.1)
-    for filter_name, filter_ in filters.iteritems():
-        img = galsim.ImageF(64, 64, scale=pixel_scale)
-        final.drawImage(filter_, image=img)
-        img.addNoise(gaussian_noise)
-        logger.debug('Created {}-band image'.format(filter_name))
-        out_filename = os.path.join(outpath, 'demo12a_{}.fits'.format(filter_name))
-        galsim.fits.write(img, out_filename)
-        logger.debug('Wrote {}-band image to disk'.format(filter_name))
-        logger.info('Added flux for {}-band image: {}'.format(filter_name, img.added_flux))
-
-    logger.info('You can display the output in ds9 with a command line that looks something like:')
-    logger.info('ds9 output/demo12a_*.fits -match scale -zoom 2 -match frame image &')
-
-    #-----------------------------------------------------------------------------------------------
     # Part B: chromatic bulge+disk galaxy
 
     logger.info('')
@@ -176,6 +141,12 @@ def main(argv):
     logger.debug('Created disk component')
     # ... and then combine them.
     bdgal = 1.1 * (0.8*bulge+4*disk) # you can add and multiply ChromaticObjects just like GSObjects
+
+    # convolve with PSF to make final profile
+    #PSF = galsim.Moffat(fwhm=0.6, beta=2.5)
+    psf_sigma = 1.5 * pixel_scale # in arcsec
+    PSF = galsim.Gaussian(flux=1., sigma=psf_sigma)
+
     bdfinal = galsim.Convolve([bdgal, PSF])
     # Note that at this stage, our galaxy is chromatic but our PSF is still achromatic.  Part C)
     # below will dive into chromatic PSFs.
@@ -186,11 +157,17 @@ def main(argv):
     for filter_name, filter_ in filters.iteritems():
         img = galsim.ImageF(64, 64, scale=pixel_scale)
         bdfinal.drawImage(filter_, image=img)
-        img.addNoise(gaussian_noise)
         logger.debug('Created {}-band image'.format(filter_name))
         out_filename = os.path.join(outpath, 'demo12b_{}.fits'.format(filter_name))
-        galsim.fits.write(img, out_filename)
-        logger.debug('Wrote {}-band image to disk'.format(filter_name))
+
+        nepochs = 3
+        images = []
+        for i in range(nepochs):
+            newImg = img.copy()
+            newImg.addNoise(gaussian_noise)
+            images.append(newImg)
+        galsim.fits.writeCube(images, out_filename)
+        logger.debug('Wrote {}-band images to disk'.format(filter_name))
         logger.info('Added flux for {}-band image: {}'.format(filter_name, img.added_flux))
 
     logger.info('You can display the output in ds9 with a command line that looks something like:')
@@ -198,77 +175,6 @@ def main(argv):
                 +' -0.25 1.0 output/demo12b_i.fits -red -scale limits -0.25 1.0 output/demo12b_z.fits'
                 +' -zoom 2 &')
 
-    #-----------------------------------------------------------------------------------------------
-    # Part C: chromatic PSF
-
-    logger.info('')
-    logger.info('Starting part C: chromatic PSF')
-    redshift = 0.0
-    mono_gal = galsim.Exponential(half_light_radius=0.5)
-    SED = SEDs['CWW_Im_ext'].atRedshift(redshift)
-    # Here's another way to set the normalization of the SED.  If we want 50 counts to be drawn
-    # when observing an object with this SED through the LSST g-band filter, for instance, then we
-    # can do:
-    SED = SED.withFlux(50.0, filters['g'])
-    # The flux drawn through other bands, which sample different parts of the SED and have different
-    # throughputs, will, of course, be different.
-    gal = mono_gal * SED
-    gal = gal.shear(g1=0.5, g2=0.3)
-    logger.debug('Created `Chromatic` galaxy')
-
-    # For a ground-based PSF, two chromatic effects are introduced by the atmosphere:
-    # (i) differential chromatic refraction (DCR), and (ii) wavelength-dependent seeing.
-    #
-    # DCR shifts the position of the PSF as a function of wavelength.  Blue light is shifted
-    # toward the zenith slightly more than red light.
-    #
-    # Kolmogorov turbulence in the atmosphere leads to a seeing size (e.g., FWHM) that scales with
-    # wavelength to the (-0.2) power.
-    #
-    # The ChromaticAtmosphere function will attach both of these effects to a fiducial PSF at
-    # some fiducial wavelength.
-
-    # First we define a monochromatic PSF to be the fiducial PSF.
-    PSF_500 = galsim.Moffat(beta=2.5, fwhm=0.5)
-    # Then we use ChromaticAtmosphere to manipulate this fiducial PSF as a function of wavelength.
-    # ChromaticAtmosphere also needs to know the wavelength of the fiducial PSF, and the location
-    # and orientation of the object with respect to the zenith.  This final piece of information
-    # can be specified in several ways (see the ChromaticAtmosphere docstring for all of them).
-    # Here are a couple ways: let's pretend our object is located near M101 on the sky, we observe
-    # it 1 hour before it transits and we're observing from Mauna Kea.
-    ra = galsim.HMS_Angle("14:03:13") # hours : minutes : seconds
-    dec = galsim.DMS_Angle("54:20:57") # degrees : minutes : seconds
-    m101 = galsim.CelestialCoord(ra, dec)
-    latitude = 19.8207 * galsim.degrees # latitude of Mauna Kea
-    HA = -1.0 * galsim.hours # Hour angle = one hour before transit
-
-    # Then we can compute the zenith angle and parallactic angle (which is is the position angle
-    # of the zenith measured from North through East) of this object:
-    za, pa = galsim.dcr.zenith_parallactic_angles(m101, HA=HA, latitude=latitude)
-    # And then finally, create the chromatic PSF
-    PSF = galsim.ChromaticAtmosphere(PSF_500, 500.0, zenith_angle=za, parallactic_angle=pa)
-    # We could have also just passed `m101`, `latitude` and `HA` to ChromaticAtmosphere directly:
-    PSF = galsim.ChromaticAtmosphere(PSF_500, 500.0, obj_coord=m101, latitude=latitude, HA=HA)
-    # and proceed like normal.
-
-    # convolve with galaxy to create final profile
-    final = galsim.Convolve([gal, PSF])
-    logger.debug('Created chromatic PSF finale profile')
-
-    # Draw profile through LSST filters
-    gaussian_noise = galsim.GaussianNoise(rng, sigma=0.03)
-    for filter_name, filter_ in filters.iteritems():
-        img = galsim.ImageF(64, 64, scale=pixel_scale)
-        final.drawImage(filter_, image=img)
-        img.addNoise(gaussian_noise)
-        logger.debug('Created {}-band image'.format(filter_name))
-        out_filename = os.path.join(outpath, 'demo12c_{}.fits'.format(filter_name))
-        galsim.fits.write(img, out_filename)
-        logger.debug('Wrote {}-band image to disk'.format(filter_name))
-        logger.info('Added flux for {}-band image: {}'.format(filter_name, img.added_flux))
-
-    logger.info('You can display the output in ds9 with a command line that looks something like:')
-    logger.info('ds9 output/demo12c_*.fits -match scale -zoom 2 -match frame image -blink &')
 
 if __name__ == "__main__":
     main(sys.argv)
