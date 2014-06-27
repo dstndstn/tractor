@@ -85,7 +85,7 @@ class Sky(Params):
     '''
     Duck-type definition for a sky model.
     '''
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, tractor, img, srcs):
         '''
         Returns [ Patch, Patch, ... ], of length numberOfParams(),
         containing the derivatives in the given `Image` for each
