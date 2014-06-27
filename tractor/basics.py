@@ -38,6 +38,12 @@ class TractorWCSWrapper(object):
         return True, x-self.x0+1, y-self.y0+1
 
 
+def getParamTypeTree(param):
+    mytype = str(type(param))
+    if isinstance(param, MultiParams):
+        return [mytype] + [getParamTypeTree(s) for s in param._getActiveSubs()]
+    return [mytype]
+
 
 class TAITime(ScalarParam, ArithmeticParams):
     '''
@@ -147,7 +153,7 @@ class Mags(ParamList):
             m = self.getMag(band)
             mscaled = m - 2.5 * np.log10( np.abs(factor) )
             kwargs[band] = mscaled
-        return Mags(order=self.order, **kwargs)
+        return self.__class__(order=self.order, **kwargs)
 
     def __setstate__(self, state):
         '''For pickling.'''
@@ -172,7 +178,7 @@ class Fluxes(Mags):
         for band in self.order:
             m = self.getFlux(band)
             kwargs[band] = m * factor
-        return Fluxes(order=self.order, **kwargs)
+        return self.__class__(order=self.order, **kwargs)
 
     def getBand(self, *args, **kwargs):
         return super(Fluxes,self).getMag(*args,**kwargs)
@@ -248,6 +254,20 @@ class NanoMaggies(Fluxes):
         '''
         return 10.**((zp - 22.5)/2.5)
 
+    @staticmethod
+    def fluxErrorsToMagErrors(flux, flux_invvar):
+        dflux = np.zeros(len(flux))
+        okiv = (flux_invvar > 0)
+        dflux[okiv] = (1./np.sqrt(flux_invvar[okiv]))
+        okflux = (flux > 0)
+        mag = np.zeros(len(flux))
+        mag[okflux] = (NanoMaggies.nanomaggiesToMag(flux[okflux]))
+        dmag = np.zeros(len(flux))
+        ok = (okiv * okflux)
+        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dflux[ok] / flux[ok]))
+        mag[np.logical_not(okflux)] = np.nan
+        dmag[np.logical_not(ok)] = np.nan
+        return mag.astype(np.float32), dmag.astype(np.float32)
 
 class Mag(ScalarParam):
     '''

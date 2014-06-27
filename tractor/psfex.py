@@ -206,7 +206,9 @@ class PsfEx(VaryingGaussianPSF):
 
     def mogAt(self, x, y):
         w,mu,var = self.scaledMogParamsAt(x, y)
-        return GaussianMixturePSF(w, mu, var)
+        mog = GaussianMixturePSF(w, mu, var)
+        mog.radius = self.radius
+        return mog
 
     def instantiateAt(self, x, y, nativeScale=False):
         from scipy.ndimage.interpolation import affine_transform
