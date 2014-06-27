@@ -11,6 +11,7 @@ Welcome to the Tractor's documentation!
    :maxdepth: 2
 
    intro
+   intro2
    oaq
    reference
    tutorial

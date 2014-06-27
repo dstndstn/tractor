@@ -649,9 +649,9 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
         cd = img.getWcs().cdAtPixel(px, py)
         pixscale = np.sqrt(np.abs(np.linalg.det(cd)))
         s = self.shapeExp
-        r = ExpGalaxy.nre * s.re * max(s.ab, 1.)
+        r = ExpGalaxy.nre * s.re
         s = self.shapeDev
-        r = max(r, DevGalaxy.nre * s.re * max(s.ab, 1.))
+        r = max(r, DevGalaxy.nre * s.re)
         halfsize = max(1., r) / 3600. / pixscale
         psf = img.getPsf()
         halfsize += psf.getRadius()
