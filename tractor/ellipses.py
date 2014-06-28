@@ -42,13 +42,16 @@ class EllipseE(ParamList):
         e1 = e * np.cos(angle)
         e2 = e * np.sin(angle)
         return EllipseE(r, e1, e2)
-    
+
     @property
     def e(self):
         return np.hypot(self.e1, self.e2)
 
     @property
     def theta(self):
+        '''
+        Returns position angle in *radians*
+        '''
         return np.arctan2(self.e2, self.e1) / 2.
 
     def __repr__(self):
@@ -118,8 +121,12 @@ class EllipseESoft(EllipseE):
 
     The parameters are a tweak on the usual ellipticity parameters
     e1,e2, plus log(effective radius).  The tweak is that we map 'e'
-    through a sigmoid-like 1-exp(-e) function so that there are no
+    through a sigmoid-like 1-exp(-|ee|) function so that there are no
     forbidden regions in the parameter space.
+
+    In this class, we use "ee" to indicate the "softened" parameters
+    (before they have gone through the sigmoid to bring them into
+    |e|<1, and "e" to indicate the usual, unsoftened versions.
     '''
     @staticmethod
     def getName():
@@ -128,9 +135,9 @@ class EllipseESoft(EllipseE):
     @staticmethod
     def getNamedParams():
         # log r: log of effective radius in arcsec
-        # e1: e cos 2 theta, dimensionless
-        # e2: e sin 2 theta, dimensionless
-        return dict(logre=0, e1=1, e2=2)
+        # ee1: e cos 2 theta, dimensionless
+        # ee2: e sin 2 theta, dimensionless
+        return dict(logre=0, ee1=1, ee2=2)
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
@@ -146,7 +153,7 @@ class EllipseESoft(EllipseE):
         return [0.01] * 3
 
     def __repr__(self):
-        return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.e1, self.e2)
+        return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.ee1, self.ee2)
 
     @property
     def re(self):
@@ -154,13 +161,20 @@ class EllipseESoft(EllipseE):
 
     @property
     def e(self):
-        e = np.hypot(self.e1, self.e2)
+        ee = np.hypot(self.ee1, self.ee2)
         return 1. - np.exp(-e)
 
     @property
     def softe(self):
-        return np.hypot(self.e1, self.e2)
+        return np.hypot(self.ee1, self.ee2)
 
+    @property
+    def theta(self):
+        '''
+        Returns position angle in *radians*
+        '''
+        return np.arctan2(self.ee2, self.ee1) / 2.
+    
     # Have to override this because all parameter values are legal, unlike
     # the superclass.
     def isLegal(self):
