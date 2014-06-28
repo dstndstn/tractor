@@ -74,10 +74,7 @@ class EllipseE(ParamList):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
         '''
-        e1 = self.e1
-        e2 = self.e2
-
-        theta = np.arctan2(e2, e1) / 2.
+        theta = self.theta
         ct = np.cos(theta)
         st = np.sin(theta)
 
@@ -153,7 +150,7 @@ class EllipseESoft(EllipseE):
         return [0.01] * 3
 
     def __repr__(self):
-        return 'log r_e=%g, e1=%g, e2=%g' % (self.logre, self.ee1, self.ee2)
+        return 'log r_e=%g, ee1=%g, ee2=%g' % (self.logre, self.ee1, self.ee2)
 
     @property
     def re(self):
@@ -161,11 +158,17 @@ class EllipseESoft(EllipseE):
 
     @property
     def e(self):
+        '''
+        Returns the "usual" ellipticity e in [0,1]
+        '''
         ee = np.hypot(self.ee1, self.ee2)
         return 1. - np.exp(-e)
 
     @property
     def softe(self):
+        '''
+        Returns the "softened" ellipticity ee in [0, inf]
+        '''
         return np.hypot(self.ee1, self.ee2)
 
     @property
