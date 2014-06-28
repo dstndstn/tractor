@@ -269,6 +269,12 @@ def sqimshow(img, **kwa):
     mx = kwa.pop('vmax')
     imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
 
+# ???
+# def convert_source_for_output(src):
+#     '''
+#     Converts a tractor source from our internal representation to output format.
+#     '''
+
 def get_tractor_params(T, cat, pat):
     typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
                 FixedCompositeGalaxy: 'C' }
@@ -430,48 +436,40 @@ if __name__ == '__main__':
             None, None, None, objs=objs, sdss=sdss,
             radecroi=[r0,r1,d0,d1], bands=[tim.filter],
             nanomaggies=True, fixedComposites=True,
-            useObjcType=True)
-        
-            #ellipse=EllipseESoft.fromRAbPhi)
+            useObjcType=True,
+            ellipse=EllipseESoft.fromRAbPhi)
 
         catsources = objs
         
     print len(cat), 'sources'
 
-
     typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
                 FixedCompositeGalaxy: 'C' }
-    #T.tractor_type = np.array([typemap[type(src)] for src in cat])
 
     hdr = fitsio.FITSHDR()
-    # Find a source of each type and query its parameter names
+    # Find a source of each type and query its parameter names, for the header
     for t,ts in typemap.items():
         for src in cat:
-            if type(src) == t:
-                print 'Parameters for', t, src
-                sc = src.copy()
-                #print 'Copy is', sc
-                #print type(sc)
-                #print dir(sc)
-                sc.thawAllRecursive()
-                for i,nm in enumerate(sc.getParamNames()):
-                    hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
-                                        comment='Tractor param name'))
-
-                def flatten_node(node):
-                    return reduce(lambda x,y: x+y, [flatten_node(c) for c in node[1:]],
-                                  [node[0]])
-
-                tree = getParamTypeTree(sc)
-                print 'Source param types:', tree
-                types = flatten_node(tree)
-                print 'Flat:', types
-                for i,t in enumerate(types):
-                    hdr.add_record(dict(name='TR_%s_T%i' % (ts, i), value=t.replace("'", '"'),
-                                        comment='Tractor param types'))
-                break
+            if type(src) != t:
+                continue
+            print 'Parameters for', t, src
+            sc = src.copy()
+            sc.thawAllRecursive()
+            for i,nm in enumerate(sc.getParamNames()):
+                hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
+                                    comment='Tractor param name'))
+            def flatten_node(node):
+                return reduce(lambda x,y: x+y, [flatten_node(c) for c in node[1:]],
+                              [node[0]])
+            tree = getParamTypeTree(sc)
+            print 'Source param types:', tree
+            types = flatten_node(tree)
+            print 'Flat:', types
+            for i,t in enumerate(types):
+                hdr.add_record(dict(name='TR_%s_T%i' % (ts, i), value=t.replace("'", '"'),
+                                    comment='Tractor param types'))
+            break
     print 'Header:', hdr
-
 
 
     # FIXME -- check astrometry

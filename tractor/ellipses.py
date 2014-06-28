@@ -154,7 +154,9 @@ class EllipseESoft(EllipseE):
 
     @property
     def re(self):
-        return np.exp(self.logre)
+        #return np.exp(self.logre)
+        # HACK - limits shouldn't be HERE...
+        return np.exp(np.clip(self.logre, -100, 100))
 
     @property
     def e(self):
@@ -169,7 +171,9 @@ class EllipseESoft(EllipseE):
         '''
         Returns the "softened" ellipticity ee in [0, inf]
         '''
-        return np.hypot(self.ee1, self.ee2)
+        #return np.hypot(self.ee1, self.ee2)
+        # HACK - limits shouldn't be HERE...
+        return np.clip(np.hypot(self.ee1, self.ee2), 0, 100.)
 
     @property
     def theta(self):
