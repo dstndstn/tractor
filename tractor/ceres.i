@@ -160,6 +160,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     options.jacobi_scaling = false;
     //options.jacobi_scaling = true;
 
+    // .minimizer_type = TRUST_REGION / LINE_SEARCH
     // .linear_solver_type = SPARSE_NORMAL_CHOLESKY / DENSE_QR
     // / DENSE_SCHUR / SPARSE_SCHUR
     // .trust_region_strategy_type = LEVENBERG_MARQUARDT / DOGLEG
@@ -297,9 +298,28 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 
 // Generic optimization
 
+
+class NumericDiffImageCost {
+ public:
+ NumericDiffImageCost(ImageCostFunction* im) : _im(im) {}
+    
+    ~NumericDiffImageCost() {
+        delete _im;
+    }
+
+    bool operator()(double const* const* parameters, double* residuals) const {
+        return _im->Evaluate(parameters, residuals, NULL);
+    }
+
+ protected:
+    ImageCostFunction* _im;
+};
+
+
+
 static PyObject* ceres_opt(PyObject* tractor, int nims,
                            PyObject* np_params, PyObject* np_variance,
-                           int scale_columns) {
+                           int scale_columns, int numeric) {
     /*
      np_params: numpy array, type double, length number of params.
      */
@@ -331,9 +351,29 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         allparams.push_back(params + i);
 
     for (i=0; i<nims; i++) {
-        CostFunction* cost = new ImageCostFunction(tractor, i, nparams, np_params);
+
+        ImageCostFunction* icf = new ImageCostFunction
+            (tractor, i, nparams, np_params);
+
+        CostFunction* cost = NULL;
+        if (numeric) {
+            ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>* dyncost = 
+                new ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>
+                (new NumericDiffImageCost(icf));
+            for (i=0; i<nparams; i++)
+                dyncost->AddParameterBlock(1);
+            dyncost->SetNumResiduals(icf->nPix());
+            cost = dyncost;
+
+        } else {
+            cost = icf;
+        }
+        //CostFunction* cost = new ImageCostFunction
+        //(tractor, i, nparams, np_params);
+
         problem.AddResidualBlock(cost, NULL, allparams);
     }
+
 
     // Run the solver!
     Solver::Options options;

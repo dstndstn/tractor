@@ -1291,24 +1291,10 @@ if __name__ == '__main__':
         
         subiv = tim.getInvvar()[bslc]
         subiv[blobs[bslc] != (b+1)] = 0.
-
         subimg = tim.getImage()[bslc]
-        
-        # plt.clf()
-        # plt.subplot(2,2,1)
-        # imshow(subimg, **ima)
-        # plt.subplot(2,2,2)
-        # imshow(subiv, **imx)
-        # plt.subplot(2,2,3)
-        # imshow(mod[bslc], **ima)
-        # plt.subplot(2,2,4)
-        # imshow(chi[bslc] * (subiv > 0), **imchi)
-        # ps.savefig()
-
         sy,sx = bslc
         y0,y1 = sy.start, sy.stop
         x0,x1 = sx.start, sx.stop
-
         subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
         subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
 
@@ -1421,7 +1407,10 @@ if __name__ == '__main__':
             sqimshow(submod, **imsq)
             ps.savefig()
 
-        
+
+        if len(subtr.getParams()) == 0:
+            continue
+            
         radec0.extend([(src.getPosition().ra, src.getPosition().dec)
                        for src in bsrcs])
 
@@ -1440,6 +1429,17 @@ if __name__ == '__main__':
                                subtr.getParams(), var):
             print '  ', nm, '=', val, '+-', np.sqrt(vvar)
 
+        print
+        print 'Ceres with numeric differentiation:'
+        R = subtr._ceres_opt(variance=True, numeric=True)
+        var = R['variance']
+        print 'Params:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+        print
+
+            
         p0 = subtr.getParams()
         lnp0 = subtr.getLogProb()
         print 'Check vars:'

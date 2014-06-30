@@ -537,16 +537,21 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
-    def _ceres_opt(self, variance=False, scale_columns=True):
+    def _ceres_opt(self, variance=False, scale_columns=True,
+                   numeric=False):
         from ceres import ceres_opt
 
-        params = np.array(self.getParams())
+        pp = self.getParams()
+        if len(pp) == 0:
+            return None
+        params = np.array(pp)
         variance_out = None
         if variance:
             variance_out = np.zeros_like(params)
 
         R = ceres_opt(self, self.getNImages(), params, variance_out,
-                      (1 if scale_columns else 0))
+                      (1 if scale_columns else 0),
+                      (1 if numeric else 0))
         if variance:
             R['variance'] = variance_out
         # print 'ceres_opt result:'

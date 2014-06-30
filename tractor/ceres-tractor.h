@@ -63,6 +63,9 @@ class ImageCostFunction : public CostFunction {
     virtual bool Evaluate(double const* const* parameters,
                           double* residuals,
                           double** jacobians) const;
+
+    int nPix() const { return _npix; }
+
  protected:
     PyObject* _tractor;
     int _imagei;
