@@ -298,7 +298,8 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 // Generic optimization
 
 static PyObject* ceres_opt(PyObject* tractor, int nims,
-                           PyObject* np_params) {
+                           PyObject* np_params, PyObject* np_variance,
+                           int scale_columns) {
     /*
      np_params: numpy array, type double, length number of params.
      */
@@ -306,13 +307,23 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     int i;
     double* params;
     int nparams;
+    int get_variance;
+    int variance_ok = 0;
 
     assert(PyArray_Check(np_params));
     assert(PyArray_TYPE(np_params) == NPY_DOUBLE);
+    if (!(PyArray_Check(np_params) &&
+          (PyArray_TYPE(np_params) == NPY_DOUBLE))) {
+        printf("ceres_opt: wrong type for params variable\n");
+        return NULL;
+    }
     nparams = (int)PyArray_Size(np_params);
     params = (double*)PyArray_DATA(np_params);
 
-    printf("ceres_opt, nims %i, nparams %i\n", nims, nparams);
+    get_variance = (np_variance != Py_None);
+
+    printf("ceres_opt, nims %i, nparams %i, get_variance %i\n", nims, nparams,
+           get_variance);
 
     std::vector<double*> allparams;
     // Single-param blocks
@@ -328,7 +339,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     Solver::Options options;
     options.minimizer_progress_to_stdout = true;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
-    options.jacobi_scaling = true;
+    //options.jacobi_scaling = true;
+    options.jacobi_scaling = scale_columns;
 
     Solver::Summary summary;
     Solve(options, &problem, &summary);
@@ -339,17 +351,55 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     // CERES 1.8.0
     //const char* errstring = summary.error.c_str();
 
-    return Py_BuildValue("{sisssdsdsdsssssisisi}",
-                         "termination", int(summary.termination_type),
-                         "error", errstring,
-                         "initial_cost", summary.initial_cost,
-                         "final_cost", summary.final_cost,
-                         "fixed_cost", summary.fixed_cost,
-                         "brief_report", summary.BriefReport().c_str(),
-                         "full_report", summary.FullReport().c_str(),
-                         "steps_successful", summary.num_successful_steps,
-                         "steps_unsuccessful", summary.num_unsuccessful_steps,
-                         "steps_inner", summary.num_inner_iteration_steps);
+    if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
+        if (!(PyArray_Check(np_variance) &&
+              (PyArray_TYPE(np_variance) == NPY_DOUBLE))) {
+            printf("ceres_opt: wrong type for variance variable\n");
+            return NULL;
+        }
+        if (PyArray_Size(np_variance) != PyArray_Size(np_params)) {
+            printf("ceres_opt: wrong size for variance variable\n");
+            return NULL;
+        }
+        double* cov_out = (double*)PyArray_DATA(np_variance);
+        for (i=0; i<nparams; i++)
+            cov_out[i] = 0.0;
+
+        ceres::Covariance::Options options;
+
+        options.algorithm_type = ceres::DENSE_SVD;
+        options.null_space_rank = -1;
+        //options.algorithm_type = SPARSE_QR;
+        //options.algorithm_type = SPARSE_CHOLESKY;
+
+        ceres::Covariance covariance(options);
+
+        std::vector<std::pair<const double*, const double*> > covar_blocks;
+        for (i=0; i<nparams; i++)
+            covar_blocks.push_back(std::make_pair(params+i, params+i));
+        if (!covariance.Compute(covar_blocks, &problem)) {
+            printf("ceres_opt: failed to compute variance\n");
+            // ?
+            return NULL;
+        } else {
+            variance_ok = 1;
+        }
+        for (i=0; i<nparams; i++)
+            covariance.GetCovarianceBlock(params+i, params+i, cov_out+i);
+    }
+    return Py_BuildValue
+        ("{sisssdsdsdsssssisisisi}",
+         "termination", int(summary.termination_type),
+         "error", errstring,
+         "initial_cost", summary.initial_cost,
+         "final_cost", summary.final_cost,
+         "fixed_cost", summary.fixed_cost,
+         "brief_report", summary.BriefReport().c_str(),
+         "full_report", summary.FullReport().c_str(),
+         "steps_successful", summary.num_successful_steps,
+         "steps_unsuccessful", summary.num_unsuccessful_steps,
+         "steps_inner", summary.num_inner_iteration_steps,
+         "variance_ok", variance_ok);
 }
 
 

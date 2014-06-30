@@ -537,14 +537,28 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
-    def _ceres_opt(self):
+    def _ceres_opt(self, variance=False, scale_columns=True):
         from ceres import ceres_opt
 
         params = np.array(self.getParams())
-        R = ceres_opt(self, self.getNImages(), params)
+        variance_out = None
+        if variance:
+            variance_out = np.zeros_like(params)
+
+        R = ceres_opt(self, self.getNImages(), params, variance_out,
+                      (1 if scale_columns else 0))
+        if variance:
+            R['variance'] = variance_out
         # print 'ceres_opt result:'
         # for k,v in R.items():
         #     print k, v
+
+        # Does Ceres leave our state at the optimum?
+        pend = np.array(self.getParams())
+        assert(np.all(pend == params))
+        # Set to the optimum found by Ceres
+        # self.setParams(params)
+        
         return R
         
     # This function is called-back by _ceres_opt; it is called from
@@ -1433,6 +1447,14 @@ class Tractor(MultiParams):
         Performs *one step* of linearized least-squares + line search.
         
         Returns (delta-logprob, parameter update X, alpha stepsize)
+
+        If variance=True,
+
+        Returns (delta-logprob, parameter update X, alpha stepsize, variance)
+
+        If just_variance=True,
+
+        Return variance.
         '''
         logverb(self.getName()+': Finding derivs...')
         t0 = Time()
@@ -1450,6 +1472,8 @@ class Tractor(MultiParams):
                                     shared_params=shared_params,
                                     variance=variance)
         if variance:
+            if len(X) == 0:
+                return 0, X, 0, None
             X,var = X
             if just_variance:
                 return var

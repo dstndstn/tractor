@@ -269,11 +269,21 @@ def sqimshow(img, **kwa):
     mx = kwa.pop('vmax')
     imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
 
-# ???
 # def convert_source_for_output(src):
 #     '''
-#     Converts a tractor source from our internal representation to output format.
+#     Converts a tractor source from our internal representation to
+#     output format.
+# 
+#     Specifically, converts EllipseESoft to EllipseE
 #     '''
+#     if instance(src, (DevGalaxy, ExpGalaxy)):
+#         src.shape = EllipseE.fromEllipeESoft(src.shape)
+#     elif instance(src, FixedCompositeGalaxy):
+#         src.shapeExp = EllipseE.fromEllipeESoft(src.shapeExp)
+#         src.shapeDev = EllipseE.fromEllipeESoft(src.shapeDev)
+
+# We'll want to compute errors in our native representation, so have a
+# FITS output routine that can convert those into output format.
 
 def get_tractor_params(T, cat, pat):
     typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
@@ -305,14 +315,21 @@ def get_tractor_params(T, cat, pat):
 
 if __name__ == '__main__':
     import optparse
+    import logging
     parser = optparse.OptionParser('%prog [options] [base input filename]')
     parser.add_option('--se', action='store_true')
     parser.add_option('--x0', type=int, help='Read sub-image', default=0)
     parser.add_option('--y0', type=int, help='Read sub-image', default=0)
     parser.add_option('-W', type=int, help='Read sub-image', default=0)
     parser.add_option('-H', type=int, help='Read sub-image', default=0)
+    parser.add_option('-v', dest='verbose', default=False, action='store_true')
     opt,args = parser.parse_args()
 
+    lvl = logging.WARN
+    if opt.verbose:
+        lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+    
     if opt.W or opt.H or opt.x0 or opt.y0:
         x1,y1 = -1,-1
         if opt.H:
@@ -957,6 +974,10 @@ if __name__ == '__main__':
     plt.title('Masked')
     ps.savefig()
 
+    for src in cat:
+        pos = src.getPosition()
+        pos.stepsizes = [1e-5, 1e-5]
+    
     tractor = Tractor([tim], cat)
 
     print 'Rendering initial model image (no optimization)...'
@@ -1403,27 +1424,43 @@ if __name__ == '__main__':
         
         radec0.extend([(src.getPosition().ra, src.getPosition().dec)
                        for src in bsrcs])
-        
-        subtr._ceres_opt()
+
+        R2 = subtr._ceres_opt(variance=True, scale_columns=False)
+        var2 = R2['variance']
+        print 'Params2:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var2):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+        #subtr._ceres_opt()
+        R = subtr._ceres_opt(variance=True)
+        var = R['variance']
+        print 'Params:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+        p0 = subtr.getParams()
+        lnp0 = subtr.getLogProb()
+        print 'Check vars:'
+        for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
+                                             subtr.getParams(), var)):
+            lnpx = subtr.getLogProb()
+            assert(lnpx == lnp0)
+            dvar = np.sqrt(vvar)
+            subtr.setParam(i, p0[i] + dvar)
+            lnp1 = subtr.getLogProb()
+            subtr.setParam(i, p0[i] - dvar)
+            lnp2 = subtr.getLogProb()
+            subtr.setParam(i, p0[i])
+            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
 
         radec1.extend([(src.getPosition().ra, src.getPosition().dec)
                        for src in bsrcs])
         
-        submod = subtr.getModelImage(0)
-        subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
-
-        # plt.clf()
-        # plt.subplot(2,2,1)
-        # imshow(subtim.getImage(), **ima)
-        # plt.subplot(2,2,2)
-        # imshow(subiv, **imx)
-        # plt.subplot(2,2,3)
-        # imshow(submod, **ima)
-        # plt.subplot(2,2,4)
-        # imshow(subchi, **imchi)
-        # ps.savefig()
-
         if ii < 25:
+            submod = subtr.getModelImage(0)
+            subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
             plt.clf()
             plt.subplot(2,3,1)
             imshow(subtim.getImage(), **ima)
@@ -1436,7 +1473,79 @@ if __name__ == '__main__':
             plt.subplot(2,3,5)
             sqimshow(submod, **imsq)
             ps.savefig()
-        
+
+
+        while True:
+            dlnp,x,alpha,vars3 = subtr.optimize(
+                shared_params=False, variance=True)
+            print 'Opt: dlnp', dlnp
+            if dlnp < 1e-3:
+                break
+        print 'Params3:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), vars3):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+            
+        subtr.catalog.freezeAllParams()
+        vars2 = []
+        for i,src in enumerate(blobsrcs[b]):
+            subtr.catalog.thawParam(i)
+            print 'Fitting source', i
+            for nm,val in zip(subtr.getParamNames(), subtr.getParams()):
+                print '  ', nm, '=', val
+            
+            while True:
+                dlnp,X,alpha,svar = subtr.optimize(
+                    shared_params=False, variance=True)
+                print 'Opt: dlnp', dlnp
+                if svar is None:
+                    svar = np.zeros_like(X)
+                if dlnp < 1e-3:
+                    break
+            vars2.append(svar)
+            subtr.catalog.freezeParam(i)
+
+        vars2 = np.hstack(vars2)
+        subtr.catalog.thawAllParams()
+        print 'Params4:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), vars2):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+
+        p0 = subtr.getParams()
+        lnp0 = subtr.getLogProb()
+        print 'Check vars 2:'
+        for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
+                                             subtr.getParams(), vars2)):
+            dvar = np.sqrt(vvar)
+            subtr.setParam(i, p0[i] + dvar)
+            lnp1 = subtr.getLogProb()
+            subtr.setParam(i, p0[i] - dvar)
+            lnp2 = subtr.getLogProb()
+            subtr.setParam(i, p0[i])
+            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+
+            
+        if ii < 25:
+            submod = subtr.getModelImage(0)
+            subchi = (subtim.getImage() - submod) * np.sqrt(subiv)
+            plt.clf()
+            plt.subplot(2,3,1)
+            imshow(subtim.getImage(), **ima)
+            plt.subplot(2,3,2)
+            imshow(submod, **ima)
+            plt.subplot(2,3,3)
+            imshow(subchi, **imchi)
+            plt.subplot(2,3,4)
+            sqimshow(subtim.getImage(), **imsq)
+            plt.subplot(2,3,5)
+            sqimshow(submod, **imsq)
+            ps.savefig()
+
+            
+            
+            
     radec0 = np.array(radec0)
     radec1 = np.array(radec1)
 

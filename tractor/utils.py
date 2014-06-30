@@ -453,15 +453,13 @@ class NamedParams(object):
         for n in args:
             self.thawParam(n)
     def thawAllParams(self):
-        for i in xrange(len(self.liquid)):
-            self.liquid[i] = True
+        self.liquid[:] = [True]*len(self.liquid)
     unfreezeParam = thawParam
     unfreezeParams = thawParams
     unfreezeAllParams = thawAllParams
     
     def freezeAllParams(self):
-        for i in xrange(len(self.liquid)):
-            self.liquid[i] = False
+        self.liquid[:] = [False]*len(self.liquid)
     def getFrozenParams(self):
         return [self.getNamedParamName(i) for i in self.getFrozenParamIndices()]
     def getThawedParams(self):
