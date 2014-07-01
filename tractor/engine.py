@@ -612,23 +612,6 @@ class Tractor(MultiParams):
                    numeric=False):
         from ceres import ceres_opt
 
-        class ScaledTractor(object):
-            def __init__(self, tractor, p0, scales):
-                self.tractor = tractor
-                self.offset = p0
-                self.scale = scales
-            def getImage(self, i):
-                return self.tractor.getImage(i)
-            def getChiImage(self, i):
-                return self.tractor.getChiImage(i)
-            def _getOneImageDerivs(self, i):
-                derivs = self.tractor._getOneImageDerivs(i)
-                for (ind, x0, y0, der) in derivs:
-                    der /= self.scale[ind]
-                return derivs
-            def setParams(self, p):
-                return self.tractor.setParams(self.offset + self.scale * p)
-        
         pp = self.getParams()
         if len(pp) == 0:
             return None
@@ -2688,3 +2671,20 @@ class Tractor(MultiParams):
         self.catalog = oldcat
         return didchange
 
+class ScaledTractor(object):
+    def __init__(self, tractor, p0, scales):
+        self.tractor = tractor
+        self.offset = p0
+        self.scale = scales
+    def getImage(self, i):
+        return self.tractor.getImage(i)
+    def getChiImage(self, i):
+        return self.tractor.getChiImage(i)
+    def _getOneImageDerivs(self, i):
+        derivs = self.tractor._getOneImageDerivs(i)
+        for (ind, x0, y0, der) in derivs:
+            der /= self.scale[ind]
+        return derivs
+    def setParams(self, p):
+        return self.tractor.setParams(self.offset + self.scale * p)
+        
