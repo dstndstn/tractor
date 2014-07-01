@@ -338,7 +338,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
                            int scale_columns,
                            int numeric,
                            float numeric_stepsize,
-                           float dlnp) {
+                           float dlnp,
+                           int max_iterations) {
     /*
      np_params: numpy array, type double, length number of params.
      np_variance: ditto
@@ -409,7 +410,9 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.jacobi_scaling = scale_columns;
     options.numeric_derivative_relative_step_size = numeric_stepsize;
-
+    if (max_iterations) {
+        options.max_num_iterations = max_iterations;
+    }
     if (dlnp > 0) {
         options.function_tolerance = 1e-16;
 

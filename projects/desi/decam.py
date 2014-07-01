@@ -453,10 +453,11 @@ if __name__ == '__main__':
         #subtr._ceres_opt()
 
         print
-        print '------------------- variance=True ---------------------'
+        #print '------------------- variance=True ---------------------'
+        print '------------------- Ceres ---------------------'
         print
         subtr.setParams(p0)
-        R = subtr._ceres_opt(variance=True)
+        R = subtr._ceres_opt(variance=True, max_iterations=100)
 
         print 'Report:', R['full_report']
 
@@ -495,8 +496,10 @@ if __name__ == '__main__':
         #     print '  ', nm, '=', val, '+-', np.sqrt(vvar)
         # print
 
+        ceres_lnp = subtr.getLogProb()
+        
         if True:
-            p0 = subtr.getParams()
+            pp = subtr.getParams()
             lnp0 = subtr.getLogProb()
             print 'Check vars:'
             for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
@@ -504,13 +507,44 @@ if __name__ == '__main__':
                 lnpx = subtr.getLogProb()
                 assert(lnpx == lnp0)
                 dvar = np.sqrt(vvar)
-                subtr.setParam(i, p0[i] + dvar)
+                subtr.setParam(i, pp[i] + dvar)
                 lnp1 = subtr.getLogProb()
-                subtr.setParam(i, p0[i] - dvar)
+                subtr.setParam(i, pp[i] - dvar)
                 lnp2 = subtr.getLogProb()
-                subtr.setParam(i, p0[i])
+                subtr.setParam(i, pp[i])
                 print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
 
+        print
+        print '------------------- LSQR ---------------------'
+        print
+        subtr.setParams(p0)
+
+        while True:
+            dlnp,X,alpha,var = subtr.optimize(variance=True, shared_params=False,
+                                              alphas=[0.01, 0.1, 1., 2., 4., 10.])
+            print 'dlnp', dlnp
+            if dlnp < 1e-3:
+                break
+
+        lsqr_lnp = subtr.getLogProb()
+
+        p0 = subtr.getParams()
+        lnp0 = subtr.getLogProb()
+        print 'Check vars:'
+        for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
+                                             subtr.getParams(), var)):
+            lnpx = subtr.getLogProb()
+            assert(lnpx == lnp0)
+            dvar = np.sqrt(vvar)
+            subtr.setParam(i, p0[i] + dvar)
+            lnp1 = subtr.getLogProb()
+            subtr.setParam(i, p0[i] - dvar)
+            lnp2 = subtr.getLogProb()
+            subtr.setParam(i, p0[i])
+            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+
+        
+        print 'Log-probs: ceres', ceres_lnp, 'vs', lsqr_lnp, '(delta: %g)' % (lsqr_lnp - ceres_lnp)
 
     sys.exit(0)
     

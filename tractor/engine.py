@@ -611,7 +611,7 @@ class Tractor(MultiParams):
     def _ceres_opt(self, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,
-                   dlnp = 1e-3):
+                   dlnp = 1e-3, max_iterations=0):
         from ceres import ceres_opt
 
         pp = self.getParams()
@@ -656,7 +656,7 @@ class Tractor(MultiParams):
         R = ceres_opt(tractor, self.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0), numeric_stepsize,
-                      dlnp)
+                      dlnp, max_iterations)
         if variance:
             R['variance'] = variance_out
 

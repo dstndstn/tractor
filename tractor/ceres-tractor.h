@@ -67,6 +67,12 @@ class ImageCostFunction : public CostFunction {
     int nPix() const { return _npix; }
 
  protected:
+
+    bool _Evaluate(double const* const* parameters,
+                   double* residuals,
+                   double** jacobians) const;
+
+
     PyObject* _tractor;
     int _imagei;
     PyObject* _image;

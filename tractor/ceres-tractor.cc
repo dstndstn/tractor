@@ -208,6 +208,14 @@ ImageCostFunction::~ImageCostFunction() {
 bool ImageCostFunction::Evaluate(double const* const* parameters,
                                  double* residuals,
                                  double** jacobians) const {
+    bool result = _Evaluate(parameters, residuals, jacobians);
+    printf("ImageCostFunction::Evaluate: returning %i\n", (int)result);
+    return result;
+}
+
+bool ImageCostFunction::_Evaluate(double const* const* parameters,
+                                  double* residuals,
+                                  double** jacobians) const {
     const std::vector<int32_t> bs = parameter_block_sizes();
 
     //printf("ImageCostFunction::Evaluate\n");
