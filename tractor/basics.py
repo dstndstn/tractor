@@ -692,11 +692,13 @@ class RaDecPos(ArithmeticParams, ParamList):
         return '%s: RA, Dec = (%.5f, %.5f)' % (self.getName(), self.ra, self.dec)
     def __init__(self, *args, **kwargs):
         super(RaDecPos,self).__init__(*args,**kwargs)
-        self.setStepSizes(1e-4)
+        #self.setStepSizes(1e-4)
+        delta = 1e-4
+        self.setStepSizes([delta / np.cos(np.deg2rad(self.dec)), delta])
     def getDimension(self):
         return 2
-    def setStepSizes(self, delta):
-        self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
+    #def setStepSizes(self, delta):
+    #    self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
 
     def distanceFrom(self, pos):
         from astrometry.util.starutil_numpy import degrees_between

@@ -48,9 +48,17 @@ class Params(object):
         return []
     def getAllParams(self):
         return self.getParams()
+
+    def getAllStepSizes(self, *args, **kwargs):
+        return self.getStepSizes(*args, **kwargs)
     def getStepSizes(self, *args, **kwargs):
         ''' Returns "reasonable" step sizes for the parameters.'''
         return []
+    def setAllStepSizes(self, ss):
+        self.setStepSizes(ss)
+    def setStepSizes(self, ss):
+        assert(len(ss) == self.numberOfParams())
+        pass
     def setParams(self, p):
         '''
         Sets the parameter values to the values in the given

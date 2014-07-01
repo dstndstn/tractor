@@ -166,6 +166,8 @@ class BaseParams(object):
         return []
     def getAllParams(self):
         return self.getParams()
+    def getAllStepSizes(self, *args, **kwargs):
+        return self.getStepSizes(*args, **kwargs)
     def getStepSizes(self, *args, **kwargs):
         '''
         Returns "reasonable" step sizes for the parameters.
@@ -174,6 +176,10 @@ class BaseParams(object):
         if ss is not None:
             return ss
         return [1.] * self.numberOfParams()
+    def setAllStepSizes(self, ss):
+        self.setStepSizes(ss)
+    def setStepSizes(self, ss):
+        self.stepsizes = ss
     def setParams(self, p):
         '''
         NOTE, you MUST implement either "setParams" or "setParam",
@@ -243,6 +249,8 @@ class ScalarParam(BaseParams):
         return 1
     def getStepSizes(self, *args, **kwargs):
         return [self.stepsize]
+    def setStepSizes(self, ss):
+        self.stepsize = ss[0]
     # Returns a *copy* of the current parameter values (list)
     def getParams(self):
         return [self.val]
@@ -316,7 +324,29 @@ class NamedParams(object):
         Returns "reasonable" step sizes for the parameters, ignoring
         frozen/thawed state.
         '''
+        ss = getattr(self, 'stepsizes', None)
+        if ss is not None:
+            return ss
         return [1.] * len(self.getAllParams())
+
+    def setStepSizes(self, ss):
+        ss = getattr(self, 'stepsizes', None)
+        if ss is None:
+            newss = []
+            j = 0
+            for i,ll in enumerate(self.liquid):
+                if ll:
+                    newss.append(ss[j])
+                    j += 1
+                else:
+                    newss.append(1.)
+            self.stepsizes = newss
+        else:
+            for i,s in self._enumerateLiquidArray(ss):
+                self.stepsizes[i] = s
+
+    def setAllStepSizes(self, ss):
+        self.stepsizes = ss
     
     def _addNamedParams(self, alias, **d):
         self.namedparams.update(d)
@@ -982,6 +1012,26 @@ class MultiParams(BaseParams, NamedParams):
             p.extend(s.getStepSizes(*args, **kwargs))
         return p
 
+    def getAllStepSizes(self, *args, **kwargs):
+        p = []
+        for s in self.subs:
+            p.extend(s.getAllStepSizes(*args, **kwargs))
+        return p
+
+    def setStepSizes(self, ss):
+        off = 0
+        for sub in self._getActiveSubs():
+            n = sub.numberOfParams()
+            sub.setStepSizes(ss[off: off+n])
+            off += n
+
+    def setAllStepSizes(self, ss):
+        off = 0
+        for sub in self.subs:
+            n = len(sub.getAllParams())
+            sub.setAllStepSizes(ss[off: off+n])
+            off += n
+            
     def getLogPrior(self):
         lnp = 0.
         for s in self._getActiveSubs():
