@@ -345,6 +345,14 @@ if __name__ == '__main__':
     else:
         decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
 
+    secat = opt.se
+    if secat:
+        ps = PlotSequence('decam-se')
+    else:
+        ps = PlotSequence('decam-sdss')
+    ps.format = '%03i'
+
+        
     if True:
         X = unpickle_from_file('subtim-0000.pickle')
         subtim = X['tim']
@@ -354,28 +362,135 @@ if __name__ == '__main__':
         subtr.modtype = np.float64
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
+
+        subtr.catalog.freezeAllParams()
+        subtr.catalog.thawParam(0)
         
+        if False:
+            derivs = subtr._getOneImageDerivs(0)
+            pnames = subtr.getParamNames()
+            ss = subtr.getStepSizes()
+            
+            pp = subtr.getParams()
+            p0 = np.array(pp)
+            scales = 10. * np.array(subtr.getStepSizes())
+    
+            p0 -= scales
+            params = np.ones_like(p0)
+            scaler = ScaledTractor(subtr, p0, scales)
+            #scaler.setParams(params)
+            sderivs = scaler._getOneImageDerivs(0)
+    
+            for (i,x0,y0,deriv),(si,sx0,sy0,sderiv) in zip(derivs, sderivs):
+                assert(i == si)
+    
+                plt.clf()
+                plt.subplot(2,3,1)
+                mx = np.abs(deriv).max()
+                plt.imshow(deriv, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                plt.colorbar()
+                plt.subplot(2,3,4)
+                mx = np.abs(sderiv).max()
+                plt.imshow(sderiv, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                #plt.title('Scaled deriv for %s; %f' % (pnames[si], scales[si]))
+                plt.title('%g' % scales[si])
+                plt.colorbar()
+    
+                plt.suptitle('Deriv for %s' % pnames[i])
+    
+                chi0 = subtr.getChiImage(0)
+                subtr.setParam(i, pp[i] + ss[i])
+                chi1 = subtr.getChiImage(0)
+                subtr.setParam(i, pp[i])
+                mx = np.abs(chi0).max()
+                plt.subplot(2,3,2)
+                plt.imshow(chi0, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                plt.colorbar()
+                plt.subplot(2,3,3)
+                dchi = chi1 - chi0
+                mx = np.abs(dchi).max()
+                plt.imshow(dchi, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                plt.colorbar()
+    
+    
+                chi0 = scaler.getChiImage(0)
+                params[i] += 0.1
+                scaler.setParams(params)
+                chi1 = scaler.getChiImage(0)
+                params[i] -= 0.1
+                scaler.setParams(params)
+                mx = np.abs(chi0).max()
+                plt.subplot(2,3,5)
+                plt.imshow(chi0, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                plt.colorbar()
+                plt.subplot(2,3,6)
+                dchi = chi1 - chi0
+                mx = np.abs(dchi).max()
+                plt.imshow(dchi, interpolation='nearest', origin='lower',
+                           vmin=-mx, vmax=mx, cmap='RdBu')
+                plt.colorbar()
+                
+                ps.savefig()
+    
+            sys.exit(0)
+
+        p0 = subtr.getParams()
+
         print 'Calling ceres optimization on subimage of size', subtim.shape,
         print 'and', len(bsrcs), 'sources'
         #print 'Fitting params:'
         #subtr.printThawedParams()
-
-        R2 = subtr._ceres_opt(variance=True, scale_columns=False)
-        var2 = R2['variance']
-        print 'Params2:'
-        for nm,val,vvar in zip(subtr.getParamNames(),
-                               subtr.getParams(), var2):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
-
         #subtr._ceres_opt()
-        R = subtr._ceres_opt(variance=True)
+
+        print
+        print '------------------- variance=True, scaled=False ----------------'
+        print
+        subtr.setParams(p0)
+
+        R = subtr._ceres_opt(variance=True, scaled=False)
         var = R['variance']
         print 'Params:'
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var):
             print '  ', nm, '=', val, '+-', np.sqrt(vvar)
 
+
         print
+        print '------------------- variance=True ---------------------'
+        print
+        subtr.setParams(p0)
+            
+        R = subtr._ceres_opt(variance=True)
+        var = R['variance']
+        print 'Params1:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+        
+        # print
+        # print '------------------- variance=True, scale=False -----------------'
+        # print
+        # subtr.setParams(p0)
+        # R2 = subtr._ceres_opt(variance=True, scale_columns=False)
+        # var2 = R2['variance']
+        # print 'Params2:'
+        # for nm,val,vvar in zip(subtr.getParamNames(),
+        #                        subtr.getParams(), var2):
+        #     print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+
+        print
+        print
+        print '------------------- variance=True, numeric=True -----------------'
+        print
+        subtr.setParams(p0)
+
         print 'Ceres with numeric differentiation:'
         R = subtr._ceres_opt(variance=True, numeric=True)
         var = R['variance']
@@ -385,21 +500,22 @@ if __name__ == '__main__':
             print '  ', nm, '=', val, '+-', np.sqrt(vvar)
         print
 
-            
-        p0 = subtr.getParams()
-        lnp0 = subtr.getLogProb()
-        print 'Check vars:'
-        for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
-                                             subtr.getParams(), var)):
-            lnpx = subtr.getLogProb()
-            assert(lnpx == lnp0)
-            dvar = np.sqrt(vvar)
-            subtr.setParam(i, p0[i] + dvar)
-            lnp1 = subtr.getLogProb()
-            subtr.setParam(i, p0[i] - dvar)
-            lnp2 = subtr.getLogProb()
-            subtr.setParam(i, p0[i])
-            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+
+        if False:
+            p0 = subtr.getParams()
+            lnp0 = subtr.getLogProb()
+            print 'Check vars:'
+            for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
+                                                 subtr.getParams(), var)):
+                lnpx = subtr.getLogProb()
+                assert(lnpx == lnp0)
+                dvar = np.sqrt(vvar)
+                subtr.setParam(i, p0[i] + dvar)
+                lnp1 = subtr.getLogProb()
+                subtr.setParam(i, p0[i] - dvar)
+                lnp2 = subtr.getLogProb()
+                subtr.setParam(i, p0[i])
+                print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
 
 
         sys.exit(0)
@@ -426,16 +542,13 @@ if __name__ == '__main__':
         print 'Wrote', picklefn
     
     # SourceExtractor, or SDSS?
-    secat = opt.se
     if secat:
         objfn = seobjfn
         catname = 'SExtractor'
-        ps = PlotSequence('decam-se')
     else:
         objfn = sdssobjfn
         catname = 'SDSS'
         ps = PlotSequence('decam-sdss')
-    ps.format = '%03i'
 
     sdss = DR9(basedir='dr9')
     sdss.saveUnzippedFiles('dr9')

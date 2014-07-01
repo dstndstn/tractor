@@ -609,42 +609,48 @@ class Tractor(MultiParams):
             plt.savefig(plotfn)
 
     def _ceres_opt(self, variance=False, scale_columns=True,
-                   numeric=False):
+                   numeric=False, scaled=True):
         from ceres import ceres_opt
 
         pp = self.getParams()
         if len(pp) == 0:
             return None
-        p0 = np.array(pp)
-        scales = 10. * np.array(self.getStepSizes())
 
-        p0 -= scales
-        params = np.ones_like(p0)
+        if scaled:
+            p0 = np.array(pp)
+            scales = 10. * np.array(self.getStepSizes())
+
+            # Offset all the parameters so that Ceres sees them all
+            # with value 1.0
+            p0 -= scales
+            params = np.ones_like(p0)
         
-        scaler = ScaledTractor(self, p0, scales)
+            scaler = ScaledTractor(self, p0, scales)
+            tractor = scaler
+            
+        else:
+            params = np.array(pp)
 
-        #params = np.zeros_like(p0)
+            scaler = ScaledTractor(self, np.zeros_like(pp), np.ones_like(pp))
+            tractor = scaler
+            #tractor = self
 
-        #params = np.array(pp)
         variance_out = None
         if variance:
             variance_out = np.zeros_like(params)
-
-        #R = ceres_opt(self, self.getNImages(), params, variance_out,
-
-        R = ceres_opt(scaler, self.getNImages(), params, variance_out,
+            
+        R = ceres_opt(tractor, self.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0))
         if variance:
             R['variance'] = variance_out
 
-        print 'Optimized scaled params:', params
-            
-        # scaled:
-        self.setParams(p0 + params * scales)
-        variance_out *= scales**2
-        R['params0'] = p0
-        R['scales'] = scales
+        if scaled:
+            print 'Optimized scaled params:', params
+            self.setParams(p0 + params * scales)
+            variance_out *= scales**2
+            R['params0'] = p0
+            R['scales'] = scales
 
         return R
         
@@ -2421,5 +2427,6 @@ class ScaledTractor(object):
             der /= self.scale[ind]
         return derivs
     def setParams(self, p):
+        print 'ScaledTractor: setParams', p
         return self.tractor.setParams(self.offset + self.scale * p)
         
