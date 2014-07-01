@@ -543,7 +543,7 @@ if __name__ == '__main__':
             subtr.setParam(i, p0[i])
             print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
 
-        
+
         print 'Log-probs: ceres', ceres_lnp, 'vs', lsqr_lnp, '(delta: %g)' % (lsqr_lnp - ceres_lnp)
 
     sys.exit(0)

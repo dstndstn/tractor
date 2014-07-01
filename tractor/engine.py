@@ -608,6 +608,25 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
+    def getDynamicScales(self):
+        '''
+        Returns parameter step sizes that will result in changes in
+        chi^2 of about 1.0
+        '''
+        scales = np.zeros(self.numberOfParams())
+        for i in range(self.getNImages()):
+            derivs = self._getOneImageDerivs(i)
+            for j,x0,y0,der in derivs:
+                scales[j] += np.sum(der**2)
+        scales = np.sqrt(scales)
+        I = (scales != 0)
+        if any(I):
+            scales[I] = 1./scales[I]
+        I = (scales == 0)
+        if any(I):
+            scales[I] = np.array(self.getStepSizes())[I]
+        return scales
+        
     def _ceres_opt(self, variance=False, scale_columns=True,
                    numeric=False, scaled=True, numeric_stepsize=0.1,
                    dynamic_scale=True,
@@ -622,16 +641,7 @@ class Tractor(MultiParams):
             p0 = np.array(pp)
 
             if dynamic_scale:
-                scales = np.zeros_like(p0)
-                for i in range(self.getNImages()):
-                    derivs = self._getOneImageDerivs(i)
-                    for j,x0,y0,der in derivs:
-                        scales[j] += np.sum(der**2)
-                scales = np.sqrt(scales)
-                I = (scales != 0)
-                scales[I] = 1./scales[I]
-                I = (scales == 0)
-                scales[I] = np.array(self.getStepSizes())[I]
+                scales = self.getDynamicScales()
                 # print 'Dynamic scales:', scales
 
             else:
