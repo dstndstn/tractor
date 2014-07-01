@@ -609,7 +609,9 @@ class Tractor(MultiParams):
             plt.savefig(plotfn)
 
     def _ceres_opt(self, variance=False, scale_columns=True,
-                   numeric=False, scaled=True, numeric_stepsize=0.1):
+                   numeric=False, scaled=True, numeric_stepsize=0.1,
+                   dynamic_scale=True,
+                   dlnp = 1e-3):
         from ceres import ceres_opt
 
         pp = self.getParams()
@@ -618,22 +620,22 @@ class Tractor(MultiParams):
 
         if scaled:
             p0 = np.array(pp)
-            #scales = 10. * np.array(self.getStepSizes())
 
-            scales = np.zeros_like(p0)
+            if dynamic_scale:
+                scales = np.zeros_like(p0)
+                for i in range(self.getNImages()):
+                    derivs = self._getOneImageDerivs(i)
+                    for j,x0,y0,der in derivs:
+                        scales[j] += np.sum(der**2)
+                scales = np.sqrt(scales)
+                I = (scales != 0)
+                scales[I] = 1./scales[I]
+                I = (scales == 0)
+                scales[I] = np.array(self.getStepSizes())[I]
+                # print 'Dynamic scales:', scales
 
-            for i in range(self.getNImages()):
-                derivs = self._getOneImageDerivs(i)
-                for j,x0,y0,der in derivs:
-                    scales[j] += np.sum(der**2)
-            scales = np.sqrt(scales)
-
-            I = (scales != 0)
-            scales[I] = 1./scales[I]
-            I = (scales == 0)
-            scales[I] = (10. * np.array(self.getStepSizes()))[I]
-
-            print 'Dynamic scales:', scales
+            else:
+                scales = np.array(self.getStepSizes())
             
             # Offset all the parameters so that Ceres sees them all
             # with value 1.0
@@ -643,30 +645,23 @@ class Tractor(MultiParams):
             scaler = ScaledTractor(self, p0, scales)
             tractor = scaler
 
-            print 'Initial params:', self.getParams()
-            scaler.setParams(np.ones_like(params) + 1.)
-            print 'Params at one step:', self.getParams()
-            scaler.setParams(params)
-            
         else:
             params = np.array(pp)
-
-            scaler = ScaledTractor(self, np.zeros_like(pp), np.ones_like(pp))
-            tractor = scaler
-            #tractor = self
+            tractor = self
 
         variance_out = None
         if variance:
             variance_out = np.zeros_like(params)
-            
+
         R = ceres_opt(tractor, self.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
-                      (1 if numeric else 0), numeric_stepsize)
+                      (1 if numeric else 0), numeric_stepsize,
+                      dlnp)
         if variance:
             R['variance'] = variance_out
 
         if scaled:
-            print 'Optimized scaled params:', params
+            print 'Opt. in scaled space:', params
             self.setParams(p0 + params * scales)
             variance_out *= scales**2
             R['params0'] = p0
@@ -2445,9 +2440,9 @@ class ScaledTractor(object):
         derivs = self.tractor._getOneImageDerivs(i)
         for (ind, x0, y0, der) in derivs:
             der *= self.scale[ind]
-            print 'Derivative', ind, 'has RSS', np.sqrt(np.sum(der**2))
+            #print 'Derivative', ind, 'has RSS', np.sqrt(np.sum(der**2))
         return derivs
     def setParams(self, p):
-        print 'ScaledTractor: setParams', p
+        #print 'ScaledTractor: setParams', p
         return self.tractor.setParams(self.offset + self.scale * p)
         

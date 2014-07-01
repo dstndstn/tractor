@@ -300,8 +300,8 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 
 
 class NumericDiffImageCost {
- public:
- NumericDiffImageCost(ImageCostFunction* im) : _im(im) {}
+public:
+    NumericDiffImageCost(ImageCostFunction* im) : _im(im) {}
     
     ~NumericDiffImageCost() {
         delete _im;
@@ -311,16 +311,34 @@ class NumericDiffImageCost {
         return _im->Evaluate(parameters, residuals, NULL);
     }
 
- protected:
+protected:
     ImageCostFunction* _im;
 };
 
+class DlnpCallback : public ceres::IterationCallback {
+public:
+    DlnpCallback(double dlnp) : _dlnp(dlnp) {}
+    virtual ~DlnpCallback() {}
+
+    virtual ceres::CallbackReturnType operator()
+    (const ceres::IterationSummary& summary) {
+        printf("Cost change: %g\n", summary.cost_change);
+        if (summary.cost_change > 0 && summary.cost_change < _dlnp) {
+            return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
+        }
+        return ceres::SOLVER_CONTINUE;
+    }
+protected:
+    const double _dlnp;
+};
 
 
 static PyObject* ceres_opt(PyObject* tractor, int nims,
                            PyObject* np_params, PyObject* np_variance,
-                           int scale_columns, int numeric,
-                           float numeric_stepsize) {
+                           int scale_columns,
+                           int numeric,
+                           float numeric_stepsize,
+                           float dlnp) {
     /*
      np_params: numpy array, type double, length number of params.
      np_variance: ditto
@@ -391,6 +409,14 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.jacobi_scaling = scale_columns;
     options.numeric_derivative_relative_step_size = numeric_stepsize;
+
+    if (dlnp > 0) {
+        options.function_tolerance = 1e-16;
+
+        printf("Callbacks: %i\n", (int)options.callbacks.size());
+        DlnpCallback cb(dlnp);
+        options.callbacks.push_back(&cb);
+    }
 
     Solver::Summary summary;
     Solve(options, &problem, &summary);

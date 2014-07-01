@@ -284,8 +284,10 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
     // dModel / dParam!
     PyObject* allderivs = PyObject_CallMethod(
         _tractor, (char*)"_getOneImageDerivs", (char*)"i", _imagei);
-    if (!allderivs)
+    if (!allderivs) {
+        printf("_getOneImageDerivs() returned NULL\n");
         return false;
+    }
     if (!PyList_Check(allderivs)) {
         printf("Expecting allderivs to be a list\n");
         Py_XDECREF(allderivs);

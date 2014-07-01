@@ -353,8 +353,9 @@ if __name__ == '__main__':
     ps.format = '%03i'
 
         
-    if True:
-        X = unpickle_from_file('subtim-0000.pickle')
+    #if True:
+    for timi in range(25):
+        X = unpickle_from_file('subtim-%04i.pickle' % timi)
         subtim = X['tim']
         bsrcs = X['cat']
 
@@ -363,8 +364,12 @@ if __name__ == '__main__':
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
 
-        subtr.catalog.freezeAllParams()
-        subtr.catalog.thawParam(0)
+        print 'subtr', subtr
+        if len(bsrcs) == 0:
+            continue
+            
+        #subtr.catalog.freezeAllParams()
+        #subtr.catalog.thawParam(0)
         
         if False:
             derivs = subtr._getOneImageDerivs(0)
@@ -448,60 +453,49 @@ if __name__ == '__main__':
         #subtr._ceres_opt()
 
         print
-        print '------------------- variance=True, scaled=False ----------------'
-        print
-        subtr.setParams(p0)
-
-        R = subtr._ceres_opt(variance=True, scaled=False)
-        var = R['variance']
-        print 'Params:'
-        for nm,val,vvar in zip(subtr.getParamNames(),
-                               subtr.getParams(), var):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
-
-
-        print
         print '------------------- variance=True ---------------------'
         print
         subtr.setParams(p0)
-            
         R = subtr._ceres_opt(variance=True)
-        var = R['variance']
-        print 'Params1:'
-        for nm,val,vvar in zip(subtr.getParamNames(),
-                               subtr.getParams(), var):
-            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
 
-        
-        # print
-        # print '------------------- variance=True, scale=False -----------------'
-        # print
-        # subtr.setParams(p0)
-        # R2 = subtr._ceres_opt(variance=True, scale_columns=False)
-        # var2 = R2['variance']
-        # print 'Params2:'
-        # for nm,val,vvar in zip(subtr.getParamNames(),
-        #                        subtr.getParams(), var2):
-        #     print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+        print 'Report:', R['full_report']
 
-
-        print
-        print
-        print '------------------- variance=True, numeric=True -----------------'
-        print
-        subtr.setParams(p0)
-
-        print 'Ceres with numeric differentiation:'
-        R = subtr._ceres_opt(variance=True, numeric=True)
         var = R['variance']
         print 'Params:'
         for nm,val,vvar in zip(subtr.getParamNames(),
                                subtr.getParams(), var):
             print '  ', nm, '=', val, '+-', np.sqrt(vvar)
-        print
 
 
-        if False:
+        # print
+        # print '------------------- variance=True, scaled=False ----------------'
+        # print
+        # subtr.setParams(p0)
+        # 
+        # R = subtr._ceres_opt(variance=True, scaled=False)
+        # var = R['variance']
+        # print 'Params:'
+        # for nm,val,vvar in zip(subtr.getParamNames(),
+        #                        subtr.getParams(), var):
+        #     print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+        # 
+        # 
+        # print
+        # print
+        # print '------------------- variance=True, numeric=True -----------------'
+        # print
+        # subtr.setParams(p0)
+        # 
+        # print 'Ceres with numeric differentiation:'
+        # R = subtr._ceres_opt(variance=True, numeric=True)
+        # var = R['variance']
+        # print 'Params:'
+        # for nm,val,vvar in zip(subtr.getParamNames(),
+        #                        subtr.getParams(), var):
+        #     print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+        # print
+
+        if True:
             p0 = subtr.getParams()
             lnp0 = subtr.getLogProb()
             print 'Check vars:'
@@ -518,7 +512,7 @@ if __name__ == '__main__':
                 print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
 
 
-        sys.exit(0)
+    sys.exit(0)
     
 
     tim = read_decam_image(decbase, slc=slc)
