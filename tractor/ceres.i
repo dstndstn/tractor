@@ -319,7 +319,8 @@ class NumericDiffImageCost {
 
 static PyObject* ceres_opt(PyObject* tractor, int nims,
                            PyObject* np_params, PyObject* np_variance,
-                           int scale_columns, int numeric) {
+                           int scale_columns, int numeric,
+                           float numeric_stepsize) {
     /*
      np_params: numpy array, type double, length number of params.
      np_variance: ditto
@@ -370,7 +371,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         if (numeric) {
             ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>* dyncost = 
                 new ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>
-                (new NumericDiffImageCost(icf));
+                (new NumericDiffImageCost(icf), ceres::TAKE_OWNERSHIP,
+                 numeric_stepsize);
             for (i=0; i<nparams; i++)
                 dyncost->AddParameterBlock(1);
             dyncost->SetNumResiduals(icf->nPix());
@@ -379,9 +381,6 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         } else {
             cost = icf;
         }
-        //CostFunction* cost = new ImageCostFunction
-        //(tractor, i, nparams, np_params);
-
         problem.AddResidualBlock(cost, NULL, allparams);
     }
 
@@ -390,19 +389,12 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     Solver::Options options;
     options.minimizer_progress_to_stdout = true;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
-    //options.jacobi_scaling = true;
     options.jacobi_scaling = scale_columns;
-
-    //options.numeric_derivative_relative_step_size
+    options.numeric_derivative_relative_step_size = numeric_stepsize;
 
     Solver::Summary summary;
     Solve(options, &problem, &summary);
     printf("%s\n", summary.BriefReport().c_str());
-
-    // CERES 1.9.0
-    const char* errstring = summary.message.c_str();
-    // CERES 1.8.0
-    //const char* errstring = summary.error.c_str();
 
     if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
         if (!(PyArray_Check(np_variance) &&
@@ -440,6 +432,9 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
         for (i=0; i<nparams; i++)
             covariance.GetCovarianceBlock(params+i, params+i, cov_out+i);
     }
+
+    const char* errstring = summary.message.c_str();
+
     return Py_BuildValue
         ("{sisssdsdsdsssssisisisi}",
          "termination", int(summary.termination_type),

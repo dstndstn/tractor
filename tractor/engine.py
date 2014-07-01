@@ -609,7 +609,7 @@ class Tractor(MultiParams):
             plt.savefig(plotfn)
 
     def _ceres_opt(self, variance=False, scale_columns=True,
-                   numeric=False, scaled=True):
+                   numeric=False, scaled=True, numeric_stepsize=0.1):
         from ceres import ceres_opt
 
         pp = self.getParams()
@@ -618,8 +618,23 @@ class Tractor(MultiParams):
 
         if scaled:
             p0 = np.array(pp)
-            scales = 10. * np.array(self.getStepSizes())
+            #scales = 10. * np.array(self.getStepSizes())
 
+            scales = np.zeros_like(p0)
+
+            for i in range(self.getNImages()):
+                derivs = self._getOneImageDerivs(i)
+                for j,x0,y0,der in derivs:
+                    scales[j] += np.sum(der**2)
+            scales = np.sqrt(scales)
+
+            I = (scales != 0)
+            scales[I] = 1./scales[I]
+            I = (scales == 0)
+            scales[I] = (10. * np.array(self.getStepSizes()))[I]
+
+            print 'Dynamic scales:', scales
+            
             # Offset all the parameters so that Ceres sees them all
             # with value 1.0
             p0 -= scales
@@ -627,6 +642,11 @@ class Tractor(MultiParams):
         
             scaler = ScaledTractor(self, p0, scales)
             tractor = scaler
+
+            print 'Initial params:', self.getParams()
+            scaler.setParams(np.ones_like(params) + 1.)
+            print 'Params at one step:', self.getParams()
+            scaler.setParams(params)
             
         else:
             params = np.array(pp)
@@ -641,7 +661,7 @@ class Tractor(MultiParams):
             
         R = ceres_opt(tractor, self.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
-                      (1 if numeric else 0))
+                      (1 if numeric else 0), numeric_stepsize)
         if variance:
             R['variance'] = variance_out
 
@@ -2424,7 +2444,8 @@ class ScaledTractor(object):
     def _getOneImageDerivs(self, i):
         derivs = self.tractor._getOneImageDerivs(i)
         for (ind, x0, y0, der) in derivs:
-            der /= self.scale[ind]
+            der *= self.scale[ind]
+            print 'Derivative', ind, 'has RSS', np.sqrt(np.sum(der**2))
         return derivs
     def setParams(self, p):
         print 'ScaledTractor: setParams', p
