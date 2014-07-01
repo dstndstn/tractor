@@ -345,14 +345,65 @@ if __name__ == '__main__':
     else:
         decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
 
+    if True:
+        X = unpickle_from_file('subtim-0000.pickle')
+        subtim = X['tim']
+        bsrcs = X['cat']
 
-    # if True:
-    #     fits = fitsio.FITS('subtim.fits', 'r')
-    #     tim = Image.readFromFits(fits, prefix='TR_')
-    #     print 'Got', tim
-    #     
-    #     sys.exit(0)
+        subtr = Tractor([subtim], bsrcs)
+        subtr.modtype = np.float64
+        subtr.freezeParam('images')
+        subtr.catalog.thawAllRecursive()
+        
+        print 'Calling ceres optimization on subimage of size', subtim.shape,
+        print 'and', len(bsrcs), 'sources'
+        #print 'Fitting params:'
+        #subtr.printThawedParams()
 
+        R2 = subtr._ceres_opt(variance=True, scale_columns=False)
+        var2 = R2['variance']
+        print 'Params2:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var2):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+        #subtr._ceres_opt()
+        R = subtr._ceres_opt(variance=True)
+        var = R['variance']
+        print 'Params:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+
+        print
+        print 'Ceres with numeric differentiation:'
+        R = subtr._ceres_opt(variance=True, numeric=True)
+        var = R['variance']
+        print 'Params:'
+        for nm,val,vvar in zip(subtr.getParamNames(),
+                               subtr.getParams(), var):
+            print '  ', nm, '=', val, '+-', np.sqrt(vvar)
+        print
+
+            
+        p0 = subtr.getParams()
+        lnp0 = subtr.getLogProb()
+        print 'Check vars:'
+        for i,(nm,val,vvar) in enumerate(zip(subtr.getParamNames(),
+                                             subtr.getParams(), var)):
+            lnpx = subtr.getLogProb()
+            assert(lnpx == lnp0)
+            dvar = np.sqrt(vvar)
+            subtr.setParam(i, p0[i] + dvar)
+            lnp1 = subtr.getLogProb()
+            subtr.setParam(i, p0[i] - dvar)
+            lnp2 = subtr.getLogProb()
+            subtr.setParam(i, p0[i])
+            print '  ', nm, val, '+-', dvar, '-> dlnp', (lnp1-lnp0), (lnp2-lnp0)
+
+
+        sys.exit(0)
+    
 
     tim = read_decam_image(decbase, slc=slc)
     print 'Got', tim, tim.shape
@@ -374,32 +425,6 @@ if __name__ == '__main__':
         pickle_to_file(X, picklefn)
         print 'Wrote', picklefn
     
-    if True:
-        bslc = slice(1819, 1954), slice(9, 144)
-        
-        subiv = tim.getInvvar()[bslc]
-        #subiv[blobs[bslc] != (b+1)] = 0.
-        subimg = tim.getImage()[bslc]
-        sy,sx = bslc
-        y0,y1 = sy.start, sy.stop
-        x0,x1 = sx.start, sx.stop
-        subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
-        subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
-
-        subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
-                       sky=tim.getSky(), photocal=tim.getPhotoCal())
-        
-        fits = fitsio.FITS('tim.fits', 'rw', clobber=True)
-        subtim.toFits(fits, prefix='TR_')
-        fits.close()
-
-        fits = fitsio.FITS('tim.fits', 'r', clobber=True)
-        tim = Image.readFromFits(fits, prefix='TR_')
-        print 'Got', tim
-    
-        sys.exit(0)
-    
-
     # SourceExtractor, or SDSS?
     secat = opt.se
     if secat:
@@ -1326,8 +1351,6 @@ if __name__ == '__main__':
 
         print 'blob slice:', bslc
 
-        sys.exit(0)
-        
         subiv = tim.getInvvar()[bslc]
         subiv[blobs[bslc] != (b+1)] = 0.
         subimg = tim.getImage()[bslc]
@@ -1337,7 +1360,7 @@ if __name__ == '__main__':
         subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
         subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
 
-        doplot = (ii < 25) or (len(blobsrcs[b]) == 0 and ndecamonly < 25)
+        doplot = (ii < 25) or (len(bsrcs) == 0 and ndecamonly < 25)
 
         ###
         if doplot:
@@ -1409,14 +1432,18 @@ if __name__ == '__main__':
         subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
                        sky=tim.getSky(), photocal=tim.getPhotoCal())
 
-        #subtr = ChattyTractor([subtim], blobsrcs[b])
-        subtr = Tractor([subtim], blobsrcs[b])
+        pfn = 'subtim-%04i.pickle' % ii
+        pickle_to_file(dict(tim=subtim, cat=bsrcs, bslc=bslc), pfn)
+        print 'Wrote', pfn
+        
+        #subtr = ChattyTractor([subtim], bsrcs)
+        subtr = Tractor([subtim], bsrcs)
         subtr.modtype = np.float64
         subtr.freezeParam('images')
         subtr.catalog.thawAllRecursive()
 
         print 'Calling ceres optimization on subimage of size', subtim.shape,
-        print 'and', len(blobsrcs[b]), 'sources'
+        print 'and', len(bsrcs), 'sources'
         print 'Fitting params:'
         subtr.printThawedParams()
 
@@ -1528,7 +1555,7 @@ if __name__ == '__main__':
             
         subtr.catalog.freezeAllParams()
         vars2 = []
-        for i,src in enumerate(blobsrcs[b]):
+        for i,src in enumerate(bsrcs):
             subtr.catalog.thawParam(i)
             print 'Fitting source', i
             for nm,val in zip(subtr.getParamNames(), subtr.getParams()):
