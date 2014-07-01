@@ -188,7 +188,7 @@ class Fluxes(Mags):
         self.setMag(band, val)
     setFlux = setBand   
 
-class FluxesPhotoCal(BaseParams):
+class FluxesPhotoCal(BaseParams, ducks.ImageCalibration):
     def __init__(self, band):
         self.band = band
         BaseParams.__init__(self)
@@ -286,7 +286,7 @@ class Flux(ScalarParam):
         return new
     __rmul__ = __mul__
 
-class MagsPhotoCal(ParamList):
+class MagsPhotoCal(ParamList, ducks.ImageCalibration):
     '''
     A `PhotoCal` implementation to be used with zeropoint-calibrated `Mags`.
     '''
@@ -326,7 +326,7 @@ class MagsPhotoCal(ParamList):
     def __str__(self):
         return 'MagsPhotoCal(band=%s, zp=%.3f)' % (self.band, self.zp)
 
-class NullPhotoCal(BaseParams):
+class NullPhotoCal(BaseParams, ducks.ImageCalibration):
     '''
     The "identity" `PhotoCal`, to be used with `Flux` -- the
     `Brightness` objects are in units of `Image` counts.
@@ -334,7 +334,7 @@ class NullPhotoCal(BaseParams):
     def brightnessToCounts(self, brightness):
         return brightness.getValue()
 
-class LinearPhotoCal(ScalarParam):
+class LinearPhotoCal(ScalarParam, ducks.ImageCalibration):
     '''
     A `PhotoCal`, to be used with `Flux` or `Fluxes` brightnesses,
     that simply scales the flux by a fixed factor; the brightness
@@ -365,7 +365,7 @@ class LinearPhotoCal(ScalarParam):
         return counts
         
 
-class NullWCS(BaseParams):
+class NullWCS(BaseParams, ducks.ImageCalibration):
     '''
     The "identity" WCS -- useful when you are using raw pixel
     positions rather than RA,Decs.
@@ -386,7 +386,7 @@ class NullWCS(BaseParams):
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
-class WcslibWcs(BaseParams):
+class WcslibWcs(BaseParams, ducks.ImageCalibration):
     '''
     A WCS implementation that wraps a FITS WCS object (with a pixel
     offset), delegating to wcslib.
@@ -482,7 +482,7 @@ class WcslibWcs(BaseParams):
                  [dec1 - dec0,        dec2 - dec0]])
 
 
-class ConstantFitsWcs(ParamList):
+class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
     '''
     A WCS implementation that wraps a FITS WCS object (with a pixel
     offset).
@@ -555,7 +555,7 @@ class ConstantFitsWcs(ParamList):
 
     
 ### FIXME -- this should be called TanWcs!
-class FitsWcs(ConstantFitsWcs):
+class FitsWcs(ConstantFitsWcs, ducks.ImageCalibration):
     '''
     The WCS object must be an astrometry.util.util.Tan object, or a
     convincingly quacking duck.
@@ -706,7 +706,7 @@ class RaDecPos(ArithmeticParams, ParamList):
 class NullSky(BaseParams, ducks.Sky):
     pass
     
-class ConstantSky(ScalarParam):
+class ConstantSky(ScalarParam, ducks.ImageCalibration):
     '''
     In counts
     '''
@@ -1036,7 +1036,7 @@ class MovingPointSource(PointSource):
                 
         return derivs
 
-class PixelizedPSF(BaseParams):
+class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     '''
     A PSF model based on an image postage stamp, which will be
     sinc-shifted to subpixel positions.
@@ -1120,7 +1120,7 @@ class PixelizedPSF(BaseParams):
         self.fftcache[sz] = rtn
         return rtn
     
-class GaussianMixturePSF(ParamList):
+class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
@@ -1153,6 +1153,26 @@ class GaussianMixturePSF(ParamList):
         # print 'Setting param names:', names
         self.addNamedParams(**names)
 
+    @classmethod
+    def fromFitsHeader(clazz, hdr, prefix=''):
+        params = []
+        for i in range(100):
+            k = prefix + 'P%i' % i
+            print 'Key', k
+            if not k in hdr:
+                break
+            params.append(hdr.get(k))
+        print 'PSF Params:', params
+        if len(params) == 0 or (len(params) % 6 != 0):
+            raise RuntimeError('Failed to create %s from FITS header: expected '
+                               'factor of 6 parameters, got %i' % 
+                               (str(clazz), len(params)))
+        K = len(params) / 6
+        psf = clazz(np.zeros(K), np.zeros((K,2)), np.zeros((K,2,2)))
+        psf.setParams(params)
+        return psf
+    
+        
     # HACK... incomplete
     # def getLogPrior(self):
     #     if np.any(self.mog.amp < 0):
@@ -1332,7 +1352,7 @@ class GaussianMixturePSF(ParamList):
         tpsf = GaussianMixturePSF(w, mu, sig)
         return tpsf
     
-class NCircularGaussianPSF(MultiParams):
+class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A PSF model using N concentric, circular Gaussians.
     '''
@@ -1497,7 +1517,7 @@ class ParamsWrapper(BaseParams):
         return self.real.getStepSizes(*args, **kwargs)
 
 
-class ShiftedPsf(ParamsWrapper):
+class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, psf, x0, y0):
         super(ShiftedPsf, self).__init__(psf)
         self.psf = psf
@@ -1519,7 +1539,7 @@ class ShiftedPsf(ParamsWrapper):
         return self.psf.getMixtureOfGaussians(**kwargs)
 
     
-class ScaledPhotoCal(ParamsWrapper):
+class ScaledPhotoCal(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, photocal, factor):
         super(ScaledPhotoCal,self).__init__(photocal)
         self.pc = photocal
@@ -1529,7 +1549,7 @@ class ScaledPhotoCal(ParamsWrapper):
     def brightnessToCounts(self, brightness):
         return self.factor * self.pc.brightnessToCounts(brightness)
 
-class ScaledWcs(ParamsWrapper):
+class ScaledWcs(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, wcs, factor):
         super(ScaledWcs,self).__init__(wcs)
         self.factor = factor
@@ -1549,7 +1569,7 @@ class ScaledWcs(ParamsWrapper):
         return ((x + 0.5) * self.factor - 0.5,
                 (y + 0.5) * self.factor - 0.5)
 
-class ShiftedWcs(ParamsWrapper):
+class ShiftedWcs(ParamsWrapper, ducks.ImageCalibration):
     '''
     Wraps a WCS in order to use it for a subimage.
     '''
@@ -1559,6 +1579,18 @@ class ShiftedWcs(ParamsWrapper):
         self.y0 = y0
         self.wcs = wcs
 
+    def toFitsHeader(self, hdr, prefix=''):
+        tt = type(self.wcs)
+        sub_type = '%s.%s' % (tt.__module__, tt.__name__)
+        hdr.add_record(dict(name=prefix + 'SUB', value=sub_type,
+                            comment='ShiftedWcs sub-type'))
+        hdr.add_record(dict(name=prefix + 'X0', value=self.x0,
+                            comment='ShiftedWcs x0'))
+        hdr.add_record(dict(name=prefix + 'Y0', value=self.y0,
+                            comment='ShiftedWcs y0'))
+        print 'Sub wcs:', self.wcs
+        self.wcs.toFitsHeader(hdr, prefix=prefix)
+        
     def hashkey(self):
         return ('ShiftedWcs', self.x0, self.y0) + tuple(self.wcs.hashkey())
 

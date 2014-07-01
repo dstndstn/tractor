@@ -5,8 +5,9 @@ from .utils import *
 from .emfit import em_fit_2d
 from .fitpsf import em_init_params
 from . import mixture_profiles as mp
+from . import ducks
 
-class VaryingGaussianPSF(MultiParams):
+class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A mixture-of-Gaussians (MoG) PSF with spatial variation,
     represented as a spline(x,y) in each of the MoG parameters.

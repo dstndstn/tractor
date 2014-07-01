@@ -211,7 +211,78 @@ class Image(MultiParams):
     def getPhotoCal(self):
         return self.photocal
 
+    @staticmethod
+    def readFromFits(fits, prefix=''):
+        hdr = fits[0].read_header()
+        pix = fits[1].read()
+        iv = fits[2].read()
+        assert(pix.shape == iv.shape)
 
+        def readObject(prefix):
+            k = prefix
+            objclass = hdr[k]
+            names = objclass.split('.')
+            names = [n for n in names if len(n)]
+            pkg = '.'.join(names[:-1])
+            clazz = names[-1]
+            import importlib
+            mod = importlib.import_module(pkg)
+            print 'Module:', mod
+            clazz = getattr(mod, clazz)
+            print 'Class:', clazz
+            fromfits = getattr(clazz, 'fromFitsHeader')
+            print 'fromFits:', fromfits
+            obj = fromfits(hdr, prefix=prefix + '_')
+            print 'Got:', obj
+            return obj
+
+        psf = readObject(prefix + 'PSF')
+        wcs = readObject(prefix + 'WCS')
+        sky = readObject(prefix + 'SKY')
+        pcal = readObject(prefix + 'PHO')
+
+        return Image(data=pix, invvar=iv, psf=psf, wcs=wcs, sky=sky,
+                     photocal=pcal)
+        
+    def toFits(self, fits, prefix=''):
+        psf = self.getPsf()
+        wcs = self.getWcs()
+        sky = self.getSky()
+        pcal = self.getPhotoCal()
+        
+        import fitsio
+        hdr = fitsio.FITSHDR()
+        tt = type(psf)
+        psf_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(wcs)
+        wcs_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(sky)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(pcal)
+        pcal_type = '%s.%s' % (tt.__module__, tt.__name__)
+        hdr.add_record(dict(name=prefix + 'PSF', value=psf_type,
+                            comment='PSF class'))
+        hdr.add_record(dict(name=prefix + 'WCS', value=wcs_type,
+                            comment='WCS class'))
+        hdr.add_record(dict(name=prefix + 'SKY', value=sky_type,
+                            comment='Sky class'))
+        hdr.add_record(dict(name=prefix + 'PHO', value=pcal_type,
+                            comment='PhotoCal class'))
+        psf.toFitsHeader(hdr,  prefix + 'PSF_')
+        wcs.toFitsHeader(hdr,  prefix + 'WCS_')
+        sky.toFitsHeader(hdr,  prefix + 'SKY_')
+        pcal.toFitsHeader(hdr, prefix + 'PHO_')
+
+        fits.write(None, header=hdr)
+        fits.write(self.getImage())
+        fits.write(self.getInvvar())
+        #fits = fitsio.FITS('subtim.fits', 'rw', clobber=True)
+        #fits.close()
+        #sys.exit(0)
+        
+
+    
+        
 class Catalog(MultiParams):
     '''
     A list of Source objects.  This class allows the Tractor to treat
@@ -541,36 +612,64 @@ class Tractor(MultiParams):
                    numeric=False):
         from ceres import ceres_opt
 
+        class ScaledTractor(object):
+            def __init__(self, tractor, p0, scales):
+                self.tractor = tractor
+                self.offset = p0
+                self.scale = scales
+            def getImage(self, i):
+                return self.tractor.getImage(i)
+            def getChiImage(self, i):
+                return self.tractor.getChiImage(i)
+            def _getOneImageDerivs(self, i):
+                derivs = self.tractor._getOneImageDerivs(i)
+                for (ind, x0, y0, der) in derivs:
+                    der /= self.scale[ind]
+                return derivs
+            def setParams(self, p):
+                return self.tractor.setParams(self.offset + self.scale * p)
+        
         pp = self.getParams()
         if len(pp) == 0:
             return None
-        params = np.array(pp)
+        p0 = np.array(pp)
+        scales = 10. * np.array(self.getStepSizes())
+
+        p0 -= scales
+        params = np.ones_like(p0)
+        
+        scaler = ScaledTractor(self, p0, scales)
+
+        #params = np.zeros_like(p0)
+
+        #params = np.array(pp)
         variance_out = None
         if variance:
             variance_out = np.zeros_like(params)
 
-        R = ceres_opt(self, self.getNImages(), params, variance_out,
+        #R = ceres_opt(self, self.getNImages(), params, variance_out,
+
+        R = ceres_opt(scaler, self.getNImages(), params, variance_out,
                       (1 if scale_columns else 0),
                       (1 if numeric else 0))
         if variance:
             R['variance'] = variance_out
-        # print 'ceres_opt result:'
-        # for k,v in R.items():
-        #     print k, v
 
-        # Does Ceres leave our state at the optimum?
-        pend = np.array(self.getParams())
-        assert(np.all(pend == params))
-        # Set to the optimum found by Ceres
-        # self.setParams(params)
-        
+        print 'Optimized scaled params:', params
+            
+        # scaled:
+        self.setParams(p0 + params * scales)
+        variance_out *= scales**2
+        R['params0'] = p0
+        R['scales'] = scales
+
         return R
         
     # This function is called-back by _ceres_opt; it is called from
     # ceres-tractor.cc via ceres.i .
     def _getOneImageDerivs(self, imgi):
         # Returns:
-        #     [  (param-index, patch), ... ]
+        #     [  (param-index, deriv_x0, deriv_x0, deriv), ... ]
         # not necessarily in order of param-index
         #
         # NOTE, this scales the derivatives by inverse-error and -1 to

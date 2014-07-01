@@ -345,6 +345,15 @@ if __name__ == '__main__':
     else:
         decbase = 'proc/20130330/C01/zband/DECam_00192399.01.p.w'
 
+
+    # if True:
+    #     fits = fitsio.FITS('subtim.fits', 'r')
+    #     tim = Image.readFromFits(fits, prefix='TR_')
+    #     print 'Got', tim
+    #     
+    #     sys.exit(0)
+
+
     tim = read_decam_image(decbase, slc=slc)
     print 'Got', tim, tim.shape
 
@@ -364,6 +373,32 @@ if __name__ == '__main__':
         X = dict(psf=tim.psf)
         pickle_to_file(X, picklefn)
         print 'Wrote', picklefn
+    
+    if True:
+        bslc = slice(1819, 1954), slice(9, 144)
+        
+        subiv = tim.getInvvar()[bslc]
+        #subiv[blobs[bslc] != (b+1)] = 0.
+        subimg = tim.getImage()[bslc]
+        sy,sx = bslc
+        y0,y1 = sy.start, sy.stop
+        x0,x1 = sx.start, sx.stop
+        subpsf = tim.getPsf().mogAt((x0+x1)/2., (y0+y1)/2.)
+        subwcs = ShiftedWcs(tim.getWcs(), x0, y0)
+
+        subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
+                       sky=tim.getSky(), photocal=tim.getPhotoCal())
+        
+        fits = fitsio.FITS('tim.fits', 'rw', clobber=True)
+        subtim.toFits(fits, prefix='TR_')
+        fits.close()
+
+        fits = fitsio.FITS('tim.fits', 'r', clobber=True)
+        tim = Image.readFromFits(fits, prefix='TR_')
+        print 'Got', tim
+    
+        sys.exit(0)
+    
 
     # SourceExtractor, or SDSS?
     secat = opt.se
@@ -1288,6 +1323,10 @@ if __name__ == '__main__':
         print
         print 'Blob', ii, 'of', len(blobchisq), 'index', b
         print 
+
+        print 'blob slice:', bslc
+
+        sys.exit(0)
         
         subiv = tim.getInvvar()[bslc]
         subiv[blobs[bslc] != (b+1)] = 0.
@@ -1369,6 +1408,7 @@ if __name__ == '__main__':
 
         subtim = Image(data=subimg, invvar=subiv, psf=subpsf, wcs=subwcs,
                        sky=tim.getSky(), photocal=tim.getPhotoCal())
+
         #subtr = ChattyTractor([subtim], blobsrcs[b])
         subtr = Tractor([subtim], blobsrcs[b])
         subtr.modtype = np.float64

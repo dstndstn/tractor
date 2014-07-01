@@ -322,6 +322,17 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
                            int scale_columns, int numeric) {
     /*
      np_params: numpy array, type double, length number of params.
+     np_variance: ditto
+
+     Methods called on the "tractor" object include:
+
+     img = tractor.getImage(i)
+        img.getWidth()
+        img.getHeight()
+     tractor.setParams(np_params)   # with the np_params obj passed in
+     tractor.getChiImage(i)
+     tractor._getOneImageDerivs(i)
+
      */
     Problem problem;
     int i;
@@ -381,6 +392,8 @@ static PyObject* ceres_opt(PyObject* tractor, int nims,
     options.linear_solver_type = ceres::SPARSE_SCHUR;
     //options.jacobi_scaling = true;
     options.jacobi_scaling = scale_columns;
+
+    //options.numeric_derivative_relative_step_size
 
     Solver::Summary summary;
     Solve(options, &problem, &summary);
