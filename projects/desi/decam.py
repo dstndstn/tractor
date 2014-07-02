@@ -29,7 +29,6 @@ from scipy.ndimage.interpolation import shift
 
 from .em import *
 
-
 def tweak_astrometry(SEcat, SDSScat, sip, ps):
     SEcat = fits_table(seobjfn, hdu=2)
     SEcat.ra  = SEcat.alpha_j2000
@@ -305,6 +304,83 @@ def sqimshow(img, **kwa):
     mx = kwa.pop('vmax')
     imshow(np.sqrt(np.maximum(0, img - mn)), vmin=0, vmax=np.sqrt(mx-mn), **kwa)
 
+
+
+def get_fits_catalog(cat, var, T, hdr, filt, fs):
+    if T is None:
+        T = fits_table()
+    if hdr is None:
+        hdr = fitsio.FITSHDR()
+
+    # Find a source of each type and query its parameter names, for the header
+    # ASSUMES the catalog contains at least one object of each type
+    for t,ts in typemap.items():
+        for src in cat:
+            if type(src) != t:
+                continue
+            print 'Parameters for', t, src
+            sc = src.copy()
+            sc.thawAllRecursive()
+            for i,nm in enumerate(sc.getParamNames()):
+                hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
+                                    comment='Tractor param name'))
+            def flatten_node(node):
+                return reduce(lambda x,y: x+y,
+                              [flatten_node(c) for c in node[1:]],
+                              [node[0]])
+            tree = getParamTypeTree(sc)
+            print 'Source param types:', tree
+            types = flatten_node(tree)
+            #print 'Flat:', types
+            for i,t in enumerate(types):
+                hdr.add_record(dict(name='TR_%s_T%i' % (ts, i),
+                                    value=t.replace("'", '"'),
+                                    comment='Tractor param types'))
+            break
+    print 'Header:', hdr
+
+    params0 = cat.getParams()
+
+    flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+                     for src in cat])
+
+    # Oh my, this is tricky... set parameter values to the variance
+    # vector so that we can read off the parameter variances via the
+    # python object apis.
+    cat.setParams(var)
+    fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+                        for src in cat])
+    cat.setParams(params0)
+    
+    # flux = []
+    # for src in cat:
+    #     bb = src.getBrightnesses()
+    #     flux.append(sum(b.getFlux(filt) for b in bb))
+    #     # for fluxI
+    #     assert(len(bb) == 1)
+    #     b = bb[0]
+    #     p = b.getParam()
+    #     bb[0].set
+        
+    flux_iv = 1./np.array(fluxvar)
+    mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+    
+    T.set('decam_%s_nanomaggies'        % filt, flux)
+    T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv)
+    T.set('decam_%s_mag'                % filt, mag)
+    T.set('decam_%s_mag_err'            % filt, dmag)
+
+    if fs is not None:
+        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+        for k in fskeys:
+            x = getattr(fs, k)
+            x = np.array(x).astype(np.float32)
+            T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
+    
+    return T, hdr
+        
+
+        
 # def convert_source_for_output(src):
 #     '''
 #     Converts a tractor source from our internal representation to
@@ -692,34 +768,6 @@ if __name__ == '__main__':
     rcfs = zip(rcfnum / 10000, rcfnum % 10000 / 1000, rcfnum % 1000)
     print 'RCF', rcfs
 
-    typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
-                FixedCompositeGalaxy: 'C' }
-    hdr = fitsio.FITSHDR()
-    # Find a source of each type and query its parameter names, for the header
-    for t,ts in typemap.items():
-        for src in cat:
-            if type(src) != t:
-                continue
-            print 'Parameters for', t, src
-            sc = src.copy()
-            sc.thawAllRecursive()
-            for i,nm in enumerate(sc.getParamNames()):
-                hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
-                                    comment='Tractor param name'))
-            def flatten_node(node):
-                return reduce(lambda x,y: x+y, [flatten_node(c) for c in node[1:]],
-                              [node[0]])
-            tree = getParamTypeTree(sc)
-            print 'Source param types:', tree
-            types = flatten_node(tree)
-            print 'Flat:', types
-            for i,t in enumerate(types):
-                hdr.add_record(dict(name='TR_%s_T%i' % (ts, i), value=t.replace("'", '"'),
-                                    comment='Tractor param types'))
-            break
-    print 'Header:', hdr
-
-
     secat = fits_table(seobjfn, hdu=2,
                        column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'})
 
@@ -791,6 +839,7 @@ if __name__ == '__main__':
     
     sdssflux = np.array([sum(b.getFlux(tim.filter) 
                              for b in src.getBrightnesses()) for src in cat])
+    catsources.set('sdss_%s_nanomaggies' % tim.filter, sdssflux)
 
     # Number of sigma to render profiles to
     minsig = 0.1
@@ -807,29 +856,14 @@ if __name__ == '__main__':
         use_ceres=True, BW=8,BH=8)
     flux_iv,fs = R.IV, R.fitstats
 
-    flux = np.array([sum(b.getFlux(tim.filter) for b in src.getBrightnesses())
-                     for src in cat])
-    mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
-
-    T = catsources.copy()
-    T.set('sdss_%s_nanomaggies' % tim.filter, sdssflux)
-    T.set('decam_%s_nanomaggies' % tim.filter, flux)
-    T.set('decam_%s_nanomaggies_invvar' % tim.filter, flux_iv)
-    T.set('decam_%s_mag'  % tim.filter, mag)
-    T.set('decam_%s_mag_err'  % tim.filter, dmag)
-
-    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
-    for k in fskeys:
-        x = getattr(fs, k)
-        x = np.array(x).astype(np.float32)
-        T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
-
+    T,hdr = get_fits_catalog(cat, flux_iv, catsources.copy(), None,
+                             tim.filter, fs)
     get_tractor_params(T, cat, 'tractor_%s_init')
     T.writeto(basefn + '-phot-1.fits', header=hdr)
         
     smag = -2.5 * (np.log10(sdssflux) - 9.)
-    tmag = mag
-    tflux = flux
+    tmag = T.get('decam_%s_mag' % tim.filter)
+    tflux = T.get('decam_%s_nanomaggies' % tim.filter)
     
     mod = tractor.getModelImage(0)
     chi = (tim.data - mod) * tim.getInvError()
