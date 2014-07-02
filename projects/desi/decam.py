@@ -30,6 +30,68 @@ from scipy.ndimage.interpolation import shift
 from .em import *
 
 
+def tweak_astrometry(SEcat, SDSScat, sip, ps):
+    SEcat = fits_table(seobjfn, hdu=2)
+    SEcat.ra  = SEcat.alpha_j2000
+    SEcat.dec = SEcat.delta_j2000
+    SDSScat = fits_table(sdssobjfn)
+    ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
+    I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
+    print len(I), 'matches'
+
+    # Try doing the EM tune-up thing.
+
+    X = np.vstack((xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J])).T
+    weights = [1.]
+    sigma = 2.
+    mu = np.array([0.,0.])
+    bg = 0.01
+    B = 0.5
+
+    for i in range(20):
+        weights,mu,sigma,B,Q,fore = em_step(X, weights, mu, sigma, bg, B)
+    print 'Sigma', sigma
+    print 'Mu', mu
+    print 'B', B
+
+    if ps:
+        plt.clf()
+        plt.scatter(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], c=fore,
+                    edgecolors='none', alpha=0.5)
+        plt.colorbar()
+        plt.plot(mu[0], mu[1], 'kx', ms=15, mew=3)
+        angle = np.linspace(0, 2.*np.pi, 200)
+        plt.plot(mu[0] + sigma * np.sin(angle),
+                 mu[1] + sigma * np.cos(angle), 'k-')
+        plt.xlabel('dx (pix)')
+        plt.ylabel('dy (pix)')
+        plt.axhline(0, color='k', alpha=0.5)
+        plt.axvline(0, color='k', alpha=0.5)
+        plt.axis('scaled')
+        plt.axis([-2,2,-2,2])
+        ps.savefig()
+
+    # UPDATE 'sip'
+    crpix = sip.crpix
+    print 'CRPIX', crpix
+    sip.set_crpix((crpix[0] - mu[0], crpix[1] - mu[1]))
+
+    ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
+    I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
+    print len(I), 'matches'
+
+    if ps:
+        plt.clf()
+        plt.plot(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], 'b.')
+        plt.xlabel('dx (pix)')
+        plt.ylabel('dy (pix)')
+        plt.axhline(0, color='k', alpha=0.5)
+        plt.axvline(0, color='k', alpha=0.5)
+        plt.title('SE cat x,y - SIP(SDSS)')
+        plt.axis('scaled')
+        plt.axis([-2,2,-2,2])
+        ps.savefig()
+
 def set_source_radii(psf, cat, minsb):
     # Render PSF profile to determine good source radii
     R = 100
@@ -591,10 +653,9 @@ if __name__ == '__main__':
         print 'Using local tree for SDSS files'
         sdss.useLocalTree()
 
-    sip = tim.wcs.wcs
-
     # read_source_extractor_catalog(secatfn, tim.zp
         
+    sip = tim.wcs.wcs
     if not os.path.exists(objfn):
         margin = 5./3600.
         cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
@@ -622,6 +683,7 @@ if __name__ == '__main__':
         useObjcType=True,
         ellipse=EllipseESoft.fromRAbPhi)
     catsources = objs
+    print len(cat), 'sources'
 
     rcfnum = (objs.run.astype(np.int32) * 10000 +
               objs.camcol.astype(np.int32) * 1000 +
@@ -629,8 +691,6 @@ if __name__ == '__main__':
     rcfnum = np.unique(rcfnum)
     rcfs = zip(rcfnum / 10000, rcfnum % 10000 / 1000, rcfnum % 1000)
     print 'RCF', rcfs
-
-    print len(cat), 'sources'
 
     typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
                 FixedCompositeGalaxy: 'C' }
@@ -660,69 +720,11 @@ if __name__ == '__main__':
     print 'Header:', hdr
 
 
+    secat = fits_table(seobjfn, hdu=2,
+                       column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'})
+
     # FIXME -- check astrometry
-    if True:
-        SEcat = fits_table(seobjfn, hdu=2)
-        SEcat.ra  = SEcat.alpha_j2000
-        SEcat.dec = SEcat.delta_j2000
-        SDSScat = fits_table(sdssobjfn)
-        I,J,d = match_radec(SEcat.ra, SEcat.dec, SDSScat.ra, SDSScat.dec,
-                            4.0/3600.)
-        print len(I), 'matches'
-
-        ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
-        I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
-        print len(I), 'matches'
-
-        # Try doing the EM tune-up thing.
-
-        X = np.vstack((xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J])).T
-        weights = [1.]
-        sigma = 2.
-        mu = np.array([0.,0.])
-        bg = 0.01
-        B = 0.5
-
-        for i in range(20):
-            weights,mu,sigma,B,Q,fore = em_step(X, weights, mu, sigma, bg, B)
-        print 'Sigma', sigma
-        print 'Mu', mu
-        print 'B', B
-
-        plt.clf()
-        plt.scatter(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], c=fore,
-                    edgecolors='none', alpha=0.5)
-        plt.colorbar()
-        plt.plot(mu[0], mu[1], 'kx', ms=15, mew=3)
-        angle = np.linspace(0, 2.*np.pi, 200)
-        plt.plot(mu[0] + sigma * np.sin(angle),
-                 mu[1] + sigma * np.cos(angle), 'k-')
-        plt.xlabel('dx (pix)')
-        plt.ylabel('dy (pix)')
-        plt.axhline(0, color='k', alpha=0.5)
-        plt.axvline(0, color='k', alpha=0.5)
-        plt.axis('scaled')
-        plt.axis([-2,2,-2,2])
-        ps.savefig()
-
-        crpix = sip.crpix
-        print 'CRPIX', crpix
-        sip.set_crpix((crpix[0] - mu[0], crpix[1] - mu[1]))
-
-        ok,xx,yy = sip.radec2pixelxy(SDSScat.ra, SDSScat.dec)
-        I,J,d = match_xy(xx, yy, SEcat.x_image, SEcat.y_image, 5.0)
-        print len(I), 'matches'
-
-        plt.clf()
-        plt.plot(xx[I] - SEcat.x_image[J], yy[I] - SEcat.y_image[J], 'b.')
-        plt.xlabel('dx (pix)')
-        plt.ylabel('dy (pix)')
-        plt.axhline(0, color='k', alpha=0.5)
-        plt.axvline(0, color='k', alpha=0.5)
-        plt.title('SE cat x,y - SIP(SDSS)')
-        plt.axis('scaled')
-        plt.axis([-2,2,-2,2])
-        ps.savefig()
+    tweak_astrometry(secat, objs, sip)
 
     ima = dict(interpolation='nearest', origin='lower',
                vmin=tim.zr[0], vmax=tim.zr[1], cmap='gray')
@@ -787,18 +789,15 @@ if __name__ == '__main__':
     #print 'Fitting params:'
     #tractor.printThawedParams()
     
-    sdssflux = np.array([sum(b.getFlux(tim.filter)
-                             for b in src.getBrightnesses())
-                         for src in cat])
+    sdssflux = np.array([sum(b.getFlux(tim.filter) 
+                             for b in src.getBrightnesses()) for src in cat])
 
     # Number of sigma to render profiles to
     minsig = 0.1
+    minradius = 3
     # -> min surface brightness
     minsb = tim.sig1 * minsig
     print 'Sigma1:', tim.sig1, 'minsig', minsig, 'minsb', minsb
-
-    minradius = 3
-
     set_source_radii(tim.getPsf(), cat, minsb, minradius)
 
     print 'Opt forced photom...'
@@ -876,26 +875,6 @@ if __name__ == '__main__':
     plt.axis([hi,lo,hi,lo])
     plt.title('Tractor forced photometry of DECam data')
     ps.savefig()
-
-    if False:
-        S = fits_table(sdssobjfn)
-        # stars
-        S.cut(S.objc_type == 6)
-    
-        I,J,d = match_radec(S.ra, S.dec, T.ra, T.dec, 1./3600)
-        S.cut(I)
-        g = S.psfmag[:,1]
-        r = S.psfmag[:,2]
-        z = T.mag[J]
-        plt.clf()
-        plt.plot(g-r, r-z, 'b.', alpha=0.25)
-        plt.axis([0, 2, -1, 3])
-        plt.xlabel('SDSS g-r')
-        plt.ylabel('SDSS r - DECam z')
-        plt.title('Forced photometry using %s catalog (%i stars)' %
-                  (catname, len(S)))
-        ps.savefig()
-
 
     # Run detection algorithm on image
     hot = detection_map(tim.getPsf(), tim.getImage(), tim.getInvError(),
