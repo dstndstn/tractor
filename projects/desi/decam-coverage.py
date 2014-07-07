@@ -48,6 +48,7 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
+import sys
 
 from astrometry.util.siap import *
 from astrometry.util.fits import *
@@ -55,7 +56,83 @@ from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 from astrometry.util.util import *
 
+import fitsio
+
 ps = PlotSequence('decov')
+
+
+if True:
+    # Plot the (WCS) headers extracted by collect-headers.py
+
+    from astrometry.blind.plotstuff import *
+
+    wcsfns = {}
+    for dirpath,dirs,files in os.walk('headers-d2f3', followlinks=True):
+        for fn in files:
+            path = os.path.join(dirpath, fn)
+            print 'Path', path
+            try:
+                hdr = fitsio.read_header(path)
+                filt = hdr['FILTER']
+                filt = filt.split()[0]
+                print 'Filter', filt
+
+                if not filt in wcsfns:
+                    wcsfns[filt] = []
+                wcsfns[filt].append(path)
+            except:
+                import traceback
+                traceback.print_exc()
+
+    #wcs = anwcs_create_allsky_hammer_aitoff(180., 0., 1000, 500)
+    #wcs = anwcs_create_hammer_aitoff(180, -30, 2., 1000, 500, 1)
+    #grid,gridlab = 30, 30
+
+    # DEEP2 Field 3
+    #wcs = anwcs_create_hammer_aitoff(352, 0., 10., 1000, 500, 1)
+    #grid,gridlab = 1,3
+    #wcs = anwcs_create_hammer_aitoff(352, 0., 40., 1000, 500, 1)
+    #grid,gridlab = 1,1
+    #wcs = anwcs_create_hammer_aitoff(352, 0., 60., 800, 800, 1)
+    #grid,gridlab = 1,1
+    wcs = anwcs_create_box_upsidedown(352.5, 0., 3., 800, 800)
+    grid,gridlab = 1,1
+
+    #plot = Plotstuff(outformat='png', size=(1000,500), rdw=(180, -30, 180))
+    plot = Plotstuff(outformat='png')
+    plot.wcs = wcs
+    plot.set_size_from_wcs()
+
+    for band in ['g','r','z']:
+
+        if not band in wcsfns:
+            continue
+
+        plot.color = 'verydarkblue'
+        plot.plot('fill')
+        plot.color = 'white'
+        plot.alpha = 0.3
+        out = plot.outline
+        out.fill = 1
+
+        for path in wcsfns[band]:
+            out.set_wcs_file(path, 0)
+            out.set_wcs_size(2048, 4096)
+            plot.plot('outline')
+
+        plot.color = 'gray'
+        plot.alpha = 0.5
+        plot.apply_settings()
+        plot.plot_grid(grid, grid, gridlab, gridlab)
+        fn = ps.getnext()
+        plot.write(fn)
+        print 'Wrote', fn
+
+    sys.exit(0)
+
+
+
+
 
 if False:
     T = fits_table('schlegel-z.fits')
