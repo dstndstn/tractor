@@ -57,11 +57,11 @@ class GalaxyShape(ParamList):
     def __str__(self):
         return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
 
-    def getAllStepSizes(self, *args, **kwargs):
-        abstep = 0.01
-        if self.ab >= (1 - abstep):
-            abstep = -abstep
-        return [ 0.1, abstep, 1. ]
+    # def getAllStepSizes(self, *args, **kwargs):
+    #     abstep = 0.01
+    #     if self.ab >= (1 - abstep):
+    #         abstep = -abstep
+    #     return [ 0.1, abstep, 1. ]
 
     def getRaDecBasis(self):
         '''

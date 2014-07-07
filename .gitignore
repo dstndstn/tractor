@@ -16,3 +16,4 @@ astrometry
 *.log
 *.aux
 *.dvi
+headers/

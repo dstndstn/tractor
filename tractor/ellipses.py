@@ -18,6 +18,10 @@ class EllipseE(ParamList):
     def getName():
         return "EllipseE"
 
+    def __init__(self, *args, **kwargs):
+        super(self, EllipseE).__init__(*args, **kwargs)
+        self.stepsizes = [0.01]*3
+    
     @staticmethod
     def getNamedParams():
         # re: effective radius in arcsec
@@ -59,13 +63,13 @@ class EllipseE(ParamList):
     def __str__(self):
         return self.getName() + ': ' + repr(self)
 
-    def getAllStepSizes(self, *args, **kwargs):
-        # re
-        # e1,e2: step toward e=0
-        ss = [ 0.01,
-               0.01 if self.e1 <= 0 else -0.01,
-               0.01 if self.e2 <= 0 else -0.01 ]
-        return ss
+    # def getAllStepSizes(self, *args, **kwargs):
+    #     # re
+    #     # e1,e2: step toward e=0
+    #     ss = [ 0.01,
+    #            0.01 if self.e1 <= 0 else -0.01,
+    #            0.01 if self.e2 <= 0 else -0.01 ]
+    #     return ss
 
     def isLegal(self):
         return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)
@@ -146,8 +150,8 @@ class EllipseESoft(EllipseE):
         ee2 = ee * np.sin(angle)
         return EllipseESoft(np.log(r), ee1, ee2)
 
-    def getAllStepSizes(self, *args, **kwargs):
-        return [0.01] * 3
+    #def getAllStepSizes(self, *args, **kwargs):
+    #    return [0.01] * 3
 
     def __repr__(self):
         return 'log r_e=%g, ee1=%g, ee2=%g' % (self.logre, self.ee1, self.ee2)

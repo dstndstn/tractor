@@ -20,10 +20,7 @@ ForcedPhotCostFunction<T>::ForcedPhotCostFunction(Patch<T> data,
     _data(data), _sources(sources), _nonneg(nonneg) {
 
     set_num_residuals(data.npix());
-
-    //std::vector<int16_t>* bs = mutable_parameter_block_sizes();
     std::vector<int32_t>* bs = mutable_parameter_block_sizes();
-
     for (size_t i=0; i<sources.size(); i++) {
         bs->push_back(1);
     }
@@ -40,7 +37,6 @@ template<typename T>
 bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
                                          double* residuals,
                                          double** jacobians) const {
-    //const std::vector<int16_t> bs = parameter_block_sizes();
     const std::vector<int32_t> bs = parameter_block_sizes();
 
     /*
@@ -54,8 +50,6 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
      printf(" ]\n");
      }
      */
-
-    //double maxJ = 0.;
 
     T* mod;
     if (_data._mod0) {
@@ -137,9 +131,6 @@ bool ForcedPhotCostFunction<T>::Evaluate(double const* const* parameters,
         }
     }
 
-    //if (jacobians)
-    //printf("Max jacobian: %g\n", maxJ);
-
     T* dptr = _data._img;
     T* mptr = mod;
     T* eptr = _data._ierr;
@@ -204,7 +195,6 @@ ImageCostFunction::ImageCostFunction(PyObject* tractor,
     printf("Image %i: %i x %i -> number of pixels %i\n", _imagei, _W, _H,_npix);
 
     set_num_residuals(_npix);
-    //std::vector<int16_t>* bs = mutable_parameter_block_sizes();
     std::vector<int32_t>* bs = mutable_parameter_block_sizes();
     for (int i=0; i<_nparams; i++) {
         bs->push_back(1);
@@ -218,8 +208,14 @@ ImageCostFunction::~ImageCostFunction() {
 bool ImageCostFunction::Evaluate(double const* const* parameters,
                                  double* residuals,
                                  double** jacobians) const {
+    bool result = _Evaluate(parameters, residuals, jacobians);
+    printf("ImageCostFunction::Evaluate: returning %i\n", (int)result);
+    return result;
+}
 
-    //const std::vector<int16_t> bs = parameter_block_sizes();
+bool ImageCostFunction::_Evaluate(double const* const* parameters,
+                                  double* residuals,
+                                  double** jacobians) const {
     const std::vector<int32_t> bs = parameter_block_sizes();
 
     //printf("ImageCostFunction::Evaluate\n");
@@ -296,8 +292,10 @@ bool ImageCostFunction::Evaluate(double const* const* parameters,
     // dModel / dParam!
     PyObject* allderivs = PyObject_CallMethod(
         _tractor, (char*)"_getOneImageDerivs", (char*)"i", _imagei);
-    if (!allderivs)
+    if (!allderivs) {
+        printf("_getOneImageDerivs() returned NULL\n");
         return false;
+    }
     if (!PyList_Check(allderivs)) {
         printf("Expecting allderivs to be a list\n");
         Py_XDECREF(allderivs);
