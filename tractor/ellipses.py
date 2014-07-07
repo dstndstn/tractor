@@ -19,7 +19,7 @@ class EllipseE(ParamList):
         return "EllipseE"
 
     def __init__(self, *args, **kwargs):
-        super(self, EllipseE).__init__(*args, **kwargs)
+        super(EllipseE, self).__init__(*args, **kwargs)
         self.stepsizes = [0.01]*3
     
     @staticmethod
