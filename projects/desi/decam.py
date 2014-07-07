@@ -27,7 +27,10 @@ from scipy.ndimage.morphology import binary_dilation, binary_closing
 from scipy.ndimage.morphology import binary_fill_holes
 from scipy.ndimage.interpolation import shift
 
-from .em import *
+from scipy.interpolate import RectBivariateSpline
+
+#from .em import *
+from em import *
 
 def tweak_astrometry(SEcat, SDSScat, sip, ps):
     SEcat = fits_table(seobjfn, hdu=2)
@@ -141,13 +144,68 @@ def detection_map(psf, img, inverr, sig1, nsigma=4, dilate_fwhm=1.):
     # run rough detection alg on image
     img = img.copy()
     if inverr is not None:
-        img[inverr == 0)] = 0.
+        img[inverr == 0] = 0.
     detimg = gaussian_filter(img, psfsig) / psfnorm**2
     thresh = nsigma * sig1 / psfnorm
     hot = (detimg > thresh)
     # expand by fwhm
     hot = binary_dilation(hot, iterations=int(fwhm * dilate_fwhm))
     return hot
+
+def sky_subtract(img, cellsize, fullimg=None, x0=0, y0=0, gradient=True):
+    # Remove x/y gradient estimated in ~"cellsize"-pixel^2 squares
+    if fullimg is None:
+        fullimg = img
+    H,W = img.shape
+    fH,fW = fullimg.shape
+    nx = int(np.ceil(float(fW) / cellsize))
+    ny = int(np.ceil(float(fH) / cellsize))
+    if gradient:
+        xx = np.linspace(0, fW, nx+1)
+        yy = np.linspace(0, fH, ny+1)
+    else:
+        # Make half-size boxes at the edges to improve the spatial
+        # response
+        xx = np.linspace(0., fW, nx+1)
+        xx += (xx[1]-xx[0])/2.
+        xx = np.append(0, xx.astype(int))
+        xx[-1] = fW
+        print 'xx', xx
+        yy = np.linspace(0., fH, ny+1)
+        yy += (yy[1]-yy[0])/2.
+        yy = np.append(0, yy.astype(int))
+        yy[-1] = fH
+        
+    subs = np.zeros((len(yy)-1, len(xx)-1))
+    for iy,(ylo,yhi) in enumerate(zip(yy, yy[1:])):
+        for ix,(xlo,xhi) in enumerate(zip(xx, xx[1:])):
+            subim = fullimg[ylo:yhi, xlo:xhi]
+            subs[iy,ix] = np.median(subim.ravel())
+
+    if gradient:
+        xx,yy = np.meshgrid(xx[:-1],yy[:-1])
+        A = np.zeros((len(xx.ravel()), 3))
+        A[:,0] = 1.
+        dx = float(fW) / float(nx)
+        dy = float(fH) / float(ny)
+        A[:,1] = 0.5*dx + xx.ravel()
+        A[:,2] = 0.5*dy + yy.ravel()
+        b = subs.ravel()
+        X,res,rank,s = np.linalg.lstsq(A, b)
+        print 'Sky gradient:', X
+        bg = np.zeros_like(img) + X[0]
+        bg += (X[1] * (x0 + np.arange(W)))[np.newaxis,:]
+        bg += (X[2] * (y0 + np.arange(H)))[:,np.newaxis]
+        # bx = (X[1] * (x0 + np.arange(W)))
+        # by = (X[2] * (y0 + np.arange(H)))
+        # print 'Background x contribution:', bx.shape, bx.min(), bx.max()
+        # print 'Background y contribution:', by.shape, by.min(), by.max()
+    else:
+        sx,sy = (xx[1:] + xx[:-1])/2., (yy[1:]+yy[:-1])/2.
+        spl = RectBivariateSpline(sx, sy, subs.T)
+        bg = spl(x0 + np.arange(W), y0 + np.arange(H)).T
+
+    return bg
 
 def read_decam_image(basefn, skysubtract=True, slc=None):
     '''
@@ -205,41 +263,7 @@ def read_decam_image(basefn, skysubtract=True, slc=None):
         psf = ShiftedPsf(psf, x0, y0)
         
     if skysubtract:
-        # Remove x/y gradient estimated in ~500-pixel^2 squares
-        fH,fW = fullimg.shape
-        nx = int(np.ceil(float(fW) / 512))
-        ny = int(np.ceil(float(fH) / 512))
-        xx = np.linspace(0, fW, nx+1)
-        yy = np.linspace(0, fH, ny+1)
-        subs = np.zeros((len(yy)-1, len(xx)-1))
-        for iy,(ylo,yhi) in enumerate(zip(yy, yy[1:])):
-            for ix,(xlo,xhi) in enumerate(zip(xx, xx[1:])):
-                subim = fullimg[ylo:yhi, xlo:xhi]
-                subs[iy,ix] = np.median(subim.ravel())
-
-        xx,yy = np.meshgrid(xx[:-1],yy[:-1])
-        A = np.zeros((len(xx.ravel()), 3))
-        A[:,0] = 1.
-        dx = float(fW) / float(nx)
-        dy = float(fH) / float(ny)
-        A[:,1] = 0.5*dx + xx.ravel()
-        A[:,2] = 0.5*dy + yy.ravel()
-        b = subs.ravel()
-        X,res,rank,s = np.linalg.lstsq(A, b)
-
-        print 'Sky gradient:', X
-
-        bg = np.zeros_like(img) + X[0]
-        bg += (X[1] * (x0 + np.arange(W)))[np.newaxis,:]
-        bg += (X[2] * (y0 + np.arange(H)))[:,np.newaxis]
-
-        bx = (X[1] * (x0 + np.arange(W)))
-        by = (X[2] * (y0 + np.arange(H)))
-        print 'Background x contribution:', bx.shape, bx.min(), bx.max()
-        print 'Background y contribution:', by.shape, by.min(), by.max()
-
-        #bg = np.zeros_like(img)
-        #ok = median_smooth(img, (mask != 0), 100, bg)
+        bg = sky_subtract(img, 512, fullimg=fullimg, x0=0,y0=0)
         orig_img = img.copy()
         img -= bg
         sky = 0.

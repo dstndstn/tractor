@@ -67,6 +67,7 @@ if True:
     from astrometry.blind.plotstuff import *
 
     wcsfns = {}
+    W,H = 2048,4096
     for dirpath,dirs,files in os.walk('headers-d2f3', followlinks=True):
         for fn in files:
             path = os.path.join(dirpath, fn)
@@ -77,12 +78,42 @@ if True:
                 filt = filt.split()[0]
                 print 'Filter', filt
 
+                name = ''
+                pth = os.path.dirname(path)
+                for i in range(4):
+                    nm = os.path.basename(pth)
+                    print 'nm', nm
+                    pth = os.path.dirname(pth)
+                    if len(nm) == 3 and nm[0] == 'C':
+                        name = nm
+                        break
+
                 if not filt in wcsfns:
                     wcsfns[filt] = []
-                wcsfns[filt].append(path)
+                wcsfns[filt].append((path, name, W, H))
             except:
                 import traceback
                 traceback.print_exc()
+
+    # WISE
+    W = H = 2048
+    for dirpath,dirs,files in os.walk('unwise', followlinks=True):
+        for fn in files:
+            if not '-img-m.fits' in fn:
+                continue
+            path = os.path.join(dirpath, fn)
+            print 'Path', path
+            if 'w1' in fn:
+                filt = 'W1'
+            elif 'w2' in fn:
+                filt = 'W2'
+            else:
+                print '??', fn
+                continue
+            if not filt in wcsfns:
+                wcsfns[filt] = []
+            name = ''
+            wcsfns[filt].append((path, name, W, H))
 
     #wcs = anwcs_create_allsky_hammer_aitoff(180., 0., 1000, 500)
     #wcs = anwcs_create_hammer_aitoff(180, -30, 2., 1000, 500, 1)
@@ -103,7 +134,8 @@ if True:
     plot.wcs = wcs
     plot.set_size_from_wcs()
 
-    for band in ['g','r','z']:
+    #for band in ['g','r','z']:
+    for band in ['g','r','z', 'W1','W2']:
 
         if not band in wcsfns:
             continue
@@ -115,10 +147,29 @@ if True:
         out = plot.outline
         out.fill = 1
 
-        for path in wcsfns[band]:
+        for path,name,W,H in wcsfns[band]:
             out.set_wcs_file(path, 0)
-            out.set_wcs_size(2048, 4096)
+            out.set_wcs_size(W, H)
             plot.plot('outline')
+            if len(name):
+                ok,r,d = out.wcs.pixelxy2radec(W/2, H/2)
+                plot.text_radec(r, d, name)
+
+        # Plot 1/4 x 1/4 WISE tile
+        plot.color = 'yellow'
+        wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
+        wcs = Tan(wcsfn)
+        W,H = wcs.get_width(), wcs.get_height()
+        nsub = 4
+        subw, subh = W/nsub, H/nsub
+        subx, suby = 0, 3
+        subwcs = Tan(wcs)
+        subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
+        subwcs.set_imagesize(subw, subh)
+        ansub = anwcs_new_tan(subwcs)
+        out.wcs = ansub
+        out.fill = 0
+        plot.plot('outline')
 
         plot.color = 'gray'
         plot.alpha = 0.5
