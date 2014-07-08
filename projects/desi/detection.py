@@ -294,10 +294,13 @@ if __name__ == '__main__':
     ps.savefig()
         
     #rgb = get_rgb_image(g,r,z, alpha=0.8, m=0.02)
-    rgb = get_rgb_image(g,r,z, alpha=16., m=0.005, m2=0.002,
+    #rgb = get_rgb_image(g,r,z, alpha=16., m=0.005, m2=0.002,
+    #rgb = get_rgb_image(g,r,z, alpha=32., m=0.01, m2=0.002,
+    rgb = get_rgb_image(g,r,z, alpha=8., m=0.0, m2=0.0,
         scale_g = 2.,
         scale_r = 1.1,
-        scale_z = 0.5)
+        scale_z = 0.5,
+        Q = 10)
 
 
     #for im in g,r,z:
