@@ -21,14 +21,15 @@ from decam import sky_subtract
 ps = PlotSequence('det')
 
 def get_rgb_image(g, r, z,
-                  alpha = 1.5
+                  alpha = 1.5,
+                  m = 0.0,
                   ):
-    scale_g = 2.5
+    #scale_g = 2.5
+    scale_g = 1.5
     scale_r = 1.0
     #scale_z = 0.7
     scale_z = 0.5
     #m = -0.02
-    m = 0.0
 
     # Watch the ordering here -- "r" aliasing!
     b = np.maximum(0, g * scale_g - m)
@@ -247,7 +248,10 @@ if __name__ == '__main__':
     
     g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
 
-    rgb = get_rgb_image(g,r,z, alpha=1.0)
+    plt.figure(figsize=(10,10))
+    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
+    
+    rgb = get_rgb_image(g,r,z, alpha=0.8, m=0.02)
     ps.skipto(6)
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
