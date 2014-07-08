@@ -51,7 +51,7 @@ def get_rgb_image(g, r, z,
     B[J] = B[J]/maxrgb[J]
     return np.clip(np.dstack([R,G,B]), 0., 1.)
 
-def _det_one((cowcs, fn, wcsfn)):
+def _det_one((cowcs, fn, wcsfn, do_img)):
     print 'Image', fn
     F = fitsio.FITS(fn)[0]
     imginf = F.get_info()
@@ -120,16 +120,27 @@ def _det_one((cowcs, fn, wcsfn)):
     print 'Detection map sig1', detmap_sig1
 
     # Lanczos resample
+    print 'Resampling...'
     L = 3
     try:
-        Yo,Xo,Yi,Xi,[rim] = resample_with_wcs(cowcs, wcs, [detmap], L)
+        lims = [detmap]
+        if do_img:
+            lims.append(img)
+        Yo,Xo,Yi,Xi,rims = resample_with_wcs(cowcs, wcs, lims, L)
+        rdetmap = rims[0]
     except OverlapError:
         return None
+    print 'Resampled'
 
     detmap_iv = (mask[Yo,Xo] == 0) * 1./detmap_sig1**2
     #detmap_iv = 1./detmap_sig1**2
 
-    return Yo,Xo,rim,detmap_iv
+    if do_img:
+        rimg = rims[1]
+    else:
+        rimg = None
+
+    return Yo,Xo,rdetmap,detmap_iv,rimg
     
 
 
@@ -200,27 +211,42 @@ def main():
         fns = [fn for fn in paths if '%sband' % band in fn]
         #print 'Found', fns
 
+        # resample image too (not just detection map?)
+        do_img = True
+
         coH,coW = cowcs.get_height(), cowcs.get_width()
-        coadd = np.zeros((coH,coW))
-        coadd_iv = np.zeros((coH,coW))
+        codet = np.zeros((coH,coW))
+        codet_iv = np.zeros((coH,coW))
+        if do_img:
+            coadd = np.zeros((coH, coW))
+            coadd_iv = np.zeros((coH,coW))
 
         wcsdir = 'data/decam/astrom'
         args = [(cowcs, fn,
-                 os.path.join(wcsdir, os.path.basename(fn).replace('.fits','.wcs')))
+                 os.path.join(wcsdir, os.path.basename(fn).replace('.fits','.wcs')),
+                 do_img)
                  for fn in fns]
         for i,A in enumerate(mp.map(_det_one, args)):
             if A is None:
                 print 'Skipping input', fns[i]
                 continue
-            Yo,Xo,rim,detmap_iv = A
-            coadd[Yo,Xo] += rim * detmap_iv
-            coadd_iv[Yo,Xo] += detmap_iv
+            Yo,Xo,rdetmap,detmap_iv,rimg = A
+            codet[Yo,Xo] += rdetmap * detmap_iv
+            codet_iv[Yo,Xo] += detmap_iv
+            if do_img:
+                coadd[Yo,Xo] += rimg * detmap_iv
+                coadd_iv[Yo,Xo] += detmap_iv
 
-        coadd /= np.maximum(coadd_iv, 1e-16)
+        codet /= np.maximum(codet_iv, 1e-16)
+        if do_img:
+            coadd /= np.maximum(coadd_iv, 1e-16)
+            coadds.append((coadd, coadd_iv))
+            fitsio.write('coadd-%s.fits' % band, coadd.astype(np.float32), clobber=True)
+            # no clobber -- append to file
+            fitsio.write('coadd-%s.fits' % band, coadd_iv.astype(np.float32))
 
-        mn,mx = [np.percentile(coadd, p) for p in [20,99]]
+        mn,mx = [np.percentile(codet, p) for p in [20,99]]
 
-        coadds.append((coadd, coadd_iv, mn, mx))
 
         plt.clf()
         plt.imshow(coadd, interpolation='nearest', origin='lower', cmap='gray',
@@ -235,15 +261,15 @@ def main():
         plt.colorbar()
         ps.savefig()
 
-        fitsio.write('detmap-%s.fits' % band, coadd.astype(np.float32), clobber=True)
+        fitsio.write('detmap-%s.fits' % band, codet.astype(np.float32), clobber=True)
         # no clobber -- append to file
-        fitsio.write('detmap-%s.fits' % band, coadd_iv.astype(np.float32))
+        fitsio.write('detmap-%s.fits' % band, codet_iv.astype(np.float32))
 
 
-    rgb = get_rgb_image(coadds[0][0], coadds[1][0], coadds[2][0])
-    plt.clf()
-    plt.imshow(rgb, interpolation='nearest', origin='lower')
-    ps.savefig()
+    # rgb = get_rgb_image(coadds[0][0], coadds[1][0], coadds[2][0])
+    # plt.clf()
+    # plt.imshow(rgb, interpolation='nearest', origin='lower')
+    # ps.savefig()
 
 
 if __name__ == '__main__':
