@@ -51,14 +51,14 @@ def get_rgb_image(g, r, z,
     B[J] = B[J]/maxrgb[J]
     return np.clip(np.dstack([R,G,B]), 0., 1.)
 
-def _det_one((cowcs, fn)):
+def _det_one((cowcs, fn, wcsfn)):
     print 'Image', fn
     F = fitsio.FITS(fn)[0]
     imginf = F.get_info()
     hdr = F.read_header()
     H,W = imginf['dims']
 
-    wcs = Sip(fn)
+    wcs = Sip(wcsfn)
     depix = wcs.pixel_scale()
     seeing = hdr['SEEING']
     print 'Seeing', seeing
@@ -204,7 +204,10 @@ def main():
         coadd = np.zeros((coH,coW))
         coadd_iv = np.zeros((coH,coW))
 
-        args = [(cowcs, fn) for fn in fns]
+        wcsdir = 'data/decam/astrom'
+        args = [(cowcs, fn,
+                 os.path.join(wcsdir, os.path.basename(fn).replace('.fits','.wcs')))
+                 for fn in fns]
         for i,A in enumerate(mp.map(_det_one, args)):
             if A is None:
                 print 'Skipping input', fns[i]
@@ -232,9 +235,9 @@ def main():
         plt.colorbar()
         ps.savefig()
 
-        fitsio.write('detmap-%s.fits' % band, coadd, clobber=True)
+        fitsio.write('detmap-%s.fits' % band, coadd.astype(np.float32), clobber=True)
         # no clobber -- append to file
-        fitsio.write('detmap-%s.fits' % band, coadd_iv)
+        fitsio.write('detmap-%s.fits' % band, coadd_iv.astype(np.float32))
 
 
     rgb = get_rgb_image(coadds[0][0], coadds[1][0], coadds[2][0])
@@ -244,7 +247,7 @@ def main():
 
 
 if __name__ == '__main__':
-    #main()
+    main()
     
     g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
 
@@ -252,6 +255,7 @@ if __name__ == '__main__':
     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
     
     rgb = get_rgb_image(g,r,z, alpha=0.8, m=0.02)
+
     ps.skipto(6)
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
