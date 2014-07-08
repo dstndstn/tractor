@@ -3,6 +3,7 @@ matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
 import sys
+import tempfile
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
@@ -105,6 +106,13 @@ def _det_one((cowcs, fn, wcsfn, do_img)):
     # Read bad pixel mask
     maskfn = fn.replace('.p.w.fits', '.p.w.bpm.fits')
     mask = fitsio.read(maskfn)
+
+    # FIXME -- mask edge pixels -- some seem to be bad and unmasked
+    mask[:2 ,:] = 1
+    mask[-2:,:] = 1
+    mask[:, :2] = 1
+    mask[:,-2:] = 1
+
     # FIXME -- patch image?
     img[mask != 0] = 0.
 
@@ -206,7 +214,12 @@ def main():
                     paths.append(path)
     print 'Found', len(paths), 'images'
 
-    coadds = []
+    # Plug the WCS header cards into the output coadd files.
+    f,tmpfn = tempfile.mkstemp()
+    os.close(f)
+    cowcs.write_to(tmpfn)
+    hdr = fitsio.read_header(tmpfn)
+    os.remove(tmpfn)
 
     for band in ['g','r','z']:
 
@@ -242,38 +255,32 @@ def main():
                 coadd_iv[Yo,Xo] += detmap_iv
 
         codet /= np.maximum(codet_iv, 1e-16)
+        fitsio.write('detmap-%s.fits' % band, codet.astype(np.float32), header=hdr, clobber=True)
+        # no clobber -- append to file
+        fitsio.write('detmap-%s.fits' % band, codet_iv.astype(np.float32), header=hdr)
+
         if do_img:
             coadd /= np.maximum(coadd_iv, 1e-16)
-            coadds.append((coadd, coadd_iv))
-            fitsio.write('coadd-%s.fits' % band, coadd.astype(np.float32), clobber=True)
+            fitsio.write('coadd-%s.fits' % band, coadd.astype(np.float32), header=hdr, clobber=True)
             # no clobber -- append to file
-            fitsio.write('coadd-%s.fits' % band, coadd_iv.astype(np.float32))
+            fitsio.write('coadd-%s.fits' % band, coadd_iv.astype(np.float32), header=hdr)
 
         mn,mx = [np.percentile(codet, p) for p in [20,99]]
 
-
         plt.clf()
-        plt.imshow(coadd, interpolation='nearest', origin='lower', cmap='gray',
+        plt.imshow(codet, interpolation='nearest', origin='lower', cmap='gray',
                    vmin=mn, vmax=mx)
         plt.title('Coadd detmap: %s' % band)
         plt.colorbar()
         ps.savefig()
 
         plt.clf()
-        plt.imshow(coadd_iv, interpolation='nearest', origin='lower', cmap='gray')
+        plt.imshow(codet_iv, interpolation='nearest', origin='lower', cmap='gray')
         plt.title('Coadd detmap invvar: %s' % band)
         plt.colorbar()
         ps.savefig()
 
-        fitsio.write('detmap-%s.fits' % band, codet.astype(np.float32), clobber=True)
-        # no clobber -- append to file
-        fitsio.write('detmap-%s.fits' % band, codet_iv.astype(np.float32))
 
-
-    # rgb = get_rgb_image(coadds[0][0], coadds[1][0], coadds[2][0])
-    # plt.clf()
-    # plt.imshow(rgb, interpolation='nearest', origin='lower')
-    # ps.savefig()
 
 
 def main2(bands):
@@ -343,22 +350,105 @@ def main2(bands):
     plt.ylabel('r - z')
     ps.savefig()
 
-def main3():
+def main3(bands):
     import detmap.detection as detmap
 
     g,r,z = [fitsio.read('detmap-%s.fits' % b) for b in bands]
     giv,riv,ziv = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
 
-    seds = [('g-only', (1., 0., 0.)),
+    cowcs = Tan('detmap-%s.fits' % bands[0])
+    coH,coW = cowcs.get_height(), cowcs.get_width()
+
+
+    # Read SExtractor catalogs
+    fns = [
+        'data/desi/imaging/redux/decam/proc/20130804/C22/gband/dec095705.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C22/rband/dec095702.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C22/zband/dec095704.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/gband/dec095705.43.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/rband/dec095702.43.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/zband/dec095704.43.p.w.cat.fits',
+        ]
+    catbands = []   # kitties playing guitars... look out youtubes, here we come
+    for fn in fns:
+        band = None
+        for b in bands:
+            if ('%sband' % b) in fn:
+                band = b
+                break
+        catbands.append(band)
+    fns = zip(fns, catbands)
+
+    cats = dict([(b,[]) for b in bands])
+    for fn,band in fns:
+        T = fits_table(fn, hdu=2,
+                       columns=['x_image', 'y_image', 'mag_auto', 'flux_auto'])
+        T.cut(T.mag_auto < 99)
+        wcsfn = os.path.basename(fn).replace('.cat.fits','.wcs')
+        wcsdir = 'data/decam/astrom'
+        wcsfn = os.path.join(wcsdir, wcsfn)
+        print 'WCS fn', wcsfn
+        wcs = Sip(wcsfn)
+        T.ra,T.dec = wcs.pixelxy2radec(T.x_image, T.y_image)
+        # Cut to sources within the coadd.
+        ok,T.cox,T.coy = cowcs.radec2pixelxy(T.ra, T.dec)
+        T.cut((T.cox >= 1) * (T.cox <= coW) * (T.coy >= 1) * (T.coy <= coH))
+        cats[band].append(T)
+    for k in cats.keys():
+        cats[k] = merge_tables(cats[k])
+        print len(cats[k]), 'SourceExtractor sources for', k, 'band'
+
+    match_pix = 2.5
+    match_radius = 0.27 * match_pix / 3600.
+    # print 'Clustering SExtractor detections...'
+    # T = merge_tables(cats.values())
+    # print len(T), 'sources'
+    # I,S = cluster_radec(T.ra, T.dec, match_radius)
+    # print 'Found', len(I), 'clusters and', len(S), 'singletons'
+
+    # Match r to g,z, dropping g,z detections within radius and
+    # keeping g- and z-only.
+    rr = cats['r']
+    rr.band = np.array(['r'] * len(rr))
+    gg = cats['g']
+    gg.band = np.array(['g'] * len(gg))
+    zz = cats['z']
+    zz.band = np.array(['z'] * len(zz))
+    for oo in (gg,zz):
+        I,J,d = match_radec(rr.ra, rr.dec, oo.ra, oo.dec, match_radius)
+        keep = np.ones(len(oo), bool)
+        keep[J] = False
+        oo.cut(keep)
+    secat = merge_tables([gg, rr, zz])
+    print 'Total of', len(secat), 'SExtractor sources'
+
+    print 'secat x', secat.x_image.min(), secat.x_image.max()
+    print 'secat y', secat.y_image.min(), secat.y_image.max()
+
+    plt.clf()
+    for H,c in [(secat.x_image, 'r'), (secat.y_image, 'b'),
+                (2048 - secat.x_image, 'm'), (4096 - secat.y_image, 'c'),]:
+        try:
+            plt.hist(H, bins=-0.5+np.arange(10), histtype='step', color=c)
+        except: pass
+    ps.savefig()
+
+    # FIXME -- hard-coded DECam CCD sizes!
+    secat.cut((secat.x_image > 2.) * (secat.x_image < 2047) *
+              (secat.y_image > 2.) * (secat.y_image < 4095))
+    print 'Cut to', len(secat), 'SExtractor sources not near edges'
+    
+
+    seds = [('Flat',   (1., 1., 1.)),
+            ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
+            ('g-only', (1., 0., 0.)),
             ('r-only', (0., 1., 0.)),
             ('z-only', (0., 0., 1.)),
-            ('Flat',   (1., 1., 1.)),
-            ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
-            ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
-            ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
-            ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
-            ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
-            ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
+            # ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
+            # ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
+            # ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
+            # ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
+            # ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
             ]
 
     detmaps = [g,   r,   z]
@@ -371,6 +461,9 @@ def main3():
     detmask = np.zeros((H,W), np.uint16)
     peakmask = np.zeros((H,W), np.uint16)
 
+    # unique peaks
+    upx,upy = None,None
+
     for ised,(name,sed) in enumerate(seds):
         print 'SED:', name
         mdet, msig, msig1 = detmap.sed_matched_filter(sed, detmaps, detivs, sig1s)
@@ -379,6 +472,18 @@ def main3():
                                                                fill_holes=True)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
+
+        if upx is None:
+            upx = Px
+            upy = Py
+        else:
+            keep = np.ones(len(Px), bool)
+            I,J,d = match_xy(upx, upy, Px, Py, match_pix)
+            keep[J] = False
+            print 'Keeping', sum(keep), 'new peaks'
+            upx = np.append(upx, Px[keep])
+            upy = np.append(upy, Py[keep])
+        print 'Total of', len(upx), 'peaks'
 
         plt.clf()
         plt.imshow(blobs, interpolation='nearest', origin='lower')
@@ -410,8 +515,33 @@ def main3():
     plt.title('blobs: all')
     ps.savefig()
 
+    I,J,d = match_xy(upx, upy, secat.cox-1, secat.coy-1, match_pix)
+    print 'Of', len(upx), 'SED-matched and', len(secat), 'SExtractor,'
+    print 'Matched', len(I)
+
+    only = np.ones(len(secat), bool)
+    only[J] = False
+    seonly = secat[only]
+    only = np.ones(len(upx), bool)
+    only[I] = False
+    sedonly = upx[only],upy[only]
+
+    sematch = secat[J]
+
     rgb = fitsio.read('rgb.fits')
     print 'RGB', rgb.shape
+
+    plt.clf()
+    plt.imshow(rgb, interpolation='nearest', origin='lower')
+    ax = plt.axis()
+    plt.plot(sematch.cox-1, sematch.coy-1, 'o', mec='w', mfc='none', ms=6, mew=2)
+    plt.plot(seonly.cox-1,  seonly.coy-1,  'o', mec='r', mfc='none', ms=6, mew=2)
+    x,y = sedonly
+    plt.plot(x, y, 'w+', ms=8, mew=1)
+    plt.axis(ax)
+    
+    ps.savefig()
+
 
     for iblob,slc in enumerate(blobslices):
         pk = peakmask[slc] * hot[slc]
@@ -431,7 +561,20 @@ def main3():
                    interpolation='nearest', origin='lower',
                    extent=[x0-0.5,x1-0.5,y0-0.5,y1-0.5])
         ax = plt.axis()
-        plt.plot(px, py, 'r+')
+        #plt.plot(px, py, 'k+', ms=15, mew=3)
+        #plt.plot(px, py, 'w+', ms=10, mew=2)
+        #plt.plot(upx, upy, 'k+', ms=15, mew=3)
+        #plt.plot(upx, upy, 'w+', ms=15, mew=1)
+        x,y = sedonly
+        plt.plot(x, y, 'w+', ms=15, mew=1)
+        
+        #for b,cc in zip(bands, 'cgr'):
+        #    plt.plot(cats[b].cox-1, cats[b].coy-1, 'o', mec=cc, mfc='none', ms=10, mew=2)
+        #plt.plot(secat.cox-1, secat.coy-1, 'o', mec='r', mfc='none', ms=10, mew=2)
+
+        plt.plot(sematch.cox-1, sematch.coy-1, 'o', mec='w', mfc='none', ms=10, mew=2)
+        plt.plot(seonly.cox-1,  seonly.coy-1,  'o', mec='r', mfc='none', ms=10, mew=2)
+
         plt.axis(ax)
         if (iblob+1) % 25 == 0:
             ps.savefig()
@@ -489,7 +632,7 @@ if __name__ == '__main__':
     ps.skipto(8)
     #main2(bands)
 
-    main3()
+    main3(bands)
 
     sys.exit(0)
 
