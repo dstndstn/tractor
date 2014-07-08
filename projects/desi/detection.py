@@ -16,6 +16,8 @@ import fitsio
 from tractor.basics import NanoMaggies
 
 from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage.morphology import binary_dilation, binary_closing
 
 from decam import sky_subtract
 
@@ -341,21 +343,103 @@ def main2(bands):
     plt.ylabel('r - z')
     ps.savefig()
 
+def main3():
+    import detmap.detection as detmap
+
+    g,r,z = [fitsio.read('detmap-%s.fits' % b) for b in bands]
+    giv,riv,ziv = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
+
+    seds = [('g-only', (1., 0., 0.)),
+            ('r-only', (0., 1., 0.)),
+            ('z-only', (0., 0., 1.)),
+            ('Flat',   (1., 1., 1.)),
+            ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
+            ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
+            ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
+            ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
+            ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
+            ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
+            ]
+
+    detmaps = [g,   r,   z]
+    detivs  = [giv, riv, ziv]
+    sig1s = [np.sqrt(1./np.median(iv[iv>0])) for iv in detivs]
+
+    H,W = g.shape
+
+    # bitmasks for detection blobs in each SED.
+    detmask = np.zeros((H,W), np.uint16)
+    peakmask = np.zeros((H,W), np.uint16)
+
+    for ised,(name,sed) in enumerate(seds):
+        print 'SED:', name
+        mdet, msig, msig1 = detmap.sed_matched_filter(sed, detmaps, detivs, sig1s)
+
+        blobs,blobslices,P,Px,Py,peaks = detmap.get_detections(mdet / msig, 1., mdet,
+                                                               fill_holes=True)
+        detmask  |= (blobs != 0) * (1 << ised)
+        peakmask |= peaks        * (1 << ised)
+
+        plt.clf()
+        plt.imshow(blobs, interpolation='nearest', origin='lower')
+        plt.title('blobs: %s' % name)
+        ps.savefig()
+
+        # plt.clf()
+        # plt.imshow(peaks, interpolation='nearest', origin='lower')
+        # plt.title('peaks: %s' % name)
+        # ps.savefig()
+
+        # for iblob,slc in enumerate(blobslices):
+        #     mblob = mdet[slc]
+        #     msigblob = msig[slc]
+        #     pk = peaks[slc]
+        #     y0,x0 = [s.start for s in slc]
+        #     y1,x1 = [s.stop  for s in slc]
+        #     pi = np.flatnonzero(pk)
+        #     py,px = np.unravel_index(pi, pk.shape)
+        #     px = px.astype(np.int32)
+        #     py = py.astype(np.int32)
+
+    hot = (detmask > 0)
+    blobs,nblobs = label(hot, np.ones((3,3), int))
+    blobslices = find_objects(blobs)
+
+    plt.clf()
+    plt.imshow(blobs, interpolation='nearest', origin='lower')
+    plt.title('blobs: all')
+    ps.savefig()
+
+    rgb = fitsio.read('rgb.fits')
+    print 'RGB', rgb.shape
+
+    for iblob,slc in enumerate(blobslices):
+        pk = peakmask[slc] * hot[slc]
+        y0,x0 = [s.start for s in slc]
+        y1,x1 = [s.stop  for s in slc]
+        pi = np.flatnonzero(pk)
+        py,px = np.unravel_index(pi, pk.shape)
+        px = px.astype(np.int32) + x0
+        py = py.astype(np.int32) + y0
+
+        sy,sx = slc
+        
+        if iblob % 25 == 0:
+            plt.clf()
+        plt.subplot(5, 5, 1 + (iblob % 25))
+        plt.imshow(rgb[sy,sx,:] * hot[sy,sx,np.newaxis],
+                   interpolation='nearest', origin='lower',
+                   extent=[x0-0.5,x1-0.5,y0-0.5,y1-0.5])
+        ax = plt.axis()
+        plt.plot(px, py, 'r+')
+        plt.axis(ax)
+        if (iblob+1) % 25 == 0:
+            ps.savefig()
+        if iblob > 150:
+            break
 
 
-
-if __name__ == '__main__':
-    bands = ['g','r','z']
-
-    if not all([os.path.exists('detmap-%s.fits' % b) for b in bands]):
-        main()
-
-    ps.skipto(8)
-    main2(bands)
-
-    sys.exit(0)
-    ps.skipto(6)
-
+def write_rgb():
     #g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
     g,r,z = [fitsio.read('coadd-%s.fits' % band) for band in 'grz']
 
@@ -388,3 +472,24 @@ if __name__ == '__main__':
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
     ps.savefig()
+
+    fitsio.write('rgb.fits', rgb)
+
+
+if __name__ == '__main__':
+    bands = ['g','r','z']
+
+    if not all([os.path.exists('detmap-%s.fits' % b) for b in bands]):
+        main()
+
+    ps.skipto(6)
+    if not os.path.exists('rgb.fits'):
+        write_rgb()
+
+    ps.skipto(8)
+    #main2(bands)
+
+    main3()
+
+    sys.exit(0)
+
