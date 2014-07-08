@@ -9,6 +9,7 @@ from astrometry.util.plotutils import *
 from astrometry.util.util import *
 from astrometry.util.resample import *
 from astrometry.util.multiproc import *
+from astrometry.libkd.spherematch import *
 
 import fitsio
 
@@ -273,9 +274,86 @@ def main():
     # ps.savefig()
 
 
+def main2(bands):
+
+    # Read SExtractor catalogs
+    fns = [
+        'data/desi/imaging/redux/decam/proc/20130804/C22/gband/dec095705.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C22/rband/dec095702.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C22/zband/dec095704.22.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/gband/dec095705.43.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/rband/dec095702.43.p.w.cat.fits',
+        'data/desi/imaging/redux/decam/proc/20130804/C43/zband/dec095704.43.p.w.cat.fits',
+        #'data/desi/imaging/redux/decam/proc/20130805/C22/gband/dec096107.22.p.w.cat.fits',
+        #'data/desi/imaging/redux/decam/proc/20130805/C22/rband/dec096104.22.p.w.cat.fits',
+        #'data/desi/imaging/redux/decam/proc/20130805/C22/zband/dec096106.22.p.w.cat.fits',
+        ]
+
+    cats = dict([(b,[]) for b in bands])
+    for fn in fns:
+        T = fits_table(fn, hdu=2,
+                       column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'},
+                       columns=['alpha_j2000', 'delta_j2000', 'mag_auto', 'flux_auto'])
+        T.cut(T.mag_auto < 99)
+        imfn = fn.replace('.cat.fits','.fits')
+        hdr = fitsio.read_header(imfn)
+        for zpkey in ['MAG_ZP', 'UB1_ZP']:
+            zp = hdr.get(zpkey, None)
+            if zp is not None:
+                break
+        print 'ZP', zp
+        print 'Mags', T.mag_auto.min(), T.mag_auto.max()
+        print 'Fluxes', T.flux_auto.min(), T.flux_auto.max()
+
+        band = None
+        for b in bands:
+            if '%sband' % b in fn:
+                band = b
+                break
+
+        mag2 = -2.5 * np.log10(T.flux_auto) + zp
+
+        T.set('mag', mag2)
+        cats[band].append(T)
+    for k in cats.keys():
+        cats[k] = merge_tables(cats[k])
+
+    # HACK
+    g,r,z = [cats[b] for b in bands]
+
+    R = 0.5 / 3600.
+    I,J,d = match_radec(g.ra, g.dec, r.ra, r.dec, R, nearest=True)
+    print len(I), 'g-r matches'
+    # CUT to g-r matches only!
+    g.cut(I)
+    r.cut(J)
+
+    I,J,d = match_radec(g.ra, g.dec, z.ra, z.dec, R, nearest=True)
+    print len(I), 'g-r-z matches'
+    # CUT to g-r-z matches only!
+    g.cut(I)
+    r.cut(I)
+    z.cut(J)
+
+    plt.clf()
+    plt.plot(g.mag - r.mag, r.mag - z.mag, 'k.')
+    plt.xlabel('g - r')
+    plt.ylabel('r - z')
+    ps.savefig()
+
+
+
+
 if __name__ == '__main__':
-    #main()
-    
+    bands = ['g','r','z']
+
+    if not all([os.path.exists('detmap-%s.fits' % b) for b in bands]):
+        main()
+
+    ps.skipto(8)
+    main2(bands)
+
+    sys.exit(0)
     ps.skipto(6)
 
     #g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
