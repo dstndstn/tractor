@@ -23,12 +23,14 @@ ps = PlotSequence('det')
 def get_rgb_image(g, r, z,
                   alpha = 1.5,
                   m = 0.0,
+                  m2 = 0.0,
+                  scale_g = 2.0,
+                  scale_r = 1.0,
+                  scale_z = 0.5,
+                  Q = 20
                   ):
     #scale_g = 2.5
-    scale_g = 1.5
-    scale_r = 1.0
     #scale_z = 0.7
-    scale_z = 0.5
     #m = -0.02
 
     # Watch the ordering here -- "r" aliasing!
@@ -37,8 +39,7 @@ def get_rgb_image(g, r, z,
     r = np.maximum(0, z * scale_z - m)
     I = (r+g+b)/3.
 
-    Q = 20
-    m2 = 0.
+    #m2 = 0.
     fI = np.arcsinh(alpha * Q * (I - m2)) / np.sqrt(Q)
     I += (I == 0.) * 1e-6
     R = fI * r / I
@@ -273,16 +274,36 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    #main()
     
-    g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
+    ps.skipto(6)
+
+    #g,r,z = [fitsio.read('detmap-%s.fits' % band) for band in 'grz']
+    g,r,z = [fitsio.read('coadd-%s.fits' % band) for band in 'grz']
 
     plt.figure(figsize=(10,10))
     plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
-    
-    rgb = get_rgb_image(g,r,z, alpha=0.8, m=0.02)
 
-    ps.skipto(6)
+    plt.clf()
+    for (im1,cc),scale in zip([(g,'b'),(r,'g'),(z,'r')],
+                             [2.0, 1.2, 0.4]):
+        im = im1 * scale
+        im = im[im != 0]
+        plt.hist(im.ravel(), histtype='step', color=cc,
+                 range=[np.percentile(im, p) for p in (1,98)], bins=50)
+    ps.savefig()
+        
+    #rgb = get_rgb_image(g,r,z, alpha=0.8, m=0.02)
+    rgb = get_rgb_image(g,r,z, alpha=16., m=0.005, m2=0.002,
+        scale_g = 2.,
+        scale_r = 1.1,
+        scale_z = 0.5)
+
+
+    #for im in g,r,z:
+    #    mn,mx = [np.percentile(im, p) for p in [20,99]]
+    #    print 'mn,mx:', mn,mx
+    
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
     ps.savefig()
