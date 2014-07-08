@@ -56,7 +56,7 @@ def get_rgb_image(g, r, z,
     B[J] = B[J]/maxrgb[J]
     return np.clip(np.dstack([R,G,B]), 0., 1.)
 
-def _det_one((cowcs, fn, wcsfn, do_img)):
+def _det_one((cowcs, fn, wcsfn, do_img, wise)):
     print 'Image', fn
     F = fitsio.FITS(fn)[0]
     imginf = F.get_info()
@@ -64,10 +64,15 @@ def _det_one((cowcs, fn, wcsfn, do_img)):
     H,W = imginf['dims']
 
     wcs = Sip(wcsfn)
-    depix = wcs.pixel_scale()
-    seeing = hdr['SEEING']
-    print 'Seeing', seeing
-    psf_sigma = seeing / depix / 2.35
+
+    if wise:
+        # HACK -- assume, incorrectly, single Gaussian ~diffraction limited
+        psf_sigma = 0.873
+    else:
+        pixscale = wcs.pixel_scale()
+        seeing = hdr['SEEING']
+        print 'Seeing', seeing
+        psf_sigma = seeing / pixscale / 2.35
     print 'Sigma:', psf_sigma
     psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
 
@@ -94,40 +99,47 @@ def _det_one((cowcs, fn, wcsfn, do_img)):
     img = F.read()
     print 'Image', img.shape
 
-    # Estimate and subtract background
-    bg = sky_subtract(img, 512, gradient=False)
-    img -= bg
+    if wise:
+        ivfn = fn.replace('img-m.fits', 'invvar-m.fits.gz')
+        iv = fitsio.read(ivfn)
+        sig1 = 1./np.sqrt(np.median(iv))
+        print 'Per-pixel noise estimate:', sig1
+        mask = (iv == 0)
+    else:
+        # Estimate and subtract background
+        bg = sky_subtract(img, 512, gradient=False)
+        img -= bg
     
-    diffs = img[:-5:10,:-5:10] - img[5::10,5::10]
-    mad = np.median(np.abs(diffs).ravel())
-    sig1 = 1.4826 * mad / np.sqrt(2.)
-    print 'Per-pixel noise estimate:', sig1
+        diffs = img[:-5:10,:-5:10] - img[5::10,5::10]
+        mad = np.median(np.abs(diffs).ravel())
+        sig1 = 1.4826 * mad / np.sqrt(2.)
+        print 'Per-pixel noise estimate:', sig1
+        # Read bad pixel mask
+        maskfn = fn.replace('.p.w.fits', '.p.w.bpm.fits')
+        mask = fitsio.read(maskfn)
 
-    # Read bad pixel mask
-    maskfn = fn.replace('.p.w.fits', '.p.w.bpm.fits')
-    mask = fitsio.read(maskfn)
+        # FIXME -- mask edge pixels -- some seem to be bad and unmasked
+        mask[:2 ,:] = 1
+        mask[-2:,:] = 1
+        mask[:, :2] = 1
+        mask[:,-2:] = 1
 
-    # FIXME -- mask edge pixels -- some seem to be bad and unmasked
-    mask[:2 ,:] = 1
-    mask[-2:,:] = 1
-    mask[:, :2] = 1
-    mask[:,-2:] = 1
+        # FIXME -- patch image?
+        img[mask != 0] = 0.
 
-    # FIXME -- patch image?
-    img[mask != 0] = 0.
+        # Get image zeropoint
+        for zpkey in ['MAG_ZP', 'UB1_ZP']:
+            zp = hdr.get(zpkey, None)
+            if zp is not None:
+                break
 
-    # Get image zeropoint
-    for zpkey in ['MAG_ZP', 'UB1_ZP']:
-        zp = hdr.get(zpkey, None)
-        if zp is not None:
-            break
-    zpscale = NanoMaggies.zeropointToScale(zp)
-    # Scale image to nanomaggies
-    img /= zpscale
-    sig1 /= zpscale
+        zpscale = NanoMaggies.zeropointToScale(zp)
+        # Scale image to nanomaggies
+        img /= zpscale
+        sig1 /= zpscale
 
     # Produce detection map
-    detmap = gaussian_filter(img, psf_sigma) / psfnorm**2
+    detmap = gaussian_filter(img, psf_sigma, mode='constant') / psfnorm**2
     detmap_sig1 = sig1 / psfnorm
     print 'Detection map sig1', detmap_sig1
 
@@ -145,7 +157,6 @@ def _det_one((cowcs, fn, wcsfn, do_img)):
     print 'Resampled'
 
     detmap_iv = (mask[Yo,Xo] == 0) * 1./detmap_sig1**2
-    #detmap_iv = 1./detmap_sig1**2
 
     if do_img:
         rimg = rims[1]
@@ -156,7 +167,7 @@ def _det_one((cowcs, fn, wcsfn, do_img)):
     
 
 
-def main():
+def main(bands):
     mp = multiproc(8)
     #mp = multiproc()
 
@@ -221,13 +232,23 @@ def main():
     hdr = fitsio.read_header(tmpfn)
     os.remove(tmpfn)
 
-    for band in ['g','r','z']:
+    for band in bands:
 
         print
         print 'Band', band
-        fns = [fn for fn in paths if '%sband' % band in fn]
-        #print 'Found', fns
 
+        wise = band.startswith('W')
+        if not wise:
+            fns = [fn for fn in paths if '%sband' % band in fn]
+            wcsdir = 'data/decam/astrom'
+            wcsfns = [os.path.join(wcsdir, os.path.basename(fn).replace('.fits','.wcs'))
+                      for fn in fns]
+        else:
+            # HACK
+            wisefn = 'unwise/352/3524p000/unwise-3524p000-%s-img-m.fits' % band.lower()
+            fns = [wisefn]
+            wcsfns = fns
+            
         # resample image too (not just detection map?)
         do_img = True
 
@@ -238,11 +259,7 @@ def main():
             coadd = np.zeros((coH, coW))
             coadd_iv = np.zeros((coH,coW))
 
-        wcsdir = 'data/decam/astrom'
-        args = [(cowcs, fn,
-                 os.path.join(wcsdir, os.path.basename(fn).replace('.fits','.wcs')),
-                 do_img)
-                 for fn in fns]
+        args = [(cowcs, fn, wcsfn, do_img, wise) for fn,wcsfn in zip(fns,wcsfns)]
         for i,A in enumerate(mp.map(_det_one, args)):
             if A is None:
                 print 'Skipping input', fns[i]
@@ -353,12 +370,16 @@ def main2(bands):
 def main3(bands):
     import detmap.detection as detmap
 
-    g,r,z = [fitsio.read('detmap-%s.fits' % b) for b in bands]
-    giv,riv,ziv = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
+    detmaps = [fitsio.read('detmap-%s.fits' % b) for b in bands]
+    detivs  = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
+    sig1s = [np.sqrt(1./np.median(iv[iv>0])) for iv in detivs]
+
+
+    for b,d in zip(bands,detmaps):
+        print 'Band', b, 'detmap peak:', np.max(d)
 
     cowcs = Tan('detmap-%s.fits' % bands[0])
     coH,coW = cowcs.get_height(), cowcs.get_width()
-
 
     # Read SExtractor catalogs
     fns = [
@@ -379,7 +400,7 @@ def main3(bands):
         catbands.append(band)
     fns = zip(fns, catbands)
 
-    cats = dict([(b,[]) for b in bands])
+    cats = {}
     for fn,band in fns:
         T = fits_table(fn, hdu=2,
                        columns=['x_image', 'y_image', 'mag_auto', 'flux_auto'])
@@ -393,6 +414,13 @@ def main3(bands):
         # Cut to sources within the coadd.
         ok,T.cox,T.coy = cowcs.radec2pixelxy(T.ra, T.dec)
         T.cut((T.cox >= 1) * (T.cox <= coW) * (T.coy >= 1) * (T.coy <= coH))
+
+        T.gmag = np.zeros(len(T))
+        T.rmag = np.zeros(len(T))
+        T.zmag = np.zeros(len(T))
+        T.set('%smag' % band, T.mag_auto)
+        if not band in cats:
+            cats[band] = []
         cats[band].append(T)
     for k in cats.keys():
         cats[k] = merge_tables(cats[k])
@@ -400,12 +428,6 @@ def main3(bands):
 
     match_pix = 2.5
     match_radius = 0.27 * match_pix / 3600.
-    # print 'Clustering SExtractor detections...'
-    # T = merge_tables(cats.values())
-    # print len(T), 'sources'
-    # I,S = cluster_radec(T.ra, T.dec, match_radius)
-    # print 'Found', len(I), 'clusters and', len(S), 'singletons'
-
     # Match r to g,z, dropping g,z detections within radius and
     # keeping g- and z-only.
     rr = cats['r']
@@ -414,33 +436,71 @@ def main3(bands):
     gg.band = np.array(['g'] * len(gg))
     zz = cats['z']
     zz.band = np.array(['z'] * len(zz))
+
+    print 'Min g:', np.min(gg.mag_auto)
+    print 'Min r:', np.min(rr.mag_auto)
+    print 'Min z:', np.min(zz.mag_auto)
+
     for oo in (gg,zz):
         I,J,d = match_radec(rr.ra, rr.dec, oo.ra, oo.dec, match_radius)
+        magcol = '%smag' % oo.band[0]
+        mag = rr.get(magcol)
+        mag[I] = oo.get(magcol)[J]
         keep = np.ones(len(oo), bool)
         keep[J] = False
         oo.cut(keep)
     secat = merge_tables([gg, rr, zz])
     print 'Total of', len(secat), 'SExtractor sources'
 
-    print 'secat x', secat.x_image.min(), secat.x_image.max()
-    print 'secat y', secat.y_image.min(), secat.y_image.max()
-
-    plt.clf()
-    for H,c in [(secat.x_image, 'r'), (secat.y_image, 'b'),
-                (2048 - secat.x_image, 'm'), (4096 - secat.y_image, 'c'),]:
-        try:
-            plt.hist(H, bins=-0.5+np.arange(10), histtype='step', color=c)
-        except: pass
-    ps.savefig()
+    # print 'secat x', secat.x_image.min(), secat.x_image.max()
+    # print 'secat y', secat.y_image.min(), secat.y_image.max()
+    # plt.clf()
+    # for H,c in [(secat.x_image, 'r'), (secat.y_image, 'b'),
+    #             (2048 - secat.x_image, 'm'), (4096 - secat.y_image, 'c'),]:
+    #     try:
+    #         plt.hist(H, bins=-0.5+np.arange(10), histtype='step', color=c)
+    #     except: pass
+    # ps.savefig()
 
     # FIXME -- hard-coded DECam CCD sizes!
     secat.cut((secat.x_image > 2.) * (secat.x_image < 2047) *
               (secat.y_image > 2.) * (secat.y_image < 4095))
     print 'Cut to', len(secat), 'SExtractor sources not near edges'
-    
+
+
+    # Match to AllWISE catalog to find typical colors.
+    wise = fits_table('wise-sources-3524p000.fits')
+    print len(wise), 'WISE sources'
+
+    ok,wise.cox,wise.coy = cowcs.radec2pixelxy(wise.ra, wise.dec)
+    wise.cut((wise.cox >= 1) * (wise.cox <= coW) * (wise.coy >= 1) * (wise.coy <= coH))
+    print 'Cut to', len(wise), 'within coadd'
+
+    print 'Min W1:', np.min(wise.w1mpro)
+    print 'Min W2:', np.min(wise.w2mpro)
+
+    segr = secat[(secat.gmag > 0) * (secat.rmag > 0)]
+    I,J,d = match_radec(segr.ra, segr.dec, wise.ra, wise.dec, 4./3600)
+    print len(I), 'matches'
+
+    plt.clf()
+    plt.plot(segr.gmag[I] - segr.rmag[I], segr.rmag[I] - wise.w1mpro[J], 'k.')
+    plt.xlabel('g - r')
+    plt.ylabel('r - W1')
+    ps.savefig()
+
+    plt.clf()
+    plt.plot(segr.gmag[I] - segr.rmag[I], segr.rmag[I] - wise.w2mpro[J], 'k.')
+    plt.xlabel('g - r')
+    plt.ylabel('r - W2')
+    ps.savefig()
 
     seds = [('Flat',   (1., 1., 1.)),
+            ('FlatW1',   (1., 1., 1., 1.)),
+            ('FlatW12',   (1., 1., 1., 1., 1.)),
             ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
+            ('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
+            ('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
             ('g-only', (1., 0., 0.)),
             ('r-only', (0., 1., 0.)),
             ('z-only', (0., 0., 1.)),
@@ -451,11 +511,7 @@ def main3(bands):
             # ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
             ]
 
-    detmaps = [g,   r,   z]
-    detivs  = [giv, riv, ziv]
-    sig1s = [np.sqrt(1./np.median(iv[iv>0])) for iv in detivs]
-
-    H,W = g.shape
+    H,W = detmaps[0].shape
 
     # bitmasks for detection blobs in each SED.
     detmask = np.zeros((H,W), np.uint16)
@@ -620,16 +676,20 @@ def write_rgb():
 
 
 if __name__ == '__main__':
-    bands = ['g','r','z']
+    bands = ['g','r','z', 'W1','W2']
 
-    if not all([os.path.exists('detmap-%s.fits' % b) for b in bands]):
-        main()
+    missing = []
+    for b in bands:
+        if not os.path.exists('detmap-%s.fits' % b):
+            missing.append(b)
+    if len(missing):
+        main(missing)
 
-    ps.skipto(6)
+    ps.skipto(10)
     if not os.path.exists('rgb.fits'):
         write_rgb()
 
-    ps.skipto(8)
+    ps.skipto(12)
     #main2(bands)
 
     main3(bands)
