@@ -167,7 +167,7 @@ def _det_one((cowcs, fn, wcsfn, do_img, wise)):
     
 
 
-def main(bands):
+def create_detmaps(bands):
     mp = multiproc(8)
     #mp = multiproc()
 
@@ -281,21 +281,6 @@ def main(bands):
             fitsio.write('coadd-%s.fits' % band, coadd.astype(np.float32), header=hdr, clobber=True)
             # no clobber -- append to file
             fitsio.write('coadd-%s.fits' % band, coadd_iv.astype(np.float32), header=hdr)
-
-        mn,mx = [np.percentile(codet, p) for p in [20,99]]
-
-        plt.clf()
-        plt.imshow(codet, interpolation='nearest', origin='lower', cmap='gray',
-                   vmin=mn, vmax=mx)
-        plt.title('Coadd detmap: %s' % band)
-        plt.colorbar()
-        ps.savefig()
-
-        plt.clf()
-        plt.imshow(codet_iv, interpolation='nearest', origin='lower', cmap='gray')
-        plt.title('Coadd detmap invvar: %s' % band)
-        plt.colorbar()
-        ps.savefig()
 
 
 
@@ -451,11 +436,39 @@ def main2(bands):
 
 
 def main3(bands):
-    import detmap.detection as detmap
+    import detmap.detection as detmapdet
 
     detmaps = [fitsio.read('detmap-%s.fits' % b) for b in bands]
     detivs  = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
     sig1s = [np.sqrt(1./np.median(iv[iv>0])) for iv in detivs]
+
+    # WISE Vega to AB
+    for b,dmag in [('W1', 2.683), ('W2', 3.319)]:
+        i = bands.index(b)
+        scale = 10. ** (dmag / 2.5)
+        detmaps[i] /= scale
+        sig1s  [i] /= scale
+        detivs [i] *= scale**2
+
+    if False:
+        for detmap,detiv,band,sig1 in zip(detmaps, detivs, bands, sig1s):
+            #mn,mx = [np.percentile(codet, p) for p in [20,99]]
+            mn,mx = 0., 10.*sig1
+            plt.clf()
+            plt.imshow(detmap, interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn, vmax=mx)
+            plt.title('Coadd detmap: %s' % band)
+            plt.colorbar()
+            ps.savefig()
+    
+            plt.clf()
+            plt.imshow(detiv, interpolation='nearest', origin='lower', cmap='gray')
+            plt.title('Coadd detmap invvar: %s' % band)
+            plt.colorbar()
+            ps.savefig()
+    else:
+        ps.skip(2*len(bands))
+
 
     cowcs = Tan('detmap-%s.fits' % bands[0])
     coH,coW = cowcs.get_height(), cowcs.get_width()
@@ -515,9 +528,6 @@ def main3(bands):
     gg.band = np.array(['g'] * len(gg))
     zz = cats['z']
     zz.band = np.array(['z'] * len(zz))
-    # print 'Min g:', np.min(gg.mag_auto)
-    # print 'Min r:', np.min(rr.mag_auto)
-    # print 'Min z:', np.min(zz.mag_auto)
     for oo in (gg,zz):
         I,J,d = match_radec(rr.ra, rr.dec, oo.ra, oo.dec, match_radius)
         magcol = '%smag' % oo.band[0]
@@ -529,37 +539,29 @@ def main3(bands):
     secat = merge_tables([gg, rr, zz])
     print 'Total of', len(secat), 'SExtractor sources'
 
-    # print 'secat x', secat.x_image.min(), secat.x_image.max()
-    # print 'secat y', secat.y_image.min(), secat.y_image.max()
-    # plt.clf()
-    # for H,c in [(secat.x_image, 'r'), (secat.y_image, 'b'),
-    #             (2048 - secat.x_image, 'm'), (4096 - secat.y_image, 'c'),]:
-    #     try:
-    #         plt.hist(H, bins=-0.5+np.arange(10), histtype='step', color=c)
-    #     except: pass
-    # ps.savefig()
-
+    # Cut SExtractor detections near the CCD edges
     # FIXME -- hard-coded DECam CCD sizes!
     secat.cut((secat.x_image > 2.) * (secat.x_image < 2047) *
               (secat.y_image > 2.) * (secat.y_image < 4095))
     print 'Cut to', len(secat), 'SExtractor sources not near edges'
 
-
-    seds = [('Flat',   (1., 1., 1.)),
-            ('FlatW1',   (1., 1., 1., 1.)),
-            ('FlatW12',   (1., 1., 1., 1., 1.)),
-            ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
-            ('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
-            ('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
-            ('g-only', (1., 0., 0.)),
-            ('r-only', (0., 1., 0.)),
-            ('z-only', (0., 0., 1.)),
-            # ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
-            # ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
-            # ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
-            # ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
-            # ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
-            ]
+    seds = [
+        ('g-only', (1., 0., 0.)),
+        ('r-only', (0., 1., 0.)),
+        ('z-only', (0., 0., 1.)),
+        ('Flat',   (1., 1., 1.)),
+        ('FlatW1',   (1., 1., 1., 1.)),
+        ('FlatW12',   (1., 1., 1., 1., 1.)),
+        ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
+        ('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
+        ('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
+        ('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
+        # ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
+        # ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
+        # ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
+        # ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
+        # ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
+        ]
 
     H,W = detmaps[0].shape
 
@@ -570,11 +572,20 @@ def main3(bands):
     # unique peaks
     upx,upy = None,None
 
+    rgb = fitsio.read('rgb.fits')
+    print 'RGB', rgb.shape
+
+    iW1 = bands.index('W1')
+    ir  = bands.index('r')
+    iW2 = bands.index('W2')
+    ig  = bands.index('g')
+    iz  = bands.index('z')
+
     for ised,(name,sed) in enumerate(seds):
         print 'SED:', name
-        mdet, msig, msig1 = detmap.sed_matched_filter(sed, detmaps, detivs, sig1s)
+        mdet, msig, msig1 = detmapdet.sed_matched_filter(sed, detmaps, detivs, sig1s)
 
-        blobs,blobslices,P,Px,Py,peaks = detmap.get_detections(mdet / msig, 1., mdet,
+        blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
                                                                fill_holes=True)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
@@ -582,6 +593,7 @@ def main3(bands):
         if upx is None:
             upx = Px
             upy = Py
+            newpeaks = Px,Py
         else:
             keep = np.ones(len(Px), bool)
             I,J,d = match_xy(upx, upy, Px, Py, match_pix)
@@ -589,12 +601,74 @@ def main3(bands):
             print 'Keeping', sum(keep), 'new peaks'
             upx = np.append(upx, Px[keep])
             upy = np.append(upy, Py[keep])
+            newpeaks = Px[keep],Py[keep]
         print 'Total of', len(upx), 'peaks'
 
+        # Plot most significant new peaks
+        px,py = newpeaks
+        if len(px) == 0:
+            continue
+        peaksn = mdet[py,px] / msig[py,px]
+        I = np.argsort(-peaksn)
         plt.clf()
-        plt.imshow(blobs, interpolation='nearest', origin='lower')
-        plt.title('blobs: %s' % name)
+        for j,i in enumerate(I[:25]):
+            S = 20
+            plt.subplot(5,5, j+1)
+            plt.imshow(rgb[max(0, py[i]-S) : min(coH, py[i]+S+1),
+                           max(0, px[i]-S) : min(coW, px[i]+S+1), :],
+                       interpolation='nearest', origin='lower')
+        plt.suptitle('New peaks for %s' % name)
         ps.savefig()
+
+        # Plot detmap values in r,W1 for all peaks
+        magg  = -2.5*(np.log10(detmaps[ig ][Py,Px])-9)
+        magr  = -2.5*(np.log10(detmaps[ir ][Py,Px])-9)
+        magz  = -2.5*(np.log10(detmaps[iz ][Py,Px])-9)
+        magW1 = -2.5*(np.log10(detmaps[iW1][Py,Px])-9)
+        magW2 = -2.5*(np.log10(detmaps[iW2][Py,Px])-9)
+
+        plt.clf()
+        p1 = plt.plot(magr, magW1, 'k.', alpha=0.5)
+        p2 = plt.plot(magr, magW2, 'm.', alpha=0.5)
+        p3 = plt.plot(magr, magg, 'g.', alpha=0.5)
+        p4 = plt.plot(magr, magz, 'r.', alpha=0.5)
+        plt.legend([p[0] for p in [p3,p4,p1,p2]], ['g','z','W1','W2'],
+                   loc='upper left')
+        plt.xlabel('r mag')
+        plt.ylabel('X mag')
+        lo,hi = 12,26
+        plt.plot([lo,hi],[lo,hi], 'b-', alpha=0.5)
+        plt.plot([lo,hi],[lo+1,hi+1], 'b-', alpha=0.25)
+        plt.plot([lo,hi],[lo-1,hi-1], 'b-', alpha=0.25)
+        plt.plot([lo,hi],[lo-2,hi-2], 'b-', alpha=0.25)
+        plt.plot([lo,hi],[lo-3,hi-3], 'b-', alpha=0.25)
+        plt.plot([lo,hi],[lo-4,hi-4], 'b-', alpha=0.25)
+        plt.axis([lo,hi,lo,hi])
+        plt.title(name)
+        ps.savefig()
+
+
+        plt.clf()
+        p1 = plt.plot(magr, magW1 - magr, 'k.', alpha=0.5)
+        p2 = plt.plot(magr, magW2 - magr, 'm.', alpha=0.5)
+        p3 = plt.plot(magr, magg  - magr, 'g.', alpha=0.5)
+        p4 = plt.plot(magr, magz  - magr, 'r.', alpha=0.5)
+        plt.legend([p[0] for p in [p3,p4,p1,p2]], ['g','z','W1','W2'],
+                   loc='upper left')
+        plt.xlabel('r mag')
+        plt.ylabel('X - r mag')
+        lo,hi = 12,26
+        for y in [1,0,0,-1,-2,-3,-4]:
+            plt.axhline(y, color='b', alpha=0.25)
+        plt.axis([lo,hi,-5,5])
+        plt.title(name)
+        ps.savefig()
+
+
+        # plt.clf()
+        # plt.imshow(blobs, interpolation='nearest', origin='lower')
+        # plt.title('blobs: %s' % name)
+        # ps.savefig()
 
         # plt.clf()
         # plt.imshow(peaks, interpolation='nearest', origin='lower')
@@ -633,9 +707,6 @@ def main3(bands):
     sedonly = upx[only],upy[only]
 
     sematch = secat[J]
-
-    rgb = fitsio.read('rgb.fits')
-    print 'RGB', rgb.shape
 
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
@@ -733,16 +804,15 @@ if __name__ == '__main__':
         if not os.path.exists('detmap-%s.fits' % b):
             missing.append(b)
     if len(missing):
-        main(missing)
+        create_detmaps(missing)
 
-    ps.skipto(10)
+    #ps.skipto(10)
     if not os.path.exists('rgb.fits'):
         write_rgb()
 
-    ps.skipto(12)
-    main2(bands)
-    sys.exit(0)
-    
+    ps.skipto(2)
+    #main2(bands)
+    #sys.exit(0)
     main3(bands)
 
 
