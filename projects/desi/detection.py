@@ -550,16 +550,16 @@ def main3(bands):
         ('r-only', (0., 1., 0.)),
         ('z-only', (0., 0., 1.)),
         ('Flat',   (1., 1., 1.)),
-        ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
+        ('Red',    [2.5**x for x in [1, 0, -2]]),
+        ('loc2',   [2.5**x for x in [1, 0, -0.7]]),
         #('FlatW1',   (1., 1., 1., 1.)),
-        ('W1-only', (0., 0., 0., 1., 0.)),
-        ('W2-only', (0., 0., 0., 0., 1.)),
-        ('FlatW12',   (1., 1., 1., 1., 1.)),
+        #('W1-only', (0., 0., 0., 1., 0.)),
+        #('W2-only', (0., 0., 0., 0., 1.)),
+        #('FlatW12',   (1., 1., 1., 1., 1.)),
         #('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
         #('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
-        ('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
+        #('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
         # ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
-        # ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
         # ('loc3', [2.5 ** c for c in [1.4, 0., -1.1]]),
         # ('loc4', [2.5 ** c for c in [1.4, 0., -1.8]]),
         # ('Redder', (2.5 **  1.5, 1., 2.5 ** -3)),
@@ -581,11 +581,11 @@ def main3(bands):
     for i in range(3):
         rgb[:,:,i] = gaussian_filter(rgb[:,:,i], 0.5)
 
-    iW1 = bands.index('W1')
-    ir  = bands.index('r')
-    iW2 = bands.index('W2')
     ig  = bands.index('g')
+    ir  = bands.index('r')
     iz  = bands.index('z')
+    iW1 = bands.index('W1')
+    iW2 = bands.index('W2')
 
     for ised,(name,sed) in enumerate(seds):
         print 'SED:', name
@@ -593,7 +593,7 @@ def main3(bands):
 
         blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
                                                                   fill_holes=True,
-                                                                  nsigma=20.)
+                                                                  nsigma=4.5)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
 
