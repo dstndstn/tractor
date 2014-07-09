@@ -330,79 +330,6 @@ def sqimshow(img, **kwa):
 
 
 
-def get_fits_catalog(cat, var, T, hdr, filt, fs):
-    if T is None:
-        T = fits_table()
-    if hdr is None:
-        hdr = fitsio.FITSHDR()
-
-    # Find a source of each type and query its parameter names, for the header
-    # ASSUMES the catalog contains at least one object of each type
-    for t,ts in typemap.items():
-        for src in cat:
-            if type(src) != t:
-                continue
-            print 'Parameters for', t, src
-            sc = src.copy()
-            sc.thawAllRecursive()
-            for i,nm in enumerate(sc.getParamNames()):
-                hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
-                                    comment='Tractor param name'))
-            def flatten_node(node):
-                return reduce(lambda x,y: x+y,
-                              [flatten_node(c) for c in node[1:]],
-                              [node[0]])
-            tree = getParamTypeTree(sc)
-            print 'Source param types:', tree
-            types = flatten_node(tree)
-            #print 'Flat:', types
-            for i,t in enumerate(types):
-                hdr.add_record(dict(name='TR_%s_T%i' % (ts, i),
-                                    value=t.replace("'", '"'),
-                                    comment='Tractor param types'))
-            break
-    print 'Header:', hdr
-
-    params0 = cat.getParams()
-
-    flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
-                     for src in cat])
-
-    # Oh my, this is tricky... set parameter values to the variance
-    # vector so that we can read off the parameter variances via the
-    # python object apis.
-    cat.setParams(var)
-    fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
-                        for src in cat])
-    cat.setParams(params0)
-    
-    # flux = []
-    # for src in cat:
-    #     bb = src.getBrightnesses()
-    #     flux.append(sum(b.getFlux(filt) for b in bb))
-    #     # for fluxI
-    #     assert(len(bb) == 1)
-    #     b = bb[0]
-    #     p = b.getParam()
-    #     bb[0].set
-        
-    flux_iv = 1./np.array(fluxvar)
-    mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
-    
-    T.set('decam_%s_nanomaggies'        % filt, flux)
-    T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv)
-    T.set('decam_%s_mag'                % filt, mag)
-    T.set('decam_%s_mag_err'            % filt, dmag)
-
-    if fs is not None:
-        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
-        for k in fskeys:
-            x = getattr(fs, k)
-            x = np.array(x).astype(np.float32)
-            T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
-    
-    return T, hdr
-        
 
         
 # def convert_source_for_output(src):
@@ -881,7 +808,7 @@ if __name__ == '__main__':
     flux_iv,fs = R.IV, R.fitstats
 
     T,hdr = get_fits_catalog(cat, flux_iv, catsources.copy(), None,
-                             tim.filter, fs)
+                             [tim.filter], fs)
     get_tractor_params(T, cat, 'tractor_%s_init')
     T.writeto(basefn + '-phot-1.fits', header=hdr)
         

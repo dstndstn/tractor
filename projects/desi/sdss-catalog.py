@@ -21,6 +21,7 @@ if __name__ == '__main__':
     parser.add_option('-x', type=int, help='Sub-tile x', default=0)
     parser.add_option('-y', type=int, help='Sub-tile y', default=0)
     parser.add_option('--atlas', default='allsky-atlas.fits', help='WISE tile list')
+    parser.add_option('--bands', default=[], action='append', help='Bands to include in output catalog, default g,r,z')
     opt,args = parser.parse_args()
 
     if len(args) != 2:
@@ -31,6 +32,9 @@ if __name__ == '__main__':
 
     if opt.n != desi_common.N_subtiles:
         desi_common.N_subtiles = opt.n
+
+    if len(opt.bands) == 0:
+        opt.bands = ['g','r','z']
 
     wcs = get_subtile_wcs(tile, opt.x, opt.y)
     print 'WCS:', wcs
@@ -49,12 +53,27 @@ if __name__ == '__main__':
             'run','camcol','field','id',
             'psfflux', 'psfflux_ivar',
             'cmodelflux', 'cmodelflux_ivar',
-            'modelflux', 'modelflux_ivar']
+            'modelflux', 'modelflux_ivar',
+            'devflux', 'expflux']
 
-    pobjs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
-   
-    print 'Got', len(pobjs), 'photoObjs'
-    pobjs.writeto(outfn)
+    objs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
+    print 'Got', len(objs), 'photoObjs'
+    #pobjs.writeto(outfn)
 
+    #radecroi=[r0,r1,d0,d1],
+    srcs = get_tractor_sources_dr9(
+        None, None, None, objs=objs, sdss=sdss,
+        bands=opt.bands,
+        nanomaggies=True, fixedComposites=True,
+        useObjcType=True,
+        ellipse=EllipseESoft.fromRAbPhi)
+    print 'Got', len(srcs), 'Tractor sources'
+
+    cat = Catalog(*srcs)
+    N = cat.numberOfParams()
+    var = np.zeros(N)
+
+    T,hdr = get_fits_catalog(cat, var, None, None, opt.bands, None)
+    T.writeto(outfn, header=hdr)
     print 'Wrote to', outfn
     

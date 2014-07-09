@@ -1,5 +1,11 @@
+import fitsio
+
 from astrometry.util.util import *
 from astrometry.util.fits import *
+
+from tractor import *
+from tractor.galaxy import *
+from tractor.ellipses import *
 
 N_subtiles = 4
 unwise_atlas = 'allsky-atlas.fits'
@@ -49,3 +55,72 @@ def unwise_tile_wcs(ra, dec, W=2048, H=2048, pixscale=2.75):
     cowcs = Tan(ra, dec, (W+1)/2., (H+1)/2.,
                 -pixscale/3600., 0., 0., pixscale/3600., W, H)
     return cowcs
+
+
+def get_fits_catalog(cat, var, T, hdr, filts, fs):
+    if T is None:
+        T = fits_table()
+    if hdr is None:
+        hdr = fitsio.FITSHDR()
+
+    typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
+                FixedCompositeGalaxy: 'C' }
+
+    # Find a source of each type and query its parameter names, for the header.
+    # ASSUMES the catalog contains at least one object of each type
+    for t,ts in typemap.items():
+        for src in cat:
+            if type(src) != t:
+                continue
+            print 'Parameters for', t, src
+            sc = src.copy()
+            sc.thawAllRecursive()
+            for i,nm in enumerate(sc.getParamNames()):
+                hdr.add_record(dict(name='TR_%s_P%i' % (ts, i), value=nm,
+                                    comment='Tractor param name'))
+            def flatten_node(node):
+                return reduce(lambda x,y: x+y,
+                              [flatten_node(c) for c in node[1:]],
+                              [node[0]])
+            tree = getParamTypeTree(sc)
+            print 'Source param types:', tree
+            types = flatten_node(tree)
+            #print 'Flat:', types
+            for i,t in enumerate(types):
+                hdr.add_record(dict(name='TR_%s_T%i' % (ts, i),
+                                    value=t.replace("'", '"'),
+                                    comment='Tractor param types'))
+            break
+    print 'Header:', hdr
+
+    params0 = cat.getParams()
+
+    for filt in filts:
+        flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+                         for src in cat])
+
+        # Oh my, this is tricky... set parameter values to the variance
+        # vector so that we can read off the parameter variances via the
+        # python object apis.
+        cat.setParams(var)
+        fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+                            for src in cat])
+        cat.setParams(params0)
+    
+        flux_iv = 1./np.array(fluxvar)
+        mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+    
+        T.set('decam_%s_nanomaggies'        % filt, flux)
+        T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv)
+        T.set('decam_%s_mag'                % filt, mag)
+        T.set('decam_%s_mag_err'            % filt, dmag)
+
+    if fs is not None:
+        fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
+        for k in fskeys:
+            x = getattr(fs, k)
+            x = np.array(x).astype(np.float32)
+            T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
+    
+    return T, hdr
+        

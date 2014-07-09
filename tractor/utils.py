@@ -330,8 +330,7 @@ class NamedParams(object):
         return [1.] * len(self.getAllParams())
 
     def setStepSizes(self, ss):
-        ss = getattr(self, 'stepsizes', None)
-        if ss is None:
+        if not hasattr(self, 'stepsizes'):
             newss = []
             j = 0
             for i,ll in enumerate(self.liquid):
