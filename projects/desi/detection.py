@@ -22,6 +22,8 @@ from scipy.ndimage.morphology import binary_dilation, binary_closing
 
 from decam import sky_subtract
 
+from desi_common import *
+
 ps = PlotSequence('det')
 
 def get_rgb_image(g, r, z,
@@ -171,28 +173,7 @@ def create_detmaps(bands):
     mp = multiproc(8)
     #mp = multiproc()
 
-    wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
-    wcs = Tan(wcsfn)
-    W,H = wcs.get_width(), wcs.get_height()
-
-    bounds = wcs.radec_bounds()
-    print 'RA,Dec bounds', bounds
-    print 'pixscale', wcs.pixel_scale()
-
-    # Tweak to DECam pixel scale and number of pixels.
-    depix = 0.27
-    D = int(np.ceil((W * wcs.pixel_scale() / depix) / 4)) * 4
-    DW,DH = D,D
-    wcs.set_crpix(DW/2 + 1.5, DH/2 + 1.5)
-    pixscale = depix / 3600.
-    wcs.set_cd(-pixscale, 0., 0., pixscale)
-    wcs.set_imagesize(DW, DH)
-    W,H = wcs.get_width(), wcs.get_height()
-
-    print 'Detmap patch size:', wcs.get_width(), wcs.get_height()
-    bounds = wcs.radec_bounds()
-    print 'RA,Dec bounds', bounds
-    print 'pixscale', wcs.pixel_scale()
+    tile = '3524p000'
 
     # 1/4 x 1/4 subimage
     nsub = 4
@@ -203,17 +184,10 @@ def create_detmaps(bands):
     nsub = 16
     subx, suby = 0, 12
     chips = [22, 43]
-
-    subw, subh = W/nsub, H/nsub
-    subwcs = Tan(wcs)
-    subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
-    subwcs.set_imagesize(subw, subh)
-
-    bounds = subwcs.radec_bounds()
-    print 'RA,Dec bounds', bounds
-    print 'Sub-image patch size:', subwcs.get_width(), subwcs.get_height()
-
-    cowcs = subwcs
+    import desi_common
+    desi_common.N_subtiles = nsub
+    
+    cowcs = get_subtile_wcs(tile, subx, suby)
 
     # Insert imaging database here...
     paths = []
