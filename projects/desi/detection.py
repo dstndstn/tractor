@@ -551,11 +551,12 @@ def main3(bands):
         ('z-only', (0., 0., 1.)),
         ('Flat',   (1., 1., 1.)),
         ('Red',    [2.5**x for x in [1, 0, -2]]),
-        ('loc2',   [2.5**x for x in [1, 0, -0.7]]),
+        #('loc2',   [2.5**x for x in [1, 0, -0.7]]),
         #('FlatW1',   (1., 1., 1., 1.)),
-        #('W1-only', (0., 0., 0., 1., 0.)),
-        #('W2-only', (0., 0., 0., 0., 1.)),
-        #('FlatW12',   (1., 1., 1., 1., 1.)),
+        ('W1-only', (0., 0., 0., 1., 0.)),
+        ('W2-only', (0., 0., 0., 0., 1.)),
+        ('W12', (0., 0., 0., 1., 1.)),
+        ('FlatW12',   (1., 1., 1., 1., 1.)),
         #('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
         #('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
         #('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
@@ -587,15 +588,23 @@ def main3(bands):
     iW1 = bands.index('W1')
     iW2 = bands.index('W2')
 
+    sednames = [nm for nm,sed in seds]
+    #iflat = sednames.index('Flat')
+    noptical = sednames.index('W1-only')
+
+    alldetmaps = []
+
     for ised,(name,sed) in enumerate(seds):
         print 'SED:', name
         mdet, msig, msig1 = detmapdet.sed_matched_filter(sed, detmaps, detivs, sig1s)
 
         blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
                                                                   fill_holes=True,
-                                                                  nsigma=4.5)
+                                                                  nsigma=20)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
+
+        alldetmaps.append(mdet / msig)
 
         if upx is None:
             upx = Px
@@ -611,12 +620,20 @@ def main3(bands):
             newpeaks = Px[keep],Py[keep]
         print 'Total of', len(upx), 'peaks'
 
-        # Plot most significant new peaks
         px,py = newpeaks
         if len(px) == 0:
             continue
         peaksn = mdet[py,px] / msig[py,px]
         I = np.argsort(-peaksn)
+
+        if ised >= noptical:
+            print 'New peaks: S/N vs Flat S/N:'
+            for i in I[:25]:
+                optsn = [m[py[i],px[i]] for m in alldetmaps[:noptical]]
+                optimax = np.argmax(optsn)
+                print '  % 8.1f' % (peaksn[i]), '  % 8.1f' % optsn[optimax], 'in', sednames[optimax]
+
+        # Plot most significant new peaks
         plt.clf()
         for j,i in enumerate(I[:25]):
             S = 20
