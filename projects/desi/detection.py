@@ -550,11 +550,13 @@ def main3(bands):
         ('r-only', (0., 1., 0.)),
         ('z-only', (0., 0., 1.)),
         ('Flat',   (1., 1., 1.)),
-        ('FlatW1',   (1., 1., 1., 1.)),
-        ('FlatW12',   (1., 1., 1., 1., 1.)),
         ('Red',    (2.5 **  1, 1., 2.5 ** -2)),
-        ('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
-        ('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
+        #('FlatW1',   (1., 1., 1., 1.)),
+        ('W1-only', (0., 0., 0., 1., 0.)),
+        ('W2-only', (0., 0., 0., 0., 1.)),
+        ('FlatW12',   (1., 1., 1., 1., 1.)),
+        #('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
+        #('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
         ('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
         # ('loc1', [2.5 ** c for c in [0.5, 0., -0.3]]),
         # ('loc2', [2.5 ** c for c in [1.0, 0., -0.7]]),
@@ -575,6 +577,10 @@ def main3(bands):
     rgb = fitsio.read('rgb.fits')
     print 'RGB', rgb.shape
 
+    # smooth the rgb image a little
+    for i in range(3):
+        rgb[:,:,i] = gaussian_filter(rgb[:,:,i], 0.5)
+
     iW1 = bands.index('W1')
     ir  = bands.index('r')
     iW2 = bands.index('W2')
@@ -586,7 +592,8 @@ def main3(bands):
         mdet, msig, msig1 = detmapdet.sed_matched_filter(sed, detmaps, detivs, sig1s)
 
         blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
-                                                               fill_holes=True)
+                                                                  fill_holes=True,
+                                                                  nsigma=20.)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
 
@@ -617,6 +624,8 @@ def main3(bands):
             plt.imshow(rgb[max(0, py[i]-S) : min(coH, py[i]+S+1),
                            max(0, px[i]-S) : min(coW, px[i]+S+1), :],
                        interpolation='nearest', origin='lower')
+            plt.xticks([])
+            plt.yticks([])
         plt.suptitle('New peaks for %s' % name)
         ps.savefig()
 
