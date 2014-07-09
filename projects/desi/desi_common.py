@@ -1,20 +1,17 @@
 from astrometry.util.util import *
 from astrometry.util.fits import *
 
-
 N_subtiles = 4
 unwise_atlas = 'allsky-atlas.fits'
 decam_pixscale = 0.27
 
-def get_subtile_wcs(name, x, y): #, nsub=N_subtiles, pixscale=decam_pixscale):
+def get_subtile_wcs(name, x, y):
     '''
     pixscale: arcsec/pixel
     '''
     nsub = N_subtiles
     pixscale = decam_pixscale
 
-    print 'get_subtile_wcs: nsub', nsub
-    
     wcs = unwise_wcs_from_name(name)
     W,H = wcs.get_width(), wcs.get_height()
     # Tweak to DECam pixel scale and number of pixels.

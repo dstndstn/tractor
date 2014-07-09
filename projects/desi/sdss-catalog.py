@@ -7,38 +7,54 @@ from astrometry.sdss import *
 from tractor import *
 from tractor.sdss import *
 
-
-
+from desi_common import *
 
 
 if __name__ == '__main__':
     import optparse
     import sys
+    import desi_common
 
-    parser = optparse.OptionParser('%prog [options] <WISE tile name>')
-    parser.add_option('-n', type=int, default=4,
+    parser = optparse.OptionParser('%prog [options] <WISE tile name> <catalog output name>')
+    parser.add_option('-n', type=int, default=desi_common.N_subtiles,
                       help='Number of sub-tiles; default %default')
     parser.add_option('-x', type=int, help='Sub-tile x', default=0)
     parser.add_option('-y', type=int, help='Sub-tile y', default=0)
     parser.add_option('--atlas', default='allsky-atlas.fits', help='WISE tile list')
     opt,args = parser.parse_args()
 
-    if len(args) != 1:
+    if len(args) != 2:
         parser.print_help()
         sys.exit(-1)
         
-    tile = args[0]
+    tile,outfn = args
 
-    print 'Reading', opt.atlas
-    T = fits_table(opt.atlas)
-    print 'Read', len(T), 'WISE tiles'
-    I = np.flatnonzero(tile == T.coadd_id)
-    if len(I) != 1:
-        print 'Failed to find WISE tile', tile
-        sys.exit(-1)
-    I = I[0]
-    tra,tdec = T.ra[I],T.dec[I]
-    del T
+    if opt.n != desi_common.N_subtiles:
+        desi_common.N_subtiles = opt.n
 
+    wcs = get_subtile_wcs(tile, opt.x, opt.y)
+    print 'WCS:', wcs
 
+    # FIXME
+    margin = 0.
+    photoobjdir = 'photoObjs-new'
+
+    sdss = DR9(basedir=photoobjdir)
+    sdss.useLocalTree()
+
+    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id',
+            'psfflux', 'psfflux_ivar',
+            'cmodelflux', 'cmodelflux_ivar',
+            'modelflux', 'modelflux_ivar']
+
+    pobjs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
+   
+    print 'Got', len(pobjs), 'photoObjs'
+    pobjs.writeto(outfn)
+
+    print 'Wrote to', outfn
     
