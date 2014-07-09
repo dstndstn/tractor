@@ -545,18 +545,20 @@ def main3(bands):
               (secat.y_image > 2.) * (secat.y_image < 4095))
     print 'Cut to', len(secat), 'SExtractor sources not near edges'
 
+    #noptical = sednames.index('W1-only')
+    noptical = 6
     seds = [
         ('g-only', (1., 0., 0.)),
         ('r-only', (0., 1., 0.)),
         ('z-only', (0., 0., 1.)),
         ('Flat',   (1., 1., 1.)),
         ('Red',    [2.5**x for x in [1, 0, -2]]),
-        #('loc2',   [2.5**x for x in [1, 0, -0.7]]),
+        ('loc2',   [2.5**x for x in [1, 0, -0.7]]),
         #('FlatW1',   (1., 1., 1., 1.)),
-        ('W1-only', (0., 0., 0., 1., 0.)),
-        ('W2-only', (0., 0., 0., 0., 1.)),
-        ('W12', (0., 0., 0., 1., 1.)),
-        ('FlatW12',   (1., 1., 1., 1., 1.)),
+        # ('W1-only', (0., 0., 0., 1., 0.)),
+        # ('W2-only', (0., 0., 0., 0., 1.)),
+        # ('W12', (0., 0., 0., 1., 1.)),
+        # ('FlatW12',   (1., 1., 1., 1., 1.)),
         #('RedW1',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3)),
         #('RedW12',    (2.5 **  1, 1., 2.5 ** -2, 2.5**-3, 2.5**-3)),
         #('Mine',   [2.5**x for x in [1, 0, -0.5, -2, -2]]),
@@ -589,8 +591,6 @@ def main3(bands):
     iW2 = bands.index('W2')
 
     sednames = [nm for nm,sed in seds]
-    #iflat = sednames.index('Flat')
-    noptical = sednames.index('W1-only')
 
     alldetmaps = []
 
@@ -600,7 +600,7 @@ def main3(bands):
 
         blobs,blobslices,P,Px,Py,peaks = detmapdet.get_detections(mdet / msig, 1., mdet,
                                                                   fill_holes=True,
-                                                                  nsigma=20)
+                                                                  nsigma=5.)
         detmask  |= (blobs != 0) * (1 << ised)
         peakmask |= peaks        * (1 << ised)
 
@@ -747,7 +747,7 @@ def main3(bands):
     ax = plt.axis()
     plt.plot(sematch.cox-1, sematch.coy-1, 'o', mec='w', mfc='none', ms=6, mew=2)
     plt.plot(seonly.cox-1,  seonly.coy-1,  'o', mec='r', mfc='none', ms=6, mew=2)
-    plt.plot(sdss.cox-1, sdss.coy-1, '+', color=(0,1,0))
+    plt.plot(sdss.cox-1, sdss.coy-1, 'x', color=(0,1,0))
     x,y = sedonly
     plt.plot(x, y, 'w+', ms=8, mew=1)
     plt.axis(ax)
