@@ -717,11 +717,20 @@ def main3(bands):
 
     sematch = secat[J]
 
+    # What about SDSS sources?
+    sdss = fits_table('photoobjs-3524p000.fits')
+    # Cut to sources within the coadd.
+    ok,sdss.cox,sdss.coy = cowcs.radec2pixelxy(sdss.ra, sdss.dec)
+    sdss.cut((sdss.cox >= 1) * (sdss.cox <= coW) * (sdss.coy >= 1) * (sdss.coy <= coH))
+    print len(sdss), 'SDSS sources within coadd'
+    
+
     plt.clf()
     plt.imshow(rgb, interpolation='nearest', origin='lower')
     ax = plt.axis()
     plt.plot(sematch.cox-1, sematch.coy-1, 'o', mec='w', mfc='none', ms=6, mew=2)
     plt.plot(seonly.cox-1,  seonly.coy-1,  'o', mec='r', mfc='none', ms=6, mew=2)
+    plt.plot(sdss.cox-1, sdss.coy-1, '+', color=(0,1,0))
     x,y = sedonly
     plt.plot(x, y, 'w+', ms=8, mew=1)
     plt.axis(ax)
