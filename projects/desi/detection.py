@@ -302,6 +302,13 @@ def main(bands):
 
 def main2(bands):
 
+    detmaps = [fitsio.read('detmap-%s.fits' % b) for b in bands]
+    for b,d in zip(bands,detmaps):
+        print 'Band', b, 'detmap peak:', np.max(d)
+    cowcs = Tan('detmap-%s.fits' % bands[0])
+    coH,coW = cowcs.get_height(), cowcs.get_width()
+
+
     # Read SExtractor catalogs
     fns = [
         'data/desi/imaging/redux/decam/proc/20130804/C22/gband/dec095705.22.p.w.cat.fits',
@@ -315,11 +322,12 @@ def main2(bands):
         #'data/desi/imaging/redux/decam/proc/20130805/C22/zband/dec096106.22.p.w.cat.fits',
         ]
 
-    cats = dict([(b,[]) for b in bands])
+    cats = {}
     for fn in fns:
         T = fits_table(fn, hdu=2,
                        column_map={'alpha_j2000':'ra', 'delta_j2000':'dec'},
-                       columns=['alpha_j2000', 'delta_j2000', 'mag_auto', 'flux_auto'])
+                       columns=['x_image', 'y_image', 'alpha_j2000', 'delta_j2000',
+                                'mag_auto', 'flux_auto'])
         T.cut(T.mag_auto < 99)
         imfn = fn.replace('.cat.fits','.fits')
         hdr = fitsio.read_header(imfn)
@@ -331,6 +339,16 @@ def main2(bands):
         print 'Mags', T.mag_auto.min(), T.mag_auto.max()
         print 'Fluxes', T.flux_auto.min(), T.flux_auto.max()
 
+        wcsfn = os.path.basename(fn).replace('.cat.fits','.wcs')
+        wcsdir = 'data/decam/astrom'
+        wcsfn = os.path.join(wcsdir, wcsfn)
+        print 'WCS fn', wcsfn
+        wcs = Sip(wcsfn)
+        T.ra,T.dec = wcs.pixelxy2radec(T.x_image, T.y_image)
+        # Cut to sources within the coadd.
+        ok,T.cox,T.coy = cowcs.radec2pixelxy(T.ra, T.dec)
+        T.cut((T.cox >= 1) * (T.cox <= coW) * (T.coy >= 1) * (T.coy <= coH))
+
         band = None
         for b in bands:
             if '%sband' % b in fn:
@@ -340,12 +358,13 @@ def main2(bands):
         mag2 = -2.5 * np.log10(T.flux_auto) + zp
 
         T.set('mag', mag2)
+        if not band in cats:
+            cats[band] = []
         cats[band].append(T)
     for k in cats.keys():
         cats[k] = merge_tables(cats[k])
 
-    # HACK
-    g,r,z = [cats[b] for b in bands]
+    g,r,z = [cats[b].copy() for b in 'grz']
 
     R = 0.5 / 3600.
     I,J,d = match_radec(g.ra, g.dec, r.ra, r.dec, R, nearest=True)
@@ -367,16 +386,76 @@ def main2(bands):
     plt.ylabel('r - z')
     ps.savefig()
 
+    # Match to AllWISE catalog to find typical colors.
+    wise = fits_table('wise-sources-3524p000.fits')
+    print len(wise), 'WISE sources'
+
+    ok,wise.cox,wise.coy = cowcs.radec2pixelxy(wise.ra, wise.dec)
+    wise.cut((wise.cox >= 1) * (wise.cox <= coW) * (wise.coy >= 1) * (wise.coy <= coH))
+    print 'Cut to', len(wise), 'within coadd'
+
+    print 'Min W1:', np.min(wise.w1mpro)
+    print 'Min W2:', np.min(wise.w2mpro)
+
+    I,J,d = match_radec(r.ra, r.dec, wise.ra, wise.dec, 4./3600)
+    print len(I), 'matches'
+
+    plt.clf()
+    plt.plot(g.mag[I] - r.mag[I], r.mag[I] - wise.w1mpro[J], 'k.')
+    plt.xlabel('g - r')
+    plt.ylabel('r - W1')
+    ps.savefig()
+
+    plt.clf()
+    plt.plot(g.mag[I] - r.mag[I], r.mag[I] - wise.w2mpro[J], 'k.')
+    plt.xlabel('g - r')
+    plt.ylabel('r - W2')
+    ps.savefig()
+
+
+    # Check detection map values -- do they correspond to catalog fluxes?
+    ix,iy = np.round(wise.cox - 1).astype(int), np.round(wise.coy - 1).astype(int)
+    for b in ['W1','W2']:
+        dmap = detmaps[bands.index(b)]
+        dval = dmap[iy, ix]
+        mag = wise.get('%smpro' % b.lower())
+        
+        plt.clf()
+        plt.plot(mag, -2.5 * (np.log10(dval) - 9.), 'k.')
+        plt.xlabel('WISE mpro')
+        plt.ylabel('detection map')
+        lo,hi = 13,18
+        plt.plot([lo,hi],[lo,hi],'b-', alpha=0.5)
+        plt.axis([hi,lo,hi,lo])
+        plt.title(b)
+        ps.savefig()
+
+    for b in 'grz':
+        cat = cats[b].copy()
+        ix,iy = np.round(cat.cox - 1).astype(int), np.round(cat.coy - 1).astype(int)
+        dmap = detmaps[bands.index(b)]
+        dval = dmap[iy, ix]
+        
+        plt.clf()
+        plt.plot(cat.mag, -2.5 * (np.log10(dval) - 9.), 'k.')
+        plt.xlabel('SourceExtractor mag_auto')
+        plt.ylabel('detection map')
+        lo,hi = 16,24
+        #lo,hi = 8,30
+        plt.plot([lo,hi],[lo,hi],'b-', alpha=0.5)
+        plt.axis([hi,lo,hi,lo])
+        plt.title(b)
+        ps.savefig()
+
+
+
+
 def main3(bands):
     import detmap.detection as detmap
 
     detmaps = [fitsio.read('detmap-%s.fits' % b) for b in bands]
     detivs  = [fitsio.read('detmap-%s.fits' % b, ext=1) for b in bands]
     sig1s = [np.sqrt(1./np.median(iv[iv>0])) for iv in detivs]
-
-
-    for b,d in zip(bands,detmaps):
-        print 'Band', b, 'detmap peak:', np.max(d)
 
     cowcs = Tan('detmap-%s.fits' % bands[0])
     coH,coW = cowcs.get_height(), cowcs.get_width()
@@ -436,11 +515,9 @@ def main3(bands):
     gg.band = np.array(['g'] * len(gg))
     zz = cats['z']
     zz.band = np.array(['z'] * len(zz))
-
-    print 'Min g:', np.min(gg.mag_auto)
-    print 'Min r:', np.min(rr.mag_auto)
-    print 'Min z:', np.min(zz.mag_auto)
-
+    # print 'Min g:', np.min(gg.mag_auto)
+    # print 'Min r:', np.min(rr.mag_auto)
+    # print 'Min z:', np.min(zz.mag_auto)
     for oo in (gg,zz):
         I,J,d = match_radec(rr.ra, rr.dec, oo.ra, oo.dec, match_radius)
         magcol = '%smag' % oo.band[0]
@@ -467,33 +544,6 @@ def main3(bands):
               (secat.y_image > 2.) * (secat.y_image < 4095))
     print 'Cut to', len(secat), 'SExtractor sources not near edges'
 
-
-    # Match to AllWISE catalog to find typical colors.
-    wise = fits_table('wise-sources-3524p000.fits')
-    print len(wise), 'WISE sources'
-
-    ok,wise.cox,wise.coy = cowcs.radec2pixelxy(wise.ra, wise.dec)
-    wise.cut((wise.cox >= 1) * (wise.cox <= coW) * (wise.coy >= 1) * (wise.coy <= coH))
-    print 'Cut to', len(wise), 'within coadd'
-
-    print 'Min W1:', np.min(wise.w1mpro)
-    print 'Min W2:', np.min(wise.w2mpro)
-
-    segr = secat[(secat.gmag > 0) * (secat.rmag > 0)]
-    I,J,d = match_radec(segr.ra, segr.dec, wise.ra, wise.dec, 4./3600)
-    print len(I), 'matches'
-
-    plt.clf()
-    plt.plot(segr.gmag[I] - segr.rmag[I], segr.rmag[I] - wise.w1mpro[J], 'k.')
-    plt.xlabel('g - r')
-    plt.ylabel('r - W1')
-    ps.savefig()
-
-    plt.clf()
-    plt.plot(segr.gmag[I] - segr.rmag[I], segr.rmag[I] - wise.w2mpro[J], 'k.')
-    plt.xlabel('g - r')
-    plt.ylabel('r - W2')
-    ps.savefig()
 
     seds = [('Flat',   (1., 1., 1.)),
             ('FlatW1',   (1., 1., 1., 1.)),
@@ -690,9 +740,10 @@ if __name__ == '__main__':
         write_rgb()
 
     ps.skipto(12)
-    #main2(bands)
-
+    main2(bands)
+    sys.exit(0)
+    
     main3(bands)
 
-    sys.exit(0)
+
 
