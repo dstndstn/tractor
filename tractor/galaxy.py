@@ -102,20 +102,6 @@ class Galaxy(MultiParams):
     def getNamedParams():
         return dict(pos=0, brightness=1, shape=2)
 
-    # These assume a specific ellipse parameterization, and only provide a
-    # bit of syntactic sugar
-    # def _setRe (self, re ): self.shape.re  = re
-    # def _setAb (self, ab ): self.shape.ab  = ab
-    # def _setPhi(self, phi): self.shape.phi = phi
-    # 
-    # # define pass-through names
-    # re = property(lambda x: x.shape.re, _setRe, None,
-    #               'galaxy effective radius')
-    # ab = property(lambda x: x.shape.ab, _setAb, None,
-    #               'galaxy axis ratio')
-    # phi = property(lambda x: x.shape.phi, _setPhi, None,
-    #                'galaxy position angle')
-
     def getName(self):
         return 'Galaxy'
 

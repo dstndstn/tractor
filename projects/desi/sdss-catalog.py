@@ -73,7 +73,10 @@ if __name__ == '__main__':
     N = cat.numberOfParams()
     var = np.zeros(N)
 
-    T,hdr = get_fits_catalog(cat, var, None, None, opt.bands, None)
+    T,hdr = prepare_fits_catalog(cat, var, None, None, opt.bands, None)
     T.writeto(outfn, header=hdr)
     print 'Wrote to', outfn
+
+    print 'Reading catalog...'
+    read_fits_catalog(T, hdr)
     
