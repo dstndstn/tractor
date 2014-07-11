@@ -58,9 +58,7 @@ if __name__ == '__main__':
 
     objs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
     print 'Got', len(objs), 'photoObjs'
-    #pobjs.writeto(outfn)
 
-    #radecroi=[r0,r1,d0,d1],
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
         bands=opt.bands,
@@ -77,6 +75,3 @@ if __name__ == '__main__':
     T.writeto(outfn, header=hdr)
     print 'Wrote to', outfn
 
-    print 'Reading catalog...'
-    read_fits_catalog(T, hdr)
-    

@@ -194,7 +194,9 @@ def get_tractor_fits_values(T, cat, pat):
 
 
 def read_fits_catalog(T, hdr):
-
+    '''
+    This is currently a weird hybrid of dynamic and hard-coded.
+    '''
     rev_typemap = dict([(v,k) for k,v in fits_typemap.items()])
 
     bands = []
@@ -207,21 +209,14 @@ def read_fits_catalog(T, hdr):
             bandcols.append(pre + band + post)
     print 'Found bands:', bands, 'in', bandcols
 
-    print 'Reverse typemap:', rev_typemap
-
     cat = []
     for i,t in enumerate(T):
         clazz = rev_typemap[t.type]
-
-        print 'clazz:', clazz
-        print 'type:', type(clazz)
-        
         pos = RaDecPos(t.ra, t.dec)
         br = NanoMaggies(**dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
-
         params = [pos, br]
-
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
+            # hard-code knowledge that third param is the ellipse
             eclazz = hdr['TR_%s_T3' % t.type]
             # look up that string... to avoid eval()
             eclazz = ellipse_types[eclazz]
@@ -232,6 +227,7 @@ def read_fits_catalog(T, hdr):
             params.append(ell)
             
         elif issubclass(clazz, FixedCompositeGalaxy):
+            # hard-code knowledge that params are fracDev, shapeE, shapeD
             params.append(t.fracdev)
             expeclazz = hdr['TR_%s_T4' % t.type]
             deveclazz = hdr['TR_%s_T5' % t.type]
@@ -247,9 +243,8 @@ def read_fits_catalog(T, hdr):
         else:
             raise RuntimeError('Unknown class %s' % str(clazz))
 
-
         src = clazz(*params)
-        print 'Created source', src
+        #print 'Created source', src
         cat.append(src)
     return cat
 
@@ -257,4 +252,7 @@ def read_fits_catalog(T, hdr):
 
 if __name__ == '__main__':
     T=fits_table('3524p000-0-12-n16-sdss-cat.fits')
-    read_fits_catalog(T, T.get_header())
+    cat = read_fits_catalog(T, T.get_header())
+    print 'Read catalog:'
+    for src in cat:
+        print ' ', src
