@@ -9,7 +9,6 @@ import numpy as np
 
 from tractor import *
 
-
 class EllipseE(ParamList):
     '''
     Ellipse parameterization with r, e1, e2.
@@ -168,7 +167,7 @@ class EllipseESoft(EllipseE):
         Returns the "usual" ellipticity e in [0,1]
         '''
         ee = np.hypot(self.ee1, self.ee2)
-        return 1. - np.exp(-e)
+        return 1. - np.exp(-ee)
 
     @property
     def softe(self):
@@ -186,8 +185,8 @@ class EllipseESoft(EllipseE):
         '''
         return np.arctan2(self.ee2, self.ee1) / 2.
     
-    # Have to override this because all parameter values are legal, unlike
-    # the superclass.
+    # Have to override this because all parameter values are legal,
+    # unlike the superclass.
     def isLegal(self):
         return True
     

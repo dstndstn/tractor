@@ -1667,12 +1667,20 @@ class Tractor(MultiParams):
 
 
     def getDerivs(self):
-        # Returns:
-        # allderivs: [
-        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
-        #    (param1:)  [],
-        #    (param2:)  [  (deriv, img), ],
-        # ]
+        '''
+        Computes model-image derivatives for each parameter.
+        
+        Returns a nested list of tuples:
+
+        allderivs: [
+           (param0:)  [  (deriv, img), (deriv, img), ... ],
+           (param1:)  [],
+           (param2:)  [  (deriv, img), ],
+        ]
+
+        Where the *derivs* are *Patch* objects and *imgs* are *Image*
+        objects.
+        '''
         allderivs = []
 
         # First, derivs for Image parameters (because 'images' comes first in the
