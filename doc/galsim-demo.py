@@ -75,7 +75,7 @@ if True:
 
     # Take several linearized least squares steps
     for i in range(20):
-        dlnp,X,alpha = tractor.optimize()
+        dlnp,X,alpha = tractor.optimize(shared_params=False)
         print 'dlnp', dlnp
         if dlnp < 1e-3:
             break
