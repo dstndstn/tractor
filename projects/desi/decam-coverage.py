@@ -78,6 +78,8 @@ if True:
                 filt = filt.split()[0]
                 print 'Filter', filt
 
+                detpos = hdr['DETPOS']
+                
                 name = ''
                 pth = os.path.dirname(path)
                 for i in range(4):
@@ -90,7 +92,7 @@ if True:
 
                 if not filt in wcsfns:
                     wcsfns[filt] = []
-                wcsfns[filt].append((path, name, W, H))
+                wcsfns[filt].append((path, name, detpos, W, H))
             except:
                 import traceback
                 traceback.print_exc()
@@ -113,7 +115,7 @@ if True:
             if not filt in wcsfns:
                 wcsfns[filt] = []
             name = ''
-            wcsfns[filt].append((path, name, W, H))
+            wcsfns[filt].append((path, name, '', W, H))
 
     #wcs = anwcs_create_allsky_hammer_aitoff(180., 0., 1000, 500)
     #wcs = anwcs_create_hammer_aitoff(180, -30, 2., 1000, 500, 1)
@@ -134,50 +136,56 @@ if True:
     plot.wcs = wcs
     plot.set_size_from_wcs()
 
-    #for band in ['g','r','z']:
-    for band in ['g','r','z', 'W1','W2']:
+    for band in ['g','r','z']:
+    #for band in ['g','r','z', 'W1','W2']:
 
         if not band in wcsfns:
             continue
 
-        plot.color = 'verydarkblue'
-        plot.plot('fill')
-        plot.color = 'white'
-        plot.alpha = 0.3
-        out = plot.outline
-        out.fill = 1
+        for label_detpos in [False, True]:
+        
+            plot.color = 'verydarkblue'
+            plot.plot('fill')
+            plot.color = 'white'
+            plot.alpha = 0.3
+            out = plot.outline
+            out.fill = 1
 
-        for path,name,W,H in wcsfns[band]:
-            out.set_wcs_file(path, 0)
-            out.set_wcs_size(W, H)
+            for path,name,detpos,W,H in wcsfns[band]:
+                out.set_wcs_file(path, 0)
+                out.set_wcs_size(W, H)
+                plot.plot('outline')
+                if label_detpos:
+                    txt = detpos
+                else:
+                    txt = name
+                if len(txt):
+                    ok,r,d = out.wcs.pixelxy2radec(W/2, H/2)
+                    plot.text_radec(r, d, txt)
+
+            # Plot 1/4 x 1/4 WISE tile
+            plot.color = 'yellow'
+            wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
+            wcs = Tan(wcsfn)
+            W,H = wcs.get_width(), wcs.get_height()
+            nsub = 4
+            subw, subh = W/nsub, H/nsub
+            subx, suby = 0, 3
+            subwcs = Tan(wcs)
+            subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
+            subwcs.set_imagesize(subw, subh)
+            ansub = anwcs_new_tan(subwcs)
+            out.wcs = ansub
+            out.fill = 0
             plot.plot('outline')
-            if len(name):
-                ok,r,d = out.wcs.pixelxy2radec(W/2, H/2)
-                plot.text_radec(r, d, name)
-
-        # Plot 1/4 x 1/4 WISE tile
-        plot.color = 'yellow'
-        wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
-        wcs = Tan(wcsfn)
-        W,H = wcs.get_width(), wcs.get_height()
-        nsub = 4
-        subw, subh = W/nsub, H/nsub
-        subx, suby = 0, 3
-        subwcs = Tan(wcs)
-        subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
-        subwcs.set_imagesize(subw, subh)
-        ansub = anwcs_new_tan(subwcs)
-        out.wcs = ansub
-        out.fill = 0
-        plot.plot('outline')
-
-        plot.color = 'gray'
-        plot.alpha = 0.5
-        plot.apply_settings()
-        plot.plot_grid(grid, grid, gridlab, gridlab)
-        fn = ps.getnext()
-        plot.write(fn)
-        print 'Wrote', fn
+    
+            plot.color = 'gray'
+            plot.alpha = 0.5
+            plot.apply_settings()
+            plot.plot_grid(grid, grid, gridlab, gridlab)
+            fn = ps.getnext()
+            plot.write(fn)
+            print 'Wrote', fn
 
     sys.exit(0)
 

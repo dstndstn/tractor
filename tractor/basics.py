@@ -288,6 +288,8 @@ class NanoMaggies(Fluxes):
 
     @staticmethod
     def fluxErrorsToMagErrors(flux, flux_invvar):
+        flux = np.atleast_1d(flux)
+        flux_invvar = np.atleast_1d(flux_invvar)
         dflux = np.zeros(len(flux))
         okiv = (flux_invvar > 0)
         dflux[okiv] = (1./np.sqrt(flux_invvar[okiv]))
