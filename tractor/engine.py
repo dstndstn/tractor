@@ -18,7 +18,6 @@ import resource
 import gc
 
 import numpy as np
-#import pylab as plt
 
 # Scipy deps -- pushed down to where they are used.
 # from scipy.sparse import csr_matrix, csc_matrix
@@ -26,11 +25,12 @@ import numpy as np
 # from scipy.ndimage.morphology import binary_dilation
 # from scipy.ndimage.measurements import label
 
-from astrometry.util.miscutils import get_overlapping_region
 from astrometry.util.multiproc import *
 from astrometry.util.ttime import *
-from utils import MultiParams, _isint, listmax
-from cache import *
+
+from .utils import MultiParams, _isint, listmax
+from .cache import *
+from .patch import *
 
 def logverb(*args):
     msg = ' '.join([str(x) for x in args])
@@ -61,7 +61,7 @@ class Image(MultiParams):
     can optimize them.
     '''
     def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
-                 photocal=None, name=None, domask=True, time=None, **kwargs):
+                 photocal=None, name=None, domask=False, time=None, **kwargs):
         '''
         Args:
           * *data*: numpy array: the image pixels
@@ -87,6 +87,18 @@ class Image(MultiParams):
         self.starMask = np.ones_like(self.data)
         self.zr = kwargs.pop('zr', None)
         self.time = time
+
+        # Fill in defaults, if necessary.
+        if wcs is None:
+            from .basics import NullWCS
+            wcs = NullWCS()
+        if sky is None:
+            from .basics import NullSky
+            sky = NullSky()
+        if photocal is None:
+            from .basics import NullPhotoCal
+            photocal = NullPhotoCal()
+            
         super(Image, self).__init__(psf, wcs, photocal, sky)
 
     def __str__(self):
@@ -111,7 +123,7 @@ class Image(MultiParams):
         derivs = []
         for s in self._getActiveSubs():
             if hasattr(s, 'getParamDerivatives'):
-                print 'Calling getParamDerivatives on', s
+                #print 'Calling getParamDerivatives on', s
                 sd = s.getParamDerivatives(tractor, self, srcs)
                 assert(len(sd) == s.numberOfParams())
                 derivs.extend(sd)
@@ -199,336 +211,78 @@ class Image(MultiParams):
     def getPhotoCal(self):
         return self.photocal
 
+    @staticmethod
+    def readFromFits(fits, prefix=''):
+        hdr = fits[0].read_header()
+        pix = fits[1].read()
+        iv = fits[2].read()
+        assert(pix.shape == iv.shape)
 
-# Adds two patches, handling the case when one is None
-def add_patches(pa, pb):
-    p = pa
-    if pb is not None:
-        if p is None:
-            p = pb
-        else:
-            p += pb
-    return p
-    
-class Patch(object):
-    '''
-    An image patch; a subimage.  In the Tractor we use these to hold
-    synthesized (ie, model) images.  The patch is a rectangular grid
-    of pixels and it knows its offset (2-d position) in some larger
-    image.
+        def readObject(prefix):
+            k = prefix
+            objclass = hdr[k]
+            names = objclass.split('.')
+            names = [n for n in names if len(n)]
+            pkg = '.'.join(names[:-1])
+            clazz = names[-1]
+            import importlib
+            mod = importlib.import_module(pkg)
+            print 'Module:', mod
+            clazz = getattr(mod, clazz)
+            print 'Class:', clazz
+            fromfits = getattr(clazz, 'fromFitsHeader')
+            print 'fromFits:', fromfits
+            obj = fromfits(hdr, prefix=prefix + '_')
+            print 'Got:', obj
+            return obj
 
-    This class overloads arithmetic operations (like add and multiply)
-    relevant to synthetic image patches.
-    '''
-    def __init__(self, x0, y0, patch):
-        self.x0 = x0
-        self.y0 = y0
-        self.patch = patch
-        self.name = ''
-        if patch is not None:
-            try:
-                H,W = patch.shape
-                self.size = H*W
-            except:
-                pass
+        psf = readObject(prefix + 'PSF')
+        wcs = readObject(prefix + 'WCS')
+        sky = readObject(prefix + 'SKY')
+        pcal = readObject(prefix + 'PHO')
 
-    def __str__(self):
-        s = 'Patch: '
-        name = getattr(self, 'name', '')
-        if len(name):
-            s += name + ' '
-        s += 'origin (%i,%i) ' % (self.x0, self.y0)
-        if self.patch is not None:
-            (H,W) = self.patch.shape
-            s += 'size (%i x %i)' % (W, H)
-        else:
-            s += '(no image)'
-        return s
-
-    def set(self, other):
-        self.x0 = other.x0
-        self.y0 = other.y0
-        self.patch = other.patch
-        self.name = other.name
-    
-    def trimToNonZero(self):
-        if self.patch is None:
-            return
-        H,W = self.patch.shape
-        if W == 0 or H == 0:
-            return
-        for x in range(W):
-            if not np.all(self.patch[:,x] == 0):
-                break
-        x0 = x
-        for x in range(W, 0, -1):
-            if not np.all(self.patch[:,x-1] == 0):
-                break
-            if x <= x0:
-                break
-        x1 = x
-
-        for y in range(H):
-            if not np.all(self.patch[y,:] == 0):
-                break
-        y0 = y
-        for y in range(H, 0, -1):
-            if not np.all(self.patch[y-1,:] == 0):
-                break
-            if y <= y0:
-                break
-        y1 = y
-
-        if x0 == 0 and y0 == 0 and x1 == W and y1 == H:
-            return
-
-        self.patch = self.patch[y0:y1, x0:x1]
-        H,W = self.patch.shape
-        if H == 0 or W == 0:
-            self.patch = None
-        self.x0 += x0
-        self.y0 += y0
-
-    def overlapsBbox(self, bbox):
-        ext = self.getExtent()
-        (x0,x1,y0,y1) = ext
-        (ox0,ox1,oy0,oy1) = bbox
-        if x0 >= ox1 or ox0 >= x1 or y0 >= oy1 or oy0 >= y1:
-            return False
-        return True
-
-    def hasBboxOverlapWith(self, other):
-        oext = other.getExtent()
-        return self.overlapsBbox(oext)
+        return Image(data=pix, invvar=iv, psf=psf, wcs=wcs, sky=sky,
+                     photocal=pcal)
         
-    def hasNonzeroOverlapWith(self, other):
-        if not self.hasBboxOverlapWith(other):
-            return False
-        ext = self.getExtent()
-        (x0,x1,y0,y1) = ext
-        oext = other.getExtent()
-        (ox0,ox1,oy0,oy1) = oext
-        ix,ox = get_overlapping_region(ox0, ox1-1, x0, x1-1)
-        iy,oy = get_overlapping_region(oy0, oy1-1, y0, y1-1)
-        ix = slice(ix.start -  x0, ix.stop -  x0)
-        iy = slice(iy.start -  y0, iy.stop -  y0)
-        sub = self.patch[iy,ix]
-        osub = other.patch[oy,ox]
-        assert(sub.shape == osub.shape)
-        return np.sum(sub * osub) > 0.
+    def toFits(self, fits, prefix=''):
+        psf = self.getPsf()
+        wcs = self.getWcs()
+        sky = self.getSky()
+        pcal = self.getPhotoCal()
+        
+        import fitsio
+        hdr = fitsio.FITSHDR()
+        tt = type(psf)
+        psf_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(wcs)
+        wcs_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(sky)
+        sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+        tt = type(pcal)
+        pcal_type = '%s.%s' % (tt.__module__, tt.__name__)
+        hdr.add_record(dict(name=prefix + 'PSF', value=psf_type,
+                            comment='PSF class'))
+        hdr.add_record(dict(name=prefix + 'WCS', value=wcs_type,
+                            comment='WCS class'))
+        hdr.add_record(dict(name=prefix + 'SKY', value=sky_type,
+                            comment='Sky class'))
+        hdr.add_record(dict(name=prefix + 'PHO', value=pcal_type,
+                            comment='PhotoCal class'))
+        psf.toFitsHeader(hdr,  prefix + 'PSF_')
+        wcs.toFitsHeader(hdr,  prefix + 'WCS_')
+        sky.toFitsHeader(hdr,  prefix + 'SKY_')
+        pcal.toFitsHeader(hdr, prefix + 'PHO_')
 
-    def getNonZeroMask(self):
-        nz = (self.patch != 0)
-        return Patch(self.x0, self.y0, nz)
+        fits.write(None, header=hdr)
+        fits.write(self.getImage())
+        fits.write(self.getInvvar())
+        #fits = fitsio.FITS('subtim.fits', 'rw', clobber=True)
+        #fits.close()
+        #sys.exit(0)
+        
+
     
-    def __repr__(self):
-        return str(self)
-    def setName(self, name):
-        self.name = name
-    def getName(self):
-        return self.name
-
-    # for Cache
-    #def size(self):
-    #   (H,W) = self.patch.shape
-    #   return H*W
-    def copy(self):
-        if self.patch is None:
-            return Patch(self.x0, self.y0, None)
-        return Patch(self.x0, self.y0, self.patch.copy())
-
-    def getExtent(self, margin=0.):
-        ''' Return (x0, x1, y0, y1) '''
-        (h,w) = self.shape
-        return (self.x0-margin, self.x0 + w + margin,
-                self.y0-margin, self.y0 + h + margin)
-
-    def getOrigin(self):
-        return (self.x0,self.y0)
-    def getPatch(self):
-        return self.patch
-    def getImage(self):
-        return self.patch
-    def getX0(self):
-        return self.x0
-    def getY0(self):
-        return self.y0
-
-    def clipTo(self, W, H):
-        if self.patch is None:
-            return False
-        if self.x0 >= W:
-            # empty
-            self.patch = None
-            return False
-        if self.y0 >= H:
-            self.patch = None
-            return False
-        # debug
-        o0 = (self.x0, self.y0, self.patch.shape)
-        if self.x0 < 0:
-            self.patch = self.patch[:, -self.x0:]
-            self.x0 = 0
-        if self.y0 < 0:
-            self.patch = self.patch[-self.y0:, :]
-            self.y0 = 0
-        # debug
-        S = self.patch.shape
-        if len(S) != 2:
-            print 'clipTo: shape', self.patch.shape
-            print 'original offset and patch shape:', o0
-            print 'current offset and patch shape:', self.x0, self.y0, self.patch.shape
-
-        (h,w) = self.patch.shape
-        if (self.x0 + w) > W:
-            self.patch = self.patch[:, :(W - self.x0)]
-        if (self.y0 + h) > H:
-            self.patch = self.patch[:(H - self.y0), :]
-
-        assert(self.x0 >= 0)
-        assert(self.y0 >= 0)
-        (h,w) = self.shape
-        assert(w <= W)
-        assert(h <= H)
-        assert(self.shape == self.patch.shape)
-        return True
-
-
-    #### WARNing, this function has not been tested
-    def clipToRoi(self, x0,x1,y0,y1):
-        if self.patch is None:
-            return False
-        if ((self.x0 >= x1) or (self.x1 <= x0) or
-            (self.y0 >= y1) or (self.y1 <= y0)):
-            # empty
-            self.patch = None
-            return False
-
-        if self.x0 < x0:
-            self.patch = self.patch[:, x0-self.x0:]
-            self.x0 = x0
-        if self.y0 < y0:
-            self.patch = self.patch[(y0-self.y0):, :]
-            self.y0 = y0
-        (h,w) = self.shape
-        if (self.x0 + w) > x1:
-            self.patch = self.patch[:, :(x1 - self.x0)]
-        if (self.y0 + h) > y1:
-            self.patch = self.patch[:(y1 - self.y0), :]
-        return True
-
-
-    def getSlice(self, parent=None):
-        if self.patch is None:
-            return ([],[])
-        (ph,pw) = self.patch.shape
-        if parent is not None:
-            (H,W) = parent.shape
-            return (slice(np.clip(self.y0, 0, H), np.clip(self.y0+ph, 0, H)),
-                    slice(np.clip(self.x0, 0, W), np.clip(self.x0+pw, 0, W)))
-        return (slice(self.y0, self.y0+ph),
-                slice(self.x0, self.x0+pw))
-
-    def getPixelIndices(self, parent):
-        if self.patch is None:
-            return np.array([], np.int)
-        (h,w) = self.shape
-        (H,W) = parent.shape
-        X,Y = np.meshgrid(np.arange(w), np.arange(h))
-        return (Y.ravel() + self.y0) * W + (X.ravel() + self.x0)
-
-    plotnum = 0
-
-    def addTo(self, img, scale=1.):
-        if self.patch is None:
-            return
-        (ih,iw) = img.shape
-        (ph,pw) = self.shape
-        (outx, inx) = get_overlapping_region(self.x0, self.x0+pw-1, 0, iw-1)
-        (outy, iny) = get_overlapping_region(self.y0, self.y0+ph-1, 0, ih-1)
-        if inx == [] or iny == []:
-            return
-        p = self.patch[iny,inx]
-        img[outy, outx] += p * scale
-
-        # if False:
-        #   tmpimg = np.zeros_like(img)
-        #   tmpimg[outy,outx] = p * scale
-        #   plt.clf()
-        #   plt.imshow(tmpimg, interpolation='nearest', origin='lower')
-        #   plt.hot()
-        #   plt.colorbar()
-        #   fn = 'addto-%03i.png' % Patch.plotnum
-        #   plt.savefig(fn)
-        #   print 'Wrote', fn
-        # 
-        #   plt.clf()
-        #   plt.imshow(p, interpolation='nearest', origin='lower')
-        #   plt.hot()
-        #   plt.colorbar()
-        #   fn = 'addto-%03i-p.png' % Patch.plotnum
-        #   plt.savefig(fn)
-        #   print 'Wrote', fn
-        # 
-        #   Patch.plotnum += 1
-
-    def __getattr__(self, name):
-        if name == 'shape':
-            if self.patch is None:
-                return (0,0)
-            return self.patch.shape
-        raise AttributeError('Patch: unknown attribute "%s"' % name)
-
-    def __mul__(self, flux):
-        if self.patch is None:
-            return Patch(self.x0, self.y0, None)
-        return Patch(self.x0, self.y0, self.patch * flux)
-    def __div__(self, x):
-        if self.patch is None:
-            return Patch(self.x0, self.y0, None)
-        return Patch(self.x0, self.y0, self.patch / x)
-
-    def performArithmetic(self, other, opname, otype=float):
-        assert(isinstance(other, Patch))
-        if (self.x0 == other.getX0() and self.y0 == other.getY0() and
-            self.shape == other.shape):
-            assert(self.x0 == other.getX0())
-            assert(self.y0 == other.getY0())
-            assert(self.shape == other.shape)
-            if self.patch is None or other.patch is None:
-                return Patch(self.x0, self.y0, None)
-            pcopy = self.patch.copy()
-            op = getattr(pcopy, opname)
-            return Patch(self.x0, self.y0, op(other.patch))
-
-        (ph,pw) = self.patch.shape
-        (ox0,oy0) = other.getX0(), other.getY0()
-        (oh,ow) = other.shape
-
-        # Find the union of the regions.
-        ux0 = min(ox0, self.x0)
-        uy0 = min(oy0, self.y0)
-        ux1 = max(ox0 + ow, self.x0 + pw)
-        uy1 = max(oy0 + oh, self.y0 + ph)
-
-        p = np.zeros((uy1 - uy0, ux1 - ux0), dtype=otype)
-        p[self.y0 - uy0 : self.y0 - uy0 + ph,
-          self.x0 - ux0 : self.x0 - ux0 + pw] = self.patch
-
-        psub = p[oy0 - uy0 : oy0 - uy0 + oh,
-                 ox0 - ux0 : ox0 - ux0 + ow]
-        op = getattr(psub, opname)
-        op(other.getImage())
-        return Patch(ux0, uy0, p)
-
-    def __add__(self, other):
-        return self.performArithmetic(other, '__iadd__')
-
-    def __sub__(self, other):
-        return self.performArithmetic(other, '__isub__')
-
-
-
+        
 class Catalog(MultiParams):
     '''
     A list of Source objects.  This class allows the Tractor to treat
@@ -572,13 +326,6 @@ class Catalog(MultiParams):
     def getNamedParamName(self, j):
         return 'source%i' % j
 
-    def thawSourcesInCircle(self, pos, radius):
-        for i,src in enumerate(self):
-            if src.overlapsCircle(pos, radius):
-                self.thawParam(i)
-            
-
-
 class Images(MultiParams):
     """
     This is a class for holding a list of `Image` objects, each which
@@ -599,7 +346,7 @@ def getmodelimagestep((tr, j, k, p0, step)):
     im.setParam(k, p0)
     return mod
 def getmodelimagefunc((tr, imj)):
-    print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
+    #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
 def getsrcderivs((src, img)):
     return src.getParamDerivatives(img)
@@ -653,11 +400,8 @@ class Tractor(MultiParams):
         super(Tractor,self).__init__(images, catalog)
         self._setup(mp=mp)
 
-    # def __del__(self):
-    #   # dstn is not sure this is necessary / useful
-    #   if self.cache is not None:
-    #       self.cache.clear()
-    #   del self.cache
+    def disable_cache(self):
+        self.cache = None
 
     def _setup(self, mp=None, cache=None, pickleCache=False):
         if mp is None:
@@ -671,7 +415,13 @@ class Tractor(MultiParams):
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
-        s += ' (' + ', '.join([im.name for im in self.images]) + ')'
+        names = []
+        for im in self.images:
+            if im.name is None:
+                names.append('[unnamed]')
+            else:
+                names.append(im.name)
+        s += ' (' + ', '.join(names) + ')'
         return s
 
     def is_multiproc(self):
@@ -684,27 +434,16 @@ class Tractor(MultiParams):
 
     # For use from emcee
     def __call__(self, X):
-        # print self.getName()+'.__call__: I am pid', os.getpid()
         self.setParams(X)
-        lnp = self.getLogProb()
-        # print self.cache
-        # from .sdss_galaxy import get_galaxy_cache
-        # print 'Galaxy cache:', get_galaxy_cache()
-        # print 'Items:'
-        # self.cache.printItems()
-        # print
-        return lnp
+        return self.getLogProb()
 
     # For pickling
     def __getstate__(self):
-        #print 'pickling tractor in pid', os.getpid()
         S = (self.getImages(), self.getCatalog(), self.liquid)
         if self.pickleCache:
             S = S + (self.cache,)
-        #print 'Tractor.__getstate__:', S
         return S
     def __setstate__(self, state):
-        #print 'unpickling tractor in pid', os.getpid()
         args = {}
         if len(state) == 3:
             (images, catalog, liquid) = state
@@ -869,6 +608,150 @@ class Tractor(MultiParams):
                 plt.ylabel('L-BFGS-B iteration number')
             plt.savefig(plotfn)
 
+    def getDynamicScales(self):
+        '''
+        Returns parameter step sizes that will result in changes in
+        chi^2 of about 1.0
+        '''
+        scales = np.zeros(self.numberOfParams())
+        for i in range(self.getNImages()):
+            derivs = self._getOneImageDerivs(i)
+            for j,x0,y0,der in derivs:
+                scales[j] += np.sum(der**2)
+        scales = np.sqrt(scales)
+        I = (scales != 0)
+        if any(I):
+            scales[I] = 1./scales[I]
+        I = (scales == 0)
+        if any(I):
+            scales[I] = np.array(self.getStepSizes())[I]
+        return scales
+        
+    def _ceres_opt(self, variance=False, scale_columns=True,
+                   numeric=False, scaled=True, numeric_stepsize=0.1,
+                   dynamic_scale=True,
+                   dlnp = 1e-3, max_iterations=0):
+        from ceres import ceres_opt
+
+        pp = self.getParams()
+        if len(pp) == 0:
+            return None
+
+        if scaled:
+            p0 = np.array(pp)
+
+            if dynamic_scale:
+                scales = self.getDynamicScales()
+                # print 'Dynamic scales:', scales
+
+            else:
+                scales = np.array(self.getStepSizes())
+            
+            # Offset all the parameters so that Ceres sees them all
+            # with value 1.0
+            p0 -= scales
+            params = np.ones_like(p0)
+        
+            scaler = ScaledTractor(self, p0, scales)
+            tractor = scaler
+
+        else:
+            params = np.array(pp)
+            tractor = self
+
+        variance_out = None
+        if variance:
+            variance_out = np.zeros_like(params)
+
+        R = ceres_opt(tractor, self.getNImages(), params, variance_out,
+                      (1 if scale_columns else 0),
+                      (1 if numeric else 0), numeric_stepsize,
+                      dlnp, max_iterations)
+        if variance:
+            R['variance'] = variance_out
+
+        if scaled:
+            print 'Opt. in scaled space:', params
+            self.setParams(p0 + params * scales)
+            variance_out *= scales**2
+            R['params0'] = p0
+            R['scales'] = scales
+
+        return R
+        
+    # This function is called-back by _ceres_opt; it is called from
+    # ceres-tractor.cc via ceres.i .
+    def _getOneImageDerivs(self, imgi):
+        # Returns:
+        #     [  (param-index, deriv_x0, deriv_x0, deriv), ... ]
+        # not necessarily in order of param-index
+        #
+        # NOTE, this scales the derivatives by inverse-error and -1 to
+        # yield derivatives of CHI with respect to PARAMs; NOT the
+        # model image wrt params.
+        #
+        allderivs = []
+
+        # First, derivs for Image parameters (because 'images' comes
+        # first in the tractor's parameters)
+        parami = 0
+        img = self.images[imgi]
+        cat = self.catalog
+        if not self.isParamFrozen('images'):
+            for i in self.images.getThawedParamIndices():
+                if i == imgi:
+                    # Give the image a chance to compute its own derivs
+                    derivs = img.getParamDerivatives(self, cat)
+                    needj = []
+                    for j,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        if deriv is False:
+                            needj.append(j)
+                            continue
+                        allderivs.append((parami + j, deriv))
+
+                    if len(needj):
+                        mod0 = self.getModelImage(i)
+                        p0 = img.getParams()
+                        ss = img.getStepSizes()
+                    for j in needj:
+                        step = ss[j]
+                        img.setParam(j, p0[j]+step)
+                        modj = self.getModelImage(i)
+                        img.setParam(j, p0[j])
+                        deriv = Patch(0, 0, (modj - mod0) / step)
+                        allderivs.append((parami + j, deriv))
+
+                parami += self.images[i].numberOfParams()
+
+            assert(parami == self.images.numberOfParams())
+            
+        srcs = list(self.catalog.getThawedSources())
+        for src in srcs:
+            derivs = src.getParamDerivatives(img)
+            for j,deriv in enumerate(derivs):
+                if deriv is None:
+                    continue
+                allderivs.append((parami + j, deriv))
+            parami += src.numberOfParams()
+
+        assert(parami == self.numberOfParams())
+        # Clip and unpack the (x0,y0,patch) elements for ease of use from C (ceres)
+        # Also scale by -1 * inverse-error to get units of dChi here.
+        ie = img.getInvError()
+        H,W = img.shape
+        chiderivs = []
+        for ind,d in allderivs:
+            d.clipTo(W,H)
+            if d.patch is None:
+                continue
+            deriv = -1. * d.patch.astype(np.float64) * ie[d.getSlice()]
+            chiderivs.append((ind, d.x0, d.y0, deriv))
+            
+        return chiderivs
+    
+            
     def _ceres_forced_photom(self, result, umodels,
                              imlist, mods0, scales,
                              skyderivs, minFlux,
@@ -971,7 +854,10 @@ class Tractor(MultiParams):
                 for by in range(by0, by1+1):
                     for bx in range(bx0, bx1+1):
                         bi = by * nbw + bx
-                        dd = (ceresparam, umod.x0, umod.y0, cmod)
+                        #if type(umod.x0) != int or type(umod.y0) != int:
+                        #    print 'umod:', umod.x0, umod.y0, type(umod.x0), type(umod.y0)
+                        #    print 'umod:', umod
+                        dd = (ceresparam, int(umod.x0), int(umod.y0), cmod)
                         blocks[b0 + bi][1].append(dd)
         logverb('forced phot: dicing up', Time()-t0)
                         
@@ -1021,7 +907,18 @@ class Tractor(MultiParams):
         return x
 
     def _get_fitstats(self, imsBest, srcs, imlist, umodsforsource,
-                      umodels, scales, nilcounts):
+                      umodels, scales, nilcounts, extras=[]):
+        '''
+        extras: [ ('key', [eim0,eim1,eim2]), ... ]
+
+        Extra fields to add to the "FitStats" object, populated by
+        taking the profile-weighted sum of 'eim*'.  The number of
+        these images *must* match the number and shape of Tractor
+        images.
+        '''
+        if extras is None:
+            extras = []
+
         class FitStats(object):
             pass
         fs = FitStats()
@@ -1047,7 +944,11 @@ class Tractor(MultiParams):
         # total number of pixels touched by this source
         fs.npix = np.zeros(len(srcs), int)
 
-        # subtract sky from models before measuring others' flux within my profile
+        for key,x in extras:
+            setattr(fs, key, np.zeros(len(srcs)))
+
+        # subtract sky from models before measuring others' flux
+        # within my profile
         skies = []
         for tim,(img,mod,ie,chi,roi) in zip(imlist, imsBest):
             tim.getSky().addTo(mod, scale=-1.)
@@ -1117,6 +1018,11 @@ class Tractor(MultiParams):
                 # scale to nanomaggies, weight by profile
                 fs.proflux[si] += np.sum((np.abs((mod[slc] - srcmod[slc]*csum) / scale) * np.abs(srcmod[slc])).flat[nz])
                 fs.npix[si] += len(nz)
+
+                for key,extraims in extras:
+                    x = getattr(fs, key)
+                    x[si] += np.sum(np.abs(srcmod[slc].flat[nz]) * extraims[imi][slc].flat[nz])
+
                 srcmod[slc] = 0.
 
         # re-add sky
@@ -1482,6 +1388,7 @@ class Tractor(MultiParams):
                                    sky=False,
                                    minFlux=None,
                                    fitstats=False,
+                                   fitstat_extras=None,
                                    justims0=False,
                                    variance=False,
                                    skyvariance=False,
@@ -1647,17 +1554,25 @@ class Tractor(MultiParams):
         elif fitstats:
             t0 = Time()
             result.fitstats = self._get_fitstats(imsBest, srcs, imlist, umodsforsource,
-                                                 umodels, scales, nilcounts)
+                                                 umodels, scales, nilcounts, extras=fitstat_extras)
             logverb('forced phot: fit stats:', Time()-t0)
         return result
 
 
     def optimize(self, alphas=None, damp=0, priors=True, scale_columns=True,
-                 shared_params=True, variance=False):
+                 shared_params=True, variance=False, just_variance=False):
         '''
         Performs *one step* of linearized least-squares + line search.
         
         Returns (delta-logprob, parameter update X, alpha stepsize)
+
+        If variance=True,
+
+        Returns (delta-logprob, parameter update X, alpha stepsize, variance)
+
+        If just_variance=True,
+
+        Return variance.
         '''
         logverb(self.getName()+': Finding derivs...')
         t0 = Time()
@@ -1675,7 +1590,11 @@ class Tractor(MultiParams):
                                     shared_params=shared_params,
                                     variance=variance)
         if variance:
+            if len(X) == 0:
+                return 0, X, 0, None
             X,var = X
+            if just_variance:
+                return var
         #print Time() - t0
         topt = Time()-t0
         #print 'X:', X
@@ -1748,12 +1667,20 @@ class Tractor(MultiParams):
 
 
     def getDerivs(self):
-        # Returns:
-        # allderivs: [
-        #    (param0:)  [  (deriv, img), (deriv, img), ... ],
-        #    (param1:)  [],
-        #    (param2:)  [  (deriv, img), ],
-        # ]
+        '''
+        Computes model-image derivatives for each parameter.
+        
+        Returns a nested list of tuples:
+
+        allderivs: [
+           (param0:)  [  (deriv, img), (deriv, img), ... ],
+           (param1:)  [],
+           (param2:)  [  (deriv, img), ],
+        ]
+
+        Where the *derivs* are *Patch* objects and *imgs* are *Image*
+        objects.
+        '''
         allderivs = []
 
         # First, derivs for Image parameters (because 'images' comes first in the
@@ -2040,14 +1967,8 @@ class Tractor(MultiParams):
             # not convinced it's worth the effort right now.
             X = self.getLogPriorDerivatives()
             if X is not None:
-
-                print
-                print 'Warning: using priors; dstn was monkeying with'
-                print 'the code and the getLogPriorDerivatives() API has'
-                print 'changed: cA must be *integers*, not np arrays'
-                print
-                
                 rA,cA,vA,pb = X
+
                 sprows.extend([ri + Nrows for ri in rA])
                 spcols.extend(cA)
                 spvals.extend([vi / colscales[ci] for vi,ci in zip(vA,cA)])
@@ -2055,11 +1976,11 @@ class Tractor(MultiParams):
                 nr = listmax(rA, -1) + 1
                 Nrows += nr
                 logverb('Nrows was %i, added %i rows of priors => %i' % (oldnrows, nr, Nrows))
-                #print 'cA', cA
-                #print 'max', np.max(cA)
-                #print 'max', np.max(cA)+1
-                #print 'Ncols', Ncols
-                Ncols = max(Ncols, listmax(cA, -1) + 1)
+                # if len(cA) == 0:
+                #     Ncols = 0
+                # else:
+                #     Ncols = 1 + max(cA)
+
                 b = np.zeros(Nrows)
                 b[oldnrows:] = np.hstack(pb)
 
@@ -2139,11 +2060,6 @@ class Tractor(MultiParams):
             print 'sprows:', len(sprows), 'chunks'
             print '  total', sum(len(x) for x in sprows), 'elements'
 
-            # print 'spcols:', spcols
-            # print 'sprows:', sprows
-            # print 'spvals:', spvals
-            # print 'b:', b
-            
             ucols,colI = np.unique(spcols, return_inverse=True)
             J = np.argsort(colI)
 
@@ -2190,11 +2106,6 @@ class Tractor(MultiParams):
                             bcomp, nrcomp, Nelements)
             print 'Got TSNNLS result:', X
 
-            # print 'spcols:', spcols
-            # print 'ucols:', ucols
-            # print 'colI:', colI
-            # print 'sorted_cols:', sorted_cols
-            
             # Undo the column mappings
             X2 = np.zeros(len(allderivs))
             #X2[colI] = X
@@ -2221,7 +2132,7 @@ class Tractor(MultiParams):
             spcols = cc
             assert(i == len(sprows))
             assert(len(sprows) == len(spcols))
-    
+
             logverb('  Number of sparse matrix elements:', len(sprows))
             urows = np.unique(sprows)
             ucols = np.unique(spcols)
@@ -2329,35 +2240,22 @@ class Tractor(MultiParams):
         return src.getModelPatch(img, **kwargs)
 
     def getModelPatch(self, img, src, minsb=0., **kwargs):
-        # print
-        # print 'getModelPatch.'
-        # print 'src', src
-        # print '-> hashkey', src.hashkey()
-        # print 'img', img
-        # print '-> hashkey', img.hashkey()
-        # print
+        if self.cache is None:
+            # shortcut
+            return src.getModelPatch(img, **kwargs)
+
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
         mv,mod = self.cache.get(deps, (0.,None))
         if mv > minsb:
             mod = None
         if mod is not None:
-            #logverb('  Cache hit for model patch: image ' + str(img) +
-            #       ', source ' + str(src))
-            #logverb('  image hashkey ' + str(img.hashkey()))
-            #logverb('  source hashkey ' + str(src.hashkey()))
             pass
         else:
-            #logverb('  Cache miss for model patch: image ' + str(img) +
-            #       ', source ' + str(src))
-            #logverb('  image hashkey ' + str(img.hashkey()))
-            #logverb('  source hashkey ' + str(src.hashkey()))
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
-            #print 'Caching model image'
             self.cache.put(deps, (minsb,mod))
         return mod
 
-    #def getModelImageNoCache(self, img, srcs=None, sky=True):
     def getModelImage(self, img, srcs=None, sky=True, minsb=0.):
         '''
         Create a model image for the given "tractor image", including
@@ -2367,7 +2265,6 @@ class Tractor(MultiParams):
         '''
         if _isint(img):
             img = self.getImage(img)
-        #print 'getModelImage: for image', img
         mod = np.zeros(img.getModelShape(), self.modtype)
         if sky:
             img.sky.addTo(mod)
@@ -2376,29 +2273,9 @@ class Tractor(MultiParams):
         for src in srcs:
             patch = self.getModelPatch(img, src, minsb=minsb)
             if patch is None:
-                #print 'None patch: src is', src
-                #print 'position is', img.getWcs().positionToPixel(src.pos, src)
                 continue
             patch.addTo(mod)
         return mod
-
-    #def getModelImage(self, img, srcs=None, sky=True):
-    #   return self.getModelImageNoCache(img, srcs=srcs, sky=sky)
-    '''
-    def getModelImage(self, img):
-        # dependencies of this model image:
-        deps = (img.hashkey(), self.catalog.hashkey())
-        deps = hash(deps)
-        mod = self.cache.get(deps, None)
-        if mod is not None:
-            #print '  Cache hit!'
-            mod = mod.copy()
-        else:
-            mod = self.getModelImageNoCache(img)
-            #print 'Caching model image'
-            self.cache[deps] = mod
-        return mod
-    '''
 
     def getOverlappingSources(self, img, srcs=None, minsb=0.):
         from scipy.ndimage.morphology import binary_dilation
@@ -2509,7 +2386,8 @@ class Tractor(MultiParams):
         if img is None:
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
-        return (img.getImage() - mod) * img.getInvError()
+        chi = (img.getImage() - mod) * img.getInvError()
+        return chi
 
     def getNdata(self):
         count = 0
@@ -2528,7 +2406,10 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        lnp = self.getLogLikelihood() + self.getLogPrior()
+        lnp = self.getLogPrior()
+        if lnp == -np.inf:
+            return lnp
+        lnp += self.getLogLikelihood()
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'
@@ -2561,271 +2442,25 @@ class Tractor(MultiParams):
         roi = nzsum.getExtent()
         return roi
     
-    def createNewSource(self, img, x, y, height):
-        return None
 
-    def debugNewSource(self, *args, **kwargs):
-        pass
 
-    def createSource(self, nbatch=1, imgi=None, jointopt=False,
-                     avoidExisting=True):
-        logverb('createSource')
-        '''
-        -synthesize images
-        -look for "promising" x,y image locations with positive residuals
-        - (not near existing sources)
-        ---chi image, PSF smooth, propose positions?
-        -instantiate new source (Position, brightness)
-        -local optimizeAtFixedComplexity
-        '''
-        if imgi is None:
-            imgi = range(self.getNImages())
+    
+class ScaledTractor(object):
+    def __init__(self, tractor, p0, scales):
+        self.tractor = tractor
+        self.offset = p0
+        self.scale = scales
+    def getImage(self, i):
+        return self.tractor.getImage(i)
+    def getChiImage(self, i):
+        return self.tractor.getChiImage(i)
+    def _getOneImageDerivs(self, i):
+        derivs = self.tractor._getOneImageDerivs(i)
+        for (ind, x0, y0, der) in derivs:
+            der *= self.scale[ind]
+            #print 'Derivative', ind, 'has RSS', np.sqrt(np.sum(der**2))
+        return derivs
+    def setParams(self, p):
+        #print 'ScaledTractor: setParams', p
+        return self.tractor.setParams(self.offset + self.scale * p)
         
-        for i in imgi:
-            for b in range(nbatch):
-                chi = self.getChiImage(i)
-                img = self.getImage(i)
-
-                if avoidExisting:
-                    # block out regions around existing Sources.
-                    for j,src in enumerate(self.catalog):
-                        patch = self.getModelPatch(img, src)
-                        (H,W) = img.shape
-                        if not patch.clipTo(W, H):
-                            continue
-                        chi[patch.getSlice()] = 0.
-
-                # PSF-correlate
-                sm = img.getPsf().applyTo(chi)
-                debugargs = dict(imgi=i, img=img, chiimg=chi, smoothed=sm)
-                self.debugNewSource(type='chi-smoothed', **debugargs)
-
-                # Try to create sources in the highest-valued pixels.
-                # FIXME -- should do peak-finding (ie, non-maximal rejection)
-                II = np.argsort(-sm.ravel())
-                # MAGIC: number of pixels to try.
-                for ii,I in enumerate(II[:10]):
-                    (H,W) = sm.shape
-                    ix = I%W
-                    iy = I/W
-                    # this is just the peak pixel height difference...
-                    ht = (img.getImage() - self.getModelImage(img))[iy,ix]
-                    logverb('Requesting new source at x,y', (ix,iy))
-                    src = self.createNewSource(img, ix, iy, ht)
-                    logverb('Got:', src)
-                    debugargs['src'] = src
-                    self.debugNewSource(type='newsrc-0', **debugargs)
-                    # try adding the new source...
-                    pBefore = self.getLogProb()
-                    logverb('log-prob before:', pBefore)
-                    if jointopt:
-                        oldcat = self.catalog.deepcopy()
-
-                    self.catalog.append(src)
-
-                    # individually optimizing the newly-added
-                    # source...
-                    for ostep in range(20):
-                        logverb('Optimizing the new source (step %i)...' % (ostep+1))
-                        dlnprob,X,alpha = self.optimizeCatalogAtFixedComplexityStep(srcs=[src])
-                        logverb('After:', src)
-                        self.debugNewSource(type='newsrc-opt', step=ostep, dlnprob=dlnprob,
-                                            **debugargs)
-                        if dlnprob < 1.:
-                            logverb('failed to improve the new source enough (d lnprob = %g)' % dlnprob)
-                            break
-
-                    # Try changing the newly-added source type?
-                    # print 'Trying to change the source type of the newly-added source'
-                    # self.changeSourceTypes(srcs=[src])
-                    
-                    if jointopt:
-                        # then the whole catalog
-                        logverb('Optimizing the catalog with the new source...')
-                        self.optimizeCatalogAtFixedComplexityStep()
-
-                    pAfter = self.getLogProb()
-                    logverb('delta log-prob:', (pAfter - pBefore))
-
-                    if pAfter > pBefore:
-                        logverb('Keeping new source')
-                        break
-
-                    else:
-                        logverb('Rejecting new source')
-                        # revert the catalog
-                        if jointopt:
-                            self.catalog = oldcat
-                        else:
-                            self.catalog.pop()
-
-
-    def increasePsfComplexity(self, imagei):
-        print 'Increasing complexity of PSF in image', imagei
-        pBefore = self.getLogProb()
-        img = self.getImage(imagei)
-        psf = img.getPsf()
-        psfk = psf.proposeIncreasedComplexity(img)
-
-        print 'Trying to increase PSF complexity'
-        print 'from:', psf
-        print 'to  :', psfk
-
-        img.setPsf(psfk)
-        pAfter = self.getLogProb()
-
-        print 'Before increasing PSF complexity: log-prob', pBefore
-        print 'After  increasing PSF complexity: log-prob', pAfter
-
-        self.optimizePsfAtFixedComplexityStep(imagei)
-        pAfter2 = self.getLogProb()
-
-        print 'Before increasing PSF complexity: log-prob', pBefore
-        print 'After  increasing PSF complexity: log-prob', pAfter
-        print 'After  tuning:                    log-prob', pAfter2
-
-        # HACKY: want to be better, and to have successfully optimized...
-        if pAfter2 > pAfter+1. and pAfter2 > pBefore+2.:
-            print 'Accepting PSF change!'
-        else:
-            print 'Rejecting PSF change!'
-            img.setPsf(psf)
-
-        print 'PSF is', img.getPsf()
-
-    def increaseAllPsfComplexity(self):
-        for i in range(len(self.images)):
-            self.increasePsfComplexity(i)
-
-    def changeSource(self, source):
-        '''
-        Proposes a list of alternatives, where each is a lists of new
-        Sources that the given Source could be changed into.
-        '''
-        return []
-
-    def debugChangeSources(self, **kwargs):
-        pass
-
-    def changeSourceTypes(self, srcs=None, jointopt=False):
-        '''
-        Returns a list of booleans of length "srcs": whether the
-        sources were changed or not.
-        '''
-        logverb('changeSourceTypes')
-        pBefore = self.getLogProb()
-        logverb('log-prob before:', pBefore)
-
-        didchange = []
-
-        oldcat = self.catalog
-        ncat = len(oldcat)
-
-        # We can't just loop over "srcs" -- because when we accept a
-        # change, the catalog changes!
-        # FIXME -- with this structure, we try to change new sources that
-        # we have just added.
-        i = -1
-        ii = -1
-        while True:
-            i += 1
-            logverb('changeSourceTypes: source', i)
-            self.catalog = oldcat
-
-            if srcs is None:
-                # go through self.catalog using "ii" as the index.
-                # (which is updated within the loop when self.catalog is mutated)
-                ii += 1
-                if ii >= len(self.catalog):
-                    break
-                if ii >= ncat:
-                    break
-                logverb('  changing source index', ii)
-                src = self.catalog[ii]
-                logmsg('Considering change to source:', src)
-            else:
-                if i >= len(srcs):
-                    break
-                src = srcs[i]
-
-            # Prevent too-easy switches due to the current source not being optimized.
-            pBefore = self.getLogProb()
-            logverb('Optimizing source before trying to change it...')
-            self.optimizeCatalogLoop(srcs=[src], sky=False)
-            logmsg('After optimizing source:', src)
-            pAfter = self.getLogProb()
-            logverb('delta-log-prob:', pAfter - pBefore)
-            pBefore = pAfter
-
-            bestlogprob = pBefore
-            bestalt = -1
-            bestparams = None
-
-            alts = self.changeSource(src)
-            self.debugChangeSources(step='start', src=src, alts=alts)
-            srcind = oldcat.index(src)
-            for j,newsrcs in enumerate(alts):
-                newcat = oldcat.deepcopy()
-                rsrc = newcat.pop(srcind)
-                newcat.extend(newsrcs)
-                logverb('Trying change:')
-                logverb('  from', src)
-                logverb('  to  ', newsrcs)
-                self.catalog = newcat
-
-                self.debugChangeSources(step='init', src=src, newsrcs=newsrcs, alti=j)
-
-                # first try individually optimizing the newly-added
-                # sources...
-                self.optimizeCatalogLoop(srcs=newsrcs, sky=False)
-                logverb('After optimizing new sources:')
-                for ns in newsrcs:
-                    logverb('  ', ns)
-                self.debugChangeSources(step='opt0', src=src, newsrcs=newsrcs, alti=j)
-                if jointopt:
-                    self.optimizeCatalogAtFixedComplexityStep(sky=False)
-
-                pAfter = self.getLogProb()
-                logverb('delta-log-prob:', pAfter - pBefore)
-
-                self.debugChangeSources(step='opt1', src=src, newsrcs=newsrcs, alti=j, dlnprob=pAfter-pBefore)
-
-                if pAfter > bestlogprob:
-                    logverb('Best change so far!')
-                    bestlogprob = pAfter
-                    bestalt = j
-                    bestparams = newcat.getParams()
-
-            if bestparams is not None:
-                #print 'Switching to new catalog!'
-                # We want to update "oldcat" in-place (rather than
-                # setting "self.catalog = bestcat") so that the source
-                # object identities don't change -- so that the outer
-                # loop "for src in self.catalog" still works.  We need
-                # to updated the structure and params.
-                oldcat.remove(src)
-                ii -= 1
-                ncat -= 1
-                oldcat.extend(alts[bestalt])
-                oldcat.setAllParams(bestparams)
-                self.catalog = oldcat
-                pBefore = bestlogprob
-
-                logmsg('')
-                logmsg('Accepted change:')
-                logmsg('from:', src)
-                if len(alts[bestalt]) == 1:
-                    logmsg('to:', alts[bestalt][0])
-                else:
-                    logmsg('to:', alts[bestalt])
-
-                assert(self.getLogProb() == pBefore)
-                self.debugChangeSources(step='switch', src=src, newsrcs=alts[bestalt], alti=bestalt, dlnprob=bestlogprob)
-                didchange.append(True)
-            else:
-                self.debugChangeSources(step='keep', src=src)
-                didchange.append(False)
-
-        self.catalog = oldcat
-        return didchange
-

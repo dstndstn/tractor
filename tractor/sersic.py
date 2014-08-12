@@ -16,11 +16,11 @@ import numpy as np
 
 from scipy.interpolate import InterpolatedUnivariateSpline
 
-import mixture_profiles as mp
-from engine import *
-from utils import *
-from cache import *
-from sdss_galaxy import *
+from . import mixture_profiles as mp
+from .engine import *
+from .utils import *
+from .cache import *
+from .galaxy import *
 
 class SersicMixture(object):
     singleton = None

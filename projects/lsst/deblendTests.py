@@ -9,7 +9,7 @@ import pyfits
 from astrometry.util.util import Tan
 
 from tractor.sdss import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 def addexpgal(x, y, flux, re, ab, theta, wcs, tractor):
 	rd1 = wcs.pixelToPosition(x, y)

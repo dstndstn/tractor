@@ -14,7 +14,7 @@ from astrometry.util.util import Sip
 from astrometry.util.pyfits_utils import *
 
 import tractor
-from tractor import sdss_galaxy as gal
+from tractor import galaxy as gal
 
 def main():
 

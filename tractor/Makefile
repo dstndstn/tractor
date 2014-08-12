@@ -1,13 +1,25 @@
-all: mix ceres
+all: mix ceres mpf
 
 ceres: _ceres.so ceres.py
 .PHONY: ceres
+
+mpf: mp_fourier
+.PHONY: mpf
+mp_fourier: _mp_fourier.so mp_fourier.py
+.PHONY: mp_fourier
 
 mix: _mix.so mix.py
 .PHONY: mix
 
 emfit: _emfit.so emfit.py
 .PHONY: emfit
+
+mp_fourier.py mp_fourier_wrap.c: mp_fourier.i
+	swig -python -I. mp_fourier.i
+
+_mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
+	python setup-mpf.py build --force --build-base build --build-platlib build/lib
+	cp build/lib/_mp_fourier.so $@
 
 
 mix.py mix_wrap.c: mix.i
@@ -29,7 +41,7 @@ _emfit.so: emfit_wrap.c setup-emfit.py
 
 NUMPY_INC := $(shell python -c "from numpy.distutils.misc_util import get_numpy_include_dirs as d; print ' '.join('-I'+x for x in d())")
 
-PYMOD_LIB ?= $(shell python-config --libs) #-lpython
+PYMOD_LIB ?= -L$(shell python-config --prefix)/lib $(shell python-config --libs)
 PYMOD_INC ?= $(shell python-config --includes)
 
 EIGEN_INC ?= $(shell pkg-config --cflags eigen3)
@@ -39,13 +51,22 @@ CERES_INC ?=
 #CERES_LIB ?= -L/usr/local/lib -lceres_shared -lglog
 
 # ceres 1.7.0 doesn't have the shared lib on my homebrew install...
-CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
+# CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
+# /usr/local/lib/libcxsparse.a \
+# /usr/local/lib/libcholmod.a \
+# /usr/local/lib/libcamd.a \
+# /usr/local/lib/libcolamd.a \
+# /usr/local/lib/libamd.a \
+# -framework Accelerate
+
+CERES_LIB ?= -L/usr/local/lib -lceres -lglog \
 /usr/local/lib/libcxsparse.a \
 /usr/local/lib/libcholmod.a \
 /usr/local/lib/libcamd.a \
 /usr/local/lib/libcolamd.a \
 /usr/local/lib/libamd.a \
 -framework Accelerate
+
 
 # On Riemann:
 #SSlib=~/software/suitespares-4.1.2/lib
@@ -68,11 +89,20 @@ CERES_LIB ?= /usr/local/lib/libceres.a -L/usr/local/lib -lglog \
 # export CERES_LIB="/usr/local/ceres-solver-1.8.0/lib/libceres.a -lglog /usr/local/lib/libcxsparse.a /usr/local/lib/libcholmod.a /usr/local/lib/libcamd.a /usr/local/lib/libcolamd.a /usr/local/lib/libamd.a -lgomp /usr/lib/liblapack.a /usr/lib/libf77blas.a /usr/lib/libatlas.a /usr/lib/libcblas.a -lgfortran"
 # export CERES_INC="-I/usr/local/ceres-solver-1.8.0/include"
 
+ceres.py: ceres.i
+	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
+
+CXXFLAGS := -Wall -fPIC
+# DEBUG
+CXXFLAGS += -O0 -g
+#CXXLINKFLAGS := -Wl,--no-undefined
+CXXLINKFLAGS :=
+
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
-	g++ -Wall -fPIC -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
-	g++ -Wall -fPIC -c ceres-tractor.cc $(CERES_INC) $(EIGEN_INC)
-	g++ -Wall -fPIC -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
+	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
+	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
 
 LIBTSNNLS_INC ?=
 LIBTSNNLS_LIB ?= -ltsnnls

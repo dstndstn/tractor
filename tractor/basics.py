@@ -12,9 +12,10 @@ Magnitudes, (RA,Dec) positions, FITS WCS, and so on.
 """
 from math import ceil, floor, pi, sqrt, exp
 
-from engine import *
-#from ducks import *
-from utils import *
+from .engine import *
+from .utils import *
+from . import ducks
+
 import mixture_profiles as mp
 import numpy as np
 
@@ -36,6 +37,12 @@ class TractorWCSWrapper(object):
         x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
         return True, x-self.x0+1, y-self.y0+1
 
+
+def getParamTypeTree(param):
+    mytype = str(type(param))
+    if isinstance(param, MultiParams):
+        return [mytype] + [getParamTypeTree(s) for s in param._getActiveSubs()]
+    return [mytype]
 
 
 class TAITime(ScalarParam, ArithmeticParams):
@@ -77,15 +84,36 @@ class TAITime(ScalarParam, ArithmeticParams):
         ''' to proper year '''
         return self.toYears() - TAITime(None, mjd=TAITime.mjd2k).toYears() + 2000.0
 
-        
-class Mags(ParamList):
+
+class Mag(ScalarParam):
     '''
-    An implementation of `Brightness` that stores magnitudes in
-    multiple bands.
+    An implementation of `Brightness` that stores a single magnitude.
+    '''
+    stepsize = -0.01
+    strformat = '%.3f'
+
+class Flux(ScalarParam):
+    '''
+    A `Brightness` implementation that stores raw counts.
+    '''
+    def __mul__(self, factor):
+        new = self.copy()
+        new.val *= factor
+        return new
+    __rmul__ = __mul__
+
+class MultiBandBrightness(ParamList, ducks.Brightness):
+    '''
+    An implementation of `Brightness` that stores an independent
+    brightness in a set of named bands.  The PhotoCal for an image
+    must know its band, and then it can retrieve the appropriate
+    brightness for the image in question.
+
+    This is the base class for Mags and Fluxes.
     '''
     def __init__(self, **kwargs):
         '''
-        Mags(r=14.3, g=15.6, order=['r','g'])
+        MultiBandBrightness(r=14.3, g=15.6, order=['r','g'])
 
         The `order` parameter is optional; it determines the ordering
         of the bands in the parameter vector (eg, `getParams()`).
@@ -99,19 +127,50 @@ class Mags(ParamList):
         vals = []
         for k in keys:
             vals.append(kwargs[k])
-        super(Mags,self).__init__(*vals)
+        super(MultiBandBrightness, self).__init__(*vals)
         self.order = keys
         self.addNamedParams(**dict((k,i) for i,k in enumerate(keys)))
-        self.stepsizes = [0.01] * self.numberOfParams()
+    
+    def __setstate__(self, state):
+        '''For pickling.'''
+        self.__dict__ = state
+        self.addNamedParams(**dict((k,i)
+                                   for i,k in enumerate(self.order)))
+
+    def copy(self):
+        return self*1.
+        
+    def getBand(self, band):
+        return getattr(self, band)
+
+    def setBand(self, band, value):
+        return setattr(self, band, value)
+        
+        
+class Mags(MultiBandBrightness):
+    '''
+    An implementation of `Brightness` that stores magnitudes in
+    multiple bands.
+    '''
+    def __init__(self, **kwargs):
+        '''
+        Mags(r=14.3, g=15.6, order=['r','g'])
+
+        The `order` parameter is optional; it determines the ordering
+        of the bands in the parameter vector (eg, `getParams()`).
+        '''
+        super(Mags,self).__init__(**kwargs)
+        self.stepsizes = [-0.01] * self.numberOfParams()
 
     def getMag(self, bandname):
-        ''' Bandname: string
+        '''
+        Bandname: string
         Returns: mag in the given band.
         '''
-        return getattr(self, bandname)
+        return self.getBand(bandname)
 
     def setMag(self, bandname, mag):
-        setattr(self, bandname, mag)
+        return self.setBand(bandname, mag)
 
     def __add__(self, other):
         # mags + 0.1
@@ -131,36 +190,28 @@ class Mags(ParamList):
             kwargs[band] = msum
         return Mags(order=self.order, **kwargs)
 
-    def copy(self):
-        return self*1.
-      
     def __mul__(self, factor):
-        # Return the magnitude that corresponds to the flux rescaled by factor.
-            # Flux is positive (and log(-ve) is not permitted), so we take the abs
-            # of the input scale factor to prevent embarrassment.
-            # Negative magnifications appear in gravitational lensing, but they just label
-        # the "parity" of the source, not its brightness. So, we treat factor=-3 the 
+        # Return the magnitude that corresponds to the flux rescaled
+        # by factor.  Flux is positive (and log(-ve) is not
+        # permitted), so we take the abs of the input scale factor to
+        # prevent embarrassment.  Negative magnifications appear in
+        # gravitational lensing, but they just label the "parity" of
+        # the source, not its brightness. So, we treat factor=-3 the
         # same as factor=3, for example.
         kwargs = {}
+        dmag = -2.5 * np.log10(np.abs(factor))
         for band in self.order:
             m = self.getMag(band)
-            mscaled = m - 2.5 * np.log10( np.abs(factor) )
+            mscaled = m + dmag
             kwargs[band] = mscaled
-        return Mags(order=self.order, **kwargs)
-
-    def __setstate__(self, state):
-        '''For pickling.'''
-        self.__dict__ = state
-        self.addNamedParams(**dict((k,i) for i,k in enumerate(self.order)))
+        return self.__class__(order=self.order, **kwargs)
 
 
-class Fluxes(Mags):
+class Fluxes(MultiBandBrightness):
     '''
     An implementation of `Brightness` that stores fluxes in multiple
     bands.
     '''
-    #getBand = Mags.getMag
-    #getFlux = Mags.getMag
     def __add__(self, other):
         kwargs = {}
         for band in self.order:
@@ -173,28 +224,13 @@ class Fluxes(Mags):
         for band in self.order:
             m = self.getFlux(band)
             kwargs[band] = m * factor
-        return Fluxes(order=self.order, **kwargs)
+        return self.__class__(order=self.order, **kwargs)
 
-    def getBand(self, *args, **kwargs):
-        return super(Fluxes,self).getMag(*args,**kwargs)
-    getFlux = getBand
-
-    def setBand(self, band, val):
-        self.setMag(band, val)
-    setFlux = setBand   
-
-class FluxesPhotoCal(BaseParams):
-    def __init__(self, band):
-        self.band = band
-        BaseParams.__init__(self)
-    def copy(self):
-        return FluxesPhotoCal(self.band)
-    def brightnessToCounts(self, brightness):
-        flux = brightness.getFlux(self.band)
-        return flux
-    def __str__(self):
-        return 'FluxesPhotoCal(band=%s)' % (self.band)
-
+    def getFlux(self, bandname):
+        return self.getBand(bandname)
+    def setFlux(self, bandname, value):
+        return self.setFlux(bandname, value)
+    
 
 class NanoMaggies(Fluxes):
     '''
@@ -220,15 +256,16 @@ class NanoMaggies(Fluxes):
     def getMag(self, band):
         ''' Convert to mag.'''
         flux = self.getFlux(band)
-        mag = -2.5 * (np.log10(flux) - 9)
+        mag = NanoMaggies.nanomaggiesToMag(flux)
         return mag
 
     @staticmethod
     def fromMag(mag):
         order = mag.order
-        return NanoMaggies(order=order,
-                           **dict([(k,NanoMaggies.magToNanomaggies(mag.getMag(k)))
-                                   for k in order]))
+        return NanoMaggies(
+            order=order,
+            **dict([(k,NanoMaggies.magToNanomaggies(mag.getMag(k)))
+                    for k in order]))
 
     @staticmethod
     def magToNanomaggies(mag):
@@ -249,37 +286,47 @@ class NanoMaggies(Fluxes):
         '''
         return 10.**((zp - 22.5)/2.5)
 
+    @staticmethod
+    def fluxErrorsToMagErrors(flux, flux_invvar):
+        flux = np.atleast_1d(flux)
+        flux_invvar = np.atleast_1d(flux_invvar)
+        dflux = np.zeros(len(flux))
+        okiv = (flux_invvar > 0)
+        dflux[okiv] = (1./np.sqrt(flux_invvar[okiv]))
+        okflux = (flux > 0)
+        mag = np.zeros(len(flux))
+        mag[okflux] = (NanoMaggies.nanomaggiesToMag(flux[okflux]))
+        dmag = np.zeros(len(flux))
+        ok = (okiv * okflux)
+        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dflux[ok] / flux[ok]))
+        mag[np.logical_not(okflux)] = np.nan
+        dmag[np.logical_not(ok)] = np.nan
+        return mag.astype(np.float32), dmag.astype(np.float32)
 
-class Mag(ScalarParam):
-    '''
-    An implementation of `Brightness` that stores a single magnitude.
-    '''
-    stepsize = 0.01
-    strformat = '%.3f'
 
-class Flux(ScalarParam):
-    '''
-    A `Brightness` implementation that stores raw counts.
-    '''
-    def __mul__(self, factor):
-        new = self.copy()
-        new.val *= factor
-        return new
-    __rmul__ = __mul__
-    # enforce limit: Flux > 0
-    def _set(self, val):
-        if val < 0:
-            #print 'Clamping Flux from', p[0], 'to zero'
-            pass
-        self.val = max(0., val)
+    
+class FluxesPhotoCal(BaseParams, ducks.ImageCalibration):
+    def __init__(self, band):
+        self.band = band
+        BaseParams.__init__(self)
+    def copy(self):
+        return FluxesPhotoCal(self.band)
+    def brightnessToCounts(self, brightness):
+        flux = brightness.getFlux(self.band)
+        return flux
+    def __str__(self):
+        return 'FluxesPhotoCal(band=%s)' % (self.band)
 
-class MagsPhotoCal(ParamList):
+
+class MagsPhotoCal(ParamList, ducks.ImageCalibration):
     '''
-    A `PhotoCal` implementation to be used with zeropoint-calibrated `Mags`.
+    A `PhotoCal` implementation to be used with zeropoint-calibrated
+    `Mags`.
     '''
     def __init__(self, band, zeropoint):
         '''
-        Create a new ``MagsPhotoCal`` object with a *zeropoint* in a *band*.
+        Create a new ``MagsPhotoCal`` object with a *zeropoint* in a
+        *band*.
 
         The ``Mags`` objects you use must have *band* as one of their
         available bands.
@@ -313,7 +360,7 @@ class MagsPhotoCal(ParamList):
     def __str__(self):
         return 'MagsPhotoCal(band=%s, zp=%.3f)' % (self.band, self.zp)
 
-class NullPhotoCal(BaseParams):
+class NullPhotoCal(BaseParams, ducks.ImageCalibration):
     '''
     The "identity" `PhotoCal`, to be used with `Flux` -- the
     `Brightness` objects are in units of `Image` counts.
@@ -321,7 +368,7 @@ class NullPhotoCal(BaseParams):
     def brightnessToCounts(self, brightness):
         return brightness.getValue()
 
-class LinearPhotoCal(ScalarParam):
+class LinearPhotoCal(ScalarParam, ducks.ImageCalibration):
     '''
     A `PhotoCal`, to be used with `Flux` or `Fluxes` brightnesses,
     that simply scales the flux by a fixed factor; the brightness
@@ -352,26 +399,28 @@ class LinearPhotoCal(ScalarParam):
         return counts
         
 
-class NullWCS(BaseParams):
+class NullWCS(BaseParams, ducks.ImageCalibration):
     '''
     The "identity" WCS -- useful when you are using raw pixel
     positions rather than RA,Decs.
     '''
-    def __init__(self, pixscale=1.):
+    def __init__(self, pixscale=1., dx=0., dy=0.):
         '''
         pixscale: [arcsec/pix]
         '''
         self.pixscale = pixscale
+        self.dx = dx
+        self.dy = dy
     def hashkey(self):
-        return ('NullWCS',)
+        return ('NullWCS', self.dx, self.dy)
     def positionToPixel(self, pos, src=None):
-        return pos.x, pos.y
+        return pos.x + self.dx, pos.y + self.dy
     def pixelToPosition(self, x, y, src=None):
-        return x,y
+        return x - self.dx, y - self.dy
     def cdAtPixel(self, x, y):
         return np.array([[1.,0.],[0.,1.]]) * self.pixscale / 3600.
 
-class WcslibWcs(BaseParams):
+class WcslibWcs(BaseParams, ducks.ImageCalibration):
     '''
     A WCS implementation that wraps a FITS WCS object (with a pixel
     offset), delegating to wcslib.
@@ -382,12 +431,15 @@ class WcslibWcs(BaseParams):
     FIXME: we could implement anwcs_copy() using wcscopy().
     
     '''
-    def __init__(self, filename, hdu=0):
+    def __init__(self, filename, hdu=0, wcs=None):
         self.x0 = 0.
         self.y0 = 0.
-        from astrometry.util.util import anwcs
-        wcs = anwcs(filename, hdu)
-        self.wcs = wcs
+        if wcs is not None:
+            self.wcs = wcs
+        else:
+            from astrometry.util.util import anwcs
+            wcs = anwcs(filename, hdu)
+            self.wcs = wcs
 
     # pickling
     def __getstate__(self):
@@ -445,7 +497,7 @@ class WcslibWcs(BaseParams):
 
     def pixelToPosition(self, x, y, src=None):
         # MAGIC: 1 for FITS coords.
-        ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra,dec = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
         return RaDecPos(ra, dec)
 
     def cdAtPixel(self, x, y):
@@ -454,9 +506,9 @@ class WcslibWcs(BaseParams):
 
         (Returns the constant ``CD`` matrix elements)
         '''
-        ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
-        ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
-        ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
+        ok,ra0,dec0 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 1. + self.y0)
+        ok,ra1,dec1 = self.wcs.pixelxy2radec(x + 2. + self.x0, y + 1. + self.y0)
+        ok,ra2,dec2 = self.wcs.pixelxy2radec(x + 1. + self.x0, y + 2. + self.y0)
 
         cosdec = np.cos(np.deg2rad(dec0))
 
@@ -464,7 +516,7 @@ class WcslibWcs(BaseParams):
                  [dec1 - dec0,        dec2 - dec0]])
 
 
-class ConstantFitsWcs(ParamList):
+class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
     '''
     A WCS implementation that wraps a FITS WCS object (with a pixel
     offset).
@@ -537,7 +589,7 @@ class ConstantFitsWcs(ParamList):
 
     
 ### FIXME -- this should be called TanWcs!
-class FitsWcs(ConstantFitsWcs):
+class FitsWcs(ConstantFitsWcs, ducks.ImageCalibration):
     '''
     The WCS object must be an astrometry.util.util.Tan object, or a
     convincingly quacking duck.
@@ -641,14 +693,6 @@ class FitsWcs(ConstantFitsWcs):
         ss = [dcrval, dcrval, 1., 1., dcd, dcd, dcd, dcd, 1., 1.]
         return list(self._getLiquidArray(ss))
 
-    # def getParams(self):
-    #   '''
-    #   Returns a *copy* of the current active parameter values (list)
-    #   '''
-    #   return list(self._getLiquidArray(self._getThings()))
-
-
-
 class PixPos(ParamList):
     '''
     A Position implementation using pixel positions.
@@ -656,20 +700,15 @@ class PixPos(ParamList):
     @staticmethod
     def getNamedParams():
         return dict(x=0, y=1)
+    def __init__(self, *args):
+        super(PixPos, self).__init__(*args)
+        self.stepsize = [0.1, 0.1]
     def __str__(self):
         return 'pixel (%.2f, %.2f)' % (self.x, self.y)
-    #def __repr__(self):
-    #   return 'PixPos(%.4f, %.4f)' % (self.x, self.y)
-    #def copy(self):
-    #   return PixPos(self.x, self.y)
-    #def hashkey(self):
-    #   return ('PixPos', self.x, self.y)
     def getDimension(self):
         return 2
-    def getStepSizes(self, *args, **kwargs):
-        return [0.1, 0.1]
 
-class RaDecPos(ParamList, ArithmeticParams):
+class RaDecPos(ArithmeticParams, ParamList):
     '''
     A Position implementation using RA,Dec positions, in degrees.
 
@@ -686,31 +725,35 @@ class RaDecPos(ParamList, ArithmeticParams):
     def __str__(self):
         return '%s: RA, Dec = (%.5f, %.5f)' % (self.getName(), self.ra, self.dec)
     def __init__(self, *args, **kwargs):
-        self.stepsizes = [0,0]  # in case the superclass constructor cares
-                        # about the length?
         super(RaDecPos,self).__init__(*args,**kwargs)
-        self.setStepSizes(1e-4)
-    #def __repr__(self):
-    #   return 'RaDecPos(%.5f, %.5f)' % (self.ra, self.dec)
-    #def copy(self):
-    #   return RaDecPos(self.ra, self.dec)
-    #def hashkey(self):
-    #   return ('RaDecPos', self.ra, self.dec)
+        #self.setStepSizes(1e-4)
+        delta = 1e-4
+        self.setStepSizes([delta / np.cos(np.deg2rad(self.dec)), delta])
     def getDimension(self):
         return 2
-    def getStepSizes(self, *args, **kwargs):
-        return self.stepsizes
-    def setStepSizes(self, delta):
-        self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
+    #def setStepSizes(self, delta):
+    #    self.stepsizes = [delta / np.cos(np.deg2rad(self.dec)),delta]
 
     def distanceFrom(self, pos):
         from astrometry.util.starutil_numpy import degrees_between
         return degrees_between(self.ra, self.dec, pos.ra, pos.dec)
 
 
-class ConstantSky(ScalarParam):
+class NullSky(BaseParams, ducks.Sky):
     '''
-    In counts
+    A Sky implementation that does nothing; the background level is
+    zero.
+    '''
+    pass
+    
+class ConstantSky(ScalarParam, ducks.ImageCalibration):
+    '''
+    A simple constant sky level across the whole image.
+
+    This sky object has one parameter, the constant level.
+    
+    The sky level is specified in the same units as the image
+    ("counts").
     '''
     def getParamDerivatives(self, tractor, img, srcs):
         p = Patch(0, 0, np.ones_like(img.getImage()))
@@ -742,7 +785,6 @@ class ConstantSky(ScalarParam):
 #         oldval = self.val
 #         self._set(p - self.offset)
 #         return oldval + self.offset
-    
 
 
 class PointSource(MultiParams):
@@ -838,10 +880,7 @@ class PointSource(MultiParams):
                 derivs.append(df)
         return derivs
 
-    def overlapsCircle(self, pos, radius):
-        return self.pos.distanceFrom(pos) <= radius
-
-class Parallax(ScalarParam, ArithmeticParams):
+class Parallax(ArithmeticParams, ScalarParam):
     ''' in arcesc '''
     stepsize = 1e-3
     def __str__(self):
@@ -856,6 +895,10 @@ class ParallaxWithPrior(Parallax):
         # in the fuckin' introduction!
         return -4. * np.log(p)
 
+    def isLegal(self):
+        p = self.getValue()
+        return (p >= 0)
+    
     #### FIXME -- cos(Dec)
 class PMRaDec(RaDecPos):
     @staticmethod
@@ -869,9 +912,6 @@ class PMRaDec(RaDecPos):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
         self.setStepSizes(1e-6)
-        
-    # def setStepSizes(self, delta):
-    #   self.stepsizes = [delta, delta]
         
     @staticmethod
     def getNamedParams():
@@ -888,9 +928,7 @@ class PMRaDec(RaDecPos):
     
 class MovingPointSource(PointSource):
     def __init__(self, pos, brightness, pm, parallax, epoch=0.):
-        # ASSUME 'pm' is the same type as 'pos'
-        #assert(type(pos) == type(pm))
-        # More precisely, ...
+        # Assume types...
         assert(type(pos) is RaDecPos)
         assert(type(pm) is PMRaDec)
         super(PointSource, self).__init__(pos, brightness, pm,
@@ -958,7 +996,6 @@ class MovingPointSource(PointSource):
 
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
-        #return [False]*self.numberOfParams()
 
         t = img.getTime()
         pos0 = self.getPositionAtTime(t)
@@ -1044,15 +1081,13 @@ class MovingPointSource(PointSource):
                 
         return derivs
 
-class PixelizedPSF(BaseParams):
+class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     '''
     A PSF model based on an image postage stamp, which will be
     sinc-shifted to subpixel positions.
 
-    (Actually Lanczos shifted, with order Lorder)
+    Galaxies will be rendering using FFT convolution.
     
-    This will allow only Point Sources to be rendered by the Tractor!
-
     FIXME -- currently this class claims to have no params.
     '''
     def __init__(self, img, Lorder=3):
@@ -1061,6 +1096,7 @@ class PixelizedPSF(BaseParams):
         assert((H % 2) == 1)
         assert((W % 2) == 1)
         self.Lorder = Lorder
+        self.fftcache = {}
         
     def __str__(self):
         return 'PixelizedPSF'
@@ -1097,8 +1133,39 @@ class PixelizedPSF(BaseParams):
 
         shifted /= shifted.sum()
         return Patch(x0, y0, shifted)
+
+    def getFourierTransformSize(self, radius):
+        ## FIXME -- power-of-2 MINUS one to keep things odd...?
+        sz = 2**int(np.ceil(np.log2(radius*2.))) - 1
+        return sz
     
-class GaussianMixturePSF(ParamList):
+    def getFourierTransform(self, radius):
+        sz = self.getFourierTransformSize(radius)
+        if sz in self.fftcache:
+            return self.fftcache[sz]
+        H,W = self.img.shape
+        subimg = self.img
+        pad = np.zeros((sz,sz))
+        if sz > H:
+            y0 = (sz - H)/2
+        else:
+            y0 = 0
+            d = (H - sz)/2
+            subimg = subimg[d:-d, :]
+        if sz > W:
+            x0 = (sz - W)/2
+        else:
+            x0 = 0
+            d = (W - sz)/2
+            subimg = subimg[:, d:-d]
+        sh,sw = subimg.shape
+        pad[y0:y0+sh, x0:x0+sw] = subimg
+        P = np.fft.rfft2(pad)
+        rtn = P, (sz/2, sz/2), pad.shape
+        self.fftcache[sz] = rtn
+        return rtn
+    
+class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
@@ -1131,14 +1198,36 @@ class GaussianMixturePSF(ParamList):
         # print 'Setting param names:', names
         self.addNamedParams(**names)
 
+    @classmethod
+    def fromFitsHeader(clazz, hdr, prefix=''):
+        params = []
+        for i in range(100):
+            k = prefix + 'P%i' % i
+            print 'Key', k
+            if not k in hdr:
+                break
+            params.append(hdr.get(k))
+        print 'PSF Params:', params
+        if len(params) == 0 or (len(params) % 6 != 0):
+            raise RuntimeError('Failed to create %s from FITS header: expected '
+                               'factor of 6 parameters, got %i' % 
+                               (str(clazz), len(params)))
+        K = len(params) / 6
+        psf = clazz(np.zeros(K), np.zeros((K,2)), np.zeros((K,2,2)))
+        psf.setParams(params)
+        return psf
+    
+        
     # HACK... incomplete
     # def getLogPrior(self):
     #     if np.any(self.mog.amp < 0):
     #         return -1e100
     #     return 0.
 
-    def getMixtureOfGaussians(self):
-        return self.mog
+    def getMixtureOfGaussians(self, mean=None):
+        mog = self.mog
+        mog.symmetrize()
+        return mog
 
     def applyTo(self, image):
         raise
@@ -1174,6 +1263,7 @@ class GaussianMixturePSF(ParamList):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None,
                             radius=None, **kwargs):
+        self.mog.symmetrize()
         if minval > 0.:
             if radius is not None:
                 rr = radius
@@ -1307,7 +1397,7 @@ class GaussianMixturePSF(ParamList):
         tpsf = GaussianMixturePSF(w, mu, sig)
         return tpsf
     
-class NCircularGaussianPSF(MultiParams):
+class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A PSF model using N concentric, circular Gaussians.
     '''
@@ -1325,9 +1415,21 @@ class NCircularGaussianPSF(MultiParams):
         eg,   NCircularGaussianPSF([1.5, 4.0], [0.8, 0.2])
         '''
         assert(len(sigmas) == len(weights))
-        super(NCircularGaussianPSF, self).__init__(ParamList(*sigmas), ParamList(*weights))
+        psigmas = ParamList(*sigmas)
+        psigmas.stepsizes = [0.01] * len(sigmas)
+        pweights = ParamList(*weights)
+        pweights.stepsizes = [0.01] * len(weights)
+        super(NCircularGaussianPSF, self).__init__(psigmas, pweights)
         self.minradius = 1.
-        
+
+    @property
+    def amp(self):
+        return self.weights
+
+    @property
+    def mog(self):
+        return self.getMixtureOfGaussians()
+    
     @staticmethod
     def getNamedParams():
         return dict(sigmas=0, weights=1)
@@ -1366,66 +1468,18 @@ class NCircularGaussianPSF(MultiParams):
                                      mymeans,
                                      np.array(self.mysigmas)**2)
         
-    def proposeIncreasedComplexity(self, img):
-        maxs = np.max(self.mysigmas)
-        # MAGIC -- make new Gaussian with variance bigger than the biggest
-        # so far
-        return NCircularGaussianPSF(list(self.mysigmas) + [maxs + 1.],
-                            list(self.myweights) + [0.05])
-
-    def getStepSizes(self, *args, **kwargs):
-        N = len(self.sigmas)
-        ss = []
-        if not self.isParamFrozen('sigmas'):
-            ss.extend([0.01]*N)
-        if not self.isParamFrozen('weights'):
-            ss.extend([0.01]*N)
-        return ss
-
-    '''
-    def isValidParamStep(self, dparam):
-        NS = len(self.sigmas)
-        assert(len(dparam) == 2*NS)
-        dsig = dparam[:NS]
-        dw = dparam[NS:]
-        for s,ds in zip(self.sigmas, dsig):
-            # MAGIC
-            if s + ds < 0.1:
-                return False
-        for w,dw in zip(self.weights, dw):
-            if w + dw < 0:
-                return False
-        return True
-        #return all(self.sigmas + dsig > 0.1) and all(self.weights + dw > 0)
-        '''
-
-    def normalize(self):
-        mx = max(self.weights)
-        self.weights.setParams([w/mx for w in self.weights])
-
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
-        #hk = ('NCircularGaussianPSF',
-        #     tuple(x for x in self.sigmas),
-        #     tuple(x for x in self.weights))
-        # print 'sigmas', self.sigmas
-        # print 'sigmas type', type(self.sigmas)
-        # print 'sigmas[0]', self.sigmas[0]
-        # print 'Hashkey', hk
-        # print hash(hk)
         return hk
     
     def copy(self):
-        cc = NCircularGaussianPSF(list([s for s in self.sigmas]),
-                                  list([w for w in self.weights]))
-        #print 'NCirc copy', cc
-        return cc
+        return NCircularGaussianPSF(list([s for s in self.sigmas]),
+                                    list([w for w in self.weights]))
 
     def applyTo(self, image):
         from scipy.ndimage.filters import gaussian_filter
         # gaussian_filter normalizes the Gaussian; the output has ~ the
         # same sum as the input.
-        
         res = np.zeros_like(image)
         for s,w in zip(self.sigmas, self.weights):
             res += w * gaussian_filter(image, s)
@@ -1437,21 +1491,26 @@ class NCircularGaussianPSF(MultiParams):
         return 5.
 
     def getRadius(self):
+        if hasattr(self, 'radius'):
+            return self.radius
         return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., radius=None, **kwargs):
         ix = int(round(px))
         iy = int(round(py))
-        rad = int(ceil(self.getRadius()))
+        if radius is None:
+            rad = int(ceil(self.getRadius()))
+        else:
+            rad = radius
         x0 = ix - rad
         x1 = ix + rad + 1
         y0 = iy - rad
         y1 = iy + rad + 1
-        mix = self.getMixtureOfGaussians(np.array([px,py]))
+        mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
         patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
         # Note: sum(self.weights) can be zero if parameters are frozen!!!
-        patch /= sum(mix.amp)
+        #patch /= sum(mix.amp)
         return Patch(x0, y0, patch)
 
 
@@ -1503,7 +1562,7 @@ class ParamsWrapper(BaseParams):
         return self.real.getStepSizes(*args, **kwargs)
 
 
-class ShiftedPsf(ParamsWrapper):
+class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, psf, x0, y0):
         super(ShiftedPsf, self).__init__(psf)
         self.psf = psf
@@ -1519,8 +1578,13 @@ class ShiftedPsf(ParamsWrapper):
         p.x0 -= self.x0
         p.y0 -= self.y0
         return p
+    def getRadius(self):
+        return self.psf.getRadius()
+    def getMixtureOfGaussians(self, **kwargs):
+        return self.psf.getMixtureOfGaussians(**kwargs)
+
     
-class ScaledPhotoCal(ParamsWrapper):
+class ScaledPhotoCal(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, photocal, factor):
         super(ScaledPhotoCal,self).__init__(photocal)
         self.pc = photocal
@@ -1530,7 +1594,7 @@ class ScaledPhotoCal(ParamsWrapper):
     def brightnessToCounts(self, brightness):
         return self.factor * self.pc.brightnessToCounts(brightness)
 
-class ScaledWcs(ParamsWrapper):
+class ScaledWcs(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, wcs, factor):
         super(ScaledWcs,self).__init__(wcs)
         self.factor = factor
@@ -1550,7 +1614,7 @@ class ScaledWcs(ParamsWrapper):
         return ((x + 0.5) * self.factor - 0.5,
                 (y + 0.5) * self.factor - 0.5)
 
-class ShiftedWcs(ParamsWrapper):
+class ShiftedWcs(ParamsWrapper, ducks.ImageCalibration):
     '''
     Wraps a WCS in order to use it for a subimage.
     '''
@@ -1560,6 +1624,18 @@ class ShiftedWcs(ParamsWrapper):
         self.y0 = y0
         self.wcs = wcs
 
+    def toFitsHeader(self, hdr, prefix=''):
+        tt = type(self.wcs)
+        sub_type = '%s.%s' % (tt.__module__, tt.__name__)
+        hdr.add_record(dict(name=prefix + 'SUB', value=sub_type,
+                            comment='ShiftedWcs sub-type'))
+        hdr.add_record(dict(name=prefix + 'X0', value=self.x0,
+                            comment='ShiftedWcs x0'))
+        hdr.add_record(dict(name=prefix + 'Y0', value=self.y0,
+                            comment='ShiftedWcs y0'))
+        print 'Sub wcs:', self.wcs
+        self.wcs.toFitsHeader(hdr, prefix=prefix)
+        
     def hashkey(self):
         return ('ShiftedWcs', self.x0, self.y0) + tuple(self.wcs.hashkey())
 
@@ -1569,3 +1645,9 @@ class ShiftedWcs(ParamsWrapper):
     def positionToPixel(self, pos, src=None):
         x,y = self.wcs.positionToPixel(pos, src=src)
         return (x - self.x0, y - self.y0)
+
+    def pixelToPosition(self, x, y, src=None):
+        pos = self.wcs.pixelToPosition(x+self.x0, y+self.y0, src=src)
+        return pos
+
+    

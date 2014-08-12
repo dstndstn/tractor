@@ -34,6 +34,109 @@ def getClassName(obj):
     return obj.__class__.__name__
 
 
+class _GaussianPriors(object):
+    '''
+    A class to support Gaussian priors in ParamList objects.  This
+    class holds the actual list of terms in the prior and computes the
+    required logProb and derivatives.  The GaussianPriorsMixin class
+    below glues this to the Params interface.
+    '''
+    def __init__(self, param):
+        self.terms = []
+        self.param = param
+
+    def __str__(self):
+        s = ('GaussianPriors: [ ' +
+             ', '.join(['(%s ~ N(mu=%.3g, sig=%.3g)' %
+                        (nm,mu,sig) for nm,i,mu,sig in self.terms]) + ' ]')
+        return s
+        
+    def add(self, name, mu, sigma):
+        i = self.param.getNamedParamIndex(name)
+        if i is None:
+            raise KeyError('GaussianPriors.add: parameter not found: "%s"' % name)
+        self.terms.append((name, i, mu, sigma))
+
+    def getLogPrior(self):
+        p = self.param.getAllParams()
+        chisq = 0.
+        for name,i,mu,sigma in self.terms:
+            chisq += (p[i] - mu)**2 / sigma**2
+        return -0.5 * chisq
+
+    def getDerivs(self):
+        rows = []
+        cols = []
+        vals = []
+        bs = []
+        row0 = 0
+        p = self.param.getParams()
+        for name,j,mu,sigma in self.terms:
+            i = self.param.getLiquidIndexOfIndex(j)
+            # frozen:
+            if i == -1:
+                continue
+            cols.append(i)
+            vals.append(np.array([1. / sigma]))
+            rows.append(np.array([row0]))
+            bs.append(np.array([-(p[i] - mu) / sigma]))
+            row0 += 1
+        return rows, cols, vals, bs
+
+class GaussianPriorsMixin(object):
+    '''
+    A mix-in class for ParamList-like classes, to make it easy to support
+    Gaussian priors.
+    '''
+    def __init__(self, *args, **kwargs):
+        super(GaussianPriorsMixin, self).__init__(*args, **kwargs)
+        self.gpriors = _GaussianPriors(self)
+
+    def addGaussianPrior(self, name, mu, sigma):
+        self.gpriors.add(name, mu, sigma)
+
+    def getLogPriorDerivatives(self):
+        '''
+        Returns the log prior derivatives in a sparse matrix form as
+        required by the Tractor when optimizing.
+
+        You might want to override like this:
+
+        X = self.getGaussianLogPriorDerivatives()
+        Y = << other log prior derivatives >>
+        return [x+y for x,y in zip(X,Y)]
+        '''
+        return self.getGaussianLogPriorDerivatives()
+
+    def isLegal(self):
+        '''
+        Returns True if the current parameter values are legal; ie,
+        have > 0 prior.
+        '''
+        return True
+    
+    def getGaussianLogPriorDerivatives(self):
+        return self.gpriors.getDerivs()
+
+    def getLogPrior(self):
+        '''
+        Returns the log prior at the current parameter values.
+        
+        If you want to disallow entirely regions of parameter space,
+        override the isLegal() method; this method will then return
+        -np.inf .
+
+        If you need to do something more elaborate, you probably want
+        to add getGaussianLogPrior() to your fancy prior so that
+        Gaussian priors still work.
+        '''
+        if not self.isLegal():
+            return -np.inf
+        return self.getGaussianLogPrior()
+
+    def getGaussianLogPrior(self):
+        return self.gpriors.getLogPrior()
+
 class BaseParams(object):
     '''
     A basic implementation of the `Params` duck type.
@@ -43,7 +146,7 @@ class BaseParams(object):
     def __str__(self):
         return getClassName(self) + ': ' + str(self.getParams())
     def copy(self):
-        return self.__class__(*self.getParams())
+        return self.__class__(*self.getAllParams())
     def hashkey(self):
         return (getClassName(self),) + tuple(self.getAllParams())
     def __hash__(self):
@@ -63,11 +166,20 @@ class BaseParams(object):
         return []
     def getAllParams(self):
         return self.getParams()
+    def getAllStepSizes(self, *args, **kwargs):
+        return self.getStepSizes(*args, **kwargs)
     def getStepSizes(self, *args, **kwargs):
         '''
         Returns "reasonable" step sizes for the parameters.
         '''
-        return []
+        ss = getattr(self, 'stepsizes', None)
+        if ss is not None:
+            return ss
+        return [1.] * self.numberOfParams()
+    def setAllStepSizes(self, ss):
+        self.setStepSizes(ss)
+    def setStepSizes(self, ss):
+        self.stepsizes = ss
     def setParams(self, p):
         '''
         NOTE, you MUST implement either "setParams" or "setParam",
@@ -137,6 +249,8 @@ class ScalarParam(BaseParams):
         return 1
     def getStepSizes(self, *args, **kwargs):
         return [self.stepsize]
+    def setStepSizes(self, ss):
+        self.stepsize = ss[0]
     # Returns a *copy* of the current parameter values (list)
     def getParams(self):
         return [self.val]
@@ -164,7 +278,7 @@ def _isint(i):
 
 class NamedParams(object):
     '''
-    A mix-in class.
+    A mix-in class for Params subclassers.
 
     Allows names to be attached to parameters.
 
@@ -199,6 +313,40 @@ class NamedParams(object):
         ''' Returns all params, regardless of thawed/frozen status. '''
         raise RuntimeError("Unimplemented setAllParams in " + str(self.__class__))
 
+    def getStepSizes(self, *args, **kwargs):
+        ss = getattr(self, 'stepsizes', None)
+        if ss is None:
+            ss = self.getAllStepSizes(*args, **kwargs)
+        return list(self._getLiquidArray(ss))
+
+    def getAllStepSizes(self, *args, **kwargs):
+        '''
+        Returns "reasonable" step sizes for the parameters, ignoring
+        frozen/thawed state.
+        '''
+        ss = getattr(self, 'stepsizes', None)
+        if ss is not None:
+            return ss
+        return [1.] * len(self.getAllParams())
+
+    def setStepSizes(self, ss):
+        if not hasattr(self, 'stepsizes'):
+            newss = []
+            j = 0
+            for i,ll in enumerate(self.liquid):
+                if ll:
+                    newss.append(ss[j])
+                    j += 1
+                else:
+                    newss.append(1.)
+            self.stepsizes = newss
+        else:
+            for i,s in self._enumerateLiquidArray(ss):
+                self.stepsizes[i] = s
+
+    def setAllStepSizes(self, ss):
+        self.stepsizes = ss
+    
     def _addNamedParams(self, alias, **d):
         self.namedparams.update(d)
         if not alias:
@@ -334,15 +482,13 @@ class NamedParams(object):
         for n in args:
             self.thawParam(n)
     def thawAllParams(self):
-        for i in xrange(len(self.liquid)):
-            self.liquid[i] = True
+        self.liquid[:] = [True]*len(self.liquid)
     unfreezeParam = thawParam
     unfreezeParams = thawParams
     unfreezeAllParams = thawAllParams
     
     def freezeAllParams(self):
-        for i in xrange(len(self.liquid)):
-            self.liquid[i] = False
+        self.liquid[:] = [False]*len(self.liquid)
     def getFrozenParams(self):
         return [self.getNamedParamName(i) for i in self.getFrozenParamIndices()]
     def getThawedParams(self):
@@ -359,7 +505,39 @@ class NamedParams(object):
         i = self.getNamedParamIndex(paramname)
         assert(i is not None)
         return not self.liquid[i]
+    def isParamThawed(self, paramname):
+        i = self.getNamedParamIndex(paramname)
+        assert(i is not None)
+        return self.liquid[i]
 
+    def getLiquidIndexOfIndex(self, i):
+        '''
+        Return the index, among the thawed parameters, of the given
+        parameter index (in all parameters).  Returns -1 if the
+        parameter is frozen.
+        '''
+        if not self.liquid[i]:
+            return -1
+        return sum(self.liquid[:i])
+
+    def getLiquidIndex(self, paramname):
+        '''
+        Returns the index, among the thawed parameters, of the given
+        named parameter.  Returns -1 if the parameter is frozen.
+        Raises KeyError if the parameter is not found.
+
+        For example, if names 'a','c', and 'e' are thawed,
+
+        getLiquidIndex('c') returns 1
+        getLiquidIndex('b') returns -1
+        '''
+        i = self.getNamedParamIndex(paramname)
+        if i is None:
+            raise KeyError('No such parameter "%s"', paramname)
+        if not self.liquid[i]:
+            return -1
+        return sum(self.liquid[:i])
+        
     def _enumerateLiquidArray(self, array):
         for i,v in enumerate(self.liquid):
             if v:
@@ -399,7 +577,7 @@ class NamedParams(object):
                 yield (i, j)
                 i += 1
 
-class ParamList(BaseParams, NamedParams):
+class ParamList(GaussianPriorsMixin, NamedParams, BaseParams):
     '''
     An implementation of Params that holds values in a list.
     '''
@@ -407,12 +585,12 @@ class ParamList(BaseParams, NamedParams):
         #print 'ParamList __init__()'
         # FIXME -- kwargs with named params?
         self.vals = list(args)
-        #print 'Creating ParamList', self.__class__, '->', self.vals
         super(ParamList,self).__init__()
 
     def copy(self):
         #return self.__class__(*self.getParams())
-        cop = self.__class__(*self._getThings())
+        #cop = self.__class__(*self._getThings())
+        cop = super(ParamList, self).copy()
         cop.liquid = [l for l in self.liquid]
         return cop
 
@@ -478,11 +656,6 @@ class ParamList(BaseParams, NamedParams):
     def getParam(self,i):
         ii = self._indexLiquid(i)
         return self._getThing(ii)
-
-    def getStepSizes(self, *args, **kwargs):
-        if hasattr(self, 'stepsizes'):
-            return list(self._getLiquidArray(self.stepsizes))
-        return [1.0] * self.numberOfParams()
 
     def __len__(self):
         ''' len(): of liquid params '''
@@ -838,6 +1011,26 @@ class MultiParams(BaseParams, NamedParams):
             p.extend(s.getStepSizes(*args, **kwargs))
         return p
 
+    def getAllStepSizes(self, *args, **kwargs):
+        p = []
+        for s in self.subs:
+            p.extend(s.getAllStepSizes(*args, **kwargs))
+        return p
+
+    def setStepSizes(self, ss):
+        off = 0
+        for sub in self._getActiveSubs():
+            n = sub.numberOfParams()
+            sub.setStepSizes(ss[off: off+n])
+            off += n
+
+    def setAllStepSizes(self, ss):
+        off = 0
+        for sub in self.subs:
+            n = len(sub.getAllParams())
+            sub.setAllStepSizes(ss[off: off+n])
+            off += n
+            
     def getLogPrior(self):
         lnp = 0.
         for s in self._getActiveSubs():
@@ -867,13 +1060,11 @@ class MultiParams(BaseParams, NamedParams):
             pb.extend(b)
 
             c0 += s.numberOfParams()
-            r0 += listmax(r)
+            r0 += listmax(r,-1) + 1
 
         if rA == []:
             return None
         return rA,cA,vA,pb
-
-
 
 
 class NpArrayParams(ParamList):

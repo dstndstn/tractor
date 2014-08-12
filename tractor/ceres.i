@@ -3,6 +3,7 @@
 %include <typemaps.i>
 
 %{
+#define PY_ARRAY_UNIQUE_SYMBOL tractorceres_ARRAY_API
 #include <numpy/arrayobject.h>
 #include <math.h>
 #include <assert.h>
@@ -159,6 +160,7 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     options.jacobi_scaling = false;
     //options.jacobi_scaling = true;
 
+    // .minimizer_type = TRUST_REGION / LINE_SEARCH
     // .linear_solver_type = SPARSE_NORMAL_CHOLESKY / DENSE_QR
     // / DENSE_SCHUR / SPARSE_SCHUR
     // .trust_region_strategy_type = LEVENBERG_MARQUARDT / DOGLEG
@@ -228,9 +230,15 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         }
     }
 
+
+    // CERES 1.9.0
+    const char* errstring = summary.message.c_str();
+    // CERES 1.8.0
+    //const char* errstring = summary.error.c_str();
+
     return Py_BuildValue("{sisssdsdsdsssssisisi}",
                          "termination", int(summary.termination_type),
-                         "error", summary.error.c_str(),
+                         "error", errstring,
                          "initial_cost", summary.initial_cost,
                          "final_cost", summary.final_cost,
                          "fixed_cost", summary.fixed_cost,
@@ -286,6 +294,193 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
 
     Py_RETURN_NONE;
 }
+
+
+// Generic optimization
+
+
+class NumericDiffImageCost {
+public:
+    NumericDiffImageCost(ImageCostFunction* im) : _im(im) {}
+    
+    ~NumericDiffImageCost() {
+        delete _im;
+    }
+
+    bool operator()(double const* const* parameters, double* residuals) const {
+        return _im->Evaluate(parameters, residuals, NULL);
+    }
+
+protected:
+    ImageCostFunction* _im;
+};
+
+class DlnpCallback : public ceres::IterationCallback {
+public:
+    DlnpCallback(double dlnp) : _dlnp(dlnp) {}
+    virtual ~DlnpCallback() {}
+
+    virtual ceres::CallbackReturnType operator()
+    (const ceres::IterationSummary& summary) {
+        printf("Cost change: %g\n", summary.cost_change);
+        if (summary.cost_change > 0 && summary.cost_change < _dlnp) {
+            return ceres::SOLVER_TERMINATE_SUCCESSFULLY;
+        }
+        return ceres::SOLVER_CONTINUE;
+    }
+protected:
+    const double _dlnp;
+};
+
+
+static PyObject* ceres_opt(PyObject* tractor, int nims,
+                           PyObject* np_params, PyObject* np_variance,
+                           int scale_columns,
+                           int numeric,
+                           float numeric_stepsize,
+                           float dlnp,
+                           int max_iterations) {
+    /*
+     np_params: numpy array, type double, length number of params.
+     np_variance: ditto
+
+     Methods called on the "tractor" object include:
+
+     img = tractor.getImage(i)
+        img.getWidth()
+        img.getHeight()
+     tractor.setParams(np_params)   # with the np_params obj passed in
+     tractor.getChiImage(i)
+     tractor._getOneImageDerivs(i)
+
+     */
+    Problem problem;
+    int i;
+    double* params;
+    int nparams;
+    int get_variance;
+    int variance_ok = 0;
+
+    assert(PyArray_Check(np_params));
+    assert(PyArray_TYPE(np_params) == NPY_DOUBLE);
+    if (!(PyArray_Check(np_params) &&
+          (PyArray_TYPE(np_params) == NPY_DOUBLE))) {
+        printf("ceres_opt: wrong type for params variable\n");
+        return NULL;
+    }
+    nparams = (int)PyArray_Size(np_params);
+    params = (double*)PyArray_DATA(np_params);
+
+    get_variance = (np_variance != Py_None);
+
+    printf("ceres_opt, nims %i, nparams %i, get_variance %i\n", nims, nparams,
+           get_variance);
+
+    std::vector<double*> allparams;
+    // Single-param blocks
+    for (i=0; i<nparams; i++)
+        allparams.push_back(params + i);
+
+    for (i=0; i<nims; i++) {
+
+        ImageCostFunction* icf = new ImageCostFunction
+            (tractor, i, nparams, np_params);
+
+        CostFunction* cost = NULL;
+        if (numeric) {
+            ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>* dyncost = 
+                new ceres::DynamicNumericDiffCostFunction<NumericDiffImageCost>
+                (new NumericDiffImageCost(icf), ceres::TAKE_OWNERSHIP,
+                 numeric_stepsize);
+            for (i=0; i<nparams; i++)
+                dyncost->AddParameterBlock(1);
+            dyncost->SetNumResiduals(icf->nPix());
+            cost = dyncost;
+
+        } else {
+            cost = icf;
+        }
+        problem.AddResidualBlock(cost, NULL, allparams);
+    }
+
+
+    // Run the solver!
+    Solver::Options options;
+    options.minimizer_progress_to_stdout = true;
+    options.linear_solver_type = ceres::SPARSE_SCHUR;
+    options.jacobi_scaling = scale_columns;
+    options.numeric_derivative_relative_step_size = numeric_stepsize;
+    if (max_iterations) {
+        options.max_num_iterations = max_iterations;
+    }
+    if (dlnp > 0) {
+        options.function_tolerance = 1e-16;
+
+        printf("Callbacks: %i\n", (int)options.callbacks.size());
+        DlnpCallback cb(dlnp);
+        options.callbacks.push_back(&cb);
+    }
+
+    Solver::Summary summary;
+    Solve(options, &problem, &summary);
+    printf("%s\n", summary.BriefReport().c_str());
+
+    if (get_variance && (summary.termination_type == ceres::CONVERGENCE)) {
+        if (!(PyArray_Check(np_variance) &&
+              (PyArray_TYPE(np_variance) == NPY_DOUBLE))) {
+            printf("ceres_opt: wrong type for variance variable\n");
+            return NULL;
+        }
+        if (PyArray_Size(np_variance) != PyArray_Size(np_params)) {
+            printf("ceres_opt: wrong size for variance variable\n");
+            return NULL;
+        }
+        double* cov_out = (double*)PyArray_DATA(np_variance);
+        for (i=0; i<nparams; i++)
+            cov_out[i] = 0.0;
+
+        ceres::Covariance::Options options;
+
+        options.algorithm_type = ceres::DENSE_SVD;
+        options.null_space_rank = -1;
+        //options.algorithm_type = SPARSE_QR;
+        //options.algorithm_type = SPARSE_CHOLESKY;
+
+        ceres::Covariance covariance(options);
+
+        std::vector<std::pair<const double*, const double*> > covar_blocks;
+        for (i=0; i<nparams; i++)
+            covar_blocks.push_back(std::make_pair(params+i, params+i));
+        if (!covariance.Compute(covar_blocks, &problem)) {
+            printf("ceres_opt: failed to compute variance\n");
+            // ?
+            return NULL;
+        } else {
+            variance_ok = 1;
+        }
+        for (i=0; i<nparams; i++)
+            covariance.GetCovarianceBlock(params+i, params+i, cov_out+i);
+    }
+
+    const char* errstring = summary.message.c_str();
+
+    return Py_BuildValue
+        ("{sisssdsdsdsssssisisisi}",
+         "termination", int(summary.termination_type),
+         "error", errstring,
+         "initial_cost", summary.initial_cost,
+         "final_cost", summary.final_cost,
+         "fixed_cost", summary.fixed_cost,
+         "brief_report", summary.BriefReport().c_str(),
+         "full_report", summary.FullReport().c_str(),
+         "steps_successful", summary.num_successful_steps,
+         "steps_unsuccessful", summary.num_unsuccessful_steps,
+         "steps_inner", summary.num_inner_iteration_steps,
+         "variance_ok", variance_ok);
+}
+
+
+
 
 
 %}

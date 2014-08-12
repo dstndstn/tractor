@@ -6,7 +6,7 @@ import unittest
 
 from tractor import *
 from tractor.sdss import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 
 class TractorTest(unittest.TestCase):
 	def test_pixpsf(self):

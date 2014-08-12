@@ -11,7 +11,7 @@ import socket
 import fitsio
 
 from astrometry.util.fits import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import *
 from astrometry.util.util import *
@@ -25,7 +25,7 @@ sys.path.append(os.getcwd())
 
 from tractor import *
 from tractor.sdss import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 

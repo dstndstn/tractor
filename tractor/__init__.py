@@ -1,13 +1,14 @@
 from engine import *
 from ducks import *
 from basics import *
-from nasasloan import *
+#from nasasloan import *
 from psfex import *
 from ellipses import *
+from imageutils import *
 
 __all__ = [
     # modules
-    'sdss', 'fitpsf', 'emfit', 'sdss_galaxy',
+    'sdss', 'fitpsf', 'emfit', 'galaxy', 'sersic',
     # ducks
     'Params', 'Sky', 'Source', 'Position', 'Brightness', 'PhotoCal',
     'PSF', 
@@ -19,12 +20,13 @@ __all__ = [
     'Flux', 'Fluxes', 'Mag', 'Mags', 'MagsPhotoCal',
     'NanoMaggies',
     'PixPos', 'RaDecPos',
-    'NullPhotoCal', 'LinearPhotoCal',
+    'NullPhotoCal', 'LinearPhotoCal', 'FluxesPhotoCal',
     'WCS', 'NullWCS',
     'FitsWcs', 'WcslibWcs', 'ConstantFitsWcs',
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
     'ParamsWrapper',
+    #'GaussianPriors',
     # engine
     'Patch', 'Image', 'Images',
     'Catalog', 'Tractor',
@@ -32,4 +34,6 @@ __all__ = [
     'VaryingGaussianPSF', 'PsfEx',
     # ellipses
     'EllipseE', 'EllipseESoft',
+    # imageutils
+    'interpret_roi',
     ]

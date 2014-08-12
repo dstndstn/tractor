@@ -85,6 +85,9 @@ class SplineSky(ParamList):
 
 		rowA, colA, valA, and pb should be *lists* of np.arrays
 
+        (ACTUALLY, the colA values should be plain ints, not arrays;
+        the code below may not have been updated!!)
+        
 		where "N" is the number of "pseudo-pixels"; "pA" will be
 		appended to the least-squares "A" matrix, and "pb" will be
 		appended to the least-squares "b" vector, and the

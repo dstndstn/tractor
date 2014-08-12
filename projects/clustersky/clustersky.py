@@ -75,7 +75,7 @@ import os
 
 from astrometry.util.fits import *
 from astrometry.util.file import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.plotutils import *
 from astrometry.util.starutil_numpy import *
 import astrometry.libkd.spherematch as sm
@@ -86,7 +86,7 @@ from astrometry.util.stages import *
 from tractor.utils import *
 from tractor import sdss as st
 from tractor import *
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.splinesky import SplineSky
 from tractor.sdss import SdssPointSource, SdssBrightPSF
 

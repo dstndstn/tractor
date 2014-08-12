@@ -48,9 +48,17 @@ class Params(object):
         return []
     def getAllParams(self):
         return self.getParams()
+
+    def getAllStepSizes(self, *args, **kwargs):
+        return self.getStepSizes(*args, **kwargs)
     def getStepSizes(self, *args, **kwargs):
         ''' Returns "reasonable" step sizes for the parameters.'''
         return []
+    def setAllStepSizes(self, ss):
+        self.setStepSizes(ss)
+    def setStepSizes(self, ss):
+        assert(len(ss) == self.numberOfParams())
+        pass
     def setParams(self, p):
         '''
         Sets the parameter values to the values in the given
@@ -81,11 +89,37 @@ class Params(object):
     def getLogPriorDerivatives(self):
         return None
 
-class Sky(Params):
+class ImageCalibration(object):
+    def toFitsHeader(self, hdr, prefix=''):
+        params = self.getAllParams()
+        for i in range(len(params)):
+            k = prefix + 'P%i' % i
+            hdr.add_record(dict(name=k, value=params[i]))
+
+    @classmethod
+    def fromFitsHeader(clazz, hdr, prefix=''):
+        args = []
+        for i in range(100):
+            k = prefix + 'A%i' % i
+            if not k in hdr:
+                break
+            args.append(hdr.get(k))
+        obj = clazz(*args)
+        params = []
+        for i in range(100):
+            k = prefix + 'P%i' % i
+            if not k in hdr:
+                break
+            params.append(hdr.get(k))
+        obj.setAllParams(params)
+        return obj
+        
+    
+class Sky(ImageCalibration, Params):
     '''
     Duck-type definition for a sky model.
     '''
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, tractor, img, srcs):
         '''
         Returns [ Patch, Patch, ... ], of length numberOfParams(),
         containing the derivatives in the given `Image` for each
@@ -152,7 +186,7 @@ class Brightness(Params):
     '''
     pass
 
-class PhotoCal(Params):
+class PhotoCal(ImageCalibration, Params):
     '''
     Duck-type definition of photometric calibration.
 
@@ -200,7 +234,7 @@ class Time(Params):
     def toYears():
         pass
     
-class WCS(Params):
+class WCS(ImageCalibration, Params):
     '''
     Duck-type definition of World Coordinate System.
     
@@ -254,7 +288,7 @@ class WCS(Params):
         '''
         return None
 
-class PSF(Params):
+class PSF(ImageCalibration, Params):
     '''
     Duck-type definition of a point-spread function.
     '''

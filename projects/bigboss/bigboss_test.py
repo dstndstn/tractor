@@ -56,7 +56,7 @@ def make_plots(prefix, im, tr=None, plots=['data','model','chi'], mags=['i'],
 def get_cfht_catalog(mags=['i'], maglim = 27., returnTable=False):
     from astrometry.util.pyfits_utils import fits_table
     from tractor import Mags, RaDecPos, PointSource, Images, Catalog
-    from tractor.sdss_galaxy import DevGalaxy, ExpGalaxy, CompositeGalaxy, GalaxyShape
+    from tractor.galaxy import DevGalaxy, ExpGalaxy, CompositeGalaxy, GalaxyShape
 
     T = fits_table('/project/projectdirs/bigboss/data/cs82/W4p1m1_i.V2.7A.swarp.cut.deVexp.fit', hdunum=2)
     print 'Read', len(T), 'sources'

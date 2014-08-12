@@ -87,45 +87,6 @@ Utilities
 .. autoclass:: tractor.MultiParams
    :members:
 
-.. _basics:
-
-Basics for standard images & catalogs
--------------------------------------
-
-.. autoclass:: tractor.ConstantSky
-   :members:
-
-.. autoclass:: tractor.PointSource
-   :members:
-
-.. autoclass:: tractor.NullWCS
-   :members:
-.. autoclass:: tractor.PixPos
-   :members:
-
-.. autoclass:: tractor.NullPhotoCal
-   :members:
-.. autoclass:: tractor.Flux
-   :members:
-
-.. autoclass:: tractor.FitsWcs
-   :members:
-.. autoclass:: tractor.RaDecPos
-   :members:
-
-.. autoclass:: tractor.Mag
-   :members:
-.. autoclass:: tractor.Mags
-   :members:
-.. autoclass:: tractor.MagsPhotoCal
-   :members:
-
-.. autoclass:: tractor.NCircularGaussianPSF
-   :members:
-.. autoclass:: tractor.GaussianMixturePSF
-   :members:
-
-
 
 .. _engine:
 

@@ -1,12 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.ngc2000 import *
 import os
 from tractor import *
 from tractor import sdss as st
 from tractor.saveImg import *
-from tractor import sdss_galaxy as sg
+from tractor import galaxy as sg
 from tractor import basics as ba
 
 

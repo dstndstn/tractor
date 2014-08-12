@@ -1396,7 +1396,7 @@ import pylab as plt
 import multiprocessing
 from glob import glob
 from astrometry.util.pyfits_utils import *
-from astrometry.util.sdss_radec_to_rcf import *
+from astrometry.sdss.fields import *
 from astrometry.util.multiproc import *
 from astrometry.util.file import *
 from astrometry.util.plotutils import ArcsinhNormalize
@@ -1405,7 +1405,7 @@ from astrometry.sdss import *
 from tractor import *
 from tractor import cfht as cf
 from tractor import sdss as st
-from tractor.sdss_galaxy import *
+from tractor.galaxy import *
 from tractor.emfit import em_fit_2d
 from tractor.fitpsf import em_init_params
 import emcee

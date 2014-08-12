@@ -1,17 +1,13 @@
 import numpy as np
-import numpy.linalg
 
-#import scipy.interpolate
-#from scipy.ndimage.interpolation import affine_transform
+from .basics import *
+from .utils import *
+from .emfit import em_fit_2d
+from .fitpsf import em_init_params
+from . import mixture_profiles as mp
+from . import ducks
 
-from astrometry.util.fits import *
-
-from tractor.basics import *
-from tractor.utils import *
-from tractor.emfit import em_fit_2d
-from tractor.fitpsf import em_init_params
-
-class VaryingGaussianPSF(MultiParams):
+class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A mixture-of-Gaussians (MoG) PSF with spatial variation,
     represented as a spline(x,y) in each of the MoG parameters.
@@ -34,6 +30,12 @@ class VaryingGaussianPSF(MultiParams):
         self.ny = ny
 
         self.savesplinedata = False
+
+    def getRadius(self):
+        if hasattr(self, 'radius'):
+            return self.radius
+        # FIXME uhhh...?
+        return 25.
 
     def fitSavedData(self, pp, XX, YY):
         import scipy.interpolate
@@ -64,8 +66,18 @@ class VaryingGaussianPSF(MultiParams):
         Returns a Mixture-of-Gaussians representation of this PSF at the given
         pixel position x,y
         '''
-        w,mu,sig = self.mogParamsAt(x, y)
-        return GaussianMixturePSF(w, mu, sig)
+        w,mu,var = self.mogParamsAt(x, y)
+        return GaussianMixturePSF(w, mu, var)
+
+    def scaledMogParamsAt(self, x, y):
+        w,mu,var = self.mogParamsAt(x, y)
+        if not self.scale:
+            # We didn't downsample the PSF in pixel space, so
+            # scale down the MOG params.
+            sfactor = self.sampling
+            mu  *= sfactor
+            var *= sfactor**2
+        return w, mu, var
 
     def mogParamsAt(self, x, y):
         '''
@@ -82,20 +94,20 @@ class VaryingGaussianPSF(MultiParams):
         mu = np.empty((K,2))
         mu.ravel()[:] = vals[:2*K]
         vals = vals[2*K:]
-        sig = np.empty((K,2,2))
-        sig[:,0,0] = vals[:K]
+        var = np.empty((K,2,2))
+        var[:,0,0] = vals[:K]
         vals = vals[K:]
-        sig[:,0,1] = vals[:K]
-        sig[:,1,0] = sig[:,0,1]
+        var[:,0,1] = vals[:K]
+        var[:,1,0] = var[:,0,1]
         vals = vals[K:]
-        sig[:,1,1] = vals[:K]
+        var[:,1,1] = vals[:K]
         vals = vals[K:]
-        return w, mu, sig
+        return w, mu, var
 
     def _fitParamGrid(self):
         # number of MoG mixture components
         K = self.K
-        w,mu,sig = em_init_params(K, None, None, None)
+        w,mu,var = em_init_params(K, None, None, None)
         # all MoG fit parameters (we need to make them shaped (ny,nx)
         # for spline fitting)
         pp = []
@@ -110,22 +122,22 @@ class VaryingGaussianPSF(MultiParams):
                 # We start each row with the MoG fit parameters of the start of the
                 # previous row (to try to make the fit more continuous)
                 if ix == 0 and px0 is not None:
-                    w,mu,sig = px0
+                    w,mu,var = px0
                 im = self.instantiateAt(x, y)
                 PS = im.shape[0]
                 im /= im.sum()
                 im = np.maximum(im, 0)
                 xm,ym = -(PS/2), -(PS/2)
-                em_fit_2d(im, xm, ym, w, mu, sig)
-                print 'Fit w,mu,sig', w,mu,sig
+                em_fit_2d(im, xm, ym, w, mu, var)
+                print 'Fit w,mu,var', w,mu,var
                 if ix == 0:
-                    px0 = w,mu,sig
+                    px0 = w,mu,var
 
                 params = np.hstack((w.ravel()[:-1],
                                     mu.ravel(),
-                                    sig[:,0,0].ravel(),
-                                    sig[:,0,1].ravel(),
-                                    sig[:,1,1].ravel())).copy()
+                                    var[:,0,0].ravel(),
+                                    var[:,0,1].ravel(),
+                                    var[:,1,1].ravel())).copy()
                 pprow.append(params)
             pp.append(pprow)
         pp = np.array(pp)
@@ -142,13 +154,15 @@ class PsfEx(VaryingGaussianPSF):
         scale (boolean): resample the eigen-PSFs (True), or scale the
               fit parameters (False)?  
         '''
+        from astrometry.util.fits import fits_table
+
         T = fits_table(fn, ext=ext)
         ims = T.psf_mask[0]
         print 'Got', ims.shape, 'PSF images'
-        hdr = pyfits.open(fn)[ext].header
+        hdr = T.get_header()
         # PSF distortion bases are polynomials of x,y
-        assert(hdr['POLNAME1'] == 'X_IMAGE')
-        assert(hdr['POLNAME2'] == 'Y_IMAGE')
+        assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
+        assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
         assert(hdr['POLGRP1'] == 1)
         assert(hdr['POLGRP2'] == 1)
         assert(hdr['POLNGRP' ] == 1)
@@ -179,17 +193,25 @@ class PsfEx(VaryingGaussianPSF):
 
         super(PsfEx, self).__init__(W, H, nx, ny, K)
 
-    def mogAt(self, x, y):
-        w,mu,sig = self.mogParamsAt(x, y)
-        if self.scale:
-            # We didn't downsample the PSF in pixel space, so
-            # scale down the MOG params.
-            sfactor = self.sampling
-            mu  *= sfactor
-            sig *= sfactor**2
-        return GaussianMixturePSF(w, mu, sig)
+        bh,bw = self.psfbases[0].shape
+        self.radius = (bh+1)/2.
 
-    def instantiateAt(self, x, y):
+    def getMixtureOfGaussians(self, mean=None):
+        if mean is not None:
+            x = mean[0]
+            y = mean[1]
+        else:
+            x = y = 0.
+        w,mu,var = self.scaledMogParamsAt(x, y)
+        return mp.MixtureOfGaussians(w, mu, var)
+
+    def mogAt(self, x, y):
+        w,mu,var = self.scaledMogParamsAt(x, y)
+        mog = GaussianMixturePSF(w, mu, var)
+        mog.radius = self.radius
+        return mog
+
+    def instantiateAt(self, x, y, nativeScale=False):
         from scipy.ndimage.interpolation import affine_transform
         psf = np.zeros_like(self.psfbases[0])
         #print 'psf', psf.shape
@@ -214,7 +236,7 @@ class PsfEx(VaryingGaussianPSF):
                 #print 'psf sum', psf.sum()
         #print 'min', psf.min(), 'max', psf.max()
 
-        if self.scale and self.sampling != 1:
+        if (self.scale or nativeScale) and self.sampling != 1:
             ny,nx = psf.shape
             spsf = affine_transform(psf, [1./self.sampling]*2,
                                     offset=nx/2 * (self.sampling - 1.))

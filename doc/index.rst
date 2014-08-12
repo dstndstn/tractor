@@ -10,11 +10,20 @@ Welcome to the Tractor's documentation!
 .. toctree::
    :maxdepth: 2
 
+   intro
+   intro2
+   galsim
    oaq
    reference
    tutorial
+   ceres
 
+.. toctree::
+   :hidden:
 
+   ref-basics
+   ref-basics-images
+   ref-basics-sources
 
 
 Indices
