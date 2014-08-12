@@ -73,9 +73,14 @@ if True:
     # Freeze all image calibration parameters
     tractor.freezeParam('images')
 
+    print 'Thawed params:'
+    tractor.printThawedParams()
+    print
+
+    
     # Take several linearized least squares steps
     for i in range(20):
-        dlnp,X,alpha = tractor.optimize()
+        dlnp,X,alpha = tractor.optimize(shared_params=False)
         print 'dlnp', dlnp
         if dlnp < 1e-3:
             break

@@ -18,6 +18,12 @@ Welcome to the Tractor's documentation!
    tutorial
    ceres
 
+.. toctree::
+   :hidden:
+
+   ref-basics
+   ref-basics-images
+   ref-basics-sources
 
 
 Indices

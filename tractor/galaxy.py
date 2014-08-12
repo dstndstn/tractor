@@ -209,7 +209,6 @@ class Galaxy(MultiParams):
                 #print 'to get', self.shape
                 patchx = self.getUnitFluxModelPatch(img, px0, py0)
                 self.shape.setParam(i, oldval)
-                #print '  reverted to', self.shape
                 if patchx is None:
                     print 'patchx is None:'
                     print '  ', self

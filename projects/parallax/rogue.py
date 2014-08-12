@@ -181,6 +181,7 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut, fakewcs):
 
 
 def plot_tracks(src, fakewcs, spa=None, **kwargs):
+    # NOTE -- MAGIC 61 = monthly; this is ASSUMEd below.
     tt = np.linspace(2010., 2015., 61)
     t0 = TAITime(None, mjd=TAITime.mjd2k + 365.25*10)
     #rd0 = src.getPositionAtTime(t0)
@@ -709,6 +710,7 @@ if __name__ == '__main__':
         rrdd.append((rr,dd))
     ps.savefig()
 
+    # ASSUME tt are monthly.
     plt.clf()
     for i,(rr,dd) in enumerate(rrdd):
         plt.plot(rr, dd, 'k-', alpha=0.5)
