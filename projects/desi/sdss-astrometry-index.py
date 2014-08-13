@@ -11,7 +11,10 @@ from astrometry.util.plotutils import *
 from astrometry.sdss import *
 
 
-def _run_one((cmd)):
+def _run_one((cmd, outfn)):
+    if os.path.exists(outfn):
+        print 'Output file exists:', outfn, '; not running command'
+        return
     os.system(cmd)
 
 def main():
@@ -54,7 +57,7 @@ def main():
     cmds = []
     scale = 2
     for band in ['r','z']:
-        for hp in range(48): #[17]:
+        for hp in range(48):
             indfn = 'data/decam/sdss-indexes/index-sdss-%s-hp%02i-%i.fits' % (band, hp, scale)
             if os.path.exists(indfn):
                 print 'Exists:', indfn
@@ -66,7 +69,7 @@ def main():
             cmd = ('build-astrometry-index -o %s -P %i -i %s -S %s_psfflux -f -H %i -s 2 -L 20 -I 1408130 -t data/tmp'
                    % (indfn, scale, catfn, band, hp))
             print cmd
-            cmds.append(cmd)
+            cmds.append((cmd,indfn))
 
     mp = multiproc(8)
     mp.map(_run_one, cmds)
