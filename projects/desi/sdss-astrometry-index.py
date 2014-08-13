@@ -56,9 +56,11 @@ def main():
 
     cmds = []
     scale = 2
-    for band in ['r','z']:
+    #for band in ['r','z']:
+    for band in ['r']:
         for hp in range(48):
-            indfn = 'data/decam/sdss-indexes/index-sdss-%s-hp%02i-%i.fits' % (band, hp, scale)
+            #indfn = 'data/decam/sdss-indexes/index-sdss-%s-hp%02i-%i.fits' % (band, hp, scale)
+            indfn = 'data/decam/sdss-indexes/index-sdss2-%s-hp%02i-%i.fits' % (band, hp, scale)
             if os.path.exists(indfn):
                 print 'Exists:', indfn
                 continue
@@ -66,8 +68,9 @@ def main():
             if not os.path.exists(catfn):
                 print 'No input catalog:', catfn
                 continue
-            cmd = ('build-astrometry-index -o %s -P %i -i %s -S %s_psfflux -f -H %i -s 2 -L 20 -I 1408130 -t data/tmp'
-                   % (indfn, scale, catfn, band, hp))
+            nstars = 30
+            cmd = ('build-astrometry-index -o %s -P %i -i %s -S %s_psfflux -f -H %i -s 2 -L 20 -I 1408130 -t data/tmp -n %i'
+                   % (indfn, scale, catfn, band, hp, nstars))
             print cmd
             cmds.append((cmd,indfn))
 
