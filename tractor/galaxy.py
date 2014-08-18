@@ -543,21 +543,41 @@ class FracDev(ScalarParam):
     def getClippedValue(self):
         f = self.getValue()
         return np.clip(f, 0., 1.)
+
+class SoftenedFracDev(FracDev):
+    '''
+    Implements a "softened" version of the deV-to-total fraction.
+
+    The sigmoid function is scaled and shifted so that S(0) ~ 0.1 and
+    S(1) ~ 0.9.
+
+    Use the 'getClippedValue()' function to get the un-softened
+    fracDev in [0,1].
+    '''
+    def getClippedValue(self):
+        f = self.getValue()
+        return 1./(1 + np.exp(4.*(0.5 - f)))
     
 class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
     '''
-    A galaxy with Exponential and deVaucouleurs components
-    with a FIXED fraction of deV / (exp + deV) light.
-
+    A galaxy with Exponential and deVaucouleurs components where the
+    brightnesses of the deV and exp components are defined in terms of
+    a total brightness and a fraction of that total that goes to the
+    deV component.
+    
     The two components share a position (ie the centers are the same),
     but have different shapes.  The galaxy has a single brightness
     that is split between the components.
 
     This is like CompositeGalaxy, but more useful for getting
-    consistent colors from forced photometry.
+    consistent colors from forced photometry, because one can freeze
+    the fracDev to keep the deV+exp profile fixed.
     '''
     def __init__(self, pos, brightness, fracDev, shapeExp, shapeDev):
-        MultiParams.__init__(self, pos, brightness, FracDev(fracDev),
+        # handle passing fracDev as a float
+        if not isinstance(fracDev, BaseParams):
+            fracDev = FracDev(fracDev)
+        MultiParams.__init__(self, pos, brightness, fracDev,
                              shapeExp, shapeDev)
         self.name = self.getName()
 
@@ -585,7 +605,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
                 ', shapeDev=' + repr(self.shapeDev) + ')')
     def copy(self):
         return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
-                                    self.fracDev.getValue(),
+                                    self.fracDev.copy(),
                                     self.shapeExp.copy(),
                                     self.shapeDev.copy())
 
