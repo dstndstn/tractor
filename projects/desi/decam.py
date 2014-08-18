@@ -332,49 +332,6 @@ def sqimshow(img, **kwa):
 
 
         
-# def convert_source_for_output(src):
-#     '''
-#     Converts a tractor source from our internal representation to
-#     output format.
-# 
-#     Specifically, converts EllipseESoft to EllipseE
-#     '''
-#     if instance(src, (DevGalaxy, ExpGalaxy)):
-#         src.shape = EllipseE.fromEllipeESoft(src.shape)
-#     elif instance(src, FixedCompositeGalaxy):
-#         src.shapeExp = EllipseE.fromEllipeESoft(src.shapeExp)
-#         src.shapeDev = EllipseE.fromEllipeESoft(src.shapeDev)
-
-# We'll want to compute errors in our native representation, so have a
-# FITS output routine that can convert those into output format.
-
-def get_tractor_params(T, cat, pat):
-    typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
-                FixedCompositeGalaxy: 'C' }
-    T.set(pat % 'type', np.array([typemap[type(src)] for src in cat]))
-
-    T.set(pat % 'ra',  np.array([src.getPosition().ra  for src in cat]))
-    T.set(pat % 'dec', np.array([src.getPosition().dec for src in cat]))
-
-    shapeExp = np.zeros((len(T), 3))
-    shapeDev = np.zeros((len(T), 3))
-    fracDev  = np.zeros(len(T))
-
-    for i,src in enumerate(cat):
-        if isinstance(src, ExpGalaxy):
-            shapeExp[i,:] = src.shape.getAllParams()
-        elif isinstance(src, DevGalaxy):
-            shapeDev[i,:] = src.shape.getAllParams()
-            fracDev[i] = 1.
-        elif isinstance(src, FixedCompositeGalaxy):
-            shapeExp[i,:] = src.shapeExp.getAllParams()
-            shapeDev[i,:] = src.shapeDev.getAllParams()
-            fracDev[i] = src.fracDev.getValue()
-
-    T.set(pat % 'shapeExp', shapeExp)
-    T.set(pat % 'shapeDev', shapeDev)
-    T.set(pat % 'fracDev', fracDev)
-    return
 
 if __name__ == '__main__':
     import optparse
@@ -807,9 +764,9 @@ if __name__ == '__main__':
         use_ceres=True, BW=8,BH=8)
     flux_iv,fs = R.IV, R.fitstats
 
-    T,hdr = get_fits_catalog(cat, flux_iv, catsources.copy(), None,
+    T,hdr = prepare_fits_catalog(cat, flux_iv, catsources.copy(), None,
                              [tim.filter], fs)
-    get_tractor_params(T, cat, 'tractor_%s_init')
+    #get_tractor_fits_values(T, cat, 'tractor_%s_init')
     T.writeto(basefn + '-phot-1.fits', header=hdr)
         
     smag = -2.5 * (np.log10(sdssflux) - 9.)
@@ -1211,7 +1168,7 @@ if __name__ == '__main__':
     #     x = getattr(fs, k)
     #     x = np.array(x).astype(np.float32)
     #     T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
-    get_tractor_params(T, cat, 'tractor_%s')
+    get_tractor_fits_values(T, cat, 'tractor_%s')
 
     T.writeto(basefn + '-phot-2.fits', header=hdr)
 

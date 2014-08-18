@@ -58,9 +58,7 @@ if __name__ == '__main__':
 
     objs = read_photoobjs_in_wcs(wcs, margin, sdss=sdss, cols=cols)
     print 'Got', len(objs), 'photoObjs'
-    #pobjs.writeto(outfn)
 
-    #radecroi=[r0,r1,d0,d1],
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
         bands=opt.bands,
@@ -73,7 +71,7 @@ if __name__ == '__main__':
     N = cat.numberOfParams()
     var = np.zeros(N)
 
-    T,hdr = get_fits_catalog(cat, var, None, None, opt.bands, None)
+    T,hdr = prepare_fits_catalog(cat, var, None, None, opt.bands, None)
     T.writeto(outfn, header=hdr)
     print 'Wrote to', outfn
-    
+
