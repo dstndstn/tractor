@@ -1,3 +1,34 @@
+
+'''
+    2014-August run #1: g,r,z coverage:
+    240 < RA < 251, 6 < dec < 11
+
+
+
+    -exposure database
+    -tractor on tiles
+    -images -- CP or Nugent calibrations?
+    -astrometry w/ SDSS index files
+    -catalogs -- 
+       -- source extractor: simple (union of single exposures?  coadd?)
+       -- source extractor with galaxy photometry ("")
+       -- SDSS
+       -- Pan-STARRS
+       -- SED-matched filter
+    -segmentation
+    -brightest to faintest?  largest residuals to smallest?
+    -add new sources?  Point source <-> galaxy swaps?
+    -moving sources?
+
+    -catalog formats -- internal / output
+    -output values -- uncertainties; metrics
+
+'''
+
+    
+
+
+
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')
@@ -332,7 +363,6 @@ def sqimshow(img, **kwa):
 
 
         
-
 if __name__ == '__main__':
     import optparse
     import logging
