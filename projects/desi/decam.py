@@ -5,7 +5,7 @@
 
 
 
-    -exposure database?
+    -exposure/CCD database?
     -calibration database?  Or file tree?
     -tractor on tiles
     -images -- CP or Nugent calibrations?
