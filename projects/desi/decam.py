@@ -5,7 +5,8 @@
 
 
 
-    -exposure database
+    -exposure database?
+    -calibration database?  Or file tree?
     -tractor on tiles
     -images -- CP or Nugent calibrations?
     -astrometry w/ SDSS index files
