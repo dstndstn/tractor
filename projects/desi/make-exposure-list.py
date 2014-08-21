@@ -9,10 +9,15 @@ from astrometry.util.fits import *
 
 import fitsio
 
+'''
+python -u projects/desi/make-exposure-list.py ~/cosmo/data/staging/decam/CP*/c4d_*_ooi*.fits.fz > log 2> err &
+python -u projects/desi/make-exposure-list.py -o ccds-20140810.fits ~/cosmo/data/staging/decam/CP20140810/c4d_*_ooi*.fits.fz > log-0810 2>&1 &
+'''
 
 if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser('%prog [options] <frame frame frame>')
+    parser.add_option('-o', dest='outfn', help='Output filename', default='ccds.fits')
     opt,args = parser.parse_args()
 
     nan = np.nan
@@ -38,35 +43,31 @@ if __name__ == '__main__':
                ('CD1_2',nan),
                ('CD2_1',nan),
                ('CD2_2',nan),
+               ('EXTNAME',''),
                ]
 
-    vals = dict([(k,[]) for k,d in
-                 primkeys + hdrkeys + [('FILENAME',''), ('HDU',0)]])
+    otherkeys = [('FILENAME',''), ('HDU',0),
+                 ('HEIGHT',0),('WIDTH',0),
+                 ]
 
-    for fn in args:
-        print 'Reading', fn
+    allkeys = primkeys + hdrkeys + otherkeys
+
+    vals = dict([(k,[]) for k,d in allkeys])
+
+    for i,fn in enumerate(args):
+        print 'Reading', (i+1), 'of', len(args), ':', fn
         F = fitsio.FITS(fn)
         #print F
         #print len(F)
         primhdr = F[0].read_header()
         #print primhdr
 
-        # filt = primhdr['FILTER'].split()[0]
-        # ra  = hmsstring2ra (primhdr['RA'])
-        # dec = dmsstring2dec(primhdr['DEC'])
-        # airmass = primhdr['AIRMASS']
-        # date    = primhdr['DATE-OBS']
-        # gseeing = primhdr['G-SEEING']
-        # exptime = primhdr['EXPTIME']
-        # 
-        # print 'Filt', filt, 'RA,Dec', ra,dec
-        # print 'exptime', exptime
-        # print 'airmass', airmass
-        # print 'date', date
-        # print 'gsee', gseeing
-
         for hdu in range(1, len(F)):
             hdr = F[hdu].read_header()
+
+            info = F[hdu].get_info()
+            #'extname': 'S1', 'dims': [4146L, 2160L]
+            H,W = info['dims']
 
             for k,d in primkeys:
                 vals[k].append(primhdr.get(k, d))
@@ -75,10 +76,11 @@ if __name__ == '__main__':
 
             vals['FILENAME'].append(fn)
             vals['HDU'].append(hdu)
+            vals['WIDTH'].append(int(W))
+            vals['HEIGHT'].append(int(H))
 
     T = fits_table()
-    #for k,v in vals.items():
-    for k,d in primkeys + hdrkeys:
+    for k,d in allkeys:
         T.set(k.lower().replace('-','_'), np.array(vals[k]))
     #T.about()
 
@@ -89,8 +91,7 @@ if __name__ == '__main__':
     T.ra  = np.zeros(len(T))
     T.dec = np.zeros(len(T))
     for i in range(len(T)):
-        # FIXME -- is this the right way around?
-        W,H = T.znaxis1[i], T.znaxis2[i]
+        W,H = T.width[i], T.height[i]
 
         wcs = Tan(T.crval1[i], T.crval2[i], T.crpix1[i], T.crpix2[i],
                   T.cd1_1[i], T.cd1_2[i], T.cd2_1[i], T.cd2_2[i], float(W), float(H))
@@ -107,6 +108,6 @@ if __name__ == '__main__':
         print k
         print T.get(k)
 
-    T.writeto('ccds.fits')
-    
+    T.writeto(opt.outfn)
+    print 'Wrote', opt.outfn
                 
