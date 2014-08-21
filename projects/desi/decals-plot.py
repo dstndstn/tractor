@@ -10,49 +10,84 @@ from astrometry.util.fits import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
 from astrometry.util.resample import *
+from astrometry.util.starutil_numpy import *
 
 if __name__ == '__main__':
-    ra,dec = 351.56, 0.33
-    #W,H = 2048,4096
-    #W,H = 4096,4096
-    W,H = 4096,2048
-    pixscale = 0.262 / 3600.
+
+    B = fits_table('bricks.fits')
+    B.index = np.arange(len(B))
+
+    ii = 377305
+
+    ra,dec = B.ra[ii], B.dec[ii]
+    W,H = 3600,3600
+    pixscale = 0.27 / 3600.
+    
+    # ra,dec = 351.56, 0.33
+    # W,H = 4096,2048
+    # pixscale = 0.262 / 3600.
 
     ps = PlotSequence('decals')
-    
+
+    print (ra, dec, W/2.+0.5, H/2.+0.5, -pixscale, 0., 0., pixscale, float(W), float(H))
+
     targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
                     -pixscale, 0., 0., pixscale,
-                    W, H)
-
-    #data/decam/proc/20130804/C01/gband/dec095705.01.p.w.fits
+                    float(W), float(H))
 
     nearest = True
 
     coims = []
+
+    T = fits_table('ccds.fits')
+    sz = 0.25
+    T.cut(np.abs(T.dec - dec) < sz)
+    T.cut(degrees_between(T.ra, T.dec, ra, dec) < sz)
+    print len(T), 'CCDs nearby'
     
     for band in 'grz':
-        fns = glob('data/decam/proc/2013080?/C01/%sband/dec??????.??.p.w.fits' %
-                   band)
-        print 'filenames:', fns
+        #fns = glob('data/decam/proc/2013080?/C01/%sband/dec??????.??.p.w.fits' %
+        #           band)
+        TT = T[T.filter == band]
+        print len(TT), 'in', band, 'band'
+        print 'filenames:', TT.filename
 
         coimg = np.zeros((H,W), np.float32)
         cowt  = np.zeros((H,W), np.float32)
         coimgm = np.zeros((H,W), np.float32)
         cowtm  = np.zeros((H,W), np.float32)
         
-        for fn in fns:
-            wt = 1.
-            img = fitsio.read(fn)
+        for fn,hdu in zip(TT.filename, TT.hdu):
+
+            img = fitsio.FITS(fn)[hdu].read()
+            #img = fitsio.read(fn)
+            #wcsfn = fn.replace('.fits','.cat.wcs')
+            wcsfn = fn
             print 'Image', img.shape
-            wcsfn = fn.replace('.fits','.cat.wcs')
             print 'WCS filename', wcsfn
             wcs = Sip(wcsfn)
             print 'WCS', wcs
 
-            bpfn = fn.replace('.fits', '.bpm.fits')
-            print 'Bad pixel mask', bpfn
-            mask = fitsio.read(bpfn)
-            mask = (mask == 0)
+            dqfn = fn.replace('_ooi_', '_ood_')
+            print 'DQ', dqfn
+            dq = fitsio.FITS(dqfn)[hdu].read()
+            print 'DQ', dq.shape, dq.dtype
+
+            print len(dq.ravel()), 'DQ pixels'
+            print 'Unique vals:', np.unique(dq)
+            print sum(dq == 0), 'have value 0'
+            
+            wtfn = fn.replace('_ooi_', '_oow_')
+            print 'Weight', wtfn
+            wt = fitsio.FITS(wtfn)[hdu].read()
+            print 'WT', wt.shape, wt.dtype
+            
+            if False:
+                # Nugent's bad pixel masks
+                bpfn = fn.replace('.fits', '.bpm.fits')
+                print 'Bad pixel mask', bpfn
+                mask = fitsio.read(bpfn)
+                mask = (mask == 0)
             
             L = 2
             try:
@@ -67,12 +102,16 @@ if __name__ == '__main__':
 
             if nearest:
                 coimg[Yo,Xo]  += img[Yi,Xi]
-                coimgm[Yo,Xo] += img[Yi,Xi] * mask[Yi,Xi]
+                coimgm[Yo,Xo] += img[Yi,Xi] * wt[Yi,Xi] * (dq[Yi,Xi] == 0)
+                #mask[Yi,Xi]
             else:
                 coimg[Yo,Xo]  += rim
-                coimgm[Yo,Xo] += img * mask[Yi,Xi]
-            cowt [Yo,Xo] += wt
-            cowtm[Yo,Xo] += wt * mask[Yi,Xi]
+                coimgm[Yo,Xo] += rim * wt[Yi,Xi] * (dq[Yi,Xi] == 0)
+                #mask[Yi,Xi]
+
+            cowt [Yo,Xo] += 1.
+            cowtm[Yo,Xo] += wt[Yi,Xi] * (dq[Yi,Xi] == 0)
+            #wt * mask[Yi,Xi]
             
         coadd = coimg / np.maximum(1e-16, cowt)
         coaddm = coimgm / np.maximum(1e-16, cowtm)
