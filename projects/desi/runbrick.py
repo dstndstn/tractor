@@ -12,6 +12,7 @@ import fitsio
 from astrometry.util.fits import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
+from astrometry.util.miscutils import *
 from astrometry.util.resample import *
 from astrometry.util.starutil_numpy import *
 from astrometry.libkd.spherematch import *
@@ -243,9 +244,9 @@ def main():
     plt.clf()
     for cat in cats:
         plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    rd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-                   [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-    plt.plot(rd[:,0], rd[:,1], 'r-')
+    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+    plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
     ps.savefig()
 
     for cat in cats:
@@ -262,7 +263,7 @@ def main():
     
     plt.clf()
     plt.plot(merged.ra, merged.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    plt.plot(rd[:,0], rd[:,1], 'r-')
+    plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
     ps.savefig()
 
     del cats
@@ -291,10 +292,43 @@ def main():
     for im in ims:
         band = im.band
 
+        wcs = Sip(im.wcsfn)
+        print 'Image shape', wcs.imagew, wcs.imageh
+        
+        imh,imw = wcs.imageh,wcs.imagew
+        imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
+        ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
+        tpoly = zip(tx,ty)
+
+        ## FIXME -- it seems I got lucky and the cross product is negative -- clockwise
+        ## One could check this and reverse the polygon vertex order.
+        # dx0,dy0 = tx[1]-tx[0], ty[1]-ty[0]
+        # dx1,dy1 = tx[2]-tx[1], ty[2]-ty[1]
+        # cross = dx0*dy1 - dx1*dy0
+        # print 'Cross:', cross
+
+        plt.clf()
+        imp = np.array(imgpoly)
+        #print 'imp', imp
+        ii = np.array([0,1,2,3,0])
+        imp = imp[ii,:]
+        plt.plot(imp[:,0], imp[:,1], 'b-')
+        plt.plot(tx[ii], ty[ii], 'r-')
+        clip = clip_polygon(imgpoly, tpoly)
+        #print 'Clip:', clip
+        clip = np.array(clip)
+        plt.plot(clip[ii,0], clip[ii,1], 'g-')
+        ps.savefig()
+
+        x0,y0 = np.floor(clip.min(axis=0)).astype(int)
+        x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
+        print 'Image range:', x0,x1, y0,y1
+
+        slc = slice(y0,y1+1), slice(x0,x1+1)
+
         img,imghdr = im.read_image(header=True)
         #dq = im.read_dq()
         invvar = im.read_invvar()
-        wcs = Sip(im.wcsfn)
 
         psf_fwhm = imghdr['FWHM']
 
