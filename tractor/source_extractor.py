@@ -1,4 +1,4 @@
-import np
+import numpy as np
 
 from tractor import *
 from tractor.galaxy import *

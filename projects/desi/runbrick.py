@@ -14,9 +14,11 @@ from astrometry.util.util import *
 from astrometry.util.plotutils import *
 from astrometry.util.resample import *
 from astrometry.util.starutil_numpy import *
+from astrometry.libkd.spherematch import *
 
 from tractor import *
 from tractor.galaxy import *
+from tractor.source_extractor import *
 
 tempdir = os.environ['TMPDIR']
 calibdir = os.environ.get('DECALS_CALIB', 'calib')
@@ -25,12 +27,14 @@ print 'calibdir', calibdir
 def create_temp(**kwargs):
     f,fn = tempfile.mkstemp(dir=tempdir, **kwargs)
     os.close(f)
+    os.unlink(fn)
     return fn
 
 class DecamImage(object):
-    def __init__(self, imgfn, hdu):
+    def __init__(self, imgfn, hdu, band):
         self.imgfn = imgfn
         self.hdu   = hdu
+        self.band  = band
         self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
         self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
@@ -48,6 +52,11 @@ class DecamImage(object):
         self.sexfn = os.path.join(calibdir, 'sextractor', dirname, base + extnm + '.cat')
         self.psffn = os.path.join(calibdir, 'psf', dirname, base + extnm + '.psf')
         self.morphfn = os.path.join(calibdir, 'morph', dirname, base + extnm + '.fits')
+
+    def __str__(self):
+        return self.name
+    def __repr__(self):
+        return str(self)
 
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
@@ -74,11 +83,11 @@ class DecamImage(object):
         return fitsio.FITS(self.wtfn)[self.hdu].read()
 
 
-def run_calibs(im):
-    print 'wcs', im.wcsfn
-    print 'se', im.sexfn
-    print 'psf', im.psffn
-    print 'morph', im.morphfn
+def run_calibs(im, ra, dec, pixscale):
+    #print 'wcs', im.wcsfn
+    #print 'se', im.sexfn
+    #print 'psf', im.psffn
+    #print 'morph', im.morphfn
 
     im.makedirs()
 
@@ -103,19 +112,19 @@ def run_calibs(im):
         tmpimgfn  = create_temp(suffix='.fits')
         tmpmaskfn = create_temp(suffix='.fits')
 
-        cmd = 'funpack -E %i -O %s %s' % (hdu, tmpimgfn, im.imgfn)
+        cmd = 'funpack -E %i -O %s %s' % (im.hdu, tmpimgfn, im.imgfn)
         print cmd
         if os.system(cmd):
             sys.exit(-1)
 
-        cmd = 'funpack -E %i -O %s %s' % (hdu, tmpmaskfn, im.dqfn)
+        cmd = 'funpack -E %i -O %s %s' % (im.hdu, tmpmaskfn, im.dqfn)
         print cmd
         if os.system(cmd):
             sys.exit(-1)
 
     if run_astrom or run_morph:
         # grab header values...
-        primhdr = im.read_image_prim_header()
+        primhdr = im.read_image_primary_header()
         hdr     = im.read_image_header()
 
         magzp  = primhdr['MAGZERO']
@@ -168,6 +177,8 @@ def run_calibs(im):
 
 
 def main():
+    ps = PlotSequence('brick')
+    
     B = fits_table('bricks.fits')
 
     # brick index...
@@ -179,6 +190,9 @@ def main():
     W,H = 3600,3600
     pixscale = 0.27 / 3600.
 
+    bands = ['g','r','z']
+    catband = 'r'
+
     targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
                     -pixscale, 0., 0., pixscale,
                     float(W), float(H))
@@ -189,55 +203,179 @@ def main():
     T.cut(degrees_between(T.ra, T.dec, ra, dec) < sz)
     print len(T), 'CCDs nearby'
 
-    tims = []
-
-    for band in 'grz':
+    ims = []
+    for band in bands:
         TT = T[T.filter == band]
         print len(TT), 'in', band, 'band'
         print 'filenames,hdus:', zip(TT.filename, TT.hdu)
-
         for fn,hdu in zip(TT.filename, TT.hdu):
             print
             print 'Image file', fn, 'hdu', hdu
+            im = DecamImage(fn, hdu, band)
+            ims.append(im)
 
-            im = DecamImage(fn, hdu)
+    for im in ims:
+        band = im.band
+        run_calibs(im, ra, dec, pixscale)
 
-            run_calibs(im, ra, dec)
+    catims = [im for im in ims if im.band == catband]
+    print 'Reference catalog files:', catims
 
-            img,imghdr = im.read_image(header=True)
-            #dq = im.read_dq()
-            invvar = im.read_invvar()
-            wcs = Sip(im.wcsfn)
+    cats = []
+    extra_cols = []
+    for im in catims:
+        cat = fits_table(
+            im.morphfn,
+            hdu=2, #column_map={'ALPHA_J2000':'ra', 'DELTA_J2000':'dec'},
+            columns=[x.upper() for x in
+                     [#'ALPHA_J2000', 'DELTA_J2000',
+                      'x_image', 'y_image',
+                      'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
+                      'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
+                      'disk_theta_world', 'spheroid_reff_world',
+                      'spheroid_aspect_world', 'spheroid_theta_world',
+                      'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
+        print 'Read', len(cat), 'from', im.morphfn
+        wcs = Sip(im.wcsfn)
+        cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
+        cats.append(cat)
 
-            primhdr = im.read_image_primary_header()
-            magzp  = primhdr['MAGZERO']
-            zpscale = NanoMaggies.zeropointToScale(magzp)
+    plt.clf()
+    for cat in cats:
+        plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
+    rd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                   [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+    plt.plot(rd[:,0], rd[:,1], 'r-')
+    ps.savefig()
 
-            sky = imghdr['SKYBRITE']
-            print 'SKYBRITE:', sky
-            medsky = np.median(img)
-            print 'Image median:', medsky
-            img -= medsky
+    for cat in cats:
+        ok,x,y = targetwcs.radec2pixelxy(cat.ra, cat.dec)
+        cat.cut((x > 0.5) * (x < (W+0.5)) * (y > 0.5) * (y < (H+0.5)))
 
-            twcs = ConstantFitsWcs(wcs)
-            #if x0 or y0:
-            #    twcs.setX0Y0(x0,y0)
+    merged = cats[0]
+    for cat in cats[1:]:
+        I,J,d = match_radec(merged.ra, merged.dec, cat.ra, cat.dec, 0.5/3600.)
+        keep = np.ones(len(cat), bool)
+        keep[J] = False
+        if sum(keep):
+            merged = merge_tables([merged, cat[keep]])
+    
+    plt.clf()
+    plt.plot(merged.ra, merged.dec, 'o', mec='none', mfc='b', alpha=0.5)
+    plt.plot(rd[:,0], rd[:,1], 'r-')
+    ps.savefig()
 
-            imh,imw = img.shape
-            psf = PsfEx(im.psffn, imw, imh, scale=False, nx=9, ny=17)
+    del cats
 
-            # Scale images to Nanomaggies
-            img /= zpscale
-            invvar *= zpscale**2
-            orig_zpscale = zpscale
-            zpscale = 1.
+    cat,isrcs = get_se_modelfit_cat(merged, maglim=90, bands=bands)
+    print 'Tractor sources:', cat
 
-            tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
-                        photocal=LinearPhotoCal(zpscale, band=band),
-                        sky=ConstantSky(0.), name=im.name + ' ' + band)
-            tims.append(tim)
+    T = merged[isrcs]
+    T.about()
+    # for c in T.get_columns():
+    #     plt.clf()
+    #     plt.hist(T.get(c), 50)
+    #     plt.xlabel(c)
+    #     ps.savefig()
+
+    zz = T[T.spheroid_reff_world == 0.]
+    print 'Zero spheroid reff:', len(zz)
+    zz.writeto('zsph.fits')
+    
+    zz = T[T.disk_scale_world == 0.]
+    print 'Zero disk reff:', len(zz)
+    zz.writeto('zdisk.fits')
+
+
+    tims = []
+    for im in ims:
+        band = im.band
+
+        img,imghdr = im.read_image(header=True)
+        #dq = im.read_dq()
+        invvar = im.read_invvar()
+        wcs = Sip(im.wcsfn)
+
+        psf_fwhm = imghdr['FWHM']
+
+        primhdr = im.read_image_primary_header()
+        magzp  = primhdr['MAGZERO']
+        zpscale = NanoMaggies.zeropointToScale(magzp)
+        print 'Magzp', magzp
+        print 'zpscale', zpscale
+
+        sky = imghdr['SKYBRITE']
+        print 'SKYBRITE:', sky
+        medsky = np.median(img)
+        print 'Image median:', medsky
+        img -= medsky
+
+        twcs = ConstantFitsWcs(wcs)
+        #if x0 or y0:
+        #    twcs.setX0Y0(x0,y0)
+
+        imh,imw = img.shape
+        psf = PsfEx(im.psffn, imw, imh, scale=False, nx=9, ny=17)
+
+        # Scale images to Nanomaggies
+        img /= zpscale
+        invvar *= zpscale**2
+        orig_zpscale = zpscale
+        zpscale = 1.
+        sig1 = 1./np.sqrt(np.median(invvar))
+
+        # plt.clf()
+        # plt.imshow(invvar, interpolation='nearest', origin='lower')
+        # plt.colorbar()
+        # plt.title('weight map: ' + im.name)
+        # ps.savefig()
+        # 
+        # plt.clf()
+        # plt.hist(invvar.ravel(), 100)
+        # plt.xlabel('invvar')
+        # ps.savefig()
+
+        # The weight maps have values < 0
+        invvar = np.maximum(invvar, 0.)
+
+        tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
+                    photocal=LinearPhotoCal(zpscale, band=band),
+                    sky=ConstantSky(0.), name=im.name + ' ' + band)
+        tim.zr = [-3. * sig1, 10. * sig1]
+        tims.append(tim)
+
+        # HACK
+        tim.psf = NCircularGaussianPSF([psf_fwhm / 2.35],[1.])
+
+        tractor = Tractor([tim], cat)
+
+        mn,mx = tim.zr
+        ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                   vmin=mn, vmax=mx)
+        plt.clf()
+        plt.subplot(1,2,1)
+        plt.imshow(tim.getImage(), **ima)
+        mod = tractor.getModelImage(tim)
+        plt.subplot(1,2,2)
+        plt.imshow(mod, **ima)
+        ps.savefig()
 
     print 'Tims:', tims
+
+    # tractor = Tractor(tims, cat)
+    # for i,tim in enumerate(tims):
+    #     plt.clf()
+    #     mn,mx = tim.zr
+    #     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+    #                vmin=mn, vmax=mx)
+    # 
+    #     plt.subplot(1,2,1)
+    #     plt.imshow(tim.getImage(), **ima)
+    #     mod = tractor.getModelImage(i)
+    #     plt.subplot(1,2,2)
+    #     plt.imshow(mod, **ima)
+    #     ps.savefig()
+        
 
 
 if __name__ == '__main__':
