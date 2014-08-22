@@ -12,6 +12,19 @@ from astrometry.util.plotutils import *
 from astrometry.util.resample import *
 from astrometry.util.starutil_numpy import *
 
+'''
+imcopy /global/homes/d/dstn/cosmo/data/staging/decam/CP20140815/c4d_140816_001323_ooi_g_v1.fits.fz+27 1.fits
+
+solve-field --config ~/desi-dstn/sdss-astrometry-index/r2/cfg -v -D . --temp-dir tmp --ra 244 --dec 8 --radius 1 --continue --no-plots --sextractor-config /project/projectdirs/desi/imaging/code/cats/CS82.sex 1.fits -X x_image -Y y_image -s flux_auto
+
+funpack -E 27 -O flag.fits /global/homes/d/dstn/cosmo/data/staging/decam/CP20140815/c4d_140816_001323_ood_g_v1.fits.fz
+
+an-fitstopnm -i 1.fits | pnmscale -reduce 4 | pnmtojpeg > 1-4.jpg
+
+solve-field --config /data/INDEXES/sdss-astrometry-index/r2/cfg -v -D . --ra 244 --dec 8 --radius 1 --continue -X x_image -Y y_image -s flux_auto 1.axy --plot-bg 1.jpg --plot-scale 0.25
+
+'''
+
 def plot_coadd(coadd, cowt, tt, ps, mnmx=None):
     if sum(cowt > 0) == 0:
         print 'Zero pixels with weight > 0 for', tt
