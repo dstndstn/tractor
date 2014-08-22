@@ -67,7 +67,16 @@ class DecamImage(object):
                 except:
                     pass
 
-    def read_image(self, **kwargs):
+    def read_image(self, slice=None, **kwargs):
+        if slice is not None:
+            f = fitsio.FITS(self.imgfn)[self.hdu]
+            img = f[slice]
+            rtn = img
+            if 'header' in kwargs and kwargs['header']:
+                hdr = f.read_header()
+                return (img,hdr)
+            return rtn
+        
         return fitsio.read(self.imgfn, ext=self.hdu, **kwargs)
 
     def read_image_primary_header(self, **kwargs):
