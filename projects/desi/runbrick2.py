@@ -250,19 +250,19 @@ if True:
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     
-    for b,I in enumerate(blobsrcs):
+    for b,Isrcs in enumerate(blobsrcs):
         bslc = blobslices[b]
         bsrcs = blobsrcs[b]
 
         #print 'blob slice:', bslc
-        #print 'sources in blob:', I
-        if len(I) == 0:
+        #print 'sources in blob:', Isrcs
+        if len(Isrcs) == 0:
             continue
 
         cat.freezeAllParams()
-        #cat.thawParams(I)
+        #cat.thawParams(Isrcs)
         print 'Fitting:'
-        for i in I:
+        for i in Isrcs:
             cat.thawParams(i)
             print cat[i]
             
@@ -322,45 +322,48 @@ if True:
             if dlnp < 0.1:
                 break
 
+        # Try fitting sources one at a time?
+        if len(Isrcs) > 1:
+            for i in Isrcs:
+                print 'Fitting source', i
+                cat.freezeAllBut(i)
+                for step in range(5):
+                    dlnp,X,alpha = subtr.optimize(priors=False,
+                                                  shared_params=False)
+                    print 'dlnp:', dlnp
+                    if dlnp < 0.1:
+                        break
+            
         mod1 = [tractor.getModelImage(tim) for tim in tims]
 
-        # rgbim = np.zeros((H,W,3))
         rgbm0 = np.zeros((H,W,3))
         rgbm1 = np.zeros((H,W,3))
         rgbchi0 = np.zeros((H,W,3))
         rgbchi1 = np.zeros((H,W,3))
-
         subims_b = []
         subims_a = []
         
         for iband,band in enumerate(bands):
-            # coimg = np.zeros((H,W))
             coimg = coimgs[iband]
             com0  = np.zeros((H,W))
             com1  = np.zeros((H,W))
-            #con   = np.zeros((H,W))
             cochi0 = np.zeros((H,W))
             cochi1 = np.zeros((H,W))
             for tim,m0,m1 in zip(tims, mod0, mod1):
                 if tim.band != band:
                     continue
                 (Yo,Xo,Yi,Xi) = tim.resamp
-                #coimg[Yo,Xo] += tim.getImage ()[Yi,Xi]
                 cochi0[Yo,Xo] += (tim.getImage()[Yi,Xi] - m0[Yi,Xi]) * tim.getInvError()[Yi,Xi]
                 cochi1[Yo,Xo] += (tim.getImage()[Yi,Xi] - m1[Yi,Xi]) * tim.getInvError()[Yi,Xi]
                 com0 [Yo,Xo] += m0[Yi,Xi]
                 com1 [Yo,Xo] += m1[Yi,Xi]
-                #con  [Yo,Xo] += 1
                 mn,mx = tim.zr
-
-            # coimg /= np.maximum(con,1)
             com0  /= np.maximum(con,1)
             com1  /= np.maximum(con,1)
 
             ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
             c = 2-iband
-            #rgbim[:,:,c] = np.clip((coimg - mn) / (mx - mn), 0., 1.)
             rgbm0[:,:,c] = np.clip((com0  - mn) / (mx - mn), 0., 1.)
             rgbm1[:,:,c] = np.clip((com1  - mn) / (mx - mn), 0., 1.)
 
@@ -371,20 +374,6 @@ if True:
             subims_b.append((coimg[bslc], com0[bslc], ima, cochi0[bslc]))
             subims_a.append((coimg[bslc], com1[bslc], ima, cochi1[bslc]))
             
-            # for m,chi,txt in [(com0,cochi0,'Before'),(com1,cochi1,'After')]:
-            #     plt.clf()
-            #     plt.subplot(2,2,1)
-            #     plt.imshow(coimg, **ima)
-            #     plt.subplot(2,2,2)
-            #     plt.imshow(m, **ima)
-            #     ax = plt.axis()
-            #     plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
-            #     plt.axis(ax)
-            #     plt.subplot(2,2,3)
-            #     plt.imshow(-chi, **imchi)
-            #     plt.suptitle('%s optimization: %s band' % (txt, band))
-            #     ps.savefig()
-
 
         for subims,rgbm in [(subims_b,rgbm0), (subims_a,rgbm1)]:
             plt.clf()
@@ -400,7 +389,6 @@ if True:
             plt.imshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]), **imx)
             plt.subplot(3,4,8)
             plt.imshow(np.dstack([rgbm[:,:,c][bslc] for c in [0,1,2]]), **imx)
-            #plt.imshow(rgbm, **imx)
             plt.subplot(3,4,12)
             plt.imshow(rgbim, **imx)
             ax = plt.axis()
@@ -411,20 +399,4 @@ if True:
         if b >= 10:
             break
         
-        # ima = dict(interpolation='nearest', origin='lower')
-        # for m,chi,txt in [(rgbm0,rgbchi0,'Before'), (rgbm1,rgbchi1,'After')]:
-        #     plt.clf()
-        #     for j,im in enumerate([rgbim, m]):
-        #         plt.subplot(2,2,1+j)
-        #         plt.imshow(im, **ima)
-        #         ax = plt.axis()
-        #         plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
-        #         plt.axis(ax)
-        #     plt.subplot(2,2,3)
-        #     plt.imshow(-chi, **imchi)
-        #     plt.suptitle('%s optimization: %s' % (txt, bands))
-        #     ps.savefig()
-
-# <codecell>
-
 
