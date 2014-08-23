@@ -14,6 +14,7 @@ from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing
 
 from astrometry.util.fits import *
+from astrometry.util.file import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
@@ -206,7 +207,8 @@ def main():
 
     ra,dec = brick.ra, brick.dec
     #W,H = 3600,3600
-    W,H = 200,200
+    #W,H = 200,200
+    W,H = 400,400
     pixscale = 0.27 / 3600.
 
     bands = ['g','r','z']
@@ -545,6 +547,10 @@ def main():
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
+
+    pickle_to_file(dict(tractor=tractor, sedsn=sedsn, sedmap=sedmap,
+                        blobs=blobs, nblobs=nblobs, blobslices=blobslices,
+                        T=T), 'brick.pickle')
 
     # save resampling params
     for tim in tims:
