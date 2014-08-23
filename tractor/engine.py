@@ -1571,8 +1571,13 @@ class Tractor(MultiParams):
         Returns (delta-logprob, parameter update X, alpha stepsize, variance)
 
         If just_variance=True,
+        Returns variance.
 
-        Return variance.
+        '''
+        '''
+        If rois is not None, it must be a list of [x0,x1,y0,y1] the
+        same length as the number of images, giving the ROI in which
+        the chi value (and derivatives) will be evaluated.
         '''
         logverb(self.getName()+': Finding derivs...')
         t0 = Time()
