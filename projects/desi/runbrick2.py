@@ -102,57 +102,22 @@ if True:
     detivs  = dict([(b, np.zeros((H,W))) for b in bands])
 
     for tim in tims:
-        # Render the detection map
-        wcs = tim.sip_wcs
-        x0,y0 = tim.x0,tim.y0
+        # Render the detection maps
         psf_sigma = tim.psf_sigma
         band = tim.band
-        subh,subw = tim.shape
-        subwcs = wcs.get_subimage(int(x0), int(y0), subw, subh)
         subiv = tim.getInvvar()
         psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
         detim = tim.getImage().copy()
         detim[subiv == 0] = 0.
         detim = gaussian_filter(detim, psf_sigma) / psfnorm**2
-        try:
-            Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
-            print 'Resampled', len(Yo), 'pixels'
-        except OverlapError:
-            print 'No overlap'
-            continue
-        if len(Yo) == 0:
-            continue
-
         detsig1 = tim.sig1 / psfnorm
         detiv = np.zeros((subh,subw)) + (1. / detsig1**2)
         detiv[subiv == 0] = 0.
 
+        (Yo,Xo,Yi,Xi) = tim.resamp
         detmaps[band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
         detivs [band][Yo,Xo] += detiv[Yi,Xi]
 
-        # Debug small invvars
-        # plt.clf()
-        # plt.subplot(2,3,3)
-        # plt.hist(subiv.ravel(), 100)
-        # plt.subplot(2,3,1)
-        # plt.imshow(detim, interpolation='nearest', origin='lower',
-        #            vmin=0, vmax=10.*detsig1)
-        # plt.colorbar()
-        # plt.subplot(2,3,2)
-        # plt.imshow(detiv, interpolation='nearest', origin='lower',
-        #            vmin=0, vmax=2./(detsig1**2))
-        # plt.colorbar()
-        # plt.subplot(2,3,4)
-        # plt.imshow(detmaps[band] / np.maximum(1e-16,detivs[band]),
-        #            interpolation='nearest', origin='lower',
-        #            vmin=0, vmax=10.*detsig1)
-        # plt.colorbar()
-        # plt.subplot(2,3,5)
-        # plt.imshow(detivs[band], interpolation='nearest', origin='lower',
-        #            vmin=0, vmax=6./(detsig1**2))
-        # plt.colorbar()
-        # ps.savefig()
-        
     sedmap = np.zeros((H,W))
     sediv  = np.zeros((H,W))
     for band in bands:
@@ -163,16 +128,6 @@ if True:
         sediv  += detivs [band]
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
-        
-    # for tim in tims:
-    #     plt.clf()
-    #     plt.subplot(1,2,1)
-    #     plt.imshow(tim.getImage(), interpolation='nearest', origin='lower',
-    #                cmap='gray', vmin=tim.zr[0], vmax=tim.zr[1])
-    #     plt.subplot(1,2,2)
-    #     plt.imshow(tim.getInvvar(), interpolation='nearest', origin='lower',
-    #                cmap='gray')
-    #     ps.savefig()
         
     plt.clf()
     plt.imshow(np.round(sedsn), interpolation='nearest', origin='lower',
