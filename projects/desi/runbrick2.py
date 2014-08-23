@@ -10,6 +10,8 @@ from astrometry.util.resample import *
 import pylab as plt
 from tractor import *
 from scipy.ndimage.filters import *
+from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage.morphology import binary_dilation, binary_closing
 
 import sys
 
@@ -32,6 +34,7 @@ if True:
     targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
                     -pixscale, 0., 0., pixscale,
                     float(W), float(H))
+    imx = dict(interpolation='nearest', origin='lower')
 
 # <codecell>
 
@@ -111,6 +114,7 @@ if True:
         detim[subiv == 0] = 0.
         detim = gaussian_filter(detim, psf_sigma) / psfnorm**2
         detsig1 = tim.sig1 / psfnorm
+        subh,subw = tim.shape
         detiv = np.zeros((subh,subw)) + (1. / detsig1**2)
         detiv[subiv == 0] = 0.
 
@@ -139,7 +143,42 @@ if True:
     # blank out ones within a couple of pixels of a catalog source
     # create sources for any remaining peaks
 
-    peaks = (sedsn > 5)
+    T.itx = np.clip(np.round(T.tx).astype(int), 0, W-1)
+    T.ity = np.clip(np.round(T.ty).astype(int), 0, H-1)
+
+    #for x,y in zip(T.itx,T.ity):
+    #    peaks[np.maximum(y - 2, 0) : np.minimum(y + 3, H),
+    #          np.maximum(x - 2, 0) : np.minimum(x + 3, W)] = 0
+
+    hot = (sedsn > 5)
+    peaks = hot.copy()
+
+    plt.clf()
+    plt.imshow(peaks, cmap='gray', **imx)
+    ax = plt.axis()
+    plt.plot(T.itx, T.ity, 'r+')
+    plt.axis(ax)
+    ps.savefig()
+    
+    blobs,nblobs = label(hot)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+    for x,y in zip(T.itx, T.ity):
+        # blob number
+        bb = blobs[y,x]
+        if bb == 0:
+            continue
+        # un-set 'peaks' within this blob
+        slc = blobslices[bb-1]
+        peaks[slc][blobs[slc] == bb] = 0
+
+    plt.clf()
+    plt.imshow(peaks, cmap='gray', **imx)
+    ax = plt.axis()
+    plt.plot(T.itx, T.ity, 'r+')
+    plt.axis(ax)
+    ps.savefig()
+        
     # zero out the edges(?)
     peaks[0 ,:] = peaks[:, 0] = 0
     peaks[-1,:] = peaks[:,-1] = 0
@@ -147,13 +186,6 @@ if True:
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,1:-1])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,0:-2])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,2:  ])
-
-    T.itx = np.round(T.tx).astype(int)
-    T.ity = np.round(T.ty).astype(int)
-
-    for x,y in zip(T.itx,T.ity):
-        peaks[np.maximum(y - 2, 0) : np.minimum(y + 3, H),
-              np.maximum(x - 2, 0) : np.minimum(x + 3, W)] = 0
     pki = np.flatnonzero(peaks)
     peaky,peakx = np.unravel_index(pki, peaks.shape)
     print len(peaky), 'peaks'
@@ -163,20 +195,55 @@ if True:
     plt.imshow(coimgs[1], **imas[1])
     ax = plt.axis()
     plt.plot(T.tx, T.ty, 'r+', mew=1.5, ms=8)
-    plt.plot(peakx, peaky, 'g+', mew=1.5, ms=8)
+    plt.plot(peakx, peaky, '+', color=(0,1,0), mew=1.5, ms=8)
     plt.axis(ax)
     ps.savefig()
 
+    rr = 2.0
+    RR = int(np.ceil(rr))
+    S = 2*RR+1
+    struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
+             ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
+    print 'structuring element:', struc
 
+    hot = binary_dilation(hot, structure=struc)
+    #iterations=int(np.ceil(2. * psf_sigma)))
+    blobs,nblobs = label(hot)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+    T.blob = blobs[T.ity, T.itx]
+
+    plt.clf()
+    plt.imshow(hot, cmap='gray', **imx)
+    ps.savefig()
+    
     blobsrcs = []
     for blob in range(1, nblobs+1):
         blobsrcs.append(np.flatnonzero(T.blob == blob))
+
+    # Add sources for the new peaks we found
+    fluxes = dict([(b,[]) for b in bands])
+    for tim in tims:
+        psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+        fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
+    fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
+    pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
+    print 'Adding', len(pr), 'new sources'
+    I0 = len(cat)
+    for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
+        cat.append(PointSource(RaDecPos(r,d),
+                               NanoMaggies(order=bands, **fluxes)))
+        ## FIXME -- this is dumb, we're appending this list rather than,
+        # say, extending T with the new sources
+        blobindex = blobs[y,x] - 1
+        blobsrcs[blobindex] = np.append(blobsrcs[blobindex],
+                                        np.array([I0+i]))
+        
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
-
     
-# <codecell>
+
 
     imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
                 vmin=-5, vmax=5)
@@ -341,7 +408,7 @@ if True:
             plt.axis(ax)
             ps.savefig()
 
-        if b >= 4:
+        if b >= 10:
             break
         
         # ima = dict(interpolation='nearest', origin='lower')
