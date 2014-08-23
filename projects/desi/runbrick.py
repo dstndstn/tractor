@@ -414,7 +414,7 @@ def main():
         tim.psf_fwhm = psf_fwhm
         tim.psf_sigma = psf_sigma
         tim.sip_wcs = wcs
-        tim.x0,tim.y0 = x0,y0
+        tim.x0,tim.y0 = int(x0),int(y0)
         tims.append(tim)
 
         mn,mx = tim.zr
@@ -445,11 +445,7 @@ def main():
         x0,y0 = tim.x0,tim.y0
         psf_sigma = tim.psf_sigma
         band = tim.band
-
         subh,subw = tim.shape
-        print 'x0,y0', x0,y0
-        print type(x0)
-        print type(y0)
         subwcs = wcs.get_subimage(int(x0), int(y0), subw, subh)
         subiv = tim.getInvvar()
         psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
@@ -549,6 +545,11 @@ def main():
     # save resampling params
     for tim in tims:
         wcs = tim.sip_wcs
+
+        x0,y0 = int(tim.x0),int(tim.y0)
+        subh,subw = tim.shape
+        subwcs = wcs.get_subimage(x0, y0, subw, subh)
+
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
             print 'Resampled', len(Yo), 'pixels'
