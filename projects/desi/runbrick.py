@@ -9,6 +9,10 @@ import os
 
 import fitsio
 
+from scipy.ndimage.filters import *
+from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage.morphology import binary_dilation, binary_closing
+
 from astrometry.util.fits import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
@@ -68,17 +72,19 @@ class DecamImage(object):
                 except:
                     pass
 
-    def read_image(self, slice=None, **kwargs):
+    def _read_fits(self, fn, hdu, slice=None, header=None, **kwargs):
         if slice is not None:
-            f = fitsio.FITS(self.imgfn)[self.hdu]
+            f = fitsio.FITS(fn)[hdu]
             img = f[slice]
             rtn = img
-            if 'header' in kwargs and kwargs['header']:
+            if header:
                 hdr = f.read_header()
                 return (img,hdr)
-            return rtn
-        
-        return fitsio.read(self.imgfn, ext=self.hdu, **kwargs)
+            return img
+        return fitsio.read(fn, ext=hdu, header=header, **kwargs)
+
+    def read_image(self, **kwargs):
+        return self._read_fits(self.imgfn, self.hdu, **kwargs)
 
     def read_image_primary_header(self, **kwargs):
         return fitsio.read_header(self.imgfn)
@@ -87,10 +93,12 @@ class DecamImage(object):
         return fitsio.read_header(self.imgfn, ext=self.hdu)
 
     def read_dq(self, **kwargs):
-        return fitsio.FITS(self.dqfn)[self.hdu].read()
+        return self._read_fits(self.dqfn, self.hdu, **kwargs)
+    #return fitsio.FITS(self.dqfn)[self.hdu].read()
 
     def read_invvar(self, **kwargs):
-        return fitsio.FITS(self.wtfn)[self.hdu].read()
+        return self._read_fits(self.wtfn, self.hdu, **kwargs)
+    #return fitsio.FITS(self.wtfn)[self.hdu].read()
 
 
 def run_calibs(im, ra, dec, pixscale):
@@ -197,7 +205,8 @@ def main():
     brick = B[ii]
 
     ra,dec = brick.ra, brick.dec
-    W,H = 3600,3600
+    #W,H = 3600,3600
+    W,H = 200,200
     pixscale = 0.27 / 3600.
 
     bands = ['g','r','z']
@@ -239,13 +248,15 @@ def main():
             hdu=2, #column_map={'ALPHA_J2000':'ra', 'DELTA_J2000':'dec'},
             columns=[x.upper() for x in
                      [#'ALPHA_J2000', 'DELTA_J2000',
-                      'x_image', 'y_image',
+                      'x_image', 'y_image', 'flags',
                       'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
                       'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
                       'disk_theta_world', 'spheroid_reff_world',
                       'spheroid_aspect_world', 'spheroid_theta_world',
                       'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
         print 'Read', len(cat), 'from', im.morphfn
+        cat.cut(cat.flags == 0)
+        print '  Cut to', len(cat), 'with no flags set'
         wcs = Sip(im.wcsfn)
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
         cats.append(cat)
@@ -264,6 +275,11 @@ def main():
 
     merged = cats[0]
     for cat in cats[1:]:
+        if len(merged) == 0:
+            merged = cat
+            continue
+        if len(cat) == 0:
+            continue
         I,J,d = match_radec(merged.ra, merged.dec, cat.ra, cat.dec, 0.5/3600.)
         keep = np.ones(len(cat), bool)
         keep[J] = False
@@ -288,14 +304,12 @@ def main():
     #     plt.xlabel(c)
     #     ps.savefig()
 
-    zz = T[T.spheroid_reff_world == 0.]
-    print 'Zero spheroid reff:', len(zz)
-    zz.writeto('zsph.fits')
-    
-    zz = T[T.disk_scale_world == 0.]
-    print 'Zero disk reff:', len(zz)
-    zz.writeto('zdisk.fits')
-
+    # zz = T[T.spheroid_reff_world == 0.]
+    # print 'Zero spheroid reff:', len(zz)
+    # zz.writeto('zsph.fits')
+    # zz = T[T.disk_scale_world == 0.]
+    # print 'Zero disk reff:', len(zz)
+    # zz.writeto('zdisk.fits')
 
     tims = []
     for im in ims:
@@ -308,6 +322,11 @@ def main():
         imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
         ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
         tpoly = zip(tx,ty)
+        clip = clip_polygon(imgpoly, tpoly)
+        clip = np.array(clip)
+        print 'Clip', clip
+        if len(clip) == 0:
+            continue
 
         ## FIXME -- it seems I got lucky and the cross product is negative -- clockwise
         ## One could check this and reverse the polygon vertex order.
@@ -316,49 +335,54 @@ def main():
         # cross = dx0*dy1 - dx1*dy0
         # print 'Cross:', cross
 
-        plt.clf()
-        imp = np.array(imgpoly)
-        #print 'imp', imp
-        ii = np.array([0,1,2,3,0])
-        imp = imp[ii,:]
-        plt.plot(imp[:,0], imp[:,1], 'b-')
-        plt.plot(tx[ii], ty[ii], 'r-')
-        clip = clip_polygon(imgpoly, tpoly)
-        #print 'Clip:', clip
-        clip = np.array(clip)
-        plt.plot(clip[ii,0], clip[ii,1], 'g-')
-        ps.savefig()
+        if False:
+            plt.clf()
+            imp = np.array(imgpoly)
+            #print 'imp', imp
+            ii = np.array([0,1,2,3,0])
+            imp = imp[ii,:]
+            plt.plot(imp[:,0], imp[:,1], 'b-')
+            plt.plot(tx[ii], ty[ii], 'r-')
+            #print 'Clip:', clip
+            plt.plot(clip[ii,0], clip[ii,1], 'g-')
+            ps.savefig()
 
         x0,y0 = np.floor(clip.min(axis=0)).astype(int)
         x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
-        print 'Image range:', x0,x1, y0,y1
-
+        #print 'Image range:', x0,x1, y0,y1
         slc = slice(y0,y1+1), slice(x0,x1+1)
 
-        img,imghdr = im.read_image(header=True)
-        #dq = im.read_dq()
-        invvar = im.read_invvar()
+        img,imghdr = im.read_image(header=True, slice=slc)
+        invvar = im.read_invvar(slice=slc)
 
+        print 'Image ', img.shape
+        #print 'Invvar', invvar.shape
+
+        # in pixels
         psf_fwhm = imghdr['FWHM']
-
         primhdr = im.read_image_primary_header()
         magzp  = primhdr['MAGZERO']
         zpscale = NanoMaggies.zeropointToScale(magzp)
         print 'Magzp', magzp
         print 'zpscale', zpscale
 
-        sky = imghdr['SKYBRITE']
-        print 'SKYBRITE:', sky
+        #sky = imghdr['SKYBRITE']
         medsky = np.median(img)
-        print 'Image median:', medsky
+        #print 'SKYBRITE:', sky
+        #print 'Image median:', medsky
         img -= medsky
 
         twcs = ConstantFitsWcs(wcs)
-        #if x0 or y0:
-        #    twcs.setX0Y0(x0,y0)
+        if x0 or y0:
+            twcs.setX0Y0(x0,y0)
 
+        ### FIXME!! -- this is the sliced image size -- should be full size probably!
         imh,imw = img.shape
         psf = PsfEx(im.psffn, imw, imh, scale=False, nx=9, ny=17)
+        psf = ShiftedPsf(psf, x0, y0)
+        # HACK!!
+        psf_sigma = psf_fwhm / 2.35
+        psf = NCircularGaussianPSF([psf_sigma],[1.])
 
         # Scale images to Nanomaggies
         img /= zpscale
@@ -385,23 +409,244 @@ def main():
                     photocal=LinearPhotoCal(zpscale, band=band),
                     sky=ConstantSky(0.), name=im.name + ' ' + band)
         tim.zr = [-3. * sig1, 10. * sig1]
+        tim.sig1 = sig1
+        tim.band = band
+        tim.psf_fwhm = psf_fwhm
+        tim.psf_sigma = psf_sigma
+        tim.sip_wcs = wcs
+        tim.x0,tim.y0 = x0,y0
         tims.append(tim)
-
-        # HACK
-        tim.psf = NCircularGaussianPSF([psf_fwhm / 2.35],[1.])
-
-        tractor = Tractor([tim], cat)
 
         mn,mx = tim.zr
         ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                    vmin=mn, vmax=mx)
+
+        # tractor = Tractor([tim], cat)
+        # plt.clf()
+        # plt.subplot(1,2,1)
+        # plt.imshow(tim.getImage(), **ima)
+        # mod = tractor.getModelImage(tim)
+        # plt.subplot(1,2,2)
+        # plt.imshow(mod, **ima)
+        # plt.suptitle(tim.name)
+        # ps.savefig()
+
         plt.clf()
-        plt.subplot(1,2,1)
         plt.imshow(tim.getImage(), **ima)
-        mod = tractor.getModelImage(tim)
-        plt.subplot(1,2,2)
-        plt.imshow(mod, **ima)
+        plt.suptitle(tim.name)
         ps.savefig()
+
+    detmaps = dict([(b, np.zeros((H,W))) for b in bands])
+    detivs  = dict([(b, np.zeros((H,W))) for b in bands])
+
+    for tim in tims:
+        # Render the detection map
+        wcs = tim.sip_wcs
+        x0,y0 = tim.x0,tim.y0
+        psf_sigma = tim.psf_sigma
+        band = tim.band
+
+        subh,subw = tim.shape
+        print 'x0,y0', x0,y0
+        print type(x0)
+        print type(y0)
+        subwcs = wcs.get_subimage(int(x0), int(y0), subw, subh)
+        subiv = tim.getInvvar()
+        psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
+        detim = tim.getImage().copy()
+        detim[subiv == 0] = 0.
+        detim = gaussian_filter(detim, psf_sigma) / psfnorm**2
+        try:
+            Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
+            print 'Resampled', len(Yo), 'pixels'
+        except OverlapError:
+            print 'No overlap'
+            continue
+        if len(Yo) == 0:
+            continue
+
+        detsig1 = tim.sig1 / psfnorm
+        detiv = np.zeros((subh,subw)) + (1. / detsig1**2)
+        detiv[subiv == 0] = 0.
+
+        detmaps[band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
+        detivs [band][Yo,Xo] += detiv[Yi,Xi]
+
+    hot = np.zeros((H,W), bool)
+    
+    sedmap = np.zeros((H,W))
+    sediv  = np.zeros((H,W))
+    for band in bands:
+        detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
+        detsn = detmap * np.sqrt(detivs[band])
+
+        hot |= (detsn > 5.)
+
+        sedmap += detmaps[band]
+        sediv  += detivs [band]
+
+        # plt.clf()
+        # plt.imshow(detmap, interpolation='nearest', origin='lower', cmap='gray')
+        # plt.title('Detection map: %s' % band)
+        # plt.colorbar()
+        # ps.savefig()
+
+        plt.clf()
+        plt.imshow(detsn, interpolation='nearest', origin='lower', cmap='hot',
+                   vmin=-2, vmax=10)
+        plt.title('Detection map S/N: %s' % band)
+        plt.colorbar()
+        ps.savefig()
+
+
+    sedmap /= np.maximum(1e-16, sediv)
+    sedsn   = sedmap * np.sqrt(sediv)
+
+    hot |= (sedsn > 5.)
+    hot = binary_dilation(hot, iterations=int(np.ceil(2. * psf_sigma)))
+
+    # plt.clf()
+    # plt.imshow(sedmap, interpolation='nearest', origin='lower', cmap='gray')
+    # plt.title('Detection map: flat SED')
+    # plt.colorbar()
+    # ps.savefig()
+
+    plt.clf()
+    plt.imshow(sedsn, interpolation='nearest', origin='lower', cmap='hot',
+               vmin=-2, vmax=10)
+    plt.title('Detection map S/N: flat SED')
+    plt.colorbar()
+    ps.savefig()
+
+    plt.clf()
+    plt.imshow(hot, interpolation='nearest', origin='lower', cmap='gray')
+    plt.title('Segmentation')
+    ax = plt.axis()
+    ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
+    T.tx -= 1
+    T.ty -= 1
+    plt.plot(T.tx, T.ty, 'r+', mec='r', mfc='none', mew=2, ms=10)
+    plt.axis(ax)
+    ps.savefig()
+
+    blobs,nblobs = label(hot)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+
+    print 'blobs max', blobs.max()
+
+    T.blob = blobs[np.clip(np.round(T.ty).astype(int), 0, H-1),
+                   np.clip(np.round(T.tx).astype(int), 0, W-1)]
+
+    blobsrcs = []
+    for blob in range(1, nblobs+1):
+        blobsrcs.append(np.flatnonzero(T.blob == blob))
+
+    cat.freezeAllParams()
+    tractor = Tractor(tims, cat)
+    tractor.freezeParam('images')
+
+    # save resampling params
+    for tim in tims:
+        wcs = tim.sip_wcs
+        try:
+            Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
+            print 'Resampled', len(Yo), 'pixels'
+        except OverlapError:
+            print 'No overlap'
+            continue
+        if len(Yo) == 0:
+            continue
+        tim.resamp = (Yo,Xo,Yi,Xi)
+
+
+    for b,I in enumerate(blobsrcs):
+        bslc = blobslices[b]
+        bsrcs = blobsrcs[b]
+
+        print 'blob slice:', bslc
+        print 'sources in blob:', I
+        if len(I) == 0:
+            continue
+
+        cat.freezeAllParams()
+        #cat.thawParams(I)
+        for i in I:
+            cat.thawParams(i)
+
+        print 'Fitting:'
+        tractor.printThawedParams()
+
+        # before-n-after plots
+        mod0 = [tractor.getModelImage(tim) for tim in tims]
+
+        for step in range(10):
+            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
+            print 'dlnp:', dlnp
+            if dlnp < 0.1:
+                break
+
+        mod1 = [tractor.getModelImage(tim) for tim in tims]
+
+        rgbim = np.zeros((H,W,3))
+        rgbm0 = np.zeros((H,W,3))
+        rgbm1 = np.zeros((H,W,3))
+
+        for ib,band in enumerate(bands):
+            coimg = np.zeros((H,W))
+            com0  = np.zeros((H,W))
+            com1  = np.zeros((H,W))
+            con   = np.zeros((H,W))
+            for tim,m0,m1 in zip(tims, mod0, mod1):
+                if tim.band != band:
+                    continue
+                (Yo,Xo,Yi,Xi) = tim.resamp
+                coimg[Yo,Xo] += tim.getImage()[Yi,Xi]
+                com0 [Yo,Xo] += m0[Yi,Xi]
+                com1 [Yo,Xo] += m1[Yi,Xi]
+                con  [Yo,Xo] += 1
+
+                mn,mx = tim.zr
+
+            coimg /= np.maximum(con,1)
+            com0  /= np.maximum(con,1)
+            com1  /= np.maximum(con,1)
+
+            ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn, vmax=mx)
+            sy,sx = bslc
+            y0,y1 = sy.start, sy.stop
+            x0,x1 = sx.start, sx.stop
+
+            c = 2-ib
+            rgbim[:,:,c] = np.clip((coimg - mn) / (mx - mn), 0., 1.)
+            rgbm0[:,:,c] = np.clip((com0  - mn) / (mx - mn), 0., 1.)
+            rgbm1[:,:,c] = np.clip((com1  - mn) / (mx - mn), 0., 1.)
+
+            for m,txt in [(com0,'Before'),(com1,'After')]:
+                plt.clf()
+                plt.subplot(1,2,1)
+                plt.imshow(coimg, **ima)
+                plt.subplot(1,2,2)
+                plt.imshow(m, **ima)
+                ax = plt.axis()
+                plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
+                plt.axis(ax)
+                plt.suptitle('%s optimization: %s band' % (txt, band))
+                ps.savefig()
+
+        ima = dict(interpolation='nearest', origin='lower')
+        for m,txt in [(rgbm0,'Before'), (rgbm1,'After')]:
+            plt.clf()
+            plt.subplot(1,2,1)
+            plt.imshow(rgbim, **ima)
+            plt.subplot(1,2,2)
+            plt.imshow(m, **ima)
+            ax = plt.axis()
+            plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
+            plt.axis(ax)
+            plt.suptitle('%s optimization: %s band' % (txt, band))
+            ps.savefig()
 
     print 'Tims:', tims
 
