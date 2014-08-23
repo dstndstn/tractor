@@ -250,9 +250,9 @@ if True:
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     
-    for b,Isrcs in enumerate(blobsrcs):
-        bslc = blobslices[b]
-        bsrcs = blobsrcs[b]
+    for iblob,Isrcs in enumerate(blobsrcs):
+        bslc = blobslices[iblob]
+        bsrcs = blobsrcs[iblob]
 
         #print 'blob slice:', bslc
         #print 'sources in blob:', Isrcs
@@ -278,6 +278,13 @@ if True:
         x0,x1 = sx.start, sx.stop
 
         rr,dd = targetwcs.pixelxy2radec([x0,x0,x1,x1],[y0,y1,y1,y0])
+
+        ###
+        # We create sub-image for each blob here.
+        # What wo don't do, though, is mask out the invvar pixels
+        # that are within the blob bounding-box but not within the
+        # blob itself.  Does this matter?
+        ###
         
         subtims = []
         for i,tim in enumerate(tims):
@@ -323,16 +330,16 @@ if True:
                 break
 
         # Try fitting sources one at a time?
-        if len(Isrcs) > 1:
-            for i in Isrcs:
-                print 'Fitting source', i
-                cat.freezeAllBut(i)
-                for step in range(5):
-                    dlnp,X,alpha = subtr.optimize(priors=False,
-                                                  shared_params=False)
-                    print 'dlnp:', dlnp
-                    if dlnp < 0.1:
-                        break
+        # if len(Isrcs) > 1:
+        #     for i in Isrcs:
+        #         print 'Fitting source', i
+        #         cat.freezeAllBut(i)
+        #         for step in range(5):
+        #             dlnp,X,alpha = subtr.optimize(priors=False,
+        #                                           shared_params=False)
+        #             print 'dlnp:', dlnp
+        #             if dlnp < 0.1:
+        #                 break
             
         mod1 = [tractor.getModelImage(tim) for tim in tims]
 
@@ -342,6 +349,7 @@ if True:
         rgbchi1 = np.zeros((H,W,3))
         subims_b = []
         subims_a = []
+        chis = dict([(b,[]) for b in bands])
         
         for iband,band in enumerate(bands):
             coimg = coimgs[iband]
@@ -353,8 +361,21 @@ if True:
                 if tim.band != band:
                     continue
                 (Yo,Xo,Yi,Xi) = tim.resamp
-                cochi0[Yo,Xo] += (tim.getImage()[Yi,Xi] - m0[Yi,Xi]) * tim.getInvError()[Yi,Xi]
-                cochi1[Yo,Xo] += (tim.getImage()[Yi,Xi] - m1[Yi,Xi]) * tim.getInvError()[Yi,Xi]
+
+                chi0 = ((tim.getImage()[Yi,Xi] - m0[Yi,Xi]) *
+                        tim.getInvError()[Yi,Xi])
+                chi1 = ((tim.getImage()[Yi,Xi] - m1[Yi,Xi]) *
+                        tim.getInvError()[Yi,Xi])
+
+                rechi = np.zeros((H,W))
+                rechi[Yo,Xo] = chi0
+                rechi0 = rechi[bslc].copy()
+                rechi[Yo,Xo] = chi1
+                rechi1 = rechi[bslc].copy()
+                chis[band].append((rechi0,rechi1))
+                
+                cochi0[Yo,Xo] += chi0
+                cochi1[Yo,Xo] += chi1
                 com0 [Yo,Xo] += m0[Yi,Xi]
                 com1 [Yo,Xo] += m1[Yi,Xi]
                 mn,mx = tim.zr
@@ -373,8 +394,8 @@ if True:
 
             subims_b.append((coimg[bslc], com0[bslc], ima, cochi0[bslc]))
             subims_a.append((coimg[bslc], com1[bslc], ima, cochi1[bslc]))
-            
 
+        # Plot per-band chi coadds, and RGB images for before & after
         for subims,rgbm in [(subims_b,rgbm0), (subims_a,rgbm1)]:
             plt.clf()
             for j,(im,m,ima,chi) in enumerate(subims):
@@ -396,7 +417,20 @@ if True:
             plt.axis(ax)
             ps.savefig()
 
-        if b >= 10:
+        # Plot per-image chis
+        cols = max(len(v) for v in chis.values())
+        rows = len(bands)
+        for i in [0,1]:
+            plt.clf()
+            for row,band in enumerate(bands):
+                sp0 = 1 + cols*row
+                for col,cc in enumerate(chis[band]):
+                    chi = cc[i]
+                    plt.subplot(rows, cols, sp0 + col)
+                    plt.imshow(-chi, **imchi)
+            ps.savefig()
+        
+        if iblob >= 10:
             break
         
 
