@@ -70,7 +70,7 @@ if True:
     ps = PlotSequence('brick2', format='%03i')
     #plt.figure(figsize=(8,6));
     plt.figure(figsize=(12,9));
-    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.95,
+    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.03, top=0.95,
                         hspace=0.05, wspace=0.05)
 
     # Clamp near-zero invvars to zero
@@ -135,7 +135,8 @@ if True:
         
     plt.clf()
     plt.imshow(np.round(sedsn), interpolation='nearest', origin='lower',
-               vmin=0, vmax=10)
+               vmin=0, vmax=10, cmap='hot')
+    plt.title('SED-matched detection filter')
     ps.savefig()
 
     # find significant peaks in the detection maps
@@ -153,11 +154,13 @@ if True:
     hot = (sedsn > 5)
     peaks = hot.copy()
 
+    crossa = dict(ms=10, mew=1.5)
     plt.clf()
     plt.imshow(peaks, cmap='gray', **imx)
     ax = plt.axis()
-    plt.plot(T.itx, T.ity, 'r+')
+    plt.plot(T.itx, T.ity, 'r+', **crossa)
     plt.axis(ax)
+    plt.title('Detection blobs')
     ps.savefig()
     
     blobs,nblobs = label(hot)
@@ -175,8 +178,9 @@ if True:
     plt.clf()
     plt.imshow(peaks, cmap='gray', **imx)
     ax = plt.axis()
-    plt.plot(T.itx, T.ity, 'r+')
+    plt.plot(T.itx, T.ity, 'r+', **crossa)
     plt.axis(ax)
+    plt.title('Detection blobs minus SE catalog sources')
     ps.savefig()
         
     # zero out the edges(?)
@@ -194,11 +198,21 @@ if True:
     #plt.imshow(rgbim)
     plt.imshow(coimgs[1], **imas[1])
     ax = plt.axis()
-    plt.plot(T.tx, T.ty, 'r+', mew=1.5, ms=8)
-    plt.plot(peakx, peaky, '+', color=(0,1,0), mew=1.5, ms=8)
+    plt.plot(T.tx, T.ty, 'r+', **crossa)
+    plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
     plt.axis(ax)
+    plt.title('SE Catalog + SED-matched detections')
     ps.savefig()
 
+    plt.clf()
+    plt.imshow(rgbim, **imx)
+    ax = plt.axis()
+    plt.plot(T.tx, T.ty, 'r+', **crossa)
+    plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
+    plt.axis(ax)
+    plt.title('SE Catalog + SED-matched detections')
+    ps.savefig()
+    
     rr = 2.0
     RR = int(np.ceil(rr))
     S = 2*RR+1
@@ -430,7 +444,7 @@ if True:
                     plt.imshow(-chi, **imchi)
             ps.savefig()
         
-        if iblob >= 10:
-            break
+        # if iblob >= 10:
+        #    break
         
 
