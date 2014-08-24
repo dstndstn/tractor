@@ -86,6 +86,9 @@ class DecamImage(object):
     def read_image(self, **kwargs):
         return self._read_fits(self.imgfn, self.hdu, **kwargs)
 
+    def get_image_info(self, **kwargs):
+        return fitsio.FITS(self.imgfn)[self.hdu].get_info()
+    
     def read_image_primary_header(self, **kwargs):
         return fitsio.read_header(self.imgfn)
 
@@ -206,7 +209,7 @@ def main():
 
     ra,dec = brick.ra, brick.dec
     #W,H = 3600,3600
-    W,H = 200,200
+    W,H = 400,400
     pixscale = 0.27 / 3600.
 
     bands = ['g','r','z']
@@ -230,6 +233,13 @@ def main():
         for fn,hdu in zip(TT.filename, TT.hdu):
             print
             print 'Image file', fn, 'hdu', hdu
+
+            cmd = 'rsync -arvz carver:%s .' % fn
+            print
+            if os.system(cmd):
+                sys.exit(-1)
+            continue
+            
             im = DecamImage(fn, hdu, band)
             ims.append(im)
 
@@ -237,18 +247,17 @@ def main():
         band = im.band
         run_calibs(im, ra, dec, pixscale)
 
+    # Select SE catalogs to read
     catims = [im for im in ims if im.band == catband]
     print 'Reference catalog files:', catims
-
+    # ... and read 'em
     cats = []
     extra_cols = []
     for im in catims:
         cat = fits_table(
-            im.morphfn,
-            hdu=2, #column_map={'ALPHA_J2000':'ra', 'DELTA_J2000':'dec'},
+            im.morphfn, hdu=2,
             columns=[x.upper() for x in
-                     [#'ALPHA_J2000', 'DELTA_J2000',
-                      'x_image', 'y_image', 'flags',
+                     ['x_image', 'y_image', 'flags',
                       'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
                       'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
                       'disk_theta_world', 'spheroid_reff_world',
@@ -261,18 +270,21 @@ def main():
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
         cats.append(cat)
 
-    plt.clf()
-    for cat in cats:
-        plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-    plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
-    ps.savefig()
+    # Plot all catalog sources and ROI
+    # plt.clf()
+    # for cat in cats:
+    #     plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
+    # targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+    #                      [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+    # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
+    # ps.savefig()
 
+    # Cut catalogs to ROI
     for cat in cats:
         ok,x,y = targetwcs.radec2pixelxy(cat.ra, cat.dec)
         cat.cut((x > 0.5) * (x < (W+0.5)) * (y > 0.5) * (y < (H+0.5)))
 
+    # Merge catalogs by keeping ones > 0.5" away from previous ones
     merged = cats[0]
     for cat in cats[1:]:
         if len(merged) == 0:
@@ -286,38 +298,29 @@ def main():
         if sum(keep):
             merged = merge_tables([merged, cat[keep]])
     
-    plt.clf()
-    plt.plot(merged.ra, merged.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
-    ps.savefig()
+    # plt.clf()
+    # plt.plot(merged.ra, merged.dec, 'o', mec='none', mfc='b', alpha=0.5)
+    # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
+    # ps.savefig()
 
     del cats
-
+    # Create Tractor sources
     cat,isrcs = get_se_modelfit_cat(merged, maglim=90, bands=bands)
     print 'Tractor sources:', cat
-
     T = merged[isrcs]
-    T.about()
+    #T.about()
     # for c in T.get_columns():
     #     plt.clf()
     #     plt.hist(T.get(c), 50)
     #     plt.xlabel(c)
     #     ps.savefig()
 
-    # zz = T[T.spheroid_reff_world == 0.]
-    # print 'Zero spheroid reff:', len(zz)
-    # zz.writeto('zsph.fits')
-    # zz = T[T.disk_scale_world == 0.]
-    # print 'Zero disk reff:', len(zz)
-    # zz.writeto('zdisk.fits')
-
+    # Read images, clip to ROI
     tims = []
     for im in ims:
         band = im.band
-
         wcs = Sip(im.wcsfn)
-        print 'Image shape', wcs.imagew, wcs.imageh
-        
+        #print 'Image shape', wcs.imagew, wcs.imageh
         imh,imw = wcs.imageh,wcs.imagew
         imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
         ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
@@ -327,36 +330,21 @@ def main():
         print 'Clip', clip
         if len(clip) == 0:
             continue
+        x0,y0 = np.floor(clip.min(axis=0)).astype(int)
+        x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
+        slc = slice(y0,y1+1), slice(x0,x1+1)
 
-        ## FIXME -- it seems I got lucky and the cross product is negative -- clockwise
-        ## One could check this and reverse the polygon vertex order.
+        ## FIXME -- it seems I got lucky and the cross product is
+        ## negative -- clockwise One could check this and reverse the
+        ## polygon vertex order.
         # dx0,dy0 = tx[1]-tx[0], ty[1]-ty[0]
         # dx1,dy1 = tx[2]-tx[1], ty[2]-ty[1]
         # cross = dx0*dy1 - dx1*dy0
         # print 'Cross:', cross
 
-        if False:
-            plt.clf()
-            imp = np.array(imgpoly)
-            #print 'imp', imp
-            ii = np.array([0,1,2,3,0])
-            imp = imp[ii,:]
-            plt.plot(imp[:,0], imp[:,1], 'b-')
-            plt.plot(tx[ii], ty[ii], 'r-')
-            #print 'Clip:', clip
-            plt.plot(clip[ii,0], clip[ii,1], 'g-')
-            ps.savefig()
-
-        x0,y0 = np.floor(clip.min(axis=0)).astype(int)
-        x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
-        #print 'Image range:', x0,x1, y0,y1
-        slc = slice(y0,y1+1), slice(x0,x1+1)
-
         img,imghdr = im.read_image(header=True, slice=slc)
         invvar = im.read_invvar(slice=slc)
-
-        print 'Image ', img.shape
-        #print 'Invvar', invvar.shape
+        #print 'Image ', img.shape
 
         # in pixels
         psf_fwhm = imghdr['FWHM']
@@ -376,10 +364,15 @@ def main():
         if x0 or y0:
             twcs.setX0Y0(x0,y0)
 
-        ### FIXME!! -- this is the sliced image size -- should be full size probably!
-        imh,imw = img.shape
-        psf = PsfEx(im.psffn, imw, imh, scale=False, nx=9, ny=17)
-        psf = ShiftedPsf(psf, x0, y0)
+        ### FIXME!! -- this is the sliced image size -- should be full
+        ### size probably!
+
+        info = im.get_image_info()
+        print 'Image info:', info
+        fullh,fullw = info['dims']
+
+        psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
+        psfex = ShiftedPsf(psf, x0, y0)
         # HACK!!
         psf_sigma = psf_fwhm / 2.35
         psf = NCircularGaussianPSF([psf_sigma],[1.])
@@ -389,21 +382,11 @@ def main():
         invvar *= zpscale**2
         orig_zpscale = zpscale
         zpscale = 1.
-        sig1 = 1./np.sqrt(np.median(invvar))
+        sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
 
-        # plt.clf()
-        # plt.imshow(invvar, interpolation='nearest', origin='lower')
-        # plt.colorbar()
-        # plt.title('weight map: ' + im.name)
-        # ps.savefig()
-        # 
-        # plt.clf()
-        # plt.hist(invvar.ravel(), 100)
-        # plt.xlabel('invvar')
-        # ps.savefig()
-
-        # The weight maps have values < 0
-        invvar = np.maximum(invvar, 0.)
+        # Clamp near-zero (incl negative!) invvars to zero
+        thresh = 0.2 * (1./sig1**2)
+        invvar[invvar < thresh] = 0
 
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
@@ -415,11 +398,11 @@ def main():
         tim.psf_sigma = psf_sigma
         tim.sip_wcs = wcs
         tim.x0,tim.y0 = int(x0),int(y0)
-        tims.append(tim)
-
+        tim.psfex = psfex
         mn,mx = tim.zr
-        ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-                   vmin=mn, vmax=mx)
+        tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn, vmax=mx)
+        tims.append(tim)
 
         # tractor = Tractor([tim], cat)
         # plt.clf()
@@ -430,15 +413,24 @@ def main():
         # plt.imshow(mod, **ima)
         # plt.suptitle(tim.name)
         # ps.savefig()
+        # plt.clf()
+        # plt.imshow(invvar, interpolation='nearest', origin='lower')
+        # plt.colorbar()
+        # plt.title('weight map: ' + im.name)
+        # ps.savefig()
+        # 
+        # plt.clf()
+        # plt.hist(invvar.ravel(), 100)
+        # plt.xlabel('invvar')
+        # ps.savefig()
 
-        plt.clf()
-        plt.imshow(tim.getImage(), **ima)
-        plt.suptitle(tim.name)
-        ps.savefig()
+        # plt.clf()
+        # plt.imshow(tim.getImage(), **ima)
+        # plt.suptitle(tim.name)
+        # ps.savefig()
 
     detmaps = dict([(b, np.zeros((H,W))) for b in bands])
     detivs  = dict([(b, np.zeros((H,W))) for b in bands])
-
     for tim in tims:
         # Render the detection map
         wcs = tim.sip_wcs
@@ -475,9 +467,7 @@ def main():
     for band in bands:
         detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
         detsn = detmap * np.sqrt(detivs[band])
-
         hot |= (detsn > 5.)
-
         sedmap += detmaps[band]
         sediv  += detivs [band]
 
