@@ -27,7 +27,12 @@ from tractor.source_extractor import *
 
 tempdir = os.environ['TMPDIR']
 calibdir = os.environ.get('DECALS_CALIB', 'calib')
+imgdir   = os.environ.get('DECALS_IMG', None)
+sedir    = os.environ.get('DECALS_SE',
+                          '/project/projectdirs/desi/imaging/code/cats')
 print 'calibdir', calibdir
+
+#
 
 def create_temp(**kwargs):
     f,fn = tempfile.mkstemp(dir=tempdir, **kwargs)
@@ -110,6 +115,9 @@ def run_calibs(im, ra, dec, pixscale):
     #print 'psf', im.psffn
     #print 'morph', im.morphfn
 
+    for fn in [im.wcsfn,im.sexfn,im.psffn,im.morphfn,im.corrfn]:
+        print 'exists?', os.path.exists(fn), fn
+        
     im.makedirs()
 
     run_funpack = False
@@ -154,7 +162,7 @@ def run_calibs(im, ra, dec, pixscale):
     if run_se:
         cmd = ' '.join([
             'sex',
-            '-c', '/project/projectdirs/desi/imaging/code/cats/DECaLS-v2.sex',
+            '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
             '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
             '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.sexfn,
             tmpimgfn])
@@ -179,13 +187,15 @@ def run_calibs(im, ra, dec, pixscale):
             sys.exit(-1)
 
     if run_psfex:
-        cmd = 'psfex -c ~/desi/imaging/code/cats/DECaLS-v2.psfex -PSF_DIR %s %s' % (os.path.dirname(im.psffn), im.sexfn)
+        cmd = ('psfex -c %s -PSF_DIR %s %s' %
+               (os.path.join(sedir, 'DECaLS-v2.psfex'),
+                os.path.dirname(im.psffn), im.sexfn))
         print cmd
         if os.system(cmd):
             sys.exit(-1)
 
     if run_morph:
-        cmd = ' '.join(['sex -c ~/desi/imaging/code/cats/CS82_MF.sex',
+        cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
                         '-FLAG_IMAGE', tmpmaskfn,
                         '-SEEING_FWHM %f' % seeing,
                         '-MAG_ZEROPOINT %f' % magzp,
@@ -233,16 +243,23 @@ def main():
         for fn,hdu in zip(TT.filename, TT.hdu):
             print
             print 'Image file', fn, 'hdu', hdu
-
-            cmd = 'rsync -arvz carver:%s .' % fn
-            print
-            if os.system(cmd):
-                sys.exit(-1)
-            continue
+            #continue
+            if imgdir:
+                fn = fn.replace('/project/projectdirs/cosmo/staging',
+                                imgdir)
             
             im = DecamImage(fn, hdu, band)
             ims.append(im)
 
+            # fns = ','.join([im.imgfn, im.dqfn, im.wtfn])
+            # cmd = 'rsync --progress -arvz carver:"{%s}" .' % fns
+            # print
+            # if os.system(cmd):
+            #     sys.exit(-1)
+            # continue
+            
+
+            
     for im in ims:
         band = im.band
         run_calibs(im, ra, dec, pixscale)
@@ -274,10 +291,10 @@ def main():
     # plt.clf()
     # for cat in cats:
     #     plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    # targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-    #                      [(1,1),(W,1),(W,H),(1,H),(1,1)]])
     # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
     # ps.savefig()
+    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
 
     # Cut catalogs to ROI
     for cat in cats:
@@ -372,7 +389,7 @@ def main():
         fullh,fullw = info['dims']
 
         psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
-        psfex = ShiftedPsf(psf, x0, y0)
+        psfex = ShiftedPsf(psfex, x0, y0)
         # HACK!!
         psf_sigma = psf_fwhm / 2.35
         psf = NCircularGaussianPSF([psf_sigma],[1.])
