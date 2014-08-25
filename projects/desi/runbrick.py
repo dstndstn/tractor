@@ -337,8 +337,10 @@ def main():
         if off in [0,4]:
             plt.ylabel('SDSS - DECam instrumental mag')
         plt.title(im.name)
-        #med = np.median(mag[J] - mag2[I])
-        #plt.ylim(med-2,med+2)
+
+        med = np.median(mag[J] - mag2[I])
+        plt.axhline(med, color='k', alpha=0.25)
+
         plt.ylim(29,32)
         plt.xlim(15, 22)
         plt.axhline(magzp, color='r', alpha=0.5)
@@ -347,9 +349,7 @@ def main():
         off += 1
         lastband = band
     ps.savefig()
-
         
-    sys.exit(0)
         
     # FIXME -- we're only reading 'catband'-band catalogs, and all the fluxes
     # are initialized at that band's flux... should really read all bands!
@@ -506,7 +506,7 @@ def main():
         print 'Image info:', info
         fullh,fullw = info['dims']
         psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
-        psfex = ShiftedPsf(psfex, x0, y0)
+        #psfex = ShiftedPsf(psfex, x0, y0)
         # HACK!!
         psf_sigma = psf_fwhm / 2.35
         psf = NCircularGaussianPSF([psf_sigma],[1.])
@@ -834,8 +834,12 @@ def main():
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
             # FIXME --
-            subpsf = tim.psfex.mogAt((ox0+x0+x1)/2., (oy0+y0+y1)/2.)
+            #subpsf = tim.psfex.mogAt(ox0+(x0+x1)/2., oy0+(y0+y1)/2.)
             #subpsf = tim.getPsf()
+
+            psfimg = tim.psfex.instantiateAt(ox0+(x0+x1)/2., oy0+(y0+y1)/2.,
+                                             nativeScale=True)
+            subpsf = GaussianMixturePSF.fromStamp(psfimg)
 
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
