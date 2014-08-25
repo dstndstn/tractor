@@ -30,6 +30,8 @@ calibdir = os.environ.get('DECALS_CALIB', 'calib')
 imgdir   = os.environ.get('DECALS_IMG', None)
 sedir    = os.environ.get('DECALS_SE',
                           '/project/projectdirs/desi/imaging/code/cats')
+an_config = os.environ.get('DECALS_AN_CFG',
+                           '~/desi-dstn/sdss-astrometry-index/r2/cfg')
 print 'calibdir', calibdir
 
 #
@@ -51,7 +53,7 @@ class DecamImage(object):
         base = os.path.basename(imgfn)
         base = base.replace('.fits.fz', '')
         dirname = os.path.basename(os.path.dirname(imgfn))
-        self.name = base + '/' + dirname
+        self.name = dirname + '/' + base + ' + %02i' % hdu
 
         print 'dir,base', dirname, base
         print 'calibdir', calibdir
@@ -59,6 +61,7 @@ class DecamImage(object):
         extnm = '.ext%02i' % hdu
         self.wcsfn = os.path.join(calibdir, 'astrom', dirname, base + extnm + '.wcs')
         self.corrfn = self.wcsfn.replace('.wcs', '.corr')
+        self.sdssfn = self.wcsfn.replace('.wcs', '.sdss')
         self.sexfn = os.path.join(calibdir, 'sextractor', dirname, base + extnm + '.cat')
         self.psffn = os.path.join(calibdir, 'psf', dirname, base + extnm + '.psf')
         self.morphfn = os.path.join(calibdir, 'morph', dirname, base + extnm + '.fits')
@@ -70,7 +73,7 @@ class DecamImage(object):
 
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
-                      [self.wcsfn, self.corrfn, self.sexfn, self.psffn, self.morphfn]]:
+                      [self.wcsfn, self.corrfn, self.sdssfn, self.sexfn, self.psffn, self.morphfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -115,7 +118,7 @@ def run_calibs(im, ra, dec, pixscale):
     #print 'psf', im.psffn
     #print 'morph', im.morphfn
 
-    for fn in [im.wcsfn,im.sexfn,im.psffn,im.morphfn,im.corrfn]:
+    for fn in [im.wcsfn,im.sexfn,im.psffn,im.morphfn,im.corrfn,im.sdssfn]:
         print 'exists?', os.path.exists(fn), fn
         
     im.makedirs()
@@ -126,16 +129,16 @@ def run_calibs(im, ra, dec, pixscale):
     run_psfex = False
     run_morph = False
 
-    if not all([os.path.exists(fn) for fn in [im.sexfn, im.psffn, im.wcsfn]]):
+    if not all([os.path.exists(fn) for fn in [im.sexfn]]):
         run_se = True
-    if not all([os.path.exists(fn) for fn in [im.sexfn, im.morphfn]]):
         run_funpack = True
-    if not all([os.path.exists(fn) for fn in [im.wcsfn,im.corrfn]]):
+    if not all([os.path.exists(fn) for fn in [im.wcsfn,im.corrfn,im.sdssfn]]):
         run_astrom = True
     if not os.path.exists(im.psffn):
         run_psfex = True
     if not os.path.exists(im.morphfn):
         run_morph = True
+        run_funpack = True
     
     if run_funpack:
         tmpimgfn  = create_temp(suffix='.fits')
@@ -172,16 +175,16 @@ def run_calibs(im, ra, dec, pixscale):
 
     if run_astrom:
         cmd = ' '.join([
-            'solve-field --config ~/desi-dstn/sdss-astrometry-index/r2/cfg',
-            '-D . --temp-dir tmp',
+            'solve-field --config', an_config, '-D . --temp-dir', tempdir,
             '--ra %f --dec %f' % (ra,dec), '--radius 1 -L 0.25 -H 0.29 -u app',
-            '--continue --no-plots --no-remove-lines --uniformize 0 --no-fits2fits',
+            '--continue --no-plots --no-remove-lines --uniformize 0',
+            '--no-fits2fits',
             '-X x_image -Y y_image -s flux_auto --extension 2',
             '--width 2048 --height 4096',
             '--crpix-center',
-            '-N none -U none -S none -M none -R none',
-            '--temp-axy', '--corr', im.corrfn, '--tag-all',
-            '--wcs', im.wcsfn, im.sexfn])
+            '-N none -U none -S none -M none --rdls', im.sdssfn,
+            '--corr', im.corrfn, '--wcs', im.wcsfn, 
+            '--temp-axy', '--tag-all', im.sexfn])
         print cmd
         if os.system(cmd):
             sys.exit(-1)
@@ -210,7 +213,10 @@ def run_calibs(im, ra, dec, pixscale):
 def main():
     ps = PlotSequence('brick')
     plt.figure(figsize=(12,9));
-    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.03, top=0.95,
+    #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.03, top=0.95,
+    #                    hspace=0.05, wspace=0.05)
+
+    plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         hspace=0.05, wspace=0.05)
     
     B = fits_table('bricks.fits')
@@ -264,9 +270,53 @@ def main():
 
             
     for im in ims:
-        band = im.band
         run_calibs(im, ra, dec, pixscale)
 
+    # Check photometric calibrations
+    for im in ims:
+        band = im.band
+        cat = fits_table(im.morphfn, hdu=2, columns=[
+            'mag_psf','x_image', 'y_image', 'mag_disk', 'mag_spheroid', 'flags',
+            'flux_psf' ])
+        print 'Read', len(cat), 'from', im.morphfn
+        cat.cut(cat.flags == 0)
+        print '  Cut to', len(cat), 'with no flags set'
+        wcs = Sip(im.wcsfn)
+        cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
+
+        sdss = fits_table(im.sdssfn)
+
+        I,J,d = match_radec(cat.ra, cat.dec, sdss.ra, sdss.dec, 1./3600.)
+        plt.clf()
+        flux = sdss.get('%s_psfflux' % band)
+        mag = NanoMaggies.nanomaggiesToMag(flux)
+        plt.plot(mag[J], cat.mag_psf[I] - mag[J], 'b.')
+        plt.xlabel('SDSS %s psf mag' % band)
+        plt.ylabel('SDSS - DECam mag')
+        plt.title(im.name)
+        plt.axhline(0, color='k', alpha=0.5)
+        plt.ylim(-2,2)
+        plt.xlim(15, 23)
+        ps.savefig()
+
+        plt.clf()
+        mag2 = -2.5 * np.log10(cat.flux_psf)
+        plt.plot(mag[J], mag2[I] - mag[J], 'b.')
+        plt.xlabel('SDSS %s psf mag' % band)
+        plt.ylabel('SDSS - DECam instrumental mag')
+        plt.title(im.name)
+        #plt.axhline(0, color='k', alpha=0.5)
+        med = np.median(mag2[I] - mag[J])
+        plt.ylim(med-2,med+2)
+        plt.xlim(15, 23)
+        ps.savefig()
+
+        
+    sys.exit(0)
+        
+    # FIXME -- we're only reading 'catband'-band catalogs, and all the fluxes
+    # are initialized at that band's flux... should really read all bands!
+        
     # Select SE catalogs to read
     catims = [im for im in ims if im.band == catband]
     print 'Reference catalog files:', catims
@@ -290,6 +340,8 @@ def main():
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
         cats.append(cat)
 
+        
+        
     # Plot all catalog sources and ROI
     # plt.clf()
     # for cat in cats:
@@ -728,8 +780,8 @@ def main():
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
             # FIXME --
-            #subpsf = tim.getPsf().mogAt((ox0+x0+x1)/2., (oy0+y0+y1)/2.)
-            subpsf = tim.getPsf()
+            subpsf = tim.psfex.mogAt((ox0+x0+x1)/2., (oy0+y0+y1)/2.)
+            #subpsf = tim.getPsf()
 
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
