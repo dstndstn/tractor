@@ -14,6 +14,7 @@ from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing
 
 from astrometry.util.fits import *
+from astrometry.util.file import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
 from astrometry.util.miscutils import *
