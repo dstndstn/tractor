@@ -59,6 +59,7 @@ if __name__ == '__main__':
 
     T.rename('1sig-4"ap', 'onesig_4sec')
     T.rename('RMS(DMag)', 'rms_dmag')
+    T.rename('ExpID', 'expnum')
 
     T.writeto('almanac.fits')
     

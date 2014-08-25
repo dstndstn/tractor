@@ -27,10 +27,17 @@ from tractor.galaxy import *
 from tractor.source_extractor import *
 
 tempdir = os.environ['TMPDIR']
-calibdir = os.environ.get('DECALS_CALIB', 'calib')
-imgdir   = os.environ.get('DECALS_IMG', None)
-sedir    = os.environ.get('DECALS_SE',
-                          '/project/projectdirs/desi/imaging/code/cats')
+
+#calibdir = os.environ.get('DECALS_CALIB', 'calib')
+#imgdir   = os.environ.get('DECALS_IMG', None)
+#sedir    = os.environ.get('DECALS_SE',
+#                          '/project/projectdirs/desi/imaging/code/cats')
+
+decals_dir = os.environ.get('DECALS_DIR')
+
+calibdir = os.path.join(decals_dir, 'calib', 'decam')
+imgdir   = os.path.join(decals_dir, 'images', 'decam')
+sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 print 'calibdir', calibdir
 
 #
@@ -347,6 +354,10 @@ def main():
     #     plt.xlabel(c)
     #     ps.savefig()
 
+    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
+    print 'Reading zeropoints:', zpfn
+    ZP = fits_table(zpfn)
+
     # Read images, clip to ROI
     tims = []
     for im in ims:
@@ -381,9 +392,22 @@ def main():
         # header 'FWHM' is in pixels
         psf_fwhm = imghdr['FWHM']
         primhdr = im.read_image_primary_header()
-        magzp  = primhdr['MAGZERO']
-        zpscale = NanoMaggies.zeropointToScale(magzp)
+
+        I = np.flatnonzero(ZP.expnum == im.expnum)
+        if len(I) > 1:
+            I = np.flatnonzero((ZP.expnum == im.expnum) * (ZP.extname == im.extname))
+        assert(len(I) == 1)
+        I = I[0]
+        magzp = ZP.zpt[I]
         print 'magzp', magzp
+        exptime = ZP.exptime[I]
+        magzp += 2.5 * np.log10(exptime)
+        print 'magzp', magzp
+
+        magzp0  = primhdr['MAGZERO']
+        print 'header magzp:', magzp0
+
+        zpscale = NanoMaggies.zeropointToScale(magzp)
         print 'zpscale', zpscale
 
         #sky = imghdr['SKYBRITE']
