@@ -49,12 +49,13 @@ def create_temp(**kwargs):
     return fn
 
 class DecamImage(object):
-    def __init__(self, imgfn, hdu, band, expnum, extname, calname):
+    def __init__(self, imgfn, hdu, band, expnum, extname, calname, exptime):
         self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
         self.band  = band
+        self.exptime = exptime
         self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
         self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
@@ -229,7 +230,8 @@ def main():
     #                    hspace=0.05, wspace=0.05)
 
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
-                        hspace=0.05, wspace=0.05)
+                        #hspace=0.05, wspace=0.05)
+                        hspace=0.2, wspace=0.05)
     
     B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
 
@@ -264,49 +266,20 @@ def main():
         for t in TT:
             print
             print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-
-            im = DecamImage(t.cpimage, t.cpimage_hdu, band, t.expnum, t.extname.strip(), t.calname.strip())
+            im = DecamImage(t.cpimage, t.cpimage_hdu, band, t.expnum, t.extname.strip(),
+                            t.calname.strip(), t.exptime)
             ims.append(im)
-
-            im.makedirs()
-
-            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/morph/%s' %
-                   t.cpimage.replace('.fits.fz', '.ext%02i.fits' % t.cpimage_hdu))
-            dfn = im.morphfn
-            cmd = 'mv %s %s' % (sfn, dfn)
-            if os.path.exists(sfn):
-                print cmd
-
-            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/sextractor/%s' %
-                   t.cpimage.replace('.fits.fz', '.ext%02i.cat' % t.cpimage_hdu))
-            dfn = im.sexfn
-            cmd = 'mv %s %s' % (sfn, dfn)
-            print cmd
-            if os.path.exists(sfn):
-                print cmd
-
-
-            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/psf/%s' %
-                   t.cpimage.replace('.fits.fz', '.ext%02i.psf' % t.cpimage_hdu))
-            dfn = im.psffn
-            cmd = 'mv %s %s' % (sfn, dfn)
-            print cmd
-            if os.path.exists(sfn):
-                print cmd
-
-            # fns = ','.join([im.imgfn, im.dqfn, im.wtfn])
-            # cmd = 'rsync --progress -arvz carver:"{%s}" .' % fns
-            # print
-            # if os.system(cmd):
-            #     sys.exit(-1)
-            # continue
-            
-    #sys.exit(0)
             
     for im in ims:
         run_calibs(im, ra, dec, pixscale)
 
+    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
+    print 'Reading zeropoints:', zpfn
+    ZP = fits_table(zpfn)
+
     # Check photometric calibrations
+    lastband = None
+
     for im in ims:
         band = im.band
         cat = fits_table(im.morphfn, hdu=2, columns=[
@@ -320,30 +293,60 @@ def main():
 
         sdss = fits_table(im.sdssfn)
 
+
+        I = np.flatnonzero(ZP.expnum == im.expnum)
+        if len(I) > 1:
+            I = np.flatnonzero((ZP.expnum == im.expnum) * (ZP.extname == im.extname))
+        assert(len(I) == 1)
+        I = I[0]
+        magzp = ZP.zpt[I]
+        print 'magzp', magzp
+        exptime = ZP.exptime[I]
+        magzp += 2.5 * np.log10(exptime)
+        print 'magzp', magzp
+
+        primhdr = im.read_image_primary_header()
+        magzp0  = primhdr['MAGZERO']
+        print 'header magzp:', magzp0
+
         I,J,d = match_radec(cat.ra, cat.dec, sdss.ra, sdss.dec, 1./3600.)
-        plt.clf()
+
         flux = sdss.get('%s_psfflux' % band)
         mag = NanoMaggies.nanomaggiesToMag(flux)
-        plt.plot(mag[J], cat.mag_psf[I] - mag[J], 'b.')
-        plt.xlabel('SDSS %s psf mag' % band)
-        plt.ylabel('SDSS - DECam mag')
-        plt.title(im.name)
-        plt.axhline(0, color='k', alpha=0.5)
-        plt.ylim(-2,2)
-        plt.xlim(15, 23)
-        ps.savefig()
 
-        plt.clf()
+        # plt.clf()
+        # plt.plot(mag[J], cat.mag_psf[I] - mag[J], 'b.')
+        # plt.xlabel('SDSS %s psf mag' % band)
+        # plt.ylabel('SDSS - DECam mag')
+        # plt.title(im.name)
+        # plt.axhline(0, color='k', alpha=0.5)
+        # plt.ylim(-2,2)
+        # plt.xlim(15, 23)
+        # ps.savefig()
+
+        if band != lastband:
+            if lastband is not None:
+                ps.savefig()
+            off = 0
+            plt.clf()
+
+        plt.subplot(2,4, off+1)
         mag2 = -2.5 * np.log10(cat.flux_psf)
-        plt.plot(mag[J], mag2[I] - mag[J], 'b.')
+        p = plt.plot(mag[J], mag[J] - mag2[I], 'b.')
         plt.xlabel('SDSS %s psf mag' % band)
-        plt.ylabel('SDSS - DECam instrumental mag')
+        if off in [0,4]:
+            plt.ylabel('SDSS - DECam instrumental mag')
         plt.title(im.name)
-        #plt.axhline(0, color='k', alpha=0.5)
-        med = np.median(mag2[I] - mag[J])
-        plt.ylim(med-2,med+2)
-        plt.xlim(15, 23)
-        ps.savefig()
+        #med = np.median(mag[J] - mag2[I])
+        #plt.ylim(med-2,med+2)
+        plt.ylim(29,32)
+        plt.xlim(15, 22)
+        plt.axhline(magzp, color='r', alpha=0.5)
+        plt.axhline(magzp0, color='b', alpha=0.5)
+
+        off += 1
+        lastband = band
+    ps.savefig()
 
         
     sys.exit(0)
