@@ -36,7 +36,6 @@ tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
 
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
-imgdir   = os.path.join(decals_dir, 'images', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
@@ -50,28 +49,34 @@ def create_temp(**kwargs):
     return fn
 
 class DecamImage(object):
-    def __init__(self, imgfn, hdu, band):
-        self.imgfn = imgfn
+    def __init__(self, imgfn, hdu, band, expnum, extname, calname):
+        self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
+        self.expnum = expnum
+        self.extname = extname
         self.band  = band
         self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
         self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
-        base = os.path.basename(imgfn)
-        base = base.replace('.fits.fz', '')
-        dirname = os.path.basename(os.path.dirname(imgfn))
-        self.name = dirname + '/' + base + ' + %02i' % hdu
+        ibase = os.path.basename(imgfn)
+        ibase = ibase.replace('.fits.fz', '')
+        idirname = os.path.basename(os.path.dirname(imgfn))
+        #self.name = dirname + '/' + base + ' + %02i' % hdu
+        print 'dir,base', idirname, ibase
+        #print 'calibdir', calibdir
 
-        print 'dir,base', dirname, base
-        print 'calibdir', calibdir
+        self.calname = calname
+        self.name = '%08i-%s' % (expnum, extname)
+        print 'Calname', calname
         
         extnm = '.ext%02i' % hdu
-        self.wcsfn = os.path.join(calibdir, 'astrom', dirname, base + extnm + '.wcs')
-        self.corrfn = self.wcsfn.replace('.wcs', '.corr')
-        self.sdssfn = self.wcsfn.replace('.wcs', '.sdss')
-        self.sexfn = os.path.join(calibdir, 'sextractor', dirname, base + extnm + '.cat')
-        self.psffn = os.path.join(calibdir, 'psf', dirname, base + extnm + '.psf')
-        self.morphfn = os.path.join(calibdir, 'morph', dirname, base + extnm + '.fits')
+        self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
+        self.corrfn = self.wcsfn.replace('.wcs', '.corr.fits')
+        self.sdssfn = self.wcsfn.replace('.wcs', '.sdss.fits')
+        self.sexfn = os.path.join(calibdir, 'sextractor', calname + '.cat.fits')
+        # PsfEx hard-codes the .psf suffix
+        self.psffn = os.path.join(calibdir, 'psfex', calname + '.psf')
+        self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
     def __str__(self):
         return self.name
@@ -226,7 +231,7 @@ def main():
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         hspace=0.05, wspace=0.05)
     
-    B = fits_table('bricks.fits')
+    B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
 
     # brick index...
     ii = 377305
@@ -245,7 +250,8 @@ def main():
                     -pixscale, 0., 0., pixscale,
                     float(W), float(H))
 
-    T = fits_table('ccds.fits')
+    ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
+    T = fits_table(ccdsfn)
     sz = 0.25
     T.cut(np.abs(T.dec - dec) < sz)
     T.cut(degrees_between(T.ra, T.dec, ra, dec) < sz)
@@ -255,17 +261,38 @@ def main():
     for band in bands:
         TT = T[T.filter == band]
         print len(TT), 'in', band, 'band'
-        print 'filenames,hdus:', zip(TT.filename, TT.hdu)
-        for fn,hdu in zip(TT.filename, TT.hdu):
+        for t in TT:
             print
-            print 'Image file', fn, 'hdu', hdu
-            #continue
-            if imgdir:
-                fn = fn.replace('/project/projectdirs/cosmo/staging',
-                                imgdir)
-            
-            im = DecamImage(fn, hdu, band)
+            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+
+            im = DecamImage(t.cpimage, t.cpimage_hdu, band, t.expnum, t.extname.strip(), t.calname.strip())
             ims.append(im)
+
+            im.makedirs()
+
+            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/morph/%s' %
+                   t.cpimage.replace('.fits.fz', '.ext%02i.fits' % t.cpimage_hdu))
+            dfn = im.morphfn
+            cmd = 'mv %s %s' % (sfn, dfn)
+            if os.path.exists(sfn):
+                print cmd
+
+            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/sextractor/%s' %
+                   t.cpimage.replace('.fits.fz', '.ext%02i.cat' % t.cpimage_hdu))
+            dfn = im.sexfn
+            cmd = 'mv %s %s' % (sfn, dfn)
+            print cmd
+            if os.path.exists(sfn):
+                print cmd
+
+
+            sfn = ('/project/projectdirs/cosmo/work/decam/tractorinputs/psf/%s' %
+                   t.cpimage.replace('.fits.fz', '.ext%02i.psf' % t.cpimage_hdu))
+            dfn = im.psffn
+            cmd = 'mv %s %s' % (sfn, dfn)
+            print cmd
+            if os.path.exists(sfn):
+                print cmd
 
             # fns = ','.join([im.imgfn, im.dqfn, im.wtfn])
             # cmd = 'rsync --progress -arvz carver:"{%s}" .' % fns
@@ -274,7 +301,7 @@ def main():
             #     sys.exit(-1)
             # continue
             
-
+    #sys.exit(0)
             
     for im in ims:
         run_calibs(im, ra, dec, pixscale)
