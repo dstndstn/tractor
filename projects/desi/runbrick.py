@@ -791,6 +791,7 @@ def stage0(**kwargs):
         rtn[k] = locals()[k]
     return rtn
 
+# Check out the PsfEx models
 def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
              detmaps=None, detivs=None,
              rgbim=None,
@@ -799,9 +800,6 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
              W=None,H=None,
              ra=None,dec=None, bands=None, ps=None, tims=None,
              **kwargs):
-
-    # Check out the PsfEx models
-
     # sort sources by their sedsn values.
     fluxes = sedsn[T.ity, T.itx]
 
@@ -829,14 +827,33 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         chis1 = tractor.getChiImages()
         mods1 = tractor.getModelImages()
 
+
+        for itim,tim in enumerate(tims):
+            ox0,oy0 = orig_wcsxy0[itim]
+            x,y = tim.wcs.positionToPixel(cat[srci].getPosition())
+            psfimg = tim.psfex.instantiateAt(ox0+x, oy0+y, nativeScale=True)
+            subpsf = PixelizedPSF(psfimg)
+            tim.psf = subpsf
+        for step in range(10):
+            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
+            print 'dlnp:', dlnp
+            if dlnp < 0.1:
+                break
+        
+        chis2 = tractor.getChiImages()
+        mods2 = tractor.getModelImages()
+
+        
         subchis = []
         submods = []
+        subchis2 = []
+        submods2 = []
         subimgs = []
         for i,(chi,mod) in enumerate(zip(chis1, mods1)):
             x,y = tims[i].wcs.positionToPixel(cat[srci].getPosition())
             x = int(x)
             y = int(y)
-            S = 20
+            S = 15
             th,tw = tims[i].shape
             x0 = max(x-S, 0)
             y0 = max(y-S, 0)
@@ -845,6 +862,8 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subchis.append(chi[y0:y1, x0:x1])
             submods.append(mod[y0:y1, x0:x1])
             subimgs.append(tims[i].getImage()[y0:y1, x0:x1])
+            subchis2.append(chis2[i][y0:y1, x0:x1])
+            submods2.append(mods2[i][y0:y1, x0:x1])
 
         mxchi = max([np.abs(chi).max() for chi in subchis])
 
@@ -859,28 +878,51 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         # ps.savefig()
 
         cols = len(subchis)
+        rows = 3
+        rows = 5
         plt.clf()
+        ta = dict(fontsize=8)
         for i,(chi,mod,img) in enumerate(zip(subchis,submods,subimgs)):
             mx = img.max()
             def nl(x):
                 return np.log10(np.maximum(tim.sig1, x + 5.*tim.sig1))
 
-            plt.subplot(3, cols, i+1)
-            #plt.imshow(img, **tims[i].ima)
+            plt.subplot(rows, cols, i+1)
             plt.imshow(nl(img), vmin=nl(0), vmax=nl(mx), **imx)
             plt.xticks([]); plt.yticks([])
-            plt.title(tims[i].name)
-            plt.subplot(3, cols, i+1+cols)
-            #plt.imshow(mod, **tims[i].ima)
+            plt.title(tims[i].name, **ta)
+
+            plt.subplot(rows, cols, i+1+cols)
             plt.imshow(nl(mod), vmin=nl(0), vmax=nl(mx), **imx)
             plt.xticks([]); plt.yticks([])
-            plt.subplot(3, cols, i+1+cols*2)
+            if i == 0:
+                plt.title('MoG PSF', **ta)
 
+            plt.subplot(rows, cols, i+1+cols*2)
             mxchi = 5.
             plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
             plt.xticks([]); plt.yticks([])
             #plt.colorbar()
+            if i == 0:
+                plt.title('MoG chi', **ta)
 
+            # pix
+            plt.subplot(rows, cols, i+1+cols*3)
+            plt.imshow(nl(submods2[i]), vmin=nl(0), vmax=nl(mx), **imx)
+            plt.xticks([]); plt.yticks([])
+            if i == 0:
+                plt.title('Pixelized PSF', **ta)
+
+            plt.subplot(rows, cols, i+1+cols*4)
+            mxchi = 5.
+            plt.imshow(-subchis2[i], vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
+            plt.xticks([]); plt.yticks([])
+            if i == 0:
+                plt.title('Pixelized chi', **ta)
+
+        rd = cat[srci].getPosition()
+        plt.suptitle('Source at RA,Dec = (%.4f, %.4f)' % (rd.ra, rd.dec))
+            
         ps.savefig()
 
 
