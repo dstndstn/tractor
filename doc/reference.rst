@@ -27,6 +27,7 @@ Flat list
 * :class:`~tractor.Mags`
 * :class:`~tractor.MagsPhotoCal`
 * :class:`~tractor.MultiParams`
+* :class:`~tractor.NamedParams`
 * :class:`~tractor.NCircularGaussianPSF`
 * :class:`~tractor.NullPhotoCal`
 * :class:`~tractor.NullWCS`
@@ -79,6 +80,8 @@ Ducks
 Utilities
 ---------
 .. autoclass:: tractor.BaseParams
+   :members:
+.. autoclass:: tractor.NamedParams
    :members:
 .. autoclass:: tractor.ScalarParam
    :members:
