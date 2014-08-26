@@ -791,6 +791,90 @@ def stage0(**kwargs):
         rtn[k] = locals()[k]
     return rtn
 
+def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+             detmaps=None, detivs=None,
+             rgbim=None,
+             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+             tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None,
+             ra=None,dec=None, bands=None, ps=None, tims=None,
+             **kwargs):
+
+    # Check out the PsfEx models
+
+    # sort sources by their sedsn values.
+    fluxes = sedsn[T.ity, T.itx]
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+
+    for srci in np.argsort(-fluxes)[:20]:
+        cat.freezeAllParams()
+        cat.thawParam(srci)
+                    
+        print 'Fitting:'
+        tractor.printThawedParams()
+        for itim,tim in enumerate(tims):
+            ox0,oy0 = orig_wcsxy0[itim]
+            x,y = tim.wcs.positionToPixel(cat[srci].getPosition())
+            psfimg = tim.psfex.instantiateAt(ox0+x, oy0+y, nativeScale=True)
+            subpsf = GaussianMixturePSF.fromStamp(psfimg)
+            tim.psf = subpsf
+
+        for step in range(10):
+            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
+            print 'dlnp:', dlnp
+            if dlnp < 0.1:
+                break
+        
+        chis1 = tractor.getChiImages()
+        mods1 = tractor.getModelImages()
+
+        subchis = []
+        submods = []
+        subimgs = []
+        for i,(chi,mod) in enumerate(zip(chis1, mods1)):
+            x,y = tims[i].wcs.positionToPixel(cat[srci].getPosition())
+            x = int(x)
+            y = int(y)
+            S = 20
+            th,tw = tims[i].shape
+            x0 = max(x-S, 0)
+            y0 = max(y-S, 0)
+            x1 = min(x+S, tw)
+            y1 = min(y+S, th)
+            subchis.append(chi[y0:y1, x0:x1])
+            submods.append(mod[y0:y1, x0:x1])
+            subimgs.append(tims[i].getImage()[y0:y1, x0:x1])
+
+        n = len(subchis)
+        cols = int(np.ceil(np.sqrt(n)))
+        rows = int(np.ceil(float(n) / cols))
+        mx = max([np.abs(chi).max() for chi in subchis])
+        plt.clf()
+        for i,chi in enumerate(subchis):
+            plt.subplot(rows, cols, i+1)
+            plt.imshow(-chi, vmin=-mx, vmax=mx, cmap='RdBu', **imx)
+            plt.colorbar()
+        ps.savefig()
+
+        cols = len(subchis)
+        plt.clf()
+        for i,(chi,mod,img) in enumerate(zip(subchis,submods,subimgs)):
+            mx = img.max()
+            def nl(x):
+                return np.log10(np.maximum(tim.sig1, x + 5.*tim.sig1))
+
+            plt.subplot(3, cols, i+1)
+            #plt.imshow(img, **tims[i].ima)
+            plt.imshow(nl(img), vmin=nl(0), vmax=nl(mx), **imx)
+            plt.subplot(3, cols, i+1+cols)
+            #plt.imshow(mod, **tims[i].ima)
+            plt.imshow(nl(mod), vmin=nl(0), vmax=nl(mx), **imx)
+            plt.subplot(3, cols, i+1+cols*2)
+            plt.imshow(-chi, vmin=-mx, vmax=mx, cmap='RdBu', **imx)
+            plt.colorbar()
+        ps.savefig()
+
 
 def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            detmaps=None, detivs=None,
@@ -800,7 +884,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            W=None,H=None,
            ra=None,dec=None, bands=None, ps=None, tims=None,
            **kwargs):
-    
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
     # Fit in order of flux
@@ -838,7 +922,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         ###
         
         subtims = []
-        for i,tim in enumerate(tims):
+        for itim,tim in enumerate(tims):
             h,w = tim.shape
             ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
             sx0,sx1 = x.min(), x.max()
@@ -856,7 +940,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subimg = tim.getImage ()[subslc]
             subiv  = tim.getInvvar()[subslc]
             subwcs = tim.getWcs().copy()
-            ox0,oy0 = orig_wcsxy0[i]
+            ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
             # FIXME --
@@ -1047,7 +1131,10 @@ if __name__ == '__main__':
     picklepat = 'runbrick-s%03i.pickle'
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write)
+    prereqs = {101: 0}
+    
+    runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write,
+             prereqs=prereqs)
     
     #main()
 
