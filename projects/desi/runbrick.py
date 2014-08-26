@@ -937,36 +937,17 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             mods = [mod0, mod1, mod3, mod2]
 
         rgbmods = [np.zeros((H,W,3)) for m in mods]
-        #rgbchis = [np.zeros((H,W,3)) for m in mods]
         subims = [[] for m in mods]
-
-        #rgbm0 = 
-        #rgbm1 = np.zeros((H,W,3))
-        #rgbm2 = np.zeros((H,W,3))
-        #rgbchi0 = np.zeros((H,W,3))
-        #rgbchi1 = np.zeros((H,W,3))
-        #rgbchi2 = np.zeros((H,W,3))
-        # subims0 = []
-        # subims1 = []
-        # subims2 = []
         chis = dict([(b,[]) for b in bands])
         
         for iband,band in enumerate(bands):
             coimg = coimgs[iband]
             comods = [np.zeros((H,W)) for m in mods]
             cochis = [np.zeros((H,W)) for m in mods]
-            # com0  = np.zeros((H,W))
-            # com1  = np.zeros((H,W))
-            # com2  = np.zeros((H,W))
-            # cochi0 = np.zeros((H,W))
-            # cochi1 = np.zeros((H,W))
-            # cochi2 = np.zeros((H,W))
-            #for tim,m0,m1,m2 in zip(tims, mod0, mod1,mod2):
             for itim,tim in enumerate(tims):
                 if tim.band != band:
                     continue
                 (Yo,Xo,Yi,Xi) = tim.resamp
-
                 rechi = np.zeros((H,W))
                 chilist = []
                 for imod,mod in enumerate(mods):
@@ -977,58 +958,19 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                     cochis[imod][Yo,Xo] += chi
                     comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
                 chis[band].append(chilist)
-                    
-                # chi0 = ((tim.getImage()[Yi,Xi] - m0[Yi,Xi]) *
-                #         tim.getInvError()[Yi,Xi])
-                # chi1 = ((tim.getImage()[Yi,Xi] - m1[Yi,Xi]) *
-                #         tim.getInvError()[Yi,Xi])
-                # chi2 = ((tim.getImage()[Yi,Xi] - m2[Yi,Xi]) *
-                #         tim.getInvError()[Yi,Xi])
-                # rechi = np.zeros((H,W))
-                # rechi[Yo,Xo] = chi0
-                # rechi0 = rechi[bslc].copy()
-                # rechi[Yo,Xo] = chi1
-                # rechi1 = rechi[bslc].copy()
-                # rechi[Yo,Xo] = chi2
-                # rechi2 = rechi[bslc].copy()
-                # chis[band].append((rechi0,rechi1,rechi2))
-                # cochi0[Yo,Xo] += chi0
-                # cochi1[Yo,Xo] += chi1
-                # cochi2[Yo,Xo] += chi2
-                # com0 [Yo,Xo] += m0[Yi,Xi]
-                # com1 [Yo,Xo] += m1[Yi,Xi]
-                # com2 [Yo,Xo] += m2[Yi,Xi]
                 mn,mx = tim.zr
 
             for comod in comods:
                 comod /= np.maximum(con, 1)
-            # com0  /= np.maximum(con,1)
-            # com1  /= np.maximum(con,1)
-            # com2  /= np.maximum(con,1)
-
             ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
             c = 2-iband
             for i,rgbmod in enumerate(rgbmods):
                 rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
-            # rgbm0[:,:,c] = np.clip((com0  - mn) / (mx - mn), 0., 1.)
-            # rgbm1[:,:,c] = np.clip((com1  - mn) / (mx - mn), 0., 1.)
-            # rgbm2[:,:,c] = np.clip((com2  - mn) / (mx - mn), 0., 1.)
-
-            # mn,mx = -5,5
-            # rgbchi0[:,:,c] = np.clip((cochi0 - mn) / (mx - mn), 0, 1)
-            # rgbchi1[:,:,c] = np.clip((cochi1 - mn) / (mx - mn), 0, 1)
-            # rgbchi2[:,:,c] = np.clip((cochi2 - mn) / (mx - mn), 0, 1)
-
             for subim,comod,cochi in zip(subims, comods, cochis):
                 subim.append((coimg[bslc], comod[bslc], ima, cochi[bslc]))
 
-            # subims0.append((coimg[bslc], com0[bslc], ima, cochi0[bslc]))
-            # subims1.append((coimg[bslc], com1[bslc], ima, cochi1[bslc]))
-            # subims2.append((coimg[bslc], com2[bslc], ima, cochi2[bslc]))
-
         # Plot per-band chi coadds, and RGB images for before & after
-        #for subims,rgbm in [(subims0,rgbm0), (subims1,rgbm1), (subims2,rgbm2)]:
         for subim, rgbm in zip(subims, rgbmods):
             plt.clf()
             for j,(im,m,ima,chi) in enumerate(subim):
@@ -1061,8 +1003,6 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                     plt.subplot(rows, cols, sp0 + col)
                     plt.imshow(-chi, **imchi)
             ps.savefig()
-    
-        
 
 
 if __name__ == '__main__':
