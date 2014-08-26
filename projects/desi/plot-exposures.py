@@ -10,8 +10,12 @@ from astrometry.blind.plotstuff import *
 
 if __name__ == '__main__':
 
-    T = fits_table('ccds.fits')#-20140810.fits')
-
+    decals_dir = os.environ.get('DECALS_DIR')
+    B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
+    #B = fits_table('bricks.fits')
+    #T = fits_table('ccds.fits')#-20140810.fits')
+    T = fits_table(os.path.join(decals_dir, 'decals-ccds.fits'))
+    
     # plt.clf()
     # plt.plot(T.ra, T.dec, 'b.')
     # plt.savefig('rd.png')
@@ -37,14 +41,14 @@ if __name__ == '__main__':
     #rc,dc = 245,8
     #width = 6.
     rc,dc = 244,8
-    width = 1.
+    #width = 1.
+    width = 4.
     W,H = 800,800
     sz = width * 0.6
     T.cut((np.abs(T.ra - rc) < sz) * (np.abs(T.dec - dc) < sz))
     print 'Cut to', len(T), 'in range'
     print 'Bands', np.unique(T.filter)
 
-    B = fits_table('bricks.fits')
     B.index = np.arange(len(B))
     B.cut((np.abs(B.ra - rc) < sz) * (np.abs(B.dec - dc) < sz))
     print len(B), 'bricks in range'
