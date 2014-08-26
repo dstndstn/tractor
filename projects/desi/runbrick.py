@@ -783,32 +783,23 @@ def stage0(**kwargs):
     print 'Locals:', locals().keys()
     print
     rtn = dict()
-    for k in ['T', 'sedsn', 'coimgs', 'coimas', 'detmaps', 'detivs', 'rgbim',
+    for k in ['T', 'sedsn', 'coimgs', 'con', 'coimas', 'detmaps', 'detivs', 'rgbim',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'ra','dec', 'bands',
+              'ra','dec', 'bands', 'tims',
               'ps']:
         rtn[k] = locals()[k]
     return rtn
 
 
-def stage1(**kwargs):
-    # L = locals()
-    # for k,v in kwargs.items():
-    #     print 'Setting locals:', k
-    #     L[k] = v
-    #print 'Updated locals:'
-    #k = locals().keys()
-    #k.sort()
-    #print sorted(locals().keys())
-
-    #print 'Updated globals:'
-    #print sorted(globals().keys())
-
-    print 'tractor in globals:', 'tractor' in globals()
-    print 'tractor in locals:', 'tractor' in locals()
-
-    tims = tractor.getImages()
+def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+           detmaps=None, detivs=None,
+           rgbim=None,
+           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+           W=None,H=None,
+           ra=None,dec=None, bands=None, ps=None, tims=None,
+           **kwargs):
     
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
@@ -1075,30 +1066,31 @@ if __name__ == '__main__':
     picklepat = 'runbrick-s%03i.pickle'
     set_globals()
 
-    #stagefunc = CallGlobal('stage%i', globals())
-    class CallFunc(object):
-        def __init__(self, pattern):
-            self.pattern = pattern
-        def __call__(self, stage, **kwargs):
-            funcname = self.pattern % stage
-            globs = globals().copy()
-            locs = locals().copy()
-            for k,v in kwargs.items():
-                print 'Key:', k
-                locs[k] = v
-                globs[k] = v
-            #print 'calling with locals:', locs.keys()
-            #print 'calling with globals:', globs.keys()
-            print 'calling:', funcname
-            #return eval(funcname + '()', globs, locs)
-            #return eval(funcname + '()', globs)
-
-            print 'globals[tractor] =', globs['tractor']
-
-            func = eval(funcname, globals())
-            exec(funcname + '()', globs, locs)
-
-    stagefunc = CallFunc('stage%i')
+    stagefunc = CallGlobal('stage%i', globals())
+    # class CallFunc(object):
+    #     def __init__(self, pattern):
+    #         self.pattern = pattern
+    #     def __call__(self, stage, **kwargs):
+    #         funcname = self.pattern % stage
+    # 
+    #         globs = globals().copy()
+    #         locs = locals().copy()
+    #         for k,v in kwargs.items():
+    #             print 'Key:', k
+    #             locs[k] = v
+    #             globs[k] = v
+    #         #print 'calling with locals:', locs.keys()
+    #         #print 'calling with globals:', globs.keys()
+    #         print 'calling:', funcname
+    #         #return eval(funcname + '()', globs, locs)
+    #         #return eval(funcname + '()', globs)
+    #         #func = eval(funcname, globals())
+    # 
+    #         print 'globals[tractor] =', globs['tractor']
+    # 
+    #         exec(funcname + '()', globs, locs)
+    # 
+    # stagefunc = CallFunc('stage%i')
     
     runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write)
     
