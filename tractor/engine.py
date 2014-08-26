@@ -1658,9 +1658,9 @@ class Tractor(MultiParams):
         if alphaBest is None or alphaBest == 0:
             print "Warning: optimization is borking"
             print "Parameter direction =",X
-            print "Parameters and step sizes:"
-            for n,p,s in zip(self.getParamNames(), self.getParams(), self.getStepSizes()):
-                print n, p, s
+            print "Parameters, step sizes, updates:"
+            for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
+                print n, '=', p, '  step', s, 'update', x
         if alphaBest is None:
             self.setParams(p0)
             return 0, 0.

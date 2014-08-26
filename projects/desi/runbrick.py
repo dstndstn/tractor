@@ -816,8 +816,8 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             cat.thawParams(i)
             print cat[i]
             
-        #print 'Fitting:'
-        #tractor.printThawedParams()
+        print 'Fitting:'
+        tractor.printThawedParams()
 
         # before-n-after plots
         mod0 = [tractor.getModelImage(tim) for tim in tims]
@@ -876,11 +876,19 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         subtr.freezeParam('images')
         print 'Optimizing:', subtr
         subtr.printThawedParams()
+
+        mod3 = None
         
         for step in range(10):
             #dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False)
             print 'dlnp:', dlnp
+            if dlnp == 0.0:
+                # Borked -- take the step and render the models.
+                p0 = subtr.getParams()
+                subtr.setParams(p0 + X)
+                mod3 = [tractor.getModelImage(tim) for tim in tims]
+                subtr.setParams(p0)
             if dlnp < 0.1:
                 break
 
@@ -918,94 +926,112 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             B = 8
             X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
                                                     BW=B, BH=B, wantims=False)
-
-        # Try to forced-photometer bands simultaneously -- doesn't work.
-        # cat.freezeAllRecursive()
-        # for i in Isrcs:
-        #     cat.thawParam(i)
-        #     cat[i].thawPathsTo(*bands)
-        # print
-        # print 'Forced phot:'
-        # subtr.printThawedParams()
-        # B = 8
-        # X = subtr.optimize_forced_photometry(shared_params=False, use_ceres=True,
-        #                                      BW=B, BH=B, wantims=False)
-        # cat.thawAllRecursive()
+        cat.thawAllRecursive()
 
         mod2 = [tractor.getModelImage(tim) for tim in tims]
         print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
 
-        rgbm0 = np.zeros((H,W,3))
-        rgbm1 = np.zeros((H,W,3))
-        rgbm2 = np.zeros((H,W,3))
-        rgbchi0 = np.zeros((H,W,3))
-        rgbchi1 = np.zeros((H,W,3))
-        rgbchi2 = np.zeros((H,W,3))
-        subims0 = []
-        subims1 = []
-        subims2 = []
+        if mod3 is None:
+            mods = [mod0, mod1, mod2]
+        else:
+            mods = [mod0, mod1, mod3, mod2]
+
+        rgbmods = [np.zeros((H,W,3)) for m in mods]
+        #rgbchis = [np.zeros((H,W,3)) for m in mods]
+        subims = [[] for m in mods]
+
+        #rgbm0 = 
+        #rgbm1 = np.zeros((H,W,3))
+        #rgbm2 = np.zeros((H,W,3))
+        #rgbchi0 = np.zeros((H,W,3))
+        #rgbchi1 = np.zeros((H,W,3))
+        #rgbchi2 = np.zeros((H,W,3))
+        # subims0 = []
+        # subims1 = []
+        # subims2 = []
         chis = dict([(b,[]) for b in bands])
         
         for iband,band in enumerate(bands):
             coimg = coimgs[iband]
-            com0  = np.zeros((H,W))
-            com1  = np.zeros((H,W))
-            com2  = np.zeros((H,W))
-            cochi0 = np.zeros((H,W))
-            cochi1 = np.zeros((H,W))
-            cochi2 = np.zeros((H,W))
-            for tim,m0,m1,m2 in zip(tims, mod0, mod1,mod2):
+            comods = [np.zeros((H,W)) for m in mods]
+            cochis = [np.zeros((H,W)) for m in mods]
+            # com0  = np.zeros((H,W))
+            # com1  = np.zeros((H,W))
+            # com2  = np.zeros((H,W))
+            # cochi0 = np.zeros((H,W))
+            # cochi1 = np.zeros((H,W))
+            # cochi2 = np.zeros((H,W))
+            #for tim,m0,m1,m2 in zip(tims, mod0, mod1,mod2):
+            for itim,tim in enumerate(tims):
                 if tim.band != band:
                     continue
                 (Yo,Xo,Yi,Xi) = tim.resamp
 
-                chi0 = ((tim.getImage()[Yi,Xi] - m0[Yi,Xi]) *
-                        tim.getInvError()[Yi,Xi])
-                chi1 = ((tim.getImage()[Yi,Xi] - m1[Yi,Xi]) *
-                        tim.getInvError()[Yi,Xi])
-                chi2 = ((tim.getImage()[Yi,Xi] - m2[Yi,Xi]) *
-                        tim.getInvError()[Yi,Xi])
-
                 rechi = np.zeros((H,W))
-                rechi[Yo,Xo] = chi0
-                rechi0 = rechi[bslc].copy()
-                rechi[Yo,Xo] = chi1
-                rechi1 = rechi[bslc].copy()
-                rechi[Yo,Xo] = chi2
-                rechi2 = rechi[bslc].copy()
-                chis[band].append((rechi0,rechi1,rechi2))
-                
-                cochi0[Yo,Xo] += chi0
-                cochi1[Yo,Xo] += chi1
-                cochi2[Yo,Xo] += chi2
-                com0 [Yo,Xo] += m0[Yi,Xi]
-                com1 [Yo,Xo] += m1[Yi,Xi]
-                com2 [Yo,Xo] += m2[Yi,Xi]
+                chilist = []
+                for imod,mod in enumerate(mods):
+                    chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
+                           tim.getInvError()[Yi,Xi])
+                    rechi[Yo,Xo] = chi
+                    chilist.append(rechi[bslc].copy())
+                    cochis[imod][Yo,Xo] += chi
+                    comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
+                chis[band].append(chilist)
+                    
+                # chi0 = ((tim.getImage()[Yi,Xi] - m0[Yi,Xi]) *
+                #         tim.getInvError()[Yi,Xi])
+                # chi1 = ((tim.getImage()[Yi,Xi] - m1[Yi,Xi]) *
+                #         tim.getInvError()[Yi,Xi])
+                # chi2 = ((tim.getImage()[Yi,Xi] - m2[Yi,Xi]) *
+                #         tim.getInvError()[Yi,Xi])
+                # rechi = np.zeros((H,W))
+                # rechi[Yo,Xo] = chi0
+                # rechi0 = rechi[bslc].copy()
+                # rechi[Yo,Xo] = chi1
+                # rechi1 = rechi[bslc].copy()
+                # rechi[Yo,Xo] = chi2
+                # rechi2 = rechi[bslc].copy()
+                # chis[band].append((rechi0,rechi1,rechi2))
+                # cochi0[Yo,Xo] += chi0
+                # cochi1[Yo,Xo] += chi1
+                # cochi2[Yo,Xo] += chi2
+                # com0 [Yo,Xo] += m0[Yi,Xi]
+                # com1 [Yo,Xo] += m1[Yi,Xi]
+                # com2 [Yo,Xo] += m2[Yi,Xi]
                 mn,mx = tim.zr
-            com0  /= np.maximum(con,1)
-            com1  /= np.maximum(con,1)
-            com2  /= np.maximum(con,1)
+
+            for comod in comods:
+                comod /= np.maximum(con, 1)
+            # com0  /= np.maximum(con,1)
+            # com1  /= np.maximum(con,1)
+            # com2  /= np.maximum(con,1)
 
             ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
             c = 2-iband
-            rgbm0[:,:,c] = np.clip((com0  - mn) / (mx - mn), 0., 1.)
-            rgbm1[:,:,c] = np.clip((com1  - mn) / (mx - mn), 0., 1.)
-            rgbm2[:,:,c] = np.clip((com2  - mn) / (mx - mn), 0., 1.)
+            for i,rgbmod in enumerate(rgbmods):
+                rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
+            # rgbm0[:,:,c] = np.clip((com0  - mn) / (mx - mn), 0., 1.)
+            # rgbm1[:,:,c] = np.clip((com1  - mn) / (mx - mn), 0., 1.)
+            # rgbm2[:,:,c] = np.clip((com2  - mn) / (mx - mn), 0., 1.)
 
-            mn,mx = -5,5
-            rgbchi0[:,:,c] = np.clip((cochi0 - mn) / (mx - mn), 0, 1)
-            rgbchi1[:,:,c] = np.clip((cochi1 - mn) / (mx - mn), 0, 1)
-            rgbchi2[:,:,c] = np.clip((cochi2 - mn) / (mx - mn), 0, 1)
+            # mn,mx = -5,5
+            # rgbchi0[:,:,c] = np.clip((cochi0 - mn) / (mx - mn), 0, 1)
+            # rgbchi1[:,:,c] = np.clip((cochi1 - mn) / (mx - mn), 0, 1)
+            # rgbchi2[:,:,c] = np.clip((cochi2 - mn) / (mx - mn), 0, 1)
 
-            subims0.append((coimg[bslc], com0[bslc], ima, cochi0[bslc]))
-            subims1.append((coimg[bslc], com1[bslc], ima, cochi1[bslc]))
-            subims2.append((coimg[bslc], com2[bslc], ima, cochi2[bslc]))
+            for subim,comod,cochi in zip(subims, comods, cochis):
+                subim.append((coimg[bslc], comod[bslc], ima, cochi[bslc]))
+
+            # subims0.append((coimg[bslc], com0[bslc], ima, cochi0[bslc]))
+            # subims1.append((coimg[bslc], com1[bslc], ima, cochi1[bslc]))
+            # subims2.append((coimg[bslc], com2[bslc], ima, cochi2[bslc]))
 
         # Plot per-band chi coadds, and RGB images for before & after
-        for subims,rgbm in [(subims0,rgbm0), (subims1,rgbm1), (subims2,rgbm2)]:
+        #for subims,rgbm in [(subims0,rgbm0), (subims1,rgbm1), (subims2,rgbm2)]:
+        for subim, rgbm in zip(subims, rgbmods):
             plt.clf()
-            for j,(im,m,ima,chi) in enumerate(subims):
+            for j,(im,m,ima,chi) in enumerate(subim):
                 plt.subplot(3,4,1 + j + 0)
                 plt.imshow(im, **ima)
                 plt.subplot(3,4,1 + j + 4)
@@ -1026,7 +1052,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         # Plot per-image chis
         cols = max(len(v) for v in chis.values())
         rows = len(bands)
-        for i in [0,1,2]:
+        for i in range(len(mods)):
             plt.clf()
             for row,band in enumerate(bands):
                 sp0 = 1 + cols*row
@@ -1036,62 +1062,34 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                     plt.imshow(-chi, **imchi)
             ps.savefig()
     
-    # tractor = Tractor(tims, cat)
-    # for i,tim in enumerate(tims):
-    #     plt.clf()
-    #     mn,mx = tim.zr
-    #     ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-    #                vmin=mn, vmax=mx)
-    # 
-    #     plt.subplot(1,2,1)
-    #     plt.imshow(tim.getImage(), **ima)
-    #     mod = tractor.getModelImage(i)
-    #     plt.subplot(1,2,2)
-    #     plt.imshow(mod, **ima)
-    #     ps.savefig()
         
 
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
     import optparse
+    import logging
+    
     parser = optparse.OptionParser()
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
                       help="Force re-running the given stage(s) -- don't read from pickle.")
     parser.add_option('-s', '--stage', dest='stage', default=1, type=int,
                       help="Run up to the given stage")
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
+    parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
+                      help='Make more verbose')
+
     opt,args = parser.parse_args()
+
+    if opt.verbose == 0:
+        lvl = logging.INFO
+    else:
+        lvl = logging.DEBUG
+    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     picklepat = 'runbrick-s%03i.pickle'
     set_globals()
-
     stagefunc = CallGlobal('stage%i', globals())
-    # class CallFunc(object):
-    #     def __init__(self, pattern):
-    #         self.pattern = pattern
-    #     def __call__(self, stage, **kwargs):
-    #         funcname = self.pattern % stage
-    # 
-    #         globs = globals().copy()
-    #         locs = locals().copy()
-    #         for k,v in kwargs.items():
-    #             print 'Key:', k
-    #             locs[k] = v
-    #             globs[k] = v
-    #         #print 'calling with locals:', locs.keys()
-    #         #print 'calling with globals:', globs.keys()
-    #         print 'calling:', funcname
-    #         #return eval(funcname + '()', globs, locs)
-    #         #return eval(funcname + '()', globs)
-    #         #func = eval(funcname, globals())
-    # 
-    #         print 'globals[tractor] =', globs['tractor']
-    # 
-    #         exec(funcname + '()', globs, locs)
-    # 
-    # stagefunc = CallFunc('stage%i')
-    
     runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write)
     
     #main()
