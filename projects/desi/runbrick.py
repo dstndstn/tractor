@@ -869,7 +869,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
-                           sky=tim.getSky())
+                           sky=tim.getSky(), name=tim.name)
             subtims.append(subtim)
             
         subtr = Tractor(subtims, cat)
@@ -889,6 +889,23 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                 subtr.setParams(p0 + X)
                 mod3 = [tractor.getModelImage(tim) for tim in tims]
                 subtr.setParams(p0)
+
+                derivs = subtr.getDerivs()
+                for i,(paramname,derivlist) in enumerate(zip(subtr.getParamNames(), derivs)):
+                    if len(derivlist) == 0:
+                        continue
+                    plt.clf()
+                    n = len(derivlist)
+                    cols = int(np.ceil(np.sqrt(n)))
+                    rows = int(np.ceil(float(n) / cols))
+                    for j,(deriv,tim) in enumerate(derivlist):
+                        plt.subplot(rows,cols, j+1)
+                        plt.imshow(deriv.patch, cmap='RdBu', **imx)
+                        plt.colorbar()
+                        plt.title(tim.name)
+                    plt.suptitle(paramname)
+                    ps.savefig()
+
             if dlnp < 0.1:
                 break
 
