@@ -84,8 +84,7 @@ def stage0(**kwargs):
         for t in TT:
             print
             print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t.cpimage, t.cpimage_hdu, band, t.expnum, t.extname.strip(),
-                            t.calname.strip(), t.exptime)
+            im = DecamImage(t)
             ims.append(im)
 
     args = []

@@ -18,7 +18,11 @@ def create_temp(**kwargs):
     return fn
 
 class DecamImage(object):
-    def __init__(self, imgfn, hdu, band, expnum, extname, calname, exptime):
+    def __init__(self, t):
+        imgfn, hdu, band, expnum, extname, calname, exptime = (
+            t.cpimage, t.cpimage_hdu, t.filter, t.expnum, t.extname.strip(),
+            t.calname.strip(), t.exptime)
+
         self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
