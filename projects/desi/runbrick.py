@@ -72,11 +72,10 @@ class DecamImage(object):
         
         extnm = '.ext%02i' % hdu
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
-        self.corrfn = self.wcsfn.replace('.wcs', '.corr.fits')
-        self.sdssfn = self.wcsfn.replace('.wcs', '.sdss.fits')
-        self.sexfn = os.path.join(calibdir, 'sextractor', calname + '.cat.fits')
-        # PsfEx hard-codes the .psf suffix
-        self.psffn = os.path.join(calibdir, 'psfex', calname + '.psf')
+        self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
+        self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
+        self.sexfn = os.path.join(calibdir, 'sextractor', calname + '.fits')
+        self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
     def __str__(self):
@@ -245,7 +244,10 @@ def stage0(**kwargs):
     
     B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
     # brick index...
-    ii = 377305
+    # One near the middle
+    #ii = 377305
+    # One near the edge and with little overlap
+    ii = 380155
     brick = B[ii]
 
     ra,dec = brick.ra, brick.dec
