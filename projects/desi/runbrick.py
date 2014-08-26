@@ -868,12 +868,19 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             plt.subplot(3, cols, i+1)
             #plt.imshow(img, **tims[i].ima)
             plt.imshow(nl(img), vmin=nl(0), vmax=nl(mx), **imx)
+            plt.xticks([]); plt.yticks([])
+            plt.title(tims[i].name)
             plt.subplot(3, cols, i+1+cols)
             #plt.imshow(mod, **tims[i].ima)
             plt.imshow(nl(mod), vmin=nl(0), vmax=nl(mx), **imx)
+            plt.xticks([]); plt.yticks([])
             plt.subplot(3, cols, i+1+cols*2)
+
+            mxchi = 5.
             plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
-            plt.colorbar()
+            plt.xticks([]); plt.yticks([])
+            #plt.colorbar()
+
         ps.savefig()
 
 
