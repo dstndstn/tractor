@@ -888,7 +888,19 @@ def main():
             B = 8
             X = subtr.optimize_forced_photometry(shared_params=False, use_ceres=True,
                                                  BW=B, BH=B, wantims=False)
-        cat.thawAllRecursive()
+
+        # Try to forced-photometer bands simultaneously -- doesn't work.
+        # cat.freezeAllRecursive()
+        # for i in Isrcs:
+        #     cat.thawParam(i)
+        #     cat[i].thawPathsTo(*bands)
+        # print
+        # print 'Forced phot:'
+        # subtr.printThawedParams()
+        # B = 8
+        # X = subtr.optimize_forced_photometry(shared_params=False, use_ceres=True,
+        #                                      BW=B, BH=B, wantims=False)
+        # cat.thawAllRecursive()
 
         mod2 = [tractor.getModelImage(tim) for tim in tims]
         print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
