@@ -223,8 +223,12 @@ def run_calibs(im, ra, dec, pixscale):
             sys.exit(-1)
 
 
-def main():
-    ps = PlotSequence('brick')
+#def main():
+
+def set_globals():
+    global imx
+    global imchi
+    
     plt.figure(figsize=(12,9));
     #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.03, top=0.95,
     #                    hspace=0.05, wspace=0.05)
@@ -232,12 +236,16 @@ def main():
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         #hspace=0.05, wspace=0.05)
                         hspace=0.2, wspace=0.05)
+    imx = dict(interpolation='nearest', origin='lower')
+    imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
+                vmin=-5, vmax=5)
+        
+def stage0(**kwargs):
+    ps = PlotSequence('brick')
     
     B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
-
     # brick index...
     ii = 377305
-
     brick = B[ii]
 
     ra,dec = brick.ra, brick.dec
@@ -376,8 +384,6 @@ def main():
         wcs = Sip(im.wcsfn)
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
         cats.append(cat)
-
-        
         
     # Plot all catalog sources and ROI
     # plt.clf()
@@ -600,10 +606,6 @@ def main():
         coimgs.append(coimg)
         coimas.append(dict(interpolation='nearest', origin='lower', cmap='gray',
                            vmin=mn, vmax=mx))
-    imx = dict(interpolation='nearest', origin='lower')
-    imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
-                vmin=-5, vmax=5)
-        
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W))) for b in bands])
     detivs  = dict([(b, np.zeros((H,W))) for b in bands])
@@ -772,11 +774,42 @@ def main():
         plt.title('Segmentation')
         ps.savefig()
 
-
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
 
+    
+    print
+    print 'Locals:', locals().keys()
+    print
+    rtn = dict()
+    for k in ['T', 'sedsn', 'coimgs', 'coimas', 'detmaps', 'detivs', 'rgbim',
+              'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
+              'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
+              'ra','dec', 'bands',
+              'ps']:
+        rtn[k] = locals()[k]
+    return rtn
+
+
+def stage1(**kwargs):
+    # L = locals()
+    # for k,v in kwargs.items():
+    #     print 'Setting locals:', k
+    #     L[k] = v
+    #print 'Updated locals:'
+    #k = locals().keys()
+    #k.sort()
+    #print sorted(locals().keys())
+
+    #print 'Updated globals:'
+    #print sorted(globals().keys())
+
+    print 'tractor in globals:', 'tractor' in globals()
+    print 'tractor in locals:', 'tractor' in locals()
+
+    tims = tractor.getImages()
+    
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
     # Fit in order of flux
@@ -882,12 +915,18 @@ def main():
                 cat.thawParam(i)
                 cat[i].thawPathsTo(band)
             #cat.thawPathsTo(band)
+            bandtims = []
+            for tim in tims:
+                if tim.band == band:
+                    bandtims.append(tim)
             print
             print 'Fitting', band, 'band:'
-            subtr.printThawedParams()
+            btractor = Tractor(bandtims, cat)
+            btractor.freezeParam('images')
+            btractor.printThawedParams()
             B = 8
-            X = subtr.optimize_forced_photometry(shared_params=False, use_ceres=True,
-                                                 BW=B, BH=B, wantims=False)
+            X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
+                                                    BW=B, BH=B, wantims=False)
 
         # Try to forced-photometer bands simultaneously -- doesn't work.
         # cat.freezeAllRecursive()
@@ -1023,5 +1062,45 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    from astrometry.util.stages import *
+    import optparse
+    parser = optparse.OptionParser()
+    parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
+                      help="Force re-running the given stage(s) -- don't read from pickle.")
+    parser.add_option('-s', '--stage', dest='stage', default=1, type=int,
+                      help="Run up to the given stage")
+    parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
+    opt,args = parser.parse_args()
+
+    picklepat = 'runbrick-s%03i.pickle'
+    set_globals()
+
+    #stagefunc = CallGlobal('stage%i', globals())
+    class CallFunc(object):
+        def __init__(self, pattern):
+            self.pattern = pattern
+        def __call__(self, stage, **kwargs):
+            funcname = self.pattern % stage
+            globs = globals().copy()
+            locs = locals().copy()
+            for k,v in kwargs.items():
+                print 'Key:', k
+                locs[k] = v
+                globs[k] = v
+            #print 'calling with locals:', locs.keys()
+            #print 'calling with globals:', globs.keys()
+            print 'calling:', funcname
+            #return eval(funcname + '()', globs, locs)
+            #return eval(funcname + '()', globs)
+
+            print 'globals[tractor] =', globs['tractor']
+
+            func = eval(funcname, globals())
+            exec(funcname + '()', globs, locs)
+
+    stagefunc = CallFunc('stage%i')
+    
+    runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write)
+    
+    #main()
 
