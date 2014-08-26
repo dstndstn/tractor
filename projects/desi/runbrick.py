@@ -846,16 +846,17 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             submods.append(mod[y0:y1, x0:x1])
             subimgs.append(tims[i].getImage()[y0:y1, x0:x1])
 
-        n = len(subchis)
-        cols = int(np.ceil(np.sqrt(n)))
-        rows = int(np.ceil(float(n) / cols))
-        mx = max([np.abs(chi).max() for chi in subchis])
-        plt.clf()
-        for i,chi in enumerate(subchis):
-            plt.subplot(rows, cols, i+1)
-            plt.imshow(-chi, vmin=-mx, vmax=mx, cmap='RdBu', **imx)
-            plt.colorbar()
-        ps.savefig()
+        mxchi = max([np.abs(chi).max() for chi in subchis])
+
+        # n = len(subchis)
+        # cols = int(np.ceil(np.sqrt(n)))
+        # rows = int(np.ceil(float(n) / cols))
+        # plt.clf()
+        # for i,chi in enumerate(subchis):
+        #     plt.subplot(rows, cols, i+1)
+        #     plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
+        #     plt.colorbar()
+        # ps.savefig()
 
         cols = len(subchis)
         plt.clf()
@@ -871,7 +872,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             #plt.imshow(mod, **tims[i].ima)
             plt.imshow(nl(mod), vmin=nl(0), vmax=nl(mx), **imx)
             plt.subplot(3, cols, i+1+cols*2)
-            plt.imshow(-chi, vmin=-mx, vmax=mx, cmap='RdBu', **imx)
+            plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
             plt.colorbar()
         ps.savefig()
 
