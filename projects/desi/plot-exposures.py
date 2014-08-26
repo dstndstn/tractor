@@ -42,8 +42,8 @@ if __name__ == '__main__':
     #width = 6.
     rc,dc = 244,8
     #width = 1.
-    width = 4.
-    W,H = 800,800
+    width = 2.5
+    W,H = 1000,1000
     sz = width * 0.6
     T.cut((np.abs(T.ra - rc) < sz) * (np.abs(T.dec - dc) < sz))
     print 'Cut to', len(T), 'in range'
@@ -85,8 +85,9 @@ if __name__ == '__main__':
         plot.alpha = 0.3
     
         for t in TT:
-            wcs = Tan(t.crval1, t.crval2, t.crpix1, t.crpix2,
-                      t.cd1_1, t.cd1_2, t.cd2_1, t.cd2_2, t.width, t.height)
+            wcs = Tan(*[float(x) for x in
+                        [t.crval1, t.crval2, t.crpix1, t.crpix2,
+                         t.cd1_1, t.cd1_2, t.cd2_1, t.cd2_2, t.width, t.height]])
             out.wcs = anwcs_new_tan(wcs)
 
             #out.fill = 1
@@ -97,9 +98,11 @@ if __name__ == '__main__':
             # plot.lw = 1
             # plot.alpha = 0.6
             # plot.plot('outline')
-        
-        plot.write('ccd-%s1.png' % band)
 
+        fn = 'ccd-%s1.png' % band
+        plot.write(fn)
+        print 'Wrote', fn
+        
         plot.color = 'gray'
         plot.plot_grid(gridsize, gridsize, gridsize*2, gridsize*2)
 
@@ -124,6 +127,7 @@ if __name__ == '__main__':
             wcs = Tan(r, d, bw/2, bh/2, -pixscale, 0., 0., pixscale, bw,bh)
             out.wcs = anwcs_new_tan(wcs)
             plot.plot('outline')
-        
-        plot.write('ccd-%s2.png' % band)
-    
+
+        fn = 'ccd-%s2.png' % band
+        plot.write(fn)
+        print 'wrote', fn
