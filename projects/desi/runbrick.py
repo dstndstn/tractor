@@ -42,6 +42,8 @@ an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 print 'calibdir', calibdir
 #
 
+mp = None
+
 def create_temp(**kwargs):
     f,fn = tempfile.mkstemp(dir=tempdir, **kwargs)
     os.close(f)
@@ -123,6 +125,9 @@ class DecamImage(object):
         return self._read_fits(self.wtfn, self.hdu, **kwargs)
     #return fitsio.FITS(self.wtfn)[self.hdu].read()
 
+
+def bounce_run_calibs(X):
+    return run_calibs(*X)
 
 def run_calibs(im, ra, dec, pixscale):
     #print 'wcs', im.wcsfn
@@ -279,9 +284,15 @@ def stage0(**kwargs):
             im = DecamImage(t.cpimage, t.cpimage_hdu, band, t.expnum, t.extname.strip(),
                             t.calname.strip(), t.exptime)
             ims.append(im)
-            
+
+    args = []
     for im in ims:
-        run_calibs(im, ra, dec, pixscale)
+        if mp is not None:
+            args.append((im,ra,dec,pixscale))
+        else:
+            run_calibs(im, ra, dec, pixscale)
+    if mp is not None:
+        mp.map(bounce_run_calibs, args)
 
     zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
     print 'Reading zeropoints:', zpfn
@@ -1171,6 +1182,7 @@ if __name__ == '__main__':
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
+    parser.add_option('--threads', type=int, help='Run multi-threaded')
 
     opt,args = parser.parse_args()
 
@@ -1179,6 +1191,10 @@ if __name__ == '__main__':
     else:
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+    if opt.threads and opt.threads > 1:
+        from astrometry.util.multiproc import multiproc
+        mp = multiproc(opt.threads)
 
     picklepat = 'runbrick-s%03i.pickle'
     set_globals()
