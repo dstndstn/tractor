@@ -66,7 +66,7 @@ def stage0(**kwargs):
     bands = ['g','r','z']
     catband = 'r'
 
-    targetwcs = wcs_for_brick(b, W=W, H=H)
+    targetwcs = wcs_for_brick(brick, W=W, H=H)
 
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
@@ -107,8 +107,12 @@ def stage0(**kwargs):
             'mag_psf','x_image', 'y_image', 'mag_disk', 'mag_spheroid', 'flags',
             'flux_psf' ])
         print 'Read', len(cat), 'from', im.morphfn
+        if len(cat) == 0:
+            continue
         cat.cut(cat.flags == 0)
         print '  Cut to', len(cat), 'with no flags set'
+        if len(cat) == 0:
+            continue
         wcs = Sip(im.wcsfn)
         cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
 
