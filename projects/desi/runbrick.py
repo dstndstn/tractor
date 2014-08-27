@@ -49,8 +49,10 @@ def set_globals():
 
 def stage0(**kwargs):
     ps = PlotSequence('brick')
-    
-    B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
+
+    decals = Decals()
+
+    B = decals.get_bricks()
     # brick index...
     # One near the middle
     #ii = 377305
@@ -58,23 +60,19 @@ def stage0(**kwargs):
     ii = 380155
     brick = B[ii]
 
-    ra,dec = brick.ra, brick.dec
     #W,H = 3600,3600
     W,H = 400,400
-    pixscale = 0.27 / 3600.
 
     bands = ['g','r','z']
     catband = 'r'
 
-    targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
-                    -pixscale, 0., 0., pixscale,
-                    float(W), float(H))
+    targetwcs = wcs_for_brick(b, W=W, H=H)
 
-    ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
-    T = fits_table(ccdsfn)
-    sz = 0.25
-    T.cut(np.abs(T.dec - dec) < sz)
-    T.cut(degrees_between(T.ra, T.dec, ra, dec) < sz)
+    pixscale = targetwcs.pixel_scale()
+    print 'pixscale', pixscale
+
+    T = decals.get_ccds()
+    T.cut(ccds_touching_wcs(targetwcs, T))
     print len(T), 'CCDs nearby'
 
     ims = []
@@ -90,9 +88,9 @@ def stage0(**kwargs):
     args = []
     for im in ims:
         if mp is not None:
-            args.append((im,ra,dec,pixscale))
+            args.append((im, brick.ra, brick.dec, pixscale))
         else:
-            run_calibs(im, ra, dec, pixscale)
+            run_calibs(im, brick.ra, brick.dec, pixscale)
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
@@ -601,7 +599,7 @@ def stage0(**kwargs):
     for k in ['T', 'sedsn', 'coimgs', 'con', 'coimas', 'detmaps', 'detivs', 'rgbim',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'ra','dec', 'bands', 'tims',
+              'bands', 'tims',
               'ps']:
         rtn[k] = locals()[k]
     return rtn
@@ -613,7 +611,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
              nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
              tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
-             ra=None,dec=None, bands=None, ps=None, tims=None,
+             bands=None, ps=None, tims=None,
              **kwargs):
     # sort sources by their sedsn values.
     fluxes = sedsn[T.ity, T.itx]
@@ -747,7 +745,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None,
-           ra=None,dec=None, bands=None, ps=None, tims=None,
+           bands=None, ps=None, tims=None,
            **kwargs):
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
