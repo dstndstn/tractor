@@ -10,9 +10,6 @@ qdo launch decals 1 --batchopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial
 '''
 
 if __name__ == '__main__':
-    #ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
-    #T = fits_table(ccdsfn)
-
     D = Decals()
     T = D.get_ccds()
 

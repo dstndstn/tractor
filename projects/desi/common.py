@@ -16,6 +16,60 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+def ccd_map_image(valmap, empty=0.):
+    '''
+    valmap: { 'N7' : 1., 'N8' : 17.8 }
+
+    Returns: a numpy image (shape (12,14)) with values mapped to their CCD locations.
+    '''
+    img = np.empty((12,14))
+    img[:,:] = empty
+    for k,v in valmap.items():
+        x0,x1,y0,y1 = ccd_map_extent(k)
+        #img[y0+6:y1+6, x0+7:x1+7] = v
+        img[y0:y1, x0:x1] = v
+    return img
+
+def ccd_map_center(extname):
+    x0,x1,y0,y1 = ccd_map_extent(extname)
+    return (x0+x1)/2., (y0+y1)/2.
+
+def ccd_map_extent(extname, inset=0.):
+    assert(extname.startswith('N') or extname.startswith('S'))
+    num = int(extname[1:])
+    assert(num >= 1 and num <= 31)
+    if num <= 7:
+        x0 = 7 - 2*num
+        y0 = 0
+    elif num <= 13:
+        x0 = 6 - (num - 7)*2
+        y0 = 1
+    elif num <= 19:
+        x0 = 6 - (num - 13)*2
+        y0 = 2
+    elif num <= 24:
+        x0 = 5 - (num - 19)*2
+        y0 = 3
+    elif num <= 28:
+        x0 = 4 - (num - 24)*2
+        y0 = 4
+    else:
+        x0 = 3 - (num - 28)*2
+        y0 = 5
+    if extname.startswith('N'):
+        (x0,x1,y0,y1) = (x0, x0+2, -y0-1, -y0)
+    else:
+        (x0,x1,y0,y1) = (x0, x0+2, y0, y0+1)
+
+    # Shift from being (0,0)-centered to being aligned with the ccd_map_image() image.
+    x0 += 7
+    x1 += 7
+    y0 += 6
+    y1 += 6
+    
+    if inset == 0.:
+        return (x0,x1,y0,y1)
+    return (x0+inset, x1-inset, y0+inset, y1-inset)
 
 def wcs_for_brick(b, W=3600, H=3600, pixscale=0.262):
     '''
