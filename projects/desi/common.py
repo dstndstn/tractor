@@ -175,7 +175,7 @@ class DecamImage(object):
         ibase = ibase.replace('.fits.fz', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
         #self.name = dirname + '/' + base + ' + %02i' % hdu
-        print 'dir,base', idirname, ibase
+        #print 'dir,base', idirname, ibase
         #print 'calibdir', calibdir
 
         self.calname = calname

@@ -5,6 +5,8 @@ import numpy as np
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
+from astrometry.util.util import Sip
+from astrometry.libkd.spherematch import match_radec
 
 from common import *
 
@@ -47,15 +49,37 @@ if __name__ == '__main__':
             if not os.path.exists(im.corrfn):
                 print 'NO SUCH FILE:', im.corrfn
                 continue
+
+            sdss = fits_table(im.sdssfn)
+            morph = fits_table(im.morphfn, hdu=2)
+            wcs = Sip(im.wcsfn)
+            if len(sdss) == 0:
+                print 'EMPTY:', im.sdssfn
+                continue
+            if len(morph) == 0:
+                print 'EMPTY:', im.morphfn
+                continue
+            print len(sdss), 'SDSS sources from', im.sdssfn
+            print len(morph), 'SE sources from', im.morphfn
+            morph.ra,morph.dec = wcs.pixelxy2radec(morph.x_image, morph.y_image)
+
+            I,J,d = match_radec(morph.ra, morph.dec, sdss.ra, sdss.dec, 0.5/3600.)
+            corr = sdss[J]
+            corr.add_columns_from(morph[I])
+
             chipnames.append(im.extname)
-            corr = fits_table(im.corrfn)
+            #corr = fits_table(im.corrfn)
+
             corrs.append(corr)
             print im, ':', len(corr), 'correspondences'
 
-        for col,cut in [('flux_auto',None)] + [('flux_aper',i) for i in range(3)]:
+        for col,cut in ([('flux_auto',None)] + [('flux_aper',i) for i in range(3)]
+                        + [('flux_psf',None), ('flux_model',None)]):
             dmags = []
             smags = []
             for corr in corrs:
+                if not col in corr.get_columns():
+                    continue
                 dflux = corr.get(col)
                 if cut is not None:
                     dflux = dflux[:,cut]
@@ -65,6 +89,10 @@ if __name__ == '__main__':
                 smag = -2.5 * (np.log10(sflux[I]) - 9)
                 dmags.append(dmag)
                 smags.append(smag)
+                print 'median', np.median(smag - dmag)
+                #print 'mags', dmag, smag
+            if len(dmags) == 0:
+                continue
             zps = [np.median(smag - dmag) for dmag,smag in zip(dmags,smags)]
             #print 'zeropoints:', zps
 
