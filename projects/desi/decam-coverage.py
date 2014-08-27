@@ -128,7 +128,7 @@ if True:
     #grid,gridlab = 1,1
     #wcs = anwcs_create_hammer_aitoff(352, 0., 60., 800, 800, 1)
     #grid,gridlab = 1,1
-    wcs = anwcs_create_box_upsidedown(352.5, 0., 3., 800, 800)
+    wcs = anwcs_create_box_upsidedown(352.5, 0.25, 2.3, 800, 800)
     grid,gridlab = 1,1
 
     #plot = Plotstuff(outformat='png', size=(1000,500), rdw=(180, -30, 180))
@@ -163,23 +163,24 @@ if True:
                     ok,r,d = out.wcs.pixelxy2radec(W/2, H/2)
                     plot.text_radec(r, d, txt)
 
-            # Plot 1/4 x 1/4 WISE tile
-            plot.color = 'yellow'
-            wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
-            wcs = Tan(wcsfn)
-            W,H = wcs.get_width(), wcs.get_height()
-            nsub = 4
-            subw, subh = W/nsub, H/nsub
-            subx, suby = 0, 3
-            subwcs = Tan(wcs)
-            subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
-            subwcs.set_imagesize(subw, subh)
-            ansub = anwcs_new_tan(subwcs)
-            out.wcs = ansub
-            out.fill = 0
-            plot.plot('outline')
+            if False:
+                # Plot 1/4 x 1/4 WISE tile
+                plot.color = 'yellow'
+                wcsfn = 'unwise/352/3524p000/unwise-3524p000-w1-img-m.fits'
+                wcs = Tan(wcsfn)
+                W,H = wcs.get_width(), wcs.get_height()
+                nsub = 4
+                subw, subh = W/nsub, H/nsub
+                subx, suby = 0, 3
+                subwcs = Tan(wcs)
+                subwcs.set_crpix(wcs.crpix[0] - subx*subw, wcs.crpix[1] - suby*subh)
+                subwcs.set_imagesize(subw, subh)
+                ansub = anwcs_new_tan(subwcs)
+                out.wcs = ansub
+                out.fill = 0
+                plot.plot('outline')
     
-            plot.color = 'gray'
+            plot.color = 'white'
             plot.alpha = 0.5
             plot.apply_settings()
             plot.plot_grid(grid, grid, gridlab, gridlab)
