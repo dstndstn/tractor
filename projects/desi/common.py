@@ -1,8 +1,14 @@
 import os
 import tempfile
 
+import numpy as np
+
 import fitsio
 
+from astrometry.util.fits import fits_table
+from astrometry.util.util import Tan
+from astrometry.util.starutil_numpy import degrees_between
+from astrometry.util.miscutils import polygons_intersect
 
 tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
@@ -11,11 +17,90 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 
+def wcs_for_brick(b, W=3600, H=3600, pixscale=0.262):
+    '''
+    b: row from decals-bricks.fits file
+    W,H: size in pixels
+    pixscale: pixel scale in arcsec/pixel.
+
+    Returns: Tan wcs object
+    '''
+    pixscale = pixscale / 3600.
+    return Tan(b.ra, b.dec, W/2.+0.5, H/2.+0.5,
+               -pixscale, 0., 0., pixscale,
+               float(W), float(H))
+
+def ccds_touching_wcs(targetwcs, T, ccdrad=0.17):
+    '''
+    targetwcs: wcs object describing region of interest
+    T: fits_table object of CCDs
+
+    ccdrad: radius of CCDs, in degrees.  Default 0.17 is for DECam.
+    #If None, computed from T.
+
+    Returns: index array I of CCDs within range.
+    '''
+    trad = targetwcs.radius()
+    if ccdrad is None:
+        ccdrad = max(np.sqrt(np.abs(T.cd1_1 * T.cd2_2 - T.cd1_2 * T.cd2_1)) *
+                     np.hypot(T.width, T.height) / 2.)
+
+    rad = trad + ccdrad
+    r,d = targetwcs.crval
+    #print len(T), 'ccds'
+    #print 'trad', trad, 'ccdrad', ccdrad
+    I = np.flatnonzero(np.abs(T.dec - d) < rad)
+    #print 'Cut to', len(I), 'on Dec'
+    I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
+    #print 'Cut to', len(I), 'on RA,Dec'
+
+    # now check actual polygon intersection
+    tw,th = targetwcs.imagew, targetwcs.imageh
+    targetpoly = [(0.5,0.5),(tw+0.5,0.5),(tw+0.5,th+0.5),(0.5,th+0.5)]
+    cd = targetwcs.get_cd()
+    tdet = cd[0]*cd[3] - cd[1]*cd[2]
+    #print 'tdet', tdet
+    if tdet > 0:
+        targetpoly = list(reversed(targetpoly))
+    targetpoly = np.array(targetpoly)
+
+    keep = []
+    for i in I:
+        W,H = T.width[i],T.height[i]
+        wcs = Tan(*[float(x) for x in
+                    [T.crval1[i], T.crval2[i], T.crpix1[i], T.crpix2[i], T.cd1_1[i],
+                     T.cd1_2[i], T.cd2_1[i], T.cd2_2[i], W, H]])
+        cd = wcs.get_cd()
+        wdet = cd[0]*cd[3] - cd[1]*cd[2]
+        #print 'wdet', wdet
+        poly = []
+        for x,y in [(0.5,0.5),(W+0.5,0.5),(W+0.5,H+0.5),(0.5,H+0.5)]:
+            rr,dd = wcs.pixelxy2radec(x,y)
+            ok,xx,yy = targetwcs.radec2pixelxy(rr,dd)
+            poly.append((xx,yy))
+        if wdet > 0:
+            poly = list(reversed(poly))
+        poly = np.array(poly)
+        if polygons_intersect(targetpoly, poly):
+            keep.append(i)
+    I = np.array(keep)
+    return I
+
+
 def create_temp(**kwargs):
     f,fn = tempfile.mkstemp(dir=tempdir, **kwargs)
     os.close(f)
     os.unlink(fn)
     return fn
+
+class Decals(object):
+    def __init__(self):
+        pass
+    def get_bricks(self):
+        return fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
+    def get_ccds(self):
+        return fits_table(os.path.join(decals_dir, 'decals-ccds.fits'))
+    
 
 class DecamImage(object):
     def __init__(self, t):
