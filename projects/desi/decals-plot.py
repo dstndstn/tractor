@@ -134,12 +134,12 @@ if __name__ == '__main__':
 
             corrfn = wcsfn.replace('.wcs', '.corr')
 
-            sexfn = imgfn
-            sexfn = sexfn.replace('/project/projectdirs/cosmo/data/staging/decam',
+            sefn = imgfn
+            sefn = sefn.replace('/project/projectdirs/cosmo/data/staging/decam',
                                   'calib/sextractor')
-            sexfn = sexfn.replace('.fits.fz', '.ext%02i.fits' % hdu)
+            sefn = sefn.replace('.fits.fz', '.ext%02i.fits' % hdu)
 
-            for dirnm in [os.path.dirname(fn) for fn in [wcsfn,corrfn,sexfn]]:
+            for dirnm in [os.path.dirname(fn) for fn in [wcsfn,corrfn,sefn]]:
                 if not os.path.exists(dirnm):
                     try:
                         os.makedirs(dirnm)
@@ -148,7 +148,7 @@ if __name__ == '__main__':
 
             print 'WCS filename', wcsfn
             print 'Corr', corrfn
-            print 'SExtractor', sexfn
+            print 'SExtractor', sefn
 
             if not os.path.exists(wcsfn):
                 #
@@ -176,7 +176,7 @@ if __name__ == '__main__':
                        + '-X x_image -Y y_image -s flux_auto '
                        + '--crpix-center '
                        + '-N none -U none -S none -M none -R none '
-                       + '--keep-xylist ' + sexfn + ' '
+                       + '--keep-xylist ' + sefn + ' '
                        + '--temp-axy '
                        + '--corr ' + corrfn + ' --tag-all '
                        + '--wcs ' + wcsfn + ' '

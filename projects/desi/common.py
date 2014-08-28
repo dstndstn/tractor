@@ -204,7 +204,7 @@ class DecamImage(object):
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
-        self.sexfn = os.path.join(calibdir, 'sextractor', calname + '.fits')
+        self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
@@ -215,7 +215,7 @@ class DecamImage(object):
 
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
-                      [self.wcsfn, self.corrfn, self.sdssfn, self.sexfn, self.psffn, self.morphfn]]:
+                      [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -260,22 +260,24 @@ class DecamImage(object):
 def bounce_run_calibs(X):
     return run_calibs(*X)
 
-def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=True):
+def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=True,
+               se2=True):
     '''
     pixscale: in degrees/pixel
     '''
-    for fn in [im.wcsfn,im.sexfn,im.psffn,im.morphfn,im.corrfn,im.sdssfn]:
+    for fn in [im.wcsfn,im.sefn,im.psffn,im.morphfn,im.corrfn,im.sdssfn]:
         print 'exists?', os.path.exists(fn), fn
         
     im.makedirs()
 
     run_funpack = False
     run_se = False
+    run_se2 = False
     run_astrom = False
     run_psfex = False
     run_morph = False
 
-    if not all([os.path.exists(fn) for fn in [im.sexfn]]):
+    if not all([os.path.exists(fn) for fn in [im.sefn]]):
         run_se = True
         run_funpack = True
     if not all([os.path.exists(fn) for fn in [im.wcsfn,im.corrfn,im.sdssfn]]):
@@ -313,7 +315,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
             'sex',
             '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
             '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-            '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.sexfn,
+            '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.sefn,
             tmpimgfn])
         print cmd
         if os.system(cmd):
@@ -330,7 +332,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
             '--crpix-center',
             '-N none -U none -S none -M none --rdls', im.sdssfn,
             '--corr', im.corrfn, '--wcs', im.wcsfn, 
-            '--temp-axy', '--tag-all', im.sexfn])
+            '--temp-axy', '--tag-all', im.sefn])
         print cmd
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)
@@ -338,7 +340,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
     if run_psfex and psfex:
         cmd = ('psfex -c %s -PSF_DIR %s %s' %
                (os.path.join(sedir, 'DECaLS-v2.psfex'),
-                os.path.dirname(im.psffn), im.sexfn))
+                os.path.dirname(im.psffn), im.sefn))
         print cmd
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)

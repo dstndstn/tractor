@@ -41,8 +41,8 @@ if __name__ == '__main__':
         M.filter = np.array([t.filter] * len(M))
         MM.append(M)
 
-        S = fits_table(im.sexfn, hdu=2)
-        print len(S), 'se', im.sexfn
+        S = fits_table(im.sefn, hdu=2)
+        print len(S), 'se', im.sefn
         S.ra,S.dec = wcs.pixelxy2radec(S.x_image, S.y_image)
         zp = D.get_zeropoint_for(im)
         print 'zp', zp
