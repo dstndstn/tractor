@@ -6,7 +6,7 @@ import numpy as np
 import fitsio
 
 from astrometry.util.fits import fits_table
-from astrometry.util.util import Tan
+from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect
 
@@ -149,12 +149,30 @@ def create_temp(**kwargs):
 
 class Decals(object):
     def __init__(self):
-        pass
+        self.decals_dir = decals_dir
+        self.ZP = None
+        
     def get_bricks(self):
-        return fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
+        return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
     def get_ccds(self):
-        return fits_table(os.path.join(decals_dir, 'decals-ccds.fits'))
-    
+        return fits_table(os.path.join(self.decals_dir, 'decals-ccds.fits'))
+
+    def get_zeropoint_for(self, im):
+        if self.ZP is None:
+            zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
+            print 'Reading zeropoints:', zpfn
+            self.ZP = fits_table(zpfn)
+        I = np.flatnonzero(self.ZP.expnum == im.expnum)
+        if len(I) > 1:
+            I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
+        assert(len(I) == 1)
+        I = I[0]
+        magzp = self.ZP.zpt[I]
+        #print 'magzp', magzp
+        exptime = self.ZP.exptime[I]
+        magzp += 2.5 * np.log10(exptime)
+        #print 'magzp', magzp
+        return magzp
 
 class DecamImage(object):
     def __init__(self, t):
@@ -235,11 +253,17 @@ class DecamImage(object):
         return self._read_fits(self.wtfn, self.hdu, **kwargs)
     #return fitsio.FITS(self.wtfn)[self.hdu].read()
 
+    def read_wcs(self):
+        return Sip(self.wcsfn)
+
 
 def bounce_run_calibs(X):
     return run_calibs(*X)
 
-def run_calibs(im, ra, dec, pixscale):
+def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=True):
+    '''
+    pixscale: in degrees/pixel
+    '''
     for fn in [im.wcsfn,im.sexfn,im.psffn,im.morphfn,im.corrfn,im.sdssfn]:
         print 'exists?', os.path.exists(fn), fn
         
@@ -284,7 +308,7 @@ def run_calibs(im, ra, dec, pixscale):
         magzp  = primhdr['MAGZERO']
         seeing = pixscale * 3600 * hdr['FWHM']
 
-    if run_se:
+    if run_se and se:
         cmd = ' '.join([
             'sex',
             '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
@@ -295,7 +319,7 @@ def run_calibs(im, ra, dec, pixscale):
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)
 
-    if run_astrom:
+    if run_astrom and astrom:
         cmd = ' '.join([
             'solve-field --config', an_config, '-D . --temp-dir', tempdir,
             '--ra %f --dec %f' % (ra,dec), '--radius 1 -L 0.25 -H 0.29 -u app',
@@ -311,7 +335,7 @@ def run_calibs(im, ra, dec, pixscale):
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)
 
-    if run_psfex:
+    if run_psfex and psfex:
         cmd = ('psfex -c %s -PSF_DIR %s %s' %
                (os.path.join(sedir, 'DECaLS-v2.psfex'),
                 os.path.dirname(im.psffn), im.sexfn))
@@ -319,7 +343,7 @@ def run_calibs(im, ra, dec, pixscale):
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)
 
-    if run_morph:
+    if run_morph and morph:
         cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
                         '-FLAG_IMAGE', tmpmaskfn,
                         '-SEEING_FWHM %f' % seeing,

@@ -24,7 +24,8 @@ if __name__ == '__main__':
 
     # images touching brick X
     B = D.get_bricks()
-    ii = 380155
+    #ii = 380155
+    ii = 377305
     targetwcs = wcs_for_brick(B[ii])
     I = ccds_touching_wcs(targetwcs, T)
     #print len(I), 'CCDs touching'
