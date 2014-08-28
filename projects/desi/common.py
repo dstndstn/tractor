@@ -205,6 +205,7 @@ class DecamImage(object):
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
+        self.se2fn = os.path.join(calibdir, 'sextractor2', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
@@ -215,7 +216,8 @@ class DecamImage(object):
 
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
-                      [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn]]:
+                      [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
+                       self.se2fn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -280,6 +282,9 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
     if not all([os.path.exists(fn) for fn in [im.sefn]]):
         run_se = True
         run_funpack = True
+    if not all([os.path.exists(fn) for fn in [im.se2fn]]):
+        run_se2 = True
+        run_funpack = True
     if not all([os.path.exists(fn) for fn in [im.wcsfn,im.corrfn,im.sdssfn]]):
         run_astrom = True
     if not os.path.exists(im.psffn):
@@ -302,7 +307,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
         if os.system(cmd):
             raise RuntimeError('Command failed: ' + cmd)
 
-    if run_astrom or run_morph:
+    if run_astrom or run_morph or run_se or run_se2:
         # grab header values...
         primhdr = im.read_image_primary_header()
         hdr     = im.read_image_header()
@@ -316,6 +321,17 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
             '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
             '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
             '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.sefn,
+            tmpimgfn])
+        print cmd
+        if os.system(cmd):
+            raise RuntimeError('Command failed: ' + cmd)
+
+    if run_se2 and se2:
+        cmd = ' '.join([
+            'sex',
+            '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
+            '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
+            '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.se2fn,
             tmpimgfn])
         print cmd
         if os.system(cmd):

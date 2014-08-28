@@ -55,13 +55,13 @@ def stage0(**kwargs):
     B = decals.get_bricks()
     # brick index...
     # One near the middle
-    #ii = 377305
+    ii = 377305
     # One near the edge and with little overlap
-    ii = 380155
+    #ii = 380155
     brick = B[ii]
 
-    #W,H = 3600,3600
-    W,H = 400,400
+    W,H = 3600,3600
+    #W,H = 400,400
 
     bands = ['g','r','z']
     catband = 'r'
@@ -154,6 +154,9 @@ def stage0(**kwargs):
                 ps.savefig()
             off = 0
             plt.clf()
+
+        if off >= 8:
+            continue
 
         plt.subplot(2,4, off+1)
         mag2 = -2.5 * np.log10(cat.flux_psf)
@@ -423,6 +426,11 @@ def stage0(**kwargs):
         coimgs.append(coimg)
         coimas.append(dict(interpolation='nearest', origin='lower', cmap='gray',
                            vmin=mn, vmax=mx))
+
+    #fitsio.write('rgb.fits', rgbim, clobber=True)
+    #print 'saved RGB'
+    #sys.exit(0)
+
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W))) for b in bands])
     detivs  = dict([(b, np.zeros((H,W))) for b in bands])
@@ -751,6 +759,8 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            W=None,H=None,
            bands=None, ps=None, tims=None,
            **kwargs):
+
+    #fitsio.write('rgb.fits', rgbim)
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
