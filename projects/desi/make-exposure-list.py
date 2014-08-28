@@ -1,5 +1,6 @@
 import glob as glob
 import os
+import datetime
 
 import numpy as np
 
@@ -12,12 +13,15 @@ import fitsio
 '''
 python -u projects/desi/make-exposure-list.py ~/cosmo/data/staging/decam/CP*/c4d_*_ooi*.fits.fz > log 2> err &
 python -u projects/desi/make-exposure-list.py -o ccds-20140810.fits ~/cosmo/data/staging/decam/CP20140810/c4d_*_ooi*.fits.fz > log-0810 2>&1 &
+
+python -u projects/desi/make-exposure-list.py --trim /global/homes/d/dstn/cosmo/staging/decam/ -o 1.fits ~/cosmo/staging/decam/CP20140810/c4d_140809_04*_ooi*.fits.fz > log 2> err &
 '''
 
 if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser('%prog [options] <frame frame frame>')
     parser.add_option('-o', dest='outfn', help='Output filename', default='ccds.fits')
+    parser.add_option('--trim', help='Trim prefix from filename')
     opt,args = parser.parse_args()
 
     nan = np.nan
@@ -29,12 +33,15 @@ if __name__ == '__main__':
                 ('G-SEEING', nan),
                 ('EXPTIME', nan),
                 ('EXPNUM', 0),
+                ('MJD-OBS', 0),
+                ('PROPID', ''),
+                ('GUIDER', ''),
                 ]
     hdrkeys = [('AVSKY', nan),
                ('ARAWGAIN', nan),
                ('FWHM', nan),
-               ('ZNAXIS1',0),
-               ('ZNAXIS2',0),
+               #('ZNAXIS1',0),
+               #('ZNAXIS2',0),
                ('CRPIX1',nan),
                ('CRPIX2',nan),
                ('CRVAL1',nan),
@@ -44,9 +51,10 @@ if __name__ == '__main__':
                ('CD2_1',nan),
                ('CD2_2',nan),
                ('EXTNAME',''),
+               ('CCDNUM',''),
                ]
 
-    otherkeys = [('FILENAME',''), ('HDU',0),
+    otherkeys = [('CPIMAGE',''), ('CPIMAGE_HDU',0), ('CALNAME',''), #('CPDATE',0),
                  ('HEIGHT',0),('WIDTH',0),
                  ]
 
@@ -62,6 +70,25 @@ if __name__ == '__main__':
         primhdr = F[0].read_header()
         #print primhdr
 
+        expstr = '%08i' % primhdr.get('EXPNUM')
+
+        # # Parse date with format: 2014-08-09T04:20:50.812543
+        # date = datetime.datetime.strptime(primhdr.get('DATE-OBS'),
+        #                                   '%Y-%m-%dT%H:%M:%S.%f')
+        # # Subract 12 hours to get the date used by the CP to label the night;
+        # # CP20140818 includes observations with date 2014-08-18 evening and
+        # # 2014-08-19 early AM.
+        # cpdate = date - datetime.timedelta(0.5)
+        # #cpdatestr = '%04i%02i%02i' % (cpdate.year, cpdate.month, cpdate.day)
+        # #print 'Date', date, '-> CP', cpdatestr
+        # cpdateval = cpdate.year * 10000 + cpdate.month * 100 + cpdate.day
+        # print 'Date', date, '-> CP', cpdateval
+
+        cpfn = fn
+        if opt.trim:
+            cpfn = cpfn.replace(opt.trim, '')
+        print 'CP fn', cpfn
+
         for hdu in range(1, len(F)):
             hdr = F[hdu].read_header()
 
@@ -74,10 +101,14 @@ if __name__ == '__main__':
             for k,d in hdrkeys:
                 vals[k].append(hdr.get(k, d))
 
-            vals['FILENAME'].append(fn)
-            vals['HDU'].append(hdu)
+            vals['CPIMAGE'].append(cpfn)
+            vals['CPIMAGE_HDU'].append(hdu)
             vals['WIDTH'].append(int(W))
             vals['HEIGHT'].append(int(H))
+            #vals['CPDATE'].append(cpdateval)
+
+            calname = '%s/%s/decam-%s-%s' % (expstr[:5], expstr, expstr, hdr.get('EXTNAME'))
+            vals['CALNAME'].append(calname)
 
     T = fits_table()
     for k,d in allkeys:
@@ -103,10 +134,22 @@ if __name__ == '__main__':
 
     T.about()
 
+    print 'Converting datatypes...'
     for k in T.get_columns():
         print
         print k
-        print T.get(k)
+        #print T.get(k)
+        # Convert doubles to floats
+        if k.startswith('ra') or k.startswith('dec') or k.startswith('cr'):
+            continue
+        X = T.get(k)
+        print X.dtype
+        if X.dtype == np.float64:
+            T.set(k, X.astype(np.float32))
+        elif X.dtype == np.int64:
+            T.set(k, X.astype(np.int32))
+
+    T.about()
 
     T.writeto(opt.outfn)
     print 'Wrote', opt.outfn
