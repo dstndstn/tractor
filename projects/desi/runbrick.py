@@ -1069,9 +1069,6 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             print j, cat[j].getBrightness()
 
 
-
-
-
     # HACK -- define "bright" limits
     bright = dict(g = 20.5, r = 20, z = 19.5)
 
@@ -1088,12 +1085,17 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
     bcat = []
     for i,src in enumerate(cat):
-        if i in ibright:
-            if isinstance(src, PointSource):
-                bcat.append(BrightPointSource(src.pos, src.brightness))
-            else:
-                print 'Trying to replace bright source', src, 'with point source'
-                bcat.append(BrightPointSource(src.getPosition(), src.getBrightness()))
+        # if i in ibright:
+        #     if isinstance(src, PointSource):
+        #         bcat.append(BrightPointSource(src.pos, src.brightness))
+        #     else:
+        #         ### FIXME -- model selection??
+        #         print 'Trying to replace bright source', src, 'with point source'
+        #         bcat.append(BrightPointSource(src.getPosition(), src.getBrightness()))
+
+        if i in ibright and isinstance(src, PointSource):
+            bcat.append(BrightPointSource(src.pos, src.brightness))
+
         else:
             bcat.append(src)
     bcat = Catalog(*bcat)
@@ -1164,7 +1166,8 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subtim.extent = (sx0, sx1, sy0, sy1)
             subtim.band = tim.band
 
-            subtim.brightPsf = PixelizedPSF(psfimg)
+            subtim.brightPsf = PixelizedPsfEx(tim.psfex, ox0 + sx0, oy0 + sy0)
+            #subtim.brightPsf = PixelizedPSF(psfimg)
             #subtim.brightPsf = GaussianMixturePSF.fromStamp(psfimg, N=5)
 
             subtims.append(subtim)
@@ -1179,6 +1182,9 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             mod0 = subtr.getModelImages()
         print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
 
+        for i in Isrcs:
+            print bcat[i]
+
         for step in range(10):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
@@ -1189,6 +1195,9 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         if plots:
             mod1 = subtr.getModelImages()
         print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
+
+        for i in Isrcs:
+            print bcat[i]
 
         # Forced-photometer bands individually
         for band in bands:
@@ -1210,6 +1219,8 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                                                     BW=B, BH=B, wantims=False)
         bcat.thawAllRecursive()
         print 'Sub-image forced-phot lnlikelihood:', subtr.getLogLikelihood()
+        for i in Isrcs:
+            print bcat[i]
 
         if plots:
             mod2 = subtr.getModelImages()
@@ -1217,7 +1228,9 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         if plots:
             mods = [mod0, mod1, mod2]
 
+            myrgbim = np.zeros((blobh,blobw,3))
             rgbmods = [np.zeros((blobh,blobw,3)) for m in mods]
+            rgbresids = [np.zeros((blobh,blobw,3)) for m in mods]
             subims = [[] for m in mods]
             chis = dict([(b,[]) for b in bands])
             for iband,band in enumerate(bands):
@@ -1248,19 +1261,26 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                         comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
                     chis[band].append(chilist)
                     mn,mx = tims[itim].zr
-    
+                    print 'band', band, 'mn,mx', mn,mx
+                    sig1 = tims[itim].sig1
+                    print 'sig1', sig1
+                    #tim.zr = [-3. * sig1, 10. * sig1]
+                    mn,mx = -10.*sig1, 30.*sig1
+                    
                 for comod in comods:
                     comod /= np.maximum(con[bslc], 1)
                 ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                            vmin=mn, vmax=mx)
                 c = 2-iband
-                for i,rgbmod in enumerate(rgbmods):
+                for i,(rgbmod,rgbresid) in enumerate(zip(rgbmods, rgbresids)):
                     rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
+                    rgbresid[:,:,c] = np.clip((coimg - comods[i]  - mn) / (mx - mn), 0., 1.)
+                myrgbim[:,:,c] = np.clip((coimg - mn) / (mx - mn), 0., 1.)
                 for subim,comod,cochi in zip(subims, comods, cochis):
                     subim.append((coimg, comod, ima, cochi))
     
             # Plot per-band chi coadds, and RGB images for before & after
-            for subim, rgbmod in zip(subims, rgbmods):
+            for subim, rgbmod, rgbresid in zip(subims, rgbmods, rgbresids):
                 plt.clf()
                 for j,(im,m,ima,chi) in enumerate(subim):
                     plt.subplot(3,4,1 + j + 0)
@@ -1270,14 +1290,18 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                     plt.subplot(3,4,1 + j + 8)
                     plt.imshow(-chi, **imchi)
                 plt.subplot(3,4,4)
-                dimshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]))
+                #dimshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]))
+                dimshow(myrgbim)
                 plt.subplot(3,4,8)
-                dimshow(np.dstack([rgbmod[:,:,c] for c in [0,1,2]]))
+                #dimshow(np.dstack([rgbmod[:,:,c] for c in [0,1,2]]))
+                dimshow(rgbmod)
                 plt.subplot(3,4,12)
-                dimshow(rgbim)
-                ax = plt.axis()
-                plt.plot([bx0,bx1,bx1,bx0,bx0],[by0,by0,by1,by1,by0],'r-')
-                plt.axis(ax)
+                dimshow(rgbresid)
+                #plt.subplot(3,4,12)
+                #dimshow(rgbim)
+                #ax = plt.axis()
+                #plt.plot([bx0,bx1,bx1,bx0,bx0],[by0,by0,by1,by1,by0],'r-')
+                #plt.axis(ax)
                 ps.savefig()
     
             # Plot per-image chis
@@ -1334,8 +1358,8 @@ def stage103(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
     cat = tractor.catalog = bcat
 
     print 'Sources:'
-    for src in cat:
-        print '  ', src
+    for i,src in enumerate(cat):
+        print '  ', i, src
 
     stage102(tractor=tractor, tims=tims, H=H, W=W, bands=bands,
              rgbim=rgbim, cat=cat, ps=ps, coimgs=coimgs, con=con,
@@ -1358,6 +1382,11 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
     rgbmod = np.zeros((H,W,3))
     rgbmod2 = np.zeros((H,W,3))
     rgbresids = np.zeros((H,W,3))
+    rgbresids2 = np.zeros((H,W,3))
+
+    rgbmodsig = np.zeros((H,W,3))
+    rgbimgsig = np.zeros((H,W,3))
+
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
         comod = np.zeros((H,W))
@@ -1372,12 +1401,24 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             noise[ie == 0] = 0.
             comod2[Yo,Xo] += mod[itim][Yi,Xi] + noise[Yi,Xi]
             mn,mx = tim.zr
-        comod /= np.maximum(con, 1)
+            sig1 = tim.sig1
+            mn2,mx2 = -10.*sig1, 30.*sig1
+        comod  /= np.maximum(con, 1)
         comod2 /= np.maximum(con, 1)
         c = 2-iband
+
+        rgbmodsig[:,:,c] = comod / sig1
+        rgbimgsig[:,:,c] = coimg / sig1
+
         rgbmod[:,:,c] = np.clip((comod - mn) / (mx - mn), 0., 1.)
         rgbmod2[:,:,c] = np.clip((comod2 - mn) / (mx - mn), 0., 1.)
         rgbresids[:,:,c] = np.clip((coimg - comod - mn) / (mx - mn), 0., 1.)
+
+        # Blank out residual pixels where there is no data
+        rgbresids[:,:,c][con == 0] = np.clip((0 - mn) / (mx - mn), 0., 1.)
+
+        rgbresids2[:,:,c] = np.clip((coimg - comod - mn2) / (mx2 - mn2), 0., 1.)
+        rgbresids2[:,:,c][con == 0] = np.clip((0 - mn2) / (mx2 - mn2), 0., 1.)
 
     plt.clf()
     dimshow(rgbim)
@@ -1386,7 +1427,7 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
     ax = plt.axis()
     cat = tractor.getCatalog()
-    for src in cat:
+    for i,src in enumerate(cat):
         rd = src.getPosition()
         ok,x,y = targetwcs.radec2pixelxy(rd.ra, rd.dec)
         cc = (0,1,0)
@@ -1394,6 +1435,7 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             plt.plot(x-1, y-1, '+', color=cc, ms=10, mew=1.5)
         else:
             plt.plot(x-1, y-1, 'o', mec=cc, mfc='none', ms=10, mew=1.5)
+        # plt.text(x, y, '%i' % i, color=cc, ha='center', va='bottom')
     plt.axis(ax)
     ps.savefig()
 
@@ -1410,6 +1452,27 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
     plt.clf()
     dimshow(rgbresids)
     plt.title('Residuals')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(rgbresids2)
+    plt.title('Residuals (2)')
+    ps.savefig()
+
+    mn,mx = -20.,50.
+    plt.clf()
+    dimshow(np.clip((rgbimgsig - mn) / (mx - mn), 0., 1.))
+    plt.title('Image (2)')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(np.clip((rgbmodsig - mn) / (mx - mn), 0., 1.))
+    plt.title('Model (2)')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(np.clip((rgbimgsig - rgbmodsig - mn) / (mx - mn), 0., 1.))
+    plt.title('Residuals (2)')
     ps.savefig()
 
 
@@ -1447,6 +1510,7 @@ if __name__ == '__main__':
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
     prereqs = {101: 0, 102: 1, 103: 2}
+    opt.force.append(opt.stage)
     
     runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write,
              prereqs=prereqs, plots=opt.plots)
