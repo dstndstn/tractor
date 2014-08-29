@@ -22,13 +22,19 @@ from astrometry.util.resample import *
 from astrometry.util.starutil_numpy import *
 from astrometry.libkd.spherematch import *
 
+from astrometry.sdss.fields import read_photoobjs_in_wcs
+from astrometry.sdss import DR9
+
 from tractor import *
 from tractor.galaxy import *
 from tractor.source_extractor import *
+from tractor.sdss import get_tractor_sources_dr9
 
 from common import *
 
 mp = None
+
+photoobjdir = 'photoObjs-new'
 
 def set_globals():
     global imx
@@ -47,57 +53,7 @@ def set_globals():
 
 #def main():
 
-def stage0(**kwargs):
-    ps = PlotSequence('brick')
-
-    decals = Decals()
-
-    B = decals.get_bricks()
-    # brick index...
-    # One near the middle
-    ii = 377305
-    # One near the edge and with little overlap
-    #ii = 380155
-    brick = B[ii]
-
-    W,H = 3600,3600
-    #W,H = 400,400
-
-    bands = ['g','r','z']
-    catband = 'r'
-
-    targetwcs = wcs_for_brick(brick, W=W, H=H)
-
-    pixscale = targetwcs.pixel_scale()
-    print 'pixscale', pixscale
-
-    T = decals.get_ccds()
-    T.cut(ccds_touching_wcs(targetwcs, T))
-    print len(T), 'CCDs nearby'
-
-    ims = []
-    for band in bands:
-        TT = T[T.filter == band]
-        print len(TT), 'in', band, 'band'
-        for t in TT:
-            print
-            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
-            ims.append(im)
-
-    args = []
-    for im in ims:
-        if mp is not None:
-            args.append((im, brick.ra, brick.dec, pixscale))
-        else:
-            run_calibs(im, brick.ra, brick.dec, pixscale)
-    if mp is not None:
-        mp.map(bounce_run_calibs, args)
-
-    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
-    print 'Reading zeropoints:', zpfn
-    ZP = fits_table(zpfn)
-
+def check_photometric_calib(ims, cat, ps):
     # Check photometric calibrations
     lastband = None
 
@@ -177,8 +133,8 @@ def stage0(**kwargs):
         off += 1
         lastband = band
     ps.savefig()
-        
-        
+
+def get_se_sources(ims, catband, targetwcs, W, H):
     # FIXME -- we're only reading 'catband'-band catalogs, and all the fluxes
     # are initialized at that band's flux... should really read all bands!
         
@@ -211,9 +167,6 @@ def stage0(**kwargs):
     #     plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
     # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
     # ps.savefig()
-    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-
     # Cut catalogs to ROI
     for cat in cats:
         ok,x,y = targetwcs.radec2pixelxy(cat.ra, cat.dec)
@@ -243,6 +196,98 @@ def stage0(**kwargs):
     cat,isrcs = get_se_modelfit_cat(merged, maglim=90, bands=bands)
     print 'Tractor sources:', cat
     T = merged[isrcs]
+    return cat, T
+
+def get_sdss_sources(bands, targetwcs, W, H):
+    # FIXME?
+    margin = 0.
+
+    sdss = DR9(basedir=photoobjdir)
+    sdss.useLocalTree()
+
+    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id',
+            'psfflux', 'psfflux_ivar',
+            'cmodelflux', 'cmodelflux_ivar',
+            'modelflux', 'modelflux_ivar',
+            'devflux', 'expflux']
+
+    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
+    print 'Got', len(objs), 'photoObjs'
+
+    srcs = get_tractor_sources_dr9(
+        None, None, None, objs=objs, sdss=sdss,
+        bands=bands,
+        nanomaggies=True, fixedComposites=True,
+        useObjcType=True,
+        ellipse=EllipseESoft.fromRAbPhi)
+    print 'Got', len(srcs), 'Tractor sources'
+
+    cat = Catalog(*srcs)
+    return cat, objs
+
+def stage0(**kwargs):
+    ps = PlotSequence('brick')
+
+    decals = Decals()
+
+    B = decals.get_bricks()
+    # brick index...
+    # One near the middle
+    ii = 377305
+    # One near the edge and with little overlap
+    #ii = 380155
+    brick = B[ii]
+
+    #W,H = 3600,3600
+    W,H = 400,400
+
+    bands = ['g','r','z']
+    catband = 'r'
+
+    targetwcs = wcs_for_brick(brick, W=W, H=H)
+
+    pixscale = targetwcs.pixel_scale()
+    print 'pixscale', pixscale
+
+    T = decals.get_ccds()
+    T.cut(ccds_touching_wcs(targetwcs, T))
+    print len(T), 'CCDs nearby'
+
+    ims = []
+    for band in bands:
+        TT = T[T.filter == band]
+        print len(TT), 'in', band, 'band'
+        for t in TT:
+            print
+            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+            im = DecamImage(t)
+            ims.append(im)
+
+    args = []
+    for im in ims:
+        if mp is not None:
+            args.append((im, brick.ra, brick.dec, pixscale))
+        else:
+            run_calibs(im, brick.ra, brick.dec, pixscale)
+    if mp is not None:
+        mp.map(bounce_run_calibs, args)
+
+    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
+    print 'Reading zeropoints:', zpfn
+    ZP = fits_table(zpfn)
+
+    #check_photometric_calib(ims, cat, ps)
+
+    #cat,T = get_se_sources(ims, catband, targetwcs, W, H)
+
+    cat,T = get_sdss_sources(bands, targetwcs, W, H)
+
+    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
 
     # record coordinates in target brick image
     ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
@@ -261,16 +306,11 @@ def stage0(**kwargs):
     #     plt.xlabel(c)
     #     ps.savefig()
 
-    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
-    print 'Reading zeropoints:', zpfn
-    ZP = fits_table(zpfn)
-
     # Read images, clip to ROI
     tims = []
     for im in ims:
         band = im.band
-        wcs = Sip(im.wcsfn)
-        #print 'Image shape', wcs.imagew, wcs.imageh
+        wcs = im.read_wcs()
         imh,imw = wcs.imageh,wcs.imagew
         imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
         ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
@@ -300,19 +340,11 @@ def stage0(**kwargs):
         psf_fwhm = imghdr['FWHM']
         primhdr = im.read_image_primary_header()
 
-        I = np.flatnonzero(ZP.expnum == im.expnum)
-        if len(I) > 1:
-            I = np.flatnonzero((ZP.expnum == im.expnum) * (ZP.extname == im.extname))
-        assert(len(I) == 1)
-        I = I[0]
-        magzp = ZP.zpt[I]
-        print 'magzp', magzp
-        exptime = ZP.exptime[I]
-        magzp += 2.5 * np.log10(exptime)
+        magzp = decals.get_zeropoint_for(im)
         print 'magzp', magzp
 
-        magzp0  = primhdr['MAGZERO']
-        print 'header magzp:', magzp0
+        #magzp0  = primhdr['MAGZERO']
+        #print 'header magzp:', magzp0
 
         zpscale = NanoMaggies.zeropointToScale(magzp)
         print 'zpscale', zpscale
@@ -329,7 +361,7 @@ def stage0(**kwargs):
 
         # get full image size for PsfEx
         info = im.get_image_info()
-        print 'Image info:', info
+        #print 'Image info:', info
         fullh,fullw = info['dims']
         psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
         #psfex = ShiftedPsf(psfex, x0, y0)
@@ -578,6 +610,12 @@ def stage0(**kwargs):
     for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
         cat.append(PointSource(RaDecPos(r,d),
                                NanoMaggies(order=bands, **fluxes)))
+
+    print 'Existing source table:'
+    T.about()
+    print 'New source table:'
+    Tnew.about()
+
     T = merge_tables([T, Tnew], columns='fillzero')
 
     # Segment, and record which sources fall into each blob
