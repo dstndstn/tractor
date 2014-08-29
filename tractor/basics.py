@@ -826,9 +826,10 @@ class PointSource(MultiParams):
     def getUnitFluxModelPatch(self, img, minval=0.):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
-        patch = img.getPsf().getPointSourcePatch(px, py, minval=minval,
-                                                 extent=[0,W-1,0,H-1],
-                                                 radius=self.fixedRadius)
+        psf = self._getPsf(img)
+        patch = psf.getPointSourcePatch(px, py, minval=minval,
+                                        extent=[0,W-1,0,H-1],
+                                        radius=self.fixedRadius)
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -844,13 +845,18 @@ class PointSource(MultiParams):
             return None
         return upatch * counts
 
+    def _getPsf(self, img):
+        return img.getPsf()
+
     def getParamDerivatives(self, img):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
         pos0 = self.getPosition()
-        (px0,py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = img.getPsf().getPointSourcePatch(px0, py0)
+        wcs = img.getWcs()
+        (px0,py0) = wcs.positionToPixel(pos0, self)
+        psf = self._getPsf(img)
+        patch0 = psf.getPointSourcePatch(px0, py0)
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
         derivs = []
 
@@ -860,8 +866,8 @@ class PointSource(MultiParams):
             pvals = pos0.getParams()
             for i,pstep in enumerate(psteps):
                 oldval = pos0.setParam(i, pvals[i] + pstep)
-                (px,py) = img.getWcs().positionToPixel(pos0, self)
-                patchx = img.getPsf().getPointSourcePatch(px, py)
+                (px,py) = wcs.positionToPixel(pos0, self)
+                patchx = psf.getPointSourcePatch(px, py)
                 pos0.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(pos%i)' % i)

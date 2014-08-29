@@ -244,6 +244,13 @@ class PsfEx(VaryingGaussianPSF):
             
         return psf
 
+# class PixelizedPsfEx(PsfEx):
+#     def getPointSourcePatch(self, px, py, minval=0., extent=None):
+#         pix = self.instantiateAt(px, py, nativeScale=True)
+#         pixpsf = PixelizedPSF(pix).getPointSourcePatch(px, py)
+#         #sz = pix.shape[0]
+#         #return Patch(pix, -sz/2, -sz/2)
+
 if __name__ == '__main__':
     from astrometry.util.plotutils import *
     import sys

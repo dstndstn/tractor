@@ -9,18 +9,19 @@ import os
 
 import fitsio
 
-from scipy.ndimage.filters import *
+from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing
 
-from astrometry.util.fits import *
-from astrometry.util.file import *
-from astrometry.util.util import *
-from astrometry.util.plotutils import *
-from astrometry.util.miscutils import *
-from astrometry.util.resample import *
-from astrometry.util.starutil_numpy import *
-from astrometry.libkd.spherematch import *
+from astrometry.util.fits import fits_table,merge_tables
+from astrometry.util.plotutils import PlotSequence, dimshow
+from astrometry.util.miscutils import clip_polygon
+from astrometry.util.resample import resample_with_wcs
+from astrometry.libkd.spherematch import match_radec
+
+# from astrometry.util.file import *
+# from astrometry.util.util import *
+# from astrometry.util.starutil_numpy import *
 
 from astrometry.sdss.fields import read_photoobjs_in_wcs
 from astrometry.sdss import DR9
@@ -50,8 +51,6 @@ def set_globals():
     imx = dict(interpolation='nearest', origin='lower')
     imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
                 vmin=-5, vmax=5)
-
-#def main():
 
 def check_photometric_calib(ims, cat, ps):
     # Check photometric calibrations
@@ -862,10 +861,10 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
             # FIXME --
-            #subpsf = tim.psfex.mogAt(ox0+(x0+x1)/2., oy0+(y0+y1)/2.)
+            #subpsf = tim.psfex.mogAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.)
             #subpsf = tim.getPsf()
 
-            psfimg = tim.psfex.instantiateAt(ox0+(x0+x1)/2., oy0+(y0+y1)/2.,
+            psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
                                              nativeScale=True)
             subpsf = GaussianMixturePSF.fromStamp(psfimg)
 
@@ -935,7 +934,8 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                 cat[i].thawPathsTo(band)
             #cat.thawPathsTo(band)
             bandtims = []
-            for tim in tims:
+            #for tim in tims:
+            for tim in subtims:
                 if tim.band == band:
                     bandtims.append(tim)
             print
@@ -1032,6 +1032,18 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
     return rtn
 
 
+class BrightPointSource(PointSource):
+    def _getPsf(self, img):
+        return img.brightPsf
+        #return img.getBrightPsf()
+    def getSourceType(self):
+        return 'BrightPointSource'
+
+# class BrightPsfImage(Image):
+#     def getBrightPsf(self):
+#         return self.brightPsf
+
+
 def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            detmaps=None, detivs=None,
            rgbim=None,
@@ -1041,6 +1053,304 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
            bands=None, ps=None,
            plots=False, tims=None, tractor=None,
            **kwargs):
+
+    # For bright sources, use more MoG components, or use pixelized PSF model?
+    fluxes = []
+    for src in cat:
+        br = src.getBrightness()
+        fluxes.append([br.getFlux(b) for b in bands])
+    fluxes = np.array(fluxes)
+
+    for i,b in enumerate(bands):
+        ii = np.argsort(-fluxes[:,i])
+        print
+        print 'Brightest in band', b
+        for j in ii[:10]:
+            print j, cat[j].getBrightness()
+
+
+
+
+
+    # HACK -- define "bright" limits
+    bright = dict(g = 20.5, r = 20, z = 19.5)
+
+    ibright = []
+    for band in bands:
+        brightmag = bright[band]
+        for i,src in enumerate(cat):
+            br = src.getBrightness()
+            if br.getMag(band) < brightmag:
+                ibright.append(i)
+    ibright = np.unique(ibright)
+
+    print 'Bright sources:', ibright
+
+    bcat = []
+    for i,src in enumerate(cat):
+        if i in ibright:
+            if isinstance(src, PointSource):
+                bcat.append(BrightPointSource(src.pos, src.brightness))
+            else:
+                print 'Trying to replace bright source', src, 'with point source'
+                bcat.append(BrightPointSource(src.getPosition(), src.getBrightness()))
+        else:
+            bcat.append(src)
+    bcat = Catalog(*bcat)
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+                
+    for iblob,(bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
+        if not len(set(ibright).intersection(set(Isrcs))):
+            continue
+        print 'Re-fitting blob', iblob, 'with', len(Isrcs), 'sources'
+
+        bcat.freezeAllParams()
+        print 'Fitting:'
+        for i in Isrcs:
+            bcat.thawParams(i)
+            print bcat[i]
+            
+        # blob bbox in target coords
+        sy,sx = bslc
+        by0,by1 = sy.start, sy.stop
+        bx0,bx1 = sx.start, sx.stop
+        blobh,blobw = by1 - by0, bx1 - bx0
+
+        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
+
+        ###
+        # FIXME -- We create sub-image for each blob here.
+        # What wo don't do, though, is mask out the invvar pixels
+        # that are within the blob bounding-box but not within the
+        # blob itself.  Does this matter?
+        ###
+
+        alphas = [0.1, 0.3, 1.0]
+        
+        subtims = []
+        for itim,tim in enumerate(tims):
+            h,w = tim.shape
+            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
+            sx0,sx1 = x.min(), x.max()
+            sy0,sy1 = y.min(), y.max()
+            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
+                continue
+            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
+            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
+            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
+            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
+            #print 'image subregion', sx0,sx1,sy0,sy1
+
+            subslc = slice(sy0,sy1),slice(sx0,sx1)
+            subimg = tim.getImage ()[subslc]
+            subiv  = tim.getInvvar()[subslc]
+            subwcs = tim.getWcs().copy()
+            ox0,oy0 = orig_wcsxy0[itim]
+            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
+
+            # FIXME --
+            #subpsf = tim.psfex.mogAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.)
+            #subpsf = tim.getPsf()
+
+            psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
+                                             nativeScale=True)
+            subpsf = GaussianMixturePSF.fromStamp(psfimg)
+
+            #subtim = BrightPsfImage(data=subimg, invvar=subiv, wcs=subwcs,
+            subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
+                           psf=subpsf, photocal=tim.getPhotoCal(),
+                           sky=tim.getSky(), name=tim.name)
+            subtim.extent = (sx0, sx1, sy0, sy1)
+            subtim.band = tim.band
+
+            subtim.brightPsf = PixelizedPSF(psfimg)
+            #subtim.brightPsf = GaussianMixturePSF.fromStamp(psfimg, N=5)
+
+            subtims.append(subtim)
+
+        subtr = Tractor(subtims, bcat)
+        subtr.freezeParam('images')
+        print 'Optimizing:', subtr
+        subtr.printThawedParams()
+
+        if plots:
+            # before-n-after plots
+            mod0 = subtr.getModelImages()
+        print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
+
+        for step in range(10):
+            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                          alphas=alphas)
+            print 'dlnp:', dlnp
+            if dlnp < 0.1:
+                break
+
+        if plots:
+            mod1 = subtr.getModelImages()
+        print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
+
+        # Forced-photometer bands individually
+        for band in bands:
+            bcat.freezeAllRecursive()
+            for i in Isrcs:
+                bcat.thawParam(i)
+                bcat[i].thawPathsTo(band)
+            bandtims = []
+            for tim in subtims:
+                if tim.band == band:
+                    bandtims.append(tim)
+            print
+            print 'Fitting', band, 'band:'
+            btractor = Tractor(bandtims, bcat)
+            btractor.freezeParam('images')
+            btractor.printThawedParams()
+            B = 8
+            X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
+                                                    BW=B, BH=B, wantims=False)
+        bcat.thawAllRecursive()
+        print 'Sub-image forced-phot lnlikelihood:', subtr.getLogLikelihood()
+
+        if plots:
+            mod2 = subtr.getModelImages()
+
+        if plots:
+            mods = [mod0, mod1, mod2]
+
+            rgbmods = [np.zeros((blobh,blobw,3)) for m in mods]
+            subims = [[] for m in mods]
+            chis = dict([(b,[]) for b in bands])
+            for iband,band in enumerate(bands):
+                coimg = coimgs[iband][bslc]
+                comods = [np.zeros((blobh,blobw)) for m in mods]
+                cochis = [np.zeros((blobh,blobw)) for m in mods]
+                for itim,subtim in enumerate(subtims):
+                    if subtim.band != band:
+                        continue
+                    (Yo,Xo,Yi,Xi) = tims[itim].resamp
+                    (sx0, sx1, sy0, sy1) = subtim.extent
+                    I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) *
+                                       (Xi >= sx0) * (Xi < sx1) *
+                                       (Yo >= by0) * (Yo < by1) *
+                                       (Xo >= bx0) * (Xo < bx1))
+                    Yo = Yo[I] - by0
+                    Xo = Xo[I] - bx0
+                    Yi = Yi[I] - sy0
+                    Xi = Xi[I] - sx0
+                    rechi = np.zeros((blobh,blobw))
+                    chilist = []
+                    for imod,mod in enumerate(mods):
+                        chi = ((subtim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
+                               subtim.getInvError()[Yi,Xi])
+                        rechi[Yo,Xo] = chi
+                        chilist.append(rechi.copy())
+                        cochis[imod][Yo,Xo] += chi
+                        comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
+                    chis[band].append(chilist)
+                    mn,mx = tims[itim].zr
+    
+                for comod in comods:
+                    comod /= np.maximum(con[bslc], 1)
+                ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                           vmin=mn, vmax=mx)
+                c = 2-iband
+                for i,rgbmod in enumerate(rgbmods):
+                    rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
+                for subim,comod,cochi in zip(subims, comods, cochis):
+                    subim.append((coimg, comod, ima, cochi))
+    
+            # Plot per-band chi coadds, and RGB images for before & after
+            for subim, rgbmod in zip(subims, rgbmods):
+                plt.clf()
+                for j,(im,m,ima,chi) in enumerate(subim):
+                    plt.subplot(3,4,1 + j + 0)
+                    plt.imshow(im, **ima)
+                    plt.subplot(3,4,1 + j + 4)
+                    plt.imshow(m, **ima)
+                    plt.subplot(3,4,1 + j + 8)
+                    plt.imshow(-chi, **imchi)
+                plt.subplot(3,4,4)
+                dimshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]))
+                plt.subplot(3,4,8)
+                dimshow(np.dstack([rgbmod[:,:,c] for c in [0,1,2]]))
+                plt.subplot(3,4,12)
+                dimshow(rgbim)
+                ax = plt.axis()
+                plt.plot([bx0,bx1,bx1,bx0,bx0],[by0,by0,by1,by1,by0],'r-')
+                plt.axis(ax)
+                ps.savefig()
+    
+            # Plot per-image chis
+            cols = max(len(v) for v in chis.values())
+            rows = len(bands)
+            for i in range(len(mods)):
+                plt.clf()
+                for row,band in enumerate(bands):
+                    sp0 = 1 + cols*row
+                    for col,cc in enumerate(chis[band]):
+                        chi = cc[i]
+                        plt.subplot(rows, cols, sp0 + col)
+                        plt.imshow(-chi, **imchi)
+                ps.savefig()
+
+
+    rtn = dict()
+    for k in ['tractor','tims', 'bcat']:
+        rtn[k] = locals()[k]
+    return rtn
+
+
+class PixelizedPsfEx(object):
+    def __init__(self, psfex, x0, y0):
+        self.psfex = psfex
+        self.x0 = x0
+        self.y0 = y0
+        
+    def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None):
+        pix = self.psfex.instantiateAt(self.x0 + px, self.y0 + py, nativeScale=True)
+        return PixelizedPSF(pix).getPointSourcePatch(px, py, radius=radius, extent=extent)
+
+def stage103(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+             detmaps=None, detivs=None,
+             rgbim=None,
+             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+             cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None,
+             bands=None, ps=None,
+             plots=False, tims=None, tractor=None, bcat=None,
+             **kwargs):
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    for itim,tim in enumerate(tims):
+        ox0,oy0 = orig_wcsxy0[itim]
+        # # HACK -- instantiate pixelized PSF at center of tim
+        # r,d = targetwcs.pixelxy2radec(W/2., H/2.)
+        # ok,cx,cy = tim.subwcs.radec2pixelxy(r, d)
+        # psfimg = tim.psfex.instantiateAt(ox0+cx, oy0+cy, nativeScale=True)
+        # tim.brightPsf = PixelizedPsfEx(psfimg)
+
+        tim.brightPsf = PixelizedPsfEx(tim.psfex, ox0, oy0)
+
+    cat = tractor.catalog = bcat
+
+    print 'Sources:'
+    for src in cat:
+        print '  ', src
+
+    stage102(tractor=tractor, tims=tims, H=H, W=W, bands=bands,
+             rgbim=rgbim, cat=cat, ps=ps, coimgs=coimgs, con=con,
+             targetwcs=targetwcs)
+
+
+def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+             detmaps=None, detivs=None,
+             rgbim=None,
+             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+             cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None,
+             bands=None, ps=None,
+             plots=False, tims=None, tractor=None,
+             **kwargs):
 
     mod = [tractor.getModelImage(tim) for tim in tims]
 
@@ -1136,10 +1446,8 @@ if __name__ == '__main__':
     picklepat = 'runbrick-s%03i.pickle'
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    prereqs = {101: 0}
+    prereqs = {101: 0, 102: 1, 103: 2}
     
     runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write,
              prereqs=prereqs, plots=opt.plots)
     
-    #main()
-
