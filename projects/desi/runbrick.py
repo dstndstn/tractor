@@ -37,6 +37,43 @@ mp = None
 
 photoobjdir = 'photoObjs-new'
 
+def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
+    '''
+    Given a list of images in the given bands, returns a scaled RGB
+    image.
+    '''
+    # for now...
+    assert(''.join(bands) == 'grz')
+
+    scales = dict(g = (2, 0.0066),
+                  r = (1, 0.01),
+                  z = (0, 0.025),
+                  )
+    h,w = imgs[0].shape
+    rgb = np.zeros((h,w,3), np.float32)
+    # Convert to ~ sigmas
+    for im,band in zip(imgs, bands):
+        plane,scale = scales[band]
+        rgb[:,:,plane] = (im / scale).astype(np.float32)
+
+        print 'rgb: plane', plane, 'range', rgb[:,:,plane].min(), rgb[:,:,plane].max()
+
+    if mnmx is None:
+        mn,mx = -3, 10
+    else:
+        mn,mx = mnmx
+
+    if arcsinh is not None:
+        def nlmap(x):
+            return np.arcsinh(x * arcsinh) / np.sqrt(arcsinh)
+        rgb = nlmap(rgb)
+        mn = nlmap(mn)
+        mx = nlmap(mx)
+
+    rgb = (rgb - mn) / (mx - mn)
+    return np.clip(rgb, 0., 1.)
+    
+
 def set_globals():
     global imx
     global imchi
@@ -275,12 +312,7 @@ def stage0(**kwargs):
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
-    zpfn = os.path.join(calibdir, 'photom', 'zeropoints.fits')
-    print 'Reading zeropoints:', zpfn
-    ZP = fits_table(zpfn)
-
     #check_photometric_calib(ims, cat, ps)
-
     #cat,T = get_se_sources(ims, catband, targetwcs, W, H)
 
     cat,T = get_sdss_sources(bands, targetwcs, W, H)
@@ -324,8 +356,8 @@ def stage0(**kwargs):
         slc = slice(y0,y1+1), slice(x0,x1+1)
 
         ## FIXME -- it seems I got lucky and the cross product is
-        ## negative -- clockwise One could check this and reverse the
-        ## polygon vertex order.
+        ## negative == clockwise, as required by clip_polygon. One
+        ## could check this and reverse the polygon vertex order.
         # dx0,dy0 = tx[1]-tx[0], ty[1]-ty[0]
         # dx1,dy1 = tx[2]-tx[1], ty[2]-ty[1]
         # cross = dx0*dy1 - dx1*dy0
@@ -341,32 +373,11 @@ def stage0(**kwargs):
 
         magzp = decals.get_zeropoint_for(im)
         print 'magzp', magzp
-
-        #magzp0  = primhdr['MAGZERO']
-        #print 'header magzp:', magzp0
-
         zpscale = NanoMaggies.zeropointToScale(magzp)
-        print 'zpscale', zpscale
+        #print 'zpscale', zpscale
 
-        #sky = imghdr['SKYBRITE']
         medsky = np.median(img)
-        #print 'SKYBRITE:', sky
-        #print 'Image median:', medsky
         img -= medsky
-
-        twcs = ConstantFitsWcs(wcs)
-        if x0 or y0:
-            twcs.setX0Y0(x0,y0)
-
-        # get full image size for PsfEx
-        info = im.get_image_info()
-        #print 'Image info:', info
-        fullh,fullw = info['dims']
-        psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
-        #psfex = ShiftedPsf(psfex, x0, y0)
-        # HACK!!
-        psf_sigma = psf_fwhm / 2.35
-        psf = NCircularGaussianPSF([psf_sigma],[1.])
 
         # Scale images to Nanomaggies
         img /= zpscale
@@ -378,6 +389,19 @@ def stage0(**kwargs):
         # Clamp near-zero (incl negative!) invvars to zero
         thresh = 0.2 * (1./sig1**2)
         invvar[invvar < thresh] = 0
+
+        twcs = ConstantFitsWcs(wcs)
+        if x0 or y0:
+            twcs.setX0Y0(x0,y0)
+
+        # get full image size for PsfEx
+        info = im.get_image_info()
+        fullh,fullw = info['dims']
+        psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
+        #psfex = ShiftedPsf(psfex, x0, y0)
+        # HACK -- highly approximate PSF here!
+        psf_sigma = psf_fwhm / 2.35
+        psf = NCircularGaussianPSF([psf_sigma],[1.])
 
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
@@ -436,10 +460,9 @@ def stage0(**kwargs):
             continue
         tim.resamp = (Yo,Xo,Yi,Xi)
 
-    # Produce per-band coadds and an RGB image, for plots
-    rgbim = np.zeros((H,W,3))
+    # Produce per-band coadds, for plots
     coimgs = []
-    coimas = []
+    cons = []
     for ib,band in enumerate(bands):
         coimg = np.zeros((H,W))
         con   = np.zeros((H,W))
@@ -450,41 +473,31 @@ def stage0(**kwargs):
             nn = (tim.getInvvar()[Yi,Xi] > 0)
             coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
             con  [Yo,Xo] += nn
-            mn,mx = tim.zr
         coimg /= np.maximum(con,1)
-        c = 2-ib
-        rgbim[:,:,c] = np.clip((coimg - mn) / (mx - mn), 0., 1.)
         coimgs.append(coimg)
-        coimas.append(dict(interpolation='nearest', origin='lower', cmap='gray',
-                           vmin=mn, vmax=mx))
-
-    #fitsio.write('rgb.fits', rgbim, clobber=True)
-    #print 'saved RGB'
-    #sys.exit(0)
+        cons  .append(con)
 
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W))) for b in bands])
     detivs  = dict([(b, np.zeros((H,W))) for b in bands])
     for tim in tims:
-        psf_sigma = tim.psf_sigma
-        band = tim.band
         iv = tim.getInvvar()
-        psfnorm = 1./(2. * np.sqrt(np.pi) * psf_sigma)
+        psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
         detim = tim.getImage().copy()
         detim[iv == 0] = 0.
-        detim = gaussian_filter(detim, psf_sigma) / psfnorm**2
+        detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
         detsig1 = tim.sig1 / psfnorm
         subh,subw = tim.shape
         detiv = np.zeros((subh,subw)) + (1. / detsig1**2)
         detiv[iv == 0] = 0.
         (Yo,Xo,Yi,Xi) = tim.resamp
-        detmaps[band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
-        detivs [band][Yo,Xo] += detiv[Yi,Xi]
+        detmaps[tim.band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
+        detivs [tim.band][Yo,Xo] += detiv[Yi,Xi]
 
-    # find significant peaks in the per-band detection maps and SED-matched (hot)
-    # segment into blobs
-    # blank out blobs containing a catalog source
-    # create sources for any remaining peaks
+    # -find significant peaks in the per-band detection maps and SED-matched (hot)
+    # -segment into blobs
+    # -blank out blobs containing a catalog source
+    # -create sources for any remaining peaks
     hot = np.zeros((H,W), bool)
     sedmap = np.zeros((H,W))
     sediv  = np.zeros((H,W))
@@ -501,14 +514,13 @@ def stage0(**kwargs):
     peaks = hot.copy()
 
     plt.clf()
-    plt.imshow(np.round(sedsn), interpolation='nearest', origin='lower',
-               vmin=0, vmax=10, cmap='hot')
+    dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
     plt.title('SED-matched detection filter (flat SED)')
     ps.savefig()
 
     crossa = dict(ms=10, mew=1.5)
     plt.clf()
-    plt.imshow(peaks, cmap='gray', **imx)
+    dimshow(peaks)
     ax = plt.axis()
     plt.plot(T.itx, T.ity, 'r+', **crossa)
     plt.axis(ax)
@@ -528,11 +540,11 @@ def stage0(**kwargs):
         peaks[slc][blobs[slc] == bb] = 0
 
     plt.clf()
-    plt.imshow(peaks, cmap='gray', **imx)
+    dimshow(peaks)
     ax = plt.axis()
     plt.plot(T.itx, T.ity, 'r+', **crossa)
     plt.axis(ax)
-    plt.title('Detection blobs minus SE catalog sources')
+    plt.title('Detection blobs minus catalog sources')
     ps.savefig()
         
     # zero out the edges(?)
@@ -547,39 +559,14 @@ def stage0(**kwargs):
     print len(peaky), 'peaks'
     
     plt.clf()
-    plt.imshow(coimgs[1], **coimas[1])
+    dimshow(get_rgb(coimgs, bands))
     ax = plt.axis()
     plt.plot(T.tx, T.ty, 'r+', **crossa)
     plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
     plt.axis(ax)
-    plt.title('SE Catalog + SED-matched detections')
-    ps.savefig()
-
-    plt.clf()
-    plt.imshow(rgbim, **imx)
-    ax = plt.axis()
-    plt.plot(T.tx, T.ty, 'r+', **crossa)
-    plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
-    plt.axis(ax)
-    plt.title('SE Catalog + SED-matched detections')
+    plt.title('Catalog + SED-matched detections')
     ps.savefig()
     
-    if False:
-        # RGB detection map
-        rgbdet = np.zeros((H,W,3))
-        for iband,band in enumerate(bands):
-            c = 2-iband
-            detsn = detmaps[band] * np.sqrt(detivs[band])
-            rgbdet[:,:,c] = np.clip(detsn / 10., 0., 1.)
-        plt.clf()
-        plt.imshow(rgbdet, **imx)
-        ax = plt.axis()
-        plt.plot(T.tx, T.ty, 'r+', **crossa)
-        plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
-        plt.axis(ax)
-        plt.title('SE Catalog + SED-matched detections')
-        ps.savefig()
-
     # Grow the 'hot' pixels by dilating by a few pixels
     rr = 2.0
     RR = int(np.ceil(rr))
@@ -626,8 +613,8 @@ def stage0(**kwargs):
     blobflux = []
     for blob in range(1, nblobs+1):
         blobsrcs.append(np.flatnonzero(T.blob == blob))
-        # not really 'flux' per se...
         bslc = blobslices[blob-1]
+        # not really 'flux' per se...
         blobflux.append(np.sum(sedsn[bslc][blobs[bslc] == blob]))
 
     if False:
@@ -639,17 +626,12 @@ def stage0(**kwargs):
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
-
     
-    print
-    print 'Locals:', locals().keys()
-    print
     rtn = dict()
-    for k in ['T', 'sedsn', 'coimgs', 'con', 'coimas', 'detmaps', 'detivs', 'rgbim',
+    for k in ['T', 'sedsn', 'coimgs', 'cons', 'detmaps', 'detivs',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims',
-              'ps']:
+              'bands', 'tims', 'ps']:
         rtn[k] = locals()[k]
     return rtn
 
@@ -788,9 +770,100 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         ps.savefig()
 
 
-def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+def _plot_mods(tims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps):
+    subims = [[] for m in mods]
+    chis = dict([(b,[]) for b in bands])
+    for iband,band in enumerate(bands):
+        comods = [np.zeros((blobh,blobw)) for m in mods]
+        cochis = [np.zeros((blobh,blobw)) for m in mods]
+        comodn = np.zeros((blobh,blobw))
+
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            rechi = np.zeros((blobh,blobw))
+            chilist = []
+            comodn[Yo,Xo] += 1
+            for imod,mod in enumerate(mods):
+                chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
+                       tim.getInvError()[Yi,Xi])
+                rechi[Yo,Xo] = chi
+                chilist.append(rechi.copy())
+                cochis[imod][Yo,Xo] += chi
+                comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
+            chis[band].append(chilist)
+            mn,mx = -10.*tim.sig1, 30.*tim.sig1
+
+        for comod in comods:
+            comod /= np.maximum(comodn, 1)
+        ima = dict(vmin=mn, vmax=mx)
+        coimg = coimgs[iband][bslc]
+        coimgn = cons[iband][bslc]
+        for subim,comod,cochi in zip(subims, comods, cochis):
+            subim.append((coimg, coimgn, comod, ima, cochi))
+
+    # Plot per-band image, model, and chi coadds, and RGB images
+    for subim in subims:
+        plt.clf()
+        rows,cols = 3,5
+        imgs = []
+        mods = []
+        resids = []
+        for j,(img,imgn,mod,ima,chi) in enumerate(subim):
+            imgs.append(img)
+            mods.append(mod)
+            resid = img - mod
+            resid[imgn == 0] = np.nan
+            resids.append(resid)
+            plt.subplot(rows,cols,1 + j + 0)
+            dimshow(img, **ima)
+            plt.subplot(rows,cols,1 + j + cols)
+            dimshow(mod, **ima)
+            plt.subplot(rows,cols,1 + j + cols*2)
+            #dimshow(-chi, **imchi)
+            #dimshow(imgn, vmin=0, vmax=3)
+            dimshow(resid, nancolor='r')
+        plt.subplot(rows,cols, 4)
+        dimshow(get_rgb(imgs, bands))
+        plt.subplot(rows,cols, cols+4)
+        dimshow(get_rgb(mods, bands))
+        plt.subplot(rows,cols, cols*2+4)
+        dimshow(get_rgb(resids, bands, mnmx=(-10,10)))
+
+        mnmx = -5,300
+        kwa = dict(mnmx=mnmx, arcsinh=1)
+        plt.subplot(rows,cols, 5)
+        print
+        print 'RGB image'
+        dimshow(get_rgb(imgs, bands, **kwa))
+        plt.subplot(rows,cols, cols+5)
+        print
+        print 'RGB model'
+        dimshow(get_rgb(mods, bands, **kwa))
+        print
+        plt.subplot(rows,cols, cols*2+5)
+        mnmx = -100,100
+        kwa = dict(mnmx=mnmx, arcsinh=1)
+        dimshow(get_rgb(resids, bands, **kwa))
+        ps.savefig()
+
+    # Plot per-image chis
+    cols = max(len(v) for v in chis.values())
+    rows = len(bands)
+    for i in range(len(mods)):
+        plt.clf()
+        for row,band in enumerate(bands):
+            sp0 = 1 + cols*row
+            for col,cc in enumerate(chis[band]):
+                chi = cc[i]
+                plt.subplot(rows, cols, sp0 + col)
+                plt.imshow(-chi, **imchi)
+        ps.savefig()
+
+
+def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
-           rgbim=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None,
@@ -815,24 +888,19 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             cat.thawParams(i)
             print cat[i]
             
-        print 'Fitting:'
-        tractor.printThawedParams()
-
-        if plots:
-            # before-n-after plots
-            mod0 = [tractor.getModelImage(tim) for tim in tims]
         print 'Initial chi-squared:', tractor.getLogLikelihood()
 
         # blob bbox in target coords
         sy,sx = bslc
         y0,y1 = sy.start, sy.stop
         x0,x1 = sx.start, sx.stop
+        blobh,blobw = y1 - y0, x1 - x0
 
         rr,dd = targetwcs.pixelxy2radec([x0,x0,x1,x1],[y0,y1,y1,y0])
 
         ###
         # FIXME -- We create sub-image for each blob here.
-        # What wo don't do, though, is mask out the invvar pixels
+        # What we don't do, though, is mask out the invvar pixels
         # that are within the blob bounding-box but not within the
         # blob itself.  Does this matter?
         ###
@@ -871,12 +939,29 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
                            sky=tim.getSky(), name=tim.name)
+            subtim.band = tim.band
+
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
+                               (Yo >=  y0) * (Yo <  y1) * (Xo >=  x0) * (Xo <  x1))
+            Yo = Yo[I] - y0
+            Xo = Xo[I] - x0
+            Yi = Yi[I] - sy0
+            Xi = Xi[I] - sx0
+            subtim.resamp = (Yo, Xo, Yi, Xi)
+            subtim.sig1 = tim.sig1
+
+
             subtims.append(subtim)
             
         subtr = Tractor(subtims, cat)
         subtr.freezeParam('images')
         print 'Optimizing:', subtr
         subtr.printThawedParams()
+
+        if plots:
+            # before-n-after plots
+            mod0 = subtr.getModelImages()
 
         mod3 = None
         
@@ -923,7 +1008,7 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         #                 break
             
         if plots:
-            mod1 = [tractor.getModelImage(tim) for tim in tims]
+            mod1 = subtr.getModelImages()
         print 'First fit chi-squared:', tractor.getLogLikelihood()
 
         # Forced-photometer bands individually
@@ -934,7 +1019,6 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
                 cat[i].thawPathsTo(band)
             #cat.thawPathsTo(band)
             bandtims = []
-            #for tim in tims:
             for tim in subtims:
                 if tim.band == band:
                     bandtims.append(tim)
@@ -950,103 +1034,94 @@ def stage1(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
 
         if plots:
-            mod2 = [tractor.getModelImage(tim) for tim in tims]
+            mod2 = subtr.getModelImages()
 
             if mod3 is None:
                 mods = [mod0, mod1, mod2]
             else:
                 mods = [mod0, mod1, mod3, mod2]
 
-            rgbmods = [np.zeros((H,W,3)) for m in mods]
-            subims = [[] for m in mods]
-            chis = dict([(b,[]) for b in bands])
-            
-            for iband,band in enumerate(bands):
-                coimg = coimgs[iband]
-                comods = [np.zeros((H,W)) for m in mods]
-                cochis = [np.zeros((H,W)) for m in mods]
-                for itim,tim in enumerate(tims):
-                    if tim.band != band:
-                        continue
-                    (Yo,Xo,Yi,Xi) = tim.resamp
-                    rechi = np.zeros((H,W))
-                    chilist = []
-                    for imod,mod in enumerate(mods):
-                        chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
-                               tim.getInvError()[Yi,Xi])
-                        rechi[Yo,Xo] = chi
-                        chilist.append(rechi[bslc].copy())
-                        cochis[imod][Yo,Xo] += chi
-                        comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
-                    chis[band].append(chilist)
-                    mn,mx = tim.zr
-    
-                for comod in comods:
-                    comod /= np.maximum(con, 1)
-                ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-                           vmin=mn, vmax=mx)
-                c = 2-iband
-                for i,rgbmod in enumerate(rgbmods):
-                    rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
-                for subim,comod,cochi in zip(subims, comods, cochis):
-                    subim.append((coimg[bslc], comod[bslc], ima, cochi[bslc]))
-    
-            # Plot per-band chi coadds, and RGB images for before & after
-            for subim, rgbm in zip(subims, rgbmods):
-                plt.clf()
-                for j,(im,m,ima,chi) in enumerate(subim):
-                    plt.subplot(3,4,1 + j + 0)
-                    plt.imshow(im, **ima)
-                    plt.subplot(3,4,1 + j + 4)
-                    plt.imshow(m, **ima)
-                    plt.subplot(3,4,1 + j + 8)
-                    plt.imshow(-chi, **imchi)
-                plt.subplot(3,4,4)
-                plt.imshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]), **imx)
-                plt.subplot(3,4,8)
-                plt.imshow(np.dstack([rgbm[:,:,c][bslc] for c in [0,1,2]]), **imx)
-                plt.subplot(3,4,12)
-                plt.imshow(rgbim, **imx)
-                ax = plt.axis()
-                plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
-                plt.axis(ax)
-                ps.savefig()
-    
-            # Plot per-image chis
-            cols = max(len(v) for v in chis.values())
-            rows = len(bands)
-            for i in range(len(mods)):
-                plt.clf()
-                for row,band in enumerate(bands):
-                    sp0 = 1 + cols*row
-                    for col,cc in enumerate(chis[band]):
-                        chi = cc[i]
-                        plt.subplot(rows, cols, sp0 + col)
-                        plt.imshow(-chi, **imchi)
-                ps.savefig()
+            _plot_mods(subtims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps)
 
+            # subims = [[] for m in mods]
+            # chis = dict([(b,[]) for b in bands])
+            # for iband,band in enumerate(bands):
+            #     comods = [np.zeros((H,W)) for m in mods]
+            #     #comodns = [np.zeros((H,W)) for m in mods]
+            #     cochis = [np.zeros((H,W)) for m in mods]
+            #     for itim,tim in enumerate(tims):
+            #         if tim.band != band:
+            #             continue
+            #         (Yo,Xo,Yi,Xi) = tim.resamp
+            #         rechi = np.zeros((H,W))
+            #         chilist = []
+            #         for imod,mod in enumerate(mods):
+            #             chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
+            #                    tim.getInvError()[Yi,Xi])
+            #             rechi[Yo,Xo] = chi
+            #             chilist.append(rechi[bslc].copy())
+            #             cochis[imod][Yo,Xo] += chi
+            #             comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
+            #         chis[band].append(chilist)
+            #         mn,mx = tim.zr
+            # 
+            #     for comod in comods:
+            #         comod /= np.maximum(con, 1)
+            #     ima = dict(vmin=mn, vmax=mx)
+            #     for subim,comod,cochi in zip(subims, comods, cochis):
+            #         subim.append((coimg[bslc], comod[bslc], ima, cochi[bslc]))
+            # 
+            # # Plot per-band chi coadds, and RGB images for before & after
+            # for subim in subims:
+            #     plt.clf()
+            #     imgs = []
+            #     mods = []
+            #     for j,(img,mod,ima,chi) in enumerate(subim):
+            #         imgs.append(img)
+            #         mods.append(mod)
+            #         plt.subplot(3,4,1 + j + 0)
+            #         dimshow(img, **ima)
+            #         plt.subplot(3,4,1 + j + 4)
+            #         dimshow(mod, **ima)
+            #         plt.subplot(3,4,1 + j + 8)
+            #         plt.imshow(-chi, **imchi)
+            #     plt.subplot(3,4,4)
+            #     dimshow(get_rgb(imgs, bands))
+            #     plt.subplot(3,4,8)
+            #     dimshow(get_rgb(mods, bands))
+            #     plt.subplot(3,4,12)
+            #     dimshow(get_rgb(coimgs,bands))
+            #     ax = plt.axis()
+            #     plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
+            #     plt.axis(ax)
+            #     ps.savefig()
+            # 
+            # # Plot per-image chis
+            # cols = max(len(v) for v in chis.values())
+            # rows = len(bands)
+            # for i in range(len(mods)):
+            #     plt.clf()
+            #     for row,band in enumerate(bands):
+            #         sp0 = 1 + cols*row
+            #         for col,cc in enumerate(chis[band]):
+            #             chi = cc[i]
+            #             plt.subplot(rows, cols, sp0 + col)
+            #             plt.imshow(-chi, **imchi)
+            #     ps.savefig()
 
     rtn = dict()
-    for k in ['tractor','tims']:
+    for k in ['tractor','tims','ps']:
         rtn[k] = locals()[k]
     return rtn
-
 
 class BrightPointSource(PointSource):
     def _getPsf(self, img):
         return img.brightPsf
-        #return img.getBrightPsf()
     def getSourceType(self):
         return 'BrightPointSource'
 
-# class BrightPsfImage(Image):
-#     def getBrightPsf(self):
-#         return self.brightPsf
-
-
-def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
-           rgbim=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None,
@@ -1095,7 +1170,6 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
 
         if i in ibright and isinstance(src, PointSource):
             bcat.append(BrightPointSource(src.pos, src.brightness))
-
         else:
             bcat.append(src)
     bcat = Catalog(*bcat)
@@ -1166,6 +1240,16 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             subtim.extent = (sx0, sx1, sy0, sy1)
             subtim.band = tim.band
 
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
+                               (Yo >= by0) * (Yo < by1) * (Xo >= bx0) * (Xo < bx1))
+            Yo = Yo[I] - by0
+            Xo = Xo[I] - bx0
+            Yi = Yi[I] - sy0
+            Xi = Xi[I] - sx0
+            subtim.resamp = (Yo, Xo, Yi, Xi)
+            subtim.sig1 = tim.sig1
+
             subtim.brightPsf = PixelizedPsfEx(tim.psfex, ox0 + sx0, oy0 + sy0)
             #subtim.brightPsf = PixelizedPSF(psfimg)
             #subtim.brightPsf = GaussianMixturePSF.fromStamp(psfimg, N=5)
@@ -1178,6 +1262,9 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         subtr.printThawedParams()
 
         if plots:
+            otractor = Tractor(subtims, cat)
+            modx = otractor.getModelImages()
+
             # before-n-after plots
             mod0 = subtr.getModelImages()
         print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
@@ -1226,100 +1313,11 @@ def stage2(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
             mod2 = subtr.getModelImages()
 
         if plots:
-            mods = [mod0, mod1, mod2]
-
-            myrgbim = np.zeros((blobh,blobw,3))
-            rgbmods = [np.zeros((blobh,blobw,3)) for m in mods]
-            rgbresids = [np.zeros((blobh,blobw,3)) for m in mods]
-            subims = [[] for m in mods]
-            chis = dict([(b,[]) for b in bands])
-            for iband,band in enumerate(bands):
-                coimg = coimgs[iband][bslc]
-                comods = [np.zeros((blobh,blobw)) for m in mods]
-                cochis = [np.zeros((blobh,blobw)) for m in mods]
-                for itim,subtim in enumerate(subtims):
-                    if subtim.band != band:
-                        continue
-                    (Yo,Xo,Yi,Xi) = tims[itim].resamp
-                    (sx0, sx1, sy0, sy1) = subtim.extent
-                    I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) *
-                                       (Xi >= sx0) * (Xi < sx1) *
-                                       (Yo >= by0) * (Yo < by1) *
-                                       (Xo >= bx0) * (Xo < bx1))
-                    Yo = Yo[I] - by0
-                    Xo = Xo[I] - bx0
-                    Yi = Yi[I] - sy0
-                    Xi = Xi[I] - sx0
-                    rechi = np.zeros((blobh,blobw))
-                    chilist = []
-                    for imod,mod in enumerate(mods):
-                        chi = ((subtim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
-                               subtim.getInvError()[Yi,Xi])
-                        rechi[Yo,Xo] = chi
-                        chilist.append(rechi.copy())
-                        cochis[imod][Yo,Xo] += chi
-                        comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
-                    chis[band].append(chilist)
-                    mn,mx = tims[itim].zr
-                    print 'band', band, 'mn,mx', mn,mx
-                    sig1 = tims[itim].sig1
-                    print 'sig1', sig1
-                    #tim.zr = [-3. * sig1, 10. * sig1]
-                    mn,mx = -10.*sig1, 30.*sig1
-                    
-                for comod in comods:
-                    comod /= np.maximum(con[bslc], 1)
-                ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-                           vmin=mn, vmax=mx)
-                c = 2-iband
-                for i,(rgbmod,rgbresid) in enumerate(zip(rgbmods, rgbresids)):
-                    rgbmod[:,:,c] = np.clip((comods[i]  - mn) / (mx - mn), 0., 1.)
-                    rgbresid[:,:,c] = np.clip((coimg - comods[i]  - mn) / (mx - mn), 0., 1.)
-                myrgbim[:,:,c] = np.clip((coimg - mn) / (mx - mn), 0., 1.)
-                for subim,comod,cochi in zip(subims, comods, cochis):
-                    subim.append((coimg, comod, ima, cochi))
-    
-            # Plot per-band chi coadds, and RGB images for before & after
-            for subim, rgbmod, rgbresid in zip(subims, rgbmods, rgbresids):
-                plt.clf()
-                for j,(im,m,ima,chi) in enumerate(subim):
-                    plt.subplot(3,4,1 + j + 0)
-                    plt.imshow(im, **ima)
-                    plt.subplot(3,4,1 + j + 4)
-                    plt.imshow(m, **ima)
-                    plt.subplot(3,4,1 + j + 8)
-                    plt.imshow(-chi, **imchi)
-                plt.subplot(3,4,4)
-                #dimshow(np.dstack([rgbim[:,:,c][bslc] for c in [0,1,2]]))
-                dimshow(myrgbim)
-                plt.subplot(3,4,8)
-                #dimshow(np.dstack([rgbmod[:,:,c] for c in [0,1,2]]))
-                dimshow(rgbmod)
-                plt.subplot(3,4,12)
-                dimshow(rgbresid)
-                #plt.subplot(3,4,12)
-                #dimshow(rgbim)
-                #ax = plt.axis()
-                #plt.plot([bx0,bx1,bx1,bx0,bx0],[by0,by0,by1,by1,by0],'r-')
-                #plt.axis(ax)
-                ps.savefig()
-    
-            # Plot per-image chis
-            cols = max(len(v) for v in chis.values())
-            rows = len(bands)
-            for i in range(len(mods)):
-                plt.clf()
-                for row,band in enumerate(bands):
-                    sp0 = 1 + cols*row
-                    for col,cc in enumerate(chis[band]):
-                        chi = cc[i]
-                        plt.subplot(rows, cols, sp0 + col)
-                        plt.imshow(-chi, **imchi)
-                ps.savefig()
-
+            mods = [modx, mod0, mod1, mod2]
+            _plot_mods(subtims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps)
 
     rtn = dict()
-    for k in ['tractor','tims', 'bcat']:
+    for k in ['tractor','tims', 'bcat', 'ps']:
         rtn[k] = locals()[k]
     return rtn
 
