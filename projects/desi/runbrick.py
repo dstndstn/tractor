@@ -279,9 +279,10 @@ def stage0(**kwargs):
 
     # brick index...
     # One near the middle
-    ii = 377305
+    brickid = 377306
     # One near the edge and with little overlap
-    #ii = 380155
+    #brickid = 380156
+    ii = np.flatnonzero(B.brickid == brickid)[0]
     brick = B[ii]
     print 'Chosen brick:'
     brick.about()
