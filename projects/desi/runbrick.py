@@ -16,7 +16,7 @@ from scipy.ndimage.morphology import binary_dilation, binary_closing
 from astrometry.util.fits import fits_table,merge_tables
 from astrometry.util.plotutils import PlotSequence, dimshow
 from astrometry.util.miscutils import clip_polygon
-from astrometry.util.resample import resample_with_wcs
+from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 
 # from astrometry.util.file import *
@@ -56,8 +56,7 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     for im,band in zip(imgs, bands):
         plane,scale = scales[band]
         rgb[:,:,plane] = (im / scale).astype(np.float32)
-
-        print 'rgb: plane', plane, 'range', rgb[:,:,plane].min(), rgb[:,:,plane].max()
+        #print 'rgb: plane', plane, 'range', rgb[:,:,plane].min(), rgb[:,:,plane].max()
 
     if mnmx is None:
         mn,mx = -3, 10
@@ -266,7 +265,7 @@ def get_sdss_sources(bands, targetwcs, W, H):
     cat = Catalog(*srcs)
     return cat, objs
 
-def stage0(**kwargs):
+def stage0(W=3600, H=3600, **kwargs):
     ps = PlotSequence('brick')
     t0 = tlast = Time()
 
@@ -286,9 +285,6 @@ def stage0(**kwargs):
     brick = B[ii]
     print 'Chosen brick:'
     brick.about()
-
-    W,H = 3600,3600
-    #W,H = 400,400
 
     bands = ['g','r','z']
     catband = 'r'
@@ -486,40 +482,14 @@ def stage0(**kwargs):
                        vmin=mn, vmax=mx)
         tims.append(tim)
 
-        # tractor = Tractor([tim], cat)
-        # plt.clf()
-        # plt.subplot(1,2,1)
-        # plt.imshow(tim.getImage(), **ima)
-        # mod = tractor.getModelImage(tim)
-        # plt.subplot(1,2,2)
-        # plt.imshow(mod, **ima)
-        # plt.suptitle(tim.name)
-        # ps.savefig()
-        # plt.clf()
-        # plt.imshow(invvar, interpolation='nearest', origin='lower')
-        # plt.colorbar()
-        # plt.title('weight map: ' + im.name)
-        # ps.savefig()
-        # 
-        # plt.clf()
-        # plt.hist(invvar.ravel(), 100)
-        # plt.xlabel('invvar')
-        # ps.savefig()
-
-        # plt.clf()
-        # plt.imshow(tim.getImage(), **ima)
-        # plt.suptitle(tim.name)
-        # ps.savefig()
-
     print 'Read images:', Time()-tlast
     tlast = Time()
 
     # save resampling params
     for tim in tims:
         wcs = tim.sip_wcs
-        x0,y0 = int(tim.x0),int(tim.y0)
         subh,subw = tim.shape
-        subwcs = wcs.get_subimage(x0, y0, subw, subh)
+        subwcs = wcs.get_subimage(tim.x0, tim.y0, subw, subh)
         tim.subwcs = subwcs
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
@@ -529,6 +499,16 @@ def stage0(**kwargs):
         if len(Yo) == 0:
             continue
         tim.resamp = (Yo,Xo,Yi,Xi)
+
+        # # Resampling the reverse direction
+        # try:
+        #     Yo,Xo,Yi,Xi,rims = resample_with_wcs(subwcs, targetwcs, [], 2)
+        # except OverlapError:
+        #     print 'No overlap'
+        #     continue
+        # if len(Yo) == 0:
+        #     continue
+        # tim.reverseresamp = (Yo,Xo,Yi,Xi)
 
     print 'Computing resampling:', Time()-tlast
     tlast = Time()
@@ -919,14 +899,9 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
         mnmx = -5,300
         kwa = dict(mnmx=mnmx, arcsinh=1)
         plt.subplot(rows,cols, 5)
-        print
-        print 'RGB image'
         dimshow(get_rgb(imgs, bands, **kwa))
         plt.subplot(rows,cols, cols+5)
-        print
-        print 'RGB model'
         dimshow(get_rgb(mods, bands, **kwa))
-        print
         plt.subplot(rows,cols, cols*2+5)
         mnmx = -100,100
         kwa = dict(mnmx=mnmx, arcsinh=1)
@@ -975,23 +950,35 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
         # blob bbox in target coords
         sy,sx = bslc
-        y0,y1 = sy.start, sy.stop
-        x0,x1 = sx.start, sx.stop
-        blobh,blobw = y1 - y0, x1 - x0
+        by0,by1 = sy.start, sy.stop
+        bx0,bx1 = sx.start, sx.stop
+        blobh,blobw = by1 - by0, bx1 - bx0
 
-        rr,dd = targetwcs.pixelxy2radec([x0,x0,x1,x1],[y0,y1,y1,y0])
-
-        ###
-        # FIXME -- We create sub-images for each blob here.
-        # What we don't do, though, is mask out the invvar pixels
-        # that are within the blob bounding-box but not within the
-        # blob itself.  Does this matter?
-        ###
+        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
 
         alphas = [0.1, 0.3, 1.0]
-        
+
+        if plots and False:
+            imgs = [coimgs[i][bslc] for i in range(len(bands))]
+            rgb = get_rgb(imgs, bands)
+            rgb1 = rgb.copy()
+            for i,cc in enumerate([0,1,0]):
+                rgb[:,:,i][blobs[bslc] != (iblob+1)] = cc
+            plt.clf()
+            plt.subplot(1,3,1)
+            dimshow(rgb1)
+            plt.subplot(1,3,2)
+            dimshow(blobs[bslc] == (iblob+1))
+            plt.subplot(1,3,3)
+            dimshow(rgb)
+            plt.suptitle('blob (target coords)')
+            ps.savefig()
+
+        tlast = Time()
         subtims = []
         for itim,tim in enumerate(tims):
+            ttim = Time()
+
             h,w = tim.shape
             ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
             sx0,sx1 = x.min(), x.max()
@@ -1011,13 +998,53 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
+            print 'tim clip:', Time()-ttim
+            ttim = Time()
+
+            # Mask out invvar for pixels that are not within the blob.
+            subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
+            subsubwcs = tim.subwcs.get_subimage(int(sx0), int(sy0), int(sx1-sx0), int(sy1-sy0))
+            try:
+                Yo,Xo,Yi,Xi,rims = resample_with_wcs(subsubwcs, subtarget, [], 2)
+            except OverlapError:
+                print 'No overlap'
+                continue
+            if len(Yo) == 0:
+                continue
+            subiv2 = np.zeros_like(subiv)
+            I = np.flatnonzero(blobs[bslc][Yi, Xi] == (iblob+1))
+            subiv2[Yo[I],Xo[I]] = subiv[Yo[I],Xo[I]]
+            subiv = subiv2
+
+            print 'tim mask iv:', Time()-ttim
+            ttim = Time()
+
+            if plots and False:
+                plt.clf()
+                plt.subplot(1,2,1)
+                dimshow(subimg)
+                plt.subplot(1,2,2)
+                dimshow(subiv)
+                plt.suptitle('blob (subtim)')
+                ps.savefig()
+
             # FIXME --
             #subpsf = tim.psfex.mogAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.)
             #subpsf = tim.getPsf()
 
+
+            ttim = Time()
+
             psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
                                              nativeScale=True)
+
+            print 'tim instantiate PSF:', Time()-ttim
+            ttim = Time()
+
             subpsf = GaussianMixturePSF.fromStamp(psfimg)
+
+            print 'tim fit PSF:', Time()-ttim
+            ttim = Time()
 
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
@@ -1026,138 +1053,128 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
             (Yo,Xo,Yi,Xi) = tim.resamp
             I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
-                               (Yo >=  y0) * (Yo <  y1) * (Xo >=  x0) * (Xo <  x1))
-            Yo = Yo[I] - y0
-            Xo = Xo[I] - x0
+                               (Yo >=  by0) * (Yo <  by1) * (Xo >=  bx0) * (Xo <  bx1))
+            Yo = Yo[I] - by0
+            Xo = Xo[I] - bx0
             Yi = Yi[I] - sy0
             Xi = Xi[I] - sx0
             subtim.resamp = (Yo, Xo, Yi, Xi)
             subtim.sig1 = tim.sig1
 
+            print 'tim resamp:', Time()-ttim
 
             subtims.append(subtim)
 
-        subtr = Tractor(subtims, cat)
+        print 'subtims:', Time()-tlast
+        #tlast = Time()
+
+        subcat = Catalog(*[cat[i] for i in Isrcs])
+        subtr = Tractor(subtims, subcat)
         subtr.freezeParam('images')
 
         if plots:
-            # before-n-after plots
-            mod0 = subtr.getModelImages()
+            mods = []
+            modnames = []
+            mods.append(subtr.getModelImages())
+            modnames.append('Initial')
         print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
-
-        mod3 = None
 
         # Optimize individual sources in order of flux
         fluxes = []
-        for i in Isrcs:
-            br = cat[i].getBrightness()
+        for src in subcat:
             # HACK -- here we just *sum* the nanomaggies in each band.  Bogus!
+            br = src.getBrightness()
             flux = sum([br.getFlux(band) for band in bands])
             fluxes.append(flux)
-        Ibright = Isrcs[np.argsort(-np.array(fluxes))]
-        cat.freezeAllParams()
+        Ibright = np.argsort(-np.array(fluxes))
+        subcat.freezeAllParams()
         for i in Ibright:
             tsrc = Time()
             print 'Fitting source', i
-            print cat[i]
-            cat.freezeAllBut(i)
+            print subcat[i]
+            subcat.freezeAllBut(i)
             print 'Optimizing:', subtr
             subtr.printThawedParams()
-            for step in range(5):
+            for step in range(10):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print 'dlnp:', dlnp
                 if dlnp < 0.1:
                     break
             print 'Fitting source took', Time()-tsrc
-            print cat[i]
+            print subcat[i]
 
         if plots:
-            modS = subtr.getModelImages()
+            mods.append(subtr.getModelImages())
+            modnames.append('Per Source')
         print 'Sub-image individual-source fit lnlikelihood:', subtr.getLogLikelihood()
 
-        # Optimize all at once?
-        cat.freezeAllParams()
-        print 'Fitting:'
-        for i in Isrcs:
-            cat.thawParams(i)
-            print cat[i]
-        print 'Optimizing:', subtr
-        subtr.printThawedParams()
-        
-        for step in range(10):
-            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                          alphas=alphas)
-            print 'dlnp:', dlnp
-            if dlnp == 0.0 and plots and False:
-                # Borked -- take the step and render the models.
-                p0 = subtr.getParams()
-                subtr.setParams(p0 + X)
-                mod3 = [tractor.getModelImage(tim) for tim in tims]
-                subtr.setParams(p0)
+        if len(Isrcs) > 1:
+            # Optimize all at once?
+            subcat.thawAllParams()
+            print 'Optimizing:', subtr
+            subtr.printThawedParams()
+            for step in range(10):
+                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print 'dlnp:', dlnp
+                if dlnp == 0.0 and plots and False:
+                    # Borked -- take the step and render the models.
+                    p0 = subtr.getParams()
+                    subtr.setParams(p0 + X)
+                    mods.append(subtr.getModelImages())
+                    modnames.append('Borked')
+                    subtr.setParams(p0)
+                    derivs = subtr.getDerivs()
+                    for i,(paramname,derivlist) in enumerate(zip(subtr.getParamNames(), derivs)):
+                        if len(derivlist) == 0:
+                            continue
+                        plt.clf()
+                        n = len(derivlist)
+                        cols = int(np.ceil(np.sqrt(n)))
+                        rows = int(np.ceil(float(n) / cols))
+                        for j,(deriv,tim) in enumerate(derivlist):
+                            plt.subplot(rows,cols, j+1)
+                            plt.imshow(deriv.patch, cmap='RdBu', **imx)
+                            plt.colorbar()
+                            plt.title(tim.name)
+                        plt.suptitle('Borked optimization: derivs for ' + paramname)
+                        ps.savefig()
+                if dlnp < 0.1:
+                    break
 
-                derivs = subtr.getDerivs()
-                for i,(paramname,derivlist) in enumerate(zip(subtr.getParamNames(), derivs)):
-                    if len(derivlist) == 0:
-                        continue
-                    plt.clf()
-                    n = len(derivlist)
-                    cols = int(np.ceil(np.sqrt(n)))
-                    rows = int(np.ceil(float(n) / cols))
-                    for j,(deriv,tim) in enumerate(derivlist):
-                        plt.subplot(rows,cols, j+1)
-                        plt.imshow(deriv.patch, cmap='RdBu', **imx)
-                        plt.colorbar()
-                        plt.title(tim.name)
-                    plt.suptitle('Borked optimization: derivs for ' + paramname)
-                    ps.savefig()
-
-            if dlnp < 0.1:
-                break
-
-        if plots:
-            mod1 = subtr.getModelImages()
-        print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
-        #print 'First fit chi-squared:', tractor.getLogLikelihood()
+            if plots:
+                mods.append(subtr.getModelImages())
+                modnames.append('All Sources')
+            print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
 
         # Forced-photometer bands individually
         for band in bands:
-            cat.freezeAllRecursive()
-            for i in Isrcs:
-                cat.thawParam(i)
-                cat[i].thawPathsTo(band)
-            #cat.thawPathsTo(band)
+            subcat.freezeAllRecursive()
+            subcat.thawPathsTo(band)
             bandtims = []
             for tim in subtims:
                 if tim.band == band:
                     bandtims.append(tim)
             print
             print 'Fitting', band, 'band:'
-            btractor = Tractor(bandtims, cat)
+            btractor = Tractor(bandtims, subcat)
             btractor.freezeParam('images')
             btractor.printThawedParams()
             B = 8
             X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
                                                     BW=B, BH=B, wantims=False)
-        cat.thawAllRecursive()
-        #print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
+        subcat.thawAllRecursive()
         print 'Forced-phot lnlikelihood:', subtr.getLogLikelihood()
 
         if plots:
-            mod2 = subtr.getModelImages()
+            mods.append(subtr.getModelImages())
+            modnames.append('Forced phot')
 
-            if mod3 is None:
-                mods = [mod0, modS, mod1, mod2]
-                tt = ['initial', 'single sources', 'all sources', 'per band']
-            else:
-                mods = [mod0, modS, mod1, mod3, mod2]
-                tt = ['initial', 'single sources', 'all sources', 'borked', 'per band']
-
-            _plot_mods(subtims, mods, tt, bands, coimgs, cons, bslc, blobw, blobh, ps)
+            _plot_mods(subtims, mods, modnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
 
             if blobnumber >= 10:
                 plots = False
-
 
         print 'Blob', blobnumber, 'finished:', Time()-tlast
         tlast = Time()
@@ -1547,6 +1564,9 @@ if __name__ == '__main__':
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='runbrick-s%03i.pickle')
 
+    parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
+    parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
+
     opt,args = parser.parse_args()
 
     Time.add_measurement(MemMeas)
@@ -1567,5 +1587,5 @@ if __name__ == '__main__':
     opt.force.append(opt.stage)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-             prereqs=prereqs, plots=opt.plots)
+             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H)
     
