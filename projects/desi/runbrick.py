@@ -937,6 +937,16 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
     tlast = Time()
 
+    # Fit a MoG PSF model to the PSF in the middle of each tim.
+    initial_psf_mog = []
+    for itim,tim in enumerate(tims):
+        ox0,oy0 = orig_wcsxy0[itim]
+        h,w = tim.shape
+        psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=10000)
+        initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
+
+
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
         bslc  = blobslices[iblob]
@@ -1041,7 +1051,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             print 'tim instantiate PSF:', Time()-ttim
             ttim = Time()
 
-            subpsf = GaussianMixturePSF.fromStamp(psfimg)
+            subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
 
             print 'tim fit PSF:', Time()-ttim
             ttim = Time()

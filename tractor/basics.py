@@ -1378,20 +1378,20 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
                   emsteps=1000):
         '''
-        optional P0 = (w,mu,sig): initial parameter guess.
+        optional P0 = (w,mu,var): initial parameter guess.
 
         w has shape (N,)
         mu has shape (N,2)
-        sig (actually variance!) has shape (N,2,2)
+        var (variance) has shape (N,2,2)
 
         optional xy0 = int x0,y0 origin of stamp.
         '''
         from emfit import em_fit_2d, em_fit_2d_reg
         from fitpsf import em_init_params
         if P0 is not None:
-            w,mu,sig = P0
+            w,mu,var = P0
         else:
-            w,mu,sig = em_init_params(N, None, None, None)
+            w,mu,var = em_init_params(N, None, None, None)
         stamp = stamp.copy()
         stamp /= stamp.sum()
         stamp = np.maximum(stamp, 0)
@@ -1399,8 +1399,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
         else:
             xm, ym = xy0
-        em_fit_2d_reg(stamp, xm, ym, w, mu, sig, alpha, emsteps)
-        tpsf = GaussianMixturePSF(w, mu, sig)
+        em_fit_2d_reg(stamp, xm, ym, w, mu, var, alpha, emsteps)
+        tpsf = GaussianMixturePSF(w, mu, var)
         return tpsf
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):

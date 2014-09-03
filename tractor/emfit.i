@@ -339,29 +339,28 @@
             double wsum[K];
             double qsum = 0.0;
 
-            /*
-            printf("step=%i\n", step);
-            printf("weights ");
-            for (k=0; k<K; k++)
-                printf("%g ", amp[k]);
-            printf("\n");
-            printf("means ");
-            for (k=0; k<K; k++) {
-                printf("[ ");
-                for (d=0; d<D; d++)
-                    printf("%g ", mean[k*D+d]);
-                printf("] ");
+            {
+                int d;
+                printf("step=%i: ", step);
+                printf("w=[");
+                for (k=0; k<K; k++)
+                    printf("%g ", amp[k]);
+                printf("], mu=[");
+                for (k=0; k<K; k++) {
+                    printf("[");
+                    for (d=0; d<D; d++)
+                        printf("%s%g", (d?" ":""), mean[k*D+d]);
+                    printf("], ");
+                }
+                printf("], var=[");
+                for (k=0; k<K; k++) {
+                    printf("[ ");
+                    for (d=0; d<D*D; d++)
+                        printf("%s%g", (d?" ":""), var[k*D*D+d]);
+                    printf("], ");
+                }
+                printf("]\n");
             }
-            printf("\n");
-            printf("vars ");
-            for (k=0; k<K; k++) {
-                printf("[ ");
-                for (d=0; d<D*D; d++)
-                    printf("%g ", var[k*D*D+d]);
-                printf("] ");
-            }
-            printf("\n");
-             */
 
             memset(Z, 0, K*N*sizeof(double));
             for (k=0; k<K; k++) {
