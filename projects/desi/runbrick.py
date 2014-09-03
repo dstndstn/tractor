@@ -23,6 +23,7 @@ from astrometry.libkd.spherematch import match_radec
 # from astrometry.util.util import *
 # from astrometry.util.starutil_numpy import *
 
+from astrometry.util.ttime import Time, MemMeas
 from astrometry.sdss.fields import read_photoobjs_in_wcs
 from astrometry.sdss import DR9
 
@@ -267,24 +268,33 @@ def get_sdss_sources(bands, targetwcs, W, H):
 
 def stage0(**kwargs):
     ps = PlotSequence('brick')
+    t0 = tlast = Time()
 
     decals = Decals()
 
     B = decals.get_bricks()
+
+    print 'Bricks:'
+    B.about()
+
     # brick index...
     # One near the middle
     ii = 377305
     # One near the edge and with little overlap
     #ii = 380155
     brick = B[ii]
+    print 'Chosen brick:'
+    brick.about()
 
-    #W,H = 3600,3600
-    W,H = 400,400
+    W,H = 3600,3600
+    #W,H = 400,400
 
     bands = ['g','r','z']
     catband = 'r'
 
     targetwcs = wcs_for_brick(brick, W=W, H=H)
+    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
 
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
@@ -303,6 +313,59 @@ def stage0(**kwargs):
             im = DecamImage(t)
             ims.append(im)
 
+    # Check that the CCDs_touching cuts are correct.
+    if False:
+        #from astrometry.blind.plotstuff import Plotstuff
+        #plot = Plotstuff(outformat='png', size=(800,800), ra=brick.ra, dec=brick.dec,
+        #                 width=pixscale*W)
+        T2 = decals.get_ccds()
+
+        T3 = T2[ccds_touching_wcs(targetwcs, T2, polygons=False)]
+        T4 = T2[ccds_touching_wcs(targetwcs, T2)]
+        print len(T3), 'on RA,Dec box'
+        print len(T4), 'polygon'
+        ccmap = dict(r='r', g='g', z='m')
+        for band in bands:
+
+            plt.clf()
+
+            TT2 = T3[T3.filter == band]
+            print len(TT2), 'in', band, 'band'
+            plt.plot(TT2.ra, TT2.dec, 'o', color=ccmap[band], alpha=0.5)
+
+            for t in TT2:
+                im = DecamImage(t)
+
+                run_calibs(im, brick.ra, brick.dec, pixscale, morph=False, se2=False,
+                           psfex=False)
+
+                wcs = im.read_wcs()
+                r,d = wcs.pixelxy2radec([1,1,t.width,t.width,1], [1,t.height,t.height,1,1])
+                plt.plot(r, d, '-', color=ccmap[band], alpha=0.3, lw=2)
+
+            TT2 = T4[T4.filter == band]
+            print len(TT2), 'in', band, 'band; polygon'
+            plt.plot(TT2.ra, TT2.dec, 'x', color=ccmap[band], alpha=0.5, ms=15)
+
+            for t in TT2:
+                im = DecamImage(t)
+                wcs = im.read_wcs()
+                r,d = wcs.pixelxy2radec([1,1,t.width,t.width,1], [1,t.height,t.height,1,1])
+                plt.plot(r, d, '-', color=ccmap[band], lw=1.5)
+
+            TT2.about()
+
+            plt.plot(brick.ra, brick.dec, 'k.')
+            plt.plot(targetrd[:,0], targetrd[:,1], 'k-')
+            plt.xlabel('RA')
+            plt.ylabel('Dec')
+            ps.savefig()
+        sys.exit(0)
+
+
+    print 'Finding images touching brick:', Time()-tlast
+    tlast = Time()
+
     args = []
     for im in ims:
         if mp is not None:
@@ -312,13 +375,16 @@ def stage0(**kwargs):
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
+    print 'Calibrations:', Time()-tlast
+    tlast = Time()
+
     #check_photometric_calib(ims, cat, ps)
     #cat,T = get_se_sources(ims, catband, targetwcs, W, H)
 
     cat,T = get_sdss_sources(bands, targetwcs, W, H)
 
-    targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-                         [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+    print 'SDSS sources:', Time()-tlast
+    tlast = Time()
 
     # record coordinates in target brick image
     ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
@@ -348,7 +414,7 @@ def stage0(**kwargs):
         tpoly = zip(tx,ty)
         clip = clip_polygon(imgpoly, tpoly)
         clip = np.array(clip)
-        print 'Clip', clip
+        #print 'Clip', clip
         if len(clip) == 0:
             continue
         x0,y0 = np.floor(clip.min(axis=0)).astype(int)
@@ -444,6 +510,9 @@ def stage0(**kwargs):
         # plt.suptitle(tim.name)
         # ps.savefig()
 
+    print 'Read images:', Time()-tlast
+    tlast = Time()
+
     # save resampling params
     for tim in tims:
         wcs = tim.sip_wcs
@@ -460,12 +529,15 @@ def stage0(**kwargs):
             continue
         tim.resamp = (Yo,Xo,Yi,Xi)
 
+    print 'Computing resampling:', Time()-tlast
+    tlast = Time()
+
     # Produce per-band coadds, for plots
     coimgs = []
     cons = []
     for ib,band in enumerate(bands):
-        coimg = np.zeros((H,W))
-        con   = np.zeros((H,W))
+        coimg = np.zeros((H,W), np.float32)
+        con   = np.zeros((H,W), np.uint8)
         for tim in tims:
             if tim.band != band:
                 continue
@@ -477,9 +549,12 @@ def stage0(**kwargs):
         coimgs.append(coimg)
         cons  .append(con)
 
+    print 'Coadds:', Time()-tlast
+    tlast = Time()
+
     # Render the detection maps
-    detmaps = dict([(b, np.zeros((H,W))) for b in bands])
-    detivs  = dict([(b, np.zeros((H,W))) for b in bands])
+    detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
+    detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     for tim in tims:
         iv = tim.getInvvar()
         psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
@@ -488,19 +563,22 @@ def stage0(**kwargs):
         detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
         detsig1 = tim.sig1 / psfnorm
         subh,subw = tim.shape
-        detiv = np.zeros((subh,subw)) + (1. / detsig1**2)
+        detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
         detiv[iv == 0] = 0.
         (Yo,Xo,Yi,Xi) = tim.resamp
         detmaps[tim.band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
         detivs [tim.band][Yo,Xo] += detiv[Yi,Xi]
+
+    print 'Detmaps:', Time()-tlast
+    tlast = Time()
 
     # -find significant peaks in the per-band detection maps and SED-matched (hot)
     # -segment into blobs
     # -blank out blobs containing a catalog source
     # -create sources for any remaining peaks
     hot = np.zeros((H,W), bool)
-    sedmap = np.zeros((H,W))
-    sediv  = np.zeros((H,W))
+    sedmap = np.zeros((H,W), np.float32)
+    sediv  = np.zeros((H,W), np.float32)
     for band in bands:
         detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
         detsn = detmap * np.sqrt(detivs[band])
@@ -557,7 +635,10 @@ def stage0(**kwargs):
     pki = np.flatnonzero(peaks)
     peaky,peakx = np.unravel_index(pki, peaks.shape)
     print len(peaky), 'peaks'
-    
+
+    print 'Peaks:', Time()-tlast
+    tlast = Time()
+
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
     ax = plt.axis()
@@ -616,6 +697,9 @@ def stage0(**kwargs):
         bslc = blobslices[blob-1]
         # not really 'flux' per se...
         blobflux.append(np.sum(sedsn[bslc][blobs[bslc] == blob]))
+
+    print 'Segmentation:', Time()-tlast
+    tlast = Time()
 
     if False:
         plt.clf()
@@ -770,7 +854,7 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         ps.savefig()
 
 
-def _plot_mods(tims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps):
+def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
     subims = [[] for m in mods]
     chis = dict([(b,[]) for b in bands])
     for iband,band in enumerate(bands):
@@ -804,7 +888,7 @@ def _plot_mods(tims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps):
             subim.append((coimg, coimgn, comod, ima, cochi))
 
     # Plot per-band image, model, and chi coadds, and RGB images
-    for subim in subims:
+    for i,subim in enumerate(subims):
         plt.clf()
         rows,cols = 3,5
         imgs = []
@@ -846,6 +930,7 @@ def _plot_mods(tims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps):
         mnmx = -100,100
         kwa = dict(mnmx=mnmx, arcsinh=1)
         dimshow(get_rgb(resids, bands, **kwa))
+        plt.suptitle(titles[i])
         ps.savefig()
 
     # Plot per-image chis
@@ -859,6 +944,7 @@ def _plot_mods(tims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps):
                 chi = cc[i]
                 plt.subplot(rows, cols, sp0 + col)
                 plt.imshow(-chi, **imchi)
+        plt.suptitle(titles[i])
         ps.savefig()
 
 
@@ -871,24 +957,20 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            plots=False,
            **kwargs):
 
-    #fitsio.write('rgb.fits', rgbim)
-
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
+    tlast = Time()
+
     # Fit in order of flux
-    for iblob in np.argsort(-np.array(blobflux)):
+    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
         if len(Isrcs) == 0:
             continue
 
-        cat.freezeAllParams()
-        print 'Fitting:'
-        for i in Isrcs:
-            cat.thawParams(i)
-            print cat[i]
-            
-        print 'Initial chi-squared:', tractor.getLogLikelihood()
+        print
+        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
+        print
 
         # blob bbox in target coords
         sy,sx = bslc
@@ -899,7 +981,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         rr,dd = targetwcs.pixelxy2radec([x0,x0,x1,x1],[y0,y1,y1,y0])
 
         ###
-        # FIXME -- We create sub-image for each blob here.
+        # FIXME -- We create sub-images for each blob here.
         # What we don't do, though, is mask out the invvar pixels
         # that are within the blob bounding-box but not within the
         # blob itself.  Does this matter?
@@ -953,23 +1035,60 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
 
             subtims.append(subtim)
-            
+
         subtr = Tractor(subtims, cat)
         subtr.freezeParam('images')
-        print 'Optimizing:', subtr
-        subtr.printThawedParams()
 
         if plots:
             # before-n-after plots
             mod0 = subtr.getModelImages()
+        print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
 
         mod3 = None
+
+        # Optimize individual sources in order of flux
+        fluxes = []
+        for i in Isrcs:
+            br = cat[i].getBrightness()
+            # HACK -- here we just *sum* the nanomaggies in each band.  Bogus!
+            flux = sum([br.getFlux(band) for band in bands])
+            fluxes.append(flux)
+        Ibright = Isrcs[np.argsort(-np.array(fluxes))]
+        cat.freezeAllParams()
+        for i in Ibright:
+            tsrc = Time()
+            print 'Fitting source', i
+            print cat[i]
+            cat.freezeAllBut(i)
+            print 'Optimizing:', subtr
+            subtr.printThawedParams()
+            for step in range(5):
+                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print 'dlnp:', dlnp
+                if dlnp < 0.1:
+                    break
+            print 'Fitting source took', Time()-tsrc
+            print cat[i]
+
+        if plots:
+            modS = subtr.getModelImages()
+        print 'Sub-image individual-source fit lnlikelihood:', subtr.getLogLikelihood()
+
+        # Optimize all at once?
+        cat.freezeAllParams()
+        print 'Fitting:'
+        for i in Isrcs:
+            cat.thawParams(i)
+            print cat[i]
+        print 'Optimizing:', subtr
+        subtr.printThawedParams()
         
         for step in range(10):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
             print 'dlnp:', dlnp
-            if dlnp == 0.0 and plots:
+            if dlnp == 0.0 and plots and False:
                 # Borked -- take the step and render the models.
                 p0 = subtr.getParams()
                 subtr.setParams(p0 + X)
@@ -995,21 +1114,10 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             if dlnp < 0.1:
                 break
 
-        # Try fitting sources one at a time?
-        # if len(Isrcs) > 1:
-        #     for i in Isrcs:
-        #         print 'Fitting source', i
-        #         cat.freezeAllBut(i)
-        #         for step in range(5):
-        #             dlnp,X,alpha = subtr.optimize(priors=False,
-        #                                           shared_params=False)
-        #             print 'dlnp:', dlnp
-        #             if dlnp < 0.1:
-        #                 break
-            
         if plots:
             mod1 = subtr.getModelImages()
-        print 'First fit chi-squared:', tractor.getLogLikelihood()
+        print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
+        #print 'First fit chi-squared:', tractor.getLogLikelihood()
 
         # Forced-photometer bands individually
         for band in bands:
@@ -1031,83 +1139,27 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
                                                     BW=B, BH=B, wantims=False)
         cat.thawAllRecursive()
-        print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
+        #print 'Forced-phot chi-squared:', tractor.getLogLikelihood()
+        print 'Forced-phot lnlikelihood:', subtr.getLogLikelihood()
 
         if plots:
             mod2 = subtr.getModelImages()
 
             if mod3 is None:
-                mods = [mod0, mod1, mod2]
+                mods = [mod0, modS, mod1, mod2]
+                tt = ['initial', 'single sources', 'all sources', 'per band']
             else:
-                mods = [mod0, mod1, mod3, mod2]
+                mods = [mod0, modS, mod1, mod3, mod2]
+                tt = ['initial', 'single sources', 'all sources', 'borked', 'per band']
 
-            _plot_mods(subtims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps)
+            _plot_mods(subtims, mods, tt, bands, coimgs, cons, bslc, blobw, blobh, ps)
 
-            # subims = [[] for m in mods]
-            # chis = dict([(b,[]) for b in bands])
-            # for iband,band in enumerate(bands):
-            #     comods = [np.zeros((H,W)) for m in mods]
-            #     #comodns = [np.zeros((H,W)) for m in mods]
-            #     cochis = [np.zeros((H,W)) for m in mods]
-            #     for itim,tim in enumerate(tims):
-            #         if tim.band != band:
-            #             continue
-            #         (Yo,Xo,Yi,Xi) = tim.resamp
-            #         rechi = np.zeros((H,W))
-            #         chilist = []
-            #         for imod,mod in enumerate(mods):
-            #             chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
-            #                    tim.getInvError()[Yi,Xi])
-            #             rechi[Yo,Xo] = chi
-            #             chilist.append(rechi[bslc].copy())
-            #             cochis[imod][Yo,Xo] += chi
-            #             comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
-            #         chis[band].append(chilist)
-            #         mn,mx = tim.zr
-            # 
-            #     for comod in comods:
-            #         comod /= np.maximum(con, 1)
-            #     ima = dict(vmin=mn, vmax=mx)
-            #     for subim,comod,cochi in zip(subims, comods, cochis):
-            #         subim.append((coimg[bslc], comod[bslc], ima, cochi[bslc]))
-            # 
-            # # Plot per-band chi coadds, and RGB images for before & after
-            # for subim in subims:
-            #     plt.clf()
-            #     imgs = []
-            #     mods = []
-            #     for j,(img,mod,ima,chi) in enumerate(subim):
-            #         imgs.append(img)
-            #         mods.append(mod)
-            #         plt.subplot(3,4,1 + j + 0)
-            #         dimshow(img, **ima)
-            #         plt.subplot(3,4,1 + j + 4)
-            #         dimshow(mod, **ima)
-            #         plt.subplot(3,4,1 + j + 8)
-            #         plt.imshow(-chi, **imchi)
-            #     plt.subplot(3,4,4)
-            #     dimshow(get_rgb(imgs, bands))
-            #     plt.subplot(3,4,8)
-            #     dimshow(get_rgb(mods, bands))
-            #     plt.subplot(3,4,12)
-            #     dimshow(get_rgb(coimgs,bands))
-            #     ax = plt.axis()
-            #     plt.plot([x0,x1,x1,x0,x0],[y0,y0,y1,y1,y0],'r-')
-            #     plt.axis(ax)
-            #     ps.savefig()
-            # 
-            # # Plot per-image chis
-            # cols = max(len(v) for v in chis.values())
-            # rows = len(bands)
-            # for i in range(len(mods)):
-            #     plt.clf()
-            #     for row,band in enumerate(bands):
-            #         sp0 = 1 + cols*row
-            #         for col,cc in enumerate(chis[band]):
-            #             chi = cc[i]
-            #             plt.subplot(rows, cols, sp0 + col)
-            #             plt.imshow(-chi, **imchi)
-            #     ps.savefig()
+            if blobnumber >= 10:
+                plots = False
+
+
+        print 'Blob', blobnumber, 'finished:', Time()-tlast
+        tlast = Time()
 
     rtn = dict()
     for k in ['tractor','tims','ps']:
@@ -1314,7 +1366,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
         if plots:
             mods = [modx, mod0, mod1, mod2]
-            _plot_mods(subtims, mods, bands, coimgs, cons, bslc, blobw, blobh, ps)
+            _plot_mods(subtims, mods, ['' for m in mods], bands, coimgs, cons, bslc, blobw, blobh, ps)
 
     rtn = dict()
     for k in ['tractor','tims', 'bcat', 'ps']:
@@ -1491,8 +1543,12 @@ if __name__ == '__main__':
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
+    parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
+                      default='runbrick-s%03i.pickle')
 
     opt,args = parser.parse_args()
+
+    Time.add_measurement(MemMeas)
 
     if opt.verbose == 0:
         lvl = logging.INFO
@@ -1504,12 +1560,11 @@ if __name__ == '__main__':
         from astrometry.util.multiproc import multiproc
         mp = multiproc(opt.threads)
 
-    picklepat = 'runbrick-s%03i.pickle'
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
     prereqs = {101: 0, 102: 1, 103: 2}
     opt.force.append(opt.stage)
     
-    runstage(opt.stage, picklepat, stagefunc, force=opt.force, write=opt.write,
+    runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
              prereqs=prereqs, plots=opt.plots)
     

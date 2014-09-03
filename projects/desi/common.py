@@ -84,7 +84,7 @@ def wcs_for_brick(b, W=3600, H=3600, pixscale=0.262):
                -pixscale, 0., 0., pixscale,
                float(W), float(H))
 
-def ccds_touching_wcs(targetwcs, T, ccdrad=0.17):
+def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     '''
     targetwcs: wcs object describing region of interest
     T: fits_table object of CCDs
@@ -108,6 +108,8 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17):
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
     #print 'Cut to', len(I), 'on RA,Dec'
 
+    if not polygons:
+        return I
     # now check actual polygon intersection
     tw,th = targetwcs.imagew, targetwcs.imageh
     targetpoly = [(0.5,0.5),(tw+0.5,0.5),(tw+0.5,th+0.5),(0.5,th+0.5)]
@@ -138,6 +140,7 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17):
         if polygons_intersect(targetpoly, poly):
             keep.append(i)
     I = np.array(keep)
+    #print 'Cut to', len(I), 'on polygons'
     return I
 
 
