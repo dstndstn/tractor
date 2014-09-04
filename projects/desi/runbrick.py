@@ -1205,20 +1205,11 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                 srctractor = Tractor(subtims, [src])
                 srctractor.freezeParams('images')
 
-                #_plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
-                #           bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
-
                 # Add this source's initial model back in.
                 for tim,mods in zip(subtims, initial_models):
-                    print 'In tim', tim.name, 'flux =', tim.getPhotoCal().brightnessToCounts(src.getBrightness())
                     mod = mods[i]
                     if mod is not None:
-                        print 'Mod sum:', mod.patch.sum()
-                        print 'Tim image before:', tim.getImage().sum()
                         mod.addTo(tim.getImage())
-                        print 'Tim image after:', tim.getImage().sum()
-                    else:
-                        print 'Mod is none'
 
                 print 'Optimizing:', srctractor
                 srctractor.printThawedParams()
@@ -1245,13 +1236,14 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                     if mod is not None:
                         mod.addTo(tim.getImage(), scale=-1)
 
-                _plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
-                           bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
+                if plots:
+                    _plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
+                               bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
 
                 print 'Fitting source took', Time()-tsrc
                 print src
     
-            for tim,img in zip(tims, orig_timages):
+            for tim,img in zip(subtims, orig_timages):
                 tim.data = img
 
             del orig_timages
@@ -1329,7 +1321,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                 if tim.band == band:
                     bandtims.append(tim)
             print
-            print 'Fitting', band, 'band:'
+            print 'Fitting', band, 'band:', len(bandtims), 'images'
             btractor = Tractor(bandtims, subcat)
             btractor.freezeParam('images')
             btractor.printThawedParams()
