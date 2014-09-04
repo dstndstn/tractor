@@ -38,6 +38,25 @@ mp = None
 
 photoobjdir = 'photoObjs-new'
 
+def _print_struc(X):
+    if X is None:
+        print 'None',
+    elif type(X) in (list,tuple):
+        islist = (type(X) is list)
+        if islist:
+            print '[',
+        else:
+            print '(',
+        for x in X:
+            _print_struc(x)
+            print ',',
+        if islist:
+            print ']',
+        else:
+            print ')',
+    else:
+        print type(X),
+
 def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     '''
     Given a list of images in the given bands, returns a scaled RGB
@@ -835,9 +854,16 @@ def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
         ps.savefig()
 
 
-def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
+def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
+               chi_plots=True):
     subims = [[] for m in mods]
     chis = dict([(b,[]) for b in bands])
+    
+    make_coimgs = (coimgs is None)
+    if make_coimgs:
+        coimgs = [np.zeros((blobh,blobw)) for b in bands]
+        cons   = [np.zeros((blobh,blobw)) for b in bands]
+
     for iband,band in enumerate(bands):
         comods = [np.zeros((blobh,blobw)) for m in mods]
         cochis = [np.zeros((blobh,blobw)) for m in mods]
@@ -854,17 +880,27 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
                 chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
                        tim.getInvError()[Yi,Xi])
                 rechi[Yo,Xo] = chi
-                chilist.append(rechi.copy())
+                chilist.append((rechi.copy(), itim))
                 cochis[imod][Yo,Xo] += chi
                 comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
             chis[band].append(chilist)
             mn,mx = -10.*tim.sig1, 30.*tim.sig1
 
+            if make_coimgs:
+                coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi]
+                cons  [iband][Yo,Xo] += 1
+                
+        if make_coimgs:
+            coimgs[iband] /= np.maximum(cons[iband], 1)
+            coimg  = coimgs[iband]
+            coimgn = cons  [iband]
+        else:
+            coimg = coimgs[iband][bslc]
+            coimgn = cons[iband][bslc]
+            
         for comod in comods:
             comod /= np.maximum(comodn, 1)
         ima = dict(vmin=mn, vmax=mx)
-        coimg = coimgs[iband][bslc]
-        coimgn = cons[iband][bslc]
         for subim,comod,cochi in zip(subims, comods, cochis):
             subim.append((coimg, coimgn, comod, ima, cochi))
 
@@ -873,11 +909,11 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
         plt.clf()
         rows,cols = 3,5
         imgs = []
-        mods = []
+        themods = []
         resids = []
         for j,(img,imgn,mod,ima,chi) in enumerate(subim):
             imgs.append(img)
-            mods.append(mod)
+            themods.append(mod)
             resid = img - mod
             resid[imgn == 0] = np.nan
             resids.append(resid)
@@ -892,7 +928,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
         plt.subplot(rows,cols, 4)
         dimshow(get_rgb(imgs, bands))
         plt.subplot(rows,cols, cols+4)
-        dimshow(get_rgb(mods, bands))
+        dimshow(get_rgb(themods, bands))
         plt.subplot(rows,cols, cols*2+4)
         dimshow(get_rgb(resids, bands, mnmx=(-10,10)))
 
@@ -901,7 +937,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
         plt.subplot(rows,cols, 5)
         dimshow(get_rgb(imgs, bands, **kwa))
         plt.subplot(rows,cols, cols+5)
-        dimshow(get_rgb(mods, bands, **kwa))
+        dimshow(get_rgb(themods, bands, **kwa))
         plt.subplot(rows,cols, cols*2+5)
         mnmx = -100,100
         kwa = dict(mnmx=mnmx, arcsinh=1)
@@ -909,18 +945,23 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps):
         plt.suptitle(titles[i])
         ps.savefig()
 
-    # Plot per-image chis
+    if not chi_plots:
+        return
+    # Plot per-image chis: in a grid with band along the rows and images along the cols
     cols = max(len(v) for v in chis.values())
     rows = len(bands)
-    for i in range(len(mods)):
+    for imod in range(len(mods)):
         plt.clf()
         for row,band in enumerate(bands):
             sp0 = 1 + cols*row
-            for col,cc in enumerate(chis[band]):
-                chi = cc[i]
+            # chis[band] = [ (one for each tim:) [ (one for each mod:) (chi,itim), (chi,itim) ], ...]
+            for col,chilist in enumerate(chis[band]):
+                chi,itim = chilist[imod]
                 plt.subplot(rows, cols, sp0 + col)
                 plt.imshow(-chi, **imchi)
-        plt.suptitle(titles[i])
+                plt.xticks([]); plt.yticks([])
+                plt.title(tims[itim].name)
+        plt.suptitle(titles[imod])
         ps.savefig()
 
 
@@ -1109,10 +1150,10 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         subtr.freezeParam('images')
 
         if plots:
-            mods = []
-            modnames = []
-            mods.append(subtr.getModelImages())
-            modnames.append('Initial')
+            plotmods = []
+            plotmodnames = []
+            plotmods.append(subtr.getModelImages())
+            plotmodnames.append('Initial')
         print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
 
         # Optimize individual sources in order of flux
@@ -1123,26 +1164,121 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             flux = sum([br.getFlux(band) for band in bands])
             fluxes.append(flux)
         Ibright = np.argsort(-np.array(fluxes))
-        subcat.freezeAllParams()
-        for i in Ibright:
-            tsrc = Time()
-            print 'Fitting source', i
-            print subcat[i]
-            subcat.freezeAllBut(i)
-            print 'Optimizing:', subtr
-            subtr.printThawedParams()
-            for step in range(10):
-                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                              alphas=alphas)
-                print 'dlnp:', dlnp
-                if dlnp < 0.1:
-                    break
-            print 'Fitting source took', Time()-tsrc
-            print subcat[i]
+
+
+        if len(Ibright) >= 5:
+            # -Remember the original subtim images
+            # -Compute initial models for each source (in each tim)
+            # -Subtract initial models from images
+            # -During fitting, for each source:
+            #   -add back in the source's initial model (to each tim)
+            #   -fit, with Catalog([src])
+            #   -subtract final model (from each tim)
+            # -Replace original subtim images
+            #
+            # --Might want to omit newly-added detection-filter sources, since their
+            # fluxes are bogus.
+
+            # Remember original tim images
+            orig_timages = [tim.getImage().copy() for tim in subtims]
+            initial_models = []
+
+            # Create initial models for each tim x each source
+            tt = Time()
+            for tim in subtims:
+                mods = []
+                for src in subcat:
+                    mod = src.getModelPatch(tim)
+                    mods.append(mod)
+                    if mod is not None:
+                        mod.addTo(tim.getImage(), scale=-1)
+                initial_models.append(mods)
+            print 'Subtracting initial models:', Time()-tt
+
+            # For sources in decreasing order of brightness
+            for i in Ibright:
+                tsrc = Time()
+                print 'Fitting source', i
+                src = subcat[i]
+                print src
+
+                srctractor = Tractor(subtims, [src])
+                srctractor.freezeParams('images')
+
+                #_plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
+                #           bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
+
+                # Add this source's initial model back in.
+                for tim,mods in zip(subtims, initial_models):
+                    print 'In tim', tim.name, 'flux =', tim.getPhotoCal().brightnessToCounts(src.getBrightness())
+                    mod = mods[i]
+                    if mod is not None:
+                        print 'Mod sum:', mod.patch.sum()
+                        print 'Tim image before:', tim.getImage().sum()
+                        mod.addTo(tim.getImage())
+                        print 'Tim image after:', tim.getImage().sum()
+                    else:
+                        print 'Mod is none'
+
+                print 'Optimizing:', srctractor
+                srctractor.printThawedParams()
+
+                if plots:
+                    spmods = [srctractor.getModelImages()]
+                    spnames = ['Initial']
+    
+                for step in range(10):
+                    dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
+                                                  alphas=alphas)
+                    print 'dlnp:', dlnp
+                    if dlnp < 0.1:
+                        break
+
+                if plots:
+                    spmods.append(srctractor.getModelImages())
+                    spnames.append('Fit')
+                    _plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
+                               chi_plots=False)
+
+                for tim in subtims:
+                    mod = src.getModelPatch(tim)
+                    if mod is not None:
+                        mod.addTo(tim.getImage(), scale=-1)
+
+                _plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
+                           bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
+
+                print 'Fitting source took', Time()-tsrc
+                print src
+    
+            for tim,img in zip(tims, orig_timages):
+                tim.data = img
+
+            del orig_timages
+            del initial_models
+            
+        else:
+            # Fit sources one at a time, but don't subtract other models
+            subcat.freezeAllParams()
+            for i in Ibright:
+                tsrc = Time()
+                print 'Fitting source', i
+                print subcat[i]
+                subcat.freezeAllBut(i)
+                print 'Optimizing:', subtr
+                subtr.printThawedParams()
+                for step in range(10):
+                    dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                                  alphas=alphas)
+                    print 'dlnp:', dlnp
+                    if dlnp < 0.1:
+                        break
+                print 'Fitting source took', Time()-tsrc
+                print subcat[i]
 
         if plots:
-            mods.append(subtr.getModelImages())
-            modnames.append('Per Source')
+            plotmods.append(subtr.getModelImages())
+            plotmodnames.append('Per Source')
         print 'Sub-image individual-source fit lnlikelihood:', subtr.getLogLikelihood()
 
         if len(Isrcs) > 1:
@@ -1158,8 +1294,8 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                     # Borked -- take the step and render the models.
                     p0 = subtr.getParams()
                     subtr.setParams(p0 + X)
-                    mods.append(subtr.getModelImages())
-                    modnames.append('Borked')
+                    plotmods.append(subtr.getModelImages())
+                    plotmodnames.append('Borked')
                     subtr.setParams(p0)
                     derivs = subtr.getDerivs()
                     for i,(paramname,derivlist) in enumerate(zip(subtr.getParamNames(), derivs)):
@@ -1180,8 +1316,8 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                     break
 
             if plots:
-                mods.append(subtr.getModelImages())
-                modnames.append('All Sources')
+                plotmods.append(subtr.getModelImages())
+                plotmodnames.append('All Sources')
             print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
 
         # Forced-photometer bands individually
@@ -1204,10 +1340,10 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         print 'Forced-phot lnlikelihood:', subtr.getLogLikelihood()
 
         if plots:
-            mods.append(subtr.getModelImages())
-            modnames.append('Forced phot')
+            plotmods.append(subtr.getModelImages())
+            plotmodnames.append('Forced phot')
 
-            _plot_mods(subtims, mods, modnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
+            _plot_mods(subtims, plotmods, plotmodnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
 
             if blobnumber >= 10:
                 plots = False
