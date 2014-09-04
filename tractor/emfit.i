@@ -339,7 +339,7 @@
             double wsum[K];
             double qsum = 0.0;
 
-            {
+    /*              {
                 int d;
                 printf("step=%i: ", step);
                 printf("w=[");
@@ -361,7 +361,7 @@
                 }
                 printf("]\n");
             }
-
+    */
             memset(Z, 0, K*N*sizeof(double));
             for (k=0; k<K; k++) {
                 // ASSUME ordering

@@ -943,7 +943,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         ox0,oy0 = orig_wcsxy0[itim]
         h,w = tim.shape
         psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=10000)
+        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
         initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
 
 
@@ -1051,9 +1051,35 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             print 'tim instantiate PSF:', Time()-ttim
             ttim = Time()
 
+            if False:
+                (w,mu,var) = initial_psf_mog[itim]
+                thepsf = GaussianMixturePSF(w.copy(), mu.copy(), var.copy())
+                psftim = Image(data=psfimg, invvar=np.zeros(psfimg.shape)+1e4,
+                               psf=thepsf)
+                ph,pw = psfimg.shape
+                psftractor = Tractor([psftim], [PointSource(PixPos(pw/2., ph/2.), Flux(1.))])
+                psftractor.freezeParam('catalog')
+                psftim.freezeAllBut('psf')
+                print 'Optimizing:'
+                psftractor.printThawedParams()
+                for step in range(100):
+                    dlnp,X,alpha = psftractor.optimize(priors=False, shared_params=False)
+                    print 'dlnp:', dlnp
+                    if dlnp < 0.1:
+                        break
+                print 'Tractor fit PSF:'
+                print thepsf
+                print 'tim PSF fitting via Tractor:', Time()-ttim
+                ttim = Time()
+
+            # Note, initial_psf_mog is probably modified in this process!
             subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
 
+            print 'EM fit PSF:'
+            print subpsf
+            
             print 'tim fit PSF:', Time()-ttim
+            print 'psfimg shape', psfimg.shape
             ttim = Time()
 
             subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
