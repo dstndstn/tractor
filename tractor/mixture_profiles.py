@@ -363,8 +363,7 @@ def functional_test_patch_maker(fn, psf=None):
 if __name__ == '__main__':
     # functional test: c_gauss_2d_approx
 
-    from mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2
-    # "More than enough"
+    from mix import c_gauss_2d_approx, c_gauss_2d_grid, c_gauss_2d_approx2, c_gauss_2d_approx3
 
     from astrometry.util.plotutils import PlotSequence
     ps = PlotSequence('approx')
@@ -384,6 +383,8 @@ if __name__ == '__main__':
         mean = np.array([[0.3, 0.7],])
         minval = 1e-3
         dx = dy = 0.
+        minradius = 2
+
         if j == 0:
             var = np.array([ [ [ 4., 4. ], [4., 9.,] ], ])
         elif j == 1:
@@ -431,6 +432,12 @@ if __name__ == '__main__':
                              [ [ 400., -100. ], [-100., 100.,] ], ])
             dx = 1.
             minval = 1e-9
+        elif j == 13:
+            var = np.array([ [ [ 4., 4. ], [4., 9.,] ], ])
+            minradius = 12
+        elif j == 14:
+            var = np.array([ [ [ 0.5, -0.6 ], [-0.6, 1.,] ], ])
+            minradius = 4
         else:
             break
 
@@ -447,17 +454,18 @@ if __name__ == '__main__':
         print 'Max difference:', np.max(np.abs(r2 - result))
 
         plt.clf()
+        plt.subplot(1,2,1)
         plt.imshow(np.log10(np.maximum(minval * 1e-3, r2)),
                    interpolation='nearest', origin='lower')
         plt.colorbar()
         plt.title('Grid')
-        ps.savefig()
         
-        plt.clf()
+        plt.subplot(1,2,2)
         plt.imshow(np.log10(np.maximum(minval * 1e-3, result)),
                    interpolation='nearest', origin='lower')
         plt.colorbar()
         plt.title('Approx 1')
+        plt.suptitle('j = %i' % j)
         ps.savefig()
 
         assert(np.all(np.abs(r2 - result) < minval))
@@ -467,25 +475,50 @@ if __name__ == '__main__':
         rtn = c_gauss_2d_approx2(x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result2)
         if rtn == -1:
             raise RuntimeError('c_gauss_2d_approx2 failed')
-
         print 'Max difference 2:', np.max(np.abs(r2 - result2))
         
         plt.clf()
+        plt.subplot(1,2,1)
         plt.imshow(np.log10(np.maximum(minval * 1e-3, result2)),
                    interpolation='nearest', origin='lower')
         plt.colorbar()
         plt.title('Approx 2')
-        ps.savefig()
 
-        plt.clf()
+        plt.subplot(1,2,2)
         plt.imshow(result2 - r2,
                    interpolation='nearest', origin='lower')
         plt.colorbar()
         plt.title('Approx 2 - Grid')
+        plt.suptitle('j = %i' % j)
         ps.savefig()
 
         
         assert(np.all(np.abs(r2 - result2) < minval))
+
+        result3 = np.zeros((H, W))
+        xderiv, yderiv, mask = None, None, None
+        xc,yc = int(mean[0,0] + dx), int(mean[0,1] + dy)
+        args = (x0, x1, y0, y1, dx, dy, minval, amp, mean, var, result3, xderiv, yderiv, mask, xc, yc, minradius)
+        print 'args (approx3):', args
+        rtn = c_gauss_2d_approx3(*args)
+        if rtn == -1:
+            raise RuntimeError('c_gauss_2d_approx3 failed')
+        print 'Max difference 3:', np.max(np.abs(r2 - result3))
+
+        plt.clf()
+        plt.subplot(1,2,1)
+        plt.imshow(np.log10(np.maximum(minval * 1e-3, result3)),
+                   interpolation='nearest', origin='lower')
+        plt.colorbar()
+        plt.title('Approx 3')
+
+        plt.subplot(1,2,2)
+        plt.imshow(result3 - r2,
+                   interpolation='nearest', origin='lower')
+        plt.colorbar()
+        plt.title('Approx 3 - Grid')
+        plt.suptitle('j = %i' % j)
+        ps.savefig()
         
         # if j == 3:
         #   plt.clf()

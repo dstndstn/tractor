@@ -33,16 +33,23 @@ static double eval_all(int K, double* scales, double* I, double* means,
 // PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
 
 static int get_np(PyObject* ob_amp,
-                   PyObject* ob_mean,
-                   PyObject* ob_var,
-                   PyObject* ob_result,
-                   int NX, int NY,
-                   int* K,
-                   PyObject **np_amp,
-                   PyObject **np_mean,
-                   PyObject **np_var,
-                   PyObject **np_result) {
+                  PyObject* ob_mean,
+                  PyObject* ob_var,
+                  PyObject* ob_result,
+                  PyObject* ob_xderiv,
+                  PyObject* ob_yderiv,
+                  PyObject* ob_mask,
+                  int NX, int NY,
+                  int* K,
+                  PyObject **np_amp,
+                  PyObject **np_mean,
+                  PyObject **np_var,
+                  PyObject **np_result,
+                  PyObject **np_xderiv,
+                  PyObject **np_yderiv,
+                  PyObject **np_mask) {
     PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+    PyArray_Descr* btype = NULL;
     int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
     int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
     const int D = 2;
@@ -55,9 +62,26 @@ static int get_np(PyObject* ob_amp,
     *np_mean = PyArray_FromAny(ob_mean, dtype, 2, 2, req, NULL);
     *np_var = PyArray_FromAny(ob_var, dtype, 3, 3, req, NULL);
     *np_result = PyArray_FromAny(ob_result, dtype, 2, 2, reqout, NULL);
+    if (ob_xderiv != Py_None) {
+        Py_INCREF(dtype);
+        *np_xderiv = PyArray_FromAny(ob_xderiv, dtype, 2, 2, reqout, NULL);
+    }
+    if (ob_yderiv != Py_None) {
+        Py_INCREF(dtype);
+        *np_yderiv = PyArray_FromAny(ob_yderiv, dtype, 2, 2, reqout, NULL);
+    }
+    if (ob_mask != Py_None) {
+        btype = PyArray_DescrFromType(PyArray_BOOL);
+        Py_INCREF(btype);
+        *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
+        Py_CLEAR(btype);
+    }
     Py_CLEAR(dtype);
 
-    if (!(*np_amp && *np_mean && *np_var && *np_result)) {
+    if (!*np_amp || !*np_mean || !*np_var || !*np_result ||
+        ((ob_xderiv != Py_None) && !*np_xderiv) ||
+        ((ob_yderiv != Py_None) && !*np_yderiv) ||
+        ((ob_mask   != Py_None) && !*np_mask)) {
         if (!*np_amp) {
             ERR("amp wasn't the type expected");
             Py_DECREF(dtype);
@@ -73,6 +97,18 @@ static int get_np(PyObject* ob_amp,
         if (!*np_result) {
             ERR("result wasn't the type expected");
             Py_DECREF(dtype);
+        }
+        if ((ob_xderiv != Py_None) && !*np_xderiv) {
+            ERR("xderiv wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        if ((ob_yderiv != Py_None) && !*np_yderiv) {
+            ERR("yderiv wasn't the type expected");
+            Py_DECREF(dtype);
+        }
+        if ((ob_mask != Py_None) && !*np_mask) {
+            ERR("mask wasn't the type expected");
+            Py_DECREF(btype);
         }
         return 1;
     }
@@ -94,6 +130,36 @@ static int get_np(PyObject* ob_amp,
             NY, NX, (int)PyArray_DIM(*np_result, 0),
             (int)PyArray_DIM(*np_result, 1));
         return 1;
+    }
+    if (np_xderiv && *np_xderiv) {
+        printf("np_xderiv %p\n", np_xderiv);
+        if ((PyArray_DIM(*np_xderiv, 0) != NY) ||
+            (PyArray_DIM(*np_xderiv, 1) != NX)) {
+            ERR("np_xderiv must be size NY x NX (%i x %i), got %i x %i",
+                NY, NX, (int)PyArray_DIM(*np_xderiv, 0),
+                (int)PyArray_DIM(*np_xderiv, 1));
+            return 1;
+        }
+    }
+    if (np_yderiv && *np_yderiv) {
+        printf("np_yderiv %p\n", np_yderiv);
+        if ((PyArray_DIM(*np_yderiv, 0) != NY) ||
+            (PyArray_DIM(*np_yderiv, 1) != NX)) {
+            ERR("np_yderiv must be size NY x NX (%i x %i), got %i x %i",
+                NY, NX, (int)PyArray_DIM(*np_yderiv, 0),
+                (int)PyArray_DIM(*np_yderiv, 1));
+            return 1;
+        }
+    }
+    if (np_mask && *np_mask) {
+        printf("np_mask %p\n", np_mask);
+        if ((PyArray_DIM(*np_mask, 0) != NY) ||
+            (PyArray_DIM(*np_mask, 1) != NX)) {
+            ERR("np_mask must be size NY x NX (%i x %i), got %i x %i",
+                NY, NX, (int)PyArray_DIM(*np_mask, 0),
+                (int)PyArray_DIM(*np_mask, 1));
+            return 1;
+        }
     }
     return 0;
 }
@@ -257,8 +323,8 @@ static int c_gauss_2d_grid(double xlo, double xstep, int NX,
 
     tpd = pow(2.*M_PI, D);
 
-    if (get_np(ob_amp, ob_mean, ob_var, ob_result, NX, NY,
-                &K, &np_amp, &np_mean, &np_var, &np_result))
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, NX, NY,
+               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
         goto bailout;
 
     amp = PyArray_DATA(np_amp);
@@ -335,8 +401,8 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
     H = y1 - y0;
     tpd = pow(2.*M_PI, D);
 
-    if (get_np(ob_amp, ob_mean, ob_var, ob_result, W, H,
-                &K, &np_amp, &np_mean, &np_var, &np_result))
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, W, H,
+               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
         goto bailout;
 
     amp = PyArray_DATA(np_amp);
@@ -356,7 +422,8 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         double scale;
         double mx,my;
         double mv;
-        int xc,yc;
+        //int xc;
+        int yc;
         V[0] = var[k*D*D + 0];
         V[1] = (var[k*D*D + 1] + var[k*D*D + 2])*0.5;
         V[2] = var[k*D*D + 3];
@@ -373,7 +440,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
         mv = minval * fabs(amp[k]);
         //printf("minval %g: amp %g, allowing mv %g\n", minval, amp[k], mv);
         //printf("minval %g, amp %g, scale %g, mv %g\n", minval, amp[k], scale, mv);
-        xc = MAX(x0, MIN(x1-1, (int)lround(mx)));
+        //xc = MAX(x0, MIN(x1-1, (int)lround(mx)));
         yc = MAX(y0, MIN(y1-1, (int)lround(my)));
         //printf("mx,my (%.1f, %.1f)   xc,yc (%i,%i)\n", mx,my,xc,yc);
         for (dyabs=0; dyabs < MAX(y1-yc, 1+yc-y0); dyabs++) {
@@ -466,8 +533,8 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     H = y1 - y0;
     tpd = pow(2.*M_PI, D);
 
-    if (get_np(ob_amp, ob_mean, ob_var, ob_result, W, H,
-               &K, &np_amp, &np_mean, &np_var, &np_result))
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, W, H,
+               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
         goto bailout;
 
     amp = PyArray_DATA(np_amp);
@@ -874,6 +941,24 @@ bailout:
     return rtn;
 }
 
+
+static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
+                              // (fx,fy): center position
+                              // which offsets "means"
+                              double fx, double fy,
+                              double minval,
+                              PyObject* ob_amp,
+                              PyObject* ob_mean,
+                              PyObject* ob_var,
+                              PyObject* ob_result,
+                              PyObject* ob_xderiv,
+                              PyObject* ob_yderiv,
+                              PyObject* ob_mask,
+                              int xc, int yc,
+                              int minradius
+                              );
+
+#include "approx3.c"
 
 %}
 

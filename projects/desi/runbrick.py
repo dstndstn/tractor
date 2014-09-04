@@ -995,6 +995,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         if len(Isrcs) == 0:
             continue
 
+        tblob = Time()
         print
         print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
         print
@@ -1196,9 +1197,9 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             print 'Subtracting initial models:', Time()-tt
 
             # For sources in decreasing order of brightness
-            for i in Ibright:
+            for numi,i in enumerate(Ibright):
                 tsrc = Time()
-                print 'Fitting source', i
+                print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
                 src = subcat[i]
                 print src
 
@@ -1252,9 +1253,9 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         else:
             # Fit sources one at a time, but don't subtract other models
             subcat.freezeAllParams()
-            for i in Ibright:
+            for numi,i in enumerate(Ibright):
                 tsrc = Time()
-                print 'Fitting source', i
+                print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
                 print subcat[i]
                 subcat.freezeAllBut(i)
                 print 'Optimizing:', subtr
@@ -1273,7 +1274,8 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             plotmodnames.append('Per Source')
         print 'Sub-image individual-source fit lnlikelihood:', subtr.getLogLikelihood()
 
-        if len(Isrcs) > 1:
+        if len(Isrcs) > 1 and len(Isrcs) <= 10:
+            tfit = Time()
             # Optimize all at once?
             subcat.thawAllParams()
             print 'Optimizing:', subtr
@@ -1307,36 +1309,45 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                 if dlnp < 0.1:
                     break
 
+            print 'Simultaneous fit took:', Time()-tfit
             if plots:
                 plotmods.append(subtr.getModelImages())
                 plotmodnames.append('All Sources')
             print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
 
-        # Forced-photometer bands individually
-        for band in bands:
-            subcat.freezeAllRecursive()
-            subcat.thawPathsTo(band)
-            bandtims = []
-            for tim in subtims:
-                if tim.band == band:
-                    bandtims.append(tim)
-            print
-            print 'Fitting', band, 'band:', len(bandtims), 'images'
-            btractor = Tractor(bandtims, subcat)
-            btractor.freezeParam('images')
-            btractor.printThawedParams()
-            B = 8
-            X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
-                                                    BW=B, BH=B, wantims=False)
-        subcat.thawAllRecursive()
-        print 'Forced-phot lnlikelihood:', subtr.getLogLikelihood()
+        # FIXME -- for large blobs, fit strata of sources simultaneously?
+
+        if False:
+            print 'Starting forced phot: time since blob start', Time()-tblob
+            # Forced-photometer bands individually?
+            for band in bands:
+                tp = Time()
+    
+                subcat.freezeAllRecursive()
+                subcat.thawPathsTo(band)
+                bandtims = []
+                for tim in subtims:
+                    if tim.band == band:
+                        bandtims.append(tim)
+                print
+                print 'Fitting', band, 'band:', len(bandtims), 'images'
+                btractor = Tractor(bandtims, subcat)
+                btractor.freezeParam('images')
+                btractor.printThawedParams()
+                B = 8
+                X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
+                                                        BW=B, BH=B, wantims=False)
+                print 'Forced phot of', band, 'band took', Time()-tp
+    
+            subcat.thawAllRecursive()
+            print 'Forced-phot lnlikelihood:', subtr.getLogLikelihood()
+    
+            if plots:
+                plotmods.append(subtr.getModelImages())
+                plotmodnames.append('Forced phot')
 
         if plots:
-            plotmods.append(subtr.getModelImages())
-            plotmodnames.append('Forced phot')
-
             _plot_mods(subtims, plotmods, plotmodnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
-
             if blobnumber >= 10:
                 plots = False
 
