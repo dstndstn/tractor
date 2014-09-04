@@ -482,7 +482,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     // We symmetrize the covariance matrix,
     // so V,I just have three elements for each K: x**2, xy, y**2.
     for (k=0; k<K; k++) {
-        // We also scale the the I to make the Gaussian evaluation easier
+        // We also scale the I to make the Gaussian evaluation easier
         double det;
         double isc;
         double scale;
