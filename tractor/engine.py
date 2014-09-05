@@ -1820,7 +1820,8 @@ class Tractor(MultiParams):
                            chiImages=None, variance=False,
                            shared_params=True,
                            use_tsnnls=False,
-                           use_ceres=False):
+                           use_ceres=False,
+                           get_A_matrix=False):
 
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -2157,7 +2158,10 @@ class Tractor(MultiParams):
             # Build sparse matrix
             #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
             A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-    
+
+            if get_A_matrix:
+                return A
+
             lsqropts = dict(show=isverbose(), damp=damp)
             if variance:
                 lsqropts.update(calc_var=True)

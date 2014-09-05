@@ -1122,38 +1122,51 @@ def stage203(T=None, coimgs=None, cons=None,
     cat.freezeAllRecursive()
     cat.thawPathsTo(*bands)
 
+    #### HACK
+    for tim in tims:
+        tim.psf.radius = 2
+
     for isrc,src in enumerate(cat):
         print 'Variance for source', isrc, 'of', len(cat)
         srctr = Tractor(tims, [src])
         srctr.freezeParam('images')
-        print 'Variances for:'
-        srctr.printThawedParams()
+        #print 'Variances for:'
+        #srctr.printThawedParams()
         flux_var = srctr.optimize(priors=False, shared_params=False,
                                   variance=True, just_variance=True)
         vars.append(flux_var)
+        print 'Flux variance:', flux_var
+
+
+        allderivs = srctr.getDerivs()
+        A = srctr.getUpdateDirection(allderivs, priors=False, shared_params=False,
+                                     get_A_matrix=True, scale_columns=False)
+        #print 'A:', A
+        A = A.todense()
+        print 'A:', A.shape
+        print A
+
+        AtA = A.T * A
+        print 'AtA:', AtA.shape
+        print AtA
+
+        AtAinv = np.linalg.inv(AtA)
+        print 'AtAinv:', AtAinv
+
+        chisqderivs = []
 
         for band in bands:
             src.freezeAllRecursive()
             src.thawPathsTo(band)
-            print 'Variances for:'
-            srctr.printThawedParams()
+            #print 'Variances for:'
+            #srctr.printThawedParams()
             band_var = srctr.optimize(priors=False, shared_params=False,
                                       variance=True, just_variance=True)
             print 'Variance for', band, 'band:', band_var
 
-        chisqderivs = []
-        for band in bands:
-            src.freezeAllRecursive()
-            src.thawPathsTo(band)
             dchisq = 0
             for tim in tims:
                 if tim.band != band:
-                    print 'Looking at band', band, 'but image is in band', tim.band
-                    derivs = src.getParamDerivatives(tim)
-                    print 'Derivs:', derivs
-                    deriv = derivs[0]
-                    if deriv is not None:
-                        print 'deriv range:', deriv.patch.min(), deriv.patch.max()
                     continue
                 derivs = src.getParamDerivatives(tim)
                 # just the flux
@@ -1167,10 +1180,12 @@ def stage203(T=None, coimgs=None, cons=None,
                         continue
                     chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
                     dchisq += (chi**2).sum()
+
+            print 'Derivative in chi-square:', dchisq, 'inv', 1./dchisq
+
             chisqderivs.append(dchisq)
         chisqderivs = np.array(chisqderivs)
 
-        print 'Flux variance:', flux_var
         print 'Derivative in chi-square:', chisqderivs, 'inv', 1./chisqderivs
         
     vars = np.hstack(vars)
