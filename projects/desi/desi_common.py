@@ -116,7 +116,7 @@ def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
         flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
                          for src in cat])
 
-        if var:
+        if var is not None:
             # Oh my, this is tricky... set parameter values to the variance
             # vector so that we can read off the parameter variances via the
             # python object apis.

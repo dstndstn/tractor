@@ -1116,54 +1116,38 @@ def stage203(T=None, coimgs=None, cons=None,
     # flux_iv,fs = R.IV, R.fitstats
     #flux_iv = 1./flux_var
 
-    vars = []
     print 'Variances...'
-
     cat.freezeAllRecursive()
     cat.thawPathsTo(*bands)
-
-    #### HACK
-    for tim in tims:
-        tim.psf.radius = 2
-
+    flux_iv = []
     for isrc,src in enumerate(cat):
         print 'Variance for source', isrc, 'of', len(cat)
         srctr = Tractor(tims, [src])
         srctr.freezeParam('images')
-        #print 'Variances for:'
-        #srctr.printThawedParams()
-        flux_var = srctr.optimize(priors=False, shared_params=False,
-                                  variance=True, just_variance=True)
-        vars.append(flux_var)
-        print 'Flux variance:', flux_var
 
-
-        allderivs = srctr.getDerivs()
-        A = srctr.getUpdateDirection(allderivs, priors=False, shared_params=False,
-                                     get_A_matrix=True, scale_columns=False)
-        #print 'A:', A
-        A = A.todense()
-        print 'A:', A.shape
-        print A
-
-        AtA = A.T * A
-        print 'AtA:', AtA.shape
-        print AtA
-
-        AtAinv = np.linalg.inv(AtA)
-        print 'AtAinv:', AtAinv
+        # flux_var = srctr.optimize(priors=False, shared_params=False,
+        #                           variance=True, just_variance=True)
+        # vars.append(flux_var)
+        # print 'Flux variance:', flux_var
 
         chisqderivs = []
-
         for band in bands:
             src.freezeAllRecursive()
             src.thawPathsTo(band)
-            #print 'Variances for:'
-            #srctr.printThawedParams()
-            band_var = srctr.optimize(priors=False, shared_params=False,
-                                      variance=True, just_variance=True)
-            print 'Variance for', band, 'band:', band_var
 
+            # bandtims = [tim for tim in tims if tim.band == band]
+            # btr = Tractor(bandtims, [src])
+            # btr.freezeParam('images')
+            # p0 = src.getParams()
+            # R = btr.optimize_forced_photometry(variance=True, shared_params=False,
+            #                                    wantims=False)
+            # flux_iv = R.IV
+            # print 'IV:', flux_iv
+            # src.setParams(p0)
+
+            # band_var = srctr.optimize(priors=False, shared_params=False,
+            #                           variance=True, just_variance=True)
+            # print 'Variance for', band, 'band:', band_var
             dchisq = 0
             for tim in tims:
                 if tim.band != band:
@@ -1171,7 +1155,6 @@ def stage203(T=None, coimgs=None, cons=None,
                 derivs = src.getParamDerivatives(tim)
                 # just the flux
                 assert(len(derivs) == 1)
-
                 H,W = tim.shape
                 for deriv in derivs:
                     if deriv is None:
@@ -1180,16 +1163,19 @@ def stage203(T=None, coimgs=None, cons=None,
                         continue
                     chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
                     dchisq += (chi**2).sum()
+            #print 'Derivative in chi-square for', band, ':', dchisq, 'inv', 1./dchisq
 
-            print 'Derivative in chi-square:', dchisq, 'inv', 1./dchisq
+            flux_iv.append(dchisq)
+    flux_iv = np.array(flux_iv)
 
-            chisqderivs.append(dchisq)
-        chisqderivs = np.array(chisqderivs)
+    assert(len(flux_iv) == len(cat)*len(bands))
 
-        print 'Derivative in chi-square:', chisqderivs, 'inv', 1./chisqderivs
-        
-    vars = np.hstack(vars)
-    flux_iv = 1./vars
+    # X = fits_table()
+    # for i,band in enumerate(bands):
+    #     X.set('flux_%s' % band,
+    #           np.array([src.getBrightness().getFlux(band) for src in cat]))
+    #     X.set('flux_invvar_%s' % band, flux_iv[i::len(bands)])
+    # X.writeto('flux.fits')
 
     #flux_iv = None
     fs = None
@@ -1214,7 +1200,7 @@ def stage203(T=None, coimgs=None, cons=None,
     cat.thawPathsTo(*bands)
 
     hdr = None
-    T2,hdr = prepare_fits_catalog(cat, flux_iv, TT, hdr, bands, fs)
+    T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
     for k in ['ra_var', 'dec_var']:
         T2.set(k, T2.get(k).astype(np.float32))
     T2.writeto('phot.fits', header=hdr)
