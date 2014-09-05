@@ -129,7 +129,8 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
                 im = np.maximum(im, 0)
                 xm,ym = -(PS/2), -(PS/2)
                 em_fit_2d(im, xm, ym, w, mu, var)
-                print 'Fit w,mu,var', w,mu,var
+                #print 'Fit w,mu,var', w,mu,var
+                print 'Fit PSF at', x,y
                 if ix == 0:
                     px0 = w,mu,var
 
