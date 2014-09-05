@@ -1093,14 +1093,22 @@ def stage203(T=None, coimgs=None, cons=None,
     del kwargs
 
     from desi_common import prepare_fits_catalog
-    
-    cat.freezeAllRecursive()
-    cat.thawPathsTo(*bands)
 
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    # Fit a MoG PSF model to the PsfEx model in the middle of each tim.
+    for itim,tim in enumerate(tims):
+        ox0,oy0 = orig_wcsxy0[itim]
+        h,w = tim.shape
+        psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+        tim.psf = subpsf
+
+    
+    #cat.freezeAllRecursive()
+    #cat.thawPathsTo(*bands)
     #print 'Variances...'
     #flux_var = tractor.optimize(priors=False, shared_params=False,
     #                            variance=True, just_variance=True)
-
     # print 'Opt forced photom...'
     # R = tractor.optimize_forced_photometry(
     #     shared_params=False, wantims=False, fitstats=True, variance=True,
@@ -1108,7 +1116,67 @@ def stage203(T=None, coimgs=None, cons=None,
     # flux_iv,fs = R.IV, R.fitstats
     #flux_iv = 1./flux_var
 
-    flux_iv = None
+    vars = []
+    print 'Variances...'
+
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
+
+    for isrc,src in enumerate(cat):
+        print 'Variance for source', isrc, 'of', len(cat)
+        srctr = Tractor(tims, [src])
+        srctr.freezeParam('images')
+        print 'Variances for:'
+        srctr.printThawedParams()
+        flux_var = srctr.optimize(priors=False, shared_params=False,
+                                  variance=True, just_variance=True)
+        vars.append(flux_var)
+
+        for band in bands:
+            src.freezeAllRecursive()
+            src.thawPathsTo(band)
+            print 'Variances for:'
+            srctr.printThawedParams()
+            band_var = srctr.optimize(priors=False, shared_params=False,
+                                      variance=True, just_variance=True)
+            print 'Variance for', band, 'band:', band_var
+
+        chisqderivs = []
+        for band in bands:
+            src.freezeAllRecursive()
+            src.thawPathsTo(band)
+            dchisq = 0
+            for tim in tims:
+                if tim.band != band:
+                    print 'Looking at band', band, 'but image is in band', tim.band
+                    derivs = src.getParamDerivatives(tim)
+                    print 'Derivs:', derivs
+                    deriv = derivs[0]
+                    if deriv is not None:
+                        print 'deriv range:', deriv.patch.min(), deriv.patch.max()
+                    continue
+                derivs = src.getParamDerivatives(tim)
+                # just the flux
+                assert(len(derivs) == 1)
+
+                H,W = tim.shape
+                for deriv in derivs:
+                    if deriv is None:
+                        continue
+                    if not deriv.clipTo(W,H):
+                        continue
+                    chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
+                    dchisq += (chi**2).sum()
+            chisqderivs.append(dchisq)
+        chisqderivs = np.array(chisqderivs)
+
+        print 'Flux variance:', flux_var
+        print 'Derivative in chi-square:', chisqderivs, 'inv', 1./chisqderivs
+        
+    vars = np.hstack(vars)
+    flux_iv = 1./vars
+
+    #flux_iv = None
     fs = None
 
     TT = T.copy()
@@ -1126,6 +1194,9 @@ def stage203(T=None, coimgs=None, cons=None,
         elif isinstance(src, FixedCompositeGalaxy):
             src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
             src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
 
     hdr = None
     T2,hdr = prepare_fits_catalog(cat, flux_iv, TT, hdr, bands, fs)
@@ -1181,6 +1252,7 @@ def stage103(T=None, coimgs=None, cons=None,
     rgbmod2 = []
     rgbresids = []
 
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
         comod = np.zeros((H,W), np.float32)
@@ -1189,26 +1261,34 @@ def stage103(T=None, coimgs=None, cons=None,
             if tim.band != band:
                 continue
 
-            print 'Fitting PsfEx model for', tim.name
-            tim.psfex.savesplinedata = True
-            tim.psfex.ensureFit()
-            tim.psf = tim.psfex
+            # Fit a MoG PSF model to the PsfEx model in the middle of the tim
+            ox0,oy0 = orig_wcsxy0[itim]
+            h,w = tim.shape
+            psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+            subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+            tim.psf = subpsf
+
+            if False:
+                print 'Fitting PsfEx model for', tim.name
+                tim.psfex.savesplinedata = True
+                tim.psfex.ensureFit()
+                tim.psf = tim.psfex
+
             mod = tractor.getModelImage(tim)
 
-            plt.clf()
-            dimshow(tim.getImage(), **tim.ima)
-            plt.title(tim.name)
-            ps.savefig()
-
-            plt.clf()
-            dimshow(mod, **tim.ima)
-            plt.title(tim.name)
-            ps.savefig()
-
-            plt.clf()
-            dimshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
-            plt.title(tim.name)
-            ps.savefig()
+            if plots:
+                plt.clf()
+                dimshow(tim.getImage(), **tim.ima)
+                plt.title(tim.name)
+                ps.savefig()
+                plt.clf()
+                dimshow(mod, **tim.ima)
+                plt.title(tim.name)
+                ps.savefig()
+                plt.clf()
+                dimshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
+                plt.title(tim.name)
+                ps.savefig()
 
             (Yo,Xo,Yi,Xi) = tim.resamp
             comod[Yo,Xo] += mod[Yi,Xi]
@@ -1224,6 +1304,10 @@ def stage103(T=None, coimgs=None, cons=None,
         resid = coimg - comod
         resid[cons[iband] == 0] = np.nan
         rgbresids.append(resid)
+
+        fitsio.write('image-coadd-%s.fits' % band, comod)
+        fitsio.write('model-coadd-%s.fits' % band, coimg)
+        fitsio.write('resid-coadd-%s.fits' % band, resid)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))

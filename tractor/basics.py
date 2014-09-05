@@ -852,12 +852,38 @@ class PointSource(MultiParams):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
+
+        # Short-cut the case where we're only fitting fluxes, and the
+        # band of the image is not being fit.
+        counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
+        if self.isParamFrozen('pos') and not self.isParamFrozen('brightness'):
+            bsteps = self.brightness.getStepSizes(img)
+            bvals = self.brightness.getParams()
+            allzero = True
+            for i,bstep in enumerate(bsteps):
+                oldval = self.brightness.setParam(i, bvals[i] + bstep)
+                countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+                self.brightness.setParam(i, oldval)
+                if countsi != counts0:
+                    allzero = False
+                    break
+            if allzero:
+                return [None]*self.numberOfParams()
+
+
         pos0 = self.getPosition()
         wcs = img.getWcs()
         (px0,py0) = wcs.positionToPixel(pos0, self)
+        # FIXME -- check for position way outside the image, before rendering point source patch?
+        
         psf = self._getPsf(img)
         patch0 = psf.getPointSourcePatch(px0, py0)
-        counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
+
+        H,W = img.shape
+        # check for intersection of patch0 with img
+        if not patch0.overlapsBbox((0, W, 0, H)):
+            return [None]*self.numberOfParams()
+        
         derivs = []
 
         # Position
