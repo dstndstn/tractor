@@ -503,6 +503,14 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
 }
 
 
+static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
+                          PyObject* np_amp,
+                          PyObject* np_mean,
+                          PyObject* np_var,
+                          double alpha,
+                          int steps);
+#include "emfit2.c"
+
 
 static int em_fit_2d(PyObject* np_img, int x0, int y0,
                      PyObject* np_amp,
