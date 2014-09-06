@@ -229,7 +229,7 @@ class Fluxes(MultiBandBrightness):
     def getFlux(self, bandname):
         return self.getBand(bandname)
     def setFlux(self, bandname, value):
-        return self.setFlux(bandname, value)
+        return self.setBand(bandname, value)
     
 
 class NanoMaggies(Fluxes):
