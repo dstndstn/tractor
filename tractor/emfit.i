@@ -502,16 +502,16 @@ static int em_fit_2d_reg(PyObject* np_img, int x0, int y0,
     return result;
 }
 
-
+//%apply double *OUTPUT { double *p_skyamp };
 static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                           PyObject* np_amp,
                           PyObject* np_mean,
                           PyObject* np_var,
                           double alpha,
                           int steps,
-                          double approx);
+                          double approx,
+                          double* OUTPUT);
 #include "emfit2.c"
-
 
 static int em_fit_2d(PyObject* np_img, int x0, int y0,
                      PyObject* np_amp,

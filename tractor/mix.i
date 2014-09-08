@@ -565,8 +565,13 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
         // we also fold in the 2*dx*dy term here
         I[1] = -V[1] * isc * 2.0;
         I[2] =  V[0] * isc;
-        scale = amp[k] / sqrt(tpd * det);
-        scales[k] = scale;
+        if (det <= 0.) {
+            // FIXME -- Abort?
+            scales[k] = 0.;
+        } else {
+            scale = amp[k] / sqrt(tpd * det);
+            scales[k] = scale;
+        }
     }
 
     // Find (likely) max pixel.  This looks for the max pixel within

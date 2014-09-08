@@ -29,10 +29,14 @@ _mix.so: mix_wrap.c setup-mix.py
 	python setup-mix.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mix.so $@
 
-emfit.py emfit_wrap.c: emfit.i
-	swig -python -I. emfit.i
+# emfit.py emfit_wrap.c: emfit.i
+# 	swig -python -I. emfit.i
+# 
+# _emfit.so: emfit_wrap.c setup-emfit.py
+# 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
+# 	cp build/lib/_emfit.so $@
 
-_emfit.so: emfit_wrap.c setup-emfit.py
+_emfit.so: emfit.i emfit2.c setup-emfit.py
 	python setup-emfit.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_emfit.so $@
 

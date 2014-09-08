@@ -2388,7 +2388,13 @@ class Tractor(MultiParams):
         mods = self.getModelImages()
         chis = []
         for img,mod in zip(self.images, mods):
-            chis.append((img.getImage() - mod) * img.getInvError())
+            chi = (img.getImage() - mod) * img.getInvError()
+            if not np.all(np.isfinite(chi)):
+                print 'Chi not finite'
+                print 'Image finite?', np.all(np.isfinite(img.getImage()))
+                print 'Mod finite?', np.all(np.isfinite(mod))
+                print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
+            chis.append(chi)
         return chis
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
@@ -2415,16 +2421,17 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        lnp = self.getLogPrior()
-        if lnp == -np.inf:
-            return lnp
-        lnp += self.getLogLikelihood()
+        lnprior = self.getLogPrior()
+        if lnprior == -np.inf:
+            return lnprior
+        lnl = self.getLogLikelihood()
+        lnp = lnprior + lnl
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'
             print self.printThawedParams()
-            print 'log likelihood:', self.getLogLikelihood()
-            print 'log prior:', self.getLogPrior()
+            print 'log likelihood:', lnl
+            print 'log prior:', lnprior
             return -np.inf
         return lnp
 
