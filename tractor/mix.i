@@ -24,10 +24,38 @@ static double eval_all(int K, double* scales, double* I, double* means,
     double r = 0;
     int k;
     for (k=0; k<K; k++) {
-        r += scales[k] * eval_g(I + 3*k, x - means[2*k+0], y - means[2*k+1]);
+        double dx,dy;
+        dx = x - means[2*k+0];
+        dy = y - means[2*k+1];
+        r += scales[k] * eval_g(I + 3*k, dx, dy);
     }
     return r;
 }
+
+static double eval_all_dxy(int K, double* scales, double* I, double* means,
+                           double x, double y, double* xderiv, double* yderiv) {
+    double r = 0;
+    int k;
+    if (xderiv)
+        *xderiv = 0;
+    if (yderiv)
+        *yderiv = 0;
+
+    for (k=0; k<K; k++) {
+        double dx,dy;
+        double G;
+        dx = x - means[2*k+0];
+        dy = y - means[2*k+1];
+        G = scales[k] * eval_g(I + 3*k, dx, dy);
+        r += G;
+        if (xderiv)
+            *xderiv += G * (2. * I[3*k+0] * dx + I[3*k+1] * dy);
+        if (yderiv)
+            *yderiv += G * (2. * I[3*k+2] * dy + I[3*k+1] * dx);
+    }
+    return r;
+}
+
 
 #define ERR(x, ...) printf(x, ## __VA_ARGS__)
 // PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)

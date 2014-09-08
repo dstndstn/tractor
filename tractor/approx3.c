@@ -43,6 +43,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     uint8_t *doT=NULL, *doB=NULL, *doL=NULL, *doR=NULL;
     uint8_t *nextT=NULL, *nextB=NULL, *nextL=NULL, *nextR=NULL;
     int R;
+    double *pxd = NULL, *pyd = NULL;
 
     W = x1 - x0;
     H = y1 - y0;
@@ -91,6 +92,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         scales[k] = scale;
     }
 
+    // is the given starting pixel xc,yc outside the box the be evaluated?
     if ((xc < x0) || (yc < y0) || (xc >= x1) || (yc >= y1)) {
         // Find max pixel on the boundary and use that as xc,yc
         int newxc, newyc;
@@ -170,13 +172,21 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     if (xc < (x1-1)) {
         SET(nextR, yc,   y0,y1);
     }
-    result[(yc - y0)*W + (xc - x0)] = eval_all(K, scales, II, mean, xc-fx, yc-fy);
+    if (xderiv)
+        pxd = xderiv + (yc - y0)*W + (xc - x0);
+    if (yderiv)
+        pyd = yderiv + (yc - y0)*W + (xc - x0);
+
+    result[(yc - y0)*W + (xc - x0)] = eval_all_dxy(K, scales, II, mean,
+                                                   xc-fx, yc-fy, pxd, pyd);
+                                                   
 
     for (R=1;; R++) {
         int any = 0;
         int xx, yy;
         int i;
         double* rrow;
+        int off;
 
         uint8_t* tmparr;
 
@@ -242,14 +252,20 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         // top
         yy = yc + R;
         if (yy < y1) {
-            rrow = result + (yy - y0)*W;
+            off = (yy - y0)*W;
+            rrow = result + off;
+            if (xderiv)
+                pxd = xderiv + off;
+            if (yderiv)
+                pyd = yderiv + off;
             for (i=0; i<W; i++) {
                 double r;
                 if (!doT[i])
                     continue;
                 any = 1;
                 xx = x0 + i;
-                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
+                                 (pxd?pxd+i:NULL), (pyd?pyd+i:NULL));
                 //result[(yy - y0)*W + (xx - x0)] = r;
                 rrow[i] = r;
                 //printf("top[xx=%i] = %g\n", xx, r);
@@ -282,13 +298,18 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         yy = yc - R;
         if (yy >= y0) {
             rrow = result + (yy - y0)*W;
+            if (xderiv)
+                pxd = xderiv + (yy - y0)*W;
+            if (yderiv)
+                pyd = yderiv + (yy - y0)*W;
             for (i=0; i<W; i++) {
                 double r;
                 if (!doB[i])
                     continue;
                 any = 1;
                 xx = x0 + i;
-                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
+                r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
+                                 (pxd?pxd+i:NULL), (pyd?pyd+i:NULL));
                 //result[(yy - y0)*W + (xx - x0)] = r;
                 rrow[i] = r;
                 //printf("bottom[xx=%i] = %g\n", xx, r);
@@ -325,8 +346,10 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     continue;
                 any = 1;
                 yy = y0 + i;
-                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-                result[(yy - y0)*W + (xx - x0)] = r;
+                off = (yy - y0)*W + (xx - x0);
+                r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
+                                 (pxd?pxd+off:NULL), (pyd?pyd+off:NULL));
+                result[off] = r;
                 //printf("left[yy=%i] = %g\n", xx, r);
                 if ((R > minradius) && (r < minval))
                     continue;
@@ -348,8 +371,10 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     continue;
                 any = 1;
                 yy = y0 + i;
-                r = eval_all(K, scales, II, mean, xx-fx, yy-fy);
-                result[(yy - y0)*W + (xx - x0)] = r;
+                off = (yy - y0)*W + (xx - x0);
+                r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
+                                 (pxd?pxd+off:NULL), (pyd?pyd+off:NULL));
+                result[off] = r;
                 //printf("right[yy=%i] = %g\n", yy, r);
                 if ((R > minradius) && (r < minval))
                     continue;

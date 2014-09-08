@@ -22,12 +22,17 @@ _mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
 	cp build/lib/_mp_fourier.so $@
 
 
-mix.py mix_wrap.c: mix.i
-	swig -python -I. mix.i
+# mix.py mix_wrap.c: mix.i
+# 	swig -python -I. mix.i
+# 
+# _mix.so: mix_wrap.c setup-mix.py
+# 	python setup-mix.py build --force --build-base build --build-platlib build/lib
+# 	cp build/lib/_mix.so $@
 
-_mix.so: mix_wrap.c setup-mix.py
+mix.py _mix.so: mix.i approx3.c setup-mix.py
 	python setup-mix.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mix.so $@
+
 
 # emfit.py emfit_wrap.c: emfit.i
 # 	swig -python -I. emfit.i

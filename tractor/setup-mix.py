@@ -3,9 +3,10 @@ from numpy.distutils.misc_util import get_numpy_include_dirs
 
 numpy_inc = get_numpy_include_dirs()
 
+#sources = ['mix_wrap.c' ],
 c_swig_module = Extension('_mix',
-						  sources = ['mix_wrap.c' ],
-						  include_dirs = numpy_inc,
+                          sources = ['mix.i'],
+                          include_dirs = numpy_inc,
 						  extra_objects = [],
     )
 #undef_macros=['NDEBUG'],
