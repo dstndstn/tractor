@@ -508,7 +508,8 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                           PyObject* np_mean,
                           PyObject* np_var,
                           double alpha,
-                          int steps);
+                          int steps,
+                          double approx);
 #include "emfit2.c"
 
 
