@@ -160,7 +160,6 @@ static int get_np(PyObject* ob_amp,
         return 1;
     }
     if (np_xderiv && *np_xderiv) {
-        printf("np_xderiv %p\n", np_xderiv);
         if ((PyArray_DIM(*np_xderiv, 0) != NY) ||
             (PyArray_DIM(*np_xderiv, 1) != NX)) {
             ERR("np_xderiv must be size NY x NX (%i x %i), got %i x %i",
@@ -170,7 +169,6 @@ static int get_np(PyObject* ob_amp,
         }
     }
     if (np_yderiv && *np_yderiv) {
-        printf("np_yderiv %p\n", np_yderiv);
         if ((PyArray_DIM(*np_yderiv, 0) != NY) ||
             (PyArray_DIM(*np_yderiv, 1) != NX)) {
             ERR("np_yderiv must be size NY x NX (%i x %i), got %i x %i",
@@ -180,7 +178,6 @@ static int get_np(PyObject* ob_amp,
         }
     }
     if (np_mask && *np_mask) {
-        printf("np_mask %p\n", np_mask);
         if ((PyArray_DIM(*np_mask, 0) != NY) ||
             (PyArray_DIM(*np_mask, 1) != NX)) {
             ERR("np_mask must be size NY x NX (%i x %i), got %i x %i",

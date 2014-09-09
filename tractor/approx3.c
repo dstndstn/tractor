@@ -44,6 +44,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     uint8_t *nextT=NULL, *nextB=NULL, *nextL=NULL, *nextR=NULL;
     int R;
     double *pxd = NULL, *pyd = NULL;
+    int off;
 
     W = x1 - x0;
     H = y1 - y0;
@@ -172,22 +173,19 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     if (xc < (x1-1)) {
         SET(nextR, yc,   y0,y1);
     }
-    if (xderiv)
-        pxd = xderiv + (yc - y0)*W + (xc - x0);
-    if (yderiv)
-        pyd = yderiv + (yc - y0)*W + (xc - x0);
 
-    result[(yc - y0)*W + (xc - x0)] = eval_all_dxy(K, scales, II, mean,
-                                                   xc-fx, yc-fy, pxd, pyd);
-                                                   
+    off = (yc - y0)*W + (xc - x0);
+    if (xderiv)
+        pxd = xderiv + off;
+    if (yderiv)
+        pyd = yderiv + off;
+    result[off] = eval_all_dxy(K, scales, II, mean, xc-fx, yc-fy, pxd, pyd);
 
     for (R=1;; R++) {
         int any = 0;
         int xx, yy;
         int i;
         double* rrow;
-        int off;
-
         uint8_t* tmparr;
 
         // Swap "do" and "next" arrays (do = next)
