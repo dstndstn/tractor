@@ -16,7 +16,7 @@ def plot_result(gpsf, psfimg):
     psfimg2 = np.maximum(psfimg, 0)
     psfimg2 /= psfimg2.sum()
 
-    gpsf.mog.normalize()
+    #gpsf.mog.normalize()
 
     mx = np.max(np.log10(psfimg[psfimg>0] + 1e-3))
     #mn = np.min(np.log10(psfimg + 1e-3))
@@ -72,11 +72,74 @@ def plot_result(gpsf, psfimg):
     
 
 if __name__ == '__main__':
+    ps = PlotSequence('test-em')
+
+    truepsf = GaussianMixturePSF(np.array([1.]),
+                                 np.array([[0.1, 0.3]]),
+                                 np.array([[[4.,0.5],[0.5,4.0]]]))
+    truepsf.radius = 10
+    img = truepsf.getPointSourcePatch(0., 0.)
+    img = img.patch
+
+    fsa = dict(v2=True, approx=1e-8, N=1)
+    
+    fit1 = GaussianMixturePSF.fromStamp(img, **fsa)
+
+    print 'truth:', truepsf
+    print 'fit1 :', fit1
+
+    for mu,sigma in [#(0, 1e-6), (1e-6,1e-6), (1e-5,1e-6),
+                     (0.,1e-4), #(1e-4,1e-4), (2e-4,1e-4), (-1e-4,1e-4), (-2e-4,1e-4),
+                     (0., 1e-3),
+                     (0.,1e-2),
+        # (1e-2, 1e-2), #(0, 2e-2)
+        # (-1e-2, 1e-2),
+                     ]:
+        print
+        print 'Fit with noise mu,sigma', mu,sigma
+        h,w = img.shape
+        plt.clf()
+        plt.subplot(2,1,1)
+        fitparams = []
+        for iters in range(50):
+            noise = np.random.normal(size=img.shape) * sigma + mu
+            plt.plot(img[h/2,:] + noise[h/2,:], 'g-', alpha=0.1)
+            fit2,sky = GaussianMixturePSF.fromStamp(img + noise, **fsa)
+            fit2.radius = truepsf.radius
+            print 'fit sky=', sky
+            print fit2
+            fitparams.append(fit2.getParams())
+            
+            fitimg = fit2.getPointSourcePatch(0.,0.)
+            fitimg = fitimg.patch
+            plt.plot(fitimg[h/2,:], 'r-', alpha=0.2)
+
+        plt.plot(img[h/2,:], 'b-', lw=2)
+        plt.suptitle('Noise mu=%.2g, sigma=%.2g' % (mu,sigma))
+        #plt.yscale('symlog', linthreshy=sigma)
+        fitparams = np.array(fitparams)
+        plt.subplot(2,1,2)
+        iparam = -3
+        plt.hist(fitparams[:,iparam], 10)
+        trueval = truepsf.getParams()[iparam]
+        xl,xh = plt.xlim()
+        mx = max(np.abs(xl-trueval), np.abs(xh-trueval))
+        plt.xlim(trueval-mx, trueval+mx)
+        plt.axvline(trueval, color='r')
+        plt.xlabel(truepsf.getParamNames()[iparam])
+        ps.savefig()
+            
+    import sys    
+    sys.exit(0)
+    
+    
+
+
+
+    
     fn = os.path.join(os.path.dirname(__file__),
                       'c4d_140818_002108_ooi_z_v1.ext27.psf')
     psf = PsfEx(fn, 2048, 4096)
-
-    ps = PlotSequence('test-em')
 
     nrounds = 1
     
@@ -205,14 +268,26 @@ if __name__ == '__main__':
 
     t0 = Time()
     for i in range(nrounds):
-        gpsf4 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6, **fsa)
+        gpsf4,sky = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6, **fsa)
     print 'fromStamp (v4):', Time()-t0
     print gpsf4
-
     plot_result(gpsf4, psfimg)
     plt.suptitle('fromStamp (v2, 1e-6)')
     ps.savefig()
 
+    import sys
+    sys.exit(0)
+    
+    t0 = Time()
+    for i in range(nrounds):
+        gpsf5 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-4, **fsa)
+    print 'fromStamp (v5):', Time()-t0
+    print gpsf5
+    plot_result(gpsf5, psfimg)
+    plt.suptitle('fromStamp (v2, 1e-4)')
+    ps.savefig()
+
+    
     if False:
         # non-positive determinant!
         t0 = Time()
@@ -237,23 +312,13 @@ if __name__ == '__main__':
     psftractor = Tractor([psftim], [PointSource(PixPos(pw/2, ph/2), Flux(1.))])
     psftractor.freezeParam('catalog')
     psftim.freezeAllBut('psf')
-    print 'Optimizing:'
-    psftractor.printThawedParams()
+    #print 'Optimizing:'
+    #psftractor.printThawedParams()
 
-    mod = psftractor.getModelImage(0)
-    #print 'Model image:', mod.min(), mod.max(), 'Finite:', np.all(np.isfinite(mod))
-    mod = psftractor.getModelImage(0)
-    #print 'Model image:', mod.min(), mod.max(), 'Finite:', np.all(np.isfinite(mod))
-    im = psftim.getImage()
-    #print 'PSF img:', im.min(), im.max(), 'Finite:', np.all(np.isfinite(im))
-    im = psftim.getInvError()
-    #print 'PSF ie:', im.min(), im.max(), 'Finite:', np.all(np.isfinite(im))
-    #print
-    
     tpsfs = []
     for step in range(100):
         #print 'Log-prob:', psftractor.getLogLikelihood()
-        tpsfs.append(psftim.psf.copy())
+        #tpsfs.append(psftim.psf.copy())
         dlnp,X,alpha = psftractor.optimize(priors=False, shared_params=False,
                                            damp=0.1, alphas=[0.1, 0.3, 1.0, 2.0])
         print 'dlnp:', dlnp

@@ -21,7 +21,7 @@ def video():
     ima = dict(interpolation='nearest', origin='lower')
     gx,gy = W/2 + 0.3, H/2 + 0.5
     gal = ExpGalaxy(PixPos(gx,gy), Flux(1.), GalaxyShape(5., 0.5, 30.))
-    tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+    tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
                 wcs=NullWCS(), psf=NCircularGaussianPSF([psfsig], [1.]),
                 photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
     tractor = Tractor([tim], [gal])
@@ -125,7 +125,7 @@ gx,gy = W/2 + 0.3, H/2 + 0.5
 
 gal = ExpGalaxy(PixPos(gx,gy), Flux(1.), GalaxyShape(5., 0.5, 30.))
 
-tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
             wcs=NullWCS(), psf=NCircularGaussianPSF([0.5], [1.]),
             photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
 
@@ -193,7 +193,7 @@ if False:
     plt.suptitle('Galaxy (conv narrow PSF)')
     ps.savefig()
 
-tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)),
+tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)),
             wcs=NullWCS(), psf=psfmodel,
             photocal=LinearPhotoCal(1.), sky=ConstantSky(0.))
 tractor = Tractor([tim], [gal])

@@ -22,11 +22,11 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     double* var;
     double* img;
 
-    double skyamp = 0.01;
+    double psky;
+    double skyamp;
+    double imgsum;
 
     int nexp = 0;
-
-    // FIXME -- are we assuming sum(img) == 1.0 ?
 
     tpd = pow(2.*M_PI, D);
 
@@ -87,6 +87,8 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     var  = PyArray_DATA(np_var);
     img  = PyArray_DATA(np_img);
 
+    skyamp = 0.01;
+
     for (step=0; step<steps; step++) {
         double x,y;
         double new_mean[K*D];
@@ -97,7 +99,24 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
         double* imgcursor;
         npy_intp ix, iy;
 
-        double psky = skyamp / (NX*NY);
+        // "amps" are in units of image counts: the total "flux"
+        // contributed by each Gaussian component.
+
+        // Similarly, "psky" is the "flux" from the sky in each pixel
+
+        // During the loop, we accumulate the total flux due to the
+        // sky in "skyamp"
+
+        if (step == 0) {
+            int i;
+            imgcursor = img;
+            imgsum = 0;
+            for (i=0; i<(NX*NY); i++) {
+                imgsum += *imgcursor;
+                imgcursor++;
+            }
+            psky = skyamp * imgsum / (NX*NY);
+        }
 
         /*              {
          int d;
@@ -174,8 +193,13 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                 imgcursor++;
                 x = x0 + ix;
                 y = y0 + iy;
+
+                if (*imgcursor <= 0) {
+                    // sky
+                    skyamp += abs(*imgcursor);
+                    continue;
+                }
                 // E step
-                //printf("zi =");
                 for (k=0; k<K; k++) {
                     double dsq;
                     double dx,dy;
@@ -185,7 +209,6 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                         + ivar[k*D*D + 1] * dx * dy
                         + ivar[k*D*D + 3] * dy * dy;
                     if (dsq >= maxD[k]) {
-                        //printf("0 ");
                         Zi[k] = 0.;
                         continue;
                     }
@@ -193,16 +216,12 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                     nexp++;
                     zsum += zi;
                     Zi[k] = zi;
-                    //printf("%.3g ", zi);
                 }
                 if (zsum == 0) {
                     skyamp += *imgcursor;
-                    //printf("\n");
                     continue;
                 }
-                //printf("| %.3g\n", psky);
                 zsum += psky;
-                //skyamp += (psky / zsum);
                 skyamp += *imgcursor * (psky / zsum);
 
                 // M step
@@ -232,18 +251,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
             var[k*D*D + 3] /= (amp[k] + alpha);
         }
 
-        /*{
-            double ampsum = 0.;
-            for (k=0; k<K; k++) {
-                ampsum += amp[k];
-            }
-            //printf("amp sum = %g\n", ampsum);
-            printf("skyamp: %g\n", skyamp);
-            printf("vs:     %g\n", 1.-ampsum);
-            skyamp = 1. - ampsum;
-         }*/
-        //skyamp /= (NX*NY);
-        //printf("skyamp: %g\n", skyamp);
+        psky = skyamp / (NX*NY);
     }
 
     printf("Number of exp calls: %i\n", nexp);
@@ -257,7 +265,7 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
     Py_DECREF(np_var);
     Py_DECREF(dtype);
 
-    *p_skyamp = skyamp;
+    *p_skyamp = psky;
 
     return result;
 }

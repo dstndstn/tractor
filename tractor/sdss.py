@@ -799,7 +799,7 @@ def scale_sdss_image(tim, S):
     # drop remainder pixels (for all image-shaped data items)
     H,W = tim.shape
     data = tim.getImage()
-    invvar = tim.getOrigInvvar()
+    invvar = tim.getInvvar()
     if H%S:
         data = data    [:-(H%S),:]
         invvar = invvar[:-(H%S),:]

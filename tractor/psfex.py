@@ -107,7 +107,6 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     def _fitParamGrid(self):
         # number of MoG mixture components
         K = self.K
-        w,mu,var = em_init_params(K, None, None, None)
         # all MoG fit parameters (we need to make them shaped (ny,nx)
         # for spline fitting)
         pp = []
@@ -119,20 +118,18 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         for y in YY:
             pprow = []
             for ix,x in enumerate(XX):
-                # We start each row with the MoG fit parameters of the start of the
-                # previous row (to try to make the fit more continuous)
+                p0 = None
+                # We start each row with the MoG fit parameters of the
+                # start of the previous row (to try to make the fit
+                # more continuous)
                 if ix == 0 and px0 is not None:
-                    w,mu,var = px0
+                    p0 = px0
                 im = self.instantiateAt(x, y)
-                PS = im.shape[0]
-                im /= im.sum()
-                im = np.maximum(im, 0)
-                xm,ym = -(PS/2), -(PS/2)
-                em_fit_2d(im, xm, ym, w, mu, var)
-                #print 'Fit w,mu,var', w,mu,var
+                gpsf = GaussianMixturePSF.fromStamp(im, K=K, P0=p0)
                 print 'Fit PSF at', x,y
+                w,mu,var = gpsf.get_wmuvar()
                 if ix == 0:
-                    px0 = w,mu,var
+                    px0 = (w,mu,var)
 
                 params = np.hstack((w.ravel()[:-1],
                                     mu.ravel(),

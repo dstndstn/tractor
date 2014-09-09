@@ -780,12 +780,8 @@ if __name__ == '__main__':
     bright = Flux(1000.)
     egal = ExpGalaxy(pos, bright, shape)
 
-    pcal = NullPhotoCal()
-    wcs = NullWCS()
     data = np.zeros((100, 200))
-    invvar = np.zeros_like(data)
-    tim = Image(data=data, invvar=invvar, psf=psf, wcs=wcs, sky=ConstantSky(0.),
-                photocal=pcal)
+    tim = Image(data=data, psf=psf)
 
     p0 = egal.getModelPatch(tim)
     
