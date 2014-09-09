@@ -72,11 +72,74 @@ def plot_result(gpsf, psfimg):
     
 
 if __name__ == '__main__':
+    ps = PlotSequence('test-em')
+
+    truepsf = GaussianMixturePSF(np.array([1.]),
+                                 np.array([[0.1, 0.3]]),
+                                 np.array([[[4.,0.5],[0.5,4.0]]]))
+    truepsf.radius = 10
+    img = truepsf.getPointSourcePatch(0., 0.)
+    img = img.patch
+
+    fsa = dict(v2=True, approx=1e-8, N=1)
+    
+    fit1 = GaussianMixturePSF.fromStamp(img, **fsa)
+
+    print 'truth:', truepsf
+    print 'fit1 :', fit1
+
+    for mu,sigma in [#(0, 1e-6), (1e-6,1e-6), (1e-5,1e-6),
+                     (0.,1e-4), #(1e-4,1e-4), (2e-4,1e-4), (-1e-4,1e-4), (-2e-4,1e-4),
+                     (0., 1e-3),
+                     (0.,1e-2),
+        # (1e-2, 1e-2), #(0, 2e-2)
+        # (-1e-2, 1e-2),
+                     ]:
+        print
+        print 'Fit with noise mu,sigma', mu,sigma
+        h,w = img.shape
+        plt.clf()
+        plt.subplot(2,1,1)
+        fitparams = []
+        for iters in range(50):
+            noise = np.random.normal(size=img.shape) * sigma + mu
+            plt.plot(img[h/2,:] + noise[h/2,:], 'g-', alpha=0.1)
+            fit2,sky = GaussianMixturePSF.fromStamp(img + noise, **fsa)
+            fit2.radius = truepsf.radius
+            print 'fit sky=', sky
+            print fit2
+            fitparams.append(fit2.getParams())
+            
+            fitimg = fit2.getPointSourcePatch(0.,0.)
+            fitimg = fitimg.patch
+            plt.plot(fitimg[h/2,:], 'r-', alpha=0.2)
+
+        plt.plot(img[h/2,:], 'b-', lw=2)
+        plt.suptitle('Noise mu=%.2g, sigma=%.2g' % (mu,sigma))
+        #plt.yscale('symlog', linthreshy=sigma)
+        fitparams = np.array(fitparams)
+        plt.subplot(2,1,2)
+        iparam = -3
+        plt.hist(fitparams[:,iparam], 10)
+        trueval = truepsf.getParams()[iparam]
+        xl,xh = plt.xlim()
+        mx = max(np.abs(xl-trueval), np.abs(xh-trueval))
+        plt.xlim(trueval-mx, trueval+mx)
+        plt.axvline(trueval, color='r')
+        plt.xlabel(truepsf.getParamNames()[iparam])
+        ps.savefig()
+            
+    import sys    
+    sys.exit(0)
+    
+    
+
+
+
+    
     fn = os.path.join(os.path.dirname(__file__),
                       'c4d_140818_002108_ooi_z_v1.ext27.psf')
     psf = PsfEx(fn, 2048, 4096)
-
-    ps = PlotSequence('test-em')
 
     nrounds = 1
     

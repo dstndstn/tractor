@@ -1445,7 +1445,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         else:
             w,mu,var = em_init_params(N, None, None, None)
         stamp = stamp.copy()
-        #stamp *= 1000.
         
         if xy0 is None:
             xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
@@ -1455,10 +1454,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         if v2:
             from emfit import em_fit_2d_reg2
             print 'stamp sum:', np.sum(stamp)
+            #stamp *= 1000.
             ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
                                        emsteps, approx)
-            print 'sky amp:', skyamp
-            print 'w sum:', sum(w)
+            #print 'sky amp:', skyamp
+            #print 'w sum:', sum(w)
             tpsf = GaussianMixturePSF(w, mu, var)
             return tpsf,skyamp
         else:
