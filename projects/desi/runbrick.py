@@ -557,7 +557,7 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
     for k in ['T', 'sedsn', 'coimgs', 'cons', 'detmaps', 'detivs',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims', 'ps']:
+              'bands', 'tims', 'ps', 'brickid']:
         rtn[k] = locals()[k]
     return rtn
 
@@ -688,15 +688,32 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None,
+           W=None,H=None, brickid=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
+    # Fit spatially variying PsfEx models.
+    for itim,tim in enumerate(tims):
+        print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
+        t0 = Time()
+        tim.psfex.savesplinedata = True
+        tim.psfex.ensureFit()
+        print 'PsfEx model fit took:', Time()-t0
+        
+    return dict(tims=tims)
+    
 
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
+#### formerly 1    
+def stage11(T=None, sedsn=None, coimgs=None, cons=None,
+           detmaps=None, detivs=None,
+           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+           W=None,H=None, brickid=None,
+           bands=None, ps=None, tims=None,
+           plots=False,
+           **kwargs):
     tlast = Time()
-
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     # Fit a MoG PSF model to the PSF in the middle of each tim.
     initial_psf_mog = []
     for itim,tim in enumerate(tims):
