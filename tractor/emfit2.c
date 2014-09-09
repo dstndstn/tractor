@@ -141,7 +141,10 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
             I[3] =  V[0] / det;
             scale[k] = amp[k] / sqrt(tpd * det);
 
-            maxD[k] = log(approx / scale[k]) / -0.5;
+            // maxD: we want to allow each component (before
+            // multiplication by amp) to make up to "approx" error, so
+            // that their sum is < approx.
+            maxD[k] = log(approx * sqrt(tpd * det)) / -0.5;
         }
 
         imgcursor = img;
