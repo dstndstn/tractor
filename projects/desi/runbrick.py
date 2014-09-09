@@ -126,7 +126,7 @@ def get_sdss_sources(bands, targetwcs, W, H):
     cat = Catalog(*srcs)
     return cat, objs
 
-def stage0(W=3600, H=3600, **kwargs):
+def stage0(W=3600, H=3600, brickid=None, **kwargs):
     ps = PlotSequence('brick')
     t0 = tlast = Time()
 
@@ -139,7 +139,7 @@ def stage0(W=3600, H=3600, **kwargs):
 
     # brick index...
     # One near the middle
-    brickid = 377306
+    #brickid = 377306
     # One near the edge and with little overlap
     #brickid = 380156
     ii = np.flatnonzero(B.brickid == brickid)[0]
@@ -560,6 +560,18 @@ def stage0(W=3600, H=3600, **kwargs):
               'bands', 'tims', 'ps']:
         rtn[k] = locals()[k]
     return rtn
+
+def stage101(coimgs=None, cons=None, bands=None, ps=None, **kwargs):
+    # RGB image
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands))
+    ps.savefig()
+
+    # cluster zoom-in
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands)[200:1200, 1700:2700,:])
+    ps.savefig()
+
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                chi_plots=True):
@@ -1067,6 +1079,8 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
     return rtn
 
 
+
+
 def stage102(T=None, sedsn=None, coimgs=None, cons=None,
              detmaps=None, detivs=None,
              nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
@@ -1088,6 +1102,7 @@ def stage203(T=None, coimgs=None, cons=None,
              W=None,H=None,
              bands=None, ps=None,
              plots=False, tims=None, tractor=None,
+             brickid=None,
              **kwargs):
     print 'kwargs:', kwargs.keys()
     del kwargs
@@ -1144,10 +1159,10 @@ def stage203(T=None, coimgs=None, cons=None,
             # flux_iv = R.IV
             # print 'IV:', flux_iv
             # src.setParams(p0)
-
             # band_var = srctr.optimize(priors=False, shared_params=False,
             #                           variance=True, just_variance=True)
             # print 'Variance for', band, 'band:', band_var
+
             dchisq = 0
             for tim in tims:
                 if tim.band != band:
@@ -1163,31 +1178,25 @@ def stage203(T=None, coimgs=None, cons=None,
                         continue
                     chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
                     dchisq += (chi**2).sum()
-            #print 'Derivative in chi-square for', band, ':', dchisq, 'inv', 1./dchisq
-
             flux_iv.append(dchisq)
     flux_iv = np.array(flux_iv)
-
     assert(len(flux_iv) == len(cat)*len(bands))
 
-    # X = fits_table()
-    # for i,band in enumerate(bands):
-    #     X.set('flux_%s' % band,
-    #           np.array([src.getBrightness().getFlux(band) for src in cat]))
-    #     X.set('flux_invvar_%s' % band, flux_iv[i::len(bands)])
-    # X.writeto('flux.fits')
-
-    #flux_iv = None
     fs = None
 
+    # HACK -- temp, until this propagates through the stages...
+    if brickid is None:
+        brickid = 377306
+
     TT = T.copy()
-    for k in ['itx','ity','tx','ty','index']:
+    for k in ['itx','ity','index']:
         TT.delete_column(k)
     for col in TT.get_columns():
-        TT.rename(col, 'sdss_%s' % col)
+        if not col in ['tx', 'ty', 'blob']:
+            TT.rename(col, 'sdss_%s' % col)
 
-    ## FIXME -- galaxy shape parameterization --> softened to regular r,e1,e2
-    ## (including errors)
+    TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.objid   = np.arange(len(TT)).astype(np.int32)
 
     for src in cat:
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
@@ -1203,7 +1212,46 @@ def stage203(T=None, coimgs=None, cons=None,
     T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
     for k in ['ra_var', 'dec_var']:
         T2.set(k, T2.get(k).astype(np.float32))
-    T2.writeto('phot.fits', header=hdr)
+    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
+
+    return dict(flux_iv=flux_iv, tims=tims, cat=cat)
+
+
+def stage204(T=None, flux_iv=None, tims=None, cat=None,
+             bands=None, brickid=None, **kwargs):
+    from desi_common import prepare_fits_catalog
+
+    fs = None
+
+    # HACK -- temp, until this propagates through the stages...
+    if brickid is None:
+        brickid = 377306
+
+    TT = T.copy()
+    for k in ['itx','ity','index']:
+        TT.delete_column(k)
+    for col in TT.get_columns():
+        if not col in ['tx', 'ty', 'blob']:
+            TT.rename(col, 'sdss_%s' % col)
+
+    TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.objid   = np.arange(len(TT)).astype(np.int32)
+
+    for src in cat:
+        if isinstance(src, (DevGalaxy, ExpGalaxy)):
+            src.shape = EllipseE.fromEllipseESoft(src.shape)
+        elif isinstance(src, FixedCompositeGalaxy):
+            src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+            src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
+
+    hdr = None
+    T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
+    for k in ['ra_var', 'dec_var', 'tx', 'ty']:
+        T2.set(k, T2.get(k).astype(np.float32))
+    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
 
 
 def stage103(T=None, coimgs=None, cons=None,
@@ -1350,6 +1398,10 @@ if __name__ == '__main__':
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
+
+    parser.add_option('-b', '--brick', type=int, help='Brick ID to run: default %default',
+                      default=377306)
+
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
@@ -1379,5 +1431,5 @@ if __name__ == '__main__':
     opt.force.append(opt.stage)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H)
+             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick)
     
