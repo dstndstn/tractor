@@ -273,7 +273,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 //printf("top[xx=%i] = %g\n", xx, r);
 
                 // If we're inside the minradius, mark the next pixels as game
-                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
+                //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // leftmost pixel of Top, and not at the left edge...
@@ -317,7 +317,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 //result[(yy - y0)*W + (xx - x0)] = r;
                 rrow[i] = r;
                 //printf("bottom[xx=%i] = %g\n", xx, r);
-                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
+                //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // leftmost pixel in Bottom, and not left edge?
@@ -357,7 +357,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                                  (yderiv ? yderiv+off : NULL));
                 result[off] = r;
                 //printf("left[yy=%i] = %g\n", xx, r);
-                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
+                //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // not the left edge?
@@ -384,7 +384,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                                  (yderiv ? yderiv+off : NULL));
                 result[off] = r;
                 //printf("right[yy=%i] = %g\n", yy, r);
-                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
+                //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // not the right edge?
