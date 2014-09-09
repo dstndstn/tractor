@@ -26,6 +26,8 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     //
     // minradius: minimum number of pixels to evaluate, regardless of minval
 
+    int nexp0 = n_exp;
+
     double *amp, *mean, *var, *result;
     double *xderiv=NULL, *yderiv=NULL;
     uint8_t* mask=NULL;
@@ -36,11 +38,6 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     PyObject *np_xderiv=NULL, *np_yderiv=NULL, *np_mask=NULL;
     double tpd;
     int W,H;
-    //double *II = NULL;
-    //double *VV = NULL;
-    //double *scales = NULL;
-    //uint8_t *doT=NULL, *doB=NULL, *doL=NULL, *doR=NULL;
-    //uint8_t *nextT=NULL, *nextB=NULL, *nextL=NULL, *nextR=NULL;
     int R;
     double *pxd = NULL, *pyd = NULL;
     int off;
@@ -72,6 +69,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         double II[3*K];
         double VV[3*K];
         double scales[K];
+        double maxD[K];
 
         uint8_t aw[4*W];
         uint8_t ah[4*H];
@@ -94,6 +92,10 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         uint8_t* nextL = ah + 2*H;
         uint8_t* nextR = ah + 3*H;
 
+        double ampsum = 0.;
+        for (k=0; k<K; k++)
+            ampsum += amp[k];
+            
         // We symmetrize the covariance matrix,
         // so V,I just have three elements for each K: x**2, xy, y**2.
         for (k=0; k<K; k++) {
@@ -113,6 +115,13 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
             I[1] = -V[1] * isc * 2.0;
             I[2] =  V[0] * isc;
             scales[k] = amp[k] / sqrt(tpd * det);
+            if (minval > 0.0) {
+                maxD[k] = log(minval * sqrt(tpd*det) / ampsum);
+                if (maxD[k] < -100.)
+                    maxD[k] = -100.;
+            } else {
+                maxD[k] = -100.;
+            }
         }
 
         // is the given starting pixel xc,yc outside the box the be evaluated?
@@ -184,7 +193,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
             pxd = xderiv + off;
         if (yderiv)
             pyd = yderiv + off;
-        result[off] = eval_all_dxy(K, scales, II, mean, xc-fx, yc-fy, pxd, pyd);
+        result[off] = eval_all_dxy(K, scales, II, mean, xc-fx, yc-fy, pxd, pyd, maxD);
 
         //printf("xc,yc %i,%i, vs x [%i,%i], y [%i,%i] -> res %g\n",
         //xc, yc, x0, x1, y0, y1, result[off]);
@@ -271,7 +280,8 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     any = 1;
                     xx = x0 + i;
                     r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
-                                     (pxd ? pxd+i : NULL), (pyd ? pyd+i : NULL));
+                                     (pxd ? pxd+i : NULL), (pyd ? pyd+i : NULL),
+                                     maxD);
 
                     //result[(yy - y0)*W + (xx - x0)] = r;
                     rrow[i] = r;
@@ -318,7 +328,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     any = 1;
                     xx = x0 + i;
                     r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
-                                     (pxd?pxd+i:NULL), (pyd?pyd+i:NULL));
+                                     (pxd?pxd+i:NULL), (pyd?pyd+i:NULL), maxD);
                     //result[(yy - y0)*W + (xx - x0)] = r;
                     rrow[i] = r;
                     //printf("bottom[xx=%i] = %g\n", xx, r);
@@ -359,7 +369,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     off = (yy - y0)*W + (xx - x0);
                     r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
                                      (xderiv ? xderiv+off : NULL),
-                                     (yderiv ? yderiv+off : NULL));
+                                     (yderiv ? yderiv+off : NULL), maxD);
                     result[off] = r;
                     //printf("left[yy=%i] = %g\n", xx, r);
                     //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
@@ -386,7 +396,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                     off = (yy - y0)*W + (xx - x0);
                     r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
                                      (xderiv ? xderiv+off : NULL),
-                                     (yderiv ? yderiv+off : NULL));
+                                     (yderiv ? yderiv+off : NULL), maxD);
                     result[off] = r;
                     //printf("right[yy=%i] = %g\n", yy, r);
                     //printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
@@ -416,6 +426,8 @@ bailout:
     Py_XDECREF(np_xderiv);
     Py_XDECREF(np_yderiv);
     Py_XDECREF(np_mask);
+
+    printf("N exp calls: %i\n", n_exp - nexp0);
 
     return rtn;
     }
