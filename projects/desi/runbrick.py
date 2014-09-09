@@ -697,6 +697,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
         t0 = Time()
         tim.psfex.savesplinedata = True
+        print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
         tim.psfex.ensureFit()
         print 'PsfEx model fit took:', Time()-t0
         
