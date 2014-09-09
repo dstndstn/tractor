@@ -26,8 +26,6 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
 
     int nexp = 0;
 
-    // FIXME -- are we assuming sum(img) == 1.0 ?
-
     tpd = pow(2.*M_PI, D);
 
     Py_INCREF(dtype);
@@ -174,6 +172,12 @@ static int em_fit_2d_reg2(PyObject* np_img, int x0, int y0,
                 imgcursor++;
                 x = x0 + ix;
                 y = y0 + iy;
+
+                if (*imgcursor <= 0) {
+                    // sky
+                    skyamp += abs(*imgcursor);
+                    continue;
+                }
                 // E step
                 //printf("zi =");
                 for (k=0; k<K; k++) {

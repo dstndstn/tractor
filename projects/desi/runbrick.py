@@ -692,7 +692,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
-    # Fit spatially variying PsfEx models.
+    # Fit spatially varying PsfEx models.
     for itim,tim in enumerate(tims):
         print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
         t0 = Time()

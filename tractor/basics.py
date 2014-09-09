@@ -1230,6 +1230,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         # print 'Setting param names:', names
         self.addNamedParams(**names)
 
+    def get_mwuvar(self):
+        return (self.mog.amp, self.mog.mean, self.mog.var)
+        
     @classmethod
     def fromFitsHeader(clazz, hdr, prefix=''):
         params = []
@@ -1425,7 +1428,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     @staticmethod
     def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
-                  emsteps=1000, v2=False, approx=1e-30, clamp=True):
+                  emsteps=1000, v2=False, approx=1e-30):
         '''
         optional P0 = (w,mu,var): initial parameter guess.
 
@@ -1442,9 +1445,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         else:
             w,mu,var = em_init_params(N, None, None, None)
         stamp = stamp.copy()
-        if clamp:
-            stamp = np.maximum(stamp, 0)
-        stamp /= stamp.sum()
+        #stamp *= 1000.
+        
         if xy0 is None:
             xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
         else:
@@ -1455,7 +1457,15 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             print 'stamp sum:', np.sum(stamp)
             ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
                                        emsteps, approx)
+            print 'sky amp:', skyamp
+            print 'w sum:', sum(w)
+            tpsf = GaussianMixturePSF(w, mu, var)
+            return tpsf,skyamp
         else:
+
+            stamp /= stamp.sum()
+            stamp = np.maximum(stamp, 0)
+
             em_fit_2d_reg(stamp, xm, ym, w, mu, var, alpha, emsteps)
 
         tpsf = GaussianMixturePSF(w, mu, var)

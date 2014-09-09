@@ -16,7 +16,7 @@ def plot_result(gpsf, psfimg):
     psfimg2 = np.maximum(psfimg, 0)
     psfimg2 /= psfimg2.sum()
 
-    gpsf.mog.normalize()
+    #gpsf.mog.normalize()
 
     mx = np.max(np.log10(psfimg[psfimg>0] + 1e-3))
     #mn = np.min(np.log10(psfimg + 1e-3))
@@ -205,14 +205,26 @@ if __name__ == '__main__':
 
     t0 = Time()
     for i in range(nrounds):
-        gpsf4 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6, **fsa)
+        gpsf4,sky = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-6, **fsa)
     print 'fromStamp (v4):', Time()-t0
     print gpsf4
-
     plot_result(gpsf4, psfimg)
     plt.suptitle('fromStamp (v2, 1e-6)')
     ps.savefig()
 
+    import sys
+    sys.exit(0)
+    
+    t0 = Time()
+    for i in range(nrounds):
+        gpsf5 = GaussianMixturePSF.fromStamp(psfimg, v2=True, approx=1e-4, **fsa)
+    print 'fromStamp (v5):', Time()-t0
+    print gpsf5
+    plot_result(gpsf5, psfimg)
+    plt.suptitle('fromStamp (v2, 1e-4)')
+    ps.savefig()
+
+    
     if False:
         # non-positive determinant!
         t0 = Time()
@@ -237,23 +249,13 @@ if __name__ == '__main__':
     psftractor = Tractor([psftim], [PointSource(PixPos(pw/2, ph/2), Flux(1.))])
     psftractor.freezeParam('catalog')
     psftim.freezeAllBut('psf')
-    print 'Optimizing:'
-    psftractor.printThawedParams()
+    #print 'Optimizing:'
+    #psftractor.printThawedParams()
 
-    mod = psftractor.getModelImage(0)
-    #print 'Model image:', mod.min(), mod.max(), 'Finite:', np.all(np.isfinite(mod))
-    mod = psftractor.getModelImage(0)
-    #print 'Model image:', mod.min(), mod.max(), 'Finite:', np.all(np.isfinite(mod))
-    im = psftim.getImage()
-    #print 'PSF img:', im.min(), im.max(), 'Finite:', np.all(np.isfinite(im))
-    im = psftim.getInvError()
-    #print 'PSF ie:', im.min(), im.max(), 'Finite:', np.all(np.isfinite(im))
-    #print
-    
     tpsfs = []
     for step in range(100):
         #print 'Log-prob:', psftractor.getLogLikelihood()
-        tpsfs.append(psftim.psf.copy())
+        #tpsfs.append(psftim.psf.copy())
         dlnp,X,alpha = psftractor.optimize(priors=False, shared_params=False,
                                            damp=0.1, alphas=[0.1, 0.3, 1.0, 2.0])
         print 'dlnp:', dlnp
