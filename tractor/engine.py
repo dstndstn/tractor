@@ -2223,7 +2223,7 @@ class Tractor(MultiParams):
     def getModelPatchNoCache(self, img, src, **kwargs):
         return src.getModelPatch(img, **kwargs)
 
-    def getModelPatch(self, img, src, minsb=0., **kwargs):
+    def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
             # shortcut
             return src.getModelPatch(img, **kwargs)
@@ -2231,6 +2231,8 @@ class Tractor(MultiParams):
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
         mv,mod = self.cache.get(deps, (0.,None))
+        if minsb is None:
+            minsb = img.modelMinval
         if mv > minsb:
             mod = None
         if mod is not None:
@@ -2240,7 +2242,7 @@ class Tractor(MultiParams):
             self.cache.put(deps, (minsb,mod))
         return mod
 
-    def getModelImage(self, img, srcs=None, sky=True, minsb=0.):
+    def getModelImage(self, img, srcs=None, sky=True, minsb=None):
         '''
         Create a model image for the given "tractor image", including
         the sky level.  If "srcs" is specified (a list of sources),

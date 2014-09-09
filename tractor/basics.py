@@ -835,10 +835,12 @@ class PointSource(MultiParams):
     def getUnitFluxModelPatches(self, *args, **kwargs):
         return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
-    def getModelPatch(self, img, minsb=0.):
+    def getModelPatch(self, img, minsb=None):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
+        if minsb is None:
+            minsb = img.modelMinval
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval)
         if upatch is None:
@@ -871,30 +873,49 @@ class PointSource(MultiParams):
                 return [None]*self.numberOfParams()
 
 
-        pos0 = self.getPosition()
+        pos = self.getPosition()
         wcs = img.getWcs()
-        (px0,py0) = wcs.positionToPixel(pos0, self)
-        # FIXME -- check for position way outside the image, before rendering point source patch?
-        
-        psf = self._getPsf(img)
-        patch0 = psf.getPointSourcePatch(px0, py0)
 
-        H,W = img.shape
+        # (px0,py0) = wcs.positionToPixel(pos, self)
+        # psf = self._getPsf(img)
+        # extent = [0,W-1,0,H-1]
+        # patch0 = psf.getPointSourcePatch(px0, py0, extent=extent,
+        #                                  radius=self.fixedRadius)
+
+        minsb = img.modelMinval
+        if counts0 > 0:
+            minval = minsb / counts0
+        else:
+            minval = None
+            
+        patch0 = self.getUnitFluxModelPatch(img, minval=minval)
+        if patch0 is None:
+            return [None]*self.numberOfParams()
         # check for intersection of patch0 with img
+        H,W = img.shape
         if not patch0.overlapsBbox((0, W, 0, H)):
             return [None]*self.numberOfParams()
         
         derivs = []
 
+        # FIXME -- what about PSF models that can return the x,y
+        # derivatives along with the model?
+        
         # Position
         if not self.isParamFrozen('pos'):
-            psteps = pos0.getStepSizes(img)
-            pvals = pos0.getParams()
+            psteps = pos.getStepSizes(img)
+            pvals = pos.getParams()
+            ## FIXME -- we should ensure that patch0 and patchx have the same
+            ## extent (of pixels rendered > minval)!
             for i,pstep in enumerate(psteps):
-                oldval = pos0.setParam(i, pvals[i] + pstep)
-                (px,py) = wcs.positionToPixel(pos0, self)
-                patchx = psf.getPointSourcePatch(px, py)
-                pos0.setParam(i, oldval)
+                oldval = pos.setParam(i, pvals[i] + pstep)
+
+                #(px,py) = wcs.positionToPixel(pos, self)
+                #patchx = psf.getPointSourcePatch(px, py, extent=extent,
+                #                                 radius=self.fixedRadius)
+                patchx = self.getUnitFluxModelPatch(img, minval=minval)
+
+                pos.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(pos%i)' % i)
                 derivs.append(dx)
@@ -1230,7 +1251,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         # print 'Setting param names:', names
         self.addNamedParams(**names)
 
-    def get_mwuvar(self):
+    def get_wmuvar(self):
         return (self.mog.amp, self.mog.mean, self.mog.var)
         
     @classmethod
@@ -1301,6 +1322,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                             v3=False, derivs=False,
                             **kwargs):
         self.mog.symmetrize()
+        if minval is None:
+            minval = 0.
         if minval > 0.:
             if radius is not None:
                 rr = radius

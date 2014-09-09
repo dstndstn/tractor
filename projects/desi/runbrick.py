@@ -229,7 +229,8 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
         if mp is not None:
             args.append((im, brick.ra, brick.dec, pixscale))
         else:
-            run_calibs(im, brick.ra, brick.dec, pixscale)
+            run_calibs(im, brick.ra, brick.dec, pixscale, se2=False,
+                       morph=False)
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
@@ -703,9 +704,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         
     return dict(tims=tims)
     
-
-#### formerly 1    
-def stage11(T=None, sedsn=None, coimgs=None, cons=None,
+def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
@@ -713,18 +712,29 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
-    tlast = Time()
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    # Fit a MoG PSF model to the PSF in the middle of each tim.
-    initial_psf_mog = []
-    for itim,tim in enumerate(tims):
-        ox0,oy0 = orig_wcsxy0[itim]
-        h,w = tim.shape
-        psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-        initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
 
+    for tim in tims:
+        #print 'PsfEx saved params:', tim.psfex.splinedata
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
+        tim.psf = tim.psfex
 
+    for tim in tims:
+        tim.modelMinval = 0.1 * tim.sig1
+        
+    # # Fit a MoG PSF model to the PSF in the middle of each tim.
+    # initial_psf_mog = []
+    # for itim,tim in enumerate(tims):
+    #     ox0,oy0 = orig_wcsxy0[itim]
+    #     h,w = tim.shape
+    #     psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+    #     subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+    #     initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
+
+    ## FIXME -- set tim.modelMinval !
+    
+
+    tfitall = tlast = Time()
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
         bslc  = blobslices[iblob]
@@ -790,7 +800,7 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
             print 'tim clip:', Time()-ttim
             ttim = Time()
 
-            # Mask out invvar for pixels that are not within the blob.
+            # Mask out inverr for pixels that are not within the blob.
             subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
             subsubwcs = tim.subwcs.get_subimage(int(sx0), int(sy0), int(sx1-sx0), int(sy1-sy0))
             try:
@@ -805,7 +815,7 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
             subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
             subie = subie2
 
-            print 'tim mask iv:', Time()-ttim
+            print 'tim mask inverr:', Time()-ttim
             ttim = Time()
 
             if plots and False:
@@ -824,11 +834,18 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
 
             ttim = Time()
 
-            psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
-                                             nativeScale=True)
-
-            print 'tim instantiate PSF:', Time()-ttim
-            ttim = Time()
+            if False:
+                psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
+                                                 nativeScale=True)
+                print 'tim instantiate PSF:', Time()-ttim
+                ttim = Time()
+                # Note, initial_psf_mog is probably modified in this process!
+                subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
+                print 'EM fit PSF:'
+                print subpsf
+                print 'tim fit PSF:', Time()-ttim
+                print 'psfimg shape', psfimg.shape
+                ttim = Time()
 
             if False:
                 (w,mu,var) = initial_psf_mog[itim]
@@ -851,32 +868,29 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
                 print 'tim PSF fitting via Tractor:', Time()-ttim
                 ttim = Time()
 
-            # Note, initial_psf_mog is probably modified in this process!
-            subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
-
-            print 'EM fit PSF:'
-            print subpsf
-            
-            print 'tim fit PSF:', Time()-ttim
-            print 'psfimg shape', psfimg.shape
-            ttim = Time()
-
+            subpsf = ShiftedPsf(tim.psf, ox0+sx0, oy0+sy0)
+                
             subtim = Image(data=subimg, inverr=subie, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
                            sky=tim.getSky(), name=tim.name)
             subtim.band = tim.band
-
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
-                               (Yo >=  by0) * (Yo <  by1) * (Xo >=  bx0) * (Xo <  bx1))
-            Yo = Yo[I] - by0
-            Xo = Xo[I] - bx0
-            Yi = Yi[I] - sy0
-            Xi = Xi[I] - sx0
-            subtim.resamp = (Yo, Xo, Yi, Xi)
             subtim.sig1 = tim.sig1
 
-            print 'tim resamp:', Time()-ttim
+            subtim.modelMinval = tim.modelMinval
+            
+            if plots:
+                ttim = Time()
+                (Yo,Xo,Yi,Xi) = tim.resamp
+                I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) *
+                                   (Xi >= sx0) * (Xi < sx1) *
+                                   (Yo >=  by0) * (Yo <  by1) *
+                                   (Xo >=  bx0) * (Xo <  bx1))
+                Yo = Yo[I] - by0
+                Xo = Xo[I] - bx0
+                Yi = Yi[I] - sy0
+                Xi = Xi[I] - sx0
+                subtim.resamp = (Yo, Xo, Yi, Xi)
+                print 'tim resamp:', Time()-ttim
 
             subtims.append(subtim)
 
@@ -902,7 +916,6 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
             flux = sum([br.getFlux(band) for band in bands])
             fluxes.append(flux)
         Ibright = np.argsort(-np.array(fluxes))
-
 
         if len(Ibright) >= 5:
             # -Remember the original subtim images
@@ -1091,12 +1104,14 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
         print 'Blob', blobnumber, 'finished:', Time()-tlast
         tlast = Time()
 
+    print 'Fitting sources took:', Time()-tfitall
+
+    print 'Logprob:', tractor.getLogProb()
+    
     rtn = dict()
     for k in ['tractor','tims','ps']:
         rtn[k] = locals()[k]
     return rtn
-
-
 
 
 def stage102(T=None, sedsn=None, coimgs=None, cons=None,
@@ -1329,11 +1344,11 @@ def stage103(T=None, coimgs=None, cons=None,
                 continue
 
             # Fit a MoG PSF model to the PsfEx model in the middle of the tim
-            ox0,oy0 = orig_wcsxy0[itim]
-            h,w = tim.shape
-            psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-            subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-            tim.psf = subpsf
+            # ox0,oy0 = orig_wcsxy0[itim]
+            # h,w = tim.shape
+            # psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+            # subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+            # tim.psf = subpsf
 
             if False:
                 print 'Fitting PsfEx model for', tim.name
@@ -1445,7 +1460,7 @@ if __name__ == '__main__':
 
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    prereqs = {101: 0, 102:1, 203:102 }
+    prereqs = {101: 0, 102:2, 203:102 }
     opt.force.append(opt.stage)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
