@@ -424,9 +424,7 @@ if __name__ == '__main__':
     
     data = np.zeros((200, 200))
     invvar = np.zeros_like(data)
-    tim = Image(data=data, invvar=invvar, psf=psf,
-                wcs=NullWCS(), sky=ConstantSky(0.),
-                photocal=NullPhotoCal())
+    tim = Image(data=data, invvar=invvar, psf=psf)
 
     tractor = Tractor([tim], [s])
 

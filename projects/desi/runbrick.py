@@ -781,7 +781,7 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
 
             subslc = slice(sy0,sy1),slice(sx0,sx1)
             subimg = tim.getImage ()[subslc]
-            subiv  = tim.getInvvar()[subslc]
+            subie  = tim.getInvError()[subslc]
             subwcs = tim.getWcs().copy()
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
@@ -799,10 +799,10 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
                 continue
             if len(Yo) == 0:
                 continue
-            subiv2 = np.zeros_like(subiv)
+            subie2 = np.zeros_like(subie)
             I = np.flatnonzero(blobs[bslc][Yi, Xi] == (iblob+1))
-            subiv2[Yo[I],Xo[I]] = subiv[Yo[I],Xo[I]]
-            subiv = subiv2
+            subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
+            subie = subie2
 
             print 'tim mask iv:', Time()-ttim
             ttim = Time()
@@ -812,7 +812,7 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.subplot(1,2,1)
                 dimshow(subimg)
                 plt.subplot(1,2,2)
-                dimshow(subiv)
+                dimshow(subie)
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
@@ -860,7 +860,7 @@ def stage11(T=None, sedsn=None, coimgs=None, cons=None,
             print 'psfimg shape', psfimg.shape
             ttim = Time()
 
-            subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
+            subtim = Image(data=subimg, inverr=subie, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
                            sky=tim.getSky(), name=tim.name)
             subtim.band = tim.band

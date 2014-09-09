@@ -71,7 +71,7 @@ if __name__ == '__main__':
 	
 	W,H = 500,500
 	data = np.zeros((H,W))
-	iv = np.ones((H,W))
+	ie = np.ones((H,W))
 	psf = NCircularGaussianPSF([1.], [1.])
 
 	ra,dec = 90.,0.
@@ -82,7 +82,7 @@ if __name__ == '__main__':
 	photocal = NullPhotoCal()
 	sky = ConstantSky(0.)
 	
-	tim = Image(data=data, invvar=iv, psf=psf, wcs=lwcs,
+	tim = Image(data=data, inverr=ie, psf=psf, wcs=lwcs,
 				sky=sky, photocal=photocal, name='im')
 
 	srcs = []

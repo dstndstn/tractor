@@ -29,7 +29,7 @@ if True:
         assert(nims == nepochs)
         for i in range(nims):
             image = cube[i,:,:]
-            tim = Image(data=image, invvar=np.ones_like(image) / pixnoise**2,
+            tim = Image(data=image, inverr=np.ones_like(image) / pixnoise,
                         photocal=FluxesPhotoCal(band),
                         wcs=NullWCS(pixscale=pixscale),
                         psf=NCircularGaussianPSF([psf_sigma], [1.0]))
