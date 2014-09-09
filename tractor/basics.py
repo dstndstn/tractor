@@ -1340,11 +1340,12 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 if derivs:
                     xderiv = np.zeros_like(result)
                     yderiv = np.zeros_like(result)
-                    rtn = c_gauss_2d_approx3(x0, x1+1, y0, y1+1, px, py, minval,
-                                             self.mog.amp, self.mog.mean,
-                                             self.mog.var, result,
-                                             xderiv, yderiv, mask,
-                                             int(px), int(py), minradius)
+                rtn = c_gauss_2d_approx3(x0, x1+1, y0, y1+1, px, py, minval,
+                                         self.mog.amp, self.mog.mean,
+                                         self.mog.var, result,
+                                         xderiv, yderiv, mask,
+                                         int(px), int(py), minradius)
+                assert(rtn == 0)
                 if derivs:
                     return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
                             Patch(x0,y0,yderiv))

@@ -49,9 +49,9 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
         G = scales[k] * eval_g(I + 3*k, dx, dy);
         r += G;
         if (xderiv)
-            *xderiv += G * (2. * I[3*k+0] * dx + I[3*k+1] * dy);
+            *xderiv += G * (2. * I[3*k + 0] * dx + I[3*k + 1] * dy);
         if (yderiv)
-            *yderiv += G * (2. * I[3*k+2] * dy + I[3*k+1] * dx);
+            *yderiv += G * (2. * I[3*k + 2] * dy + I[3*k + 1] * dx);
     }
     return r;
 }

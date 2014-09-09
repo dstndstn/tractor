@@ -11,8 +11,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               PyObject* ob_yderiv,
                               PyObject* ob_mask,
                               int xc, int yc,
-                              int minradius
-                              ) {
+                              int minradius) {
 
     //
     // ob_mask: numpy array, shape (y1-y0, x1-x0), boolean: which
@@ -50,21 +49,24 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     H = y1 - y0;
     tpd = pow(2.*M_PI, D);
 
-    if (get_np(ob_amp, ob_mean, ob_var, ob_result, ob_xderiv, ob_yderiv, ob_mask, W, H,
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, ob_xderiv, ob_yderiv,
+               ob_mask, W, H,
                &K, &np_amp, &np_mean, &np_var, &np_result, &np_xderiv, &np_yderiv,
-               &np_mask))
+               &np_mask)) {
+        printf("get_np failed\n");
         goto bailout;
+    }
 
-    amp = PyArray_DATA(np_amp);
-    mean = PyArray_DATA(np_mean);
-    var = PyArray_DATA(np_var);
+    amp    = PyArray_DATA(np_amp);
+    mean   = PyArray_DATA(np_mean);
+    var    = PyArray_DATA(np_var);
     result = PyArray_DATA(np_result);
     if (np_xderiv)
         xderiv = PyArray_DATA(np_xderiv);
     if (np_yderiv)
         yderiv = PyArray_DATA(np_yderiv);
     if (np_mask)
-        mask = PyArray_DATA(np_mask);
+        mask   = PyArray_DATA(np_mask);
 
     II = malloc(sizeof(double) * 3 * K);
     VV = malloc(sizeof(double) * 3 * K);
@@ -76,7 +78,6 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         // We also scale the I to make the Gaussian evaluation easier
         double det;
         double isc;
-        double scale;
         double* V = VV + 3*k;
         double* I = II + 3*k;
         V[0] =  var[k*D*D + 0];
@@ -89,8 +90,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         // we also fold in the 2*dx*dy term here
         I[1] = -V[1] * isc * 2.0;
         I[2] =  V[0] * isc;
-        scale = amp[k] / sqrt(tpd * det);
-        scales[k] = scale;
+        scales[k] = amp[k] / sqrt(tpd * det);
     }
 
     // is the given starting pixel xc,yc outside the box the be evaluated?
@@ -181,6 +181,9 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         pyd = yderiv + off;
     result[off] = eval_all_dxy(K, scales, II, mean, xc-fx, yc-fy, pxd, pyd);
 
+    //printf("xc,yc %i,%i, vs x [%i,%i], y [%i,%i] -> res %g\n",
+    //xc, yc, x0, x1, y0, y1, result[off]);
+
     for (R=1;; R++) {
         int any = 0;
         int xx, yy;
@@ -188,7 +191,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         double* rrow;
         uint8_t* tmparr;
 
-        // Swap "do" and "next" arrays (do = next)
+        // Swap "do" and "next" arrays (do <= next)
         tmparr = doT;
         doT = nextT;
         nextT = tmparr;
@@ -207,45 +210,45 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         memset(nextR, 0, H);
 
         // Beautiful ASCII art...
-        /*
-         printf("R = %i, xc,yc = (%i,%i)\n", R, xc, yc);
-         for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
-         printf("%c", (doT[i] ? '*' : '-'));
-         }
-         printf("\n");
-         for (i=MIN(yc-y0+R-1, H-1); i>=MAX(yc-y0-R+1, 0); i--) {
-         printf("%c", (doL[i] ? '*' : '|'));
-         int j;
-         for (j=MAX(xc-x0-R, 0)+1; j<=MIN(xc-x0+R, W-1)-1; j++)
-         printf(" ");
-         printf("%c", (doR[i] ? '*' : '|'));
-         printf("\n");
-         }
-         for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
-         printf("%c", (doB[i] ? '*' : '-'));
-         }
-         printf("\n");
-         printf("\n");
+        if (0) {
+            printf("R = %i, xc,yc = (%i,%i)\n", R, xc, yc);
+            for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+                printf("%c", (doT[i] ? '*' : '-'));
+            }
+            printf("\n");
+            for (i=MIN(yc-y0+R-1, H-1); i>=MAX(yc-y0-R+1, 0); i--) {
+                printf("%c", (doL[i] ? '*' : '|'));
+                int j;
+                for (j=MAX(xc-x0-R, 0)+1; j<=MIN(xc-x0+R, W-1)-1; j++)
+                    printf(" ");
+                printf("%c", (doR[i] ? '*' : '|'));
+                printf("\n");
+            }
+            for (i=MAX(xc-x0-R, 0); i<=MIN(xc-x0+R, W-1); i++) {
+                printf("%c", (doB[i] ? '*' : '-'));
+            }
+            printf("\n");
+            printf("\n");
 
-         for (i=0; i<H; i++) {
-         int j;
-         for (j=0; j<W; j++) {
-         if (i == (yc+R-y0)) {
-         printf("%c", (doT[j] ? '*' : '-'));
-         } else if (i == (yc-R-y0)) {
-         printf("%c", (doB[j] ? '*' : '-'));
-         } else if (j == (xc-R-x0)) {
-         printf("%c", (doL[i] ? '*' : '-'));
-         } else if (j == (xc+R-x0)) {
-         printf("%c", (doR[i] ? '*' : '-'));
-         } else {
-         printf(".");
-         }
-         }
-         printf("\n");
-         }
-         printf("\n");
-         */
+            for (i=0; i<H; i++) {
+                int j;
+                for (j=0; j<W; j++) {
+                    if (i == (yc+R-y0)) {
+                        printf("%c", (doT[j] ? '*' : '-'));
+                    } else if (i == (yc-R-y0)) {
+                        printf("%c", (doB[j] ? '*' : '-'));
+                    } else if (j == (xc-R-x0)) {
+                        printf("%c", (doL[i] ? '*' : '-'));
+                    } else if (j == (xc+R-x0)) {
+                        printf("%c", (doR[i] ? '*' : '-'));
+                    } else {
+                        printf(".");
+                    }
+                }
+                printf("\n");
+            }
+            printf("\n");
+        }
 
         // top
         yy = yc + R;
@@ -263,12 +266,14 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 any = 1;
                 xx = x0 + i;
                 r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
-                                 (pxd?pxd+i:NULL), (pyd?pyd+i:NULL));
+                                 (pxd ? pxd+i : NULL), (pyd ? pyd+i : NULL));
+
                 //result[(yy - y0)*W + (xx - x0)] = r;
                 rrow[i] = r;
                 //printf("top[xx=%i] = %g\n", xx, r);
 
                 // If we're inside the minradius, mark the next pixels as game
+                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // leftmost pixel of Top, and not at the left edge...
@@ -295,11 +300,12 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
         // bottom
         yy = yc - R;
         if (yy >= y0) {
-            rrow = result + (yy - y0)*W;
+            off = (yy - y0)*W;
+            rrow = result + off;
             if (xderiv)
-                pxd = xderiv + (yy - y0)*W;
+                pxd = xderiv + off;
             if (yderiv)
-                pyd = yderiv + (yy - y0)*W;
+                pyd = yderiv + off;
             for (i=0; i<W; i++) {
                 double r;
                 if (!doB[i])
@@ -311,6 +317,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 //result[(yy - y0)*W + (xx - x0)] = r;
                 rrow[i] = r;
                 //printf("bottom[xx=%i] = %g\n", xx, r);
+                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // leftmost pixel in Bottom, and not left edge?
@@ -346,9 +353,11 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 yy = y0 + i;
                 off = (yy - y0)*W + (xx - x0);
                 r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
-                                 (pxd?pxd+off:NULL), (pyd?pyd+off:NULL));
+                                 (xderiv ? xderiv+off : NULL),
+                                 (yderiv ? yderiv+off : NULL));
                 result[off] = r;
                 //printf("left[yy=%i] = %g\n", xx, r);
+                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // not the left edge?
@@ -371,9 +380,11 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                 yy = y0 + i;
                 off = (yy - y0)*W + (xx - x0);
                 r = eval_all_dxy(K, scales, II, mean, xx-fx, yy-fy,
-                                 (pxd?pxd+off:NULL), (pyd?pyd+off:NULL));
+                                 (xderiv ? xderiv+off : NULL),
+                                 (yderiv ? yderiv+off : NULL));
                 result[off] = r;
                 //printf("right[yy=%i] = %g\n", yy, r);
+                printf("r=%g vs minval %g; R=%i vs minradius %i\n", r, minval, R, minradius);
                 if ((R > minradius) && (r < minval))
                     continue;
                 // not the right edge?
@@ -415,4 +426,4 @@ bailout:
     Py_XDECREF(np_mask);
 
     return rtn;
-}
+    }
