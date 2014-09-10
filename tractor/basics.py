@@ -824,18 +824,14 @@ class PointSource(MultiParams):
                 repr(self.brightness) + ')')
 
     def getUnitFluxModelPatch(self, img, minval=0.):
-        print
-        print 'PointSource.getUnitFluxModelPatch'
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
-        print 'pixel position', int(px),int(py), 'in image size', W,H
         psf = self._getPsf(img)
-        print 'PSF:', psf
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         extent=[0,W-1,0,H-1],
                                         radius=self.fixedRadius,
-            v3=True)
-        print 'PointSource.getUnitFluxModelPatch: patch is', patch
+        #v3=True
+            )
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -1327,9 +1323,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                             radius=None,
                             v3=False, derivs=False,
                             **kwargs):
-        print 'GaussianMixturePSF.getPointSourcePatch'
-
-        self.mog.symmetrize()
+        #self.mog.symmetrize()
         if minval is None:
             minval = 0.
         if minval > 0.:
@@ -1347,16 +1341,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                     if r2 > 0:
                         r = max(r, np.sqrt(r2))
                 rr = int(np.ceil(r))
-                #print 'choosing r=', rr
 
-
-            print 'GMPSF: px,py', px,py, 'rr', rr
             x0 = int(floor(px - rr))
             x1 = int(ceil (px + rr))
             y0 = int(floor(py - rr))
             y1 = int(ceil (py + rr))
-
-            print 'initial patch:', x0,x1,y0,y1
 
             # x1,y1: inclusive
             if extent is not None:
@@ -1368,8 +1357,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 y0 = max(y0, yl)
                 y1 = min(y1, yh)
 
-                print 'extent:', xl,xh,yl,yh
-            print 'rendering:', x0,x1, y0,y1
             if x0 > x1:
                 return None
             if y0 > y1:
