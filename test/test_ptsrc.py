@@ -4,6 +4,7 @@ import pylab as plt
 import numpy as np
 
 from tractor import *
+from tractor.galaxy import *
 from astrometry.util.util import Tan
 from astrometry.util.plotutils import *
 
@@ -57,3 +58,22 @@ for cd in [
         plt.title('Fast ' + deriv.name)
         plt.colorbar()
     ps.savefig()
+
+
+src = FixedCompositeGalaxy(RaDecPos(0., 0.), Flux(100.),
+                             0.5, EllipseESoft(1., 0., 0.2),
+                             EllipseESoft(1., 0.2, 0.))
+derivs = src.getParamDerivatives(tim)
+print 'Derivs:', derivs
+cols = int(np.ceil(np.sqrt(len(derivs))))
+rows = int(np.ceil(float(len(derivs)) / cols))
+plt.clf()
+for i,deriv in enumerate(derivs):
+    plt.subplot(rows,cols,i+1)
+    dimshow(deriv.patch, extent=deriv.getExtent())
+    plt.axis(ax)
+    plt.title(deriv.name, fontsize=8)
+    #plt.colorbar()
+    plt.xticks([]); plt.yticks([])    
+ps.savefig()
+    

@@ -909,7 +909,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         subcat = Catalog(*[cat[i] for i in Isrcs])
         subtr = Tractor(subtims, subcat)
         subtr.freezeParam('images')
-
+        #subtr.disable_cache()
+        
         if plots:
             plotmods = []
             plotmodnames = []
@@ -964,7 +965,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
                 srctractor = Tractor(subtims, [src])
                 srctractor.freezeParams('images')
-
+                #srctractor.disable_cache()
+                
                 # Add this source's initial model back in.
                 for tim,mods in zip(subtims, initial_models):
                     mod = mods[i]
