@@ -731,9 +731,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     #     subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
     #     initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
 
-    ## FIXME -- set tim.modelMinval !
-    
-
     tfitall = tlast = Time()
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
@@ -868,8 +865,15 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 print 'tim PSF fitting via Tractor:', Time()-ttim
                 ttim = Time()
 
-            subpsf = ShiftedPsf(tim.psf, ox0+sx0, oy0+sy0)
-                
+            # If the subimage (blob) is small enough, instantiate a
+            # constant PSF model in the center.
+            if sy1-sy0 < 100 and sx1-sx1 < 100:
+                subpsf = tim.psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
+            else:
+                # Otherwise, instantiate a (shifted) spatially-varying
+                # PsfEx model.
+                subpsf = ShiftedPsf(tim.psf, ox0+sx0, oy0+sy0)
+
             subtim = Image(data=subimg, inverr=subie, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
                            sky=tim.getSky(), name=tim.name)

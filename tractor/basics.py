@@ -830,8 +830,8 @@ class PointSource(MultiParams):
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         extent=[0,W-1,0,H-1],
                                         radius=self.fixedRadius,
-        #v3=True
-            )
+                                        v3=True
+                                        )
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):

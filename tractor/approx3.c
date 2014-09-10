@@ -461,7 +461,7 @@ bailout:
     Py_XDECREF(np_yderiv);
     Py_XDECREF(np_mask);
 
-    printf("N exp calls: %i\n", n_exp - nexp0);
+    //printf("N exp calls: %i\n", n_exp - nexp0);
 
     (*sx1)++;
     (*sy1)++;
