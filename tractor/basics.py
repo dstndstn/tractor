@@ -823,14 +823,14 @@ class PointSource(MultiParams):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
 
-    def getUnitFluxModelPatch(self, img, minval=0.):
+    def getUnitFluxModelPatch(self, img, minval=0., derivs=False):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
         psf = self._getPsf(img)
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         extent=[0,W-1,0,H-1],
                                         radius=self.fixedRadius,
-                                        v3=True
+                                        v3=True, derivs=derivs
                                         )
         return patch
 
@@ -852,7 +852,7 @@ class PointSource(MultiParams):
     def _getPsf(self, img):
         return img.getPsf()
 
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, img, fastPosDerivs=True):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
@@ -889,8 +889,25 @@ class PointSource(MultiParams):
             minval = minsb / counts0
         else:
             minval = None
-            
-        patch0 = self.getUnitFluxModelPatch(img, minval=minval)
+
+        derivs = (not self.isParamFrozen('pos')) and fastPosDerivs
+        patchdx,patchdy = None,None
+        
+        if derivs:
+            patches = self.getUnitFluxModelPatch(img, minval=minval, derivs=True)
+            #print 'minval=', minval, 'Patches:', patches
+            if patches is None:
+                return [None]*self.numberOfParams()
+            if not isinstance(patches, tuple):
+                patch0 = patches
+                #print 'img:', img
+                #print 'counts0:', counts0
+            else:
+                patch0, patchdx, patchdy = patches
+
+        else:
+            patch0 = self.getUnitFluxModelPatch(img, minval=minval)
+
         if patch0 is None:
             return [None]*self.numberOfParams()
         # check for intersection of patch0 with img
@@ -900,27 +917,56 @@ class PointSource(MultiParams):
         
         derivs = []
 
-        # FIXME -- what about PSF models that can return the x,y
-        # derivatives along with the model?
-        
         # Position
         if not self.isParamFrozen('pos'):
-            psteps = pos.getStepSizes(img)
-            pvals = pos.getParams()
-            ## FIXME -- we should ensure that patch0 and patchx have the same
-            ## extent (of pixels rendered > minval)!
-            for i,pstep in enumerate(psteps):
-                oldval = pos.setParam(i, pvals[i] + pstep)
 
-                #(px,py) = wcs.positionToPixel(pos, self)
-                #patchx = psf.getPointSourcePatch(px, py, extent=extent,
-                #                                 radius=self.fixedRadius)
-                patchx = self.getUnitFluxModelPatch(img, minval=minval)
+            if patchdx is not None and patchdy is not None:
 
-                pos.setParam(i, oldval)
-                dx = (patchx - patch0) * (counts0 / pstep)
-                dx.setName('d(ptsrc)/d(pos%i)' % i)
-                derivs.append(dx)
+                # Convert x,y derivatives to Position derivatives
+
+                px,py = wcs.positionToPixel(pos, self)
+                cd = wcs.cdAtPixel(px, py)
+                #print 'cd', cd
+                cdi = np.linalg.inv(cd)
+                #print 'cdi', cdi
+                # Get thawed Position parameter indices
+                thawed = pos.getThawedParamIndices()
+                for i,pname in zip(thawed, pos.getParamNames()):
+                    deriv = (patchdx * cdi[0,i] + patchdy * cdi[1,i]) * counts0
+                    deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+                    derivs.append(deriv)
+                #derivs.extend((patchdx, patchdy))
+
+                # psteps = pos.getStepSizes(img)
+                # pvals = pos.getParams()
+                # pnames = pos.getParamNames()
+                # for i,(pstep,pname) in enumerate(zip(psteps,pnames)):
+                #     oldval = pos.setParam(i, pvals[i] + pstep)
+                #     px1,py1 = wcs.positionToPixel(pos, self)
+                #     pos.setParam(i, oldval)
+                #     dx,dy = px1 - px, py1 - py
+                #     print 'dx,dy', dx/pstep, dy/pstep
+                #     deriv = (patchdx * dx + patchdy * dy) * counts0/pstep
+                #     deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+                #     derivs.append(deriv)
+
+            else:
+                psteps = pos.getStepSizes(img)
+                pvals = pos.getParams()
+                ## FIXME -- we should ensure that patch0 and patchx have the same
+                ## extent (of pixels rendered > minval)!
+                for i,pstep in enumerate(psteps):
+                    oldval = pos.setParam(i, pvals[i] + pstep)
+                
+                    #(px,py) = wcs.positionToPixel(pos, self)
+                    #patchx = psf.getPointSourcePatch(px, py, extent=extent,
+                    #                                 radius=self.fixedRadius)
+                    patchx = self.getUnitFluxModelPatch(img, minval=minval)
+                
+                    pos.setParam(i, oldval)
+                    dx = (patchx - patch0) * (counts0 / pstep)
+                    dx.setName('d(ptsrc)/d(pos%i)' % i)
+                    derivs.append(dx)
 
         # Brightness
         if not self.isParamFrozen('brightness'):
@@ -1377,6 +1423,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                     self.mog.amp, self.mog.mean, self.mog.var,
                     result, xderiv, yderiv, mask,
                     int(px), int(py), minradius)
+                assert(rtn == 0)
                 slc = slice(sy0,sy1),slice(sx0,sx1)
                 result = result[slc]
                 if derivs:
@@ -1384,7 +1431,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                     yderiv = yderiv[slc]
                 x0 += sx0
                 y0 += sy0
-                assert(rtn == 0)
                 if derivs:
                     return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
                             Patch(x0,y0,yderiv))

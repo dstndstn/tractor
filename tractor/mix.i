@@ -62,10 +62,12 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
         n_exp++;
         G = scales[k] * exp(dsq);
         r += G;
+        // The negative sign here is because we want the derivatives
+        // with respect to the means, not x,y.
         if (xderiv)
-            *xderiv += G * (2. * Ik[0] * dx + Ik[1] * dy);
+            *xderiv += -G * (2. * Ik[0] * dx + Ik[1] * dy);
         if (yderiv)
-            *yderiv += G * (2. * Ik[2] * dy + Ik[1] * dx);
+            *yderiv += -G * (2. * Ik[2] * dy + Ik[1] * dx);
     }
     return r;
 }
