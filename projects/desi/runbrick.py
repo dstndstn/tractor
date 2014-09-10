@@ -716,9 +716,14 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
     for tim in tims:
         #print 'PsfEx saved params:', tim.psfex.splinedata
+
         tim.psfex.fitSavedData(*tim.psfex.splinedata)
         tim.psf = tim.psfex
 
+        #from tractor.psfex import CachingPsfEx
+        #tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+        #tim.psf.fitSavedData(*tim.psf.splinedata)
+            
     for tim in tims:
         tim.modelMinval = 0.1 * tim.sig1
         
