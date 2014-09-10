@@ -211,6 +211,9 @@ static int get_np(PyObject* ob_amp,
     import_array();
     %}
 
+
+%apply int *OUTPUT { int* p_sx0, int* p_sx1, int* p_sy0, int p_sy1 };
+
 %inline %{
 
 #if 0
@@ -999,7 +1002,8 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               PyObject* ob_yderiv,
                               PyObject* ob_mask,
                               int xc, int yc,
-                              int minradius
+                              int minradius,
+                              int* p_sx0, int* p_sx1, int* p_sy0, int* p_sy1
                               );
 
 #include "approx3.c"
