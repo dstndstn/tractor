@@ -824,12 +824,18 @@ class PointSource(MultiParams):
                 repr(self.brightness) + ')')
 
     def getUnitFluxModelPatch(self, img, minval=0.):
+        print
+        print 'PointSource.getUnitFluxModelPatch'
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
+        print 'pixel position', int(px),int(py), 'in image size', W,H
         psf = self._getPsf(img)
+        print 'PSF:', psf
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         extent=[0,W-1,0,H-1],
-                                        radius=self.fixedRadius)
+                                        radius=self.fixedRadius,
+            v3=True)
+        print 'PointSource.getUnitFluxModelPatch: patch is', patch
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -1321,6 +1327,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                             radius=None,
                             v3=False, derivs=False,
                             **kwargs):
+        print 'GaussianMixturePSF.getPointSourcePatch'
+
         self.mog.symmetrize()
         if minval is None:
             minval = 0.
@@ -1341,10 +1349,15 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 rr = int(np.ceil(r))
                 #print 'choosing r=', rr
 
+
+            print 'GMPSF: px,py', px,py, 'rr', rr
             x0 = int(floor(px - rr))
             x1 = int(ceil (px + rr))
             y0 = int(floor(py - rr))
             y1 = int(ceil (py + rr))
+
+            print 'initial patch:', x0,x1,y0,y1
+
             # x1,y1: inclusive
             if extent is not None:
                 # inclusive
@@ -1354,6 +1367,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 x1 = min(x1, xh)
                 y0 = max(y0, yl)
                 y1 = min(y1, yh)
+
+                print 'extent:', xl,xh,yl,yh
+            print 'rendering:', x0,x1, y0,y1
             if x0 > x1:
                 return None
             if y0 > y1:
@@ -1677,8 +1693,12 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         self.y0 = y0
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
-    def getPointSourcePatch(self, px, py, **kwargs):
-        p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py, **kwargs)
+    def getPointSourcePatch(self, px, py, extent=None, **kwargs):
+        if extent is not None:
+            (ex0,ex1,ey0,ey1) = extent
+            extent = (ex0+self.x0, ex1+self.x0, ey0+self.y0, ey1+self.y0)
+        p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py,
+                                         extent=extent, **kwargs)
         # Now we have to shift the patch back too
         if p is None:
             return None

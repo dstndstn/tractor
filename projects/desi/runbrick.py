@@ -776,7 +776,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         tlast = Time()
         subtims = []
         for itim,tim in enumerate(tims):
-            ttim = Time()
+            #ttim = Time()
 
             h,w = tim.shape
             ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
@@ -797,8 +797,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
-            print 'tim clip:', Time()-ttim
-            ttim = Time()
+            #print 'tim clip:', Time()-ttim
+            #ttim = Time()
 
             # Mask out inverr for pixels that are not within the blob.
             subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
@@ -815,8 +815,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
             subie = subie2
 
-            print 'tim mask inverr:', Time()-ttim
-            ttim = Time()
+            #print 'tim mask inverr:', Time()-ttim
+            #ttim = Time()
 
             if plots and False:
                 plt.clf()

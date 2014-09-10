@@ -212,7 +212,7 @@ static int get_np(PyObject* ob_amp,
     %}
 
 
-%apply int *OUTPUT { int* p_sx0, int* p_sx1, int* p_sy0, int p_sy1 };
+%apply int *OUTPUT { int* p_sx0, int* p_sx1, int* p_sy0, int* p_sy1 };
 
 %inline %{
 
