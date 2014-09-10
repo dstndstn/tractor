@@ -60,20 +60,103 @@ for cd in [
     ps.savefig()
 
 
-src = FixedCompositeGalaxy(RaDecPos(0., 0.), Flux(100.),
-                             0.5, EllipseESoft(1., 0., 0.2),
-                             EllipseESoft(1., 0.2, 0.))
-derivs = src.getParamDerivatives(tim)
-print 'Derivs:', derivs
-cols = int(np.ceil(np.sqrt(len(derivs))))
-rows = int(np.ceil(float(len(derivs)) / cols))
+fsrc = FixedCompositeGalaxy(RaDecPos(0., 0.), Flux(100.), 0.25,
+                            EllipseESoft(1., 0., 0.2),
+                            EllipseESoft(1., 0., -0.2))
+
+    #src = ExpGalaxy(RaDecPos(0., 0.), Flux(100.),
+    #            EllipseESoft(1., 0., 0.2))
+    #src = DevGalaxy(RaDecPos(0., 0.), Flux(100.),
+    #            EllipseESoft(1., 0., 0.2))
+
+derivs = fsrc.getParamDerivatives(tim)
+e = ExpGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeExp)
+d = DevGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeDev)
+f = fsrc.fracDev.getClippedValue()
+de = e.getParamDerivatives(tim)
+dd = d.getParamDerivatives(tim)
+
+for deriv in de:
+    if deriv is not None:
+        deriv *= (1.-f)
+for deriv in dd:
+    if deriv is not None:
+        deriv *= f
+
 plt.clf()
-for i,deriv in enumerate(derivs):
-    plt.subplot(rows,cols,i+1)
-    dimshow(deriv.patch, extent=deriv.getExtent())
-    plt.axis(ax)
-    plt.title(deriv.name, fontsize=8)
-    #plt.colorbar()
-    plt.xticks([]); plt.yticks([])    
+mx = np.max(np.abs(derivs[0].patch))
+plt.subplot(2,3,1)
+dimshow(derivs[0].patch, vmin=-mx, vmax=mx)
+plt.title('FixedComp')
+plt.subplot(2,3,4)
+dimshow(de[0].patch, vmin=-mx, vmax=mx)
+plt.title('exp')
+plt.subplot(2,3,5)
+dimshow(dd[0].patch, vmin=-mx, vmax=mx)
+plt.title('deV')
+
+plt.subplot(2,3,2)
+#dimshow((dd[0] * f + de[0] * (1.-f)).patch, vmin=-mx, vmax=mx)
+dimshow((dd[0] + de[0]).patch, vmin=-mx, vmax=mx)
+plt.title('sum')
+
+plt.subplot(2,3,3)
+ss = fsrc.getStepSizes()
+p0 = fsrc.getParams()
+patch0 = fsrc.getModelPatch(tim)
+i=0
+s = ss[i]
+oldval = fsrc.setParam(i, p0[i]+s)
+patchx = fsrc.getModelPatch(tim)
+fsrc.setParam(i, p0[i])
+dp = (patchx - patch0) / s
+dimshow(dp.patch, vmin=-mx, vmax=mx)
+plt.title('step')
+
 ps.savefig()
+
     
+for src in [fsrc, e, d]:
+
+    derivs = src.getParamDerivatives(tim)
+    print 'Derivs:', derivs
+    cols = int(np.ceil(np.sqrt(len(derivs))))
+    rows = int(np.ceil(float(len(derivs)) / cols))
+    plt.clf()
+    maxes = []
+    for i,deriv in enumerate(derivs):
+        plt.subplot(rows,cols,i+1)
+        mx = max(np.abs(deriv.patch.min()), deriv.patch.max())
+        dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
+        maxes.append(mx)
+        plt.axis(ax)
+        plt.title(deriv.name, fontsize=8)
+        #plt.colorbar()
+        plt.xticks([]); plt.yticks([])    
+    plt.suptitle('getParamDerivatives')
+    ps.savefig()
+    
+    patch0 = src.getModelPatch(tim)
+    print 'Patch sum:', patch0.patch.sum()    
+
+    p0 = src.getParams()
+    ss = src.getStepSizes()
+    names = src.getParamNames()
+    plt.clf()
+    for i,(s,name) in enumerate(zip(ss, names)):
+        plt.subplot(rows,cols,i+1)
+    
+        oldval = src.setParam(i, p0[i]+s)
+        patchx = src.getModelPatch(tim)
+        src.setParam(i, p0[i])
+    
+        dp = (patchx - patch0) / s
+        
+        dimshow(dp.patch, extent=dp.getExtent(), vmin=-maxes[i], vmax=maxes[i])
+        plt.axis(ax)
+        plt.title(name, fontsize=8)
+        #plt.colorbar()
+        plt.xticks([]); plt.yticks([])    
+    plt.suptitle('Stepping parameters')
+    ps.savefig()
+

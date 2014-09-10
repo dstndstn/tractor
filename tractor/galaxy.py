@@ -646,8 +646,13 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             amix.symmetrize()
             amix.amp *= f
             mix.append(amix)
+            print 'affine profile: shape', s, 'weight', f, '->', amix
+            print 'amp sum:', np.sum(amix.amp)
         if len(mix) == 1:
             return mix[0]
+        smix = mix[0] + mix[1]
+        print 'Summed profiles:', smix
+        print 'amp sum', np.sum(smix.amp)
         return mix[0] + mix[1]
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
@@ -672,8 +677,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
                      self.shapeExp.hashkey(),
                      self.fracDev.hashkey()))
     
-    # WARNING, this code has not been tested.
     def getParamDerivatives(self, img):
+
+        print 'FixedCompositeGalaxy.getParamDerivatives()'
+
         ### FIXME -- minsb would be useful here!
         #pos0 = self.getPosition()
         #(px0,py0) = img.getWcs().positionToPixel(pos0, self)
