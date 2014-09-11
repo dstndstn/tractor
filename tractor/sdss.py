@@ -31,21 +31,6 @@ from astrometry.util.file import *
 from astrometry.util.plotutils import setRadecAxes, redgreen
 from astrometry.libkd.spherematch import match_radec
 
-# makes an SDSS AsTrans WCS object look like an anwcs /  Tan / Sip
-class AsTransWrapper(object):
-    def __init__(self, wcs, w, h, x0=0, y0=0):
-        self.wcs = wcs
-        self.imagew = w
-        self.imageh = h
-        self.x0 = x0
-        self.y0 = y0
-    def pixelxy2radec(self, x, y):
-        r,d = self.wcs.pixel_to_radec(x+self.x0-1, y+self.y0-1)
-        return r, d
-    def radec2pixelxy(self, ra, dec):
-        x,y = self.wcs.radec_to_pixel(ra, dec)
-        return True, x-self.x0+1, y-self.y0+1
-
 ## FIXME -- these PSF params are not Params
 class SdssBrightPSF(ParamsWrapper):
     def __init__(self, real, a1, s1, a2, s2, a3, sigmap, beta):
