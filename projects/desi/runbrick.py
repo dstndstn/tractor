@@ -727,15 +727,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     for tim in tims:
         tim.modelMinval = 0.1 * tim.sig1
         
-    # # Fit a MoG PSF model to the PSF in the middle of each tim.
-    # initial_psf_mog = []
-    # for itim,tim in enumerate(tims):
-    #     ox0,oy0 = orig_wcsxy0[itim]
-    #     h,w = tim.shape
-    #     psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-    #     subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-    #     initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
-
     tfitall = tlast = Time()
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
@@ -817,9 +808,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
             subie = subie2
 
-            #print 'tim mask inverr:', Time()-ttim
-            #ttim = Time()
-
             if plots and False:
                 plt.clf()
                 plt.subplot(1,2,1)
@@ -829,46 +817,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
-            # FIXME --
-            #subpsf = tim.psfex.mogAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.)
-            #subpsf = tim.getPsf()
-
-
             ttim = Time()
-
-            if False:
-                psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
-                                                 nativeScale=True)
-                print 'tim instantiate PSF:', Time()-ttim
-                ttim = Time()
-                # Note, initial_psf_mog is probably modified in this process!
-                subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
-                print 'EM fit PSF:'
-                print subpsf
-                print 'tim fit PSF:', Time()-ttim
-                print 'psfimg shape', psfimg.shape
-                ttim = Time()
-
-            if False:
-                (w,mu,var) = initial_psf_mog[itim]
-                thepsf = GaussianMixturePSF(w.copy(), mu.copy(), var.copy())
-                psftim = Image(data=psfimg, invvar=np.zeros(psfimg.shape)+1e4,
-                               psf=thepsf)
-                ph,pw = psfimg.shape
-                psftractor = Tractor([psftim], [PointSource(PixPos(pw/2., ph/2.), Flux(1.))])
-                psftractor.freezeParam('catalog')
-                psftim.freezeAllBut('psf')
-                print 'Optimizing:'
-                psftractor.printThawedParams()
-                for step in range(100):
-                    dlnp,X,alpha = psftractor.optimize(priors=False, shared_params=False)
-                    print 'dlnp:', dlnp
-                    if dlnp < 0.1:
-                        break
-                print 'Tractor fit PSF:'
-                print thepsf
-                print 'tim PSF fitting via Tractor:', Time()-ttim
-                ttim = Time()
 
             # If the subimage (blob) is small enough, instantiate a
             # constant PSF model in the center.
