@@ -164,6 +164,9 @@ class Galaxy(MultiParams):
             return [None] * self.numberOfParams()
         derivs = []
 
+        print 'Galaxy.getParamDerivatives: img', img.shape
+        print 'patch0 extent:', patch0.getExtent()
+
         # derivatives wrt position
         psteps = pos0.getStepSizes()
         if not self.isParamFrozen('pos'):
@@ -425,6 +428,7 @@ class ProfileGalaxy(object):
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians()
             cmix = amix.convolve(psfmix)
+            print '_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1
             return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
         else:
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
@@ -692,6 +696,12 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
         dexp = e.getParamDerivatives(img)
         ddev = d.getParamDerivatives(img)
 
+        print 'FixedCompositeGalaxy.getParamDerivatives.'
+        print 'tim shape', img.shape
+        print 'exp deriv extents:'
+        for deriv in dexp + ddev:
+            print '  ', deriv.name, deriv.getExtent()
+
         # fracDev scaling
         f = self.fracDev.getClippedValue()
         for deriv in dexp:
@@ -747,6 +757,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             derivs.extend(dexp[i0:])
         if not self.isParamFrozen('shapeDev'):
             derivs.extend(ddev[i0:])
+
+        print 'Returning derivs:'
+        for deriv in derivs:
+            print '  ', deriv.name, deriv.getExtent()
             
         return derivs
     

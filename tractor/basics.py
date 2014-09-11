@@ -1406,7 +1406,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 return None
 
             return self.mog.evaluate_grid_approx3(
-                x0, x1+1, y0, y1+1, px, py, minval, derivs=derivs)
+                x0, x1, y0, y1, px, py, minval, derivs=derivs)
             
         else:
             if radius is None:

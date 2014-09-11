@@ -1,3 +1,49 @@
+def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
+    T2 = decals.get_ccds()
+
+    T3 = T2[ccds_touching_wcs(targetwcs, T2, polygons=False)]
+    T4 = T2[ccds_touching_wcs(targetwcs, T2)]
+    print len(T3), 'on RA,Dec box'
+    print len(T4), 'polygon'
+    ccmap = dict(r='r', g='g', z='m')
+    for band in bands:
+
+        plt.clf()
+
+        TT2 = T3[T3.filter == band]
+        print len(TT2), 'in', band, 'band'
+        plt.plot(TT2.ra, TT2.dec, 'o', color=ccmap[band], alpha=0.5)
+
+        for t in TT2:
+            im = DecamImage(t)
+
+            run_calibs(im, brick.ra, brick.dec, pixscale, morph=False, se2=False,
+                       psfex=False)
+
+            wcs = im.read_wcs()
+            r,d = wcs.pixelxy2radec([1,1,t.width,t.width,1], [1,t.height,t.height,1,1])
+            plt.plot(r, d, '-', color=ccmap[band], alpha=0.3, lw=2)
+
+        TT2 = T4[T4.filter == band]
+        print len(TT2), 'in', band, 'band; polygon'
+        plt.plot(TT2.ra, TT2.dec, 'x', color=ccmap[band], alpha=0.5, ms=15)
+
+        for t in TT2:
+            im = DecamImage(t)
+            wcs = im.read_wcs()
+            r,d = wcs.pixelxy2radec([1,1,t.width,t.width,1], [1,t.height,t.height,1,1])
+            plt.plot(r, d, '-', color=ccmap[band], lw=1.5)
+
+        TT2.about()
+
+        plt.plot(brick.ra, brick.dec, 'k.')
+        plt.plot(targetrd[:,0], targetrd[:,1], 'k-')
+        plt.xlabel('RA')
+        plt.ylabel('Dec')
+        ps.savefig()
+
+
+
 def check_photometric_calib(ims, cat, ps):
     # Check photometric calibrations
     lastband = None
