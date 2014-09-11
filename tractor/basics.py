@@ -1365,11 +1365,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         return self.radius
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., extent=None,
-                            radius=None,
-                            v3=False, derivs=False,
-                            **kwargs):
-        #self.mog.symmetrize()
+    def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
+                            derivs=False, **kwargs):
         if minval is None:
             minval = 0.
         if minval > 0.:
@@ -1407,39 +1404,10 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 return None
             if y0 > y1:
                 return None
-                
-            if v3:
-                from mix import c_gauss_2d_approx3
-                
-                result = np.zeros((y1-y0 + 1, x1-x0 + 1))
-                xderiv = yderiv = mask = None
-                minradius = 3
-                if derivs:
-                    xderiv = np.zeros_like(result)
-                    yderiv = np.zeros_like(result)
 
-                rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
-                    x0, x1+1, y0, y1+1, px, py, minval,
-                    self.mog.amp, self.mog.mean, self.mog.var,
-                    result, xderiv, yderiv, mask,
-                    int(px), int(py), minradius)
-                assert(rtn == 0)
-                slc = slice(sy0,sy1),slice(sx0,sx1)
-                result = result[slc]
-                if derivs:
-                    xderiv = xderiv[slc]
-                    yderiv = yderiv[slc]
-                x0 += sx0
-                y0 += sy0
-                if derivs:
-                    return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
-                            Patch(x0,y0,yderiv))
-                return Patch(x0,y0,result)
-                    
-            else:
-                grid = self.mog.evaluate_grid_approx(x0, x1+1, y0, y1+1,
-                                                     px, py, minval)
-
+            return self.mog.evaluate_grid_approx3(
+                x0, x1+1, y0, y1+1, px, py, minval, derivs=derivs)
+            
         else:
             if radius is None:
                 r = self.getRadius()

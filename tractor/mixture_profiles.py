@@ -245,20 +245,66 @@ class MixtureOfGaussians():
         [y0,y1): (int) Y values to evaluate
         (cx,cy): (float) pixel center of the MoG
         '''
-        #from mix import c_gauss_2d_approx
         from mix import c_gauss_2d_approx2
         assert(self.D == 2)
 
         result = np.zeros((y1-y0, x1-x0))
-        # rtn = c_gauss_2d_approx(x0, x1, y0, y1, dx, dy, minval,
-        #                         self.amp, self.mean,self.var, result)
         rtn = c_gauss_2d_approx2(x0, x1, y0, y1, cx, cy, minval,
                                  self.amp, self.mean,self.var, result)
         if rtn == -1:
-            #raise RuntimeError('c_gauss_2d_approx failed')
             raise RuntimeError('c_gauss_2d_approx2 failed')
         return result
 
+    def evaluate_grid_approx3(self, x0, x1, y0, y1, fx, fy, minval,
+                              derivs=False, minradius=3, doslice=True):
+        '''
+        minval: small value at which to stop evaluating
+
+        [x0,x1): (int) X values to evaluate
+        [y0,y1): (int) Y values to evaluate
+        (fx,fy): (float) pixel offset of the MoG; ie, evaluate MoG shifted by
+                this amount.
+
+        If 'doslice' is True, slices the images down to the non-zero
+        bounding-box.
+
+        If 'derivs' is True, computes and returns x and y derivatives too.
+        
+        Unlike evaluate_grid_approx, returns a Patch object.
+        '''
+        from mix import c_gauss_2d_approx3
+
+        result = np.zeros((y1-y0 + 1, x1-x0 + 1))
+        xderiv = yderiv = mask = None
+        if derivs:
+            xderiv = np.zeros_like(result)
+            yderiv = np.zeros_like(result)
+
+
+        # guess:
+        cx = int(self.mean[0,0] + fx)
+        cy = int(self.mean[0,1] + fy)
+        rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
+            x0, x1+1, y0, y1+1, fx, fy, minval,
+            self.amp, self.mean, self.var,
+            result, xderiv, yderiv, mask,
+            cx, cy, minradius)
+        assert(rtn == 0)
+        if doslice:
+            slc = slice(sy0,sy1),slice(sx0,sx1)
+            result = result[slc]
+            if derivs:
+                xderiv = xderiv[slc]
+                yderiv = yderiv[slc]
+            x0 += sx0
+            y0 += sy0
+
+        if derivs:
+            return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
+                    Patch(x0,y0,yderiv))
+
+        return Patch(x0,y0,result)
+    
     def evaluate_grid_hogg(self, xlo, xhi, ylo, yhi):
         assert(self.D == 2)
         xy = np.array(np.meshgrid(range(xlo, xhi), range(ylo, yhi)))
@@ -281,8 +327,8 @@ def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
     if minval == 0.:
         img = mixture.evaluate_grid(x0, x1, y0, y1)
     else:
-        #print 'eval grid:', x0,x1,y0,y1
-        img = mixture.evaluate_grid_approx(x0, x1, y0, y1, 0., 0., minval)
+        #img = mixture.evaluate_grid_approx(x0, x1, y0, y1, 0., 0., minval)
+        return mixture.evaluate_grid_approx3(x0, x1, y0, y1, 0., 0., minval)
     return Patch(x0, y0, img)
     
 def model_to_patch(model, scale, posmin, posmax):
