@@ -1664,11 +1664,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         y0 = iy - rad
         y1 = iy + rad + 1
         mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
-        patch = mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
-        # Note: sum(self.weights) can be zero if parameters are frozen!!!
-        #patch /= sum(mix.amp)
-        return Patch(x0, y0, patch)
-
+        return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
 
 # class SubImage(Image):
 #   def __init__(self, im, roi,

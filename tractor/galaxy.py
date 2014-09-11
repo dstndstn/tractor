@@ -424,10 +424,8 @@ class ProfileGalaxy(object):
             amix = self._getAffineProfile(img, px, py)
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians()
-            #psfmix.normalize()
             cmix = amix.convolve(psfmix)
-            psfconvolvedimg = mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
-            return Patch(x0, y0, psfconvolvedimg)
+            return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval)
         else:
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
             w = np.fft.rfftfreq(pW)
