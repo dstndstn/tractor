@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <sys/param.h>
 
+    int n_exp = 0;
+
 static double eval_g(double I[3], double dx, double dy) {
     double dsq = (I[0] * dx * dx +
                   I[1] * dx * dy +
@@ -15,6 +17,7 @@ static double eval_g(double I[3], double dx, double dy) {
     if (dsq < -100)
         // ~ 1e-44
         return 0.0;
+    n_exp++;
     return exp(dsq);
 }
 
@@ -24,10 +27,51 @@ static double eval_all(int K, double* scales, double* I, double* means,
     double r = 0;
     int k;
     for (k=0; k<K; k++) {
-        r += scales[k] * eval_g(I + 3*k, x - means[2*k+0], y - means[2*k+1]);
+        double dx,dy;
+        dx = x - means[2*k+0];
+        dy = y - means[2*k+1];
+        r += scales[k] * eval_g(I + 3*k, dx, dy);
     }
     return r;
 }
+
+static double eval_all_dxy(int K, double* scales, double* I, double* means,
+                           double x, double y, double* xderiv, double* yderiv,
+                           double* maxD) {
+    double r = 0;
+    int k;
+    if (xderiv)
+        *xderiv = 0;
+    if (yderiv)
+        *yderiv = 0;
+
+    for (k=0; k<K; k++) {
+        double dx,dy;
+        double G;
+        double* Ik = I + 3*k;
+        double dsq;
+        dx = x - means[2*k+0];
+        dy = y - means[2*k+1];
+        dsq = (Ik[0] * dx * dx +
+               Ik[1] * dx * dy +
+               Ik[2] * dy * dy);
+        // "maxD" is slightly (ok totally) misnamed: it includes the
+        // -0.5 factor * mahalanobis distance so is actually a *minimum*.
+        if (dsq < maxD[k])
+            continue;
+        n_exp++;
+        G = scales[k] * exp(dsq);
+        r += G;
+        // The negative sign here is because we want the derivatives
+        // with respect to the means, not x,y.
+        if (xderiv)
+            *xderiv += -G * (2. * Ik[0] * dx + Ik[1] * dy);
+        if (yderiv)
+            *yderiv += -G * (2. * Ik[2] * dy + Ik[1] * dx);
+    }
+    return r;
+}
+
 
 #define ERR(x, ...) printf(x, ## __VA_ARGS__)
 // PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
@@ -132,7 +176,6 @@ static int get_np(PyObject* ob_amp,
         return 1;
     }
     if (np_xderiv && *np_xderiv) {
-        printf("np_xderiv %p\n", np_xderiv);
         if ((PyArray_DIM(*np_xderiv, 0) != NY) ||
             (PyArray_DIM(*np_xderiv, 1) != NX)) {
             ERR("np_xderiv must be size NY x NX (%i x %i), got %i x %i",
@@ -142,7 +185,6 @@ static int get_np(PyObject* ob_amp,
         }
     }
     if (np_yderiv && *np_yderiv) {
-        printf("np_yderiv %p\n", np_yderiv);
         if ((PyArray_DIM(*np_yderiv, 0) != NY) ||
             (PyArray_DIM(*np_yderiv, 1) != NX)) {
             ERR("np_yderiv must be size NY x NX (%i x %i), got %i x %i",
@@ -152,7 +194,6 @@ static int get_np(PyObject* ob_amp,
         }
     }
     if (np_mask && *np_mask) {
-        printf("np_mask %p\n", np_mask);
         if ((PyArray_DIM(*np_mask, 0) != NY) ||
             (PyArray_DIM(*np_mask, 1) != NX)) {
             ERR("np_mask must be size NY x NX (%i x %i), got %i x %i",
@@ -171,6 +212,9 @@ static int get_np(PyObject* ob_amp,
     // numpy
     import_array();
     %}
+
+
+%apply int *OUTPUT { int* p_sx0, int* p_sx1, int* p_sy0, int* p_sy1 };
 
 %inline %{
 
@@ -565,8 +609,13 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
         // we also fold in the 2*dx*dy term here
         I[1] = -V[1] * isc * 2.0;
         I[2] =  V[0] * isc;
-        scale = amp[k] / sqrt(tpd * det);
-        scales[k] = scale;
+        if (det <= 0.) {
+            // FIXME -- Abort?
+            scales[k] = 0.;
+        } else {
+            scale = amp[k] / sqrt(tpd * det);
+            scales[k] = scale;
+        }
     }
 
     // Find (likely) max pixel.  This looks for the max pixel within
@@ -955,7 +1004,8 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               PyObject* ob_yderiv,
                               PyObject* ob_mask,
                               int xc, int yc,
-                              int minradius
+                              int minradius,
+                              int* p_sx0, int* p_sx1, int* p_sy0, int* p_sy1
                               );
 
 #include "approx3.c"

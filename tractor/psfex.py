@@ -105,9 +105,6 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         return w, mu, var
 
     def _fitParamGrid(self):
-        # number of MoG mixture components
-        K = self.K
-        w,mu,var = em_init_params(K, None, None, None)
         # all MoG fit parameters (we need to make them shaped (ny,nx)
         # for spline fitting)
         pp = []
@@ -119,19 +116,18 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         for y in YY:
             pprow = []
             for ix,x in enumerate(XX):
-                # We start each row with the MoG fit parameters of the start of the
-                # previous row (to try to make the fit more continuous)
+                p0 = None
+                # We start each row with the MoG fit parameters of the
+                # start of the previous row (to try to make the fit
+                # more continuous)
                 if ix == 0 and px0 is not None:
-                    w,mu,var = px0
+                    p0 = px0
                 im = self.instantiateAt(x, y)
-                PS = im.shape[0]
-                im /= im.sum()
-                im = np.maximum(im, 0)
-                xm,ym = -(PS/2), -(PS/2)
-                em_fit_2d(im, xm, ym, w, mu, var)
-                print 'Fit w,mu,var', w,mu,var
+                gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
+                print 'Fit PSF at', x,y
+                w,mu,var = gpsf.get_wmuvar()
                 if ix == 0:
-                    px0 = w,mu,var
+                    px0 = (w,mu,var)
 
                 params = np.hstack((w.ravel()[:-1],
                                     mu.ravel(),
@@ -156,45 +152,42 @@ class PsfEx(VaryingGaussianPSF):
         '''
         from astrometry.util.fits import fits_table
 
-        T = fits_table(fn, ext=ext)
-        ims = T.psf_mask[0]
-        print 'Got', ims.shape, 'PSF images'
-        hdr = T.get_header()
-        # PSF distortion bases are polynomials of x,y
-        assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
-        assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
-        assert(hdr['POLGRP1'] == 1)
-        assert(hdr['POLGRP2'] == 1)
-        assert(hdr['POLNGRP' ] == 1)
-        x0     = hdr.get('POLZERO1')
-        xscale = hdr.get('POLSCAL1')
-        y0     = hdr.get('POLZERO2')
-        yscale = hdr.get('POLSCAL2')
-        degree = hdr.get('POLDEG1')
+        if fn is not None:
+            T = fits_table(fn, ext=ext)
+            ims = T.psf_mask[0]
+            print 'Got', ims.shape, 'PSF images'
+            hdr = T.get_header()
+            # PSF distortion bases are polynomials of x,y
+            assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
+            assert(hdr['POLNAME2'].strip() == 'Y_IMAGE')
+            assert(hdr['POLGRP1'] == 1)
+            assert(hdr['POLGRP2'] == 1)
+            assert(hdr['POLNGRP' ] == 1)
+            x0     = hdr.get('POLZERO1')
+            xscale = hdr.get('POLSCAL1')
+            y0     = hdr.get('POLZERO2')
+            yscale = hdr.get('POLSCAL2')
+            degree = hdr.get('POLDEG1')
+            self.sampling = hdr.get('PSF_SAMP')
+            # number of terms in polynomial
+            ne = (degree + 1) * (degree + 2) / 2
+            assert(hdr['PSFAXIS3'] == ne)
+            assert(len(ims.shape) == 3)
+            assert(ims.shape[0] == ne)
+            ## HACK -- fit psf0 + psfi for each term i
+            ## (since those will probably work better as multi-Gaussians
+            ## than psfi alone)
+            ## OR instantiate PSF across the image, fit with
+            ## multi-gaussians, and regress the gaussian params?
+            self.psfbases = ims
+            self.xscale, self.yscale = xscale, yscale
+            self.degree = degree
+            bh,bw = self.psfbases[0].shape
+            self.radius = (bh+1)/2.
+            self.x0,self.y0 = x0,y0
 
-        self.sampling = hdr.get('PSF_SAMP')
         self.scale = scale
-
-        # number of terms in polynomial
-        ne = (degree + 1) * (degree + 2) / 2
-        assert(hdr['PSFAXIS3'] == ne)
-        assert(len(ims.shape) == 3)
-        assert(ims.shape[0] == ne)
-        ## HACK -- fit psf0 + psfi for each term i
-        ## (since those will probably work better as multi-Gaussians
-        ## than psfi alone)
-        ## OR instantiate PSF across the image, fit with
-        ## multi-gaussians, and regress the gaussian params?
-        
-        self.psfbases = ims
-        self.x0,self.y0 = x0,y0
-        self.xscale, self.yscale = xscale, yscale
-        self.degree = degree
-
         super(PsfEx, self).__init__(W, H, nx, ny, K)
-
-        bh,bw = self.psfbases[0].shape
-        self.radius = (bh+1)/2.
 
     def getMixtureOfGaussians(self, mean=None):
         if mean is not None:
@@ -244,6 +237,39 @@ class PsfEx(VaryingGaussianPSF):
             
         return psf
 
+class CachingPsfEx(PsfEx):
+    @staticmethod
+    def fromPsfEx(psfex):
+        c = CachingPsfEx(None, psfex.W, psfex.H, nx=psfex.nx, ny=psfex.ny,
+                         scale=psfex.scale, K=psfex.K)
+        c.sampling = psfex.sampling
+        c.xscale = psfex.xscale
+        c.yscale = psfex.yscale
+        c.degree = psfex.degree
+        c.radius = psfex.radius
+        c.x0 = psfex.x0
+        c.y0 = psfex.y0
+        c.splinedata = psfex.splinedata
+        return c
+
+    def __init__(self, *args, **kwargs):
+        from tractor.cache import Cache
+
+        super(CachingPsfEx, self).__init__(*args, **kwargs)
+        self.cache = Cache(maxsize=100)
+        # round pixel coordinates to the nearest...
+        self.rounding = 10
+        
+    def mogAt(self, x, y):
+        key = (int(x)/self.rounding, int(y)/self.rounding)
+        mog = self.cache.get(key, None)
+        if mog is not None:
+            return mog
+        mog = super(CachingPsfEx, self).mogAt(x, y)
+        self.cache.put(key, mog)
+        return mog
+
+    
 # class PixelizedPsfEx(PsfEx):
 #     def getPointSourcePatch(self, px, py, minval=0., extent=None):
 #         pix = self.instantiateAt(px, py, nativeScale=True)

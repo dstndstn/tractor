@@ -19,7 +19,7 @@ if True:
 
     # create tractor.Image object for rendering synthetic galaxy
     # images 
-    tim = Image(data=np.zeros((H,W)), invvar=np.ones((H,W)) / (noisesigma**2),
+    tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)) / noisesigma,
                 psf=NCircularGaussianPSF([psfsigma], [1.]))
 
     # Exponential galaxy -- GalaxyShape params are r_e [arcsec], ab, phi [deg]

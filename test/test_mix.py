@@ -1,5 +1,77 @@
-import mixture_profiles as mp
+import matplotlib
+matplotlib.use('Agg')
+import pylab as plt
 import numpy as np
+
+from tractor import mixture_profiles as mp
+
+from tractor import *
+from astrometry.util.plotutils import *
+import sys
+import os
+
+fn = os.path.join(os.path.dirname(__file__),
+                  'c4d_140818_002108_ooi_z_v1.ext27.psf')
+psf = PsfEx(fn, 2048, 4096)
+psfimg = psf.instantiateAt(100,100)
+gpsf = GaussianMixturePSF.fromStamp(psfimg)
+
+print 'PSF:', gpsf
+
+ps = PlotSequence('test-mix')
+
+patch0 = gpsf.getPointSourcePatch(0., 0., radius=20)
+
+approx = 1e-4
+
+patch1 = gpsf.getPointSourcePatch(0., 0., radius=20, v3=True, minval=approx)
+patch2,dx2,dy2 = gpsf.getPointSourcePatch(0., 0., radius=20, v3=True,
+                                          minval=approx, derivs=True)
+
+mn,mx = patch0.patch.min(), patch0.patch.max()
+#ima = dict(vmin=mn, vmax=mx)
+floor = approx * 1e-2
+ima = dict(vmin=np.log10(max(floor, mn)), vmax=np.log10(mx))
+
+imda = dict(vmin=-approx, vmax=approx)
+
+for patch in [patch1, patch2]:
+    print 'Patch range', patch.patch.min(), patch.patch.max()
+    plt.clf()
+    plt.subplot(2,2,1)
+    dimshow(np.log10(np.maximum(floor, patch0.patch)), **ima)
+    plt.colorbar()
+    plt.title('p0')
+    plt.subplot(2,2,2)
+    dimshow(np.log10(np.maximum(floor, patch.patch)), **ima)
+    plt.colorbar()
+
+    plt.subplot(2,2,4)
+    dimshow(patch.patch > 0, vmin=0, vmax=1)
+    
+    plt.title('patch')
+    plt.subplot(2,2,3)
+    diff = patch.patch - patch0.patch
+    print 'Diff range:', diff.min(), diff.max()
+    dimshow(diff, **imda)
+    plt.colorbar()
+    plt.title('difference')
+    ps.savefig()
+
+
+plt.clf()
+plt.subplot(2,2,2)
+dimshow(np.log10(np.maximum(floor, patch2.patch)), **ima)
+plt.subplot(2,2,3)
+dimshow(dx2.patch)
+plt.subplot(2,2,4)
+dimshow(dy2.patch)
+ps.savefig()
+
+sys.exit(0)
+
+
+
 
 mg = mp.MixtureOfGaussians([1.], [0.,0.], np.array([1.]))
 x = mg.evaluate(np.array([0,0]))

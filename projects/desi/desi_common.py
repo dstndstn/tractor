@@ -116,21 +116,28 @@ def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
         flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
                          for src in cat])
 
-        # Oh my, this is tricky... set parameter values to the variance
-        # vector so that we can read off the parameter variances via the
-        # python object apis.
-        cat.setParams(var)
-        fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
-                            for src in cat])
-        cat.setParams(params0)
+        if var is not None:
+            # Oh my, this is tricky... set parameter values to the variance
+            # vector so that we can read off the parameter variances via the
+            # python object apis.
+            cat.setParams(var)
+            fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+                                for src in cat])
+            flux_iv = 1./np.array(fluxvar)
+            cat.setParams(params0)
 
-        flux_iv = 1./np.array(fluxvar)
-        mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+            mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+        else:
+            mag = NanoMaggies.nanomaggiesToMag(flux)
+            dmag = np.zeros_like(mag)
+            flux_iv = np.zeros_like(flux)
 
-        T.set('decam_%s_nanomaggies'        % filt, flux)
-        T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv)
-        T.set('decam_%s_mag'                % filt, mag)
-        T.set('decam_%s_mag_err'            % filt, dmag)
+        T.set('decam_%s_nanomaggies'        % filt, flux.astype(np.float32))
+        T.set('decam_%s_mag'                % filt, mag.astype(np.float32))
+
+        T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv.astype(np.float32))
+        T.set('decam_%s_mag_err'            % filt, dmag.astype(np.float32))
+
 
     if fs is not None:
         fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
@@ -140,7 +147,11 @@ def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
             T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
 
     get_tractor_fits_values(T, cat, '%s')
-    cat.setParams(var)
+
+    if var is not None:
+        cat.setParams(var)
+    else:
+        cat.setParams(np.zeros(cat.numberOfParams()))
     get_tractor_fits_values(T, cat, '%s_var')
     cat.setParams(params0)
     # Heh, no uncertainty here!
@@ -185,9 +196,9 @@ def get_tractor_fits_values(T, cat, pat):
             shapeDev[i,:] = src.shapeDev.getAllParams()
             fracDev[i] = src.fracDev.getValue()
 
-    T.set(pat % 'shapeExp', shapeExp)
-    T.set(pat % 'shapeDev', shapeDev)
-    T.set(pat % 'fracDev', fracDev)
+    T.set(pat % 'shapeExp', shapeExp.astype(np.float32))
+    T.set(pat % 'shapeDev', shapeDev.astype(np.float32))
+    T.set(pat % 'fracDev',   fracDev.astype(np.float32))
     return
 
 

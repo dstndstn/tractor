@@ -60,12 +60,14 @@ class Image(MultiParams):
     instances, and ``Image`` is a ``MultiParams`` so that the Tractor
     can optimize them.
     '''
-    def __init__(self, data=None, invvar=None, psf=None, wcs=None, sky=None,
-                 photocal=None, name=None, domask=False, time=None, **kwargs):
+    def __init__(self, data=None, invvar=None, inverr=None,
+                 psf=None, wcs=None, sky=None,
+                 photocal=None, name=None, time=None, **kwargs):
         '''
         Args:
           * *data*: numpy array: the image pixels
           * *invvar*: numpy array: the image inverse-variance
+          * *inverr*: numpy array: the image inverse-error
           * *psf*: a :class:`tractor.PSF` duck
           * *wcs*: a :class:`tractor.WCS` duck
           * *sky*: a :class:`tractor.Sky` duck
@@ -73,18 +75,17 @@ class Image(MultiParams):
           * *name*: string name of this image.
           * *zr*: plotting range ("vmin"/"vmax" in matplotlib.imshow)
 
+        Only one of *invvar* and *inverr* should be given.  If both
+        are given, inverr takes precedent.
+          
         '''
         self.data = data
-        self.origInvvar = 1. * np.array(invvar)
-        kwa = dict()
-        if 'dilation' in kwargs:
-            kwa.update(dilation=kwargs.pop('dilation'))
-        self.domask = domask
-        if domask:
-            self.setMask(**kwa)
-        self.setInvvar(self.origInvvar)
+        if inverr is not None:
+            self.inverr = inverr
+        elif invvar is not None:
+            self.inverr = np.sqrt(invvar)
+            
         self.name = name
-        self.starMask = np.ones_like(self.data)
         self.zr = kwargs.pop('zr', None)
         self.time = time
 
@@ -98,6 +99,10 @@ class Image(MultiParams):
         if photocal is None:
             from .basics import NullPhotoCal
             photocal = NullPhotoCal()
+
+        # acceptable approximation level when rendering this model
+        # image
+        self.modelMinval = 0.
             
         super(Image, self).__init__(psf, wcs, photocal, sky)
 
@@ -141,11 +146,14 @@ class Image(MultiParams):
     def setPsf(self, psf):
         self.psf = psf
 
-    def __getattr__(self, name):
-        if name == 'shape':
-            return self.getShape()
-        raise AttributeError('Image: unknown attribute "%s"' % name)
+    @property
+    def shape(self):
+        return self.getShape()
 
+    @property
+    def invvar(self):
+        return self.inverr**2
+    
     # Numpy arrays have shape H,W
     def getWidth(self):
         return self.getShape()[1]
@@ -160,7 +168,7 @@ class Image(MultiParams):
         return self.getShape()
     
     def hashkey(self):
-        return ('Image', id(self.data), id(self.invvar), self.psf.hashkey(),
+        return ('Image', id(self.data), id(self.inverr), self.psf.hashkey(),
                 self.sky.hashkey(), self.wcs.hashkey(),
                 self.photocal.hashkey())
 
@@ -171,37 +179,8 @@ class Image(MultiParams):
     def getInvError(self):
         return self.inverr
     def getInvvar(self):
-        return self.invvar
-    def setInvvar(self,invvar):
-        self.invvar = 1. * invvar
-        if self.domask:
-            self.invvar[self.mask] = 0. 
-        self.inverr = np.sqrt(self.invvar)
+        return self.inverr**2
 
-    def getMedianPixelNoise(self, nz=True):
-        if nz:
-            iv = self.invvar[self.invvar != 0.]
-        else:
-            iv = self.invvar
-        return 1./np.sqrt(np.median(iv))
-
-    def getMask(self):
-        return self.mask
-
-    def setMask(self, dilation=3):
-        self.mask = (self.origInvvar <= 0.)
-        if dilation > 0:
-            from scipy.ndimage.morphology import binary_dilation
-            self.mask = binary_dilation(self.mask,iterations=dilation)
-
-    def getStarMask(self):
-        return self.starMask
-    def setStarMask(self,mask):
-        self.starMask = mask
-
-
-    def getOrigInvvar(self):
-        return self.origInvvar
     def getImage(self):
         return self.data
     def getPsf(self):
@@ -276,10 +255,6 @@ class Image(MultiParams):
         fits.write(None, header=hdr)
         fits.write(self.getImage())
         fits.write(self.getInvvar())
-        #fits = fitsio.FITS('subtim.fits', 'rw', clobber=True)
-        #fits.close()
-        #sys.exit(0)
-        
 
     
         
@@ -1466,7 +1441,7 @@ class Tractor(MultiParams):
                 y0 = roi[0].start
                 x0 = roi[1].start
                 subwcs = ShiftedWcs(img.wcs, x0, y0)
-                subimg = Image(data=img.data[roi], invvar=img.invvar[roi],
+                subimg = Image(data=img.data[roi], inverr=img.inverr[roi],
                                psf=img.psf, wcs=subwcs, sky=img.sky,
                                photocal=img.photocal, name=img.name)
                 subimgs.append(subimg)
@@ -1820,7 +1795,8 @@ class Tractor(MultiParams):
                            chiImages=None, variance=False,
                            shared_params=True,
                            use_tsnnls=False,
-                           use_ceres=False):
+                           use_ceres=False,
+                           get_A_matrix=False):
 
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
@@ -2157,7 +2133,10 @@ class Tractor(MultiParams):
             # Build sparse matrix
             #A = csc_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
             A = csr_matrix((spvals, (sprows, spcols)), shape=(Nrows, Ncols))
-    
+
+            if get_A_matrix:
+                return A
+
             lsqropts = dict(show=isverbose(), damp=damp)
             if variance:
                 lsqropts.update(calc_var=True)
@@ -2226,25 +2205,25 @@ class Tractor(MultiParams):
 
         return X
 
-    def changeInvvar(self, Q2=None):
-        '''
-        run one iteration of iteratively reweighting the invvars for IRLS
-        '''
-        if Q2 is None:
-            return
-        assert(Q2 > 0.5)
-        for img in self.getImages():
-            resid = img.getImage() - self.getModelImage(img)
-            oinvvar = img.getOrigInvvar()
-            smask = img.getStarMask()
-            chi2 = oinvvar * resid**2
-            factor = Q2 / (Q2 + chi2)
-            img.setInvvar(oinvvar * factor * smask)
+    # def changeInvvar(self, Q2=None):
+    #     '''
+    #     run one iteration of iteratively reweighting the invvars for IRLS
+    #     '''
+    #     if Q2 is None:
+    #         return
+    #     assert(Q2 > 0.5)
+    #     for img in self.getImages():
+    #         resid = img.getImage() - self.getModelImage(img)
+    #         oinvvar = img.getOrigInvvar()
+    #         smask = img.getStarMask()
+    #         chi2 = oinvvar * resid**2
+    #         factor = Q2 / (Q2 + chi2)
+    #         img.setInvvar(oinvvar * factor * smask)
 
     def getModelPatchNoCache(self, img, src, **kwargs):
         return src.getModelPatch(img, **kwargs)
 
-    def getModelPatch(self, img, src, minsb=0., **kwargs):
+    def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
             # shortcut
             return src.getModelPatch(img, **kwargs)
@@ -2252,6 +2231,8 @@ class Tractor(MultiParams):
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
         mv,mod = self.cache.get(deps, (0.,None))
+        if minsb is None:
+            minsb = img.modelMinval
         if mv > minsb:
             mod = None
         if mod is not None:
@@ -2261,7 +2242,7 @@ class Tractor(MultiParams):
             self.cache.put(deps, (minsb,mod))
         return mod
 
-    def getModelImage(self, img, srcs=None, sky=True, minsb=0.):
+    def getModelImage(self, img, srcs=None, sky=True, minsb=None):
         '''
         Create a model image for the given "tractor image", including
         the sky level.  If "srcs" is specified (a list of sources),
@@ -2384,7 +2365,13 @@ class Tractor(MultiParams):
         mods = self.getModelImages()
         chis = []
         for img,mod in zip(self.images, mods):
-            chis.append((img.getImage() - mod) * img.getInvError())
+            chi = (img.getImage() - mod) * img.getInvError()
+            if not np.all(np.isfinite(chi)):
+                print 'Chi not finite'
+                print 'Image finite?', np.all(np.isfinite(img.getImage()))
+                print 'Mod finite?', np.all(np.isfinite(mod))
+                print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
+            chis.append(chi)
         return chis
 
     def getChiImage(self, imgi=-1, img=None, srcs=None, minsb=0.):
@@ -2411,16 +2398,17 @@ class Tractor(MultiParams):
         '''
         return the posterior PDF, evaluated at the parametrs
         '''
-        lnp = self.getLogPrior()
-        if lnp == -np.inf:
-            return lnp
-        lnp += self.getLogLikelihood()
+        lnprior = self.getLogPrior()
+        if lnprior == -np.inf:
+            return lnprior
+        lnl = self.getLogLikelihood()
+        lnp = lnprior + lnl
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'
             print self.printThawedParams()
-            print 'log likelihood:', self.getLogLikelihood()
-            print 'log prior:', self.getLogPrior()
+            print 'log likelihood:', lnl
+            print 'log prior:', lnprior
             return -np.inf
         return lnp
 

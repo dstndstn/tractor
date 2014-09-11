@@ -108,7 +108,7 @@ if False:
     image = trueimage + noisesigma * np.random.normal(size=trueimage.shape)
 
     # Create Tractor Image
-    tim = Image(data=image, invvar=np.ones_like(image) / (noisesigma**2),
+    tim = Image(data=image, inverr=np.ones_like(image) / noisesigma,
                 psf=NCircularGaussianPSF([psfsigma], [1.]),
                 wcs=NullWCS(), photocal=NullPhotoCal(),
                 sky=ConstantSky(0.))
@@ -227,7 +227,7 @@ if True:
         images.append(image)
         
     # Create Tractor Images
-    tims = [Image(data=image, invvar=np.ones_like(image) / (noisesigma**2),
+    tims = [Image(data=image, inverr=np.ones_like(image) / noisesigma,
                   psf=NCircularGaussianPSF([psfsigma], [1.]),
                   wcs=NullWCS(), photocal=NullPhotoCal(),
                   sky=ConstantSky(0.))

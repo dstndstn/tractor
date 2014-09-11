@@ -229,7 +229,7 @@ class Fluxes(MultiBandBrightness):
     def getFlux(self, bandname):
         return self.getBand(bandname)
     def setFlux(self, bandname, value):
-        return self.setFlux(bandname, value)
+        return self.setBand(bandname, value)
     
 
 class NanoMaggies(Fluxes):
@@ -823,22 +823,26 @@ class PointSource(MultiParams):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
 
-    def getUnitFluxModelPatch(self, img, minval=0.):
+    def getUnitFluxModelPatch(self, img, minval=0., derivs=False):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
         psf = self._getPsf(img)
         patch = psf.getPointSourcePatch(px, py, minval=minval,
                                         extent=[0,W-1,0,H-1],
-                                        radius=self.fixedRadius)
+                                        radius=self.fixedRadius,
+                                        v3=True, derivs=derivs
+                                        )
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
         return [self.getUnitFluxModelPatch(*args, **kwargs)]
 
-    def getModelPatch(self, img, minsb=0.):
+    def getModelPatch(self, img, minsb=None):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
+        if minsb is None:
+            minsb = img.modelMinval
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval)
         if upatch is None:
@@ -848,30 +852,121 @@ class PointSource(MultiParams):
     def _getPsf(self, img):
         return img.getPsf()
 
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, img, fastPosDerivs=True):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
-        pos0 = self.getPosition()
-        wcs = img.getWcs()
-        (px0,py0) = wcs.positionToPixel(pos0, self)
-        psf = self._getPsf(img)
-        patch0 = psf.getPointSourcePatch(px0, py0)
+
+        # Short-cut the case where we're only fitting fluxes, and the
+        # band of the image is not being fit.
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
+        if self.isParamFrozen('pos') and not self.isParamFrozen('brightness'):
+            bsteps = self.brightness.getStepSizes(img)
+            bvals = self.brightness.getParams()
+            allzero = True
+            for i,bstep in enumerate(bsteps):
+                oldval = self.brightness.setParam(i, bvals[i] + bstep)
+                countsi = img.getPhotoCal().brightnessToCounts(self.brightness)
+                self.brightness.setParam(i, oldval)
+                if countsi != counts0:
+                    allzero = False
+                    break
+            if allzero:
+                return [None]*self.numberOfParams()
+
+
+        pos = self.getPosition()
+        wcs = img.getWcs()
+
+        # (px0,py0) = wcs.positionToPixel(pos, self)
+        # psf = self._getPsf(img)
+        # extent = [0,W-1,0,H-1]
+        # patch0 = psf.getPointSourcePatch(px0, py0, extent=extent,
+        #                                  radius=self.fixedRadius)
+
+        minsb = img.modelMinval
+        if counts0 > 0:
+            minval = minsb / counts0
+        else:
+            minval = None
+
+        derivs = (not self.isParamFrozen('pos')) and fastPosDerivs
+        patchdx,patchdy = None,None
+        
+        if derivs:
+            patches = self.getUnitFluxModelPatch(img, minval=minval, derivs=True)
+            #print 'minval=', minval, 'Patches:', patches
+            if patches is None:
+                return [None]*self.numberOfParams()
+            if not isinstance(patches, tuple):
+                patch0 = patches
+                #print 'img:', img
+                #print 'counts0:', counts0
+            else:
+                patch0, patchdx, patchdy = patches
+
+        else:
+            patch0 = self.getUnitFluxModelPatch(img, minval=minval)
+
+        if patch0 is None:
+            return [None]*self.numberOfParams()
+        # check for intersection of patch0 with img
+        H,W = img.shape
+        if not patch0.overlapsBbox((0, W, 0, H)):
+            return [None]*self.numberOfParams()
+        
         derivs = []
 
         # Position
         if not self.isParamFrozen('pos'):
-            psteps = pos0.getStepSizes(img)
-            pvals = pos0.getParams()
-            for i,pstep in enumerate(psteps):
-                oldval = pos0.setParam(i, pvals[i] + pstep)
-                (px,py) = wcs.positionToPixel(pos0, self)
-                patchx = psf.getPointSourcePatch(px, py)
-                pos0.setParam(i, oldval)
-                dx = (patchx - patch0) * (counts0 / pstep)
-                dx.setName('d(ptsrc)/d(pos%i)' % i)
-                derivs.append(dx)
+
+            if patchdx is not None and patchdy is not None:
+
+                # Convert x,y derivatives to Position derivatives
+
+                px,py = wcs.positionToPixel(pos, self)
+                cd = wcs.cdAtPixel(px, py)
+                #print 'cd', cd
+                cdi = np.linalg.inv(cd)
+                #print 'cdi', cdi
+                # Get thawed Position parameter indices
+                thawed = pos.getThawedParamIndices()
+                for i,pname in zip(thawed, pos.getParamNames()):
+                    deriv = (patchdx * cdi[0,i] + patchdy * cdi[1,i]) * counts0
+                    deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+                    derivs.append(deriv)
+                #derivs.extend((patchdx, patchdy))
+
+                # psteps = pos.getStepSizes(img)
+                # pvals = pos.getParams()
+                # pnames = pos.getParamNames()
+                # for i,(pstep,pname) in enumerate(zip(psteps,pnames)):
+                #     oldval = pos.setParam(i, pvals[i] + pstep)
+                #     px1,py1 = wcs.positionToPixel(pos, self)
+                #     pos.setParam(i, oldval)
+                #     dx,dy = px1 - px, py1 - py
+                #     print 'dx,dy', dx/pstep, dy/pstep
+                #     deriv = (patchdx * dx + patchdy * dy) * counts0/pstep
+                #     deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
+                #     derivs.append(deriv)
+
+            else:
+                psteps = pos.getStepSizes(img)
+                pvals = pos.getParams()
+                ## FIXME -- we should ensure that patch0 and patchx have the same
+                ## extent (of pixels rendered > minval)!
+                for i,pstep in enumerate(psteps):
+                    oldval = pos.setParam(i, pvals[i] + pstep)
+                
+                    #(px,py) = wcs.positionToPixel(pos, self)
+                    #patchx = psf.getPointSourcePatch(px, py, extent=extent,
+                    #                                 radius=self.fixedRadius)
+                    patchx = self.getUnitFluxModelPatch(img, minval=minval)
+                
+                    pos.setParam(i, oldval)
+                    dx = (patchx - patch0) * (counts0 / pstep)
+                    dx.setName('d(ptsrc)/d(pos%i)' % i)
+                    derivs.append(dx)
 
         # Brightness
         if not self.isParamFrozen('brightness'):
@@ -1204,6 +1299,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         # print 'Setting param names:', names
         self.addNamedParams(**names)
 
+    def get_wmuvar(self):
+        return (self.mog.amp, self.mog.mean, self.mog.var)
+        
     @classmethod
     def fromFitsHeader(clazz, hdr, prefix=''):
         params = []
@@ -1268,11 +1366,17 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None,
-                            radius=None, **kwargs):
-        self.mog.symmetrize()
+                            radius=None,
+                            v3=False, derivs=False,
+                            **kwargs):
+        #self.mog.symmetrize()
+        if minval is None:
+            minval = 0.
         if minval > 0.:
             if radius is not None:
                 rr = radius
+            elif self.radius is not None:
+                rr = self.radius
             else:
                 r = 0.
                 for v in self.mog.var:
@@ -1283,12 +1387,12 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                     if r2 > 0:
                         r = max(r, np.sqrt(r2))
                 rr = int(np.ceil(r))
-                #print 'choosing r=', rr
 
             x0 = int(floor(px - rr))
             x1 = int(ceil (px + rr))
             y0 = int(floor(py - rr))
             y1 = int(ceil (py + rr))
+
             # x1,y1: inclusive
             if extent is not None:
                 # inclusive
@@ -1298,13 +1402,43 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 x1 = min(x1, xh)
                 y0 = max(y0, yl)
                 y1 = min(y1, yh)
+
             if x0 > x1:
                 return None
             if y0 > y1:
                 return None
                 
-            grid = self.mog.evaluate_grid_approx(x0, x1+1, y0, y1+1,
-                                                 px, py, minval)
+            if v3:
+                from mix import c_gauss_2d_approx3
+                
+                result = np.zeros((y1-y0 + 1, x1-x0 + 1))
+                xderiv = yderiv = mask = None
+                minradius = 3
+                if derivs:
+                    xderiv = np.zeros_like(result)
+                    yderiv = np.zeros_like(result)
+
+                rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
+                    x0, x1+1, y0, y1+1, px, py, minval,
+                    self.mog.amp, self.mog.mean, self.mog.var,
+                    result, xderiv, yderiv, mask,
+                    int(px), int(py), minradius)
+                assert(rtn == 0)
+                slc = slice(sy0,sy1),slice(sx0,sx1)
+                result = result[slc]
+                if derivs:
+                    xderiv = xderiv[slc]
+                    yderiv = yderiv[slc]
+                x0 += sx0
+                y0 += sy0
+                if derivs:
+                    return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
+                            Patch(x0,y0,yderiv))
+                return Patch(x0,y0,result)
+                    
+            else:
+                grid = self.mog.evaluate_grid_approx(x0, x1+1, y0, y1+1,
+                                                     px, py, minval)
 
         else:
             if radius is None:
@@ -1376,7 +1510,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     @staticmethod
     def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
-                  emsteps=1000):
+                  emsteps=1000, v2=False, approx=1e-30):
         '''
         optional P0 = (w,mu,var): initial parameter guess.
 
@@ -1393,13 +1527,29 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         else:
             w,mu,var = em_init_params(N, None, None, None)
         stamp = stamp.copy()
-        stamp /= stamp.sum()
-        stamp = np.maximum(stamp, 0)
+        
         if xy0 is None:
             xm, ym = -(stamp.shape[1]/2), -(stamp.shape[0]/2)
         else:
             xm, ym = xy0
-        em_fit_2d_reg(stamp, xm, ym, w, mu, var, alpha, emsteps)
+
+        if v2:
+            from emfit import em_fit_2d_reg2
+            print 'stamp sum:', np.sum(stamp)
+            #stamp *= 1000.
+            ok,skyamp = em_fit_2d_reg2(stamp, xm, ym, w, mu, var, alpha,
+                                       emsteps, approx)
+            #print 'sky amp:', skyamp
+            #print 'w sum:', sum(w)
+            tpsf = GaussianMixturePSF(w, mu, var)
+            return tpsf,skyamp
+        else:
+
+            stamp /= stamp.sum()
+            stamp = np.maximum(stamp, 0)
+
+            em_fit_2d_reg(stamp, xm, ym, w, mu, var, alpha, emsteps)
+
         tpsf = GaussianMixturePSF(w, mu, var)
         return tpsf
     
@@ -1576,8 +1726,12 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         self.y0 = y0
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
-    def getPointSourcePatch(self, px, py, **kwargs):
-        p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py, **kwargs)
+    def getPointSourcePatch(self, px, py, extent=None, **kwargs):
+        if extent is not None:
+            (ex0,ex1,ey0,ey1) = extent
+            extent = (ex0+self.x0, ex1+self.x0, ey0+self.y0, ey1+self.y0)
+        p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py,
+                                         extent=extent, **kwargs)
         # Now we have to shift the patch back too
         if p is None:
             return None

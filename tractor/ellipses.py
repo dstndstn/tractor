@@ -291,7 +291,7 @@ if __name__ == '__main__':
     sig1 = 1.
     pixscale = 1.
     psf = NCircularGaussianPSF([1.5], [1.])
-    tim = Image(data=img, invvar=np.ones_like(img) * (1./sig1**2),
+    tim = Image(data=img, inverr=np.zero_like(img) + (1./sig1),
                 psf=psf, wcs=NullWCS(pixscale=pixscale), sky=ConstantSky(0.),
                 photocal=LinearPhotoCal(1.),
                 domask=False, zr=[-2.*sig1, 3.*sig1])

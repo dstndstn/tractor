@@ -18,11 +18,6 @@ from astrometry.util.plotutils import PlotSequence, dimshow
 from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
-
-# from astrometry.util.file import *
-# from astrometry.util.util import *
-# from astrometry.util.starutil_numpy import *
-
 from astrometry.util.ttime import Time, MemMeas
 from astrometry.sdss.fields import read_photoobjs_in_wcs
 from astrometry.sdss import DR9
@@ -94,164 +89,11 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     
 
 def set_globals():
-    global imx
     global imchi
-    
     plt.figure(figsize=(12,9));
-    #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.03, top=0.95,
-    #                    hspace=0.05, wspace=0.05)
-
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
-                        #hspace=0.05, wspace=0.05)
                         hspace=0.2, wspace=0.05)
-    imx = dict(interpolation='nearest', origin='lower')
-    imchi = dict(interpolation='nearest', origin='lower', cmap='RdBu',
-                vmin=-5, vmax=5)
-
-def check_photometric_calib(ims, cat, ps):
-    # Check photometric calibrations
-    lastband = None
-
-    for im in ims:
-        band = im.band
-        cat = fits_table(im.morphfn, hdu=2, columns=[
-            'mag_psf','x_image', 'y_image', 'mag_disk', 'mag_spheroid', 'flags',
-            'flux_psf' ])
-        print 'Read', len(cat), 'from', im.morphfn
-        if len(cat) == 0:
-            continue
-        cat.cut(cat.flags == 0)
-        print '  Cut to', len(cat), 'with no flags set'
-        if len(cat) == 0:
-            continue
-        wcs = Sip(im.wcsfn)
-        cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
-
-        sdss = fits_table(im.sdssfn)
-
-
-        I = np.flatnonzero(ZP.expnum == im.expnum)
-        if len(I) > 1:
-            I = np.flatnonzero((ZP.expnum == im.expnum) * (ZP.extname == im.extname))
-        assert(len(I) == 1)
-        I = I[0]
-        magzp = ZP.zpt[I]
-        print 'magzp', magzp
-        exptime = ZP.exptime[I]
-        magzp += 2.5 * np.log10(exptime)
-        print 'magzp', magzp
-
-        primhdr = im.read_image_primary_header()
-        magzp0  = primhdr['MAGZERO']
-        print 'header magzp:', magzp0
-
-        I,J,d = match_radec(cat.ra, cat.dec, sdss.ra, sdss.dec, 1./3600.)
-
-        flux = sdss.get('%s_psfflux' % band)
-        mag = NanoMaggies.nanomaggiesToMag(flux)
-
-        # plt.clf()
-        # plt.plot(mag[J], cat.mag_psf[I] - mag[J], 'b.')
-        # plt.xlabel('SDSS %s psf mag' % band)
-        # plt.ylabel('SDSS - DECam mag')
-        # plt.title(im.name)
-        # plt.axhline(0, color='k', alpha=0.5)
-        # plt.ylim(-2,2)
-        # plt.xlim(15, 23)
-        # ps.savefig()
-
-        if band != lastband:
-            if lastband is not None:
-                ps.savefig()
-            off = 0
-            plt.clf()
-
-        if off >= 8:
-            continue
-
-        plt.subplot(2,4, off+1)
-        mag2 = -2.5 * np.log10(cat.flux_psf)
-        p = plt.plot(mag[J], mag[J] - mag2[I], 'b.')
-        plt.xlabel('SDSS %s psf mag' % band)
-        if off in [0,4]:
-            plt.ylabel('SDSS - DECam instrumental mag')
-        plt.title(im.name)
-
-        med = np.median(mag[J] - mag2[I])
-        plt.axhline(med, color='k', alpha=0.25)
-
-        plt.ylim(29,32)
-        plt.xlim(15, 22)
-        plt.axhline(magzp, color='r', alpha=0.5)
-        plt.axhline(magzp0, color='b', alpha=0.5)
-
-        off += 1
-        lastband = band
-    ps.savefig()
-
-def get_se_sources(ims, catband, targetwcs, W, H):
-    # FIXME -- we're only reading 'catband'-band catalogs, and all the fluxes
-    # are initialized at that band's flux... should really read all bands!
-        
-    # Select SE catalogs to read
-    catims = [im for im in ims if im.band == catband]
-    print 'Reference catalog files:', catims
-    # ... and read 'em
-    cats = []
-    extra_cols = []
-    for im in catims:
-        cat = fits_table(
-            im.morphfn, hdu=2,
-            columns=[x.upper() for x in
-                     ['x_image', 'y_image', 'flags',
-                      'chi2_psf', 'chi2_model', 'mag_psf', 'mag_disk',
-                      'mag_spheroid', 'disk_scale_world', 'disk_aspect_world',
-                      'disk_theta_world', 'spheroid_reff_world',
-                      'spheroid_aspect_world', 'spheroid_theta_world',
-                      'alphamodel_j2000', 'deltamodel_j2000'] + extra_cols])
-        print 'Read', len(cat), 'from', im.morphfn
-        cat.cut(cat.flags == 0)
-        print '  Cut to', len(cat), 'with no flags set'
-        wcs = Sip(im.wcsfn)
-        cat.ra,cat.dec = wcs.pixelxy2radec(cat.x_image, cat.y_image)
-        cats.append(cat)
-        
-    # Plot all catalog sources and ROI
-    # plt.clf()
-    # for cat in cats:
-    #     plt.plot(cat.ra, cat.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
-    # ps.savefig()
-    # Cut catalogs to ROI
-    for cat in cats:
-        ok,x,y = targetwcs.radec2pixelxy(cat.ra, cat.dec)
-        cat.cut((x > 0.5) * (x < (W+0.5)) * (y > 0.5) * (y < (H+0.5)))
-
-    # Merge catalogs by keeping sources > 0.5" away from previous ones
-    merged = cats[0]
-    for cat in cats[1:]:
-        if len(merged) == 0:
-            merged = cat
-            continue
-        if len(cat) == 0:
-            continue
-        I,J,d = match_radec(merged.ra, merged.dec, cat.ra, cat.dec, 0.5/3600.)
-        keep = np.ones(len(cat), bool)
-        keep[J] = False
-        if sum(keep):
-            merged = merge_tables([merged, cat[keep]])
-    
-    # plt.clf()
-    # plt.plot(merged.ra, merged.dec, 'o', mec='none', mfc='b', alpha=0.5)
-    # plt.plot(targetrd[:,0], targetrd[:,1], 'r-')
-    # ps.savefig()
-
-    del cats
-    # Create Tractor sources
-    cat,isrcs = get_se_modelfit_cat(merged, maglim=90, bands=bands)
-    print 'Tractor sources:', cat
-    T = merged[isrcs]
-    return cat, T
+    imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
 def get_sdss_sources(bands, targetwcs, W, H):
     # FIXME?
@@ -284,7 +126,7 @@ def get_sdss_sources(bands, targetwcs, W, H):
     cat = Catalog(*srcs)
     return cat, objs
 
-def stage0(W=3600, H=3600, **kwargs):
+def stage0(W=3600, H=3600, brickid=None, **kwargs):
     ps = PlotSequence('brick')
     t0 = tlast = Time()
 
@@ -297,7 +139,7 @@ def stage0(W=3600, H=3600, **kwargs):
 
     # brick index...
     # One near the middle
-    brickid = 377306
+    #brickid = 377306
     # One near the edge and with little overlap
     #brickid = 380156
     ii = np.flatnonzero(B.brickid == brickid)[0]
@@ -387,7 +229,8 @@ def stage0(W=3600, H=3600, **kwargs):
         if mp is not None:
             args.append((im, brick.ra, brick.dec, pixscale))
         else:
-            run_calibs(im, brick.ra, brick.dec, pixscale)
+            run_calibs(im, brick.ra, brick.dec, pixscale, se2=False,
+                       morph=False)
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
@@ -703,7 +546,7 @@ def stage0(W=3600, H=3600, **kwargs):
 
     if False:
         plt.clf()
-        plt.imshow(hot, cmap='gray', **imx)
+        dimshow(hot)
         plt.title('Segmentation')
         ps.savefig()
 
@@ -715,143 +558,20 @@ def stage0(W=3600, H=3600, **kwargs):
     for k in ['T', 'sedsn', 'coimgs', 'cons', 'detmaps', 'detivs',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims', 'ps']:
+              'bands', 'tims', 'ps', 'brickid']:
         rtn[k] = locals()[k]
     return rtn
 
-# Check out the PsfEx models
-def stage101(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
-             detmaps=None, detivs=None,
-             rgbim=None,
-             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-             tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None,
-             bands=None, ps=None, tims=None,
-             **kwargs):
-    # sort sources by their sedsn values.
-    fluxes = sedsn[T.ity, T.itx]
+def stage101(coimgs=None, cons=None, bands=None, ps=None, **kwargs):
+    # RGB image
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands))
+    ps.savefig()
 
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
-    for srci in np.argsort(-fluxes)[:20]:
-        cat.freezeAllParams()
-        cat.thawParam(srci)
-                    
-        print 'Fitting:'
-        tractor.printThawedParams()
-        for itim,tim in enumerate(tims):
-            ox0,oy0 = orig_wcsxy0[itim]
-            x,y = tim.wcs.positionToPixel(cat[srci].getPosition())
-            psfimg = tim.psfex.instantiateAt(ox0+x, oy0+y, nativeScale=True)
-            subpsf = GaussianMixturePSF.fromStamp(psfimg)
-            tim.psf = subpsf
-
-        for step in range(10):
-            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
-            print 'dlnp:', dlnp
-            if dlnp < 0.1:
-                break
-        
-        chis1 = tractor.getChiImages()
-        mods1 = tractor.getModelImages()
-
-
-        for itim,tim in enumerate(tims):
-            ox0,oy0 = orig_wcsxy0[itim]
-            x,y = tim.wcs.positionToPixel(cat[srci].getPosition())
-            psfimg = tim.psfex.instantiateAt(ox0+x, oy0+y, nativeScale=True)
-            subpsf = PixelizedPSF(psfimg)
-            tim.psf = subpsf
-        for step in range(10):
-            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False)
-            print 'dlnp:', dlnp
-            if dlnp < 0.1:
-                break
-        
-        chis2 = tractor.getChiImages()
-        mods2 = tractor.getModelImages()
-
-        
-        subchis = []
-        submods = []
-        subchis2 = []
-        submods2 = []
-        subimgs = []
-        for i,(chi,mod) in enumerate(zip(chis1, mods1)):
-            x,y = tims[i].wcs.positionToPixel(cat[srci].getPosition())
-            x = int(x)
-            y = int(y)
-            S = 15
-            th,tw = tims[i].shape
-            x0 = max(x-S, 0)
-            y0 = max(y-S, 0)
-            x1 = min(x+S, tw)
-            y1 = min(y+S, th)
-            subchis.append(chi[y0:y1, x0:x1])
-            submods.append(mod[y0:y1, x0:x1])
-            subimgs.append(tims[i].getImage()[y0:y1, x0:x1])
-            subchis2.append(chis2[i][y0:y1, x0:x1])
-            submods2.append(mods2[i][y0:y1, x0:x1])
-
-        mxchi = max([np.abs(chi).max() for chi in subchis])
-
-        # n = len(subchis)
-        # cols = int(np.ceil(np.sqrt(n)))
-        # rows = int(np.ceil(float(n) / cols))
-        # plt.clf()
-        # for i,chi in enumerate(subchis):
-        #     plt.subplot(rows, cols, i+1)
-        #     plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
-        #     plt.colorbar()
-        # ps.savefig()
-
-        cols = len(subchis)
-        rows = 3
-        rows = 5
-        plt.clf()
-        ta = dict(fontsize=8)
-        for i,(chi,mod,img) in enumerate(zip(subchis,submods,subimgs)):
-            mx = img.max()
-            def nl(x):
-                return np.log10(np.maximum(tim.sig1, x + 5.*tim.sig1))
-
-            plt.subplot(rows, cols, i+1)
-            plt.imshow(nl(img), vmin=nl(0), vmax=nl(mx), **imx)
-            plt.xticks([]); plt.yticks([])
-            plt.title(tims[i].name, **ta)
-
-            plt.subplot(rows, cols, i+1+cols)
-            plt.imshow(nl(mod), vmin=nl(0), vmax=nl(mx), **imx)
-            plt.xticks([]); plt.yticks([])
-            if i == 0:
-                plt.title('MoG PSF', **ta)
-
-            plt.subplot(rows, cols, i+1+cols*2)
-            mxchi = 5.
-            plt.imshow(-chi, vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
-            plt.xticks([]); plt.yticks([])
-            #plt.colorbar()
-            if i == 0:
-                plt.title('MoG chi', **ta)
-
-            # pix
-            plt.subplot(rows, cols, i+1+cols*3)
-            plt.imshow(nl(submods2[i]), vmin=nl(0), vmax=nl(mx), **imx)
-            plt.xticks([]); plt.yticks([])
-            if i == 0:
-                plt.title('Pixelized PSF', **ta)
-
-            plt.subplot(rows, cols, i+1+cols*4)
-            mxchi = 5.
-            plt.imshow(-subchis2[i], vmin=-mxchi, vmax=mxchi, cmap='RdBu', **imx)
-            plt.xticks([]); plt.yticks([])
-            if i == 0:
-                plt.title('Pixelized chi', **ta)
-
-        rd = cat[srci].getPosition()
-        plt.suptitle('Source at RA,Dec = (%.4f, %.4f)' % (rd.ra, rd.dec))
-            
-        ps.savefig()
+    # cluster zoom-in
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands)[200:1200, 1700:2700,:])
+    ps.savefig()
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -958,7 +678,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
             for col,chilist in enumerate(chis[band]):
                 chi,itim = chilist[imod]
                 plt.subplot(rows, cols, sp0 + col)
-                plt.imshow(-chi, **imchi)
+                dimshow(-chi, **imchi)
                 plt.xticks([]); plt.yticks([])
                 plt.title(tims[itim].name)
         plt.suptitle(titles[imod])
@@ -969,25 +689,54 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None,
+           W=None,H=None, brickid=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
-
+    # Fit spatially varying PsfEx models.
+    for itim,tim in enumerate(tims):
+        print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
+        t0 = Time()
+        tim.psfex.savesplinedata = True
+        print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
+        tim.psfex.ensureFit()
+        print 'PsfEx model fit took:', Time()-t0
+        
+    return dict(tims=tims)
+    
+def stage2(T=None, sedsn=None, coimgs=None, cons=None,
+           detmaps=None, detivs=None,
+           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+           W=None,H=None, brickid=None,
+           bands=None, ps=None, tims=None,
+           plots=False,
+           **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
-    tlast = Time()
+    for tim in tims:
+        #print 'PsfEx saved params:', tim.psfex.splinedata
 
-    # Fit a MoG PSF model to the PSF in the middle of each tim.
-    initial_psf_mog = []
-    for itim,tim in enumerate(tims):
-        ox0,oy0 = orig_wcsxy0[itim]
-        h,w = tim.shape
-        psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-        initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
+        tim.psf = tim.psfex
 
+        #from tractor.psfex import CachingPsfEx
+        #tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+        #tim.psf.fitSavedData(*tim.psf.splinedata)
+            
+    for tim in tims:
+        tim.modelMinval = 0.1 * tim.sig1
+        
+    # # Fit a MoG PSF model to the PSF in the middle of each tim.
+    # initial_psf_mog = []
+    # for itim,tim in enumerate(tims):
+    #     ox0,oy0 = orig_wcsxy0[itim]
+    #     h,w = tim.shape
+    #     psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+    #     subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+    #     initial_psf_mog.append((subpsf.mog.amp, subpsf.mog.mean, subpsf.mog.var))
 
+    tfitall = tlast = Time()
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
         bslc  = blobslices[iblob]
@@ -1029,7 +778,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         tlast = Time()
         subtims = []
         for itim,tim in enumerate(tims):
-            ttim = Time()
+            #ttim = Time()
 
             h,w = tim.shape
             ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
@@ -1045,15 +794,15 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
             subslc = slice(sy0,sy1),slice(sx0,sx1)
             subimg = tim.getImage ()[subslc]
-            subiv  = tim.getInvvar()[subslc]
+            subie  = tim.getInvError()[subslc]
             subwcs = tim.getWcs().copy()
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
-            print 'tim clip:', Time()-ttim
-            ttim = Time()
+            #print 'tim clip:', Time()-ttim
+            #ttim = Time()
 
-            # Mask out invvar for pixels that are not within the blob.
+            # Mask out inverr for pixels that are not within the blob.
             subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
             subsubwcs = tim.subwcs.get_subimage(int(sx0), int(sy0), int(sx1-sx0), int(sy1-sy0))
             try:
@@ -1063,20 +812,20 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                 continue
             if len(Yo) == 0:
                 continue
-            subiv2 = np.zeros_like(subiv)
+            subie2 = np.zeros_like(subie)
             I = np.flatnonzero(blobs[bslc][Yi, Xi] == (iblob+1))
-            subiv2[Yo[I],Xo[I]] = subiv[Yo[I],Xo[I]]
-            subiv = subiv2
+            subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
+            subie = subie2
 
-            print 'tim mask iv:', Time()-ttim
-            ttim = Time()
+            #print 'tim mask inverr:', Time()-ttim
+            #ttim = Time()
 
             if plots and False:
                 plt.clf()
                 plt.subplot(1,2,1)
                 dimshow(subimg)
                 plt.subplot(1,2,2)
-                dimshow(subiv)
+                dimshow(subie)
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
@@ -1087,11 +836,18 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
             ttim = Time()
 
-            psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
-                                             nativeScale=True)
-
-            print 'tim instantiate PSF:', Time()-ttim
-            ttim = Time()
+            if False:
+                psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
+                                                 nativeScale=True)
+                print 'tim instantiate PSF:', Time()-ttim
+                ttim = Time()
+                # Note, initial_psf_mog is probably modified in this process!
+                subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
+                print 'EM fit PSF:'
+                print subpsf
+                print 'tim fit PSF:', Time()-ttim
+                print 'psfimg shape', psfimg.shape
+                ttim = Time()
 
             if False:
                 (w,mu,var) = initial_psf_mog[itim]
@@ -1114,32 +870,36 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                 print 'tim PSF fitting via Tractor:', Time()-ttim
                 ttim = Time()
 
-            # Note, initial_psf_mog is probably modified in this process!
-            subpsf = GaussianMixturePSF.fromStamp(psfimg, P0=initial_psf_mog[itim])
+            # If the subimage (blob) is small enough, instantiate a
+            # constant PSF model in the center.
+            if sy1-sy0 < 100 and sx1-sx1 < 100:
+                subpsf = tim.psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
+            else:
+                # Otherwise, instantiate a (shifted) spatially-varying
+                # PsfEx model.
+                subpsf = ShiftedPsf(tim.psf, ox0+sx0, oy0+sy0)
 
-            print 'EM fit PSF:'
-            print subpsf
-            
-            print 'tim fit PSF:', Time()-ttim
-            print 'psfimg shape', psfimg.shape
-            ttim = Time()
-
-            subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
+            subtim = Image(data=subimg, inverr=subie, wcs=subwcs,
                            psf=subpsf, photocal=tim.getPhotoCal(),
                            sky=tim.getSky(), name=tim.name)
             subtim.band = tim.band
-
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
-                               (Yo >=  by0) * (Yo <  by1) * (Xo >=  bx0) * (Xo <  bx1))
-            Yo = Yo[I] - by0
-            Xo = Xo[I] - bx0
-            Yi = Yi[I] - sy0
-            Xi = Xi[I] - sx0
-            subtim.resamp = (Yo, Xo, Yi, Xi)
             subtim.sig1 = tim.sig1
 
-            print 'tim resamp:', Time()-ttim
+            subtim.modelMinval = tim.modelMinval
+            
+            if plots:
+                ttim = Time()
+                (Yo,Xo,Yi,Xi) = tim.resamp
+                I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) *
+                                   (Xi >= sx0) * (Xi < sx1) *
+                                   (Yo >=  by0) * (Yo <  by1) *
+                                   (Xo >=  bx0) * (Xo <  bx1))
+                Yo = Yo[I] - by0
+                Xo = Xo[I] - bx0
+                Yi = Yi[I] - sy0
+                Xi = Xi[I] - sx0
+                subtim.resamp = (Yo, Xo, Yi, Xi)
+                print 'tim resamp:', Time()-ttim
 
             subtims.append(subtim)
 
@@ -1165,7 +925,6 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
             flux = sum([br.getFlux(band) for band in bands])
             fluxes.append(flux)
         Ibright = np.argsort(-np.array(fluxes))
-
 
         if len(Ibright) >= 5:
             # -Remember the original subtim images
@@ -1301,7 +1060,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
                         rows = int(np.ceil(float(n) / cols))
                         for j,(deriv,tim) in enumerate(derivlist):
                             plt.subplot(rows,cols, j+1)
-                            plt.imshow(deriv.patch, cmap='RdBu', **imx)
+                            dimshow(deriv.patch, cmap='RdBu')
                             plt.colorbar()
                             plt.title(tim.name)
                         plt.suptitle('Borked optimization: derivs for ' + paramname)
@@ -1354,264 +1113,18 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         print 'Blob', blobnumber, 'finished:', Time()-tlast
         tlast = Time()
 
+    print 'Fitting sources took:', Time()-tfitall
+
+    print 'Logprob:', tractor.getLogProb()
+    
     rtn = dict()
     for k in ['tractor','tims','ps']:
         rtn[k] = locals()[k]
     return rtn
 
-class BrightPointSource(PointSource):
-    def _getPsf(self, img):
-        return img.brightPsf
-    def getSourceType(self):
-        return 'BrightPointSource'
 
-def stage2(T=None, sedsn=None, coimgs=None, cons=None,
-           detmaps=None, detivs=None,
-           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None,
-           bands=None, ps=None,
-           plots=False, tims=None, tractor=None,
-           **kwargs):
-
-    # For bright sources, use more MoG components, or use pixelized PSF model?
-    fluxes = []
-    for src in cat:
-        br = src.getBrightness()
-        fluxes.append([br.getFlux(b) for b in bands])
-    fluxes = np.array(fluxes)
-
-    for i,b in enumerate(bands):
-        ii = np.argsort(-fluxes[:,i])
-        print
-        print 'Brightest in band', b
-        for j in ii[:10]:
-            print j, cat[j].getBrightness()
-
-
-    # HACK -- define "bright" limits
-    bright = dict(g = 20.5, r = 20, z = 19.5)
-
-    ibright = []
-    for band in bands:
-        brightmag = bright[band]
-        for i,src in enumerate(cat):
-            br = src.getBrightness()
-            if br.getMag(band) < brightmag:
-                ibright.append(i)
-    ibright = np.unique(ibright)
-
-    print 'Bright sources:', ibright
-
-    bcat = []
-    for i,src in enumerate(cat):
-        # if i in ibright:
-        #     if isinstance(src, PointSource):
-        #         bcat.append(BrightPointSource(src.pos, src.brightness))
-        #     else:
-        #         ### FIXME -- model selection??
-        #         print 'Trying to replace bright source', src, 'with point source'
-        #         bcat.append(BrightPointSource(src.getPosition(), src.getBrightness()))
-
-        if i in ibright and isinstance(src, PointSource):
-            bcat.append(BrightPointSource(src.pos, src.brightness))
-        else:
-            bcat.append(src)
-    bcat = Catalog(*bcat)
-
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-                
-    for iblob,(bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
-        if not len(set(ibright).intersection(set(Isrcs))):
-            continue
-        print 'Re-fitting blob', iblob, 'with', len(Isrcs), 'sources'
-
-        bcat.freezeAllParams()
-        print 'Fitting:'
-        for i in Isrcs:
-            bcat.thawParams(i)
-            print bcat[i]
-            
-        # blob bbox in target coords
-        sy,sx = bslc
-        by0,by1 = sy.start, sy.stop
-        bx0,bx1 = sx.start, sx.stop
-        blobh,blobw = by1 - by0, bx1 - bx0
-
-        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
-
-        ###
-        # FIXME -- We create sub-image for each blob here.
-        # What wo don't do, though, is mask out the invvar pixels
-        # that are within the blob bounding-box but not within the
-        # blob itself.  Does this matter?
-        ###
-
-        alphas = [0.1, 0.3, 1.0]
-        
-        subtims = []
-        for itim,tim in enumerate(tims):
-            h,w = tim.shape
-            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
-            sx0,sx1 = x.min(), x.max()
-            sy0,sy1 = y.min(), y.max()
-            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
-                continue
-            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
-            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
-            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
-            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
-            #print 'image subregion', sx0,sx1,sy0,sy1
-
-            subslc = slice(sy0,sy1),slice(sx0,sx1)
-            subimg = tim.getImage ()[subslc]
-            subiv  = tim.getInvvar()[subslc]
-            subwcs = tim.getWcs().copy()
-            ox0,oy0 = orig_wcsxy0[itim]
-            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
-
-            # FIXME --
-            #subpsf = tim.psfex.mogAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.)
-            #subpsf = tim.getPsf()
-
-            psfimg = tim.psfex.instantiateAt(ox0+(sx0+sx1)/2., oy0+(sy0+sy1)/2.,
-                                             nativeScale=True)
-            subpsf = GaussianMixturePSF.fromStamp(psfimg)
-
-            #subtim = BrightPsfImage(data=subimg, invvar=subiv, wcs=subwcs,
-            subtim = Image(data=subimg, invvar=subiv, wcs=subwcs,
-                           psf=subpsf, photocal=tim.getPhotoCal(),
-                           sky=tim.getSky(), name=tim.name)
-            subtim.extent = (sx0, sx1, sy0, sy1)
-            subtim.band = tim.band
-
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
-                               (Yo >= by0) * (Yo < by1) * (Xo >= bx0) * (Xo < bx1))
-            Yo = Yo[I] - by0
-            Xo = Xo[I] - bx0
-            Yi = Yi[I] - sy0
-            Xi = Xi[I] - sx0
-            subtim.resamp = (Yo, Xo, Yi, Xi)
-            subtim.sig1 = tim.sig1
-
-            subtim.brightPsf = PixelizedPsfEx(tim.psfex, ox0 + sx0, oy0 + sy0)
-            #subtim.brightPsf = PixelizedPSF(psfimg)
-            #subtim.brightPsf = GaussianMixturePSF.fromStamp(psfimg, N=5)
-
-            subtims.append(subtim)
-
-        subtr = Tractor(subtims, bcat)
-        subtr.freezeParam('images')
-        print 'Optimizing:', subtr
-        subtr.printThawedParams()
-
-        if plots:
-            otractor = Tractor(subtims, cat)
-            modx = otractor.getModelImages()
-
-            # before-n-after plots
-            mod0 = subtr.getModelImages()
-        print 'Sub-image initial lnlikelihood:', subtr.getLogLikelihood()
-
-        for i in Isrcs:
-            print bcat[i]
-
-        for step in range(10):
-            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                          alphas=alphas)
-            print 'dlnp:', dlnp
-            if dlnp < 0.1:
-                break
-
-        if plots:
-            mod1 = subtr.getModelImages()
-        print 'Sub-image first fit lnlikelihood:', subtr.getLogLikelihood()
-
-        for i in Isrcs:
-            print bcat[i]
-
-        # Forced-photometer bands individually
-        for band in bands:
-            bcat.freezeAllRecursive()
-            for i in Isrcs:
-                bcat.thawParam(i)
-                bcat[i].thawPathsTo(band)
-            bandtims = []
-            for tim in subtims:
-                if tim.band == band:
-                    bandtims.append(tim)
-            print
-            print 'Fitting', band, 'band:'
-            btractor = Tractor(bandtims, bcat)
-            btractor.freezeParam('images')
-            btractor.printThawedParams()
-            B = 8
-            X = btractor.optimize_forced_photometry(shared_params=False, use_ceres=True,
-                                                    BW=B, BH=B, wantims=False)
-        bcat.thawAllRecursive()
-        print 'Sub-image forced-phot lnlikelihood:', subtr.getLogLikelihood()
-        for i in Isrcs:
-            print bcat[i]
-
-        if plots:
-            mod2 = subtr.getModelImages()
-
-        if plots:
-            mods = [modx, mod0, mod1, mod2]
-            _plot_mods(subtims, mods, ['' for m in mods], bands, coimgs, cons, bslc, blobw, blobh, ps)
-
-    rtn = dict()
-    for k in ['tractor','tims', 'bcat', 'ps']:
-        rtn[k] = locals()[k]
-    return rtn
-
-
-class PixelizedPsfEx(object):
-    def __init__(self, psfex, x0, y0):
-        self.psfex = psfex
-        self.x0 = x0
-        self.y0 = y0
-        
-    def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None):
-        pix = self.psfex.instantiateAt(self.x0 + px, self.y0 + py, nativeScale=True)
-        return PixelizedPSF(pix).getPointSourcePatch(px, py, radius=radius, extent=extent)
-
-def stage103(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
+def stage102(T=None, sedsn=None, coimgs=None, cons=None,
              detmaps=None, detivs=None,
-             rgbim=None,
-             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-             cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None,
-             bands=None, ps=None,
-             plots=False, tims=None, tractor=None, bcat=None,
-             **kwargs):
-
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    for itim,tim in enumerate(tims):
-        ox0,oy0 = orig_wcsxy0[itim]
-        # # HACK -- instantiate pixelized PSF at center of tim
-        # r,d = targetwcs.pixelxy2radec(W/2., H/2.)
-        # ok,cx,cy = tim.subwcs.radec2pixelxy(r, d)
-        # psfimg = tim.psfex.instantiateAt(ox0+cx, oy0+cy, nativeScale=True)
-        # tim.brightPsf = PixelizedPsfEx(psfimg)
-
-        tim.brightPsf = PixelizedPsfEx(tim.psfex, ox0, oy0)
-
-    cat = tractor.catalog = bcat
-
-    print 'Sources:'
-    for i,src in enumerate(cat):
-        print '  ', i, src
-
-    stage102(tractor=tractor, tims=tims, H=H, W=W, bands=bands,
-             rgbim=rgbim, cat=cat, ps=ps, coimgs=coimgs, con=con,
-             targetwcs=targetwcs)
-
-
-def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
-             detmaps=None, detivs=None,
-             rgbim=None,
              nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
@@ -1619,53 +1132,188 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
              plots=False, tims=None, tractor=None,
              **kwargs):
 
-    mod = [tractor.getModelImage(tim) for tim in tims]
+    coimgs = [im.astype(np.float32) for im in coimgs]
+    cons   = [im.astype(np.float32) for im in cons]
 
-    # After plot
-    rgbmod = np.zeros((H,W,3))
-    rgbmod2 = np.zeros((H,W,3))
-    rgbresids = np.zeros((H,W,3))
-    rgbresids2 = np.zeros((H,W,3))
+    return dict(sedsn=None, detmaps=None, detivs=None,
+                nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+                coimgs=coimgs, cons=cons)
 
-    rgbmodsig = np.zeros((H,W,3))
-    rgbimgsig = np.zeros((H,W,3))
+def stage203(T=None, coimgs=None, cons=None,
+             cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None,
+             bands=None, ps=None,
+             plots=False, tims=None, tractor=None,
+             brickid=None,
+             **kwargs):
+    print 'kwargs:', kwargs.keys()
+    del kwargs
 
-    for iband,band in enumerate(bands):
-        coimg = coimgs[iband]
-        comod = np.zeros((H,W))
-        comod2 = np.zeros((H,W))
-        for itim,tim in enumerate(tims):
-            if tim.band != band:
-                continue
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            comod[Yo,Xo] += mod[itim][Yi,Xi]
-            ie = tim.getInvError()
-            noise = np.random.normal(size=ie.shape) / ie
-            noise[ie == 0] = 0.
-            comod2[Yo,Xo] += mod[itim][Yi,Xi] + noise[Yi,Xi]
-            mn,mx = tim.zr
-            sig1 = tim.sig1
-            mn2,mx2 = -10.*sig1, 30.*sig1
-        comod  /= np.maximum(con, 1)
-        comod2 /= np.maximum(con, 1)
-        c = 2-iband
+    from desi_common import prepare_fits_catalog
 
-        rgbmodsig[:,:,c] = comod / sig1
-        rgbimgsig[:,:,c] = coimg / sig1
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    # Fit a MoG PSF model to the PsfEx model in the middle of each tim.
+    for itim,tim in enumerate(tims):
+        ox0,oy0 = orig_wcsxy0[itim]
+        h,w = tim.shape
+        psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+        subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+        tim.psf = subpsf
 
-        rgbmod[:,:,c] = np.clip((comod - mn) / (mx - mn), 0., 1.)
-        rgbmod2[:,:,c] = np.clip((comod2 - mn) / (mx - mn), 0., 1.)
-        rgbresids[:,:,c] = np.clip((coimg - comod - mn) / (mx - mn), 0., 1.)
+    
+    #cat.freezeAllRecursive()
+    #cat.thawPathsTo(*bands)
+    #print 'Variances...'
+    #flux_var = tractor.optimize(priors=False, shared_params=False,
+    #                            variance=True, just_variance=True)
+    # print 'Opt forced photom...'
+    # R = tractor.optimize_forced_photometry(
+    #     shared_params=False, wantims=False, fitstats=True, variance=True,
+    #     use_ceres=True, BW=8,BH=8)
+    # flux_iv,fs = R.IV, R.fitstats
+    #flux_iv = 1./flux_var
 
-        # Blank out residual pixels where there is no data
-        rgbresids[:,:,c][con == 0] = np.clip((0 - mn) / (mx - mn), 0., 1.)
+    print 'Variances...'
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
+    flux_iv = []
+    for isrc,src in enumerate(cat):
+        print 'Variance for source', isrc, 'of', len(cat)
+        srctr = Tractor(tims, [src])
+        srctr.freezeParam('images')
 
-        rgbresids2[:,:,c] = np.clip((coimg - comod - mn2) / (mx2 - mn2), 0., 1.)
-        rgbresids2[:,:,c][con == 0] = np.clip((0 - mn2) / (mx2 - mn2), 0., 1.)
+        # flux_var = srctr.optimize(priors=False, shared_params=False,
+        #                           variance=True, just_variance=True)
+        # vars.append(flux_var)
+        # print 'Flux variance:', flux_var
+
+        chisqderivs = []
+        for band in bands:
+            src.freezeAllRecursive()
+            src.thawPathsTo(band)
+
+            # bandtims = [tim for tim in tims if tim.band == band]
+            # btr = Tractor(bandtims, [src])
+            # btr.freezeParam('images')
+            # p0 = src.getParams()
+            # R = btr.optimize_forced_photometry(variance=True, shared_params=False,
+            #                                    wantims=False)
+            # flux_iv = R.IV
+            # print 'IV:', flux_iv
+            # src.setParams(p0)
+            # band_var = srctr.optimize(priors=False, shared_params=False,
+            #                           variance=True, just_variance=True)
+            # print 'Variance for', band, 'band:', band_var
+
+            dchisq = 0
+            for tim in tims:
+                if tim.band != band:
+                    continue
+                derivs = src.getParamDerivatives(tim)
+                # just the flux
+                assert(len(derivs) == 1)
+                H,W = tim.shape
+                for deriv in derivs:
+                    if deriv is None:
+                        continue
+                    if not deriv.clipTo(W,H):
+                        continue
+                    chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
+                    dchisq += (chi**2).sum()
+            flux_iv.append(dchisq)
+    flux_iv = np.array(flux_iv)
+    assert(len(flux_iv) == len(cat)*len(bands))
+
+    fs = None
+
+    # HACK -- temp, until this propagates through the stages...
+    if brickid is None:
+        brickid = 377306
+
+    TT = T.copy()
+    for k in ['itx','ity','index']:
+        TT.delete_column(k)
+    for col in TT.get_columns():
+        if not col in ['tx', 'ty', 'blob']:
+            TT.rename(col, 'sdss_%s' % col)
+
+    TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.objid   = np.arange(len(TT)).astype(np.int32)
+
+    for src in cat:
+        if isinstance(src, (DevGalaxy, ExpGalaxy)):
+            src.shape = EllipseE.fromEllipseESoft(src.shape)
+        elif isinstance(src, FixedCompositeGalaxy):
+            src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+            src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
+
+    hdr = None
+    T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
+    for k in ['ra_var', 'dec_var']:
+        T2.set(k, T2.get(k).astype(np.float32))
+    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
+
+    return dict(flux_iv=flux_iv, tims=tims, cat=cat)
+
+
+def stage204(T=None, flux_iv=None, tims=None, cat=None,
+             bands=None, brickid=None, **kwargs):
+    from desi_common import prepare_fits_catalog
+
+    fs = None
+
+    # HACK -- temp, until this propagates through the stages...
+    if brickid is None:
+        brickid = 377306
+
+    TT = T.copy()
+    for k in ['itx','ity','index']:
+        TT.delete_column(k)
+    for col in TT.get_columns():
+        if not col in ['tx', 'ty', 'blob']:
+            TT.rename(col, 'sdss_%s' % col)
+
+    TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.objid   = np.arange(len(TT)).astype(np.int32)
+
+    for src in cat:
+        if isinstance(src, (DevGalaxy, ExpGalaxy)):
+            src.shape = EllipseE.fromEllipseESoft(src.shape)
+        elif isinstance(src, FixedCompositeGalaxy):
+            src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+            src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+
+    cat.freezeAllRecursive()
+    cat.thawPathsTo(*bands)
+
+    hdr = None
+    T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
+    for k in ['ra_var', 'dec_var', 'tx', 'ty']:
+        T2.set(k, T2.get(k).astype(np.float32))
+    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
+
+
+def stage103(T=None, coimgs=None, cons=None,
+             cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None,
+             bands=None, ps=None,
+             plots=False, tims=None, tractor=None,
+             **kwargs):
+
+    print 'kwargs:', kwargs.keys()
+    del kwargs
+
+    # for tim in tims:
+    #     print 'Fitting PsfEx model for', tim.name
+    #     tim.psfex.ensureFit()
+    #     tim.psf = tim.psfex
 
     plt.clf()
-    dimshow(rgbim)
-    plt.title('Images')
+    dimshow(get_rgb(coimgs, bands))
+    plt.title('Image')
     ps.savefig()
 
     ax = plt.axis()
@@ -1682,43 +1330,102 @@ def stage102(T=None, sedsn=None, coimgs=None, con=None, coimas=None,
     plt.axis(ax)
     ps.savefig()
 
+    mnmx = -5,300
+    arcsinha = dict(mnmx=mnmx, arcsinh=1)
+
     plt.clf()
-    dimshow(rgbmod)
+    dimshow(get_rgb(coimgs, bands, **arcsinha))
+    plt.title('Image')
+    ps.savefig()
+
+    # After plot
+    rgbmod = []
+    rgbmod2 = []
+    rgbresids = []
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    for iband,band in enumerate(bands):
+        coimg = coimgs[iband]
+        comod = np.zeros((H,W), np.float32)
+        comod2 = np.zeros((H,W), np.float32)
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+
+            # Fit a MoG PSF model to the PsfEx model in the middle of the tim
+            # ox0,oy0 = orig_wcsxy0[itim]
+            # h,w = tim.shape
+            # psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
+            # subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
+            # tim.psf = subpsf
+
+            if False:
+                print 'Fitting PsfEx model for', tim.name
+                tim.psfex.savesplinedata = True
+                tim.psfex.ensureFit()
+                tim.psf = tim.psfex
+
+            mod = tractor.getModelImage(tim)
+
+            if plots:
+                plt.clf()
+                dimshow(tim.getImage(), **tim.ima)
+                plt.title(tim.name)
+                ps.savefig()
+                plt.clf()
+                dimshow(mod, **tim.ima)
+                plt.title(tim.name)
+                ps.savefig()
+                plt.clf()
+                dimshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
+                plt.title(tim.name)
+                ps.savefig()
+
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            comod[Yo,Xo] += mod[Yi,Xi]
+            ie = tim.getInvError()
+            noise = np.random.normal(size=ie.shape) / ie
+            noise[ie == 0] = 0.
+            comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
+        comod  /= np.maximum(cons[iband], 1)
+        comod2 /= np.maximum(cons[iband], 1)
+
+        rgbmod.append(comod)
+        rgbmod2.append(comod2)
+        resid = coimg - comod
+        resid[cons[iband] == 0] = np.nan
+        rgbresids.append(resid)
+
+        fitsio.write('image-coadd-%s.fits' % band, comod)
+        fitsio.write('model-coadd-%s.fits' % band, coimg)
+        fitsio.write('resid-coadd-%s.fits' % band, resid)
+
+    plt.clf()
+    dimshow(get_rgb(rgbmod, bands))
     plt.title('Model')
     ps.savefig()
 
     plt.clf()
-    dimshow(rgbmod2)
+    dimshow(get_rgb(rgbmod2, bands))
     plt.title('Model + Noise')
     ps.savefig()
 
     plt.clf()
-    dimshow(rgbresids)
+    dimshow(get_rgb(rgbmod2, bands, **arcsinha))
+    plt.title('Model + Noise')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(get_rgb(rgbresids, bands))
     plt.title('Residuals')
     ps.savefig()
 
     plt.clf()
-    dimshow(rgbresids2)
+    dimshow(get_rgb(rgbresids, bands, mnmx=(-30,30)))
     plt.title('Residuals (2)')
     ps.savefig()
 
-    mn,mx = -20.,50.
-    plt.clf()
-    dimshow(np.clip((rgbimgsig - mn) / (mx - mn), 0., 1.))
-    plt.title('Image (2)')
-    ps.savefig()
-
-    plt.clf()
-    dimshow(np.clip((rgbmodsig - mn) / (mx - mn), 0., 1.))
-    plt.title('Model (2)')
-    ps.savefig()
-
-    plt.clf()
-    dimshow(np.clip((rgbimgsig - rgbmodsig - mn) / (mx - mn), 0., 1.))
-    plt.title('Residuals (2)')
-    ps.savefig()
-
-
+    return dict(tims=tims)
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
@@ -1733,6 +1440,10 @@ if __name__ == '__main__':
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
+
+    parser.add_option('-b', '--brick', type=int, help='Brick ID to run: default %default',
+                      default=377306)
+
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
@@ -1758,9 +1469,9 @@ if __name__ == '__main__':
 
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    prereqs = {101: 0, 102: 1, 103: 2}
+    prereqs = {101: 0, 102:2, 203:102 }
     opt.force.append(opt.stage)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H)
+             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick)
     
