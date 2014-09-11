@@ -243,8 +243,10 @@ class Patch(object):
             return np.array([], np.int)
         (h,w) = self.shape
         (H,W) = parent.shape
-        X,Y = np.meshgrid(np.arange(w), np.arange(h))
-        return (Y.ravel() + self.y0) * W + (X.ravel() + self.x0)
+        return ( (np.arange(w)+self.x0)     [np.newaxis,:] +
+                ((np.arange(h)+self.y0) * W)[:,np.newaxis]).ravel()
+    # X,Y = np.meshgrid(np.arange(w), np.arange(h))
+    # return (Y.ravel() + self.y0) * W + (X.ravel() + self.x0)
 
     plotnum = 0
 

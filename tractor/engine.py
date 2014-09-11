@@ -1880,8 +1880,8 @@ class Tractor(MultiParams):
                     continue
                 rows = row0 + pix[nz]
                 #print 'Adding derivative', deriv.getName(), 'for image', img.name
-                vals = dimg.ravel()[nz]
-                w = inverrs[deriv.getSlice(img)].ravel()[nz]
+                vals = dimg.flat[nz]
+                w = inverrs[deriv.getSlice(img)].flat[nz]
                 assert(vals.shape == w.shape)
                 if not scales_only:
                     RR.append(rows)
