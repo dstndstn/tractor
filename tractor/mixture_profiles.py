@@ -119,10 +119,10 @@ class MixtureOfGaussians():
         assert(shift.shape == (self.D,))
         assert(scale.shape == (self.D, self.D))
         newmean = self.mean + shift
-        newvar = self.var.copy()
+        newvar = np.zeros_like(self.var)
         for k in range(self.K):
             newvar[k,:,:] = np.dot(scale.T, np.dot(self.var[k,:,:], scale))
-        return MixtureOfGaussians(self.amp, newmean, newvar)
+        return MixtureOfGaussians(self.amp.copy(), newmean, newvar)
 
     # dstn: should this be called "correlate"?
     def convolve(self, other):

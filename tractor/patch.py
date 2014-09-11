@@ -288,14 +288,25 @@ class Patch(object):
             return self.patch.shape
         raise AttributeError('Patch: unknown attribute "%s"' % name)
 
-    def __mul__(self, flux):
+    ## Implement *=, /= for numeric types
+    def __imul__(self, f):
+        if self.patch is not None:
+            self.patch *= f
+        return self
+    def __idiv__(self, f):
+        if self.patch is not None:
+            self.patch /= f
+        return self
+
+    ## Implement *, / for numeric types
+    def __mul__(self, f):
         if self.patch is None:
             return Patch(self.x0, self.y0, None)
-        return Patch(self.x0, self.y0, self.patch * flux)
-    def __div__(self, x):
+        return Patch(self.x0, self.y0, self.patch * f)
+    def __div__(self, f):
         if self.patch is None:
             return Patch(self.x0, self.y0, None)
-        return Patch(self.x0, self.y0, self.patch / x)
+        return Patch(self.x0, self.y0, self.patch / f)
 
     def performArithmetic(self, other, opname, otype=float):
         assert(isinstance(other, Patch))
@@ -320,12 +331,15 @@ class Patch(object):
         ux1 = max(ox0 + ow, self.x0 + pw)
         uy1 = max(oy0 + oh, self.y0 + ph)
 
+        # Set the "self" portion of the union
         p = np.zeros((uy1 - uy0, ux1 - ux0), dtype=otype)
         p[self.y0 - uy0 : self.y0 - uy0 + ph,
           self.x0 - ux0 : self.x0 - ux0 + pw] = self.patch
 
+        # Get a slice for the "other"'s portion of the union
         psub = p[oy0 - uy0 : oy0 - uy0 + oh,
                  ox0 - ux0 : ox0 - ux0 + ow]
+        # Perform the in-place += or -= operation on "psub"
         op = getattr(psub, opname)
         op(other.getImage())
         return Patch(ux0, uy0, p)

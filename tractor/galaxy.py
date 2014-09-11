@@ -392,11 +392,11 @@ class ProfileGalaxy(object):
         try:
             (cached,mv) = _galcache.get(deps)
             if mv <= minval:
-                return cached
+                return cached.copy()
         except KeyError:
             pass
         patch = self._realGetUnitFluxModelPatch(img, px, py, minval)
-        _galcache.put(deps, (patch,minval))
+        _galcache.put(deps, (patch.copy(),minval))
         return patch
 
     def getUnitFluxModelPatches(self, img, minval=0.):
@@ -646,13 +646,13 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             amix.symmetrize()
             amix.amp *= f
             mix.append(amix)
-            print 'affine profile: shape', s, 'weight', f, '->', amix
-            print 'amp sum:', np.sum(amix.amp)
+            #print 'affine profile: shape', s, 'weight', f, '->', amix
+            #print 'amp sum:', np.sum(amix.amp)
         if len(mix) == 1:
             return mix[0]
         smix = mix[0] + mix[1]
-        print 'Summed profiles:', smix
-        print 'amp sum', np.sum(smix.amp)
+        #print 'Summed profiles:', smix
+        #print 'amp sum', np.sum(smix.amp)
         return mix[0] + mix[1]
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
@@ -681,15 +681,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
 
         print 'FixedCompositeGalaxy.getParamDerivatives()'
 
-        ### FIXME -- minsb would be useful here!
-        #pos0 = self.getPosition()
-        #(px0,py0) = img.getWcs().positionToPixel(pos0, self)
         e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightness, self.shapeDev)
         e.dname = 'fcomp.exp'
         d.dname = 'fcomp.dev'
-
-        f = self.fracDev.getClippedValue()
 
         if self.isParamFrozen('pos'):
             e.freezeParam('pos')
@@ -699,14 +694,15 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
         if self.isParamFrozen('shapeDev'):
             d.freezeParam('shape')
 
-        de = e.getParamDerivatives(img)
-        dd = d.getParamDerivatives(img)
+        dexp = e.getParamDerivatives(img)
+        ddev = d.getParamDerivatives(img)
 
         # fracDev scaling
-        for deriv in de:
+        f = self.fracDev.getClippedValue()
+        for deriv in dexp:
             if deriv is not None:
                 deriv *= (1.-f)
-        for deriv in dd:
+        for deriv in ddev:
             if deriv is not None:
                 deriv *= f
         
@@ -717,10 +713,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             npos = self.pos.numberOfParams()
             for i in range(npos):
                 ii = i0+i
-                df = add_patches(de[ii], dd[ii])
-                if df is not None: 
-                    df.setName('d(fcomp)/d(pos%i)' % i)
-                derivs.append(df)
+                dsum = add_patches(dexp[ii], ddev[ii])
+                if dsum is not None: 
+                    dsum.setName('d(fcomp)/d(pos%i)' % i)
+                derivs.append(dsum)
             i0 += npos
 
         if not self.isParamFrozen('brightness'):
@@ -728,10 +724,10 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             nb = self.brightness.numberOfParams()
             for i in range(nb):
                 ii = i0+i
-                df = add_patches(de[ii], dd[ii])
-                if df is not None: 
-                    df.setName('d(fcomp)/d(bright%i)' % i)
-                derivs.append(df)
+                dsum = add_patches(dexp[ii], ddev[ii])
+                if dsum is not None: 
+                    dsum.setName('d(fcomp)/d(bright%i)' % i)
+                derivs.append(dsum)
             i0 += nb
                 
         if not self.isParamFrozen('fracDev'):
@@ -739,6 +735,7 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
             if counts == 0.:
                 derivs.append(None)
             else:
+                ## FIXME -- should be possible to avoid recomputing these...
                 ue = e.getUnitFluxModelPatch(img)
                 ud = d.getUnitFluxModelPatch(img)
                 if ue is not None:
@@ -752,9 +749,9 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
                     derivs.append(df)
 
         if not self.isParamFrozen('shapeExp'):
-            derivs.extend(de[i0:])
+            derivs.extend(dexp[i0:])
         if not self.isParamFrozen('shapeDev'):
-            derivs.extend(dd[i0:])
+            derivs.extend(ddev[i0:])
             
         return derivs
     
