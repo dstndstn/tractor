@@ -1663,129 +1663,160 @@ class Tractor(MultiParams):
         '''
         allderivs = []
 
-        # First, derivs for Image parameters (because 'images' comes first in the
-        # tractor's parameters)
-        if self.isParamFrozen('images'):
-            ims = []
-            imjs = []
-        else:
-            imjs = [i for i in self.images.getThawedParamIndices()]
-            ims = [self.images[j] for j in imjs]
-
         if self.isParamFrozen('catalog'):
             srcs = []
         else:
             srcs = list(self.catalog.getThawedSources())
-            #print len(srcs), 'thawed sources'
-            
-        # FIXME -- don't we want Sky, PSF, etc to be able to provide
-        # their own derivatives?
+        
+        allsrcs = self.catalog
+        if self.is_multiproc():
+            # First, derivs for Image parameters (because 'images'
+            # comes first in the tractor's parameters)
+            if self.isParamFrozen('images'):
+                ims = []
+                imjs = []
+            else:
+                imjs = [i for i in self.images.getThawedParamIndices()]
+                ims = [self.images[j] for j in imjs]
+            imderivs = self._map(getimagederivs, [(imj, im, self, allsrcs)
+                                                  for im,imj in zip(ims, imjs)])
 
-        imderivs = self._map(getimagederivs, [(imj, im, self, srcs)
-                                              for im,imj in zip(ims, imjs)])
-
-        needimjs = []
-        needims = []
-        needparams = []
-
-        for derivs,im,imj in zip(imderivs, ims, imjs):
-            need = []
-            for k,d in enumerate(derivs):
-                if d is False:
-                    need.append(k)
-            if len(need):
-                needimjs.append(imj)
-                needims.append(im)
-                needparams.append(need)
-                    
-        # initial models...
-        logverb('Getting', len(needimjs), 'initial models for image derivatives')
-        mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in needimjs])
-        # stepping each (needed) param...
-        args = []
-        # for j,im in enumerate(ims):
-        #   p0 = im.getParams()
-        #   #print 'Image', im
-        #   #print 'Step sizes:', im.getStepSizes()
-        #   #print 'p0:', p0
-        #   for k,step in enumerate(im.getStepSizes()):
-        #       args.append((self, j, k, p0[k], step))
-        for im,imj,params in zip(needims, needimjs, needparams):
-            p0 = im.getParams()
-            ss = im.getStepSizes()
-            for i in params:
-                args.append((self, imj, i, p0[i], ss[i]))
-        # reverse the args so we can pop() below.
-        logverb('Stepping in', len(args), 'model parameters for derivatives')
-        mod1s = self._map_async(getmodelimagestep, reversed(args))
-
-        # Next, derivs for the sources.
-        args = []
-        for j,src in enumerate(srcs):
-            for i,img in enumerate(self.images):
-                args.append((src, img))
-        sderivs = self._map_async(getsrcderivs, reversed(args))
-
-        # Wait for and unpack the image derivatives...
-        mod0s = mod0s.get()
-        mod1s = mod1s.get()
-        # convert to a imj->mod0 map
-        assert(len(mod0s) == len(needimjs))
-        mod0s = dict(zip(needimjs, mod0s))
-
-        for derivs,im,imj in zip(imderivs, ims, imjs):
-            for k,d in enumerate(derivs):
-                if d is False:
-                    mod0 = mod0s[imj]
-                    nm = im.getParamNames()[k]
-                    step = im.getStepSizes()[k]
-                    mod1 = mod1s.pop()
-                    d = Patch(0, 0, (mod1 - mod0) / step)
-                    d.name = 'd(im%i)/d(%s)' % (j,nm)
-                allderivs.append([(d, im)])
-        # popped all
-        assert(len(mod1s) == 0)
-
-        # for i,(j,im) in enumerate(zip(imjs,ims)):
-        #   mod0 = mod0s[i]
-        #   p0 = im.getParams()
-        #   for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
-        #       mod1 = mod1s.pop()
-        #       deriv = Patch(0, 0, (mod1 - mod0) / step)
-        #       deriv.name = 'd(im%i)/d(%s)' % (j,nm)
-        #       allderivs.append([(deriv, im)])
-
-        # Wait for source derivs...
-        sderivs = sderivs.get()
-
-        for j,src in enumerate(srcs):
-            srcderivs = [[] for i in range(src.numberOfParams())]
-            for i,img in enumerate(self.images):
-                # Get derivatives (in this image) of params
-                derivs = sderivs.pop()
-                # derivs is a list of Patch objects or None, one per parameter.
-                assert(len(derivs) == src.numberOfParams())
-                for k,deriv in enumerate(derivs):
-                    if deriv is None:
-                        continue
-                    # if deriv is False:
-                    #     # compute it now
-                    #   (THIS IS WRONG; mod0s only has initial models for images
-                    #    that need it -- those that are unfrozen)
-                    #     mod0 = mod0s[i]
-                    #     nm = src.getParamNames()[k]
-                    #     step = src.getStepSizes()[k]
-                    #     mod1 = tra.getModelImage(img)
-                    #     d = Patch(0, 0, (mod1 - mod0) / step)
-                    #     d.name = 'd(src(im%i))/d(%s)' % (i, nm)
-                    #     deriv = d
+            needimjs = []
+            needims = []
+            needparams = []
+    
+            for derivs,im,imj in zip(imderivs, ims, imjs):
+                need = []
+                for k,d in enumerate(derivs):
+                    if d is False:
+                        need.append(k)
+                if len(need):
+                    needimjs.append(imj)
+                    needims.append(im)
+                    needparams.append(need)
                         
-                    if not np.all(np.isfinite(deriv.patch.ravel())):
-                        print 'Derivative for source', src
-                        print 'deriv index', i
-                        assert(False)
-                    srcderivs[k].append((deriv, img))
-            allderivs.extend(srcderivs)
+            # initial models...
+            logverb('Getting', len(needimjs), 'initial models for image derivatives')
+            mod0s = self._map_async(getmodelimagefunc, [(self, imj) for imj in needimjs])
+            # stepping each (needed) param...
+            args = []
+            # for j,im in enumerate(ims):
+            #   p0 = im.getParams()
+            #   #print 'Image', im
+            #   #print 'Step sizes:', im.getStepSizes()
+            #   #print 'p0:', p0
+            #   for k,step in enumerate(im.getStepSizes()):
+            #       args.append((self, j, k, p0[k], step))
+            for im,imj,params in zip(needims, needimjs, needparams):
+                p0 = im.getParams()
+                ss = im.getStepSizes()
+                for i in params:
+                    args.append((self, imj, i, p0[i], ss[i]))
+            # reverse the args so we can pop() below.
+            logverb('Stepping in', len(args), 'model parameters for derivatives')
+            mod1s = self._map_async(getmodelimagestep, reversed(args))
+
+            # Next, derivs for the sources.
+            args = []
+            for j,src in enumerate(srcs):
+                for i,img in enumerate(self.images):
+                    args.append((src, img))
+            sderivs = self._map_async(getsrcderivs, reversed(args))
+    
+            # Wait for and unpack the image derivatives...
+            mod0s = mod0s.get()
+            mod1s = mod1s.get()
+            # convert to a imj->mod0 map
+            assert(len(mod0s) == len(needimjs))
+            mod0s = dict(zip(needimjs, mod0s))
+    
+            for derivs,im,imj in zip(imderivs, ims, imjs):
+                for k,d in enumerate(derivs):
+                    if d is False:
+                        mod0 = mod0s[imj]
+                        nm = im.getParamNames()[k]
+                        step = im.getStepSizes()[k]
+                        mod1 = mod1s.pop()
+                        d = Patch(0, 0, (mod1 - mod0) / step)
+                        d.name = 'd(im%i)/d(%s)' % (j,nm)
+                    allderivs.append([(d, im)])
+            # popped all
+            assert(len(mod1s) == 0)
+    
+            # for i,(j,im) in enumerate(zip(imjs,ims)):
+            #   mod0 = mod0s[i]
+            #   p0 = im.getParams()
+            #   for k,(nm,step) in enumerate(zip(im.getParamNames(), im.getStepSizes())):
+            #       mod1 = mod1s.pop()
+            #       deriv = Patch(0, 0, (mod1 - mod0) / step)
+            #       deriv.name = 'd(im%i)/d(%s)' % (j,nm)
+            #       allderivs.append([(deriv, im)])
+    
+            # Wait for source derivs...
+            sderivs = sderivs.get()
+    
+            for j,src in enumerate(srcs):
+                srcderivs = [[] for i in range(src.numberOfParams())]
+                for i,img in enumerate(self.images):
+                    # Get derivatives (in this image) of params
+                    derivs = sderivs.pop()
+                    # derivs is a list of Patch objects or None, one per parameter.
+                    assert(len(derivs) == src.numberOfParams())
+                    for k,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        # if deriv is False:
+                        #     # compute it now
+                        #   (THIS IS WRONG; mod0s only has initial models for images
+                        #    that need it -- those that are unfrozen)
+                        #     mod0 = mod0s[i]
+                        #     nm = src.getParamNames()[k]
+                        #     step = src.getStepSizes()[k]
+                        #     mod1 = tra.getModelImage(img)
+                        #     d = Patch(0, 0, (mod1 - mod0) / step)
+                        #     d.name = 'd(src(im%i))/d(%s)' % (i, nm)
+                        #     deriv = d
+                            
+                        if not np.all(np.isfinite(deriv.patch.ravel())):
+                            print 'Derivative for source', src
+                            print 'deriv index', i
+                            assert(False)
+                        srcderivs[k].append((deriv, img))
+                allderivs.extend(srcderivs)
+            
+        else:
+            
+            if not self.isParamFrozen('images'):
+                for i in self.images.getThawedParamIndices():
+                    img = self.images[i]
+                    derivs = img.getParamDerivatives(self, allsrcs)
+                    mod0 = None
+                    for di,deriv in enumerate(derivs):
+                        if deriv is False:
+                            if mod0 is None:
+                                mod0 = self.getModelImage(img)
+                                p0 = img.getParams()
+                                stepsizes = img.getStepSizes()
+                                paramnames = img.getParamNames()
+                            oldval = img.setParam(di, p0[di] + stepsizes[di])
+                            mod = self.getModelImage(img)
+                            img.setParam(di, oldval)
+                            deriv = Patch(0, 0, (mod - mod0) / stepsizes[di])
+                            deriv.name = 'd(im%i)/d(%s)' % (i, paramnames[di])
+                        allderivs.append([(deriv, img)])
+                    del mod0
+
+            for src in srcs:
+                srcderivs = [[] for i in range(src.numberOfParams())]
+                for img in self.images:
+                    derivs = src.getParamDerivatives(img)
+                    for k,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        srcderivs[k].append((deriv, img))
+                allderivs.extend(srcderivs)
+            print 'allderivs:', len(allderivs)
+            print 'N params:', self.numberOfParams()
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
