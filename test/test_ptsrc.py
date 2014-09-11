@@ -60,18 +60,14 @@ def main():
             plt.colorbar()
         ps.savefig()
     
-    
-    print 'Start: DevGalaxy.profile', DevGalaxy.profile
-    print 'Start: ExpGalaxy.profile', ExpGalaxy.profile
-
-    #disable_galaxy_cache()
-    
     fsrc = FixedCompositeGalaxy(RaDecPos(0., 0.), Flux(100.), 0.25,
                                 EllipseESoft(1., 0., 0.2),
                                 EllipseESoft(1., 0., -0.2))
-    
-    print 'Initial brightness:', fsrc.getBrightness()
 
+    csrc = CompositeGalaxy(RaDecPos(0., 0.),
+                           Flux(100.), EllipseESoft(1., 0., 0.2),
+                           Flux(100.), EllipseESoft(1., 0., -0.2))
+    
     d = DevGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeDev)
     e = ExpGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeExp)
     dd = d.getParamDerivatives(tim)
@@ -100,9 +96,6 @@ def main():
     
     print 'de2:', np.sum(np.abs(de2[0].patch))
     print 'dd2:', np.sum(np.abs(dd2[0].patch))
-    
-    print 'DevGalaxy.profile', DevGalaxy.profile
-    print 'ExpGalaxy.profile', ExpGalaxy.profile
     
     if True:
         plt.clf()
@@ -154,7 +147,7 @@ def main():
         ps.savefig()
     
         
-    for src,tt in [(fsrc,'FixedComp'), (e,'E'), (d,'D'), (e2,'E2'), (d2,'D2')]:
+    for src,tt in [(csrc,'Comp'), (fsrc,'FixedComp'), (e,'E'), (d,'D'), (e2,'E2'), (d2,'D2')]:
         print
     
         derivs = src.getParamDerivatives(tim)

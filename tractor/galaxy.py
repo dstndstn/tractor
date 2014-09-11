@@ -678,9 +678,6 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
                      self.fracDev.hashkey()))
     
     def getParamDerivatives(self, img):
-
-        print 'FixedCompositeGalaxy.getParamDerivatives()'
-
         e = ExpGalaxy(self.pos, self.brightness, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightness, self.shapeDev)
         e.dname = 'fcomp.exp'
