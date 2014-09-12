@@ -1022,16 +1022,16 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 dchisq = 0
                 for deriv,tim in derivs:
                     print 'Deriv', deriv.name
-                    print 'Deriv:', deriv.x0, deriv.y0, deriv.shape
-                    print 'Tim:', tim.shape
-                    print 'Tim inverr:', tim.getInvError().shape
-                    w,h = tim.shape
+                    print 'Deriv extent:', deriv.getExtent()
+                    h,w = tim.shape
+                    print 'Inverr extent:', [0, w, 0, h]
                     deriv.clipTo(w,h)
                     print 'Deriv clipped:', deriv.getExtent()
-                    print 'Deriv slice:', deriv.getSlice()
                     ie = tim.getInvError()
                     slc = deriv.getSlice(ie)
-                    print 'Sliced tim shape:', ie[slc].shape
+                    print 'Deriv slice:', slc
+                    h,w = ie[slc].shape
+                    print 'Sliced ie extent:', [0,w,0,h]
                     chi = deriv.patch * ie[slc]
                     dchisq += (chi**2).sum()
                 srcvariances[srci].append(1./dchisq)
