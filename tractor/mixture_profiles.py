@@ -225,17 +225,20 @@ class MixtureOfGaussians():
         x, y = meshgrid()
         return result
 
-    def evaluate_grid_dstn(self, xlo, xhi, ylo, yhi, xstep=1., ystep=1.):
+    def evaluate_grid_dstn(self, x0, x1, y0, y1, cx, cy):
+        '''
+        [x0,x1): (int) X values to evaluate
+        [y0,y1): (int) Y values to evaluate
+        (cx,cy): (float) pixel center of the MoG
+        '''
         from mix import c_gauss_2d_grid
         assert(self.D == 2)
-        NX = int(round(xhi - xlo + 1) / float(xstep))
-        NY = int(round(yhi - ylo + 1) / float(ystep))
-        result = np.zeros((NY, NX))
-        rtn = c_gauss_2d_grid(xlo, xstep, NX, ylo, ystep, NY,
+        result = np.zeros((y1-y0, x1-x0))
+        rtn = c_gauss_2d_grid(x0, x1, y0, y1, cx, cy,
                               self.amp, self.mean,self.var, result)
         if rtn == -1:
             raise RuntimeError('c_gauss_2d_grid failed')
-        return result
+        return Patch(x0, y0, result)
 
     def evaluate_grid_approx(self, x0, x1, y0, y1, cx, cy, minval):
         '''
@@ -274,7 +277,7 @@ class MixtureOfGaussians():
         '''
         from mix import c_gauss_2d_approx3
 
-        result = np.zeros((y1-y0 + 1, x1-x0 + 1))
+        result = np.zeros((y1-y0, x1-x0))
         xderiv = yderiv = mask = None
         if derivs:
             xderiv = np.zeros_like(result)
@@ -285,7 +288,7 @@ class MixtureOfGaussians():
         cx = int(self.mean[0,0] + fx)
         cy = int(self.mean[0,1] + fy)
         rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
-            x0, x1+1, y0, y1+1, fx, fy, minval,
+            x0, x1, y0, y1, fx, fy, minval,
             self.amp, self.mean, self.var,
             result, xderiv, yderiv, mask,
             cx, cy, minradius)
@@ -317,7 +320,7 @@ class MixtureOfGaussians():
     #evaluate_grid = evaluate_grid_hogg
     evaluate_grid = evaluate_grid_dstn
 
-def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
+def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0., exactExtent=False):
     '''
     `mixture`: a MixtureOfGaussians
     `x0,x1,y0,y1`: integer bounds [x0,x1), [y0,y1) of the grid to evaluate
@@ -325,11 +328,12 @@ def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0.):
     Returns: a Patch object
     '''
     if minval == 0.:
-        img = mixture.evaluate_grid(x0, x1, y0, y1)
-    else:
-        #img = mixture.evaluate_grid_approx(x0, x1, y0, y1, 0., 0., minval)
-        return mixture.evaluate_grid_approx3(x0, x1, y0, y1, 0., 0., minval)
-    return Patch(x0, y0, img)
+        return mixture.evaluate_grid(x0, x1, y0, y1, 0., 0.)
+
+    p = mixture.evaluate_grid_approx3(x0, x1, y0, y1, 0., 0., minval,
+                                      doslice=not(exactExtent))
+    #print 'mixture_to_patch: got extent', [x0,x1,y0,y1], 'returning extent', p.getExtent()
+    return p
     
 def model_to_patch(model, scale, posmin, posmax):
     xl = np.arange(posmin[0], posmax[0]+1., 1.)

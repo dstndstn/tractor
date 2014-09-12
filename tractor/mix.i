@@ -350,76 +350,70 @@ bailout:
 
 
 
-static int c_gauss_2d_grid(double xlo, double xstep, int NX,
-                           double ylo, double ystep, int NY,
-                           PyObject* ob_amp,
-                           PyObject* ob_mean, PyObject* ob_var,
+static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
+                           PyObject* ob_amp, PyObject* ob_mean, PyObject* ob_var,
                            PyObject* ob_result) {
     int i, K, k;
     const int D = 2;
     double *amp, *mean, *var, *result;
     double tpd;
-    double* scale = NULL, *ivar = NULL;
-    int ix, iy;
-    double x, y;
     PyObject *np_amp=NULL, *np_mean=NULL, *np_var=NULL, *np_result=NULL;
     int rtn = -1;
+    int NX = x1 - x0;
+    int NY = y1 - y0;
 
     tpd = pow(2.*M_PI, D);
 
-    if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, NX, NY,
-               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
+    if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None,
+               NX, NY, &K, &np_amp, &np_mean, &np_var, &np_result,
+               NULL, NULL, NULL))
         goto bailout;
 
-    amp = PyArray_DATA(np_amp);
-    mean = PyArray_DATA(np_mean);
-    var = PyArray_DATA(np_var);
+    amp    = PyArray_DATA(np_amp);
+    mean   = PyArray_DATA(np_mean);
+    var    = PyArray_DATA(np_var);
     result = PyArray_DATA(np_result);
 
-    scale = malloc(K * sizeof(double));
-    ivar = malloc(K * D * D * sizeof(double));
+    {
+        double scale[K];
+        double ivar[K*3];
+        int x1 = x0 + NX;
+        int y1 = y0 + NY;
+        int ix,iy;
 
-    for (k=0; k<K; k++) {
-        double* V = var + k*D*D;
-        double* I = ivar + k*D*D;
-        double det;
-        det = V[0]*V[3] - V[1]*V[2];
-        I[0] =  V[3] / det;
-        I[1] = -V[1] / det;
-        I[2] = -V[2] / det;
-        I[3] =  V[0] / det;
-        scale[k] = amp[k] / sqrt(tpd * det);
-    }
-    
-    i = 0;
-    y = ylo;
-    for (iy=0; iy<NY; iy++) {
-        x = xlo;
-        for (ix=0; ix<NX; ix++) {
-            for (k=0; k<K; k++) {
-                double dsq;
-                double dx,dy;
-                dx = x - mean[k*D+0];
-                dy = y - mean[k*D+1];
-                dsq = ivar[k*D*D + 0] * dx * dx
-                    + ivar[k*D*D + 1] * dx * dy
-                    + ivar[k*D*D + 2] * dx * dy
-                    + ivar[k*D*D + 3] * dy * dy;
-                if (dsq >= 100)
-                    continue;
-                result[i] += scale[k] * exp(-0.5 * dsq);
-                assert(i == (iy*NX + ix));
-            }
-            i++;
-            x += xstep;
+        for (k=0; k<K; k++) {
+            double* V = var + k*D*D;
+            double* I = ivar + k*3;
+            double det;
+            det = V[0]*V[3] - V[1]*V[2];
+            I[0] =  V[3] / det;
+            I[1] = -(V[1]+V[2]) / det;
+            I[2] =  V[0] / det;
+            scale[k] = amp[k] / sqrt(tpd * det);
         }
-        y += ystep;
+    
+        i = 0;
+        for (iy=y0; iy<y1; iy++) {
+            for (ix=x0; ix<x1; ix++) {
+                for (k=0; k<K; k++) {
+                    double dsq;
+                    double dx,dy;
+                    dx = ix - fx - mean[k*D+0];
+                    dy = iy - fy - mean[k*D+1];
+                    dsq = ivar[k*3 + 0] * dx * dx
+                        + ivar[k*3 + 1] * dx * dy
+                        + ivar[k*3 + 2] * dy * dy;
+                    if (dsq >= 100)
+                        continue;
+                    result[i] += scale[k] * exp(-0.5 * dsq);
+                }
+                i++;
+            }
+        }
+        rtn = 0;
     }
-    rtn = 0;
 
 bailout:
-    free(scale);
-    free(ivar);
     Py_XDECREF(np_amp);
     Py_XDECREF(np_mean);
     Py_XDECREF(np_var);

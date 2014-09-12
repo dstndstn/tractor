@@ -14,6 +14,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               int minradius,
                               int* sx0, int* sx1, int* sy0, int* sy1) {
 
+    // [x0,x1), [y0,y1)
     //
     // ob_mask: numpy array, shape (y1-y0, x1-x0), boolean: which
     // pixels to evaluate.

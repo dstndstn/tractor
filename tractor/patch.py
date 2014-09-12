@@ -137,17 +137,16 @@ class Patch(object):
     def getName(self):
         return self.name
 
-    # for Cache
-    #def size(self):
-    #   (H,W) = self.patch.shape
-    #   return H*W
     def copy(self):
         if self.patch is None:
             return Patch(self.x0, self.y0, None)
         return Patch(self.x0, self.y0, self.patch.copy())
 
     def getExtent(self, margin=0):
-        ''' Return (x0, x1, y0, y1) '''
+        '''
+        Return (x0, x1, y0, y1) of the region covered by this patch;
+        NON-inclusive upper bounds, ie, [x0, x1), [y0, y1).
+        '''
         (h,w) = self.shape
         return (self.x0-margin, self.x0 + w + margin,
                 self.y0-margin, self.y0 + h + margin)
@@ -174,7 +173,7 @@ class Patch(object):
             self.patch = None
             return False
         # debug
-        o0 = (self.x0, self.y0, self.patch.shape)
+        #o0 = (self.x0, self.y0, self.patch.shape)
         if self.x0 < 0:
             self.patch = self.patch[:, -self.x0:]
             self.x0 = 0
@@ -182,11 +181,11 @@ class Patch(object):
             self.patch = self.patch[-self.y0:, :]
             self.y0 = 0
         # debug
-        S = self.patch.shape
-        if len(S) != 2:
-            print 'clipTo: shape', self.patch.shape
-            print 'original offset and patch shape:', o0
-            print 'current offset and patch shape:', self.x0, self.y0, self.patch.shape
+        # S = self.patch.shape
+        # if len(S) != 2:
+        #     print 'clipTo: shape', self.patch.shape
+        #     print 'original offset and patch shape:', o0
+        #     print 'current offset and patch shape:', self.x0, self.y0, self.patch.shape
 
         (h,w) = self.patch.shape
         if (self.x0 + w) > W:
@@ -202,8 +201,6 @@ class Patch(object):
         assert(self.shape == self.patch.shape)
         return True
 
-
-    #### WARNing, this function has not been tested
     def clipToRoi(self, x0,x1,y0,y1):
         if self.patch is None:
             return False

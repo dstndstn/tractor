@@ -1271,7 +1271,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
     '''
-    # Call into MOG to set params, or keep my own copy (via MultiParams)
     def __init__(self, amp, mean, var):
         '''
         amp:  np array (size K) of Gaussian amplitudes
@@ -1321,13 +1320,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         psf.setParams(params)
         return psf
     
-        
-    # HACK... incomplete
-    # def getLogPrior(self):
-    #     if np.any(self.mog.amp < 0):
-    #         return -1e100
-    #     return 0.
-
     def getMixtureOfGaussians(self, mean=None):
         mog = self.mog
         mog.symmetrize()
@@ -1352,9 +1344,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         # ?
         meig = max([max(abs(numpy.linalg.eigvalsh(v)))
                     for v in self.mog.var])
-        #for v in self.mog.var:
-        #   print 'Var', v
-        #   print 'Eigs:', numpy.linalg.eigvalsh(v)
         return self.getNSigma() * np.sqrt(meig)
         
     def getNSigma(self):
@@ -1406,17 +1395,16 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 return None
 
             return self.mog.evaluate_grid_approx3(
-                x0, x1, y0, y1, px, py, minval, derivs=derivs)
+                x0, x1+1, y0, y1+1, px, py, minval, derivs=derivs)
             
+
+        if radius is None:
+            r = self.getRadius()
         else:
-            if radius is None:
-                r = self.getRadius()
-            else:
-                r = radius
-            x0,x1 = int(floor(px-r)), int(ceil(px+r))
-            y0,y1 = int(floor(py-r)), int(ceil(py+r))
-            grid = self.mog.evaluate_grid(x0-px, x1-px, y0-py, y1-py)
-        return Patch(x0, y0, grid)
+            r = radius
+        x0,x1 = int(floor(px-r)), int(ceil(px+r))
+        y0,y1 = int(floor(py-r)), int(ceil(py+r))
+        return self.mog.evaluate_grid(x0, x1+1, y0, y1+1, px, py)
 
     def __str__(self):
         return (

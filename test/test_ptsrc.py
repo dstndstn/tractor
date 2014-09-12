@@ -21,29 +21,67 @@ def main():
     
 
     tim = Image(data=np.zeros((H,W), np.float32), psf=psf)
-    tim.modelMinval = 1e-3
 
     src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
 
-    patch0 = src.getModelPatch(tim)
-    plt.clf()
-    dimshow(patch0.patch, extent=patch0.getExtent())
-    plt.axis([0,W,0,H])
-    ps.savefig()
+    tiny = 1e-6
 
-    derivs = src.getParamDerivatives(tim)
-    for deriv in derivs:
-        if deriv is None:
-            continue
+    # mv = 1e-3
+    # tim.modelMinval = mv
+    # patch0 = src.getModelPatch(tim)
+    # sys.exit(0)
+    
+    for mv in [0., 1e-3, 1e-5]:
+        tim.modelMinval = mv
+
+        get_galaxy_cache().clear()
+        
         print
-        print deriv.name
-        print 'Deriv :', deriv.getExtent()
-        print 'Patch0:', patch0.getExtent()
+        print 'minval =', mv
         print
+        
+        patch0 = src.getModelPatch(tim)
+
+        p = patch0.patch
+        print 'patch smallest non-zero value:', np.min(p[p > 0])
+
         plt.clf()
-        dimshow(deriv.patch, extent=deriv.getExtent())
+        im = np.log10(patch0.patch + tiny)
+        mn,mx = im.min(), im.max()
+        dimshow(im, extent=patch0.getExtent(), vmin=mn, vmax=mx)
         plt.axis([0,W,0,H])
+        plt.title('patch, mv=%f' % mv)
+        plt.colorbar()
         ps.savefig()
+
+        for clip in []:#(40,50,50,60), (0,40,0,40), (40,100,60,70)]:
+            pp = patch0.copy()
+            pp.clipToRoi(*clip)
+            plt.clf()
+            dimshow(np.log10(pp.patch + tiny), extent=pp.getExtent(),
+                    vmin=mn, vmax=mx)
+            plt.axis([0,W,0,H])
+            plt.title('clipped patch, mv=%f' % mv)
+            plt.colorbar()
+            ps.savefig()
+
+        
+        derivs = src.getParamDerivatives(tim)
+        for deriv in derivs:
+            if deriv is None:
+                continue
+            print
+            print deriv.name
+            print 'Deriv :', deriv.getExtent()
+            print 'Patch0:', patch0.getExtent()
+            print
+            plt.clf()
+            deriv.patch[deriv.patch == 0] = np.nan
+            dimshow(deriv.patch, extent=deriv.getExtent())
+            plt.axis([0,W,0,H])
+            plt.title('%s, mv=%f' % (deriv.name, mv))
+            ps.savefig()
+
     
     src.pos.setParams([10,50])
 
@@ -69,7 +107,6 @@ def main():
 
     
 
-    sys.exit(0)
 
     
     for cd in [
