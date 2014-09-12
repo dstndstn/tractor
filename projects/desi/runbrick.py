@@ -110,7 +110,7 @@ def get_sdss_sources(bands, targetwcs, W, H):
             'psfflux', 'psfflux_ivar',
             'cmodelflux', 'cmodelflux_ivar',
             'modelflux', 'modelflux_ivar',
-            'devflux', 'expflux']
+            'devflux', 'expflux', 'extinction']
 
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
     print 'Got', len(objs), 'photoObjs'
@@ -1265,13 +1265,13 @@ def stage204(T=None, flux_iv=None, tims=None, cat=None,
     T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
     for k in ['ra_var', 'dec_var', 'tx', 'ty']:
         T2.set(k, T2.get(k).astype(np.float32))
-    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
+    T2.writeto('tractor-phot-b%06i.fits' % brickid, header=hdr)
 
 
 def stage103(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
-             bands=None, ps=None,
+             bands=None, ps=None, brickid=None,
              plots=False, tims=None, tractor=None,
              **kwargs):
 
@@ -1368,9 +1368,9 @@ def stage103(T=None, coimgs=None, cons=None,
         resid[cons[iband] == 0] = np.nan
         rgbresids.append(resid)
 
-        fitsio.write('image-coadd-%s.fits' % band, comod)
-        fitsio.write('model-coadd-%s.fits' % band, coimg)
-        fitsio.write('resid-coadd-%s.fits' % band, resid)
+        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod)
+        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg)
+        fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))

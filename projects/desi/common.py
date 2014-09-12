@@ -167,10 +167,12 @@ class Decals(object):
             self.ZP = fits_table(zpfn)
         I = np.flatnonzero(self.ZP.expnum == im.expnum)
         if len(I) > 1:
-            I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
+            #I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
+            I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
         assert(len(I) == 1)
         I = I[0]
         magzp = self.ZP.zpt[I]
+        #magzp = self.ZP.ccdzpt[I]
         #print 'magzp', magzp
         exptime = self.ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
