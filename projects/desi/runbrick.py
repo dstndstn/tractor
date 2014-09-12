@@ -127,7 +127,6 @@ def get_sdss_sources(bands, targetwcs, W, H):
     return cat, objs
 
 def stage0(W=3600, H=3600, brickid=None, **kwargs):
-    ps = PlotSequence('brick')
     t0 = tlast = Time()
 
     decals = Decals()
@@ -1420,8 +1419,11 @@ if __name__ == '__main__':
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
+
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
-                      default='runbrick-s%03i.pickle')
+                      default='pickles/runbrick-%(brick)06i-s%%(stage)03i.pickle')
+    parser.add_option('--plot-base', help='Base filename for plots, default %default',
+                      default='brick-%(brick)06i')
 
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
@@ -1444,7 +1446,16 @@ if __name__ == '__main__':
     stagefunc = CallGlobal('stage%i', globals())
     prereqs = {101: 0, 103:2, 203:2 }
     opt.force.append(opt.stage)
+
+    initargs = {}
+
+    if opt.plots:
+        ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
+        initargs['ps'] = ps
+
+    opt.picklepat = opt.picklepat % dict(brick=opt.brick)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick)
+             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick,
+             initial_args=initargs)
     
