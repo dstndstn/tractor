@@ -14,6 +14,63 @@ def main():
     W,H = 100,100
     pixscale = 0.4/3600.
     rot = np.deg2rad(10.)
+
+    psf=GaussianMixturePSF(np.array([0.8, 0.2]),
+                           np.zeros((2,2)),
+                           np.array([[[6.,0.],[0.,6.]], [[18.,0.],[0.,18.]]]))
+    
+
+    tim = Image(data=np.zeros((H,W), np.float32), psf=psf)
+    tim.modelMinval = 1e-3
+
+    src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
+
+    patch0 = src.getModelPatch(tim)
+    plt.clf()
+    dimshow(patch0.patch, extent=patch0.getExtent())
+    plt.axis([0,W,0,H])
+    ps.savefig()
+
+    derivs = src.getParamDerivatives(tim)
+    for deriv in derivs:
+        if deriv is None:
+            continue
+        print
+        print deriv.name
+        print 'Deriv :', deriv.getExtent()
+        print 'Patch0:', patch0.getExtent()
+        print
+        plt.clf()
+        dimshow(deriv.patch, extent=deriv.getExtent())
+        plt.axis([0,W,0,H])
+        ps.savefig()
+    
+    src.pos.setParams([10,50])
+
+    patch0 = src.getModelPatch(tim)
+    plt.clf()
+    dimshow(patch0.patch, extent=patch0.getExtent())
+    plt.axis([0,W,0,H])
+    ps.savefig()
+
+    derivs = src.getParamDerivatives(tim)
+    for deriv in derivs:
+        if deriv is None:
+            continue
+        print
+        print deriv.name
+        print 'Deriv :', deriv.getExtent()
+        print 'Patch0:', patch0.getExtent()
+        print
+        plt.clf()
+        dimshow(deriv.patch, extent=deriv.getExtent())
+        plt.axis([0,W,0,H])
+        ps.savefig()
+
+    
+
+    sys.exit(0)
+
     
     for cd in [
             (-pixscale*np.cos(rot), pixscale*np.sin(rot),
@@ -27,10 +84,6 @@ def main():
         wcs = Tan(*[0., 0., W/2., H/2.] + list(cd) + [float(W), float(H)])
     
         ptsrc = PointSource(RaDecPos(0., 0.), Flux(100.))
-    
-        psf=GaussianMixturePSF(np.array([0.8, 0.2]),
-                               np.zeros((2,2)),
-                               np.array([[[6.,0.],[0.,6.]], [[18.,0.],[0.,18.]]]))
     
         tim = Image(data=np.zeros((H,W), np.float32), wcs=ConstantFitsWcs(wcs),
                     psf=psf)
@@ -70,22 +123,19 @@ def main():
     
     d = DevGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeDev)
     e = ExpGalaxy(fsrc.pos, fsrc.brightness, fsrc.shapeExp)
+
     dd = d.getParamDerivatives(tim)
     de = e.getParamDerivatives(tim)
-    
     dcomp = fsrc.getParamDerivatives(tim)
     f = fsrc.fracDev.getClippedValue()
-    
     print 'de before:', np.sum(np.abs(de[0].patch))
     print 'dd before:', np.sum(np.abs(dd[0].patch))
-    
     for deriv in de:
         if deriv is not None:
             deriv *= (1.-f)
     for deriv in dd:
         if deriv is not None:
             deriv *= f
-    
     print 'de after:', np.sum(np.abs(de[0].patch))
     print 'dd after:', np.sum(np.abs(dd[0].patch))
             
@@ -116,7 +166,6 @@ def main():
         dimshow((dd[0] + de[0]).patch, vmin=-mx, vmax=mx)
         plt.title('sum')
     
-    
         plt.subplot(3,3,7)
         dimshow(de2[0].patch, vmin=-mx, vmax=mx)
         plt.title('exp2')
@@ -128,8 +177,6 @@ def main():
         plt.subplot(3,3,9)
         dimshow((dd2[0] + de2[0]).patch, vmin=-mx, vmax=mx)
         plt.title('sum2')
-    
-        
         
         plt.subplot(3,3,3)
         ss = fsrc.getStepSizes()
@@ -147,9 +194,11 @@ def main():
         ps.savefig()
     
         
-    for src,tt in [(csrc,'Comp'), (fsrc,'FixedComp'), (e,'E'), (d,'D'), (e2,'E2'), (d2,'D2')]:
+    for src,tt in [(csrc,'Comp'), (fsrc,'FixedComp'), (e,'E'), (d,'D'),
+                   (e2,'E2'), (d2,'D2')]:
         print
-    
+
+        patch0 = src.getModelPatch(tim)
         derivs = src.getParamDerivatives(tim)
         print tt, ':', np.sum(np.abs(derivs[0].patch))
         cols = int(np.ceil(np.sqrt(len(derivs))))
@@ -158,6 +207,13 @@ def main():
         maxes = []
         for i,deriv in enumerate(derivs):
             plt.subplot(rows,cols,i+1)
+
+            print
+            print deriv.name
+            print 'Deriv :', deriv.getExtent()
+            print 'Patch0:', patch0.getExtent()
+            print
+                        
             mx = max(np.abs(deriv.patch.min()), deriv.patch.max())
             dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
             maxes.append(mx)
