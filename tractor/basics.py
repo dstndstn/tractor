@@ -828,7 +828,7 @@ class PointSource(MultiParams):
         H,W = img.shape
         psf = self._getPsf(img)
         patch = psf.getPointSourcePatch(px, py, minval=minval,
-                                        extent=[0,W-1,0,H-1],
+                                        extent=[0,W,0,H],
                                         radius=self.fixedRadius,
                                         v3=True, derivs=derivs
                                         )
@@ -1356,6 +1356,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
                             derivs=False, **kwargs):
+        '''
+        extent = [x0,x1,y0,y1], clip to [x0,x1), [y0,y1).
+        '''
         if minval is None:
             minval = 0.
         if minval > 0.:
@@ -1375,13 +1378,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 rr = int(np.ceil(r))
 
             x0 = int(floor(px - rr))
-            x1 = int(ceil (px + rr))
+            x1 = int(ceil (px + rr)) + 1
             y0 = int(floor(py - rr))
-            y1 = int(ceil (py + rr))
+            y1 = int(ceil (py + rr)) + 1
 
-            # x1,y1: inclusive
             if extent is not None:
-                # inclusive
                 [xl,xh,yl,yh] = extent
                 # clip
                 x0 = max(x0, xl)
@@ -1389,22 +1390,22 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
                 y0 = max(y0, yl)
                 y1 = min(y1, yh)
 
-            if x0 > x1:
+            if x0 >= x1:
                 return None
-            if y0 > y1:
+            if y0 >= y1:
                 return None
 
             return self.mog.evaluate_grid_approx3(
-                x0, x1+1, y0, y1+1, px, py, minval, derivs=derivs)
+                x0, x1, y0, y1, px, py, minval, derivs=derivs)
             
 
         if radius is None:
             r = self.getRadius()
         else:
             r = radius
-        x0,x1 = int(floor(px-r)), int(ceil(px+r))
-        y0,y1 = int(floor(py-r)), int(ceil(py+r))
-        return self.mog.evaluate_grid(x0, x1+1, y0, y1+1, px, py)
+        x0,x1 = int(floor(px-r)), int(ceil(px+r)) + 1
+        y0,y1 = int(floor(py-r)), int(ceil(py+r)) + 1
+        return self.mog.evaluate_grid(x0, x1, y0, y1, px, py)
 
     def __str__(self):
         return (

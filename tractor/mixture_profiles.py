@@ -283,12 +283,11 @@ class MixtureOfGaussians():
             xderiv = np.zeros_like(result)
             yderiv = np.zeros_like(result)
 
-
         # guess:
         cx = int(self.mean[0,0] + fx)
         cy = int(self.mean[0,1] + fy)
         rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
-            x0, x1, y0, y1, fx, fy, minval,
+            int(x0), int(x1), int(y0), int(y1), fx, fy, minval,
             self.amp, self.mean, self.var,
             result, xderiv, yderiv, mask,
             cx, cy, minradius)

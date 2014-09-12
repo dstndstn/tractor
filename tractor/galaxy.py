@@ -314,7 +314,9 @@ class ProfileGalaxy(object):
             pass
         patch = self._realGetUnitFluxModelPatch(img, px, py, minval,
                                                 extent=extent)
-        _galcache.put(deps, (patch.copy(),minval))
+        if patch is not None:
+            patch = patch.copy()
+        _galcache.put(deps, (patch,minval))
         return patch
 
     def getUnitFluxModelPatches(self, img, minval=0.):
