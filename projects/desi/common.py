@@ -165,15 +165,26 @@ class Decals(object):
             zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
             print 'Reading zeropoints:', zpfn
             self.ZP = fits_table(zpfn)
+
+            # 'N4 ' -> 'N4'
+            self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
+
+            self.ZP.about()
+
         I = np.flatnonzero(self.ZP.expnum == im.expnum)
+        print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
             #I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
             I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
         assert(len(I) == 1)
         I = I[0]
         magzp = self.ZP.zpt[I]
-        #magzp = self.ZP.ccdzpt[I]
-        #print 'magzp', magzp
+        print 'Raw magzp', magzp
+        if magzp == 0:
+            print 'Magzp = 0; using ccdzpt'
+            magzp = self.ZP.ccdzpt[I]
+            print 'Got', magzp
         exptime = self.ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
         #print 'magzp', magzp

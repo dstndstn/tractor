@@ -126,7 +126,8 @@ def get_sdss_sources(bands, targetwcs, W, H):
     cat = Catalog(*srcs)
     return cat, objs
 
-def stage0(W=3600, H=3600, brickid=None, **kwargs):
+def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
+           **kwargs):
     t0 = tlast = Time()
 
     decals = Decals()
@@ -373,10 +374,11 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
         sedsn   = sedmap * np.sqrt(sediv)
         hot = np.maximum(hot, sedsn)
 
-        plt.clf()
-        dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
-        plt.title('SED-matched detection filter: %s' % sedname)
-        ps.savefig()
+        if plots:
+            plt.clf()
+            dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
+            plt.title('SED-matched detection filter: %s' % sedname)
+            ps.savefig()
 
     del sedmap
     del sediv
@@ -384,14 +386,15 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
 
     peaks = (hot > 4)
 
-    crossa = dict(ms=10, mew=1.5)
-    plt.clf()
-    dimshow(peaks)
-    ax = plt.axis()
-    plt.plot(T.itx, T.ity, 'r+', **crossa)
-    plt.axis(ax)
-    plt.title('Detection blobs')
-    ps.savefig()
+    if plots:
+        crossa = dict(ms=10, mew=1.5)
+        plt.clf()
+        dimshow(peaks)
+        ax = plt.axis()
+        plt.plot(T.itx, T.ity, 'r+', **crossa)
+        plt.axis(ax)
+        plt.title('Detection blobs')
+        ps.savefig()
 
     blobs,nblobs = label(peaks)
     print 'N detected blobs:', nblobs
@@ -406,13 +409,14 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
         slc = blobslices[bb-1]
         peaks[slc][blobs[slc] == bb] = 0
 
-    plt.clf()
-    dimshow(peaks)
-    ax = plt.axis()
-    plt.plot(T.itx, T.ity, 'r+', **crossa)
-    plt.axis(ax)
-    plt.title('Detection blobs minus catalog sources')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        dimshow(peaks)
+        ax = plt.axis()
+        plt.plot(T.itx, T.ity, 'r+', **crossa)
+        plt.axis(ax)
+        plt.title('Detection blobs minus catalog sources')
+        ps.savefig()
 
     # Now, after having removed catalog sources, crank up the detection threshold
     peaks &= (hot > 5)
@@ -433,14 +437,15 @@ def stage0(W=3600, H=3600, brickid=None, **kwargs):
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands))
-    ax = plt.axis()
-    plt.plot(T.tx, T.ty, 'r+', **crossa)
-    plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
-    plt.axis(ax)
-    plt.title('Catalog + SED-matched detections')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        ax = plt.axis()
+        plt.plot(T.tx, T.ty, 'r+', **crossa)
+        plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
+        plt.axis(ax)
+        plt.title('Catalog + SED-matched detections')
+        ps.savefig()
     
     # Grow the 'hot' pixels by dilating by a few pixels
     rr = 2.0
@@ -1447,11 +1452,8 @@ if __name__ == '__main__':
     prereqs = {101: 0, 103:2, 203:2 }
     opt.force.append(opt.stage)
 
-    initargs = {}
-
-    if opt.plots:
-        ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
-        initargs['ps'] = ps
+    ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
+    initargs = dict(ps=ps)
 
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
     
