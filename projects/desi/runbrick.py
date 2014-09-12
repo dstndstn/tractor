@@ -680,7 +680,21 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         tim.modelMinval = 0.1 * tim.sig1
 
     srcvariances = [[] for src in cat]
-        
+
+    ### FIXME --- for sources outside the image bounds, what should we do?
+    ## # Find sources that do not belong to a blob and add them as
+    ## # singleton "blobs"; otherwise they don't get optimized.
+    ## missed = np.ones(len(cat), bool)
+    ## for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+    ##     bslc  = blobslices[iblob]
+    ##     Isrcs = blobsrcs  [iblob]
+    ##     if len(Isrcs) == 0:
+    ##         continue
+    ##     missed[Isrcs] = Falsee
+    ## I = np.nonzero(missed)
+    ## for i in I:
+    ##     blobflux.append(0.)
+
     tfitall = tlast = Time()
     # Fit in order of flux
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
@@ -692,6 +706,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         tblob = Time()
         print
         print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
+        print 'Source indices:', Isrcs
         print
 
         # blob bbox in target coords
@@ -1008,30 +1023,29 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         subcat.thawAllRecursive()
         subcat.freezeAllParams()
         for isub,srci in enumerate(Isrcs):
+            print 'Variances for source', srci
             subcat.thawParam(isub)
 
             src = subcat[isub]
+            print 'Source', src
+            print 'Params:', src.getParamNames()
+            
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = EllipseE.fromEllipseESoft(src.shape)
             elif isinstance(src, FixedCompositeGalaxy):
                 src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
                 src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
 
+            print 'Converted ellipse:', src
+
             allderivs = subtr.getDerivs()
             for iparam,derivs in enumerate(allderivs):
                 dchisq = 0
                 for deriv,tim in derivs:
-                    print 'Deriv', deriv.name
-                    print 'Deriv extent:', deriv.getExtent()
                     h,w = tim.shape
-                    print 'Inverr extent:', [0, w, 0, h]
                     deriv.clipTo(w,h)
-                    print 'Deriv clipped:', deriv.getExtent()
                     ie = tim.getInvError()
                     slc = deriv.getSlice(ie)
-                    print 'Deriv slice:', slc
-                    h,w = ie[slc].shape
-                    print 'Sliced ie extent:', [0,w,0,h]
                     chi = deriv.patch * ie[slc]
                     dchisq += (chi**2).sum()
                 srcvariances[srci].append(1./dchisq)
@@ -1039,8 +1053,25 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             subcat.freezeParam(isub)
         print 'Blob', blobnumber, 'variances:', Time()-tlast
 
-    variances = np.hstack(srcvariances)
+
     cat.thawAllRecursive()
+
+    for i,src in enumerate(cat):
+        print 'Source', i, src
+        print 'variances:', srcvariances[i]
+        print len(srcvariances[i]), 'vs', src.numberOfParams()
+        if len(srcvariances[i]) != src.numberOfParams():
+            # This can happen for sources outside the brick bounds: they never get optimized?
+            print 'Warning: zeroing variances for source', src
+            srcvariances[i] = [0]*src.numberOfParams()
+            if isinstance(src, (DevGalaxy, ExpGalaxy)):
+                src.shape = EllipseE.fromEllipseESoft(src.shape)
+            elif isinstance(src, FixedCompositeGalaxy):
+                src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+                src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+        assert(len(srcvariances[i]) == src.numberOfParams())
+
+    variances = np.hstack(srcvariances)
     assert(len(variances) == cat.numberOfParams())
 
     print 'Fitting sources took:', Time()-tfitall
@@ -1051,22 +1082,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
 
-
-def stage102(T=None, sedsn=None, coimgs=None, cons=None,
-             detmaps=None, detivs=None,
-             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-             cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None,
-             bands=None, ps=None,
-             plots=False, tims=None, tractor=None,
-             **kwargs):
-
-    coimgs = [im.astype(np.float32) for im in coimgs]
-    cons   = [im.astype(np.float32) for im in cons]
-
-    return dict(sedsn=None, detmaps=None, detivs=None,
-                nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-                coimgs=coimgs, cons=cons)
 
 def stage203(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
@@ -1182,11 +1197,43 @@ def stage203(T=None, coimgs=None, cons=None,
 
     T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
 
-    for k in ['ra_var', 'dec_var']:
-        T2.set(k, T2.get(k).astype(np.float32))
-    T2.writeto('tractor-phot-b%i.fits' % brickid, header=hdr)
+    #for k in ['ra_var', 'dec_var']:
+    #    T2.set(k, T2.get(k).astype(np.float32))
 
-    return dict(flux_iv=flux_iv, tims=tims, cat=cat)
+    # Convert from variances to inverse-sigmas.
+    for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
+        X = T2.get(k)
+        T2.delete_column(k)
+        T2.set(k.replace('_var', '_isig'), (1./np.sqrt(X)).astype(np.float32))
+
+    # Create DECAM_FLUX columns: [ugrizY]
+    bandindex = dict(g=1, r=2, z=4)
+
+    T2.decam_flux      = np.zeros((len(T2), 6), np.float32)
+    T2.decam_flux_isig = np.zeros((len(T2), 6), np.float32)
+    for band in bands:
+        T2.decam_flux[:, bandindex[band]] = T2.get('decam_%s_nanomaggies' % band)
+        T2.decam_flux_isig[:, bandindex[band]] = np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
+
+    # Unpack shape columns
+    T2.shapeExp_r = T2.shapeExp[:,0]
+    T2.shapeExp_e1 = T2.shapeExp[:,1]
+    T2.shapeExp_e2 = T2.shapeExp[:,2]
+    T2.shapeDev_r = T2.shapeExp[:,0]
+    T2.shapeDev_e1 = T2.shapeExp[:,1]
+    T2.shapeDev_e2 = T2.shapeExp[:,2]
+    T2.shapeExp_r_isig  = T2.shapeExp_isig[:,0]
+    T2.shapeExp_e1_isig = T2.shapeExp_isig[:,1]
+    T2.shapeExp_e2_isig = T2.shapeExp_isig[:,2]
+    T2.shapeDev_r_isig  = T2.shapeExp_isig[:,0]
+    T2.shapeDev_e1_isig = T2.shapeExp_isig[:,1]
+    T2.shapeDev_e2_isig = T2.shapeExp_isig[:,2]
+
+    fn = 'tractor-phot-b%i.fits' % brickid
+    T2.writeto(fn, header=hdr)
+    print 'Wrote', fn
+
+    return dict(variances=variances, tims=tims, cat=cat)
 
 
 def stage204(T=None, flux_iv=None, tims=None, cat=None,
@@ -1194,10 +1241,6 @@ def stage204(T=None, flux_iv=None, tims=None, cat=None,
     from desi_common import prepare_fits_catalog
 
     fs = None
-
-    # HACK -- temp, until this propagates through the stages...
-    if brickid is None:
-        brickid = 377306
 
     TT = T.copy()
     for k in ['itx','ity','index']:
@@ -1289,11 +1332,11 @@ def stage103(T=None, coimgs=None, cons=None,
             # subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
             # tim.psf = subpsf
 
-            if False:
-                print 'Fitting PsfEx model for', tim.name
-                tim.psfex.savesplinedata = True
-                tim.psfex.ensureFit()
-                tim.psf = tim.psfex
+            # if False:
+            #     print 'Fitting PsfEx model for', tim.name
+            #     tim.psfex.savesplinedata = True
+            #     tim.psfex.ensureFit()
+            #     tim.psf = tim.psfex
 
             mod = tractor.getModelImage(tim)
 
@@ -1399,7 +1442,7 @@ if __name__ == '__main__':
 
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    prereqs = {101: 0, 102:2, 203:102 }
+    prereqs = {101: 0, 103:2, 203:2 }
     opt.force.append(opt.stage)
     
     runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
