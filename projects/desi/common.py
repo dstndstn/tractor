@@ -179,12 +179,16 @@ class Decals(object):
             print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
         assert(len(I) == 1)
         I = I[0]
-        magzp = self.ZP.zpt[I]
-        print 'Raw magzp', magzp
-        if magzp == 0:
-            print 'Magzp = 0; using ccdzpt'
-            magzp = self.ZP.ccdzpt[I]
-            print 'Got', magzp
+
+        # Arjun says use CCDZPT
+        magzp = self.ZP.ccdzpt[I]
+
+        # magzp = self.ZP.zpt[I]
+        # print 'Raw magzp', magzp
+        # if magzp == 0:
+        #     print 'Magzp = 0; using ccdzpt'
+        #     magzp = self.ZP.ccdzpt[I]
+        #     print 'Got', magzp
         exptime = self.ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
         #print 'magzp', magzp

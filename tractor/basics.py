@@ -827,11 +827,8 @@ class PointSource(MultiParams):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
         psf = self._getPsf(img)
-        patch = psf.getPointSourcePatch(px, py, minval=minval,
-                                        extent=[0,W,0,H],
-                                        radius=self.fixedRadius,
-                                        v3=True, derivs=derivs
-                                        )
+        patch = psf.getPointSourcePatch(px, py, minval=minval, extent=[0,W,0,H],
+                                        radius=self.fixedRadius, derivs=derivs)
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -1679,15 +1676,24 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         self.y0 = y0
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
-    def getPointSourcePatch(self, px, py, extent=None, **kwargs):
+    def getPointSourcePatch(self, px, py, extent=None, derivs=False, **kwargs):
         if extent is not None:
             (ex0,ex1,ey0,ey1) = extent
             extent = (ex0+self.x0, ex1+self.x0, ey0+self.y0, ey1+self.y0)
         p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py,
-                                         extent=extent, **kwargs)
+                                         extent=extent, derivs=derivs, **kwargs)
         # Now we have to shift the patch back too
         if p is None:
             return None
+        if derivs:
+            p,dx,dy = p
+            p.x0 -= self.x0
+            p.y0 -= self.y0
+            dx.x0 -= self.x0
+            dx.y0 -= self.y0
+            dy.x0 -= self.x0
+            dy.y0 -= self.y0
+            return p,dx,dy
         p.x0 -= self.x0
         p.y0 -= self.y0
         return p

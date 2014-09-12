@@ -1815,8 +1815,8 @@ class Tractor(MultiParams):
                             continue
                         srcderivs[k].append((deriv, img))
                 allderivs.extend(srcderivs)
-            print 'allderivs:', len(allderivs)
-            print 'N params:', self.numberOfParams()
+            #print 'allderivs:', len(allderivs)
+            #print 'N params:', self.numberOfParams()
 
         assert(len(allderivs) == self.numberOfParams())
         return allderivs
