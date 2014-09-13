@@ -286,11 +286,23 @@ class MixtureOfGaussians():
         # guess:
         cx = int(self.mean[0,0] + fx)
         cy = int(self.mean[0,1] + fy)
-        rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
-            int(x0), int(x1), int(y0), int(y1), fx, fy, minval,
-            self.amp, self.mean, self.var,
-            result, xderiv, yderiv, mask,
-            cx, cy, minradius)
+
+        try:
+            rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
+                int(x0), int(x1), int(y0), int(y1),
+                float(fx), float(fy), float(minval),
+                self.amp, self.mean, self.var,
+                result, xderiv, yderiv, mask,
+                cx, cy, int(minradius))
+        except:
+            print 'failure calling c_gauss_2d_approx3:'
+            print x0, x1, y0, y1
+            print fx, fy, minval
+            print cx, cy, minradius
+            print '-->', int(x0), int(x1), int(y0), int(y1)
+            print '-->', float(fx), float(fy), float(minval)
+            print '-->', cx, cy, int(minradius)
+            raise
         assert(rtn == 0)
         if doslice:
             slc = slice(sy0,sy1),slice(sx0,sx1)
@@ -326,7 +338,7 @@ def mixture_to_patch(mixture, x0, x1, y0, y1, minval=0., exactExtent=False):
 
     Returns: a Patch object
     '''
-    if minval == 0.:
+    if minval == 0. or minval is None:
         return mixture.evaluate_grid(x0, x1, y0, y1, 0., 0.)
 
     p = mixture.evaluate_grid_approx3(x0, x1, y0, y1, 0., 0., minval,

@@ -300,6 +300,8 @@ class ProfileGalaxy(object):
             (cached,mv) = _galcache.get(deps)
             if mv <= minval:
                 if extent is None:
+                    if cached is None:
+                        return None
                     return cached.copy()
                 # do the extents overlap?
                 (x0,x1,y0,y1) = extent

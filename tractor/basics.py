@@ -1685,7 +1685,7 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         # Now we have to shift the patch back too
         if p is None:
             return None
-        if derivs:
+        if derivs and isinstance(p, tuple):
             p,dx,dy = p
             p.x0 -= self.x0
             p.y0 -= self.y0

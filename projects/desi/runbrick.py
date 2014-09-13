@@ -1052,7 +1052,11 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                     slc = deriv.getSlice(ie)
                     chi = deriv.patch * ie[slc]
                     dchisq += (chi**2).sum()
-                srcvariances[srci].append(1./dchisq)
+                if dchisq == 0.:
+                    v = np.nan
+                else:
+                    v = 1./dchisq
+                srcvariances[srci].append(v)
             assert(len(srcvariances[srci]) == subcat[isub].numberOfParams())
             subcat.freezeParam(isub)
         print 'Blob', blobnumber, 'variances:', Time()-tlast
