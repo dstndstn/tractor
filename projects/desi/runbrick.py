@@ -1411,8 +1411,8 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
                       help="Force re-running the given stage(s) -- don't read from pickle.")
-    parser.add_option('-s', '--stage', dest='stage', default=1, type=int,
-                      help="Run up to the given stage")
+    parser.add_option('-s', '--stage', dest='stage', default=[1], type=int, action='append',
+                      help="Run up to the given stage(s)")
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
@@ -1455,8 +1455,9 @@ if __name__ == '__main__':
     initargs = dict(ps=ps)
 
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
-    
-    runstage(opt.stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-             prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick,
-             initial_args=initargs)
+
+    for stage in opt.stage:
+        runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
+                 prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick,
+                 initial_args=initargs)
     
