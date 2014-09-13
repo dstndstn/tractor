@@ -1287,11 +1287,6 @@ def stage103(T=None, coimgs=None, cons=None,
     print 'kwargs:', kwargs.keys()
     del kwargs
 
-    # for tim in tims:
-    #     print 'Fitting PsfEx model for', tim.name
-    #     tim.psfex.ensureFit()
-    #     tim.psf = tim.psfex
-
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
     plt.title('Image')
@@ -1323,28 +1318,17 @@ def stage103(T=None, coimgs=None, cons=None,
     rgbmod = []
     rgbmod2 = []
     rgbresids = []
+    rgbchisqs = []
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
         comod = np.zeros((H,W), np.float32)
         comod2 = np.zeros((H,W), np.float32)
+        cochi2 = np.zeros((H,W), np.float32)
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
-
-            # Fit a MoG PSF model to the PsfEx model in the middle of the tim
-            # ox0,oy0 = orig_wcsxy0[itim]
-            # h,w = tim.shape
-            # psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-            # subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-            # tim.psf = subpsf
-
-            # if False:
-            #     print 'Fitting PsfEx model for', tim.name
-            #     tim.psfex.savesplinedata = True
-            #     tim.psfex.ensureFit()
-            #     tim.psf = tim.psfex
 
             mod = tractor.getModelImage(tim)
 
@@ -1368,6 +1352,10 @@ def stage103(T=None, coimgs=None, cons=None,
             noise = np.random.normal(size=ie.shape) / ie
             noise[ie == 0] = 0.
             comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
+
+            cochi2[Yo,Xo] += ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) *
+                              tim.getInvError()[Yi,Xi])**2
+            
         comod  /= np.maximum(cons[iband], 1)
         comod2 /= np.maximum(cons[iband], 1)
 
@@ -1376,10 +1364,12 @@ def stage103(T=None, coimgs=None, cons=None,
         resid = coimg - comod
         resid[cons[iband] == 0] = np.nan
         rgbresids.append(resid)
-
+        rgbchisqs.append(cochi2)
+        
         fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod)
         fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg)
         fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid)
+        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  chi2)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
@@ -1404,6 +1394,11 @@ def stage103(T=None, coimgs=None, cons=None,
     plt.clf()
     dimshow(get_rgb(rgbresids, bands, mnmx=(-30,30)))
     plt.title('Residuals (2)')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(get_rgb(rgbchisqs, bands, mnmx=(0,100)))
+    plt.title('Chi-squared')
     ps.savefig()
 
     return dict(tims=tims)
