@@ -1320,6 +1320,9 @@ def stage103(T=None, coimgs=None, cons=None,
     rgbresids = []
     rgbchisqs = []
 
+    chibins = np.linspace(-10., 10., 200)
+    chihist = [np.zeros(len(chibins)-1, int) for band in bands]
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
@@ -1352,9 +1355,11 @@ def stage103(T=None, coimgs=None, cons=None,
             noise = np.random.normal(size=ie.shape) / ie
             noise[ie == 0] = 0.
             comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
-
-            cochi2[Yo,Xo] += ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) *
-                              tim.getInvError()[Yi,Xi])**2
+            chi = ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) * tim.getInvError()[Yi,Xi])
+            cochi2[Yo,Xo] += chi**2
+            chi = chi[chi != 0.]
+            hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
+            chihist[iband] += hh
             
         comod  /= np.maximum(cons[iband], 1)
         comod2 /= np.maximum(cons[iband], 1)
@@ -1365,11 +1370,18 @@ def stage103(T=None, coimgs=None, cons=None,
         resid[cons[iband] == 0] = np.nan
         rgbresids.append(resid)
         rgbchisqs.append(cochi2)
-        
-        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod)
-        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg)
-        fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid)
-        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  cochi2)
+
+        # Plug the WCS header cards into these images
+        wcsfn = create_temp()
+        targetwcs.write_to(wcsfn)
+        hdr = fitsio.read_header(wcsfn)
+        os.remove(wcsfn)
+
+        wa = dict(clobber=True, header=hdr)
+        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
+        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg, **wa)
+        fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid, **wa)
+        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  cochi2, **wa)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
@@ -1402,6 +1414,20 @@ def stage103(T=None, coimgs=None, cons=None,
     mn,mx = 0, im.max()
     dimshow(np.clip((im - mn) / (mx - mn), 0., 1.))
     plt.title('Chi-squared')
+    ps.savefig()
+
+    plt.clf()
+    xx = np.repeat(chibins, 2)[1:-1]
+    for y,cc in zip(chihist, 'grm'):
+        plt.plot(xx, np.repeat(np.maximum(0.1, y),2), '-', color=cc)
+    plt.xlabel('Chi')
+    plt.yticks([])
+    plt.axvline(0., color='k', alpha=0.25)
+    ps.savefig()
+
+    plt.yscale('log')
+    mx = np.max([max(y) for y in chihist])
+    plt.ylim(1, mx * 1.05)
     ps.savefig()
 
     return dict(tims=tims)
