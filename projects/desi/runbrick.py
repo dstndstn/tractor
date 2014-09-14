@@ -1281,7 +1281,7 @@ def stage103(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
              bands=None, ps=None, brickid=None,
-             plots=False, tims=None, tractor=None,
+             plots=False, plots2=False, tims=None, tractor=None,
              **kwargs):
 
     print 'kwargs:', kwargs.keys()
@@ -1332,7 +1332,7 @@ def stage103(T=None, coimgs=None, cons=None,
 
             mod = tractor.getModelImage(tim)
 
-            if plots:
+            if plots2:
                 plt.clf()
                 dimshow(tim.getImage(), **tim.ima)
                 plt.title(tim.name)
@@ -1369,7 +1369,7 @@ def stage103(T=None, coimgs=None, cons=None,
         fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod)
         fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg)
         fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid)
-        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  chi2)
+        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  cochi2)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
@@ -1397,7 +1397,10 @@ def stage103(T=None, coimgs=None, cons=None,
     ps.savefig()
 
     plt.clf()
-    dimshow(get_rgb(rgbchisqs, bands, mnmx=(0,100)))
+    g,r,z = rgbchisqs
+    im = np.log10(np.dstack((z,r,g)))
+    mn,mx = 0, im.max()
+    dimshow(np.clip((im - mn) / (mx - mn), 0., 1.))
     plt.title('Chi-squared')
     ps.savefig()
 
@@ -1411,7 +1414,7 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
                       help="Force re-running the given stage(s) -- don't read from pickle.")
-    parser.add_option('-s', '--stage', dest='stage', default=[1], type=int, action='append',
+    parser.add_option('-s', '--stage', dest='stage', default=[], type=int, action='append',
                       help="Run up to the given stage(s)")
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
@@ -1423,6 +1426,8 @@ if __name__ == '__main__':
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
+    parser.add_option('--plots2', action='store_true',
+                      help='More plots?')
 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='pickles/runbrick-%(brick)06i-s%%(stage)03i.pickle')
@@ -1449,7 +1454,10 @@ if __name__ == '__main__':
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
     prereqs = {101: 0, 103:2, 203:2 }
-    opt.force.append(opt.stage)
+
+    if len(opt.stage) == 0:
+        opt.stage.append(1)
+    opt.force.extend(opt.stage)
 
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
     initargs = dict(ps=ps)
@@ -1458,6 +1466,7 @@ if __name__ == '__main__':
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-                 prereqs=prereqs, plots=opt.plots, W=opt.W, H=opt.H, brickid=opt.brick,
+                 prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
+                 W=opt.W, H=opt.H, brickid=opt.brick,
                  initial_args=initargs)
     
