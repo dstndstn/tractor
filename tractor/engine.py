@@ -313,24 +313,27 @@ class Images(MultiParams):
         return 'image%i' % j
 
 # These are free functions for multiprocessing in "getderivs2()"
-def getmodelimagestep((tr, j, k, p0, step)):
+def getmodelimagestep(X):
+    (tr, j, k, p0, step) = X
     im = tr.getImage(j)
     #print 'Setting param', p0, step, p0+step
     im.setParam(k, p0 + step)
     mod = tr.getModelImage(im)
     im.setParam(k, p0)
     return mod
-def getmodelimagefunc((tr, imj)):
+def getmodelimagefunc(X):
+    (tr, imj) = X
     #print 'getmodelimagefunc(): imj', imj, 'pid', os.getpid()
     return tr.getModelImage(imj)
-def getsrcderivs((src, img)):
+def getsrcderivs(X):
+    (src, img) = X
     return src.getParamDerivatives(img)
-
-def getimagederivs((imj, img, tractor, srcs)):
+def getimagederivs(X):
+    (imj, img, tractor, srcs) = X
     ## FIXME -- avoid shipping all images...
     return img.getParamDerivatives(tractor, srcs)
-
-def getmodelimagefunc2((tr, im)):
+def getmodelimagefunc2(X):
+    (tr, im) = X
     #print 'getmodelimagefunc2(): im', im, 'pid', os.getpid()
     #tr.images = Images(im)
     try:
@@ -1407,14 +1410,14 @@ class Tractor(MultiParams):
         result = OptResult()
 
         assert(not priors)
-        if rois is not None:
-            assert(len(rois) == len(imgs))
-
         scales = []
         imgs = self.getImages()
         for img in imgs:
             assert(isinstance(img.getPhotoCal(), LinearPhotoCal))
             scales.append(img.getPhotoCal().getScale())
+
+        if rois is not None:
+            assert(len(rois) == len(imgs))
 
         # HACK -- if sky=True, assume we are fitting the sky in ALL images.
         # We could ask which ones are thawed...

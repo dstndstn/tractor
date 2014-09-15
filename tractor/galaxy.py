@@ -47,7 +47,8 @@ class GalaxyShape(ParamList):
         '''
         re: arcsec
         ab: axis ratio, dimensionless, in [0,1]
-        phi: deg, "E of N", 0=direction of increasing Dec, 90=direction of increasing RA
+        phi: deg, "E of N", 0=direction of increasing Dec,
+        90=direction of increasing RA
         '''
         return dict(re=0, ab=1, phi=2)
 
@@ -55,31 +56,8 @@ class GalaxyShape(ParamList):
         return 're=%g, ab=%g, phi=%g' % (self.re, self.ab, self.phi)
 
     def __str__(self):
-        return '%s: re=%.2f, ab=%.2f, phi=%.1f' % (self.getName(), self.re, self.ab, self.phi)
-
-    # def getAllStepSizes(self, *args, **kwargs):
-    #     abstep = 0.01
-    #     if self.ab >= (1 - abstep):
-    #         abstep = -abstep
-    #     return [ 0.1, abstep, 1. ]
-
-    def getRaDecBasis(self):
-        '''
-        Returns a transformation matrix that takes vectors in r_e
-        to delta-RA, delta-Dec vectors.
-        '''
-        # convert re, ab, phi into a transformation matrix
-        phi = np.deg2rad(90 - self.phi)
-        # convert re to degrees
-        # HACK -- bring up to a minimum size to prevent singular matrix inversions
-        re_deg = max(1./30, self.re) / 3600.
-        cp = np.cos(phi)
-        sp = np.sin(phi)
-        # Squish, rotate, and scale into degrees.
-        # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
-        G = re_deg * np.array([[ cp, sp * self.ab],
-                               [-sp, cp * self.ab]])
-        return G
+        return ('%s: re=%.2f, ab=%.2f, phi=%.1f' %
+                (self.getName(), self.re, self.ab, self.phi))
 
     def getTensor(self, cd):
         # G takes unit vectors (in r_e) to degrees (~intermediate world coords)
@@ -90,6 +68,25 @@ class GalaxyShape(ParamList):
         print 'Basis', G, 'cd', cd
         T = np.dot(np.linalg.inv(G), cd)
         return T
+
+    def getRaDecBasis(self):
+        '''
+        Returns a transformation matrix that takes vectors in r_e
+        to delta-RA, delta-Dec vectors.
+        '''
+        # # convert re, ab, phi into a transformation matrix
+        phi = np.deg2rad(90 - self.phi)
+        # # convert re to degrees
+        # # HACK -- bring up to a minimum size to prevent singular
+        # # matrix inversions
+        re_deg = max(1./30, self.re) / 3600.
+        cp = np.cos(phi)
+        sp = np.sin(phi)
+        # Squish, rotate, and scale into degrees.
+        # resulting G takes unit vectors (in r_e) to degrees
+        # (~intermediate world coords)
+        return re_deg * np.array([[cp, sp*self.ab], [-sp, cp*self.ab]])
+
 
 class Galaxy(MultiParams):
     '''
