@@ -2418,6 +2418,14 @@ class Tractor(MultiParams):
             print 'Image finite?', np.all(np.isfinite(img.getImage()))
             print 'Mod finite?', np.all(np.isfinite(mod))
             print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
+            print 'Current thawed parameters:'
+            self.printThawedParams()
+            print 'Current sources:'
+            for src in self.getCatalog():
+                print '  ', src
+            print 'Image:', img
+            print 'sky:', img.getSky()
+            print 'psf:', img.getPsf()
         return chi
 
     def getNdata(self):

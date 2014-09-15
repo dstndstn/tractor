@@ -726,7 +726,9 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
     tfitall = tlast = Time()
     # Fit in order of flux
-    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+    #for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+    ii = np.argsort(-np.array(blobflux))[2634]
+    for blobnumber,iblob in enumerate([ii]):
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
         if len(Isrcs) == 0:
