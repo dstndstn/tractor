@@ -1,3 +1,7 @@
+# Cython
+#import pyximport; pyximport.install(pyimport=True)
+
+
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt

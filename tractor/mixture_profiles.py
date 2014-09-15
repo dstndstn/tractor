@@ -222,7 +222,6 @@ class MixtureOfGaussians():
         rtn = c_gauss_2d(pos, self.amp, self.mean, self.var, result)
         if rtn == -1:
             raise RuntimeError('c_gauss_2d failed')
-        x, y = meshgrid()
         return result
 
     def evaluate_grid_dstn(self, x0, x1, y0, y1, cx, cy):

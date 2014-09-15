@@ -9,6 +9,9 @@ mix: FORCE
 emfit: FORCE
 	$(MAKE) -C tractor emfit
 
+cython:
+	python setup-cython.py build_ext --inplace
+.PHONY: cython
 
 doc:
 	$(MAKE) -C doc -f Makefile.sphinx html PYTHONPATH=$(shell pwd):${PYTHONPATH}
