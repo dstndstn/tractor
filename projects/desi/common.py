@@ -158,7 +158,9 @@ class Decals(object):
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
     def get_ccds(self):
-        return fits_table(os.path.join(self.decals_dir, 'decals-ccds.fits'))
+        T = fits_table(os.path.join(self.decals_dir, 'decals-ccds.fits'))
+        T.extname = np.array([s.strip() for s in T.extname])
+        return T
 
     def get_zeropoint_for(self, im):
         if self.ZP is None:

@@ -206,6 +206,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     # Read images, clip to ROI
     tims = []
     for im in ims:
+        print
+        print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
         band = im.band
         wcs = im.read_wcs()
         imh,imw = wcs.imageh,wcs.imagew
@@ -229,8 +231,19 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         # cross = dx0*dy1 - dx1*dy0
         # print 'Cross:', cross
 
+        print 'Image slice: x [%i,%i], y [%i,%i]' % (x0,x1, y0,y1)
+        print 'Reading image from', im.imgfn, 'HDU', im.hdu
         img,imghdr = im.read_image(header=True, slice=slc)
+        print 'Reading invvar from', im.wtfn, 'HDU', im.hdu
         invvar = im.read_invvar(slice=slc)
+
+        print 'Invvar range:', invvar.min(), invvar.max()
+        if np.all(invvar == 0.):
+            print 'Skipping zero-invvar image'
+            continue
+        assert(np.all(np.isfinite(img)))
+        assert(np.all(np.isfinite(invvar)))
+        assert(not(np.all(invvar == 0.)))
 
         # header 'FWHM' is in pixels
         psf_fwhm = imghdr['FWHM']
@@ -239,7 +252,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         magzp = decals.get_zeropoint_for(im)
         print 'magzp', magzp
         zpscale = NanoMaggies.zeropointToScale(magzp)
-        #print 'zpscale', zpscale
+        print 'zpscale', zpscale
 
         medsky = np.median(img)
         img -= medsky
@@ -249,11 +262,19 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         invvar *= zpscale**2
         orig_zpscale = zpscale
         zpscale = 1.
+        assert(np.sum(invvar > 0) > 0)
         sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
+
+        assert(np.all(np.isfinite(invvar)))
+        assert(np.isfinite(sig1))
 
         # Clamp near-zero (incl negative!) invvars to zero
         thresh = 0.2 * (1./sig1**2)
         invvar[invvar < thresh] = 0
+
+        assert(np.all(np.isfinite(img)))
+        assert(np.all(np.isfinite(invvar)))
+        assert(np.isfinite(sig1))
 
         twcs = ConstantFitsWcs(wcs)
         if x0 or y0:

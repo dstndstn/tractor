@@ -2410,6 +2410,11 @@ class Tractor(MultiParams):
             img = self.getImage(imgi)
         mod = self.getModelImage(img, srcs=srcs, minsb=minsb)
         chi = (img.getImage() - mod) * img.getInvError()
+        if not np.all(np.isfinite(chi)):
+            print 'Chi not finite'
+            print 'Image finite?', np.all(np.isfinite(img.getImage()))
+            print 'Mod finite?', np.all(np.isfinite(mod))
+            print 'InvErr finite?', np.all(np.isfinite(img.getInvError()))
         return chi
 
     def getNdata(self):
