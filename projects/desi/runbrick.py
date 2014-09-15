@@ -1403,8 +1403,8 @@ def stage103(T=None, coimgs=None, cons=None,
         os.remove(wcsfn)
 
         wa = dict(clobber=True, header=hdr)
-        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
-        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), coimg, **wa)
+        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), coimg, **wa)
+        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
         fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid, **wa)
         fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  cochi2, **wa)
 
