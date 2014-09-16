@@ -24,7 +24,7 @@ from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
 from astrometry.sdss.fields import read_photoobjs_in_wcs
-from astrometry.sdss import DR9
+from astrometry.sdss import DR9, band_index
 
 from tractor import *
 from tractor.galaxy import *
@@ -99,7 +99,7 @@ def set_globals():
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
-def get_sdss_sources(bands, targetwcs, W, H):
+def get_sdss_sources(bands, targetwcs):
     # FIXME?
     margin = 0.
 
@@ -195,7 +195,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     #check_photometric_calib(ims, cat, ps)
     #cat,T = get_se_sources(ims, catband, targetwcs, W, H)
 
-    cat,T = get_sdss_sources(bands, targetwcs, W, H)
+    cat,T = get_sdss_sources(bands, targetwcs)
 
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
@@ -543,7 +543,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         rtn[k] = locals()[k]
     return rtn
 
-def stage101(coimgs=None, cons=None, bands=None, ps=None, **kwargs):
+def stage101(coimgs=None, cons=None, bands=None, ps=None,
+             targetwcs=None, **kwargs):
     # RGB image
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
@@ -554,6 +555,47 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None, **kwargs):
     dimshow(get_rgb(coimgs, bands)[200:1200, 1700:2700,:])
     ps.savefig()
 
+    # cluster zoom-in
+    x0,x1, y0,y1 = 1700,2700, 200,1200
+    clco = [co[y0:y1, x0:x1] for co in coimgs]
+    clW, clH = x1-x0, y1-y0
+    clwcs = targetwcs.get_subimage(x0, y0, clW, clH)
+
+    # find SDSS fields within that WCS
+    sdss = DR9(basedir=photoobjdir)
+    sdss.useLocalTree()
+    wfn = sdss.filenames.get('window_flist', None)
+    print 'Searching for run,camcol,fields with radius', rad, 'deg'
+    clra,cldec = clwcs.get_center()
+    clrad = clwcs.get_radius()
+    RCF = radec_to_sdss_rcf(clra, cldec, radius=clrad*60., tablefn=wfn)
+    print 'Found %i fields possibly in range' % len(RCF)
+
+    sdsscoimgs = [np.zeros((clH,clW),np.float32) for band in bands]
+    sdsscons   = [np.zeros((clH,clW),np.float32) for band in bands]
+    for run,camcol,field,r,d in RCF:
+        for iband,band in enumerate(bands):
+            bandnum = band_index(band)
+            frame = sdss.readFrame(run, camcol, field, bandnum)
+            print 'Got frame', frame
+            h,w = frame.getImageShape()
+            simg = frame.getImage()
+            wcs = AsTransWrapper(frame.astrans, w, h)
+            Yo,Xo,Yi,Xi,nil = resample_with_wcs(clwcs, wcs, [], 3)
+            sdsscoimgs[iband][Yo,Xo] += simg[Yi,Xi]
+            sdsscons  [iband][Yo,Xo] += 1
+    for co,n in zip(sdsscoimgs, sdsscons):
+        co /= np.maximum(1e-6, n)
+
+    plt.clf()
+    dimshow(get_rgb(sdsscoimgs, bands))
+    plt.title('SDSS')
+    ps.savefig()
+    
+    #wa = dict(clobber=True, header=hdr)
+    #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
+
+    
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                chi_plots=True):
