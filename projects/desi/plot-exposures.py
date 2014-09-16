@@ -8,13 +8,18 @@ from astrometry.util.util import *
 from astrometry.util.starutil_numpy import *
 from astrometry.blind.plotstuff import *
 
+from common import *
+
 if __name__ == '__main__':
 
-    decals_dir = os.environ.get('DECALS_DIR')
-    B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
+    decals = Decals()
+    #decals_dir = os.environ.get('DECALS_DIR')
+    #B = fits_table(os.path.join(decals_dir, 'decals-bricks.fits'))
     #B = fits_table('bricks.fits')
     #T = fits_table('ccds.fits')#-20140810.fits')
-    T = fits_table(os.path.join(decals_dir, 'decals-ccds.fits'))
+    #T = fits_table(os.path.join(decals_dir, 'decals-ccds.fits'))
+    B = decals.get_bricks()
+    T = decals.get_ccds()
     
     # plt.clf()
     # plt.plot(T.ra, T.dec, 'b.')
@@ -36,22 +41,47 @@ if __name__ == '__main__':
     #gridsize = 10.
     #W,H = 1000,500
 
-    allsky = False
-    gridsize = 1.
-    #rc,dc = 245,8
-    #width = 6.
-    rc,dc = 244,8
-    #width = 1.
-    width = 2.5
-    W,H = 1000,1000
-    sz = width * 0.6
-    T.cut((np.abs(T.ra - rc) < sz) * (np.abs(T.dec - dc) < sz))
-    print 'Cut to', len(T), 'in range'
-    print 'Bands', np.unique(T.filter)
+    if False:
+        hammer = False
+        allsky = False
+        gridsize = 1.
+        #rc,dc = 245,8
+        #width = 6.
+        rc,dc = 244,8
+        #width = 1.
+        width = 2.5
+        W,H = 1000,1000
+        sz = width * 0.6
+        T.cut((np.abs(T.ra - rc) < sz) * (np.abs(T.dec - dc) < sz))
+        print 'Cut to', len(T), 'in range'
+        print 'Bands', np.unique(T.filter)
+        plot_bricks = True
+    else:
 
-    B.index = np.arange(len(B))
-    B.cut((np.abs(B.ra - rc) < sz) * (np.abs(B.dec - dc) < sz))
-    print len(B), 'bricks in range'
+        hammer = True
+        allsky = False
+        gridsize = 30
+        decgridsize = 15
+        #rc,dc = 180, 0
+        #width = 180
+        #rc,dc = 280, 0
+        #width = 120
+        #rc,dc = 300, 0
+        #width = 200
+        #W,H = 1000,500
+
+        rc,dc = 300, 15
+        width = 170
+        W,H = 1000,500
+        sz = width
+
+        plot_bricks = False
+        
+
+    if plot_bricks:
+        B.index = np.arange(len(B))
+        B.cut((np.abs(B.ra - rc) < sz) * (np.abs(B.dec - dc) < sz))
+        print len(B), 'bricks in range'
     
     #r0,r1 = T.ra.min(),  T.ra.max()
     #d0,d1 = T.dec.min(), T.dec.max()
@@ -66,46 +96,125 @@ if __name__ == '__main__':
     plot = Plotstuff(outformat='png', size=(W,H),
                      rdw=(rc, dc, width))
 
-    if allsky:
-        plot.wcs = anwcs_create_allsky_hammer_aitoff(rc, dc, W, H)
-
-    cmap = { 'g':'green', 'r':'red', 'z':'magenta' }
+    if hammer:
+        if allsky:
+            plot.wcs = anwcs_create_allsky_hammer_aitoff(rc, dc, W, H)
+        else:
+            plot.wcs = anwcs_create_hammer_aitoff(rc, dc, (360./width), W, H,True)
+                                                  
+            
+    #cmap = { 'g':'green', 'r':'red', 'z':'magenta' }
+    cmap = { 'g':'darkgreen', 'r':'red', 'z':'magenta' }
 
     for band in np.unique(T.filter):
         TT = T[T.filter == band]
         print len(TT), 'in band', band
         
-        plot.color = 'verydarkblue'
+        #plot.color = 'verydarkblue'
+        plot.color = 'white'
         plot.plot('fill')
     
         #plot.color = 'green'
         plot.color = cmap.get(band, 'white')
         out = plot.outline
         out.fill = 1
+        out.stepsize = 5000
         plot.alpha = 0.3
-    
+
+        #plot.bg_rgba = (0.,0.,0.,0.)
+        plot.bg_rgba = (1.,1.,1.,1.)
+        
         for t in TT:
             wcs = Tan(*[float(x) for x in
                         [t.crval1, t.crval2, t.crpix1, t.crpix2,
                          t.cd1_1, t.cd1_2, t.cd2_1, t.cd2_2, t.width, t.height]])
             out.wcs = anwcs_new_tan(wcs)
-
             #out.fill = 1
             #plot.alpha = 0.3
             plot.plot('outline')
-
             # out.fill = 0
             # plot.lw = 1
             # plot.alpha = 0.6
             # plot.plot('outline')
 
+        plot.color = 'red'
+        plot.lw = 2
+        plot.apply_settings()
+        plot.line_constant_ra (120, -5, 30)
+        plot.line_constant_dec( 30, 120, 270)
+        plot.line_to_radec(270, 30)
+        plot.line_to_radec(240,  0)
+        plot.line_to_radec(230, -5)
+        #plot.line_to_radec(120, -5)
+        plot.line_constant_dec(-5, 230, 120)
+        plot.stroke()
+
+        plot.move_to_radec(315, -10)
+
+        #plot.line_to_radec(315, 15)
+        #plot.line_to_radec(330, 15)
+        #plot.line_to_radec(330, 30)
+        plot.line_constant_ra(315, -10, 30)
+
+        plot.line_to_radec(315, 30)
+        #plot.line_to_radec( 40, 30)
+
+        #plot.line_constant_dec(30, 330, 361)
+        plot.line_constant_dec(30, 315, 361)
+        plot.line_to_radec(360, 30)
+        plot.line_constant_dec(30, 0, 40)
+
+        #plot.line_constant_dec2(30, 330-360, 40, 1)
+
+        #plot.line_constant_dec(30, 0, 40)
+        plot.line_to_radec( 40, 10)
+        plot.line_to_radec( 65, 10)
+        plot.line_to_radec( 65,-10)
+        plot.line_to_radec( 45,-10)
+        plot.line_to_radec( 45,  5)
+        plot.line_to_radec(355,  5)
+        plot.line_to_radec(355,-10)
+        plot.line_to_radec(315,-10)
+        plot.stroke()
+
+        
+        #plot.move_to_radec(315, -10)
+        
         fn = 'ccd-%s1.png' % band
         plot.write(fn)
         print 'Wrote', fn
         
         plot.color = 'gray'
-        plot.plot_grid(gridsize, gridsize, gridsize*2, gridsize*2)
+        plot.alpha = 0.5
+        #plot.plot_grid(gridsize, gridsize, gridsize*2, gridsize*2)
 
+        # plot.grid.ralo = 240.
+        # plot.grid.rahi = 420.
+        # plot.grid.declo = -15.
+        # plot.grid.dechi =  30.
+        plot.plot_grid(gridsize, decgridsize)
+
+        plot.color = 'darkgray'
+        plot.fontsize = 12
+        plot.apply_settings()
+        #plot.valign = 'B'
+        #plot.halign = 'L'
+        #plot.label_offset_y = -5
+        #plot.label_offset_x = 5
+        plot.label_offset_y = -5
+        plot.label_offset_x = 0
+        plot.valign = 'B'
+        plot.halign = 'C'
+        for ra in range(180, 360, 30) + range(0, 90, 30):
+            plot.text_radec(ra, 30, '%i' % ra)
+        plot.valign = 'C'
+        plot.halign = 'L'
+        plot.label_offset_y = 0
+        plot.label_offset_x = 5
+        for dec in range(30, 60, 15):
+            plot.text_radec(300, dec, '%i' % dec)
+        plot.stroke()
+            
         plot.color = 'white'
         plot.alpha = 0.6
         plot.marker = 'circle'
@@ -114,19 +223,20 @@ if __name__ == '__main__':
         plot.apply_settings()
         #for r,d in zip(B.ra, B.dec):
         #    plot.marker_radec(r,d)
-        for r,d,ii in zip(B.ra, B.dec, B.index):
-            plot.text_radec(r, d, '%i' % ii)
-        plot.stroke()
+        if plot_bricks:
+            for r,d,ii in zip(B.ra, B.dec, B.index):
+                plot.text_radec(r, d, '%i' % ii)
+            plot.stroke()
 
-        pixscale = 0.27 / 3600.
-        out.fill = 0
-        plot.alpha = 0.8
-        for r,d in zip(B.ra, B.dec):
-            #bw,bh = 2048, 2048
-            bw,bh = 3600, 3600
-            wcs = Tan(r, d, bw/2, bh/2, -pixscale, 0., 0., pixscale, bw,bh)
-            out.wcs = anwcs_new_tan(wcs)
-            plot.plot('outline')
+            pixscale = 0.27 / 3600.
+            out.fill = 0
+            plot.alpha = 0.8
+            for r,d in zip(B.ra, B.dec):
+                #bw,bh = 2048, 2048
+                bw,bh = 3600, 3600
+                wcs = Tan(r, d, bw/2, bh/2, -pixscale, 0., 0., pixscale, bw,bh)
+                out.wcs = anwcs_new_tan(wcs)
+                plot.plot('outline')
 
         fn = 'ccd-%s2.png' % band
         plot.write(fn)
