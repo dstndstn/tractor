@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
+import os
 
 from astrometry.util.fits import *
 from astrometry.util.util import *
@@ -93,8 +94,11 @@ if __name__ == '__main__':
     #print 'Dec range', d0,d1
     #print 'Plot width:', width
     #W,H = 800,800
-    plot = Plotstuff(outformat='png', size=(W,H),
-                     rdw=(rc, dc, width))
+
+    #fmt = 'pdf'
+    fmt = 'png'
+    
+    plot = Plotstuff(outformat=fmt, size=(W,H), rdw=(rc, dc, width))
 
     if hammer:
         if allsky:
@@ -180,7 +184,7 @@ if __name__ == '__main__':
         
         #plot.move_to_radec(315, -10)
         
-        fn = 'ccd-%s1.png' % band
+        fn = 'ccd-%s1.%s' % (band,fmt)
         plot.write(fn)
         print 'Wrote', fn
         
@@ -195,13 +199,14 @@ if __name__ == '__main__':
         plot.plot_grid(gridsize, decgridsize)
 
         plot.color = 'darkgray'
-        plot.fontsize = 12
+        #plot.fontsize = 12
         plot.apply_settings()
         #plot.valign = 'B'
         #plot.halign = 'L'
         #plot.label_offset_y = -5
         #plot.label_offset_x = 5
-        plot.label_offset_y = -5
+        off = 10
+        plot.label_offset_y = -off
         plot.label_offset_x = 0
         plot.valign = 'B'
         plot.halign = 'C'
@@ -210,8 +215,8 @@ if __name__ == '__main__':
         plot.valign = 'C'
         plot.halign = 'L'
         plot.label_offset_y = 0
-        plot.label_offset_x = 5
-        for dec in range(30, 60, 15):
+        plot.label_offset_x = off
+        for dec in range(-30, 60, 15):
             plot.text_radec(300, dec, '%i' % dec)
         plot.stroke()
             
@@ -238,6 +243,12 @@ if __name__ == '__main__':
                 out.wcs = anwcs_new_tan(wcs)
                 plot.plot('outline')
 
-        fn = 'ccd-%s2.png' % band
+        fn = 'ccd-%s2.%s' % (band,fmt)
         plot.write(fn)
         print 'wrote', fn
+
+        if fmt == 'png':
+            cutfn = 'ccd-%s3.png' % band
+            cmd = 'pngtopnm %s | pamcut -top 50 -bottom 400 | pnmtopng > %s' % (fn, cutfn)
+            os.system(cmd)
+        
