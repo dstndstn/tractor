@@ -1,0 +1,86 @@
+#PBS -q serial
+#PBS -A cosmo
+#PBS -l walltime=12:00:00
+
+# Max memory for regular nodes:
+#PBS -l pvmem=20GB
+
+# Max memory for bigmem nodes:
+###PBS -l pvmem=44GB
+###PBS -l bigmem
+
+cd $PBS_O_WORKDIR
+
+echo "PWD: $(pwd)"
+export PYTHONPATH=${PYTHONPATH}:.
+
+echo "Modules:"
+module list
+
+echo "_ceres.so:"
+ldd tractor/_ceres.so
+
+echo "MKL:"
+ls -l /usr/common/usg/intel/composer_xe_2011_sp1.9.293/mkl/lib/intel64/
+
+echo "MKL:"
+find /usr/common/usg/intel/composer_xe_2011_sp1.9.293/mkl/lib -type f
+
+echo "CHOS: $CHOS"
+
+echo
+
+#python -u projects/desi/runbrick.py -s 0 --plots > log 2>&1
+#python -u projects/desi/runbrick.py -P pickles/runbrick-s%03i.pickle -s 1 --plots > log 2>&1
+
+#python -u projects/desi/runbrick.py -P pickles/runbrick-s%03i.pickle -s 1 > log1 2>&1
+
+#python -u projects/desi/runbrick.py -s 1 -P pickles/runbrick-tst-s%03i.pickle -W 400 -H 400 > log.tst 2>&1
+
+#python -u projects/desi/runbrick.py -s 103 -n -P pickles/runbrick-s%03i.pickle > log.103 2>&1
+
+#python -u projects/desi/runbrick.py -s 203 -P pickles/runbrick-s%03i.pickle > log.203 2>&1
+
+#python -u projects/desi/runbrick.py -s 1 -P pickles/runbrick-371589-s%03i.pickle -b 371589 > log.1 2>&1
+
+#python projects/desi/runbrick.py -P pickles/runbrick-371589-s%03i.pickle -b 371589 -s 1 -f 0 --plots > log.1 2>&1
+
+
+# 377306 -- initial test brick
+# 380156 -- a brick near the edge with little overlap
+# 371589 #  244.06993 7.00000 ? rich cluster at z=0.34 centered RA,DEC=244.04237, 6.9179 
+# 384424 #  242.65823 9.25000 ? cluster at z=0.52 centered RA,DEC=t 242.6550, 9.2294
+
+#BRICK=377306
+#BRICK=371589
+BRICK=384424
+ARGS="--brick $BRICK"
+
+# echo 'Starting s0'
+# date
+# time python -u projects/desi/runbrick.py -s 0 --plots $ARGS > log.$BRICK.0 2>&1
+
+echo
+echo 'Starting s1'
+date
+time python -u projects/desi/runbrick.py -s 1 --plots $ARGS > log.$BRICK.1 2>&1
+
+echo
+echo 'Starting s2'
+date
+time python -u projects/desi/runbrick.py -s 2 $ARGS > log.$BRICK.2 2>&1
+
+echo
+echo 'Starting s103'
+date
+time python -u projects/desi/runbrick.py -s 103 --plots $ARGS > log.$BRICK.103 2>&1
+date
+
+echo
+echo 'Starting s203'
+date
+time python -u projects/desi/runbrick.py -s 203 --plots $ARGS > log.$BRICK.203 2>&1
+date
+
+echo 'Done'
+

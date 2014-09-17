@@ -23,8 +23,8 @@ from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
-from astrometry.sdss.fields import read_photoobjs_in_wcs
-from astrometry.sdss import DR9, band_index
+from astrometry.sdss.fields import read_photoobjs_in_wcs, radec_to_sdss_rcf
+from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor import *
 from tractor.galaxy import *
@@ -546,28 +546,32 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 def stage101(coimgs=None, cons=None, bands=None, ps=None,
              targetwcs=None, **kwargs):
     # RGB image
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands))
-    ps.savefig()
+    # plt.clf()
+    # dimshow(get_rgb(coimgs, bands))
+    # ps.savefig()
 
     # cluster zoom-in
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands)[200:1200, 1700:2700,:])
-    ps.savefig()
+    #x0,x1, y0,y1 = 1700,2700, 200,1200
+    #x0,x1, y0,y1 = 1900,2500, 400,1000
+    x0,x1, y0,y1 = 1900,2400, 450,950
 
-    # cluster zoom-in
-    x0,x1, y0,y1 = 1700,2700, 200,1200
     clco = [co[y0:y1, x0:x1] for co in coimgs]
     clW, clH = x1-x0, y1-y0
     clwcs = targetwcs.get_subimage(x0, y0, clW, clH)
 
     # find SDSS fields within that WCS
-    sdss = DR9(basedir=photoobjdir)
-    sdss.useLocalTree()
-    wfn = sdss.filenames.get('window_flist', None)
-    print 'Searching for run,camcol,fields with radius', rad, 'deg'
-    clra,cldec = clwcs.get_center()
-    clrad = clwcs.get_radius()
+    #sdss = DR9(basedir=photoobjdir)
+    #sdss.useLocalTree()
+    sdss = DR9(basedir='tmp')
+    sdss.saveUnzippedFiles('tmp')
+
+    #wfn = sdss.filenames.get('window_flist', None)
+    wfn = os.path.join(os.environ['PHOTO_RESOLVE'], 'window_flist.fits')
+    
+    clra,cldec = clwcs.radec_center()
+    clrad = clwcs.radius()
+    clrad = clrad + np.hypot(10.,14.)/2./60.
+    print 'Searching for run,camcol,fields with radius', clrad, 'deg'
     RCF = radec_to_sdss_rcf(clra, cldec, radius=clrad*60., tablefn=wfn)
     print 'Found %i fields possibly in range' % len(RCF)
 
@@ -576,22 +580,48 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     for run,camcol,field,r,d in RCF:
         for iband,band in enumerate(bands):
             bandnum = band_index(band)
+            sdss.retrieve('frame', run, camcol, field, band)
             frame = sdss.readFrame(run, camcol, field, bandnum)
             print 'Got frame', frame
             h,w = frame.getImageShape()
             simg = frame.getImage()
-            wcs = AsTransWrapper(frame.astrans, w, h)
-            Yo,Xo,Yi,Xi,nil = resample_with_wcs(clwcs, wcs, [], 3)
+            wcs = AsTransWrapper(frame.astrans, w, h, 0.5, 0.5)
+            try:
+                Yo,Xo,Yi,Xi,nil = resample_with_wcs(clwcs, wcs, [], 3)
+            except OverlapError:
+                continue
             sdsscoimgs[iband][Yo,Xo] += simg[Yi,Xi]
             sdsscons  [iband][Yo,Xo] += 1
     for co,n in zip(sdsscoimgs, sdsscons):
         co /= np.maximum(1e-6, n)
 
+    # plt.clf()
+    # plt.loglog(clco[0].ravel(), sdsscoimgs[0].ravel(), 'm.', alpha=0.1)
+    # plt.loglog(clco[1].ravel(), sdsscoimgs[1].ravel(), 'r.', alpha=0.1)
+    # plt.loglog(clco[2].ravel(), sdsscoimgs[2].ravel(), 'g.', alpha=0.1)
+    # ps.savefig()
+    # 
+    # for i,c in enumerate(['m','r','g']):
+    #     plt.clf()
+    #     plt.loglog(sdsscoimgs[i].ravel(), clco[i].ravel()/sdsscoimgs[i].ravel(), '.', color=c, alpha=0.1)
+    #     plt.ylim(0.1, 10.0)
+    #     ps.savefig()
+
+    plt.figure(figsize=(6,6))
+    plt.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.995)
+
+    # cluster zoom-in
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands)[y0:y1, x0:x1])
+    plt.xticks([]); plt.yticks([])
+    ps.savefig()
+
     plt.clf()
     dimshow(get_rgb(sdsscoimgs, bands))
-    plt.title('SDSS')
+    plt.xticks([]); plt.yticks([])
+    #plt.title('SDSS')
     ps.savefig()
-    
+
     #wa = dict(clobber=True, header=hdr)
     #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
 
