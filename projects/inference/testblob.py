@@ -32,10 +32,17 @@ if __name__ == '__main__':
     for src in srcs:
         print '  ', src
 
-    from projects.desi.desi_common import prepare_fits_catalog
-    T,hdr = prepare_fits_catalog(Catalog(*srcs), None, None, None, bands, None)
-    T.writeto('cat.fits', header=hdr)
-    
+    # from projects.desi.desi_common import prepare_fits_catalog
+    # T,hdr = prepare_fits_catalog(Catalog(*srcs), None, None, None, bands, None)
+    # T.writeto('cat.fits', header=hdr)
+
+    fn = sdss.retrieve('photoField', run, camcol, field)
+    print 'Retrieved', fn
+    F = fits_table(fn)
+    F.cut((F.run == run) * (F.camcol == camcol) * (F.field == field))
+    print len(F), 'fields'
+    assert(len(F) == 1)
+    F = F[0]
         
     tims = []
     tinfs = []
@@ -46,7 +53,20 @@ if __name__ == '__main__':
                                           roiradecsize=(ra, dec, pixradius),
                                           nanomaggies=True)
         print 'Got tim:', tim
-        print 'tinfo:', tinfo
+        #print 'tinfo:', tinfo
+        frame = sdss.readFrame(run, camcol, field, band)
+
+        x,y = tim.getWcs().positionToPixel(RaDecPos(ra, dec))
+        x,y = int(x), int(y)
+        tim.sdss_calib = np.median(frame.getCalibVec())
+        tim.sdss_sky = frame.getSkyAt(x,y)
+        #print 'Calibvec:', frame.getCalibVec()
+        #print 'Sky:', frame.getSkyAt(500, 500)
+
+        iband = band_index(band)
+        tim.sdss_gain = F.gain[iband]
+        tim.sdss_darkvar = F.dark_variance[iband]
+        
         tims.append(tim)
         tinfs.append(tinfo)
         if band == 'r':
@@ -65,6 +85,15 @@ if __name__ == '__main__':
     for src in srcs:
         print '  ', src
 
+    T = fits_table()
+    T.ra  = [src.getPosition().ra  for src in srcs]
+    T.dec = [src.getPosition().dec for src in srcs]
+    for band in bands:
+        T.set('psfflux_%s' % band,
+              [src.getBrightness().getBand(band) for src in srcs])
+    T.writeto('cat.fits')
+    
+        
             
 
     for band,tim,tinfo in zip(bands, tims, tinfs):
@@ -129,6 +158,15 @@ if __name__ == '__main__':
             hdr.add_record(dict(name=key, value=orighdr[key],
                                 comment=orighdr.get_comment(key)))
 
+        hdr.add_record(dict(name='CALIB', value=tim.sdss_calib,
+                            comment='Mean "calibvec" value for this image'))
+        hdr.add_record(dict(name='SKY', value=tim.sdss_sky,
+                            comment='SDSS sky estimate at image center'))
+        hdr.add_record(dict(name='GAIN', value=tim.sdss_gain,
+                            comment='SDSS gain'))
+        hdr.add_record(dict(name='DARKVAR', value=tim.sdss_darkvar,
+                            comment='SDSS dark variance'))
+            
         tim.getPsf().toFitsHeader(hdr, 'PSF_')
             
         fn = 'stamp-%s.fits' % band

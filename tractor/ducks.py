@@ -92,9 +92,10 @@ class Params(object):
 class ImageCalibration(object):
     def toFitsHeader(self, hdr, prefix=''):
         params = self.getAllParams()
+        names = self.getParamNames()
         for i in range(len(params)):
             k = prefix + 'P%i' % i
-            hdr.add_record(dict(name=k, value=params[i]))
+            hdr.add_record(dict(name=k, value=params[i], comment=names[i]))
 
     @classmethod
     def fromFitsHeader(clazz, hdr, prefix=''):

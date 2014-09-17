@@ -663,7 +663,7 @@ def get_tractor_image(run, camcol, field, bandname,
     stripe = hdr.get('STRIPE')
     strip = hdr.get('STRIP')
     obj = hdr.get('OBJECT')
-    info.update(tai=tai, stripe=stripe, strip=strip, object=obj)
+    info.update(tai=tai, stripe=stripe, strip=strip, object=obj, hdr=hdr)
 
     tsf = sdss.readTsField(run, camcol, field, rerun)
     astrans = tsf.getAsTrans(bandnum)
@@ -925,7 +925,7 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     stripe = hdr.get('STRIPE')
     strip = hdr.get('STRIP')
     obj = hdr.get('OBJECT')
-    info.update(tai=tai, stripe=stripe, strip=strip, object=obj)
+    info.update(tai=tai, stripe=stripe, strip=strip, object=obj, hdr=hdr)
 
     astrans = frame.getAsTrans()
     wcs = SdssWcs(astrans)
