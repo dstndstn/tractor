@@ -14,8 +14,17 @@ from astrometry.sdss import *
 from tractor import *
 from tractor.sdss import *
 
+def _bounce_one_blob((teff,dteff,ra,dec)):
+    try:
+        oneblob(ra,dec,teff,dteff)
+    except:
+        print 'Error running oneblob:'
+        import traceback
+        traceback.print_exc()
+        print
+    
 def main():
-    for teff, dteff, ra,dec in [
+    stars = [
         (0., 0., 270.0, 0.003),
         # David's nearby pairs of F stars
         (3900., 0., 118.37066, 52.527073),
@@ -29,14 +38,23 @@ def main():
         (8088.685, 0.2436366, 253.11475, 11.60716),
         (8395.096, 0.7563477, 188.34439, 63.442057),
         (9201.74,  178, 93.971719, 0.56302169),
-        ]:
-        oneblob(ra,dec, teff, dteff)
+        ]
+
+    if True:
+        from astrometry.util.multiproc import *
+        mp = multiproc(4)
+        mp.map(_bounce_one_blob, stars)
+
+    else:
+        for teff, dteff, ra,dec in stars:
+            oneblob(ra,dec, teff, dteff)
         
 def oneblob(ra, dec, teff, dteff):
 
     # Resample test blobs to a common pixel grid.
     sdss = DR9()
-
+    sdss.saveUnzippedFiles('.')
+    
     pixscale = 0.396
     pixradius = 25
     bands = 'ugriz'
