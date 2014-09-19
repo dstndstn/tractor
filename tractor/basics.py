@@ -34,6 +34,26 @@ class TractorWCSWrapper(object):
         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
         return rd.ra, rd.dec
     def radec2pixelxy(self, ra, dec):
+        # Vectorized?
+        if hasattr(ra, '__len__') or hasattr(dec, '__len__'):
+            try:
+                b = np.broadcast(ra, dec)
+                ok = np.ones(b.shape, bool)
+                x  = np.zeros(b.shape)
+                y  = np.zeros(b.shape)
+                rd = RaDecPos(0.,0.)
+                for i,(r,d) in enumerate(b):
+                    rd.ra = r
+                    rd.dec = d
+                    xi,yi = self.wcs.positionToPixel(rd)
+                    x.flat[i] = xi - self.x0 + 1
+                    y.flat[i] = yi - self.y0 + 1
+                x += 1 - self.x0
+                y += 1 - self.y0
+                return ok,x,y
+            except:
+                pass
+            
         x,y = self.wcs.positionToPixel(RaDecPos(ra, dec))
         return True, x-self.x0+1, y-self.y0+1
 

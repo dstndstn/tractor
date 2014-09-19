@@ -932,10 +932,11 @@ def _get_tractor_image_dr8(run, camcol, field, bandname, sdss=None,
     #print 'Created SDSS Wcs:', wcs
     #print '(x,y) = 1,1 -> RA,Dec', wcs.pixelToPosition(1,1)
 
-    roi,hasroi = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
+    X = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
                                roiradecbox=roiradecbox)
-    if roi is None:
+    if X is None:
         return None,None
+    roi,hasroi = X
     info.update(roi=roi)
     x0,x1,y0,y1 = roi
 
