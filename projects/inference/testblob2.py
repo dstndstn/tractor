@@ -60,7 +60,7 @@ def oneblob(ra, dec, teff, dteff):
     bands = 'ugriz'
 
     stamp_pattern = 'stamp-%%s-%.4f-%.4f.fits' % (ra, dec)
-    catfn = 'cat-%.4f-%.4f.fits'
+    catfn = 'cat-%.4f-%.4f.fits' % (ra,dec)
 
     plots = False
     srcband = 'r'
@@ -108,6 +108,7 @@ def oneblob(ra, dec, teff, dteff):
         TT.append(T)
     T = merge_tables(TT)
     T.writeto(catfn)
+
 
     written = set()
             
