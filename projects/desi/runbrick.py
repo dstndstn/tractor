@@ -119,6 +119,9 @@ def get_sdss_sources(bands, targetwcs):
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
     print 'Got', len(objs), 'photoObjs'
 
+    # It can be string-valued
+    T.objid = np.array([int(x) if len(x) else 0 for x in T.objid])
+
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
         bands=bands,
@@ -131,6 +134,7 @@ def get_sdss_sources(bands, targetwcs):
     return cat, objs
 
 def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
+           target_extent=None,
            **kwargs):
     t0 = tlast = Time()
 
@@ -155,6 +159,13 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     catband = 'r'
 
     targetwcs = wcs_for_brick(brick, W=W, H=H)
+
+    if target_extent is not None:
+        (x0,x1,y0,y1) = target_extent
+        W = x1-x0
+        H = y1-y0
+        targetwcs = targetwcs.get_subimage(x0, y0, W, H)
+    
     targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                          [(1,1),(W,1),(W,H),(1,H),(1,1)]])
 
@@ -544,20 +555,116 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     return rtn
 
 def stage101(coimgs=None, cons=None, bands=None, ps=None,
-             targetwcs=None, **kwargs):
+             targetwcs=None,
+             T=None, cat=None, tims=None, tractor=None, **kwargs):
     # RGB image
     # plt.clf()
     # dimshow(get_rgb(coimgs, bands))
     # ps.savefig()
 
+    print 'T:'
+    T.about()
+
     # cluster zoom-in
     #x0,x1, y0,y1 = 1700,2700, 200,1200
     #x0,x1, y0,y1 = 1900,2500, 400,1000
-    x0,x1, y0,y1 = 1900,2400, 450,950
+    #x0,x1, y0,y1 = 1900,2400, 450,950
+    x0,x1, y0,y1 = 0,500, 0,500
 
     clco = [co[y0:y1, x0:x1] for co in coimgs]
     clW, clH = x1-x0, y1-y0
     clwcs = targetwcs.get_subimage(x0, y0, clW, clH)
+
+    plt.figure(figsize=(6,6))
+    plt.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.995)
+    ps.suffixes = ['png','pdf']
+
+    # cluster zoom-in
+    plt.clf()
+    dimshow(get_rgb(clco, bands), ticks=False)
+    ps.savefig()
+
+    # Initial model (SDSS only)
+    T.objid = np.array([int(x) if len(x) else 0 for x in T.objid])
+    scat = Catalog(*[cat[i] for i in np.flatnonzero(T.objid)])
+    sedcat = Catalog(*[cat[i] for i in np.flatnonzero(T.objid == 0)])
+
+    print len(cat), 'total sources'
+    print len(scat), 'SDSS sources'
+    print len(sedcat), 'SED-matched sources'
+    tr = Tractor(tractor.images, scat)
+
+
+    comods = []
+    for iband,band in enumerate(bands):
+        comod = np.zeros((clH,clW))
+        con = np.zeros((clH,clW))
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            mod = tr.getModelImage(tim)
+            Yo -= y0
+            Xo -= x0
+            K = np.nonzero((Yo >= 0) * (Yo < clH) * (Xo >= 0) * (Xo < clW))
+            Xo,Yo,Xi,Yi = Xo[K],Yo[K],Xi[K],Yi[K]
+            comod[Yo,Xo] += mod[Yi,Xi]
+            con[Yo,Xo] += 1
+        comod /= np.maximum(con, 1)
+        comods.append(comod)
+    
+    plt.clf()
+    dimshow(get_rgb(comods, bands), ticks=False)
+    ps.savefig()
+
+    # Overplot SDSS sources
+    ax = plt.axis()
+    for src in scat:
+        rd = src.getPosition()
+        ok,x,y = clwcs.radec2pixelxy(rd.ra, rd.dec)
+        cc = (0,1,0)
+        if isinstance(src, PointSource):
+            plt.plot(x-1, y-1, 'o', mec=cc, mfc='none', ms=10, mew=1.5)
+        else:
+            plt.plot(x-1, y-1, 'o', mec='r', mfc='none', ms=10, mew=1.5)
+    plt.axis(ax)
+    ps.savefig()
+
+    # Add SED-matched detections
+    for src in sedcat:
+        rd = src.getPosition()
+        ok,x,y = clwcs.radec2pixelxy(rd.ra, rd.dec)
+        plt.plot(x-1, y-1, 'o', mec='c', mfc='none', ms=10, mew=1.5)
+    plt.axis(ax)
+    ps.savefig()
+
+    # Mark SED-matched detections on image
+    plt.clf()
+    dimshow(get_rgb(clco, bands), ticks=False)
+    ax = plt.axis()
+    for src in sedcat:
+        rd = src.getPosition()
+        ok,x,y = clwcs.radec2pixelxy(rd.ra, rd.dec)
+        #plt.plot(x-1, y-1, 'o', mec='c', mfc='none', ms=10, mew=1.5)
+        x,y = x-1, y-1
+        hi,lo = 20,7
+        # plt.plot([x-lo,x-hi],[y,y], 'c-')
+        # plt.plot([x+lo,x+hi],[y,y], 'c-')
+        # plt.plot([x,x],[y+lo,y+hi], 'c-')
+        # plt.plot([x,x],[y-lo,y-hi], 'c-')
+        plt.annotate('', (x,y+lo), xytext=(x,y+hi),
+                     arrowprops=dict(color='c', width=1, frac=0.3, headwidth=5))
+    plt.axis(ax)
+    ps.savefig()
+
+    # plt.clf()
+    # dimshow(get_rgb([gaussian_filter(x,1) for x in clco], bands), ticks=False)
+    # ps.savefig()
+
+    # Resid
+    # plt.clf()
+    # dimshow(get_rgb([im-mo for im,mo in zip(clco,comods)], bands), ticks=False)
+    # ps.savefig()
 
     # find SDSS fields within that WCS
     #sdss = DR9(basedir=photoobjdir)
@@ -595,6 +702,12 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     for co,n in zip(sdsscoimgs, sdsscons):
         co /= np.maximum(1e-6, n)
 
+    plt.clf()
+    dimshow(get_rgb(sdsscoimgs, bands), ticks=False)
+    #plt.title('SDSS')
+    ps.savefig()
+
+
     # plt.clf()
     # plt.loglog(clco[0].ravel(), sdsscoimgs[0].ravel(), 'm.', alpha=0.1)
     # plt.loglog(clco[1].ravel(), sdsscoimgs[1].ravel(), 'r.', alpha=0.1)
@@ -606,21 +719,6 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     #     plt.loglog(sdsscoimgs[i].ravel(), clco[i].ravel()/sdsscoimgs[i].ravel(), '.', color=c, alpha=0.1)
     #     plt.ylim(0.1, 10.0)
     #     ps.savefig()
-
-    plt.figure(figsize=(6,6))
-    plt.subplots_adjust(left=0.005, right=0.995, bottom=0.005, top=0.995)
-
-    # cluster zoom-in
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands)[y0:y1, x0:x1])
-    plt.xticks([]); plt.yticks([])
-    ps.savefig()
-
-    plt.clf()
-    dimshow(get_rgb(sdsscoimgs, bands))
-    plt.xticks([]); plt.yticks([])
-    #plt.title('SDSS')
-    ps.savefig()
 
     #wa = dict(clobber=True, header=hdr)
     #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
@@ -1562,6 +1660,8 @@ if __name__ == '__main__':
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
 
+    parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
+
     opt,args = parser.parse_args()
 
     Time.add_measurement(MemMeas)
@@ -1578,7 +1678,6 @@ if __name__ == '__main__':
 
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
-    prereqs = {101: 0, 103:2, 203:2 }
 
     if len(opt.stage) == 0:
         opt.stage.append(1)
@@ -1589,9 +1688,11 @@ if __name__ == '__main__':
 
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
+    prereqs = {101: 1, 103:2, 203:2 }
+
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
-                 W=opt.W, H=opt.H, brickid=opt.brick,
+                 W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                  initial_args=initargs)
     
