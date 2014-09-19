@@ -94,7 +94,7 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
 
 def set_globals():
     global imchi
-    plt.figure(figsize=(12,9));
+    plt.figure(figsize=(12,9))
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
@@ -726,7 +726,7 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
-               chi_plots=True):
+               chi_plots=True, rgb_plots=False, main_plot=True):
     subims = [[] for m in mods]
     chis = dict([(b,[]) for b in bands])
     
@@ -758,8 +758,9 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
             mn,mx = -10.*tim.sig1, 30.*tim.sig1
 
             if make_coimgs:
-                coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi]
-                cons  [iband][Yo,Xo] += 1
+                nn = (tim.getInvError()[Yi,Xi] > 0)
+                coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+                cons  [iband][Yo,Xo] += nn
                 
         if make_coimgs:
             coimgs[iband] /= np.maximum(cons[iband], 1)
@@ -771,11 +772,14 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
             
         for comod in comods:
             comod /= np.maximum(comodn, 1)
-        ima = dict(vmin=mn, vmax=mx)
+        ima = dict(vmin=mn, vmax=mx, ticks=False)
         for subim,comod,cochi in zip(subims, comods, cochis):
             subim.append((coimg, coimgn, comod, ima, cochi))
 
     # Plot per-band image, model, and chi coadds, and RGB images
+    rgba = dict(ticks=False)
+    rgbs = []
+    plt.figure(1)
     for i,subim in enumerate(subims):
         plt.clf()
         rows,cols = 3,5
@@ -788,36 +792,55 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
             resid = img - mod
             resid[imgn == 0] = np.nan
             resids.append(resid)
-            plt.subplot(rows,cols,1 + j + 0)
-            dimshow(img, **ima)
-            plt.subplot(rows,cols,1 + j + cols)
-            dimshow(mod, **ima)
-            plt.subplot(rows,cols,1 + j + cols*2)
-            #dimshow(-chi, **imchi)
-            #dimshow(imgn, vmin=0, vmax=3)
-            dimshow(resid, nancolor='r')
-        plt.subplot(rows,cols, 4)
-        dimshow(get_rgb(imgs, bands))
-        plt.subplot(rows,cols, cols+4)
-        dimshow(get_rgb(themods, bands))
-        plt.subplot(rows,cols, cols*2+4)
-        dimshow(get_rgb(resids, bands, mnmx=(-10,10)))
 
-        mnmx = -5,300
-        kwa = dict(mnmx=mnmx, arcsinh=1)
-        plt.subplot(rows,cols, 5)
-        dimshow(get_rgb(imgs, bands, **kwa))
-        plt.subplot(rows,cols, cols+5)
-        dimshow(get_rgb(themods, bands, **kwa))
-        plt.subplot(rows,cols, cols*2+5)
-        mnmx = -100,100
-        kwa = dict(mnmx=mnmx, arcsinh=1)
-        dimshow(get_rgb(resids, bands, **kwa))
-        plt.suptitle(titles[i])
-        ps.savefig()
+            if main_plot:
+                plt.subplot(rows,cols,1 + j + 0)
+                dimshow(img, **ima)
+                plt.subplot(rows,cols,1 + j + cols)
+                dimshow(mod, **ima)
+                plt.subplot(rows,cols,1 + j + cols*2)
+                # dimshow(-chi, **imchi)
+                # dimshow(imgn, vmin=0, vmax=3)
+                dimshow(resid, nancolor='r')
+        rgb = get_rgb(imgs, bands)
+        if i == 0:
+            rgbs.append(rgb)
+        if main_plot:
+            plt.subplot(rows,cols, 4)
+            dimshow(rgb, **rgba)
+        rgb = get_rgb(themods, bands)
+        rgbs.append(rgb)
+        if main_plot:
+            plt.subplot(rows,cols, cols+4)
+            dimshow(rgb, **rgba)
+            plt.subplot(rows,cols, cols*2+4)
+            dimshow(get_rgb(resids, bands, mnmx=(-10,10)), **rgba)
+
+            mnmx = -5,300
+            kwa = dict(mnmx=mnmx, arcsinh=1)
+            plt.subplot(rows,cols, 5)
+            dimshow(get_rgb(imgs, bands, **kwa), **rgba)
+            plt.subplot(rows,cols, cols+5)
+            dimshow(get_rgb(themods, bands, **kwa), **rgba)
+            plt.subplot(rows,cols, cols*2+5)
+            mnmx = -100,100
+            kwa = dict(mnmx=mnmx, arcsinh=1)
+            dimshow(get_rgb(resids, bands, **kwa), **rgba)
+            plt.suptitle(titles[i])
+            ps.savefig()
+
+    if rgb_plots:
+        # RGB image and model
+        plt.figure(2)
+        for rgb in rgbs:
+            plt.clf()
+            dimshow(rgb, **rgba)
+            ps.savefig()
 
     if not chi_plots:
         return
+
+    plt.figure(1)
     # Plot per-image chis: in a grid with band along the rows and images along the cols
     cols = max(len(v) for v in chis.values())
     rows = len(bands)
@@ -832,7 +855,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                 dimshow(-chi, **imchi)
                 plt.xticks([]); plt.yticks([])
                 plt.title(tims[itim].name)
-        plt.suptitle(titles[imod])
+        #plt.suptitle(titles[imod])
         ps.savefig()
 
 
@@ -861,9 +884,11 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None, brickid=None,
            bands=None, ps=None, tims=None,
-           plots=False,
+           plots=False, plots2=False,
            **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+
+    ps.skipto(10)
 
     for tim in tims:
         #print 'PsfEx saved params:', tim.psfex.splinedata
@@ -896,9 +921,14 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
 
     tfitall = tlast = Time()
     # Fit in order of flux
-    #for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-    ii = np.argsort(-np.array(blobflux))[2634]
-    for blobnumber,iblob in enumerate([ii]):
+    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+        # ii = np.argsort(-np.array(blobflux))[2634]
+        # for blobnumber,iblob in enumerate([ii]):
+
+        ## HACK
+        if blobnumber != 1:
+            continue
+
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
         if len(Isrcs) == 0:
@@ -1082,33 +1112,64 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 srctractor.printThawedParams()
 
                 if plots:
-                    spmods = [srctractor.getModelImages()]
-                    spnames = ['Initial']
+                    spmods,spnames = [],[]
+                    spallmods,spallnames = [],[]
+
+                if plots and numi == 0:
+                    spmods.append(srctractor.getModelImages())
+                    spnames.append('Initial')
+                    spallmods.append(subtr.getModelImages())
+                    spallnames.append('Initial (all)')
     
-                for step in range(20):
+                for step in range(50):
                     dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                                   alphas=alphas)
-                    print 'dlnp:', dlnp
+                    print 'dlnp:', dlnp, 'src', src
                     if dlnp < 0.1:
                         break
 
                 if plots:
                     spmods.append(srctractor.getModelImages())
                     spnames.append('Fit')
-                    _plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
-                               chi_plots=False)
+                    spallmods.append(subtr.getModelImages())
+                    spallnames.append('Fit (all)')
+
+                if plots:
+                    plt.figure(1, figsize=(8,6))
+                    plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
+                                        hspace=0.1, wspace=0.05)
+    
+                    plt.figure(2, figsize=(3,3))
+                    plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
+    
+                    #_plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
+                    #           chi_plots=plots2)
+    
+                    tempims = [tim.getImage() for tim in subtims]
+                    for tim,orig in zip(subtims, orig_timages):
+                        tim.data = orig
+                    _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
+                               chi_plots=plots2, rgb_plots=True, main_plot=False)
+                    for tim,im in zip(subtims, tempims):
+                        tim.data = im
+
+
 
                 for tim in subtims:
                     mod = src.getModelPatch(tim)
                     if mod is not None:
                         mod.addTo(tim.getImage(), scale=-1)
 
-                if plots:
-                    _plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
-                               bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
+                # if plots:
+                #     _plot_mods(subtims, [srctractor.getModelImages()], ['Residuals'],
+                #                bands, None, None, bslc, blobw, blobh, ps, chi_plots=False)
 
                 print 'Fitting source took', Time()-tsrc
                 print src
+
+
+
+
     
             for tim,img in zip(subtims, orig_timages):
                 tim.data = img
