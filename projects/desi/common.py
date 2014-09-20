@@ -273,13 +273,26 @@ class DecamImage(object):
         return self._read_fits(self.dqfn, self.hdu, **kwargs)
     #return fitsio.FITS(self.dqfn)[self.hdu].read()
 
-    def read_invvar(self, **kwargs):
-        return self._read_fits(self.wtfn, self.hdu, **kwargs)
+    def read_invvar(self, clip=False, **kwargs):
+        invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)
+        if clip:
+            sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
+            # Clamp near-zero (incl negative!) invvars to zero
+            thresh = 0.2 * (1./sig1**2)
+            invvar[invvar < thresh] = 0
+        return invvar
     #return fitsio.FITS(self.wtfn)[self.hdu].read()
 
     def read_wcs(self):
         return Sip(self.wcsfn)
 
+    def read_sdss(self):
+        S = fits_table(self.sdssfn)
+        # ugh!
+        if S.objc_type.min() > 128:
+            S.objc_type -= 128
+        return S
+        
 
 def bounce_run_calibs(X):
     return run_calibs(*X)
@@ -315,7 +328,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
         run_morph = True
         run_funpack = True
     
-    if run_funpack:
+    if run_funpack and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
         tmpimgfn  = create_temp(suffix='.fits')
         tmpmaskfn = create_temp(suffix='.fits')
 
