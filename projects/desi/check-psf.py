@@ -63,10 +63,19 @@ if __name__ == '__main__':
     wcs = im.read_wcs()
 
     img = im.read_image()
+    sky = np.median(img)
+    img -= sky
     invvar = im.read_invvar(clip=True)
+    sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
+    sigoff = 3
+    img += sig1 * sigoff
+    # convert to sigmas
+    img /= sig1
+    invvar *= sig1**2
+
     H,W = img.shape
     sz = 20
-
+    
     ok,S.x,S.y = wcs.radec2pixelxy(S.ra, S.dec)
     S.x -= 1
     S.y -= 1
@@ -85,9 +94,10 @@ if __name__ == '__main__':
         s = S[sdssi]
         plt.subplot(rows, cols, 1+i)
         subimg = img[s.iy - sz : s.iy + sz+1, s.ix - sz : s.ix + sz+1]
-        dimshow(subimg)
+        dimshow(subimg, ticks=False)
     ps.savefig()
     
+    maxes = []
     plt.clf()
     for i,sdssi in enumerate(np.argsort(-S.flux)):
         if i >= rows*cols:
@@ -96,6 +106,33 @@ if __name__ == '__main__':
         plt.subplot(rows, cols, 1+i)
         subimg = img[s.iy - sz : s.iy + sz+1, s.ix - sz : s.ix + sz+1]
         mx = subimg.max()
+        maxes.append(mx)
         logmx = np.log10(mx)
-        dimshow(np.log10(np.maximum(subimg, mx*1e-16)), vmin=logmx-3, vmax=logmx)
+        dimshow(np.log10(np.maximum(subimg, mx*1e-16)), vmin=0, vmax=logmx,
+                ticks=False)
     ps.savefig()
+
+    plt.clf()
+    for i,sdssi in enumerate(np.argsort(-S.flux)):
+        if i >= rows*cols:
+            break
+        s = S[sdssi]
+        plt.subplot(rows, cols, 1+i)
+
+        subimg = img[s.iy - sz : s.iy + sz+1, s.ix - sz : s.ix + sz+1]
+        ss = 5
+        flux = np.sum(img[s.iy-ss:s.iy+ss+1, s.ix-ss:s.ix+ss+1])
+        # subtract off the 3*sig we added
+        flux -= (2*ss+1)**2 * sigoff
+
+        psfimg = psfex.instantiateAt(s.x, s.y)
+        psfimg = psfimg * flux + sigoff
+        
+        mx = maxes[i]
+        #mx = psfimg.max()
+        logmx = np.log10(mx)
+        dimshow(np.log10(np.maximum(psfimg, mx*1e-16)), vmin=0, vmax=logmx,
+                ticks=False)
+    ps.savefig()
+
+    
