@@ -926,7 +926,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     if plots:
         plt.clf()
         for p in profiles:
-            plt.plot(p, 'b-')
+            plt.semilogy(np.maximum(1e-10, p), 'b-')
         ps.savefig()
 
     pro = np.max(profiles, axis=0)
