@@ -246,6 +246,8 @@ class MixtureOfGaussians():
         [x0,x1): (int) X values to evaluate
         [y0,y1): (int) Y values to evaluate
         (cx,cy): (float) pixel center of the MoG
+
+        Returns: numpy array of shape (y1-y0, x1-x0)
         '''
         from mix import c_gauss_2d_approx2
         assert(self.D == 2)

@@ -899,9 +899,52 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         #from tractor.psfex import CachingPsfEx
         #tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
         #tim.psf.fitSavedData(*tim.psf.splinedata)
-            
+
+    # How far down to render model profiles
+    minsigma = 0.1
     for tim in tims:
-        tim.modelMinval = 0.1 * tim.sig1
+        tim.modelMinval = minsigma * tim.sig1
+
+    # FIXME -- set source radii crudely, based on the maximum of the
+    # PSF profiles in all images (!) -- should have a source x image
+    # structure -- *and* based on SDSS fluxes.
+    profiles = []
+    R = 100
+    minsig1s = dict([(band,1e100) for band in bands])
+    for (ox0,oy0),tim in zip(orig_wcsxy0, tims):
+        minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
+        th,tw = tim.shape
+        psf = tim.psf.mogAt(ox0+(tw/2), oy0+(th/2))
+        profiles.extend([
+            psf.mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
+            psf.mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
+            psf.mog.evaluate_grid(0, 1, 0, R, 0., 0.).patch.ravel(),
+            psf.mog.evaluate_grid(0, 1, -(R-1), 1, 0., 0.).patch.ravel()[-1::-1]])
+    profiles = np.array(profiles)
+    print 'profiles', profiles.dtype, profiles.shape
+
+    if plots:
+        plt.clf()
+        for p in profiles:
+            plt.plot(p, 'b-')
+        ps.savefig()
+
+    pro = np.max(profiles, axis=0)
+    for src in cat:
+        if not isinstance(src, PointSource):
+            continue
+        nsigmas = 0.
+        bright = src.getBrightness()
+        for band in bands:
+            nsigmas = max(nsigmas, bright.getFlux(band) / minsig1s[band])
+        if nsigmas <= 0:
+            continue
+        ii = np.flatnonzero(pro > (minsigma / nsigmas))
+        if len(ii) == 0:
+            continue
+        src.fixedRadius = max(psf.radius, 1 + ii[-1])
+        print 'Nsigma', nsigmas, 'radius', src.fixedRadius
+
 
     srcvariances = [[] for src in cat]
 
@@ -926,8 +969,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         # for blobnumber,iblob in enumerate([ii]):
 
         ## HACK
-        if blobnumber != 1:
-            continue
+        # if blobnumber != 1:
+        #     continue
 
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]

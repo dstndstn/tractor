@@ -52,18 +52,18 @@ echo
 # 384424 #  242.65823 9.25000 ? cluster at z=0.52 centered RA,DEC=t 242.6550, 9.2294
 
 #BRICK=377306
-#BRICK=371589
-BRICK=384424
+BRICK=371589
+#BRICK=384424
 ARGS="--brick $BRICK"
 
 # echo 'Starting s0'
 # date
 # time python -u projects/desi/runbrick.py -s 0 --plots $ARGS > log.$BRICK.0 2>&1
 
-echo
-echo 'Starting s1'
-date
-time python -u projects/desi/runbrick.py -s 1 --plots $ARGS > log.$BRICK.1 2>&1
+# echo
+# echo 'Starting s1'
+# date
+# time python -u projects/desi/runbrick.py -s 1 --plots $ARGS > log.$BRICK.1 2>&1
 
 echo
 echo 'Starting s2'
