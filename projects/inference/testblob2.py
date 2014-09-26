@@ -69,7 +69,7 @@ def oneblob(ra, dec, teff, dteff):
     W,H = pixradius*2+1, pixradius*2+1
     targetwcs = Tan(ra, dec, pixradius, pixradius,
                     -pixscale/3600., 0., 0., pixscale/3600., W, H)
-    radius = np.sqrt(pixradius) * pixscale / 3600.
+    radius = pixradius * pixscale / 3600.
     
     wlistfn = sdss.filenames.get('window_flist', 'window_flist.fits')
     #wfn = os.path.join(os.environ['PHOTO_RESOLVE'], 'window_flist.fits')
@@ -93,7 +93,8 @@ def oneblob(ra, dec, teff, dteff):
         srcs = get_tractor_sources_dr9(run, camcol, field, bandname=srcband,
                                        sdss=sdss,
                                        radecrad=(ra, dec, radius*np.sqrt(2.)),
-                                       nanomaggies=True)
+                                       nanomaggies=True,
+                                       cutToPrimary=True)
         print 'Got sources:'
         for src in srcs:
             print '  ', src

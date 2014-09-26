@@ -227,7 +227,8 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
                  useObjcType=False,
                  objCuts=True,
                  classmap={},
-                 ellipse=GalaxyShape):
+                 ellipse=GalaxyShape,
+                 cutToPrimary=False):
     '''
     If set,
 
@@ -320,6 +321,9 @@ def _get_sources(run, camcol, field, bandname='r', sdss=None, release='DR7',
         bright = photo_flags1_map.get('BRIGHT')
         objs.cut((objs.nchild == 0) * ((objs.objc_flags & bright) == 0))
 
+    if cutToPrimary:
+        objs.cut((objs.resolve_status & 256) > 0)
+        
     if isdr7:
         objs.rename('phi_dev', 'phi_dev_deg')
         objs.rename('phi_exp', 'phi_exp_deg')
