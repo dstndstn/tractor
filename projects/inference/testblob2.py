@@ -67,7 +67,7 @@ def oneblob(ra, dec, teff, dteff):
     Lanczos = 3
     
     W,H = pixradius*2+1, pixradius*2+1
-    targetwcs = Tan(ra, dec, pixradius, pixradius,
+    targetwcs = Tan(ra, dec, pixradius+1, pixradius+1,
                     -pixscale/3600., 0., 0., pixscale/3600., W, H)
     radius = pixradius * pixscale / 3600.
     

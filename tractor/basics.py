@@ -22,8 +22,11 @@ import numpy as np
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
-# ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
 class TractorWCSWrapper(object):
+    '''
+    Wraps a Tractor WCS object to look like an
+    astrometry.util.util.Tan/Sip object.
+    '''
     def __init__(self, wcs, w, h, x0=0, y0=0):
         self.wcs = wcs
         self.imagew = w
@@ -31,6 +34,7 @@ class TractorWCSWrapper(object):
         self.x0 = x0
         self.y0 = y0
     def pixelxy2radec(self, x, y):
+        # FITS pixels x,y
         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
         return rd.ra, rd.dec
     def radec2pixelxy(self, ra, dec):
@@ -46,8 +50,8 @@ class TractorWCSWrapper(object):
                     rd.ra = r
                     rd.dec = d
                     xi,yi = self.wcs.positionToPixel(rd)
-                    x.flat[i] = xi - self.x0 + 1
-                    y.flat[i] = yi - self.y0 + 1
+                    x.flat[i] = xi
+                    y.flat[i] = yi
                 x += 1 - self.x0
                 y += 1 - self.y0
                 return ok,x,y
