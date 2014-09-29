@@ -64,8 +64,8 @@ class GalaxyShape(ParamList):
         G = self.getRaDecBasis()
         # "cd" takes pixels to degrees (intermediate world coords)
         # T takes pixels to unit vectors.
-        print 'Shape', self
-        print 'Basis', G, 'cd', cd
+        #print 'Shape', self
+        #print 'Basis', G, 'cd', cd
         T = np.dot(np.linalg.inv(G), cd)
         return T
 
