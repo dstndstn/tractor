@@ -132,6 +132,11 @@ if __name__ == '__main__':
     origpsfimgs = []
     unitpsfimgs = []
     psfimgs = []
+
+    psfex.savesplindata = True
+    print 'Fitting PsfEx model...'
+    psfex.ensureFit()
+    
     
     plt.clf()
     for i,subimg in enumerate(subimgs):
