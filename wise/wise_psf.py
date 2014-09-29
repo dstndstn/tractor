@@ -421,8 +421,12 @@ def _meisner_psf_models():
         # mypsf = MyGaussianMixturePSF(psfx.mog.amp, psfx.mog.mean, psfx.mog.var)
         # mypsf.radius = sh/2
 
+
         sh,sw = pix.shape
 
+        # Initialize from original fit params
+        psfx = psf
+        
         # Try concentric gaussian PSF
         sigmas = []
         for k in range(psfx.mog.K):
@@ -434,7 +438,8 @@ def _meisner_psf_models():
         mypsf = gpsf
         
         tim = Image(data=pix, invvar=1e6 * np.ones_like(pix), psf=mypsf)
-
+        tim.modelMinval = 1e-16
+        
         # xx,yy = np.meshgrid(np.arange(sw), np.arange(sh))
         # cx,cy = np.sum(xx*pix)/np.sum(pix), np.sum(yy*pix)/np.sum(pix)
         # print 'Centroid:', cx,cy
@@ -457,12 +462,25 @@ def _meisner_psf_models():
         print 'Optimizing Params:'
         tractor.printThawedParams()
     
-        for i in range(100):
-            dlnp,X,alpha = tractor.optimize(damp=0.1)
-            print 'dlnp', dlnp
-            if dlnp < 0.001:
+        for i in range(200):
+            #dlnp,X,alpha = tractor.optimize(damp=0.1)
+            dlnp,X,alpha = tractor.optimize(damp=1)
+            print i,'dlnp %.3g' % dlnp, 'psf', gpsf
+            if dlnp < 1e-6:
                 break
 
+        tractor.freezeParam('catalog')
+        gpsf.sigmas.stepsize = len(gpsf.sigmas) * [1e-6]
+        gpsf.weights.stepsize = len(gpsf.sigmas) * [1e-6]
+        
+        for i in range(200):
+            #dlnp,X,alpha = tractor.optimize(damp=0.1)
+            dlnp,X,alpha = tractor.optimize(damp=1)
+            print i,'dlnp %.3g' % dlnp, 'psf', gpsf
+            if dlnp < 1e-6:
+                break
+
+            
         print 'PSF3(opt): flux', src.brightness
         print 'PSF amps:', np.sum(mypsf.amp)
         print 'PSF amps * Source brightness:', src.brightness.getValue() * np.sum(mypsf.amp)
@@ -495,9 +513,203 @@ def _meisner_psf_models():
         plt.suptitle('W%i psf3 (opt): %g = %s, resid %.3f' %
                      (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
         ps.savefig()
+
+
+        class MyGaussianPSF(NCircularGaussianPSF):
+            '''
+            A PSF model with strictly positive weights that sum to
+            unity.
+            '''
+            def __init__(self, sigmas, weights):
+                ww = np.array(weights)
+                ww = np.log(ww)
+                super(MyGaussianPSF, self).__init__(sigmas, ww)
+
+            @staticmethod
+            def getNamedParams():
+                return dict(sigmas=0, logweights=1)
+                
+            def __str__(self):
+                return ('MyGaussianPSF: sigmas [ ' +
+                        ', '.join(['%.3f'%s for s in self.mysigmas]) +
+                        ' ], weights [ ' +
+                        ', '.join(['%.3f'%w for w in self.myweights]) +
+                        ' ]')
+
+            @property
+            def myweights(self):
+                ww = np.exp(self.logweights.getAllParams())
+                ww /= ww.sum()
+                return ww
+
+            @property
+            def weights(self):
+                ww = np.exp(self.logweights.getParams())
+                wsum = np.sum(np.exp(self.logweights.getAllParams()))
+                return ww / wsum
+            
+
+        if band == 4:
+            # HACK
+            mypsf = MyGaussianPSF([1.7, 6.4, 15.0], [0.333, 0.666, 0.1])
+        else:
+            mypsf = MyGaussianPSF(gpsf.sigmas, gpsf.amp)
+        mypsf.radius = sh/2
+
+        tim.psf = mypsf
         
+        print 'Optimizing Params:'
+        tractor.printThawedParams()
+    
+        for i in range(200):
+            #dlnp,X,alpha = tractor.optimize(damp=0.1)
+            dlnp,X,alpha = tractor.optimize(damp=1)
+            print i,'dlnp %.3g' % dlnp, 'psf', mypsf
+            if dlnp < 1e-6:
+                break
+
+        mypsf.sigmas.stepsize = len(mypsf.sigmas) * [1e-6]
+        mypsf.logweights.stepsize = len(mypsf.sigmas) * [1e-6]
+
+        for i in range(200):
+            #dlnp,X,alpha = tractor.optimize(damp=0.1)
+            dlnp,X,alpha = tractor.optimize(damp=1)
+            print i,'dlnp %.3g' % dlnp, 'psf', mypsf
+            if dlnp < 1e-6:
+                break
+        
+        print 'PSF amps:', np.sum(mypsf.amp)
+        print 'pix sum:', pix.sum()
+        print 'Optimize source:', src
+        print 'Optimized PSF:', mypsf
+        
+        mod = tractor.getModelImage(0)
+        print 'Mod sum:', mod.sum()
+        _plot_psf(pix, mod, mypsf, flux=src.brightness.getValue())
+        plt.suptitle('W%i psf3 (opt2): %g = %s, resid %.3f' %
+                     (band, np.sum(mypsf.amp), ','.join(['%.3f'%a for a in mypsf.amp]), np.sum(pix-mod)))
+        ps.savefig()
+
+        # Write
+        mog = mypsf.getMixtureOfGaussians()
+        T = fits_table()
+        T.amp  = mog.amp
+        T.mean = mog.mean
+        T.var  = mog.var
+        T.writeto('psf4.fits', append=(band != 1))
 
 
+def _plot_psf_models(fn, ps):
+    plt.clf()
+    plt.subplots_adjust(top=0.92, bottom=0.1, left=0.1, right=0.9,
+                        hspace=0.25)
+    lp,lt = [],[]
+    for band in [1,2,3,4]:
+        print
+        print 'Band W%i' % band
+        
+        #plt.clf()
+        plt.subplot(2,2, band)
+        plt.title('W%i' % band)
+        
+        pix = fitsio.read('wise-psf-avg-pix-bright.fits', ext=band-1)
+        h,w = pix.shape
+        scale = 1.
+        vscale = 1
+        if band == 4:
+            scale = 0.5
+            vscale = 2.
+        # Slices along axes
+        xx = (np.arange(w)-w/2) / scale
+        p1 = plt.plot(xx, pix[h/2, :] * vscale, 'b-', lw=2, alpha=0.5)
+        xx = (np.arange(h)-h/2) / scale
+        p2 = plt.plot(xx, pix[:, w/2] * vscale, 'b--', lw=2, alpha=0.5)
+        lp.append(p1[0])
+        lt.append('Meisner+')
+        yy = pix[:,w/2]
+        print 'Meisner max:', pix.max(), 'sum', pix.sum()
+        
+        pix = reduce(np.add,
+                     [fitsio.read('wise-w%i-psf-wpro-09x09-%02ix%02i.fits' %
+                                  (band, 1+(i/9), 1+(i%9)))
+                                  for i in range(9*9)])
+        pix /= 81.
+        
+        h,w = pix.shape
+        scale = 8.
+        vscale = scale**2
+        if band == 4:
+            scale = 4.
+            
+        xx = (np.arange(w)-w/2) / scale
+        p3 = plt.plot(xx, pix[h/2, :] * vscale, 'r-')
+        xx = (np.arange(h) - h/2) / scale
+        p4 = plt.plot(xx, pix[:, w/2] * vscale, 'r--')
+        lp.append(p3[0])
+        lt.append('AllWISE')
+        print 'AllWISE max:', pix.max(), 'sum', pix.sum()
+
+
+        T = fits_table(fn, hdu=band)
+        # T.about()
+        print 'Amp sum:', np.sum(T.amp)
+        print 'Amp', T.amp
+        # print 'Mean', T.mean
+        print 'Var', T.var[:,0,0]
+
+        vscale = 1
+        if band == 4:
+            vscale = 4.
+
+        xlo,xhi = -22, 22
+            
+        xx = np.linspace(xlo, xhi, 201)
+        yy = reduce(np.add,
+                    [amp * 1./(2.*np.pi*var) * np.exp(-0.5 * xx**2 / var)
+                     for amp,var in zip(T.amp, T.var[:,0,0])])
+        p5 = plt.plot(xx, yy * vscale, 'k-')
+
+        lp.append(p5[0])
+        lt.append('Model')
+
+        
+        # for amp,var in zip(T.amp, T.var[:,0,0]):
+        #     yy = amp * 1./(2.*np.pi*var) * np.exp(-0.5 * xx**2 / var)
+        #     if amp < 0:
+        #         plt.plot(xx, np.abs(yy) * vscale, 'k--', alpha=0.5)
+        #     else:
+        #         plt.plot(xx, yy * vscale, 'k-', alpha=0.5)
+
+        print 'Mid:', yy[len(yy)/2]
+        print 'Model max:', yy.max()
+
+        xx,yy = np.meshgrid(np.arange(w)-w/2, np.arange(h)-h/2)
+        zz = reduce(np.add,
+                    [amp * 1./(2.*np.pi*var) * np.exp(-0.5 * (xx**2 + yy**2) / var)
+                     for amp,var in zip(T.amp, T.var[:,0,0])])
+        print 'Model sum:', zz.sum()
+
+        
+        #plt.yscale('symlog', linthreshy=1e-6)
+        plt.yscale('log')
+        plt.ylim(2.5e-6, 0.25)
+        
+        #plt.xscale('symlog', linthreshx=10, linscalex=3)
+        #plt.xlim(-100, 100)
+        plt.xlim(xlo, xhi)
+        plt.xticks([-20,-10,0,10,20])
+        
+        if band == 1:
+            plt.figlegend(lp, lt, 'upper right')
+
+        if band in [1,3]:
+            plt.ylabel('PSF profile')
+        if band in [3,4]:
+            plt.xlabel('Pixel')
+            
+            
+    ps.savefig()
+        
 if __name__ == '__main__':
 
     import logging
@@ -554,9 +766,20 @@ if __name__ == '__main__':
             for sp in [3,6,9]:
                 plt.subplot(3,3,sp)
                 if sp == 3:
-                    plt.imshow(mod, **ima)
-                    cc = 'w'
+                    # plt.imshow(mod, **ima)
+                    # cc = 'w'
+                    # aa = 1.
+
+                    diff = img - mod
+                    mn = -6.
+                    mx = 0.
+                    ad = np.clip(np.log10(np.abs(diff)), mn, mx)
+                    diff = np.where(diff > 0, ad, 2*mn - ad)
+                    cc = 'g'
                     aa = 1.
+                    plt.imshow(diff, interpolation='nearest', origin='lower',
+                               vmin=2*mn, vmax=0, cmap='RdBu')
+                    
                 else:
                     #plt.imshow(np.log10(mod), **imlog)
                     plt.imshow(img - mod, **imdiff)
@@ -645,9 +868,20 @@ if __name__ == '__main__':
     from astrometry.util.util import *
 
     ps = PlotSequence('psf')
-
+    ps.suffixes = ['png', 'pdf']
+    
     # Compare AllWISE vs Meisner PSF model images.
 
+    #_meisner_psf_models()
+    #sys.exit(0)
+
+    _plot_psf_models('psf-allwise-con3.fits', ps)
+    _plot_psf_models('psf4.fits', ps)
+
+    sys.exit(0)
+
+
+    
     plt.clf()
     for band in [1,2,3,4]:
         #S = 10
@@ -658,6 +892,7 @@ if __name__ == '__main__':
         h,w = pix.shape
         plt.imshow(pix, interpolation='nearest', origin='lower')
         plt.axis([w/2-S, w/2+S, h/2-S, h/2+S])
+        plt.title('Meisner W%i' % band)
 
         plt.subplot(3,4, 4 + band)
         subim = pix[h/2-S : h/2+S, w/2-S : w/2+S]
@@ -669,6 +904,7 @@ if __name__ == '__main__':
         h,w = pix.shape
         plt.imshow(pix, interpolation='nearest', origin='lower')
         plt.axis([w/2-S*scale, w/2+S*scale, h/2-S*scale, h/2+S*scale])
+        plt.title('Meisner W%i' % band)
         
         plt.subplot(3,4, 8 + band)
         pix = reduce(np.add,
@@ -682,9 +918,14 @@ if __name__ == '__main__':
 
         plt.imshow(pix, interpolation='nearest', origin='lower')
         plt.axis([w/2-S*scale, w/2+S*scale, h/2-S*scale, h/2+S*scale])
-
+        plt.title('AllWISE W%i' % band)
+        
     ps.savefig()
 
+
+
+
+    
     
     #_meisner_psf_models()
         
