@@ -661,7 +661,8 @@ def _plot_psf_models(fn, ps):
         if band == 4:
             vscale = 4.
 
-        xlo,xhi = -22, 22
+        #xlo,xhi = -22, 22
+        xlo,xhi = -16, 16
             
         xx = np.linspace(xlo, xhi, 201)
         yy = reduce(np.add,
@@ -696,8 +697,8 @@ def _plot_psf_models(fn, ps):
         
         #plt.xscale('symlog', linthreshx=10, linscalex=3)
         #plt.xlim(-100, 100)
-        plt.xlim(xlo, xhi)
         plt.xticks([-20,-10,0,10,20])
+        plt.xlim(xlo, xhi)
         
         if band == 1:
             plt.figlegend(lp, lt, 'upper right')
