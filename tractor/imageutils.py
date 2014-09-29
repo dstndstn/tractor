@@ -8,7 +8,8 @@ def interpret_roi(wcs, (H,W), roi=None, roiradecsize=None, roiradecbox=None,
 
     If not None, roi = (x0, x1, y0, y1) defines a region-of-interest
     in the image, in zero-indexed pixel coordinates.  x1,y1 are
-    NON-inclusive; roi=(0,100,0,100) will yield a 100 x 100 image.
+    NON-inclusive, ie, x in [x0,x1);
+    roi=(0,100,0,100) will yield a 100 x 100 image.
 
     "roiradecsize" = (ra, dec, half-size in pixels) indicates that you
     want to grab a ROI around the given RA,Dec.
