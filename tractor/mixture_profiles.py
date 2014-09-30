@@ -307,10 +307,10 @@ class MixtureOfGaussians():
         assert(rtn == 0)
         if doslice:
             slc = slice(sy0,sy1),slice(sx0,sx1)
-            result = result[slc]
+            result = result[slc].copy()
             if derivs:
-                xderiv = xderiv[slc]
-                yderiv = yderiv[slc]
+                xderiv = xderiv[slc].copy()
+                yderiv = yderiv[slc].copy()
             x0 += sx0
             y0 += sy0
 
