@@ -1095,12 +1095,32 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
     '''
-    def __init__(self, amp, mean, var):
+    def __init__(self, *args):
         '''
+        GaussianMixturePSF(amp, mean, var)
+
+        or
+
+        GaussianMixturePSF(a0,a1,a2, mx0,my0,mx1,my1,mx2,my2,
+                           vxx0,vyy0,vxy0, vxx1,vyy1,vxy1, vxx2,vyy2,vxy2)
+        
         amp:  np array (size K) of Gaussian amplitudes
         mean: np array (size K,2) of means
         var:  np array (size K,2,2) of variances
         '''
+        if len(args) == 3:
+            amp, mean, var = args
+        else:
+            assert(len(args) % 6 == 0)
+            K = len(args) / 6
+            amp  = np.array(args[:K])
+            mean = np.array(args[K:3*K]).reshape((K,2))
+            args = args[3*K:]
+            var  = np.zeros((K,2,2))
+            var[:,0,0] = args[::3]
+            var[:,1,1] = args[1::3]
+            var[:,0,1] = var[:,1,0] = args[2::3]
+
         self.mog = mp.MixtureOfGaussians(amp, mean, var)
         assert(self.mog.D == 2)
         self.radius = 25
@@ -1244,16 +1264,6 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
             ', means=' + str(tuple(self.mog.mean.ravel())) +
             ', var=' + str(tuple(self.mog.var.ravel())))
-    def hashkey(self):
-        return ('GaussianMixturePSF',
-                tuple(self.mog.amp),
-                tuple(self.mog.mean.ravel()),
-                tuple(self.mog.var.ravel()),)
-    
-    def copy(self):
-        return GaussianMixturePSF(self.mog.amp.copy(),
-                                  self.mog.mean.copy(),
-                                  self.mog.var.copy())
 
     def _numberOfThings(self):
         K = self.mog.K
