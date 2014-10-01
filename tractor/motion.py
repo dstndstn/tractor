@@ -1,3 +1,6 @@
+from .utils import *
+from .basics import *
+
 class Parallax(ArithmeticParams, ScalarParam):
     ''' in arcesc '''
     stepsize = 1e-3
@@ -10,7 +13,7 @@ class ParallaxWithPrior(Parallax):
         if p < 0:
             return -np.inf
         # Lutz & Kelker (1973) PASP 85 573
-        # in the fuckin' introduction!
+        # in the introduction, yo!
         return -4. * np.log(p)
 
     def isLegal(self):

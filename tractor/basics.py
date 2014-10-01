@@ -1110,7 +1110,11 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         
         K = self.mog.K
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
+        self._set_param_names(K)
 
+    def _set_param_names(self, K):
+        # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
+        #   var0xx,var0yy,var0xy, var1xx, var1yy, var1xy
         names = {}
         for k in range(K):
             names['amp%i'%k] = k
@@ -1121,7 +1125,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             names['var%ixy'%k] = K*3 + (k*3)+2
         # print 'Setting param names:', names
         self.addNamedParams(**names)
-
+        
     def get_wmuvar(self):
         return (self.mog.amp, self.mog.mean, self.mog.var)
         
@@ -1355,6 +1359,96 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
         tpsf = GaussianMixturePSF(w, mu, var)
         return tpsf
+
+
+class GaussianMixtureEllipsePSF(GaussianMixturePSF):
+    '''
+    A variant of GaussianMixturePSF that uses EllipseESoft to describe
+    the covariance ellipse.
+    '''
+
+    def __init__(self, amp, mean, ell):
+        '''
+        amp:  np array (size K) of Gaussian amplitudes
+        mean: np array (size K,2) of means
+        ell:  list (length K) of EllipseESoft objects
+        '''
+        K = len(amp)
+        var = np.zeros((K,2,2))
+        for k in range(K):
+            var[k,:,:] = self.ellipseToVariance(ell[k])
+        super(GaussianMixtureEllipsePsf, self).__init__(amp, mean, var)
+        self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.01]*(K*3)
+
+    def ellipseToVariance(self, ell):
+        return np.array([[0., 0.], [0., 0.]])
+        
+    def _set_param_names(self, K):
+        names = {}
+        for k in range(K):
+            names['amp%i'%k] = k
+            names['mean%ix'%k] = K+(k*2)
+            names['mean%iy'%k] = K+(k*2)+1
+            names['logr%i'%k] = K*3 + (k*3)
+            names['ee1-%i'%k] = K*3 + (k*3)+1
+            names['ee2-%i'%k] = K*3 + (k*3)+2
+        self.addNamedParams(**names)
+        
+    def copy(self):
+        pass
+    def hashkey(self):
+        return ('GaussianMixturePSF',
+                tuple(self.mog.amp),
+                tuple(self.mog.mean.ravel()),
+                tuple(self.mog.var.ravel()),)
+    def __str__(self):
+        return (
+            'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
+            ', means=' + str(tuple(self.mog.mean.ravel())) +
+            ', var=' + str(tuple(self.mog.var.ravel())))
+    
+    def _get_variance(self):
+        pass
+        
+    def _getThings(self):
+        p = list(self.mog.amp) + list(self.mog.mean.ravel())
+        for v in self.mog.var:
+            p += (v[0,0], v[1,1], v[0,1])
+        return p
+    def _setThings(self, p):
+        K = self.mog.K
+        self.mog.amp = np.atleast_1d(p[:K])
+        pp = p[K:]
+        self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
+        pp = pp[K*2:]
+        self.mog.var[:,0,0] = pp[::3]
+        self.mog.var[:,1,1] = pp[1::3]
+        self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
+    def _setThing(self, i, p):
+        K = self.mog.K
+        if i < K:
+            old = self.mog.amp[i]
+            self.mog.amp[i] = p
+            return old
+        i -= K
+        if i < K*2:
+            old = self.mog.mean.ravel()[i]
+            self.mog.mean.ravel()[i] = p
+            return old
+        i -= K*2
+        j = i / 3
+        k = i % 3
+        if k in [0,1]:
+            old = self.mog.var[j,k,k]
+            self.mog.var[j,k,k] = p
+            return old
+        old = self.mog.var[j,0,1]
+        self.mog.var[j,0,1] = p
+        self.mog.var[j,1,0] = p
+        return old
+    
+
+
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
