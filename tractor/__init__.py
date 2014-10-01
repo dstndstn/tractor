@@ -2,6 +2,7 @@ from engine import *
 from ducks import *
 from basics import *
 #from nasasloan import *
+from motion import *
 from psfex import *
 from ellipses import *
 from imageutils import *

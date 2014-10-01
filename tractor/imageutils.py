@@ -24,9 +24,9 @@ def interpret_roi(wcs, (H,W), roi=None, roiradecsize=None, roiradecbox=None,
         xc,yc = [int(np.round(p)) for p in fxc,fyc]
 
         roi = [np.clip(xc-S, 0, W),
-               np.clip(xc+S, 0, W),
+               np.clip(xc+S+1, 0, W),
                np.clip(yc-S, 0, H),
-               np.clip(yc+S, 0, H)]
+               np.clip(yc+S+1, 0, H)]
         roi = [int(x) for x in roi]
         if roi[0]==roi[1] or roi[2]==roi[3]:
             return None

@@ -2453,7 +2453,7 @@ class Tractor(MultiParams):
         if np.isnan(lnp):
             print 'Tractor.getLogProb() returning NaN.'
             print 'Params:'
-            print self.printThawedParams()
+            self.printThawedParams()
             print 'log likelihood:', lnl
             print 'log prior:', lnprior
             return -np.inf
