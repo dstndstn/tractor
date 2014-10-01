@@ -22,7 +22,7 @@ import numpy as np
 
 from .engine import *
 from .basics import *
-from .imageutils import *
+from .imageutils import interpret_roi
 from .galaxy import *
 
 from astrometry.sdss import * #DR7, band_name, band_index
@@ -611,8 +611,11 @@ def get_tractor_sources_cas_dr9(table, bandname='r', bands=None,
 
 def get_tractor_image(run, camcol, field, bandname, 
                       sdssobj=None, release='DR7',
-                      retrieve=True, curl=False, roi=None,
-                      psf='kl-gm', useMags=False, roiradecsize=None,
+                      retrieve=True, curl=False,
+                      psf='kl-gm', useMags=False,
+                      roi=None,
+                      roiradecsize=None,
+                      roiradecbox=None,
                       nanomaggies=False,
                       savepsfimg=None, zrange=[-3,10]):
     '''
@@ -621,7 +624,7 @@ def get_tractor_image(run, camcol, field, bandname,
     If not None, roi = (x0, x1, y0, y1) defines a region-of-interest
     in the image, in zero-indexed pixel coordinates.  x1,y1 are
     NON-inclusive; roi=(0,100,0,100) will yield a 100 x 100 image.
-
+    
     psf can be:
       "dg" for double-Gaussian
       "kl-gm" for SDSS KL-decomposition approximated as a Gaussian mixture
@@ -674,29 +677,14 @@ def get_tractor_image(run, camcol, field, bandname,
     wcs = SdssWcs(astrans)
     #print 'Created SDSS Wcs:', wcs
 
-    if roiradecsize is not None:
-        ra,dec,S = roiradecsize
-        fxc,fyc = wcs.positionToPixel(RaDecPos(ra,dec))
-        print 'RA,Dec (%.3f, %.3f) -> x,y (%.2f, %.2f)' % (ra, dec, fxc, fyc)
-        xc,yc = [int(np.round(p)) for p in fxc,fyc]
-
-        roi = [np.clip(xc-S, 0, W),
-               np.clip(xc+S, 0, W),
-               np.clip(yc-S, 0, H),
-               np.clip(yc+S, 0, H)]
-        roi = [int(x) for x in roi]
-
-        if (roi[0]==roi[1] or (roi[2]==roi[3])):
-            print "zero roi"
-        print 'roi', roi
-
-        info.update(roi=roi)
+    X = interpret_roi(wcs, (H,W), roi=roi, roiradecsize=roiradecsize,
+                      roiradecbox=roiradecbox)
+    if X is None:
+        return None,None
+    roi,hasroi = X
+    info.update(roi=roi)
+    x0,x1,y0,y1 = roi
         
-    if roi is not None:
-        x0,x1,y0,y1 = roi
-    else:
-        x0 = y0 = 0
-
     # Mysterious half-pixel shift.  asTrans pixel coordinates?
     wcs.setX0Y0(x0 + 0.5, y0 + 0.5)
 

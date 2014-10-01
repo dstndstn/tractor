@@ -25,10 +25,11 @@ def _bounce_one_blob((teff,dteff,ra,dec)):
     
 def main():
     stars = [
-        (0., 0., 270.0, 0.003),
         # David's nearby pairs of F stars
         (3900., 0., 118.37066, 52.527073),
         (3705., 0., 130.17654, 52.750081),
+        # High stellar density
+        (0., 0., 270.0, 0.003),
         # Dustin's stars
         (4472.001,	0.02514649,	246.47016,	19.066909),
         (5196.53,   0.02490235, 240.09403,  37.404078),
@@ -67,7 +68,7 @@ def oneblob(ra, dec, teff, dteff):
     Lanczos = 3
     
     W,H = pixradius*2+1, pixradius*2+1
-    targetwcs = Tan(ra, dec, pixradius, pixradius,
+    targetwcs = Tan(ra, dec, pixradius+1, pixradius+1,
                     -pixscale/3600., 0., 0., pixscale/3600., W, H)
     radius = pixradius * pixscale / 3600.
     
@@ -197,7 +198,44 @@ def oneblob(ra, dec, teff, dteff):
                 plt.plot(xx, yy, 'r+')
                 plt.axis(ax)
                 plt.savefig('rim-%s%i.png' % (band, ifield))
-            
+
+            # Convert PSF params also
+            cd = tim.getWcs().cdAtPixel(tw/2, th/2)
+            print 'Tim CD matrix', cd
+            targetcd = np.array(targetwcs.cd).copy().reshape((2,2))
+            print 'Target CD matrix:', targetcd
+
+            trans = np.dot(np.linalg.inv(targetcd), cd)
+            print 'Transformation matrix:', trans
+
+            psf = tim.getPsf()
+            print 'PSF', psf
+            K = psf.mog.K
+            newmean = np.zeros_like(psf.mog.mean)
+            print 'newmean', newmean
+            newvar = np.zeros_like(psf.mog.var)
+            print 'newvar', newvar
+
+            for i,(dx,dy) in enumerate(psf.mog.mean):
+                print 'dx,dy', dx,dy
+                x,y = tim.getWcs().positionToPixel(RaDecPos(ra, dec))
+                r,d = tim.getWcs().pixelToPosition(x + dx, y + dy)
+                print 'ra,dec', r,d
+                ok,x0,y0 = targetwcs.radec2pixelxy(ra, dec)
+                ok,x1,y1 = targetwcs.radec2pixelxy(r, d)
+                print 'dx2,dy2', x1-x0, y1-y0
+                vv = np.array([dx,dy])
+                tv = np.dot(trans, vv)
+                print 'dot', tv
+                newmean[i,:] = tv
+                
+            for i,var in enumerate(psf.mog.var):
+                print 'var', var
+                newvar[i,:,:] = np.dot(trans, np.dot(var, trans.T))
+                print 'newvar', newvar[i,:,:]
+
+            newpsf = GaussianMixturePSF(psf.mog.amp, newmean, newvar)
+
             hdr = fitsio.FITSHDR()
             targetwcs.add_to_header(hdr)
             hdr.add_record(dict(name='RUN', value=run, comment='SDSS run'))
@@ -225,7 +263,7 @@ def oneblob(ra, dec, teff, dteff):
             hdr.add_record(dict(name='DT_EFF', value=dteff,
                                 comment='Effective temperature error'))
             
-            tim.getPsf().toFitsHeader(hdr, 'PSF_')
+            newpsf.toFitsHeader(hdr, 'PSF_')
             
             # First time, overwrite existing file.  Later, append
             clobber = not band in written

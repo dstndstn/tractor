@@ -22,8 +22,11 @@ import numpy as np
 from astrometry.util.starutil_numpy import *
 from astrometry.util.miscutils import *
 
-# ## Wraps a Tractor WCS object to look like an astrometry.util.util.Tan/Sip object.
 class TractorWCSWrapper(object):
+    '''
+    Wraps a Tractor WCS object to look like an
+    astrometry.util.util.Tan/Sip object.
+    '''
     def __init__(self, wcs, w, h, x0=0, y0=0):
         self.wcs = wcs
         self.imagew = w
@@ -31,6 +34,7 @@ class TractorWCSWrapper(object):
         self.x0 = x0
         self.y0 = y0
     def pixelxy2radec(self, x, y):
+        # FITS pixels x,y
         rd = self.wcs.pixelToPosition(x+self.x0-1, y+self.y0-1)
         return rd.ra, rd.dec
     def radec2pixelxy(self, ra, dec):
@@ -46,8 +50,8 @@ class TractorWCSWrapper(object):
                     rd.ra = r
                     rd.dec = d
                     xi,yi = self.wcs.positionToPixel(rd)
-                    x.flat[i] = xi - self.x0 + 1
-                    y.flat[i] = yi - self.y0 + 1
+                    x.flat[i] = xi
+                    y.flat[i] = yi
                 x += 1 - self.x0
                 y += 1 - self.y0
                 return ok,x,y
@@ -821,6 +825,9 @@ class PointSource(MultiParams):
         # if not None, fixedRadius determines the size of unit-flux
         # model Patches produced for this PointSource.
         self.fixedRadius = None
+        # if not None, minradius determines the minimum size of unit-flux
+        # models
+        self.minRadius = None
     @staticmethod
     def getNamedParams():
         return dict(pos=0, brightness=1)
@@ -848,7 +855,8 @@ class PointSource(MultiParams):
         H,W = img.shape
         psf = self._getPsf(img)
         patch = psf.getPointSourcePatch(px, py, minval=minval, extent=[0,W,0,H],
-                                        radius=self.fixedRadius, derivs=derivs)
+                                        radius=self.fixedRadius, derivs=derivs,
+                                        minradius=self.minRadius)
         return patch
 
     def getUnitFluxModelPatches(self, *args, **kwargs):
@@ -1372,13 +1380,13 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
-                            derivs=False, **kwargs):
+                            derivs=False, minradius=None, **kwargs):
         '''
         extent = [x0,x1,y0,y1], clip to [x0,x1), [y0,y1).
         '''
         if minval is None:
             minval = 0.
-        if minval > 0.:
+        if minval > 0. or minradius is not None:
             if radius is not None:
                 rr = radius
             elif self.radius is not None:
@@ -1412,8 +1420,12 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             if y0 >= y1:
                 return None
 
+            kwa = {}
+            if minradius is not None:
+                kwa['minradius'] = minradius
+            
             return self.mog.evaluate_grid_approx3(
-                x0, x1, y0, y1, px, py, minval, derivs=derivs)
+                x0, x1, y0, y1, px, py, minval, derivs=derivs, **kwa)
             
 
         if radius is None:
@@ -1484,7 +1496,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     @staticmethod
     def fromStamp(stamp, N=3, P0=None, xy0=None, alpha=0.,
-                  emsteps=1000, v2=False, approx=1e-30):
+                  emsteps=1000, v2=False, approx=1e-30,
+                  v3=False):
         '''
         optional P0 = (w,mu,var): initial parameter guess.
 
@@ -1507,7 +1520,24 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         else:
             xm, ym = xy0
 
-        if v2:
+        if v3:
+            tpsf = GaussianMixturePSF(w, mu, var)
+            tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp),
+                        psf=tpsf)
+            h,w = tim.shape
+            src = PointSource(PixPos(w/2, h/2), Flux(1.))
+            tr = Tractor([tim],[src])
+            tr.freezeParam('catalog')
+            tim.freezeAllBut('psf')
+            tim.modelMinval = approx
+            for step in range(20):
+                dlnp,X,alpha = tr.optimize(shared_params=False)
+                print 'dlnp', dlnp
+                if dlnp < 1e-6:
+                    break
+            return tpsf
+                
+        elif v2:
             from emfit import em_fit_2d_reg2
             print 'stamp sum:', np.sum(stamp)
             #stamp *= 1000.

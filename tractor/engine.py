@@ -1068,10 +1068,10 @@ class Tractor(MultiParams):
             for si,src in enumerate(srcs):
                 counts = sum([pcal.brightnessToCounts(b) for b in src.getBrightnesses()])
                 if counts <= 0:
-                    mv = 0.
+                    mv = 1e-3
                 else:
-                    # we will scale the PSF by counts and we want that scaled min val
-                    # to be less than minsb
+                    # we will scale the PSF by counts and we want that
+                    # scaled min val to be less than minsb
                     mv = minsb / counts
                 ums = src.getUnitFluxModelPatches(img, minval=mv)
 
