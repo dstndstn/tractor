@@ -15,7 +15,7 @@ import fitsio
 
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.measurements import label, find_objects
-from scipy.ndimage.morphology import binary_dilation, binary_closing
+from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion
 
 from astrometry.util.fits import fits_table,merge_tables
 from astrometry.util.plotutils import PlotSequence, dimshow
@@ -120,7 +120,7 @@ def get_sdss_sources(bands, targetwcs):
     print 'Got', len(objs), 'photoObjs'
 
     # It can be string-valued
-    T.objid = np.array([int(x) if len(x) else 0 for x in T.objid])
+    objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
 
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
@@ -173,8 +173,11 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'pixscale', pixscale
 
     T = decals.get_ccds()
-    T.cut(ccds_touching_wcs(targetwcs, T))
-    print len(T), 'CCDs nearby'
+    I = ccds_touching_wcs(targetwcs, T)
+    print len(I), 'CCDs nearby'
+    if len(I) == 0:
+        return None
+    T.cut(I)
 
     ims = []
     for band in bands:
@@ -197,6 +200,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
             args.append((im, brick.ra, brick.dec, pixscale))
         else:
             run_calibs(im, brick.ra, brick.dec, pixscale, se2=False, morph=False)
+                       # HACK!!
+                       #psfex=False)
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
@@ -556,6 +561,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
 def stage101(coimgs=None, cons=None, bands=None, ps=None,
              targetwcs=None,
+             blobs=None,
              T=None, cat=None, tims=None, tractor=None, **kwargs):
     # RGB image
     # plt.clf()
@@ -580,12 +586,32 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     ps.suffixes = ['png','pdf']
 
     # cluster zoom-in
+    rgb = get_rgb(clco, bands)
     plt.clf()
-    dimshow(get_rgb(clco, bands), ticks=False)
+    dimshow(rgb, ticks=False)
+    ps.savefig()
+
+    # blobs
+    #b0 = blobs
+    #b1 = binary_dilation(blobs, np.ones((3,3)))
+    #bout = np.logical_and(b1, np.logical_not(b0))
+    b0 = blobs
+    b1 = binary_erosion(b0, np.ones((3,3)))
+    bout = np.logical_and(b0, np.logical_not(b1))
+    # set green
+    rgb[:,:,0][bout] = 0.
+    rgb[:,:,1][bout] = 1.
+    rgb[:,:,2][bout] = 0.
+    plt.clf()
+    dimshow(rgb, ticks=False)
     ps.savefig()
 
     # Initial model (SDSS only)
-    T.objid = np.array([int(x) if len(x) else 0 for x in T.objid])
+    try:
+        # convert from string to int
+        T.objid = np.array([int(x) if len(x) else 0 for x in T.objid])
+    except:
+        pass
     scat = Catalog(*[cat[i] for i in np.flatnonzero(T.objid)])
     sedcat = Catalog(*[cat[i] for i in np.flatnonzero(T.objid == 0)])
 
@@ -594,10 +620,11 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     print len(sedcat), 'SED-matched sources'
     tr = Tractor(tractor.images, scat)
 
-
     comods = []
+    comods2 = []
     for iband,band in enumerate(bands):
         comod = np.zeros((clH,clW))
+        comod2 = np.zeros((clH,clW))
         con = np.zeros((clH,clW))
         for itim,tim in enumerate(tims):
             if tim.band != band:
@@ -609,10 +636,20 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
             K = np.nonzero((Yo >= 0) * (Yo < clH) * (Xo >= 0) * (Xo < clW))
             Xo,Yo,Xi,Yi = Xo[K],Yo[K],Xi[K],Yi[K]
             comod[Yo,Xo] += mod[Yi,Xi]
+            ie = tim.getInvError()
+            noise = np.random.normal(size=ie.shape) / ie
+            noise[ie == 0] = 0.
+            comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
             con[Yo,Xo] += 1
         comod /= np.maximum(con, 1)
         comods.append(comod)
+        comod2 /= np.maximum(con, 1)
+        comods2.append(comod2)
     
+    plt.clf()
+    dimshow(get_rgb(comods2, bands), ticks=False)
+    ps.savefig()
+
     plt.clf()
     dimshow(get_rgb(comods, bands), ticks=False)
     ps.savefig()
@@ -1392,6 +1429,67 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     return rtn
 
 
+
+
+def stage3(T=None, sedsn=None, coimgs=None, cons=None,
+           detmaps=None, detivs=None,
+           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+           W=None,H=None, brickid=None,
+           bands=None, ps=None, tims=None,
+           plots=False, plots2=False,
+           **kwargs):
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+
+    for tim in tims:
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
+        tim.psf = tim.psfex
+
+    cat.thawAllRecursive()
+    # rough: sum flux in all bands
+    bright = []
+    for src in cat:
+        br = src.getBrightness()
+        bright.append(sum([br.getFlux(band) for band in bands]))
+    I = np.argsort(-np.array(bright))
+
+    for i in I:
+        cat.freezeAllBut(i)
+        print 'Fitting source', i
+        src = cat[i]
+        print src
+
+        tractor.printThawedParams()
+
+        alphas = [0.1, 0.3, 1.0]
+        for step in range(50):
+            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
+                                            alphas=alphas)
+            print 'dlnp:', dlnp, 'src', src
+            if dlnp < 0.1:
+                break
+
+        if plots:
+            comods = []
+            for iband,band in enumerate(bands):
+                comod = np.zeros((clH,clW))
+                con = np.zeros((clH,clW))
+                for itim,tim in enumerate(tims):
+                    if tim.band != band:
+                        continue
+                    (Yo,Xo,Yi,Xi) = tim.resamp
+                    mod = tractor.getModelImage(tim)
+                    comod[Yo,Xo] += mod[Yi,Xi]
+                    con[Yo,Xo] += 1
+                comod /= np.maximum(con, 1)
+                comods.append(comod)
+    
+            plt.clf()
+            dimshow(get_rgb(comods, bands), ticks=False)
+            ps.savefig()
+
+
+
 def stage203(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
@@ -1588,6 +1686,12 @@ def stage103(T=None, coimgs=None, cons=None,
     print 'kwargs:', kwargs.keys()
     del kwargs
 
+
+    plt.figure(figsize=(10,10))
+    #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+
+
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
     plt.title('Image')
@@ -1758,8 +1862,10 @@ if __name__ == '__main__':
 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='pickles/runbrick-%(brick)06i-s%%(stage)03i.pickle')
-    parser.add_option('--plot-base', help='Base filename for plots, default %default',
-                      default='brick-%(brick)06i')
+
+    plot_base_default = 'brick-%(brick)06i'
+    parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
+    parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
@@ -1787,9 +1893,16 @@ if __name__ == '__main__':
         opt.stage.append(1)
     opt.force.extend(opt.stage)
 
+    if opt.plot_base is None:
+        opt.plot_base = plot_base_default
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
     initargs = dict(ps=ps)
 
+    kwargs = {}
+    if opt.plot_number:
+        ps.skipto(opt.plot_number)
+        kwargs.update(ps=ps)
+        
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
     prereqs = {101: 1, 103:2, 203:2 }
@@ -1798,5 +1911,5 @@ if __name__ == '__main__':
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
                  W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
-                 initial_args=initargs)
+                 initial_args=initargs, **kwargs)
     

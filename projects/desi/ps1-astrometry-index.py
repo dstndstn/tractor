@@ -41,10 +41,10 @@ def main():
 
     splitpat = 'tmp/ps1-hp%02i.fits'
     
-    cmd = 'hpsplit %s -o %s -n 2' % (reffn, splitpat)
-
-    print cmd
-    os.system(cmd)
+    if False:
+        cmd = 'hpsplit %s -o %s -n 2' % (reffn, splitpat)
+        print cmd
+        os.system(cmd)
     
     # hpsplit data/decam/sdss-indexes/calibObj-merge-both{,-2}.fits -o data/decam/sdss-indexes/sdss-hp%02i-ns2.fits -n 2
 

@@ -26,7 +26,18 @@ if __name__ == '__main__':
     D = Decals()
     T = D.get_ccds()
 
-    for expnum in [349664, 349667, 349589]:
+    #outfn = None
+    outfn = 'zp.fits'
+
+    # DES SN1
+    expnums = [ 148563, 148564, 148567, 173321, 173322, 173324, 173325,
+                174346, 174347, 174349, 175270, 175271, 175273, 175274,
+                228752, 228753 ]
+    #expnums = [349664, 349667, 349589]
+
+    allzps = {}
+
+    for expnum in expnums:
         TT = T[T.expnum == expnum]
         print len(TT), 'with expnum', expnum
         bands = np.unique(TT.filter)
@@ -51,7 +62,13 @@ if __name__ == '__main__':
                 continue
 
             sdss = fits_table(im.sdssfn)
-            morph = fits_table(im.morphfn, hdu=2)
+
+            #sefn = im.morphfn
+            sefn = im.sefn
+            print 'Looking for', sefn
+
+            morph = fits_table(sefn, hdu=2)
+
             wcs = Sip(im.wcsfn)
             if len(sdss) == 0:
                 print 'EMPTY:', im.sdssfn
@@ -60,7 +77,7 @@ if __name__ == '__main__':
                 print 'EMPTY:', im.morphfn
                 continue
             print len(sdss), 'SDSS sources from', im.sdssfn
-            print len(morph), 'SE sources from', im.morphfn
+            print len(morph), 'SE sources from', sefn
             morph.ra,morph.dec = wcs.pixelxy2radec(morph.x_image, morph.y_image)
 
             I,J,d = match_radec(morph.ra, morph.dec, sdss.ra, sdss.dec, 0.5/3600.)
@@ -115,3 +132,14 @@ if __name__ == '__main__':
             plt.title('Zeropoint diffs (mean %.3f) for %s, %i %s' % (meanzp, col, expnum, band))
             ps.savefig()
                    
+            if not expnum in allzps:
+                allzps[expnum] = (expnum, meanzp, im.exptime)
+
+
+    if outfn:
+        T = fits_table()
+        T.expnum = np.array(allzps.keys())
+        T.ccdzpt  = np.array([v[1] for v in allzps.values()])
+        T.exptime = np.array([v[2] for v in allzps.values()])
+        T.writeto(outfn)
+        print 'Wrote', outfn

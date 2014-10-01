@@ -168,8 +168,9 @@ class Decals(object):
             print 'Reading zeropoints:', zpfn
             self.ZP = fits_table(zpfn)
 
-            # 'N4 ' -> 'N4'
-            self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
+            if 'ccdname' in self.ZP.get_columns():
+                # 'N4 ' -> 'N4'
+                self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
 
             self.ZP.about()
 
