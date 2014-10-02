@@ -233,9 +233,6 @@ if __name__ == '__main__':
         ps.savefig()
 
     import sys
-    sys.exit(0)
-    
-    ps = PlotSequence('ell')
     
     angle = np.linspace(0., 2.*np.pi, 20)
     xx,yy = np.sin(angle), np.cos(angle)
@@ -259,8 +256,8 @@ if __name__ == '__main__':
             txy = np.dot(T, xy)
             #print 'txy', txy.shape
             plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)
-    plt.xlabel('"e1"')
-    plt.ylabel('"e2"')
+    plt.xlabel('ee1')
+    plt.ylabel('ee2')
     plt.axis('scaled')
     plt.title('EllipseESoft')
     ps.savefig()
@@ -291,7 +288,7 @@ if __name__ == '__main__':
     sig1 = 1.
     pixscale = 1.
     psf = NCircularGaussianPSF([1.5], [1.])
-    tim = Image(data=img, inverr=np.zero_like(img) + (1./sig1),
+    tim = Image(data=img, inverr=np.zeros_like(img) + (1./sig1),
                 psf=psf, wcs=NullWCS(pixscale=pixscale), sky=ConstantSky(0.),
                 photocal=LinearPhotoCal(1.),
                 domask=False, zr=[-2.*sig1, 3.*sig1])
