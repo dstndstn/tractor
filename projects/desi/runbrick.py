@@ -1451,6 +1451,7 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
     for src in cat:
         br = src.getBrightness()
         bright.append(sum([br.getFlux(band) for band in bands]))
+        src.minRadius = 3
     I = np.argsort(-np.array(bright))
 
     for i in I:
@@ -1466,28 +1467,29 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
             dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
                                             alphas=alphas)
             print 'dlnp:', dlnp, 'src', src
+            print 'Update:', X
+            print 'src params:', src.getParams()
+
+            if plots:
+                comods = []
+                for iband,band in enumerate(bands):
+                    comod = np.zeros((H,W))
+                    con = np.zeros((H,W))
+                    for itim,tim in enumerate(tims):
+                        if tim.band != band:
+                            continue
+                        (Yo,Xo,Yi,Xi) = tim.resamp
+                        mod = tractor.getModelImage(tim)
+                        comod[Yo,Xo] += mod[Yi,Xi]
+                        con[Yo,Xo] += 1
+                    comod /= np.maximum(con, 1)
+                    comods.append(comod)
+                plt.clf()
+                dimshow(get_rgb(comods, bands), ticks=False)
+                ps.savefig()
+
             if dlnp < 0.1:
                 break
-
-        if plots:
-            comods = []
-            for iband,band in enumerate(bands):
-                comod = np.zeros((clH,clW))
-                con = np.zeros((clH,clW))
-                for itim,tim in enumerate(tims):
-                    if tim.band != band:
-                        continue
-                    (Yo,Xo,Yi,Xi) = tim.resamp
-                    mod = tractor.getModelImage(tim)
-                    comod[Yo,Xo] += mod[Yi,Xi]
-                    con[Yo,Xo] += 1
-                comod /= np.maximum(con, 1)
-                comods.append(comod)
-    
-            plt.clf()
-            dimshow(get_rgb(comods, bands), ticks=False)
-            ps.savefig()
-
 
 
 def stage203(T=None, coimgs=None, cons=None,
