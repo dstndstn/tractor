@@ -25,6 +25,7 @@ __all__ = [
     'WCS', 'NullWCS',
     'FitsWcs', 'WcslibWcs', 'ConstantFitsWcs',
     'NCircularGaussianPSF', 'GaussianMixturePSF', 'PixelizedPSF',
+    'GaussianMixtureEllipsePSF',
     'ScaledWcs', 'ShiftedWcs', 'ScaledPhotoCal', 'ShiftedPsf',
     'ParamsWrapper',
     #'GaussianPriors',

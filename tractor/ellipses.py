@@ -49,18 +49,9 @@ class EllipseE(ParamList):
     @staticmethod
     def fromCovariance(cov):
         u,s,v = np.linalg.svd(cov)
-        print 'U=', u
-        print 'S=', s
-        print 'V=', v
-        #s,v = np.linalg.eig(cov)
-        #print 'eig: s=', s
-        #print 'v=', v
         r = np.sqrt(s[0])
         ab = np.sqrt(s[1] / s[0])
         theta = np.rad2deg(np.arctan2(u[0,0], u[0,1]))
-        print 'r', r
-        print 'ab', ab
-        print 'theta', theta
         return EllipseE.fromRAbPhi(r, ab, -theta)
     
     @property
@@ -172,7 +163,11 @@ class EllipseESoft(EllipseE):
         e = ell.e
         esoft = -np.log(1. - e)
         return EllipseESoft(np.log(ell.re), ell.e1/e*esoft, ell.e2/e*esoft)
-    
+
+    @staticmethod
+    def fromCovariance(cov):
+        return EllipseESoft.fromEllipseE(EllipseE.fromCovariance(cov))
+
     @staticmethod
     def fromRAbPhi(r, ba, phi):
         ab = 1./ba

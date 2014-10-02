@@ -123,8 +123,8 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
                 if ix == 0 and px0 is not None:
                     p0 = px0
                 im = self.instantiateAt(x, y)
-                gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0,
-                                                    v3=True, approx=1e-6)
+                gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
+                #v3=True, approx=1e-6)
                 print 'Fit PSF at', x,y
                 w,mu,var = gpsf.get_wmuvar()
                 if ix == 0:
