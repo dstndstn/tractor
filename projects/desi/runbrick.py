@@ -1454,18 +1454,42 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
         src.minRadius = 3
     I = np.argsort(-np.array(bright))
 
+    # Remember original tim images
+    orig_timages = [tim.getImage().copy() for tim in tims]
+    initial_models = []
+    # Create initial models for each tim x each source
+    tt = Time()
+    for tim in tims:
+        mods = []
+        for src in cat:
+            mod = src.getModelPatch(tim)
+            mods.append(mod)
+            if mod is not None:
+                mod.addTo(tim.getImage(), scale=-1)
+        initial_models.append(mods)
+    print 'Subtracting initial models:', Time()-tt
+
     for i in I:
-        cat.freezeAllBut(i)
-        print 'Fitting source', i
         src = cat[i]
+        print 'Fitting source', i
         print src
 
-        tractor.printThawedParams()
+        srctractor = Tractor(subtims, [src])
+        srctractor.freezeParams('images')
+
+        # Add this source's initial model back in.
+        for tim,mods in zip(tims, initial_models):
+            mod = mods[i]
+            if mod is not None:
+                mod.addTo(tim.getImage())
+
+        print 'Optimizing:', srctractor
+        srctractor.printThawedParams()
 
         alphas = [0.1, 0.3, 1.0]
         for step in range(50):
-            dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
-                                            alphas=alphas)
+            dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
+                                               alphas=alphas)
             print 'dlnp:', dlnp, 'src', src
             print 'Update:', X
             print 'src params:', src.getParams()
@@ -1479,7 +1503,7 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
                         if tim.band != band:
                             continue
                         (Yo,Xo,Yi,Xi) = tim.resamp
-                        mod = tractor.getModelImage(tim)
+                        mod = srctractor.getModelImage(tim)
                         comod[Yo,Xo] += mod[Yi,Xi]
                         con[Yo,Xo] += 1
                     comod /= np.maximum(con, 1)
@@ -1487,9 +1511,54 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.clf()
                 dimshow(get_rgb(comods, bands), ticks=False)
                 ps.savefig()
-
+    
             if dlnp < 0.1:
                 break
+
+        for tim in subtims:
+            mod = src.getModelPatch(tim)
+            if mod is not None:
+                mod.addTo(tim.getImage(), scale=-1)
+
+    for tim,img in zip(tims, orig_timages):
+        tim.data = img
+
+    # for i in I:
+    #     cat.freezeAllBut(i)
+    #     print 'Fitting source', i
+    #     src = cat[i]
+    #     print src
+    # 
+    #     tractor.printThawedParams()
+    # 
+    #     alphas = [0.1, 0.3, 1.0]
+    #     for step in range(50):
+    #         dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
+    #                                         alphas=alphas)
+    #         print 'dlnp:', dlnp, 'src', src
+    #         print 'Update:', X
+    #         print 'src params:', src.getParams()
+    # 
+    #         if plots:
+    #             comods = []
+    #             for iband,band in enumerate(bands):
+    #                 comod = np.zeros((H,W))
+    #                 con = np.zeros((H,W))
+    #                 for itim,tim in enumerate(tims):
+    #                     if tim.band != band:
+    #                         continue
+    #                     (Yo,Xo,Yi,Xi) = tim.resamp
+    #                     mod = tractor.getModelImage(tim)
+    #                     comod[Yo,Xo] += mod[Yi,Xi]
+    #                     con[Yo,Xo] += 1
+    #                 comod /= np.maximum(con, 1)
+    #                 comods.append(comod)
+    #             plt.clf()
+    #             dimshow(get_rgb(comods, bands), ticks=False)
+    #             ps.savefig()
+    # 
+    #         if dlnp < 0.1:
+    #             break
 
 
 def stage203(T=None, coimgs=None, cons=None,
