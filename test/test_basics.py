@@ -53,8 +53,24 @@ ps = PlotSequence('gell')
 for logre,cc in zip([1., 2., 3.], 'rgb'):
     plt.clf()
     for e1,e2 in zip(E1.ravel(), E2.ravel()):
+        print 
         e = EllipseESoft(logre, e1, e2)
-        print e
+        print 'Original:', e
+        print 'theta:', np.rad2deg(e.theta)
+        print 'r:', e.re
+        ee = e.e
+        ab = (1.+ee)/(1.-ee)
+        print 'ab:', 1./ab
+        print 'hard:', EllipseE.fromEllipseESoft(e)
+
+        print
+        cov = e.getCovariance()
+        print 'cov', cov
+        ec = EllipseE.fromCovariance(cov)
+        print 'ec', ec
+        ec2 = EllipseESoft.fromEllipseE(ec)
+        print 'ec2', ec2
+
         T = e.getRaDecBasis()
         txy = np.dot(T, xy)
         plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)

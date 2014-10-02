@@ -1392,24 +1392,11 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.01]*(K*3)
 
     def ellipseToVariance(self, ell):
-        G = ell.getRaDecBasis()
-        G *= 3600.
-        print 'Ellipse:', ell
-        print 'G:', G
-        GTG = np.dot(G.T, G)
-        #GG = np.dot(G, G)
-        print 'GTG:', GTG
-        
-        GGT = np.dot(G, G.T)
-        print 'GGT:', GGT
-        
-        U,S,V = np.linalg.svd(G)
-        print 'Eigen-decomp of G:',
-        print 'U =', U
-        print 'S =', S
-        print 'V =', V
-
-        return GGT
+        # G = ell.getRaDecBasis()
+        # G *= 3600.
+        # GGT = np.dot(G, G.T)
+        # return GGT
+        return ell.getCovariance()
         
     def _set_param_names(self, K):
         names = {}

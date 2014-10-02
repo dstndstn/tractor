@@ -46,6 +46,23 @@ class EllipseE(ParamList):
         e2 = e * np.sin(angle)
         return EllipseE(r, e1, e2)
 
+    @staticmethod
+    def fromCovariance(cov):
+        u,s,v = np.linalg.svd(cov)
+        print 'U=', u
+        print 'S=', s
+        print 'V=', v
+        #s,v = np.linalg.eig(cov)
+        #print 'eig: s=', s
+        #print 'v=', v
+        r = np.sqrt(s[0])
+        ab = np.sqrt(s[1] / s[0])
+        theta = np.rad2deg(np.arctan2(u[0,0], u[0,1]))
+        print 'r', r
+        print 'ab', ab
+        print 'theta', theta
+        return EllipseE.fromRAbPhi(r, ab, -theta)
+    
     @property
     def e(self):
         return np.hypot(self.e1, self.e2)
@@ -73,6 +90,17 @@ class EllipseE(ParamList):
     def isLegal(self):
         return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)
 
+    def getCovariance(self):
+        '''
+        Returns a covariance matrix that when, eg, used in a Gaussian
+        results in iso-density contours that lie on this ellipse.
+        The units are arcsec**2.
+        '''
+        G = self.getRaDecBasis()
+        G *= 3600.
+        GGT = np.dot(G, G.T)
+        return GGT
+    
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
@@ -139,6 +167,12 @@ class EllipseESoft(EllipseE):
         # ee2: e sin 2 theta, dimensionless
         return dict(logre=0, ee1=1, ee2=2)
 
+    @staticmethod
+    def fromEllipseE(ell):
+        e = ell.e
+        esoft = -np.log(1. - e)
+        return EllipseESoft(np.log(ell.re), ell.e1/e*esoft, ell.e2/e*esoft)
+    
     @staticmethod
     def fromRAbPhi(r, ba, phi):
         ab = 1./ba
