@@ -1377,19 +1377,37 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
     the covariance ellipse.
     '''
 
-    def __init__(self, amp, mean, ell):
+    def __init__(self, *args):
         '''
+        args = (amp, mean, ell)
+
+        or
+
+        args = (a0,a1,..., mx0,my0,mx1,my1,..., logr0,ee1-0,ee2-0,logr1,ee1-2,...)
+
+        
         amp:  np array (size K) of Gaussian amplitudes
         mean: np array (size K,2) of means
         ell:  list (length K) of EllipseESoft objects
         '''
+        if len(args) == 3:
+            amp, mean, ell = args
+        else:
+            from .ellipses import EllipseESoft
+            assert(len(args) % 6 == 0)
+            K = len(args) / 6
+            amp  = np.array(args[:K])
+            mean = np.array(args[K:3*K]).reshape((K,2))
+            args = args[3*K:]
+            ell = [EllipseESoft(*args[3*k: 3*(k+1)]) for k in range(K)]
+
         K = len(amp)
         var = np.zeros((K,2,2))
         for k in range(K):
             var[k,:,:] = self.ellipseToVariance(ell[k])
         self.ellipses = [e.copy() for e in ell]
         super(GaussianMixtureEllipsePSF, self).__init__(amp, mean, var)
-        self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.01]*(K*3)
+        self.stepsizes = [0.001]*K + [0.001]*(K*2) + [0.001]*(K*3)
 
     def ellipseToVariance(self, ell):
         return ell.getCovariance()
@@ -1441,42 +1459,36 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         return old
 
     @staticmethod
-    def fromStamp(stamp, N=3, P0=None, xy0=None, approx=1e-6):
+    def fromStamp(stamp, N=3, P0=None, approx=1e-6):
         '''
         optional P0 = (list of floats): initial parameter guess.
 
         (parameters of a GaussianMixtureEllipsePSF)
-        
-        #w has shape (N,)
-        #mu has shape (N,2)
-        #ellipses is a list of (N) EllipseESoft objects
-
-        optional xy0 = int x0,y0 origin of stamp.
         '''
         from .ellipses import EllipseESoft
-        H,W = stamp.shape
-        if xy0 is not None:
-            xm, ym = xy0
-        else:
-            xm, ym = -W/2, -H/2
-
         w = np.ones(N) / float(N)
         mu = np.zeros((N,2))
         ell = [EllipseESoft(np.log(2*r), 0., 0.) for r in range(1, N+1)]
         psf = GaussianMixtureEllipsePSF(w, mu, ell)
         if P0 is not None:
-            psf.setParams(P0)
+            psf.setAllParams(P0)
         tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp), psf=psf)
+        H,W = stamp.shape
         src = PointSource(PixPos(W/2, H/2), Flux(1.))
         tr = Tractor([tim],[src])
         tr.freezeParam('catalog')
         tim.freezeAllBut('psf')
+        #print 'Fitting:'
+        tr.printThawedParams()
         tim.modelMinval = approx
+        alphas = [0.1, 0.3, 1.0]
         for step in range(50):
-            dlnp,X,alpha = tr.optimize(shared_params=False)
-            print 'dlnp', dlnp
+            dlnp,X,alpha = tr.optimize(shared_params=False, alphas=alphas)
+            # print 'dlnp', dlnp
+            # print 'alpha', alpha
             if dlnp < 1e-6:
                 break
+            # print 'psf', psf
         return psf
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):

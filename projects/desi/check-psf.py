@@ -53,7 +53,8 @@ if __name__ == '__main__':
     iminfo = im.get_image_info()
     print 'img:', iminfo
     H,W = iminfo['dims']
-    psfex = PsfEx(im.psffn, W, H, nx=6)
+    #psfex = PsfEx(im.psffn, W, H, nx=6)
+    psfex = PsfEx(im.psffn, W, H, ny=9, nx=5)
 
     S = im.read_sdss()
     print len(S), 'SDSS sources'
@@ -135,10 +136,145 @@ if __name__ == '__main__':
     unitpsfimgs = []
     psfimgs = []
 
-    psfex.savesplindata = True
+    plt.figure(figsize=(5,10))
+    plt.subplots_adjust(left=0.1, bottom=0.1, top=0.95, right=0.99,
+                        wspace=0.05, hspace=0.05)
+    
+    YY = np.linspace(0, psfex.H, psfex.ny)
+    XX = np.linspace(0, psfex.W, psfex.nx)
+    psfgrid = []
+    psfcropgrid = []
+    for y in YY:
+        for x in XX:
+            psfimg = psfex.instantiateAt(x, y)
+            psfgrid.append(psfimg)
+    mx = np.max([psfimg.max() for psfimg in psfgrid])
+    logmx = np.log10(mx)
+    crop = 10
+    plt.clf()
+    for i,psfimg in enumerate(psfgrid):
+        plt.subplot(len(YY), len(XX), i+1)
+        h,w = psfimg.shape
+        img = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
+        print 'Cropped size', img.shape
+        psfcropgrid.append(img)
+        dimshow(np.log10(np.maximum(img, mx*1e-16)),
+                vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+    plt.suptitle('PsfEx models')
+    ps.savefig()
+
+
+    # 
+    #x,y = XX[0], YY[0]
+    pp = []
+    px0 = None
+    for iy,y in enumerate(YY):
+        pprow = []
+        p0 = px0
+        for ix,x in enumerate(XX):
+            psfimg = psfex.instantiateAt(x, y)
+            h,w = psfimg.shape
+            cropped = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
+
+            epsf = GaussianMixtureEllipsePSF.fromStamp(psfimg, P0=p0)
+            if ix == 0:
+                px0 = epsf.getParams()
+
+            if iy == 0:
+                epsf.radius = crop
+                modimg = epsf.getPointSourcePatch(0., 0.)
+                plt.clf()
+                plt.subplot(3,1,1)
+                dimshow(np.log10(np.maximum(cropped, mx*1e-16)),
+                        vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+                plt.subplot(3,1,2)
+                dimshow(np.log10(np.maximum(modimg.patch, mx*1e-16)),
+                        vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+                plt.subplot(3,1,3)
+                dimshow(cropped - modimg.patch,
+                        vmin=-0.001, vmax=0.001, ticks=False, cmap='RdBu')
+                ps.savefig()
+
+            print 'Fit PSF:', epsf
+            print 'Params:', epsf.getAllParams()
+            repsf = GaussianMixtureEllipsePSF(*epsf.getAllParams())
+            print 'Reconstructed:', repsf
+            
+            params = np.array(epsf.getAllParams())
+            pprow.append(params)
+        pp.append(pprow)
+    pp = np.array(pp)
+    print 'pp', pp.shape
+
+    ny,nx,nparams = pp.shape
+
+    plt.figure(figsize=(10,10))
+    
+    names = epsf.getParamNames()
+    
+    #iii = [ [i + j for j in [0,3,4,9,10,11]] for i in [0,1,2] ]
+    iii = [ [0, 3,4, 9,10,11],
+            [1, 5,6, 12,13,14],
+            [2, 7,8, 15,16,17] ]
+
+    for ii in iii:
+        plt.clf()
+        for j,ip in enumerate(ii):
+            plt.subplot(2,3, j+1)
+
+            print 'Param', names[ip]
+            print pp[:,:,ip]
+
+            dimshow(pp[:,:,ip], ticks=False)
+            plt.colorbar()
+            plt.title(names[ip])
+        ps.savefig()
+    
+    # for ip in range(nparams):
+    #     plt.clf()
+    #     dimshow(pp[:,:,ip], ticks=False)
+    #     plt.colorbar()
+    #     plt.title(names[ip])
+    #     ps.savefig()
+    
+
+
+    sys.exit(0)
+    
+    psfex.savesplinedata = True
     print 'Fitting PsfEx model...'
     psfex.ensureFit()
+
+    modgrid = []
+    for y in YY:
+        for x in XX:
+            mog = psfex.mogAt(x, y)
+            mog.radius = crop
+            modimg = mog.getPointSourcePatch(0., 0.)
+            print 'Patch shape', modimg.shape
+            modgrid.append(modimg.patch)
+    plt.clf()
+    for i,modimg in enumerate(modgrid):
+        plt.subplot(len(YY), len(XX), i+1)
+        #h,w = psfimg.shape
+        #img = psfimg[h/2-crop:h/2+crop, w/2-crop:w/2+crop]
+        dimshow(np.log10(np.maximum(modimg, mx*1e-16)),
+                vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+    plt.suptitle('PsfEx: Mixture-of-Gaussian fits')
+    ps.savefig()
+
+    plt.clf()
+    for i,(psfimg,modimg) in enumerate(zip(psfcropgrid,modgrid)):
+        plt.subplot(len(YY), len(XX), i+1)
+        diff = psfimg - modimg
+        print 'Max diff:', np.abs(diff).max()
+        dimshow(psfimg - modimg, vmin=-0.01, vmax=0.01,
+                ticks=False, cmap='jet')
+    plt.suptitle('PsfEx: Pixelized - Mixture-of-Gaussian')
+    ps.savefig()
     
+    sys.exit(0)
+
     
     plt.clf()
     for i,subimg in enumerate(subimgs):

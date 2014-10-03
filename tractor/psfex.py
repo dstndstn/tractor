@@ -86,6 +86,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         '''
         self.ensureFit()
         vals = [spl(x, y) for spl in self.splines]
+
         K = self.K
         w = np.empty(K)
 
@@ -96,13 +97,12 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         vals = vals[K:]
 
         mu = np.empty((K,2))
-        mu.ravel()[:] = vals[:2*K]
+        mu.flat[:] = vals[:2*K]
         vals = vals[2*K:]
         var = np.empty((K,2,2))
         var[:,0,0] = vals[:K]
         vals = vals[K:]
-        var[:,0,1] = vals[:K]
-        var[:,1,0] = var[:,0,1]
+        var[:,1,0] = var[:,0,1] = vals[:K]
         vals = vals[K:]
         var[:,1,1] = vals[:K]
         vals = vals[K:]
@@ -119,13 +119,11 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         px0 = None
         for y in YY:
             pprow = []
+            # We start each row with the MoG fit parameters of the
+            # start of the previous row (to try to make the fit
+            # more continuous)
+            p0 = px0
             for ix,x in enumerate(XX):
-                p0 = None
-                # We start each row with the MoG fit parameters of the
-                # start of the previous row (to try to make the fit
-                # more continuous)
-                if ix == 0 and px0 is not None:
-                    p0 = px0
                 im = self.instantiateAt(x, y)
 
                 # gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
@@ -135,16 +133,19 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
                 #     px0 = (w,mu,var)
                 # w,mu,var = gpsf.get_wmuvar()
 
-                gpsf = GaussianMixtureEllipsePSF.fromStamp(im, N=self.K, P0=p0)
+                epsf = GaussianMixtureEllipsePSF.fromStamp(im, N=self.K, P0=p0)
                 if ix == 0:
-                    px0 = gpsf.getParams()
-                psf = gpsf.toMog()
-                w,mu,var = psf.get_wmuvar()
-                params = np.hstack((w.ravel(),
-                                    mu.ravel(),
-                                    var[:,0,0].ravel(),
-                                    var[:,0,1].ravel(),
-                                    var[:,1,1].ravel())).copy()
+                    px0 = epsf.getParams()
+                psf = epsf    
+                #psf = epsf.toMog()
+                #print 'MoG psf:', psf
+                #w,mu,var = psf.get_wmuvar()
+                # params = np.hstack((w.ravel(),
+                #                     mu.ravel(),
+                #                     var[:,0,0].ravel(),
+                #                     var[:,0,1].ravel(),
+                #                     var[:,1,1].ravel())).copy()
+                params = np.array(psf.getAllParams())
                 pprow.append(params)
             pp.append(pprow)
         pp = np.array(pp)
@@ -200,21 +201,30 @@ class PsfEx(VaryingGaussianPSF):
         self.scale = scale
         super(PsfEx, self).__init__(W, H, nx, ny, K)
 
-    def getMixtureOfGaussians(self, mean=None):
-        if mean is not None:
-            x = mean[0]
-            y = mean[1]
-        else:
-            x = y = 0.
-        w,mu,var = self.scaledMogParamsAt(x, y)
-        return mp.MixtureOfGaussians(w, mu, var)
+    # def getMixtureOfGaussians(self, mean=None):
+    #     if mean is not None:
+    #         x = mean[0]
+    #         y = mean[1]
+    #     else:
+    #         x = y = 0.
+    #     w,mu,var = self.scaledMogParamsAt(x, y)
+    #     return mp.MixtureOfGaussians(w, mu, var)
+    # 
+    # def mogAt(self, x, y):
+    #     w,mu,var = self.scaledMogParamsAt(x, y)
+    #     mog = GaussianMixturePSF(w, mu, var)
+    #     mog.radius = self.radius
+    #     return mog
 
-    def mogAt(self, x, y):
-        w,mu,var = self.scaledMogParamsAt(x, y)
-        mog = GaussianMixturePSF(w, mu, var)
-        mog.radius = self.radius
-        return mog
+    def getPointSourcePatch(self, px, py, **kwargs):
+        self.ensureFit()
+        vals = [spl(x, y) for spl in self.splines]
 
+        psf = GaussianMixtureEllipsePSF(*vals)
+        return psf.getPointSourcePatch(px, py, **kwargs)
+        #mog = self.mogAt(px, py)
+        #return mog.getPointSourcePatch(px, py, **kwargs)
+    
     def instantiateAt(self, x, y, nativeScale=False):
         from scipy.ndimage.interpolation import affine_transform
         psf = np.zeros_like(self.psfbases[0])
