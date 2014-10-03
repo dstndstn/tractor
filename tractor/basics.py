@@ -1404,6 +1404,9 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
             names['ee1-%i'%k] = K*3 + (k*3)+1
             names['ee2-%i'%k] = K*3 + (k*3)+2
         self.addNamedParams(**names)
+
+    def toMog(self):
+        return GaussianMixturePSF(self.mog.amp, self.mog.mean, self.mog.var)
         
     def __str__(self):
         return (
@@ -1437,6 +1440,44 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         self._setThings(things)
         return old
 
+    @staticmethod
+    def fromStamp(stamp, N=3, P0=None, xy0=None, approx=1e-6):
+        '''
+        optional P0 = (list of floats): initial parameter guess.
+
+        (parameters of a GaussianMixtureEllipsePSF)
+        
+        #w has shape (N,)
+        #mu has shape (N,2)
+        #ellipses is a list of (N) EllipseESoft objects
+
+        optional xy0 = int x0,y0 origin of stamp.
+        '''
+        from .ellipses import EllipseESoft
+        H,W = stamp.shape
+        if xy0 is not None:
+            xm, ym = xy0
+        else:
+            xm, ym = -W/2, -H/2
+
+        w = np.ones(N) / float(N)
+        mu = np.zeros((N,2))
+        ell = [EllipseESoft(np.log(2*r), 0., 0.) for r in range(1, N+1)]
+        psf = GaussianMixtureEllipsePSF(w, mu, ell)
+        if P0 is not None:
+            psf.setParams(P0)
+        tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp), psf=psf)
+        src = PointSource(PixPos(W/2, H/2), Flux(1.))
+        tr = Tractor([tim],[src])
+        tr.freezeParam('catalog')
+        tim.freezeAllBut('psf')
+        tim.modelMinval = approx
+        for step in range(50):
+            dlnp,X,alpha = tr.optimize(shared_params=False)
+            print 'dlnp', dlnp
+            if dlnp < 1e-6:
+                break
+        return psf
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''

@@ -88,9 +88,13 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         vals = [spl(x, y) for spl in self.splines]
         K = self.K
         w = np.empty(K)
-        w[:-1] = vals[:K-1]
-        vals = vals[K-1:]
-        w[-1] = 1. - sum(w[:-1])
+
+        # w[:-1] = vals[:K-1]
+        # vals = vals[K-1:]
+        # w[-1] = 1. - sum(w[:-1])
+        w[:] = vals[:K]
+        vals = vals[K:]
+
         mu = np.empty((K,2))
         mu.ravel()[:] = vals[:2*K]
         vals = vals[2*K:]
@@ -123,14 +127,20 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
                 if ix == 0 and px0 is not None:
                     p0 = px0
                 im = self.instantiateAt(x, y)
-                gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
-                #v3=True, approx=1e-6)
-                print 'Fit PSF at', x,y
-                w,mu,var = gpsf.get_wmuvar()
-                if ix == 0:
-                    px0 = (w,mu,var)
 
-                params = np.hstack((w.ravel()[:-1],
+                # gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
+                # #v3=True, approx=1e-6)
+                # print 'Fit PSF at', x,y
+                # if ix == 0:
+                #     px0 = (w,mu,var)
+                # w,mu,var = gpsf.get_wmuvar()
+
+                gpsf = GaussianMixtureEllipsePSF.fromStamp(im, N=self.K, P0=p0)
+                if ix == 0:
+                    px0 = gpsf.getParams()
+                psf = gpsf.toMog()
+                w,mu,var = psf.get_wmuvar()
+                params = np.hstack((w.ravel(),
                                     mu.ravel(),
                                     var[:,0,0].ravel(),
                                     var[:,0,1].ravel(),
