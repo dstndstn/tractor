@@ -1459,7 +1459,7 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         return old
 
     @staticmethod
-    def fromStamp(stamp, N=3, P0=None, approx=1e-6):
+    def fromStamp(stamp, N=3, P0=None, approx=1e-6, damp=0.):
         '''
         optional P0 = (list of floats): initial parameter guess.
 
@@ -1478,17 +1478,20 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         tr = Tractor([tim],[src])
         tr.freezeParam('catalog')
         tim.freezeAllBut('psf')
-        #print 'Fitting:'
+
+        print 'Fitting:'
         tr.printThawedParams()
+
         tim.modelMinval = approx
         alphas = [0.1, 0.3, 1.0]
         for step in range(50):
-            dlnp,X,alpha = tr.optimize(shared_params=False, alphas=alphas)
-            # print 'dlnp', dlnp
-            # print 'alpha', alpha
+            dlnp,X,alpha = tr.optimize(shared_params=False, alphas=alphas,
+                                       damp=damp)
+            print 'dlnp', dlnp, 'alpha', alpha
+            print 'X', X
             if dlnp < 1e-6:
                 break
-            # print 'psf', psf
+            print 'psf', psf
         return psf
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
