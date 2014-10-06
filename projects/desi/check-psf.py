@@ -18,6 +18,12 @@ from tractor import *
 
 from common import *
 
+def subplot_grid(ny, nx, i):
+    y = i/nx
+    x = i%nx
+    plt.subplot(ny, nx, 1 + ((ny-1)-y)*nx + x)
+
+
 if __name__ == '__main__':
     decals = Decals()
 
@@ -50,11 +56,81 @@ if __name__ == '__main__':
     pixscale = wcs.pixel_scale()/3600.
     run_calibs(im, r, d, pixscale, astrom=True, morph=False, se2=False)
 
+
     iminfo = im.get_image_info()
     print 'img:', iminfo
     H,W = iminfo['dims']
     #psfex = PsfEx(im.psffn, W, H, nx=6)
-    psfex = PsfEx(im.psffn, W, H, ny=9, nx=5)
+    #psfex = PsfEx(im.psffn, W, H, ny=17, nx=9)
+    psfex = PsfEx(im.psffn, W, H, ny=13, nx=7)
+    #psfex = PsfEx(im.psffn, W, H, ny=9, nx=5)
+
+    # for ibase,basis in enumerate(psfex.psfbases):
+    #     plt.clf()
+    #     plt.subplot(2,1,1)
+    #     mx = np.percentile(np.abs(basis), 99.5)
+    #     if ibase == 0:
+    #         dimshow(basis, ticks=False)
+    #     else:
+    #         dimshow(basis, ticks=False, vmin=-mx, vmax=mx)
+    #     #plt.colorbar(fraction=0.2)
+    #     plt.suptitle('PsfEx eigen-PSF %i' % ibase)
+    #     plt.subplot(2,1,2)
+    # 
+    #     xx,yy = np.meshgrid(np.linspace(0, W, 50), np.linspace(0, H, 50))
+    #     print 'xx,yy', xx.shape, yy.shape
+    #     amp = np.zeros_like(xx)
+    #     print 'amp', amp.shape
+    #     
+    #     dx = (xx - psfex.x0) / psfex.xscale
+    #     dy = (yy - psfex.y0) / psfex.yscale
+    #     for d in range(psfex.degree + 1):
+    #         print 'degree', d
+    #         for j in range(d+1):
+    #             k = d - j
+    #             print 'j', j, 'k', k
+    #             # PSFEx manual pg. 111 ?
+    #             ii = j + (psfex.degree+1) * k - (k * (k-1))/ 2
+    #             print 'ii', ii
+    #             if ii != ibase:
+    #                 continue
+    #             amp += dx**j * dy**k
+    #     dimshow(amp, extent=[xx[0,0],xx[0,-1],yy[0,0],yy[-1,0]])
+    #     plt.colorbar(fraction=0.25)
+    #     ps.savefig()
+
+    plt.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.92,
+                        wspace=0.1, hspace=0.2)
+    
+    nbases = len(psfex.psfbases)
+    cols = int(np.ceil(np.sqrt(nbases) * 1.3))
+    rows = int(np.ceil(nbases / float(cols)))
+    plt.clf()
+    for ibase,basis in enumerate(psfex.psfbases):
+        plt.subplot(rows, cols, ibase+1)
+        mx = np.percentile(np.abs(basis), 99.5)
+        if ibase == 0:
+            dimshow(basis, ticks=False)
+        else:
+            dimshow(basis, ticks=False, vmin=-mx, vmax=mx)
+
+        for d in range(psfex.degree + 1):
+            print 'degree', d
+            for j in range(d+1):
+                k = d - j
+                print 'j', j, 'k', k
+                # PSFEx manual pg. 111 ?
+                ii = j + (psfex.degree+1) * k - (k * (k-1))/ 2
+                print 'ii', ii
+                if ii == ibase:
+                    xoyo = (j,k)
+        plt.title('$x^%i y^%i$' % xoyo, fontdict=dict(fontsize=10))
+    plt.suptitle('PsfEx eigen-PSFs')
+    ps.savefig()
+    
+    plt.figure(figsize=(5,10))
+    plt.subplots_adjust(left=0.1, bottom=0.1, top=0.95, right=0.99,
+                        wspace=0.05, hspace=0.05)
 
     S = im.read_sdss()
     print len(S), 'SDSS sources'
@@ -114,32 +190,28 @@ if __name__ == '__main__':
         subimg = img[s.iy - sz : s.iy + sz+1, s.ix - sz : s.ix + sz+1]
         subimgs.append(subimg)
     
-    plt.clf()
-    for i,subimg in enumerate(subimgs):
-        plt.subplot(rows, cols, 1+i)
-        dimshow(subimg, ticks=False)
-        #plt.colorbar()
-    ps.savefig()
+    # plt.clf()
+    # for i,subimg in enumerate(subimgs):
+    #     plt.subplot(rows, cols, 1+i)
+    #     dimshow(subimg, ticks=False)
+    #     #plt.colorbar()
+    # ps.savefig()
     
     maxes = []
-    plt.clf()
+    # plt.clf()
     for i,subimg in enumerate(subimgs):
-        plt.subplot(rows, cols, 1+i)
+        # plt.subplot(rows, cols, 1+i)
         mx = subimg.max()
         maxes.append(mx)
-        logmx = np.log10(mx)
-        dimshow(np.log10(np.maximum(subimg, mx*1e-16)), vmin=0, vmax=logmx,
-                ticks=False)
-    ps.savefig()
+        # logmx = np.log10(mx)
+        # dimshow(np.log10(np.maximum(subimg, mx*1e-16)), vmin=0, vmax=logmx,
+        #         ticks=False)
+    # ps.savefig()
 
     origpsfimgs = []
     unitpsfimgs = []
     psfimgs = []
 
-    plt.figure(figsize=(5,10))
-    plt.subplots_adjust(left=0.1, bottom=0.1, top=0.95, right=0.99,
-                        wspace=0.05, hspace=0.05)
-    
     YY = np.linspace(0, psfex.H, psfex.ny)
     XX = np.linspace(0, psfex.W, psfex.nx)
     psfgrid = []
@@ -153,10 +225,12 @@ if __name__ == '__main__':
     crop = 10
     plt.clf()
     for i,psfimg in enumerate(psfgrid):
-        plt.subplot(len(YY), len(XX), i+1)
+        #plt.subplot(len(YY), len(XX), i+1)
+        subplot_grid(len(YY), len(XX), i)
         h,w = psfimg.shape
         img = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
-        print 'Cropped size', img.shape
+        if i == 0:
+            print 'Cropped size', img.shape
         psfcropgrid.append(img)
         dimshow(np.log10(np.maximum(img, mx*1e-16)),
                 vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
@@ -164,8 +238,8 @@ if __name__ == '__main__':
     ps.savefig()
 
 
-    # 
-    #x,y = XX[0], YY[0]
+    modgrid = []
+    
     pp = []
     px0 = None
     for iy,y in enumerate(YY):
@@ -181,9 +255,11 @@ if __name__ == '__main__':
             if ix == 0:
                 px0 = p0
 
-            if iy == 0:
-                epsf.radius = crop
-                modimg = epsf.getPointSourcePatch(0., 0.)
+            epsf.radius = crop
+            modimg = epsf.getPointSourcePatch(0., 0.)
+            modgrid.append(modimg.patch)
+                
+            if iy == 0 and False:
                 plt.clf()
                 plt.subplot(3,1,1)
                 dimshow(np.log10(np.maximum(cropped, mx*1e-16)),
@@ -219,6 +295,26 @@ if __name__ == '__main__':
     pp = np.array(pp)
     print 'pp', pp.shape
 
+    plt.clf()
+    for i,modimg in enumerate(modgrid):
+        subplot_grid(len(YY), len(XX), i)
+        #plt.subplot(len(YY), len(XX), i+1)
+        dimshow(np.log10(np.maximum(modimg, mx*1e-16)),
+                vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+    plt.suptitle('PsfEx: Mixture-of-Gaussian fits')
+    ps.savefig()
+
+    plt.clf()
+    for i,(psfimg,modimg) in enumerate(zip(psfcropgrid,modgrid)):
+        subplot_grid(len(YY), len(XX), i)
+        #plt.subplot(len(YY), len(XX), i+1)
+        diff = psfimg - modimg
+        print 'Max diff:', np.abs(diff).max()
+        dimshow(psfimg - modimg, vmin=-0.001, vmax=0.001,
+                ticks=False, cmap='RdBu')
+    plt.suptitle('PsfEx: Pixelized - Mixture-of-Gaussian')
+    ps.savefig()
+    
     ny,nx,nparams = pp.shape
 
     plt.figure(figsize=(10,10))
@@ -238,7 +334,11 @@ if __name__ == '__main__':
             print 'Param', names[ip]
             print pp[:,:,ip]
 
-            dimshow(pp[:,:,ip], ticks=False)
+            # param values from other components
+            kpp = np.hstack([pp[:,:,kii[j]].ravel() for kii in iii])
+            mn,mx = kpp.min(), kpp.max()
+            
+            dimshow(pp[:,:,ip], cmap='jet', ticks=False, vmin=mn, vmax=mx)
             plt.colorbar()
             plt.title(names[ip])
         ps.savefig()
