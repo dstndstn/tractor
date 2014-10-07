@@ -1387,11 +1387,12 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         var = np.zeros((K,2,2))
         for k in range(K):
             var[k,:,:] = self.ellipseToVariance(ell[k])
-        super(GaussianMixtureEllipsePsf, self).__init__(amp, mean, var)
+        self.ellipses = [e.copy() for e in ell]
+        super(GaussianMixtureEllipsePSF, self).__init__(amp, mean, var)
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.01]*(K*3)
 
     def ellipseToVariance(self, ell):
-        return np.array([[0., 0.], [0., 0.]])
+        return ell.getCovariance()
         
     def _set_param_names(self, K):
         names = {}
@@ -1403,27 +1404,23 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
             names['ee1-%i'%k] = K*3 + (k*3)+1
             names['ee2-%i'%k] = K*3 + (k*3)+2
         self.addNamedParams(**names)
+
+    def toMog(self):
+        return GaussianMixturePSF(self.mog.amp, self.mog.mean, self.mog.var)
         
-    def copy(self):
-        pass
-    def hashkey(self):
-        return ('GaussianMixturePSF',
-                tuple(self.mog.amp),
-                tuple(self.mog.mean.ravel()),
-                tuple(self.mog.var.ravel()),)
     def __str__(self):
         return (
-            'GaussianMixturePSF: amps=' + str(tuple(self.mog.amp.ravel())) +
-            ', means=' + str(tuple(self.mog.mean.ravel())) +
+            'GaussianMixtureEllipsePSF: amps=' +
+            '['+', '.join(['%.3f' % a for a in self.mog.amp.ravel()]) + ']' +
+            ', means=[' + ', '.join([
+                '(%.3f, %.3f)' % (x,y) for x,y in self.mog.mean]) + ']' +
+            ', ellipses=' + ', '.join(str(e) for e in self.ellipses) +
             ', var=' + str(tuple(self.mog.var.ravel())))
     
-    def _get_variance(self):
-        pass
-        
     def _getThings(self):
         p = list(self.mog.amp) + list(self.mog.mean.ravel())
-        for v in self.mog.var:
-            p += (v[0,0], v[1,1], v[0,1])
+        for e in self.ellipses:
+            p += e.getAllParams()
         return p
     def _setThings(self, p):
         K = self.mog.K
@@ -1431,34 +1428,56 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         pp = p[K:]
         self.mog.mean = np.atleast_2d(pp[:K*2]).reshape(K,2)
         pp = pp[K*2:]
-        self.mog.var[:,0,0] = pp[::3]
-        self.mog.var[:,1,1] = pp[1::3]
-        self.mog.var[:,0,1] = self.mog.var[:,1,0] = pp[2::3]
+        for i,e in enumerate(self.ellipses):
+            e.setAllParams(pp[:3])
+            pp = pp[3:]
+            self.mog.var[i,:,:] = self.ellipseToVariance(e)
     def _setThing(self, i, p):
-        K = self.mog.K
-        if i < K:
-            old = self.mog.amp[i]
-            self.mog.amp[i] = p
-            return old
-        i -= K
-        if i < K*2:
-            old = self.mog.mean.ravel()[i]
-            self.mog.mean.ravel()[i] = p
-            return old
-        i -= K*2
-        j = i / 3
-        k = i % 3
-        if k in [0,1]:
-            old = self.mog.var[j,k,k]
-            self.mog.var[j,k,k] = p
-            return old
-        old = self.mog.var[j,0,1]
-        self.mog.var[j,0,1] = p
-        self.mog.var[j,1,0] = p
+        ## hack
+        things = self._getThings()
+        old = things[i]
+        things[i] = p
+        self._setThings(things)
         return old
-    
 
+    @staticmethod
+    def fromStamp(stamp, N=3, P0=None, xy0=None, approx=1e-6):
+        '''
+        optional P0 = (list of floats): initial parameter guess.
 
+        (parameters of a GaussianMixtureEllipsePSF)
+        
+        #w has shape (N,)
+        #mu has shape (N,2)
+        #ellipses is a list of (N) EllipseESoft objects
+
+        optional xy0 = int x0,y0 origin of stamp.
+        '''
+        from .ellipses import EllipseESoft
+        H,W = stamp.shape
+        if xy0 is not None:
+            xm, ym = xy0
+        else:
+            xm, ym = -W/2, -H/2
+
+        w = np.ones(N) / float(N)
+        mu = np.zeros((N,2))
+        ell = [EllipseESoft(np.log(2*r), 0., 0.) for r in range(1, N+1)]
+        psf = GaussianMixtureEllipsePSF(w, mu, ell)
+        if P0 is not None:
+            psf.setParams(P0)
+        tim = Image(data=stamp, invvar=1e6*np.ones_like(stamp), psf=psf)
+        src = PointSource(PixPos(W/2, H/2), Flux(1.))
+        tr = Tractor([tim],[src])
+        tr.freezeParam('catalog')
+        tim.freezeAllBut('psf')
+        tim.modelMinval = approx
+        for step in range(50):
+            dlnp,X,alpha = tr.optimize(shared_params=False)
+            print 'dlnp', dlnp
+            if dlnp < 1e-6:
+                break
+        return psf
     
 class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''

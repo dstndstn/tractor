@@ -46,6 +46,14 @@ class EllipseE(ParamList):
         e2 = e * np.sin(angle)
         return EllipseE(r, e1, e2)
 
+    @staticmethod
+    def fromCovariance(cov):
+        u,s,v = np.linalg.svd(cov)
+        r = np.sqrt(s[0])
+        ab = np.sqrt(s[1] / s[0])
+        theta = np.rad2deg(np.arctan2(u[0,0], u[0,1]))
+        return EllipseE.fromRAbPhi(r, ab, -theta)
+    
     @property
     def e(self):
         return np.hypot(self.e1, self.e2)
@@ -73,6 +81,17 @@ class EllipseE(ParamList):
     def isLegal(self):
         return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)
 
+    def getCovariance(self):
+        '''
+        Returns a covariance matrix that when, eg, used in a Gaussian
+        results in iso-density contours that lie on this ellipse.
+        The units are arcsec**2.
+        '''
+        G = self.getRaDecBasis()
+        G *= 3600.
+        GGT = np.dot(G, G.T)
+        return GGT
+    
     def getRaDecBasis(self):
         ''' Returns a transformation matrix that takes vectors in r_e
         to delta-RA, delta-Dec vectors.
@@ -138,6 +157,16 @@ class EllipseESoft(EllipseE):
         # ee1: e cos 2 theta, dimensionless
         # ee2: e sin 2 theta, dimensionless
         return dict(logre=0, ee1=1, ee2=2)
+
+    @staticmethod
+    def fromEllipseE(ell):
+        e = ell.e
+        esoft = -np.log(1. - e)
+        return EllipseESoft(np.log(ell.re), ell.e1/e*esoft, ell.e2/e*esoft)
+
+    @staticmethod
+    def fromCovariance(cov):
+        return EllipseESoft.fromEllipseE(EllipseE.fromCovariance(cov))
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
@@ -233,9 +262,6 @@ if __name__ == '__main__':
         ps.savefig()
 
     import sys
-    sys.exit(0)
-    
-    ps = PlotSequence('ell')
     
     angle = np.linspace(0., 2.*np.pi, 20)
     xx,yy = np.sin(angle), np.cos(angle)
@@ -259,8 +285,8 @@ if __name__ == '__main__':
             txy = np.dot(T, xy)
             #print 'txy', txy.shape
             plt.plot(e1 + txy[0,:], e2 + txy[1,:], '-', color=cc, alpha=0.5)
-    plt.xlabel('"e1"')
-    plt.ylabel('"e2"')
+    plt.xlabel('ee1')
+    plt.ylabel('ee2')
     plt.axis('scaled')
     plt.title('EllipseESoft')
     ps.savefig()
@@ -291,7 +317,7 @@ if __name__ == '__main__':
     sig1 = 1.
     pixscale = 1.
     psf = NCircularGaussianPSF([1.5], [1.])
-    tim = Image(data=img, inverr=np.zero_like(img) + (1./sig1),
+    tim = Image(data=img, inverr=np.zeros_like(img) + (1./sig1),
                 psf=psf, wcs=NullWCS(pixscale=pixscale), sky=ConstantSky(0.),
                 photocal=LinearPhotoCal(1.),
                 domask=False, zr=[-2.*sig1, 3.*sig1])

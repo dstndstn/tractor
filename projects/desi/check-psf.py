@@ -104,6 +104,7 @@ if __name__ == '__main__':
     S.cut(np.argsort(-S.flux))
 
     rows,cols = 4,5
+    #rows,cols = 2,2
 
     
     subimgs = []
@@ -116,6 +117,7 @@ if __name__ == '__main__':
     for i,subimg in enumerate(subimgs):
         plt.subplot(rows, cols, 1+i)
         dimshow(subimg, ticks=False)
+        #plt.colorbar()
     ps.savefig()
     
     maxes = []
@@ -296,7 +298,9 @@ if __name__ == '__main__':
     plt.suptitle('PixPSF - MoG')
     ps.savefig()
 
-    # Re-fit the MoG
+    orig_mogs = [mog.copy() for mog in mogs]
+    
+    # Re-fit the MoG PSF to the pixelized postage stamp
     plt.clf()
     for i,(mog,psfimg) in enumerate(zip(mogs, origpsfimgs)):
         print
@@ -341,3 +345,76 @@ if __name__ == '__main__':
     plt.suptitle('Image - MoG model')
     ps.savefig()
 
+
+
+    ############## 
+
+    # Re-fit the MoGs using EllipseESoft basis.
+    epsfs = []
+    plt.clf()
+    for i,(mog,psfimg) in enumerate(zip(orig_mogs, origpsfimgs)):
+        print
+        print
+        
+        ells = [EllipseESoft.fromCovariance(cov)
+                for cov in mog.mog.var]
+        psf = GaussianMixtureEllipsePSF(mog.mog.amp, mog.mog.mean, ells)
+
+        tim = Image(data=psfimg, invvar=1e6*np.ones_like(psfimg),
+                    psf=psf)
+        epsfs.append(psf)
+        
+        h,w = psfimg.shape
+        src = PointSource(PixPos(w/2,h/2), Flux(1.))
+        tr = Tractor([tim], [src])
+        tr.freezeParam('catalog')
+        tim.freezeAllBut('psf')
+
+        print 'PSF', psf
+        for step in range(20):
+            dlnp,X,alpha = tr.optimize(shared_params=False)
+            print 'dlnp', dlnp, 'psf', psf
+            if dlnp < 1e-6:
+                break
+            
+        sz = w/2
+        mogimg = psf.getPointSourcePatch(0., 0., radius=sz)
+        mogimg = mogimg.patch
+        mx = 0.002
+        
+        plt.subplot(rows, cols, 1+i)
+        dimshow(psfimg - mogimg, ticks=False, vmin=-mx, vmax=mx)
+    plt.suptitle('PixPSF - MoG (ellipse)')
+    ps.savefig()
+
+    # Update the 'tims' with these newly-found PSFs
+    for psf,tim in zip(epsfs, tims):
+        tim.mogpsf = tim.psf
+        tim.psf = psf
+
+    # Image - MoG model
+    # plt.clf()
+    # for i,(subimg,tim,src) in enumerate(zip(
+    #         subimgs, tims, srcs)):
+    #     tr = Tractor([tim],[src])
+    #     plt.subplot(rows, cols, 1+i)
+    #     mod = tr.getModelImage(0)
+    #     dimshow(mod, ticks=False)
+    #     #plt.colorbar()
+    # plt.suptitle('MoG (ellipse) model')
+    # ps.savefig()
+    
+    plt.clf()
+    for i,(subimg,tim,src,psf) in enumerate(zip(
+            subimgs, tims, srcs,epsfs)):
+        print 'Source:', src
+        print 'PSF:', tim.getPsf()
+        print 'subimage sum:', subimg.sum()
+        tr = Tractor([tim],[src])
+        plt.subplot(rows, cols, 1+i)
+        mod = tr.getModelImage(0)
+        print 'mod sum:', mod.sum()
+        dimshow(subimg - mod, ticks=False, vmin=-5, vmax=5)
+    plt.suptitle('Image - MoG (ellipse) model')
+    ps.savefig()
+    
