@@ -61,10 +61,122 @@ if __name__ == '__main__':
     print 'img:', iminfo
     H,W = iminfo['dims']
     #psfex = PsfEx(im.psffn, W, H, nx=6)
-    #psfex = PsfEx(im.psffn, W, H, ny=17, nx=9)
-    psfex = PsfEx(im.psffn, W, H, ny=13, nx=7)
+    psfex = PsfEx(im.psffn, W, H, ny=17, nx=9,
+                  psfClass=GaussianMixtureEllipsePSF)
+    #psfex = PsfEx(im.psffn, W, H, ny=13, nx=7)
     #psfex = PsfEx(im.psffn, W, H, ny=9, nx=5)
 
+    fn = 'psfex-ellipses.fits'
+    if os.path.exists(fn):
+
+        plt.figure(figsize=(5,10))
+        plt.subplots_adjust(left=0.01, bottom=0.01, top=0.95, right=0.99,
+                            wspace=0.05, hspace=0.025)
+
+
+        pp = fitsio.read(fn)
+        print 'Read parameters:', pp.shape
+        ny,nx,nparams = pp.shape
+        print 'nx,ny', nx,ny
+        print 'nparams', nparams
+        psfex.ny = ny
+        psfex.nx = nx
+
+        YY = np.linspace(0, psfex.H, psfex.ny)
+        XX = np.linspace(0, psfex.W, psfex.nx)
+        #psfex.splinedata = (pp, XX, YY)
+        psfex.fitSavedData(pp, XX, YY)
+
+        subpp = pp[::2, ::2, :]
+        subXX, subYY = XX[::2], YY[::2]
+        print 'subpp:', subpp.shape
+        subpsfex = PsfEx(im.psffn, W, H, ny=len(subYY), nx=len(subXX),
+                         psfClass=GaussianMixtureEllipsePSF)
+        subpsfex.fitSavedData(subpp, subXX, subYY)
+
+        ppvar = np.zeros_like(pp)
+        for iy in range(ny):
+            for ix in range(nx):
+                psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
+                #print 'PSF:', psf
+                mog = psf.toMog()
+                #print 'MoG:', mog
+                #print 'Params:', mog.getParams()
+                ppvar[iy,ix,:] = mog.getParams()
+        psfexvar = PsfEx(im.psffn, W, H, ny=17, nx=9,
+                         psfClass=GaussianMixturePSF)
+        #psfexvar = VaryingGaussianPSF(W, H, ny=17, nx=9)
+        psfexvar.fitSavedData(ppvar, XX, YY)
+
+        subvar = ppvar[::2, ::2, :]
+        subpsfexvar = PsfEx(im.psffn, W, H, ny=len(subYY), nx=len(subXX),
+                            psfClass=GaussianMixturePSF)
+        subpsfexvar.fitSavedData(subvar, subXX, subYY)
+        
+
+        psfgrid = []
+        psfcropgrid = []
+        crop = 10
+        for y in YY:
+            for x in XX:
+                psfimg = psfex.instantiateAt(x, y)
+                psfgrid.append(psfimg)
+                h,w = psfimg.shape
+                img = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
+                psfcropgrid.append(img)
+        mx = np.max([psfimg.max() for psfimg in psfgrid])
+        logmx = np.log10(mx)
+        plt.clf()
+        for i,psfimg in enumerate(psfcropgrid):
+            #plt.subplot(len(YY), len(XX), i+1)
+            subplot_grid(len(YY), len(XX), i)
+            dimshow(np.log10(np.maximum(psfimg, mx*1e-16)),
+                    vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+        plt.suptitle('PsfEx models')
+        ps.savefig()
+
+
+        modnames = ['Dense-grid MoG', 'Coarse-grid MoG',
+                    'Dense-grid MoG (variance)', 'Coarse-grid MoG (variance)']
+        models = [ psfex, subpsfex, psfexvar, subpsfexvar ]
+
+        modgrids = [[] for m in models]
+        
+        for iy,y in enumerate(YY):
+            for ix,x in enumerate(XX):
+
+                for model,grid in zip(models, modgrids):
+                    psf = model.psfAt(x, y)
+                    mod = psf.getPointSourcePatch(0., 0., radius=crop)
+                    assert(mod.shape == psfcropgrid[0].shape)
+                    grid.append(mod.patch)
+                
+
+        for name,modgrid in zip(modnames, modgrids):
+            plt.clf()
+            for i,psfimg in enumerate(modgrid):
+                subplot_grid(len(YY), len(XX), i)
+                dimshow(np.log10(np.maximum(psfimg, mx*1e-16)),
+                        vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+            plt.suptitle(name)
+            ps.savefig()
+
+        for name,modgrid in zip(modnames, modgrids):
+            plt.clf()
+            for i,(psfimg,modimg) in enumerate(zip(psfcropgrid,modgrid)):
+                subplot_grid(len(YY), len(XX), i)
+                diff = psfimg - modimg
+                #print 'Max diff:', np.abs(diff).max()
+                dimshow(psfimg - modimg, vmin=-0.001, vmax=0.001,
+                        ticks=False, cmap='RdBu')
+            plt.suptitle('PsfEx - %s' % name)
+            ps.savefig()
+
+        
+        sys.exit(0)
+
+
+    
     # for ibase,basis in enumerate(psfex.psfbases):
     #     plt.clf()
     #     plt.subplot(2,1,1)
@@ -129,8 +241,8 @@ if __name__ == '__main__':
     ps.savefig()
     
     plt.figure(figsize=(5,10))
-    plt.subplots_adjust(left=0.1, bottom=0.1, top=0.95, right=0.99,
-                        wspace=0.05, hspace=0.05)
+    plt.subplots_adjust(left=0.01, bottom=0.01, top=0.95, right=0.99,
+                        wspace=0.05, hspace=0.025)
 
     S = im.read_sdss()
     print len(S), 'SDSS sources'
@@ -216,23 +328,21 @@ if __name__ == '__main__':
     XX = np.linspace(0, psfex.W, psfex.nx)
     psfgrid = []
     psfcropgrid = []
+    crop = 10
     for y in YY:
         for x in XX:
             psfimg = psfex.instantiateAt(x, y)
             psfgrid.append(psfimg)
+            h,w = psfimg.shape
+            img = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
+            psfcropgrid.append(img)
     mx = np.max([psfimg.max() for psfimg in psfgrid])
     logmx = np.log10(mx)
-    crop = 10
     plt.clf()
-    for i,psfimg in enumerate(psfgrid):
+    for i,psfimg in enumerate(psfcropgrid):
         #plt.subplot(len(YY), len(XX), i+1)
         subplot_grid(len(YY), len(XX), i)
-        h,w = psfimg.shape
-        img = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
-        if i == 0:
-            print 'Cropped size', img.shape
-        psfcropgrid.append(img)
-        dimshow(np.log10(np.maximum(img, mx*1e-16)),
+        dimshow(np.log10(np.maximum(psfimg, mx*1e-16)),
                 vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
     plt.suptitle('PsfEx models')
     ps.savefig()
@@ -295,6 +405,8 @@ if __name__ == '__main__':
     pp = np.array(pp)
     print 'pp', pp.shape
 
+    fitsio.write('psfex-ellipses.fits', pp, clobber=True)
+    
     plt.clf()
     for i,modimg in enumerate(modgrid):
         subplot_grid(len(YY), len(XX), i)
@@ -341,6 +453,7 @@ if __name__ == '__main__':
             dimshow(pp[:,:,ip], cmap='jet', ticks=False, vmin=mn, vmax=mx)
             plt.colorbar()
             plt.title(names[ip])
+        plt.suptitle('Mixture of Gaussian models: spatial variation of parameters')
         ps.savefig()
     
     # for ip in range(nparams):
@@ -361,7 +474,7 @@ if __name__ == '__main__':
     modgrid = []
     for y in YY:
         for x in XX:
-            mog = psfex.mogAt(x, y)
+            mog = psfex.psfAt(x, y)
             mog.radius = crop
             modimg = mog.getPointSourcePatch(0., 0.)
             print 'Patch shape', modimg.shape
@@ -516,7 +629,7 @@ if __name__ == '__main__':
 
         print 'PSF image sum', psfimg.sum()
         
-        #mog = psfex.mogAt(s.x, s.y)
+        #mog = psfex.psfAt(s.x, s.y)
         mog = GaussianMixturePSF.fromStamp(psfimg)
         mogs.append(mog)
         
