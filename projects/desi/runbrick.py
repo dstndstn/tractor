@@ -1474,7 +1474,7 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
         print 'Fitting source', i
         print src
 
-        srctractor = Tractor(subtims, [src])
+        srctractor = Tractor(tims, [src])
         srctractor.freezeParams('images')
 
         # Add this source's initial model back in.
@@ -1515,7 +1515,7 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
             if dlnp < 0.1:
                 break
 
-        for tim in subtims:
+        for tim in tims:
             mod = src.getModelPatch(tim)
             if mod is not None:
                 mod.addTo(tim.getImage(), scale=-1)

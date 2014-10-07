@@ -2,6 +2,44 @@ import os
 import numpy as np
 from astrometry.util.fits import *
 
+def _read_wise_cats_wcs(wcs,
+                        pattern, rdpattern, decranges, cols=None, pixelmargin=0):
+    r0,r1,d0,d1 = wcs.radec_bounds()
+    # if the field were rotated 45 degrees, the margin would be sqrt(2) times bigger...
+    margin = np.sqrt(2.) * pixelmargin * wcs.pixel_scale() / 3600.
+    W,H = wcs.get_width(), wcs.get_height()
+    d0 -= margin
+    d1 += margin
+    # Dec bounds are useful, but ignore RA
+    TT = []
+    for i,(dlo,dhi) in enumerate(decranges):
+        if dlo > d1 or dhi < d0:
+            continue
+        fn = rdpattern % (i+1)
+        T = fits_table(fn)
+        print 'Read', len(T), 'from', fn
+        I = np.flatnonzero((T.dec >= d0) * (T.dec <= d1))
+        ok,x,y = wcs.radec2pixelxy(T.ra[I], T.dec[I])
+        J = (ok *
+             (x >= (0.5-pixelmargin)) *
+             (y >= (0.5-pixelmargin)) *
+             (x <= (W+0.5+pixelmargin)) *
+             (y <= (H+0.5+pixelmargin)))
+        I = I[J]
+        print 'found', len(I), 'within WCS'
+        if len(I) == 0:
+            continue
+        fn = pattern % (i+1)
+        T = fits_table(fn, rows=I, columns=cols)
+        TT.append(T)
+    if len(TT) == 0:
+        return None
+    if len(TT) == 1:
+        return TT[0]
+    return merge_tables(TT)
+    
+
+
 def _read_wise_cats(r0,r1,d0,d1,
                    pattern, rdpattern, decranges, cols=None):
     if r1 - r0 > 180:
