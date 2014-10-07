@@ -952,8 +952,9 @@ class Tractor(MultiParams):
                 csum = sum(cc)
                 if csum == 0:
                     continue
-                if csum < nilcounts:
-                    continue
+                # Still want to measure objects with negative flux
+                # if csum < nilcounts:
+                #     continue
                 
                 srcmod = srcmods[imi]
                 xlo,xhi,ylo,yhi = None,None,None,None
