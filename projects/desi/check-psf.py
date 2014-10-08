@@ -61,13 +61,16 @@ if __name__ == '__main__':
     print 'img:', iminfo
     H,W = iminfo['dims']
     #psfex = PsfEx(im.psffn, W, H, nx=6)
-    psfex = PsfEx(im.psffn, W, H, ny=17, nx=9,
-                  psfClass=GaussianMixtureEllipsePSF)
     #psfex = PsfEx(im.psffn, W, H, ny=13, nx=7)
     #psfex = PsfEx(im.psffn, W, H, ny=9, nx=5)
 
+    #psfex = PsfEx(im.psffn, W, H, ny=17, nx=9,
+    #              psfClass=GaussianMixtureEllipsePSF)
+    psfex = PsfEx(im.psffn, W, H, ny=13, nx=7,
+                  psfClass=GaussianMixtureEllipsePSF)
+    
     fn = 'psfex-ellipses.fits'
-    if os.path.exists(fn):
+    if False and os.path.exists(fn):
 
         plt.figure(figsize=(5,10))
         plt.subplots_adjust(left=0.01, bottom=0.01, top=0.95, right=0.99,
@@ -348,63 +351,77 @@ if __name__ == '__main__':
     ps.savefig()
 
 
+    psfex.savesplinedata = True
+    # psfex.ensureFit()
+    psfex._fitParamGrid(damp=1)
+    pp,XX,YY = psfex.splinedata
+
     modgrid = []
     
-    pp = []
-    px0 = None
     for iy,y in enumerate(YY):
-        pprow = []
-        p0 = px0
         for ix,x in enumerate(XX):
-            psfimg = psfex.instantiateAt(x, y)
-            h,w = psfimg.shape
-            cropped = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
-
-            epsf = GaussianMixtureEllipsePSF.fromStamp(psfimg, P0=p0, damp=1.)
-            p0 = epsf.getParams()
-            if ix == 0:
-                px0 = p0
-
-            epsf.radius = crop
-            modimg = epsf.getPointSourcePatch(0., 0.)
+            psf = psfex.psfAt(x,y)
+            psf.radius = crop
+            modimg = psf.getPointSourcePatch(0., 0.)
             modgrid.append(modimg.patch)
-                
-            if iy == 0 and False:
-                plt.clf()
-                plt.subplot(3,1,1)
-                dimshow(np.log10(np.maximum(cropped, mx*1e-16)),
-                        vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
-                plt.subplot(3,1,2)
-                dimshow(np.log10(np.maximum(modimg.patch, mx*1e-16)),
-                        vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
-                ax = plt.axis()
-                angle = np.linspace(0., 2.*np.pi, 20)
-                xx,yy = np.sin(angle), np.cos(angle)
-                xy = np.vstack((xx,yy))
-                for i,ell in enumerate(epsf.ellipses):
-                    mx,my = epsf.mog.mean[i,:]
-                    T = ell.getRaDecBasis()
-                    T *= 3600.
-                    txy = np.dot(T, xy)
-                    plt.plot(crop + mx + txy[0,:],
-                             crop + my + txy[1,:], 'k-', lw=1.5)
-                plt.axis(ax)
-                plt.subplot(3,1,3)
-                dimshow(cropped - modimg.patch,
-                        vmin=-0.001, vmax=0.001, ticks=False, cmap='RdBu')
-                ps.savefig()
 
-            print 'Fit PSF:', epsf
-            #print 'Params:', epsf.getAllParams()
-            #repsf = GaussianMixtureEllipsePSF(*epsf.getAllParams())
-            #print 'Reconstructed:', repsf
-            
-            params = np.array(epsf.getAllParams())
-            pprow.append(params)
-        pp.append(pprow)
-    pp = np.array(pp)
-    print 'pp', pp.shape
+    
+    # pp = []
+    # px0 = None
+    # for iy,y in enumerate(YY):
+    #     pprow = []
+    #     p0 = px0
+    #     for ix,x in enumerate(XX):
+    #         psfimg = psfex.instantiateAt(x, y)
+    #         h,w = psfimg.shape
+    #         cropped = psfimg[h/2-crop:h/2+crop+1, w/2-crop:w/2+crop+1]
+    # 
+    #         epsf = GaussianMixtureEllipsePSF.fromStamp(psfimg, P0=p0, damp=1.)
+    #         p0 = epsf.getParams()
+    #         if ix == 0:
+    #             px0 = p0
+    # 
+    #         epsf.radius = crop
+    #         modimg = epsf.getPointSourcePatch(0., 0.)
+    #         modgrid.append(modimg.patch)
+    #             
+    #         if iy == 0 and False:
+    #             plt.clf()
+    #             plt.subplot(3,1,1)
+    #             dimshow(np.log10(np.maximum(cropped, mx*1e-16)),
+    #                     vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+    #             plt.subplot(3,1,2)
+    #             dimshow(np.log10(np.maximum(modimg.patch, mx*1e-16)),
+    #                     vmax=logmx, vmin=logmx-4, ticks=False, cmap='jet')
+    #             ax = plt.axis()
+    #             angle = np.linspace(0., 2.*np.pi, 20)
+    #             xx,yy = np.sin(angle), np.cos(angle)
+    #             xy = np.vstack((xx,yy))
+    #             for i,ell in enumerate(epsf.ellipses):
+    #                 mx,my = epsf.mog.mean[i,:]
+    #                 T = ell.getRaDecBasis()
+    #                 T *= 3600.
+    #                 txy = np.dot(T, xy)
+    #                 plt.plot(crop + mx + txy[0,:],
+    #                          crop + my + txy[1,:], 'k-', lw=1.5)
+    #             plt.axis(ax)
+    #             plt.subplot(3,1,3)
+    #             dimshow(cropped - modimg.patch,
+    #                     vmin=-0.001, vmax=0.001, ticks=False, cmap='RdBu')
+    #             ps.savefig()
+    # 
+    #         print 'Fit PSF:', epsf
+    #         #print 'Params:', epsf.getAllParams()
+    #         #repsf = GaussianMixtureEllipsePSF(*epsf.getAllParams())
+    #         #print 'Reconstructed:', repsf
+    #         
+    #         params = np.array(epsf.getAllParams())
+    #         pprow.append(params)
+    #     pp.append(pprow)
+    # pp = np.array(pp)
+    # print 'pp', pp.shape
 
+    
     fitsio.write('psfex-ellipses.fits', pp, clobber=True)
     
     plt.clf()
@@ -428,10 +445,10 @@ if __name__ == '__main__':
     ps.savefig()
     
     ny,nx,nparams = pp.shape
+    names = psf.getParamNames()
 
     plt.figure(figsize=(10,10))
     
-    names = epsf.getParamNames()
     
     #iii = [ [i + j for j in [0,3,4,9,10,11]] for i in [0,1,2] ]
     iii = [ [0, 3,4, 9,10,11],
