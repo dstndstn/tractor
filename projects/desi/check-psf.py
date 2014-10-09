@@ -70,7 +70,7 @@ if __name__ == '__main__':
                   psfClass=GaussianMixtureEllipsePSF)
     
     fn = 'psfex-ellipses.fits'
-    if False and os.path.exists(fn):
+    if os.path.exists(fn):
 
         plt.figure(figsize=(5,10))
         plt.subplots_adjust(left=0.01, bottom=0.01, top=0.95, right=0.99,
@@ -88,8 +88,29 @@ if __name__ == '__main__':
         YY = np.linspace(0, psfex.H, psfex.ny)
         XX = np.linspace(0, psfex.W, psfex.nx)
         #psfex.splinedata = (pp, XX, YY)
-        psfex.fitSavedData(pp, XX, YY)
 
+        # Convert to GaussianMixturePSF
+        ppvar = np.zeros_like(pp)
+        for iy in range(ny):
+            for ix in range(nx):
+                psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
+                mog = psf.toMog()
+                ppvar[iy,ix,:] = mog.getParams()
+        psfexvar = PsfEx(im.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
+                         psfClass=GaussianMixturePSF)
+        psfexvar.splinedata = (ppvar, XX, YY)
+        #psfexvar.fitSavedData(ppvar, XX, YY)
+        #fitsio.write('psfex-variances.fits', ppvar, clobber=True)
+        
+        psfexvar.toFits('psfex-var-2.fits')
+
+        psfexvar2 = PsfEx.fromFits('psfex-var-2.fits')
+        
+        sys.exit(0)
+        
+
+        psfex.fitSavedData(pp, XX, YY)
+        
         subpp = pp[::2, ::2, :]
         subXX, subYY = XX[::2], YY[::2]
         print 'subpp:', subpp.shape
@@ -356,6 +377,19 @@ if __name__ == '__main__':
     psfex._fitParamGrid(damp=1)
     pp,XX,YY = psfex.splinedata
 
+
+    # Convert to GaussianMixturePSF
+    ppvar = np.zeros_like(pp)
+    for iy in range(ny):
+        for ix in range(nx):
+            psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
+            mog = psf.toMog()
+            ppvar[iy,ix,:] = mog.getParams()
+    psfexvar = PsfEx(im.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
+                     psfClass=GaussianMixturePSF)
+    #psfexvar.fitSavedData(ppvar, XX, YY)
+    fitsio.write('psfex-variances.fits', ppvar, clobber=True)
+    
     modgrid = []
     
     for iy,y in enumerate(YY):

@@ -7,6 +7,8 @@ from .fitpsf import em_init_params
 from . import mixture_profiles as mp
 from . import ducks
 
+from astrometry.util.fits import *
+
 class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A mixture-of-Gaussians (MoG) PSF with spatial variation,
@@ -286,6 +288,103 @@ class PsfEx(VaryingGaussianPSF):
             
         return psf
 
+    @staticmethod
+    def fromFits(fn):
+        import fitsio
+        hdr = fitsio.read_header(fn, ext=1)
+        T = fits_table(fn)
+        assert(len(T) == 1)
+        #for col in T.get_columns():
+        #    if col.strip() != col:
+        #        T.rename_column(col, col.strip())
+        T = T[0]
+        t = hdr['PSFEX_T'].strip()
+        print 'Type:', t
+        assert(t == 'tractor.psfex.PsfEx')
+        psft = hdr['PSF_TYPE']
+        knowntypes = dict([(typestring(x), x)
+                           for x in [GaussianMixturePSF,
+                                     GaussianMixtureEllipsePSF]])
+        psft = knowntypes[psft]
+        print 'PSF type:', psft
+
+        nx = hdr['PSF_NX']
+        ny = hdr['PSF_NY']
+        w = hdr['PSF_W']
+        h = hdr['PSF_H']
+        k = hdr['PSF_K']
+
+        psfex = PsfEx(None, w, h, nx=nx, ny=ny, K=k, psfClass=psft)
+
+        nargs = hdr['PSF_NA']
+        #psf = psft(*np.zeros(nargs))
+        #print 'PSF:', psf
+
+        pp = np.zeros((ny,nx,nargs))
+        
+        for i in range(nargs):
+            nm = hdr['PSF_A%i' % i].strip()
+            print 'param name', nm
+            pi = T.get(nm)
+            assert(pi.shape == (ny,nx))
+            pp[:,:,i] = pi
+
+        psfex.splinedata = (pp, T.xx, T.yy)
+        return psfex
+    
+
+        
+    def toFits(self, fn, data=None, hdr=None):
+        if hdr is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
+
+        hdr.add_record(dict(name='PSFEX_T', value=typestring(type(self)),
+                            comment='PsfEx type'))
+        hdr.add_record(dict(name='PSF_TYPE',
+                            value=typestring(self.psfclass),
+                            comment='PsfEx PSF type'))
+        hdr.add_record(dict(name='PSF_W', value=self.W,
+                            comment='Image width'))
+        hdr.add_record(dict(name='PSF_H', value=self.H,
+                            comment='Image height'))
+        #hdr.add_record(dict(name='PSF_SCALING',
+        hdr.add_record(dict(name='PSF_K', value=self.K,
+                            comment='Number of PSF components'))
+        hdr.add_record(dict(name='PSF_NX', value=self.nx,
+                            comment='Number of X grid points'))
+        hdr.add_record(dict(name='PSF_NY', value=self.ny,
+                            comment='Number of Y grid points'))
+
+        if data is None:
+            data = self.splinedata
+        (pp,XX,YY) = data
+        ny,nx,nparams = pp.shape
+        assert(ny == self.ny)
+        assert(nx == self.nx)
+
+        X = self.psfclass(*pp[0,0])
+        names = X.getParamNames()
+        
+        hdr.add_record(dict(name='PSF_NA', value=len(names),
+                            comment='PSF number of params'))
+        for i,nm in enumerate(names):
+            hdr.add_record(dict(name='PSF_A%i' % i, value=nm,
+                                comment='PSF param name'))
+
+        T = fits_table()
+        T.xx = XX.reshape((1, len(XX)))
+        T.yy = YY.reshape((1, len(YY)))
+        for i,nm in enumerate(names):
+            T.set(nm, pp[:,:,i].reshape((1,ny,nx)))
+        T.writeto(fn, header=hdr)
+        
+
+def typestring(t):
+    t = repr(t).replace("<class '", '').replace("'>", "")
+    return t
+        
+    
 class CachingPsfEx(PsfEx):
     @staticmethod
     def fromPsfEx(psfex):
