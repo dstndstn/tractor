@@ -299,8 +299,9 @@ class DecamImage(object):
 def bounce_run_calibs(X):
     return run_calibs(*X)
 
-def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=True,
-               se2=True, psfexfit=True):
+def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True,
+               morph=False, se2=False, psfexfit=True):
+               
     '''
     pixscale: in degrees/pixel
     '''
@@ -402,7 +403,32 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True, morph=Tr
 
     if run_psfexfit and psfexfit:
         print 'Fit PSF...'
-        pass
+
+        from tractor.basics import *
+        from tractor.psfex import *
+
+        iminfo = im.get_image_info()
+        #print 'img:', iminfo
+        H,W = iminfo['dims']
+        psfex = PsfEx(im.psffn, W, H, ny=13, nx=7,
+                      psfClass=GaussianMixtureEllipsePSF)
+        psfex.savesplinedata = True
+        print 'Fitting MoG model to PsfEx'
+        psfex._fitParamGrid(damp=1)
+        pp,XX,YY = psfex.splinedata
+
+        # Convert to GaussianMixturePSF
+        ppvar = np.zeros_like(pp)
+        for iy in range(psfex.ny):
+            for ix in range(psfex.nx):
+                psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
+                mog = psf.toMog()
+                ppvar[iy,ix,:] = mog.getParams()
+        psfexvar = PsfEx(im.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
+                         psfClass=GaussianMixturePSF)
+        psfexvar.splinedata = (ppvar, XX, YY)
+        psfexvar.toFits(im.psffitfn)
+        print 'Wrote', im.psffitfn
         
     if run_morph and morph:
         cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),

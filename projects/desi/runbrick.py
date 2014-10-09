@@ -199,9 +199,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         if mp is not None:
             args.append((im, brick.ra, brick.dec, pixscale))
         else:
-            run_calibs(im, brick.ra, brick.dec, pixscale, se2=False, morph=False)
-                       # HACK!!
-                       #psfex=False)
+            run_calibs(im, brick.ra, brick.dec, pixscale)
+
     if mp is not None:
         mp.map(bounce_run_calibs, args)
 
