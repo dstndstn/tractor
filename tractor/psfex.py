@@ -78,7 +78,11 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         self.ensureFit()
         vals = np.zeros(len(self.splines))
         for i,spl in enumerate(self.splines):
-            vals[i] = spl(x, y, grid=False)
+            import scipy
+            if scipy.__version__ >= '0.14.0':
+                vals[i] = spl(x, y, grid=False)
+            else:
+                vals[i] = spl(x, y)
         #vals = [spl(x, y) for spl in self.splines]
         return vals
         
@@ -101,6 +105,14 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         # var[:,1,1] = vals[:K]
         # vals = vals[K:]
         # return w, mu, var
+
+    def getMixtureOfGaussians(self, mean=None):
+        if mean is not None:
+            x,y = mean
+        else:
+            x = y = 0.
+        psf = self.psfAt(x, y)
+        return psf.getMixtureOfGaussians()
 
     def _fitParamGrid(self, fitfunc=None, **kwargs):
         # all MoG fit parameters (we need to make them shaped (ny,nx)
@@ -205,15 +217,6 @@ class PsfEx(VaryingGaussianPSF):
         self.scale = scale
         super(PsfEx, self).__init__(W, H, nx, ny, K, psfClass=psfClass)
 
-    # def getMixtureOfGaussians(self, mean=None):
-    #     if mean is not None:
-    #         x = mean[0]
-    #         y = mean[1]
-    #     else:
-    #         x = y = 0.
-    #     w,mu,var = self.scaledMogParamsAt(x, y)
-    #     return mp.MixtureOfGaussians(w, mu, var)
-    # 
     # def mogAt(self, x, y):
     #     w,mu,var = self.scaledMogParamsAt(x, y)
     #     mog = GaussianMixturePSF(w, mu, var)
@@ -387,9 +390,9 @@ def typestring(t):
     
 class CachingPsfEx(PsfEx):
     @staticmethod
-    def fromPsfEx(psfex):
+    def fromPsfEx(psfex, **kwargs):
         c = CachingPsfEx(None, psfex.W, psfex.H, nx=psfex.nx, ny=psfex.ny,
-                         scale=psfex.scale, K=psfex.K)
+                         scale=psfex.scale, K=psfex.K, **kwargs)
         c.sampling = psfex.sampling
         c.xscale = psfex.xscale
         c.yscale = psfex.yscale
@@ -398,16 +401,24 @@ class CachingPsfEx(PsfEx):
         c.x0 = psfex.x0
         c.y0 = psfex.y0
         c.splinedata = psfex.splinedata
+        if hasattr(c, 'splines'):
+            c.splines = psfex.splines
         return c
 
     def __init__(self, *args, **kwargs):
         from tractor.cache import Cache
-
+        rounding = kwargs.pop('rounding', 100)
         super(CachingPsfEx, self).__init__(*args, **kwargs)
         self.cache = Cache(maxsize=100)
         # round pixel coordinates to the nearest...
-        self.rounding = 10
-        
+        self.rounding = rounding
+
+    # For pickling
+    def __getstate__(self):
+        self.cache.clear()
+        #return super(CachingPsfEx, self).__getstate__()
+        return self.__dict__
+
     def psfAt(self, x, y):
         key = (int(x)/self.rounding, int(y)/self.rounding)
         mog = self.cache.get(key, None)

@@ -1,6 +1,13 @@
 # Cython
 #import pyximport; pyximport.install(pyimport=True)
 
+'''
+zeropoints.fits:
+
+python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
+
+'''
+
 
 import matplotlib
 matplotlib.use('Agg')
@@ -299,11 +306,13 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         if x0 or y0:
             twcs.setX0Y0(x0,y0)
 
-        # get full image size for PsfEx
         info = im.get_image_info()
         fullh,fullw = info['dims']
-        psfex = PsfEx(im.psffn, fullw, fullh, scale=False, nx=9, ny=17)
-        #psfex = ShiftedPsf(psfex, x0, y0)
+
+        # read fit PsfEx model
+        psfex = PsfEx.fromFits(im.psffitfn)
+        print 'Read', psfex
+
         # HACK -- highly approximate PSF here!
         psf_sigma = psf_fwhm / 2.35
         psf = NCircularGaussianPSF([psf_sigma],[1.])
@@ -907,9 +916,13 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
     for itim,tim in enumerate(tims):
         print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
         t0 = Time()
-        tim.psfex.savesplinedata = True
-        print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
-        tim.psfex.ensureFit()
+        psfex = tim.psfex
+        if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
+            psfex.fitSavedData(*psfex.splinedata)
+        else:
+            tim.psfex.savesplinedata = True
+            print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
+            tim.psfex.ensureFit()
         print 'PsfEx model fit took:', Time()-t0
         
     return dict(tims=tims)
@@ -924,17 +937,21 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
-    ps.skipto(10)
+    #ps.skipto(10)
 
     for tim in tims:
-        #print 'PsfEx saved params:', tim.psfex.splinedata
-
         tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = tim.psfex
-
-        #from tractor.psfex import CachingPsfEx
-        #tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
-        #tim.psf.fitSavedData(*tim.psf.splinedata)
+        from tractor.psfex import CachingPsfEx
+        # HACK
+        tim.psfex.sampling = None
+        tim.psfex.xscale = None
+        tim.psfex.yscale = None
+        tim.psfex.x0 = None
+        tim.psfex.y0 = None
+        tim.psfex.degree = None
+        tim.psfex.radius = 20
+        tim.psfex.psfbases = None
+        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     # How far down to render model profiles
     minsigma = 0.1
@@ -950,12 +967,15 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     for (ox0,oy0),tim in zip(orig_wcsxy0, tims):
         minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
         th,tw = tim.shape
-        psf = tim.psf.mogAt(ox0+(tw/2), oy0+(th/2))
+        print 'PSF', tim.psf
+
+        mog = tim.psf.getMixtureOfGaussians(mean=(ox0+(tw/2), oy0+(th/2)))
+
         profiles.extend([
-            psf.mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
-            psf.mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
-            psf.mog.evaluate_grid(0, 1, 0, R, 0., 0.).patch.ravel(),
-            psf.mog.evaluate_grid(0, 1, -(R-1), 1, 0., 0.).patch.ravel()[-1::-1]])
+            mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
+            mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
+            mog.evaluate_grid(0, 1, 0, R, 0., 0.).patch.ravel(),
+            mog.evaluate_grid(0, 1, -(R-1), 1, 0., 0.).patch.ravel()[-1::-1]])
     profiles = np.array(profiles)
     print 'profiles', profiles.dtype, profiles.shape
 
@@ -963,8 +983,11 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         plt.clf()
         for p in profiles:
             plt.semilogy(np.maximum(1e-10, p), 'b-')
+        plt.xlabel('Radius (pixels)')
+        plt.title('PSF profiles')
         ps.savefig()
 
+    minradius = 3
     pro = np.max(profiles, axis=0)
     for src in cat:
         if not isinstance(src, PointSource):
@@ -978,7 +1001,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         ii = np.flatnonzero(pro > (minsigma / nsigmas))
         if len(ii) == 0:
             continue
-        src.fixedRadius = max(psf.radius, 1 + ii[-1])
+        src.fixedRadius = max(minradius, 1 + ii[-1])
         print 'Nsigma', nsigmas, 'radius', src.fixedRadius
 
 
@@ -1005,8 +1028,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         # for blobnumber,iblob in enumerate([ii]):
 
         ## HACK
-        # if blobnumber != 1:
-        #     continue
+        #if blobnumber != 10:
+        #    continue
 
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
@@ -1398,6 +1421,10 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             subcat.freezeParam(isub)
         print 'Blob', blobnumber, 'variances:', Time()-tlast
 
+
+    # Drop the CachingPsfEx
+    #for tim in tims:
+    #    tim.psf = tim.psfex
 
     cat.thawAllRecursive()
 
