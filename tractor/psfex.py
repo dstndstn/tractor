@@ -7,6 +7,8 @@ from .fitpsf import em_init_params
 from . import mixture_profiles as mp
 from . import ducks
 
+from astrometry.util.fits import *
+
 class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
     A mixture-of-Gaussians (MoG) PSF with spatial variation,
@@ -14,7 +16,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     This is a base class -- subclassers must implement "instantiateAt"
     '''
-    def __init__(self, W, H, nx=11, ny=11, K=3):
+    def __init__(self, W, H, nx=11, ny=11, K=3, psfClass=GaussianMixturePSF):
         '''
         W,H: image size (for the image where this PSF lives)
         nx,ny: number of sample points for the spline fit
@@ -22,13 +24,13 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         '''
         ## HACK -- no args?
         super(VaryingGaussianPSF, self).__init__()
+        self.psfclass = psfClass
         self.splines = None
         self.W = W
         self.H = H
         self.K = K
         self.nx = nx
         self.ny = ny
-
         self.savesplinedata = False
 
     def getRadius(self):
@@ -45,7 +47,6 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         for i in range(N):
             data = pp[:,:, i]
             spl = scipy.interpolate.RectBivariateSpline(XX, YY, data.T)
-            #print 'Building a spline on XX,YY,data', XX.shape, YY.shape, data.T.shape
             splines.append(spl)
         self.splines = splines
 
@@ -58,57 +59,62 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
             self._fitParamGrid()
 
     def getPointSourcePatch(self, px, py, **kwargs):
-        mog = self.mogAt(px, py)
-        return mog.getPointSourcePatch(px, py, **kwargs)
+        psf = self.psfAt(px, py)
+        return psf.getPointSourcePatch(px, py, **kwargs)
 
-    def mogAt(self, x, y):
+    def psfAt(self, x, y):
         '''
-        Returns a Mixture-of-Gaussians representation of this PSF at the given
-        pixel position x,y
+        Returns a PSF model at the given pixel position (x, y)
         '''
-        w,mu,var = self.mogParamsAt(x, y)
-        return GaussianMixturePSF(w, mu, var)
+        params = self.psfParamsAt(x, y)
+        return self.psfclass(*params)
 
-    def scaledMogParamsAt(self, x, y):
-        w,mu,var = self.mogParamsAt(x, y)
-        if not self.scale:
-            # We didn't downsample the PSF in pixel space, so
-            # scale down the MOG params.
-            sfactor = self.sampling
-            mu  *= sfactor
-            var *= sfactor**2
-        return w, mu, var
-
-    def mogParamsAt(self, x, y):
+    mogAt = psfAt
+    
+    def psfParamsAt(self, x, y):
         '''
-        Return Mixture-of-Gaussian parameters for this PSF at the
-        given pixel position x,y.
+        Return PSF model parameters at the given pixel position x,y.
         '''
         self.ensureFit()
-        vals = [spl(x, y) for spl in self.splines]
-        K = self.K
-        w = np.empty(K)
+        vals = np.zeros(len(self.splines))
+        for i,spl in enumerate(self.splines):
+            import scipy
+            if scipy.__version__ >= '0.14.0':
+                vals[i] = spl(x, y, grid=False)
+            else:
+                vals[i] = spl(x, y)
+        #vals = [spl(x, y) for spl in self.splines]
+        return vals
+        
+        # K = self.K
+        # w = np.empty(K)
+        # # w[:-1] = vals[:K-1]
+        # # vals = vals[K-1:]
+        # # w[-1] = 1. - sum(w[:-1])
+        # w[:] = vals[:K]
+        # vals = vals[K:]
+        # 
+        # mu = np.empty((K,2))
+        # mu.flat[:] = vals[:2*K]
+        # vals = vals[2*K:]
+        # var = np.empty((K,2,2))
+        # var[:,0,0] = vals[:K]
+        # vals = vals[K:]
+        # var[:,1,0] = var[:,0,1] = vals[:K]
+        # vals = vals[K:]
+        # var[:,1,1] = vals[:K]
+        # vals = vals[K:]
+        # return w, mu, var
 
-        # w[:-1] = vals[:K-1]
-        # vals = vals[K-1:]
-        # w[-1] = 1. - sum(w[:-1])
-        w[:] = vals[:K]
-        vals = vals[K:]
+    def getMixtureOfGaussians(self, mean=None):
+        if mean is not None:
+            x,y = mean
+        else:
+            x = y = 0.
+        psf = self.psfAt(x, y)
+        return psf.getMixtureOfGaussians()
 
-        mu = np.empty((K,2))
-        mu.ravel()[:] = vals[:2*K]
-        vals = vals[2*K:]
-        var = np.empty((K,2,2))
-        var[:,0,0] = vals[:K]
-        vals = vals[K:]
-        var[:,0,1] = vals[:K]
-        var[:,1,0] = var[:,0,1]
-        vals = vals[K:]
-        var[:,1,1] = vals[:K]
-        vals = vals[K:]
-        return w, mu, var
-
-    def _fitParamGrid(self):
+    def _fitParamGrid(self, fitfunc=None, **kwargs):
         # all MoG fit parameters (we need to make them shaped (ny,nx)
         # for spline fitting)
         pp = []
@@ -119,32 +125,39 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         px0 = None
         for y in YY:
             pprow = []
+            # We start each row with the MoG fit parameters of the
+            # start of the previous row (to try to make the fit
+            # more continuous)
+            p0 = px0
             for ix,x in enumerate(XX):
-                p0 = None
-                # We start each row with the MoG fit parameters of the
-                # start of the previous row (to try to make the fit
-                # more continuous)
-                if ix == 0 and px0 is not None:
-                    p0 = px0
                 im = self.instantiateAt(x, y)
 
+                if fitfunc is not None:
+                    f = fitfunc
+                else:
+                    f = self.psfclass.fromStamp
+                psf = f(im, N=self.K, P0=p0, **kwargs)
+                
                 # gpsf = GaussianMixturePSF.fromStamp(im, N=self.K, P0=p0)
                 # #v3=True, approx=1e-6)
                 # print 'Fit PSF at', x,y
                 # if ix == 0:
                 #     px0 = (w,mu,var)
                 # w,mu,var = gpsf.get_wmuvar()
-
-                gpsf = GaussianMixtureEllipsePSF.fromStamp(im, N=self.K, P0=p0)
+                #epsf = GaussianMixtureEllipsePSF.fromStamp(im, N=self.K, P0=p0)
+                p0 = psf.getParams()
                 if ix == 0:
-                    px0 = gpsf.getParams()
-                psf = gpsf.toMog()
-                w,mu,var = psf.get_wmuvar()
-                params = np.hstack((w.ravel(),
-                                    mu.ravel(),
-                                    var[:,0,0].ravel(),
-                                    var[:,0,1].ravel(),
-                                    var[:,1,1].ravel())).copy()
+                    px0 = p0
+
+                #psf = epsf.toMog()
+                #print 'MoG psf:', psf
+                #w,mu,var = psf.get_wmuvar()
+                # params = np.hstack((w.ravel(),
+                #                     mu.ravel(),
+                #                     var[:,0,0].ravel(),
+                #                     var[:,0,1].ravel(),
+                #                     var[:,1,1].ravel())).copy()
+                params = np.array(psf.getAllParams())
                 pprow.append(params)
             pp.append(pprow)
         pp = np.array(pp)
@@ -156,13 +169,17 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
 class PsfEx(VaryingGaussianPSF):
     def __init__(self, fn, W, H, ext=1,
                  scale=True,
-                 nx=11, ny=11, K=3):
+                 nx=11, ny=11, K=3,
+                 psfClass=GaussianMixturePSF):
         '''
         scale (boolean): resample the eigen-PSFs (True), or scale the
               fit parameters (False)?  
         '''
         from astrometry.util.fits import fits_table
 
+        # See psfAt(): this needs updating & testing.
+        assert(scale)
+        
         if fn is not None:
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
@@ -198,23 +215,49 @@ class PsfEx(VaryingGaussianPSF):
             self.x0,self.y0 = x0,y0
 
         self.scale = scale
-        super(PsfEx, self).__init__(W, H, nx, ny, K)
+        super(PsfEx, self).__init__(W, H, nx, ny, K, psfClass=psfClass)
 
-    def getMixtureOfGaussians(self, mean=None):
-        if mean is not None:
-            x = mean[0]
-            y = mean[1]
-        else:
-            x = y = 0.
-        w,mu,var = self.scaledMogParamsAt(x, y)
-        return mp.MixtureOfGaussians(w, mu, var)
+    # def mogAt(self, x, y):
+    #     w,mu,var = self.scaledMogParamsAt(x, y)
+    #     mog = GaussianMixturePSF(w, mu, var)
+    #     mog.radius = self.radius
+    #     return mog
 
-    def mogAt(self, x, y):
-        w,mu,var = self.scaledMogParamsAt(x, y)
-        mog = GaussianMixturePSF(w, mu, var)
-        mog.radius = self.radius
-        return mog
-
+    # def getPointSourcePatch(self, px, py, **kwargs):
+    #     self.ensureFit()
+    #     vals = np.zeros(len(self.splines))
+    #     for i,spl in enumerate(self.splines):
+    #         vals[i] = spl(px, py, grid=False)
+    #     #vals = np.hstack([spl(px, py, grid=False) for spl in self.splines])
+    #     #print 'vals:', vals
+    #     psf = GaussianMixtureEllipsePSF(*vals)
+    #     return psf.getPointSourcePatch(px, py, **kwargs)
+    #     #mog = self.mogAt(px, py)
+    #     #return mog.getPointSourcePatch(px, py, **kwargs)
+    # 
+    # def getPsfAt(self, x, y):
+    #     self.ensureFit()
+    #     vals = np.zeros(len(self.splines))
+    #     for i,spl in enumerate(self.splines):
+    #         vals[i] = spl(x, y, grid=False)
+    #     psf = GaussianMixtureEllipsePSF(*vals)
+    #     return psf
+    # def scaledMogParamsAt(self, x, y):
+    #     w,mu,var = self.mogParamsAt(x, y)
+    #     if not self.scale:
+    #         # We didn't downsample the PSF in pixel space, so
+    #         # scale down the MOG params.
+    #         sfactor = self.sampling
+    #         mu  *= sfactor
+    #         var *= sfactor**2
+    #     return w, mu, var
+    
+    # def psfAt(self, x, y):
+    #     psf = super(PsfEx, self).psfAt(x, y)
+    #     if not self.scale:
+    #         psf.scale(self.sampling)
+    #     return psf
+    
     def instantiateAt(self, x, y, nativeScale=False):
         from scipy.ndimage.interpolation import affine_transform
         psf = np.zeros_like(self.psfbases[0])
@@ -248,11 +291,108 @@ class PsfEx(VaryingGaussianPSF):
             
         return psf
 
+    @staticmethod
+    def fromFits(fn):
+        import fitsio
+        hdr = fitsio.read_header(fn, ext=1)
+        T = fits_table(fn)
+        assert(len(T) == 1)
+        #for col in T.get_columns():
+        #    if col.strip() != col:
+        #        T.rename_column(col, col.strip())
+        T = T[0]
+        t = hdr['PSFEX_T'].strip()
+        print 'Type:', t
+        assert(t == 'tractor.psfex.PsfEx')
+        psft = hdr['PSF_TYPE']
+        knowntypes = dict([(typestring(x), x)
+                           for x in [GaussianMixturePSF,
+                                     GaussianMixtureEllipsePSF]])
+        psft = knowntypes[psft]
+        print 'PSF type:', psft
+
+        nx = hdr['PSF_NX']
+        ny = hdr['PSF_NY']
+        w = hdr['PSF_W']
+        h = hdr['PSF_H']
+        k = hdr['PSF_K']
+
+        psfex = PsfEx(None, w, h, nx=nx, ny=ny, K=k, psfClass=psft)
+
+        nargs = hdr['PSF_NA']
+        #psf = psft(*np.zeros(nargs))
+        #print 'PSF:', psf
+
+        pp = np.zeros((ny,nx,nargs))
+        
+        for i in range(nargs):
+            nm = hdr['PSF_A%i' % i].strip()
+            print 'param name', nm
+            pi = T.get(nm)
+            assert(pi.shape == (ny,nx))
+            pp[:,:,i] = pi
+
+        psfex.splinedata = (pp, T.xx, T.yy)
+        return psfex
+    
+
+        
+    def toFits(self, fn, data=None, hdr=None):
+        if hdr is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
+
+        hdr.add_record(dict(name='PSFEX_T', value=typestring(type(self)),
+                            comment='PsfEx type'))
+        hdr.add_record(dict(name='PSF_TYPE',
+                            value=typestring(self.psfclass),
+                            comment='PsfEx PSF type'))
+        hdr.add_record(dict(name='PSF_W', value=self.W,
+                            comment='Image width'))
+        hdr.add_record(dict(name='PSF_H', value=self.H,
+                            comment='Image height'))
+        #hdr.add_record(dict(name='PSF_SCALING',
+        hdr.add_record(dict(name='PSF_K', value=self.K,
+                            comment='Number of PSF components'))
+        hdr.add_record(dict(name='PSF_NX', value=self.nx,
+                            comment='Number of X grid points'))
+        hdr.add_record(dict(name='PSF_NY', value=self.ny,
+                            comment='Number of Y grid points'))
+
+        if data is None:
+            data = self.splinedata
+        (pp,XX,YY) = data
+        ny,nx,nparams = pp.shape
+        assert(ny == self.ny)
+        assert(nx == self.nx)
+
+        X = self.psfclass(*pp[0,0])
+        names = X.getParamNames()
+        
+        hdr.add_record(dict(name='PSF_NA', value=len(names),
+                            comment='PSF number of params'))
+        for i,nm in enumerate(names):
+            hdr.add_record(dict(name='PSF_A%i' % i, value=nm,
+                                comment='PSF param name'))
+
+        T = fits_table()
+        T.xx = XX.reshape((1, len(XX)))
+        T.yy = YY.reshape((1, len(YY)))
+        for i,nm in enumerate(names):
+            T.set(nm, pp[:,:,i].reshape((1,ny,nx)))
+        T.writeto(fn, header=hdr)
+        
+
+def typestring(t):
+    t = repr(t).replace("<class '", '').replace("'>", "")
+    return t
+        
+    
 class CachingPsfEx(PsfEx):
     @staticmethod
-    def fromPsfEx(psfex):
+    def fromPsfEx(psfex, **kwargs):
         c = CachingPsfEx(None, psfex.W, psfex.H, nx=psfex.nx, ny=psfex.ny,
-                         scale=psfex.scale, K=psfex.K)
+                         scale=psfex.scale, K=psfex.K, **kwargs)
         c.sampling = psfex.sampling
         c.xscale = psfex.xscale
         c.yscale = psfex.yscale
@@ -261,17 +401,25 @@ class CachingPsfEx(PsfEx):
         c.x0 = psfex.x0
         c.y0 = psfex.y0
         c.splinedata = psfex.splinedata
+        if hasattr(c, 'splines'):
+            c.splines = psfex.splines
         return c
 
     def __init__(self, *args, **kwargs):
         from tractor.cache import Cache
-
+        rounding = kwargs.pop('rounding', 100)
         super(CachingPsfEx, self).__init__(*args, **kwargs)
         self.cache = Cache(maxsize=100)
         # round pixel coordinates to the nearest...
-        self.rounding = 10
-        
-    def mogAt(self, x, y):
+        self.rounding = rounding
+
+    # For pickling
+    def __getstate__(self):
+        self.cache.clear()
+        #return super(CachingPsfEx, self).__getstate__()
+        return self.__dict__
+
+    def psfAt(self, x, y):
         key = (int(x)/self.rounding, int(y)/self.rounding)
         mog = self.cache.get(key, None)
         if mog is not None:

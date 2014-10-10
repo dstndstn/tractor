@@ -36,6 +36,7 @@ if __name__ == '__main__':
                 ('MJD-OBS', 0),
                 ('PROPID', ''),
                 ('GUIDER', ''),
+                ('OBJECT', ''),
                 ]
     hdrkeys = [('AVSKY', nan),
                ('ARAWGAIN', nan),

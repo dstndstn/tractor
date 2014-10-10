@@ -1,0 +1,31 @@
+
+Code for the analysis of the DECam Legacy Survey (DECaLS).
+
+runbrick.py -- run the Tractor analysis of one DECaLS brick.
+common.py -- used by runbrick.py and others
+make-exposure-list.py -- to create the decals-ccds.fits metadata summary
+
+ps1-astrometry-index.py -- we built some Astrometry.net index files from Pan-STARRS1 data
+sdss-astrometry-index.py -- Astrometry.net index files from SDSS
+check-psf.py -- investigating PsfEx fits and MoG fits thereof
+run.pbs -- PBS (qsub) scriptie
+kick-tires.py -- check out Tractor catalogs
+
+decam-coverage.py -- plot sky coverage
+plot-exposures.py -- more
+
+decam.py -- old Tractor analysis script
+desi_common.py -- an older set of common routines
+
+run-calib.py / queue-calib.py -- PBS glue
+
+How various files are generated:
+
+- zeropoints.fits: from Arjun's FITS tables of zeropoints:
+
+python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
+
+
+- decals-ccds.fits:
+
+python -u projects/desi/make-exposure-list.py --trim /global/homes/d/dstn/cosmo/staging/decam/ -o 1.fits ~/cosmo/staging/decam/CP20140810/c4d_140809_04*_ooi*.fits.fz > log 2> err &
