@@ -106,13 +106,17 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         # vals = vals[K:]
         # return w, mu, var
 
-    def getMixtureOfGaussians(self, mean=None):
-        if mean is not None:
-            x,y = mean
-        else:
-            x = y = 0.
-        psf = self.psfAt(x, y)
-        return psf.getMixtureOfGaussians()
+    def getMixtureOfGaussians(self, px=None, py=None, mean=None):
+        # if mean is not None:
+        #     x,y = mean
+        # else:
+        #     x = y = 0.
+        if px is None:
+            px = 0.
+        if py is None:
+            py = 0.
+        psf = self.psfAt(px, py)
+        return psf.getMixtureOfGaussians(mean=mean)
 
     def _fitParamGrid(self, fitfunc=None, **kwargs):
         # all MoG fit parameters (we need to make them shaped (ny,nx)
@@ -315,29 +319,46 @@ class PsfEx(VaryingGaussianPSF):
         ny = hdr['PSF_NY']
         w = hdr['PSF_W']
         h = hdr['PSF_H']
-        k = hdr['PSF_K']
+        K = hdr['PSF_K']
 
-        psfex = PsfEx(None, w, h, nx=nx, ny=ny, K=k, psfClass=psft)
+        psfex = PsfEx(None, w, h, nx=nx, ny=ny, K=K, psfClass=psft)
 
         nargs = hdr['PSF_NA']
         #psf = psft(*np.zeros(nargs))
         #print 'PSF:', psf
 
         pp = np.zeros((ny,nx,nargs))
+        columns = T.get_columns()
         
         for i in range(nargs):
             nm = hdr['PSF_A%i' % i].strip()
             print 'param name', nm
-            pi = T.get(nm)
-            assert(pi.shape == (ny,nx))
-            pp[:,:,i] = pi
+            if nm in columns:
+                pi = T.get(nm)
+                assert(pi.shape == (ny,nx))
+                pp[:,:,i] = pi
+            else:
+                # param name like "amp0"
+                assert(nm[-1] in '0123456789'[:K])
+                pi = T.get(nm[:-1])
+                print 'array shape', pi.shape
+                assert(pi.shape == (K,ny,nx))
+                k = int(nm[-1], 10)
+                pi = pi[k,:,:]
+                print 'cut shape', pi.shape
+                assert(pi.shape == (ny,nx))
+                pp[:,:,i] = pi
 
         psfex.splinedata = (pp, T.xx, T.yy)
         return psfex
     
 
         
-    def toFits(self, fn, data=None, hdr=None):
+    def toFits(self, fn, data=None, hdr=None,
+               merge=False):
+        '''
+        If merge: merge params "amp0", "amp1", ... into an "amp" array.
+        '''
         if hdr is None:
             import fitsio
             hdr = fitsio.FITSHDR()
@@ -378,9 +399,35 @@ class PsfEx(VaryingGaussianPSF):
         T = fits_table()
         T.xx = XX.reshape((1, len(XX)))
         T.yy = YY.reshape((1, len(YY)))
-        for i,nm in enumerate(names):
-            T.set(nm, pp[:,:,i].reshape((1,ny,nx)))
+        if merge:
+            # find like params and group them together.
+            # assume names like "amp0"
+            assert(self.K < 10)
+            pnames = set()
+            for nm in names:
+                assert(nm[-1] in '0123456789'[:self.K])
+                pnames.add(nm[:-1])
+            assert(len(pnames) * self.K == nparams)
+            pnames = list(pnames)
+            pnames.sort()
+            print 'Pnames:', pnames
+            namemap = dict([(nm,i) for i,nm in enumerate(names)])
+            for i,nm in enumerate(pnames):
+                X = np.dstack([pp[:,:,namemap['%s%i' % (nm, k)]] for k in range(self.K)])
+                print 'pname', nm, 'array:', X.shape
+                T.set(nm, X.reshape((1,self.K,ny,nx)))
+            
+            
+        else:
+            for i,nm in enumerate(names):
+                T.set(nm, pp[:,:,i].reshape((1,ny,nx)))
         T.writeto(fn, header=hdr)
+
+
+
+
+
+
         
 
 def typestring(t):
@@ -416,18 +463,20 @@ class CachingPsfEx(PsfEx):
     # For pickling
     def __getstate__(self):
         self.cache.clear()
-        #return super(CachingPsfEx, self).__getstate__()
         return self.__dict__
 
     def psfAt(self, x, y):
-        key = (int(x)/self.rounding, int(y)/self.rounding)
+        # Center of rounding cell:
+        cx = int(x)/self.rounding + self.rounding/2
+        cy = int(y)/self.rounding + self.rounding/2
+        key = (cx,cy)
         mog = self.cache.get(key, None)
         if mog is not None:
             return mog
-        mog = super(CachingPsfEx, self).mogAt(x, y)
+        print 'CachingPsf: getting PSF at', cx,cy
+        mog = super(CachingPsfEx, self).psfAt(cx, cy)
         self.cache.put(key, mog)
         return mog
-
     
 # class PixelizedPsfEx(PsfEx):
 #     def getPointSourcePatch(self, px, py, minval=0., extent=None):

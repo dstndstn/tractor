@@ -1,14 +1,6 @@
 # Cython
 #import pyximport; pyximport.install(pyimport=True)
 
-'''
-zeropoints.fits:
-
-python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
-
-'''
-
-
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -151,12 +143,6 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
     print 'Bricks:'
     B.about()
-
-    # brick index...
-    # One near the middle
-    #brickid = 377306
-    # One near the edge and with little overlap
-    #brickid = 380156
     ii = np.flatnonzero(B.brickid == brickid)[0]
     brick = B[ii]
     print 'Chosen brick:'
@@ -328,6 +314,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tim.sip_wcs = wcs
         tim.x0,tim.y0 = int(x0),int(y0)
         tim.psfex = psfex
+        tim.imobj = im
         mn,mx = tim.zr
         tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
@@ -563,7 +550,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for k in ['T', 'coimgs', 'cons', 'detmaps', 'detivs',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims', 'ps', 'brickid']:
+              'bands', 'tims', 'ps', 'brickid',
+              'target_extent']:
         rtn[k] = locals()[k]
     return rtn
 
@@ -968,9 +956,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
         th,tw = tim.shape
         print 'PSF', tim.psf
-
         mog = tim.psf.getMixtureOfGaussians(mean=(ox0+(tw/2), oy0+(th/2)))
-
         profiles.extend([
             mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
             mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
@@ -1112,9 +1098,10 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
+            print 'Blob shape:', (sy1-sy0, sx1-sx0)
             # If the subimage (blob) is small enough, instantiate a
             # constant PSF model in the center.
-            if sy1-sy0 < 100 and sx1-sx1 < 100:
+            if sy1-sy0 < 100 and sx1-sx0 < 100:
                 subpsf = tim.psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
             else:
                 # Otherwise, instantiate a (shifted) spatially-varying
@@ -1190,6 +1177,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                     mod = src.getModelPatch(tim)
                     mods.append(mod)
                     if mod is not None:
+                        assert(np.all(np.isfinite(mod.patch)))
                         mod.addTo(tim.getImage(), scale=-1)
                 initial_models.append(mods)
             print 'Subtracting initial models:', Time()-tt
@@ -1783,6 +1771,19 @@ def stage103(T=None, coimgs=None, cons=None,
     print 'kwargs:', kwargs.keys()
     del kwargs
 
+    print 'W,H =', W,H
+
+    # tim = tims[0]
+    # tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    # spl = tim.psfex.splines[0]
+    # print 'Spline:', spl
+    # knots = spl.get_knots()
+    # print 'knots:', knots
+    # tx,ty = knots
+    # k = 3
+    # print 'interior knots x:', tx[k+1:-k-1]
+    # print 'additional knots x:', tx[:k+1], 'and', tx[-k-1:]
+
 
     plt.figure(figsize=(10,10))
     #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
@@ -1825,12 +1826,16 @@ def stage103(T=None, coimgs=None, cons=None,
     chibins = np.linspace(-10., 10., 200)
     chihist = [np.zeros(len(chibins)-1, int) for band in bands]
 
+    wcsW = targetwcs.get_width()
+    wcsH = targetwcs.get_height()
+    print 'Target WCS shape', wcsW,wcsH
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
-        comod = np.zeros((H,W), np.float32)
-        comod2 = np.zeros((H,W), np.float32)
-        cochi2 = np.zeros((H,W), np.float32)
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        comod2 = np.zeros((wcsH,wcsW), np.float32)
+        cochi2 = np.zeros((wcsH,wcsW), np.float32)
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -1862,6 +1867,42 @@ def stage103(T=None, coimgs=None, cons=None,
             chi = chi[chi != 0.]
             hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
             chihist[iband] += hh
+
+            im = tim.imobj
+            fn = 'image-b%06i-%s-%s.fits' % (brickid, band, im.name)
+
+            wcsfn = create_temp()
+            wcs = tim.getWcs().wcs
+            x0,y0 = orig_wcsxy0[itim]
+            h,w = tim.shape
+            subwcs = wcs.get_subimage(int(x0), int(y0), w, h)
+            subwcs.write_to(wcsfn)
+
+            primhdr = fitsio.FITSHDR()
+            primhdr.add_record(dict(name='X0', value=x0, comment='Pixel origin of subimage'))
+            primhdr.add_record(dict(name='Y0', value=y0, comment='Pixel origin of subimage'))
+            xfn = im.wcsfn.replace(decals_dir+'/', '')
+            primhdr.add_record(dict(name='WCS_FILE', value=xfn))
+            xfn = im.psffn.replace(decals_dir+'/', '')
+            primhdr.add_record(dict(name='PSF_FILE', value=xfn))
+            primhdr.add_record(dict(name='INHERIT', value=True))
+
+            imhdr = fitsio.read_header(wcsfn)
+            imhdr.add_record(dict(name='EXTTYPE', value='IMAGE', comment='This HDU contains image data'))
+            ivhdr = fitsio.read_header(wcsfn)
+            ivhdr.add_record(dict(name='EXTTYPE', value='INVVAR', comment='This HDU contains an inverse-variance map'))
+            fits = fitsio.FITS(fn, 'rw', clobber=True)
+            tim.toFits(fits, primheader=primhdr, imageheader=imhdr, invvarheader=ivhdr)
+
+            # fn = fn.replace('image', 'model')
+            # #fn = 'model-b%06i-%08i-%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
+            # #fn = 'model-b%06i-exp%06i-hdu%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
+            imhdr.add_record(dict(name='EXTTYPE', value='MODEL', comment='This HDU contains a Tractor model image'))
+            #fitsio.write(fn, mod, clobber=True, header=imhdr)
+            #print 'Wrote', fn
+            fits.write(mod, header=imhdr)
+            print 'Wrote image and model to', fn
+
             
         comod  /= np.maximum(cons[iband], 1)
         comod2 /= np.maximum(cons[iband], 1)
