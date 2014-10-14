@@ -900,19 +900,63 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
+
     # Fit spatially varying PsfEx models.
     for itim,tim in enumerate(tims):
-        print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
-        t0 = Time()
-        psfex = tim.psfex
-        if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
-            psfex.fitSavedData(*psfex.splinedata)
-        else:
-            tim.psfex.savesplinedata = True
-            print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
-            tim.psfex.ensureFit()
-        print 'PsfEx model fit took:', Time()-t0
-        
+        # print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
+        # t0 = Time()
+        # psfex = tim.psfex
+        # if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
+        #     psfex.fitSavedData(*psfex.splinedata)
+        # else:
+        #     psfex.savesplinedata = True
+        #     print 'PsfEx:', psfex.W, 'x', psfex.H, '; grid of', psfex.nx, 'x', psfex.ny, 'PSF instances'
+        #     psfex.ensureFit()
+        # print 'PsfEx model fit took:', Time()-t0
+
+        # Re-read fit PsfEx model
+        im = tim.imobj
+        print 'Re-reading PsfEx model from', im.psffitfn
+        psfex = PsfEx.fromFits(im.psffitfn)
+        print 'Read', psfex
+        psfex.fitSavedData(*psfex.splinedata)
+        tim.psfex = psfex
+
+        if plots:
+            print
+            print 'Tim', tim
+            print
+            pp,xx,yy = psfex.splinedata
+            ny,nx,nparams = pp.shape
+            assert(len(xx) == nx)
+            assert(len(yy) == ny)
+            psfnil = psfex.psfclass(*np.zeros(nparams))
+            names = psfnil.getParamNames()
+            xa = np.linspace(xx[0], xx[-1],  50)
+            ya = np.linspace(yy[0], yy[-1], 100)
+            #xa,ya = np.meshgrid(xa,ya)
+            #xa = xa.ravel()
+            #ya = ya.ravel()
+            print 'xa', xa
+            print 'ya', ya
+            for i in range(nparams):
+                plt.clf()
+                plt.subplot(1,2,1)
+                dimshow(pp[:,:,i])
+                plt.title('grid fit')
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                sp = psfex.splines[i](xa, ya)
+                sp = sp.T
+                print 'spline shape', sp.shape
+                assert(sp.shape == (len(ya),len(xa)))
+                dimshow(sp, extent=[xx[0],xx[-1],yy[0],yy[-1]])
+                plt.title('spline')
+                plt.colorbar()
+                plt.suptitle('tim %s: PSF param %s' % (tim.name, names[i]))
+                ps.savefig()
+
+
     return dict(tims=tims)
     
 def stage2(T=None, sedsn=None, coimgs=None, cons=None,
@@ -956,7 +1000,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
         th,tw = tim.shape
         print 'PSF', tim.psf
-        mog = tim.psf.getMixtureOfGaussians(mean=(ox0+(tw/2), oy0+(th/2)))
+        mog = tim.psf.getMixtureOfGaussians(px=ox0+(tw/2), py=oy0+(th/2))
         profiles.extend([
             mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
             mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
@@ -1098,6 +1142,8 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
+            print 'Original x0,y0', ox0, oy0
+            print 'Blob x0,y0', sx0, sy0
             print 'Blob shape:', (sy1-sy0, sx1-sx0)
             # If the subimage (blob) is small enough, instantiate a
             # constant PSF model in the center.
@@ -1177,6 +1223,11 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                     mod = src.getModelPatch(tim)
                     mods.append(mod)
                     if mod is not None:
+                        if not np.all(np.isfinite(mod.patch)):
+                            print 'Non-finite mod patch'
+                            print 'source:', src
+                            print 'tim:', tim
+                            print 'PSF:', tim.getPsf()
                         assert(np.all(np.isfinite(mod.patch)))
                         mod.addTo(tim.getImage(), scale=-1)
                 initial_models.append(mods)
