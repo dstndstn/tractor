@@ -1168,13 +1168,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         psf.setParams(params)
         return psf
     
-    def getMixtureOfGaussians(self, px=None, py=None, mean=None):
-        mog = self.mog
-        mog.symmetrize()
-        if mean is not None:
-            mog = mog.copy()
-            mog.mean += mean
-        return mog
+    def getMixtureOfGaussians(self, px=None, py=None):
+        return self.mog
 
     def applyTo(self, image):
         raise
@@ -1558,13 +1553,14 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         ''' Returns a new PSF that is *factor* times wider. '''
         return NCircularGaussianPSF(np.array(self.mysigmas) * factor, self.myweights)
 
-    def getMixtureOfGaussians(self, mean=None, px=None, py=None):
-        mymeans = np.zeros((len(self.myweights), 2))
-        if mean is not None:
-            mymeans += mean
-        return mp.MixtureOfGaussians(self.myweights,
-                                     mymeans,
-                                     np.array(self.mysigmas)**2)
+    def getMixtureOfGaussians(self, px=None, py=None):
+        K = len(self.myweights)
+        amps = np.array(self.myweights)
+        means = np.zeros((K,2))
+        vars = np.zeros((K,2,2))
+        for k in range(K):
+            vars[k,0,0] = vars[k,1,1] = self.mysigmas**2
+        return mp.MixtureOfGaussians(amps, means, vars)
         
     def hashkey(self):
         hk = ('NCircularGaussianPSF', tuple(self.sigmas), tuple(self.weights))
@@ -1605,7 +1601,9 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         x1 = ix + rad + 1
         y0 = iy - rad
         y1 = iy + rad + 1
-        mix = self.getMixtureOfGaussians(mean=np.array([px,py]))
+        mix = self.getMixtureOfGaussians()
+        mix.mean[:,0] += px
+        mix.mean[:,1] += py
         return mp.mixture_to_patch(mix, x0, x1, y0, y1, minval=minval)
 
 # class SubImage(Image):
@@ -1689,19 +1687,12 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
     def getRadius(self):
         return self.psf.getRadius()
 
-    def getMixtureOfGaussians(self, px=None, py=None, mean=None, **kwargs):
+    def getMixtureOfGaussians(self, px=None, py=None, **kwargs):
         if px is not None:
             px = px + self.x0
         if py is not None:
             py = py + self.y0
-        if mean is not None:
-            mx,my = mean
-            mean = (mx + self.x0, my + self.y0)
-        mog = self.psf.getMixtureOfGaussians(px=px, py=py, mean=mean, **kwargs)
-        if mean is not None:
-            mog.mean[:,0] -= self.x0
-            mog.mean[:,1] -= self.y0
-        return mog
+        return self.psf.getMixtureOfGaussians(px=px, py=py, **kwargs)
     
 class ScaledPhotoCal(ParamsWrapper, ducks.ImageCalibration):
     def __init__(self, photocal, factor):
