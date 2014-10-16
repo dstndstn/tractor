@@ -320,3 +320,10 @@ class PSF(ImageCalibration, Params):
         '''
         return 0
 
+    # Optional: Allows galaxy models to render via analytic convolution:
+    # def getMixtureOfGaussians(self, px=None, py=None, **kwargs):
+    #     '''
+    #     Returns a mixture_profiles.MixtureOfGaussians object approximating this
+    #     PSF at the given px,py position.  The mean of the MoG is NOT set to px,py;
+    #     it is 0,0.
+    #     '''

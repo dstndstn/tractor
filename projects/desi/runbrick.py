@@ -1,14 +1,6 @@
 # Cython
 #import pyximport; pyximport.install(pyimport=True)
 
-'''
-zeropoints.fits:
-
-python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
-
-'''
-
-
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -151,12 +143,6 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
     print 'Bricks:'
     B.about()
-
-    # brick index...
-    # One near the middle
-    #brickid = 377306
-    # One near the edge and with little overlap
-    #brickid = 380156
     ii = np.flatnonzero(B.brickid == brickid)[0]
     brick = B[ii]
     print 'Chosen brick:'
@@ -328,6 +314,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tim.sip_wcs = wcs
         tim.x0,tim.y0 = int(x0),int(y0)
         tim.psfex = psfex
+        tim.imobj = im
         mn,mx = tim.zr
         tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
@@ -563,7 +550,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for k in ['T', 'coimgs', 'cons', 'detmaps', 'detivs',
               'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
               'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims', 'ps', 'brickid']:
+              'bands', 'tims', 'ps', 'brickid',
+              'target_extent']:
         rtn[k] = locals()[k]
     return rtn
 
@@ -912,19 +900,63 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            bands=None, ps=None, tims=None,
            plots=False,
            **kwargs):
+
     # Fit spatially varying PsfEx models.
     for itim,tim in enumerate(tims):
-        print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
-        t0 = Time()
-        psfex = tim.psfex
-        if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
-            psfex.fitSavedData(*psfex.splinedata)
-        else:
-            tim.psfex.savesplinedata = True
-            print 'PsfEx:', tim.psfex.W, 'x', tim.psfex.H, '; grid of', tim.psfex.nx, 'x', tim.psfex.ny, 'PSF instances'
-            tim.psfex.ensureFit()
-        print 'PsfEx model fit took:', Time()-t0
-        
+        # print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
+        # t0 = Time()
+        # psfex = tim.psfex
+        # if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
+        #     psfex.fitSavedData(*psfex.splinedata)
+        # else:
+        #     psfex.savesplinedata = True
+        #     print 'PsfEx:', psfex.W, 'x', psfex.H, '; grid of', psfex.nx, 'x', psfex.ny, 'PSF instances'
+        #     psfex.ensureFit()
+        # print 'PsfEx model fit took:', Time()-t0
+
+        # Re-read fit PsfEx model
+        im = tim.imobj
+        print 'Re-reading PsfEx model from', im.psffitfn
+        psfex = PsfEx.fromFits(im.psffitfn)
+        print 'Read', psfex
+        psfex.fitSavedData(*psfex.splinedata)
+        tim.psfex = psfex
+
+        if plots:
+            print
+            print 'Tim', tim
+            print
+            pp,xx,yy = psfex.splinedata
+            ny,nx,nparams = pp.shape
+            assert(len(xx) == nx)
+            assert(len(yy) == ny)
+            psfnil = psfex.psfclass(*np.zeros(nparams))
+            names = psfnil.getParamNames()
+            xa = np.linspace(xx[0], xx[-1],  50)
+            ya = np.linspace(yy[0], yy[-1], 100)
+            #xa,ya = np.meshgrid(xa,ya)
+            #xa = xa.ravel()
+            #ya = ya.ravel()
+            print 'xa', xa
+            print 'ya', ya
+            for i in range(nparams):
+                plt.clf()
+                plt.subplot(1,2,1)
+                dimshow(pp[:,:,i])
+                plt.title('grid fit')
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                sp = psfex.splines[i](xa, ya)
+                sp = sp.T
+                print 'spline shape', sp.shape
+                assert(sp.shape == (len(ya),len(xa)))
+                dimshow(sp, extent=[xx[0],xx[-1],yy[0],yy[-1]])
+                plt.title('spline')
+                plt.colorbar()
+                plt.suptitle('tim %s: PSF param %s' % (tim.name, names[i]))
+                ps.savefig()
+
+
     return dict(tims=tims)
     
 def stage2(T=None, sedsn=None, coimgs=None, cons=None,
@@ -968,9 +1000,7 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
         minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
         th,tw = tim.shape
         print 'PSF', tim.psf
-
-        mog = tim.psf.getMixtureOfGaussians(mean=(ox0+(tw/2), oy0+(th/2)))
-
+        mog = tim.psf.getMixtureOfGaussians(px=ox0+(tw/2), py=oy0+(th/2))
         profiles.extend([
             mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
             mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
@@ -1112,9 +1142,12 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.suptitle('blob (subtim)')
                 ps.savefig()
 
+            print 'Original x0,y0', ox0, oy0
+            print 'Blob x0,y0', sx0, sy0
+            print 'Blob shape:', (sy1-sy0, sx1-sx0)
             # If the subimage (blob) is small enough, instantiate a
             # constant PSF model in the center.
-            if sy1-sy0 < 100 and sx1-sx1 < 100:
+            if sy1-sy0 < 100 and sx1-sx0 < 100:
                 subpsf = tim.psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
             else:
                 # Otherwise, instantiate a (shifted) spatially-varying
@@ -1190,6 +1223,12 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                     mod = src.getModelPatch(tim)
                     mods.append(mod)
                     if mod is not None:
+                        if not np.all(np.isfinite(mod.patch)):
+                            print 'Non-finite mod patch'
+                            print 'source:', src
+                            print 'tim:', tim
+                            print 'PSF:', tim.getPsf()
+                        assert(np.all(np.isfinite(mod.patch)))
                         mod.addTo(tim.getImage(), scale=-1)
                 initial_models.append(mods)
             print 'Subtracting initial models:', Time()-tt
@@ -1455,6 +1494,404 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
     return rtn
 
 
+
+
+
+
+def stage22(T=None, sedsn=None, coimgs=None, cons=None,
+            detmaps=None, detivs=None,
+            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+            W=None,H=None, brickid=None,
+            bands=None, ps=None, tims=None,
+            plots=False, plots2=False,
+            **kwargs):
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    for tim in tims:
+        print 'PSFEX:', tim.psfex
+        print 'splines:', tim.psfex.splines
+        #tim.psfex.fitSavedData(*tim.psfex.splinedata)
+
+        from tractor.psfex import CachingPsfEx
+        # HACK
+        tim.psfex.sampling = None
+        tim.psfex.xscale = None
+        tim.psfex.yscale = None
+        tim.psfex.x0 = None
+        tim.psfex.y0 = None
+        tim.psfex.degree = None
+        tim.psfex.radius = 20
+        tim.psfex.psfbases = None
+        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+
+    # How far down to render model profiles
+    minsigma = 0.1
+    for tim in tims:
+        tim.modelMinval = minsigma * tim.sig1
+
+    # FIXME -- set source radii crudely, based on the maximum of the
+    # PSF profiles in all images (!) -- should have a source x image
+    # structure -- *and* based on SDSS fluxes.
+    profiles = []
+    R = 100
+    minsig1s = dict([(band,1e100) for band in bands])
+    for (ox0,oy0),tim in zip(orig_wcsxy0, tims):
+        minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
+        th,tw = tim.shape
+        print 'PSF', tim.psf
+        mog = tim.psf.getMixtureOfGaussians(px=ox0+(tw/2), py=oy0+(th/2))
+        profiles.extend([
+            mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
+            mog.evaluate_grid(-(R-1), 1, 0, 1, 0., 0.).patch.ravel()[-1::-1],
+            mog.evaluate_grid(0, 1, 0, R, 0., 0.).patch.ravel(),
+            mog.evaluate_grid(0, 1, -(R-1), 1, 0., 0.).patch.ravel()[-1::-1]])
+    profiles = np.array(profiles)
+    print 'profiles', profiles.dtype, profiles.shape
+
+    minradius = 3
+    pro = np.max(profiles, axis=0)
+    for src in cat:
+        if not isinstance(src, PointSource):
+            continue
+        nsigmas = 0.
+        bright = src.getBrightness()
+        for band in bands:
+            nsigmas = max(nsigmas, bright.getFlux(band) / minsig1s[band])
+        if nsigmas <= 0:
+            continue
+        ii = np.flatnonzero(pro > (minsigma / nsigmas))
+        if len(ii) == 0:
+            continue
+        src.fixedRadius = max(minradius, 1 + ii[-1])
+        print 'Nsigma', nsigmas, 'radius', src.fixedRadius
+
+    ### FIXME
+    ## # Find sources that do not belong to a blob and add them as
+    ## # singleton "blobs"; otherwise they don't get optimized.
+    ## # for sources outside the image bounds, what should we do?
+
+    # Fit in order of flux
+    tfitall = Time()
+    args = []
+    args2 = []
+    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+        ## HACK
+        #if blobnumber != 10:
+        #    continue
+
+        bslc  = blobslices[iblob]
+        Isrcs = blobsrcs  [iblob]
+        if len(Isrcs) == 0:
+            continue
+
+        tblob = Time()
+        print
+        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
+        print 'Source indices:', Isrcs
+        print
+
+        # blob bbox in target coords
+        sy,sx = bslc
+        by0,by1 = sy.start, sy.stop
+        bx0,bx1 = sx.start, sx.stop
+        blobh,blobw = by1 - by0, bx1 - bx0
+
+        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
+
+        subtimargs = []
+        for itim,tim in enumerate(tims):
+            h,w = tim.shape
+            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
+            sx0,sx1 = x.min(), x.max()
+            sy0,sy1 = y.min(), y.max()
+            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
+                continue
+            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
+            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
+            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
+            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
+            subslc = slice(sy0,sy1),slice(sx0,sx1)
+            subimg = tim.getImage ()[subslc]
+            subie  = tim.getInvError()[subslc]
+            subwcs = tim.getWcs().copy()
+            ox0,oy0 = orig_wcsxy0[itim]
+            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
+
+            subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
+                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
+                               ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
+
+        args.append((targetwcs, bx0, by0, blobw, blobh,
+                     blobs[bslc], iblob, subtimargs,
+                     [cat[i] for i in Isrcs], bands))
+        args2.append((Isrcs))
+
+    if mp is None:
+        R = map(_one_blob_s22, args)
+    else:
+        R = mp.map(_bounce_one_blob_s22, args)
+    del args
+
+    srcvariances = [[] for src in cat]
+    for (fitsrcs,srcvars),(Isrcs) in zip(R, args2):
+        for isrc,fitsrc,srcvar in zip(Isrcs, fitsrcs, srcvars):
+            src = cat[isrc]
+            if isinstance(src, (DevGalaxy, ExpGalaxy)):
+                src.shape = fitsrc.shape
+            elif isinstance(src, FixedCompositeGalaxy):
+                src.shapeExp = fitsrc.shapeExp
+                src.shapeDev = fitsrc.shapeDev
+            src.setParams(fitsrc.getParams())
+            srcvariances[isrc].extend(srcvar)
+
+    cat.thawAllRecursive()
+    for i,src in enumerate(cat):
+        print 'Source', i, src
+        print 'variances:', srcvariances[i]
+        print len(srcvariances[i]), 'vs', src.numberOfParams()
+        if len(srcvariances[i]) != src.numberOfParams():
+            # This can happen for sources outside the brick bounds: they never get optimized?
+            print 'Warning: zeroing variances for source', src
+            srcvariances[i] = [0]*src.numberOfParams()
+            if isinstance(src, (DevGalaxy, ExpGalaxy)):
+                src.shape = EllipseE.fromEllipseESoft(src.shape)
+            elif isinstance(src, FixedCompositeGalaxy):
+                src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+                src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+        assert(len(srcvariances[i]) == src.numberOfParams())
+    variances = np.hstack(srcvariances)
+    assert(len(variances) == cat.numberOfParams())
+
+    print 'Fitting sources took:', Time()-tfitall
+    print 'Logprob:', tractor.getLogProb()
+    
+    rtn = dict()
+    for k in ['tractor','tims','ps', 'variances']:
+        rtn[k] = locals()[k]
+    # unpicklable
+    #rtn['mp'] = None
+    return rtn
+
+                          
+def _bounce_one_blob_s22(X):
+    try:
+        return _one_blob_s22(X)
+    except:
+        import traceback
+        print 'Exception in one_blob_s22:'
+        print 'args:', X
+        traceback.print_exc()
+        raise
+
+def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
+                   blobcut, iblob, subtimargs,
+                   srcs, bands)):
+
+    tlast = Time()
+    alphas = [0.1, 0.3, 1.0]
+
+    subtims = []
+    for (subimg, subie, twcs, subwcs, pcal,
+         sky, psf, name, sx0, sx1, sy0, sy1, ox0, oy0,
+         band,sig1,modelMinval) in subtimargs:
+
+        # Mask out inverr for pixels that are not within the blob.
+        subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
+        subsubwcs = subwcs.get_subimage(int(sx0), int(sy0), int(sx1-sx0), int(sy1-sy0))
+        try:
+            Yo,Xo,Yi,Xi,rims = resample_with_wcs(subsubwcs, subtarget, [], 2)
+        except OverlapError:
+            print 'No overlap'
+            continue
+        if len(Yo) == 0:
+            continue
+        subie2 = np.zeros_like(subie)
+        I = np.flatnonzero(blobcut[Yi, Xi] == (iblob+1))
+        subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
+        subie = subie2
+
+        # If the subimage (blob) is small enough, instantiate a
+        # constant PSF model in the center.
+        if sy1-sy0 < 100 and sx1-sx0 < 100:
+            subpsf = psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
+        else:
+            # Otherwise, instantiate a (shifted) spatially-varying
+            # PsfEx model.
+            subpsf = ShiftedPsf(psf, ox0+sx0, oy0+sy0)
+
+        subtim = Image(data=subimg, inverr=subie, wcs=twcs,
+                       psf=subpsf, photocal=pcal, sky=sky, name=name)
+        subtim.band = band
+        subtim.sig1 = sig1
+        subtim.modelMinval = modelMinval
+        subtims.append(subtim)
+            
+    subcat = Catalog(*srcs)
+    subtr = Tractor(subtims, subcat)
+    subtr.freezeParam('images')
+        
+    # Optimize individual sources in order of flux
+    fluxes = []
+    for src in subcat:
+        # HACK -- here we just *sum* the nanomaggies in each band.  Bogus!
+        br = src.getBrightness()
+        flux = sum([br.getFlux(band) for band in bands])
+        fluxes.append(flux)
+    Ibright = np.argsort(-np.array(fluxes))
+
+    if len(Ibright) >= 5:
+        # -Remember the original subtim images
+        # -Compute initial models for each source (in each tim)
+        # -Subtract initial models from images
+        # -During fitting, for each source:
+        #   -add back in the source's initial model (to each tim)
+        #   -fit, with Catalog([src])
+        #   -subtract final model (from each tim)
+        # -Replace original subtim images
+        #
+        # --Might want to omit newly-added detection-filter sources, since their
+        # fluxes are bogus.
+
+        # Remember original tim images
+        orig_timages = [tim.getImage().copy() for tim in subtims]
+        initial_models = []
+
+        # Create initial models for each tim x each source
+        tt = Time()
+        for tim in subtims:
+            mods = []
+            for src in subcat:
+                mod = src.getModelPatch(tim)
+                mods.append(mod)
+                if mod is not None:
+                    if not np.all(np.isfinite(mod.patch)):
+                        print 'Non-finite mod patch'
+                        print 'source:', src
+                        print 'tim:', tim
+                        print 'PSF:', tim.getPsf()
+                    assert(np.all(np.isfinite(mod.patch)))
+                    mod.addTo(tim.getImage(), scale=-1)
+            initial_models.append(mods)
+        print 'Subtracting initial models:', Time()-tt
+
+        # For sources in decreasing order of brightness
+        for numi,i in enumerate(Ibright):
+            tsrc = Time()
+            print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
+            src = subcat[i]
+            print src
+
+            srctractor = Tractor(subtims, [src])
+            srctractor.freezeParams('images')
+            
+            # Add this source's initial model back in.
+            for tim,mods in zip(subtims, initial_models):
+                mod = mods[i]
+                if mod is not None:
+                    mod.addTo(tim.getImage())
+
+            print 'Optimizing:', srctractor
+            srctractor.printThawedParams()
+
+            for step in range(50):
+                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print 'dlnp:', dlnp, 'src', src
+                if dlnp < 0.1:
+                    break
+
+            for tim in subtims:
+                mod = src.getModelPatch(tim)
+                if mod is not None:
+                    mod.addTo(tim.getImage(), scale=-1)
+
+            print 'Fitting source took', Time()-tsrc
+            print src
+
+        for tim,img in zip(subtims, orig_timages):
+            tim.data = img
+
+        del orig_timages
+        del initial_models
+        
+    else:
+        # Fit sources one at a time, but don't subtract other models
+        subcat.freezeAllParams()
+        for numi,i in enumerate(Ibright):
+            tsrc = Time()
+            print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
+            print subcat[i]
+            subcat.freezeAllBut(i)
+            print 'Optimizing:', subtr
+            subtr.printThawedParams()
+            for step in range(10):
+                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print 'dlnp:', dlnp
+                if dlnp < 0.1:
+                    break
+            print 'Fitting source took', Time()-tsrc
+            print subcat[i]
+
+    if len(srcs) > 1 and len(srcs) <= 10:
+        tfit = Time()
+        # Optimize all at once?
+        subcat.thawAllParams()
+        print 'Optimizing:', subtr
+        subtr.printThawedParams()
+        for step in range(20):
+            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                          alphas=alphas)
+            print 'dlnp:', dlnp
+            if dlnp < 0.1:
+                break
+
+        print 'Simultaneous fit took:', Time()-tfit
+
+    # FIXME -- for large blobs, fit strata of sources simultaneously?
+
+    print 'Blob finished fitting:', Time()-tlast
+    tlast = Time()
+
+    # Variances
+    srcvariances = [[] for src in srcs]
+    subcat.thawAllRecursive()
+    subcat.freezeAllParams()
+    for isub in range(len(srcs)):
+        print 'Variances for source', isub
+        subcat.thawParam(isub)
+        src = subcat[isub]
+        print 'Source', src
+        print 'Params:', src.getParamNames()
+        
+        if isinstance(src, (DevGalaxy, ExpGalaxy)):
+            src.shape = EllipseE.fromEllipseESoft(src.shape)
+        elif isinstance(src, FixedCompositeGalaxy):
+            src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+            src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+
+        print 'Converted ellipse:', src
+
+        allderivs = subtr.getDerivs()
+        for iparam,derivs in enumerate(allderivs):
+            dchisq = 0
+            for deriv,tim in derivs:
+                h,w = tim.shape
+                deriv.clipTo(w,h)
+                ie = tim.getInvError()
+                slc = deriv.getSlice(ie)
+                chi = deriv.patch * ie[slc]
+                dchisq += (chi**2).sum()
+            if dchisq == 0.:
+                v = np.nan
+            else:
+                v = 1./dchisq
+            srcvariances[isub].append(v)
+        assert(len(srcvariances[isub]) == subcat[isub].numberOfParams())
+        subcat.freezeParam(isub)
+    print 'Blob variances:', Time()-tlast
+
+    return srcs, srcvariances
 
 
 def stage3(T=None, sedsn=None, coimgs=None, cons=None,
@@ -1783,6 +2220,21 @@ def stage103(T=None, coimgs=None, cons=None,
     print 'kwargs:', kwargs.keys()
     del kwargs
 
+    print 'W,H =', W,H
+
+    tim = tims[0]
+    tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    spl = tim.psfex.splines[0]
+    print 'Spline:', spl
+    knots = spl.get_knots()
+    print 'knots:', knots
+    tx,ty = knots
+    k = 3
+    print 'interior knots x:', tx[k+1:-k-1]
+    print 'additional knots x:', tx[:k+1], 'and', tx[-k-1:]
+    print 'interior knots y:', ty[k+1:-k-1]
+    print 'additional knots y:', ty[:k+1], 'and', ty[-k-1:]
+
 
     plt.figure(figsize=(10,10))
     #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
@@ -1825,12 +2277,16 @@ def stage103(T=None, coimgs=None, cons=None,
     chibins = np.linspace(-10., 10., 200)
     chihist = [np.zeros(len(chibins)-1, int) for band in bands]
 
+    wcsW = targetwcs.get_width()
+    wcsH = targetwcs.get_height()
+    print 'Target WCS shape', wcsW,wcsH
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
-        comod = np.zeros((H,W), np.float32)
-        comod2 = np.zeros((H,W), np.float32)
-        cochi2 = np.zeros((H,W), np.float32)
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        comod2 = np.zeros((wcsH,wcsW), np.float32)
+        cochi2 = np.zeros((wcsH,wcsW), np.float32)
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -1862,6 +2318,42 @@ def stage103(T=None, coimgs=None, cons=None,
             chi = chi[chi != 0.]
             hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
             chihist[iband] += hh
+
+            im = tim.imobj
+            fn = 'image-b%06i-%s-%s.fits' % (brickid, band, im.name)
+
+            wcsfn = create_temp()
+            wcs = tim.getWcs().wcs
+            x0,y0 = orig_wcsxy0[itim]
+            h,w = tim.shape
+            subwcs = wcs.get_subimage(int(x0), int(y0), w, h)
+            subwcs.write_to(wcsfn)
+
+            primhdr = fitsio.FITSHDR()
+            primhdr.add_record(dict(name='X0', value=x0, comment='Pixel origin of subimage'))
+            primhdr.add_record(dict(name='Y0', value=y0, comment='Pixel origin of subimage'))
+            xfn = im.wcsfn.replace(decals_dir+'/', '')
+            primhdr.add_record(dict(name='WCS_FILE', value=xfn))
+            xfn = im.psffn.replace(decals_dir+'/', '')
+            primhdr.add_record(dict(name='PSF_FILE', value=xfn))
+            primhdr.add_record(dict(name='INHERIT', value=True))
+
+            imhdr = fitsio.read_header(wcsfn)
+            imhdr.add_record(dict(name='EXTTYPE', value='IMAGE', comment='This HDU contains image data'))
+            ivhdr = fitsio.read_header(wcsfn)
+            ivhdr.add_record(dict(name='EXTTYPE', value='INVVAR', comment='This HDU contains an inverse-variance map'))
+            fits = fitsio.FITS(fn, 'rw', clobber=True)
+            tim.toFits(fits, primheader=primhdr, imageheader=imhdr, invvarheader=ivhdr)
+
+            # fn = fn.replace('image', 'model')
+            # #fn = 'model-b%06i-%08i-%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
+            # #fn = 'model-b%06i-exp%06i-hdu%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
+            imhdr.add_record(dict(name='EXTTYPE', value='MODEL', comment='This HDU contains a Tractor model image'))
+            #fitsio.write(fn, mod, clobber=True, header=imhdr)
+            #print 'Wrote', fn
+            fits.write(mod, header=imhdr)
+            print 'Wrote image and model to', fn
+
             
         comod  /= np.maximum(cons[iband], 1)
         comod2 /= np.maximum(cons[iband], 1)
@@ -1979,10 +2471,6 @@ if __name__ == '__main__':
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    if opt.threads and opt.threads > 1:
-        from astrometry.util.multiproc import multiproc
-        mp = multiproc(opt.threads)
-
     set_globals()
     stagefunc = CallGlobal('stage%i', globals())
 
@@ -1999,10 +2487,15 @@ if __name__ == '__main__':
     if opt.plot_number:
         ps.skipto(opt.plot_number)
         kwargs.update(ps=ps)
+    if opt.threads and opt.threads > 1:
+        from astrometry.util.multiproc import multiproc
+        mp = multiproc(opt.threads)
+        # not picklable
+        #kwargs.update(mp=mp)
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {101: 1, 103:2, 203:2 }
+    prereqs = {101:1, 103:2, 203:2, 22:1 }
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,

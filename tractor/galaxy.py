@@ -357,7 +357,7 @@ class ProfileGalaxy(object):
         if hasattr(psf, 'getMixtureOfGaussians'):
             amix = self._getAffineProfile(img, px, py)
             # now convolve with the PSF, analytically
-            psfmix = psf.getMixtureOfGaussians()
+            psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
             #print '_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1
             return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,

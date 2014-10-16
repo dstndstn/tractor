@@ -427,7 +427,7 @@ def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True,
         psfexvar = PsfEx(im.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
                          psfClass=GaussianMixturePSF)
         psfexvar.splinedata = (ppvar, XX, YY)
-        psfexvar.toFits(im.psffitfn)
+        psfexvar.toFits(im.psffitfn, merge=True)
         print 'Wrote', im.psffitfn
         
     if run_morph and morph:
