@@ -12,6 +12,18 @@ from tractor import *
 class EllipseE(ParamList):
     '''
     Ellipse parameterization with r, e1, e2.
+
+    e = hypot(e1, e2)
+
+    ba = (1 - e) / (1 + e)
+    e  = (ba + 1) / (ba - 1)
+
+    phi = -rad2deg(arctan2(e2, e1) / 2)
+    angle = deg2rad(-2 * phi)
+    e1 = e * cos(angle)
+    e2 = e * sin(angle)
+
+
     '''
     @staticmethod
     def getName():

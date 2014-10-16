@@ -223,14 +223,18 @@ class Image(MultiParams):
         return Image(data=pix, invvar=iv, psf=psf, wcs=wcs, sky=sky,
                      photocal=pcal)
         
-    def toFits(self, fits, prefix=''):
+    def toFits(self, fits, prefix='', primheader=None, imageheader=None,
+               invvarheader=None):
         psf = self.getPsf()
         wcs = self.getWcs()
         sky = self.getSky()
         pcal = self.getPhotoCal()
         
-        import fitsio
-        hdr = fitsio.FITSHDR()
+        if primheader is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
+        else:
+            hdr = primheader
         tt = type(psf)
         psf_type = '%s.%s' % (tt.__module__, tt.__name__)
         tt = type(wcs)
@@ -253,8 +257,8 @@ class Image(MultiParams):
         pcal.toFitsHeader(hdr, prefix + 'PHO_')
 
         fits.write(None, header=hdr)
-        fits.write(self.getImage())
-        fits.write(self.getInvvar())
+        fits.write(self.getImage(), header=imageheader)
+        fits.write(self.getInvvar(), header=invvarheader)
 
     
         
