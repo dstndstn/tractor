@@ -2,7 +2,14 @@ import os
 import numpy as np
 from astrometry.util.fits import *
 
-from wisecat import _read_wise_cats
+from wisecat import _read_wise_cats, _read_wise_cats_wcs
+
+def allwise_catalog_wcs(wcs, pixelmargin=0, path='allwise-cats', cols=None):
+    return _read_wise_cats_wcs(wcs,
+                               os.path.join(path, 'wise-allwise-cat-part%02i.fits'),
+                               os.path.join(path, 'wise-allwise-cat-part%02i-radec.fits'),
+                               allwise_catalog_dec_range, cols=cols,
+                               pixelmargin=pixelmargin)
 
 def allwise_catalog_radecbox(r0, r1, d0, d1,
                           path='allwise-cats', cols=None):
