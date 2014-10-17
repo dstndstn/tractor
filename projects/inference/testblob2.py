@@ -47,17 +47,49 @@ def main():
     T.about()
     stars.extend(zip(T.teff, T.teff_sigma, T.ra, T.dec))
 
-    if True:
+    plots = False
+    
+    if False:
         from astrometry.util.multiproc import *
         mp = multiproc(2)
         mp.map(_bounce_one_blob, stars)
 
     else:
-        for teff, dteff, ra,dec in stars:
-            oneblob(ra,dec, teff, dteff)
+
+        # stars = [ (0.,0., 131.59054,  0.66408610),
+        #           (0.,0., 147.34576,  0.51657783 ),
+        #           ]
         
+        for teff, dteff, ra,dec in stars:
+            fns = oneblob(ra,dec, teff, dteff)
+                
+            if plots:
+                stamp_pattern = 'stamp-%%s-%.4f-%.4f.fits' % (ra, dec)
+                bands = 'ugriz'
+                fns = ['cat'] + [stamp_pattern % band for band in bands]
+                for j,fn in enumerate(fns[1:]):
+                    print 'Filename', fn
+                    F = fitsio.FITS(fn)
+                    n = len(F) / 2
+                    print 'n ext:', n
+                    cols = int(np.ceil(np.sqrt(n)))
+                    rows = int(np.ceil(n / float(cols)))
+                    plt.clf()
+                    for i,ext in enumerate(range(0, len(F), 2)):
+                        plt.subplot(rows, cols, i+1)
+                        hdr = F[ext].read_header()
+                        dimshow(F[ext].read(), ticks=False)
+                        plt.title('RCF %i/%i/%i' % (hdr['RUN'], hdr['CAMCOL'], hdr['FIELD']))
+                    plt.suptitle('%s band' % bands[j])
+                    plt.savefig(fn.replace('.fits','.png'))
+
+                    
+                
+            
 def oneblob(ra, dec, teff, dteff):
 
+    outfns = []
+    
     # Resample test blobs to a common pixel grid.
     sdss = DR9()
     sdss.saveUnzippedFiles('.')
@@ -116,7 +148,7 @@ def oneblob(ra, dec, teff, dteff):
         TT.append(T)
     T = merge_tables(TT)
     T.writeto(catfn)
-
+    outfns.append(catfn)
 
     written = set()
             
@@ -278,7 +310,10 @@ def oneblob(ra, dec, teff, dteff):
             fn = stamp_pattern % band
             fitsio.write(fn, img, clobber=clobber, header=hdr)
             fitsio.write(fn, iv)
-            
+            if clobber:
+                outfns.append(fn)
+    return outfns
+                
 if __name__ == '__main__':
     main()
     
