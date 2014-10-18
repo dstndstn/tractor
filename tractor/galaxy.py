@@ -737,8 +737,8 @@ class CompositeGalaxy(MultiParams):
 
     def getBrightnesses(self):
         return [self.brightnessExp, self.brightnessDev]
-    
-    def getModelPatch(self, img, minsb=0.):
+
+    def _getModelPatches(self, img, minsb=0.):
         e = ExpGalaxy(self.pos, self.brightnessExp, self.shapeExp)
         d = DevGalaxy(self.pos, self.brightnessDev, self.shapeDev)
         if minsb == 0.:
@@ -749,11 +749,11 @@ class CompositeGalaxy(MultiParams):
             e.halfsize = d.halfsize = self.halfsize
         pe = e.getModelPatch(img, **kw)
         pd = d.getModelPatch(img, **kw)
-        if pe is None:
-            return pd
-        if pd is None:
-            return pe
-        return pe + pd
+        return (pe,pd)
+    
+    def getModelPatch(self, img, minsb=0.):
+        pe,pd = self._getModelPatches(img, minsb=minsb)
+        return add_patches(pe,pd)
 
     def getUnitFluxModelPatches(self, img, minval=0.):
         if minval > 0:
