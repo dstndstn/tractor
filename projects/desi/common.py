@@ -296,150 +296,173 @@ class DecamImage(object):
         return S
         
 
+    def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
+                   astrom=True, psfex=True,
+                   morph=False, se2=False, psfexfit=True, funpack=True,
+                   fcopy=False,
+                   use_mask=True):
+                   
+        '''
+        pixscale: in degrees/pixel
+        '''
+        for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
+            print 'exists?', os.path.exists(fn), fn
+        self.makedirs()
+    
+        run_funpack = False
+        run_se = False
+        run_se2 = False
+        run_astrom = False
+        run_psfex = False
+        run_psfexfit = False
+        run_morph = False
+    
+        if not all([os.path.exists(fn) for fn in [self.sefn]]):
+            run_se = True
+            run_funpack = True
+        if not all([os.path.exists(fn) for fn in [self.se2fn]]):
+            run_se2 = True
+            run_funpack = True
+        if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
+            run_astrom = True
+        if not os.path.exists(self.psffn):
+            run_psfex = True
+        if not os.path.exists(self.psffitfn):
+            run_psfexfit = True
+        if not os.path.exists(self.morphfn):
+            run_morph = True
+            run_funpack = True
+        
+        if run_funpack and (funpack or fcopy) and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
+            tmpimgfn  = create_temp(suffix='.fits')
+            tmpmaskfn = create_temp(suffix='.fits')
+    
+            if funpack:
+                cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpimgfn, self.imgfn)
+            else:
+                cmd = 'imcopy %s"+%i" %s' % (self.imgfn, self.hdu, tmpimgfn)
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+    
+            if use_mask:
+                cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpmaskfn, self.dqfn)
+                print cmd
+                if os.system(cmd):
+                    raise RuntimeError('Command failed: ' + cmd)
+    
+        if run_astrom or run_morph or run_se or run_se2:
+            # grab header values...
+            primhdr = self.read_image_primary_header()
+            hdr     = self.read_image_header()
+    
+            magzp  = primhdr['MAGZERO']
+            seeing = pixscale * 3600 * hdr['FWHM']
+            print 'FWHM', hdr['FWHM']
+            print 'Seeing', seeing, 'arcsec'
+    
+        if run_se and se:
+            maskstr = ''
+            if use_mask:
+                maskstr = '-FLAG_IMAGE ' + tmpmaskfn
+            cmd = ' '.join([
+                'sex',
+                '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
+                maskstr, '-SEEING_FWHM %f' % seeing,
+                '-PIXEL_SCALE 0',
+                #'-PIXEL_SCALE %f' % (pixscale * 3600),
+                '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
+                tmpimgfn])
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+    
+        if run_se2 and se2:
+            cmd = ' '.join([
+                'sex',
+                '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
+                '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
+                '-PIXEL_SCALE %f' % (pixscale * 3600),
+                '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.se2fn,
+                tmpimgfn])
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+    
+        if run_astrom and astrom:
+            cmd = ' '.join([
+                'solve-field --config', an_config, '-D . --temp-dir', tempdir,
+                '--ra %f --dec %f' % (ra,dec), '--radius 1',
+                '-L %f -H %f -u app' % (0.9 * pixscale * 3600, 1.1 * pixscale * 3600),
+                '--continue --no-plots --no-remove-lines --uniformize 0',
+                '--no-fits2fits',
+                '-X x_image -Y y_image -s flux_auto --extension 2',
+                '--width %i --height %i' % (W,H),
+                '--crpix-center',
+                '-N none -U none -S none -M none --rdls', self.sdssfn,
+                '--corr', self.corrfn, '--wcs', self.wcsfn, 
+                '--temp-axy', '--tag-all', self.sefn])
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+    
+        if run_psfex and psfex:
+            cmd = ('psfex -c %s -PSF_DIR %s %s' %
+                   (os.path.join(sedir, 'DECaLS-v2.psfex'),
+                    os.path.dirname(self.psffn), self.sefn))
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+    
+        if run_psfexfit and psfexfit:
+            print 'Fit PSF...'
+    
+            from tractor.basics import GaussianMixtureEllipsePSF, GaussianMixturePSF
+            from tractor.psfex import PsfEx
+    
+            iminfo = self.get_image_info()
+            #print 'img:', iminfo
+            H,W = iminfo['dims']
+            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
+                          psfClass=GaussianMixtureEllipsePSF)
+            psfex.savesplinedata = True
+            print 'Fitting MoG model to PsfEx'
+            psfex._fitParamGrid(damp=1)
+            pp,XX,YY = psfex.splinedata
+    
+            # Convert to GaussianMixturePSF
+            ppvar = np.zeros_like(pp)
+            for iy in range(psfex.ny):
+                for ix in range(psfex.nx):
+                    psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
+                    mog = psf.toMog()
+                    ppvar[iy,ix,:] = mog.getParams()
+            psfexvar = PsfEx(self.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
+                             psfClass=GaussianMixturePSF)
+            psfexvar.splinedata = (ppvar, XX, YY)
+            psfexvar.toFits(self.psffitfn, merge=True)
+            print 'Wrote', self.psffitfn
+            
+        if run_morph and morph:
+            cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
+                            '-FLAG_IMAGE', tmpmaskfn,
+                            '-SEEING_FWHM %f' % seeing,
+                            '-MAG_ZEROPOINT %f' % magzp,
+                            '-PSF_NAME', self.psffn,
+                            '-CATALOG_NAME', self.morphfn,
+                            tmpimgfn])
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+
+
+
 def bounce_run_calibs(X):
     return run_calibs(*X)
 
-def run_calibs(im, ra, dec, pixscale, se=True, astrom=True, psfex=True,
-               morph=False, se2=False, psfexfit=True):
-               
-    '''
-    pixscale: in degrees/pixel
-    '''
-    for fn in [im.wcsfn,im.sefn,im.psffn,im.morphfn,im.corrfn,im.sdssfn,im.psffitfn]:
-        print 'exists?', os.path.exists(fn), fn
-    im.makedirs()
-
-    run_funpack = False
-    run_se = False
-    run_se2 = False
-    run_astrom = False
-    run_psfex = False
-    run_psfexfit = False
-    run_morph = False
-
-    if not all([os.path.exists(fn) for fn in [im.sefn]]):
-        run_se = True
-        run_funpack = True
-    if not all([os.path.exists(fn) for fn in [im.se2fn]]):
-        run_se2 = True
-        run_funpack = True
-    if not all([os.path.exists(fn) for fn in [im.wcsfn,im.corrfn,im.sdssfn]]):
-        run_astrom = True
-    if not os.path.exists(im.psffn):
-        run_psfex = True
-    if not os.path.exists(im.psffitfn):
-        run_psfexfit = True
-    if not os.path.exists(im.morphfn):
-        run_morph = True
-        run_funpack = True
-    
-    if run_funpack and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
-        tmpimgfn  = create_temp(suffix='.fits')
-        tmpmaskfn = create_temp(suffix='.fits')
-
-        cmd = 'funpack -E %i -O %s %s' % (im.hdu, tmpimgfn, im.imgfn)
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-        cmd = 'funpack -E %i -O %s %s' % (im.hdu, tmpmaskfn, im.dqfn)
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-    if run_astrom or run_morph or run_se or run_se2:
-        # grab header values...
-        primhdr = im.read_image_primary_header()
-        hdr     = im.read_image_header()
-
-        magzp  = primhdr['MAGZERO']
-        seeing = pixscale * 3600 * hdr['FWHM']
-
-    if run_se and se:
-        cmd = ' '.join([
-            'sex',
-            '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
-            '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-            '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.sefn,
-            tmpimgfn])
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-    if run_se2 and se2:
-        cmd = ' '.join([
-            'sex',
-            '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
-            '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-            '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', im.se2fn,
-            tmpimgfn])
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-    if run_astrom and astrom:
-        cmd = ' '.join([
-            'solve-field --config', an_config, '-D . --temp-dir', tempdir,
-            '--ra %f --dec %f' % (ra,dec), '--radius 1 -L 0.25 -H 0.29 -u app',
-            '--continue --no-plots --no-remove-lines --uniformize 0',
-            '--no-fits2fits',
-            '-X x_image -Y y_image -s flux_auto --extension 2',
-            '--width 2048 --height 4096',
-            '--crpix-center',
-            '-N none -U none -S none -M none --rdls', im.sdssfn,
-            '--corr', im.corrfn, '--wcs', im.wcsfn, 
-            '--temp-axy', '--tag-all', im.sefn])
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-    if run_psfex and psfex:
-        cmd = ('psfex -c %s -PSF_DIR %s %s' %
-               (os.path.join(sedir, 'DECaLS-v2.psfex'),
-                os.path.dirname(im.psffn), im.sefn))
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
-
-    if run_psfexfit and psfexfit:
-        print 'Fit PSF...'
-
-        from tractor.basics import *
-        from tractor.psfex import *
-
-        iminfo = im.get_image_info()
-        #print 'img:', iminfo
-        H,W = iminfo['dims']
-        psfex = PsfEx(im.psffn, W, H, ny=13, nx=7,
-                      psfClass=GaussianMixtureEllipsePSF)
-        psfex.savesplinedata = True
-        print 'Fitting MoG model to PsfEx'
-        psfex._fitParamGrid(damp=1)
-        pp,XX,YY = psfex.splinedata
-
-        # Convert to GaussianMixturePSF
-        ppvar = np.zeros_like(pp)
-        for iy in range(psfex.ny):
-            for ix in range(psfex.nx):
-                psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
-                mog = psf.toMog()
-                ppvar[iy,ix,:] = mog.getParams()
-        psfexvar = PsfEx(im.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
-                         psfClass=GaussianMixturePSF)
-        psfexvar.splinedata = (ppvar, XX, YY)
-        psfexvar.toFits(im.psffitfn, merge=True)
-        print 'Wrote', im.psffitfn
-        
-    if run_morph and morph:
-        cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
-                        '-FLAG_IMAGE', tmpmaskfn,
-                        '-SEEING_FWHM %f' % seeing,
-                        '-MAG_ZEROPOINT %f' % magzp,
-                        '-PSF_NAME', im.psffn,
-                        '-CATALOG_NAME', im.morphfn,
-                        tmpimgfn])
-        print cmd
-        if os.system(cmd):
-            raise RuntimeError('Command failed: ' + cmd)
+def run_calibs(X):
+    im = X[0]
+    args = X[1:]
+    return im.run_calibs(*X)
 
 
