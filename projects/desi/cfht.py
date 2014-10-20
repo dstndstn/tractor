@@ -838,7 +838,7 @@ def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
 
     # ['tims', 'cons', 'pixscale', 'H', 'coimgs', 'detmaps', 'W', 'brick', 'detivs', 'targetrd']
 
-    return dict(T2=T2, tims=None, detmaps=None, detivs=None,
+    return dict(T2=T2, M=M, tims=None, detmaps=None, detivs=None,
                 cons=None, coimgs=None)
     
 def get_ccd_list():
