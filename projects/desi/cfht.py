@@ -925,42 +925,19 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
               np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
         mag = T2.get('decam_%s_mag' % band)
         cc = ccmap[band]
-
-        print 'mag', mag
-
         I = (np.isfinite(mag) * (T2.type == 'S') * np.isfinite(sn))
         Ti = T2[I]
         Ti.mag = mag[I]
         Ti.sn = sn[I]
-        #print 'mag', mag
-        #print 'sn', sn
-        
-        I1 = np.flatnonzero((Ti.mag > 18) * (Ti.mag < 20))
-        I2 = np.flatnonzero((Ti.mag > 22) * (Ti.mag < 24))
-        x1 = np.median(Ti.mag[I1])
-        x2 = np.median(Ti.mag[I2])
-        y1 = np.median(np.log10(Ti.sn[I1]))
-        y2 = np.median(np.log10(Ti.sn[I2]))
-        print 'x1,y1', x1,y1
-        print 'x2,y2', x2,y2
-        m = (y2-y1)/(x2-x1)
-        print 'slope', m
-        b = y1 - m*x1
-
-        xx = np.array([lo,hi])
-        plt.plot(xx, 10.**(b+xx*m), 'k-', alpha=0.4)
 
         zp = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
         print 'zp', zp
-        yy = 10.**(zp - 0.4*xx)
-        plt.plot(xx, yy, '-', alpha=0.4, color=cc)
+        plt.plot(xx, 10.**(zp - 0.4*xx), '-', alpha=0.4, color=cc)
         
         p = plt.semilogy(Ti.mag, Ti.sn, '.', color=cc, alpha=0.5)
 
         (expnum, exptime) = metadata[band]
-
         depth = (zp - np.log10(5.)) / 0.4
-        
         lp.append(p[0])
         lt.append('%s band: exptime %i, depth %f (exp %i)' %
                   (band, exptime, depth, expnum))
