@@ -60,13 +60,23 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     Given a list of images in the given bands, returns a scaled RGB
     image.
     '''
-    # for now...
-    assert(''.join(bands) == 'grz')
-
-    scales = dict(g = (2, 0.0066),
-                  r = (1, 0.01),
-                  z = (0, 0.025),
-                  )
+    if bands == 'grz':
+        scales = dict(g = (2, 0.0066),
+                      r = (1, 0.01),
+                      z = (0, 0.025),
+                      )
+    elif bands == 'gri':
+        # scales = dict(g = (2, 0.004),
+        #               r = (1, 0.0066),
+        #               i = (0, 0.01),
+        #               )
+        scales = dict(g = (2, 0.002),
+                      r = (1, 0.004),
+                      i = (0, 0.005),
+                      )
+    else:
+        assert(False)
+        
     h,w = imgs[0].shape
     rgb = np.zeros((h,w,3), np.float32)
     # Convert to ~ sigmas

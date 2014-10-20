@@ -242,14 +242,14 @@ class PsfEx(VaryingGaussianPSF):
         #        T.rename_column(col, col.strip())
         T = T[0]
         t = hdr['PSFEX_T'].strip()
-        print 'Type:', t
+        #print 'Type:', t
         assert(t == 'tractor.psfex.PsfEx')
         psft = hdr['PSF_TYPE']
         knowntypes = dict([(typestring(x), x)
                            for x in [GaussianMixturePSF,
                                      GaussianMixtureEllipsePSF]])
         psft = knowntypes[psft]
-        print 'PSF type:', psft
+        #print 'PSF type:', psft
 
         nx = hdr['PSF_NX']
         ny = hdr['PSF_NY']
@@ -263,7 +263,7 @@ class PsfEx(VaryingGaussianPSF):
         columns = T.get_columns()
         for i in range(nargs):
             nm = hdr['PSF_A%i' % i].strip()
-            print 'param name', nm
+            #print 'param name', nm
             if nm in columns:
                 pi = T.get(nm)
                 assert(pi.shape == (ny,nx))
@@ -272,11 +272,11 @@ class PsfEx(VaryingGaussianPSF):
                 # param name like "amp0"
                 assert(nm[-1] in '0123456789'[:K])
                 pi = T.get(nm[:-1])
-                print 'array shape', pi.shape
+                #print 'array shape', pi.shape
                 assert(pi.shape == (K,ny,nx))
                 k = int(nm[-1], 10)
                 pi = pi[k,:,:]
-                print 'cut shape', pi.shape
+                #print 'cut shape', pi.shape
                 assert(pi.shape == (ny,nx))
                 pp[:,:,i] = pi
 
