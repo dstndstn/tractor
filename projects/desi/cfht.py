@@ -932,14 +932,16 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
 
         zp = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
         print 'zp', zp
+        xx = np.array([lo,hi])
         plt.plot(xx, 10.**(zp - 0.4*xx), '-', alpha=0.4, color=cc)
+        plt.plot(xx, 10.**(zp - 0.4*xx), 'k-', alpha=0.4, color=cc)
         
         p = plt.semilogy(Ti.mag, Ti.sn, '.', color=cc, alpha=0.5)
 
         (expnum, exptime) = metadata[band]
         depth = (zp - np.log10(5.)) / 0.4
         lp.append(p[0])
-        lt.append('%s band: exptime %i, depth %f (exp %i)' %
+        lt.append('%s band: exptime %i, depth %.2f (exp %i)' %
                   (band, exptime, depth, expnum))
         plt.plot([depth,depth], [1,5], color=cc, alpha=0.5)
         
