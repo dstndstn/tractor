@@ -762,9 +762,7 @@ def stage1(T=None, coimgs=None, cons=None, detmaps=None, detivs=None,
 
 def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
            targetwcs=None, **kwargs):
-
     print 'kwargs:', kwargs.keys()
-
     #print 'variances:', variances
 
     from desi_common import prepare_fits_catalog
@@ -840,6 +838,150 @@ def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
 
     return dict(T2=T2, tims=None, detmaps=None, detivs=None,
                 cons=None, coimgs=None)
+
+def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
+           targetwcs=None, T2=None, M=None, **kwargs):
+
+    ccmap = dict(g='g', r='r', i='m')
+
+    for band in bands:
+        mag = M.get('mag_%s' % band)
+        # sdss
+        smag = M.get('smag_%s' % band)
+        ok = np.flatnonzero(mag != smag)
+        mag = mag[ok]
+        smag = smag[ok]
+        
+        cc = ccmap[band]
+        plt.clf()
+        plt.subplot(2,1,1)
+        plt.plot(smag, mag, '.', color=cc, alpha=0.5)
+        lo,hi = 16,24
+        plt.plot([lo,hi],[lo,hi], 'k-')
+        plt.xlabel('SDSS mag')
+        plt.ylabel('CFHT mag')
+        plt.axis([lo,hi,lo,hi])
+
+        plt.subplot(2,1,2)
+        plt.plot(smag, mag - smag, '.', color=cc, alpha=0.5)
+        lo,hi = 16,24
+        plt.plot([lo,hi],[0, 0], 'k-')
+        plt.xlabel('SDSS mag')
+        plt.ylabel('CFHT - SDSS mag')
+        plt.axis([lo,hi,-1,1])
+
+        plt.suptitle('%s band' % band)
+        ps.savefig()
+
+    plt.clf()
+    lp,lt = [],[]
+    for band in bands:
+        sn = (T2.get('decam_%s_nanomaggies' % band) * 
+              np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+        mag = T2.get('decam_%s_mag' % band)
+        cc = ccmap[band]
+        p = plt.semilogy(mag, sn, '.', color=cc, alpha=0.5)
+        lp.append(p[0])
+        lt.append('%s band' % band)
+    plt.xlabel('mag')
+    plt.ylabel('Flux Signal-to-Noise')
+    tt = [1,2,3,4,5,10,20,30,40,50]
+    plt.yticks(tt, ['%i' % t for t in tt])
+    plt.axhline(5., color='k')
+    #plt.axis([21, 26, 1, 20])
+    plt.legend(lp, lt, loc='upper right')
+    plt.title('CFHT depth')
+    ps.savefig()
+
+
+    # zps = {}
+    # plt.clf()
+    # lp,lt = [],[]
+    # for band in bands:
+    #     sn = (T2.get('decam_%s_nanomaggies' % band) * 
+    #           np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+    #     mag = T2.get('decam_%s_mag' % band)
+    #     cc = ccmap[band]
+    #     I = (np.isfinite(mag) * (T2.type == 'S') * np.isfinite(sn))
+    #     Ti = T2[I]
+    #     Ti.mag = mag[I]
+    #     Ti.sn = sn[I]
+    #     zps[band] = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
+    #     plt.plot(Ti.mag, np.log10(Ti.sn) + 0.4*Ti.mag, '.', color=cc)
+    # ps.savefig()
+        
+
+    metadata = dict(
+        g=(1080946, 634),
+        r=(1617879, 445),
+        i=(1080306, 411),
+        )
+    
+    lo,hi = 16,27
+    plt.clf()
+    lp,lt = [],[]
+    for band in bands:
+        sn = (T2.get('decam_%s_nanomaggies' % band) * 
+              np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+        mag = T2.get('decam_%s_mag' % band)
+        cc = ccmap[band]
+
+        print 'mag', mag
+
+        I = (np.isfinite(mag) * (T2.type == 'S') * np.isfinite(sn))
+        Ti = T2[I]
+        Ti.mag = mag[I]
+        Ti.sn = sn[I]
+        #print 'mag', mag
+        #print 'sn', sn
+        
+        I1 = np.flatnonzero((Ti.mag > 18) * (Ti.mag < 20))
+        I2 = np.flatnonzero((Ti.mag > 22) * (Ti.mag < 24))
+        x1 = np.median(Ti.mag[I1])
+        x2 = np.median(Ti.mag[I2])
+        y1 = np.median(np.log10(Ti.sn[I1]))
+        y2 = np.median(np.log10(Ti.sn[I2]))
+        print 'x1,y1', x1,y1
+        print 'x2,y2', x2,y2
+        m = (y2-y1)/(x2-x1)
+        print 'slope', m
+        b = y1 - m*x1
+
+        xx = np.array([lo,hi])
+        plt.plot(xx, 10.**(b+xx*m), 'k-', alpha=0.4)
+
+        zp = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
+        print 'zp', zp
+        yy = 10.**(zp - 0.4*xx)
+        plt.plot(xx, yy, '-', alpha=0.4, color=cc)
+        
+        p = plt.semilogy(Ti.mag, Ti.sn, '.', color=cc, alpha=0.5)
+
+        (expnum, exptime) = metadata[band]
+
+        depth = (zp - np.log10(5.)) / 0.4
+        
+        lp.append(p[0])
+        lt.append('%s band: exptime %i, depth %f (exp %i)' %
+                  (band, exptime, depth, expnum))
+        plt.plot([depth,depth], [1,5], color=cc, alpha=0.5)
+        
+    plt.xlabel('mag')
+    plt.ylabel('Flux Signal-to-Noise')
+    #tt = [1,2,3,4,5,10,20,30,40,50]
+    tt = [1,3,5,10,30,50,100,300,500,1000,3000,5000,10000,30000,50000]
+    plt.yticks(tt, ['%i' % t for t in tt])
+    plt.axhline(5., color='k')
+    #plt.axis([21, 26, 1, 20])
+    plt.xlim(lo,hi)
+    ylo,yhi = plt.ylim()
+    plt.ylim(1, yhi)
+    plt.legend(lp, lt, loc='upper right')
+    plt.title('CFHT depth (point sources)')
+    ps.savefig()
+
+    
+        
     
 def get_ccd_list():
     expnums = [ 1080306, 1080946, 1168106, 1617879 ]
