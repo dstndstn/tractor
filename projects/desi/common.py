@@ -317,8 +317,8 @@ class DecamImage(object):
 
         print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
-        #for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
-        #    print 'exists?', os.path.exists(fn), fn
+        for fn in [self.wcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
+            print 'exists?', os.path.exists(fn), fn
         self.makedirs()
     
         run_funpack = False
@@ -330,26 +330,26 @@ class DecamImage(object):
         run_morph = False
         run_sky = False
     
-        if not all([os.path.exists(fn) for fn in [self.sefn]]):
+        if se and not all([os.path.exists(fn) for fn in [self.sefn]]):
             run_se = True
             run_funpack = True
-        if not all([os.path.exists(fn) for fn in [self.se2fn]]):
+        if se2 and not all([os.path.exists(fn) for fn in [self.se2fn]]):
             run_se2 = True
             run_funpack = True
         #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
-        if not os.path.exists(self.wcsfn):
+        if astrom and not os.path.exists(self.wcsfn):
             run_astrom = True
-        if not os.path.exists(self.psffn):
+        if psfex and not os.path.exists(self.psffn):
             run_psfex = True
-        if not os.path.exists(self.psffitfn):
+        if psfexfit and not os.path.exists(self.psffitfn):
             run_psfexfit = True
-        if not os.path.exists(self.morphfn):
+        if morph and not os.path.exists(self.morphfn):
             run_morph = True
             run_funpack = True
-        if not os.path.exists(self.skyfn):
+        if sky and not os.path.exists(self.skyfn):
             run_sky = True
         
-        if run_funpack and (funpack or fcopy) and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
+        if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
             tmpmaskfn = create_temp(suffix='.fits')
     
@@ -379,7 +379,7 @@ class DecamImage(object):
             print 'pixscale', pixscale, 'arcsec/pix'
             print 'Seeing', seeing, 'arcsec'
     
-        if run_se and se:
+        if run_se:
             maskstr = ''
             if use_mask:
                 maskstr = '-FLAG_IMAGE ' + tmpmaskfn
@@ -395,7 +395,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
-        if run_se2 and se2:
+        if run_se2:
             cmd = ' '.join([
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
@@ -407,7 +407,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
-        if run_astrom and astrom:
+        if run_astrom:
             cmd = ' '.join([
                 'solve-field --config', an_config, '-D . --temp-dir', tempdir,
                 '--ra %f --dec %f' % (ra,dec), '--radius 1',
@@ -427,7 +427,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
-        if run_psfex and psfex:
+        if run_psfex:
             cmd = ('psfex -c %s -PSF_DIR %s %s' %
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
                     os.path.dirname(self.psffn), self.sefn))
@@ -435,7 +435,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
-        if run_psfexfit and psfexfit:
+        if run_psfexfit:
             print 'Fit PSF...'
     
             from tractor.basics import GaussianMixtureEllipsePSF, GaussianMixturePSF
@@ -464,7 +464,7 @@ class DecamImage(object):
             psfexvar.toFits(self.psffitfn, merge=True)
             print 'Wrote', self.psffitfn
             
-        if run_morph and morph:
+        if run_morph:
             cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
                             '-FLAG_IMAGE', tmpmaskfn,
                             '-SEEING_FWHM %f' % seeing,
@@ -476,7 +476,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
 
-        if run_sky and sky:
+        if run_sky:
             img = self.read_image()
             wt = self.read_invvar()
             img = img[wt > 0]
@@ -495,10 +495,12 @@ class DecamImage(object):
             
 def run_calibs(X):
     im = X[0]
-    args = X[1:]
+    kwargs = X[1]
+    args = X[2:]
     print 'run_calibs:', X
     print 'im', im
     print 'args', args
-    return im.run_calibs(*args)
+    print 'kwargs', kwargs
+    return im.run_calibs(*args, **kwargs)
 
 

@@ -10,6 +10,7 @@ import runbrick
 if __name__ == '__main__':
     parser = optparse.OptionParser(usage='%prog [options] brick-number')
     parser.add_option('--threads', type=int, help='Run multi-threaded')
+    parser.add_option('--stamp', action='store_true', help='Run a tiny postage-stamp')
     opt,args = parser.parse_args()
 
     if len(args) != 1:
@@ -19,7 +20,7 @@ if __name__ == '__main__':
 
     Time.add_measurement(MemMeas)
 
-    lvl = logging.INFO
+    lvl = logging.WARNING
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     if opt.threads and opt.threads > 1:
@@ -27,15 +28,32 @@ if __name__ == '__main__':
         # ?? global
         runbrick.mp = multiproc(opt.threads)
 
-    catalogfn = 'tractor-phot-b%06i.fits' % brick
+    P = dict(W=3600, H=3600, brickid=brick, pipe=True)
 
-    P = dict(W=3600, H=3600, brickid=brick)
+    if opt.stamp:
+        catalogfn = 'tractor-phot-b%06i-stamp.fits' % brick
+        P.update(W=100, H=100)
+    else:
+        catalogfn = 'tractor-phot-b%06i.fits' % brick
+
+    t0 = Time()
     R = stage0(**P)
+    t1 = Time()
+    print 'Stage0:', t1-t0
     P.update(R)
     R = stage1(**P)
+    t2 = Time()
+    print 'Stage1:', t2-t1
     P.update(R)
-    stage202(catalogfn=catalogfn, **P)
+    P.update(catalogfn=catalogfn)
+    stage202(**P)
+    t202 = Time()
+    print 'Stage202:', t202-t2
 
     # Plots
     ps = PlotSequence('brick-%06i' % brick)
-    stage102(ps=ps, **P)
+    P.update(ps=ps)
+    stage102(**P)
+    t102 = Time()
+    print 'Stage102:', t102-t202
+    print 'Total:', t102 - t0

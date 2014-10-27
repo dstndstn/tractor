@@ -143,8 +143,49 @@ def get_sdss_sources(bands, targetwcs):
     cat = Catalog(*srcs)
     return cat, objs
 
+def tim_get_resamp(tim, targetwcs):
+    if hasattr(tim, 'resamp'):
+        return tim.resamp
+    wcs = tim.sip_wcs
+    subh,subw = tim.shape
+    subwcs = wcs.get_subimage(tim.x0, tim.y0, subw, subh)
+    tim.subwcs = subwcs
+    try:
+        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, subwcs, [], 2)
+    except OverlapError:
+        print 'No overlap'
+        return None
+    if len(Yo) == 0:
+        return None
+    resamp = [x.astype(np.int16) for x in (Yo,Xo,Yi,Xi)]
+    return resamp
+
+def tims_compute_resamp(tims, targetwcs):
+    for tim in tims:
+        r = tim_get_resamp(tim, targetwcs)
+        tim.resamp = r
+
+def compute_coadds(tims, bands, W, H, targetwcs):
+    coimgs = []
+    cons = []
+    for ib,band in enumerate(bands):
+        coimg = np.zeros((H,W), np.float32)
+        con   = np.zeros((H,W), np.uint8)
+        for tim in tims:
+            if tim.band != band:
+                continue
+            (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
+            nn = (tim.getInvError()[Yi,Xi] > 0)
+            coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
+            con  [Yo,Xo] += nn
+        coimg /= np.maximum(con,1)
+        coimgs.append(coimg)
+        cons  .append(con)
+    return coimgs,cons
+    
+
 def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
-           target_extent=None,
+           target_extent=None, pipe=False,
            **kwargs):
     t0 = tlast = Time()
 
@@ -201,9 +242,9 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     args = []
     for im in ims:
         if mp is not None:
-            args.append((im, brick.ra, brick.dec, pixscale))
+            args.append((im, dict(), brick.ra, brick.dec, pixscale))
         else:
-            run_calibs((im, brick.ra, brick.dec, pixscale))
+            run_calibs((im, dict(), brick.ra, brick.dec, pixscale))
 
     if mp is not None:
         mp.map(run_calibs, args)
@@ -337,57 +378,30 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'Read images:', Time()-tlast
     tlast = Time()
 
-    # save resampling params
-    for tim in tims:
-        wcs = tim.sip_wcs
-        subh,subw = tim.shape
-        subwcs = wcs.get_subimage(tim.x0, tim.y0, subw, subh)
-        tim.subwcs = subwcs
-        try:
-            Yo,Xo,Yi,Xi,rims = resample_with_wcs(targetwcs, subwcs, [], 2)
-        except OverlapError:
-            print 'No overlap'
-            continue
-        if len(Yo) == 0:
-            continue
-        tim.resamp = (Yo,Xo,Yi,Xi)
-    print 'Computing resampling:', Time()-tlast
-    tlast = Time()
-
-    # Produce per-band coadds, for plots
-    coimgs = []
-    cons = []
-    for ib,band in enumerate(bands):
-        coimg = np.zeros((H,W), np.float32)
-        con   = np.zeros((H,W), np.uint8)
-        for tim in tims:
-            if tim.band != band:
-                continue
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            nn = (tim.getInvvar()[Yi,Xi] > 0)
-            coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
-            con  [Yo,Xo] += nn
-        coimg /= np.maximum(con,1)
-        coimgs.append(coimg)
-        cons  .append(con)
-
-    print 'Coadds:', Time()-tlast
-    tlast = Time()
+    if not pipe:
+        # save resampling params
+        tims_compute_resamp(tims, targetwcs)
+        print 'Computing resampling:', Time()-tlast
+        tlast = Time()
+        # Produce per-band coadds, for plots
+        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        print 'Coadds:', Time()-tlast
+        tlast = Time()
 
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     for tim in tims:
-        iv = tim.getInvvar()
+        ie = tim.getInvvar()
         psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
         detim = tim.getImage().copy()
-        detim[iv == 0] = 0.
+        detim[ie == 0] = 0.
         detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
         detsig1 = tim.sig1 / psfnorm
         subh,subw = tim.shape
         detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
-        detiv[iv == 0] = 0.
-        (Yo,Xo,Yi,Xi) = tim.resamp
+        detiv[ie == 0] = 0.
+        (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
         detmaps[tim.band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
         detivs [tim.band][Yo,Xo] += detiv[Yi,Xi]
 
@@ -433,6 +447,9 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     del sedmap
     del sediv
     del sedsn
+    if pipe:
+        del detmaps
+        del detivs
 
     peaks = (hot > 4)
 
@@ -503,8 +520,8 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     S = 2*RR+1
     struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
              ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
-    hot = (hot > 5)
-    hot = binary_dilation(hot, structure=struc)
+    hot2 = (hot > 5)
+    hot2 = binary_dilation(hot2, structure=struc)
 
     # Add sources for the new peaks we found
     # make their initial fluxes ~ 5-sigma
@@ -535,13 +552,18 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     T = merge_tables([T, Tnew], columns='fillzero')
 
     # Segment, and record which sources fall into each blob
-    blobs,nblobs = label(hot)
+    blobs,nblobs = label(hot2)
     print 'N detected blobs:', nblobs
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
     blobsrcs = []
     blobflux = []
-    fluximg = coimgs[1]
+    if pipe:
+        # this is a crazy max-over-SEDs S/N map... but we only need it for ranking
+        fluximg = hot
+    else:
+        fluximg = coimgs[1]
+        
     for blob in range(1, nblobs+1):
         blobsrcs.append(np.flatnonzero(T.blob == blob))
         bslc = blobslices[blob-1]
@@ -550,22 +572,21 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'Segmentation:', Time()-tlast
     tlast = Time()
 
-    if False:
-        plt.clf()
-        dimshow(hot)
-        plt.title('Segmentation')
-        ps.savefig()
-
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
     
+    keys = ['T', 
+            'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
+            'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
+            'bands', 'tims', 'ps', 'brickid',
+            'target_extent']
+
+    if not pipe:
+        keys.extend(['coimgs', 'cons', 'detmaps', 'detivs'])
+
     rtn = dict()
-    for k in ['T', 'coimgs', 'cons', 'detmaps', 'detivs',
-              'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
-              'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-              'bands', 'tims', 'ps', 'brickid',
-              'target_extent']:
+    for k in keys:
         rtn[k] = locals()[k]
     return rtn
 
@@ -580,9 +601,9 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for tim in tims:
-        print 'PSFEX:', tim.psfex
         from tractor.psfex import CachingPsfEx
         tim.psfex.radius = 20
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
         tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     # How far down to render model profiles
@@ -624,7 +645,7 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         if len(ii) == 0:
             continue
         src.fixedRadius = max(minradius, 1 + ii[-1])
-        print 'Nsigma', nsigmas, 'radius', src.fixedRadius
+        #print 'Nsigma', nsigmas, 'radius', src.fixedRadius
 
     ### FIXME
     ## # Find sources that do not belong to a blob and add them as
@@ -633,12 +654,14 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
     # Fit blobs in order of flux
     tfitall = Time()
-    args = [_blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims)]
+    iter = _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
+                      orig_wcsxy0, cat, bands)
     if mp is None:
-        R = map(_one_blob, args)
+        R = map(_one_blob, iter)
     else:
-        R = mp.map(_bounce_one_blob, args)
-    del args
+        #args = [_blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims)]
+        R = mp.map(_bounce_one_blob, iter) #args)
+    #del args
 
     srcvariances = [[] for src in cat]
     for Isrcs,fitsrcs,srcvars in R:
@@ -678,7 +701,8 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
                           
-def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
+def _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims, orig_wcsxy0,
+               cat, bands):
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
         ## HACK
         #if blobnumber != 10:
@@ -735,7 +759,7 @@ def _bounce_one_blob(X):
         return _one_blob(X)
     except:
         import traceback
-        print 'Exception in one_blob:'
+        print 'Exception in _one_blob:'
         print 'args:', X
         traceback.print_exc()
         raise
@@ -1553,6 +1577,7 @@ def stage102(T=None, coimgs=None, cons=None,
              W=None,H=None,
              bands=None, ps=None, brickid=None,
              plots=False, plots2=False, tims=None, tractor=None,
+             pipe=None,
              **kwargs):
 
     writeModels = False
@@ -1560,6 +1585,10 @@ def stage102(T=None, coimgs=None, cons=None,
     print 'kwargs:', kwargs.keys()
     del kwargs
     print 'W,H =', W,H
+
+    if pipe:
+        # Produce per-band coadds, for plots
+        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
 
     plt.figure(figsize=(10,10.5))
     #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
@@ -1626,7 +1655,7 @@ def stage102(T=None, coimgs=None, cons=None,
                 plt.title(tim.name)
                 ps.savefig()
 
-            (Yo,Xo,Yi,Xi) = tim.resamp
+            (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
             comod[Yo,Xo] += mod[Yi,Xi]
             ie = tim.getInvError()
             noise = np.random.normal(size=ie.shape) / ie
