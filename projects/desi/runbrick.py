@@ -569,6 +569,54 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         rtn[k] = locals()[k]
     return rtn
 
+
+### PSF plots
+def stage201(T=None, sedsn=None, coimgs=None, cons=None,
+             detmaps=None, detivs=None,
+             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+             tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+             W=None,H=None, brickid=None,
+             bands=None, ps=None, tims=None,
+             plots=False,
+             **kwargs):
+
+    for itim,tim in enumerate(tims):
+        psfex = tim.psfex
+        psfex.fitSavedData(*psfex.splinedata)
+        if plots:
+            print
+            print 'Tim', tim
+            print
+            pp,xx,yy = psfex.splinedata
+            ny,nx,nparams = pp.shape
+            assert(len(xx) == nx)
+            assert(len(yy) == ny)
+            psfnil = psfex.psfclass(*np.zeros(nparams))
+            names = psfnil.getParamNames()
+            xa = np.linspace(xx[0], xx[-1],  50)
+            ya = np.linspace(yy[0], yy[-1], 100)
+            #xa,ya = np.meshgrid(xa,ya)
+            #xa = xa.ravel()
+            #ya = ya.ravel()
+            print 'xa', xa
+            print 'ya', ya
+            for i in range(nparams):
+                plt.clf()
+                plt.subplot(1,2,1)
+                dimshow(pp[:,:,i])
+                plt.title('grid fit')
+                plt.colorbar()
+                plt.subplot(1,2,2)
+                sp = psfex.splines[i](xa, ya)
+                sp = sp.T
+                print 'spline shape', sp.shape
+                assert(sp.shape == (len(ya),len(xa)))
+                dimshow(sp, extent=[xx[0],xx[-1],yy[0],yy[-1]])
+                plt.title('spline')
+                plt.colorbar()
+                plt.suptitle('tim %s: PSF param %s' % (tim.name, names[i]))
+                ps.savefig()
+
 def stage101(coimgs=None, cons=None, bands=None, ps=None,
              targetwcs=None,
              blobs=None,
@@ -904,75 +952,6 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                 plt.title(tims[itim].name)
         #plt.suptitle(titles[imod])
         ps.savefig()
-
-
-def stage1(T=None, sedsn=None, coimgs=None, cons=None,
-           detmaps=None, detivs=None,
-           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None, brickid=None,
-           bands=None, ps=None, tims=None,
-           plots=False,
-           **kwargs):
-
-    # Fit spatially varying PsfEx models.
-    for itim,tim in enumerate(tims):
-        # print 'Fitting PsfEx model for tim', itim, 'of', len(tims)
-        # t0 = Time()
-        # psfex = tim.psfex
-        # if hasattr(psfex, 'splinedata') and psfex.splinedata is not None:
-        #     psfex.fitSavedData(*psfex.splinedata)
-        # else:
-        #     psfex.savesplinedata = True
-        #     print 'PsfEx:', psfex.W, 'x', psfex.H, '; grid of', psfex.nx, 'x', psfex.ny, 'PSF instances'
-        #     psfex.ensureFit()
-        # print 'PsfEx model fit took:', Time()-t0
-
-        # Re-read fit PsfEx model
-        im = tim.imobj
-        print 'Re-reading PsfEx model from', im.psffitfn
-        psfex = PsfEx.fromFits(im.psffitfn)
-        print 'Read', psfex
-        psfex.fitSavedData(*psfex.splinedata)
-        tim.psfex = psfex
-
-        if plots:
-            print
-            print 'Tim', tim
-            print
-            pp,xx,yy = psfex.splinedata
-            ny,nx,nparams = pp.shape
-            assert(len(xx) == nx)
-            assert(len(yy) == ny)
-            psfnil = psfex.psfclass(*np.zeros(nparams))
-            names = psfnil.getParamNames()
-            xa = np.linspace(xx[0], xx[-1],  50)
-            ya = np.linspace(yy[0], yy[-1], 100)
-            #xa,ya = np.meshgrid(xa,ya)
-            #xa = xa.ravel()
-            #ya = ya.ravel()
-            print 'xa', xa
-            print 'ya', ya
-            for i in range(nparams):
-                plt.clf()
-                plt.subplot(1,2,1)
-                dimshow(pp[:,:,i])
-                plt.title('grid fit')
-                plt.colorbar()
-                plt.subplot(1,2,2)
-                sp = psfex.splines[i](xa, ya)
-                sp = sp.T
-                print 'spline shape', sp.shape
-                assert(sp.shape == (len(ya),len(xa)))
-                dimshow(sp, extent=[xx[0],xx[-1],yy[0],yy[-1]])
-                plt.title('spline')
-                plt.colorbar()
-                plt.suptitle('tim %s: PSF param %s' % (tim.name, names[i]))
-                ps.savefig()
-
-
-    return dict(tims=tims)
-
 
 def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
@@ -2020,7 +1999,7 @@ if __name__ == '__main__':
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {101:1, 103:2, 203:2 }
+    prereqs = {101:1, 103:2, 203:2, 201:0 }
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
