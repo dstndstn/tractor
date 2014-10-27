@@ -82,13 +82,13 @@ class EllipseE(ParamList):
     def __str__(self):
         return self.getName() + ': ' + repr(self)
 
-    # def getAllStepSizes(self, *args, **kwargs):
-    #     # re
-    #     # e1,e2: step toward e=0
-    #     ss = [ 0.01,
-    #            0.01 if self.e1 <= 0 else -0.01,
-    #            0.01 if self.e2 <= 0 else -0.01 ]
-    #     return ss
+    def getAllStepSizes(self, *args, **kwargs):
+        # re
+        # e1,e2: step toward e=0
+        ss = [ 0.01,
+               0.01 if self.e1 <= 0 else -0.01,
+               0.01 if self.e2 <= 0 else -0.01 ]
+        return ss
 
     def isLegal(self):
         return ((self.e1**2 + self.e2**2) < 1.) and (self.re >= 0.)

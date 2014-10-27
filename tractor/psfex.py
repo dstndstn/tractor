@@ -366,16 +366,9 @@ class CachingPsfEx(PsfEx):
     def fromPsfEx(psfex, **kwargs):
         c = CachingPsfEx(None, psfex.W, psfex.H, nx=psfex.nx, ny=psfex.ny,
                          scale=psfex.scale, K=psfex.K, **kwargs)
-        c.sampling = psfex.sampling
-        c.xscale = psfex.xscale
-        c.yscale = psfex.yscale
-        c.degree = psfex.degree
-        c.radius = psfex.radius
-        c.x0 = psfex.x0
-        c.y0 = psfex.y0
-        c.splinedata = psfex.splinedata
-        if hasattr(c, 'splines'):
-            c.splines = psfex.splines
+        for k in ['sampling', 'xscale', 'yscale', 'x0','y0','degree','radius',
+                  'psfbases', 'splinedata', 'splines']:
+            setattr(c, k, getattr(psfex, k, None))
         return c
 
     def __init__(self, *args, **kwargs):

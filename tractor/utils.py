@@ -242,7 +242,7 @@ class ScalarParam(BaseParams):
     '''
     stepsize = 1.
     strformat = '%g'
-    def __init__(self, val):
+    def __init__(self, val=0):
         self.val = val
     def __str__(self):
         return getClassName(self) + ': ' + self.strformat % self.val

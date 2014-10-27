@@ -60,6 +60,7 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     Given a list of images in the given bands, returns a scaled RGB
     image.
     '''
+    bands = ''.join(bands)
     if bands == 'grz':
         scales = dict(g = (2, 0.0066),
                       r = (1, 0.01),
@@ -205,7 +206,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
             run_calibs((im, brick.ra, brick.dec, pixscale))
 
     if mp is not None:
-        mp.map(bounce_run_calibs, args)
+        mp.map(run_calibs, args)
 
     print 'Calibrations:', Time()-tlast
     tlast = Time()
@@ -317,8 +318,9 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
-                    sky=ConstantSky(0.), name=im.name + ' ' + band)
+                    sky=sky, name=im.name + ' ' + band)
         tim.zr = [-3. * sig1, 10. * sig1]
+        tim.midsky = midsky
         tim.sig1 = sig1
         tim.band = band
         tim.psf_fwhm = psf_fwhm
@@ -970,7 +972,60 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
 
 
     return dict(tims=tims)
-    
+
+
+def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
+    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+        ## HACK
+        #if blobnumber != 10:
+        #    continue
+
+        bslc  = blobslices[iblob]
+        Isrcs = blobsrcs  [iblob]
+        if len(Isrcs) == 0:
+            continue
+
+        tblob = Time()
+        print
+        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
+        print 'Source indices:', Isrcs
+        print
+
+        # blob bbox in target coords
+        sy,sx = bslc
+        by0,by1 = sy.start, sy.stop
+        bx0,bx1 = sx.start, sx.stop
+        blobh,blobw = by1 - by0, bx1 - bx0
+
+        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
+
+        subtimargs = []
+        for itim,tim in enumerate(tims):
+            h,w = tim.shape
+            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
+            sx0,sx1 = x.min(), x.max()
+            sy0,sy1 = y.min(), y.max()
+            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
+                continue
+            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
+            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
+            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
+            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
+            subslc = slice(sy0,sy1),slice(sx0,sx1)
+            subimg = tim.getImage ()[subslc]
+            subie  = tim.getInvError()[subslc]
+            subwcs = tim.getWcs().copy()
+            ox0,oy0 = orig_wcsxy0[itim]
+            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
+
+            subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
+                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
+                               ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
+
+        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh,
+               blobs[bslc], iblob, subtimargs,
+               [cat[i] for i in Isrcs], bands)
+
 def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
@@ -981,20 +1036,10 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
            **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
 
-    #ps.skipto(10)
-
     for tim in tims:
         tim.psfex.fitSavedData(*tim.psfex.splinedata)
         from tractor.psfex import CachingPsfEx
-        # HACK
-        tim.psfex.sampling = None
-        tim.psfex.xscale = None
-        tim.psfex.yscale = None
-        tim.psfex.x0 = None
-        tim.psfex.y0 = None
-        tim.psfex.degree = None
         tim.psfex.radius = 20
-        tim.psfex.psfbases = None
         tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     # How far down to render model profiles
@@ -1306,8 +1351,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
                     for tim,im in zip(subtims, tempims):
                         tim.data = im
 
-
-
                 for tim in subtims:
                     mod = src.getModelPatch(tim)
                     if mod is not None:
@@ -1472,11 +1515,6 @@ def stage2(T=None, sedsn=None, coimgs=None, cons=None,
             subcat.freezeParam(isub)
         print 'Blob', blobnumber, 'variances:', Time()-tlast
 
-
-    # Drop the CachingPsfEx
-    #for tim in tims:
-    #    tim.psf = tim.psfex
-
     cat.thawAllRecursive()
 
     for i,src in enumerate(cat):
@@ -1584,68 +1622,15 @@ def stage22(T=None, sedsn=None, coimgs=None, cons=None,
 
     # Fit in order of flux
     tfitall = Time()
-    args = []
-    args2 = []
-    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-        ## HACK
-        #if blobnumber != 10:
-        #    continue
-
-        bslc  = blobslices[iblob]
-        Isrcs = blobsrcs  [iblob]
-        if len(Isrcs) == 0:
-            continue
-
-        tblob = Time()
-        print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
-        print 'Source indices:', Isrcs
-        print
-
-        # blob bbox in target coords
-        sy,sx = bslc
-        by0,by1 = sy.start, sy.stop
-        bx0,bx1 = sx.start, sx.stop
-        blobh,blobw = by1 - by0, bx1 - bx0
-
-        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
-
-        subtimargs = []
-        for itim,tim in enumerate(tims):
-            h,w = tim.shape
-            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
-            sx0,sx1 = x.min(), x.max()
-            sy0,sy1 = y.min(), y.max()
-            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
-                continue
-            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
-            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
-            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
-            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
-            subslc = slice(sy0,sy1),slice(sx0,sx1)
-            subimg = tim.getImage ()[subslc]
-            subie  = tim.getInvError()[subslc]
-            subwcs = tim.getWcs().copy()
-            ox0,oy0 = orig_wcsxy0[itim]
-            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
-
-            subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
-                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
-                               ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
-
-        args.append((targetwcs, bx0, by0, blobw, blobh,
-                     blobs[bslc], iblob, subtimargs,
-                     [cat[i] for i in Isrcs], bands))
-        args2.append((Isrcs))
-
+    args = [_blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims)]
     if mp is None:
-        R = map(_one_blob_s22, args)
+        R = map(_one_blob, args)
     else:
-        R = mp.map(_bounce_one_blob_s22, args)
+        R = mp.map(_bounce_one_blob, args)
     del args
 
     srcvariances = [[] for src in cat]
-    for (fitsrcs,srcvars),(Isrcs) in zip(R, args2):
+    for Isrcs,fitsrcs,srcvars in R:
         for isrc,fitsrc,srcvar in zip(Isrcs, fitsrcs, srcvars):
             src = cat[isrc]
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
@@ -1678,26 +1663,25 @@ def stage22(T=None, sedsn=None, coimgs=None, cons=None,
     print 'Logprob:', tractor.getLogProb()
     
     rtn = dict()
-    for k in ['tractor','tims','ps', 'variances']:
+    for k in ['tractor', 'tims', 'ps', 'variances']:
         rtn[k] = locals()[k]
-    # unpicklable
-    #rtn['mp'] = None
     return rtn
-
                           
-def _bounce_one_blob_s22(X):
+def _bounce_one_blob(X):
     try:
-        return _one_blob_s22(X)
+        return _one_blob(X)
     except:
         import traceback
-        print 'Exception in one_blob_s22:'
+        print 'Exception in one_blob:'
         print 'args:', X
         traceback.print_exc()
         raise
 
-def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
-                   blobcut, iblob, subtimargs,
-                   srcs, bands)):
+def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
+               blobcut, iblob, subtimargs,
+               srcs, bands)):
+
+    plots = False
 
     tlast = Time()
     alphas = [0.1, 0.3, 1.0]
@@ -1737,10 +1721,27 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
         subtim.sig1 = sig1
         subtim.modelMinval = modelMinval
         subtims.append(subtim)
+
+        if plots:
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
+                               (Yo >=  by0) * (Yo <  by1) * (Xo >=  bx0) * (Xo <  bx1))
+            Yo = Yo[I] - by0
+            Xo = Xo[I] - bx0
+            Yi = Yi[I] - sy0
+            Xi = Xi[I] - sx0
+            subtim.resamp = (Yo, Xo, Yi, Xi)
+
             
     subcat = Catalog(*srcs)
     subtr = Tractor(subtims, subcat)
     subtr.freezeParam('images')
+
+    if plots:
+        plotmods = []
+        plotmodnames = []
+        plotmods.append(subtr.getModelImages())
+        plotmodnames.append('Initial')
         
     # Optimize individual sources in order of flux
     fluxes = []
@@ -1751,7 +1752,7 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
         fluxes.append(flux)
     Ibright = np.argsort(-np.array(fluxes))
 
-    if len(Ibright) >= 5:
+    if len(Ibright) > 1:
         # -Remember the original subtim images
         # -Compute initial models for each source (in each tim)
         # -Subtract initial models from images
@@ -1805,12 +1806,43 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
             print 'Optimizing:', srctractor
             srctractor.printThawedParams()
 
+            if plots:
+                spmods,spnames = [],[]
+                spallmods,spallnames = [],[]
+            if plots and numi == 0:
+                spmods.append(srctractor.getModelImages())
+                spnames.append('Initial')
+                spallmods.append(subtr.getModelImages())
+                spallnames.append('Initial (all)')
+
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print 'dlnp:', dlnp, 'src', src
                 if dlnp < 0.1:
                     break
+
+                if plots:
+                    spmods.append(srctractor.getModelImages())
+                    spnames.append('Fit')
+                    spallmods.append(subtr.getModelImages())
+                    spallnames.append('Fit (all)')
+
+                if plots:
+                    plt.figure(1, figsize=(8,6))
+                    plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
+                                        hspace=0.1, wspace=0.05)
+                    plt.figure(2, figsize=(3,3))
+                    plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
+                    #_plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
+                    #           chi_plots=plots2)
+                    tempims = [tim.getImage() for tim in subtims]
+                    for tim,orig in zip(subtims, orig_timages):
+                        tim.data = orig
+                    _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
+                               chi_plots=plots2, rgb_plots=True, main_plot=False)
+                    for tim,im in zip(subtims, tempims):
+                        tim.data = im
 
             for tim in subtims:
                 mod = src.getModelPatch(tim)
@@ -1845,6 +1877,10 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
             print 'Fitting source took', Time()-tsrc
             print subcat[i]
 
+    if plots:
+        plotmods.append(subtr.getModelImages())
+        plotmodnames.append('Per Source')
+
     if len(srcs) > 1 and len(srcs) <= 10:
         tfit = Time()
         # Optimize all at once?
@@ -1859,6 +1895,16 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
                 break
 
         print 'Simultaneous fit took:', Time()-tfit
+
+        if plots:
+            plotmods.append(subtr.getModelImages())
+            plotmodnames.append('All Sources')
+
+
+    if plots:
+        _plot_mods(subtims, plotmods, plotmodnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
+        if blobnumber >= 10:
+            plots = False
 
     # FIXME -- for large blobs, fit strata of sources simultaneously?
 
@@ -1903,7 +1949,7 @@ def _one_blob_s22((targetwcs, bx0, by0, blobw, blobh,
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
 
-    return srcs, srcvariances
+    return Isrcs, srcs, srcvariances
 
 
 def stage3(T=None, sedsn=None, coimgs=None, cons=None,

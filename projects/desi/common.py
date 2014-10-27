@@ -11,6 +11,7 @@ from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode
 
 from tractor.basics import ConstantSky
+from tractor.engine import get_class_from_name
 
 tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
@@ -313,6 +314,9 @@ class DecamImage(object):
         '''
         pixscale: in arcsec/pixel
         '''
+
+        print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
+
         #for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
         #    print 'exists?', os.path.exists(fn), fn
         self.makedirs()
@@ -372,6 +376,7 @@ class DecamImage(object):
             fwhm = hdr['FWHM']
             seeing = pixscale * fwhm
             print 'FWHM', fwhm, 'pix'
+            print 'pixscale', pixscale, 'arcsec/pix'
             print 'Seeing', seeing, 'arcsec'
     
         if run_se and se:
@@ -488,13 +493,12 @@ class DecamImage(object):
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
             fits.write(None, header=hdr)
             
-
-def bounce_run_calibs(X):
-    return run_calibs(*X)
-
 def run_calibs(X):
     im = X[0]
     args = X[1:]
-    return im.run_calibs(*X)
+    print 'run_calibs:', X
+    print 'im', im
+    print 'args', args
+    return im.run_calibs(*args)
 
 
