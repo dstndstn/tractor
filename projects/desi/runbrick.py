@@ -570,58 +570,6 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     return rtn
 
 
-def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
-    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-        ## HACK
-        #if blobnumber != 10:
-        #    continue
-
-        bslc  = blobslices[iblob]
-        Isrcs = blobsrcs  [iblob]
-        if len(Isrcs) == 0:
-            continue
-
-        tblob = Time()
-        print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
-        print 'Source indices:', Isrcs
-        print
-
-        # blob bbox in target coords
-        sy,sx = bslc
-        by0,by1 = sy.start, sy.stop
-        bx0,bx1 = sx.start, sx.stop
-        blobh,blobw = by1 - by0, bx1 - bx0
-
-        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
-
-        subtimargs = []
-        for itim,tim in enumerate(tims):
-            h,w = tim.shape
-            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
-            sx0,sx1 = x.min(), x.max()
-            sy0,sy1 = y.min(), y.max()
-            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
-                continue
-            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
-            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
-            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
-            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
-            subslc = slice(sy0,sy1),slice(sx0,sx1)
-            subimg = tim.getImage ()[subslc]
-            subie  = tim.getInvError()[subslc]
-            subwcs = tim.getWcs().copy()
-            ox0,oy0 = orig_wcsxy0[itim]
-            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
-
-            subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
-                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
-                               ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
-
-        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh,
-               blobs[bslc], iblob, subtimargs,
-               [cat[i] for i in Isrcs], bands)
-
 def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
@@ -730,6 +678,58 @@ def stage1(T=None, sedsn=None, coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
                           
+def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
+    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
+        ## HACK
+        #if blobnumber != 10:
+        #    continue
+
+        bslc  = blobslices[iblob]
+        Isrcs = blobsrcs  [iblob]
+        if len(Isrcs) == 0:
+            continue
+
+        tblob = Time()
+        print
+        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
+        print 'Source indices:', Isrcs
+        print
+
+        # blob bbox in target coords
+        sy,sx = bslc
+        by0,by1 = sy.start, sy.stop
+        bx0,bx1 = sx.start, sx.stop
+        blobh,blobw = by1 - by0, bx1 - bx0
+
+        rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
+
+        subtimargs = []
+        for itim,tim in enumerate(tims):
+            h,w = tim.shape
+            ok,x,y = tim.subwcs.radec2pixelxy(rr,dd)
+            sx0,sx1 = x.min(), x.max()
+            sy0,sy1 = y.min(), y.max()
+            if sx1 < 0 or sy1 < 0 or sx1 > w or sy1 > h:
+                continue
+            sx0 = np.clip(int(np.floor(sx0)), 0, w-1)
+            sx1 = np.clip(int(np.ceil (sx1)), 0, w-1) + 1
+            sy0 = np.clip(int(np.floor(sy0)), 0, h-1)
+            sy1 = np.clip(int(np.ceil (sy1)), 0, h-1) + 1
+            subslc = slice(sy0,sy1),slice(sx0,sx1)
+            subimg = tim.getImage ()[subslc]
+            subie  = tim.getInvError()[subslc]
+            subwcs = tim.getWcs().copy()
+            ox0,oy0 = orig_wcsxy0[itim]
+            subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
+
+            subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
+                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
+                               ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
+
+        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh,
+               blobs[bslc], iblob, subtimargs,
+               [cat[i] for i in Isrcs], bands)
+
 def _bounce_one_blob(X):
     try:
         return _one_blob(X)
@@ -1145,6 +1145,142 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
     #             break
 
 
+def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
+               chi_plots=True, rgb_plots=False, main_plot=True):
+    subims = [[] for m in mods]
+    chis = dict([(b,[]) for b in bands])
+    
+    make_coimgs = (coimgs is None)
+    if make_coimgs:
+        coimgs = [np.zeros((blobh,blobw)) for b in bands]
+        cons   = [np.zeros((blobh,blobw)) for b in bands]
+
+    for iband,band in enumerate(bands):
+        comods = [np.zeros((blobh,blobw)) for m in mods]
+        cochis = [np.zeros((blobh,blobw)) for m in mods]
+        comodn = np.zeros((blobh,blobw))
+
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            (Yo,Xo,Yi,Xi) = tim.resamp
+            rechi = np.zeros((blobh,blobw))
+            chilist = []
+            comodn[Yo,Xo] += 1
+            for imod,mod in enumerate(mods):
+                chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
+                       tim.getInvError()[Yi,Xi])
+                rechi[Yo,Xo] = chi
+                chilist.append((rechi.copy(), itim))
+                cochis[imod][Yo,Xo] += chi
+                comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
+            chis[band].append(chilist)
+            mn,mx = -10.*tim.sig1, 30.*tim.sig1
+
+            if make_coimgs:
+                nn = (tim.getInvError()[Yi,Xi] > 0)
+                coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+                cons  [iband][Yo,Xo] += nn
+                
+        if make_coimgs:
+            coimgs[iband] /= np.maximum(cons[iband], 1)
+            coimg  = coimgs[iband]
+            coimgn = cons  [iband]
+        else:
+            coimg = coimgs[iband][bslc]
+            coimgn = cons[iband][bslc]
+            
+        for comod in comods:
+            comod /= np.maximum(comodn, 1)
+        ima = dict(vmin=mn, vmax=mx, ticks=False)
+        for subim,comod,cochi in zip(subims, comods, cochis):
+            subim.append((coimg, coimgn, comod, ima, cochi))
+
+    # Plot per-band image, model, and chi coadds, and RGB images
+    rgba = dict(ticks=False)
+    rgbs = []
+    plt.figure(1)
+    for i,subim in enumerate(subims):
+        plt.clf()
+        rows,cols = 3,5
+        imgs = []
+        themods = []
+        resids = []
+        for j,(img,imgn,mod,ima,chi) in enumerate(subim):
+            imgs.append(img)
+            themods.append(mod)
+            resid = img - mod
+            resid[imgn == 0] = np.nan
+            resids.append(resid)
+
+            if main_plot:
+                plt.subplot(rows,cols,1 + j + 0)
+                dimshow(img, **ima)
+                plt.subplot(rows,cols,1 + j + cols)
+                dimshow(mod, **ima)
+                plt.subplot(rows,cols,1 + j + cols*2)
+                # dimshow(-chi, **imchi)
+                # dimshow(imgn, vmin=0, vmax=3)
+                dimshow(resid, nancolor='r')
+        rgb = get_rgb(imgs, bands)
+        if i == 0:
+            rgbs.append(rgb)
+        if main_plot:
+            plt.subplot(rows,cols, 4)
+            dimshow(rgb, **rgba)
+        rgb = get_rgb(themods, bands)
+        rgbs.append(rgb)
+        if main_plot:
+            plt.subplot(rows,cols, cols+4)
+            dimshow(rgb, **rgba)
+            plt.subplot(rows,cols, cols*2+4)
+            dimshow(get_rgb(resids, bands, mnmx=(-10,10)), **rgba)
+
+            mnmx = -5,300
+            kwa = dict(mnmx=mnmx, arcsinh=1)
+            plt.subplot(rows,cols, 5)
+            dimshow(get_rgb(imgs, bands, **kwa), **rgba)
+            plt.subplot(rows,cols, cols+5)
+            dimshow(get_rgb(themods, bands, **kwa), **rgba)
+            plt.subplot(rows,cols, cols*2+5)
+            mnmx = -100,100
+            kwa = dict(mnmx=mnmx, arcsinh=1)
+            dimshow(get_rgb(resids, bands, **kwa), **rgba)
+            plt.suptitle(titles[i])
+            ps.savefig()
+
+    if rgb_plots:
+        # RGB image and model
+        plt.figure(2)
+        for rgb in rgbs:
+            plt.clf()
+            dimshow(rgb, **rgba)
+            ps.savefig()
+
+    if not chi_plots:
+        return
+
+    plt.figure(1)
+    # Plot per-image chis: in a grid with band along the rows and images along the cols
+    cols = max(len(v) for v in chis.values())
+    rows = len(bands)
+    for imod in range(len(mods)):
+        plt.clf()
+        for row,band in enumerate(bands):
+            sp0 = 1 + cols*row
+            # chis[band] = [ (one for each tim:) [ (one for each mod:) (chi,itim), (chi,itim) ], ...]
+            for col,chilist in enumerate(chis[band]):
+                chi,itim = chilist[imod]
+                plt.subplot(rows, cols, sp0 + col)
+                dimshow(-chi, **imchi)
+                plt.xticks([]); plt.yticks([])
+                plt.title(tims[itim].name)
+        #plt.suptitle(titles[imod])
+        ps.savefig()
+
+
+
+
 ### PSF plots
 def stage201(T=None, sedsn=None, coimgs=None, cons=None,
              detmaps=None, detivs=None,
@@ -1394,141 +1530,6 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
 
     
-
-def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
-               chi_plots=True, rgb_plots=False, main_plot=True):
-    subims = [[] for m in mods]
-    chis = dict([(b,[]) for b in bands])
-    
-    make_coimgs = (coimgs is None)
-    if make_coimgs:
-        coimgs = [np.zeros((blobh,blobw)) for b in bands]
-        cons   = [np.zeros((blobh,blobw)) for b in bands]
-
-    for iband,band in enumerate(bands):
-        comods = [np.zeros((blobh,blobw)) for m in mods]
-        cochis = [np.zeros((blobh,blobw)) for m in mods]
-        comodn = np.zeros((blobh,blobw))
-
-        for itim,tim in enumerate(tims):
-            if tim.band != band:
-                continue
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            rechi = np.zeros((blobh,blobw))
-            chilist = []
-            comodn[Yo,Xo] += 1
-            for imod,mod in enumerate(mods):
-                chi = ((tim.getImage()[Yi,Xi] - mod[itim][Yi,Xi]) *
-                       tim.getInvError()[Yi,Xi])
-                rechi[Yo,Xo] = chi
-                chilist.append((rechi.copy(), itim))
-                cochis[imod][Yo,Xo] += chi
-                comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
-            chis[band].append(chilist)
-            mn,mx = -10.*tim.sig1, 30.*tim.sig1
-
-            if make_coimgs:
-                nn = (tim.getInvError()[Yi,Xi] > 0)
-                coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi] * nn
-                cons  [iband][Yo,Xo] += nn
-                
-        if make_coimgs:
-            coimgs[iband] /= np.maximum(cons[iband], 1)
-            coimg  = coimgs[iband]
-            coimgn = cons  [iband]
-        else:
-            coimg = coimgs[iband][bslc]
-            coimgn = cons[iband][bslc]
-            
-        for comod in comods:
-            comod /= np.maximum(comodn, 1)
-        ima = dict(vmin=mn, vmax=mx, ticks=False)
-        for subim,comod,cochi in zip(subims, comods, cochis):
-            subim.append((coimg, coimgn, comod, ima, cochi))
-
-    # Plot per-band image, model, and chi coadds, and RGB images
-    rgba = dict(ticks=False)
-    rgbs = []
-    plt.figure(1)
-    for i,subim in enumerate(subims):
-        plt.clf()
-        rows,cols = 3,5
-        imgs = []
-        themods = []
-        resids = []
-        for j,(img,imgn,mod,ima,chi) in enumerate(subim):
-            imgs.append(img)
-            themods.append(mod)
-            resid = img - mod
-            resid[imgn == 0] = np.nan
-            resids.append(resid)
-
-            if main_plot:
-                plt.subplot(rows,cols,1 + j + 0)
-                dimshow(img, **ima)
-                plt.subplot(rows,cols,1 + j + cols)
-                dimshow(mod, **ima)
-                plt.subplot(rows,cols,1 + j + cols*2)
-                # dimshow(-chi, **imchi)
-                # dimshow(imgn, vmin=0, vmax=3)
-                dimshow(resid, nancolor='r')
-        rgb = get_rgb(imgs, bands)
-        if i == 0:
-            rgbs.append(rgb)
-        if main_plot:
-            plt.subplot(rows,cols, 4)
-            dimshow(rgb, **rgba)
-        rgb = get_rgb(themods, bands)
-        rgbs.append(rgb)
-        if main_plot:
-            plt.subplot(rows,cols, cols+4)
-            dimshow(rgb, **rgba)
-            plt.subplot(rows,cols, cols*2+4)
-            dimshow(get_rgb(resids, bands, mnmx=(-10,10)), **rgba)
-
-            mnmx = -5,300
-            kwa = dict(mnmx=mnmx, arcsinh=1)
-            plt.subplot(rows,cols, 5)
-            dimshow(get_rgb(imgs, bands, **kwa), **rgba)
-            plt.subplot(rows,cols, cols+5)
-            dimshow(get_rgb(themods, bands, **kwa), **rgba)
-            plt.subplot(rows,cols, cols*2+5)
-            mnmx = -100,100
-            kwa = dict(mnmx=mnmx, arcsinh=1)
-            dimshow(get_rgb(resids, bands, **kwa), **rgba)
-            plt.suptitle(titles[i])
-            ps.savefig()
-
-    if rgb_plots:
-        # RGB image and model
-        plt.figure(2)
-        for rgb in rgbs:
-            plt.clf()
-            dimshow(rgb, **rgba)
-            ps.savefig()
-
-    if not chi_plots:
-        return
-
-    plt.figure(1)
-    # Plot per-image chis: in a grid with band along the rows and images along the cols
-    cols = max(len(v) for v in chis.values())
-    rows = len(bands)
-    for imod in range(len(mods)):
-        plt.clf()
-        for row,band in enumerate(bands):
-            sp0 = 1 + cols*row
-            # chis[band] = [ (one for each tim:) [ (one for each mod:) (chi,itim), (chi,itim) ], ...]
-            for col,chilist in enumerate(chis[band]):
-                chi,itim = chilist[imod]
-                plt.subplot(rows, cols, sp0 + col)
-                dimshow(-chi, **imchi)
-                plt.xticks([]); plt.yticks([])
-                plt.title(tims[itim].name)
-        #plt.suptitle(titles[imod])
-        ps.savefig()
-
-
 
 def stage103(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
