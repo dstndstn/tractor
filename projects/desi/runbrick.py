@@ -1555,13 +1555,15 @@ def stage102(T=None, coimgs=None, cons=None,
              plots=False, plots2=False, tims=None, tractor=None,
              **kwargs):
 
+    writeModels = False
+
     print 'kwargs:', kwargs.keys()
     del kwargs
     print 'W,H =', W,H
 
-    plt.figure(figsize=(10,10))
-    #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
-    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+    plt.figure(figsize=(10,10.5))
+    #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.95)
 
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
@@ -1584,11 +1586,6 @@ def stage102(T=None, coimgs=None, cons=None,
 
     mnmx = -5,300
     arcsinha = dict(mnmx=mnmx, arcsinh=1)
-
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands, **arcsinha))
-    plt.title('Image')
-    ps.savefig()
 
     # After plot
     rgbmod = []
@@ -1641,6 +1638,9 @@ def stage102(T=None, coimgs=None, cons=None,
             hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
             chihist[iband] += hh
 
+            if not writeModels:
+                continue
+
             im = tim.imobj
             fn = 'image-b%06i-%s-%s.fits' % (brickid, band, im.name)
 
@@ -1667,12 +1667,7 @@ def stage102(T=None, coimgs=None, cons=None,
             fits = fitsio.FITS(fn, 'rw', clobber=True)
             tim.toFits(fits, primheader=primhdr, imageheader=imhdr, invvarheader=ivhdr)
 
-            # fn = fn.replace('image', 'model')
-            # #fn = 'model-b%06i-%08i-%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
-            # #fn = 'model-b%06i-exp%06i-hdu%02i-%s.fits' % (brickid, im.expnum, im.hdu, band)
             imhdr.add_record(dict(name='EXTTYPE', value='MODEL', comment='This HDU contains a Tractor model image'))
-            #fitsio.write(fn, mod, clobber=True, header=imhdr)
-            #print 'Wrote', fn
             fits.write(mod, header=imhdr)
             print 'Wrote image and model to', fn
             
@@ -1709,11 +1704,6 @@ def stage102(T=None, coimgs=None, cons=None,
     ps.savefig()
 
     plt.clf()
-    dimshow(get_rgb(rgbmod2, bands, **arcsinha))
-    plt.title('Model + Noise')
-    ps.savefig()
-
-    plt.clf()
     dimshow(get_rgb(rgbresids, bands))
     plt.title('Residuals')
     ps.savefig()
@@ -1721,6 +1711,16 @@ def stage102(T=None, coimgs=None, cons=None,
     plt.clf()
     dimshow(get_rgb(rgbresids, bands, mnmx=(-30,30)))
     plt.title('Residuals (2)')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands, **arcsinha))
+    plt.title('Image (stretched)')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(get_rgb(rgbmod2, bands, **arcsinha))
+    plt.title('Model + Noise (stretched)')
     ps.savefig()
 
     plt.clf()
@@ -1758,6 +1758,7 @@ def stage202(T=None, coimgs=None, cons=None,
              plots=False, tims=None, tractor=None,
              brickid=None,
              variances=None,
+             catalogfn=None,
              **kwargs):
     print 'kwargs:', kwargs.keys()
     del kwargs
@@ -1806,7 +1807,10 @@ def stage202(T=None, coimgs=None, cons=None,
     T2.shapeDev_e1_invvar = T2.shapeExp_invvar[:,1]
     T2.shapeDev_e2_invvar = T2.shapeExp_invvar[:,2]
 
-    fn = 'tractor-phot-b%i.fits' % brickid
+    if catalogfn is not None:
+        fn = catalogfn
+    else:
+        fn = 'tractor-phot-b%i.fits' % brickid
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
