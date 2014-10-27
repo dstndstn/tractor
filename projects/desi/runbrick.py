@@ -1812,40 +1812,6 @@ def stage202(T=None, coimgs=None, cons=None,
 
     return dict(variances=variances, tims=tims, cat=cat)
 
-
-def stage204(T=None, flux_iv=None, tims=None, cat=None,
-             bands=None, brickid=None, **kwargs):
-    from desi_common import prepare_fits_catalog
-
-    fs = None
-
-    TT = T.copy()
-    for k in ['itx','ity','index']:
-        TT.delete_column(k)
-    for col in TT.get_columns():
-        if not col in ['tx', 'ty', 'blob']:
-            TT.rename(col, 'sdss_%s' % col)
-
-    TT.brickid = np.zeros(len(TT), np.int32) + brickid
-    TT.objid   = np.arange(len(TT)).astype(np.int32)
-
-    for src in cat:
-        if isinstance(src, (DevGalaxy, ExpGalaxy)):
-            src.shape = EllipseE.fromEllipseESoft(src.shape)
-        elif isinstance(src, FixedCompositeGalaxy):
-            src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
-            src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-
-    cat.freezeAllRecursive()
-    cat.thawPathsTo(*bands)
-
-    hdr = None
-    T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
-    for k in ['ra_var', 'dec_var', 'tx', 'ty']:
-        T2.set(k, T2.get(k).astype(np.float32))
-    T2.writeto('tractor-phot-b%06i.fits' % brickid, header=hdr)
-
-
 if __name__ == '__main__':
     from astrometry.util.stages import *
     import optparse
