@@ -885,12 +885,15 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
         lt.append('%s band' % band)
     plt.xlabel('mag')
     plt.ylabel('Flux Signal-to-Noise')
-    tt = [1,2,3,4,5,10,20,30,40,50]
+    #tt = [1,2,3,4,5,10,20,30,40,50]
+    tt = [1,3,5,10,30,50,100,300,500,1000,3000,5000,10000,30000,50000]
     plt.yticks(tt, ['%i' % t for t in tt])
     plt.axhline(5., color='k')
     #plt.axis([21, 26, 1, 20])
     plt.legend(lp, lt, loc='upper right')
     plt.title('CFHT depth')
+    lo,hi = 16,27
+    plt.xlim(lo,hi)
     ps.savefig()
 
 
@@ -917,6 +920,7 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
         i=(1080306, 411),
         )
     
+    zps = {}
     lo,hi = 16,27
     plt.clf()
     lp,lt = [],[]
@@ -931,10 +935,11 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
         Ti.sn = sn[I]
 
         zp = np.median(np.log10(Ti.sn) + 0.4*Ti.mag)
+        zps[band] = zp
         print 'zp', zp
         xx = np.array([lo,hi])
         plt.plot(xx, 10.**(zp - 0.4*xx), '-', alpha=0.4, color=cc)
-        plt.plot(xx, 10.**(zp - 0.4*xx), 'k-', alpha=0.4, color=cc)
+        plt.plot(xx, 10.**(zp - 0.4*xx), 'k-', alpha=0.4)
         
         p = plt.semilogy(Ti.mag, Ti.sn, '.', color=cc, alpha=0.5)
 
@@ -953,13 +958,139 @@ def stage3(cat=None, variances=None, T=None, bands=None, ps=None,
     plt.axhline(5., color='k')
     #plt.axis([21, 26, 1, 20])
     plt.xlim(lo,hi)
-    ylo,yhi = plt.ylim()
-    plt.ylim(1, yhi)
+    #ylo,yhi = plt.ylim()
+    #plt.ylim(1, yhi)
+    plt.ylim(1, 1e5)
     plt.legend(lp, lt, loc='upper right')
     plt.title('CFHT depth (point sources)')
     ps.savefig()
 
-    
+
+
+    plt.clf()
+    lp,lt = [],[]
+    for band in bands:
+        sn = (T2.get('decam_%s_nanomaggies' % band) * 
+              np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+        mag = T2.get('decam_%s_mag' % band)
+        cc = ccmap[band]
+        I = (np.isfinite(mag) * (T2.type != 'S') * np.isfinite(sn))
+        Ti = T2[I]
+        Ti.mag = mag[I]
+        Ti.sn = sn[I]
+        xx = np.array([lo,hi])
+        zp = zps[band]
+        plt.plot(xx, 10.**(zp - 0.4*xx), '-', alpha=0.4, color=cc)
+        plt.plot(xx, 10.**(zp - 0.4*xx), 'k-', alpha=0.4)
+        
+        p = plt.semilogy(Ti.mag, Ti.sn, '.', color=cc, alpha=0.5)
+
+        lp.append(p[0])
+        lt.append('%s band' % band)
+        
+    plt.xlabel('mag')
+    plt.ylabel('Flux Signal-to-Noise')
+    tt = [1,3,5,10,30,50,100,300,500,1000,3000,5000,10000,30000,50000]
+    plt.yticks(tt, ['%i' % t for t in tt])
+    plt.axhline(5., color='k')
+    plt.xlim(lo,hi)
+    # ylo,yhi = plt.ylim()
+    # plt.ylim(1, yhi)
+    plt.ylim(1, 1e5)
+    plt.legend(lp, lt, loc='upper right')
+    plt.title('CFHT depth (extended sources)')
+    ps.savefig()
+
+    plt.subplots_adjust(hspace=0.)
+    plt.clf()
+    lp,lt = [],[]
+    for i,band in enumerate(bands):
+        plt.subplot(3,1,i+1)
+        sn = (T2.get('decam_%s_nanomaggies' % band) * 
+              np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+        mag = T2.get('decam_%s_mag' % band)
+        cc = ccmap[band]
+        I = (np.isfinite(mag) * (T2.type != 'S') * np.isfinite(sn))
+        Ti = T2[I]
+        Ti.mag = mag[I]
+        Ti.sn = sn[I]
+        xx = np.array([lo,hi])
+        zp = zps[band]
+        plt.plot(xx, [1.,1.], '-', alpha=0.4, color=cc)
+        plt.plot(xx, [1.,1.], 'k-', alpha=0.4)
+
+        plt.plot(xx, [0.4,0.4],   'k-', alpha=0.1)
+        plt.plot(xx, [0.16,0.16], 'k-', alpha=0.1)
+        
+        p = plt.semilogy(Ti.mag, Ti.sn / 10.**(zp - 0.4*Ti.mag),
+                         '.', color=cc, alpha=0.5)
+        lp.append(p[0])
+        lt.append('%s band' % band)
+
+        if i == 1:
+            plt.ylabel('Flux Signal-to-Noise vs Point Source')
+        if i != 2:
+            plt.xticks([])
+            
+        plt.ylim(0.08, 1.2)
+        plt.xlim(lo,hi)
+        
+    plt.xlabel('mag')
+    #tt = [1,3,5,10,30,50,100,300,500,1000,3000,5000,10000,30000,50000]
+    #plt.yticks(tt, ['%i' % t for t in tt])
+    plt.figlegend(lp, lt, loc='upper right')
+    plt.suptitle('CFHT depth (extended sources)')
+    ps.savefig()
+
+    plt.clf()
+    lp,lt = [],[]
+    for i,band in enumerate(bands):
+        sn = (T2.get('decam_%s_nanomaggies' % band) * 
+              np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band)))
+        mag = T2.get('decam_%s_mag' % band)
+        cc = ccmap[band]
+        I = (np.isfinite(mag) * (T2.type != 'S') * np.isfinite(sn))
+        Ti = T2[I]
+        Ti.mag = mag[I]
+        Ti.sn = sn[I]
+        zp = zps[band]
+        snloss = Ti.sn / 10.**(zp - 0.4*Ti.mag)
+
+        for J,name,style,deV in [
+                (np.flatnonzero(Ti.type == 'D'), 'deV', 'x', True),
+                (np.flatnonzero(Ti.type == 'E'), 'exp', 'o', False),
+                (np.flatnonzero((Ti.type == 'C') * (Ti.fracDev > 0.5)),
+                 'comp/deV', 's', True),
+                (np.flatnonzero((Ti.type == 'C') * (Ti.fracDev <= 0.5)),
+                 'comp/exp', '^', False),
+                ]:
+            print len(J), name
+            if deV:
+                size = Ti.shapeDev[:,0]
+            else:
+                size = Ti.shapeExp[:,0]
+
+            ylo = 5e-2
+            p = plt.loglog(np.clip(size[J], 1e-2, 1e3),
+                           np.clip(snloss[J], ylo, 10.),
+                           style, color=cc, mfc='none', mec=cc, alpha=0.5)
+
+            if i == 0:
+                lp.append(p[0])
+                lt.append(name)
+
+    plt.axhline(0.4**0, color='k', alpha=0.1)
+    plt.axhline(0.4**1, color='k', alpha=0.1)
+    plt.axhline(0.4**2, color='k', alpha=0.1)
+    plt.axhline(0.4**3, color='k', alpha=0.1)
+                
+    plt.xlim(0.9*1e-2, 1.1*1e3)
+    plt.ylim(0.9*ylo, 1.2)
+    plt.xlabel('Galaxy effective radius (arcsec)')
+    plt.ylabel('S/N loss vs point source')
+    plt.legend(lp,lt, loc='upper right')
+    plt.title('CFHT extended sources: S/N vs size')
+    ps.savefig()
         
     
 def get_ccd_list():
