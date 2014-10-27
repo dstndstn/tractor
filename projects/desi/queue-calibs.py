@@ -9,9 +9,45 @@ python projects/desi/queue-calibs.py  | qdo load decals -
 qdo launch decals 1 --batchopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial"
 '''
 
+from astrometry.libkd.spherematch import *
+
+import matplotlib
+matplotlib.use('Agg')
+import pylab as plt
+
 if __name__ == '__main__':
     D = Decals()
     T = D.get_ccds()
+    B = D.get_bricks()
+
+    # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
+    # plt.clf()
+    # plt.hist(counts, counts.max()+1)
+    # plt.savefig('bricks.png')
+    # B.cut(I[counts >= 9])
+    # plt.clf()
+    # plt.plot(B.ra, B.dec, 'b.')
+    # #plt.scatter(B.ra[I], B.dec[I], c=counts)
+    # plt.savefig('bricks2.png')
+
+    #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
+    B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
+    #print len(B), 'bricks in range'
+
+    allI = set()
+    for b in B:
+        wcs = wcs_for_brick(b)
+        I = ccds_touching_wcs(wcs, T)
+        allI.update(I)
+    #print 'Total of', len(allI), 'CCDs touch'
+    #T.cut(np.array(list(allI)))
+
+    print >>sys.stderr, len(B), 'bricks,', len(allI), 'CCDs'
+
+    for i in list(allI):
+        print 'python projects/desi/run-calib.py %i' % i
+
+    sys.exit(0)
 
     # g,r,z full focal planes, 2014-08-18
     #I = np.flatnonzero(T.expnum == 349664)

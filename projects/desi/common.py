@@ -8,7 +8,9 @@ import fitsio
 from astrometry.util.fits import fits_table
 from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
-from astrometry.util.miscutils import polygons_intersect
+from astrometry.util.miscutils import polygons_intersect, estimate_mode
+
+from tractor.basics import ConstantSky
 
 tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
@@ -231,6 +233,7 @@ class DecamImage(object):
         self.se2fn = os.path.join(calibdir, 'sextractor2', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
+        self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
     def __str__(self):
@@ -297,11 +300,9 @@ class DecamImage(object):
         
 
     def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
-                   astrom=True, psfex=True,
-                   morph=False, se2=False, psfexfit=True, funpack=True,
-                   fcopy=False,
-                   use_mask=True):
-                   
+                   astrom=True, psfex=True, sky=True,
+                   morph=False, se2=False, psfexfit=True,
+                   funpack=True, fcopy=False, use_mask=True):
         '''
         pixscale: in degrees/pixel
         '''
@@ -316,6 +317,7 @@ class DecamImage(object):
         run_psfex = False
         run_psfexfit = False
         run_morph = False
+        run_sky = False
     
         if not all([os.path.exists(fn) for fn in [self.sefn]]):
             run_se = True
@@ -323,7 +325,8 @@ class DecamImage(object):
         if not all([os.path.exists(fn) for fn in [self.se2fn]]):
             run_se2 = True
             run_funpack = True
-        if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
+        #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
+        if not os.path.exists(self.wcsfn):
             run_astrom = True
         if not os.path.exists(self.psffn):
             run_psfex = True
@@ -332,6 +335,8 @@ class DecamImage(object):
         if not os.path.exists(self.morphfn):
             run_morph = True
             run_funpack = True
+        if not os.path.exists(self.skyfn):
+            run_sky = True
         
         if run_funpack and (funpack or fcopy) and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
             tmpimgfn  = create_temp(suffix='.fits')
@@ -399,8 +404,11 @@ class DecamImage(object):
                 '-X x_image -Y y_image -s flux_auto --extension 2',
                 '--width %i --height %i' % (W,H),
                 '--crpix-center',
-                '-N none -U none -S none -M none --rdls', self.sdssfn,
-                '--corr', self.corrfn, '--wcs', self.wcsfn, 
+                '-N none -U none -S none -M none',
+                #'--rdls', self.sdssfn,
+                #'--corr', self.corrfn,
+                '--rdls none --corr none',
+                '--wcs', self.wcsfn, 
                 '--temp-axy', '--tag-all', self.sefn])
             print cmd
             if os.system(cmd):
@@ -455,7 +463,24 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
 
-
+        if run_sky and sky:
+            img = self.read_image()
+            wt = self.read_invvar()
+            img = img[wt > 0]
+            try:
+                skyval = estimate_mode(img, raiseOnWarn=True)
+            except:
+                skyval = np.median(img)
+            sky = ConstantSky(skyval)
+            tt = type(sky)
+            sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+            hdr = fitsio.FITSHDR()
+            hdr.add_record(dict(name=prefix + 'SKY', value=sky_type,
+                                comment='Sky class'))
+            sky.toFitsHeader(hdr, prefix='SKY_')
+            fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
+            fits.write(None, header=hdr)
+            
 
 def bounce_run_calibs(X):
     return run_calibs(*X)

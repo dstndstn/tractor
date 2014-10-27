@@ -23,4 +23,5 @@ if __name__ == '__main__':
         print 'Pixscale', pixscale
         print 'in arcsec:', pixscale * 3600.
 
-        run_calibs(im, t.ra_bore, t.dec_bore, pixscale)
+        #run_calibs(im, t.ra_bore, t.dec_bore, pixscale)
+        run_calibs((im, t.ra, t.dec, pixscale))
