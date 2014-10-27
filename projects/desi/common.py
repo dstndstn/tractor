@@ -8,7 +8,10 @@ import fitsio
 from astrometry.util.fits import fits_table
 from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
-from astrometry.util.miscutils import polygons_intersect
+from astrometry.util.miscutils import polygons_intersect, estimate_mode
+
+from tractor.basics import ConstantSky
+from tractor.engine import get_class_from_name
 
 tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
@@ -231,6 +234,7 @@ class DecamImage(object):
         self.se2fn = os.path.join(calibdir, 'sextractor2', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
+        self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
     def __str__(self):
@@ -241,7 +245,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.se2fn, self.psffitfn]]:
+                       self.se2fn, self.psffitfn, self.skyfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -294,19 +298,27 @@ class DecamImage(object):
         if S.objc_type.min() > 128:
             S.objc_type -= 128
         return S
-        
+
+    def read_sky_model(self):
+        hdr = fitsio.read_header(self.skyfn)
+        skyclass = hdr['SKY']
+        clazz = get_class_from_name(skyclass)
+        fromfits = getattr(clazz, 'fromFitsHeader')
+        skyobj = fromfits(hdr, prefix='SKY_')
+        return skyobj
 
     def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
-                   astrom=True, psfex=True,
-                   morph=False, se2=False, psfexfit=True, funpack=True,
-                   fcopy=False,
-                   use_mask=True):
-                   
+                   astrom=True, psfex=True, sky=True,
+                   morph=False, se2=False, psfexfit=True,
+                   funpack=True, fcopy=False, use_mask=True):
         '''
-        pixscale: in degrees/pixel
+        pixscale: in arcsec/pixel
         '''
-        for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
-            print 'exists?', os.path.exists(fn), fn
+
+        print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
+
+        #for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
+        #    print 'exists?', os.path.exists(fn), fn
         self.makedirs()
     
         run_funpack = False
@@ -316,6 +328,7 @@ class DecamImage(object):
         run_psfex = False
         run_psfexfit = False
         run_morph = False
+        run_sky = False
     
         if not all([os.path.exists(fn) for fn in [self.sefn]]):
             run_se = True
@@ -323,7 +336,8 @@ class DecamImage(object):
         if not all([os.path.exists(fn) for fn in [self.se2fn]]):
             run_se2 = True
             run_funpack = True
-        if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
+        #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
+        if not os.path.exists(self.wcsfn):
             run_astrom = True
         if not os.path.exists(self.psffn):
             run_psfex = True
@@ -332,6 +346,8 @@ class DecamImage(object):
         if not os.path.exists(self.morphfn):
             run_morph = True
             run_funpack = True
+        if not os.path.exists(self.skyfn):
+            run_sky = True
         
         if run_funpack and (funpack or fcopy) and ((run_se and se) or (run_se2 and se2) or (run_morph and morph)):
             tmpimgfn  = create_temp(suffix='.fits')
@@ -357,8 +373,10 @@ class DecamImage(object):
             hdr     = self.read_image_header()
     
             magzp  = primhdr['MAGZERO']
-            seeing = pixscale * 3600 * hdr['FWHM']
-            print 'FWHM', hdr['FWHM']
+            fwhm = hdr['FWHM']
+            seeing = pixscale * fwhm
+            print 'FWHM', fwhm, 'pix'
+            print 'pixscale', pixscale, 'arcsec/pix'
             print 'Seeing', seeing, 'arcsec'
     
         if run_se and se:
@@ -370,7 +388,7 @@ class DecamImage(object):
                 '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
                 maskstr, '-SEEING_FWHM %f' % seeing,
                 '-PIXEL_SCALE 0',
-                #'-PIXEL_SCALE %f' % (pixscale * 3600),
+                #'-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
                 tmpimgfn])
             print cmd
@@ -382,7 +400,7 @@ class DecamImage(object):
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
                 '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-                '-PIXEL_SCALE %f' % (pixscale * 3600),
+                '-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.se2fn,
                 tmpimgfn])
             print cmd
@@ -393,14 +411,17 @@ class DecamImage(object):
             cmd = ' '.join([
                 'solve-field --config', an_config, '-D . --temp-dir', tempdir,
                 '--ra %f --dec %f' % (ra,dec), '--radius 1',
-                '-L %f -H %f -u app' % (0.9 * pixscale * 3600, 1.1 * pixscale * 3600),
+                '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
                 '--continue --no-plots --no-remove-lines --uniformize 0',
                 '--no-fits2fits',
                 '-X x_image -Y y_image -s flux_auto --extension 2',
                 '--width %i --height %i' % (W,H),
                 '--crpix-center',
-                '-N none -U none -S none -M none --rdls', self.sdssfn,
-                '--corr', self.corrfn, '--wcs', self.wcsfn, 
+                '-N none -U none -S none -M none',
+                #'--rdls', self.sdssfn,
+                #'--corr', self.corrfn,
+                '--rdls none --corr none',
+                '--wcs', self.wcsfn, 
                 '--temp-axy', '--tag-all', self.sefn])
             print cmd
             if os.system(cmd):
@@ -455,14 +476,29 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
 
-
-
-def bounce_run_calibs(X):
-    return run_calibs(*X)
-
+        if run_sky and sky:
+            img = self.read_image()
+            wt = self.read_invvar()
+            img = img[wt > 0]
+            try:
+                skyval = estimate_mode(img, raiseOnWarn=True)
+            except:
+                skyval = np.median(img)
+            sky = ConstantSky(skyval)
+            tt = type(sky)
+            sky_type = '%s.%s' % (tt.__module__, tt.__name__)
+            hdr = fitsio.FITSHDR()
+            hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))
+            sky.toFitsHeader(hdr, prefix='SKY_')
+            fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
+            fits.write(None, header=hdr)
+            
 def run_calibs(X):
     im = X[0]
     args = X[1:]
-    return im.run_calibs(*X)
+    print 'run_calibs:', X
+    print 'im', im
+    print 'args', args
+    return im.run_calibs(*args)
 
 

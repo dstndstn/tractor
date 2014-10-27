@@ -35,7 +35,7 @@ if __name__ == '__main__':
         #    continue
         im = DecamImage(t)
 
-        run_calibs(im, t.ra, t.dec, 0.262/3600., morph=False)
+        run_calibs(im, t.ra, t.dec, 0.262, morph=False)
 
         if not os.path.exists(im.morphfn):
             continue

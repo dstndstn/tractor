@@ -28,7 +28,7 @@ import numpy as np
 from astrometry.util.multiproc import *
 from astrometry.util.ttime import *
 
-from .utils import MultiParams, _isint, listmax
+from .utils import MultiParams, _isint, listmax, get_class_from_name
 from .cache import *
 from .patch import *
 
@@ -200,15 +200,7 @@ class Image(MultiParams):
         def readObject(prefix):
             k = prefix
             objclass = hdr[k]
-            names = objclass.split('.')
-            names = [n for n in names if len(n)]
-            pkg = '.'.join(names[:-1])
-            clazz = names[-1]
-            import importlib
-            mod = importlib.import_module(pkg)
-            print 'Module:', mod
-            clazz = getattr(mod, clazz)
-            print 'Class:', clazz
+            clazz = get_class_from_name(objclass)
             fromfits = getattr(clazz, 'fromFitsHeader')
             print 'fromFits:', fromfits
             obj = fromfits(hdr, prefix=prefix + '_')
