@@ -134,6 +134,18 @@ class Sky(ImageCalibration, Params):
         '''
         pass
 
+    def getConstant(self):
+        '''
+        Returns an unspecified constant value, eg the mean, median, etc.
+        '''
+        return 0.
+
+    def subtract(self, con):
+        '''
+        Subtracts a constant value from this sky model.
+        '''
+        raise RuntimeError('Unimplemented: Sky.subtract()')
+
 
 class Source(Params):
     '''

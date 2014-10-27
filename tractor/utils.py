@@ -19,6 +19,19 @@ try:
     total_ordering = functools.total_ordering
 except:
     from total_ordering import total_ordering
+
+def get_class_from_name(objclass):
+    import importlib
+
+    names = objclass.split('.')
+    names = [n for n in names if len(n)]
+    pkg = '.'.join(names[:-1])
+    clazz = names[-1]
+    mod = importlib.import_module(pkg)
+    #print 'Module:', mod
+    clazz = getattr(mod, clazz)
+    #print 'Class:', clazz
+    return clazz
     
 def listmax(X, default=0):
     mx = [np.max(x) for x in X if len(x)]

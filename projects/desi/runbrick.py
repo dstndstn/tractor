@@ -200,9 +200,9 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     args = []
     for im in ims:
         if mp is not None:
-            args.append((im, brick.ra, brick.dec, pixscale/3600.))
+            args.append((im, brick.ra, brick.dec, pixscale))
         else:
-            run_calibs(im, brick.ra, brick.dec, pixscale/3600.)
+            run_calibs((im, brick.ra, brick.dec, pixscale))
 
     if mp is not None:
         mp.map(bounce_run_calibs, args)
@@ -276,8 +276,10 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         zpscale = NanoMaggies.zeropointToScale(magzp)
         print 'zpscale', zpscale
 
-        medsky = np.median(img)
-        img -= medsky
+        sky = im.read_sky_model()
+        midsky = sky.getConstant()
+        img -= midsky
+        sky.subtract(midsky)
 
         # Scale images to Nanomaggies
         img /= zpscale

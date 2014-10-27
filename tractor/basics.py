@@ -787,6 +787,12 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
     def getParamNames(self):
         return ['sky']
 
+    def getConstant(self):
+        return self.val
+
+    def subtract(self, con):
+        self.val -= con
+
 
 # class OffsetConstantSky(ConstantSky):
 #     '''

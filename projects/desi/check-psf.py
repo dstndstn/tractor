@@ -53,7 +53,7 @@ if __name__ == '__main__':
     print 'WCS:', wcs
     r,d = wcs.pixelxy2radec(wcs.imagew/2, wcs.imageh/2)
 
-    pixscale = wcs.pixel_scale()/3600.
+    pixscale = wcs.pixel_scale()
     run_calibs(im, r, d, pixscale, astrom=True, morph=False, se2=False)
 
 

@@ -20,8 +20,6 @@ if __name__ == '__main__':
         im = DecamImage(t)
 
         pixscale = np.sqrt(np.abs(t.cd1_1 * t.cd2_2 - t.cd1_2 * t.cd2_1))
-        print 'Pixscale', pixscale
-        print 'in arcsec:', pixscale * 3600.
-
-        #run_calibs(im, t.ra_bore, t.dec_bore, pixscale)
+        pixscale *= 3600.
+        print 'Pixscale', pixscale, 'arcsec/pix'
         run_calibs((im, t.ra, t.dec, pixscale))

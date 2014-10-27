@@ -244,7 +244,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.se2fn, self.psffitfn]]:
+                       self.se2fn, self.psffitfn, self.skyfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -297,17 +297,24 @@ class DecamImage(object):
         if S.objc_type.min() > 128:
             S.objc_type -= 128
         return S
-        
+
+    def read_sky_model(self):
+        hdr = fitsio.read_header(self.skyfn)
+        skyclass = hdr['SKY']
+        clazz = get_class_from_name(skyclass)
+        fromfits = getattr(clazz, 'fromFitsHeader')
+        skyobj = fromfits(hdr, prefix='SKY_')
+        return skyobj
 
     def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True):
         '''
-        pixscale: in degrees/pixel
+        pixscale: in arcsec/pixel
         '''
-        for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
-            print 'exists?', os.path.exists(fn), fn
+        #for fn in [self.wcsfn,self.sefn,self.psffn,self.morphfn,self.corrfn,self.sdssfn,self.psffitfn]:
+        #    print 'exists?', os.path.exists(fn), fn
         self.makedirs()
     
         run_funpack = False
@@ -362,8 +369,9 @@ class DecamImage(object):
             hdr     = self.read_image_header()
     
             magzp  = primhdr['MAGZERO']
-            seeing = pixscale * 3600 * hdr['FWHM']
-            print 'FWHM', hdr['FWHM']
+            fwhm = hdr['FWHM']
+            seeing = pixscale * fwhm
+            print 'FWHM', fwhm, 'pix'
             print 'Seeing', seeing, 'arcsec'
     
         if run_se and se:
@@ -375,7 +383,7 @@ class DecamImage(object):
                 '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
                 maskstr, '-SEEING_FWHM %f' % seeing,
                 '-PIXEL_SCALE 0',
-                #'-PIXEL_SCALE %f' % (pixscale * 3600),
+                #'-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
                 tmpimgfn])
             print cmd
@@ -387,7 +395,7 @@ class DecamImage(object):
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
                 '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-                '-PIXEL_SCALE %f' % (pixscale * 3600),
+                '-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.se2fn,
                 tmpimgfn])
             print cmd
@@ -398,7 +406,7 @@ class DecamImage(object):
             cmd = ' '.join([
                 'solve-field --config', an_config, '-D . --temp-dir', tempdir,
                 '--ra %f --dec %f' % (ra,dec), '--radius 1',
-                '-L %f -H %f -u app' % (0.9 * pixscale * 3600, 1.1 * pixscale * 3600),
+                '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
                 '--continue --no-plots --no-remove-lines --uniformize 0',
                 '--no-fits2fits',
                 '-X x_image -Y y_image -s flux_auto --extension 2',
@@ -475,8 +483,7 @@ class DecamImage(object):
             tt = type(sky)
             sky_type = '%s.%s' % (tt.__module__, tt.__name__)
             hdr = fitsio.FITSHDR()
-            hdr.add_record(dict(name=prefix + 'SKY', value=sky_type,
-                                comment='Sky class'))
+            hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))
             sky.toFitsHeader(hdr, prefix='SKY_')
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
             fits.write(None, header=hdr)
