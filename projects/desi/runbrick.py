@@ -1005,7 +1005,7 @@ def _blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims):
                blobs[bslc], iblob, subtimargs,
                [cat[i] for i in Isrcs], bands)
 
-def stage2(T=None, sedsn=None, coimgs=None, cons=None,
+def stage1(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
