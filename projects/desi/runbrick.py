@@ -1281,7 +1281,9 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
 
 
 
-### PSF plots
+'''
+PSF plots
+'''
 def stage201(T=None, sedsn=None, coimgs=None, cons=None,
              detmaps=None, detivs=None,
              nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
@@ -1290,6 +1292,19 @@ def stage201(T=None, sedsn=None, coimgs=None, cons=None,
              bands=None, ps=None, tims=None,
              plots=False,
              **kwargs):
+
+    tim = tims[0]
+    tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    spl = tim.psfex.splines[0]
+    print 'Spline:', spl
+    knots = spl.get_knots()
+    print 'knots:', knots
+    tx,ty = knots
+    k = 3
+    print 'interior knots x:', tx[k+1:-k-1]
+    print 'additional knots x:', tx[:k+1], 'and', tx[-k-1:]
+    print 'interior knots y:', ty[k+1:-k-1]
+    print 'additional knots y:', ty[:k+1], 'and', ty[-k-1:]
 
     for itim,tim in enumerate(tims):
         psfex = tim.psfex
@@ -1530,8 +1545,10 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
     #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
 
     
-
-def stage103(T=None, coimgs=None, cons=None,
+'''
+Plots; single-image image,invvar,model FITS files
+'''
+def stage102(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
              bands=None, ps=None, brickid=None,
@@ -1540,27 +1557,11 @@ def stage103(T=None, coimgs=None, cons=None,
 
     print 'kwargs:', kwargs.keys()
     del kwargs
-
     print 'W,H =', W,H
-
-    tim = tims[0]
-    tim.psfex.fitSavedData(*tim.psfex.splinedata)
-    spl = tim.psfex.splines[0]
-    print 'Spline:', spl
-    knots = spl.get_knots()
-    print 'knots:', knots
-    tx,ty = knots
-    k = 3
-    print 'interior knots x:', tx[k+1:-k-1]
-    print 'additional knots x:', tx[:k+1], 'and', tx[-k-1:]
-    print 'interior knots y:', ty[k+1:-k-1]
-    print 'additional knots y:', ty[:k+1], 'and', ty[-k-1:]
-
 
     plt.figure(figsize=(10,10))
     #plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99)
     plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
-
 
     plt.clf()
     dimshow(get_rgb(coimgs, bands))
@@ -1674,7 +1675,6 @@ def stage103(T=None, coimgs=None, cons=None,
             #print 'Wrote', fn
             fits.write(mod, header=imhdr)
             print 'Wrote image and model to', fn
-
             
         comod  /= np.maximum(cons[iband], 1)
         comod2 /= np.maximum(cons[iband], 1)
@@ -1748,8 +1748,10 @@ def stage103(T=None, coimgs=None, cons=None,
     return dict(tims=tims)
 
 
-
-def stage203(T=None, coimgs=None, cons=None,
+'''
+Write catalog output
+'''
+def stage202(T=None, coimgs=None, cons=None,
              cat=None, targetrd=None, pixscale=None, targetwcs=None,
              W=None,H=None,
              bands=None, ps=None,
@@ -1759,84 +1761,8 @@ def stage203(T=None, coimgs=None, cons=None,
              **kwargs):
     print 'kwargs:', kwargs.keys()
     del kwargs
-
     from desi_common import prepare_fits_catalog
-
-    # orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    # # Fit a MoG PSF model to the PsfEx model in the middle of each tim.
-    # for itim,tim in enumerate(tims):
-    #     ox0,oy0 = orig_wcsxy0[itim]
-    #     h,w = tim.shape
-    #     psfimg = tim.psfex.instantiateAt(ox0+(w/2), oy0+h/2, nativeScale=True)
-    #     subpsf = GaussianMixturePSF.fromStamp(psfimg, emsteps=1000)
-    #     tim.psf = subpsf
-    # 
-    # 
-    # #cat.freezeAllRecursive()
-    # #cat.thawPathsTo(*bands)
-    # #print 'Variances...'
-    # #flux_var = tractor.optimize(priors=False, shared_params=False,
-    # #                            variance=True, just_variance=True)
-    # # print 'Opt forced photom...'
-    # # R = tractor.optimize_forced_photometry(
-    # #     shared_params=False, wantims=False, fitstats=True, variance=True,
-    # #     use_ceres=True, BW=8,BH=8)
-    # # flux_iv,fs = R.IV, R.fitstats
-    # #flux_iv = 1./flux_var
-    # 
-    # print 'Variances...'
-    # cat.freezeAllRecursive()
-    # cat.thawPathsTo(*bands)
-    # flux_iv = []
-    # for isrc,src in enumerate(cat):
-    #     print 'Variance for source', isrc, 'of', len(cat)
-    #     srctr = Tractor(tims, [src])
-    #     srctr.freezeParam('images')
-    # 
-    #     # flux_var = srctr.optimize(priors=False, shared_params=False,
-    #     #                           variance=True, just_variance=True)
-    #     # vars.append(flux_var)
-    #     # print 'Flux variance:', flux_var
-    # 
-    #     chisqderivs = []
-    #     for band in bands:
-    #         src.freezeAllRecursive()
-    #         src.thawPathsTo(band)
-    # 
-    #         # bandtims = [tim for tim in tims if tim.band == band]
-    #         # btr = Tractor(bandtims, [src])
-    #         # btr.freezeParam('images')
-    #         # p0 = src.getParams()
-    #         # R = btr.optimize_forced_photometry(variance=True, shared_params=False,
-    #         #                                    wantims=False)
-    #         # flux_iv = R.IV
-    #         # print 'IV:', flux_iv
-    #         # src.setParams(p0)
-    #         # band_var = srctr.optimize(priors=False, shared_params=False,
-    #         #                           variance=True, just_variance=True)
-    #         # print 'Variance for', band, 'band:', band_var
-    # 
-    #         dchisq = 0
-    #         for tim in tims:
-    #             if tim.band != band:
-    #                 continue
-    #             derivs = src.getParamDerivatives(tim)
-    #             # just the flux
-    #             assert(len(derivs) == 1)
-    #             H,W = tim.shape
-    #             for deriv in derivs:
-    #                 if deriv is None:
-    #                     continue
-    #                 if not deriv.clipTo(W,H):
-    #                     continue
-    #                 chi = deriv.patch * tim.getInvError()[deriv.getSlice()]
-    #                 dchisq += (chi**2).sum()
-    #         flux_iv.append(dchisq)
-    # flux_iv = np.array(flux_iv)
-    # assert(len(flux_iv) == len(cat)*len(bands))
-
     fs = None
-
     TT = T.copy()
     for k in ['itx','ity','index']:
         TT.delete_column(k)
@@ -1847,30 +1773,15 @@ def stage203(T=None, coimgs=None, cons=None,
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
     TT.objid   = np.arange(len(TT)).astype(np.int32)
 
-    # for src in cat:
-    #     if isinstance(src, (DevGalaxy, ExpGalaxy)):
-    #         src.shape = EllipseE.fromEllipseESoft(src.shape)
-    #     elif isinstance(src, FixedCompositeGalaxy):
-    #         src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
-    #         src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-    #cat.freezeAllRecursive()
-    #cat.thawPathsTo(*bands)
-
     cat.thawAllRecursive()
-
     hdr = None
-    #T2,hdr = prepare_fits_catalog(cat, 1./flux_iv, TT, hdr, bands, fs)
-
     T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
-
-    #for k in ['ra_var', 'dec_var']:
-    #    T2.set(k, T2.get(k).astype(np.float32))
 
     # Convert from variances to inverse-sigmas.
     for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
         X = T2.get(k)
         T2.delete_column(k)
-        T2.set(k.replace('_var', '_isig'), (1./np.sqrt(X)).astype(np.float32))
+        T2.set(k.replace('_var', '_invvar'), (1./X).astype(np.float32))
 
     # Create DECAM_FLUX columns: [ugrizY]
     bandindex = dict(g=1, r=2, z=4)
@@ -1888,12 +1799,12 @@ def stage203(T=None, coimgs=None, cons=None,
     T2.shapeDev_r = T2.shapeExp[:,0]
     T2.shapeDev_e1 = T2.shapeExp[:,1]
     T2.shapeDev_e2 = T2.shapeExp[:,2]
-    T2.shapeExp_r_isig  = T2.shapeExp_isig[:,0]
-    T2.shapeExp_e1_isig = T2.shapeExp_isig[:,1]
-    T2.shapeExp_e2_isig = T2.shapeExp_isig[:,2]
-    T2.shapeDev_r_isig  = T2.shapeExp_isig[:,0]
-    T2.shapeDev_e1_isig = T2.shapeExp_isig[:,1]
-    T2.shapeDev_e2_isig = T2.shapeExp_isig[:,2]
+    T2.shapeExp_r_invvar  = T2.shapeExp_invvar[:,0]
+    T2.shapeExp_e1_invvar = T2.shapeExp_invvar[:,1]
+    T2.shapeExp_e2_invvar = T2.shapeExp_invvar[:,2]
+    T2.shapeDev_r_invvar  = T2.shapeExp_invvar[:,0]
+    T2.shapeDev_e1_invvar = T2.shapeExp_invvar[:,1]
+    T2.shapeDev_e2_invvar = T2.shapeExp_invvar[:,2]
 
     fn = 'tractor-phot-b%i.fits' % brickid
     T2.writeto(fn, header=hdr)
@@ -2004,7 +1915,7 @@ if __name__ == '__main__':
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {101:1, 103:2, 203:2, 201:0 }
+    prereqs = {101:0, 201:0, 102:1, 202:1 }
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
