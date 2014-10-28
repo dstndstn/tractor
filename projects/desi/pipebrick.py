@@ -37,23 +37,23 @@ if __name__ == '__main__':
         catalogfn = 'pipebrick-cats/tractor-phot-b%06i.fits' % brick
 
     t0 = Time()
-    R = stage0(**P)
+    R = stage_tims(**P)
     t1 = Time()
-    print 'Stage0:', t1-t0
+    print 'Stage tims:', t1-t0
     P.update(R)
-    R = stage1(**P)
+    R = stage_srcs(**P)
     t2 = Time()
-    print 'Stage1:', t2-t1
+    print 'Stage srcs:', t2-t1
     P.update(R)
     P.update(catalogfn=catalogfn)
-    stage202(**P)
-    t202 = Time()
-    print 'Stage202:', t202-t2
+    stage_writecat(**P)
+    t3 = Time()
+    print 'Stage writecat:', t3-t2
 
     # Plots
     ps = PlotSequence('pipebrick-plots/brick-%06i' % brick)
     P.update(ps=ps, outdir='pipebrick-plots')
-    stage102(**P)
-    t102 = Time()
-    print 'Stage102:', t102-t202
-    print 'Total:', t102 - t0
+    stage_fitplots(**P)
+    t4 = Time()
+    print 'Stage fitplots:', t4-t3
+    print 'Total:', t4 - t0

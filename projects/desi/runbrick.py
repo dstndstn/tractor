@@ -187,17 +187,14 @@ def compute_coadds(tims, bands, W, H, targetwcs):
     return coimgs,cons
     
 
-def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
-           target_extent=None, pipe=False,
-           **kwargs):
+def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
+               target_extent=None, pipe=False,
+               **kwargs):
     t0 = tlast = Time()
-
     decals = Decals()
-
     B = decals.get_bricks()
-
-    print 'Bricks:'
-    B.about()
+    #print 'Bricks:'
+    #B.about()
     ii = np.flatnonzero(B.brickid == brickid)[0]
     brick = B[ii]
     print 'Chosen brick:'
@@ -252,27 +249,10 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
             args.append((im, dict(), brick.ra, brick.dec, pixscale))
         else:
             run_calibs((im, dict(), brick.ra, brick.dec, pixscale))
-
     if mp is not None:
         mp.map(run_calibs, args)
-
     print 'Calibrations:', Time()-tlast
     tlast = Time()
-
-    #check_photometric_calib(ims, cat, ps)
-    #cat,T = get_se_sources(ims, catband, targetwcs, W, H)
-
-    cat,T = get_sdss_sources(bands, targetwcs)
-
-    print 'SDSS sources:', Time()-tlast
-    tlast = Time()
-
-    # record coordinates in target brick image
-    ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
-    T.tx -= 1
-    T.ty -= 1
-    T.itx = np.clip(np.round(T.tx).astype(int), 0, W-1)
-    T.ity = np.clip(np.round(T.ty).astype(int), 0, H-1)
 
     # Read images, clip to ROI
     tims = []
@@ -337,14 +317,6 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         zpscale = 1.
         assert(np.sum(invvar > 0) > 0)
         sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
-
-        assert(np.all(np.isfinite(invvar)))
-        assert(np.isfinite(sig1))
-
-        # Clamp near-zero (incl negative!) invvars to zero
-        thresh = 0.2 * (1./sig1**2)
-        invvar[invvar < thresh] = 0
-
         assert(np.all(np.isfinite(img)))
         assert(np.all(np.isfinite(invvar)))
         assert(np.isfinite(sig1))
@@ -355,7 +327,6 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
         info = im.get_image_info()
         fullh,fullw = info['dims']
-
         # read fit PsfEx model
         psfex = PsfEx.fromFits(im.psffitfn)
         print 'Read', psfex
@@ -395,6 +366,22 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
+    keys = ['targetrd', 'pixscale', 'targetwcs', 'W','H',
+            'bands', 'tims', 'ps', 'brickid', 'target_extent']
+    if not pipe:
+        keys.extend(['coimgs', 'cons'])
+    rtn = dict()
+    for k in keys:
+        rtn[k] = locals()[k]
+    return rtn
+    
+
+def stage_srcs(coimgs=None, cons=None,
+               targetrd=None, pixscale=None, targetwcs=None,
+               W=None,H=None, brickid=None,
+               bands=None, ps=None, tims=None,
+               plots=False, plots2=False, **kwargs):
+
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
@@ -425,6 +412,7 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
     hot = np.zeros((H,W), np.float32)
 
+    # Single-band SED
     for band in bands:
         detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
         detsn = detmap * np.sqrt(detivs[band])
@@ -460,6 +448,18 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     if pipe:
         del detmaps
         del detivs
+
+    # Read SDSS sources
+    #check_photometric_calib(ims, cat, ps)
+    cat,T = get_sdss_sources(bands, targetwcs)
+    # record coordinates in target brick image
+    ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
+    T.tx -= 1
+    T.ty -= 1
+    T.itx = np.clip(np.round(T.tx).astype(int), 0, W-1)
+    T.ity = np.clip(np.round(T.ty).astype(int), 0, H-1)
+    print 'SDSS sources:', Time()-tlast
+    tlast = Time()
 
     peaks = (hot > 4)
 
@@ -553,11 +553,10 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
         cat.append(PointSource(RaDecPos(r,d),
                                NanoMaggies(order=bands, **fluxes)))
-
-    print 'Existing source table:'
-    T.about()
-    print 'New source table:'
-    Tnew.about()
+    # print 'Existing source table:'
+    # T.about()
+    # print 'New source table:'
+    # Tnew.about()
 
     T = merge_tables([T, Tnew], columns='fillzero')
 
@@ -588,27 +587,23 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     
     keys = ['T', 
             'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
-            'tractor', 'cat', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid',
-            'target_extent']
-
+            'tractor', 'cat', 'ps']
     if not pipe:
-        keys.extend(['coimgs', 'cons', 'detmaps', 'detivs'])
-
+        keys.extend(['detmaps', 'detivs'])
     rtn = dict()
     for k in keys:
         rtn[k] = locals()[k]
     return rtn
 
 
-def stage1(T=None, sedsn=None, coimgs=None, cons=None,
-           detmaps=None, detivs=None,
-           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None, brickid=None,
-           bands=None, ps=None, tims=None,
-           plots=False, plots2=False,
-           **kwargs):
+def stage_fitblobs(T=None, sedsn=None, coimgs=None, cons=None,
+                   detmaps=None, detivs=None,
+                   nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+                   tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+                   W=None,H=None, brickid=None,
+                   bands=None, ps=None, tims=None,
+                   plots=False, plots2=False,
+                   **kwargs):
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for tim in tims:
         from tractor.psfex import CachingPsfEx
@@ -1065,6 +1060,9 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
     return Isrcs, srcs, srcvariances
 
 
+'''
+Re-fit sources one at a time.
+'''
 def stage3(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
            nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
@@ -1193,6 +1191,20 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
     # 
     #         if dlnp < 0.1:
     #             break
+
+
+def stage4(T=None,
+           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+           W=None,H=None,
+           bands=None, ps=None, tims=None,
+           plots=False, plots2=False,
+           **kwargs):
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+
+
+
+
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -1334,14 +1346,15 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
 '''
 PSF plots
 '''
-def stage201(T=None, sedsn=None, coimgs=None, cons=None,
-             detmaps=None, detivs=None,
-             nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-             tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None, brickid=None,
-             bands=None, ps=None, tims=None,
-             plots=False,
-             **kwargs):
+def stage_psfplots(
+    T=None, sedsn=None, coimgs=None, cons=None,
+    detmaps=None, detivs=None,
+    nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+    tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+    W=None,H=None, brickid=None,
+    bands=None, ps=None, tims=None,
+    plots=False,
+    **kwargs):
 
     tim = tims[0]
     tim.psfex.fitSavedData(*tim.psfex.splinedata)
@@ -1393,10 +1406,11 @@ def stage201(T=None, sedsn=None, coimgs=None, cons=None,
                 plt.suptitle('tim %s: PSF param %s' % (tim.name, names[i]))
                 ps.savefig()
 
-def stage101(coimgs=None, cons=None, bands=None, ps=None,
-             targetwcs=None,
-             blobs=None,
-             T=None, cat=None, tims=None, tractor=None, **kwargs):
+def stage_initplots(
+    coimgs=None, cons=None, bands=None, ps=None,
+    targetwcs=None,
+    blobs=None,
+    T=None, cat=None, tims=None, tractor=None, **kwargs):
     # RGB image
     # plt.clf()
     # dimshow(get_rgb(coimgs, bands))
@@ -1598,14 +1612,15 @@ def stage101(coimgs=None, cons=None, bands=None, ps=None,
 '''
 Plots; single-image image,invvar,model FITS files
 '''
-def stage102(T=None, coimgs=None, cons=None,
-             cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None,
-             bands=None, ps=None, brickid=None,
-             plots=False, plots2=False, tims=None, tractor=None,
-             pipe=None,
-             outdir=None,
-             **kwargs):
+def stage_fitplots(
+    T=None, coimgs=None, cons=None,
+    cat=None, targetrd=None, pixscale=None, targetwcs=None,
+    W=None,H=None,
+    bands=None, ps=None, brickid=None,
+    plots=False, plots2=False, tims=None, tractor=None,
+    pipe=None,
+    outdir=None,
+    **kwargs):
 
     writeModels = False
 
@@ -1812,15 +1827,16 @@ def stage102(T=None, coimgs=None, cons=None,
 '''
 Write catalog output
 '''
-def stage202(T=None, coimgs=None, cons=None,
-             cat=None, targetrd=None, pixscale=None, targetwcs=None,
-             W=None,H=None,
-             bands=None, ps=None,
-             plots=False, tims=None, tractor=None,
-             brickid=None,
-             variances=None,
-             catalogfn=None,
-             **kwargs):
+def stage_writecat(
+    T=None, coimgs=None, cons=None,
+    cat=None, targetrd=None, pixscale=None, targetwcs=None,
+    W=None,H=None,
+    bands=None, ps=None,
+    plots=False, tims=None, tractor=None,
+    brickid=None,
+    variances=None,
+    catalogfn=None,
+    **kwargs):
     print 'kwargs:', kwargs.keys()
     del kwargs
     from desi_common import prepare_fits_catalog
@@ -1883,9 +1899,9 @@ if __name__ == '__main__':
     import logging
     
     parser = optparse.OptionParser()
-    parser.add_option('-f', '--force-stage', dest='force', action='append', default=[], type=int,
+    parser.add_option('-f', '--force-stage', dest='force', action='append', default=[],
                       help="Force re-running the given stage(s) -- don't read from pickle.")
-    parser.add_option('-s', '--stage', dest='stage', default=[], type=int, action='append',
+    parser.add_option('-s', '--stage', dest='stage', default=[], action='append',
                       help="Run up to the given stage(s)")
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
@@ -1901,7 +1917,7 @@ if __name__ == '__main__':
                       help='More plots?')
 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
-                      default='pickles/runbrick-%(brick)06i-s%%(stage)03i.pickle')
+                      default='pickles/runbrick-%(brick)06i-%%(stage)s.pickle')
 
     plot_base_default = 'brick-%(brick)06i'
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
@@ -1923,10 +1939,12 @@ if __name__ == '__main__':
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
     set_globals()
-    stagefunc = CallGlobal('stage%i', globals())
+    
+    #stagefunc = CallGlobal('stage%i', globals())
+    stagefunc = CallGlobal('stage_%s', globals())
 
     if len(opt.stage) == 0:
-        opt.stage.append(1)
+        opt.stage.append('cat')
     opt.force.extend(opt.stage)
 
     if opt.plot_base is None:
@@ -1946,7 +1964,16 @@ if __name__ == '__main__':
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {101:0, 201:0, 102:1, 202:1 }
+    prereqs = {'tims':None,
+               'srcs':'tims',
+               'fitblobs':'srcs',
+
+               'fitplots': 'fitblobs',
+               'writecat': 'fitblobs',
+
+               'psfplots': 'tims',
+               'initplots': 'tims',
+               }
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
