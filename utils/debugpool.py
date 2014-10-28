@@ -273,19 +273,6 @@ class DebugPoolMeas(object):
                 return stats
         return FormatDiff(self.pool)
 
-class DebugProcess(mp.process.Process):
-    def run(self):
-        try:
-            print 'DebugProcess.run()'
-            super(DebugProcess, self).run()
-        except KeyboardInterrupt:
-            print 'DebugProcess caught KeyboardInterrupt.'
-            raise
-        except:
-            print 'DebugProcess: exception:'
-            import traceback
-            traceback.print_exc()
-    
 class DebugPool(mp.pool.Pool):
     def _setup_queues(self):
         self._inqueue = DebugSimpleQueue()
@@ -316,8 +303,7 @@ class DebugPool(mp.pool.Pool):
         """
         print 'Repopulating pool...'
         for i in range(self._processes - len(self._pool)):
-            #w = self.Process(target=debug_worker,
-            w = DebugProcess(target=debug_worker,
+            w = self.Process(target=debug_worker,
                              args=(self._inqueue, self._outqueue,
                                    self._initializer,
                                    self._initargs, self._maxtasksperchild)
