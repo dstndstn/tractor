@@ -1078,6 +1078,8 @@ class Tractor(MultiParams):
                 for ui,um in enumerate(ums):
                     if um is None:
                         continue
+                    if um.patch is None:
+                        continue
                     um.x0 -= x0
                     um.y0 -= y0
                     isvalid = True
