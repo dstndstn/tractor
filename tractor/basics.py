@@ -1417,8 +1417,8 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
         names = {}
         for k in range(K):
             names['amp%i'%k] = k
-            names['mean%ix'%k] = K+(k*2)
-            names['mean%iy'%k] = K+(k*2)+1
+            names['meanx%i'%k] = K+(k*2)
+            names['meany%i'%k] = K+(k*2)+1
             names['logr%i'%k] = K*3 + (k*3)
             names['ee1-%i'%k] = K*3 + (k*3)+1
             names['ee2-%i'%k] = K*3 + (k*3)+2
