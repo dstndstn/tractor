@@ -41,8 +41,8 @@ import os
 # Only _multiprocessing/socket_connection.c is used on non-Windows platforms.
 
 import _multiprocessing
-#import cPickle as pickle
-import pickle
+import cPickle as pickle
+#import pickle
 import time
 
 class DebugConnection():
@@ -149,8 +149,6 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=()):
 			success,val = (False, e)
 		t2 = time.time()
 		dt = t2 - t1
-		#result = (, (succ, val))
-		#put((job, i, result))
 		put((job, i, (dt,(success,val))))
 		#t3 = time.time()
 		#print 'worker: get task', (t1-t0), 'run', (t2-t1), 'result', (t3-t2)
@@ -255,7 +253,6 @@ class DebugPoolMeas(object):
 				return [self.pool.get_worker_cpu()] + self.pool.get_pickle_traffic()
 		return FormatDiff(self.pool)
 
-
 class DebugPool(mp.pool.Pool):
 	def _setup_queues(self):
 		self._inqueue = DebugSimpleQueue()
@@ -332,71 +329,75 @@ class DebugPool(mp.pool.Pool):
 	
 
 
-import sys
-from tractor import *
-from tractor import sdss as st
-from astrometry.util import multiproc
-
-from tractor.engine import getmodelimagefunc2
-
-class Tractor2(Tractor):
-	def _map(self, *args):
-		t0 = Time()
-		R = super(Tractor2,self)._map(*args)
-		print 'map:', Time()-t0
-		return R
-
-	def getderivs2(self):
-		alldata = []
-		for im in self.images:
-			alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
-			im.shape = im.data.shape
-			im.data,im.invvar = None,None
-			im.inverr,im.origInvvar = None,None
-			#print 'Image:', dir(im)
-		R = super(Tractor2,self).getderivs2()
-		for im,d in zip(self.images, alldata):
-			im.data,im.invvar, im.inverr, im.origInvvar = d
-		return R
-
-	def getModelImages(self):
-		if self.is_multiproc():
-			# avoid shipping my images...
-			allimages = self.getImages()
-			self.images = []
-
-			alldata = []
-			for im in allimages:
-				alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
-				im.shape = im.data.shape
-				im.data,im.invvar = None,None
-				im.inverr,im.origInvvar = None,None
-
-			mods = self._map(getmodelimagefunc2, [(self, im) for im in allimages])
-
-			for im,d in zip(allimages, alldata):
-				im.data,im.invvar, im.inverr, im.origInvvar = d
-
-			self.images = allimages
-		else:
-			mods = [self.getModelImage(img) for img in self.images]
-		return mods
-
-
-
-	# def getModelPatchNoCache(self, img, src):
-	#	data,invvar = img.data,img.invvar
-	#	img.shape = data.shape
-	#	del img.data
-	#	del img.invvar
-	#	R = super(Tractor2,self).getModelPatchNoCache(img, src)
-	#	img.data, img.invvar = data,invvar
-
-
-def work((i)):
-	time.sleep(1)
 
 if __name__ == '__main__':
+
+    import sys
+    from tractor import *
+    from tractor import sdss as st
+    from astrometry.util import multiproc
+    
+    from tractor.engine import getmodelimagefunc2
+    
+    class Tractor2(Tractor):
+    	def _map(self, *args):
+    		t0 = Time()
+    		R = super(Tractor2,self)._map(*args)
+    		print 'map:', Time()-t0
+    		return R
+    
+    	def getderivs2(self):
+    		alldata = []
+    		for im in self.images:
+    			alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
+    			im.shape = im.data.shape
+    			im.data,im.invvar = None,None
+    			im.inverr,im.origInvvar = None,None
+    			#print 'Image:', dir(im)
+    		R = super(Tractor2,self).getderivs2()
+    		for im,d in zip(self.images, alldata):
+    			im.data,im.invvar, im.inverr, im.origInvvar = d
+    		return R
+    
+    	def getModelImages(self):
+    		if self.is_multiproc():
+    			# avoid shipping my images...
+    			allimages = self.getImages()
+    			self.images = []
+    
+    			alldata = []
+    			for im in allimages:
+    				alldata.append((im.data,im.invvar, im.inverr,im.origInvvar))
+    				im.shape = im.data.shape
+    				im.data,im.invvar = None,None
+    				im.inverr,im.origInvvar = None,None
+    
+    			mods = self._map(getmodelimagefunc2, [(self, im) for im in allimages])
+    
+    			for im,d in zip(allimages, alldata):
+    				im.data,im.invvar, im.inverr, im.origInvvar = d
+    
+    			self.images = allimages
+    		else:
+    			mods = [self.getModelImage(img) for img in self.images]
+    		return mods
+    
+    
+    
+    	# def getModelPatchNoCache(self, img, src):
+    	#	data,invvar = img.data,img.invvar
+    	#	img.shape = data.shape
+    	#	del img.data
+    	#	del img.invvar
+    	#	R = super(Tractor2,self).getModelPatchNoCache(img, src)
+    	#	img.data, img.invvar = data,invvar
+    
+    
+    def work((i)):
+    	time.sleep(1)
+
+
+
 	dpool = DebugPool(4)
 	dmup = multiproc.multiproc(pool=dpool)
 	Time.add_measurement(DebugPoolMeas(dpool))
