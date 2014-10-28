@@ -5,8 +5,8 @@ from astrometry.util.fits import fits_table
 from common import Decals, wcs_for_brick, ccds_touching_wcs
 
 '''
-python projects/desi/queue-calibs.py  | qdo load decals -
-qdo launch decals 1 --pbsopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial"
+python projects/desi/queue-calibs.py  | qdo load cal -
+qdo launch cal 1 --pbsopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial"
 
 python projects/desi/queue-calibs.py  | qdo load bricks -
 qdo launch bricks 1 --pbsopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial -o pipebrick-logs -j oe -l pvmem=6GB" \
@@ -35,12 +35,14 @@ if __name__ == '__main__':
     # plt.savefig('bricks2.png')
 
     #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
-    B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
+
+    #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
+    B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
     #print len(B), 'bricks in range'
 
-    for b in B.brickid:
-        print b
-    sys.exit(0)
+    #for b in B.brickid:
+    #    print b
+    #sys.exit(0)
 
     allI = set()
     for b in B:
