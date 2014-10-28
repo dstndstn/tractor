@@ -152,16 +152,24 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=(),
 
         job, i, func, args, kwds = task
         t1 = time.time()
+        quitnow = False
         try:
             success,val = (True, func(*args, **kwds))
-        except Exception, e:
+        except Exception as e:
             success,val = (False, e)
+            print 'debug_worker: caught', e
+        except KeyboardInterrupt as e:
+            success,val = (False, e)
+            print 'debug_worker: caught ctrl-C', e
+            quitnow = True
         t2 = time.time()
         dt = t2 - t1
         put((job, i, (dt,(success,val))))
         #t3 = time.time()
         #print 'worker: get task', (t1-t0), 'run', (t2-t1), 'result', (t3-t2)
         completed += 1
+        if quitnow:
+            break
     debug('worker exiting after %d tasks' % completed)
 
         
@@ -255,7 +263,7 @@ class DebugPoolMeas(object):
             def format_diff(self, other):
                 t1 = self.t0
                 t0 = other.t0
-                return ('%f s worker CPU, pickled %i/%i objs, %g/%g MB' %
+                return ('%.3f s worker CPU, pickled %i/%i objs, %g/%g MB' %
                         tuple(t1[k] - t0[k] for k in [
                         'worker_cpu', 'pickle_objs', 'unpickle_objs',
                         'pickle_megabytes', 'unpickle_megabytes']))
@@ -265,6 +273,19 @@ class DebugPoolMeas(object):
                 return stats
         return FormatDiff(self.pool)
 
+class DebugProcess(mp.process.Process):
+    def run(self):
+        try:
+            print 'DebugProcess.run()'
+            super(DebugProcess, self).run()
+        except KeyboardInterrupt:
+            print 'DebugProcess caught KeyboardInterrupt.'
+            raise
+        except:
+            print 'DebugProcess: exception:'
+            import traceback
+            traceback.print_exc()
+    
 class DebugPool(mp.pool.Pool):
     def _setup_queues(self):
         self._inqueue = DebugSimpleQueue()
@@ -288,12 +309,15 @@ class DebugPool(mp.pool.Pool):
     def get_worker_cpu(self):
         return self._beancounter.get_cpu()
 
+    ### This just replaces the "worker" call with our "debug_worker".
     def _repopulate_pool(self):
         """Bring the number of pool processes up to the specified number,
         for use after reaping workers which have exited.
         """
+        print 'Repopulating pool...'
         for i in range(self._processes - len(self._pool)):
-            w = self.Process(target=debug_worker,
+            #w = self.Process(target=debug_worker,
+            w = DebugProcess(target=debug_worker,
                              args=(self._inqueue, self._outqueue,
                                    self._initializer,
                                    self._initargs, self._maxtasksperchild)
@@ -305,9 +329,36 @@ class DebugPool(mp.pool.Pool):
             debug('added worker')
 
 
+    def map_async(self, func, iterable, chunksize=None, callback=None):
+        '''
+        Asynchronous equivalent of `map()` builtin
+        '''
+        assert self._state == RUN
+        if not hasattr(iterable, '__len__'):
+            iterable = list(iterable)
+
+        if chunksize is None:
+            chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
+            if extra:
+                chunksize += 1
+        if len(iterable) == 0:
+            chunksize = 0
+
+        task_batches = mp.pool.Pool._get_tasks(func, iterable, chunksize)
+        result = mp.pool.MapResult(self._cache, chunksize, len(iterable), callback)
+        mapstar = mp.pool.mapstar
+        print 'task_batches:', task_batches
+        print 'putting on taskqueue:'
+        print (((result._job, i, mapstar, (x,), {})
+                for i, x in enumerate(task_batches)), None)
+        self._taskqueue.put((((result._job, i, mapstar, (x,), {})
+                              for i, x in enumerate(task_batches)), None))
+        return result
+            
+            
+
     
-    # This is just copied from the superclass; we use redefined routines:
-    #  -worker -> debug_worker
+    # This is just copied from the superclass; we call our routines:
     #  -handle_results -> debug_handle_results
     # And add _beancounter.
     def __init__(self, processes=None, initializer=None, initargs=(),
@@ -341,17 +392,6 @@ class DebugPool(mp.pool.Pool):
         self._worker_handler.daemon = True
         self._worker_handler._state = RUN
         self._worker_handler.start()
-
-        # self._pool = []
-        # for i in range(processes):
-        #     w = self.Process(
-        #         target=debug_worker,
-        #         args=(self._inqueue, self._outqueue, initializer, initargs)
-        #         )
-        #     self._pool.append(w)
-        #     w.name = w.name.replace('Process', 'PoolWorker')
-        #     w.daemon = True
-        #     w.start()
 
         self._task_handler = threading.Thread(
             target=mp.pool.Pool._handle_tasks,
