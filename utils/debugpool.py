@@ -7,7 +7,20 @@ import os
 # In Python 2.7 (and 2.6):
 #
 # Pool has an _inqueue (_quick_put) and _outqueue (_quick_get)
-# and _taskqueue
+# and _taskqueue:
+#
+#
+#   pool.map()  ---> sets cache[]
+#               ---> put work on taskqueue
+#       handle_tasks thread  ---> gets work from taskqueue
+#                            ---> puts work onto inqueue
+#       worker threads       ---> get work from inqueue
+#                            ---> put results into outqueue
+#       handle_results thread --> gets results from outqueue
+#                             --> sets cache[]
+#
+#       meanwhile, handle_workers thread creates new workers as needed.
+#
 #
 # map() etc add themselves to cache[jobid] = self
 # and place work on the task queue.
@@ -47,7 +60,6 @@ import time
 
 class DebugConnection():
     def stats(self):
-        #return ('pickled %i objs, %i bytes, %g s CPU; unpickled %i objs, %i bytes, %g s CPU' %
         return dict(pickle_objs = self.pobjs,
                     pickle_bytes = self.pbytes,
                     pickle_megabytes = 1e-6 * self.pbytes,
@@ -68,31 +80,22 @@ class DebugConnection():
     def poll(self):
         return self.real.poll()
     def recv(self):
-        # read string length + string
-        # unpickle.loads()
-        # obj = self.real.recv()
         bytes = self.real.recv_bytes()
         t0 = time.time()
         obj = pickle.loads(bytes)
         dt = time.time() - t0
-        #print 'unpickling took', dt
         self.upbytes += len(bytes)
         self.uptime += dt
         self.upobjs += 1
         return obj
 
     def send(self, obj):
-        # pickle obj to string (dumps())
-        # write string length (u32 network byte order) + string
-        # return self.real.send(obj)
         t0 = time.time()
         s = pickle.dumps(obj, -1)
         dt = time.time() - t0
         self.pbytes += len(s)
         self.ptime += dt
         self.pobjs += 1
-        #print '-->', len(s), 'bytes'
-        #print 'pickling took', dt
         return self.real.send_bytes(s)
 
     def close(self):
@@ -107,58 +110,73 @@ def DebugPipe():
 from multiprocessing.queues import Lock
 
 class DebugSimpleQueue(mp.queues.SimpleQueue):
+    # new method
     def stats(self):
         S1 = self._reader.stats()
         S2 = self._writer.stats()
         return dict([(k, S1[k]+S2[k]) for k in S1.keys()])
 
     def __init__(self):
-        self._reader, self._writer = DebugPipe()
+        (self._reader, self._writer) = DebugPipe()
         self._rlock = Lock()
         self._wlock = Lock()
         self._make_methods()
-
+        # _make_methods creates two methods:
+        #
+        #  get:  self._rlock.acquire();
+        #        self._reader.recv();
+        #        self._rlock.release();
+        #
+        #  put:  self._wlock.acquire();
+        #        self._write_send();
+        #        self._wlock.release();
+        #
+        
 import threading
 import Queue
 from multiprocessing import Process, cpu_count, TimeoutError
 from multiprocessing.util import Finalize, debug
 from multiprocessing.pool import RUN, CLOSE, TERMINATE
 
-def debug_handle_workers(pool):
-    while pool._worker_handler._state == RUN and pool._state == RUN:
-        print 'debug_handle_workers: pool state', pool._state
-        pool._maintain_pool()
-        time.sleep(0.5)
-    
-    print 'debug_handle_workers: pool state', pool._state, 'worker_handler state', pool._worker_handler._state
-    # send sentinel to stop workers
-    print 'Sending sentinel on task queue...'
-    pool._taskqueue.put(None)
-    # print 'Trying to join...'
-    for p in pool._pool:
-        print 'Worker', p
-        print 'isalive', p.is_alive()
-        if p.is_alive():
-            print 'terminating'
-            p.terminate()
-            print 'joining',
-            p.join(timeout=0.1)
-    print 'debug_handle_workers finishing.'
+# def debug_handle_workers(pool):
+#     while pool._worker_handler._state == RUN and pool._state == RUN:
+#         print 'debug_handle_workers: pool state', pool._state
+#         pool._maintain_pool()
+#         time.sleep(0.5)
+#     
+#     print 'debug_handle_workers: pool state', pool._state, 'worker_handler state', pool._worker_handler._state
+#     # send sentinel to stop workers
+#     print 'Sending sentinel on task queue...'
+#     pool._taskqueue.put(None)
+#     # print 'Trying to join...'
+#     for p in pool._pool:
+#         print 'Worker', p
+#         print 'isalive', p.is_alive()
+#         if p.is_alive():
+#             print 'terminating'
+#             p.terminate()
+#             print 'joining',
+#             p.join(timeout=0.1)
+#     print 'debug_handle_workers finishing.'
     
 
-def debug_worker(inqueue, outqueue, initializer=None, initargs=(),
+def debug_worker(inqueue, outqueue, progressqueue,
+                 initializer=None, initargs=(),
                  maxtasks=None):
-    print 'debug_worker()'
+    #print 'debug_worker()'
     assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
     put = outqueue.put
     get = inqueue.get
     if hasattr(inqueue, '_writer'):
         inqueue._writer.close()
         outqueue._reader.close()
-
+        progressqueue._reader.close()
+        
     if initializer is not None:
         initializer(*initargs)
 
+    mypid = os.getpid()
+        
     completed = 0
     while maxtasks is None or (maxtasks and completed < maxtasks):
         #t0 = time.time()
@@ -168,7 +186,7 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=(),
             debug('worker got EOFError or IOError -- exiting')
             break
         except KeyboardInterrupt as e:
-            print 'debug_worker caught KeyboardInterrupt during get()'
+            #print 'debug_worker caught KeyboardInterrupt during get()'
             put((None, None, (None,(False,e))))
             raise SystemExit('ctrl-c')
             break
@@ -178,28 +196,30 @@ def debug_worker(inqueue, outqueue, initializer=None, initargs=(),
             break
 
         job, i, func, args, kwds = task
+
+        if progressqueue is not None:
+            try:
+                progressqueue.put((job, i, mypid))
+            except (EOFError, IOError):
+                debug('worker got EOFError or IOError on progress queue -- exiting')
+                break
+
         t1 = time.time()
-        #quitnow = False
         try:
             success,val = (True, func(*args, **kwds))
         except Exception as e:
             success,val = (False, e)
-            print 'debug_worker: caught', e
+            #print 'debug_worker: caught', e
         except KeyboardInterrupt as e:
             success,val = (False, e)
-            print 'debug_worker: caught ctrl-C during work', e
-            print type(e)
-            # quitnow = True
+            #print 'debug_worker: caught ctrl-C during work', e
+            #print type(e)
             put((None, None, (None,(False,e))))
             raise
         t2 = time.time()
         dt = t2 - t1
         put((job, i, (dt,(success,val))))
-        #t3 = time.time()
-        #print 'worker: get task', (t1-t0), 'run', (t2-t1), 'result', (t3-t2)
         completed += 1
-        #if quitnow:
-        #    break
     debug('worker exiting after %d tasks' % completed)
 
         
@@ -218,20 +238,19 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
         if task is None:
             debug('result handler got sentinel')
             break
-        print 'Got task:', task
+        #print 'Got task:', task
         (job, i, (dt,obj)) = task
         #(None, None, (None, (False, KeyboardInterrupt())))
         if job is None:
             (success, val) = obj
             if not success:
-                print 'Val:', val, type(val)
                 if isinstance(val, KeyboardInterrupt):
-                    print 'Terminating due to KeyboardInterrupt'
+                    #print 'Terminating due to KeyboardInterrupt'
                     thread._state = TERMINATE
-                    #thread._state = CLOSE
                     pool._state = CLOSE
                     break
         try:
+            #print 'cache[job]:', cache[job], 'job', job, 'i', i
             cache[job]._set(i, obj)
         except KeyError:
             pass
@@ -249,7 +268,7 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
             continue
         job, i, (dt, obj) = task
         if job is None:
-            print 'Ignoring another KeyboardInterrupt'
+            #print 'Ignoring another KeyboardInterrupt'
             continue
         try:
             cache[job]._set(i, obj)
@@ -272,25 +291,46 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
     debug('result handler exiting: len(cache)=%s, thread._state=%s',
           len(cache), thread._state)
 
-    print 'debug_handle_results finishing.'
+    #print 'debug_handle_results finishing.'
 
 
-def debug_handle_tasks(taskqueue, put, outqueue, pool):
+def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
+                       maxnqueued):
     thread = threading.current_thread()
+    #print 'debug_handle_tasks starting'
+    if progressqueue is not None and hasattr(progressqueue, '_writer'):
+        progressqueue._writer.close()
 
-    print 'debug_handle_tasks starting'
+    
+    nqueued = 0
     
     for taskseq, set_length in iter(taskqueue.get, None):
         i = -1
+        #print 'handle_tasks: task sequence', taskseq
         for i, task in enumerate(taskseq):
+            #print 'handle_tasks: task', task
             if thread._state:
                 debug('task handler found thread._state != RUN')
                 break
+
+            #print 'N queue:', nqueued, 'max', maxnqueued
             try:
+                #print 'Queueing new task'
                 put(task)
+                nqueued += 1
             except IOError:
                 debug('could not put task on queue')
                 break
+
+            #print 'N queue:', nqueued, 'max', maxnqueued
+            while maxnqueued and nqueued >= maxnqueued:
+                try:
+                    (job,i,pid) = progressqueue.get()
+                    #print 'Job', job, 'element', i, 'pid', pid
+                    nqueued -= 1
+                except IOError:
+                    break
+
         else:
             if set_length:
                 debug('doing set_length()')
@@ -300,7 +340,7 @@ def debug_handle_tasks(taskqueue, put, outqueue, pool):
     else:
         debug('task handler got sentinel')
 
-    print 'debug_handle_tasks got sentinel'
+    #print 'debug_handle_tasks got sentinel'
 
     try:
         # tell result handler to finish when cache is empty
@@ -314,7 +354,7 @@ def debug_handle_tasks(taskqueue, put, outqueue, pool):
     except IOError:
         debug('task handler got IOError when sending sentinels')
 
-    print 'debug_handle_tasks finishing'
+    #print 'debug_handle_tasks finishing'
 
     
 
@@ -367,7 +407,7 @@ class DebugPool(mp.pool.Pool):
         self._outqueue = DebugSimpleQueue()
         self._quick_put = self._inqueue._writer.send
         self._quick_get = self._outqueue._reader.recv
-
+        
     def get_pickle_traffic_string(self):
         S = self.get_pickle_traffic()
         return (('  pickled %i objs, %g MB, using %g s CPU\n' +
@@ -389,10 +429,11 @@ class DebugPool(mp.pool.Pool):
         """Bring the number of pool processes up to the specified number,
         for use after reaping workers which have exited.
         """
-        print 'Repopulating pool with', (self._processes - len(self._pool)), 'workers'
+        #print 'Repopulating pool with', (self._processes - len(self._pool)), 'workers'
         for i in range(self._processes - len(self._pool)):
             w = self.Process(target=debug_worker,
                              args=(self._inqueue, self._outqueue,
+                                   self._progressqueue,
                                    self._initializer,
                                    self._initargs, self._maxtasksperchild)
                             )
@@ -402,33 +443,37 @@ class DebugPool(mp.pool.Pool):
             w.start()
             debug('added worker')
 
-    def _join_exited_workers(self):
-        """Cleanup after any worker processes which have exited due to reaching
-        their specified lifetime.  Returns True if any workers were cleaned up.
-        """
-        cleaned = False
-        for i in reversed(range(len(self._pool))):
-            worker = self._pool[i]
-            print 'Worker', worker, 'exitcode', worker.exitcode
-            if worker.exitcode is not None:
-                # worker exited
-                debug('cleaning up worker %d' % i)
-                worker.join()
-                cleaned = True
-                del self._pool[i]
-        return cleaned
+#     def _join_exited_workers(self):
+#         """Cleanup after any worker processes which have exited due to reaching
+#         their specified lifetime.  Returns True if any workers were cleaned up.
+#         """
+#         cleaned = False
+#         for i in reversed(range(len(self._pool))):
+#             worker = self._pool[i]
+#             print 'Worker', worker, 'exitcode', worker.exitcode
+#             if worker.exitcode is not None:
+#                 # worker exited
+#                 debug('cleaning up worker %d' % i)
+#                 worker.join()
+#                 cleaned = True
+#                 del self._pool[i]
+#         return cleaned
 
     def map(self, func, iterable, chunksize=None):
         '''
         Equivalent of `map()` builtin
         '''
         assert self._state == RUN
+        async = self.map_async(func, iterable, chunksize)
         while True:
             try:
-                return self.map_async(func, iterable, chunksize).get(1)
+                #print 'Waiting for async result...'
+                res = async.get(1)
+                #print 'Got async result', res
+                return res
             except multiprocessing.TimeoutError:
+                #print 'Timeout waiting for async result.'
                 continue
-    
 
     def map_async(self, func, iterable, chunksize=None, callback=None):
         '''
@@ -438,7 +483,6 @@ class DebugPool(mp.pool.Pool):
         if not hasattr(iterable, '__len__'):
             iterable = list(iterable)
 
-        print 'chunksize', chunksize
         if chunksize is None:
             chunksize, extra = divmod(len(iterable), len(self._pool) * 4)
             if extra:
@@ -446,33 +490,18 @@ class DebugPool(mp.pool.Pool):
         if len(iterable) == 0:
             chunksize = 0
 
-
         result = mp.pool.MapResult(self._cache, chunksize, len(iterable), callback)
         mapstar = mp.pool.mapstar
-
+        #print 'chunksize', chunksize
+        #print 'Submitting job:', result._job
+        #print 'Result:', result
+        
         if chunksize == 1:
-            print 'putting on taskqueue:'
-            task_batches = mp.pool.Pool._get_tasks(func, iterable, chunksize)
-            # print (((result._job, i, mapstar, (x,), {})
-            #         for i, x in enumerate(task_batches)), None)
-            # print 'evaluates to:'
-            # for x in ((result._job, i, mapstar, (x,), {})
-            #           for i, x in enumerate(task_batches)):
-            #     print '  ', x
+            self._taskqueue.put((((result._job, i, map, (func,(x,)), {})
+                                  for i, x in enumerate(iterable)), None))
 
-            # taskseq,set_length = <iterable>, None
-
-            # i,task = enumerate(iterable)
-            
-            
-            self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-                                  for i, x in enumerate(task_batches)), None))
         else:
             task_batches = mp.pool.Pool._get_tasks(func, iterable, chunksize)
-            print 'task_batches:', task_batches
-            print 'putting on taskqueue:'
-            print (((result._job, i, mapstar, (x,), {})
-                    for i, x in enumerate(task_batches)), None)
             self._taskqueue.put((((result._job, i, mapstar, (x,), {})
                                   for i, x in enumerate(task_batches)), None))
         return result
@@ -484,7 +513,19 @@ class DebugPool(mp.pool.Pool):
     #  -handle_results -> debug_handle_results
     # And add _beancounter.
     def __init__(self, processes=None, initializer=None, initargs=(),
-                 maxtasksperchild=None):
+                 maxtasksperchild=None, taskqueuesize=0):
+        '''
+        taskqueuesize: maximum number of tasks to put on the queue;
+          this is actually done by keeping a progressqueue, written-to
+          by workers as they take work off the inqueue, and read by
+          the handle_tasks thread.  (Can't use a limit on _taskqueue,
+          because (a) multi-element tasks are written; and (b)
+          taskqueue is between the caller and the handle_tasks thread,
+          which then just transfers the work to the inqueue, where it
+          piles up.  Can't easily use a limit on inqueue because it is
+          implemented via pipes with unknown, OS-controlled capacity
+          in units of bytes.)
+        '''
         self._beancounter = BeanCounter()
         self._setup_queues()
         self._taskqueue = Queue.Queue()
@@ -494,6 +535,11 @@ class DebugPool(mp.pool.Pool):
         self._initargs = initargs
         self._maxtasksperchild = maxtasksperchild
 
+        if taskqueuesize:
+            self._progressqueue = DebugSimpleQueue()
+        else:
+            self._progressqueue = None
+        
         if processes is None:
             try:
                 processes = cpu_count()
@@ -508,19 +554,28 @@ class DebugPool(mp.pool.Pool):
         self._repopulate_pool()
 
         self._worker_handler = threading.Thread(
-        #target=mp.pool.Pool._handle_workers,
-        target = debug_handle_workers,
+        target=mp.pool.Pool._handle_workers,
+        #target = debug_handle_workers,
         args=(self, )
             )
+        self._worker_handler.name = 'WorkerHandler'
         self._worker_handler.daemon = True
         self._worker_handler._state = RUN
         self._worker_handler.start()
 
-        self._task_handler = threading.Thread(
-        #target=mp.pool.Pool._handle_tasks,
-        target=debug_handle_tasks,
-        args=(self._taskqueue, self._quick_put, self._outqueue, self._pool)
-            )
+        if True:
+            self._task_handler = threading.Thread(
+                target=debug_handle_tasks,
+                args=(self._taskqueue, self._quick_put, self._outqueue,
+                      self._progressqueue, self._pool,
+                      taskqueuesize))
+        else:
+            self._task_handler = threading.Thread(
+                target=mp.pool.Pool._handle_tasks,
+                args=(self._taskqueue, self._quick_put, self._outqueue,
+                      self._pool))
+              
+        self._task_handler.name = 'TaskHandler'
         self._task_handler.daemon = True
         self._task_handler._state = RUN
         self._task_handler.start()
@@ -530,6 +585,7 @@ class DebugPool(mp.pool.Pool):
             args=(self._outqueue, self._quick_get, self._cache,
                   self._beancounter, self)
             )
+        self._result_handler.name = 'ResultHandler'
         self._result_handler.daemon = True
         self._result_handler._state = RUN
         self._result_handler.start()
@@ -549,32 +605,49 @@ if __name__ == '__main__':
     from astrometry.util import multiproc
     from astrometry.util.ttime import *
 
-    import logging
-    lvl = logging.DEBUG
-    logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
-    import multiprocessing
-    multiprocessing.get_logger()
+    # import logging
+    # lvl = logging.DEBUG
+    # logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+    # import multiprocessing
+    # multiprocessing.get_logger()
     
     def work((i)):
         print 'Doing work', i
-        time.sleep(1)
+        time.sleep(2)
         print 'Done work', i
+        return i
         
-    def arglist(n):
+    class ywrapper(object):
+        def __init__(self, y, n):
+            self.n = n
+            self.y = y
+        def __str__(self):
+            return 'ywrapper: n=%i; ' % self.n + self.y
+        def __iter__(self):
+            return self
+        def next(self):
+            return self.y.next()
+        def __len__(self):
+            return self.n
+
+    def yielder(n):
         for i in range(n):
             print 'Yielding', i
             yield i
-        
-    dpool = DebugPool(4)
+
+    N = 20
+    y = yielder(N)
+    args = ywrapper(y, N)
+    
+    dpool = DebugPool(4, taskqueuesize=4)
     dmup = multiproc.multiproc(pool=dpool)
     Time.add_measurement(DebugPoolMeas(dpool))
 
     t0 = Time()
-    args = arglist(10)
-    print 'args:', args
-    dmup.map(work, args)
+    res = dmup.map(work, args)
     print Time()-t0
-
+    print 'Got result:', res
+    
     sys.exit(0)
 
 
