@@ -913,6 +913,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
                                                       use_ceres=True, BW=8, BH=8,
                                                       wantims=False)
                 print 'Band', b, 'took', Time()-tband
+            src.getBrightness().thawAllParams()
             src.thawAllParams()
 
             print 'Optimizing:', srctractor
