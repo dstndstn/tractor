@@ -48,7 +48,12 @@ import time
 class DebugConnection():
 	def stats(self):
 		#return ('pickled %i objs, %i bytes, %g s CPU; unpickled %i objs, %i bytes, %g s CPU' %
-		return (self.pobjs, self.pbytes, self.ptime, self.upobjs, self.upbytes, self.uptime)
+		return dict(pickle_objs = self.pobjs,
+                    pickle_bytes = self.pbytes,
+                    pickle_cputime = self.ptime,
+                    unpickle_objs = self.upobjs,
+                    unpickle_bytes = self.upbytes,
+                    unpickle_cputime = self.uptime)
 	
 	def __init__(self, fd, writable=True, readable=True):
 		self.real = _multiprocessing.Connection(fd, writable=writable, readable=readable)
@@ -103,9 +108,8 @@ class DebugSimpleQueue(mp.queues.SimpleQueue):
 	def stats(self):
 		S1 = self._reader.stats()
 		S2 = self._writer.stats()
-		return [s1+s2 for s1,s2 in zip(S1,S2)]
-		#return ('reader', self._reader.stats(), 'writer', self._writer.stats())
-		#return ('pickled %i objs, %i bytes, %g s CPU; unpickled %i objs, %i bytes, %g s CPU' %
+        return dict([(k, S1[k]+S2[k]) for k in S1.keys()])
+
 	def __init__(self):
 		self._reader, self._writer = DebugPipe()
 		self._rlock = Lock()
@@ -232,9 +236,6 @@ class BeanCounter(object):
 	def __str__(self):
 		return 'CPU time: %g s' % self.get_cpu()
 
-Pool = mp.pool.Pool
-mapstar = mp.pool.mapstar
-
 class DebugPoolMeas(object):
 	def __init__(self, pool):
 		self.pool = pool
@@ -262,7 +263,9 @@ class DebugPool(mp.pool.Pool):
 
 	def get_pickle_traffic_string(self):
 		S = self.get_pickle_traffic()
-		(po,pb,pt, uo,ub,ut) = S
+        po,pb,pt,uo,ub,ut = [S[k] for k in [
+            'pickle_objs', 'pickle_bytes', 'pickle_cputime',
+            'unpickle_objs', 'unpickle_bytes', 'unpickle_cputime']]
 		return ('  pickled %i objs, %g MB, using %g s CPU' % (po,pb*1e-6,pt)
 				+ '\n' +
 				'unpickled %i objs, %g MB, using %g s CPU' % (uo,ub*1e-6,ut))
@@ -270,8 +273,7 @@ class DebugPool(mp.pool.Pool):
 	def get_pickle_traffic(self):
 		S1 = self._inqueue.stats()
 		S2 = self._outqueue.stats()
-		S = [s1+s2 for s1,s2 in zip(S1,S2)]
-		return S
+        return dict([(k, S1[k]+S2[k]) for k in S1.keys()])
 
 	def get_worker_cpu(self):
 		return self._beancounter.get_cpu()
@@ -305,7 +307,7 @@ class DebugPool(mp.pool.Pool):
 			w.start()
 
 		self._task_handler = threading.Thread(
-			target=Pool._handle_tasks,
+			target=mp.pool.Pool._handle_tasks,
 			args=(self._taskqueue, self._quick_put, self._outqueue, self._pool)
 			)
 		self._task_handler.daemon = True
@@ -327,8 +329,6 @@ class DebugPool(mp.pool.Pool):
 			exitpriority=15
 			)
 	
-
-
 
 if __name__ == '__main__':
 
