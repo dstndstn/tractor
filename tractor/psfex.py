@@ -33,6 +33,14 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         self.ny = ny
         self.savesplinedata = False
 
+    def __str__(self):
+        try:
+            return '%s: %s, %i x %i' % (getClassName(self), self.psfclass.__name__,
+                                        self.nx, self.ny)
+        except:
+            return '%s: %s, %i x %i' % (getClassName(self), self.psfclass,
+                                        self.nx, self.ny)
+
     def getRadius(self):
         if hasattr(self, 'radius'):
             return self.radius
@@ -378,6 +386,10 @@ class CachingPsfEx(PsfEx):
         self.cache = Cache(maxsize=100)
         # round pixel coordinates to the nearest...
         self.rounding = rounding
+
+    def __str__(self):
+        return '%s: rounding %i, %s' % (getClassName(self), self.rounding,
+                                        super(CachingPsfEx, self).__str__())
 
     # For pickling
     def __getstate__(self):

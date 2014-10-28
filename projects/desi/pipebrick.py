@@ -38,17 +38,24 @@ if __name__ == '__main__':
 
     t0 = Time()
     R = stage_tims(**P)
+    P.update(R)
     t1 = Time()
     print 'Stage tims:', t1-t0
-    P.update(R)
+
     R = stage_srcs(**P)
+    P.update(R)
     t2 = Time()
     print 'Stage srcs:', t2-t1
+
+    R = stage_fitblobs(**P)
     P.update(R)
+    t2b = Time()
+    print 'Stage fitblobs:', t2b-t2
+
     P.update(catalogfn=catalogfn)
     stage_writecat(**P)
     t3 = Time()
-    print 'Stage writecat:', t3-t2
+    print 'Stage writecat:', t3-t2b
 
     # Plots
     ps = PlotSequence('pipebrick-plots/brick-%06i' % brick)

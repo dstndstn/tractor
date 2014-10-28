@@ -286,7 +286,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         print 'Reading image from', im.imgfn, 'HDU', im.hdu
         img,imghdr = im.read_image(header=True, slice=slc)
         print 'Reading invvar from', im.wtfn, 'HDU', im.hdu
-        invvar = im.read_invvar(slice=slc)
+        invvar = im.read_invvar(slice=slc, clip=True)
 
         print 'Invvar range:', invvar.min(), invvar.max()
         if np.all(invvar == 0.):
@@ -338,6 +338,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
                     sky=sky, name=im.name + ' ' + band)
+        assert(np.all(np.isfinite(tim.getInvError())))
         tim.zr = [-3. * sig1, 10. * sig1]
         tim.midsky = midsky
         tim.sig1 = sig1
@@ -380,8 +381,11 @@ def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
                W=None,H=None, brickid=None,
                bands=None, ps=None, tims=None,
-               plots=False, plots2=False, **kwargs):
+               plots=False, plots2=False,
+               pipe=False,
+               **kwargs):
 
+    tlast = Time()
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
@@ -572,13 +576,19 @@ def stage_srcs(coimgs=None, cons=None,
         fluximg = hot
     else:
         fluximg = coimgs[1]
-        
     for blob in range(1, nblobs+1):
         blobsrcs.append(np.flatnonzero(T.blob == blob))
         bslc = blobslices[blob-1]
+        # print 'blobslice', bslc
+        # print 'fluximg:', fluximg.shape
+        # print 'fluximg[bslc]:', fluximg[bslc].shape
+        # print 'blobs:', blobs.shape
+        # print 'blobs[bslc]', blobs[bslc].shape
+        # print 'blob cut', (blobs[bslc] == blob).shape
+        # print 'flux cut', fluximg[bslc][blobs[bslc] == blob]
         blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
         
-    print 'Segmentation:', Time()-tlast
+    print 'Blobs:', Time()-tlast
     tlast = Time()
 
     cat.freezeAllParams()
@@ -604,6 +614,9 @@ def stage_fitblobs(T=None, sedsn=None, coimgs=None, cons=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    **kwargs):
+    for tim in tims:
+        assert(np.all(np.isfinite(tim.getInvError())))
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for tim in tims:
         from tractor.psfex import CachingPsfEx
@@ -1622,11 +1635,10 @@ def stage_fitplots(
     outdir=None,
     **kwargs):
 
+    for tim in tims:
+        print 'Tim', tim, 'PSF', tim.getPsf()
+        
     writeModels = False
-
-    print 'kwargs:', kwargs.keys()
-    del kwargs
-    print 'W,H =', W,H
 
     if pipe:
         # Produce per-band coadds, for plots
@@ -1832,13 +1844,11 @@ def stage_writecat(
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
-    plots=False, tims=None, tractor=None,
+    plots=False, tractor=None,
     brickid=None,
     variances=None,
     catalogfn=None,
     **kwargs):
-    print 'kwargs:', kwargs.keys()
-    del kwargs
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
@@ -1891,14 +1901,20 @@ def stage_writecat(
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
-    return dict(variances=variances, tims=tims, cat=cat)
+    return dict(variances=variances, cat=cat)
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
     import optparse
     import logging
-    
-    parser = optparse.OptionParser()
+
+    ep = '''
+eg, to run a small field containing a cluster:
+\n
+python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 950 -P pickles/runbrick-cluster-%%s.pickle
+\n
+'''
+    parser = optparse.OptionParser(epilog=ep)
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[],
                       help="Force re-running the given stage(s) -- don't read from pickle.")
     parser.add_option('-s', '--stage', dest='stage', default=[], action='append',
@@ -1944,7 +1960,7 @@ if __name__ == '__main__':
     stagefunc = CallGlobal('stage_%s', globals())
 
     if len(opt.stage) == 0:
-        opt.stage.append('cat')
+        opt.stage.append('writecat')
     opt.force.extend(opt.stage)
 
     if opt.plot_base is None:
@@ -1975,9 +1991,11 @@ if __name__ == '__main__':
                'initplots': 'tims',
                }
 
+    initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
+
+#W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
-                 W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                  initial_args=initargs, **kwargs)
     

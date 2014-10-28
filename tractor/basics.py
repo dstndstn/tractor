@@ -1562,7 +1562,7 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         means = np.zeros((K,2))
         vars = np.zeros((K,2,2))
         for k in range(K):
-            vars[k,0,0] = vars[k,1,1] = self.mysigmas**2
+            vars[k,0,0] = vars[k,1,1] = self.mysigmas[k]**2
         return mp.MixtureOfGaussians(amps, means, vars)
         
     def hashkey(self):
