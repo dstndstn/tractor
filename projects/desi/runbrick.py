@@ -174,7 +174,10 @@ def compute_coadds(tims, bands, W, H, targetwcs):
         for tim in tims:
             if tim.band != band:
                 continue
-            (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
             nn = (tim.getInvError()[Yi,Xi] > 0)
             coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
             con  [Yo,Xo] += nn
@@ -238,6 +241,10 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
     #check_touching(decals, targetwcs, bands, brick, pixscale, ps)
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
+
+    # Check that the zeropoints exist
+    for im in ims:
+        decals.get_zeropoint_for(im)
 
     args = []
     for im in ims:
@@ -401,7 +408,10 @@ def stage0(W=3600, H=3600, brickid=None, ps=None, plots=False,
         subh,subw = tim.shape
         detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
         detiv[ie == 0] = 0.
-        (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
+        R = tim_get_resamp(tim, targetwcs)
+        if R is None:
+            continue
+        (Yo,Xo,Yi,Xi) = R
         detmaps[tim.band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
         detivs [tim.band][Yo,Xo] += detiv[Yi,Xi]
 
@@ -1578,6 +1588,7 @@ def stage102(T=None, coimgs=None, cons=None,
              bands=None, ps=None, brickid=None,
              plots=False, plots2=False, tims=None, tractor=None,
              pipe=None,
+             outdir=None,
              **kwargs):
 
     writeModels = False
@@ -1655,7 +1666,10 @@ def stage102(T=None, coimgs=None, cons=None,
                 plt.title(tim.name)
                 ps.savefig()
 
-            (Yo,Xo,Yi,Xi) = tim_get_resamp(tim, targetwcs)
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
             comod[Yo,Xo] += mod[Yi,Xi]
             ie = tim.getInvError()
             noise = np.random.normal(size=ie.shape) / ie
@@ -1716,11 +1730,13 @@ def stage102(T=None, coimgs=None, cons=None,
         hdr = fitsio.read_header(wcsfn)
         os.remove(wcsfn)
 
+        if outdir is None:
+            outdir = '.'
         wa = dict(clobber=True, header=hdr)
-        fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), coimg, **wa)
-        fitsio.write('model-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
-        fitsio.write('resid-coadd-%06i-%s.fits' % (brickid, band), resid, **wa)
-        fitsio.write('chi2-coadd-%06i-%s.fits' % (brickid, band),  cochi2, **wa)
+        fitsio.write(os.path.join(outdir, 'image-coadd-%06i-%s.fits' % (brickid, band)), coimg,  **wa)
+        fitsio.write(os.path.join(outdir, 'model-coadd-%06i-%s.fits' % (brickid, band)), comod,  **wa)
+        fitsio.write(os.path.join(outdir, 'resid-coadd-%06i-%s.fits' % (brickid, band)), resid,  **wa)
+        fitsio.write(os.path.join(outdir, 'chi2-coadd-%06i-%s.fits'  % (brickid, band)), cochi2, **wa)
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
