@@ -863,7 +863,9 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
         # fluxes are bogus.
 
         # Remember original tim images
-        orig_timages = [tim.getImage().copy() for tim in subtims]
+        orig_timages = [tim.getImage() for tim in subtims]
+        for tim,img in zip(subtims,orig_timages):
+            tim.data = img.copy()
         initial_models = []
 
         # Create initial models for each tim x each source
@@ -900,6 +902,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
                 if mod is not None:
                     mod.addTo(tim.getImage())
 
+            # Try fitting flux first?
+            src.freezeAllBut('brightness')
+            for b in bands:
+                tband = Time()
+                src.getBrightness().freezeAllBut(b)
+                print 'Optimizing band', b, ':', srctractor
+                srctractor.printThawedParams()
+                srctractor.optimize_forced_photometry(alphas=alphas, shared_params=False,
+                                                      use_ceres=True, BW=8, BH=8,
+                                                      wantims=False)
+                print 'Band', b, 'took', Time()-tband
+            src.thawAllParams()
+
             print 'Optimizing:', srctractor
             srctractor.printThawedParams()
 
@@ -919,27 +934,27 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
                 if dlnp < 0.1:
                     break
 
-                if plots:
-                    spmods.append(srctractor.getModelImages())
-                    spnames.append('Fit')
-                    spallmods.append(subtr.getModelImages())
-                    spallnames.append('Fit (all)')
+            if plots:
+                spmods.append(srctractor.getModelImages())
+                spnames.append('Fit')
+                spallmods.append(subtr.getModelImages())
+                spallnames.append('Fit (all)')
 
-                if plots:
-                    plt.figure(1, figsize=(8,6))
-                    plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
-                                        hspace=0.1, wspace=0.05)
-                    plt.figure(2, figsize=(3,3))
-                    plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
-                    #_plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
-                    #           chi_plots=plots2)
-                    tempims = [tim.getImage() for tim in subtims]
-                    for tim,orig in zip(subtims, orig_timages):
-                        tim.data = orig
-                    _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
-                               chi_plots=plots2, rgb_plots=True, main_plot=False)
-                    for tim,im in zip(subtims, tempims):
-                        tim.data = im
+            if plots:
+                plt.figure(1, figsize=(8,6))
+                plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
+                                    hspace=0.1, wspace=0.05)
+                plt.figure(2, figsize=(3,3))
+                plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
+                #_plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
+                #           chi_plots=plots2)
+                tempims = [tim.getImage() for tim in subtims]
+                for tim,orig in zip(subtims, orig_timages):
+                    tim.data = orig
+                _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
+                           chi_plots=plots2, rgb_plots=True, main_plot=False)
+                for tim,im in zip(subtims, tempims):
+                    tim.data = im
 
             for tim in subtims:
                 mod = src.getModelPatch(tim)
