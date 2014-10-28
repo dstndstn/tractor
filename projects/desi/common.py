@@ -234,6 +234,7 @@ class DecamImage(object):
         self.se2fn = os.path.join(calibdir, 'sextractor2', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
+        self.psffitellfn = os.path.join(calibdir, 'psfexfit', calname + '-ell.fits')
         self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
@@ -450,6 +451,9 @@ class DecamImage(object):
             print 'Fitting MoG model to PsfEx'
             psfex._fitParamGrid(damp=1)
             pp,XX,YY = psfex.splinedata
+
+            psfex.toFits(self.psffitellfn, merge=True)
+            print 'Wrote', self.psffitellfn
     
             # Convert to GaussianMixturePSF
             ppvar = np.zeros_like(pp)
