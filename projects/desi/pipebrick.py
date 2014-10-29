@@ -25,8 +25,15 @@ if __name__ == '__main__':
 
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc
+
         # ?? global
-        runbrick.mp = multiproc(opt.threads)
+        #runbrick.mp = multiproc(opt.threads)
+
+        from utils.debugpool import DebugPool, DebugPoolMeas
+        dpool = DebugPool(opt.threads, taskqueuesize=2*opt.threads)
+        mp = multiproc(pool=dpool)
+        Time.add_measurement(DebugPoolMeas(dpool))
+        runbrick.mp = mp
 
     P = dict(W=3600, H=3600, brickid=brick, pipe=True)
 

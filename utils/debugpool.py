@@ -3,6 +3,8 @@ import multiprocessing.queues
 import multiprocessing.pool
 import os
 
+from astrometry.util.ttime import CpuMeas
+
 #
 # In Python 2.7 (and 2.6):
 #
@@ -204,7 +206,7 @@ def debug_worker(inqueue, outqueue, progressqueue,
                 debug('worker got EOFError or IOError on progress queue -- exiting')
                 break
 
-        t1 = time.time()
+        t1 = CpuMeas()
         try:
             success,val = (True, func(*args, **kwds))
         except Exception as e:
@@ -216,9 +218,9 @@ def debug_worker(inqueue, outqueue, progressqueue,
             #print type(e)
             put((None, None, (None,(False,e))))
             raise
-        t2 = time.time()
-        dt = t2 - t1
-        put((job, i, (dt,(success,val))))
+        t2 = CpuMeas()
+        dt = (t2.cpu_seconds_since(t1), t2.wall_seconds_since(t1))
+        put((job, i, dt,(success,val)))
         completed += 1
     debug('worker exiting after %d tasks' % completed)
 
@@ -239,8 +241,8 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
             debug('result handler got sentinel')
             break
         #print 'Got task:', task
-        (job, i, (dt,obj)) = task
-        #(None, None, (None, (False, KeyboardInterrupt())))
+        (job, i, dt, obj) = task
+        # ctrl-C -> (None, None, None, (False, KeyboardInterrupt()))
         if job is None:
             (success, val) = obj
             if not success:
@@ -254,7 +256,7 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
             cache[job]._set(i, obj)
         except KeyError:
             pass
-        beancounter.add_cpu(dt)
+        beancounter.add_time(dt)
 
     while cache and thread._state != TERMINATE:
         try:
@@ -266,7 +268,7 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
         if task is None:
             debug('result handler ignoring extra sentinel')
             continue
-        job, i, (dt, obj) = task
+        (job, i, dt, obj) = task
         if job is None:
             #print 'Ignoring another KeyboardInterrupt'
             continue
@@ -274,7 +276,7 @@ def debug_handle_results(outqueue, get, cache, beancounter, pool):
             cache[job]._set(i, obj)
         except KeyError:
             pass
-        beancounter.add_cpu(dt)
+        beancounter.add_time(dt)
 
     if hasattr(outqueue, '_reader'):
         debug('ensuring that outqueue is not full')
@@ -363,12 +365,15 @@ from multiprocessing.synchronize import Lock
 class BeanCounter(object):
     def __init__(self):
         self.cpu = 0.
+        self.wall = 0.
         self.lock = Lock()
     ### LOCKING
-    def add_cpu(self, dt):
+    def add_time(self, dt):
         self.lock.acquire()
         try:
-            self.cpu += dt
+            (cpu, wall) = dt
+            self.cpu += cpu
+            self.wall += wall
         finally:
             self.lock.release()
     def get_cpu(self):
@@ -377,8 +382,14 @@ class BeanCounter(object):
             return self.cpu
         finally:
             self.lock.release()
+    def get_wall(self):
+        self.lock.acquire()
+        try:
+            return self.wall
+        finally:
+            self.lock.release()
     def __str__(self):
-        return 'CPU time: %g s' % self.get_cpu()
+        return 'CPU time: %.3fs s, Wall time: %.3fs' % (self.get_cpu(), self.get_wall())
 
 class DebugPoolMeas(object):
     def __init__(self, pool):
@@ -391,13 +402,15 @@ class DebugPoolMeas(object):
             def format_diff(self, other):
                 t1 = self.t0
                 t0 = other.t0
-                return ('%.3f s worker CPU, pickled %i/%i objs, %g/%g MB' %
+                return (('%.3f s worker CPU, %.3f s worker Wall, ' +
+                         'pickled %i/%i objs, %g/%g MB') %
                         tuple(t1[k] - t0[k] for k in [
-                        'worker_cpu', 'pickle_objs', 'unpickle_objs',
-                        'pickle_megabytes', 'unpickle_megabytes']))
+                    'worker_cpu', 'worker_wall', 'pickle_objs', 'unpickle_objs',
+                    'pickle_megabytes', 'unpickle_megabytes']))
             def now(self):
                 stats = self.pool.get_pickle_traffic()
-                stats.update(worker_cpu = self.pool.get_worker_cpu())
+                stats.update(worker_cpu = self.pool.get_worker_cpu(),
+                             worker_wall = self.pool.get_worker_wall())
                 return stats
         return FormatDiff(self.pool)
 
@@ -423,6 +436,8 @@ class DebugPool(mp.pool.Pool):
 
     def get_worker_cpu(self):
         return self._beancounter.get_cpu()
+    def get_worker_wall(self):
+        return self._beancounter.get_wall()
 
     ### This just replaces the "worker" call with our "debug_worker".
     def _repopulate_pool(self):

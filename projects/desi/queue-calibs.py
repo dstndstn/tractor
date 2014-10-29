@@ -40,9 +40,13 @@ if __name__ == '__main__':
     B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
     #print len(B), 'bricks in range'
 
-    #for b in B.brickid:
-    #    print b
-    #sys.exit(0)
+    for b in B.brickid:
+        fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b
+        if os.path.exists(fn):
+            print >> sys.stderr, 'exists:', fn
+            continue
+        print b
+    sys.exit(0)
 
     allI = set()
     for b in B:
