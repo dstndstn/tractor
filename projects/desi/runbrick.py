@@ -332,8 +332,8 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
         info = im.get_image_info()
         fullh,fullw = info['dims']
-        # read fit PsfEx model
-        psfex = PsfEx.fromFits(im.psffitfn)
+        # read fit PsfEx model -- with ellipse representation
+        psfex = PsfEx.fromFits(im.psffitellfn)
         print 'Read', psfex
 
         # HACK -- highly approximate PSF here!

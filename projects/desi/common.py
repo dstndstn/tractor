@@ -342,7 +342,7 @@ class DecamImage(object):
             run_astrom = True
         if psfex and not os.path.exists(self.psffn):
             run_psfex = True
-        if psfexfit and not os.path.exists(self.psffitfn):
+        if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
             run_psfexfit = True
         if morph and not os.path.exists(self.morphfn):
             run_morph = True
