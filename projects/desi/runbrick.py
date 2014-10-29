@@ -258,6 +258,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     tims = []
     for im in ims:
         print
+        ttim = Time()
         print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
         band = im.band
         wcs = im.read_wcs()
@@ -353,6 +354,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
         tims.append(tim)
+        print 'Reading tim:', Time()-ttim
 
     print 'Read images:', Time()-tlast
     tlast = Time()

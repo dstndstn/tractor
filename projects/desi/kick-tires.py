@@ -3,8 +3,10 @@ matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
 import fitsio
+from glob import glob
+
 from astrometry.util.fits import fits_table,merge_tables
-from astrometry.util.plotutils import PlotSequence, dimshow
+from astrometry.util.plotutils import * #PlotSequence, dimshow
 from astrometry.libkd.spherematch import match_radec
 from tractor import *
 from tractor.galaxy import *
@@ -12,18 +14,44 @@ from common import *
 
 if __name__ == '__main__':
 
-    brickid = 371589
     ps = PlotSequence('kick')
-    ps.suffixes = ['png','pdf']
+    #ps.suffixes = ['png','pdf']
 
     plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
-    
-    fn = 'tractor-phot-b%06i.fits' % brickid
-    T = fits_table(fn)
-    print 'Read', len(T)
+
+    TT = []
+    for fn in glob('pipebrick-cats/tractor-phot-b*.fits'):
+        T = fits_table(fn)
+        print len(T), 'from', fn
+        TT.append(T)
+    T = merge_tables(TT)
+    del TT
+
+    if False:
+        brickid = 371589
+        fn = 'tractor-phot-b%06i.fits' % brickid
+        T = fits_table(fn)
+        print 'Read', len(T)
     T.about()
     T.cut(T.blob > 0)
     print 'Cut to', len(T)
+
+    print 'RA', T.ra.min(), T.ra.max()
+    print 'Dec', T.dec.min(), T.dec.max()
+    # Uhh, how does *this* happen?!  Fitting gone wild I guess
+    T.cut((T.ra > 0) * (T.ra < 360) * (T.dec > -90) * (T.dec < 90))
+    print 'RA', T.ra.min(), T.ra.max()
+    print 'Dec', T.dec.min(), T.dec.max()
+    rlo,rhi = [np.percentile(T.ra,  p) for p in [1,99]]
+    dlo,dhi = [np.percentile(T.dec, p) for p in [1,99]]
+    print 'RA', rlo,rhi
+    print 'Dec', dlo,dhi
+
+    plt.clf()
+    plothist(T.ra, T.dec, 100, range=((rlo,rhi),(dlo,dhi)))
+    plt.xlabel('RA')
+    plt.ylabel('Dec')
+    ps.savefig()
     
     # decals = Decals()
     # B = decals.get_bricks()
@@ -78,9 +106,14 @@ if __name__ == '__main__':
 
         dflux = T.get('decam_%s_nanomaggies_corr' % band)
         plt.clf()
-        plt.loglog(sflux, dflux / sflux, 'o', mec='b', ms=4, alpha=0.1)
+        #plt.loglog(sflux, dflux / sflux, 'o', mec='b', ms=4, alpha=0.1)
+        plt.loglog(sflux, dflux / sflux, 'b.', alpha=0.01)
+        plt.xlim(1e-1, 3e3)
         plt.axhline(1., color='k')
         plt.ylim(0.5, 2.)
+        plt.xlabel('SDSS flux (nmgy)')
+        plt.ylabel('DECam flux / SDSS flux')
+        plt.title('%s band' % band)
         ps.savefig()
         
     bands = 'grz'
@@ -99,7 +132,8 @@ if __name__ == '__main__':
         sn = T.get('decam_%s_nanomaggies' % band) * np.sqrt(T.get('decam_%s_nanomaggies_invvar' % band))
         mag = T.get('decam_%s_mag_corr' % band)
         cc = ccmap[band]
-        plt.semilogy(mag, sn, '.', color=cc, alpha=0.2)
+        #plt.semilogy(mag, sn, '.', color=cc, alpha=0.2)
+        plt.semilogy(mag, sn, '.', color=cc, alpha=0.01, mec='none')
     plt.xlabel('mag')
     plt.ylabel('Flux Signal-to-Noise')
     tt = [1,2,3,4,5,10,20,30,40,50]
@@ -165,3 +199,61 @@ if __name__ == '__main__':
     ps.savefig()
 
     
+
+    # Stars/galaxies in subplots
+
+    plt.clf()
+    lp = []
+    cut = (TT.sdss_objc_type == 6)
+    g,r,z = [NanoMaggies.nanomaggiesToMag(TT.sdss_psfflux[:,i])
+             for i in [1,2,4]]
+    plt.subplot(1,2,1)
+    p = plt.plot((g-r)[cut], (r-z)[cut], '.', alpha=0.02, color='b')
+    px = plt.plot(100, 100, '.', color='b')
+    lp.append(px[0])
+    plt.xlabel('g - r (mag)')
+    plt.ylabel('r - z (mag)')
+    plt.xlim(-0.5, 2.5)
+    plt.ylim(-0.5, 3)
+    cut = (TT.sdss_objc_type == 3)
+    g,r,z = [NanoMaggies.nanomaggiesToMag(TT.sdss_modelflux[:,i])
+             for i in [1,2,4]]
+    plt.subplot(1,2,2)
+    p = plt.plot((g-r)[cut], (r-z)[cut], '.', alpha=0.02, color='r')
+    px = plt.plot(100, 100, '.', color='r')
+    lp.append(px[0])
+    plt.xlabel('g - r (mag)')
+    plt.ylabel('r - z (mag)')
+    plt.xlim(-0.5, 2.5)
+    plt.ylim(-0.5, 3)
+    plt.figlegend(lp, ['stars', 'galaxies'], 'upper right')
+    plt.suptitle('SDSS')
+    ps.savefig()
+
+    g = TT.decam_g_mag_corr
+    r = TT.decam_r_mag_corr
+    z = TT.decam_z_mag_corr
+
+    plt.clf()
+    lt,lp = [],[]
+    for i,(cut,cc,tt) in enumerate([
+        (TT.sdss_objc_type == 6, 'b', 'stars'),
+        (TT.sdss_objc_type == 3, 'r', 'galaxies'),
+        #(TT.sdss_objc_type == 0, 'g', 'faint'),
+        ]):
+        plt.subplot(1,2,i+1)
+        p = plt.plot((g-r)[cut], (r-z)[cut], '.', alpha=0.02, color=cc)
+        lt.append(tt)
+        px = plt.plot(100, 100, '.', color=cc)
+        lp.append(px[0])
+        plt.xlabel('g - r (mag)')
+        plt.ylabel('r - z (mag)')
+        plt.xlim(-0.5, 2.5)
+        plt.ylim(-0.5, 3)
+    plt.figlegend(lp, lt, 'upper right')
+    plt.suptitle('DECaLS')
+    ps.savefig()
+
+    
+
+

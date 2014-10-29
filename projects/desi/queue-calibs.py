@@ -36,17 +36,21 @@ if __name__ == '__main__':
 
     #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
 
+    # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
-    B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
+    # 240 bricks, ~3000 CCDs
+    #B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
+    # 535 bricks, ~7000 CCDs
+    B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
     #print len(B), 'bricks in range'
 
-    for b in B.brickid:
-        fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b
-        if os.path.exists(fn):
-            print >> sys.stderr, 'exists:', fn
-            continue
-        print b
-    sys.exit(0)
+    # for b in B.brickid:
+    #     fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b
+    #     if os.path.exists(fn):
+    #         print >> sys.stderr, 'exists:', fn
+    #         continue
+    #     print b
+    # sys.exit(0)
 
     allI = set()
     for b in B:

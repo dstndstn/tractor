@@ -403,7 +403,7 @@ class DebugPoolMeas(object):
                 t1 = self.t0
                 t0 = other.t0
                 return (('%.3f s worker CPU, %.3f s worker Wall, ' +
-                         'pickled %i/%i objs, %g/%g MB') %
+                         'pickled %i/%i objs, %.1f/%.1f MB') %
                         tuple(t1[k] - t0[k] for k in [
                     'worker_cpu', 'worker_wall', 'pickle_objs', 'unpickle_objs',
                     'pickle_megabytes', 'unpickle_megabytes']))

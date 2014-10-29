@@ -39,9 +39,11 @@ if __name__ == '__main__':
 
     if opt.stamp:
         catalogfn = 'tractor-phot-b%06i-stamp.fits' % brick
+        pspat = 'pipebrick-plots/brick-%06i-stamp' % brick
         P.update(W=100, H=100)
     else:
         catalogfn = 'pipebrick-cats/tractor-phot-b%06i.fits' % brick
+        pspat = 'pipebrick-plots/brick-%06i' % brick
 
     t0 = Time()
     R = stage_tims(**P)
@@ -65,7 +67,8 @@ if __name__ == '__main__':
     print 'Stage writecat:', t3-t2b
 
     # Plots
-    ps = PlotSequence('pipebrick-plots/brick-%06i' % brick)
+    
+    ps = PlotSequence(pspat)
     P.update(ps=ps, outdir='pipebrick-plots')
     stage_fitplots(**P)
     t4 = Time()
