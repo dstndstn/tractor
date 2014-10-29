@@ -260,7 +260,8 @@ class MixtureOfGaussians():
         return result
 
     def evaluate_grid_approx3(self, x0, x1, y0, y1, fx, fy, minval,
-                              derivs=False, minradius=3, doslice=True):
+                              derivs=False, minradius=3, doslice=True,
+                              maxmargin=100):
         '''
         minval: small value at which to stop evaluating
 
@@ -268,6 +269,8 @@ class MixtureOfGaussians():
         [y0,y1): (int) Y values to evaluate
         (fx,fy): (float) pixel offset of the MoG; ie, evaluate MoG shifted by
                 this amount.
+
+        'maxmargin': don't render sources more than this distance outside the box.
 
         If 'doslice' is True, slices the images down to the non-zero
         bounding-box.
@@ -287,6 +290,10 @@ class MixtureOfGaussians():
         # guess:
         cx = int(self.mean[0,0] + fx)
         cy = int(self.mean[0,1] + fy)
+
+        if (cx < x0 - maxmargin or cx > x1 + maxmargin or
+            cy < y0 - maxmargin or cy > y1 + maxmargin):
+            return Patch(x0,y0,None)
 
         try:
             rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(

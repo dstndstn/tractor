@@ -283,6 +283,10 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         # cross = dx0*dy1 - dx1*dy0
         # print 'Cross:', cross
 
+        if y1 - y0 < 5 or x1 - x0 < 5:
+            print 'Skipping tiny subimage'
+            continue
+
         print 'Image slice: x [%i,%i], y [%i,%i]' % (x0,x1, y0,y1)
         print 'Reading image from', im.imgfn, 'HDU', im.hdu
         img,imghdr = im.read_image(header=True, slice=slc)
