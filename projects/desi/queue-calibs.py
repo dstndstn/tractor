@@ -2,7 +2,7 @@ import sys
 import os
 import numpy as np
 from astrometry.util.fits import fits_table
-from common import Decals, wcs_for_brick, ccds_touching_wcs
+from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
 '''
 python projects/desi/queue-calibs.py  | qdo load cal -
@@ -21,7 +21,6 @@ import pylab as plt
 
 if __name__ == '__main__':
     D = Decals()
-    T = D.get_ccds()
     B = D.get_bricks()
 
     # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
@@ -44,13 +43,32 @@ if __name__ == '__main__':
     B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
     #print len(B), 'bricks in range'
 
-    # for b in B.brickid:
-    #     fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b
-    #     if os.path.exists(fn):
-    #         print >> sys.stderr, 'exists:', fn
-    #         continue
-    #     print b
-    # sys.exit(0)
+    T = D.get_ccds()
+
+    for b in B:
+        fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b.brickid
+        if os.path.exists(fn):
+            print >> sys.stderr, 'exists:', fn
+            continue
+        #print b
+        # Don't try bricks for which the zeropoints are missing.
+        wcs = wcs_for_brick(b)
+        I = ccds_touching_wcs(wcs, T)
+        im = None
+        try:
+            for t in T[I]:
+                im = DecamImage(t)
+                zp = D.get_zeropoint_for(im)
+        except:
+            print >> sys.stderr, 'Brick', b.brickid, ': Failed to get zeropoint for', im
+            #import traceback
+            #traceback.print_exc()
+            continue
+
+        # Ok
+        print b.brickid
+
+    sys.exit(0)
 
     allI = set()
     for b in B:

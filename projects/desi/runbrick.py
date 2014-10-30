@@ -199,6 +199,13 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'Version:', version
 
     decals = Decals()
+
+    decalsv = decals.decals_dir
+    hdr = fitsio.FITSHDR()
+    hdr.add_record(dict(name='TRACTORV', value=version, comment='Tractor git version'))
+    hdr.add_record(dict(name='DECALSV', value=dversion, comment='DECaLS version'))
+    version_header = hdr
+
     B = decals.get_bricks()
     #print 'Bricks:'
     #B.about()
@@ -380,7 +387,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
-    keys = ['version', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
+    keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
             'bands', 'tims', 'ps', 'brickid', 'target_extent']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
@@ -1854,7 +1861,7 @@ def stage_fitplots(
 Write catalog output
 '''
 def stage_writecat(
-    version=None,
+    version_header=None,
     T=None, coimgs=None, cons=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
@@ -1877,8 +1884,7 @@ def stage_writecat(
     TT.objid   = np.arange(len(TT)).astype(np.int32)
 
     cat.thawAllRecursive()
-    hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='TRACTORV', value=version, comment='Tractor git version'))
+    hdr = version_header
     T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
 
     # Convert from variances to inverse-sigmas.

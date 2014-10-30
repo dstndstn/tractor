@@ -168,21 +168,21 @@ class Decals(object):
     def get_zeropoint_for(self, im):
         if self.ZP is None:
             zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
-            print 'Reading zeropoints:', zpfn
+            #print 'Reading zeropoints:', zpfn
             self.ZP = fits_table(zpfn)
 
             if 'ccdname' in self.ZP.get_columns():
                 # 'N4 ' -> 'N4'
                 self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
 
-            self.ZP.about()
+            #self.ZP.about()
 
         I = np.flatnonzero(self.ZP.expnum == im.expnum)
-        print 'Got', len(I), 'matching expnum', im.expnum
+        #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
             #I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
             I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
-            print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
+            #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
         assert(len(I) == 1)
         I = I[0]
 
@@ -224,7 +224,7 @@ class DecamImage(object):
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
-        print 'Calname', calname
+        #print 'Calname', calname
         
         extnm = '.ext%02i' % hdu
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
