@@ -192,6 +192,12 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False,
                **kwargs):
     t0 = tlast = Time()
+
+    rtn,version,err = run_command('git describe')
+    if rtn:
+        raise RuntimeError('Failed to get version string (git describe):' + ver + err)
+    print 'Version:', ver
+
     decals = Decals()
     B = decals.get_bricks()
     #print 'Bricks:'
@@ -374,7 +380,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
-    keys = ['targetrd', 'pixscale', 'targetwcs', 'W','H',
+    keys = ['version', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
             'bands', 'tims', 'ps', 'brickid', 'target_extent']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
@@ -1847,6 +1853,7 @@ def stage_fitplots(
 Write catalog output
 '''
 def stage_writecat(
+    version=None,
     T=None, coimgs=None, cons=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
@@ -1870,10 +1877,7 @@ def stage_writecat(
 
     cat.thawAllRecursive()
     hdr = fitsio.FITSHDR()
-    rtn,ver,err = run_command('git describe')
-    if rtn:
-        raise RuntimeError('Failed to get version string (git describe):' + ver + err)
-    hdr.add_record(dict(name='TRACTORV', value=ver, comment='Tractor git version'))
+    hdr.add_record(dict(name='TRACTORV', value=version, comment='Tractor git version'))
     T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
 
     # Convert from variances to inverse-sigmas.
