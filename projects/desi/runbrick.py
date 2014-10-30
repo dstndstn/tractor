@@ -24,6 +24,7 @@ from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
 from astrometry.sdss.fields import read_photoobjs_in_wcs, radec_to_sdss_rcf
 from astrometry.sdss import DR9, band_index, AsTransWrapper
+from astrometry.util.run_command import *
 
 from tractor import *
 from tractor.galaxy import *
@@ -1868,7 +1869,11 @@ def stage_writecat(
     TT.objid   = np.arange(len(TT)).astype(np.int32)
 
     cat.thawAllRecursive()
-    hdr = None
+    hdr = fitsio.FITSHDR()
+    rtn,ver,err = run_command('git describe')
+    if rtn:
+        raise RuntimeError('Failed to get version string (git describe):' + ver + err)
+    hdr.add_record(dict(name='TRACTORV', value=ver, comment='Tractor git version'))
     T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
 
     # Convert from variances to inverse-sigmas.
