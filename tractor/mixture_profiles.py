@@ -293,7 +293,7 @@ class MixtureOfGaussians():
 
         if (cx < x0 - maxmargin or cx > x1 + maxmargin or
             cy < y0 - maxmargin or cy > y1 + maxmargin):
-            return Patch(x0,y0,None)
+            return None #Patch(x0,y0,None)
 
         try:
             rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(

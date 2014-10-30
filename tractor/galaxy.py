@@ -250,6 +250,7 @@ class Galaxy(MultiParams):
                     print '  stepped', gsteps[i]
                     print '  to', self.shape.getParams()[i]
                     derivs.append(None)
+                    continue
 
                 dx = (patchx - patch0) * (counts / gstep)
                 dx.setName('d(%s)/d(%s)' % (self.dname, gnames[i]))
