@@ -1663,6 +1663,8 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         self.psf = psf
         self.x0 = x0
         self.y0 = y0
+    def __str__(self):
+        return ('ShiftedPsf: %i,%i + ' % (self.x0,self.y0)) + str(self.psf)
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
     def getPointSourcePatch(self, px, py, extent=None, derivs=False, **kwargs):
