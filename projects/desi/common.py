@@ -19,6 +19,47 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
+                                decals, bricks,
+                                catpattern):
+    '''
+    Merges multiple Tractor brick catalogs to cover an RA,Dec
+    bounding-box.
+
+    No cleverness with RA wrap-around; assumes ralo < rahi.
+
+    decals: Decals object
+    
+    bricks: table of bricks, eg from Decals.get_bricks()
+
+    catpattern: filename pattern of catalog files to read,
+        eg "pipebrick-cats/tractor-phot-%06i.its"
+    
+    '''
+    assert(ralo < rahi)
+    assert(declo < dechi)
+
+    I = decals.bricks_touching_radec_box(bricks, ralo, rahi, declo, dechi)
+    print len(I), 'bricks touch RA,Dec box'
+    TT = []
+    for i in I:
+        brick = bricks[i]
+        fn = catpattern % brick.brickid
+        print 'Catalog', fn
+        if not os.path.exists(fn):
+            print 'Warning: catalog does not exist:', fn
+            continue
+        T = fits_table(fn)
+        if T is None or len(T) == 0:
+            print 'Warning: empty catalog', fn
+            continue
+        T.cut((T.ra  >= brick.ra1 ) * (T.ra  < brick.ra2 ) *
+              (T.dec >= brick.dec1) * (T.dec < brick.dec2))
+        TT.append(T)
+    if len(TT) == 0:
+        return None
+    return merge_tables(TT)
+    
 def ccd_map_image(valmap, empty=0.):
     '''
     valmap: { 'N7' : 1., 'N8' : 17.8 }
@@ -146,7 +187,6 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     #print 'Cut to', len(I), 'on polygons'
     return I
 
-
 def create_temp(**kwargs):
     f,fn = tempfile.mkstemp(dir=tempdir, **kwargs)
     os.close(f)
@@ -160,6 +200,15 @@ class Decals(object):
         
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
+    def bricks_touching_radec_box(self, bricks,
+                                  ralo, rahi, declo, dechi):
+        '''
+        Returns an index vector of the bricks that touch the given RA,Dec box.
+        '''
+        I = np.flatnonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                           (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+        return I
+    
     def get_ccds(self):
         T = fits_table(os.path.join(self.decals_dir, 'decals-ccds.fits'))
         T.extname = np.array([s.strip() for s in T.extname])
