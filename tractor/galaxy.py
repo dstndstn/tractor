@@ -301,15 +301,15 @@ class ProfileGalaxy(object):
                     if cached is None:
                         return None
                     return cached.copy()
-                # do the extents overlap?
-                (x0,x1,y0,y1) = extent
-                (cx0,cx1,cy0,cy1) = cached.getExtent()
-                if cx0 <= x0 and cx1 >= x1 and cy0 <= y0 and cy1 >= y1:
-                    pat = cached.copy()
-                    if cx0 != x0 or cx1 != x1 or cy0 != y0 or cy1 != y1:
-                        pat.clipToRoi(*extent)
-                        #print 'Extent:', pat.getExtent(), 'vs', extent
-                    return pat
+                if cached is not None:
+                    # do the extents overlap?
+                    (x0,x1,y0,y1) = extent
+                    (cx0,cx1,cy0,cy1) = cached.getExtent()
+                    if cx0 <= x0 and cx1 >= x1 and cy0 <= y0 and cy1 >= y1:
+                        pat = cached.copy()
+                        if cx0 != x0 or cx1 != x1 or cy0 != y0 or cy1 != y1:
+                            pat.clipToRoi(*extent)
+                        return pat
         except KeyError:
             pass
         patch = self._realGetUnitFluxModelPatch(img, px, py, minval,
