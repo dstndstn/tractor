@@ -203,7 +203,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     decalsv = decals.decals_dir
     hdr = fitsio.FITSHDR()
     hdr.add_record(dict(name='TRACTORV', value=version, comment='Tractor git version'))
-    hdr.add_record(dict(name='DECALSV', value=dversion, comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSV', value=decalsv, comment='DECaLS version'))
     version_header = hdr
 
     B = decals.get_bricks()
