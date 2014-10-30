@@ -196,7 +196,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     rtn,version,err = run_command('git describe')
     if rtn:
         raise RuntimeError('Failed to get version string (git describe):' + ver + err)
-    print 'Version:', ver
+    print 'Version:', version
 
     decals = Decals()
     B = decals.get_bricks()
@@ -897,13 +897,14 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
                 mod = src.getModelPatch(tim)
                 mods.append(mod)
                 if mod is not None:
-                    if not np.all(np.isfinite(mod.patch)):
-                        print 'Non-finite mod patch'
-                        print 'source:', src
-                        print 'tim:', tim
-                        print 'PSF:', tim.getPsf()
-                    assert(np.all(np.isfinite(mod.patch)))
-                    mod.addTo(tim.getImage(), scale=-1)
+                    if mod.patch is not None:
+                        if not np.all(np.isfinite(mod.patch)):
+                            print 'Non-finite mod patch'
+                            print 'source:', src
+                            print 'tim:', tim
+                            print 'PSF:', tim.getPsf()
+                        assert(np.all(np.isfinite(mod.patch)))
+                        mod.addTo(tim.getImage(), scale=-1)
             initial_models.append(mods)
         print 'Subtracting initial models:', Time()-tt
 
