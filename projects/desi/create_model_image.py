@@ -17,6 +17,7 @@ def main():
     catpattern = 'pipebrick-cats/tractor-phot-b%06i.fits'
     ra,dec = 242, 7
 
+    # Region-of-interest, in pixels: x0, x1, y0, y1
     #roi = None
     roi = [500, 1000, 500, 1000]
 
@@ -111,10 +112,12 @@ def main():
 
     plt.clf()
     dimshow(tim.getImage(), **tim.ima)
+    plt.title('Image')
     plt.savefig('1.png')
 
     plt.clf()
     dimshow(mod, **tim.ima)
+    plt.title('Model')
     plt.savefig('2.png')
 
     
@@ -122,11 +125,14 @@ def main():
                                   [src.getPosition().dec for src in cat])
     ax = plt.axis()
     plt.plot(x, y, 'rx')
-    plt.savefig('3.png')
+    #plt.savefig('3.png')
     plt.axis(ax)
-    plt.savefig('4.png')
+    plt.title('Sources')
+    plt.savefig('3.png')
     
     bands = [im.band]
+    import runbrick
+    runbrick.photoobjdir = '.'
     scat,T = get_sdss_sources(bands, targetwcs, local=False)
     print 'Got', len(scat), 'SDSS sources in bounds'
     
@@ -136,7 +142,8 @@ def main():
 
     plt.clf()
     dimshow(smod, **tim.ima)
-    plt.savefig('5.png')
+    plt.title('SDSS model')
+    plt.savefig('4.png')
 
     
 
