@@ -110,12 +110,13 @@ def set_globals():
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
-def get_sdss_sources(bands, targetwcs):
+def get_sdss_sources(bands, targetwcs, local=True):
     # FIXME?
     margin = 0.
 
     sdss = DR9(basedir=photoobjdir)
-    sdss.useLocalTree()
+    if local:
+        sdss.useLocalTree()
 
     cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
             'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',

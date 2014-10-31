@@ -74,7 +74,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         '''
         Returns a PSF model at the given pixel position (x, y)
         '''
-        print 'VaryingGaussianPSF: at', x,y
+        #print 'VaryingGaussianPSF: at', x,y
         params = self.psfParamsAt(x, y)
         return self.psfclass(*params)
 
@@ -368,44 +368,6 @@ def typestring(t):
     t = repr(t).replace("<class '", '').replace("'>", "")
     return t
         
-
-# class CachingPsfEx(): #ParamsWrapper):
-#     def __init__(self, psfex, rounding=100, cachesize=100):
-#         from tractor.cache import Cache
-#         self.rounding = rounding
-#         self.cache = Cache(maxsize=100)
-#         self.psfex = psfex
-#         
-#     # For pickling
-#     def __getstate__(self):
-#         self.cache.clear()
-#         return self.__dict__
-# 
-#     def psfAt(self, x, y):
-#         # Center of rounding cell:
-#         cx = int(x / self.rounding) * self.rounding + self.rounding/2
-#         cy = int(y / self.rounding) * self.rounding + self.rounding/2
-#         key = (cx,cy)
-#         mog = self.cache.get(key, None)
-#         if mog is not None:
-#             return mog
-#         mog = self.psfex.psfAt(cx, cy)
-#         print 'CachingPsf: getting PSF at', cx,cy, '->', mog
-#         self.cache.put(key, mog)
-#         return mog
-# 
-#     def getMixtureOfGaussians(self, px=None, py=None):
-#         if px is None:
-#             px = 0.
-#         if py is None:
-#             py = 0.
-#         psf = self.psfAt(px, py)
-#         return psf.getMixtureOfGaussians()
-# 
-#     #def __getattr__(self, k):
-#     #    return getattr(self.psfex, k)
-#
-    
 class CachingPsfEx(PsfEx):
     @staticmethod
     def fromPsfEx(psfex, **kwargs):
@@ -443,7 +405,7 @@ class CachingPsfEx(PsfEx):
         if mog is not None:
             return mog
         mog = super(CachingPsfEx, self).psfAt(cx, cy)
-        print 'CachingPsf: getting PSF at', cx,cy, '->', mog
+        #print 'CachingPsf: getting PSF at', cx,cy, '->', mog
         self.cache.put(key, mog)
         return mog
     

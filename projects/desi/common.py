@@ -5,13 +5,14 @@ import numpy as np
 
 import fitsio
 
-from astrometry.util.fits import fits_table
+from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode
 
-from tractor.basics import ConstantSky
-from tractor.engine import get_class_from_name
+from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
+from tractor.engine import get_class_from_name, Image
+from tractor.psfex import PsfEx
 
 tempdir = os.environ['TMPDIR']
 decals_dir = os.environ.get('DECALS_DIR')
@@ -43,6 +44,7 @@ def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
     I = decals.bricks_touching_radec_box(bricks, ralo, rahi, declo, dechi)
     print len(I), 'bricks touch RA,Dec box'
     TT = []
+    hdr = None
     for i in I:
         brick = bricks[i]
         fn = catpattern % brick.brickid
@@ -50,16 +52,19 @@ def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
         if not os.path.exists(fn):
             print 'Warning: catalog does not exist:', fn
             continue
-        T = fits_table(fn)
+        T = fits_table(fn, header=True)
         if T is None or len(T) == 0:
             print 'Warning: empty catalog', fn
             continue
-        T.cut((T.ra  >= brick.ra1 ) * (T.ra  < brick.ra2 ) *
-              (T.dec >= brick.dec1) * (T.dec < brick.dec2))
+        T.cut((T.ra  >= ralo ) * (T.ra  <= rahi) *
+              (T.dec >= declo) * (T.dec <= dechi))
         TT.append(T)
     if len(TT) == 0:
         return None
-    return merge_tables(TT)
+    T = merge_tables(TT)
+    # arbitrarily keep the first header
+    T._header = TT[0]._header
+    return T
     
 def ccd_map_image(valmap, empty=0.):
     '''
@@ -307,8 +312,9 @@ class DecamImage(object):
         '''
         band = self.band
         imh,imw = self.get_image_shape()
+        wcs = self.read_wcs()
+        x0,y0 = 0,0
         if slc is None and radecpoly is not None:
-            wcs = self.read_wcs()
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
             ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
             tpoly = zip(tx,ty)
@@ -343,6 +349,7 @@ class DecamImage(object):
 
         # header 'FWHM' is in pixels
         psf_fwhm = imghdr['FWHM']
+        psf_sigma = psf_fwhm / 2.35
         primhdr = self.read_image_primary_header()
 
         magzp = decals.get_zeropoint_for(self)
@@ -369,6 +376,7 @@ class DecamImage(object):
         twcs = ConstantFitsWcs(wcs)
         if x0 or y0:
             twcs.setX0Y0(x0,y0)
+
 
         # read fit PsfEx model -- with ellipse representation
         psfex = PsfEx.fromFits(self.psffitellfn)

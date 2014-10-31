@@ -171,8 +171,9 @@ class EllipseESoft(EllipseE):
         return dict(logre=0, ee1=1, ee2=2)
 
     @staticmethod
-    def fromEllipseE(ell):
+    def fromEllipseE(ell, maxe=0.999999):
         e = ell.e
+        e = min(e, maxe)
         esoft = -np.log(1. - e)
         return EllipseESoft(np.log(ell.re), ell.e1/e*esoft, ell.e2/e*esoft)
 
