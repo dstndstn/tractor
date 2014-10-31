@@ -20,8 +20,7 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
-                                decals, bricks,
-                                catpattern):
+                                decals, catpattern, bricks=None):
     '''
     Merges multiple Tractor brick catalogs to cover an RA,Dec
     bounding-box.
@@ -39,6 +38,8 @@ def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
     assert(ralo < rahi)
     assert(declo < dechi)
 
+    if bricks is None:
+        bricks = decals.get_bricks()
     I = decals.bricks_touching_radec_box(bricks, ralo, rahi, declo, dechi)
     print len(I), 'bricks touch RA,Dec box'
     TT = []
@@ -214,6 +215,14 @@ class Decals(object):
         T.extname = np.array([s.strip() for s in T.extname])
         return T
 
+    def find_ccds(self, expnum=None, extname=None):
+        T = self.get_ccds()
+        if expnum is not None:
+            T.cut(T.expnum == expnum)
+        if extname is not None:
+            T.cut(T.extname == extname)
+        return T
+    
     def get_zeropoint_for(self, im):
         if self.ZP is None:
             zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
@@ -292,6 +301,97 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
+    def get_tractor_image(self, decals, slc=None, radecpoly=None):
+        '''
+        slc: y,x slices
+        '''
+        band = self.band
+        imh,imw = self.get_image_shape()
+        if slc is None and radecpoly is not None:
+            wcs = self.read_wcs()
+            imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
+            ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
+            tpoly = zip(tx,ty)
+            clip = clip_polygon(imgpoly, tpoly)
+            clip = np.array(clip)
+            if len(clip) == 0:
+                return None
+            x0,y0 = np.floor(clip.min(axis=0)).astype(int)
+            x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
+            slc = slice(y0,y1+1), slice(x0,x1+1)
+
+            if y1 - y0 < 5 or x1 - x0 < 5:
+                print 'Skipping tiny subimage'
+                return None
+        if slc is not None:
+            sy,sx = slc
+            y0,y1 = sy.start, sy.stop
+            x0,x1 = sx.start, sx.stop
+        
+        print 'Reading image from', self.imgfn, 'HDU', self.hdu
+        img,imghdr = self.read_image(header=True, slice=slc)
+        print 'Reading invvar from', self.wtfn, 'HDU', self.hdu
+        invvar = self.read_invvar(slice=slc, clip=True)
+
+        print 'Invvar range:', invvar.min(), invvar.max()
+        if np.all(invvar == 0.):
+            print 'Skipping zero-invvar image'
+            return None
+        assert(np.all(np.isfinite(img)))
+        assert(np.all(np.isfinite(invvar)))
+        assert(not(np.all(invvar == 0.)))
+
+        # header 'FWHM' is in pixels
+        psf_fwhm = imghdr['FWHM']
+        primhdr = self.read_image_primary_header()
+
+        magzp = decals.get_zeropoint_for(self)
+        print 'magzp', magzp
+        zpscale = NanoMaggies.zeropointToScale(magzp)
+        print 'zpscale', zpscale
+
+        sky = self.read_sky_model()
+        midsky = sky.getConstant()
+        img -= midsky
+        sky.subtract(midsky)
+
+        # Scale images to Nanomaggies
+        img /= zpscale
+        invvar *= zpscale**2
+        orig_zpscale = zpscale
+        zpscale = 1.
+        assert(np.sum(invvar > 0) > 0)
+        sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
+        assert(np.all(np.isfinite(img)))
+        assert(np.all(np.isfinite(invvar)))
+        assert(np.isfinite(sig1))
+
+        twcs = ConstantFitsWcs(wcs)
+        if x0 or y0:
+            twcs.setX0Y0(x0,y0)
+
+        # read fit PsfEx model -- with ellipse representation
+        psfex = PsfEx.fromFits(self.psffitellfn)
+        print 'Read', psfex
+        tim = Image(img, invvar=invvar, wcs=twcs, psf=psfex,
+                    photocal=LinearPhotoCal(zpscale, band=band),
+                    sky=sky, name=self.name + ' ' + band)
+        assert(np.all(np.isfinite(tim.getInvError())))
+        tim.zr = [-3. * sig1, 10. * sig1]
+        tim.midsky = midsky
+        tim.sig1 = sig1
+        tim.band = band
+        tim.psf_fwhm = psf_fwhm
+        tim.psf_sigma = psf_sigma
+        tim.sip_wcs = wcs
+        tim.x0,tim.y0 = int(x0),int(y0)
+        tim.psfex = psfex
+        tim.imobj = self
+        mn,mx = tim.zr
+        tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
+                       vmin=mn, vmax=mx)
+        return tim
+    
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
@@ -316,8 +416,12 @@ class DecamImage(object):
     def read_image(self, **kwargs):
         return self._read_fits(self.imgfn, self.hdu, **kwargs)
 
-    def get_image_info(self, **kwargs):
+    def get_image_info(self):
         return fitsio.FITS(self.imgfn)[self.hdu].get_info()
+
+    def get_image_shape(self):
+        ''' Returns image H,W '''
+        return self.get_image_info()['dims']
     
     def read_image_primary_header(self, **kwargs):
         return fitsio.read_header(self.imgfn)

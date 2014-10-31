@@ -202,8 +202,10 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
     decalsv = decals.decals_dir
     hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='TRACTORV', value=version, comment='Tractor git version'))
-    hdr.add_record(dict(name='DECALSV', value=decalsv, comment='DECaLS version'))
+    hdr.add_record(dict(name='TRACTORV', value=version,
+                        comment='Tractor git version'))
+    hdr.add_record(dict(name='DECALSV', value=decalsv,
+                        comment='DECaLS version'))
     version_header = hdr
 
     B = decals.get_bricks()
@@ -274,103 +276,9 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         print
         ttim = Time()
         print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-        band = im.band
-        wcs = im.read_wcs()
-        imh,imw = wcs.imageh,wcs.imagew
-        imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
-        ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
-        tpoly = zip(tx,ty)
-        clip = clip_polygon(imgpoly, tpoly)
-        clip = np.array(clip)
-        #print 'Clip', clip
-        if len(clip) == 0:
+        tim = im.get_tractor_image(decals, radecpoly=targetrd)
+        if tim is None:
             continue
-        x0,y0 = np.floor(clip.min(axis=0)).astype(int)
-        x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
-        slc = slice(y0,y1+1), slice(x0,x1+1)
-
-        ## FIXME -- it seems I got lucky and the cross product is
-        ## negative == clockwise, as required by clip_polygon. One
-        ## could check this and reverse the polygon vertex order.
-        # dx0,dy0 = tx[1]-tx[0], ty[1]-ty[0]
-        # dx1,dy1 = tx[2]-tx[1], ty[2]-ty[1]
-        # cross = dx0*dy1 - dx1*dy0
-        # print 'Cross:', cross
-
-        if y1 - y0 < 5 or x1 - x0 < 5:
-            print 'Skipping tiny subimage'
-            continue
-
-        print 'Image slice: x [%i,%i], y [%i,%i]' % (x0,x1, y0,y1)
-        print 'Reading image from', im.imgfn, 'HDU', im.hdu
-        img,imghdr = im.read_image(header=True, slice=slc)
-        print 'Reading invvar from', im.wtfn, 'HDU', im.hdu
-        invvar = im.read_invvar(slice=slc, clip=True)
-
-        print 'Invvar range:', invvar.min(), invvar.max()
-        if np.all(invvar == 0.):
-            print 'Skipping zero-invvar image'
-            continue
-        assert(np.all(np.isfinite(img)))
-        assert(np.all(np.isfinite(invvar)))
-        assert(not(np.all(invvar == 0.)))
-
-        # header 'FWHM' is in pixels
-        psf_fwhm = imghdr['FWHM']
-        primhdr = im.read_image_primary_header()
-
-        magzp = decals.get_zeropoint_for(im)
-        print 'magzp', magzp
-        zpscale = NanoMaggies.zeropointToScale(magzp)
-        print 'zpscale', zpscale
-
-        sky = im.read_sky_model()
-        midsky = sky.getConstant()
-        img -= midsky
-        sky.subtract(midsky)
-
-        # Scale images to Nanomaggies
-        img /= zpscale
-        invvar *= zpscale**2
-        orig_zpscale = zpscale
-        zpscale = 1.
-        assert(np.sum(invvar > 0) > 0)
-        sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
-        assert(np.all(np.isfinite(img)))
-        assert(np.all(np.isfinite(invvar)))
-        assert(np.isfinite(sig1))
-
-        twcs = ConstantFitsWcs(wcs)
-        if x0 or y0:
-            twcs.setX0Y0(x0,y0)
-
-        info = im.get_image_info()
-        fullh,fullw = info['dims']
-        # read fit PsfEx model -- with ellipse representation
-        psfex = PsfEx.fromFits(im.psffitellfn)
-        print 'Read', psfex
-
-        # HACK -- highly approximate PSF here!
-        psf_sigma = psf_fwhm / 2.35
-        psf = NCircularGaussianPSF([psf_sigma],[1.])
-
-        tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
-                    photocal=LinearPhotoCal(zpscale, band=band),
-                    sky=sky, name=im.name + ' ' + band)
-        assert(np.all(np.isfinite(tim.getInvError())))
-        tim.zr = [-3. * sig1, 10. * sig1]
-        tim.midsky = midsky
-        tim.sig1 = sig1
-        tim.band = band
-        tim.psf_fwhm = psf_fwhm
-        tim.psf_sigma = psf_sigma
-        tim.sip_wcs = wcs
-        tim.x0,tim.y0 = int(x0),int(y0)
-        tim.psfex = psfex
-        tim.imobj = im
-        mn,mx = tim.zr
-        tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
-                       vmin=mn, vmax=mx)
         tims.append(tim)
         print 'Reading tim:', Time()-ttim
 
