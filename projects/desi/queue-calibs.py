@@ -35,13 +35,59 @@ if __name__ == '__main__':
 
     #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
 
+    # 535 bricks, ~7000 CCDs
+    rlo,rhi = 240,245
+    dlo,dhi =   5, 12
+    
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
     # 240 bricks, ~3000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
     # 535 bricks, ~7000 CCDs
-    B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
+    #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
+    B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
+
+    bricksize = 0.25
+    # how many bricks wide?
+    bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
+    # how big are the postage stamps?
+    stampsize = 100
+    stampspace = 100
+
+    html = ('<html><body>' +
+            '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
+
+    for b in B:
+        pngfn = 'brick-%06i-00.png' % b.brickid
+        stampfn = 'brick-%06i-00-stamp.jpg' % b.brickid
+        if not os.path.exists(stampfn) and os.path.exists(pngfn):
+            cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
+            print cmd
+            os.system(cmd)
+        if not os.path.exists(stampfn):
+            continue
+
+        jpgfn = 'brick-%06i-00.jpg' % b.brickid
+        if not os.path.exists(jpgfn):
+            cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
+            print cmd
+            os.system(cmd)
+
+        bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
+        #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
+        left   = int(stampspace * (rhi - b.ra1) / bricksize)
+        html += ('<a href="%s"><img src="%s" style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
+                 (jpgfn, stampfn, bottom, left, stampsize, stampsize))
+    html += ('</div>' + 
+            '</body></html>')
+
+    f = open('bricks.html', 'w')
+    f.write(html)
+    f.close()
+
+    sys.exit(0)
+
 
     T = D.get_ccds()
 
