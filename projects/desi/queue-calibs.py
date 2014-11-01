@@ -59,7 +59,7 @@ if __name__ == '__main__':
             '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
 
     for b in B:
-        pngfn = 'brick-%06i-00.png' % b.brickid
+        pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
         stampfn = 'brick-%06i-00-stamp.jpg' % b.brickid
         if not os.path.exists(stampfn) and os.path.exists(pngfn):
             cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
@@ -74,11 +74,21 @@ if __name__ == '__main__':
             print cmd
             os.system(cmd)
 
+        modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+        modstampfn = 'brick-%06i-02-stamp.jpg' % b.brickid
+        if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
+            cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
+            print cmd
+            os.system(cmd)
+
+
         bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
         #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
         left   = int(stampspace * (rhi - b.ra1) / bricksize)
-        html += ('<a href="%s"><img src="%s" style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
-                 (jpgfn, stampfn, bottom, left, stampsize, stampsize))
+        html += ('<a href="%s"><img src="%s" ' % (jpgfn, stampfn) +
+                 "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
+                 'style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
+                 (bottom, left, stampsize, stampsize))
     html += ('</div>' + 
             '</body></html>')
 

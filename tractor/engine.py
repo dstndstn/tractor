@@ -847,6 +847,9 @@ class Tractor(MultiParams):
         fluxes = np.zeros(len(usedParamMap))
         print 'Ceres forced phot:'
         print len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes)))
+        if len(blocks) == 0 or len(fluxes) == 0:
+            print 'Nothing to do!'
+            return
         # init fluxes passed to ceres
         p0 = self.getParams()
         for i,k in usedParamMap.items():
