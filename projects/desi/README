@@ -24,6 +24,8 @@ How various files are generated:
 - zeropoints.fits: from Arjun's FITS tables of zeropoints:
 
 python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
+    
+python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/global/homes/a/arjundey/ZeroPoint/ZeroPoint_*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
 
 
 - decals-ccds.fits:
