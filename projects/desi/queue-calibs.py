@@ -6,10 +6,11 @@ from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
 '''
 python projects/desi/queue-calibs.py  | qdo load cal -
-qdo launch cal 1 --pbsopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial"
+qdo launch cal 1 --batchopts "-A cosmo -t 1-50" --walltime=24:00:00 --batchqueue serial --script projects/desi/run-calib.py
+#qdo launch cal 1 --batchopts "-A cosmo -t 1-10" --walltime=24:00:00 --batchqueue serial
 
 python projects/desi/queue-calibs.py  | qdo load bricks -
-qdo launch bricks 1 --pbsopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial -o pipebrick-logs -j oe -l pvmem=6GB" \
+qdo launch bricks 1 --batchopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial -o pipebrick-logs -j oe -l pvmem=6GB" \
     --script projects/desi/pipebrick.sh
 '''
 
@@ -48,55 +49,56 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
 
-    bricksize = 0.25
-    # how many bricks wide?
-    bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
-    # how big are the postage stamps?
-    stampsize = 100
-    stampspace = 100
-
-    html = ('<html><body>' +
-            '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
-
-    for b in B:
-        pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
-        stampfn = 'brick-%06i-00-stamp.jpg' % b.brickid
-        if not os.path.exists(stampfn) and os.path.exists(pngfn):
-            cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
-            print cmd
-            os.system(cmd)
-        if not os.path.exists(stampfn):
-            continue
-
-        jpgfn = 'brick-%06i-00.jpg' % b.brickid
-        if not os.path.exists(jpgfn):
-            cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
-            print cmd
-            os.system(cmd)
-
-        modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-        modstampfn = 'brick-%06i-02-stamp.jpg' % b.brickid
-        if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
-            cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
-            print cmd
-            os.system(cmd)
-
-
-        bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
-        #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
-        left   = int(stampspace * (rhi - b.ra1) / bricksize)
-        html += ('<a href="%s"><img src="%s" ' % (jpgfn, stampfn) +
-                 "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
-                 'style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
-                 (bottom, left, stampsize, stampsize))
-    html += ('</div>' + 
-            '</body></html>')
-
-    f = open('bricks.html', 'w')
-    f.write(html)
-    f.close()
-
-    sys.exit(0)
+    if False:
+        bricksize = 0.25
+        # how many bricks wide?
+        bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
+        # how big are the postage stamps?
+        stampsize = 100
+        stampspace = 100
+    
+        html = ('<html><body>' +
+                '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
+    
+        for b in B:
+            pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
+            stampfn = 'brick-%06i-00-stamp.jpg' % b.brickid
+            if not os.path.exists(stampfn) and os.path.exists(pngfn):
+                cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
+                print cmd
+                os.system(cmd)
+            if not os.path.exists(stampfn):
+                continue
+    
+            jpgfn = 'brick-%06i-00.jpg' % b.brickid
+            if not os.path.exists(jpgfn):
+                cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
+                print cmd
+                os.system(cmd)
+    
+            modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+            modstampfn = 'brick-%06i-02-stamp.jpg' % b.brickid
+            if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
+                cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
+                print cmd
+                os.system(cmd)
+    
+    
+            bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
+            #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
+            left   = int(stampspace * (rhi - b.ra1) / bricksize)
+            html += ('<a href="%s"><img src="%s" ' % (jpgfn, stampfn) +
+                     "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
+                     'style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
+                     (bottom, left, stampsize, stampsize))
+        html += ('</div>' + 
+                '</body></html>')
+    
+        f = open('bricks.html', 'w')
+        f.write(html)
+        f.close()
+    
+        sys.exit(0)
 
 
     T = D.get_ccds()
@@ -122,14 +124,15 @@ if __name__ == '__main__':
             continue
 
         # Ok
-        print b.brickid
+        #print b.brickid
 
-    sys.exit(0)
+    #sys.exit(0)
 
     allI = set()
     for b in B:
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
+        print >> sys.stderr, 'Brick', b, ':', len(I), 'CCDs'
         allI.update(I)
     #print 'Total of', len(allI), 'CCDs touch'
     #T.cut(np.array(list(allI)))
@@ -137,7 +140,8 @@ if __name__ == '__main__':
     print >>sys.stderr, len(B), 'bricks,', len(allI), 'CCDs'
 
     for i in list(allI):
-        print 'python projects/desi/run-calib.py %i' % i
+        #print 'python projects/desi/run-calib.py %i' % i
+        print i
 
     sys.exit(0)
 
