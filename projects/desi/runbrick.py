@@ -9,6 +9,7 @@ import sys
 from glob import glob
 import tempfile
 import os
+import time
 
 import fitsio
 
@@ -35,7 +36,39 @@ from common import *
 
 mp = None
 
+nocache = True
+
 photoobjdir = 'photoObjs-new'
+
+def runbrick_global_init():
+    if nocache:
+        disable_galaxy_cache()
+
+def create_tractor(tims, srcs):
+    t = Tractor(tims, src)
+    if nocache:
+        t.disable_cache()
+    return t
+
+# didn't I write mp to avoid this foolishness in the first place?
+def _map(f, args):
+    if mp is not None:
+        return mp.map(f, args, chunksize=1)
+    else:
+        return map(f, args)
+
+class iterwrapper(object):
+    def __init__(self, y, n):
+        self.n = n
+        self.y = y
+    def __str__(self):
+        return 'iterwrapper: n=%i; ' % self.n + self.y
+    def __iter__(self):
+        return self
+    def next(self):
+        return self.y.next()
+    def __len__(self):
+        return self.n
 
 def _print_struc(X):
     if X is None:
@@ -148,12 +181,8 @@ def get_sdss_sources(bands, targetwcs, local=True):
 def tim_get_resamp(tim, targetwcs):
     if hasattr(tim, 'resamp'):
         return tim.resamp
-    wcs = tim.sip_wcs
-    subh,subw = tim.shape
-    subwcs = wcs.get_subimage(tim.x0, tim.y0, subw, subh)
-    tim.subwcs = subwcs
     try:
-        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, subwcs, [], 2)
+        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, tim.subwcs, [], 2)
     except OverlapError:
         print 'No overlap'
         return None
@@ -187,7 +216,11 @@ def compute_coadds(tims, bands, W, H, targetwcs):
         coimgs.append(coimg)
         cons  .append(con)
     return coimgs,cons
-    
+
+def _read_tim((im, decals, targetrd)):
+    print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
+    tim = im.get_tractor_image(decals, radecpoly=targetrd)
+    return tim
 
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False,
@@ -260,28 +293,16 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for im in ims:
         decals.get_zeropoint_for(im)
 
-    args = []
-    for im in ims:
-        if mp is not None:
-            args.append((im, dict(), brick.ra, brick.dec, pixscale))
-        else:
-            run_calibs((im, dict(), brick.ra, brick.dec, pixscale))
-    if mp is not None:
-        mp.map(run_calibs, args)
+    args = [(im, dict(), brick.ra, brick.dec, pixscale) for im in ims]
+    _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
     tlast = Time()
 
     # Read images, clip to ROI
-    tims = []
-    for im in ims:
-        print
-        ttim = Time()
-        print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-        tim = im.get_tractor_image(decals, radecpoly=targetrd)
-        if tim is None:
-            continue
-        tims.append(tim)
-        print 'Reading tim:', Time()-ttim
+    ttim = Time()
+    args = [(im, decals, targetrd) for im in ims]
+    tims = _map(_read_tim, args)
+    tims = [tim for tim in tims if tim is not None]
 
     print 'Read images:', Time()-tlast
     tlast = Time()
@@ -304,7 +325,23 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for k in keys:
         rtn[k] = locals()[k]
     return rtn
-    
+
+
+def _detmap((tim, targetwcs, H, W)):
+    R = tim_get_resamp(tim, targetwcs)
+    if R is None:
+        return None,None,None,None
+    ie = tim.getInvvar()
+    psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+    detim = tim.getImage().copy()
+    detim[ie == 0] = 0.
+    detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
+    detsig1 = tim.sig1 / psfnorm
+    subh,subw = tim.shape
+    detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
+    detiv[ie == 0] = 0.
+    (Yo,Xo,Yi,Xi) = R
+    return Yo, Xo, detim[Yi,Xi], detiv[Yi,Xi]
 
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
@@ -314,27 +351,17 @@ def stage_srcs(coimgs=None, cons=None,
                pipe=False,
                **kwargs):
 
+    print 'Rendering detection maps...'
     tlast = Time()
     # Render the detection maps
     detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
     detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    for tim in tims:
-        ie = tim.getInvvar()
-        psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-        detim = tim.getImage().copy()
-        detim[ie == 0] = 0.
-        detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
-        detsig1 = tim.sig1 / psfnorm
-        subh,subw = tim.shape
-        detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
-        detiv[ie == 0] = 0.
-        R = tim_get_resamp(tim, targetwcs)
-        if R is None:
+    for tim, (Yo,Xo,incmap,inciv) in zip(
+        tims, _map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
+        if Yo is None:
             continue
-        (Yo,Xo,Yi,Xi) = R
-        detmaps[tim.band][Yo,Xo] += detiv[Yi,Xi] * detim[Yi,Xi]
-        detivs [tim.band][Yo,Xo] += detiv[Yi,Xi]
-
+        detmaps[tim.band][Yo,Xo] += incmap*inciv
+        detivs [tim.band][Yo,Xo] += inciv
     print 'Detmaps:', Time()-tlast
     tlast = Time()
 
@@ -351,6 +378,14 @@ def stage_srcs(coimgs=None, cons=None,
         detsn = detmap * np.sqrt(detivs[band])
         hot = np.maximum(hot, detsn)
         detmaps[band] = detmap
+
+        if plots:
+            plt.clf()
+            dimshow(np.round(detsn), vmin=0, vmax=10, cmap='hot')
+            plt.title('Single-band detection filter S/N: %s' % band)
+            plt.colorbar()
+            ps.savefig()
+
 
     for sedname,sed in [('Flat', (1.,1.,1.)), ('Red', (2.5, 1.0, 0.4))]:
         sedmap = np.zeros((H,W), np.float32)
@@ -372,7 +407,8 @@ def stage_srcs(coimgs=None, cons=None,
         if plots:
             plt.clf()
             dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
-            plt.title('SED-matched detection filter: %s' % sedname)
+            plt.title('SED-matched detection filter S/N: %s' % sedname)
+            plt.colorbar()
             ps.savefig()
 
     del sedmap
@@ -403,7 +439,7 @@ def stage_srcs(coimgs=None, cons=None,
         ax = plt.axis()
         plt.plot(T.itx, T.ity, 'r+', **crossa)
         plt.axis(ax)
-        plt.title('Detection blobs')
+        plt.title('Detection blobs + SDSS sources')
         ps.savefig()
 
     blobs,nblobs = label(peaks)
@@ -432,8 +468,10 @@ def stage_srcs(coimgs=None, cons=None,
     peaks &= (hot > 5)
         
     # zero out the edges(?)
-    peaks[0 ,:] = peaks[:, 0] = 0
-    peaks[-1,:] = peaks[:,-1] = 0
+    peaks[0 ,:] = 0
+    peaks[:, 0] = 0
+    peaks[-1,:] = 0
+    peaks[:,-1] = 0
     peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[0:-2,1:-1])
     peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[2:  ,1:-1])
     peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[1:-1,0:-2])
@@ -442,7 +480,7 @@ def stage_srcs(coimgs=None, cons=None,
     # These are our peaks
     pki = np.flatnonzero(peaks)
     peaky,peakx = np.unravel_index(pki, peaks.shape)
-    print len(peaky), 'peaks'
+    print len(peaky), 'new peaks'
 
     print 'Peaks:', Time()-tlast
     tlast = Time()
@@ -457,15 +495,6 @@ def stage_srcs(coimgs=None, cons=None,
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
     
-    # Grow the 'hot' pixels by dilating by a few pixels
-    rr = 2.0
-    RR = int(np.ceil(rr))
-    S = 2*RR+1
-    struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
-             ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
-    hot2 = (hot > 5)
-    hot2 = binary_dilation(hot2, structure=struc)
-
     # Add sources for the new peaks we found
     # make their initial fluxes ~ 5-sigma
     fluxes = dict([(b,[]) for b in bands])
@@ -493,30 +522,49 @@ def stage_srcs(coimgs=None, cons=None,
 
     T = merge_tables([T, Tnew], columns='fillzero')
 
+
     # Segment, and record which sources fall into each blob
+    # Grow the 'hot' pixels by dilating by a few pixels
+    rr = 2.0
+    RR = int(np.ceil(rr))
+    S = 2*RR+1
+    struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
+             ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
+    hot2 = (hot > 5)
+    hot2 = binary_dilation(hot2, structure=struc)
+
     blobs,nblobs = label(hot2)
     print 'N detected blobs:', nblobs
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
-    blobsrcs = []
-    blobflux = []
     if pipe:
         # this is a crazy max-over-SEDs S/N map... but we only need it for ranking
         fluximg = hot
     else:
         fluximg = coimgs[1]
+    blobsrcs = []
+    blobflux = []
+    keepblobs = []
+    keepslices = []
     for blob in range(1, nblobs+1):
-        blobsrcs.append(np.flatnonzero(T.blob == blob))
+        Isrcs = np.flatnonzero(T.blob == blob)
+        if len(Isrcs) == 0:
+            continue
+        blobsrcs.append(Isrcs)
         bslc = blobslices[blob-1]
-        # print 'blobslice', bslc
-        # print 'fluximg:', fluximg.shape
-        # print 'fluximg[bslc]:', fluximg[bslc].shape
-        # print 'blobs:', blobs.shape
-        # print 'blobs[bslc]', blobs[bslc].shape
-        # print 'blob cut', (blobs[bslc] == blob).shape
-        # print 'flux cut', fluximg[bslc][blobs[bslc] == blob]
         blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
-        
+        keepblobs.append(blob)
+        keepslices.append(bslc)
+
+    # bloblist = [1, 7, 8, 13, ...] -- blob NUMBERs (not indices)
+    #  that actually contain sources
+    blobslices = keepslices
+    bloblist = keepblobs
+    nblobs = len(bloblist)
+    assert(nblobs == len(blobsrcs))
+    assert(nblobs == len(blobflux))
+    assert(nblobs == len(blobslices))
+    print 'Keeping', nblobs, 'blobs, with', len(T), 'sources'
     print 'Blobs:', Time()-tlast
     tlast = Time()
 
@@ -525,7 +573,7 @@ def stage_srcs(coimgs=None, cons=None,
     tractor.freezeParam('images')
     
     keys = ['T', 
-            'nblobs','blobsrcs','blobflux','blobslices', 'blobs',
+            'bloblist','blobsrcs','blobflux','blobslices', 'blobs',
             'tractor', 'cat', 'ps']
     if not pipe:
         keys.extend(['detmaps', 'detivs'])
@@ -535,9 +583,10 @@ def stage_srcs(coimgs=None, cons=None,
     return rtn
 
 
-def stage_fitblobs(T=None, sedsn=None, coimgs=None, cons=None,
+def stage_fitblobs(T=None, coimgs=None, cons=None,
                    detmaps=None, detivs=None,
-                   nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+                   bloblist=None, blobsrcs=None, blobflux=None,
+                   blobslices=None, blobs=None,
                    tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
@@ -601,14 +650,10 @@ def stage_fitblobs(T=None, sedsn=None, coimgs=None, cons=None,
 
     # Fit blobs in order of flux
     tfitall = Time()
-    iter = _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
+    iter = _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
                       orig_wcsxy0, cat, bands)
-    if mp is None:
-        R = map(_one_blob, iter)
-    else:
-        #args = [_blob_iter(blobflux, blobslices, blobsrcs, targetwcs, tims)]
-        R = mp.map(_bounce_one_blob, iter) #args)
-    #del args
+    iter = iterwrapper(iter, len(bloblist))
+    R = _map(_bounce_one_blob, iter)
 
     srcvariances = [[] for src in cat]
     for Isrcs,fitsrcs,srcvars in R:
@@ -648,12 +693,9 @@ def stage_fitblobs(T=None, sedsn=None, coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
                           
-def _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims, orig_wcsxy0,
-               cat, bands):
+def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
+               targetwcs, tims, orig_wcsxy0, cat, bands):
     for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-        ## HACK
-        #if blobnumber != 10:
-        #    continue
 
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
@@ -661,16 +703,16 @@ def _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims, orig_wcsx
             continue
 
         tblob = Time()
-        print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':', len(Isrcs), 'sources'
-        print 'Source indices:', Isrcs
-        print
-
         # blob bbox in target coords
         sy,sx = bslc
         by0,by1 = sy.start, sy.stop
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
+
+        print
+        print 'Blob', blobnumber, 'of', len(blobflux), ':',
+        print len(Isrcs), 'sources, size', blobw, 'x', blobh
+        print
 
         rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
 
@@ -697,8 +739,10 @@ def _blob_iter(blobflux, blobslices, blobsrcs, blobs, targetwcs, tims, orig_wcsx
                                tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
 
-        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh,
-               blobs[bslc], iblob, subtimargs,
+        blobmask = (blobs[bslc] == bloblist[iblob])
+        print 'Blob mask:', np.sum(blobmask), 'pixels'
+
+        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                [cat[i] for i in Isrcs], bands)
 
 def _bounce_one_blob(X):
@@ -711,14 +755,15 @@ def _bounce_one_blob(X):
         traceback.print_exc()
         raise
 
-def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
-               blobcut, iblob, subtimargs,
+def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                srcs, bands)):
 
     plots = False
 
     tlast = Time()
     alphas = [0.1, 0.3, 1.0]
+
+    bigblob = (blobw * blobh) > 100*100
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -736,7 +781,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
         if len(Yo) == 0:
             continue
         subie2 = np.zeros_like(subie)
-        I = np.flatnonzero(blobcut[Yi, Xi] == (iblob+1))
+        I = np.flatnonzero(blobmask[Yi,Xi])
         subie2[Yo[I],Xo[I]] = subie[Yo[I],Xo[I]]
         subie = subie2
 
@@ -770,6 +815,27 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
     subcat = Catalog(*srcs)
     subtr = Tractor(subtims, subcat)
     subtr.freezeParam('images')
+
+    # Try fitting fluxes first?
+    subcat.thawAllRecursive()
+    for src in srcs:
+        src.freezeAllBut('brightness')
+    for b in bands:
+        tband = Time()
+        for src in srcs:
+            src.getBrightness().freezeAllBut(b)
+        btims = []
+        for tim in subtims:
+            if tim.band != b:
+                continue
+            btims.append(tim)
+        btr = Tractor(btims, subcat)
+        btr.freezeParam('images')
+        print 'Optimizing band', b, ':', btr
+        btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
+                                       use_ceres=True, BW=8, BH=8, wantims=False)
+        print 'Band', b, 'took', Time()-tband
+    subcat.thawAllRecursive()
 
     if plots:
         plotmods = []
@@ -824,38 +890,68 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
             initial_models.append(mods)
         print 'Subtracting initial models:', Time()-tt
 
-        # For sources in decreasing order of brightness
+        # For sources, in decreasing order of brightness
         for numi,i in enumerate(Ibright):
             tsrc = Time()
             print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             src = subcat[i]
             print src
 
-            srctractor = Tractor(subtims, [src])
-            srctractor.freezeParams('images')
-            
             # Add this source's initial model back in.
             for tim,mods in zip(subtims, initial_models):
                 mod = mods[i]
                 if mod is not None:
                     mod.addTo(tim.getImage())
 
-            # Try fitting flux first?
-            src.freezeAllBut('brightness')
-            for b in bands:
-                tband = Time()
-                src.getBrightness().freezeAllBut(b)
-                print 'Optimizing band', b, ':', srctractor
-                srctractor.printThawedParams()
-                srctractor.optimize_forced_photometry(alphas=alphas, shared_params=False,
-                                                      use_ceres=True, BW=8, BH=8,
-                                                      wantims=False)
-                print 'Band', b, 'took', Time()-tband
-            src.getBrightness().thawAllParams()
-            src.thawAllParams()
+            if bigblob: # or True:
+                # Create super-local sub-sub-tims around this source
+                srctims = []
+                for tim in subtims:
+                    sz = 100
+                    h,w = tim.shape
+                    x,y = tim.getWcs().positionToPixel(src.getPosition())
+                    if x < -sz or y < -sz or x > w+sz or y > h+sz:
+                        continue
+                    x,y = int(np.round(x)), int(np.round(y))
+                    x0,y0 = max(x - sz, 0), max(y - sz, 0)
+                    x1,y1 = min(x + sz, w), min(y + sz, h)
+                    slc = slice(y0,y1), slice(x0, x1)
+                    wcs = tim.getWcs().copy()
+                    wx0,wy0 = wcs.getX0Y0()
+                    wcs.setX0Y0(wx0 + x0, wy0 + y0)
+                    srctim = Image(data=tim.getImage ()[slc],
+                                   inverr=tim.getInvError()[slc],
+                                   wcs=wcs, psf=ShiftedPsf(tim.getPsf(), x0, y0),
+                                   photocal=tim.getPhotoCal(),
+                                   sky=tim.getSky(), name=tim.name)
+                    srctim.band = tim.band
+                    srctim.sig1 = tim.sig1
+                    srctim.modelMinval = tim.modelMinval
+                    srctims.append(srctim)
+                    print 'Big blob: srctim', srctim.shape, 'vs sub', tim.shape
+            else:
+                srctims = subtims
+
+            srctractor = Tractor(srctims, [src])
+            srctractor.freezeParams('images')
+            
+            # # Try fitting flux first?
+            # src.freezeAllBut('brightness')
+            # for b in bands:
+            #     tband = Time()
+            #     src.getBrightness().freezeAllBut(b)
+            #     print 'Optimizing band', b, ':', srctractor
+            #     srctractor.printThawedParams()
+            #     srctractor.optimize_forced_photometry(alphas=alphas, shared_params=False,
+            #                                           use_ceres=True, BW=8, BH=8,
+            #                                           wantims=False)
+            #     print 'Band', b, 'took', Time()-tband
+            # src.getBrightness().thawAllParams()
+            # src.thawAllParams()
 
             print 'Optimizing:', srctractor
             srctractor.printThawedParams()
+            print 'Tim shapes:', [tim.shape for tim in srctims]
 
             if plots:
                 spmods,spnames = [],[]
@@ -866,10 +962,18 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
                 spallmods.append(subtr.getModelImages())
                 spallnames.append('Initial (all)')
 
+            max_cpu_per_source = 60.
+
+            cpu0 = time.clock()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print 'dlnp:', dlnp, 'src', src
+
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
+
                 if dlnp < 0.1:
                     break
 
@@ -903,9 +1007,16 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh,
             print 'Fitting source took', Time()-tsrc
             print src
 
+            gc = get_galaxy_cache()
+            print 'Galaxy cache:', gc
+            if gc is not None:
+                gc.printStats()
+                print 'GC total size:', gc.totalSize()
+                gc.clear()
+                print 'After clearing cache:', Time()-tsrc
+
         for tim,img in zip(subtims, orig_timages):
             tim.data = img
-
         del orig_timages
         del initial_models
         
@@ -1008,7 +1119,7 @@ Re-fit sources one at a time.
 '''
 def stage3(T=None, sedsn=None, coimgs=None, cons=None,
            detmaps=None, detivs=None,
-           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None, brickid=None,
            bands=None, ps=None, tims=None,
@@ -1137,7 +1248,7 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
 
 
 def stage4(T=None,
-           nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
            tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
            W=None,H=None,
            bands=None, ps=None, tims=None,
@@ -1292,7 +1403,7 @@ PSF plots
 def stage_psfplots(
     T=None, sedsn=None, coimgs=None, cons=None,
     detmaps=None, detivs=None,
-    nblobs=None,blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
+    blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
     tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None, brickid=None,
     bands=None, ps=None, tims=None,
@@ -1906,8 +2017,6 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc
         mp = multiproc(opt.threads)
-        # not picklable
-        #kwargs.update(mp=mp)
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 

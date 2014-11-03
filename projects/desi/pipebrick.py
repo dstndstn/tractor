@@ -30,17 +30,22 @@ if __name__ == '__main__':
         #runbrick.mp = multiproc(opt.threads)
 
         from utils.debugpool import DebugPool, DebugPoolMeas
-        dpool = DebugPool(opt.threads, taskqueuesize=2*opt.threads)
+        dpool = DebugPool(opt.threads, taskqueuesize=2*opt.threads,
+                          initializer=runbrick_global_init)
         mp = multiproc(pool=dpool)
         Time.add_measurement(DebugPoolMeas(dpool))
         runbrick.mp = mp
+    else:
+        runbrick_global_init()
 
     P = dict(W=3600, H=3600, brickid=brick, pipe=True)
 
     if opt.stamp:
         catalogfn = 'tractor-phot-b%06i-stamp.fits' % brick
         pspat = 'pipebrick-plots/brick-%06i-stamp' % brick
-        P.update(W=100, H=100)
+        SS = 200
+        #P.update(W=100, H=100)
+        P.update(W=SS, H=SS)
     else:
         catalogfn = 'pipebrick-cats/tractor-phot-b%06i.fits' % brick
         pspat = 'pipebrick-plots/brick-%06i' % brick

@@ -8,7 +8,7 @@ import fitsio
 from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
-from astrometry.util.miscutils import polygons_intersect, estimate_mode
+from astrometry.util.miscutils import polygons_intersect, estimate_mode, clip_polygon
 
 from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
 from tractor.engine import get_class_from_name, Image
@@ -316,7 +316,7 @@ class DecamImage(object):
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
-            ok,tx,ty = wcs.radec2pixelxy(targetrd[:-1,0], targetrd[:-1,1])
+            ok,tx,ty = wcs.radec2pixelxy(radecpoly[:-1,0], radecpoly[:-1,1])
             tpoly = zip(tx,ty)
             clip = clip_polygon(imgpoly, tpoly)
             clip = np.array(clip)
@@ -396,6 +396,8 @@ class DecamImage(object):
         tim.psfex = psfex
         tim.imobj = self
         mn,mx = tim.zr
+        subh,subw = tim.shape
+        tim.subwcs = tim.sip_wcs.get_subimage(tim.x0, tim.y0, subw, subh)
         tim.ima = dict(interpolation='nearest', origin='lower', cmap='gray',
                        vmin=mn, vmax=mx)
         return tim
