@@ -740,7 +740,7 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
 
         blobmask = (blobs[bslc] == bloblist[iblob])
-        print 'Blob mask:', np.sum(blobmask), 'pixels'
+        #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                [cat[i] for i in Isrcs], bands)
@@ -1662,6 +1662,10 @@ def stage_initplots(
     #wa = dict(clobber=True, header=hdr)
     #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
 
+
+def _get_mod((tim, srcs)):
+    tractor = Tractor([tim], srcs)
+    return tractor.getModelImage(0)
     
 '''
 Plots; single-image image,invvar,model FITS files
@@ -1682,8 +1686,10 @@ def stage_fitplots(
     writeModels = False
 
     if pipe:
+        t0 = Time()
         # Produce per-band coadds, for plots
         coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        print 'Coadds:', Time()-t0
 
     plt.figure(figsize=(10,10.5))
     #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
@@ -1724,17 +1730,21 @@ def stage_fitplots(
     wcsH = targetwcs.get_height()
     print 'Target WCS shape', wcsW,wcsH
 
+    t0 = Time()
+    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    print 'Getting model images:', Time()-t0
+
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
     for iband,band in enumerate(bands):
         coimg = coimgs[iband]
         comod  = np.zeros((wcsH,wcsW), np.float32)
         comod2 = np.zeros((wcsH,wcsW), np.float32)
         cochi2 = np.zeros((wcsH,wcsW), np.float32)
-        for itim,tim in enumerate(tims):
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
             if tim.band != band:
                 continue
 
-            mod = tractor.getModelImage(tim)
+            #mod = tractor.getModelImage(tim)
 
             if plots2:
                 plt.clf()
@@ -1817,10 +1827,10 @@ def stage_fitplots(
         if outdir is None:
             outdir = '.'
         wa = dict(clobber=True, header=hdr)
-        fitsio.write(os.path.join(outdir, 'image-coadd-%06i-%s.fits' % (brickid, band)), coimg,  **wa)
-        fitsio.write(os.path.join(outdir, 'model-coadd-%06i-%s.fits' % (brickid, band)), comod,  **wa)
-        fitsio.write(os.path.join(outdir, 'resid-coadd-%06i-%s.fits' % (brickid, band)), resid,  **wa)
-        fitsio.write(os.path.join(outdir, 'chi2-coadd-%06i-%s.fits'  % (brickid, band)), cochi2, **wa)
+        for name,img in [('image', coimg), ('model', comod), ('resid', resid), ('chi2', cochi2)]:
+            fn = os.path.join(outdir, '%s-coadd-%06i-%s.fits' % (name, brickid, band))
+            fitsio.write(fn, img,  **wa)
+            print 'Wrote', fn
 
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
