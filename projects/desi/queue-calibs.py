@@ -1,8 +1,11 @@
 import sys
 import os
 import numpy as np
+from collections import OrderedDict
+
 from astrometry.util.fits import fits_table
 from common import * #Decals, wcs_for_brick, ccds_touching_wcs
+
 
 '''
 python projects/desi/queue-calibs.py  | qdo load cal -
@@ -104,7 +107,8 @@ if __name__ == '__main__':
     T = D.get_ccds()
 
     for b in B:
-        fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b.brickid
+        #fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b.brickid
+        fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
         if os.path.exists(fn):
             print >> sys.stderr, 'exists:', fn
             continue
@@ -124,22 +128,30 @@ if __name__ == '__main__':
             continue
 
         # Ok
-        #print b.brickid
+        print b.brickid
 
-    #sys.exit(0)
+    sys.exit(0)
 
-    allI = set()
+    #allI = set()
+    allI = OrderedDict()
+    
     for b in B:
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
         print >> sys.stderr, 'Brick', b, ':', len(I), 'CCDs'
-        allI.update(I)
+        #allI.update(I)
+        allI.update([(i,True) for i in I])
     #print 'Total of', len(allI), 'CCDs touch'
     #T.cut(np.array(list(allI)))
 
     print >>sys.stderr, len(B), 'bricks,', len(allI), 'CCDs'
 
-    for i in list(allI):
+    #for i in list(allI):
+    for i in allI.keys():
+
+        im = DecamImage(T[i])
+        if not run_calibs(im, None, None, None, just_check=True):
+            continue
         #print 'python projects/desi/run-calib.py %i' % i
         print i
 

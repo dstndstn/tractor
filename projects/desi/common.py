@@ -474,9 +474,12 @@ class DecamImage(object):
     def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
                    morph=False, se2=False, psfexfit=True,
-                   funpack=True, fcopy=False, use_mask=True):
+                   funpack=True, fcopy=False, use_mask=True,
+                   just_check=False):
         '''
         pixscale: in arcsec/pixel
+
+        just_check: if True, returns True if calibs need to be run.
         '''
 
         print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
@@ -512,7 +515,11 @@ class DecamImage(object):
             run_funpack = True
         if sky and not os.path.exists(self.skyfn):
             run_sky = True
-        
+
+        if just_check:
+            return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
+                    or run_morph or run_sky)
+
         if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
             tmpmaskfn = create_temp(suffix='.fits')
