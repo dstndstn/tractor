@@ -907,7 +907,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 # Create super-local sub-sub-tims around this source
                 srctims = []
                 for tim in subtims:
-                    sz = 100
+                    sz = 50
                     h,w = tim.shape
                     x,y = tim.getWcs().positionToPixel(src.getPosition())
                     if x < -sz or y < -sz or x > w+sz or y > h+sz:
