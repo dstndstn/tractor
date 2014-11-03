@@ -10,6 +10,7 @@ from glob import glob
 import tempfile
 import os
 import time
+import datetime
 
 import fitsio
 
@@ -143,6 +144,52 @@ def set_globals():
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
+def treat_as_pointsource(T, bandnum, setObjcType=True):
+    b = bandnum
+    gal = (T.objc_type == 3)
+    dev = gal * (T.fracdev[:,b] >= 0.5)
+    exp = gal * (T.fracdev[:,b] <  0.5)
+    stars = (T.objc_type == 6)
+    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
+    print 'Total', len(T), 'sources'
+
+    thetasn = np.zeros(len(T))
+    T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
+    T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
+    # theta_experr nonzero: 1.28507e-05
+    # theta_deverr nonzero: 1.92913e-06
+    thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
+    thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
+
+    # aberrzero = np.zeros(len(T), bool)
+    # aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
+    # aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
+
+    maxtheta = np.zeros(len(T), bool)
+    maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
+    maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
+
+    # theta S/N > modelflux for dev, 10*modelflux for exp
+    bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
+
+    print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
+    print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
+    #print sum(aberrzero), 'have zero a/b error'
+    print sum(maxtheta), 'have the maximum theta'
+    print sum(bigthetasn), 'have large theta S/N vs modelflux'
+    
+    badgals = gal * reduce(np.logical_or,
+                           [thetasn < 3.,
+                            T.modelflux[:,b] > 1e4,
+                            #aberrzero,
+                            maxtheta,
+                            bigthetasn,
+                            ])
+    print 'Found', sum(badgals), 'bad galaxies'
+    if setObjcType:
+        T.objc_type[badgals] = 6
+    return badgals
+
 def get_sdss_sources(bands, targetwcs, local=True):
     # FIXME?
     margin = 0.
@@ -166,6 +213,11 @@ def get_sdss_sources(bands, targetwcs, local=True):
 
     # It can be string-valued
     objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
+
+    # Treat as pointsource...
+    sband = 'r'
+    bandnum = 'ugriz'.index(sband)
+    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
 
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss,
@@ -240,6 +292,8 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
+                        comment='runbrick.py run time'))
     version_header = hdr
 
     B = decals.get_bricks()
