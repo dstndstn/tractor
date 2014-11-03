@@ -7,9 +7,10 @@ module list 2>&1
 echo
 
 brick="$1"
-python -u projects/desi/pipebrick.py --threads 4 $brick > pipebrick-logs/$brick.log 2>&1
+python -u projects/desi/pipebrick.py --threads 8 $brick > pipebrick-logs/$brick.log 2>&1
 
 
+# qdo launch 1 --batchopts "-A cosmo -t 1-10" --walltime=1:00:00 --batchqueue regular --script projects/desi/pipebrick-threads.sh
 
 #  > qdo launch bricks 2 --mpack 4 --batchopts "-A cosmo -t 1-10 -q regular" --walltime=4:00:00 --script projects/desi/pipebrick.sh --verbose
 #  Cores per node: 8                                                                                                                         
