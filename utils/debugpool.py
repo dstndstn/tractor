@@ -183,12 +183,14 @@ def debug_worker(inqueue, outqueue, progressqueue,
     while maxtasks is None or (maxtasks and completed < maxtasks):
         #t0 = time.time()
         try:
+            print 'Worker pid', os.getpid(), 'getting task'
             task = get()
         except (EOFError, IOError):
             debug('worker got EOFError or IOError -- exiting')
+            print 'Worker pid', os.getpid(), 'got EOF/IOErr getting task'
             break
         except KeyboardInterrupt as e:
-            #print 'debug_worker caught KeyboardInterrupt during get()'
+            print 'debug_worker caught KeyboardInterrupt during get()'
             put((None, None, (None,(False,e))))
             raise SystemExit('ctrl-c')
             break
@@ -201,9 +203,10 @@ def debug_worker(inqueue, outqueue, progressqueue,
 
         if progressqueue is not None:
             try:
+                print 'Worker pid', os.getpid(), 'writing to progressqueue'
                 progressqueue.put((job, i, mypid))
             except (EOFError, IOError):
-                debug('worker got EOFError or IOError on progress queue -- exiting')
+                print 'worker got EOFError or IOError on progress queue -- exiting'
                 break
 
         t1 = CpuMeas()
@@ -310,25 +313,25 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
         i = -1
         #print 'handle_tasks: task sequence', taskseq
         for i, task in enumerate(taskseq):
-            #print 'handle_tasks: task', task
+            print 'handle_tasks: got task', i
             if thread._state:
                 debug('task handler found thread._state != RUN')
                 break
 
-            #print 'N queue:', nqueued, 'max', maxnqueued
+            print 'N queue:', nqueued, 'max', maxnqueued
             try:
-                #print 'Queueing new task'
+                print 'Queueing new task'
                 put(task)
                 nqueued += 1
             except IOError:
                 debug('could not put task on queue')
                 break
 
-            #print 'N queue:', nqueued, 'max', maxnqueued
+            print 'N queue:', nqueued, 'max', maxnqueued
             while maxnqueued and nqueued >= maxnqueued:
                 try:
                     (job,i,pid) = progressqueue.get()
-                    #print 'Job', job, 'element', i, 'pid', pid
+                    print 'Job', job, 'element', i, 'pid', pid, 'started'
                     nqueued -= 1
                 except IOError:
                     break
@@ -357,7 +360,18 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
         debug('task handler got IOError when sending sentinels')
 
     #print 'debug_handle_tasks finishing'
+    # 
 
+    # Empty the progressqueue to prevent blocking writing workers?
+    print 'task thread: emptying progressqueue'
+    try:
+        print 'task thread: reading from progressqueue.  nqueued=', nqueued
+        (job,i,pid) = progressqueue.get()
+        print 'Job', job, 'element', i, 'pid', pid, 'started'
+        nqueued -= 1
+    except IOError:
+        pass
+    print 'Task thread done.'
     
 
 from multiprocessing.synchronize import Lock
@@ -482,12 +496,12 @@ class DebugPool(mp.pool.Pool):
         async = self.map_async(func, iterable, chunksize)
         while True:
             try:
-                #print 'Waiting for async result...'
+                print 'Waiting for async result...'
                 res = async.get(1)
-                #print 'Got async result', res
+                print 'Got async result'
                 return res
             except multiprocessing.TimeoutError:
-                #print 'Timeout waiting for async result.'
+                print 'Timeout waiting for async result.'
                 continue
 
     def map_async(self, func, iterable, chunksize=None, callback=None):

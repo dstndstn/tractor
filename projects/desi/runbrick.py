@@ -45,6 +45,9 @@ def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
 
+    from tractor.ceres import ceres_opt
+    
+
 def create_tractor(tims, srcs):
     t = Tractor(tims, src)
     if nocache:
@@ -67,7 +70,14 @@ class iterwrapper(object):
     def __iter__(self):
         return self
     def next(self):
-        return self.y.next()
+        try:
+            return self.y.next()
+        except:
+            import traceback
+            print str(self), 'next()'
+            traceback.print_exc()
+            raise
+            
     def __len__(self):
         return self.n
 

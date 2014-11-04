@@ -52,7 +52,7 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
 
-    if False:
+    if True:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     
         for b in B:
             pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
-            stampfn = 'brick-%06i-00-stamp.jpg' % b.brickid
+            stampfn = 'jpegs/brick-%06i-00-stamp.jpg' % b.brickid
             if not os.path.exists(stampfn) and os.path.exists(pngfn):
                 cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
                 print cmd
@@ -73,14 +73,21 @@ if __name__ == '__main__':
             if not os.path.exists(stampfn):
                 continue
     
-            jpgfn = 'brick-%06i-00.jpg' % b.brickid
+            png2fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+            jpg2fn = 'jpegs/brick-%06i-02.jpg' % b.brickid
+            if not os.path.exists(jpg2fn):
+                cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
+                print cmd
+                os.system(cmd)
+
+            jpgfn = 'jpegs/brick-%06i-00.jpg' % b.brickid
             if not os.path.exists(jpgfn):
                 cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
                 print cmd
                 os.system(cmd)
-    
+
             modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-            modstampfn = 'brick-%06i-02-stamp.jpg' % b.brickid
+            modstampfn = 'jpegs/brick-%06i-02-stamp.jpg' % b.brickid
             if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
                 cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
                 print cmd

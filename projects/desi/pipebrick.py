@@ -26,14 +26,15 @@ if __name__ == '__main__':
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc
 
-        # ?? global
-        #runbrick.mp = multiproc(opt.threads)
+        if True:
+            mp = multiproc(opt.threads, init=runbrick_global_init, initargs=())
 
-        from utils.debugpool import DebugPool, DebugPoolMeas
-        dpool = DebugPool(opt.threads, taskqueuesize=2*opt.threads,
-                          initializer=runbrick_global_init)
-        mp = multiproc(pool=dpool)
-        Time.add_measurement(DebugPoolMeas(dpool))
+        else:
+            from utils.debugpool import DebugPool, DebugPoolMeas
+            dpool = DebugPool(opt.threads, taskqueuesize=2*opt.threads,
+                              initializer=runbrick_global_init)
+            mp = multiproc(pool=dpool)
+            Time.add_measurement(DebugPoolMeas(dpool))
         runbrick.mp = mp
     else:
         runbrick_global_init()
