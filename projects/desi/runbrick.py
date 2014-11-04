@@ -886,6 +886,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         btr = Tractor(btims, subcat)
         btr.freezeParam('images')
         print 'Optimizing band', b, ':', btr
+        print Time()-tband
         btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
                                        use_ceres=True, BW=8, BH=8, wantims=False)
         print 'Band', b, 'took', Time()-tband
@@ -1886,6 +1887,8 @@ def stage_fitplots(
             fitsio.write(fn, img,  **wa)
             print 'Wrote', fn
 
+    del cons
+
     plt.clf()
     dimshow(get_rgb(rgbmod, bands))
     plt.title('Model')
@@ -1915,6 +1918,11 @@ def stage_fitplots(
     dimshow(get_rgb(rgbmod2, bands, **arcsinha))
     plt.title('Model + Noise (stretched)')
     ps.savefig()
+
+    del coimgs
+    del rgbresids
+    del rgbmod
+    del rgbmod2
 
     plt.clf()
     g,r,z = rgbchisqs

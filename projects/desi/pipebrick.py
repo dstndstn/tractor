@@ -72,6 +72,10 @@ if __name__ == '__main__':
     print 'Stage writecat:', t3-t2b
 
     # Plots
+
+    print
+    print 'plots:', P.keys()
+    print
     
     ps = PlotSequence(pspat)
     P.update(ps=ps, outdir='pipebrick-plots')
