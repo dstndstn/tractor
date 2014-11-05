@@ -35,11 +35,11 @@ from tractor.sdss import get_tractor_sources_dr9
 
 from common import *
 
+## GLOBALS!  Oh my!
 mp = None
-
 nocache = True
-
 photoobjdir = 'photoObjs-new'
+useCeres = True
 
 def runbrick_global_init():
     if nocache:
@@ -66,7 +66,7 @@ class iterwrapper(object):
         self.n = n
         self.y = y
     def __str__(self):
-        return 'iterwrapper: n=%i; ' % self.n + self.y
+        return 'iterwrapper: n=%i; ' % self.n + str(self.y)
     def __iter__(self):
         return self
     def next(self):
@@ -716,6 +716,7 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     tfitall = Time()
     iter = _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
                       orig_wcsxy0, cat, bands)
+    # to allow debugpool to only queue tasks one at a time
     iter = iterwrapper(iter, len(bloblist))
     R = _map(_bounce_one_blob, iter)
 
@@ -764,6 +765,8 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
         bslc  = blobslices[iblob]
         Isrcs = blobsrcs  [iblob]
         if len(Isrcs) == 0:
+            # This shouldn't happen any more... and may break iterwrapper dealie
+            print 'Blob has no sources!'
             continue
 
         tblob = Time()
@@ -897,8 +900,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         btr.freezeParam('images')
         print 'Optimizing band', b, ':', btr
         print Time()-tband
-        btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
-                                       use_ceres=True, BW=8, BH=8, wantims=False)
+        if useCeres:
+            btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
+                                           use_ceres=True, BW=8, BH=8, wantims=False)
+        else:
+            try:
+                btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
+                                               wantims=False)
+            except:
+                import traceback
+                print 'Warning: Optimize_forced_photometry failed:'
+                traceback.print_exc()
+                # carry on
+            
         print 'Band', b, 'took', Time()-tband
     subcat.thawAllRecursive()
 

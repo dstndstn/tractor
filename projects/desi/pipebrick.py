@@ -10,6 +10,7 @@ import runbrick
 if __name__ == '__main__':
     parser = optparse.OptionParser(usage='%prog [options] brick-number')
     parser.add_option('--threads', type=int, help='Run multi-threaded')
+    parser.add_option('--no-ceres', action='store_true', help='Do not use Ceres')
     parser.add_option('--stamp', action='store_true', help='Run a tiny postage-stamp')
     opt,args = parser.parse_args()
 
@@ -38,6 +39,9 @@ if __name__ == '__main__':
         runbrick.mp = mp
     else:
         runbrick_global_init()
+
+    if opt.no_ceres:
+        runbrick.useCeres = False
 
     P = dict(W=3600, H=3600, brickid=brick, pipe=True)
 
