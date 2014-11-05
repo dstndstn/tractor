@@ -20,6 +20,14 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+def switch_to_soft_ellipses(cat):
+    for src in cat:
+        if isinstance(src, (DevGalaxy, ExpGalaxy)):
+            src.shape = EllipseESoft.fromEllipseE(src.shape)
+        elif isinstance(src, FixedCompositeGalaxy):
+            src.shapeDev = EllipseESoft.fromEllipseE(src.shapeDev)
+            src.shapeExp = EllipseESoft.fromEllipseE(src.shapeExp)
+
 def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
                                 decals, catpattern, bricks=None):
     '''

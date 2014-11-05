@@ -62,38 +62,19 @@ def main():
     print 'Got', len(cat), 'catalog objects'
 
     print 'Switching ellipse parameterizations'
-    # Switch ellipse parameterizations
+    switch_to_soft_ellipses(cat)
     keepcat = []
     for src in cat:
+        if not np.all(np.isfinite(src.getParams())):
+            print 'Src has infinite params:', src
+            continue
         if isinstance(src, FixedCompositeGalaxy):
             f = src.fracDev.getClippedValue()
             if f == 0.:
                 src = ExpGalaxy(src.pos, src.brightness, src.shapeExp)
             elif f == 1.:
                 src = DevGalaxy(src.pos, src.brightness, src.shapeDev)
-
-        if isinstance(src, (DevGalaxy, ExpGalaxy)):
-            newshape = EllipseESoft.fromEllipseE(src.shape)
-            if not np.all(np.isfinite(newshape.getParams())):
-                print 'Shape has infinite term: orig', src.shape, 'new', newshape
-                print 'src:', src
-                continue
-            src.shape = newshape
-            keepcat.append(src)
-        elif isinstance(src, FixedCompositeGalaxy):
-            newshape = EllipseESoft.fromEllipseE(src.shapeDev)
-            if not np.all(np.isfinite(newshape.getParams())):
-                print 'ShapeDev has infinite term: orig', src.shapeDev, 'new', newshape
-                print 'src:', src
-                continue
-            src.shapeDev = newshape
-            newshape = EllipseESoft.fromEllipseE(src.shapeExp)
-            if not np.all(np.isfinite(newshape.getParams())):
-                print 'ShapeExp has infinite term: orig', src.shapeExp, 'new', newshape
-                print 'src:', src
-                continue
-            src.shapeExp = newshape
-            keepcat.append(src)
+        keepcat.append(src)
     cat = keepcat
 
     slc = None
