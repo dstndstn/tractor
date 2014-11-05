@@ -94,20 +94,12 @@ def stage_plots(tims=None, cat=None, targetwcs=None, **kwargs):
         plt.imshow(mod, **tim.ima)
         ps.savefig()
 
-    # residtims = []
-    # mods0 = []
-    # for i,tim in enumerate(tims):
-    #     #mod = tractor.getModelImage(
-
+    # List of model patches for each source
     srcmods = dict([(src,[]) for src in cat])
-
     mods = []
     for itim,tim in enumerate(tims):
-        #timmods = []
-
         modimg = np.zeros(tim.getModelShape(), tractor.modtype)
         tim.getSky().addTo(modimg)
-
         for src in cat:
             patch = src.getModelPatch(tim)
             if patch is None:
@@ -123,85 +115,35 @@ def stage_plots(tims=None, cat=None, targetwcs=None, **kwargs):
             ph,pw = patch.shape
             if pw*ph == 0:
                 continue
-
             patch.addTo(modimg)
-
             srcmods[src].append((itim, patch))
         mods.append(modimg)
-
 
     keepcat = []
     for src in cat:
         print 'Setting source flux to zero:', src
-        lnp0 = tractor.getLogProb()
-        bright = src.getBrightness()
-        flux = bright.getParams()
-        bright.setParams(np.zeros(len(flux)))
-        lnp1 = tractor.getLogProb()
 
-        xlnp0 = 0.
-        for tim,mod in zip(tims, mods):
-            chi2 = np.sum(((tim.getImage() - mod) * tim.getInvError())**2)
-            xlnp0 += -0.5 * chi2
-        print 'xlnp0:', xlnp0
-        print ' lnp0:', lnp0
-
-        for itim,patch in srcmods[src]:
-            patch.addTo(mods[itim], scale=-1)
-            
-        xlnp1 = 0.
-        for tim,mod in zip(tims, mods):
-            chi2 = np.sum(((tim.getImage() - mod) * tim.getInvError())**2)
-            xlnp1 += -0.5 * chi2
-        print 'xlnp1:', xlnp1
-        print ' lnp1:', lnp1
-
-        print 'Delta-logprob:', lnp1 - lnp0
-        print '        xdlnp:', xlnp1 - xlnp0
-
-        # if xlnp1 - xlnp0 > 0:
-        #     print 'Removing source!'
-        # else:
-        #     # Put it back like it was
-        #     for itim,patch in srcmods[src]:
-        #         patch.addTo(mods[itim])
-
-
-        # Put it back like it was
-        for itim,patch in srcmods[src]:
-            patch.addTo(mods[itim])
-
+        # Try removing the source from the model;
+        # check chi-squared change in the patches.
         sdlnp = 0.
         for itim,patch in srcmods[src]:
             tim = tims[itim]
             mod = mods[itim]
             slc = patch.getSlice(tim)
-            #print 'Slice', slc
             simg = tim.getImage()[slc]
             sie  = tim.getInvError()[slc]
-            #print 'Img slice', simg.shape
-            #print 'sie', sie.shape
-            #print 'mod', mod[slc].shape
-            #print 'patch', patch.shape
             chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
             chisq1 = np.sum(((simg - (mod[slc] - patch.patch)) * sie)**2)
             sdlnp += -0.5 * (chisq1 - chisq0)
-
         print '        sdlnp:', sdlnp
 
-
-        if xlnp1 - xlnp0 > 0:
+        if sdlnp > 0:
             print 'Removing source!'
-            # Subtract it off again!
             for itim,patch in srcmods[src]:
                 patch.addTo(mods[itim], scale=-1)
-
-
-        if lnp1 - lnp0 > 0:
-            print 'Removing source!'
             continue
+
         keepcat.append(src)
-        bright.setParams(flux)
     cat = keepcat
 
     tractor = Tractor(tims, cat)
