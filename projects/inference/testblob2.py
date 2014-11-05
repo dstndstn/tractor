@@ -59,7 +59,7 @@ def main():
         run,camcol,field = 3836,2,258
         pofn = sdss.retrieve('photoObj', run, camcol, field)
         T = fits_table(pofn, columns=[
-            'objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
+            'parent', 'objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
             'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
             'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
             'resolve_status', 'nchild', 'flags', 'objc_flags',
@@ -67,15 +67,28 @@ def main():
         print len(T), 'objects'
         T.cut(T.objc_type == 3)
         print len(T), 'galaxies'
+        T.cut(T.nchild == 0)
+        print len(T), 'children'
         T.cut(np.argsort(-T.modelflux[:,2]))
+
+        # keep only one child in each blend family
+        parents = set()
+        keepi = []
+        for i in range(len(T)):
+            if T.parent[i] in parents:
+                continue
+            keepi.append(i)
+            parents.add(T.parent[i])
+        T.cut(np.array(keepi))
+        print len(T), 'unique blend families'
         T = T[:25]
         stars = [(0,0,ra,dec) for ra,dec in zip(T.ra, T.dec)]
 
     plots = True
     
-    if False:
+    if True:
         from astrometry.util.multiproc import *
-        mp = multiproc(1)
+        mp = multiproc(4)
         mp.map(_bounce_one_blob, stars)
 
     else:

@@ -21,6 +21,8 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 def switch_to_soft_ellipses(cat):
+    from tractor.galaxy import DevGalaxy, ExpGalaxy, FixedCompositeGalaxy
+    from tractor.ellipses import EllipseESoft
     for src in cat:
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
             src.shape = EllipseESoft.fromEllipseE(src.shape)
