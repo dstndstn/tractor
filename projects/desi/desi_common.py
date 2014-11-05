@@ -204,10 +204,12 @@ def get_tractor_fits_values(T, cat, pat):
 
 
 
-def read_fits_catalog(T, hdr):
+def read_fits_catalog(T, hdr=None):
     '''
     This is currently a weird hybrid of dynamic and hard-coded.
     '''
+    if hdr is None:
+        hdr = T._header
     rev_typemap = dict([(v,k) for k,v in fits_typemap.items()])
 
     bands = []

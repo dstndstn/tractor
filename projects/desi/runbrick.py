@@ -2129,7 +2129,6 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
 
-#W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,

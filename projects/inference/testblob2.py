@@ -11,8 +11,12 @@ from astrometry.util.plotutils import *
 from astrometry.util.resample import *
 from astrometry.sdss import *
 
+from astrometry.sdss import *
+
 from tractor import *
 from tractor.sdss import *
+
+tempdir = 'scratch'
 
 def _bounce_one_blob((teff,dteff,ra,dec)):
     try:
@@ -22,36 +26,56 @@ def _bounce_one_blob((teff,dteff,ra,dec)):
         import traceback
         traceback.print_exc()
         print
-    
+
 def main():
-    stars = [
-        # David's nearby pairs of F stars
-        (3900., 0., 118.37066, 52.527073),
-        (3705., 0., 130.17654, 52.750081),
-        # High stellar density
-        #(0., 0., 270.0, 0.003),
-        ]
-    # Dustin's stars
-    # (4472.001,	0.02514649,	246.47016,	19.066909),
-    # (5196.53,   0.02490235, 240.09403,  37.404078),
-    # (6179.05,   0.6324392,  310.47791,  57.523221),
-    # (6021.875, 0.7000019, 150.52443, -0.478836),
-    # (7757.096, 0.06507664, 305.11144, -12.957655),
-    # (8088.685, 0.2436366, 253.11475, 11.60716),
-    # (8395.096, 0.7563477, 188.34439, 63.442057),
-    # (9201.74,  178, 93.971719, 0.56302169),
-    # ]
+    if False:
+        stars = [
+            # David's nearby pairs of F stars
+            (3900., 0., 118.37066, 52.527073),
+            (3705., 0., 130.17654, 52.750081),
+            # High stellar density
+            #(0., 0., 270.0, 0.003),
+            ]
+        # Dustin's stars
+        # (4472.001,	0.02514649,	246.47016,	19.066909),
+        # (5196.53,   0.02490235, 240.09403,  37.404078),
+        # (6179.05,   0.6324392,  310.47791,  57.523221),
+        # (6021.875, 0.7000019, 150.52443, -0.478836),
+        # (7757.096, 0.06507664, 305.11144, -12.957655),
+        # (8088.685, 0.2436366, 253.11475, 11.60716),
+        # (8395.096, 0.7563477, 188.34439, 63.442057),
+        # (9201.74,  178, 93.971719, 0.56302169),
+        # ]
+    
+        T = fits_table('stars2.fits')
+        print 'Read stars:'
+        T.about()
+        stars.extend(zip(T.teff, T.teff_sigma, T.ra, T.dec))
+    else:
+        # This photoObj is unknown
+        sdss = DR9(basedir=tempdir)
+        sdss.useLocalTree()
+        # near M87 / Virgo cluster
+        run,camcol,field = 3836,2,258
+        pofn = sdss.retrieve('photoObj', run, camcol, field)
+        T = fits_table(pofn, columns=[
+            'objid', 'ra', 'dec', 'fracdev', 'objc_type', 'modelflux',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id'])
+        print len(T), 'objects'
+        T.cut(T.objc_type == 3)
+        print len(T), 'galaxies'
+        T.cut(np.argsort(-T.modelflux[:,2]))
+        T = T[:25]
+        stars = [(0,0,ra,dec) for ra,dec in zip(T.ra, T.dec)]
 
-    T = fits_table('stars2.fits')
-    print 'Read stars:'
-    T.about()
-    stars.extend(zip(T.teff, T.teff_sigma, T.ra, T.dec))
-
-    plots = False
+    plots = True
     
     if False:
         from astrometry.util.multiproc import *
-        mp = multiproc(2)
+        mp = multiproc(1)
         mp.map(_bounce_one_blob, stars)
 
     else:
@@ -61,8 +85,12 @@ def main():
         #           ]
         
         for teff, dteff, ra,dec in stars:
-            fns = oneblob(ra,dec, teff, dteff)
-                
+            try:
+                fns = oneblob(ra,dec, teff, dteff)
+            except:
+                import traceback
+                traceback.print_exc()
+                continue
             if plots:
                 stamp_pattern = 'stamp-%%s-%.4f-%.4f.fits' % (ra, dec)
                 bands = 'ugriz'
@@ -82,7 +110,8 @@ def main():
                         plt.title('RCF %i/%i/%i' % (hdr['RUN'], hdr['CAMCOL'], hdr['FIELD']))
                     plt.suptitle('%s band' % bands[j])
                     plt.savefig(fn.replace('.fits','.png'))
-
+                    F.close()
+                    del F
                     
                 
             
@@ -91,8 +120,8 @@ def oneblob(ra, dec, teff, dteff):
     outfns = []
     
     # Resample test blobs to a common pixel grid.
-    sdss = DR9()
-    sdss.saveUnzippedFiles('.')
+    sdss = DR9(basedir=tempdir)
+    sdss.saveUnzippedFiles(tempdir)
     
     pixscale = 0.396
     pixradius = 25
@@ -239,38 +268,38 @@ def oneblob(ra, dec, teff, dteff):
 
             # Convert PSF params also
             cd = tim.getWcs().cdAtPixel(tw/2, th/2)
-            print 'Tim CD matrix', cd
+            #print 'Tim CD matrix', cd
             targetcd = np.array(targetwcs.cd).copy().reshape((2,2))
-            print 'Target CD matrix:', targetcd
+            #print 'Target CD matrix:', targetcd
 
             trans = np.dot(np.linalg.inv(targetcd), cd)
-            print 'Transformation matrix:', trans
+            #print 'Transformation matrix:', trans
 
             psf = tim.getPsf()
-            print 'PSF', psf
+            #print 'PSF', psf
             K = psf.mog.K
             newmean = np.zeros_like(psf.mog.mean)
-            print 'newmean', newmean
+            #print 'newmean', newmean
             newvar = np.zeros_like(psf.mog.var)
-            print 'newvar', newvar
+            #print 'newvar', newvar
 
             for i,(dx,dy) in enumerate(psf.mog.mean):
-                print 'dx,dy', dx,dy
+                #print 'dx,dy', dx,dy
                 x,y = tim.getWcs().positionToPixel(RaDecPos(ra, dec))
                 r,d = tim.getWcs().pixelToPosition(x + dx, y + dy)
-                print 'ra,dec', r,d
+                #print 'ra,dec', r,d
                 ok,x0,y0 = targetwcs.radec2pixelxy(ra, dec)
                 ok,x1,y1 = targetwcs.radec2pixelxy(r, d)
-                print 'dx2,dy2', x1-x0, y1-y0
+                #print 'dx2,dy2', x1-x0, y1-y0
                 vv = np.array([dx,dy])
                 tv = np.dot(trans, vv)
-                print 'dot', tv
+                #print 'dot', tv
                 newmean[i,:] = tv
                 
             for i,var in enumerate(psf.mog.var):
-                print 'var', var
+                #print 'var', var
                 newvar[i,:,:] = np.dot(trans, np.dot(var, trans.T))
-                print 'newvar', newvar[i,:,:]
+                #print 'newvar', newvar[i,:,:]
 
             newpsf = GaussianMixturePSF(psf.mog.amp, newmean, newvar)
 
@@ -308,6 +337,7 @@ def oneblob(ra, dec, teff, dteff):
             written.add(band)
             
             fn = stamp_pattern % band
+            print 'writing', fn
             fitsio.write(fn, img, clobber=clobber, header=hdr)
             fitsio.write(fn, iv)
             if clobber:

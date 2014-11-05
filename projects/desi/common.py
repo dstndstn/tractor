@@ -214,6 +214,14 @@ class Decals(object):
         
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
+
+    def get_brick(self, brickid):
+        B = self.get_bricks()
+        I = np.flatnonzero(B.brickid == brickid)
+        if len(I) == 0:
+            return None
+        return B[I[0]]
+
     def bricks_touching_radec_box(self, bricks,
                                   ralo, rahi, declo, dechi):
         '''
