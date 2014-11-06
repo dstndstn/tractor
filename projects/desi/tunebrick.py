@@ -120,6 +120,7 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
 
+    t0 = Time()
     comods = []
     for iband,band in enumerate(bands):
         comod  = np.zeros((wcsH,wcsW), np.float32)
@@ -133,111 +134,18 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             comod[Yo,Xo] += mod[Yi,Xi]
         comod  /= np.maximum(cons[iband], 1)
         comods.append(comod)
+    print 'Creating model coadd:', Time()-t0
 
     plt.clf()
     dimshow(get_rgb(comods, bands))
     plt.title('Model')
     ps.savefig()
 
-    # for i,tim in enumerate(tims):
-    #     mod = tractor.getModelImage(i)
-    #     plt.clf()
-    #     plt.subplot(1,2,1)
-    #     plt.imshow(tim.getImage(), **tim.ima)
-    #     plt.subplot(1,2,2)
-    #     plt.imshow(mod, **tim.ima)
-    #     ps.savefig()
-
-    # Now we go and compute the models again...
-    # # List of model patches for each source
-    # srcmods = dict([(src,[]) for src in cat])
-    # mods = []
-    # for itim,tim in enumerate(tims):
-    #     modimg = np.zeros(tim.getModelShape(), tractor.modtype)
-    #     tim.getSky().addTo(modimg)
-    #     for src in cat:
-    #         patch = src.getModelPatch(tim)
-    #         if patch is None:
-    #             continue
-    #         if patch.patch is None:
-    #             continue
-    # 
-    #         # HACK -- this shouldn't be necessary, but seems to be!
-    #         # FIXME -- track down why patches are being made with extent outside
-    #         # that of the parent!
-    #         H,W = tim.shape
-    #         patch.clipTo(W,H)
-    #         ph,pw = patch.shape
-    #         if pw*ph == 0:
-    #             continue
-    #         patch.addTo(modimg)
-    #         srcmods[src].append((itim, patch))
-    #     mods.append(modimg)
-    # 
-    # keepcat = []
-    # for src in cat:
-    #     print 'Setting source flux to zero:', src
-    # 
-    #     # Try removing the source from the model;
-    #     # check chi-squared change in the patches.
-    #     sdlnp = 0.
-    #     for itim,patch in srcmods[src]:
-    #         tim = tims[itim]
-    #         mod = mods[itim]
-    #         slc = patch.getSlice(tim)
-    #         simg = tim.getImage()[slc]
-    #         sie  = tim.getInvError()[slc]
-    #         chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
-    #         chisq1 = np.sum(((simg - (mod[slc] - patch.patch)) * sie)**2)
-    #         sdlnp += -0.5 * (chisq1 - chisq0)
-    #     print '        sdlnp:', sdlnp
-    # 
-    #     if sdlnp > 0:
-    #         print 'Removing source!'
-    #         for itim,patch in srcmods[src]:
-    #             patch.addTo(mods[itim], scale=-1)
-    #         continue
-    # 
-    #     keepcat.append(src)
-    # cat = keepcat
-
-    #tractor = Tractor(tims, cat)
-    #mods = _map(_get_mod, [(tim, cat) for tim in tims])
-    # for i,tim in enumerate(tims):
-    #     mod = tractor.getModelImage(i)
-    #     plt.clf()
-    #     plt.subplot(1,2,1)
-    #     plt.imshow(tim.getImage(), **tim.ima)
-    #     plt.subplot(1,2,2)
-    #     plt.imshow(mod, **tim.ima)
-    #     ps.savefig()
-
-
-    # for itim,tim in enumerate(tims):
-    #     modimg = np.zeros(tim.getModelShape(), tractor.modtype)
-    #     tim.getSky().addTo(modimg)
-    #     for src in cat:
-    #         patch = src.getModelPatch(tim)
-    #         if patch is None:
-    #             continue
-    #         if patch.patch is None:
-    #             continue
-    # 
-    #         # HACK -- this shouldn't be necessary, but seems to be!
-    #         # FIXME -- track down why patches are being made with extent outside
-    #         # that of the parent!
-    #         H,W = tim.shape
-    #         patch.clipTo(W,H)
-    #         ph,pw = patch.shape
-    #         if pw*ph == 0:
-    #             continue
-    #         patch.addTo(modimg)
-    #         srcmods[src].append((itim, patch))
-    #     mods.append(modimg)
-    # 
+    t0 = Time()
     keepcat = []
     for src in cat:
-        print 'Setting source flux to zero:', src
+        print 'Try removing source:', src
+        tsrc = Time()
 
         srcmodlist = []
         for itim,tim in enumerate(tims):
@@ -268,7 +176,9 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
             chisq1 = np.sum(((simg - (mod[slc] - patch.patch)) * sie)**2)
             sdlnp += -0.5 * (chisq1 - chisq0)
-        print '        sdlnp:', sdlnp
+        print '        dlnp:', sdlnp
+
+        print 'Testing source removal:', Time()-tsrc
     
         if sdlnp > 0:
             print 'Removing source!'
@@ -278,7 +188,7 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     
         keepcat.append(src)
     cat = keepcat
-
+    print 'Removing sources:', Time()-t0
 
     comods = []
     for iband,band in enumerate(bands):
@@ -313,28 +223,6 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     plt.axis(ax)
     ps.savefig()
 
-
-    # # Check: re-render models   (this checks out)
-    # mods = _map(_get_mod, [(tim, cat) for tim in tims])
-    # 
-    # comods = []
-    # for iband,band in enumerate(bands):
-    #     comod  = np.zeros((wcsH,wcsW), np.float32)
-    #     for itim, (tim,mod) in enumerate(zip(tims, mods)):
-    #         if tim.band != band:
-    #             continue
-    #         R = tim_get_resamp(tim, targetwcs)
-    #         if R is None:
-    #             continue
-    #         (Yo,Xo,Yi,Xi) = R
-    #         comod[Yo,Xo] += mod[Yi,Xi]
-    #     comod  /= np.maximum(cons[iband], 1)
-    #     comods.append(comod)
-    # 
-    # plt.clf()
-    # dimshow(get_rgb(comods, bands))
-    # plt.title('Model')
-    # ps.savefig()
 
 #def stage_new_cat(cat=None, **kwargs):
 #    #
