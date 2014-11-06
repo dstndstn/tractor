@@ -1,3 +1,7 @@
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
+
 from astrometry.util.util import *
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
@@ -8,7 +12,9 @@ from desi_common import *
 
 from tractor.galaxy import *
 
-from runbrick import stage_tims
+import runbrick
+from runbrick import stage_tims, _map, _get_mod, runbrick_global_init, get_rgb
+from runbrick import tim_get_resamp
 
 def stage_cat(brickid=None, target_extent=None,
               targetwcs=None, tims=None, **kwargs):
@@ -81,18 +87,66 @@ def stage_cat(brickid=None, target_extent=None,
     return dict(cat=cat)
 
 
-def stage_plots(tims=None, cat=None, targetwcs=None, **kwargs):
+def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
+                bands=None, **kwargs):
     print 'kwargs:', kwargs.keys()
 
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands))
+    plt.title('Image')
+    ps.savefig()
+
+    ax = plt.axis()
+    for i,src in enumerate(cat):
+        rd = src.getPosition()
+        ok,x,y = targetwcs.radec2pixelxy(rd.ra, rd.dec)
+        cc = (0,1,0)
+        if isinstance(src, PointSource):
+            plt.plot(x-1, y-1, '+', color=cc, ms=10, mew=1.5)
+        else:
+            plt.plot(x-1, y-1, 'o', mec=cc, mfc='none', ms=10, mew=1.5)
+        # plt.text(x, y, '%i' % i, color=cc, ha='center', va='bottom')
+    plt.axis(ax)
+    ps.savefig()
+
     tractor = Tractor(tims, cat)
-    for i,tim in enumerate(tims):
-        mod = tractor.getModelImage(i)
-        plt.clf()
-        plt.subplot(1,2,1)
-        plt.imshow(tim.getImage(), **tim.ima)
-        plt.subplot(1,2,2)
-        plt.imshow(mod, **tim.ima)
-        ps.savefig()
+
+    wcsW = targetwcs.get_width()
+    wcsH = targetwcs.get_height()
+
+    t0 = Time()
+    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    print 'Getting model images:', Time()-t0
+
+    comods = []
+    for iband,band in enumerate(bands):
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            comod[Yo,Xo] += mod[Yi,Xi]
+        comod  /= np.maximum(cons[iband], 1)
+        comods.append(comod)
+
+    plt.clf()
+    dimshow(get_rgb(comods, bands))
+    plt.title('Model')
+    ps.savefig()
+
+    # for i,tim in enumerate(tims):
+    #     mod = tractor.getModelImage(i)
+    #     plt.clf()
+    #     plt.subplot(1,2,1)
+    #     plt.imshow(tim.getImage(), **tim.ima)
+    #     plt.subplot(1,2,2)
+    #     plt.imshow(mod, **tim.ima)
+    #     ps.savefig()
+
+    # Now we go and compute the models again...
 
     # List of model patches for each source
     srcmods = dict([(src,[]) for src in cat])
@@ -146,15 +200,60 @@ def stage_plots(tims=None, cat=None, targetwcs=None, **kwargs):
         keepcat.append(src)
     cat = keepcat
 
-    tractor = Tractor(tims, cat)
-    for i,tim in enumerate(tims):
-        mod = tractor.getModelImage(i)
-        plt.clf()
-        plt.subplot(1,2,1)
-        plt.imshow(tim.getImage(), **tim.ima)
-        plt.subplot(1,2,2)
-        plt.imshow(mod, **tim.ima)
-        ps.savefig()
+    #tractor = Tractor(tims, cat)
+    #mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    # for i,tim in enumerate(tims):
+    #     mod = tractor.getModelImage(i)
+    #     plt.clf()
+    #     plt.subplot(1,2,1)
+    #     plt.imshow(tim.getImage(), **tim.ima)
+    #     plt.subplot(1,2,2)
+    #     plt.imshow(mod, **tim.ima)
+    #     ps.savefig()
+
+    comods = []
+    for iband,band in enumerate(bands):
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            comod[Yo,Xo] += mod[Yi,Xi]
+        comod  /= np.maximum(cons[iband], 1)
+        comods.append(comod)
+
+    plt.clf()
+    dimshow(get_rgb(comods, bands))
+    plt.title('Model')
+    ps.savefig()
+
+    # Check: re-render models
+    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+
+    comods = []
+    for iband,band in enumerate(bands):
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            comod[Yo,Xo] += mod[Yi,Xi]
+        comod  /= np.maximum(cons[iband], 1)
+        comods.append(comod)
+
+    plt.clf()
+    dimshow(get_rgb(comods, bands))
+    plt.title('Model')
+    ps.savefig()
+
+#def stage_new_cat(cat=None, **kwargs):
+#    #
 
 
 if __name__ == '__main__':
@@ -178,6 +277,8 @@ if __name__ == '__main__':
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
 
+    parser.add_option('--threads', type=int, help='Run multi-threaded')
+
     opt,args = parser.parse_args()
     Time.add_measurement(MemMeas)
 
@@ -198,6 +299,13 @@ if __name__ == '__main__':
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
     kwargs = {}
+
+    if opt.threads and opt.threads > 1:
+        from astrometry.util.multiproc import multiproc
+        mp = multiproc(opt.threads, init=runbrick_global_init, initargs=())
+        runbrick.mp = mp
+    else:
+        runbrick_global_init()
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
