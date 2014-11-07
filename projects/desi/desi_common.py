@@ -108,11 +108,11 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
                 hdr.add_record(dict(name='TR_%s_T%i' % (ts, i),
                                     value=t, comment='Tractor param type'))
             break
-    print 'Header:', hdr
+    #print 'Header:', hdr
 
     params0 = cat.getParams()
 
-    print 'cat', len(cat)
+    #print 'cat', len(cat)
     allbands = 'ugrizy'
     T.decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
     T.decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
@@ -197,8 +197,8 @@ def get_tractor_fits_values(T, cat, pat):
     shapeDev = np.zeros((len(T), 3))
     fracDev  = np.zeros(len(T))
 
-    print 'Cat:', len(cat)
-    print 'T:', len(T)
+    #print 'Cat:', len(cat)
+    #print 'T:', len(T)
 
     for i,src in enumerate(cat):
         if isinstance(src, ExpGalaxy):
@@ -219,7 +219,7 @@ def get_tractor_fits_values(T, cat, pat):
 
 
 
-def read_fits_catalog(T, hdr=None, invvars=False):
+def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
     '''
     This is currently a weird hybrid of dynamic and hard-coded.
 
@@ -234,30 +234,60 @@ def read_fits_catalog(T, hdr=None, invvars=False):
 
     ivbandcols = []
 
-    bands = []
-    bandcols = []
-    for col in T.get_columns():
-        pre,post = 'decam_', '_nanomaggies'
-        if col.startswith(pre) and col.endswith(post) and len(col) == len(pre+post)+1:
-            band = col[len(pre)]
-            bands.append(band)
-            bandcols.append(pre + band + post) # = col!
+    # bandorder = 'ugrizy'
+    # bands = []
+    # bandcols = []
+    # for col in T.get_columns():
+    #     pre,post = 'decam_', '_nanomaggies'
+    #     if col.startswith(pre) and col.endswith(post) and len(col) == len(pre+post)+1:
+    #         band = col[len(pre)]
+    #         bands.append(band)
+    #         bandcols.append(pre + band + post) # = col!
+    #         if invvars:
+    #             ivbandcols.append('decam_%s_nanomaggies_invvar' % band)
+    # 
+    # # Permute back to "correct" order.  This is all kinda bass akwards
+    # ibands = [bandorder.index(b) for b in bands]
+    # I = np.argsort(ibands)
+    # bands = [bands[i] for i in I]
+    # bandcols = [bandcols[i] for i in I]
+    # print 'Found bands:', bands, 'in', bandcols
+    # if invvars:
+    #     ivbandcols = [ivbandcols[i] for in I]
+    #     print 'invvars', ivbandcols
 
-            if invvars:
-                ivbandcols.append('decam_%s_nanomaggies_invvar' % band)
-    print 'Found bands:', bands, 'in', bandcols
+    bandcols = []
+    ivbandcols = []
+    for band in bands:
+        col = 'decam_%s_nanomaggies' % band
+        if not col in T.get_columns():
+            raise ValueError('Did not find flux for band %s in catalog' % band)
+        bandcols.append(col)
+        if invvars:
+            col = 'decam_%s_nanomaggies_invvar' % band
+            if not col in T.get_columns():
+                raise ValueError('Did not find flux invvar for band %s in catalog' % band)
+            ivbandcols.append(col)
 
     ivs = []
     cat = []
     for i,t in enumerate(T):
         clazz = rev_typemap[t.type]
         pos = RaDecPos(t.ra, t.dec)
-        br = NanoMaggies(**dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
+        br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
         params = [pos, br]
         if invvars:
             # ASSUME & hard-code that the position and brightness are the first params
             ivs.extend([t.ra_invvar, t.dec_invvar] +
                        [t.get(c) for c in ivbandcols])
+
+            # print 'pos', pos
+            # print 'bright', br
+            # iv = np.array([t.ra_invvar, t.dec_invvar] +
+            #               [t.get(c) for c in ivbandcols])
+            # print 'ivs:', iv
+            # print 'sigmas:', 1./np.sqrt(iv)
+            
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
             # hard-code knowledge that third param is the ellipse
             eclazz = hdr['TR_%s_T3' % t.type]
@@ -301,6 +331,8 @@ def read_fits_catalog(T, hdr=None, invvars=False):
         cat.append(src)
 
     if invvars:
+        ivs = np.array(ivs)
+        ivs[np.logical_not(np.isfinite(ivs))] = 0
         return cat, ivs
     return cat
 

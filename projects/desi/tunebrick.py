@@ -26,7 +26,9 @@ def stage_cat(brickid=None, target_extent=None,
     cat,invvars = read_fits_catalog(T, invvars=True)
     print 'Got catalog:', len(cat), 'sources'
 
-    invvars = np.array(invvars)
+    #invvars = np.array(invvars)
+    print 'Invvars:', invvars
+
     assert(len(Catalog(*cat).getParams()) == len(invvars))
     assert(len(cat) == len(T))
     Tcat = T
@@ -42,15 +44,24 @@ def stage_cat(brickid=None, target_extent=None,
         margin = 0.002
         ikeep = []
         keepcat = []
+        keepivs = []
+        iterinvvars = invvars
         for i,src in enumerate(cat):
+            N = src.numberOfParams()
+            iv = iterinvvars[:N]
+            iterinvvars = iterinvvars[N:]
             pos = src.getPosition()
             if (pos.ra  > r0-margin and pos.ra  < r1+margin and
                 pos.dec > d0-margin and pos.dec < d1+margin):
                 keepcat.append(src)
+                keepivs.extend(iv)
                 ikeep.append(i)
         cat = keepcat
         Tcat.cut(np.array(ikeep))
+        invvars = np.array(keepivs)
         print 'Keeping', len(cat), 'sources within range'
+        
+    assert(Catalog(*cat).numberOfParams() == len(invvars))
 
     print len(tims), 'tims'
     print 'Sizes:', [tim.shape for tim in tims]
@@ -68,6 +79,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                bands=None, invvars=None, brickid=None,
                Tcat=None, version_header=None, **kwargs):
     print 'kwargs:', kwargs.keys()
+
+    print 'invvars:', invvars
 
     plt.figure(figsize=(10,10))
     plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
@@ -109,25 +122,32 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     # for src in cat:
     #     print '  ', src
     # switch_to_soft_ellipses(cat)
+
+    assert(Catalog(*cat).numberOfParams() == len(invvars))
+
     keepcat = []
     keepinvvars = []
     iterinvvars = invvars
     ikeep = []
     for i,src in enumerate(cat):
         N = src.numberOfParams()
+        iv = iterinvvars[:N]
         iterinvvars = iterinvvars[N:]
         if not np.all(np.isfinite(src.getParams())):
             print 'Dropping source:', src
             continue
         keepcat.append(src)
-        iv = iterinvvars[:N]
         keepinvvars.extend(iv)
+        print 'Keep:', src
+        print 'iv:', iv
+        print 'sigma', 1./np.sqrt(np.array(iv))
         ikeep.append(i)
     cat = keepcat
     Tcat.cut(np.array(ikeep))
     invvars = keepinvvars
     print len(cat), 'sources with finite params'
     assert(Catalog(*cat).numberOfParams() == len(invvars))
+    assert(len(iterinvvars) == 0)
 
     print 'Rendering model images...'
     t0 = Time()
@@ -347,6 +367,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         if newiv is None:
             keepinvvars.append(oldiv)
         else:
+            print 'oldivs:', oldiv
+            print 'newivs:', newiv
             keepinvvars.append(newiv)
     
         keepcat.append(src)
@@ -460,10 +482,6 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     if 'DECALSDT' in thdr:
         hdr.add_record(dict(name='RB_DATE', value=thdr['DECALSDT'],
                             comment='Date when runbrick.py was run'))
-    variances = 1./np.array(invvars)
-
-    print 'Tcat:', len(Tcat)
-    print 'cat:', len(cat)
     assert(len(cat) == len(Tcat))
 
     # Keep these columns...
@@ -479,17 +497,18 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'TT:', len(TT)
     print 'cat:', len(cat)
 
+    print 'params:', Catalog(*cat).numberOfParams()
+    print 'invvars:', len(invvars), invvars
+
     ## FIXME -- we don't update these fit-stats
     fs = None
-    T,hdr = prepare_fits_catalog(Catalog(*cat), variances, TT, hdr, bands, fs)
+    T,hdr = prepare_fits_catalog(Catalog(*cat), invvars, TT, hdr, bands, fs)
 
     ok,x,y = targetwcs.radec2pixelxy(T.ra, T.dec)
     T.x = x.astype(np.float32)
     T.y = y.astype(np.float32)
-    for col in T.get_columns():
-        if 'invvar' in col:
-            print 'Renaming', col
-            T.rename(col, col.replace('invvar', 'ivar'))
+    T.ra_ivar  = T.ra_ivar.astype(np.float32)
+    T.dec_ivar = T.dec_ivar.astype(np.float32)
 
     decals = Decals()
     brick = decals.get_brick(brickid)
@@ -497,12 +516,6 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
                        (T.dec >= brick.dec1) * (T.dec < brick.dec2))
     T.brickname = np.array([brick.brickname] * len(T))
 
-    T.about()
-
-    # for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
-    #     X = T.get(k)
-    #     T.delete_column(k)
-    #     T.set(k.replace('_var', '_ivar'), (1./X).astype(np.float32))
     # Unpack shape columns
     T.shapeExp_r  = T.shapeExp[:,0]
     T.shapeExp_e1 = T.shapeExp[:,1]
@@ -517,29 +530,9 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     T.shapeDev_e1_ivar = T.shapeExp_ivar[:,1]
     T.shapeDev_e2_ivar = T.shapeExp_ivar[:,2]
 
-    for k in [# 'decam_g_nanomaggies', 'decam_g_nanomaggies_ivar',
-              # 'decam_g_mag', 'decam_g_mag_err',
-              # 'decam_r_nanomaggies', 'decam_r_nanomaggies_ivar',
-              # 'decam_r_mag', 'decam_r_mag_err',
-              # 'decam_z_nanomaggies', 'decam_z_nanomaggies_ivar',
-              # 'decam_z_mag', 'decam_z_mag_err',
-              'shapeExp', 'shapeDev', 'shapeExp_ivar', 'shapeDev_ivar']:
+    for k in ['shapeExp', 'shapeDev', 'shapeExp_ivar', 'shapeDev_ivar']:
         T.delete_column(k)
               
-              
-
-    # allbands = 'ugrizy'
-    # T.decam_flux = np.array((len(T), len(allbands)), np.float32)
-    # T.decam_flux_ivar = np.array((len(T), len(allbands)), np.float32)
-    # for band in bands:
-    #     i = allbands.index(band)
-    #     T.decam_flux[:,i] = T.get('decam_%s_nanomaggies' % band)
-    #     T.decam_flux_ivar[:,i] = T.get('decam_%s_nanomaggies_ivar' % band)
-    # 
-    #     T.delete_column('decam_%s_nanomaggies' % band)
-    #     T.delete_column('decam_%s_nanomaggies_invvar' % band)
-
-
     fn = 'tunebrick-cats/tractor-phot-b%06i.fits' % brickid
     T.writeto(fn, header=hdr)
     print 'Wrote', fn
