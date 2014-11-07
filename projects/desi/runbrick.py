@@ -286,13 +286,14 @@ def _read_tim((im, decals, targetrd)):
     return tim
 
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
-               target_extent=None, pipe=False,
+               target_extent=None, pipe=False, program_name='runbrick.py',
                **kwargs):
     t0 = tlast = Time()
 
     rtn,version,err = run_command('git describe')
     if rtn:
         raise RuntimeError('Failed to get version string (git describe):' + ver + err)
+    version = version.strip()
     print 'Version:', version
 
     decals = Decals()
@@ -304,7 +305,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
-                        comment='runbrick.py run time'))
+                        comment='%s run time' % program_name))
     version_header = hdr
 
     B = decals.get_bricks()

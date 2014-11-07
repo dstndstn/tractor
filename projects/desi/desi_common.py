@@ -185,6 +185,9 @@ def get_tractor_fits_values(T, cat, pat):
     shapeDev = np.zeros((len(T), 3))
     fracDev  = np.zeros(len(T))
 
+    print 'Cat:', len(cat)
+    print 'T:', len(T)
+
     for i,src in enumerate(cat):
         if isinstance(src, ExpGalaxy):
             shapeExp[i,:] = src.shape.getAllParams()
@@ -204,13 +207,20 @@ def get_tractor_fits_values(T, cat, pat):
 
 
 
-def read_fits_catalog(T, hdr=None):
+def read_fits_catalog(T, hdr=None, invvars=False):
     '''
     This is currently a weird hybrid of dynamic and hard-coded.
+
+    Return list of tractor Sources.
+
+    If invvars=True, return sources,invvars
+    where invvars is a list matching sources.getParams()
     '''
     if hdr is None:
         hdr = T._header
     rev_typemap = dict([(v,k) for k,v in fits_typemap.items()])
+
+    ivbandcols = []
 
     bands = []
     bandcols = []
@@ -219,15 +229,23 @@ def read_fits_catalog(T, hdr=None):
         if col.startswith(pre) and col.endswith(post) and len(col) == len(pre+post)+1:
             band = col[len(pre)]
             bands.append(band)
-            bandcols.append(pre + band + post)
+            bandcols.append(pre + band + post) # = col!
+
+            if invvars:
+                ivbandcols.append('decam_%s_nanomaggies_invvar' % band)
     print 'Found bands:', bands, 'in', bandcols
 
+    ivs = []
     cat = []
     for i,t in enumerate(T):
         clazz = rev_typemap[t.type]
         pos = RaDecPos(t.ra, t.dec)
         br = NanoMaggies(**dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
         params = [pos, br]
+        if invvars:
+            # ASSUME & hard-code that the position and brightness are the first params
+            ivs.extend([t.ra_invvar, t.dec_invvar] +
+                       [t.get(c) for c in ivbandcols])
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
             # hard-code knowledge that third param is the ellipse
             eclazz = hdr['TR_%s_T3' % t.type]
@@ -238,6 +256,11 @@ def read_fits_catalog(T, hdr=None):
             else:
                 ell = eclazz(*t.shapeexp)
             params.append(ell)
+            if invvars:
+                if issubclass(clazz, DevGalaxy):
+                    ivs.extend(t.shapedev_invvar)
+                else:
+                    ivs.extend(t.shapeexp_invvar)
             
         elif issubclass(clazz, FixedCompositeGalaxy):
             # hard-code knowledge that params are fracDev, shapeE, shapeD
@@ -251,6 +274,11 @@ def read_fits_catalog(T, hdr=None):
             params.append(ee)
             params.append(de)
 
+            if invvars:
+                ivs.append(t.fracdev_invvar)
+                ivs.extend(t.shapeexp_invvar)
+                ivs.extend(t.shapedev_invvar)
+
         elif issubclass(clazz, PointSource):
             pass
         else:
@@ -259,6 +287,9 @@ def read_fits_catalog(T, hdr=None):
         src = clazz(*params)
         #print 'Created source', src
         cat.append(src)
+
+    if invvars:
+        return cat, ivs
     return cat
 
 

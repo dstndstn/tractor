@@ -23,25 +23,14 @@ def stage_cat(brickid=None, target_extent=None,
 
     catfn = catpattern % brickid
     T = fits_table(catfn)
-    cat = read_fits_catalog(T)
+    cat,invvars = read_fits_catalog(T, invvars=True)
     print 'Got catalog:', len(cat), 'sources'
+
+    invvars = np.array(invvars)
+    assert(len(Catalog(*cat).getParams()) == len(invvars))
+    assert(len(cat) == len(T))
+    Tcat = T
     
-    # decals = Decals()
-    # brick = decals.get_brick(brick)
-    # print 'Brick:', brick.about()
-    # 
-    # targetwcs = wcs_for_brick(brick)
-    # ccds = decals.get_ccds()
-    # ccds.cut(ccds_touching_wcs(targetwcs, ccds))
-    # print len(ccds), 'touching brick'
-
-    # pipeline?
-    #pipe = True
-
-    #P = stage_tims(brickid=brickid, pipe=pipe, target_extent=target_extent)
-    #tims = P['tims']
-    #targetwcs = P['targetwcs']
-
     if target_extent is not None:
         #x0,x1,y0,y1 = target_extent
         W,H = int(targetwcs.get_width()), int(targetwcs.get_height())
@@ -51,30 +40,18 @@ def stage_cat(brickid=None, target_extent=None,
         r0,r1 = r.min(),r.max()
         d0,d1 = d.min(),d.max()
         margin = 0.002
+        ikeep = []
         keepcat = []
-        for src in cat:
+        for i,src in enumerate(cat):
             pos = src.getPosition()
             if (pos.ra  > r0-margin and pos.ra  < r1+margin and
                 pos.dec > d0-margin and pos.dec < d1+margin):
                 keepcat.append(src)
+                ikeep.append(i)
         cat = keepcat
+        Tcat.cut(np.array(ikeep))
         print 'Keeping', len(cat), 'sources within range'
 
-    print 'Catalog:'
-    for src in cat:
-        print '  ', src
-
-    switch_to_soft_ellipses(cat)
-    keepcat = []
-    for src in cat:
-        if not np.all(np.isfinite(src.getParams())):
-            print 'Dropping source:', src
-            continue
-        keepcat.append(src)
-    cat = keepcat
-    print len(cat), 'sources with finite params'
-
-    
     print len(tims), 'tims'
     print 'Sizes:', [tim.shape for tim in tims]
 
@@ -84,17 +61,29 @@ def stage_cat(brickid=None, target_extent=None,
         tim.psfex.fitSavedData(*tim.psfex.splinedata)
         tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
-    return dict(cat=cat)
+    return dict(cat=cat, Tcat=Tcat, invvars=invvars)
 
 
-def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
-                bands=None, **kwargs):
+def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
+               bands=None, invvars=None, brickid=None,
+               Tcat=None, version_header=None, **kwargs):
     print 'kwargs:', kwargs.keys()
 
+    plt.figure(figsize=(10,10))
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+
     plt.clf()
-    dimshow(get_rgb(coimgs, bands))
-    plt.title('Image')
+    rgb = get_rgb(coimgs, bands)
+    dimshow(rgb)
+    #plt.title('Image')
     ps.savefig()
+
+    tmpfn = create_temp(suffix='.png')
+    plt.imsave(tmpfn, rgb)
+    del rgb
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick-plots/brick-%06i-full.jpg' % (tmpfn, brickid)
+    os.system(cmd)
+    os.unlink(tmpfn)
 
     pla = dict(ms=5, mew=1)
 
@@ -116,6 +105,31 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     wcsW = targetwcs.get_width()
     wcsH = targetwcs.get_height()
 
+    # print 'Catalog:'
+    # for src in cat:
+    #     print '  ', src
+    # switch_to_soft_ellipses(cat)
+    keepcat = []
+    keepinvvars = []
+    iterinvvars = invvars
+    ikeep = []
+    for i,src in enumerate(cat):
+        N = src.numberOfParams()
+        iterinvvars = iterinvvars[N:]
+        if not np.all(np.isfinite(src.getParams())):
+            print 'Dropping source:', src
+            continue
+        keepcat.append(src)
+        iv = iterinvvars[:N]
+        keepinvvars.extend(iv)
+        ikeep.append(i)
+    cat = keepcat
+    Tcat.cut(np.array(ikeep))
+    invvars = keepinvvars
+    print len(cat), 'sources with finite params'
+    assert(Catalog(*cat).numberOfParams() == len(invvars))
+
+    print 'Rendering model images...'
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
@@ -142,8 +156,62 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     ps.savefig()
 
     t0 = Time()
+    keepinvvars = []
     keepcat = []
-    for src in cat:
+    iterinvvars = invvars
+    ikeep = []
+
+    for isrc,src in enumerate(cat):
+        newiv = None
+        N = src.numberOfParams()
+
+        print 'Checking source', src
+        print 'N params:', N
+        print 'iterinvvars:', len(iterinvvars)
+
+        oldiv = iterinvvars[:N]
+        iterinvvars = iterinvvars[N:]
+        recompute_iv = False
+
+        if isinstance(src, FixedCompositeGalaxy):
+            # Obvious simplification: for composite galaxies with fracdev
+            # out of bounds, convert to exp or dev.
+            f = src.fracDev.getClippedValue()
+            if f == 0.:
+                oldsrc = src
+                src = ExpGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeExp)
+                print 'Converted comp to exp:'
+                print '   ', oldsrc
+                print ' ->', src
+                # pull out the invvar elements!
+                pp = src.getParams()
+                oldsrc.setParams(oldiv)
+                newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams() + oldsrc.shapeExp.getParams()
+                src.setParams(pp)
+            elif f == 1.:
+                oldsrc = src
+                src = DevGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeDev)
+                print 'Converted comp to dev:'
+                print '   ', oldsrc
+                print ' ->', src
+                pp = src.getParams()
+                oldsrc.setParams(oldiv)
+                newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams() + oldsrc.shapeDev.getParams()
+                src.setParams(pp)
+
+        # treated_as_pointsource: do the bright-star check at least!
+        if not isinstance(src, PointSource):
+            # This is the check we use in unWISE
+            if src.getBrightness().getMag('r') < 12.5:
+                oldsrc = src
+                src = PointSource(oldsrc.pos, oldsrc.brightness)
+                print 'Bright star: replacing', oldsrc
+                print 'With', src
+                # Not QUITE right.
+                #oldsrc.setParams(oldiv)
+                #newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams()
+                recompute_iv = True
+
         print 'Try removing source:', src
         tsrc = Time()
 
@@ -185,14 +253,125 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             for itim,patch in srcmodlist:
                 patch.addTo(mods[itim], scale=-1)
             continue
+
+        # Try some model changes...
+        newsrcs = []
+        if isinstance(src, FixedCompositeGalaxy):
+            newsrcs.append(ExpGalaxy(src.pos, src.brightness, src.shapeExp))
+            newsrcs.append(DevGalaxy(src.pos, src.brightness, src.shapeDev))
+            newsrcs.append(PointSource(src.pos, src.brightness))
+        elif isinstance(src, (DevGalaxy, ExpGalaxy)):
+            newsrcs.append(PointSource(src.pos, src.brightness))
+
+        bestnew = None
+        bestdlnp = 0.
+        bestdpatches = None
+
+        srcmodlist2 = [None for tim in tims]
+        for itim,patch in srcmodlist:
+            srcmodlist2[itim] = patch
+
+        for newsrc in newsrcs:
+
+            dpatches = []
+            dlnp = 0.
+            for itim,tim in enumerate(tims):
+                patch = newsrc.getModelPatch(tim)
+                if patch is not None:
+                    if patch.patch is None:
+                        patch = None
+                if patch is not None:
+                    # HACK -- this shouldn't be necessary, but seems to be!
+                    # FIXME -- track down why patches are being made with extent outside
+                    # that of the parent!
+                    H,W = tim.shape
+                    patch.clipTo(W,H)
+                    ph,pw = patch.shape
+                    if pw*ph == 0:
+                        patch = None
+
+                oldpatch = srcmodlist2[itim]
+                if oldpatch is None and patch is None:
+                    continue
+
+                # Find difference in models
+                if oldpatch is None:
+                    dpatch = patch
+                elif patch is None:
+                    dpatch = oldpatch * -1.
+                else:
+                    dpatch = patch - oldpatch
+                dpatches.append((itim, dpatch))
+                
+                mod = mods[itim]
+                slc = dpatch.getSlice(tim)
+                simg = tim.getImage()[slc]
+                sie  = tim.getInvError()[slc]
+                chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
+                chisq1 = np.sum(((simg - (mod[slc] + dpatch.patch)) * sie)**2)
+                dlnp += -0.5 * (chisq1 - chisq0)
+
+            print 'Trying source change:'
+            print 'from', src
+            print '  to', newsrc
+            print 'dlnp:', dlnp
+
+            if dlnp >= bestdlnp:
+                bestnew = newsrc
+                bestdlnp = dlnp
+                bestdpatches = dpatches
+
+        if bestnew is not None:
+            print 'Found model improvement!  Switching to',
+            print bestnew
+            for itim,dpatch in bestdpatches:
+                dpatch.addTo(mods[itim])
+            src = bestnew
+            recompute_iv = True
+
+        if recompute_iv:
+            dchisqs = np.zeros(src.numberOfParams())
+            for tim in tims:
+                derivs = src.getParamDerivatives(tim)
+                h,w = tim.shape
+                ie = tim.getInvError()
+                for i,deriv in enumerate(derivs):
+                    if deriv is None:
+                        continue
+                    deriv.clipTo(w,h)
+                    slc = deriv.getSlice(ie)
+                    chi = deriv.patch * ie[slc]
+                    dchisqs[i] += (chi**2).sum()
+            newiv = dchisqs
+
+        if newiv is None:
+            keepinvvars.append(oldiv)
+        else:
+            keepinvvars.append(newiv)
     
         keepcat.append(src)
+        ikeep.append(isrc)
     cat = keepcat
+    Tcat.cut(np.array(ikeep))
     print 'Removing sources:', Time()-t0
+
+    assert(len(iterinvvars) == 0)
+    keepinvvars = np.hstack(keepinvvars)
+    assert(Catalog(*keepcat).numberOfParams() == len(keepinvvars))
+    invvars = keepinvvars
+    assert(len(cat) == len(Tcat))
+
+    # WCS header for these images
+    hdr = fitsio.FITSHDR()
+    targetwcs.add_to_header(hdr)
+    fwa = dict(clobber=True, header=hdr)
 
     comods = []
     for iband,band in enumerate(bands):
         comod  = np.zeros((wcsH,wcsW), np.float32)
+        cochi2 = np.zeros((wcsH,wcsW), np.float32)
+        coiv   = np.zeros((wcsH,wcsW), np.float32)
+        detiv   = np.zeros((wcsH,wcsW), np.float32)
         for itim, (tim,mod) in enumerate(zip(tims, mods)):
             if tim.band != band:
                 continue
@@ -201,11 +380,45 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 continue
             (Yo,Xo,Yi,Xi) = R
             comod[Yo,Xo] += mod[Yi,Xi]
+            ie = tim.getInvError()
+            cochi2[Yo,Xo] += ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) * ie[Yi,Xi])**2
+            coiv[Yo,Xo] += ie[Yi,Xi]**2
+
+            psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+            detsig1 = tim.sig1 / psfnorm
+            detiv[Yo,Xo] += (ie[Yi,Xi] > 0) * (1. / detsig1**2)
+
         comod  /= np.maximum(cons[iband], 1)
         comods.append(comod)
 
+        fn = 'tunebrick-plots/chi2-b%06i-%s.fits' % (brickid, band)
+        fitsio.write(fn, cochi2, **fwa)
+        del cochi2
+        print 'Wrote', fn
+
+        fn = 'tunebrick-plots/image-b%06i-%s.fits' % (brickid, band)
+        fitsio.write(fn, coimgs[iband], **fwa)
+        print 'Wrote', fn
+        fitsio.write(fn, coiv, clobber=False)
+        print 'Appended ivar to', fn
+        del coiv
+
+        fn = 'tunebrick-plots/ptsrcdepth-b%06i-%s.fits' % (brickid, band)
+        fitsio.write(fn, detiv, **fwa)
+        print 'Wrote', fn
+        del detiv
+
+        fn = 'tunebrick-plots/model-b%06i-%s.fits' % (brickid, band)
+        fitsio.write(fn, comods[iband], **fwa)
+        print 'Wrote', fn
+
+        fn = 'tunebrick-plots/nexp-b%06i-%s.fits' % (brickid, band)
+        fitsio.write(fn, cons[iband], **fwa)
+        print 'Wrote', fn
+
     plt.clf()
-    dimshow(get_rgb(comods, bands))
+    rgb = get_rgb(comods, bands)
+    dimshow(rgb)
     plt.title('Model')
     ps.savefig()
 
@@ -223,9 +436,109 @@ def stage_plots(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     plt.axis(ax)
     ps.savefig()
 
+    tmpfn = create_temp(suffix='.png')
+    plt.imsave(tmpfn, rgb)
+    del rgb
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick-plots/model-%06i-full.jpg' % (tmpfn, brickid)
+    os.system(cmd)
+    os.unlink(tmpfn)
 
-#def stage_new_cat(cat=None, **kwargs):
-#    #
+    assert(len(cat) == len(Tcat))
+
+    return dict(cat=cat, Tcat=Tcat, invvars=invvars)
+
+def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
+                    bands=None, targetwcs=None, brickid=None,
+                    **kwargs):
+    
+    # Write catalog
+    hdr = version_header
+    thdr = Tcat._header
+
+    hdr.add_record(dict(name='RB_TRACV', value=thdr['TRACTORV'],
+                        comment='Tractor version when runbrick.py was run'))
+    if 'DECALSDT' in thdr:
+        hdr.add_record(dict(name='RB_DATE', value=thdr['DECALSDT'],
+                            comment='Date when runbrick.py was run'))
+    variances = 1./np.array(invvars)
+
+    print 'Tcat:', len(Tcat)
+    print 'cat:', len(cat)
+    assert(len(cat) == len(Tcat))
+
+    # Keep these columns...
+    TT = fits_table()
+    for k in ['blob','brickid','sdss_run', 'sdss_camcol', 'sdss_field', 'sdss_objid',
+              'sdss_cmodelflux', 'sdss_cmodelflux_ivar', 'sdss_ra', 'sdss_dec',
+              'sdss_modelflux', 'sdss_modelflux_ivar',
+              'sdss_psfflux', 'sdss_psfflux_ivar', 'sdss_extinction', 'sdss_flags',
+              'sdss_objc_flags', 'sdss_objc_type',]:
+        TT.set(k, Tcat.get(k))
+    TT._length = len(Tcat)
+
+    print 'TT:', len(TT)
+    print 'cat:', len(cat)
+
+    ## FIXME -- we don't update these fit-stats
+    fs = None
+    T,hdr = prepare_fits_catalog(Catalog(*cat), variances, TT, hdr, bands, fs)
+
+    ok,T.x,T.y = targetwcs.radec2pixelxy(T.ra, T.dec)
+    for col in T.get_columns():
+        if 'invvar' in col:
+            T.rename(col, col.replace('invvar', 'ivar'))
+
+    decals = Decals()
+    brick = decals.get_brick(brickid)
+    T.brick_primary = ((T.ra  >= brick.ra1 ) * (T.ra  < brick.ra2) *
+                       (T.dec >= brick.dec1) * (T.dec < brick.dec2))
+    T.brickname = np.array([brick.brickname] * len(T))
+
+    for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
+        X = T.get(k)
+        T.delete_column(k)
+        T.set(k.replace('_var', '_ivar'), (1./X).astype(np.float32))
+    # Unpack shape columns
+    T.shapeExp_r  = T.shapeExp[:,0]
+    T.shapeExp_e1 = T.shapeExp[:,1]
+    T.shapeExp_e2 = T.shapeExp[:,2]
+    T.shapeDev_r  = T.shapeExp[:,0]
+    T.shapeDev_e1 = T.shapeExp[:,1]
+    T.shapeDev_e2 = T.shapeExp[:,2]
+    T.shapeExp_r_ivar  = T.shapeExp_ivar[:,0]
+    T.shapeExp_e1_ivar = T.shapeExp_ivar[:,1]
+    T.shapeExp_e2_ivar = T.shapeExp_ivar[:,2]
+    T.shapeDev_r_ivar  = T.shapeExp_ivar[:,0]
+    T.shapeDev_e1_ivar = T.shapeExp_ivar[:,1]
+    T.shapeDev_e2_ivar = T.shapeExp_ivar[:,2]
+
+    for k in ['decam_g_nanomaggies', 'decam_g_nanomaggies_ivar',
+              'decam_g_mag', 'decam_g_mag_err',
+              'decam_r_nanomaggies', 'decam_r_nanomaggies_ivar',
+              'decam_r_mag', 'decam_r_mag_err',
+              'decam_z_nanomaggies', 'decam_z_nanomaggies_ivar',
+              'decam_z_mag', 'decam_z_mag_err',
+              'shapeExp', 'shapeDev', 'shapeExp_ivar', 'shapeDev_ivar']:
+        T.delete_column(k)
+              
+              
+
+    # allbands = 'ugrizy'
+    # T.decam_flux = np.array((len(T), len(allbands)), np.float32)
+    # T.decam_flux_ivar = np.array((len(T), len(allbands)), np.float32)
+    # for band in bands:
+    #     i = allbands.index(band)
+    #     T.decam_flux[:,i] = T.get('decam_%s_nanomaggies' % band)
+    #     T.decam_flux_ivar[:,i] = T.get('decam_%s_nanomaggies_ivar' % band)
+    # 
+    #     T.delete_column('decam_%s_nanomaggies' % band)
+    #     T.delete_column('decam_%s_nanomaggies_invvar' % band)
+
+
+    fn = 'tunebrick-cats/tractor-phot-b%06i.fits' % brickid
+    T.writeto(fn, header=hdr)
+    print 'Wrote', fn
+
 
 
 if __name__ == '__main__':
@@ -257,19 +570,21 @@ if __name__ == '__main__':
     stagefunc = CallGlobal('stage_%s', globals())
 
     if len(opt.stage) == 0:
-        opt.stage.append('plots')
+        opt.stage.append('writecat2')
     opt.force.extend(opt.stage)
 
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
     prereqs = {'tims': None,
                'cat': 'tims',
-               'plots': 'cat',
+               'tune': 'cat',
+               'writecat2': 'tune'
                }
 
-    ps = PlotSequence('tune-b%06i' % opt.brick)
+    ps = PlotSequence('tunebrick-plots/brick-%06i' % opt.brick)
     initargs = dict(ps=ps)
-    initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
+    initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
+                    program_name = 'tunebrick.py')
     kwargs = {}
 
     if opt.threads and opt.threads > 1:
