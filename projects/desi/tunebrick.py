@@ -80,7 +80,12 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                Tcat=None, version_header=None, **kwargs):
     print 'kwargs:', kwargs.keys()
 
-    print 'invvars:', invvars
+    #print 'invvars:', invvars
+
+    # How far down to render model profiles
+    minsigma = 0.1
+    for tim in tims:
+        tim.modelMinval = minsigma * tim.sig1
 
     plt.figure(figsize=(10,10))
     plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
@@ -112,11 +117,6 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         # plt.text(x, y, '%i' % i, color=cc, ha='center', va='bottom')
     plt.axis(ax)
     ps.savefig()
-
-    tractor = Tractor(tims, cat)
-
-    wcsW = targetwcs.get_width()
-    wcsH = targetwcs.get_height()
 
     # print 'Catalog:'
     # for src in cat:
@@ -154,6 +154,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
 
+    wcsW = targetwcs.get_width()
+    wcsH = targetwcs.get_height()
+
     t0 = Time()
     comods = []
     for iband,band in enumerate(bands):
@@ -174,20 +177,25 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     dimshow(get_rgb(comods, bands))
     plt.title('Model')
     ps.savefig()
+    del comods
 
     t0 = Time()
     keepinvvars = []
     keepcat = []
     iterinvvars = invvars
     ikeep = []
-
     for isrc,src in enumerate(cat):
         newiv = None
         N = src.numberOfParams()
 
-        print 'Checking source', src
-        print 'N params:', N
-        print 'iterinvvars:', len(iterinvvars)
+        gc = get_galaxy_cache()
+        print 'Galaxy cache:', gc
+        if gc is not None:
+            gc.clear()
+
+        print 'Checking source', isrc, 'of', len(cat), ':', src
+        #print 'N params:', N
+        #print 'iterinvvars:', len(iterinvvars)
 
         oldiv = iterinvvars[:N]
         iterinvvars = iterinvvars[N:]
@@ -200,9 +208,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             if f == 0.:
                 oldsrc = src
                 src = ExpGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeExp)
-                print 'Converted comp to exp:'
-                print '   ', oldsrc
-                print ' ->', src
+                print 'Converted comp to exp'
+                #print '   ', oldsrc
+                #print ' ->', src
                 # pull out the invvar elements!
                 pp = src.getParams()
                 oldsrc.setParams(oldiv)
@@ -211,8 +219,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             elif f == 1.:
                 oldsrc = src
                 src = DevGalaxy(oldsrc.pos, oldsrc.brightness, oldsrc.shapeDev)
-                print 'Converted comp to dev:'
-                print '   ', oldsrc
+                print 'Converted comp to dev'
+                ##print '   ', oldsrc
                 print ' ->', src
                 pp = src.getParams()
                 oldsrc.setParams(oldiv)
@@ -232,7 +240,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 #newiv = oldsrc.pos.getParams() + oldsrc.brightness.getParams()
                 recompute_iv = True
 
-        print 'Try removing source:', src
+        #print 'Try removing source:', src
         tsrc = Time()
 
         srcmodlist = []
@@ -242,10 +250,15 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 continue
             if patch.patch is None:
                 continue
+
             # HACK -- this shouldn't be necessary, but seems to be!
             # FIXME -- track down why patches are being made with extent outside
             # that of the parent!
             H,W = tim.shape
+            if patch.x0 < 0 or patch.y0 < 0 or patch.x1 >= W or patch.y1 >= H:
+                print 'Warning: Patch extends outside tim bounds:'
+                print 'patch extent:', patch.getExtent()
+                print 'image size:', W, 'x', H
             patch.clipTo(W,H)
             ph,pw = patch.shape
             if pw*ph == 0:
@@ -264,12 +277,11 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             chisq0 = np.sum(((simg - mod[slc]) * sie)**2)
             chisq1 = np.sum(((simg - (mod[slc] - patch.patch)) * sie)**2)
             sdlnp += -0.5 * (chisq1 - chisq0)
-        print '        dlnp:', sdlnp
-
+        print 'Removing source: dlnp =', sdlnp
         print 'Testing source removal:', Time()-tsrc
     
         if sdlnp > 0:
-            print 'Removing source!'
+            #print 'Removing source!'
             for itim,patch in srcmodlist:
                 patch.addTo(mods[itim], scale=-1)
             continue
@@ -331,10 +343,10 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 chisq1 = np.sum(((simg - (mod[slc] + dpatch.patch)) * sie)**2)
                 dlnp += -0.5 * (chisq1 - chisq0)
 
-            print 'Trying source change:'
-            print 'from', src
-            print '  to', newsrc
-            print 'dlnp:', dlnp
+            #print 'Trying source change:'
+            #print 'from', src
+            #print '  to', newsrc
+            print 'Trying source change to', type(newsrc).__name__, ': dlnp =', dlnp
 
             if dlnp >= bestdlnp:
                 bestnew = newsrc
@@ -348,6 +360,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                 dpatch.addTo(mods[itim])
             src = bestnew
             recompute_iv = True
+
+        del srcmodlist
+        del srcmodlist2
 
         if recompute_iv:
             dchisqs = np.zeros(src.numberOfParams())
@@ -367,15 +382,13 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         if newiv is None:
             keepinvvars.append(oldiv)
         else:
-            print 'oldivs:', oldiv
-            print 'newivs:', newiv
             keepinvvars.append(newiv)
     
         keepcat.append(src)
         ikeep.append(isrc)
     cat = keepcat
     Tcat.cut(np.array(ikeep))
-    print 'Removing sources:', Time()-t0
+    print 'Model selection:', Time()-t0
 
     assert(len(iterinvvars) == 0)
     keepinvvars = np.hstack(keepinvvars)
@@ -412,6 +425,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
 
         comod  /= np.maximum(cons[iband], 1)
         comods.append(comod)
+        del comod
 
         fn = 'tunebrick-plots/chi2-b%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, cochi2, **fwa)
@@ -443,7 +457,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     dimshow(rgb)
     plt.title('Model')
     ps.savefig()
-
+    del comods
+    
     # Plot sources over top
     ax = plt.axis()
     for i,src in enumerate(cat):

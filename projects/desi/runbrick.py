@@ -261,7 +261,7 @@ def tims_compute_resamp(tims, targetwcs):
     #for tim in tims:
     #    r = tim_get_resamp(tim, targetwcs)
     #    tim.resamp = r
-    R = _map(tim_get_resamp, [(tim,targetwcs) for tim in tims])
+    R = _map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
     for tim,r in zip(tims, R):
         tim.resamp = r
 
