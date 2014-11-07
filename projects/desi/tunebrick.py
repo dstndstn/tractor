@@ -179,6 +179,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     ps.savefig()
     del comods
 
+    # Parallelize in blobs?
+
+
     t0 = Time()
     keepinvvars = []
     keepcat = []
@@ -388,6 +391,11 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         ikeep.append(isrc)
     cat = keepcat
     Tcat.cut(np.array(ikeep))
+
+    gc = get_galaxy_cache()
+    print 'Galaxy cache:', gc
+    if gc is not None:
+        gc.clear()
     print 'Model selection:', Time()-t0
 
     assert(len(iterinvvars) == 0)
