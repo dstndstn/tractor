@@ -78,6 +78,7 @@ def stage_cat(brickid=None, target_extent=None,
 def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                bands=None, invvars=None, brickid=None,
                Tcat=None, version_header=None, **kwargs):
+    tstage = t0 = Time()
     print 'kwargs:', kwargs.keys()
 
     #print 'invvars:', invvars
@@ -127,6 +128,8 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         # plt.text(x, y, '%i' % i, color=cc, ha='center', va='bottom')
     plt.axis(ax)
     ps.savefig()
+
+    print 'Plots:', Time()-t0
 
     # print 'Catalog:'
     # for src in cat:
@@ -188,9 +191,6 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     plt.title('Model')
     ps.savefig()
     del comods
-
-    # Parallelize in blobs?
-
 
     t0 = Time()
     keepinvvars = []
@@ -406,14 +406,15 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     print 'Galaxy cache:', gc
     if gc is not None:
         gc.clear()
-    print 'Model selection:', Time()-t0
 
     assert(len(iterinvvars) == 0)
     keepinvvars = np.hstack(keepinvvars)
     assert(Catalog(*keepcat).numberOfParams() == len(keepinvvars))
     invvars = keepinvvars
     assert(len(cat) == len(Tcat))
+    print 'Model selection:', Time()-t0
 
+    t0 = Time()
     # WCS header for these images
     hdr = fitsio.FITSHDR()
     targetwcs.add_to_header(hdr)
@@ -499,12 +500,16 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     os.unlink(tmpfn)
 
     assert(len(cat) == len(Tcat))
+    print 'Coadd FITS files and plots:', Time()-t0
+
+    print 'Whole stage:', Time()-tstage
 
     return dict(cat=cat, Tcat=Tcat, invvars=invvars)
 
 def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
                     bands=None, targetwcs=None, brickid=None,
                     **kwargs):
+    t0 = Time()
     
     # Write catalog
     hdr = version_header
@@ -580,6 +585,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
         'sdss_psfflux sdss_psfflux_ivar sdss_flags sdss_objc_flags sdss_objc_type ' +
         'sdss_extinction').split(' '))
     print 'Wrote', fn
+    print 'Writing catalog:', Time()-t0
 
 
 if __name__ == '__main__':
