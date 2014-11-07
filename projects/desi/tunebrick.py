@@ -109,7 +109,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     tmpfn = create_temp(suffix='.png')
     plt.imsave(tmpfn, rgb)
     del rgb
-    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick-plots/brick-%06i-full.jpg' % (tmpfn, brickid)
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick/coadd/image-%06i-full.jpg' % (tmpfn, brickid)
     os.system(cmd)
     os.unlink(tmpfn)
 
@@ -445,28 +445,28 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
         comods.append(comod)
         del comod
 
-        fn = 'tunebrick-plots/chi2-b%06i-%s.fits' % (brickid, band)
+        fn = 'tunebrick/coadd/chi2-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, cochi2, **fwa)
         del cochi2
         print 'Wrote', fn
 
-        fn = 'tunebrick-plots/image-b%06i-%s.fits' % (brickid, band)
+        fn = 'tunebrick/coadd/image-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, coimgs[iband], **fwa)
         print 'Wrote', fn
         fitsio.write(fn, coiv, clobber=False)
         print 'Appended ivar to', fn
         del coiv
 
-        fn = 'tunebrick-plots/ptsrcdepth-b%06i-%s.fits' % (brickid, band)
+        fn = 'tunebrick/coadd/depth-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, detiv, **fwa)
         print 'Wrote', fn
         del detiv
 
-        fn = 'tunebrick-plots/model-b%06i-%s.fits' % (brickid, band)
+        fn = 'tunebrick/coadd/model-%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, comods[iband], **fwa)
         print 'Wrote', fn
 
-        fn = 'tunebrick-plots/nexp-b%06i-%s.fits' % (brickid, band)
+        fn = 'tunebrick/coadd/nexp-b%06i-%s.fits' % (brickid, band)
         fitsio.write(fn, cons[iband], **fwa)
         print 'Wrote', fn
 
@@ -494,7 +494,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     tmpfn = create_temp(suffix='.png')
     plt.imsave(tmpfn, rgb)
     del rgb
-    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick-plots/model-%06i-full.jpg' % (tmpfn, brickid)
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick/coadd/model-%06i-full.jpg' % (tmpfn, brickid)
     os.system(cmd)
     os.unlink(tmpfn)
 
@@ -566,7 +566,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     for k in ['shapeExp', 'shapeDev', 'shapeExp_ivar', 'shapeDev_ivar']:
         T.delete_column(k)
               
-    fn = 'tunebrick-cats/tractor-phot-b%06i.fits' % brickid
+    fn = 'tunebrick/tractor/tractor-%06i.fits' % brickid
     T.writeto(fn, header=hdr, columns=(
         'brickid brickname objid ra dec ra_ivar dec_ivar type ' +
         'x y brick_primary blob ' +
@@ -622,7 +622,7 @@ if __name__ == '__main__':
                'writecat2': 'tune'
                }
 
-    ps = PlotSequence('tunebrick-plots/brick-%06i' % opt.brick)
+    ps = PlotSequence('tunebrick/coadd/plot-%06i' % opt.brick)
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                     program_name = 'tunebrick.py')
