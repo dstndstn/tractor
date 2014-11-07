@@ -82,7 +82,7 @@ def source_param_types(src):
     return types
     
 
-def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
+def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
     if T is None:
         T = fits_table()
     if hdr is None:
@@ -112,31 +112,43 @@ def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
 
     params0 = cat.getParams()
 
+    print 'cat', len(cat)
+    allbands = 'ugrizy'
+    T.decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
+    T.decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
+
     for filt in filts:
         flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
                          for src in cat])
 
-        if var is not None:
+        if invvars is not None:
             # Oh my, this is tricky... set parameter values to the variance
             # vector so that we can read off the parameter variances via the
             # python object apis.
-            cat.setParams(var)
-            fluxvar = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
+            cat.setParams(invvars)
+            flux_iv = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
                                 for src in cat])
-            flux_iv = 1./np.array(fluxvar)
             cat.setParams(params0)
 
-            mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
+            #mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
         else:
-            mag = NanoMaggies.nanomaggiesToMag(flux)
-            dmag = np.zeros_like(mag)
+            #mag = NanoMaggies.nanomaggiesToMag(flux)
+            #dmag = np.zeros_like(mag)
             flux_iv = np.zeros_like(flux)
 
-        T.set('decam_%s_nanomaggies'        % filt, flux.astype(np.float32))
-        T.set('decam_%s_mag'                % filt, mag.astype(np.float32))
+        #print 'decam_flux:', T.decam_flux.shape
+        #print 'filt', filt
+        #print 'allbands', allbands
+        i = allbands.index(filt)
+        #print 'index', i
+        #print 'flux', len(flux)
+        T.decam_flux[:,i] = flux.astype(np.float32)
+        T.decam_flux_ivar[:,i] = flux_iv.astype(np.float32)
 
-        T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv.astype(np.float32))
-        T.set('decam_%s_mag_err'            % filt, dmag.astype(np.float32))
+        # T.set('decam_%s_nanomaggies'        % filt, flux.astype(np.float32))
+        # T.set('decam_%s_mag'                % filt, mag.astype(np.float32))
+        # T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv.astype(np.float32))
+        # T.set('decam_%s_mag_err'            % filt, dmag.astype(np.float32))
 
 
     if fs is not None:
@@ -148,14 +160,14 @@ def prepare_fits_catalog(cat, var, T, hdr, filts, fs):
 
     get_tractor_fits_values(T, cat, '%s')
 
-    if var is not None:
-        cat.setParams(var)
+    if invvars is not None:
+        cat.setParams(invvars)
     else:
         cat.setParams(np.zeros(cat.numberOfParams()))
-    get_tractor_fits_values(T, cat, '%s_var')
+    get_tractor_fits_values(T, cat, '%s_ivar')
     cat.setParams(params0)
     # Heh, no uncertainty here!
-    T.delete_column('type_var')
+    T.delete_column('type_ivar')
     
     return T, hdr
         

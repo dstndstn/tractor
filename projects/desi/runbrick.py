@@ -722,9 +722,9 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     iter = iterwrapper(iter, len(bloblist))
     R = _map(_bounce_one_blob, iter)
 
-    srcvariances = [[] for src in cat]
-    for Isrcs,fitsrcs,srcvars in R:
-        for isrc,fitsrc,srcvar in zip(Isrcs, fitsrcs, srcvars):
+    srcivs = [[] for src in cat]
+    for Isrcs,fitsrcs,srcinvvars in R:
+        for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcvars):
             src = cat[isrc]
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = fitsrc.shape
@@ -732,31 +732,31 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
                 src.shapeExp = fitsrc.shapeExp
                 src.shapeDev = fitsrc.shapeDev
             src.setParams(fitsrc.getParams())
-            srcvariances[isrc].extend(srcvar)
+            srcivs[isrc].extend(srciv)
 
     cat.thawAllRecursive()
     for i,src in enumerate(cat):
         print 'Source', i, src
-        print 'variances:', srcvariances[i]
-        print len(srcvariances[i]), 'vs', src.numberOfParams()
-        if len(srcvariances[i]) != src.numberOfParams():
+        print 'variances:', srcivs[i]
+        print len(srcivs[i]), 'vs', src.numberOfParams()
+        if len(srcivs[i]) != src.numberOfParams():
             # This can happen for sources outside the brick bounds: they never get optimized?
             print 'Warning: zeroing variances for source', src
-            srcvariances[i] = [0]*src.numberOfParams()
+            srcivs[i] = [0]*src.numberOfParams()
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = EllipseE.fromEllipseESoft(src.shape)
             elif isinstance(src, FixedCompositeGalaxy):
                 src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
                 src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-        assert(len(srcvariances[i]) == src.numberOfParams())
-    variances = np.hstack(srcvariances)
-    assert(len(variances) == cat.numberOfParams())
+        assert(len(srcivs[i]) == src.numberOfParams())
+    invvars = np.hstack(srcivs)
+    assert(len(invvars) == cat.numberOfParams())
 
     print 'Fitting sources took:', Time()-tfitall
     print 'Logprob:', tractor.getLogProb()
     
     rtn = dict()
-    for k in ['tractor', 'tims', 'ps', 'variances']:
+    for k in ['tractor', 'tims', 'ps', 'invvars']:
         rtn[k] = locals()[k]
     return rtn
                           
@@ -1155,7 +1155,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     tlast = Time()
 
     # Variances
-    srcvariances = [[] for src in srcs]
+    srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
     subcat.freezeAllParams()
     for isub in range(len(srcs)):
@@ -1183,16 +1183,12 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 slc = deriv.getSlice(ie)
                 chi = deriv.patch * ie[slc]
                 dchisq += (chi**2).sum()
-            if dchisq == 0.:
-                v = np.nan
-            else:
-                v = 1./dchisq
-            srcvariances[isub].append(v)
-        assert(len(srcvariances[isub]) == subcat[isub].numberOfParams())
+            srcinvvars[isub].append(dchisq)
+        assert(len(srcinvvars[isub]) == subcat[isub].numberOfParams())
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
 
-    return Isrcs, srcs, srcvariances
+    return Isrcs, srcs, srcinvvars
 
 
 '''
@@ -1986,7 +1982,7 @@ def stage_writecat(
     bands=None, ps=None,
     plots=False, tractor=None,
     brickid=None,
-    variances=None,
+    invvars=None,
     catalogfn=None,
     **kwargs):
     from desi_common import prepare_fits_catalog
@@ -2003,9 +1999,9 @@ def stage_writecat(
 
     cat.thawAllRecursive()
     hdr = version_header
-    T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
+    T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
 
-    # Convert from variances to inverse-sigmas.
+    # Convert from variances to invvars
     for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
         X = T2.get(k)
         T2.delete_column(k)

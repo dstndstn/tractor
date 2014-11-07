@@ -769,7 +769,7 @@ def stage2(cat=None, variances=None, T=None, bands=None, ps=None,
     TT = T.copy()
     hdr = None
     fs = None
-    T2,hdr = prepare_fits_catalog(cat, variances, TT, hdr, bands, fs)
+    T2,hdr = prepare_fits_catalog(cat, 1./np.array(variances), TT, hdr, bands, fs)
     T2.about()
     T2.writeto('cfht.fits')
     

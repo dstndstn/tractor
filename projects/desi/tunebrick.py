@@ -468,7 +468,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
 
     # Keep these columns...
     TT = fits_table()
-    for k in ['blob','brickid','sdss_run', 'sdss_camcol', 'sdss_field', 'sdss_objid',
+    for k in ['blob','brickid','objid','sdss_run', 'sdss_camcol', 'sdss_field', 'sdss_objid',
               'sdss_cmodelflux', 'sdss_cmodelflux_ivar', 'sdss_ra', 'sdss_dec',
               'sdss_modelflux', 'sdss_modelflux_ivar',
               'sdss_psfflux', 'sdss_psfflux_ivar', 'sdss_extinction', 'sdss_flags',
@@ -483,9 +483,12 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     fs = None
     T,hdr = prepare_fits_catalog(Catalog(*cat), variances, TT, hdr, bands, fs)
 
-    ok,T.x,T.y = targetwcs.radec2pixelxy(T.ra, T.dec)
+    ok,x,y = targetwcs.radec2pixelxy(T.ra, T.dec)
+    T.x = x.astype(np.float32)
+    T.y = y.astype(np.float32)
     for col in T.get_columns():
         if 'invvar' in col:
+            print 'Renaming', col
             T.rename(col, col.replace('invvar', 'ivar'))
 
     decals = Decals()
@@ -494,10 +497,12 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
                        (T.dec >= brick.dec1) * (T.dec < brick.dec2))
     T.brickname = np.array([brick.brickname] * len(T))
 
-    for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
-        X = T.get(k)
-        T.delete_column(k)
-        T.set(k.replace('_var', '_ivar'), (1./X).astype(np.float32))
+    T.about()
+
+    # for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
+    #     X = T.get(k)
+    #     T.delete_column(k)
+    #     T.set(k.replace('_var', '_ivar'), (1./X).astype(np.float32))
     # Unpack shape columns
     T.shapeExp_r  = T.shapeExp[:,0]
     T.shapeExp_e1 = T.shapeExp[:,1]
@@ -512,12 +517,12 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     T.shapeDev_e1_ivar = T.shapeExp_ivar[:,1]
     T.shapeDev_e2_ivar = T.shapeExp_ivar[:,2]
 
-    for k in ['decam_g_nanomaggies', 'decam_g_nanomaggies_ivar',
-              'decam_g_mag', 'decam_g_mag_err',
-              'decam_r_nanomaggies', 'decam_r_nanomaggies_ivar',
-              'decam_r_mag', 'decam_r_mag_err',
-              'decam_z_nanomaggies', 'decam_z_nanomaggies_ivar',
-              'decam_z_mag', 'decam_z_mag_err',
+    for k in [# 'decam_g_nanomaggies', 'decam_g_nanomaggies_ivar',
+              # 'decam_g_mag', 'decam_g_mag_err',
+              # 'decam_r_nanomaggies', 'decam_r_nanomaggies_ivar',
+              # 'decam_r_mag', 'decam_r_mag_err',
+              # 'decam_z_nanomaggies', 'decam_z_nanomaggies_ivar',
+              # 'decam_z_mag', 'decam_z_mag_err',
               'shapeExp', 'shapeDev', 'shapeExp_ivar', 'shapeDev_ivar']:
         T.delete_column(k)
               
