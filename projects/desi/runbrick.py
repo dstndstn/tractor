@@ -254,9 +254,15 @@ def tim_get_resamp(tim, targetwcs):
     resamp = [x.astype(np.int16) for x in (Yo,Xo,Yi,Xi)]
     return resamp
 
+def _bounce_tim_get_resamp((tim, targetwcs)):
+    return tim_get_resamp(tim, targetwcs)
+
 def tims_compute_resamp(tims, targetwcs):
-    for tim in tims:
-        r = tim_get_resamp(tim, targetwcs)
+    #for tim in tims:
+    #    r = tim_get_resamp(tim, targetwcs)
+    #    tim.resamp = r
+    R = _map(tim_get_resamp, [(tim,targetwcs) for tim in tims])
+    for tim,r in zip(tims, R):
         tim.resamp = r
 
 def compute_coadds(tims, bands, W, H, targetwcs):

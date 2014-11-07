@@ -22,8 +22,22 @@ from astrometry.libkd.spherematch import *
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
+from glob import glob
 
 if __name__ == '__main__':
+
+    # tune-ups:
+    fns = glob('pipebrick-cats/tractor-phot-b??????.fits')
+    fns.sort()
+    for fn in fns:
+        fn = fn.replace('pipebrick-cats/tractor-phot-b', '')
+        fn = fn.replace('.fits', '')
+        brickid = int(fn, 10)
+        print brickid
+    sys.exit(0)
+
+
+
     D = Decals()
     B = D.get_bricks()
 
@@ -52,7 +66,7 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
 
-    if True:
+    if False:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -115,7 +129,8 @@ if __name__ == '__main__':
 
     for b in B:
         #fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b.brickid
-        fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+        #fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+        fn = 'tunebricks-cats/tractor-phot-b%06i.fits' % b.brickid
         if os.path.exists(fn):
             print >> sys.stderr, 'exists:', fn
             continue
