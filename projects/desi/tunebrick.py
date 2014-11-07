@@ -534,9 +534,19 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
         T.delete_column(k)
               
     fn = 'tunebrick-cats/tractor-phot-b%06i.fits' % brickid
-    T.writeto(fn, header=hdr)
+    T.writeto(fn, header=hdr, columns=(
+        'brickid brickname objid ra dec ra_ivar dec_ivar type ' +
+        'x y brick_primary blob ' +
+        'decam_flux decam_flux_ivar ' +
+        'fracDev fracDev_ivar ' +
+        'shapeExp_r shapeExp_e1 shapeExp_e2 shapeDev_r shapeDev_e1 shapeDev_e2 ' +
+        'shapeExp_r_ivar shapeExp_e1_ivar shapeExp_e2_ivar ' +
+        'shapeDev_r_ivar shapeDev_e1_ivar shapeDev_e2_ivar ' +
+        'sdss_run sdss_camcol sdss_field sdss_objid sdss_cmodelflux ' +
+        'sdss_cmodelflux_ivar sdss_ra sdss_dec sdss_modelflux sdss_modelflux_ivar ' +
+        'sdss_psfflux sdss_psfflux_ivar sdss_flags sdss_objc_flags sdss_objc_type ' +
+        'sdss_extinction').split(' '))
     print 'Wrote', fn
-
 
 
 if __name__ == '__main__':
