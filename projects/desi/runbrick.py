@@ -654,31 +654,7 @@ def stage_srcs(coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
 
-
-def stage_fitblobs(T=None, coimgs=None, cons=None,
-                   detmaps=None, detivs=None,
-                   bloblist=None, blobsrcs=None, blobflux=None,
-                   blobslices=None, blobs=None,
-                   tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-                   W=None,H=None, brickid=None,
-                   bands=None, ps=None, tims=None,
-                   plots=False, plots2=False,
-                   **kwargs):
-    for tim in tims:
-        assert(np.all(np.isfinite(tim.getInvError())))
-
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    for tim in tims:
-        from tractor.psfex import CachingPsfEx
-        tim.psfex.radius = 20
-        tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
-
-    # How far down to render model profiles
-    minsigma = 0.1
-    for tim in tims:
-        tim.modelMinval = minsigma * tim.sig1
-
+def set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma, minradius=3):
     # FIXME -- set source radii crudely, based on the maximum of the
     # PSF profiles in all images (!) -- should have a source x image
     # structure -- *and* based on SDSS fluxes.
@@ -714,6 +690,32 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
             continue
         src.fixedRadius = max(minradius, 1 + ii[-1])
         #print 'Nsigma', nsigmas, 'radius', src.fixedRadius
+
+def stage_fitblobs(T=None, coimgs=None, cons=None,
+                   detmaps=None, detivs=None,
+                   bloblist=None, blobsrcs=None, blobflux=None,
+                   blobslices=None, blobs=None,
+                   tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+                   W=None,H=None, brickid=None,
+                   bands=None, ps=None, tims=None,
+                   plots=False, plots2=False,
+                   **kwargs):
+    for tim in tims:
+        assert(np.all(np.isfinite(tim.getInvError())))
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    for tim in tims:
+        from tractor.psfex import CachingPsfEx
+        tim.psfex.radius = 20
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
+        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+
+    # How far down to render model profiles
+    minsigma = 0.1
+    for tim in tims:
+        tim.modelMinval = minsigma * tim.sig1
+
+    set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
 
     ### FIXME
     ## # Find sources that do not belong to a blob and add them as

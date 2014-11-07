@@ -14,7 +14,7 @@ from tractor.galaxy import *
 
 import runbrick
 from runbrick import stage_tims, _map, _get_mod, runbrick_global_init, get_rgb
-from runbrick import tim_get_resamp
+from runbrick import tim_get_resamp, set_source_radii
 
 def stage_cat(brickid=None, target_extent=None,
               targetwcs=None, tims=None, **kwargs):
@@ -87,6 +87,16 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
     for tim in tims:
         tim.modelMinval = minsigma * tim.sig1
 
+    # Caching PSF
+    for tim in tims:
+        from tractor.psfex import CachingPsfEx
+        tim.psfex.radius = 20
+        tim.psfex.fitSavedData(*tim.psfex.splinedata)
+        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
+
     plt.figure(figsize=(10,10))
     plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
 
@@ -138,9 +148,9 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             continue
         keepcat.append(src)
         keepinvvars.extend(iv)
-        print 'Keep:', src
-        print 'iv:', iv
-        print 'sigma', 1./np.sqrt(np.array(iv))
+        #print 'Keep:', src
+        #print 'iv:', iv
+        #print 'sigma', 1./np.sqrt(np.array(iv))
         ikeep.append(i)
     cat = keepcat
     Tcat.cut(np.array(ikeep))
@@ -258,7 +268,7 @@ def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
             # FIXME -- track down why patches are being made with extent outside
             # that of the parent!
             H,W = tim.shape
-            if patch.x0 < 0 or patch.y0 < 0 or patch.x1 >= W or patch.y1 >= H:
+            if patch.x0 < 0 or patch.y0 < 0 or patch.x1 > W or patch.y1 > H:
                 print 'Warning: Patch extends outside tim bounds:'
                 print 'patch extent:', patch.getExtent()
                 print 'image size:', W, 'x', H
@@ -513,7 +523,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
               'sdss_cmodelflux', 'sdss_cmodelflux_ivar', 'sdss_ra', 'sdss_dec',
               'sdss_modelflux', 'sdss_modelflux_ivar',
               'sdss_psfflux', 'sdss_psfflux_ivar', 'sdss_extinction', 'sdss_flags',
-              'sdss_objc_flags', 'sdss_objc_type',]:
+              'sdss_objc_flags', 'sdss_objc_type', 'tx','ty']:
         TT.set(k, Tcat.get(k))
     TT._length = len(Tcat)
 
