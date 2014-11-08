@@ -969,7 +969,7 @@ class PointSource(MultiParams):
                     derivs.append(deriv)
 
             elif counts0 == 0:
-                derivs.append([None] * pos.numberOfParams())
+                derivs.extend([None] * pos.numberOfParams())
             else:
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()

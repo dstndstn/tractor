@@ -77,7 +77,7 @@ def stage_cat(brickid=None, target_extent=None,
 
 def stage_tune(tims=None, cat=None, targetwcs=None, coimgs=None, cons=None,
                bands=None, invvars=None, brickid=None,
-               Tcat=None, version_header=None, **kwargs):
+               Tcat=None, version_header=None, ps=None, **kwargs):
     tstage = t0 = Time()
     print 'kwargs:', kwargs.keys()
 
