@@ -574,7 +574,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     fn = 'tunebrick/tractor/tractor-%06i.fits' % brickid
     T.writeto(fn, header=hdr, columns=(
         'brickid brickname objid ra dec ra_ivar dec_ivar type ' +
-        'x y brick_primary blob ' +
+        'x y brick_primary blob tx ty ' +
         'decam_flux decam_flux_ivar ' +
         'fracDev fracDev_ivar ' +
         'shapeExp_r shapeExp_e1 shapeExp_e2 shapeDev_r shapeDev_e1 shapeDev_e2 ' +
