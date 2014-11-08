@@ -588,7 +588,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Writing catalog:', Time()-t0
 
 
-if __name__ == '__main__':
+def main():
     import optparse
     from astrometry.util.stages import *
 
@@ -641,8 +641,13 @@ if __name__ == '__main__':
     else:
         runbrick_global_init()
 
+    t0 = Time()
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, initial_args=initargs, **kwargs)
                  
                #tune(opt.brick, target_extent=opt.zoom)
+    print 'Total:', Time()-t0
+
+if __name__ == '__main__':
+    main()

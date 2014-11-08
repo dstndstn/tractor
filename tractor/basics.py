@@ -960,30 +960,16 @@ class PointSource(MultiParams):
 
                 px,py = wcs.positionToPixel(pos, self)
                 cd = wcs.cdAtPixel(px, py)
-                #print 'cd', cd
                 cdi = np.linalg.inv(cd)
-                #print 'cdi', cdi
                 # Get thawed Position parameter indices
                 thawed = pos.getThawedParamIndices()
                 for i,pname in zip(thawed, pos.getParamNames()):
                     deriv = (patchdx * cdi[0,i] + patchdy * cdi[1,i]) * counts0
                     deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
                     derivs.append(deriv)
-                #derivs.extend((patchdx, patchdy))
 
-                # psteps = pos.getStepSizes(img)
-                # pvals = pos.getParams()
-                # pnames = pos.getParamNames()
-                # for i,(pstep,pname) in enumerate(zip(psteps,pnames)):
-                #     oldval = pos.setParam(i, pvals[i] + pstep)
-                #     px1,py1 = wcs.positionToPixel(pos, self)
-                #     pos.setParam(i, oldval)
-                #     dx,dy = px1 - px, py1 - py
-                #     print 'dx,dy', dx/pstep, dy/pstep
-                #     deriv = (patchdx * dx + patchdy * dy) * counts0/pstep
-                #     deriv.setName('d(ptsrc)/d(pos.%s)' % pname)
-                #     derivs.append(deriv)
-
+            elif counts0 == 0:
+                derivs.append([None] * pos.numberOfParams())
             else:
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
