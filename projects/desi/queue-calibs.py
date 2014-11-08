@@ -26,17 +26,16 @@ from glob import glob
 
 if __name__ == '__main__':
 
-    # tune-ups:
-    fns = glob('pipebrick-cats/tractor-phot-b??????.fits')
-    fns.sort()
-    for fn in fns:
-        fn = fn.replace('pipebrick-cats/tractor-phot-b', '')
-        fn = fn.replace('.fits', '')
-        brickid = int(fn, 10)
-        print brickid
-    sys.exit(0)
-
-
+    if False:
+        # tune-ups:
+        fns = glob('pipebrick-cats/tractor-phot-b??????.fits')
+        fns.sort()
+        for fn in fns:
+            fn = fn.replace('pipebrick-cats/tractor-phot-b', '')
+            fn = fn.replace('.fits', '')
+            brickid = int(fn, 10)
+            print brickid
+        sys.exit(0)
 
     D = Decals()
     B = D.get_bricks()
@@ -66,7 +65,9 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
 
-    if False:
+    B.writeto('edr-bricks.fits')
+
+    if True:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -78,36 +79,48 @@ if __name__ == '__main__':
                 '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
     
         for b in B:
-            pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
-            stampfn = 'jpegs/brick-%06i-00-stamp.jpg' % b.brickid
+            #pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
+            #stampfn = 'jpegs/brick-%06i-00-stamp.jpg' % b.brickid
+            pngfn = 'tunebrick/coadd/plot-%06i-00.png' % b.brickid
+            stampfn = 'tunebrick/web/image-%06i-stamp.jpg' % b.brickid
             if not os.path.exists(stampfn) and os.path.exists(pngfn):
-                cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
+                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
+                cmd = 'pngtopnm %s | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
                 print cmd
                 os.system(cmd)
             if not os.path.exists(stampfn):
                 continue
-    
-            png2fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-            jpg2fn = 'jpegs/brick-%06i-02.jpg' % b.brickid
-            if not os.path.exists(jpg2fn):
-                cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
-                print cmd
-                os.system(cmd)
 
-            jpgfn = 'jpegs/brick-%06i-00.jpg' % b.brickid
-            if not os.path.exists(jpgfn):
-                cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
-                print cmd
-                os.system(cmd)
-
-            modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-            modstampfn = 'jpegs/brick-%06i-02-stamp.jpg' % b.brickid
+            #modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+            #modstampfn = 'jpegs/brick-%06i-02-stamp.jpg' % b.brickid
+            modpngfn = 'tunebrick/coadd/plot-%06i-03.png' % b.brickid
+            modstampfn = 'tunebrick/web/model-%06i-stamp.jpg' % b.brickid
             if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
-                cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
+                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
+                cmd = 'pngtopnm %s | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
                 print cmd
                 os.system(cmd)
-    
-    
+
+            # 1000 x 1000 image
+            #jpgfn = 'jpegs/brick-%06i-00.jpg' % b.brickid
+            jpgfn = 'tunebrick/web/image-%06i.jpg' % b.brickid
+            if not os.path.exists(jpgfn):
+                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
+                cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
+                print cmd
+                os.system(cmd)
+
+            # 1000 x 1000 model
+            #png2fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
+            #jpg2fn = 'jpegs/brick-%06i-02.jpg' % b.brickid
+            png2fn = modpngfn
+            jpg2fn = 'tunebrick/web/model-%06i.jpg' % b.brickid
+            if not os.path.exists(jpg2fn):
+                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
+                cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
+                print cmd
+                os.system(cmd)
+
             bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
             #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
             left   = int(stampspace * (rhi - b.ra1) / bricksize)
@@ -115,17 +128,30 @@ if __name__ == '__main__':
                      "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
                      'style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
                      (bottom, left, stampsize, stampsize))
+            html = html.replace('tunebrick/web/', '')
         html += ('</div>' + 
                 '</body></html>')
     
-        f = open('bricks.html', 'w')
+        f = open('tunebrick/web/bricks.html', 'w')
         f.write(html)
         f.close()
     
-        sys.exit(0)
+        #sys.exit(0)
 
 
     T = D.get_ccds()
+
+    allI = set()
+    for b in B:
+        wcs = wcs_for_brick(b)
+        I = ccds_touching_wcs(wcs, T)
+        print len(I), 'CCDs for brick', b.brickid
+        allI.update(I)
+    allI = list(allI)
+    allI.sort()
+    T.cut(allI)
+    T.writeto('edr-ccds.fits')
+    sys.exit(0)
 
     for b in B:
         #fn = 'pipebrick-cats/tractor-phot-b%06i.fits' % b.brickid

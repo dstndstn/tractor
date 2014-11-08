@@ -984,7 +984,10 @@ class PointSource(MultiParams):
                     patchx = self.getUnitFluxModelPatch(img, minval=minval)
                 
                     pos.setParam(i, oldval)
-                    dx = (patchx - patch0) * (counts0 / pstep)
+                    if patchx is None:
+                        dx = patch0 * (-1 * counts0 / pstep)
+                    else:
+                        dx = (patchx - patch0) * (counts0 / pstep)
                     dx.setName('d(ptsrc)/d(pos%i)' % i)
                     derivs.append(dx)
 
