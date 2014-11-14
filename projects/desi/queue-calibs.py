@@ -65,6 +65,11 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     #print len(B), 'bricks in range'
 
+    for b in B:
+        print b.brickid
+    sys.exit(0)
+
+
     B.writeto('edr-bricks.fits')
 
     if True:

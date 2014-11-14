@@ -587,16 +587,17 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Wrote', fn
     print 'Writing catalog:', Time()-t0
 
-def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None,
+def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
                   **kwargs):
-    print 'kwargs:', kwargs.keys()
+    #print 'kwargs:', kwargs.keys()
     
     W = targetwcs.get_width()
     H = targetwcs.get_height()
 
     coimgs = []
+    # moo
     cowimgs = []
-    nimgs = []
+    #nimgs = []
     wimgs = []
     for iband,band in enumerate(bands):
         coimg  = np.zeros((H,W), np.float32)
@@ -618,7 +619,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None,
         cowimg /= np.maximum(wimg, 1e-16)
         coimgs.append(coimg)
         cowimgs.append(cowimg)
-        nimgs.append(nimg)
+        #nimgs.append(nimg)
         wimgs.append(wimg)
 
     plt.figure(figsize=(10,10))
@@ -652,11 +653,26 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None,
 
     for i,(wimg,cowimg,coimg) in enumerate(zip(wimgs, cowimgs, coimgs)):
         cowimg[wimg == 0] = coimg[wimg == 0]
+    del wimgs
+    del coimgs
+    del wimg
+    del coimg
+    rgb = get_rgb(cowimgs, bands)
+    del cowimgs
 
     plt.clf()
-    dimshow(get_rgb(cowimgs, bands))
+    dimshow(rgb)
     #plt.title('wimg+')
-    ps.savefig()
+    #ps.savefig()
+    plt.savefig('tunebrick/coadd/image2-%06i.png' % brickid)
+
+    tmpfn = create_temp(suffix='.png')
+    plt.imsave(tmpfn, rgb)
+    del rgb
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick/coadd/image2-%06i-full.jpg' % (tmpfn, brickid)
+    os.system(cmd)
+    os.unlink(tmpfn)
+
 
 def main():
     import optparse

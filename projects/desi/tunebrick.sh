@@ -24,6 +24,7 @@ export MKL_NUM_THREADS=1
 
 brick="$1"
 
-python -u projects/desi/tunebrick.py -n -b $brick > tunebrick-logs/$brick.log 2>&1
+#python -u projects/desi/tunebrick.py -n -b $brick > tunebrick-logs/$brick.log 2>&1
+python -u projects/desi/tunebrick.py -n -b $brick -s recoadd > tunebrick-logs/$brick-recoadd.log 2>&1
 
 # qdo launch bricks 1 --batchopts "-l pvmem=10GB -t 1-20" --batchqueue serial --walltime=24:00:00 --script projects/desi/tunebrick.sh
