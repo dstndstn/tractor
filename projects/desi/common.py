@@ -160,7 +160,8 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
                      np.hypot(T.width, T.height) / 2.)
 
     rad = trad + ccdrad
-    r,d = targetwcs.crval
+    #r,d = targetwcs.crval
+    r,d = targetwcs.radec_center()
     #print len(T), 'ccds'
     #print 'trad', trad, 'ccdrad', ccdrad
     I = np.flatnonzero(np.abs(T.dec - d) < rad)

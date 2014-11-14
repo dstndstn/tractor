@@ -587,6 +587,76 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Wrote', fn
     print 'Writing catalog:', Time()-t0
 
+def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None,
+                  **kwargs):
+    print 'kwargs:', kwargs.keys()
+    
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    coimgs = []
+    cowimgs = []
+    nimgs = []
+    wimgs = []
+    for iband,band in enumerate(bands):
+        coimg  = np.zeros((H,W), np.float32)
+        cowimg  = np.zeros((H,W), np.float32)
+        wimg  = np.zeros((H,W), np.float32)
+        nimg  = np.zeros((H,W), np.uint8)
+        for tim in tims:
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            coimg[Yo,Xo] += tim.getImage()[Yi,Xi]
+            nimg[Yo,Xo] += 1
+            cowimg[Yo,Xo] += tim.getImage()[Yi,Xi] * tim.getInvvar()[Yi,Xi]
+            wimg[Yo,Xo] += tim.getInvvar()[Yi,Xi]
+        coimg /= np.maximum(nimg, 1)
+        cowimg /= np.maximum(wimg, 1e-16)
+        coimgs.append(coimg)
+        cowimgs.append(cowimg)
+        nimgs.append(nimg)
+        wimgs.append(wimg)
+
+    plt.figure(figsize=(10,10))
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+
+    # plt.clf()
+    # dimshow(get_rgb(coimgs, bands))
+    # plt.title('img')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # for i,nimg in enumerate(nimgs):
+    #     plt.subplot(2,2,1+i)
+    #     plt.imshow(nimg, interpolation='nearest', origin='lower', vmin=0,
+    #                cmap='hot')
+    #     plt.colorbar()
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # dimshow(get_rgb(cowimgs, bands))
+    # plt.title('wimg')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # for i,wimg in enumerate(wimgs):
+    #     plt.subplot(2,2,1+i)
+    #     plt.imshow(wimg, interpolation='nearest', origin='lower', vmin=0,
+    #                cmap='hot')
+    #     plt.colorbar()
+    # ps.savefig()
+
+    for i,(wimg,cowimg,coimg) in enumerate(zip(wimgs, cowimgs, coimgs)):
+        cowimg[wimg == 0] = coimg[wimg == 0]
+
+    plt.clf()
+    dimshow(get_rgb(cowimgs, bands))
+    #plt.title('wimg+')
+    ps.savefig()
 
 def main():
     import optparse
@@ -609,6 +679,9 @@ def main():
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
 
+    parser.add_option('--plot-base', default='plot-%(brick)06i', #'tunebrick/coadd/plot-%(brick)06i',
+                      help='Plot filenames; default %default')
+
     parser.add_option('--threads', type=int, help='Run multi-threaded')
 
     opt,args = parser.parse_args()
@@ -625,10 +698,12 @@ def main():
     prereqs = {'tims': None,
                'cat': 'tims',
                'tune': 'cat',
-               'writecat2': 'tune'
+               'writecat2': 'tune',
+
+               'recoadd': 'tims',
                }
 
-    ps = PlotSequence('tunebrick/coadd/plot-%06i' % opt.brick)
+    ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                     program_name = 'tunebrick.py')
