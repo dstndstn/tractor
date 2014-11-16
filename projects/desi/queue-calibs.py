@@ -24,6 +24,9 @@ matplotlib.use('Agg')
 import pylab as plt
 from glob import glob
 
+def log(*s):
+    print >>sys.stderr, ' '.join([str(ss) for ss in s])
+
 if __name__ == '__main__':
 
     if False:
@@ -52,10 +55,16 @@ if __name__ == '__main__':
 
     #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
 
+    # EDR:
     # 535 bricks, ~7000 CCDs
-    rlo,rhi = 240,245
-    dlo,dhi =   5, 12
-    
+    # rlo,rhi = 240,245
+    # dlo,dhi =   5, 12
+
+    # 860 bricks
+    # ~10,000 CCDs
+    rlo,rhi = 239,246
+    dlo,dhi =   5, 13
+
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
     # 240 bricks, ~3000 CCDs
@@ -63,16 +72,15 @@ if __name__ == '__main__':
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
-    #print len(B), 'bricks in range'
+    log(len(B), 'bricks in range')
 
-    for b in B:
-        print b.brickid
-    sys.exit(0)
+    #for b in B:
+    #    print b.brickid
+    #sys.exit(0)
 
+    #B.writeto('edr-bricks.fits')
 
-    B.writeto('edr-bricks.fits')
-
-    if True:
+    if False:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -84,50 +92,36 @@ if __name__ == '__main__':
                 '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
     
         for b in B:
-            #pngfn = 'pipebrick-plots/brick-%06i-00.png' % b.brickid
-            #stampfn = 'jpegs/brick-%06i-00-stamp.jpg' % b.brickid
-            pngfn = 'tunebrick/coadd/plot-%06i-00.png' % b.brickid
-            stampfn = 'tunebrick/web/image-%06i-stamp.jpg' % b.brickid
-            if not os.path.exists(stampfn) and os.path.exists(pngfn):
-                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
-                cmd = 'pngtopnm %s | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
-                print cmd
-                os.system(cmd)
-            if not os.path.exists(stampfn):
-                continue
 
-            #modpngfn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-            #modstampfn = 'jpegs/brick-%06i-02-stamp.jpg' % b.brickid
             modpngfn = 'tunebrick/coadd/plot-%06i-03.png' % b.brickid
             modstampfn = 'tunebrick/web/model-%06i-stamp.jpg' % b.brickid
-            if not os.path.exists(modstampfn) and os.path.exists(modpngfn):
-                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
-                cmd = 'pngtopnm %s | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (modpngfn, modstampfn)
-                print cmd
-                os.system(cmd)
-
-            # 1000 x 1000 image
-            #jpgfn = 'jpegs/brick-%06i-00.jpg' % b.brickid
-            jpgfn = 'tunebrick/web/image-%06i.jpg' % b.brickid
-            if not os.path.exists(jpgfn):
-                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
-                cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
-                print cmd
-                os.system(cmd)
-
-            # 1000 x 1000 model
-            #png2fn = 'pipebrick-plots/brick-%06i-02.png' % b.brickid
-            #jpg2fn = 'jpegs/brick-%06i-02.jpg' % b.brickid
             png2fn = modpngfn
             jpg2fn = 'tunebrick/web/model-%06i.jpg' % b.brickid
-            if not os.path.exists(jpg2fn):
-                #cmd = 'pngtopnm %s | pamcut -top 50 | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
-                cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (png2fn, jpg2fn)
-                print cmd
-                os.system(cmd)
+            mod = (modpngfn, jpg2fn, modstampfn)
+
+            for pngfn, jpgfn, stampfn in [
+                mod,
+                ('tunebrick/coadd/plot-%06i-00.png' % b.brickid,
+                 'tunebrick/web/image-%06i.jpg' % b.brickid,
+                 'tunebrick/web/image-%06i-stamp.jpg' % b.brickid),
+                ('tunebrick/coadd/image2-%06i.png' % b.brickid,
+                 'tunebrick/web/image2-%06i.jpg' % b.brickid,
+                 'tunebrick/web/image2-%06i-stamp.jpg' % b.brickid),
+                ]:
+                if not os.path.exists(stampfn) and os.path.exists(pngfn):
+                    cmd = 'pngtopnm %s | pnmscale 0.1 | pnmtojpeg -quality 90 > %s' % (pngfn, stampfn)
+                    print cmd
+                    os.system(cmd)
+
+                # 1000 x 1000 image
+                if not os.path.exists(jpgfn):
+                    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
+                    print cmd
+                    os.system(cmd)
+            # Note evilness: we use the loop variables outside the loop!
+
 
             bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
-            #left   = int(stampspace * (b.ra1  - rlo) / bricksize)
             left   = int(stampspace * (rhi - b.ra1) / bricksize)
             html += ('<a href="%s"><img src="%s" ' % (jpgfn, stampfn) +
                      "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
@@ -137,12 +131,14 @@ if __name__ == '__main__':
         html += ('</div>' + 
                 '</body></html>')
     
-        f = open('tunebrick/web/bricks.html', 'w')
+        fn = 'tunebrick/web/bricks.html'
+        f = open(fn, 'w')
         f.write(html)
         f.close()
+        print 'Wrote', fn
     
-        #sys.exit(0)
-
+        sys.exit(0)
+        
 
     T = D.get_ccds()
 
@@ -150,12 +146,25 @@ if __name__ == '__main__':
     for b in B:
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
-        print len(I), 'CCDs for brick', b.brickid
+        log(len(I), 'CCDs for brick', b.brickid)
         allI.update(I)
     allI = list(allI)
     allI.sort()
-    T.cut(allI)
-    T.writeto('edr-ccds.fits')
+
+    #T.cut(allI)
+    #T.writeto('edr-ccds.fits')
+    #sys.exit(0)
+
+    f = open('jobs','w')
+    log('Total of', len(allI), 'CCDs')
+    for i in allI:
+        im = DecamImage(T[i])
+        if not im.run_calibs(im, None, None, None, just_check=True):
+            continue
+        f.write('%i\n' % i)
+        #print i
+    f.close()
+    print 'Wrote "jobs"'
     sys.exit(0)
 
     for b in B:
@@ -200,15 +209,6 @@ if __name__ == '__main__':
     print >>sys.stderr, len(B), 'bricks,', len(allI), 'CCDs'
 
     #for i in list(allI):
-    for i in allI.keys():
-
-        im = DecamImage(T[i])
-        if not run_calibs(im, None, None, None, just_check=True):
-            continue
-        #print 'python projects/desi/run-calib.py %i' % i
-        print i
-
-    sys.exit(0)
 
     # g,r,z full focal planes, 2014-08-18
     #I = np.flatnonzero(T.expnum == 349664)

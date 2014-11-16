@@ -607,6 +607,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
         for tim in tims:
             if tim.band != band:
                 continue
+            print 'Coadding', tim.name
             R = tim_get_resamp(tim, targetwcs)
             if R is None:
                 continue
@@ -615,6 +616,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
             nimg[Yo,Xo] += 1
             cowimg[Yo,Xo] += tim.getImage()[Yi,Xi] * tim.getInvvar()[Yi,Xi]
             wimg[Yo,Xo] += tim.getInvvar()[Yi,Xi]
+            del R,Yo,Xo,Yi,Xi
         coimg /= np.maximum(nimg, 1)
         cowimg /= np.maximum(wimg, 1e-16)
         coimgs.append(coimg)
@@ -722,7 +724,7 @@ def main():
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
-                    program_name = 'tunebrick.py')
+                    program_name = 'tunebrick.py', pipe=True)
     kwargs = {}
 
     if opt.threads and opt.threads > 1:
