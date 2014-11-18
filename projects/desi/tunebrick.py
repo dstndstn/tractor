@@ -588,6 +588,7 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Writing catalog:', Time()-t0
 
 def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
+                  basedir=None,
                   **kwargs):
     #print 'kwargs:', kwargs.keys()
     
@@ -659,21 +660,77 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
     del coimgs
     del wimg
     del coimg
+
+    try:
+        os.path.makedirs(os.path.join(basedir, 'coadd'))
+    except:
+        pass
+
+    for band,cow in zip(bands, cowimgs):
+        fn = os.path.join(basedir, 'coadd', 'image2-%06i-%s.fits' % (brickid,band))
+        fitsio.write(fn, cow, clobber=True)
+        print 'Wrote', fn
+
     rgb = get_rgb(cowimgs, bands)
-    del cowimgs
+    #del cowimgs
 
     plt.clf()
     dimshow(rgb)
     #plt.title('wimg+')
     #ps.savefig()
-    plt.savefig('tunebrick/coadd/image2-%06i.png' % brickid)
+    fn = os.path.join(basedir, 'coadd', 'image2-%06i.png' % brickid)
+    plt.savefig(fn)
+    print 'Saved', fn
 
     tmpfn = create_temp(suffix='.png')
     plt.imsave(tmpfn, rgb)
     del rgb
-    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > tunebrick/coadd/image2-%06i-full.jpg' % (tmpfn, brickid)
+    fn = os.path.join(basedir, 'coadd', 'image2-%06i-full.jpg' % brickid)
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, fn)
     os.system(cmd)
     os.unlink(tmpfn)
+    print 'Wrote', fn
+
+    return dict(coimgs=cowimgs, tims=None)
+
+def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
+                  **kwargs):
+
+    '''
+    Nice PR image for NOAO.  Make a synthetic brick centered on a nice galaxy in 374451
+
+    bricks.txt:
+    # brickid ra dec ra1 ra2 dec1 dec2
+    1 244.70 7.41 244.5739 244.8261 7.285 7.535
+    2 244.70 7.41 244.5739 244.8261 7.285 7.535
+
+    text2fits.py -f jdddddd PR/bricks.txt PR/decals-bricks.fits
+    cp decals/decals-ccds.fits PR
+    (cd PR; ln -s ~/cosmo/work/decam/versions/work/calib .)
+    (cd PR; ln -s ~/cosmo/work/decam/versions/work/images .)
+    export DECALS_DIR=$(pwd)/PR
+    python -u projects/desi/tunebrick.py -b      1 -s primage -P "pickles/PR-%(brick)06i-%%(stage)s.pickle"
+    python -u projects/desi/tunebrick.py -b 374441 -s primage -P "pickles/PR-%(brick)06i-%%(stage)s.pickle"
+
+    '''
+
+
+    print 'kwargs:', kwargs.keys()
+
+    rgb = get_rgb(coimgs, bands, mnmx=(0., 100.), arcsinh=1.)
+    
+    plt.clf()
+    dimshow(rgb)
+    ps.savefig()
+
+    fn = ps.getnext()
+    plt.imsave(fn, rgb, origin='lower')
+
+    jpegfn = fn.replace('.png','.jpg')
+    cmd = 'pngtopnm %s | pnmtojpeg -quality 80 > %s' % (fn, jpegfn)
+    print cmd
+    os.system(cmd)
+    
 
 
 def main():
@@ -702,6 +759,9 @@ def main():
 
     parser.add_option('--threads', type=int, help='Run multi-threaded')
 
+    parser.add_option('--base-dir', dest='basedir', default='tunebrick',
+                      help='Base output directory; default %default')
+
     opt,args = parser.parse_args()
     Time.add_measurement(MemMeas)
 
@@ -719,6 +779,8 @@ def main():
                'writecat2': 'tune',
 
                'recoadd': 'tims',
+
+               'primage': 'recoadd',
                }
 
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
@@ -726,6 +788,7 @@ def main():
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                     program_name = 'tunebrick.py', pipe=True)
     kwargs = {}
+    kwargs.update(basedir=opt.basedir)
 
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc

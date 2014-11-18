@@ -500,7 +500,6 @@ class DecamImage(object):
 
         just_check: if True, returns True if calibs need to be run.
         '''
-
         print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
         for fn in [self.wcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:

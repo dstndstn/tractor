@@ -65,6 +65,9 @@ if __name__ == '__main__':
     rlo,rhi = 239,246
     dlo,dhi =   5, 13
 
+    # Arjun says 3x3 coverage area is roughly
+    # RA=240-252 DEC=6-12 (but not completely rectangular)
+
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
     # 240 bricks, ~3000 CCDs

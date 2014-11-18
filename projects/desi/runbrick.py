@@ -315,9 +315,14 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     version_header = hdr
 
     B = decals.get_bricks()
-    #print 'Bricks:'
-    #B.about()
-    ii = np.flatnonzero(B.brickid == brickid)[0]
+
+    print 'Bricks:'
+    B.about()
+    print 'Brickid:', brickid
+    print 'Brickids:', B.brickid
+    ii = np.flatnonzero(B.brickid == brickid)
+    print len(ii), 'brick ids match'
+    ii = ii[0]
     brick = B[ii]
     print 'Chosen brick:'
     brick.about()
