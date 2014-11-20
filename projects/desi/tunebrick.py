@@ -762,6 +762,9 @@ def main():
     parser.add_option('--base-dir', dest='basedir', default='tunebrick',
                       help='Base output directory; default %default')
 
+    parser.add_option('--mock-psf', dest='mock_psf', action='store_true',
+                      help='Use fake PSF?')
+
     opt,args = parser.parse_args()
     Time.add_measurement(MemMeas)
 
@@ -786,7 +789,8 @@ def main():
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
-                    program_name = 'tunebrick.py', pipe=True)
+                    program_name = 'tunebrick.py', pipe=True,
+                    mock_psf=opt.mock_psf)
     kwargs = {}
     kwargs.update(basedir=opt.basedir)
 

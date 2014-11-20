@@ -265,6 +265,16 @@ class Decals(object):
             #I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
             I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
+
+        elif len(I) == 0:
+            print 'WARNING: using header zeropoints for', im
+            # No updated zeropoint -- use header MAGZERO from primary HDU.
+            hdr = im.read_image_primary_header()
+            magzero = hdr['MAGZERO']
+            #exptime = hdr['EXPTIME']
+            #magzero += 2.5 * np.log10(exptime)
+            return magzero
+
         assert(len(I) == 1)
         I = I[0]
 
@@ -285,8 +295,8 @@ class Decals(object):
 class DecamImage(object):
     def __init__(self, t):
         imgfn, hdu, band, expnum, extname, calname, exptime = (
-            t.cpimage, t.cpimage_hdu, t.filter, t.expnum, t.extname.strip(),
-            t.calname.strip(), t.exptime)
+            t.cpimage.strip(), t.cpimage_hdu, t.filter.strip(), t.expnum,
+            t.extname.strip(), t.calname.strip(), t.exptime)
 
         self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
@@ -325,7 +335,7 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
-    def get_tractor_image(self, decals, slc=None, radecpoly=None):
+    def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False):
         '''
         slc: y,x slices
         '''
@@ -396,11 +406,18 @@ class DecamImage(object):
         if x0 or y0:
             twcs.setX0Y0(x0,y0)
 
+        if mock_psf:
+            from tractor.basics import NCircularGaussianPSF
+            psfex = None
+            psf = NCircularGaussianPSF([1.5], [1.0])
+            print 'WARNING: using mock PSF:', psf
+        else:
+            # read fit PsfEx model -- with ellipse representation
+            psfex = PsfEx.fromFits(self.psffitellfn)
+            print 'Read', psfex
+            psf = psfex
 
-        # read fit PsfEx model -- with ellipse representation
-        psfex = PsfEx.fromFits(self.psffitellfn)
-        print 'Read', psfex
-        tim = Image(img, invvar=invvar, wcs=twcs, psf=psfex,
+        tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
                     sky=sky, name=self.name + ' ' + band)
         assert(np.all(np.isfinite(tim.getInvError())))
@@ -490,7 +507,8 @@ class DecamImage(object):
         skyobj = fromfits(hdr, prefix='SKY_')
         return skyobj
 
-    def run_calibs(self, ra, dec, pixscale, W=2048, H=4096, se=True,
+    def run_calibs(self, ra, dec, pixscale, mock_psf,
+                   W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True,
@@ -505,6 +523,10 @@ class DecamImage(object):
         for fn in [self.wcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
             print 'exists?', os.path.exists(fn), fn
         self.makedirs()
+
+        if mock_psf:
+            psfex = False
+            psfexfit = False
     
         run_funpack = False
         run_se = False

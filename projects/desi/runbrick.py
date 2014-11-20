@@ -286,14 +286,14 @@ def compute_coadds(tims, bands, W, H, targetwcs):
         cons  .append(con)
     return coimgs,cons
 
-def _read_tim((im, decals, targetrd)):
+def _read_tim((im, decals, targetrd, mock_psf)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd)
+    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
     return tim
 
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
-               **kwargs):
+               mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
     rtn,version,err = run_command('git describe')
@@ -370,14 +370,14 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for im in ims:
         decals.get_zeropoint_for(im)
 
-    args = [(im, dict(), brick.ra, brick.dec, pixscale) for im in ims]
+    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf) for im in ims]
     _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
     tlast = Time()
 
     # Read images, clip to ROI
     ttim = Time()
-    args = [(im, decals, targetrd) for im in ims]
+    args = [(im, decals, targetrd, mock_psf) for im in ims]
     tims = _map(_read_tim, args)
     tims = [tim for tim in tims if tim is not None]
 

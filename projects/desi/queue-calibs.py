@@ -68,6 +68,10 @@ if __name__ == '__main__':
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
 
+    # COSMOS
+    rlo,rhi = 148.9, 151.2
+    dlo,dhi = 0.9, 3.5
+
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
     # 240 bricks, ~3000 CCDs
@@ -77,13 +81,17 @@ if __name__ == '__main__':
     B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
 
-    #for b in B:
-    #    print b.brickid
-    #sys.exit(0)
+    for b in B:
+        #fn = 'tunebrick/coadd/image2-%06i.png' % b.brickid
+        fn = 'cosmos/coadd/image2-%06i.png' % b.brickid
+        if os.path.exists(fn):
+            continue
+        print b.brickid
+    sys.exit(0)
 
     #B.writeto('edr-bricks.fits')
 
-    if False:
+    if True:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -95,6 +103,10 @@ if __name__ == '__main__':
                 '<div style="width:%i; height:%i; position:relative">' % (bw*stampspace, bh*stampspace))
     
         for b in B:
+
+            fn = 'tunebrick/coadd/image2-%06i.png' % b.brickid
+            if not os.path.exists(fn):
+                continue
 
             modpngfn = 'tunebrick/coadd/plot-%06i-03.png' % b.brickid
             modstampfn = 'tunebrick/web/model-%06i-stamp.jpg' % b.brickid
@@ -117,7 +129,7 @@ if __name__ == '__main__':
                     os.system(cmd)
 
                 # 1000 x 1000 image
-                if not os.path.exists(jpgfn):
+                if os.path.exists(pngfn) and not os.path.exists(jpgfn):
                     cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (pngfn, jpgfn)
                     print cmd
                     os.system(cmd)
@@ -126,15 +138,21 @@ if __name__ == '__main__':
 
             bottom = int(stampspace * (b.dec1 - dlo) / bricksize)
             left   = int(stampspace * (rhi - b.ra1) / bricksize)
+
+            if os.path.exists(modstampfn):
+                mouse = "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn)
+            else:
+                mouse = ''
             html += ('<a href="%s"><img src="%s" ' % (jpgfn, stampfn) +
-                     "onmouseenter=\"this.src='%s\';\" onmouseleave=\"this.src='%s';\" " % (modstampfn, stampfn) +
+                     mouse +
                      'style="position:absolute; bottom:%i; left:%i; width=%i; height=%i " /></a>' %
                      (bottom, left, stampsize, stampsize))
             html = html.replace('tunebrick/web/', '')
         html += ('</div>' + 
                 '</body></html>')
     
-        fn = 'tunebrick/web/bricks.html'
+        #fn = 'tunebrick/web/bricks.html'
+        fn = 'bricks2.html'
         f = open(fn, 'w')
         f.write(html)
         f.close()

@@ -24,4 +24,5 @@ if __name__ == '__main__':
         pixscale = np.sqrt(np.abs(t.cd1_1 * t.cd2_2 - t.cd1_2 * t.cd2_1))
         pixscale *= 3600.
         print 'Pixscale', pixscale, 'arcsec/pix'
-        run_calibs((im, dict(), t.ra, t.dec, pixscale))
+        mock_psf = False
+        run_calibs((im, dict(), t.ra, t.dec, pixscale, mock_psf))
