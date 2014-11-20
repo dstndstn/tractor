@@ -20,6 +20,53 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
+    '''
+    Given a list of images in the given bands, returns a scaled RGB
+    image.
+    '''
+    bands = ''.join(bands)
+    if bands == 'grz':
+        scales = dict(g = (2, 0.0066),
+                      r = (1, 0.01),
+                      z = (0, 0.025),
+                      )
+    elif bands == 'gri':
+        # scales = dict(g = (2, 0.004),
+        #               r = (1, 0.0066),
+        #               i = (0, 0.01),
+        #               )
+        scales = dict(g = (2, 0.002),
+                      r = (1, 0.004),
+                      i = (0, 0.005),
+                      )
+    else:
+        assert(False)
+        
+    h,w = imgs[0].shape
+    rgb = np.zeros((h,w,3), np.float32)
+    # Convert to ~ sigmas
+    for im,band in zip(imgs, bands):
+        plane,scale = scales[band]
+        rgb[:,:,plane] = (im / scale).astype(np.float32)
+        #print 'rgb: plane', plane, 'range', rgb[:,:,plane].min(), rgb[:,:,plane].max()
+
+    if mnmx is None:
+        mn,mx = -3, 10
+    else:
+        mn,mx = mnmx
+
+    if arcsinh is not None:
+        def nlmap(x):
+            return np.arcsinh(x * arcsinh) / np.sqrt(arcsinh)
+        rgb = nlmap(rgb)
+        mn = nlmap(mn)
+        mx = nlmap(mx)
+
+    rgb = (rgb - mn) / (mx - mn)
+    return np.clip(rgb, 0., 1.)
+    
+
 def switch_to_soft_ellipses(cat):
     from tractor.galaxy import DevGalaxy, ExpGalaxy, FixedCompositeGalaxy
     from tractor.ellipses import EllipseESoft
