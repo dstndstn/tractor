@@ -55,7 +55,8 @@ def main():
     # build-astrometry-index -o data/decam/sdss-indexes/index-sdss-z-hp00-2.fits -P 2 -i data/decam/sdss-indexes/sdss-stars-hp00-ns2.fits -S z_psf -H 0 -s 2 -L 20 -I 1408120 -t data/tmp
 
     cmds = []
-    scale = 2
+    #scale = 2
+    scale = 3
     #for band in ['r','z']:
     for band in ['r']:
         for hp in range(48):

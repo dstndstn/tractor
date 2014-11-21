@@ -593,6 +593,7 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
     #print 'kwargs:', kwargs.keys()
     if targetwcs is None:
         # can happen if no CCDs overlap...
+        import sys
         sys.exit(0)
     
     W = targetwcs.get_width()

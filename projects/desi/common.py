@@ -356,8 +356,12 @@ class DecamImage(object):
 
         for attr in ['imgfn', 'dqfn', 'wtfn']:
             fn = getattr(self, attr)
-            if not os.path.exists(fn) and fn.endswith('.fz'):
-                fun = self.imgfn[:-3]
+            print attr, '->', fn
+            if os.path.exists(fn):
+                print 'Exists.'
+                continue
+            if fn.endswith('.fz'):
+                fun = fn[:-3]
                 if os.path.exists(fun):
                     print 'Using      ', fun
                     print 'rather than', fn
@@ -365,7 +369,6 @@ class DecamImage(object):
             fn = getattr(self, attr)
             print attr, fn
             print '  exists? ', os.path.exists(fn)
-
 
         ibase = os.path.basename(imgfn)
         ibase = ibase.replace('.fits.fz', '')
@@ -705,7 +708,7 @@ class DecamImage(object):
                     'solve-field --config', an_config_2, '-D . --temp-dir', tempdir,
                     '--ra %f --dec %f' % (ra,dec), '--radius 1',
                     '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
-                    '--continue --no-plots --no-remove-lines --uniformize 0',
+                    '--continue --no-plots --uniformize 0',
                     '--no-fits2fits',
                     '-X x_image -Y y_image -s flux_auto --extension 2',
                     '--width %i --height %i' % (W,H),
@@ -714,6 +717,7 @@ class DecamImage(object):
                     '--rdls none --corr none',
                     '--wcs', self.wcsfn, 
                     '--temp-axy', '--tag-all', self.sefn])
+                    #--no-remove-lines 
                 print cmd
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
