@@ -57,8 +57,8 @@ if __name__ == '__main__':
 
     # EDR:
     # 535 bricks, ~7000 CCDs
-    # rlo,rhi = 240,245
-    # dlo,dhi =   5, 12
+    rlo,rhi = 240,245
+    dlo,dhi =   5, 12
 
     # 860 bricks
     # ~10,000 CCDs
@@ -69,8 +69,8 @@ if __name__ == '__main__':
     # RA=240-252 DEC=6-12 (but not completely rectangular)
 
     # COSMOS
-    rlo,rhi = 148.9, 151.2
-    dlo,dhi = 0.9, 3.5
+    #rlo,rhi = 148.9, 151.2
+    #dlo,dhi = 0.9, 3.5
 
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
@@ -83,10 +83,34 @@ if __name__ == '__main__':
 
     for b in B:
         #fn = 'tunebrick/coadd/image2-%06i.png' % b.brickid
-        fn = 'cosmos/coadd/image2-%06i.png' % b.brickid
-        if os.path.exists(fn):
-            continue
+        #fn = 'cosmos/coadd/image2-%06i.png' % b.brickid
+        #fn = 'tunebrick/coadd/image2-%06i-g.fits' % b.brickid
+        #if os.path.exists(fn):
+        #    continue
         print b.brickid
+
+        wcs = wcs_for_brick(b)
+        for band in 'grz':
+            #fn = 'cosmos/coadd/image2-%06i-%s.fits' % (b.brickid, band)
+            fn = 'tunebrick/coadd/image2-%06i-%s.fits' % (b.brickid, band)
+            if not os.path.exists(fn):
+                continue
+            for key,val in [('CTYPE1', 'RA---TAN'),
+                            ('CTYPE2', 'DEC--TAN'),
+                            ('CRVAL1', wcs.crval[0]),
+                            ('CRVAL2', wcs.crval[1]),
+                            ('CRPIX1', wcs.crpix[0]),
+                            ('CRPIX2', wcs.crpix[1]),
+                            ('CD1_1', wcs.cd[0]),
+                            ('CD1_2', wcs.cd[1]),
+                            ('CD2_1', wcs.cd[2]),
+                            ('CD2_2', wcs.cd[3]),
+                            ('IMAGEW', wcs.imagew),
+                            ('IMAGEH', wcs.imageh),]:
+                cmd = 'modhead %s %s %s' % (fn, key, val)
+                print cmd
+                os.system(cmd)
+
     sys.exit(0)
 
     #B.writeto('edr-bricks.fits')

@@ -246,6 +246,7 @@ def _read_tim((im, decals, targetrd, mock_psf)):
 
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
+               bands='grz',
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -280,7 +281,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'Chosen brick:'
     brick.about()
 
-    bands = ['g','r','z']
+    #bands = ['g','r','z']
     catband = 'r'
 
     targetwcs = wcs_for_brick(brick, W=W, H=H)

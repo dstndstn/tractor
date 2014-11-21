@@ -354,6 +354,19 @@ class DecamImage(object):
         self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
         self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
+        for attr in ['imgfn', 'dqfn', 'wtfn']:
+            fn = getattr(self, attr)
+            if not os.path.exists(fn) and fn.endswith('.fz'):
+                fun = self.imgfn[:-3]
+                if os.path.exists(fun):
+                    print 'Using      ', fun
+                    print 'rather than', fn
+                    setattr(self, attr, fun)
+            fn = getattr(self, attr)
+            print attr, fn
+            print '  exists? ', os.path.exists(fn)
+
+
         ibase = os.path.basename(imgfn)
         ibase = ibase.replace('.fits.fz', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
@@ -684,7 +697,27 @@ class DecamImage(object):
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
-    
+
+            if not os.path.exists(self.wcsfn):
+                # Run a second phase...
+                an_config_2 = os.path.join(decals_dir, 'calib', 'an-config', 'cfg2')
+                cmd = ' '.join([
+                    'solve-field --config', an_config_2, '-D . --temp-dir', tempdir,
+                    '--ra %f --dec %f' % (ra,dec), '--radius 1',
+                    '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
+                    '--continue --no-plots --no-remove-lines --uniformize 0',
+                    '--no-fits2fits',
+                    '-X x_image -Y y_image -s flux_auto --extension 2',
+                    '--width %i --height %i' % (W,H),
+                    '--crpix-center',
+                    '-N none -U none -S none -M none',
+                    '--rdls none --corr none',
+                    '--wcs', self.wcsfn, 
+                    '--temp-axy', '--tag-all', self.sefn])
+                print cmd
+                if os.system(cmd):
+                    raise RuntimeError('Command failed: ' + cmd)
+
         if run_psfex:
             cmd = ('psfex -c %s -PSF_DIR %s %s' %
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
