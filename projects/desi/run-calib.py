@@ -25,4 +25,8 @@ if __name__ == '__main__':
         pixscale *= 3600.
         print 'Pixscale', pixscale, 'arcsec/pix'
         mock_psf = False
-        run_calibs((im, dict(), t.ra, t.dec, pixscale, mock_psf))
+        kwargs = dict()
+
+        kwargs.update(psfex=False, psfexfit=False)
+
+        run_calibs((im, kwargs, t.ra, t.dec, pixscale, mock_psf))

@@ -72,50 +72,60 @@ if __name__ == '__main__':
     #rlo,rhi = 148.9, 151.2
     #dlo,dhi = 0.9, 3.5
 
+    # DES Stripe82
+    rlo,rhi = 316., 6.
+    dlo,dhi = -6., 4.
+
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
     # 240 bricks, ~3000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
-    B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
+
+    if rlo < rhi:
+        B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
+    else: # RA wrap
+        B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
 
-    for b in B:
-        #fn = 'tunebrick/coadd/image2-%06i.png' % b.brickid
-        #fn = 'cosmos/coadd/image2-%06i.png' % b.brickid
-        #fn = 'tunebrick/coadd/image2-%06i-g.fits' % b.brickid
-        #if os.path.exists(fn):
-        #    continue
-        print b.brickid
+    #B.writeto('edrplus-bricks.fits')
 
-        wcs = wcs_for_brick(b)
-        for band in 'grz':
-            #fn = 'cosmos/coadd/image2-%06i-%s.fits' % (b.brickid, band)
-            fn = 'tunebrick/coadd/image2-%06i-%s.fits' % (b.brickid, band)
-            if not os.path.exists(fn):
-                continue
-            for key,val in [('CTYPE1', 'RA---TAN'),
-                            ('CTYPE2', 'DEC--TAN'),
-                            ('CRVAL1', wcs.crval[0]),
-                            ('CRVAL2', wcs.crval[1]),
-                            ('CRPIX1', wcs.crpix[0]),
-                            ('CRPIX2', wcs.crpix[1]),
-                            ('CD1_1', wcs.cd[0]),
-                            ('CD1_2', wcs.cd[1]),
-                            ('CD2_1', wcs.cd[2]),
-                            ('CD2_2', wcs.cd[3]),
-                            ('IMAGEW', wcs.imagew),
-                            ('IMAGEH', wcs.imageh),]:
-                cmd = 'modhead %s %s %s' % (fn, key, val)
-                print cmd
-                os.system(cmd)
+    if False:
+        for b in B:
+            #fn = 'tunebrick/coadd/image2-%06i.png' % b.brickid
+            #fn = 'cosmos/coadd/image2-%06i.png' % b.brickid
+            #fn = 'tunebrick/coadd/image2-%06i-g.fits' % b.brickid
+            #if os.path.exists(fn):
+            #    continue
+            print b.brickid
+    
+            wcs = wcs_for_brick(b)
+            for band in 'grz':
+                #fn = 'cosmos/coadd/image2-%06i-%s.fits' % (b.brickid, band)
+                fn = 'tunebrick/coadd/image2-%06i-%s.fits' % (b.brickid, band)
+                if not os.path.exists(fn):
+                    continue
+                for key,val in [('CTYPE1', 'RA---TAN'),
+                                ('CTYPE2', 'DEC--TAN'),
+                                ('CRVAL1', wcs.crval[0]),
+                                ('CRVAL2', wcs.crval[1]),
+                                ('CRPIX1', wcs.crpix[0]),
+                                ('CRPIX2', wcs.crpix[1]),
+                                ('CD1_1', wcs.cd[0]),
+                                ('CD1_2', wcs.cd[1]),
+                                ('CD2_1', wcs.cd[2]),
+                                ('CD2_2', wcs.cd[3]),
+                                ('IMAGEW', wcs.imagew),
+                                ('IMAGEH', wcs.imageh),]:
+                    cmd = 'modhead %s %s %s' % (fn, key, val)
+                    print cmd
+                    os.system(cmd)
+    
+        sys.exit(0)
 
-    sys.exit(0)
 
-    #B.writeto('edr-bricks.fits')
-
-    if True:
+    if False:
         bricksize = 0.25
         # how many bricks wide?
         bw,bh = int(np.ceil((rhi - rlo) / bricksize)), int(np.ceil((dhi - dlo) / bricksize))
@@ -184,14 +194,23 @@ if __name__ == '__main__':
     
         sys.exit(0)
         
-
     T = D.get_ccds()
+    log(len(T), 'CCDs')
+    
+    bands = 'grz'
+    log('Filters:', np.unique(T.filter))
+    T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
+    log('Cut to', len(T), 'CCDs in filters', bands)
 
     allI = set()
     for b in B:
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
-        log(len(I), 'CCDs for brick', b.brickid)
+        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+
+        if len(I):
+            print b.brickid
+
         allI.update(I)
     allI = list(allI)
     allI.sort()
@@ -204,7 +223,8 @@ if __name__ == '__main__':
     log('Total of', len(allI), 'CCDs')
     for i in allI:
         im = DecamImage(T[i])
-        if not im.run_calibs(im, None, None, None, just_check=True):
+        if not im.run_calibs(im, None, None, None, just_check=True,
+                             psfex=False, psfexfit=False):
             continue
         f.write('%i\n' % i)
         #print i

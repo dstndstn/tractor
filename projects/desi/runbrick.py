@@ -306,14 +306,18 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     T.cut(I)
 
     ims = []
+    ti = []
     for band in bands:
-        TT = T[T.filter == band]
+        I = np.flatnonzero(T.filter == band)
+        ti.append(I)
+        TT = T[I]
         print len(TT), 'in', band, 'band'
         for t in TT:
             print
             print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
             im = DecamImage(t)
             ims.append(im)
+    T.cut(np.hstack(ti))
 
     # Check that the CCDs_touching cuts are correct.
     #check_touching(decals, targetwcs, bands, brick, pixscale, ps)
@@ -333,7 +337,16 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     ttim = Time()
     args = [(im, decals, targetrd, mock_psf) for im in ims]
     tims = _map(_read_tim, args)
+
+    print 'Tims:', tims
+    print 'T:', len(T)
+    T.about()
+    I = np.flatnonzero(np.array([tim is not None for tim in tims]))
+    print 'I:', I
+    T.cut(I)
+    ccds = T
     tims = [tim for tim in tims if tim is not None]
+    assert(len(T) == len(tims))
 
     print 'Read images:', Time()-tlast
     tlast = Time()
@@ -349,7 +362,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tlast = Time()
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid', 'target_extent']
+            'bands', 'tims', 'ps', 'brickid', 'target_extent', 'ccds']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
     rtn = dict()

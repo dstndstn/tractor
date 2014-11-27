@@ -313,10 +313,12 @@ class Decals(object):
             I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
+        # No updated zeropoint -- use header MAGZERO from primary HDU.
         elif len(I) == 0:
             print 'WARNING: using header zeropoints for', im
-            # No updated zeropoint -- use header MAGZERO from primary HDU.
             hdr = im.read_image_primary_header()
+
+            # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
             #exptime = hdr['EXPTIME']
             #magzero += 2.5 * np.log10(exptime)

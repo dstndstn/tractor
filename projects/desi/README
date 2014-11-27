@@ -32,4 +32,4 @@ python -c "import numpy as np; from glob import glob; from astrometry.util.fits 
 
 python -u projects/desi/make-exposure-list.py --trim /global/homes/d/dstn/cosmo/staging/decam/ -o 1.fits ~/cosmo/staging/decam/CP20140810/c4d_140809_04*_ooi*.fits.fz > log 2> err &
 
-python -c "from astrometry.util.fits import *; T1=fits_table('decals-ccds-CPv2.fits'); T2=fits_table('cosmos-ccds.fits'); T=merge_tables([T1,T2], columns='fillzero'); T.writeto('decals-ccds.fits')"
+python -c "from astrometry.util.fits import *; TT = [fits_table(fn) for fn in ['decals-ccds-CPv2.fits', 'cosmos-ccds.fits', 'ccds-des-stripe82.fits']]; T=merge_tables(TT, columns='fillzero'); T.writeto('decals-ccds.fits')"

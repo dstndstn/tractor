@@ -588,13 +588,17 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Writing catalog:', Time()-t0
 
 def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
-                  basedir=None,
+                  basedir=None, ccds=None,
                   **kwargs):
     #print 'kwargs:', kwargs.keys()
     if targetwcs is None:
         # can happen if no CCDs overlap...
         import sys
         sys.exit(0)
+
+    fn = os.path.join(basedir, 'ccds-%06i.fits' % brickid)
+    ccds.writeto(fn)
+    print 'Wrote', fn
     
     W = targetwcs.get_width()
     H = targetwcs.get_height()
@@ -675,7 +679,6 @@ def stage_rergb(coimgs=None, bands=None, basedir=None, brickid=None,
     os.unlink(tmpfn)
     print 'Wrote', fn
 
-
 def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
                   **kwargs):
 
@@ -718,7 +721,7 @@ def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
 
 def main():
     import optparse
-    from astrometry.util.stages import *
+    from astrometry.util.stages import CallGlobal, runstage
 
     parser = optparse.OptionParser()
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[],
