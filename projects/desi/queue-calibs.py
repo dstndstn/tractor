@@ -73,7 +73,8 @@ if __name__ == '__main__':
     #dlo,dhi = 0.9, 3.5
 
     # DES Stripe82
-    rlo,rhi = 316., 6.
+    #rlo,rhi = 316., 6.
+    rlo,rhi = 350.,360.
     dlo,dhi = -6., 4.
 
     # 56 bricks, ~725 CCDs
@@ -217,7 +218,7 @@ if __name__ == '__main__':
 
     #T.cut(allI)
     #T.writeto('edr-ccds.fits')
-    #sys.exit(0)
+    sys.exit(0)
 
     f = open('jobs','w')
     log('Total of', len(allI), 'CCDs')
