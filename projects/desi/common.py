@@ -9,6 +9,8 @@ from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.util import Tan, Sip
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode, clip_polygon
+from astrometry.sdss.fields import read_photoobjs_in_wcs
+from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
 from tractor.engine import get_class_from_name, Image
@@ -19,6 +21,250 @@ decals_dir = os.environ.get('DECALS_DIR')
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
+
+def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
+    # FIXME?
+    margin = 0.
+
+    sdss = DR9(basedir=photoobjdir)
+    if local:
+        sdss.useLocalTree()
+
+    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr',
+            'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr',
+            'phi_exp_deg',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id',
+            'psfflux', 'psfflux_ivar',
+            'cmodelflux', 'cmodelflux_ivar',
+            'modelflux', 'modelflux_ivar',
+            'devflux', 'expflux', 'extinction']
+
+    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
+    print 'Got', len(objs), 'photoObjs'
+
+    # It can be string-valued
+    objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
+
+    # Treat as pointsource...
+    sband = 'r'
+    bandnum = 'ugriz'.index(sband)
+    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
+
+    srcs = get_tractor_sources_dr9(
+        None, None, None, objs=objs, sdss=sdss,
+        bands=bands,
+        nanomaggies=True, fixedComposites=True,
+        useObjcType=True,
+        ellipse=EllipseESoft.fromRAbPhi)
+    print 'Got', len(srcs), 'Tractor sources'
+
+    cat = Catalog(*srcs)
+    return cat, objs
+
+def treat_as_pointsource(T, bandnum, setObjcType=True):
+    b = bandnum
+    gal = (T.objc_type == 3)
+    dev = gal * (T.fracdev[:,b] >= 0.5)
+    exp = gal * (T.fracdev[:,b] <  0.5)
+    stars = (T.objc_type == 6)
+    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
+    print 'Total', len(T), 'sources'
+
+    thetasn = np.zeros(len(T))
+    T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
+    T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
+    # theta_experr nonzero: 1.28507e-05
+    # theta_deverr nonzero: 1.92913e-06
+    thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
+    thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
+
+    # aberrzero = np.zeros(len(T), bool)
+    # aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
+    # aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
+
+    maxtheta = np.zeros(len(T), bool)
+    maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
+    maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
+
+    # theta S/N > modelflux for dev, 10*modelflux for exp
+    bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
+
+    print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
+    print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
+    #print sum(aberrzero), 'have zero a/b error'
+    print sum(maxtheta), 'have the maximum theta'
+    print sum(bigthetasn), 'have large theta S/N vs modelflux'
+    
+    badgals = gal * reduce(np.logical_or,
+                           [thetasn < 3.,
+                            T.modelflux[:,b] > 1e4,
+                            #aberrzero,
+                            maxtheta,
+                            bigthetasn,
+                            ])
+    print 'Found', sum(badgals), 'bad galaxies'
+    if setObjcType:
+        T.objc_type[badgals] = 6
+    return badgals
+
+
+def _detmap((tim, targetwcs, H, W)):
+    R = tim_get_resamp(tim, targetwcs)
+    if R is None:
+        return None,None,None,None
+    ie = tim.getInvvar()
+    psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+    detim = tim.getImage().copy()
+    detim[ie == 0] = 0.
+    detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
+    detsig1 = tim.sig1 / psfnorm
+    subh,subw = tim.shape
+    detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
+    detiv[ie == 0] = 0.
+    (Yo,Xo,Yi,Xi) = R
+    return Yo, Xo, detim[Yi,Xi], detiv[Yi,Xi]
+
+def detection_maps(tims, targetwcs, bands, mp):
+    # Render the detection maps
+    H,W = targetwcs.shape
+    detmaps = dict([(b, np.zeros((H,W)), np.float32) for b in bands])
+    detivs  = dict([(b, np.zeros((H,W)), np.float32) for b in bands])
+    for tim, (Yo,Xo,incmap,inciv) in zip(
+        tims, mp.map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
+        if Yo is None:
+            continue
+        detmaps[tim.band][Yo,Xo] += incmap*inciv
+        detivs [tim.band][Yo,Xo] += inciv
+
+    for band in bands:
+        detmaps[band] /= np.maximum(1e-16, detivs[band])
+
+    # back into lists, not dicts
+    detmaps = [detmaps[b] for b in bands]
+    detivs  = [detivs [b] for b in bands]
+        
+    return detmaps, detivs
+
+def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
+                          xomit, yomit,
+                          nsigma=5.,
+                          saddle=2.):
+                          
+    '''
+    detmaps: list of detmaps, same order as "bands"
+    detivs :    ditto
+    
+    '''
+    H,W = detmaps[0].shape
+    sedmap = np.zeros((H,W), np.float32)
+    sediv  = np.zeros((H,W), np.float32)
+    for iband,band in enumerate(bands):
+        if sed[iband] == 0:
+            continue
+        # We convert the detmap to canonical band via
+        #   detmap * w
+        # And the corresponding change to sig1 is
+        #   sig1 * w
+        # So the invvar-weighted sum is
+        #    (detmap * w) / (sig1**2 * w**2)
+        #  = detmap / (sig1**2 * w)
+        sedmap += detmaps[iband] * detivs[iband] / sed[iband]
+        sediv  += detivs [iband] / sed[iband]**2
+    sedmap /= np.maximum(1e-16, sediv)
+    sedsn   = sedmap * np.sqrt(sediv)
+
+    peaks = (sedsn > nsigma)
+
+    # zero out the edges -- larger margin here?
+    peaks[0 ,:] = 0
+    peaks[:, 0] = 0
+    peaks[-1,:] = 0
+    peaks[:,-1] = 0
+    # find pixels that are larger than their 8 neighbors
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,1:-1])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,1:-1])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,2:  ])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,2:  ])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,2:  ])
+
+    # Ok, now for each peak (in decreasing order of peak height):
+    #  -find the image area that is "saddle" sigma lower than the peak.
+    #  -blank out any lower peaks in that region?
+    #  -omit this peak if one of the "omit" points is within the saddle
+    # ... or create saddle images for each of the 'omit' points first?
+
+    omitmap = np.zeros(peaks.shape, bool)
+
+    for x,y in zip(xomit, yomit):
+        if sedsn[y,x] > nsigma:
+            level = sedsn[y,x] - saddle*sigma
+            blobs,nblobs = label(sedsn > level)
+            omitmap |= (blobs == blobs[y,x])
+        else:
+            # 3x3 box
+            omitmap[np.clip(y-1,0,H-1): np.clip(y+2,0,H),
+                    np.clip(x-1,0,W-1): np.clip(x+2,0,W)] = True
+
+    # find peaks, sort by flux
+    py,px = np.nonzero(peaks)
+    I = np.argsort(-sedsn[py,px])
+    py = py[I]
+    px = px[I]
+    #keep = np.ones(len(py), bool)
+    # drop peaks inside the 'omit map'
+    keep = np.logical_not(omitmap[py, px])
+    
+    for i,(x,y) in enumerate(zip(px, py)):
+        if not keep[i]:
+            continue
+
+        level = sedsn[y,x] - saddle*sigma
+        blobs,nblobs = label(sedsn > level)
+        saddleblob = (blobs == blobs[y,x])
+        # ???
+        if np.any(saddleblob & omitmap):
+            keep[i] = False
+            continue
+        
+        omitmap |= saddleblob
+
+    py = py[keep]
+    px = px[keep]
+    
+    return sedsn, px, py
+
+    
+    # blobs,nblobs = label(peaks)
+    # print 'N detected blobs:', nblobs
+    # blobslices = find_objects(blobs)
+
+    # Now... peaks...
+    
+    # # Un-set existing blobs
+    # for x,y in zip(xomit, yomit):
+    #     # blob number
+    #     bb = blobs[y,x]
+    #     if bb == 0:
+    #         continue
+    #     # un-set 'peaks' within this blob
+    #     slc = blobslices[bb-1]
+    #     peaks[slc][blobs[slc] == bb] = 0
+
+    # zero out the edges -- larger margin here?
+    # peaks[0 ,:] = 0
+    # peaks[:, 0] = 0
+    # peaks[-1,:] = 0
+    # peaks[:,-1] = 0
+
+    
+
+        
 
 def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     '''

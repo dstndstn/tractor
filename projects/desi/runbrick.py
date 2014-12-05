@@ -25,9 +25,8 @@ from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
-from astrometry.sdss.fields import read_photoobjs_in_wcs, radec_to_sdss_rcf
-from astrometry.sdss import DR9, band_index, AsTransWrapper
 from astrometry.util.run_command import *
+from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor import *
 from tractor.galaxy import *
@@ -39,7 +38,7 @@ from common import *
 ## GLOBALS!  Oh my!
 mp = None
 nocache = True
-photoobjdir = 'photoObjs-new'
+#photoobjdir = 'photoObjs-new'
 useCeres = True
 
 def runbrick_global_init():
@@ -107,92 +106,6 @@ def set_globals():
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
-
-def treat_as_pointsource(T, bandnum, setObjcType=True):
-    b = bandnum
-    gal = (T.objc_type == 3)
-    dev = gal * (T.fracdev[:,b] >= 0.5)
-    exp = gal * (T.fracdev[:,b] <  0.5)
-    stars = (T.objc_type == 6)
-    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
-    print 'Total', len(T), 'sources'
-
-    thetasn = np.zeros(len(T))
-    T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
-    T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
-    # theta_experr nonzero: 1.28507e-05
-    # theta_deverr nonzero: 1.92913e-06
-    thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
-    thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
-
-    # aberrzero = np.zeros(len(T), bool)
-    # aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
-    # aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
-
-    maxtheta = np.zeros(len(T), bool)
-    maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
-    maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
-
-    # theta S/N > modelflux for dev, 10*modelflux for exp
-    bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
-
-    print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
-    print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
-    #print sum(aberrzero), 'have zero a/b error'
-    print sum(maxtheta), 'have the maximum theta'
-    print sum(bigthetasn), 'have large theta S/N vs modelflux'
-    
-    badgals = gal * reduce(np.logical_or,
-                           [thetasn < 3.,
-                            T.modelflux[:,b] > 1e4,
-                            #aberrzero,
-                            maxtheta,
-                            bigthetasn,
-                            ])
-    print 'Found', sum(badgals), 'bad galaxies'
-    if setObjcType:
-        T.objc_type[badgals] = 6
-    return badgals
-
-def get_sdss_sources(bands, targetwcs, local=True):
-    # FIXME?
-    margin = 0.
-
-    sdss = DR9(basedir=photoobjdir)
-    if local:
-        sdss.useLocalTree()
-
-    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
-            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
-            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
-            'resolve_status', 'nchild', 'flags', 'objc_flags',
-            'run','camcol','field','id',
-            'psfflux', 'psfflux_ivar',
-            'cmodelflux', 'cmodelflux_ivar',
-            'modelflux', 'modelflux_ivar',
-            'devflux', 'expflux', 'extinction']
-
-    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
-    print 'Got', len(objs), 'photoObjs'
-
-    # It can be string-valued
-    objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
-
-    # Treat as pointsource...
-    sband = 'r'
-    bandnum = 'ugriz'.index(sband)
-    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
-
-    srcs = get_tractor_sources_dr9(
-        None, None, None, objs=objs, sdss=sdss,
-        bands=bands,
-        nanomaggies=True, fixedComposites=True,
-        useObjcType=True,
-        ellipse=EllipseESoft.fromRAbPhi)
-    print 'Got', len(srcs), 'Tractor sources'
-
-    cat = Catalog(*srcs)
-    return cat, objs
 
 def tim_get_resamp(tim, targetwcs):
     if hasattr(tim, 'resamp'):
@@ -370,23 +283,6 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         rtn[k] = locals()[k]
     return rtn
 
-
-def _detmap((tim, targetwcs, H, W)):
-    R = tim_get_resamp(tim, targetwcs)
-    if R is None:
-        return None,None,None,None
-    ie = tim.getInvvar()
-    psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-    detim = tim.getImage().copy()
-    detim[ie == 0] = 0.
-    detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
-    detsig1 = tim.sig1 / psfnorm
-    subh,subw = tim.shape
-    detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
-    detiv[ie == 0] = 0.
-    (Yo,Xo,Yi,Xi) = R
-    return Yo, Xo, detim[Yi,Xi], detiv[Yi,Xi]
-
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
                W=None,H=None, brickid=None,
@@ -395,75 +291,7 @@ def stage_srcs(coimgs=None, cons=None,
                pipe=False,
                **kwargs):
 
-    print 'Rendering detection maps...'
-    tlast = Time()
-    # Render the detection maps
-    detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    for tim, (Yo,Xo,incmap,inciv) in zip(
-        tims, _map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
-        if Yo is None:
-            continue
-        detmaps[tim.band][Yo,Xo] += incmap*inciv
-        detivs [tim.band][Yo,Xo] += inciv
-    print 'Detmaps:', Time()-tlast
-    tlast = Time()
-
-    # -find significant peaks in the per-band detection maps and SED-matched (hot)
-    # -segment into blobs
-    # -blank out blobs containing a catalog source
-    # -create sources for any remaining peaks
-
-    hot = np.zeros((H,W), np.float32)
-
-    # Single-band SED
-    for band in bands:
-        detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
-        detsn = detmap * np.sqrt(detivs[band])
-        hot = np.maximum(hot, detsn)
-        detmaps[band] = detmap
-
-        if plots:
-            plt.clf()
-            dimshow(np.round(detsn), vmin=0, vmax=10, cmap='hot')
-            plt.title('Single-band detection filter S/N: %s' % band)
-            plt.colorbar()
-            ps.savefig()
-
-
-    for sedname,sed in [('Flat', (1.,1.,1.)), ('Red', (2.5, 1.0, 0.4))]:
-        sedmap = np.zeros((H,W), np.float32)
-        sediv  = np.zeros((H,W), np.float32)
-        for iband,band in enumerate(bands):
-            # We convert the detmap to canonical band via
-            #   detmap * w
-            # And the corresponding change to sig1 is
-            #   sig1 * w
-            # So the invvar-weighted sum is
-            #    (detmap * w) / (sig1**2 * w**2)
-            #  = detmap / (sig1**2 * w)
-            sedmap += detmaps[band] * detivs[band] / sed[iband]
-            sediv  += detivs [band] / sed[iband]**2
-        sedmap /= np.maximum(1e-16, sediv)
-        sedsn   = sedmap * np.sqrt(sediv)
-        hot = np.maximum(hot, sedsn)
-
-        if plots:
-            plt.clf()
-            dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
-            plt.title('SED-matched detection filter S/N: %s' % sedname)
-            plt.colorbar()
-            ps.savefig()
-
-    del sedmap
-    del sediv
-    del sedsn
-    if pipe:
-        del detmaps
-        del detivs
-
     # Read SDSS sources
-    #check_photometric_calib(ims, cat, ps)
     cat,T = get_sdss_sources(bands, targetwcs)
     # record coordinates in target brick image
     ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
@@ -474,58 +302,40 @@ def stage_srcs(coimgs=None, cons=None,
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
-    peaks = (hot > 4)
+    print 'Rendering detection maps...'
+    tlast = Time()
+    detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
+    print 'Detmaps:', Time()-tlast
+    tlast = Time()
 
-    if plots:
-        crossa = dict(ms=10, mew=1.5)
-        plt.clf()
-        dimshow(peaks)
-        ax = plt.axis()
-        plt.plot(T.itx, T.ity, 'r+', **crossa)
-        plt.axis(ax)
-        plt.title('Detection blobs + SDSS sources')
-        ps.savefig()
+    # single-band filters
+    SEDs = []
+    for i,band in enumerate(bands):
+        sed = np.zeros(len(bands))
+        sed[i] = 1.
+        SEDs.append((band, sed))
+    SEDs.append(('Flat', (1.,1.,1.)))
+    SEDs.append(('Red', (2.5, 1.0, 0.4)))
 
-    blobs,nblobs = label(peaks)
-    print 'N detected blobs:', nblobs
-    blobslices = find_objects(blobs)
-    # Un-set catalog blobs
-    for x,y in zip(T.itx, T.ity):
-        # blob number
-        bb = blobs[y,x]
-        if bb == 0:
-            continue
-        # un-set 'peaks' within this blob
-        slc = blobslices[bb-1]
-        peaks[slc][blobs[slc] == bb] = 0
+    # all source positions
+    xx = T.itx
+    yy = T.ity
 
-    if plots:
-        plt.clf()
-        dimshow(peaks)
-        ax = plt.axis()
-        plt.plot(T.itx, T.ity, 'r+', **crossa)
-        plt.axis(ax)
-        plt.title('Detection blobs minus catalog sources')
-        ps.savefig()
+    hot = np.zeros((H,W), np.float32)
+    for sedname,sed in SEDs:
+        print 'SED', sedname
+        sedsn,px,py = sed_matched_detection(
+            sedname, sed, detmaps, detivs, bands, xx, yy)
+        print len(px), 'new peaks'
+        hot = np.maximum(hot, sedsn)
+        xx = np.append(xx, px)
+        yy = np.append(yy, py)
 
-    # Now, after having removed catalog sources, crank up the detection threshold
-    peaks &= (hot > 5)
-        
-    # zero out the edges(?)
-    peaks[0 ,:] = 0
-    peaks[:, 0] = 0
-    peaks[-1,:] = 0
-    peaks[:,-1] = 0
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[0:-2,1:-1])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[2:  ,1:-1])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[1:-1,0:-2])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[1:-1,2:  ])
+    if pipe:
+        del detmaps
+        del detivs
 
-    # These are our peaks
-    pki = np.flatnonzero(peaks)
-    peaky,peakx = np.unravel_index(pki, peaks.shape)
     print len(peaky), 'new peaks'
-
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
