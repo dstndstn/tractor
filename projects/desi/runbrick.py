@@ -31,7 +31,6 @@ from astrometry.sdss import DR9, band_index, AsTransWrapper
 from tractor import *
 from tractor.galaxy import *
 from tractor.source_extractor import *
-from tractor.sdss import get_tractor_sources_dr9
 
 from common import *
 
@@ -107,19 +106,6 @@ def set_globals():
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
-def tim_get_resamp(tim, targetwcs):
-    if hasattr(tim, 'resamp'):
-        return tim.resamp
-    try:
-        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, tim.subwcs, [], 2)
-    except OverlapError:
-        print 'No overlap'
-        return None
-    if len(Yo) == 0:
-        return None
-    resamp = [x.astype(np.int16) for x in (Yo,Xo,Yi,Xi)]
-    return resamp
-
 def _bounce_tim_get_resamp((tim, targetwcs)):
     return tim_get_resamp(tim, targetwcs)
 
@@ -136,7 +122,9 @@ def compute_coadds(tims, bands, W, H, targetwcs):
     cons = []
     for ib,band in enumerate(bands):
         coimg = np.zeros((H,W), np.float32)
+        coimg2 = np.zeros((H,W), np.float32)
         con   = np.zeros((H,W), np.uint8)
+        con2  = np.zeros((H,W), np.uint8)
         for tim in tims:
             if tim.band != band:
                 continue
@@ -145,9 +133,12 @@ def compute_coadds(tims, bands, W, H, targetwcs):
                 continue
             (Yo,Xo,Yi,Xi) = R
             nn = (tim.getInvError()[Yi,Xi] > 0)
-            coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
-            con  [Yo,Xo] += nn
+            coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+            con   [Yo,Xo] += nn
+            coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
+            con2  [Yo,Xo] += 1
         coimg /= np.maximum(con,1)
+        coimg[con == 0] = coimg2[con == 0] / np.maximum(1, con2[con == 0])
         coimgs.append(coimg)
         cons  .append(con)
     return coimgs,cons
@@ -291,6 +282,7 @@ def stage_srcs(coimgs=None, cons=None,
                pipe=False,
                **kwargs):
 
+    tlast = Time()
     # Read SDSS sources
     cat,T = get_sdss_sources(bands, targetwcs)
     # record coordinates in target brick image
@@ -324,22 +316,30 @@ def stage_srcs(coimgs=None, cons=None,
     hot = np.zeros((H,W), np.float32)
     for sedname,sed in SEDs:
         print 'SED', sedname
+        if plots:
+            pps = ps
+        else:
+            pps = None
         sedsn,px,py = sed_matched_detection(
-            sedname, sed, detmaps, detivs, bands, xx, yy)
+            sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
         print len(px), 'new peaks'
         hot = np.maximum(hot, sedsn)
         xx = np.append(xx, px)
         yy = np.append(yy, py)
 
+    # New peaks:
+    peakx = xx[len(T):]
+    peaky = yy[len(T):]
+
     if pipe:
         del detmaps
         del detivs
 
-    print len(peaky), 'new peaks'
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
     if plots:
+        crossa = dict(ms=10, mew=1.5)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
         ax = plt.axis()
@@ -414,13 +414,41 @@ def stage_srcs(coimgs=None, cons=None,
     #  that actually contain sources
     blobslices = keepslices
     bloblist = keepblobs
-    nblobs = len(bloblist)
-    assert(nblobs == len(blobsrcs))
-    assert(nblobs == len(blobflux))
-    assert(nblobs == len(blobslices))
-    print 'Keeping', nblobs, 'blobs, with', len(T), 'sources'
+    kblobs = len(bloblist)
+    assert(kblobs == len(blobsrcs))
+    assert(kblobs == len(blobflux))
+    assert(kblobs == len(blobslices))
+    print 'Keeping', kblobs, 'blobs, with', len(T), 'sources'
     print 'Blobs:', Time()-tlast
     tlast = Time()
+
+    ## # Find sources that do not belong to a blob and add them as
+    ## # singleton "blobs"; otherwise they don't get optimized.
+    ## # for sources outside the image bounds, what should we do?
+    inblobs = np.zeros(len(T), bool)
+    for Isrcs in blobsrcs:
+        inblobs[Isrcs] = True
+    noblobs = np.flatnonzero(inblobs == 0)
+    del inblobs
+    # Add new fake blobs!
+    for ib,i in enumerate(noblobs):
+        S = 3
+        bslc = (slice(np.clip(T.ity - S, 0, H-1), np.clip(T.ity + S+1, 0, H)),
+                slice(np.clip(T.itx - S, 0, W-1), np.clip(T.itx + S+1, 0, W)))
+        # Set synthetic blob number
+        blob = nblobs+1 + ib
+        bloblist.append(blob)
+        blobs[bslc][blobs[bslc] == 0] = blob
+        blobslices.append(bslc)
+        #x = np.clip(T.itx, 0, W-1)
+        #y = np.clip(T.ity, 0, H-1)
+        blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
+        blobsrcs.append(np.array([i]))
+    print 'Added', len(noblobs), 'new fake singleton blobs'
+    kblobs = len(bloblist)
+    assert(kblobs == len(blobsrcs))
+    assert(kblobs == len(blobflux))
+    assert(kblobs == len(blobslices))
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
@@ -514,7 +542,7 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
 
     srcivs = [[] for src in cat]
     for Isrcs,fitsrcs,srcinvvars in R:
-        for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcvars):
+        for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcinvvars):
             src = cat[isrc]
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
                 src.shape = fitsrc.shape
@@ -1791,20 +1819,13 @@ def stage_writecat(
     hdr = version_header
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
 
-    # Convert from variances to invvars
-    for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
-        X = T2.get(k)
-        T2.delete_column(k)
-        T2.set(k.replace('_var', '_invvar'), (1./X).astype(np.float32))
-
-    # Create DECAM_FLUX columns: [ugrizY]
-    bandindex = dict(g=1, r=2, z=4)
-
-    T2.decam_flux      = np.zeros((len(T2), 6), np.float32)
-    T2.decam_flux_isig = np.zeros((len(T2), 6), np.float32)
-    for band in bands:
-        T2.decam_flux[:, bandindex[band]] = T2.get('decam_%s_nanomaggies' % band)
-        T2.decam_flux_isig[:, bandindex[band]] = np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
+    # # Create DECAM_FLUX columns: [ugrizY]
+    # bandindex = dict(g=1, r=2, z=4)
+    # T2.decam_flux      = np.zeros((len(T2), 6), np.float32)
+    # T2.decam_flux_isig = np.zeros((len(T2), 6), np.float32)
+    # for band in bands:
+    #     T2.decam_flux[:, bandindex[band]] = T2.get('decam_%s_nanomaggies' % band)
+    #     T2.decam_flux_isig[:, bandindex[band]] = np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
 
     # Unpack shape columns
     T2.shapeExp_r = T2.shapeExp[:,0]
@@ -1813,12 +1834,12 @@ def stage_writecat(
     T2.shapeDev_r = T2.shapeExp[:,0]
     T2.shapeDev_e1 = T2.shapeExp[:,1]
     T2.shapeDev_e2 = T2.shapeExp[:,2]
-    T2.shapeExp_r_invvar  = T2.shapeExp_invvar[:,0]
-    T2.shapeExp_e1_invvar = T2.shapeExp_invvar[:,1]
-    T2.shapeExp_e2_invvar = T2.shapeExp_invvar[:,2]
-    T2.shapeDev_r_invvar  = T2.shapeExp_invvar[:,0]
-    T2.shapeDev_e1_invvar = T2.shapeExp_invvar[:,1]
-    T2.shapeDev_e2_invvar = T2.shapeExp_invvar[:,2]
+    T2.shapeExp_r_ivar  = T2.shapeExp_ivar[:,0]
+    T2.shapeExp_e1_ivar = T2.shapeExp_ivar[:,1]
+    T2.shapeExp_e2_ivar = T2.shapeExp_ivar[:,2]
+    T2.shapeDev_r_ivar  = T2.shapeExp_ivar[:,0]
+    T2.shapeDev_e1_ivar = T2.shapeExp_ivar[:,1]
+    T2.shapeDev_e2_ivar = T2.shapeExp_ivar[:,2]
 
     if catalogfn is not None:
         fn = catalogfn
@@ -1827,7 +1848,8 @@ def stage_writecat(
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
-    return dict(variances=variances, cat=cat)
+    # Return updated (ellipse param changed) catalog + invvars
+    return dict(cat=cat, invvars=invvars)
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
@@ -1898,9 +1920,12 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.plot_number:
         ps.skipto(opt.plot_number)
         kwargs.update(ps=ps)
+
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc
         mp = multiproc(opt.threads)
+    else:
+        mp = multiproc()
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
