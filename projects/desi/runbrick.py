@@ -262,6 +262,18 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Detmaps:', Time()-tlast
     tlast = Time()
 
+    # SED-matched detections
+    SEDs = sed_matched_filters(bands)
+    Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
+                                              (T.itx,T.ity), targetwcs, plots=plots,
+                                              ps=ps)
+    Nsdss = len(T)
+    T = merge_tables([T,Tnew], columns='fillzero')
+    cat.extend(newcat)
+    # new peaks
+    peakx = T.tx[Nsdss:]
+    peaky = T.ty[Nsdss:]
+    
     # single-band filters
     SEDs = []
     for i,band in enumerate(bands):
@@ -270,28 +282,6 @@ def stage_srcs(coimgs=None, cons=None,
         SEDs.append((band, sed))
     SEDs.append(('Flat', (1.,1.,1.)))
     SEDs.append(('Red', (2.5, 1.0, 0.4)))
-
-    # all source positions
-    xx = T.itx
-    yy = T.ity
-
-    hot = np.zeros((H,W), np.float32)
-    for sedname,sed in SEDs:
-        print 'SED', sedname
-        if plots:
-            pps = ps
-        else:
-            pps = None
-        sedsn,px,py = sed_matched_detection(
-            sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
-        print len(px), 'new peaks'
-        hot = np.maximum(hot, sedsn)
-        xx = np.append(xx, px)
-        yy = np.append(yy, py)
-
-    # New peaks:
-    peakx = xx[len(T):]
-    peaky = yy[len(T):]
 
     if pipe:
         del detmaps
@@ -311,35 +301,6 @@ def stage_srcs(coimgs=None, cons=None,
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
     
-    # Add sources for the new peaks we found
-    # make their initial fluxes ~ 5-sigma
-    fluxes = dict([(b,[]) for b in bands])
-    for tim in tims:
-        psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-        fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
-    fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
-    pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
-    print 'Adding', len(pr), 'new sources'
-    # Also create FITS table for new sources
-    Tnew = fits_table()
-    Tnew.ra  = pr
-    Tnew.dec = pd
-    Tnew.tx = peakx
-    Tnew.ty = peaky
-    Tnew.itx = np.clip(np.round(Tnew.tx).astype(int), 0, W-1)
-    Tnew.ity = np.clip(np.round(Tnew.ty).astype(int), 0, H-1)
-    for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
-        cat.append(PointSource(RaDecPos(r,d),
-                               NanoMaggies(order=bands, **fluxes)))
-
-    print 'Existing source table:'
-    T.about()
-    print 'New source table:'
-    Tnew.about()
-
-    T = merge_tables([T, Tnew], columns='fillzero')
-
-
     # Segment, and record which sources fall into each blob
     # Grow the 'hot' pixels by dilating by a few pixels
     rr = 2.0
@@ -349,6 +310,8 @@ def stage_srcs(coimgs=None, cons=None,
              ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
     hot2 = (hot > 5)
     hot2 = binary_dilation(hot2, structure=struc)
+
+    T.about()
 
     blobs,nblobs = label(hot2)
     print 'N detected blobs:', nblobs

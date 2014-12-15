@@ -80,8 +80,8 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
     objs.tx -= 1
     objs.ty -= 1
     W,H = targetwcs.get_width(), targetwcs.get_height()
-    objs.itx = np.clip(np.round(objs.tx).astype(int), 0, W-1)
-    objs.ity = np.clip(np.round(objs.ty).astype(int), 0, H-1)
+    objs.itx = np.clip(np.round(objs.tx), 0, W-1).astype(int)
+    objs.ity = np.clip(np.round(objs.ty), 0, H-1).astype(int)
 
     cat = Catalog(*srcs)
     return cat, objs
@@ -661,8 +661,8 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     Tnew.dec = pd
     Tnew.tx = peakx
     Tnew.ty = peaky
-    Tnew.itx = np.clip(np.round(Tnew.tx).astype(int), 0, W-1)
-    Tnew.ity = np.clip(np.round(Tnew.ty).astype(int), 0, H-1)
+    Tnew.itx = np.clip(np.round(Tnew.tx), 0, W-1).astype(int)
+    Tnew.ity = np.clip(np.round(Tnew.ty), 0, H-1).astype(int)
     newcat = []
     for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
         fluxes = dict([(band, detmap[Tnew.ity[i], Tnew.itx[i]])
@@ -676,7 +676,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     # T = merge_tables([T, Tnew], columns='fillzero')
     # return peakx,peaky,
 
-    return Tnew, newcat
+    return Tnew, newcat, hot
 
 class Decals(object):
     def __init__(self):

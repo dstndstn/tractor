@@ -51,8 +51,8 @@ if __name__ == '__main__':
         detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
 
         SEDs = sed_matched_filters(bands)
-        Tnew,newcat = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
-                                              (T.itx,T.ity), targetwcs)
+        Tnew,newcat,nil = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
+                                                  (T.itx,T.ity), targetwcs)
         T = merge_tables([T,Tnew], columns='fillzero')
         cat.extend(newcat)
 
