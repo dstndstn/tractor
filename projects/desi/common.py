@@ -75,6 +75,14 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
         ellipse=EllipseESoft.fromRAbPhi)
     print 'Got', len(srcs), 'Tractor sources'
 
+    # record coordinates in target brick image
+    ok,objs.tx,objs.ty = targetwcs.radec2pixelxy(objs.ra, objs.dec)
+    objs.tx -= 1
+    objs.ty -= 1
+    W,H = targetwcs.get_width(), targetwcs.get_height()
+    objs.itx = np.clip(np.round(objs.tx).astype(int), 0, W-1)
+    objs.ity = np.clip(np.round(objs.ty).astype(int), 0, H-1)
+
     cat = Catalog(*srcs)
     return cat, objs
 
@@ -1149,4 +1157,9 @@ def run_calibs(X):
     print 'kwargs', kwargs
     return im.run_calibs(*args, **kwargs)
 
+
+def read_one_tim((im, decals, targetrd, mock_psf)):
+    print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
+    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
+    return tim
 

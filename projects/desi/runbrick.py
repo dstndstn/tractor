@@ -138,11 +138,6 @@ def compute_coadds(tims, bands, W, H, targetwcs):
         cons  .append(con)
     return coimgs,cons
 
-def _read_tim((im, decals, targetrd, mock_psf)):
-    print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
-    return tim
-
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
                bands='grz',
@@ -167,21 +162,9 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                         comment='%s run time' % program_name))
     version_header = hdr
 
-    B = decals.get_bricks()
-
-    print 'Bricks:'
-    B.about()
-    print 'Brickid:', brickid
-    print 'Brickids:', B.brickid
-    ii = np.flatnonzero(B.brickid == brickid)
-    print len(ii), 'brick ids match'
-    ii = ii[0]
-    brick = B[ii]
+    brick = decals.get_brick(brickid)
     print 'Chosen brick:'
     brick.about()
-
-    catband = 'r'
-
     targetwcs = wcs_for_brick(brick, W=W, H=H)
 
     if target_extent is not None:
@@ -197,19 +180,15 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'pixscale', pixscale
 
     T = decals.ccds_touching_wcs(targetwcs)
+    # Sort by band
+    II = []
+    T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
     ims = []
-    ti = []
-    for band in bands:
-        I = np.flatnonzero(T.filter == band)
-        ti.append(I)
-        TT = T[I]
-        print len(TT), 'in', band, 'band'
-        for t in TT:
-            print
-            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
-            ims.append(im)
-    T.cut(np.hstack(ti))
+    for t in T:
+        print
+        print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+        im = DecamImage(t)
+        ims.append(im)
 
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
@@ -228,7 +207,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     # Read images, clip to ROI
     ttim = Time()
     args = [(im, decals, targetrd, mock_psf) for im in ims]
-    tims = _map(_read_tim, args)
+    tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
     print 'Tims:', tims
@@ -274,12 +253,6 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
     # Read SDSS sources
     cat,T = get_sdss_sources(bands, targetwcs)
-    # record coordinates in target brick image
-    ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
-    T.tx -= 1
-    T.ty -= 1
-    T.itx = np.clip(np.round(T.tx).astype(int), 0, W-1)
-    T.ity = np.clip(np.round(T.ty).astype(int), 0, H-1)
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
