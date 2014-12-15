@@ -45,88 +45,17 @@ if __name__ == '__main__':
     cat,T = get_sdss_sources(bands, targetwcs)
 
     if opt.sed_matched:
-
         # Read images
-        C = decals.ccds_touching_wcs(targetwcs)
-        # Sort by band
-        II = []
-        C.cut(np.hstack([np.flatnonzero(C.filter == band) for band in bands]))
-        ims = []
-        for t in C:
-            print
-            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
-            ims.append(im)
-        # Read images, clip to ROI
-        mock_psf = True
-        targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
-                             [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-        args = [(im, decals, targetrd, mock_psf) for im in ims]
-        tims = mp.map(read_one_tim, args)
-
+        tims = decals.tims_touching_wcs(targetwcs, mp, mock_psf=True, bands=bands)
         print 'Rendering detection maps...'
         detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
 
-        # List the SED-matched filters to run
-        # single-band filters
-        SEDs = []
-        for i,band in enumerate(bands):
-            sed = np.zeros(len(bands))
-            sed[i] = 1.
-            SEDs.append((band, sed))
-        assert(bands == 'grz')
-        SEDs.append(('Flat', (1.,1.,1.)))
-        SEDs.append(('Red', (2.5, 1.0, 0.4)))
+        SEDs = sed_matched_filters(bands)
+        Tnew,newcat = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
+                                              (T.itx,T.ity), targetwcs)
+        T = merge_tables([T,Tnew], columns='fillzero')
+        cat.extend(newcat)
 
-        # all source positions
-        xx = T.itx
-        yy = T.ity
-
-        hot = np.zeros((H,W), np.float32)
-        for sedname,sed in SEDs:
-            print 'SED', sedname
-            if plots:
-                pps = ps
-            else:
-                pps = None
-            sedsn,px,py = sed_matched_detection(
-                sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
-            print len(px), 'new peaks'
-            hot = np.maximum(hot, sedsn)
-            xx = np.append(xx, px)
-            yy = np.append(yy, py)
-
-        # New peaks:
-        peakx = xx[len(T):]
-        peaky = yy[len(T):]
-
-        # Add sources for the new peaks we found
-        # make their initial fluxes ~ 5-sigma
-        fluxes = dict([(b,[]) for b in bands])
-        for tim in tims:
-            psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-            fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
-        fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
-        pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
-        print 'Adding', len(pr), 'new sources'
-        # Also create FITS table for new sources
-        Tnew = fits_table()
-        Tnew.ra  = pr
-        Tnew.dec = pd
-        Tnew.tx = peakx
-        Tnew.ty = peaky
-        Tnew.itx = np.clip(np.round(Tnew.tx).astype(int), 0, W-1)
-        Tnew.ity = np.clip(np.round(Tnew.ty).astype(int), 0, H-1)
-        for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
-            cat.append(PointSource(RaDecPos(r,d),
-                                   NanoMaggies(order=bands, **fluxes)))
-    
-        print 'Existing source table:'
-        T.about()
-        print 'New source table:'
-        Tnew.about()
-    
-        T = merge_tables([T, Tnew], columns='fillzero')
 
     from desi_common import prepare_fits_catalog
     TT = T.copy()
