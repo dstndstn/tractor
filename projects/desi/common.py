@@ -623,6 +623,15 @@ class Decals(object):
         T.extname = np.array([s.strip() for s in T.extname])
         return T
 
+    def ccds_touching_wcs(self, wcs):
+        T = self.get_ccds()
+        I = ccds_touching_wcs(wcs, T)
+        #print len(I), 'CCDs nearby'
+        if len(I) == 0:
+            return None
+        T.cut(I)
+        return T
+    
     def find_ccds(self, expnum=None, extname=None):
         T = self.get_ccds()
         if expnum is not None:

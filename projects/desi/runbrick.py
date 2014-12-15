@@ -43,9 +43,7 @@ useCeres = True
 def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
-
     from tractor.ceres import ceres_opt
-    
 
 def create_tractor(tims, srcs):
     t = Tractor(tims, src)
@@ -110,9 +108,6 @@ def _bounce_tim_get_resamp((tim, targetwcs)):
     return tim_get_resamp(tim, targetwcs)
 
 def tims_compute_resamp(tims, targetwcs):
-    #for tim in tims:
-    #    r = tim_get_resamp(tim, targetwcs)
-    #    tim.resamp = r
     R = _map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
     for tim,r in zip(tims, R):
         tim.resamp = r
@@ -185,7 +180,6 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     print 'Chosen brick:'
     brick.about()
 
-    #bands = ['g','r','z']
     catband = 'r'
 
     targetwcs = wcs_for_brick(brick, W=W, H=H)
@@ -202,13 +196,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
 
-    T = decals.get_ccds()
-    I = ccds_touching_wcs(targetwcs, T)
-    print len(I), 'CCDs nearby'
-    if len(I) == 0:
-        return None
-    T.cut(I)
-
+    T = decals.ccds_touching_wcs(targetwcs)
     ims = []
     ti = []
     for band in bands:
@@ -223,8 +211,6 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
             ims.append(im)
     T.cut(np.hstack(ti))
 
-    # Check that the CCDs_touching cuts are correct.
-    #check_touching(decals, targetwcs, bands, brick, pixscale, ps)
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
 
@@ -232,7 +218,9 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for im in ims:
         decals.get_zeropoint_for(im)
 
-    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf) for im in ims]
+    # Run calibrations
+    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf)
+            for im in ims]
     _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
     tlast = Time()
@@ -242,6 +230,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     args = [(im, decals, targetrd, mock_psf) for im in ims]
     tims = _map(_read_tim, args)
 
+    # Cut the table of CCDs to match the 'tims' list
     print 'Tims:', tims
     print 'T:', len(T)
     T.about()
@@ -369,10 +358,11 @@ def stage_srcs(coimgs=None, cons=None,
     for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
         cat.append(PointSource(RaDecPos(r,d),
                                NanoMaggies(order=bands, **fluxes)))
-    # print 'Existing source table:'
-    # T.about()
-    # print 'New source table:'
-    # Tnew.about()
+
+    print 'Existing source table:'
+    T.about()
+    print 'New source table:'
+    Tnew.about()
 
     T = merge_tables([T, Tnew], columns='fillzero')
 
@@ -440,8 +430,6 @@ def stage_srcs(coimgs=None, cons=None,
         bloblist.append(blob)
         blobs[bslc][blobs[bslc] == 0] = blob
         blobslices.append(bslc)
-        #x = np.clip(T.itx, 0, W-1)
-        #y = np.clip(T.ity, 0, H-1)
         blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
         blobsrcs.append(np.array([i]))
     print 'Added', len(noblobs), 'new fake singleton blobs'
