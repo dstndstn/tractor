@@ -274,15 +274,6 @@ def stage_srcs(coimgs=None, cons=None,
     peakx = T.tx[Nsdss:]
     peaky = T.ty[Nsdss:]
     
-    # single-band filters
-    SEDs = []
-    for i,band in enumerate(bands):
-        sed = np.zeros(len(bands))
-        sed[i] = 1.
-        SEDs.append((band, sed))
-    SEDs.append(('Flat', (1.,1.,1.)))
-    SEDs.append(('Red', (2.5, 1.0, 0.4)))
-
     if pipe:
         del detmaps
         del detivs
@@ -300,86 +291,20 @@ def stage_srcs(coimgs=None, cons=None,
         plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
-    
-    # Segment, and record which sources fall into each blob
-    # Grow the 'hot' pixels by dilating by a few pixels
-    rr = 2.0
-    RR = int(np.ceil(rr))
-    S = 2*RR+1
-    struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
-             ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
+
+
     hot2 = (hot > 5)
-    hot2 = binary_dilation(hot2, structure=struc)
+    hot2 = binary_dilation(hot2, structure=np.ones(3,3), iterations=2)
 
-    T.about()
-
-    blobs,nblobs = label(hot2)
-    print 'N detected blobs:', nblobs
-    blobslices = find_objects(blobs)
-    T.blob = blobs[T.ity, T.itx]
-    if pipe:
-        # this is a crazy max-over-SEDs S/N map... but we only need it for ranking
-        fluximg = hot
-    else:
-        fluximg = coimgs[1]
-    blobsrcs = []
-    blobflux = []
-    keepblobs = []
-    keepslices = []
-    for blob in range(1, nblobs+1):
-        Isrcs = np.flatnonzero(T.blob == blob)
-        if len(Isrcs) == 0:
-            continue
-        blobsrcs.append(Isrcs)
-        bslc = blobslices[blob-1]
-        blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
-        keepblobs.append(blob)
-        keepslices.append(bslc)
-
-    # bloblist = [1, 7, 8, 13, ...] -- blob NUMBERs (not indices)
-    #  that actually contain sources
-    blobslices = keepslices
-    bloblist = keepblobs
-    kblobs = len(bloblist)
-    assert(kblobs == len(blobsrcs))
-    assert(kblobs == len(blobflux))
-    assert(kblobs == len(blobslices))
-    print 'Keeping', kblobs, 'blobs, with', len(T), 'sources'
-    print 'Blobs:', Time()-tlast
-    tlast = Time()
-
-    ## # Find sources that do not belong to a blob and add them as
-    ## # singleton "blobs"; otherwise they don't get optimized.
-    ## # for sources outside the image bounds, what should we do?
-    inblobs = np.zeros(len(T), bool)
-    for Isrcs in blobsrcs:
-        inblobs[Isrcs] = True
-    noblobs = np.flatnonzero(inblobs == 0)
-    del inblobs
-    # Add new fake blobs!
-    for ib,i in enumerate(noblobs):
-        S = 3
-        bslc = (slice(np.clip(T.ity - S, 0, H-1), np.clip(T.ity + S+1, 0, H)),
-                slice(np.clip(T.itx - S, 0, W-1), np.clip(T.itx + S+1, 0, W)))
-        # Set synthetic blob number
-        blob = nblobs+1 + ib
-        bloblist.append(blob)
-        blobs[bslc][blobs[bslc] == 0] = blob
-        blobslices.append(bslc)
-        blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
-        blobsrcs.append(np.array([i]))
-    print 'Added', len(noblobs), 'new fake singleton blobs'
-    kblobs = len(bloblist)
-    assert(kblobs == len(blobsrcs))
-    assert(kblobs == len(blobflux))
-    assert(kblobs == len(blobslices))
+    # Segment, and record which sources fall into each blob
+    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T)
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
     
     keys = ['T', 
-            'bloblist','blobsrcs','blobflux','blobslices', 'blobs',
+            'blobsrcs', 'blobslices', 'blobs',
             'tractor', 'cat', 'ps']
     if not pipe:
         keys.extend(['detmaps', 'detivs'])
@@ -427,8 +352,7 @@ def set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma, minradius=3):
 
 def stage_fitblobs(T=None, coimgs=None, cons=None,
                    detmaps=None, detivs=None,
-                   bloblist=None, blobsrcs=None, blobflux=None,
-                   blobslices=None, blobs=None,
+                   blobsrcs=None, blobslices=None, blobs=None,
                    tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
@@ -451,17 +375,11 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
 
     set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
 
-    ### FIXME
-    ## # Find sources that do not belong to a blob and add them as
-    ## # singleton "blobs"; otherwise they don't get optimized.
-    ## # for sources outside the image bounds, what should we do?
-
-    # Fit blobs in order of flux
     tfitall = Time()
-    iter = _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
+    iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
                       orig_wcsxy0, cat, bands)
     # to allow debugpool to only queue tasks one at a time
-    iter = iterwrapper(iter, len(bloblist))
+    iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
 
     srcivs = [[] for src in cat]
@@ -502,16 +420,10 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
         rtn[k] = locals()[k]
     return rtn
                           
-def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
+def _blob_iter(blobslices, blobsrcs, blobs,
                targetwcs, tims, orig_wcsxy0, cat, bands):
-    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-
-        bslc  = blobslices[iblob]
-        Isrcs = blobsrcs  [iblob]
-        if len(Isrcs) == 0:
-            # This shouldn't happen any more... and may break iterwrapper dealie
-            print 'Blob has no sources!'
-            continue
+    for iblob, (bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
+        assert(len(Isrcs) > 0)
 
         tblob = Time()
         # blob bbox in target coords
@@ -521,7 +433,7 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
         blobh,blobw = by1 - by0, bx1 - bx0
 
         print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':',
+        print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh
         print
 
@@ -550,7 +462,10 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
                                tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
 
-        blobmask = (blobs[bslc] == bloblist[iblob])
+
+
+        # Here we assume the "blobs" array has been remapped...
+        blobmask = (blobs[bslc] == iblob)
         #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,

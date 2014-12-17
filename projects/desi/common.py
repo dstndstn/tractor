@@ -34,6 +34,91 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+def segment_and_group_sources(image, T):
+    '''
+    *image*: binary image that defines "blobs"
+    *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
+      - ".blob" field is added.
+
+    Returns: (blobs, blobsrcs, blobslices)
+
+    *blobs*: image, values -1 = no blob, integer blob indices
+    *blobsrcs*: list of np arrays of integers, elements in T within each blob
+    *blobslices*: list of slice objects for blob bounding-boxes.
+    
+    '''
+    blobs,nblobs = label(image)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+    T.blob = blobs[T.ity, T.itx]
+
+    # Find sets of sources within blobs
+    blobsrcs = []
+    #keepblobs = []
+    keepslices = []
+    blobmap = {}
+    for blob in range(1, nblobs+1):
+        Isrcs = np.flatnonzero(T.blob == blob)
+        if len(Isrcs) == 0:
+            continue
+        blobmap[blob] = len(blobsrcs)
+        blobsrcs.append(Isrcs)
+        bslc = blobslices[blob-1]
+        #keepblobs.append(blob)
+        keepslices.append(bslc)
+
+    blobslices = keepslices
+    #bloblist = keepblobs
+    # kblobs = len(bloblist)
+    # assert(kblobs == len(blobsrcs))
+    # assert(kblobs == len(blobflux))
+    # assert(kblobs == len(blobslices))
+    # print 'Keeping', kblobs, 'blobs, with', len(T), 'sources'
+
+    # Find sources that do not belong to a blob and add them as
+    # singleton "blobs"; otherwise they don't get optimized.
+    # for sources outside the image bounds, what should we do?
+    inblobs = np.zeros(len(T), bool)
+    for Isrcs in blobsrcs:
+        inblobs[Isrcs] = True
+    noblobs = np.flatnonzero(inblobs == 0)
+    del inblobs
+    H,W = image.shape
+    # Add new fake blobs!
+    for ib,i in enumerate(noblobs):
+        S = 3
+        bslc = (slice(np.clip(T.ity - S, 0, H-1), np.clip(T.ity + S+1, 0, H)),
+                slice(np.clip(T.itx - S, 0, W-1), np.clip(T.itx + S+1, 0, W)))
+        # Set synthetic blob number
+        blob = nblobs+1 + ib
+        #bloblist.append(blob)
+        blobs[bslc][blobs[bslc] == 0] = blob
+        blobmap[blob] = len(blobsrcs)
+        blobslices.append(bslc)
+        #blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
+        blobsrcs.append(np.array([i]))
+    print 'Added', len(noblobs), 'new fake singleton blobs'
+    #kblobs = len(bloblist)
+    # assert(kblobs == len(blobsrcs))
+    # assert(kblobs == len(blobflux))
+    # assert(kblobs == len(blobslices))
+
+    # Remap the "blobs" image so that empty regions are = -1 and the blob values
+    # correspond to their indices in the "blobsrcs" list.
+    bm = np.zeros(max(blobmap.keys())+1, int)
+    for k,v in blobmap.items():
+        bm[k] = v
+    bm[0] = -1
+    blobs = bm[blobs]
+
+    for i,Isrcs in enumerate(blobsrcs):
+        for i in Isrcs:
+            assert(blobs[T.ity[i], T.itx[i]] == i)
+    T.blob = blobs[T.ity, T.itx]
+    assert(len(blobsrcs) == len(blobslices))
+
+    return blobs, blobsrcs, blobslices
+
 def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
     # FIXME?
     margin = 0.
