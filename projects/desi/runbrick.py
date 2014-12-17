@@ -293,9 +293,8 @@ def stage_srcs(coimgs=None, cons=None,
         ps.savefig()
 
 
-    hot2 = (hot > 5)
-    hot2 = binary_dilation(hot2, structure=np.ones(3,3), iterations=2)
-
+    hot = (hot > 5)
+    hot = binary_dilation(hot, structure=np.ones(3,3), iterations=2)
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T)
 

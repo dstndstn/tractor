@@ -54,7 +54,6 @@ def segment_and_group_sources(image, T):
 
     # Find sets of sources within blobs
     blobsrcs = []
-    #keepblobs = []
     keepslices = []
     blobmap = {}
     for blob in range(1, nblobs+1):
@@ -64,16 +63,9 @@ def segment_and_group_sources(image, T):
         blobmap[blob] = len(blobsrcs)
         blobsrcs.append(Isrcs)
         bslc = blobslices[blob-1]
-        #keepblobs.append(blob)
         keepslices.append(bslc)
 
     blobslices = keepslices
-    #bloblist = keepblobs
-    # kblobs = len(bloblist)
-    # assert(kblobs == len(blobsrcs))
-    # assert(kblobs == len(blobflux))
-    # assert(kblobs == len(blobslices))
-    # print 'Keeping', kblobs, 'blobs, with', len(T), 'sources'
 
     # Find sources that do not belong to a blob and add them as
     # singleton "blobs"; otherwise they don't get optimized.
@@ -91,17 +83,11 @@ def segment_and_group_sources(image, T):
                 slice(np.clip(T.itx - S, 0, W-1), np.clip(T.itx + S+1, 0, W)))
         # Set synthetic blob number
         blob = nblobs+1 + ib
-        #bloblist.append(blob)
         blobs[bslc][blobs[bslc] == 0] = blob
         blobmap[blob] = len(blobsrcs)
         blobslices.append(bslc)
-        #blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
         blobsrcs.append(np.array([i]))
     print 'Added', len(noblobs), 'new fake singleton blobs'
-    #kblobs = len(bloblist)
-    # assert(kblobs == len(blobsrcs))
-    # assert(kblobs == len(blobflux))
-    # assert(kblobs == len(blobslices))
 
     # Remap the "blobs" image so that empty regions are = -1 and the blob values
     # correspond to their indices in the "blobsrcs" list.
