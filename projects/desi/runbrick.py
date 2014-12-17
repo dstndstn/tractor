@@ -294,7 +294,7 @@ def stage_srcs(coimgs=None, cons=None,
 
 
     hot = (hot > 5)
-    hot = binary_dilation(hot, structure=np.ones(3,3), iterations=2)
+    hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T)
 
@@ -980,19 +980,6 @@ def stage3(T=None, sedsn=None, coimgs=None, cons=None,
     #             break
 
 
-def stage4(T=None,
-           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None,
-           bands=None, ps=None, tims=None,
-           plots=False, plots2=False,
-           **kwargs):
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
-
-
-
-
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                chi_plots=True, rgb_plots=False, main_plot=True):
@@ -1656,14 +1643,6 @@ def stage_writecat(
     cat.thawAllRecursive()
     hdr = version_header
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
-
-    # # Create DECAM_FLUX columns: [ugrizY]
-    # bandindex = dict(g=1, r=2, z=4)
-    # T2.decam_flux      = np.zeros((len(T2), 6), np.float32)
-    # T2.decam_flux_isig = np.zeros((len(T2), 6), np.float32)
-    # for band in bands:
-    #     T2.decam_flux[:, bandindex[band]] = T2.get('decam_%s_nanomaggies' % band)
-    #     T2.decam_flux_isig[:, bandindex[band]] = np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
 
     # Unpack shape columns
     T2.shapeExp_r = T2.shapeExp[:,0]

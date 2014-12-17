@@ -47,6 +47,9 @@ def segment_and_group_sources(image, T):
     *blobslices*: list of slice objects for blob bounding-boxes.
     
     '''
+
+    emptyblob = 0
+
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
     blobslices = find_objects(blobs)
@@ -79,11 +82,12 @@ def segment_and_group_sources(image, T):
     # Add new fake blobs!
     for ib,i in enumerate(noblobs):
         S = 3
-        bslc = (slice(np.clip(T.ity - S, 0, H-1), np.clip(T.ity + S+1, 0, H)),
-                slice(np.clip(T.itx - S, 0, W-1), np.clip(T.itx + S+1, 0, W)))
+        bslc = (slice(np.clip(T.ity[i] - S, 0, H-1), np.clip(T.ity[i] + S+1, 0, H)),
+                slice(np.clip(T.itx[i] - S, 0, W-1), np.clip(T.itx[i] + S+1, 0, W)))
+        print 'Slice:', bslc
         # Set synthetic blob number
         blob = nblobs+1 + ib
-        blobs[bslc][blobs[bslc] == 0] = blob
+        blobs[bslc][blobs[bslc] == emptyblob] = blob
         blobmap[blob] = len(blobsrcs)
         blobslices.append(bslc)
         blobsrcs.append(np.array([i]))
@@ -97,9 +101,9 @@ def segment_and_group_sources(image, T):
     bm[0] = -1
     blobs = bm[blobs]
 
-    for i,Isrcs in enumerate(blobsrcs):
+    for j,Isrcs in enumerate(blobsrcs):
         for i in Isrcs:
-            assert(blobs[T.ity[i], T.itx[i]] == i)
+            assert(blobs[T.ity[i], T.itx[i]] == j)
     T.blob = blobs[T.ity, T.itx]
     assert(len(blobsrcs) == len(blobslices))
 
@@ -865,13 +869,133 @@ class Decals(object):
         #print 'magzp', magzp
         return magzp
 
+def exposure_metadata(filenames, hdus=None, trim=None):
+    nan = np.nan
+    primkeys = [('FILTER',''),
+                ('RA', nan),
+                ('DEC', nan),
+                ('AIRMASS', nan),
+                ('DATE-OBS', ''),
+                ('G-SEEING', nan),
+                ('EXPTIME', nan),
+                ('EXPNUM', 0),
+                ('MJD-OBS', 0),
+                ('PROPID', ''),
+                ('GUIDER', ''),
+                ('OBJECT', ''),
+                ]
+    hdrkeys = [('AVSKY', nan),
+               ('ARAWGAIN', nan),
+               ('FWHM', nan),
+               #('ZNAXIS1',0),
+               #('ZNAXIS2',0),
+               ('CRPIX1',nan),
+               ('CRPIX2',nan),
+               ('CRVAL1',nan),
+               ('CRVAL2',nan),
+               ('CD1_1',nan),
+               ('CD1_2',nan),
+               ('CD2_1',nan),
+               ('CD2_2',nan),
+               ('EXTNAME',''),
+               ('CCDNUM',''),
+               ]
+
+    otherkeys = [('CPIMAGE',''), ('CPIMAGE_HDU',0), ('CALNAME',''), #('CPDATE',0),
+                 ('HEIGHT',0),('WIDTH',0),
+                 ]
+
+    allkeys = primkeys + hdrkeys + otherkeys
+
+    vals = dict([(k,[]) for k,d in allkeys])
+
+    for i,fn in enumerate(filenames):
+        print 'Reading', (i+1), 'of', len(filenames), ':', fn
+        F = fitsio.FITS(fn)
+        #print F
+        #print len(F)
+        primhdr = F[0].read_header()
+        #print primhdr
+
+        expstr = '%08i' % primhdr.get('EXPNUM')
+
+        # # Parse date with format: 2014-08-09T04:20:50.812543
+        # date = datetime.datetime.strptime(primhdr.get('DATE-OBS'),
+        #                                   '%Y-%m-%dT%H:%M:%S.%f')
+        # # Subract 12 hours to get the date used by the CP to label the night;
+        # # CP20140818 includes observations with date 2014-08-18 evening and
+        # # 2014-08-19 early AM.
+        # cpdate = date - datetime.timedelta(0.5)
+        # #cpdatestr = '%04i%02i%02i' % (cpdate.year, cpdate.month, cpdate.day)
+        # #print 'Date', date, '-> CP', cpdatestr
+        # cpdateval = cpdate.year * 10000 + cpdate.month * 100 + cpdate.day
+        # print 'Date', date, '-> CP', cpdateval
+
+        cpfn = fn
+        if trim is not None:
+            cpfn = cpfn.replace(trim, '')
+        print 'CP fn', cpfn
+
+        if hdus is not None:
+            hdulist = hdus
+        else:
+            hdulist = range(1, len(F))
+
+        for hdu in hdulist:
+            hdr = F[hdu].read_header()
+
+            info = F[hdu].get_info()
+            #'extname': 'S1', 'dims': [4146L, 2160L]
+            H,W = info['dims']
+
+            for k,d in primkeys:
+                vals[k].append(primhdr.get(k, d))
+            for k,d in hdrkeys:
+                vals[k].append(hdr.get(k, d))
+
+            vals['CPIMAGE'].append(cpfn)
+            vals['CPIMAGE_HDU'].append(hdu)
+            vals['WIDTH'].append(int(W))
+            vals['HEIGHT'].append(int(H))
+            #vals['CPDATE'].append(cpdateval)
+
+            calname = '%s/%s/decam-%s-%s' % (expstr[:5], expstr, expstr, hdr.get('EXTNAME'))
+            vals['CALNAME'].append(calname)
+
+    T = fits_table()
+    for k,d in allkeys:
+        T.set(k.lower().replace('-','_'), np.array(vals[k]))
+    #T.about()
+
+    T.filter = np.array([s.split()[0] for s in T.filter])
+    T.ra_bore  = np.array([hmsstring2ra (s) for s in T.ra ])
+    T.dec_bore = np.array([dmsstring2dec(s) for s in T.dec])
+
+    T.ra  = np.zeros(len(T))
+    T.dec = np.zeros(len(T))
+    for i in range(len(T)):
+        W,H = T.width[i], T.height[i]
+
+        wcs = Tan(T.crval1[i], T.crval2[i], T.crpix1[i], T.crpix2[i],
+                  T.cd1_1[i], T.cd1_2[i], T.cd2_1[i], T.cd2_2[i], float(W), float(H))
+        
+        xc,yc = W/2.+0.5, H/2.+0.5
+        rc,dc = wcs.pixelxy2radec(xc,yc)
+        T.ra [i] = rc
+        T.dec[i] = dc
+
+    return T
+
 class DecamImage(object):
     def __init__(self, t):
         imgfn, hdu, band, expnum, extname, calname, exptime = (
             t.cpimage.strip(), t.cpimage_hdu, t.filter.strip(), t.expnum,
             t.extname.strip(), t.calname.strip(), t.exptime)
 
-        self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
+        if os.path.exists(imgfn):
+            self.imgfn = imgfn
+        else:
+            self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
