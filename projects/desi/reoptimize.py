@@ -5,7 +5,7 @@ from desi_common import *
 
 if __name__ == '__main__':
     import optparse
-    parser = optparse.OptionParser(usage='%prog <catalog.fits> <output-catalog.fits>')
+    parser = optparse.OptionParser(usage='%prog <catalog.fits>')
 
     #parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 2046 0 4094")')
     #parser.add_option('--no-ceres', action='store_false', default=True, dest='ceres', help='Do not use Ceres optimiziation engine (use scipy)')
@@ -19,14 +19,30 @@ if __name__ == '__main__':
     parser.add_option('--psf', action='store_true', help='Fit PSF model?')
     parser.add_option('--photom', action='store_true', help='Fit photometric cal?')
 
+    parser.add_option('--out', dest='outcat', help='Catalog output filename (if --sources is specified)')
+    parser.add_option('--outdir', dest='outdir', help='Output directory for re-fit calibration files (if --sky, --astrom, --psf, --photom are specified)')
+
     opt,args = parser.parse_args()
 
-    if len(args) != 2:
+    if len(args) != 1:
         parser.print_help()
         sys.exit(-1)
 
     catfn = args[0]
-    outfn = args[1]
+
+    if opt.sources:
+        if opt.outcat is None:
+            print 'If --sources are being re-optimized, must specify output file with --out'
+            sys.exit(-1)
+    cal = opt.sky or opt.astrom or opt.psf or opt.photom
+    if cal:
+        if opt.outdir is None:
+            print 'If --sky, --astrom, --psf, or --photom are being re-optimized, must specify output directory with --outdir'
+            sys.exit(-1)
+
+    if not (opt.sources or cal):
+        print 'Nothing to do!  Must specify --sources, --sky, --astrom, --psf, or --photom.'
+        sys.exit(-1)
 
     # zoomslice = None
     # if opt.zoom is not None:
@@ -77,7 +93,7 @@ if __name__ == '__main__':
     if not opt.sources:
         tr.freezeParam('catalog')
 
-    if not (opt.sky or opt.astrom or opt.psf or opt.photom):
+    if not cal:
         tr.freezeParams('images')
     else:
         but = []
@@ -125,8 +141,8 @@ if __name__ == '__main__':
         tr.thawAllRecursive()
         cat = tr.catalog
         T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
-        T2.writeto(outfn, header=hdr)
-        print 'Wrote', outfn
+        T2.writeto(opt.outcat, header=hdr)
+        print 'Wrote', opt.outcat
 
     if opt.sky:
         for tim in tims:
@@ -142,12 +158,35 @@ if __name__ == '__main__':
 
             print 'Header:', hdr
 
-            fn = tim.imobj.skyfn.replace(decals_dir, outfn)
+            fn = tim.imobj.skyfn.replace(decals_dir, opt.outdir)
             print 'Output filename', fn
             try:
                 os.makedirs(os.path.dirname(fn))
             except:
                 pass
-            fitsio.write(fn, None, header=hdr)
+            fitsio.write(fn, None, header=hdr, clobber=True)
             print 'Wrote', fn
             
+
+    if opt.photom:
+        for tim in tims:
+            hdr = fitsio.FITSHDR()
+
+            photom = tim.getPhotoCal()
+            tt = type(photom)
+            photom_type = '%s.%s' % (tt.__module__, tt.__name__)
+            prefix = ''
+            hdr.add_record(dict(name=prefix + 'PHOT', value=photom_type,
+                                comment='Photom class'))
+            photom.toFitsHeader(hdr,  prefix + 'PHOT_')
+            print 'Header:', hdr
+
+            fn = tim.imobj.skyfn.replace(decals_dir, opt.outdir).replace('sky','photom')
+            print 'Output filename', fn
+            try:
+                os.makedirs(os.path.dirname(fn))
+            except:
+                pass
+            fitsio.write(fn, None, header=hdr, clobber=True)
+            print 'Wrote', fn
+
