@@ -28,7 +28,8 @@ from tractor.psfex import PsfEx
 from tractor.sdss import get_tractor_sources_dr9
 from tractor.ellipses import *
 
-tempdir = os.environ['TMPDIR']
+# search order: $TMPDIR, $TEMP, $TMP, then /tmp, /var/tmp, /usr/tmp
+tempdir = tempfile.gettempdir()
 decals_dir = os.environ.get('DECALS_DIR')
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
