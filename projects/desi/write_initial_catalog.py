@@ -22,6 +22,13 @@ if __name__ == '__main__':
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
 
+    if not (('BOSS_PHOTOOBJ' in os.environ) and ('PHOTO_RESOLVE' in os.environ)):
+        print '$BOSS_PHOTOOBJ and $PHOTO_RESOLVE not set -- on NERSC, you can do:'
+        print '  export BOSS_PHOTOOBJ=/project/projectdirs/cosmo/data/sdss/pre13/eboss/photoObj.v5b'
+        print '  export PHOTO_RESOLVE=/project/projectdirs/cosmo/data/sdss/pre13/eboss/resolve/2013-07-29'
+        print 'To read SDSS files from the local filesystem rather than downloading them.'
+        print
+        
     opt,args = parser.parse_args()
     brickid = opt.brick
     bands = opt.bands

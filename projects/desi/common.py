@@ -31,6 +31,13 @@ from tractor.ellipses import *
 # search order: $TMPDIR, $TEMP, $TMP, then /tmp, /var/tmp, /usr/tmp
 tempdir = tempfile.gettempdir()
 decals_dir = os.environ.get('DECALS_DIR')
+if decals_dir is None:
+    print 'Warning: you should set the $DECALS_DIR environment variable.'
+    print 'On NERSC, you can do:'
+    print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
+    print '  module load decals'
+    print
+    
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
@@ -115,6 +122,9 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
     margin = 0.
 
     sdss = DR9(basedir=photoobjdir)
+    if local:
+        local = (local and ('BOSS_PHOTOOBJ' in os.environ)
+                 and ('PHOTO_RESOLVE' in os.environ))
     if local:
         sdss.useLocalTree()
 
