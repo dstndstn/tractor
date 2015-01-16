@@ -1012,8 +1012,14 @@ class DecamImage(object):
         self.extname = extname
         self.band  = band
         self.exptime = exptime
-        self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
-        self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
+
+        # EDR filenames: .imag.fits, .ivar.fits, .mask.fits.gz
+        if '.imag.fits' in self.imgfn:
+            self.dqfn = self.imgfn.replace('.imag.fits', '.mask.fits.gz')
+            self.wtfn = self.imgfn.replace('.imag.fits', '.ivar.fits')
+        else:
+            self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
+            self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
         for attr in ['imgfn', 'dqfn', 'wtfn']:
             fn = getattr(self, attr)
@@ -1033,6 +1039,7 @@ class DecamImage(object):
 
         ibase = os.path.basename(imgfn)
         ibase = ibase.replace('.fits.fz', '')
+        ibase = ibase.replace('.fits', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
         #self.name = dirname + '/' + base + ' + %02i' % hdu
         #print 'dir,base', idirname, ibase

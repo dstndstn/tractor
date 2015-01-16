@@ -810,6 +810,12 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     print 'Blob finished fitting:', Time()-tlast
     tlast = Time()
 
+
+    # Next, model selections: point source vs dev/exp vs composite.
+    
+
+
+
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
