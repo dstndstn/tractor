@@ -2293,6 +2293,8 @@ class Tractor(MultiParams):
         if srcs is None:
             srcs = self.catalog
         for src in srcs:
+            if src is None:
+                continue
             patch = self.getModelPatch(img, src, minsb=minsb)
             if patch is None:
                 continue

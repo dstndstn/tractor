@@ -133,9 +133,6 @@ class Galaxy(MultiParams):
                 ', brightness=' + repr(self.brightness) +
                 ', shape=' + repr(self.shape))
 
-    def copy(self):
-        return None
-
     def getUnitFluxModelPatch(self, img, **kwargs):
         raise RuntimeError('getUnitFluxModelPatch unimplemented in' +
                            self.getName())
@@ -402,10 +399,6 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
     def getName(self):
         return 'HoggGalaxy'
 
-    def copy(self):
-        return HoggGalaxy(self.pos.copy(), self.brightness.copy(),
-                          self.shape.copy())
-
     def getRadius(self):
         return self.nre * self.shape.re
     
@@ -452,9 +445,6 @@ class ExpGalaxy(HoggGalaxy):
         return ExpGalaxy.getExpProfile()
     def getShape(self):
         return self.shape
-    def copy(self):
-        return ExpGalaxy(self.pos.copy(), self.brightness.copy(),
-                         self.shape.copy())
 
 class DevGalaxy(HoggGalaxy):
     nre = 8.
@@ -470,10 +460,6 @@ class DevGalaxy(HoggGalaxy):
         return 'DevGalaxy'
     def getProfile(self):
         return DevGalaxy.getDevProfile()
-    def copy(self):
-        return DevGalaxy(self.pos.copy(), self.brightness.copy(),
-                         self.shape.copy())
-
 
 class FracDev(ScalarParam):
     stepsize = 0.01
@@ -540,11 +526,6 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy):
                 ', fracDev=' + repr(self.fracDev) + 
                 ', shapeExp=' + repr(self.shapeExp) +
                 ', shapeDev=' + repr(self.shapeDev) + ')')
-    def copy(self):
-        return FixedCompositeGalaxy(self.pos.copy(), self.brightness.copy(),
-                                    self.fracDev.copy(),
-                                    self.shapeExp.copy(),
-                                    self.shapeDev.copy())
 
     def getBrightness(self):
         return self.brightness
