@@ -114,7 +114,7 @@ def main():
         print len(T), 'without EDGE bit set'
 
         # Cut
-        T = T[:1]
+        T = T[:100]
 
         # Write out Stripe82 measurements...
         for i in range(len(T)):

@@ -536,7 +536,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             Xi = Xi[I] - sx0
             subtim.resamp = (Yo, Xo, Yi, Xi)
 
-            
     subcat = Catalog(*srcs)
     subtr = Tractor(subtims, subcat)
     subtr.freezeParam('images')
@@ -812,9 +811,111 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
 
     # Next, model selections: point source vs dev/exp vs composite.
-    
 
+    # FIXME -- render initial models and find significant flux overlap
+    # (product)??  (Could use the same logic above!)  This would give
+    # families of sources to fit simultaneously.  (The
+    # not-friends-of-friends version of blobs!)
 
+    # For sources, in decreasing order of brightness
+    #cat = subtr.getCatalog()
+    for numi,i in enumerate(Ibright):
+        src = subcat[i]
+        print src
+
+        # FIXME -- do we need to do the whole "compute & subtract
+        # initial models" thing here?  Probably...
+
+        lnp0 = subtr.getLogProb()
+
+        subcat[i] = None
+        print 'Catalog:', [src for src in subcat]
+        lnp_null = subtr.getLogProb()
+
+        #lnp_ptsrc = lnp_dev = lnp_exp = lnp_comp = None
+
+        lnps = dict(ptsrc=None, dev=None, exp=None, comp=None)
+
+        if isinstance(src, PointSource):
+            # logr, ee1, ee2
+            shape = EllipseESoft(-1., 0., 0.)
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            comp = None
+            ptsrc = None
+            lnps.update(ptsrc=lnp0)
+            models = [('dev', dev), ('exp', exp), ('comp', comp)]
+
+        elif isinstance(src, DevGalaxy):
+            dev = src.copy()
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
+            comp = None
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(dev=lnp0)
+            models = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+
+        elif isinstance(src, ExpGalaxy):
+            exp = src.copy()
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
+            comp = None
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(exp=lnp0)
+            models = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+
+        elif isinstance(src, FixedCompositeGalaxy):
+            frac = src.fracDev.getValue()
+            if frac > 0:
+                shape = src.shapeDev
+            else:
+                shape = src.shapeExp
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            if frac < 1:
+                shape = src.shapeExp
+            else:
+                shape = src.shapeDev
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            comp = src.copy()
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(comp=lnp0)
+            models = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+
+        for name,newsrc in models:
+            print 'Trying model:', name
+            if name == 'comp' and newsrc is None:
+                newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
+                                                     0.5, exp.getShape(), dev.getShape()).copy()
+            print 'New source:', newsrc
+            subcat[i] = newsrc
+            lnp = subtr.getLogProb()
+            print 'Initial log-prob:', lnp
+            print 'vs original src:', lnp - lnp0
+
+            subcat.freezeAllBut(i)
+
+            max_cpu_per_source = 60.
+
+            cpu0 = time.clock()
+            for step in range(50):
+                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print 'dlnp:', dlnp, 'new src', newsrc
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
+                if dlnp < 0.1:
+                    break
+
+            print 'New source (after optimization):', newsrc
+            lnp = subtr.getLogProb()
+            print 'Optimized log-prob:', lnp
+            print 'vs original src:', lnp - lnp0
+
+            lnps[name] = lnp
+            
+
+        # FIXME -- here we REVERT!!
+        subcat[i] = src
+        
 
     # Variances
     srcinvvars = [[] for src in srcs]
