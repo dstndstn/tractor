@@ -9,6 +9,7 @@ from astrometry.util.fits import *
 from astrometry.util.util import *
 from astrometry.util.plotutils import *
 from astrometry.util.resample import *
+from astrometry.libkd.spherematch import *
 from astrometry.sdss import *
 
 from astrometry.sdss import *
@@ -16,11 +17,11 @@ from astrometry.sdss import *
 from tractor import *
 from tractor.sdss import *
 
-tempdir = 'scratch'
+tempdir = 'scratch/blobs'
 
-def _bounce_one_blob((teff,dteff,ra,dec)):
+def _bounce_one_blob(args):
     try:
-        oneblob(ra,dec,teff,dteff)
+        oneblob(*args)
     except:
         print 'Error running oneblob:'
         import traceback
@@ -28,6 +29,9 @@ def _bounce_one_blob((teff,dteff,ra,dec)):
         print
 
 def main():
+
+    cutToPrimary = True
+
     if False:
         stars = [
             # David's nearby pairs of F stars
@@ -51,8 +55,14 @@ def main():
         print 'Read stars:'
         T.about()
         stars.extend(zip(T.teff, T.teff_sigma, T.ra, T.dec))
-    else:
-        # This photoObj is unknown
+
+        # reformat
+        stars = [(ra,dec,[('T_EFF',teff,'Effective temperature'),
+                          ('DT_EFF',dteff,'Effective temperate error')],
+                  cutToPrimary) for teff,dteff,ra,dec in stars]
+        
+    elif False:
+
         sdss = DR9(basedir=tempdir)
         sdss.useLocalTree()
         # near M87 / Virgo cluster
@@ -82,13 +92,116 @@ def main():
         T.cut(np.array(keepi))
         print len(T), 'unique blend families'
         T = T[:25]
-        stars = [(0,0,ra,dec) for ra,dec in zip(T.ra, T.dec)]
+
+        stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)]
+
+    else:
+
+        # Objects in the Stripe82 coadd context in CAS:
+        #   select * into mydb.s82 from PhotoPrimary where
+        #    ra between 5 and 6
+        #      and dec between 0 and 1
+        #        and (run = 106 or run = 206)  -> s82.fits
+
+        T = fits_table('s82.fits')
+        print 'Read', len(T), 'objects'
+        T.cut(T.nchild == 0)
+        print len(T), 'children'
+        T.cut(T.insidemask == 0)
+        print len(T), 'not in mask'
+        # EDGE
+        T.cut(T.flags & 0x4 == 0)
+        print len(T), 'without EDGE bit set'
+
+        # Cut
+        T = T[:1]
+
+        # Write out Stripe82 measurements...
+        for i in range(len(T)):
+
+            pixscale = 0.396
+            pixradius = 25
+            radius = np.sqrt(2.) * pixradius * pixscale / 3600.
+            
+            # t = T[np.array([i])]
+            # print 't:', t
+            # t.about()
+            # assert(len(t) == 1)
+
+            I,J,d = match_radec(np.array([T.ra[i]]), np.array([T.dec[i]]),
+                                T.ra, T.dec, radius)
+            t = T[J]
+            print len(t), 'matched within', radius*3600., 'arcsec'
+            
+            tt = fits_table()            
+            cols = ['ra','dec','run','camcol','field',#'probpsf',
+                    #'flags', #'type',
+                    'fracdev_r', #'probpsf_r', 
+                    'devrad_r','devraderr_r', 'devab_r', 'devaberr_r',
+                    'devphi_r', 'devphierr_r',
+                    'exprad_r','expraderr_r', 'expab_r', 'expaberr_r',
+                    'expphi_r', 'expphierr_r',
+                    ]
+            for c in cols:
+                cout = c
+                # drop "_r" from dev/exp shapes
+                if cout.endswith('_r'):
+                    cout = cout[:-2]
+
+                coutmap = dict(devrad='theta_dev',
+                               devphi='phi_dev',
+                               devab ='ab_dev',
+                               devraderr='theta_dev_err',
+                               devphierr='phi_dev_err',
+                               devaberr ='ab_dev_err',
+                               exprad='theta_exp',
+                               expphi='phi_exp',
+                               expab ='ab_exp',
+                               expraderr='theta_exp_err',
+                               expphierr='phi_exp_err',
+                               expaberr ='ab_exp_err',
+                               fracdev='frac_dev')
+                cout = coutmap.get(cout, cout)
+                    
+                tt.set(cout, t.get(c))
+
+            tt.is_star = (t.type == 6)
+
+            for magname in ['psf', 'dev', 'exp']:
+                for band in 'ugriz':
+                    mag = t.get('%smag_%s' % (magname, band))
+                    magerr = t.get('%smagerr_%s' % (magname, band))
+
+                    ### FIXME -- arcsinh mags??
+                    
+                    flux = NanoMaggies.magToNanomaggies(mag)
+                    dflux = np.abs(flux * np.log(10.)/-2.5 * magerr)
+
+                    tt.set('%sflux_%s' % (magname, band), flux)
+                    tt.set('%sfluxerr_%s' % (magname, band), dflux)
+
+            for band in 'ugriz':
+                # http://www.sdss3.org/dr10/algorithms/magnitudes.php#cmodel
+                fexp = tt.get('expflux_%s' % band)
+                fdev = tt.get('expflux_%s' % band)
+                fracdev = t.get('fracdev_%s' % band)
+                tt.set('cmodelflux_%s' % band, fracdev * fdev + (1.-fracdev) * fexp)
+
+            catfn = 'cat-s82-%.4f-%.4f.fits' % (t.ra[0], t.dec[0])
+            tt.writeto(catfn)
+            print 'Wrote', catfn
+            
+        cutToPrimary = False
+
+        stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)]
+
 
     plots = True
     
     if True:
         from astrometry.util.multiproc import *
-        mp = multiproc(4)
+        #mp = multiproc(4)
+        mp = multiproc()
         mp.map(_bounce_one_blob, stars)
 
     else:
@@ -97,9 +210,10 @@ def main():
         #           (0.,0., 147.34576,  0.51657783 ),
         #           ]
         
-        for teff, dteff, ra,dec in stars:
+        for args in stars:
+            ra,dec = stars[:2]
             try:
-                fns = oneblob(ra,dec, teff, dteff)
+                fns = oneblob(*stars)
             except:
                 import traceback
                 traceback.print_exc()
@@ -128,12 +242,13 @@ def main():
                     
                 
             
-def oneblob(ra, dec, teff, dteff):
+def oneblob(ra, dec, addToHeader, cutToPrimary):
 
     outfns = []
     
     # Resample test blobs to a common pixel grid.
     sdss = DR9(basedir=tempdir)
+    #sdss.useLocalTree()
     sdss.saveUnzippedFiles(tempdir)
     
     pixscale = 0.396
@@ -171,11 +286,13 @@ def oneblob(ra, dec, teff, dteff):
     for ifield,(run,camcol,field) in enumerate(RCF):
 
         # Retrieve SDSS catalog sources in the field
-        srcs = get_tractor_sources_dr9(run, camcol, field, bandname=srcband,
-                                       sdss=sdss,
-                                       radecrad=(ra, dec, radius*np.sqrt(2.)),
-                                       nanomaggies=True,
-                                       cutToPrimary=True)
+        srcs,objs = get_tractor_sources_dr9(run, camcol, field, bandname=srcband,
+                                            sdss=sdss,
+                                            radecrad=(ra, dec, radius*np.sqrt(2.)),
+                                            nanomaggies=True,
+                                            cutToPrimary=cutToPrimary,
+                                            getsourceobjs=True,
+                                            useObjcType=True)
         print 'Got sources:'
         for src in srcs:
             print '  ', src
@@ -184,9 +301,37 @@ def oneblob(ra, dec, teff, dteff):
         T = fits_table()
         T.ra  = [src.getPosition().ra  for src in srcs]
         T.dec = [src.getPosition().dec for src in srcs]
+
+        # for band in bands:
+        #     T.set('psfflux_%s' % band,
+        #           [src.getBrightness().getBand(band) for src in srcs])
+
+        # same objects, same order
+        assert(len(objs) == len(srcs))
+        assert(np.all(T.ra == objs.ra))
+
+        # r-band
+        bandnum = 2
+        T.primary = ((objs.resolve_status & 256) > 0)
+        T.run = objs.run
+        T.camcol = objs.camcol
+        T.field = objs.field
+        T.is_star = (objs.objc_type == 6)
+        T.frac_dev = objs.fracdev[:,bandnum]
+        T.theta_dev = objs.theta_dev[:,bandnum]
+        T.theta_exp = objs.theta_exp[:,bandnum]
+        T.phi_dev = objs.phi_dev_deg[:,bandnum]
+        T.phi_exp = objs.phi_exp_deg[:,bandnum]
+        T.ab_dev = objs.ab_dev[:,bandnum]
+        T.ab_exp = objs.ab_exp[:,bandnum]
+
         for band in bands:
-            T.set('psfflux_%s' % band,
-                  [src.getBrightness().getBand(band) for src in srcs])
+            bi = band_index(band)
+            T.set('psfflux_%s' % band, objs.psfflux[:,bi])
+            T.set('devflux_%s' % band, objs.devflux[:,bi])
+            T.set('expflux_%s' % band, objs.expflux[:,bi])
+            T.set('cmodelflux_%s' % band, objs.cmodelflux[:,bi])
+            
         TT.append(T)
     T = merge_tables(TT)
     T.writeto(catfn)
@@ -338,11 +483,9 @@ def oneblob(ra, dec, teff, dteff):
             hdr.add_record(dict(name='DARKVAR', value=tim.sdss_darkvar,
                                 comment='SDSS dark variance'))
 
-            hdr.add_record(dict(name='T_EFF', value=teff,
-                                comment='Effective temperature'))
-            hdr.add_record(dict(name='DT_EFF', value=dteff,
-                                comment='Effective temperature error'))
-            
+            for (key, value, comment) in addToHeader:
+                hdr.add_record(dict(name=key, value=value, comment=comment))
+                
             newpsf.toFitsHeader(hdr, 'PSF_')
             
             # First time, overwrite existing file.  Later, append
