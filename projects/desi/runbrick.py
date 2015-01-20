@@ -821,18 +821,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     #cat = subtr.getCatalog()
     for numi,i in enumerate(Ibright):
         src = subcat[i]
-        print src
+        print
+        print 'Model selection for source', src
 
         # FIXME -- do we need to do the whole "compute & subtract
         # initial models" thing here?  Probably...
 
         lnp0 = subtr.getLogProb()
+        print 'lnp0:', lnp0
 
         subcat[i] = None
-        print 'Catalog:', [src for src in subcat]
+        #print 'Catalog:', [s for s in subcat]
         lnp_null = subtr.getLogProb()
-
-        #lnp_ptsrc = lnp_dev = lnp_exp = lnp_comp = None
+        print 'Removing the source: dlnp', lnp_null - lnp0
 
         lnps = dict(ptsrc=None, dev=None, exp=None, comp=None)
 
@@ -842,7 +843,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
-            ptsrc = None
             lnps.update(ptsrc=lnp0)
             models = [('dev', dev), ('exp', exp), ('comp', comp)]
 
@@ -895,10 +895,11 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             max_cpu_per_source = 60.
 
             cpu0 = time.clock()
+            p0 = newsrc.getParams()
             for step in range(50):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp, 'new src', newsrc
+                print '  dlnp:', dlnp, 'new src', newsrc
                 if time.clock()-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
                     break
@@ -910,8 +911,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             print 'Optimized log-prob:', lnp
             print 'vs original src:', lnp - lnp0
 
-            lnps[name] = lnp
+            # Try Ceres...
+            newsrc.setParams(p0)
+            print 'Ceres opt...'
+            R = subtr._ceres_opt(max_iterations=50)
+            print 'Result:', R
+            print 'New source (after optimization):', newsrc
+            lnp = subtr.getLogProb()
+            print 'Optimized log-prob:', lnp
+            print 'vs original src:', lnp - lnp0
             
+            lnps[name] = lnp
+
+        print 'Log-probs:', lnps
 
         # FIXME -- here we REVERT!!
         subcat[i] = src

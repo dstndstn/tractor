@@ -114,10 +114,10 @@ def main():
         print len(T), 'without EDGE bit set'
 
         # Cut
-        T = T[:100]
+        #T = T[:100]
 
         # Write out Stripe82 measurements...
-        for i in range(len(T)):
+        for i in range(len(T[:100])):
 
             pixscale = 0.396
             pixradius = 25
@@ -130,6 +130,7 @@ def main():
 
             I,J,d = match_radec(np.array([T.ra[i]]), np.array([T.dec[i]]),
                                 T.ra, T.dec, radius)
+            print len(J), 'matched within', radius*3600., 'arcsec'
             t = T[J]
             print len(t), 'matched within', radius*3600., 'arcsec'
             
@@ -195,6 +196,7 @@ def main():
 
         stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)]
 
+    sys.exit(0)
 
     plots = True
     

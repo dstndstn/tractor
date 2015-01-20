@@ -657,8 +657,9 @@ class Tractor(MultiParams):
     # ceres-tractor.cc via ceres.i .
     def _getOneImageDerivs(self, imgi):
         # Returns:
-        #     [  (param-index, deriv_x0, deriv_x0, deriv), ... ]
+        #     [  (param-index, deriv_x0, deriv_y0, deriv), ... ]
         # not necessarily in order of param-index
+        # Where deriv_x0, deriv_y0 are integer pixel offsets of the "deriv" image.
         #
         # NOTE, this scales the derivatives by inverse-error and -1 to
         # yield derivatives of CHI with respect to PARAMs; NOT the
@@ -2497,7 +2498,9 @@ class ScaledTractor(object):
     def getImage(self, i):
         return self.tractor.getImage(i)
     def getChiImage(self, i):
-        return self.tractor.getChiImage(i)
+        #return self.tractor.getChiImage(i)
+        return self.tractor.getChiImage(i).astype(float)
+
     def _getOneImageDerivs(self, i):
         derivs = self.tractor._getOneImageDerivs(i)
         for (ind, x0, y0, der) in derivs:
