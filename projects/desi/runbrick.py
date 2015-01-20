@@ -112,14 +112,24 @@ def tims_compute_resamp(tims, targetwcs):
     for tim,r in zip(tims, R):
         tim.resamp = r
 
-def compute_coadds(tims, bands, W, H, targetwcs):
+def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
     coimgs = []
     cons = []
+    if get_n2:
+        cons2 = []
+    if get_cow:
+        # moo
+        cowimgs = []
+        wimgs = []
+    
     for ib,band in enumerate(bands):
         coimg = np.zeros((H,W), np.float32)
         coimg2 = np.zeros((H,W), np.float32)
         con   = np.zeros((H,W), np.uint8)
         con2  = np.zeros((H,W), np.uint8)
+        if get_cow:
+            cowimg = np.zeros((H,W), np.float32)
+            wimg  = np.zeros((H,W), np.float32)
         for tim in tims:
             if tim.band != band:
                 continue
@@ -130,13 +140,28 @@ def compute_coadds(tims, bands, W, H, targetwcs):
             nn = (tim.getInvError()[Yi,Xi] > 0)
             coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
             con   [Yo,Xo] += nn
+            if get_cow:
+                cowimg[Yo,Xo] += tim.getImage()[Yi,Xi] * tim.getInvvar()[Yi,Xi]
+                wimg[Yo,Xo] += tim.getInvvar()[Yi,Xi]
             coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
             con2  [Yo,Xo] += 1
         coimg /= np.maximum(con,1)
         coimg[con == 0] = coimg2[con == 0] / np.maximum(1, con2[con == 0])
+        if get_cow:
+            cowimg /= np.maximum(wimg, 1e-16)
+            cowimgs.append(cowimg)
+            wimgs.append(wimg)
         coimgs.append(coimg)
-        cons  .append(con)
-    return coimgs,cons
+        cons.append(con)
+        if get_n2:
+            cons2.append(con2)
+
+    rtn = [coimgs,cons]
+    if get_cow:
+        rtn.extend([cowimgs, wimgs])
+    if get_n2:
+        rtn.append(cons2)
+    return rtn
 
 def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
@@ -1866,6 +1891,97 @@ def stage_fitplots(
     return dict(tims=tims)
 
 
+def stage_coadds(bands=None, version_header=None, targetwcs=None,
+                 tims=None, ps=None, brickid=None, ccds=None,
+                 outdir=None):
+
+    fn = os.path.join(outdir, 'ccds-%06i.fits' % brickid)
+    ccds.writeto(fn)
+    print 'Wrote', fn
+    
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    t0 = Time()
+    coimgs,cons,cowimgs,wimgs,cons2 = (
+        compute_coadds(tims, bands, W, H, targetwcs,
+                       get_cow=True, get_n2=True))
+    print 'Coadds:', Time()-t0
+
+    plt.figure(figsize=(10,10.5))
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+    #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.95)
+
+    plt.clf()
+    dimshow(get_rgb(coimgs, bands))
+    plt.title('Image')
+    ps.savefig()
+    
+    t0 = Time()
+    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    print 'Getting model images:', Time()-t0
+
+    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    for iband,band in enumerate(bands):
+        coimg = coimgs[iband]
+        comod  = np.zeros((wcsH,wcsW), np.float32)
+        comod2 = np.zeros((wcsH,wcsW), np.float32)
+        cochi2 = np.zeros((wcsH,wcsW), np.float32)
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            comod[Yo,Xo] += mod[Yi,Xi]
+            ie = tim.getInvError()
+            noise = np.random.normal(size=ie.shape) / ie
+            noise[ie == 0] = 0.
+            comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
+            chi = ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) * tim.getInvError()[Yi,Xi])
+            cochi2[Yo,Xo] += chi**2
+            chi = chi[chi != 0.]
+            hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
+            chihist[iband] += hh
+
+        comod  /= np.maximum(cons[iband], 1)
+        comod2 /= np.maximum(cons[iband], 1)
+
+        rgbmod.append(comod)
+        rgbmod2.append(comod2)
+        resid = coimg - comod
+        resid[cons[iband] == 0] = np.nan
+        rgbresids.append(resid)
+        rgbchisqs.append(cochi2)
+
+        # Plug the WCS header cards into these images
+        wcsfn = create_temp()
+        targetwcs.write_to(wcsfn)
+        hdr = fitsio.read_header(wcsfn)
+        os.remove(wcsfn)
+
+        if outdir is None:
+            outdir = '.'
+        wa = dict(clobber=True, header=hdr)
+        for name,img in [('image', coimg), ('model', comod), ('resid', resid), ('chi2', cochi2)]:
+            fn = os.path.join(outdir, '%s-coadd-%06i-%s.fits' % (name, brickid, band))
+            fitsio.write(fn, img,  **wa)
+            print 'Wrote', fn
+
+    del cons
+
+    plt.clf()
+    dimshow(get_rgb(rgbmod, bands))
+    plt.title('Model')
+    ps.savefig()
+
+    plt.clf()
+    dimshow(get_rgb(rgbmod2, bands))
+    plt.title('Model + Noise')
+    ps.savefig()
+    
+
 '''
 Write catalog output
 '''
@@ -2015,7 +2131,13 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                'fitblobs':'srcs',
 
                'fitplots': 'fitblobs',
-               'writecat': 'fitblobs',
+
+    # This isn't quite right: writecat really depends on both fitblobs
+    # and coadds, but coadds depends on tims, not fitblobs.  Need to
+    # support lists of prereqs in stages!
+               'coadds': 'fitblobs'
+               'writecat': 'coadds',
+    #'writecat': 'fitblobs',
 
                'psfplots': 'tims',
                'initplots': 'tims',
