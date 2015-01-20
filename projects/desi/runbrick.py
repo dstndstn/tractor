@@ -835,7 +835,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         lnp_null = subtr.getLogProb()
         print 'Removing the source: dlnp', lnp_null - lnp0
 
-        lnps = dict(ptsrc=None, dev=None, exp=None, comp=None)
+        lnps = dict(ptsrc=None, dev=None, exp=None, comp=None,
+                    none=lnp_null)
 
         if isinstance(src, PointSource):
             # logr, ee1, ee2
@@ -843,16 +844,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
+            ptsrc = src.copy()
             lnps.update(ptsrc=lnp0)
-            models = [('dev', dev), ('exp', exp), ('comp', comp)]
-
+            trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
+            oldmodel = 'ptsrc'
+            
         elif isinstance(src, DevGalaxy):
             dev = src.copy()
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             lnps.update(dev=lnp0)
-            models = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            oldmodel = 'dev'
 
         elif isinstance(src, ExpGalaxy):
             exp = src.copy()
@@ -860,8 +864,9 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             lnps.update(exp=lnp0)
-            models = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
-
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+            oldmodel = 'exp'
+            
         elif isinstance(src, FixedCompositeGalaxy):
             frac = src.fracDev.getValue()
             if frac > 0:
@@ -877,9 +882,10 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             comp = src.copy()
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             lnps.update(comp=lnp0)
-            models = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            oldmodel = 'comp'
 
-        for name,newsrc in models:
+        for name,newsrc in trymodels:
             print 'Trying model:', name
             if name == 'comp' and newsrc is None:
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
@@ -912,21 +918,70 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             print 'vs original src:', lnp - lnp0
 
             # Try Ceres...
-            newsrc.setParams(p0)
-            print 'Ceres opt...'
-            R = subtr._ceres_opt(max_iterations=50)
-            print 'Result:', R
-            print 'New source (after optimization):', newsrc
-            lnp = subtr.getLogProb()
-            print 'Optimized log-prob:', lnp
-            print 'vs original src:', lnp - lnp0
+            # newsrc.setParams(p0)
+            # print 'Ceres opt...'
+            # R = subtr._ceres_opt(max_iterations=50)
+            # print 'Result:', R
+            # print 'New source (after optimization):', newsrc
+            # lnp = subtr.getLogProb()
+            # print 'Optimized log-prob:', lnp
+            # print 'vs original src:', lnp - lnp0
             
             lnps[name] = lnp
 
         print 'Log-probs:', lnps
 
-        # FIXME -- here we REVERT!!
-        subcat[i] = src
+        nbands = len(bands)
+        nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
+                       dev=5 + nbands, comp=9 + nbands)
+
+        plnps = dict([(k, (lnps[k]-lnp0) - 0.5 * nparams[k])
+                      for k in nparams.keys()])
+
+        #print 'Relative penalized log-probs:'
+        #for k in keys:
+        #    print '  ', k, ':', plnps[k]
+
+        keepmod = 'none'
+        keepsrc = None
+
+        # Model-switching recipe: move up the ladder
+        
+        dlnp = 0.5 * 5.**2
+        print 'Needed delta-logprob for upgrade:', dlnp
+        diff = plnps['ptsrc'] - plnps[keepmod]
+        if diff > dlnp:
+            print 'Upgrading from none to ptsrc:', diff
+            keepsrc = ptsrc
+            keepmod = 'ptsrc'
+
+            expdiff = plnps['exp'] - plnps[keepmod]
+            devdiff = plnps['dev'] - plnps[keepmod]
+            if expdiff > dlnp or devdiff > dlnp:
+                if expdiff > devdiff:
+                    print 'Upgrading from ptsrc to exp: diff', expdiff
+                    keepsrc = exp
+                    keepmod = 'exp'
+                else:
+                    print 'Upgrading from ptsrc to dev: diff', devdiff
+                    keepsrc = dev
+                    keepmod = 'dev'
+
+                diff = plnps['comp'] - plnps[keepmod]
+                if diff > dlnp:
+                    print 'Upgrading for dev/exp to composite: diff', diff
+                    keepsrc = comp
+                    keepmod = 'comp'
+
+        if keepmod != oldmodel:
+            print 'Switching source!'
+            print 'Old:', src
+            print 'New:', keepsrc
+        else:
+            print 'Not switching source'
+            print 'Old:', src
+
+        subcat[i] = keepsrc
         
 
     # Variances
@@ -938,6 +993,9 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subcat.thawParam(isub)
         src = subcat[isub]
         print 'Source', src
+        if src is None:
+            subcat.freezeParam(isub)
+            continue
         print 'Params:', src.getParamNames()
         
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
@@ -963,8 +1021,23 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
 
-    return Isrcs, srcs, srcinvvars
+    keepI = [i for i,s in zip(Isrcs, srcs) if src is not None]
+    keepsrcs = [s for s in srcs if src is not None]
+    keepivs = [i for i,s in zip(srcinvvars,srcs) if src is not None]
 
+    Isrcs = keepI
+    srcs = keepsrcs
+    srcinvvars = keepivs
+    
+    # rchi2 quality-of-fit metric
+    # fracflux degree-of-blending metric
+    # nobserve how-many-images metric
+    rchi2 = np.zeros(len(srcs), np.float32)
+    fracflux = np.zeros(len(srcs), np.float32)
+    nobserve = np.zeros(len(srcs), int)
+    
+    return Isrcs, srcs, srcinvvars
+    
 
 '''
 Re-fit sources one at a time.

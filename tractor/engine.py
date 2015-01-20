@@ -647,7 +647,8 @@ class Tractor(MultiParams):
         if scaled:
             print 'Opt. in scaled space:', params
             self.setParams(p0 + params * scales)
-            variance_out *= scales**2
+            if variance:
+                variance_out *= scales**2
             R['params0'] = p0
             R['scales'] = scales
 
