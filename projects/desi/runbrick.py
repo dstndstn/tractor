@@ -382,7 +382,12 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     R = _map(_bounce_one_blob, iter)
 
     srcivs = [[] for src in cat]
-    for Isrcs,fitsrcs,srcinvvars in R:
+    fracflux = np.zeros((len(cat),len(bands)), np.float32)
+    rchi2    = np.zeros((len(cat),len(bands)), np.float32)
+
+    for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
+        fracflux[Isrcs,:] = thisfracflux
+        rchi2[Isrcs,:] = thisrchi2
         for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcinvvars):
             src = cat[isrc]
             if isinstance(src, (DevGalaxy, ExpGalaxy)):
@@ -415,7 +420,7 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     print 'Logprob:', tractor.getLogProb()
     
     rtn = dict()
-    for k in ['tractor', 'tims', 'ps', 'invvars']:
+    for k in ['tractor', 'tims', 'ps', 'invvars', 'rchi2', 'fracflux']:
         rtn[k] = locals()[k]
     return rtn
                           
@@ -984,6 +989,13 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subcat[i] = keepsrc
         
 
+    keepI = [i for i,s in zip(Isrcs, srcs) if src is not None]
+    keepsrcs = [s for s in srcs if src is not None]
+    Isrcs = keepI
+    srcs = keepsrcs
+    subcat = Catalog(*srcs)
+    subtr.catalog = subcat
+    
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
@@ -1021,22 +1033,70 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
 
-    keepI = [i for i,s in zip(Isrcs, srcs) if src is not None]
-    keepsrcs = [s for s in srcs if src is not None]
-    keepivs = [i for i,s in zip(srcinvvars,srcs) if src is not None]
-
-    Isrcs = keepI
-    srcs = keepsrcs
-    srcinvvars = keepivs
     
     # rchi2 quality-of-fit metric
     # fracflux degree-of-blending metric
+    rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
+    rchi2_den    = np.zeros((len(srcs),len(bands)), np.float32)
+    fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
+    fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
     # nobserve how-many-images metric
-    rchi2 = np.zeros(len(srcs), np.float32)
-    fracflux = np.zeros(len(srcs), np.float32)
-    nobserve = np.zeros(len(srcs), int)
+    #nobserve = np.zeros((len(srcs),len(bands)), int)
+
+    for iband,band in enumerate(bands):
+        for tim in subtims:
+            if tim.band != b:
+                continue
+
+            mod = np.zeros(tim.getModelShape(), subtr.modtype)
+            #img.sky.addTo(mod)
+            #srcumod = [None for src in srcs]
+            srcmods = [None for src in srcs]
+            counts = np.zeros(len(srcs))
+            pcal = tim.getPhotoCal()
+            
+            for isrc,src in enumerate(srcs):
+                # ums = src.getUnitFluxModelPatches(tim) #, minval=mv)
+                # assert(len(ums) == 1)
+                # um = ums[0]
+                # if um is None or um.patch is None:
+                #     continue
+                # srcumod[isrc] = um
+                patch = subtr.getModelPatch(tim, src, minsb=tim.modelMinval)
+                if patch is None or patch.patch is None:
+                    continue
+                H,W = mod.shape
+                patch.clipTo(W,H)
+                srcmods[isrc] = patch
+                patch.addTo(mod)
+
+                counts[isrc] = np.sum([pcal.brightnessToCounts(b)
+                                       for b in src.getBrightnesses()])
+                
+            for isrc,patch in enumerate(srcmods):
+                if patch is None:
+                    continue
+                slc = patch.getSlice(mod)
+                # (mod - patch) is flux from others
+                # (mod - patch) / counts is normalized flux from others
+                # patch/counts is unit profile
+                fracflux_num[isrc,iband] += np.sum(((mod[slc] - patch.patch) * patch.patch)) / counts[isrc]**2
+                fracflux_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
+
+            tim.getSky().addTo(mod)
+            chisq = ((tim.getImage() - mod) * tim.getInvError())**2
+            
+            for isrc,patch in enumerate(srcmods):
+                if patch is None:
+                    continue
+                slc = patch.getSlice(mod)
+                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch / counts[isrc])
+                rchi2_den[isrc,iband] += np.sum(patch.patch / counts[isrc])
+
+    fracflux = fracflux_num / fracflux_den
+    rchi2    = rchi2_num    / rchi2_den
     
-    return Isrcs, srcs, srcinvvars
+    return Isrcs, srcs, srcinvvars, fracflux, rchi2
     
 
 '''
@@ -1818,6 +1878,8 @@ def stage_writecat(
     plots=False, tractor=None,
     brickid=None,
     invvars=None,
+    rchi2=None,
+    fracflux=None,
     catalogfn=None,
     **kwargs):
     from desi_common import prepare_fits_catalog
@@ -1832,9 +1894,19 @@ def stage_writecat(
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
     TT.objid   = np.arange(len(TT)).astype(np.int32)
 
+    allbands = 'ugrizy'
+    
+    TT.decam_rchi2 = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    for iband,band in enumerate(bands):
+        i = allbands.index(band)
+        TT.decam_rchi2[:,i] = rchi2[:,iband]
+        TT.decam_fracflux[:,i] = fracflux[:,iband]
+
     cat.thawAllRecursive()
     hdr = version_header
-    T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
+    T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
+                                  allbands=allbands)
 
     # Unpack shape columns
     T2.shapeExp_r = T2.shapeExp[:,0]

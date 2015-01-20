@@ -82,7 +82,7 @@ def source_param_types(src):
     return types
     
 
-def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
+def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizy'):
     if T is None:
         T = fits_table()
     if hdr is None:
@@ -113,7 +113,6 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
     params0 = cat.getParams()
 
     #print 'cat', len(cat)
-    allbands = 'ugrizy'
     T.decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
     T.decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
 
