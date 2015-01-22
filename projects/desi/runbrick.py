@@ -425,12 +425,8 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     
     II       = np.hstack([r[0] for r in R])
     srcivs   = np.hstack([hstack(r[2]) for r in R])
-    print 'fracs:', [r[3] for r in R]
     fracflux = np.vstack([r[3] for r in R])
     rchi2    = np.vstack([r[4] for r in R])
-    print 'srcivs:', srcivs.shape
-    print 'fracflux:', fracflux.shape
-    print 'rchi2:', rchi2.shape
     newcat = []
     for r in R:
         newcat.extend(r[1])
@@ -455,7 +451,7 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     
     rtn = dict()
     for k in ['tractor', 'tims', 'ps', 'invvars', 'rchi2', 'fracflux',
-              'T']:
+              'T', 'cat']:
         rtn[k] = locals()[k]
     return rtn
                           
@@ -1851,8 +1847,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         for tim in tims:
             if tim.band != band:
                 continue
-            print 'Primare header:'
-            print tim.primhdr
             v = []
             for key in keys:
                 v.append(tim.primhdr.get(key,''))
@@ -1908,6 +1902,7 @@ def stage_writecat(
     W=None,H=None,
     bands=None, ps=None,
     plots=False, tractor=None,
+    brickname=None,
     brickid=None,
     invvars=None,
     rchi2=None,
@@ -1916,6 +1911,7 @@ def stage_writecat(
     catalogfn=None,
     outdir=None,
     **kwargs):
+
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
@@ -1924,10 +1920,14 @@ def stage_writecat(
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob']:
             TT.rename(col, 'sdss_%s' % col)
+    TT.tx = (TT.tx + 1.).astype(np.float32)
+    TT.ty = (TT.ty + 1.).astype(np.float32)
+    TT.blob = TT.blob.astype(np.int32)
 
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.brickname = np.array([brickname] * len(TT))
     TT.objid   = np.arange(len(TT)).astype(np.int32)
-
+    
     allbands = 'ugrizy'
     
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
@@ -1944,6 +1944,10 @@ def stage_writecat(
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
 
+    ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
+    T2.bx = bx.astype(np.float32)
+    T2.by = by.astype(np.float32)
+    
     # Unpack shape columns
     T2.shapeExp_r  = T2.shapeExp[:,0]
     T2.shapeExp_e1 = T2.shapeExp[:,1]
@@ -1963,8 +1967,8 @@ def stage_writecat(
     else:
         if outdir is None:
             outdir = '.'
-        outdir = os.path.join(outdir, 'tractor')
-        fn = os.path.join(outdir, 'tractor-%06i.fits' % brickid)
+        outdir = os.path.join(outdir, 'tractor', brickname[:3])
+        fn = os.path.join(outdir, 'tractor-%s.fits' % brickname)
 
     dirnm = os.path.dirname(fn)
     if not os.path.exists(dirnm):
@@ -1976,8 +1980,6 @@ def stage_writecat(
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
-    # Return updated (ellipse param changed) catalog + invvars
-    return dict(cat=cat, invvars=invvars)
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
