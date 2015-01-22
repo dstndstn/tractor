@@ -281,7 +281,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
-               W=None,H=None, #brickid=None,
+               W=None,H=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False,

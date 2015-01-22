@@ -781,7 +781,7 @@ class Decals(object):
 
     def get_brick_by_name(self, brickname):
         B = self.get_bricks()
-        I = np.flatnonzero(B.brickname == brickname)
+        I = np.flatnonzero([n == brickname for n in B.brickname])
         if len(I) == 0:
             return None
         return B[I[0]]
