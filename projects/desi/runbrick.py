@@ -69,6 +69,8 @@ class iterwrapper(object):
     def next(self):
         try:
             return self.y.next()
+        except StopIteration:
+            raise
         except:
             import traceback
             print str(self), 'next()'
@@ -2009,7 +2011,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='pickles/runbrick-%(brick)06i-%%(stage)s.pickle')
 
-    plot_base_default = 'brick-%(brick)06i'
+    plot_base_default = 'brick-%(brick)s'
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
     parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
