@@ -407,21 +407,8 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
 
-#     return dict(R=R)
-# 
-# def stage_fitblobs2(T=None, coimgs=None, cons=None,
-#                    detmaps=None, detivs=None,
-#                    blobsrcs=None, blobslices=None, blobs=None,
-#                    tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-#                    W=None,H=None, brickid=None,
-#                    bands=None, ps=None, tims=None,
-#                    plots=False, plots2=False,
-#                    R=None,
-#                    **kwargs):
-    
     # one_blob can reduce the number and change the types of sources!
-
-    # for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
+    # Reorder the sources here...
     
     II       = np.hstack([r[0] for r in R])
     srcivs   = np.hstack([hstack(r[2]) for r in R])
@@ -449,45 +436,6 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     assert(nb == len(bands))
 
     invvars = srcivs
-    
-    # srcivs = [[] for src in cat]
-    # fracflux = np.zeros((len(cat),len(bands)), np.float32)
-    # rchi2    = np.zeros((len(cat),len(bands)), np.float32)
-    # 
-    # keepinds = np.zeros(len(T), bool)
-    # 
-    # for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
-    #     fracflux[Isrcs,:] = thisfracflux
-    #     rchi2[Isrcs,:] = thisrchi2
-    #     #keepinds[Isrcs] = True
-    #     
-    #     for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcinvvars):
-    #         src = cat[isrc]
-    #         if isinstance(src, (DevGalaxy, ExpGalaxy)):
-    #             src.shape = fitsrc.shape
-    #         elif isinstance(src, FixedCompositeGalaxy):
-    #             src.shapeExp = fitsrc.shapeExp
-    #             src.shapeDev = fitsrc.shapeDev
-    #         src.setParams(fitsrc.getParams())
-    #         srcivs[isrc].extend(srciv)
-
-    # cat.thawAllRecursive()
-    # for i,src in enumerate(cat):
-    #     print 'Source', i, src
-    #     print 'variances:', srcivs[i]
-    #     print len(srcivs[i]), 'vs', src.numberOfParams()
-    #     if len(srcivs[i]) != src.numberOfParams():
-    #         # This can happen for sources outside the brick bounds: they never get optimized?
-    #         print 'Warning: zeroing variances for source', src
-    #         srcivs[i] = [0]*src.numberOfParams()
-    #         if isinstance(src, (DevGalaxy, ExpGalaxy)):
-    #             src.shape = EllipseE.fromEllipseESoft(src.shape)
-    #         elif isinstance(src, FixedCompositeGalaxy):
-    #             src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
-    #             src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-    #     assert(len(srcivs[i]) == src.numberOfParams())
-    # invvars = np.hstack(srcivs)
-    # assert(len(invvars) == cat.numberOfParams())
     
     print 'Fitting sources took:', Time()-tfitall
     print 'Logprob:', tractor.getLogProb()
@@ -897,7 +845,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     # not-friends-of-friends version of blobs!)
 
     # For sources, in decreasing order of brightness
-    #cat = subtr.getCatalog()
     for numi,i in enumerate(Ibright):
         src = subcat[i]
         print
@@ -1106,37 +1053,24 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         assert(len(srcinvvars[isub]) == subcat[isub].numberOfParams())
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
-
     
     # rchi2 quality-of-fit metric
-    # fracflux degree-of-blending metric
     rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
     rchi2_den    = np.zeros((len(srcs),len(bands)), np.float32)
+    # fracflux degree-of-blending metric
     fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
     fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
-    # nobserve how-many-images metric
-    #nobserve = np.zeros((len(srcs),len(bands)), int)
 
     for iband,band in enumerate(bands):
-        #print
-        #print 'Band', band
         for tim in subtims:
             if tim.band != band:
                 continue
             mod = np.zeros(tim.getModelShape(), subtr.modtype)
-            #img.sky.addTo(mod)
-            #srcumod = [None for src in srcs]
             srcmods = [None for src in srcs]
             counts = np.zeros(len(srcs))
             pcal = tim.getPhotoCal()
             
             for isrc,src in enumerate(srcs):
-                # ums = src.getUnitFluxModelPatches(tim) #, minval=mv)
-                # assert(len(ums) == 1)
-                # um = ums[0]
-                # if um is None or um.patch is None:
-                #     continue
-                # srcumod[isrc] = um
                 patch = subtr.getModelPatch(tim, src, minsb=tim.modelMinval)
                 if patch is None or patch.patch is None:
                     continue
@@ -1174,138 +1108,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     
     return Isrcs, srcs, srcinvvars, fracflux, rchi2
     
-
-'''
-Re-fit sources one at a time.
-'''
-def stage3(T=None, sedsn=None, coimgs=None, cons=None,
-           detmaps=None, detivs=None,
-           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None, brickid=None,
-           bands=None, ps=None, tims=None,
-           plots=False, plots2=False,
-           **kwargs):
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
-    for tim in tims:
-        tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = tim.psfex
-
-    cat.thawAllRecursive()
-    # rough: sum flux in all bands
-    bright = []
-    for src in cat:
-        br = src.getBrightness()
-        bright.append(sum([br.getFlux(band) for band in bands]))
-        src.minRadius = 3
-    I = np.argsort(-np.array(bright))
-
-    # Remember original tim images
-    orig_timages = [tim.getImage().copy() for tim in tims]
-    initial_models = []
-    # Create initial models for each tim x each source
-    tt = Time()
-    for tim in tims:
-        mods = []
-        for src in cat:
-            mod = src.getModelPatch(tim)
-            mods.append(mod)
-            if mod is not None:
-                mod.addTo(tim.getImage(), scale=-1)
-        initial_models.append(mods)
-    print 'Subtracting initial models:', Time()-tt
-
-    for i in I:
-        src = cat[i]
-        print 'Fitting source', i
-        print src
-
-        srctractor = Tractor(tims, [src])
-        srctractor.freezeParams('images')
-
-        # Add this source's initial model back in.
-        for tim,mods in zip(tims, initial_models):
-            mod = mods[i]
-            if mod is not None:
-                mod.addTo(tim.getImage())
-
-        print 'Optimizing:', srctractor
-        srctractor.printThawedParams()
-
-        alphas = [0.1, 0.3, 1.0]
-        for step in range(50):
-            dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
-                                               alphas=alphas)
-            print 'dlnp:', dlnp, 'src', src
-            print 'Update:', X
-            print 'src params:', src.getParams()
-
-            if plots:
-                comods = []
-                for iband,band in enumerate(bands):
-                    comod = np.zeros((H,W))
-                    con = np.zeros((H,W))
-                    for itim,tim in enumerate(tims):
-                        if tim.band != band:
-                            continue
-                        (Yo,Xo,Yi,Xi) = tim.resamp
-                        mod = srctractor.getModelImage(tim)
-                        comod[Yo,Xo] += mod[Yi,Xi]
-                        con[Yo,Xo] += 1
-                    comod /= np.maximum(con, 1)
-                    comods.append(comod)
-                plt.clf()
-                dimshow(get_rgb(comods, bands), ticks=False)
-                ps.savefig()
-    
-            if dlnp < 0.1:
-                break
-
-        for tim in tims:
-            mod = src.getModelPatch(tim)
-            if mod is not None:
-                mod.addTo(tim.getImage(), scale=-1)
-
-    for tim,img in zip(tims, orig_timages):
-        tim.data = img
-
-    # for i in I:
-    #     cat.freezeAllBut(i)
-    #     print 'Fitting source', i
-    #     src = cat[i]
-    #     print src
-    # 
-    #     tractor.printThawedParams()
-    # 
-    #     alphas = [0.1, 0.3, 1.0]
-    #     for step in range(50):
-    #         dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
-    #                                         alphas=alphas)
-    #         print 'dlnp:', dlnp, 'src', src
-    #         print 'Update:', X
-    #         print 'src params:', src.getParams()
-    # 
-    #         if plots:
-    #             comods = []
-    #             for iband,band in enumerate(bands):
-    #                 comod = np.zeros((H,W))
-    #                 con = np.zeros((H,W))
-    #                 for itim,tim in enumerate(tims):
-    #                     if tim.band != band:
-    #                         continue
-    #                     (Yo,Xo,Yi,Xi) = tim.resamp
-    #                     mod = tractor.getModelImage(tim)
-    #                     comod[Yo,Xo] += mod[Yi,Xi]
-    #                     con[Yo,Xo] += 1
-    #                 comod /= np.maximum(con, 1)
-    #                 comods.append(comod)
-    #             plt.clf()
-    #             dimshow(get_rgb(comods, bands), ticks=False)
-    #             ps.savefig()
-    # 
-    #         if dlnp < 0.1:
-    #             break
 
 
 
@@ -1695,21 +1497,6 @@ def stage_initplots(
     ps.savefig()
 
 
-    # plt.clf()
-    # plt.loglog(clco[0].ravel(), sdsscoimgs[0].ravel(), 'm.', alpha=0.1)
-    # plt.loglog(clco[1].ravel(), sdsscoimgs[1].ravel(), 'r.', alpha=0.1)
-    # plt.loglog(clco[2].ravel(), sdsscoimgs[2].ravel(), 'g.', alpha=0.1)
-    # ps.savefig()
-    # 
-    # for i,c in enumerate(['m','r','g']):
-    #     plt.clf()
-    #     plt.loglog(sdsscoimgs[i].ravel(), clco[i].ravel()/sdsscoimgs[i].ravel(), '.', color=c, alpha=0.1)
-    #     plt.ylim(0.1, 10.0)
-    #     ps.savefig()
-
-    #wa = dict(clobber=True, header=hdr)
-    #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
-
 
 def _get_mod((tim, srcs)):
     tractor = Tractor([tim], srcs)
@@ -1959,27 +1746,14 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     ccds.writeto(fn)
     print 'Wrote', fn
     
-    W = targetwcs.get_width()
-    H = targetwcs.get_height()
-
-    # t0 = Time()
-    # coimgs,cons,cowimgs,wimgs,cons2 = (
-    #     compute_coadds(tims, bands, W, H, targetwcs,
-    #                    get_cow=True, get_n2=True))
-    # del coimgs
-    # print 'Coadds:', Time()-t0
-
-    plt.figure(figsize=(10,10.5))
-    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
-    #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.95)
-
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
 
-    coimgs = []
-    comods = []
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
 
+    # Look up number of images overlapping each source's position.
     assert(len(T) == len(cat))
     nobs = np.zeros((len(T), len(bands)), np.uint8)
     rr = np.array([s.getPosition().ra  for s in cat])
@@ -1987,6 +1761,9 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
     ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
     iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
+
+    coimgs = []
+    comods = []
     
     for iband,band in enumerate(bands):
 
@@ -2074,16 +1851,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         os.system(cmd)
         os.unlink(tmpfn)
     
-    # plt.clf()
-    # dimshow(get_rgb(coimgs, bands))
-    # plt.title('Image')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # dimshow(get_rgb(comods, bands))
-    # plt.title('Model')
-    # ps.savefig()
-
     return dict(decam_nobs = nobs)
     
 
@@ -2246,25 +2013,17 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {'tims':None,
-               'srcs':'tims',
-               'fitblobs':'srcs',
+    prereqs = {
+        'tims':None,
+        'srcs':'tims',
+        'fitblobs':'srcs',
+        'coadds': 'fitblobs',
+        'writecat': 'coadds',
 
-               'fitplots': 'fitblobs',
-
-    # This isn't quite right: writecat really depends on both fitblobs
-    # and coadds, but coadds depends on tims, not fitblobs.  Need to
-    # support lists of prereqs in stages!
-
-    #'fitblobs2': 'fitblobs',
-    #'coadds': 'fitblobs2',
-    'coadds': 'fitblobs',
-               'writecat': 'coadds',
-    #'writecat': 'fitblobs',
-
-               'psfplots': 'tims',
-               'initplots': 'tims',
-               }
+        'fitplots': 'fitblobs',
+        'psfplots': 'tims',
+        'initplots': 'tims',
+        }
 
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
 
