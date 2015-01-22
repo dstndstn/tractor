@@ -1998,7 +1998,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                       help='Make more verbose')
 
     parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
-                      default=377306)
+                      default='377306')
 
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
