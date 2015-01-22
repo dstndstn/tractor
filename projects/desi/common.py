@@ -1162,6 +1162,8 @@ class DecamImage(object):
         tim.x0,tim.y0 = int(x0),int(y0)
         tim.psfex = psfex
         tim.imobj = self
+        tim.primhdr = primhdr
+        tim.hdr = imghdr
         mn,mx = tim.zr
         subh,subw = tim.shape
         tim.subwcs = tim.sip_wcs.get_subimage(tim.x0, tim.y0, subw, subh)

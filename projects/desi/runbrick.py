@@ -407,30 +407,48 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
 
+#     return dict(R=R)
+# 
+# def stage_fitblobs2(T=None, coimgs=None, cons=None,
+#                    detmaps=None, detivs=None,
+#                    blobsrcs=None, blobslices=None, blobs=None,
+#                    tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+#                    W=None,H=None, brickid=None,
+#                    bands=None, ps=None, tims=None,
+#                    plots=False, plots2=False,
+#                    R=None,
+#                    **kwargs):
+    
     # one_blob can reduce the number and change the types of sources!
 
     # for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
-
+    
     II       = np.hstack([r[0] for r in R])
-    srcivs   = np.hstack([r[2] for r in R])
-    fracflux = np.hstack([r[3] for r in R])
-    rchi2    = np.hstack([r[4] for r in R])
+    srcivs   = np.hstack([hstack(r[2]) for r in R])
+    print 'fracs:', [r[3] for r in R]
+    fracflux = np.vstack([r[3] for r in R])
+    rchi2    = np.vstack([r[4] for r in R])
+    print 'srcivs:', srcivs.shape
+    print 'fracflux:', fracflux.shape
+    print 'rchi2:', rchi2.shape
     newcat = []
     for r in R:
         newcat.extend(r[1])
     T.cut(II)
 
     assert(len(T) == len(newcat))
-
     print 'Old catalog:', len(cat)
     print 'New catalog:', len(newcat)
-    cat = Catalog(newcat)
-
-    print 'srcivs:', srcivs.shape
-    print 'fracflux:', fracflux.shape
-    print 'rchi2:', rchi2.shape
-    
+    cat = Catalog(*newcat)
     assert(cat.numberOfParams() == len(srcivs))
+    ns,nb = fracflux.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
+    ns,nb = rchi2.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
+
+    invvars = srcivs
     
     # srcivs = [[] for src in cat]
     # fracflux = np.zeros((len(cat),len(bands)), np.float32)
@@ -1100,10 +1118,11 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     #nobserve = np.zeros((len(srcs),len(bands)), int)
 
     for iband,band in enumerate(bands):
+        #print
+        #print 'Band', band
         for tim in subtims:
-            if tim.band != b:
+            if tim.band != band:
                 continue
-
             mod = np.zeros(tim.getModelShape(), subtr.modtype)
             #img.sky.addTo(mod)
             #srcumod = [None for src in srcs]
@@ -1121,13 +1140,14 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 patch = subtr.getModelPatch(tim, src, minsb=tim.modelMinval)
                 if patch is None or patch.patch is None:
                     continue
+                counts[isrc] = np.sum([np.abs(pcal.brightnessToCounts(b))
+                                              for b in src.getBrightnesses()])
+                if counts[isrc] == 0:
+                    continue
                 H,W = mod.shape
                 patch.clipTo(W,H)
                 srcmods[isrc] = patch
                 patch.addTo(mod)
-
-                counts[isrc] = np.sum([pcal.brightnessToCounts(b)
-                                       for b in src.getBrightnesses()])
                 
             for isrc,patch in enumerate(srcmods):
                 if patch is None:
@@ -1136,8 +1156,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 # (mod - patch) is flux from others
                 # (mod - patch) / counts is normalized flux from others
                 # patch/counts is unit profile
-                fracflux_num[isrc,iband] += np.sum(((mod[slc] - patch.patch) * patch.patch)) / counts[isrc]**2
-                fracflux_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
+                fracflux_num[isrc,iband] += np.sum((np.abs(mod[slc] - patch.patch) * np.abs(patch.patch))) / counts[isrc]**2
+                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
 
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
@@ -1146,8 +1166,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 if patch is None:
                     continue
                 slc = patch.getSlice(mod)
-                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch) / counts[isrc]
-                rchi2_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
+                rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / counts[isrc]
+                rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
 
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
@@ -1928,8 +1948,14 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     if outdir is None:
         outdir = '.'
-    
-    fn = os.path.join(outdir, 'ccds-%06i.fits' % brickid)
+    basedir = os.path.join(outdir, 'coadd')
+    if not os.path.exists(basedir):
+        try:
+            os.makedirs(basedir)
+        except:
+            pass
+        
+    fn = os.path.join(basedir, 'ccds-%06i.fits' % brickid)
     ccds.writeto(fn)
     print 'Wrote', fn
     
@@ -2034,7 +2060,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                          ('depth',  detiv),
                          ('nexp',   congood),
                          ]:
-            fn = os.path.join(outdir,
+            fn = os.path.join(basedir,
                               '%s-%06i-%s.fits' % (name, brickid, band))
             fitsio.write(fn, img,  **wa)
             print 'Wrote', fn
@@ -2043,7 +2069,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     for name,ims in [('image',coimgs), ('model',comods)]:
         plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
         cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
-               (tmpfn, os.path.join(outdir, '%s-%06i-%s.jpg' %
+               (tmpfn, os.path.join(basedir, '%s-%06i-%s.jpg' %
                                     (name, brickid, band))))
         os.system(cmd)
         os.unlink(tmpfn)
@@ -2077,6 +2103,7 @@ def stage_writecat(
     fracflux=None,
     decam_nobs=None,
     catalogfn=None,
+    outdir=None,
     **kwargs):
     from desi_common import prepare_fits_catalog
     fs = None
@@ -2107,23 +2134,34 @@ def stage_writecat(
                                   allbands=allbands)
 
     # Unpack shape columns
-    T2.shapeExp_r = T2.shapeExp[:,0]
+    T2.shapeExp_r  = T2.shapeExp[:,0]
     T2.shapeExp_e1 = T2.shapeExp[:,1]
     T2.shapeExp_e2 = T2.shapeExp[:,2]
-    T2.shapeDev_r = T2.shapeExp[:,0]
-    T2.shapeDev_e1 = T2.shapeExp[:,1]
-    T2.shapeDev_e2 = T2.shapeExp[:,2]
+    T2.shapeDev_r  = T2.shapeDev[:,0]
+    T2.shapeDev_e1 = T2.shapeDev[:,1]
+    T2.shapeDev_e2 = T2.shapeDev[:,2]
     T2.shapeExp_r_ivar  = T2.shapeExp_ivar[:,0]
     T2.shapeExp_e1_ivar = T2.shapeExp_ivar[:,1]
     T2.shapeExp_e2_ivar = T2.shapeExp_ivar[:,2]
-    T2.shapeDev_r_ivar  = T2.shapeExp_ivar[:,0]
-    T2.shapeDev_e1_ivar = T2.shapeExp_ivar[:,1]
-    T2.shapeDev_e2_ivar = T2.shapeExp_ivar[:,2]
+    T2.shapeDev_r_ivar  = T2.shapeDev_ivar[:,0]
+    T2.shapeDev_e1_ivar = T2.shapeDev_ivar[:,1]
+    T2.shapeDev_e2_ivar = T2.shapeDev_ivar[:,2]
 
     if catalogfn is not None:
         fn = catalogfn
     else:
-        fn = 'tractor-phot-b%i.fits' % brickid
+        if outdir is None:
+            outdir = '.'
+        outdir = os.path.join(outdir, 'tractor')
+        fn = os.path.join(outdir, 'tractor-%06i.fits' % brickid)
+
+    dirnm = os.path.dirname(fn)
+    if not os.path.exists(dirnm):
+        try:
+            os.makedirs(dirnm)
+        except:
+            pass
+        
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
@@ -2217,7 +2255,10 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     # This isn't quite right: writecat really depends on both fitblobs
     # and coadds, but coadds depends on tims, not fitblobs.  Need to
     # support lists of prereqs in stages!
-               'coadds': 'fitblobs',
+
+    #'fitblobs2': 'fitblobs',
+    #'coadds': 'fitblobs2',
+    'coadds': 'fitblobs',
                'writecat': 'coadds',
     #'writecat': 'fitblobs',
 
