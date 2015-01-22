@@ -779,6 +779,13 @@ class Decals(object):
             return None
         return B[I[0]]
 
+    def get_brick_by_name(self, brickname):
+        B = self.get_bricks()
+        I = np.flatnonzero(B.brickname == brickname)
+        if len(I) == 0:
+            return None
+        return B[I[0]]
+
     def bricks_touching_radec_box(self, bricks,
                                   ralo, rahi, declo, dechi):
         '''

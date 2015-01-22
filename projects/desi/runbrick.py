@@ -164,7 +164,8 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
+def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
+               plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
                bands='grz',
                mock_psf=False, **kwargs):
@@ -184,13 +185,22 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSRE', value='pre-EDR2',
+                        comment='DECaLS release name'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
                         comment='%s run time' % program_name))
+    hdr.add_record(dict(name='SURVEY', value='DECaLS',
+                        comment='DECam Legacy Survey'))
     version_header = hdr
 
-    brick = decals.get_brick(brickid)
+    if brickid is not None:
+        brick = decals.get_brick(brickid)
+    else:
+        brick = decals.get_brick_by_name(brickname)
     print 'Chosen brick:'
     brick.about()
+    brickid = brick.brickid
+    brickname = brick.brickname
     targetwcs = wcs_for_brick(brick, W=W, H=H)
 
     if target_extent is not None:
@@ -260,7 +270,8 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tlast = Time()
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid', 'target_extent', 'ccds']
+            'bands', 'tims', 'ps', 'brickid', 'brickname',
+            'target_extent', 'ccds']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
     rtn = dict()
@@ -270,7 +281,7 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
 
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
-               W=None,H=None, brickid=None,
+               W=None,H=None, #brickid=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False,
@@ -1730,19 +1741,19 @@ def stage_fitplots(
 
 
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
-                 tims=None, ps=None, brickid=None, ccds=None,
+                 tims=None, ps=None, brickname=None, ccds=None,
                  outdir=None, T=None, cat=None, **kwargs):
 
     if outdir is None:
         outdir = '.'
-    basedir = os.path.join(outdir, 'coadd')
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
     if not os.path.exists(basedir):
         try:
             os.makedirs(basedir)
         except:
             pass
         
-    fn = os.path.join(basedir, 'ccds-%06i.fits' % brickid)
+    fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
     ccds.writeto(fn)
     print 'Wrote', fn
     
@@ -1826,10 +1837,38 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         del comod
 
         # Plug the WCS header cards into these images
+        # copy version_header before modifying...
         hdr = fitsio.FITSHDR()
+        for r in version_header.records():
+            hdr.add_record(r)
+        hdr.add_record(dict(name='BRICKNAM', value=brickname,
+                            comment='DECaLS brick name'))
+        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+                'INSTRUME']
+        vals = set()
+        for tim in tims:
+            if tim.band != band:
+                continue
+            print 'Primare header:'
+            print tim.primhdr
+            v = []
+            for key in keys:
+                v.append(tim.primhdr.get(key,''))
+            vals.add(tuple(v))
+        for i,v in enumerate(vals):
+            for ik,key in enumerate(keys):
+                if i == 0:
+                    kk = key
+                else:
+                    kk = key[:7] + '%i'%i
+                hdr.add_record(dict(name=kk, value=v[ik]))
+            
+        hdr.add_record(dict(name='FILTER', value=band))
+
         targetwcs.add_to_header(hdr)
+        hdr.delete('IMAGEW')
+        hdr.delete('IMAGEH')
         
-        wa = dict(clobber=True, header=hdr)
         for name,img in [('image',  cowimg),
                          ('invvar', cow),
                          ('model',  cowmod),
@@ -1837,17 +1876,20 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                          ('depth',  detiv),
                          ('nexp',   congood),
                          ]:
+
+            hdr.add_record(dict(name='IMTYPE', value=name,
+                                comment='DECaLS image type'))
             fn = os.path.join(basedir,
-                              '%s-%06i-%s.fits' % (name, brickid, band))
-            fitsio.write(fn, img,  **wa)
+                              'decals-%s-%s-%s.fits' % (brickname, name, band))
+            fitsio.write(fn, img, clobber=True, header=hdr)
             print 'Wrote', fn
 
     tmpfn = create_temp(suffix='.png')
     for name,ims in [('image',coimgs), ('model',comods)]:
         plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
         cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
-               (tmpfn, os.path.join(basedir, '%s-%06i-%s.jpg' %
-                                    (name, brickid, band))))
+               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
+                                    (brickname, name))))
         os.system(cmd)
         os.unlink(tmpfn)
     
@@ -1955,7 +1997,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
 
-    parser.add_option('-b', '--brick', type=int, help='Brick ID to run: default %default',
+    parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
                       default=377306)
 
     parser.add_option('--threads', type=int, help='Run multi-threaded')
@@ -2025,7 +2067,12 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'initplots': 'tims',
         }
 
-    initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
+    initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
+    try:
+        brickid = int(opt.brick, 10)
+        initargs.update(brickid=brickid)
+    except:
+        initargs.update(brickname = opt.brick)
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
