@@ -141,14 +141,15 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
             coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
             con   [Yo,Xo] += nn
             if get_cow:
-                cowimg[Yo,Xo] += tim.getImage()[Yi,Xi] * tim.getInvvar()[Yi,Xi]
-                wimg[Yo,Xo] += tim.getInvvar()[Yi,Xi]
+                cowimg[Yo,Xo] += tim.getInvvar()[Yi,Xi] * tim.getImage()[Yi,Xi]
+                wimg  [Yo,Xo] += tim.getInvvar()[Yi,Xi]
             coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
             con2  [Yo,Xo] += 1
         coimg /= np.maximum(con,1)
         coimg[con == 0] = coimg2[con == 0] / np.maximum(1, con2[con == 0])
         if get_cow:
             cowimg /= np.maximum(wimg, 1e-16)
+            cowimg[wimg == 0] = coimg[wimg == 0]
             cowimgs.append(cowimg)
             wimgs.append(wimg)
         coimgs.append(coimg)
@@ -406,46 +407,76 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
 
-    srcivs = [[] for src in cat]
-    fracflux = np.zeros((len(cat),len(bands)), np.float32)
-    rchi2    = np.zeros((len(cat),len(bands)), np.float32)
+    # one_blob can reduce the number and change the types of sources!
 
-    for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
-        fracflux[Isrcs,:] = thisfracflux
-        rchi2[Isrcs,:] = thisrchi2
-        for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcinvvars):
-            src = cat[isrc]
-            if isinstance(src, (DevGalaxy, ExpGalaxy)):
-                src.shape = fitsrc.shape
-            elif isinstance(src, FixedCompositeGalaxy):
-                src.shapeExp = fitsrc.shapeExp
-                src.shapeDev = fitsrc.shapeDev
-            src.setParams(fitsrc.getParams())
-            srcivs[isrc].extend(srciv)
+    # for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
 
-    cat.thawAllRecursive()
-    for i,src in enumerate(cat):
-        print 'Source', i, src
-        print 'variances:', srcivs[i]
-        print len(srcivs[i]), 'vs', src.numberOfParams()
-        if len(srcivs[i]) != src.numberOfParams():
-            # This can happen for sources outside the brick bounds: they never get optimized?
-            print 'Warning: zeroing variances for source', src
-            srcivs[i] = [0]*src.numberOfParams()
-            if isinstance(src, (DevGalaxy, ExpGalaxy)):
-                src.shape = EllipseE.fromEllipseESoft(src.shape)
-            elif isinstance(src, FixedCompositeGalaxy):
-                src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
-                src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-        assert(len(srcivs[i]) == src.numberOfParams())
-    invvars = np.hstack(srcivs)
-    assert(len(invvars) == cat.numberOfParams())
+    II       = np.hstack([r[0] for r in R])
+    srcivs   = np.hstack([r[2] for r in R])
+    fracflux = np.hstack([r[3] for r in R])
+    rchi2    = np.hstack([r[4] for r in R])
+    newcat = []
+    for r in R:
+        newcat.extend(r[1])
+    T.cut(II)
 
+    assert(len(T) == len(newcat))
+
+    print 'Old catalog:', len(cat)
+    print 'New catalog:', len(newcat)
+    cat = Catalog(newcat)
+
+    print 'srcivs:', srcivs.shape
+    print 'fracflux:', fracflux.shape
+    print 'rchi2:', rchi2.shape
+    
+    assert(cat.numberOfParams() == len(srcivs))
+    
+    # srcivs = [[] for src in cat]
+    # fracflux = np.zeros((len(cat),len(bands)), np.float32)
+    # rchi2    = np.zeros((len(cat),len(bands)), np.float32)
+    # 
+    # keepinds = np.zeros(len(T), bool)
+    # 
+    # for Isrcs,fitsrcs,srcinvvars,thisfracflux,thisrchi2 in R:
+    #     fracflux[Isrcs,:] = thisfracflux
+    #     rchi2[Isrcs,:] = thisrchi2
+    #     #keepinds[Isrcs] = True
+    #     
+    #     for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcinvvars):
+    #         src = cat[isrc]
+    #         if isinstance(src, (DevGalaxy, ExpGalaxy)):
+    #             src.shape = fitsrc.shape
+    #         elif isinstance(src, FixedCompositeGalaxy):
+    #             src.shapeExp = fitsrc.shapeExp
+    #             src.shapeDev = fitsrc.shapeDev
+    #         src.setParams(fitsrc.getParams())
+    #         srcivs[isrc].extend(srciv)
+
+    # cat.thawAllRecursive()
+    # for i,src in enumerate(cat):
+    #     print 'Source', i, src
+    #     print 'variances:', srcivs[i]
+    #     print len(srcivs[i]), 'vs', src.numberOfParams()
+    #     if len(srcivs[i]) != src.numberOfParams():
+    #         # This can happen for sources outside the brick bounds: they never get optimized?
+    #         print 'Warning: zeroing variances for source', src
+    #         srcivs[i] = [0]*src.numberOfParams()
+    #         if isinstance(src, (DevGalaxy, ExpGalaxy)):
+    #             src.shape = EllipseE.fromEllipseESoft(src.shape)
+    #         elif isinstance(src, FixedCompositeGalaxy):
+    #             src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
+    #             src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
+    #     assert(len(srcivs[i]) == src.numberOfParams())
+    # invvars = np.hstack(srcivs)
+    # assert(len(invvars) == cat.numberOfParams())
+    
     print 'Fitting sources took:', Time()-tfitall
     print 'Logprob:', tractor.getLogProb()
     
     rtn = dict()
-    for k in ['tractor', 'tims', 'ps', 'invvars', 'rchi2', 'fracflux']:
+    for k in ['tractor', 'tims', 'ps', 'invvars', 'rchi2', 'fracflux',
+              'T']:
         rtn[k] = locals()[k]
     return rtn
                           
@@ -1115,8 +1146,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 if patch is None:
                     continue
                 slc = patch.getSlice(mod)
-                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch / counts[isrc])
-                rchi2_den[isrc,iband] += np.sum(patch.patch / counts[isrc])
+                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch) / counts[isrc]
+                rchi2_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
 
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
@@ -1893,8 +1924,11 @@ def stage_fitplots(
 
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickid=None, ccds=None,
-                 outdir=None):
+                 outdir=None, T=None, cat=None, **kwargs):
 
+    if outdir is None:
+        outdir = '.'
+    
     fn = os.path.join(outdir, 'ccds-%06i.fits' % brickid)
     ccds.writeto(fn)
     print 'Wrote', fn
@@ -1902,31 +1936,44 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     W = targetwcs.get_width()
     H = targetwcs.get_height()
 
-    t0 = Time()
-    coimgs,cons,cowimgs,wimgs,cons2 = (
-        compute_coadds(tims, bands, W, H, targetwcs,
-                       get_cow=True, get_n2=True))
-    print 'Coadds:', Time()-t0
+    # t0 = Time()
+    # coimgs,cons,cowimgs,wimgs,cons2 = (
+    #     compute_coadds(tims, bands, W, H, targetwcs,
+    #                    get_cow=True, get_n2=True))
+    # del coimgs
+    # print 'Coadds:', Time()-t0
 
     plt.figure(figsize=(10,10.5))
     plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
     #plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.95)
 
-    plt.clf()
-    dimshow(get_rgb(coimgs, bands))
-    plt.title('Image')
-    ps.savefig()
-    
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
 
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
+    coimgs = []
+    comods = []
+
+    assert(len(T) == len(cat))
+    nobs = np.zeros((len(T), len(bands)), np.uint8)
+    rr = np.array([s.getPosition().ra  for s in cat])
+    dd = np.array([s.getPosition().dec for s in cat])
+    ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
+    ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
+    iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
+    
     for iband,band in enumerate(bands):
-        coimg = coimgs[iband]
-        comod  = np.zeros((wcsH,wcsW), np.float32)
-        comod2 = np.zeros((wcsH,wcsW), np.float32)
-        cochi2 = np.zeros((wcsH,wcsW), np.float32)
+
+        cow    = np.zeros((H,W), np.float32)
+        cowimg = np.zeros((H,W), np.float32)
+        cowmod = np.zeros((H,W), np.float32)
+        coimg  = np.zeros((H,W), np.float32)
+        comod  = np.zeros((H,W), np.float32)
+        cochi2 = np.zeros((H,W), np.float32)
+        con     = np.zeros((H,W), np.uint8)
+        congood = np.zeros((H,W), np.uint8)
+        detiv   = np.zeros((H,W), np.float32)
+
         for itim, (tim,mod) in enumerate(zip(tims, mods)):
             if tim.band != band:
                 continue
@@ -1934,52 +1981,84 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
             if R is None:
                 continue
             (Yo,Xo,Yi,Xi) = R
+
+            # number of good exposures
+            good = (tim.getInvError()[Yi,Xi] > 0)
+            congood[Yo,Xo] += good
+
+            iv = tim.getInvvar()[Yi,Xi]
+            im = tim.getImage()[Yi,Xi]
+
+            # invvar-weighted image & model
+            cowimg[Yo,Xo] += iv * im
+            cowmod[Yo,Xo] += iv * mod[Yi,Xi]
+            cow   [Yo,Xo] += iv
+
+            # chi-squared
+            cochi2[Yo,Xo] += iv * (im - mod[Yi,Xi])**2
+            
+            # straight-up image & model
+            coimg[Yo,Xo] += im
             comod[Yo,Xo] += mod[Yi,Xi]
-            ie = tim.getInvError()
-            noise = np.random.normal(size=ie.shape) / ie
-            noise[ie == 0] = 0.
-            comod2[Yo,Xo] += mod[Yi,Xi] + noise[Yi,Xi]
-            chi = ((tim.getImage()[Yi,Xi] - mod[Yi,Xi]) * tim.getInvError()[Yi,Xi])
-            cochi2[Yo,Xo] += chi**2
-            chi = chi[chi != 0.]
-            hh,xe = np.histogram(np.clip(chi, -10, 10).ravel(), bins=chibins)
-            chihist[iband] += hh
+            con  [Yo,Xo] += 1
 
-        comod  /= np.maximum(cons[iband], 1)
-        comod2 /= np.maximum(cons[iband], 1)
+            # point-source depth
+            psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+            detsig1 = tim.sig1 / psfnorm
+            detiv[Yo,Xo] += good * (1. / detsig1**2)
 
-        rgbmod.append(comod)
-        rgbmod2.append(comod2)
-        resid = coimg - comod
-        resid[cons[iband] == 0] = np.nan
-        rgbresids.append(resid)
-        rgbchisqs.append(cochi2)
+
+        nobs[:, iband] = con[iy,ix]
+            
+        cowimg /= np.maximum(cow, 1e-16)
+        cowmod /= np.maximum(cow, 1e-16)
+
+        cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+        cowmod[cow == 0] = (comod[cow == 0] / np.maximum(1, con[cow == 0]))
+
+        coimgs.append(cowimg)
+        comods.append(cowmod)
+
+        del coimg
+        del comod
 
         # Plug the WCS header cards into these images
-        wcsfn = create_temp()
-        targetwcs.write_to(wcsfn)
-        hdr = fitsio.read_header(wcsfn)
-        os.remove(wcsfn)
-
-        if outdir is None:
-            outdir = '.'
+        hdr = fitsio.FITSHDR()
+        targetwcs.add_to_header(hdr)
+        
         wa = dict(clobber=True, header=hdr)
-        for name,img in [('image', coimg), ('model', comod), ('resid', resid), ('chi2', cochi2)]:
-            fn = os.path.join(outdir, '%s-coadd-%06i-%s.fits' % (name, brickid, band))
+        for name,img in [('image',  cowimg),
+                         ('invvar', cow),
+                         ('model',  cowmod),
+                         ('chi2',   cochi2),
+                         ('depth',  detiv),
+                         ('nexp',   congood),
+                         ]:
+            fn = os.path.join(outdir,
+                              '%s-%06i-%s.fits' % (name, brickid, band))
             fitsio.write(fn, img,  **wa)
             print 'Wrote', fn
 
-    del cons
+    tmpfn = create_temp(suffix='.png')
+    for name,ims in [('image',coimgs), ('model',comods)]:
+        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
+        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
+               (tmpfn, os.path.join(outdir, '%s-%06i-%s.jpg' %
+                                    (name, brickid, band))))
+        os.system(cmd)
+        os.unlink(tmpfn)
+    
+    # plt.clf()
+    # dimshow(get_rgb(coimgs, bands))
+    # plt.title('Image')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # dimshow(get_rgb(comods, bands))
+    # plt.title('Model')
+    # ps.savefig()
 
-    plt.clf()
-    dimshow(get_rgb(rgbmod, bands))
-    plt.title('Model')
-    ps.savefig()
-
-    plt.clf()
-    dimshow(get_rgb(rgbmod2, bands))
-    plt.title('Model + Noise')
-    ps.savefig()
+    return dict(decam_nobs = nobs)
     
 
 '''
@@ -1996,6 +2075,7 @@ def stage_writecat(
     invvars=None,
     rchi2=None,
     fracflux=None,
+    decam_nobs=None,
     catalogfn=None,
     **kwargs):
     from desi_common import prepare_fits_catalog
@@ -2012,12 +2092,14 @@ def stage_writecat(
 
     allbands = 'ugrizy'
     
-    TT.decam_rchi2 = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
         TT.decam_rchi2[:,i] = rchi2[:,iband]
         TT.decam_fracflux[:,i] = fracflux[:,iband]
+        TT.decam_nobs[:,i] = decam_nobs[:,iband]
 
     cat.thawAllRecursive()
     hdr = version_header
@@ -2135,7 +2217,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     # This isn't quite right: writecat really depends on both fitblobs
     # and coadds, but coadds depends on tims, not fitblobs.  Need to
     # support lists of prereqs in stages!
-               'coadds': 'fitblobs'
+               'coadds': 'fitblobs',
                'writecat': 'coadds',
     #'writecat': 'fitblobs',
 
