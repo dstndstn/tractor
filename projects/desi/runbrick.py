@@ -1928,8 +1928,8 @@ def stage_writecat(
     TT.brickname = np.array([brickname] * len(TT))
     TT.objid   = np.arange(len(TT)).astype(np.int32)
     
-    allbands = 'ugrizy'
-    
+    allbands = 'ugrizY'
+
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
@@ -1947,6 +1947,11 @@ def stage_writecat(
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
     T2.bx = bx.astype(np.float32)
     T2.by = by.astype(np.float32)
+
+    sfd = SFDMap()
+    system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
+    filts = ['%s %s' % (system[f], f) for f in allbands]
+    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec)
     
     # Unpack shape columns
     T2.shapeExp_r  = T2.shapeExp[:,0]

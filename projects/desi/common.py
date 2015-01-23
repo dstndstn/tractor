@@ -15,7 +15,7 @@ from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion
 
 from astrometry.util.fits import fits_table, merge_tables
-from astrometry.util.util import Tan, Sip
+from astrometry.util.util import Tan, Sip, anwcs_t
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode, clip_polygon
 from astrometry.sdss.fields import read_photoobjs_in_wcs
@@ -41,6 +41,83 @@ if decals_dir is None:
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
+
+class SFDMap(object):
+    extinctions = {
+        'SDSS u': 4.239,
+        'DES g': 3.237,
+        'DES r': 2.176,
+        'DES i': 1.595,
+        'DES z': 1.217,
+        'DES Y': 1.058,
+        }
+
+    def __init__(self, ngp_filename=None, sgp_filename=None):
+        dustdir = os.environ.get('DUST_DIR', None)
+        if dustdir is not None:
+            dustdir = os.path.join(dustdir, 'maps')
+        else:
+            dustdir = '.'
+            print 'Warning: $DUST_DIR not set; looking for SFD maps in current directory.'
+        if ngp_filename is None:
+            ngp_filename = os.path.join(dustdir, 'SFD_dust_4096_ngp.fits')
+        if sgp_filename is None:
+            sgp_filename = os.path.join(dustdir, 'SFD_dust_4096_sgp.fits')
+        if not os.path.exists(ngp_filename):
+            raise RuntimeError('Error: SFD map does not exist: %s' % ngp_filename)
+        if not os.path.exists(sgp_filename):
+            raise RuntimeError('Error: SFD map does not exist: %s' % sgp_filename)
+        self.north = fitsio.read(ngp_filename)
+        self.south = fitsio.read(sgp_filename)
+        self.northwcs = anwcs_t(ngp_filename, 0)
+        self.southwcs = anwcs_t(sgp_filename, 0)
+
+    @staticmethod
+    def bilinear_interp_nonzero(image, x, y):
+        x0 = np.floor(x).astype(int)
+        y0 = np.floor(y).astype(int)
+        # Bilinear interpolate, but not outside the bounds (where ebv=0)
+        fx = x - x0
+        ebvA = image[y0,x0]
+        ebvB = image[y0,x0+1]
+        ebv1 = ebvA * fx + ebvB * (1.-fx)
+        ebv1[ebvA == 0] = ebvB[ebvA == 0]
+        ebv1[ebvB == 0] = ebvA[ebvB == 0]
+
+        ebvA = image[y0+1,x0]
+        ebvB = image[y0+1,x0+1]
+        ebv2 = ebvA * fx + ebvB * (1.-fx)
+        ebv2[ebvA == 0] = ebvB[ebvA == 0]
+        ebv2[ebvB == 0] = ebvA[ebvB == 0]
+
+        fy = y - y0
+        ebv = ebv1 * fy + ebv2 * (1.-fy)
+        ebv[ebv1 == 0] = ebv2[ebv1 == 0]
+        ebv[ebv2 == 0] = ebv1[ebv2 == 0]
+        return ebv
+        
+    def extinction(self, filts, ra, dec):
+        l,b = radectolb(ra, dec)
+        ebv = np.zeros_like(l)
+        N = (b >= 0)
+        for wcs,image,cut in [(self.northwcs, self.north, N),
+                              (self.southwcs, self.south, np.logical_not(N))]:
+            # Our WCS routines are mis-named... the SFD WCSes convert 
+            #   X,Y <-> L,B.
+            ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
+            assert(np.all(ok == 0))
+            H,W = image.shape
+            assert(np.all(x >= 1.))
+            assert(np.all(x <= W))
+            assert(np.all(y >= 1.))
+            assert(np.all(y <= H))
+            ebv[cut] = SFDMap.bilinear_interp_nonzero(image, x-1., y-1.)
+
+        factors = np.array([SFDMap.extinctions[f] for f in filts])
+
+        #a,b = np.broadcast_arrays(factors, ebv)
+        #return a*b
+        return factors[np.newaxis,:] * ebv[:,np.newaxis]
 
 def segment_and_group_sources(image, T):
     '''

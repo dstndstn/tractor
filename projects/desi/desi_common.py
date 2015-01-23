@@ -82,7 +82,7 @@ def source_param_types(src):
     return types
     
 
-def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizy'):
+def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY'):
     if T is None:
         T = fits_table()
     if hdr is None:
@@ -233,7 +233,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
 
     ivbandcols = []
 
-    # bandorder = 'ugrizy'
+    # bandorder = 'ugrizY'
     # bands = []
     # bandcols = []
     # for col in T.get_columns():
@@ -271,7 +271,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
                     raise ValueError('Did not find flux invvar for band %s in catalog' % band)
                 ivbandcols.append(col)
 
-    allbands = 'ugrizy'
+    allbands = 'ugrizY'
 
     ibands = np.array([allbands.index(b) for b in bands])
 

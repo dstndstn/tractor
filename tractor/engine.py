@@ -1433,6 +1433,7 @@ class Tractor(MultiParams):
         Nsourceparams = self.catalog.numberOfParams()
         srcs = list(self.catalog.getThawedSources())
 
+        # Render unit-flux models for each source.
         t0 = Time()
         (umodels, umodtosource, umodsforsource
          )= self._get_umodels(srcs, imgs, minsb, rois)
