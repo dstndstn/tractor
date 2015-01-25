@@ -41,7 +41,7 @@ class EllipseE(ParamList):
         return dict(re=0, e1=1, e2=2)
 
     @staticmethod
-    def fromEllipseESoft(esoft, maxe=1.0):
+    def fromEllipseESoft(esoft, maxe=0.999999):
         re = esoft.re
         e = min(maxe, esoft.e)
         theta = esoft.theta

@@ -388,10 +388,10 @@ def set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma, minradius=3):
         src.fixedRadius = max(minradius, 1 + ii[-1])
         #print 'Nsigma', nsigmas, 'radius', src.fixedRadius
 
-def stage_fitblobs(T=None, coimgs=None, cons=None,
-                   detmaps=None, detivs=None,
+def stage_fitblobs(T=None, 
                    blobsrcs=None, blobslices=None, blobs=None,
-                   tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+                   tractor=None, cat=None, targetrd=None, pixscale=None,
+                   targetwcs=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
@@ -419,23 +419,55 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     # to allow debugpool to only queue tasks one at a time
     iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
+    print 'Fitting sources took:', Time()-tfitall
+
+    return dict(fitblobs_R=R, tims=tims, ps=ps)
+    
+def stage_fitblobs_finish(
+        T=None, blobsrcs=None, blobslices=None, blobs=None,
+        tractor=None, cat=None, targetrd=None, pixscale=None,
+        targetwcs=None,
+        W=None,H=None, brickid=None,
+        bands=None, ps=None, tims=None,
+        plots=False, plots2=False,
+        fitblobs_R=None,
+        **kwargs):
+
+    print 'Logprob:', tractor.getLogProb()
 
     # one_blob can reduce the number and change the types of sources!
     # Reorder the sources here...
+    R = fitblobs_R
+
+    # print 'R:'
+    # for rr in R:
+    #     print
+    #     for r in rr:
+    #         print r
+    #     print
+
+    # Drop now-empty blobs.
+    R = [r for r in R if len(r[0])]
     
     II       = np.hstack([r[0] for r in R])
-    srcivs   = np.hstack([hstack(r[2]) for r in R])
+    srcivs   = np.hstack([np.hstack(r[2]) for r in R])
     fracflux = np.vstack([r[3] for r in R])
     rchi2    = np.vstack([r[4] for r in R])
+    dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
+    
     newcat = []
     for r in R:
         newcat.extend(r[1])
     T.cut(II)
 
+    del R
+    del fitblobs_R
+    
     assert(len(T) == len(newcat))
     print 'Old catalog:', len(cat)
     print 'New catalog:', len(newcat)
     cat = Catalog(*newcat)
+    tractor.catalog = cat
     assert(cat.numberOfParams() == len(srcivs))
     ns,nb = fracflux.shape
     assert(ns == len(cat))
@@ -443,15 +475,31 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
     ns,nb = rchi2.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
+    ns,nb = dchisqs.shape
+    assert(ns == len(cat))
+    assert(nb == 5) # none, ptsrc, dev, exp, comp
 
+    T.fracflux = fracflux
+    T.rchi2 = rchi2
+    T.dchisq = dchisqs.astype(np.float32)
+    
     invvars = srcivs
+
+    print 'New catalog:'
+    for src in cat:
+        print '  ', src
     
-    print 'Fitting sources took:', Time()-tfitall
     print 'Logprob:', tractor.getLogProb()
+    print 'lnprior:', tractor.getLogPrior()
+    print 'lnl:', tractor.getLogLikelihood()
+
+    print 'image priors', tractor.images.getLogPrior()
+    print 'catalog priors', tractor.catalog.getLogPrior()
+    for src in cat:
+        print '  prior', src.getLogPrior(), src
     
-    rtn = dict()
-    for k in ['tractor', 'tims', 'ps', 'invvars', 'rchi2', 'fracflux',
-              'T', 'cat']:
+    rtn = dict(fitblobs_R = None)
+    for k in ['tractor', 'cat', 'invvars', 'T']:
         rtn[k] = locals()[k]
     return rtn
                           
@@ -853,6 +901,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     # families of sources to fit simultaneously.  (The
     # not-friends-of-friends version of blobs!)
 
+    src_lnps = []
+    
     # For sources, in decreasing order of brightness
     for numi,i in enumerate(Ibright):
         src = subcat[i]
@@ -966,6 +1016,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
         print 'Log-probs:', lnps
 
+        #src_lnps.append(lnps)
+        
         nbands = len(bands)
         nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
                        dev=5 + nbands, comp=9 + nbands)
@@ -1008,6 +1060,10 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                     keepsrc = comp
                     keepmod = 'comp'
 
+        # Actually, penalized delta chi-squareds!
+        src_lnps.append([-2. * (plnps[k] - plnps[keepmod])
+                         for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
+                    
         if keepmod != oldmodel:
             print 'Switching source!'
             print 'Old:', src
@@ -1017,12 +1073,14 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             print 'Old:', src
 
         subcat[i] = keepsrc
-        
 
-    keepI = [i for i,s in zip(Isrcs, srcs) if src is not None]
-    keepsrcs = [s for s in srcs if src is not None]
+    srcs = subcat
+    keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
+    keepsrcs = [s for s in srcs if s is not None]
+    keeplnps = [x for x,s in zip(src_lnps,srcs) if s is not None]
     Isrcs = keepI
     srcs = keepsrcs
+    src_lnps = keeplnps
     subcat = Catalog(*srcs)
     subtr.catalog = subcat
     
@@ -1115,7 +1173,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
     
-    return Isrcs, srcs, srcinvvars, fracflux, rchi2
+    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps
     
 
 
@@ -1888,8 +1946,9 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                                     (brickname, name))))
         os.system(cmd)
         os.unlink(tmpfn)
-    
-    return dict(decam_nobs = nobs)
+
+    T.nobs = nobs
+    return dict(T = T)
     
 
 '''
@@ -1897,7 +1956,7 @@ Write catalog output
 '''
 def stage_writecat(
     version_header=None,
-    T=None, coimgs=None, cons=None,
+    T=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
@@ -1905,20 +1964,22 @@ def stage_writecat(
     brickname=None,
     brickid=None,
     invvars=None,
-    rchi2=None,
-    fracflux=None,
-    decam_nobs=None,
     catalogfn=None,
     outdir=None,
     **kwargs):
 
+    print 'Source types:'
+    for src in cat:
+        print '  ', type(src)
+    
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
     for k in ['itx','ity','index']:
         TT.delete_column(k)
     for col in TT.get_columns():
-        if not col in ['tx', 'ty', 'blob']:
+        if not col in ['tx', 'ty', 'blob',
+                       'fracflux','rchi2','dchisq','nobs']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = (TT.tx + 1.).astype(np.float32)
     TT.ty = (TT.ty + 1.).astype(np.float32)
@@ -1935,9 +1996,13 @@ def stage_writecat(
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
-        TT.decam_rchi2[:,i] = rchi2[:,iband]
-        TT.decam_fracflux[:,i] = fracflux[:,iband]
-        TT.decam_nobs[:,i] = decam_nobs[:,iband]
+        TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
+        TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
+        TT.decam_nobs[:,i] = TT.nobs[:,iband]
+
+    TT.delete_column('rchi2')
+    TT.delete_column('fracflux')
+    TT.delete_column('nobs')
 
     cat.thawAllRecursive()
     hdr = version_header
@@ -1948,10 +2013,13 @@ def stage_writecat(
     T2.bx = bx.astype(np.float32)
     T2.by = by.astype(np.float32)
 
+    T2.ra_ivar  = T2.ra_ivar .astype(np.float32)
+    T2.dec_ivar = T2.dec_ivar.astype(np.float32)
+    
     sfd = SFDMap()
     system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
     filts = ['%s %s' % (system[f], f) for f in allbands]
-    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec)
+    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
     
     # Unpack shape columns
     T2.shapeExp_r  = T2.shapeExp[:,0]
@@ -2068,10 +2136,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'tims':None,
         'srcs':'tims',
         'fitblobs':'srcs',
-        'coadds': 'fitblobs',
+        'fitblobs_finish':'fitblobs',
+        'coadds': 'fitblobs_finish',
         'writecat': 'coadds',
 
-        'fitplots': 'fitblobs',
+        'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
         'initplots': 'tims',
         }
