@@ -109,20 +109,67 @@ def main():
         print len(T), 'children'
         T.cut(T.insidemask == 0)
         print len(T), 'not in mask'
-        # EDGE
-        T.cut(T.flags & 0x4 == 0)
-        print len(T), 'without EDGE bit set'
 
-        # Cut
-        #T = T[:100]
+        # http://skyserver.sdss.org/dr12/en/help/browser/browser.aspx#&&history=enum+PhotoFlags+E
+        for flagname,flagval in [('BRIGHT', 0x2),
+                                 ('EDGE', 0x4),
+                                 ('NODEBLEND', 0x40),
+                                 ('DEBLEND_TOO_MANY_PEAKS' , 0x800),
+                                 ('NOTCHECKED', 0x80000),
+                                 ('TOO_LARGE', 0x1000000),
+                                 ('BINNED2', 0x20000000),
+                                 ('BINNED4', 0x40000000),
+                                 ('SATUR_CENTER', 0x80000000000),
+                                 ('INTERP_CENTER', 0x100000000000),
+                                 ('MAYBE_CR', 0x100000000000000),
+                                 ('MAYBE_EGHOST', 0x200000000000000),
+                      ]:
+            T.cut(T.flags & flagval == 0)
+            print len(T), 'without', flagname, 'bit set'
+
+        # Cut to objects that are likely to appear in the individual images
+        T.cut(T.psfmag_r < 22.)
+
+        # Select "interesting" objects...
+        # for i in range(len(T)):
+        # 
+        #     t = T[i]
+        #     ra,dec = t.ra, t.dec
+        # 
+        #     radius = 2. * 0.396 / 3600.
+        #     ddec = radius
+        #     dra = radius / np.cos(np.deg2rad(dec))
+        #     r0,r1 = ra - dra, ra + dra
+        #     d0,d1 = dec - ddec, dec + ddec
+        #     
+        #     wlistfn = sdss.filenames.get('window_flist', 'window_flist.fits')
+        #     RCF = radec_to_sdss_rcf(ra, dec, tablefn=wlistfn)
+        #     print 'Found', len(RCF), 'fields in range.'
+        #     keepRCF = []
+        #     for run,camcol,field,r,d in RCF:
+        #         rr = sdss.get_rerun(run, field)
+        #         print 'Rerun:', rr
+        #         if rr == '157':
+        #             continue
+        #         keepRCF.append((run,camcol,field))
+        #     RCF = keepRCF
+        #     for ifield,(run,camcol,field) in enumerate(RCF):
+        #         objfn = sdss.getPath('photoObj', run, camcol, field)
+        #         objs = fits_table(objfn)
+        #         objs.cut((objs.ra  > r0) * (objs.ra  < r1) *
+        #                  (objs.dec > d0) * (objs.dec < d1))
+        #         bright = photo_flags1_map.get('BRIGHT')
+        #         objs.cut((objs.nchild == 0) * ((objs.objc_flags & bright) == 0))
 
         # Write out Stripe82 measurements...
-        for i in range(len(T[:100])):
+        pixscale = 0.396
+        pixradius = 25
+        radius = np.sqrt(2.) * pixradius * pixscale / 3600.
 
-            pixscale = 0.396
-            pixradius = 25
-            radius = np.sqrt(2.) * pixradius * pixscale / 3600.
-            
+        Nkeep = 1000
+
+        for i in range(len(T[550:Nkeep])):
+
             # t = T[np.array([i])]
             # print 't:', t
             # t.about()
@@ -194,16 +241,14 @@ def main():
             
         cutToPrimary = False
 
-        stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)]
-
-    sys.exit(0)
+        stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)[:Nkeep]]
 
     plots = True
     
     if True:
         from astrometry.util.multiproc import *
-        #mp = multiproc(4)
-        mp = multiproc()
+        mp = multiproc(8)
+        #mp = multiproc()
         mp.map(_bounce_one_blob, stars)
 
     else:
@@ -340,9 +385,16 @@ def oneblob(ra, dec, addToHeader, cutToPrimary):
     outfns.append(catfn)
 
     written = set()
+
+    plt.figure(figsize=(8,8))
+    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.99,
+                        hspace=0.05, wspace=0.05)
             
     # Retrieve SDSS images
     for band in bands:
+        if band == 'r':
+            rimgs = []
+
         for ifield,(run,camcol,field) in enumerate(RCF):
             fn = sdss.retrieve('photoField', run, camcol, field)
             print 'Retrieved', fn
@@ -493,13 +545,27 @@ def oneblob(ra, dec, addToHeader, cutToPrimary):
             # First time, overwrite existing file.  Later, append
             clobber = not band in written
             written.add(band)
+
+            if band == 'r':
+                rimgs.append(img)
             
             fn = stamp_pattern % band
             print 'writing', fn
-            fitsio.write(fn, img, clobber=clobber, header=hdr)
-            fitsio.write(fn, iv)
+            fitsio.write(fn, img.astype(np.float32), clobber=clobber, header=hdr)
+            fitsio.write(fn, iv.astype(np.float32))
             if clobber:
                 outfns.append(fn)
+
+        if band == 'r':
+            N = len(rimgs)
+            ncols = int(np.ceil(np.sqrt(float(N))))
+            nrows = int(np.ceil(float(N) / ncols))
+            plt.clf()
+            for k,img in enumerate(rimgs):
+                plt.subplot(nrows, ncols, k+1)
+                dimshow(img, vmin=-0.1, vmax=1., ticks=False)
+            plt.savefig('stamps-%.4f-%.4f.png' % (ra, dec))
+                
     return outfns
                 
 if __name__ == '__main__':
