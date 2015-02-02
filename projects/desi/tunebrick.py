@@ -588,9 +588,17 @@ def stage_writecat2(cat=None, Tcat=None, invvars=None, version_header=None,
     print 'Writing catalog:', Time()-t0
 
 def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
-                  basedir=None,
+                  basedir=None, ccds=None,
                   **kwargs):
     #print 'kwargs:', kwargs.keys()
+    if targetwcs is None:
+        # can happen if no CCDs overlap...
+        import sys
+        sys.exit(0)
+
+    fn = os.path.join(basedir, 'ccds-%06i.fits' % brickid)
+    ccds.writeto(fn)
+    print 'Wrote', fn
     
     W = targetwcs.get_width()
     H = targetwcs.get_height()
@@ -625,35 +633,6 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
         #nimgs.append(nimg)
         wimgs.append(wimg)
 
-    plt.figure(figsize=(10,10))
-    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
-
-    # plt.clf()
-    # dimshow(get_rgb(coimgs, bands))
-    # plt.title('img')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # for i,nimg in enumerate(nimgs):
-    #     plt.subplot(2,2,1+i)
-    #     plt.imshow(nimg, interpolation='nearest', origin='lower', vmin=0,
-    #                cmap='hot')
-    #     plt.colorbar()
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # dimshow(get_rgb(cowimgs, bands))
-    # plt.title('wimg')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # for i,wimg in enumerate(wimgs):
-    #     plt.subplot(2,2,1+i)
-    #     plt.imshow(wimg, interpolation='nearest', origin='lower', vmin=0,
-    #                cmap='hot')
-    #     plt.colorbar()
-    # ps.savefig()
-
     for i,(wimg,cowimg,coimg) in enumerate(zip(wimgs, cowimgs, coimgs)):
         cowimg[wimg == 0] = coimg[wimg == 0]
     del wimgs
@@ -666,18 +645,27 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
     except:
         pass
 
+    # WCS header for these images
+    hdr = fitsio.FITSHDR()
+    targetwcs.add_to_header(hdr)
+    fwa = dict(clobber=True, header=hdr)
+
     for band,cow in zip(bands, cowimgs):
         fn = os.path.join(basedir, 'coadd', 'image2-%06i-%s.fits' % (brickid,band))
-        fitsio.write(fn, cow, clobber=True)
+        fitsio.write(fn, cow, **fwa)
         print 'Wrote', fn
 
-    rgb = get_rgb(cowimgs, bands)
-    #del cowimgs
+    return dict(coimgs=cowimgs, tims=None)
+
+def stage_rergb(coimgs=None, bands=None, basedir=None, brickid=None,
+                ps=None, **kwargs):
+    plt.figure(figsize=(10,10))
+    plt.subplots_adjust(left=0.002, right=0.998, bottom=0.002, top=0.998)
+
+    rgb = get_rgb(coimgs, bands)
 
     plt.clf()
     dimshow(rgb)
-    #plt.title('wimg+')
-    #ps.savefig()
     fn = os.path.join(basedir, 'coadd', 'image2-%06i.png' % brickid)
     plt.savefig(fn)
     print 'Saved', fn
@@ -690,8 +678,6 @@ def stage_recoadd(tims=None, bands=None, targetwcs=None, ps=None, brickid=None,
     os.system(cmd)
     os.unlink(tmpfn)
     print 'Wrote', fn
-
-    return dict(coimgs=cowimgs, tims=None)
 
 def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
                   **kwargs):
@@ -735,7 +721,7 @@ def stage_primage(coimgs=None, bands=None, ps=None, basedir=None,
 
 def main():
     import optparse
-    from astrometry.util.stages import *
+    from astrometry.util.stages import CallGlobal, runstage
 
     parser = optparse.OptionParser()
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[],
@@ -753,6 +739,8 @@ def main():
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
     parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
     parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
+
+    parser.add_option('--bands', help='Bands to process; default "%default"', default='grz')
 
     parser.add_option('--plot-base', default='plot-%(brick)06i', #'tunebrick/coadd/plot-%(brick)06i',
                       help='Plot filenames; default %default')
@@ -782,6 +770,7 @@ def main():
                'writecat2': 'tune',
 
                'recoadd': 'tims',
+               'rergb': 'recoadd',
 
                'primage': 'recoadd',
                }
@@ -790,6 +779,7 @@ def main():
     initargs = dict(ps=ps)
     initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom,
                     program_name = 'tunebrick.py', pipe=True,
+                    bands=opt.bands,
                     mock_psf=opt.mock_psf)
     kwargs = {}
     kwargs.update(basedir=opt.basedir)

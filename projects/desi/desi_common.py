@@ -82,7 +82,7 @@ def source_param_types(src):
     return types
     
 
-def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
+def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY'):
     if T is None:
         T = fits_table()
     if hdr is None:
@@ -113,7 +113,6 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs):
     params0 = cat.getParams()
 
     #print 'cat', len(cat)
-    allbands = 'ugrizy'
     T.decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
     T.decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
 
@@ -234,7 +233,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
 
     ivbandcols = []
 
-    # bandorder = 'ugrizy'
+    # bandorder = 'ugrizY'
     # bands = []
     # bandcols = []
     # for col in T.get_columns():
@@ -256,30 +255,44 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
     #     ivbandcols = [ivbandcols[i] for in I]
     #     print 'invvars', ivbandcols
 
-    bandcols = []
-    ivbandcols = []
-    for band in bands:
-        col = 'decam_%s_nanomaggies' % band
-        if not col in T.get_columns():
-            raise ValueError('Did not find flux for band %s in catalog' % band)
-        bandcols.append(col)
-        if invvars:
-            col = 'decam_%s_nanomaggies_invvar' % band
+
+    # decam_g_nanomaggies, etc
+    if False:
+        bandcols = []
+        ivbandcols = []
+        for band in bands:
+            col = 'decam_%s_nanomaggies' % band
             if not col in T.get_columns():
-                raise ValueError('Did not find flux invvar for band %s in catalog' % band)
-            ivbandcols.append(col)
+                raise ValueError('Did not find flux for band %s in catalog' % band)
+            bandcols.append(col)
+            if invvars:
+                col = 'decam_%s_nanomaggies_invvar' % band
+                if not col in T.get_columns():
+                    raise ValueError('Did not find flux invvar for band %s in catalog' % band)
+                ivbandcols.append(col)
+
+    allbands = 'ugrizY'
+
+    ibands = np.array([allbands.index(b) for b in bands])
 
     ivs = []
     cat = []
     for i,t in enumerate(T):
+
+        #print 't flux', t.decam_flux
+        #print 'ivar', t.decam_flux_ivar
+        #print 'flux', t.decam_flux[ibands]
+        #print 'ivar', t.decam_flux_ivar[ibands]
+
         clazz = rev_typemap[t.type]
         pos = RaDecPos(t.ra, t.dec)
-        br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
+        #br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
+        br = NanoMaggies(order=bands, **dict(zip(bands, t.decam_flux[ibands])))
         params = [pos, br]
         if invvars:
             # ASSUME & hard-code that the position and brightness are the first params
-            ivs.extend([t.ra_invvar, t.dec_invvar] +
-                       [t.get(c) for c in ivbandcols])
+            ivs.extend([t.ra_ivar, t.dec_ivar] + list(t.decam_flux_ivar[ibands]))
+                       
 
             # print 'pos', pos
             # print 'bright', br

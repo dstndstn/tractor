@@ -1,3 +1,8 @@
+if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('Agg')
+import pylab as plt
+
 import os
 import tempfile
 
@@ -5,20 +10,523 @@ import numpy as np
 
 import fitsio
 
+from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage.measurements import label, find_objects
+from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion
+
 from astrometry.util.fits import fits_table, merge_tables
-from astrometry.util.util import Tan, Sip
+from astrometry.util.util import Tan, Sip, anwcs_t
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode, clip_polygon
+from astrometry.sdss.fields import read_photoobjs_in_wcs
+from astrometry.sdss import DR9, band_index, AsTransWrapper
+from astrometry.util.resample import resample_with_wcs,OverlapError
 
 from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
 from tractor.engine import get_class_from_name, Image
 from tractor.psfex import PsfEx
+from tractor.sdss import get_tractor_sources_dr9
+from tractor.ellipses import *
 
-tempdir = os.environ['TMPDIR']
+# search order: $TMPDIR, $TEMP, $TMP, then /tmp, /var/tmp, /usr/tmp
+tempdir = tempfile.gettempdir()
 decals_dir = os.environ.get('DECALS_DIR')
+if decals_dir is None:
+    print 'Warning: you should set the $DECALS_DIR environment variable.'
+    print 'On NERSC, you can do:'
+    print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
+    print '  module load decals'
+    print
+    
 calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
+
+class SFDMap(object):
+    extinctions = {
+        'SDSS u': 4.239,
+        'DES g': 3.237,
+        'DES r': 2.176,
+        'DES i': 1.595,
+        'DES z': 1.217,
+        'DES Y': 1.058,
+        }
+
+    def __init__(self, ngp_filename=None, sgp_filename=None):
+        dustdir = os.environ.get('DUST_DIR', None)
+        if dustdir is not None:
+            dustdir = os.path.join(dustdir, 'maps')
+        else:
+            dustdir = '.'
+            print 'Warning: $DUST_DIR not set; looking for SFD maps in current directory.'
+        if ngp_filename is None:
+            ngp_filename = os.path.join(dustdir, 'SFD_dust_4096_ngp.fits')
+        if sgp_filename is None:
+            sgp_filename = os.path.join(dustdir, 'SFD_dust_4096_sgp.fits')
+        if not os.path.exists(ngp_filename):
+            raise RuntimeError('Error: SFD map does not exist: %s' % ngp_filename)
+        if not os.path.exists(sgp_filename):
+            raise RuntimeError('Error: SFD map does not exist: %s' % sgp_filename)
+        self.north = fitsio.read(ngp_filename)
+        self.south = fitsio.read(sgp_filename)
+        self.northwcs = anwcs_t(ngp_filename, 0)
+        self.southwcs = anwcs_t(sgp_filename, 0)
+
+    @staticmethod
+    def bilinear_interp_nonzero(image, x, y):
+        x0 = np.floor(x).astype(int)
+        y0 = np.floor(y).astype(int)
+        # Bilinear interpolate, but not outside the bounds (where ebv=0)
+        fx = x - x0
+        ebvA = image[y0,x0]
+        ebvB = image[y0,x0+1]
+        ebv1 = ebvA * fx + ebvB * (1.-fx)
+        ebv1[ebvA == 0] = ebvB[ebvA == 0]
+        ebv1[ebvB == 0] = ebvA[ebvB == 0]
+
+        ebvA = image[y0+1,x0]
+        ebvB = image[y0+1,x0+1]
+        ebv2 = ebvA * fx + ebvB * (1.-fx)
+        ebv2[ebvA == 0] = ebvB[ebvA == 0]
+        ebv2[ebvB == 0] = ebvA[ebvB == 0]
+
+        fy = y - y0
+        ebv = ebv1 * fy + ebv2 * (1.-fy)
+        ebv[ebv1 == 0] = ebv2[ebv1 == 0]
+        ebv[ebv2 == 0] = ebv1[ebv2 == 0]
+        return ebv
+        
+    def extinction(self, filts, ra, dec):
+        l,b = radectolb(ra, dec)
+        ebv = np.zeros_like(l)
+        N = (b >= 0)
+        for wcs,image,cut in [(self.northwcs, self.north, N),
+                              (self.southwcs, self.south, np.logical_not(N))]:
+            # Our WCS routines are mis-named... the SFD WCSes convert 
+            #   X,Y <-> L,B.
+            ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
+            assert(np.all(ok == 0))
+            H,W = image.shape
+            assert(np.all(x >= 1.))
+            assert(np.all(x <= W))
+            assert(np.all(y >= 1.))
+            assert(np.all(y <= H))
+            ebv[cut] = SFDMap.bilinear_interp_nonzero(image, x-1., y-1.)
+
+        factors = np.array([SFDMap.extinctions[f] for f in filts])
+
+        #a,b = np.broadcast_arrays(factors, ebv)
+        #return a*b
+        return factors[np.newaxis,:] * ebv[:,np.newaxis]
+
+def segment_and_group_sources(image, T):
+    '''
+    *image*: binary image that defines "blobs"
+    *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
+      - ".blob" field is added.
+
+    Returns: (blobs, blobsrcs, blobslices)
+
+    *blobs*: image, values -1 = no blob, integer blob indices
+    *blobsrcs*: list of np arrays of integers, elements in T within each blob
+    *blobslices*: list of slice objects for blob bounding-boxes.
+    
+    '''
+
+    emptyblob = 0
+
+    blobs,nblobs = label(image)
+    print 'N detected blobs:', nblobs
+    blobslices = find_objects(blobs)
+    T.blob = blobs[T.ity, T.itx]
+
+    # Find sets of sources within blobs
+    blobsrcs = []
+    keepslices = []
+    blobmap = {}
+    for blob in range(1, nblobs+1):
+        Isrcs = np.flatnonzero(T.blob == blob)
+        if len(Isrcs) == 0:
+            continue
+        blobmap[blob] = len(blobsrcs)
+        blobsrcs.append(Isrcs)
+        bslc = blobslices[blob-1]
+        keepslices.append(bslc)
+
+    blobslices = keepslices
+
+    # Find sources that do not belong to a blob and add them as
+    # singleton "blobs"; otherwise they don't get optimized.
+    # for sources outside the image bounds, what should we do?
+    inblobs = np.zeros(len(T), bool)
+    for Isrcs in blobsrcs:
+        inblobs[Isrcs] = True
+    noblobs = np.flatnonzero(inblobs == 0)
+    del inblobs
+    H,W = image.shape
+    # Add new fake blobs!
+    for ib,i in enumerate(noblobs):
+        S = 3
+        bslc = (slice(np.clip(T.ity[i] - S, 0, H-1), np.clip(T.ity[i] + S+1, 0, H)),
+                slice(np.clip(T.itx[i] - S, 0, W-1), np.clip(T.itx[i] + S+1, 0, W)))
+        print 'Slice:', bslc
+        # Set synthetic blob number
+        blob = nblobs+1 + ib
+        blobs[bslc][blobs[bslc] == emptyblob] = blob
+        blobmap[blob] = len(blobsrcs)
+        blobslices.append(bslc)
+        blobsrcs.append(np.array([i]))
+    print 'Added', len(noblobs), 'new fake singleton blobs'
+
+    # Remap the "blobs" image so that empty regions are = -1 and the blob values
+    # correspond to their indices in the "blobsrcs" list.
+    bm = np.zeros(max(blobmap.keys())+1, int)
+    for k,v in blobmap.items():
+        bm[k] = v
+    bm[0] = -1
+    blobs = bm[blobs]
+
+    for j,Isrcs in enumerate(blobsrcs):
+        for i in Isrcs:
+            assert(blobs[T.ity[i], T.itx[i]] == j)
+    T.blob = blobs[T.ity, T.itx]
+    assert(len(blobsrcs) == len(blobslices))
+
+    return blobs, blobsrcs, blobslices
+
+def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
+    # FIXME?
+    margin = 0.
+
+    sdss = DR9(basedir=photoobjdir)
+    if local:
+        local = (local and ('BOSS_PHOTOOBJ' in os.environ)
+                 and ('PHOTO_RESOLVE' in os.environ))
+    if local:
+        sdss.useLocalTree()
+
+    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
+            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr',
+            'phi_dev_deg',
+            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr',
+            'phi_exp_deg',
+            'resolve_status', 'nchild', 'flags', 'objc_flags',
+            'run','camcol','field','id',
+            'psfflux', 'psfflux_ivar',
+            'cmodelflux', 'cmodelflux_ivar',
+            'modelflux', 'modelflux_ivar',
+            'devflux', 'expflux', 'extinction']
+
+    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
+    print 'Got', len(objs), 'photoObjs'
+
+    # It can be string-valued
+    objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
+
+    # Treat as pointsource...
+    sband = 'r'
+    bandnum = 'ugriz'.index(sband)
+    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
+
+    print 'Bands', bands, '->', list(bands)
+
+    srcs = get_tractor_sources_dr9(
+        None, None, None, objs=objs, sdss=sdss,
+        bands=list(bands),
+        nanomaggies=True, fixedComposites=True,
+        useObjcType=True,
+        ellipse=EllipseESoft.fromRAbPhi)
+    print 'Got', len(srcs), 'Tractor sources'
+
+    # record coordinates in target brick image
+    ok,objs.tx,objs.ty = targetwcs.radec2pixelxy(objs.ra, objs.dec)
+    objs.tx -= 1
+    objs.ty -= 1
+    W,H = targetwcs.get_width(), targetwcs.get_height()
+    objs.itx = np.clip(np.round(objs.tx), 0, W-1).astype(int)
+    objs.ity = np.clip(np.round(objs.ty), 0, H-1).astype(int)
+
+    cat = Catalog(*srcs)
+    return cat, objs
+
+def treat_as_pointsource(T, bandnum, setObjcType=True):
+    b = bandnum
+    gal = (T.objc_type == 3)
+    dev = gal * (T.fracdev[:,b] >= 0.5)
+    exp = gal * (T.fracdev[:,b] <  0.5)
+    stars = (T.objc_type == 6)
+    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
+    print 'Total', len(T), 'sources'
+
+    thetasn = np.zeros(len(T))
+    T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
+    T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
+    # theta_experr nonzero: 1.28507e-05
+    # theta_deverr nonzero: 1.92913e-06
+    thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
+    thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
+
+    # aberrzero = np.zeros(len(T), bool)
+    # aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
+    # aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
+
+    maxtheta = np.zeros(len(T), bool)
+    maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
+    maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
+
+    # theta S/N > modelflux for dev, 10*modelflux for exp
+    bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
+
+    print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
+    print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
+    #print sum(aberrzero), 'have zero a/b error'
+    print sum(maxtheta), 'have the maximum theta'
+    print sum(bigthetasn), 'have large theta S/N vs modelflux'
+    
+    badgals = gal * reduce(np.logical_or,
+                           [thetasn < 3.,
+                            T.modelflux[:,b] > 1e4,
+                            #aberrzero,
+                            maxtheta,
+                            bigthetasn,
+                            ])
+    print 'Found', sum(badgals), 'bad galaxies'
+    if setObjcType:
+        T.objc_type[badgals] = 6
+    return badgals
+
+
+def _detmap((tim, targetwcs, H, W)):
+    R = tim_get_resamp(tim, targetwcs)
+    if R is None:
+        return None,None,None,None
+    ie = tim.getInvvar()
+    psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+    detim = tim.getImage().copy()
+    detim[ie == 0] = 0.
+    detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
+    detsig1 = tim.sig1 / psfnorm
+    subh,subw = tim.shape
+    detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
+    detiv[ie == 0] = 0.
+    (Yo,Xo,Yi,Xi) = R
+    return Yo, Xo, detim[Yi,Xi], detiv[Yi,Xi]
+
+def tim_get_resamp(tim, targetwcs):
+    if hasattr(tim, 'resamp'):
+        return tim.resamp
+    try:
+        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, tim.subwcs, [], 2)
+    except OverlapError:
+        print 'No overlap'
+        return None
+    if len(Yo) == 0:
+        return None
+    resamp = [x.astype(np.int16) for x in (Yo,Xo,Yi,Xi)]
+    return resamp
+
+def detection_maps(tims, targetwcs, bands, mp):
+    # Render the detection maps
+    H,W = targetwcs.shape
+    detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
+    detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
+    for tim, (Yo,Xo,incmap,inciv) in zip(
+        tims, mp.map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
+        if Yo is None:
+            continue
+        detmaps[tim.band][Yo,Xo] += incmap*inciv
+        detivs [tim.band][Yo,Xo] += inciv
+
+    for band in bands:
+        detmaps[band] /= np.maximum(1e-16, detivs[band])
+
+    # back into lists, not dicts
+    detmaps = [detmaps[b] for b in bands]
+    detivs  = [detivs [b] for b in bands]
+        
+    return detmaps, detivs
+
+def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
+                          xomit, yomit,
+                          nsigma=5.,
+                          saddle=2.,
+                          ps=None):
+                          
+    '''
+    detmaps: list of detmaps, same order as "bands"
+    detivs :    ditto
+    
+    '''
+    H,W = detmaps[0].shape
+    sedmap = np.zeros((H,W), np.float32)
+    sediv  = np.zeros((H,W), np.float32)
+    for iband,band in enumerate(bands):
+        if sed[iband] == 0:
+            continue
+        # We convert the detmap to canonical band via
+        #   detmap * w
+        # And the corresponding change to sig1 is
+        #   sig1 * w
+        # So the invvar-weighted sum is
+        #    (detmap * w) / (sig1**2 * w**2)
+        #  = detmap / (sig1**2 * w)
+        sedmap += detmaps[iband] * detivs[iband] / sed[iband]
+        sediv  += detivs [iband] / sed[iband]**2
+    sedmap /= np.maximum(1e-16, sediv)
+    sedsn   = sedmap * np.sqrt(sediv)
+
+    peaks = (sedsn > nsigma)
+
+    if ps is not None:
+        pkbounds = binary_dilation(peaks) - peaks
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='hot')
+        rgba = np.zeros((H,W,4), np.uint8)
+        rgba[:,:,1] = pkbounds
+        rgba[:,:,3] = pkbounds
+        plt.imshow(rgba, interpolation='nearest', origin='lower')
+        plt.title('SED %s: S/N & peaks' % sedname)
+        ps.savefig()
+
+    # zero out the edges -- larger margin here?
+    peaks[0 ,:] = 0
+    peaks[:, 0] = 0
+    peaks[-1,:] = 0
+    peaks[:,-1] = 0
+    # find pixels that are larger than their 8 neighbors
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,1:-1])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,1:-1])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[1:-1,2:  ])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,2:  ])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,0:-2])
+    peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,2:  ])
+
+    # Ok, now for each peak (in decreasing order of peak height):
+    #  -find the image area that is "saddle" sigma lower than the peak.
+    #  -blank out any lower peaks in that region?
+    #  -omit this peak if one of the "omit" points is within the saddle
+    # ... or create saddle images for each of the 'omit' points first?
+
+    omitmap = np.zeros(peaks.shape, bool)
+
+    def saddle_level(Y):
+        # Require a saddle of (the larger of) "saddle" sigma, or 10% of the peak height
+        drop = max(saddle, Y * 0.1)
+        return Y - drop
+
+    for x,y in zip(xomit, yomit):
+        if sedsn[y,x] > nsigma:
+            level = saddle_level(sedsn[y,x])
+            blobs,nblobs = label(sedsn > level)
+            omitmap |= (blobs == blobs[y,x])
+        elif sediv[y,x] == 0:
+            # Nil pixel... possibly saturated.  Mask the whole region.
+            badpix = (sediv == 0)
+            blobs,nblobs = label(badpix)
+            #print 'Blobs:', blobs.shape, blobs.dtype
+            badpix = (blobs == blobs[y,x])
+            badpix = binary_dilation(badpix, iterations=5)
+            omitmap |= badpix
+        else:
+            # omit a 3x3 box around the peak
+            omitmap[np.clip(y-1,0,H-1): np.clip(y+2,0,H),
+                    np.clip(x-1,0,W-1): np.clip(x+2,0,W)] = True
+
+    # find peaks, sort by flux
+    py,px = np.nonzero(peaks)
+    I = np.argsort(-sedsn[py,px])
+    py = py[I]
+    px = px[I]
+    #keep = np.ones(len(py), bool)
+    # drop peaks inside the 'omit map'
+    keep = np.logical_not(omitmap[py, px])
+
+
+    if ps is not None:
+        crossa = dict(ms=10, mew=1.5)
+        green = (0,1,0)
+        plt.clf()
+        plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('Omit map for SED %s' % sedname)
+        ps.savefig()
+        
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='gray')
+        ax = plt.axis()
+        plt.plot(px[keep], py[keep], '+', color=green, **crossa)
+        drop = np.logical_not(keep)
+        plt.plot(px[drop], py[drop], 'r+', **crossa)
+        plt.axis(ax)
+        plt.title('SED %s: keep (green) peaks' % sedname)
+        ps.savefig()
+    
+    for i,(x,y) in enumerate(zip(px, py)):
+        if not keep[i]:
+            continue
+
+        level = saddle_level(sedsn[y,x])
+        blobs,nblobs = label(sedsn > level)
+        saddleblob = (blobs == blobs[y,x])
+        # ???
+        # this source's blob touches the omit map
+        if np.any(saddleblob & omitmap):
+            keep[i] = False
+            continue
+        
+        omitmap |= saddleblob
+
+    if ps is not None:
+        plt.clf()
+        plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
+        plt.title('Final omit map for SED %s' % sedname)
+        ps.savefig()
+        
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='gray')
+        ax = plt.axis()
+        plt.plot(px[keep], py[keep], '+', color=green, **crossa)
+        drop = np.logical_not(keep)
+        plt.plot(px[drop], py[drop], 'r+', **crossa)
+        plt.axis(ax)
+        plt.title('SED %s: Final keep (green) peaks' % sedname)
+        ps.savefig()
+
+    py = py[keep]
+    px = px[keep]
+    
+    return sedsn, px, py
+
+    
+    # blobs,nblobs = label(peaks)
+    # print 'N detected blobs:', nblobs
+    # blobslices = find_objects(blobs)
+
+    # Now... peaks...
+    
+    # # Un-set existing blobs
+    # for x,y in zip(xomit, yomit):
+    #     # blob number
+    #     bb = blobs[y,x]
+    #     if bb == 0:
+    #         continue
+    #     # un-set 'peaks' within this blob
+    #     slc = blobslices[bb-1]
+    #     peaks[slc][blobs[slc] == bb] = 0
+
+    # zero out the edges -- larger margin here?
+    # peaks[0 ,:] = 0
+    # peaks[:, 0] = 0
+    # peaks[-1,:] = 0
+    # peaks[:,-1] = 0
+
+    
+
+        
 
 def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     '''
@@ -262,6 +770,82 @@ def create_temp(**kwargs):
     os.unlink(fn)
     return fn
 
+def sed_matched_filters(bands):
+    # List the SED-matched filters to run
+    # single-band filters
+    SEDs = []
+    for i,band in enumerate(bands):
+        sed = np.zeros(len(bands))
+        sed[i] = 1.
+        SEDs.append((band, sed))
+    assert(bands == 'grz')
+    SEDs.append(('Flat', (1.,1.,1.)))
+    SEDs.append(('Red', (2.5, 1.0, 0.4)))
+    return SEDs
+
+def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
+                            targetwcs,
+                            plots=False, ps=None):
+    if omit_xy is not None:
+        xx,yy = omit_xy
+        n0 = len(xx)
+    else:
+        xx,yy = [],[]
+        n0 = 0
+
+    H,W = detmaps[0].shape
+    hot = np.zeros((H,W), np.float32)
+    for sedname,sed in SEDs:
+        print 'SED', sedname
+        if plots:
+            pps = ps
+        else:
+            pps = None
+        sedsn,px,py = sed_matched_detection(
+            sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
+        print len(px), 'new peaks'
+        hot = np.maximum(hot, sedsn)
+        xx = np.append(xx, px)
+        yy = np.append(yy, py)
+
+    # New peaks:
+    peakx = xx[n0:]
+    peaky = yy[n0:]
+
+    # Add sources for the new peaks we found
+
+    # make their initial fluxes ~ 5-sigma
+    # fluxes = dict([(b,[]) for b in bands])
+    # for tim in tims:
+    #     psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+    #     fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
+    # fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
+
+    pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
+    print 'Adding', len(pr), 'new sources'
+    # Also create FITS table for new sources
+    Tnew = fits_table()
+    Tnew.ra  = pr
+    Tnew.dec = pd
+    Tnew.tx = peakx
+    Tnew.ty = peaky
+    Tnew.itx = np.clip(np.round(Tnew.tx), 0, W-1).astype(int)
+    Tnew.ity = np.clip(np.round(Tnew.ty), 0, H-1).astype(int)
+    newcat = []
+    for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
+        fluxes = dict([(band, detmap[Tnew.ity[i], Tnew.itx[i]])
+                       for band,detmap in zip(bands,detmaps)])
+        newcat.append(PointSource(RaDecPos(r,d),
+                                  NanoMaggies(order=bands, **fluxes)))
+    # print 'Existing source table:'
+    # T.about()
+    # print 'New source table:'
+    # Tnew.about()
+    # T = merge_tables([T, Tnew], columns='fillzero')
+    # return peakx,peaky,
+
+    return Tnew, newcat, hot
+
 class Decals(object):
     def __init__(self):
         self.decals_dir = decals_dir
@@ -284,6 +868,13 @@ class Decals(object):
             return None
         return B[I[0]]
 
+    def get_brick_by_name(self, brickname):
+        B = self.get_bricks()
+        I = np.flatnonzero(np.array([n == brickname for n in B.brickname]))
+        if len(I) == 0:
+            return None
+        return B[I[0]]
+
     def bricks_touching_radec_box(self, bricks,
                                   ralo, rahi, declo, dechi):
         '''
@@ -300,6 +891,38 @@ class Decals(object):
         T.extname = np.array([s.strip() for s in T.extname])
         return T
 
+    def ccds_touching_wcs(self, wcs):
+        T = self.get_ccds()
+        I = ccds_touching_wcs(wcs, T)
+        #print len(I), 'CCDs nearby'
+        if len(I) == 0:
+            return None
+        T.cut(I)
+        return T
+
+    def tims_touching_wcs(self, targetwcs, mp, mock_psf=False, bands=None):
+        '''
+        mp: multiprocessing object
+        '''
+        # Read images
+        C = self.ccds_touching_wcs(targetwcs)
+        # Sort by band
+        if bands is not None:
+            C.cut(np.hstack([np.flatnonzero(C.filter == band) for band in bands]))
+        ims = []
+        for t in C:
+            print
+            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+            im = DecamImage(t)
+            ims.append(im)
+        # Read images, clip to ROI
+        W,H = targetwcs.get_width(), targetwcs.get_height()
+        targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
+                             [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+        args = [(im, self, targetrd, mock_psf) for im in ims]
+        tims = mp.map(read_one_tim, args)
+        return tims
+    
     def find_ccds(self, expnum=None, extname=None):
         T = self.get_ccds()
         if expnum is not None:
@@ -327,10 +950,12 @@ class Decals(object):
             I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
+        # No updated zeropoint -- use header MAGZERO from primary HDU.
         elif len(I) == 0:
             print 'WARNING: using header zeropoints for', im
-            # No updated zeropoint -- use header MAGZERO from primary HDU.
             hdr = im.read_image_primary_header()
+
+            # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
             #exptime = hdr['EXPTIME']
             #magzero += 2.5 * np.log10(exptime)
@@ -353,23 +978,166 @@ class Decals(object):
         #print 'magzp', magzp
         return magzp
 
+def exposure_metadata(filenames, hdus=None, trim=None):
+    nan = np.nan
+    primkeys = [('FILTER',''),
+                ('RA', nan),
+                ('DEC', nan),
+                ('AIRMASS', nan),
+                ('DATE-OBS', ''),
+                ('G-SEEING', nan),
+                ('EXPTIME', nan),
+                ('EXPNUM', 0),
+                ('MJD-OBS', 0),
+                ('PROPID', ''),
+                ('GUIDER', ''),
+                ('OBJECT', ''),
+                ]
+    hdrkeys = [('AVSKY', nan),
+               ('ARAWGAIN', nan),
+               ('FWHM', nan),
+               #('ZNAXIS1',0),
+               #('ZNAXIS2',0),
+               ('CRPIX1',nan),
+               ('CRPIX2',nan),
+               ('CRVAL1',nan),
+               ('CRVAL2',nan),
+               ('CD1_1',nan),
+               ('CD1_2',nan),
+               ('CD2_1',nan),
+               ('CD2_2',nan),
+               ('EXTNAME',''),
+               ('CCDNUM',''),
+               ]
+
+    otherkeys = [('CPIMAGE',''), ('CPIMAGE_HDU',0), ('CALNAME',''), #('CPDATE',0),
+                 ('HEIGHT',0),('WIDTH',0),
+                 ]
+
+    allkeys = primkeys + hdrkeys + otherkeys
+
+    vals = dict([(k,[]) for k,d in allkeys])
+
+    for i,fn in enumerate(filenames):
+        print 'Reading', (i+1), 'of', len(filenames), ':', fn
+        F = fitsio.FITS(fn)
+        #print F
+        #print len(F)
+        primhdr = F[0].read_header()
+        #print primhdr
+
+        expstr = '%08i' % primhdr.get('EXPNUM')
+
+        # # Parse date with format: 2014-08-09T04:20:50.812543
+        # date = datetime.datetime.strptime(primhdr.get('DATE-OBS'),
+        #                                   '%Y-%m-%dT%H:%M:%S.%f')
+        # # Subract 12 hours to get the date used by the CP to label the night;
+        # # CP20140818 includes observations with date 2014-08-18 evening and
+        # # 2014-08-19 early AM.
+        # cpdate = date - datetime.timedelta(0.5)
+        # #cpdatestr = '%04i%02i%02i' % (cpdate.year, cpdate.month, cpdate.day)
+        # #print 'Date', date, '-> CP', cpdatestr
+        # cpdateval = cpdate.year * 10000 + cpdate.month * 100 + cpdate.day
+        # print 'Date', date, '-> CP', cpdateval
+
+        cpfn = fn
+        if trim is not None:
+            cpfn = cpfn.replace(trim, '')
+        print 'CP fn', cpfn
+
+        if hdus is not None:
+            hdulist = hdus
+        else:
+            hdulist = range(1, len(F))
+
+        for hdu in hdulist:
+            hdr = F[hdu].read_header()
+
+            info = F[hdu].get_info()
+            #'extname': 'S1', 'dims': [4146L, 2160L]
+            H,W = info['dims']
+
+            for k,d in primkeys:
+                vals[k].append(primhdr.get(k, d))
+            for k,d in hdrkeys:
+                vals[k].append(hdr.get(k, d))
+
+            vals['CPIMAGE'].append(cpfn)
+            vals['CPIMAGE_HDU'].append(hdu)
+            vals['WIDTH'].append(int(W))
+            vals['HEIGHT'].append(int(H))
+            #vals['CPDATE'].append(cpdateval)
+
+            calname = '%s/%s/decam-%s-%s' % (expstr[:5], expstr, expstr, hdr.get('EXTNAME'))
+            vals['CALNAME'].append(calname)
+
+    T = fits_table()
+    for k,d in allkeys:
+        T.set(k.lower().replace('-','_'), np.array(vals[k]))
+    #T.about()
+
+    T.filter = np.array([s.split()[0] for s in T.filter])
+    T.ra_bore  = np.array([hmsstring2ra (s) for s in T.ra ])
+    T.dec_bore = np.array([dmsstring2dec(s) for s in T.dec])
+
+    T.ra  = np.zeros(len(T))
+    T.dec = np.zeros(len(T))
+    for i in range(len(T)):
+        W,H = T.width[i], T.height[i]
+
+        wcs = Tan(T.crval1[i], T.crval2[i], T.crpix1[i], T.crpix2[i],
+                  T.cd1_1[i], T.cd1_2[i], T.cd2_1[i], T.cd2_2[i], float(W), float(H))
+        
+        xc,yc = W/2.+0.5, H/2.+0.5
+        rc,dc = wcs.pixelxy2radec(xc,yc)
+        T.ra [i] = rc
+        T.dec[i] = dc
+
+    return T
+
 class DecamImage(object):
     def __init__(self, t):
         imgfn, hdu, band, expnum, extname, calname, exptime = (
             t.cpimage.strip(), t.cpimage_hdu, t.filter.strip(), t.expnum,
             t.extname.strip(), t.calname.strip(), t.exptime)
 
-        self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
+        if os.path.exists(imgfn):
+            self.imgfn = imgfn
+        else:
+            self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
         self.band  = band
         self.exptime = exptime
-        self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
-        self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
+
+        # EDR filenames: .imag.fits, .ivar.fits, .mask.fits.gz
+        if '.imag.fits' in self.imgfn:
+            self.dqfn = self.imgfn.replace('.imag.fits', '.mask.fits.gz')
+            self.wtfn = self.imgfn.replace('.imag.fits', '.ivar.fits')
+        else:
+            self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
+            self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
+
+        for attr in ['imgfn', 'dqfn', 'wtfn']:
+            fn = getattr(self, attr)
+            print attr, '->', fn
+            if os.path.exists(fn):
+                print 'Exists.'
+                continue
+            if fn.endswith('.fz'):
+                fun = fn[:-3]
+                if os.path.exists(fun):
+                    print 'Using      ', fun
+                    print 'rather than', fn
+                    setattr(self, attr, fun)
+            fn = getattr(self, attr)
+            print attr, fn
+            print '  exists? ', os.path.exists(fn)
 
         ibase = os.path.basename(imgfn)
         ibase = ibase.replace('.fits.fz', '')
+        ibase = ibase.replace('.fits', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
         #self.name = dirname + '/' + base + ' + %02i' % hdu
         #print 'dir,base', idirname, ibase
@@ -492,6 +1260,8 @@ class DecamImage(object):
         tim.x0,tim.y0 = int(x0),int(y0)
         tim.psfex = psfex
         tim.imobj = self
+        tim.primhdr = primhdr
+        tim.hdr = imghdr
         mn,mx = tim.zr
         subh,subw = tim.shape
         tim.subwcs = tim.sip_wcs.get_subimage(tim.x0, tim.y0, subw, subh)
@@ -698,7 +1468,28 @@ class DecamImage(object):
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
-    
+
+            if not os.path.exists(self.wcsfn):
+                # Run a second phase...
+                an_config_2 = os.path.join(decals_dir, 'calib', 'an-config', 'cfg2')
+                cmd = ' '.join([
+                    'solve-field --config', an_config_2, '-D . --temp-dir', tempdir,
+                    '--ra %f --dec %f' % (ra,dec), '--radius 1',
+                    '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
+                    '--continue --no-plots --uniformize 0',
+                    '--no-fits2fits',
+                    '-X x_image -Y y_image -s flux_auto --extension 2',
+                    '--width %i --height %i' % (W,H),
+                    '--crpix-center',
+                    '-N none -U none -S none -M none',
+                    '--rdls none --corr none',
+                    '--wcs', self.wcsfn, 
+                    '--temp-axy', '--tag-all', self.sefn])
+                    #--no-remove-lines 
+                print cmd
+                if os.system(cmd):
+                    raise RuntimeError('Command failed: ' + cmd)
+
         if run_psfex:
             cmd = ('psfex -c %s -PSF_DIR %s %s' %
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
@@ -778,4 +1569,9 @@ def run_calibs(X):
     print 'kwargs', kwargs
     return im.run_calibs(*args, **kwargs)
 
+
+def read_one_tim((im, decals, targetrd, mock_psf)):
+    print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
+    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
+    return tim
 

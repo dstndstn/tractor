@@ -792,9 +792,10 @@ class MultiParams(BaseParams, NamedParams):
         super(MultiParams,self).__init__()
 
     def copy(self):
-        #print "copy:",self
-        return self.__class__(*[s.copy() for s in self.subs])
-
+        x = self.__class__(*[s.copy() for s in self.subs])
+        x.liquid = [l for l in self.liquid]
+        return x
+    
     # delegate list operations to self.subs.
     def append(self, x):
         self.subs.append(x)

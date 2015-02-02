@@ -25,29 +25,25 @@ from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
-from astrometry.sdss.fields import read_photoobjs_in_wcs, radec_to_sdss_rcf
-from astrometry.sdss import DR9, band_index, AsTransWrapper
 from astrometry.util.run_command import *
+from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor import *
 from tractor.galaxy import *
 from tractor.source_extractor import *
-from tractor.sdss import get_tractor_sources_dr9
 
 from common import *
 
 ## GLOBALS!  Oh my!
 mp = None
 nocache = True
-photoobjdir = 'photoObjs-new'
+#photoobjdir = 'photoObjs-new'
 useCeres = True
 
 def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
-
     from tractor.ceres import ceres_opt
-    
 
 def create_tractor(tims, srcs):
     t = Tractor(tims, src)
@@ -73,6 +69,8 @@ class iterwrapper(object):
     def next(self):
         try:
             return self.y.next()
+        except StopIteration:
+            raise
         except:
             import traceback
             print str(self), 'next()'
@@ -108,122 +106,32 @@ def set_globals():
                         hspace=0.2, wspace=0.05)
     imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
-def treat_as_pointsource(T, bandnum, setObjcType=True):
-    b = bandnum
-    gal = (T.objc_type == 3)
-    dev = gal * (T.fracdev[:,b] >= 0.5)
-    exp = gal * (T.fracdev[:,b] <  0.5)
-    stars = (T.objc_type == 6)
-    print sum(dev), 'deV,', sum(exp), 'exp, and', sum(stars), 'stars'
-    print 'Total', len(T), 'sources'
-
-    thetasn = np.zeros(len(T))
-    T.theta_deverr[dev,b] = np.maximum(1e-6, T.theta_deverr[dev,b])
-    T.theta_experr[exp,b] = np.maximum(1e-5, T.theta_experr[exp,b])
-    # theta_experr nonzero: 1.28507e-05
-    # theta_deverr nonzero: 1.92913e-06
-    thetasn[dev] = T.theta_dev[dev,b] / T.theta_deverr[dev,b]
-    thetasn[exp] = T.theta_exp[exp,b] / T.theta_experr[exp,b]
-
-    # aberrzero = np.zeros(len(T), bool)
-    # aberrzero[dev] = (T.ab_deverr[dev,b] == 0.)
-    # aberrzero[exp] = (T.ab_experr[exp,b] == 0.)
-
-    maxtheta = np.zeros(len(T), bool)
-    maxtheta[dev] = (T.theta_dev[dev,b] >= 29.5)
-    maxtheta[exp] = (T.theta_exp[exp,b] >= 59.0)
-
-    # theta S/N > modelflux for dev, 10*modelflux for exp
-    bigthetasn = (thetasn > (T.modelflux[:,b] * (1.*dev + 10.*exp)))
-
-    print sum(gal * (thetasn < 3.)), 'have low S/N in theta'
-    print sum(gal * (T.modelflux[:,b] > 1e4)), 'have big flux'
-    #print sum(aberrzero), 'have zero a/b error'
-    print sum(maxtheta), 'have the maximum theta'
-    print sum(bigthetasn), 'have large theta S/N vs modelflux'
-    
-    badgals = gal * reduce(np.logical_or,
-                           [thetasn < 3.,
-                            T.modelflux[:,b] > 1e4,
-                            #aberrzero,
-                            maxtheta,
-                            bigthetasn,
-                            ])
-    print 'Found', sum(badgals), 'bad galaxies'
-    if setObjcType:
-        T.objc_type[badgals] = 6
-    return badgals
-
-def get_sdss_sources(bands, targetwcs, local=True):
-    # FIXME?
-    margin = 0.
-
-    sdss = DR9(basedir=photoobjdir)
-    if local:
-        sdss.useLocalTree()
-
-    cols = ['objid', 'ra', 'dec', 'fracdev', 'objc_type',
-            'theta_dev', 'theta_deverr', 'ab_dev', 'ab_deverr', 'phi_dev_deg',
-            'theta_exp', 'theta_experr', 'ab_exp', 'ab_experr', 'phi_exp_deg',
-            'resolve_status', 'nchild', 'flags', 'objc_flags',
-            'run','camcol','field','id',
-            'psfflux', 'psfflux_ivar',
-            'cmodelflux', 'cmodelflux_ivar',
-            'modelflux', 'modelflux_ivar',
-            'devflux', 'expflux', 'extinction']
-
-    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
-    print 'Got', len(objs), 'photoObjs'
-
-    # It can be string-valued
-    objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
-
-    # Treat as pointsource...
-    sband = 'r'
-    bandnum = 'ugriz'.index(sband)
-    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
-
-    srcs = get_tractor_sources_dr9(
-        None, None, None, objs=objs, sdss=sdss,
-        bands=bands,
-        nanomaggies=True, fixedComposites=True,
-        useObjcType=True,
-        ellipse=EllipseESoft.fromRAbPhi)
-    print 'Got', len(srcs), 'Tractor sources'
-
-    cat = Catalog(*srcs)
-    return cat, objs
-
-def tim_get_resamp(tim, targetwcs):
-    if hasattr(tim, 'resamp'):
-        return tim.resamp
-    try:
-        Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, tim.subwcs, [], 2)
-    except OverlapError:
-        print 'No overlap'
-        return None
-    if len(Yo) == 0:
-        return None
-    resamp = [x.astype(np.int16) for x in (Yo,Xo,Yi,Xi)]
-    return resamp
-
 def _bounce_tim_get_resamp((tim, targetwcs)):
     return tim_get_resamp(tim, targetwcs)
 
 def tims_compute_resamp(tims, targetwcs):
-    #for tim in tims:
-    #    r = tim_get_resamp(tim, targetwcs)
-    #    tim.resamp = r
     R = _map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
     for tim,r in zip(tims, R):
         tim.resamp = r
 
-def compute_coadds(tims, bands, W, H, targetwcs):
+def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
     coimgs = []
     cons = []
+    if get_n2:
+        cons2 = []
+    if get_cow:
+        # moo
+        cowimgs = []
+        wimgs = []
+    
     for ib,band in enumerate(bands):
         coimg = np.zeros((H,W), np.float32)
+        coimg2 = np.zeros((H,W), np.float32)
         con   = np.zeros((H,W), np.uint8)
+        con2  = np.zeros((H,W), np.uint8)
+        if get_cow:
+            cowimg = np.zeros((H,W), np.float32)
+            wimg  = np.zeros((H,W), np.float32)
         for tim in tims:
             if tim.band != band:
                 continue
@@ -232,20 +140,36 @@ def compute_coadds(tims, bands, W, H, targetwcs):
                 continue
             (Yo,Xo,Yi,Xi) = R
             nn = (tim.getInvError()[Yi,Xi] > 0)
-            coimg[Yo,Xo] += tim.getImage ()[Yi,Xi] * nn
-            con  [Yo,Xo] += nn
+            coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+            con   [Yo,Xo] += nn
+            if get_cow:
+                cowimg[Yo,Xo] += tim.getInvvar()[Yi,Xi] * tim.getImage()[Yi,Xi]
+                wimg  [Yo,Xo] += tim.getInvvar()[Yi,Xi]
+            coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
+            con2  [Yo,Xo] += 1
         coimg /= np.maximum(con,1)
+        coimg[con == 0] = coimg2[con == 0] / np.maximum(1, con2[con == 0])
+        if get_cow:
+            cowimg /= np.maximum(wimg, 1e-16)
+            cowimg[wimg == 0] = coimg[wimg == 0]
+            cowimgs.append(cowimg)
+            wimgs.append(wimg)
         coimgs.append(coimg)
-        cons  .append(con)
-    return coimgs,cons
+        cons.append(con)
+        if get_n2:
+            cons2.append(con2)
 
-def _read_tim((im, decals, targetrd, mock_psf)):
-    print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
-    return tim
+    rtn = [coimgs,cons]
+    if get_cow:
+        rtn.extend([cowimgs, wimgs])
+    if get_n2:
+        rtn.append(cons2)
+    return rtn
 
-def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
+def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
+               plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
+               bands='grz',
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -263,26 +187,22 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSRE', value='pre-EDR2',
+                        comment='DECaLS release name'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
                         comment='%s run time' % program_name))
+    hdr.add_record(dict(name='SURVEY', value='DECaLS',
+                        comment='DECam Legacy Survey'))
     version_header = hdr
 
-    B = decals.get_bricks()
-
-    print 'Bricks:'
-    B.about()
-    print 'Brickid:', brickid
-    print 'Brickids:', B.brickid
-    ii = np.flatnonzero(B.brickid == brickid)
-    print len(ii), 'brick ids match'
-    ii = ii[0]
-    brick = B[ii]
+    if brickid is not None:
+        brick = decals.get_brick(brickid)
+    else:
+        brick = decals.get_brick_by_name(brickname)
     print 'Chosen brick:'
     brick.about()
-
-    bands = ['g','r','z']
-    catband = 'r'
-
+    brickid = brick.brickid
+    brickname = brick.brickname
     targetwcs = wcs_for_brick(brick, W=W, H=H)
 
     if target_extent is not None:
@@ -297,25 +217,17 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
 
-    T = decals.get_ccds()
-    I = ccds_touching_wcs(targetwcs, T)
-    print len(I), 'CCDs nearby'
-    if len(I) == 0:
-        return None
-    T.cut(I)
-
+    T = decals.ccds_touching_wcs(targetwcs)
+    # Sort by band
+    II = []
+    T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
     ims = []
-    for band in bands:
-        TT = T[T.filter == band]
-        print len(TT), 'in', band, 'band'
-        for t in TT:
-            print
-            print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
-            ims.append(im)
+    for t in T:
+        print
+        print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
+        im = DecamImage(t)
+        ims.append(im)
 
-    # Check that the CCDs_touching cuts are correct.
-    #check_touching(decals, targetwcs, bands, brick, pixscale, ps)
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
 
@@ -323,7 +235,9 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     for im in ims:
         decals.get_zeropoint_for(im)
 
-    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf) for im in ims]
+    # Run calibrations
+    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf)
+            for im in ims]
     _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
     tlast = Time()
@@ -331,8 +245,18 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
     # Read images, clip to ROI
     ttim = Time()
     args = [(im, decals, targetrd, mock_psf) for im in ims]
-    tims = _map(_read_tim, args)
+    tims = _map(read_one_tim, args)
+
+    # Cut the table of CCDs to match the 'tims' list
+    print 'Tims:', tims
+    print 'T:', len(T)
+    T.about()
+    I = np.flatnonzero(np.array([tim is not None for tim in tims]))
+    print 'I:', I
+    T.cut(I)
+    ccds = T
     tims = [tim for tim in tims if tim is not None]
+    assert(len(T) == len(tims))
 
     print 'Read images:', Time()-tlast
     tlast = Time()
@@ -348,7 +272,8 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         tlast = Time()
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid', 'target_extent']
+            'bands', 'tims', 'ps', 'brickid', 'brickname',
+            'target_extent', 'ccds']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
     rtn = dict()
@@ -356,166 +281,47 @@ def stage_tims(W=3600, H=3600, brickid=None, ps=None, plots=False,
         rtn[k] = locals()[k]
     return rtn
 
-
-def _detmap((tim, targetwcs, H, W)):
-    R = tim_get_resamp(tim, targetwcs)
-    if R is None:
-        return None,None,None,None
-    ie = tim.getInvvar()
-    psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-    detim = tim.getImage().copy()
-    detim[ie == 0] = 0.
-    detim = gaussian_filter(detim, tim.psf_sigma) / psfnorm**2
-    detsig1 = tim.sig1 / psfnorm
-    subh,subw = tim.shape
-    detiv = np.zeros((subh,subw), np.float32) + (1. / detsig1**2)
-    detiv[ie == 0] = 0.
-    (Yo,Xo,Yi,Xi) = R
-    return Yo, Xo, detim[Yi,Xi], detiv[Yi,Xi]
-
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
-               W=None,H=None, brickid=None,
+               W=None,H=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False,
                **kwargs):
 
-    print 'Rendering detection maps...'
     tlast = Time()
-    # Render the detection maps
-    detmaps = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    detivs  = dict([(b, np.zeros((H,W), np.float32)) for b in bands])
-    for tim, (Yo,Xo,incmap,inciv) in zip(
-        tims, _map(_detmap, [(tim, targetwcs, H, W) for tim in tims])):
-        if Yo is None:
-            continue
-        detmaps[tim.band][Yo,Xo] += incmap*inciv
-        detivs [tim.band][Yo,Xo] += inciv
-    print 'Detmaps:', Time()-tlast
-    tlast = Time()
-
-    # -find significant peaks in the per-band detection maps and SED-matched (hot)
-    # -segment into blobs
-    # -blank out blobs containing a catalog source
-    # -create sources for any remaining peaks
-
-    hot = np.zeros((H,W), np.float32)
-
-    # Single-band SED
-    for band in bands:
-        detmap = detmaps[band] / np.maximum(1e-16, detivs[band])
-        detsn = detmap * np.sqrt(detivs[band])
-        hot = np.maximum(hot, detsn)
-        detmaps[band] = detmap
-
-        if plots:
-            plt.clf()
-            dimshow(np.round(detsn), vmin=0, vmax=10, cmap='hot')
-            plt.title('Single-band detection filter S/N: %s' % band)
-            plt.colorbar()
-            ps.savefig()
-
-
-    for sedname,sed in [('Flat', (1.,1.,1.)), ('Red', (2.5, 1.0, 0.4))]:
-        sedmap = np.zeros((H,W), np.float32)
-        sediv  = np.zeros((H,W), np.float32)
-        for iband,band in enumerate(bands):
-            # We convert the detmap to canonical band via
-            #   detmap * w
-            # And the corresponding change to sig1 is
-            #   sig1 * w
-            # So the invvar-weighted sum is
-            #    (detmap * w) / (sig1**2 * w**2)
-            #  = detmap / (sig1**2 * w)
-            sedmap += detmaps[band] * detivs[band] / sed[iband]
-            sediv  += detivs [band] / sed[iband]**2
-        sedmap /= np.maximum(1e-16, sediv)
-        sedsn   = sedmap * np.sqrt(sediv)
-        hot = np.maximum(hot, sedsn)
-
-        if plots:
-            plt.clf()
-            dimshow(np.round(sedsn), vmin=0, vmax=10, cmap='hot')
-            plt.title('SED-matched detection filter S/N: %s' % sedname)
-            plt.colorbar()
-            ps.savefig()
-
-    del sedmap
-    del sediv
-    del sedsn
-    if pipe:
-        del detmaps
-        del detivs
-
     # Read SDSS sources
-    #check_photometric_calib(ims, cat, ps)
     cat,T = get_sdss_sources(bands, targetwcs)
-    # record coordinates in target brick image
-    ok,T.tx,T.ty = targetwcs.radec2pixelxy(T.ra, T.dec)
-    T.tx -= 1
-    T.ty -= 1
-    T.itx = np.clip(np.round(T.tx).astype(int), 0, W-1)
-    T.ity = np.clip(np.round(T.ty).astype(int), 0, H-1)
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
-    peaks = (hot > 4)
+    print 'Rendering detection maps...'
+    tlast = Time()
+    detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
+    print 'Detmaps:', Time()-tlast
+    tlast = Time()
 
-    if plots:
-        crossa = dict(ms=10, mew=1.5)
-        plt.clf()
-        dimshow(peaks)
-        ax = plt.axis()
-        plt.plot(T.itx, T.ity, 'r+', **crossa)
-        plt.axis(ax)
-        plt.title('Detection blobs + SDSS sources')
-        ps.savefig()
-
-    blobs,nblobs = label(peaks)
-    print 'N detected blobs:', nblobs
-    blobslices = find_objects(blobs)
-    # Un-set catalog blobs
-    for x,y in zip(T.itx, T.ity):
-        # blob number
-        bb = blobs[y,x]
-        if bb == 0:
-            continue
-        # un-set 'peaks' within this blob
-        slc = blobslices[bb-1]
-        peaks[slc][blobs[slc] == bb] = 0
-
-    if plots:
-        plt.clf()
-        dimshow(peaks)
-        ax = plt.axis()
-        plt.plot(T.itx, T.ity, 'r+', **crossa)
-        plt.axis(ax)
-        plt.title('Detection blobs minus catalog sources')
-        ps.savefig()
-
-    # Now, after having removed catalog sources, crank up the detection threshold
-    peaks &= (hot > 5)
-        
-    # zero out the edges(?)
-    peaks[0 ,:] = 0
-    peaks[:, 0] = 0
-    peaks[-1,:] = 0
-    peaks[:,-1] = 0
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[0:-2,1:-1])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[2:  ,1:-1])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[1:-1,0:-2])
-    peaks[1:-1, 1:-1] &= (hot[1:-1,1:-1] >= hot[1:-1,2:  ])
-
-    # These are our peaks
-    pki = np.flatnonzero(peaks)
-    peaky,peakx = np.unravel_index(pki, peaks.shape)
-    print len(peaky), 'new peaks'
+    # SED-matched detections
+    SEDs = sed_matched_filters(bands)
+    Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
+                                              (T.itx,T.ity), targetwcs, plots=plots,
+                                              ps=ps)
+    Nsdss = len(T)
+    T = merge_tables([T,Tnew], columns='fillzero')
+    cat.extend(newcat)
+    # new peaks
+    peakx = T.tx[Nsdss:]
+    peaky = T.ty[Nsdss:]
+    
+    if pipe:
+        del detmaps
+        del detivs
 
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
     if plots:
+        crossa = dict(ms=10, mew=1.5)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
         ax = plt.axis()
@@ -524,86 +330,19 @@ def stage_srcs(coimgs=None, cons=None,
         plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
-    
-    # Add sources for the new peaks we found
-    # make their initial fluxes ~ 5-sigma
-    fluxes = dict([(b,[]) for b in bands])
-    for tim in tims:
-        psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-        fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
-    fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
-    pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
-    print 'Adding', len(pr), 'new sources'
-    # Also create FITS table for new sources
-    Tnew = fits_table()
-    Tnew.ra  = pr
-    Tnew.dec = pd
-    Tnew.tx = peakx
-    Tnew.ty = peaky
-    Tnew.itx = np.clip(np.round(Tnew.tx).astype(int), 0, W-1)
-    Tnew.ity = np.clip(np.round(Tnew.ty).astype(int), 0, H-1)
-    for i,(r,d,x,y) in enumerate(zip(pr,pd,peakx,peaky)):
-        cat.append(PointSource(RaDecPos(r,d),
-                               NanoMaggies(order=bands, **fluxes)))
-    # print 'Existing source table:'
-    # T.about()
-    # print 'New source table:'
-    # Tnew.about()
-
-    T = merge_tables([T, Tnew], columns='fillzero')
 
 
+    hot = (hot > 5)
+    hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
-    # Grow the 'hot' pixels by dilating by a few pixels
-    rr = 2.0
-    RR = int(np.ceil(rr))
-    S = 2*RR+1
-    struc = (((np.arange(S)-RR)**2)[:,np.newaxis] +
-             ((np.arange(S)-RR)**2)[np.newaxis,:]) <= rr**2
-    hot2 = (hot > 5)
-    hot2 = binary_dilation(hot2, structure=struc)
-
-    blobs,nblobs = label(hot2)
-    print 'N detected blobs:', nblobs
-    blobslices = find_objects(blobs)
-    T.blob = blobs[T.ity, T.itx]
-    if pipe:
-        # this is a crazy max-over-SEDs S/N map... but we only need it for ranking
-        fluximg = hot
-    else:
-        fluximg = coimgs[1]
-    blobsrcs = []
-    blobflux = []
-    keepblobs = []
-    keepslices = []
-    for blob in range(1, nblobs+1):
-        Isrcs = np.flatnonzero(T.blob == blob)
-        if len(Isrcs) == 0:
-            continue
-        blobsrcs.append(Isrcs)
-        bslc = blobslices[blob-1]
-        blobflux.append(np.sum(fluximg[bslc][blobs[bslc] == blob]))
-        keepblobs.append(blob)
-        keepslices.append(bslc)
-
-    # bloblist = [1, 7, 8, 13, ...] -- blob NUMBERs (not indices)
-    #  that actually contain sources
-    blobslices = keepslices
-    bloblist = keepblobs
-    nblobs = len(bloblist)
-    assert(nblobs == len(blobsrcs))
-    assert(nblobs == len(blobflux))
-    assert(nblobs == len(blobslices))
-    print 'Keeping', nblobs, 'blobs, with', len(T), 'sources'
-    print 'Blobs:', Time()-tlast
-    tlast = Time()
+    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T)
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
     
     keys = ['T', 
-            'bloblist','blobsrcs','blobflux','blobslices', 'blobs',
+            'blobsrcs', 'blobslices', 'blobs',
             'tractor', 'cat', 'ps']
     if not pipe:
         keys.extend(['detmaps', 'detivs'])
@@ -649,11 +388,10 @@ def set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma, minradius=3):
         src.fixedRadius = max(minradius, 1 + ii[-1])
         #print 'Nsigma', nsigmas, 'radius', src.fixedRadius
 
-def stage_fitblobs(T=None, coimgs=None, cons=None,
-                   detmaps=None, detivs=None,
-                   bloblist=None, blobsrcs=None, blobflux=None,
-                   blobslices=None, blobs=None,
-                   tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
+def stage_fitblobs(T=None, 
+                   blobsrcs=None, blobslices=None, blobs=None,
+                   tractor=None, cat=None, targetrd=None, pixscale=None,
+                   targetwcs=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
@@ -675,67 +413,100 @@ def stage_fitblobs(T=None, coimgs=None, cons=None,
 
     set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
 
-    ### FIXME
-    ## # Find sources that do not belong to a blob and add them as
-    ## # singleton "blobs"; otherwise they don't get optimized.
-    ## # for sources outside the image bounds, what should we do?
-
-    # Fit blobs in order of flux
     tfitall = Time()
-    iter = _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs, targetwcs, tims,
+    iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
                       orig_wcsxy0, cat, bands)
     # to allow debugpool to only queue tasks one at a time
-    iter = iterwrapper(iter, len(bloblist))
+    iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
-
-    srcivs = [[] for src in cat]
-    for Isrcs,fitsrcs,srcinvvars in R:
-        for isrc,fitsrc,srciv in zip(Isrcs, fitsrcs, srcvars):
-            src = cat[isrc]
-            if isinstance(src, (DevGalaxy, ExpGalaxy)):
-                src.shape = fitsrc.shape
-            elif isinstance(src, FixedCompositeGalaxy):
-                src.shapeExp = fitsrc.shapeExp
-                src.shapeDev = fitsrc.shapeDev
-            src.setParams(fitsrc.getParams())
-            srcivs[isrc].extend(srciv)
-
-    cat.thawAllRecursive()
-    for i,src in enumerate(cat):
-        print 'Source', i, src
-        print 'variances:', srcivs[i]
-        print len(srcivs[i]), 'vs', src.numberOfParams()
-        if len(srcivs[i]) != src.numberOfParams():
-            # This can happen for sources outside the brick bounds: they never get optimized?
-            print 'Warning: zeroing variances for source', src
-            srcivs[i] = [0]*src.numberOfParams()
-            if isinstance(src, (DevGalaxy, ExpGalaxy)):
-                src.shape = EllipseE.fromEllipseESoft(src.shape)
-            elif isinstance(src, FixedCompositeGalaxy):
-                src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
-                src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
-        assert(len(srcivs[i]) == src.numberOfParams())
-    invvars = np.hstack(srcivs)
-    assert(len(invvars) == cat.numberOfParams())
-
     print 'Fitting sources took:', Time()-tfitall
-    print 'Logprob:', tractor.getLogProb()
+
+    return dict(fitblobs_R=R, tims=tims, ps=ps)
     
-    rtn = dict()
-    for k in ['tractor', 'tims', 'ps', 'invvars']:
+def stage_fitblobs_finish(
+        T=None, blobsrcs=None, blobslices=None, blobs=None,
+        tractor=None, cat=None, targetrd=None, pixscale=None,
+        targetwcs=None,
+        W=None,H=None, brickid=None,
+        bands=None, ps=None, tims=None,
+        plots=False, plots2=False,
+        fitblobs_R=None,
+        **kwargs):
+
+    print 'Logprob:', tractor.getLogProb()
+
+    # one_blob can reduce the number and change the types of sources!
+    # Reorder the sources here...
+    R = fitblobs_R
+
+    # print 'R:'
+    # for rr in R:
+    #     print
+    #     for r in rr:
+    #         print r
+    #     print
+
+    # Drop now-empty blobs.
+    R = [r for r in R if len(r[0])]
+    
+    II       = np.hstack([r[0] for r in R])
+    srcivs   = np.hstack([np.hstack(r[2]) for r in R])
+    fracflux = np.vstack([r[3] for r in R])
+    rchi2    = np.vstack([r[4] for r in R])
+    dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
+    
+    newcat = []
+    for r in R:
+        newcat.extend(r[1])
+    T.cut(II)
+
+    del R
+    del fitblobs_R
+    
+    assert(len(T) == len(newcat))
+    print 'Old catalog:', len(cat)
+    print 'New catalog:', len(newcat)
+    cat = Catalog(*newcat)
+    tractor.catalog = cat
+    assert(cat.numberOfParams() == len(srcivs))
+    ns,nb = fracflux.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
+    ns,nb = rchi2.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
+    ns,nb = dchisqs.shape
+    assert(ns == len(cat))
+    assert(nb == 5) # none, ptsrc, dev, exp, comp
+
+    T.fracflux = fracflux
+    T.rchi2 = rchi2
+    T.dchisq = dchisqs.astype(np.float32)
+    
+    invvars = srcivs
+
+    print 'New catalog:'
+    for src in cat:
+        print '  ', src
+    
+    print 'Logprob:', tractor.getLogProb()
+    print 'lnprior:', tractor.getLogPrior()
+    print 'lnl:', tractor.getLogLikelihood()
+
+    print 'image priors', tractor.images.getLogPrior()
+    print 'catalog priors', tractor.catalog.getLogPrior()
+    for src in cat:
+        print '  prior', src.getLogPrior(), src
+    
+    rtn = dict(fitblobs_R = None)
+    for k in ['tractor', 'cat', 'invvars', 'T']:
         rtn[k] = locals()[k]
     return rtn
                           
-def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
+def _blob_iter(blobslices, blobsrcs, blobs,
                targetwcs, tims, orig_wcsxy0, cat, bands):
-    for blobnumber,iblob in enumerate(np.argsort(-np.array(blobflux))):
-
-        bslc  = blobslices[iblob]
-        Isrcs = blobsrcs  [iblob]
-        if len(Isrcs) == 0:
-            # This shouldn't happen any more... and may break iterwrapper dealie
-            print 'Blob has no sources!'
-            continue
+    for iblob, (bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
+        assert(len(Isrcs) > 0)
 
         tblob = Time()
         # blob bbox in target coords
@@ -745,7 +516,7 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
         blobh,blobw = by1 - by0, bx1 - bx0
 
         print
-        print 'Blob', blobnumber, 'of', len(blobflux), ':',
+        print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh
         print
 
@@ -774,7 +545,10 @@ def _blob_iter(bloblist, blobflux, blobslices, blobsrcs, blobs,
                                tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
 
-        blobmask = (blobs[bslc] == bloblist[iblob])
+
+
+        # Here we assume the "blobs" array has been remapped...
+        blobmask = (blobs[bslc] == iblob)
         #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
@@ -846,7 +620,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             Xi = Xi[I] - sx0
             subtim.resamp = (Yo, Xo, Yi, Xi)
 
-            
     subcat = Catalog(*srcs)
     subtr = Tractor(subtims, subcat)
     subtr.freezeParam('images')
@@ -1120,6 +893,197 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     print 'Blob finished fitting:', Time()-tlast
     tlast = Time()
 
+
+    # Next, model selections: point source vs dev/exp vs composite.
+
+    # FIXME -- render initial models and find significant flux overlap
+    # (product)??  (Could use the same logic above!)  This would give
+    # families of sources to fit simultaneously.  (The
+    # not-friends-of-friends version of blobs!)
+
+    src_lnps = []
+    
+    # For sources, in decreasing order of brightness
+    for numi,i in enumerate(Ibright):
+        src = subcat[i]
+        print
+        print 'Model selection for source', src
+
+        # FIXME -- do we need to do the whole "compute & subtract
+        # initial models" thing here?  Probably...
+
+        lnp0 = subtr.getLogProb()
+        print 'lnp0:', lnp0
+
+        subcat[i] = None
+        #print 'Catalog:', [s for s in subcat]
+        lnp_null = subtr.getLogProb()
+        print 'Removing the source: dlnp', lnp_null - lnp0
+
+        lnps = dict(ptsrc=None, dev=None, exp=None, comp=None,
+                    none=lnp_null)
+
+        if isinstance(src, PointSource):
+            # logr, ee1, ee2
+            shape = EllipseESoft(-1., 0., 0.)
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            comp = None
+            ptsrc = src.copy()
+            lnps.update(ptsrc=lnp0)
+            trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
+            oldmodel = 'ptsrc'
+            
+        elif isinstance(src, DevGalaxy):
+            dev = src.copy()
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
+            comp = None
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(dev=lnp0)
+            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            oldmodel = 'dev'
+
+        elif isinstance(src, ExpGalaxy):
+            exp = src.copy()
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
+            comp = None
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(exp=lnp0)
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+            oldmodel = 'exp'
+            
+        elif isinstance(src, FixedCompositeGalaxy):
+            frac = src.fracDev.getValue()
+            if frac > 0:
+                shape = src.shapeDev
+            else:
+                shape = src.shapeExp
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            if frac < 1:
+                shape = src.shapeExp
+            else:
+                shape = src.shapeDev
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
+            comp = src.copy()
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            lnps.update(comp=lnp0)
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            oldmodel = 'comp'
+
+        for name,newsrc in trymodels:
+            print 'Trying model:', name
+            if name == 'comp' and newsrc is None:
+                newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
+                                                     0.5, exp.getShape(), dev.getShape()).copy()
+            print 'New source:', newsrc
+            subcat[i] = newsrc
+            lnp = subtr.getLogProb()
+            print 'Initial log-prob:', lnp
+            print 'vs original src:', lnp - lnp0
+
+            subcat.freezeAllBut(i)
+
+            max_cpu_per_source = 60.
+
+            cpu0 = time.clock()
+            p0 = newsrc.getParams()
+            for step in range(50):
+                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print '  dlnp:', dlnp, 'new src', newsrc
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
+                if dlnp < 0.1:
+                    break
+
+            print 'New source (after optimization):', newsrc
+            lnp = subtr.getLogProb()
+            print 'Optimized log-prob:', lnp
+            print 'vs original src:', lnp - lnp0
+
+            # Try Ceres...
+            # newsrc.setParams(p0)
+            # print 'Ceres opt...'
+            # R = subtr._ceres_opt(max_iterations=50)
+            # print 'Result:', R
+            # print 'New source (after optimization):', newsrc
+            # lnp = subtr.getLogProb()
+            # print 'Optimized log-prob:', lnp
+            # print 'vs original src:', lnp - lnp0
+            
+            lnps[name] = lnp
+
+        print 'Log-probs:', lnps
+
+        #src_lnps.append(lnps)
+        
+        nbands = len(bands)
+        nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
+                       dev=5 + nbands, comp=9 + nbands)
+
+        plnps = dict([(k, (lnps[k]-lnp0) - 0.5 * nparams[k])
+                      for k in nparams.keys()])
+
+        #print 'Relative penalized log-probs:'
+        #for k in keys:
+        #    print '  ', k, ':', plnps[k]
+
+        keepmod = 'none'
+        keepsrc = None
+
+        # Model-switching recipe: move up the ladder
+        
+        dlnp = 0.5 * 5.**2
+        print 'Needed delta-logprob for upgrade:', dlnp
+        diff = plnps['ptsrc'] - plnps[keepmod]
+        if diff > dlnp:
+            print 'Upgrading from none to ptsrc:', diff
+            keepsrc = ptsrc
+            keepmod = 'ptsrc'
+
+            expdiff = plnps['exp'] - plnps[keepmod]
+            devdiff = plnps['dev'] - plnps[keepmod]
+            if expdiff > dlnp or devdiff > dlnp:
+                if expdiff > devdiff:
+                    print 'Upgrading from ptsrc to exp: diff', expdiff
+                    keepsrc = exp
+                    keepmod = 'exp'
+                else:
+                    print 'Upgrading from ptsrc to dev: diff', devdiff
+                    keepsrc = dev
+                    keepmod = 'dev'
+
+                diff = plnps['comp'] - plnps[keepmod]
+                if diff > dlnp:
+                    print 'Upgrading for dev/exp to composite: diff', diff
+                    keepsrc = comp
+                    keepmod = 'comp'
+
+        # Actually, penalized delta chi-squareds!
+        src_lnps.append([-2. * (plnps[k] - plnps[keepmod])
+                         for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
+                    
+        if keepmod != oldmodel:
+            print 'Switching source!'
+            print 'Old:', src
+            print 'New:', keepsrc
+        else:
+            print 'Not switching source'
+            print 'Old:', src
+
+        subcat[i] = keepsrc
+
+    srcs = subcat
+    keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
+    keepsrcs = [s for s in srcs if s is not None]
+    keeplnps = [x for x,s in zip(src_lnps,srcs) if s is not None]
+    Isrcs = keepI
+    srcs = keepsrcs
+    src_lnps = keeplnps
+    subcat = Catalog(*srcs)
+    subtr.catalog = subcat
+    
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
@@ -1129,6 +1093,9 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subcat.thawParam(isub)
         src = subcat[isub]
         print 'Source', src
+        if src is None:
+            subcat.freezeParam(isub)
+            continue
         print 'Params:', src.getParamNames()
         
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
@@ -1153,154 +1120,61 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         assert(len(srcinvvars[isub]) == subcat[isub].numberOfParams())
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
-
-    return Isrcs, srcs, srcinvvars
-
-
-'''
-Re-fit sources one at a time.
-'''
-def stage3(T=None, sedsn=None, coimgs=None, cons=None,
-           detmaps=None, detivs=None,
-           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None, brickid=None,
-           bands=None, ps=None, tims=None,
-           plots=False, plots2=False,
-           **kwargs):
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
-    for tim in tims:
-        tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = tim.psfex
-
-    cat.thawAllRecursive()
-    # rough: sum flux in all bands
-    bright = []
-    for src in cat:
-        br = src.getBrightness()
-        bright.append(sum([br.getFlux(band) for band in bands]))
-        src.minRadius = 3
-    I = np.argsort(-np.array(bright))
-
-    # Remember original tim images
-    orig_timages = [tim.getImage().copy() for tim in tims]
-    initial_models = []
-    # Create initial models for each tim x each source
-    tt = Time()
-    for tim in tims:
-        mods = []
-        for src in cat:
-            mod = src.getModelPatch(tim)
-            mods.append(mod)
-            if mod is not None:
-                mod.addTo(tim.getImage(), scale=-1)
-        initial_models.append(mods)
-    print 'Subtracting initial models:', Time()-tt
-
-    for i in I:
-        src = cat[i]
-        print 'Fitting source', i
-        print src
-
-        srctractor = Tractor(tims, [src])
-        srctractor.freezeParams('images')
-
-        # Add this source's initial model back in.
-        for tim,mods in zip(tims, initial_models):
-            mod = mods[i]
-            if mod is not None:
-                mod.addTo(tim.getImage())
-
-        print 'Optimizing:', srctractor
-        srctractor.printThawedParams()
-
-        alphas = [0.1, 0.3, 1.0]
-        for step in range(50):
-            dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
-                                               alphas=alphas)
-            print 'dlnp:', dlnp, 'src', src
-            print 'Update:', X
-            print 'src params:', src.getParams()
-
-            if plots:
-                comods = []
-                for iband,band in enumerate(bands):
-                    comod = np.zeros((H,W))
-                    con = np.zeros((H,W))
-                    for itim,tim in enumerate(tims):
-                        if tim.band != band:
-                            continue
-                        (Yo,Xo,Yi,Xi) = tim.resamp
-                        mod = srctractor.getModelImage(tim)
-                        comod[Yo,Xo] += mod[Yi,Xi]
-                        con[Yo,Xo] += 1
-                    comod /= np.maximum(con, 1)
-                    comods.append(comod)
-                plt.clf()
-                dimshow(get_rgb(comods, bands), ticks=False)
-                ps.savefig()
     
-            if dlnp < 0.1:
-                break
+    # rchi2 quality-of-fit metric
+    rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
+    rchi2_den    = np.zeros((len(srcs),len(bands)), np.float32)
+    # fracflux degree-of-blending metric
+    fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
+    fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
 
-        for tim in tims:
-            mod = src.getModelPatch(tim)
-            if mod is not None:
-                mod.addTo(tim.getImage(), scale=-1)
+    for iband,band in enumerate(bands):
+        for tim in subtims:
+            if tim.band != band:
+                continue
+            mod = np.zeros(tim.getModelShape(), subtr.modtype)
+            srcmods = [None for src in srcs]
+            counts = np.zeros(len(srcs))
+            pcal = tim.getPhotoCal()
+            
+            for isrc,src in enumerate(srcs):
+                patch = subtr.getModelPatch(tim, src, minsb=tim.modelMinval)
+                if patch is None or patch.patch is None:
+                    continue
+                counts[isrc] = np.sum([np.abs(pcal.brightnessToCounts(b))
+                                              for b in src.getBrightnesses()])
+                if counts[isrc] == 0:
+                    continue
+                H,W = mod.shape
+                patch.clipTo(W,H)
+                srcmods[isrc] = patch
+                patch.addTo(mod)
+                
+            for isrc,patch in enumerate(srcmods):
+                if patch is None:
+                    continue
+                slc = patch.getSlice(mod)
+                # (mod - patch) is flux from others
+                # (mod - patch) / counts is normalized flux from others
+                # patch/counts is unit profile
+                fracflux_num[isrc,iband] += np.sum((np.abs(mod[slc] - patch.patch) * np.abs(patch.patch))) / counts[isrc]**2
+                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
 
-    for tim,img in zip(tims, orig_timages):
-        tim.data = img
+            tim.getSky().addTo(mod)
+            chisq = ((tim.getImage() - mod) * tim.getInvError())**2
+            
+            for isrc,patch in enumerate(srcmods):
+                if patch is None:
+                    continue
+                slc = patch.getSlice(mod)
+                rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / counts[isrc]
+                rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
 
-    # for i in I:
-    #     cat.freezeAllBut(i)
-    #     print 'Fitting source', i
-    #     src = cat[i]
-    #     print src
-    # 
-    #     tractor.printThawedParams()
-    # 
-    #     alphas = [0.1, 0.3, 1.0]
-    #     for step in range(50):
-    #         dlnp,X,alpha = tractor.optimize(priors=False, shared_params=False,
-    #                                         alphas=alphas)
-    #         print 'dlnp:', dlnp, 'src', src
-    #         print 'Update:', X
-    #         print 'src params:', src.getParams()
-    # 
-    #         if plots:
-    #             comods = []
-    #             for iband,band in enumerate(bands):
-    #                 comod = np.zeros((H,W))
-    #                 con = np.zeros((H,W))
-    #                 for itim,tim in enumerate(tims):
-    #                     if tim.band != band:
-    #                         continue
-    #                     (Yo,Xo,Yi,Xi) = tim.resamp
-    #                     mod = tractor.getModelImage(tim)
-    #                     comod[Yo,Xo] += mod[Yi,Xi]
-    #                     con[Yo,Xo] += 1
-    #                 comod /= np.maximum(con, 1)
-    #                 comods.append(comod)
-    #             plt.clf()
-    #             dimshow(get_rgb(comods, bands), ticks=False)
-    #             ps.savefig()
-    # 
-    #         if dlnp < 0.1:
-    #             break
-
-
-def stage4(T=None,
-           blobsrcs=None,blobflux=None,blobslices=None, blobs=None,
-           tractor=None, cat=None, targetrd=None, pixscale=None, targetwcs=None,
-           W=None,H=None,
-           bands=None, ps=None, tims=None,
-           plots=False, plots2=False,
-           **kwargs):
-    orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-
-
-
+    fracflux = fracflux_num / fracflux_den
+    rchi2    = rchi2_num    / rchi2_den
+    
+    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps
+    
 
 
 
@@ -1690,21 +1564,6 @@ def stage_initplots(
     ps.savefig()
 
 
-    # plt.clf()
-    # plt.loglog(clco[0].ravel(), sdsscoimgs[0].ravel(), 'm.', alpha=0.1)
-    # plt.loglog(clco[1].ravel(), sdsscoimgs[1].ravel(), 'r.', alpha=0.1)
-    # plt.loglog(clco[2].ravel(), sdsscoimgs[2].ravel(), 'g.', alpha=0.1)
-    # ps.savefig()
-    # 
-    # for i,c in enumerate(['m','r','g']):
-    #     plt.clf()
-    #     plt.loglog(sdsscoimgs[i].ravel(), clco[i].ravel()/sdsscoimgs[i].ravel(), '.', color=c, alpha=0.1)
-    #     plt.ylim(0.1, 10.0)
-    #     ps.savefig()
-
-    #wa = dict(clobber=True, header=hdr)
-    #fitsio.write('image-coadd-%06i-%s.fits' % (brickid, band), comod, **wa)
-
 
 def _get_mod((tim, srcs)):
     tractor = Tractor([tim], srcs)
@@ -1937,73 +1796,263 @@ def stage_fitplots(
     return dict(tims=tims)
 
 
+def stage_coadds(bands=None, version_header=None, targetwcs=None,
+                 tims=None, ps=None, brickname=None, ccds=None,
+                 outdir=None, T=None, cat=None, **kwargs):
+
+    if outdir is None:
+        outdir = '.'
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
+    if not os.path.exists(basedir):
+        try:
+            os.makedirs(basedir)
+        except:
+            pass
+        
+    fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
+    ccds.writeto(fn)
+    print 'Wrote', fn
+    
+    t0 = Time()
+    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    print 'Getting model images:', Time()-t0
+
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    # Look up number of images overlapping each source's position.
+    assert(len(T) == len(cat))
+    nobs = np.zeros((len(T), len(bands)), np.uint8)
+    rr = np.array([s.getPosition().ra  for s in cat])
+    dd = np.array([s.getPosition().dec for s in cat])
+    ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
+    ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
+    iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
+
+    coimgs = []
+    comods = []
+    
+    for iband,band in enumerate(bands):
+
+        cow    = np.zeros((H,W), np.float32)
+        cowimg = np.zeros((H,W), np.float32)
+        cowmod = np.zeros((H,W), np.float32)
+        coimg  = np.zeros((H,W), np.float32)
+        comod  = np.zeros((H,W), np.float32)
+        cochi2 = np.zeros((H,W), np.float32)
+        con     = np.zeros((H,W), np.uint8)
+        congood = np.zeros((H,W), np.uint8)
+        detiv   = np.zeros((H,W), np.float32)
+
+        for itim, (tim,mod) in enumerate(zip(tims, mods)):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+
+            # number of good exposures
+            good = (tim.getInvError()[Yi,Xi] > 0)
+            congood[Yo,Xo] += good
+
+            iv = tim.getInvvar()[Yi,Xi]
+            im = tim.getImage()[Yi,Xi]
+
+            # invvar-weighted image & model
+            cowimg[Yo,Xo] += iv * im
+            cowmod[Yo,Xo] += iv * mod[Yi,Xi]
+            cow   [Yo,Xo] += iv
+
+            # chi-squared
+            cochi2[Yo,Xo] += iv * (im - mod[Yi,Xi])**2
+            
+            # straight-up image & model
+            coimg[Yo,Xo] += im
+            comod[Yo,Xo] += mod[Yi,Xi]
+            con  [Yo,Xo] += 1
+
+            # point-source depth
+            psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+            detsig1 = tim.sig1 / psfnorm
+            detiv[Yo,Xo] += good * (1. / detsig1**2)
+
+
+        nobs[:, iband] = con[iy,ix]
+            
+        cowimg /= np.maximum(cow, 1e-16)
+        cowmod /= np.maximum(cow, 1e-16)
+
+        cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+        cowmod[cow == 0] = (comod[cow == 0] / np.maximum(1, con[cow == 0]))
+
+        coimgs.append(cowimg)
+        comods.append(cowmod)
+
+        del coimg
+        del comod
+
+        # Plug the WCS header cards into these images
+        # copy version_header before modifying...
+        hdr = fitsio.FITSHDR()
+        for r in version_header.records():
+            hdr.add_record(r)
+        hdr.add_record(dict(name='BRICKNAM', value=brickname,
+                            comment='DECaLS brick name'))
+        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+                'INSTRUME']
+        vals = set()
+        for tim in tims:
+            if tim.band != band:
+                continue
+            v = []
+            for key in keys:
+                v.append(tim.primhdr.get(key,''))
+            vals.add(tuple(v))
+        for i,v in enumerate(vals):
+            for ik,key in enumerate(keys):
+                if i == 0:
+                    kk = key
+                else:
+                    kk = key[:7] + '%i'%i
+                hdr.add_record(dict(name=kk, value=v[ik]))
+            
+        hdr.add_record(dict(name='FILTER', value=band))
+
+        targetwcs.add_to_header(hdr)
+        hdr.delete('IMAGEW')
+        hdr.delete('IMAGEH')
+        
+        for name,img in [('image',  cowimg),
+                         ('invvar', cow),
+                         ('model',  cowmod),
+                         ('chi2',   cochi2),
+                         ('depth',  detiv),
+                         ('nexp',   congood),
+                         ]:
+
+            hdr.add_record(dict(name='IMTYPE', value=name,
+                                comment='DECaLS image type'))
+            fn = os.path.join(basedir,
+                              'decals-%s-%s-%s.fits' % (brickname, name, band))
+            fitsio.write(fn, img, clobber=True, header=hdr)
+            print 'Wrote', fn
+
+    tmpfn = create_temp(suffix='.png')
+    for name,ims in [('image',coimgs), ('model',comods)]:
+        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
+        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
+               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
+                                    (brickname, name))))
+        os.system(cmd)
+        os.unlink(tmpfn)
+
+    T.nobs = nobs
+    return dict(T = T)
+    
+
 '''
 Write catalog output
 '''
 def stage_writecat(
     version_header=None,
-    T=None, coimgs=None, cons=None,
+    T=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
     plots=False, tractor=None,
+    brickname=None,
     brickid=None,
     invvars=None,
     catalogfn=None,
+    outdir=None,
     **kwargs):
+
+    print 'Source types:'
+    for src in cat:
+        print '  ', type(src)
+    
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
     for k in ['itx','ity','index']:
         TT.delete_column(k)
     for col in TT.get_columns():
-        if not col in ['tx', 'ty', 'blob']:
+        if not col in ['tx', 'ty', 'blob',
+                       'fracflux','rchi2','dchisq','nobs']:
             TT.rename(col, 'sdss_%s' % col)
+    TT.tx = (TT.tx + 1.).astype(np.float32)
+    TT.ty = (TT.ty + 1.).astype(np.float32)
+    TT.blob = TT.blob.astype(np.int32)
 
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
+    TT.brickname = np.array([brickname] * len(TT))
     TT.objid   = np.arange(len(TT)).astype(np.int32)
+    
+    allbands = 'ugrizY'
+
+    TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
+    for iband,band in enumerate(bands):
+        i = allbands.index(band)
+        TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
+        TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
+        TT.decam_nobs[:,i] = TT.nobs[:,iband]
+
+    TT.delete_column('rchi2')
+    TT.delete_column('fracflux')
+    TT.delete_column('nobs')
 
     cat.thawAllRecursive()
     hdr = version_header
-    T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs)
+    T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
+                                  allbands=allbands)
 
-    # Convert from variances to invvars
-    for k in ['ra_var', 'dec_var', 'shapeExp_var', 'shapeDev_var', 'fracDev_var']:
-        X = T2.get(k)
-        T2.delete_column(k)
-        T2.set(k.replace('_var', '_invvar'), (1./X).astype(np.float32))
+    ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
+    T2.bx = bx.astype(np.float32)
+    T2.by = by.astype(np.float32)
 
-    # Create DECAM_FLUX columns: [ugrizY]
-    bandindex = dict(g=1, r=2, z=4)
-
-    T2.decam_flux      = np.zeros((len(T2), 6), np.float32)
-    T2.decam_flux_isig = np.zeros((len(T2), 6), np.float32)
-    for band in bands:
-        T2.decam_flux[:, bandindex[band]] = T2.get('decam_%s_nanomaggies' % band)
-        T2.decam_flux_isig[:, bandindex[band]] = np.sqrt(T2.get('decam_%s_nanomaggies_invvar' % band))
-
+    T2.ra_ivar  = T2.ra_ivar .astype(np.float32)
+    T2.dec_ivar = T2.dec_ivar.astype(np.float32)
+    
+    sfd = SFDMap()
+    system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
+    filts = ['%s %s' % (system[f], f) for f in allbands]
+    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
+    
     # Unpack shape columns
-    T2.shapeExp_r = T2.shapeExp[:,0]
+    T2.shapeExp_r  = T2.shapeExp[:,0]
     T2.shapeExp_e1 = T2.shapeExp[:,1]
     T2.shapeExp_e2 = T2.shapeExp[:,2]
-    T2.shapeDev_r = T2.shapeExp[:,0]
-    T2.shapeDev_e1 = T2.shapeExp[:,1]
-    T2.shapeDev_e2 = T2.shapeExp[:,2]
-    T2.shapeExp_r_invvar  = T2.shapeExp_invvar[:,0]
-    T2.shapeExp_e1_invvar = T2.shapeExp_invvar[:,1]
-    T2.shapeExp_e2_invvar = T2.shapeExp_invvar[:,2]
-    T2.shapeDev_r_invvar  = T2.shapeExp_invvar[:,0]
-    T2.shapeDev_e1_invvar = T2.shapeExp_invvar[:,1]
-    T2.shapeDev_e2_invvar = T2.shapeExp_invvar[:,2]
+    T2.shapeDev_r  = T2.shapeDev[:,0]
+    T2.shapeDev_e1 = T2.shapeDev[:,1]
+    T2.shapeDev_e2 = T2.shapeDev[:,2]
+    T2.shapeExp_r_ivar  = T2.shapeExp_ivar[:,0]
+    T2.shapeExp_e1_ivar = T2.shapeExp_ivar[:,1]
+    T2.shapeExp_e2_ivar = T2.shapeExp_ivar[:,2]
+    T2.shapeDev_r_ivar  = T2.shapeDev_ivar[:,0]
+    T2.shapeDev_e1_ivar = T2.shapeDev_ivar[:,1]
+    T2.shapeDev_e2_ivar = T2.shapeDev_ivar[:,2]
 
     if catalogfn is not None:
         fn = catalogfn
     else:
-        fn = 'tractor-phot-b%i.fits' % brickid
+        if outdir is None:
+            outdir = '.'
+        outdir = os.path.join(outdir, 'tractor', brickname[:3])
+        fn = os.path.join(outdir, 'tractor-%s.fits' % brickname)
+
+    dirnm = os.path.dirname(fn)
+    if not os.path.exists(dirnm):
+        try:
+            os.makedirs(dirnm)
+        except:
+            pass
+        
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
 
-    return dict(variances=variances, cat=cat)
 
 if __name__ == '__main__':
     from astrometry.util.stages import *
@@ -2025,8 +2074,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
 
-    parser.add_option('-b', '--brick', type=int, help='Brick ID to run: default %default',
-                      default=377306)
+    parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
+                      default='377306')
 
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
@@ -2037,7 +2086,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='pickles/runbrick-%(brick)06i-%%(stage)s.pickle')
 
-    plot_base_default = 'brick-%(brick)06i'
+    plot_base_default = 'brick-%(brick)s'
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
     parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
@@ -2074,24 +2123,34 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.plot_number:
         ps.skipto(opt.plot_number)
         kwargs.update(ps=ps)
+
     if opt.threads and opt.threads > 1:
         from astrometry.util.multiproc import multiproc
         mp = multiproc(opt.threads)
+    else:
+        mp = multiproc()
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
-    prereqs = {'tims':None,
-               'srcs':'tims',
-               'fitblobs':'srcs',
+    prereqs = {
+        'tims':None,
+        'srcs':'tims',
+        'fitblobs':'srcs',
+        'fitblobs_finish':'fitblobs',
+        'coadds': 'fitblobs_finish',
+        'writecat': 'coadds',
 
-               'fitplots': 'fitblobs',
-               'writecat': 'fitblobs',
+        'fitplots': 'fitblobs_finish',
+        'psfplots': 'tims',
+        'initplots': 'tims',
+        }
 
-               'psfplots': 'tims',
-               'initplots': 'tims',
-               }
-
-    initargs.update(W=opt.W, H=opt.H, brickid=opt.brick, target_extent=opt.zoom)
+    initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
+    try:
+        brickid = int(opt.brick, 10)
+        initargs.update(brickid=brickid)
+    except:
+        initargs.update(brickname = opt.brick)
 
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,

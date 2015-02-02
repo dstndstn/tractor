@@ -647,7 +647,8 @@ class Tractor(MultiParams):
         if scaled:
             print 'Opt. in scaled space:', params
             self.setParams(p0 + params * scales)
-            variance_out *= scales**2
+            if variance:
+                variance_out *= scales**2
             R['params0'] = p0
             R['scales'] = scales
 
@@ -657,8 +658,9 @@ class Tractor(MultiParams):
     # ceres-tractor.cc via ceres.i .
     def _getOneImageDerivs(self, imgi):
         # Returns:
-        #     [  (param-index, deriv_x0, deriv_x0, deriv), ... ]
+        #     [  (param-index, deriv_x0, deriv_y0, deriv), ... ]
         # not necessarily in order of param-index
+        # Where deriv_x0, deriv_y0 are integer pixel offsets of the "deriv" image.
         #
         # NOTE, this scales the derivatives by inverse-error and -1 to
         # yield derivatives of CHI with respect to PARAMs; NOT the
@@ -1431,6 +1433,7 @@ class Tractor(MultiParams):
         Nsourceparams = self.catalog.numberOfParams()
         srcs = list(self.catalog.getThawedSources())
 
+        # Render unit-flux models for each source.
         t0 = Time()
         (umodels, umodtosource, umodsforsource
          )= self._get_umodels(srcs, imgs, minsb, rois)
@@ -2293,6 +2296,8 @@ class Tractor(MultiParams):
         if srcs is None:
             srcs = self.catalog
         for src in srcs:
+            if src is None:
+                continue
             patch = self.getModelPatch(img, src, minsb=minsb)
             if patch is None:
                 continue
@@ -2495,7 +2500,9 @@ class ScaledTractor(object):
     def getImage(self, i):
         return self.tractor.getImage(i)
     def getChiImage(self, i):
-        return self.tractor.getChiImage(i)
+        #return self.tractor.getChiImage(i)
+        return self.tractor.getChiImage(i).astype(float)
+
     def _getOneImageDerivs(self, i):
         derivs = self.tractor._getOneImageDerivs(i)
         for (ind, x0, y0, der) in derivs:
