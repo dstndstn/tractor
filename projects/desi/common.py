@@ -724,7 +724,7 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     r,d = targetwcs.radec_center()
     #print len(T), 'ccds'
     #print 'trad', trad, 'ccdrad', ccdrad
-    I = np.flatnonzero(np.abs(T.dec - d) < rad)
+    I = np.nonzero(np.abs(T.dec - d) < rad)
     #print 'Cut to', len(I), 'on Dec'
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
     #print 'Cut to', len(I), 'on RA,Dec'
@@ -851,6 +851,12 @@ class Decals(object):
         self.decals_dir = decals_dir
         self.ZP = None
         self.bricks = None
+
+        # Create and cache a kd-tree for bricks_touching_radec_box ?
+        self.cache_tree = False
+        self.bricktree = None
+        ### HACK! Hard-coded brick edge size, in degrees!
+        self.bricksize = 0.25
         
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
@@ -859,18 +865,21 @@ class Decals(object):
     def get_bricks_readonly(self):
         if self.bricks is None:
             self.bricks = self.get_bricks()
+            # Assert that bricks are the sizes we think they are.
+            assert(np.all(np.abs((self.bricks.dec2 - self.bricks.dec1) -
+                                 self.bricksize) < 1e-8))
         return self.bricks
 
     def get_brick(self, brickid):
         B = self.get_bricks_readonly()
-        I = np.flatnonzero(B.brickid == brickid)
+        I = np.nonzero(B.brickid == brickid)
         if len(I) == 0:
             return None
         return B[I[0]]
 
     def get_brick_by_name(self, brickname):
-        B = self.get_bricks()
-        I = np.flatnonzero(np.array([n == brickname for n in B.brickname]))
+        B = self.get_bricks_readonly()
+        I = np.nonzero(np.array([n == brickname for n in B.brickname]))
         if len(I) == 0:
             return None
         return B[I[0]]
@@ -882,8 +891,26 @@ class Decals(object):
         '''
         if bricks is None:
             bricks = self.get_bricks_readonly()
-        I = np.flatnonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
-                           (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+        if self.cache_tree and bricks == self.bricks:
+            from astrometry.libkd.spherematch import tree_build_radec, tree_search_radec
+            # Use kdtree
+            if self.bricktree is None:
+                self.bricktree = tree_build_radec(bricks.ra, bricks.dec)
+            # brick size
+            radius = np.sqrt(2.)/2. * self.bricksize
+            # + RA,Dec box size
+            radius = radius + degrees_between(ralo, declo, rahi, dechi) / 2.
+            dec = (dechi + declo) / 2.
+            c = (np.cos(np.deg2rad(rahi)) + np.cos(np.deg2rad(ralo))) / 2.
+            s = (np.sin(np.deg2rad(rahi)) + np.sin(np.deg2rad(ralo))) / 2.
+            ra  = np.rad2deg(np.arctan2(s, c))
+            J = tree_search_radec(self.bricktree, ra, dec, radius)
+            I = J[np.nonzero((bricks.ra1[J]  <= rahi ) * (bricks.ra2[J]  >= ralo) *
+                             (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))]
+            return I
+            
+        I = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                       (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
     
     def get_ccds(self):
@@ -908,7 +935,7 @@ class Decals(object):
         C = self.ccds_touching_wcs(targetwcs)
         # Sort by band
         if bands is not None:
-            C.cut(np.hstack([np.flatnonzero(C.filter == band) for band in bands]))
+            C.cut(np.hstack([np.nonzero(C.filter == band) for band in bands]))
         ims = []
         for t in C:
             print
@@ -943,11 +970,11 @@ class Decals(object):
 
             #self.ZP.about()
 
-        I = np.flatnonzero(self.ZP.expnum == im.expnum)
+        I = np.nonzero(self.ZP.expnum == im.expnum)
         #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
-            #I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
-            I = np.flatnonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            #I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
+            I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
         # No updated zeropoint -- use header MAGZERO from primary HDU.
