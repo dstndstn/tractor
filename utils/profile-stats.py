@@ -5,19 +5,27 @@ import numpy as np
 def main():
     import optparse
     parser = optparse.OptionParser('%prog: [opts] <profile>...')
+    parser.add_option('--merge', action='store_true', help='Merge input files into one big profile')
     opt,args = parser.parse_args()
     if len(args) == 0:
         parser.print_help()
         sys.exit(0)
 
 
-    for fn in args:
-
+    if opt.merge:
+        p = pstats.Stats(args[0])
+        #p.add(*args[1:])
+        for fn in args[1:]:
+            p.add(fn)
+        P = [p]
+    else:
+        P = [pstats.Stats(fn) for fn in args]
+    
+    for p in P:
         print
         print 'Cumulative time'
         print
-
-        p = pstats.Stats(fn)
+        #p = pstats.Stats(fn)
         p = p.strip_dirs()
         p.sort_stats('cumulative').print_stats(100)
 
@@ -30,7 +38,7 @@ def main():
         print 'Time'
         print
 
-        p = pstats.Stats(fn)
+        #p = pstats.Stats(fn)
         p.sort_stats('time').print_stats(40)
         p.print_callees()
 

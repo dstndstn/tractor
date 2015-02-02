@@ -31,6 +31,11 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
                       r = (1, 0.01),
                       z = (0, 0.025),
                       )
+    elif bands == 'urz':
+        scales = dict(u = (2, 0.0066),
+                      r = (1, 0.01),
+                      z = (0, 0.025),
+                      )
     elif bands == 'gri':
         # scales = dict(g = (2, 0.004),
         #               r = (1, 0.0066),
@@ -97,7 +102,7 @@ def brick_catalog_for_radec_box(ralo, rahi, declo, dechi,
     assert(declo < dechi)
 
     if bricks is None:
-        bricks = decals.get_bricks()
+        bricks = decals.get_bricks_readonly()
     I = decals.bricks_touching_radec_box(bricks, ralo, rahi, declo, dechi)
     print len(I), 'bricks touch RA,Dec box'
     TT = []
@@ -261,12 +266,19 @@ class Decals(object):
     def __init__(self):
         self.decals_dir = decals_dir
         self.ZP = None
+        self.bricks = None
         
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
 
+    ### HACK...
+    def get_bricks_readonly(self):
+        if self.bricks is None:
+            self.bricks = self.get_bricks()
+        return self.bricks
+
     def get_brick(self, brickid):
-        B = self.get_bricks()
+        B = self.get_bricks_readonly()
         I = np.flatnonzero(B.brickid == brickid)
         if len(I) == 0:
             return None
@@ -277,6 +289,8 @@ class Decals(object):
         '''
         Returns an index vector of the bricks that touch the given RA,Dec box.
         '''
+        if bricks is None:
+            bricks = self.get_bricks_readonly()
         I = np.flatnonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
                            (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
