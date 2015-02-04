@@ -866,7 +866,8 @@ class Decals(object):
         if self.bricks is None:
             self.bricks = self.get_bricks()
             # Assert that bricks are the sizes we think they are.
-            assert(np.all(np.abs((self.bricks.dec2 - self.bricks.dec1) -
+            # ... except for the two poles, which are half-sized
+            assert(np.all(np.abs((self.bricks.dec2 - self.bricks.dec1)[1:-1] -
                                  self.bricksize) < 1e-8))
         return self.bricks
 
