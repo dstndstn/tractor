@@ -110,6 +110,8 @@ def main():
         T.cut(T.insidemask == 0)
         print len(T), 'not in mask'
 
+        #T.cut(np.hypot(T.ra - 5.0562, T.dec - 0.0643) < 0.001)
+        
         # http://skyserver.sdss.org/dr12/en/help/browser/browser.aspx#&&history=enum+PhotoFlags+E
         for flagname,flagval in [('BRIGHT', 0x2),
                                  ('EDGE', 0x4),
@@ -126,9 +128,11 @@ def main():
                       ]:
             T.cut(T.flags & flagval == 0)
             print len(T), 'without', flagname, 'bit set'
-
+            #pass
+        
         # Cut to objects that are likely to appear in the individual images
         T.cut(T.psfmag_r < 22.)
+        print 'Cut to', len(T), 'with psfmag_r < 22 in coadd'
 
         # Select "interesting" objects...
         # for i in range(len(T)):
@@ -168,7 +172,15 @@ def main():
 
         Nkeep = 1000
 
-        for i in range(len(T[550:Nkeep])):
+        outdir = 'stamps'
+
+        T.tag = np.array(['%.4f-%.4f.fits' % (r,d) for r,d in zip(T.ra, T.dec)])
+        T[:Nkeep].writeto(os.path.join(outdir, 'stamps.fits'), columns=
+                          '''tag objid run camcol field ra dec psfmag_u psfmag_g psfmag_r
+                          psfmag_i psfmag_z modelmag_u modelmag_g modelmag_r
+                          modelmag_i modelmag_z'''.split())
+
+        for i in range(len(T[:Nkeep])):
 
             # t = T[np.array([i])]
             # print 't:', t
@@ -235,13 +247,29 @@ def main():
                 fracdev = t.get('fracdev_%s' % band)
                 tt.set('cmodelflux_%s' % band, fracdev * fdev + (1.-fracdev) * fexp)
 
-            catfn = 'cat-s82-%.4f-%.4f.fits' % (t.ra[0], t.dec[0])
+            catfn = os.path.join(outdir, 'cat-s82-%.4f-%.4f.fits' % (t.ra[0], t.dec[0]))
             tt.writeto(catfn)
             print 'Wrote', catfn
             
         cutToPrimary = False
 
-        stars = [(ra,dec,[],cutToPrimary) for ra,dec in zip(T.ra, T.dec)[:Nkeep]]
+        ### HACK -- move old files into place.
+        for ra,dec in zip(T.ra, T.dec)[:Nkeep]:
+            plotfn = 'stamps-%.4f-%.4f.png' % (ra, dec)
+            if os.path.exists(plotfn):
+                fns = [plotfn]
+                for band in 'ugriz':
+                    stampfn = 'stamp-%s-%.4f-%.4f.fits' % (band, ra, dec)
+                    fns.append(stampfn)
+                catfn = 'cat-%.4f-%.4f.fits' % (ra,dec)
+                fns.append(catfn)
+                
+                for fn in fns:
+                    cmd = 'mv %s %s' % (fn, outdir)
+                    print cmd
+                    os.system(cmd)
+
+        stars = [(ra,dec,[],cutToPrimary,outdir) for ra,dec in zip(T.ra, T.dec)[:Nkeep]]
 
     plots = True
     
@@ -289,7 +317,12 @@ def main():
                     
                 
             
-def oneblob(ra, dec, addToHeader, cutToPrimary):
+def oneblob(ra, dec, addToHeader, cutToPrimary, outdir):
+
+    plotfn = os.path.join(outdir, 'stamps-%.4f-%.4f.png' % (ra, dec))
+    if os.path.exists(plotfn):
+        print 'Exists:', plotfn
+        return []
 
     outfns = []
     
@@ -302,8 +335,8 @@ def oneblob(ra, dec, addToHeader, cutToPrimary):
     pixradius = 25
     bands = 'ugriz'
 
-    stamp_pattern = 'stamp-%%s-%.4f-%.4f.fits' % (ra, dec)
-    catfn = 'cat-%.4f-%.4f.fits' % (ra,dec)
+    stamp_pattern = os.path.join(outdir, 'stamp-%%s-%.4f-%.4f.fits' % (ra, dec))
+    catfn = os.path.join(outdir, 'cat-%.4f-%.4f.fits' % (ra,dec))
 
     plots = False
     srcband = 'r'
@@ -327,9 +360,13 @@ def oneblob(ra, dec, addToHeader, cutToPrimary):
             continue
         keepRCF.append((run,camcol,field))
     RCF = keepRCF
+
+    if len(RCF) == 0:
+        print 'No run/camcol/fields in rerun 301'
+        return
         
     TT = []
-    
+
     for ifield,(run,camcol,field) in enumerate(RCF):
 
         # Retrieve SDSS catalog sources in the field
