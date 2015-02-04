@@ -1970,7 +1970,10 @@ class Tractor(MultiParams):
             #c[:] = col
             #spcols.append(c)
             if scale_columns:
-                spvals.append(vals / scale)
+                if scale == 0.:
+                    spvals.append(vals)
+                else:
+                    spvals.append(vals / scale)
             else:
                 spvals.append(vals)
                 
@@ -2227,7 +2230,7 @@ class Tractor(MultiParams):
             logverb('shared_params: after, X len', len(X), 'with', np.count_nonzero(X), 'non-zero entries')
 
         if scale_columns:
-            X /= colscales
+            X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
 
         #np.seterr(**olderr)
@@ -2239,7 +2242,7 @@ class Tractor(MultiParams):
                 var = var[paramindexmap]
             
             if scale_columns:
-                var /= colscales**2
+                var[colscales > 0] /= colscales[colscales > 0]**2
             return X,var
 
         return X

@@ -1452,7 +1452,7 @@ def stage_initplots(
             mod = tr.getModelImage(tim)
             Yo -= y0
             Xo -= x0
-            K = np.nonzero((Yo >= 0) * (Yo < clH) * (Xo >= 0) * (Xo < clW))
+            K, = np.nonzero((Yo >= 0) * (Yo < clH) * (Xo >= 0) * (Xo < clW))
             Xo,Yo,Xi,Yi = Xo[K],Yo[K],Xi[K],Yi[K]
             comod[Yo,Xo] += mod[Yi,Xi]
             ie = tim.getInvError()
@@ -2068,6 +2068,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser = optparse.OptionParser(epilog=ep)
     parser.add_option('-f', '--force-stage', dest='force', action='append', default=[],
                       help="Force re-running the given stage(s) -- don't read from pickle.")
+    parser.add_option('-F', '--force-all', dest='forceall', action='store_true',
+                      help='Force all stages to run')
     parser.add_option('-s', '--stage', dest='stage', default=[], action='append',
                       help="Run up to the given stage(s)")
     parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
@@ -2077,6 +2079,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
                       default='377306')
 
+    parser.add_option('-d', '--outdir', help='Set output base directory')
+    
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
                       help='Per-blob plots?')
@@ -2084,7 +2088,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                       help='More plots?')
 
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
-                      default='pickles/runbrick-%(brick)06i-%%(stage)s.pickle')
+                      default='pickles/runbrick-%(brick)s-%%(stage)s.pickle')
 
     plot_base_default = 'brick-%(brick)s'
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
@@ -2107,7 +2111,6 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     set_globals()
     
-    #stagefunc = CallGlobal('stage%i', globals())
     stagefunc = CallGlobal('stage_%s', globals())
 
     if len(opt.stage) == 0:
@@ -2129,6 +2132,12 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         mp = multiproc(opt.threads)
     else:
         mp = multiproc()
+
+    if opt.outdir:
+        kwargs.update(outdir=opt.outdir)
+
+    if opt.forceall:
+        kwargs.update(forceall=True)
         
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 

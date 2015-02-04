@@ -8,7 +8,7 @@ import logging
 import runbrick
 
 if __name__ == '__main__':
-    parser = optparse.OptionParser(usage='%prog [options] brick-number')
+    parser = optparse.OptionParser(usage='%prog [options] brick-name-or-number')
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('--no-ceres', action='store_true', help='Do not use Ceres')
     parser.add_option('--stamp', action='store_true', help='Run a tiny postage-stamp')
@@ -17,7 +17,16 @@ if __name__ == '__main__':
     if len(args) != 1:
         parser.print_help()
         sys.exit(-1)
-    brick = int(args[0], 10)
+
+
+    initargs = dict(W=3600, H=3600, pipe=True)
+
+    brick = args[0]
+    try:
+        brickid = int(brick, 10)
+        initargs.update(brickid=brickid)
+    except:
+        initargs.update(brickname=brick)
 
     Time.add_measurement(MemMeas)
 
@@ -43,18 +52,17 @@ if __name__ == '__main__':
     if opt.no_ceres:
         runbrick.useCeres = False
 
-    P = dict(W=3600, H=3600, brickid=brick, pipe=True)
-
     if opt.stamp:
         catalogfn = 'tractor-phot-b%06i-stamp.fits' % brick
         pspat = 'pipebrick-plots/brick-%06i-stamp' % brick
         SS = 200
-        #P.update(W=100, H=100)
-        P.update(W=SS, H=SS)
+        #initargs.update(W=100, H=100)
+        initargs.update(W=SS, H=SS)
     else:
         catalogfn = 'pipebrick-cats/tractor-phot-b%06i.fits' % brick
         pspat = 'pipebrick-plots/brick-%06i' % brick
 
+    P = initargs
     t0 = Time()
     R = stage_tims(**P)
     P.update(R)
@@ -68,8 +76,18 @@ if __name__ == '__main__':
 
     R = stage_fitblobs(**P)
     P.update(R)
-    t2b = Time()
-    print 'Stage fitblobs:', t2b-t2
+    t3 = Time()
+    print 'Stage fitblobs:', t3-t2
+
+    R = stage_fitblobs_finish(**P)
+    P.update(R)
+    t4 = Time()
+    print 'Stage fitblobs_finish:', t4-t3
+
+    R = stage_coadds(**P)
+    P.update(R)
+    t5 = Time()
+    print 'Stage coadds:', t5-t4
 
     P.update(catalogfn=catalogfn)
     stage_writecat(**P)
