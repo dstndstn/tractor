@@ -724,7 +724,7 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     r,d = targetwcs.radec_center()
     #print len(T), 'ccds'
     #print 'trad', trad, 'ccdrad', ccdrad
-    I = np.nonzero(np.abs(T.dec - d) < rad)
+    I, = np.nonzero(np.abs(T.dec - d) < rad)
     #print 'Cut to', len(I), 'on Dec'
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
     #print 'Cut to', len(I), 'on RA,Dec'
@@ -872,14 +872,14 @@ class Decals(object):
 
     def get_brick(self, brickid):
         B = self.get_bricks_readonly()
-        I = np.nonzero(B.brickid == brickid)
+        I, = np.nonzero(B.brickid == brickid)
         if len(I) == 0:
             return None
         return B[I[0]]
 
     def get_brick_by_name(self, brickname):
         B = self.get_bricks_readonly()
-        I = np.nonzero(np.array([n == brickname for n in B.brickname]))
+        I, = np.nonzero(np.array([n == brickname for n in B.brickname]))
         if len(I) == 0:
             return None
         return B[I[0]]
@@ -906,11 +906,11 @@ class Decals(object):
             ra  = np.rad2deg(np.arctan2(s, c))
             J = tree_search_radec(self.bricktree, ra, dec, radius)
             I = J[np.nonzero((bricks.ra1[J]  <= rahi ) * (bricks.ra2[J]  >= ralo) *
-                             (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))]
+                             (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))[0]]
             return I
             
-        I = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
-                       (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+        I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                        (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
     
     def get_ccds(self):
@@ -935,7 +935,7 @@ class Decals(object):
         C = self.ccds_touching_wcs(targetwcs)
         # Sort by band
         if bands is not None:
-            C.cut(np.hstack([np.nonzero(C.filter == band) for band in bands]))
+            C.cut(np.hstack([np.nonzero(C.filter == band)[0] for band in bands]))
         ims = []
         for t in C:
             print
@@ -970,11 +970,11 @@ class Decals(object):
 
             #self.ZP.about()
 
-        I = np.nonzero(self.ZP.expnum == im.expnum)
+        I, = np.nonzero(self.ZP.expnum == im.expnum)
         #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
             #I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
-            I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            I, = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
         # No updated zeropoint -- use header MAGZERO from primary HDU.
