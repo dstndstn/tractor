@@ -119,11 +119,13 @@ class SFDMap(object):
         #return a*b
         return factors[np.newaxis,:] * ebv[:,np.newaxis]
 
-def segment_and_group_sources(image, T):
+def segment_and_group_sources(image, T, name=None):
     '''
     *image*: binary image that defines "blobs"
     *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
       - ".blob" field is added.
+
+    *name*: for debugging only
 
     Returns: (blobs, blobsrcs, blobslices)
 
@@ -184,11 +186,24 @@ def segment_and_group_sources(image, T):
     for k,v in blobmap.items():
         bm[k] = v
     bm[0] = -1
+
+    # DEBUG
+    fitsio.write('blobs-before-%s.fits' % name, blobs)
+
     blobs = bm[blobs]
+
+    fitsio.write('blobs-after-%s.fits' % name, blobs)
+
 
     for j,Isrcs in enumerate(blobsrcs):
         for i in Isrcs:
-            assert(blobs[T.ity[i], T.itx[i]] == j)
+            #assert(blobs[T.ity[i], T.itx[i]] == j)
+            if (blobs[T.ity[i], T.itx[i]] != j):
+                print '---------------------------!!!--------------------------'
+                print 'Blob', j, 'sources', Isrcs
+                print 'Source', i, 'coords x,y', T.itx[i], T.ity[i]
+                print 'Expected blob value', j, 'but got', blobs[T.ity[i], T.itx[i]]
+
     T.blob = blobs[T.ity, T.itx]
     assert(len(blobsrcs) == len(blobslices))
 
