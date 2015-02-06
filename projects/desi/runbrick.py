@@ -2016,11 +2016,6 @@ def stage_writecat(
     T2.ra_ivar  = T2.ra_ivar .astype(np.float32)
     T2.dec_ivar = T2.dec_ivar.astype(np.float32)
     
-    sfd = SFDMap()
-    system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
-    filts = ['%s %s' % (system[f], f) for f in allbands]
-    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
-    
     # Unpack shape columns
     T2.shapeExp_r  = T2.shapeExp[:,0]
     T2.shapeExp_e1 = T2.shapeExp[:,1]
@@ -2042,7 +2037,6 @@ def stage_writecat(
             outdir = '.'
         outdir = os.path.join(outdir, 'tractor', brickname[:3])
         fn = os.path.join(outdir, 'tractor-%s.fits' % brickname)
-
     dirnm = os.path.dirname(fn)
     if not os.path.exists(dirnm):
         try:
@@ -2052,6 +2046,16 @@ def stage_writecat(
         
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn
+
+    print 'Reading SFD maps...'
+
+    sfd = SFDMap()
+    system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
+    filts = ['%s %s' % (system[f], f) for f in allbands]
+    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
+    
+    T2.writeto(fn, header=hdr)
+    print 'Wrote', fn, 'with extinction'
 
 
 if __name__ == '__main__':
@@ -2111,7 +2115,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     set_globals()
     
-    stagefunc = CallGlobal('stage_%s', globals())
+    stagefunc = CallGlobalTime('stage_%s', globals())
 
     if len(opt.stage) == 0:
         opt.stage.append('writecat')
@@ -2161,8 +2165,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     except:
         initargs.update(brickname = opt.brick)
 
+    t0 = Time()
+
     for stage in opt.stage:
         runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
                  prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
                  initial_args=initargs, **kwargs)
-    
+
+    print 'All done:', Time()-t0
