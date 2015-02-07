@@ -104,6 +104,8 @@ class SFDMap(object):
                               (self.southwcs, self.south, np.logical_not(N))]:
             # Our WCS routines are mis-named... the SFD WCSes convert 
             #   X,Y <-> L,B.
+            if sum(cut) == 0:
+                continue
             ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
             assert(np.all(ok == 0))
             H,W = image.shape
