@@ -114,7 +114,8 @@ def tims_compute_resamp(tims, targetwcs):
     for tim,r in zip(tims, R):
         tim.resamp = r
 
-def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
+def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
+                   images=None):
     coimgs = []
     cons = []
     if get_n2:
@@ -132,7 +133,7 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
         if get_cow:
             cowimg = np.zeros((H,W), np.float32)
             wimg  = np.zeros((H,W), np.float32)
-        for tim in tims:
+        for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
             R = tim_get_resamp(tim, targetwcs)
@@ -140,12 +141,16 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False):
                 continue
             (Yo,Xo,Yi,Xi) = R
             nn = (tim.getInvError()[Yi,Xi] > 0)
-            coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+            if images is None:
+                coimg [Yo,Xo] += tim.getImage()[Yi,Xi] * nn
+                coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
+            else:
+                coimg [Yo,Xo] += images[itim][Yi,Xi] * nn
+                coimg2[Yo,Xo] += images[itim][Yi,Xi]
             con   [Yo,Xo] += nn
             if get_cow:
                 cowimg[Yo,Xo] += tim.getInvvar()[Yi,Xi] * tim.getImage()[Yi,Xi]
                 wimg  [Yo,Xo] += tim.getInvvar()[Yi,Xi]
-            coimg2[Yo,Xo] += tim.getImage()[Yi,Xi]
             con2  [Yo,Xo] += 1
         coimg /= np.maximum(con,1)
         coimg[con == 0] = coimg2[con == 0] / np.maximum(1, con2[con == 0])
@@ -286,7 +291,7 @@ def stage_srcs(coimgs=None, cons=None,
                W=None,H=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
-               pipe=False,
+               pipe=False, brickname=None,
                **kwargs):
 
     tlast = Time()
@@ -335,7 +340,7 @@ def stage_srcs(coimgs=None, cons=None,
     hot = (hot > 5)
     hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
-    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T)
+    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname)
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
@@ -413,9 +418,25 @@ def stage_fitblobs(T=None,
 
     set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
 
+    if plots:
+        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % i, ha='center', va='bottom', color='r')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
+        
+
     tfitall = Time()
     iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
-                      orig_wcsxy0, cat, bands)
+                      orig_wcsxy0, cat, bands, plots, ps)
     # to allow debugpool to only queue tasks one at a time
     iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
@@ -504,7 +525,7 @@ def stage_fitblobs_finish(
     return rtn
                           
 def _blob_iter(blobslices, blobsrcs, blobs,
-               targetwcs, tims, orig_wcsxy0, cat, bands):
+               targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps):
     for iblob, (bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
         assert(len(Isrcs) > 0)
 
@@ -552,7 +573,7 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               [cat[i] for i in Isrcs], bands)
+               [cat[i] for i in Isrcs], bands, plots, ps)
 
 def _bounce_one_blob(X):
     try:
@@ -565,14 +586,16 @@ def _bounce_one_blob(X):
         raise
 
 def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               srcs, bands)):
+               srcs, bands, plots, ps)):
 
-    plots = False
+    plots2 = False
 
     tlast = Time()
     alphas = [0.1, 0.3, 1.0]
 
     bigblob = (blobw * blobh) > 100*100
+
+    subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -580,7 +603,6 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
          band,sig1,modelMinval) in subtimargs:
 
         # Mask out inverr for pixels that are not within the blob.
-        subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
         subsubwcs = subwcs.get_subimage(int(sx0), int(sy0), int(sx1-sx0), int(sy1-sy0))
         try:
             Yo,Xo,Yi,Xi,rims = resample_with_wcs(subsubwcs, subtarget, [], 2)
@@ -611,13 +633,11 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         subtims.append(subtim)
 
         if plots:
-            (Yo,Xo,Yi,Xi) = tim.resamp
-            I = np.flatnonzero((Yi >= sy0) * (Yi < sy1) * (Xi >= sx0) * (Xi < sx1) *
-                               (Yo >=  by0) * (Yo <  by1) * (Xo >=  bx0) * (Xo <  bx1))
-            Yo = Yo[I] - by0
-            Xo = Xo[I] - bx0
-            Yi = Yi[I] - sy0
-            Xi = Xi[I] - sx0
+            try:
+                Yo,Xo,Yi,Xi,rims = resample_with_wcs(subtarget, subsubwcs, [], 2)
+            except OverlapError:
+                print 'No overlap'
+                continue
             subtim.resamp = (Yo, Xo, Yi, Xi)
 
     subcat = Catalog(*srcs)
@@ -658,6 +678,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
     subcat.thawAllRecursive()
 
     if plots:
+        bslc = (slice(by0, by0+blobh), slice(bx0, bx0+blobw))
         plotmods = []
         plotmodnames = []
         plotmods.append(subtr.getModelImages())
@@ -884,9 +905,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
 
     if plots:
-        _plot_mods(subtims, plotmods, plotmodnames, bands, coimgs, cons, bslc, blobw, blobh, ps)
-        if blobnumber >= 10:
-            plots = False
+        _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
 
     # FIXME -- for large blobs, fit strata of sources simultaneously?
 
@@ -908,6 +927,10 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         src = subcat[i]
         print
         print 'Model selection for source', src
+
+        # if plots:
+        #     plotmods = []
+        #     plotmodnames = []
 
         # FIXME -- do we need to do the whole "compute & subtract
         # initial models" thing here?  Probably...
@@ -1014,9 +1037,15 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             
             lnps[name] = lnp
 
+            # if plots:
+            #     plotmods.append(subtr.getModelImages())
+            #     plotmodnames.append('try ' + name)
+
         print 'Log-probs:', lnps
 
-        #src_lnps.append(lnps)
+        # if plots:
+        #    _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
+
         
         nbands = len(bands)
         nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
@@ -1028,6 +1057,48 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         #print 'Relative penalized log-probs:'
         #for k in keys:
         #    print '  ', k, ':', plnps[k]
+
+        if plots:
+            plt.clf()
+            rows,cols = 2, 5
+
+            #mods = OrderedDict(none=None, ptsrc=ptsrc, dev=dev, exp=exp, comp=comp)
+            mods = OrderedDict([('none',None), ('ptsrc',ptsrc), ('dev',dev),
+                                ('exp',exp), ('comp',comp)])
+            for imod,modname in enumerate(mods.keys()):
+                subcat[i] = mods[modname]
+
+                plt.subplot(rows, cols, imod+1)
+                if modname != 'none':
+                    modimgs = subtr.getModelImages()
+                    comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                                images=modimgs)
+                    dimshow(get_rgb(comods, bands))
+                    plt.title(modname)
+
+                    chisqs = [((tim.getImage() - mod) * tim.getInvError())**2
+                              for tim,mod in zip(subtims, modimgs)]
+                else:
+
+                    coimgs, cons = compute_coadds(subtims, bands, blobw, blobh, subtarget)
+                    dimshow(get_rgb(coimgs, bands))
+                    ax = plt.axis()
+                    ok,x,y = subtarget.radec2pixelxy(src.getPosition().ra, src.getPosition().dec)
+                    plt.plot(x-1, y-1, 'r+')
+                    plt.axis(ax)
+                    plt.title('Image')
+
+                    chisqs = [((tim.getImage()) * tim.getInvError())**2
+                              for tim in subtims]
+                cochisqs,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                             images=chisqs)
+                cochisq = reduce(np.add, cochisqs)
+
+                plt.subplot(rows, cols, imod+1+cols)
+                dimshow(cochisq, vmin=0, vmax=25)
+                plt.title('dlnp %.0f' % plnps[modname])
+
+            ps.savefig()
 
         keepmod = 'none'
         keepsrc = None
@@ -1185,6 +1256,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
     
     make_coimgs = (coimgs is None)
     if make_coimgs:
+        print '_plot_mods: blob shape', (blobh, blobw)
         coimgs = [np.zeros((blobh,blobw)) for b in bands]
         cons   = [np.zeros((blobh,blobw)) for b in bands]
 
@@ -1196,7 +1268,14 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
+            print '_plot_mods: tim shape', tim.shape
+
             (Yo,Xo,Yi,Xi) = tim.resamp
+            print 'Yo', Yo.min(), Yo.max()
+            print 'Xo', Xo.min(), Xo.max()
+            print 'Yi', Yi.min(), Yi.max()
+            print 'Xi', Xi.min(), Xi.max()
+
             rechi = np.zeros((blobh,blobw))
             chilist = []
             comodn[Yo,Xo] += 1
@@ -2058,10 +2137,11 @@ def stage_writecat(
     print 'Wrote', fn, 'with extinction'
 
 
-if __name__ == '__main__':
+def main():
     from astrometry.util.stages import *
     import optparse
     import logging
+    from astrometry.util.multiproc import multiproc
 
     ep = '''
 eg, to run a small field containing a cluster:
@@ -2132,7 +2212,6 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         kwargs.update(ps=ps)
 
     if opt.threads and opt.threads > 1:
-        from astrometry.util.multiproc import multiproc
         mp = multiproc(opt.threads)
     else:
         mp = multiproc()
@@ -2173,3 +2252,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                  initial_args=initargs, **kwargs)
 
     print 'All done:', Time()-t0
+
+
+if __name__ == '__main__':
+    main()
