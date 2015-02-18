@@ -23,7 +23,8 @@ from astrometry.sdss import DR9, band_index, AsTransWrapper
 from astrometry.util.resample import resample_with_wcs,OverlapError
 
 from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
-from tractor.engine import get_class_from_name, Image
+from tractor.engine import Image
+from tractor.utils import get_class_from_name
 from tractor.psfex import PsfEx
 from tractor.sdss import get_tractor_sources_dr9
 from tractor.ellipses import *
