@@ -52,8 +52,9 @@ class SFDMap(object):
         'DES Y': 1.058,
         }
 
-    def __init__(self, ngp_filename=None, sgp_filename=None):
-        dustdir = os.environ.get('DUST_DIR', None)
+    def __init__(self, ngp_filename=None, sgp_filename=None, dustdir=None):
+        if dustdir is None:
+            dustdir = os.environ.get('DUST_DIR', None)
         if dustdir is not None:
             dustdir = os.path.join(dustdir, 'maps')
         else:
@@ -74,29 +75,30 @@ class SFDMap(object):
 
     @staticmethod
     def bilinear_interp_nonzero(image, x, y):
+        H,W = image.shape
         x0 = np.floor(x).astype(int)
         y0 = np.floor(y).astype(int)
         # Bilinear interpolate, but not outside the bounds (where ebv=0)
-        fx = x - x0
+        fx = np.clip(x - x0, 0., 1.)
         ebvA = image[y0,x0]
-        ebvB = image[y0,x0+1]
-        ebv1 = ebvA * fx + ebvB * (1.-fx)
+        ebvB = image[y0, np.clip(x0+1, 0, W-1)]
+        ebv1 = (1.-fx) * ebvA + fx * ebvB
         ebv1[ebvA == 0] = ebvB[ebvA == 0]
         ebv1[ebvB == 0] = ebvA[ebvB == 0]
 
-        ebvA = image[y0+1,x0]
-        ebvB = image[y0+1,x0+1]
-        ebv2 = ebvA * fx + ebvB * (1.-fx)
+        ebvA = image[np.clip(y0+1, 0, H-1), x0]
+        ebvB = image[np.clip(y0+1, 0, H-1), np.clip(x0+1, 0, W-1)]
+        ebv2 = (1.-fx) * ebvA + fx * ebvB
         ebv2[ebvA == 0] = ebvB[ebvA == 0]
         ebv2[ebvB == 0] = ebvA[ebvB == 0]
 
-        fy = y - y0
-        ebv = ebv1 * fy + ebv2 * (1.-fy)
+        fy = np.clip(y - y0, 0., 1.)
+        ebv = (1.-fy) * ebv1 + fy * ebv2
         ebv[ebv1 == 0] = ebv2[ebv1 == 0]
         ebv[ebv2 == 0] = ebv1[ebv2 == 0]
         return ebv
-        
-    def extinction(self, filts, ra, dec):
+
+    def ebv(self, ra, dec):
         l,b = radectolb(ra, dec)
         ebv = np.zeros_like(l)
         N = (b >= 0)
@@ -107,16 +109,16 @@ class SFDMap(object):
             ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
             assert(np.all(ok == 0))
             H,W = image.shape
-            assert(np.all(x >= 1.))
-            assert(np.all(x <= W))
-            assert(np.all(y >= 1.))
-            assert(np.all(y <= H))
+            assert(np.all(x >= 0.5))
+            assert(np.all(x <= (W+0.5)))
+            assert(np.all(y >= 0.5))
+            assert(np.all(y <= (H+0.5)))
             ebv[cut] = SFDMap.bilinear_interp_nonzero(image, x-1., y-1.)
-
+        return ebv
+        
+    def extinction(self, filts, ra, dec):
+        ebv = self.ebv(ra, dec)
         factors = np.array([SFDMap.extinctions[f] for f in filts])
-
-        #a,b = np.broadcast_arrays(factors, ebv)
-        #return a*b
         return factors[np.newaxis,:] * ebv[:,np.newaxis]
 
 def segment_and_group_sources(image, T):
