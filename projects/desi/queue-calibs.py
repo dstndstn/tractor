@@ -8,9 +8,17 @@ from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
 
 '''
+This script (with manual editing) can produce lists of CCD indices for calibration:
+
 python projects/desi/queue-calibs.py  | qdo load cal -
 qdo launch cal 1 --batchopts "-A cosmo -t 1-50" --walltime=24:00:00 --batchqueue serial --script projects/desi/run-calib.py
 #qdo launch cal 1 --batchopts "-A cosmo -t 1-10" --walltime=24:00:00 --batchqueue serial
+
+Or
+qdo launch cal 8 --batchopts "-A cosmo -t 1-6" --pack --walltime=30:00 --batchqueue debug --script projects/desi/run-calib.py
+
+
+Or lists of bricks to run in production:
 
 python projects/desi/queue-calibs.py  | qdo load bricks -
 qdo launch bricks 1 --batchopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial -o pipebrick-logs -j oe -l pvmem=6GB" \
@@ -29,17 +37,6 @@ def log(*s):
 
 if __name__ == '__main__':
 
-    if False:
-        # tune-ups:
-        fns = glob('pipebrick-cats/tractor-phot-b??????.fits')
-        fns.sort()
-        for fn in fns:
-            fn = fn.replace('pipebrick-cats/tractor-phot-b', '')
-            fn = fn.replace('.fits', '')
-            brickid = int(fn, 10)
-            print brickid
-        sys.exit(0)
-
     D = Decals()
     B = D.get_bricks()
 
@@ -53,17 +50,15 @@ if __name__ == '__main__':
     # #plt.scatter(B.ra[I], B.dec[I], c=counts)
     # plt.savefig('bricks2.png')
 
-    #B.cut((B.ra > 240) * (B.ra < 250) * (B.dec > 5) * (B.dec < 12))
-
     # EDR:
     # 535 bricks, ~7000 CCDs
-    rlo,rhi = 240,245
-    dlo,dhi =   5, 12
+    # rlo,rhi = 240,245
+    # dlo,dhi =   5, 12
 
     # 860 bricks
     # ~10,000 CCDs
-    rlo,rhi = 239,246
-    dlo,dhi =   5, 13
+    # rlo,rhi = 239,246
+    # dlo,dhi =   5, 13
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -72,10 +67,14 @@ if __name__ == '__main__':
     #rlo,rhi = 148.9, 151.2
     #dlo,dhi = 0.9, 3.5
 
+    # A nice well-behaved region
+    rlo,rhi = 243.6, 244.6
+    dlo,dhi = 8.1, 8.6
+
     # DES Stripe82
     #rlo,rhi = 316., 6.
-    rlo,rhi = 350.,360.
-    dlo,dhi = -6., 4.
+    # rlo,rhi = 350.,360.
+    # dlo,dhi = -6., 4.
 
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
@@ -89,6 +88,52 @@ if __name__ == '__main__':
     else: # RA wrap
         B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
+
+    for b in B:
+        print b.brickname
+    sys.exit(0)
+    
+    #B.cut(B.brickname == '1498p017')
+    #log(len(B), 'bricks for real')
+
+
+    T = D.get_ccds()
+    log(len(T), 'CCDs')
+    
+    bands = 'grz'
+    log('Filters:', np.unique(T.filter))
+    T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
+    log('Cut to', len(T), 'CCDs in filters', bands)
+
+    allI = set()
+    for b in B:
+        wcs = wcs_for_brick(b)
+        I = ccds_touching_wcs(wcs, T)
+        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+
+        #if len(I):
+        #    print b.brickname
+
+        allI.update(I)
+    allI = list(allI)
+    allI.sort()
+
+    f = open('jobs','w')
+    log('Total of', len(allI), 'CCDs')
+    for i in allI:
+        #im = DecamImage(T[i])
+        #if not im.run_calibs(im, None, None, None, just_check=True,
+        #                     psfex=False, psfexfit=False):
+        #    continue
+        f.write('%i\n' % i)
+    f.close()
+    print 'Wrote "jobs"'
+
+    sys.exit(0)
+    
+
+
+    # Various tune-ups and other stuff below here...
 
     #B.writeto('edrplus-bricks.fits')
 
@@ -195,27 +240,6 @@ if __name__ == '__main__':
     
         sys.exit(0)
         
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
-    
-    bands = 'grz'
-    log('Filters:', np.unique(T.filter))
-    T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
-    log('Cut to', len(T), 'CCDs in filters', bands)
-
-    allI = set()
-    for b in B:
-        wcs = wcs_for_brick(b)
-        I = ccds_touching_wcs(wcs, T)
-        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-
-        if len(I):
-            print b.brickid
-
-        allI.update(I)
-    allI = list(allI)
-    allI.sort()
-
     #T.cut(allI)
     #T.writeto('edr-ccds.fits')
     sys.exit(0)

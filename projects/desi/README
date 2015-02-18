@@ -4,6 +4,7 @@ Code for the analysis of the DECam Legacy Survey (DECaLS).
 runbrick.py -- run the Tractor analysis of one DECaLS brick.
 common.py -- used by runbrick.py and others
 make-exposure-list.py -- to create the decals-ccds.fits metadata summary
+pipebrick.sh -- for running "runbrick.py" in production runs (via qdo)
 
 ps1-astrometry-index.py -- we built some Astrometry.net index files from Pan-STARRS1 data
 sdss-astrometry-index.py -- Astrometry.net index files from SDSS
@@ -23,13 +24,35 @@ How various files are generated:
 
 - zeropoints.fits: from Arjun's FITS tables of zeropoints:
 
-python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoint_CP*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
-    
-python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/global/homes/a/arjundey/ZeroPoint/ZeroPoint_*_v2.fits')]; T = merge_tables(TT); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
+ python -c "import numpy as np; from glob import glob; from astrometry.util.fits import *; TT = [fits_table(x) for x in glob('/global/homes/a/arjundey/ZeroPoints/ZeroPoint_*.fits.gz')]; T = merge_tables(TT, columns='fillzero'); T.expnum = np.array([int(x) for x in T.expnum]); T.writeto('zp.fits')"
 
 
 - decals-ccds.fits:
 
-python -u projects/desi/make-exposure-list.py --trim /global/homes/d/dstn/cosmo/staging/decam/ -o 1.fits ~/cosmo/staging/decam/CP20140810/c4d_140809_04*_ooi*.fits.fz > log 2> err &
+For DR1:
 
-python -c "from astrometry.util.fits import *; TT = [fits_table(fn) for fn in ['decals-ccds-CPv2.fits', 'cosmos-ccds.fits', 'ccds-des-stripe82.fits']]; T=merge_tables(TT, columns='fillzero'); T.writeto('decals-ccds.fits')"
+python -u projects/desi/make-exposure-list.py -o decals-ccds-dr1.fits --trim decals/images/ decals/images/decam/{COSMOS,CP*_v2,CP20141227,CP20150108,DESY1_Stripe82}/*_ooi_* > list.log 2>&1 &
+
+
+
+
+- cosmos-subset-ccds.fits:
+
+-attempt to select a DECaLS-like subset of the COSMOS imaging we have.
+-g exptime ~  75- 90 s, total ~ 240 s
+-r exptime ~  65-125 s, total ~ 240 s
+-z exptime ~     125 s, total ~ 375 s
+COSMOS has: g: 11 x 30s exposures (also 10, 60, 300, 600)
+want 8
+  177083, 312823, 312824, 312825, 312826, 312827, 313856, 314042,
+  314046, 314050, 314054
+r: 9 x 40s (also 600)
+want 6
+  312828, 312829, 312830, 312831, 313855, 314041, 314045, 314049,
+  314053
+z: 3 x 100s (also 9 x 30s, 300s, 500, 999.999+, 1000 s)
+want 3
+  192440, 192768, 193180
+9 x 30s:
+  312836, 312837, 312838, 312839, 313853, 314039, 314043, 314047,
+  314051

@@ -23,7 +23,8 @@ from astrometry.sdss import DR9, band_index, AsTransWrapper
 from astrometry.util.resample import resample_with_wcs,OverlapError
 
 from tractor.basics import ConstantSky, NanoMaggies, ConstantFitsWcs, LinearPhotoCal
-from tractor.engine import get_class_from_name, Image
+from tractor.engine import Image
+from tractor.utils import get_class_from_name
 from tractor.psfex import PsfEx
 from tractor.sdss import get_tractor_sources_dr9
 from tractor.ellipses import *
@@ -106,6 +107,8 @@ class SFDMap(object):
                               (self.southwcs, self.south, np.logical_not(N))]:
             # Our WCS routines are mis-named... the SFD WCSes convert 
             #   X,Y <-> L,B.
+            if sum(cut) == 0:
+                continue
             ok,x,y = wcs.radec2pixelxy(l[cut], b[cut])
             assert(np.all(ok == 0))
             H,W = image.shape
@@ -121,11 +124,13 @@ class SFDMap(object):
         factors = np.array([SFDMap.extinctions[f] for f in filts])
         return factors[np.newaxis,:] * ebv[:,np.newaxis]
 
-def segment_and_group_sources(image, T):
+def segment_and_group_sources(image, T, name=None):
     '''
     *image*: binary image that defines "blobs"
     *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
       - ".blob" field is added.
+
+    *name*: for debugging only
 
     Returns: (blobs, blobsrcs, blobslices)
 
@@ -186,11 +191,24 @@ def segment_and_group_sources(image, T):
     for k,v in blobmap.items():
         bm[k] = v
     bm[0] = -1
+
+    # DEBUG
+    fitsio.write('blobs-before-%s.fits' % name, blobs)
+
     blobs = bm[blobs]
+
+    fitsio.write('blobs-after-%s.fits' % name, blobs)
+
 
     for j,Isrcs in enumerate(blobsrcs):
         for i in Isrcs:
-            assert(blobs[T.ity[i], T.itx[i]] == j)
+            #assert(blobs[T.ity[i], T.itx[i]] == j)
+            if (blobs[T.ity[i], T.itx[i]] != j):
+                print '---------------------------!!!--------------------------'
+                print 'Blob', j, 'sources', Isrcs
+                print 'Source', i, 'coords x,y', T.itx[i], T.ity[i]
+                print 'Expected blob value', j, 'but got', blobs[T.ity[i], T.itx[i]]
+
     T.blob = blobs[T.ity, T.itx]
     assert(len(blobsrcs) == len(blobslices))
 
@@ -726,7 +744,7 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     r,d = targetwcs.radec_center()
     #print len(T), 'ccds'
     #print 'trad', trad, 'ccdrad', ccdrad
-    I = np.nonzero(np.abs(T.dec - d) < rad)
+    I, = np.nonzero(np.abs(T.dec - d) < rad)
     #print 'Cut to', len(I), 'on Dec'
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
     #print 'Cut to', len(I), 'on RA,Dec'
@@ -875,14 +893,14 @@ class Decals(object):
 
     def get_brick(self, brickid):
         B = self.get_bricks_readonly()
-        I = np.nonzero(B.brickid == brickid)
+        I, = np.nonzero(B.brickid == brickid)
         if len(I) == 0:
             return None
         return B[I[0]]
 
     def get_brick_by_name(self, brickname):
         B = self.get_bricks_readonly()
-        I = np.nonzero(np.array([n == brickname for n in B.brickname]))
+        I, = np.nonzero(np.array([n == brickname for n in B.brickname]))
         if len(I) == 0:
             return None
         return B[I[0]]
@@ -909,11 +927,11 @@ class Decals(object):
             ra  = np.rad2deg(np.arctan2(s, c))
             J = tree_search_radec(self.bricktree, ra, dec, radius)
             I = J[np.nonzero((bricks.ra1[J]  <= rahi ) * (bricks.ra2[J]  >= ralo) *
-                             (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))]
+                             (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))[0]]
             return I
             
-        I = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
-                       (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+        I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                        (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
     
     def get_ccds(self):
@@ -938,7 +956,7 @@ class Decals(object):
         C = self.ccds_touching_wcs(targetwcs)
         # Sort by band
         if bands is not None:
-            C.cut(np.hstack([np.nonzero(C.filter == band) for band in bands]))
+            C.cut(np.hstack([np.nonzero(C.filter == band)[0] for band in bands]))
         ims = []
         for t in C:
             print
@@ -973,11 +991,11 @@ class Decals(object):
 
             #self.ZP.about()
 
-        I = np.nonzero(self.ZP.expnum == im.expnum)
+        I, = np.nonzero(self.ZP.expnum == im.expnum)
         #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
             #I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
-            I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            I, = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
         # No updated zeropoint -- use header MAGZERO from primary HDU.

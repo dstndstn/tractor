@@ -233,44 +233,6 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
 
     ivbandcols = []
 
-    # bandorder = 'ugrizY'
-    # bands = []
-    # bandcols = []
-    # for col in T.get_columns():
-    #     pre,post = 'decam_', '_nanomaggies'
-    #     if col.startswith(pre) and col.endswith(post) and len(col) == len(pre+post)+1:
-    #         band = col[len(pre)]
-    #         bands.append(band)
-    #         bandcols.append(pre + band + post) # = col!
-    #         if invvars:
-    #             ivbandcols.append('decam_%s_nanomaggies_invvar' % band)
-    # 
-    # # Permute back to "correct" order.  This is all kinda bass akwards
-    # ibands = [bandorder.index(b) for b in bands]
-    # I = np.argsort(ibands)
-    # bands = [bands[i] for i in I]
-    # bandcols = [bandcols[i] for i in I]
-    # print 'Found bands:', bands, 'in', bandcols
-    # if invvars:
-    #     ivbandcols = [ivbandcols[i] for in I]
-    #     print 'invvars', ivbandcols
-
-
-    # decam_g_nanomaggies, etc
-    if False:
-        bandcols = []
-        ivbandcols = []
-        for band in bands:
-            col = 'decam_%s_nanomaggies' % band
-            if not col in T.get_columns():
-                raise ValueError('Did not find flux for band %s in catalog' % band)
-            bandcols.append(col)
-            if invvars:
-                col = 'decam_%s_nanomaggies_invvar' % band
-                if not col in T.get_columns():
-                    raise ValueError('Did not find flux invvar for band %s in catalog' % band)
-                ivbandcols.append(col)
-
     allbands = 'ugrizY'
 
     ibands = np.array([allbands.index(b) for b in bands])
@@ -292,14 +254,6 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
         if invvars:
             # ASSUME & hard-code that the position and brightness are the first params
             ivs.extend([t.ra_ivar, t.dec_ivar] + list(t.decam_flux_ivar[ibands]))
-                       
-
-            # print 'pos', pos
-            # print 'bright', br
-            # iv = np.array([t.ra_invvar, t.dec_invvar] +
-            #               [t.get(c) for c in ivbandcols])
-            # print 'ivs:', iv
-            # print 'sigmas:', 1./np.sqrt(iv)
             
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
             # hard-code knowledge that third param is the ellipse
@@ -313,9 +267,9 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             params.append(ell)
             if invvars:
                 if issubclass(clazz, DevGalaxy):
-                    ivs.extend(t.shapedev_invvar)
+                    ivs.extend(t.shapedev_ivar)
                 else:
-                    ivs.extend(t.shapeexp_invvar)
+                    ivs.extend(t.shapeexp_ivar)
             
         elif issubclass(clazz, FixedCompositeGalaxy):
             # hard-code knowledge that params are fracDev, shapeE, shapeD
@@ -330,9 +284,9 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             params.append(de)
 
             if invvars:
-                ivs.append(t.fracdev_invvar)
-                ivs.extend(t.shapeexp_invvar)
-                ivs.extend(t.shapedev_invvar)
+                ivs.append(t.fracdev_ivar)
+                ivs.extend(t.shapeexp_ivar)
+                ivs.extend(t.shapedev_ivar)
 
         elif issubclass(clazz, PointSource):
             pass

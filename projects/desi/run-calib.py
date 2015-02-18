@@ -27,6 +27,6 @@ if __name__ == '__main__':
         mock_psf = False
         kwargs = dict()
 
-        kwargs.update(psfex=False, psfexfit=False)
+        # kwargs.update(psfex=False, psfexfit=False)
 
         run_calibs((im, kwargs, t.ra, t.dec, pixscale, mock_psf))
