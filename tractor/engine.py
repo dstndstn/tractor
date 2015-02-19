@@ -217,16 +217,22 @@ class Image(MultiParams):
         
     def toFits(self, fits, prefix='', primheader=None, imageheader=None,
                invvarheader=None):
+        hdr = self.getFitsHeader(header=primheader)
+        fits.write(None, header=hdr)
+        fits.write(self.getImage(), header=imageheader)
+        fits.write(self.getInvvar(), header=invvarheader)
+
+    def getFitsHeader(self, header=None):
         psf = self.getPsf()
         wcs = self.getWcs()
         sky = self.getSky()
         pcal = self.getPhotoCal()
         
-        if primheader is None:
+        if header is None:
             import fitsio
             hdr = fitsio.FITSHDR()
         else:
-            hdr = primheader
+            hdr = header
         tt = type(psf)
         psf_type = '%s.%s' % (tt.__module__, tt.__name__)
         tt = type(wcs)
@@ -247,10 +253,23 @@ class Image(MultiParams):
         wcs.toFitsHeader(hdr,  prefix + 'WCS_')
         sky.toFitsHeader(hdr,  prefix + 'SKY_')
         pcal.toFitsHeader(hdr, prefix + 'PHO_')
+        return hdr
 
-        fits.write(None, header=hdr)
-        fits.write(self.getImage(), header=imageheader)
-        fits.write(self.getInvvar(), header=invvarheader)
+    def getStandardFitsHeader(self, header=None):
+        if header is None:
+            import fitsio
+            hdr = fitsio.FITSHDR()
+        else:
+            hdr = header
+        psf = self.getPsf()
+        wcs = self.getWcs()
+        sky = self.getSky()
+        pcal = self.getPhotoCal()
+        psf.toStandardFitsHeader(hdr)
+        wcs.toStandardFitsHeader(hdr)
+        sky.toStandardFitsHeader(hdr)
+        pcal.toStandardFitsHeader(hdr)
+        return hdr
 
     
         

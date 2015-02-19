@@ -97,6 +97,9 @@ class ImageCalibration(object):
             k = prefix + 'P%i' % i
             hdr.add_record(dict(name=k, value=params[i], comment=names[i]))
 
+    def toStandardFitsHeader(self, hdr):
+        pass
+
     @classmethod
     def fromFitsHeader(clazz, hdr, prefix=''):
         args = []

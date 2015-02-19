@@ -14,7 +14,8 @@ from math import ceil, floor, pi, sqrt, exp
 
 from .engine import *
 from .utils import *
-from . import ducks
+#from . import ducks
+import ducks
 
 import mixture_profiles as mp
 import numpy as np
@@ -311,6 +312,15 @@ class NanoMaggies(Fluxes):
         return 10.**((zp - 22.5)/2.5)
 
     @staticmethod
+    def scaleToZeropoint(zpscale):
+        '''
+        Converts a scale factor (by which nanomaggies should be
+        multiplied to produce image counts) into a traditional
+        magnitude zeropoint.
+        '''
+        return 22.5 + 2.5 * np.log10(zpscale)
+    
+    @staticmethod
     def fluxErrorsToMagErrors(flux, flux_invvar):
         flux = np.atleast_1d(flux)
         flux_invvar = np.atleast_1d(flux_invvar)
@@ -418,7 +428,13 @@ class LinearPhotoCal(ScalarParam, ducks.ImageCalibration):
         else:
             counts = brightness.getFlux(self.band) * self.val
         return counts
-        
+
+    def toStandardFitsHeader(self, hdr):
+        hdr.add_record(
+            dict(key='MAGZP',
+                 value=NanoMaggies.scaleToZeropoint(self.getScale()),
+                 comment='Zeropoint magnitude'))
+    
 
 class NullWCS(BaseParams, ducks.ImageCalibration):
     '''
@@ -608,6 +624,15 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
     def pixel_scale(self):
         return self.wcs.pixel_scale()
 
+    def toStandardFitsHeader(self, hdr):
+        if self.x0 != 0 or self.y0 != 0:
+            wcs = self.wcs.get_subimage(self.x0, self.y0,
+                                        wcs.get_width()-x0,
+                                        wcs.get_height()-y0)
+        else:
+            wcs = self.wcs
+        wcs.add_to_header(hdr)
+
     
 ### FIXME -- this should be called TanWcs!
 class FitsWcs(ConstantFitsWcs, ducks.ImageCalibration):
@@ -793,6 +818,9 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
     def subtract(self, con):
         self.val -= con
 
+    def toStandardFitsHeader(self, hdr):
+        hdr.add_record(dict(key='SKY', comment='Sky value in Tractor model',
+                            value=self.val))
 
 # class OffsetConstantSky(ConstantSky):
 #     '''
