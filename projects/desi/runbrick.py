@@ -505,6 +505,8 @@ def stage_fitblobs_finish(
     T.dchisq = dchisqs.astype(np.float32)
     # Set -0 to 0
     T.dchisq[T.dchisq == 0.] = 0.
+    # Make dchisq relative to the first element ("none" model)
+    T.dchisq = T.dchisq[:, 1:] - T.dchisq[:, 0]
     
     invvars = srcivs
 
@@ -1123,6 +1125,10 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
             keepsrc = ptsrc
             keepmod = 'ptsrc'
 
+            # This is our "upgrade" threshold: how much better a galaxy
+            # fit has to be versus ptsrc, and comp versus galaxy.
+            dlnp = 0.5 * 3.**2
+            
             expdiff = plnps['exp'] - plnps[keepmod]
             devdiff = plnps['dev'] - plnps[keepmod]
             if expdiff > dlnp or devdiff > dlnp:
