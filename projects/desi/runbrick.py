@@ -503,6 +503,8 @@ def stage_fitblobs_finish(
     T.fracflux = fracflux
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
+    # Set -0 to 0
+    T.dchisq[T.dchisq == 0.] = 0.
     
     invvars = srcivs
 
