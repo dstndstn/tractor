@@ -503,6 +503,10 @@ def stage_fitblobs_finish(
     T.fracflux = fracflux
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
+    # Set -0 to 0
+    T.dchisq[T.dchisq == 0.] = 0.
+    # Make dchisq relative to the first element ("none" model)
+    T.dchisq = T.dchisq[:, 1:] - T.dchisq[:, 0]
     
     invvars = srcivs
 
@@ -1048,8 +1052,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
         
         nbands = len(bands)
-        nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
-                       dev=5 + nbands, comp=9 + nbands)
+        nparams = dict(none=0, ptsrc=2, exp=5, dev=5, comp=9)
 
         plnps = dict([(k, (lnps[k]-lnp0) - 0.5 * nparams[k])
                       for k in nparams.keys()])
@@ -1103,16 +1106,29 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         keepmod = 'none'
         keepsrc = None
 
-        # Model-switching recipe: move up the ladder
-        
+        # We decide separately whether to include the source in the
+        # catalog and what type to give it.
+
+        # This is our "detection threshold": 5-sigma in
+        # *penalized* units; ie, ~5.2-sigma for point sources
         dlnp = 0.5 * 5.**2
-        print 'Needed delta-logprob for upgrade:', dlnp
-        diff = plnps['ptsrc'] - plnps[keepmod]
+        # Take the best of ptsrc, dev, exp, comp
+        diff = max([plnps[name] - plnps[keepmod]
+                    for name in ['ptsrc', 'dev', 'exp', 'comp']])
         if diff > dlnp:
-            print 'Upgrading from none to ptsrc:', diff
+            # We're going to keep this source!
+            # It starts out as a point source.
+            # This has the weird outcome that a source can be accepted
+            # into the catalog on the basis of its "deV" fit, but appear
+            # as a point source because the deV fit is not *convincingly*
+            # better than the ptsrc fit.
             keepsrc = ptsrc
             keepmod = 'ptsrc'
 
+            # This is our "upgrade" threshold: how much better a galaxy
+            # fit has to be versus ptsrc, and comp versus galaxy.
+            dlnp = 0.5 * 3.**2
+            
             expdiff = plnps['exp'] - plnps[keepmod]
             devdiff = plnps['dev'] - plnps[keepmod]
             if expdiff > dlnp or devdiff > dlnp:
@@ -1228,8 +1244,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 # (mod - patch) is flux from others
                 # (mod - patch) / counts is normalized flux from others
                 # patch/counts is unit profile
-                fracflux_num[isrc,iband] += np.sum((np.abs(mod[slc] - patch.patch) * np.abs(patch.patch))) / counts[isrc]**2
-                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
+                fracflux_num[isrc,iband] += np.sum((mod[slc] - patch.patch) * np.abs(patch.patch)) / counts[isrc]**2
+                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
@@ -1238,8 +1254,14 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 if patch is None:
                     continue
                 slc = patch.getSlice(mod)
-                rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / counts[isrc]
-                rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
+                #rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / np.abs(counts[isrc])
+                #rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch) / counts[isrc]
+                # We compute numerator and denom separately to handle edge objects, where
+                # sum(patch.patch) < counts.  Also, to normalize by the number of images.
+                # (Being on the edge of an image is like being in half an image.)
+                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch) / counts[isrc]
+                # If the source is not near an image edge, sum(patch.patch) == counts[isrc].
+                rchi2_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
 
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
@@ -2131,7 +2153,7 @@ def stage_writecat(
     sfd = SFDMap()
     system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
     filts = ['%s %s' % (system[f], f) for f in allbands]
-    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
+    T2.decam_extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
     
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn, 'with extinction'

@@ -87,7 +87,10 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         self.ensureFit()
         vals = np.zeros(len(self.splines))
         import scipy
-        if scipy.__version__ >= '0.14.0':
+        ver = [int(x,10) for x in scipy.__version__.split('.')]
+        #if scipy.__version__ >= '0.14.0':
+        ## Weirdly, this seems to work
+        if ver >= [0, 14, 0]:
             kwa = dict(grid=False)
         else:
             kwa = {}
