@@ -1244,8 +1244,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 # (mod - patch) is flux from others
                 # (mod - patch) / counts is normalized flux from others
                 # patch/counts is unit profile
-                fracflux_num[isrc,iband] += np.sum((np.abs(mod[slc] - patch.patch) * np.abs(patch.patch))) / counts[isrc]**2
-                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
+                fracflux_num[isrc,iband] += np.sum((mod[slc] - patch.patch) * np.abs(patch.patch)) / counts[isrc]**2
+                fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
