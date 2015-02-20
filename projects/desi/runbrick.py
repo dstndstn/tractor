@@ -1254,8 +1254,14 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 if patch is None:
                     continue
                 slc = patch.getSlice(mod)
-                rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / counts[isrc]
-                rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch)) / counts[isrc]
+                #rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / np.abs(counts[isrc])
+                #rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch) / counts[isrc]
+                # We compute numerator and denom separately to handle edge objects, where
+                # sum(patch.patch) < counts.  Also, to normalize by the number of images.
+                # (Being on the edge of an image is like being in half an image.)
+                rchi2_num[isrc,iband] += np.sum(chisq[slc] * patch.patch) / counts[isrc]
+                # If the source is not near an image edge, sum(patch.patch) == counts[isrc].
+                rchi2_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
 
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
