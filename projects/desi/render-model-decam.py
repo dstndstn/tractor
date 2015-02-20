@@ -8,8 +8,12 @@ if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser(usage='%prog <decam-image-filename> <decam-HDU> <catalog.fits> <output-image.fits>')
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 2046 0 4094")')
-    parser.add_option('--nmgy', action='store_true', help='Render image in nanomaggy units, not counts')
-    parser.add_option('--no-sky', action='store_true', help='Do not add sky model')
+    parser.add_option('--nmgy', action='store_true', default=False,
+                      help='Render image in nanomaggy units, not counts')
+    parser.add_option('--no-sky', action='store_true', default=False,
+                      help='Do not add sky model (default is to add sky estimate back in)')
+    parser.add_option('--invvar', action='store_true', default=False,
+                      help='Write inverse-variance image as second HDU')
     opt,args = parser.parse_args()
 
     if len(args) != 4:
@@ -36,7 +40,8 @@ if __name__ == '__main__':
 
     im = DecamImage(T[0])
     decals = Decals()
-    tim = im.get_tractor_image(decals, slc=zoomslice)
+    tim = im.get_tractor_image(decals, slc=zoomslice, nanomaggies=opt.nmgy,
+                               subsky=opt.no_sky)
     print 'Got tim:', tim
 
     #if opt.nmgy:
@@ -55,7 +60,27 @@ if __name__ == '__main__':
     print 'Creating FITS header...'
     hdr = tim.getFitsHeader()
     tim.getStandardFitsHeader(header=hdr)
-    
-    fitsio.write(outfn, mod, clobber=True)
+
+    if opt.nmgy:
+        scale = tim.zpscale
+    else:
+        scale = 1.
+    hdr.add_record(dict(name='ZPSCALE', value=scale,
+                        comment='Scaling to get to image counts'))
+    if opt.no_sky:
+        sky = tim.midsky
+    else:
+        sky = 0.
+    hdr.add_record(dict(name='SKYLEVEL', value=sky,
+                        comment='Sky level to add to model'))
+
+    fits = fitsio.FITS(outfn, 'rw', clobber=True)
+    fits.write(None, header=hdr)
+    fits.write(mod)
+    if opt.invvar:
+        fits.write(tim.getInvvar())
+    fits.close()
+
+    #fitsio.write(outfn, mod, header=hdr, clobber=True)
     print 'Wrote model to', outfn
     

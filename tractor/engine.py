@@ -217,12 +217,12 @@ class Image(MultiParams):
         
     def toFits(self, fits, prefix='', primheader=None, imageheader=None,
                invvarheader=None):
-        hdr = self.getFitsHeader(header=primheader)
+        hdr = self.getFitsHeader(header=primheader, prefix=prefix)
         fits.write(None, header=hdr)
         fits.write(self.getImage(), header=imageheader)
         fits.write(self.getInvvar(), header=invvarheader)
 
-    def getFitsHeader(self, header=None):
+    def getFitsHeader(self, header=None, prefix=''):
         psf = self.getPsf()
         wcs = self.getWcs()
         sky = self.getSky()
