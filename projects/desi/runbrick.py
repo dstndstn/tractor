@@ -1048,8 +1048,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
         
         nbands = len(bands)
-        nparams = dict(none=0, ptsrc=2 + nbands, exp=5 + nbands,
-                       dev=5 + nbands, comp=9 + nbands)
+        nparams = dict(none=0, ptsrc=2, exp=5, dev=5, comp=9)
 
         plnps = dict([(k, (lnps[k]-lnp0) - 0.5 * nparams[k])
                       for k in nparams.keys()])
@@ -1103,13 +1102,22 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
         keepmod = 'none'
         keepsrc = None
 
-        # Model-switching recipe: move up the ladder
-        
+        # We decide separately whether to include the source in the
+        # catalog and what type to give it.
+
+        # This is our "detection threshold": 5-sigma in
+        # *penalized* units; ie, ~5.2-sigma for point sources
         dlnp = 0.5 * 5.**2
-        print 'Needed delta-logprob for upgrade:', dlnp
-        diff = plnps['ptsrc'] - plnps[keepmod]
+        # Take the best of ptsrc, dev, exp, comp
+        diff = max([plnps[name] - plnps[keepmod]
+                    for name in ['ptsrc', 'dev', 'exp', 'comp']])
         if diff > dlnp:
-            print 'Upgrading from none to ptsrc:', diff
+            # We're going to keep this source!
+            # It starts out as a point source.
+            # This has the weird outcome that a source can be accepted
+            # into the catalog on the basis of its "deV" fit, but appear
+            # as a point source because the deV fit is not *convincingly*
+            # better than the ptsrc fit.
             keepsrc = ptsrc
             keepmod = 'ptsrc'
 
