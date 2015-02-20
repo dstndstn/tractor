@@ -2153,7 +2153,7 @@ def stage_writecat(
     sfd = SFDMap()
     system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
     filts = ['%s %s' % (system[f], f) for f in allbands]
-    T2.extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
+    T2.decam_extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
     
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn, 'with extinction'
