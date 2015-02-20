@@ -44,6 +44,7 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 class SFDMap(object):
+    # These come from Schlafly et al, arxiv 1012.4804v2, Table 6, Rv=3.1
     extinctions = {
         'SDSS u': 4.239,
         'DES g': 3.237,
