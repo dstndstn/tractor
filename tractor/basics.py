@@ -431,7 +431,7 @@ class LinearPhotoCal(ScalarParam, ducks.ImageCalibration):
 
     def toStandardFitsHeader(self, hdr):
         hdr.add_record(
-            dict(key='MAGZP',
+            dict(name='MAGZP',
                  value=NanoMaggies.scaleToZeropoint(self.getScale()),
                  comment='Zeropoint magnitude'))
     
@@ -819,7 +819,7 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
         self.val -= con
 
     def toStandardFitsHeader(self, hdr):
-        hdr.add_record(dict(key='SKY', comment='Sky value in Tractor model',
+        hdr.add_record(dict(name='SKY', comment='Sky value in Tractor model',
                             value=self.val))
 
 # class OffsetConstantSky(ConstantSky):

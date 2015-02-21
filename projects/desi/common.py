@@ -1213,7 +1213,8 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
-    def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False):
+    def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False,
+                          nanomaggies=True, subsky=True):
         '''
         slc: y,x slices
         '''
@@ -1261,19 +1262,22 @@ class DecamImage(object):
 
         magzp = decals.get_zeropoint_for(self)
         print 'magzp', magzp
-        zpscale = NanoMaggies.zeropointToScale(magzp)
+        orig_zpscale = zpscale = NanoMaggies.zeropointToScale(magzp)
         print 'zpscale', zpscale
 
         sky = self.read_sky_model()
         midsky = sky.getConstant()
-        img -= midsky
-        sky.subtract(midsky)
 
-        # Scale images to Nanomaggies
-        img /= zpscale
-        invvar *= zpscale**2
-        orig_zpscale = zpscale
-        zpscale = 1.
+        if subsky:
+            img -= midsky
+            sky.subtract(midsky)
+
+        if nanomaggies:
+            # Scale images to Nanomaggies
+            img /= zpscale
+            invvar *= zpscale**2
+            zpscale = 1.
+
         assert(np.sum(invvar > 0) > 0)
         sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
         assert(np.all(np.isfinite(img)))
@@ -1300,6 +1304,7 @@ class DecamImage(object):
                     sky=sky, name=self.name + ' ' + band)
         assert(np.all(np.isfinite(tim.getInvError())))
         tim.zr = [-3. * sig1, 10. * sig1]
+        tim.zpscale = orig_zpscale
         tim.midsky = midsky
         tim.sig1 = sig1
         tim.band = band
