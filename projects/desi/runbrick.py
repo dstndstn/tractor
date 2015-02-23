@@ -46,10 +46,13 @@ def runbrick_global_init():
     from tractor.ceres import ceres_opt
 
 def create_tractor(tims, srcs):
-    t = Tractor(tims, src)
+    import tractor
+    t = tractor.Tractor(tims, srcs)
     if nocache:
         t.disable_cache()
     return t
+
+Tractor = create_tractor
 
 # didn't I write mp to avoid this foolishness in the first place?
 def _map(f, args):
@@ -953,7 +956,54 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     parms.append(pp[i])
                     lnps.append(lnp)
                     print 'logprob:', pp, '=', lnp
-                    
+
+
+                ##
+                s3 = s2[:2]
+                ministeps = reduce(np.append, [-s3[::-1], 0, s3])
+                print 'mini steps:', ministeps
+                for s in ministeps:
+                    pp = p0 + s * X
+                    srctractor.setParams(pp)
+                    lnp = srctractor.getLogProb()
+                    print 'logprob:', pp, '=', lnp
+
+                rows = len(ministeps)
+                cols = len(srctractor.images)
+
+                plt.figure(4, figsize=(8,6))
+                plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
+                                    right=0.99, bottom=0.01, top=0.99)
+                plt.clf()
+                k = 1
+                mods = []
+                for s in ministeps:
+                    pp = p0 + s * X
+                    srctractor.setParams(pp)
+                    print 'ministep', s
+                    print 'log prior', srctractor.getLogPrior()
+                    print 'log likelihood', srctractor.getLogLikelihood()
+                    mods.append(srctractor.getModelImages())
+                    chis = srctractor.getChiImages()
+                    # for chi in chis:
+                    #     plt.subplot(rows, cols, k)
+                    #     k += 1
+                    #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
+                    print 'chisqs:', [(chi**2).sum() for chi in chis]
+                    print 'sum:', sum([(chi**2).sum() for chi in chis])
+
+                mod0 = mods[len(ministeps)/2]
+                for modlist in mods:
+                    for mi,mod in enumerate(modlist):
+                        plt.subplot(rows, cols, k)
+                        k += 1
+                        m0 = mod0[mi]
+                        rng = m0.max() - m0.min()
+                        dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
+                                ticks=False, cmap='gray')
+                ps.savefig()
+                plt.figure(3)
+                
                 plt.plot(parms, lnps, 'r.-')
 
                 print 'Stepping in X by alphas...'
