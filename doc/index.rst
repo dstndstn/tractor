@@ -13,6 +13,7 @@ Welcome to the Tractor's documentation!
    intro
    intro2
    galsim
+   code
    oaq
    reference
    tutorial
