@@ -45,13 +45,14 @@ def runbrick_global_init():
         disable_galaxy_cache()
     from tractor.ceres import ceres_opt
 
+# Turn on/off caching for all new Tractor instances.
 def create_tractor(tims, srcs):
     import tractor
     t = tractor.Tractor(tims, srcs)
     if nocache:
         t.disable_cache()
     return t
-
+### Woot!
 Tractor = create_tractor
 
 # didn't I write mp to avoid this foolishness in the first place?
