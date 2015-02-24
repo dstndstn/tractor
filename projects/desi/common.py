@@ -1246,7 +1246,7 @@ class DecamImage(object):
         return str(self)
 
     def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False,
-                          nanomaggies=True, subsky=True):
+                          nanomaggies=True, subsky=True, tiny=5):
         '''
         slc: y,x slices
         '''
@@ -1266,7 +1266,7 @@ class DecamImage(object):
             x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
             slc = slice(y0,y1+1), slice(x0,x1+1)
 
-            if y1 - y0 < 5 or x1 - x0 < 5:
+            if y1 - y0 < tiny or x1 - x0 < tiny:
                 print 'Skipping tiny subimage'
                 return None
         if slc is not None:
