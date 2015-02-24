@@ -2316,7 +2316,7 @@ class Tractor(MultiParams):
             img = self.getImage(img)
         mod = np.zeros(img.getModelShape(), self.modtype)
         if sky:
-            img.sky.addTo(mod)
+            img.getSky().addTo(mod)
         if srcs is None:
             srcs = self.catalog
         for src in srcs:

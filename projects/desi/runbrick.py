@@ -851,8 +851,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             max_cpu_per_source = 60.
 
             # DEBUG
-            params = []
-            params.append((srctractor.getLogProb(), srctractor.getParams()))
+            DEBUG = False
+            if DEBUG:
+                params = []
+                params.append((srctractor.getLogProb(), srctractor.getParams()))
 
             cpu0 = time.clock()
             for step in range(50):
@@ -860,10 +862,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                                               alphas=alphas)
                 print 'dlnp:', dlnp, 'src', src
 
-                ### DEBUG
-                print 'DEBUG'
-                params.append((srctractor.getLogProb(), srctractor.getParams()))
-                ###
+                if DEBUG:
+                    params.append((srctractor.getLogProb(), srctractor.getParams()))
 
                 if time.clock()-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
@@ -873,167 +873,165 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     break
 
 
-            ### DEBUG
-            print 'DEBUG'
-
-            thislnp0 = srctractor.getLogProb()
-            p0 = np.array(srctractor.getParams())
-            print 'logprob:', p0, '=', thislnp0
-
-            print 'p0 type:', p0.dtype
-            px = p0 + np.zeros_like(p0)
-            srctractor.setParams(px)
-            lnpx = srctractor.getLogProb()
-            assert(lnpx == thislnp0)
-            print 'logprob:', px, '=', lnpx
-
-            scales = srctractor.getParameterScales()
-            print 'Parameter scales:', scales
-            print 'Parameters:'
-            srctractor.printThawedParams()
-
-            # getParameterScales better not have changed the params!!
-            assert(np.all(p0 == np.array(srctractor.getParams())))
-            assert(srctractor.getLogProb() == thislnp0)
-
-            pfinal = srctractor.getParams()
-            pnames = srctractor.getParamNames()
-
-            plt.figure(3, figsize=(8,6))
-
-            plt.clf()
-            for i in range(len(scales)):
-                plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
-                         [lnp for lnp,p in params], '-', label=pnames[i])
-            plt.ylabel('lnp')
-            plt.legend()
-            plt.title('scaled')
-            ps.savefig()
-
-            for i in range(len(scales)):
+            if DEBUG:
+                thislnp0 = srctractor.getLogProb()
+                p0 = np.array(srctractor.getParams())
+                print 'logprob:', p0, '=', thislnp0
+    
+                print 'p0 type:', p0.dtype
+                px = p0 + np.zeros_like(p0)
+                srctractor.setParams(px)
+                lnpx = srctractor.getLogProb()
+                assert(lnpx == thislnp0)
+                print 'logprob:', px, '=', lnpx
+    
+                scales = srctractor.getParameterScales()
+                print 'Parameter scales:', scales
+                print 'Parameters:'
+                srctractor.printThawedParams()
+    
+                # getParameterScales better not have changed the params!!
+                assert(np.all(p0 == np.array(srctractor.getParams())))
+                assert(srctractor.getLogProb() == thislnp0)
+    
+                pfinal = srctractor.getParams()
+                pnames = srctractor.getParamNames()
+    
+                plt.figure(3, figsize=(8,6))
+    
                 plt.clf()
-                #plt.subplot(2,1,1)
-                plt.plot([p[i] for lnp,p in params], '-')
-                plt.xlabel('step')
-                plt.title(pnames[i])
-                ps.savefig()
-
-                plt.clf()
-                plt.plot([p[i] for lnp,p in params],
-                         [lnp for lnp,p in params], 'b.-')
-
-                # We also want to know about d(lnp)/d(param)
-                # and d(lnp)/d(X)
-                step = 1.1
-                steps = 1.1 ** np.arange(-20, 21)
-                s2 = np.linspace(0, steps[0], 10)[1:-1]
-                steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
-                print 'Steps:', steps
-
-                plt.plot(p0[i], thislnp0, 'bx', ms=20)
-
-                print 'Stepping in param', pnames[i], '...'
-                pp = p0.copy()
-                lnps,parms = [],[]
-                for s in steps:
-                    parm = p0[i] + s / scales[i]
-                    pp[i] = parm
-                    srctractor.setParams(pp)
-                    lnp = srctractor.getLogProb()
-                    parms.append(parm)
-                    lnps.append(lnp)
-                    print 'logprob:', pp, '=', lnp
-                    
-                plt.plot(parms, lnps, 'k.-')
-                j = np.argmin(np.abs(steps - 1.))
-                plt.plot(parms[j], lnps[j], 'ko')
-
-                print 'Stepping in X...'
-                lnps,parms = [],[]
-                for s in steps:
-                    pp = p0 + s * X
-                    srctractor.setParams(pp)
-                    lnp = srctractor.getLogProb()
-                    parms.append(pp[i])
-                    lnps.append(lnp)
-                    print 'logprob:', pp, '=', lnp
-
-
-                ##
-                s3 = s2[:2]
-                ministeps = reduce(np.append, [-s3[::-1], 0, s3])
-                print 'mini steps:', ministeps
-                for s in ministeps:
-                    pp = p0 + s * X
-                    srctractor.setParams(pp)
-                    lnp = srctractor.getLogProb()
-                    print 'logprob:', pp, '=', lnp
-
-                rows = len(ministeps)
-                cols = len(srctractor.images)
-
-                plt.figure(4, figsize=(8,6))
-                plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
-                                    right=0.99, bottom=0.01, top=0.99)
-                plt.clf()
-                k = 1
-                mods = []
-                for s in ministeps:
-                    pp = p0 + s * X
-                    srctractor.setParams(pp)
-                    print 'ministep', s
-                    print 'log prior', srctractor.getLogPrior()
-                    print 'log likelihood', srctractor.getLogLikelihood()
-                    mods.append(srctractor.getModelImages())
-                    chis = srctractor.getChiImages()
-                    # for chi in chis:
-                    #     plt.subplot(rows, cols, k)
-                    #     k += 1
-                    #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
-                    print 'chisqs:', [(chi**2).sum() for chi in chis]
-                    print 'sum:', sum([(chi**2).sum() for chi in chis])
-
-                mod0 = mods[len(ministeps)/2]
-                for modlist in mods:
-                    for mi,mod in enumerate(modlist):
-                        plt.subplot(rows, cols, k)
-                        k += 1
-                        m0 = mod0[mi]
-                        rng = m0.max() - m0.min()
-                        dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
-                                ticks=False, cmap='gray')
-                ps.savefig()
-                plt.figure(3)
-                
-                plt.plot(parms, lnps, 'r.-')
-
-                print 'Stepping in X by alphas...'
-                lnps = []
-                for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
-                    pp = p0 + ss*X
-                    srctractor.setParams(pp)
-                    lnp = srctractor.getLogProb()
-                    print 'logprob:', pp, '=', lnp
-
-                    plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
-                    lnps.append(lnp)
-
-                px = p0[i] + X[i]
-                pmid = (px + p0[i]) / 2.
-                dp = np.abs((px - pmid) * 2.)
-                hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
-                lnpmid = (hi + lo) / 2.
-                dlnp = np.abs((hi - lo) * 2.)
-
+                for i in range(len(scales)):
+                    plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
+                             [lnp for lnp,p in params], '-', label=pnames[i])
                 plt.ylabel('lnp')
-                plt.title(pnames[i])
+                plt.legend()
+                plt.title('scaled')
                 ps.savefig()
-
-                plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
-                ps.savefig()
-
-            srctractor.setParams(p0)
-            ### DEBUG
+    
+                for i in range(len(scales)):
+                    plt.clf()
+                    #plt.subplot(2,1,1)
+                    plt.plot([p[i] for lnp,p in params], '-')
+                    plt.xlabel('step')
+                    plt.title(pnames[i])
+                    ps.savefig()
+    
+                    plt.clf()
+                    plt.plot([p[i] for lnp,p in params],
+                             [lnp for lnp,p in params], 'b.-')
+    
+                    # We also want to know about d(lnp)/d(param)
+                    # and d(lnp)/d(X)
+                    step = 1.1
+                    steps = 1.1 ** np.arange(-20, 21)
+                    s2 = np.linspace(0, steps[0], 10)[1:-1]
+                    steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
+                    print 'Steps:', steps
+    
+                    plt.plot(p0[i], thislnp0, 'bx', ms=20)
+    
+                    print 'Stepping in param', pnames[i], '...'
+                    pp = p0.copy()
+                    lnps,parms = [],[]
+                    for s in steps:
+                        parm = p0[i] + s / scales[i]
+                        pp[i] = parm
+                        srctractor.setParams(pp)
+                        lnp = srctractor.getLogProb()
+                        parms.append(parm)
+                        lnps.append(lnp)
+                        print 'logprob:', pp, '=', lnp
+                        
+                    plt.plot(parms, lnps, 'k.-')
+                    j = np.argmin(np.abs(steps - 1.))
+                    plt.plot(parms[j], lnps[j], 'ko')
+    
+                    print 'Stepping in X...'
+                    lnps,parms = [],[]
+                    for s in steps:
+                        pp = p0 + s * X
+                        srctractor.setParams(pp)
+                        lnp = srctractor.getLogProb()
+                        parms.append(pp[i])
+                        lnps.append(lnp)
+                        print 'logprob:', pp, '=', lnp
+    
+    
+                    ##
+                    s3 = s2[:2]
+                    ministeps = reduce(np.append, [-s3[::-1], 0, s3])
+                    print 'mini steps:', ministeps
+                    for s in ministeps:
+                        pp = p0 + s * X
+                        srctractor.setParams(pp)
+                        lnp = srctractor.getLogProb()
+                        print 'logprob:', pp, '=', lnp
+    
+                    rows = len(ministeps)
+                    cols = len(srctractor.images)
+    
+                    plt.figure(4, figsize=(8,6))
+                    plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
+                                        right=0.99, bottom=0.01, top=0.99)
+                    plt.clf()
+                    k = 1
+                    mods = []
+                    for s in ministeps:
+                        pp = p0 + s * X
+                        srctractor.setParams(pp)
+                        print 'ministep', s
+                        print 'log prior', srctractor.getLogPrior()
+                        print 'log likelihood', srctractor.getLogLikelihood()
+                        mods.append(srctractor.getModelImages())
+                        chis = srctractor.getChiImages()
+                        # for chi in chis:
+                        #     plt.subplot(rows, cols, k)
+                        #     k += 1
+                        #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
+                        print 'chisqs:', [(chi**2).sum() for chi in chis]
+                        print 'sum:', sum([(chi**2).sum() for chi in chis])
+    
+                    mod0 = mods[len(ministeps)/2]
+                    for modlist in mods:
+                        for mi,mod in enumerate(modlist):
+                            plt.subplot(rows, cols, k)
+                            k += 1
+                            m0 = mod0[mi]
+                            rng = m0.max() - m0.min()
+                            dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
+                                    ticks=False, cmap='gray')
+                    ps.savefig()
+                    plt.figure(3)
+                    
+                    plt.plot(parms, lnps, 'r.-')
+    
+                    print 'Stepping in X by alphas...'
+                    lnps = []
+                    for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
+                        pp = p0 + ss*X
+                        srctractor.setParams(pp)
+                        lnp = srctractor.getLogProb()
+                        print 'logprob:', pp, '=', lnp
+    
+                        plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
+                        lnps.append(lnp)
+    
+                    px = p0[i] + X[i]
+                    pmid = (px + p0[i]) / 2.
+                    dp = np.abs((px - pmid) * 2.)
+                    hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
+                    lnpmid = (hi + lo) / 2.
+                    dlnp = np.abs((hi - lo) * 2.)
+    
+                    plt.ylabel('lnp')
+                    plt.title(pnames[i])
+                    ps.savefig()
+    
+                    plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
+                    ps.savefig()
+    
+                srctractor.setParams(p0)
+                ### DEBUG
             
 
 
@@ -1063,6 +1061,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 for tim,im in zip(subtims, tempims):
                     tim.data = im
 
+            # Re-remove the final fit model for this source.
             for tim in subtims:
                 mod = src.getModelPatch(tim)
                 if mod is not None:
@@ -1144,6 +1143,45 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # not-friends-of-friends version of blobs!)
 
     src_lnps = []
+
+
+    # FIXME -- do we need to do the whole "compute & subtract
+    # initial models" thing here?  Probably...
+
+    # -Remember the original subtim images
+    # -Compute initial models for each source (in each tim)
+    # -Subtract initial models from images
+    # -During fitting, for each source:
+    #   -add back in the source's initial model (to each tim)
+    #   -fit, with Catalog([src])
+    #   -subtract final model (from each tim)
+    # -Replace original subtim images
+    
+    # Remember original tim images
+    orig_timages = [tim.getImage() for tim in subtims]
+    for tim,img in zip(subtims,orig_timages):
+        tim.data = img.copy()
+    initial_models = []
+
+    # Create initial models for each tim x each source
+    tt = Time()
+    for tim in subtims:
+        mods = []
+        for src in subcat:
+            mod = src.getModelPatch(tim)
+            mods.append(mod)
+            if mod is not None:
+                if mod.patch is not None:
+                    if not np.all(np.isfinite(mod.patch)):
+                        print 'Non-finite mod patch'
+                        print 'source:', src
+                        print 'tim:', tim
+                        print 'PSF:', tim.getPsf()
+                    assert(np.all(np.isfinite(mod.patch)))
+                    mod.addTo(tim.getImage(), scale=-1)
+        initial_models.append(mods)
+    print 'Subtracting initial models:', Time()-tt
+
     
     # For sources, in decreasing order of brightness
     for numi,i in enumerate(Ibright):
@@ -1155,11 +1193,15 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         #     plotmods = []
         #     plotmodnames = []
 
-        # FIXME -- do we need to do the whole "compute & subtract
-        # initial models" thing here?  Probably...
+        # Add this source's initial model back in.
+        for tim,mods in zip(subtims, initial_models):
+            mod = mods[i]
+            if mod is not None:
+                mod.addTo(tim.getImage())
 
         lnp0 = subtr.getLogProb()
         print 'lnp0:', lnp0
+
 
         subcat[i] = None
         #print 'Catalog:', [s for s in subcat]
@@ -1381,6 +1423,20 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         subcat[i] = keepsrc
 
+        src = keepsrc
+        if src is not None:
+            # Re-remove the final fit model for this source.
+            for tim in subtims:
+                mod = src.getModelPatch(tim)
+                if mod is not None:
+                    mod.addTo(tim.getImage(), scale=-1)
+
+    for tim,img in zip(subtims, orig_timages):
+        tim.data = img
+    del orig_timages
+    del initial_models
+
+
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
@@ -1511,13 +1567,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
-            print '_plot_mods: tim shape', tim.shape
-
             (Yo,Xo,Yi,Xi) = tim.resamp
-            print 'Yo', Yo.min(), Yo.max()
-            print 'Xo', Xo.min(), Xo.max()
-            print 'Yi', Yi.min(), Yi.max()
-            print 'Xi', Xi.min(), Xi.max()
 
             rechi = np.zeros((blobh,blobw))
             chilist = []
@@ -1530,8 +1580,9 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                 cochis[imod][Yo,Xo] += chi
                 comods[imod][Yo,Xo] += mod[itim][Yi,Xi]
             chis[band].append(chilist)
+            # we'll use 'sig1' of the last tim in the list below...
             mn,mx = -10.*tim.sig1, 30.*tim.sig1
-
+            sig1 = tim.sig1
             if make_coimgs:
                 nn = (tim.getInvError()[Yi,Xi] > 0)
                 coimgs[iband][Yo,Xo] += tim.getImage()[Yi,Xi] * nn
@@ -1548,8 +1599,9 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         for comod in comods:
             comod /= np.maximum(comodn, 1)
         ima = dict(vmin=mn, vmax=mx, ticks=False)
+        resida = dict(vmin=-5.*sig1, vmax=5.*sig1, ticks=False)
         for subim,comod,cochi in zip(subims, comods, cochis):
-            subim.append((coimg, coimgn, comod, ima, cochi))
+            subim.append((coimg, coimgn, comod, ima, cochi, resida))
 
     # Plot per-band image, model, and chi coadds, and RGB images
     rgba = dict(ticks=False)
@@ -1562,7 +1614,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         imgs = []
         themods = []
         resids = []
-        for j,(img,imgn,mod,ima,chi) in enumerate(subim):
+        for j,(img,imgn,mod,ima,chi,resida) in enumerate(subim):
             imgs.append(img)
             themods.append(mod)
             resid = img - mod
@@ -1577,7 +1629,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                 plt.subplot(rows,cols,1 + j + cols*2)
                 # dimshow(-chi, **imchi)
                 # dimshow(imgn, vmin=0, vmax=3)
-                dimshow(resid, nancolor='r')
+                dimshow(resid, nancolor='r', **resida)
         rgb = get_rgb(imgs, bands)
         if i == 0:
             rgbs.append(rgb)

@@ -1,10 +1,9 @@
 Code structure of the Tractor
 =============================
 
-Miscellaneous notes on control flow and call stack.
+Miscellaneous notes on control flow and call stacks.
 
 ::
-
     Tractor.optimize()
         Tractor.getDerivs()
             Image.getParamDerivatives()
@@ -15,4 +14,19 @@ Miscellaneous notes on control flow and call stack.
             scipy...lsqr()
         Tractor.tryUpdates()
             Tractor.getLogProb()
+
+
+::
+    Tractor.getLogProb()
+        Tractor.getLogPrior()
+        Tractor.getLogLikelihood()
+            Tractor.getChiImages()
+                Tractor.getModelImages()
+                    Tractor.getModelImage()
+                        Image.getSky()
+                        Tractor.getModelPatch()
+                            Tractor.getModelPatchNoCache()
+                                Source.getModelPatch()
+
+
 
