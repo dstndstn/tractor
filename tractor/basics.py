@@ -1711,12 +1711,18 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         return ('ShiftedPsf: %i,%i + ' % (self.x0,self.y0)) + str(self.psf)
     def hashkey(self):
         return ('ShiftedPsf', self.x0, self.y0) + self.psf.hashkey()
-    def getPointSourcePatch(self, px, py, extent=None, derivs=False, **kwargs):
+    def getPointSourcePatch(self, px, py, extent=None, derivs=False,
+                            modelMask=None, **kwargs):
         if extent is not None:
             (ex0,ex1,ey0,ey1) = extent
             extent = (ex0+self.x0, ex1+self.x0, ey0+self.y0, ey1+self.y0)
+        mm = None
+        if modelMask is not None:
+            mm = Patch(modelMask.x0 + self.x0, modelMask.y0 + self.y0, modelMask.patch)
+            
         p = self.psf.getPointSourcePatch(self.x0 + px, self.y0 + py,
-                                         extent=extent, derivs=derivs, **kwargs)
+                                         extent=extent, derivs=derivs,
+                                         modelMask=mm, **kwargs)
         # Now we have to shift the patch back too
         if p is None:
             return None

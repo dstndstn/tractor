@@ -88,7 +88,7 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
 
         for (dy=0; dy<H; dy++) {
             int y = y0 + dy;
-            int i0 = y0 * W;
+            int i0 = dy * W;
             for (dx=0; dx<W; dx++) {
                 if (!mask[i0 + dx])
                     continue;

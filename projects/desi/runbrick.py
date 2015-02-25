@@ -791,7 +791,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if mod is not None:
                     mod.addTo(tim.getImage())
 
-            if bigblob: # or True:
+            #if bigblob: # or True:
+            if False:
                 # Create super-local sub-sub-tims around this source
                 srctims = []
                 for tim in subtims:
@@ -832,7 +833,24 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.freezeParams('images')
 
             srctractor.setModelMasks(modelMasks)
-            
+
+            #### DEBUG
+            for tim,imods,mm in zip(srctims, initial_models, modelMasks):
+                mod = imods[i]
+                if mod is None:
+                    continue
+
+                plt.clf()
+                plt.subplot(1,2,1)
+                dimshow(mod.patch, extent=mod.getExtent())
+                mn,mx = mod.patch.min(), mod.patch.max()
+                mod2 = srctractor.getModelPatchNoCache(tim, src)
+                plt.subplot(1,2,2)
+                dimshow(mod2.patch, extent=mod2.getExtent(), vmin=mn, vmax=mx)
+                ps.savefig()
+                
+
+
             # # Try fitting flux first?
             # src.freezeAllBut('brightness')
             # for b in bands:
@@ -2631,5 +2649,10 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     print 'All done:', Time()-t0
 
 
+def trace(frame, event, arg):
+    print "%s, %s:%d" % (event, frame.f_code.co_filename, frame.f_lineno)
+    return trace
+
 if __name__ == '__main__':
+    #sys.settrace(trace)
     main()
