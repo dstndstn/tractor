@@ -35,16 +35,31 @@ def main():
     plt.clf()
     im = np.log10(patch0.patch + tiny)
     mn,mx = im.min(), im.max()
-    plt.subplot(1,2,1)
+    plt.subplot(2,3,1)
     dimshow(im, extent=patch0.getExtent(), vmin=mn, vmax=mx)
     plt.axis([0,W,0,H])
     plt.colorbar()
-    plt.subplot(1,2,2)
+
+    plt.subplot(2,3,2)
+    dimshow(patch0.patch>0, extent=patch0.getExtent(), vmin=0, vmax=1, cmap='hot')
+    plt.axis([0,W,0,H])
+
+    plt.subplot(2,3,4)
     im1 = np.log10(patch1.patch + tiny)
     dimshow(im1, extent=patch1.getExtent(), vmin=mn, vmax=mx)
     plt.axis([0,W,0,H])
     plt.colorbar()
-    plt.title('patch, mv=%f' % mv)
+
+    plt.subplot(2,3,5)
+    dimshow(patch1.patch>0, extent=patch0.getExtent(), vmin=0, vmax=1, cmap='hot')
+    plt.axis([0,W,0,H])
+
+    plt.subplot(2,3,6)
+    dimshow(patch1.patch - patch0.patch, extent=patch0.getExtent())
+    plt.axis([0,W,0,H])
+    plt.colorbar()
+
+    plt.suptitle('patch, mv=%f' % mv)
     ps.savefig()
 
     import sys
