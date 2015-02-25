@@ -46,6 +46,6 @@ for band in bands:
         print 'Reading', fn
         hdr = fitsio.read_header(fn)
         
-        phot = hdr['PHOT_FLAG']
+        phot = hdr['PHOTFLAG']
         print 'PHOT:', phot, '(photometric=1)'
         

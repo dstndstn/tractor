@@ -1646,6 +1646,8 @@ class Tractor(MultiParams):
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
 
+            print '  stepped with alpha', alpha, 'and got dlnp', pAfter-pBefore
+
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
                 break
@@ -1941,10 +1943,10 @@ class Tractor(MultiParams):
                 vals = dimg.flat[nz]
                 w = inverrs[deriv.getSlice(img)].flat[nz]
                 assert(vals.shape == w.shape)
-                if not scales_only:
-                    RR.append(rows)
-                    VV.append(vals)
-                    WW.append(w)
+                #if not scales_only:
+                RR.append(rows)
+                VV.append(vals)
+                WW.append(w)
 
             # massage, re-scale, and clean up matrix elements
             if len(VV) == 0:

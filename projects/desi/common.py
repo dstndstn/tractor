@@ -155,6 +155,8 @@ def segment_and_group_sources(image, T, name=None):
     for blob in range(1, nblobs+1):
         Isrcs = np.flatnonzero(T.blob == blob)
         if len(Isrcs) == 0:
+            print 'Blob', blob, 'has no sources'
+            blobmap[blob] = -1
             continue
         blobmap[blob] = len(blobsrcs)
         blobsrcs.append(Isrcs)
@@ -169,7 +171,7 @@ def segment_and_group_sources(image, T, name=None):
     inblobs = np.zeros(len(T), bool)
     for Isrcs in blobsrcs:
         inblobs[Isrcs] = True
-    noblobs = np.flatnonzero(inblobs == 0)
+    noblobs = np.flatnonzero(np.logical_not(inblobs))
     del inblobs
     H,W = image.shape
     # Add new fake blobs!
@@ -177,13 +179,43 @@ def segment_and_group_sources(image, T, name=None):
         S = 3
         bslc = (slice(np.clip(T.ity[i] - S, 0, H-1), np.clip(T.ity[i] + S+1, 0, H)),
                 slice(np.clip(T.itx[i] - S, 0, W-1), np.clip(T.itx[i] + S+1, 0, W)))
-        print 'Slice:', bslc
-        # Set synthetic blob number
-        blob = nblobs+1 + ib
-        blobs[bslc][blobs[bslc] == emptyblob] = blob
-        blobmap[blob] = len(blobsrcs)
-        blobslices.append(bslc)
-        blobsrcs.append(np.array([i]))
+
+        # Does this new blob overlap existing blob(s)?
+        oblobs = np.unique(blobs[bslc])
+        oblobs = oblobs[oblobs != emptyblob]
+
+        print 'Adding new blob for source at', (T.itx[i], T.ity[i])
+        print 'This blob overlaps existing blobs:', oblobs
+        if len(oblobs) > 1:
+            print 'WARNING: not merging overlapping blobs like maybe we should'
+        if len(oblobs):
+            blob = oblobs[0]
+            print 'Adding source to existing blob', blob
+            blobs[bslc][blobs[bslc] == emptyblob] = blob
+            blobindex = blobmap[blob]
+            # Expand the existing blob slice to encompass this new source
+            oldslc = blobslices[blobindex]
+            print 'Old slice:', oldslc
+            print 'New slice:', bslc
+            sy,sx = oldslc
+            oy0,oy1, ox0,ox1 = sy.start,sy.stop, sx.start,sx.stop
+            sy,sx = bslc
+            ny0,ny1, nx0,nx1 = sy.start,sy.stop, sx.start,sx.stop
+            print 'Old y', oy0,oy1, 'x', ox0,ox1
+            print 'New y', ny0,ny1, 'x', nx0,nx1
+            newslc = slice(min(oy0,ny0), max(oy1,ny1)), slice(min(ox0,nx0), max(ox1,nx1))
+            print 'Updated slice:', newslc
+            blobslices[blobindex] = newslc
+            # Add this source to the list of source indices for the existing blob.
+            blobsrcs[blobindex] = np.append(blobsrcs[blobindex], np.array([i]))
+
+        else:
+            # Set synthetic blob number
+            blob = nblobs+1 + ib
+            blobs[bslc][blobs[bslc] == emptyblob] = blob
+            blobmap[blob] = len(blobsrcs)
+            blobslices.append(bslc)
+            blobsrcs.append(np.array([i]))
     print 'Added', len(noblobs), 'new fake singleton blobs'
 
     # Remap the "blobs" image so that empty regions are = -1 and the blob values
@@ -194,11 +226,11 @@ def segment_and_group_sources(image, T, name=None):
     bm[0] = -1
 
     # DEBUG
-    fitsio.write('blobs-before-%s.fits' % name, blobs)
+    fitsio.write('blobs-before-%s.fits' % name, blobs, clobber=True)
 
     blobs = bm[blobs]
 
-    fitsio.write('blobs-after-%s.fits' % name, blobs)
+    fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
 
 
     for j,Isrcs in enumerate(blobsrcs):
@@ -1214,7 +1246,7 @@ class DecamImage(object):
         return str(self)
 
     def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False,
-                          nanomaggies=True, subsky=True):
+                          nanomaggies=True, subsky=True, tiny=5):
         '''
         slc: y,x slices
         '''
@@ -1234,7 +1266,7 @@ class DecamImage(object):
             x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
             slc = slice(y0,y1+1), slice(x0,x1+1)
 
-            if y1 - y0 < 5 or x1 - x0 < 5:
+            if y1 - y0 < tiny or x1 - x0 < tiny:
                 print 'Skipping tiny subimage'
                 return None
         if slc is not None:

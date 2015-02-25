@@ -45,11 +45,15 @@ def runbrick_global_init():
         disable_galaxy_cache()
     from tractor.ceres import ceres_opt
 
+# Turn on/off caching for all new Tractor instances.
 def create_tractor(tims, srcs):
-    t = Tractor(tims, src)
+    import tractor
+    t = tractor.Tractor(tims, srcs)
     if nocache:
         t.disable_cache()
     return t
+### Woot!
+Tractor = create_tractor
 
 # didn't I write mp to avoid this foolishness in the first place?
 def _map(f, args):
@@ -292,6 +296,7 @@ def stage_srcs(coimgs=None, cons=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False, brickname=None,
+               mp=None,
                **kwargs):
 
     tlast = Time()
@@ -432,7 +437,43 @@ def stage_fitblobs(T=None,
         plt.axis(ax)
         plt.title('Blobs')
         ps.savefig()
-        
+
+        for i,Isrcs in enumerate(blobsrcs):
+            for isrc in Isrcs:
+                src = cat[isrc]
+                ra,dec = src.getPosition().ra, src.getPosition().dec
+                ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                plt.text(x, y, 'b%i/s%i' % (i,isrc), ha='center', va='bottom', color='r')
+        plt.axis(ax)
+        plt.title('Blobs + Sources')
+        ps.savefig()
+
+        plt.clf()
+        dimshow(blobs)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % i, ha='center', va='bottom', color='r')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
+
+        plt.clf()
+        dimshow(blobs != -1)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % i, ha='center', va='bottom', color='r')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
+
 
     tfitall = Time()
     iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
@@ -506,7 +547,7 @@ def stage_fitblobs_finish(
     # Set -0 to 0
     T.dchisq[T.dchisq == 0.] = 0.
     # Make dchisq relative to the first element ("none" model)
-    T.dchisq = T.dchisq[:, 1:] - T.dchisq[:, 0]
+    T.dchisq = T.dchisq[:, 1:] - T.dchisq[:, 0][:,np.newaxis]
     
     invvars = srcivs
 
@@ -576,7 +617,7 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         blobmask = (blobs[bslc] == iblob)
         #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
-        yield (Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
+        yield (iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                [cat[i] for i in Isrcs], bands, plots, ps)
 
 def _bounce_one_blob(X):
@@ -589,7 +630,7 @@ def _bounce_one_blob(X):
         traceback.print_exc()
         raise
 
-def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
+def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                srcs, bands, plots, ps)):
 
     plots2 = False
@@ -809,11 +850,20 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
             max_cpu_per_source = 60.
 
+            # DEBUG
+            params = []
+            params.append((srctractor.getLogProb(), srctractor.getParams()))
+
             cpu0 = time.clock()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print 'dlnp:', dlnp, 'src', src
+
+                ### DEBUG
+                print 'DEBUG'
+                params.append((srctractor.getLogProb(), srctractor.getParams()))
+                ###
 
                 if time.clock()-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
@@ -821,6 +871,171 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
                 if dlnp < 0.1:
                     break
+
+
+            ### DEBUG
+            print 'DEBUG'
+
+            thislnp0 = srctractor.getLogProb()
+            p0 = np.array(srctractor.getParams())
+            print 'logprob:', p0, '=', thislnp0
+
+            print 'p0 type:', p0.dtype
+            px = p0 + np.zeros_like(p0)
+            srctractor.setParams(px)
+            lnpx = srctractor.getLogProb()
+            assert(lnpx == thislnp0)
+            print 'logprob:', px, '=', lnpx
+
+            scales = srctractor.getParameterScales()
+            print 'Parameter scales:', scales
+            print 'Parameters:'
+            srctractor.printThawedParams()
+
+            # getParameterScales better not have changed the params!!
+            assert(np.all(p0 == np.array(srctractor.getParams())))
+            assert(srctractor.getLogProb() == thislnp0)
+
+            pfinal = srctractor.getParams()
+            pnames = srctractor.getParamNames()
+
+            plt.figure(3, figsize=(8,6))
+
+            plt.clf()
+            for i in range(len(scales)):
+                plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
+                         [lnp for lnp,p in params], '-', label=pnames[i])
+            plt.ylabel('lnp')
+            plt.legend()
+            plt.title('scaled')
+            ps.savefig()
+
+            for i in range(len(scales)):
+                plt.clf()
+                #plt.subplot(2,1,1)
+                plt.plot([p[i] for lnp,p in params], '-')
+                plt.xlabel('step')
+                plt.title(pnames[i])
+                ps.savefig()
+
+                plt.clf()
+                plt.plot([p[i] for lnp,p in params],
+                         [lnp for lnp,p in params], 'b.-')
+
+                # We also want to know about d(lnp)/d(param)
+                # and d(lnp)/d(X)
+                step = 1.1
+                steps = 1.1 ** np.arange(-20, 21)
+                s2 = np.linspace(0, steps[0], 10)[1:-1]
+                steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
+                print 'Steps:', steps
+
+                plt.plot(p0[i], thislnp0, 'bx', ms=20)
+
+                print 'Stepping in param', pnames[i], '...'
+                pp = p0.copy()
+                lnps,parms = [],[]
+                for s in steps:
+                    parm = p0[i] + s / scales[i]
+                    pp[i] = parm
+                    srctractor.setParams(pp)
+                    lnp = srctractor.getLogProb()
+                    parms.append(parm)
+                    lnps.append(lnp)
+                    print 'logprob:', pp, '=', lnp
+                    
+                plt.plot(parms, lnps, 'k.-')
+                j = np.argmin(np.abs(steps - 1.))
+                plt.plot(parms[j], lnps[j], 'ko')
+
+                print 'Stepping in X...'
+                lnps,parms = [],[]
+                for s in steps:
+                    pp = p0 + s * X
+                    srctractor.setParams(pp)
+                    lnp = srctractor.getLogProb()
+                    parms.append(pp[i])
+                    lnps.append(lnp)
+                    print 'logprob:', pp, '=', lnp
+
+
+                ##
+                s3 = s2[:2]
+                ministeps = reduce(np.append, [-s3[::-1], 0, s3])
+                print 'mini steps:', ministeps
+                for s in ministeps:
+                    pp = p0 + s * X
+                    srctractor.setParams(pp)
+                    lnp = srctractor.getLogProb()
+                    print 'logprob:', pp, '=', lnp
+
+                rows = len(ministeps)
+                cols = len(srctractor.images)
+
+                plt.figure(4, figsize=(8,6))
+                plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
+                                    right=0.99, bottom=0.01, top=0.99)
+                plt.clf()
+                k = 1
+                mods = []
+                for s in ministeps:
+                    pp = p0 + s * X
+                    srctractor.setParams(pp)
+                    print 'ministep', s
+                    print 'log prior', srctractor.getLogPrior()
+                    print 'log likelihood', srctractor.getLogLikelihood()
+                    mods.append(srctractor.getModelImages())
+                    chis = srctractor.getChiImages()
+                    # for chi in chis:
+                    #     plt.subplot(rows, cols, k)
+                    #     k += 1
+                    #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
+                    print 'chisqs:', [(chi**2).sum() for chi in chis]
+                    print 'sum:', sum([(chi**2).sum() for chi in chis])
+
+                mod0 = mods[len(ministeps)/2]
+                for modlist in mods:
+                    for mi,mod in enumerate(modlist):
+                        plt.subplot(rows, cols, k)
+                        k += 1
+                        m0 = mod0[mi]
+                        rng = m0.max() - m0.min()
+                        dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
+                                ticks=False, cmap='gray')
+                ps.savefig()
+                plt.figure(3)
+                
+                plt.plot(parms, lnps, 'r.-')
+
+                print 'Stepping in X by alphas...'
+                lnps = []
+                for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
+                    pp = p0 + ss*X
+                    srctractor.setParams(pp)
+                    lnp = srctractor.getLogProb()
+                    print 'logprob:', pp, '=', lnp
+
+                    plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
+                    lnps.append(lnp)
+
+                px = p0[i] + X[i]
+                pmid = (px + p0[i]) / 2.
+                dp = np.abs((px - pmid) * 2.)
+                hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
+                lnpmid = (hi + lo) / 2.
+                dlnp = np.abs((hi - lo) * 2.)
+
+                plt.ylabel('lnp')
+                plt.title(pnames[i])
+                ps.savefig()
+
+                plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
+                ps.savefig()
+
+            srctractor.setParams(p0)
+            ### DEBUG
+            
+
 
             if plots:
                 spmods.append(srctractor.getModelImages())
@@ -832,15 +1047,19 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 plt.figure(1, figsize=(8,6))
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
                                     hspace=0.1, wspace=0.05)
-                plt.figure(2, figsize=(3,3))
-                plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
+                #plt.figure(2, figsize=(3,3))
+                #plt.subplots_adjust(left=0.005, right=0.995, top=0.995,bottom=0.005)
                 #_plot_mods(subtims, spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
                 #           chi_plots=plots2)
+                plt.figure(2, figsize=(3,3.5))
+                plt.subplots_adjust(left=0.005, right=0.995, top=0.88, bottom=0.005)
+                plt.suptitle('Blob %i' % iblob)
                 tempims = [tim.getImage() for tim in subtims]
                 for tim,orig in zip(subtims, orig_timages):
                     tim.data = orig
                 _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
-                           chi_plots=plots2, rgb_plots=True, main_plot=False)
+                           chi_plots=plots2, rgb_plots=True, main_plot=False,
+                           rgb_format='Blob %i, src %i: %%s' % (iblob, i))
                 for tim,im in zip(subtims, tempims):
                     tim.data = im
 
@@ -1101,6 +1320,7 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                 dimshow(cochisq, vmin=0, vmax=25)
                 plt.title('dlnp %.0f' % plnps[modname])
 
+            plt.suptitle('Blob %i, source %i: model selection' % (iblob, i))
             ps.savefig()
 
         keepmod = 'none'
@@ -1272,7 +1492,8 @@ def _one_blob((Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
-               chi_plots=True, rgb_plots=False, main_plot=True):
+               chi_plots=True, rgb_plots=False, main_plot=True,
+               rgb_format='%s'):
     subims = [[] for m in mods]
     chis = dict([(b,[]) for b in bands])
     
@@ -1333,6 +1554,7 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
     # Plot per-band image, model, and chi coadds, and RGB images
     rgba = dict(ticks=False)
     rgbs = []
+    rgbnames = []
     plt.figure(1)
     for i,subim in enumerate(subims):
         plt.clf()
@@ -1359,11 +1581,13 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         rgb = get_rgb(imgs, bands)
         if i == 0:
             rgbs.append(rgb)
+            rgbnames.append(rgb_format % 'Image')
         if main_plot:
             plt.subplot(rows,cols, 4)
             dimshow(rgb, **rgba)
         rgb = get_rgb(themods, bands)
         rgbs.append(rgb)
+        rgbnames.append(rgb_format % titles[i])
         if main_plot:
             plt.subplot(rows,cols, cols+4)
             dimshow(rgb, **rgba)
@@ -1386,9 +1610,10 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
     if rgb_plots:
         # RGB image and model
         plt.figure(2)
-        for rgb in rgbs:
+        for rgb,tt in zip(rgbs, rgbnames):
             plt.clf()
             dimshow(rgb, **rgba)
+            plt.title(tt)
             ps.savefig()
 
     if not chi_plots:
@@ -2242,6 +2467,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         mp = multiproc(opt.threads)
     else:
         mp = multiproc()
+    # ??
+    kwargs.update(mp=mp)
 
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
