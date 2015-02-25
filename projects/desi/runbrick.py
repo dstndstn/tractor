@@ -823,9 +823,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             modelMasks = []
             for imods in initial_models:
-                mod = imods[i]
                 d = dict()
                 modelMasks.append(d)
+                mod = imods[i]
                 if mod is not None:
                     d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
@@ -835,19 +835,19 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(modelMasks)
 
             #### DEBUG
-            for tim,imods,mm in zip(srctims, initial_models, modelMasks):
-                mod = imods[i]
-                if mod is None:
-                    continue
-
-                plt.clf()
-                plt.subplot(1,2,1)
-                dimshow(mod.patch, extent=mod.getExtent())
-                mn,mx = mod.patch.min(), mod.patch.max()
-                mod2 = srctractor.getModelPatchNoCache(tim, src)
-                plt.subplot(1,2,2)
-                dimshow(mod2.patch, extent=mod2.getExtent(), vmin=mn, vmax=mx)
-                ps.savefig()
+            # for tim,imods,mm in zip(srctims, initial_models, modelMasks):
+            #     mod = imods[i]
+            #     if mod is None:
+            #         continue
+            # 
+            #     plt.clf()
+            #     plt.subplot(1,2,1)
+            #     dimshow(mod.patch, extent=mod.getExtent())
+            #     mn,mx = mod.patch.min(), mod.patch.max()
+            #     mod2 = srctractor.getModelPatchNoCache(tim, src)
+            #     plt.subplot(1,2,2)
+            #     dimshow(mod2.patch, extent=mod2.getExtent(), vmin=mn, vmax=mx)
+            #     ps.savefig()
                 
 
 
@@ -881,7 +881,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             max_cpu_per_source = 60.
 
             # DEBUG
-            DEBUG = False
+            DEBUG = True
             if DEBUG:
                 params = []
                 params.append((srctractor.getLogProb(), srctractor.getParams()))
@@ -1319,7 +1319,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 except KeyError:
                     pass
                 mm.append(mm2)
-            srccat.setModelMasks(mm)
+            srctractor.setModelMasks(mm)
 
             lnp = srctractor.getLogProb()
 
@@ -1346,7 +1346,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             lnp = srctractor.getLogProb()
             print 'Optimized log-prob:', lnp
 
-            srccat.setModelMasks(None)
+            srctractor.setModelMasks(None)
 
             # Recompute modelMasks
             mm = []
@@ -1358,7 +1358,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     continue
                 mask = Patch(mod.x0, mod.y0, mod.patch != 0)
                 d[newsrc] = mask
-            srccat.setModelMasks(mm)
+            srctractor.setModelMasks(mm)
 
             # Run another round of opt.
             cpu0 = time.clock()

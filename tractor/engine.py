@@ -2322,9 +2322,9 @@ class Tractor(MultiParams):
     def _checkModelMask(self, patch, mask):
         if patch is not None and mask is not None and patch.patch is not None:
             nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
-            print 'nonzero type:', nonzero.patch.dtype
+            #print 'nonzero type:', nonzero.patch.dtype
             unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.patch))
-            print 'unmasked type:', unmasked.patch.dtype
+            #print 'unmasked type:', unmasked.patch.dtype
             bad = nonzero.performArithmetic(unmasked, '__iand__', otype=bool)
             assert(np.all(bad.patch == False))
 

@@ -270,16 +270,16 @@ class MixtureOfGaussians():
             xderiv = np.zeros_like(result)
             yderiv = np.zeros_like(result)
 
-        print 'gauss_2d_masked:', int(x0), int(y0), int(w), int (h), float(fx), float(fy),
-        print '  ', self.amp.astype(np.float32),
-        print '  ', self.mean.astype(np.float32),
-        print '  ', self.var.astype(np.float32),
-        print '  ', 'res', (result.shape, result.dtype),
-        if xderiv is not None:
-            print '  ', 'xd', (xderiv.shape, xderiv.dtype),
-        if yderiv is not None:
-            print '  ', 'yd', (yderiv.shape, yderiv.dtype),
-        print '  ', 'mask', mask, mask.shape, mask.dtype
+        # print 'gauss_2d_masked:', int(x0), int(y0), int(w), int (h), float(fx), float(fy),
+        # print '  ', self.amp.astype(np.float32),
+        # print '  ', self.mean.astype(np.float32),
+        # print '  ', self.var.astype(np.float32),
+        # print '  ', 'res', (result.shape, result.dtype),
+        # if xderiv is not None:
+        #     print '  ', 'xd', (xderiv.shape, xderiv.dtype),
+        # if yderiv is not None:
+        #     print '  ', 'yd', (yderiv.shape, yderiv.dtype),
+        # print '  ', 'mask', mask, mask.shape, mask.dtype
         
         rtn = c_gauss_2d_masked(int(x0), int(y0), int(w), int (h),
                                 float(fx), float(fy),
@@ -288,7 +288,7 @@ class MixtureOfGaussians():
                                 self.var.astype(np.float32),
                                 result, xderiv, yderiv, mask)
 
-        print 'gauss_2d_masked returned.'
+        # print 'gauss_2d_masked returned.'
         
         assert(rtn == 0)
         if derivs:
