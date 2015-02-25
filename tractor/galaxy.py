@@ -18,6 +18,7 @@ from . import mixture_profiles as mp
 from .engine import *
 from .utils import *
 from .cache import *
+from .basics import SingleProfileSource, BasicSource
 
 _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
@@ -297,7 +298,7 @@ class ProfileGalaxy(object):
         return patch
 
     def _realGetUnitFluxModelPatch(self, img, px, py, minval, extent=None,
-                                   modelMask=modelMask):
+                                   modelMask=None):
         '''
         extent: if not None, [x0,x1,y0,y1], where the range to render
         is [x0, x1), [y0,y1).
