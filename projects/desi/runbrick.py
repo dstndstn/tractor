@@ -2393,6 +2393,11 @@ def stage_writecat(
     T2.bx = bx.astype(np.float32)
     T2.by = by.astype(np.float32)
 
+    decals = Decals()
+    brick = decals.get_brick_by_name(brickname)
+    T2.brick_primary = ((T2.ra  >= brick.ra1 ) * (T2.ra  < brick.ra2) *
+                        (T2.dec >= brick.dec1) * (T2.dec < brick.dec2))
+    
     T2.ra_ivar  = T2.ra_ivar .astype(np.float32)
     T2.dec_ivar = T2.dec_ivar.astype(np.float32)
     
