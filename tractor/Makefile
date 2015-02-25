@@ -29,7 +29,7 @@ _mp_fourier.so: mp_fourier_wrap.c setup-mpf.py
 # 	python setup-mix.py build --force --build-base build --build-platlib build/lib
 # 	cp build/lib/_mix.so $@
 
-mix.py _mix.so: mix.i approx3.c setup-mix.py
+mix.py _mix.so: mix.i approx3.c gauss_masked.c setup-mix.py
 	python setup-mix.py build --force --build-base build --build-platlib build/lib
 	cp build/lib/_mix.so $@
 

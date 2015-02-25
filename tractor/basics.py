@@ -1239,7 +1239,13 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         '''
 
         ## FIXME!
-        assert(modelMask is None)
+        #assert(modelMask is None)
+
+        if modelMask is not None:
+            return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,
+                                                 modelMask.patch, px, py, derivs=derivs,
+                                                 **kwargs)
+
 
         if minval is None:
             minval = 0.

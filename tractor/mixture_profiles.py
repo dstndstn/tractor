@@ -259,6 +259,30 @@ class MixtureOfGaussians():
             raise RuntimeError('c_gauss_2d_approx2 failed')
         return result
 
+    def evaluate_grid_masked(self, x0, y0, mask, fx, fy,
+                             derivs=False):
+        from mix import c_gauss_2d_masked
+
+        h,w = mask.shape
+        result = np.zeros((h,w), np.float32)
+        xderiv = yderiv = None
+        if derivs:
+            xderiv = np.zeros_like(result)
+            yderiv = np.zeros_like(result)
+
+        rtn = c_gauss_2d_masked(int(x0), int(y0), int(w), int (h),
+                                float(fx), float(fy),
+                                self.amp.astype(np.float32),
+                                self.mean.astype(np.float32),
+                                self.var.astype(np.float32),
+                                result, xderiv, yderiv, mask)
+        assert(rtn == 0)
+        if derivs:
+            return (Patch(x0,y0,result), Patch(x0,y0,xderiv),
+                    Patch(x0,y0,yderiv))
+        return Patch(x0,y0,result)
+        
+
     def evaluate_grid_approx3(self, x0, x1, y0, y1, fx, fy, minval,
                               derivs=False, minradius=3, doslice=True,
                               maxmargin=100):
@@ -293,7 +317,7 @@ class MixtureOfGaussians():
 
         if (cx < x0 - maxmargin or cx > x1 + maxmargin or
             cy < y0 - maxmargin or cy > y1 + maxmargin):
-            return None #Patch(x0,y0,None)
+            return None
 
         try:
             rtn,sx0,sx1,sy0,sy1 = c_gauss_2d_approx3(
