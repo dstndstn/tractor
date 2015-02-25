@@ -162,10 +162,11 @@ class BaseParams(object):
         return self.__class__(*self.getAllParams())
     def hashkey(self):
         return (getClassName(self),) + tuple(self.getAllParams())
-    def __hash__(self):
-        return hash(self.hashkey())
-    def __eq__(self, other):
-        return hash(self) == hash(other)
+    #def __hash__(self):
+    #    return hash(self.hashkey())
+    #def __eq__(self, other):
+    #    return hash(self.hashkey()) == hash(other.hashkey())
+
     def getParamNames(self):
         ''' Returns a list containing the names of the parameters. '''
         return []

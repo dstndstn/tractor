@@ -30,9 +30,10 @@ class Params(object):
         http://docs.python.org/glossary.html#term-hashable
         '''
         return ()
-    def __hash__(self):
-        ''' Params must be hashable. '''
-        return None
+
+    #def __hash__(self):
+    #    ''' Params must be hashable. '''
+    #    return None
     #def __eq__(self, other):
 
     def getParamNames(self):

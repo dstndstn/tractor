@@ -1146,10 +1146,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     src_lnps = []
 
-
-    # FIXME -- do we need to do the whole "compute & subtract
-    # initial models" thing here?  Probably...
-
+    # We repeat the "compute & subtract initial models" logic from above.
     # -Remember the original subtim images
     # -Compute initial models for each source (in each tim)
     # -Subtract initial models from images
