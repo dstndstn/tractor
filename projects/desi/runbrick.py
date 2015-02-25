@@ -820,8 +820,18 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             else:
                 srctims = subtims
 
+            modelMasks = []
+            for imods in initial_models:
+                mod = imods[i]
+                d = dict()
+                modelMasks.append(d)
+                if mod is not None:
+                    d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
+
             srctractor = Tractor(srctims, [src])
             srctractor.freezeParams('images')
+
+            srctractor.setModelMasks(modelMasks)
             
             # # Try fitting flux first?
             # src.freezeAllBut('brightness')
@@ -1198,13 +1208,27 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if mod is not None:
                 mod.addTo(tim.getImage())
 
-        lnp0 = subtr.getLogProb()
+        modelMasks = []
+        for imods in initial_models:
+            mod = imods[i]
+            if mod is not None:
+                mask = Patch(mod.x0, mod.y0, mod.patch != 0)
+                modelMasks.append(dict(src=mask))
+
+        srctractor = Tractor(subtims, [src])
+        srctractor.freezeParams('images')
+
+        srctractor.setModelMasks(modelMasks)
+
+        lnp0 = srctractor.getLogProb()
         print 'lnp0:', lnp0
 
+        srccat = srctractor.getCatalog()
 
-        subcat[i] = None
-        #print 'Catalog:', [s for s in subcat]
-        lnp_null = subtr.getLogProb()
+        #subcat[i] = None
+        srccat[0] = None
+        
+        lnp_null = srctractor.getLogProb()
         print 'Removing the source: dlnp', lnp_null - lnp0
 
         lnps = dict(ptsrc=None, dev=None, exp=None, comp=None,
@@ -1263,19 +1287,65 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
                                                      0.5, exp.getShape(), dev.getShape()).copy()
             print 'New source:', newsrc
-            subcat[i] = newsrc
-            lnp = subtr.getLogProb()
+            #subcat[i] = newsrc
+
+            srccat[0] = newsrc
+
+            # Use the same initial modelMasks as the original source; we'll do a second
+            # round below.
+            mm = []
+            for mim in modelMasks:
+                mm2 = dict()
+                try:
+                    mm2[newsrc] = mim[src]
+                except KeyError:
+                    pass
+                mm.append(mm2)
+            srccat.setModelMasks(mm)
+
+            lnp = srctractor.getLogProb()
+
             print 'Initial log-prob:', lnp
             print 'vs original src:', lnp - lnp0
 
-            subcat.freezeAllBut(i)
+            #subcat.freezeAllBut(i)
 
             max_cpu_per_source = 60.
 
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
-                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
+                                              alphas=alphas)
+                print '  dlnp:', dlnp, 'new src', newsrc
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
+                if dlnp < 0.1:
+                    break
+
+            print 'New source (after first round optimization):', newsrc
+            lnp = srctractor.getLogProb()
+            print 'Optimized log-prob:', lnp
+
+            srccat.setModelMasks(None)
+
+            # Recompute modelMasks
+            mm = []
+            for tim in subtims:
+                mod = src.getModelPatch(tim)
+                d = dict()
+                mm.append(d)
+                if mod is None:
+                    continue
+                mask = Patch(mod.x0, mod.y0, mod.patch != 0)
+                d[newsrc] = mask
+            srccat.setModelMasks(mm)
+
+            # Run another round of opt.
+            cpu0 = time.clock()
+            for step in range(50):
+                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print '  dlnp:', dlnp, 'new src', newsrc
                 if time.clock()-cpu0 > max_cpu_per_source:
@@ -1285,7 +1355,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     break
 
             print 'New source (after optimization):', newsrc
-            lnp = subtr.getLogProb()
+            lnp = srctractor.getLogProb()
             print 'Optimized log-prob:', lnp
             print 'vs original src:', lnp - lnp0
 
@@ -1329,11 +1399,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             mods = OrderedDict([('none',None), ('ptsrc',ptsrc), ('dev',dev),
                                 ('exp',exp), ('comp',comp)])
             for imod,modname in enumerate(mods.keys()):
-                subcat[i] = mods[modname]
 
+                #subcat[i] = mods[modname]
+                srccat[0] = mods[modname]
+                
                 plt.subplot(rows, cols, imod+1)
                 if modname != 'none':
-                    modimgs = subtr.getModelImages()
+                    modimgs = srctractor.getModelImages()
                     comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
                                                 images=modimgs)
                     dimshow(get_rgb(comods, bands))
@@ -2358,8 +2430,8 @@ def stage_writecat(
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','rchi2','dchisq','nobs']:
             TT.rename(col, 'sdss_%s' % col)
-    TT.tx = (TT.tx + 1.).astype(np.float32)
-    TT.ty = (TT.ty + 1.).astype(np.float32)
+    TT.tx = TT.tx.astype(np.float32)
+    TT.ty = TT.ty.astype(np.float32)
     TT.blob = TT.blob.astype(np.int32)
 
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
@@ -2387,8 +2459,8 @@ def stage_writecat(
                                   allbands=allbands)
 
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
-    T2.bx = bx.astype(np.float32)
-    T2.by = by.astype(np.float32)
+    T2.bx = (bx - 1.).astype(np.float32)
+    T2.by = (by - 1.).astype(np.float32)
 
     decals = Decals()
     brick = decals.get_brick_by_name(brickname)
