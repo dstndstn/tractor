@@ -392,6 +392,7 @@ class Tractor(MultiParams):
             catalog = Catalog(*catalog)
         super(Tractor,self).__init__(images, catalog)
         self._setup(mp=mp)
+        self.modelMasks = None
 
     def disable_cache(self):
         self.cache = None
@@ -724,7 +725,7 @@ class Tractor(MultiParams):
             
         srcs = list(self.catalog.getThawedSources())
         for src in srcs:
-            derivs = src.getParamDerivatives(img)
+            derivs = self._getSourceDerivatives(src, img)
             for j,deriv in enumerate(derivs):
                 if deriv is None:
                     continue
@@ -1094,7 +1095,8 @@ class Tractor(MultiParams):
                     # we will scale the PSF by counts and we want that
                     # scaled min val to be less than minsb
                     mv = minsb / counts
-                ums = src.getUnitFluxModelPatches(img, minval=mv)
+                mask = self._getModelMaskFor(img, src)
+                ums = src.getUnitFluxModelPatches(img, minval=mv, modelMask=mask)
 
                 isvalid = False
                 isallzero = False
@@ -1750,6 +1752,9 @@ class Tractor(MultiParams):
             for j,src in enumerate(srcs):
                 for i,img in enumerate(self.images):
                     args.append((src, img))
+
+            # if modelMasks are set, need to send those across the multiprocessing...
+            assert(self.modelMasks is None)
             sderivs = self._map_async(getsrcderivs, reversed(args))
     
             # Wait for and unpack the image derivatives...
@@ -1838,7 +1843,7 @@ class Tractor(MultiParams):
             for src in srcs:
                 srcderivs = [[] for i in range(src.numberOfParams())]
                 for img in self.images:
-                    derivs = src.getParamDerivatives(img)
+                    derivs = self._getSourceDerivatives(src, img)
                     for k,deriv in enumerate(derivs):
                         if deriv is None:
                             continue
@@ -2283,9 +2288,64 @@ class Tractor(MultiParams):
     #         factor = Q2 / (Q2 + chi2)
     #         img.setInvvar(oinvvar * factor * smask)
 
-    def getModelPatchNoCache(self, img, src, **kwargs):
-        return src.getModelPatch(img, **kwargs)
+    def setModelMasks(self, masks):
 
+        '''
+        A "model mask" is used to define the pixels that are evaluated
+        when computing the model patch for a source in an image.  This
+        allows for consistent computation of derivatives and
+        optimization, without introducing errors due to approximating
+        the profiles differently given different parameter settings.
+
+        If *masks* is None, this masking is disabled, and normal
+        approximation rules apply.
+
+        Otherwise, *masks* must be a list, with length equal to the
+        number of images.  Each list element must be a dictionary with
+        Source objects for keys and Patch objects for values, where
+        the Patch images are binary masks (True for pixels that should
+        be evaluated).  Sources that do not touch the image should not
+        exist in the dictionary; all the Patches should be non-None
+        and non-empty.
+        '''
+        self.modelMasks = masks
+
+    def _getModelMaskFor(self, image, src):
+        if self.modelMasks is None:
+            return None
+        i = self.images.index(image)
+        try:
+            return self.modelMasks[i][src]
+        except KeyError:
+            return None
+
+    def _checkModelMask(self, patch, mask):
+        if patch is not None and mask is not None:
+            nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
+            unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.patch))
+            bad = nonzero.performArithmetic(unmasked, '__iand__')
+            assert(np.all(bad.patch == False))
+
+    def _getSourceDerivatives(self, src, img, **kwargs):
+        mask = self._getModelMaskFor(img, src)
+        derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
+
+        # HACK -- check 'em
+        for d in derivs:
+            if d is not None:
+                self._checkModelMask(d, mask)
+
+        return derivs
+
+    def getModelPatchNoCache(self, img, src, **kwargs):
+        mask = self._getModelMaskFor(img, src)
+        mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+
+        ## HACK -- here we *check* that modelMask was respected.
+        self._checkModelMask(mod, mask)
+
+        return mod
+    
     def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
             # shortcut
@@ -2303,6 +2363,12 @@ class Tractor(MultiParams):
         else:
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
             self.cache.put(deps, (minsb,mod))
+
+        # HACK -- here we *check* that modelMask is respected by the
+        # possibly-cached model.
+        mask = self._getModelMaskFor(img, src)
+        self._checkModelMask(mod, mask)
+
         return mod
 
     def getModelImage(self, img, srcs=None, sky=True, minsb=None):

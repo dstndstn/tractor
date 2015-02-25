@@ -43,8 +43,8 @@ class PMRaDec(RaDecPos):
     def getDecArcsecPerYear(self):
         return self.pmdec * 3600.
 
-    def getParamDerivatives(self, img):
-        return [None]*self.numberOfParams()
+    #def getParamDerivatives(self, img, modelMask=None):
+    #    return [None]*self.numberOfParams()
 
     
 class MovingPointSource(PointSource):
@@ -105,13 +105,13 @@ class MovingPointSource(PointSource):
         r,d = xyztoradec(xyz)
         return RaDecPos(r,d)
     
-    def getUnitFluxModelPatch(self, img, minval=0.):
+    def getUnitFluxModelPatch(self, img, minval=0., modelMask=None):
         pos = self.getPositionAtTime(img.getTime())
         (px,py) = img.getWcs().positionToPixel(pos)
-        patch = img.getPsf().getPointSourcePatch(px, py, minval=minval)
+        patch = img.getPsf().getPointSourcePatch(px, py, minval=minval, modelMask=modelMask)
         return patch
 
-    def getParamDerivatives(self, img):
+    def getParamDerivatives(self, img, modelMask=None):
         '''
         MovingPointSource derivatives.
 
@@ -121,7 +121,7 @@ class MovingPointSource(PointSource):
         t = img.getTime()
         pos0 = self.getPositionAtTime(t)
         (px0,py0) = img.getWcs().positionToPixel(pos0, self)
-        patch0 = img.getPsf().getPointSourcePatch(px0, py0)
+        patch0 = img.getPsf().getPointSourcePatch(px0, py0, modelMask=modelMask)
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
         derivs = []
 
@@ -163,7 +163,7 @@ class MovingPointSource(PointSource):
                 (px,py) = img.getWcs().positionToPixel(tpos, self)
 
                 # print 'stepping param', name, i, '-->', p, '--> pos', tpos, 'pix pos', px,py
-                patchx = img.getPsf().getPointSourcePatch(px, py)
+                patchx = img.getPsf().getPointSourcePatch(px, py, modelMask=modelMask)
                 p.setParam(i, oldval)
                 dx = (patchx - patch0) * (counts0 / pstep)
                 dx.setName('d(ptsrc)/d(%s%i)' % (name, i))

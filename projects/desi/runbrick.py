@@ -1,6 +1,8 @@
 # Cython
 #import pyximport; pyximport.install(pyimport=True)
 
+# python -u projects/desi/runbrick.py -b 2437p082 --zoom 2575 2675 400 500 -P "pickles/zoom2-%(brick)s-%%(stage)s.pickle" > log 2>&1 &
+
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('Agg')

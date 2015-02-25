@@ -842,7 +842,46 @@ class ConstantSky(ScalarParam, ducks.ImageCalibration):
 #         return oldval + self.offset
 
 
-class PointSource(MultiParams):
+class BasicSource(ducks.Source):
+    def getPosition(self):
+        return self.pos
+    def setPosition(self, position):
+        self.pos = position
+
+
+class SingleProfileSource(BasicSource):
+    '''
+    A mix-in class for Source objects that have a single profile, eg, PointSources,
+    Dev, Exp, and Sersic galaxies, and also FixedCompositeGalaxy (surprising but true)
+    but not CompositeGalaxy.
+    '''
+
+    def getBrightness(self):
+        return self.brightness
+    def setBrightness(self, brightness):
+        self.brightness = brightness
+
+    def getBrightnesses(self):
+        return [self.getBrightness()]
+
+    def getUnitFluxModelPatches(self, *args, **kwargs):
+        return [self.getUnitFluxModelPatch(*args, **kwargs)]
+
+    def getModelPatch(self, img, minsb=None, modelMask=None):
+        counts = img.getPhotoCal().brightnessToCounts(self.brightness)
+        if counts == 0:
+            return None
+        if minsb is None:
+            minsb = img.modelMinval
+        minval = minsb / counts
+        upatch = self.getUnitFluxModelPatch(img, minval=minval, modelMask=modelMask)
+        if upatch is None:
+            return None
+        return upatch * counts
+
+
+
+class PointSource(MultiParams, SingleProfileSource):
     '''
     An implementation of a point source, characterized by its position
     and brightness.
@@ -864,16 +903,6 @@ class PointSource(MultiParams):
         return dict(pos=0, brightness=1)
     def getSourceType(self):
         return 'PointSource'
-    def getPosition(self):
-        return self.pos
-    def setPosition(self, position):
-        self.pos = position
-    def getBrightness(self):
-        return self.brightness
-    def getBrightnesses(self):
-        return [self.getBrightness()]
-    def setBrightness(self, brightness):
-        self.brightness = brightness
     def __str__(self):
         return (self.getSourceType() + ' at ' + str(self.pos) +
                 ' with ' + str(self.brightness))
@@ -881,7 +910,7 @@ class PointSource(MultiParams):
         return (self.getSourceType() + '(' + repr(self.pos) + ', ' +
                 repr(self.brightness) + ')')
 
-    def getUnitFluxModelPatch(self, img, minval=0., derivs=False):
+    def getUnitFluxModelPatch(self, img, minval=0., derivs=False, modelMask=None):
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         H,W = img.shape
         psf = self._getPsf(img)
@@ -893,32 +922,16 @@ class PointSource(MultiParams):
             return None
         patch = psf.getPointSourcePatch(px, py, minval=minval, extent=[0,W,0,H],
                                         radius=self.fixedRadius, derivs=derivs,
-                                        minradius=self.minRadius)
+                                        minradius=self.minRadius, modelMask=modelMask)
         return patch
-
-    def getUnitFluxModelPatches(self, *args, **kwargs):
-        return [self.getUnitFluxModelPatch(*args, **kwargs)]
-
-    def getModelPatch(self, img, minsb=None):
-        counts = img.getPhotoCal().brightnessToCounts(self.brightness)
-        if counts == 0:
-            return None
-        if minsb is None:
-            minsb = img.modelMinval
-        minval = minsb / counts
-        upatch = self.getUnitFluxModelPatch(img, minval=minval)
-        if upatch is None:
-            return None
-        return upatch * counts
 
     def _getPsf(self, img):
         return img.getPsf()
 
-    def getParamDerivatives(self, img, fastPosDerivs=True):
+    def getParamDerivatives(self, img, fastPosDerivs=True, modelMask=None):
         '''
         returns [ Patch, Patch, ... ] of length numberOfParams().
         '''
-
         # Short-cut the case where we're only fitting fluxes, and the
         # band of the image is not being fit.
         counts0 = img.getPhotoCal().brightnessToCounts(self.brightness)
@@ -936,15 +949,8 @@ class PointSource(MultiParams):
             if allzero:
                 return [None]*self.numberOfParams()
 
-
         pos = self.getPosition()
         wcs = img.getWcs()
-
-        # (px0,py0) = wcs.positionToPixel(pos, self)
-        # psf = self._getPsf(img)
-        # extent = [0,W-1,0,H-1]
-        # patch0 = psf.getPointSourcePatch(px0, py0, extent=extent,
-        #                                  radius=self.fixedRadius)
 
         minsb = img.modelMinval
         if counts0 > 0:
@@ -956,7 +962,8 @@ class PointSource(MultiParams):
         patchdx,patchdy = None,None
         
         if derivs:
-            patches = self.getUnitFluxModelPatch(img, minval=minval, derivs=True)
+            patches = self.getUnitFluxModelPatch(img, minval=minval, derivs=True,
+                                                 modelMask=modelMask)
             #print 'minval=', minval, 'Patches:', patches
             if patches is None:
                 return [None]*self.numberOfParams()
@@ -968,7 +975,7 @@ class PointSource(MultiParams):
                 patch0, patchdx, patchdy = patches
 
         else:
-            patch0 = self.getUnitFluxModelPatch(img, minval=minval)
+            patch0 = self.getUnitFluxModelPatch(img, minval=minval, modelMask=modelMask)
 
         if patch0 is None:
             return [None]*self.numberOfParams()
@@ -1001,15 +1008,10 @@ class PointSource(MultiParams):
             else:
                 psteps = pos.getStepSizes(img)
                 pvals = pos.getParams()
-                ## FIXME -- we should ensure that patch0 and patchx have the same
-                ## extent (of pixels rendered > minval)!
                 for i,pstep in enumerate(psteps):
                     oldval = pos.setParam(i, pvals[i] + pstep)
-                
-                    #(px,py) = wcs.positionToPixel(pos, self)
-                    #patchx = psf.getPointSourcePatch(px, py, extent=extent,
-                    #                                 radius=self.fixedRadius)
-                    patchx = self.getUnitFluxModelPatch(img, minval=minval)
+                    patchx = self.getUnitFluxModelPatch(img, minval=minval,
+                                                        modelMask=modelMask)
                 
                     pos.setParam(i, oldval)
                     if patchx is None:
@@ -1062,7 +1064,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         H,W = self.img.shape
         return np.hypot(H,W)/2.
 
-    def getPointSourcePatch(self, px, py, minval=0., **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., modelMask=None, **kwargs):
+
+        ## FIXME!
+        assert(modelMask is None)
+
         from scipy.ndimage.filters import correlate1d
         H,W = self.img.shape
         ix = int(np.round(px))
@@ -1227,10 +1233,14 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
-                            derivs=False, minradius=None, **kwargs):
+                            derivs=False, minradius=None, modelMask=None, **kwargs):
         '''
         extent = [x0,x1,y0,y1], clip to [x0,x1), [y0,y1).
         '''
+
+        ## FIXME!
+        assert(modelMask is None)
+
         if minval is None:
             minval = 0.
         if minval > 0. or minradius is not None:
@@ -1616,7 +1626,12 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         return max(self.minradius, max(self.mysigmas) * self.getNSigma())
 
     # returns a Patch object.
-    def getPointSourcePatch(self, px, py, minval=0., radius=None, **kwargs):
+    def getPointSourcePatch(self, px, py, minval=0., radius=None,
+                            modelMask=None, **kwargs):
+
+        ## FIXME!
+        assert(modelMask is None)
+
         ix = int(round(px))
         iy = int(round(py))
         if radius is None:
