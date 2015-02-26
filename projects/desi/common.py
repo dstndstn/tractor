@@ -45,6 +45,8 @@ an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 class SFDMap(object):
     # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
+    # but updated (and adding DES u) via email from Schlafly,
+    # decam-data thread from 11/13/2014, "New recommended SFD coefficients for DECam."
     #
     # The coefficients for the four WISE filters are derived from Fitzpatrick 1999,
     # as recommended by Schafly & Finkbeiner, considered better than either the
@@ -54,11 +56,12 @@ class SFDMap(object):
     #
     extinctions = {
         'SDSS u': 4.239,
-        'DES g': 3.237,
-        'DES r': 2.176,
-        'DES i': 1.595,
-        'DES z': 1.217,
-        'DES Y': 1.058,
+        'DES u': 3.995,
+        'DES g': 3.214,
+        'DES r': 2.165,
+        'DES i': 1.592,
+        'DES z': 1.211,
+        'DES Y': 1.064,
         'WISE W1': 0.184,
         'WISE W2': 0.113,
         'WISE W3': 0.0241,
@@ -1025,50 +1028,111 @@ class Decals(object):
         if extname is not None:
             T.cut(T.extname == extname)
         return T
-    
+
+    def photometric_ccds(self, CCD):
+        '''
+        Returns an index array for the members of the table "CCD" that are photometric.
+        '''
+        
+        # Using Arjun's zeropoints and recipe: email 2015-02-25
+        '''
+        I would suggest using the following algorithm to avoid bad data (in IDL-ese):
+
+        iznp = where(abs(zpz.zpt-zpz.ccdzpt) ge 0.05 $
+          or (zpz.ccdnmatch ge 20 and zpz.ccdphrms gt 0.2) $
+          or (zpz.zpt le z0-0.3 and zpz.zpt ge z0+1.1) $
+          or zpz.ccdnmatch lt 20 $
+          ; or strcompress(zpz.ccdname,/remove_all) eq 'S7' $
+          ,nznp)
+
+        where zpz is a structure containing all the z-band
+        zeropoints. Similarly for the g- and r-band zero points.
+
+        Here the nominal zero points for the three bands are roughly
+        g0 = 26.61 -2.5*alog10(4.)
+        r0 = 26.818 -2.5*alog10(4.)
+        z0 = 26.484 -2.5*alog10(4.)
+
+        Using all the listed above criteria (with the S7 selection
+        commented out) results in red points on the attached plot. The
+        red points are in pretty good agreement with the log notes
+        about poor sky conditions. Setting CCDNMATCH < 20 also catches
+        places where the overlap with PS1 was not good. You will also
+        want to throw out the bad CCD (CCDNAME = S7)
+        '''
+
+        ZP = self._get_zeropoints_tables()
+        zp_rowmap = dict([((expnum,extname),i) for i,(expnum,extname) in enumerate(
+            zip(ZP.expnum, ZP.ccdname))])
+        I = np.array([zp_rowmap[(expnum,extname)] for expnum,extname in
+                      zip(CCD.expnum, CCD.extname)])
+        ZP = ZP[I]
+        assert(len(ZP) == len(CCD))
+        
+        z0 = dict(g = 26.610 - 2.5*np.log10(4.),
+                  r = 26.818 - 2.5*np.log10(4.),
+                  z = 26.464 - 2.5*np.log10(4.),)
+        z0 = np.array([z0[f[0]] for f in ZP.filter])
+
+        good = np.ones(len(CCD), bool)
+        n0 = sum(good)
+        for name,crit in [
+            ('zpt - ccdzpt', (np.abs(ZP.zpt - ZP.ccdzpt) >= 0.05)),
+            ('ccdnmatch >= 20 and ccdphrms >= 0.2',
+             ((ZP.ccdnmatch >= 20) * (ZP.ccdphrms >= 0.2))),
+            ('zpt lower than nominal', (ZP.zpt < (z0 - 0.3))),
+            ('zpt higher than nominal', (ZP.zpt > (z0 + 1.1))),
+            ('ccdnmatch < 20', (ZP.ccdnmatch < 20)),
+            ('S7', np.array([s == 'S7' for s in ZP.ccdname])),
+            ]:
+            good[crit] = False
+            n = sum(good)
+            print 'Flagged', n0-n, 'more non-photometric using criterion:', name
+            n0 = n
+
+        return np.flatnonzero(good)
+
+    def _get_zeropoints_table(self):
+        if self.ZP is not None:
+            return self.ZP
+        zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
+        #print 'Reading zeropoints:', zpfn
+        self.ZP = fits_table(zpfn)
+
+        if 'ccdname' in self.ZP.get_columns():
+            # 'N4 ' -> 'N4'
+            self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
+        return self.ZP
+        
     def get_zeropoint_for(self, im):
-        if self.ZP is None:
-            zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
-            #print 'Reading zeropoints:', zpfn
-            self.ZP = fits_table(zpfn)
-
-            if 'ccdname' in self.ZP.get_columns():
-                # 'N4 ' -> 'N4'
-                self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
-
-            #self.ZP.about()
-
-        I, = np.nonzero(self.ZP.expnum == im.expnum)
+        ZP = self._get_zeropoints_table()
+        I, = np.nonzero(ZP.expnum == im.expnum)
         #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
-            #I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
-            I, = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            I, = np.nonzero((ZP.expnum == im.expnum) * (ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
         # No updated zeropoint -- use header MAGZERO from primary HDU.
         elif len(I) == 0:
             print 'WARNING: using header zeropoints for', im
             hdr = im.read_image_primary_header()
-
             # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
-            #exptime = hdr['EXPTIME']
-            #magzero += 2.5 * np.log10(exptime)
             return magzero
 
         assert(len(I) == 1)
         I = I[0]
 
         # Arjun says use CCDZPT
-        magzp = self.ZP.ccdzpt[I]
+        magzp = ZP.ccdzpt[I]
 
-        # magzp = self.ZP.zpt[I]
+        # magzp = ZP.zpt[I]
         # print 'Raw magzp', magzp
         # if magzp == 0:
         #     print 'Magzp = 0; using ccdzpt'
-        #     magzp = self.ZP.ccdzpt[I]
+        #     magzp = ZP.ccdzpt[I]
         #     print 'Got', magzp
-        exptime = self.ZP.exptime[I]
+        exptime = ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
         #print 'magzp', magzp
         return magzp

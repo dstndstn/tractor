@@ -2598,8 +2598,7 @@ def stage_writecat(
     print 'Reading SFD maps...'
 
     sfd = SFDMap()
-    system = dict(u='SDSS', g='DES', r='DES', i='DES', z='DES', Y='DES')
-    filts = ['%s %s' % (system[f], f) for f in allbands]
+    filts = ['%s %s' % ('DES', f) for f in allbands]
     # T2.decam_extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
 
     wisebands = ['WISE W1', 'WISE W2', 'WISE W3', 'WISE W4']
