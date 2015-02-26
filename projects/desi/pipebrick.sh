@@ -25,15 +25,10 @@ export MKL_NUM_THREADS=1
 
 brick="$1"
 
-outdir=edr2
+outdir=edr3
 mkdir -p $outdir/logs
 
 python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir > $outdir/logs/$brick.log 2>&1
-
-
-
-#python -u projects/desi/pipebrick.py --no-ceres $brick > pipebrick-logs/$brick.log 2>&1
-#python -u projects/desi/pipebrick.py $brick > pipebrick-logs/$brick.log 2>&1
 
 # qdo launch bricks 1 --batchopts "-l pvmem=6GB -A cosmo -t 1-20 -q serial" --walltime=24:00:00 --script projects/desi/pipebrick.sh --verbose
 
