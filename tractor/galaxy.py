@@ -171,10 +171,6 @@ class Galaxy(MultiParams, SingleProfileSource):
                 (px,py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
 
-                print 'Galaxy derivative: px,py', px,py, 'vs px0,py0', px0,py0
-                if modelMask is not None:
-                    print 'modelMask extent:', modelMask.getExtent()
-                    
                 patchx = self.getUnitFluxModelPatch(img, px, py, minval=minval,
                                                     extent=extent, modelMask=modelMask)
                 if patchx is None or patchx.getImage() is None:
@@ -300,21 +296,21 @@ class ProfileGalaxy(object):
                                                    extent=extent, modelMask=modelMask)
         
         deps = self._getUnitFluxDeps(img, px, py)
-        print 'deps', deps, '->',
-        deps = hash(deps)
-        print deps
+        #print 'deps', deps, '->',
+        #deps = hash(deps)
+        #print deps
 
         try:
             # FIXME -- what about when the extent was specified for
             # the cached entry but not specified for this call?
-            print 'Searching cache for:', deps
+            #print 'Searching cache for:', deps
             (cached,mv) = _galcache.get(deps)
-            if cached is None:
-                print 'Cache hit:', cached
-            else:
-                print 'Cache hit:', cached.shape
-                if modelMask is not None:
-                    assert(cached.shape == modelMask.shape)
+            # if cached is None:
+            #     print 'Cache hit:', cached
+            # else:
+            #     print 'Cache hit:', cached.shape
+            #     if modelMask is not None:
+            #         assert(cached.shape == modelMask.shape)
 
             if mv <= minval:
                 if extent is None:
@@ -337,14 +333,14 @@ class ProfileGalaxy(object):
                                                 extent=extent, modelMask=modelMask)
         if patch is not None:
             patch = patch.copy()
-        print 'Adding to cache:', deps,
-        if patch is not None:
-            print 'patch shape', patch.shape
-        else:
-            print 'patch is None'
+        # print 'Adding to cache:', deps,
+        # if patch is not None:
+        #     print 'patch shape', patch.shape
+        # else:
+        #     print 'patch is None'
         if patch is not None and modelMask is not None:
             assert(patch.shape == modelMask.shape)
-        print 'modelMask:', modelMask
+        # print 'modelMask:', modelMask
         _galcache.put(deps, (patch,minval))
         return patch
 
@@ -467,10 +463,11 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         return amix
 
     def _getUnitFluxDeps(self, img, px, py):
-        #return hash(('unitpatch', self.getName(), px, py,
-        return ('unitpatch', self.getName(), px, py,
+        # return ('unitpatch', self.getName(), px, py,
+        return hash(('unitpatch', self.getName(), px, py,
                 img.getWcs().hashkey(),
                 img.getPsf().hashkey(), self.shape.hashkey())
+                    )
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):

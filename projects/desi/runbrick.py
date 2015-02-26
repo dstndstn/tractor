@@ -1104,14 +1104,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'Fitting source took', Time()-tsrc
             print src
 
-            gc = get_galaxy_cache()
-            print 'Galaxy cache:', gc
-            if gc is not None:
-                gc.printStats()
-                print 'GC total size:', gc.totalSize()
-                gc.clear()
-                print 'After clearing cache:', Time()-tsrc
-
         for tim,img in zip(subtims, orig_timages):
             tim.data = img
         del orig_timages
@@ -1194,6 +1186,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         tim.data = img.copy()
     initial_models = []
 
+    
+
     # Create initial models for each tim x each source
     tt = Time()
     for tim in subtims:
@@ -1212,7 +1206,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     mod.addTo(tim.getImage(), scale=-1)
         initial_models.append(mods)
     print 'Subtracting initial models:', Time()-tt
-
     
     # For sources, in decreasing order of brightness
     for numi,i in enumerate(Ibright):
@@ -1324,7 +1317,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             enable_galaxy_cache()
 
             print 'set initial modelMasks:', mm
-            print 'srctractor cache:', srctractor.cache
 
             lnp = srctractor.getLogProb()
 

@@ -2352,9 +2352,9 @@ class Tractor(MultiParams):
         if self.expectModelMasks and mask is None:
             return [None] * src.numberOfParams()
 
-        print 'getting param derivs for', src
+        #print 'getting param derivs for', src
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
-        print 'done getting param derivs for', src
+        #print 'done getting param derivs for', src
 
         # HACK -- auto-add?
         # if self.expectModelMasks:
@@ -2378,7 +2378,7 @@ class Tractor(MultiParams):
 
         # HACK -- assume no mask -> no overlap
         if self.expectModelMasks and mask is None:
-            print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
+            #print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
             return None
 
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
