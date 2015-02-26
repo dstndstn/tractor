@@ -261,6 +261,9 @@ class MixtureOfGaussians():
 
     def evaluate_grid_masked(self, x0, y0, mask, fx, fy,
                              derivs=False):
+        '''
+        mask: np array of booleans (NOT Patch object!)
+        '''
         from mix import c_gauss_2d_masked
 
         h,w = mask.shape
@@ -279,7 +282,7 @@ class MixtureOfGaussians():
         #     print '  ', 'xd', (xderiv.shape, xderiv.dtype),
         # if yderiv is not None:
         #     print '  ', 'yd', (yderiv.shape, yderiv.dtype),
-        # print '  ', 'mask', mask, mask.shape, mask.dtype
+        # print '  ', 'mask', mask.shape, mask.dtype
         
         rtn = c_gauss_2d_masked(int(x0), int(y0), int(w), int (h),
                                 float(fx), float(fy),

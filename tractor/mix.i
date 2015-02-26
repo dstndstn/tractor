@@ -162,7 +162,7 @@ static int get_np(PyObject* ob_amp,
         *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
         Py_CLEAR(btype);
     }
-    Py_CLEAR(dtype);
+    Py_DECREF(dtype);
 
     if (!*np_amp || !*np_mean || !*np_var || !*np_result ||
         ((ob_xderiv != Py_None) && !*np_xderiv) ||

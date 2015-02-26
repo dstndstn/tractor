@@ -881,7 +881,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             max_cpu_per_source = 60.
 
             # DEBUG
-            DEBUG = True
+            DEBUG = False
             if DEBUG:
                 params = []
                 params.append((srctractor.getLogProb(), srctractor.getParams()))
@@ -1351,12 +1351,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # Recompute modelMasks
             mm = []
             for tim in subtims:
-                mod = src.getModelPatch(tim)
                 d = dict()
                 mm.append(d)
+                mod = src.getModelPatch(tim)
                 if mod is None:
                     continue
                 mask = Patch(mod.x0, mod.y0, mod.patch != 0)
+                print 'mask type:', mask.patch.dtype
                 d[newsrc] = mask
             srctractor.setModelMasks(mm)
 

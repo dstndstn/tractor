@@ -304,13 +304,13 @@ class ProfileGalaxy(object):
         is [x0, x1), [y0,y1).
         '''
 
-        # FIXME!!
-        assert(modelMask is None)
+        if modelMask is None:
+            # now choose the patch size
+            halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
 
-        # now choose the patch size
-        halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
-        if extent is None:
+        if modelMask is not None:
+            x0,y0 = modelMask.x0, modelMask.y0
+        elif extent is None:
             # find overlapping pixels to render
             (outx, inx) = get_overlapping_region(
                 int(floor(px-halfsize)), int(ceil(px+halfsize+1)),
@@ -341,9 +341,18 @@ class ProfileGalaxy(object):
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
             #print '_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1
-            return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
-                                       exactExtent=(extent is not None))
+            if modelMask is None:
+                return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
+                                           exactExtent=(extent is not None))
+            else:
+                return cmix.evaluate_grid_masked(x0, y0, modelMask.patch, px, py)
+                                                 
         else:
+            if modelMask is not None:
+                halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
+
+            assert(modelMask is None)
+
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
             w = np.fft.rfftfreq(pW)
             v = np.fft.fftfreq(pH)
