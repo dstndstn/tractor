@@ -2309,6 +2309,7 @@ class Tractor(MultiParams):
         and non-empty.
         '''
         self.modelMasks = masks
+        assert((masks is None) or (len(masks) == len(self.images)))
 
     def _getModelMaskFor(self, image, src):
         if self.modelMasks is None:

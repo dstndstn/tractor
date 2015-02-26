@@ -1228,10 +1228,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         modelMasks = []
         for imods in initial_models:
+            d = dict()
+            modelMasks.append(d)
             mod = imods[i]
             if mod is not None:
-                mask = Patch(mod.x0, mod.y0, mod.patch != 0)
-                modelMasks.append(dict(src=mask))
+                d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
         srctractor = Tractor(subtims, [src])
         srctractor.freezeParams('images')
@@ -1314,11 +1315,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             mm = []
             for mim in modelMasks:
                 mm2 = dict()
+                mm.append(mm2)
                 try:
                     mm2[newsrc] = mim[src]
                 except KeyError:
                     pass
-                mm.append(mm2)
             srctractor.setModelMasks(mm)
 
             lnp = srctractor.getLogProb()
@@ -2606,9 +2607,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         kwargs.update(ps=ps)
 
     if opt.threads and opt.threads > 1:
-        mp = multiproc(opt.threads)
+        mp = multiproc(opt.threads, init=runbrick_global_init)
     else:
-        mp = multiproc()
+        mp = multiproc(init=runbrick_global_init)
     # ??
     kwargs.update(mp=mp)
 
