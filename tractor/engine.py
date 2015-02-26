@@ -2289,7 +2289,7 @@ class Tractor(MultiParams):
     #         factor = Q2 / (Q2 + chi2)
     #         img.setInvvar(oinvvar * factor * smask)
 
-    def setModelMasks(self, masks):
+    def setModelMasks(self, masks, assumeMasks=True):
 
         '''
         A "model mask" is used to define the pixels that are evaluated
@@ -2311,9 +2311,7 @@ class Tractor(MultiParams):
         '''
         self.modelMasks = masks
         assert((masks is None) or (len(masks) == len(self.images)))
-
-        ## DEBUG
-        self.expectModelMasks = (masks is not None)
+        self.expectModelMasks = (masks is not None) and assumeMasks
 
     def _getModelMaskFor(self, image, src):
         if self.modelMasks is None:
@@ -2322,9 +2320,6 @@ class Tractor(MultiParams):
         try:
             return self.modelMasks[i][src]
         except KeyError:
-            # no, for no overlap the source has no entry in modelMasks.
-            #if self.expectModelMasks:
-            #    assert(False)
             return None
 
     def _checkModelMask(self, patch, mask):

@@ -518,6 +518,7 @@ def stage_fitblobs_finish(
     fracflux = np.vstack([r[3] for r in R])
     rchi2    = np.vstack([r[4] for r in R])
     dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
+    fracmasked = np.hstack([r[6] for r in R])
     
     newcat = []
     for r in R:
@@ -544,6 +545,7 @@ def stage_fitblobs_finish(
     assert(nb == 5) # none, ptsrc, dev, exp, comp
 
     T.fracflux = fracflux
+    T.fracmasked = fracmasked
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
     # Set -0 to 0
@@ -831,7 +833,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             srctractor = Tractor(srctims, [src])
             srctractor.freezeParams('images')
-
             srctractor.setModelMasks(modelMasks)
 
             #### DEBUG
@@ -1091,15 +1092,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 for tim,im in zip(subtims, tempims):
                     tim.data = im
 
-            srctractor.setModelMasks(None)
-            disable_galaxy_cache()
-
-
-            # Re-remove the final fit model for this source.
+            # Re-remove the final fit model for this source (pull from cache)
             for tim in subtims:
-                mod = src.getModelPatch(tim)
+                mod = srctractor.getModelPatch(tim, src)
                 if mod is not None:
                     mod.addTo(tim.getImage(), scale=-1)
+
+            srctractor.setModelMasks(None)
+            disable_galaxy_cache()
 
             print 'Fitting source took', Time()-tsrc
             print src
@@ -1185,8 +1185,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     for tim,img in zip(subtims,orig_timages):
         tim.data = img.copy()
     initial_models = []
-
-    
 
     # Create initial models for each tim x each source
     tt = Time()
@@ -1316,7 +1314,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(mm)
             enable_galaxy_cache()
 
-            print 'set initial modelMasks:', mm
+            #print 'set initial modelMasks:', mm
 
             lnp = srctractor.getLogProb()
 
@@ -1459,14 +1457,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         plnps = dict([(k, (lnps[k]-lnp0) - 0.5 * nparams[k])
                       for k in nparams.keys()])
 
-        #print 'Relative penalized log-probs:'
-        #for k in keys:
-        #    print '  ', k, ':', plnps[k]
-
         if plots:
             plt.clf()
             rows,cols = 2, 5
-
             mods = OrderedDict([('none',None), ('ptsrc',ptsrc), ('dev',dev),
                                 ('exp',exp), ('comp',comp)])
             for imod,modname in enumerate(mods.keys()):
@@ -1488,7 +1481,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     chisqs = [((tim.getImage() - mod) * tim.getInvError())**2
                               for tim,mod in zip(subtims, modimgs)]
                 else:
-
                     coimgs, cons = compute_coadds(subtims, bands, blobw, blobh, subtarget)
                     dimshow(get_rgb(coimgs, bands))
                     ax = plt.axis()
@@ -1502,11 +1494,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 cochisqs,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
                                              images=chisqs)
                 cochisq = reduce(np.add, cochisqs)
-
                 plt.subplot(rows, cols, imod+1+cols)
                 dimshow(cochisq, vmin=0, vmax=25)
                 plt.title('dlnp %.0f' % plnps[modname])
-
             plt.suptitle('Blob %i, source %i: was: %s' %
                          (iblob, i, str(src)))
             ps.savefig()
@@ -1641,9 +1631,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # rchi2 quality-of-fit metric
     rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
     rchi2_den    = np.zeros((len(srcs),len(bands)), np.float32)
+
     # fracflux degree-of-blending metric
     fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
     fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
+
+    # fracmasked: fraction of masked pixels metric
+    fracmasked_num = np.zeros(len(srcs), np.float32)
+    fracmasked_den = np.zeros(len(srcs), np.float32)
 
     for iband,band in enumerate(bands):
         for tim in subtims:
@@ -1677,6 +1672,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 fracflux_num[isrc,iband] += np.sum((mod[slc] - patch.patch) * np.abs(patch.patch)) / counts[isrc]**2
                 fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
+                fracmasked_num[isrc] += np.sum((tim.getInvError()[slc] == 0) * np.abs(patch.patch)) / np.abs(counts[isrc])
+                fracmasked_den[isrc] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
+
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
             
@@ -1684,8 +1682,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if patch is None:
                     continue
                 slc = patch.getSlice(mod)
-                #rchi2_num[isrc,iband] += np.sum(np.abs(chisq[slc] * patch.patch)) / np.abs(counts[isrc])
-                #rchi2_den[isrc,iband] += np.sum(np.abs(patch.patch) / counts[isrc]
                 # We compute numerator and denom separately to handle edge objects, where
                 # sum(patch.patch) < counts.  Also, to normalize by the number of images.
                 # (Being on the edge of an image is like being in half an image.)
@@ -1695,8 +1691,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
+    fracmasked = fracmasked_num / fracmasked_den
     
-    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps
+    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps, fracmasked
     
 
 
@@ -2355,6 +2352,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     # Look up number of images overlapping each source's position.
     assert(len(T) == len(cat))
     nobs = np.zeros((len(T), len(bands)), np.uint8)
+    satur = np.zeros(len(T), bool)
     rr = np.array([s.getPosition().ra  for s in cat])
     dd = np.array([s.getPosition().dec for s in cat])
     ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
@@ -2373,6 +2371,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         comod  = np.zeros((H,W), np.float32)
         cochi2 = np.zeros((H,W), np.float32)
         con     = np.zeros((H,W), np.uint8)
+        anysatur = np.zeros((H,W), bool)
         congood = np.zeros((H,W), np.uint8)
         detiv   = np.zeros((H,W), np.float32)
 
@@ -2404,14 +2403,17 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
             comod[Yo,Xo] += mod[Yi,Xi]
             con  [Yo,Xo] += 1
 
+            anysatur[Yo,Xo] |= ((tim.dq[Yi,Xi] & tim.dq_bits['satur']) != 0)
+
             # point-source depth
             psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
             detsig1 = tim.sig1 / psfnorm
             detiv[Yo,Xo] += good * (1. / detsig1**2)
 
-
         nobs[:, iband] = con[iy,ix]
-            
+
+        satur[:] = anysatur[iy,ix]
+
         cowimg /= np.maximum(cow, 1e-16)
         cowmod /= np.maximum(cow, 1e-16)
 
@@ -2480,6 +2482,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         os.unlink(tmpfn)
 
     T.nobs = nobs
+    T.saturated = satur
     return dict(T = T)
     
 
@@ -2511,11 +2514,16 @@ def stage_writecat(
         TT.delete_column(k)
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
-                       'fracflux','rchi2','dchisq','nobs']:
+                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)
     TT.ty = TT.ty.astype(np.float32)
-    TT.blob = TT.blob.astype(np.int32)
+
+    # Renumber blobs to make them contiguous.
+    ublob,iblob = np.unique(TT.blob, return_inverse=True)
+    del ublob
+    assert(len(iblob) == len(TT))
+    TT.blob = iblob.astype(np.int32)
 
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
     TT.brickname = np.array([brickname] * len(TT))
@@ -2531,6 +2539,9 @@ def stage_writecat(
         TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
+
+    TT.rename('fracmasked', 'decam_fracmasked')
+    TT.rename('saturated', 'decam_saturated')
 
     TT.delete_column('rchi2')
     TT.delete_column('fracflux')

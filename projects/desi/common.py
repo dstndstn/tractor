@@ -1278,6 +1278,24 @@ class DecamImage(object):
         img,imghdr = self.read_image(header=True, slice=slc)
         print 'Reading invvar from', self.wtfn, 'HDU', self.hdu
         invvar = self.read_invvar(slice=slc, clip=True)
+        print 'Reading dq from', self.dqfn, 'HDU', self.hdu
+        dq = self.read_dq(slice=slc)
+
+        uq = np.unique(dq)
+        bits = reduce(np.bitwise_or, uq)
+        print 'DQ bits set: 0x%x' % bits
+
+        # From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
+        # 1   -- detector bad pixel           InstCal
+        # 1   -- detector bad pixel/no data   Resampled
+        # 1   -- No data                      Stacked
+        # 2   -- saturated                    InstCal/Resampled
+        # 4   -- interpolated                 InstCal/Resampled
+        # 16  -- single exposure cosmic ray   InstCal/Resampled
+        # 64  -- bleed trail                  InstCal/Resampled
+        # 128 -- multi-exposure transient     InstCal/Resampled 
+
+        invvar[dq != 0] = 0.
 
         print 'Invvar range:', invvar.min(), invvar.max()
         if np.all(invvar == 0.):
@@ -1348,6 +1366,11 @@ class DecamImage(object):
         tim.imobj = self
         tim.primhdr = primhdr
         tim.hdr = imghdr
+
+        tim.dq = dq
+        tim.dq_bits = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
+                           trans=128)
+            
         mn,mx = tim.zr
         subh,subw = tim.shape
         tim.subwcs = tim.sip_wcs.get_subimage(tim.x0, tim.y0, subw, subh)
@@ -1394,7 +1417,6 @@ class DecamImage(object):
 
     def read_dq(self, **kwargs):
         return self._read_fits(self.dqfn, self.hdu, **kwargs)
-    #return fitsio.FITS(self.dqfn)[self.hdu].read()
 
     def read_invvar(self, clip=False, **kwargs):
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)
