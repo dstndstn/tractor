@@ -1061,7 +1061,7 @@ class Decals(object):
         want to throw out the bad CCD (CCDNAME = S7)
         '''
 
-        ZP = self._get_zeropoints_tables()
+        ZP = self._get_zeropoints_table()
         zp_rowmap = dict([((expnum,extname),i) for i,(expnum,extname) in enumerate(
             zip(ZP.expnum, ZP.ccdname))])
         I = np.array([zp_rowmap[(expnum,extname)] for expnum,extname in
@@ -1102,6 +1102,10 @@ class Decals(object):
         if 'ccdname' in self.ZP.get_columns():
             # 'N4 ' -> 'N4'
             self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
+
+        # it's a string in some versions...
+        self.ZP.expnum = np.array([int(t) for t in self.ZP.expnum])
+
         return self.ZP
         
     def get_zeropoint_for(self, im):

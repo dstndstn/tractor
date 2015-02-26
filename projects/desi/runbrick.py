@@ -230,8 +230,13 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     T = decals.ccds_touching_wcs(targetwcs)
     # Sort by band
-    II = []
     T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
+
+    print 'Cutting out non-photometric CCDs...'
+    I = decals.photometric_ccds(T)
+    print len(I), 'of', len(T), 'CCDs are photometric'
+    T.cut(I)
+
     ims = []
     for t in T:
         print
