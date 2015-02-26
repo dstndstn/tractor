@@ -2321,6 +2321,11 @@ class Tractor(MultiParams):
             return None
 
     def _checkModelMask(self, patch, mask):
+
+        if patch is not None and mask is not None:
+            # not strictly required?  but a good idea!
+            assert(patch.patch.shape == mask.patch.shape)
+
         if patch is not None and mask is not None and patch.patch is not None:
             nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
             #print 'nonzero type:', nonzero.patch.dtype

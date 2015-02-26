@@ -89,6 +89,8 @@ class GalaxyShape(ParamList):
         return re_deg * np.array([[cp, sp*self.ab], [-sp, cp*self.ab]])
 
 
+plotnum = 0
+
 class Galaxy(MultiParams, SingleProfileSource):
     '''
     Generic Galaxy profile with position, brightness, and shape.
@@ -149,8 +151,6 @@ class Galaxy(MultiParams, SingleProfileSource):
             return [None] * self.numberOfParams()
         derivs = []
 
-        #print 'Galaxy.getParamDerivatives: img', img.shape
-        #print 'patch0 extent:', patch0.getExtent()
         extent = patch0.getExtent()
         
         # derivatives wrt position
@@ -169,17 +169,46 @@ class Galaxy(MultiParams, SingleProfileSource):
                 (px,py) = img.getWcs().positionToPixel(pos0, self)
                 pos0.setParam(i, oldval)
 
-                # print 'patch0 extent', patch0.getExtent()
-                # print 'getting offset unit flux patch'
-
+                print 'Galaxy derivative: px,py', px,py, 'vs px0,py0', px0,py0
+                if modelMask is not None:
+                    print 'modelMask extent:', modelMask.getExtent()
+                    
                 patchx = self.getUnitFluxModelPatch(img, px, py, minval=minval,
                                                     extent=extent, modelMask=modelMask)
                 if patchx is None or patchx.getImage() is None:
                     derivs.append(None)
                     continue
 
-                #print 'patchx extent', patchx.getExtent()
-                
+                if False:
+                    import pylab as plt
+                    plt.clf()
+                    global plotnum
+                    plt.subplot(2,2,1)
+                    mn = patch0.patch.min()
+                    mx = patch0.patch.max()
+                    plt.imshow(patch0.patch, extent=patch0.getExtent(),
+                               interpolation='nearest', origin='lower',
+                               vmin=mn, vmax=mx)
+                    plt.colorbar()
+                    plt.subplot(2,2,2)
+                    plt.imshow(patchx.patch, extent=patchx.getExtent(),
+                               interpolation='nearest', origin='lower',
+                               vmin=mn, vmax=mx)
+                    plt.colorbar()
+                    plt.subplot(2,2,3)
+                    diff = patchx.patch - patch0.patch
+                    mx = np.max(np.abs(diff))
+                    plt.imshow(diff, extent=patchx.getExtent(),
+                               interpolation='nearest', origin='lower',
+                               vmin=-mx, vmax=mx)
+                    plt.colorbar()
+                    fn = 'galdiff-%03i.png' % plotnum
+                    plt.suptitle('dpos of %s in %s' % (str(self), img.name))
+                    plt.savefig(fn)
+                    print 'wrote', fn
+                    plotnum += 1
+                               
+
                 # We evaluated patch0 and patchx on the same extent,
                 # so they are pixel aligned.  Take the intersection of
                 # the pixels they evaluated (>minval) to avoid jumps.
@@ -340,12 +369,18 @@ class ProfileGalaxy(object):
             # now convolve with the PSF, analytically
             psfmix = psf.getMixtureOfGaussians(px=px, py=py)
             cmix = amix.convolve(psfmix)
+
+            # print 'galaxy affine mixture:', amix
+            # print 'psf mixture:', psfmix
+            # print 'convolved mixture:', cmix
             #print '_realGetUnitFluxModelPatch: extent', x0,x1,y0,y1
             if modelMask is None:
                 return mp.mixture_to_patch(cmix, x0, x1, y0, y1, minval,
                                            exactExtent=(extent is not None))
             else:
-                return cmix.evaluate_grid_masked(x0, y0, modelMask.patch, px, py)
+                # The convolved mixture *already* has the px,py offset added
+                # (via px,py to amix) so set px,py=0,0 in this call.
+                return cmix.evaluate_grid_masked(x0, y0, modelMask.patch, 0., 0.)
                                                  
         else:
             if modelMask is not None:

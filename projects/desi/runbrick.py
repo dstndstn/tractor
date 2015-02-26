@@ -1236,15 +1236,12 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         srctractor = Tractor(subtims, [src])
         srctractor.freezeParams('images')
-
         srctractor.setModelMasks(modelMasks)
 
         lnp0 = srctractor.getLogProb()
         print 'lnp0:', lnp0
 
         srccat = srctractor.getCatalog()
-
-        #subcat[i] = None
         srccat[0] = None
         
         lnp_null = srctractor.getLogProb()
@@ -1306,28 +1303,64 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
                                                      0.5, exp.getShape(), dev.getShape()).copy()
             print 'New source:', newsrc
-            #subcat[i] = newsrc
-
             srccat[0] = newsrc
 
             # Use the same initial modelMasks as the original source; we'll do a second
-            # round below.
+            # round below.  Need to create newsrc->mask mappings though:
             mm = []
             for mim in modelMasks:
-                mm2 = dict()
-                mm.append(mm2)
+                d = dict()
+                mm.append(d)
                 try:
-                    mm2[newsrc] = mim[src]
+                    d[newsrc] = mim[src]
                 except KeyError:
                     pass
             srctractor.setModelMasks(mm)
 
+            print 'set initial modelMasks:', mm
+
             lnp = srctractor.getLogProb()
 
             print 'Initial log-prob:', lnp
-            print 'vs original src:', lnp - lnp0
+            print 'vs original src: ', lnp - lnp0
 
-            #subcat.freezeAllBut(i)
+            if plots:
+                plt.clf()
+                rows = len(subtims)
+                cols = 1 + newsrc.numberOfParams()
+                for it,tim in enumerate(subtims):
+                    derivs = srctractor._getSourceDerivatives(newsrc, tim)
+                    c0 = 1 + cols*it
+                    mod = srctractor.getModelPatchNoCache(tim, src)
+                    if mod is not None and mod.patch is not None:
+                        plt.subplot(rows, cols, c0)
+                        dimshow(mod.patch, extent=mod.getExtent())
+                    c0 += 1
+                    for ip,deriv in enumerate(derivs):
+                        if deriv is None:
+                            continue
+                        plt.subplot(rows, cols, c0+ip)
+                        mx = np.max(np.abs(deriv.patch))
+                        dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
+                plt.title('Derivatives for ' + name)
+                ps.savefig()
+
+                plt.clf()
+                modimgs = srctractor.getModelImages()
+                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                            images=modimgs)
+                dimshow(get_rgb(comods, bands))
+                plt.title('Initial ' + name)
+                ps.savefig()
+
+            if plots:
+                plt.clf()
+                modimgs = srctractor.getModelImages()
+                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                            images=modimgs)
+                dimshow(get_rgb(comods, bands))
+                plt.title('Initial ' + name)
+                ps.savefig()
 
             max_cpu_per_source = 60.
 
@@ -1347,6 +1380,15 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             lnp = srctractor.getLogProb()
             print 'Optimized log-prob:', lnp
 
+            if plots:
+                plt.clf()
+                modimgs = srctractor.getModelImages()
+                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                            images=modimgs)
+                dimshow(get_rgb(comods, bands))
+                plt.title('First-round opt ' + name)
+                ps.savefig()
+
             srctractor.setModelMasks(None)
 
             # Recompute modelMasks
@@ -1357,9 +1399,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 mod = src.getModelPatch(tim)
                 if mod is None:
                     continue
-                mask = Patch(mod.x0, mod.y0, mod.patch != 0)
-                print 'mask type:', mask.patch.dtype
-                d[newsrc] = mask
+                d[newsrc] = Patch(mod.x0, mod.y0, mod.patch != 0)
             srctractor.setModelMasks(mm)
 
             # Run another round of opt.
@@ -1377,7 +1417,16 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'New source (after optimization):', newsrc
             lnp = srctractor.getLogProb()
             print 'Optimized log-prob:', lnp
-            print 'vs original src:', lnp - lnp0
+            print 'vs original src:   ', lnp - lnp0
+
+            if plots:
+                plt.clf()
+                modimgs = srctractor.getModelImages()
+                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                            images=modimgs)
+                dimshow(get_rgb(comods, bands))
+                plt.title('Second-round opt ' + name)
+                ps.savefig()
 
             # Try Ceres...
             # newsrc.setParams(p0)
@@ -1415,13 +1464,15 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             plt.clf()
             rows,cols = 2, 5
 
-            #mods = OrderedDict(none=None, ptsrc=ptsrc, dev=dev, exp=exp, comp=comp)
             mods = OrderedDict([('none',None), ('ptsrc',ptsrc), ('dev',dev),
                                 ('exp',exp), ('comp',comp)])
             for imod,modname in enumerate(mods.keys()):
-
-                #subcat[i] = mods[modname]
                 srccat[0] = mods[modname]
+
+                print 'Plotting model for blob', iblob, 'source', i, ':', modname
+                print srccat[0]
+
+                print 'cat:', srctractor.getCatalog()
                 
                 plt.subplot(rows, cols, imod+1)
                 if modname != 'none':
@@ -1453,7 +1504,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 dimshow(cochisq, vmin=0, vmax=25)
                 plt.title('dlnp %.0f' % plnps[modname])
 
-            plt.suptitle('Blob %i, source %i: model selection' % (iblob, i))
+            plt.suptitle('Blob %i, source %i: was: %s' %
+                         (iblob, i, str(src)))
             ps.savefig()
 
         keepmod = 'none'
