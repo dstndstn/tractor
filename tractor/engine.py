@@ -392,7 +392,6 @@ class Tractor(MultiParams):
             catalog = Catalog(*catalog)
         super(Tractor,self).__init__(images, catalog)
         self._setup(mp=mp)
-        self.modelMasks = None
 
     def disable_cache(self):
         self.cache = None
@@ -406,6 +405,7 @@ class Tractor(MultiParams):
             cache = Cache()
         self.cache = cache
         self.pickleCache = pickleCache
+        self.modelMasks = None
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))

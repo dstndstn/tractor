@@ -1324,7 +1324,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'Initial log-prob:', lnp
             print 'vs original src: ', lnp - lnp0
 
-            if plots:
+            # Grid of derivatives.
+            if plots and False:
                 plt.clf()
                 rows = len(subtims)
                 cols = 1 + newsrc.numberOfParams()
@@ -1344,7 +1345,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                         dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
                 plt.title('Derivatives for ' + name)
                 ps.savefig()
-
                 plt.clf()
                 modimgs = srctractor.getModelImages()
                 comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
@@ -1353,7 +1353,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 plt.title('Initial ' + name)
                 ps.savefig()
 
-            if plots:
+            if plots and False:
                 plt.clf()
                 modimgs = srctractor.getModelImages()
                 comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
@@ -1380,7 +1380,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             lnp = srctractor.getLogProb()
             print 'Optimized log-prob:', lnp
 
-            if plots:
+            if plots and False:
                 plt.clf()
                 modimgs = srctractor.getModelImages()
                 comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
@@ -1419,7 +1419,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'Optimized log-prob:', lnp
             print 'vs original src:   ', lnp - lnp0
 
-            if plots:
+            if plots and False:
                 plt.clf()
                 modimgs = srctractor.getModelImages()
                 comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,

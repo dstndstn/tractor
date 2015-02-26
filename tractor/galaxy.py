@@ -179,6 +179,7 @@ class Galaxy(MultiParams, SingleProfileSource):
                     derivs.append(None)
                     continue
 
+                # Plot derivatives.
                 if False:
                     import pylab as plt
                     plt.clf()
@@ -208,16 +209,14 @@ class Galaxy(MultiParams, SingleProfileSource):
                     print 'wrote', fn
                     plotnum += 1
                                
-
-                # We evaluated patch0 and patchx on the same extent,
-                # so they are pixel aligned.  Take the intersection of
-                # the pixels they evaluated (>minval) to avoid jumps.
                 dx = (patchx - patch0) * (counts / pstep)
 
-                #print 'patch0 extent', patch0.getExtent()
-                #print 'diff   extent', dx.getExtent()
+                if modelMask is None:
+                    # We evaluated patch0 and patchx on the same extent,
+                    # so they are pixel aligned.  Take the intersection of
+                    # the pixels they evaluated (>minval) to avoid jumps.
+                    dx.patch *= ((patch0.patch > 0) * (patchx.patch > 0))
 
-                dx.patch *= ((patch0.patch > 0) * (patchx.patch > 0))
                 dx.setName('d(%s)/d(pos%i)' % (self.dname, i))
                 derivs.append(dx)
 
