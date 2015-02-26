@@ -628,7 +628,7 @@ def _bounce_one_blob(X):
     except:
         import traceback
         print 'Exception in _one_blob:'
-        print 'args:', X
+        #print 'args:', X
         traceback.print_exc()
         raise
 
@@ -1091,6 +1091,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 for tim,im in zip(subtims, tempims):
                     tim.data = im
 
+            srctractor.setModelMasks(None)
+            disable_galaxy_cache()
+
+
             # Re-remove the final fit model for this source.
             for tim in subtims:
                 mod = src.getModelPatch(tim)
@@ -1237,6 +1241,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         srctractor = Tractor(subtims, [src])
         srctractor.freezeParams('images')
         srctractor.setModelMasks(modelMasks)
+        enable_galaxy_cache()
 
         lnp0 = srctractor.getLogProb()
         print 'lnp0:', lnp0
@@ -1316,8 +1321,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 except KeyError:
                     pass
             srctractor.setModelMasks(mm)
+            enable_galaxy_cache()
 
             print 'set initial modelMasks:', mm
+            print 'srctractor cache:', srctractor.cache
 
             lnp = srctractor.getLogProb()
 
@@ -1390,6 +1397,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 ps.savefig()
 
             srctractor.setModelMasks(None)
+            disable_galaxy_cache()
 
             # Recompute modelMasks
             mm = []
@@ -1401,6 +1409,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     continue
                 d[newsrc] = Patch(mod.x0, mod.y0, mod.patch != 0)
             srctractor.setModelMasks(mm)
+            enable_galaxy_cache()
 
             # Run another round of opt.
             cpu0 = time.clock()
@@ -1428,6 +1437,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 plt.title('Second-round opt ' + name)
                 ps.savefig()
 
+            srctractor.setModelMasks(None)
+            disable_galaxy_cache()
+
             # Try Ceres...
             # newsrc.setParams(p0)
             # print 'Ceres opt...'
@@ -1448,7 +1460,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         # if plots:
         #    _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
-
         
         nbands = len(bands)
         nparams = dict(none=0, ptsrc=2, exp=5, dev=5, comp=9)
@@ -1579,6 +1590,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     del orig_timages
     del initial_models
 
+    print 'Blob finished model selection:', Time()-tlast
+    tlast = Time()
+
+    if plots:
+        plotmods, plotmodnames = [],[]
+        plotmods.append(subtr.getModelImages())
+        plotmodnames.append('All model selection')
+        _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
 
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]

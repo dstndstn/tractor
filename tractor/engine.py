@@ -406,6 +406,7 @@ class Tractor(MultiParams):
         self.cache = cache
         self.pickleCache = pickleCache
         self.modelMasks = None
+        self.expectModelMasks = False
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
@@ -2311,6 +2312,9 @@ class Tractor(MultiParams):
         self.modelMasks = masks
         assert((masks is None) or (len(masks) == len(self.images)))
 
+        ## DEBUG
+        self.expectModelMasks = (masks is not None)
+
     def _getModelMaskFor(self, image, src):
         if self.modelMasks is None:
             return None
@@ -2318,9 +2322,16 @@ class Tractor(MultiParams):
         try:
             return self.modelMasks[i][src]
         except KeyError:
+            # no, for no overlap the source has no entry in modelMasks.
+            #if self.expectModelMasks:
+            #    assert(False)
             return None
 
     def _checkModelMask(self, patch, mask):
+
+        if self.expectModelMasks:
+            if patch is not None:
+                assert(mask is not None)
 
         if patch is not None and mask is not None:
             # not strictly required?  but a good idea!
@@ -2336,7 +2347,24 @@ class Tractor(MultiParams):
 
     def _getSourceDerivatives(self, src, img, **kwargs):
         mask = self._getModelMaskFor(img, src)
+
+        # HACK! -- assume no modelMask -> no overlap
+        if self.expectModelMasks and mask is None:
+            return [None] * src.numberOfParams()
+
+        print 'getting param derivs for', src
         derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
+        print 'done getting param derivs for', src
+
+        # HACK -- auto-add?
+        # if self.expectModelMasks:
+        #     for d in derivs:
+        #         if d is not None and mask is None:
+        #             # add to modelMasks
+        #             i = self.images.index(img)
+        #             # set 'mask' so the assertion in _checkModelMask doesn't fire
+        #             mask = Patch(d.x0, d.y0, d.patch != 0)
+        #             self.modelMasks[i][src] = mask
 
         # HACK -- check 'em
         for d in derivs:
@@ -2347,7 +2375,22 @@ class Tractor(MultiParams):
 
     def getModelPatchNoCache(self, img, src, **kwargs):
         mask = self._getModelMaskFor(img, src)
+
+        # HACK -- assume no mask -> no overlap
+        if self.expectModelMasks and mask is None:
+            print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
+            return None
+
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+
+        # # HACK -- auto-add?
+        # if self.expectModelMasks:
+        #     if mod is not None and mask is None:
+        #         # add to modelMasks
+        #         i = self.images.index(img)
+        #         # set 'mask' so the assertion in _checkModelMask doesn't fire
+        #         mask = Patch(mod.x0, mod.y0, mod.patch != 0)
+        #         self.modelMasks[i][src] = mask
 
         ## HACK -- here we *check* that modelMask was respected.
         self._checkModelMask(mod, mask)
@@ -2356,8 +2399,7 @@ class Tractor(MultiParams):
     
     def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
-            # shortcut
-            return src.getModelPatch(img, **kwargs)
+            return self.getModelPatchNoCache(img, src, **kwargs)
 
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)

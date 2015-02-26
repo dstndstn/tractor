@@ -24,9 +24,11 @@ _galcache = Cache(maxsize=10000)
 def get_galaxy_cache():
     return _galcache
 
-def set_galaxy_cache_size(N):
+def set_galaxy_cache_size(N=10000):
     global _galcache
     _galcache = Cache(maxsize=N)
+
+enable_galaxy_cache = set_galaxy_cache_size
 
 def disable_galaxy_cache():
     global _galcache
@@ -298,10 +300,22 @@ class ProfileGalaxy(object):
                                                    extent=extent, modelMask=modelMask)
         
         deps = self._getUnitFluxDeps(img, px, py)
+        print 'deps', deps, '->',
+        deps = hash(deps)
+        print deps
+
         try:
             # FIXME -- what about when the extent was specified for
             # the cached entry but not specified for this call?
+            print 'Searching cache for:', deps
             (cached,mv) = _galcache.get(deps)
+            if cached is None:
+                print 'Cache hit:', cached
+            else:
+                print 'Cache hit:', cached.shape
+                if modelMask is not None:
+                    assert(cached.shape == modelMask.shape)
+
             if mv <= minval:
                 if extent is None:
                     if cached is None:
@@ -318,10 +332,19 @@ class ProfileGalaxy(object):
                         return pat
         except KeyError:
             pass
+
         patch = self._realGetUnitFluxModelPatch(img, px, py, minval,
                                                 extent=extent, modelMask=modelMask)
         if patch is not None:
             patch = patch.copy()
+        print 'Adding to cache:', deps,
+        if patch is not None:
+            print 'patch shape', patch.shape
+        else:
+            print 'patch is None'
+        if patch is not None and modelMask is not None:
+            assert(patch.shape == modelMask.shape)
+        print 'modelMask:', modelMask
         _galcache.put(deps, (patch,minval))
         return patch
 
@@ -379,12 +402,15 @@ class ProfileGalaxy(object):
             else:
                 # The convolved mixture *already* has the px,py offset added
                 # (via px,py to amix) so set px,py=0,0 in this call.
-                return cmix.evaluate_grid_masked(x0, y0, modelMask.patch, 0., 0.)
+                p = cmix.evaluate_grid_masked(x0, y0, modelMask.patch, 0., 0.)
+                assert(p.shape == modelMask.shape)
+                return p
                                                  
         else:
             if modelMask is not None:
                 halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
 
+            # Haven't implemented this yet...
             assert(modelMask is None)
 
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
@@ -441,9 +467,10 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         return amix
 
     def _getUnitFluxDeps(self, img, px, py):
-        return hash(('unitpatch', self.getName(), px, py,
-                     img.getWcs().hashkey(),
-                     img.getPsf().hashkey(), self.shape.hashkey()))
+        #return hash(('unitpatch', self.getName(), px, py,
+        return ('unitpatch', self.getName(), px, py,
+                img.getWcs().hashkey(),
+                img.getPsf().hashkey(), self.shape.hashkey())
 
     def _getUnitFluxPatchSize(self, img, px, py, minval):
         if hasattr(self, 'halfsize'):
