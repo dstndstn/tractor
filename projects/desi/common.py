@@ -130,11 +130,14 @@ class SFDMap(object):
             assert(np.all(y <= (H+0.5)))
             ebv[cut] = SFDMap.bilinear_interp_nonzero(image, x-1., y-1.)
         return ebv
-        
-    def extinction(self, filts, ra, dec):
+
+    def extinction(self, filts, ra, dec, get_ebv=False):
         ebv = self.ebv(ra, dec)
         factors = np.array([SFDMap.extinctions[f] for f in filts])
-        return factors[np.newaxis,:] * ebv[:,np.newaxis]
+        rtn = factors[np.newaxis,:] * ebv[:,np.newaxis]
+        if get_ebv:
+            return ebv,rtn
+        return rtn
 
 def segment_and_group_sources(image, T, name=None):
     '''
