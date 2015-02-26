@@ -44,7 +44,14 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 class SFDMap(object):
-    # These come from Schlafly et al, arxiv 1012.4804v2, Table 6, Rv=3.1
+    # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
+    #
+    # The coefficients for the four WISE filters are derived from Fitzpatrick 1999,
+    # as recommended by Schafly & Finkbeiner, considered better than either the
+    # Cardelli et al 1989 curves or the newer Fitzpatrick & Massa 2009 NIR curve
+    # not vetted beyond 2 micron).
+    # These coefficients are A / E(B-V) = 0.184, 0.113, 0.0241, 0.00910. 
+    #
     extinctions = {
         'SDSS u': 4.239,
         'DES g': 3.237,
@@ -52,6 +59,10 @@ class SFDMap(object):
         'DES i': 1.595,
         'DES z': 1.217,
         'DES Y': 1.058,
+        'WISE W1': 0.184,
+        'WISE W2': 0.113,
+        'WISE W3': 0.0241,
+        'WISE W4': 0.00910,
         }
 
     def __init__(self, ngp_filename=None, sgp_filename=None, dustdir=None):
