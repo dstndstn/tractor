@@ -160,8 +160,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     emptyblob = 0
 
-    #
-    #image = binary_fill_holes(image)
+    image = binary_fill_holes(image)
 
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
