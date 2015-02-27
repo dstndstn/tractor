@@ -352,7 +352,8 @@ def stage_srcs(coimgs=None, cons=None,
     hot = (hot > 5)
     hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
-    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname)
+    blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
+                                                          ps=ps, plots=plots)
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)

@@ -12,7 +12,7 @@ import fitsio
 
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.measurements import label, find_objects
-from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion
+from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion, binary_fill_holes
 
 from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.util import Tan, Sip, anwcs_t
@@ -142,7 +142,7 @@ class SFDMap(object):
             return ebv,rtn
         return rtn
 
-def segment_and_group_sources(image, T, name=None):
+def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"
     *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
@@ -160,20 +160,43 @@ def segment_and_group_sources(image, T, name=None):
 
     emptyblob = 0
 
+    #
+    #image = binary_fill_holes(image)
+
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
 
+    if plots:
+        from astrometry.util.plotutils import dimshow
+        plt.clf()
+        dimshow(blobs > 0, vmin=0, vmax=1)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % (i+1), ha='center', va='bottom', color='r')
+        plt.plot(T.itx, T.ity, 'rx')
+        for i,t in enumerate(T):
+            plt.text(t.itx, t.ity, 'src %i' % i, color='red', ha='left', va='center')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
+
     # Find sets of sources within blobs
     blobsrcs = []
     keepslices = []
     blobmap = {}
+    dropslices = {}
     for blob in range(1, nblobs+1):
         Isrcs = np.flatnonzero(T.blob == blob)
         if len(Isrcs) == 0:
             print 'Blob', blob, 'has no sources'
             blobmap[blob] = -1
+            dropslices[blob] = blobslices[blob-1]
             continue
         blobmap[blob] = len(blobsrcs)
         blobsrcs.append(Isrcs)
@@ -210,6 +233,13 @@ def segment_and_group_sources(image, T, name=None):
             print 'Adding source to existing blob', blob
             blobs[bslc][blobs[bslc] == emptyblob] = blob
             blobindex = blobmap[blob]
+            print 'blob index', blobindex
+            if blobindex == -1:
+                # the overlapping blob was going to be dropped -- restore it.
+                blobindex = len(blobsrcs)
+                blobmap[blob] = blobindex
+                blobslices.append(dropslices[blob])
+                blobsrcs.append(np.array([]))
             # Expand the existing blob slice to encompass this new source
             oldslc = blobslices[blobindex]
             print 'Old slice:', oldslc
@@ -218,8 +248,8 @@ def segment_and_group_sources(image, T, name=None):
             oy0,oy1, ox0,ox1 = sy.start,sy.stop, sx.start,sx.stop
             sy,sx = bslc
             ny0,ny1, nx0,nx1 = sy.start,sy.stop, sx.start,sx.stop
-            print 'Old y', oy0,oy1, 'x', ox0,ox1
-            print 'New y', ny0,ny1, 'x', nx0,nx1
+            #print 'Old y', oy0,oy1, 'x', ox0,ox1
+            #print 'New y', ny0,ny1, 'x', nx0,nx1
             newslc = slice(min(oy0,ny0), max(oy1,ny1)), slice(min(ox0,nx0), max(ox1,nx1))
             print 'Updated slice:', newslc
             blobslices[blobindex] = newslc
@@ -249,6 +279,23 @@ def segment_and_group_sources(image, T, name=None):
 
     fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
 
+    if plots:
+        from astrometry.util.plotutils import dimshow
+        plt.clf()
+        dimshow(blobs > -1, vmin=0, vmax=1)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % (i+1), ha='center', va='bottom', color='r')
+        plt.plot(T.itx, T.ity, 'rx')
+        for i,t in enumerate(T):
+            plt.text(t.itx, t.ity, 'src %i' % i, color='red', ha='left', va='center')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
 
     for j,Isrcs in enumerate(blobsrcs):
         for i in Isrcs:
