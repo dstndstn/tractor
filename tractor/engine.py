@@ -77,7 +77,12 @@ class Image(MultiParams):
 
         Only one of *invvar* and *inverr* should be given.  If both
         are given, inverr takes precedent.
-          
+
+        If *wcs* is not given, assumes pixel space.
+
+        If *sky* is not given, assumes zero sky.
+        
+        If *photocal* is not given, assumes count units.
         '''
         self.data = data
         if inverr is not None:
