@@ -14,7 +14,7 @@ def main():
     flux = 1000.
     
     tim = Image(data=np.zeros((H,W)), inverr=np.ones((H,W)) / sig1,
-                psf=NCircularGaussianPSF([2.], [1.]),
+                psf=NCircularGaussianPSF([0.8], [1.]),
                 photocal=LinearPhotoCal(1.))
     tim.sig1 = sig1
     
@@ -61,6 +61,7 @@ def main():
 
 
     # What happens if we have the source position a little wrong?
+    chislices = []
     for fx1 in [20, 21, 22, 23, 24]:
         fitsrc1 = PointSource(PixPos(fx1, H/2), Flux(1.))
         fitsrc1.freezeParam('pos')
@@ -81,7 +82,9 @@ def main():
         plt.imshow(chix, interpolation='nearest', origin='lower', vmin=-3, vmax=3)
         plt.title('Chi: pos error = %i' % (fx1 - x1))
         ps.savefig()
-    
+
+        chislices.append(chix[H/2, :])
+        
         xm = np.mean(fluxes)
         st = np.std(fluxes)
         xl = xm - 4.*st
@@ -95,7 +98,12 @@ def main():
         plt.title('Fits: pos error = %i' % (fx1 - x1))
         ps.savefig()
 
-
+    plt.clf()
+    for chi in chislices:
+        plt.plot(chi)
+    plt.xlabel('Slice in x direction of image')
+    plt.ylabel('Chi of best fit')
+    ps.savefig()
         
     
 def runtest(tims, realsrcs, fitsrcs, niters):
