@@ -271,6 +271,8 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
             'devflux', 'expflux', 'extinction']
 
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
+    if objs is None:
+        return None,None
     print 'Got', len(objs), 'photoObjs'
 
     # It can be string-valued
