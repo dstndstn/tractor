@@ -115,7 +115,8 @@ class SdssPointSource(PointSource):
     def copy(self):
         return SdssPointSource(pos, bright, self.thresh1, self.thresh2)
 
-    def getModelPatch(self, img):
+    def getModelPatch(self, img, modelMask=None):
+        assert(modelMask is None)
         (px,py) = img.getWcs().positionToPixel(self.getPosition(), self)
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:

@@ -18,8 +18,8 @@ setup(name = 'Gaussian mixtures',
 	  version = '1.0',
 	  description = '',
 	  author = 'Lang & Hogg',
-	  author_email = 'dstn@astro.princeton.edu',
-	  url = 'http://astrometry.net',
+	  author_email = 'dstndstn@gmail.com',
+	  url = 'http://thetractor.org',
 	  py_modules = [],
 	  ext_modules = [c_swig_module])
 

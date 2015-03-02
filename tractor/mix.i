@@ -8,7 +8,8 @@
 #include <assert.h>
 #include <sys/param.h>
 
-    int n_exp = 0;
+int n_exp = 0;
+int n_expf = 0;
 
 static double eval_g(double I[3], double dx, double dy) {
     double dsq = (I[0] * dx * dx +
@@ -73,6 +74,45 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
 }
 
 
+static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
+                             float x, float y, float* xderiv, float* yderiv,
+                             float* maxD) {
+    float r = 0;
+    int k;
+    if (xderiv)
+        *xderiv = 0;
+    if (yderiv)
+        *yderiv = 0;
+
+    for (k=0; k<K; k++) {
+        float dx,dy;
+        float G;
+        float* Ik = I + 3*k;
+        float dsq;
+        dx = x - means[2*k+0];
+        dy = y - means[2*k+1];
+        dsq = (Ik[0] * dx * dx +
+               Ik[1] * dx * dy +
+               Ik[2] * dy * dy);
+        // "maxD" is slightly (ok totally) misnamed: it includes the
+        // -0.5 factor * mahalanobis distance so is actually a *minimum*.
+        if (dsq < maxD[k])
+            continue;
+        n_expf++;
+        G = scales[k] * expf(dsq);
+        r += G;
+        // The negative sign here is because we want the derivatives
+        // with respect to the means, not x,y.
+        if (xderiv)
+            *xderiv += -G * (2. * Ik[0] * dx + Ik[1] * dy);
+        if (yderiv)
+            *yderiv += -G * (2. * Ik[2] * dy + Ik[1] * dx);
+    }
+    return r;
+}
+
+
+
 #define ERR(x, ...) printf(x, ## __VA_ARGS__)
 // PyErr_SetString(PyExc_ValueError, x, __VA_ARGS__)
 
@@ -91,12 +131,14 @@ static int get_np(PyObject* ob_amp,
                   PyObject **np_result,
                   PyObject **np_xderiv,
                   PyObject **np_yderiv,
-                  PyObject **np_mask) {
-    PyArray_Descr* dtype = PyArray_DescrFromType(PyArray_DOUBLE);
+                  PyObject **np_mask,
+                  PyArray_Descr* dtype) {
     PyArray_Descr* btype = NULL;
     int req = NPY_C_CONTIGUOUS | NPY_ALIGNED;
     int reqout = req | NPY_WRITEABLE | NPY_UPDATEIFCOPY;
     const int D = 2;
+    if (!dtype)
+        dtype = PyArray_DescrFromType(PyArray_DOUBLE);
 
     Py_INCREF(dtype);
     Py_INCREF(dtype);
@@ -120,7 +162,7 @@ static int get_np(PyObject* ob_amp,
         *np_mask = PyArray_FromAny(ob_mask, btype, 2, 2, req, NULL);
         Py_CLEAR(btype);
     }
-    Py_CLEAR(dtype);
+    Py_DECREF(dtype);
 
     if (!*np_amp || !*np_mean || !*np_var || !*np_result ||
         ((ob_xderiv != Py_None) && !*np_xderiv) ||
@@ -366,7 +408,7 @@ static int c_gauss_2d_grid(int x0, int x1, int y0, int y1, double fx, double fy,
 
     if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None,
                NX, NY, &K, &np_amp, &np_mean, &np_var, &np_result,
-               NULL, NULL, NULL))
+               NULL, NULL, NULL, NULL))
         goto bailout;
 
     amp    = PyArray_DATA(np_amp);
@@ -440,7 +482,7 @@ static int c_gauss_2d_approx(int x0, int x1, int y0, int y1,
     tpd = pow(2.*M_PI, D);
 
     if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, W, H,
-               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
+               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL, NULL))
         goto bailout;
 
     amp = PyArray_DATA(np_amp);
@@ -572,7 +614,7 @@ static int c_gauss_2d_approx2(int x0, int x1, int y0, int y1,
     tpd = pow(2.*M_PI, D);
 
     if (get_np(ob_amp, ob_mean, ob_var, ob_result, Py_None, Py_None, Py_None, W, H,
-               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL))
+               &K, &np_amp, &np_mean, &np_var, &np_result, NULL, NULL, NULL, NULL))
         goto bailout;
 
     amp = PyArray_DATA(np_amp);
@@ -1003,6 +1045,22 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
                               );
 
 #include "approx3.c"
+
+
+static int c_gauss_2d_masked(int x0, int y0, int W, int H,
+                             // (fx,fy): center position
+                             // which offsets "means"
+                             double fx, double fy,
+                             PyObject* ob_amp,
+                             PyObject* ob_mean,
+                             PyObject* ob_var,
+                             PyObject* ob_result,
+                             PyObject* ob_xderiv,
+                             PyObject* ob_yderiv,
+                             PyObject* ob_mask);
+
+#include "gauss_masked.c"
+
 
 %}
 

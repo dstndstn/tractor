@@ -58,7 +58,7 @@ static int c_gauss_2d_approx3(int x0, int x1, int y0, int y1,
     if (get_np(ob_amp, ob_mean, ob_var, ob_result, ob_xderiv, ob_yderiv,
                ob_mask, W, H,
                &K, &np_amp, &np_mean, &np_var, &np_result, &np_xderiv, &np_yderiv,
-               &np_mask)) {
+               &np_mask, NULL)) {
         printf("get_np failed\n");
         goto bailout;
     }

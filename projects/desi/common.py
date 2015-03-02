@@ -12,7 +12,7 @@ import fitsio
 
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.measurements import label, find_objects
-from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion
+from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion, binary_fill_holes
 
 from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.util import Tan, Sip, anwcs_t
@@ -44,14 +44,28 @@ sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 class SFDMap(object):
-    # These come from Schlafly et al, arxiv 1012.4804v2, Table 6, Rv=3.1
+    # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
+    # but updated (and adding DES u) via email from Schlafly,
+    # decam-data thread from 11/13/2014, "New recommended SFD coefficients for DECam."
+    #
+    # The coefficients for the four WISE filters are derived from Fitzpatrick 1999,
+    # as recommended by Schafly & Finkbeiner, considered better than either the
+    # Cardelli et al 1989 curves or the newer Fitzpatrick & Massa 2009 NIR curve
+    # not vetted beyond 2 micron).
+    # These coefficients are A / E(B-V) = 0.184, 0.113, 0.0241, 0.00910. 
+    #
     extinctions = {
         'SDSS u': 4.239,
-        'DES g': 3.237,
-        'DES r': 2.176,
-        'DES i': 1.595,
-        'DES z': 1.217,
-        'DES Y': 1.058,
+        'DES u': 3.995,
+        'DES g': 3.214,
+        'DES r': 2.165,
+        'DES i': 1.592,
+        'DES z': 1.211,
+        'DES Y': 1.064,
+        'WISE W1': 0.184,
+        'WISE W2': 0.113,
+        'WISE W3': 0.0241,
+        'WISE W4': 0.00910,
         }
 
     def __init__(self, ngp_filename=None, sgp_filename=None, dustdir=None):
@@ -119,13 +133,16 @@ class SFDMap(object):
             assert(np.all(y <= (H+0.5)))
             ebv[cut] = SFDMap.bilinear_interp_nonzero(image, x-1., y-1.)
         return ebv
-        
-    def extinction(self, filts, ra, dec):
+
+    def extinction(self, filts, ra, dec, get_ebv=False):
         ebv = self.ebv(ra, dec)
         factors = np.array([SFDMap.extinctions[f] for f in filts])
-        return factors[np.newaxis,:] * ebv[:,np.newaxis]
+        rtn = factors[np.newaxis,:] * ebv[:,np.newaxis]
+        if get_ebv:
+            return ebv,rtn
+        return rtn
 
-def segment_and_group_sources(image, T, name=None):
+def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"
     *T*: source table; only ".itx" and ".ity" elements are used (x,y integer pix pos)
@@ -143,20 +160,42 @@ def segment_and_group_sources(image, T, name=None):
 
     emptyblob = 0
 
+    image = binary_fill_holes(image)
+
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
 
+    if plots:
+        from astrometry.util.plotutils import dimshow
+        plt.clf()
+        dimshow(blobs > 0, vmin=0, vmax=1)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % (i+1), ha='center', va='bottom', color='r')
+        plt.plot(T.itx, T.ity, 'rx')
+        for i,t in enumerate(T):
+            plt.text(t.itx, t.ity, 'src %i' % i, color='red', ha='left', va='center')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
+
     # Find sets of sources within blobs
     blobsrcs = []
     keepslices = []
     blobmap = {}
+    dropslices = {}
     for blob in range(1, nblobs+1):
         Isrcs = np.flatnonzero(T.blob == blob)
         if len(Isrcs) == 0:
             print 'Blob', blob, 'has no sources'
             blobmap[blob] = -1
+            dropslices[blob] = blobslices[blob-1]
             continue
         blobmap[blob] = len(blobsrcs)
         blobsrcs.append(Isrcs)
@@ -193,6 +232,13 @@ def segment_and_group_sources(image, T, name=None):
             print 'Adding source to existing blob', blob
             blobs[bslc][blobs[bslc] == emptyblob] = blob
             blobindex = blobmap[blob]
+            print 'blob index', blobindex
+            if blobindex == -1:
+                # the overlapping blob was going to be dropped -- restore it.
+                blobindex = len(blobsrcs)
+                blobmap[blob] = blobindex
+                blobslices.append(dropslices[blob])
+                blobsrcs.append(np.array([]))
             # Expand the existing blob slice to encompass this new source
             oldslc = blobslices[blobindex]
             print 'Old slice:', oldslc
@@ -201,8 +247,8 @@ def segment_and_group_sources(image, T, name=None):
             oy0,oy1, ox0,ox1 = sy.start,sy.stop, sx.start,sx.stop
             sy,sx = bslc
             ny0,ny1, nx0,nx1 = sy.start,sy.stop, sx.start,sx.stop
-            print 'Old y', oy0,oy1, 'x', ox0,ox1
-            print 'New y', ny0,ny1, 'x', nx0,nx1
+            #print 'Old y', oy0,oy1, 'x', ox0,ox1
+            #print 'New y', ny0,ny1, 'x', nx0,nx1
             newslc = slice(min(oy0,ny0), max(oy1,ny1)), slice(min(ox0,nx0), max(ox1,nx1))
             print 'Updated slice:', newslc
             blobslices[blobindex] = newslc
@@ -232,6 +278,23 @@ def segment_and_group_sources(image, T, name=None):
 
     fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
 
+    if plots:
+        from astrometry.util.plotutils import dimshow
+        plt.clf()
+        dimshow(blobs > -1, vmin=0, vmax=1)
+        ax = plt.axis()
+        for i,bs in enumerate(blobslices):
+            sy,sx = bs
+            by0,by1 = sy.start, sy.stop
+            bx0,bx1 = sx.start, sx.stop
+            plt.plot([bx0, bx0, bx1, bx1, bx0], [by0, by1, by1, by0, by0], 'r-')
+            plt.text((bx0+bx1)/2., by0, '%i' % (i+1), ha='center', va='bottom', color='r')
+        plt.plot(T.itx, T.ity, 'rx')
+        for i,t in enumerate(T):
+            plt.text(t.itx, t.ity, 'src %i' % i, color='red', ha='left', va='center')
+        plt.axis(ax)
+        plt.title('Blobs')
+        ps.savefig()
 
     for j,Isrcs in enumerate(blobsrcs):
         for i in Isrcs:
@@ -1013,50 +1076,115 @@ class Decals(object):
         if extname is not None:
             T.cut(T.extname == extname)
         return T
-    
+
+    def photometric_ccds(self, CCD):
+        '''
+        Returns an index array for the members of the table "CCD" that are photometric.
+        '''
+        
+        # Using Arjun's zeropoints and recipe: email 2015-02-25
+        '''
+        I would suggest using the following algorithm to avoid bad data (in IDL-ese):
+
+        iznp = where(abs(zpz.zpt-zpz.ccdzpt) ge 0.05 $
+          or (zpz.ccdnmatch ge 20 and zpz.ccdphrms gt 0.2) $
+          or (zpz.zpt le z0-0.3 and zpz.zpt ge z0+1.1) $
+          or zpz.ccdnmatch lt 20 $
+          ; or strcompress(zpz.ccdname,/remove_all) eq 'S7' $
+          ,nznp)
+
+        where zpz is a structure containing all the z-band
+        zeropoints. Similarly for the g- and r-band zero points.
+
+        Here the nominal zero points for the three bands are roughly
+        g0 = 26.61 -2.5*alog10(4.)
+        r0 = 26.818 -2.5*alog10(4.)
+        z0 = 26.484 -2.5*alog10(4.)
+
+        Using all the listed above criteria (with the S7 selection
+        commented out) results in red points on the attached plot. The
+        red points are in pretty good agreement with the log notes
+        about poor sky conditions. Setting CCDNMATCH < 20 also catches
+        places where the overlap with PS1 was not good. You will also
+        want to throw out the bad CCD (CCDNAME = S7)
+        '''
+
+        ZP = self._get_zeropoints_table()
+        zp_rowmap = dict([((expnum,extname),i) for i,(expnum,extname) in enumerate(
+            zip(ZP.expnum, ZP.ccdname))])
+        I = np.array([zp_rowmap[(expnum,extname)] for expnum,extname in
+                      zip(CCD.expnum, CCD.extname)])
+        ZP = ZP[I]
+        assert(len(ZP) == len(CCD))
+        
+        z0 = dict(g = 26.610 - 2.5*np.log10(4.),
+                  r = 26.818 - 2.5*np.log10(4.),
+                  z = 26.464 - 2.5*np.log10(4.),)
+        z0 = np.array([z0[f[0]] for f in ZP.filter])
+
+        good = np.ones(len(CCD), bool)
+        n0 = sum(good)
+        for name,crit in [
+            ('zpt - ccdzpt', (np.abs(ZP.zpt - ZP.ccdzpt) >= 0.05)),
+            ('ccdnmatch >= 20 and ccdphrms >= 0.2',
+             ((ZP.ccdnmatch >= 20) * (ZP.ccdphrms >= 0.2))),
+            ('zpt lower than nominal', (ZP.zpt < (z0 - 0.3))),
+            ('zpt higher than nominal', (ZP.zpt > (z0 + 1.1))),
+            ('ccdnmatch < 20', (ZP.ccdnmatch < 20)),
+            ('S7', np.array([s == 'S7' for s in ZP.ccdname])),
+            ]:
+            good[crit] = False
+            n = sum(good)
+            print 'Flagged', n0-n, 'more non-photometric using criterion:', name
+            n0 = n
+
+        return np.flatnonzero(good)
+
+    def _get_zeropoints_table(self):
+        if self.ZP is not None:
+            return self.ZP
+        zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
+        #print 'Reading zeropoints:', zpfn
+        self.ZP = fits_table(zpfn)
+
+        if 'ccdname' in self.ZP.get_columns():
+            # 'N4 ' -> 'N4'
+            self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
+
+        # it's a string in some versions...
+        self.ZP.expnum = np.array([int(t) for t in self.ZP.expnum])
+
+        return self.ZP
+        
     def get_zeropoint_for(self, im):
-        if self.ZP is None:
-            zpfn = os.path.join(self.decals_dir, 'calib', 'decam', 'photom', 'zeropoints.fits')
-            #print 'Reading zeropoints:', zpfn
-            self.ZP = fits_table(zpfn)
-
-            if 'ccdname' in self.ZP.get_columns():
-                # 'N4 ' -> 'N4'
-                self.ZP.ccdname = np.array([s.strip() for s in self.ZP.ccdname])
-
-            #self.ZP.about()
-
-        I, = np.nonzero(self.ZP.expnum == im.expnum)
+        ZP = self._get_zeropoints_table()
+        I, = np.nonzero(ZP.expnum == im.expnum)
         #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
-            #I = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.extname == im.extname))
-            I, = np.nonzero((self.ZP.expnum == im.expnum) * (self.ZP.ccdname == im.extname))
+            I, = np.nonzero((ZP.expnum == im.expnum) * (ZP.ccdname == im.extname))
             #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
 
         # No updated zeropoint -- use header MAGZERO from primary HDU.
         elif len(I) == 0:
             print 'WARNING: using header zeropoints for', im
             hdr = im.read_image_primary_header()
-
             # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
-            #exptime = hdr['EXPTIME']
-            #magzero += 2.5 * np.log10(exptime)
             return magzero
 
         assert(len(I) == 1)
         I = I[0]
 
         # Arjun says use CCDZPT
-        magzp = self.ZP.ccdzpt[I]
+        magzp = ZP.ccdzpt[I]
 
-        # magzp = self.ZP.zpt[I]
+        # magzp = ZP.zpt[I]
         # print 'Raw magzp', magzp
         # if magzp == 0:
         #     print 'Magzp = 0; using ccdzpt'
-        #     magzp = self.ZP.ccdzpt[I]
+        #     magzp = ZP.ccdzpt[I]
         #     print 'Got', magzp
-        exptime = self.ZP.exptime[I]
+        exptime = ZP.exptime[I]
         magzp += 2.5 * np.log10(exptime)
         #print 'magzp', magzp
         return magzp
@@ -1280,6 +1408,24 @@ class DecamImage(object):
         img,imghdr = self.read_image(header=True, slice=slc)
         print 'Reading invvar from', self.wtfn, 'HDU', self.hdu
         invvar = self.read_invvar(slice=slc, clip=True)
+        print 'Reading dq from', self.dqfn, 'HDU', self.hdu
+        dq = self.read_dq(slice=slc)
+
+        uq = np.unique(dq)
+        bits = reduce(np.bitwise_or, uq)
+        print 'DQ bits set: 0x%x' % bits
+
+        # From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
+        # 1   -- detector bad pixel           InstCal
+        # 1   -- detector bad pixel/no data   Resampled
+        # 1   -- No data                      Stacked
+        # 2   -- saturated                    InstCal/Resampled
+        # 4   -- interpolated                 InstCal/Resampled
+        # 16  -- single exposure cosmic ray   InstCal/Resampled
+        # 64  -- bleed trail                  InstCal/Resampled
+        # 128 -- multi-exposure transient     InstCal/Resampled 
+
+        invvar[dq != 0] = 0.
 
         print 'Invvar range:', invvar.min(), invvar.max()
         if np.all(invvar == 0.):
@@ -1350,6 +1496,11 @@ class DecamImage(object):
         tim.imobj = self
         tim.primhdr = primhdr
         tim.hdr = imghdr
+
+        tim.dq = dq
+        tim.dq_bits = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
+                           trans=128)
+            
         mn,mx = tim.zr
         subh,subw = tim.shape
         tim.subwcs = tim.sip_wcs.get_subimage(tim.x0, tim.y0, subw, subh)
@@ -1396,7 +1547,6 @@ class DecamImage(object):
 
     def read_dq(self, **kwargs):
         return self._read_fits(self.dqfn, self.hdu, **kwargs)
-    #return fitsio.FITS(self.dqfn)[self.hdu].read()
 
     def read_invvar(self, clip=False, **kwargs):
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)

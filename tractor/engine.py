@@ -405,6 +405,8 @@ class Tractor(MultiParams):
             cache = Cache()
         self.cache = cache
         self.pickleCache = pickleCache
+        self.modelMasks = None
+        self.expectModelMasks = False
 
     def __str__(self):
         s = '%s with %i sources and %i images' % (self.getName(), len(self.catalog), len(self.images))
@@ -724,7 +726,7 @@ class Tractor(MultiParams):
             
         srcs = list(self.catalog.getThawedSources())
         for src in srcs:
-            derivs = src.getParamDerivatives(img)
+            derivs = self._getSourceDerivatives(src, img)
             for j,deriv in enumerate(derivs):
                 if deriv is None:
                     continue
@@ -1094,7 +1096,8 @@ class Tractor(MultiParams):
                     # we will scale the PSF by counts and we want that
                     # scaled min val to be less than minsb
                     mv = minsb / counts
-                ums = src.getUnitFluxModelPatches(img, minval=mv)
+                mask = self._getModelMaskFor(img, src)
+                ums = src.getUnitFluxModelPatches(img, minval=mv, modelMask=mask)
 
                 isvalid = False
                 isallzero = False
@@ -1646,6 +1649,8 @@ class Tractor(MultiParams):
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
 
+            print '  stepped with alpha', alpha, 'and got dlnp', pAfter-pBefore
+
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
                 break
@@ -1748,6 +1753,9 @@ class Tractor(MultiParams):
             for j,src in enumerate(srcs):
                 for i,img in enumerate(self.images):
                     args.append((src, img))
+
+            # if modelMasks are set, need to send those across the multiprocessing...
+            assert(self.modelMasks is None)
             sderivs = self._map_async(getsrcderivs, reversed(args))
     
             # Wait for and unpack the image derivatives...
@@ -1836,7 +1844,7 @@ class Tractor(MultiParams):
             for src in srcs:
                 srcderivs = [[] for i in range(src.numberOfParams())]
                 for img in self.images:
-                    derivs = src.getParamDerivatives(img)
+                    derivs = self._getSourceDerivatives(src, img)
                     for k,deriv in enumerate(derivs):
                         if deriv is None:
                             continue
@@ -1941,10 +1949,10 @@ class Tractor(MultiParams):
                 vals = dimg.flat[nz]
                 w = inverrs[deriv.getSlice(img)].flat[nz]
                 assert(vals.shape == w.shape)
-                if not scales_only:
-                    RR.append(rows)
-                    VV.append(vals)
-                    WW.append(w)
+                #if not scales_only:
+                RR.append(rows)
+                VV.append(vals)
+                WW.append(w)
 
             # massage, re-scale, and clean up matrix elements
             if len(VV) == 0:
@@ -2281,13 +2289,112 @@ class Tractor(MultiParams):
     #         factor = Q2 / (Q2 + chi2)
     #         img.setInvvar(oinvvar * factor * smask)
 
-    def getModelPatchNoCache(self, img, src, **kwargs):
-        return src.getModelPatch(img, **kwargs)
+    def setModelMasks(self, masks, assumeMasks=True):
 
+        '''
+        A "model mask" is used to define the pixels that are evaluated
+        when computing the model patch for a source in an image.  This
+        allows for consistent computation of derivatives and
+        optimization, without introducing errors due to approximating
+        the profiles differently given different parameter settings.
+
+        If *masks* is None, this masking is disabled, and normal
+        approximation rules apply.
+
+        Otherwise, *masks* must be a list, with length equal to the
+        number of images.  Each list element must be a dictionary with
+        Source objects for keys and Patch objects for values, where
+        the Patch images are binary masks (True for pixels that should
+        be evaluated).  Sources that do not touch the image should not
+        exist in the dictionary; all the Patches should be non-None
+        and non-empty.
+        '''
+        self.modelMasks = masks
+        assert((masks is None) or (len(masks) == len(self.images)))
+        self.expectModelMasks = (masks is not None) and assumeMasks
+
+    def _getModelMaskFor(self, image, src):
+        if self.modelMasks is None:
+            return None
+        i = self.images.index(image)
+        try:
+            return self.modelMasks[i][src]
+        except KeyError:
+            return None
+
+    def _checkModelMask(self, patch, mask):
+
+        if self.expectModelMasks:
+            if patch is not None:
+                assert(mask is not None)
+
+        if patch is not None and mask is not None:
+            # not strictly required?  but a good idea!
+            assert(patch.patch.shape == mask.patch.shape)
+
+        if patch is not None and mask is not None and patch.patch is not None:
+            nonzero = Patch(patch.x0, patch.y0, patch.patch != 0)
+            #print 'nonzero type:', nonzero.patch.dtype
+            unmasked = Patch(mask.x0, mask.y0, np.logical_not(mask.patch))
+            #print 'unmasked type:', unmasked.patch.dtype
+            bad = nonzero.performArithmetic(unmasked, '__iand__', otype=bool)
+            assert(np.all(bad.patch == False))
+
+    def _getSourceDerivatives(self, src, img, **kwargs):
+        mask = self._getModelMaskFor(img, src)
+
+        # HACK! -- assume no modelMask -> no overlap
+        if self.expectModelMasks and mask is None:
+            return [None] * src.numberOfParams()
+
+        #print 'getting param derivs for', src
+        derivs = src.getParamDerivatives(img, modelMask=mask, **kwargs)
+        #print 'done getting param derivs for', src
+
+        # HACK -- auto-add?
+        # if self.expectModelMasks:
+        #     for d in derivs:
+        #         if d is not None and mask is None:
+        #             # add to modelMasks
+        #             i = self.images.index(img)
+        #             # set 'mask' so the assertion in _checkModelMask doesn't fire
+        #             mask = Patch(d.x0, d.y0, d.patch != 0)
+        #             self.modelMasks[i][src] = mask
+
+        # HACK -- check 'em
+        for d in derivs:
+            if d is not None:
+                self._checkModelMask(d, mask)
+
+        return derivs
+
+    def getModelPatchNoCache(self, img, src, **kwargs):
+        mask = self._getModelMaskFor(img, src)
+
+        # HACK -- assume no mask -> no overlap
+        if self.expectModelMasks and mask is None:
+            #print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
+            return None
+
+        mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+
+        # # HACK -- auto-add?
+        # if self.expectModelMasks:
+        #     if mod is not None and mask is None:
+        #         # add to modelMasks
+        #         i = self.images.index(img)
+        #         # set 'mask' so the assertion in _checkModelMask doesn't fire
+        #         mask = Patch(mod.x0, mod.y0, mod.patch != 0)
+        #         self.modelMasks[i][src] = mask
+
+        ## HACK -- here we *check* that modelMask was respected.
+        self._checkModelMask(mod, mask)
+
+        return mod
+    
     def getModelPatch(self, img, src, minsb=None, **kwargs):
         if self.cache is None:
-            # shortcut
-            return src.getModelPatch(img, **kwargs)
+            return self.getModelPatchNoCache(img, src, **kwargs)
 
         deps = (img.hashkey(), src.hashkey())
         deps = hash(deps)
@@ -2301,6 +2408,12 @@ class Tractor(MultiParams):
         else:
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
             self.cache.put(deps, (minsb,mod))
+
+        # HACK -- here we *check* that modelMask is respected by the
+        # possibly-cached model.
+        mask = self._getModelMaskFor(img, src)
+        self._checkModelMask(mod, mask)
+
         return mod
 
     def getModelImage(self, img, srcs=None, sky=True, minsb=None):
@@ -2314,7 +2427,7 @@ class Tractor(MultiParams):
             img = self.getImage(img)
         mod = np.zeros(img.getModelShape(), self.modtype)
         if sky:
-            img.sky.addTo(mod)
+            img.getSky().addTo(mod)
         if srcs is None:
             srcs = self.catalog
         for src in srcs:
