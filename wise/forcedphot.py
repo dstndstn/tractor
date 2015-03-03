@@ -5,6 +5,7 @@ from tractor.galaxy import *
 from tractor.ellipses import *
 
 from astrometry.util.fits import *
+from astrometry.util.plotutils import *
 from astrometry.util.ttime import *
 
 #from wise.unwise import *
@@ -37,6 +38,8 @@ def main():
                       default=8,
                       help='Ceres image block size (default: %default)')
 
+    parser.add_option('--plots', dest='plots', default=False, action='store_true')
+    parser.add_option('--save-fits', dest='save_fits', default=False, action='store_true')
     
     #parser.add_option('--ellipses', action='store_true',
     #                  help='Assume catalog shapes are ellipse descriptions (not r,ab,phi)')
@@ -60,10 +63,16 @@ def main():
     opt.bands = bb
     print 'Bands', opt.bands
 
-    infn,outfn = args
+    ps = None
+    if opt.plots:
+        ps = PlotSequence('unwise')
 
+    wantims = ((ps is not None) or opt.save_fits)
+
+    infn,outfn = args
     
     T = fits_table(infn)
+    print 'Read', len(T), 'sources from', infn
     if opt.declo is not None:
         T.cut(T.dec >= opt.declo)
     if opt.dechi is not None:
@@ -113,6 +122,9 @@ def main():
     if opt.rahi is None:
         opt.rahi = T.ra[np.argmax(T.cross)]
     T.delete_column('cross')
+
+    print 'RA range:', opt.ralo, opt.rahi
+    print 'Dec range:', opt.declo, opt.dechi
     
     x = np.mean([np.cos(np.deg2rad(r)) for r in (opt.ralo, opt.rahi)])
     y = np.mean([np.sin(np.deg2rad(r)) for r in (opt.ralo, opt.rahi)])
@@ -120,28 +132,40 @@ def main():
     midra += 360.*(midra < 0)
     middec = (opt.declo + opt.dechi) / 2.
 
-    pixscale = 2.75/3600.
-    H = (opt.dechi - opt.declo) / pixscale
-    dra = min(np.abs(midra - opt.ralo), np.abs(midra - opt.rahi))
-    W = dra / pixscale / np.cos(np.deg2rad(middec))
+    print 'RA,Dec center:', midra, middec
 
+    pixscale = 2.75 / 3600.
+    H = (opt.dechi - opt.declo) / pixscale
+    dra = 2. * min(np.abs(midra - opt.ralo), np.abs(midra - opt.rahi))
+    W = dra * np.cos(np.deg2rad(middec)) / pixscale
+
+    W = int(W)
+    H = int(H)
     print 'W,H', W,H
-    targetwcs = Tan(midra, middec, (int(W)+1)/2., (int(H)+1)/2.,
-                    -pixscale, 0., 0., pixscale, float(int(W)), float(int(H)))
-    W = unwise_tiles_touching_wcs(targetwcs)
-    print 'Cut to', len(W), 'tiles'
+    targetwcs = Tan(midra, middec, (W+1)/2., (H+1)/2.,
+                    -pixscale, 0., 0., pixscale, float(W), float(H))
+    print 'Target WCS:', targetwcs
+    
+    ra0,dec0 = targetwcs.pixelxy2radec(0.5, 0.5)
+    ra1,dec1 = targetwcs.pixelxy2radec(W+0.5, H+0.5)
+    roiradecbox = [ra0, ra1, dec0, dec1]
+    print 'ROI RA,Dec box', roiradecbox
+
+    Tiles = unwise_tiles_touching_wcs(targetwcs)
+    print 'Cut to', len(Tiles), 'unWISE tiles'
 
     disable_galaxy_cache()
 
     cols = T.get_columns()
     all_ptsrcs = not('type' in cols)
     if not all_ptsrcs:
-        assert('shape_exp' in cols)
-        assert('shape_dev' in cols)
+        assert('shapeexp' in cols)
+        assert('shapedev' in cols)
         assert('fracdev' in cols)
 
     wanyband = 'w'
-        
+
+    print 'Creating Tractor catalog...'
     cat = []
     for i,t in enumerate(T):
         pos = RaDecPos(t.ra, t.dec)
@@ -154,14 +178,14 @@ def main():
         if tt in ['PTSRC', 'STAR', 'S']:
             cat.append(PointSource(pos, flux))
         elif tt in ['EXP', 'E']:
-            shape = EllipseE(*t.shape_exp)
+            shape = EllipseE(*t.shapeexp)
             cat.append(ExpGalaxy(pos, flux, shape))
         elif tt in ['DEV', 'D']:
-            shape = EllipseE(*t.shape_dev)
+            shape = EllipseE(*t.shapedev)
             cat.append(DevGalaxy(pos, flux, shape))
         elif tt in ['COMP', 'C']:
-            eshape = EllipseE(*t.shape_exp)
-            dshape = EllipseE(*t.shape_dev)
+            eshape = EllipseE(*t.shapeexp)
+            dshape = EllipseE(*t.shapedev)
             cat.append(FixedCompositeGalaxy(pos, flux, t.fracdev,
                                             eshape, dshape))
         else:
@@ -170,21 +194,20 @@ def main():
             assert(False)
 
 
-    
-            
     for band in opt.bands:
-        print 'Band', band
+        print 'Photometering WISE band', band
         wband = 'w%i' % band
-        for tile in W:
+        for tile in Tiles:
+            print 'Reading tile', tile.coadd_id
 
             flux_invvars = np.zeros(len(cat))
             fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
             fitstats = dict([(k, np.zeros(len(cat))) for k in fskeys])
 
-
             tim = get_unwise_tractor_image(opt.unwise_dir, tile.coadd_id, band,
-                                           bandname=wanyband)
-
+                                           bandname=wanyband, roiradecbox=roiradecbox)
+            print 'Read image with shape', tim.shape
+            
             # Select sources in play.
             wcs = tim.wcs.wcs
             H,W = tim.shape
@@ -213,7 +236,7 @@ def main():
 
             #### FIXME -- set source radii, ...?
 
-            minsb = None
+            minsb = 0.
             fitsky = False
             
             ## Look in image and set radius based on peak height??
@@ -225,6 +248,8 @@ def main():
             tractor.freezeParamsRecursive('*')
             tractor.thawPathsTo(wanyband)
 
+            print tractor
+            continue
             
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
@@ -311,31 +336,32 @@ def main():
     T.writeto(outfn)
     
 if __name__ == '__main__':
-    #main()
-
-    T = fits_table()
-    T.ra = np.arange(0., 10.)
-    T.dec = np.arange(len(T))
-    fn = 'x.fits'
-    outfn = 'out.fits'
-    T.writeto(fn)
-    prog = sys.argv[0]
-    sys.argv = [prog, fn, outfn]
     main()
-
-    T = fits_table()
-    T.ra = np.arange(350., 371.) % 360
-    T.dec = np.arange(len(T))
-    T.writeto(fn)
-    sys.argv = [prog, fn, outfn]
-    main()
-
-    T = fits_table()
-    T.ra = np.arange(350., 371.) % 360
-    T.dec = np.arange(len(T))
-    T.writeto(fn)
-    sys.argv = [prog, fn, outfn, '-r', '355', '-R', 9]
-    main()
+    sys.exit(0)
+    
+    # T = fits_table()
+    # T.ra = np.arange(0., 10.)
+    # T.dec = np.arange(len(T))
+    # fn = 'x.fits'
+    # outfn = 'out.fits'
+    # T.writeto(fn)
+    # prog = sys.argv[0]
+    # sys.argv = [prog, fn, outfn]
+    # main()
+    # 
+    # T = fits_table()
+    # T.ra = np.arange(350., 371.) % 360
+    # T.dec = np.arange(len(T))
+    # T.writeto(fn)
+    # sys.argv = [prog, fn, outfn]
+    # main()
+    # 
+    # T = fits_table()
+    # T.ra = np.arange(350., 371.) % 360
+    # T.dec = np.arange(len(T))
+    # T.writeto(fn)
+    # sys.argv = [prog, fn, outfn, '-r', '355', '-R', 9]
+    # main()
 
 
     
