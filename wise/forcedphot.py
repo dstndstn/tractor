@@ -139,8 +139,9 @@ def main():
     dra = 2. * min(np.abs(midra - opt.ralo), np.abs(midra - opt.rahi))
     W = dra * np.cos(np.deg2rad(middec)) / pixscale
 
-    W = int(W)
-    H = int(H)
+    margin = 5
+    W = int(W) + margin*2
+    H = int(H) + margin*2
     print 'W,H', W,H
     targetwcs = Tan(midra, middec, (W+1)/2., (H+1)/2.,
                     -pixscale, 0., 0., pixscale, float(W), float(H))
@@ -233,9 +234,11 @@ def main():
             margin = 10.
             I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
                                (T.y >= -margin) * (T.y < H+margin))
+            print len(I), 'within the image + margin'
 
             inbox = ((T.x[I] >= -0.5) * (T.x[I] < (W-0.5)) *
                      (T.y[I] >= -0.5) * (T.y[I] < (H-0.5)))
+            print sum(inbox), 'strictly within the image'
 
             # Compute L_inf distance to (full) tile center.
             tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
