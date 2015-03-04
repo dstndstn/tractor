@@ -94,7 +94,7 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     H,W = int(H), int(W)
 
     roi,nil = interpret_roi(twcs, (H,W), **kwargs)
-    print 'interpret_roi: roi is', roi
+    #print 'interpret_roi: roi is', roi
     if roi is None:
         # No overlap with ROI
         return None

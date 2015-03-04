@@ -144,12 +144,12 @@ def main():
     print 'W,H', W,H
     targetwcs = Tan(midra, middec, (W+1)/2., (H+1)/2.,
                     -pixscale, 0., 0., pixscale, float(W), float(H))
-    print 'Target WCS:', targetwcs
+    #print 'Target WCS:', targetwcs
     
     ra0,dec0 = targetwcs.pixelxy2radec(0.5, 0.5)
     ra1,dec1 = targetwcs.pixelxy2radec(W+0.5, H+0.5)
     roiradecbox = [ra0, ra1, dec0, dec1]
-    print 'ROI RA,Dec box', roiradecbox
+    #print 'ROI RA,Dec box', roiradecbox
 
     Tiles = unwise_tiles_touching_wcs(targetwcs)
     print 'Cut to', len(Tiles), 'unWISE tiles'
@@ -193,19 +193,35 @@ def main():
             t.about()
             assert(False)
 
+    for src in cat:
+        if isinstance(cat, PointSource):
+            src.fixedRadius = 4
+        else:
+            src.halfsize = 4
+
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
+    T.tile = np.array(['        '] * len(T))
 
     for band in opt.bands:
         print 'Photometering WISE band', band
         wband = 'w%i' % band
+
+        # The tiles have some overlap, so for each source, keep the
+        # fit in the tile whose center is closest to the source.
+        tiledists = np.empty(len(cat))
+        tiledists[:] = 1e100
+        flux_invvars = np.zeros(len(cat), np.float32)
+        fitstats = dict([(k, np.zeros(len(cat), np.float32)) for k in fskeys])
+
         for tile in Tiles:
             print 'Reading tile', tile.coadd_id
 
-            flux_invvars = np.zeros(len(cat))
-            fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
-            fitstats = dict([(k, np.zeros(len(cat))) for k in fskeys])
-
             tim = get_unwise_tractor_image(opt.unwise_dir, tile.coadd_id, band,
                                            bandname=wanyband, roiradecbox=roiradecbox)
+            if tim is None:
+                print 'Actually, no overlap with tile', tile.coadd_id
+                continue
+            
             print 'Read image with shape', tim.shape
             
             # Select sources in play.
@@ -214,19 +230,36 @@ def main():
             ok,T.x,T.y = wcs.radec2pixelxy(T.ra, T.dec)
             T.x = (T.x - 1.).astype(np.float32)
             T.y = (T.y - 1.).astype(np.float32)
-            margin = 20.
+            margin = 10.
             I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
                                (T.y >= -margin) * (T.y < H+margin))
 
             inbox = ((T.x[I] >= -0.5) * (T.x[I] < (W-0.5)) *
                      (T.y[I] >= -0.5) * (T.y[I] < (H-0.5)))
-            
-            # Source indices inside the box
-            srci = I[inbox]
-            # Source indices in the margins
-            margi = I[np.logical_not(inbox)]
 
-            # sources in the box
+            # Compute L_inf distance to (full) tile center.
+            tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
+            cx,cy = tilewcs.crpix
+            ok,tx,ty = tilewcs.radec2pixelxy(T.ra[I], T.dec[I])
+            td = np.maximum(np.abs(tx - cx), np.abs(ty - cy))
+            closest = (td < tiledists[I])
+            tiledists[I[closest]] = td[closest]
+
+            keep = inbox * closest
+            
+            # Source indices (in the full "cat") to keep (the fit values for)
+            srci = I[keep]
+
+            T.tile[srci] = tile.coadd_id
+
+            if not len(srci):
+                print 'No sources to be kept; skipping.'
+                continue
+
+            # Source indices in the margins
+            margi = I[np.logical_not(keep)]
+
+            # sources in the box -- at the start of the subcat list.
             subcat = [cat[i] for i in srci]
 
             # include *copies* of sources in the margins
@@ -249,7 +282,6 @@ def main():
             tractor.thawPathsTo(wanyband)
 
             print tractor
-            continue
             
             kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
             t0 = Time()
@@ -269,6 +301,11 @@ def main():
                 if term != 0:
                     raise RuntimeError('Ceres terminated with status %i' % term)
 
+            if wantims:
+                ims0 = R.ims0
+                ims1 = R.ims1
+            IV,fs = R.IV, R.fitstats
+
             if opt.save_fits:
                 (dat,mod,ie,chi,roi) = ims1[0]
 
@@ -281,6 +318,7 @@ def main():
                 tag = '%s W%i' % (tile.coadd_id, band)
                 (dat,mod,ie,chi,roi) = ims1[0]
 
+                sig1 = tim.sig1
                 plt.clf()
                 plt.imshow(dat, interpolation='nearest', origin='lower',
                            cmap='gray', vmin=-3*sig1, vmax=10*sig1)
@@ -302,18 +340,24 @@ def main():
                 plt.title('%s: chi' % tag)
                 ps.savefig()
 
-            if len(srci):
-                # Save fit stats
-                flux_invvars[srci] = IV[:len(srci)]
-                for k in fskeys:
-                    x = getattr(fs, k)
-                    fitstats[k][srci] = np.array(x)
+            # Save results for this tile.
+            # the "keep" sources are at the beginning of the "subcat" list
+            flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
+            print 'srci len:', len(srci)
+            print 'subcat len:', len(subcat)
+            for k in fskeys:
+                x = getattr(fs, k)
+                # fitstats are returned only for un-frozen sources
+                print 'fitstat', k, 'len:', len(x)
+                fitstats[k][srci] = np.array(x).astype(np.float32)[:len(srci)]
 
         # Note, this is *outside* the loop over tiles.
+        # The fluxes are saved in the source objects, and will be set based on
+        # the 'tiledists' logic above.
         nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
         nm_ivar = flux_invvars
         T.set(wband + '_nanomaggies', nm.astype(np.float32))
-        T.set(wband + '_nanomaggies_ivar', nm_ivar.astype(np.float32))
+        T.set(wband + '_nanomaggies_ivar', nm_ivar)
         dnm = np.zeros(len(nm_ivar), np.float32)
         okiv = (nm_ivar > 0)
         dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
@@ -331,7 +375,10 @@ def main():
         T.set(wband + '_mag', mag)
         T.set(wband + '_mag_err', dmag)
         for k in fskeys:
-            T.set(wband + '_' + k, fitstats[k].astype(np.float32))
+            T.set(wband + '_' + k, fitstats[k])
+
+        # DEBUG
+        T.tiledists = tiledists
 
     T.writeto(outfn)
     
