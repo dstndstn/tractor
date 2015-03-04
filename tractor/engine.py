@@ -2381,6 +2381,10 @@ class Tractor(MultiParams):
             #print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
             return None
 
+        # if not 'extent' in kwargs:
+        #     H,W = img.shape
+        #     kwargs.update(extent = [0,W, 0,H])
+
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
 
         # # HACK -- auto-add?

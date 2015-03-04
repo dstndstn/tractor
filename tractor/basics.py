@@ -1297,6 +1297,13 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             r = radius
         x0,x1 = int(floor(px-r)), int(ceil(px+r)) + 1
         y0,y1 = int(floor(py-r)), int(ceil(py+r)) + 1
+        if extent is not None:
+            [xl,xh,yl,yh] = extent
+            # clip
+            x0 = max(x0, xl)
+            x1 = min(x1, xh)
+            y0 = max(y0, yl)
+            y1 = min(y1, yh)
         return self.mog.evaluate_grid(x0, x1, y0, y1, px, py)
 
     def __str__(self):
