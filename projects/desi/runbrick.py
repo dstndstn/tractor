@@ -575,7 +575,7 @@ def stage_fitblobs_finish(
     outdir = os.path.join(outdir, 'metrics', brickname[:3])
     try_makedirs(outdir)
     fn = os.path.join(outdir, 'all-models-%s.fits' % brickname)
-    TT.writeto(fn)
+    TT.writeto(fn, header=hdr)
     del TT
     print 'Wrote', fn
 
@@ -2682,6 +2682,10 @@ def stage_writecat(
     T2.shapeDev_r_ivar  = T2.shapeDev_ivar[:,0]
     T2.shapeDev_e1_ivar = T2.shapeDev_ivar[:,1]
     T2.shapeDev_e2_ivar = T2.shapeDev_ivar[:,2]
+
+    # Rename source types.
+    typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
+    T2.type = np.array([typemap[t] for t in T2.type])
 
     if catalogfn is not None:
         fn = catalogfn
