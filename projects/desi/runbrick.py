@@ -64,6 +64,16 @@ def _map(f, args):
     else:
         return map(f, args)
 
+def try_makedirs(dirs):
+    if not os.path.exists(dirs):
+        # there can be a race
+        try:
+            os.makedirs(dirs)
+        except:
+            import traceback
+            traceback.print_exc()
+            pass
+
 class iterwrapper(object):
     def __init__(self, y, n):
         self.n = n
@@ -494,6 +504,7 @@ def stage_fitblobs(T=None,
     return dict(fitblobs_R=R, tims=tims, ps=ps)
     
 def stage_fitblobs_finish(
+    brickname=None,
         T=None, blobsrcs=None, blobslices=None, blobs=None,
         tractor=None, cat=None, targetrd=None, pixscale=None,
         targetwcs=None,
@@ -501,6 +512,7 @@ def stage_fitblobs_finish(
         bands=None, ps=None, tims=None,
         plots=False, plots2=False,
         fitblobs_R=None,
+        outdir=None,
         **kwargs):
 
     print 'Logprob:', tractor.getLogProb()
@@ -516,6 +528,62 @@ def stage_fitblobs_finish(
     #         print r
     #     print
 
+    assert(len(R) == len(blobsrcs))
+    
+    # DEBUGging / metrics for us
+    all_models = [r[8] for r in R]
+    performance = [r[9] for r in R]
+
+    allmods = [None]*len(T)
+    allperfs = [None]*len(T)
+    for Isrcs,mods,perf in zip(blobsrcs,all_models,performance):
+        for i,mod,per in zip(Isrcs,mods,perf):
+            allmods[i] = mod
+            allperfs[i] = per
+    del all_models
+    del performance
+
+    from desi_common import prepare_fits_catalog
+    from astrometry.util.file import *
+    
+    hdr = fitsio.FITSHDR()
+    TT = T.copy()
+    for srctype in ['ptsrc', 'dev','exp','comp']:
+        xcat = Catalog(*[m[srctype] for m in allmods])
+        xcat.thawAllRecursive()
+        allbands = 'ugrizY'
+        TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
+                                      allbands=allbands, prefix=srctype+'_',
+                                      save_invvars=False)
+        TT.set('%s_flags' % srctype, np.array([m['flags'][srctype] for m in allmods]))
+    TT.delete_column('ptsrc_shapeExp')
+    TT.delete_column('ptsrc_shapeDev')
+    TT.delete_column('ptsrc_fracDev')
+    TT.delete_column('ptsrc_type')
+    TT.delete_column('dev_shapeExp')
+    TT.delete_column('dev_fracDev')
+    TT.delete_column('dev_type')
+    TT.delete_column('exp_shapeDev')
+    TT.delete_column('exp_fracDev')
+    TT.delete_column('exp_type')
+    TT.delete_column('comp_type')
+
+    TT.keepmod = np.array([m['keep'] for m in allmods])
+    TT.dchisq = np.array([m['dchisqs'] for m in allmods])
+    if outdir is None:
+        outdir = '.'
+    outdir = os.path.join(outdir, 'metrics', brickname[:3])
+    try_makedirs(outdir)
+    fn = os.path.join(outdir, 'all-models-%s.fits' % brickname)
+    TT.writeto(fn)
+    del TT
+    print 'Wrote', fn
+
+    fn = os.path.join(outdir, 'performance-%s.pickle' % brickname)
+    pickle_to_file(allperfs, fn)
+    print 'Wrote', fn
+
+
     # Drop now-empty blobs.
     R = [r for r in R if len(r[0])]
     
@@ -525,6 +593,7 @@ def stage_fitblobs_finish(
     rchi2    = np.vstack([r[4] for r in R])
     dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
     fracmasked = np.hstack([r[6] for r in R])
+    flags = np.hstack([r[7] for r in R])
     
     newcat = []
     for r in R:
@@ -549,7 +618,9 @@ def stage_fitblobs_finish(
     ns,nb = dchisqs.shape
     assert(ns == len(cat))
     assert(nb == 5) # none, ptsrc, dev, exp, comp
+    assert(len(flags) == len(cat))
 
+    T.flags = flags
     T.fracflux = fracflux
     T.fracmasked = fracmasked
     T.rchi2 = rchi2
@@ -639,6 +710,11 @@ def _bounce_one_blob(X):
         #print 'args:', X
         traceback.print_exc()
         raise
+
+FLAG_CPU_A   = 1
+FLAG_STEPS_A = 2
+FLAG_CPU_B   = 4
+FLAG_STEPS_B = 8
 
 def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                srcs, bands, plots, ps)):
@@ -1174,7 +1250,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # families of sources to fit simultaneously.  (The
     # not-friends-of-friends version of blobs!)
 
-    src_lnps = []
+    delta_chisqs = []
 
     # We repeat the "compute & subtract initial models" logic from above.
     # -Remember the original subtim images
@@ -1210,9 +1286,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     mod.addTo(tim.getImage(), scale=-1)
         initial_models.append(mods)
     print 'Subtracting initial models:', Time()-tt
-    
+
+    all_models = [{} for i in range(len(Isrcs))]
+    performance = [[] for i in range(len(Isrcs))]
+    flags = np.zeros(len(Isrcs), np.uint16)
+
     # For sources, in decreasing order of brightness
     for numi,i in enumerate(Ibright):
+        
         src = subcat[i]
         print
         print 'Model selection for source', src
@@ -1259,8 +1340,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
             ptsrc = src.copy()
-            lnps.update(ptsrc=lnp0)
-            trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
+            #lnps.update(ptsrc=lnp0)
+            #trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'ptsrc'
             
         elif isinstance(src, DevGalaxy):
@@ -1268,8 +1350,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(dev=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            #lnps.update(dev=lnp0)
+            #trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'dev'
 
         elif isinstance(src, ExpGalaxy):
@@ -1277,8 +1360,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(exp=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+            #lnps.update(exp=lnp0)
+            #trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'exp'
             
         elif isinstance(src, FixedCompositeGalaxy):
@@ -1295,10 +1379,12 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = src.copy()
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(comp=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            #lnps.update(comp=lnp0)
+            #trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'comp'
 
+        allflags = {}
         for name,newsrc in trymodels:
             print 'Trying model:', name
             if name == 'comp' and newsrc is None:
@@ -1367,17 +1453,24 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             max_cpu_per_source = 60.
 
+            thisflags = 0
+
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print '  dlnp:', dlnp, 'new src', newsrc
-                if time.clock()-cpu0 > max_cpu_per_source:
+                cpu = time.clock()
+                performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
+                if cpu-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
+                    thisflags |= FLAG_CPU_A
                     break
                 if dlnp < 0.1:
                     break
+            else:
+                thisflags |= FLAG_STEPS_A
 
             print 'New source (after first round optimization):', newsrc
             lnp = srctractor.getLogProb()
@@ -1413,11 +1506,16 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 print '  dlnp:', dlnp, 'new src', newsrc
-                if time.clock()-cpu0 > max_cpu_per_source:
+                cpu = time.clock()
+                performance[i].append((name,'B',step,dlnp,alpha,cpu-cpu0))
+                if cpu-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
+                    thisflags |= FLAG_CPU_B
                     break
                 if dlnp < 0.1:
                     break
+            else:
+                thisflags |= FLAG_STEPS_B
 
             print 'New source (after optimization):', newsrc
             lnp = srctractor.getLogProb()
@@ -1447,7 +1545,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # print 'vs original src:', lnp - lnp0
             
             lnps[name] = lnp
-
+            all_models[i][name] = newsrc.copy()
+            allflags[name] = thisflags
+            
             # if plots:
             #     plotmods.append(subtr.getModelImages())
             #     plotmodnames.append('try ' + name)
@@ -1552,7 +1652,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     keepmod = 'comp'
 
         # Actually, penalized delta chi-squareds!
-        src_lnps.append([-2. * (plnps[k] - plnps[keepmod])
+        delta_chisqs.append([-2. * (plnps[k] - plnps[keepmod])
                          for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
                     
         if keepmod != oldmodel:
@@ -1564,6 +1664,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'Old:', src
 
         subcat[i] = keepsrc
+        flags[i] = allflags.get(keepmod, 0)
+        all_models[i]['keep'] = keepmod
+        all_models[i]['dchisqs'] = delta_chisqs[-1]
+        all_models[i]['flags'] = allflags
 
         src = keepsrc
         if src is not None:
@@ -1590,10 +1694,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
-    keeplnps = [x for x,s in zip(src_lnps,srcs) if s is not None]
+    keepdeltas = [x for x,s in zip(delta_chisqs,srcs) if s is not None]
+    flags = [f for f,s in zip(flags, srcs) if s is not None]
     Isrcs = keepI
     srcs = keepsrcs
-    src_lnps = keeplnps
+    delta_chisqs = keepdeltas
     subcat = Catalog(*srcs)
     subtr.catalog = subcat
     
@@ -1699,9 +1804,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     rchi2    = rchi2_num    / rchi2_den
     fracmasked = fracmasked_num / fracmasked_den
     
-    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps, fracmasked
-    
-
+    return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
+            all_models, performance)
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -2338,12 +2442,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     if outdir is None:
         outdir = '.'
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
-    if not os.path.exists(basedir):
-        try:
-            os.makedirs(basedir)
-        except:
-            pass
-        
+    try_makedirs(basedir)
     fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
     ccds.writeto(fn)
     print 'Wrote', fn
@@ -2592,11 +2691,7 @@ def stage_writecat(
         outdir = os.path.join(outdir, 'tractor', brickname[:3])
         fn = os.path.join(outdir, 'tractor-%s.fits' % brickname)
     dirnm = os.path.dirname(fn)
-    if not os.path.exists(dirnm):
-        try:
-            os.makedirs(dirnm)
-        except:
-            pass
+    try_makedirs(dirnm)
         
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn

@@ -233,7 +233,7 @@ class MixtureOfGaussians():
         from mix import c_gauss_2d_grid
         assert(self.D == 2)
         result = np.zeros((y1-y0, x1-x0))
-        rtn = c_gauss_2d_grid(x0, x1, y0, y1, cx, cy,
+        rtn = c_gauss_2d_grid(int(x0), int(x1), int(y0), int(y1), cx, cy,
                               self.amp, self.mean,self.var, result)
         if rtn == -1:
             raise RuntimeError('c_gauss_2d_grid failed')
