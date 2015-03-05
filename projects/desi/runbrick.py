@@ -41,6 +41,7 @@ mp = None
 nocache = True
 #photoobjdir = 'photoObjs-new'
 useCeres = True
+unwise_dir = 'unwise-coadds'
 
 def runbrick_global_init():
     if nocache:
@@ -298,7 +299,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         tlast = Time()
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid', 'brickname',
+            'bands', 'tims', 'ps', 'brickid', 'brickname', 'brick',
             'target_extent', 'ccds']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
@@ -2592,12 +2593,33 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
 
 
-def stage_wise_forced_phot(
+def stage_wise_forced(
     cat=None,
     T=None,
     targetwcs=None,
-    outdir=None):
-    from wise.forcedphot import *
+    brickname=None,
+    outdir=None,
+    **kwargs):
+
+    from wise.forcedphot import unwise_forcedphot, unwise_tiles_touching_wcs
+
+    decals = Decals()
+    brick = decals.get_brick_by_name(brickname)
+    roiradec = [brick.ra1, brick.ra2, brick.dec1, brick.dec2]
+    tiles = unwise_tiles_touching_wcs(targetwcs)
+    print 'Cut to', len(tiles), 'unWISE tiles'
+
+    wcat = []
+    for src in cat:
+        src = src.copy()
+        src.setBrightness(NanoMaggies(w=1.))
+        wcat.append(src)
+
+    W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                          unwise_dir=unwise_dir, use_ceres=useCeres)
+    W.rename('tile', 'unwise_tile')
+    #T.add_columns_from(W)
+    return dict(WISE=W)
     
 
 '''
@@ -2606,6 +2628,7 @@ Write catalog output
 def stage_writecat(
     version_header=None,
     T=None,
+    WISE=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
@@ -2696,6 +2719,19 @@ def stage_writecat(
     typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
     T2.type = np.array([typemap[t] for t in T2.type])
 
+    #T2.add_columns_from(WISE)
+
+    T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
+                              WISE.w3_nanomaggies, WISE.w4_nanomaggies])
+    T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
+                                   WISE.w3_nanomaggies_iar, WISE.w4_nanomaggies_ivar])
+    T2.wise_nobserve = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
+                                  WISE.w3_pronexp, WISE.w4_pronexp])
+    T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
+                                  WISE.w3_profracflux, WISE.w4_profracflux])
+    T2.wise_rchi2 = np.vstack([WISE.w1_prochi2, WISE.w2_prochi2,
+                               WISE.w3_prochi2, WISE.w4_prochi2])
+
     if catalogfn is not None:
         fn = catalogfn
     else:
@@ -2706,8 +2742,8 @@ def stage_writecat(
     dirnm = os.path.dirname(fn)
     try_makedirs(dirnm)
         
-    T2.writeto(fn, header=hdr)
-    print 'Wrote', fn
+    #T2.writeto(fn, header=hdr)
+    #print 'Wrote', fn
 
     print 'Reading SFD maps...'
 
@@ -2821,7 +2857,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',
         'coadds': 'fitblobs_finish',
-        'writecat': 'coadds',
+        'wise_forced': 'coadds',
+        'writecat': 'wise_forced',
 
         'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
