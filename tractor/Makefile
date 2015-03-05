@@ -106,13 +106,16 @@ CXXFLAGS := -Wall -fPIC
 #CXXFLAGS += -O0 -g
 CXXFLAGS += -O3
 #CXXLINKFLAGS := -Wl,--no-undefined
-CXXLINKFLAGS :=
+#CXXLINKFLAGS :=
+CXXLINKFLAGS ?=
+
+CERES_EXTRA_LIB ?=
 
 _ceres.so: ceres.i ceres-tractor.h ceres-tractor.cc
 	swig -python -c++ $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC) $<
 	g++ $(CXXFLAGS) -c ceres_wrap.cxx $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
 	g++ $(CXXFLAGS) -c ceres-tractor.cc $(PYMOD_INC) $(NUMPY_INC) $(CERES_INC) $(EIGEN_INC)
-	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB)
+	g++ $(CXXFLAGS) $(CXXLINKFLAGS) -o _ceres.so -shared ceres_wrap.o ceres-tractor.o $(CERES_LIB) $(PYMOD_LIB) $(CERES_EXTRA_LIB)
 
 LIBTSNNLS_INC ?=
 LIBTSNNLS_LIB ?= -ltsnnls

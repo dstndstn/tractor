@@ -196,9 +196,9 @@ def main():
 
     for src in cat:
         if isinstance(cat, PointSource):
-            src.fixedRadius = 4
+            src.fixedRadius = 10
         else:
-            src.halfsize = 4
+            src.halfsize = 10
 
     fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
     T.tile = np.array(['        '] * len(T))
