@@ -11,6 +11,213 @@ from astrometry.util.ttime import *
 #from wise.unwise import *
 from unwise import *
 
+def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir='.',
+                      use_ceres=True, ceres_block=8,
+                      save_fits=False, ps=None):
+    '''
+    Given a list of tractor sources *cat*
+    and a list of unWISE tiles *tiles* (a fits_table with RA,Dec,coadd_id)
+    runs forced photometry, returning a FITS table the same length as *cat*.
+    '''
+
+    # HACKery
+    for src in cat:
+        if isinstance(cat, PointSource):
+            src.fixedRadius = 10
+        else:
+            src.halfsize = 10
+
+    wantims = ((ps is not None) or save_fits)
+    wanyband = 'w'
+
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
+
+    Nsrcs = len(cat)
+    phot = fits_table()
+    phot.tile = np.array(['        '] * Nsrcs)
+
+    ra  = np.array([src.getPosition().ra  for src in cat])
+    dec = np.array([src.getPosition().dec for src in cat])
+
+    for band in bands:
+        print 'Photometering WISE band', band
+        wband = 'w%i' % band
+
+        # The tiles have some overlap, so for each source, keep the
+        # fit in the tile whose center is closest to the source.
+        tiledists = np.empty(len(cat))
+        tiledists[:] = 1e100
+        flux_invvars = np.zeros(len(cat), np.float32)
+        fitstats = dict([(k, np.zeros(len(cat), np.float32)) for k in fskeys])
+
+        for tile in tiles:
+            print 'Reading tile', tile.coadd_id
+
+            tim = get_unwise_tractor_image(unwise_dir, tile.coadd_id, band,
+                                           bandname=wanyband, roiradecbox=roiradecbox)
+            if tim is None:
+                print 'Actually, no overlap with tile', tile.coadd_id
+                continue
+            
+            print 'Read image with shape', tim.shape
+            
+            # Select sources in play.
+            wcs = tim.wcs.wcs
+            H,W = tim.shape
+            ok,x,y = wcs.radec2pixelxy(ra, dec)
+            x = (x - 1.).astype(np.float32)
+            y = (y - 1.).astype(np.float32)
+            margin = 10.
+            I = np.flatnonzero((x >= -margin) * (x < W+margin) *
+                               (y >= -margin) * (y < H+margin))
+            print len(I), 'within the image + margin'
+
+            inbox = ((x[I] >= -0.5) * (x[I] < (W-0.5)) *
+                     (y[I] >= -0.5) * (y[I] < (H-0.5)))
+            print sum(inbox), 'strictly within the image'
+
+            # Compute L_inf distance to (full) tile center.
+            tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
+            cx,cy = tilewcs.crpix
+            ok,tx,ty = tilewcs.radec2pixelxy(ra[I], dec[I])
+            td = np.maximum(np.abs(tx - cx), np.abs(ty - cy))
+            closest = (td < tiledists[I])
+            tiledists[I[closest]] = td[closest]
+
+            keep = inbox * closest
+            
+            # Source indices (in the full "cat") to keep (the fit values for)
+            srci = I[keep]
+
+            phot.tile[srci] = tile.coadd_id
+
+            if not len(srci):
+                print 'No sources to be kept; skipping.'
+                continue
+
+            # Source indices in the margins
+            margi = I[np.logical_not(keep)]
+
+            # sources in the box -- at the start of the subcat list.
+            subcat = [cat[i] for i in srci]
+
+            # include *copies* of sources in the margins
+            # (that way we automatically don't save the results)
+            subcat.extend([cat[i].copy() for i in margi])
+            assert(len(subcat) == len(I))
+
+            #### FIXME -- set source radii, ...?
+
+            minsb = 0.
+            fitsky = False
+            
+            ## Look in image and set radius based on peak height??
+
+
+            
+            tractor = Tractor([tim], subcat)
+            tractor.disable_cache()
+            tractor.freezeParamsRecursive('*')
+            tractor.thawPathsTo(wanyband)
+
+            print tractor
+            
+            kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
+            t0 = Time()
+            R = tractor.optimize_forced_photometry(
+                minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True, 
+                variance=True, shared_params=False,
+                use_ceres=use_ceres, BW=ceres_block, BH=ceres_block,
+                wantims=wantims, **kwa)
+            print 'That took', Time()-t0
+
+            if use_ceres:
+                term = R.ceres_status['termination']
+                print 'Ceres termination status:', term
+                # Running out of memory can cause failure to converge
+                # and term status = 2.
+                # Fail completely in this case.
+                if term != 0:
+                    raise RuntimeError('Ceres terminated with status %i' % term)
+
+            if wantims:
+                ims0 = R.ims0
+                ims1 = R.ims1
+            IV,fs = R.IV, R.fitstats
+
+            if save_fits:
+                (dat,mod,ie,chi,roi) = ims1[0]
+
+                tag = 'fit-%s-w%i' % (tile.coadd_id, band)
+                fitsio.write('%s-data.fits' % tag, dat, clobber=True)
+                fitsio.write('%s-mod.fits' % tag,  mod, clobber=True)
+                fitsio.write('%s-chi.fits' % tag,  chi, clobber=True)
+
+            if ps:
+                tag = '%s W%i' % (tile.coadd_id, band)
+                (dat,mod,ie,chi,roi) = ims1[0]
+
+                sig1 = tim.sig1
+                plt.clf()
+                plt.imshow(dat, interpolation='nearest', origin='lower',
+                           cmap='gray', vmin=-3*sig1, vmax=10*sig1)
+                plt.colorbar()
+                plt.title('%s: data' % tag)
+                ps.savefig()
+                
+                plt.clf()
+                plt.imshow(mod, interpolation='nearest', origin='lower',
+                           cmap='gray', vmin=-3*sig1, vmax=10*sig1)
+                plt.colorbar()
+                plt.title('%s: model' % tag)
+                ps.savefig()
+
+                plt.clf()
+                plt.imshow(chi, interpolation='nearest', origin='lower',
+                cmap='gray', vmin=-5, vmax=+5)
+                plt.colorbar()
+                plt.title('%s: chi' % tag)
+                ps.savefig()
+
+            # Save results for this tile.
+            # the "keep" sources are at the beginning of the "subcat" list
+            flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
+            for k in fskeys:
+                x = getattr(fs, k)
+                # fitstats are returned only for un-frozen sources
+                fitstats[k][srci] = np.array(x).astype(np.float32)[:len(srci)]
+
+        # Note, this is *outside* the loop over tiles.
+        # The fluxes are saved in the source objects, and will be set based on
+        # the 'tiledists' logic above.
+        nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
+        nm_ivar = flux_invvars
+        phot.set(wband + '_nanomaggies', nm.astype(np.float32))
+        phot.set(wband + '_nanomaggies_ivar', nm_ivar)
+        dnm = np.zeros(len(nm_ivar), np.float32)
+        okiv = (nm_ivar > 0)
+        dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
+        okflux = (nm > 0)
+        mag = np.zeros(len(nm), np.float32)
+        mag[okflux] = (NanoMaggies.nanomaggiesToMag(nm[okflux])
+                       ).astype(np.float32)
+        dmag = np.zeros(len(nm), np.float32)
+        ok = (okiv * okflux)
+        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])
+                    ).astype(np.float32)
+        mag[np.logical_not(okflux)] = np.nan
+        dmag[np.logical_not(ok)] = np.nan
+            
+        phot.set(wband + '_mag', mag)
+        phot.set(wband + '_mag_err', dmag)
+        for k in fskeys:
+            phot.set(wband + '_' + k, fitstats[k])
+
+        # DEBUG
+        #phot.tiledists = tiledists
+
+    return phot
+
 def main():
     import optparse
     parser = optparse.OptionParser(usage='%prog [options] incat.fits out.fits')
@@ -66,8 +273,6 @@ def main():
     ps = None
     if opt.plots:
         ps = PlotSequence('unwise')
-
-    wantims = ((ps is not None) or opt.save_fits)
 
     infn,outfn = args
     
@@ -152,8 +357,8 @@ def main():
     roiradecbox = [ra0, ra1, dec0, dec1]
     #print 'ROI RA,Dec box', roiradecbox
 
-    Tiles = unwise_tiles_touching_wcs(targetwcs)
-    print 'Cut to', len(Tiles), 'unWISE tiles'
+    tiles = unwise_tiles_touching_wcs(targetwcs)
+    print 'Cut to', len(tiles), 'unWISE tiles'
 
     disable_galaxy_cache()
 
@@ -194,196 +399,11 @@ def main():
             t.about()
             assert(False)
 
-    for src in cat:
-        if isinstance(cat, PointSource):
-            src.fixedRadius = 10
-        else:
-            src.halfsize = 10
-
-    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
-    T.tile = np.array(['        '] * len(T))
-
-    for band in opt.bands:
-        print 'Photometering WISE band', band
-        wband = 'w%i' % band
-
-        # The tiles have some overlap, so for each source, keep the
-        # fit in the tile whose center is closest to the source.
-        tiledists = np.empty(len(cat))
-        tiledists[:] = 1e100
-        flux_invvars = np.zeros(len(cat), np.float32)
-        fitstats = dict([(k, np.zeros(len(cat), np.float32)) for k in fskeys])
-
-        for tile in Tiles:
-            print 'Reading tile', tile.coadd_id
-
-            tim = get_unwise_tractor_image(opt.unwise_dir, tile.coadd_id, band,
-                                           bandname=wanyband, roiradecbox=roiradecbox)
-            if tim is None:
-                print 'Actually, no overlap with tile', tile.coadd_id
-                continue
-            
-            print 'Read image with shape', tim.shape
-            
-            # Select sources in play.
-            wcs = tim.wcs.wcs
-            H,W = tim.shape
-            ok,T.x,T.y = wcs.radec2pixelxy(T.ra, T.dec)
-            T.x = (T.x - 1.).astype(np.float32)
-            T.y = (T.y - 1.).astype(np.float32)
-            margin = 10.
-            I = np.flatnonzero((T.x >= -margin) * (T.x < W+margin) *
-                               (T.y >= -margin) * (T.y < H+margin))
-            print len(I), 'within the image + margin'
-
-            inbox = ((T.x[I] >= -0.5) * (T.x[I] < (W-0.5)) *
-                     (T.y[I] >= -0.5) * (T.y[I] < (H-0.5)))
-            print sum(inbox), 'strictly within the image'
-
-            # Compute L_inf distance to (full) tile center.
-            tilewcs = unwise_tile_wcs(tile.ra, tile.dec)
-            cx,cy = tilewcs.crpix
-            ok,tx,ty = tilewcs.radec2pixelxy(T.ra[I], T.dec[I])
-            td = np.maximum(np.abs(tx - cx), np.abs(ty - cy))
-            closest = (td < tiledists[I])
-            tiledists[I[closest]] = td[closest]
-
-            keep = inbox * closest
-            
-            # Source indices (in the full "cat") to keep (the fit values for)
-            srci = I[keep]
-
-            T.tile[srci] = tile.coadd_id
-
-            if not len(srci):
-                print 'No sources to be kept; skipping.'
-                continue
-
-            # Source indices in the margins
-            margi = I[np.logical_not(keep)]
-
-            # sources in the box -- at the start of the subcat list.
-            subcat = [cat[i] for i in srci]
-
-            # include *copies* of sources in the margins
-            # (that way we automatically don't save the results)
-            subcat.extend([cat[i].copy() for i in margi])
-            assert(len(subcat) == len(I))
-
-            #### FIXME -- set source radii, ...?
-
-            minsb = 0.
-            fitsky = False
-            
-            ## Look in image and set radius based on peak height??
-
-
-            
-            tractor = Tractor([tim], subcat)
-            tractor.disable_cache()
-            tractor.freezeParamsRecursive('*')
-            tractor.thawPathsTo(wanyband)
-
-            print tractor
-            
-            kwa = dict(fitstat_extras=[('pronexp', [tim.nims])])
-            t0 = Time()
-            R = tractor.optimize_forced_photometry(
-                minsb=minsb, mindlnp=1., sky=fitsky, fitstats=True, 
-                variance=True, shared_params=False,
-                use_ceres=opt.ceres, BW=opt.ceresblock, BH=opt.ceresblock,
-                wantims=wantims, **kwa)
-            print 'That took', Time()-t0
-
-            if opt.ceres:
-                term = R.ceres_status['termination']
-                print 'Ceres termination status:', term
-                # Running out of memory can cause failure to converge
-                # and term status = 2.
-                # Fail completely in this case.
-                if term != 0:
-                    raise RuntimeError('Ceres terminated with status %i' % term)
-
-            if wantims:
-                ims0 = R.ims0
-                ims1 = R.ims1
-            IV,fs = R.IV, R.fitstats
-
-            if opt.save_fits:
-                (dat,mod,ie,chi,roi) = ims1[0]
-
-                tag = 'fit-%s-w%i' % (tile.coadd_id, band)
-                fitsio.write('%s-data.fits' % tag, dat, clobber=True)
-                fitsio.write('%s-mod.fits' % tag,  mod, clobber=True)
-                fitsio.write('%s-chi.fits' % tag,  chi, clobber=True)
-
-            if ps:
-                tag = '%s W%i' % (tile.coadd_id, band)
-                (dat,mod,ie,chi,roi) = ims1[0]
-
-                sig1 = tim.sig1
-                plt.clf()
-                plt.imshow(dat, interpolation='nearest', origin='lower',
-                           cmap='gray', vmin=-3*sig1, vmax=10*sig1)
-                plt.colorbar()
-                plt.title('%s: data' % tag)
-                ps.savefig()
-                
-                plt.clf()
-                plt.imshow(mod, interpolation='nearest', origin='lower',
-                           cmap='gray', vmin=-3*sig1, vmax=10*sig1)
-                plt.colorbar()
-                plt.title('%s: model' % tag)
-                ps.savefig()
-
-                plt.clf()
-                plt.imshow(chi, interpolation='nearest', origin='lower',
-                cmap='gray', vmin=-5, vmax=+5)
-                plt.colorbar()
-                plt.title('%s: chi' % tag)
-                ps.savefig()
-
-            # Save results for this tile.
-            # the "keep" sources are at the beginning of the "subcat" list
-            flux_invvars[srci] = IV[:len(srci)].astype(np.float32)
-            print 'srci len:', len(srci)
-            print 'subcat len:', len(subcat)
-            for k in fskeys:
-                x = getattr(fs, k)
-                # fitstats are returned only for un-frozen sources
-                print 'fitstat', k, 'len:', len(x)
-                fitstats[k][srci] = np.array(x).astype(np.float32)[:len(srci)]
-
-        # Note, this is *outside* the loop over tiles.
-        # The fluxes are saved in the source objects, and will be set based on
-        # the 'tiledists' logic above.
-        nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
-        nm_ivar = flux_invvars
-        T.set(wband + '_nanomaggies', nm.astype(np.float32))
-        T.set(wband + '_nanomaggies_ivar', nm_ivar)
-        dnm = np.zeros(len(nm_ivar), np.float32)
-        okiv = (nm_ivar > 0)
-        dnm[okiv] = (1./np.sqrt(nm_ivar[okiv])).astype(np.float32)
-        okflux = (nm > 0)
-        mag = np.zeros(len(nm), np.float32)
-        mag[okflux] = (NanoMaggies.nanomaggiesToMag(nm[okflux])
-                       ).astype(np.float32)
-        dmag = np.zeros(len(nm), np.float32)
-        ok = (okiv * okflux)
-        dmag[ok] = (np.abs((-2.5 / np.log(10.)) * dnm[ok] / nm[ok])
-                    ).astype(np.float32)
-        mag[np.logical_not(okflux)] = np.nan
-        dmag[np.logical_not(ok)] = np.nan
-            
-        T.set(wband + '_mag', mag)
-        T.set(wband + '_mag_err', dmag)
-        for k in fskeys:
-            T.set(wband + '_' + k, fitstats[k])
-
-        # DEBUG
-        T.tiledists = tiledists
-
-    T.writeto(outfn)
+    W = unwise_forcedphot(cat, tiles, roiradecbox=roiradecbox,
+                          bands=opt.bands, unwise_dir=opt.unwise_dir,
+                          use_ceres=opt.ceres, ceres_block=opt.ceresblock,
+                          save_fits=opt.save_fits, ps=ps)
+    W.writeto(outfn)
     
 if __name__ == '__main__':
     main()

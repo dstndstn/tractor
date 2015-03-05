@@ -2589,6 +2589,15 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     T.nobs = nobs
     T.saturated = satur
     return dict(T = T)
+
+
+
+def stage_wise_forced_phot(
+    cat=None,
+    T=None,
+    targetwcs=None,
+    outdir=None):
+    from wise.forcedphot import *
     
 
 '''
