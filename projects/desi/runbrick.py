@@ -2724,7 +2724,7 @@ def stage_writecat(
     T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
                               WISE.w3_nanomaggies, WISE.w4_nanomaggies])
     T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
-                                   WISE.w3_nanomaggies_iar, WISE.w4_nanomaggies_ivar])
+                                   WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar])
     T2.wise_nobserve = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
                                   WISE.w3_pronexp, WISE.w4_pronexp])
     T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
