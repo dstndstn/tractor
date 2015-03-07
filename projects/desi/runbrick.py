@@ -717,6 +717,8 @@ FLAG_CPU_A   = 1
 FLAG_STEPS_A = 2
 FLAG_CPU_B   = 4
 FLAG_STEPS_B = 8
+FLAG_TRIED_C = 0x10
+FLAG_CPU_C   = 0x20
 
 def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                srcs, bands, plots, ps)):
@@ -1693,19 +1695,43 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         plotmodnames.append('All model selection')
         _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
 
-    ### 
-
-
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
     keepdeltas = [x for x,s in zip(delta_chisqs,srcs) if s is not None]
-    flags = [f for f,s in zip(flags, srcs) if s is not None]
+    flags = np.array([f for f,s in zip(flags, srcs) if s is not None])
     Isrcs = keepI
     srcs = keepsrcs
     delta_chisqs = keepdeltas
     subcat = Catalog(*srcs)
     subtr.catalog = subcat
+
+    ### Simultaneous re-opt.
+    if len(subcat) > 1 and len(subcat) <= 10:
+        tfit = Time()
+        # Optimize all at once?
+        subcat.thawAllParams()
+        print 'Optimizing:', subtr
+        subtr.printThawedParams()
+
+        flags |= FLAG_TRIED_C
+        max_cpu = 300.
+        cpu0 = time.clock()
+        for step in range(50):
+            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                          alphas=alphas)
+            print 'dlnp:', dlnp
+            cpu = time.clock()
+            performance[0].append(('All','J',step,dlnp,alpha,cpu-cpu0))
+            if cpu-cpu0 > max_cpu:
+                print 'Warning: Exceeded maximum CPU time for source'
+                flags |= FLAG_CPU_C
+                break
+            if dlnp < 0.1:
+                break
+        print 'Simultaneous fit took:', Time()-tfit
+
+
     
     # Variances
     srcinvvars = [[] for src in srcs]
