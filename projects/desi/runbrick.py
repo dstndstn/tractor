@@ -1693,6 +1693,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         plotmodnames.append('All model selection')
         _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
 
+    ### 
+
+
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
@@ -2552,7 +2555,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         ra  = np.array([src.getPosition().ra  for src in cat])
         dec = np.array([src.getPosition().dec for src in cat])
         ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
-        xy = np.vstack((xx,yy)).T
+        xy = np.vstack((xx - 1., yy - 1.)).T
         apimg = []
         apimgerr = []
         apres = []
