@@ -2439,7 +2439,7 @@ def stage_fitplots(
 
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
-                 outdir=None, T=None, cat=None, **kwargs):
+                 outdir=None, T=None, cat=None, pixscale=None, **kwargs):
 
     import photutils
 
@@ -2537,9 +2537,11 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         del coimg
         del comod
 
-        maxrad = 15.0 # maximum aperture radius [pixels]
-        apertures = [0.5, 1.0, 1.5, 2.0, 3.5, 5.0]
-
+        # Apertures, radii in ARCSEC.
+        apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+        apertures = apertures_arcsec / pixscale
+        print 'Apertures: (in pixels)', apertures
+        
         # Aperture photometry.
         invvar = cow
         resid = cowimg - cowmod
@@ -2635,7 +2637,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     T.nobs = nobs
     T.saturated = satur
-    return dict(T = T, AP=AP)
+    return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
 
 
 def stage_wise_forced(
@@ -2674,6 +2676,7 @@ def stage_writecat(
     T=None,
     WISE=None,
     AP=None,
+    apertures_arcsec=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
@@ -2736,10 +2739,10 @@ def stage_writecat(
     TT.apflux_resid_ivar_decam = np.zeros((len(TT), len(allbands), A), np.float32)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
-        TT.apflux_img_decam[:,iband,:] = AP.get('apflux_img_%s' % band)
-        TT.apflux_img_ivar_decam[:,iband,:] = AP.get('apflux_img_ivar_%s' % band)
-        TT.apflux_resid_decam[:,iband,:] = AP.get('apflux_resid_%s' % band)
-        TT.apflux_resid_ivar_decam[:,iband,:] = AP.get('apflux_resid_ivar_%s' % band)
+        TT.apflux_img_decam[:,i,:] = AP.get('apflux_img_%s' % band)
+        TT.apflux_img_ivar_decam[:,i,:] = AP.get('apflux_img_ivar_%s' % band)
+        TT.apflux_resid_decam[:,i,:] = AP.get('apflux_resid_%s' % band)
+        TT.apflux_resid_ivar_decam[:,i,:] = AP.get('apflux_resid_ivar_%s' % band)
 
     TT.rename('fracmasked', 'decam_fracmasked')
     TT.rename('saturated', 'decam_saturated')
@@ -2752,6 +2755,9 @@ def stage_writecat(
     hdr = version_header
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
+    for i,ap in enumerate(apertures_arcsec):
+        hdr.add_record(dict(name='APRAD%i' % i, value=ap,
+                            comment='Aperture radius, in arcsec'))
 
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
     T2.bx = (bx - 1.).astype(np.float32)
