@@ -68,13 +68,19 @@ CERES_INC ?=
 # /usr/local/lib/libamd.a \
 # -framework Accelerate
 
-CERES_LIB ?= -L/usr/local/lib -lceres -lglog \
-/usr/local/lib/libcxsparse.a \
-/usr/local/lib/libcholmod.a \
-/usr/local/lib/libcamd.a \
-/usr/local/lib/libcolamd.a \
-/usr/local/lib/libamd.a \
--framework Accelerate
+SUITESPARSE_LIB_DIR ?= /usr/local/lib
+
+SUITESPARSE_LIB ?= $(SUITESPARSE_LIB_DIR)/libcxsparse.a \
+	$(SUITESPARSE_LIB_DIR)/libcholmod.a \
+	$(SUITESPARSE_LIB_DIR)/libcamd.a \
+	$(SUITESPARSE_LIB_DIR)/libcolamd.a \
+	$(SUITESPARSE_LIB_DIR)/libamd.a
+
+BLAS_LIB ?= -framework Accelerate
+
+GLOG_LIB ?= -lglog
+CERES_LIB_DIR ?= /usr/local/lib
+CERES_LIB ?= -L$(CERES_LIB_DIR) -lceres $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LIB)
 
 
 # On Riemann:
