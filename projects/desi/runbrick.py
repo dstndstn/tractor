@@ -46,7 +46,8 @@ unwise_dir = 'unwise-coadds'
 def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
-    from tractor.ceres import ceres_opt
+    if useCeres:
+        from tractor.ceres import ceres_opt
 
 # Turn on/off caching for all new Tractor instances.
 def create_tractor(tims, srcs):
@@ -2440,6 +2441,8 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
                  outdir=None, T=None, cat=None, **kwargs):
 
+    import photutils
+
     if outdir is None:
         outdir = '.'
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
@@ -2467,7 +2470,9 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     coimgs = []
     comods = []
-    
+
+    AP = fits_table()
+
     for iband,band in enumerate(bands):
 
         cow    = np.zeros((H,W), np.float32)
@@ -2532,6 +2537,47 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         del coimg
         del comod
 
+        maxrad = 15.0 # maximum aperture radius [pixels]
+        apertures = [0.5, 1.0, 1.5, 2.0, 3.5, 5.0]
+
+        # Aperture photometry.
+        invvar = cow
+        resid = cowimg - cowmod
+        image = cowimg
+        with np.errstate(divide='ignore'):
+            imsigma = 1.0/np.sqrt(invvar)
+            imsigma[invvar == 0] = 0
+        ra  = np.array([src.getPosition().ra  for src in cat])
+        dec = np.array([src.getPosition().dec for src in cat])
+        ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
+        xy = np.vstack((xx,yy)).T
+        apimg = []
+        apimgerr = []
+        apres = []
+        apreserr = []
+        for rad in apertures:
+            aper = photutils.CircularAperture(xy, rad)
+            p = photutils.aperture_photometry(image, aper, error=imsigma)
+            apimg.append(p.field('aperture_sum'))
+            apimgerr.append(p.field('aperture_sum_err'))
+            p = photutils.aperture_photometry(resid, aper, error=imsigma)
+            apres.append(p.field('aperture_sum'))
+            apreserr.append(p.field('aperture_sum_err'))
+
+        AP.set('apflux_img_%s' % band, np.vstack(apimg).T)
+        AP.set('apflux_img_ivar_%s' % band, 1./(np.vstack(apimgerr).T)**2)
+        AP.set('apflux_resid_%s' % band, np.vstack(apres).T)
+        AP.set('apflux_resid_ivar_%s' % band, 1./(np.vstack(apreserr).T)**2)
+            
+        # remove aliases
+        del invvar
+        del resid
+        del image
+        del apimg
+        del apres
+        del apimgerr
+        del apreserr
+
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
         hdr = fitsio.FITSHDR()
@@ -2589,8 +2635,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     T.nobs = nobs
     T.saturated = satur
-    return dict(T = T)
-
+    return dict(T = T, AP=AP)
 
 
 def stage_wise_forced(
@@ -2618,7 +2663,6 @@ def stage_wise_forced(
     W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
                           unwise_dir=unwise_dir, use_ceres=useCeres)
     W.rename('tile', 'unwise_tile')
-    #T.add_columns_from(W)
     return dict(WISE=W)
     
 
@@ -2629,6 +2673,7 @@ def stage_writecat(
     version_header=None,
     T=None,
     WISE=None,
+    AP=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
@@ -2677,6 +2722,25 @@ def stage_writecat(
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
 
+    allbands = 'ugrizY'
+
+    # How many apertures?
+    ap = AP.get('apflux_img_%s' % bands[0])
+    print 'Aperture flux shape:', ap.shape
+    print 'T:', len(TT)
+    n,A = ap.shape
+    
+    TT.apflux_img_decam = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.apflux_img_ivar_decam = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.apflux_resid_decam = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.apflux_resid_ivar_decam = np.zeros((len(TT), len(allbands), A), np.float32)
+    for iband,band in enumerate(bands):
+        i = allbands.index(band)
+        TT.apflux_img_decam[:,iband,:] = AP.get('apflux_img_%s' % band)
+        TT.apflux_img_ivar_decam[:,iband,:] = AP.get('apflux_img_ivar_%s' % band)
+        TT.apflux_resid_decam[:,iband,:] = AP.get('apflux_resid_%s' % band)
+        TT.apflux_resid_ivar_decam[:,iband,:] = AP.get('apflux_resid_ivar_%s' % band)
+
     TT.rename('fracmasked', 'decam_fracmasked')
     TT.rename('saturated', 'decam_saturated')
 
@@ -2721,16 +2785,34 @@ def stage_writecat(
 
     #T2.add_columns_from(WISE)
 
+    # Convert WISE fluxes from Vega to AB.
+    # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
+    vega_to_ab = dict(w1=2.699,
+                      w2=3.339,
+                      w3=5.174,
+                      w4=6.620)
+
+    for band in [1,2,3,4]:
+        dm = vega_to_ab['w%i' % band]
+        print 'WISE', band
+        print 'dm', dm
+        fluxfactor = 10.** (dm / -2.5)
+        print 'flux factor', fluxfactor
+        f = WISE.get('w%i_nanomaggies' % band)
+        f *= fluxfactor
+        f = WISE.get('w%i_nanomaggies_ivar' % band)
+        f *= (1./fluxfactor**2)
+
     T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
-                              WISE.w3_nanomaggies, WISE.w4_nanomaggies])
+                              WISE.w3_nanomaggies, WISE.w4_nanomaggies]).T
     T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
-                                   WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar])
+                                   WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar]).T
     T2.wise_nobserve = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
-                                  WISE.w3_pronexp, WISE.w4_pronexp])
+                                  WISE.w3_pronexp, WISE.w4_pronexp]).T
     T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
-                                  WISE.w3_profracflux, WISE.w4_profracflux])
+                                  WISE.w3_profracflux, WISE.w4_profracflux]).T
     T2.wise_rchi2 = np.vstack([WISE.w1_prochi2, WISE.w2_prochi2,
-                               WISE.w3_prochi2, WISE.w4_prochi2])
+                               WISE.w3_prochi2, WISE.w4_prochi2]).T
 
     if catalogfn is not None:
         fn = catalogfn
@@ -2808,6 +2890,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
 
+    parser.add_option('--no-ceres', dest='ceres', default=True, action='store_false',
+                      help='Do not use Ceres Solver')
+
     opt,args = parser.parse_args()
 
     Time.add_measurement(MemMeas)
@@ -2817,6 +2902,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     else:
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+    global useCeres
+    useCeres = opt.ceres
 
     set_globals()
     
@@ -2837,9 +2925,10 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         kwargs.update(ps=ps)
 
     if opt.threads and opt.threads > 1:
-        mp = multiproc(opt.threads, init=runbrick_global_init)
+        mp = multiproc(opt.threads, init=runbrick_global_init,
+                       initargs=[])
     else:
-        mp = multiproc(init=runbrick_global_init)
+        mp = multiproc(init=runbrick_global_init, initargs=[])
     # ??
     kwargs.update(mp=mp)
 
