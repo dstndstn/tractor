@@ -52,8 +52,8 @@ if __name__ == '__main__':
 
     # EDR:
     # 535 bricks, ~7000 CCDs
-    # rlo,rhi = 240,245
-    # dlo,dhi =   5, 12
+    rlo,rhi = 240,245
+    dlo,dhi =   5, 12
 
     # 860 bricks
     # ~10,000 CCDs
@@ -67,9 +67,9 @@ if __name__ == '__main__':
     #rlo,rhi = 148.9, 151.2
     #dlo,dhi = 0.9, 3.5
 
-    # A nice well-behaved region
-    rlo,rhi = 243.6, 244.6
-    dlo,dhi = 8.1, 8.6
+    # A nice well-behaved region (EDR2/3)
+    # rlo,rhi = 243.6, 244.6
+    # dlo,dhi = 8.1, 8.6
 
     # DES Stripe82
     #rlo,rhi = 316., 6.
