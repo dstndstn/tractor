@@ -238,7 +238,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
                 blobindex = len(blobsrcs)
                 blobmap[blob] = blobindex
                 blobslices.append(dropslices[blob])
-                blobsrcs.append(np.array([]))
+                blobsrcs.append(np.array([], np.int64))
             # Expand the existing blob slice to encompass this new source
             oldslc = blobslices[blobindex]
             print 'Old slice:', oldslc
@@ -272,11 +272,12 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     bm[0] = -1
 
     # DEBUG
-    fitsio.write('blobs-before-%s.fits' % name, blobs, clobber=True)
-
+    if plots:
+        fitsio.write('blobs-before-%s.fits' % name, blobs, clobber=True)
     blobs = bm[blobs]
 
-    fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
+    if plots:
+        fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
 
     if plots:
         from astrometry.util.plotutils import dimshow

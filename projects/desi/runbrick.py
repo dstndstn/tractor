@@ -367,6 +367,14 @@ def stage_srcs(coimgs=None, cons=None,
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
                                                           ps=ps, plots=plots)
 
+    for i,Isrcs in enumerate(blobsrcs):
+        #print 'Isrcs dtype', Isrcs.dtype
+        if not (Isrcs.dtype in [int, np.int64]):
+            print 'Isrcs dtype', Isrcs.dtype
+            print 'i:', i
+            print 'Isrcs:', Isrcs
+            print 'blobslice:', blobslices[i]
+
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
@@ -698,7 +706,6 @@ def _blob_iter(blobslices, blobsrcs, blobs,
 
         # Here we assume the "blobs" array has been remapped...
         blobmask = (blobs[bslc] == iblob)
-        #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                [cat[i] for i in Isrcs], bands, plots, ps)
