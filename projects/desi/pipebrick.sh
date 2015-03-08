@@ -31,7 +31,7 @@ mkdir -p $outdir/logs
 #python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir > $outdir/logs/$brick.log 2>&1
 python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 8 > $outdir/logs/$brick.log 2>&1
 
-# with 8 threads: 3 GB per core * 8 cores
+# with 8 threads: 3 GB per core * 8 cores (most of the carver nodes have 24 GB)
 # qdo launch bricks 1 --batchopts "-l pvmem=3GB -l nodes=1:ppn=8 -A desi -t 1-20 -q regular" --walltime=48:00:00 --script projects/desi/pipebrick.sh
 
 # qdo launch bricks 1 --batchopts "-l pvmem=6GB -A cosmo -t 1-20 -q serial" --walltime=24:00:00 --script projects/desi/pipebrick.sh --verbose

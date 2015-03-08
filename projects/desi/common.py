@@ -469,13 +469,28 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                           nsigma=5.,
                           saddle=2.,
                           ps=None):
+    from astrometry.util.ttime import Time
                           
     '''
     detmaps: list of detmaps, same order as "bands"
     detivs :    ditto
     
     '''
+    t0 = Time()
     H,W = detmaps[0].shape
+
+    allzero = True
+    for iband,band in enumerate(bands):
+        if sed[iband] == 0:
+            continue
+        if np.all(detivs[iband] == 0):
+            continue
+        allzero = False
+        break
+    if allzero:
+        print 'SED', sedname, 'has all zero weight'
+        return None,None,None
+
     sedmap = np.zeros((H,W), np.float32)
     sediv  = np.zeros((H,W), np.float32)
     for iband,band in enumerate(bands):
@@ -492,8 +507,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         sediv  += detivs [iband] / sed[iband]**2
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
-
+    
     peaks = (sedsn > nsigma)
+    print 'SED sn:', Time()-t0
+    t0 = Time()
 
     if ps is not None:
         pkbounds = binary_dilation(peaks) - peaks
@@ -521,6 +538,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,2:  ])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,0:-2])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,2:  ])
+    print 'Peaks:', Time()-t0
+    t0 = Time()
 
     # Ok, now for each peak (in decreasing order of peak height):
     #  -find the image area that is "saddle" sigma lower than the peak.
@@ -535,23 +554,54 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         drop = max(saddle, Y * 0.1)
         return Y - drop
 
+    print len(xomit), 'points to omit'
+
+    allblobs,nblobs = label(sedsn > nsigma)
+    allslices = find_objects(allblobs)
+    ally0 = [sy.start for sy,sx in allslices]
+    allx0 = [sx.start for sy,sx in allslices]
+
+    badpix = (sediv == 0)
+    badblobs,nblobs = label(badpix)
+    badslices = find_objects(badblobs)
+    margin = 5
+    for i,(sy,sx) in enumerate(badslices):
+        y0,y1, x0,x1 = sy.start,sy.stop, sx.start,sx.stop
+        y0 = max(y0-margin, 0)
+        y1 = min(y1+margin, H)
+        x0 = max(x0-margin, 0)
+        x1 = min(x1+margin, W)
+        badslices[i] = slice(y0,y1), slice(x0,x1)
+
     for x,y in zip(xomit, yomit):
+        #t0 = Time()
         if sedsn[y,x] > nsigma:
+            #print 'saddle',
+            blob = allblobs[y,x]
+            index = blob - 1
+            slc = allslices[index]
             level = saddle_level(sedsn[y,x])
-            blobs,nblobs = label(sedsn > level)
-            omitmap |= (blobs == blobs[y,x])
+            blobs,nblobs = label(sedsn[slc] > level)
+            omitmap[slc] |= (blobs == blobs[y - ally0[index], x - allx0[index]])
+
         elif sediv[y,x] == 0:
+            #print 'satur',
             # Nil pixel... possibly saturated.  Mask the whole region.
-            badpix = (sediv == 0)
-            blobs,nblobs = label(badpix)
             #print 'Blobs:', blobs.shape, blobs.dtype
-            badpix = (blobs == blobs[y,x])
+            blob = badblobs[y,x]
+            index = blob - 1
+            slc = badslices[index]
+            badpix = (badblobs[slc] == blob)
             badpix = binary_dilation(badpix, iterations=5)
-            omitmap |= badpix
+            omitmap[slc] |= badpix
         else:
+            #print 'other',
             # omit a 3x3 box around the peak
             omitmap[np.clip(y-1,0,H-1): np.clip(y+2,0,H),
                     np.clip(x-1,0,W-1): np.clip(x+2,0,W)] = True
+        #print Time()-t0
+    print 'Omit map:', Time()-t0
+    t0 = Time()
 
     # find peaks, sort by flux
     py,px = np.nonzero(peaks)
@@ -581,7 +631,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.axis(ax)
         plt.title('SED %s: keep (green) peaks' % sedname)
         ps.savefig()
-    
+
+    t0 = Time()
     for i,(x,y) in enumerate(zip(px, py)):
         if not keep[i]:
             continue
@@ -596,6 +647,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             continue
         
         omitmap |= saddleblob
+    print 'Omit:', Time()-t0
+    t0 = Time()
 
     if ps is not None:
         plt.clf()
@@ -903,7 +956,9 @@ def sed_matched_filters(bands):
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
                             targetwcs,
-                            plots=False, ps=None):
+                            plots=False, ps=None, mp=None):
+    from astrometry.util.ttime import Time
+
     if omit_xy is not None:
         xx,yy = omit_xy
         n0 = len(xx)
@@ -913,14 +968,23 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
 
     H,W = detmaps[0].shape
     hot = np.zeros((H,W), np.float32)
+
+    #if mp is not None:
+    #    R = mp.map(_run_sed, [(sedname, sed, detmaps, detivs, bands, xx, yy
+
+
     for sedname,sed in SEDs:
         print 'SED', sedname
         if plots:
             pps = ps
         else:
             pps = None
+        t0 = Time()
         sedsn,px,py = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
+        print 'SED took', Time()-t0
+        if sedsn is None:
+            continue
         print len(px), 'new peaks'
         hot = np.maximum(hot, sedsn)
         xx = np.append(xx, px)

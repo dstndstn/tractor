@@ -334,7 +334,7 @@ def stage_srcs(coimgs=None, cons=None,
     SEDs = sed_matched_filters(bands)
     Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
                                               (T.itx,T.ity), targetwcs, plots=plots,
-                                              ps=ps)
+                                              ps=ps, mp=mp)
     Nsdss = len(T)
     T = merge_tables([T,Tnew], columns='fillzero')
     cat.extend(newcat)
@@ -2585,20 +2585,16 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         apimg = []
         apimgerr = []
         apres = []
-        apreserr = []
         for rad in apertures:
             aper = photutils.CircularAperture(xy, rad)
             p = photutils.aperture_photometry(image, aper, error=imsigma)
             apimg.append(p.field('aperture_sum'))
             apimgerr.append(p.field('aperture_sum_err'))
-            p = photutils.aperture_photometry(resid, aper, error=imsigma)
+            p = photutils.aperture_photometry(resid, aper)
             apres.append(p.field('aperture_sum'))
-            apreserr.append(p.field('aperture_sum_err'))
-
         AP.set('apflux_img_%s' % band, np.vstack(apimg).T)
         AP.set('apflux_img_ivar_%s' % band, 1./(np.vstack(apimgerr).T)**2)
         AP.set('apflux_resid_%s' % band, np.vstack(apres).T)
-        AP.set('apflux_resid_ivar_%s' % band, 1./(np.vstack(apreserr).T)**2)
             
         # remove aliases
         del invvar
@@ -2607,7 +2603,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         del apimg
         del apres
         del apimgerr
-        del apreserr
 
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
@@ -2762,16 +2757,14 @@ def stage_writecat(
     print 'T:', len(TT)
     n,A = ap.shape
     
-    TT.apflux_img_decam = np.zeros((len(TT), len(allbands), A), np.float32)
-    TT.apflux_img_ivar_decam = np.zeros((len(TT), len(allbands), A), np.float32)
-    TT.apflux_resid_decam = np.zeros((len(TT), len(allbands), A), np.float32)
-    TT.apflux_resid_ivar_decam = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.decam_apflux = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.decam_apflux_ivar = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.decam_apflux_resid = np.zeros((len(TT), len(allbands), A), np.float32)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
-        TT.apflux_img_decam[:,i,:] = AP.get('apflux_img_%s' % band)
-        TT.apflux_img_ivar_decam[:,i,:] = AP.get('apflux_img_ivar_%s' % band)
-        TT.apflux_resid_decam[:,i,:] = AP.get('apflux_resid_%s' % band)
-        TT.apflux_resid_ivar_decam[:,i,:] = AP.get('apflux_resid_ivar_%s' % band)
+        TT.decam_apflux[:,i,:] = AP.get('apflux_img_%s' % band)
+        TT.decam_apflux_ivar[:,i,:] = AP.get('apflux_img_ivar_%s' % band)
+        TT.decam_apflux_resid[:,i,:] = AP.get('apflux_resid_%s' % band)
 
     TT.rename('fracmasked', 'decam_fracmasked')
     TT.rename('saturated', 'decam_saturated')
@@ -2866,14 +2859,16 @@ def stage_writecat(
 
     sfd = SFDMap()
     filts = ['%s %s' % ('DES', f) for f in allbands]
-    # T2.decam_extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
-
     wisebands = ['WISE W1', 'WISE W2', 'WISE W3', 'WISE W4']
     ebv,ext = sfd.extinction(filts + wisebands, T2.ra, T2.dec, get_ebv=True)
     ext = ext.astype(np.float32)
-    T2.decam_extinction = ext[:,:len(allbands)]
-    T2.wise_extinction = ext[:,len(allbands):]
+    
+    decam_extinction = ext[:,:len(allbands)]
+    wise_extinction = ext[:,len(allbands):]
     T2.ebv = ebv.astype(np.float32)
+
+    T2.decam_mw_transmission = 10.**(-decam_extinction / 2.5)
+    T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
     
     T2.writeto(fn, header=hdr)
     print 'Wrote', fn, 'with extinction'
