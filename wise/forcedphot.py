@@ -30,7 +30,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
     wantims = ((ps is not None) or save_fits)
     wanyband = 'w'
 
-    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp']
+    fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix', 'pronexp' ]
 
     Nsrcs = len(cat)
     phot = fits_table()
@@ -45,10 +45,11 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
 
         # The tiles have some overlap, so for each source, keep the
         # fit in the tile whose center is closest to the source.
-        tiledists = np.empty(len(cat))
+        tiledists = np.empty(Nsrcs)
         tiledists[:] = 1e100
-        flux_invvars = np.zeros(len(cat), np.float32)
-        fitstats = dict([(k, np.zeros(len(cat), np.float32)) for k in fskeys])
+        flux_invvars = np.zeros(Nsrcs, np.float32)
+        fitstats = dict([(k, np.zeros(Nsrcs, np.float32)) for k in fskeys])
+        nexp = np.zeros(Nsrcs, np.int16)
 
         for tile in tiles:
             print 'Reading tile', tile.coadd_id
@@ -89,11 +90,13 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
             # Source indices (in the full "cat") to keep (the fit values for)
             srci = I[keep]
 
-            phot.tile[srci] = tile.coadd_id
-
             if not len(srci):
                 print 'No sources to be kept; skipping.'
                 continue
+
+            phot.tile[srci] = tile.coadd_id
+            nexp[srci] = tim.nuims[np.clip(np.round(y[keep]).astype(int), 0, H-1),
+                                   np.clip(np.round(x[keep]).astype(int), 0, W-1)]
 
             # Source indices in the margins
             margi = I[np.logical_not(keep)]
@@ -212,6 +215,7 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
         phot.set(wband + '_mag_err', dmag)
         for k in fskeys:
             phot.set(wband + '_' + k, fitstats[k])
+        phot.set('w%i_nexp' % band, nexp)
 
         # DEBUG
         #phot.tiledists = tiledists

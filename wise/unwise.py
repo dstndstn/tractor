@@ -84,6 +84,7 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     ivfn = base + 'invvar-%s.fits.gz' % mu
     #ppfn = base + 'std-%s.fits.gz'    % mu
     nifn = base + 'n-%s.fits.gz'      % mu
+    nufn = base + 'n-u.fits.gz'
 
     print 'Reading', imfn
     wcs = Tan(imfn)
@@ -119,6 +120,13 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     #pp = fitsio.FITS(ppfn)[0][roislice]
     print 'Reading', nifn
     nims = fitsio.FITS(nifn)[0][roislice]
+
+    if nufn == nifn:
+        nuims = nims
+    else:
+        print 'Reading', nufn
+        nuims = fitsio.FITS(nufn)[0][roislice]
+
     #print 'Median # ims:', np.median(nims)
     good = (nims > 0)
     invvar[np.logical_not(good)] = 0.
@@ -146,5 +154,6 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     tim.sig1 = sig1
     tim.roi = roi
     tim.nims = nims
+    tim.nuims = nuims
     return tim
 

@@ -171,7 +171,8 @@ def debug_worker(inqueue, outqueue, progressqueue,
     if hasattr(inqueue, '_writer'):
         inqueue._writer.close()
         outqueue._reader.close()
-        progressqueue._reader.close()
+        if progressqueue is not None:
+            progressqueue._reader.close()
         
     if initializer is not None:
         initializer(*initargs)
@@ -327,13 +328,14 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
                 break
 
             print 'N queue:', nqueued, 'max', maxnqueued
-            while maxnqueued and nqueued >= maxnqueued:
-                try:
-                    (job,i,pid) = progressqueue.get()
-                    print 'Job', job, 'element', i, 'pid', pid, 'started'
-                    nqueued -= 1
-                except IOError:
-                    break
+            if progressqueue is not None:
+                while maxnqueued and nqueued >= maxnqueued:
+                    try:
+                        (job,i,pid) = progressqueue.get()
+                        print 'Job', job, 'element', i, 'pid', pid, 'started'
+                        nqueued -= 1
+                    except IOError:
+                        break
 
         else:
             if set_length:
@@ -362,14 +364,15 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
     # 
 
     # Empty the progressqueue to prevent blocking writing workers?
-    print 'task thread: emptying progressqueue'
-    try:
-        print 'task thread: reading from progressqueue.  nqueued=', nqueued
-        (job,i,pid) = progressqueue.get()
-        print 'Job', job, 'element', i, 'pid', pid, 'started'
-        nqueued -= 1
-    except IOError:
-        pass
+    if progressqueue is not None:
+        print 'task thread: emptying progressqueue'
+        try:
+            print 'task thread: reading from progressqueue.  nqueued=', nqueued
+            (job,i,pid) = progressqueue.get()
+            print 'Job', job, 'element', i, 'pid', pid, 'started'
+            nqueued -= 1
+        except IOError:
+            pass
     print 'Task thread done.'
     
 
