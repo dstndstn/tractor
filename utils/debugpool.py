@@ -57,7 +57,6 @@ from astrometry.util.ttime import CpuMeas
 
 import _multiprocessing
 import cPickle as pickle
-#import pickle
 import time
 
 class DebugConnection():
@@ -628,18 +627,18 @@ class DebugPool(mp.pool.Pool):
             )
 
 
-class iterwrapper(object):
-    def __init__(self, y, n):
-        self.n = n
-        self.y = y
-    def __str__(self):
-        return 'iterwrapper: n=%i; ' % self.n + self.y
-    def __iter__(self):
-        return self
-    def next(self):
-        return self.y.next()
-    def __len__(self):
-        return self.n
+# class iterwrapper(object):
+#     def __init__(self, y, n):
+#         self.n = n
+#         self.y = y
+#     def __str__(self):
+#         return 'iterwrapper: n=%i; ' % self.n + self.y
+#     def __iter__(self):
+#         return self
+#     def next(self):
+#         return self.y.next()
+#     def __len__(self):
+#         return self.n
     
 
 if __name__ == '__main__':

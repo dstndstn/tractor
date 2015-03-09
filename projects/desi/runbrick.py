@@ -250,6 +250,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'pixscale', pixscale
 
     T = decals.ccds_touching_wcs(targetwcs)
+    print len(T), 'CCDs touching target WCS'
+
     # Sort by band
     T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
 
@@ -2971,8 +2973,15 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         kwargs.update(ps=ps)
 
     if opt.threads and opt.threads > 1:
-        mp = multiproc(opt.threads, init=runbrick_global_init,
-                       initargs=[])
+
+        from utils.debugpool import DebugPool, DebugPoolMeas
+        pool = DebugPool(opt.threads, initializer=runbrick_global_init,
+                         initargs=[])
+        Time.add_measurement(DebugPoolMeas(pool))
+        mp = multiproc(None, pool=pool)
+
+        #mp = multiproc(opt.threads, init=runbrick_global_init,
+        #               initargs=[])
     else:
         mp = multiproc(init=runbrick_global_init, initargs=[])
     # ??
