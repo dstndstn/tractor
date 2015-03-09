@@ -565,7 +565,7 @@ def stage_fitblobs_finish(
     del performance
 
     from desi_common import prepare_fits_catalog
-    from astrometry.util.file import *
+    from astrometry.util.file import pickle_to_file
     
     hdr = fitsio.FITSHDR()
     TT = T.copy()
@@ -2896,7 +2896,7 @@ def stage_writecat(
 
 
 def main():
-    from astrometry.util.stages import *
+    from astrometry.util.stages import CallGlobalTime, runstage
     import optparse
     import logging
     from astrometry.util.multiproc import multiproc

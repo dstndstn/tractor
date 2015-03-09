@@ -10,6 +10,10 @@ echo "Environment:"
 set
 echo
 
+echo
+ulimit -a
+echo
+
 # 
 # echo MKL $MKL
 # echo MKL_HOME $MKL_HOME
@@ -29,7 +33,9 @@ mkdir -p $outdir/logs
 
 #python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir > $outdir/logs/$brick.log 2>&1
 
-python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 8 > $outdir/logs/$brick.log 2>&1
+echo "\nStarting on $(hostname)\n" > $outdir/logs/$brick.log
+
+python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 8 >> $outdir/logs/$brick.log 2>&1
 
 # Try 8 threads on edison nodes (packing 3 of those per 24-core node)?
 #qdo launch bricks 3 --mpack 8 --batchopts "-A desi -t 1-10" --walltime=24:00:00 --script projects/desi/pipebrick-edison.sh --batchqueue regular
