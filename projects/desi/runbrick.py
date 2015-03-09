@@ -210,12 +210,21 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
-    hdr.add_record(dict(name='DECALSRE', value='pre-EDR2',
+    hdr.add_record(dict(name='DECALSDR', value='EDR4',
                         comment='DECaLS release name'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
                         comment='%s run time' % program_name))
     hdr.add_record(dict(name='SURVEY', value='DECaLS',
                         comment='DECam Legacy Survey'))
+
+    import socket
+    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
+                        comment='NERSC machine where runbrick.py was run'))
+
     version_header = hdr
 
     if brickid is not None:
