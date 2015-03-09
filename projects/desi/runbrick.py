@@ -2653,18 +2653,20 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         hdr.delete('IMAGEW')
         hdr.delete('IMAGEH')
         
-        for name,img in [('image',  cowimg),
-                         ('invvar', cow),
-                         ('model',  cowmod),
-                         ('chi2',   cochi2),
-                         ('depth',  detiv),
-                         ('nexp',   congood),
-                         ]:
+        for name,img,gzip in [('image',  cowimg, False),
+                              ('invvar', cow, False),
+                              ('model',  cowmod, True),
+                              ('chi2',   cochi2, False),
+                              ('depth',  detiv, True),
+                              ('nexp',   congood, True),
+                              ]:
 
             hdr.add_record(dict(name='IMTYPE', value=name,
                                 comment='DECaLS image type'))
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
+            if gzip:
+                fn += '.gz'
             fitsio.write(fn, img, clobber=True, header=hdr)
             print 'Wrote', fn
 
