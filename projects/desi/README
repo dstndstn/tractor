@@ -56,3 +56,13 @@ want 3
 9 x 30s:
   312836, 312837, 312838, 312839, 313853, 314039, 314043, 314047,
   314051
+
+
+
+--------------------- EDR4 / DR1 CPU usage ----------------------
+March 9 AM:
+
+Repo	Type	Repo Balance    My Usage   My Balance
+cosmo	REPO	134,315	          547	    35,453
+desi	REPO	3,967,855          17	   799,983
+

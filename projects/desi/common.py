@@ -639,15 +639,20 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             continue
 
         level = saddle_level(sedsn[y,x])
-        blobs,nblobs = label(sedsn > level)
-        saddleblob = (blobs == blobs[y,x])
+
+        ablob = allblobs[y,x]
+        index = ablob - 1
+        slc = allslices[index]
+
+        blobs,nblobs = label(sedsn[slc] > level)
+        saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
         # ???
         # this source's blob touches the omit map
-        if np.any(saddleblob & omitmap):
+        if np.any(saddleblob & omitmap[slc]):
             keep[i] = False
             continue
         
-        omitmap |= saddleblob
+        omitmap[slc] |= saddleblob
     print 'Omit:', Time()-t0
     t0 = Time()
 
