@@ -2944,6 +2944,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--no-ceres', dest='ceres', default=True, action='store_false',
                       help='Do not use Ceres Solver')
 
+    print
+    print 'runbrick.py starting at', datetime.datetime.now().isoformat()
+    print 'Command-line args:', sys.argv
+    print
+
     opt,args = parser.parse_args()
 
     Time.add_measurement(MemMeas)

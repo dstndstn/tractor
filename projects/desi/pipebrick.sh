@@ -33,7 +33,7 @@ mkdir -p $outdir/logs
 
 #python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir > $outdir/logs/$brick.log 2>&1
 
-echo "\nStarting on $(hostname)\n" > $outdir/logs/$brick.log
+echo -e "\nStarting on $(NERSC_HOST) $(hostname)\n" > $outdir/logs/$brick.log
 
 python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 8 >> $outdir/logs/$brick.log 2>&1
 
