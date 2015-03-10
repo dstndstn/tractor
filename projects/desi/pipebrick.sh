@@ -28,9 +28,10 @@ echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" > $outdir/logs/$brick.log
 
 python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 6 >> $outdir/logs/$brick.log 2>&1
 
+# Edison: 6 threads per job, 4 jobs per node = 24 cores.
+# here we ask for 4 nodes * 4 jobs = 16 jobs total.
+# qdo launch bricks 16 --mpack 6 --batchopts "-A desi" --walltime=4:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
 
-# Try 8 threads on edison nodes (packing 3 of those per 24-core node)?
-#qdo launch bricks 3 --mpack 8 --batchopts "-A desi -t 1-10" --walltime=24:00:00 --script projects/desi/pipebrick-edison.sh --batchqueue regular
 
 # with 8 threads: 3 GB per core * 8 cores (most of the carver nodes have 24 GB)
 # qdo launch bricks 1 --batchopts "-l pvmem=3GB -l nodes=1:ppn=8 -A desi -t 1-20 -q regular" --walltime=48:00:00 --script projects/desi/pipebrick.sh
