@@ -210,7 +210,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
                         comment='DECaLS version'))
-    hdr.add_record(dict(name='DECALSDR', value='EDR4',
+    hdr.add_record(dict(name='DECALSDR', value='DR1',
                         comment='DECaLS release name'))
     hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
                         comment='%s run time' % program_name))

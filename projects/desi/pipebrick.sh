@@ -14,7 +14,6 @@ echo
 ulimit -a
 echo
 
-# 
 # echo MKL $MKL
 # echo MKL_HOME $MKL_HOME
 # echo LD_LIBRARY_PATH $LD_LIBRARY_PATH
@@ -28,14 +27,13 @@ export MKL_NUM_THREADS=1
 
 brick="$1"
 
-outdir=edr4
+# $SCRATCH/dr1
+outdir=/scratch1/scratchdirs/dstn/dr1
 mkdir -p $outdir/logs
-
-#python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir > $outdir/logs/$brick.log 2>&1
 
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" > $outdir/logs/$brick.log
 
-python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 8 >> $outdir/logs/$brick.log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 6 >> $outdir/logs/$brick.log 2>&1
 
 # Try 8 threads on edison nodes (packing 3 of those per 24-core node)?
 #qdo launch bricks 3 --mpack 8 --batchopts "-A desi -t 1-10" --walltime=24:00:00 --script projects/desi/pipebrick-edison.sh --batchqueue regular
