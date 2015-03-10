@@ -1532,7 +1532,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 thisflags |= FLAG_STEPS_B
 
             # print 'New source (after optimization):', newsrc
-            # lnp = srctractor.getLogProb()
             # print 'Optimized log-prob:', lnp
             # print 'vs original src:   ', lnp - lnp0
 
@@ -1548,6 +1547,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(None)
             disable_galaxy_cache()
 
+            lnp = srctractor.getLogProb()
             lnps[name] = lnp
             all_models[i][name] = newsrc.copy()
             allflags[name] = thisflags
@@ -1716,7 +1716,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         for step in range(50):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
-            print 'dlnp:', dlnp
+            #print 'dlnp:', dlnp
             cpu = time.clock()
             performance[0].append(('All','J',step,dlnp,alpha,cpu-cpu0))
             if cpu-cpu0 > max_cpu:
