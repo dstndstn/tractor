@@ -180,10 +180,9 @@ def debug_worker(inqueue, outqueue, progressqueue,
     mypid = os.getpid()
         
     completed = 0
-    t0 = time.time()
+    #t0 = time.time()
     while maxtasks is None or (maxtasks and completed < maxtasks):
-        #t0 = time.time()
-        print 'PID %i @ %f: get task' % (os.getpid(), time.time()-t0)
+        #print 'PID %i @ %f: get task' % (os.getpid(), time.time()-t0)
         try:
             # print 'Worker pid', os.getpid(), 'getting task'
             task = get()
@@ -201,7 +200,7 @@ def debug_worker(inqueue, outqueue, progressqueue,
             debug('worker got sentinel -- exiting')
             break
 
-        print 'PID %i @ %f: unpack task' % (os.getpid(), time.time()-t0)
+        # print 'PID %i @ %f: unpack task' % (os.getpid(), time.time()-t0)
         job, i, func, args, kwds = task
 
         if progressqueue is not None:
@@ -213,7 +212,7 @@ def debug_worker(inqueue, outqueue, progressqueue,
                 break
 
         t1 = CpuMeas()
-        print 'PID %i @ %f: run task' % (os.getpid(), time.time()-t0)
+        #print 'PID %i @ %f: run task' % (os.getpid(), time.time()-t0)
         try:
             success,val = (True, func(*args, **kwds))
         except Exception as e:
@@ -225,12 +224,12 @@ def debug_worker(inqueue, outqueue, progressqueue,
             #print type(e)
             put((None, None, (None,(False,e))))
             raise
-        print 'PID %i @ %f: ran task' % (os.getpid(), time.time()-t0)
+        #print 'PID %i @ %f: ran task' % (os.getpid(), time.time()-t0)
         t2 = CpuMeas()
         dt = (t2.cpu_seconds_since(t1), t2.wall_seconds_since(t1))
         put((job, i, dt,(success,val)))
         completed += 1
-        print 'PID %i @ %f: sent result' % (os.getpid(), time.time()-t0)
+        #print 'PID %i @ %f: sent result' % (os.getpid(), time.time()-t0)
     debug('worker exiting after %d tasks' % completed)
 
         
