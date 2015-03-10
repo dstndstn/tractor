@@ -2602,9 +2602,15 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
             apimgerr.append(p.field('aperture_sum_err'))
             p = photutils.aperture_photometry(resid, aper)
             apres.append(p.field('aperture_sum'))
-        AP.set('apflux_img_%s' % band, np.vstack(apimg).T)
-        AP.set('apflux_img_ivar_%s' % band, 1./(np.vstack(apimgerr).T)**2)
-        AP.set('apflux_resid_%s' % band, np.vstack(apres).T)
+        ap = np.vstack(apimg).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_%s' % band, ap)
+        ap = 1./(np.vstack(apimgerr).T)**2)
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_ivar_%s' % band, ap)
+        ap = np.vstack(apres).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_resid_%s' % band, ap)
             
         # remove aliases
         del invvar
@@ -2613,6 +2619,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         del apimg
         del apres
         del apimgerr
+        del ap
 
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
