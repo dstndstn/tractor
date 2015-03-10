@@ -1654,8 +1654,6 @@ class Tractor(MultiParams):
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
 
-            print '  stepped with alpha', alpha, 'and got dlnp', pAfter-pBefore
-
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
                 break
@@ -2219,7 +2217,7 @@ class Tractor(MultiParams):
             #np.seterr(all='warn')
             
             # Run lsqr()
-            logmsg('LSQR: %i cols (%i unique), %i elements' %
+            logverb('LSQR: %i cols (%i unique), %i elements' %
                    (Ncols, len(ucols), len(spvals)-1))
     
             # print 'A matrix:'
@@ -2228,11 +2226,11 @@ class Tractor(MultiParams):
             # print 'vector b:'
             # print b
             
-            t0 = time.clock()
+            #t0 = time.clock()
             (X, istop, niters, r1norm, r2norm, anorm, acond,
              arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
-            t1 = time.clock()
-            logmsg('  %.1f seconds' % (t1-t0))
+            #t1 = time.clock()
+            #logverb('  %.1f seconds' % (t1-t0))
 
             del A
             del b
