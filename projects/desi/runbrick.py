@@ -445,6 +445,8 @@ def stage_fitblobs(T=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    **kwargs):
+    print 'Multiproc:', mp
+
     for tim in tims:
         assert(np.all(np.isfinite(tim.getInvError())))
 
@@ -2982,8 +2984,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         ps.skipto(opt.plot_number)
         kwargs.update(ps=ps)
 
+    global mp
     if opt.threads and opt.threads > 1:
-
         from utils.debugpool import DebugPool, DebugPoolMeas
         pool = DebugPool(opt.threads, initializer=runbrick_global_init,
                          initargs=[])
