@@ -2605,7 +2605,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         ap = np.vstack(apimg).T
         ap[np.logical_not(np.isfinite(ap))] = 0.
         AP.set('apflux_img_%s' % band, ap)
-        ap = 1./(np.vstack(apimgerr).T)**2)
+        ap = 1./(np.vstack(apimgerr).T)**2
         ap[np.logical_not(np.isfinite(ap))] = 0.
         AP.set('apflux_img_ivar_%s' % band, ap)
         ap = np.vstack(apres).T
