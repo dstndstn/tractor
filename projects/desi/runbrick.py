@@ -1327,6 +1327,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         
         src = subcat[i]
         #print
+        print 'Model selection for source %i of %i in blob' % (numi, len(Ibright))
         #print 'Model selection for source', src
 
         # if plots:

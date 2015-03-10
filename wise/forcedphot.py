@@ -195,6 +195,11 @@ def unwise_forcedphot(cat, tiles, bands=[1,2,3,4], roiradecbox=None, unwise_dir=
         # the 'tiledists' logic above.
         nm = np.array([src.getBrightness().getBand(wanyband) for src in cat])
         nm_ivar = flux_invvars
+
+        # Sources out of bounds, eg, never change from their default
+        # (1-sigma or whatever) initial fluxes.  Zero them out instead.
+        nm[nm_ivar == 0] = 0.
+
         phot.set(wband + '_nanomaggies', nm.astype(np.float32))
         phot.set(wband + '_nanomaggies_ivar', nm_ivar)
         dnm = np.zeros(len(nm_ivar), np.float32)

@@ -1675,7 +1675,7 @@ class Tractor(MultiParams):
             self.setParams(p0)
             return 0, 0.
 
-        logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+        logverb('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
         pa = [p + alphaBest * d for p,d in zip(p0, X)]
         self.setParams(pa)
         return pBest - pBefore, alphaBest
