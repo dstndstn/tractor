@@ -814,8 +814,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             btims.append(tim)
         btr = Tractor(btims, subcat)
         btr.freezeParam('images')
-        print 'Optimizing band', b, ':', btr
-        print Time()-tband
+        # print 'Optimizing band', b, ':', btr
+        # print Time()-tband
         if useCeres:
             btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
                                            use_ceres=True, BW=8, BH=8, wantims=False)
@@ -829,7 +829,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 traceback.print_exc()
                 # carry on
             
-        print 'Band', b, 'took', Time()-tband
+        # print 'Band', b, 'took', Time()-tband
     subcat.thawAllRecursive()
 
     if plots:
@@ -868,7 +868,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         initial_models = []
 
         # Create initial models for each tim x each source
-        tt = Time()
+        #tt = Time()
         for tim in subtims:
             mods = []
             for src in subcat:
@@ -884,14 +884,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                         assert(np.all(np.isfinite(mod.patch)))
                         mod.addTo(tim.getImage(), scale=-1)
             initial_models.append(mods)
-        print 'Subtracting initial models:', Time()-tt
+        #print 'Subtracting initial models:', Time()-tt
 
         # For sources, in decreasing order of brightness
         for numi,i in enumerate(Ibright):
             tsrc = Time()
             print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             src = subcat[i]
-            print src
+            # print src
 
             # Add this source's initial model back in.
             for tim,mods in zip(subtims, initial_models):
@@ -972,9 +972,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # src.getBrightness().thawAllParams()
             # src.thawAllParams()
 
-            print 'Optimizing:', srctractor
-            srctractor.printThawedParams()
-            print 'Tim shapes:', [tim.shape for tim in srctims]
+            # print 'Optimizing:', srctractor
+            # srctractor.printThawedParams()
+            # print 'Tim shapes:', [tim.shape for tim in srctims]
 
             if plots:
                 spmods,spnames = [],[]
@@ -997,7 +997,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp, 'src', src
+                # print 'dlnp:', dlnp, 'src', src
 
                 if DEBUG:
                     params.append((srctractor.getLogProb(), srctractor.getParams()))
@@ -1208,7 +1208,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             disable_galaxy_cache()
 
             print 'Fitting source took', Time()-tsrc
-            print src
+            #print src
 
         for tim,img in zip(subtims, orig_timages):
             tim.data = img
@@ -1223,16 +1223,16 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             print subcat[i]
             subcat.freezeAllBut(i)
-            print 'Optimizing:', subtr
-            subtr.printThawedParams()
+            # print 'Optimizing:', subtr
+            # subtr.printThawedParams()
             for step in range(10):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp
+                # print 'dlnp:', dlnp
                 if dlnp < 0.1:
                     break
             print 'Fitting source took', Time()-tsrc
-            print subcat[i]
+            # print subcat[i]
 
     if plots:
         plotmods.append(subtr.getModelImages())
@@ -1243,11 +1243,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         # Optimize all at once?
         subcat.thawAllParams()
         print 'Optimizing:', subtr
-        subtr.printThawedParams()
+        # subtr.printThawedParams()
         for step in range(20):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
-            print 'dlnp:', dlnp
+            # print 'dlnp:', dlnp
             if dlnp < 0.1:
                 break
 
@@ -1265,7 +1265,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     print 'Blob finished fitting:', Time()-tlast
     tlast = Time()
-
 
     # Next, model selections: point source vs dev/exp vs composite.
 
@@ -1293,7 +1292,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     initial_models = []
 
     # Create initial models for each tim x each source
-    tt = Time()
+    # tt = Time()
     for tim in subtims:
         mods = []
         for src in subcat:
@@ -1309,7 +1308,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     assert(np.all(np.isfinite(mod.patch)))
                     mod.addTo(tim.getImage(), scale=-1)
         initial_models.append(mods)
-    print 'Subtracting initial models:', Time()-tt
+    # print 'Subtracting initial models:', Time()-tt
 
     all_models = [{} for i in range(len(Isrcs))]
     performance = [[] for i in range(len(Isrcs))]
@@ -1319,8 +1318,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     for numi,i in enumerate(Ibright):
         
         src = subcat[i]
-        print
-        print 'Model selection for source', src
+        #print
+        #print 'Model selection for source', src
 
         # if plots:
         #     plotmods = []
@@ -1346,13 +1345,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         enable_galaxy_cache()
 
         lnp0 = srctractor.getLogProb()
-        print 'lnp0:', lnp0
+        # print 'lnp0:', lnp0
 
         srccat = srctractor.getCatalog()
         srccat[0] = None
         
         lnp_null = srctractor.getLogProb()
-        print 'Removing the source: dlnp', lnp_null - lnp0
+        # print 'Removing the source: dlnp', lnp_null - lnp0
 
         lnps = dict(ptsrc=None, dev=None, exp=None, comp=None,
                     none=lnp_null)
@@ -1364,8 +1363,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
             ptsrc = src.copy()
-            #lnps.update(ptsrc=lnp0)
-            #trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'ptsrc'
             
@@ -1374,8 +1371,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            #lnps.update(dev=lnp0)
-            #trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'dev'
 
@@ -1384,8 +1379,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            #lnps.update(exp=lnp0)
-            #trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'exp'
             
@@ -1403,18 +1396,16 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = src.copy()
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            #lnps.update(comp=lnp0)
-            #trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'comp'
 
         allflags = {}
         for name,newsrc in trymodels:
-            print 'Trying model:', name
+            #print 'Trying model:', name
             if name == 'comp' and newsrc is None:
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
                                                      0.5, exp.getShape(), dev.getShape()).copy()
-            print 'New source:', newsrc
+            #print 'New source:', newsrc
             srccat[0] = newsrc
 
             # Use the same initial modelMasks as the original source; we'll do a second
@@ -1432,10 +1423,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             #print 'set initial modelMasks:', mm
 
-            lnp = srctractor.getLogProb()
-
-            print 'Initial log-prob:', lnp
-            print 'vs original src: ', lnp - lnp0
+            #lnp = srctractor.getLogProb()
+            #print 'Initial log-prob:', lnp
+            #print 'vs original src: ', lnp - lnp0
 
             # Grid of derivatives.
             if plots and False:
@@ -1484,7 +1474,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print '  dlnp:', dlnp, 'new src', newsrc
+                #print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
                 if cpu-cpu0 > max_cpu_per_source:
@@ -1496,9 +1486,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             else:
                 thisflags |= FLAG_STEPS_A
 
-            print 'New source (after first round optimization):', newsrc
-            lnp = srctractor.getLogProb()
-            print 'Optimized log-prob:', lnp
+            # print 'New source (after first round optimization):', newsrc
+            # lnp = srctractor.getLogProb()
+            # print 'Optimized log-prob:', lnp
 
             if plots and False:
                 plt.clf()
@@ -1529,7 +1519,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print '  dlnp:', dlnp, 'new src', newsrc
+                #print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'B',step,dlnp,alpha,cpu-cpu0))
                 if cpu-cpu0 > max_cpu_per_source:
@@ -1541,10 +1531,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             else:
                 thisflags |= FLAG_STEPS_B
 
-            print 'New source (after optimization):', newsrc
-            lnp = srctractor.getLogProb()
-            print 'Optimized log-prob:', lnp
-            print 'vs original src:   ', lnp - lnp0
+            # print 'New source (after optimization):', newsrc
+            # lnp = srctractor.getLogProb()
+            # print 'Optimized log-prob:', lnp
+            # print 'vs original src:   ', lnp - lnp0
 
             if plots and False:
                 plt.clf()
@@ -1558,25 +1548,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(None)
             disable_galaxy_cache()
 
-            # Try Ceres...
-            # newsrc.setParams(p0)
-            # print 'Ceres opt...'
-            # R = subtr._ceres_opt(max_iterations=50)
-            # print 'Result:', R
-            # print 'New source (after optimization):', newsrc
-            # lnp = subtr.getLogProb()
-            # print 'Optimized log-prob:', lnp
-            # print 'vs original src:', lnp - lnp0
-            
             lnps[name] = lnp
             all_models[i][name] = newsrc.copy()
             allflags[name] = thisflags
             
-            # if plots:
-            #     plotmods.append(subtr.getModelImages())
-            #     plotmodnames.append('try ' + name)
-
-        print 'Log-probs:', lnps
+        #print 'Log-probs:', lnps
 
         # if plots:
         #    _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
@@ -1731,8 +1707,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         tfit = Time()
         # Optimize all at once?
         subcat.thawAllParams()
-        print 'Optimizing:', subtr
-        subtr.printThawedParams()
+        #print 'Optimizing:', subtr
+        #subtr.printThawedParams()
 
         flags |= FLAG_TRIED_C
         max_cpu = 300.
@@ -1752,20 +1728,22 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         print 'Simultaneous fit took:', Time()-tfit
 
 
+    print 'Blob finished re-opt:', Time()-tlast
+    tlast = Time()
     
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
     subcat.freezeAllParams()
     for isub in range(len(srcs)):
-        print 'Variances for source', isub
+        #print 'Variances for source', isub
         subcat.thawParam(isub)
         src = subcat[isub]
-        print 'Source', src
+        #print 'Source', src
         if src is None:
             subcat.freezeParam(isub)
             continue
-        print 'Params:', src.getParamNames()
+        #print 'Params:', src.getParamNames()
         
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
             src.shape = EllipseE.fromEllipseESoft(src.shape)
@@ -1773,7 +1751,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
             src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
 
-        print 'Converted ellipse:', src
+        #print 'Converted ellipse:', src
 
         allderivs = subtr.getDerivs()
         for iparam,derivs in enumerate(allderivs):
@@ -1789,6 +1767,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         assert(len(srcinvvars[isub]) == subcat[isub].numberOfParams())
         subcat.freezeParam(isub)
     print 'Blob variances:', Time()-tlast
+    tlast = Time()
     
     # rchi2 quality-of-fit metric
     rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
@@ -1854,6 +1833,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
     fracmasked = fracmasked_num / fracmasked_den
+
+    print 'Blob finished metrics:', Time()-tlast
     
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
             all_models, performance)
