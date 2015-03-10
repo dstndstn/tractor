@@ -444,8 +444,10 @@ def stage_fitblobs(T=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
+                   nblobs=None,
                    **kwargs):
     print 'Multiproc:', mp
+    print 'Nblobs:', nblobs
 
     for tim in tims:
         assert(np.all(np.isfinite(tim.getInvError())))
@@ -517,10 +519,16 @@ def stage_fitblobs(T=None,
 
 
     tfitall = Time()
-    iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
-                      orig_wcsxy0, cat, bands, plots, ps)
-    # to allow debugpool to only queue tasks one at a time
-    iter = iterwrapper(iter, len(blobsrcs))
+
+    if nblobs is not None and nblobs < len(blobslices):
+        iter = _blob_iter(blobslices[:nblobs], blobsrcs[:nblobs], blobs, targetwcs,
+                          tims, orig_wcsxy0, cat, bands, plots, ps)
+        iter = iterwrapper(iter, nblobs)
+    else:
+        iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
+                          orig_wcsxy0, cat, bands, plots, ps)
+        # to allow debugpool to only queue tasks one at a time
+        iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
     print 'Fitting sources took:', Time()-tfitall
 
@@ -2929,6 +2937,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--no-ceres', dest='ceres', default=True, action='store_false',
                       help='Do not use Ceres Solver')
 
+    parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
+
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
@@ -2979,6 +2989,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         mp = multiproc(init=runbrick_global_init, initargs=[])
     # ??
     kwargs.update(mp=mp)
+
+    if opt.nblobs is not None:
+        kwargs.update(nblobs=opt.nblobs)
 
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
