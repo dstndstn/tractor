@@ -873,10 +873,10 @@ class Tractor(MultiParams):
 
         t0 = Time()
         fluxes = np.zeros(len(usedParamMap))
-        print 'Ceres forced phot:'
-        print len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes)))
+        logverb('Ceres forced phot:')
+        logverb(len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes))))
         if len(blocks) == 0 or len(fluxes) == 0:
-            print 'Nothing to do!'
+            logverb('Nothing to do!')
             return
         # init fluxes passed to ceres
         p0 = self.getParams()
@@ -1665,12 +1665,12 @@ class Tractor(MultiParams):
                 alphaBest = alpha
                 pBest = pAfter
         
-        if alphaBest is None or alphaBest == 0:
-            print "Warning: optimization is borking"
-            print "Parameter direction =",X
-            print "Parameters, step sizes, updates:"
-            for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
-                print n, '=', p, '  step', s, 'update', x
+        # if alphaBest is None or alphaBest == 0:
+        #     print "Warning: optimization is borking"
+        #     print "Parameter direction =",X
+        #     print "Parameters, step sizes, updates:"
+        #     for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
+        #         print n, '=', p, '  step', s, 'update', x
         if alphaBest is None:
             self.setParams(p0)
             return 0, 0.
