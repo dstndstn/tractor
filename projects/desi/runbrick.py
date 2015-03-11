@@ -1059,15 +1059,18 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for src in subcat:
                 mod = src.getModelPatch(tim)
                 mods.append(mod)
-                if mod is not None:
-                    if mod.patch is not None:
-                        if not np.all(np.isfinite(mod.patch)):
-                            print 'Non-finite mod patch'
-                            print 'source:', src
-                            print 'tim:', tim
-                            print 'PSF:', tim.getPsf()
-                        assert(np.all(np.isfinite(mod.patch)))
-                        mod.addTo(tim.getImage(), scale=-1)
+                if mod is not None and mod.patch is not None:
+                    if not np.all(np.isfinite(mod.patch)):
+                        print 'Non-finite mod patch'
+                        print 'source:', src
+                        print 'tim:', tim
+                        print 'PSF:', tim.getPsf()
+                    assert(np.all(np.isfinite(mod.patch)))
+                    mod.addTo(tim.getImage(), scale=-1)
+
+                    #print 'Model patch shape', mod.shape
+                    #print 'Tim shape', tim.shape
+
             initial_models.append(mods)
         #print 'Subtracting initial models:', Time()-tt
 
@@ -1342,18 +1345,26 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # tt = Time()
     for tim in subtims:
         mods = []
+        sh = tim.shape
+        ie = tim.getInvError()
+        img = tim.getImage()
         for src in subcat:
             mod = src.getModelPatch(tim)
+            if mod is not None and mod.patch is not None:
+                if not np.all(np.isfinite(mod.patch)):
+                    print 'Non-finite mod patch'
+                    print 'source:', src
+                    print 'tim:', tim
+                    print 'PSF:', tim.getPsf()
+                assert(np.all(np.isfinite(mod.patch)))
+
+                # Blank out pixels that are outside the blob ROI.
+                mslc,islc = mod.getSlices(sh)
+                sy,sx = mslc
+                mod = Patch(sx.start, sy.start, mod.patch[mslc] * (ie[islc]>0))
+                mod.addTo(img, scale=-1)
             mods.append(mod)
-            if mod is not None:
-                if mod.patch is not None:
-                    if not np.all(np.isfinite(mod.patch)):
-                        print 'Non-finite mod patch'
-                        print 'source:', src
-                        print 'tim:', tim
-                        print 'PSF:', tim.getPsf()
-                    assert(np.all(np.isfinite(mod.patch)))
-                    mod.addTo(tim.getImage(), scale=-1)
+
         initial_models.append(mods)
     # print 'Subtracting initial models:', Time()-tt
 
@@ -1365,9 +1376,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     for numi,i in enumerate(Ibright):
         
         src = subcat[i]
-        #print
         print 'Model selection for source %i of %i in blob' % (numi, len(Ibright))
-        #print 'Model selection for source', src
 
         # if plots:
         #     plotmods = []
@@ -1378,6 +1387,33 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             mod = mods[i]
             if mod is not None:
                 mod.addTo(tim.getImage())
+                print 'Model shape', mod.shape
+                print 'Tim shape', tim.shape
+
+                mslc,islc = mod.getSlices(tim.shape)
+                print 'Model nonzero pixels:', sum(mod.patch != 0)
+                mi = mod.patch[mslc] * tim.getInvError()[islc]
+                print 'Model*invvar nonzero pixels:', sum(mi != 0)
+                print 'mi shape', mi.shape
+
+                sy,sx = mslc
+                mnew = Patch(sx.start, sy.start, mod.patch[mslc] * (tim.getInvError()[islc] > 0))
+
+                if plots:
+                    plt.clf()
+                    H,W = tim.shape
+                    ax = [0,W,0,H]
+                    plt.subplot(2,2,1)
+                    dimshow(mod.patch, extent=mod.getExtent())
+                    plt.axis(ax)
+                    plt.subplot(2,2,2)
+                    dimshow(tim.getInvError(), extent=ax)
+                    plt.axis(ax)
+                    plt.subplot(2,2,4)
+                    dimshow(mnew.patch, extent=mnew.getExtent())
+                    plt.axis(ax)
+                    ps.savefig()
+
 
         modelMasks = []
         for imods in initial_models:
@@ -1904,7 +1940,8 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         comods = [np.zeros((blobh,blobw)) for m in mods]
         cochis = [np.zeros((blobh,blobw)) for m in mods]
         comodn = np.zeros((blobh,blobw))
-
+        mn,mx = 0,0
+        sig1 = 1.
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
