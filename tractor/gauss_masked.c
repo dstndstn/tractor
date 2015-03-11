@@ -88,7 +88,7 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
             if (!(isfinite(V[0]) && isfinite(V[1]) && isfinite(V[2]) &&
                   isfinite(I[0]) && isfinite(I[1]) && isfinite(I[2]) &&
                   isfinite(scales[k]))) {
-                printf("Warning: infinite variance or scale.  Zeroing.\n");
+                //printf("Warning: infinite variance or scale.  Zeroing.\n");
                 // large variance can cause this... set scale = 0.
                 scales[k] = 0.;
                 V[0] = V[1] = V[2] = 1.;
