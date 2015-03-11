@@ -14,6 +14,7 @@ brick="$1"
 log="$outdir/logs/$brick.log"
 
 echo Logging to: $log
+echo Running on ${NERSC_HOST} $(hostname)
 
 echo "PWD: $(pwd)" > $log
 echo "Modules:" >> $log

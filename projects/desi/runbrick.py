@@ -444,9 +444,10 @@ def stage_fitblobs(T=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
-                   nblobs=None,
+                   nblobs=None, blob0=None,
                    **kwargs):
     print 'Multiproc:', mp
+    print 'Blob0:', blob0
     print 'Nblobs:', nblobs
 
     for tim in tims:
@@ -520,10 +521,23 @@ def stage_fitblobs(T=None,
 
     tfitall = Time()
 
-    if nblobs is not None and nblobs < len(blobslices):
-        iter = _blob_iter(blobslices[:nblobs], blobsrcs[:nblobs], blobs, targetwcs,
-                          tims, orig_wcsxy0, cat, bands, plots, ps)
-        iter = iterwrapper(iter, nblobs)
+    if blob0 is not None or (nblobs is not None and nblobs < len(blobslices)):
+        if blob0 is None:
+            blob0 = 0
+        print 'Unique blob values:', np.unique(blobs)
+        if blob0 > 0:
+            blobs[blobs < blob0] = -1
+            blobs[blobs >= 0] -= blob0
+            blobslices = blobslices[blob0:]
+            blobsrcs = blobsrcs[blob0:]
+        print 'Unique blob values:', np.unique(blobs)
+        if nblobs is not None:
+            blobs[blobs >= nblobs] = -1
+            blobslices = blobslices[:nblobs]
+            blobsrcs = blobsrcs[:nblobs]
+        iter = _blob_iter(blobslices, blobsrcs, blobs,
+                          targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps)
+        iter = iterwrapper(iter, len(blobslices))
     else:
         iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
                           orig_wcsxy0, cat, bands, plots, ps)
@@ -740,6 +754,169 @@ def _bounce_one_blob(X):
         #print 'args:', X
         traceback.print_exc()
         raise
+
+def _debug_plots(srctractor, ps):
+    thislnp0 = srctractor.getLogProb()
+    p0 = np.array(srctractor.getParams())
+    print 'logprob:', p0, '=', thislnp0
+
+    print 'p0 type:', p0.dtype
+    px = p0 + np.zeros_like(p0)
+    srctractor.setParams(px)
+    lnpx = srctractor.getLogProb()
+    assert(lnpx == thislnp0)
+    print 'logprob:', px, '=', lnpx
+
+    scales = srctractor.getParameterScales()
+    print 'Parameter scales:', scales
+    print 'Parameters:'
+    srctractor.printThawedParams()
+
+    # getParameterScales better not have changed the params!!
+    assert(np.all(p0 == np.array(srctractor.getParams())))
+    assert(srctractor.getLogProb() == thislnp0)
+
+    pfinal = srctractor.getParams()
+    pnames = srctractor.getParamNames()
+
+    plt.figure(3, figsize=(8,6))
+
+    plt.clf()
+    for i in range(len(scales)):
+        plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
+                 [lnp for lnp,p in params], '-', label=pnames[i])
+    plt.ylabel('lnp')
+    plt.legend()
+    plt.title('scaled')
+    ps.savefig()
+
+    for i in range(len(scales)):
+        plt.clf()
+        #plt.subplot(2,1,1)
+        plt.plot([p[i] for lnp,p in params], '-')
+        plt.xlabel('step')
+        plt.title(pnames[i])
+        ps.savefig()
+
+        plt.clf()
+        plt.plot([p[i] for lnp,p in params],
+                 [lnp for lnp,p in params], 'b.-')
+
+        # We also want to know about d(lnp)/d(param)
+        # and d(lnp)/d(X)
+        step = 1.1
+        steps = 1.1 ** np.arange(-20, 21)
+        s2 = np.linspace(0, steps[0], 10)[1:-1]
+        steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
+        print 'Steps:', steps
+
+        plt.plot(p0[i], thislnp0, 'bx', ms=20)
+
+        print 'Stepping in param', pnames[i], '...'
+        pp = p0.copy()
+        lnps,parms = [],[]
+        for s in steps:
+            parm = p0[i] + s / scales[i]
+            pp[i] = parm
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            parms.append(parm)
+            lnps.append(lnp)
+            print 'logprob:', pp, '=', lnp
+            
+        plt.plot(parms, lnps, 'k.-')
+        j = np.argmin(np.abs(steps - 1.))
+        plt.plot(parms[j], lnps[j], 'ko')
+
+        print 'Stepping in X...'
+        lnps,parms = [],[]
+        for s in steps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            parms.append(pp[i])
+            lnps.append(lnp)
+            print 'logprob:', pp, '=', lnp
+
+
+        ##
+        s3 = s2[:2]
+        ministeps = reduce(np.append, [-s3[::-1], 0, s3])
+        print 'mini steps:', ministeps
+        for s in ministeps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            print 'logprob:', pp, '=', lnp
+
+        rows = len(ministeps)
+        cols = len(srctractor.images)
+
+        plt.figure(4, figsize=(8,6))
+        plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
+                            right=0.99, bottom=0.01, top=0.99)
+        plt.clf()
+        k = 1
+        mods = []
+        for s in ministeps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            print 'ministep', s
+            print 'log prior', srctractor.getLogPrior()
+            print 'log likelihood', srctractor.getLogLikelihood()
+            mods.append(srctractor.getModelImages())
+            chis = srctractor.getChiImages()
+            # for chi in chis:
+            #     plt.subplot(rows, cols, k)
+            #     k += 1
+            #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
+            print 'chisqs:', [(chi**2).sum() for chi in chis]
+            print 'sum:', sum([(chi**2).sum() for chi in chis])
+
+        mod0 = mods[len(ministeps)/2]
+        for modlist in mods:
+            for mi,mod in enumerate(modlist):
+                plt.subplot(rows, cols, k)
+                k += 1
+                m0 = mod0[mi]
+                rng = m0.max() - m0.min()
+                dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
+                        ticks=False, cmap='gray')
+        ps.savefig()
+        plt.figure(3)
+        
+        plt.plot(parms, lnps, 'r.-')
+
+        print 'Stepping in X by alphas...'
+        lnps = []
+        for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
+            pp = p0 + ss*X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            print 'logprob:', pp, '=', lnp
+
+            plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
+            lnps.append(lnp)
+
+        px = p0[i] + X[i]
+        pmid = (px + p0[i]) / 2.
+        dp = np.abs((px - pmid) * 2.)
+        hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
+        lnpmid = (hi + lo) / 2.
+        dlnp = np.abs((hi - lo) * 2.)
+
+        plt.ylabel('lnp')
+        plt.title(pnames[i])
+        ps.savefig()
+
+        plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
+        ps.savefig()
+
+    srctractor.setParams(p0)
+    ### DEBUG
+            
+
+
 
 FLAG_CPU_A   = 1
 FLAG_STEPS_A = 2
@@ -1017,168 +1194,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if dlnp < 0.1:
                     break
 
-
             if DEBUG:
-                thislnp0 = srctractor.getLogProb()
-                p0 = np.array(srctractor.getParams())
-                print 'logprob:', p0, '=', thislnp0
-    
-                print 'p0 type:', p0.dtype
-                px = p0 + np.zeros_like(p0)
-                srctractor.setParams(px)
-                lnpx = srctractor.getLogProb()
-                assert(lnpx == thislnp0)
-                print 'logprob:', px, '=', lnpx
-    
-                scales = srctractor.getParameterScales()
-                print 'Parameter scales:', scales
-                print 'Parameters:'
-                srctractor.printThawedParams()
-    
-                # getParameterScales better not have changed the params!!
-                assert(np.all(p0 == np.array(srctractor.getParams())))
-                assert(srctractor.getLogProb() == thislnp0)
-    
-                pfinal = srctractor.getParams()
-                pnames = srctractor.getParamNames()
-    
-                plt.figure(3, figsize=(8,6))
-    
-                plt.clf()
-                for i in range(len(scales)):
-                    plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
-                             [lnp for lnp,p in params], '-', label=pnames[i])
-                plt.ylabel('lnp')
-                plt.legend()
-                plt.title('scaled')
-                ps.savefig()
-    
-                for i in range(len(scales)):
-                    plt.clf()
-                    #plt.subplot(2,1,1)
-                    plt.plot([p[i] for lnp,p in params], '-')
-                    plt.xlabel('step')
-                    plt.title(pnames[i])
-                    ps.savefig()
-    
-                    plt.clf()
-                    plt.plot([p[i] for lnp,p in params],
-                             [lnp for lnp,p in params], 'b.-')
-    
-                    # We also want to know about d(lnp)/d(param)
-                    # and d(lnp)/d(X)
-                    step = 1.1
-                    steps = 1.1 ** np.arange(-20, 21)
-                    s2 = np.linspace(0, steps[0], 10)[1:-1]
-                    steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
-                    print 'Steps:', steps
-    
-                    plt.plot(p0[i], thislnp0, 'bx', ms=20)
-    
-                    print 'Stepping in param', pnames[i], '...'
-                    pp = p0.copy()
-                    lnps,parms = [],[]
-                    for s in steps:
-                        parm = p0[i] + s / scales[i]
-                        pp[i] = parm
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        parms.append(parm)
-                        lnps.append(lnp)
-                        print 'logprob:', pp, '=', lnp
-                        
-                    plt.plot(parms, lnps, 'k.-')
-                    j = np.argmin(np.abs(steps - 1.))
-                    plt.plot(parms[j], lnps[j], 'ko')
-    
-                    print 'Stepping in X...'
-                    lnps,parms = [],[]
-                    for s in steps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        parms.append(pp[i])
-                        lnps.append(lnp)
-                        print 'logprob:', pp, '=', lnp
-    
-    
-                    ##
-                    s3 = s2[:2]
-                    ministeps = reduce(np.append, [-s3[::-1], 0, s3])
-                    print 'mini steps:', ministeps
-                    for s in ministeps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        print 'logprob:', pp, '=', lnp
-    
-                    rows = len(ministeps)
-                    cols = len(srctractor.images)
-    
-                    plt.figure(4, figsize=(8,6))
-                    plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
-                                        right=0.99, bottom=0.01, top=0.99)
-                    plt.clf()
-                    k = 1
-                    mods = []
-                    for s in ministeps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        print 'ministep', s
-                        print 'log prior', srctractor.getLogPrior()
-                        print 'log likelihood', srctractor.getLogLikelihood()
-                        mods.append(srctractor.getModelImages())
-                        chis = srctractor.getChiImages()
-                        # for chi in chis:
-                        #     plt.subplot(rows, cols, k)
-                        #     k += 1
-                        #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
-                        print 'chisqs:', [(chi**2).sum() for chi in chis]
-                        print 'sum:', sum([(chi**2).sum() for chi in chis])
-    
-                    mod0 = mods[len(ministeps)/2]
-                    for modlist in mods:
-                        for mi,mod in enumerate(modlist):
-                            plt.subplot(rows, cols, k)
-                            k += 1
-                            m0 = mod0[mi]
-                            rng = m0.max() - m0.min()
-                            dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
-                                    ticks=False, cmap='gray')
-                    ps.savefig()
-                    plt.figure(3)
-                    
-                    plt.plot(parms, lnps, 'r.-')
-    
-                    print 'Stepping in X by alphas...'
-                    lnps = []
-                    for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
-                        pp = p0 + ss*X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        print 'logprob:', pp, '=', lnp
-    
-                        plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
-                        lnps.append(lnp)
-    
-                    px = p0[i] + X[i]
-                    pmid = (px + p0[i]) / 2.
-                    dp = np.abs((px - pmid) * 2.)
-                    hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
-                    lnpmid = (hi + lo) / 2.
-                    dlnp = np.abs((hi - lo) * 2.)
-    
-                    plt.ylabel('lnp')
-                    plt.title(pnames[i])
-                    ps.savefig()
-    
-                    plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
-                    ps.savefig()
-    
-                srctractor.setParams(p0)
-                ### DEBUG
-            
-
+                _debug_plots(srctractor, ps)
 
             if plots:
                 spmods.append(srctractor.getModelImages())
@@ -1224,23 +1241,45 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         del initial_models
         
     else:
+        # Single source (though this is coded to handle multiple sources)
         # Fit sources one at a time, but don't subtract other models
         subcat.freezeAllParams()
+
+        modelMasks = []
+        for tim in subtims:
+            d = dict()
+            modelMasks.append(d)
+            for src in subcat:
+                mod = src.getModelPatch(tim)
+                if mod is not None:
+                    d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
+        subtr.setModelMasks(modelMasks)
+        enable_galaxy_cache()
+
         for numi,i in enumerate(Ibright):
             tsrc = Time()
             print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
-            print subcat[i]
+            #print subcat[i]
             subcat.freezeAllBut(i)
             # print 'Optimizing:', subtr
             # subtr.printThawedParams()
-            for step in range(10):
+
+            max_cpu_per_source = 60.
+            cpu0 = time.clock()
+            for step in range(50):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
                 # print 'dlnp:', dlnp
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
                 if dlnp < 0.1:
                     break
             print 'Fitting source took', Time()-tsrc
             # print subcat[i]
+
+        subtr.setModelMasks(None)
+        disable_galaxy_cache()
 
     if plots:
         plotmods.append(subtr.getModelImages())
@@ -2946,6 +2985,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                       help='Do not use Ceres Solver')
 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
+    parser.add_option('--blob', type=int, help='Debugging: start with blob #')
 
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
@@ -3000,6 +3040,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     if opt.nblobs is not None:
         kwargs.update(nblobs=opt.nblobs)
+    if opt.blob is not None:
+        kwargs.update(blob0=opt.blob)
 
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
