@@ -321,6 +321,84 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         rtn[k] = locals()[k]
     return rtn
 
+def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
+                       brickname=None, version_header=None,
+                       **kwargs):
+    if outdir is None:
+        outdir = '.'
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
+    try_makedirs(basedir)
+
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    coimgs = []
+    for iband,band in enumerate(bands):
+
+        cow    = np.zeros((H,W), np.float32)
+        cowimg = np.zeros((H,W), np.float32)
+        coimg  = np.zeros((H,W), np.float32)
+        con     = np.zeros((H,W), np.uint8)
+
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            iv = tim.getInvvar()[Yi,Xi]
+            im = tim.getImage()[Yi,Xi]
+            # invvar-weighted image
+            cowimg[Yo,Xo] += iv * im
+            cow   [Yo,Xo] += iv
+            # straight-up image
+            coimg[Yo,Xo] += im
+            con  [Yo,Xo] += 1
+        cowimg /= np.maximum(cow, 1e-16)
+        cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+
+        # Plug the WCS header cards into these images
+        # copy version_header before modifying...
+        hdr = fitsio.FITSHDR()
+        for r in version_header.records():
+            hdr.add_record(r)
+        hdr.add_record(dict(name='BRICKNAM', value=brickname,
+                            comment='DECaLS brick name'))
+        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+                'INSTRUME']
+        vals = set()
+        for tim in tims:
+            if tim.band != band:
+                continue
+            v = []
+            for key in keys:
+                v.append(tim.primhdr.get(key,''))
+            vals.add(tuple(v))
+        for i,v in enumerate(vals):
+            for ik,key in enumerate(keys):
+                if i == 0:
+                    kk = key
+                else:
+                    kk = key[:7] + '%i'%i
+                hdr.add_record(dict(name=kk, value=v[ik]))
+        hdr.add_record(dict(name='FILTER', value=band))
+        targetwcs.add_to_header(hdr)
+        hdr.delete('IMAGEW')
+        hdr.delete('IMAGEH')
+
+        for name,img,gzip in [('image',  cowimg, False),]:
+            hdr.add_record(dict(name='IMTYPE', value=name,
+                                comment='DECaLS image type'))
+            fn = os.path.join(basedir,
+                              'decals-%s-%s-%s.fits' % (brickname, name, band))
+            if gzip:
+                fn += '.gz'
+            fitsio.write(fn, img, clobber=True, header=hdr)
+            print 'Wrote', fn
+
+    return None
+
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
                W=None,H=None,
@@ -2533,6 +2611,8 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     AP = fits_table()
 
+    ### FIXME -- COULD read previously-written coadd files from stage_image_coadds.
+
     for iband,band in enumerate(bands):
 
         cow    = np.zeros((H,W), np.float32)
@@ -3058,7 +3138,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     prereqs = {
         'tims':None,
-        'srcs':'tims',
+
+        #'srcs':'tims',
+        'image_coadds':'tims',
+        'srcs':'image_coadds',
+
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',
         'coadds': 'fitblobs_finish',
