@@ -32,7 +32,8 @@ template <typename T>
 static PyObject* real_ceres_forced_phot(PyObject* blocks,
                                         PyObject* np_fluxes,
                                         int npy_type,
-                                        int nonneg) {
+                                        int nonneg,
+                                        int verbose) {
     // Note, if you change this function signature, you also need
     // to change the template instantiations below!
     /*
@@ -148,12 +149,14 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
         totalderivpix += nderivpix;
         totalsources += Nsources;
     }
-    printf("Ceres: %i blocks, total %i pixels, %i sources-in-blocks, %i sources, %i deriv elements\n",
-           (int)Nblocks, totaldatapix, totalsources, Nfluxes, totalderivpix);
+    if (verbose)
+        printf("Ceres: %i blocks, total %i pixels, %i sources-in-blocks, %i sources, %i deriv elements\n",
+               (int)Nblocks, totaldatapix, totalsources, Nfluxes, totalderivpix);
     
     // Run the solver!
     Solver::Options options;
-    options.minimizer_progress_to_stdout = true;
+    if (verbose)
+        options.minimizer_progress_to_stdout = true;
     //options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
     options.linear_solver_type = ceres::SPARSE_SCHUR;
 
@@ -220,8 +223,8 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
     Solver::Summary summary;
     Solve(options, &problem, &summary);
 
-    printf("%s\n", summary.BriefReport().c_str());
-    //std::cout << summary.BriefReport() << "\n";
+    if (verbose)
+        printf("%s\n", summary.BriefReport().c_str());
     //std::cout << summary.FullReport() << "\n";
 
     if (nonneg) {
@@ -250,8 +253,8 @@ static PyObject* real_ceres_forced_phot(PyObject* blocks,
                          
 }
 
-template PyObject* real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int);
-template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int);
+template PyObject* real_ceres_forced_phot<float>(PyObject*, PyObject*, int, int, int);
+template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int, int);
 
 
 %}
@@ -265,7 +268,8 @@ template PyObject* real_ceres_forced_phot<double>(PyObject*, PyObject*, int, int
 
 static PyObject* ceres_forced_phot(PyObject* blocks,
                                    PyObject* np_fluxes,
-                                   int nonneg) {
+                                   int nonneg,
+                                   int verbose) {
 	assert(PyList_Check(blocks));
     assert(PyList_Size(blocks) > 0);
     PyObject* block;
@@ -282,13 +286,15 @@ static PyObject* ceres_forced_phot(PyObject* blocks,
     assert(PyArray_Check(img));
 
     if (PyArray_TYPE(img) == NPY_FLOAT) {
-        printf("Calling float version\n");
+        if (verbose)
+            printf("Calling float version\n");
         return real_ceres_forced_phot<float>(blocks, np_fluxes, NPY_FLOAT,
-                                             nonneg);
+                                             nonneg, verbose);
     } else if (PyArray_TYPE(img) == NPY_DOUBLE) {
-        printf("Calling double version\n");
+        if (verbose)
+            printf("Calling double version\n");
         return real_ceres_forced_phot<double>(blocks, np_fluxes, NPY_DOUBLE,
-                                              nonneg);
+                                              nonneg, verbose);
     }
     printf("Unknown PyArray type %i\n", PyArray_TYPE(img));
 

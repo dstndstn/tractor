@@ -763,6 +763,7 @@ class Tractor(MultiParams):
                              wantims0 = True,
                              wantims1 = True,
                              negfluxval = None,
+                             verbose = False
                              ):
         '''
         negfluxval: when 'nonneg' is set, the flux value to give sources that went
@@ -883,17 +884,18 @@ class Tractor(MultiParams):
         for i,k in usedParamMap.items():
             fluxes[k] = p0[i]
 
+        iverbose = 1 if verbose else 0
         nonneg = int(nonneg)
         if nonneg:
             # Initial run with nonneg=False, to get in the ballpark
-            x = ceres_forced_phot(blocks, fluxes, 0)
+            x = ceres_forced_phot(blocks, fluxes, 0, iverbose)
             assert(x == 0)
             logverb('forced phot: ceres initial run', Time()-t0)
             t0 = Time()
             if negfluxval is not None:
                 fluxes = np.maximum(fluxes, negfluxval)
 
-        x = ceres_forced_phot(blocks, fluxes, nonneg)
+        x = ceres_forced_phot(blocks, fluxes, nonneg, iverbose)
         #print 'Ceres forced phot:', x
         logverb('forced phot: ceres', Time()-t0)
 
