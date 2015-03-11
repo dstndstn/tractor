@@ -256,7 +256,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
 
     print 'Cutting out non-photometric CCDs...'
-    I = decals.photometric_ccds(T)
+    #I = decals.photometric_ccds(T)
+    I = np.flatnonzero(T.dr1 == 1)
     print len(I), 'of', len(T), 'CCDs are photometric'
     T.cut(I)
 

@@ -10,7 +10,7 @@ Merge for DR1!
 
 P = fits_table('/global/project/projectdirs/cosmo/work/decam/cats/ZeroPoints/ZeroPoints-DR1.fits')
 print 'Read', len(P), 'of DJS zeropoints'
-C = fits_table('decals/decals-ccds.fits')
+C = fits_table('decals/decals-ccds-dr1-dstn.fits')
 print 'Read', len(C), 'of dstn CCDs'
 
 imap = dict([((int(enum),ccdname.strip()),i) for i,(enum,ccdname) in enumerate(zip(P.expnum,P.ccdname))])
@@ -29,10 +29,11 @@ for fn in fns:
     print fn
 
 C.cpimage = np.array([fn
-                 .replace('/global/homes/a/arjundey/cats/CPDESY1_Stripe82/',
-                          'decam/CPDES82/')
-                 .replace('data/', 'decam/')
-                 .replace('cats/', 'decam/')
-                 for fn in fns])
+                      .replace('/global/homes/a/arjundey/cats/CPDESY1_Stripe82/',
+                               'decam/CPDES82/')
+                      .replace('data/', 'decam/')
+                      .replace('cats/', 'decam/')
+                      .replace('.fits', '.fits.fz')
+                      for fn in fns])
 C.delete_column('I')
 C.writeto('ccds.fits')
