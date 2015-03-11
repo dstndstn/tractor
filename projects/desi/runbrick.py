@@ -2987,12 +2987,35 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
     parser.add_option('--blob', type=int, help='Debugging: start with blob #')
 
+    parser.add_option('--check-done', default=False, action='store_true',
+                      help='Just check for existence of output files for this brick?')
+
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
     print
 
     opt,args = parser.parse_args()
+
+    if opt.check_done:
+        outdir = opt.outdir
+        if outdir is None:
+            outdir = '.'
+        brickname = opt.brick
+        fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
+        print 'Checking for', fn
+        if not os.path.exists(fn):
+            print 'Does not exist:', fn
+            return -1
+        try:
+            T = fits_table(fn)
+            print 'Read', len(T), 'sources from', fn
+        except:
+            print 'Failed to read file', fn
+            return -1
+        print 'Found:', fn
+        return 0
+
 
     Time.add_measurement(MemMeas)
 
@@ -3080,7 +3103,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                  initial_args=initargs, **kwargs)
 
     print 'All done:', Time()-t0
-
+    return 0
 
 def trace(frame, event, arg):
     print "%s, %s:%d" % (event, frame.f_code.co_filename, frame.f_lineno)
@@ -3088,4 +3111,4 @@ def trace(frame, event, arg):
 
 if __name__ == '__main__':
     #sys.settrace(trace)
-    main()
+    sys.exit(main())
