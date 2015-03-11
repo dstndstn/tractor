@@ -1646,17 +1646,17 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             devdiff = plnps['dev'] - plnps[keepmod]
             if expdiff > dlnp or devdiff > dlnp:
                 if expdiff > devdiff:
-                    print 'Upgrading from ptsrc to exp: diff', expdiff
+                    #print 'Upgrading from ptsrc to exp: diff', expdiff
                     keepsrc = exp
                     keepmod = 'exp'
                 else:
-                    print 'Upgrading from ptsrc to dev: diff', devdiff
+                    #print 'Upgrading from ptsrc to dev: diff', devdiff
                     keepsrc = dev
                     keepmod = 'dev'
 
                 diff = plnps['comp'] - plnps[keepmod]
                 if diff > dlnp:
-                    print 'Upgrading for dev/exp to composite: diff', diff
+                    #print 'Upgrading for dev/exp to composite: diff', diff
                     keepsrc = comp
                     keepmod = 'comp'
 
@@ -1664,13 +1664,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         delta_chisqs.append([-2. * (plnps[k] - plnps[keepmod])
                          for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
                     
-        if keepmod != oldmodel:
-            print 'Switching source!'
-            print 'Old:', src
-            print 'New:', keepsrc
-        else:
-            print 'Not switching source'
-            print 'Old:', src
+        # if keepmod != oldmodel:
+        #     print 'Switching source!'
+        #     print 'Old:', src
+        #     print 'New:', keepsrc
+        # else:
+        #     print 'Not switching source'
+        #     print 'Old:', src
 
         subcat[i] = keepsrc
         flags[i] = allflags.get(keepmod, 0)

@@ -6,27 +6,32 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-echo "PWD: $(pwd)"
-echo "Modules:"
-module list 2>&1
-echo
-echo "Environment:"
-set
-echo
-
-echo
-ulimit -a
-echo
-
-brick="$1"
-
 # $SCRATCH/dr1
 outdir=/scratch1/scratchdirs/dstn/dr1
+
 mkdir -p $outdir/logs
+brick="$1"
+log="$outdir/logs/$brick.log"
 
-echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" > $outdir/logs/$brick.log
+echo Logging to: $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 6 >> $outdir/logs/$brick.log 2>&1
+echo "PWD: $(pwd)" > $log
+echo "Modules:" >> $log
+module list >> $log 2>&1
+echo >> $log
+echo "Environment:" >> $log
+set >> $log
+echo >> $log
+
+echo >> $log
+ulimit -a >> $log
+echo >> $log
+
+
+echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
+echo "-----------------------------------------------------------------------------------------" >> $log
+
+python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 6 >> $log 2>&1
 
 # Edison: 6 threads per job, 4 jobs per node = 24 cores.
 # here we ask for 4 nodes * 4 jobs = 16 jobs total.
