@@ -59,6 +59,8 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
         float scales[K];
         float maxD[K];
         float ampsum = 0.;
+        int allzero = 1;
+
         for (k=0; k<K; k++)
             ampsum += amp[k];
             
@@ -82,10 +84,27 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
             I[2] =  V[0] * isc;
             scales[k] = amp[k] / sqrt(tpd * det);
             maxD[k] = -100.;
+
+            if (!(isfinite(V[0]) && isfinite(V[1]) && isfinite(V[2]) &&
+                  isfinite(I[0]) && isfinite(I[1]) && isfinite(I[2]) &&
+                  isfinite(scales[k]))) {
+                printf("Warning: infinite variance or scale.  Zeroing.\n");
+                // large variance can cause this... set scale = 0.
+                scales[k] = 0.;
+                V[0] = V[1] = V[2] = 1.;
+                I[0] = I[1] = I[2] = 1.;
+                det = 1.;
+                isc = 1.;
+            }
+
+            if (scales[k] != 0)
+                allzero = 0;
         }
 
-        int dx, dy;
+        if (allzero)
+            goto bailout;
 
+        int dx, dy;
         for (dy=0; dy<H; dy++) {
             int y = y0 + dy;
             int i0 = dy * W;
