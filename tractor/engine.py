@@ -2365,9 +2365,9 @@ class Tractor(MultiParams):
         #             self.modelMasks[i][src] = mask
 
         # HACK -- check 'em
-        for d in derivs:
-            if d is not None:
-                self._checkModelMask(d, mask)
+        # for d in derivs:
+        #     if d is not None:
+        #         self._checkModelMask(d, mask)
 
         return derivs
 
@@ -2395,7 +2395,7 @@ class Tractor(MultiParams):
         #         self.modelMasks[i][src] = mask
 
         ## HACK -- here we *check* that modelMask was respected.
-        self._checkModelMask(mod, mask)
+        #self._checkModelMask(mod, mask)
 
         return mod
     
@@ -2418,8 +2418,8 @@ class Tractor(MultiParams):
 
         # HACK -- here we *check* that modelMask is respected by the
         # possibly-cached model.
-        mask = self._getModelMaskFor(img, src)
-        self._checkModelMask(mod, mask)
+        # mask = self._getModelMaskFor(img, src)
+        # self._checkModelMask(mod, mask)
 
         return mod
 
