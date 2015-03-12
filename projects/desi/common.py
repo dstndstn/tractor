@@ -1652,7 +1652,7 @@ class DecamImage(object):
                    astrom=True, psfex=True, sky=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True,
-                   just_check=False):
+                   force=False, just_check=False):
         '''
         pixscale: in arcsec/pixel
 
@@ -1699,6 +1699,25 @@ class DecamImage(object):
         if just_check:
             return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
                     or run_morph or run_sky)
+
+        if force:
+            if se:
+                run_se = True
+                run_funpack = True
+            if se2:
+                run_se2 = True
+                run_funpack = True
+            if astrom:
+                run_astrom = True
+            if psfex:
+                run_psfex = True
+            if psfexfit:
+                run_psfexfit = True
+            if morph:
+                run_morp = True
+                run_funpack = True
+            if sky:
+                run_sky = True
 
         if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
