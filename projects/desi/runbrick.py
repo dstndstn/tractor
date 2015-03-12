@@ -462,8 +462,15 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
     # Read SDSS sources
     cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
-            'devflux_ivar', 'expflux_ivar', 'calib_status']
+            'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr', 'decerr']
     cat,T = get_sdss_sources(bands, targetwcs, extracols=cols)
+    # SDSS RAERR, DECERR are in arcsec.
+    err = T.raerr / 3600.
+    T.ra_ivar  = 1./err**2
+    err = T.decerr / 3600.
+    T.dec_ivar  = 1./err**2
+    T.delete_column('raerr')
+    T.delete_column('decerr')
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
@@ -3062,7 +3069,8 @@ def stage_writecat(
         'shapedev_e2_ivar', 'ebv', 'sdss_treated_as_pointsource', 'sdss_run',
         'sdss_camcol', 'sdss_field', 'sdss_id', 'sdss_objid', 'sdss_parent',
         'sdss_nchild', 'sdss_objc_type', 'sdss_objc_flags', 'sdss_objc_flags2',
-        'sdss_flags', 'sdss_flags2', 'sdss_tai', 'sdss_ra', 'sdss_dec', 'sdss_psf_fwhm',
+        'sdss_flags', 'sdss_flags2', 'sdss_tai', 'sdss_ra', 'sdss_ra_ivar',
+        'sdss_dec', 'sdss_dec_ivar', 'sdss_psf_fwhm',
         'sdss_mjd', 'sdss_theta_dev', 'sdss_theta_deverr', 'sdss_ab_dev', 'sdss_ab_deverr',
         'sdss_theta_exp', 'sdss_theta_experr', 'sdss_ab_exp', 'sdss_ab_experr',
         'sdss_fracdev', 'sdss_phi_dev_deg', 'sdss_phi_exp_deg', 'sdss_psfflux',
