@@ -65,11 +65,11 @@ if __name__ == '__main__':
 
     # DES Stripe82
     #rlo,rhi = 316., 6.
-    rlo,rhi = 350.,360.
-    dlo,dhi = -6., 4.
+    #rlo,rhi = 350.,360.
+    #dlo,dhi = -6., 4.
     # TINY bit
-    #rlo,rhi = 350.,351.1
-    #dlo,dhi = 0., 1.1
+    rlo,rhi = 350.,351.1
+    dlo,dhi = 0., 1.1
 
     # 860 bricks
     # ~10,000 CCDs
@@ -113,6 +113,8 @@ if __name__ == '__main__':
     T = D.get_ccds()
     log(len(T), 'CCDs')
 
+    T.index = np.arange(len(T))
+
     T.cut(T.dr1 == 1)
     log(len(T), 'photometric for DR1')
     
@@ -126,11 +128,7 @@ if __name__ == '__main__':
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
         log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-
-        #if len(I):
-        #    print b.brickname
-
-        allI.update(I)
+        allI.update(T.index[I])
     allI = list(allI)
     allI.sort()
 
@@ -138,10 +136,6 @@ if __name__ == '__main__':
     f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
     for i in allI:
-        #im = DecamImage(T[i])
-        #if not im.run_calibs(im, None, None, None, just_check=True,
-        #                     psfex=False, psfexfit=False):
-        #    continue
         f.write('%i\n' % i)
     f.close()
     print 'Wrote', opt.out
