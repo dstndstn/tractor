@@ -1420,15 +1420,9 @@ class DecamImage(object):
         ibase = ibase.replace('.fits.fz', '')
         ibase = ibase.replace('.fits', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
-        #self.name = dirname + '/' + base + ' + %02i' % hdu
-        #print 'dir,base', idirname, ibase
-        #print 'calibdir', calibdir
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
-        #print 'Calname', calname
-        
-        extnm = '.ext%02i' % hdu
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
@@ -1483,6 +1477,7 @@ class DecamImage(object):
 
         e = imghdr['EXTNAME']
         print 'EXTNAME from image header:', e
+        print 'My EXTNAME:', self.extname
         assert(e.strip() == self.extname.strip())
 
         uq = np.unique(dq)
