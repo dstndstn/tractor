@@ -1513,7 +1513,7 @@ class DecamImage(object):
         magzp = decals.get_zeropoint_for(self)
         print 'magzp', magzp
         orig_zpscale = zpscale = NanoMaggies.zeropointToScale(magzp)
-        print 'zpscale', zpscale
+        #print 'zpscale', zpscale
 
         sky = self.read_sky_model()
         midsky = sky.getConstant()
@@ -1545,6 +1545,7 @@ class DecamImage(object):
             print 'WARNING: using mock PSF:', psf
         else:
             # read fit PsfEx model -- with ellipse representation
+            print 'Reading PsfEx-fit model from', self.psffitellfn
             psfex = PsfEx.fromFits(self.psffitellfn)
             print 'Read', psfex
             psf = psfex
@@ -1639,6 +1640,7 @@ class DecamImage(object):
         return S
 
     def read_sky_model(self):
+        print 'Reading sky model from', self.skyfn
         hdr = fitsio.read_header(self.skyfn)
         skyclass = hdr['SKY']
         clazz = get_class_from_name(skyclass)
