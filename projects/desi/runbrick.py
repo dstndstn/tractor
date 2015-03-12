@@ -323,6 +323,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
 def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                        brickname=None, version_header=None,
+                       plots=False, ps=None,
                        **kwargs):
     if outdir is None:
         outdir = '.'
@@ -340,6 +341,7 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         coimg  = np.zeros((H,W), np.float32)
         con     = np.zeros((H,W), np.uint8)
 
+        sig1 = 1.
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -355,8 +357,46 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             # straight-up image
             coimg[Yo,Xo] += im
             con  [Yo,Xo] += 1
+
+            sig1 = tim.sig1
+            if plots:
+                thisco = np.zeros((H,W), np.float32)
+                thisco[Yo,Xo] = im
+                plt.clf()
+                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
+                plt.title('co: %s' % tim.name)
+                ps.savefig()
+
+                thisco[Yo,Xo] = iv
+                plt.clf()
+                dimshow(thisco, vmin=0., vmax=(1.2/tim.sig1**2))
+                plt.title('iv: %s' % tim.name)
+                ps.savefig()
+
+        if plots:
+            plt.clf()
+            plt.subplot(2,2,1)
+            dimshow(cowimg / np.maximum(cow, 1e-16), vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg')
+            plt.subplot(2,2,2)
+            dimshow(cow)
+            plt.title('cow')
+            plt.subplot(2,2,3)
+            dimshow(coimg / np.maximum(1, con), vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('coimg')
+            plt.subplot(2,2,4)
+            dimshow(con)
+            plt.title('con')
+            ps.savefig()
+
         cowimg /= np.maximum(cow, 1e-16)
         cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+
+        if plots:
+            plt.clf()
+            dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg (patched)')
+            ps.savefig()
 
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
@@ -396,6 +436,17 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                 fn += '.gz'
             fitsio.write(fn, img, clobber=True, header=hdr)
             print 'Wrote', fn
+
+        coimgs.append(cowimg)
+
+    tmpfn = create_temp(suffix='.png')
+    for name,ims in [('image',coimgs)]:
+        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
+        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
+               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
+                                    (brickname, name))))
+        os.system(cmd)
+        os.unlink(tmpfn)
 
     return None
 

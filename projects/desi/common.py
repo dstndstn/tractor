@@ -343,9 +343,9 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
     objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
 
     # Treat as pointsource...
-    sband = 'r'
-    bandnum = 'ugriz'.index(sband)
-    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
+    #sband = 'r'
+    #bandnum = 'ugriz'.index(sband)
+    #objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
 
     print 'Bands', bands, '->', list(bands)
 
