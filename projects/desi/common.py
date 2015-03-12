@@ -1481,6 +1481,10 @@ class DecamImage(object):
         print 'Reading dq from', self.dqfn, 'HDU', self.hdu
         dq = self.read_dq(slice=slc)
 
+        e = imghdr['EXTNAME']
+        print 'EXTNAME from image header:', e
+        assert(e.strip() == self.extname.strip())
+
         uq = np.unique(dq)
         bits = reduce(np.bitwise_or, uq)
         print 'DQ bits set: 0x%x' % bits
