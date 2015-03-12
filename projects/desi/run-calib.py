@@ -14,13 +14,11 @@ if __name__ == '__main__':
     opt,args = parser.parse_args()
 
     # Now THAT's what I call forcing
-    opt.force = True
+    #opt.force = True
 
     D = Decals()
     T = D.get_ccds()
     print len(T), 'CCDs'
-    #ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
-    #T = fits_table(ccdsfn)
 
     for a in args:
         i = int(a)
