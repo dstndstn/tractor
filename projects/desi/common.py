@@ -1803,8 +1803,9 @@ class DecamImage(object):
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
                     os.path.dirname(self.psffn), self.sefn))
             print cmd
-            if os.system(cmd):
-                raise RuntimeError('Command failed: ' + cmd)
+            rtn = os.system(cmd)
+            if rtn:
+                raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
         if run_psfexfit:
             print 'Fit PSF...'
