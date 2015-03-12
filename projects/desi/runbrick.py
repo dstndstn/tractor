@@ -3055,6 +3055,8 @@ def stage_writecat(
     T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
 
     # 'tx', 'ty', 
+    # 'sdss_treated_as_pointsource', 
+    # 'decam_flags',
 
     cols = [
         'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
@@ -3066,7 +3068,7 @@ def stage_writecat(
         'fracdev', 'fracDev_ivar', 'shapeexp_r', 'shapeexp_r_ivar', 'shapeexp_e1',
         'shapeexp_e1_ivar', 'shapeexp_e2', 'shapeexp_e2_ivar', 'shapedev_r',
         'shapedev_r_ivar', 'shapedev_e1', 'shapedev_e1_ivar', 'shapedev_e2',
-        'shapedev_e2_ivar', 'ebv', 'sdss_treated_as_pointsource', 'sdss_run',
+        'shapedev_e2_ivar', 'ebv', 'sdss_run',
         'sdss_camcol', 'sdss_field', 'sdss_id', 'sdss_objid', 'sdss_parent',
         'sdss_nchild', 'sdss_objc_type', 'sdss_objc_flags', 'sdss_objc_flags2',
         'sdss_flags', 'sdss_flags2', 'sdss_tai', 'sdss_ra', 'sdss_ra_ivar',
