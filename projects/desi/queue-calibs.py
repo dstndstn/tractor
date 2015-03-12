@@ -65,11 +65,11 @@ if __name__ == '__main__':
 
     # DES Stripe82
     #rlo,rhi = 316., 6.
-    # rlo,rhi = 350.,360.
-    # dlo,dhi = -6., 4.
+    rlo,rhi = 350.,360.
+    dlo,dhi = -6., 4.
     # TINY bit
-    rlo,rhi = 350.,351.1
-    dlo,dhi = 0., 1.1
+    #rlo,rhi = 350.,351.1
+    #dlo,dhi = 0., 1.1
 
     # 860 bricks
     # ~10,000 CCDs
