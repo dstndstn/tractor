@@ -64,12 +64,12 @@ if __name__ == '__main__':
     #dlo,dhi =   5, 12
 
     # DES Stripe82
-    #rlo,rhi = 316., 6.
     #rlo,rhi = 350.,360.
-    #dlo,dhi = -6., 4.
+    rlo,rhi = 300., 10.
+    dlo,dhi = -6., 4.
     # TINY bit
-    rlo,rhi = 350.,351.1
-    dlo,dhi = 0., 1.1
+    #rlo,rhi = 350.,351.1
+    #dlo,dhi = 0., 1.1
 
     # 860 bricks
     # ~10,000 CCDs
@@ -128,6 +128,8 @@ if __name__ == '__main__':
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
         log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+        if len(I) == 0:
+            continue
         allI.update(T.index[I])
     allI = list(allI)
     allI.sort()
