@@ -83,7 +83,7 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
             I[1] = -V[1] * isc * 2.0;
             I[2] =  V[0] * isc;
             scales[k] = amp[k] / sqrt(tpd * det);
-            maxD[k] = -100.;
+            maxD[k] = -30.;
 
             if (!(isfinite(V[0]) && isfinite(V[1]) && isfinite(V[2]) &&
                   isfinite(I[0]) && isfinite(I[1]) && isfinite(I[2]) &&
@@ -92,7 +92,7 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
                 // large variance can cause this... set scale = 0.
                 scales[k] = 0.;
                 V[0] = V[1] = V[2] = 1.;
-                I[0] = I[1] = I[2] = 1.;
+                I[0] = I[1] = I[2] = -1.;
                 det = 1.;
                 isc = 1.;
             }
@@ -117,6 +117,24 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
                 if (yderiv)
                     pyd = yderiv + i0 + dx;
                 float v = eval_all_dxy_f(K, scales, II, mean, x-fx, y-fy, pxd, pyd, maxD);
+                if (!isfinite(v)) {
+                    printf("Inf: %f\n", v);
+                    int k;
+                    for (k=0; k<K; k++) {
+                        float dx,dy;
+                        printf("scale[%i] = %f\n", k, scales[k]);
+                        dx = (x-fx) - mean[2*k+0];
+                        dy = (y-fy) - mean[2*k+1];
+                        printf("dx,dy = %f,%f\n", dx,dy);
+                        float* Ik = II + 3*k;
+                        printf("I = %f,%f,%f\n", Ik[0], Ik[1], Ik[2]);
+                        float dsq = (Ik[0] * dx * dx +
+                                     Ik[1] * dx * dy +
+                                     Ik[2] * dy * dy);
+                        printf("dsq = %f\n", dsq);
+                        printf("exp = %f\n", expf(dsq));
+                    }
+                }
                 result[i0 + dx] = v;
             }
         }
