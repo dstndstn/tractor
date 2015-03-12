@@ -112,6 +112,9 @@ if __name__ == '__main__':
 
     T = D.get_ccds()
     log(len(T), 'CCDs')
+
+    T.cut(T.dr1 == 1)
+    log(len(T), 'photometric for DR1')
     
     bands = 'grz'
     log('Filters:', np.unique(T.filter))

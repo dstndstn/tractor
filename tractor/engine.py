@@ -2073,6 +2073,8 @@ class Tractor(MultiParams):
         if chiImages is not None:
             for img,chi in zip(self.getImages(), chiImages):
                 chimap[img] = chi
+
+        ## FIXME -- could compute just chi ROIs here.
                 
         # iterating this way avoids setting the elements more than once
         for img,row0 in imgoffs.items():
@@ -2381,23 +2383,15 @@ class Tractor(MultiParams):
             #print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
             return None
 
-        # if not 'extent' in kwargs:
-        #     H,W = img.shape
-        #     kwargs.update(extent = [0,W, 0,H])
-
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
 
-        # # HACK -- auto-add?
-        # if self.expectModelMasks:
-        #     if mod is not None and mask is None:
-        #         # add to modelMasks
-        #         i = self.images.index(img)
-        #         # set 'mask' so the assertion in _checkModelMask doesn't fire
-        #         mask = Patch(mod.x0, mod.y0, mod.patch != 0)
-        #         self.modelMasks[i][src] = mask
-
-        ## HACK -- here we *check* that modelMask was respected.
-        #self._checkModelMask(mod, mask)
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            # if not np.all(np.isfinite(mod.patch)):
+            #     from tractor.galaxy import disable_galaxy_cache
+            #     disable_galaxy_cache()
+            #     mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+            assert(np.all(np.isfinite(mod.patch)))
 
         return mod
     
@@ -2418,10 +2412,9 @@ class Tractor(MultiParams):
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
             self.cache.put(deps, (minsb,mod))
 
-        # HACK -- here we *check* that modelMask is respected by the
-        # possibly-cached model.
-        # mask = self._getModelMaskFor(img, src)
-        # self._checkModelMask(mod, mask)
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            assert(np.all(np.isfinite(mod.patch)))
 
         return mod
 
