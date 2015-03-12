@@ -9,6 +9,8 @@ from common import decals_dir, run_calibs, DecamImage, Decals
 if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser()
+    parser.add_option('--force', action='store_true', default=False,
+                      help='Run calib processes even if files already exist?')
     opt,args = parser.parse_args()
 
     D = Decals()
@@ -31,5 +33,7 @@ if __name__ == '__main__':
         kwargs = dict()
 
         # kwargs.update(psfex=False, psfexfit=False)
+        if opt.force:
+            kwargs.update(force=True)
 
         run_calibs((im, kwargs, t.ra, t.dec, pixscale, mock_psf))
