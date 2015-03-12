@@ -36,6 +36,14 @@ def log(*s):
     print >>sys.stderr, ' '.join([str(ss) for ss in s])
 
 if __name__ == '__main__':
+    import optparse
+
+    parser = optparse.OptionParser()
+    parser.add_option('--calibs', action='store_true', default=False,
+                      help='Output CCDs that need to be calibrated.')
+    parser.add_option('--out', help='Output filename for calibs, default %default',
+                      default='jobs')
+    opt,args = parser.parse_args()
 
     D = Decals()
     B = D.get_bricks()
@@ -94,7 +102,9 @@ if __name__ == '__main__':
 
     for b in B:
         print b.brickname
-    sys.exit(0)
+
+    if not opt.calibs:
+        sys.exit(0)
     
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
@@ -121,7 +131,8 @@ if __name__ == '__main__':
     allI = list(allI)
     allI.sort()
 
-    f = open('jobs','w')
+    print 'Writing calibs to', opt.out
+    f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
     for i in allI:
         #im = DecamImage(T[i])
@@ -130,7 +141,7 @@ if __name__ == '__main__':
         #    continue
         f.write('%i\n' % i)
     f.close()
-    print 'Wrote "jobs"'
+    print 'Wrote', opt.out
 
     sys.exit(0)
     

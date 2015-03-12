@@ -4,15 +4,18 @@ import os
 import numpy as np
 from astrometry.util.fits import fits_table
 
-from common import decals_dir, run_calibs, DecamImage
+from common import decals_dir, run_calibs, DecamImage, Decals
 
 if __name__ == '__main__':
     import optparse
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
-    ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
-    T = fits_table(ccdsfn)
+    D = Decals()
+    T = D.get_ccds()
+    print len(T), 'CCDs'
+    #ccdsfn = os.path.join(decals_dir, 'decals-ccds.fits')
+    #T = fits_table(ccdsfn)
 
     for a in args:
         i = int(a)
