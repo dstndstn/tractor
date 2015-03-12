@@ -13,6 +13,9 @@ if __name__ == '__main__':
                       help='Run calib processes even if files already exist?')
     opt,args = parser.parse_args()
 
+    # Now THAT's what I call forcing
+    opt.force = True
+
     D = Decals()
     T = D.get_ccds()
     print len(T), 'CCDs'
