@@ -311,7 +311,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     return blobs, blobsrcs, blobslices
 
-def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
+def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
+                     extracols=[]):
     # FIXME?
     margin = 0.
 
@@ -332,7 +333,7 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
             'psfflux', 'psfflux_ivar',
             'cmodelflux', 'cmodelflux_ivar',
             'modelflux', 'modelflux_ivar',
-            'devflux', 'expflux', 'extinction']
+            'devflux', 'expflux', 'extinction'] + extracols
 
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
     if objs is None:

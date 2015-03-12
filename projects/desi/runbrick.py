@@ -410,7 +410,9 @@ def stage_srcs(coimgs=None, cons=None,
 
     tlast = Time()
     # Read SDSS sources
-    cat,T = get_sdss_sources(bands, targetwcs)
+    cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
+            'devflux_ivar', 'expflux_ivar', 'calib_status']
+    cat,T = get_sdss_sources(bands, targetwcs, extracols=cols)
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
@@ -744,7 +746,7 @@ def stage_fitblobs_finish(
     assert(nb == 5) # none, ptsrc, dev, exp, comp
     assert(len(flags) == len(cat))
 
-    T.flags = flags
+    T.decam_flags = flags
     T.fracflux = fracflux
     T.fracmasked = fracmasked
     T.rchi2 = rchi2
@@ -2843,7 +2845,8 @@ def stage_writecat(
         TT.delete_column(k)
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
-                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs']:
+                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
+                       'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)
     TT.ty = TT.ty.astype(np.float32)
@@ -2992,9 +2995,43 @@ def stage_writecat(
 
     T2.decam_mw_transmission = 10.**(-decam_extinction / 2.5)
     T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
-    
-    T2.writeto(fn, header=hdr)
-    print 'Wrote', fn, 'with extinction'
+
+    # 'tx', 'ty', 
+
+    cols = [
+        'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
+        'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
+        'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
+        'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_saturated',
+        'wise_flux', 'wise_flux_ivar',
+        'wise_mw_transmission', 'wise_nobs', 'wise_fracflux', 'wise_rchi2', 'dchisq',
+        'fracdev', 'fracDev_ivar', 'shapeexp_r', 'shapeexp_r_ivar', 'shapeexp_e1',
+        'shapeexp_e1_ivar', 'shapeexp_e2', 'shapeexp_e2_ivar', 'shapedev_r',
+        'shapedev_r_ivar', 'shapedev_e1', 'shapedev_e1_ivar', 'shapedev_e2',
+        'shapedev_e2_ivar', 'ebv', 'sdss_treated_as_pointsource', 'sdss_run',
+        'sdss_camcol', 'sdss_field', 'sdss_id', 'sdss_objid', 'sdss_parent',
+        'sdss_nchild', 'sdss_objc_type', 'sdss_objc_flags', 'sdss_objc_flags2',
+        'sdss_flags', 'sdss_flags2', 'sdss_tai', 'sdss_ra', 'sdss_dec', 'sdss_psf_fwhm',
+        'sdss_mjd', 'sdss_theta_dev', 'sdss_theta_deverr', 'sdss_ab_dev', 'sdss_ab_deverr',
+        'sdss_theta_exp', 'sdss_theta_experr', 'sdss_ab_exp', 'sdss_ab_experr',
+        'sdss_fracdev', 'sdss_phi_dev_deg', 'sdss_phi_exp_deg', 'sdss_psfflux',
+        'sdss_psfflux_ivar', 'sdss_cmodelflux', 'sdss_cmodelflux_ivar', 'sdss_modelflux',
+        'sdss_modelflux_ivar', 'sdss_devflux', 'sdss_devflux_ivar', 'sdss_expflux',
+        'sdss_expflux_ivar', 'sdss_extinction', 'sdss_calib_status',
+        'sdss_resolve_status',
+        ]
+    # match case to T2.
+    cc = T2.get_columns()
+    cclower = [c.lower() for c in cc]
+    for i,c in enumerate(cols):
+        if (not c in cc) and c in cclower:
+            j = cclower.index(c)
+            cols[i] = cc[j]
+
+    T2.writeto(fn, header=hdr, columns=cols)
+    print 'Wrote', fn
+
+
 
 
 def main():
