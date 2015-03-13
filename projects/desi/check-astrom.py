@@ -58,16 +58,67 @@ if __name__ == '__main__':
     rd = fits_table(rdfn)
     ok,xx,yy = wcs.radec2pixelxy(rd.ra, rd.dec)
 
-    plt.figure(figsize=(6,12))
+    srdfn = 'srd.fits'
+    cmd = ('query-starkd -o %s -r %f -d %f -R 0.2 /project/projectdirs/desi/users/dstn/sdss-astrometry-index/r2/index-sdss2-r-hp17-2.fits' %
+           (srdfn, ra, dec))
+    print cmd
+    rtn = os.system(cmd)
+    assert(rtn == 0)
+
+    srd = fits_table(srdfn)
+    ok,sx,sy = wcs.radec2pixelxy(srd.ra, srd.dec)
+
+    H,W = tim.shape
+    wfn = 'pvsip.wcs'
+    cmd = ('~/astrometry/blind/wcs-pv2sip -e %i -W %i -H %i -X %i -Y %i %s %s' %
+           (ccd.cpimage_hdu, W, H, W, H, fn, wfn))
+    print cmd
+    rtn = os.system(cmd)
+    assert(rtn == 0)
+
+    pvsip = Sip(wfn)
+    ok,x2,y2 = pvsip.radec2pixelxy(rd.ra, rd.dec)
+
+
+    ok,stx,sty = pvsip.radec2pixelxy(srd.ra, srd.dec)
+
+    S = fits_table()
+    S.x = stx
+    S.y = sty
+    S.writeto('stxy.fits')
+
+    #plt.figure(figsize=(6,12))
+    plt.figure(figsize=(10,20))
     #plt.figure(figsize=(6,6))
-    plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
+    #plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95)
+    plt.subplots_adjust(left=0.01, right=0.99, bottom=0.01, top=0.98)
     plt.clf()
-    dimshow(tim.getImage(), vmin=-0.2, vmax=1)
+    dimshow(tim.getImage(), vmin=-0.1, vmax=0.5)
     ax = plt.axis()
-    plt.plot(xy.x_image, xy.y_image, 'ro', mec='r', mfc='none')
-    plt.plot(xx-1, yy-1, 'g+')
-    plt.axis(ax)
-    #plt.axis([0,1000,0,1000])
+    plt.title('Expnum %i, Extname %s' % (ccd.expnum, ccd.extname))
     plt.savefig('1.png')
+
+    p0 = plt.plot(xy.x_image, xy.y_image, 'ro', mec='r', mfc='none', ms=8)
+    plt.axis(ax)
+    #plt.title('SourceExtractor sources')
+    plt.legend((p0), ('SourceExtractor sources'), 'upper left')
+    plt.savefig('2.png')
+
+    ## sx: SDSS -> SIP
+    p3 = plt.plot(sx-1, sy-1, 'o', mec='c', mfc='none')
+
+    ## xx: PS1 -> SIP
+    p1 = plt.plot(xx-1, yy-1, 'g+')
+
+    ## x2: PS1 -> (TV->SIP)
+    p2 = plt.plot(x2-1, y2-1, 'mx')
+    plt.legend((p0[0],p3[0],p1[0],p2[0]),
+               ('SourceExtractor sources',
+                'SDSS -> Astrometry.net',
+                'PS1 -> Astrometry.net',
+                'PS1 -> (TPV->SIP)'), 'upper left')
+    plt.axis(ax)
+    plt.savefig('3.png')
+    #plt.axis([0,1000,0,1000])
 
 
