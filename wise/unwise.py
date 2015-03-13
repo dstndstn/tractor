@@ -94,11 +94,13 @@ def get_unwise_tractor_image(basedir, tile, band, bandname=None, masked=True,
     H,W = img.get_info()['dims']
     H,W = int(H), int(W)
 
-    roi,nil = interpret_roi(twcs, (H,W), **kwargs)
+    roi = interpret_roi(twcs, (H,W), **kwargs)
     #print 'interpret_roi: roi is', roi
     if roi is None:
         # No overlap with ROI
         return None
+    # interpret_roi returns None or a tuple; drop the second element in the tuple.
+    roi,nil = roi
 
     (x0,x1,y0,y1) = roi
 
