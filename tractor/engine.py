@@ -1868,7 +1868,13 @@ class Tractor(MultiParams):
                            use_tsnnls=False,
                            use_ceres=False,
                            get_A_matrix=False):
-
+        #
+        # Returns: numpy array containing update direction.
+        # If *variance* is True, return    (update,variance)
+        # If *get_A_matrix* is True, returns the sparse matrix of derivatives.
+        # If *scale_only* is True, return column scalings
+        # In cases of an empty matrix, returns the list []
+        #
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
         #    (param1:)  [],
@@ -2217,27 +2223,35 @@ class Tractor(MultiParams):
             if variance:
                 lsqropts.update(calc_var=True)
     
-            # lsqr can trigger floating-point errors
-            #np.seterr(all='warn')
-            
             # Run lsqr()
             logverb('LSQR: %i cols (%i unique), %i elements' %
                    (Ncols, len(ucols), len(spvals)-1))
-    
+
             # print 'A matrix:'
             # print A.todense()
             # print
             # print 'vector b:'
             # print b
-            
-            #t0 = time.clock()
-            (X, istop, niters, r1norm, r2norm, anorm, acond,
-             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
-            #t1 = time.clock()
-            #logverb('  %.1f seconds' % (t1-t0))
+
+            bail = False
+            try:
+                # lsqr can trigger floating-point errors
+                oldsettings = np.seterr(all='print')
+                (X, istop, niters, r1norm, r2norm, anorm, acond,
+                 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+            except ZeroDivisionError:
+                print 'ZeroDivisionError caught.  Returning zero.'
+                bail = True
+            # finally:
+            np.seterr(**oldsettings)
 
             del A
             del b
+
+            if bail:
+                if shared_params:
+                    return np.zeros(len(paramindexmap))
+                return np.zeros(len(allderivs))
     
             # print 'LSQR results:'
             # print '  istop =', istop
@@ -2249,8 +2263,6 @@ class Tractor(MultiParams):
             # print '  arnorm =', arnorm
             # print '  xnorm =', xnorm
             # print '  var =', var
-    
-            #olderr = set_fp_err()
         
         logverb('scaled  X=', X)
         X = np.array(X)
@@ -2266,9 +2278,6 @@ class Tractor(MultiParams):
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
-
-        #np.seterr(**olderr)
-        #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
         if variance:
             if shared_params:
