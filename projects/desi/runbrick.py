@@ -250,6 +250,10 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'pixscale', pixscale
 
     T = decals.ccds_touching_wcs(targetwcs)
+    if T is None:
+        print 'No CCDs touching target WCS'
+        sys.exit(0)
+
     print len(T), 'CCDs touching target WCS'
 
     # Sort by band
@@ -3149,6 +3153,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     parser.add_option('--check-done', default=False, action='store_true',
                       help='Just check for existence of output files for this brick?')
+    parser.add_option('--skip', default=False, action='store_true',
+                      help='Quit if the output catalog already exists.')
 
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
@@ -3157,25 +3163,31 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     opt,args = parser.parse_args()
 
-    if opt.check_done:
+    if opt.check_done or opt.skip:
         outdir = opt.outdir
         if outdir is None:
             outdir = '.'
         brickname = opt.brick
         fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
         print 'Checking for', fn
-        if not os.path.exists(fn):
-            print 'Does not exist:', fn
-            return -1
-        try:
-            T = fits_table(fn)
-            print 'Read', len(T), 'sources from', fn
-        except:
-            print 'Failed to read file', fn
-            return -1
-        print 'Found:', fn
-        return 0
+        exists = os.path.exists(fn)
+        if exists:
+            try:
+                T = fits_table(fn)
+                print 'Read', len(T), 'sources from', fn
+            except:
+                print 'Failed to read file', fn
+                exists = False
 
+        if opt.skip:
+            if exists:
+                return 0
+        elif opt.check_done:
+            if not exists:
+                print 'Does not exist:', fn
+                return -1
+            print 'Found:', fn
+            return 0
 
     Time.add_measurement(MemMeas)
 

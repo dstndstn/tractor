@@ -65,16 +65,17 @@ if __name__ == '__main__':
 
     # DES Stripe82
     #rlo,rhi = 350.,360.
-    rlo,rhi = 300., 10.
-    dlo,dhi = -6., 4.
+    # rlo,rhi = 300., 10.
+    # dlo,dhi = -6., 4.
     # TINY bit
     #rlo,rhi = 350.,351.1
     #dlo,dhi = 0., 1.1
 
+    # EDR+
     # 860 bricks
     # ~10,000 CCDs
-    # rlo,rhi = 239,246
-    # dlo,dhi =   5, 13
+    rlo,rhi = 239,246
+    dlo,dhi =   5, 13
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
