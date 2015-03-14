@@ -6,6 +6,7 @@ from collections import OrderedDict
 from astrometry.util.fits import fits_table
 from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
+from astrometry.libkd.spherematch import *
 
 '''
 This script (with manual editing) can produce lists of CCD indices for calibration:
@@ -74,8 +75,12 @@ if __name__ == '__main__':
     # EDR+
     # 860 bricks
     # ~10,000 CCDs
-    rlo,rhi = 239,246
-    dlo,dhi =   5, 13
+    #rlo,rhi = 239,246
+    #dlo,dhi =   5, 13
+
+    # DR1, part 1
+    rlo,rhi = 0, 360
+    dlo,dhi = 25, 40
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -101,6 +106,19 @@ if __name__ == '__main__':
         B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
 
+    T = D.get_ccds()
+    log(len(T), 'CCDs')
+
+    I,J,d = match_radec(B.ra, B.dec, T.ra, T.dec, 0.25)
+    keep = np.zeros(len(B), bool)
+    for i in I:
+        keep[i] = True
+    B.cut(keep)
+    log('Cut to', len(B), 'bricks near CCDs')
+
+    # sort by dec decreasing
+    B.cut(np.argsort(-B.dec))
+
     for b in B:
         print b.brickname
 
@@ -110,9 +128,6 @@ if __name__ == '__main__':
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
 
-
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
 
     T.index = np.arange(len(T))
 
