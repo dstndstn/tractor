@@ -315,9 +315,14 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
+    # Cut "bands" down to just the bands for which we have images.
+    allbands = [tim.band for tim in tims]
+    bands = [b for b in bands if b in allbands]
+    print 'Cut bands to', bands
+
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
             'bands', 'tims', 'ps', 'brickid', 'brickname', 'brick',
-            'target_extent', 'ccds']
+            'target_extent', 'ccds', 'bands']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
     rtn = dict()

@@ -712,11 +712,14 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     image.
     '''
     bands = ''.join(bands)
-    if bands == 'grz':
-        scales = dict(g = (2, 0.0066),
+
+    grzscales = dict(g = (2, 0.0066),
                       r = (1, 0.01),
                       z = (0, 0.025),
                       )
+
+    if bands == 'grz':
+        scales = grzscales
     elif bands == 'urz':
         scales = dict(u = (2, 0.0066),
                       r = (1, 0.01),
@@ -732,7 +735,7 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
                       i = (0, 0.005),
                       )
     else:
-        assert(False)
+        scales = grzscales
         
     h,w = imgs[0].shape
     rgb = np.zeros((h,w,3), np.float32)
@@ -950,15 +953,27 @@ def create_temp(**kwargs):
 
 def sed_matched_filters(bands):
     # List the SED-matched filters to run
+
+    if len(bands) == 1:
+        return [(bands[0], (1.,))]
+
+    # These are for grz filters
     # single-band filters
     SEDs = []
     for i,band in enumerate(bands):
         sed = np.zeros(len(bands))
         sed[i] = 1.
         SEDs.append((band, sed))
-    assert(bands == 'grz')
     SEDs.append(('Flat', (1.,1.,1.)))
     SEDs.append(('Red', (2.5, 1.0, 0.4)))
+
+    if bands != 'grz':
+        inds = ['grz'.index(b) for b in bands]
+        keepseds = []
+        for name,sed in SEDs:
+            keepseds.append((name, [sed[i] for i in inds]))
+        SEDs = keepseds
+
     return SEDs
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
