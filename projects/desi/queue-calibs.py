@@ -80,7 +80,9 @@ if __name__ == '__main__':
 
     # DR1, part 1
     rlo,rhi = 0, 360
-    dlo,dhi = 25, 40
+    #dlo,dhi = 25, 40
+    # part 2
+    dlo,dhi = 20,25
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
