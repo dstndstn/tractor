@@ -871,13 +871,27 @@ class SingleProfileSource(BasicSource):
         counts = img.getPhotoCal().brightnessToCounts(self.brightness)
         if counts == 0:
             return None
+
+        ## HACK
+        if not np.isfinite(np.float32(counts)):
+            return None
+
         if minsb is None:
             minsb = img.modelMinval
         minval = minsb / counts
         upatch = self.getUnitFluxModelPatch(img, minval=minval, modelMask=modelMask)
         if upatch is None:
             return None
-        return upatch * counts
+
+        if upatch.patch is not None:
+            assert(np.all(np.isfinite(upatch.patch)))
+
+        p = upatch * counts
+
+        if p.patch is not None:
+            assert(np.all(np.isfinite(p.patch)))
+
+        return p
 
 
 

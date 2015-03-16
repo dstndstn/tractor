@@ -87,8 +87,11 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
     for (k=0; k<K; k++) {
         float dx,dy;
         float G;
-        float* Ik = I + 3*k;
+        float* Ik;
         float dsq;
+        if (scales[k] == 0)
+            continue;
+        Ik = I + 3*k;
         dx = x - means[2*k+0];
         dy = y - means[2*k+1];
         dsq = (Ik[0] * dx * dx +

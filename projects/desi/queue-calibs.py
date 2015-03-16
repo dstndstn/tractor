@@ -6,6 +6,7 @@ from collections import OrderedDict
 from astrometry.util.fits import fits_table
 from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
+from astrometry.libkd.spherematch import *
 
 '''
 This script (with manual editing) can produce lists of CCD indices for calibration:
@@ -36,6 +37,14 @@ def log(*s):
     print >>sys.stderr, ' '.join([str(ss) for ss in s])
 
 if __name__ == '__main__':
+    import optparse
+
+    parser = optparse.OptionParser()
+    parser.add_option('--calibs', action='store_true', default=False,
+                      help='Output CCDs that need to be calibrated.')
+    parser.add_option('--out', help='Output filename for calibs, default %default',
+                      default='jobs')
+    opt,args = parser.parse_args()
 
     D = Decals()
     B = D.get_bricks()
@@ -52,13 +61,26 @@ if __name__ == '__main__':
 
     # EDR:
     # 535 bricks, ~7000 CCDs
-    rlo,rhi = 240,245
-    dlo,dhi =   5, 12
+    #rlo,rhi = 240,245
+    #dlo,dhi =   5, 12
 
+    # DES Stripe82
+    #rlo,rhi = 350.,360.
+    # rlo,rhi = 300., 10.
+    # dlo,dhi = -6., 4.
+    # TINY bit
+    #rlo,rhi = 350.,351.1
+    #dlo,dhi = 0., 1.1
+
+    # EDR+
     # 860 bricks
     # ~10,000 CCDs
-    # rlo,rhi = 239,246
-    # dlo,dhi =   5, 13
+    #rlo,rhi = 239,246
+    #dlo,dhi =   5, 13
+
+    # DR1, part 1
+    rlo,rhi = 0, 360
+    dlo,dhi = 25, 40
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -70,11 +92,6 @@ if __name__ == '__main__':
     # A nice well-behaved region (EDR2/3)
     # rlo,rhi = 243.6, 244.6
     # dlo,dhi = 8.1, 8.6
-
-    # DES Stripe82
-    #rlo,rhi = 316., 6.
-    # rlo,rhi = 350.,360.
-    # dlo,dhi = -6., 4.
 
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
@@ -89,16 +106,33 @@ if __name__ == '__main__':
         B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
 
+    T = D.get_ccds()
+    log(len(T), 'CCDs')
+
+    I,J,d = match_radec(B.ra, B.dec, T.ra, T.dec, 0.25)
+    keep = np.zeros(len(B), bool)
+    for i in I:
+        keep[i] = True
+    B.cut(keep)
+    log('Cut to', len(B), 'bricks near CCDs')
+
+    # sort by dec decreasing
+    B.cut(np.argsort(-B.dec))
+
     for b in B:
         print b.brickname
-    sys.exit(0)
+
+    if not opt.calibs:
+        sys.exit(0)
     
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
 
 
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
+    T.index = np.arange(len(T))
+
+    T.cut(T.dr1 == 1)
+    log(len(T), 'photometric for DR1')
     
     bands = 'grz'
     log('Filters:', np.unique(T.filter))
@@ -110,24 +144,19 @@ if __name__ == '__main__':
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
         log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-
-        #if len(I):
-        #    print b.brickname
-
-        allI.update(I)
+        if len(I) == 0:
+            continue
+        allI.update(T.index[I])
     allI = list(allI)
     allI.sort()
 
-    f = open('jobs','w')
+    print 'Writing calibs to', opt.out
+    f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
     for i in allI:
-        #im = DecamImage(T[i])
-        #if not im.run_calibs(im, None, None, None, just_check=True,
-        #                     psfex=False, psfexfit=False):
-        #    continue
         f.write('%i\n' % i)
     f.close()
-    print 'Wrote "jobs"'
+    print 'Wrote', opt.out
 
     sys.exit(0)
     

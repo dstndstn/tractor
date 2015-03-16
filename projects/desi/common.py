@@ -311,7 +311,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     return blobs, blobsrcs, blobslices
 
-def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
+def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
+                     extracols=[]):
     # FIXME?
     margin = 0.
 
@@ -332,7 +333,7 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
             'psfflux', 'psfflux_ivar',
             'cmodelflux', 'cmodelflux_ivar',
             'modelflux', 'modelflux_ivar',
-            'devflux', 'expflux', 'extinction']
+            'devflux', 'expflux', 'extinction'] + extracols
 
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
     if objs is None:
@@ -343,9 +344,9 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True):
     objs.objid = np.array([int(x) if len(x) else 0 for x in objs.objid])
 
     # Treat as pointsource...
-    sband = 'r'
-    bandnum = 'ugriz'.index(sband)
-    objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
+    #sband = 'r'
+    #bandnum = 'ugriz'.index(sband)
+    #objs.treated_as_pointsource = treat_as_pointsource(objs, bandnum)
 
     print 'Bands', bands, '->', list(bands)
 
@@ -711,11 +712,14 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     image.
     '''
     bands = ''.join(bands)
-    if bands == 'grz':
-        scales = dict(g = (2, 0.0066),
+
+    grzscales = dict(g = (2, 0.0066),
                       r = (1, 0.01),
                       z = (0, 0.025),
                       )
+
+    if bands == 'grz':
+        scales = grzscales
     elif bands == 'urz':
         scales = dict(u = (2, 0.0066),
                       r = (1, 0.01),
@@ -731,7 +735,7 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
                       i = (0, 0.005),
                       )
     else:
-        assert(False)
+        scales = grzscales
         
     h,w = imgs[0].shape
     rgb = np.zeros((h,w,3), np.float32)
@@ -949,15 +953,27 @@ def create_temp(**kwargs):
 
 def sed_matched_filters(bands):
     # List the SED-matched filters to run
+
+    if len(bands) == 1:
+        return [(bands[0], (1.,))]
+
+    # These are for grz filters
     # single-band filters
     SEDs = []
     for i,band in enumerate(bands):
         sed = np.zeros(len(bands))
         sed[i] = 1.
         SEDs.append((band, sed))
-    assert(bands == 'grz')
     SEDs.append(('Flat', (1.,1.,1.)))
     SEDs.append(('Red', (2.5, 1.0, 0.4)))
+
+    if bands != 'grz':
+        inds = ['grz'.index(b) for b in bands]
+        keepseds = []
+        for name,sed in SEDs:
+            keepseds.append((name, [sed[i] for i in inds]))
+        SEDs = keepseds
+
     return SEDs
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
@@ -1385,7 +1401,7 @@ class DecamImage(object):
         if os.path.exists(imgfn):
             self.imgfn = imgfn
         else:
-            self.imgfn = os.path.join(decals_dir, 'images', 'decam', imgfn)
+            self.imgfn = os.path.join(decals_dir, 'images', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
@@ -1420,15 +1436,9 @@ class DecamImage(object):
         ibase = ibase.replace('.fits.fz', '')
         ibase = ibase.replace('.fits', '')
         idirname = os.path.basename(os.path.dirname(imgfn))
-        #self.name = dirname + '/' + base + ' + %02i' % hdu
-        #print 'dir,base', idirname, ibase
-        #print 'calibdir', calibdir
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
-        #print 'Calname', calname
-        
-        extnm = '.ext%02i' % hdu
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
@@ -1481,6 +1491,11 @@ class DecamImage(object):
         print 'Reading dq from', self.dqfn, 'HDU', self.hdu
         dq = self.read_dq(slice=slc)
 
+        e = imghdr['EXTNAME']
+        print 'EXTNAME from image header:', e
+        print 'My EXTNAME:', self.extname
+        assert(e.strip() == self.extname.strip())
+
         uq = np.unique(dq)
         bits = reduce(np.bitwise_or, uq)
         print 'DQ bits set: 0x%x' % bits
@@ -1513,7 +1528,7 @@ class DecamImage(object):
         magzp = decals.get_zeropoint_for(self)
         print 'magzp', magzp
         orig_zpscale = zpscale = NanoMaggies.zeropointToScale(magzp)
-        print 'zpscale', zpscale
+        #print 'zpscale', zpscale
 
         sky = self.read_sky_model()
         midsky = sky.getConstant()
@@ -1545,6 +1560,7 @@ class DecamImage(object):
             print 'WARNING: using mock PSF:', psf
         else:
             # read fit PsfEx model -- with ellipse representation
+            print 'Reading PsfEx-fit model from', self.psffitellfn
             psfex = PsfEx.fromFits(self.psffitellfn)
             print 'Read', psfex
             psf = psfex
@@ -1639,6 +1655,7 @@ class DecamImage(object):
         return S
 
     def read_sky_model(self):
+        print 'Reading sky model from', self.skyfn
         hdr = fitsio.read_header(self.skyfn)
         skyclass = hdr['SKY']
         clazz = get_class_from_name(skyclass)
@@ -1651,7 +1668,7 @@ class DecamImage(object):
                    astrom=True, psfex=True, sky=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True,
-                   just_check=False):
+                   force=False, just_check=False):
         '''
         pixscale: in arcsec/pixel
 
@@ -1698,6 +1715,25 @@ class DecamImage(object):
         if just_check:
             return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
                     or run_morph or run_sky)
+
+        if force:
+            if se:
+                run_se = True
+                run_funpack = True
+            if se2:
+                run_se2 = True
+                run_funpack = True
+            if astrom:
+                run_astrom = True
+            if psfex:
+                run_psfex = True
+            if psfexfit:
+                run_psfexfit = True
+            if morph:
+                run_morp = True
+                run_funpack = True
+            if sky:
+                run_sky = True
 
         if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
@@ -1803,8 +1839,9 @@ class DecamImage(object):
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
                     os.path.dirname(self.psffn), self.sefn))
             print cmd
-            if os.system(cmd):
-                raise RuntimeError('Command failed: ' + cmd)
+            rtn = os.system(cmd)
+            if rtn:
+                raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
         if run_psfexfit:
             print 'Fit PSF...'

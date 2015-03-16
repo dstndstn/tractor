@@ -32,7 +32,7 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --stage writecat --brick $brick --outdir $outdir --threads 6 >> $log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --skip >> $log 2>&1
 
 # Edison: 6 threads per job, 4 jobs per node = 24 cores.
 # here we ask for 4 nodes * 4 jobs = 16 jobs total.
