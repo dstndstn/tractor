@@ -284,7 +284,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     # Read images, clip to ROI
     ttim = Time()
-    args = [(im, decals, targetrd, mock_psf) for im in ims]
+    args = [(im, decals, targetrd, mock_psf, pvwcs) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
