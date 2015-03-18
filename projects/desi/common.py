@@ -1606,7 +1606,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.se2fn, self.psffitfn, self.skyfn]]:
+                       self.se2fn, self.psffitfn, self.skyfn, self.pvwcsfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -1661,7 +1661,7 @@ class DecamImage(object):
         dra,ddec = decals.get_astrometric_zeropoint_for(self)
         r,d = wcs.get_crval()
         print 'Astrometric zeropoint:', dra,ddec
-        wcs.set_crval(r + dra, d + ddec)
+        wcs.set_crval((r + dra, d + ddec))
         return wcs
     
     def read_sdss(self):
@@ -1723,6 +1723,7 @@ class DecamImage(object):
             run_astrom = True
         if pvastrom and not os.path.exists(self.pvwcsfn):
             run_pvastrom = True
+            #run_funpack = True
         if psfex and not os.path.exists(self.psffn):
             run_psfex = True
         if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
@@ -1748,6 +1749,7 @@ class DecamImage(object):
                 run_astrom = True
             if pvastrom:
                 run_pvastrom = True
+                #run_funpack = True
             if psfex:
                 run_psfex = True
             if psfexfit:
@@ -1757,6 +1759,9 @@ class DecamImage(object):
                 run_funpack = True
             if sky:
                 run_sky = True
+
+        tmpimgfn = None
+        tmpmaskfn = None
 
         if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
@@ -1863,8 +1868,10 @@ class DecamImage(object):
             # need in SIP terms.
             info = fitsio.FITS(self.imgfn)[self.hdu].get_info()
             H,W = info['dims']
+            print 'Image size:', W,'x',H
             cmd = ('wcs-pv2sip -S -o 6 -e %i -W %i -H %i -X %i -Y %i %s %s' %
                    (self.hdu, W, H, W, H, self.imgfn, self.pvwcsfn))
+            #(0, W, H, W, H, tmpimgfn, self.pvwcsfn))
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
@@ -1938,6 +1945,12 @@ class DecamImage(object):
             sky.toFitsHeader(hdr, prefix='SKY_')
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
             fits.write(None, header=hdr)
+
+        if tmpimgfn is not None:
+            os.unlink(tmpimgfn)
+        if tmpmaskfn is not None:
+            os.unlink(tmpmaskfn)
+
             
 def run_calibs(X):
     im = X[0]
