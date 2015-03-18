@@ -1241,39 +1241,41 @@ class Decals(object):
         self.ZP.expnum = np.array([int(t) for t in self.ZP.expnum])
 
         return self.ZP
-        
-    def get_zeropoint_for(self, im):
+
+    def get_zeropoint_row_for(self, im):
         ZP = self._get_zeropoints_table()
         I, = np.nonzero(ZP.expnum == im.expnum)
-        #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
-            I, = np.nonzero((ZP.expnum == im.expnum) * (ZP.ccdname == im.extname))
-            #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
-
+            I, = np.nonzero((ZP.expnum == im.expnum) *
+                            (ZP.ccdname == im.extname))
+        if len(I) == 0:
+            return None
+        assert(len(I) == 1)
+        return ZP[I[0]]
+            
+    def get_zeropoint_for(self, im):
+        zp = self.get_zeropoint_row_for(im)
         # No updated zeropoint -- use header MAGZERO from primary HDU.
-        elif len(I) == 0:
+        if zp is None:
             print 'WARNING: using header zeropoints for', im
             hdr = im.read_image_primary_header()
             # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
             return magzero
 
-        assert(len(I) == 1)
-        I = I[0]
-
-        # Arjun says use CCDZPT
-        magzp = ZP.ccdzpt[I]
-
-        # magzp = ZP.zpt[I]
-        # print 'Raw magzp', magzp
-        # if magzp == 0:
-        #     print 'Magzp = 0; using ccdzpt'
-        #     magzp = ZP.ccdzpt[I]
-        #     print 'Got', magzp
-        exptime = ZP.exptime[I]
-        magzp += 2.5 * np.log10(exptime)
-        #print 'magzp', magzp
+        magzp = zp.ccdzpt
+        magzp += 2.5 * np.log10(zp.exptime)
         return magzp
+
+    def get_astrometric_zeropoint_for(self, im):
+        zp = self.get_zeropoint_row_for(im)
+        if zp is None:
+            print 'WARNING: no astrometric zeropoints found for', im
+            return 0.,0.
+        dra, ddec = zp.ccdraoff, zp.ccddecoff
+        return dra / 3600., ddec / 3600.
+        #dec = zp.ccddec
+        #return dra / np.cos(np.deg2rad(dec)), ddec
 
 def exposure_metadata(filenames, hdus=None, trim=None):
     nan = np.nan
@@ -1456,14 +1458,20 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
-    def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False,
-                          nanomaggies=True, subsky=True, tiny=5):
+    def get_tractor_image(self, decals, slc=None, radecpoly=None,
+                          mock_psf=False,
+                          nanomaggies=True, subsky=True, tiny=5,
+                          pvwcs=False):
         '''
         slc: y,x slices
         '''
         band = self.band
         imh,imw = self.get_image_shape()
-        wcs = self.read_wcs()
+
+        if pvwcs:
+            wcs = self.read_pv_wcs(decals)
+        else:
+            wcs = self.read_wcs()
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
@@ -1648,6 +1656,14 @@ class DecamImage(object):
     def read_wcs(self):
         return Sip(self.wcsfn)
 
+    def read_pv_wcs(self, decals):
+        wcs = Sip(self.pvwcsfn)
+        dra,ddec = decals.get_astrometric_zeropoint_for(self)
+        r,d = wcs.get_crval()
+        print 'Astrometric zeropoint:', dra,ddec
+        wcs.set_crval(r + dra, d + ddec)
+        return wcs
+    
     def read_sdss(self):
         S = fits_table(self.sdssfn)
         # ugh!
@@ -1934,8 +1950,9 @@ def run_calibs(X):
     return im.run_calibs(*args, **kwargs)
 
 
-def read_one_tim((im, decals, targetrd, mock_psf)):
+def read_one_tim((im, decals, targetrd, mock_psf, pvwcs)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
+    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf,
+                               pvwcs=pvwcs)
     return tim
 
