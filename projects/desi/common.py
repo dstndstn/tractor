@@ -1866,12 +1866,8 @@ class DecamImage(object):
             # DECam images appear to have PV coefficients up to PVx_10,
             # which are up to cubic terms in xi,eta,r.  Overshoot what we
             # need in SIP terms.
-            info = fitsio.FITS(self.imgfn)[self.hdu].get_info()
-            H,W = info['dims']
-            print 'Image size:', W,'x',H
-            cmd = ('wcs-pv2sip -S -o 6 -e %i -W %i -H %i -X %i -Y %i %s %s' %
-                   (self.hdu, W, H, W, H, self.imgfn, self.pvwcsfn))
-            #(0, W, H, W, H, tmpimgfn, self.pvwcsfn))
+            cmd = ('wcs-pv2sip -S -o 6 -e %i %s %s' %
+                   (self.hdu, self.imgfn, self.pvwcsfn))
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
