@@ -1440,6 +1440,7 @@ class DecamImage(object):
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
+        self.pvwcsfn = os.path.join(calibdir, 'astrom-pv', calname + '.wcs.fits')
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
@@ -1666,6 +1667,7 @@ class DecamImage(object):
     def run_calibs(self, ra, dec, pixscale, mock_psf,
                    W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
+                   pvastrom=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True,
                    force=False, just_check=False):
@@ -1688,6 +1690,7 @@ class DecamImage(object):
         run_se = False
         run_se2 = False
         run_astrom = False
+        run_pvastrom = False
         run_psfex = False
         run_psfexfit = False
         run_morph = False
@@ -1702,6 +1705,8 @@ class DecamImage(object):
         #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
         if astrom and not os.path.exists(self.wcsfn):
             run_astrom = True
+        if pvastrom and not os.path.exists(self.pvwcsfn):
+            run_pvastrom = True
         if psfex and not os.path.exists(self.psffn):
             run_psfex = True
         if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
@@ -1714,7 +1719,7 @@ class DecamImage(object):
 
         if just_check:
             return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
-                    or run_morph or run_sky)
+                    or run_morph or run_sky or run_pvastrom)
 
         if force:
             if se:
@@ -1725,6 +1730,8 @@ class DecamImage(object):
                 run_funpack = True
             if astrom:
                 run_astrom = True
+            if pvastrom:
+                run_pvastrom = True
             if psfex:
                 run_psfex = True
             if psfexfit:
@@ -1834,6 +1841,18 @@ class DecamImage(object):
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
 
+        if run_pvastrom:
+            # DECam images appear to have PV coefficients up to PVx_10,
+            # which are up to cubic terms in xi,eta,r.  Overshoot what we
+            # need in SIP terms.
+            info = fitsio.FITS(self.imgfn)[self.hdu].get_info()
+            H,W = info['dims']
+            cmd = ('wcs-pv2sip -S -o 6 -e %i -W %i -H %i -X %i -Y %i %s %s' %
+                   (self.hdu, W, H, W, H, self.imgfn, self.pvwcsfn))
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+                
         if run_psfex:
             cmd = ('psfex -c %s -PSF_DIR %s %s' %
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),

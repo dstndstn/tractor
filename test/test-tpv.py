@@ -26,7 +26,7 @@ print
 H,W = 4094, 2046
 wfn = 'pvsip.wcs'
 os.unlink(wfn)
-cmd = ('wcs-pv2sip -v -v -S -o 8 -e %i -W %i -H %i -X %i -Y %i %s %s' %
+cmd = ('wcs-pv2sip -v -v -S -o 5 -e %i -W %i -H %i -X %i -Y %i %s %s' %
        (0, W, H, W, H, hdrfn, wfn))
 print cmd
 rtn = os.system(cmd)
