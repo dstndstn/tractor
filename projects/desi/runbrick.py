@@ -305,6 +305,10 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'Read images:', Time()-tlast
     tlast = Time()
 
+    if len(tims) == 0:
+        print 'No photometric CCDs overlap.  Quitting.'
+        sys.exit(0)
+
     if not pipe:
         # save resampling params
         tims_compute_resamp(tims, targetwcs)
