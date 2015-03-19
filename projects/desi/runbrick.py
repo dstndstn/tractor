@@ -348,8 +348,8 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         cow    = np.zeros((H,W), np.float32)
         cowimg = np.zeros((H,W), np.float32)
 
-        cosat   = np.zeros((H,W), np.float32)
-        cosatnn = np.zeros((H,W), np.uint8)
+        cosat  = np.zeros((H,W), np.float32)
+        cosatn = np.zeros((H,W), np.uint8)
         #coimg  = np.zeros((H,W), np.float32)
         #con     = np.zeros((H,W), np.uint8)
 
@@ -367,9 +367,9 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             cowimg[Yo,Xo] += iv * im
             cow   [Yo,Xo] += iv
             # image, including saturated pixels but not other masked pixels
-            ok = ((tim.dq[Yo,Xo] & np.bitwise_not(tim.dq_bits['satur'])) == 0)
-            cosat[Yo,Xo] += im[ok]
-            cosatn[Yo,Xo] += 1 * ok
+            ok = ((tim.dq[Yi,Xi] & np.bitwise_not(tim.dq_bits['satur'])) == 0)
+            cosat [Yo,Xo][ok] += im[ok]
+            cosatn[Yo,Xo][ok] += 1
             # straight-up image
             #coimg[Yo,Xo] += im
             #con  [Yo,Xo] += 1
@@ -463,11 +463,11 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
     tmpfn = create_temp(suffix='.png')
     for name,ims in [('image',coimgs)]:
         plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
-        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
-               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
-                                    (brickname, name))))
+        jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
+        cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn)
         os.system(cmd)
         os.unlink(tmpfn)
+        print 'Wrote', jpegfn
 
     return None
 
