@@ -1241,39 +1241,41 @@ class Decals(object):
         self.ZP.expnum = np.array([int(t) for t in self.ZP.expnum])
 
         return self.ZP
-        
-    def get_zeropoint_for(self, im):
+
+    def get_zeropoint_row_for(self, im):
         ZP = self._get_zeropoints_table()
         I, = np.nonzero(ZP.expnum == im.expnum)
-        #print 'Got', len(I), 'matching expnum', im.expnum
         if len(I) > 1:
-            I, = np.nonzero((ZP.expnum == im.expnum) * (ZP.ccdname == im.extname))
-            #print 'Got', len(I), 'matching expnum', im.expnum, 'and extname', im.extname
-
+            I, = np.nonzero((ZP.expnum == im.expnum) *
+                            (ZP.ccdname == im.extname))
+        if len(I) == 0:
+            return None
+        assert(len(I) == 1)
+        return ZP[I[0]]
+            
+    def get_zeropoint_for(self, im):
+        zp = self.get_zeropoint_row_for(im)
         # No updated zeropoint -- use header MAGZERO from primary HDU.
-        elif len(I) == 0:
+        if zp is None:
             print 'WARNING: using header zeropoints for', im
             hdr = im.read_image_primary_header()
             # DES Year1 Stripe82 images:
             magzero = hdr['MAGZERO']
             return magzero
 
-        assert(len(I) == 1)
-        I = I[0]
-
-        # Arjun says use CCDZPT
-        magzp = ZP.ccdzpt[I]
-
-        # magzp = ZP.zpt[I]
-        # print 'Raw magzp', magzp
-        # if magzp == 0:
-        #     print 'Magzp = 0; using ccdzpt'
-        #     magzp = ZP.ccdzpt[I]
-        #     print 'Got', magzp
-        exptime = ZP.exptime[I]
-        magzp += 2.5 * np.log10(exptime)
-        #print 'magzp', magzp
+        magzp = zp.ccdzpt
+        magzp += 2.5 * np.log10(zp.exptime)
         return magzp
+
+    def get_astrometric_zeropoint_for(self, im):
+        zp = self.get_zeropoint_row_for(im)
+        if zp is None:
+            print 'WARNING: no astrometric zeropoints found for', im
+            return 0.,0.
+        dra, ddec = zp.ccdraoff, zp.ccddecoff
+        return dra / 3600., ddec / 3600.
+        #dec = zp.ccddec
+        #return dra / np.cos(np.deg2rad(dec)), ddec
 
 def exposure_metadata(filenames, hdus=None, trim=None):
     nan = np.nan
@@ -1440,6 +1442,7 @@ class DecamImage(object):
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
         self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
+        self.pvwcsfn = os.path.join(calibdir, 'astrom-pv', calname + '.wcs.fits')
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
@@ -1455,14 +1458,20 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
-    def get_tractor_image(self, decals, slc=None, radecpoly=None, mock_psf=False,
-                          nanomaggies=True, subsky=True, tiny=5):
+    def get_tractor_image(self, decals, slc=None, radecpoly=None,
+                          mock_psf=False,
+                          nanomaggies=True, subsky=True, tiny=5,
+                          pvwcs=False):
         '''
         slc: y,x slices
         '''
         band = self.band
         imh,imw = self.get_image_shape()
-        wcs = self.read_wcs()
+
+        if pvwcs:
+            wcs = self.read_pv_wcs(decals)
+        else:
+            wcs = self.read_wcs()
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
@@ -1598,7 +1607,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.se2fn, self.psffitfn, self.skyfn]]:
+                       self.se2fn, self.psffitfn, self.skyfn, self.pvwcsfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -1648,6 +1657,14 @@ class DecamImage(object):
     def read_wcs(self):
         return Sip(self.wcsfn)
 
+    def read_pv_wcs(self, decals):
+        wcs = Sip(self.pvwcsfn)
+        dra,ddec = decals.get_astrometric_zeropoint_for(self)
+        r,d = wcs.get_crval()
+        print 'Astrometric zeropoint:', dra,ddec
+        wcs.set_crval((r + dra, d + ddec))
+        return wcs
+    
     def read_sdss(self):
         S = fits_table(self.sdssfn)
         # ugh!
@@ -1667,6 +1684,7 @@ class DecamImage(object):
     def run_calibs(self, ra, dec, pixscale, mock_psf,
                    W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
+                   pvastrom=True,
                    morph=False, se2=False, psfexfit=True,
                    funpack=True, fcopy=False, use_mask=True,
                    force=False, just_check=False):
@@ -1689,6 +1707,7 @@ class DecamImage(object):
         run_se = False
         run_se2 = False
         run_astrom = False
+        run_pvastrom = False
         run_psfex = False
         run_psfexfit = False
         run_morph = False
@@ -1703,6 +1722,9 @@ class DecamImage(object):
         #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
         if astrom and not os.path.exists(self.wcsfn):
             run_astrom = True
+        if pvastrom and not os.path.exists(self.pvwcsfn):
+            run_pvastrom = True
+            #run_funpack = True
         if psfex and not os.path.exists(self.psffn):
             run_psfex = True
         if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
@@ -1715,7 +1737,7 @@ class DecamImage(object):
 
         if just_check:
             return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
-                    or run_morph or run_sky)
+                    or run_morph or run_sky or run_pvastrom)
 
         if force:
             if se:
@@ -1726,6 +1748,9 @@ class DecamImage(object):
                 run_funpack = True
             if astrom:
                 run_astrom = True
+            if pvastrom:
+                run_pvastrom = True
+                #run_funpack = True
             if psfex:
                 run_psfex = True
             if psfexfit:
@@ -1735,6 +1760,9 @@ class DecamImage(object):
                 run_funpack = True
             if sky:
                 run_sky = True
+
+        tmpimgfn = None
+        tmpmaskfn = None
 
         if run_funpack and (funpack or fcopy):
             tmpimgfn  = create_temp(suffix='.fits')
@@ -1835,6 +1863,16 @@ class DecamImage(object):
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
 
+        if run_pvastrom:
+            # DECam images appear to have PV coefficients up to PVx_10,
+            # which are up to cubic terms in xi,eta,r.  Overshoot what we
+            # need in SIP terms.
+            cmd = ('wcs-pv2sip -S -o 6 -e %i %s %s' %
+                   (self.hdu, self.imgfn, self.pvwcsfn))
+            print cmd
+            if os.system(cmd):
+                raise RuntimeError('Command failed: ' + cmd)
+                
         if run_psfex:
             cmd = ('psfex -c %s -PSF_DIR %s %s' %
                    (os.path.join(sedir, 'DECaLS-v2.psfex'),
@@ -1904,6 +1942,12 @@ class DecamImage(object):
             sky.toFitsHeader(hdr, prefix='SKY_')
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
             fits.write(None, header=hdr)
+
+        if tmpimgfn is not None:
+            os.unlink(tmpimgfn)
+        if tmpmaskfn is not None:
+            os.unlink(tmpmaskfn)
+
             
 def run_calibs(X):
     im = X[0]
@@ -1916,8 +1960,9 @@ def run_calibs(X):
     return im.run_calibs(*args, **kwargs)
 
 
-def read_one_tim((im, decals, targetrd, mock_psf)):
+def read_one_tim((im, decals, targetrd, mock_psf, pvwcs)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf)
+    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf,
+                               pvwcs=pvwcs)
     return tim
 

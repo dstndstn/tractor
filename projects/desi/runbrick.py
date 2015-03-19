@@ -192,7 +192,7 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
 def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz',
+               bands='grz', pvwcs=False,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -275,10 +275,6 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
 
-    # Check that the zeropoints exist
-    for im in ims:
-        decals.get_zeropoint_for(im)
-
     # Run calibrations
     args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
@@ -288,7 +284,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     # Read images, clip to ROI
     ttim = Time()
-    args = [(im, decals, targetrd, mock_psf) for im in ims]
+    args = [(im, decals, targetrd, mock_psf, pvwcs) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
@@ -3172,6 +3168,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
     parser.add_option('--blob', type=int, help='Debugging: start with blob #')
 
+    parser.add_option('--pv', action='store_true', help='Use Community Pipeline WCS -- PV distortion terms')
+    
     parser.add_option('--check-done', default=False, action='store_true',
                       help='Just check for existence of output files for this brick?')
     parser.add_option('--skip', default=False, action='store_true',
@@ -3292,6 +3290,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     except:
         initargs.update(brickname = opt.brick)
 
+    initargs.update(pvwcs=opt.pv)
+        
     t0 = Time()
 
     for stage in opt.stage:
