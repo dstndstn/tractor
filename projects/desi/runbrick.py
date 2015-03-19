@@ -276,7 +276,11 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     tlast = Time()
 
     # Run calibrations
-    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf)
+    kwa = dict()
+    if pvwcs:
+        kwa.update(pvastrom=True, astrom=False)
+
+    args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
     _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
@@ -3204,8 +3208,10 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
     parser.add_option('--blob', type=int, help='Debugging: start with blob #')
 
-    parser.add_option('--pv', action='store_true', help='Use Community Pipeline WCS -- PV distortion terms')
-    
+    #parser.add_option('--pv', action='store_true', help='Use Community Pipeline WCS -- PV distortion terms')
+    parser.add_option('--no-pv', dest='pv', default='True', action='store_false',
+                      help='Do not use Community Pipeline WCS with PV distortion terms -- solve using Astrometry.net')
+
     parser.add_option('--check-done', default=False, action='store_true',
                       help='Just check for existence of output files for this brick?')
     parser.add_option('--skip', default=False, action='store_true',
@@ -3327,7 +3333,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         initargs.update(brickname = opt.brick)
 
     initargs.update(pvwcs=opt.pv)
-        
+
     t0 = Time()
 
     for stage in opt.stage:
