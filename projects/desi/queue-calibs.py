@@ -81,11 +81,11 @@ if __name__ == '__main__':
     # DR1
     rlo,rhi = 0, 360
     # part 1
-    #dlo,dhi = 25, 40
+    dlo,dhi = 25, 40
     # 1a
     #dlo,dhi = 30, 35
     # 1b
-    dlo,dhi = 25, 30
+    #dlo,dhi = 25, 30
     # part 2
     #dlo,dhi = 20,25
     # part 3

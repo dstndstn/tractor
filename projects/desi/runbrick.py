@@ -354,7 +354,7 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         #con     = np.zeros((H,W), np.uint8)
 
         sig1 = 1.
-        tinyw = 1e-16
+        tinyw = 1e-30
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -367,9 +367,18 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             # invvar-weighted image
             cowimg[Yo,Xo] += iv * im
             cow   [Yo,Xo] += iv
+
             # dummy values for saturated pixels
-            cowimg[Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi]) * tim.satval
-            cow   [Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi])
+            sat = tim.dq_bits['satur'] & tim.dq
+            sat = binary_dilation(sat, iterations=10)
+            cowimg[Yo,Xo] += tinyw * sat[Yi,Xi]
+            cow   [Yo,Xo] += tinyw
+            #cowimg[Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi]) * tim.satval
+            #cow   [Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi])
+
+            #cowimg[Yo,Xo] += tinyw * im
+            #cow   [Yo,Xo] += tinyw
+
             # image, including saturated pixels but not other masked pixels
             # okbits = tim.dq_bits['satur'] + tim.dq_bits['bleed']
             # ok = ((tim.dq[Yi,Xi] & np.bitwise_not(okbits)) == 0)
