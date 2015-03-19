@@ -348,12 +348,13 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         cow    = np.zeros((H,W), np.float32)
         cowimg = np.zeros((H,W), np.float32)
 
-        cosat  = np.zeros((H,W), np.float32)
-        cosatn = np.zeros((H,W), np.uint8)
+        # cosat  = np.zeros((H,W), np.float32)
+        # cosatn = np.zeros((H,W), np.uint8)
         #coimg  = np.zeros((H,W), np.float32)
         #con     = np.zeros((H,W), np.uint8)
 
         sig1 = 1.
+        tinyw = 1e-16
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -366,13 +367,14 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             # invvar-weighted image
             cowimg[Yo,Xo] += iv * im
             cow   [Yo,Xo] += iv
+            # dummy values for saturated pixels
+            cowimg[Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi]) * tim.satval
+            cow   [Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi])
             # image, including saturated pixels but not other masked pixels
-            ok = ((tim.dq[Yi,Xi] & np.bitwise_not(tim.dq_bits['satur'])) == 0)
-            cosat [Yo,Xo][ok] += im[ok]
-            cosatn[Yo,Xo][ok] += 1
-            # straight-up image
-            #coimg[Yo,Xo] += im
-            #con  [Yo,Xo] += 1
+            # okbits = tim.dq_bits['satur'] + tim.dq_bits['bleed']
+            # ok = ((tim.dq[Yi,Xi] & np.bitwise_not(okbits)) == 0)
+            # cosat [Yo,Xo] += im * ok
+            # cosatn[Yo,Xo] += ok
 
             sig1 = tim.sig1
             if plots:
@@ -389,10 +391,25 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                 plt.title('iv: %s' % tim.name)
                 ps.savefig()
 
+                thisco[Yo,Xo] = im
+                vals = tim.dq_bits.values()
+                vals.sort()
+                thisbit = np.zeros((H,W), bool)
+                for i,v in enumerate(vals):
+                    #plt.subplot(3,3,i+1)
+                    thisbit[:,:] = False
+                    thisbit[Yo,Xo] = (tim.dq[Yi,Xi] & v) > 0
+                    print 'bit', v, 'has', thisbit.sum(), 'pixels set'
+                    if sum(thisbit) > 0:
+                        plt.clf()
+                        dimshow(thisbit * thisco, vmin=-5.*tim.sig1, vmax=5.*tim.sig1)
+                        plt.title('bit 0x%x' % v)
+                        ps.savefig()
+
         if plots:
             plt.clf()
             plt.subplot(2,2,1)
-            dimshow(cowimg / np.maximum(cow, 1e-16), vmin=-2.*sig1, vmax=5.*sig1)
+            dimshow(cowimg / np.maximum(cow, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
             plt.title('cowimg')
             plt.subplot(2,2,2)
             dimshow(cow)
@@ -400,18 +417,28 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             plt.subplot(2,2,3)
             #dimshow(coimg / np.maximum(1, con), vmin=-2.*sig1, vmax=5.*sig1)
             #plt.title('coimg')
-            dimshow(cosatimg / np.maximum(1, cosatn), vmin=-2.*sig1, vmax=5.*sig1)
-            plt.title('cosat')
-            plt.subplot(2,2,4)
-            #dimshow(con)
-            dimshow(cosatn)
-            plt.title('cosatn')
+            # dimshow(cosat / np.maximum(1, cosatn), vmin=-2.*sig1, vmax=5.*sig1)
+            # plt.title('cosat')
+            # plt.subplot(2,2,4)
+            # #dimshow(con)
+            # dimshow(cosatn)
+            # plt.title('cosatn')
             ps.savefig()
 
-        cowimg /= np.maximum(cow, 1e-16)
+        if plots:
+            plt.clf()
+            dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg (pre-patched)')
+            ps.savefig()
+            # plt.clf()
+            # dimshow(cosat / np.maximum(1, cosatn), vmin=-2.*sig1, vmax=5.*sig1)
+            # plt.title('cosat')
+            # ps.savefig()
+
+        cowimg /= np.maximum(cow, tinyw)
         #cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
         # This is somewhat silly... patch saturated pixels.
-        cowimg[cow == 0] = (cosat[cow == 0] / np.maximum(1, cosatn[cow == 0]))
+        #cowimg[cow == 0] = (cosat[cow == 0] / np.maximum(1, cosatn[cow == 0]))
 
         if plots:
             plt.clf()

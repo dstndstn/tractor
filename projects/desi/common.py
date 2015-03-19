@@ -1596,6 +1596,12 @@ class DecamImage(object):
         tim.dq_bits = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                            trans=128,
                            edge = 256)
+        tim.saturation = imghdr['SATURATE']
+        tim.satval = tim.saturation
+        if subsky:
+            tim.satval -= midsky
+        if nanomaggies:
+            tim.satval /= zpscale
 
         mn,mx = tim.zr
         subh,subw = tim.shape
