@@ -7,7 +7,8 @@ export PYTHONPATH=${PYTHONPATH}:.
 export MKL_NUM_THREADS=1
 
 # $SCRATCH/dr1
-outdir=/scratch1/scratchdirs/dstn/dr1b
+#outdir=/scratch1/scratchdirs/dstn/dr1b
+outdir=$GSCRATCH/dr1b
 
 mkdir -p $outdir/logs
 brick="$1"
