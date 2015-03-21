@@ -2004,7 +2004,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         if ivar[0] == 0.:
             continue
         keep.append(i)
-    keep = np.flatnonzero(keep)
     if len(keep) < len(srcs):
         print 'Keeping', len(keep), 'of', len(srcs), 'sources with non-zero ivar'
         Isrcs        = [Isrcs[i]        for i in keep]
