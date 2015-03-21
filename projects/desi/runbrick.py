@@ -1953,10 +1953,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 break
         #print 'Simultaneous fit took:', Time()-tfit
 
-
     #print 'Blob finished re-opt:', Time()-tlast
     #tlast = Time()
-    
+
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
@@ -1994,6 +1993,27 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         subcat.freezeParam(isub)
     #print 'Blob variances:', Time()-tlast
     #tlast = Time()
+
+    # Check for sources with zero inverse-variance -- I think these
+    # can be generated during the "Simultaneous re-opt" stage above --
+    # sources can get scattered outside the blob.
+    keep = []
+    for i,(src,ivar) in enumerate(zip(srcs, srcinvvars)):
+        print 'ivar', ivar
+        # Arbitrarily look at the first element (RA)?
+        if ivar[0] == 0.:
+            continue
+        keep.append(i)
+    keep = np.flatnonzero(keep)
+    if len(keep) < len(srcs):
+        print 'Keeping', len(keep), 'of', len(srcs), 'sources with non-zero ivar'
+        Isrcs        = [Isrcs[i]        for i in keep]
+        srcs         = [srcs[i]         for i in keep]
+        srcinvvars   = [srcinvvars[i]   for i in keep]
+        delta_chisqs = [delta_chisqs[i] for i in keep]
+        flags        = [flags[i]        for i in keep]
+        subcat = Catalog(*srcs)
+        subtr.catalog = subcat
     
     # rchi2 quality-of-fit metric
     rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)

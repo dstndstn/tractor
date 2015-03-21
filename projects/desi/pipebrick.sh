@@ -6,8 +6,7 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-# $SCRATCH/dr1
-outdir=/scratch1/scratchdirs/dstn/dr1
+outdir=$GSCRATCH/dr1b
 
 mkdir -p $outdir/logs
 brick="$1"

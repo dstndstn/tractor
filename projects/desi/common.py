@@ -1708,7 +1708,7 @@ class DecamImage(object):
         if mock_psf:
             psfex = False
             psfexfit = False
-    
+
         run_funpack = False
         run_se = False
         run_se2 = False
@@ -1756,7 +1756,6 @@ class DecamImage(object):
                 run_astrom = True
             if pvastrom:
                 run_pvastrom = True
-                #run_funpack = True
             if psfex:
                 run_psfex = True
             if psfexfit:
@@ -1766,6 +1765,46 @@ class DecamImage(object):
                 run_funpack = True
             if sky:
                 run_sky = True
+
+        # Sometimes SourceExtractor gets interrupted or something and
+        # writes out 0 detections.  Then PsfEx fails but in a way that
+        # an output file is still written.  Try to detect & fix this
+        # case.
+        if run_psfexfit:
+            # Check the PsfEx output file for POLNAME1
+            fn = self.psffn
+            if os.path.exists(fn):
+                hdr = fitsio.read_header(fn, ext=1)
+                if hdr.get('POLNAME1', None) is None:
+                    print 'Did not find POLNAME1 in PsfEx header', fn, '-- deleting'
+                    os.unlink(fn)
+                    run_psfex = True
+
+        if run_psfex:
+            # Check SourceExtractor catalog for size = 0
+            fn = self.sefn
+            if os.path.exists(fn):
+                T = fits_table(fn, hdu=2)
+                print 'Read', len(T), 'sources from SE catalog', fn
+                if T is None or len(T) == 0:
+                    print 'SourceExtractor catalog', fn, 'has no sources -- deleting'
+                    try:
+                        os.unlink(fn)
+                    except:
+                        pass
+                    run_se = True
+                    run_funpack = True
+
+        # Somehow, astrom-pv invalid files can get written.
+        if pvastrom and not run_pvastrom:
+            fn = self.pvwcsfn
+            if os.path.exists(fn):
+                try:
+                    wcs = Sip(fn)
+                except:
+                    print 'Failed to read PV-SIP file', fn, '-- deleting'
+                    os.unlink(fn)
+                    run_pvastrom = True
 
         tmpimgfn = None
         tmpmaskfn = None
