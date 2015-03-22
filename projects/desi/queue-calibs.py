@@ -155,7 +155,7 @@ if __name__ == '__main__':
         log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
         if len(I) == 0:
             continue
-        allI.update(T.index[I])
+        allI.update(I)
     allI = list(allI)
     allI.sort()
 
@@ -170,8 +170,7 @@ if __name__ == '__main__':
                                  astrom=False):
                 print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
                 continue
-
-        f.write('%i\n' % i)
+        f.write('%i\n' % T.index[i])
     f.close()
     print 'Wrote', opt.out
 

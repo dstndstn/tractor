@@ -1701,7 +1701,7 @@ class DecamImage(object):
         '''
         print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
-        for fn in [self.wcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
+        for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
             print 'exists?', os.path.exists(fn), fn
         self.makedirs()
 
