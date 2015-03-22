@@ -546,10 +546,9 @@ def stage_srcs(coimgs=None, cons=None,
         T.dec_ivar  = 1./err**2
         T.delete_column('raerr')
         T.delete_column('decerr')
-
-        sdss_xy = None
-    else:
         sdss_xy = T.itx, T.ity
+    else:
+        sdss_xy = None
 
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
@@ -568,7 +567,7 @@ def stage_srcs(coimgs=None, cons=None,
     if T is None:
         Nsdss = 0
         T = Tnew
-        cat = newcat
+        cat = Catalog(*newcat)
     else:
         Nsdss = len(T)
         T = merge_tables([T,Tnew], columns='fillzero')
@@ -3004,7 +3003,8 @@ def stage_writecat(
     fs = None
     TT = T.copy()
     for k in ['itx','ity','index']:
-        TT.delete_column(k)
+        if k in TT.get_columns():
+            TT.delete_column(k)
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
