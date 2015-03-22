@@ -337,6 +337,7 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
 
     objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
     if objs is None:
+        print 'No photoObjs in wcs'
         return None,None
     print 'Got', len(objs), 'photoObjs'
 
