@@ -31,7 +31,8 @@ if __name__ == '__main__':
         pixscale *= 3600.
         print 'Pixscale', pixscale, 'arcsec/pix'
         mock_psf = False
-        kwargs = dict()
+
+        kwargs = dict(astrom=False)
 
         # kwargs.update(psfex=False, psfexfit=False)
         if opt.force:
