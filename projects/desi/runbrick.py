@@ -204,29 +204,6 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     decals = Decals()
 
-    decalsv = decals.decals_dir
-    hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='TRACTORV', value=version,
-                        comment='Tractor git version'))
-    hdr.add_record(dict(name='DECALSV', value=decalsv,
-                        comment='DECaLS version'))
-    hdr.add_record(dict(name='DECALSDR', value='DR1',
-                        comment='DECaLS release name'))
-    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
-                        comment='%s run time' % program_name))
-    hdr.add_record(dict(name='SURVEY', value='DECaLS',
-                        comment='DECam Legacy Survey'))
-
-    import socket
-    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
-                        comment='Machine where runbrick.py was run'))
-    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
-                        comment='Machine where runbrick.py was run'))
-    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
-                        comment='NERSC machine where runbrick.py was run'))
-
-    version_header = hdr
-
     if brickid is not None:
         brick = decals.get_brick(brickid)
     else:
@@ -274,6 +251,41 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
+
+    decalsv = decals.decals_dir
+    hdr = fitsio.FITSHDR()
+
+    hdr.add_record(dict(name='COMMENT',
+                        comment='Data product of the DECam Legacy Survey (DECaLS)'))
+    hdr.add_record(dict(name='COMMENT',
+                        comment='Full documentation at http://legacysurvey.org'))
+    hdr.add_record(dict(name='TRACTORV', value=version,
+                        comment='Tractor git version'))
+    hdr.add_record(dict(name='DECALSV', value=decalsv,
+                        comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSDR', value='DR1',
+                        comment='DECaLS release name'))
+    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
+                        comment='%s run time' % program_name))
+    hdr.add_record(dict(name='SURVEY', value='DECaLS',
+                        comment='DECam Legacy Survey'))
+
+    hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
+    hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
+    hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
+    hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
+    hdr.add_record(dict(name='DECMIN'  , value=brick.ra1, comment='Brick Dec min'))
+    hdr.add_record(dict(name='DECMAX'  , value=brick.ra2, comment='Brick Dec max'))
+
+    import socket
+    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
+                        comment='NERSC machine where runbrick.py was run'))
+
+    version_header = hdr
 
     # Run calibrations
     kwa = dict()
@@ -3035,7 +3047,7 @@ def stage_writecat(
     TT.delete_column('nobs')
 
     cat.thawAllRecursive()
-    hdr = version_header
+    hdr = None
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
     for i,ap in enumerate(apertures_arcsec):
@@ -3161,6 +3173,37 @@ def stage_writecat(
         'sdss_expflux_ivar', 'sdss_extinction', 'sdss_calib_status',
         'sdss_resolve_status',
         ]
+
+    # TUNIT cards.
+    deg='deg'
+    degiv='1/deg^2'
+    units = dict(
+        ra=deg, dec=deg,
+        ra_ivar=degiv, dec_ivar=degiv,
+        decam_flux='nanomaggies', decam_flux_ivar='1/nanomaggies^2',
+        decam_apflux='nanomaggies', decam_apflux_ivar='1/nanomaggies^2',
+        decam_apflux_resid='nanomaggies',
+        wise_flux='nanomaggies', wise_flux_ivar='1/nanomaggies^2',
+        shapeexp_r='arcsec', shapeexp_r_ivar='1/arcsec^2',
+        shapedev_r='arcsec', shapedev_r_ivar='1/arcsec^2',
+        ebv='mag',
+        sdss_ra=deg, sdss_ra_ivar=degiv,
+        sdss_dec=deg, sdss_dec_ivar=degiv,
+        sdss_tai='sec', sdss_psf_fwhm='arcsec', sdss_mjd='days',
+        sdss_theta_dev='arcsec', sdss_theta_exp='arcsec',
+        sdss_theta_deverr='1/arcsec', sdss_theta_experr='1/arcsec',
+        sdss_phi_dev_deg=deg, sdss_phi_exp_deg=deg,
+        sdss_psfflux='nanomaggies', sdss_psfflux_ivar='1/nanomaggies^2',
+        sdss_cmodelflux='nanomaggies', sdss_cmodelflux_ivar='1/nanomaggies^2',
+        sdss_modelflux='nanomaggies', sdss_modelflux_ivar='1/nanomaggies^2',
+        sdss_devflux='nanomaggies', sdss_devflux_ivar='1/nanomaggies^2',
+        sdss_expflux='nanomaggies', sdss_expflux_ivar='1/nanomaggies^2',
+        sdss_extinction='mag')
+
+    for i,col in enumerate(cols):
+        if col in units:
+            hdr.add_record(dict(name='TUNIT%i' % (i+1), value=units[col]))
+
     # match case to T2.
     cc = T2.get_columns()
     cclower = [c.lower() for c in cc]
@@ -3169,10 +3212,8 @@ def stage_writecat(
             j = cclower.index(c)
             cols[i] = cc[j]
 
-    T2.writeto(fn, header=hdr, columns=cols)
+    T2.writeto(fn, header=hdr, primhdr=version_header, columns=cols)
     print 'Wrote', fn
-
-
 
 
 def main():
