@@ -255,9 +255,9 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     decalsv = decals.decals_dir
     hdr = fitsio.FITSHDR()
 
-    hdr.add_record(dict(name='COMMENT',
+    hdr.add_record(dict(name='COMMENT', value=None,
                         comment='Data product of the DECam Legacy Survey (DECaLS)'))
-    hdr.add_record(dict(name='COMMENT',
+    hdr.add_record(dict(name='COMMENT', value=None,
                         comment='Full documentation at http://legacysurvey.org'))
     hdr.add_record(dict(name='TRACTORV', value=version,
                         comment='Tractor git version'))
