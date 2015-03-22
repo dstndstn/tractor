@@ -537,13 +537,20 @@ def stage_srcs(coimgs=None, cons=None,
     cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
             'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr', 'decerr']
     cat,T = get_sdss_sources(bands, targetwcs, extracols=cols)
-    # SDSS RAERR, DECERR are in arcsec.
-    err = T.raerr / 3600.
-    T.ra_ivar  = 1./err**2
-    err = T.decerr / 3600.
-    T.dec_ivar  = 1./err**2
-    T.delete_column('raerr')
-    T.delete_column('decerr')
+
+    if T is not None:
+        # SDSS RAERR, DECERR are in arcsec.  Convert to deg.
+        err = T.raerr / 3600.
+        T.ra_ivar  = 1./err**2
+        err = T.decerr / 3600.
+        T.dec_ivar  = 1./err**2
+        T.delete_column('raerr')
+        T.delete_column('decerr')
+
+        sdss_xy = None
+    else:
+        sdss_xy = T.itx, T.ity
+
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
@@ -556,11 +563,16 @@ def stage_srcs(coimgs=None, cons=None,
     # SED-matched detections
     SEDs = sed_matched_filters(bands)
     Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
-                                              (T.itx,T.ity), targetwcs, plots=plots,
+                                              sdss_xy, targetwcs, plots=plots,
                                               ps=ps, mp=mp)
-    Nsdss = len(T)
-    T = merge_tables([T,Tnew], columns='fillzero')
-    cat.extend(newcat)
+    if T is None:
+        Nsdss = 0
+        T = Tnew
+        cat = newcat
+    else:
+        Nsdss = len(T)
+        T = merge_tables([T,Tnew], columns='fillzero')
+        cat.extend(newcat)
     # new peaks
     peakx = T.tx[Nsdss:]
     peaky = T.ty[Nsdss:]
@@ -3371,6 +3383,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'tims':None,
 
         'srcs':'tims',
+
         'image_coadds':'tims',
         #'srcs':'image_coadds',
 
