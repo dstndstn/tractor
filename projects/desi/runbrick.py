@@ -3370,9 +3370,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     prereqs = {
         'tims':None,
 
-        #'srcs':'tims',
+        'srcs':'tims',
         'image_coadds':'tims',
-        'srcs':'image_coadds',
+        #'srcs':'image_coadds',
 
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',

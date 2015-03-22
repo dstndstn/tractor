@@ -148,16 +148,21 @@ if __name__ == '__main__':
     T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
     log('Cut to', len(T), 'CCDs in filters', bands)
 
-    allI = set()
-    for b in B:
-        wcs = wcs_for_brick(b)
-        I = ccds_touching_wcs(wcs, T)
-        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-        if len(I) == 0:
-            continue
-        allI.update(I)
-    allI = list(allI)
-    allI.sort()
+    # allI = set()
+    # for b in B:
+    #     wcs = wcs_for_brick(b)
+    #     I = ccds_touching_wcs(wcs, T)
+    #     log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+    #     if len(I) == 0:
+    #         continue
+    #     allI.update(I)
+    # allI = list(allI)
+    # allI.sort()
+    ##### HACK
+    #allI = np.flatnonzero(T.dec > 24.75)
+    allI = np.flatnonzero((T.dec < 25.25) * (T.dec > 19.75))
+
+    ## Be careful here -- T has been cut; we want to write out T.index.
 
     print 'Writing calibs to', opt.out
     f = open(opt.out,'w')
