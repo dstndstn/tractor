@@ -42,6 +42,8 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--calibs', action='store_true', default=False,
                       help='Output CCDs that need to be calibrated.')
+    parser.add_option('--check', action='store_true', default=False,
+                      help='Check which calibrations actually need to run.')
     parser.add_option('--out', help='Output filename for calibs, default %default',
                       default='jobs')
     opt,args = parser.parse_args()
@@ -82,10 +84,6 @@ if __name__ == '__main__':
     rlo,rhi = 0, 360
     # part 1
     dlo,dhi = 25, 40
-    # 1a
-    #dlo,dhi = 30, 35
-    # 1b
-    #dlo,dhi = 25, 30
     # part 2
     #dlo,dhi = 20,25
     # part 3
@@ -165,6 +163,14 @@ if __name__ == '__main__':
     f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
     for i in allI:
+
+        if opt.check:
+            im = DecamImage(T[i])
+            if not im.run_calibs(im, None, None, None, just_check=True,
+                                 astrom=False):
+                print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
+                continue
+
         f.write('%i\n' % i)
     f.close()
     print 'Wrote', opt.out
