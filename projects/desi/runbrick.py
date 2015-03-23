@@ -3225,7 +3225,17 @@ def stage_writecat(
             j = cclower.index(c)
             cols[i] = cc[j]
 
-    T2.writeto(fn, header=hdr, primheader=version_header, columns=cols)
+    #T2.writeto(fn, header=hdr, primheader=version_header, columns=cols)
+    
+    # 'primheader' is not written in Astrometry.net 0.53
+
+    arrays = [T2.get(c) for c in cols]
+    arrays = [np.array(a) if isinstance(a,list) else a
+              for a in arrays]
+    fitsio.write(fn, None, header=version_header, clobber=True)
+    fitsio.write(fn, arrays, names=cols, header=hdr)
+
+
     print 'Wrote', fn
 
 
