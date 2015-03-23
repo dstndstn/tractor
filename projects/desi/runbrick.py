@@ -769,7 +769,8 @@ def stage_fitblobs(T=None,
     R = _map(_bounce_one_blob, iter)
     print 'Fitting sources took:', Time()-tfitall
 
-    return dict(fitblobs_R=R, tims=tims, ps=ps)
+    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs, blobslices=blobslices,
+                blobsrcs=blobsrcs)
     
 def stage_fitblobs_finish(
     brickname=None,

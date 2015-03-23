@@ -58,7 +58,8 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
                Ik[2] * dy * dy);
         // "maxD" is slightly (ok totally) misnamed: it includes the
         // -0.5 factor * mahalanobis distance so is actually a *minimum*.
-        if (dsq < maxD[k])
+        // (!(x >= y)) to handle NaNs.
+        if (!(dsq >= maxD[k]))
             continue;
         n_exp++;
         G = scales[k] * exp(dsq);
