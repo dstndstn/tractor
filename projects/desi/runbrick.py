@@ -3229,6 +3229,72 @@ def stage_writecat(
     
     # 'primheader' is not written in Astrometry.net 0.53
 
+    # fill in any empty columns (eg, SDSS columns in areas outside the
+    # footprint)
+    fitsB = np.uint8
+    fitsI = np.int16
+    fitsJ = np.int32
+    fitsK = np.int64
+    fitsD = float
+    fitsE = np.float32
+    coltypes = dict(sdss_run=fitsI,
+                    sdss_camcol=fitsB,
+                    sdss_field=fitsI,
+                    sdss_id=fitsI,
+                    sdss_objid=fitsK,
+                    sdss_parent=fitsI,
+                    sdss_nchild=fitsI,
+                    sdss_objc_type=fitsJ,
+                    sdss_objc_flags=fitsJ,
+                    sdss_objc_flags2=fitsJ,
+                    sdss_ra=fitsD,
+                    sdss_ra_ivar=fitsD,
+                    sdss_dec=fitsD,
+                    sdss_dec_ivar=fitsD,
+                    sdss_mjd=fitsJ,
+                    sdss_resolve_status=fitsJ
+                    )
+    arrtypes = dict(sdss_flags=fitsJ,
+                    sdss_flags2=fitsJ,
+                    sdss_tai=fitsD,
+                    sdss_psf_fwhm=fitsE,
+                    sdss_theta_dev=fitsE,
+                    sdss_theta_deverr=fitsE,
+                    sdss_ab_dev=fitsE,
+                    sdss_ab_deverr=fitsE,
+                    sdss_theta_exp=fitsE,
+                    sdss_theta_experr=fitsE,
+                    sdss_ab_exp=fitsE,
+                    sdss_ab_experr=fitsE,
+                    sdss_fracdev=fitsE,
+                    sdss_phi_dev_deg=fitsE,
+                    sdss_phi_exp_deg=fitsE,
+                    sdss_psfflux=fitsE,
+                    sdss_psfflux_ivar=fitsE,
+                    sdss_cmodelflux=fitsE,
+                    sdss_cmodelflux_ivar=fitsE,
+                    sdss_modelflux=fitsE,
+                    sdss_modelflux_ivar=fitsE,
+                    sdss_devflux=fitsE,
+                    sdss_devflux_ivar=fitsE,
+                    sdss_expflux=fitsE,
+                    sdss_expflux_ivar=fitsE,
+                    sdss_extinction=fitsE,
+                    sdss_calib_status=fitsJ)
+    Tcols = T2.get_columns()
+    for c in cols:
+        if not c in Tcols:
+            print 'Filling in missing column', c
+            if c in coltypes:
+                print '  type', coltypes[c]
+                T2.set(c, np.zeros(len(T2), coltypes[c]))
+            if c in arrtypes:
+                print '  array type', arrtypes[c]
+                T2.set(c, np.zeros((len(T2),5), arrtypes[c]))
+
+    # If there are no "COMP" sources, it will be 'S3'...
+    T2.type = T2.type.astype('S4')
+
     arrays = [T2.get(c) for c in cols]
     arrays = [np.array(a) if isinstance(a,list) else a
               for a in arrays]
