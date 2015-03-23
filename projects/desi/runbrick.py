@@ -3224,7 +3224,7 @@ def stage_writecat(
             j = cclower.index(c)
             cols[i] = cc[j]
 
-    T2.writeto(fn, header=hdr, primhdr=version_header, columns=cols)
+    T2.writeto(fn, header=hdr, primheader=version_header, columns=cols)
     print 'Wrote', fn
 
 
