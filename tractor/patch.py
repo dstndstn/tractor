@@ -247,7 +247,7 @@ class Patch(object):
         (outx, inx) = get_overlapping_region(self.x0, self.x0+pw-1, 0, iw-1)
         (outy, iny) = get_overlapping_region(self.y0, self.y0+ph-1, 0, ih-1)
         if inx == [] or iny == []:
-            return slice(0,0), slice(0,0)
+            return (slice(0,0),slice(0,0)), (slice(0,0),slice(0,0))
         return (iny,inx), (outy,outx)
 
     def getPixelIndices(self, parent):
