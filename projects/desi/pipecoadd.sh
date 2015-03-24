@@ -38,3 +38,7 @@ echo "--------------------------------------------------------------------------
 
 python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --skip-coadd --stage image_coadds >> $log 2>&1
 
+rtnval=$?
+
+echo "runbrick.py exited with status $rtnval" >> $log
+exit $rtnval

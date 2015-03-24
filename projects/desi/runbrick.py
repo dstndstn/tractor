@@ -258,10 +258,11 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     decalsv = decals.decals_dir
     hdr = fitsio.FITSHDR()
 
-    hdr.add_record(dict(name='COMMENT', value=None,
-                        comment='Data product of the DECam Legacy Survey (DECaLS)'))
-    hdr.add_record(dict(name='COMMENT', value=None,
-                        comment='Full documentation at http://legacysurvey.org'))
+    for s in [
+        'Data product of the DECam Legacy Survey (DECaLS)',
+        'Full documentation at http://legacysurvey.org',
+        ]:
+        hdr.add_record(dict(name='COMMENT', value=s, comment=s))
     hdr.add_record(dict(name='TRACTORV', value=version,
                         comment='Tractor git version'))
     hdr.add_record(dict(name='DECALSV', value=decalsv,
@@ -2920,16 +2921,17 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         hdr.delete('IMAGEW')
         hdr.delete('IMAGEH')
         
-        for name,img,gzip in [('image',  cowimg, False),
-                              ('invvar', cow, False),
-                              ('model',  cowmod, True),
-                              ('chi2',   cochi2, False),
-                              ('depth',  detiv, True),
+        for name,img,gzip in [('image',  cowimg,  False),
+                              ('invvar', cow,     False),
+                              ('model',  cowmod,  True),
+                              ('chi2',   cochi2,  False),
+                              ('depth',  detiv,   True),
                               ('nexp',   congood, True),
                               ]:
 
             hdr.add_record(dict(name='IMTYPE', value=name,
                                 comment='DECaLS image type'))
+
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
             if gzip:
