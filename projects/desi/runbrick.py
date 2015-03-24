@@ -3368,6 +3368,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                       help='Just check for existence of output files for this brick?')
     parser.add_option('--skip', default=False, action='store_true',
                       help='Quit if the output catalog already exists.')
+    parser.add_option('--skip-coadd', default=False, action='store_true',
+                      help='Quit if the output coadd jpeg already exists.')
 
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
@@ -3376,14 +3378,19 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     opt,args = parser.parse_args()
 
-    if opt.check_done or opt.skip:
+    if opt.check_done or opt.skip or opt.skip_coadd:
         outdir = opt.outdir
         if outdir is None:
             outdir = '.'
         brickname = opt.brick
-        fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
+        if opt.skip_coadd:
+            fn = os.path.join(outdir, 'coadd', brickname[:3], brickname, 'decals-%s-image.jpg' % brickname)
+        else:
+            fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
         print 'Checking for', fn
         exists = os.path.exists(fn)
+        if opt.skip_coadd and exists:
+            return 0
         if exists:
             try:
                 T = fits_table(fn)

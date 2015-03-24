@@ -12,7 +12,7 @@ outdir=$GSCRATCH/dr1b
 
 mkdir -p $outdir/logs
 brick="$1"
-log="$outdir/logs/$brick.log"
+log="$outdir/logs/co-$brick.log"
 
 echo Logging to: $log
 echo Running on ${NERSC_HOST} $(hostname)
@@ -33,5 +33,5 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --skip --stage image_coadds >> $log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --skip-coadd --stage image_coadds >> $log 2>&1
 
