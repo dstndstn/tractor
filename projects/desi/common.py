@@ -142,6 +142,70 @@ class SFDMap(object):
             return ebv,rtn
         return rtn
 
+class MyFITSHDR(fitsio.FITSHDR):
+    ''' This is copied straight from fitsio, simply removing "BUNIT"
+    from the list of headers to remove.
+    '''
+    def clean(self):
+        """
+        Remove reserved keywords from the header.
+        
+        These are keywords that the fits writer must write in order
+        to maintain consistency between header and data.
+        """
+
+        rmnames = ['SIMPLE','EXTEND','XTENSION','BITPIX','PCOUNT','GCOUNT',
+                   'THEAP',
+                   'EXTNAME',
+                   #'BUNIT',
+                   'BSCALE','BZERO','BLANK',
+                   'ZQUANTIZ','ZDITHER0','ZIMAGE','ZCMPTYPE',
+                   'ZSIMPLE','ZTENSION','ZPCOUNT','ZGCOUNT',
+                   'ZBITPIX','ZEXTEND',
+                   #'FZTILELN','FZALGOR',
+                   'CHECKSUM','DATASUM']
+        self.delete(rmnames)
+
+        r = self._record_map.get('NAXIS',None)
+        if r is not None:
+            naxis = int(r['value'])
+            self.delete('NAXIS')
+
+            rmnames = ['NAXIS%d' % i for i in xrange(1,naxis+1)]
+            self.delete(rmnames)
+
+        r = self._record_map.get('ZNAXIS',None)
+        self.delete('ZNAXIS')
+        if r is not None:
+
+            znaxis = int(r['value'])
+
+            rmnames = ['ZNAXIS%d' % i for i in xrange(1,znaxis+1)]
+            self.delete(rmnames)
+            rmnames = ['ZTILE%d' % i for i in xrange(1,znaxis+1)]
+            self.delete(rmnames)
+            rmnames = ['ZNAME%d' % i for i in xrange(1,znaxis+1)]
+            self.delete(rmnames)
+            rmnames = ['ZVAL%d' % i for i in xrange(1,znaxis+1)]
+            self.delete(rmnames)
+
+        
+        r = self._record_map.get('TFIELDS',None)
+        if r is not None:
+            tfields = int(r['value'])
+            self.delete('TFIELDS')
+
+            if tfields > 0:
+
+                nbase = ['TFORM','TTYPE','TDIM','TUNIT','TSCAL','TZERO',
+                         'TNULL','TDISP','TDMIN','TDMAX','TDESC','TROTA',
+                         'TRPIX','TRVAL','TDELT','TCUNI',
+                         #'FZALG'
+                        ]
+                for i in xrange(1,tfields+1):
+                    names=['%s%d' % (n,i) for n in nbase]
+                    self.delete(names)
+
 def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"

@@ -350,6 +350,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         rtn[k] = locals()[k]
     return rtn
 
+
 def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                        brickname=None, version_header=None,
                        plots=False, ps=None,
@@ -477,7 +478,7 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
 
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
-        hdr = fitsio.FITSHDR()
+        hdr = MyFITSHDR()
         for r in version_header.records():
             hdr.add_record(r)
         hdr.add_record(dict(name='BRICKNAM', value=brickname,
@@ -504,15 +505,17 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         hdr.delete('IMAGEW')
         hdr.delete('IMAGEH')
 
-        for name,img,gzip in [('image',  cowimg, False),]:
-            hdr.add_record(dict(name='IMTYPE', value=name,
-                                comment='DECaLS image type'))
-            fn = os.path.join(basedir,
-                              'decals-%s-%s-%s.fits' % (brickname, name, band))
-            if gzip:
-                fn += '.gz'
-            fitsio.write(fn, img, clobber=True, header=hdr)
-            print 'Wrote', fn
+        name,img = ('image',  cowimg)
+        hdr.add_record(dict(name='IMTYPE', value=name,
+                            comment='DECaLS image type'))
+        hdr.add_record(dict(name='MAGZERO', value=22.5,
+                            comment='Magnitude zeropoint'))
+        hdr.add_record(dict(name='BUNIT', value='nanomaggie',
+                            comment='Image units: AB mag = -2.5*log10(nanomaggie) + 22.5'))
+
+        fn = os.path.join(basedir, 'decals-%s-%s-%s.fits' % (brickname, name, band))
+        fitsio.write(fn, img, clobber=True, header=hdr)
+        print 'Wrote', fn
 
         coimgs.append(cowimg)
 
@@ -2920,23 +2923,36 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         targetwcs.add_to_header(hdr)
         hdr.delete('IMAGEW')
         hdr.delete('IMAGEH')
-        
-        for name,img,gzip in [('image',  cowimg,  False),
-                              ('invvar', cow,     False),
-                              ('model',  cowmod,  True),
-                              ('chi2',   cochi2,  False),
-                              ('depth',  detiv,   True),
-                              ('nexp',   congood, True),
-                              ]:
 
-            hdr.add_record(dict(name='IMTYPE', value=name,
-                                comment='DECaLS image type'))
+        for name,img,gzip in [
+            ('image',  cowimg,  False),
+            ('invvar', cow,     False),
+            ('model',  cowmod,  True),
+            ('chi2',   cochi2,  False),
+            ('depth',  detiv,   True),
+            ('nexp',   congood, True),
+            ]:
+
+            # Make a copy, because each image has different values for these headers...
+            hdr2 = MyFITSHDR()
+            for r in hdr.records():
+                hdr2.add_record(r)
+            hdr2.add_record(dict(name='IMTYPE', value=name,
+                                 comment='DECaLS image type'))
+            if name in ['image', 'model']:
+                hdr2.add_record(dict(name='MAGZERO', value=22.5,
+                                     comment='Magnitude zeropoint'))
+                hdr2.add_record(dict(name='BUNIT', value='nanomaggie',
+                                     comment='Image units: AB mag = -2.5*log10(nanomaggie) + 22.5'))
+            if name in ['invvar', 'depth']:
+                hdr2.add_record(dict(name='BUNIT', value='1/nanomaggie^2',
+                                     comment='Image units: invvar of AB mag = -2.5*log10(nanomaggie) + 22.5'))
 
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
             if gzip:
                 fn += '.gz'
-            fitsio.write(fn, img, clobber=True, header=hdr)
+            fitsio.write(fn, img, clobber=True, header=hdr2)
             print 'Wrote', fn
 
     tmpfn = create_temp(suffix='.png')

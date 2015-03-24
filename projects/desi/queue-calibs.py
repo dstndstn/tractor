@@ -49,8 +49,8 @@ if __name__ == '__main__':
     parser.add_option('--out', help='Output filename for calibs, default %default',
                       default='jobs')
 
-    parser.add_option('--maxdec', type=float, default=40, help='Maximum Dec to run')
-    parser.add_option('--mindec', type=float, default=-20, help='Minimum Dec to run')
+    parser.add_option('--maxdec', type=float, help='Maximum Dec to run')
+    parser.add_option('--mindec', type=float, help='Minimum Dec to run')
 
     opt,args = parser.parse_args()
 
@@ -121,8 +121,10 @@ if __name__ == '__main__':
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
 
-    dlo = max(dlo, opt.mindec)
-    dhi = min(dhi, opt.maxdec)
+    if opt.mindec is not None:
+        dlo = opt.mindec
+    if opt.maxdec is not None:
+        dhi = opt.maxdec
 
     if rlo < rhi:
         B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
@@ -139,6 +141,20 @@ if __name__ == '__main__':
         keep[i] = True
     B.cut(keep)
     log('Cut to', len(B), 'bricks near CCDs')
+
+    # Aside -- how many near DR1=1 CCDs?
+    if True:
+        T2 = D.get_ccds()
+        log(len(T2), 'CCDs')
+        T2.cut(T2.dr1 == 1)
+        log(len(T2), 'CCDs marked DR1=1')
+        log(len(B), 'bricks in range')
+        I,J,d = match_radec(B.ra, B.dec, T2.ra, T2.dec, 0.25)
+        keep = np.zeros(len(B), bool)
+        for i in I:
+            keep[i] = True
+        log('Total of', sum(keep), 'bricks near CCDs with DR1=1')
+        B[keep].writeto('decals-bricks-in-dr1.fits')
 
     # sort by dec decreasing
     B.cut(np.argsort(-B.dec))
