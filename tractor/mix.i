@@ -61,6 +61,8 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
         // (!(x >= y)) to handle NaNs.
         if (!(dsq >= maxD[k]))
             continue;
+        if (!isfinite(dsq))
+            continue;
         n_exp++;
         G = scales[k] * exp(dsq);
         r += G;
