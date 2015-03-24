@@ -15,7 +15,10 @@ log="$outdir/logs/$brick.log"
 echo Logging to: $log
 echo Running on ${NERSC_HOST} $(hostname)
 
-echo "PWD: $(pwd)" > $log
+echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
+echo "-----------------------------------------------------------------------------------------" >> $log
+echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
+echo "PWD: $(pwd)" >> $log
 echo "Modules:" >> $log
 module list >> $log 2>&1
 echo >> $log
