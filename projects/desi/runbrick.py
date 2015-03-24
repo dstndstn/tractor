@@ -196,6 +196,9 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
+    # early fail for mysterious "ImportError: c.so.6: cannot open shared object file: No such file or directory"
+    from tractor.mix import c_gauss_2d_grid
+
     rtn,version,err = run_command('git describe')
     if rtn:
         raise RuntimeError('Failed to get version string (git describe):' + ver + err)
@@ -933,7 +936,7 @@ def _blob_iter(blobslices, blobsrcs, blobs,
 
         print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
-        print len(Isrcs), 'sources, size', blobw, 'x', blobh
+        print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
         print
 
         rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
@@ -2023,7 +2026,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # sources can get scattered outside the blob.
     keep = []
     for i,(src,ivar) in enumerate(zip(srcs, srcinvvars)):
-        print 'ivar', ivar
+        #print 'ivar', ivar
         # Arbitrarily look at the first element (RA)?
         if ivar[0] == 0.:
             continue

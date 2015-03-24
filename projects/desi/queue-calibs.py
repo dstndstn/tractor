@@ -44,8 +44,14 @@ if __name__ == '__main__':
                       help='Output CCDs that need to be calibrated.')
     parser.add_option('--check', action='store_true', default=False,
                       help='Check which calibrations actually need to run.')
+    parser.add_option('--check-coadd', action='store_true', default=False,
+                      help='Check which caoadds actually need to run.')
     parser.add_option('--out', help='Output filename for calibs, default %default',
                       default='jobs')
+
+    parser.add_option('--maxdec', type=float, default=40, help='Maximum Dec to run')
+    parser.add_option('--mindec', type=float, default=-20, help='Minimum Dec to run')
+
     opt,args = parser.parse_args()
 
     D = Decals()
@@ -83,13 +89,19 @@ if __name__ == '__main__':
     # DR1
     rlo,rhi = 0, 360
     # part 1
-    dlo,dhi = 25, 40
+    #dlo,dhi = 25, 40
     # part 2
     #dlo,dhi = 20,25
     # part 3
     #dlo,dhi = 15,20
     # part 4
     #dlo,dhi = 10,15
+    # part 5
+    #dlo,dhi = 5,10
+    # the rest
+    #dlo,dhi = -11, 5
+
+    dlo,dhi = 15,25.5
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -108,6 +120,9 @@ if __name__ == '__main__':
     #B.cut((B.ra > 240) * (B.ra < 244) * (B.dec > 5) * (B.dec < 9))
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
+
+    dlo = max(dlo, opt.mindec)
+    dhi = min(dhi, opt.maxdec)
 
     if rlo < rhi:
         B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
@@ -129,6 +144,12 @@ if __name__ == '__main__':
     B.cut(np.argsort(-B.dec))
 
     for b in B:
+        if opt.check_coadd:
+            fn = 'dr1b/coadd/%s/%s/decals-%s-image.jpg' % (b.brickname[:3], b.brickname, b.brickname)
+            if os.path.exists(fn):
+                print >> sys.stderr, 'Exists:', fn
+                continue
+
         print b.brickname
 
     if not opt.calibs:
@@ -160,22 +181,25 @@ if __name__ == '__main__':
     # allI.sort()
     ##### HACK
     #allI = np.flatnonzero(T.dec > 24.75)
-    allI = np.flatnonzero((T.dec < 25.25) * (T.dec > 19.75))
+    allI = np.flatnonzero((T.dec < dhi+0.1) * (T.dec > dlo-0.1))
 
     ## Be careful here -- T has been cut; we want to write out T.index.
 
     print 'Writing calibs to', opt.out
     f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
-    for i in allI:
+    for j,i in enumerate(allI):
 
         if opt.check:
+            print j+1, 'of', len(allI)
             im = DecamImage(T[i])
             if not im.run_calibs(im, None, None, None, just_check=True,
                                  astrom=False):
                 print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
                 continue
         f.write('%i\n' % T.index[i])
+        if opt.check:
+            f.flush()
     f.close()
     print 'Wrote', opt.out
 
