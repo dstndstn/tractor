@@ -9,7 +9,7 @@ from astropy.io import fits
 
 import os
 
-hdrfn = os.path.join(os.path.dirname(__file__), 'hdr.fits')
+hdrfn = os.path.join(os.path.dirname(__file__), 'pvhdr.fits')
 
 # read header
 hdulist = fits.open(hdrfn)

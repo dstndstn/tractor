@@ -536,13 +536,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                           nsigma=5.,
                           saddle=2.,
                           ps=None):
-    from astrometry.util.ttime import Time
-                          
     '''
     detmaps: list of detmaps, same order as "bands"
     detivs :    ditto
     
     '''
+    from astrometry.util.ttime import Time
     t0 = Time()
     H,W = detmaps[0].shape
 
@@ -585,8 +584,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
                    cmap='hot')
         rgba = np.zeros((H,W,4), np.uint8)
-        rgba[:,:,1] = pkbounds
-        rgba[:,:,3] = pkbounds
+        #rgba[:,:,1] = pkbounds
+        #rgba[:,:,3] = pkbounds
+        rgba[:,:,1] = peaks
+        rgba[:,:,3] = peaks
         plt.imshow(rgba, interpolation='nearest', origin='lower')
         plt.title('SED %s: S/N & peaks' % sedname)
         ps.savefig()
