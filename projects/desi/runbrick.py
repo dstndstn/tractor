@@ -536,7 +536,7 @@ def stage_srcs(coimgs=None, cons=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False, brickname=None,
-               mp=None,
+               mp=None, outdir=None,
                **kwargs):
 
     tlast = Time()
@@ -596,25 +596,36 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
-    if plots:
+    if plots or True:
+        if not plots:
+            plt.figure(figsize=(18,18))
+            plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
+                                hspace=0.2, wspace=0.05)
+        if not plots:
+            if outdir is None:
+                outdir = '.'
+            outdir = os.path.join(outdir, 'metrics', brickname[:3])
+            try_makedirs(outdir)
+            fn = os.path.join(outdir, 'sources-%s' % brickname)
+            ps = PlotSequence(fn)
+
         crossa = dict(ms=10, mew=1.5)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
-        #plt.clf()
-        #dimshow(get_rgb(coimgs, bands))
+
         ax = plt.axis()
         plt.plot(T.tx, T.ty, 'r+', **crossa)
         plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
         plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
-        for x,y in zip(peakx,peaky):
-            plt.text(x+5, y, '%.1f' % (hot[np.clip(int(y),0,H-1),
-                                         np.clip(int(x),0,W-1)]), color='r',
-                     ha='left', va='center')
-        ps.savefig()
+        # for x,y in zip(peakx,peaky):
+        #     plt.text(x+5, y, '%.1f' % (hot[np.clip(int(y),0,H-1),
+        #                                  np.clip(int(x),0,W-1)]), color='r',
+        #              ha='left', va='center')
+        # ps.savefig()
 
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
