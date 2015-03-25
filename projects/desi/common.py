@@ -15,6 +15,7 @@ from scipy.ndimage.measurements import label, find_objects
 from scipy.ndimage.morphology import binary_dilation, binary_closing, binary_erosion, binary_fill_holes
 
 from astrometry.util.fits import fits_table, merge_tables
+from astrometry.util.plotutils import dimshow
 from astrometry.util.util import Tan, Sip, anwcs_t
 from astrometry.util.starutil_numpy import degrees_between
 from astrometry.util.miscutils import polygons_intersect, estimate_mode, clip_polygon
@@ -232,7 +233,6 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     T.blob = blobs[T.ity, T.itx]
 
     if plots:
-        from astrometry.util.plotutils import dimshow
         plt.clf()
         dimshow(blobs > 0, vmin=0, vmax=1)
         ax = plt.axis()
@@ -344,7 +344,6 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
         fitsio.write('blobs-after-%s.fits' % name, blobs, clobber=True)
 
     if plots:
-        from astrometry.util.plotutils import dimshow
         plt.clf()
         dimshow(blobs > -1, vmin=0, vmax=1)
         ax = plt.axis()
@@ -555,7 +554,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         break
     if allzero:
         print 'SED', sedname, 'has all zero weight'
-        return None,None,None
+        return None,None,None,None
 
     sedmap = np.zeros((H,W), np.float32)
     sediv  = np.zeros((H,W), np.float32)
@@ -578,19 +577,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     print 'SED sn:', Time()-t0
     t0 = Time()
 
-    if ps is not None:
-        pkbounds = binary_dilation(peaks) - peaks
-        plt.clf()
-        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-                   cmap='hot')
-        rgba = np.zeros((H,W,4), np.uint8)
-        #rgba[:,:,1] = pkbounds
-        #rgba[:,:,3] = pkbounds
-        rgba[:,:,1] = peaks
-        rgba[:,:,3] = peaks
-        plt.imshow(rgba, interpolation='nearest', origin='lower')
-        plt.title('SED %s: S/N & peaks' % sedname)
-        ps.savefig()
+    def saddle_level(Y):
+        # Require a saddle of (the larger of) "saddle" sigma, or 10% of the peak height
+        drop = max(saddle, Y * 0.2)
+        return Y - drop
+
+    lowest_saddle = nsigma - saddle
 
     # zero out the edges -- larger margin here?
     peaks[0 ,:] = 0
@@ -609,22 +601,48 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     print 'Peaks:', Time()-t0
     t0 = Time()
 
+    if ps is not None:
+
+        def plot_boundary_map(X):
+            bounds = binary_dilation(X) - X
+            H,W = X.shape
+            rgba = np.zeros((H,W,4), np.uint8)
+            rgba[:,:,1] = bounds*255
+            rgba[:,:,3] = bounds*255
+            plt.imshow(rgba, interpolation='nearest', origin='lower')
+
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='hot')
+        above = (sedsn > nsigma)
+        plot_boundary_map(above)
+        ax = plt.axis()
+        y,x = np.nonzero(peaks)
+        plt.plot(x, y, 'r+')
+        plt.axis(ax)
+        plt.title('SED %s: S/N & peaks' % sedname)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='hot')
+        plot_boundary_map(sedsn > lowest_saddle)
+        plt.title('SED %s: S/N & lowest saddle point bounds' % sedname)
+        ps.savefig()
+
     # Ok, now for each peak (in decreasing order of peak height):
     #  -find the image area that is "saddle" sigma lower than the peak.
     #  -blank out any lower peaks in that region?
     #  -omit this peak if one of the "omit" points is within the saddle
     # ... or create saddle images for each of the 'omit' points first?
 
-    omitmap = np.zeros(peaks.shape, bool)
-
-    def saddle_level(Y):
-        # Require a saddle of (the larger of) "saddle" sigma, or 10% of the peak height
-        drop = max(saddle, Y * 0.1)
-        return Y - drop
-
     print len(xomit), 'points to omit'
 
-    allblobs,nblobs = label(sedsn > nsigma)
+    dilate = 2
+
+    saddlemap = (sedsn > lowest_saddle)
+    saddlemap = binary_dilation(saddlemap, iterations=dilate)
+    allblobs,nblobs = label(saddlemap)
     allslices = find_objects(allblobs)
     ally0 = [sy.start for sy,sx in allslices]
     allx0 = [sx.start for sy,sx in allslices]
@@ -641,93 +659,227 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         x1 = min(x1+margin, W)
         badslices[i] = slice(y0,y1), slice(x0,x1)
 
-    for x,y in zip(xomit, yomit):
-        #t0 = Time()
-        if sedsn[y,x] > nsigma:
-            #print 'saddle',
-            blob = allblobs[y,x]
-            index = blob - 1
-            slc = allslices[index]
-            level = saddle_level(sedsn[y,x])
-            blobs,nblobs = label(sedsn[slc] > level)
-            omitmap[slc] |= (blobs == blobs[y - ally0[index], x - allx0[index]])
+    if ps is not None:
+        plt.clf()
+        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+                   cmap='hot')
+        omitbounds = np.zeros(sedsn.shape, bool)
 
-        elif sediv[y,x] == 0:
-            #print 'satur',
-            # Nil pixel... possibly saturated.  Mask the whole region.
-            #print 'Blobs:', blobs.shape, blobs.dtype
-            blob = badblobs[y,x]
-            index = blob - 1
-            slc = badslices[index]
-            badpix = (badblobs[slc] == blob)
-            badpix = binary_dilation(badpix, iterations=5)
-            omitmap[slc] |= badpix
-        else:
-            #print 'other',
-            # omit a 3x3 box around the peak
-            omitmap[np.clip(y-1,0,H-1): np.clip(y+2,0,H),
-                    np.clip(x-1,0,W-1): np.clip(x+2,0,W)] = True
-        #print Time()-t0
-    print 'Omit map:', Time()-t0
-    t0 = Time()
+
+
 
     # find peaks, sort by flux
     py,px = np.nonzero(peaks)
     I = np.argsort(-sedsn[py,px])
     py = py[I]
     px = px[I]
-    #keep = np.ones(len(py), bool)
-    # drop peaks inside the 'omit map'
-    keep = np.logical_not(omitmap[py, px])
 
+    #print 'Distinct integer S/Nes:', np.unique(np.ceil(sedsn[py,px]))
+    #print 'Distinct integer S/Nes, omit:', np.unique(np.ceil(sedsn[yomit,xomit]))
 
     if ps is not None:
         crossa = dict(ms=10, mew=1.5)
         green = (0,1,0)
-        plt.clf()
-        plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
-        plt.title('Omit map for SED %s' % sedname)
-        ps.savefig()
-        
-        plt.clf()
-        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-                   cmap='gray')
-        ax = plt.axis()
-        plt.plot(px[keep], py[keep], '+', color=green, **crossa)
-        drop = np.logical_not(keep)
-        plt.plot(px[drop], py[drop], 'r+', **crossa)
-        plt.axis(ax)
-        plt.title('SED %s: keep (green) peaks' % sedname)
-        ps.savefig()
 
-    t0 = Time()
+    keep = np.zeros(len(px), bool)
+
+    aper = []
+    apin = 10
+    apout = 20
+    
+    # For each peak, determine whether it is isolated enough --
+    # separated by a low enough saddle from other sources.  Need only
+    # search within its "allblob", which is defined by the lowest
+    # saddle.
     for i,(x,y) in enumerate(zip(px, py)):
-        if not keep[i]:
-            continue
-
         level = saddle_level(sedsn[y,x])
-
         ablob = allblobs[y,x]
         index = ablob - 1
         slc = allslices[index]
 
-        blobs,nblobs = label(sedsn[slc] > level)
-        saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
-        # ???
-        # this source's blob touches the omit map
-        if np.any(saddleblob & omitmap[slc]):
-            keep[i] = False
+        saddlemap = (sedsn[slc] > level) * (allblobs[slc] == ablob)
+        saddlemap = binary_fill_holes(saddlemap)
+        saddlemap = binary_dilation(saddlemap, iterations=dilate)
+        blobs,nblobs = label(saddlemap)
+        #saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
+        x0,y0 = allx0[index], ally0[index]
+        thisblob = blobs[y-y0, x-x0]
+
+        # previously found sources:
+        ox = np.append(xomit, px[:i][keep[:i]]) - x0
+        oy = np.append(yomit, py[:i][keep[:i]]) - y0
+        h,w = blobs.shape
+        cut = any((ox >= 0) * (ox < w) * (oy >= 0) * (oy < h) *
+                  blobs[np.clip(oy,0,h-1), np.clip(ox,0,w-1)] == thisblob)
+
+        if False and (not cut) and ps is not None:
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(sedsn, vmin=-2, vmax=10, cmap='hot')
+            plot_boundary_map((sedsn > nsigma))
+            ax = plt.axis()
+            plt.plot(x, y, 'm+', ms=12, mew=2)
+            plt.axis(ax)
+
+            plt.subplot(1,2,2)
+            y1,x1 = [s.stop for s in slc]
+            ext = [x0,x1,y0,y1]
+            dimshow(saddlemap, extent=ext)
+            #plt.plot([x0,x0,x1,x1,x0], [y0,y1,y1,y0,y0], 'c-')
+            #ax = plt.axis()
+            #plt.plot(ox+x0, oy+y0, 'rx')
+            plt.plot(xomit, yomit, 'rx', ms=8, mew=2)
+            plt.plot(px[:i][keep[:i]], py[:i][keep[:i]], '+', color=green, ms=8, mew=2)
+            plt.plot(x, y, 'mo', mec='m', mfc='none', ms=12, mew=2)
+            plt.axis(ax)
+            if cut:
+                plt.suptitle('Cut')
+            else:
+                plt.suptitle('Keep')
+            ps.savefig()
+
+        if cut:
+            # in same blob as previously found source
             continue
-        
-        omitmap[slc] |= saddleblob
+
+        # Measure in aperture...
+        ap   =  sedsn[max(0, y-apout):min(H,y+apout+1), max(0, x-apout):min(W,x+apout+1)]
+        apiv = (sediv[max(0, y-apout):min(H,y+apout+1), max(0, x-apout):min(W,x+apout+1)] > 0)
+        aph,apw = ap.shape
+        apx0, apy0 = max(0, x - apout), max(0, y - apout)
+        R2 = ((np.arange(aph)+apy0 - y)[:,np.newaxis]**2 + 
+              (np.arange(apw)+apx0 - x)[np.newaxis,:]**2)
+        m = np.percentile(ap[apiv * (R2 >= apin**2) * (R2 <= apout**2)], 16.)
+
+        aper.append(m)
+
+        if False and ps is not None:
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(ap, vmin=-2, vmax=10, cmap='hot', extent=[apx0,apx0+apw,apy0,apy0+aph])
+            plt.subplot(1,2,2)
+            dimshow(ap * ((R2 >= apin**2) * (R2 <= apout**2)), vmin=-2, vmax=10, cmap='hot', extent=[apx0,apx0+apw,apy0,apy0+aph])
+            plt.suptitle('peak %.1f vs ap %.1f' % (sedsn[y,x], m))
+            ps.savefig()
+
+        # if any(blobs[py[:i][keep[:i]] - y0, px[:i][keep[:i]] - x0] == thisblob):
+        #     # conflict
+        #     continue
+        # 
+        # if any(blobs[yomit - y0, xomit - x0] == thisblob):
+        #     # conflict
+        #     continue
+
+        keep[i] = True
+
+
+
+    # for x,y in zip(xomit, yomit):
+    #     if sedsn[y,x] > nsigma:
+    #         blob = allblobs[y,x]
+    #         index = blob - 1
+    #         slc = allslices[index]
+    #         level = saddle_level(sedsn[y,x])
+    #         blobs,nblobs = label((sedsn[slc] > level) * (allblobs[slc] == blob))
+    #         omitmap[slc] |= (blobs == blobs[y - ally0[index], x - allx0[index]])
+    # 
+    #         if ps is not None:
+    #             newomit = (blobs == blobs[y - ally0[index], x - allx0[index]])
+    #             #print 'newomit: total of', newomit.sum(), 'pixels set'
+    #             omitbounds[slc] |= (binary_dilation(newomit) - newomit)
+    #             #print 'omitbounds: now total of', omitbounds.sum(), 'pixels set'
+    # 
+    #     elif sediv[y,x] == 0:
+    #         # Nil pixel... possibly saturated.  Mask the whole region.
+    #         blob = badblobs[y,x]
+    #         index = blob - 1
+    #         slc = badslices[index]
+    #         badpix = (badblobs[slc] == blob)
+    #         badpix = binary_dilation(badpix, iterations=5)
+    #         omitmap[slc] |= badpix
+    #     else:
+    #         # omit a 5x5 box around the peak
+    #         omitmap[np.clip(y-2,0,H-1): np.clip(y+3,0,H),
+    #                 np.clip(x-2,0,W-1): np.clip(x+3,0,W)] = True
+    # 
+    # if ps is not None:
+    #     rgba = np.zeros((H,W,4), np.uint8)
+    #     rgba[:,:,1] = omitbounds*255
+    #     rgba[:,:,3] = omitbounds*255
+    #     plt.imshow(rgba, interpolation='nearest', origin='lower')
+    #     plt.title('Omit map expansions from [xy]omit')
+    #     ax = plt.axis()
+    #     plt.plot(xomit, yomit, 'g+')
+    #     plt.axis(ax)
+    #     ps.savefig()
+    # 
+    # print 'Omit map:', Time()-t0
+    # t0 = Time()
+    # 
+    # # find peaks, sort by flux
+    # py,px = np.nonzero(peaks)
+    # I = np.argsort(-sedsn[py,px])
+    # py = py[I]
+    # px = px[I]
+    # # drop peaks inside the 'omit map'
+    # keep = np.logical_not(omitmap[py, px])
+    # 
+    # 
+    # if ps is not None:
+    #     crossa = dict(ms=10, mew=1.5)
+    #     green = (0,1,0)
+    #     # plt.clf()
+    #     # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
+    #     # plt.title('Omit map for SED %s' % sedname)
+    #     # ps.savefig()
+    #     
+    #     plt.clf()
+    #     plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+    #                cmap='gray')
+    #     ax = plt.axis()
+    #     plt.plot(px[keep], py[keep], '+', color=green, **crossa)
+    #     drop = np.logical_not(keep)
+    #     plt.plot(px[drop], py[drop], 'r+', **crossa)
+    #     plt.axis(ax)
+    #     rgba = np.zeros((H,W,4), np.uint8)
+    #     rgba[:,:,1] = omitbounds*255
+    #     rgba[:,:,3] = omitbounds*255
+    #     plt.imshow(rgba, interpolation='nearest', origin='lower')
+    #     plt.title('SED %s: keep (green) peaks' % sedname)
+    #     ps.savefig()
+    # 
+    # t0 = Time()
+    # for i,(x,y) in enumerate(zip(px, py)):
+    #     if not keep[i]:
+    #         continue
+    # 
+    #     level = saddle_level(sedsn[y,x])
+    # 
+    #     ablob = allblobs[y,x]
+    #     index = ablob - 1
+    #     slc = allslices[index]
+    # 
+    #     blobs,nblobs = label((sedsn[slc] > level) * (allblobs[slc] == ablob))
+    #     saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
+    #     # ???
+    #     # this source's blob touches the omit map
+    #     if np.any(saddleblob & omitmap[slc]):
+    #         keep[i] = False
+    #         continue
+    #     
+    #     omitmap[slc] |= saddleblob
+    # 
+    #     if ps is not None:
+    #         omitbounds[slc] |= (binary_dilation(saddleblob) - saddleblob)
+
     print 'Omit:', Time()-t0
     t0 = Time()
 
     if ps is not None:
-        plt.clf()
-        plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
-        plt.title('Final omit map for SED %s' % sedname)
-        ps.savefig()
+        # plt.clf()
+        # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
+        # plt.title('Final omit map for SED %s' % sedname)
+        # ps.savefig()
         
         plt.clf()
         plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
@@ -737,13 +889,17 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         drop = np.logical_not(keep)
         plt.plot(px[drop], py[drop], 'r+', **crossa)
         plt.axis(ax)
+        # rgba = np.zeros((H,W,4), np.uint8)
+        # rgba[:,:,1] = omitbounds*255
+        # rgba[:,:,3] = omitbounds*255
+        # plt.imshow(rgba, interpolation='nearest', origin='lower')
         plt.title('SED %s: Final keep (green) peaks' % sedname)
         ps.savefig()
 
     py = py[keep]
     px = px[keep]
     
-    return sedsn, px, py
+    return sedsn, px, py, aper
 
     
     # blobs,nblobs = label(peaks)
@@ -1057,9 +1213,8 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     H,W = detmaps[0].shape
     hot = np.zeros((H,W), np.float32)
 
-    #if mp is not None:
-    #    R = mp.map(_run_sed, [(sedname, sed, detmaps, detivs, bands, xx, yy
-
+    peaksn = []
+    apsn = []
 
     for sedname,sed in SEDs:
         print 'SED', sedname
@@ -1068,7 +1223,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         else:
             pps = None
         t0 = Time()
-        sedsn,px,py = sed_matched_detection(
+        sedsn,px,py,apval = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
         print 'SED took', Time()-t0
         if sedsn is None:
@@ -1078,19 +1233,14 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         xx = np.append(xx, px)
         yy = np.append(yy, py)
 
+        peaksn.extend(sedsn[py,px])
+        apsn.extend(apval)
+
     # New peaks:
     peakx = xx[n0:]
     peaky = yy[n0:]
 
     # Add sources for the new peaks we found
-
-    # make their initial fluxes ~ 5-sigma
-    # fluxes = dict([(b,[]) for b in bands])
-    # for tim in tims:
-    #     psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-    #     fluxes[tim.band].append(5. * tim.sig1 / psfnorm)
-    # fluxes = dict([(b, np.mean(fluxes[b])) for b in bands])
-
     pr,pd = targetwcs.pixelxy2radec(peakx+1, peaky+1)
     print 'Adding', len(pr), 'new sources'
     # Also create FITS table for new sources
@@ -1099,6 +1249,11 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     Tnew.dec = pd
     Tnew.tx = peakx
     Tnew.ty = peaky
+    assert(len(peaksn) == len(Tnew))
+    assert(len(apsn) == len(Tnew))
+    Tnew.peaksn = np.array(peaksn)
+    Tnew.apsn = np.array(apsn)
+
     Tnew.itx = np.clip(np.round(Tnew.tx), 0, W-1).astype(int)
     Tnew.ity = np.clip(np.round(Tnew.ty), 0, H-1).astype(int)
     newcat = []
@@ -1107,12 +1262,6 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
                        for band,detmap in zip(bands,detmaps)])
         newcat.append(PointSource(RaDecPos(r,d),
                                   NanoMaggies(order=bands, **fluxes)))
-    # print 'Existing source table:'
-    # T.about()
-    # print 'New source table:'
-    # Tnew.about()
-    # T = merge_tables([T, Tnew], columns='fillzero')
-    # return peakx,peaky,
 
     return Tnew, newcat, hot
 

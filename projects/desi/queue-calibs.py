@@ -52,6 +52,8 @@ if __name__ == '__main__':
     parser.add_option('--maxdec', type=float, help='Maximum Dec to run')
     parser.add_option('--mindec', type=float, help='Minimum Dec to run')
 
+    parser.add_option('--region', help='Region to select')
+
     opt,args = parser.parse_args()
 
     D = Decals()
@@ -121,6 +123,20 @@ if __name__ == '__main__':
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
 
+
+    if opt.region in ['test1', 'test2', 'test3', 'test4']:
+        nm = dict(test1='2446p115', # weird stuff around bright star
+                  test2='1183p292', # faint sources around bright galaxy
+                  test3='3503p005', # DES
+                  test4='1163p277', # Pollux
+                  )[opt.region]
+
+        B.cut(np.flatnonzero(np.array([s == nm for s in B.brickname])))
+        log('Cut to', len(B), 'bricks')
+        print B.ra, B.dec
+        dlo,dhi = -90,90
+        rlo,rhi = 0, 360
+
     if opt.mindec is not None:
         dlo = opt.mindec
     if opt.maxdec is not None:
@@ -143,7 +159,7 @@ if __name__ == '__main__':
     log('Cut to', len(B), 'bricks near CCDs')
 
     # Aside -- how many near DR1=1 CCDs?
-    if True:
+    if False:
         T2 = D.get_ccds()
         log(len(T2), 'CCDs')
         T2.cut(T2.dr1 == 1)
@@ -153,8 +169,19 @@ if __name__ == '__main__':
         keep = np.zeros(len(B), bool)
         for i in I:
             keep[i] = True
-        log('Total of', sum(keep), 'bricks near CCDs with DR1=1')
-        B[keep].writeto('decals-bricks-in-dr1.fits')
+        B2 = B[keep]
+        log('Total of', len(B2), 'bricks near CCDs with DR1=1')
+        for band in 'grz':
+            Tb = T2[T2.filter == band]
+            log(len(Tb), 'in filter', band)
+            I,J,d = match_radec(B2.ra, B2.dec, Tb.ra, Tb.dec, 0.25)
+            good = np.zeros(len(B2), bool)
+            for i in I:
+                good[i] = True
+            B2.set('has_' + band, good)
+
+        B2.writeto('decals-bricks-in-dr1.fits')
+        sys.exit(0)
 
     # sort by dec decreasing
     B.cut(np.argsort(-B.dec))
@@ -185,19 +212,20 @@ if __name__ == '__main__':
     T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
     log('Cut to', len(T), 'CCDs in filters', bands)
 
-    # allI = set()
-    # for b in B:
-    #     wcs = wcs_for_brick(b)
-    #     I = ccds_touching_wcs(wcs, T)
-    #     log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-    #     if len(I) == 0:
-    #         continue
-    #     allI.update(I)
-    # allI = list(allI)
-    # allI.sort()
+    allI = set()
+    for b in B:
+        wcs = wcs_for_brick(b)
+        I = ccds_touching_wcs(wcs, T)
+        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+        if len(I) == 0:
+            continue
+        allI.update(I)
+    allI = list(allI)
+    allI.sort()
     ##### HACK
     #allI = np.flatnonzero(T.dec > 24.75)
-    allI = np.flatnonzero((T.dec < dhi+0.1) * (T.dec > dlo-0.1))
+
+    #allI = np.flatnonzero((T.dec < dhi+0.1) * (T.dec > dlo-0.1))
 
     ## Be careful here -- T has been cut; we want to write out T.index.
 
