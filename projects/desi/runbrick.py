@@ -3454,7 +3454,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     kwargs = {}
     if opt.plot_number:
         ps.skipto(opt.plot_number)
-        kwargs.update(ps=ps)
+    kwargs.update(ps=ps)
 
     global mp
     if opt.threads and opt.threads > 1:
