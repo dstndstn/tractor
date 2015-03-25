@@ -571,6 +571,12 @@ def stage_srcs(coimgs=None, cons=None,
     Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
                                               sdss_xy, targetwcs, plots=plots,
                                               ps=ps, mp=mp)
+
+    peaksn = Tnew.peaksn
+    apsn = Tnew.apsn
+    Tnew.delete_column('peaksn')
+    Tnew.delete_column('apsn')
+
     if T is None:
         Nsdss = 0
         T = Tnew
@@ -594,12 +600,44 @@ def stage_srcs(coimgs=None, cons=None,
         crossa = dict(ms=10, mew=1.5)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
+        plt.title('Catalog + SED-matched detections')
+        ps.savefig()
+        #plt.clf()
+        #dimshow(get_rgb(coimgs, bands))
         ax = plt.axis()
         plt.plot(T.tx, T.ty, 'r+', **crossa)
         plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
         plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
+        for x,y in zip(peakx,peaky):
+            plt.text(x+5, y, '%.1f' % (hot[np.clip(int(y),0,H-1),
+                                         np.clip(int(x),0,W-1)]), color='r',
+                     ha='left', va='center')
+        ps.savefig()
+
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        ax = plt.axis()
+        plt.plot(T.tx[:Nsdss], T.ty[:Nsdss], 'r+', **crossa)
+        I = Nsdss + np.flatnonzero(peaksn - apsn >= 5.)
+        plt.plot(T.tx[I], T.ty[I], '+', color=(0,1,0), **crossa)
+        I = Nsdss + np.flatnonzero(peaksn - apsn < 5.)
+        plt.plot(T.tx[I], T.ty[I], '+', color='m', **crossa)
+        plt.title('Catalog + SED-matched detections - ap')
+        plt.axis(ax)
+        ps.savefig()
+
+        plt.clf()
+        dimshow(get_rgb(coimgs, bands))
+        ax = plt.axis()
+        plt.plot(T.tx[:Nsdss], T.ty[:Nsdss], 'r+', **crossa)
+        I = Nsdss + np.flatnonzero(peaksn - apsn >= 5.)
+        plt.plot(T.tx[I], T.ty[I], '+', color=(0,1,0), **crossa)
+        plt.title('Catalog + SED-matched detections - ap')
+        plt.axis(ax)
+        ps.savefig()
+
 
 
     hot = (hot > 5)
