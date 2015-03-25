@@ -536,7 +536,7 @@ def stage_srcs(coimgs=None, cons=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False, brickname=None,
-               mp=None, outdir=None,
+               mp=None, outdir=None, nsigma=5,
                **kwargs):
 
     tlast = Time()
@@ -567,10 +567,12 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
 
     # SED-matched detections
+    print 'Running source detection at', nsigma, 'sigma'
     SEDs = sed_matched_filters(bands)
     Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
-                                              sdss_xy, targetwcs, plots=plots,
-                                              ps=ps, mp=mp)
+                                              sdss_xy, targetwcs, nsigma=nsigma,
+                                              plots=plots, ps=ps, mp=mp)
+                                              
 
     peaksn = Tnew.peaksn
     apsn = Tnew.apsn
@@ -3438,6 +3440,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--skip-coadd', default=False, action='store_true',
                       help='Quit if the output coadd jpeg already exists.')
 
+    parser.add_option('--nsigma', type=float, help='Set N sigma source detection thresh')
+
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
@@ -3504,6 +3508,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.plot_number:
         ps.skipto(opt.plot_number)
     kwargs.update(ps=ps)
+
+    if opt.nsigma:
+        kwargs.update(nsigma=opt.nsigma)
 
     global mp
     if opt.threads and opt.threads > 1:

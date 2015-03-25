@@ -1200,7 +1200,7 @@ def sed_matched_filters(bands):
     return SEDs
 
 def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
-                            targetwcs,
+                            targetwcs, nsigma=5,
                             plots=False, ps=None, mp=None):
     from astrometry.util.ttime import Time
 
@@ -1225,7 +1225,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
             pps = None
         t0 = Time()
         sedsn,px,py,apval = sed_matched_detection(
-            sedname, sed, detmaps, detivs, bands, xx, yy, ps=pps)
+            sedname, sed, detmaps, detivs, bands, xx, yy, nsigma=nsigma, ps=pps)
         print 'SED took', Time()-t0
         if sedsn is None:
             continue
