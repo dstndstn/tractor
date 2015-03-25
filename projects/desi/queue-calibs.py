@@ -153,8 +153,19 @@ if __name__ == '__main__':
         keep = np.zeros(len(B), bool)
         for i in I:
             keep[i] = True
-        log('Total of', sum(keep), 'bricks near CCDs with DR1=1')
-        B[keep].writeto('decals-bricks-in-dr1.fits')
+        B2 = B[keep]
+        log('Total of', len(B2), 'bricks near CCDs with DR1=1')
+        for band in 'grz':
+            Tb = T2[T2.filter == band]
+            log(len(Tb), 'in filter', band)
+            I,J,d = match_radec(B2.ra, B2.dec, Tb.ra, Tb.dec, 0.25)
+            good = np.zeros(len(B2), bool)
+            for i in I:
+                good[i] = True
+            B2.set('has_' + band, good)
+
+        B2.writeto('decals-bricks-in-dr1.fits')
+        sys.exit(0)
 
     # sort by dec decreasing
     B.cut(np.argsort(-B.dec))
