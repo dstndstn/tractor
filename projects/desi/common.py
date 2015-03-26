@@ -1979,13 +1979,19 @@ class DecamImage(object):
                 raise RuntimeError('Command failed: ' + cmd)
                 
         if run_psfex:
-            cmd = ('psfex -c %s -PSF_DIR %s %s' %
-                   (os.path.join(sedir, 'DECaLS-v2.psfex'),
-                    os.path.dirname(self.psffn), self.sefn))
-            print cmd
-            rtn = os.system(cmd)
-            if rtn:
-                raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
+            # If we write *.psf instead of *.fits in a previous run...
+            oldfn = self.psffn.replace('.fits', '.psf')
+            if os.path.exists(oldfn):
+                print 'Moving', oldfn, 'to', self.psffn
+                os.rename(oldfn, self.psffn)
+            else:
+                cmd = ('psfex -c %s -PSF_DIR %s %s' %
+                       (os.path.join(sedir, 'DECaLS-v2.psfex'),
+                        os.path.dirname(self.psffn), self.sefn))
+                print cmd
+                rtn = os.system(cmd)
+                if rtn:
+                    raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
         if run_psfexfit:
             print 'Fit PSF...'
