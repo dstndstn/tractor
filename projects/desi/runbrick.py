@@ -571,8 +571,8 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
 
     # Median-smooth detection maps?
-    for detmap,detiv in zip(detmaps,detivs):
     #if False:
+    for detmap,detiv in zip(detmaps,detivs):
         #from astrometry.util.util import median_smooth
         #smoo = np.zeros_like(detmap)
         #median_smooth(detmap, detiv>0, 100, smoo)
@@ -619,8 +619,6 @@ def stage_srcs(coimgs=None, cons=None,
         for i in range(S):
             for j in range(S):
                 detmap[i::S, j::S] -= smoo
-        #detmap -= smoo
-
 
     # SED-matched detections
     print 'Running source detection at', nsigma, 'sigma'
