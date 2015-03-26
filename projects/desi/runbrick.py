@@ -598,12 +598,15 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
-    if plots or True:
-        if not plots:
+    if plots:
+        ## NOTE, these plots don't currently work because I set
+        # "cutonaper = True" by default in sed_matched_detections --
+        # they are cut before being returned (so they can be picked up
+        # in another SED, eg)
+        if False and not plots:
             plt.figure(figsize=(18,18))
             plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                                 hspace=0.2, wspace=0.05)
-        if not plots:
             if outdir is None:
                 outdir = '.'
             outdir = os.path.join(outdir, 'metrics', brickname[:3])
@@ -650,8 +653,6 @@ def stage_srcs(coimgs=None, cons=None,
         plt.title('Catalog + SED-matched detections - ap')
         plt.axis(ax)
         ps.savefig()
-
-
 
     hot = (hot > 5)
     hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
@@ -963,15 +964,6 @@ def stage_fitblobs_finish(
     for src in cat:
         print '  ', src
     
-    print 'Logprob:', tractor.getLogProb()
-    print 'lnprior:', tractor.getLogPrior()
-    print 'lnl:', tractor.getLogLikelihood()
-
-    print 'image priors', tractor.images.getLogPrior()
-    print 'catalog priors', tractor.catalog.getLogPrior()
-    for src in cat:
-        print '  prior', src.getLogPrior(), src
-    
     rtn = dict(fitblobs_R = None)
     for k in ['tractor', 'cat', 'invvars', 'T']:
         rtn[k] = locals()[k]
@@ -989,7 +981,6 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
 
-        print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
         print
