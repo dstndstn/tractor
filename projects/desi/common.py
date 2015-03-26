@@ -44,6 +44,11 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
+                  trans=128,
+                  edge = 256,
+                  edge2 = 512) # in z-band images?
+
 class SFDMap(object):
     # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
     # but updated (and adding DES u) via email from Schlafly,
@@ -1652,9 +1657,7 @@ class DecamImage(object):
         tim.hdr = imghdr
 
         tim.dq = dq
-        tim.dq_bits = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
-                           trans=128,
-                           edge = 256)
+        tim.dq_bits = CP_DQ_BITS
         tim.saturation = imghdr['SATURATE']
         tim.satval = tim.saturation
         if subsky:
