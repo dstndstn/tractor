@@ -658,11 +658,10 @@ def stage_srcs(coimgs=None, cons=None,
         plt.axis(ax)
         ps.savefig()
 
-    hot = (hot > 5)
-    hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
                                                           ps=ps, plots=plots)
+    del hot
 
     for i,Isrcs in enumerate(blobsrcs):
         #print 'Isrcs dtype', Isrcs.dtype
@@ -3104,10 +3103,13 @@ def stage_writecat(
     outdir=None,
     **kwargs):
 
-    print 'Source types:'
-    for src in cat:
-        print '  ', type(src)
-    
+    # print 'Source types:'
+    # for src in cat:
+    #     print '  ', type(src)
+
+    print 'T:'
+    T.about()
+
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
@@ -3117,8 +3119,7 @@ def stage_writecat(
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
-                       'oob'
-                       'anymask', 'allmask',
+                       'oob', 'anymask', 'allmask',
                        'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)

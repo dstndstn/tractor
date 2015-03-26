@@ -234,6 +234,9 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
+    H,W = image.shape
+    del image
+
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
 
@@ -262,7 +265,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     for blob in range(1, nblobs+1):
         Isrcs = np.flatnonzero(T.blob == blob)
         if len(Isrcs) == 0:
-            print 'Blob', blob, 'has no sources'
+            #print 'Blob', blob, 'has no sources'
             blobmap[blob] = -1
             dropslices[blob] = blobslices[blob-1]
             continue
@@ -281,7 +284,6 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
         inblobs[Isrcs] = True
     noblobs = np.flatnonzero(np.logical_not(inblobs))
     del inblobs
-    H,W = image.shape
     # Add new fake blobs!
     for ib,i in enumerate(noblobs):
         S = 3
@@ -292,16 +294,16 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
         oblobs = np.unique(blobs[bslc])
         oblobs = oblobs[oblobs != emptyblob]
 
-        print 'Adding new blob for source at', (T.itx[i], T.ity[i])
-        print 'This blob overlaps existing blobs:', oblobs
+        ##print 'Adding new blob for source at', (T.itx[i], T.ity[i])
+        #print 'This blob overlaps existing blobs:', oblobs
         if len(oblobs) > 1:
             print 'WARNING: not merging overlapping blobs like maybe we should'
         if len(oblobs):
             blob = oblobs[0]
-            print 'Adding source to existing blob', blob
+            #print 'Adding source to existing blob', blob
             blobs[bslc][blobs[bslc] == emptyblob] = blob
             blobindex = blobmap[blob]
-            print 'blob index', blobindex
+            #print 'blob index', blobindex
             if blobindex == -1:
                 # the overlapping blob was going to be dropped -- restore it.
                 blobindex = len(blobsrcs)
@@ -310,8 +312,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
                 blobsrcs.append(np.array([], np.int64))
             # Expand the existing blob slice to encompass this new source
             oldslc = blobslices[blobindex]
-            print 'Old slice:', oldslc
-            print 'New slice:', bslc
+            #print 'Old slice:', oldslc
+            #print 'New slice:', bslc
             sy,sx = oldslc
             oy0,oy1, ox0,ox1 = sy.start,sy.stop, sx.start,sx.stop
             sy,sx = bslc
@@ -319,7 +321,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
             #print 'Old y', oy0,oy1, 'x', ox0,ox1
             #print 'New y', ny0,ny1, 'x', nx0,nx1
             newslc = slice(min(oy0,ny0), max(oy1,ny1)), slice(min(ox0,nx0), max(ox1,nx1))
-            print 'Updated slice:', newslc
+            #print 'Updated slice:', newslc
             blobslices[blobindex] = newslc
             # Add this source to the list of source indices for the existing blob.
             blobsrcs[blobindex] = np.append(blobsrcs[blobindex], np.array([i]))
@@ -331,7 +333,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
             blobmap[blob] = len(blobsrcs)
             blobslices.append(bslc)
             blobsrcs.append(np.array([i]))
-    print 'Added', len(noblobs), 'new fake singleton blobs'
+    #print 'Added', len(noblobs), 'new fake singleton blobs'
 
     # Remap the "blobs" image so that empty regions are = -1 and the blob values
     # correspond to their indices in the "blobsrcs" list.
@@ -343,6 +345,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     # DEBUG
     if plots:
         fitsio.write('blobs-before-%s.fits' % name, blobs, clobber=True)
+
+    # Remap blob numbers
     blobs = bm[blobs]
 
     if plots:
@@ -561,7 +565,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         break
     if allzero:
         print 'SED', sedname, 'has all zero weight'
-        return None,None,None,None
+        return None,None,None,None,None
 
     sedmap = np.zeros((H,W), np.float32)
     sediv  = np.zeros((H,W), np.float32)
@@ -579,6 +583,13 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         sediv  += detivs [iband] / sed[iband]**2
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
+    del sedmap
+
+    # FIXME DR2: Median-smooth the SED S/N map HERE?  Should really be
+    # in detmaps, actually.
+    #smoo = np.zeros_like(sedsn)
+    #median_smooth(sedsn, sediv>0, 50, smoo)
+    #sedsn -= smoo
     
     peaks = (sedsn > nsigma)
     print 'SED sn:', Time()-t0
@@ -596,6 +607,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     peaks[:, 0] = 0
     peaks[-1,:] = 0
     peaks[:,-1] = 0
+
+    # Label the N-sigma blobs at this point... we'll use this to build "sedhot"
+    hotblobs,nhot = label(binary_fill_holes(binary_dilation(peaks, iterations=2)))
+
     # find pixels that are larger than their 8 neighbors
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,1:-1])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,1:-1])
@@ -641,7 +656,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     # For each new source, compute the saddle value, segment at that
     # level, and drop the source if it is in the same blob as a
-    # previously-detected source.  We dilate the blobs a bit too.
+    # previously-detected source.  We dilate the blobs a bit too, to
+    # catch slight differences in centroid vs SDSS sources.
     dilate = 2
 
     # For efficiency, segment at the minimum saddle level to compute
@@ -662,6 +678,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     keep = np.zeros(len(px), bool)
 
+    peakval = []
     aper = []
     apin = 10
     apout = 20
@@ -737,6 +754,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                 continue
 
         aper.append(m)
+        peakval.append(sedsn[y,x])
         keep[i] = True
 
         if False and ps is not None:
@@ -774,8 +792,28 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     py = py[keep]
     px = px[keep]
-    
-    return sedsn, px, py, aper
+
+    # Which of the hotblobs yielded sources?  Those are the ones to keep.
+    hbmap = np.zeros(nhot+1, bool)
+    hbmap[hotblobs[py,px]] = True
+    if len(xomit):
+        hbmap[hotblobs[xomit,yomit]] = True
+    # in case a source is (somehow) not in a hotblob?
+    hbmap[0] = False
+    hotblobs = hbmap[hotblobs]
+    #print 'Hotblobs:', hotblobs.shape, hotblobs.dtype
+
+    if ps is not None:
+        plt.clf()
+        dimshow(hotblobs, vmin=0, vmax=1, cmap='hot')
+        ax = plt.axis()
+        plt.plot(px, py, 'r+', ms=8, mew=2)
+        plt.plot(xomit, yomit, 'm+', ms=8, mew=2)
+        plt.axis(ax)
+        plt.title('Hot blobs')
+        ps.savefig()
+
+    return hotblobs, px, py, aper, peakval
 
 def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     '''
@@ -1060,7 +1098,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         n0 = 0
 
     H,W = detmaps[0].shape
-    hot = np.zeros((H,W), np.float32)
+    hot = np.zeros((H,W), bool)
 
     peaksn = []
     apsn = []
@@ -1072,17 +1110,17 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         else:
             pps = None
         t0 = Time()
-        sedsn,px,py,apval = sed_matched_detection(
+        sedhot,px,py,peakval,apval = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy, nsigma=nsigma, ps=pps)
         print 'SED took', Time()-t0
-        if sedsn is None:
+        if sedhot is None:
             continue
         print len(px), 'new peaks'
-        hot = np.maximum(hot, sedsn)
+        hot |= sedhot
         xx = np.append(xx, px)
         yy = np.append(yy, py)
 
-        peaksn.extend(sedsn[py,px])
+        peaksn.extend(peakval)
         apsn.extend(apval)
 
     # New peaks:
