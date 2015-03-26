@@ -570,6 +570,58 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Detmaps:', Time()-tlast
     tlast = Time()
 
+    # Median-smooth detection maps?
+    for detmap,detiv in zip(detmaps,detivs):
+    #if False:
+        #from astrometry.util.util import median_smooth
+        #smoo = np.zeros_like(detmap)
+        #median_smooth(detmap, detiv>0, 100, smoo)
+        from scipy.ndimage.filters import median_filter
+        #tmed = Time()
+        #smoo = median_filter(detmap, (50,50))
+        #print 'Median filter 50:', Time()-tmed
+
+        # Bin down before median-filtering, for speed.
+        binning = 4
+        binned,nil = bin_image(detmap, detiv, binning)
+        tmed = Time()
+        smoo = median_filter(binned, (50,50))
+        print 'Median filter:', Time()-tmed
+
+        if plots:
+            sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))
+            kwa = dict(vmin=-2.*sig1, vmax=10.*sig1)
+            kwa2 = dict(vmin=-2.*sig1, vmax=50.*sig1)
+
+            subbed = detmap.copy()
+            S = binning
+            for i in range(S):
+                for j in range(S):
+                    subbed[i::S, j::S] -= smoo
+
+            plt.clf()
+            plt.subplot(2,3,1)
+            dimshow(detmap, **kwa)
+            plt.subplot(2,3,2)
+            dimshow(smoo, **kwa)
+            plt.subplot(2,3,3)
+            dimshow(subbed, **kwa)
+            plt.subplot(2,3,4)
+            dimshow(detmap, **kwa2)
+            plt.subplot(2,3,5)
+            dimshow(smoo, **kwa2)
+            plt.subplot(2,3,6)
+            dimshow(subbed, **kwa2)
+            ps.savefig()
+
+        # Subtract binned median image.
+        S = binning
+        for i in range(S):
+            for j in range(S):
+                detmap[i::S, j::S] -= smoo
+        #detmap -= smoo
+
+
     # SED-matched detections
     print 'Running source detection at', nsigma, 'sigma'
     SEDs = sed_matched_filters(bands)

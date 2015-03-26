@@ -212,6 +212,21 @@ class MyFITSHDR(fitsio.FITSHDR):
                     names=['%s%d' % (n,i) for n in nbase]
                     self.delete(names)
 
+def bin_image(data, invvar, S):
+    # rebin image data
+    H,W = data.shape
+    sH,sW = (H+S-1)/S, (W+S-1)/S
+    newdata = np.zeros((sH,sW), dtype=data.dtype)
+    newiv = np.zeros((sH,sW), dtype=invvar.dtype)
+    for i in range(S):
+        for j in range(S):
+            iv = invvar[i::S, j::S]
+            newdata += data[i::S, j::S] * iv
+            newiv += iv
+    newdata /= (newiv + (newiv == 0)*1.)
+    newdata[newiv == 0] = 0.
+    return newdata,newiv
+
 def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"
