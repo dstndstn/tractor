@@ -604,6 +604,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     t0 = Time()
 
     if ps is not None:
+        crossa = dict(ms=10, mew=1.5)
+        green = (0,1,0)
 
         def plot_boundary_map(X):
             bounds = binary_dilation(X) - X
