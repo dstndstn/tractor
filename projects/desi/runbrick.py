@@ -308,17 +308,17 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
-    print 'Tims:', tims
-    print 'T:', len(T)
-    T.about()
+    #print 'Tims:', tims
+    #print 'T:', len(T)
+    #T.about()
     I = np.flatnonzero(np.array([tim is not None for tim in tims]))
-    print 'I:', I
+    #print 'I:', I
     T.cut(I)
     ccds = T
     tims = [tim for tim in tims if tim is not None]
     assert(len(T) == len(tims))
 
-    print 'Read images:', Time()-tlast
+    print 'Read', len(T), 'images:', Time()-tlast
     tlast = Time()
 
     if len(tims) == 0:
@@ -339,6 +339,13 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     allbands = [tim.band for tim in tims]
     bands = [b for b in bands if b in allbands]
     print 'Cut bands to', bands
+
+    for band in 'grz':
+        hasit = band in bands
+        hdr.add_record(dict(name='BRICK_%s' % band, value=hasit,
+                            comment='Does band %s touch this brick?' % band))
+    hdr.add_record(dict(name='BRICKBND', value=''.join(bands),
+                        comment='Bands touching this brick'))
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
             'bands', 'tims', 'ps', 'brickid', 'brickname', 'brick',
@@ -366,13 +373,10 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
     coimgs = []
     for iband,band in enumerate(bands):
 
-        cow    = np.zeros((H,W), np.float32)
         cowimg = np.zeros((H,W), np.float32)
-
-        # cosat  = np.zeros((H,W), np.float32)
-        # cosatn = np.zeros((H,W), np.uint8)
-        #coimg  = np.zeros((H,W), np.float32)
-        #con     = np.zeros((H,W), np.uint8)
+        cow    = np.zeros((H,W), np.float32)
+        cosatw = np.zeros((H,W), np.float32)
+        cosatim= np.zeros((H,W), np.float32)
 
         sig1 = 1.
         tinyw = 1e-30
@@ -384,75 +388,79 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                 continue
             (Yo,Xo,Yi,Xi) = R
             iv = tim.getInvvar()[Yi,Xi]
-            im = tim.getImage()[Yi,Xi]
+            im = tim.getImage ()[Yi,Xi]
             # invvar-weighted image
             cowimg[Yo,Xo] += iv * im
             cow   [Yo,Xo] += iv
 
-            # dummy values for saturated pixels
-            sat = tim.dq_bits['satur'] & tim.dq
+            # Saturated (but not otherwise bad) pixels
+            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
+            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
+            #print 'sat:', sat.sum(), 'pixels'
+            #print 'bad:', bad.sum(), 'pixels'
+            sat &= np.logical_not(bad)
+            #print 'sat & ~bad:', sat.sum(), 'pixels'
+            # Pixels near saturated pix
             sat = binary_dilation(sat, iterations=10)
-            cowimg[Yo,Xo] += tinyw * sat[Yi,Xi]
-            cow   [Yo,Xo] += tinyw
-            #cowimg[Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi]) * tim.satval
-            #cow   [Yo,Xo] += tinyw * (tim.dq_bits['satur'] & tim.dq[Yi,Xi])
-
-            #cowimg[Yo,Xo] += tinyw * im
-            #cow   [Yo,Xo] += tinyw
-
-            # image, including saturated pixels but not other masked pixels
-            # okbits = tim.dq_bits['satur'] + tim.dq_bits['bleed']
-            # ok = ((tim.dq[Yi,Xi] & np.bitwise_not(okbits)) == 0)
-            # cosat [Yo,Xo] += im * ok
-            # cosatn[Yo,Xo] += ok
+            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
+            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im #tim.satval
 
             sig1 = tim.sig1
             if plots:
+                plt.clf()
+                plt.subplot(1,3,1)
                 thisco = np.zeros((H,W), np.float32)
                 thisco[Yo,Xo] = im
-                plt.clf()
                 dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
                 plt.title('co: %s' % tim.name)
-                ps.savefig()
 
+                plt.subplot(1,3,2)
+                thisco = np.zeros((H,W), np.float32)
                 thisco[Yo,Xo] = iv
-                plt.clf()
                 dimshow(thisco, vmin=0., vmax=(1.2/tim.sig1**2))
                 plt.title('iv: %s' % tim.name)
+
+                plt.subplot(1,3,3)
+                thisco = np.zeros((H,W), np.float32)
+                thisco[Yo,Xo] = tinyw * sat[Yi,Xi] * im
+                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
+                plt.title('sat: %s' % tim.name)
+
                 ps.savefig()
 
-                thisco[Yo,Xo] = im
-                vals = tim.dq_bits.values()
-                vals.sort()
-                thisbit = np.zeros((H,W), bool)
-                for i,v in enumerate(vals):
-                    #plt.subplot(3,3,i+1)
-                    thisbit[:,:] = False
-                    thisbit[Yo,Xo] = (tim.dq[Yi,Xi] & v) > 0
-                    print 'bit', v, 'has', thisbit.sum(), 'pixels set'
-                    if sum(thisbit) > 0:
-                        plt.clf()
-                        dimshow(thisbit * thisco, vmin=-5.*tim.sig1, vmax=5.*tim.sig1)
-                        plt.title('bit 0x%x' % v)
-                        ps.savefig()
+                if False:
+                    thisco[Yo,Xo] = im
+                    vals = tim.dq_bits.values()
+                    vals.sort()
+                    thisbit = np.zeros((H,W), bool)
+                    for i,v in enumerate(vals):
+                        #plt.subplot(3,3,i+1)
+                        thisbit[:,:] = False
+                        thisbit[Yo,Xo] = (tim.dq[Yi,Xi] & v) > 0
+                        print 'bit', v, 'has', thisbit.sum(), 'pixels set'
+                        if sum(thisbit) > 0:
+                            plt.clf()
+                            dimshow(thisbit * thisco, vmin=-5.*tim.sig1, vmax=5.*tim.sig1)
+                            plt.title('bit 0x%x' % v)
+                            ps.savefig()
 
         if plots:
             plt.clf()
-            plt.subplot(2,2,1)
+            plt.subplot(1,2,1)
             dimshow(cowimg / np.maximum(cow, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
             plt.title('cowimg')
-            plt.subplot(2,2,2)
+            plt.subplot(1,2,2)
             dimshow(cow)
             plt.title('cow')
-            plt.subplot(2,2,3)
-            #dimshow(coimg / np.maximum(1, con), vmin=-2.*sig1, vmax=5.*sig1)
-            #plt.title('coimg')
-            # dimshow(cosat / np.maximum(1, cosatn), vmin=-2.*sig1, vmax=5.*sig1)
-            # plt.title('cosat')
-            # plt.subplot(2,2,4)
-            # #dimshow(con)
-            # dimshow(cosatn)
-            # plt.title('cosatn')
+            ps.savefig()
+
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(cosatim / np.maximum(cosatw, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cosatim')
+            plt.subplot(1,2,2)
+            dimshow(cosatw)
+            plt.title('cosatw')
             ps.savefig()
 
         if plots:
@@ -460,19 +468,17 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
             plt.title('cowimg (pre-patched)')
             ps.savefig()
-            # plt.clf()
-            # dimshow(cosat / np.maximum(1, cosatn), vmin=-2.*sig1, vmax=5.*sig1)
-            # plt.title('cosat')
-            # ps.savefig()
+
+        copretty = (cowimg + cosatim) / np.maximum(tinyw, cow + cosatw)
+        coimgs.append(copretty)
+        del cosatw
+        del cosatim
 
         cowimg /= np.maximum(cow, tinyw)
-        #cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
-        # This is somewhat silly... patch saturated pixels.
-        #cowimg[cow == 0] = (cosat[cow == 0] / np.maximum(1, cosatn[cow == 0]))
 
         if plots:
             plt.clf()
-            dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
+            dimshow(copretty, vmin=-2.*sig1, vmax=5.*sig1)
             plt.title('cowimg (patched)')
             ps.savefig()
 
@@ -511,13 +517,11 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         hdr.add_record(dict(name='MAGZERO', value=22.5,
                             comment='Magnitude zeropoint'))
         hdr.add_record(dict(name='BUNIT', value='nanomaggie',
-                            comment='Image units: AB mag = -2.5*log10(nanomaggie) + 22.5'))
+                            comment='AB mag = 22.5 - 2.5*log10(nanomaggie)'))
 
         fn = os.path.join(basedir, 'decals-%s-%s-%s.fits' % (brickname, name, band))
         fitsio.write(fn, img, clobber=True, header=hdr)
         print 'Wrote', fn
-
-        coimgs.append(cowimg)
 
     tmpfn = create_temp(suffix='.png')
     for name,ims in [('image',coimgs)]:
@@ -566,6 +570,58 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Detmaps:', Time()-tlast
     tlast = Time()
 
+    # Median-smooth detection maps?
+    for detmap,detiv in zip(detmaps,detivs):
+    #if False:
+        #from astrometry.util.util import median_smooth
+        #smoo = np.zeros_like(detmap)
+        #median_smooth(detmap, detiv>0, 100, smoo)
+        from scipy.ndimage.filters import median_filter
+        #tmed = Time()
+        #smoo = median_filter(detmap, (50,50))
+        #print 'Median filter 50:', Time()-tmed
+
+        # Bin down before median-filtering, for speed.
+        binning = 4
+        binned,nil = bin_image(detmap, detiv, binning)
+        tmed = Time()
+        smoo = median_filter(binned, (50,50))
+        print 'Median filter:', Time()-tmed
+
+        if plots:
+            sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))
+            kwa = dict(vmin=-2.*sig1, vmax=10.*sig1)
+            kwa2 = dict(vmin=-2.*sig1, vmax=50.*sig1)
+
+            subbed = detmap.copy()
+            S = binning
+            for i in range(S):
+                for j in range(S):
+                    subbed[i::S, j::S] -= smoo
+
+            plt.clf()
+            plt.subplot(2,3,1)
+            dimshow(detmap, **kwa)
+            plt.subplot(2,3,2)
+            dimshow(smoo, **kwa)
+            plt.subplot(2,3,3)
+            dimshow(subbed, **kwa)
+            plt.subplot(2,3,4)
+            dimshow(detmap, **kwa2)
+            plt.subplot(2,3,5)
+            dimshow(smoo, **kwa2)
+            plt.subplot(2,3,6)
+            dimshow(subbed, **kwa2)
+            ps.savefig()
+
+        # Subtract binned median image.
+        S = binning
+        for i in range(S):
+            for j in range(S):
+                detmap[i::S, j::S] -= smoo
+        #detmap -= smoo
+
+
     # SED-matched detections
     print 'Running source detection at', nsigma, 'sigma'
     SEDs = sed_matched_filters(bands)
@@ -598,12 +654,15 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Peaks:', Time()-tlast
     tlast = Time()
 
-    if plots or True:
-        if not plots:
+    if plots:
+        ## NOTE, these plots don't currently work because I set
+        # "cutonaper = True" by default in sed_matched_detections --
+        # they are cut before being returned (so they can be picked up
+        # in another SED, eg)
+        if False and not plots:
             plt.figure(figsize=(18,18))
             plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                                 hspace=0.2, wspace=0.05)
-        if not plots:
             if outdir is None:
                 outdir = '.'
             outdir = os.path.join(outdir, 'metrics', brickname[:3])
@@ -651,13 +710,10 @@ def stage_srcs(coimgs=None, cons=None,
         plt.axis(ax)
         ps.savefig()
 
-
-
-    hot = (hot > 5)
-    hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
                                                           ps=ps, plots=plots)
+    del hot
 
     for i,Isrcs in enumerate(blobsrcs):
         #print 'Isrcs dtype', Isrcs.dtype
@@ -963,15 +1019,6 @@ def stage_fitblobs_finish(
     for src in cat:
         print '  ', src
     
-    print 'Logprob:', tractor.getLogProb()
-    print 'lnprior:', tractor.getLogPrior()
-    print 'lnl:', tractor.getLogLikelihood()
-
-    print 'image priors', tractor.images.getLogPrior()
-    print 'catalog priors', tractor.catalog.getLogPrior()
-    for src in cat:
-        print '  prior', src.getLogPrior(), src
-    
     rtn = dict(fitblobs_R = None)
     for k in ['tractor', 'cat', 'invvars', 'T']:
         rtn[k] = locals()[k]
@@ -989,7 +1036,6 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
 
-        print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
         print
@@ -2820,33 +2866,48 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     # Look up number of images overlapping each source's position.
     assert(len(T) == len(cat))
-    nobs = np.zeros((len(T), len(bands)), np.uint8)
-    satur = np.zeros(len(T), bool)
     rr = np.array([s.getPosition().ra  for s in cat])
     dd = np.array([s.getPosition().dec for s in cat])
     ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
+    T.oob = reduce(np.logical_or, [ix < 0.5, iy < 0.5, ix > W+0.5, iy > H+0.5])
     ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
     iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
 
     coimgs = []
     comods = []
+    coresids = []
 
     AP = fits_table()
 
-    ### FIXME -- COULD read previously-written coadd files from stage_image_coadds.
+    T.saturated = np.zeros((len(T),len(bands)), bool)
+    T.nobs = np.zeros((len(T), len(bands)), np.uint8)
+    T.anymask = np.zeros((len(T), len(bands)), np.uint16)
+    T.allmask = np.zeros((len(T), len(bands)), np.uint16)
 
     for iband,band in enumerate(bands):
 
         cow    = np.zeros((H,W), np.float32)
         cowimg = np.zeros((H,W), np.float32)
         cowmod = np.zeros((H,W), np.float32)
-        coimg  = np.zeros((H,W), np.float32)
+
+        cosatw = np.zeros((H,W), np.float32)
+        cosatim= np.zeros((H,W), np.float32)
+
+        #coimg  = np.zeros((H,W), np.float32)
         comod  = np.zeros((H,W), np.float32)
         cochi2 = np.zeros((H,W), np.float32)
         con     = np.zeros((H,W), np.uint8)
-        anysatur = np.zeros((H,W), bool)
         congood = np.zeros((H,W), np.uint8)
         detiv   = np.zeros((H,W), np.float32)
+
+        anysatur = np.zeros((H,W), bool)
+
+        # These match the type of the "DQ" images.
+        ormask   = np.zeros((H,W), np.int32)
+        andmask  = np.empty((H,W), np.int32)
+        andmask[:,:] = 0x7fffffff
+
+        tinyw = 1e-30
 
         for itim, (tim,mod) in enumerate(zip(tims, mods)):
             if tim.band != band:
@@ -2862,47 +2923,75 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
             iv = tim.getInvvar()[Yi,Xi]
             im = tim.getImage()[Yi,Xi]
+            mo = mod[Yi,Xi]
 
             # invvar-weighted image & model
             cowimg[Yo,Xo] += iv * im
-            cowmod[Yo,Xo] += iv * mod[Yi,Xi]
+            cowmod[Yo,Xo] += iv * mo
             cow   [Yo,Xo] += iv
 
             # chi-squared
-            cochi2[Yo,Xo] += iv * (im - mod[Yi,Xi])**2
+            cochi2[Yo,Xo] += iv * (im - mo)**2
+
+            # Saturated (but not otherwise bad) pixels
+            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
+            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
+            sat &= np.logical_not(bad)
+            sat = binary_dilation(sat, iterations=10)
+            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
+            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im
             
             # straight-up image & model
-            coimg[Yo,Xo] += im
+            #coimg[Yo,Xo] += im
             comod[Yo,Xo] += mod[Yi,Xi]
             con  [Yo,Xo] += 1
 
-            anysatur[Yo,Xo] |= ((tim.dq[Yi,Xi] & tim.dq_bits['satur']) != 0)
+            dq = tim.dq[Yi,Xi]
+
+            # FIXME -- this is subsumed by "ormask".
+            anysatur[Yo,Xo] |= ((dq & tim.dq_bits['satur']) != 0)
+
+            ormask [Yo,Xo] |= dq
+            andmask[Yo,Xo] &= dq
 
             # point-source depth
             psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
             detsig1 = tim.sig1 / psfnorm
             detiv[Yo,Xo] += good * (1. / detsig1**2)
 
-        nobs[:, iband] = con[iy,ix]
 
-        satur[:] = anysatur[iy,ix]
+        T.saturated[:,iband] = anysatur[iy,ix]
+        T.nobs [:,iband] = con[iy,ix]
 
-        cowimg /= np.maximum(cow, 1e-16)
-        cowmod /= np.maximum(cow, 1e-16)
+        andmask_bits = np.sum(CP_DQ_BITS.values())
+        T.anymask[:,iband] =  ormask [iy,ix]
+        T.allmask[:,iband] = (andmask[iy,ix] & andmask_bits)
+        # unless there were no images there...
+        T.allmask[con[iy,ix] == 0, iband] = 0
 
-        cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+        cowimg  /= np.maximum(cow, tinyw)
+        cowmod  /= np.maximum(cow, tinyw)
+        cosatim /= np.maximum(cosatw, tinyw)
+
+        coresid = cowimg - cowmod
+        coresid[cow == 0] = 0.
+
+        cowimg[cow == 0] = cosatim[cow == 0]
         cowmod[cow == 0] = (comod[cow == 0] / np.maximum(1, con[cow == 0]))
 
         coimgs.append(cowimg)
         comods.append(cowmod)
+        coresids.append(coresid)
 
-        del coimg
         del comod
+        #del coimg
+        del cosatw
+        del cosatim
 
         # Apertures, radii in ARCSEC.
         apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
         apertures = apertures_arcsec / pixscale
-        print 'Apertures: (in pixels)', apertures
+        #print 'Apertures: (in pixels)', apertures
         
         # Aperture photometry.
         invvar = cow
@@ -2994,10 +3083,10 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                 hdr2.add_record(dict(name='MAGZERO', value=22.5,
                                      comment='Magnitude zeropoint'))
                 hdr2.add_record(dict(name='BUNIT', value='nanomaggie',
-                                     comment='Image units: AB mag = -2.5*log10(nanomaggie) + 22.5'))
+                                     comment='AB mag = 22.5 - 2.5*log10(nanomaggie)'))
             if name in ['invvar', 'depth']:
                 hdr2.add_record(dict(name='BUNIT', value='1/nanomaggie^2',
-                                     comment='Image units: invvar of AB mag = -2.5*log10(nanomaggie) + 22.5'))
+                                     comment='Ivar of AB mag = 22.5-2.5*log10(nanomaggie)'))
 
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
@@ -3015,8 +3104,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         os.system(cmd)
         os.unlink(tmpfn)
 
-    T.nobs = nobs
-    T.saturated = satur
     return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
 
 
@@ -3068,10 +3155,13 @@ def stage_writecat(
     outdir=None,
     **kwargs):
 
-    print 'Source types:'
-    for src in cat:
-        print '  ', type(src)
-    
+    # print 'Source types:'
+    # for src in cat:
+    #     print '  ', type(src)
+
+    print 'T:'
+    T.about()
+
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
@@ -3081,6 +3171,7 @@ def stage_writecat(
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
+                       'oob', 'anymask', 'allmask',
                        'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)
@@ -3101,18 +3192,32 @@ def stage_writecat(
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
+    TT.decam_saturated = np.zeros((len(TT), len(allbands)), TT.saturated.dtype)
+    TT.decam_anymask = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
+    TT.decam_allmask = np.zeros((len(TT), len(allbands)), TT.allmask.dtype)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
         TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
+        TT.decam_saturated[:,i] = TT.saturated[:,iband]
+        TT.decam_anymask[:,i] = TT.allmask[:,iband]
+        TT.decam_allmask[:,i] = TT.anymask[:,iband]
 
-    allbands = 'ugrizY'
+    TT.rename('fracmasked', 'decam_fracmasked')
+    TT.rename('oob', 'out_of_bounds')
+
+    TT.delete_column('rchi2')
+    TT.delete_column('fracflux')
+    TT.delete_column('nobs')
+    TT.delete_column('saturated')
+    TT.delete_column('anymask')
+    TT.delete_column('allmask')
 
     # How many apertures?
     ap = AP.get('apflux_img_%s' % bands[0])
-    print 'Aperture flux shape:', ap.shape
-    print 'T:', len(TT)
+    #print 'Aperture flux shape:', ap.shape
+    #print 'T:', len(TT)
     n,A = ap.shape
     
     TT.decam_apflux = np.zeros((len(TT), len(allbands), A), np.float32)
@@ -3124,20 +3229,27 @@ def stage_writecat(
         TT.decam_apflux_ivar[:,i,:] = AP.get('apflux_img_ivar_%s' % band)
         TT.decam_apflux_resid[:,i,:] = AP.get('apflux_resid_%s' % band)
 
-    TT.rename('fracmasked', 'decam_fracmasked')
-    TT.rename('saturated', 'decam_saturated')
-
-    TT.delete_column('rchi2')
-    TT.delete_column('fracflux')
-    TT.delete_column('nobs')
-
     cat.thawAllRecursive()
     hdr = None
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
+
+    primhdr = fitsio.FITSHDR()
+    for r in version_header.records():
+        primhdr.add_record(r)
+
     for i,ap in enumerate(apertures_arcsec):
-        hdr.add_record(dict(name='APRAD%i' % i, value=ap,
-                            comment='Aperture radius, in arcsec'))
+        primhdr.add_record(dict(name='APRAD%i' % i, value=ap,
+                                comment='Aperture radius, in arcsec'))
+
+    bits = CP_DQ_BITS.values()
+    bits.sort()
+    bitmap = dict((v,k) for k,v in CP_DQ_BITS.items())
+    for i in range(16):
+        bit = 1<<i
+        if bit in bitmap:
+            primhdr.add_record(dict(name='MASKB%i' % i, value=bitmap[bit],
+                                    comment='Mask bit 2**%i=%i meaning' % (i, bit)))
 
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
     T2.bx = (bx - 1.).astype(np.float32)
@@ -3177,6 +3289,8 @@ def stage_writecat(
                       w2=3.339,
                       w3=5.174,
                       w4=6.620)
+
+    
 
     for band in [1,2,3,4]:
         dm = vega_to_ab['w%i' % band]
@@ -3240,6 +3354,8 @@ def stage_writecat(
         'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
         'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
         'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_saturated',
+        'out_of_bounds',
+        'decam_anymask', 'decam_allmask',
         'wise_flux', 'wise_flux_ivar',
         'wise_mw_transmission', 'wise_nobs', 'wise_fracflux', 'wise_rchi2', 'dchisq',
         'fracdev', 'fracDev_ivar', 'shapeexp_r', 'shapeexp_r_ivar', 'shapeexp_e1',
@@ -3299,7 +3415,7 @@ def stage_writecat(
 
     #T2.writeto(fn, header=hdr, primheader=version_header, columns=cols)
     
-    # 'primheader' is not written in Astrometry.net 0.53
+    # 'primheader' is not written in Astrometry.net 0.53; we write ourselves.
 
     # fill in any empty columns (eg, SDSS columns in areas outside the
     # footprint)
@@ -3370,7 +3486,7 @@ def stage_writecat(
     arrays = [T2.get(c) for c in cols]
     arrays = [np.array(a) if isinstance(a,list) else a
               for a in arrays]
-    fitsio.write(fn, None, header=version_header, clobber=True)
+    fitsio.write(fn, None, header=primhdr, clobber=True)
     fitsio.write(fn, arrays, names=cols, header=hdr)
 
 
@@ -3429,9 +3545,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
     parser.add_option('--blob', type=int, help='Debugging: start with blob #')
 
-    #parser.add_option('--pv', action='store_true', help='Use Community Pipeline WCS -- PV distortion terms')
     parser.add_option('--no-pv', dest='pv', default='True', action='store_false',
                       help='Do not use Community Pipeline WCS with PV distortion terms -- solve using Astrometry.net')
+
+    parser.add_option('--pipe', default=False, action='store_true',
+                      help='"pipeline" mode')
 
     parser.add_option('--check-done', default=False, action='store_true',
                       help='Just check for existence of output files for this brick?')
@@ -3512,6 +3630,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.nsigma:
         kwargs.update(nsigma=opt.nsigma)
 
+    kwargs.update(pipe=opt.pipe)
+
     global mp
     if opt.threads and opt.threads > 1:
         from utils.debugpool import DebugPool, DebugPoolMeas
@@ -3543,10 +3663,10 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     prereqs = {
         'tims':None,
 
-        'srcs':'tims',
+        #'srcs':'tims',
 
         'image_coadds':'tims',
-        #'srcs':'image_coadds',
+        'srcs':'image_coadds',
 
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',

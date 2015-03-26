@@ -44,6 +44,11 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
+                  trans=128,
+                  edge = 256,
+                  edge2 = 512) # in z-band images?
+
 class SFDMap(object):
     # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
     # but updated (and adding DES u) via email from Schlafly,
@@ -207,6 +212,21 @@ class MyFITSHDR(fitsio.FITSHDR):
                     names=['%s%d' % (n,i) for n in nbase]
                     self.delete(names)
 
+def bin_image(data, invvar, S):
+    # rebin image data
+    H,W = data.shape
+    sH,sW = (H+S-1)/S, (W+S-1)/S
+    newdata = np.zeros((sH,sW), dtype=data.dtype)
+    newiv = np.zeros((sH,sW), dtype=invvar.dtype)
+    for i in range(S):
+        for j in range(S):
+            iv = invvar[i::S, j::S]
+            newdata += data[i::S, j::S] * iv
+            newiv += iv
+    newdata /= (newiv + (newiv == 0)*1.)
+    newdata[newiv == 0] = 0.
+    return newdata,newiv
+
 def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     '''
     *image*: binary image that defines "blobs"
@@ -229,6 +249,9 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     blobs,nblobs = label(image)
     print 'N detected blobs:', nblobs
+    H,W = image.shape
+    del image
+
     blobslices = find_objects(blobs)
     T.blob = blobs[T.ity, T.itx]
 
@@ -257,7 +280,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     for blob in range(1, nblobs+1):
         Isrcs = np.flatnonzero(T.blob == blob)
         if len(Isrcs) == 0:
-            print 'Blob', blob, 'has no sources'
+            #print 'Blob', blob, 'has no sources'
             blobmap[blob] = -1
             dropslices[blob] = blobslices[blob-1]
             continue
@@ -276,7 +299,6 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
         inblobs[Isrcs] = True
     noblobs = np.flatnonzero(np.logical_not(inblobs))
     del inblobs
-    H,W = image.shape
     # Add new fake blobs!
     for ib,i in enumerate(noblobs):
         S = 3
@@ -287,16 +309,16 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
         oblobs = np.unique(blobs[bslc])
         oblobs = oblobs[oblobs != emptyblob]
 
-        print 'Adding new blob for source at', (T.itx[i], T.ity[i])
-        print 'This blob overlaps existing blobs:', oblobs
+        ##print 'Adding new blob for source at', (T.itx[i], T.ity[i])
+        #print 'This blob overlaps existing blobs:', oblobs
         if len(oblobs) > 1:
             print 'WARNING: not merging overlapping blobs like maybe we should'
         if len(oblobs):
             blob = oblobs[0]
-            print 'Adding source to existing blob', blob
+            #print 'Adding source to existing blob', blob
             blobs[bslc][blobs[bslc] == emptyblob] = blob
             blobindex = blobmap[blob]
-            print 'blob index', blobindex
+            #print 'blob index', blobindex
             if blobindex == -1:
                 # the overlapping blob was going to be dropped -- restore it.
                 blobindex = len(blobsrcs)
@@ -305,8 +327,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
                 blobsrcs.append(np.array([], np.int64))
             # Expand the existing blob slice to encompass this new source
             oldslc = blobslices[blobindex]
-            print 'Old slice:', oldslc
-            print 'New slice:', bslc
+            #print 'Old slice:', oldslc
+            #print 'New slice:', bslc
             sy,sx = oldslc
             oy0,oy1, ox0,ox1 = sy.start,sy.stop, sx.start,sx.stop
             sy,sx = bslc
@@ -314,7 +336,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
             #print 'Old y', oy0,oy1, 'x', ox0,ox1
             #print 'New y', ny0,ny1, 'x', nx0,nx1
             newslc = slice(min(oy0,ny0), max(oy1,ny1)), slice(min(ox0,nx0), max(ox1,nx1))
-            print 'Updated slice:', newslc
+            #print 'Updated slice:', newslc
             blobslices[blobindex] = newslc
             # Add this source to the list of source indices for the existing blob.
             blobsrcs[blobindex] = np.append(blobsrcs[blobindex], np.array([i]))
@@ -326,7 +348,7 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
             blobmap[blob] = len(blobsrcs)
             blobslices.append(bslc)
             blobsrcs.append(np.array([i]))
-    print 'Added', len(noblobs), 'new fake singleton blobs'
+    #print 'Added', len(noblobs), 'new fake singleton blobs'
 
     # Remap the "blobs" image so that empty regions are = -1 and the blob values
     # correspond to their indices in the "blobsrcs" list.
@@ -338,6 +360,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     # DEBUG
     if plots:
         fitsio.write('blobs-before-%s.fits' % name, blobs, clobber=True)
+
+    # Remap blob numbers
     blobs = bm[blobs]
 
     if plots:
@@ -534,6 +558,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
                           xomit, yomit,
                           nsigma=5.,
                           saddle=2.,
+                          cutonaper=True,
                           ps=None):
     '''
     detmaps: list of detmaps, same order as "bands"
@@ -554,7 +579,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         break
     if allzero:
         print 'SED', sedname, 'has all zero weight'
-        return None,None,None,None
+        return None,None,None,None,None
 
     sedmap = np.zeros((H,W), np.float32)
     sediv  = np.zeros((H,W), np.float32)
@@ -572,6 +597,13 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         sediv  += detivs [iband] / sed[iband]**2
     sedmap /= np.maximum(1e-16, sediv)
     sedsn   = sedmap * np.sqrt(sediv)
+    del sedmap
+
+    # FIXME DR2: Median-smooth the SED S/N map HERE?  Should really be
+    # in detmaps, actually.
+    #smoo = np.zeros_like(sedsn)
+    #median_smooth(sedsn, sediv>0, 50, smoo)
+    #sedsn -= smoo
     
     peaks = (sedsn > nsigma)
     print 'SED sn:', Time()-t0
@@ -589,6 +621,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     peaks[:, 0] = 0
     peaks[-1,:] = 0
     peaks[:,-1] = 0
+
+    # Label the N-sigma blobs at this point... we'll use this to build "sedhot"
+    hotblobs,nhot = label(binary_fill_holes(binary_dilation(peaks, iterations=2)))
+
     # find pixels that are larger than their 8 neighbors
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,1:-1])
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[2:  ,1:-1])
@@ -602,6 +638,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     t0 = Time()
 
     if ps is not None:
+        crossa = dict(ms=10, mew=1.5)
+        green = (0,1,0)
 
         def plot_boundary_map(X):
             bounds = binary_dilation(X) - X
@@ -630,16 +668,15 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.title('SED %s: S/N & lowest saddle point bounds' % sedname)
         ps.savefig()
 
-    # Ok, now for each peak (in decreasing order of peak height):
-    #  -find the image area that is "saddle" sigma lower than the peak.
-    #  -blank out any lower peaks in that region?
-    #  -omit this peak if one of the "omit" points is within the saddle
-    # ... or create saddle images for each of the 'omit' points first?
-
-    print len(xomit), 'points to omit'
-
+    # For each new source, compute the saddle value, segment at that
+    # level, and drop the source if it is in the same blob as a
+    # previously-detected source.  We dilate the blobs a bit too, to
+    # catch slight differences in centroid vs SDSS sources.
     dilate = 2
 
+    # For efficiency, segment at the minimum saddle level to compute
+    # slices; the operations described above need only happen within
+    # the slice.
     saddlemap = (sedsn > lowest_saddle)
     saddlemap = binary_dilation(saddlemap, iterations=dilate)
     allblobs,nblobs = label(saddlemap)
@@ -647,42 +684,15 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     ally0 = [sy.start for sy,sx in allslices]
     allx0 = [sx.start for sy,sx in allslices]
 
-    badpix = (sediv == 0)
-    badblobs,nblobs = label(badpix)
-    badslices = find_objects(badblobs)
-    margin = 5
-    for i,(sy,sx) in enumerate(badslices):
-        y0,y1, x0,x1 = sy.start,sy.stop, sx.start,sx.stop
-        y0 = max(y0-margin, 0)
-        y1 = min(y1+margin, H)
-        x0 = max(x0-margin, 0)
-        x1 = min(x1+margin, W)
-        badslices[i] = slice(y0,y1), slice(x0,x1)
-
-    if ps is not None:
-        plt.clf()
-        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-                   cmap='hot')
-        omitbounds = np.zeros(sedsn.shape, bool)
-
-
-
-
-    # find peaks, sort by flux
+    # brightest peaks first
     py,px = np.nonzero(peaks)
     I = np.argsort(-sedsn[py,px])
     py = py[I]
     px = px[I]
 
-    #print 'Distinct integer S/Nes:', np.unique(np.ceil(sedsn[py,px]))
-    #print 'Distinct integer S/Nes, omit:', np.unique(np.ceil(sedsn[yomit,xomit]))
-
-    if ps is not None:
-        crossa = dict(ms=10, mew=1.5)
-        green = (0,1,0)
-
     keep = np.zeros(len(px), bool)
 
+    peakval = []
     aper = []
     apin = 10
     apout = 20
@@ -701,7 +711,6 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         saddlemap = binary_fill_holes(saddlemap)
         saddlemap = binary_dilation(saddlemap, iterations=dilate)
         blobs,nblobs = label(saddlemap)
-        #saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
         x0,y0 = allx0[index], ally0[index]
         thisblob = blobs[y-y0, x-x0]
 
@@ -743,15 +752,24 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             continue
 
         # Measure in aperture...
-        ap   =  sedsn[max(0, y-apout):min(H,y+apout+1), max(0, x-apout):min(W,x+apout+1)]
-        apiv = (sediv[max(0, y-apout):min(H,y+apout+1), max(0, x-apout):min(W,x+apout+1)] > 0)
+        ap   =  sedsn[max(0, y-apout):min(H,y+apout+1),
+                      max(0, x-apout):min(W,x+apout+1)]
+        apiv = (sediv[max(0, y-apout):min(H,y+apout+1),
+                      max(0, x-apout):min(W,x+apout+1)] > 0)
         aph,apw = ap.shape
         apx0, apy0 = max(0, x - apout), max(0, y - apout)
         R2 = ((np.arange(aph)+apy0 - y)[:,np.newaxis]**2 + 
               (np.arange(apw)+apx0 - x)[np.newaxis,:]**2)
+        # 16th percentile ~ -1 sigma point.
         m = np.percentile(ap[apiv * (R2 >= apin**2) * (R2 <= apout**2)], 16.)
 
+        if cutonaper:
+            if sedsn[y,x] - m < nsigma:
+                continue
+
         aper.append(m)
+        peakval.append(sedsn[y,x])
+        keep[i] = True
 
         if False and ps is not None:
             plt.clf()
@@ -762,117 +780,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
             plt.suptitle('peak %.1f vs ap %.1f' % (sedsn[y,x], m))
             ps.savefig()
 
-        # if any(blobs[py[:i][keep[:i]] - y0, px[:i][keep[:i]] - x0] == thisblob):
-        #     # conflict
-        #     continue
-        # 
-        # if any(blobs[yomit - y0, xomit - x0] == thisblob):
-        #     # conflict
-        #     continue
-
-        keep[i] = True
-
-
-
-    # for x,y in zip(xomit, yomit):
-    #     if sedsn[y,x] > nsigma:
-    #         blob = allblobs[y,x]
-    #         index = blob - 1
-    #         slc = allslices[index]
-    #         level = saddle_level(sedsn[y,x])
-    #         blobs,nblobs = label((sedsn[slc] > level) * (allblobs[slc] == blob))
-    #         omitmap[slc] |= (blobs == blobs[y - ally0[index], x - allx0[index]])
-    # 
-    #         if ps is not None:
-    #             newomit = (blobs == blobs[y - ally0[index], x - allx0[index]])
-    #             #print 'newomit: total of', newomit.sum(), 'pixels set'
-    #             omitbounds[slc] |= (binary_dilation(newomit) - newomit)
-    #             #print 'omitbounds: now total of', omitbounds.sum(), 'pixels set'
-    # 
-    #     elif sediv[y,x] == 0:
-    #         # Nil pixel... possibly saturated.  Mask the whole region.
-    #         blob = badblobs[y,x]
-    #         index = blob - 1
-    #         slc = badslices[index]
-    #         badpix = (badblobs[slc] == blob)
-    #         badpix = binary_dilation(badpix, iterations=5)
-    #         omitmap[slc] |= badpix
-    #     else:
-    #         # omit a 5x5 box around the peak
-    #         omitmap[np.clip(y-2,0,H-1): np.clip(y+3,0,H),
-    #                 np.clip(x-2,0,W-1): np.clip(x+3,0,W)] = True
-    # 
-    # if ps is not None:
-    #     rgba = np.zeros((H,W,4), np.uint8)
-    #     rgba[:,:,1] = omitbounds*255
-    #     rgba[:,:,3] = omitbounds*255
-    #     plt.imshow(rgba, interpolation='nearest', origin='lower')
-    #     plt.title('Omit map expansions from [xy]omit')
-    #     ax = plt.axis()
-    #     plt.plot(xomit, yomit, 'g+')
-    #     plt.axis(ax)
-    #     ps.savefig()
-    # 
-    # print 'Omit map:', Time()-t0
-    # t0 = Time()
-    # 
-    # # find peaks, sort by flux
-    # py,px = np.nonzero(peaks)
-    # I = np.argsort(-sedsn[py,px])
-    # py = py[I]
-    # px = px[I]
-    # # drop peaks inside the 'omit map'
-    # keep = np.logical_not(omitmap[py, px])
-    # 
-    # 
-    # if ps is not None:
-    #     crossa = dict(ms=10, mew=1.5)
-    #     green = (0,1,0)
-    #     # plt.clf()
-    #     # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
-    #     # plt.title('Omit map for SED %s' % sedname)
-    #     # ps.savefig()
-    #     
-    #     plt.clf()
-    #     plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-    #                cmap='gray')
-    #     ax = plt.axis()
-    #     plt.plot(px[keep], py[keep], '+', color=green, **crossa)
-    #     drop = np.logical_not(keep)
-    #     plt.plot(px[drop], py[drop], 'r+', **crossa)
-    #     plt.axis(ax)
-    #     rgba = np.zeros((H,W,4), np.uint8)
-    #     rgba[:,:,1] = omitbounds*255
-    #     rgba[:,:,3] = omitbounds*255
-    #     plt.imshow(rgba, interpolation='nearest', origin='lower')
-    #     plt.title('SED %s: keep (green) peaks' % sedname)
-    #     ps.savefig()
-    # 
-    # t0 = Time()
-    # for i,(x,y) in enumerate(zip(px, py)):
-    #     if not keep[i]:
-    #         continue
-    # 
-    #     level = saddle_level(sedsn[y,x])
-    # 
-    #     ablob = allblobs[y,x]
-    #     index = ablob - 1
-    #     slc = allslices[index]
-    # 
-    #     blobs,nblobs = label((sedsn[slc] > level) * (allblobs[slc] == ablob))
-    #     saddleblob = (blobs == blobs[y-ally0[index], x-allx0[index]])
-    #     # ???
-    #     # this source's blob touches the omit map
-    #     if np.any(saddleblob & omitmap[slc]):
-    #         keep[i] = False
-    #         continue
-    #     
-    #     omitmap[slc] |= saddleblob
-    # 
-    #     if ps is not None:
-    #         omitbounds[slc] |= (binary_dilation(saddleblob) - saddleblob)
-
-    print 'Omit:', Time()-t0
+    print 'New sources:', Time()-t0
     t0 = Time()
 
     if ps is not None:
@@ -898,35 +806,28 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     py = py[keep]
     px = px[keep]
-    
-    return sedsn, px, py, aper
 
-    
-    # blobs,nblobs = label(peaks)
-    # print 'N detected blobs:', nblobs
-    # blobslices = find_objects(blobs)
+    # Which of the hotblobs yielded sources?  Those are the ones to keep.
+    hbmap = np.zeros(nhot+1, bool)
+    hbmap[hotblobs[py,px]] = True
+    if len(xomit):
+        hbmap[hotblobs[xomit,yomit]] = True
+    # in case a source is (somehow) not in a hotblob?
+    hbmap[0] = False
+    hotblobs = hbmap[hotblobs]
+    #print 'Hotblobs:', hotblobs.shape, hotblobs.dtype
 
-    # Now... peaks...
-    
-    # # Un-set existing blobs
-    # for x,y in zip(xomit, yomit):
-    #     # blob number
-    #     bb = blobs[y,x]
-    #     if bb == 0:
-    #         continue
-    #     # un-set 'peaks' within this blob
-    #     slc = blobslices[bb-1]
-    #     peaks[slc][blobs[slc] == bb] = 0
+    if ps is not None:
+        plt.clf()
+        dimshow(hotblobs, vmin=0, vmax=1, cmap='hot')
+        ax = plt.axis()
+        plt.plot(px, py, 'r+', ms=8, mew=2)
+        plt.plot(xomit, yomit, 'm+', ms=8, mew=2)
+        plt.axis(ax)
+        plt.title('Hot blobs')
+        ps.savefig()
 
-    # zero out the edges -- larger margin here?
-    # peaks[0 ,:] = 0
-    # peaks[:, 0] = 0
-    # peaks[-1,:] = 0
-    # peaks[:,-1] = 0
-
-    
-
-        
+    return hotblobs, px, py, aper, peakval
 
 def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
     '''
@@ -1211,7 +1112,7 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         n0 = 0
 
     H,W = detmaps[0].shape
-    hot = np.zeros((H,W), np.float32)
+    hot = np.zeros((H,W), bool)
 
     peaksn = []
     apsn = []
@@ -1223,17 +1124,17 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
         else:
             pps = None
         t0 = Time()
-        sedsn,px,py,apval = sed_matched_detection(
+        sedhot,px,py,peakval,apval = sed_matched_detection(
             sedname, sed, detmaps, detivs, bands, xx, yy, nsigma=nsigma, ps=pps)
         print 'SED took', Time()-t0
-        if sedsn is None:
+        if sedhot is None:
             continue
         print len(px), 'new peaks'
-        hot = np.maximum(hot, sedsn)
+        hot |= sedhot
         xx = np.append(xx, px)
         yy = np.append(yy, py)
 
-        peaksn.extend(sedsn[py,px])
+        peaksn.extend(peakval)
         apsn.extend(apval)
 
     # New peaks:
@@ -1808,9 +1709,7 @@ class DecamImage(object):
         tim.hdr = imghdr
 
         tim.dq = dq
-        tim.dq_bits = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
-                           trans=128,
-                           edge = 256)
+        tim.dq_bits = CP_DQ_BITS
         tim.saturation = imghdr['SATURATE']
         tim.satval = tim.saturation
         if subsky:
@@ -2062,6 +1961,9 @@ class DecamImage(object):
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
                 maskstr, '-SEEING_FWHM %f' % seeing,
+                '-PARAMETERS_NAME', os.path.join(sedir, 'DECaLS-v2.param'),
+                '-FILTER_NAME', os.path.join(sedir, 'gauss_5.0_9x9.conv'),
+                '-STARNNW_NAME', os.path.join(sedir, 'default.nnw'),
                 '-PIXEL_SCALE 0',
                 #'-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
@@ -2134,13 +2036,19 @@ class DecamImage(object):
                 raise RuntimeError('Command failed: ' + cmd)
                 
         if run_psfex:
-            cmd = ('psfex -c %s -PSF_DIR %s %s' %
-                   (os.path.join(sedir, 'DECaLS-v2.psfex'),
-                    os.path.dirname(self.psffn), self.sefn))
-            print cmd
-            rtn = os.system(cmd)
-            if rtn:
-                raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
+            # If we write *.psf instead of *.fits in a previous run...
+            oldfn = self.psffn.replace('.fits', '.psf')
+            if os.path.exists(oldfn):
+                print 'Moving', oldfn, 'to', self.psffn
+                os.rename(oldfn, self.psffn)
+            else:
+                cmd = ('psfex -c %s -PSF_DIR %s %s' %
+                       (os.path.join(sedir, 'DECaLS-v2.psfex'),
+                        os.path.dirname(self.psffn), self.sefn))
+                print cmd
+                rtn = os.system(cmd)
+                if rtn:
+                    raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
         if run_psfexfit:
             print 'Fit PSF...'
