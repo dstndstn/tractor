@@ -761,6 +761,7 @@ def stage_fitblobs(T=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    nblobs=None, blob0=None,
+                   simul_opt=False,
                    **kwargs):
     print 'Multiproc:', mp
     print 'Blob0:', blob0
@@ -855,11 +856,12 @@ def stage_fitblobs(T=None,
             blobslices = blobslices[:nblobs]
             blobsrcs = blobsrcs[:nblobs]
         iter = _blob_iter(blobslices, blobsrcs, blobs,
-                          targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps)
+                          targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps,
+                          simul_opt)
         iter = iterwrapper(iter, len(blobslices))
     else:
         iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
-                          orig_wcsxy0, cat, bands, plots, ps)
+                          orig_wcsxy0, cat, bands, plots, ps, simul_opt)
         # to allow debugpool to only queue tasks one at a time
         iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
@@ -1011,7 +1013,7 @@ def stage_fitblobs_finish(
     return rtn
                           
 def _blob_iter(blobslices, blobsrcs, blobs,
-               targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps):
+               targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps, simul_opt):
     for iblob, (bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
         assert(len(Isrcs) > 0)
 
@@ -1056,7 +1058,7 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         blobmask = (blobs[bslc] == iblob)
 
         yield (iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               [cat[i] for i in Isrcs], bands, plots, ps)
+               [cat[i] for i in Isrcs], bands, plots, ps, simul_opt)
 
 def _bounce_one_blob(X):
     try:
@@ -1277,7 +1279,7 @@ FLAG_TRIED_C = 0x10
 FLAG_CPU_C   = 0x20
 
 def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               srcs, bands, plots, ps)):
+               srcs, bands, plots, ps, simul_opt)):
 
     plots2 = False
 
@@ -1287,6 +1289,12 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     bigblob = (blobw * blobh) > 100*100
 
     subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
+
+    ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+                                       np.array([src.getPosition().dec for src in srcs]))
+    started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+                               np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    print 'Sources started in blob:', started_in_blob
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -2042,7 +2050,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     subtr.catalog = subcat
 
     ### Simultaneous re-opt.
-    if False and len(subcat) > 1 and len(subcat) <= 10:
+    if simul_opt and len(subcat) > 1 and len(subcat) <= 10:
         #tfit = Time()
         # Optimize all at once?
         subcat.thawAllParams()
@@ -2200,8 +2208,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracmasked = fracmasked_num / fracmasked_den
     fracin     = fracin_num     / fracin_den
 
+    ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+                                       np.array([src.getPosition().dec for src in srcs]))
+    finished_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+                                np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    print 'Sources finished in blob:', finished_in_blob
+
     #print 'Blob finished metrics:', Time()-tlast
-    print 'Blob', iblob, 'finished:', Time()-tlast
+    print 'Blob', iblob+1, 'finished:', Time()-tlast
 
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
             all_models, performance, fracin)
@@ -3101,11 +3115,15 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     if ps is not None:
         plt.clf()
+        ra  = np.array([src.getPosition().ra  for src in cat])
+        dec = np.array([src.getPosition().dec for src in cat])
         ok,x0,y0 = targetwcs.radec2pixelxy(T.orig_ra, T.orig_dec)
-        ok,x1,y1 = targetwcs.radec2pixelxy(T.ra, T.dec)
+        ok,x1,y1 = targetwcs.radec2pixelxy(ra, dec)
         dimshow(get_rgb(coimgs, bands, **rgbkwargs))
         ax = plt.axis()
-        plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
+        #plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
+        for xx0,yy0,xx1,yy1 in zip(x0,y0,x1,y1):
+            plt.plot([xx0-1,xx1-1], [yy0-1,yy1-1], 'r-')
         plt.plot(x1-1, y1-1, 'r.')
         plt.axis(ax)
         ps.savefig()
@@ -3585,6 +3603,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     parser.add_option('--nsigma', type=float, help='Set N sigma source detection thresh')
 
+    parser.add_option('--simul-opt', action='store_true', default=False,
+                      help='Do simultaneous optimization after model selection')
+
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
@@ -3655,6 +3676,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.nsigma:
         kwargs.update(nsigma=opt.nsigma)
 
+    kwargs.update(simul_opt=opt.simul_opt)
     kwargs.update(pipe=opt.pipe)
 
     global mp
