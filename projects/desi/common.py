@@ -622,8 +622,13 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     peaks[-1,:] = 0
     peaks[:,-1] = 0
 
-    # Label the N-sigma blobs at this point... we'll use this to build "sedhot"
-    hotblobs,nhot = label(binary_fill_holes(binary_dilation(peaks, iterations=2)))
+    # Label the N-sigma blobs at this point... we'll use this to build
+    # "sedhot", which in turn is used to define the blobs that we will
+    # optimize simultaneously.  This also determines which pixels go
+    # into the fitting!
+    dilate = 8
+    hotblobs,nhot = label(binary_fill_holes(
+            binary_dilation(peaks, iterations=dilate))) #, structure=np.ones((3,3)))))
 
     # find pixels that are larger than their 8 neighbors
     peaks[1:-1, 1:-1] &= (sedsn[1:-1,1:-1] >= sedsn[0:-2,1:-1])

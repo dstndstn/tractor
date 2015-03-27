@@ -43,6 +43,11 @@ nocache = True
 useCeres = True
 unwise_dir = 'unwise-coadds'
 
+# RGB image args used in the tile viewer:
+rgbkwargs = dict(mnmx=(-1,100.), arcsinh=1.)
+rgbkwargs_resid = dict(mnmx=(-5,5))
+
+
 def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
@@ -524,8 +529,8 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
         print 'Wrote', fn
 
     tmpfn = create_temp(suffix='.png')
-    for name,ims in [('image',coimgs)]:
-        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
+    for name,ims,rgbkw in [('image',coimgs,rgbkwargs)]:
+        plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
         jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
         cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn)
         os.system(cmd)
@@ -964,7 +969,6 @@ def stage_fitblobs_finish(
     pickle_to_file(allperfs, fn)
     print 'Wrote', fn
 
-
     # Drop now-empty blobs.
     R = [r for r in R if len(r[0])]
     
@@ -975,6 +979,7 @@ def stage_fitblobs_finish(
     dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
     fracmasked = np.hstack([r[6] for r in R])
     flags = np.hstack([r[7] for r in R])
+    fracin = np.vstack([r[10] for r in R])
     
     newcat = []
     for r in R:
@@ -993,6 +998,9 @@ def stage_fitblobs_finish(
     ns,nb = fracflux.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
+    ns,nb = fracin.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
     ns,nb = rchi2.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
@@ -1003,6 +1011,7 @@ def stage_fitblobs_finish(
 
     T.decam_flags = flags
     T.fracflux = fracflux
+    T.fracin = fracin
     T.fracmasked = fracmasked
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
@@ -1034,9 +1043,9 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
 
+        print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
-        print
 
         rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
 
@@ -2148,6 +2157,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
     fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
 
+    # fracin flux-inside-blob metric
+    fracin_num = np.zeros((len(srcs),len(bands)), np.float32)
+    fracin_den = np.zeros((len(srcs),len(bands)), np.float32)
+
     # fracmasked: fraction of masked pixels metric
     fracmasked_num = np.zeros(len(srcs), np.float32)
     fracmasked_den = np.zeros(len(srcs), np.float32)
@@ -2187,6 +2200,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 fracmasked_num[isrc] += np.sum((tim.getInvError()[slc] == 0) * np.abs(patch.patch)) / np.abs(counts[isrc])
                 fracmasked_den[isrc] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
+                fracin_num[isrc,iband] += np.sum(patch.patch)
+                fracin_den[isrc,iband] += counts[isrc]
+
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
             
@@ -2204,13 +2220,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
     fracmasked = fracmasked_num / fracmasked_den
+    fracin     = fracin_num     / fracin_den
 
     #print 'Blob finished metrics:', Time()-tlast
-    
     print 'Blob finished:', Time()-tlast
 
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
-            all_models, performance)
+            all_models, performance, fracin)
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -2989,7 +3005,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         # Apertures, radii in ARCSEC.
         apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
         apertures = apertures_arcsec / pixscale
-        #print 'Apertures: (in pixels)', apertures
         
         # Aperture photometry.
         invvar = cow
@@ -3094,13 +3109,17 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
             print 'Wrote', fn
 
     tmpfn = create_temp(suffix='.png')
-    for name,ims in [('image',coimgs), ('model',comods)]:
-        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
-        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
-               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
-                                    (brickname, name))))
+
+    for name,ims,rgbkw in [('image', coimgs, rgbkwargs),
+                           ('model', comods, rgbkwargs),
+                           ('resid', coresids, rgbkwargs_resid),
+                           ]:
+        plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
+        jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
+        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn))
         os.system(cmd)
         os.unlink(tmpfn)
+        print 'Wrote', jpegfn
 
     return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
 
@@ -3169,6 +3188,7 @@ def stage_writecat(
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
+                       'fracin',
                        'oob', 'anymask', 'allmask',
                        'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
@@ -3189,6 +3209,7 @@ def stage_writecat(
 
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_fracin   = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
     TT.decam_saturated = np.zeros((len(TT), len(allbands)), TT.saturated.dtype)
     TT.decam_anymask = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
@@ -3197,6 +3218,7 @@ def stage_writecat(
         i = allbands.index(band)
         TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
+        TT.decam_fracin[:,i] = TT.fracin[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
         TT.decam_saturated[:,i] = TT.saturated[:,iband]
         TT.decam_anymask[:,i] = TT.allmask[:,iband]
@@ -3207,6 +3229,7 @@ def stage_writecat(
 
     TT.delete_column('rchi2')
     TT.delete_column('fracflux')
+    TT.delete_column('fracin')
     TT.delete_column('nobs')
     TT.delete_column('saturated')
     TT.delete_column('anymask')
@@ -3279,8 +3302,6 @@ def stage_writecat(
     typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
     T2.type = np.array([typemap[t] for t in T2.type])
 
-    #T2.add_columns_from(WISE)
-
     # Convert WISE fluxes from Vega to AB.
     # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
     vega_to_ab = dict(w1=2.699,
@@ -3288,14 +3309,16 @@ def stage_writecat(
                       w3=5.174,
                       w4=6.620)
 
-    
+    for band in [1,2,3,4]:
+        primhdr.add_record(dict(name='WISEAB%i' % band, value=vega_to_ab['w%i' % band],
+                                comment='WISE Vega to AB conv for band %i' % band))
 
     for band in [1,2,3,4]:
         dm = vega_to_ab['w%i' % band]
-        print 'WISE', band
-        print 'dm', dm
+        #print 'WISE', band
+        #print 'dm', dm
         fluxfactor = 10.** (dm / -2.5)
-        print 'flux factor', fluxfactor
+        #print 'flux factor', fluxfactor
         f = WISE.get('w%i_nanomaggies' % band)
         f *= fluxfactor
         f = WISE.get('w%i_nanomaggies_ivar' % band)
@@ -3351,7 +3374,8 @@ def stage_writecat(
         'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
         'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
         'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
-        'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_saturated',
+        'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_fracin',
+        'decam_saturated',
         'out_of_bounds',
         'decam_anymask', 'decam_allmask',
         'wise_flux', 'wise_flux_ivar',

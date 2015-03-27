@@ -45,6 +45,7 @@ dirnm = os.path.join(os.environ['DECALS_DIR'], 'images')
 for i,fn in enumerate(C.cpimage):
 
     print
+    print 'CCD', (i+1), 'of', len(C)
     print oldcpimage[i]
     old = oldcpimage[i].replace('decals/images/', '').strip()
     fn = fn.strip()
@@ -74,7 +75,7 @@ for i,fn in enumerate(C.cpimage):
     ee = ff['EXTNAME'].strip()
     extname = C.extname[i].strip()
     if ee != extname:
-        print 'WARNING: HDU wrong for', fn
+        print 'HDU wrong for', fn
         if not (fn,extname) in hdus:
             for hdu in range(len(F)):
                 hdr = F[hdu].read_header()
@@ -90,3 +91,4 @@ for i,fn in enumerate(C.cpimage):
 
 C.delete_column('I')
 C.writeto('ccds.fits')
+print 'Finished.'
