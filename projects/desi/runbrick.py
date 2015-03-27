@@ -3175,9 +3175,8 @@ def stage_writecat(
     # print 'Source types:'
     # for src in cat:
     #     print '  ', type(src)
-
-    print 'T:'
-    T.about()
+    #print 'T:'
+    #T.about()
 
     from desi_common import prepare_fits_catalog
     fs = None
@@ -3501,6 +3500,23 @@ def stage_writecat(
             if c in arrtypes:
                 print '  array type', arrtypes[c]
                 T2.set(c, np.zeros((len(T2),5), arrtypes[c]))
+
+    # Blank out all SDSS fields for sources that have moved too much.
+    xyz1 = radectoxyz(T2.ra, T2.dec)
+    xyz2 = radectoxyz(T2.sdss_ra, T2.sdss_dec)
+    d2 = np.sum((xyz2-xyz1)**2, axis=1)
+    # 1.5 arcsec
+    maxd2 = np.deg2rad(1.5 / 3600.)**2
+    blankout = np.flatnonzero((T2.sdss_ra != 0) * (d2 > maxd2))
+    print 'Blanking out', len(blankout), 'SDSS no-longer-matches'
+    Tcols = T2.get_columns()
+    for c in Tcols:
+        if c.startswith('sdss'):
+            x = T2.get(c)
+            #s = x.shape
+            print 'column', c
+            print 'shape', x.shape, x.dtype
+            x[blankout] = 0
 
     # If there are no "COMP" sources, it will be 'S3'...
     T2.type = T2.type.astype('S4')
