@@ -577,7 +577,7 @@ def stage_srcs(coimgs=None, cons=None,
 
     # Median-smooth detection maps?
     #if False:
-    for detmap,detiv in zip(detmaps,detivs):
+    for i,(detmap,detiv) in enumerate(zip(detmaps,detivs)):
         #from astrometry.util.util import median_smooth
         #smoo = np.zeros_like(detmap)
         #median_smooth(detmap, detiv>0, 100, smoo)
@@ -617,6 +617,7 @@ def stage_srcs(coimgs=None, cons=None,
             dimshow(smoo, **kwa2)
             plt.subplot(2,3,6)
             dimshow(subbed, **kwa2)
+            plt.suptitle('Median filter of detection map: %s band' % bands[i])
             ps.savefig()
 
         # Subtract binned median image.
@@ -658,10 +659,6 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
 
     if plots:
-        ## NOTE, these plots don't currently work because I set
-        # "cutonaper = True" by default in sed_matched_detections --
-        # they are cut before being returned (so they can be picked up
-        # in another SED, eg)
         if False and not plots:
             plt.figure(figsize=(18,18))
             plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
@@ -680,39 +677,18 @@ def stage_srcs(coimgs=None, cons=None,
         ps.savefig()
 
         ax = plt.axis()
-        plt.plot(T.tx, T.ty, 'r+', **crossa)
-        plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
+        p1 = plt.plot(T.tx, T.ty, 'r+', **crossa)
+        p2 = plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
         plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
+        plt.figlegend((p1[0], p2[0]), ('SDSS', 'New'), 'upper left')
         ps.savefig()
         # for x,y in zip(peakx,peaky):
         #     plt.text(x+5, y, '%.1f' % (hot[np.clip(int(y),0,H-1),
         #                                  np.clip(int(x),0,W-1)]), color='r',
         #              ha='left', va='center')
         # ps.savefig()
-
-        plt.clf()
-        dimshow(get_rgb(coimgs, bands))
-        ax = plt.axis()
-        plt.plot(T.tx[:Nsdss], T.ty[:Nsdss], 'r+', **crossa)
-        I = Nsdss + np.flatnonzero(peaksn - apsn >= 5.)
-        plt.plot(T.tx[I], T.ty[I], '+', color=(0,1,0), **crossa)
-        I = Nsdss + np.flatnonzero(peaksn - apsn < 5.)
-        plt.plot(T.tx[I], T.ty[I], '+', color='m', **crossa)
-        plt.title('Catalog + SED-matched detections - ap')
-        plt.axis(ax)
-        ps.savefig()
-
-        plt.clf()
-        dimshow(get_rgb(coimgs, bands))
-        ax = plt.axis()
-        plt.plot(T.tx[:Nsdss], T.ty[:Nsdss], 'r+', **crossa)
-        I = Nsdss + np.flatnonzero(peaksn - apsn >= 5.)
-        plt.plot(T.tx[I], T.ty[I], '+', color=(0,1,0), **crossa)
-        plt.title('Catalog + SED-matched detections - ap')
-        plt.axis(ax)
-        ps.savefig()
-
+ 
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
                                                           ps=ps, plots=plots)
@@ -2223,7 +2199,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracin     = fracin_num     / fracin_den
 
     #print 'Blob finished metrics:', Time()-tlast
-    print 'Blob finished:', Time()-tlast
+    print 'Blob', iblob, 'finished:', Time()-tlast
 
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
             all_models, performance, fracin)
@@ -3509,14 +3485,12 @@ def stage_writecat(
     maxd2 = np.deg2rad(1.5 / 3600.)**2
     blankout = np.flatnonzero((T2.sdss_ra != 0) * (d2 > maxd2))
     print 'Blanking out', len(blankout), 'SDSS no-longer-matches'
-    Tcols = T2.get_columns()
-    for c in Tcols:
-        if c.startswith('sdss'):
-            x = T2.get(c)
-            #s = x.shape
-            print 'column', c
-            print 'shape', x.shape, x.dtype
-            x[blankout] = 0
+    if len(blankout):
+        Tcols = T2.get_columns()
+        for c in Tcols:
+            if c.startswith('sdss'):
+                x = T2.get(c)
+                x[blankout] = 0
 
     # If there are no "COMP" sources, it will be 'S3'...
     T2.type = T2.type.astype('S4')

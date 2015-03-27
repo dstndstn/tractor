@@ -8,8 +8,10 @@
 #include <assert.h>
 #include <sys/param.h>
 
-int n_exp = 0;
-int n_expf = 0;
+static int n_exp = 0;
+static int n_expf = 0;
+static int n_finf = 0;
+static int n_fnan = 0;
 
 static double eval_g(double I[3], double dx, double dy) {
     double dsq = (I[0] * dx * dx +
@@ -104,10 +106,25 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
         // -0.5 factor * mahalanobis distance so is actually a *minimum*.
         // (!(x >= y)) to handle NaNs.
         //if (dsq < maxD[k])
-        if (!(dsq >= maxD[k]))
+        if (!(dsq >= maxD[k])) {
+            if (!isfinite(dsq)) {
+                printf("skipping dsq %f\n", dsq);
+            }
             continue;
-        if (!isfinite(dsq))
+        }
+        if (!isfinite(dsq)) {
+            printf("XXX dsq not finite %f\n", dsq);
             continue;
+        }
+
+        /*{
+            if (isnan(dsq))
+                n_fnan++;
+            if (isinf(dsq))
+                n_finf++;
+            continue;
+        }*/
+
         n_expf++;
         G = scales[k] * expf(dsq);
         r += G;

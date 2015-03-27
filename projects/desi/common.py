@@ -301,7 +301,8 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     del inblobs
     # Add new fake blobs!
     for ib,i in enumerate(noblobs):
-        S = 3
+        #S = 3
+        S = 5
         bslc = (slice(np.clip(T.ity[i] - S, 0, H-1), np.clip(T.ity[i] + S+1, 0, H)),
                 slice(np.clip(T.itx[i] - S, 0, W-1), np.clip(T.itx[i] + S+1, 0, W)))
 
@@ -599,12 +600,6 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     sedsn   = sedmap * np.sqrt(sediv)
     del sedmap
 
-    # FIXME DR2: Median-smooth the SED S/N map HERE?  Should really be
-    # in detmaps, actually.
-    #smoo = np.zeros_like(sedsn)
-    #median_smooth(sedsn, sediv>0, 50, smoo)
-    #sedsn -= smoo
-    
     peaks = (sedsn > nsigma)
     print 'SED sn:', Time()-t0
     t0 = Time()
@@ -666,12 +661,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.title('SED %s: S/N & peaks' % sedname)
         ps.savefig()
 
-        plt.clf()
-        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-                   cmap='hot')
-        plot_boundary_map(sedsn > lowest_saddle)
-        plt.title('SED %s: S/N & lowest saddle point bounds' % sedname)
-        ps.savefig()
+        # plt.clf()
+        # plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+        #            cmap='hot')
+        # plot_boundary_map(sedsn > lowest_saddle)
+        # plt.title('SED %s: S/N & lowest saddle point bounds' % sedname)
+        # ps.savefig()
 
     # For each new source, compute the saddle value, segment at that
     # level, and drop the source if it is in the same blob as a
@@ -789,25 +784,23 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     t0 = Time()
 
     if ps is not None:
-        # plt.clf()
-        # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
-        # plt.title('Final omit map for SED %s' % sedname)
-        # ps.savefig()
-        
-        plt.clf()
-        plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-                   cmap='gray')
-        ax = plt.axis()
-        plt.plot(px[keep], py[keep], '+', color=green, **crossa)
-        drop = np.logical_not(keep)
-        plt.plot(px[drop], py[drop], 'r+', **crossa)
-        plt.axis(ax)
-        # rgba = np.zeros((H,W,4), np.uint8)
-        # rgba[:,:,1] = omitbounds*255
-        # rgba[:,:,3] = omitbounds*255
-        # plt.imshow(rgba, interpolation='nearest', origin='lower')
-        plt.title('SED %s: Final keep (green) peaks' % sedname)
-        ps.savefig()
+        pxdrop = px[np.logical_not(keep)]
+        pydrop = py[np.logical_not(keep)]
+    #     # plt.clf()
+    #     # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
+    #     # plt.title('Final omit map for SED %s' % sedname)
+    #     # ps.savefig()
+    #     
+    #     plt.clf()
+    #     plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
+    #                cmap='gray')
+    #     ax = plt.axis()
+    #     plt.plot(px[keep], py[keep], '+', color=green, **crossa)
+    #     drop = np.logical_not(keep)
+    #     plt.plot(px[drop], py[drop], 'r+', **crossa)
+    #     plt.axis(ax)
+    #     plt.title('SED %s: Final keep (green) peaks' % sedname)
+    #     ps.savefig()
 
     py = py[keep]
     px = px[keep]
@@ -816,7 +809,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     hbmap = np.zeros(nhot+1, bool)
     hbmap[hotblobs[py,px]] = True
     if len(xomit):
-        hbmap[hotblobs[xomit,yomit]] = True
+        hbmap[hotblobs[yomit,xomit]] = True
     # in case a source is (somehow) not in a hotblob?
     hbmap[0] = False
     hotblobs = hbmap[hotblobs]
@@ -826,10 +819,12 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         plt.clf()
         dimshow(hotblobs, vmin=0, vmax=1, cmap='hot')
         ax = plt.axis()
-        plt.plot(px, py, 'r+', ms=8, mew=2)
-        plt.plot(xomit, yomit, 'm+', ms=8, mew=2)
+        p1 = plt.plot(px, py, 'g+', ms=8, mew=2)
+        p2 = plt.plot(pxdrop, pydrop, 'm+', ms=8, mew=2)
+        p3 = plt.plot(xomit, yomit, 'r+', ms=8, mew=2)
         plt.axis(ax)
-        plt.title('Hot blobs')
+        plt.title('SED %s: hot blobs' % sedname)
+        plt.figlegend((p3[0],p1[0],p2[0]), ('Existing', 'Keep', 'Drop'), 'upper left')
         ps.savefig()
 
     return hotblobs, px, py, aper, peakval

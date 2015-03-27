@@ -17,6 +17,9 @@ static int c_gauss_2d_masked(int x0, int y0, int W, int H,
 
     int nexpf0 = n_expf;
 
+    int n_finf0 = n_finf;
+    int n_fnan0 = n_fnan;
+
     float *amp, *mean, *var, *result;
     float *xderiv=NULL, *yderiv=NULL;
     float fx = (float)fxd;
