@@ -330,6 +330,70 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         print 'No photometric CCDs overlap.  Quitting.'
         sys.exit(0)
 
+
+    # HACK -- check PSF models
+    # for im,tim in zip(ims,tims):
+    #     print
+    #     print 'Image', tim.name
+    #     print 'PsfEx:', type(tim.psfex)
+    #     print 'PSF:', type(tim.psf)
+    #     print 'same?', tim.psf == tim.psfex
+    # 
+    #     x0,y0 = tim.wcs.getX0Y0()
+    # 
+    #     psfex = PsfEx(im.psffn, 2048, 4096)
+    #     psfimg = psfex.instantiateAt(x0, y0)
+    #     print 'PSF img:', psfimg.shape
+    #     print 'range', psfimg.min(), psfimg.max()
+    #     print 'sum', psfimg.sum()
+    # 
+    #     mx1 = psfimg.max()
+    # 
+    #     # print 'Reading PsfEx-fit model from', im.psffitellfn
+    #     # psfell = PsfEx.fromFits(im.psffitellfn)
+    #     # psfell.radius = 20
+    #     # psfell.fitSavedData(*psfell.splinedata)
+    #     # psfimgell = psfell.getPointSourcePatch(0., 0.)
+    #     # print 'Ellipse Patch:', psfimgell.shape
+    #     # print 'ellipse sum', psfimgell.patch.sum()
+    # 
+    #     tim.psfex.radius = 20
+    #     #tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    #     psfimg2 = tim.psfex.getPointSourcePatch(x0, y0)
+    #     print 'Patch:', psfimg2.shape
+    #     print 'sum', psfimg2.patch.sum()
+    # 
+    #     psfimg3 = tim.psf.getPointSourcePatch(0., 0.)
+    #     print 'Patch:', psfimg3.shape
+    #     print 'sum', psfimg3.patch.sum()
+    # 
+    #     # print 'equal', np.all(psfimgell.patch == psfimg2.patch)
+    # 
+    #     mx2 = psfimg2.patch.max()
+    # 
+    #     mx = max(mx1, mx2)
+    # 
+    #     if ps is not None:
+    #         plt.clf()
+    #         plt.subplot(2,3,1)
+    #         dimshow(psfimg, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('PsfEx')
+    #         plt.subplot(2,3,2)
+    #         dimshow(psfimg2.patch, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('Multi-Gaussian Fit')
+    #         plt.subplot(2,3,3)
+    #         dimshow(psfimg3.patch, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('Multi-Gaussian Fit')
+    #         plt.subplot(2,3,4)
+    #         dimshow(np.log10(np.maximum(psfimg, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         plt.subplot(2,3,5)
+    #         dimshow(np.log10(np.maximum(psfimg2.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         plt.subplot(2,3,6)
+    #         dimshow(np.log10(np.maximum(psfimg3.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         ps.savefig()
+
+
+
     if not pipe:
         # save resampling params
         tims_compute_resamp(tims, targetwcs)
@@ -771,11 +835,6 @@ def stage_fitblobs(T=None,
         assert(np.all(np.isfinite(tim.getInvError())))
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    for tim in tims:
-        from tractor.psfex import CachingPsfEx
-        tim.psfex.radius = 20
-        tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     # How far down to render model profiles
     minsigma = 0.1
@@ -1003,9 +1062,9 @@ def stage_fitblobs_finish(
     
     invvars = srcivs
 
-    print 'New catalog:'
-    for src in cat:
-        print '  ', src
+    #print 'New catalog:'
+    #for src in cat:
+    #    print '  ', src
     
     rtn = dict(fitblobs_R = None)
     for k in ['tractor', 'cat', 'invvars', 'T']:
@@ -1048,11 +1107,12 @@ def _blob_iter(blobslices, blobsrcs, blobs,
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
+            # We pass the *original*, full-image PSF model; _one_blob applies offsets
+            psf = tim.psfex
+
             subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
-                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
+                               tim.getSky(), psf, tim.name, sx0, sx1, sy0, sy1,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
-
-
 
         # Here we assume the "blobs" array has been remapped...
         blobmask = (blobs[bslc] == iblob)
@@ -1317,7 +1377,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         # If the subimage (blob) is small enough, instantiate a
         # constant PSF model in the center.
-        if sy1-sy0 < 100 and sx1-sx0 < 100:
+        if sy1-sy0 < 400 and sx1-sx0 < 400:
             subpsf = psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
         else:
             # Otherwise, instantiate a (shifted) spatially-varying
@@ -2862,7 +2922,10 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
     ccds.writeto(fn)
     print 'Wrote', fn
-    
+
+    for tim in tims:
+        print 'Tim', tim.name, 'PSF', tim.getPsf()
+
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0

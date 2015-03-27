@@ -718,8 +718,10 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         ox = np.append(xomit, px[:i][keep[:i]]) - x0
         oy = np.append(yomit, py[:i][keep[:i]]) - y0
         h,w = blobs.shape
-        cut = any((ox >= 0) * (ox < w) * (oy >= 0) * (oy < h) *
-                  blobs[np.clip(oy,0,h-1), np.clip(ox,0,w-1)] == thisblob)
+        cut = False
+        if len(ox):
+            cut = any((ox >= 0) * (ox < w) * (oy >= 0) * (oy < h) *
+                      blobs[np.clip(oy,0,h-1), np.clip(ox,0,w-1)] == thisblob)
 
         if False and (not cut) and ps is not None:
             plt.clf()
@@ -1131,8 +1133,9 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
             continue
         print len(px), 'new peaks'
         hot |= sedhot
-        xx = np.append(xx, px)
-        yy = np.append(yy, py)
+        # With an empty xx, np.append turns it into a double!
+        xx = np.append(xx, px).astype(int)
+        yy = np.append(yy, py).astype(int)
 
         peaksn.extend(peakval)
         apsn.extend(apval)
@@ -1653,7 +1656,6 @@ class DecamImage(object):
         magzp = decals.get_zeropoint_for(self)
         print 'magzp', magzp
         orig_zpscale = zpscale = NanoMaggies.zeropointToScale(magzp)
-        #print 'zpscale', zpscale
 
         sky = self.read_sky_model()
         midsky = sky.getConstant()
@@ -1664,6 +1666,7 @@ class DecamImage(object):
 
         if nanomaggies:
             # Scale images to Nanomaggies
+            print 'zpscale', zpscale
             img /= zpscale
             invvar *= zpscale**2
             zpscale = 1.
@@ -1688,7 +1691,15 @@ class DecamImage(object):
             print 'Reading PsfEx-fit model from', self.psffitellfn
             psfex = PsfEx.fromFits(self.psffitellfn)
             print 'Read', psfex
-            psf = psfex
+            psfex.ensureSplines()
+            psfex.radius = 20
+
+            if x0 or y0:
+                psf = ShiftedPsf(psfex, x0, y0)
+                # ?
+                psf.radius = 20
+            else:
+                psf = psfex
 
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
@@ -2068,7 +2079,7 @@ class DecamImage(object):
 
             psfex.toFits(self.psffitellfn, merge=True)
             print 'Wrote', self.psffitellfn
-    
+
             # Convert to GaussianMixturePSF
             ppvar = np.zeros_like(pp)
             for iy in range(psfex.ny):

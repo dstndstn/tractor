@@ -58,6 +58,10 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
             splines.append(spl)
         self.splines = splines
 
+    def ensureSplines(self):
+        if self.splines is None:
+            self.fitSavedData(*self.splinedata)
+
     def ensureFit(self):
         '''
         This class does lazy evaluation of the spatial-variation fit.
