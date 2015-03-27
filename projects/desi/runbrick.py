@@ -835,6 +835,9 @@ def stage_fitblobs(T=None,
         ps.savefig()
 
 
+    T.orig_ra  = T.ra.copy()
+    T.orig_dec = T.dec.copy()
+
     tfitall = Time()
 
     if blob0 is not None or (nblobs is not None and nblobs < len(blobslices)):
@@ -1019,7 +1022,6 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
 
-        print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
         print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
 
@@ -3096,6 +3098,17 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         os.system(cmd)
         os.unlink(tmpfn)
         print 'Wrote', jpegfn
+
+    if ps is not None:
+        plt.clf()
+        ok,x0,y0 = targetwcs.radec2pixelxy(T.orig_ra, T.orig_dec)
+        ok,x1,y1 = targetwcs.radec2pixelxy(T.ra, T.dec)
+        dimshow(get_rgb(coimgs, bands, **rgbkwargs))
+        ax = plt.axis()
+        plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
+        plt.plot(x1-1, y1-1, 'r.')
+        plt.axis(ax)
+        ps.savefig()
 
     return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
 
