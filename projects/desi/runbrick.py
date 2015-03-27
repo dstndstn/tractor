@@ -2042,7 +2042,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     subtr.catalog = subcat
 
     ### Simultaneous re-opt.
-    if len(subcat) > 1 and len(subcat) <= 10:
+    if False and len(subcat) > 1 and len(subcat) <= 10:
         #tfit = Time()
         # Optimize all at once?
         subcat.thawAllParams()
