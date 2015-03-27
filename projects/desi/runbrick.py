@@ -521,8 +521,8 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
                             comment='DECaLS image type'))
         hdr.add_record(dict(name='MAGZERO', value=22.5,
                             comment='Magnitude zeropoint'))
-        hdr.add_record(dict(name='BUNIT', value='nanomaggie',
-                            comment='AB mag = 22.5 - 2.5*log10(nanomaggie)'))
+        hdr.add_record(dict(name='BUNIT', value='nanomaggy',
+                            comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
 
         fn = os.path.join(basedir, 'decals-%s-%s-%s.fits' % (brickname, name, band))
         fitsio.write(fn, img, clobber=True, header=hdr)
@@ -3087,11 +3087,11 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
             if name in ['image', 'model']:
                 hdr2.add_record(dict(name='MAGZERO', value=22.5,
                                      comment='Magnitude zeropoint'))
-                hdr2.add_record(dict(name='BUNIT', value='nanomaggie',
-                                     comment='AB mag = 22.5 - 2.5*log10(nanomaggie)'))
+                hdr2.add_record(dict(name='BUNIT', value='nanomaggy',
+                                     comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
             if name in ['invvar', 'depth']:
-                hdr2.add_record(dict(name='BUNIT', value='1/nanomaggie^2',
-                                     comment='Ivar of AB mag = 22.5-2.5*log10(nanomaggie)'))
+                hdr2.add_record(dict(name='BUNIT', value='1/nanomaggy^2',
+                                     comment='Ivar of ABmag=22.5-2.5*log10(nmgy)'))
 
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
@@ -3409,10 +3409,10 @@ def stage_writecat(
     units = dict(
         ra=deg, dec=deg,
         ra_ivar=degiv, dec_ivar=degiv,
-        decam_flux='nanomaggies', decam_flux_ivar='1/nanomaggies^2',
-        decam_apflux='nanomaggies', decam_apflux_ivar='1/nanomaggies^2',
-        decam_apflux_resid='nanomaggies',
-        wise_flux='nanomaggies', wise_flux_ivar='1/nanomaggies^2',
+        decam_flux='nanomaggy', decam_flux_ivar='1/nanomaggy^2',
+        decam_apflux='nanomaggy', decam_apflux_ivar='1/nanomaggy^2',
+        decam_apflux_resid='nanomaggy',
+        wise_flux='nanomaggy', wise_flux_ivar='1/nanomaggy^2',
         shapeexp_r='arcsec', shapeexp_r_ivar='1/arcsec^2',
         shapedev_r='arcsec', shapedev_r_ivar='1/arcsec^2',
         ebv='mag',
@@ -3422,11 +3422,11 @@ def stage_writecat(
         sdss_theta_dev='arcsec', sdss_theta_exp='arcsec',
         sdss_theta_deverr='1/arcsec', sdss_theta_experr='1/arcsec',
         sdss_phi_dev_deg=deg, sdss_phi_exp_deg=deg,
-        sdss_psfflux='nanomaggies', sdss_psfflux_ivar='1/nanomaggies^2',
-        sdss_cmodelflux='nanomaggies', sdss_cmodelflux_ivar='1/nanomaggies^2',
-        sdss_modelflux='nanomaggies', sdss_modelflux_ivar='1/nanomaggies^2',
-        sdss_devflux='nanomaggies', sdss_devflux_ivar='1/nanomaggies^2',
-        sdss_expflux='nanomaggies', sdss_expflux_ivar='1/nanomaggies^2',
+        sdss_psfflux='nanomaggy', sdss_psfflux_ivar='1/nanomaggy^2',
+        sdss_cmodelflux='nanomaggy', sdss_cmodelflux_ivar='1/nanomaggy^2',
+        sdss_modelflux='nanomaggy', sdss_modelflux_ivar='1/nanomaggy^2',
+        sdss_devflux='nanomaggy', sdss_devflux_ivar='1/nanomaggy^2',
+        sdss_expflux='nanomaggy', sdss_expflux_ivar='1/nanomaggy^2',
         sdss_extinction='mag')
 
     for i,col in enumerate(cols):
