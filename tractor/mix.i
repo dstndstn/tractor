@@ -107,13 +107,13 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
         // (!(x >= y)) to handle NaNs.
         //if (dsq < maxD[k])
         if (!(dsq >= maxD[k])) {
-            if (!isfinite(dsq)) {
-                printf("skipping dsq %f\n", dsq);
-            }
+            //if (!isfinite(dsq)) {
+            //printf("skipping dsq %f\n", dsq);
+            //}
             continue;
         }
         if (!isfinite(dsq)) {
-            printf("XXX dsq not finite %f\n", dsq);
+            //printf("XXX dsq not finite %f\n", dsq);
             continue;
         }
 
