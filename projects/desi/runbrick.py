@@ -331,15 +331,58 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         sys.exit(0)
 
 
-    # HACK -- check PSF models
-    # for im,tim in zip(ims,tims):
-    #     print
-    #     print 'Image', tim.name
-    #     print 'PsfEx:', type(tim.psfex)
-    #     print 'PSF:', type(tim.psf)
-    #     print 'same?', tim.psf == tim.psfex
-    # 
-    #     x0,y0 = tim.wcs.getX0Y0()
+    if ps is not None:
+        # HACK -- check PSF models
+        plt.figure(num=2, figsize=(7,4))
+        for im,tim in zip(ims,tims):
+            print
+            print 'Image', tim.name
+
+            plt.subplots_adjust(left=0, right=1, bottom=0, top=1,
+                                hspace=0, wspace=0)
+            W,H = 2048,4096
+            psfex = PsfEx(im.psffn, W, H)
+            for round in [1,2,3]:
+                plt.clf()
+                k = 1
+                #rows,cols = 10,5
+                rows,cols = 7,4
+                for iy,y in enumerate(np.linspace(0, H, rows).astype(int)):
+                    for ix,x in enumerate(np.linspace(0, W, cols).astype(int)):
+                        psfimg = psfex.instantiateAt(x, y)
+                        # trim
+                        psfimg = psfimg[5:-5, 5:-5]
+                        print 'psfimg', psfimg.shape
+                        ph,pw = psfimg.shape
+                        psfimg2 = tim.psfex.getPointSourcePatch(x, y, radius=pw/2)
+                        mod = np.zeros_like(psfimg)
+                        h,w = mod.shape
+                        #psfimg2.x0 -= x
+                        #psfimg2.x0 += w/2
+                        #psfimg2.y0 -= y
+                        #psfimg2.y0 += h/2
+                        psfimg2.x0 = 0
+                        psfimg2.y0 = 0
+                        print 'psfimg2:', (psfimg2.x0,psfimg2.y0)
+                        psfimg2.addTo(mod)
+                        print 'psfimg:', psfimg.min(), psfimg.max(), psfimg.sum()
+                        print 'psfimg2:', psfimg2.patch.min(), psfimg2.patch.max(), psfimg2.patch.sum()
+                        print 'mod:', mod.min(), mod.max(), mod.sum()
+
+                        #plt.subplot(rows, cols, k)
+                        plt.subplot(cols, rows, k)
+                        k += 1
+                        mx = 0.03
+                        kwa = dict(vmin=0, vmax=mx, ticks=False)
+                        if round == 1:
+                            dimshow(psfimg, **kwa)
+                        elif round == 2:
+                            dimshow(mod, **kwa)
+                        elif round == 3:
+                            dimshow(psfimg - mod, vmin=-mx/2, vmax=mx/2, ticks=False)
+                ps.savefig()
+                    
+    # x0,y0 = tim.wcs.getX0Y0()
     # 
     #     psfex = PsfEx(im.psffn, 2048, 4096)
     #     psfimg = psfex.instantiateAt(x0, y0)
