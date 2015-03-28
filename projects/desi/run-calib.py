@@ -34,7 +34,8 @@ if __name__ == '__main__':
 
         kwargs = dict(astrom=False)
 
-        # kwargs.update(psfex=False, psfexfit=False)
+        kwargs.update(psfexfit=False)
+
         if opt.force:
             kwargs.update(force=True)
 
