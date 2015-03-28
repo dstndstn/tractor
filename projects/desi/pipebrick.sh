@@ -6,7 +6,7 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-outdir=$GSCRATCH/dr1b
+outdir=$GSCRATCH/dr1d
 
 mkdir -p $outdir/logs
 brick="$1"
@@ -34,7 +34,7 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --skip --pipe >> $log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
 
 
 
