@@ -1082,22 +1082,18 @@ def sed_matched_filters(bands):
     if len(bands) == 1:
         return [(bands[0], (1.,))]
 
-    # These are for grz filters
     # single-band filters
     SEDs = []
     for i,band in enumerate(bands):
         sed = np.zeros(len(bands))
         sed[i] = 1.
         SEDs.append((band, sed))
-    SEDs.append(('Flat', (1.,1.,1.)))
-    SEDs.append(('Red', (2.5, 1.0, 0.4)))
 
-    if bands != 'grz':
-        inds = ['grz'.index(b) for b in bands]
-        keepseds = []
-        for name,sed in SEDs:
-            keepseds.append((name, [sed[i] for i in inds]))
-        SEDs = keepseds
+    if len(bands) > 1:
+        flat = dict(g=1., r=1., z=1.)
+        SEDs.append(('Flat', [flat[b] for b in bands]))
+        red = dict(g=2.5, r=1., z=0.4)
+        SEDs.append(('Red', [red[b] for b in bands]))
 
     return SEDs
 
