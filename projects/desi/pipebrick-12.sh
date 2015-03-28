@@ -23,7 +23,7 @@ echo "Modules:" >> $log
 module list >> $log 2>&1
 echo >> $log
 echo "Environment:" >> $log
-set >> $log
+set | grep -v QDO_DB_PASS >> $log
 echo >> $log
 
 echo >> $log
