@@ -12,6 +12,10 @@ from astrometry.libkd.spherematch import *
 This script (with manual editing) can produce lists of CCD indices for calibration:
 
 python projects/desi/queue-calibs.py  | qdo load cal -
+
+dr1(d):
+qdo launch bricks 16 --mpack 6 --batchopts "-A desi" --walltime=24:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
+
 qdo launch cal 1 --batchopts "-A cosmo -t 1-50" --walltime=24:00:00 --batchqueue serial --script projects/desi/run-calib.py
 #qdo launch cal 1 --batchopts "-A cosmo -t 1-10" --walltime=24:00:00 --batchqueue serial
 
@@ -54,10 +58,16 @@ if __name__ == '__main__':
 
     parser.add_option('--region', help='Region to select')
 
+    parser.add_option('--bricks', help='Set bricks.fits file to load')
+
     opt,args = parser.parse_args()
 
     D = Decals()
-    B = D.get_bricks()
+    if opt.bricks is not None:
+        B = fits_table(opt.bricks)
+        log('Read', len(B), 'from', opt.bricks)
+    else:
+        B = D.get_bricks()
 
     # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
     # plt.clf()
@@ -85,7 +95,7 @@ if __name__ == '__main__':
     #dlo,dhi =   5, 13
 
     # DR1
-    rlo,rhi = 0, 360
+    #rlo,rhi = 0, 360
     # part 1
     #dlo,dhi = 25, 40
     # part 2
@@ -98,8 +108,10 @@ if __name__ == '__main__':
     #dlo,dhi = 5,10
     # the rest
     #dlo,dhi = -11, 5
+    #dlo,dhi = 15,25.5
 
-    dlo,dhi = 15,25.5
+    dlo,dhi = -15, 40
+    rlo,rhi = 0, 360
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -138,6 +150,18 @@ if __name__ == '__main__':
         # 535 bricks, ~7000 CCDs
         rlo,rhi = 240,245
         dlo,dhi =   5, 12
+
+    elif opt.region == 'dr1a':
+        rlo,rhi = 0, 360
+        dlo,dhi = 30, 40
+    # elif opt.region == 'dr1b':
+    #     rlo,rhi = 0, 360
+    #     dlo,dhi = 25,30
+    # elif opt.region == 'dr1b':
+    #     rlo,rhi = 0, 360
+    #     dlo,dhi = 25,30
+
+
 
     if opt.mindec is not None:
         dlo = opt.mindec
@@ -189,6 +213,11 @@ if __name__ == '__main__':
     B.cut(np.argsort(-B.dec))
 
     for b in B:
+        if opt.check:
+            fn = 'dr1d/tractor/%s/tractor-%s.fits' % (b.brickname[:3], b.brickname)
+            if os.path.exists(fn):
+                print >> sys.stderr, 'Exists:', fn
+                continue
         if opt.check_coadd:
             fn = 'dr1b/coadd/%s/%s/decals-%s-image.jpg' % (b.brickname[:3], b.brickname, b.brickname)
             if os.path.exists(fn):
