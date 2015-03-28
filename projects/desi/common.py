@@ -1270,7 +1270,7 @@ class Decals(object):
         W,H = targetwcs.get_width(), targetwcs.get_height()
         targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                              [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-        args = [(im, self, targetrd, mock_psf) for im in ims]
+        args = [(im, self, targetrd, mock_psf, False, False) for im in ims]
         tims = mp.map(read_one_tim, args)
         return tims
     
@@ -1569,6 +1569,7 @@ class DecamImage(object):
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
         self.psffitellfn = os.path.join(calibdir, 'psfexfit', calname + '-ell.fits')
+        self.psffitell2fn = os.path.join(calibdir, 'psfexfit', calname + '-ell2.fits')
         self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
@@ -1578,7 +1579,7 @@ class DecamImage(object):
         return str(self)
 
     def get_tractor_image(self, decals, slc=None, radecpoly=None,
-                          mock_psf=False,
+                          mock_psf=False, const2psf=False,
                           nanomaggies=True, subsky=True, tiny=5,
                           pvwcs=False):
         '''
@@ -1686,10 +1687,26 @@ class DecamImage(object):
             psfex = None
             psf = NCircularGaussianPSF([1.5], [1.0])
             print 'WARNING: using mock PSF:', psf
+        elif const2psf:
+            # 2-component constant MoG.
+            from tractor.basics import GaussianMixtureEllipsePSF
+            iminfo = self.get_image_info()
+            H,W = iminfo['dims']
+            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
+                          psfClass=GaussianMixtureEllipsePSF, K=2)
+            # FIXME -- could instantiate in the center of the ROI...
+            psfim = psfex.instantiateAt(W/2, H/2)
+            # trim a little
+            psfim = psfim[5:-5, 5:-5]
+            psf = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+
         else:
             # read fit PsfEx model -- with ellipse representation
-            print 'Reading PsfEx-fit model from', self.psffitellfn
-            psfex = PsfEx.fromFits(self.psffitellfn)
+            # print 'Reading PsfEx-fit model from', self.psffitellfn
+            # psfex = PsfEx.fromFits(self.psffitellfn)
+            print 'Reading PsfEx-fit model from', self.psffitell2fn
+            psfex = PsfEx.fromFits(self.psffitell2fn)
+
             print 'Read', psfex
             psfex.ensureSplines()
             psfex.radius = 20
@@ -1816,7 +1833,7 @@ class DecamImage(object):
                    W=2048, H=4096, se=True,
                    astrom=True, psfex=True, sky=True,
                    pvastrom=True,
-                   morph=False, se2=False, psfexfit=True,
+                   morph=False, se2=False, psfexfit=True, psfexfit2=False,
                    funpack=True, fcopy=False, use_mask=True,
                    force=False, just_check=False):
         '''
@@ -1833,6 +1850,7 @@ class DecamImage(object):
         if mock_psf:
             psfex = False
             psfexfit = False
+            psfexfit2 = False
 
         run_funpack = False
         run_se = False
@@ -1841,6 +1859,7 @@ class DecamImage(object):
         run_pvastrom = False
         run_psfex = False
         run_psfexfit = False
+        run_psfexfit2 = False
         run_morph = False
         run_sky = False
     
@@ -1860,6 +1879,8 @@ class DecamImage(object):
             run_psfex = True
         if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
             run_psfexfit = True
+        if psfexfit2 and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitell2fn)):
+            run_psfexfit2 = True
         if morph and not os.path.exists(self.morphfn):
             run_morph = True
             run_funpack = True
@@ -1868,7 +1889,7 @@ class DecamImage(object):
 
         if just_check:
             return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
-                    or run_morph or run_sky or run_pvastrom)
+                    or run_morph or run_sky or run_pvastrom or run_psfexfit2)
 
         if force:
             if se:
@@ -1885,6 +1906,8 @@ class DecamImage(object):
                 run_psfex = True
             if psfexfit:
                 run_psfexfit = True
+            if psfexfit2:
+                run_psfexfit2 = True
             if morph:
                 run_morp = True
                 run_funpack = True
@@ -1895,7 +1918,7 @@ class DecamImage(object):
         # writes out 0 detections.  Then PsfEx fails but in a way that
         # an output file is still written.  Try to detect & fix this
         # case.
-        if run_psfexfit:
+        if run_psfexfit or run_psfexfit2:
             # Check the PsfEx output file for POLNAME1
             fn = self.psffn
             if os.path.exists(fn):
@@ -2092,6 +2115,23 @@ class DecamImage(object):
             psfexvar.splinedata = (ppvar, XX, YY)
             psfexvar.toFits(self.psffitfn, merge=True)
             print 'Wrote', self.psffitfn
+
+        if run_psfexfit2:
+            print 'Fit PSF...'
+    
+            from tractor.basics import GaussianMixtureEllipsePSF
+            from tractor.psfex import PsfEx
+    
+            iminfo = self.get_image_info()
+            H,W = iminfo['dims']
+            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
+                          psfClass=GaussianMixtureEllipsePSF, K=2)
+            psfex.savesplinedata = True
+            print 'Fitting MoG model to PsfEx'
+            psfex._fitParamGrid(damp=1)
+            pp,XX,YY = psfex.splinedata
+            psfex.toFits(self.psffitell2fn, merge=True)
+            print 'Wrote', self.psffitell2fn
             
         if run_morph:
             cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
@@ -2139,9 +2179,9 @@ def run_calibs(X):
     return im.run_calibs(*args, **kwargs)
 
 
-def read_one_tim((im, decals, targetrd, mock_psf, pvwcs)):
+def read_one_tim((im, decals, targetrd, mock_psf, pvwcs, const2psf)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
     tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf,
-                               pvwcs=pvwcs)
+                               pvwcs=pvwcs, const2psf=const2psf)
     return tim
 

@@ -110,7 +110,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         psf = self.psfAt(px, py)
         return psf.getMixtureOfGaussians()
 
-    def _fitParamGrid(self, fitfunc=None, **kwargs):
+    def _fitParamGrid(self, fitfunc=None, trim=0, **kwargs):
         # all MoG fit parameters (we need to make them shaped (ny,nx)
         # for spline fitting)
         pp = []
@@ -127,6 +127,9 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
             p0 = px0
             for ix,x in enumerate(XX):
                 im = self.instantiateAt(x, y)
+                if trim > 0:
+                    # Trim down to central part
+                    im = im[trim:-trim, trim:-trim]
 
                 if fitfunc is not None:
                     f = fitfunc

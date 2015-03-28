@@ -197,7 +197,7 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
 def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz', pvwcs=False,
+               bands='grz', pvwcs=False, const2psf=True,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -309,7 +309,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     # Read images, clip to ROI
     ttim = Time()
-    args = [(im, decals, targetrd, mock_psf, pvwcs) for im in ims]
+    args = [(im, decals, targetrd, mock_psf, pvwcs, const2psf) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
@@ -331,18 +331,59 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         sys.exit(0)
 
 
-    if ps is not None:
+    if False and ps is not None:
         # HACK -- check PSF models
-        plt.figure(num=2, figsize=(7,4))
+        plt.figure(num=2, figsize=(7,4.08))
         for im,tim in zip(ims,tims):
             print
             print 'Image', tim.name
 
-            plt.subplots_adjust(left=0, right=1, bottom=0, top=1,
+            plt.subplots_adjust(left=0, right=1, bottom=0, top=0.95,
                                 hspace=0, wspace=0)
             W,H = 2048,4096
             psfex = PsfEx(im.psffn, W, H)
-            for round in [1,2,3]:
+
+            psfim0 = psfim = psfex.instantiateAt(W/2, H/2)
+            # trim
+            psfim = psfim[10:-10, 10:-10]
+
+            tfit = Time()
+            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+            psfim = psfim0[5:-5, 5:-5]
+            tfit = Time()
+            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+            ph,pw = psfim.shape
+            psffit = GaussianMixtureEllipsePSF.fromStamp(psfim, N=3)
+
+            #mx = 0.03
+            mx = psfim.max()
+
+            mod3 = np.zeros_like(psfim)
+            p = psffit.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+            p.addTo(mod3)
+            mod2 = np.zeros_like(psfim)
+            p = psffit2.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+            p.addTo(mod2)
+
+            plt.clf()
+            plt.subplot(2,3,1)
+            dimshow(psfim, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,2)
+            dimshow(mod3, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,3)
+            dimshow(mod2, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,5)
+            dimshow(psfim-mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+            plt.subplot(2,3,6)
+            dimshow(psfim-mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+            ps.savefig()
+            #continue
+
+            for round in [1,2,3,4,5]:
                 plt.clf()
                 k = 1
                 #rows,cols = 10,5
@@ -372,14 +413,22 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                         #plt.subplot(rows, cols, k)
                         plt.subplot(cols, rows, k)
                         k += 1
-                        mx = 0.03
                         kwa = dict(vmin=0, vmax=mx, ticks=False)
                         if round == 1:
                             dimshow(psfimg, **kwa)
+                            plt.suptitle('PsfEx')
                         elif round == 2:
                             dimshow(mod, **kwa)
+                            plt.suptitle('varying MoG')
                         elif round == 3:
                             dimshow(psfimg - mod, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - varying MoG')
+                        elif round == 4:
+                            dimshow(psfimg - mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - const MoG(3)')
+                        elif round == 5:
+                            dimshow(psfimg - mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - const MoG(2)')
                 ps.savefig()
                     
     # x0,y0 = tim.wcs.getX0Y0()
@@ -1151,7 +1200,8 @@ def _blob_iter(blobslices, blobsrcs, blobs,
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
             # We pass the *original*, full-image PSF model; _one_blob applies offsets
-            psf = tim.psfex
+            #psf = tim.psfex
+            psf = tim.psf
 
             subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
                                tim.getSky(), psf, tim.name, sx0, sx1, sy0, sy1,
@@ -1393,11 +1443,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
 
-    ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
-                                       np.array([src.getPosition().dec for src in srcs]))
-    started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
-                               np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
-    print 'Sources started in blob:', started_in_blob
+    # ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+    #                                    np.array([src.getPosition().dec for src in srcs]))
+    # started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+    #                            np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    # print 'Sources started in blob:', started_in_blob
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -2311,11 +2361,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracmasked = fracmasked_num / fracmasked_den
     fracin     = fracin_num     / fracin_den
 
-    ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
-                                       np.array([src.getPosition().dec for src in srcs]))
-    finished_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
-                                np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
-    print 'Sources finished in blob:', finished_in_blob
+    # ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+    #                                    np.array([src.getPosition().dec for src in srcs]))
+    # finished_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+    #                             np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    # print 'Sources finished in blob:', finished_in_blob
 
     #print 'Blob finished metrics:', Time()-tlast
     print 'Blob', iblob+1, 'finished:', Time()-tlast

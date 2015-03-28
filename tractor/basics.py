@@ -1486,6 +1486,9 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
 
     def toMog(self):
         return GaussianMixturePSF(self.mog.amp, self.mog.mean, self.mog.var)
+
+    def mogAt(self, x, y):
+        return self.toMog()
         
     def __str__(self):
         return (
