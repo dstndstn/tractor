@@ -762,9 +762,13 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         apx0, apy0 = max(0, x - apout), max(0, y - apout)
         R2 = ((np.arange(aph)+apy0 - y)[:,np.newaxis]**2 + 
               (np.arange(apw)+apx0 - x)[np.newaxis,:]**2)
-        # 16th percentile ~ -1 sigma point.
-        m = np.percentile(ap[apiv * (R2 >= apin**2) * (R2 <= apout**2)], 16.)
-
+        ap = ap[apiv * (R2 >= apin**2) * (R2 <= apout**2)]
+        if len(ap):
+            # 16th percentile ~ -1 sigma point.
+            m = np.percentile(ap, 16.)
+        else:
+            # fake
+            m = -1.
         if cutonaper:
             if sedsn[y,x] - m < nsigma:
                 continue
@@ -788,21 +792,6 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
     if ps is not None:
         pxdrop = px[np.logical_not(keep)]
         pydrop = py[np.logical_not(keep)]
-    #     # plt.clf()
-    #     # plt.imshow(omitmap, interpolation='nearest', origin='lower', cmap='gray')
-    #     # plt.title('Final omit map for SED %s' % sedname)
-    #     # ps.savefig()
-    #     
-    #     plt.clf()
-    #     plt.imshow(sedsn, vmin=-2, vmax=10, interpolation='nearest', origin='lower',
-    #                cmap='gray')
-    #     ax = plt.axis()
-    #     plt.plot(px[keep], py[keep], '+', color=green, **crossa)
-    #     drop = np.logical_not(keep)
-    #     plt.plot(px[drop], py[drop], 'r+', **crossa)
-    #     plt.axis(ax)
-    #     plt.title('SED %s: Final keep (green) peaks' % sedname)
-    #     ps.savefig()
 
     py = py[keep]
     px = px[keep]
