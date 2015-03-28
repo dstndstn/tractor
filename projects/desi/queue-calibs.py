@@ -69,10 +69,6 @@ if __name__ == '__main__':
     # #plt.scatter(B.ra[I], B.dec[I], c=counts)
     # plt.savefig('bricks2.png')
 
-    # EDR:
-    # 535 bricks, ~7000 CCDs
-    #rlo,rhi = 240,245
-    #dlo,dhi =   5, 12
 
     # DES Stripe82
     #rlo,rhi = 350.,360.
@@ -136,6 +132,12 @@ if __name__ == '__main__':
         print B.ra, B.dec
         dlo,dhi = -90,90
         rlo,rhi = 0, 360
+
+    elif opt.region == 'edr':
+        # EDR:
+        # 535 bricks, ~7000 CCDs
+        rlo,rhi = 240,245
+        dlo,dhi =   5, 12
 
     if opt.mindec is not None:
         dlo = opt.mindec

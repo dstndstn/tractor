@@ -300,6 +300,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     kwa = dict()
     if pvwcs:
         kwa.update(pvastrom=True, astrom=False)
+    if const2psf:
+        kwa.update(psfexfit=False)
 
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
