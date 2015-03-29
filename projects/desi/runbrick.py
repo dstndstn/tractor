@@ -3006,7 +3006,8 @@ def stage_fitplots(
 
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
-                 outdir=None, T=None, cat=None, pixscale=None, **kwargs):
+                 outdir=None, T=None, cat=None, pixscale=None, plots=False,
+                 **kwargs):
 
     import photutils
 
@@ -3271,7 +3272,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         os.unlink(tmpfn)
         print 'Wrote', jpegfn
 
-    if ps is not None:
+    if plots:
         plt.clf()
         ra  = np.array([src.getPosition().ra  for src in cat])
         dec = np.array([src.getPosition().dec for src in cat])
