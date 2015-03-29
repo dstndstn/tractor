@@ -2622,16 +2622,16 @@ def stage_initplots(
     #b0 = blobs
     #b1 = binary_dilation(blobs, np.ones((3,3)))
     #bout = np.logical_and(b1, np.logical_not(b0))
-    b0 = blobs
-    b1 = binary_erosion(b0, np.ones((3,3)))
-    bout = np.logical_and(b0, np.logical_not(b1))
-    # set green
-    rgb[:,:,0][bout] = 0.
-    rgb[:,:,1][bout] = 1.
-    rgb[:,:,2][bout] = 0.
-    plt.clf()
-    dimshow(rgb, ticks=False)
-    ps.savefig()
+    # b0 = blobs
+    # b1 = binary_erosion(b0, np.ones((3,3)))
+    # bout = np.logical_and(b0, np.logical_not(b1))
+    # # set green
+    # rgb[:,:,0][bout] = 0.
+    # rgb[:,:,1][bout] = 1.
+    # rgb[:,:,2][bout] = 0.
+    # plt.clf()
+    # dimshow(rgb, ticks=False)
+    # ps.savefig()
 
     # Initial model (SDSS only)
     try:
@@ -2738,6 +2738,8 @@ def stage_initplots(
 
     #wfn = sdss.filenames.get('window_flist', None)
     wfn = os.path.join(os.environ['PHOTO_RESOLVE'], 'window_flist.fits')
+
+    from astrometry.sdss.fields import radec_to_sdss_rcf
     
     clra,cldec = clwcs.radec_center()
     clrad = clwcs.radius()
@@ -3882,7 +3884,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
         'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
-        'initplots': 'tims',
+        'initplots': 'srcs',
         }
 
     initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
