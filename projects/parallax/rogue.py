@@ -7,7 +7,7 @@ import pylab as plt
 import os
 import datetime
 
-#import emcee
+import emcee
 #import triangle
 
 import fitsio
@@ -29,6 +29,8 @@ from scipy.ndimage.filters import *
 
 from unwise_coadd import get_wise_frames, get_l1b_file
 from wise.wise import *
+
+from tractor.motion import *
 
 wisedir = 'wise-frames'
 
@@ -151,31 +153,37 @@ def epoch_coadd_plots(tractor, ps, S, ima, yearcut, fakewcs):
     #chimax = max(achisq.max(), bchisq.max())
     #ca = dict(interpolation='nearest', origin='lower', vmin=0, vmax=chimax)
     c2a = dict(interpolation='nearest', origin='lower', vmin=0, vmax=16*nn)
-    ca = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=3)
+    ca = dict(interpolation='nearest', origin='lower', vmin=-3, vmax=3, cmap='RdBu')
 
     plt.clf()
 
     plt.subplot(2,3,1)
     plt.imshow(bimg, **ima)
+    plt.xticks([]); plt.yticks([])
 
     plt.subplot(2,3,2)
     plt.imshow(bmod, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.title('First epoch')
 
     plt.subplot(2,3,3)
     #plt.imshow(bchisq, **c2a)
     plt.imshow(bchi, **ca)
+    plt.xticks([]); plt.yticks([])
 
     plt.subplot(2,3,4)
     plt.imshow(aimg, **ima)
+    plt.xticks([]); plt.yticks([])
 
     plt.subplot(2,3,5)
     plt.imshow(amod, **ima)
+    plt.xticks([]); plt.yticks([])
     plt.title('Second epoch')
 
     plt.subplot(2,3,6)
     #plt.imshow(achisq, **c2a)
     plt.imshow(achi, **ca)
+    plt.xticks([]); plt.yticks([])
 
     ps.savefig()
 
@@ -209,7 +217,7 @@ def plot_tracks(src, fakewcs, spa=None, **kwargs):
 
     return rr,dd,tt
 
-from detection import *
+#from detection import *
 
 def search(tile):
 
@@ -432,9 +440,11 @@ if __name__ == '__main__':
     #sz = 0.01
     sz = 0.006
 
-    A = fits_table('three-atlas.fits')
-    for tile in A.coadd_id:
-        search(tile)
+    # ------------
+    # A = fits_table('three-atlas.fits')
+    # for tile in A.coadd_id:
+    #     search(tile)
+    # ------------
     
     # II = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-img-m.fits' % e) for e in [0,1]]
     # PP = [fitsio.read('e%i/cus/custom-1337m072/unwise-custom-1337m072-w2-std-m.fits' % e) for e in [0,1]]
@@ -486,8 +496,10 @@ if __name__ == '__main__':
     # plt.imshow((II[0] - II[1]) / np.hypot(PP[0], PP[1]), interpolation='nearest', origin='lower')
     # ps.savefig()
 
-    sys.exit(0)
-    
+    #sys.exit(0)
+
+    ps = PlotSequence('rogue')
+
     wfn = 'rogue-frames.fits'
     if os.path.exists(wfn):
         W = fits_table(wfn)
@@ -510,7 +522,8 @@ if __name__ == '__main__':
             W.inroi[i] = True
         W.writeto(wfn)
     
-    W.cut(W.inroi)
+    #print 'inroi:', W.inroi
+    #W.cut(W.inroi)
     W.cut(np.argsort(W.mjd))
 
     unw = fits_table('unwise-1342m076-w2-frames.fits')
@@ -526,12 +539,16 @@ if __name__ == '__main__':
     P = fits_table('wise/wise-psf-avg.fits', hdu=band)
     psf = GaussianMixturePSF(P.amp, P.mean, P.var)
 
+    W.about()
+
     tims = []
     keepi = []
     for i,w in enumerate(W):
         print
         tim = get_tim(w, roi)
         print 'Got', tim
+        if tim is None:
+            continue
 
         I = np.flatnonzero((unw.scan_id   == w.scan_id) *
                            (unw.frame_num == w.frame_num))
@@ -570,7 +587,7 @@ if __name__ == '__main__':
     assert(len(W) == len(tims))
 
     pm = PMRaDec(0., 0.)
-    pm.setStepSizes(1e-4)
+    pm.setStepSizes([1e-4]*2)
     parallax = 0.
 
     epochyr = 2010.5
@@ -600,6 +617,10 @@ if __name__ == '__main__':
     tractor.optimize_forced_photometry()
     print 'After  fitting:', tractor.getParams()
 
+    plt.figure(1)
+    plt.subplots_adjust(left=0.02, right=0.98, bottom=0.02, top=0.95,
+                        hspace=0.1, wspace=0.1)
+
     epoch_coadd_plots(tractor, ps, S, ima, epochyr, fakewcs)
     #all_plots(tractor, ps, S, ima)
 
@@ -608,6 +629,7 @@ if __name__ == '__main__':
     tractor.catalog.thawPathsTo('pmra', 'pmdec')
     src = tractor.catalog[-1]
     src.thawPathsTo('ra', 'dec')
+    print 'Thawed params:'
     tractor.printThawedParams()
 
     print 'Source', src
