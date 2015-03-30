@@ -1941,6 +1941,17 @@ class DecamImage(object):
                     os.unlink(fn)
                     run_pvastrom = True
 
+        # Empty sky files are possible too.
+        if sky and not run_sky:
+            fn = self.skyfn
+            if os.path.exists(fn):
+                try:
+                    hdr = fitsio.read_header(fn)
+                except:
+                    print 'Failed to read sky file', fn, '-- deleting'
+                    os.unlink(fn)
+                    run_sky = True
+
         tmpimgfn = None
         tmpmaskfn = None
 
