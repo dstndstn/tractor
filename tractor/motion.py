@@ -32,7 +32,7 @@ class PMRaDec(RaDecPos):
     def __init__(self, *args, **kwargs):
         self.addParamAliases(ra=0, dec=1)
         super(PMRaDec,self).__init__(*args,**kwargs)
-        self.setStepSizes(1e-6)
+        self.setStepSizes([1e-6]*2)
         
     @staticmethod
     def getNamedParams():
