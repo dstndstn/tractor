@@ -720,6 +720,8 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
         h,w = blobs.shape
         cut = False
         if len(ox):
+            ox = ox.astype(int)
+            oy = oy.astype(int)
             cut = any((ox >= 0) * (ox < w) * (oy >= 0) * (oy < h) *
                       blobs[np.clip(oy,0,h-1), np.clip(ox,0,w-1)] == thisblob)
 
