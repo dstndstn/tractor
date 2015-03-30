@@ -6,11 +6,16 @@ from collections import OrderedDict
 from astrometry.util.fits import fits_table
 from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
+from astrometry.libkd.spherematch import *
 
 '''
 This script (with manual editing) can produce lists of CCD indices for calibration:
 
 python projects/desi/queue-calibs.py  | qdo load cal -
+
+dr1(d):
+qdo launch bricks 16 --mpack 6 --batchopts "-A desi" --walltime=24:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
+
 qdo launch cal 1 --batchopts "-A cosmo -t 1-50" --walltime=24:00:00 --batchqueue serial --script projects/desi/run-calib.py
 #qdo launch cal 1 --batchopts "-A cosmo -t 1-10" --walltime=24:00:00 --batchqueue serial
 
@@ -36,9 +41,33 @@ def log(*s):
     print >>sys.stderr, ' '.join([str(ss) for ss in s])
 
 if __name__ == '__main__':
+    import optparse
+
+    parser = optparse.OptionParser()
+    parser.add_option('--calibs', action='store_true', default=False,
+                      help='Output CCDs that need to be calibrated.')
+    parser.add_option('--check', action='store_true', default=False,
+                      help='Check which calibrations actually need to run.')
+    parser.add_option('--check-coadd', action='store_true', default=False,
+                      help='Check which caoadds actually need to run.')
+    parser.add_option('--out', help='Output filename for calibs, default %default',
+                      default='jobs')
+
+    parser.add_option('--maxdec', type=float, help='Maximum Dec to run')
+    parser.add_option('--mindec', type=float, help='Minimum Dec to run')
+
+    parser.add_option('--region', help='Region to select')
+
+    parser.add_option('--bricks', help='Set bricks.fits file to load')
+
+    opt,args = parser.parse_args()
 
     D = Decals()
-    B = D.get_bricks()
+    if opt.bricks is not None:
+        B = fits_table(opt.bricks)
+        log('Read', len(B), 'from', opt.bricks)
+    else:
+        B = D.get_bricks()
 
     # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
     # plt.clf()
@@ -50,15 +79,39 @@ if __name__ == '__main__':
     # #plt.scatter(B.ra[I], B.dec[I], c=counts)
     # plt.savefig('bricks2.png')
 
-    # EDR:
-    # 535 bricks, ~7000 CCDs
-    # rlo,rhi = 240,245
-    # dlo,dhi =   5, 12
 
+    # DES Stripe82
+    #rlo,rhi = 350.,360.
+    # rlo,rhi = 300., 10.
+    # dlo,dhi = -6., 4.
+    # TINY bit
+    #rlo,rhi = 350.,351.1
+    #dlo,dhi = 0., 1.1
+
+    # EDR+
     # 860 bricks
     # ~10,000 CCDs
-    # rlo,rhi = 239,246
-    # dlo,dhi =   5, 13
+    #rlo,rhi = 239,246
+    #dlo,dhi =   5, 13
+
+    # DR1
+    #rlo,rhi = 0, 360
+    # part 1
+    #dlo,dhi = 25, 40
+    # part 2
+    #dlo,dhi = 20,25
+    # part 3
+    #dlo,dhi = 15,20
+    # part 4
+    #dlo,dhi = 10,15
+    # part 5
+    #dlo,dhi = 5,10
+    # the rest
+    #dlo,dhi = -11, 5
+    #dlo,dhi = 15,25.5
+
+    dlo,dhi = -15, 40
+    rlo,rhi = 0, 360
 
     # Arjun says 3x3 coverage area is roughly
     # RA=240-252 DEC=6-12 (but not completely rectangular)
@@ -67,14 +120,9 @@ if __name__ == '__main__':
     #rlo,rhi = 148.9, 151.2
     #dlo,dhi = 0.9, 3.5
 
-    # A nice well-behaved region
-    rlo,rhi = 243.6, 244.6
-    dlo,dhi = 8.1, 8.6
-
-    # DES Stripe82
-    #rlo,rhi = 316., 6.
-    # rlo,rhi = 350.,360.
-    # dlo,dhi = -6., 4.
+    # A nice well-behaved region (EDR2/3)
+    # rlo,rhi = 243.6, 244.6
+    # dlo,dhi = 8.1, 8.6
 
     # 56 bricks, ~725 CCDs
     #B.cut((B.ra > 240) * (B.ra < 242) * (B.dec > 5) * (B.dec < 7))
@@ -83,22 +131,112 @@ if __name__ == '__main__':
     # 535 bricks, ~7000 CCDs
     #B.cut((B.ra > 240) * (B.ra < 245) * (B.dec > 5) * (B.dec < 12))
 
+
+    if opt.region in ['test1', 'test2', 'test3', 'test4']:
+        nm = dict(test1='2446p115', # weird stuff around bright star
+                  test2='1183p292', # faint sources around bright galaxy
+                  test3='3503p005', # DES
+                  test4='1163p277', # Pollux
+                  )[opt.region]
+
+        B.cut(np.flatnonzero(np.array([s == nm for s in B.brickname])))
+        log('Cut to', len(B), 'bricks')
+        print B.ra, B.dec
+        dlo,dhi = -90,90
+        rlo,rhi = 0, 360
+
+    elif opt.region == 'edr':
+        # EDR:
+        # 535 bricks, ~7000 CCDs
+        rlo,rhi = 240,245
+        dlo,dhi =   5, 12
+
+    elif opt.region == 'dr1a':
+        rlo,rhi = 0, 360
+        dlo,dhi = 30, 40
+    # elif opt.region == 'dr1b':
+    #     rlo,rhi = 0, 360
+    #     dlo,dhi = 25,30
+    # elif opt.region == 'dr1b':
+    #     rlo,rhi = 0, 360
+    #     dlo,dhi = 25,30
+
+
+
+    if opt.mindec is not None:
+        dlo = opt.mindec
+    if opt.maxdec is not None:
+        dhi = opt.maxdec
+
     if rlo < rhi:
         B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     else: # RA wrap
         B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
     log(len(B), 'bricks in range')
 
+    T = D.get_ccds()
+    log(len(T), 'CCDs')
+
+    I,J,d = match_radec(B.ra, B.dec, T.ra, T.dec, 0.25)
+    keep = np.zeros(len(B), bool)
+    for i in I:
+        keep[i] = True
+    B.cut(keep)
+    log('Cut to', len(B), 'bricks near CCDs')
+
+    # Aside -- how many near DR1=1 CCDs?
+    if False:
+        T2 = D.get_ccds()
+        log(len(T2), 'CCDs')
+        T2.cut(T2.dr1 == 1)
+        log(len(T2), 'CCDs marked DR1=1')
+        log(len(B), 'bricks in range')
+        I,J,d = match_radec(B.ra, B.dec, T2.ra, T2.dec, 0.25)
+        keep = np.zeros(len(B), bool)
+        for i in I:
+            keep[i] = True
+        B2 = B[keep]
+        log('Total of', len(B2), 'bricks near CCDs with DR1=1')
+        for band in 'grz':
+            Tb = T2[T2.filter == band]
+            log(len(Tb), 'in filter', band)
+            I,J,d = match_radec(B2.ra, B2.dec, Tb.ra, Tb.dec, 0.25)
+            good = np.zeros(len(B2), bool)
+            for i in I:
+                good[i] = True
+            B2.set('has_' + band, good)
+
+        B2.writeto('decals-bricks-in-dr1.fits')
+        sys.exit(0)
+
+    # sort by dec decreasing
+    B.cut(np.argsort(-B.dec))
+
     for b in B:
+        if opt.check:
+            fn = 'dr1d/tractor/%s/tractor-%s.fits' % (b.brickname[:3], b.brickname)
+            if os.path.exists(fn):
+                print >> sys.stderr, 'Exists:', fn
+                continue
+        if opt.check_coadd:
+            fn = 'dr1b/coadd/%s/%s/decals-%s-image.jpg' % (b.brickname[:3], b.brickname, b.brickname)
+            if os.path.exists(fn):
+                print >> sys.stderr, 'Exists:', fn
+                continue
+
         print b.brickname
-    sys.exit(0)
+
+    if not opt.calibs:
+        sys.exit(0)
     
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
 
 
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
+    T.index = np.arange(len(T))
+
+    T.cut(T.dr1 == 1)
+    log(len(T), 'photometric for DR1')
     
     bands = 'grz'
     log('Filters:', np.unique(T.filter))
@@ -110,24 +248,35 @@ if __name__ == '__main__':
         wcs = wcs_for_brick(b)
         I = ccds_touching_wcs(wcs, T)
         log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-
-        #if len(I):
-        #    print b.brickname
-
+        if len(I) == 0:
+            continue
         allI.update(I)
     allI = list(allI)
     allI.sort()
+    ##### HACK
+    #allI = np.flatnonzero(T.dec > 24.75)
 
-    f = open('jobs','w')
+    #allI = np.flatnonzero((T.dec < dhi+0.1) * (T.dec > dlo-0.1))
+
+    ## Be careful here -- T has been cut; we want to write out T.index.
+
+    print 'Writing calibs to', opt.out
+    f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
-    for i in allI:
-        #im = DecamImage(T[i])
-        #if not im.run_calibs(im, None, None, None, just_check=True,
-        #                     psfex=False, psfexfit=False):
-        #    continue
-        f.write('%i\n' % i)
+    for j,i in enumerate(allI):
+
+        if opt.check:
+            print j+1, 'of', len(allI)
+            im = DecamImage(T[i])
+            if not im.run_calibs(im, None, None, None, just_check=True,
+                                 astrom=False):
+                print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
+                continue
+        f.write('%i\n' % T.index[i])
+        if opt.check:
+            f.flush()
     f.close()
-    print 'Wrote "jobs"'
+    print 'Wrote', opt.out
 
     sys.exit(0)
     

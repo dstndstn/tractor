@@ -57,7 +57,6 @@ from astrometry.util.ttime import CpuMeas
 
 import _multiprocessing
 import cPickle as pickle
-#import pickle
 import time
 
 class DebugConnection():
@@ -172,7 +171,8 @@ def debug_worker(inqueue, outqueue, progressqueue,
     if hasattr(inqueue, '_writer'):
         inqueue._writer.close()
         outqueue._reader.close()
-        progressqueue._reader.close()
+        if progressqueue is not None:
+            progressqueue._reader.close()
         
     if initializer is not None:
         initializer(*initargs)
@@ -180,10 +180,11 @@ def debug_worker(inqueue, outqueue, progressqueue,
     mypid = os.getpid()
         
     completed = 0
+    #t0 = time.time()
     while maxtasks is None or (maxtasks and completed < maxtasks):
-        #t0 = time.time()
+        #print 'PID %i @ %f: get task' % (os.getpid(), time.time()-t0)
         try:
-            print 'Worker pid', os.getpid(), 'getting task'
+            # print 'Worker pid', os.getpid(), 'getting task'
             task = get()
         except (EOFError, IOError):
             debug('worker got EOFError or IOError -- exiting')
@@ -199,17 +200,19 @@ def debug_worker(inqueue, outqueue, progressqueue,
             debug('worker got sentinel -- exiting')
             break
 
+        # print 'PID %i @ %f: unpack task' % (os.getpid(), time.time()-t0)
         job, i, func, args, kwds = task
 
         if progressqueue is not None:
             try:
-                print 'Worker pid', os.getpid(), 'writing to progressqueue'
+                # print 'Worker pid', os.getpid(), 'writing to progressqueue'
                 progressqueue.put((job, i, mypid))
             except (EOFError, IOError):
                 print 'worker got EOFError or IOError on progress queue -- exiting'
                 break
 
         t1 = CpuMeas()
+        #print 'PID %i @ %f: run task' % (os.getpid(), time.time()-t0)
         try:
             success,val = (True, func(*args, **kwds))
         except Exception as e:
@@ -221,10 +224,12 @@ def debug_worker(inqueue, outqueue, progressqueue,
             #print type(e)
             put((None, None, (None,(False,e))))
             raise
+        #print 'PID %i @ %f: ran task' % (os.getpid(), time.time()-t0)
         t2 = CpuMeas()
         dt = (t2.cpu_seconds_since(t1), t2.wall_seconds_since(t1))
         put((job, i, dt,(success,val)))
         completed += 1
+        #print 'PID %i @ %f: sent result' % (os.getpid(), time.time()-t0)
     debug('worker exiting after %d tasks' % completed)
 
         
@@ -313,28 +318,29 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
         i = -1
         #print 'handle_tasks: task sequence', taskseq
         for i, task in enumerate(taskseq):
-            print 'handle_tasks: got task', i
+            # print 'handle_tasks: got task', i
             if thread._state:
                 debug('task handler found thread._state != RUN')
                 break
 
-            print 'N queue:', nqueued, 'max', maxnqueued
+            # print 'N queue:', nqueued, 'max', maxnqueued
             try:
-                print 'Queueing new task'
+                # print 'Queueing new task'
                 put(task)
                 nqueued += 1
             except IOError:
                 debug('could not put task on queue')
                 break
 
-            print 'N queue:', nqueued, 'max', maxnqueued
-            while maxnqueued and nqueued >= maxnqueued:
-                try:
-                    (job,i,pid) = progressqueue.get()
-                    print 'Job', job, 'element', i, 'pid', pid, 'started'
-                    nqueued -= 1
-                except IOError:
-                    break
+            # print 'N queue:', nqueued, 'max', maxnqueued
+            if progressqueue is not None:
+                while maxnqueued and nqueued >= maxnqueued:
+                    try:
+                        (job,i,pid) = progressqueue.get()
+                        # print 'Job', job, 'element', i, 'pid', pid, 'started'
+                        nqueued -= 1
+                    except IOError:
+                        break
 
         else:
             if set_length:
@@ -363,15 +369,16 @@ def debug_handle_tasks(taskqueue, put, outqueue, progressqueue, pool,
     # 
 
     # Empty the progressqueue to prevent blocking writing workers?
-    print 'task thread: emptying progressqueue'
-    try:
-        print 'task thread: reading from progressqueue.  nqueued=', nqueued
-        (job,i,pid) = progressqueue.get()
-        print 'Job', job, 'element', i, 'pid', pid, 'started'
-        nqueued -= 1
-    except IOError:
-        pass
-    print 'Task thread done.'
+    if progressqueue is not None:
+        # print 'task thread: emptying progressqueue'
+        try:
+            # print 'task thread: reading from progressqueue.  nqueued=', nqueued
+            (job,i,pid) = progressqueue.get()
+            # print 'Job', job, 'element', i, 'pid', pid, 'started'
+            nqueued -= 1
+        except IOError:
+            pass
+    # print 'Task thread done.'
     
 
 from multiprocessing.synchronize import Lock
@@ -496,12 +503,12 @@ class DebugPool(mp.pool.Pool):
         async = self.map_async(func, iterable, chunksize)
         while True:
             try:
-                print 'Waiting for async result...'
+                # print 'Waiting for async result...'
                 res = async.get(1)
-                print 'Got async result'
+                # print 'Got async result'
                 return res
             except multiprocessing.TimeoutError:
-                print 'Timeout waiting for async result.'
+                # print 'Timeout waiting for async result.'
                 continue
 
     def map_async(self, func, iterable, chunksize=None, callback=None):
@@ -628,18 +635,18 @@ class DebugPool(mp.pool.Pool):
             )
 
 
-class iterwrapper(object):
-    def __init__(self, y, n):
-        self.n = n
-        self.y = y
-    def __str__(self):
-        return 'iterwrapper: n=%i; ' % self.n + self.y
-    def __iter__(self):
-        return self
-    def next(self):
-        return self.y.next()
-    def __len__(self):
-        return self.n
+# class iterwrapper(object):
+#     def __init__(self, y, n):
+#         self.n = n
+#         self.y = y
+#     def __str__(self):
+#         return 'iterwrapper: n=%i; ' % self.n + self.y
+#     def __iter__(self):
+#         return self
+#     def next(self):
+#         return self.y.next()
+#     def __len__(self):
+#         return self.n
     
 
 if __name__ == '__main__':

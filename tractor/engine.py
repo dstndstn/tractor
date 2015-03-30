@@ -77,7 +77,12 @@ class Image(MultiParams):
 
         Only one of *invvar* and *inverr* should be given.  If both
         are given, inverr takes precedent.
-          
+
+        If *wcs* is not given, assumes pixel space.
+
+        If *sky* is not given, assumes zero sky.
+        
+        If *photocal* is not given, assumes count units.
         '''
         self.data = data
         if inverr is not None:
@@ -758,6 +763,7 @@ class Tractor(MultiParams):
                              wantims0 = True,
                              wantims1 = True,
                              negfluxval = None,
+                             verbose = False
                              ):
         '''
         negfluxval: when 'nonneg' is set, the flux value to give sources that went
@@ -868,27 +874,28 @@ class Tractor(MultiParams):
 
         t0 = Time()
         fluxes = np.zeros(len(usedParamMap))
-        print 'Ceres forced phot:'
-        print len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes)))
+        logverb('Ceres forced phot:')
+        logverb(len(blocks), ('image blocks (%ix%i), %i params' % (BW, BH, len(fluxes))))
         if len(blocks) == 0 or len(fluxes) == 0:
-            print 'Nothing to do!'
+            logverb('Nothing to do!')
             return
         # init fluxes passed to ceres
         p0 = self.getParams()
         for i,k in usedParamMap.items():
             fluxes[k] = p0[i]
 
+        iverbose = 1 if verbose else 0
         nonneg = int(nonneg)
         if nonneg:
             # Initial run with nonneg=False, to get in the ballpark
-            x = ceres_forced_phot(blocks, fluxes, 0)
+            x = ceres_forced_phot(blocks, fluxes, 0, iverbose)
             assert(x == 0)
             logverb('forced phot: ceres initial run', Time()-t0)
             t0 = Time()
             if negfluxval is not None:
                 fluxes = np.maximum(fluxes, negfluxval)
 
-        x = ceres_forced_phot(blocks, fluxes, nonneg)
+        x = ceres_forced_phot(blocks, fluxes, nonneg, iverbose)
         #print 'Ceres forced phot:', x
         logverb('forced phot: ceres', Time()-t0)
 
@@ -1649,8 +1656,6 @@ class Tractor(MultiParams):
             logverb('  Log-prob after:', pAfter)
             logverb('  delta log-prob:', pAfter - pBefore)
 
-            print '  stepped with alpha', alpha, 'and got dlnp', pAfter-pBefore
-
             if not np.isfinite(pAfter):
                 logmsg('  Got bad log-prob', pAfter)
                 break
@@ -1662,17 +1667,17 @@ class Tractor(MultiParams):
                 alphaBest = alpha
                 pBest = pAfter
         
-        if alphaBest is None or alphaBest == 0:
-            print "Warning: optimization is borking"
-            print "Parameter direction =",X
-            print "Parameters, step sizes, updates:"
-            for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
-                print n, '=', p, '  step', s, 'update', x
+        # if alphaBest is None or alphaBest == 0:
+        #     print "Warning: optimization is borking"
+        #     print "Parameter direction =",X
+        #     print "Parameters, step sizes, updates:"
+        #     for n,p,s,x in zip(self.getParamNames(), self.getParams(), self.getStepSizes(), X):
+        #         print n, '=', p, '  step', s, 'update', x
         if alphaBest is None:
             self.setParams(p0)
             return 0, 0.
 
-        logmsg('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
+        logverb('  Stepping by', alphaBest, 'for delta-logprob', pBest - pBefore)
         pa = [p + alphaBest * d for p,d in zip(p0, X)]
         self.setParams(pa)
         return pBest - pBefore, alphaBest
@@ -1863,7 +1868,13 @@ class Tractor(MultiParams):
                            use_tsnnls=False,
                            use_ceres=False,
                            get_A_matrix=False):
-
+        #
+        # Returns: numpy array containing update direction.
+        # If *variance* is True, return    (update,variance)
+        # If *get_A_matrix* is True, returns the sparse matrix of derivatives.
+        # If *scale_only* is True, return column scalings
+        # In cases of an empty matrix, returns the list []
+        #
         # allderivs: [
         #    (param0:)  [  (deriv, img), (deriv, img), ... ],
         #    (param1:)  [],
@@ -2068,6 +2079,8 @@ class Tractor(MultiParams):
         if chiImages is not None:
             for img,chi in zip(self.getImages(), chiImages):
                 chimap[img] = chi
+
+        ## FIXME -- could compute just chi ROIs here.
                 
         # iterating this way avoids setting the elements more than once
         for img,row0 in imgoffs.items():
@@ -2210,27 +2223,35 @@ class Tractor(MultiParams):
             if variance:
                 lsqropts.update(calc_var=True)
     
-            # lsqr can trigger floating-point errors
-            #np.seterr(all='warn')
-            
             # Run lsqr()
-            logmsg('LSQR: %i cols (%i unique), %i elements' %
+            logverb('LSQR: %i cols (%i unique), %i elements' %
                    (Ncols, len(ucols), len(spvals)-1))
-    
+
             # print 'A matrix:'
             # print A.todense()
             # print
             # print 'vector b:'
             # print b
-            
-            t0 = time.clock()
-            (X, istop, niters, r1norm, r2norm, anorm, acond,
-             arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
-            t1 = time.clock()
-            logmsg('  %.1f seconds' % (t1-t0))
+
+            bail = False
+            try:
+                # lsqr can trigger floating-point errors
+                oldsettings = np.seterr(all='print')
+                (X, istop, niters, r1norm, r2norm, anorm, acond,
+                 arnorm, xnorm, var) = lsqr(A, b, **lsqropts)
+            except ZeroDivisionError:
+                print 'ZeroDivisionError caught.  Returning zero.'
+                bail = True
+            # finally:
+            np.seterr(**oldsettings)
 
             del A
             del b
+
+            if bail:
+                if shared_params:
+                    return np.zeros(len(paramindexmap))
+                return np.zeros(len(allderivs))
     
             # print 'LSQR results:'
             # print '  istop =', istop
@@ -2242,8 +2263,6 @@ class Tractor(MultiParams):
             # print '  arnorm =', arnorm
             # print '  xnorm =', xnorm
             # print '  var =', var
-    
-            #olderr = set_fp_err()
         
         logverb('scaled  X=', X)
         X = np.array(X)
@@ -2259,9 +2278,6 @@ class Tractor(MultiParams):
         if scale_columns:
             X[colscales > 0] /= colscales[colscales > 0]
         logverb('  X=', X)
-
-        #np.seterr(**olderr)
-        #print "RUsage is: ",resource.getrusage(resource.RUSAGE_SELF)[2]
 
         if variance:
             if shared_params:
@@ -2362,9 +2378,9 @@ class Tractor(MultiParams):
         #             self.modelMasks[i][src] = mask
 
         # HACK -- check 'em
-        for d in derivs:
-            if d is not None:
-                self._checkModelMask(d, mask)
+        # for d in derivs:
+        #     if d is not None:
+        #         self._checkModelMask(d, mask)
 
         return derivs
 
@@ -2378,17 +2394,13 @@ class Tractor(MultiParams):
 
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
 
-        # # HACK -- auto-add?
-        # if self.expectModelMasks:
-        #     if mod is not None and mask is None:
-        #         # add to modelMasks
-        #         i = self.images.index(img)
-        #         # set 'mask' so the assertion in _checkModelMask doesn't fire
-        #         mask = Patch(mod.x0, mod.y0, mod.patch != 0)
-        #         self.modelMasks[i][src] = mask
-
-        ## HACK -- here we *check* that modelMask was respected.
-        self._checkModelMask(mod, mask)
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            # if not np.all(np.isfinite(mod.patch)):
+            #     from tractor.galaxy import disable_galaxy_cache
+            #     disable_galaxy_cache()
+            #     mod = src.getModelPatch(img, modelMask=mask, **kwargs)
+            assert(np.all(np.isfinite(mod.patch)))
 
         return mod
     
@@ -2409,10 +2421,9 @@ class Tractor(MultiParams):
             mod = self.getModelPatchNoCache(img, src, minsb=minsb, **kwargs)
             self.cache.put(deps, (minsb,mod))
 
-        # HACK -- here we *check* that modelMask is respected by the
-        # possibly-cached model.
-        mask = self._getModelMaskFor(img, src)
-        self._checkModelMask(mod, mask)
+        # DEBUG
+        if mod is not None and mod.patch is not None:
+            assert(np.all(np.isfinite(mod.patch)))
 
         return mod
 

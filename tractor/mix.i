@@ -8,8 +8,10 @@
 #include <assert.h>
 #include <sys/param.h>
 
-int n_exp = 0;
-int n_expf = 0;
+static int n_exp = 0;
+static int n_expf = 0;
+static int n_finf = 0;
+static int n_fnan = 0;
 
 static double eval_g(double I[3], double dx, double dy) {
     double dsq = (I[0] * dx * dx +
@@ -58,7 +60,10 @@ static double eval_all_dxy(int K, double* scales, double* I, double* means,
                Ik[2] * dy * dy);
         // "maxD" is slightly (ok totally) misnamed: it includes the
         // -0.5 factor * mahalanobis distance so is actually a *minimum*.
-        if (dsq < maxD[k])
+        // (!(x >= y)) to handle NaNs.
+        if (!(dsq >= maxD[k]))
+            continue;
+        if (!isfinite(dsq))
             continue;
         n_exp++;
         G = scales[k] * exp(dsq);
@@ -87,8 +92,11 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
     for (k=0; k<K; k++) {
         float dx,dy;
         float G;
-        float* Ik = I + 3*k;
+        float* Ik;
         float dsq;
+        if (scales[k] == 0)
+            continue;
+        Ik = I + 3*k;
         dx = x - means[2*k+0];
         dy = y - means[2*k+1];
         dsq = (Ik[0] * dx * dx +
@@ -96,8 +104,27 @@ static double eval_all_dxy_f(int K, float* scales, float* I, float* means,
                Ik[2] * dy * dy);
         // "maxD" is slightly (ok totally) misnamed: it includes the
         // -0.5 factor * mahalanobis distance so is actually a *minimum*.
-        if (dsq < maxD[k])
+        // (!(x >= y)) to handle NaNs.
+        //if (dsq < maxD[k])
+        if (!(dsq >= maxD[k])) {
+            //if (!isfinite(dsq)) {
+            //printf("skipping dsq %f\n", dsq);
+            //}
             continue;
+        }
+        if (!isfinite(dsq)) {
+            //printf("XXX dsq not finite %f\n", dsq);
+            continue;
+        }
+
+        /*{
+            if (isnan(dsq))
+                n_fnan++;
+            if (isinf(dsq))
+                n_finf++;
+            continue;
+        }*/
+
         n_expf++;
         G = scales[k] * expf(dsq);
         r += G;

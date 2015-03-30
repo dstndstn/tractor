@@ -23,7 +23,7 @@ echo "Modules:" >> $log
 module list >> $log 2>&1
 echo >> $log
 echo "Environment:" >> $log
-set >> $log
+set | grep -v QDO_DB_PASS >> $log
 echo >> $log
 
 echo >> $log
@@ -34,7 +34,7 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 12 --nsigma 6 --skip --pipe >> $log 2>&1
 
 
 

@@ -82,7 +82,8 @@ def source_param_types(src):
     return types
     
 
-def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY'):
+def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY',
+                         prefix='', save_invvars=True):
     if T is None:
         T = fits_table()
     if hdr is None:
@@ -113,8 +114,8 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY'):
     params0 = cat.getParams()
 
     #print 'cat', len(cat)
-    T.decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
-    T.decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
+    decam_flux = np.zeros((len(cat), len(allbands)), np.float32)
+    decam_flux_ivar = np.zeros((len(cat), len(allbands)), np.float32)
 
     for filt in filts:
         flux = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
@@ -128,45 +129,35 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY'):
             flux_iv = np.array([sum(b.getFlux(filt) for b in src.getBrightnesses())
                                 for src in cat])
             cat.setParams(params0)
-
-            #mag,dmag = NanoMaggies.fluxErrorsToMagErrors(flux, flux_iv)
         else:
-            #mag = NanoMaggies.nanomaggiesToMag(flux)
-            #dmag = np.zeros_like(mag)
             flux_iv = np.zeros_like(flux)
 
-        #print 'decam_flux:', T.decam_flux.shape
-        #print 'filt', filt
-        #print 'allbands', allbands
         i = allbands.index(filt)
-        #print 'index', i
-        #print 'flux', len(flux)
-        T.decam_flux[:,i] = flux.astype(np.float32)
-        T.decam_flux_ivar[:,i] = flux_iv.astype(np.float32)
+        decam_flux[:,i] = flux.astype(np.float32)
+        decam_flux_ivar[:,i] = flux_iv.astype(np.float32)
 
-        # T.set('decam_%s_nanomaggies'        % filt, flux.astype(np.float32))
-        # T.set('decam_%s_mag'                % filt, mag.astype(np.float32))
-        # T.set('decam_%s_nanomaggies_invvar' % filt, flux_iv.astype(np.float32))
-        # T.set('decam_%s_mag_err'            % filt, dmag.astype(np.float32))
-
+    T.set('%sdecam_flux' % prefix, decam_flux)
+    if save_invvars:
+        T.set('%sdecam_flux_ivar' % prefix, decam_flux_ivar)
 
     if fs is not None:
         fskeys = ['prochi2', 'pronpix', 'profracflux', 'proflux', 'npix']
         for k in fskeys:
             x = getattr(fs, k)
             x = np.array(x).astype(np.float32)
-            T.set('decam_%s_%s' % (tim.filter, k), x.astype(np.float32))
+            T.set('%sdecam_%s_%s' % (prefix, tim.filter, k), x.astype(np.float32))
 
-    get_tractor_fits_values(T, cat, '%s')
+    get_tractor_fits_values(T, cat, '%s%%s' % prefix)
 
-    if invvars is not None:
-        cat.setParams(invvars)
-    else:
-        cat.setParams(np.zeros(cat.numberOfParams()))
-    get_tractor_fits_values(T, cat, '%s_ivar')
+    if save_invvars:
+        if invvars is not None:
+            cat.setParams(invvars)
+        else:
+            cat.setParams(np.zeros(cat.numberOfParams()))
+        get_tractor_fits_values(T, cat, '%s%%s_ivar' % prefix)
+        # Heh, "no uncertainty here!"
+        T.delete_column('%stype_ivar' % prefix)
     cat.setParams(params0)
-    # Heh, no uncertainty here!
-    T.delete_column('type_ivar')
     
     return T, hdr
         

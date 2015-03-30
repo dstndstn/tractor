@@ -22,6 +22,32 @@ def main():
 
     tim = Image(data=np.zeros((H,W), np.float32), psf=psf)
 
+    src = PointSource(PixPos(50, 50), Flux(100.))
+    src.fixedRadius = 10
+    patch1 = src.getModelPatch(tim)
+    print 'Patch1', patch1
+
+    src.pos = PixPos(1, 50)
+    patch2 = src.getModelPatch(tim)
+    print 'Patch2', patch2
+
+    tr = Tractor([tim], [src])
+    tr.disable_cache()
+    patch3 = tr.getModelPatch(tim, src)
+    print 'Patch3', patch3
+
+    src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
+
+    src.halfsize = 10
+    patch1 = src.getModelPatch(tim)
+    print 'Patch1', patch1
+
+    src.pos = PixPos(1, 50)
+    patch2 = src.getModelPatch(tim)
+    print 'Patch2', patch2
+
+
+
     src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
 
     tiny = 1e-6

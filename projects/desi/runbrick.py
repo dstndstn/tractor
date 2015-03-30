@@ -41,11 +41,18 @@ mp = None
 nocache = True
 #photoobjdir = 'photoObjs-new'
 useCeres = True
+unwise_dir = 'unwise-coadds'
+
+# RGB image args used in the tile viewer:
+rgbkwargs = dict(mnmx=(-1,100.), arcsinh=1.)
+rgbkwargs_resid = dict(mnmx=(-5,5))
+
 
 def runbrick_global_init():
     if nocache:
         disable_galaxy_cache()
-    from tractor.ceres import ceres_opt
+    if useCeres:
+        from tractor.ceres import ceres_opt
 
 # Turn on/off caching for all new Tractor instances.
 def create_tractor(tims, srcs):
@@ -63,6 +70,16 @@ def _map(f, args):
         return mp.map(f, args, chunksize=1)
     else:
         return map(f, args)
+
+def try_makedirs(dirs):
+    if not os.path.exists(dirs):
+        # there can be a race
+        try:
+            os.makedirs(dirs)
+        except:
+            import traceback
+            traceback.print_exc()
+            pass
 
 class iterwrapper(object):
     def __init__(self, y, n):
@@ -180,9 +197,12 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
 def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz',
+               bands='grz', pvwcs=False, const2psf=True,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
+
+    # early fail for mysterious "ImportError: c.so.6: cannot open shared object file: No such file or directory"
+    from tractor.mix import c_gauss_2d_grid
 
     rtn,version,err = run_command('git describe')
     if rtn:
@@ -191,20 +211,6 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'Version:', version
 
     decals = Decals()
-
-    decalsv = decals.decals_dir
-    hdr = fitsio.FITSHDR()
-    hdr.add_record(dict(name='TRACTORV', value=version,
-                        comment='Tractor git version'))
-    hdr.add_record(dict(name='DECALSV', value=decalsv,
-                        comment='DECaLS version'))
-    hdr.add_record(dict(name='DECALSRE', value='pre-EDR2',
-                        comment='DECaLS release name'))
-    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
-                        comment='%s run time' % program_name))
-    hdr.add_record(dict(name='SURVEY', value='DECaLS',
-                        comment='DECam Legacy Survey'))
-    version_header = hdr
 
     if brickid is not None:
         brick = decals.get_brick(brickid)
@@ -229,11 +235,18 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'pixscale', pixscale
 
     T = decals.ccds_touching_wcs(targetwcs)
+    if T is None:
+        print 'No CCDs touching target WCS'
+        sys.exit(0)
+
+    print len(T), 'CCDs touching target WCS'
+
     # Sort by band
     T.cut(np.hstack([np.flatnonzero(T.filter == band) for band in bands]))
 
     print 'Cutting out non-photometric CCDs...'
-    I = decals.photometric_ccds(T)
+    #I = decals.photometric_ccds(T)
+    I = np.flatnonzero(T.dr1 == 1)
     print len(I), 'of', len(T), 'CCDs are photometric'
     T.cut(I)
 
@@ -247,12 +260,50 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
 
-    # Check that the zeropoints exist
-    for im in ims:
-        decals.get_zeropoint_for(im)
+    decalsv = decals.decals_dir
+    hdr = fitsio.FITSHDR()
+
+    for s in [
+        'Data product of the DECam Legacy Survey (DECaLS)',
+        'Full documentation at http://legacysurvey.org',
+        ]:
+        hdr.add_record(dict(name='COMMENT', value=s, comment=s))
+    hdr.add_record(dict(name='TRACTORV', value=version,
+                        comment='Tractor git version'))
+    hdr.add_record(dict(name='DECALSV', value=decalsv,
+                        comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSDR', value='DR1',
+                        comment='DECaLS release name'))
+    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
+                        comment='%s run time' % program_name))
+    hdr.add_record(dict(name='SURVEY', value='DECaLS',
+                        comment='DECam Legacy Survey'))
+
+    hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
+    hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
+    hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
+    hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
+    hdr.add_record(dict(name='DECMIN'  , value=brick.ra1, comment='Brick Dec min'))
+    hdr.add_record(dict(name='DECMAX'  , value=brick.ra2, comment='Brick Dec max'))
+
+    import socket
+    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
+                        comment='NERSC machine where runbrick.py was run'))
+
+    version_header = hdr
 
     # Run calibrations
-    args = [(im, dict(), brick.ra, brick.dec, pixscale, mock_psf)
+    kwa = dict()
+    if pvwcs:
+        kwa.update(pvastrom=True, astrom=False)
+    if const2psf:
+        kwa.update(psfexfit=False)
+
+    args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
     _map(run_calibs, args)
     print 'Calibrations:', Time()-tlast
@@ -260,22 +311,182 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     # Read images, clip to ROI
     ttim = Time()
-    args = [(im, decals, targetrd, mock_psf) for im in ims]
+    args = [(im, decals, targetrd, mock_psf, pvwcs, const2psf) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
-    print 'Tims:', tims
-    print 'T:', len(T)
-    T.about()
+    #print 'Tims:', tims
+    #print 'T:', len(T)
+    #T.about()
     I = np.flatnonzero(np.array([tim is not None for tim in tims]))
-    print 'I:', I
+    #print 'I:', I
     T.cut(I)
     ccds = T
     tims = [tim for tim in tims if tim is not None]
     assert(len(T) == len(tims))
 
-    print 'Read images:', Time()-tlast
+    print 'Read', len(T), 'images:', Time()-tlast
     tlast = Time()
+
+    if len(tims) == 0:
+        print 'No photometric CCDs overlap.  Quitting.'
+        sys.exit(0)
+
+
+    if False and ps is not None:
+        # HACK -- check PSF models
+        plt.figure(num=2, figsize=(7,4.08))
+        for im,tim in zip(ims,tims):
+            print
+            print 'Image', tim.name
+
+            plt.subplots_adjust(left=0, right=1, bottom=0, top=0.95,
+                                hspace=0, wspace=0)
+            W,H = 2048,4096
+            psfex = PsfEx(im.psffn, W, H)
+
+            psfim0 = psfim = psfex.instantiateAt(W/2, H/2)
+            # trim
+            psfim = psfim[10:-10, 10:-10]
+
+            tfit = Time()
+            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+            psfim = psfim0[5:-5, 5:-5]
+            tfit = Time()
+            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+            ph,pw = psfim.shape
+            psffit = GaussianMixtureEllipsePSF.fromStamp(psfim, N=3)
+
+            #mx = 0.03
+            mx = psfim.max()
+
+            mod3 = np.zeros_like(psfim)
+            p = psffit.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+            p.addTo(mod3)
+            mod2 = np.zeros_like(psfim)
+            p = psffit2.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+            p.addTo(mod2)
+
+            plt.clf()
+            plt.subplot(2,3,1)
+            dimshow(psfim, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,2)
+            dimshow(mod3, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,3)
+            dimshow(mod2, vmin=0, vmax=mx, ticks=False)
+            plt.subplot(2,3,5)
+            dimshow(psfim-mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+            plt.subplot(2,3,6)
+            dimshow(psfim-mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+            ps.savefig()
+            #continue
+
+            for round in [1,2,3,4,5]:
+                plt.clf()
+                k = 1
+                #rows,cols = 10,5
+                rows,cols = 7,4
+                for iy,y in enumerate(np.linspace(0, H, rows).astype(int)):
+                    for ix,x in enumerate(np.linspace(0, W, cols).astype(int)):
+                        psfimg = psfex.instantiateAt(x, y)
+                        # trim
+                        psfimg = psfimg[5:-5, 5:-5]
+                        print 'psfimg', psfimg.shape
+                        ph,pw = psfimg.shape
+                        psfimg2 = tim.psfex.getPointSourcePatch(x, y, radius=pw/2)
+                        mod = np.zeros_like(psfimg)
+                        h,w = mod.shape
+                        #psfimg2.x0 -= x
+                        #psfimg2.x0 += w/2
+                        #psfimg2.y0 -= y
+                        #psfimg2.y0 += h/2
+                        psfimg2.x0 = 0
+                        psfimg2.y0 = 0
+                        print 'psfimg2:', (psfimg2.x0,psfimg2.y0)
+                        psfimg2.addTo(mod)
+                        print 'psfimg:', psfimg.min(), psfimg.max(), psfimg.sum()
+                        print 'psfimg2:', psfimg2.patch.min(), psfimg2.patch.max(), psfimg2.patch.sum()
+                        print 'mod:', mod.min(), mod.max(), mod.sum()
+
+                        #plt.subplot(rows, cols, k)
+                        plt.subplot(cols, rows, k)
+                        k += 1
+                        kwa = dict(vmin=0, vmax=mx, ticks=False)
+                        if round == 1:
+                            dimshow(psfimg, **kwa)
+                            plt.suptitle('PsfEx')
+                        elif round == 2:
+                            dimshow(mod, **kwa)
+                            plt.suptitle('varying MoG')
+                        elif round == 3:
+                            dimshow(psfimg - mod, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - varying MoG')
+                        elif round == 4:
+                            dimshow(psfimg - mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - const MoG(3)')
+                        elif round == 5:
+                            dimshow(psfimg - mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+                            plt.suptitle('PsfEx - const MoG(2)')
+                ps.savefig()
+                    
+    # x0,y0 = tim.wcs.getX0Y0()
+    # 
+    #     psfex = PsfEx(im.psffn, 2048, 4096)
+    #     psfimg = psfex.instantiateAt(x0, y0)
+    #     print 'PSF img:', psfimg.shape
+    #     print 'range', psfimg.min(), psfimg.max()
+    #     print 'sum', psfimg.sum()
+    # 
+    #     mx1 = psfimg.max()
+    # 
+    #     # print 'Reading PsfEx-fit model from', im.psffitellfn
+    #     # psfell = PsfEx.fromFits(im.psffitellfn)
+    #     # psfell.radius = 20
+    #     # psfell.fitSavedData(*psfell.splinedata)
+    #     # psfimgell = psfell.getPointSourcePatch(0., 0.)
+    #     # print 'Ellipse Patch:', psfimgell.shape
+    #     # print 'ellipse sum', psfimgell.patch.sum()
+    # 
+    #     tim.psfex.radius = 20
+    #     #tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    #     psfimg2 = tim.psfex.getPointSourcePatch(x0, y0)
+    #     print 'Patch:', psfimg2.shape
+    #     print 'sum', psfimg2.patch.sum()
+    # 
+    #     psfimg3 = tim.psf.getPointSourcePatch(0., 0.)
+    #     print 'Patch:', psfimg3.shape
+    #     print 'sum', psfimg3.patch.sum()
+    # 
+    #     # print 'equal', np.all(psfimgell.patch == psfimg2.patch)
+    # 
+    #     mx2 = psfimg2.patch.max()
+    # 
+    #     mx = max(mx1, mx2)
+    # 
+    #     if ps is not None:
+    #         plt.clf()
+    #         plt.subplot(2,3,1)
+    #         dimshow(psfimg, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('PsfEx')
+    #         plt.subplot(2,3,2)
+    #         dimshow(psfimg2.patch, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('Multi-Gaussian Fit')
+    #         plt.subplot(2,3,3)
+    #         dimshow(psfimg3.patch, vmin=0, vmax=mx, cmap='jet')
+    #         plt.title('Multi-Gaussian Fit')
+    #         plt.subplot(2,3,4)
+    #         dimshow(np.log10(np.maximum(psfimg, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         plt.subplot(2,3,5)
+    #         dimshow(np.log10(np.maximum(psfimg2.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         plt.subplot(2,3,6)
+    #         dimshow(np.log10(np.maximum(psfimg3.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
+    #         ps.savefig()
+
+
 
     if not pipe:
         # save resampling params
@@ -287,9 +498,21 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
+    # Cut "bands" down to just the bands for which we have images.
+    allbands = [tim.band for tim in tims]
+    bands = [b for b in bands if b in allbands]
+    print 'Cut bands to', bands
+
+    for band in 'grz':
+        hasit = band in bands
+        hdr.add_record(dict(name='BRICK_%s' % band, value=hasit,
+                            comment='Does band %s touch this brick?' % band))
+    hdr.add_record(dict(name='BRICKBND', value=''.join(bands),
+                        comment='Bands touching this brick'))
+
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
-            'bands', 'tims', 'ps', 'brickid', 'brickname',
-            'target_extent', 'ccds']
+            'bands', 'tims', 'ps', 'brickid', 'brickname', 'brick',
+            'target_extent', 'ccds', 'bands']
     if not pipe:
         keys.extend(['coimgs', 'cons'])
     rtn = dict()
@@ -297,18 +520,210 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         rtn[k] = locals()[k]
     return rtn
 
+
+def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
+                       brickname=None, version_header=None,
+                       plots=False, ps=None,
+                       **kwargs):
+    if outdir is None:
+        outdir = '.'
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
+    try_makedirs(basedir)
+
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    coimgs = []
+    for iband,band in enumerate(bands):
+
+        cowimg = np.zeros((H,W), np.float32)
+        cow    = np.zeros((H,W), np.float32)
+        cosatw = np.zeros((H,W), np.float32)
+        cosatim= np.zeros((H,W), np.float32)
+
+        sig1 = 1.
+        tinyw = 1e-30
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            iv = tim.getInvvar()[Yi,Xi]
+            im = tim.getImage ()[Yi,Xi]
+            # invvar-weighted image
+            cowimg[Yo,Xo] += iv * im
+            cow   [Yo,Xo] += iv
+
+            # Saturated (but not otherwise bad) pixels
+            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
+            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
+            #print 'sat:', sat.sum(), 'pixels'
+            #print 'bad:', bad.sum(), 'pixels'
+            sat &= np.logical_not(bad)
+            #print 'sat & ~bad:', sat.sum(), 'pixels'
+            # Pixels near saturated pix
+            sat = binary_dilation(sat, iterations=10)
+            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
+            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im #tim.satval
+
+            sig1 = tim.sig1
+            if plots:
+                plt.clf()
+                plt.subplot(1,3,1)
+                thisco = np.zeros((H,W), np.float32)
+                thisco[Yo,Xo] = im
+                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
+                plt.title('co: %s' % tim.name)
+
+                plt.subplot(1,3,2)
+                thisco = np.zeros((H,W), np.float32)
+                thisco[Yo,Xo] = iv
+                dimshow(thisco, vmin=0., vmax=(1.2/tim.sig1**2))
+                plt.title('iv: %s' % tim.name)
+
+                plt.subplot(1,3,3)
+                thisco = np.zeros((H,W), np.float32)
+                thisco[Yo,Xo] = tinyw * sat[Yi,Xi] * im
+                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
+                plt.title('sat: %s' % tim.name)
+
+                ps.savefig()
+
+                if False:
+                    thisco[Yo,Xo] = im
+                    vals = tim.dq_bits.values()
+                    vals.sort()
+                    thisbit = np.zeros((H,W), bool)
+                    for i,v in enumerate(vals):
+                        #plt.subplot(3,3,i+1)
+                        thisbit[:,:] = False
+                        thisbit[Yo,Xo] = (tim.dq[Yi,Xi] & v) > 0
+                        print 'bit', v, 'has', thisbit.sum(), 'pixels set'
+                        if sum(thisbit) > 0:
+                            plt.clf()
+                            dimshow(thisbit * thisco, vmin=-5.*tim.sig1, vmax=5.*tim.sig1)
+                            plt.title('bit 0x%x' % v)
+                            ps.savefig()
+
+        if plots:
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(cowimg / np.maximum(cow, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg')
+            plt.subplot(1,2,2)
+            dimshow(cow)
+            plt.title('cow')
+            ps.savefig()
+
+            plt.clf()
+            plt.subplot(1,2,1)
+            dimshow(cosatim / np.maximum(cosatw, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cosatim')
+            plt.subplot(1,2,2)
+            dimshow(cosatw)
+            plt.title('cosatw')
+            ps.savefig()
+
+        if plots:
+            plt.clf()
+            dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg (pre-patched)')
+            ps.savefig()
+
+        copretty = (cowimg + cosatim) / np.maximum(tinyw, cow + cosatw)
+        coimgs.append(copretty)
+        del cosatw
+        del cosatim
+
+        cowimg /= np.maximum(cow, tinyw)
+
+        if plots:
+            plt.clf()
+            dimshow(copretty, vmin=-2.*sig1, vmax=5.*sig1)
+            plt.title('cowimg (patched)')
+            ps.savefig()
+
+        # Plug the WCS header cards into these images
+        # copy version_header before modifying...
+        hdr = MyFITSHDR()
+        for r in version_header.records():
+            hdr.add_record(r)
+        hdr.add_record(dict(name='BRICKNAM', value=brickname,
+                            comment='DECaLS brick name'))
+        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+                'INSTRUME']
+        vals = set()
+        for tim in tims:
+            if tim.band != band:
+                continue
+            v = []
+            for key in keys:
+                v.append(tim.primhdr.get(key,''))
+            vals.add(tuple(v))
+        for i,v in enumerate(vals):
+            for ik,key in enumerate(keys):
+                if i == 0:
+                    kk = key
+                else:
+                    kk = key[:7] + '%i'%i
+                hdr.add_record(dict(name=kk, value=v[ik]))
+        hdr.add_record(dict(name='FILTER', value=band))
+        targetwcs.add_to_header(hdr)
+        hdr.delete('IMAGEW')
+        hdr.delete('IMAGEH')
+
+        name,img = ('image',  cowimg)
+        hdr.add_record(dict(name='IMTYPE', value=name,
+                            comment='DECaLS image type'))
+        hdr.add_record(dict(name='MAGZERO', value=22.5,
+                            comment='Magnitude zeropoint'))
+        hdr.add_record(dict(name='BUNIT', value='nanomaggy',
+                            comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
+
+        fn = os.path.join(basedir, 'decals-%s-%s-%s.fits' % (brickname, name, band))
+        fitsio.write(fn, img, clobber=True, header=hdr)
+        print 'Wrote', fn
+
+    tmpfn = create_temp(suffix='.png')
+    for name,ims,rgbkw in [('image',coimgs,rgbkwargs)]:
+        plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
+        jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
+        cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn)
+        os.system(cmd)
+        os.unlink(tmpfn)
+        print 'Wrote', jpegfn
+
+    return None
+
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
                W=None,H=None,
                bands=None, ps=None, tims=None,
                plots=False, plots2=False,
                pipe=False, brickname=None,
-               mp=None,
+               mp=None, outdir=None, nsigma=5,
                **kwargs):
 
     tlast = Time()
     # Read SDSS sources
-    cat,T = get_sdss_sources(bands, targetwcs)
+    cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
+            'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr', 'decerr']
+    cat,T = get_sdss_sources(bands, targetwcs, extracols=cols)
+
+    if T is not None:
+        # SDSS RAERR, DECERR are in arcsec.  Convert to deg.
+        err = T.raerr / 3600.
+        T.ra_ivar  = 1./err**2
+        err = T.decerr / 3600.
+        T.dec_ivar  = 1./err**2
+        T.delete_column('raerr')
+        T.delete_column('decerr')
+        sdss_xy = T.itx, T.ity
+    else:
+        sdss_xy = None
+
     print 'SDSS sources:', Time()-tlast
     tlast = Time()
 
@@ -318,14 +733,78 @@ def stage_srcs(coimgs=None, cons=None,
     print 'Detmaps:', Time()-tlast
     tlast = Time()
 
+    # Median-smooth detection maps?
+    #if False:
+    for i,(detmap,detiv) in enumerate(zip(detmaps,detivs)):
+        #from astrometry.util.util import median_smooth
+        #smoo = np.zeros_like(detmap)
+        #median_smooth(detmap, detiv>0, 100, smoo)
+        from scipy.ndimage.filters import median_filter
+        #tmed = Time()
+        #smoo = median_filter(detmap, (50,50))
+        #print 'Median filter 50:', Time()-tmed
+
+        # Bin down before median-filtering, for speed.
+        binning = 4
+        binned,nil = bin_image(detmap, detiv, binning)
+        tmed = Time()
+        smoo = median_filter(binned, (50,50))
+        print 'Median filter:', Time()-tmed
+
+        if plots:
+            sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))
+            kwa = dict(vmin=-2.*sig1, vmax=10.*sig1)
+            kwa2 = dict(vmin=-2.*sig1, vmax=50.*sig1)
+
+            subbed = detmap.copy()
+            S = binning
+            for i in range(S):
+                for j in range(S):
+                    subbed[i::S, j::S] -= smoo
+
+            plt.clf()
+            plt.subplot(2,3,1)
+            dimshow(detmap, **kwa)
+            plt.subplot(2,3,2)
+            dimshow(smoo, **kwa)
+            plt.subplot(2,3,3)
+            dimshow(subbed, **kwa)
+            plt.subplot(2,3,4)
+            dimshow(detmap, **kwa2)
+            plt.subplot(2,3,5)
+            dimshow(smoo, **kwa2)
+            plt.subplot(2,3,6)
+            dimshow(subbed, **kwa2)
+            plt.suptitle('Median filter of detection map: %s band' % bands[i])
+            ps.savefig()
+
+        # Subtract binned median image.
+        S = binning
+        for i in range(S):
+            for j in range(S):
+                detmap[i::S, j::S] -= smoo
+
     # SED-matched detections
+    print 'Running source detection at', nsigma, 'sigma'
     SEDs = sed_matched_filters(bands)
     Tnew,newcat,hot = run_sed_matched_filters(SEDs, bands, detmaps, detivs,
-                                              (T.itx,T.ity), targetwcs, plots=plots,
-                                              ps=ps)
-    Nsdss = len(T)
-    T = merge_tables([T,Tnew], columns='fillzero')
-    cat.extend(newcat)
+                                              sdss_xy, targetwcs, nsigma=nsigma,
+                                              plots=plots, ps=ps, mp=mp)
+                                              
+
+    peaksn = Tnew.peaksn
+    apsn = Tnew.apsn
+    Tnew.delete_column('peaksn')
+    Tnew.delete_column('apsn')
+
+    if T is None:
+        Nsdss = 0
+        T = Tnew
+        cat = Catalog(*newcat)
+    else:
+        Nsdss = len(T)
+        T = merge_tables([T,Tnew], columns='fillzero')
+        cat.extend(newcat)
     # new peaks
     peakx = T.tx[Nsdss:]
     peaky = T.ty[Nsdss:]
@@ -338,22 +817,48 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = Time()
 
     if plots:
+        if False and not plots:
+            plt.figure(figsize=(18,18))
+            plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
+                                hspace=0.2, wspace=0.05)
+            if outdir is None:
+                outdir = '.'
+            outdir = os.path.join(outdir, 'metrics', brickname[:3])
+            try_makedirs(outdir)
+            fn = os.path.join(outdir, 'sources-%s' % brickname)
+            ps = PlotSequence(fn)
+
         crossa = dict(ms=10, mew=1.5)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
-        ax = plt.axis()
-        plt.plot(T.tx, T.ty, 'r+', **crossa)
-        plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
-        plt.axis(ax)
         plt.title('Catalog + SED-matched detections')
         ps.savefig()
 
-
-    hot = (hot > 5)
-    hot = binary_dilation(hot, structure=np.ones((3,3), bool), iterations=2)
+        ax = plt.axis()
+        p1 = plt.plot(T.tx, T.ty, 'r+', **crossa)
+        p2 = plt.plot(peakx, peaky, '+', color=(0,1,0), **crossa)
+        plt.axis(ax)
+        plt.title('Catalog + SED-matched detections')
+        plt.figlegend((p1[0], p2[0]), ('SDSS', 'New'), 'upper left')
+        ps.savefig()
+        # for x,y in zip(peakx,peaky):
+        #     plt.text(x+5, y, '%.1f' % (hot[np.clip(int(y),0,H-1),
+        #                                  np.clip(int(x),0,W-1)]), color='r',
+        #              ha='left', va='center')
+        # ps.savefig()
+ 
     # Segment, and record which sources fall into each blob
     blobs,blobsrcs,blobslices = segment_and_group_sources(hot, T, name=brickname,
                                                           ps=ps, plots=plots)
+    del hot
+
+    for i,Isrcs in enumerate(blobsrcs):
+        #print 'Isrcs dtype', Isrcs.dtype
+        if not (Isrcs.dtype in [int, np.int64]):
+            print 'Isrcs dtype', Isrcs.dtype
+            print 'i:', i
+            print 'Isrcs:', Isrcs
+            print 'blobslice:', blobslices[i]
 
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
@@ -413,16 +918,17 @@ def stage_fitblobs(T=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
+                   nblobs=None, blob0=None,
+                   simul_opt=False,
                    **kwargs):
+    print 'Multiproc:', mp
+    print 'Blob0:', blob0
+    print 'Nblobs:', nblobs
+
     for tim in tims:
         assert(np.all(np.isfinite(tim.getInvError())))
 
     orig_wcsxy0 = [tim.wcs.getX0Y0() for tim in tims]
-    for tim in tims:
-        from tractor.psfex import CachingPsfEx
-        tim.psfex.radius = 20
-        tim.psfex.fitSavedData(*tim.psfex.splinedata)
-        tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     # How far down to render model profiles
     minsigma = 0.1
@@ -483,17 +989,42 @@ def stage_fitblobs(T=None,
         ps.savefig()
 
 
+    T.orig_ra  = T.ra.copy()
+    T.orig_dec = T.dec.copy()
+
     tfitall = Time()
-    iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
-                      orig_wcsxy0, cat, bands, plots, ps)
-    # to allow debugpool to only queue tasks one at a time
-    iter = iterwrapper(iter, len(blobsrcs))
+
+    if blob0 is not None or (nblobs is not None and nblobs < len(blobslices)):
+        if blob0 is None:
+            blob0 = 0
+        print 'Unique blob values:', np.unique(blobs)
+        if blob0 > 0:
+            blobs[blobs < blob0] = -1
+            blobs[blobs >= 0] -= blob0
+            blobslices = blobslices[blob0:]
+            blobsrcs = blobsrcs[blob0:]
+        print 'Unique blob values:', np.unique(blobs)
+        if nblobs is not None:
+            blobs[blobs >= nblobs] = -1
+            blobslices = blobslices[:nblobs]
+            blobsrcs = blobsrcs[:nblobs]
+        iter = _blob_iter(blobslices, blobsrcs, blobs,
+                          targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps,
+                          simul_opt)
+        iter = iterwrapper(iter, len(blobslices))
+    else:
+        iter = _blob_iter(blobslices, blobsrcs, blobs, targetwcs, tims,
+                          orig_wcsxy0, cat, bands, plots, ps, simul_opt)
+        # to allow debugpool to only queue tasks one at a time
+        iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
     print 'Fitting sources took:', Time()-tfitall
 
-    return dict(fitblobs_R=R, tims=tims, ps=ps)
+    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs, blobslices=blobslices,
+                blobsrcs=blobsrcs)
     
 def stage_fitblobs_finish(
+    brickname=None,
         T=None, blobsrcs=None, blobslices=None, blobs=None,
         tractor=None, cat=None, targetrd=None, pixscale=None,
         targetwcs=None,
@@ -501,6 +1032,7 @@ def stage_fitblobs_finish(
         bands=None, ps=None, tims=None,
         plots=False, plots2=False,
         fitblobs_R=None,
+        outdir=None,
         **kwargs):
 
     print 'Logprob:', tractor.getLogProb()
@@ -516,6 +1048,61 @@ def stage_fitblobs_finish(
     #         print r
     #     print
 
+    assert(len(R) == len(blobsrcs))
+    
+    # DEBUGging / metrics for us
+    all_models = [r[8] for r in R]
+    performance = [r[9] for r in R]
+
+    allmods = [None]*len(T)
+    allperfs = [None]*len(T)
+    for Isrcs,mods,perf in zip(blobsrcs,all_models,performance):
+        for i,mod,per in zip(Isrcs,mods,perf):
+            allmods[i] = mod
+            allperfs[i] = per
+    del all_models
+    del performance
+
+    from desi_common import prepare_fits_catalog
+    from astrometry.util.file import pickle_to_file
+    
+    hdr = fitsio.FITSHDR()
+    TT = T.copy()
+    for srctype in ['ptsrc', 'dev','exp','comp']:
+        xcat = Catalog(*[m[srctype] for m in allmods])
+        xcat.thawAllRecursive()
+        allbands = 'ugrizY'
+        TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
+                                      allbands=allbands, prefix=srctype+'_',
+                                      save_invvars=False)
+        TT.set('%s_flags' % srctype, np.array([m['flags'][srctype] for m in allmods]))
+    TT.delete_column('ptsrc_shapeExp')
+    TT.delete_column('ptsrc_shapeDev')
+    TT.delete_column('ptsrc_fracDev')
+    TT.delete_column('ptsrc_type')
+    TT.delete_column('dev_shapeExp')
+    TT.delete_column('dev_fracDev')
+    TT.delete_column('dev_type')
+    TT.delete_column('exp_shapeDev')
+    TT.delete_column('exp_fracDev')
+    TT.delete_column('exp_type')
+    TT.delete_column('comp_type')
+
+    TT.keepmod = np.array([m['keep'] for m in allmods])
+    TT.dchisq = np.array([m['dchisqs'] for m in allmods])
+    if outdir is None:
+        outdir = '.'
+    outdir = os.path.join(outdir, 'metrics', brickname[:3])
+    try_makedirs(outdir)
+    fn = os.path.join(outdir, 'all-models-%s.fits' % brickname)
+    TT.writeto(fn, header=hdr)
+    del TT
+    print 'Wrote', fn
+
+    fn = os.path.join(outdir, 'performance-%s.pickle' % brickname)
+    pickle_to_file(allperfs, fn)
+    print 'Wrote', fn
+
     # Drop now-empty blobs.
     R = [r for r in R if len(r[0])]
     
@@ -525,6 +1112,8 @@ def stage_fitblobs_finish(
     rchi2    = np.vstack([r[4] for r in R])
     dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
     fracmasked = np.hstack([r[6] for r in R])
+    flags = np.hstack([r[7] for r in R])
+    fracin = np.vstack([r[10] for r in R])
     
     newcat = []
     for r in R:
@@ -543,14 +1132,20 @@ def stage_fitblobs_finish(
     ns,nb = fracflux.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
+    ns,nb = fracin.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
     ns,nb = rchi2.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
     ns,nb = dchisqs.shape
     assert(ns == len(cat))
     assert(nb == 5) # none, ptsrc, dev, exp, comp
+    assert(len(flags) == len(cat))
 
+    T.decam_flags = flags
     T.fracflux = fracflux
+    T.fracin = fracin
     T.fracmasked = fracmasked
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
@@ -561,18 +1156,9 @@ def stage_fitblobs_finish(
     
     invvars = srcivs
 
-    print 'New catalog:'
-    for src in cat:
-        print '  ', src
-    
-    print 'Logprob:', tractor.getLogProb()
-    print 'lnprior:', tractor.getLogPrior()
-    print 'lnl:', tractor.getLogLikelihood()
-
-    print 'image priors', tractor.images.getLogPrior()
-    print 'catalog priors', tractor.catalog.getLogPrior()
-    for src in cat:
-        print '  prior', src.getLogPrior(), src
+    #print 'New catalog:'
+    #for src in cat:
+    #    print '  ', src
     
     rtn = dict(fitblobs_R = None)
     for k in ['tractor', 'cat', 'invvars', 'T']:
@@ -580,7 +1166,7 @@ def stage_fitblobs_finish(
     return rtn
                           
 def _blob_iter(blobslices, blobsrcs, blobs,
-               targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps):
+               targetwcs, tims, orig_wcsxy0, cat, bands, plots, ps, simul_opt):
     for iblob, (bslc,Isrcs) in enumerate(zip(blobslices, blobsrcs)):
         assert(len(Isrcs) > 0)
 
@@ -591,10 +1177,8 @@ def _blob_iter(blobslices, blobsrcs, blobs,
         bx0,bx1 = sx.start, sx.stop
         blobh,blobw = by1 - by0, bx1 - bx0
 
-        print
         print 'Blob', iblob+1, 'of', len(blobslices), ':',
-        print len(Isrcs), 'sources, size', blobw, 'x', blobh
-        print
+        print len(Isrcs), 'sources, size', blobw, 'x', blobh, 'center', (bx0+bx1)/2, (by0+by1)/2
 
         rr,dd = targetwcs.pixelxy2radec([bx0,bx0,bx1,bx1],[by0,by1,by1,by0])
 
@@ -617,18 +1201,19 @@ def _blob_iter(blobslices, blobsrcs, blobs,
             ox0,oy0 = orig_wcsxy0[itim]
             subwcs.setX0Y0(ox0 + sx0, oy0 + sy0)
 
+            # We pass the *original*, full-image PSF model; _one_blob applies offsets
+            #psf = tim.psfex
+            psf = tim.psf
+
             subtimargs.append((subimg, subie, subwcs, tim.subwcs, tim.getPhotoCal(),
-                               tim.getSky(), tim.getPsf(), tim.name, sx0, sx1, sy0, sy1,
+                               tim.getSky(), psf, tim.name, sx0, sx1, sy0, sy1,
                                ox0, oy0, tim.band, tim.sig1, tim.modelMinval))
-
-
 
         # Here we assume the "blobs" array has been remapped...
         blobmask = (blobs[bslc] == iblob)
-        #print 'Blob mask:', np.sum(blobmask), 'pixels'
 
         yield (iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               [cat[i] for i in Isrcs], bands, plots, ps)
+               [cat[i] for i in Isrcs], bands, plots, ps, simul_opt)
 
 def _bounce_one_blob(X):
     try:
@@ -640,8 +1225,216 @@ def _bounce_one_blob(X):
         traceback.print_exc()
         raise
 
+def _debug_plots(srctractor, ps):
+    thislnp0 = srctractor.getLogProb()
+    p0 = np.array(srctractor.getParams())
+    print 'logprob:', p0, '=', thislnp0
+
+    print 'p0 type:', p0.dtype
+    px = p0 + np.zeros_like(p0)
+    srctractor.setParams(px)
+    lnpx = srctractor.getLogProb()
+    assert(lnpx == thislnp0)
+    print 'logprob:', px, '=', lnpx
+
+    scales = srctractor.getParameterScales()
+    print 'Parameter scales:', scales
+    print 'Parameters:'
+    srctractor.printThawedParams()
+
+    # getParameterScales better not have changed the params!!
+    assert(np.all(p0 == np.array(srctractor.getParams())))
+    assert(srctractor.getLogProb() == thislnp0)
+
+    pfinal = srctractor.getParams()
+    pnames = srctractor.getParamNames()
+
+    plt.figure(3, figsize=(8,6))
+
+    plt.clf()
+    for i in range(len(scales)):
+        plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
+                 [lnp for lnp,p in params], '-', label=pnames[i])
+    plt.ylabel('lnp')
+    plt.legend()
+    plt.title('scaled')
+    ps.savefig()
+
+    for i in range(len(scales)):
+        plt.clf()
+        #plt.subplot(2,1,1)
+        plt.plot([p[i] for lnp,p in params], '-')
+        plt.xlabel('step')
+        plt.title(pnames[i])
+        ps.savefig()
+
+        plt.clf()
+        plt.plot([p[i] for lnp,p in params],
+                 [lnp for lnp,p in params], 'b.-')
+
+        # We also want to know about d(lnp)/d(param)
+        # and d(lnp)/d(X)
+        step = 1.1
+        steps = 1.1 ** np.arange(-20, 21)
+        s2 = np.linspace(0, steps[0], 10)[1:-1]
+        steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
+        print 'Steps:', steps
+
+        plt.plot(p0[i], thislnp0, 'bx', ms=20)
+
+        print 'Stepping in param', pnames[i], '...'
+        pp = p0.copy()
+        lnps,parms = [],[]
+        for s in steps:
+            parm = p0[i] + s / scales[i]
+            pp[i] = parm
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            parms.append(parm)
+            lnps.append(lnp)
+            print 'logprob:', pp, '=', lnp
+            
+        plt.plot(parms, lnps, 'k.-')
+        j = np.argmin(np.abs(steps - 1.))
+        plt.plot(parms[j], lnps[j], 'ko')
+
+        print 'Stepping in X...'
+        lnps,parms = [],[]
+        for s in steps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            parms.append(pp[i])
+            lnps.append(lnp)
+            print 'logprob:', pp, '=', lnp
+
+
+        ##
+        s3 = s2[:2]
+        ministeps = reduce(np.append, [-s3[::-1], 0, s3])
+        print 'mini steps:', ministeps
+        for s in ministeps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            print 'logprob:', pp, '=', lnp
+
+        rows = len(ministeps)
+        cols = len(srctractor.images)
+
+        plt.figure(4, figsize=(8,6))
+        plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
+                            right=0.99, bottom=0.01, top=0.99)
+        plt.clf()
+        k = 1
+        mods = []
+        for s in ministeps:
+            pp = p0 + s * X
+            srctractor.setParams(pp)
+            print 'ministep', s
+            print 'log prior', srctractor.getLogPrior()
+            print 'log likelihood', srctractor.getLogLikelihood()
+            mods.append(srctractor.getModelImages())
+            chis = srctractor.getChiImages()
+            # for chi in chis:
+            #     plt.subplot(rows, cols, k)
+            #     k += 1
+            #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
+            print 'chisqs:', [(chi**2).sum() for chi in chis]
+            print 'sum:', sum([(chi**2).sum() for chi in chis])
+
+        mod0 = mods[len(ministeps)/2]
+        for modlist in mods:
+            for mi,mod in enumerate(modlist):
+                plt.subplot(rows, cols, k)
+                k += 1
+                m0 = mod0[mi]
+                rng = m0.max() - m0.min()
+                dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
+                        ticks=False, cmap='gray')
+        ps.savefig()
+        plt.figure(3)
+        
+        plt.plot(parms, lnps, 'r.-')
+
+        print 'Stepping in X by alphas...'
+        lnps = []
+        for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
+            pp = p0 + ss*X
+            srctractor.setParams(pp)
+            lnp = srctractor.getLogProb()
+            print 'logprob:', pp, '=', lnp
+
+            plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
+            lnps.append(lnp)
+
+        px = p0[i] + X[i]
+        pmid = (px + p0[i]) / 2.
+        dp = np.abs((px - pmid) * 2.)
+        hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
+        lnpmid = (hi + lo) / 2.
+        dlnp = np.abs((hi - lo) * 2.)
+
+        plt.ylabel('lnp')
+        plt.title(pnames[i])
+        ps.savefig()
+
+        plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
+        ps.savefig()
+
+    srctractor.setParams(p0)
+    ### DEBUG
+
+def _plot_derivs(subtims, newsrc, srctractor, ps):
+    plt.clf()
+    rows = len(subtims)
+    cols = 1 + newsrc.numberOfParams()
+    for it,tim in enumerate(subtims):
+        derivs = srctractor._getSourceDerivatives(newsrc, tim)
+        c0 = 1 + cols*it
+        mod = srctractor.getModelPatchNoCache(tim, src)
+        if mod is not None and mod.patch is not None:
+            plt.subplot(rows, cols, c0)
+            dimshow(mod.patch, extent=mod.getExtent())
+        c0 += 1
+        for ip,deriv in enumerate(derivs):
+            if deriv is None:
+                continue
+            plt.subplot(rows, cols, c0+ip)
+            mx = np.max(np.abs(deriv.patch))
+            dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
+    plt.title('Derivatives for ' + name)
+    ps.savefig()
+    plt.clf()
+    modimgs = srctractor.getModelImages()
+    comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
+                                images=modimgs)
+    dimshow(get_rgb(comods, bands))
+    plt.title('Initial ' + name)
+    ps.savefig()
+            
+
+def _clip_model_to_blob(mod, sh, ie):
+    '''
+    mod: Patch
+    sh: tim shape
+    ie: tim invError
+    Returns: new Patch
+    '''
+    mslc,islc = mod.getSlices(sh)
+    sy,sx = mslc
+    mod = Patch(mod.x0 + sx.start, mod.y0 + sy.start, mod.patch[mslc] * (ie[islc]>0))
+    return mod
+
+FLAG_CPU_A   = 1
+FLAG_STEPS_A = 2
+FLAG_CPU_B   = 4
+FLAG_STEPS_B = 8
+FLAG_TRIED_C = 0x10
+FLAG_CPU_C   = 0x20
+
 def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
-               srcs, bands, plots, ps)):
+               srcs, bands, plots, ps, simul_opt)):
 
     plots2 = False
 
@@ -651,6 +1444,12 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     bigblob = (blobw * blobh) > 100*100
 
     subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
+
+    # ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+    #                                    np.array([src.getPosition().dec for src in srcs]))
+    # started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+    #                            np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    # print 'Sources started in blob:', started_in_blob
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -673,7 +1472,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         # If the subimage (blob) is small enough, instantiate a
         # constant PSF model in the center.
-        if sy1-sy0 < 100 and sx1-sx0 < 100:
+        if sy1-sy0 < 400 and sx1-sx0 < 400:
             subpsf = psf.mogAt(ox0 + (sx0+sx1)/2., oy0 + (sy0+sy1)/2.)
         else:
             # Otherwise, instantiate a (shifted) spatially-varying
@@ -714,8 +1513,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             btims.append(tim)
         btr = Tractor(btims, subcat)
         btr.freezeParam('images')
-        print 'Optimizing band', b, ':', btr
-        print Time()-tband
+        # print 'Optimizing band', b, ':', btr
+        # print Time()-tband
         if useCeres:
             btr.optimize_forced_photometry(alphas=alphas, shared_params=False,
                                            use_ceres=True, BW=8, BH=8, wantims=False)
@@ -729,7 +1528,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 traceback.print_exc()
                 # carry on
             
-        print 'Band', b, 'took', Time()-tband
+        # print 'Band', b, 'took', Time()-tband
     subcat.thawAllRecursive()
 
     if plots:
@@ -768,30 +1567,32 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         initial_models = []
 
         # Create initial models for each tim x each source
-        tt = Time()
+        #tt = Time()
         for tim in subtims:
             mods = []
+            sh = tim.shape
+            ie = tim.getInvError()
             for src in subcat:
                 mod = src.getModelPatch(tim)
+                if mod is not None and mod.patch is not None:
+                    if not np.all(np.isfinite(mod.patch)):
+                        print 'Non-finite mod patch'
+                        print 'source:', src
+                        print 'tim:', tim
+                        print 'PSF:', tim.getPsf()
+                    assert(np.all(np.isfinite(mod.patch)))
+                    mod = _clip_model_to_blob(mod, sh, ie)
+                    mod.addTo(tim.getImage(), scale=-1)
                 mods.append(mod)
-                if mod is not None:
-                    if mod.patch is not None:
-                        if not np.all(np.isfinite(mod.patch)):
-                            print 'Non-finite mod patch'
-                            print 'source:', src
-                            print 'tim:', tim
-                            print 'PSF:', tim.getPsf()
-                        assert(np.all(np.isfinite(mod.patch)))
-                        mod.addTo(tim.getImage(), scale=-1)
+
             initial_models.append(mods)
-        print 'Subtracting initial models:', Time()-tt
+        #print 'Subtracting initial models:', Time()-tt
 
         # For sources, in decreasing order of brightness
         for numi,i in enumerate(Ibright):
-            tsrc = Time()
-            print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
+            #tsrc = Time()
+            #print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             src = subcat[i]
-            print src
 
             # Add this source's initial model back in.
             for tim,mods in zip(subtims, initial_models):
@@ -841,41 +1642,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.freezeParams('images')
             srctractor.setModelMasks(modelMasks)
 
-            #### DEBUG
-            # for tim,imods,mm in zip(srctims, initial_models, modelMasks):
-            #     mod = imods[i]
-            #     if mod is None:
-            #         continue
-            # 
-            #     plt.clf()
-            #     plt.subplot(1,2,1)
-            #     dimshow(mod.patch, extent=mod.getExtent())
-            #     mn,mx = mod.patch.min(), mod.patch.max()
-            #     mod2 = srctractor.getModelPatchNoCache(tim, src)
-            #     plt.subplot(1,2,2)
-            #     dimshow(mod2.patch, extent=mod2.getExtent(), vmin=mn, vmax=mx)
-            #     ps.savefig()
-                
-
-
-            # # Try fitting flux first?
-            # src.freezeAllBut('brightness')
-            # for b in bands:
-            #     tband = Time()
-            #     src.getBrightness().freezeAllBut(b)
-            #     print 'Optimizing band', b, ':', srctractor
-            #     srctractor.printThawedParams()
-            #     srctractor.optimize_forced_photometry(alphas=alphas, shared_params=False,
-            #                                           use_ceres=True, BW=8, BH=8,
-            #                                           wantims=False)
-            #     print 'Band', b, 'took', Time()-tband
-            # src.getBrightness().thawAllParams()
-            # src.thawAllParams()
-
-            print 'Optimizing:', srctractor
-            srctractor.printThawedParams()
-            print 'Tim shapes:', [tim.shape for tim in srctims]
-
             if plots:
                 spmods,spnames = [],[]
                 spallmods,spallnames = [],[]
@@ -897,7 +1663,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp, 'src', src
+                #print 'dlnp:', dlnp, 'src', src
 
                 if DEBUG:
                     params.append((srctractor.getLogProb(), srctractor.getParams()))
@@ -909,168 +1675,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if dlnp < 0.1:
                     break
 
-
             if DEBUG:
-                thislnp0 = srctractor.getLogProb()
-                p0 = np.array(srctractor.getParams())
-                print 'logprob:', p0, '=', thislnp0
-    
-                print 'p0 type:', p0.dtype
-                px = p0 + np.zeros_like(p0)
-                srctractor.setParams(px)
-                lnpx = srctractor.getLogProb()
-                assert(lnpx == thislnp0)
-                print 'logprob:', px, '=', lnpx
-    
-                scales = srctractor.getParameterScales()
-                print 'Parameter scales:', scales
-                print 'Parameters:'
-                srctractor.printThawedParams()
-    
-                # getParameterScales better not have changed the params!!
-                assert(np.all(p0 == np.array(srctractor.getParams())))
-                assert(srctractor.getLogProb() == thislnp0)
-    
-                pfinal = srctractor.getParams()
-                pnames = srctractor.getParamNames()
-    
-                plt.figure(3, figsize=(8,6))
-    
-                plt.clf()
-                for i in range(len(scales)):
-                    plt.plot([(p[i] - pfinal[i])*scales[i] for lnp,p in params],
-                             [lnp for lnp,p in params], '-', label=pnames[i])
-                plt.ylabel('lnp')
-                plt.legend()
-                plt.title('scaled')
-                ps.savefig()
-    
-                for i in range(len(scales)):
-                    plt.clf()
-                    #plt.subplot(2,1,1)
-                    plt.plot([p[i] for lnp,p in params], '-')
-                    plt.xlabel('step')
-                    plt.title(pnames[i])
-                    ps.savefig()
-    
-                    plt.clf()
-                    plt.plot([p[i] for lnp,p in params],
-                             [lnp for lnp,p in params], 'b.-')
-    
-                    # We also want to know about d(lnp)/d(param)
-                    # and d(lnp)/d(X)
-                    step = 1.1
-                    steps = 1.1 ** np.arange(-20, 21)
-                    s2 = np.linspace(0, steps[0], 10)[1:-1]
-                    steps = reduce(np.append, [-steps[::-1], -s2[::-1], 0, s2, steps])
-                    print 'Steps:', steps
-    
-                    plt.plot(p0[i], thislnp0, 'bx', ms=20)
-    
-                    print 'Stepping in param', pnames[i], '...'
-                    pp = p0.copy()
-                    lnps,parms = [],[]
-                    for s in steps:
-                        parm = p0[i] + s / scales[i]
-                        pp[i] = parm
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        parms.append(parm)
-                        lnps.append(lnp)
-                        print 'logprob:', pp, '=', lnp
-                        
-                    plt.plot(parms, lnps, 'k.-')
-                    j = np.argmin(np.abs(steps - 1.))
-                    plt.plot(parms[j], lnps[j], 'ko')
-    
-                    print 'Stepping in X...'
-                    lnps,parms = [],[]
-                    for s in steps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        parms.append(pp[i])
-                        lnps.append(lnp)
-                        print 'logprob:', pp, '=', lnp
-    
-    
-                    ##
-                    s3 = s2[:2]
-                    ministeps = reduce(np.append, [-s3[::-1], 0, s3])
-                    print 'mini steps:', ministeps
-                    for s in ministeps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        print 'logprob:', pp, '=', lnp
-    
-                    rows = len(ministeps)
-                    cols = len(srctractor.images)
-    
-                    plt.figure(4, figsize=(8,6))
-                    plt.subplots_adjust(hspace=0.05, wspace=0.05, left=0.01,
-                                        right=0.99, bottom=0.01, top=0.99)
-                    plt.clf()
-                    k = 1
-                    mods = []
-                    for s in ministeps:
-                        pp = p0 + s * X
-                        srctractor.setParams(pp)
-                        print 'ministep', s
-                        print 'log prior', srctractor.getLogPrior()
-                        print 'log likelihood', srctractor.getLogLikelihood()
-                        mods.append(srctractor.getModelImages())
-                        chis = srctractor.getChiImages()
-                        # for chi in chis:
-                        #     plt.subplot(rows, cols, k)
-                        #     k += 1
-                        #     dimshow(chi, ticks=False, vmin=-10, vmax=10, cmap='jet')
-                        print 'chisqs:', [(chi**2).sum() for chi in chis]
-                        print 'sum:', sum([(chi**2).sum() for chi in chis])
-    
-                    mod0 = mods[len(ministeps)/2]
-                    for modlist in mods:
-                        for mi,mod in enumerate(modlist):
-                            plt.subplot(rows, cols, k)
-                            k += 1
-                            m0 = mod0[mi]
-                            rng = m0.max() - m0.min()
-                            dimshow(mod - mod0[mi], vmin=-0.01*rng, vmax=0.01*rng,
-                                    ticks=False, cmap='gray')
-                    ps.savefig()
-                    plt.figure(3)
-                    
-                    plt.plot(parms, lnps, 'r.-')
-    
-                    print 'Stepping in X by alphas...'
-                    lnps = []
-                    for cc,ss in [('m',0.1), ('m',0.3), ('r',1)]:
-                        pp = p0 + ss*X
-                        srctractor.setParams(pp)
-                        lnp = srctractor.getLogProb()
-                        print 'logprob:', pp, '=', lnp
-    
-                        plt.plot(p0[i] + ss * X[i], lnp, 'o', color=cc)
-                        lnps.append(lnp)
-    
-                    px = p0[i] + X[i]
-                    pmid = (px + p0[i]) / 2.
-                    dp = np.abs((px - pmid) * 2.)
-                    hi,lo = max(max(lnps), thislnp0), min(min(lnps), thislnp0)
-                    lnpmid = (hi + lo) / 2.
-                    dlnp = np.abs((hi - lo) * 2.)
-    
-                    plt.ylabel('lnp')
-                    plt.title(pnames[i])
-                    ps.savefig()
-    
-                    plt.axis([pmid - dp, pmid + dp, lnpmid-dlnp, lnpmid+dlnp])
-                    ps.savefig()
-    
-                srctractor.setParams(p0)
-                ### DEBUG
-            
-
+                _debug_plots(srctractor, ps)
 
             if plots:
                 spmods.append(srctractor.getModelImages())
@@ -1090,6 +1696,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 plt.subplots_adjust(left=0.005, right=0.995, top=0.88, bottom=0.005)
                 plt.suptitle('Blob %i' % iblob)
                 tempims = [tim.getImage() for tim in subtims]
+
+                _plot_mods(srctractor.getImages(), spmods, spnames, bands, None, None, bslc, blobw, blobh, ps,
+                           chi_plots=plots2, rgb_plots=True, main_plot=False,
+                           rgb_format='spmods Blob %i, src %i: %%s' % (iblob, i))
+                _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
+                           chi_plots=plots2, rgb_plots=True, main_plot=False,
+                           rgb_format='spallmods Blob %i, src %i: %%s' % (iblob, i))
+
                 for tim,orig in zip(subtims, orig_timages):
                     tim.data = orig
                 _plot_mods(subtims, spallmods, spallnames, bands, None, None, bslc, blobw, blobh, ps,
@@ -1107,8 +1721,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(None)
             disable_galaxy_cache()
 
-            print 'Fitting source took', Time()-tsrc
-            print src
+            #print 'Fitting source took', Time()-tsrc
+            #print src
 
         for tim,img in zip(subtims, orig_timages):
             tim.data = img
@@ -1116,42 +1730,62 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         del initial_models
         
     else:
+        # Single source (though this is coded to handle multiple sources)
         # Fit sources one at a time, but don't subtract other models
         subcat.freezeAllParams()
+
+        modelMasks = []
+        for tim in subtims:
+            d = dict()
+            modelMasks.append(d)
+            for src in subcat:
+                mod = src.getModelPatch(tim)
+                if mod is not None:
+                    mod = _clip_model_to_blob(mod, tim.shape, tim.getInvError())
+                    d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
+        subtr.setModelMasks(modelMasks)
+        enable_galaxy_cache()
+
         for numi,i in enumerate(Ibright):
-            tsrc = Time()
-            print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
-            print subcat[i]
+            #tsrc = Time()
+            #print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             subcat.freezeAllBut(i)
-            print 'Optimizing:', subtr
-            subtr.printThawedParams()
-            for step in range(10):
+
+            max_cpu_per_source = 60.
+            cpu0 = time.clock()
+            for step in range(50):
                 dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print 'dlnp:', dlnp
+                # print 'dlnp:', dlnp
+                if time.clock()-cpu0 > max_cpu_per_source:
+                    print 'Warning: Exceeded maximum CPU time for source'
+                    break
                 if dlnp < 0.1:
                     break
-            print 'Fitting source took', Time()-tsrc
-            print subcat[i]
+            #print 'Fitting source took', Time()-tsrc
+            # print subcat[i]
+
+        subtr.setModelMasks(None)
+        disable_galaxy_cache()
 
     if plots:
         plotmods.append(subtr.getModelImages())
         plotmodnames.append('Per Source')
 
     if len(srcs) > 1 and len(srcs) <= 10:
-        tfit = Time()
+        #tfit = Time()
         # Optimize all at once?
         subcat.thawAllParams()
-        print 'Optimizing:', subtr
-        subtr.printThawedParams()
+        #print 'Optimizing:', subtr
+        # subtr.printThawedParams()
         for step in range(20):
             dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
                                           alphas=alphas)
-            print 'dlnp:', dlnp
+            # print 'dlnp:', dlnp
             if dlnp < 0.1:
                 break
 
-        print 'Simultaneous fit took:', Time()-tfit
+        #print 'Simultaneous fit took:', Time()-tfit
 
         if plots:
             plotmods.append(subtr.getModelImages())
@@ -1163,9 +1797,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     # FIXME -- for large blobs, fit strata of sources simultaneously?
 
-    print 'Blob finished fitting:', Time()-tlast
-    tlast = Time()
-
+    #print 'Blob finished fitting:', Time()-tlast
+    #tlast = Time()
 
     # Next, model selections: point source vs dev/exp vs composite.
 
@@ -1174,7 +1807,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # families of sources to fit simultaneously.  (The
     # not-friends-of-friends version of blobs!)
 
-    src_lnps = []
+    delta_chisqs = []
 
     # We repeat the "compute & subtract initial models" logic from above.
     # -Remember the original subtim images
@@ -1193,29 +1826,39 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     initial_models = []
 
     # Create initial models for each tim x each source
-    tt = Time()
+    # tt = Time()
     for tim in subtims:
         mods = []
+        sh = tim.shape
+        ie = tim.getInvError()
+        img = tim.getImage()
         for src in subcat:
             mod = src.getModelPatch(tim)
+            if mod is not None and mod.patch is not None:
+                if not np.all(np.isfinite(mod.patch)):
+                    print 'Non-finite mod patch'
+                    print 'source:', src
+                    print 'tim:', tim
+                    print 'PSF:', tim.getPsf()
+                assert(np.all(np.isfinite(mod.patch)))
+
+                # Blank out pixels that are outside the blob ROI.
+                mod = _clip_model_to_blob(mod, sh, ie)
+                mod.addTo(img, scale=-1)
             mods.append(mod)
-            if mod is not None:
-                if mod.patch is not None:
-                    if not np.all(np.isfinite(mod.patch)):
-                        print 'Non-finite mod patch'
-                        print 'source:', src
-                        print 'tim:', tim
-                        print 'PSF:', tim.getPsf()
-                    assert(np.all(np.isfinite(mod.patch)))
-                    mod.addTo(tim.getImage(), scale=-1)
+
         initial_models.append(mods)
-    print 'Subtracting initial models:', Time()-tt
-    
+    # print 'Subtracting initial models:', Time()-tt
+
+    all_models = [{} for i in range(len(Isrcs))]
+    performance = [[] for i in range(len(Isrcs))]
+    flags = np.zeros(len(Isrcs), np.uint16)
+
     # For sources, in decreasing order of brightness
     for numi,i in enumerate(Ibright):
+        
         src = subcat[i]
-        print
-        print 'Model selection for source', src
+        #print 'Model selection for source %i of %i in blob' % (numi, len(Ibright))
 
         # if plots:
         #     plotmods = []
@@ -1241,13 +1884,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         enable_galaxy_cache()
 
         lnp0 = srctractor.getLogProb()
-        print 'lnp0:', lnp0
+        # print 'lnp0:', lnp0
 
         srccat = srctractor.getCatalog()
         srccat[0] = None
         
         lnp_null = srctractor.getLogProb()
-        print 'Removing the source: dlnp', lnp_null - lnp0
+        # print 'Removing the source: dlnp', lnp_null - lnp0
 
         lnps = dict(ptsrc=None, dev=None, exp=None, comp=None,
                     none=lnp_null)
@@ -1259,8 +1902,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
             ptsrc = src.copy()
-            lnps.update(ptsrc=lnp0)
-            trymodels = [('dev', dev), ('exp', exp), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'ptsrc'
             
         elif isinstance(src, DevGalaxy):
@@ -1268,8 +1910,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(dev=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'dev'
 
         elif isinstance(src, ExpGalaxy):
@@ -1277,8 +1918,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(exp=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('comp', comp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'exp'
             
         elif isinstance(src, FixedCompositeGalaxy):
@@ -1295,16 +1935,16 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = src.copy()
             ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
-            lnps.update(comp=lnp0)
-            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp)]
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'comp'
 
+        allflags = {}
         for name,newsrc in trymodels:
-            print 'Trying model:', name
+            #print 'Trying model:', name
             if name == 'comp' and newsrc is None:
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
                                                      0.5, exp.getShape(), dev.getShape()).copy()
-            print 'New source:', newsrc
+            #print 'New source:', newsrc
             srccat[0] = newsrc
 
             # Use the same initial modelMasks as the original source; we'll do a second
@@ -1320,68 +1960,38 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(mm)
             enable_galaxy_cache()
 
-            #print 'set initial modelMasks:', mm
-
-            lnp = srctractor.getLogProb()
-
-            print 'Initial log-prob:', lnp
-            print 'vs original src: ', lnp - lnp0
-
-            # Grid of derivatives.
-            if plots and False:
-                plt.clf()
-                rows = len(subtims)
-                cols = 1 + newsrc.numberOfParams()
-                for it,tim in enumerate(subtims):
-                    derivs = srctractor._getSourceDerivatives(newsrc, tim)
-                    c0 = 1 + cols*it
-                    mod = srctractor.getModelPatchNoCache(tim, src)
-                    if mod is not None and mod.patch is not None:
-                        plt.subplot(rows, cols, c0)
-                        dimshow(mod.patch, extent=mod.getExtent())
-                    c0 += 1
-                    for ip,deriv in enumerate(derivs):
-                        if deriv is None:
-                            continue
-                        plt.subplot(rows, cols, c0+ip)
-                        mx = np.max(np.abs(deriv.patch))
-                        dimshow(deriv.patch, extent=deriv.getExtent(), vmin=-mx, vmax=mx)
-                plt.title('Derivatives for ' + name)
-                ps.savefig()
-                plt.clf()
-                modimgs = srctractor.getModelImages()
-                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                            images=modimgs)
-                dimshow(get_rgb(comods, bands))
-                plt.title('Initial ' + name)
-                ps.savefig()
+            #lnp = srctractor.getLogProb()
+            #print 'Initial log-prob:', lnp
+            #print 'vs original src: ', lnp - lnp0
 
             if plots and False:
-                plt.clf()
-                modimgs = srctractor.getModelImages()
-                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                            images=modimgs)
-                dimshow(get_rgb(comods, bands))
-                plt.title('Initial ' + name)
-                ps.savefig()
+                # Grid of derivatives.
+                _plot_derivs(subtims, newsrc, srctractor, ps)
 
             max_cpu_per_source = 60.
+
+            thisflags = 0
 
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print '  dlnp:', dlnp, 'new src', newsrc
-                if time.clock()-cpu0 > max_cpu_per_source:
+                #print '  dlnp:', dlnp, 'new src', newsrc
+                cpu = time.clock()
+                performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
+                if cpu-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
+                    thisflags |= FLAG_CPU_A
                     break
                 if dlnp < 0.1:
                     break
+            else:
+                thisflags |= FLAG_STEPS_A
 
-            print 'New source (after first round optimization):', newsrc
-            lnp = srctractor.getLogProb()
-            print 'Optimized log-prob:', lnp
+            # print 'New source (after first round optimization):', newsrc
+            # lnp = srctractor.getLogProb()
+            # print 'Optimized log-prob:', lnp
 
             if plots and False:
                 plt.clf()
@@ -1403,6 +2013,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 mod = src.getModelPatch(tim)
                 if mod is None:
                     continue
+                mod = _clip_model_to_blob(mod, tim.shape, tim.getInvError())
                 d[newsrc] = Patch(mod.x0, mod.y0, mod.patch != 0)
             srctractor.setModelMasks(mm)
             enable_galaxy_cache()
@@ -1412,17 +2023,21 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print '  dlnp:', dlnp, 'new src', newsrc
-                if time.clock()-cpu0 > max_cpu_per_source:
+                #print '  dlnp:', dlnp, 'new src', newsrc
+                cpu = time.clock()
+                performance[i].append((name,'B',step,dlnp,alpha,cpu-cpu0))
+                if cpu-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
+                    thisflags |= FLAG_CPU_B
                     break
                 if dlnp < 0.1:
                     break
+            else:
+                thisflags |= FLAG_STEPS_B
 
-            print 'New source (after optimization):', newsrc
-            lnp = srctractor.getLogProb()
-            print 'Optimized log-prob:', lnp
-            print 'vs original src:   ', lnp - lnp0
+            # print 'New source (after optimization):', newsrc
+            # print 'Optimized log-prob:', lnp
+            # print 'vs original src:   ', lnp - lnp0
 
             if plots and False:
                 plt.clf()
@@ -1436,24 +2051,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srctractor.setModelMasks(None)
             disable_galaxy_cache()
 
-            # Try Ceres...
-            # newsrc.setParams(p0)
-            # print 'Ceres opt...'
-            # R = subtr._ceres_opt(max_iterations=50)
-            # print 'Result:', R
-            # print 'New source (after optimization):', newsrc
-            # lnp = subtr.getLogProb()
-            # print 'Optimized log-prob:', lnp
-            # print 'vs original src:', lnp - lnp0
-            
+            lnp = srctractor.getLogProb()
             lnps[name] = lnp
-
-            # if plots:
-            #     plotmods.append(subtr.getModelImages())
-            #     plotmodnames.append('try ' + name)
-
-        print 'Log-probs:', lnps
-
+            all_models[i][name] = newsrc.copy()
+            allflags[name] = thisflags
+            
         # if plots:
         #    _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
         
@@ -1537,33 +2139,37 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             devdiff = plnps['dev'] - plnps[keepmod]
             if expdiff > dlnp or devdiff > dlnp:
                 if expdiff > devdiff:
-                    print 'Upgrading from ptsrc to exp: diff', expdiff
+                    #print 'Upgrading from ptsrc to exp: diff', expdiff
                     keepsrc = exp
                     keepmod = 'exp'
                 else:
-                    print 'Upgrading from ptsrc to dev: diff', devdiff
+                    #print 'Upgrading from ptsrc to dev: diff', devdiff
                     keepsrc = dev
                     keepmod = 'dev'
 
                 diff = plnps['comp'] - plnps[keepmod]
                 if diff > dlnp:
-                    print 'Upgrading for dev/exp to composite: diff', diff
+                    #print 'Upgrading for dev/exp to composite: diff', diff
                     keepsrc = comp
                     keepmod = 'comp'
 
         # Actually, penalized delta chi-squareds!
-        src_lnps.append([-2. * (plnps[k] - plnps[keepmod])
+        delta_chisqs.append([-2. * (plnps[k] - plnps[keepmod])
                          for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
                     
-        if keepmod != oldmodel:
-            print 'Switching source!'
-            print 'Old:', src
-            print 'New:', keepsrc
-        else:
-            print 'Not switching source'
-            print 'Old:', src
+        # if keepmod != oldmodel:
+        #     print 'Switching source!'
+        #     print 'Old:', src
+        #     print 'New:', keepsrc
+        # else:
+        #     print 'Not switching source'
+        #     print 'Old:', src
 
         subcat[i] = keepsrc
+        flags[i] = allflags.get(keepmod, 0)
+        all_models[i]['keep'] = keepmod
+        all_models[i]['dchisqs'] = delta_chisqs[-1]
+        all_models[i]['flags'] = allflags
 
         src = keepsrc
         if src is not None:
@@ -1578,8 +2184,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     del orig_timages
     del initial_models
 
-    print 'Blob finished model selection:', Time()-tlast
-    tlast = Time()
+    #print 'Blob finished model selection:', Time()-tlast
+    #tlast = Time()
 
     if plots:
         plotmods, plotmodnames = [],[]
@@ -1590,26 +2196,55 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     srcs = subcat
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
-    keeplnps = [x for x,s in zip(src_lnps,srcs) if s is not None]
+    keepdeltas = [x for x,s in zip(delta_chisqs,srcs) if s is not None]
+    flags = np.array([f for f,s in zip(flags, srcs) if s is not None])
     Isrcs = keepI
     srcs = keepsrcs
-    src_lnps = keeplnps
+    delta_chisqs = keepdeltas
     subcat = Catalog(*srcs)
     subtr.catalog = subcat
-    
+
+    ### Simultaneous re-opt.
+    if simul_opt and len(subcat) > 1 and len(subcat) <= 10:
+        #tfit = Time()
+        # Optimize all at once?
+        subcat.thawAllParams()
+        #print 'Optimizing:', subtr
+        #subtr.printThawedParams()
+
+        flags |= FLAG_TRIED_C
+        max_cpu = 300.
+        cpu0 = time.clock()
+        for step in range(50):
+            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
+                                          alphas=alphas)
+            #print 'dlnp:', dlnp
+            cpu = time.clock()
+            performance[0].append(('All','J',step,dlnp,alpha,cpu-cpu0))
+            if cpu-cpu0 > max_cpu:
+                print 'Warning: Exceeded maximum CPU time for source'
+                flags |= FLAG_CPU_C
+                break
+            if dlnp < 0.1:
+                break
+        #print 'Simultaneous fit took:', Time()-tfit
+
+    #print 'Blob finished re-opt:', Time()-tlast
+    #tlast = Time()
+
     # Variances
     srcinvvars = [[] for src in srcs]
     subcat.thawAllRecursive()
     subcat.freezeAllParams()
     for isub in range(len(srcs)):
-        print 'Variances for source', isub
+        #print 'Variances for source', isub
         subcat.thawParam(isub)
         src = subcat[isub]
-        print 'Source', src
+        #print 'Source', src
         if src is None:
             subcat.freezeParam(isub)
             continue
-        print 'Params:', src.getParamNames()
+        #print 'Params:', src.getParamNames()
         
         if isinstance(src, (DevGalaxy, ExpGalaxy)):
             src.shape = EllipseE.fromEllipseESoft(src.shape)
@@ -1617,7 +2252,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             src.shapeExp = EllipseE.fromEllipseESoft(src.shapeExp)
             src.shapeDev = EllipseE.fromEllipseESoft(src.shapeDev)
 
-        print 'Converted ellipse:', src
+        #print 'Converted ellipse:', src
 
         allderivs = subtr.getDerivs()
         for iparam,derivs in enumerate(allderivs):
@@ -1632,7 +2267,28 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             srcinvvars[isub].append(dchisq)
         assert(len(srcinvvars[isub]) == subcat[isub].numberOfParams())
         subcat.freezeParam(isub)
-    print 'Blob variances:', Time()-tlast
+    #print 'Blob variances:', Time()-tlast
+    #tlast = Time()
+
+    # Check for sources with zero inverse-variance -- I think these
+    # can be generated during the "Simultaneous re-opt" stage above --
+    # sources can get scattered outside the blob.
+    keep = []
+    for i,(src,ivar) in enumerate(zip(srcs, srcinvvars)):
+        #print 'ivar', ivar
+        # Arbitrarily look at the first element (RA)?
+        if ivar[0] == 0.:
+            continue
+        keep.append(i)
+    if len(keep) < len(srcs):
+        print 'Keeping', len(keep), 'of', len(srcs), 'sources with non-zero ivar'
+        Isrcs        = [Isrcs[i]        for i in keep]
+        srcs         = [srcs[i]         for i in keep]
+        srcinvvars   = [srcinvvars[i]   for i in keep]
+        delta_chisqs = [delta_chisqs[i] for i in keep]
+        flags        = [flags[i]        for i in keep]
+        subcat = Catalog(*srcs)
+        subtr.catalog = subcat
     
     # rchi2 quality-of-fit metric
     rchi2_num    = np.zeros((len(srcs),len(bands)), np.float32)
@@ -1641,6 +2297,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     # fracflux degree-of-blending metric
     fracflux_num = np.zeros((len(srcs),len(bands)), np.float32)
     fracflux_den = np.zeros((len(srcs),len(bands)), np.float32)
+
+    # fracin flux-inside-blob metric
+    fracin_num = np.zeros((len(srcs),len(bands)), np.float32)
+    fracin_den = np.zeros((len(srcs),len(bands)), np.float32)
 
     # fracmasked: fraction of masked pixels metric
     fracmasked_num = np.zeros(len(srcs), np.float32)
@@ -1681,6 +2341,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 fracmasked_num[isrc] += np.sum((tim.getInvError()[slc] == 0) * np.abs(patch.patch)) / np.abs(counts[isrc])
                 fracmasked_den[isrc] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
+                fracin_num[isrc,iband] += np.sum(patch.patch)
+                fracin_den[isrc,iband] += counts[isrc]
+
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
             
@@ -1698,10 +2361,19 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracflux = fracflux_num / fracflux_den
     rchi2    = rchi2_num    / rchi2_den
     fracmasked = fracmasked_num / fracmasked_den
-    
-    return Isrcs, srcs, srcinvvars, fracflux, rchi2, src_lnps, fracmasked
-    
+    fracin     = fracin_num     / fracin_den
 
+    # ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+    #                                    np.array([src.getPosition().dec for src in srcs]))
+    # finished_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+    #                             np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    # print 'Sources finished in blob:', finished_in_blob
+
+    #print 'Blob finished metrics:', Time()-tlast
+    print 'Blob', iblob+1, 'finished:', Time()-tlast
+
+    return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
+            all_models, performance, fracin)
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -1720,7 +2392,8 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
         comods = [np.zeros((blobh,blobw)) for m in mods]
         cochis = [np.zeros((blobh,blobw)) for m in mods]
         comodn = np.zeros((blobh,blobw))
-
+        mn,mx = 0,0
+        sig1 = 1.
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -1949,16 +2622,16 @@ def stage_initplots(
     #b0 = blobs
     #b1 = binary_dilation(blobs, np.ones((3,3)))
     #bout = np.logical_and(b1, np.logical_not(b0))
-    b0 = blobs
-    b1 = binary_erosion(b0, np.ones((3,3)))
-    bout = np.logical_and(b0, np.logical_not(b1))
-    # set green
-    rgb[:,:,0][bout] = 0.
-    rgb[:,:,1][bout] = 1.
-    rgb[:,:,2][bout] = 0.
-    plt.clf()
-    dimshow(rgb, ticks=False)
-    ps.savefig()
+    # b0 = blobs
+    # b1 = binary_erosion(b0, np.ones((3,3)))
+    # bout = np.logical_and(b0, np.logical_not(b1))
+    # # set green
+    # rgb[:,:,0][bout] = 0.
+    # rgb[:,:,1][bout] = 1.
+    # rgb[:,:,2][bout] = 0.
+    # plt.clf()
+    # dimshow(rgb, ticks=False)
+    # ps.savefig()
 
     # Initial model (SDSS only)
     try:
@@ -2065,6 +2738,8 @@ def stage_initplots(
 
     #wfn = sdss.filenames.get('window_flist', None)
     wfn = os.path.join(os.environ['PHOTO_RESOLVE'], 'window_flist.fits')
+
+    from astrometry.sdss.fields import radec_to_sdss_rcf
     
     clra,cldec = clwcs.radec_center()
     clrad = clwcs.radius()
@@ -2333,21 +3008,22 @@ def stage_fitplots(
 
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
-                 outdir=None, T=None, cat=None, **kwargs):
+                 outdir=None, T=None, cat=None, pixscale=None, plots=False,
+                 **kwargs):
+
+    import photutils
 
     if outdir is None:
         outdir = '.'
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
-    if not os.path.exists(basedir):
-        try:
-            os.makedirs(basedir)
-        except:
-            pass
-        
+    try_makedirs(basedir)
     fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
     ccds.writeto(fn)
     print 'Wrote', fn
-    
+
+    for tim in tims:
+        print 'Tim', tim.name, 'PSF', tim.getPsf()
+
     t0 = Time()
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
     print 'Getting model images:', Time()-t0
@@ -2357,29 +3033,48 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     # Look up number of images overlapping each source's position.
     assert(len(T) == len(cat))
-    nobs = np.zeros((len(T), len(bands)), np.uint8)
-    satur = np.zeros(len(T), bool)
     rr = np.array([s.getPosition().ra  for s in cat])
     dd = np.array([s.getPosition().dec for s in cat])
     ok,ix,iy = targetwcs.radec2pixelxy(rr, dd)
+    T.oob = reduce(np.logical_or, [ix < 0.5, iy < 0.5, ix > W+0.5, iy > H+0.5])
     ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
     iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
 
     coimgs = []
     comods = []
-    
+    coresids = []
+
+    AP = fits_table()
+
+    T.saturated = np.zeros((len(T),len(bands)), bool)
+    T.nobs = np.zeros((len(T), len(bands)), np.uint8)
+    T.anymask = np.zeros((len(T), len(bands)), np.uint16)
+    T.allmask = np.zeros((len(T), len(bands)), np.uint16)
+
     for iband,band in enumerate(bands):
 
         cow    = np.zeros((H,W), np.float32)
         cowimg = np.zeros((H,W), np.float32)
         cowmod = np.zeros((H,W), np.float32)
-        coimg  = np.zeros((H,W), np.float32)
+
+        cosatw = np.zeros((H,W), np.float32)
+        cosatim= np.zeros((H,W), np.float32)
+
+        #coimg  = np.zeros((H,W), np.float32)
         comod  = np.zeros((H,W), np.float32)
         cochi2 = np.zeros((H,W), np.float32)
         con     = np.zeros((H,W), np.uint8)
-        anysatur = np.zeros((H,W), bool)
         congood = np.zeros((H,W), np.uint8)
         detiv   = np.zeros((H,W), np.float32)
+
+        anysatur = np.zeros((H,W), bool)
+
+        # These match the type of the "DQ" images.
+        ormask   = np.zeros((H,W), np.int32)
+        andmask  = np.empty((H,W), np.int32)
+        andmask[:,:] = 0x7fffffff
+
+        tinyw = 1e-30
 
         for itim, (tim,mod) in enumerate(zip(tims, mods)):
             if tim.band != band:
@@ -2395,42 +3090,114 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
             iv = tim.getInvvar()[Yi,Xi]
             im = tim.getImage()[Yi,Xi]
+            mo = mod[Yi,Xi]
 
             # invvar-weighted image & model
             cowimg[Yo,Xo] += iv * im
-            cowmod[Yo,Xo] += iv * mod[Yi,Xi]
+            cowmod[Yo,Xo] += iv * mo
             cow   [Yo,Xo] += iv
 
             # chi-squared
-            cochi2[Yo,Xo] += iv * (im - mod[Yi,Xi])**2
+            cochi2[Yo,Xo] += iv * (im - mo)**2
+
+            # Saturated (but not otherwise bad) pixels
+            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
+            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
+            sat &= np.logical_not(bad)
+            sat = binary_dilation(sat, iterations=10)
+            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
+            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im
             
             # straight-up image & model
-            coimg[Yo,Xo] += im
+            #coimg[Yo,Xo] += im
             comod[Yo,Xo] += mod[Yi,Xi]
             con  [Yo,Xo] += 1
 
-            anysatur[Yo,Xo] |= ((tim.dq[Yi,Xi] & tim.dq_bits['satur']) != 0)
+            dq = tim.dq[Yi,Xi]
+
+            # FIXME -- this is subsumed by "ormask".
+            anysatur[Yo,Xo] |= ((dq & tim.dq_bits['satur']) != 0)
+
+            ormask [Yo,Xo] |= dq
+            andmask[Yo,Xo] &= dq
 
             # point-source depth
             psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
             detsig1 = tim.sig1 / psfnorm
             detiv[Yo,Xo] += good * (1. / detsig1**2)
 
-        nobs[:, iband] = con[iy,ix]
 
-        satur[:] = anysatur[iy,ix]
+        T.saturated[:,iband] = anysatur[iy,ix]
+        T.nobs [:,iband] = con[iy,ix]
 
-        cowimg /= np.maximum(cow, 1e-16)
-        cowmod /= np.maximum(cow, 1e-16)
+        andmask_bits = np.sum(CP_DQ_BITS.values())
+        T.anymask[:,iband] =  ormask [iy,ix]
+        T.allmask[:,iband] = (andmask[iy,ix] & andmask_bits)
+        # unless there were no images there...
+        T.allmask[con[iy,ix] == 0, iband] = 0
 
-        cowimg[cow == 0] = (coimg[cow == 0] / np.maximum(1, con[cow == 0]))
+        cowimg  /= np.maximum(cow, tinyw)
+        cowmod  /= np.maximum(cow, tinyw)
+        cosatim /= np.maximum(cosatw, tinyw)
+
+        coresid = cowimg - cowmod
+        coresid[cow == 0] = 0.
+
+        cowimg[cow == 0] = cosatim[cow == 0]
         cowmod[cow == 0] = (comod[cow == 0] / np.maximum(1, con[cow == 0]))
 
         coimgs.append(cowimg)
         comods.append(cowmod)
+        coresids.append(coresid)
 
-        del coimg
         del comod
+        #del coimg
+        del cosatw
+        del cosatim
+
+        # Apertures, radii in ARCSEC.
+        apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+        apertures = apertures_arcsec / pixscale
+        
+        # Aperture photometry.
+        invvar = cow
+        resid = cowimg - cowmod
+        image = cowimg
+        with np.errstate(divide='ignore'):
+            imsigma = 1.0/np.sqrt(invvar)
+            imsigma[invvar == 0] = 0
+        ra  = np.array([src.getPosition().ra  for src in cat])
+        dec = np.array([src.getPosition().dec for src in cat])
+        ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
+        xy = np.vstack((xx - 1., yy - 1.)).T
+        apimg = []
+        apimgerr = []
+        apres = []
+        for rad in apertures:
+            aper = photutils.CircularAperture(xy, rad)
+            p = photutils.aperture_photometry(image, aper, error=imsigma)
+            apimg.append(p.field('aperture_sum'))
+            apimgerr.append(p.field('aperture_sum_err'))
+            p = photutils.aperture_photometry(resid, aper)
+            apres.append(p.field('aperture_sum'))
+        ap = np.vstack(apimg).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_%s' % band, ap)
+        ap = 1./(np.vstack(apimgerr).T)**2
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_ivar_%s' % band, ap)
+        ap = np.vstack(apres).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_resid_%s' % band, ap)
+            
+        # remove aliases
+        del invvar
+        del resid
+        del image
+        del apimg
+        del apres
+        del apimgerr
+        del ap
 
         # Plug the WCS header cards into these images
         # copy version_header before modifying...
@@ -2462,34 +3229,95 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         targetwcs.add_to_header(hdr)
         hdr.delete('IMAGEW')
         hdr.delete('IMAGEH')
-        
-        for name,img in [('image',  cowimg),
-                         ('invvar', cow),
-                         ('model',  cowmod),
-                         ('chi2',   cochi2),
-                         ('depth',  detiv),
-                         ('nexp',   congood),
-                         ]:
 
-            hdr.add_record(dict(name='IMTYPE', value=name,
-                                comment='DECaLS image type'))
+        for name,img,gzip in [
+            ('image',  cowimg,  False),
+            ('invvar', cow,     False),
+            ('model',  cowmod,  True),
+            ('chi2',   cochi2,  False),
+            ('depth',  detiv,   True),
+            ('nexp',   congood, True),
+            ]:
+
+            # Make a copy, because each image has different values for these headers...
+            hdr2 = MyFITSHDR()
+            for r in hdr.records():
+                hdr2.add_record(r)
+            hdr2.add_record(dict(name='IMTYPE', value=name,
+                                 comment='DECaLS image type'))
+            if name in ['image', 'model']:
+                hdr2.add_record(dict(name='MAGZERO', value=22.5,
+                                     comment='Magnitude zeropoint'))
+                hdr2.add_record(dict(name='BUNIT', value='nanomaggy',
+                                     comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
+            if name in ['invvar', 'depth']:
+                hdr2.add_record(dict(name='BUNIT', value='1/nanomaggy^2',
+                                     comment='Ivar of ABmag=22.5-2.5*log10(nmgy)'))
+
             fn = os.path.join(basedir,
                               'decals-%s-%s-%s.fits' % (brickname, name, band))
-            fitsio.write(fn, img, clobber=True, header=hdr)
+            if gzip:
+                fn += '.gz'
+            fitsio.write(fn, img, clobber=True, header=hdr2)
             print 'Wrote', fn
 
     tmpfn = create_temp(suffix='.png')
-    for name,ims in [('image',coimgs), ('model',comods)]:
-        plt.imsave(tmpfn, get_rgb(ims, bands), origin='lower')
-        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' %
-               (tmpfn, os.path.join(basedir, 'decals-%s-%s.jpg' %
-                                    (brickname, name))))
+
+    for name,ims,rgbkw in [('image', coimgs, rgbkwargs),
+                           ('model', comods, rgbkwargs),
+                           ('resid', coresids, rgbkwargs_resid),
+                           ]:
+        plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
+        jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
+        cmd = ('pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn))
         os.system(cmd)
         os.unlink(tmpfn)
+        print 'Wrote', jpegfn
 
-    T.nobs = nobs
-    T.saturated = satur
-    return dict(T = T)
+    if plots:
+        plt.clf()
+        ra  = np.array([src.getPosition().ra  for src in cat])
+        dec = np.array([src.getPosition().dec for src in cat])
+        ok,x0,y0 = targetwcs.radec2pixelxy(T.orig_ra, T.orig_dec)
+        ok,x1,y1 = targetwcs.radec2pixelxy(ra, dec)
+        dimshow(get_rgb(coimgs, bands, **rgbkwargs))
+        ax = plt.axis()
+        #plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
+        for xx0,yy0,xx1,yy1 in zip(x0,y0,x1,y1):
+            plt.plot([xx0-1,xx1-1], [yy0-1,yy1-1], 'r-')
+        plt.plot(x1-1, y1-1, 'r.')
+        plt.axis(ax)
+        ps.savefig()
+
+    return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
+
+
+def stage_wise_forced(
+    cat=None,
+    T=None,
+    targetwcs=None,
+    brickname=None,
+    outdir=None,
+    **kwargs):
+
+    from wise.forcedphot import unwise_forcedphot, unwise_tiles_touching_wcs
+
+    decals = Decals()
+    brick = decals.get_brick_by_name(brickname)
+    roiradec = [brick.ra1, brick.ra2, brick.dec1, brick.dec2]
+    tiles = unwise_tiles_touching_wcs(targetwcs)
+    print 'Cut to', len(tiles), 'unWISE tiles'
+
+    wcat = []
+    for src in cat:
+        src = src.copy()
+        src.setBrightness(NanoMaggies(w=1.))
+        wcat.append(src)
+
+    W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                          unwise_dir=unwise_dir, use_ceres=useCeres)
+    W.rename('tile', 'unwise_tile')
+    return dict(WISE=W)
     
 
 '''
@@ -2498,6 +3326,9 @@ Write catalog output
 def stage_writecat(
     version_header=None,
     T=None,
+    WISE=None,
+    AP=None,
+    apertures_arcsec=None,
     cat=None, targetrd=None, pixscale=None, targetwcs=None,
     W=None,H=None,
     bands=None, ps=None,
@@ -2509,18 +3340,24 @@ def stage_writecat(
     outdir=None,
     **kwargs):
 
-    print 'Source types:'
-    for src in cat:
-        print '  ', type(src)
-    
+    # print 'Source types:'
+    # for src in cat:
+    #     print '  ', type(src)
+    #print 'T:'
+    #T.about()
+
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
     for k in ['itx','ity','index']:
-        TT.delete_column(k)
+        if k in TT.get_columns():
+            TT.delete_column(k)
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
-                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs']:
+                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
+                       'fracin',
+                       'oob', 'anymask', 'allmask',
+                       'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)
     TT.ty = TT.ty.astype(np.float32)
@@ -2539,24 +3376,68 @@ def stage_writecat(
 
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_fracin   = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
+    TT.decam_saturated = np.zeros((len(TT), len(allbands)), TT.saturated.dtype)
+    TT.decam_anymask = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
+    TT.decam_allmask = np.zeros((len(TT), len(allbands)), TT.allmask.dtype)
     for iband,band in enumerate(bands):
         i = allbands.index(band)
         TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
+        TT.decam_fracin[:,i] = TT.fracin[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
+        TT.decam_saturated[:,i] = TT.saturated[:,iband]
+        TT.decam_anymask[:,i] = TT.allmask[:,iband]
+        TT.decam_allmask[:,i] = TT.anymask[:,iband]
 
     TT.rename('fracmasked', 'decam_fracmasked')
-    TT.rename('saturated', 'decam_saturated')
+    TT.rename('oob', 'out_of_bounds')
 
     TT.delete_column('rchi2')
     TT.delete_column('fracflux')
+    TT.delete_column('fracin')
     TT.delete_column('nobs')
+    TT.delete_column('saturated')
+    TT.delete_column('anymask')
+    TT.delete_column('allmask')
+
+    # How many apertures?
+    ap = AP.get('apflux_img_%s' % bands[0])
+    #print 'Aperture flux shape:', ap.shape
+    #print 'T:', len(TT)
+    n,A = ap.shape
+    
+    TT.decam_apflux = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.decam_apflux_ivar = np.zeros((len(TT), len(allbands), A), np.float32)
+    TT.decam_apflux_resid = np.zeros((len(TT), len(allbands), A), np.float32)
+    for iband,band in enumerate(bands):
+        i = allbands.index(band)
+        TT.decam_apflux[:,i,:] = AP.get('apflux_img_%s' % band)
+        TT.decam_apflux_ivar[:,i,:] = AP.get('apflux_img_ivar_%s' % band)
+        TT.decam_apflux_resid[:,i,:] = AP.get('apflux_resid_%s' % band)
 
     cat.thawAllRecursive()
-    hdr = version_header
+    hdr = None
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
+
+    primhdr = fitsio.FITSHDR()
+    for r in version_header.records():
+        primhdr.add_record(r)
+
+    for i,ap in enumerate(apertures_arcsec):
+        primhdr.add_record(dict(name='APRAD%i' % i, value=ap,
+                                comment='Aperture radius, in arcsec'))
+
+    bits = CP_DQ_BITS.values()
+    bits.sort()
+    bitmap = dict((v,k) for k,v in CP_DQ_BITS.items())
+    for i in range(16):
+        bit = 1<<i
+        if bit in bitmap:
+            primhdr.add_record(dict(name='MASKB%i' % i, value=bitmap[bit],
+                                    comment='Mask bit 2**%i=%i meaning' % (i, bit)))
 
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
     T2.bx = (bx - 1.).astype(np.float32)
@@ -2584,6 +3465,46 @@ def stage_writecat(
     T2.shapeDev_e1_ivar = T2.shapeDev_ivar[:,1]
     T2.shapeDev_e2_ivar = T2.shapeDev_ivar[:,2]
 
+    # Rename source types.
+    typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
+    T2.type = np.array([typemap[t] for t in T2.type])
+
+    # Convert WISE fluxes from Vega to AB.
+    # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
+    vega_to_ab = dict(w1=2.699,
+                      w2=3.339,
+                      w3=5.174,
+                      w4=6.620)
+
+    for band in [1,2,3,4]:
+        primhdr.add_record(dict(name='WISEAB%i' % band, value=vega_to_ab['w%i' % band],
+                                comment='WISE Vega to AB conv for band %i' % band))
+
+    for band in [1,2,3,4]:
+        dm = vega_to_ab['w%i' % band]
+        #print 'WISE', band
+        #print 'dm', dm
+        fluxfactor = 10.** (dm / -2.5)
+        #print 'flux factor', fluxfactor
+        f = WISE.get('w%i_nanomaggies' % band)
+        f *= fluxfactor
+        f = WISE.get('w%i_nanomaggies_ivar' % band)
+        f *= (1./fluxfactor**2)
+
+    T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
+                              WISE.w3_nanomaggies, WISE.w4_nanomaggies]).T
+    T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
+                                   WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar]).T
+    # T2.wise_nobs = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
+    #                           WISE.w3_pronexp, WISE.w4_pronexp]).T
+    T2.wise_nobs = np.vstack([WISE.w1_nexp, WISE.w2_nexp,
+                              WISE.w3_nexp, WISE.w4_nexp]).T
+
+    T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
+                                  WISE.w3_profracflux, WISE.w4_profracflux]).T
+    T2.wise_rchi2 = np.vstack([WISE.w1_prochi2, WISE.w2_prochi2,
+                               WISE.w3_prochi2, WISE.w4_prochi2]).T
+
     if catalogfn is not None:
         fn = catalogfn
     else:
@@ -2592,34 +3513,192 @@ def stage_writecat(
         outdir = os.path.join(outdir, 'tractor', brickname[:3])
         fn = os.path.join(outdir, 'tractor-%s.fits' % brickname)
     dirnm = os.path.dirname(fn)
-    if not os.path.exists(dirnm):
-        try:
-            os.makedirs(dirnm)
-        except:
-            pass
+    try_makedirs(dirnm)
         
-    T2.writeto(fn, header=hdr)
-    print 'Wrote', fn
+    #T2.writeto(fn, header=hdr)
+    #print 'Wrote', fn
 
     print 'Reading SFD maps...'
 
     sfd = SFDMap()
     filts = ['%s %s' % ('DES', f) for f in allbands]
-    # T2.decam_extinction = sfd.extinction(filts, T2.ra, T2.dec).astype(np.float32)
-
     wisebands = ['WISE W1', 'WISE W2', 'WISE W3', 'WISE W4']
     ebv,ext = sfd.extinction(filts + wisebands, T2.ra, T2.dec, get_ebv=True)
     ext = ext.astype(np.float32)
-    T2.decam_extinction = ext[:,:len(allbands)]
-    T2.wise_extinction = ext[:,len(allbands):]
-    T2.ebv = ebv.astype(np.float32)
     
-    T2.writeto(fn, header=hdr)
-    print 'Wrote', fn, 'with extinction'
+    decam_extinction = ext[:,:len(allbands)]
+    wise_extinction = ext[:,len(allbands):]
+    T2.ebv = ebv.astype(np.float32)
+
+    T2.decam_mw_transmission = 10.**(-decam_extinction / 2.5)
+    T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
+
+    # 'tx', 'ty', 
+    # 'sdss_treated_as_pointsource', 
+    # 'decam_flags',
+
+    cols = [
+        'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
+        'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
+        'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
+        'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_fracin',
+        'decam_saturated',
+        'out_of_bounds',
+        'decam_anymask', 'decam_allmask',
+        'wise_flux', 'wise_flux_ivar',
+        'wise_mw_transmission', 'wise_nobs', 'wise_fracflux', 'wise_rchi2', 'dchisq',
+        'fracdev', 'fracDev_ivar', 'shapeexp_r', 'shapeexp_r_ivar', 'shapeexp_e1',
+        'shapeexp_e1_ivar', 'shapeexp_e2', 'shapeexp_e2_ivar', 'shapedev_r',
+        'shapedev_r_ivar', 'shapedev_e1', 'shapedev_e1_ivar', 'shapedev_e2',
+        'shapedev_e2_ivar', 'ebv', 'sdss_run',
+        'sdss_camcol', 'sdss_field', 'sdss_id', 'sdss_objid', 'sdss_parent',
+        'sdss_nchild', 'sdss_objc_type', 'sdss_objc_flags', 'sdss_objc_flags2',
+        'sdss_flags', 'sdss_flags2', 'sdss_tai', 'sdss_ra', 'sdss_ra_ivar',
+        'sdss_dec', 'sdss_dec_ivar', 'sdss_psf_fwhm',
+        'sdss_mjd', 'sdss_theta_dev', 'sdss_theta_deverr', 'sdss_ab_dev', 'sdss_ab_deverr',
+        'sdss_theta_exp', 'sdss_theta_experr', 'sdss_ab_exp', 'sdss_ab_experr',
+        'sdss_fracdev', 'sdss_phi_dev_deg', 'sdss_phi_exp_deg', 'sdss_psfflux',
+        'sdss_psfflux_ivar', 'sdss_cmodelflux', 'sdss_cmodelflux_ivar', 'sdss_modelflux',
+        'sdss_modelflux_ivar', 'sdss_devflux', 'sdss_devflux_ivar', 'sdss_expflux',
+        'sdss_expflux_ivar', 'sdss_extinction', 'sdss_calib_status',
+        'sdss_resolve_status',
+        ]
+
+    # TUNIT cards.
+    deg='deg'
+    degiv='1/deg^2'
+    units = dict(
+        ra=deg, dec=deg,
+        ra_ivar=degiv, dec_ivar=degiv,
+        decam_flux='nanomaggy', decam_flux_ivar='1/nanomaggy^2',
+        decam_apflux='nanomaggy', decam_apflux_ivar='1/nanomaggy^2',
+        decam_apflux_resid='nanomaggy',
+        wise_flux='nanomaggy', wise_flux_ivar='1/nanomaggy^2',
+        shapeexp_r='arcsec', shapeexp_r_ivar='1/arcsec^2',
+        shapedev_r='arcsec', shapedev_r_ivar='1/arcsec^2',
+        ebv='mag',
+        sdss_ra=deg, sdss_ra_ivar=degiv,
+        sdss_dec=deg, sdss_dec_ivar=degiv,
+        sdss_tai='sec', sdss_psf_fwhm='arcsec', sdss_mjd='days',
+        sdss_theta_dev='arcsec', sdss_theta_exp='arcsec',
+        sdss_theta_deverr='1/arcsec', sdss_theta_experr='1/arcsec',
+        sdss_phi_dev_deg=deg, sdss_phi_exp_deg=deg,
+        sdss_psfflux='nanomaggy', sdss_psfflux_ivar='1/nanomaggy^2',
+        sdss_cmodelflux='nanomaggy', sdss_cmodelflux_ivar='1/nanomaggy^2',
+        sdss_modelflux='nanomaggy', sdss_modelflux_ivar='1/nanomaggy^2',
+        sdss_devflux='nanomaggy', sdss_devflux_ivar='1/nanomaggy^2',
+        sdss_expflux='nanomaggy', sdss_expflux_ivar='1/nanomaggy^2',
+        sdss_extinction='mag')
+
+    for i,col in enumerate(cols):
+        if col in units:
+            hdr.add_record(dict(name='TUNIT%i' % (i+1), value=units[col]))
+
+    # match case to T2.
+    cc = T2.get_columns()
+    cclower = [c.lower() for c in cc]
+    for i,c in enumerate(cols):
+        if (not c in cc) and c in cclower:
+            j = cclower.index(c)
+            cols[i] = cc[j]
+
+    #T2.writeto(fn, header=hdr, primheader=version_header, columns=cols)
+    
+    # 'primheader' is not written in Astrometry.net 0.53; we write ourselves.
+
+    # fill in any empty columns (eg, SDSS columns in areas outside the
+    # footprint)
+    fitsB = np.uint8
+    fitsI = np.int16
+    fitsJ = np.int32
+    fitsK = np.int64
+    fitsD = float
+    fitsE = np.float32
+    coltypes = dict(sdss_run=fitsI,
+                    sdss_camcol=fitsB,
+                    sdss_field=fitsI,
+                    sdss_id=fitsI,
+                    sdss_objid=fitsK,
+                    sdss_parent=fitsI,
+                    sdss_nchild=fitsI,
+                    sdss_objc_type=fitsJ,
+                    sdss_objc_flags=fitsJ,
+                    sdss_objc_flags2=fitsJ,
+                    sdss_ra=fitsD,
+                    sdss_ra_ivar=fitsD,
+                    sdss_dec=fitsD,
+                    sdss_dec_ivar=fitsD,
+                    sdss_mjd=fitsJ,
+                    sdss_resolve_status=fitsJ
+                    )
+    arrtypes = dict(sdss_flags=fitsJ,
+                    sdss_flags2=fitsJ,
+                    sdss_tai=fitsD,
+                    sdss_psf_fwhm=fitsE,
+                    sdss_theta_dev=fitsE,
+                    sdss_theta_deverr=fitsE,
+                    sdss_ab_dev=fitsE,
+                    sdss_ab_deverr=fitsE,
+                    sdss_theta_exp=fitsE,
+                    sdss_theta_experr=fitsE,
+                    sdss_ab_exp=fitsE,
+                    sdss_ab_experr=fitsE,
+                    sdss_fracdev=fitsE,
+                    sdss_phi_dev_deg=fitsE,
+                    sdss_phi_exp_deg=fitsE,
+                    sdss_psfflux=fitsE,
+                    sdss_psfflux_ivar=fitsE,
+                    sdss_cmodelflux=fitsE,
+                    sdss_cmodelflux_ivar=fitsE,
+                    sdss_modelflux=fitsE,
+                    sdss_modelflux_ivar=fitsE,
+                    sdss_devflux=fitsE,
+                    sdss_devflux_ivar=fitsE,
+                    sdss_expflux=fitsE,
+                    sdss_expflux_ivar=fitsE,
+                    sdss_extinction=fitsE,
+                    sdss_calib_status=fitsJ)
+    Tcols = T2.get_columns()
+    for c in cols:
+        if not c in Tcols:
+            print 'Filling in missing column', c
+            if c in coltypes:
+                print '  type', coltypes[c]
+                T2.set(c, np.zeros(len(T2), coltypes[c]))
+            if c in arrtypes:
+                print '  array type', arrtypes[c]
+                T2.set(c, np.zeros((len(T2),5), arrtypes[c]))
+
+    # Blank out all SDSS fields for sources that have moved too much.
+    xyz1 = radectoxyz(T2.ra, T2.dec)
+    xyz2 = radectoxyz(T2.sdss_ra, T2.sdss_dec)
+    d2 = np.sum((xyz2-xyz1)**2, axis=1)
+    # 1.5 arcsec
+    maxd2 = np.deg2rad(1.5 / 3600.)**2
+    blankout = np.flatnonzero((T2.sdss_ra != 0) * (d2 > maxd2))
+    print 'Blanking out', len(blankout), 'SDSS no-longer-matches'
+    if len(blankout):
+        Tcols = T2.get_columns()
+        for c in Tcols:
+            if c.startswith('sdss'):
+                x = T2.get(c)
+                x[blankout] = 0
+
+    # If there are no "COMP" sources, it will be 'S3'...
+    T2.type = T2.type.astype('S4')
+
+    arrays = [T2.get(c) for c in cols]
+    arrays = [np.array(a) if isinstance(a,list) else a
+              for a in arrays]
+    fitsio.write(fn, None, header=primhdr, clobber=True)
+    fitsio.write(fn, arrays, names=cols, header=hdr)
+
+
+    print 'Wrote', fn
 
 
 def main():
-    from astrometry.util.stages import *
+    from astrometry.util.stages import CallGlobalTime, runstage
     import optparse
     import logging
     from astrometry.util.multiproc import multiproc
@@ -2664,7 +3743,67 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
 
+    parser.add_option('--no-ceres', dest='ceres', default=True, action='store_false',
+                      help='Do not use Ceres Solver')
+
+    parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
+    parser.add_option('--blob', type=int, help='Debugging: start with blob #')
+
+    parser.add_option('--no-pv', dest='pv', default='True', action='store_false',
+                      help='Do not use Community Pipeline WCS with PV distortion terms -- solve using Astrometry.net')
+
+    parser.add_option('--pipe', default=False, action='store_true',
+                      help='"pipeline" mode')
+
+    parser.add_option('--check-done', default=False, action='store_true',
+                      help='Just check for existence of output files for this brick?')
+    parser.add_option('--skip', default=False, action='store_true',
+                      help='Quit if the output catalog already exists.')
+    parser.add_option('--skip-coadd', default=False, action='store_true',
+                      help='Quit if the output coadd jpeg already exists.')
+
+    parser.add_option('--nsigma', type=float, help='Set N sigma source detection thresh')
+
+    parser.add_option('--simul-opt', action='store_true', default=False,
+                      help='Do simultaneous optimization after model selection')
+
+    print
+    print 'runbrick.py starting at', datetime.datetime.now().isoformat()
+    print 'Command-line args:', sys.argv
+    print
+
     opt,args = parser.parse_args()
+
+    if opt.check_done or opt.skip or opt.skip_coadd:
+        outdir = opt.outdir
+        if outdir is None:
+            outdir = '.'
+        brickname = opt.brick
+        if opt.skip_coadd:
+            fn = os.path.join(outdir, 'coadd', brickname[:3], brickname, 'decals-%s-image.jpg' % brickname)
+        else:
+            fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
+        print 'Checking for', fn
+        exists = os.path.exists(fn)
+        if opt.skip_coadd and exists:
+            return 0
+        if exists:
+            try:
+                T = fits_table(fn)
+                print 'Read', len(T), 'sources from', fn
+            except:
+                print 'Failed to read file', fn
+                exists = False
+
+        if opt.skip:
+            if exists:
+                return 0
+        elif opt.check_done:
+            if not exists:
+                print 'Does not exist:', fn
+                return -1
+            print 'Found:', fn
+            return 0
 
     Time.add_measurement(MemMeas)
 
@@ -2673,6 +3812,9 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     else:
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
+
+    global useCeres
+    useCeres = opt.ceres
 
     set_globals()
     
@@ -2690,14 +3832,33 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     kwargs = {}
     if opt.plot_number:
         ps.skipto(opt.plot_number)
-        kwargs.update(ps=ps)
+    kwargs.update(ps=ps)
 
+    if opt.nsigma:
+        kwargs.update(nsigma=opt.nsigma)
+
+    kwargs.update(simul_opt=opt.simul_opt)
+    kwargs.update(pipe=opt.pipe)
+
+    global mp
     if opt.threads and opt.threads > 1:
-        mp = multiproc(opt.threads, init=runbrick_global_init)
+        from utils.debugpool import DebugPool, DebugPoolMeas
+        pool = DebugPool(opt.threads, initializer=runbrick_global_init,
+                         initargs=[])
+        Time.add_measurement(DebugPoolMeas(pool))
+        mp = multiproc(None, pool=pool)
+
+        #mp = multiproc(opt.threads, init=runbrick_global_init,
+        #               initargs=[])
     else:
-        mp = multiproc(init=runbrick_global_init)
+        mp = multiproc(init=runbrick_global_init, initargs=[])
     # ??
     kwargs.update(mp=mp)
+
+    if opt.nblobs is not None:
+        kwargs.update(nblobs=opt.nblobs)
+    if opt.blob is not None:
+        kwargs.update(blob0=opt.blob)
 
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
@@ -2709,15 +3870,21 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     prereqs = {
         'tims':None,
-        'srcs':'tims',
+
+        #'srcs':'tims',
+
+        'image_coadds':'tims',
+        'srcs':'image_coadds',
+
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',
         'coadds': 'fitblobs_finish',
-        'writecat': 'coadds',
+        'wise_forced': 'coadds',
+        'writecat': 'wise_forced',
 
         'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
-        'initplots': 'tims',
+        'initplots': 'srcs',
         }
 
     initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
@@ -2727,6 +3894,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     except:
         initargs.update(brickname = opt.brick)
 
+    initargs.update(pvwcs=opt.pv)
+
     t0 = Time()
 
     for stage in opt.stage:
@@ -2735,7 +3904,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                  initial_args=initargs, **kwargs)
 
     print 'All done:', Time()-t0
-
+    return 0
 
 def trace(frame, event, arg):
     print "%s, %s:%d" % (event, frame.f_code.co_filename, frame.f_lineno)
@@ -2743,4 +3912,4 @@ def trace(frame, event, arg):
 
 if __name__ == '__main__':
     #sys.settrace(trace)
-    main()
+    sys.exit(main())

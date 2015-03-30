@@ -2,10 +2,11 @@
 *~
 *.png
 *.pdf
-*.fits
 tractor/*.pyc
 tractor/*.so
 tractor/build/
+tractor/ceres_wrap.cxx
+tractor/ceres_wrap.o
 tractor/emfit.py
 tractor/emfit_wrap.c
 tractor/mix.py

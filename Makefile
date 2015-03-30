@@ -36,3 +36,52 @@ _callgrind.so: callgrind.i
 refcnt: _refcnt.so refcnt.py
 .PHONY: refcnt
 
+INSTALL_DIR ?= /usr/local/tractor
+
+PY_INSTALL_DIR ?= $(INSTALL_DIR)/lib/python
+
+TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
+
+# emfit.py mix.py
+# mp_fourier.py 
+
+# cfht.py compiled_profiles.py diesel.py galaxy_profiles.py galex.py hst.py 
+# integral_image.py mpcache.py nasasloan.py ordereddict.py overview.py 
+# rc3.py saveImg.py sdss-main-old.py sdss_galaxy_old.py source_extractor.py
+# total_ordering.py tychodata.py
+
+TRACTOR_INSTALL := __init__.py basics.py cache.py ducks.py ellipses.py engine.py \
+	fitpsf.py galaxy.py imageutils.py mixture_profiles.py motion.py \
+	patch.py psfex.py sdss.py sersic.py splinesky.py utils.py \
+	emfit.py mix.py _emfit.so _mix.so
+
+WISE_INSTALL_DIR := $(PY_INSTALL_DIR)/wise
+WISE_INSTALL := __init__.py allwisecat.py forcedphot.py unwise.py wise_psf.py \
+	wisecat.py \
+	allsky-atlas.fits wise-psf-avg.fits
+
+CERES_INSTALL := ceres.py _ceres.so
+
+install:
+	-($(MAKE) ceres && $(MAKE) install-ceres)
+	$(MAKE) mix emfit
+	mkdir -p $(TRACTOR_INSTALL_DIR)
+	@for x in $(TRACTOR_INSTALL); do \
+		echo cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+		cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+	done
+	mkdir -p $(WISE_INSTALL_DIR)
+	@for x in $(WISE_INSTALL); do \
+		echo cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
+		cp wise/$$x '$(WISE_INSTALL_DIR)/'$$x; \
+	done
+
+install-ceres:
+	mkdir -p $(TRACTOR_INSTALL_DIR)
+	@for x in $(CERES_INSTALL); do \
+		echo cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+		cp tractor/$$x '$(TRACTOR_INSTALL_DIR)/'$$x; \
+	done
+
+
+.PHONE: install

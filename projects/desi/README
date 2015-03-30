@@ -56,3 +56,22 @@ want 3
 9 x 30s:
   312836, 312837, 312838, 312839, 313853, 314039, 314043, 314047,
   314051
+
+
+
+--------------------- EDR4 / DR1 CPU usage ----------------------
+
+Repo	Type	Repo Balance    My Usage   My Balance
+
+March 9 AM:
+cosmo	REPO	134,315	          547	    35,453
+desi	REPO	3,967,855          17	   799,983
+
+March 10 AM:
+cosmo	REPO	133,473	          573	    35,427
+desi	REPO	3,962,196       5,671	   794,329
+
+
+
+Fixed extnum in decals-ccds.fits as of
+decals-dr1-27-g6202e78
