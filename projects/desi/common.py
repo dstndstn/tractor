@@ -1782,9 +1782,9 @@ class DecamImage(object):
     def read_invvar(self, clip=False, **kwargs):
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)
         if clip:
-            sig1 = 1./np.sqrt(np.median(invvar[invvar > 0]))
             # Clamp near-zero (incl negative!) invvars to zero
-            thresh = 0.2 * (1./sig1**2)
+            med = np.median(invvar[invvar > 0])
+            thresh = 0.2 * med
             invvar[invvar < thresh] = 0
         return invvar
     #return fitsio.FITS(self.wtfn)[self.hdu].read()
