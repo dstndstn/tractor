@@ -2145,7 +2145,7 @@ class DecamImage(object):
 
         if run_sky:
             img = self.read_image()
-            wt = self.read_invvar()
+            wt = self.read_invvar(clip=True)
             img = img[wt > 0]
             try:
                 skyval = estimate_mode(img, raiseOnWarn=True)
