@@ -48,16 +48,16 @@ if __name__ == '__main__':
     im = DecamImage(T[0])
     decals = Decals()
     tim = im.get_tractor_image(decals, slc=zoomslice, nanomaggies=opt.nmgy,
-                               subsky=opt.no_sky)
+                               subsky=opt.no_sky, const2psf=True)
     print 'Got tim:', tim
 
     #if opt.nmgy:
     #    tim.photocal = 
     
-    from tractor.psfex import CachingPsfEx
-    tim.psfex.radius = 20
-    tim.psfex.fitSavedData(*tim.psfex.splinedata)
-    tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+    # from tractor.psfex import CachingPsfEx
+    # tim.psfex.radius = 20
+    # tim.psfex.fitSavedData(*tim.psfex.splinedata)
+    # tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
 
     print 'Rendering model image...'
     tr = Tractor([tim], cat)
