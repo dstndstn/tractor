@@ -3467,7 +3467,7 @@ def stage_writecat(
 
     # Rename source types.
     typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
-    T2.type = np.array([typemap[t] for t in T2.type])
+    T2.type = np.array([typemap.get(t,t) for t in T2.type])
 
     # Convert WISE fluxes from Vega to AB.
     # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
@@ -3683,9 +3683,6 @@ def stage_writecat(
             if c.startswith('sdss'):
                 x = T2.get(c)
                 x[blankout] = 0
-
-    # If there are no "COMP" sources, it will be 'S3'...
-    T2.type = T2.type.astype('S4')
 
     arrays = [T2.get(c) for c in cols]
     arrays = [np.array(a) if isinstance(a,list) else a

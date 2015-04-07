@@ -12,8 +12,12 @@ unwise_atlas = 'allsky-atlas.fits'
 decam_pixscale = 0.27
 
 # FITS catalogs
-fits_typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
-                 FixedCompositeGalaxy: 'C' }
+fits_typemap = { PointSource: 'PSF', ExpGalaxy: 'EXP', DevGalaxy: 'DEV',
+                 FixedCompositeGalaxy: 'COMP' }
+
+fits_short_typemap = { PointSource: 'S', ExpGalaxy: 'E', DevGalaxy: 'D',
+                       FixedCompositeGalaxy: 'C' }
+
 
 def typestring(t):
     t = repr(t).replace("<class '", '').replace("'>", "")
@@ -93,7 +97,7 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY',
 
     # Find a source of each type and query its parameter names, for the header.
     # ASSUMES the catalog contains at least one object of each type
-    for t,ts in fits_typemap.items():
+    for t,ts in fits_short_typemap.items():
         for src in cat:
             if type(src) != t:
                 continue
@@ -178,7 +182,10 @@ def prepare_fits_catalog(cat, invvars, T, hdr, filts, fs, allbands = 'ugrizY',
 # FITS output routine that can convert those into output format.
 
 def get_tractor_fits_values(T, cat, pat):
-    T.set(pat % 'type', np.array([fits_typemap[type(src)] for src in cat]))
+    typearray = np.array([fits_typemap[type(src)] for src in cat])
+    # If there are no "COMP" sources, it will be 'S3'...
+    typearray = typearray.astype('S4')
+    T.set(pat % 'type', typearray)
 
     T.set(pat % 'ra',  np.array([src.getPosition().ra  for src in cat]))
     T.set(pat % 'dec', np.array([src.getPosition().dec for src in cat]))
@@ -240,6 +247,9 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
         clazz = rev_typemap[t.type]
         pos = RaDecPos(t.ra, t.dec)
         #br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
+
+        shorttype = fits_short_typemap[clazz]
+
         br = NanoMaggies(order=bands, **dict(zip(bands, t.decam_flux[ibands])))
         params = [pos, br]
         if invvars:
@@ -248,7 +258,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
             # hard-code knowledge that third param is the ellipse
-            eclazz = hdr['TR_%s_T3' % t.type]
+            eclazz = hdr['TR_%s_T3' % shorttype]
             # look up that string... to avoid eval()
             eclazz = ellipse_types[eclazz]
             if issubclass(clazz, DevGalaxy):
@@ -265,8 +275,8 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
         elif issubclass(clazz, FixedCompositeGalaxy):
             # hard-code knowledge that params are fracDev, shapeE, shapeD
             params.append(t.fracdev)
-            expeclazz = hdr['TR_%s_T4' % t.type]
-            deveclazz = hdr['TR_%s_T5' % t.type]
+            expeclazz = hdr['TR_%s_T4' % shorttype]
+            deveclazz = hdr['TR_%s_T5' % shorttype]
             expeclazz = ellipse_types[expeclazz]
             deveclazz = ellipse_types[deveclazz]
             ee = expeclazz(*t.shapeexp)
