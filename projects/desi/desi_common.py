@@ -244,7 +244,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
         #print 'flux', t.decam_flux[ibands]
         #print 'ivar', t.decam_flux_ivar[ibands]
 
-        clazz = rev_typemap[t.type]
+        clazz = rev_typemap[t.type.strip()]
         pos = RaDecPos(t.ra, t.dec)
         #br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
 
@@ -259,6 +259,8 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
             # hard-code knowledge that third param is the ellipse
             eclazz = hdr['TR_%s_T3' % shorttype]
+            # drop any double-quoted weirdness
+            eclazz = eclazz.replace('"','')
             # look up that string... to avoid eval()
             eclazz = ellipse_types[eclazz]
             if issubclass(clazz, DevGalaxy):
@@ -277,6 +279,8 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             params.append(t.fracdev)
             expeclazz = hdr['TR_%s_T4' % shorttype]
             deveclazz = hdr['TR_%s_T5' % shorttype]
+            expeclazz = expeclazz.replace('"','')
+            deveclazz = deveclazz.replace('"','')
             expeclazz = ellipse_types[expeclazz]
             deveclazz = ellipse_types[deveclazz]
             ee = expeclazz(*t.shapeexp)

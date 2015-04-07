@@ -31,6 +31,13 @@ if __name__ == '__main__':
         zoomslice = (slice(y0,y1), slice(x0,x1))
 
     T = fits_table(catfn)
+    # FIXME -- pack ellipse parameters back into arrays
+    T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
+    T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
+    T.shapedev_ivar = np.vstack((T.shapedev_r_ivar, T.shapedev_e1_ivar,
+                                 T.shapedev_e2_ivar)).T
+    T.shapeexp_ivar = np.vstack((T.shapeexp_r_ivar, T.shapeexp_e1_ivar,
+                                 T.shapeexp_e2_ivar)).T
     cat,invvars = read_fits_catalog(T, invvars=True)
     print 'Got cat:', cat
 
