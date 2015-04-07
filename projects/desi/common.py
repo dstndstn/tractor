@@ -1603,7 +1603,7 @@ class DecamImage(object):
         print 'Reading image from', self.imgfn, 'HDU', self.hdu
         img,imghdr = self.read_image(header=True, slice=slc)
         print 'Reading invvar from', self.wtfn, 'HDU', self.hdu
-        invvar = self.read_invvar(slice=slc, clip=True)
+        invvar = self.read_invvar(slice=slc)
         print 'Reading dq from', self.dqfn, 'HDU', self.hdu
         dq = self.read_dq(slice=slc)
 
@@ -1779,7 +1779,7 @@ class DecamImage(object):
     def read_dq(self, **kwargs):
         return self._read_fits(self.dqfn, self.hdu, **kwargs)
 
-    def read_invvar(self, clip=False, **kwargs):
+    def read_invvar(self, clip=True, **kwargs):
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)
         if clip:
             # Clamp near-zero (incl negative!) invvars to zero
@@ -2145,7 +2145,7 @@ class DecamImage(object):
 
         if run_sky:
             img = self.read_image()
-            wt = self.read_invvar(clip=True)
+            wt = self.read_invvar()
             img = img[wt > 0]
             try:
                 skyval = estimate_mode(img, raiseOnWarn=True)
