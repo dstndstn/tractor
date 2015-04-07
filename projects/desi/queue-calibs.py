@@ -169,9 +169,9 @@ if __name__ == '__main__':
         dhi = opt.maxdec
 
     if rlo < rhi:
-        B.cut((B.ra > rlo) * (B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
+        B.cut((B.ra >= rlo) * (B.ra <= rhi) * (B.dec >= dlo) * (B.dec <= dhi))
     else: # RA wrap
-        B.cut(np.logical_or(B.ra > rlo, B.ra < rhi) * (B.dec > dlo) * (B.dec < dhi))
+        B.cut(np.logical_or(B.ra >= rlo, B.ra <= rhi) * (B.dec >= dlo) * (B.dec <= dhi))
     log(len(B), 'bricks in range')
 
     T = D.get_ccds()
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     log('Cut to', len(B), 'bricks near CCDs')
 
     # Aside -- how many near DR1=1 CCDs?
-    if False:
+    if True:
         T2 = D.get_ccds()
         log(len(T2), 'CCDs')
         T2.cut(T2.dr1 == 1)
