@@ -2769,7 +2769,7 @@ def stage_initplots(
         co /= np.maximum(1e-6, n)
 
     plt.clf()
-    dimshow(get_rgb(sdsscoimgs, bands), ticks=False)
+    dimshow(get_rgb(sdsscoimgs, bands, **rgbkwargs), ticks=False)
     #plt.title('SDSS')
     ps.savefig()
 
@@ -3697,6 +3697,120 @@ def stage_writecat(
     print 'Wrote', fn
 
 
+def stage_redo_apphot(targetwcs=None, bands=None, tims=None, outdir=None,
+                       brickname=None, version_header=None,
+                       plots=False, ps=None, pixscale=None,
+                       **kwargs):
+    import photutils
+
+    if outdir is None:
+        outdir = '.'
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
+    try_makedirs(basedir)
+
+    # read tractor output catalog
+    T = fits_table(os.path.join('dr1d', 'tractor', brickname[:3], 'tractor-%s.fits' % brickname))
+
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
+    AP = fits_table()
+
+    tinyw = 1e-30
+    coimgs = []
+    for iband,band in enumerate(bands):
+
+        cowimg = np.zeros((H,W), np.float32)
+        cow    = np.zeros((H,W), np.float32)
+        coimg  = np.zeros((H,W), np.float32)
+        con    = np.zeros((H,W), np.uint8)
+        costraightiv = np.zeros((H,W), np.float32)
+
+        sig1 = 1.
+        for itim,tim in enumerate(tims):
+            if tim.band != band:
+                continue
+            R = tim_get_resamp(tim, targetwcs)
+            if R is None:
+                continue
+            (Yo,Xo,Yi,Xi) = R
+            iv = tim.getInvvar()[Yi,Xi]
+            im = tim.getImage ()[Yi,Xi]
+            # invvar-weighted image
+            cowimg[Yo,Xo] += iv * im
+            cow   [Yo,Xo] += iv
+
+            # Saturated (but not otherwise bad) pixels
+            dq = tim.dq[Yi,Xi]
+            sat = ((tim.dq_bits['satur'] & dq) > 0)
+            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & dq) > 0)
+            justsat = sat & np.logical_not(bad)
+
+            # straight-up coadd of unmasked + sat pixels
+            keep = np.logical_or(dq == 0, justsat)
+            coimg[Yo,Xo] += im * keep
+            con  [Yo,Xo] +=  1 * keep
+            costraightiv[Yo,Xo] +=  1/tim.sig1**2 * keep
+
+        cowimg /= np.maximum(cow, tinyw)
+        coimg  /= np.maximum(con, 1)
+
+        # Apertures, radii in ARCSEC.
+        apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+        apertures = apertures_arcsec / pixscale
+        
+        # Aperture photometry.
+        invvar = costraightiv
+        image = coimg
+        with np.errstate(divide='ignore'):
+            imsigma = 1.0/np.sqrt(invvar)
+            imsigma[invvar == 0] = 0
+        # photometer positions from catalog
+        ra  = T.ra
+        dec = T.dec
+        ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
+        xy = np.vstack((xx - 1., yy - 1.)).T
+        apimg = []
+        apimgerr = []
+        for rad in apertures:
+            aper = photutils.CircularAperture(xy, rad)
+            p = photutils.aperture_photometry(image, aper, error=imsigma)
+            apimg.append(p.field('aperture_sum'))
+            apimgerr.append(p.field('aperture_sum_err'))
+        ap = np.vstack(apimg).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_%s' % band, ap)
+        ap = 1./(np.vstack(apimgerr).T)**2
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        AP.set('apflux_img_ivar_%s' % band, ap)
+            
+        # remove aliases
+        del invvar
+        del image
+        del apimg
+        del apimgerr
+        del ap
+
+    T.add_columns_from(AP)
+
+    T.about()
+    
+    plt.clf()
+    plt.plot(T.decam_apflux[:,1], T.apflux_img_g, 'g.')
+    plt.plot(T.decam_apflux[:,2], T.apflux_img_r, 'r.')
+    plt.plot(T.decam_apflux[:,4], T.apflux_img_z, 'm.')
+    plt.xscale('symlog')
+    plt.yscale('symlog')
+    plt.xlabel('Old')
+    plt.ylabel('New')
+    plt.savefig('redo-ap-%s.png' % brickname)
+
+    fn = 'redo-ap-%s.fits' % brickname
+    T.writeto(fn)
+    print 'Wrote', fn
+
+
+
 def main():
     from astrometry.util.stages import CallGlobalTime, runstage
     import optparse
@@ -3885,6 +3999,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
         'initplots': 'srcs',
+
+        'redo_apphot': 'tims',
         }
 
     initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)

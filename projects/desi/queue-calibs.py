@@ -201,9 +201,9 @@ if __name__ == '__main__':
             Tb = T2[T2.filter == band]
             log(len(Tb), 'in filter', band)
             I,J,d = match_radec(B2.ra, B2.dec, Tb.ra, Tb.dec, 0.25)
-            good = np.zeros(len(B2), bool)
+            good = np.zeros(len(B2), np.uint8)
             for i in I:
-                good[i] = True
+                good[i] = 1
             B2.set('has_' + band, good)
 
         B2.writeto('decals-bricks-in-dr1.fits')
