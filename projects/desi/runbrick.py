@@ -27,7 +27,6 @@ from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
 from astrometry.util.ttime import Time, MemMeas
-from astrometry.util.run_command import *
 from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor import *

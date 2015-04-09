@@ -50,7 +50,9 @@ CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                   edge2 = 512) # in z-band images?
 
 def get_version_header(program_name, decals_dir):
+    from astrometry.util.run_command import *
     if program_name is None:
+        import sys
         program_name = sys.argv[0]
 
     rtn,version,err = run_command('git describe')
@@ -84,7 +86,7 @@ def get_version_header(program_name, decals_dir):
                         comment='Machine where runbrick.py was run'))
     hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
                         comment='NERSC machine where runbrick.py was run'))
-
+    return hdr
 
 
 class SFDMap(object):
@@ -2101,16 +2103,17 @@ class DecamImage(object):
             # need in SIP terms.
             tmpwcsfn  = create_temp(suffix='.wcs')
             cmd = ('wcs-pv2sip -S -o 6 -e %i %s %s' %
-                   (self.hdu, self.imgfn, tmppvwcsfn))
+                   (self.hdu, self.imgfn, tmpwcsfn))
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
             # Read the resulting WCS header and add version info cards to it.
             version_hdr = get_version_header(None, decals_dir)
-            wcshdr = fitsio.read_header(self.pvwcsfn)
-            for r in version_hdr.records():
-                wcshdr.add_record(r)
-            fitsio.write(self.pvwcsfn, None, header=wcshdr, clobber=True)
+            wcshdr = fitsio.read_header(tmpwcsfn)
+            os.unlink(tmpwcsfn)
+            for r in wcshdr.records():
+                version_hdr.add_record(r)
+            fitsio.write(self.pvwcsfn, None, header=version_hdr, clobber=True)
                 
         if run_psfex:
             # If we write *.psf instead of *.fits in a previous run...
@@ -2189,6 +2192,7 @@ class DecamImage(object):
                 raise RuntimeError('Command failed: ' + cmd)
 
         if run_sky:
+            print 'Fitting sky for', self
             img = self.read_image()
             wt = self.read_invvar()
             img = img[wt > 0]
