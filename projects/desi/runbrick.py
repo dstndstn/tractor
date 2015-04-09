@@ -194,6 +194,107 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
         rtn.append(cons2)
     return rtn
 
+def _psf_check_plots(tims):
+    # HACK -- check PSF models
+    plt.figure(num=2, figsize=(7,4.08))
+    for im,tim in zip(ims,tims):
+        print
+        print 'Image', tim.name
+
+        plt.subplots_adjust(left=0, right=1, bottom=0, top=0.95,
+                            hspace=0, wspace=0)
+        W,H = 2048,4096
+        psfex = PsfEx(im.psffn, W, H)
+
+        psfim0 = psfim = psfex.instantiateAt(W/2, H/2)
+        # trim
+        psfim = psfim[10:-10, 10:-10]
+
+        tfit = Time()
+        psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+        print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+        psfim = psfim0[5:-5, 5:-5]
+        tfit = Time()
+        psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
+        print 'Fitting PSF mog:', psfim.shape, Time()-tfit
+
+        ph,pw = psfim.shape
+        psffit = GaussianMixtureEllipsePSF.fromStamp(psfim, N=3)
+
+        #mx = 0.03
+        mx = psfim.max()
+
+        mod3 = np.zeros_like(psfim)
+        p = psffit.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+        p.addTo(mod3)
+        mod2 = np.zeros_like(psfim)
+        p = psffit2.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
+        p.addTo(mod2)
+
+        plt.clf()
+        plt.subplot(2,3,1)
+        dimshow(psfim, vmin=0, vmax=mx, ticks=False)
+        plt.subplot(2,3,2)
+        dimshow(mod3, vmin=0, vmax=mx, ticks=False)
+        plt.subplot(2,3,3)
+        dimshow(mod2, vmin=0, vmax=mx, ticks=False)
+        plt.subplot(2,3,5)
+        dimshow(psfim-mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+        plt.subplot(2,3,6)
+        dimshow(psfim-mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+        ps.savefig()
+        #continue
+
+        for round in [1,2,3,4,5]:
+            plt.clf()
+            k = 1
+            #rows,cols = 10,5
+            rows,cols = 7,4
+            for iy,y in enumerate(np.linspace(0, H, rows).astype(int)):
+                for ix,x in enumerate(np.linspace(0, W, cols).astype(int)):
+                    psfimg = psfex.instantiateAt(x, y)
+                    # trim
+                    psfimg = psfimg[5:-5, 5:-5]
+                    print 'psfimg', psfimg.shape
+                    ph,pw = psfimg.shape
+                    psfimg2 = tim.psfex.getPointSourcePatch(x, y, radius=pw/2)
+                    mod = np.zeros_like(psfimg)
+                    h,w = mod.shape
+                    #psfimg2.x0 -= x
+                    #psfimg2.x0 += w/2
+                    #psfimg2.y0 -= y
+                    #psfimg2.y0 += h/2
+                    psfimg2.x0 = 0
+                    psfimg2.y0 = 0
+                    print 'psfimg2:', (psfimg2.x0,psfimg2.y0)
+                    psfimg2.addTo(mod)
+                    print 'psfimg:', psfimg.min(), psfimg.max(), psfimg.sum()
+                    print 'psfimg2:', psfimg2.patch.min(), psfimg2.patch.max(), psfimg2.patch.sum()
+                    print 'mod:', mod.min(), mod.max(), mod.sum()
+
+                    #plt.subplot(rows, cols, k)
+                    plt.subplot(cols, rows, k)
+                    k += 1
+                    kwa = dict(vmin=0, vmax=mx, ticks=False)
+                    if round == 1:
+                        dimshow(psfimg, **kwa)
+                        plt.suptitle('PsfEx')
+                    elif round == 2:
+                        dimshow(mod, **kwa)
+                        plt.suptitle('varying MoG')
+                    elif round == 3:
+                        dimshow(psfimg - mod, vmin=-mx/2, vmax=mx/2, ticks=False)
+                        plt.suptitle('PsfEx - varying MoG')
+                    elif round == 4:
+                        dimshow(psfimg - mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
+                        plt.suptitle('PsfEx - const MoG(3)')
+                    elif round == 5:
+                        dimshow(psfimg - mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
+                        plt.suptitle('PsfEx - const MoG(2)')
+            ps.savefig()
+
+
 def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
                plots=False,
                target_extent=None, pipe=False, program_name='runbrick.py',
@@ -204,14 +305,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     # early fail for mysterious "ImportError: c.so.6: cannot open shared object file: No such file or directory"
     from tractor.mix import c_gauss_2d_grid
 
-    rtn,version,err = run_command('git describe')
-    if rtn:
-        raise RuntimeError('Failed to get version string (git describe):' + ver + err)
-    version = version.strip()
-    print 'Version:', version
-
     decals = Decals()
-
     if brickid is not None:
         brick = decals.get_brick(brickid)
     else:
@@ -220,17 +314,25 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     brick.about()
     brickid = brick.brickid
     brickname = brick.brickname
-    targetwcs = wcs_for_brick(brick, W=W, H=H)
 
+    version_hdr = get_version_header(program_name, decals.decals_dir)
+    version_hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
+    version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
+    version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
+    version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
+    version_hdr.add_record(dict(name='DECMIN'  , value=brick.ra1, comment='Brick Dec min'))
+    version_hdr.add_record(dict(name='DECMAX'  , value=brick.ra2, comment='Brick Dec max'))
+    print 'Version header:'
+    print version_hdr
+
+    targetwcs = wcs_for_brick(brick, W=W, H=H)
     if target_extent is not None:
         (x0,x1,y0,y1) = target_extent
         W = x1-x0
         H = y1-y0
         targetwcs = targetwcs.get_subimage(x0, y0, W, H)
-    
     targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                          [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
 
@@ -260,49 +362,12 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     print 'Finding images touching brick:', Time()-tlast
     tlast = Time()
 
-    decalsv = decals.decals_dir
-    hdr = fitsio.FITSHDR()
-
-    for s in [
-        'Data product of the DECam Legacy Survey (DECaLS)',
-        'Full documentation at http://legacysurvey.org',
-        ]:
-        hdr.add_record(dict(name='COMMENT', value=s, comment=s))
-    hdr.add_record(dict(name='TRACTORV', value=version,
-                        comment='Tractor git version'))
-    hdr.add_record(dict(name='DECALSV', value=decalsv,
-                        comment='DECaLS version'))
-    hdr.add_record(dict(name='DECALSDR', value='DR1',
-                        comment='DECaLS release name'))
-    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
-                        comment='%s run time' % program_name))
-    hdr.add_record(dict(name='SURVEY', value='DECaLS',
-                        comment='DECam Legacy Survey'))
-
-    hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
-    hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
-    hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
-    hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
-    hdr.add_record(dict(name='DECMIN'  , value=brick.ra1, comment='Brick Dec min'))
-    hdr.add_record(dict(name='DECMAX'  , value=brick.ra2, comment='Brick Dec max'))
-
-    import socket
-    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
-                        comment='Machine where runbrick.py was run'))
-    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
-                        comment='Machine where runbrick.py was run'))
-    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
-                        comment='NERSC machine where runbrick.py was run'))
-
-    version_header = hdr
-
     # Run calibrations
     kwa = dict()
     if pvwcs:
         kwa.update(pvastrom=True, astrom=False)
     if const2psf:
         kwa.update(psfexfit=False)
-
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
     _map(run_calibs, args)
@@ -315,11 +380,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
-    #print 'Tims:', tims
-    #print 'T:', len(T)
-    #T.about()
     I = np.flatnonzero(np.array([tim is not None for tim in tims]))
-    #print 'I:', I
     T.cut(I)
     ccds = T
     tims = [tim for tim in tims if tim is not None]
@@ -332,162 +393,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         print 'No photometric CCDs overlap.  Quitting.'
         sys.exit(0)
 
-
-    if False and ps is not None:
-        # HACK -- check PSF models
-        plt.figure(num=2, figsize=(7,4.08))
-        for im,tim in zip(ims,tims):
-            print
-            print 'Image', tim.name
-
-            plt.subplots_adjust(left=0, right=1, bottom=0, top=0.95,
-                                hspace=0, wspace=0)
-            W,H = 2048,4096
-            psfex = PsfEx(im.psffn, W, H)
-
-            psfim0 = psfim = psfex.instantiateAt(W/2, H/2)
-            # trim
-            psfim = psfim[10:-10, 10:-10]
-
-            tfit = Time()
-            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
-            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
-
-            psfim = psfim0[5:-5, 5:-5]
-            tfit = Time()
-            psffit2 = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
-            print 'Fitting PSF mog:', psfim.shape, Time()-tfit
-
-            ph,pw = psfim.shape
-            psffit = GaussianMixtureEllipsePSF.fromStamp(psfim, N=3)
-
-            #mx = 0.03
-            mx = psfim.max()
-
-            mod3 = np.zeros_like(psfim)
-            p = psffit.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
-            p.addTo(mod3)
-            mod2 = np.zeros_like(psfim)
-            p = psffit2.getPointSourcePatch(pw/2, ph/2, radius=pw/2)
-            p.addTo(mod2)
-
-            plt.clf()
-            plt.subplot(2,3,1)
-            dimshow(psfim, vmin=0, vmax=mx, ticks=False)
-            plt.subplot(2,3,2)
-            dimshow(mod3, vmin=0, vmax=mx, ticks=False)
-            plt.subplot(2,3,3)
-            dimshow(mod2, vmin=0, vmax=mx, ticks=False)
-            plt.subplot(2,3,5)
-            dimshow(psfim-mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
-            plt.subplot(2,3,6)
-            dimshow(psfim-mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
-            ps.savefig()
-            #continue
-
-            for round in [1,2,3,4,5]:
-                plt.clf()
-                k = 1
-                #rows,cols = 10,5
-                rows,cols = 7,4
-                for iy,y in enumerate(np.linspace(0, H, rows).astype(int)):
-                    for ix,x in enumerate(np.linspace(0, W, cols).astype(int)):
-                        psfimg = psfex.instantiateAt(x, y)
-                        # trim
-                        psfimg = psfimg[5:-5, 5:-5]
-                        print 'psfimg', psfimg.shape
-                        ph,pw = psfimg.shape
-                        psfimg2 = tim.psfex.getPointSourcePatch(x, y, radius=pw/2)
-                        mod = np.zeros_like(psfimg)
-                        h,w = mod.shape
-                        #psfimg2.x0 -= x
-                        #psfimg2.x0 += w/2
-                        #psfimg2.y0 -= y
-                        #psfimg2.y0 += h/2
-                        psfimg2.x0 = 0
-                        psfimg2.y0 = 0
-                        print 'psfimg2:', (psfimg2.x0,psfimg2.y0)
-                        psfimg2.addTo(mod)
-                        print 'psfimg:', psfimg.min(), psfimg.max(), psfimg.sum()
-                        print 'psfimg2:', psfimg2.patch.min(), psfimg2.patch.max(), psfimg2.patch.sum()
-                        print 'mod:', mod.min(), mod.max(), mod.sum()
-
-                        #plt.subplot(rows, cols, k)
-                        plt.subplot(cols, rows, k)
-                        k += 1
-                        kwa = dict(vmin=0, vmax=mx, ticks=False)
-                        if round == 1:
-                            dimshow(psfimg, **kwa)
-                            plt.suptitle('PsfEx')
-                        elif round == 2:
-                            dimshow(mod, **kwa)
-                            plt.suptitle('varying MoG')
-                        elif round == 3:
-                            dimshow(psfimg - mod, vmin=-mx/2, vmax=mx/2, ticks=False)
-                            plt.suptitle('PsfEx - varying MoG')
-                        elif round == 4:
-                            dimshow(psfimg - mod3, vmin=-mx/2, vmax=mx/2, ticks=False)
-                            plt.suptitle('PsfEx - const MoG(3)')
-                        elif round == 5:
-                            dimshow(psfimg - mod2, vmin=-mx/2, vmax=mx/2, ticks=False)
-                            plt.suptitle('PsfEx - const MoG(2)')
-                ps.savefig()
+    # _psf_check_plots(tims)
                     
-    # x0,y0 = tim.wcs.getX0Y0()
-    # 
-    #     psfex = PsfEx(im.psffn, 2048, 4096)
-    #     psfimg = psfex.instantiateAt(x0, y0)
-    #     print 'PSF img:', psfimg.shape
-    #     print 'range', psfimg.min(), psfimg.max()
-    #     print 'sum', psfimg.sum()
-    # 
-    #     mx1 = psfimg.max()
-    # 
-    #     # print 'Reading PsfEx-fit model from', im.psffitellfn
-    #     # psfell = PsfEx.fromFits(im.psffitellfn)
-    #     # psfell.radius = 20
-    #     # psfell.fitSavedData(*psfell.splinedata)
-    #     # psfimgell = psfell.getPointSourcePatch(0., 0.)
-    #     # print 'Ellipse Patch:', psfimgell.shape
-    #     # print 'ellipse sum', psfimgell.patch.sum()
-    # 
-    #     tim.psfex.radius = 20
-    #     #tim.psfex.fitSavedData(*tim.psfex.splinedata)
-    #     psfimg2 = tim.psfex.getPointSourcePatch(x0, y0)
-    #     print 'Patch:', psfimg2.shape
-    #     print 'sum', psfimg2.patch.sum()
-    # 
-    #     psfimg3 = tim.psf.getPointSourcePatch(0., 0.)
-    #     print 'Patch:', psfimg3.shape
-    #     print 'sum', psfimg3.patch.sum()
-    # 
-    #     # print 'equal', np.all(psfimgell.patch == psfimg2.patch)
-    # 
-    #     mx2 = psfimg2.patch.max()
-    # 
-    #     mx = max(mx1, mx2)
-    # 
-    #     if ps is not None:
-    #         plt.clf()
-    #         plt.subplot(2,3,1)
-    #         dimshow(psfimg, vmin=0, vmax=mx, cmap='jet')
-    #         plt.title('PsfEx')
-    #         plt.subplot(2,3,2)
-    #         dimshow(psfimg2.patch, vmin=0, vmax=mx, cmap='jet')
-    #         plt.title('Multi-Gaussian Fit')
-    #         plt.subplot(2,3,3)
-    #         dimshow(psfimg3.patch, vmin=0, vmax=mx, cmap='jet')
-    #         plt.title('Multi-Gaussian Fit')
-    #         plt.subplot(2,3,4)
-    #         dimshow(np.log10(np.maximum(psfimg, 1e-6)), vmin=-6, vmax=0, cmap='jet')
-    #         plt.subplot(2,3,5)
-    #         dimshow(np.log10(np.maximum(psfimg2.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
-    #         plt.subplot(2,3,6)
-    #         dimshow(np.log10(np.maximum(psfimg3.patch, 1e-6)), vmin=-6, vmax=0, cmap='jet')
-    #         ps.savefig()
-
-
-
     if not pipe:
         # save resampling params
         tims_compute_resamp(tims, targetwcs)

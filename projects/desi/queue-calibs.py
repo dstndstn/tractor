@@ -46,6 +46,9 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--calibs', action='store_true', default=False,
                       help='Output CCDs that need to be calibrated.')
+    parser.add_option('--touching', action='store_true', default=False,
+                      help='Cut to only CCDs touching selected bricks')
+
     parser.add_option('--check', action='store_true', default=False,
                       help='Check which calibrations actually need to run.')
     parser.add_option('--check-coadd', action='store_true', default=False,
@@ -60,6 +63,11 @@ if __name__ == '__main__':
 
     parser.add_option('--bricks', help='Set bricks.fits file to load')
 
+    parser.add_option('--delete-sky', default=False, action='store_true',
+                      help='Delete any existing sky calibration files')
+    parser.add_option('--delete-pvastrom', default=False, action='store_true',
+                      help='Delete any existing PV WCS calibration files')
+
     opt,args = parser.parse_args()
 
     D = Decals()
@@ -68,6 +76,10 @@ if __name__ == '__main__':
         log('Read', len(B), 'from', opt.bricks)
     else:
         B = D.get_bricks()
+
+    T = D.get_ccds()
+    log(len(T), 'CCDs')
+    T.index = np.arange(len(T))
 
     # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
     # plt.clf()
@@ -161,7 +173,11 @@ if __name__ == '__main__':
     #     rlo,rhi = 0, 360
     #     dlo,dhi = 25,30
 
+    elif opt.region == 'des':
+        dlo, dhi = -6., 4.
 
+        T.cut(np.flatnonzero(np.array(['CPDES82' in fn for fn in T.cpimage])))
+        log('Cut to', len(T), 'CCDs with "CPDES82" in filename')
 
     if opt.mindec is not None:
         dlo = opt.mindec
@@ -174,9 +190,6 @@ if __name__ == '__main__':
         B.cut(np.logical_or(B.ra >= rlo, B.ra <= rhi) * (B.dec >= dlo) * (B.dec <= dhi))
     log(len(B), 'bricks in range')
 
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
-
     I,J,d = match_radec(B.ra, B.dec, T.ra, T.dec, 0.25)
     keep = np.zeros(len(B), bool)
     for i in I:
@@ -185,7 +198,7 @@ if __name__ == '__main__':
     log('Cut to', len(B), 'bricks near CCDs')
 
     # Aside -- how many near DR1=1 CCDs?
-    if True:
+    if False:
         T2 = D.get_ccds()
         log(len(T2), 'CCDs')
         T2.cut(T2.dr1 == 1)
@@ -232,9 +245,6 @@ if __name__ == '__main__':
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
 
-
-    T.index = np.arange(len(T))
-
     T.cut(T.dr1 == 1)
     log(len(T), 'photometric for DR1')
     
@@ -243,27 +253,37 @@ if __name__ == '__main__':
     T.cut(np.flatnonzero(np.array([f in bands for f in T.filter])))
     log('Cut to', len(T), 'CCDs in filters', bands)
 
-    allI = set()
-    for b in B:
-        wcs = wcs_for_brick(b)
-        I = ccds_touching_wcs(wcs, T)
-        log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
-        if len(I) == 0:
-            continue
-        allI.update(I)
-    allI = list(allI)
-    allI.sort()
-    ##### HACK
-    #allI = np.flatnonzero(T.dec > 24.75)
-
-    #allI = np.flatnonzero((T.dec < dhi+0.1) * (T.dec > dlo-0.1))
+    if opt.touching:
+        allI = set()
+        for b in B:
+            wcs = wcs_for_brick(b)
+            I = ccds_touching_wcs(wcs, T)
+            log(len(I), 'CCDs for brick', b.brickid, 'RA,Dec (%.2f, %.2f)' % (b.ra, b.dec))
+            if len(I) == 0:
+                continue
+            allI.update(I)
+        allI = list(allI)
+        allI.sort()
+    else:
+        allI = np.arange(len(T))
 
     ## Be careful here -- T has been cut; we want to write out T.index.
+    ## 'allI' contains indices into T.
 
     print 'Writing calibs to', opt.out
     f = open(opt.out,'w')
     log('Total of', len(allI), 'CCDs')
     for j,i in enumerate(allI):
+
+        if opt.delete_sky or opt.delete_pvastrom:
+            print j+1, 'of', len(allI)
+            im = DecamImage(T[i])
+            if opt.delete_sky and os.path.exists(im.skyfn):
+                print '  deleting:', im.skyfn
+                os.unlink(im.skyfn)
+            if opt.delete_pvastrom and os.path.exists(im.pvwcsfn):
+                print '  deleting:', im.pvwcsfn
+                os.unlink(im.pvwcsfn)
 
         if opt.check:
             print j+1, 'of', len(allI)
@@ -272,6 +292,7 @@ if __name__ == '__main__':
                                  astrom=False):
                 print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
                 continue
+
         f.write('%i\n' % T.index[i])
         if opt.check:
             f.flush()

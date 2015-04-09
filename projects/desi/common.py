@@ -49,6 +49,44 @@ CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                   edge = 256,
                   edge2 = 512) # in z-band images?
 
+def get_version_header(program_name, decals_dir):
+    if program_name is None:
+        program_name = sys.argv[0]
+
+    rtn,version,err = run_command('git describe')
+    if rtn:
+        raise RuntimeError('Failed to get version string (git describe):' + ver + err)
+    version = version.strip()
+    print 'Version:', version
+
+    hdr = fitsio.FITSHDR()
+
+    for s in [
+        'Data product of the DECam Legacy Survey (DECaLS)',
+        'Full documentation at http://legacysurvey.org',
+        ]:
+        hdr.add_record(dict(name='COMMENT', value=s, comment=s))
+    hdr.add_record(dict(name='TRACTORV', value=version,
+                        comment='Tractor git version'))
+    hdr.add_record(dict(name='DECALSV', value=decals_dir,
+                        comment='DECaLS version'))
+    hdr.add_record(dict(name='DECALSDR', value='DR1',
+                        comment='DECaLS release name'))
+    hdr.add_record(dict(name='DECALSDT', value=datetime.datetime.now().isoformat(),
+                        comment='%s run time' % program_name))
+    hdr.add_record(dict(name='SURVEY', value='DECaLS',
+                        comment='DECam Legacy Survey'))
+
+    import socket
+    hdr.add_record(dict(name='HOSTNAME', value=socket.gethostname(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='HOSTFQDN', value=socket.getfqdn(),
+                        comment='Machine where runbrick.py was run'))
+    hdr.add_record(dict(name='NERSC', value=os.environ.get('NERSC_HOST', 'none'),
+                        comment='NERSC machine where runbrick.py was run'))
+
+
+
 class SFDMap(object):
     # These come from Schlafly & Finkbeiner, arxiv 1012.4804v2, Table 6, Rv=3.1
     # but updated (and adding DES u) via email from Schlafly,
@@ -2061,11 +2099,18 @@ class DecamImage(object):
             # DECam images appear to have PV coefficients up to PVx_10,
             # which are up to cubic terms in xi,eta,r.  Overshoot what we
             # need in SIP terms.
+            tmpwcsfn  = create_temp(suffix='.wcs')
             cmd = ('wcs-pv2sip -S -o 6 -e %i %s %s' %
-                   (self.hdu, self.imgfn, self.pvwcsfn))
+                   (self.hdu, self.imgfn, tmppvwcsfn))
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
+            # Read the resulting WCS header and add version info cards to it.
+            version_hdr = get_version_header(None, decals_dir)
+            wcshdr = fitsio.read_header(self.pvwcsfn)
+            for r in version_hdr.records():
+                wcshdr.add_record(r)
+            fitsio.write(self.pvwcsfn, None, header=wcshdr, clobber=True)
                 
         if run_psfex:
             # If we write *.psf instead of *.fits in a previous run...
@@ -2149,12 +2194,16 @@ class DecamImage(object):
             img = img[wt > 0]
             try:
                 skyval = estimate_mode(img, raiseOnWarn=True)
+                skymeth = 'mode'
             except:
                 skyval = np.median(img)
+                skymeth = 'median'
             sky = ConstantSky(skyval)
             tt = type(sky)
             sky_type = '%s.%s' % (tt.__module__, tt.__name__)
-            hdr = fitsio.FITSHDR()
+            hdr = get_version_header(None, decals_dir)
+            hdr.add_record(dict(name='SKYMETH', value=skymeth,
+                                comment='estimate_mode, or fallback to median?'))
             hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))
             sky.toFitsHeader(hdr, prefix='SKY_')
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
