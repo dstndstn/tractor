@@ -6,6 +6,8 @@ import pylab as plt
 import os
 import tempfile
 
+from distutils.version import StrictVersion
+
 import numpy as np
 
 import fitsio
@@ -44,13 +46,22 @@ calibdir = os.path.join(decals_dir, 'calib', 'decam')
 sedir    = os.path.join(decals_dir, 'calib', 'se-config')
 an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
+# From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
+# 1   -- detector bad pixel           InstCal
+# 1   -- detector bad pixel/no data   Resampled
+# 1   -- No data                      Stacked
+# 2   -- saturated                    InstCal/Resampled
+# 4   -- interpolated                 InstCal/Resampled
+# 16  -- single exposure cosmic ray   InstCal/Resampled
+# 64  -- bleed trail                  InstCal/Resampled
+# 128 -- multi-exposure transient     InstCal/Resampled 
 CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                   trans=128,
                   edge = 256,
                   edge2 = 512) # in z-band images?
 
 def get_version_header(program_name, decals_dir):
-    from astrometry.util.run_command import *
+    from astrometry.util.run_command import run_command
     if program_name is None:
         import sys
         program_name = sys.argv[0]
@@ -1656,16 +1667,6 @@ class DecamImage(object):
         bits = reduce(np.bitwise_or, uq)
         print 'DQ bits set: 0x%x' % bits
 
-        # From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
-        # 1   -- detector bad pixel           InstCal
-        # 1   -- detector bad pixel/no data   Resampled
-        # 1   -- No data                      Stacked
-        # 2   -- saturated                    InstCal/Resampled
-        # 4   -- interpolated                 InstCal/Resampled
-        # 16  -- single exposure cosmic ray   InstCal/Resampled
-        # 64  -- bleed trail                  InstCal/Resampled
-        # 128 -- multi-exposure transient     InstCal/Resampled 
-
         invvar[dq != 0] = 0.
 
         print 'Invvar range:', invvar.min(), invvar.max()
@@ -1816,8 +1817,41 @@ class DecamImage(object):
     def read_image_header(self, **kwargs):
         return fitsio.read_header(self.imgfn, ext=self.hdu)
 
-    def read_dq(self, **kwargs):
-        return self._read_fits(self.dqfn, self.hdu, **kwargs)
+    def read_dq(self, header=False, **kwargs):
+        dq,hdr = self._read_fits(self.dqfn, self.hdu, header=True, **kwargs)
+        primhdr = fitsio.read_header(self.dqfn)
+        plver = primhdr['PLVER']
+        plver.strip()
+        plver.replace('V','')
+        if StrictVersion(plver) >= StrictVersion('3.5.0'):
+            # Integer codes, not bit masks.
+            dqbits = np.zeros(dq.shape, np.int16)
+            '''
+            1 = bad
+            2 = no value (for remapped and stacked data)
+            3 = saturated
+            4 = bleed mask
+            5 = cosmic ray
+            6 = low weight
+            7 = diff detect (multi-exposure difference detection from median)
+            8 = long streak (e.g. satellite trail)
+            '''
+            dqbits[dq == 1] |= CP_DQ_BITS['badpix']
+            dqbits[dq == 2] |= CP_DQ_BITS['badpix']
+            dqbits[dq == 3] |= CP_DQ_BITS['satur']
+            dqbits[dq == 4] |= CP_DQ_BITS['bleed']
+            dqbits[dq == 5] |= CP_DQ_BITS['cr']
+            dqbits[dq == 6] |= CP_DQ_BITS['badpix']
+            dqbits[dq == 7] |= CP_DQ_BITS['trans']
+            dqbits[dq == 8] |= CP_DQ_BITS['trans']
+
+        else:
+            dq = dq.astype(np.int16)
+
+        if header:
+            return dq,hdr
+        else:
+            return dq
 
     def read_invvar(self, clip=True, **kwargs):
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)

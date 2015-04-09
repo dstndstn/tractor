@@ -2954,8 +2954,8 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
 
     T.saturated = np.zeros((len(T),len(bands)), bool)
     T.nobs = np.zeros((len(T), len(bands)), np.uint8)
-    T.anymask = np.zeros((len(T), len(bands)), np.uint16)
-    T.allmask = np.zeros((len(T), len(bands)), np.uint16)
+    T.anymask = np.zeros((len(T), len(bands)), np.int16)
+    T.allmask = np.zeros((len(T), len(bands)), np.int16)
 
     for iband,band in enumerate(bands):
 
@@ -2976,9 +2976,9 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         anysatur = np.zeros((H,W), bool)
 
         # These match the type of the "DQ" images.
-        ormask   = np.zeros((H,W), np.int32)
-        andmask  = np.empty((H,W), np.int32)
-        andmask[:,:] = 0x7fffffff
+        ormask   = np.zeros((H,W), np.int16)
+        andmask  = np.empty((H,W), np.int16)
+        andmask[:,:] = 0x7fff
 
         tinyw = 1e-30
 
