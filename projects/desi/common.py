@@ -1820,9 +1820,8 @@ class DecamImage(object):
     def read_dq(self, header=False, **kwargs):
         dq,hdr = self._read_fits(self.dqfn, self.hdu, header=True, **kwargs)
         primhdr = fitsio.read_header(self.dqfn)
-        plver = primhdr['PLVER']
-        plver.strip()
-        plver.replace('V','')
+        plver = primhdr['PLVER'].strip()
+        plver = plver.replace('V','')
         if StrictVersion(plver) >= StrictVersion('3.5.0'):
             # Integer codes, not bit masks.
             dqbits = np.zeros(dq.shape, np.int16)

@@ -136,8 +136,13 @@ def tims_compute_resamp(tims, targetwcs):
     for tim,r in zip(tims, R):
         tim.resamp = r
 
-def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
-                   images=None):
+# Pretty much only used for plots; the real deal is _coadds().
+def compute_coadds(tims, bands, targetwcs, images=None,
+                   get_cow=False, get_n2=False):
+
+    W = targetwcs.get_width()
+    H = targetwcs.get_height()
+
     coimgs = []
     cons = []
     if get_n2:
@@ -192,6 +197,7 @@ def compute_coadds(tims, bands, W, H, targetwcs, get_cow=False, get_n2=False,
     if get_n2:
         rtn.append(cons2)
     return rtn
+
 
 def _psf_check_plots(tims):
     # HACK -- check PSF models
@@ -400,7 +406,7 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         print 'Computing resampling:', Time()-tlast
         tlast = Time()
         # Produce per-band coadds, for plots
-        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        coimgs,cons = compute_coadds(tims, bands, targetwcs)
         print 'Coadds:', Time()-tlast
         tlast = Time()
 
@@ -411,10 +417,12 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
     for band in 'grz':
         hasit = band in bands
-        hdr.add_record(dict(name='BRICK_%s' % band, value=hasit,
-                            comment='Does band %s touch this brick?' % band))
-    hdr.add_record(dict(name='BRICKBND', value=''.join(bands),
-                        comment='Bands touching this brick'))
+        version_hdr.add_record(dict(name='BRICK_%s' % band, value=hasit,
+                                    comment='Does band %s touch this brick?' % band))
+    version_hdr.add_record(dict(name='BRICKBND', value=''.join(bands),
+                                comment='Bands touching this brick'))
+
+    version_header = version_hdr
 
     keys = ['version_header', 'targetrd', 'pixscale', 'targetwcs', 'W','H',
             'bands', 'tims', 'ps', 'brickid', 'brickname', 'brick',
@@ -427,28 +435,78 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     return rtn
 
 
-def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
-                       brickname=None, version_header=None,
-                       plots=False, ps=None,
-                       **kwargs):
-    if outdir is None:
-        outdir = '.'
-    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
-    try_makedirs(basedir)
+def _coadds(tims, bands, targetwcs,
+            mods=None, xy=None, apertures=None, apxy=None,
+            ngood=False, callback=None, callback_args=[]):
+    class Duck(object):
+        pass
+    C = Duck()
 
     W = targetwcs.get_width()
     H = targetwcs.get_height()
+    
+    # always, for patching?
+    unweighted=True
 
-    coimgs = []
+    C.coimgs = []
+    if mods:
+        C.comods = []
+        C.coresids = []
+
+    #if unweighted:
+    #    C.coimgs = []
+
+    if apertures is not None:
+        unweighted = True
+        C.AP = fits_table()
+
+    if xy:
+        ix,iy = xy
+        C.T = fits_table()
+        C.T.nobs    = np.zeros((len(ix), len(bands)), np.uint8)
+        C.T.anymask = np.zeros((len(ix), len(bands)), np.int16)
+        C.T.allmask = np.zeros((len(ix), len(bands)), np.int16)
+
+    tinyw = 1e-30
     for iband,band in enumerate(bands):
 
-        cowimg = np.zeros((H,W), np.float32)
         cow    = np.zeros((H,W), np.float32)
-        cosatw = np.zeros((H,W), np.float32)
-        cosatim= np.zeros((H,W), np.float32)
+        cowimg = np.zeros((H,W), np.float32)
 
-        sig1 = 1.
-        tinyw = 1e-30
+        kwargs = dict(cowimg=cowimg, cow=cow)
+
+        if mods:
+            cowmod = np.zeros((H,W), np.float32)
+            cochi2 = np.zeros((H,W), np.float32)
+            kwargs.update(cowmod=cowmod, cochi2=cochi2)
+
+        if unweighted:
+            coimg  = np.zeros((H,W), np.float32)
+            if mods:
+                comod  = np.zeros((H,W), np.float32)
+            con    = np.zeros((H,W), np.uint8)
+            coiv   = np.zeros((H,W), np.float32)
+            kwargs.update(coimg=coimg, coiv=coiv)
+
+        # Note that we have 'congood' as well as 'nobs'.
+        # 'congood' is used for the 'nexp' *image*
+        # 'nobs' is used for the per-source measurement (you want to know the number
+        #        of observations within the source footprint, not just the peak pixel
+        #        which may be saturated, etc.)
+
+        if ngood:
+            congood = np.zeros((H,W), np.uint8)
+            kwargs.update(congood=congood)
+
+        if xy:
+            # These match the type of the "DQ" images.
+            ormask  = np.zeros((H,W), np.int16)
+            andmask = np.empty((H,W), np.int16)
+            andmask[:,:] = 0x7fff
+            detiv = np.zeros((H,W), np.float32)
+            nobs  = np.zeros((H,W), np.uint8)
+            kwargs.update(ormask=ormask, andmask=andmask, detiv=detiv, nobs=nobs)
+
         for itim,tim in enumerate(tims):
             if tim.band != band:
                 continue
@@ -458,142 +516,198 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
             (Yo,Xo,Yi,Xi) = R
             iv = tim.getInvvar()[Yi,Xi]
             im = tim.getImage ()[Yi,Xi]
+
             # invvar-weighted image
             cowimg[Yo,Xo] += iv * im
             cow   [Yo,Xo] += iv
 
-            # Saturated (but not otherwise bad) pixels
-            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
-            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
-            #print 'sat:', sat.sum(), 'pixels'
-            #print 'bad:', bad.sum(), 'pixels'
-            sat &= np.logical_not(bad)
-            #print 'sat & ~bad:', sat.sum(), 'pixels'
-            # Pixels near saturated pix
-            sat = binary_dilation(sat, iterations=10)
-            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
-            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im #tim.satval
+            if unweighted:
+                dq = tim.dq[Yi,Xi]
+                # include BLEED, SATUR, INTERP pixels if no other pixels exists
+                # (do this by eliminating all other CP flags)
+                badbits = 0
+                for bitname in ['badpix', 'cr', 'trans', 'edge', 'edge2']:
+                    badbits |= CP_DQ_BITS[bitname]
+                goodpix = ((dq & badbits) == 0)
 
-            sig1 = tim.sig1
-            if plots:
-                plt.clf()
-                plt.subplot(1,3,1)
-                thisco = np.zeros((H,W), np.float32)
-                thisco[Yo,Xo] = im
-                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
-                plt.title('co: %s' % tim.name)
+                coimg[Yo,Xo] += goodpix * im
+                con  [Yo,Xo] += goodpix
+                coiv [Yo,Xo] += goodpix * 1./tim.sig1**2  # ...ish
+                #del goodpix
+                del dq
 
-                plt.subplot(1,3,2)
-                thisco = np.zeros((H,W), np.float32)
-                thisco[Yo,Xo] = iv
-                dimshow(thisco, vmin=0., vmax=(1.2/tim.sig1**2))
-                plt.title('iv: %s' % tim.name)
+            if xy:
+                dq = tim.dq[Yi,Xi]
+                ormask [Yo,Xo] |= dq
+                andmask[Yo,Xo] &= dq
+                del dq
+                # point-source depth
+                psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
+                detsig1 = tim.sig1 / psfnorm
+                detiv[Yo,Xo] += (iv > 0) * (1. / detsig1**2)
+                # raw exposure count
+                nobs[Yo,Xo] += 1
 
-                plt.subplot(1,3,3)
-                thisco = np.zeros((H,W), np.float32)
-                thisco[Yo,Xo] = tinyw * sat[Yi,Xi] * im
-                dimshow(thisco, vmin=-2.*tim.sig1, vmax=5.*tim.sig1)
-                plt.title('sat: %s' % tim.name)
+            if ngood:
+                congood[Yo,Xo] += (iv > 0)
 
-                ps.savefig()
+            if mods:
+                mo = mods[itim][Yi,Xi]
+                # straight-up
+                comod[Yo,Xo] += goodpix * mo
+                # invvar-weighted
+                cowmod[Yo,Xo] += iv * mo
+                # chi-squared
+                cochi2[Yo,Xo] += iv * (im - mo)**2
+                del mo
 
-                if False:
-                    thisco[Yo,Xo] = im
-                    vals = tim.dq_bits.values()
-                    vals.sort()
-                    thisbit = np.zeros((H,W), bool)
-                    for i,v in enumerate(vals):
-                        #plt.subplot(3,3,i+1)
-                        thisbit[:,:] = False
-                        thisbit[Yo,Xo] = (tim.dq[Yi,Xi] & v) > 0
-                        print 'bit', v, 'has', thisbit.sum(), 'pixels set'
-                        if sum(thisbit) > 0:
-                            plt.clf()
-                            dimshow(thisbit * thisco, vmin=-5.*tim.sig1, vmax=5.*tim.sig1)
-                            plt.title('bit 0x%x' % v)
-                            ps.savefig()
-
-        if plots:
-            plt.clf()
-            plt.subplot(1,2,1)
-            dimshow(cowimg / np.maximum(cow, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
-            plt.title('cowimg')
-            plt.subplot(1,2,2)
-            dimshow(cow)
-            plt.title('cow')
-            ps.savefig()
-
-            plt.clf()
-            plt.subplot(1,2,1)
-            dimshow(cosatim / np.maximum(cosatw, tinyw), vmin=-2.*sig1, vmax=5.*sig1)
-            plt.title('cosatim')
-            plt.subplot(1,2,2)
-            dimshow(cosatw)
-            plt.title('cosatw')
-            ps.savefig()
-
-        if plots:
-            plt.clf()
-            dimshow(cowimg, vmin=-2.*sig1, vmax=5.*sig1)
-            plt.title('cowimg (pre-patched)')
-            ps.savefig()
-
-        copretty = (cowimg + cosatim) / np.maximum(tinyw, cow + cosatw)
-        coimgs.append(copretty)
-        del cosatw
-        del cosatim
+            del Yo,Xo,Yi,Xi,im,iv
 
         cowimg /= np.maximum(cow, tinyw)
+        C.coimgs.append(cowimg)
+        if mods:
+            cowmod  /= np.maximum(cow, tinyw)
+            C.comods.append(cowmod)
+            coresid = cowimg - cowmod
+            coresid[cow == 0] = 0.
+            C.coresids.append(coresid)
 
-        if plots:
-            plt.clf()
-            dimshow(copretty, vmin=-2.*sig1, vmax=5.*sig1)
-            plt.title('cowimg (patched)')
-            ps.savefig()
+        if unweighted:
+            coimg  /= np.maximum(con, 1)
+            del con
+            cowimg[cow == 0] = coimg[cow == 0]
+            cowmod[cow == 0] = comod[cow == 0]
 
-        # Plug the WCS header cards into these images
-        # copy version_header before modifying...
-        hdr = MyFITSHDR()
-        for r in version_header.records():
-            hdr.add_record(r)
-        hdr.add_record(dict(name='BRICKNAM', value=brickname,
-                            comment='DECaLS brick name'))
-        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
-                'INSTRUME']
-        vals = set()
-        for tim in tims:
-            if tim.band != band:
-                continue
-            v = []
-            for key in keys:
-                v.append(tim.primhdr.get(key,''))
-            vals.add(tuple(v))
-        for i,v in enumerate(vals):
-            for ik,key in enumerate(keys):
-                if i == 0:
-                    kk = key
-                else:
-                    kk = key[:7] + '%i'%i
-                hdr.add_record(dict(name=kk, value=v[ik]))
-        hdr.add_record(dict(name='FILTER', value=band))
-        targetwcs.add_to_header(hdr)
-        hdr.delete('IMAGEW')
-        hdr.delete('IMAGEH')
+        if xy:
+            C.T.nobs [:,iband] = nobs[iy,ix]
+            andmask_bits = np.sum(CP_DQ_BITS.values())
+            C.T.anymask[:,iband] =  ormask [iy,ix]
+            C.T.allmask[:,iband] = (andmask[iy,ix] & andmask_bits)
+            # unless there were no images there...
+            C.T.allmask[nobs[iy,ix] == 0, iband] = 0
 
-        name,img = ('image',  cowimg)
-        hdr.add_record(dict(name='IMTYPE', value=name,
-                            comment='DECaLS image type'))
-        hdr.add_record(dict(name='MAGZERO', value=22.5,
-                            comment='Magnitude zeropoint'))
-        hdr.add_record(dict(name='BUNIT', value='nanomaggy',
-                            comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
+        if apertures is not None:
+            import photutils
 
-        fn = os.path.join(basedir, 'decals-%s-%s-%s.fits' % (brickname, name, band))
-        fitsio.write(fn, img, clobber=True, header=hdr)
+            # Aperture photometry, using the unweighted "coimg" and "coiv" arrays.
+            with np.errstate(divide='ignore'):
+                imsigma = 1.0/np.sqrt(coiv)
+                imsigma[coiv == 0] = 0
+
+            apimg = []
+            apimgerr = []
+            if mods:
+                apres = []
+                
+            for rad in apertures:
+                aper = photutils.CircularAperture(apxy, rad)
+                p = photutils.aperture_photometry(coimg, aper, error=imsigma)
+                apimg.append(p.field('aperture_sum'))
+                apimgerr.append(p.field('aperture_sum_err'))
+                if mods:
+                    p = photutils.aperture_photometry(coresid, aper)
+                    apres.append(p.field('aperture_sum'))
+            ap = np.vstack(apimg).T
+            ap[np.logical_not(np.isfinite(ap))] = 0.
+            C.AP.set('apflux_img_%s' % band, ap)
+            ap = 1./(np.vstack(apimgerr).T)**2
+            ap[np.logical_not(np.isfinite(ap))] = 0.
+            C.AP.set('apflux_img_ivar_%s' % band, ap)
+            if mods:
+                ap = np.vstack(apres).T
+                ap[np.logical_not(np.isfinite(ap))] = 0.
+                C.AP.set('apflux_resid_%s' % band, ap)
+                del apres
+            del apimg,apimgerr,ap
+
+        if callback is not None:
+            callback(band, *callback_args, **kwargs)
+
+    return C
+
+
+def _write_band_images(band,
+                       brickname, version_header, tims, targetwcs, basedir,
+                       cowimg=None, cow=None, cowmod=None, cochi2=None,
+                       detiv=None, congood=None, **kwargs):
+    # copy version_header before modifying...
+    hdr = fitsio.FITSHDR()
+    for r in version_header.records():
+        hdr.add_record(r)
+    # Grab these keywords from all input files for this band...
+    keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+            'INSTRUME']
+    vals = set()
+    for tim in tims:
+        if tim.band != band:
+            continue
+        v = []
+        for key in keys:
+            v.append(tim.primhdr.get(key,''))
+        vals.add(tuple(v))
+    for i,v in enumerate(vals):
+        for ik,key in enumerate(keys):
+            if i == 0:
+                kk = key
+            else:
+                kk = key[:7] + '%i'%i
+            hdr.add_record(dict(name=kk, value=v[ik]))
+    hdr.add_record(dict(name='FILTER', value=band))
+
+    # Plug the WCS header cards into these images
+    targetwcs.add_to_header(hdr)
+    hdr.delete('IMAGEW')
+    hdr.delete('IMAGEH')
+
+    imgs = [
+        ('image',  cowimg,  False),
+        ]
+    if cowmod is not None:
+        imgs.extend([
+                ('invvar', cow,     False),
+                ('model',  cowmod,  True),
+                ('chi2',   cochi2,  False),
+                ('depth',  detiv,   True),
+                ('nexp',   congood, True),
+                ])
+    for name,img,gzip in imgs:
+        # Make a copy, because each image has different values for these headers...
+        hdr2 = MyFITSHDR()
+        for r in hdr.records():
+            hdr2.add_record(r)
+        hdr2.add_record(dict(name='IMTYPE', value=name,
+                             comment='DECaLS image type'))
+        if name in ['image', 'model']:
+            hdr2.add_record(dict(name='MAGZERO', value=22.5,
+                                 comment='Magnitude zeropoint'))
+            hdr2.add_record(dict(name='BUNIT', value='nanomaggy',
+                                 comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
+        if name in ['invvar', 'depth']:
+            hdr2.add_record(dict(name='BUNIT', value='1/nanomaggy^2',
+                                 comment='Ivar of ABmag=22.5-2.5*log10(nmgy)'))
+
+        fn = os.path.join(basedir,
+                          'decals-%s-%s-%s.fits' % (brickname, name, band))
+        if gzip:
+            fn += '.gz'
+        fitsio.write(fn, img, clobber=True, header=hdr2)
         print 'Wrote', fn
 
+def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
+                       brickname=None, version_header=None,
+                       plots=False, ps=None,
+                       **kwargs):
+    if outdir is None:
+        outdir = '.'
+    basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
+    try_makedirs(basedir)
+
+    C = _coadds(tims, bands, targetwcs, unweighted=True,
+                callback=_write_band_images,
+                callback_args=(brickname, version_header, tims, targetwcs, basedir))
+
     tmpfn = create_temp(suffix='.png')
-    for name,ims,rgbkw in [('image',coimgs,rgbkwargs)]:
+    for name,ims,rgbkw in [('image',C.couimgs,rgbkwargs)]:
         plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
         jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
         cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn)
@@ -844,7 +958,7 @@ def stage_fitblobs(T=None,
     set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma)
 
     if plots:
-        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        coimgs,cons = compute_coadds(tims, bands, targetwcs)
         plt.clf()
         dimshow(get_rgb(coimgs, bands))
         ax = plt.axis()
@@ -1313,8 +1427,7 @@ def _plot_derivs(subtims, newsrc, srctractor, ps):
     ps.savefig()
     plt.clf()
     modimgs = srctractor.getModelImages()
-    comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                images=modimgs)
+    comods,nil = compute_coadds(subtims, bands, subtarget, images=modimgs)
     dimshow(get_rgb(comods, bands))
     plt.title('Initial ' + name)
     ps.savefig()
@@ -1902,8 +2015,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if plots and False:
                 plt.clf()
                 modimgs = srctractor.getModelImages()
-                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                            images=modimgs)
+                comods,nil = compute_coadds(subtims, bands, subtarget, images=modimgs)
                 dimshow(get_rgb(comods, bands))
                 plt.title('First-round opt ' + name)
                 ps.savefig()
@@ -1948,8 +2060,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if plots and False:
                 plt.clf()
                 modimgs = srctractor.getModelImages()
-                comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                            images=modimgs)
+                comods,nil = compute_coadds(subtims, bands, subtarget, images=modimgs)
                 dimshow(get_rgb(comods, bands))
                 plt.title('Second-round opt ' + name)
                 ps.savefig()
@@ -1987,15 +2098,14 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 plt.subplot(rows, cols, imod+1)
                 if modname != 'none':
                     modimgs = srctractor.getModelImages()
-                    comods,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                                images=modimgs)
+                    comods,nil = compute_coadds(subtims, bands, subtarget, images=modimgs)
                     dimshow(get_rgb(comods, bands))
                     plt.title(modname)
 
                     chisqs = [((tim.getImage() - mod) * tim.getInvError())**2
                               for tim,mod in zip(subtims, modimgs)]
                 else:
-                    coimgs, cons = compute_coadds(subtims, bands, blobw, blobh, subtarget)
+                    coimgs, cons = compute_coadds(subtims, bands, subtarget)
                     dimshow(get_rgb(coimgs, bands))
                     ax = plt.axis()
                     ok,x,y = subtarget.radec2pixelxy(src.getPosition().ra, src.getPosition().dec)
@@ -2005,8 +2115,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
                     chisqs = [((tim.getImage()) * tim.getInvError())**2
                               for tim in subtims]
-                cochisqs,nil = compute_coadds(subtims, bands, blobw, blobh, subtarget,
-                                             images=chisqs)
+                cochisqs,nil = compute_coadds(subtims, bands, subtarget, images=chisqs)
                 cochisq = reduce(np.add, cochisqs)
                 plt.subplot(rows, cols, imod+1+cols)
                 dimshow(cochisq, vmin=0, vmax=25)
@@ -2706,7 +2815,7 @@ def stage_fitplots(
     if pipe:
         t0 = Time()
         # Produce per-band coadds, for plots
-        coimgs,cons = compute_coadds(tims, bands, W, H, targetwcs)
+        coimgs,cons = compute_coadds(tims, bands, targetwcs)
         print 'Coadds:', Time()-t0
 
     plt.figure(figsize=(10,10.5))
@@ -2917,8 +3026,6 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  outdir=None, T=None, cat=None, pixscale=None, plots=False,
                  **kwargs):
 
-    import photutils
-
     if outdir is None:
         outdir = '.'
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
@@ -2946,232 +3053,29 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     ix = np.clip(np.round(ix - 1), 0, W-1).astype(int)
     iy = np.clip(np.round(iy - 1), 0, H-1).astype(int)
 
-    coimgs = []
-    comods = []
-    coresids = []
+    # Apertures, radii in ARCSEC.
+    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+    apertures = apertures_arcsec / pixscale
 
-    AP = fits_table()
+    # Aperture photometry locations
+    ra  = np.array([src.getPosition().ra  for src in cat])
+    dec = np.array([src.getPosition().dec for src in cat])
+    ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
+    apxy = np.vstack((xx - 1., yy - 1.)).T
+    del xx,yy,ok,ra,dec
 
-    T.saturated = np.zeros((len(T),len(bands)), bool)
-    T.nobs = np.zeros((len(T), len(bands)), np.uint8)
-    T.anymask = np.zeros((len(T), len(bands)), np.int16)
-    T.allmask = np.zeros((len(T), len(bands)), np.int16)
+    C = _coadds(tims, bands, targetwcs, mods=mods, xy=(ix,iy), ngood=True,
+                apertures=apertures, apxy=apxy,
+                callback=_write_band_images,
+                callback_args=(brickname, version_header, tims, targetwcs, basedir))
 
-    for iband,band in enumerate(bands):
-
-        cow    = np.zeros((H,W), np.float32)
-        cowimg = np.zeros((H,W), np.float32)
-        cowmod = np.zeros((H,W), np.float32)
-
-        cosatw = np.zeros((H,W), np.float32)
-        cosatim= np.zeros((H,W), np.float32)
-
-        #coimg  = np.zeros((H,W), np.float32)
-        comod  = np.zeros((H,W), np.float32)
-        cochi2 = np.zeros((H,W), np.float32)
-        con     = np.zeros((H,W), np.uint8)
-        congood = np.zeros((H,W), np.uint8)
-        detiv   = np.zeros((H,W), np.float32)
-
-        anysatur = np.zeros((H,W), bool)
-
-        # These match the type of the "DQ" images.
-        ormask   = np.zeros((H,W), np.int16)
-        andmask  = np.empty((H,W), np.int16)
-        andmask[:,:] = 0x7fff
-
-        tinyw = 1e-30
-
-        for itim, (tim,mod) in enumerate(zip(tims, mods)):
-            if tim.band != band:
-                continue
-            R = tim_get_resamp(tim, targetwcs)
-            if R is None:
-                continue
-            (Yo,Xo,Yi,Xi) = R
-
-            # number of good exposures
-            good = (tim.getInvError()[Yi,Xi] > 0)
-            congood[Yo,Xo] += good
-
-            iv = tim.getInvvar()[Yi,Xi]
-            im = tim.getImage()[Yi,Xi]
-            mo = mod[Yi,Xi]
-
-            # invvar-weighted image & model
-            cowimg[Yo,Xo] += iv * im
-            cowmod[Yo,Xo] += iv * mo
-            cow   [Yo,Xo] += iv
-
-            # chi-squared
-            cochi2[Yo,Xo] += iv * (im - mo)**2
-
-            # Saturated (but not otherwise bad) pixels
-            sat = ((tim.dq_bits['satur'] & tim.dq) > 0)
-            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & tim.dq) > 0)
-            sat &= np.logical_not(bad)
-            sat = binary_dilation(sat, iterations=10)
-            cosatw [Yo,Xo] += tinyw * sat[Yi,Xi]
-            cosatim[Yo,Xo] += tinyw * sat[Yi,Xi] * im
-            
-            # straight-up image & model
-            #coimg[Yo,Xo] += im
-            comod[Yo,Xo] += mod[Yi,Xi]
-            con  [Yo,Xo] += 1
-
-            dq = tim.dq[Yi,Xi]
-
-            # FIXME -- this is subsumed by "ormask".
-            anysatur[Yo,Xo] |= ((dq & tim.dq_bits['satur']) != 0)
-
-            ormask [Yo,Xo] |= dq
-            andmask[Yo,Xo] &= dq
-
-            # point-source depth
-            psfnorm = 1./(2. * np.sqrt(np.pi) * tim.psf_sigma)
-            detsig1 = tim.sig1 / psfnorm
-            detiv[Yo,Xo] += good * (1. / detsig1**2)
-
-
-        T.saturated[:,iband] = anysatur[iy,ix]
-        T.nobs [:,iband] = con[iy,ix]
-
-        andmask_bits = np.sum(CP_DQ_BITS.values())
-        T.anymask[:,iband] =  ormask [iy,ix]
-        T.allmask[:,iband] = (andmask[iy,ix] & andmask_bits)
-        # unless there were no images there...
-        T.allmask[con[iy,ix] == 0, iband] = 0
-
-        cowimg  /= np.maximum(cow, tinyw)
-        cowmod  /= np.maximum(cow, tinyw)
-        cosatim /= np.maximum(cosatw, tinyw)
-
-        coresid = cowimg - cowmod
-        coresid[cow == 0] = 0.
-
-        cowimg[cow == 0] = cosatim[cow == 0]
-        cowmod[cow == 0] = (comod[cow == 0] / np.maximum(1, con[cow == 0]))
-
-        coimgs.append(cowimg)
-        comods.append(cowmod)
-        coresids.append(coresid)
-
-        del comod
-        #del coimg
-        del cosatw
-        del cosatim
-
-        # Apertures, radii in ARCSEC.
-        apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
-        apertures = apertures_arcsec / pixscale
-        
-        # Aperture photometry.
-        invvar = cow
-        resid = cowimg - cowmod
-        image = cowimg
-        with np.errstate(divide='ignore'):
-            imsigma = 1.0/np.sqrt(invvar)
-            imsigma[invvar == 0] = 0
-        ra  = np.array([src.getPosition().ra  for src in cat])
-        dec = np.array([src.getPosition().dec for src in cat])
-        ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
-        xy = np.vstack((xx - 1., yy - 1.)).T
-        apimg = []
-        apimgerr = []
-        apres = []
-        for rad in apertures:
-            aper = photutils.CircularAperture(xy, rad)
-            p = photutils.aperture_photometry(image, aper, error=imsigma)
-            apimg.append(p.field('aperture_sum'))
-            apimgerr.append(p.field('aperture_sum_err'))
-            p = photutils.aperture_photometry(resid, aper)
-            apres.append(p.field('aperture_sum'))
-        ap = np.vstack(apimg).T
-        ap[np.logical_not(np.isfinite(ap))] = 0.
-        AP.set('apflux_img_%s' % band, ap)
-        ap = 1./(np.vstack(apimgerr).T)**2
-        ap[np.logical_not(np.isfinite(ap))] = 0.
-        AP.set('apflux_img_ivar_%s' % band, ap)
-        ap = np.vstack(apres).T
-        ap[np.logical_not(np.isfinite(ap))] = 0.
-        AP.set('apflux_resid_%s' % band, ap)
-            
-        # remove aliases
-        del invvar
-        del resid
-        del image
-        del apimg
-        del apres
-        del apimgerr
-        del ap
-
-        # Plug the WCS header cards into these images
-        # copy version_header before modifying...
-        hdr = fitsio.FITSHDR()
-        for r in version_header.records():
-            hdr.add_record(r)
-        hdr.add_record(dict(name='BRICKNAM', value=brickname,
-                            comment='DECaLS brick name'))
-        keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
-                'INSTRUME']
-        vals = set()
-        for tim in tims:
-            if tim.band != band:
-                continue
-            v = []
-            for key in keys:
-                v.append(tim.primhdr.get(key,''))
-            vals.add(tuple(v))
-        for i,v in enumerate(vals):
-            for ik,key in enumerate(keys):
-                if i == 0:
-                    kk = key
-                else:
-                    kk = key[:7] + '%i'%i
-                hdr.add_record(dict(name=kk, value=v[ik]))
-            
-        hdr.add_record(dict(name='FILTER', value=band))
-
-        targetwcs.add_to_header(hdr)
-        hdr.delete('IMAGEW')
-        hdr.delete('IMAGEH')
-
-        for name,img,gzip in [
-            ('image',  cowimg,  False),
-            ('invvar', cow,     False),
-            ('model',  cowmod,  True),
-            ('chi2',   cochi2,  False),
-            ('depth',  detiv,   True),
-            ('nexp',   congood, True),
-            ]:
-
-            # Make a copy, because each image has different values for these headers...
-            hdr2 = MyFITSHDR()
-            for r in hdr.records():
-                hdr2.add_record(r)
-            hdr2.add_record(dict(name='IMTYPE', value=name,
-                                 comment='DECaLS image type'))
-            if name in ['image', 'model']:
-                hdr2.add_record(dict(name='MAGZERO', value=22.5,
-                                     comment='Magnitude zeropoint'))
-                hdr2.add_record(dict(name='BUNIT', value='nanomaggy',
-                                     comment='AB mag = 22.5 - 2.5*log10(nanomaggy)'))
-            if name in ['invvar', 'depth']:
-                hdr2.add_record(dict(name='BUNIT', value='1/nanomaggy^2',
-                                     comment='Ivar of ABmag=22.5-2.5*log10(nmgy)'))
-
-            fn = os.path.join(basedir,
-                              'decals-%s-%s-%s.fits' % (brickname, name, band))
-            if gzip:
-                fn += '.gz'
-            fitsio.write(fn, img, clobber=True, header=hdr2)
-            print 'Wrote', fn
+    for c in ['nobs', 'anymask', 'allmask']:
+        T.set(c, C.T.get(c))
 
     tmpfn = create_temp(suffix='.png')
-
-    for name,ims,rgbkw in [('image', coimgs, rgbkwargs),
-                           ('model', comods, rgbkwargs),
-                           ('resid', coresids, rgbkwargs_resid),
+    for name,ims,rgbkw in [('image', C.coimgs, rgbkwargs),
+                           ('model', C.comods, rgbkwargs),
+                           ('resid', C.coresids, rgbkwargs_resid),
                            ]:
         plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
         jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
@@ -3186,7 +3090,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         dec = np.array([src.getPosition().dec for src in cat])
         ok,x0,y0 = targetwcs.radec2pixelxy(T.orig_ra, T.orig_dec)
         ok,x1,y1 = targetwcs.radec2pixelxy(ra, dec)
-        dimshow(get_rgb(coimgs, bands, **rgbkwargs))
+        dimshow(get_rgb(C.coimgs, bands, **rgbkwargs))
         ax = plt.axis()
         #plt.plot(np.vstack((x0,x1))-1, np.vstack((y0,y1))-1, 'r-')
         for xx0,yy0,xx1,yy1 in zip(x0,y0,x1,y1):
@@ -3195,7 +3099,8 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         plt.axis(ax)
         ps.savefig()
 
-    return dict(T = T, AP=AP, apertures_pix=apertures, apertures_arcsec=apertures_arcsec)
+    return dict(T=T, AP=C.AP, apertures_pix=apertures,
+                apertures_arcsec=apertures_arcsec)
 
 
 def stage_wise_forced(
@@ -3260,7 +3165,7 @@ def stage_writecat(
             TT.delete_column(k)
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
-                       'fracflux','fracmasked','saturated','rchi2','dchisq','nobs',
+                       'fracflux','fracmasked', 'rchi2','dchisq','nobs',
                        'fracin',
                        'oob', 'anymask', 'allmask',
                        'decam_flags']:
@@ -3284,7 +3189,6 @@ def stage_writecat(
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracin   = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
-    TT.decam_saturated = np.zeros((len(TT), len(allbands)), TT.saturated.dtype)
     TT.decam_anymask = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
     TT.decam_allmask = np.zeros((len(TT), len(allbands)), TT.allmask.dtype)
     for iband,band in enumerate(bands):
@@ -3293,7 +3197,6 @@ def stage_writecat(
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
         TT.decam_fracin[:,i] = TT.fracin[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
-        TT.decam_saturated[:,i] = TT.saturated[:,iband]
         TT.decam_anymask[:,i] = TT.allmask[:,iband]
         TT.decam_allmask[:,i] = TT.anymask[:,iband]
 
@@ -3304,7 +3207,6 @@ def stage_writecat(
     TT.delete_column('fracflux')
     TT.delete_column('fracin')
     TT.delete_column('nobs')
-    TT.delete_column('saturated')
     TT.delete_column('anymask')
     TT.delete_column('allmask')
 
@@ -3448,7 +3350,6 @@ def stage_writecat(
         'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
         'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
         'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_fracin',
-        'decam_saturated',
         'out_of_bounds',
         'decam_anymask', 'decam_allmask',
         'wise_flux', 'wise_flux_ivar',
@@ -3604,8 +3505,6 @@ def stage_redo_apphot(targetwcs=None, bands=None, tims=None, outdir=None,
                        brickname=None, version_header=None,
                        plots=False, ps=None, pixscale=None,
                        **kwargs):
-    import photutils
-
     if outdir is None:
         outdir = '.'
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
@@ -3614,88 +3513,18 @@ def stage_redo_apphot(targetwcs=None, bands=None, tims=None, outdir=None,
     # read tractor output catalog
     T = fits_table(os.path.join('dr1d', 'tractor', brickname[:3], 'tractor-%s.fits' % brickname))
 
-    W = targetwcs.get_width()
-    H = targetwcs.get_height()
+    # Apertures, radii in ARCSEC.
+    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+    apertures = apertures_arcsec / pixscale
 
-    AP = fits_table()
+    # photometer positions from catalog
+    ok,xx,yy = targetwcs.radec2pixelxy(T.ra, T.dec)
+    apxy = np.vstack((xx - 1., yy - 1.)).T
+    del xx,yy
 
-    tinyw = 1e-30
-    coimgs = []
-    for iband,band in enumerate(bands):
+    C = _coadd(tims, bands, targetwcs, apertures=apertures, apxy=apxy)
 
-        cowimg = np.zeros((H,W), np.float32)
-        cow    = np.zeros((H,W), np.float32)
-        coimg  = np.zeros((H,W), np.float32)
-        con    = np.zeros((H,W), np.uint8)
-        costraightiv = np.zeros((H,W), np.float32)
-
-        sig1 = 1.
-        for itim,tim in enumerate(tims):
-            if tim.band != band:
-                continue
-            R = tim_get_resamp(tim, targetwcs)
-            if R is None:
-                continue
-            (Yo,Xo,Yi,Xi) = R
-            iv = tim.getInvvar()[Yi,Xi]
-            im = tim.getImage ()[Yi,Xi]
-            # invvar-weighted image
-            cowimg[Yo,Xo] += iv * im
-            cow   [Yo,Xo] += iv
-
-            # Saturated (but not otherwise bad) pixels
-            dq = tim.dq[Yi,Xi]
-            sat = ((tim.dq_bits['satur'] & dq) > 0)
-            bad = ((sum(tim.dq_bits[b] for b in ['badpix', 'cr', 'trans', 'edge', 'edge2']) & dq) > 0)
-            justsat = sat & np.logical_not(bad)
-
-            # straight-up coadd of unmasked + sat pixels
-            keep = np.logical_or(dq == 0, justsat)
-            coimg[Yo,Xo] += im * keep
-            con  [Yo,Xo] +=  1 * keep
-            costraightiv[Yo,Xo] +=  1/tim.sig1**2 * keep
-
-        cowimg /= np.maximum(cow, tinyw)
-        coimg  /= np.maximum(con, 1)
-
-        # Apertures, radii in ARCSEC.
-        apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
-        apertures = apertures_arcsec / pixscale
-        
-        # Aperture photometry.
-        invvar = costraightiv
-        image = coimg
-        with np.errstate(divide='ignore'):
-            imsigma = 1.0/np.sqrt(invvar)
-            imsigma[invvar == 0] = 0
-        # photometer positions from catalog
-        ra  = T.ra
-        dec = T.dec
-        ok,xx,yy = targetwcs.radec2pixelxy(ra, dec)
-        xy = np.vstack((xx - 1., yy - 1.)).T
-        apimg = []
-        apimgerr = []
-        for rad in apertures:
-            aper = photutils.CircularAperture(xy, rad)
-            p = photutils.aperture_photometry(image, aper, error=imsigma)
-            apimg.append(p.field('aperture_sum'))
-            apimgerr.append(p.field('aperture_sum_err'))
-        ap = np.vstack(apimg).T
-        ap[np.logical_not(np.isfinite(ap))] = 0.
-        AP.set('apflux_img_%s' % band, ap)
-        ap = 1./(np.vstack(apimgerr).T)**2
-        ap[np.logical_not(np.isfinite(ap))] = 0.
-        AP.set('apflux_img_ivar_%s' % band, ap)
-            
-        # remove aliases
-        del invvar
-        del image
-        del apimg
-        del apimgerr
-        del ap
-
-    T.add_columns_from(AP)
-
+    T.add_columns_from(C.AP)
     T.about()
     
     plt.clf()
