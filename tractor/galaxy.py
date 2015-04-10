@@ -481,8 +481,8 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
 
 class GaussianGalaxy(HoggGalaxy):
     nre = 6.
-    profile = MixtureOfGaussians(np.array([1.]), np.zeros((1,2)),
-                                 np.array([[[1.,0.],[0.,1,]]]))
+    profile = mp.MixtureOfGaussians(np.array([1.]), np.zeros((1,2)),
+                                    np.array([[[1.,0.],[0.,1.]]]))
     profile.normalize()
     def __init__(self, *args, **kwargs):
         self.nre = GaussianGalaxy.nre
