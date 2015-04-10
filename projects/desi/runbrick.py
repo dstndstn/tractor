@@ -1044,7 +1044,7 @@ def stage_fitblobs(T=None,
                 blobsrcs=blobsrcs)
     
 def stage_fitblobs_finish(
-    brickname=None,
+    brickname=None, version_header=None,
         T=None, blobsrcs=None, blobslices=None, blobs=None,
         tractor=None, cat=None, targetrd=None, pixscale=None,
         targetwcs=None,
@@ -1162,6 +1162,31 @@ def stage_fitblobs_finish(
     assert(ns == len(cat))
     assert(nb == 5) # none, ptsrc, dev, exp, comp
     assert(len(flags) == len(cat))
+
+    # Renumber blobs to make them contiguous.
+    ublob,iblob = np.unique(T.blob, return_inverse=True)
+    assert(len(iblob) == len(T))
+    # Build map from (old+1) to new blob numbers, for the blob image.
+    bm = np.empty(ublob.max()+2)
+    # make sure that dropped blobs -> -1
+    bm[:] = -1
+    # in particular,
+    bm[0] = -1
+    bm[T.blob + 1] = iblob
+    newblobs = bm[blobs+1]
+    print 'Newblobs shape:', newblobs
+    # write out blob map
+    if outdir is None:
+        outdir = '.'
+    outdir = os.path.join(outdir, 'metrics', brickname[:3])
+    try_makedirs(outdir)
+    fn = os.path.join(outdir, 'blobs-%s.fits.gz' % brickname)
+    fitsio.write(fn, newblobs, header=version_header, clobber=True)
+    print 'Wrote', fn
+    del newblobs
+    del ublob
+    T.blob = iblob.astype(np.int32)
+    
 
     T.decam_flags = flags
     T.fracflux = fracflux
@@ -3172,12 +3197,6 @@ def stage_writecat(
             TT.rename(col, 'sdss_%s' % col)
     TT.tx = TT.tx.astype(np.float32)
     TT.ty = TT.ty.astype(np.float32)
-
-    # Renumber blobs to make them contiguous.
-    ublob,iblob = np.unique(TT.blob, return_inverse=True)
-    del ublob
-    assert(len(iblob) == len(TT))
-    TT.blob = iblob.astype(np.int32)
 
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
     TT.brickname = np.array([brickname] * len(TT))
