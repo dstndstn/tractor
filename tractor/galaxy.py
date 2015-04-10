@@ -479,6 +479,19 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         halfsize += psf.getRadius()
         return halfsize
 
+class GaussianGalaxy(HoggGalaxy):
+    nre = 6.
+    profile = MixtureOfGaussians(np.array([1.]), np.zeros((1,2)),
+                                 np.array([[[1.,0.],[0.,1,]]]))
+    profile.normalize()
+    def __init__(self, *args, **kwargs):
+        self.nre = GaussianGalaxy.nre
+        super(GaussianGalaxy,self).__init__(*args, **kwargs)
+    def getName(self):
+        return 'GaussianGalaxy'
+    def getProfile(self):
+        return GaussianGalaxy.profile
+
 class ExpGalaxy(HoggGalaxy):
     nre = 4.
     profile = mp.get_exp_mixture()
@@ -492,9 +505,7 @@ class ExpGalaxy(HoggGalaxy):
     def getName(self):
         return 'ExpGalaxy'
     def getProfile(self):
-        return ExpGalaxy.getExpProfile()
-    def getShape(self):
-        return self.shape
+        return ExpGalaxy.profile
 
 class DevGalaxy(HoggGalaxy):
     nre = 8.
@@ -509,7 +520,7 @@ class DevGalaxy(HoggGalaxy):
     def getName(self):
         return 'DevGalaxy'
     def getProfile(self):
-        return DevGalaxy.getDevProfile()
+        return DevGalaxy.profile
 
 class FracDev(ScalarParam):
     stepsize = 0.01
