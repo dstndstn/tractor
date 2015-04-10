@@ -576,7 +576,8 @@ def _coadds(tims, bands, targetwcs,
             coimg  /= np.maximum(con, 1)
             del con
             cowimg[cow == 0] = coimg[cow == 0]
-            cowmod[cow == 0] = comod[cow == 0]
+            if mods:
+                cowmod[cow == 0] = comod[cow == 0]
 
         if xy:
             C.T.nobs [:,iband] = nobs[iy,ix]
@@ -702,12 +703,12 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
     try_makedirs(basedir)
 
-    C = _coadds(tims, bands, targetwcs, unweighted=True,
+    C = _coadds(tims, bands, targetwcs,
                 callback=_write_band_images,
                 callback_args=(brickname, version_header, tims, targetwcs, basedir))
 
     tmpfn = create_temp(suffix='.png')
-    for name,ims,rgbkw in [('image',C.couimgs,rgbkwargs)]:
+    for name,ims,rgbkw in [('image',C.coimgs,rgbkwargs)]:
         plt.imsave(tmpfn, get_rgb(ims, bands, **rgbkw), origin='lower')
         jpegfn = os.path.join(basedir, 'decals-%s-%s.jpg' % (brickname, name))
         cmd = 'pngtopnm %s | pnmtojpeg -quality 90 > %s' % (tmpfn, jpegfn)
@@ -778,9 +779,9 @@ def stage_srcs(coimgs=None, cons=None,
 
             subbed = detmap.copy()
             S = binning
-            for i in range(S):
-                for j in range(S):
-                    subbed[i::S, j::S] -= smoo
+            for ii in range(S):
+                for jj in range(S):
+                    subbed[ii::S, jj::S] -= smoo
 
             plt.clf()
             plt.subplot(2,3,1)
@@ -1134,6 +1135,8 @@ def stage_fitblobs_finish(
     fracmasked = np.hstack([r[6] for r in R])
     flags = np.hstack([r[7] for r in R])
     fracin = np.vstack([r[10] for r in R])
+    started_in = np.hstack([r[11] for r in R])
+    finished_in = np.hstack([r[12] for r in R])
     
     newcat = []
     for r in R:
@@ -1174,7 +1177,6 @@ def stage_fitblobs_finish(
     bm[0] = -1
     bm[T.blob + 1] = iblob
     newblobs = bm[blobs+1]
-    print 'Newblobs shape:', newblobs
     # write out blob map
     if outdir is None:
         outdir = '.'
@@ -1191,6 +1193,7 @@ def stage_fitblobs_finish(
     T.decam_flags = flags
     T.fracflux = fracflux
     T.fracin = fracin
+    T.left_blob = np.logical_and(started_in, np.logical_not(finished_in))
     T.fracmasked = fracmasked
     T.rchi2 = rchi2
     T.dchisq = dchisqs.astype(np.float32)
@@ -1489,11 +1492,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     subtarget = targetwcs.get_subimage(bx0, by0, blobw, blobh)
 
-    # ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
-    #                                    np.array([src.getPosition().dec for src in srcs]))
-    # started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
-    #                            np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
-    # print 'Sources started in blob:', started_in_blob
+    ok,x0,y0 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+                                       np.array([src.getPosition().dec for src in srcs]))
+    started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
+                               np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
+    print 'Sources started in blob: ', started_in_blob
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -2016,12 +2019,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             thisflags = 0
 
+            tt0 = Time()
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                #print '  dlnp:', dlnp, 'new src', newsrc
+                print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
                 if cpu-cpu0 > max_cpu_per_source:
@@ -2036,6 +2040,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # print 'New source (after first round optimization):', newsrc
             # lnp = srctractor.getLogProb()
             # print 'Optimized log-prob:', lnp
+            print 'Blob', iblob, 'src', i
+            print 'Fit', name, ': cpu time', time.clock() - cpu0, 'in', step, 'steps'
+            print 'time:', Time()-tt0
+            print 'src:', newsrc
 
             if plots and False:
                 plt.clf()
@@ -2056,7 +2064,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 mod = src.getModelPatch(tim)
                 if mod is None:
                     continue
+                #print 'After first-round fit: model is', mod.shape
                 mod = _clip_model_to_blob(mod, tim.shape, tim.getInvError())
+                #print 'Clipped to', mod.shape
                 d[newsrc] = Patch(mod.x0, mod.y0, mod.patch != 0)
             srctractor.setModelMasks(mm)
             enable_galaxy_cache()
@@ -2081,6 +2091,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # print 'New source (after optimization):', newsrc
             # print 'Optimized log-prob:', lnp
             # print 'vs original src:   ', lnp - lnp0
+            #print 'Refit', name, ': cpu time', time.clock() - cpu0
+            #print 'src:', newsrc
 
             if plots and False:
                 plt.clf()
@@ -2234,6 +2246,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         _plot_mods(subtims, plotmods, plotmodnames, bands, None, None, bslc, blobw, blobh, ps)
 
     srcs = subcat
+    I = np.array([i for i,s in enumerate(srcs) if s is not None])
     keepI = [i for i,s in zip(Isrcs, srcs) if s is not None]
     keepsrcs = [s for s in srcs if s is not None]
     keepdeltas = [x for x,s in zip(delta_chisqs,srcs) if s is not None]
@@ -2243,6 +2256,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     delta_chisqs = keepdeltas
     subcat = Catalog(*srcs)
     subtr.catalog = subcat
+    if len(I):
+        started_in_blob = started_in_blob[I]
 
     ### Simultaneous re-opt.
     if simul_opt and len(subcat) > 1 and len(subcat) <= 10:
@@ -2403,17 +2418,17 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracmasked = fracmasked_num / fracmasked_den
     fracin     = fracin_num     / fracin_den
 
-    # ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
-    #                                    np.array([src.getPosition().dec for src in srcs]))
-    # finished_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
-    #                             np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
-    # print 'Sources finished in blob:', finished_in_blob
+    ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
+                                       np.array([src.getPosition().dec for src in srcs]))
+    finished_in_blob = blobmask[np.clip(np.round(y1-1).astype(int), 0, blobh-1),
+                                np.clip(np.round(x1-1).astype(int), 0, blobw-1)]
+    print 'Sources finished in blob:', finished_in_blob
 
     #print 'Blob finished metrics:', Time()-tlast
     print 'Blob', iblob+1, 'finished:', Time()-tlast
 
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
-            all_models, performance, fracin)
+            all_models, performance, fracin, started_in_blob, finished_in_blob)
 
 
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
@@ -3191,7 +3206,7 @@ def stage_writecat(
     for col in TT.get_columns():
         if not col in ['tx', 'ty', 'blob',
                        'fracflux','fracmasked', 'rchi2','dchisq','nobs',
-                       'fracin',
+                       'fracin', 'orig_ra', 'orig_dec', 'left_blob',
                        'oob', 'anymask', 'allmask',
                        'decam_flags']:
             TT.rename(col, 'sdss_%s' % col)
@@ -3266,6 +3281,10 @@ def stage_writecat(
             primhdr.add_record(dict(name='MASKB%i' % i, value=bitmap[bit],
                                     comment='Mask bit 2**%i=%i meaning' % (i, bit)))
 
+    ok,bx,by = targetwcs.radec2pixelxy(T2.orig_ra, T2.orig_dec)
+    T2.bx0 = (bx - 1.).astype(np.float32)
+    T2.by0 = (by - 1.).astype(np.float32)
+
     ok,bx,by = targetwcs.radec2pixelxy(T2.ra, T2.dec)
     T2.bx = (bx - 1.).astype(np.float32)
     T2.by = (by - 1.).astype(np.float32)
@@ -3295,6 +3314,10 @@ def stage_writecat(
     # Rename source types.
     typemap = dict(S='PSF', E='EXP', D='DEV', C='COMP')
     T2.type = np.array([typemap.get(t,t) for t in T2.type])
+
+    # For sources that had DECam flux initialization from SDSS but no
+    # overlapping images (hence decam_flux_ivar = 0), zero out the DECam flux.
+    T2.decam_flux[T2.decam_flux_ivar == 0] = 0.
 
     # Convert WISE fluxes from Vega to AB.
     # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
@@ -3366,7 +3389,9 @@ def stage_writecat(
 
     cols = [
         'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
-        'bx', 'by', 'decam_flux', 'decam_flux_ivar', 'decam_apflux',
+        'bx', 'by', 'bx0', 'by0',
+        'left_blob', 
+        'decam_flux', 'decam_flux_ivar', 'decam_apflux',
         'decam_apflux_resid', 'decam_apflux_ivar', 'decam_mw_transmission', 'decam_nobs',
         'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_fracin',
         'out_of_bounds',
