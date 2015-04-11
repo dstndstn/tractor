@@ -479,7 +479,15 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
             'modelflux', 'modelflux_ivar',
             'devflux', 'expflux', 'extinction'] + extracols
 
-    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols)
+    # If we have a window_flist file cut to primary objects, use that.
+    # This file comes from svn+ssh://astrometry.net/svn/trunk/projects/wise-sdss-phot
+    # cut-window-flist.py, and used resolve/2013-07-29 (pre-DR13) as input.
+    wfn = 'window_flist-cut.fits'
+    if not os.path.exists(wfn):
+        # default to the usual window_flist.fits file.
+        wfn = None
+
+    objs = read_photoobjs_in_wcs(targetwcs, margin, sdss=sdss, cols=cols, wfn=wfn)
     if objs is None:
         print 'No photoObjs in wcs'
         return None,None
@@ -496,10 +504,8 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
     print 'Bands', bands, '->', list(bands)
 
     srcs = get_tractor_sources_dr9(
-        None, None, None, objs=objs, sdss=sdss,
-        bands=list(bands),
-        nanomaggies=True, fixedComposites=True,
-        useObjcType=True,
+        None, None, None, objs=objs, sdss=sdss, bands=list(bands),
+        nanomaggies=True, fixedComposites=True, useObjcType=True,
         ellipse=EllipseESoft.fromRAbPhi)
     print 'Got', len(srcs), 'Tractor sources'
 
