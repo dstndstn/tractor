@@ -404,7 +404,12 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
 
     # Remap the "blobs" image so that empty regions are = -1 and the blob values
     # correspond to their indices in the "blobsrcs" list.
-    bm = np.zeros(max(blobmap.keys())+1, int)
+    if len(blobmap):
+        maxblob = max(blobmap.keys())
+    else:
+        maxblob = 0
+    maxblob = max(maxblob, blobs.max())
+    bm = np.zeros(maxblob + 1, int)
     for k,v in blobmap.items():
         bm[k] = v
     bm[0] = -1
