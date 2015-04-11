@@ -10,7 +10,7 @@ outdir=$SCRATCH/dr1e
 
 brick="$1"
 
-logdir="echo $brick | head -c 3"
+logdir=$(echo $brick | head -c 3)
 mkdir -p $outdir/logs/$logdir
 log="$outdir/logs/$logdir/$brick.log"
 
