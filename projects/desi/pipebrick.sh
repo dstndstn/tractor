@@ -6,18 +6,19 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-outdir=$GSCRATCH/dr1d
+outdir=$SCRATCH/dr1e
 
-mkdir -p $outdir/logs
 brick="$1"
-log="$outdir/logs/$brick.log"
+
+logdir="echo $brick | head -c 3"
+mkdir -p $outdir/logs/$logdir
+log="$outdir/logs/$logdir/$brick.log"
 
 echo Logging to: $log
 echo Running on ${NERSC_HOST} $(hostname)
 
 echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
-echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
 echo "PWD: $(pwd)" >> $log
 echo "Modules:" >> $log
 module list >> $log 2>&1
@@ -25,17 +26,13 @@ echo >> $log
 echo "Environment:" >> $log
 set >> $log
 echo >> $log
-
-echo >> $log
 ulimit -a >> $log
 echo >> $log
-
 
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
-
+python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 2 --nsigma 6 --skip --pipe >> $log 2>&1
 
 
 # Edison: 6 threads per job, 4 jobs per node = 24 cores.

@@ -504,7 +504,6 @@ def _coadds(tims, bands, targetwcs,
             ormask  = np.zeros((H,W), np.int16)
             andmask = np.empty((H,W), np.int16)
             allbits = reduce(np.bitwise_or, CP_DQ_BITS.values())
-            print 'All bits:', allbits, '0x%x' % allbits
             andmask[:,:] = allbits
             detiv = np.zeros((H,W), np.float32)
             nobs  = np.zeros((H,W), np.uint8)
@@ -1517,7 +1516,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                                        np.array([src.getPosition().dec for src in srcs]))
     started_in_blob = blobmask[np.clip(np.round(y0-1).astype(int), 0, blobh-1),
                                np.clip(np.round(x0-1).astype(int), 0, blobw-1)]
-    print 'Sources started in blob: ', started_in_blob
+    #print 'Sources started in blob: ', started_in_blob
 
     subtims = []
     for (subimg, subie, twcs, subwcs, pcal,
@@ -2040,13 +2039,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             thisflags = 0
 
-            tt0 = Time()
+            #tt0 = Time()
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
                                               alphas=alphas)
-                print '  dlnp:', dlnp, 'new src', newsrc
+                #print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
                 if cpu-cpu0 > max_cpu_per_source:
@@ -2061,10 +2060,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # print 'New source (after first round optimization):', newsrc
             # lnp = srctractor.getLogProb()
             # print 'Optimized log-prob:', lnp
-            print 'Blob', iblob, 'src', i
-            print 'Fit', name, ': cpu time', time.clock() - cpu0, 'in', step, 'steps'
-            print 'time:', Time()-tt0
-            print 'src:', newsrc
+            # print 'Blob', iblob, 'src', i
+            # print 'Fit', name, ': cpu time', time.clock() - cpu0, 'in', step, 'steps'
+            # print 'time:', Time()-tt0
+            # print 'src:', newsrc
 
             if plots and False:
                 plt.clf()
@@ -2207,10 +2206,20 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # This is our "upgrade" threshold: how much better a galaxy
             # fit has to be versus ptsrc, and comp versus galaxy.
             dlnp = 0.5 * 3.**2
-            
+
+            # This is the "fractional" upgrade threshold for ptsrc->dev/exp:
+            # 2% of ptsrc vs nothing
+            fdlnp = 0.02 * (plnps['ptsrc'] - plnps['none'])
+
+            #print 'dlnp:', dlnp
+            #print 'fractional dlnp:', fdlnp
+            #print 'n sigma:', np.sqrt(2.*(plnps['ptsrc'] - plnps['none']))
+            #devexp_dlnp = max(dlnp, fdlnp)
+            devexp_dlnp = dlnp
+
             expdiff = plnps['exp'] - plnps[keepmod]
             devdiff = plnps['dev'] - plnps[keepmod]
-            if expdiff > dlnp or devdiff > dlnp:
+            if expdiff > devexp_dlnp or devdiff > devexp_dlnp:
                 if expdiff > devdiff:
                     #print 'Upgrading from ptsrc to exp: diff', expdiff
                     keepsrc = exp
@@ -2225,7 +2234,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     #print 'Upgrading for dev/exp to composite: diff', diff
                     keepsrc = comp
                     keepmod = 'comp'
-
+            else:
+                #print 'Keeping ptsrc model:', expdiff, devdiff, '<', devexp_dlnp
+                pass
         # Actually, penalized delta chi-squareds!
         delta_chisqs.append([-2. * (plnps[k] - plnps[keepmod])
                          for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
@@ -2443,7 +2454,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                                        np.array([src.getPosition().dec for src in srcs]))
     finished_in_blob = blobmask[np.clip(np.round(y1-1).astype(int), 0, blobh-1),
                                 np.clip(np.round(x1-1).astype(int), 0, blobw-1)]
-    print 'Sources finished in blob:', finished_in_blob
+    #print 'Sources finished in blob:', finished_in_blob
 
     #print 'Blob finished metrics:', Time()-tlast
     print 'Blob', iblob+1, 'finished:', Time()-tlast
