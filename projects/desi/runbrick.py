@@ -2290,6 +2290,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     subtr.catalog = subcat
     if len(I):
         started_in_blob = started_in_blob[I]
+    else:
+        started_in_blob = np.array([], bool)
 
     ### Simultaneous re-opt.
     if simul_opt and len(subcat) > 1 and len(subcat) <= 10:
