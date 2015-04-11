@@ -437,7 +437,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
 
 def _coadds(tims, bands, targetwcs,
             mods=None, xy=None, apertures=None, apxy=None,
-            ngood=False, callback=None, callback_args=[]):
+            ngood=False, callback=None, callback_args=[],
+            plots=False, ps=None):
     class Duck(object):
         pass
     C = Duck()
@@ -502,7 +503,9 @@ def _coadds(tims, bands, targetwcs,
             # These match the type of the "DQ" images.
             ormask  = np.zeros((H,W), np.int16)
             andmask = np.empty((H,W), np.int16)
-            andmask[:,:] = 0x7fff
+            allbits = reduce(np.bitwise_or, CP_DQ_BITS.values())
+            print 'All bits:', allbits, '0x%x' % allbits
+            andmask[:,:] = allbits
             detiv = np.zeros((H,W), np.float32)
             nobs  = np.zeros((H,W), np.uint8)
             kwargs.update(ormask=ormask, andmask=andmask, detiv=detiv, nobs=nobs)
@@ -579,11 +582,29 @@ def _coadds(tims, bands, targetwcs,
             if mods:
                 cowmod[cow == 0] = comod[cow == 0]
 
+        if plots:
+            plt.clf()
+            dimshow(nobs, vmin=0, vmax=max(1,nobs.max()), cmap='jet')
+            plt.colorbar()
+            plt.title('Number of observations, %s band' % band)
+            ps.savefig()
+
+            for k,v in CP_DQ_BITS.items():
+                plt.clf()
+                dimshow(ormask & v, vmin=0, vmax=v)
+                plt.title('OR mask, %s band: %s' % (band, k))
+                ps.savefig()
+
+                plt.clf()
+                dimshow(andmask & v, vmin=0, vmax=v)
+                plt.title('AND mask, %s band: %s' % (band,k))
+                ps.savefig()
+
+
         if xy:
             C.T.nobs [:,iband] = nobs[iy,ix]
-            andmask_bits = np.sum(CP_DQ_BITS.values())
             C.T.anymask[:,iband] =  ormask [iy,ix]
-            C.T.allmask[:,iband] = (andmask[iy,ix] & andmask_bits)
+            C.T.allmask[:,iband] =  andmask[iy,ix]
             # unless there were no images there...
             C.T.allmask[nobs[iy,ix] == 0, iband] = 0
 
@@ -3107,7 +3128,8 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     C = _coadds(tims, bands, targetwcs, mods=mods, xy=(ix,iy), ngood=True,
                 apertures=apertures, apxy=apxy,
                 callback=_write_band_images,
-                callback_args=(brickname, version_header, tims, targetwcs, basedir))
+                callback_args=(brickname, version_header, tims, targetwcs, basedir),
+                plots=plots, ps=ps)
 
     for c in ['nobs', 'anymask', 'allmask']:
         T.set(c, C.T.get(c))
@@ -3231,8 +3253,8 @@ def stage_writecat(
         TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
         TT.decam_fracin[:,i] = TT.fracin[:,iband]
         TT.decam_nobs[:,i] = TT.nobs[:,iband]
-        TT.decam_anymask[:,i] = TT.allmask[:,iband]
-        TT.decam_allmask[:,i] = TT.anymask[:,iband]
+        TT.decam_anymask[:,i] = TT.anymask[:,iband]
+        TT.decam_allmask[:,i] = TT.allmask[:,iband]
 
     TT.rename('fracmasked', 'decam_fracmasked')
     TT.rename('oob', 'out_of_bounds')
@@ -3386,6 +3408,8 @@ def stage_writecat(
     # 'tx', 'ty', 
     # 'sdss_treated_as_pointsource', 
     # 'decam_flags',
+
+    T2.dchisq[T2.dchisq != 0] *= -1.
 
     cols = [
         'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
