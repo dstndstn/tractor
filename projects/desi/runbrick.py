@@ -1190,13 +1190,13 @@ def stage_fitblobs_finish(
     ublob,iblob = np.unique(T.blob, return_inverse=True)
     assert(len(iblob) == len(T))
     # Build map from (old+1) to new blob numbers, for the blob image.
-    bm = np.empty(ublob.max()+2)
+    blobmap = np.empty(blobs.max()+2)
     # make sure that dropped blobs -> -1
-    bm[:] = -1
+    blobmap[:] = -1
     # in particular,
-    bm[0] = -1
-    bm[T.blob + 1] = iblob
-    newblobs = bm[blobs+1]
+    blobmap[0] = -1
+    blobmap[T.blob + 1] = iblob
+    newblobs = blobmap[blobs+1]
     # write out blob map
     if outdir is None:
         outdir = '.'
