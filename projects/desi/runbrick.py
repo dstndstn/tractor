@@ -2292,6 +2292,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         started_in_blob = started_in_blob[I]
     else:
         started_in_blob = np.array([], bool)
+    assert(len(started_in_blob) == len(srcs))
 
     ### Simultaneous re-opt.
     if simul_opt and len(subcat) > 1 and len(subcat) <= 10:
@@ -2457,6 +2458,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     finished_in_blob = blobmask[np.clip(np.round(y1-1).astype(int), 0, blobh-1),
                                 np.clip(np.round(x1-1).astype(int), 0, blobw-1)]
     #print 'Sources finished in blob:', finished_in_blob
+
+    assert(len(finished_in_blob) == len(srcs))
+    assert(len(finished_in_blob) == len(started_in_blob))
 
     #print 'Blob finished metrics:', Time()-tlast
     print 'Blob', iblob+1, 'finished:', Time()-tlast
