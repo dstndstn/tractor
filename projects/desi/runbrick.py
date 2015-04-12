@@ -53,6 +53,53 @@ def runbrick_global_init():
     if useCeres:
         from tractor.ceres import ceres_opt
 
+class BlobTractor(Tractor):
+    def __init__(self, *args, **kwargs):
+        super(BlobTractor, self).__init__(*args, **kwargs)
+        if nocache:
+            self.disable_cache()
+            
+    def getLogLikelihood(self):
+        assert(not self.is_multiproc())
+        chisq = 0.
+
+        sky=True
+        minsb=None
+        srcs=None
+        if srcs is None:
+            srcs = self.catalog
+
+        for img in self.images:
+            #mod = self.getModelImage(img)
+            mod = np.zeros(img.getModelShape(), self.modtype)
+            if sky:
+                img.getSky().addTo(mod)
+            for src in srcs:
+                if src is None:
+                    continue
+                patch = self.getModelPatch(img, src, minsb=minsb)
+                if patch is None:
+                    continue
+                patch.addTo(mod)
+                # Also tally up the flux outside the blob...
+                # Nastily, this is the brightness->counts * PSF sum - patch sum
+                # since real PSFs need not sum to 1.0
+                # ASSUME the source has a getBrightness() method
+                counts = img.getPhotoCal().brightnessToCounts(src.getBrightness())
+                # ASSUME the PSF conv galaxy is done via MoG;
+                psfmog = psf.getMixtureOfGaussians()
+                psfsum = np.sum(psfmog.amp)
+                #
+                excess = counts * psfsum - patch.patch.sum()
+                # APPROX - guess that the excess flux is spread into N 1-sigma pixels
+                print 'Excess flux:', excess/img.sig1, 'sigma'
+                chisq += (excess / img.sig1)
+
+            chisq += ((img.getImage() - mod) * img.getInvError())**2.sum()
+
+        return -0.5 * chisq
+    
+        
 # Turn on/off caching for all new Tractor instances.
 def create_tractor(tims, srcs):
     import tractor
@@ -1705,7 +1752,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if mod is not None:
                     d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
-            srctractor = Tractor(srctims, [src])
+            srctractor = BlobTractor(srctims, [src])
             srctractor.freezeParams('images')
             srctractor.setModelMasks(modelMasks)
 
@@ -1945,7 +1992,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if mod is not None:
                 d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
-        srctractor = Tractor(subtims, [src])
+        srctractor = BlobTractor(subtims, [src])
         srctractor.freezeParams('images')
         srctractor.setModelMasks(modelMasks)
         enable_galaxy_cache()
