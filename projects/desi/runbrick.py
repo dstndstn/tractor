@@ -87,15 +87,15 @@ class BlobTractor(Tractor):
                 # ASSUME the source has a getBrightness() method
                 counts = img.getPhotoCal().brightnessToCounts(src.getBrightness())
                 # ASSUME the PSF conv galaxy is done via MoG;
-                psfmog = psf.getMixtureOfGaussians()
+                psfmog = img.getPsf().getMixtureOfGaussians()
                 psfsum = np.sum(psfmog.amp)
                 #
                 excess = counts * psfsum - patch.patch.sum()
                 # APPROX - guess that the excess flux is spread into N 1-sigma pixels
-                print 'Excess flux:', excess/img.sig1, 'sigma'
-                chisq += (excess / img.sig1)
+                print 'Excess flux:', excess/img.sig1, 'sigma: counts', counts, 'PSF sum', psfsum, 'patch', patch.patch.sum()
+                chisq += (np.abs(excess) / img.sig1)
 
-            chisq += ((img.getImage() - mod) * img.getInvError())**2.sum()
+            chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
 
         return -0.5 * chisq
     
