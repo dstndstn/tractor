@@ -64,28 +64,34 @@ class _GaussianPriors(object):
                         (nm,mu,sig) for nm,i,mu,sig in self.terms]) + ' ]')
         return s
         
-    def add(self, name, mu, sigma):
-        i = self.param.getNamedParamIndex(name)
+    def add(self, name, mu, sigma, param=None):
+        if param is None:
+            param = self.param
+        i = param.getNamedParamIndex(name)
         if i is None:
             raise KeyError('GaussianPriors.add: parameter not found: "%s"' % name)
         self.terms.append((name, i, mu, sigma))
 
-    def getLogPrior(self):
-        p = self.param.getAllParams()
+    def getLogPrior(self, param=None):
+        if param is None:
+            param = self.param
+        p = param.getAllParams()
         chisq = 0.
         for name,i,mu,sigma in self.terms:
             chisq += (p[i] - mu)**2 / sigma**2
         return -0.5 * chisq
 
-    def getDerivs(self):
+    def getDerivs(self, param=None):
+        if param is None:
+            param = self.param
         rows = []
         cols = []
         vals = []
         bs = []
         row0 = 0
-        p = self.param.getParams()
+        p = param.getParams()
         for name,j,mu,sigma in self.terms:
-            i = self.param.getLiquidIndexOfIndex(j)
+            i = param.getLiquidIndexOfIndex(j)
             # frozen:
             if i == -1:
                 continue
@@ -106,7 +112,7 @@ class GaussianPriorsMixin(object):
         self.gpriors = _GaussianPriors(self)
 
     def addGaussianPrior(self, name, mu, sigma):
-        self.gpriors.add(name, mu, sigma)
+        self.gpriors.add(name, mu, sigma, param=self)
 
     def getLogPriorDerivatives(self):
         '''
@@ -121,6 +127,9 @@ class GaussianPriorsMixin(object):
         '''
         return self.getGaussianLogPriorDerivatives()
 
+    def getGaussianLogPriorDerivatives(self):
+        return self.gpriors.getDerivs(param=self)
+
     def isLegal(self):
         '''
         Returns True if the current parameter values are legal; ie,
@@ -128,9 +137,6 @@ class GaussianPriorsMixin(object):
         '''
         return True
     
-    def getGaussianLogPriorDerivatives(self):
-        return self.gpriors.getDerivs()
-
     def getLogPrior(self):
         '''
         Returns the log prior at the current parameter values.
@@ -148,7 +154,7 @@ class GaussianPriorsMixin(object):
         return self.getGaussianLogPrior()
 
     def getGaussianLogPrior(self):
-        return self.gpriors.getLogPrior()
+        return self.gpriors.getLogPrior(param=self)
 
 class BaseParams(object):
     '''

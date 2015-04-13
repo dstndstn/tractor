@@ -183,13 +183,18 @@ class EllipseESoft(EllipseE):
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
+        logr, ee1, ee2 = EllipseESoft.rAbPhiToESoft(r, ba, phi)
+        return EllipseESoft(logr, ee1, ee2)
+
+    @staticmethod
+    def rAbPhiToESoft(r, ba, phi):
         ab = 1./ba
         e = (ab - 1) / (ab + 1)
         ee = -np.log(1 - e)
         angle = np.deg2rad(2.*(-phi))
         ee1 = ee * np.cos(angle)
         ee2 = ee * np.sin(angle)
-        return EllipseESoft(np.log(r), ee1, ee2)
+        return (np.log(r), ee1, ee2)
 
     #def getAllStepSizes(self, *args, **kwargs):
     #    return [0.01] * 3
