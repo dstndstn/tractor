@@ -2542,6 +2542,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for isrc,patch in enumerate(srcmods):
                 if patch is None:
                     continue
+                if counts[isrc] == 0:
+                    continue
                 slc = patch.getSlice(mod)
                 # We compute numerator and denom separately to handle edge objects, where
                 # sum(patch.patch) < counts.  Also, to normalize by the number of images.
