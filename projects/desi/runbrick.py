@@ -1048,13 +1048,9 @@ def stage_fitblobs(T=None,
                    W=None,H=None, brickid=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
-                   nblobs=None, blob0=None,
+                   nblobs=None, blob0=None, blobxy=None,
                    simul_opt=False,
                    **kwargs):
-    print 'Multiproc:', mp
-    print 'Blob0:', blob0
-    print 'Nblobs:', nblobs
-
     for tim in tims:
         assert(np.all(np.isfinite(tim.getInvError())))
 
@@ -1123,6 +1119,14 @@ def stage_fitblobs(T=None,
     T.orig_dec = T.dec.copy()
 
     tfitall = Time()
+
+    if blobxy is not None:
+        print 'Blobxy', blobxy
+        bx,by = blobxy
+        # Just set blob0,nblobs and let the code below take care of the rest...
+        blob0 = blobs[by,bx]
+        nblobs = 1
+        print 'Blob:', blob0
 
     if blob0 is not None or (nblobs is not None and nblobs < len(blobslices)):
         if blob0 is None:
@@ -2552,10 +2556,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 # If the source is not near an image edge, sum(patch.patch) == counts[isrc].
                 rchi2_den[isrc,iband] += np.sum(patch.patch) / counts[isrc]
 
-    fracflux = fracflux_num / fracflux_den
-    rchi2    = rchi2_num    / rchi2_den
-    fracmasked = fracmasked_num / fracmasked_den
-    fracin     = fracin_num     / fracin_den
+    fracflux   = fracflux_num   / np.maximum(1, fracflux_den)
+    rchi2      = rchi2_num      / np.maximum(1, rchi2_den)
+    fracmasked = fracmasked_num / np.maximum(1, fracmasked_den)
+    fracin     = fracin_num     / np.maximum(1, fracin_den)
 
     ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
                                        np.array([src.getPosition().dec for src in srcs]))
@@ -3781,6 +3785,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
 
     parser.add_option('--nblobs', type=int, help='Debugging: only fit N blobs')
     parser.add_option('--blob', type=int, help='Debugging: start with blob #')
+    parser.add_option('--blobxy', type=int, nargs=2, help='Debugging: run the single blob containing pixel <bx> <by>')
 
     parser.add_option('--no-pv', dest='pv', default='True', action='store_false',
                       help='Do not use Community Pipeline WCS with PV distortion terms -- solve using Astrometry.net')
@@ -3892,6 +3897,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         kwargs.update(nblobs=opt.nblobs)
     if opt.blob is not None:
         kwargs.update(blob0=opt.blob)
+    if opt.blobxy is not None:
+        kwargs.update(blobxy=opt.blobxy)
 
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
