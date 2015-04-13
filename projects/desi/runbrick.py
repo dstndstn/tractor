@@ -65,14 +65,12 @@ class EllipseWithPriors(EllipseESoft):
     # GaussianPriorsMixin sets a "gpriors" member variable to a _GaussianPriors
     def __init__(self, *args, **kwargs):
         super(EllipseWithPriors, self).__init__(*args, **kwargs)
-        #gaussian_priors=ellipsePriors,
         self.gpriors = ellipsePriors
 
     @staticmethod
     def fromRAbPhi(r, ba, phi):
         logr, ee1, ee2 = EllipseESoft.rAbPhiToESoft(r, ba, phi)
         return EllipseWithPriors(logr, ee1, ee2)
-        
 
 # class BlobTractor(Tractor):
 #     def __init__(self, *args, **kwargs):

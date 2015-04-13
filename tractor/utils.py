@@ -108,11 +108,6 @@ class GaussianPriorsMixin(object):
     Gaussian priors.
     '''
     def __init__(self, *args, **kwargs):
-        '''
-        #If *gaussian_priors* is given, use it to store Gaussian priors
-        #(useful to share priors between objects)
-        '''
-        #gp = kwargs.pop('gaussian_priors', _GaussianPriors(self))
         super(GaussianPriorsMixin, self).__init__(*args, **kwargs)
         self.gpriors = _GaussianPriors(self)
 
