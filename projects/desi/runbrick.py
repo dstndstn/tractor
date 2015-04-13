@@ -53,93 +53,93 @@ def runbrick_global_init():
     if useCeres:
         from tractor.ceres import ceres_opt
 
-class BlobTractor(Tractor):
-    def __init__(self, *args, **kwargs):
-        super(BlobTractor, self).__init__(*args, **kwargs)
-        if nocache:
-            self.disable_cache()
-            
-    def getLogLikelihood(self):
-        assert(not self.is_multiproc())
-        chisq = 0.
-
-        sky=True
-        minsb=None
-        srcs=None
-        if srcs is None:
-            srcs = self.catalog
-
-        for img in self.images:
-            mod = np.zeros(img.getModelShape(), self.modtype)
-            if sky:
-                img.getSky().addTo(mod)
-
-            # For flux outside blob:
-            # ASSUME the PSF conv galaxy is done via MoG;
-            psfmog = img.getPsf().getMixtureOfGaussians()
-            psfsum = np.sum(psfmog.amp)
-            # FIXME -- render PSF model within source's modelMask?
-            # modelrad = 8
-            # H,W = img.shape
-            # cx,cy = int(W/2), int(H/2)
-            # psfpatch = img.getPsf().getPointSourcePatch(
-            #     cx, cy, extent=[cx-modelrad, cx+modelrad+1, cy-modelrad, cy+modelrad+1])
-            # print 'PSF sum:', psfsum
-            # print 'PSF patch sum:', psfpatch.patch.sum()
-            #psfsum = psfpatch.patch.sum()
-
-            for src in srcs:
-                if src is None:
-                    continue
-                patch = self.getModelPatch(img, src, minsb=minsb)
-                if patch is None:
-                    continue
-                patch.addTo(mod)
-                # Also tally up the flux outside the blob...
-                #
-                # One issue here could be images that do not fully
-                # cover the blob... the model gets penalized for
-                # predicting flux outside the image, but the image is
-                # smaller than the blob; the model is supposed to
-                # predict flux outside that image.  Edges suck.  You
-                # could imagine this pulling the flux estimate low.
-                # Could not impose this penalty for sources close to
-                # the image edges (or outside the image), but hard
-                # thresholds suck too.  Apodize the penalty near the
-                # image edges?
-                #
-                # Nastily, flux outside the blob is the
-                # brightness->counts * PSF sum - patch sum, since real
-                # PSFs need not sum to 1.0.
-                #
-                # ASSUME the source has a getBrightness() method
-                counts = img.getPhotoCal().brightnessToCounts(src.getBrightness())
-                # Flux outside the blob is...
-                excess = counts * psfsum - patch.patch.sum()
-                # APPROX - guess that the excess flux is spread into N 1-sigma pixels
-                # print 'Source:', src
-                # print 'Source flux:', counts/img.sig1, 'sigma'
-                # print 'Excess flux: %.2f' % (excess/img.sig1), 'sigma (%.0f%%)' % (100.*excess/counts), ': counts %.2f'%counts, 'x PSF sum %.3f'% psfsum, '= %.2f' % (counts*psfsum), 'vs patch %.2f' % patch.patch.sum(), '= %.2f' % excess
-
-                # Here's an attempt at apodization...
-                #ix,iy = img.getWcs().positionToPixel(src.getPosition())
-                #ix = int(np.round(ix))
-                #iy = int(np.round(iy))
-                #H,W = img.shape
-                #edgedist = max(0, min(ix, iy, H-1-iy, W-1-ix))
-                #print 'edge distance:', edgedist, '-- x,y', (ix,iy), 'size', W,'x',H
-                # soften = 1.
-                # if edgedist < 5:
-                #     #soften = np.exp(-0.5 * (5. - edgedist)**2 / 2.**2)
-                #     soften = 0.2 * edgedist
-                #     print 'soften:', soften
-                # chisq += soften * (np.abs(excess) / img.sig1)
-                
-                chisq += (np.abs(excess) / img.sig1)
-
-            chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
-
-        return -0.5 * chisq
+# class BlobTractor(Tractor):
+#     def __init__(self, *args, **kwargs):
+#         super(BlobTractor, self).__init__(*args, **kwargs)
+#         if nocache:
+#             self.disable_cache()
+#             
+#     def getLogLikelihood(self):
+#         assert(not self.is_multiproc())
+#         chisq = 0.
+# 
+#         sky=True
+#         minsb=None
+#         srcs=None
+#         if srcs is None:
+#             srcs = self.catalog
+# 
+#         for img in self.images:
+#             mod = np.zeros(img.getModelShape(), self.modtype)
+#             if sky:
+#                 img.getSky().addTo(mod)
+# 
+#             # For flux outside blob:
+#             # ASSUME the PSF conv galaxy is done via MoG;
+#             psfmog = img.getPsf().getMixtureOfGaussians()
+#             psfsum = np.sum(psfmog.amp)
+#             # FIXME -- render PSF model within source's modelMask?
+#             # modelrad = 8
+#             # H,W = img.shape
+#             # cx,cy = int(W/2), int(H/2)
+#             # psfpatch = img.getPsf().getPointSourcePatch(
+#             #     cx, cy, extent=[cx-modelrad, cx+modelrad+1, cy-modelrad, cy+modelrad+1])
+#             # print 'PSF sum:', psfsum
+#             # print 'PSF patch sum:', psfpatch.patch.sum()
+#             #psfsum = psfpatch.patch.sum()
+# 
+#             for src in srcs:
+#                 if src is None:
+#                     continue
+#                 patch = self.getModelPatch(img, src, minsb=minsb)
+#                 if patch is None:
+#                     continue
+#                 patch.addTo(mod)
+#                 # Also tally up the flux outside the blob...
+#                 #
+#                 # One issue here could be images that do not fully
+#                 # cover the blob... the model gets penalized for
+#                 # predicting flux outside the image, but the image is
+#                 # smaller than the blob; the model is supposed to
+#                 # predict flux outside that image.  Edges suck.  You
+#                 # could imagine this pulling the flux estimate low.
+#                 # Could not impose this penalty for sources close to
+#                 # the image edges (or outside the image), but hard
+#                 # thresholds suck too.  Apodize the penalty near the
+#                 # image edges?
+#                 #
+#                 # Nastily, flux outside the blob is the
+#                 # brightness->counts * PSF sum - patch sum, since real
+#                 # PSFs need not sum to 1.0.
+#                 #
+#                 # ASSUME the source has a getBrightness() method
+#                 counts = img.getPhotoCal().brightnessToCounts(src.getBrightness())
+#                 # Flux outside the blob is...
+#                 excess = counts * psfsum - patch.patch.sum()
+#                 # APPROX - guess that the excess flux is spread into N 1-sigma pixels
+#                 # print 'Source:', src
+#                 # print 'Source flux:', counts/img.sig1, 'sigma'
+#                 # print 'Excess flux: %.2f' % (excess/img.sig1), 'sigma (%.0f%%)' % (100.*excess/counts), ': counts %.2f'%counts, 'x PSF sum %.3f'% psfsum, '= %.2f' % (counts*psfsum), 'vs patch %.2f' % patch.patch.sum(), '= %.2f' % excess
+# 
+#                 # Here's an attempt at apodization...
+#                 #ix,iy = img.getWcs().positionToPixel(src.getPosition())
+#                 #ix = int(np.round(ix))
+#                 #iy = int(np.round(iy))
+#                 #H,W = img.shape
+#                 #edgedist = max(0, min(ix, iy, H-1-iy, W-1-ix))
+#                 #print 'edge distance:', edgedist, '-- x,y', (ix,iy), 'size', W,'x',H
+#                 # soften = 1.
+#                 # if edgedist < 5:
+#                 #     #soften = np.exp(-0.5 * (5. - edgedist)**2 / 2.**2)
+#                 #     soften = 0.2 * edgedist
+#                 #     print 'soften:', soften
+#                 # chisq += soften * (np.abs(excess) / img.sig1)
+#                 
+#                 chisq += (np.abs(excess) / img.sig1)
+# 
+#             chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
+# 
+#         return -0.5 * chisq
     
         
 # Turn on/off caching for all new Tractor instances.
@@ -1241,7 +1241,7 @@ def stage_fitblobs_finish(
     fracflux = np.vstack([r[3] for r in R])
     rchi2    = np.vstack([r[4] for r in R])
     dchisqs  = np.vstack(np.vstack([r[5] for r in R]))
-    fracmasked = np.hstack([r[6] for r in R])
+    fracmasked = np.vstack([r[6] for r in R])
     flags = np.hstack([r[7] for r in R])
     fracin = np.vstack([r[10] for r in R])
     started_in = np.hstack([r[11] for r in R])
@@ -1262,6 +1262,9 @@ def stage_fitblobs_finish(
     tractor.catalog = cat
     assert(cat.numberOfParams() == len(srcivs))
     ns,nb = fracflux.shape
+    assert(ns == len(cat))
+    assert(nb == len(bands))
+    ns,nb = fracmasked.shape
     assert(ns == len(cat))
     assert(nb == len(bands))
     ns,nb = fracin.shape
@@ -1794,7 +1797,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if mod is not None:
                     d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
-            srctractor = BlobTractor(srctims, [src])
+            #srctractor = BlobTractor(srctims, [src])
+            srctractor = Tractor(srctims, [src])
             srctractor.freezeParams('images')
             srctractor.setModelMasks(modelMasks)
 
@@ -2034,7 +2038,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if mod is not None:
                 d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
-        srctractor = BlobTractor(subtims, [src])
+        #srctractor = BlobTractor(subtims, [src])
+        srctractor = Tractor(subtims, [src])
         srctractor.freezeParams('images')
         srctractor.setModelMasks(modelMasks)
         enable_galaxy_cache()
@@ -2488,8 +2493,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracin_den = np.zeros((len(srcs),len(bands)), np.float32)
 
     # fracmasked: fraction of masked pixels metric
-    fracmasked_num = np.zeros(len(srcs), np.float32)
-    fracmasked_den = np.zeros(len(srcs), np.float32)
+    fracmasked_num = np.zeros((len(srcs),len(bands)), np.float32)
+    fracmasked_den = np.zeros((len(srcs),len(bands)), np.float32)
 
     for iband,band in enumerate(bands):
         for tim in subtims:
@@ -2516,6 +2521,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             for isrc,patch in enumerate(srcmods):
                 if patch is None:
                     continue
+                if counts[isrc] == 0:
+                    continue
                 slc = patch.getSlice(mod)
                 # (mod - patch) is flux from others
                 # (mod - patch) / counts is normalized flux from others
@@ -2523,11 +2530,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 fracflux_num[isrc,iband] += np.sum((mod[slc] - patch.patch) * np.abs(patch.patch)) / counts[isrc]**2
                 fracflux_den[isrc,iband] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
-                fracmasked_num[isrc] += np.sum((tim.getInvError()[slc] == 0) * np.abs(patch.patch)) / np.abs(counts[isrc])
-                fracmasked_den[isrc] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
+                fracmasked_num[isrc,iband] += np.sum((tim.getInvError()[slc] == 0) * np.abs(patch.patch)) / np.abs(counts[isrc])
+                fracmasked_den[isrc,iband] += np.sum(np.abs(patch.patch)) / np.abs(counts[isrc])
 
-                fracin_num[isrc,iband] += np.sum(patch.patch)
-                fracin_den[isrc,iband] += counts[isrc]
+                fracin_num[isrc,iband] += np.abs(np.sum(patch.patch))
+                fracin_den[isrc,iband] += np.abs(counts[isrc])
 
             tim.getSky().addTo(mod)
             chisq = ((tim.getImage() - mod) * tim.getInvError())**2
@@ -3357,26 +3364,24 @@ def stage_writecat(
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracin   = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
-    TT.decam_anymask = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
-    TT.decam_allmask = np.zeros((len(TT), len(allbands)), TT.allmask.dtype)
-    for iband,band in enumerate(bands):
-        i = allbands.index(band)
-        TT.decam_rchi2[:,i] = TT.rchi2[:,iband]
-        TT.decam_fracflux[:,i] = TT.fracflux[:,iband]
-        TT.decam_fracin[:,i] = TT.fracin[:,iband]
-        TT.decam_nobs[:,i] = TT.nobs[:,iband]
-        TT.decam_anymask[:,i] = TT.anymask[:,iband]
-        TT.decam_allmask[:,i] = TT.allmask[:,iband]
-
-    TT.rename('fracmasked', 'decam_fracmasked')
-    TT.rename('oob', 'out_of_bounds')
-
+    TT.decam_anymask  = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
+    TT.decam_allmask  = np.zeros((len(TT), len(allbands)), TT.allmask.dtype)
+    B = np.array([allbands.index(band) for band in bands])
+    TT.decam_rchi2     [:,B] = TT.rchi2
+    TT.decam_fracflux  [:,B] = TT.fracflux
+    TT.decam_fracmasked[:,B] = TT.fracmasked
+    TT.decam_fracin    [:,B] = TT.fracin
+    TT.decam_nobs      [:,B] = TT.nobs
+    TT.decam_anymask   [:,B] = TT.anymask
+    TT.decam_allmask   [:,B] = TT.allmask
     TT.delete_column('rchi2')
     TT.delete_column('fracflux')
     TT.delete_column('fracin')
     TT.delete_column('nobs')
     TT.delete_column('anymask')
     TT.delete_column('allmask')
+
+    TT.rename('oob', 'out_of_bounds')
 
     # How many apertures?
     ap = AP.get('apflux_img_%s' % bands[0])
