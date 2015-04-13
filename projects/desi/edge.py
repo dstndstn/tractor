@@ -5,126 +5,140 @@ import numpy as np
 import sys
 
 import fitsio
+import optparse
 
-F = fitsio.FITS('c4d_131028_014102_ooi_r_v1.fits.fz')
-M = fitsio.FITS('c4d_131028_014102_ood_r_v1.fits.fz')
-print len(F), 'hdus'
+parser = optparse.OptionParser()
+#parser.add_option('--prefix', help='Plot prefix', default='edge')
+opt,args = parser.parse_args()
 
-tt = 'Exp 247506, c4d_131028_014102_ood_r_v1'
+for fn in args:
+    #'c4d_131028_014102_ooi_r_v1.fits.fz')
+    print 'Reading', fn
+    F = fitsio.FITS(fn)
+    mfn = fn.replace('_ooi_','_ood_')
+    print 'Reading', mfn
+    M = fitsio.FITS(mfn)
+    print len(F), 'hdus'
 
-textargs = dict(ha='left', va='center', fontsize=8)
+    hdr = F[0].read_header()
+    name = os.path.basename(fn)
+    name = name.replace('.fits','').replace('.fz','')
+    expnum = int(hdr['EXPNUM'])
+    tt = 'Exp %i, %s' % (expnum, name)
 
-for fig in [1,2,3,4]:
-    plt.clf()
+    textargs = dict(ha='left', va='center', fontsize=8)
 
-yoffstep = 10
-for hdu in range(1, len(F)):
-    I = F[hdu].read()
-    hdr = F[hdu].read_header()
-    mask = M[hdu].read()
-    extname = hdr['EXTNAME']
-    print 'Read', extname
-    med = np.median(I, axis=1)
-    mm = np.median(med)
-    med -= mm
-    H = len(med)
-    x = np.arange(len(med))
-    ok = np.median(mask == 0, axis=1).astype(bool)
+    for fig in [1,2,3,4]:
+        plt.clf()
 
-    extname = extname.strip()
-    if extname.startswith('N'):
-        goodcolor = 'b'
-    else:
-        goodcolor = 'g'
+    yoffstep = 10
+    for hdu in range(1, len(F)):
+        I = F[hdu].read()
+        hdr = F[hdu].read_header()
+        mask = M[hdu].read()
+        extname = hdr['EXTNAME']
+        print 'Read', extname
+        med = np.median(I, axis=1)
+        mm = np.median(med)
+        med -= mm
+        H = len(med)
+        x = np.arange(len(med))
+        ok = np.median(mask == 0, axis=1).astype(bool)
     
-    yoff = (hdu-1)*yoffstep
-
-    N = 200
-    cutx   = x  [:N]
-    cutmed = med[:N]
-    cutok  = ok [:N]
-    cutnotok = np.logical_not(cutok)
-
+        extname = extname.strip()
+        if extname.startswith('N'):
+            goodcolor = 'b'
+        else:
+            goodcolor = 'g'
+        
+        yoff = (hdu-1)*yoffstep
+    
+        N = 200
+        cutx   = x  [:N]
+        cutmed = med[:N]
+        cutok  = ok [:N]
+        cutnotok = np.logical_not(cutok)
+    
+        plt.figure(1)
+        plt.plot(cutx, yoff + cutmed, 'k-')
+        if sum(cutok):
+            plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
+        if sum(cutnotok):
+            plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
+        plt.text(N, yoff, extname, **textargs)
+    
+    
+        cutx   = x  [-N:]
+        cutmed = med[-N:]
+        cutok  = ok [-N:]
+        cutnotok = np.logical_not(cutok)
+    
+        plt.figure(2)
+        plt.plot(cutx, yoff + cutmed, 'k-')
+        if sum(cutok):
+            plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
+        if sum(cutnotok):
+            plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
+        plt.text(H, yoff, extname, **textargs)
+    
+        med = np.median(I, axis=0)
+        mm = np.median(med)
+        med -= mm
+        W = len(med)
+        x = np.arange(len(med))
+        ok = np.median(mask == 0, axis=0).astype(bool)
+    
+        
+        N = 200
+        cutx   = x  [:N]
+        cutmed = med[:N]
+        cutok  = ok [:N]
+        cutnotok = np.logical_not(cutok)
+    
+        plt.figure(3)
+        plt.plot(cutx, yoff + cutmed, 'k-')
+        if sum(cutok):
+            plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
+        if sum(cutnotok):
+            plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
+        plt.text(N, yoff, extname, **textargs)
+    
+        cutx   = x  [-N:]
+        cutmed = med[-N:]
+        cutok  = ok [-N:]
+        cutnotok = np.logical_not(cutok)
+    
+        plt.figure(4)
+        plt.plot(cutx, yoff + cutmed, 'k-')
+        if sum(cutok):
+            plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
+        if sum(cutnotok):
+            plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
+        plt.text(W, yoff, extname, **textargs)
+        
     plt.figure(1)
-    plt.plot(cutx, yoff + cutmed, 'k-')
-    if sum(cutok):
-        plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
-    if sum(cutnotok):
-        plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
-    plt.text(N, yoff, extname, **textargs)
-
-
-    cutx   = x  [-N:]
-    cutmed = med[-N:]
-    cutok  = ok [-N:]
-    cutnotok = np.logical_not(cutok)
-
-    plt.figure(2)
-    plt.plot(cutx, yoff + cutmed, 'k-')
-    if sum(cutok):
-        plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
-    if sum(cutnotok):
-        plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
-    plt.text(H, yoff, extname, **textargs)
-
-    med = np.median(I, axis=0)
-    mm = np.median(med)
-    med -= mm
-    W = len(med)
-    x = np.arange(len(med))
-    ok = np.median(mask == 0, axis=0).astype(bool)
-
+    plt.xlim(0, N)
+    plt.ylim(-50, len(F)*yoffstep+50)
+    plt.title('%s: bottom edge' % tt)
+    plt.savefig('edge-%i-bottom.png' % expnum)
     
-    N = 200
-    cutx   = x  [:N]
-    cutmed = med[:N]
-    cutok  = ok [:N]
-    cutnotok = np.logical_not(cutok)
+    plt.figure(2)
+    plt.xlim(H-N, H)
+    plt.ylim(-50, len(F)*yoffstep+50)
+    plt.title('%s: top edge' % tt)
+    plt.savefig('edge-%i-top.png' % expnum)
 
     plt.figure(3)
-    plt.plot(cutx, yoff + cutmed, 'k-')
-    if sum(cutok):
-        plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
-    if sum(cutnotok):
-        plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
-    plt.text(N, yoff, extname, **textargs)
-
-    cutx   = x  [-N:]
-    cutmed = med[-N:]
-    cutok  = ok [-N:]
-    cutnotok = np.logical_not(cutok)
-
-    plt.figure(4)
-    plt.plot(cutx, yoff + cutmed, 'k-')
-    if sum(cutok):
-        plt.plot(cutx[cutok], yoff + cutmed[cutok], '.', color=goodcolor, alpha=0.5)
-    if sum(cutnotok):
-        plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
-    plt.text(W, yoff, extname, **textargs)
+    plt.xlim(0, N)
+    plt.ylim(-50, len(F)*yoffstep+50)
+    plt.title('%s: left edge' % tt)
+    plt.savefig('edge-%i-left.png' % expnum)
     
-plt.figure(1)
-plt.xlim(0, N)
-plt.ylim(-50, len(F)*yoffstep+50)
-plt.title('%s: bottom edge' % tt)
-plt.savefig('edge5.png')
-
-plt.figure(2)
-plt.xlim(H-N, H)
-plt.ylim(-50, len(F)*yoffstep+50)
-plt.title('%s: top edge' % tt)
-plt.savefig('edge6.png')
-
-plt.figure(3)
-plt.xlim(0, N)
-plt.ylim(-50, len(F)*yoffstep+50)
-plt.title('%s: left edge' % tt)
-plt.savefig('edge7.png')
-
-plt.figure(4)
-plt.xlim(W-N, W)
-plt.ylim(-50, len(F)*yoffstep+50)
-plt.title('%s: right edge' % tt)
-plt.savefig('edge8.png')
+    plt.figure(4)
+    plt.xlim(W-N, W)
+    plt.ylim(-50, len(F)*yoffstep+50)
+    plt.title('%s: right edge' % tt)
+    plt.savefig('edge-%i-right.png' % expnum)
 
 
 
