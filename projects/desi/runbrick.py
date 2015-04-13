@@ -1623,6 +1623,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     tlast = Time()
     alphas = [0.1, 0.3, 1.0]
+    optargs = dict(priors=False, shared_params=False, alphas=alphas)
 
     bigblob = (blobw * blobh) > 100*100
 
@@ -1845,8 +1846,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             cpu0 = time.clock()
             for step in range(50):
-                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
-                                              alphas=alphas)
+                dlnp,X,alpha = srctractor.optimize(**optargs)
+
+                               
                 #print 'dlnp:', dlnp, 'src', src
 
                 if DEBUG:
@@ -1938,8 +1940,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             max_cpu_per_source = 60.
             cpu0 = time.clock()
             for step in range(50):
-                dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                              alphas=alphas)
+                dlnp,X,alpha = subtr.optimize(**optargs)
                 # print 'dlnp:', dlnp
                 if time.clock()-cpu0 > max_cpu_per_source:
                     print 'Warning: Exceeded maximum CPU time for source'
@@ -1963,8 +1964,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         #print 'Optimizing:', subtr
         # subtr.printThawedParams()
         for step in range(20):
-            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                          alphas=alphas)
+            dlnp,X,alpha = subtr.optimize(**optargs)
             # print 'dlnp:', dlnp
             if dlnp < 0.1:
                 break
@@ -2161,8 +2161,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             cpu0 = time.clock()
             p0 = newsrc.getParams()
             for step in range(50):
-                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
-                                              alphas=alphas)
+                dlnp,X,alpha = srctractor.optimize(**optargs)
                 #print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'A',step,dlnp,alpha,cpu-cpu0))
@@ -2212,8 +2211,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # Run another round of opt.
             cpu0 = time.clock()
             for step in range(50):
-                dlnp,X,alpha = srctractor.optimize(priors=False, shared_params=False,
-                                              alphas=alphas)
+                dlnp,X,alpha = srctractor.optimize(**optargs)
                 #print '  dlnp:', dlnp, 'new src', newsrc
                 cpu = time.clock()
                 performance[i].append((name,'B',step,dlnp,alpha,cpu-cpu0))
@@ -2430,8 +2428,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         max_cpu = 300.
         cpu0 = time.clock()
         for step in range(50):
-            dlnp,X,alpha = subtr.optimize(priors=False, shared_params=False,
-                                          alphas=alphas)
+            dlnp,X,alpha = subtr.optimize(**optargs)
             #print 'dlnp:', dlnp
             cpu = time.clock()
             performance[0].append(('All','J',step,dlnp,alpha,cpu-cpu0))
