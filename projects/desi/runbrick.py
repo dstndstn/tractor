@@ -2308,12 +2308,11 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             #print 'dlnp:', dlnp
             #print 'fractional dlnp:', fdlnp
             #print 'n sigma:', np.sqrt(2.*(plnps['ptsrc'] - plnps['none']))
-            #devexp_dlnp = max(dlnp, fdlnp)
-            devexp_dlnp = dlnp
+            dlnp = max(dlnp, fdlnp)
 
             expdiff = plnps['exp'] - plnps[keepmod]
             devdiff = plnps['dev'] - plnps[keepmod]
-            if expdiff > devexp_dlnp or devdiff > devexp_dlnp:
+            if expdiff > dlnp or devdiff > dlnp:
                 if expdiff > devdiff:
                     #print 'Upgrading from ptsrc to exp: diff', expdiff
                     keepsrc = exp
@@ -2337,7 +2336,8 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             #srccat[0] = src
             #srctractor.getLogProb()
             pass
-        # Actually, penalized delta chi-squareds!
+
+        # Penalized delta chi-squareds
         delta_chisqs.append([-2. * (plnps[k] - plnps[keepmod])
                          for k in ['none', 'ptsrc', 'dev', 'exp', 'comp']])
                     
