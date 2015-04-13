@@ -456,9 +456,12 @@ def segment_and_group_sources(image, T, name=None, ps=None, plots=False):
     return blobs, blobsrcs, blobslices
 
 def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
-                     extracols=[]):
+                     extracols=[], ellipse=None):
     # FIXME?
     margin = 0.
+
+    if ellipse is None:
+        ellipse = EllipseESoft.fromRAbPhi
 
     sdss = DR9(basedir=photoobjdir)
     if local:
@@ -506,7 +509,7 @@ def get_sdss_sources(bands, targetwcs, photoobjdir=None, local=True,
     srcs = get_tractor_sources_dr9(
         None, None, None, objs=objs, sdss=sdss, bands=list(bands),
         nanomaggies=True, fixedComposites=True, useObjcType=True,
-        ellipse=EllipseESoft.fromRAbPhi)
+        ellipse=ellipse)
     print 'Got', len(srcs), 'Tractor sources'
 
     # record coordinates in target brick image

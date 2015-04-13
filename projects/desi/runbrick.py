@@ -32,6 +32,7 @@ from astrometry.sdss import DR9, band_index, AsTransWrapper
 from tractor import *
 from tractor.galaxy import *
 from tractor.source_extractor import *
+from tractor.utils import _GaussianPriors
 
 from common import *
 
@@ -52,6 +53,26 @@ def runbrick_global_init():
         disable_galaxy_cache()
     if useCeres:
         from tractor.ceres import ceres_opt
+
+ellipticityStd = 0.25
+
+ellipsePriors = _GaussianPriors(None)
+ellipsePriors.add('ee1', 0., ellipticityStd, param=EllipseESoft(1.,0.,0.))
+ellipsePriors.add('ee2', 0., ellipticityStd, param=EllipseESoft(1.,0.,0.))
+
+class EllipseWithPriors(EllipseESoft):
+    # EllipseESoft extends EllipseE extends ParamList, has GaussianPriorsMixin.
+    # GaussianPriorsMixin sets a "gpriors" member variable to a _GaussianPriors
+    def __init__(self, *args, **kwargs):
+        super(EllipseWithPriors, self).__init__(*args, **kwargs)
+        #gaussian_priors=ellipsePriors,
+        self.gpriors = ellipsePriors
+
+    @staticmethod
+    def fromRAbPhi(r, ba, phi):
+        logr, ee1, ee2 = EllipseESoft.rAbPhiToESoft(r, ba, phi)
+        return EllipseWithPriors(logr, ee1, ee2)
+        
 
 # class BlobTractor(Tractor):
 #     def __init__(self, *args, **kwargs):
@@ -840,7 +861,8 @@ def stage_srcs(coimgs=None, cons=None,
     # Read SDSS sources
     cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
             'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr', 'decerr']
-    cat,T = get_sdss_sources(bands, targetwcs, extracols=cols)
+    cat,T = get_sdss_sources(bands, targetwcs, extracols=cols,
+                             ellipse=EllipseWithPriors.fromRAbPhi)
 
     if T is not None:
         # SDSS RAERR, DECERR are in arcsec.  Convert to deg.
@@ -2062,7 +2084,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
         if isinstance(src, PointSource):
             # logr, ee1, ee2
-            shape = EllipseESoft(-1., 0., 0.)
+            shape = EllipseWithPriors(-1., 0., 0.)
             dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = None
