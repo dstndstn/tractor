@@ -1664,6 +1664,22 @@ class DecamImage(object):
             sy,sx = slc
             y0,y1 = sy.start, sy.stop
             x0,x1 = sx.start, sx.stop
+
+            # Handle 'glowing' edges in DES r-band images
+            # aww yeah
+            if band == 'r' and 'DES' in self.imgfn:
+                # Northern chips: drop 100 pix off the bottom
+                if 'N' in self.extname:
+                    if y0 < 100:
+                        print 'Clipping bottom part of northern DES r-band chip'
+                        y0 = 100
+                else:
+                    # Southern chips: drop 100 pix off the top
+                    if y1 >= (imh-100):
+                        print 'Clipping top part of southern DES r-band chip'
+                        y1 = imh-100-1
+                if y0 >= y1:
+                    return None
         
         print 'Reading image from', self.imgfn, 'HDU', self.hdu
         img,imghdr = self.read_image(header=True, slice=slc)
@@ -1732,8 +1748,6 @@ class DecamImage(object):
         elif const2psf:
             # 2-component constant MoG.
             from tractor.basics import GaussianMixtureEllipsePSF
-            iminfo = self.get_image_info()
-            H,W = iminfo['dims']
             psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
                           psfClass=GaussianMixtureEllipsePSF, K=2)
             # FIXME -- could instantiate in the center of the ROI...

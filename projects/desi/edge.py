@@ -3,6 +3,7 @@ matplotlib.use('Agg')
 import pylab as plt
 import numpy as np
 import sys
+import os
 
 import fitsio
 import optparse
@@ -24,11 +25,13 @@ for fn in args:
     name = os.path.basename(fn)
     name = name.replace('.fits','').replace('.fz','')
     expnum = int(hdr['EXPNUM'])
+    print 'Exposure number', expnum
     tt = 'Exp %i, %s' % (expnum, name)
 
     textargs = dict(ha='left', va='center', fontsize=8)
 
     for fig in [1,2,3,4]:
+        plt.figure(fig)
         plt.clf()
 
     yoffstep = 10
@@ -37,7 +40,7 @@ for fn in args:
         hdr = F[hdu].read_header()
         mask = M[hdu].read()
         extname = hdr['EXTNAME']
-        print 'Read', extname
+        print extname,
         med = np.median(I, axis=1)
         mm = np.median(med)
         med -= mm
@@ -115,6 +118,8 @@ for fn in args:
         if sum(cutnotok):
             plt.plot(cutx[cutnotok], yoff + cutmed[cutnotok], 'r.', alpha=0.5)
         plt.text(W, yoff, extname, **textargs)
+
+    print
         
     plt.figure(1)
     plt.xlim(0, N)
@@ -139,7 +144,6 @@ for fn in args:
     plt.ylim(-50, len(F)*yoffstep+50)
     plt.title('%s: right edge' % tt)
     plt.savefig('edge-%i-right.png' % expnum)
-
 
 
 
