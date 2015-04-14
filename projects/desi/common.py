@@ -1680,6 +1680,7 @@ class DecamImage(object):
                         y1 = imh-100-1
                 if y0 >= y1:
                     return None
+            slc = slice(y0,y1+1), slice(x0,x1+1)
         
         print 'Reading image from', self.imgfn, 'HDU', self.hdu
         img,imghdr = self.read_image(header=True, slice=slc)
@@ -1748,10 +1749,10 @@ class DecamImage(object):
         elif const2psf:
             # 2-component constant MoG.
             from tractor.basics import GaussianMixtureEllipsePSF
-            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
+            psfex = PsfEx(self.psffn, imw, imh, ny=13, nx=7,
                           psfClass=GaussianMixtureEllipsePSF, K=2)
             # FIXME -- could instantiate in the center of the ROI...
-            psfim = psfex.instantiateAt(W/2, H/2)
+            psfim = psfex.instantiateAt(imw/2, imh/2)
             # trim a little
             psfim = psfim[5:-5, 5:-5]
             psf = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
