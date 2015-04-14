@@ -3385,6 +3385,7 @@ def stage_writecat(
 
     TT.decam_rchi2    = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracflux = np.zeros((len(TT), len(allbands)), np.float32)
+    TT.decam_fracmasked = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_fracin   = np.zeros((len(TT), len(allbands)), np.float32)
     TT.decam_nobs     = np.zeros((len(TT), len(allbands)), np.uint8)
     TT.decam_anymask  = np.zeros((len(TT), len(allbands)), TT.anymask.dtype)
