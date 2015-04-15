@@ -2498,6 +2498,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         srcinvvars   = [srcinvvars[i]   for i in keep]
         delta_chisqs = [delta_chisqs[i] for i in keep]
         flags        = [flags[i]        for i in keep]
+        started_in_blob = [started_in_blob[i] for i in keep]
         subcat = Catalog(*srcs)
         subtr.catalog = subcat
     
