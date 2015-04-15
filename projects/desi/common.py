@@ -1667,7 +1667,7 @@ class DecamImage(object):
 
             # Handle 'glowing' edges in DES r-band images
             # aww yeah
-            if band == 'r' and 'DES' in self.imgfn:
+            if band == 'r' and (('DES' in self.imgfn) or ('COSMOS' in self.imgfn)):
                 # Northern chips: drop 100 pix off the bottom
                 if 'N' in self.extname:
                     if y0 < 100:
