@@ -3378,10 +3378,6 @@ def stage_writecat(
     TT.tx = TT.tx.astype(np.float32)
     TT.ty = TT.ty.astype(np.float32)
 
-    # mod
-    TT.ra += (TT.ra <   0) * 360.
-    TT.ra -= (TT.ra > 360) * 360.
-
     TT.brickid = np.zeros(len(TT), np.int32) + brickid
     TT.brickname = np.array([brickname] * len(TT))
     TT.objid   = np.arange(len(TT)).astype(np.int32)
@@ -3431,6 +3427,10 @@ def stage_writecat(
     hdr = None
     T2,hdr = prepare_fits_catalog(cat, invvars, TT, hdr, bands, fs,
                                   allbands=allbands)
+
+    # mod
+    T2.ra += (T2.ra <   0) * 360.
+    T2.ra -= (T2.ra > 360) * 360.
 
     primhdr = fitsio.FITSHDR()
     for r in version_header.records():
