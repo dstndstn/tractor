@@ -1623,7 +1623,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     tlast = Time()
     alphas = [0.1, 0.3, 1.0]
-    optargs = dict(priors=False, shared_params=False, alphas=alphas)
+    optargs = dict(priors=True, shared_params=False, alphas=alphas)
 
     bigblob = (blobw * blobh) > 100*100
 
