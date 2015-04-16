@@ -2140,7 +2140,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 else:
                     shape = dev.getShape().copy()
                 # MAGIC clip to "reasonable" shape...
-                shape.logr = np.clip(shape.logr, -2., 2.)
+                shape.logre = np.clip(shape.logre, -2., 2.)
                 # Large ellipticity: keep angle, but make less elliptical.
                 maxe = 0.6
                 if shape.e > maxe:
