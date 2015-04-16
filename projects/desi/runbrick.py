@@ -2136,16 +2136,17 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             # Share galaxy shape between the deV and exp models.
             if name in ['dev','exp'] and newsrc is None:
                 if name == 'dev':
-                    sp = exp.getShape().getParams()
+                    shape = exp.getShape().copy()
                 else:
-                    sp = dev.getShape().getParams()
-                shape = EllipseWithPriors(
-                    # logr
-                    np.clip(sp[0], -2., 2.),
-                    # ee1
-                    np.clip(sp[1], -2., 2.),
-                    # ee2
-                    np.clip(sp[2], -2., 2.))
+                    shape = dev.getShape().copy()
+                # MAGIC clip to "reasonable" shape...
+                shape.logr = np.clip(shape.logr, -2., 2.)
+                # Large ellipticity: keep angle, but make less elliptical.
+                maxe = 0.6
+                if shape.e > maxe:
+                    e = shape.e
+                    shape.ee1 = maxe * shape.ee1 / e
+                    shape.ee2 = maxe * shape.ee2 / e
                 if name == 'dev':
                     newsrc = dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape)
                 else:
