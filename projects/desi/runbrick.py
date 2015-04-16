@@ -2081,36 +2081,32 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     none=lnp_null)
 
         if isinstance(src, PointSource):
-            ptsrc = src.copy()
             # logr, ee1, ee2
             shape = EllipseWithPriors(-1., 0., 0.)
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
-            #dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
-            dev = None
             comp = None
-            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('dev', dev), ('comp', comp)]
+            ptsrc = src.copy()
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'ptsrc'
             
         elif isinstance(src, DevGalaxy):
-            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             dev = src.copy()
-            #exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
-            exp = None
+            exp = ExpGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'dev'
 
         elif isinstance(src, ExpGalaxy):
-            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             exp = src.copy()
-            #dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
-            dev = None
+            dev = DevGalaxy(src.getPosition(), src.getBrightness(), src.getShape()).copy()
             comp = None
-            trymodels = [('ptsrc', ptsrc), ('exp', exp), ('dev', dev), ('comp', comp)]
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
+            trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'exp'
             
         elif isinstance(src, FixedCompositeGalaxy):
-            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             frac = src.fracDev.getValue()
             if frac > 0:
                 shape = src.shapeDev
@@ -2123,6 +2119,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 shape = src.shapeDev
             exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape).copy()
             comp = src.copy()
+            ptsrc = PointSource(src.getPosition(), src.getBrightness()).copy()
             trymodels = [('ptsrc', ptsrc), ('dev', dev), ('exp', exp), ('comp', comp)]
             oldmodel = 'comp'
 
@@ -2132,26 +2129,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             if name == 'comp' and newsrc is None:
                 newsrc = comp = FixedCompositeGalaxy(src.getPosition(), src.getBrightness(),
                                                      0.5, exp.getShape(), dev.getShape()).copy()
-
-            # Share galaxy shape between the deV and exp models.
-            if name in ['dev','exp'] and newsrc is None:
-                if name == 'dev':
-                    shape = exp.getShape().copy()
-                else:
-                    shape = dev.getShape().copy()
-                # MAGIC clip to "reasonable" shape...
-                shape.logre = np.clip(shape.logre, -2., 2.)
-                # Large ellipticity: keep angle, but make less elliptical.
-                maxe = 0.6
-                if shape.e > maxe:
-                    e = shape.e
-                    shape.ee1 = maxe * shape.ee1 / e
-                    shape.ee2 = maxe * shape.ee2 / e
-                if name == 'dev':
-                    newsrc = dev = DevGalaxy(src.getPosition(), src.getBrightness(), shape)
-                else:
-                    newsrc = exp = ExpGalaxy(src.getPosition(), src.getBrightness(), shape)
-
             #print 'New source:', newsrc
             srccat[0] = newsrc
 
