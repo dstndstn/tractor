@@ -3235,6 +3235,25 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     basedir = os.path.join(outdir, 'coadd', brickname[:3], brickname)
     try_makedirs(basedir)
     fn = os.path.join(basedir, 'decals-%s-ccds.fits' % brickname)
+    #
+    ccds.ccd_x0 = np.array([tim.x0 for tim in tims]).astype(np.int16)
+    ccds.ccd_x1 = np.array([tim.x0 + tim.shape[1] for tim in tims]).astype(np.int16)
+    ccds.ccd_y0 = np.array([tim.y0 for tim in tims]).astype(np.int16)
+    ccds.ccd_y1 = np.array([tim.y0 + tim.shape[0] for tim in tims]).astype(np.int16)
+    rd = np.array([[tim.subwcs.pixelxy2radec(1, 1)[-2:],
+                    tim.subwcs.pixelxy2radec(1, y1-y0)[-2:],
+                    tim.subwcs.pixelxy2radec(x1-x0, 1)[-2:],
+                    tim.subwcs.pixelxy2radec(x1-x0, y1-y0)[-2:]]
+                    for tim,x0,y0,x1,y1 in
+                   zip(tims, ccds.ccd_x0+1, ccds.ccd_y0+1, ccds.ccd_x1, ccds.ccd_y1)])
+    print 'rd shape', rd.shape
+    ok,x,y = targetwcs.radec2pixelxy(rd[:,:,0], rd[:,:,1])
+    print 'x shape', x.shape
+    ccds.brick_x0 = np.floor(np.min(x, axis=1)).astype(np.int16)
+    ccds.brick_x1 = np.ceil (np.max(x, axis=1)).astype(np.int16)
+    ccds.brick_y0 = np.floor(np.min(y, axis=1)).astype(np.int16)
+    ccds.brick_y1 = np.ceil (np.max(y, axis=1)).astype(np.int16)
+    ccds.sig1 = np.array([tim.sig1 for tim in tims])
     ccds.writeto(fn)
     print 'Wrote', fn
 
