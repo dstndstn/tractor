@@ -175,6 +175,7 @@ if __name__ == '__main__':
 
     elif opt.region == 'des':
         dlo, dhi = -6., 4.
+        rlo, rhi = 317., 7.
 
         T.cut(np.flatnonzero(np.array(['CPDES82' in fn for fn in T.cpimage])))
         log('Cut to', len(T), 'CCDs with "CPDES82" in filename')
