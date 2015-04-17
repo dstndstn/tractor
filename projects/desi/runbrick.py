@@ -2577,7 +2577,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     fracflux   = fracflux_num   / np.maximum(1, fracflux_den)
     rchi2      = rchi2_num      / np.maximum(1, rchi2_den)
     fracmasked = fracmasked_num / np.maximum(1, fracmasked_den)
-    fracin     = fracin_num     / np.maximum(1, fracin_den)
+    # fracin_{num,den} are in flux * nimages units
+    tinyflux = 1e-9
+    fracin     = fracin_num     / np.maximum(tinyflux, fracin_den)
 
     ok,x1,y1 = subtarget.radec2pixelxy(np.array([src.getPosition().ra  for src in srcs]),
                                        np.array([src.getPosition().dec for src in srcs]))
