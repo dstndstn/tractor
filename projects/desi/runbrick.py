@@ -433,8 +433,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
     version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
     version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
-    version_hdr.add_record(dict(name='DECMIN'  , value=brick.ra1, comment='Brick Dec min'))
-    version_hdr.add_record(dict(name='DECMAX'  , value=brick.ra2, comment='Brick Dec max'))
+    version_hdr.add_record(dict(name='DECMIN'  , value=brick.dec1, comment='Brick Dec min'))
+    version_hdr.add_record(dict(name='DECMAX'  , value=brick.dec2, comment='Brick Dec max'))
     print 'Version header:'
     print version_hdr
 
