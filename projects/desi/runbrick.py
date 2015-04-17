@@ -1621,7 +1621,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
     plots2 = False
 
-    tlast = Time()
+    #tlast = Time()
     alphas = [0.1, 0.3, 1.0]
     optargs = dict(priors=True, shared_params=False, alphas=alphas)
 
@@ -1687,7 +1687,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     for src in srcs:
         src.freezeAllBut('brightness')
     for b in bands:
-        tband = Time()
+        #tband = Time()
         for src in srcs:
             src.getBrightness().freezeAllBut(b)
         btims = []
@@ -2589,7 +2589,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
     assert(len(finished_in_blob) == len(started_in_blob))
 
     #print 'Blob finished metrics:', Time()-tlast
-    print 'Blob', iblob+1, 'finished:', Time()-tlast
+    print 'Blob', iblob+1, 'finished' #:', Time()-tlast
 
     return (Isrcs, srcs, srcinvvars, fracflux, rchi2, delta_chisqs, fracmasked, flags,
             all_models, performance, fracin, started_in_blob, finished_in_blob)
