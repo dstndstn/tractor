@@ -34,6 +34,8 @@ echo "--------------------------------------------------------------------------
 
 python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 3 --nsigma 6 --skip --pipe >> $log 2>&1
 
+# dr1j:
+# qdo launch edr 32 --mpack 3 --walltime=48:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
 
 # Edison: 6 threads per job, 4 jobs per node = 24 cores.
 # here we ask for 4 nodes * 4 jobs = 16 jobs total.
