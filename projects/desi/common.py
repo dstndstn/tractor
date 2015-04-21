@@ -1941,99 +1941,70 @@ class DecamImage(object):
             psfexfit = False
             psfexfit2 = False
 
-        run_funpack = False
-        run_se = False
-        run_se2 = False
-        run_astrom = False
-        run_pvastrom = False
-        run_psfex = False
-        run_psfexfit = False
-        run_psfexfit2 = False
-        run_morph = False
-        run_sky = False
-    
-        if se and not all([os.path.exists(fn) for fn in [self.sefn]]):
-            run_se = True
-            run_funpack = True
-        if se2 and not all([os.path.exists(fn) for fn in [self.se2fn]]):
-            run_se2 = True
-            run_funpack = True
-        #if not all([os.path.exists(fn) for fn in [self.wcsfn,self.corrfn,self.sdssfn]]):
-        if astrom and not os.path.exists(self.wcsfn):
-            run_astrom = True
-        if pvastrom and not os.path.exists(self.pvwcsfn):
-            run_pvastrom = True
-            #run_funpack = True
-        if psfex and not os.path.exists(self.psffn):
-            run_psfex = True
-        if psfexfit and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitellfn)):
-            run_psfexfit = True
-        if psfexfit2 and not (os.path.exists(self.psffitfn) and os.path.exists(self.psffitell2fn)):
-            run_psfexfit2 = True
-        if morph and not os.path.exists(self.morphfn):
-            run_morph = True
-            run_funpack = True
-        if sky and not os.path.exists(self.skyfn):
-            run_sky = True
+    def run_calibs(self, ra, dec, pixscale, mock_psf,
+                   W=2048, H=4096, se=True,
+                   astrom=True, psfex=True, sky=True,
+                   pvastrom=True,
+                   psfexfit=True, psfexfit2=False,
+                   funpack=True, fcopy=False, use_mask=True,
+                   force=False, just_check=False):
+        '''
+        pixscale: in arcsec/pixel
 
-        if just_check:
-            return (run_se or run_se2 or run_astrom or run_psfex or run_psfexfit
-                    or run_morph or run_sky or run_pvastrom or run_psfexfit2)
+        just_check: if True, returns True if calibs need to be run.
+        '''
+        print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
-        if force:
-            if se:
-                run_se = True
-                run_funpack = True
-            if se2:
-                run_se2 = True
-                run_funpack = True
-            if astrom:
-                run_astrom = True
-            if pvastrom:
-                run_pvastrom = True
-            if psfex:
-                run_psfex = True
-            if psfexfit:
-                run_psfexfit = True
-            if psfexfit2:
-                run_psfexfit2 = True
-            if morph:
-                run_morp = True
-                run_funpack = True
-            if sky:
-                run_sky = True
+        for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
+            print 'exists?', os.path.exists(fn), fn
+        self.makedirs()
 
-        # Sometimes SourceExtractor gets interrupted or something and
-        # writes out 0 detections.  Then PsfEx fails but in a way that
-        # an output file is still written.  Try to detect & fix this
-        # case.
-        if run_psfexfit or run_psfexfit2:
+        if mock_psf:
+            psfex = False
+            psfexfit = False
+            psfexfit2 = False
+
+        if (psfexfit and os.path.exists(self.psffitfn) and 
+            os.path.exists(self.psffitellfn) and (not force)):
+            psfexfit = False
+        if (psfexfit2 and os.path.exists(self.psffitfn) and 
+            os.path.exists(self.psffitell2fn) and (not force)):
+            psfexfit2 = False
+        if psfexfit or psfexfit2:
+            psfex = True
+
+        if psfex and os.path.exists(self.psffn) and (not force):
+            # Sometimes SourceExtractor gets interrupted or something and
+            # writes out 0 detections.  Then PsfEx fails but in a way that
+            # an output file is still written.  Try to detect & fix this
+            # case.
             # Check the PsfEx output file for POLNAME1
-            fn = self.psffn
-            if os.path.exists(fn):
-                hdr = fitsio.read_header(fn, ext=1)
-                if hdr.get('POLNAME1', None) is None:
-                    print 'Did not find POLNAME1 in PsfEx header', fn, '-- deleting'
-                    os.unlink(fn)
-                    run_psfex = True
-
-        if run_psfex:
+            hdr = fitsio.read_header(fn, ext=1)
+            if hdr.get('POLNAME1', None) is None:
+                print 'Did not find POLNAME1 in PsfEx header', fn, '-- deleting'
+                os.unlink(fn)
+            else:
+                psfex = False
+        if psfex:
+            se = True
+            
+        if se and os.path.exists(self.sefn) and (not force):
             # Check SourceExtractor catalog for size = 0
             fn = self.sefn
-            if os.path.exists(fn):
-                T = fits_table(fn, hdu=2)
-                print 'Read', len(T), 'sources from SE catalog', fn
-                if T is None or len(T) == 0:
-                    print 'SourceExtractor catalog', fn, 'has no sources -- deleting'
-                    try:
-                        os.unlink(fn)
-                    except:
-                        pass
-                    run_se = True
-                    run_funpack = True
+            T = fits_table(fn, hdu=2)
+            print 'Read', len(T), 'sources from SE catalog', fn
+            if T is None or len(T) == 0:
+                print 'SourceExtractor catalog', fn, 'has no sources -- deleting'
+                try:
+                    os.unlink(fn)
+                except:
+                    pass
+            if os.path.exists(sefn):
+                se = False
+        if se:
+            funpack = True
 
-        # Somehow, astrom-pv invalid files can get written.
-        if pvastrom and not run_pvastrom:
+        if pvastrom and os.path.exists(self.pvwcsfn) and (not force):
             fn = self.pvwcsfn
             if os.path.exists(fn):
                 try:
@@ -2041,10 +2012,13 @@ class DecamImage(object):
                 except:
                     print 'Failed to read PV-SIP file', fn, '-- deleting'
                     os.unlink(fn)
-                    run_pvastrom = True
+            if os.path.exists(fn):
+                pvastrom = False
 
-        # Empty sky files are possible too.
-        if sky and not run_sky:
+        if astrom and os.path.exists(self.wcsfn) and (not force):
+            astrom = False
+
+        if sky and os.path.exists(self.skyfn) and (not force):
             fn = self.skyfn
             if os.path.exists(fn):
                 try:
@@ -2052,19 +2026,24 @@ class DecamImage(object):
                 except:
                     print 'Failed to read sky file', fn, '-- deleting'
                     os.unlink(fn)
-                    run_sky = True
+            if os.path.exists(fn):
+                sky = False
+
+        if just_check:
+            return (se or astrom or psfex or psfexfit or sky or pvastrom or
+                    psfexfit2)
 
         tmpimgfn = None
         tmpmaskfn = None
 
-        if run_funpack and (funpack or fcopy):
+        if funpack:
             tmpimgfn  = create_temp(suffix='.fits')
             tmpmaskfn = create_temp(suffix='.fits')
     
-            if funpack:
-                cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpimgfn, self.imgfn)
-            else:
+            if fcopy:
                 cmd = 'imcopy %s"+%i" %s' % (self.imgfn, self.hdu, tmpimgfn)
+            else:
+                cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpimgfn, self.imgfn)
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
@@ -2075,7 +2054,7 @@ class DecamImage(object):
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
     
-        if run_astrom or run_morph or run_se or run_se2:
+        if astrom or se:
             # grab header values...
             primhdr = self.read_image_primary_header()
             hdr     = self.read_image_header()
@@ -2087,7 +2066,7 @@ class DecamImage(object):
             print 'pixscale', pixscale, 'arcsec/pix'
             print 'Seeing', seeing, 'arcsec'
     
-        if run_se:
+        if se:
             maskstr = ''
             if use_mask:
                 maskstr = '-FLAG_IMAGE ' + tmpmaskfn
@@ -2099,26 +2078,13 @@ class DecamImage(object):
                 '-FILTER_NAME', os.path.join(sedir, 'gauss_5.0_9x9.conv'),
                 '-STARNNW_NAME', os.path.join(sedir, 'default.nnw'),
                 '-PIXEL_SCALE 0',
-                #'-PIXEL_SCALE %f' % (pixscale),
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
                 tmpimgfn])
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
     
-        if run_se2:
-            cmd = ' '.join([
-                'sex',
-                '-c', os.path.join(sedir, 'DECaLS-v2-2.sex'),
-                '-FLAG_IMAGE', tmpmaskfn, '-SEEING_FWHM %f' % seeing,
-                '-PIXEL_SCALE %f' % (pixscale),
-                '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.se2fn,
-                tmpimgfn])
-            print cmd
-            if os.system(cmd):
-                raise RuntimeError('Command failed: ' + cmd)
-    
-        if run_astrom:
+        if astrom:
             cmd = ' '.join([
                 'solve-field --config', an_config, '-D . --temp-dir', tempdir,
                 '--ra %f --dec %f' % (ra,dec), '--radius 1',
@@ -2129,8 +2095,6 @@ class DecamImage(object):
                 '--width %i --height %i' % (W,H),
                 '--crpix-center',
                 '-N none -U none -S none -M none',
-                #'--rdls', self.sdssfn,
-                #'--corr', self.corrfn,
                 '--rdls none --corr none',
                 '--wcs', self.wcsfn, 
                 '--temp-axy', '--tag-all', self.sefn])
@@ -2154,12 +2118,11 @@ class DecamImage(object):
                     '--rdls none --corr none',
                     '--wcs', self.wcsfn, 
                     '--temp-axy', '--tag-all', self.sefn])
-                    #--no-remove-lines 
                 print cmd
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
 
-        if run_pvastrom:
+        if pvastrom:
             # DECam images appear to have PV coefficients up to PVx_10,
             # which are up to cubic terms in xi,eta,r.  Overshoot what we
             # need in SIP terms.
@@ -2177,8 +2140,8 @@ class DecamImage(object):
                 version_hdr.add_record(r)
             fitsio.write(self.pvwcsfn, None, header=version_hdr, clobber=True)
                 
-        if run_psfex:
-            # If we write *.psf instead of *.fits in a previous run...
+        if psfex:
+            # If we wrote *.psf instead of *.fits in a previous run...
             oldfn = self.psffn.replace('.fits', '.psf')
             if os.path.exists(oldfn):
                 print 'Moving', oldfn, 'to', self.psffn
@@ -2192,14 +2155,11 @@ class DecamImage(object):
                 if rtn:
                     raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
-        if run_psfexfit:
+        if psfexfit:
             print 'Fit PSF...'
-    
             from tractor.basics import GaussianMixtureEllipsePSF, GaussianMixturePSF
             from tractor.psfex import PsfEx
-    
             iminfo = self.get_image_info()
-            #print 'img:', iminfo
             H,W = iminfo['dims']
             psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
                           psfClass=GaussianMixtureEllipsePSF)
@@ -2207,7 +2167,6 @@ class DecamImage(object):
             print 'Fitting MoG model to PsfEx'
             psfex._fitParamGrid(damp=1)
             pp,XX,YY = psfex.splinedata
-
             psfex.toFits(self.psffitellfn, merge=True)
             print 'Wrote', self.psffitellfn
 
@@ -2224,12 +2183,10 @@ class DecamImage(object):
             psfexvar.toFits(self.psffitfn, merge=True)
             print 'Wrote', self.psffitfn
 
-        if run_psfexfit2:
+        if psfexfit2:
             print 'Fit PSF...'
-    
             from tractor.basics import GaussianMixtureEllipsePSF
             from tractor.psfex import PsfEx
-    
             iminfo = self.get_image_info()
             H,W = iminfo['dims']
             psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
@@ -2241,19 +2198,7 @@ class DecamImage(object):
             psfex.toFits(self.psffitell2fn, merge=True)
             print 'Wrote', self.psffitell2fn
             
-        if run_morph:
-            cmd = ' '.join(['sex -c', os.path.join(sedir, 'CS82_MF.sex'),
-                            '-FLAG_IMAGE', tmpmaskfn,
-                            '-SEEING_FWHM %f' % seeing,
-                            '-MAG_ZEROPOINT %f' % magzp,
-                            '-PSF_NAME', self.psffn,
-                            '-CATALOG_NAME', self.morphfn,
-                            tmpimgfn])
-            print cmd
-            if os.system(cmd):
-                raise RuntimeError('Command failed: ' + cmd)
-
-        if run_sky:
+        if sky:
             print 'Fitting sky for', self
             img = self.read_image()
             wt = self.read_invvar()
@@ -2264,14 +2209,14 @@ class DecamImage(object):
             except:
                 skyval = np.median(img)
                 skymeth = 'median'
-            sky = ConstantSky(skyval)
-            tt = type(sky)
+            tsky = ConstantSky(skyval)
+            tt = type(tsky)
             sky_type = '%s.%s' % (tt.__module__, tt.__name__)
             hdr = get_version_header(None, decals_dir)
             hdr.add_record(dict(name='SKYMETH', value=skymeth,
                                 comment='estimate_mode, or fallback to median?'))
             hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))
-            sky.toFitsHeader(hdr, prefix='SKY_')
+            tsky.toFitsHeader(hdr, prefix='SKY_')
             fits = fitsio.FITS(self.skyfn, 'rw', clobber=True)
             fits.write(None, header=hdr)
 
@@ -2285,10 +2230,7 @@ def run_calibs(X):
     im = X[0]
     kwargs = X[1]
     args = X[2:]
-    print 'run_calibs:', X
-    print 'im', im
-    print 'args', args
-    print 'kwargs', kwargs
+    print 'run_calibs for image', im
     return im.run_calibs(*args, **kwargs)
 
 
