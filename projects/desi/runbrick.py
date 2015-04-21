@@ -26,7 +26,7 @@ from astrometry.util.plotutils import PlotSequence, dimshow
 from astrometry.util.miscutils import clip_polygon
 from astrometry.util.resample import resample_with_wcs,OverlapError
 from astrometry.libkd.spherematch import match_radec
-from astrometry.util.ttime import Time, MemMeas
+from astrometry.util.ttime import Time, MemMeas, CpuMeas
 from astrometry.sdss import DR9, band_index, AsTransWrapper
 
 from tractor import *
@@ -82,6 +82,74 @@ def create_tractor(tims, srcs):
     return t
 ### Woot!
 Tractor = create_tractor
+
+from utils.debugpool import DebugPoolTimestamp
+from astrometry.util.multiproc import multiproc
+class MyMultiproc(multiproc):
+    def __init__(self, *args, **kwargs):
+        super(MyMultiproc, self).__init__(*args, **kwargs)
+        self.t0 = Time()
+        self.serial = []
+        self.parallel = []
+    def map(self, *args, **kwargs):
+        tstart = Time()
+        res = super(MyMultiproc, self).map(*args, **kwargs)
+        tend = Time()
+        self.serial.append((self.t0, tstart))
+        self.parallel.append((tstart, tend))
+        self.t0 = tend
+        return res
+
+    def report(self, nthreads):
+        # Tally the serial time up to now
+        tend = Time()
+        self.serial.append((self.t0, tend))
+        self.t0 = tend
+
+        # Nasty... peek into Time members
+        scpu = 0.
+        swall = 0.
+        print 'Serial:'
+        for t0,t1 in self.serial:
+            print t1-t0
+            for m0,m1 in zip(t0.meas, t1.meas):
+                if isinstance(m0, CpuMeas):
+                    scpu  += m1.cpu_seconds_since(m0)
+                    swall += m1.wall_seconds_since(m0)
+                    #print '  total cpu', scpu, 'wall', swall
+        pworkercpu = 0.
+        pworkerwall = 0.
+        pwall = 0.
+        pcpu = 0.
+        print 'Parallel:'
+        for t0,t1 in self.parallel:
+            print t1-t0
+            for m0,m1 in zip(t0.meas, t1.meas):
+                if isinstance(m0, DebugPoolTimestamp):
+                    mt0 = m0.t0
+                    mt1 = m1.t0
+                    pworkercpu  += mt1['worker_cpu' ] - mt0['worker_cpu' ]
+                    pworkerwall += mt1['worker_wall'] - mt0['worker_wall']
+                elif isinstance(m0, CpuMeas):
+                    pwall += m1.wall_seconds_since(m0)
+                    pcpu  += m1.cpu_seconds_since(m0)
+        print
+        print 'Total serial CPU   ', scpu
+        print 'Total serial Wall  ', swall
+        print 'Total worker CPU   ', pworkercpu
+        print 'Total worker Wall  ', pworkerwall
+        print 'Total parallel Wall', pwall
+        print 'Total parallel CPU ', pcpu
+        print
+        tcpu = scpu + pworkercpu + pcpu
+        twall = swall + pwall
+        if nthreads is None:
+            nthreads = 1
+        print 'Grand total CPU:              %.1f sec' % tcpu
+        print 'Grand total Wall:             %.1f sec' % twall
+        print 'Grand total CPU utilization:  %.2f cores' % (tcpu / twall)
+        print 'Grand total efficiency:       %.1f %%' % (100. * tcpu / (twall * nthreads))
+        print
 
 # didn't I write mp to avoid this foolishness in the first place?
 def _map(f, args):
@@ -660,6 +728,17 @@ def stage_image_coadds(targetwcs=None, bands=None, tims=None, outdir=None,
 
     return None
 
+def _median_smooth_detmap((detmap, detiv, binning)):
+    from scipy.ndimage.filters import median_filter
+    #from astrometry.util.util import median_smooth
+    #smoo = np.zeros_like(detmap)
+    #median_smooth(detmap, detiv>0, 100, smoo)
+    #smoo = median_filter(detmap, (50,50))
+    # Bin down before median-filtering, for speed.
+    binned,nil = bin_image(detmap, detiv, binning)
+    smoo = median_filter(binned, (50,50))
+    return smoo
+
 def stage_srcs(coimgs=None, cons=None,
                targetrd=None, pixscale=None, targetwcs=None,
                W=None,H=None,
@@ -699,21 +778,18 @@ def stage_srcs(coimgs=None, cons=None,
     tlast = tnow
 
     # Median-smooth detection maps
-    for i,(detmap,detiv) in enumerate(zip(detmaps,detivs)):
-        #from astrometry.util.util import median_smooth
-        #smoo = np.zeros_like(detmap)
-        #median_smooth(detmap, detiv>0, 100, smoo)
-        from scipy.ndimage.filters import median_filter
-        #tmed = Time()
-        #smoo = median_filter(detmap, (50,50))
-        #print 'Median filter 50:', Time()-tmed
+    binning = 4
+    smoos = _map(_median_smooth_detmap, [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
+    tnow = Time()
+    print '[parallel srcs] Median-filter detmaps:', tnow-tlast
+    tlast = tnow
 
-        # Bin down before median-filtering, for speed.
-        binning = 4
-        binned,nil = bin_image(detmap, detiv, binning)
-        tmed = Time()
-        smoo = median_filter(binned, (50,50))
-        print 'Median filter:', Time()-tmed
+    for i,(detmap,detiv,smoo) in enumerate(zip(detmaps, detivs, smoos)):
+        # Subtract binned median image.
+        S = binning
+        for i in range(S):
+            for j in range(S):
+                detmap[i::S, j::S] -= smoo
 
         if plots:
             sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))
@@ -742,11 +818,6 @@ def stage_srcs(coimgs=None, cons=None,
             plt.suptitle('Median filter of detection map: %s band' % bands[i])
             ps.savefig()
 
-        # Subtract binned median image.
-        S = binning
-        for i in range(S):
-            for j in range(S):
-                detmap[i::S, j::S] -= smoo
 
     # SED-matched detections
     print 'Running source detection at', nsigma, 'sigma'
@@ -853,7 +924,7 @@ def set_source_radii(bands, orig_wcsxy0, tims, cat, minsigma, minradius=3):
     for (ox0,oy0),tim in zip(orig_wcsxy0, tims):
         minsig1s[tim.band] = min(minsig1s[tim.band], tim.sig1)
         th,tw = tim.shape
-        print 'PSF', tim.psf
+        #print 'PSF', tim.psf
         mog = tim.psf.getMixtureOfGaussians(px=ox0+(tw/2), py=oy0+(th/2))
         profiles.extend([
             mog.evaluate_grid(0, R, 0, 1, 0., 0.).patch.ravel(),
@@ -2939,13 +3010,12 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         from utils.debugpool import DebugPool, DebugPoolMeas
         pool = DebugPool(opt.threads, initializer=runbrick_global_init,
                          initargs=[])
-        Time.add_measurement(DebugPoolMeas(pool))
-        mp = multiproc(None, pool=pool)
-
-        #mp = multiproc(opt.threads, init=runbrick_global_init,
-        #               initargs=[])
+        Time.add_measurement(DebugPoolMeas(pool, pickleTraffic=False))
+        #mp = multiproc(None, pool=pool)
+        mp = MyMultiproc(None, pool=pool)
     else:
-        mp = multiproc(init=runbrick_global_init, initargs=[])
+        #mp = multiproc(init=runbrick_global_init, initargs=[])
+        mp = MyMultiproc(init=runbrick_global_init, initargs=[])
     # ??
     kwargs.update(mp=mp)
 
@@ -3002,6 +3072,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
                  initial_args=initargs, **kwargs)
 
     print 'All done:', Time()-t0
+    mp.report(opt.threads)
     return 0
 
 def trace(frame, event, arg):
