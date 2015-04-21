@@ -417,27 +417,32 @@ class DebugPoolMeas(object):
         self.pool = pool
         self.pickleTraffic = pickleTraffic
     def __call__(self):
-        class DebugPoolTimestamp(object):
-            def __init__(self, pool, pickleTraffic):
-                self.pool = pool
-                self.t0 = self.now(pickleTraffic)
-            def format_diff(self, other):
-                t1 = self.t0
-                t0 = other.t0
-                return (('%.3f s worker CPU, %.3f s worker Wall, ' +
-                         'pickled %i/%i objs, %.1f/%.1f MB') %
-                        tuple(t1[k] - t0[k] for k in [
-                    'worker_cpu', 'worker_wall', 'pickle_objs', 'unpickle_objs',
-                    'pickle_megabytes', 'unpickle_megabytes']))
-            def now(self, pickleTraffic):
-                if pickleTraffic:
-                    stats = self.pool.get_pickle_traffic()
-                else:
-                    stats = dict()
-                stats.update(worker_cpu = self.pool.get_worker_cpu(),
-                             worker_wall = self.pool.get_worker_wall())
-                return stats
         return DebugPoolTimestamp(self.pool, self.pickleTraffic)
+
+class DebugPoolTimestamp(object):
+    def __init__(self, pool, pickleTraffic):
+        self.pool = pool
+        self.t0 = self.now(pickleTraffic)
+    def format_diff(self, other):
+        t1 = self.t0
+        t0 = other.t0
+        s = ('%.3f s worker CPU, %.3f s worker Wall' %
+             tuple(t1[k] - t0[k] for k in ['worker_cpu', 'worker_wall']))
+        if 'pickle_objs' in self.t0:
+            s += (', pickled %i/%i objs, %.1f/%.1f MB' %
+                  tuple(t1[k] - t0[k] for k in [
+                        'pickle_objs', 'unpickle_objs',
+                        'pickle_megabytes', 'unpickle_megabytes']))
+        return s
+
+    def now(self, pickleTraffic):
+        if pickleTraffic:
+            stats = self.pool.get_pickle_traffic()
+        else:
+            stats = dict()
+        stats.update(worker_cpu = self.pool.get_worker_cpu(),
+                     worker_wall = self.pool.get_worker_wall())
+        return stats
 
 class DebugPool(mp.pool.Pool):
     def _setup_queues(self):
