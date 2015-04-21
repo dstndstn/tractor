@@ -1930,8 +1930,7 @@ class DecamImage(object):
 
         just_check: if True, returns True if calibs need to be run.
         '''
-        print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
-
+        #print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
         for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
             print 'exists?', os.path.exists(fn), fn
         self.makedirs()
@@ -1941,19 +1940,17 @@ class DecamImage(object):
             psfexfit = False
             psfexfit2 = False
 
-    def run_calibs(self, ra, dec, pixscale, mock_psf,
-                   W=2048, H=4096, se=True,
-                   astrom=True, psfex=True, sky=True,
-                   pvastrom=True,
-                   psfexfit=True, psfexfit2=False,
-                   funpack=True, fcopy=False, use_mask=True,
+    def run_calibs(self, ra, dec, pixscale, mock_psf, W=2048, H=4096,
+                   pvastrom=True, psfex=True, sky=True, psfexfit=True,
+                   se=False, astrom=False, psfexfit2=False,
+                   funpack=False, fcopy=False, use_mask=True,
                    force=False, just_check=False):
         '''
         pixscale: in arcsec/pixel
 
         just_check: if True, returns True if calibs need to be run.
         '''
-        print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
+        #print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
         for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
             print 'exists?', os.path.exists(fn), fn
@@ -1979,10 +1976,10 @@ class DecamImage(object):
             # an output file is still written.  Try to detect & fix this
             # case.
             # Check the PsfEx output file for POLNAME1
-            hdr = fitsio.read_header(fn, ext=1)
+            hdr = fitsio.read_header(self.psffn, ext=1)
             if hdr.get('POLNAME1', None) is None:
-                print 'Did not find POLNAME1 in PsfEx header', fn, '-- deleting'
-                os.unlink(fn)
+                print 'Did not find POLNAME1 in PsfEx header', self.psffn, '-- deleting'
+                os.unlink(self.psffn)
             else:
                 psfex = False
         if psfex:
@@ -1999,7 +1996,7 @@ class DecamImage(object):
                     os.unlink(fn)
                 except:
                     pass
-            if os.path.exists(sefn):
+            if os.path.exists(self.sefn):
                 se = False
         if se:
             funpack = True
@@ -2139,7 +2136,8 @@ class DecamImage(object):
             for r in wcshdr.records():
                 version_hdr.add_record(r)
             fitsio.write(self.pvwcsfn, None, header=version_hdr, clobber=True)
-                
+            print 'Wrote', self.pvwcsfn
+
         if psfex:
             # If we wrote *.psf instead of *.fits in a previous run...
             oldfn = self.psffn.replace('.fits', '.psf')
