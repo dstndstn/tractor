@@ -413,13 +413,14 @@ class BeanCounter(object):
         return 'CPU time: %.3fs s, Wall time: %.3fs' % (self.get_cpu(), self.get_wall())
 
 class DebugPoolMeas(object):
-    def __init__(self, pool):
+    def __init__(self, pool, pickleTraffic=True):
         self.pool = pool
+        self.pickleTraffic = pickleTraffic
     def __call__(self):
         class DebugPoolTimestamp(object):
-            def __init__(self, pool):
+            def __init__(self, pool, pickleTraffic):
                 self.pool = pool
-                self.t0 = self.now()
+                self.t0 = self.now(pickleTraffic)
             def format_diff(self, other):
                 t1 = self.t0
                 t0 = other.t0
@@ -428,12 +429,15 @@ class DebugPoolMeas(object):
                         tuple(t1[k] - t0[k] for k in [
                     'worker_cpu', 'worker_wall', 'pickle_objs', 'unpickle_objs',
                     'pickle_megabytes', 'unpickle_megabytes']))
-            def now(self):
-                stats = self.pool.get_pickle_traffic()
+            def now(self, pickleTraffic):
+                if pickleTraffic:
+                    stats = self.pool.get_pickle_traffic()
+                else:
+                    stats = dict()
                 stats.update(worker_cpu = self.pool.get_worker_cpu(),
                              worker_wall = self.pool.get_worker_wall())
                 return stats
-        return DebugPoolTimestamp(self.pool)
+        return DebugPoolTimestamp(self.pool, self.pickleTraffic)
 
 class DebugPool(mp.pool.Pool):
     def _setup_queues(self):
