@@ -1606,6 +1606,9 @@ class Tractor(MultiParams):
                                     scale_columns=scale_columns,
                                     shared_params=shared_params,
                                     variance=variance)
+        if X is None:
+            # Failure
+            return (0., None, 0.)
         if variance:
             if len(X) == 0:
                 return 0, X, 0, None
@@ -2181,6 +2184,9 @@ class Tractor(MultiParams):
             from scipy.sparse.linalg import lsqr
 
             spvals = np.hstack(spvals)
+            if not np.all(np.isfinite(spvals)):
+                print 'Warning: infinite derivatives; bailing out'
+                return None
             assert(np.all(np.isfinite(spvals)))
     
             sprows = np.hstack(sprows) # hogg's lovin' hstack *again* here
