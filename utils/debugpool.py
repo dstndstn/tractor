@@ -416,7 +416,7 @@ class DebugPoolMeas(object):
     def __init__(self, pool):
         self.pool = pool
     def __call__(self):
-        class FormatDiff(object):
+        class DebugPoolTimestamp(object):
             def __init__(self, pool):
                 self.pool = pool
                 self.t0 = self.now()
@@ -433,7 +433,7 @@ class DebugPoolMeas(object):
                 stats.update(worker_cpu = self.pool.get_worker_cpu(),
                              worker_wall = self.pool.get_worker_wall())
                 return stats
-        return FormatDiff(self.pool)
+        return DebugPoolTimestamp(self.pool)
 
 class DebugPool(mp.pool.Pool):
     def _setup_queues(self):
