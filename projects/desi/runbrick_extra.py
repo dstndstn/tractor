@@ -1,3 +1,91 @@
+# class BlobTractor(Tractor):
+#     def __init__(self, *args, **kwargs):
+#         super(BlobTractor, self).__init__(*args, **kwargs)
+#         if nocache:
+#             self.disable_cache()
+#             
+#     def getLogLikelihood(self):
+#         assert(not self.is_multiproc())
+#         chisq = 0.
+# 
+#         sky=True
+#         minsb=None
+#         srcs=None
+#         if srcs is None:
+#             srcs = self.catalog
+# 
+#         for img in self.images:
+#             mod = np.zeros(img.getModelShape(), self.modtype)
+#             if sky:
+#                 img.getSky().addTo(mod)
+# 
+#             # For flux outside blob:
+#             # ASSUME the PSF conv galaxy is done via MoG;
+#             psfmog = img.getPsf().getMixtureOfGaussians()
+#             psfsum = np.sum(psfmog.amp)
+#             # FIXME -- render PSF model within source's modelMask?
+#             # modelrad = 8
+#             # H,W = img.shape
+#             # cx,cy = int(W/2), int(H/2)
+#             # psfpatch = img.getPsf().getPointSourcePatch(
+#             #     cx, cy, extent=[cx-modelrad, cx+modelrad+1, cy-modelrad, cy+modelrad+1])
+#             # print 'PSF sum:', psfsum
+#             # print 'PSF patch sum:', psfpatch.patch.sum()
+#             #psfsum = psfpatch.patch.sum()
+# 
+#             for src in srcs:
+#                 if src is None:
+#                     continue
+#                 patch = self.getModelPatch(img, src, minsb=minsb)
+#                 if patch is None:
+#                     continue
+#                 patch.addTo(mod)
+#                 # Also tally up the flux outside the blob...
+#                 #
+#                 # One issue here could be images that do not fully
+#                 # cover the blob... the model gets penalized for
+#                 # predicting flux outside the image, but the image is
+#                 # smaller than the blob; the model is supposed to
+#                 # predict flux outside that image.  Edges suck.  You
+#                 # could imagine this pulling the flux estimate low.
+#                 # Could not impose this penalty for sources close to
+#                 # the image edges (or outside the image), but hard
+#                 # thresholds suck too.  Apodize the penalty near the
+#                 # image edges?
+#                 #
+#                 # Nastily, flux outside the blob is the
+#                 # brightness->counts * PSF sum - patch sum, since real
+#                 # PSFs need not sum to 1.0.
+#                 #
+#                 # ASSUME the source has a getBrightness() method
+#                 counts = img.getPhotoCal().brightnessToCounts(src.getBrightness())
+#                 # Flux outside the blob is...
+#                 excess = counts * psfsum - patch.patch.sum()
+#                 # APPROX - guess that the excess flux is spread into N 1-sigma pixels
+#                 # print 'Source:', src
+#                 # print 'Source flux:', counts/img.sig1, 'sigma'
+#                 # print 'Excess flux: %.2f' % (excess/img.sig1), 'sigma (%.0f%%)' % (100.*excess/counts), ': counts %.2f'%counts, 'x PSF sum %.3f'% psfsum, '= %.2f' % (counts*psfsum), 'vs patch %.2f' % patch.patch.sum(), '= %.2f' % excess
+# 
+#                 # Here's an attempt at apodization...
+#                 #ix,iy = img.getWcs().positionToPixel(src.getPosition())
+#                 #ix = int(np.round(ix))
+#                 #iy = int(np.round(iy))
+#                 #H,W = img.shape
+#                 #edgedist = max(0, min(ix, iy, H-1-iy, W-1-ix))
+#                 #print 'edge distance:', edgedist, '-- x,y', (ix,iy), 'size', W,'x',H
+#                 # soften = 1.
+#                 # if edgedist < 5:
+#                 #     #soften = np.exp(-0.5 * (5. - edgedist)**2 / 2.**2)
+#                 #     soften = 0.2 * edgedist
+#                 #     print 'soften:', soften
+#                 # chisq += soften * (np.abs(excess) / img.sig1)
+#                 
+#                 chisq += (np.abs(excess) / img.sig1)
+# 
+#             chisq += (((img.getImage() - mod) * img.getInvError())**2).sum()
+# 
+#         return -0.5 * chisq
+    
 def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
     T2 = decals.get_ccds()
 
