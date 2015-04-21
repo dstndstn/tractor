@@ -282,8 +282,9 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         im = DecamImage(t)
         ims.append(im)
 
-    print 'Finding images touching brick:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[serial tims] Finding images touching brick:', tnow-tlast
+    tlast = tnow
 
     # Run calibrations
     kwa = dict()
@@ -294,11 +295,11 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
     _map(run_calibs, args)
-    print 'Calibrations:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[parallel tims] Calibrations:', tnow-tlast
+    tlast = tnow
 
     # Read images, clip to ROI
-    ttim = Time()
     args = [(im, decals, targetrd, mock_psf, pvwcs, const2psf) for im in ims]
     tims = _map(read_one_tim, args)
 
@@ -309,8 +310,9 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     tims = [tim for tim in tims if tim is not None]
     assert(len(T) == len(tims))
 
-    print 'Read', len(T), 'images:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[parallel tims] Read', len(T), 'images:', tnow-tlast
+    tlast = tnow
 
     if len(tims) == 0:
         print 'No photometric CCDs overlap.  Quitting.'
@@ -321,12 +323,14 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     if not pipe:
         # save resampling params
         tims_compute_resamp(tims, targetwcs)
-        print 'Computing resampling:', Time()-tlast
-        tlast = Time()
+        tnow = Time()
+        print 'Computing resampling:', tnow-tlast
+        tlast = tnow
         # Produce per-band coadds, for plots
         coimgs,cons = compute_coadds(tims, bands, targetwcs)
-        print 'Coadds:', Time()-tlast
-        tlast = Time()
+        tnow = Time()
+        print 'Coadds:', tnow-tlast
+        tlast = tnow
 
     # Cut "bands" down to just the bands for which we have images.
     allbands = [tim.band for tim in tims]
@@ -684,17 +688,17 @@ def stage_srcs(coimgs=None, cons=None,
     else:
         sdss_xy = None
 
-    print 'SDSS sources:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[serial srcs] SDSS sources:', tnow-tlast
+    tlast = tnow
 
     print 'Rendering detection maps...'
-    tlast = Time()
     detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
-    print 'Detmaps:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[parallel srcs] Detmaps:', tnow-tlast
+    tlast = tnow
 
-    # Median-smooth detection maps?
-    #if False:
+    # Median-smooth detection maps
     for i,(detmap,detiv) in enumerate(zip(detmaps,detivs)):
         #from astrometry.util.util import median_smooth
         #smoo = np.zeros_like(detmap)
@@ -773,8 +777,9 @@ def stage_srcs(coimgs=None, cons=None,
         del detmaps
         del detivs
 
-    print 'Peaks:', Time()-tlast
-    tlast = Time()
+    tnow = Time()
+    print '[serial srcs] Peaks:', tnow-tlast
+    tlast = tnow
 
     if plots:
         if False and not plots:
@@ -823,6 +828,10 @@ def stage_srcs(coimgs=None, cons=None,
     cat.freezeAllParams()
     tractor = Tractor(tims, cat)
     tractor.freezeParam('images')
+
+    tnow = Time()
+    print '[serial srcs] Blobs:', tnow-tlast
+    tlast = tnow
     
     keys = ['T', 
             'blobsrcs', 'blobslices', 'blobs',
@@ -881,6 +890,7 @@ def stage_fitblobs(T=None,
                    nblobs=None, blob0=None, blobxy=None,
                    simul_opt=False,
                    **kwargs):
+    tlast = Time()
     for tim in tims:
         assert(np.all(np.isfinite(tim.getInvError())))
 
@@ -948,7 +958,9 @@ def stage_fitblobs(T=None,
     T.orig_ra  = T.ra.copy()
     T.orig_dec = T.dec.copy()
 
-    tfitall = Time()
+    tnow = Time()
+    print '[serial fitblobs]:', tnow-tlast
+    tlast = tnow
 
     if blobxy is not None:
         print 'Blobxy', blobxy
@@ -982,7 +994,7 @@ def stage_fitblobs(T=None,
         # to allow debugpool to only queue tasks one at a time
         iter = iterwrapper(iter, len(blobsrcs))
     R = _map(_bounce_one_blob, iter)
-    print 'Fitting sources took:', Time()-tfitall
+    print '[parallel fitblobs] Fitting sources took:', Time()-tlast
 
     return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs, blobslices=blobslices,
                 blobsrcs=blobsrcs)
@@ -998,8 +1010,6 @@ def stage_fitblobs_finish(
         fitblobs_R=None,
         outdir=None,
         **kwargs):
-
-    print 'Logprob:', tractor.getLogProb()
 
     # one_blob can reduce the number and change the types of sources!
     # Reorder the sources here...
@@ -2228,6 +2238,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
                  outdir=None, T=None, cat=None, pixscale=None, plots=False,
                  **kwargs):
+    tlast = Time()
 
     if outdir is None:
         outdir = '.'
@@ -2245,9 +2256,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
                     tim.subwcs.pixelxy2radec(x1-x0, y1-y0)[-2:]]
                     for tim,x0,y0,x1,y1 in
                    zip(tims, ccds.ccd_x0+1, ccds.ccd_y0+1, ccds.ccd_x1, ccds.ccd_y1)])
-    print 'rd shape', rd.shape
     ok,x,y = targetwcs.radec2pixelxy(rd[:,:,0], rd[:,:,1])
-    print 'x shape', x.shape
     ccds.brick_x0 = np.floor(np.min(x, axis=1)).astype(np.int16)
     ccds.brick_x1 = np.ceil (np.max(x, axis=1)).astype(np.int16)
     ccds.brick_y0 = np.floor(np.min(y, axis=1)).astype(np.int16)
@@ -2256,12 +2265,16 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     ccds.writeto(fn)
     print 'Wrote', fn
 
-    for tim in tims:
-        print 'Tim', tim.name, 'PSF', tim.getPsf()
+    #for tim in tims:
+    #    print 'Tim', tim.name, 'PSF', tim.getPsf()
 
-    t0 = Time()
+    tnow = Time()
+    print '[serial coadds]:', tnow-tlast
+    tlast = tnow
     mods = _map(_get_mod, [(tim, cat) for tim in tims])
-    print 'Getting model images:', Time()-t0
+    tnow = Time()
+    print '[parallel coadds] Getting model images:', tnow-tlast
+    tlast = tnow
 
     W = targetwcs.get_width()
     H = targetwcs.get_height()
@@ -2322,6 +2335,9 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
         plt.axis(ax)
         ps.savefig()
 
+    tnow = Time()
+    print '[serial coadds] Aperture photometry, wrap-up', tnow-tlast
+
     return dict(T=T, AP=C.AP, apertures_pix=apertures,
                 apertures_arcsec=apertures_arcsec)
 
@@ -2333,7 +2349,6 @@ def stage_wise_forced(
     brickname=None,
     outdir=None,
     **kwargs):
-
     from wise.forcedphot import unwise_forcedphot, unwise_tiles_touching_wcs
 
     decals = Decals()
