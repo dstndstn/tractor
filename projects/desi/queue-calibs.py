@@ -180,6 +180,14 @@ if __name__ == '__main__':
         T.cut(np.flatnonzero(np.array(['CPDES82' in fn for fn in T.cpimage])))
         log('Cut to', len(T), 'CCDs with "CPDES82" in filename')
 
+    elif opt.region == 'grz':
+        # Bricks with grz coverage.
+        # Be sure to use  --bricks decals-bricks-in-dr1.fits
+        # which has_[grz] columns.
+        B.cut((B.has_g == 1) * (B.has_r == 1) * (B.has_z == 1))
+        log('Cut to', len(B), 'bricks with grz coverage')
+        
+
     if opt.mindec is not None:
         dlo = opt.mindec
     if opt.maxdec is not None:
