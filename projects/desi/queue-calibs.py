@@ -187,6 +187,13 @@ if __name__ == '__main__':
         B.cut((B.has_g == 1) * (B.has_r == 1) * (B.has_z == 1))
         log('Cut to', len(B), 'bricks with grz coverage')
         
+    elif opt.region == 'nogrz':
+        # Bricks without grz coverage.
+        # Be sure to use  --bricks decals-bricks-in-dr1.fits
+        # which has_[grz] columns.
+        B.cut(np.logical_not((B.has_g == 1) * (B.has_r == 1) * (B.has_z == 1)))
+        log('Cut to', len(B), 'bricks withOUT grz coverage')
+        
 
     if opt.mindec is not None:
         dlo = opt.mindec
