@@ -68,6 +68,8 @@ if __name__ == '__main__':
     parser.add_option('--delete-pvastrom', default=False, action='store_true',
                       help='Delete any existing PV WCS calibration files')
 
+    parser.add_option('--write-ccds', help='Write CCDs list as FITS table?')
+
     opt,args = parser.parse_args()
 
     D = Decals()
@@ -282,6 +284,10 @@ if __name__ == '__main__':
         allI.sort()
     else:
         allI = np.arange(len(T))
+
+    if opt.write_ccds:
+        T[allI].writeto(opt.write_ccds)
+        print 'Wrote', opt.write_ccds
 
     ## Be careful here -- T has been cut; we want to write out T.index.
     ## 'allI' contains indices into T.
