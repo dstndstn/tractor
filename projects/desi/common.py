@@ -1675,12 +1675,12 @@ class DecamImage(object):
                         y0 = 100
                 else:
                     # Southern chips: drop 100 pix off the top
-                    if y1 >= (imh-100):
+                    if y1 > (imh-100):
                         print 'Clipping top part of southern DES r-band chip'
-                        y1 = imh-100-1
+                        y1 = imh-100
                 if y0 >= y1:
                     return None
-            slc = slice(y0,y1+1), slice(x0,x1+1)
+            slc = slice(y0,y1), slice(x0,x1)
         
         print 'Reading image from', self.imgfn, 'HDU', self.hdu
         img,imghdr = self.read_image(header=True, slice=slc)
