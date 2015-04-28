@@ -21,14 +21,26 @@ except:
     from total_ordering import total_ordering
 
 def get_class_from_name(objclass):
-    import importlib
+    try:
+        import importlib
+    except:
+        importlib = None
 
     names = objclass.split('.')
     names = [n for n in names if len(n)]
     pkg = '.'.join(names[:-1])
     clazz = names[-1]
-    mod = importlib.import_module(pkg)
-    #print 'Module:', mod
+    if importlib is not None:
+        # nice 'n easy in py2.7+
+        mod = importlib.import_module(pkg)
+    else:
+        mod = __import__(pkg, globals(), locals(), [], -1)
+        print 'Module:', mod
+        for name in names[1:-1]:
+            print 'name', name
+            mod = getattr(mod, name)
+            print '-> mod', mod
+
     clazz = getattr(mod, clazz)
     #print 'Class:', clazz
     return clazz
