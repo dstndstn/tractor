@@ -2033,6 +2033,17 @@ class DecamImage(object):
         tmpimgfn = None
         tmpmaskfn = None
 
+        # Unpacked image file
+        funimgfn = self.imgfn
+        funmaskfn = self.dqfn
+        
+        if funpack:
+            # For FITS files that are not actually fpack'ed, funpack -E
+            # fails.  Check whether actually fpacked.
+            hdr = fitsio.read_header(self.imgfn, ext=self.hdu)
+            if not ((hdr['XTENSION'] == 'BINTABLE') and hdr.get('ZIMAGE', False)):
+                print 'Image', self.imgfn, 'HDU', self.hdu, 'is not actually fpacked; not funpacking.'
+                funpack = False
         if funpack:
             tmpimgfn  = create_temp(suffix='.fits')
             tmpmaskfn = create_temp(suffix='.fits')
@@ -2044,12 +2055,14 @@ class DecamImage(object):
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
-    
+            funimgfn = tmpimgfn
+            
             if use_mask:
                 cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpmaskfn, self.dqfn)
                 print cmd
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
+                funmaskfn = tmpmaskfn
     
         if astrom or se:
             # grab header values...
@@ -2066,7 +2079,7 @@ class DecamImage(object):
         if se:
             maskstr = ''
             if use_mask:
-                maskstr = '-FLAG_IMAGE ' + tmpmaskfn
+                maskstr = '-FLAG_IMAGE ' + funmaskfn
             cmd = ' '.join([
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
@@ -2076,11 +2089,11 @@ class DecamImage(object):
                 '-STARNNW_NAME', os.path.join(sedir, 'default.nnw'),
                 '-PIXEL_SCALE 0',
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
-                tmpimgfn])
+                funimgfn])
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
-    
+
         if astrom:
             cmd = ' '.join([
                 'solve-field --config', an_config, '-D . --temp-dir', tempdir,
