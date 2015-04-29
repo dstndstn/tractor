@@ -2042,9 +2042,9 @@ class DecamImage(object):
             # fails.  Check whether actually fpacked.
             hdr = fitsio.read_header(self.imgfn, ext=self.hdu)
             if not ((hdr['XTENSION'] == 'BINTABLE') and hdr.get('ZIMAGE', False)):
-                print 'Image', self.imgfn, 'HDU', self.hdu, 'is not actually fpacked; not funpacking.'
-                funpack = False
-        if funpack:
+                print 'Image', self.imgfn, 'HDU', self.hdu, 'is not actually fpacked; not funpacking, just imcopying.'
+                fcopy = True
+
             tmpimgfn  = create_temp(suffix='.fits')
             tmpmaskfn = create_temp(suffix='.fits')
     
