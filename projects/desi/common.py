@@ -2058,7 +2058,10 @@ class DecamImage(object):
             funimgfn = tmpimgfn
             
             if use_mask:
-                cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpmaskfn, self.dqfn)
+                if fcopy:
+                    cmd = 'imcopy %s"+%i" %s' % (self.dqfn, self.hdu, tmpmaskfn)
+                else:
+                    cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpmaskfn, self.dqfn)
                 print cmd
                 if os.system(cmd):
                     raise RuntimeError('Command failed: ' + cmd)
