@@ -26,7 +26,7 @@ if __name__ == '__main__':
             T.cut(T.expnum == opt.expnum)
             print 'Cut to', len(T), 'with expnum =', opt.expnum
         if opt.extname is not None:
-            T.cut([t.strip() == opt.extname for t in T.extname])
+            T.cut(np.array([(t.strip() == opt.extname) for t in T.extname]))
             print 'Cut to', len(T), 'with extname =', opt.extname
 
         args = range(len(T))
