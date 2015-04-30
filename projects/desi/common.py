@@ -2064,7 +2064,13 @@ class DecamImage(object):
                     cmd = 'funpack -E %i -O %s %s' % (self.hdu, tmpmaskfn, self.dqfn)
                 print cmd
                 if os.system(cmd):
-                    raise RuntimeError('Command failed: ' + cmd)
+                    #raise RuntimeError('Command failed: ' + cmd)
+                    print 'Command failed: ' + cmd
+                    M,hdr = fitsio.read(self.dqfn, ext=self.hdu, header=True)
+                    print 'Read', M.dtype, M.shape
+                    fitsio.write(tmpmaskfn, M, header=hdr, clobber=True)
+                    print 'Wrote', tmpmaskfn, 'with fitsio'
+                    
                 funmaskfn = tmpmaskfn
     
         if astrom or se:
