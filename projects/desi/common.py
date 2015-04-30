@@ -2097,6 +2097,9 @@ class DecamImage(object):
                 '-FILTER_NAME', os.path.join(sedir, 'gauss_5.0_9x9.conv'),
                 '-STARNNW_NAME', os.path.join(sedir, 'default.nnw'),
                 '-PIXEL_SCALE 0',
+                # SE has a *bizarre* notion of "sigma"
+                '-DETECT_THRESH 1.5',
+                '-ANALYSIS_THRESH 1.5',
                 '-MAG_ZEROPOINT %f' % magzp, '-CATALOG_NAME', self.sefn,
                 funimgfn])
             print cmd
