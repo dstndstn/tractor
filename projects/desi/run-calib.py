@@ -11,15 +11,26 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--force', action='store_true', default=False,
                       help='Run calib processes even if files already exist?')
-    opt,args = parser.parse_args()
 
-    # Now THAT's what I call forcing
-    #opt.force = True
+    parser.add_option('--expnum', type=int, help='Cut to a single exposure')
+    parser.add_option('--extname', help='Cut to a single extension name')
+
+    opt,args = parser.parse_args()
 
     D = Decals()
     T = D.get_ccds()
     print len(T), 'CCDs'
 
+    if len(args) == 0:
+        if opt.expnum is not None:
+            T.cut(T.expnum == opt.expnum)
+            print 'Cut to', len(T), 'with expnum =', opt.expnum
+        if opt.extname is not None:
+            T.cut([t.strip() == opt.extname for t in T.extname])
+            print 'Cut to', len(T), 'with extname =', opt.extname
+
+        args = range(len(T))
+            
     for a in args:
         i = int(a)
         t = T[i]
@@ -32,7 +43,7 @@ if __name__ == '__main__':
         print 'Pixscale', pixscale, 'arcsec/pix'
         mock_psf = False
 
-        kwargs = dict(astrom=False)
+        kwargs = dict(astrom=False, pvastrom=True)
 
         kwargs.update(psfexfit=False)
 
