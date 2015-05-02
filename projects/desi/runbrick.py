@@ -1116,11 +1116,17 @@ def stage_fitblobs_finish(
 
         from desi_common import prepare_fits_catalog
         from astrometry.util.file import pickle_to_file
+
+        goodI = np.array([i for i,m in enumerate(allmods) if m is not None])
+        TT = T[goodI]
+        allmods  = [allmods [i] for i in goodI]
+        allperfs = [allperfs[i] for i in goodI]
+        assert(len(TT) == len(allmods))
+        assert(len(TT) == len(allperfs))
         
         hdr = fitsio.FITSHDR()
-        TT = T.copy()
         for srctype in ['ptsrc', 'dev','exp','comp']:
-            xcat = Catalog(*[m[srctype] for m in allmods if m is not None])
+            xcat = Catalog(*[m[srctype] for m in allmods])
             xcat.thawAllRecursive()
             allbands = 'ugrizY'
             TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
