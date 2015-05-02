@@ -1098,30 +1098,29 @@ def stage_fitblobs_finish(
     ##
     if True:
         # Drop blobs that failed.
-        good_I = np.array([i for i,r in enumerate(R) if r is not None])
-        good_blobsrcs = [blobsrcs[i] for i in good_I]
-        good_R        = [R       [i] for i in good_I]
-        good_T = T[good_I]
+        good_blobs = np.array([i for i,r in enumerate(R) if r is not None])
+        good_blobsrcs = [blobsrcs[i] for i in good_blobs]
+        good_R        = [R       [i] for i in good_blobs]
         # DEBUGging / metrics for us
         all_models  = [r[8] for r in good_R]
         performance = [r[9] for r in good_R]
     
-        allmods  = [None]*len(good_T)
-        allperfs = [None]*len(good_T)
+        allmods  = [None]*len(T)
+        allperfs = [None]*len(T)
         for Isrcs,mods,perf in zip(good_blobsrcs,all_models,performance):
             for i,mod,per in zip(Isrcs,mods,perf):
                 allmods[i] = mod
                 allperfs[i] = per
         del all_models
         del performance
-    
+
         from desi_common import prepare_fits_catalog
         from astrometry.util.file import pickle_to_file
         
         hdr = fitsio.FITSHDR()
-        TT = good_T.copy()
+        TT = T.copy()
         for srctype in ['ptsrc', 'dev','exp','comp']:
-            xcat = Catalog(*[m[srctype] for m in allmods])
+            xcat = Catalog(*[m[srctype] for m in allmods if m is not None])
             xcat.thawAllRecursive()
             allbands = 'ugrizY'
             TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
