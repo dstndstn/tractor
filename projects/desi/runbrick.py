@@ -2434,8 +2434,19 @@ def stage_wise_forced(
         src.setBrightness(NanoMaggies(w=1.))
         wcat.append(src)
 
-    W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
-                          unwise_dir=unwise_dir, use_ceres=useCeres)
+    try:
+        W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                              unwise_dir=unwise_dir, use_ceres=useCeres)
+    except:
+        import traceback
+        print 'unwise_forcedphot failed:'
+        traceback.print_exc()
+
+        if useCeres:
+            print 'Trying without Ceres...'
+            W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                                  unwise_dir=unwise_dir, use_ceres=False)
+
     W.rename('tile', 'unwise_tile')
     return dict(WISE=W)
     
