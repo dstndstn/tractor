@@ -170,7 +170,7 @@ def main():
         pixradius = 25
         radius = np.sqrt(2.) * pixradius * pixscale / 3600.
 
-        Nkeep = 1000
+        Nkeep = 1
 
         outdir = 'stamps'
 

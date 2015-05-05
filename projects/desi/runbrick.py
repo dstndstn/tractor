@@ -1095,62 +1095,74 @@ def stage_fitblobs_finish(
 
     assert(len(R) == len(blobsrcs))
     
-    # DEBUGging / metrics for us
-    all_models = [r[8] for r in R]
-    performance = [r[9] for r in R]
-
-    allmods = [None]*len(T)
-    allperfs = [None]*len(T)
-    for Isrcs,mods,perf in zip(blobsrcs,all_models,performance):
-        for i,mod,per in zip(Isrcs,mods,perf):
-            allmods[i] = mod
-            allperfs[i] = per
-    del all_models
-    del performance
-
-    from desi_common import prepare_fits_catalog
-    from astrometry.util.file import pickle_to_file
+    ##
+    if True:
+        # Drop blobs that failed.
+        good_blobs = np.array([i for i,r in enumerate(R) if r is not None])
+        good_blobsrcs = [blobsrcs[i] for i in good_blobs]
+        good_R        = [R       [i] for i in good_blobs]
+        # DEBUGging / metrics for us
+        all_models  = [r[8] for r in good_R]
+        performance = [r[9] for r in good_R]
     
-    hdr = fitsio.FITSHDR()
-    TT = T.copy()
-    for srctype in ['ptsrc', 'dev','exp','comp']:
-        xcat = Catalog(*[m[srctype] for m in allmods])
-        xcat.thawAllRecursive()
-        allbands = 'ugrizY'
-        TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
-                                      allbands=allbands, prefix=srctype+'_',
-                                      save_invvars=False)
-        TT.set('%s_flags' % srctype, np.array([m['flags'][srctype] for m in allmods]))
-    TT.delete_column('ptsrc_shapeExp')
-    TT.delete_column('ptsrc_shapeDev')
-    TT.delete_column('ptsrc_fracDev')
-    TT.delete_column('ptsrc_type')
-    TT.delete_column('dev_shapeExp')
-    TT.delete_column('dev_fracDev')
-    TT.delete_column('dev_type')
-    TT.delete_column('exp_shapeDev')
-    TT.delete_column('exp_fracDev')
-    TT.delete_column('exp_type')
-    TT.delete_column('comp_type')
+        allmods  = [None]*len(T)
+        allperfs = [None]*len(T)
+        for Isrcs,mods,perf in zip(good_blobsrcs,all_models,performance):
+            for i,mod,per in zip(Isrcs,mods,perf):
+                allmods[i] = mod
+                allperfs[i] = per
+        del all_models
+        del performance
 
-    TT.keepmod = np.array([m['keep'] for m in allmods])
-    TT.dchisq = np.array([m['dchisqs'] for m in allmods])
-    if outdir is None:
-        outdir = '.'
-    outdir = os.path.join(outdir, 'metrics', brickname[:3])
-    try_makedirs(outdir)
-    fn = os.path.join(outdir, 'all-models-%s.fits' % brickname)
-    TT.writeto(fn, header=hdr)
-    del TT
-    print 'Wrote', fn
+        from desi_common import prepare_fits_catalog
+        from astrometry.util.file import pickle_to_file
 
-    fn = os.path.join(outdir, 'performance-%s.pickle' % brickname)
-    pickle_to_file(allperfs, fn)
-    print 'Wrote', fn
+        goodI = np.array([i for i,m in enumerate(allmods) if m is not None])
+        TT = T[goodI]
+        allmods  = [allmods [i] for i in goodI]
+        allperfs = [allperfs[i] for i in goodI]
+        assert(len(TT) == len(allmods))
+        assert(len(TT) == len(allperfs))
+        
+        hdr = fitsio.FITSHDR()
+        for srctype in ['ptsrc', 'dev','exp','comp']:
+            xcat = Catalog(*[m[srctype] for m in allmods])
+            xcat.thawAllRecursive()
+            allbands = 'ugrizY'
+            TT,hdr = prepare_fits_catalog(xcat, None, TT, hdr, bands, None,
+                                          allbands=allbands, prefix=srctype+'_',
+                                          save_invvars=False)
+            TT.set('%s_flags' % srctype, np.array([m['flags'][srctype] for m in allmods]))
+        TT.delete_column('ptsrc_shapeExp')
+        TT.delete_column('ptsrc_shapeDev')
+        TT.delete_column('ptsrc_fracDev')
+        TT.delete_column('ptsrc_type')
+        TT.delete_column('dev_shapeExp')
+        TT.delete_column('dev_fracDev')
+        TT.delete_column('dev_type')
+        TT.delete_column('exp_shapeDev')
+        TT.delete_column('exp_fracDev')
+        TT.delete_column('exp_type')
+        TT.delete_column('comp_type')
+    
+        TT.keepmod = np.array([m['keep'] for m in allmods])
+        TT.dchisq = np.array([m['dchisqs'] for m in allmods])
+        if outdir is None:
+            outdir = '.'
+        outdir = os.path.join(outdir, 'metrics', brickname[:3])
+        try_makedirs(outdir)
+        fn = os.path.join(outdir, 'all-models-%s.fits' % brickname)
+        TT.writeto(fn, header=hdr)
+        del TT
+        print 'Wrote', fn
+    
+        fn = os.path.join(outdir, 'performance-%s.pickle' % brickname)
+        pickle_to_file(allperfs, fn)
+        print 'Wrote', fn
 
     # Drop now-empty blobs.
-    R = [r for r in R if len(r[0])]
-    
+    R = [r for r in R if r is not None and len(r[0])]
+
     II       = np.hstack([r[0] for r in R])
     srcivs   = np.hstack([np.hstack(r[2]) for r in R])
     fracflux = np.vstack([r[3] for r in R])
@@ -1295,11 +1307,10 @@ def _bounce_one_blob(X):
         return _one_blob(X)
     except:
         import traceback
-        print 'Exception in _one_blob:'
-        #print 'args:', X
+        print 'Exception in _one_blob: (iblob = %i)' % (X[0])
         traceback.print_exc()
-        raise
-
+        print 'CARRYING ON...'
+        return None
 
 def _clip_model_to_blob(mod, sh, ie):
     '''
@@ -2434,8 +2445,19 @@ def stage_wise_forced(
         src.setBrightness(NanoMaggies(w=1.))
         wcat.append(src)
 
-    W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
-                          unwise_dir=unwise_dir, use_ceres=useCeres)
+    try:
+        W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                              unwise_dir=unwise_dir, use_ceres=useCeres)
+    except:
+        import traceback
+        print 'unwise_forcedphot failed:'
+        traceback.print_exc()
+
+        if useCeres:
+            print 'Trying without Ceres...'
+            W = unwise_forcedphot(wcat, tiles, roiradecbox=roiradec,
+                                  unwise_dir=unwise_dir, use_ceres=False)
+
     W.rename('tile', 'unwise_tile')
     return dict(WISE=W)
     
