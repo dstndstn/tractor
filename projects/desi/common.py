@@ -1284,9 +1284,14 @@ class Decals(object):
             I = J[np.nonzero((bricks.ra1[J]  <= rahi ) * (bricks.ra2[J]  >= ralo) *
                              (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))[0]]
             return I
-            
-        I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
-                        (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+
+        if rahi < ralo:
+            # Wrap-around
+            I, = np.nonzero(np.logical_or(bricks.ra2 >= ralo, bricks.ra1 <= rahi) *
+                            (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+        else:
+            I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                            (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
     
     def get_ccds(self):

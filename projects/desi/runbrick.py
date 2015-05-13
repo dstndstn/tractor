@@ -784,12 +784,15 @@ def stage_srcs(coimgs=None, cons=None,
     print '[parallel srcs] Median-filter detmaps:', tnow-tlast
     tlast = tnow
 
+    print 'Bands:', bands
+    print 'detmaps:', len(detmaps)
+
     for i,(detmap,detiv,smoo) in enumerate(zip(detmaps, detivs, smoos)):
         # Subtract binned median image.
         S = binning
-        for i in range(S):
-            for j in range(S):
-                detmap[i::S, j::S] -= smoo
+        for ii in range(S):
+            for jj in range(S):
+                detmap[ii::S, jj::S] -= smoo
 
         if plots:
             sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))
@@ -1490,7 +1493,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         # For sources, in decreasing order of brightness
         for numi,i in enumerate(Ibright):
             #tsrc = Time()
-            #print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
+            print 'Fitting source', i, '(%i of %i in blob)' % (numi, len(Ibright))
             src = subcat[i]
 
             # Add this source's initial model back in.
