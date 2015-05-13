@@ -1287,8 +1287,16 @@ class Decals(object):
 
         if rahi < ralo:
             # Wrap-around
+            print 'In Dec slice:', len(np.flatnonzero((bricks.dec1 <= dechi) *
+                                                      (bricks.dec2 >= declo)))
+            print 'Above RAlo=', ralo, ':', len(np.flatnonzero(bricks.ra2 >= ralo))
+            print 'Below RAhi=', rahi, ':', len(np.flatnonzero(bricks.ra1 <= rahi))
+            print 'In RA slice:', len(np.nonzero(np.logical_or(bricks.ra2 >= ralo,
+                                                               bricks.ra1 <= rahi)))
+                    
             I, = np.nonzero(np.logical_or(bricks.ra2 >= ralo, bricks.ra1 <= rahi) *
                             (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+            print 'In RA&Dec slice', len(I)
         else:
             I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
                             (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
