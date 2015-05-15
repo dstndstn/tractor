@@ -286,8 +286,8 @@ def compute_coadds(tims, bands, targetwcs, images=None,
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
-               plots=False,
+def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
+               plots=False, ps=None,
                target_extent=None, pipe=False, program_name='runbrick.py',
                bands='grz', pvwcs=False, const2psf=True,
                mock_psf=False, **kwargs):
@@ -297,25 +297,20 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     from tractor.mix import c_gauss_2d_grid
 
     decals = Decals()
-    if brickid is not None:
-        brick = decals.get_brick(brickid)
+    if ra is not None:
+        # Custom brick; fake 'brick' object
+        brick = BrickDuck()
+        brick.ra  = ra
+        brick.dec = dec
+        brickid = brick.brickid = -1
+        brick.brickname = brickname
     else:
         brick = decals.get_brick_by_name(brickname)
-    print 'Chosen brick:'
-    brick.about()
-    brickid = brick.brickid
-    brickname = brick.brickname
-
-    version_hdr = get_version_header(program_name, decals.decals_dir)
-    version_hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
-    version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
-    version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
-    version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
-    version_hdr.add_record(dict(name='DECMIN'  , value=brick.dec1, comment='Brick Dec min'))
-    version_hdr.add_record(dict(name='DECMAX'  , value=brick.dec2, comment='Brick Dec max'))
-    print 'Version header:'
-    print version_hdr
-
+        print 'Chosen brick:'
+        brick.about()
+        brickid = brick.brickid
+        brickname = brick.brickname
+        
     targetwcs = wcs_for_brick(brick, W=W, H=H)
     if target_extent is not None:
         (x0,x1,y0,y1) = target_extent
@@ -324,6 +319,28 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         targetwcs = targetwcs.get_subimage(x0, y0, W, H)
     targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                          [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+
+    if ra is not None:
+        brick.ra1,nil  = targetwcs.pixelxy2radec(W, H/2)
+        brick.ra2,nil  = targetwcs.pixelxy2radec(1, H/2)
+        nil, brick.dec1 = targetwcs.pixelxy2radec(W/2, 1)
+        nil, brick.dec2 = targetwcs.pixelxy2radec(W/2, H)
+        print 'RA1,RA2', brick.ra1, brick.ra2
+        print 'Dec1,Dec2', brick.dec1, brick.dec2
+
+
+    version_hdr = get_version_header(program_name, decals.decals_dir)
+    version_hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
+    version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
+    version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
+    version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
+    version_hdr.add_record(dict(name='DECMIN'  , value=brick.dec1, comment='Brick Dec min'))
+    version_hdr.add_record(dict(name='DECMAX'  , value=brick.dec2, comment='Brick Dec max'))
+    version_hdr.add_record(dict(name='BRICKRA' , value=brick.ra,  comment='Brick center'))
+    version_hdr.add_record(dict(name='BRICKDEC', value=brick.dec, comment='Brick center'))
+    print 'Version header:'
+    print version_hdr
+
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
 
@@ -422,8 +439,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     rtn = dict()
     for k in keys:
         rtn[k] = locals()[k]
+        print 'Pickling value', k, '=', rtn[k]
     return rtn
-
 
 def _coadds(tims, bands, targetwcs,
             mods=None, xy=None, apertures=None, apxy=None,
@@ -958,7 +975,7 @@ def stage_fitblobs(T=None,
                    blobsrcs=None, blobslices=None, blobs=None,
                    tractor=None, cat=None, targetrd=None, pixscale=None,
                    targetwcs=None,
-                   W=None,H=None, brickid=None,
+                   W=None,H=None, 
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    nblobs=None, blob0=None, blobxy=None,
@@ -1078,7 +1095,7 @@ def stage_fitblobs_finish(
         T=None, blobsrcs=None, blobslices=None, blobs=None,
         tractor=None, cat=None, targetrd=None, pixscale=None,
         targetwcs=None,
-        W=None,H=None, brickid=None,
+        W=None,H=None, 
         bands=None, ps=None, tims=None,
         plots=False, plots2=False,
         fitblobs_R=None,
@@ -2432,12 +2449,11 @@ def stage_wise_forced(
     T=None,
     targetwcs=None,
     brickname=None,
+    brick=None,
     outdir=None,
     **kwargs):
     from wise.forcedphot import unwise_forcedphot, unwise_tiles_touching_wcs
 
-    decals = Decals()
-    brick = decals.get_brick_by_name(brickname)
     roiradec = [brick.ra1, brick.ra2, brick.dec1, brick.dec2]
     tiles = unwise_tiles_touching_wcs(targetwcs)
     print 'Cut to', len(tiles), 'unWISE tiles'
@@ -2480,6 +2496,7 @@ def stage_writecat(
     plots=False, tractor=None,
     brickname=None,
     brickid=None,
+    brick=None,
     invvars=None,
     catalogfn=None,
     outdir=None,
@@ -2586,8 +2603,6 @@ def stage_writecat(
     T2.bx = (bx - 1.).astype(np.float32)
     T2.by = (by - 1.).astype(np.float32)
 
-    decals = Decals()
-    brick = decals.get_brick_by_name(brickname)
     T2.brick_primary = ((T2.ra  >= brick.ra1 ) * (T2.ra  < brick.ra2) *
                         (T2.dec >= brick.dec1) * (T2.dec < brick.dec2))
     
@@ -2895,7 +2910,7 @@ def main():
     ep = '''
 eg, to run a small field containing a cluster:
 \n
-python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 950 -P pickles/runbrick-cluster-%%s.pickle
+python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 450 950 -P pickles/runbrick-cluster-%%s.pickle
 \n
 '''
     parser = optparse.OptionParser(epilog=ep)
@@ -2909,8 +2924,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
 
-    parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
-                      default='377306')
+    parser.add_option('-b', '--brick', help='Brick name to run: default %default',
+                      default='2440p070')
+
+    parser.add_option('--radec', help='RA,Dec center for a custom location (not a brick)',
+                      nargs=2)
 
     parser.add_option('-d', '--outdir', help='Set output base directory')
     
@@ -2927,8 +2945,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
     parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
-    parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
-    parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
+    parser.add_option('-W', '--width', type=int, default=3600, help='Target image width (default %default)')
+    parser.add_option('-H', '--height', type=int, default=3600, help='Target image height (default %default)')
 
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
 
@@ -2963,6 +2981,28 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     print
 
     opt,args = parser.parse_args()
+
+    initargs = {}
+
+    if opt.radec is not None:
+        print 'RA,Dec:', opt.radec
+        assert(len(opt.radec) == 2)
+        ra,dec = opt.radec
+        try:
+            ra = float(ra)
+        except:
+            from astrometry.util.starutil_numpy import hmsstring2ra
+            ra = hmsstring2ra(ra)
+        try:
+            dec = float(dec)
+        except:
+            from astrometry.util.starutil_numpy import dmsstring2dec
+            dec = dmsstring2dec(dec)
+        print 'Parsed RA,Dec', ra,dec
+        initargs.update(ra=ra, dec=dec)
+        opt.brick = 'custom-%06i%s%05i' % (int(1000*ra), '-' if dec < 0 else '+',
+                                           int(1000*np.abs(dec)))
+    initargs.update(brickname=opt.brick)
 
     if opt.check_done or opt.skip or opt.skip_coadd:
         outdir = opt.outdir
@@ -3017,7 +3057,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.plot_base is None:
         opt.plot_base = plot_base_default
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
-    initargs = dict(ps=ps)
+    initargs.update(ps=ps)
 
     kwargs = {}
     if opt.plot_number:
@@ -3080,14 +3120,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'redo_apphot': 'tims',
         }
 
-    initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
-    try:
-        brickid = int(opt.brick, 10)
-        initargs.update(brickid=brickid)
-    except:
-        initargs.update(brickname = opt.brick)
-
-    initargs.update(pvwcs=opt.pv)
+    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom, pvwcs=opt.pv)
 
     t0 = Time()
 

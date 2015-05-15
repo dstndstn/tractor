@@ -60,6 +60,9 @@ CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                   edge = 256,
                   edge2 = 512) # in z-band images?
 
+class BrickDuck(object):
+    pass
+
 def get_version_header(program_name, decals_dir):
     from astrometry.util.run_command import run_command
     if program_name is None:
@@ -1083,10 +1086,9 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
                      np.hypot(T.width, T.height) / 2.)
 
     rad = trad + ccdrad
-    #r,d = targetwcs.crval
+    #print 'Target WCS radius:', trad
+    #print 'CCD radius:', ccdrad
     r,d = targetwcs.radec_center()
-    #print len(T), 'ccds'
-    #print 'trad', trad, 'ccdrad', ccdrad
     I, = np.nonzero(np.abs(T.dec - d) < rad)
     #print 'Cut to', len(I), 'on Dec'
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
@@ -1663,14 +1665,17 @@ class DecamImage(object):
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
             ok,tx,ty = wcs.radec2pixelxy(radecpoly[:-1,0], radecpoly[:-1,1])
             tpoly = zip(tx,ty)
+            #print 'Target RA,Dec polygon in CCD pixels:', tpoly
+            #print ' --> as ints:', np.array(tpoly).astype(int)
+            #print 'Image polygon:', imgpoly
             clip = clip_polygon(imgpoly, tpoly)
             clip = np.array(clip)
+            #print 'Clipped:', clip
             if len(clip) == 0:
                 return None
             x0,y0 = np.floor(clip.min(axis=0)).astype(int)
             x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
             slc = slice(y0,y1+1), slice(x0,x1+1)
-
             if y1 - y0 < tiny or x1 - x0 < tiny:
                 print 'Skipping tiny subimage'
                 return None
