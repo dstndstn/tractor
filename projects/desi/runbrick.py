@@ -36,6 +36,7 @@ from tractor.utils import _GaussianPriors
 
 from common import *
 from runbrick_plots import *
+from runbrick_plots import _plot_mods
 
 ## GLOBALS!  Oh my!
 mp = None
