@@ -60,6 +60,9 @@ CP_DQ_BITS = dict(badpix=1, satur=2, interp=4, cr=16, bleed=64,
                   edge = 256,
                   edge2 = 512) # in z-band images?
 
+class BrickDuck(object):
+    pass
+
 def get_version_header(program_name, decals_dir):
     from astrometry.util.run_command import run_command
     if program_name is None:
@@ -589,6 +592,7 @@ def _detmap((tim, targetwcs, H, W)):
 def tim_get_resamp(tim, targetwcs):
     if hasattr(tim, 'resamp'):
         return tim.resamp
+
     try:
         Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, tim.subwcs, [], 2)
     except OverlapError:
@@ -1082,10 +1086,9 @@ def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
                      np.hypot(T.width, T.height) / 2.)
 
     rad = trad + ccdrad
-    #r,d = targetwcs.crval
+    #print 'Target WCS radius:', trad
+    #print 'CCD radius:', ccdrad
     r,d = targetwcs.radec_center()
-    #print len(T), 'ccds'
-    #print 'trad', trad, 'ccdrad', ccdrad
     I, = np.nonzero(np.abs(T.dec - d) < rad)
     #print 'Cut to', len(I), 'on Dec'
     I = I[degrees_between(T.ra[I], T.dec[I], r, d) < rad]
@@ -1284,9 +1287,22 @@ class Decals(object):
             I = J[np.nonzero((bricks.ra1[J]  <= rahi ) * (bricks.ra2[J]  >= ralo) *
                              (bricks.dec1[J] <= dechi) * (bricks.dec2[J] >= declo))[0]]
             return I
-            
-        I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
-                        (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+
+        if rahi < ralo:
+            # Wrap-around
+            print 'In Dec slice:', len(np.flatnonzero((bricks.dec1 <= dechi) *
+                                                      (bricks.dec2 >= declo)))
+            print 'Above RAlo=', ralo, ':', len(np.flatnonzero(bricks.ra2 >= ralo))
+            print 'Below RAhi=', rahi, ':', len(np.flatnonzero(bricks.ra1 <= rahi))
+            print 'In RA slice:', len(np.nonzero(np.logical_or(bricks.ra2 >= ralo,
+                                                               bricks.ra1 <= rahi)))
+                    
+            I, = np.nonzero(np.logical_or(bricks.ra2 >= ralo, bricks.ra1 <= rahi) *
+                            (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
+            print 'In RA&Dec slice', len(I)
+        else:
+            I, = np.nonzero((bricks.ra1  <= rahi ) * (bricks.ra2  >= ralo) *
+                            (bricks.dec1 <= dechi) * (bricks.dec2 >= declo))
         return I
     
     def get_ccds(self):
@@ -1649,14 +1665,17 @@ class DecamImage(object):
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
             ok,tx,ty = wcs.radec2pixelxy(radecpoly[:-1,0], radecpoly[:-1,1])
             tpoly = zip(tx,ty)
+            #print 'Target RA,Dec polygon in CCD pixels:', tpoly
+            #print ' --> as ints:', np.array(tpoly).astype(int)
+            #print 'Image polygon:', imgpoly
             clip = clip_polygon(imgpoly, tpoly)
             clip = np.array(clip)
+            #print 'Clipped:', clip
             if len(clip) == 0:
                 return None
             x0,y0 = np.floor(clip.min(axis=0)).astype(int)
             x1,y1 = np.ceil (clip.max(axis=0)).astype(int)
             slc = slice(y0,y1+1), slice(x0,x1+1)
-
             if y1 - y0 < tiny or x1 - x0 < tiny:
                 print 'Skipping tiny subimage'
                 return None
@@ -1681,12 +1700,10 @@ class DecamImage(object):
                 if y0 >= y1:
                     return None
             slc = slice(y0,y1), slice(x0,x1)
-        
-        print 'Reading image from', self.imgfn, 'HDU', self.hdu
+
+        print 'Reading image slice:', slc
         img,imghdr = self.read_image(header=True, slice=slc)
-        print 'Reading invvar from', self.wtfn, 'HDU', self.hdu
         invvar = self.read_invvar(slice=slc)
-        print 'Reading dq from', self.dqfn, 'HDU', self.hdu
         dq = self.read_dq(slice=slc)
 
         e = imghdr['EXTNAME']
@@ -1748,6 +1765,7 @@ class DecamImage(object):
             print 'WARNING: using mock PSF:', psf
         elif const2psf:
             # 2-component constant MoG.
+            print 'Reading PsfEx model from', self.psffn
             from tractor.basics import GaussianMixtureEllipsePSF
             psfex = PsfEx(self.psffn, imw, imh, ny=13, nx=7,
                           psfClass=GaussianMixtureEllipsePSF, K=2)
@@ -1756,14 +1774,12 @@ class DecamImage(object):
             # trim a little
             psfim = psfim[5:-5, 5:-5]
             psf = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
-
         else:
             # read fit PsfEx model -- with ellipse representation
             # print 'Reading PsfEx-fit model from', self.psffitellfn
             # psfex = PsfEx.fromFits(self.psffitellfn)
             print 'Reading PsfEx-fit model from', self.psffitell2fn
             psfex = PsfEx.fromFits(self.psffitell2fn)
-
             print 'Read', psfex
             psfex.ensureSplines()
             psfex.radius = 20
@@ -1792,7 +1808,6 @@ class DecamImage(object):
         tim.imobj = self
         tim.primhdr = primhdr
         tim.hdr = imghdr
-
         tim.dq = dq
         tim.dq_bits = CP_DQ_BITS
         tim.saturation = imghdr['SATURATE']
@@ -1831,6 +1846,7 @@ class DecamImage(object):
         return fitsio.read(fn, ext=hdu, header=header, **kwargs)
 
     def read_image(self, **kwargs):
+        print 'Reading image from', self.imgfn, 'hdu', self.hdu
         return self._read_fits(self.imgfn, self.hdu, **kwargs)
 
     def get_image_info(self):
@@ -1847,6 +1863,7 @@ class DecamImage(object):
         return fitsio.read_header(self.imgfn, ext=self.hdu)
 
     def read_dq(self, header=False, **kwargs):
+        print 'Reading data quality from', self.dqfn, 'hdu', self.hdu
         dq,hdr = self._read_fits(self.dqfn, self.hdu, header=True, **kwargs)
         primhdr = fitsio.read_header(self.dqfn)
         plver = primhdr['PLVER'].strip()
@@ -1882,6 +1899,7 @@ class DecamImage(object):
             return dq
 
     def read_invvar(self, clip=True, **kwargs):
+        print 'Reading inverse-variance from', self.wtfn, 'hdu', self.hdu
         invvar = self._read_fits(self.wtfn, self.hdu, **kwargs)
         if clip:
             # Clamp near-zero (incl negative!) invvars to zero
@@ -1889,16 +1907,16 @@ class DecamImage(object):
             thresh = 0.2 * med
             invvar[invvar < thresh] = 0
         return invvar
-    #return fitsio.FITS(self.wtfn)[self.hdu].read()
 
     def read_wcs(self):
         return Sip(self.wcsfn)
 
     def read_pv_wcs(self, decals):
+        print 'Reading WCS from', self.pvwcsfn
         wcs = Sip(self.pvwcsfn)
         dra,ddec = decals.get_astrometric_zeropoint_for(self)
         r,d = wcs.get_crval()
-        print 'Astrometric zeropoint:', dra,ddec
+        print 'Applying astrometric zeropoint:', (dra,ddec)
         wcs.set_crval((r + dra, d + ddec))
         return wcs
     
