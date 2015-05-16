@@ -1936,28 +1936,6 @@ class DecamImage(object):
         skyobj = fromfits(hdr, prefix='SKY_')
         return skyobj
 
-    def run_calibs(self, ra, dec, pixscale, mock_psf,
-                   W=2048, H=4096, se=True,
-                   astrom=True, psfex=True, sky=True,
-                   pvastrom=True,
-                   morph=False, se2=False, psfexfit=True, psfexfit2=False,
-                   funpack=True, fcopy=False, use_mask=True,
-                   force=False, just_check=False):
-        '''
-        pixscale: in arcsec/pixel
-
-        just_check: if True, returns True if calibs need to be run.
-        '''
-        #print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
-        for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
-            print 'exists?', os.path.exists(fn), fn
-        self.makedirs()
-
-        if mock_psf:
-            psfex = False
-            psfexfit = False
-            psfexfit2 = False
-
     def run_calibs(self, ra, dec, pixscale, mock_psf, W=2048, H=4096,
                    pvastrom=True, psfex=True, sky=True, psfexfit=True,
                    se=False, astrom=False, psfexfit2=False,
