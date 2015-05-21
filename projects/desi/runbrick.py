@@ -36,6 +36,7 @@ from tractor.utils import _GaussianPriors
 
 from common import *
 from runbrick_plots import *
+from runbrick_plots import _plot_mods
 
 ## GLOBALS!  Oh my!
 mp = None
@@ -286,8 +287,8 @@ def compute_coadds(tims, bands, targetwcs, images=None,
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
-               plots=False,
+def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
+               plots=False, ps=None,
                target_extent=None, pipe=False, program_name='runbrick.py',
                bands='grz', pvwcs=False, const2psf=True,
                mock_psf=False, **kwargs):
@@ -297,25 +298,20 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     from tractor.mix import c_gauss_2d_grid
 
     decals = Decals()
-    if brickid is not None:
-        brick = decals.get_brick(brickid)
+    if ra is not None:
+        # Custom brick; fake 'brick' object
+        brick = BrickDuck()
+        brick.ra  = ra
+        brick.dec = dec
+        brickid = brick.brickid = -1
+        brick.brickname = brickname
     else:
         brick = decals.get_brick_by_name(brickname)
-    print 'Chosen brick:'
-    brick.about()
-    brickid = brick.brickid
-    brickname = brick.brickname
-
-    version_hdr = get_version_header(program_name, decals.decals_dir)
-    version_hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
-    version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
-    version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
-    version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
-    version_hdr.add_record(dict(name='DECMIN'  , value=brick.dec1, comment='Brick Dec min'))
-    version_hdr.add_record(dict(name='DECMAX'  , value=brick.dec2, comment='Brick Dec max'))
-    print 'Version header:'
-    print version_hdr
-
+        print 'Chosen brick:'
+        brick.about()
+        brickid = brick.brickid
+        brickname = brick.brickname
+        
     targetwcs = wcs_for_brick(brick, W=W, H=H)
     if target_extent is not None:
         (x0,x1,y0,y1) = target_extent
@@ -324,6 +320,28 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
         targetwcs = targetwcs.get_subimage(x0, y0, W, H)
     targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                          [(1,1),(W,1),(W,H),(1,H),(1,1)]])
+
+    if ra is not None:
+        brick.ra1,nil  = targetwcs.pixelxy2radec(W, H/2)
+        brick.ra2,nil  = targetwcs.pixelxy2radec(1, H/2)
+        nil, brick.dec1 = targetwcs.pixelxy2radec(W/2, 1)
+        nil, brick.dec2 = targetwcs.pixelxy2radec(W/2, H)
+        print 'RA1,RA2', brick.ra1, brick.ra2
+        print 'Dec1,Dec2', brick.dec1, brick.dec2
+
+
+    version_hdr = get_version_header(program_name, decals.decals_dir)
+    version_hdr.add_record(dict(name='BRICKNAM', value=brickname, comment='DECaLS brick RRRr[pm]DDd'))
+    version_hdr.add_record(dict(name='BRICKID' , value=brickid,   comment='DECaLS brick id'))
+    version_hdr.add_record(dict(name='RAMIN'   , value=brick.ra1, comment='Brick RA min'))
+    version_hdr.add_record(dict(name='RAMAX'   , value=brick.ra2, comment='Brick RA max'))
+    version_hdr.add_record(dict(name='DECMIN'  , value=brick.dec1, comment='Brick Dec min'))
+    version_hdr.add_record(dict(name='DECMAX'  , value=brick.dec2, comment='Brick Dec max'))
+    version_hdr.add_record(dict(name='BRICKRA' , value=brick.ra,  comment='Brick center'))
+    version_hdr.add_record(dict(name='BRICKDEC', value=brick.dec, comment='Brick center'))
+    print 'Version header:'
+    print version_hdr
+
     pixscale = targetwcs.pixel_scale()
     print 'pixscale', pixscale
 
@@ -422,8 +440,8 @@ def stage_tims(W=3600, H=3600, brickid=None, brickname=None, ps=None,
     rtn = dict()
     for k in keys:
         rtn[k] = locals()[k]
+        print 'Pickling value', k, '=', rtn[k]
     return rtn
-
 
 def _coadds(tims, bands, targetwcs,
             mods=None, xy=None, apertures=None, apxy=None,
@@ -958,7 +976,7 @@ def stage_fitblobs(T=None,
                    blobsrcs=None, blobslices=None, blobs=None,
                    tractor=None, cat=None, targetrd=None, pixscale=None,
                    targetwcs=None,
-                   W=None,H=None, brickid=None,
+                   W=None,H=None, 
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    nblobs=None, blob0=None, blobxy=None,
@@ -1078,7 +1096,7 @@ def stage_fitblobs_finish(
         T=None, blobsrcs=None, blobslices=None, blobs=None,
         tractor=None, cat=None, targetrd=None, pixscale=None,
         targetwcs=None,
-        W=None,H=None, brickid=None,
+        W=None,H=None, 
         bands=None, ps=None, tims=None,
         plots=False, plots2=False,
         fitblobs_R=None,
@@ -1386,6 +1404,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         subtim.band = band
         subtim.sig1 = sig1
         subtim.modelMinval = modelMinval
+        subtim.subwcs = subsubwcs
         subtims.append(subtim)
 
         if plots:
@@ -1466,9 +1485,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         orig_timages = [tim.getImage() for tim in subtims]
         for tim,img in zip(subtims,orig_timages):
             tim.data = img.copy()
-        initial_models = []
 
         # Create initial models for each tim x each source
+        # initial_models is a list-of-lists: initial_models[itim][isrc]
+        initial_models = []
         #tt = Time()
         for tim in subtims:
             mods = []
@@ -1502,19 +1522,24 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if mod is not None:
                     mod.addTo(tim.getImage())
 
-            #if bigblob: # or True:
-            if False:
+            if bigblob:
                 # Create super-local sub-sub-tims around this source
+
+                # Make the subimages the same size as the modelMasks.
                 srctims = []
-                for tim in subtims:
-                    sz = 50
-                    h,w = tim.shape
-                    x,y = tim.getWcs().positionToPixel(src.getPosition())
-                    if x < -sz or y < -sz or x > w+sz or y > h+sz:
+                modelMasks = []
+                for tim,imods in zip(subtims, initial_models):
+                    mod = imods[i]
+                    if mod is None:
                         continue
-                    x,y = int(np.round(x)), int(np.round(y))
-                    x0,y0 = max(x - sz, 0), max(y - sz, 0)
-                    x1,y1 = min(x + sz, w), min(y + sz, h)
+                    # for modelMasks
+                    d = dict()
+                    d[src] = Patch(0, 0, mod.patch != 0)
+                    modelMasks.append(d)
+
+                    mh,mw = mod.shape
+                    x0,y0 = mod.x0 , mod.y0
+                    x1,y1 = x0 + mw, y0 + mh
                     slc = slice(y0,y1), slice(x0, x1)
                     wcs = tim.getWcs().copy()
                     wx0,wy0 = wcs.getX0Y0()
@@ -1524,21 +1549,64 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                                    wcs=wcs, psf=ShiftedPsf(tim.getPsf(), x0, y0),
                                    photocal=tim.getPhotoCal(),
                                    sky=tim.getSky(), name=tim.name)
+                    #srctim.subwcs = tim.getWcs().wcs.get_subimage(x0, y0, mw, mh)
+                    srctim.subwcs = tim.subwcs.get_subimage(x0, y0, mw, mh)
                     srctim.band = tim.band
                     srctim.sig1 = tim.sig1
                     srctim.modelMinval = tim.modelMinval
+                    srctim.x0 = x0
+                    srctim.y0 = y0
                     srctims.append(srctim)
-                    print 'Big blob: srctim', srctim.shape, 'vs sub', tim.shape
+                    #print 'Big blob: clipped', tim.shape, 'to', srctim.shape
+
+                if plots:
+                    bx1 = bx0 + blobw
+                    by1 = by0 + blobh
+                    plt.clf()
+                    coimgs,cons = compute_coadds(subtims, bands, subtarget)
+                    dimshow(get_rgb(coimgs, bands), extent=(bx0,bx1,by0,by1))
+                    plt.plot([bx0,bx0,bx1,bx1,bx0],[by0,by1,by1,by0,by0],'r-')
+                    for tim in srctims:
+                        h,w = tim.shape
+                        tx,ty = [0,0,w,w,0], [0,h,h,0,0]
+                        rd = [tim.getWcs().pixelToPosition(xi,yi)
+                              for xi,yi in zip(tx,ty)]
+                        ra  = [p.ra  for p in rd]
+                        dec = [p.dec for p in rd]
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'g-')
+
+                        ra,dec = tim.subwcs.pixelxy2radec(tx, ty)
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'm-')
+                        
+                    for tim in subtims:
+                        h,w = tim.shape
+                        tx,ty = [0,0,w,w,0], [0,h,h,0,0]
+                        rd = [tim.getWcs().pixelToPosition(xi,yi)
+                              for xi,yi in zip(tx,ty)]
+                        ra  = [p.ra  for p in rd]
+                        dec = [p.dec for p in rd]
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'b-')
+
+                        ra,dec = tim.subwcs.pixelxy2radec(tx, ty)
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'c-')
+                        
+                    ps.savefig()
+                        
+                    
             else:
                 srctims = subtims
 
-            modelMasks = []
-            for imods in initial_models:
-                d = dict()
-                modelMasks.append(d)
-                mod = imods[i]
-                if mod is not None:
-                    d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
+                modelMasks = []
+                for imods in initial_models:
+                    d = dict()
+                    modelMasks.append(d)
+                    mod = imods[i]
+                    if mod is not None:
+                        d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
             #srctractor = BlobTractor(srctims, [src])
             srctractor = Tractor(srctims, [src])
@@ -1565,8 +1633,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             cpu0 = time.clock()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(**optargs)
-
-                               
                 #print 'dlnp:', dlnp, 'src', src
 
                 if DEBUG:
@@ -1589,6 +1655,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 spallnames.append('Fit (all)')
 
             if plots:
+
+                tims_compute_resamp(srctractor.getImages(), targetwcs)
+                tims_compute_resamp(subtims, targetwcs)
+
                 plt.figure(1, figsize=(8,6))
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
                                     hspace=0.1, wspace=0.05)
@@ -1617,7 +1687,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     tim.data = im
 
             # Re-remove the final fit model for this source (pull from cache)
-            for tim in subtims:
+            for tim in srctims:
                 mod = srctractor.getModelPatch(tim, src)
                 if mod is not None:
                     mod.addTo(tim.getImage(), scale=-1)
@@ -2432,12 +2502,11 @@ def stage_wise_forced(
     T=None,
     targetwcs=None,
     brickname=None,
+    brick=None,
     outdir=None,
     **kwargs):
     from wise.forcedphot import unwise_forcedphot, unwise_tiles_touching_wcs
 
-    decals = Decals()
-    brick = decals.get_brick_by_name(brickname)
     roiradec = [brick.ra1, brick.ra2, brick.dec1, brick.dec2]
     tiles = unwise_tiles_touching_wcs(targetwcs)
     print 'Cut to', len(tiles), 'unWISE tiles'
@@ -2480,6 +2549,7 @@ def stage_writecat(
     plots=False, tractor=None,
     brickname=None,
     brickid=None,
+    brick=None,
     invvars=None,
     catalogfn=None,
     outdir=None,
@@ -2586,8 +2656,6 @@ def stage_writecat(
     T2.bx = (bx - 1.).astype(np.float32)
     T2.by = (by - 1.).astype(np.float32)
 
-    decals = Decals()
-    brick = decals.get_brick_by_name(brickname)
     T2.brick_primary = ((T2.ra  >= brick.ra1 ) * (T2.ra  < brick.ra2) *
                         (T2.dec >= brick.dec1) * (T2.dec < brick.dec2))
     
@@ -2895,7 +2963,7 @@ def main():
     ep = '''
 eg, to run a small field containing a cluster:
 \n
-python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 950 -P pickles/runbrick-cluster-%%s.pickle
+python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 450 950 -P pickles/runbrick-cluster-%%s.pickle
 \n
 '''
     parser = optparse.OptionParser(epilog=ep)
@@ -2909,8 +2977,11 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('-v', '--verbose', dest='verbose', action='count', default=0,
                       help='Make more verbose')
 
-    parser.add_option('-b', '--brick', help='Brick ID or name to run: default %default',
-                      default='377306')
+    parser.add_option('-b', '--brick', help='Brick name to run: default %default',
+                      default='2440p070')
+
+    parser.add_option('--radec', help='RA,Dec center for a custom location (not a brick)',
+                      nargs=2)
 
     parser.add_option('-d', '--outdir', help='Set output base directory')
     
@@ -2927,8 +2998,8 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
     parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
-    parser.add_option('-W', type=int, default=3600, help='Target image width (default %default)')
-    parser.add_option('-H', type=int, default=3600, help='Target image height (default %default)')
+    parser.add_option('-W', '--width', type=int, default=3600, help='Target image width (default %default)')
+    parser.add_option('-H', '--height', type=int, default=3600, help='Target image height (default %default)')
 
     parser.add_option('--zoom', type=int, nargs=4, help='Set target image extent (default "0 3600 0 3600")')
 
@@ -2963,6 +3034,28 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     print
 
     opt,args = parser.parse_args()
+
+    initargs = {}
+
+    if opt.radec is not None:
+        print 'RA,Dec:', opt.radec
+        assert(len(opt.radec) == 2)
+        ra,dec = opt.radec
+        try:
+            ra = float(ra)
+        except:
+            from astrometry.util.starutil_numpy import hmsstring2ra
+            ra = hmsstring2ra(ra)
+        try:
+            dec = float(dec)
+        except:
+            from astrometry.util.starutil_numpy import dmsstring2dec
+            dec = dmsstring2dec(dec)
+        print 'Parsed RA,Dec', ra,dec
+        initargs.update(ra=ra, dec=dec)
+        opt.brick = 'custom-%06i%s%05i' % (int(1000*ra), 'm' if dec < 0 else 'p',
+                                           int(1000*np.abs(dec)))
+    initargs.update(brickname=opt.brick)
 
     if opt.check_done or opt.skip or opt.skip_coadd:
         outdir = opt.outdir
@@ -3017,7 +3110,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
     if opt.plot_base is None:
         opt.plot_base = plot_base_default
     ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
-    initargs = dict(ps=ps)
+    initargs.update(ps=ps)
 
     kwargs = {}
     if opt.plot_number:
@@ -3080,14 +3173,7 @@ python -u projects/desi/runbrick.py --plots --brick 371589 --zoom 1900 2400 450 
         'redo_apphot': 'tims',
         }
 
-    initargs.update(W=opt.W, H=opt.H, target_extent=opt.zoom)
-    try:
-        brickid = int(opt.brick, 10)
-        initargs.update(brickid=brickid)
-    except:
-        initargs.update(brickname = opt.brick)
-
-    initargs.update(pvwcs=opt.pv)
+    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom, pvwcs=opt.pv)
 
     t0 = Time()
 

@@ -289,6 +289,8 @@ def _plot_derivs(subtims, newsrc, srctractor, ps):
 def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
                chi_plots=True, rgb_plots=False, main_plot=True,
                rgb_format='%s'):
+    import numpy as np
+
     subims = [[] for m in mods]
     chis = dict([(b,[]) for b in bands])
     

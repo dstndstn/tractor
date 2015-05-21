@@ -571,7 +571,10 @@ class ConstantFitsWcs(ParamList, ducks.ImageCalibration):
         return (self.x0, self.y0, id(self.wcs))
 
     def copy(self):
-        return ConstantFitsWcs(self.wcs)
+        copy = ConstantFitsWcs(self.wcs)
+        copy.x0 = self.x0
+        copy.y0 = self.y0
+        return copy
         
     def __str__(self):
         return ('%s: x0,y0 %.3f,%.3f, WCS ' % (getClassName(self), self.x0,self.y0)
