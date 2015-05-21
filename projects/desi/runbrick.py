@@ -36,6 +36,7 @@ from tractor.utils import _GaussianPriors
 
 from common import *
 from runbrick_plots import *
+from runbrick_plots import _plot_mods
 
 ## GLOBALS!  Oh my!
 mp = None
@@ -1403,6 +1404,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         subtim.band = band
         subtim.sig1 = sig1
         subtim.modelMinval = modelMinval
+        subtim.subwcs = subsubwcs
         subtims.append(subtim)
 
         if plots:
@@ -1483,9 +1485,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
         orig_timages = [tim.getImage() for tim in subtims]
         for tim,img in zip(subtims,orig_timages):
             tim.data = img.copy()
-        initial_models = []
 
         # Create initial models for each tim x each source
+        # initial_models is a list-of-lists: initial_models[itim][isrc]
+        initial_models = []
         #tt = Time()
         for tim in subtims:
             mods = []
@@ -1519,19 +1522,24 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 if mod is not None:
                     mod.addTo(tim.getImage())
 
-            #if bigblob: # or True:
-            if False:
+            if bigblob:
                 # Create super-local sub-sub-tims around this source
+
+                # Make the subimages the same size as the modelMasks.
                 srctims = []
-                for tim in subtims:
-                    sz = 50
-                    h,w = tim.shape
-                    x,y = tim.getWcs().positionToPixel(src.getPosition())
-                    if x < -sz or y < -sz or x > w+sz or y > h+sz:
+                modelMasks = []
+                for tim,imods in zip(subtims, initial_models):
+                    # for modelMasks
+                    d = dict()
+                    modelMasks.append(d)
+                    mod = imods[i]
+                    if mod is None:
                         continue
-                    x,y = int(np.round(x)), int(np.round(y))
-                    x0,y0 = max(x - sz, 0), max(y - sz, 0)
-                    x1,y1 = min(x + sz, w), min(y + sz, h)
+                    d[src] = Patch(0, 0, mod.patch != 0)
+
+                    mh,mw = mod.shape
+                    x0,y0 = mod.x0 , mod.y0
+                    x1,y1 = x0 + mw, y0 + mh
                     slc = slice(y0,y1), slice(x0, x1)
                     wcs = tim.getWcs().copy()
                     wx0,wy0 = wcs.getX0Y0()
@@ -1541,21 +1549,64 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                                    wcs=wcs, psf=ShiftedPsf(tim.getPsf(), x0, y0),
                                    photocal=tim.getPhotoCal(),
                                    sky=tim.getSky(), name=tim.name)
+                    #srctim.subwcs = tim.getWcs().wcs.get_subimage(x0, y0, mw, mh)
+                    srctim.subwcs = tim.subwcs.get_subimage(x0, y0, mw, mh)
                     srctim.band = tim.band
                     srctim.sig1 = tim.sig1
                     srctim.modelMinval = tim.modelMinval
+                    srctim.x0 = x0
+                    srctim.y0 = y0
                     srctims.append(srctim)
-                    print 'Big blob: srctim', srctim.shape, 'vs sub', tim.shape
+                    #print 'Big blob: clipped', tim.shape, 'to', srctim.shape
+
+                if plots:
+                    bx1 = bx0 + blobw
+                    by1 = by0 + blobh
+                    plt.clf()
+                    coimgs,cons = compute_coadds(subtims, bands, subtarget)
+                    dimshow(get_rgb(coimgs, bands), extent=(bx0,bx1,by0,by1))
+                    plt.plot([bx0,bx0,bx1,bx1,bx0],[by0,by1,by1,by0,by0],'r-')
+                    for tim in srctims:
+                        h,w = tim.shape
+                        tx,ty = [0,0,w,w,0], [0,h,h,0,0]
+                        rd = [tim.getWcs().pixelToPosition(xi,yi)
+                              for xi,yi in zip(tx,ty)]
+                        ra  = [p.ra  for p in rd]
+                        dec = [p.dec for p in rd]
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'g-')
+
+                        ra,dec = tim.subwcs.pixelxy2radec(tx, ty)
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'm-')
+                        
+                    for tim in subtims:
+                        h,w = tim.shape
+                        tx,ty = [0,0,w,w,0], [0,h,h,0,0]
+                        rd = [tim.getWcs().pixelToPosition(xi,yi)
+                              for xi,yi in zip(tx,ty)]
+                        ra  = [p.ra  for p in rd]
+                        dec = [p.dec for p in rd]
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'b-')
+
+                        ra,dec = tim.subwcs.pixelxy2radec(tx, ty)
+                        ok,x,y = targetwcs.radec2pixelxy(ra, dec)
+                        plt.plot(x, y, 'c-')
+                        
+                    ps.savefig()
+                        
+                    
             else:
                 srctims = subtims
 
-            modelMasks = []
-            for imods in initial_models:
-                d = dict()
-                modelMasks.append(d)
-                mod = imods[i]
-                if mod is not None:
-                    d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
+                modelMasks = []
+                for imods in initial_models:
+                    d = dict()
+                    modelMasks.append(d)
+                    mod = imods[i]
+                    if mod is not None:
+                        d[src] = Patch(mod.x0, mod.y0, mod.patch != 0)
 
             #srctractor = BlobTractor(srctims, [src])
             srctractor = Tractor(srctims, [src])
@@ -1582,8 +1633,6 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
             cpu0 = time.clock()
             for step in range(50):
                 dlnp,X,alpha = srctractor.optimize(**optargs)
-
-                               
                 #print 'dlnp:', dlnp, 'src', src
 
                 if DEBUG:
@@ -1606,6 +1655,10 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 spallnames.append('Fit (all)')
 
             if plots:
+
+                tims_compute_resamp(srctractor.getImages(), targetwcs)
+                tims_compute_resamp(subtims, targetwcs)
+
                 plt.figure(1, figsize=(8,6))
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
                                     hspace=0.1, wspace=0.05)
@@ -1634,7 +1687,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     tim.data = im
 
             # Re-remove the final fit model for this source (pull from cache)
-            for tim in subtims:
+            for tim in srctims:
                 mod = srctractor.getModelPatch(tim, src)
                 if mod is not None:
                     mod.addTo(tim.getImage(), scale=-1)

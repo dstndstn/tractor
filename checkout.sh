@@ -7,9 +7,9 @@ pwd
 
 git clone https://github.com/dstndstn/tractor.git .
 
-wget "http://astrometry.net/downloads/astrometry.net-0.50.tar.gz"
-tar xzf astrometry.net-0.50.tar.gz
-mv astrometry.net-0.50 astrometry
+wget "http://astrometry.net/downloads/astrometry.net-0.54.tar.gz"
+tar xzf astrometry.net-0.54.tar.gz
+mv astrometry.net-0.54 astrometry
 (cd astrometry && make pyutil)
 (cd astrometry/libkd && make pyspherematch)
 (cd astrometry/sdss && make)
