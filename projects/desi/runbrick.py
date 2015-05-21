@@ -1529,13 +1529,13 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 srctims = []
                 modelMasks = []
                 for tim,imods in zip(subtims, initial_models):
-                    # for modelMasks
-                    d = dict()
-                    modelMasks.append(d)
                     mod = imods[i]
                     if mod is None:
                         continue
+                    # for modelMasks
+                    d = dict()
                     d[src] = Patch(0, 0, mod.patch != 0)
+                    modelMasks.append(d)
 
                     mh,mw = mod.shape
                     x0,y0 = mod.x0 , mod.y0
