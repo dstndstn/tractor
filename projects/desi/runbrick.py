@@ -3053,7 +3053,7 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
             dec = dmsstring2dec(dec)
         print 'Parsed RA,Dec', ra,dec
         initargs.update(ra=ra, dec=dec)
-        opt.brick = 'custom-%06i%s%05i' % (int(1000*ra), '-' if dec < 0 else '+',
+        opt.brick = 'custom-%06i%s%05i' % (int(1000*ra), 'm' if dec < 0 else 'p',
                                            int(1000*np.abs(dec)))
     initargs.update(brickname=opt.brick)
 
