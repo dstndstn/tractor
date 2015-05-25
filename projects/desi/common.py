@@ -891,7 +891,7 @@ def sed_matched_detection(sedname, sed, detmaps, detivs, bands,
 
     return hotblobs, px, py, aper, peakval
 
-def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
+def get_rgb(imgs, bands, mnmx=None, arcsinh=None, scales=None):
     '''
     Given a list of images in the given bands, returns a scaled RGB
     image.
@@ -903,24 +903,25 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None):
                       z = (0, 0.025),
                       )
 
-    if bands == 'grz':
-        scales = grzscales
-    elif bands == 'urz':
-        scales = dict(u = (2, 0.0066),
-                      r = (1, 0.01),
-                      z = (0, 0.025),
-                      )
-    elif bands == 'gri':
-        # scales = dict(g = (2, 0.004),
-        #               r = (1, 0.0066),
-        #               i = (0, 0.01),
-        #               )
-        scales = dict(g = (2, 0.002),
-                      r = (1, 0.004),
-                      i = (0, 0.005),
-                      )
-    else:
-        scales = grzscales
+    if scales is None:
+        if bands == 'grz':
+            scales = grzscales
+        elif bands == 'urz':
+            scales = dict(u = (2, 0.0066),
+                          r = (1, 0.01),
+                          z = (0, 0.025),
+                          )
+        elif bands == 'gri':
+            # scales = dict(g = (2, 0.004),
+            #               r = (1, 0.0066),
+            #               i = (0, 0.01),
+            #               )
+            scales = dict(g = (2, 0.002),
+                          r = (1, 0.004),
+                          i = (0, 0.005),
+                          )
+        else:
+            scales = grzscales
         
     h,w = imgs[0].shape
     rgb = np.zeros((h,w,3), np.float32)
