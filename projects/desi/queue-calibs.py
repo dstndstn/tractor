@@ -55,7 +55,9 @@ if __name__ == '__main__':
                       help='Check which caoadds actually need to run.')
     parser.add_option('--out', help='Output filename for calibs, default %default',
                       default='jobs')
-
+    parser.add_option('--command', action='store_true', default=False,
+                      help='Write out full command-line to run calib')
+    
     parser.add_option('--maxdec', type=float, help='Maximum Dec to run')
     parser.add_option('--mindec', type=float, help='Minimum Dec to run')
 
@@ -315,7 +317,11 @@ if __name__ == '__main__':
                 print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
                 continue
 
-        f.write('%i\n' % T.index[i])
+        if opt.command:
+            f.write('python projects/desi/run-calib.py --expnum %i --extname %s\n' %
+                    (T.expnum[i], T.extname[i]))
+        else:
+            f.write('%i\n' % T.index[i])
         if opt.check:
             f.flush()
     f.close()
