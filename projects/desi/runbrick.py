@@ -1355,6 +1355,8 @@ FLAG_CPU_C   = 0x20
 def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtimargs,
                srcs, bands, plots, ps, simul_opt)):
 
+    print 'Fitting blob', iblob, ':', len(Isrcs), 'sources, size', blobw, 'x', blobh, len(subtimargs), 'images'
+
     plots2 = False
 
     #tlast = Time()
@@ -1528,6 +1530,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                 # Make the subimages the same size as the modelMasks.
                 srctims = []
                 modelMasks = []
+                print 'Big blob: trimming:'
                 for tim,imods in zip(subtims, initial_models):
                     mod = imods[i]
                     if mod is None:
@@ -1557,7 +1560,7 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
                     srctim.x0 = x0
                     srctim.y0 = y0
                     srctims.append(srctim)
-                    #print 'Big blob: clipped', tim.shape, 'to', srctim.shape
+                    print '  ', tim.shape, 'to', srctim.shape
 
                 if plots:
                     bx1 = bx0 + blobw
