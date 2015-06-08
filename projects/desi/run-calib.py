@@ -11,6 +11,7 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--force', action='store_true', default=False,
                       help='Run calib processes even if files already exist?')
+    parser.add_option('--ccds', help='Set ccds.fits file to load')
 
     parser.add_option('--expnum', type=int, help='Cut to a single exposure')
     parser.add_option('--extname', help='Cut to a single extension name')
@@ -18,7 +19,12 @@ if __name__ == '__main__':
     opt,args = parser.parse_args()
 
     D = Decals()
-    T = D.get_ccds()
+    if opt.ccds is not None:
+        T = fits_table(opt.ccds)
+        print 'Read', len(T), 'from', opt.ccds
+    else:
+        T = D.get_ccds()
+        print len(T), 'CCDs'
     print len(T), 'CCDs'
 
     if len(args) == 0:

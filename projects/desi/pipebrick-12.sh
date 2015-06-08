@@ -6,37 +6,39 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-outdir=$GSCRATCH/dr1d
+outdir=$SCRATCH/dr1j
 
-mkdir -p $outdir/logs
 brick="$1"
-log="$outdir/logs/$brick.log"
+
+logdir=$(echo $brick | head -c 3)
+mkdir -p $outdir/logs/$logdir
+log="$outdir/logs/$logdir/$brick.log"
 
 echo Logging to: $log
 echo Running on ${NERSC_HOST} $(hostname)
 
 echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
-echo -e "\n\n\n\n\n\n\n\n\n\n" >> $log
 echo "PWD: $(pwd)" >> $log
 echo "Modules:" >> $log
 module list >> $log 2>&1
 echo >> $log
 echo "Environment:" >> $log
-set | grep -v QDO_DB_PASS >> $log
-echo >> $log
-
+set >> $log
 echo >> $log
 ulimit -a >> $log
 echo >> $log
 
-
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 12 --nsigma 6 --skip --pipe >> $log 2>&1
+echo "Astrometry.net path:"
+python -c "import astrometry; print astrometry.__file__"
 
+python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 12 --nsigma 6 --skip --pipe >> $log 2>&1
 
+# dr1j:
+# qdo launch edr 32 --mpack 3 --walltime=48:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
 
 # Edison: 6 threads per job, 4 jobs per node = 24 cores.
 # here we ask for 4 nodes * 4 jobs = 16 jobs total.
