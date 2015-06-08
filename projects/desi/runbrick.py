@@ -2558,12 +2558,6 @@ def stage_writecat(
     outdir=None,
     **kwargs):
 
-    # print 'Source types:'
-    # for src in cat:
-    #     print '  ', type(src)
-    #print 'T:'
-    #T.about()
-
     from desi_common import prepare_fits_catalog
     fs = None
     TT = T.copy()
@@ -2687,41 +2681,42 @@ def stage_writecat(
     # overlapping images (hence decam_flux_ivar = 0), zero out the DECam flux.
     T2.decam_flux[T2.decam_flux_ivar == 0] = 0.
 
-    # Convert WISE fluxes from Vega to AB.
-    # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
-    vega_to_ab = dict(w1=2.699,
-                      w2=3.339,
-                      w3=5.174,
-                      w4=6.620)
-
-    for band in [1,2,3,4]:
-        primhdr.add_record(dict(name='WISEAB%i' % band, value=vega_to_ab['w%i' % band],
-                                comment='WISE Vega to AB conv for band %i' % band))
-
-    for band in [1,2,3,4]:
-        dm = vega_to_ab['w%i' % band]
-        #print 'WISE', band
-        #print 'dm', dm
-        fluxfactor = 10.** (dm / -2.5)
-        #print 'flux factor', fluxfactor
-        f = WISE.get('w%i_nanomaggies' % band)
-        f *= fluxfactor
-        f = WISE.get('w%i_nanomaggies_ivar' % band)
-        f *= (1./fluxfactor**2)
-
-    T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
-                              WISE.w3_nanomaggies, WISE.w4_nanomaggies]).T
-    T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
-                                   WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar]).T
-    # T2.wise_nobs = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
-    #                           WISE.w3_pronexp, WISE.w4_pronexp]).T
-    T2.wise_nobs = np.vstack([WISE.w1_nexp, WISE.w2_nexp,
-                              WISE.w3_nexp, WISE.w4_nexp]).T
-
-    T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
-                                  WISE.w3_profracflux, WISE.w4_profracflux]).T
-    T2.wise_rchi2 = np.vstack([WISE.w1_prochi2, WISE.w2_prochi2,
-                               WISE.w3_prochi2, WISE.w4_prochi2]).T
+    if WISE is not None:
+        # Convert WISE fluxes from Vega to AB.
+        # http://wise2.ipac.caltech.edu/docs/release/allsky/expsup/sec4_4h.html#conv2ab
+        vega_to_ab = dict(w1=2.699,
+                          w2=3.339,
+                          w3=5.174,
+                          w4=6.620)
+    
+        for band in [1,2,3,4]:
+            primhdr.add_record(dict(name='WISEAB%i' % band, value=vega_to_ab['w%i' % band],
+                                    comment='WISE Vega to AB conv for band %i' % band))
+    
+        for band in [1,2,3,4]:
+            dm = vega_to_ab['w%i' % band]
+            #print 'WISE', band
+            #print 'dm', dm
+            fluxfactor = 10.** (dm / -2.5)
+            #print 'flux factor', fluxfactor
+            f = WISE.get('w%i_nanomaggies' % band)
+            f *= fluxfactor
+            f = WISE.get('w%i_nanomaggies_ivar' % band)
+            f *= (1./fluxfactor**2)
+    
+        T2.wise_flux = np.vstack([WISE.w1_nanomaggies, WISE.w2_nanomaggies,
+                                  WISE.w3_nanomaggies, WISE.w4_nanomaggies]).T
+        T2.wise_flux_ivar = np.vstack([WISE.w1_nanomaggies_ivar, WISE.w2_nanomaggies_ivar,
+                                       WISE.w3_nanomaggies_ivar, WISE.w4_nanomaggies_ivar]).T
+        # T2.wise_nobs = np.vstack([WISE.w1_pronexp, WISE.w2_pronexp,
+        #                           WISE.w3_pronexp, WISE.w4_pronexp]).T
+        T2.wise_nobs = np.vstack([WISE.w1_nexp, WISE.w2_nexp,
+                                  WISE.w3_nexp, WISE.w4_nexp]).T
+    
+        T2.wise_fracflux = np.vstack([WISE.w1_profracflux, WISE.w2_profracflux,
+                                      WISE.w3_profracflux, WISE.w4_profracflux]).T
+        T2.wise_rchi2 = np.vstack([WISE.w1_prochi2, WISE.w2_prochi2,
+                                   WISE.w3_prochi2, WISE.w4_prochi2]).T
 
     if catalogfn is not None:
         fn = catalogfn
@@ -2749,7 +2744,8 @@ def stage_writecat(
     T2.ebv = ebv.astype(np.float32)
 
     T2.decam_mw_transmission = 10.**(-decam_extinction / 2.5)
-    T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
+    if WISE is not None:
+        T2.wise_mw_transmission  = 10.**(-wise_extinction  / 2.5)
 
     # 'tx', 'ty', 
     # 'sdss_treated_as_pointsource', 
@@ -2758,7 +2754,8 @@ def stage_writecat(
     T2.dchisq[T2.dchisq != 0] *= -1.
 
     cols = [
-        'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type', 'ra', 'ra_ivar', 'dec', 'dec_ivar',
+        'brickid', 'brickname', 'objid', 'brick_primary', 'blob', 'type',
+        'ra', 'ra_ivar', 'dec', 'dec_ivar',
         'bx', 'by', 'bx0', 'by0',
         'left_blob', 
         'decam_flux', 'decam_flux_ivar', 'decam_apflux',
@@ -2766,8 +2763,14 @@ def stage_writecat(
         'decam_rchi2', 'decam_fracflux', 'decam_fracmasked', 'decam_fracin',
         'out_of_bounds',
         'decam_anymask', 'decam_allmask',
-        'wise_flux', 'wise_flux_ivar',
-        'wise_mw_transmission', 'wise_nobs', 'wise_fracflux', 'wise_rchi2', 'dchisq',
+        ]
+    if WISE is not None:
+        cols.extend([
+                'wise_flux', 'wise_flux_ivar',
+                'wise_mw_transmission', 'wise_nobs', 'wise_fracflux', 'wise_rchi2',
+                ])
+    cols.extend([
+        'dchisq',
         'fracdev', 'fracDev_ivar', 'shapeexp_r', 'shapeexp_r_ivar', 'shapeexp_e1',
         'shapeexp_e1_ivar', 'shapeexp_e2', 'shapeexp_e2_ivar', 'shapedev_r',
         'shapedev_r_ivar', 'shapedev_e1', 'shapedev_e1_ivar', 'shapedev_e2',
@@ -2783,7 +2786,7 @@ def stage_writecat(
         'sdss_modelflux_ivar', 'sdss_devflux', 'sdss_devflux_ivar', 'sdss_expflux',
         'sdss_expflux_ivar', 'sdss_extinction', 'sdss_calib_status',
         'sdss_resolve_status',
-        ]
+        ])
 
     # TUNIT cards.
     deg='deg'
@@ -3031,6 +3034,9 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
     parser.add_option('--simul-opt', action='store_true', default=False,
                       help='Do simultaneous optimization after model selection')
 
+    parser.add_option('--no-wise', action='store_true', default=False,
+                      help='Skip unWISE forced photometry')
+
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
@@ -3166,8 +3172,8 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
         'fitblobs':'srcs',
         'fitblobs_finish':'fitblobs',
         'coadds': 'fitblobs_finish',
-        'wise_forced': 'coadds',
-        'writecat': 'wise_forced',
+
+        # wise_forced: see below
 
         'fitplots': 'fitblobs_finish',
         'psfplots': 'tims',
@@ -3175,6 +3181,17 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
 
         'redo_apphot': 'tims',
         }
+
+    if opt.no_wise:
+        prereqs.update({
+                'writecat': 'coadds',
+                })
+    else:
+        prereqs.update({
+                'wise_forced': 'coadds',
+                'writecat': 'wise_forced',
+                })
+        
 
     initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom, pvwcs=opt.pv)
 
