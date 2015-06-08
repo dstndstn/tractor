@@ -357,9 +357,12 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
 
     print 'Cutting out non-photometric CCDs...'
     #I = decals.photometric_ccds(T)
-    I = np.flatnonzero(T.dr1 == 1)
-    print len(I), 'of', len(T), 'CCDs are photometric'
-    T.cut(I)
+    if 'dr1' in T.get_columns():
+        I = np.flatnonzero(T.dr1 == 1)
+        print len(I), 'of', len(T), 'CCDs are photometric'
+        T.cut(I)
+    else:
+        print 'WARNING: no "dr1" column in CCDs table; assuming all CCDs are photometric!'
 
     ims = []
     for t in T:
