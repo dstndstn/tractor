@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_option('--region', help='Region to select')
 
     parser.add_option('--bricks', help='Set bricks.fits file to load')
+    parser.add_option('--ccds', help='Set ccds.fits file to load')
 
     parser.add_option('--delete-sky', default=False, action='store_true',
                       help='Delete any existing sky calibration files')
@@ -81,8 +82,12 @@ if __name__ == '__main__':
     else:
         B = D.get_bricks()
 
-    T = D.get_ccds()
-    log(len(T), 'CCDs')
+    if opt.ccds is not None:
+        T = fits_table(opt.ccds)
+        log('Read', len(T), 'from', opt.ccds)
+    else:
+        T = D.get_ccds()
+        log(len(T), 'CCDs')
     T.index = np.arange(len(T))
 
     # I,J,d,counts = match_radec(B.ra, B.dec, T.ra, T.dec, 0.2, nearest=True, count=True)
@@ -197,7 +202,9 @@ if __name__ == '__main__':
         # which has_[grz] columns.
         B.cut(np.logical_not((B.has_g == 1) * (B.has_r == 1) * (B.has_z == 1)))
         log('Cut to', len(B), 'bricks withOUT grz coverage')
-        
+    elif opt.region == 'deep2':
+        rlo,rhi = 250,260
+        dlo,dhi = 30,35
 
     if opt.mindec is not None:
         dlo = opt.mindec
@@ -265,8 +272,9 @@ if __name__ == '__main__':
     #B.cut(B.brickname == '1498p017')
     #log(len(B), 'bricks for real')
 
-    T.cut(T.dr1 == 1)
-    log(len(T), 'photometric for DR1')
+    if 'dr1' in T.columns():
+        T.cut(T.dr1 == 1)
+        log(len(T), 'photometric for DR1')
     
     bands = 'grz'
     log('Filters:', np.unique(T.filter))

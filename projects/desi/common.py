@@ -1209,7 +1209,10 @@ class Decals(object):
         return I
     
     def get_ccds(self):
-        T = fits_table(os.path.join(self.decals_dir, 'decals-ccds.fits'))
+        fn = os.path.join(self.decals_dir, 'decals-ccds.fits')
+        print 'Reading CCDs from', fn
+        T = fits_table(fn)
+        print 'Got', len(T), 'CCDs'
         T.extname = np.array([s.strip() for s in T.extname])
         return T
 
