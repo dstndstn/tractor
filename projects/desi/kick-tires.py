@@ -15,43 +15,73 @@ from common import *
 if __name__ == '__main__':
 
     ps = PlotSequence('kick')
-    #ps.suffixes = ['png','pdf']
-
     plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
 
-    TT = []
-    for fn in glob('pipebrick-cats/tractor-phot-b*.fits'):
-        T = fits_table(fn)
-        print len(T), 'from', fn
-        TT.append(T)
-    T = merge_tables(TT)
-    del TT
+    # A catalog of sources overlapping one DECaLS CCD, arbitrarily:
+    # python projects/desi/forced-photom-decam.py decam/CP20140810_g_v2/c4d_140816_032035_ooi_g_v2.fits.fz 1 DR1 f.fits
 
-    if False:
-        brickid = 371589
-        fn = 'tractor-phot-b%06i.fits' % brickid
-        T = fits_table(fn)
-        print 'Read', len(T)
-    T.about()
-    T.cut(T.blob > 0)
-    print 'Cut to', len(T)
-
-    print 'RA', T.ra.min(), T.ra.max()
-    print 'Dec', T.dec.min(), T.dec.max()
-    # Uhh, how does *this* happen?!  Fitting gone wild I guess
-    T.cut((T.ra > 0) * (T.ra < 360) * (T.dec > -90) * (T.dec < 90))
-    print 'RA', T.ra.min(), T.ra.max()
-    print 'Dec', T.dec.min(), T.dec.max()
-    rlo,rhi = [np.percentile(T.ra,  p) for p in [1,99]]
-    dlo,dhi = [np.percentile(T.dec, p) for p in [1,99]]
-    print 'RA', rlo,rhi
-    print 'Dec', dlo,dhi
+    T = fits_table('cat.fits')
+    
+    I = np.flatnonzero(T.type == 'EXP ')
+    J = np.flatnonzero(T.type == 'DEV ')
 
     plt.clf()
-    plothist(T.ra, T.dec, 100, range=((rlo,rhi),(dlo,dhi)))
-    plt.xlabel('RA')
-    plt.ylabel('Dec')
+    p1 = plt.semilogy(T.shapeexp_e1[I], T.shapeexp_e1_ivar[I], 'b.')
+    p2 = plt.semilogy(T.shapeexp_e2[I], T.shapeexp_e2_ivar[I], 'r.')
+    plt.xlabel('Ellipticity e')
+    plt.ylabel('Ellipticity inverse-variance e_ivar')
+    plt.title('EXP galaxies')
+    plt.legend([p1[0],p2[0]], ['e1','e2'])
     ps.savefig()
+
+    plt.clf()
+    p1 = plt.semilogy(T.shapeexp_e1[I], 1./np.sqrt(T.shapeexp_e1_ivar[I]), 'b.')
+    p2 = plt.semilogy(T.shapeexp_e2[I], 1./np.sqrt(T.shapeexp_e2_ivar[I]), 'r.')
+    plt.xlabel('Ellipticity e')
+    plt.ylabel('Ellipticity error e_err')
+    plt.title('EXP galaxies')
+    plt.legend([p1[0],p2[0]], ['e1','e2'])
+    ps.savefig()
+    
+    plt.clf()
+    p1 = plt.semilogy(T.shapedev_e1[J], T.shapedev_e1_ivar[J], 'b.')
+    p2 = plt.semilogy(T.shapedev_e2[J], T.shapedev_e2_ivar[J], 'r.')
+    plt.xlabel('Ellipticity e')
+    plt.ylabel('Ellipticity inverse-variance e_ivar')
+    plt.title('DEV galaxies')
+    plt.legend([p1[0],p2[0]], ['e1','e2'])
+    ps.savefig()
+
+    plt.clf()
+    p1 = plt.semilogy(T.shapedev_e1[J], 1./np.sqrt(T.shapedev_e1_ivar[J]), 'b.')
+    p2 = plt.semilogy(T.shapedev_e2[J], 1./np.sqrt(T.shapedev_e2_ivar[J]), 'r.')
+    plt.xlabel('Ellipticity e')
+    plt.ylabel('Ellipticity error e_err')
+    plt.title('DEV galaxies')
+    plt.legend([p1[0],p2[0]], ['e1','e2'])
+    ps.savefig()
+
+
+
+    sys.exit(0)
+
+    
+    print 'RA', T.ra.min(), T.ra.max()
+    print 'Dec', T.dec.min(), T.dec.max()
+
+    # Uhh, how does *this* happen?!  Fitting gone wild I guess
+    # T.cut((T.ra > 0) * (T.ra < 360) * (T.dec > -90) * (T.dec < 90))
+    # print 'RA', T.ra.min(), T.ra.max()
+    # print 'Dec', T.dec.min(), T.dec.max()
+    # rlo,rhi = [np.percentile(T.ra,  p) for p in [1,99]]
+    # dlo,dhi = [np.percentile(T.dec, p) for p in [1,99]]
+    # print 'RA', rlo,rhi
+    # print 'Dec', dlo,dhi
+    # plt.clf()
+    # plothist(T.ra, T.dec, 100, range=((rlo,rhi),(dlo,dhi)))
+    # plt.xlabel('RA')
+    # plt.ylabel('Dec')
+    # ps.savefig()
     
     # decals = Decals()
     # B = decals.get_bricks()
