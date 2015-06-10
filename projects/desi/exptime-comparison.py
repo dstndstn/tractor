@@ -55,58 +55,73 @@ def stage_read():
     ui = []
     udates = []
     
-    print 'DR1:', np.unique(C.dr1)
-    
-    print 'Number of exposures marked non-photometric: ',
-    I = np.flatnonzero(C.dr1 == 0)
-    print len(np.unique(C.expnum[I]))
-    print 'Total number of exposures:', len(C)
-    
-    for i,c in enumerate(C):
+    # print 'DR1:', np.unique(C.dr1)
+    # print 'Number of exposures marked non-photometric: ',
+    # I = np.flatnonzero(C.dr1 == 0)
+    # print len(np.unique(C.expnum[I]))
+    # print 'Total number of exposures:', len(C)
+
+    expnums = np.unique(C.expnum)
+
+    for expnum in expnums:
+        I = np.flatnonzero(C.expnum == expnum)
+        c = C[I[0]]
         if 'COSMOS' in c.cpimage:
             continue
         if 'DES' in c.cpimage:
             continue
-    
+        if c.exptime <= 30:
+            continue
+
+        CC = C[I]
+        
         # Record the first time a new date is seen
         # NOTE the date_obs values are in UTC, so this is dodgy!
         date = c.date_obs[:10]
         if not date in udates:
             udates.append(date)
             ui.append(len(R.zp))
-    
-        ccdname = c.extname.strip()
-        if ccdname != 'N4':
-            continue
-        if c.exptime <= 30:
-            continue
-    
-        #if c.dr1 == 0:
-        #    nonphotom.append(len(zps))
-    
-    
-        I = np.flatnonzero((Z.expnum == c.expnum) * (Z.ccdname == ccdname))
-        print 'Expnum', c.expnum, 'ccdname', ccdname, 'matched', len(I), 'in zeropoints file'
+
         print '  ', c.cpimage
         print '  exptime', c.exptime
-        assert(len(I) == 1)
-        z = Z[I[0]]
-        zp = z.ccdzpt
+            
+        J = []
+        ZZ = Z[(Z.expnum == expnum)]
+        for c in CC:
+            ccdname = c.extname.strip()
+            i = np.flatnonzero((ZZ.ccdname == ccdname))
+            assert(len(i) == 1)
+            J.append(i[0])
+        ZZ = ZZ[np.array(J)]
+        
+        # If there is a mix of photometric and non-photometric CCDs,
+        # cut to just the photometric ones.
+        if len(np.unique(CC.dr1)) == 2:
+            keep = np.flatnonzero(CC.dr1 == 1)
+            CC.cut(keep)
+            ZZ.cut(keep)
+            print 'Cut to', len(keep), 'photometric CCDs in this exposure'
+
+        #airmass = np.median(CC.airmass)
+        airmass = 1.0
+        
+        zp = np.median(ZZ.ccdzpt)
+        fwhm = np.median(ZZ.seeing)
+        skylev = np.median(c.avsky)
+        gain = np.median(c.arawgain)
+        skyflux = skylev / c.exptime
+        
         print '  zeropoint', zp, 'in CP'
-        airmass = c.airmass
-        fwhm = z.seeing
         print '  fwhm', fwhm
-    
-        print '  sky level', c.avsky, 'in CP'
-        skyflux = c.avsky / c.exptime
+        print '  sky level', skylev, 'in CP'
         print '  sky flux', skyflux, 'per second in CP units'
         skyflux /= (0.27**2)
         print '  sky flux', skyflux, 'per second per square arcsecond in CP'
-        skyflux *= c.arawgain
+        skyflux *= gain
         print '  sky flux', skyflux, 'e- per second per square arcsec'
         skysb = -2.5 * np.log10(skyflux)
     
-        zpRaw = zp + 2.5*np.log10(c.arawgain)
+        zpRaw = zp + 2.5*np.log10(gain)
         print '  zpRaw:', zpRaw
         
         skyRaw = skysb + zpRaw
@@ -119,7 +134,7 @@ def stage_read():
         print '  ', len(J), 'obstatus matches'
         ebv = obstatus[J[0]].ebv_med
         print '  ebv', ebv
-        
+
         ef = ExposureFactor(band, airmass, ebv, fwhm, zpRaw, skyRaw, gvs)
         print '  Exposure factor', ef
     
@@ -143,6 +158,88 @@ def stage_read():
     
     R.to_np_arrays()
     return dict(R=R, ui=ui, udates=udates)
+
+
+    # for i,c in enumerate(C):
+    #     if 'COSMOS' in c.cpimage:
+    #         continue
+    #     if 'DES' in c.cpimage:
+    #         continue
+    # 
+    #     # Record the first time a new date is seen
+    #     # NOTE the date_obs values are in UTC, so this is dodgy!
+    #     date = c.date_obs[:10]
+    #     if not date in udates:
+    #         udates.append(date)
+    #         ui.append(len(R.zp))
+    # 
+    #     ccdname = c.extname.strip()
+    #     if ccdname != 'N4':
+    #         continue
+    #     if c.exptime <= 30:
+    #         continue
+    # 
+    #     #if c.dr1 == 0:
+    #     #    nonphotom.append(len(zps))
+    # 
+    #     I = np.flatnonzero((Z.expnum == c.expnum) * (Z.ccdname == ccdname))
+    #     print 'Expnum', c.expnum, 'ccdname', ccdname, 'matched', len(I), 'in zeropoints file'
+    #     print '  ', c.cpimage
+    #     print '  exptime', c.exptime
+    #     assert(len(I) == 1)
+    #     z = Z[I[0]]
+    #     zp = z.ccdzpt
+    #     print '  zeropoint', zp, 'in CP'
+    #     airmass = c.airmass
+    #     fwhm = z.seeing
+    #     print '  fwhm', fwhm
+    # 
+    #     print '  sky level', c.avsky, 'in CP'
+    #     skyflux = c.avsky / c.exptime
+    #     print '  sky flux', skyflux, 'per second in CP units'
+    #     skyflux /= (0.27**2)
+    #     print '  sky flux', skyflux, 'per second per square arcsecond in CP'
+    #     skyflux *= c.arawgain
+    #     print '  sky flux', skyflux, 'e- per second per square arcsec'
+    #     skysb = -2.5 * np.log10(skyflux)
+    # 
+    #     zpRaw = zp + 2.5*np.log10(c.arawgain)
+    #     print '  zpRaw:', zpRaw
+    #     
+    #     skyRaw = skysb + zpRaw
+    #     print '  skyRaw', skyRaw
+    # 
+    #     tsat = np.floor((30000.0/(0.27)**2)*np.power(10.0,-0.4*(26.484 - skyRaw)))
+    #     print '  sat_max:', tsat
+    #     
+    #     J = tree_search_radec(obskd, c.ra_bore, c.dec_bore, 1)
+    #     print '  ', len(J), 'obstatus matches'
+    #     ebv = obstatus[J[0]].ebv_med
+    #     print '  ebv', ebv
+    #     
+    #     ef = ExposureFactor(band, airmass, ebv, fwhm, zpRaw, skyRaw, gvs)
+    #     print '  Exposure factor', ef
+    # 
+    #     et = np.floor(ef * gvs.base_exptimes[band])
+    #     print '  Exposure time', et
+    #     et = np.clip(et, gvs.floor_exptimes[band], gvs.ceil_exptimes[band])
+    #     print '  Clipped exposure time', et
+    #     print '  Actual  exposure time', c.exptime
+    # 
+    #     R.zp.append(zp)
+    #     R.zpRaw.append(zpRaw)
+    #     R.skyflux.append(skyflux)
+    #     R.sky.append(skyRaw)
+    #     R.ef.append(ef)
+    #     R.et.append(et)
+    #     R.realet.append(c.exptime)
+    #     R.sat.append(tsat)
+    #     R.mjd.append(c.mjd_obs)
+    #     R.fwhm.append(fwhm)
+    #     R.photometric.append(c.dr1)
+    # 
+    # R.to_np_arrays()
+    # return dict(R=R, ui=ui, udates=udates)
 
 def stage_plot(R=None, ui=None, udates=None):
     plt.figure(figsize=(12,16))
