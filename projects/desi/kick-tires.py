@@ -43,6 +43,12 @@ if __name__ == '__main__':
                                   'decals-%s-image.jpg' % brick))
     img = img[::-1,:,:]
     print 'Image:', img.shape
+
+    if False:
+        resid = plt.imread(os.path.join('dr1', 'coadd', brick[:3], brick,
+                                      'decals-%s-resid.jpg' % brick))
+        resid = resid[::-1,:,:]
+
     
     T.shapeexp_e1_err = 1./np.sqrt(T.shapeexp_e1_ivar)
     T.shapeexp_e2_err = 1./np.sqrt(T.shapeexp_e2_ivar)
@@ -76,25 +82,25 @@ if __name__ == '__main__':
 
     I = np.flatnonzero(np.logical_or(np.abs(E.shapeexp_e1) > 0.5,
                                      np.abs(E.shapeexp_e2) > 0.5))
-    cutobjs.append((E[I], 'EXP with large ellipticity'))
+    cutobjs.append((E[I], 'EXP with ellipticity > 0.5'))
 
     I = np.flatnonzero(np.logical_or(np.abs(D.shapedev_e1) > 0.5,
                                      np.abs(D.shapedev_e2) > 0.5))
-    cutobjs.append((E[I], 'DEV with large ellipticity'))
+    cutobjs.append((E[I], 'DEV with ellipticity > 0.5'))
 
     I = np.flatnonzero(np.logical_or(E.shapeexp_e1_err < 3e-3,
                                      E.shapeexp_e2_err < 3e-3))
-    cutobjs.append((E[I], 'EXP with small ellipticity errors'))
+    cutobjs.append((E[I], 'EXP with small ellipticity errors (<3e-3)'))
 
     I = np.flatnonzero(np.logical_or(D.shapedev_e1_err < 3e-3,
                                      D.shapedev_e2_err < 3e-3))
-    cutobjs.append((D[I], 'DEV with small ellipticity errors'))
+    cutobjs.append((D[I], 'DEV with small ellipticity errors (<3e-3)'))
 
     I = np.flatnonzero(D.shapedev_r > 10.)
-    cutobjs.append((D[I], 'DEV with large radius'))
+    cutobjs.append((D[I], 'DEV with large radius (>10")'))
 
     I = np.flatnonzero(D.shapedev_r_err < 2e-3)
-    cutobjs.append((D[I], 'DEV with small radius errors'))
+    cutobjs.append((D[I], 'DEV with small radius errors (<2e-3)'))
 
     I = np.flatnonzero((D.rflux > 100.) * (D.shapedev_r < 5.))
     cutobjs.append((D[I], 'DEV, small & bright'))
@@ -298,9 +304,21 @@ if __name__ == '__main__':
                      int(100. * o.decam_fracflux[4])),
                      color='red', size='small',
                      ha='left', va='bottom')
+
+            #plt.text(0, 2*S, '%.3f, %.3f' % (o.ra, o.dec),
+            #         color='red', size='small', ha='left', va='top')
             
         ps.savefig()
         
+        if False:
+            plt.clf()
+            for i,o in enumerate(objs):
+                plt.subplot(rows, cols, i+1)
+                H,W,three = img.shape
+                dimshow(resid[o.y0:min(H, o.by+S),
+                              o.x0:min(W, o.bx+S), :], ticks=False)
+            plt.suptitle(desc)
+            ps.savefig()
 
     
     
