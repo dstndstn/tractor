@@ -34,7 +34,7 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 3 --nsigma 6 --skip --pipe >> $log 2>&1
+python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
 
 # dr1j:
 # qdo launch edr 32 --mpack 3 --walltime=48:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
