@@ -145,9 +145,13 @@ def stage_read():
     return dict(R=R, ui=ui, udates=udates)
 
 def stage_plot(R=None, ui=None, udates=None):
-    #plt.figure(figsize=(12,16))
-    plt.figure(figsize=(12,12))
-    plt.subplots_adjust(bottom=0.05, top=0.95, hspace=0.2)
+    plt.figure(figsize=(12,16))
+    #plt.figure(figsize=(12,12))
+    #plt.subplots_adjust(bottom=0.05, top=0.95, hspace=0.2)
+    plt.subplots_adjust(bottom=0.08, top=0.95, hspace=0.2)
+
+    # Effective exposure time
+    R.teff = R.realet / R.ef
     
     for cut in [False,True]:
         if cut:
@@ -158,7 +162,7 @@ def stage_plot(R=None, ui=None, udates=None):
     
             R.cut(keep)
             
-        rows,cols = 5,1
+        rows,cols = 6,1
         plt.clf()
     
         for s in range(rows):
@@ -175,11 +179,9 @@ def stage_plot(R=None, ui=None, udates=None):
         plt.ylim(24.5, 25.5)
         plt.axhline(zpnom, color='k', alpha=0.2)
     
-        #plt.xticks(ui, udates)
         for i,d in zip(ui, udates):
             plt.axvline(i, color='k', alpha=0.2)
             plt.text(i, 25, d, rotation='vertical', size='smaller')
-        plt.xticks([])
     
         plt.subplot(rows, cols, 2)
     
@@ -193,7 +195,6 @@ def stage_plot(R=None, ui=None, udates=None):
         plt.ylabel('Sky Surf Bright')
         plt.axhline(skynom, color='k', alpha=0.2)
         plt.yticks(range(16,21))
-        plt.xticks([])
         plt.ylim(16, 20)
     
         plt.subplot(rows, cols, 3)
@@ -201,19 +202,32 @@ def stage_plot(R=None, ui=None, udates=None):
         plt.ylabel('FWHM')
         plt.axhline(1.3, color='k', alpha=0.2)
         plt.ylim(0.5, 2.5)
-        plt.xticks([])
         
         plt.subplot(rows, cols, 4)
         plt.semilogy(R.ef, 'b')
         plt.ylabel('Exposure factor')
         plt.axhline(1., color='k', alpha=0.2)
-        plt.ylim(0.2, 10)
+        plt.axhline(0.8, color='k', ls='--', alpha=0.2)
+        plt.axhline(2.5, color='k', ls='--', alpha=0.2)
+        plt.semilogy(R.sat / 100., 'k', alpha=0.2)
+        #plt.ylim(0.2, 10)
+        plt.ylim(0.5, 5)
     
         plt.subplot(rows, cols, 5)
         plt.semilogy(R.realet, 'b')
         plt.ylabel('Actual exposure time')
         plt.axhline(100., color='k', alpha=0.2)
-        plt.ylim(0.2 * 100., 10 * 100.)
+        plt.axhline(80, color='k', ls='--', alpha=0.2)
+        plt.axhline(250, color='k', ls='--', alpha=0.2)
+        plt.semilogy(R.sat, 'k', alpha=0.2)
+        #plt.ylim(0.2 * 100., 10 * 100.)
+        plt.ylim(0.5 * 100., 5 * 100.)
+
+        plt.subplot(rows, cols, 6)
+        plt.plot(R.teff, 'b')
+        plt.ylabel('Effective exposure time')
+        plt.axhline(100., color='k', alpha=0.2)
+        plt.ylim(25, 300)
         
         # plt.subplot(rows, cols, 5)
         # plt.plot(ets, 'b')
@@ -225,11 +239,14 @@ def stage_plot(R=None, ui=None, udates=None):
         for i in range(rows):
             plt.subplot(rows, cols, 1+i)
             plt.xlim(0, len(R))
+            plt.xticks([])
     
             if i > 0:
                 for ii,d in zip(ui, udates):
                     plt.axvline(ii, color='k', alpha=0.2)
-    
+
+        plt.xticks(ui, udates, rotation='vertical')
+                    
         plt.suptitle('DECaLS DR1 Observing Stats')
         ps.savefig()
     
@@ -248,9 +265,6 @@ def stage_plot(R=None, ui=None, udates=None):
     plt.legend([p2[0],p1[0]], ('Normal', 'Sat-clipped'),
                loc='upper left')
     ps.savefig()
-    
-    # Effective exposure time
-    R.teff = R.realet / R.ef
     
     hstyle = dict(histtype='step', color='b')
     
