@@ -2632,6 +2632,9 @@ def stage_writecat(
     for r in version_header.records():
         primhdr.add_record(r)
 
+    primhdr.add_record(dict(name='ALLBANDS', value=allbands,
+                            comment='Band order in array values'))
+
     for i,ap in enumerate(apertures_arcsec):
         primhdr.add_record(dict(name='APRAD%i' % i, value=ap,
                                 comment='Aperture radius, in arcsec'))

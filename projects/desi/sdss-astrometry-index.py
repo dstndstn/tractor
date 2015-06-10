@@ -19,6 +19,12 @@ def _run_one((cmd, outfn)):
 
 def main():
 
+    F = fits_table('window_flist-cut.fits')
+    print len(F), 'SDSS fields'
+
+
+
+
     reffn = 'data/decam/sdss-indexes/calibObj-merge-both-2.fits'
     if not os.path.exists(reffn):
         TT = []
