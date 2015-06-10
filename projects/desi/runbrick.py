@@ -767,14 +767,23 @@ def stage_srcs(coimgs=None, cons=None,
                plots=False, plots2=False,
                pipe=False, brickname=None,
                mp=None, outdir=None, nsigma=5,
+               no_sdss=False,
                **kwargs):
 
     tlast = Time()
-    # Read SDSS sources
-    cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
-            'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr', 'decerr']
-    cat,T = get_sdss_sources(bands, targetwcs, extracols=cols,
-                             ellipse=EllipseWithPriors.fromRAbPhi)
+    if not no_sdss:
+        # Read SDSS sources
+        cols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
+                'devflux_ivar', 'expflux_ivar', 'calib_status', 'raerr',
+                'decerr']
+        cat,T = get_sdss_sources(bands, targetwcs, extracols=cols,
+                                 ellipse=EllipseWithPriors.fromRAbPhi)
+        tnow = Time()
+        print '[serial srcs] SDSS sources:', tnow-tlast
+        tlast = tnow
+    else:
+        cat = []
+        T = None
 
     if T is not None:
         # SDSS RAERR, DECERR are in arcsec.  Convert to deg.
@@ -787,10 +796,6 @@ def stage_srcs(coimgs=None, cons=None,
         sdss_xy = T.itx, T.ity
     else:
         sdss_xy = None
-
-    tnow = Time()
-    print '[serial srcs] SDSS sources:', tnow-tlast
-    tlast = tnow
 
     print 'Rendering detection maps...'
     detmaps, detivs = detection_maps(tims, targetwcs, bands, mp)
@@ -3040,6 +3045,9 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
     parser.add_option('--no-wise', action='store_true', default=False,
                       help='Skip unWISE forced photometry')
 
+    parser.add_option('--no-sdss', action='store_true', default=False,
+                      help='Do not initialize from SDSS')
+    
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
     print 'Command-line args:', sys.argv
@@ -3156,12 +3164,15 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
     if opt.blobxy is not None:
         kwargs.update(blobxy=opt.blobxy)
 
+    if opt.no_sdss:
+        kwargs.update(no_sdss=True)
+        
     if opt.outdir:
         kwargs.update(outdir=opt.outdir)
 
     if opt.forceall:
         kwargs.update(forceall=True)
-        
+
     opt.picklepat = opt.picklepat % dict(brick=opt.brick)
 
     prereqs = {
@@ -3196,7 +3207,8 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
                 })
         
 
-    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom, pvwcs=opt.pv)
+    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom,
+                    pvwcs=opt.pv)
 
     t0 = Time()
 
