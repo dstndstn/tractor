@@ -1,8 +1,15 @@
 import sys
 
+import numpy as np
+import fitsio
+
+from astrometry.util.fits import fits_table, merge_tables
+from tractor import *
+
 from common import *
 from desi_common import *
 
+# python projects/desi/forced-photom-decam.py decals/images/decam/CP20140810_g_v2/c4d_140816_032035_ooi_g_v2.fits.fz 43 DR1 f.fits
 
 if __name__ == '__main__':
     import optparse
@@ -11,6 +18,7 @@ if __name__ == '__main__':
     parser.add_option('--no-ceres', action='store_false', default=True, dest='ceres', help='Do not use Ceres optimiziation engine (use scipy)')
     parser.add_option('--catalog-path', default='dr1',
                       help='Path to DECaLS DR1 catalogs; default %default, eg, /project/projectdirs/cosmo/data/legacysurvey/dr1')
+    parser.add_option('--plots', default=None, help='Create plots; specify a base filename for the plots')
     opt,args = parser.parse_args()
 
     if len(args) != 4:
@@ -27,6 +35,11 @@ if __name__ == '__main__':
         (x0,x1,y0,y1) = opt.zoom
         zoomslice = (slice(y0,y1), slice(x0,x1))
 
+    ps = None
+    if opt.plots is not None:
+        from astrometry.util.plotutils import PlotSequence
+        ps = PlotSequence(opt.plots)
+
     T = exposure_metadata([filename], hdus=[hdu])
     print 'Metadata:'
     T.about()
@@ -35,6 +48,8 @@ if __name__ == '__main__':
     decals = Decals()
     tim = im.get_tractor_image(decals, slc=zoomslice, const2psf=True, pvwcs=True)
     print 'Got tim:', tim
+
+    cols = [ 'brickid', 'brickname', 'objid', ]
 
     if catfn == 'DR1':
 
@@ -76,24 +91,25 @@ if __name__ == '__main__':
             print 'Cut to', len(T), 'on brick_primary'
             TT.append(T)
         T = merge_tables(TT)
+        T._header = TT[0]._header
 
         T.writeto('cat.fits')
 
         T.cut((T.out_of_bounds == False) * (T.left_blob == False))
 
-        allbands = 'ugrizY'
+        #allbands = 'ugrizY'
+        #bandindex = allbands.index(tim.band)
+        #fluxiv = 
 
         del TT
     else:
         T = fits_table(catfn)
 
-    cat,invvars = read_fits_catalog(T, invvars=True)
-    print 'Got cat:', cat
+    T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
+    T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
 
-    from tractor.psfex import CachingPsfEx
-    tim.psfex.radius = 20
-    tim.psfex.fitSavedData(*tim.psfex.splinedata)
-    tim.psf = CachingPsfEx.fromPsfEx(tim.psfex)
+    cat = read_fits_catalog(T)
+    print 'Got cat:', cat
 
     print 'Forced photom...'
 
@@ -108,10 +124,52 @@ if __name__ == '__main__':
         B = 8
         kwa.update(use_ceres=True, BW=B, BH=B)
 
-    R = tr.optimize_forced_photometry(variance=True, **kwa)
+    if opt.plots is None:
+        kwa.update(wantims=False)
 
-    T = fits_table()
-    T.flux = np.array([src.getBrightness().getFlux(tim.band) for src in cat]).astype(np.float32)
-    T.flux_ivar = R.IV.astype(np.float32)
-    T.writeto(outfn)
+    R = tr.optimize_forced_photometry(variance=True, fitstats=True,
+                                      shared_params=False, **kwa)
+
+    if opt.plots:
+        (data,mod,ie,chi,roi) = R.ims1[0]
+
+        ima = tim.ima
+        imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5)
+        plt.clf()
+        plt.imshow(data, **ima)
+        plt.title('Data: %s' % tim.name)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(mod, **ima)
+        plt.title('Model: %s' % tim.name)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(chi, **imchi)
+        plt.title('Chi: %s' % tim.name)
+        ps.savefig()
+
+
+    F = fits_table()
+    F.brickid   = T.brickid
+    F.brickname = T.brickname
+    F.objid     = T.objid
+
+    F.filter  = np.array([tim.band]               * len(T))
+    F.mjd     = np.array([tim.primhdr['MJD-OBS']] * len(T))
+    F.exptime = np.array([tim.primhdr['EXPTIME']] * len(T))
+
+    ok,x,y = tim.sip_wcs.radec2pixelxy(T.ra, T.dec)
+    F.x = (x-1).astype(np.float32)
+    F.y = (y-1).astype(np.float32)
+
+    F.flux = np.array([src.getBrightness().getFlux(tim.band)
+                       for src in cat]).astype(np.float32)
+    F.flux_ivar = R.IV.astype(np.float32)
+
+    F.fracflux = R.fitstats.profracflux.astype(np.float32)
+    F.rchi2    = R.fitstats.prochi2    .astype(np.float32)
+
+    F.writeto(outfn)
     print 'Wrote', outfn
