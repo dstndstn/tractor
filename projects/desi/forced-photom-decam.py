@@ -49,8 +49,6 @@ if __name__ == '__main__':
     tim = im.get_tractor_image(decals, slc=zoomslice, const2psf=True, pvwcs=True)
     print 'Got tim:', tim
 
-    cols = [ 'brickid', 'brickname', 'objid', ]
-
     if catfn == 'DR1':
 
         # How far outside the image to keep objects
@@ -70,8 +68,9 @@ if __name__ == '__main__':
             chipwcs = tim.subwcs
 
             clip = clip_wcs(chipwcs, brickwcs)
-            print 'Clipped chip coordinates:', clip
+            #print 'Clipped chip coordinates:', clip
             if len(clip) == 0:
+                print 'No overlap with brick', b.brickname
                 continue
 
             # there is some overlap with this brick... read the catalog.
@@ -86,20 +85,15 @@ if __name__ == '__main__':
                                (yy >= -margin) * (yy <= (H+margin)))
             T.cut(I)
             print 'Cut to', len(T), 'sources within image + margin'
-            print 'Brick_primary:', np.unique(T.brick_primary)
+            #print 'Brick_primary:', np.unique(T.brick_primary)
             T.cut(T.brick_primary)
             print 'Cut to', len(T), 'on brick_primary'
+            T.cut((T.out_of_bounds == False) * (T.left_blob == False))
+            print 'Cut to', len(T), 'on out_of_bounds and left_blob'
             TT.append(T)
         T = merge_tables(TT)
         T._header = TT[0]._header
-
         T.writeto('cat.fits')
-
-        T.cut((T.out_of_bounds == False) * (T.left_blob == False))
-
-        #allbands = 'ugrizY'
-        #bandindex = allbands.index(tim.band)
-        #fluxiv = 
 
         del TT
     else:
@@ -109,10 +103,9 @@ if __name__ == '__main__':
     T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
 
     cat = read_fits_catalog(T)
-    print 'Got cat:', cat
+    #print 'Got cat:', cat
 
     print 'Forced photom...'
-
     tr = Tractor([tim], cat)
     tr.freezeParam('images')
     for src in cat:
@@ -171,5 +164,29 @@ if __name__ == '__main__':
     F.fracflux = R.fitstats.profracflux.astype(np.float32)
     F.rchi2    = R.fitstats.prochi2    .astype(np.float32)
 
-    F.writeto(outfn)
+    program_name = sys.argv[0]
+    version_hdr = get_version_header(program_name, decals.decals_dir)
+    version_hdr.add_record(dict(name='CPFILE', value=im.imgfn, comment='DECam comm.pipeline file'))
+    version_hdr.add_record(dict(name='CPHDU', value=im.hdu, comment='DECam comm.pipeline ext'))
+    version_hdr.add_record(dict(name='EXPNUM', value=im.expnum, comment='DECam exposure num'))
+    version_hdr.add_record(dict(name='CCDNAME', value=im.extname, comment='DECam CCD name'))
+    version_hdr.add_record(dict(name='CAMERA', value='DECam', comment='Dark Energy Camera'))
+
+    keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
+            'INSTRUME']
+    for key in keys:
+        if key in tim.primhdr:
+            version_hdr.add_record(dict(name=key, value=tim.primhdr[key]))
+
+    hdr = fitsio.FITSHDR()
+
+    units = {'mjd':'sec', 'exptime':'sec', 'flux':'nanomaggy',
+             'flux_ivar':'1/nanomaggy^2'}
+    columns = F.get_columns()
+    for i,col in enumerate(columns):
+        if col in units:
+            hdr.add_record(dict(name='TUNIT%i' % (i+1), value=units[col]))
+
+    fitsio.write(outfn, None, header=version_hdr, clobber=True)
+    F.writeto(outfn, header=hdr, append=True)
     print 'Wrote', outfn
