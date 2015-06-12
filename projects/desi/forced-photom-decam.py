@@ -168,10 +168,12 @@ if __name__ == '__main__':
     version_hdr = get_version_header(program_name, decals.decals_dir)
     version_hdr.add_record(dict(name='CPFILE', value=im.imgfn, comment='DECam comm.pipeline file'))
     version_hdr.add_record(dict(name='CPHDU', value=im.hdu, comment='DECam comm.pipeline ext'))
+    version_hdr.add_record(dict(name='CAMERA', value='DECam', comment='Dark Energy Camera'))
     version_hdr.add_record(dict(name='EXPNUM', value=im.expnum, comment='DECam exposure num'))
     version_hdr.add_record(dict(name='CCDNAME', value=im.extname, comment='DECam CCD name'))
-    version_hdr.add_record(dict(name='CAMERA', value='DECam', comment='Dark Energy Camera'))
-
+    version_hdr.add_record(dict(name='FILTER', value=tim.band, comment='Bandpass of this image'))
+    version_hdr.add_record(dict(name='EXPOSURE', value='decam-%s-%s' % (im.expnum, im.extname), comment='Name of this image'))
+    
     keys = ['TELESCOP','OBSERVAT','OBS-LAT','OBS-LONG','OBS-ELEV',
             'INSTRUME']
     for key in keys:
