@@ -16,9 +16,113 @@ from common import *
 
 if __name__ == '__main__':
 
+    # Forced phot
     ps = PlotSequence('kick')
     plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
 
+    ff = [
+        ('decam-348227-S15-g-forced.fits', 348227, 'S15', 'g'),
+        ('decam-348248-S16-g-forced.fits', 348248, 'S16', 'g'),
+        ('decam-348271-S14-g-forced.fits', 348271, 'S14', 'g'),
+        ('decam-348660-S15-r-forced.fits', 348660, 'S15', 'r'),
+        ('decam-348684-S16-r-forced.fits', 348684, 'S16', 'r'),
+        ('decam-348712-S14-r-forced.fits', 348712, 'S14', 'r'),
+        ('decam-349154-S15-z-forced.fits', 349154, 'S15', 'z'),
+        ('decam-349183-S14-z-forced.fits', 349183, 'S14', 'z'),
+        ('decam-346630-S16-z-forced.fits', 346630, 'S16', 'z'),
+    ]
+    FF = []
+    for fn,expnum,extname,band in ff:
+        F = fits_table(fn)
+        print len(F), 'from', fn
+        F.expnum  = np.array([expnum ] * len(F))
+        F.extname = np.array([extname] * len(F))
+        FF.append(F)
+    F = merge_tables(FF)
+    bricks = np.unique(F.brickname)
+    print 'Bricks:', bricks
+    T = merge_tables([fits_table(os.path.join('dr1','tractor',b[:3],
+                                              'tractor-%s.fits' % b))
+                                              for b in bricks])
+    print 'Total of', len(T), 'sources'
+    T.srcid = (T.brickid.astype(np.int64) << 32 | T.objid)
+
+    F.srcid = (F.brickid.astype(np.int64) << 32 | F.objid)
+    print 'Total of', len(F), 'forced'
+    print len(np.unique(F.srcid)), 'unique source in forced'
+
+    tmap = dict([(s,i) for i,s in enumerate(T.srcid)])
+
+    T.forced_g = [ [] for i in range(len(T)) ]
+    T.forced_r = [ [] for i in range(len(T)) ]
+    T.forced_z = [ [] for i in range(len(T)) ]
+
+    for f in F:
+        i = tmap[f.srcid]
+        forced = T.get('forced_%s' % f.filter)[i]
+        forced.append(f.flux)
+
+    # pack into arrays
+    bands = 'grz'
+    for band in bands:
+        flist = T.get('forced_%s' % band)
+        nmax = max([len(f) for f in flist])
+        arr = np.zeros((len(T), nmax), np.float32)
+        for i,f in enumerate(flist):
+            arr[i,:len(f)] = f
+        T.set('forced_%s' % band, arr)
+
+    # Cut to sources with forced phot
+    T.cut(np.flatnonzero(reduce(np.logical_or, [
+        np.any(T.get('forced_%s'%band) > 0, axis=1) for band in bands])))
+    print 'Cut to', len(T), 'sources with forced phot'
+    
+    allbands = 'ugrizY'
+    for b in bands:
+        ib = allbands.index(b)
+        plt.clf()
+        f = T.get('forced_%s' % b)
+        n,nf = f.shape
+        flux = T.decam_flux[:,ib]
+        lo,hi = 1e-2, 1e5
+        plt.plot([lo,hi], [lo,hi], 'r-')
+        plt.errorbar(flux, flux, fmt='none',
+                     yerr=1./np.sqrt(T.decam_flux_ivar[:,ib]), ecolor='r')
+        for i in range(nf):
+            plt.plot(T.decam_flux[:,ib], f[:,i], 'b.', alpha=0.25)
+        plt.axis([lo,hi,lo,hi])
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Combined flux')
+        plt.ylabel('Forced-photometry flux')
+        plt.title('Forced phot: %s band' % b)
+        ps.savefig()
+
+    for b in bands:
+        ib = allbands.index(b)
+        plt.clf()
+        f = T.get('forced_%s' % b)
+        n,nf = f.shape
+        flux = T.decam_flux[:,ib]
+        lo,hi = -0.5, 4
+        plt.axhline(1., color='r')
+        plt.axhline(0., color='k', alpha=0.25)
+        for i in range(nf):
+            plt.plot(flux, np.clip(f[:,i] / flux, lo, hi), 'b.', alpha=0.25)
+        plt.ylim(lo-0.1, hi+0.1)
+        plt.xlim(1e-2, 1e5)
+        plt.xscale('log')
+        #plt.yscale('log')
+        plt.xlabel('Combined flux')
+        plt.ylabel('Relative forced-photometry flux')
+        plt.title('Forced phot: %s band' % b)
+        ps.savefig()
+
+
+        
+def galaxies():
+    ps = PlotSequence('kick')
+    plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
     brick = '3166p025'
 
     decals = Decals()
