@@ -9,16 +9,364 @@ from glob import glob
 
 from astrometry.util.fits import fits_table,merge_tables
 from astrometry.util.plotutils import * #PlotSequence, dimshow
+from astrometry.util.util import *
+from astrometry.util.resample import *
 from astrometry.libkd.spherematch import match_radec
 from tractor import *
 from tractor.galaxy import *
 from common import *
 
-if __name__ == '__main__':
+def plot_objects(objs, allobjs, img, brickwcs, S=25, rows=4, cols=6,
+                 imshowargs={}, fracflux=False, labels=None):
+    objs.x0 = np.maximum(0, np.round(objs.bx - S).astype(int))
+    objs.y0 = np.maximum(0, np.round(objs.by - S).astype(int))
 
+    for i,o in enumerate(objs):
+        if i >= rows*cols:
+            break
+        plt.subplot(rows, cols, i+1)
+        H,W,three = img.shape
+        dimshow(img[o.y0:min(H, o.by+S),
+                    o.x0:min(W, o.bx+S), :], ticks=False)
+
+        if fracflux:
+            plt.text(0, 0, '%i/%i/%i' % 
+                     (int(100. * o.decam_fracflux[1]),
+                      int(100. * o.decam_fracflux[2]),
+                      int(100. * o.decam_fracflux[4])),
+                      color='red', size='small',
+                      ha='left', va='bottom')
+
+            #plt.text(0, 2*S, '%.3f, %.3f' % (o.ra, o.dec),
+            #         color='red', size='small', ha='left', va='top')
+
+        if labels is not None:
+            txt = labels[i]
+            if txt is not None:
+                plt.text(0, 0, txt, color='red', size='small',
+                         ha='left', va='bottom')
+        
+    if allobjs is None:
+        return
+
+    for i,o in enumerate(objs):
+        if i >= rows*cols:
+            break
+        plt.subplot(rows, cols, i+1)
+
+        ax = plt.axis()
+        # plot sources nearby...
+        near = allobjs[(np.abs(allobjs.bx - o.bx) < S) *
+                       (np.abs(allobjs.by - o.by) < S)]
+
+        # print len(near), 'nearby sources'
+        # print '  type', near.type
+        x0 = np.maximum(0, np.round(o.bx - S).astype(int))
+        y0 = np.maximum(0, np.round(o.by - S).astype(int))
+        
+        for n in near:
+            e = None
+            cc = None
+            typ = n.type.strip()
+            green = (0.2,1,0.2)
+            if typ == 'PSF':
+                plt.plot(n.bx-x0, n.by-y0, 'o', mfc=green, mec='k', alpha=0.6)
+            elif typ == 'EXP':
+                e = EllipseE(n.shapeexp_r, n.shapeexp_e1, n.shapeexp_e2)
+                cc = '0.8'
+            elif typ == 'DEV':
+                e = EllipseE(n.shapedev_r, n.shapedev_e1, n.shapedev_e2)
+                cc = green
+            elif typ == 'COMP':
+                plt.plot(n.bx-x0, n.by-y0, 'yo', alpha=0.6)
+
+            if e is not None:
+                G = e.getRaDecBasis()
+                angle = np.linspace(0, 2.*np.pi, 60)
+                xy = np.vstack((np.append([0,0,1], np.sin(angle)),
+                                np.append([0,1,0], np.cos(angle)))).T
+                rd = np.dot(G, xy.T).T
+                ra  = n.ra  + rd[:,0] * np.cos(np.deg2rad(n.dec))
+                dec = n.dec + rd[:,1]
+                ok,xx,yy = brickwcs.radec2pixelxy(ra, dec)
+                x1,x2,x3 = xx[:3]
+                y1,y2,y3 = yy[:3]
+                plt.plot([x3 - x0, x1 - x0, x2 - x0],
+                         [y3 - y0, y1 - y0, y2 - y0], '-', color=cc)
+                plt.plot(x1 - x0, y1 - y0, '.', color=cc, ms=3, alpha=0.6)
+                xx = xx[3:]
+                yy = yy[3:]
+                plt.plot(xx - x0, yy - y0, '-', color=cc)
+        plt.axis(ax)
+
+
+def forced_phot():
+    # Forced phot
     ps = PlotSequence('kick')
     plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
 
+    ff = [
+        ('decam-348227-S15-g-forced.fits', 348227, 'S15', 'g'),
+        ('decam-348248-S16-g-forced.fits', 348248, 'S16', 'g'),
+        ('decam-348271-S14-g-forced.fits', 348271, 'S14', 'g'),
+        ('decam-348660-S15-r-forced.fits', 348660, 'S15', 'r'),
+        ('decam-348684-S16-r-forced.fits', 348684, 'S16', 'r'),
+        ('decam-348712-S14-r-forced.fits', 348712, 'S14', 'r'),
+        ('decam-349154-S15-z-forced.fits', 349154, 'S15', 'z'),
+        ('decam-349183-S14-z-forced.fits', 349183, 'S14', 'z'),
+        ('decam-346630-S16-z-forced.fits', 346630, 'S16', 'z'),
+    ]
+    FF = []
+    for fn,expnum,extname,band in ff:
+        F = fits_table(fn)
+        print len(F), 'from', fn
+        F.expnum  = np.array([expnum ] * len(F))
+        F.extname = np.array([extname] * len(F))
+        FF.append(F)
+    F = merge_tables(FF)
+    bricks = np.unique(F.brickname)
+    print 'Bricks:', bricks
+    T = merge_tables([fits_table(os.path.join('dr1','tractor',b[:3],
+                                              'tractor-%s.fits' % b))
+                                              for b in bricks])
+    print 'Total of', len(T), 'sources'
+    T.cut(T.brick_primary == 1)
+    print 'Cut to', len(T), 'brick_primary'
+
+    Tall = T.copy()
+
+    cutouts = []
+
+    I,J,d = match_radec(Tall.ra, Tall.dec, Tall.ra, Tall.dec, 5./3600.,
+                        notself=True)
+    K = np.flatnonzero(I < J)
+    I = I[K]
+    J = J[K]
+    # randomize
+    K = np.random.randint(2, size=len(I))
+    I,J = I*K + J*(1-K), I*(1-K) + J*K
+
+    plt.clf()
+    plothist(3600. *(Tall.ra[I] - Tall.ra[J]) * np.cos(np.deg2rad(Tall.dec[I])),
+            3600. * (Tall.dec[I] - Tall.dec[J]), 200) #, range=((-2,2),(-2,2)))
+    plt.xlabel('dRA (arcsec)')
+    plt.ylabel('dDec (arcsec)')
+    plt.title('%i sources, %i matches' % (len(Tall), len(I)))
+    ps.savefig()
+
+    dist = 3600. * np.hypot((Tall.ra[I] - Tall.ra[J]) *
+                            np.cos(np.deg2rad(Tall.dec[I])),
+                            Tall.dec[I] - Tall.dec[J])
+
+    cutouts.append((Tall, I[dist < 0.5], 'Close pairs', None))
+    
+    plt.clf()
+    plt.hist(dist, 50, histtype='step', color='b')
+    plt.xlabel('Match distance (arcsec)')
+    plt.title('%i sources, %i matches' % (len(Tall), len(I)))
+    ps.savefig()
+
+    plt.clf()
+    plothist(Tall.bx0[I] - Tall.bx0[J], Tall.by0[I] - Tall.by0[J],
+             200, range=((-20,20),(-20,20)))
+    plt.xlabel('d(x0)')
+    plt.ylabel('d(y0)')
+    plt.title('%i sources, %i matches' % (len(Tall), len(I)))
+    ps.savefig()
+
+    # plt.clf()
+    # plt.plot(np.vstack((Tall.bx0[I], Tall.bx0[J])),
+    #          np.vstack((Tall.by0[I], Tall.by0[J])), 'b-')
+    # ps.savefig()
+    
+    T.srcid = (T.brickid.astype(np.int64) << 32 | T.objid)
+
+    F.srcid = (F.brickid.astype(np.int64) << 32 | F.objid)
+    print 'Total of', len(F), 'forced'
+    print len(np.unique(F.srcid)), 'unique source in forced'
+
+    tmap = dict([(s,i) for i,s in enumerate(T.srcid)])
+
+    T.forced_g = [ [] for i in range(len(T)) ]
+    T.forced_r = [ [] for i in range(len(T)) ]
+    T.forced_z = [ [] for i in range(len(T)) ]
+
+    for f in F:
+        i = tmap[f.srcid]
+        forced = T.get('forced_%s' % f.filter)[i]
+        forced.append(f.flux)
+
+    # pack into arrays
+    bands = 'grz'
+    for band in bands:
+        flist = T.get('forced_%s' % band)
+        nmax = max([len(f) for f in flist])
+        arr = np.zeros((len(T), nmax), np.float32)
+        for i,f in enumerate(flist):
+            arr[i,:len(f)] = f
+        T.set('forced_%s' % band, arr)
+
+    # Cut to sources with forced phot
+    T.cut(np.flatnonzero(reduce(np.logical_or, [
+        np.any(T.get('forced_%s'%band) > 0, axis=1) for band in bands])))
+    print 'Cut to', len(T), 'sources with forced phot'
+
+    imgs = {}
+    
+    allbands = 'ugrizY'
+    for b in bands:
+        ib = allbands.index(b)
+        plt.clf()
+        f = T.get('forced_%s' % b)
+        n,nf = f.shape
+        flux = T.decam_flux[:,ib]
+        lo,hi = 1e-2, 1e5
+        plt.plot([lo,hi], [lo,hi], 'r-')
+        plt.errorbar(flux, flux, fmt='none',
+                     yerr=1./np.sqrt(T.decam_flux_ivar[:,ib]), ecolor='r')
+        for i in range(nf):
+            plt.plot(T.decam_flux[:,ib], f[:,i], 'b.', alpha=0.25)
+        plt.axis([lo,hi,lo,hi])
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Combined flux')
+        plt.ylabel('Forced-photometry flux')
+        plt.title('Forced phot: %s band' % b)
+        ps.savefig()
+
+    for b in bands:
+        ib = allbands.index(b)
+        plt.clf()
+        f = T.get('forced_%s' % b)
+        n,nf = f.shape
+        flux = T.decam_flux[:,ib]
+        lo,hi = -0.5, 4
+        plt.axhline(1., color='r')
+        plt.axhline(0., color='k', alpha=0.25)
+        for i in range(nf):
+            plt.plot(flux, np.clip(f[:,i] / flux, lo, hi), 'b.', alpha=0.25)
+        plt.ylim(lo-0.1, hi+0.1)
+        plt.xlim(1e-2, 1e5)
+        plt.xscale('log')
+        #plt.yscale('log')
+        plt.xlabel('Combined flux')
+        plt.ylabel('Relative forced-photometry flux')
+        plt.title('Forced phot: %s band' % b)
+        ps.savefig()
+
+        # Large relative flux
+        I = np.flatnonzero((flux > 0.) * ((f[:,i] / flux) > 4.))
+        #print 'Relative fluxes:', (f[:,i]/flux)[I]
+        #print 'Fluxes:', flux[I]
+        I = I[np.argsort(-flux[I])]
+        #print 'Sorted fluxes:', flux[I]
+        labels = []
+        for t in T[I]:
+            fluxes = t.get('forced_%s' % b)
+            ib = allbands.index(b)
+            flux = t.decam_flux[ib]
+            txt = ('%.1f / %.1f / %.1f | %.1f' % 
+                   (fluxes[0], fluxes[1], fluxes[2], flux))
+            labels.append(txt)
+
+        cutouts.append((T, I, 'Large relative flux: %s band' % b, labels))
+
+
+    # Create a fake "brick" WCS bounding the forced-phot objects
+    # rlo = T.ra.min()
+    # rhi = T.ra.max()
+    # dlo = T.dec.min()
+    # dhi = T.dec.max()
+
+    rlo = Tall.ra.min()
+    rhi = Tall.ra.max()
+    dlo = Tall.dec.min()
+    dhi = Tall.dec.max()
+
+    if rhi - rlo > 180:
+        print 'No RA wrap-around support'
+        sys.exit(0)
+
+    dec = (dlo + dhi) / 2.
+    ra  = (rlo + rhi) / 2.
+    pixscale = 0.262
+    ddec = (dhi - dlo)
+    H = ddec * 3600. / pixscale
+    dra  = (rhi - rlo)
+    W = dra  * np.cos(np.deg2rad(dec)) * 3600. / pixscale
+    H = int(np.ceil(H))
+    W = int(np.ceil(W))
+    print 'Target image shape', (H,W)
+    targetwcs = Tan(ra, dec, W/2.+0.5, H/2.+0.5,
+                    -pixscale/3600., 0., 0., pixscale/3600.,
+                    float(W), float(H))
+    img = np.zeros((H,W,3), np.uint8)
+    print 'img', img.shape
+    decals = Decals()
+    for brickname in bricks:
+        brick = decals.get_brick_by_name(brickname)
+        brickwcs = wcs_for_brick(brick)
+
+        try:
+            Yo,Xo,Yi,Xi,nil = resample_with_wcs(targetwcs, brickwcs, [], 3)
+        except:
+            continue
+        brickimg = plt.imread(os.path.join('dr1', 'coadd', brickname[:3],
+                                           brickname, 'decals-%s-image.jpg' % brickname))
+        print 'brick image', brickimg.shape, brickimg.dtype
+        brickimg = brickimg[::-1,:,:]
+        img[Yo,Xo,:] = brickimg[Yi,Xi,:]
+
+    # Now fake the "bx,by" coords to refer to 'targetwcs' / 'img'
+    ok,x,y = targetwcs.radec2pixelxy(T.ra, T.dec)
+    T.bx = x - 1
+    T.by = y - 1
+    ok,x,y = targetwcs.radec2pixelxy(Tall.ra, Tall.dec)
+    Tall.bx = x - 1
+    Tall.by = y - 1
+
+    print 'Tall:', len(Tall), 'sources'
+
+    plt.clf()
+    dimshow(img)
+    ps.savefig()
+    
+    ax = plt.axis()
+    plt.plot(Tall.bx, Tall.by, 'r.')
+    plt.axis(ax)
+    ps.savefig()
+    
+    for TT,I,desc,labels in cutouts:
+        plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95,
+                            hspace=0.05, wspace=0.05)
+
+        kwa = dict(rows=6, cols=9)
+
+        plt.clf()
+        plot_objects(TT[I], None, img, targetwcs, **kwa)
+        plt.suptitle(desc)
+        ps.savefig()
+        
+        plt.clf()
+        plot_objects(TT[I], Tall, img, targetwcs, labels=labels, **kwa)
+        plt.suptitle(desc)
+        ps.savefig()
+
+
+    ## Initial positions
+    # ok,x,y = targetwcs.radec2pixelxy(T.ra, T.dec)
+    # T.bx = x - 1
+    # T.by = y - 1
+    # ok,x,y = targetwcs.radec2pixelxy(Tall.ra, Tall.dec)
+    # Tall.bx = x - 1
+    # Tall.by = y - 1
+
+        
+
+        
+def galaxies():
+    ps = PlotSequence('kick')
+    plt.subplots_adjust(top=0.95, bottom=0.1, left=0.1, right=0.95)
     brick = '3166p025'
 
     decals = Decals()
@@ -222,92 +570,13 @@ if __name__ == '__main__':
         plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95,
                             hspace=0.05, wspace=0.05)
 
-        S = 25
-
-        objs.x0 = np.maximum(0, np.round(objs.bx - S).astype(int))
-        objs.y0 = np.maximum(0, np.round(objs.by - S).astype(int))
-
-        for i,o in enumerate(objs):
-            plt.subplot(rows, cols, i+1)
-            H,W,three = img.shape
-            dimshow(img[o.y0:min(H, o.by+S),
-                        o.x0:min(W, o.bx+S), :], ticks=False)
-            #print 'Cutout pixels range:'
-            
-
+        plot_objects(objs, None, img, brickwcs)
         plt.suptitle(desc)
         ps.savefig()
 
-        for i,o in enumerate(objs):
-            plt.subplot(rows, cols, i+1)
-
-            ax = plt.axis()
-            # plot sources nearby...
-            near = T[(np.abs(T.bx - o.bx) < S) * (np.abs(T.by - o.by) < S)]
-
-            # print len(near), 'nearby sources'
-            # print '  type', near.type
-            # print '  shapeexp_e1', near.shapeexp_e1
-            # print '  shapeexp_e2', near.shapeexp_e2
-            
-            x0 = np.maximum(0, np.round(o.bx - S).astype(int))
-            y0 = np.maximum(0, np.round(o.by - S).astype(int))
-
-            # print '  bx', near.bx
-            # print '  by', near.by
-            # print '  bx-x0', near.bx - x0
-            # print '  by-y0', near.by - y0
-            
-            for n in near:
-                e = None
-                cc = None
-                if n.type.strip() == 'PSF':
-                    plt.plot(n.bx-x0, n.by-y0, 'r.')
-                elif n.type.strip() == 'EXP':
-                    e = EllipseE(n.shapeexp_r, n.shapeexp_e1, n.shapeexp_e2)
-                    cc = '1'
-                elif n.type.strip() == 'DEV':
-                    e = EllipseE(n.shapedev_r, n.shapedev_e1, n.shapedev_e2)
-                    cc = 'r'
-                elif n.type.strip() == 'COMP':
-                    plt.plot(n.bx-x0, n.by-y0, 'ro')
-                    
-                if e is not None:
-                    G = e.getRaDecBasis()
-                    angle = np.linspace(0, 2.*np.pi, 60)
-                    xy = np.vstack((np.append([0,0,1], np.sin(angle)),
-                                    np.append([0,1,0], np.cos(angle)))).T
-                    # print 'G', G
-                    #print 'G', G.shape
-                    #print 'xy', xy.shape
-                    rd = np.dot(G, xy.T).T
-                    ## print 'rd', rd.shape
-                    ra  = n.ra  + rd[:,0] * np.cos(np.deg2rad(n.dec))
-                    dec = n.dec + rd[:,1]
-                    ok,xx,yy = brickwcs.radec2pixelxy(ra, dec)
-                    #print 'xx,yy', xx.shape, yy.shape
-                    x1,x2,x3 = xx[:3]
-                    y1,y2,y3 = yy[:3]
-                    # print '  x123', xx[:3]-x0
-                    # print '  y123', yy[:3]-y0
-                    plt.plot([x3 - x0, x1 - x0, x2 - x0],
-                             [y3 - y0, y1 - y0, y2 - y0], '-', color=cc)
-                    plt.plot(x1 - x0, y1 - y0, '.', color=cc, ms=3)
-                    xx = xx[3:]
-                    yy = yy[3:]
-                    plt.plot(xx - x0, yy - y0, '-', color=cc)
-            plt.axis(ax)
-
-            plt.text(0, 0, '%i/%i/%i' % 
-                    (int(100. * o.decam_fracflux[1]),
-                     int(100. * o.decam_fracflux[2]),
-                     int(100. * o.decam_fracflux[4])),
-                     color='red', size='small',
-                     ha='left', va='bottom')
-
-            #plt.text(0, 2*S, '%.3f, %.3f' % (o.ra, o.dec),
-            #         color='red', size='small', ha='left', va='top')
-            
+        plt.clf()
+        plot_objects(objs, T, img, brickwcs, fracflux=True)
+        plt.suptitle(desc)
         ps.savefig()
         
         if False:
@@ -547,3 +816,8 @@ if __name__ == '__main__':
     
 
 
+if __name__ == '__main__':
+    forced_phot()
+
+
+    
