@@ -4,6 +4,7 @@ import numpy as np
 from collections import OrderedDict
 
 from astrometry.util.fits import fits_table
+from astrometry.util.file import *
 from common import * #Decals, wcs_for_brick, ccds_touching_wcs
 
 from astrometry.libkd.spherematch import *
@@ -30,8 +31,6 @@ qdo launch bricks 1 --batchopts "-A cosmo -t 1-10 -l walltime=24:00:00 -q serial
     --script projects/desi/pipebrick.sh
 '''
 
-from astrometry.libkd.spherematch import *
-
 import matplotlib
 matplotlib.use('Agg')
 import pylab as plt
@@ -46,6 +45,10 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     parser.add_option('--calibs', action='store_true', default=False,
                       help='Output CCDs that need to be calibrated.')
+
+    parser.add_option('--forced', action='store_true', default=False,
+                      help='Output forced-photometry commands')
+
     parser.add_option('--touching', action='store_true', default=False,
                       help='Cut to only CCDs touching selected bricks')
 
@@ -266,7 +269,7 @@ if __name__ == '__main__':
 
         print b.brickname
 
-    if not opt.calibs:
+    if not (opt.calibs or opt.forced):
         sys.exit(0)
     
     #B.cut(B.brickname == '1498p017')
@@ -301,6 +304,25 @@ if __name__ == '__main__':
 
     ## Be careful here -- T has been cut; we want to write out T.index.
     ## 'allI' contains indices into T.
+
+    if opt.forced:
+        print 'Writing forced-photometry commands to', opt.out
+        f = open(opt.out,'w')
+        log('Total of', len(allI), 'CCDs')
+        for j,i in enumerate(allI):
+            expstr = '%08i' % T.expnum[i]
+            outdir = os.path.join('forced', expstr[:5], expstr)
+            trymakedirs(outdir, dir=True)
+            outfn = os.path.join(outdir,
+                                 'decam-%s-%s-%s-forced.fits' %
+                                 (expstr, T.extname[i], T.filter[i]))
+            f.write('python projects/desi/forced-photom-decam.py %s %i DR1 %s\n' % 
+                    (T.cpimage[i], T.cpimage_hdu[i], outfn))
+
+        f.close()
+        print 'Wrote', opt.out
+        sys.exit(0)
+
 
     print 'Writing calibs to', opt.out
     f = open(opt.out,'w')
