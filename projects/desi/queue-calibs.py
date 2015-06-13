@@ -313,9 +313,8 @@ if __name__ == '__main__':
             expstr = '%08i' % T.expnum[i]
             outdir = os.path.join('forced', expstr[:5], expstr)
             trymakedirs(outdir, dir=True)
-            outfn = os.path.join(outdir,
-                                 'decam-%s-%s-%s-forced.fits' %
-                                 (expstr, T.extname[i], T.filter[i]))
+            outfn = os.path.join(outdir, 'decam-%s-%s-forced.fits' %
+                                 (expstr, T.extname[i]))
             f.write('python projects/desi/forced-photom-decam.py %s %i DR1 %s\n' % 
                     (T.cpimage[i], T.cpimage_hdu[i], outfn))
 
