@@ -246,10 +246,13 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
 
         clazz = rev_typemap[t.type.strip()]
         pos = RaDecPos(t.ra, t.dec)
+        assert(np.isfinite(t.ra))
+        assert(np.isfinite(t.dec))
         #br = NanoMaggies(order=bands, **dict([(b,t.get(c)) for b,c in zip(bands,bandcols)]))
 
         shorttype = fits_short_typemap[clazz]
 
+        assert(np.all(np.isfinite(t.decam_flux[ibands])))
         br = NanoMaggies(order=bands, **dict(zip(bands, t.decam_flux[ibands])))
         params = [pos, br]
         if invvars:
@@ -264,8 +267,10 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             # look up that string... to avoid eval()
             eclazz = ellipse_types[eclazz]
             if issubclass(clazz, DevGalaxy):
+                assert(np.all([np.isfinite(x) for x in t.shapedev]))
                 ell = eclazz(*t.shapedev)
             else:
+                assert(np.all([np.isfinite(x) for x in t.shapeexp]))
                 ell = eclazz(*t.shapeexp)
             params.append(ell)
             if invvars:
@@ -276,6 +281,7 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             
         elif issubclass(clazz, FixedCompositeGalaxy):
             # hard-code knowledge that params are fracDev, shapeE, shapeD
+            assert(np.isfinite(t.fracdev))
             params.append(t.fracdev)
             expeclazz = hdr['TR_%s_T4' % shorttype]
             deveclazz = hdr['TR_%s_T5' % shorttype]
@@ -283,6 +289,8 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             deveclazz = deveclazz.replace('"','')
             expeclazz = ellipse_types[expeclazz]
             deveclazz = ellipse_types[deveclazz]
+            assert(np.all([np.isfinite(x) for x in t.shapedev]))
+            assert(np.all([np.isfinite(x) for x in t.shapeexp]))
             ee = expeclazz(*t.shapeexp)
             de = deveclazz(*t.shapedev)
             params.append(ee)
