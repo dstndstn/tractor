@@ -209,6 +209,16 @@ if __name__ == '__main__':
         rlo,rhi = 250,260
         dlo,dhi = 30,35
 
+    elif opt.region == 'virgo':
+        #rlo,rhi = 182,192
+        #dlo,dhi =   8, 18
+        rlo,rhi = 185,190
+        dlo,dhi =  10, 15
+
+    elif opt.region == 'lsb':
+        rlo,rhi = 147.2, 147.8
+        dlo,dhi = -0.4, 0.4
+
     if opt.mindec is not None:
         dlo = opt.mindec
     if opt.maxdec is not None:
