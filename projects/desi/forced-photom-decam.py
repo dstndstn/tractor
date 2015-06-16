@@ -4,6 +4,7 @@ import numpy as np
 import fitsio
 
 from astrometry.util.fits import fits_table, merge_tables
+from astrometry.util.file import *
 from tractor import *
 
 from common import *
@@ -93,8 +94,30 @@ if __name__ == '__main__':
             TT.append(T)
         T = merge_tables(TT)
         T._header = TT[0]._header
-        T.writeto('cat.fits')
+        #T.writeto('cat.fits')
 
+        # Fix up various failure modes:
+        # FixedCompositeGalaxy(pos=RaDecPos[240.51147402832561, 10.385488075518923], brightness=NanoMaggies: g=(flux -2.87), r=(flux -5.26), z=(flux -7.65), fracDev=FracDev(0.60177207), shapeExp=re=3.78351e-44, e1=9.30367e-13, e2=1.24392e-16, shapeDev=re=inf, e1=-0, e2=-0)
+        # -> convert to EXP
+        I = np.flatnonzero(np.array([((t.type == 'COMP') and 
+                                      (not np.isfinite(t.shapedev_r)))
+                                     for t in T]))
+        if len(I):
+            print 'Converting', len(I), 'bogus COMP galaxies to EXP'
+            for i in I:
+                T.type[i] = 'EXP'
+
+        # Same thing with the exp component.
+        # -> convert to DEV
+        I = np.flatnonzero(np.array([((t.type == 'COMP') and 
+                                      (not np.isfinite(t.shapeexp_r)))
+                                     for t in T]))
+        if len(I):
+            print 'Converting', len(I), 'bogus COMP galaxies to DEV'
+            for i in I:
+                T.type[i] = 'DEV'
+
+        
         del TT
     else:
         T = fits_table(catfn)
@@ -189,6 +212,9 @@ if __name__ == '__main__':
         if col in units:
             hdr.add_record(dict(name='TUNIT%i' % (i+1), value=units[col]))
 
+    outdir = os.path.dirname(outfn)
+    if len(outdir):
+        trymakedirs(outdir)
     fitsio.write(outfn, None, header=version_hdr, clobber=True)
     F.writeto(outfn, header=hdr, append=True)
     print 'Wrote', outfn

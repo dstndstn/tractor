@@ -78,18 +78,18 @@ if __name__ == '__main__':
 
     opt,args = parser.parse_args()
 
-    D = Decals()
+    decals = Decals()
     if opt.bricks is not None:
         B = fits_table(opt.bricks)
         log('Read', len(B), 'from', opt.bricks)
     else:
-        B = D.get_bricks()
+        B = decals.get_bricks()
 
     if opt.ccds is not None:
         T = fits_table(opt.ccds)
         log('Read', len(T), 'from', opt.ccds)
     else:
-        T = D.get_ccds()
+        T = decals.get_ccds()
         log(len(T), 'CCDs')
     T.index = np.arange(len(T))
 
@@ -311,12 +311,20 @@ if __name__ == '__main__':
         log('Total of', len(allI), 'CCDs')
         for j,i in enumerate(allI):
             expstr = '%08i' % T.expnum[i]
-            outdir = os.path.join('forced', expstr[:5], expstr)
-            trymakedirs(outdir, dir=True)
-            outfn = os.path.join(outdir, 'decam-%s-%s-forced.fits' %
+            #outdir = os.path.join('forced', expstr[:5], expstr)
+            #trymakedirs(outdir)
+            outfn = os.path.join('forced', expstr[:5], expstr,
+                                 'decam-%s-%s-forced.fits' %
                                  (expstr, T.extname[i]))
+            imgfn = os.path.join(decals.decals_dir, 'images',
+                                 T.cpimage[i].strip())
+            if (not os.path.exists(imgfn) and 
+                imgfn.endswith('.fz') and
+                os.path.exists(imgfn[:-3])):
+                imgfn = imgfn[:-3]
+
             f.write('python projects/desi/forced-photom-decam.py %s %i DR1 %s\n' % 
-                    (T.cpimage[i], T.cpimage_hdu[i], outfn))
+                    (imgfn, T.cpimage_hdu[i], outfn))
 
         f.close()
         print 'Wrote', opt.out
@@ -499,7 +507,7 @@ if __name__ == '__main__':
         try:
             for t in T[I]:
                 im = DecamImage(t)
-                zp = D.get_zeropoint_for(im)
+                zp = decals.get_zeropoint_for(im)
         except:
             print >> sys.stderr, 'Brick', b.brickid, ': Failed to get zeropoint for', im
             #import traceback
@@ -537,7 +545,7 @@ if __name__ == '__main__':
     #I = np.flatnonzero(np.array([im.startswith('CP20140818') for im in T.cpimage]))
 
     # images touching brick X
-    B = D.get_bricks()
+    B = decals.get_bricks()
     #ii = 380155
     ii = 377305
     targetwcs = wcs_for_brick(B[ii])
