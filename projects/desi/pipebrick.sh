@@ -6,9 +6,9 @@ export PYTHONPATH=${PYTHONPATH}:.
 # https://software.intel.com/en-us/articles/using-threaded-intel-mkl-in-multi-thread-application
 export MKL_NUM_THREADS=1
 
-export DECALS_DIR=$SCRATCH/code/tractor/decals-cb
+export DECALS_DIR=$SCRATCH/code/tractor/decals-lsb
 
-outdir=$SCRATCH/dr1m
+outdir=$SCRATCH/dr1n
 
 brick="$1"
 
@@ -34,7 +34,7 @@ echo >> $log
 echo -e "\nStarting on ${NERSC_HOST} $(hostname)\n" >> $log
 echo "-----------------------------------------------------------------------------------------" >> $log
 
-python projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
+python -u projects/desi/runbrick.py --force-all --no-write --brick $brick --outdir $outdir --threads 6 --nsigma 6 --skip --pipe >> $log 2>&1
 
 # dr1j:
 # qdo launch edr 32 --mpack 3 --walltime=48:00:00 --script projects/desi/pipebrick.sh --batchqueue regular --verbose
