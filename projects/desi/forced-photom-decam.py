@@ -5,6 +5,7 @@ import fitsio
 
 from astrometry.util.fits import fits_table, merge_tables
 from astrometry.util.file import *
+from astrometry.util.ttime import *
 from tractor import *
 
 from common import *
@@ -25,6 +26,10 @@ if __name__ == '__main__':
     if len(args) != 4:
         parser.print_help()
         sys.exit(-1)
+
+    Time.add_measurement(MemMeas)
+    t0 = Time()
+    
 
     filename = args[0]
     hdu = int(args[1])
@@ -94,6 +99,7 @@ if __name__ == '__main__':
             TT.append(T)
         T = merge_tables(TT)
         T._header = TT[0]._header
+        del TT
         #T.writeto('cat.fits')
 
         # Fix up various failure modes:
@@ -117,8 +123,6 @@ if __name__ == '__main__':
             for i in I:
                 T.type[i] = 'DEV'
 
-        
-        del TT
     else:
         T = fits_table(catfn)
 
@@ -218,3 +222,6 @@ if __name__ == '__main__':
     fitsio.write(outfn, None, header=version_hdr, clobber=True)
     F.writeto(outfn, header=hdr, append=True)
     print 'Wrote', outfn
+
+    print 'Finished forced phot:', Time()-t0
+
