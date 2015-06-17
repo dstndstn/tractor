@@ -237,6 +237,13 @@ if __name__ == '__main__':
     B.cut(keep)
     log('Cut to', len(B), 'bricks near CCDs')
 
+    if opt.touching:
+        keep = np.zeros(len(T), bool)
+        for j in J:
+            keep[j] = True
+        T.cut(keep)
+        log('Cut to', len(T), 'CCDs near bricks')
+    
     # Aside -- how many near DR1=1 CCDs?
     if False:
         T2 = D.get_ccds()
