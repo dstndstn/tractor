@@ -309,15 +309,15 @@ def forced_phot():
     for b in bands:
         ib = allbands.index(b)
         plt.clf()
-        f = T.get('forced_rms_%s' % b)
+        rms = T.get('forced_rms_%s' % b)
         N = T.get('forced_n_%s' % b)
         flux = T.decam_flux[:,ib]
         lo,hi = -0.5, 4
         #plt.axhline(1., color='r')
         #plt.axhline(0., color='k', alpha=0.25)
         I = np.flatnonzero(N > 1)
-        print len(I), 'of', len(f), 'have >1 exposure'
-        plt.plot(flux[I], f[I], 'b.', alpha=0.25)
+        print len(I), 'of', len(rms), 'have >1 exposure'
+        plt.plot(flux[I], rms[I], 'b.', alpha=0.25)
         #plt.ylim(lo-0.1, hi+0.1)
         plt.xlim(1e-2, 1e5)
         plt.xscale('log')
@@ -327,6 +327,12 @@ def forced_phot():
         plt.title('Forced phot: %s band' % b)
         ps.savefig()
 
+        # Large relative RMS
+        I = np.flatnonzero((flux > 10.) * (N > 1) * ((rms / flux) > 0.1))
+        I = I[np.argsort(-flux[I])]
+        cutouts.append((T, I, 'Large relative RMS: %s band' % b, None))
+
+        T[I].writeto('large-rms-%s.fits' % b)
         
 
     # Create a fake "brick" WCS bounding the forced-phot objects
@@ -384,14 +390,14 @@ def forced_phot():
 
     print 'Tall:', len(Tall), 'sources'
 
-    plt.clf()
-    dimshow(img)
-    ps.savefig()
-    
-    ax = plt.axis()
-    plt.plot(Tall.bx, Tall.by, 'r.')
-    plt.axis(ax)
-    ps.savefig()
+    # plt.clf()
+    # dimshow(img)
+    # ps.savefig()
+    # 
+    # ax = plt.axis()
+    # plt.plot(Tall.bx, Tall.by, 'r.')
+    # plt.axis(ax)
+    # ps.savefig()
     
     for TT,I,desc,labels in cutouts:
         plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95,
