@@ -196,6 +196,8 @@ def forced_phot():
         forced = T.get('forced_%s' % f.filter)[i]
         forced.append(f.flux)
 
+    allbands = 'ugrizY'
+        
     # pack into arrays
     bands = 'grz'
     for band in bands:
@@ -206,11 +208,42 @@ def forced_phot():
             arr[i,:len(f)] = f
         T.set('forced_%s' % band, arr)
 
+        ib = allbands.index(band)
+        flux = T.decam_flux[:,ib]
+        arr = np.zeros(len(T), np.float32)
+        for i,f in enumerate(flist):
+            arr[i] = np.mean([(fi - flux[i])**2 for fi in f])
+        arr = np.sqrt(arr)
+        T.set('forced_rms_%s' % band, arr)
+
+        T.set('forced_n_%s' % band, np.array([len(f) for f in flist]))
+        
+        
     # Cut to sources with forced phot
     T.cut(np.flatnonzero(reduce(np.logical_or, [
         np.any(T.get('forced_%s'%band) > 0, axis=1) for band in bands])))
     print 'Cut to', len(T), 'sources with forced phot'
 
+    flux = T.decam_flux[:,1]
+    forced = T.forced_g
+    rms = T.forced_rms_g
+    N = T.forced_n_g
+    I = np.flatnonzero((N > 1) * (flux > 1e3))
+    print len(I), 'with flux > 10^3'
+    #print 'flux', flux[I]
+    #print 'forced'
+    for f,ff,r,n in zip(flux[I], forced[I,:], rms[I], N[I]):
+        print 'flux', f, 'n', n, 'forced RMS', r, 'forced', ff
+
+    # Compute some summary stats
+    # allbands = 'ugrizY'
+    # for b in bands:
+    #     ib = allbands.index(b)
+    #     forced = T.get('forced_%s' % b)
+    #     flux = T.decam_flux[:,ib]
+    #     T.set('forced_rms_%s' % b, np.sqrt([np.mean([(fi - fl)**2 for fi in flist if fi != 0])
+    #                                         for flist,fl in zip(forced, flux)]))
+    
     imgs = {}
     
     allbands = 'ugrizY'
@@ -271,6 +304,30 @@ def forced_phot():
 
         cutouts.append((T, I, 'Large relative flux: %s band' % b, labels))
 
+
+
+    for b in bands:
+        ib = allbands.index(b)
+        plt.clf()
+        f = T.get('forced_rms_%s' % b)
+        N = T.get('forced_n_%s' % b)
+        flux = T.decam_flux[:,ib]
+        lo,hi = -0.5, 4
+        #plt.axhline(1., color='r')
+        #plt.axhline(0., color='k', alpha=0.25)
+        I = np.flatnonzero(N > 1)
+        print len(I), 'of', len(f), 'have >1 exposure'
+        plt.plot(flux[I], f[I], 'b.', alpha=0.25)
+        #plt.ylim(lo-0.1, hi+0.1)
+        plt.xlim(1e-2, 1e5)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Combined flux')
+        plt.ylabel('Forced-photometry flux RMS')
+        plt.title('Forced phot: %s band' % b)
+        ps.savefig()
+
+        
 
     # Create a fake "brick" WCS bounding the forced-phot objects
     # rlo = T.ra.min()
