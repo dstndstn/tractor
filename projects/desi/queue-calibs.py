@@ -192,6 +192,10 @@ if __name__ == '__main__':
         T.cut(np.flatnonzero(np.array(['CPDES82' in fn for fn in T.cpimage])))
         log('Cut to', len(T), 'CCDs with "CPDES82" in filename')
 
+    elif opt.region == 'subdes':
+        rlo,rhi = 320., 360.
+        dlo,dhi = -1.25, 1.25
+
     elif opt.region == 'grz':
         # Bricks with grz coverage.
         # Be sure to use  --bricks decals-bricks-in-dr1.fits
