@@ -1667,7 +1667,7 @@ class DecamImage(object):
         if mock_psf:
             from tractor.basics import NCircularGaussianPSF
             psfex = None
-            psf = NCircularGaussianPSF([1.5], [1.0])
+            psf = NCircularGaussianPSF([psf_sigma], [1.0])
             print 'WARNING: using mock PSF:', psf
         elif const2psf:
             # 2-component constant MoG.
