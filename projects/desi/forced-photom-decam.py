@@ -1,3 +1,4 @@
+import os
 import sys
 
 import numpy as np
@@ -83,6 +84,9 @@ if __name__ == '__main__':
 
             fn = os.path.join(opt.catalog_path, 'tractor', b.brickname[:3],
                               'tractor-%s.fits' % b.brickname)
+            if not os.path.exists(fn):
+                print 'WARNING: catalog', fn, 'does not exist.  Skipping!'
+                continue
             print 'Reading', fn
             T = fits_table(fn)
             ok,xx,yy = chipwcs.radec2pixelxy(T.ra, T.dec)
@@ -193,7 +197,16 @@ if __name__ == '__main__':
 
     program_name = sys.argv[0]
     version_hdr = get_version_header(program_name, decals.decals_dir)
-    version_hdr.add_record(dict(name='CPFILE', value=im.imgfn, comment='DECam comm.pipeline file'))
+    # HACK -- print only two directory names + filename of CPFILE.
+    fname = os.path.basename(im.imgfn)
+    d = os.path.dirname(im.imgfn)
+    d1 = os.path.basename(d)
+    d = os.path.dirname(d)
+    d2 = os.path.basename(d)
+    fname = os.path.join(d2, d1, fname)
+    print 'Trimmed filename to', fname
+    #version_hdr.add_record(dict(name='CPFILE', value=im.imgfn, comment='DECam comm.pipeline file'))
+    version_hdr.add_record(dict(name='CPFILE', value=fname, comment='DECam comm.pipeline file'))
     version_hdr.add_record(dict(name='CPHDU', value=im.hdu, comment='DECam comm.pipeline ext'))
     version_hdr.add_record(dict(name='CAMERA', value='DECam', comment='Dark Energy Camera'))
     version_hdr.add_record(dict(name='EXPNUM', value=im.expnum, comment='DECam exposure num'))
