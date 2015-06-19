@@ -1,3 +1,6 @@
+import pylab as plt
+from common import *
+
 def _psf_check_plots(tims):
     # HACK -- check PSF models
     plt.figure(num=2, figsize=(7,4.08))
@@ -412,6 +415,8 @@ def _plot_mods(tims, mods, titles, bands, coimgs, cons, bslc, blobw, blobh, ps,
 
     if not chi_plots:
         return
+
+    imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
     plt.figure(1)
     # Plot per-image chis: in a grid with band along the rows and images along the cols
