@@ -9,6 +9,7 @@ from tractor import *
 
 from common import *
 from desi_common import *
+import tractor
 
 # python projects/desi/forced-photom-decam.py decals/images/decam/CP20140810_g_v2/c4d_140816_032035_ooi_g_v2.fits.fz 43 DR1 f.fits
 
@@ -125,7 +126,7 @@ if __name__ == '__main__':
     T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
     T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
 
-    cat = read_fits_catalog(T)
+    cat = read_fits_catalog(T, ellipseClass=tractor.ellipses.EllipseE)
     #print 'Got cat:', cat
 
     print 'Forced photom...'

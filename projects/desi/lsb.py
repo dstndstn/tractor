@@ -89,8 +89,33 @@ def stage_1():
     ps.savefig()
     
     # Mask out bright pixels.
-    mask = (tim.getImage() > 50. * tim.sig1)
-    mask = binary_dilation(mask, iterations=20)
+    #mask = (tim.getImage() > 50. * tim.sig1)
+    #mask = binary_dilation(mask, iterations=20)
+
+    mask = np.zeros(tim.shape, np.bool)
+    
+    bright = fits_table('bright-virgo.fits')
+    ok,bx,by = tim.subwcs.radec2pixelxy(bright.ra, bright.dec)
+    bx = np.round(bx).astype(int)
+    by = np.round(by).astype(int)
+    
+    H,W = mask.shape
+    bright.modelmag = 22.5 - 2.5*np.log10(bright.modelflux)
+    mag = bright.modelmag[:,2]
+    radius = (10. ** (3.5 - 0.15 * mag) / 0.27).astype(np.int)
+
+    I = np.flatnonzero(
+        (radius > 0) *
+        (bx + radius > 0) * (bx - radius < W) *
+        (by + radius > 0) * (by - radius < H))
+
+    xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+    for x,y,r in zip(bx[I], by[I], radius[I]):
+        #mask[max(y-r,0):min(y+r+1, H),
+        #    max(x-r,0):min(x+r+1, W)] = True
+        mask[(xx - x)**2 + (yy - y)**2 < r**2] = True
+    # log(r) = 3.5 - 0.15 * m
+
     tim.inverr[mask] = 0.
     tim.data[mask] = 0.
     
@@ -145,7 +170,6 @@ def stage_1():
     plt.colorbar()
     ps.savefig()
     
-    
     plt.clf()
     plt.imshow((tim.getImage() - mod), **tim.ima)
     plt.title('Residuals')
@@ -154,75 +178,131 @@ def stage_1():
     resid = tim.getImage() - mod
     
     smoo = np.zeros_like(resid)
-    median_smooth(resid, None, 256, smoo)
+    median_smooth(resid, mask, 256, smoo)
     
     plt.clf()
     plt.imshow(smoo, **tim.ima)
-    plt.title('Smoothed residuals')
+    plt.title('Smoothed residuals (sky)')
     ps.savefig()
+
+    resid -= smoo
+    # Re-apply mask
+    resid[mask] = 0.
     
     plt.clf()
-    plt.imshow(resid - smoo, **tim.ima)
-    plt.title('Residual - smoothed')
+    plt.imshow(resid, **tim.ima)
+    plt.title('Residual - sky')
     ps.savefig()
     
-    ######
-    
-    smoo2 = np.zeros_like(resid)
-    median_smooth(resid - smoo, None, 10, smoo2)
-    
-    plt.clf()
-    plt.imshow(smoo2, **tim.ima)
-    plt.title('smoothed(Residual - smoothed)')
-    ps.savefig()
-    
-    plt.clf()
-    dimshow(smoo2)
-    plt.title('smoothed(Residual - smoothed)')
-    ps.savefig()
-    
-    return dict(resid=resid, smoo=smoo, ps=ps, tim=tim,
+    return dict(resid=resid, sky=smoo, ps=ps, tim=tim,
                 tr=tr, mod=mod)
 
 ######
 
-def stage_2(resid=None, smoo=None, ps=None, tim=None,
+def stage_2(resid=None, sky=None, ps=None, tim=None,
             **kwa):
 
-    bin = bin_image(resid - smoo, 8)
+    radii_arcsec = [1., 2., 4., 6., 8., 10., 13., 16.,
+                    20., 25, 32.]
 
-    plt.clf()
-    dimshow(bin,
-            vmin=np.percentile(bin,25),
-            vmax=np.percentile(bin,99))
-    plt.title('Binned by 8')
-    ps.savefig()
+    filters = []
 
-    bs = gaussian_filter(bin, 25)
+    from scipy import signal
     
+    for i,r in enumerate(radii_arcsec):
+        sigma = r / 0.27
+        print 'Filtering at', r
+
+        kernel = np.outer(signal.gaussian(r*10, r),
+                          signal.gaussian(r*10, r))
+        #print 'kernel sum', kernel.sum()
+        blurred = signal.fftconvolve(resid, kernel,
+                                     mode='same')
+        #filters.append(gaussian_filter(resid, sigma,
+        #        mode='constant'))
+        filters.append(blurred / kernel.sum())
+
+    return dict(filters=filters, radii_arcsec=radii_arcsec)
+
+def stage_3(resid=None, sky=None, ps=None, tim=None,
+            filters=None, radii_arcsec=None,
+            **kwa):
+
+    for f,r in zip(filters, radii_arcsec):
+        plt.clf()
+        #plt.imshow(f, **tim.ima)
+        #dimshow(f, vmin=np.percentile(f, 25),
+        #        vmax=np.percentile(f, 99))
+        plt.imshow(f, interpolation='nearest', origin='lower',
+                   vmin=-1.*tim.sig1, vmax=5.*tim.sig1,
+            cmap='gray')
+        plt.title('Filtered at %f arcsec' % r)
+        ps.savefig()
+
+    fstack = np.dstack(filters)
+    print 'fstack shape', fstack.shape
+
+    amax = np.argmax(fstack, axis=2)
+    fmax = np.max(fstack, axis=2)
+
     plt.clf()
-    dimshow(bs,
-            vmin=np.percentile(bs,25),
-            vmax=np.percentile(bs,99))
-    plt.title('Binned by 8, Gaussian smoothed')
+    plt.imshow(fmax, interpolation='nearest', origin='lower',
+                   vmin=-1.*tim.sig1, vmax=5.*tim.sig1,
+            cmap='gray')
+    plt.title('Filter max')
     ps.savefig()
 
-    bright = fits_table('bright-virgo.fits')
-    ok,bx,by = tim.subwcs.radec2pixelxy(bright.ra, bright.dec)
-    
     plt.clf()
-    plt.imshow(tim.getImage(), **tim.ima)
-    ax = plt.axis()
-    plt.plot(bx, by, 'r+', mew=2, ms=10)
-    plt.axis(ax)
-    plt.title('SDSS Bright Stars')
+    plt.imshow(amax, interpolation='nearest', origin='lower',
+            cmap='jet')
+    plt.title('Filter argmax')
+    plt.colorbar()
     ps.savefig()
+    
+    for f1,f2,r1,r2 in zip(filters, filters[1:],
+                           radii_arcsec, radii_arcsec[1:]):
+        plt.clf()
+        plt.imshow(f2-f1,
+                   interpolation='nearest', origin='lower',
+                   vmin=-1.*tim.sig1, vmax=5.*tim.sig1,
+                   cmap='gray')
+        plt.title('Filtered at %.1f - %.1f arcsec' %
+                  (r2, r1))
+        ps.savefig()
+
+        
+        
+    # bin = bin_image(resid, 8)
+    # 
+    # plt.clf()
+    # dimshow(bin,
+    #         vmin=np.percentile(bin,25),
+    #         vmax=np.percentile(bin,99))
+    # plt.title('Binned by 8')
+    # ps.savefig()
+    # 
+    # bs = gaussian_filter(bin, 25)
+    # 
+    # plt.clf()
+    # dimshow(bs,
+    #         vmin=np.percentile(bs,25),
+    #         vmax=np.percentile(bs,99))
+    # plt.title('Binned by 8, Gaussian smoothed')
+    # ps.savefig()
+    # 
+    # plt.clf()
+    # plt.imshow(tim.getImage(), **tim.ima)
+    # ax = plt.axis()
+    # plt.plot(bx, by, 'r+', mew=2, ms=10)
+    # plt.axis(ax)
+    # plt.title('SDSS Bright Stars')
+    # ps.savefig()
 
 
 from astrometry.util.stages import *
 
 stagefunc = CallGlobal('stage_%s', globals())
 
-runstage('2', 'lsb-%(stage)s.pickle', stagefunc,
-         prereqs={ '2':'1', '1':None },
-        force=['2'])
+runstage('3', 'lsb-%(stage)s.pickle', stagefunc,
+         prereqs={ '3':'2', '2':'1', '1':None },
+        force=['3'])
