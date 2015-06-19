@@ -3050,6 +3050,9 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
 
     parser.add_option('--no-sdss', action='store_true', default=False,
                       help='Do not initialize from SDSS')
+
+    parser.add_option('--gpsf', action='store_true', default=False,
+                      help='Use a fixed single-Gaussian PSF')
     
     print
     print 'runbrick.py starting at', datetime.datetime.now().isoformat()
@@ -3143,6 +3146,9 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
     if opt.nsigma:
         kwargs.update(nsigma=opt.nsigma)
 
+    if opt.gpsf:
+        kwargs.update(mock_psf=True)
+        
     kwargs.update(simul_opt=opt.simul_opt)
     kwargs.update(pipe=opt.pipe)
 
