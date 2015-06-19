@@ -7,7 +7,11 @@ from astrometry.sdss.dr10 import *
 import os
 import shutil
 
-T = fits_table('tractor/window_flist-cut.fits')
+T = fits_table('window_flist-cut.fits')
+
+###
+T.cut((T.ra > 180) * (T.ra < 195) * (T.dec > 5) * (T.dec < 20))
+print 'CUT TO', len(T), 'in region'
 
 # projects/desi/runbrick.py : stage_srcs
 extracols = ['parent', 'tai', 'mjd', 'psf_fwhm', 'objc_flags2', 'flags2',
@@ -40,7 +44,16 @@ for i,t in enumerate(T):
     #print 'output filename', outfn
     if os.path.exists(outfn):
         print '  Output exists:', outfn
-        continue
+        try:
+            #tt = fits_table(outfn)
+            #print '  Read', len(tt)
+            cmd = 'liststruc ' + outfn
+            rtn = os.system(cmd)
+            print 'return', rtn
+            if rtn == 0:
+                continue
+        except:
+            print 'Failed to read existing output file', outfn
     print '  Reading', fn
     S = fits_table(fn, columns=cols)
     od = os.path.dirname(outfn)
