@@ -442,7 +442,22 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
     ps.savefig()
 
-        
+
+    LSB = fits_table()
+    LSB.x = np.array(px)
+    LSB.y = np.array(py)
+    ra,dec = tim.subwcs.pixelxy2radec(LSB.x, LSB.y)
+    LSB.ra = ra
+    LSB.dec = dec
+    LSB.flux = fluxes
+    LSB.mag = mags
+    LSB.radius = np.array(radii_arcsec)[amax[py,px]]
+    LSB.sn = fmax[py,px]
+
+    LSB.cut(np.argsort(-LSB.sn))
+    
+    LSB.writeto('lsb.fits')
+    
     # for f1,f2,r1,r2 in zip(filters, filters[1:],
     #                        radii_arcsec, radii_arcsec[1:]):
     #     plt.clf()
@@ -482,6 +497,76 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     # plt.title('SDSS Bright Stars')
     # ps.savefig()
 
+    return dict(LSB=LSB, filters=None, mod=None, sky=None)
+
+def stage_5(LSB=None, resid=None, tim=None, mask=None, ps=None, **kwa):
+
+    print 'resid', resid.dtype
+    
+    # For each detected LSB source, try to fit it using the tractor...
+    orig_image = tim.getImage()
+    tim.data = resid
+    tim.inverr[mask] = 0.
+
+    from tractor import *
+
+    lsba = dict(interpolation='nearest', origin='lower', vmin=0,
+                vmax=0.5*tim.sig1, cmap='gray')
+    chia = dict(interpolation='nearest', origin='lower', vmin=-3.,
+                vmax=3., cmap='RdBu')
+
+    plt.clf()
+    plt.imshow(tim.getImage(), **lsba)
+    plt.title('Data for LSB fits')
+    ps.savefig()
+    
+    for i,lsb in enumerate(LSB):
+        source = ExpGalaxy(RaDecPos(lsb.ra, lsb.dec),
+                           NanoMaggies(**{ tim.band: lsb.flux }),
+                           EllipseESoft.fromRAbPhi(lsb.radius * 2.35/2., 1., 0.))
+        print 'Source:', source
+
+        #EllipseE(lsb.radius * 2.35 / 2., 0., 0.)
+
+        tr = Tractor([tim], [source])
+        tr.freezeParam('images')
+        mod = tr.getModelImage(0)
+
+        plt.clf()
+        plt.imshow(mod, **lsba)
+        plt.title('Initial model: LSB candidate %i' % i)
+        ps.savefig()
+
+        chi0 = (tim.getImage() - mod) * tim.inverr
+
+        while True:
+            dlnp,X,alpha = tr.optimize(priors=False, shared_params=False)
+            print 'dlnp:', dlnp
+            print 'source:', source
+            if dlnp < 1e-3:
+                break
+
+        mod = tr.getModelImage(0)
+
+        plt.clf()
+        plt.imshow(mod, **lsba)
+        plt.title('Final model: LSB candidate %i' % i)
+        ps.savefig()
+
+        plt.clf()
+        plt.imshow(chi0, **chia)
+        plt.title('Initial chi: LSB candidate %i' % i)
+        ps.savefig()
+        
+        chi = (tim.getImage() - mod) * tim.inverr
+        plt.clf()
+        plt.imshow(chi, **chia)
+        plt.title('Final chi: LSB candidate %i' % i)
+        ps.savefig()
+
+        if i == 1:
+            break
+        
 
 from astrometry.util.stages import *
 
@@ -510,5 +595,5 @@ if opt.forceall:
 
 for s in opt.stage:
     runstage(s, 'lsb-%(stage)s.pickle', stagefunc,
-             prereqs={ '4':'3', '3':'2', '2':'1', '1':None },
+             prereqs={ '5':'4', '4':'3', '3':'2', '2':'1', '1':None },
              force=opt.force, write=opt.write)
