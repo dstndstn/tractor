@@ -10,6 +10,7 @@ import fitsio
 
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
+from astrometry.util.ttime import *
 
 from tractor import *
 
@@ -245,12 +246,18 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
 
     
 def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
-            plots=False,
+            plots=False, plotprefix=None,
             **kwa):
+    if plots and ps is None:
+        ps = PlotSequence(plotprefix)
+    else:
+        ps = None
 
-    radii_arcsec = [1., 2., 4., 6., 8., 10., 13., 16.,
-                    20., 25, 32., 45., 60., 120.]
+    #radii_arcsec = [1., 2., 4., 6., 8., 10., 13., 16.,
+    #                20., 25, 32., 45., 60., 120.]
 
+    radii_arcsec = np.sqrt(2.) ** np.arange(15)
+    
     filters = []
 
     from scipy import signal
@@ -264,16 +271,61 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
         plt.subplot(2,1,2)
         plt.hist(resid[keep] / tim.sig1, 50, range=(-8,8), log=True)
         ps.savefig()
-    
+
+    resid = resid[:1000, :1000]
+        
+    binning = 1
+    img = resid
+
     for i,r in enumerate(radii_arcsec):
         sigma = r / 0.27
         print 'Filtering at', r
 
+        t0 = Time()
+        
         kernel = np.outer(signal.gaussian(sigma*10, sigma),
                           signal.gaussian(sigma*10, sigma))
         kernel /= kernel.sum()
         blurred = signal.fftconvolve(resid, kernel, mode='same')
 
+        t1 = Time()
+        
+        b2 = gaussian_filter(resid, sigma, mode='constant')
+
+        t2 = Time()
+
+        if i and i%2 == 0:
+            from scipy.interpolate import RegularGridInterpolator
+
+            img = bin_image(img, 2)
+            binning *= 2
+            t3 = Time()
+            b3 = gaussian_filter(img, sigma/binning, mode='constant')
+            t4 = Time()
+            bh,bw = img.shape
+            bx = np.arange(bw)+0.5 * binning - 0.5
+            by = np.arange(bh)+0.5 * binning - 0.5
+            # expand back up to full size
+            print 'img type', img.dtype
+            interp = RegularGridInterpolator((by, bx), img, 'linear',
+                                             bounds_error=False, fill_value=np.float32(0.))
+            t5 = Time()
+            H,W = resid.shape
+            xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+            fullsize = interp(np.vstack((xx.ravel(), yy.ravel())).T)
+            print 'fullsize', fullsize.shape
+            fullsize = fullsize.reshape((resid.shape))
+            print 'fullsize', fullsize.shape
+            t6 = Time()
+
+            print 'Subfilt', t4-t3
+            print 'Interp ', t5-t4
+            print 'Run int', t6-t5
+            print 'Total:', t6-t3
+            
+        print 'FFT  :', t1-t0
+        print 'Gfilt:', t2-t1
+        
         knorm = np.sqrt(np.sum(kernel**2))
         print 'Knorm', knorm
         print 'knorm', 1./(2. * np.sqrt(np.pi) * sigma)
@@ -284,6 +336,8 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
         #filters.append(gaussian_filter(resid, sigma,
         #        mode='constant'))
 
+        sn2 = b2 / (knorm * tim.sig1)
+        
         if plots:
             plt.clf()
             plt.imshow(sn, interpolation='nearest', origin='lower',
@@ -292,6 +346,13 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
             plt.title('Filtered at %f arcsec: S/N' % r)
             ps.savefig()
 
+            plt.clf()
+            plt.imshow(sn2, interpolation='nearest', origin='lower',
+                       vmin=-2., vmax=32.,
+                       cmap='gray')
+            plt.title('Filtered at %f arcsec: S/N' % r)
+            ps.savefig()
+            
         filters.append(sn.astype(np.float32))
 
     return dict(filters=filters, radii_arcsec=radii_arcsec)
