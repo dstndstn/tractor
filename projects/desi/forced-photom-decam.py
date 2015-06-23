@@ -37,6 +37,10 @@ if __name__ == '__main__':
     catfn = args[2]
     outfn = args[3]
 
+    if os.path.exists(outfn):
+        print 'Ouput file exists:', outfn
+        sys.exit(0)
+
     zoomslice = None
     if opt.zoom is not None:
         (x0,x1,y0,y1) = opt.zoom
