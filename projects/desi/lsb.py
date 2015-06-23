@@ -35,6 +35,19 @@ def bin_image(data, S):
     newdata /= count
     return newdata
 
+def bin_image_2(data, S):
+    # rebin image data, padding with zeros
+    H,W = data.shape
+    sH,sW = (H+S-1)/S, (W+S-1)/S
+    newdata = np.zeros((sH,sW), dtype=data.dtype)
+    for i in range(S):
+        for j in range(S):
+            sub = data[i::S, j::S]
+            subh,subw = sub.shape
+            newdata[:subh,:subw] += sub
+    return newdata / (S*S)
+
+
 
 def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
             brightstars = 'bright.fits', **kwa):
@@ -273,6 +286,7 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
         ps.savefig()
 
     resid = resid[:1000, :1000]
+    #resid = resid[:30, :30]
         
     binning = 1
     img = resid
@@ -294,44 +308,99 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
 
         t2 = Time()
 
-        if i and i%2 == 0:
-            from scipy.interpolate import RegularGridInterpolator
-
-            img = bin_image(img, 2)
-            binning *= 2
-            t3 = Time()
-            b3 = gaussian_filter(img, sigma/binning, mode='constant')
-            t4 = Time()
-            bh,bw = img.shape
-            bx = np.arange(bw)+0.5 * binning - 0.5
-            by = np.arange(bh)+0.5 * binning - 0.5
-            # expand back up to full size
-            print 'img type', img.dtype
-            interp = RegularGridInterpolator((by, bx), img, 'linear',
-                                             bounds_error=False, fill_value=np.float32(0.))
-            t5 = Time()
-            H,W = resid.shape
-            xx,yy = np.meshgrid(np.arange(W), np.arange(H))
-            fullsize = interp(np.vstack((xx.ravel(), yy.ravel())).T)
-            print 'fullsize', fullsize.shape
-            fullsize = fullsize.reshape((resid.shape))
-            print 'fullsize', fullsize.shape
-            t6 = Time()
-
-            print 'Subfilt', t4-t3
-            print 'Interp ', t5-t4
-            print 'Run int', t6-t5
-            print 'Total:', t6-t3
-            
-        print 'FFT  :', t1-t0
-        print 'Gfilt:', t2-t1
-        
         knorm = np.sqrt(np.sum(kernel**2))
         print 'Knorm', knorm
         print 'knorm', 1./(2. * np.sqrt(np.pi) * sigma)
 
         sn = blurred / (knorm * tim.sig1)
         print 'Max S/N:', sn.max()
+
+        sna = dict(interpolation='nearest', origin='lower',
+                   vmin=sn.min(), vmax=sn.max(),
+                   cmap='gray')
+        
+        if i and i%2 == 0:
+            from scipy.interpolate import RegularGridInterpolator, RectBivariateSpline
+
+            img = bin_image_2(img, 2)
+            binning *= 2
+            t3 = Time()
+            b3 = gaussian_filter(img, sigma/binning, mode='constant')
+            t4 = Time()
+            bh,bw = img.shape
+            H,W = resid.shape
+
+            # plt.clf()
+            # plt.imshow(img / (knorm*tim.sig1), **sna)
+            # plt.title('Binned')
+            # ps.savefig()
+            # 
+            # plt.clf()
+            # plt.imshow(b3 / (knorm*tim.sig1), **sna)
+            # plt.title('Binned & Smoothed')
+            # ps.savefig()
+            
+            bx = (np.arange(bw)+0.5) * binning - 0.5
+            by = (np.arange(bh)+0.5) * binning - 0.5
+            print 'Full size:', H,W
+            print 'bx:', bx.min(), bx.max()
+            print 'by:', by.min(), by.max()
+            # # expand back up to full size
+            # print 'img type', img.dtype
+            # interp = RegularGridInterpolator((by, bx), img, 'linear',
+            #                                  bounds_error=False, fill_value=np.float32(0.))
+            interp = RectBivariateSpline(bx, by, b3.T)
+            t5 = Time()
+            # xx,yy = np.meshgrid(np.arange(W), np.arange(H))
+            # fullsize = interp(np.vstack((xx.ravel(), yy.ravel())).T)
+            # print 'fullsize', fullsize.shape
+
+            xx = np.arange(W)
+            yy = np.arange(H)
+            fullsize = interp(xx, yy).T
+            # xa = np.maximum(xx - binning/2, 0)
+            # bina = xa / binning
+            # fraca = (xa % binning).astype(float) / binning
+            # print 'xa', xa
+            # print 'bin a', bina
+            # print 'frac a', fraca
+            # #binb = np.m(xx + binning/2, 0) % binning
+            # #print 'bin b', binb
+
+            # double in size
+            #twice = np.zeros((bh*2, bw*2), np.float32)
+            #frac = np.zeros_like(twice)
+            #  pixels   a b c d
+            #  bin to   a+b c+d
+            #  if you think of them as samples at the midpoints, then
+            #  the expanded pixel a gets a+b, b gets 75% a+b + 25% c*d,
+            # twice[::2,::2] = b3 * 0.25
+            # frac[::2,::2] = 0.25
+            # fullsize = fullsize.reshape((resid.shape))
+            # print 'fullsize', fullsize.shape
+            t6 = Time()
+
+            print 'Subfilt', t4-t3
+            print 'Build spline', t5-t4
+            print 'Run spline', t6-t5
+            print 'Total:', t6-t3
+
+            b3 = fullsize
+            sn3 = b3 / (knorm * tim.sig1)
+
+            if plots:
+                plt.clf()
+                #plt.imshow(sn3, interpolation='nearest', origin='lower',
+                #           vmin=-2., vmax=32.,
+                #           cmap='gray')
+                plt.imshow(sn3, **sna)
+                plt.title('Filtered at %f arcsec: S/N(3)' % r)
+                ps.savefig()
+
+            
+        print 'FFT  :', t1-t0
+        print 'Gfilt:', t2-t1
+        
         
         #filters.append(gaussian_filter(resid, sigma,
         #        mode='constant'))
@@ -340,16 +409,18 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
         
         if plots:
             plt.clf()
-            plt.imshow(sn, interpolation='nearest', origin='lower',
-                       vmin=-2., vmax=32.,
-                       cmap='gray')
+            plt.imshow(sn, **sna)
+            #interpolation='nearest', origin='lower',
+            #           vmin=-2., vmax=32.,
+            #          cmap='gray')
             plt.title('Filtered at %f arcsec: S/N' % r)
             ps.savefig()
 
             plt.clf()
-            plt.imshow(sn2, interpolation='nearest', origin='lower',
-                       vmin=-2., vmax=32.,
-                       cmap='gray')
+            plt.imshow(sn2, **sna)
+            #interpolation='nearest', origin='lower',
+            #           vmin=-2., vmax=32.,
+            #          cmap='gray')
             plt.title('Filtered at %f arcsec: S/N' % r)
             ps.savefig()
             
