@@ -62,6 +62,8 @@ if __name__ == '__main__':
     print 'Got tim:', tim
 
     if catfn == 'DR1':
+        margin = 20
+        TT = []
         chipwcs = tim.subwcs
         bricks = bricks_touching_wcs(chipwcs, decals=decals)
         for b in bricks:
