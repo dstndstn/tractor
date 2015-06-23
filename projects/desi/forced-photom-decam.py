@@ -11,6 +11,7 @@ from tractor import *
 
 from common import *
 from desi_common import *
+import tractor
 
 # python projects/desi/forced-photom-decam.py decals/images/decam/CP20140810_g_v2/c4d_140816_032035_ooi_g_v2.fits.fz 43 DR1 f.fits
 
@@ -61,31 +62,10 @@ if __name__ == '__main__':
     print 'Got tim:', tim
 
     if catfn == 'DR1':
-
-        # How far outside the image to keep objects
-        # FIXME -- should be adaptive to object size!
-        margin = 20
-
-        from astrometry.libkd.spherematch import *
-        B = decals.get_bricks_readonly()
-        # MAGIC 0.4 degree search radius =
-        # DECam hypot(1024,2048)*0.27/3600 + Brick hypot(0.25, 0.25) ~= 0.35 + margin
-        I,J,d = match_radec(B.ra, B.dec, T.ra, T.dec, 0.4)
-        print len(I), 'bricks nearby'
-        bricks = B[I]
-        TT = []
+        chipwcs = tim.subwcs
+        bricks = bricks_touching_wcs(chipwcs, decals=decals)
         for b in bricks:
-            brickwcs = wcs_for_brick(b)
-            chipwcs = tim.subwcs
-
-            clip = clip_wcs(chipwcs, brickwcs)
-            #print 'Clipped chip coordinates:', clip
-            if len(clip) == 0:
-                print 'No overlap with brick', b.brickname
-                continue
-
             # there is some overlap with this brick... read the catalog.
-
             fn = os.path.join(opt.catalog_path, 'tractor', b.brickname[:3],
                               'tractor-%s.fits' % b.brickname)
             if not os.path.exists(fn):
@@ -137,7 +117,7 @@ if __name__ == '__main__':
     T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
     T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
 
-    cat = read_fits_catalog(T)
+    cat = read_fits_catalog(T, ellipseClass=tractor.ellipses.EllipseE)
     #print 'Got cat:', cat
 
     print 'Forced photom...'

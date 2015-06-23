@@ -216,7 +216,8 @@ def get_tractor_fits_values(T, cat, pat):
 
 
 
-def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
+def read_fits_catalog(T, hdr=None, invvars=False, bands='grz',
+                      allbands = 'ugrizY', ellipseClass=None):
     '''
     This is currently a weird hybrid of dynamic and hard-coded.
 
@@ -230,8 +231,6 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
     rev_typemap = dict([(v,k) for k,v in fits_typemap.items()])
 
     ivbandcols = []
-
-    allbands = 'ugrizY'
 
     ibands = np.array([allbands.index(b) for b in bands])
 
@@ -260,12 +259,16 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             ivs.extend([t.ra_ivar, t.dec_ivar] + list(t.decam_flux_ivar[ibands]))
             
         if issubclass(clazz, (DevGalaxy, ExpGalaxy)):
-            # hard-code knowledge that third param is the ellipse
-            eclazz = hdr['TR_%s_T3' % shorttype]
-            # drop any double-quoted weirdness
-            eclazz = eclazz.replace('"','')
-            # look up that string... to avoid eval()
-            eclazz = ellipse_types[eclazz]
+            if ellipseClass is not None:
+                eclazz = ellipseClass
+            else:
+                # hard-code knowledge that third param is the ellipse
+                eclazz = hdr['TR_%s_T3' % shorttype]
+                # drop any double-quoted weirdness
+                eclazz = eclazz.replace('"','')
+                # look up that string... to avoid eval()
+                eclazz = ellipse_types[eclazz]
+
             if issubclass(clazz, DevGalaxy):
                 assert(np.all([np.isfinite(x) for x in t.shapedev]))
                 ell = eclazz(*t.shapedev)
@@ -283,12 +286,15 @@ def read_fits_catalog(T, hdr=None, invvars=False, bands='grz'):
             # hard-code knowledge that params are fracDev, shapeE, shapeD
             assert(np.isfinite(t.fracdev))
             params.append(t.fracdev)
-            expeclazz = hdr['TR_%s_T4' % shorttype]
-            deveclazz = hdr['TR_%s_T5' % shorttype]
-            expeclazz = expeclazz.replace('"','')
-            deveclazz = deveclazz.replace('"','')
-            expeclazz = ellipse_types[expeclazz]
-            deveclazz = ellipse_types[deveclazz]
+            if ellipseClass is not None:
+                expeclazz = deveclazz = ellipseClass
+            else:
+                expeclazz = hdr['TR_%s_T4' % shorttype]
+                deveclazz = hdr['TR_%s_T5' % shorttype]
+                expeclazz = expeclazz.replace('"','')
+                deveclazz = deveclazz.replace('"','')
+                expeclazz = ellipse_types[expeclazz]
+                deveclazz = ellipse_types[deveclazz]
             assert(np.all([np.isfinite(x) for x in t.shapedev]))
             assert(np.all([np.isfinite(x) for x in t.shapeexp]))
             ee = expeclazz(*t.shapeexp)
