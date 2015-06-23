@@ -973,6 +973,35 @@ def wcs_for_brick(b, W=3600, H=3600, pixscale=0.262):
                -pixscale, 0., 0., pixscale,
                float(W), float(H))
 
+def bricks_touching_wcs(targetwcs, decals=None, B=None, margin=20):
+    # margin: How far outside the image to keep objects
+    # FIXME -- should be adaptive to object size!
+
+    from astrometry.libkd.spherematch import *
+    if B is None:
+        assert(decals is not None)
+        B = decals.get_bricks_readonly()
+
+    ra,dec = targetwcs.radec_center()
+    radius = targetwcs.radius()
+        
+    # MAGIC 0.4 degree search radius =
+    # DECam hypot(1024,2048)*0.27/3600 + Brick hypot(0.25, 0.25) ~= 0.35 + margin
+    I,J,d = match_radec(B.ra, B.dec, ra, dec,
+                        radius + np.hypot(0.25,0.25)/2. + 0.05)
+    print len(I), 'bricks nearby'
+    keep = []
+    for i in I:
+        b = B[i]
+        brickwcs = wcs_for_brick(b)
+        clip = clip_wcs(targetwcs, brickwcs)
+        if len(clip) == 0:
+            print 'No overlap with brick', b.brickname
+            continue
+        keep.append(i)
+    return B[np.array(keep)]
+
+        
 def ccds_touching_wcs(targetwcs, T, ccdrad=0.17, polygons=True):
     '''
     targetwcs: wcs object describing region of interest

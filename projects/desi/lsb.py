@@ -11,6 +11,8 @@ import fitsio
 from astrometry.util.fits import *
 from astrometry.util.plotutils import *
 
+from tractor import *
+
 import os
 os.environ['DECALS_DIR'] = 'decals-lsb'
 
@@ -33,12 +35,11 @@ def bin_image(data, S):
     return newdata
 
 
-def stage_1():
-    ps = PlotSequence('lsb')
-    
+def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
+    ps = PlotSequence(plotprefix)
     
     decals = Decals()
-    C = decals.find_ccds(expnum=431202, extname='S19')
+    C = decals.find_ccds(expnum=expnum, extname=extname)
     print len(C), 'CCDs'
     im = DecamImage(C[0])
     print 'im', im
@@ -51,7 +52,9 @@ def stage_1():
     print 'Tim', tim
     
     cats = []
-    for b in ['1864p102', '1862p102']:
+    bricks = bricks_touching_wcs(tim.subwcs, decals=decals)
+    bricknames = bricks.brickname
+    for b in bricknames: #['1864p102', '1862p102']:
         fn = os.path.join(decals.decals_dir, 'tractor', b[:3],
                           'tractor-%s.fits' % b)
         print 'Reading', fn
@@ -328,6 +331,9 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
             orig_catalog=None,
             **kwa):
 
+    ok,x,y = tim.subwcs.radec2pixelxy(188.7543, 13.3847)
+    print 'X,Y', x,y
+    
     # for f,r in zip(filters, radii_arcsec):
     #     plt.clf()
     #     #plt.imshow(f, **tim.ima)
@@ -508,8 +514,6 @@ def stage_5(LSB=None, resid=None, tim=None, mask=None, ps=None, **kwa):
     tim.data = resid
     tim.inverr[mask] = 0.
 
-    from tractor import *
-
     lsba = dict(interpolation='nearest', origin='lower', vmin=0,
                 vmax=0.5*tim.sig1, cmap='gray')
     chia = dict(interpolation='nearest', origin='lower', vmin=-3.,
@@ -581,11 +585,19 @@ parser.add_option('-F', '--force-all', dest='forceall', action='store_true',
 parser.add_option('-s', '--stage', dest='stage', default=[], action='append',
                   help="Run up to the given stage(s)")
 parser.add_option('-n', '--no-write', dest='write', default=True, action='store_false')
+
+parser.add_option('--expnum', type=int, default=431202,
+                  help='CCD: Exposure number to run')
+parser.add_option('--extname', default='S19',
+                  help='CCD name to run')
+parser.add_option('--prefix', default='lsb', help='Plot & pickle filename prefix')
+
 opt,args = parser.parse_args()
 
 stagefunc = CallGlobal('stage_%s', globals())
 
-kwargs = {}
+kwargs = dict(expnum=opt.expnum, extname=opt.extname,
+              plotprefix=opt.prefix)
 
 if len(opt.stage) == 0:
     opt.stage.append('3')
@@ -594,6 +606,6 @@ if opt.forceall:
     kwargs.update(forceall=True)
 
 for s in opt.stage:
-    runstage(s, 'lsb-%(stage)s.pickle', stagefunc,
+    runstage(s, '%s-%%(stage)s.pickle' % opt.prefix, stagefunc,
              prereqs={ '5':'4', '4':'3', '3':'2', '2':'1', '1':None },
-             force=opt.force, write=opt.write)
+             force=opt.force, write=opt.write, **kwargs)
