@@ -35,9 +35,13 @@ def bin_image(data, S):
     return newdata
 
 
-def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
-    ps = PlotSequence(plotprefix)
-    
+def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
+            brightstars = 'bright.fits', **kwa):
+    if plots:
+        ps = PlotSequence(plotprefix)
+    else:
+        ps = None
+
     decals = Decals()
     C = decals.find_ccds(expnum=expnum, extname=extname)
     print len(C), 'CCDs'
@@ -54,7 +58,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
     cats = []
     bricks = bricks_touching_wcs(tim.subwcs, decals=decals)
     bricknames = bricks.brickname
-    for b in bricknames: #['1864p102', '1862p102']:
+    for b in bricknames:
         fn = os.path.join(decals.decals_dir, 'tractor', b[:3],
                           'tractor-%s.fits' % b)
         if not os.path.exists(fn):
@@ -97,19 +101,15 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
     
     print len(cat), 'catalog objects'
     
-    plt.clf()
-    plt.imshow(tim.getImage(), **tim.ima)
-    plt.title('Orig data')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(tim.getImage(), **tim.ima)
+        plt.title('Orig data')
+        ps.savefig()
     
     # Mask out bright pixels.
-    #mask = (tim.getImage() > 50. * tim.sig1)
-    #mask = binary_dilation(mask, iterations=20)
-
     mask = np.zeros(tim.shape, np.bool)
-    
-    #bright = fits_table('bright-virgo.fits')
-    bright = fits_table('bright.fits')
+    bright = fits_table(brightstars)
     print 'Read', len(bright), 'SDSS bright stars'
     ok,bx,by = tim.subwcs.radec2pixelxy(bright.ra, bright.dec)
     bx = np.round(bx).astype(int)
@@ -129,98 +129,91 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
 
     xx,yy = np.meshgrid(np.arange(W), np.arange(H))
     for x,y,r in zip(bx[I], by[I], radius[I]):
-        #mask[max(y-r,0):min(y+r+1, H),
-        #    max(x-r,0):min(x+r+1, W)] = True
         mask[(xx - x)**2 + (yy - y)**2 < r**2] = True
-    # log(r) = 3.5 - 0.15 * m
 
     mask[tim.inverr == 0] = True
-    
     tim.inverr[mask] = 0.
     tim.data[mask] = 0.
     
-    plt.clf()
-    plt.imshow(mask, interpolation='nearest', origin='lower', vmin=0, vmax=1, cmap='gray')
-    plt.title('Mask')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(mask, interpolation='nearest', origin='lower', vmin=0, vmax=1, cmap='gray')
+        plt.title('Mask')
+        ps.savefig()
     
-    plt.clf()
-    plt.imshow(tim.getImage(), **tim.ima)
-    plt.title('Masked')
-    ps.savefig()
+        plt.clf()
+        plt.imshow(tim.getImage(), **tim.ima)
+        plt.title('Masked')
+        ps.savefig()
     
     tr = Tractor([tim], cat)
-    
     mod = tr.getModelImage(tim)
     
-    print 'Model median:', np.median(mod)
-    rawimg = fitsio.read('decals-lsb/images/decam/CP20150407/c4d_150410_035040_ooi_z_v1.fits.fz', ext=im.hdu)
-    print 'Image median:', np.median(rawimg)
+    if False:
+        # OLD DEBUGGING
+        print 'Model median:', np.median(mod)
+        rawimg = fitsio.read('decals-lsb/images/decam/CP20150407/c4d_150410_035040_ooi_z_v1.fits.fz', ext=im.hdu)
+        print 'Image median:', np.median(rawimg)
+        print 'mid sky', tim.midsky
+        rawmod = mod * tim.zpscale + tim.midsky
+        print 'Model median:', np.median(rawmod)
+        fitsio.write('model.fits', rawmod, clobber=True)
     
-    print 'mid sky', tim.midsky
-    rawmod = mod * tim.zpscale + tim.midsky
-    print 'Model median:', np.median(rawmod)
-    
-    fitsio.write('model.fits', rawmod, clobber=True)
-    
-    plt.clf()
-    plt.imshow(mod, **tim.ima)
-    plt.title('Model')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(mod, **tim.ima)
+        plt.title('Model')
+        ps.savefig()
     
     mod[mask] = 0.
     
-    plt.clf()
-    plt.imshow(mod, **tim.ima)
-    plt.title('Masked model')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(mod, **tim.ima)
+        plt.title('Masked model')
+        ps.savefig()
     
-    # ax = plt.axis()
-    # plt.plot(T.x, T.y, 'r.')
-    # plt.axis(ax)
-    # ps.savefig()
+        imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5, cmap='RdBu')
     
-    imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5, cmap='RdBu')
+        plt.clf()
+        plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
+        plt.title('Chi')
+        plt.colorbar()
+        ps.savefig()
     
-    plt.clf()
-    plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
-    plt.title('Chi')
-    #ps.savefig()
-    
-    plt.colorbar()
-    ps.savefig()
-    
-    plt.clf()
-    plt.imshow((tim.getImage() - mod), **tim.ima)
-    plt.title('Residuals')
-    ps.savefig()
+        plt.clf()
+        plt.imshow((tim.getImage() - mod), **tim.ima)
+        plt.title('Residuals')
+        ps.savefig()
     
     resid = tim.getImage() - mod
     
     smoo = np.zeros_like(resid)
     median_smooth(resid, mask, 256, smoo)
-    
-    plt.clf()
-    plt.imshow(smoo, **tim.ima)
-    plt.title('Smoothed residuals (sky)')
-    ps.savefig()
+
+    if plots:
+        plt.clf()
+        plt.imshow(smoo, **tim.ima)
+        plt.title('Smoothed residuals (sky)')
+        ps.savefig()
 
     resid -= smoo
     # Re-apply mask
     resid[mask] = 0.
     
-    plt.clf()
-    plt.imshow(resid, **tim.ima)
-    plt.title('Residual - sky')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(resid, **tim.ima)
+        plt.title('Residual - sky')
+        ps.savefig()
     
     return dict(resid=resid, sky=smoo, ps=ps, tim=tim,
                 tr=tr, mod=mod, mask=mask,
-        orig_catalog = orig_catalog)
+                orig_catalog = orig_catalog)
 
-######
 
 def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
+            plots=False,
             **kwa):
 
     # Run a detection filter -- smooth by PSF and high threshold.
@@ -235,21 +228,24 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
     growsize = int(tim.psf_fwhm * 2)
     hot = binary_dilation(hot, iterations=growsize)
 
-    plt.clf()
-    plt.imshow(resid * hot, **tim.ima)
-    plt.title('Detected sources')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(resid * hot, **tim.ima)
+        plt.title('Detected sources')
+        ps.savefig()
 
     mask[hot] = True
     resid[mask] = 0.
     
-    plt.clf()
-    plt.imshow(resid, **tim.ima)
-    plt.title('Sources masked')
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(resid, **tim.ima)
+        plt.title('Sources masked')
+        ps.savefig()
 
     
 def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
+            plots=False,
             **kwa):
 
     radii_arcsec = [1., 2., 4., 6., 8., 10., 13., 16.,
@@ -261,161 +257,113 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
 
     keep = np.logical_not(mask)
     
-    plt.clf()
-    plt.subplot(2,1,1)
-    plt.hist(resid[keep] / tim.sig1, 50, range=(-8,8))
-    plt.subplot(2,1,2)
-    plt.hist(resid[keep] / tim.sig1, 50, range=(-8,8), log=True)
-    ps.savefig()
+    if plots and False:
+        plt.clf()
+        plt.subplot(2,1,1)
+        plt.hist(resid[keep] / tim.sig1, 50, range=(-8,8))
+        plt.subplot(2,1,2)
+        plt.hist(resid[keep] / tim.sig1, 50, range=(-8,8), log=True)
+        ps.savefig()
     
     for i,r in enumerate(radii_arcsec):
         sigma = r / 0.27
         print 'Filtering at', r
 
-        # k1 = signal.gaussian(r*10, r)
-        # k1 /= k1.sum()
-        # print 'Kernel 1:', k1.shape
-        # k1 = np.atleast_2d(k1)
-        # print 'Kernel 1:', k1.shape
-        # 
-        # blurred = signal.fftconvolve(resid, k1, mode='same')
-        # blurred = signal.fftconvolve(blurred, k1.T, mode='same')
-        #ksum = kernel.sum()
-        
         kernel = np.outer(signal.gaussian(sigma*10, sigma),
                           signal.gaussian(sigma*10, sigma))
         kernel /= kernel.sum()
         blurred = signal.fftconvolve(resid, kernel, mode='same')
-
-        #kernel_norm = 1./(2. * np.sqrt(np.pi) * sigma)
-        #print 'r=', r, 'sigma=', sigma, 'kernel sum=', ksum, 'kernel norm=', kernel_norm
-        #blurred /= kernel_norm**2
-        #sn = blurred / (tim.sig1 / kernel_norm)
-
-        # Source has profile:
-        #
-        # s = ftotal * N(0, s^2)
-        #
-        # Convolve by N(0, sigma^2)
-        #
-        # ->   c = ftotal * N(0, s^2 + sigma^2)
 
         knorm = np.sqrt(np.sum(kernel**2))
         print 'Knorm', knorm
         print 'knorm', 1./(2. * np.sqrt(np.pi) * sigma)
 
         sn = blurred / (knorm * tim.sig1)
-        
-        # plt.clf()
-        # plt.subplot(2,1,1)
-        # plt.hist(sn[keep], 50, range=(-8,8))
-        # plt.subplot(2,1,2)
-        # plt.hist(sn[keep], 50, range=(-8,8), log=True)
-        # ps.savefig()
-        #blurred = blurred.astype(np.float32)
+        print 'Max S/N:', sn.max()
         
         #filters.append(gaussian_filter(resid, sigma,
         #        mode='constant'))
-        #filters.append(blurred)
 
-        print 'Max S/N:', sn.max()
-        
-        plt.clf()
-        plt.imshow(sn, interpolation='nearest', origin='lower',
-                   vmin=-2., vmax=32.,
-                   cmap='gray')
-        plt.title('Filtered at %f arcsec: S/N' % r)
-        ps.savefig()
+        if plots:
+            plt.clf()
+            plt.imshow(sn, interpolation='nearest', origin='lower',
+                       vmin=-2., vmax=32.,
+                       cmap='gray')
+            plt.title('Filtered at %f arcsec: S/N' % r)
+            ps.savefig()
 
         filters.append(sn.astype(np.float32))
-        
-        
 
     return dict(filters=filters, radii_arcsec=radii_arcsec)
 
 def stage_4(resid=None, sky=None, ps=None, tim=None,
             filters=None, radii_arcsec=None,
-            orig_catalog=None,
+            orig_catalog=None, plots=False,
+            lsbcat='lsb.fits',
+            expnum=None, extname=None,
             **kwa):
 
-    ok,x,y = tim.subwcs.radec2pixelxy(188.7543, 13.3847)
-    print 'X,Y', x,y
+    #ok,x,y = tim.subwcs.radec2pixelxy(188.7543, 13.3847)
+    #print 'X,Y', x,y
     
-    # for f,r in zip(filters, radii_arcsec):
-    #     plt.clf()
-    #     #plt.imshow(f, **tim.ima)
-    #     #dimshow(f, vmin=np.percentile(f, 25),
-    #     #        vmax=np.percentile(f, 99))
-    #     plt.imshow(f, interpolation='nearest', origin='lower',
-    #                vmin=-1.*tim.sig1, vmax=5.*tim.sig1,
-    #         cmap='gray')
-    #     plt.title('Filtered at %f arcsec' % r)
-    #     ps.savefig()
-
     fstack = np.dstack(filters)
-    print 'fstack shape', fstack.shape
-
     amax = np.argmax(fstack, axis=2)
     fmax = np.max(fstack, axis=2)
 
-    print 'fmax shape', fmax.shape
-    print 'amax shape', amax.shape, amax.dtype
-    
-    sna = dict(interpolation='nearest', origin='lower',
-               vmin=-2., vmax=32.,
-               cmap='gray')
-    
-    plt.clf()
-    plt.imshow(fmax, **sna)
-    plt.title('Filter max')
-    ps.savefig()
+    if plots:
+        sna = dict(interpolation='nearest', origin='lower',
+                   vmin=-2., vmax=32.,
+                   cmap='gray')
+        plt.clf()
+        plt.imshow(fmax, **sna)
+        plt.title('Filter max')
+        ps.savefig()
 
-    from matplotlib.ticker import FixedFormatter
-
-    #def get_formatter(mx):
-    #    return FixedFormatter(['%i' % r for r in radii_arcsec])
-    radformat = FixedFormatter(['%i' % r for r in radii_arcsec])
+        from matplotlib.ticker import FixedFormatter
+        radformat = FixedFormatter(['%i' % r for r in radii_arcsec])
     
-    plt.clf()
-    plt.imshow(amax, interpolation='nearest', origin='lower',
-            cmap='jet')
-    plt.title('Filter argmax')
-    plt.colorbar(ticks=np.arange(amax.max()+1), format=radformat)
-    ps.savefig()
+        plt.clf()
+        plt.imshow(amax, interpolation='nearest', origin='lower',
+                   cmap='jet')
+        plt.title('Filter argmax')
+        plt.colorbar(ticks=np.arange(amax.max()+1), format=radformat)
+        ps.savefig()
 
-    peak_amax = np.zeros_like(amax)
+        peak_amax = np.zeros_like(amax)
 
     hot = (fmax > 10.)
     blobs, nblobs = label(hot)
     print 'Nblobs', nblobs
-    print 'blobs max', blobs.max()
+    #print 'blobs max', blobs.max()
     peaks = []
     for blob in range(1, nblobs+1):
         I = (blobs == blob)
         imax = np.argmax(fmax * I)
         py,px = np.unravel_index(imax, fmax.shape)
         peaks.append((px,py))
-        print 'blob imax', imax
+        #print 'blob imax', imax
         print 'px,py', px,py
         print 'blob max', fmax.flat[imax]
         ifilt = amax.flat[imax]
         print 'blob argmax', ifilt
-        print '  =', amax[py,px]
+        #print '  =', amax[py,px]
         
-        peak_amax[I] = ifilt
+        if plots:
+            peak_amax[I] = ifilt
 
     px = [x for x,y in peaks]
     py = [y for x,y in peaks]
         
-    plt.clf()
-    plt.imshow(amax * hot, interpolation='nearest', origin='lower',
-               cmap='jet')
-    ax = plt.axis()
-    plt.plot(px, py, '+', color='w')
-    plt.axis(ax)
-    plt.title('Filter argmax')
-    plt.colorbar(ticks=np.arange((amax*hot).max()+1), format=radformat)
-    ps.savefig()
+    if plots:
+        plt.clf()
+        plt.imshow(amax * hot, interpolation='nearest', origin='lower',
+                   cmap='jet')
+        ax = plt.axis()
+        plt.plot(px, py, '+', color='w')
+        plt.axis(ax)
+        plt.title('Filter argmax')
+        plt.colorbar(ticks=np.arange((amax*hot).max()+1), format=radformat)
+        ps.savefig()
 
     # Extended sources in the catalog
     E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
@@ -438,25 +386,28 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
 
     fluxes = np.array(fluxes)
     mags = 22.5 - 2.5 * np.log10(fluxes)
-        
-    plt.clf()
-    plt.imshow(peak_amax, interpolation='nearest', origin='lower',
-               cmap='jet')
-    ax = plt.axis()
-    plt.plot(px, py, '+', color='w', ms=10, mew=2)
-    plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
 
-    for x,y,m in zip(px, py, mags):
-        ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
-        plt.text(x, y, '%.1f (%.2f,%.2f)' % (m,ra,dec), color='w', ha='left', fontsize=12)
+    if plots:
+        plt.clf()
+        plt.imshow(peak_amax, interpolation='nearest', origin='lower',
+                   cmap='jet')
+        ax = plt.axis()
+        plt.plot(px, py, '+', color='w', ms=10, mew=2)
+        plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
 
-    plt.axis(ax)
-    plt.title('Filter peak argmax')
-    plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
-    ps.savefig()
+        for x,y,m in zip(px, py, mags):
+            ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
+            plt.text(x, y, '%.1f (%.2f,%.2f)' % (m,ra,dec), color='w', ha='left', fontsize=12)
+
+        plt.axis(ax)
+        plt.title('Filter peak argmax')
+        plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
+        ps.savefig()
 
 
     LSB = fits_table()
+    LSB.expnum  = np.array([expnum ] * len(px))
+    LSB.extname = np.array([extname] * len(px))
     LSB.x = np.array(px)
     LSB.y = np.array(py)
     ra,dec = tim.subwcs.pixelxy2radec(LSB.x, LSB.y)
@@ -466,50 +417,12 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     LSB.mag = mags
     LSB.radius = np.array(radii_arcsec)[amax[py,px]]
     LSB.sn = fmax[py,px]
-
     LSB.cut(np.argsort(-LSB.sn))
     
-    LSB.writeto('lsb.fits')
+    LSB.writeto(lsbcat)
     
-    # for f1,f2,r1,r2 in zip(filters, filters[1:],
-    #                        radii_arcsec, radii_arcsec[1:]):
-    #     plt.clf()
-    #     plt.imshow(f2-f1,
-    #                interpolation='nearest', origin='lower',
-    #                vmin=-1.*tim.sig1, vmax=5.*tim.sig1,
-    #                cmap='gray')
-    #     plt.title('Filtered at %.1f - %.1f arcsec' %
-    #               (r2, r1))
-    #     ps.savefig()
-
-        
-        
     # bin = bin_image(resid, 8)
     # 
-    # plt.clf()
-    # dimshow(bin,
-    #         vmin=np.percentile(bin,25),
-    #         vmax=np.percentile(bin,99))
-    # plt.title('Binned by 8')
-    # ps.savefig()
-    # 
-    # bs = gaussian_filter(bin, 25)
-    # 
-    # plt.clf()
-    # dimshow(bs,
-    #         vmin=np.percentile(bs,25),
-    #         vmax=np.percentile(bs,99))
-    # plt.title('Binned by 8, Gaussian smoothed')
-    # ps.savefig()
-    # 
-    # plt.clf()
-    # plt.imshow(tim.getImage(), **tim.ima)
-    # ax = plt.axis()
-    # plt.plot(bx, by, 'r+', mew=2, ms=10)
-    # plt.axis(ax)
-    # plt.title('SDSS Bright Stars')
-    # ps.savefig()
-
     return dict(LSB=LSB, filters=None, mod=None, sky=None)
 
 def stage_5(LSB=None, resid=None, tim=None, mask=None, ps=None, **kwa):
@@ -598,16 +511,24 @@ parser.add_option('--expnum', type=int, default=431202,
 parser.add_option('--extname', default='S19',
                   help='CCD name to run')
 parser.add_option('--prefix', default='lsb', help='Plot & pickle filename prefix')
+parser.add_option('--plots', action='store_true', default=False,
+                  help='Enable plots')
+parser.add_option('--bright', default='bright.fits',
+                  help='SDSS bright star filename, default %default')
+
+parser.add_option('--out', default='lsb.fits',
+                  help='Output catalog filename, default %default')
 
 opt,args = parser.parse_args()
 
 stagefunc = CallGlobal('stage_%s', globals())
 
 kwargs = dict(expnum=opt.expnum, extname=opt.extname,
-              plotprefix=opt.prefix)
+              plotprefix=opt.prefix, plots=opt.plots,
+              brightstars=opt.bright, lsbcat=opt.out)
 
 if len(opt.stage) == 0:
-    opt.stage.append('3')
+    opt.stage.append('4')
 opt.force.extend(opt.stage)
 if opt.forceall:
     kwargs.update(forceall=True)
