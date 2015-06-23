@@ -57,6 +57,9 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
     for b in bricknames: #['1864p102', '1862p102']:
         fn = os.path.join(decals.decals_dir, 'tractor', b[:3],
                           'tractor-%s.fits' % b)
+        if not os.path.exists(fn):
+            print 'WARNING: file does not exist:', fn
+            continue
         print 'Reading', fn
         cats.append(fits_table(fn))
     T = merge_tables(cats)
@@ -105,7 +108,9 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
 
     mask = np.zeros(tim.shape, np.bool)
     
-    bright = fits_table('bright-virgo.fits')
+    #bright = fits_table('bright-virgo.fits')
+    bright = fits_table('bright.fits')
+    print 'Read', len(bright), 'SDSS bright stars'
     ok,bx,by = tim.subwcs.radec2pixelxy(bright.ra, bright.dec)
     bx = np.round(bx).astype(int)
     by = np.round(by).astype(int)
@@ -116,9 +121,11 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb'):
     radius = (10. ** (3.5 - 0.15 * mag) / 0.27).astype(np.int)
 
     I = np.flatnonzero(
+        ok *
         (radius > 0) *
         (bx + radius > 0) * (bx - radius < W) *
         (by + radius > 0) * (by - radius < H))
+    print len(I), 'bright stars are near the image'
 
     xx,yy = np.meshgrid(np.arange(W), np.arange(H))
     for x,y,r in zip(bx[I], by[I], radius[I]):
@@ -606,6 +613,6 @@ if opt.forceall:
     kwargs.update(forceall=True)
 
 for s in opt.stage:
-    runstage(s, '%s-%%(stage)s.pickle' % opt.prefix, stagefunc,
+    runstage(s, 'pickles/%s-%%(stage)s.pickle' % opt.prefix, stagefunc,
              prereqs={ '5':'4', '4':'3', '3':'2', '2':'1', '1':None },
              force=opt.force, write=opt.write, **kwargs)
