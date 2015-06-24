@@ -797,6 +797,15 @@ def get_rgb(imgs, bands, mnmx=None, arcsinh=None, scales=None):
     '''
     Given a list of images in the given bands, returns a scaled RGB
     image.
+
+    *imgs*  a list of numpy arrays, all the same size, in nanomaggies
+    *bands* a list of strings, eg, ['g','r','z']
+    *mnmx*  = (min,max), values that will become black/white *after* scaling.
+           Default is (-3,10)
+    *arcsinh* use nonlinear scaling as in SDSS
+    *scales*
+
+    Returns a (H,W,3) numpy array with values between 0 and 1.
     '''
     bands = ''.join(bands)
 
