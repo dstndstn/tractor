@@ -49,6 +49,9 @@ if __name__ == '__main__':
     parser.add_option('--forced', action='store_true', default=False,
                       help='Output forced-photometry commands')
 
+    parser.add_option('--lsb', action='store_true', default=False,
+                      help='Output Low-Surface-Brightness commands')
+    
     parser.add_option('--touching', action='store_true', default=False,
                       help='Cut to only CCDs touching selected bricks')
 
@@ -290,12 +293,9 @@ if __name__ == '__main__':
 
         print b.brickname
 
-    if not (opt.calibs or opt.forced):
+    if not (opt.calibs or opt.forced or opt.lsb):
         sys.exit(0)
     
-    #B.cut(B.brickname == '1498p017')
-    #log(len(B), 'bricks for real')
-
     if 'dr1' in T.columns():
         T.cut(T.dr1 == 1)
         log(len(T), 'photometric for DR1')
@@ -351,6 +351,18 @@ if __name__ == '__main__':
         print 'Wrote', opt.out
         sys.exit(0)
 
+    if opt.lsb:
+        print 'Writing LSB commands to', opt.out
+        f = open(opt.out,'w')
+        log('Total of', len(allI), 'CCDs')
+        for j,i in enumerate(allI):
+            expstr = '%08i' % T.expnum[i]
+            outfn = 'lsb/lsb-%s-%s.fits' % (T.expnum[i], T.extname[i])
+            f.write('python projects/desi/lsb.py --expnum %i --extname %s --out %s -F -n > lsb/lsb-%s-%s.log 2>&1' % (T.expnum[i], T.extname[i], outfn, T.expnum[i], T.extname[i]))
+        f.close()
+        print 'Wrote', opt.out
+        sys.exit(0)
+        
 
     print 'Writing calibs to', opt.out
     f = open(opt.out,'w')
