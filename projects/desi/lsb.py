@@ -80,39 +80,46 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
             print 'WARNING: file does not exist:', fn
             continue
         print 'Reading', fn
-        cats.append(fits_table(fn))
-    T = merge_tables(cats)
-    T._header = cats[0]._header
+        cat = fits_table(fn)
+        if cat is None or len(cat) == 0:
+            continue
+        cats.append(cat)
+    if len(cats):
+        T = merge_tables(cats)
+        T._header = cats[0]._header
+        
+        # margin
+        M = 20
+        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+        x -= 1.
+        y -= 1.
+        T.x = x
+        T.y = y
+        H,W = tim.shape
+        T.cut((x > -M) * (x < (W+M)) * (y > -M) * (y < (H+M)))
+        print 'Cut to', len(T), 'within image bounds'
     
-    # margin
-    M = 20
-    ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
-    x -= 1.
-    y -= 1.
-    T.x = x
-    T.y = y
-    H,W = tim.shape
-    T.cut((x > -M) * (x < (W+M)) * (y > -M) * (y < (H+M)))
-    print 'Cut to', len(T), 'within image bounds'
-
-    T.cut(T.brick_primary)
-    print 'Cut to', len(T), 'brick_primary'
-    T.cut((T.out_of_bounds == False) * (T.left_blob == False))
-    print 'Cut to', len(T), 'not out-of-bound or left-blob'
+        T.cut(T.brick_primary)
+        print 'Cut to', len(T), 'brick_primary'
+        T.cut((T.out_of_bounds == False) * (T.left_blob == False))
+        print 'Cut to', len(T), 'not out-of-bound or left-blob'
+        
+        T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
+        T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
+        
+        print 'Brightest z-band:', np.max(T.decam_flux[:,4])
+        print 'Brightest r-band:', np.max(T.decam_flux[:,2])
     
-    T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
-    T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
-    
-    print 'Brightest z-band:', np.max(T.decam_flux[:,4])
-    print 'Brightest r-band:', np.max(T.decam_flux[:,2])
-
-    orig_catalog = T.copy()
-    
-    # Cut to compact sources
-    T.cut(np.maximum(T.shapeexp_r, T.shapedev_r) < 3.)
-    print 'Cut to', len(T), 'compact'
-    
-    cat = read_fits_catalog(T)
+        orig_catalog = T.copy()
+        
+        # Cut to compact sources
+        T.cut(np.maximum(T.shapeexp_r, T.shapedev_r) < 3.)
+        print 'Cut to', len(T), 'compact'
+        
+        cat = read_fits_catalog(T)
+    else:
+        cat = []
+        orig_catalog = fits_table()
     
     print len(cat), 'catalog objects'
     
@@ -382,9 +389,6 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         plt.colorbar(ticks=np.arange((amax*hot).max()+1), format=radformat)
         ps.savefig()
 
-    # Extended sources in the catalog
-    E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
-
     # Total flux estimate
     # fmax is S/N in the amax filter.  Back out...
     fluxes = []
@@ -410,7 +414,10 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
                    cmap='jet')
         ax = plt.axis()
         plt.plot(px, py, '+', color='w', ms=10, mew=2)
-        plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
+        # Extended sources in the catalog
+        if len(orig_catalog):
+            E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
+            plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
 
         for x,y,m in zip(px, py, mags):
             ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
@@ -423,17 +430,17 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
 
 
     LSB = fits_table()
-    LSB.expnum  = np.array([expnum ] * len(px))
+    LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
     LSB.extname = np.array([extname] * len(px))
-    LSB.x = np.array(px)
-    LSB.y = np.array(py)
+    LSB.x = np.array(px).astype(np.int16)
+    LSB.y = np.array(py).astype(np.int16)
     ra,dec = tim.subwcs.pixelxy2radec(LSB.x, LSB.y)
     LSB.ra = ra
     LSB.dec = dec
-    LSB.flux = fluxes
-    LSB.mag = mags
-    LSB.radius = np.array(radii_arcsec)[amax[py,px]]
-    LSB.sn = fmax[py,px]
+    LSB.flux = fluxes.astype(np.float32)
+    LSB.mag = mags.astype(np.float32)
+    LSB.radius = np.array(radii_arcsec)[amax[py,px]].astype(np.float32)
+    LSB.sn = fmax[py,px].astype(np.float32)
     LSB.cut(np.argsort(-LSB.sn))
     
     LSB.writeto(lsbcat)
