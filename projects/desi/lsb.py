@@ -16,7 +16,7 @@ from astrometry.util.ttime import *
 from tractor import *
 
 import os
-os.environ['DECALS_DIR'] = 'decals-lsb'
+#os.environ['DECALS_DIR'] = 'decals-lsb'
 
 from common import *
 from desi_common import *
@@ -429,6 +429,27 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         ps.savefig()
 
 
+    # Apertures, radii in ARCSEC.
+    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+    apertures = apertures_arcsec / pixscale
+    apxy = np.vstack((px, py)).T
+
+    import photutils
+    with np.errstate(divide='ignore'):
+        imsigma = 1.0 / tim.getInvError()
+        imsigma[tim.getInvError() == 0] = 0
+    apimg = []
+    apimgerr = []
+    for rad in apertures:
+        aper = photutils.CircularAperture(apxy, rad)
+        p = photutils.aperture_photometry(coimg, aper, error=imsigma)
+        apimg.append(p.field('aperture_sum'))
+        apimgerr.append(p.field('aperture_sum_err'))
+    ap = np.vstack(apimg).T
+    ap[np.logical_not(np.isfinite(ap))] = 0.
+    aperr = 1./(np.vstack(apimgerr).T)**2
+    aperr[np.logical_not(np.isfinite(aperr))] = 0.
+
     LSB = fits_table()
     LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
     LSB.extname = np.array([extname] * len(px))
@@ -441,6 +462,8 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     LSB.mag = mags.astype(np.float32)
     LSB.radius = np.array(radii_arcsec)[amax[py,px]].astype(np.float32)
     LSB.sn = fmax[py,px].astype(np.float32)
+    LSB.apflux = ap
+    LSB.apflux_err = aperr
     LSB.cut(np.argsort(-LSB.sn))
     
     LSB.writeto(lsbcat)
