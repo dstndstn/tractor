@@ -264,17 +264,10 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
             **kwa):
     if plots and ps is None:
         ps = PlotSequence(plotprefix)
-    else:
-        ps = None
-
-    #radii_arcsec = [1., 2., 4., 6., 8., 10., 13., 16.,
-    #                20., 25, 32., 45., 60., 120.]
 
     radii_arcsec = np.sqrt(2.) ** np.arange(15)
     
     filters = []
-
-    from scipy import signal
 
     keep = np.logical_not(mask)
     
@@ -292,79 +285,28 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
     for i,r in enumerate(radii_arcsec):
         sigma = r / 0.27
         print 'Filtering at', r
-
-        t0 = Time()
-        
-        kernel = np.outer(signal.gaussian(sigma*10, sigma),
-                          signal.gaussian(sigma*10, sigma))
-        kernel /= kernel.sum()
-        blurred = signal.fftconvolve(resid, kernel, mode='same')
-
-        t1 = Time()
-        
-        #b2 = gaussian_filter(resid, sigma, mode='constant')
-        #sn2 = b2 / (knorm * tim.sig1)
-        #t2 = Time()
-        
-
-        knorm = np.sqrt(np.sum(kernel**2))
-        print 'Knorm', knorm
-        print 'knorm', 1./(2. * np.sqrt(np.pi) * sigma)
-
-        sn = blurred / (knorm * tim.sig1)
-        print 'Max S/N:', sn.max()
-
-        sna = dict(interpolation='nearest', origin='lower',
-                   vmin=sn.min(), vmax=sn.max(),
-                   cmap='gray')
-        t3 = Time()
-        
         if i and i%2 == 0:
             img = bin_image_2(img, 2)
             binning *= 2
-            b3 = gaussian_filter(img, sigma/binning, mode='constant')
+            blurred = gaussian_filter(img, sigma/binning, mode='constant')
         else:
-            b3 = gaussian_filter(img, sigma / binning, mode='constant')
+            blurred = gaussian_filter(img, sigma / binning, mode='constant')
 
         bh,bw = img.shape
         H,W = resid.shape
         bx = (np.arange(bw)+0.5) * binning - 0.5
         by = (np.arange(bh)+0.5) * binning - 0.5
-        # print 'Full size:', H,W
-        # print 'bx:', bx.min(), bx.max()
-        # print 'by:', by.min(), by.max()
-        interp = RectBivariateSpline(bx, by, b3.T)
-        xx = np.arange(W)
-        yy = np.arange(H)
-        fullsize = interp(xx, yy).T
-        t4 = Time()
-
-        print 'Binned:', t4-t3
-        
-        b3 = fullsize
-        
-        sn3 = b3 / (knorm * tim.sig1)
-
-        
-        print 'FFT  :', t1-t0
-        #print 'Gfilt:', t2-t1
-        
+        spline = RectBivariateSpline(bx, by, blurred.T)
+        blurred = spline(np.arange(W), np.arange(H)).T
+        knorm =  1./(2. * np.sqrt(np.pi) * sigma)
+        sn = blurred / (knorm * tim.sig1)
+        print 'Max S/N:', sn.max()
         
         if plots:
             plt.clf()
-            plt.imshow(sn, **sna)
-            #interpolation='nearest', origin='lower',
-            #           vmin=-2., vmax=32.,
-            #          cmap='gray')
+            plt.imshow(sn, interpolation='nearest', origin='lower',
+                       vmin=-2., vmax=32., cmap='gray')
             plt.title('Filtered at %f arcsec: S/N' % r)
-            ps.savefig()
-
-            plt.clf()
-            plt.imshow(sn3, **sna)
-            #interpolation='nearest', origin='lower',
-            #           vmin=-2., vmax=32.,
-            #          cmap='gray')
-            plt.title('Filtered at %f arcsec: S/N (3)' % r)
             ps.savefig()
             
         filters.append(sn.astype(np.float32))
