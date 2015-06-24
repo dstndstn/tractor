@@ -356,9 +356,10 @@ if __name__ == '__main__':
         f = open(opt.out,'w')
         log('Total of', len(allI), 'CCDs')
         for j,i in enumerate(allI):
-            expstr = '%08i' % T.expnum[i]
-            outfn = 'lsb/lsb-%s-%s.fits' % (T.expnum[i], T.extname[i])
-            f.write('python projects/desi/lsb.py --expnum %i --extname %s --out %s -F -n > lsb/lsb-%s-%s.log 2>&1' % (T.expnum[i], T.extname[i], outfn, T.expnum[i], T.extname[i]))
+            exp = T.expnum[i]
+            ext = T.extname[i].strip()
+            outfn = 'lsb/lsb-%s-%s.fits' % (exp, ext)
+            f.write('python projects/desi/lsb.py --expnum %i --extname %s --out %s -F -n > lsb/lsb-%s-%s.log 2>&1\n' % (exp, ext, outfn, exp, ext))
         f.close()
         print 'Wrote', opt.out
         sys.exit(0)
