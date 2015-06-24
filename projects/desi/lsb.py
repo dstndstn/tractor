@@ -51,7 +51,9 @@ def bin_image_2(data, S):
 
 
 def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
-            brightstars = 'bright.fits', **kwa):
+            brightstars = 'bright.fits',
+            pixscale=0.27,
+            **kwa):
     if plots:
         ps = PlotSequence(plotprefix)
     else:
@@ -81,6 +83,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
             continue
         print 'Reading', fn
         cat = fits_table(fn)
+        print 'Read', len(cat), 'sources'
         if cat is None or len(cat) == 0:
             continue
         cats.append(cat)
@@ -140,7 +143,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     H,W = mask.shape
     bright.modelmag = 22.5 - 2.5*np.log10(bright.modelflux)
     mag = bright.modelmag[:,2]
-    radius = (10. ** (3.5 - 0.15 * mag) / 0.27).astype(np.int)
+    radius = (10. ** (3.5 - 0.15 * mag) / pixscale).astype(np.int)
 
     I = np.flatnonzero(
         ok *
@@ -231,7 +234,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     
     return dict(resid=resid, sky=smoo, ps=ps, tim=tim,
                 tr=tr, mod=mod, mask=mask,
-                orig_catalog = orig_catalog)
+                orig_catalog = orig_catalog, pixscale=pixscale)
 
 
 def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
@@ -267,7 +270,7 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
 
     
 def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
-            plots=False, plotprefix=None,
+            plots=False, plotprefix=None, pixscale=None,
             **kwa):
     if plots and ps is None:
         ps = PlotSequence(plotprefix)
@@ -290,8 +293,8 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
     img = resid
 
     for i,r in enumerate(radii_arcsec):
-        sigma = r / 0.27
-        print 'Filtering at', r
+        sigma = r / pixscale
+        print 'Filtering at', r, 'arcsec'
         if i and i%2 == 0:
             img = bin_image_2(img, 2)
             binning *= 2
@@ -325,6 +328,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
             orig_catalog=None, plots=False,
             lsbcat='lsb.fits',
             expnum=None, extname=None,
+            pixscale=None,
             **kwa):
 
     #ok,x,y = tim.subwcs.radec2pixelxy(188.7543, 13.3847)
@@ -399,7 +403,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         sn = fmax[y,x]
         print 'S/N', sn
         r = radii_arcsec[ifilt]
-        sigma = r / 0.27
+        sigma = r / pixscale
         knorm = 1./(2. * np.sqrt(np.pi) * sigma)
         blurred = sn * (knorm * tim.sig1)
         fluxest = blurred * 2.*np.pi * (2. * sigma**2)
@@ -442,13 +446,13 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     apimgerr = []
     for rad in apertures:
         aper = photutils.CircularAperture(apxy, rad)
-        p = photutils.aperture_photometry(coimg, aper, error=imsigma)
+        p = photutils.aperture_photometry(resid, aper, error=imsigma)
         apimg.append(p.field('aperture_sum'))
         apimgerr.append(p.field('aperture_sum_err'))
     ap = np.vstack(apimg).T
     ap[np.logical_not(np.isfinite(ap))] = 0.
-    aperr = 1./(np.vstack(apimgerr).T)**2
-    aperr[np.logical_not(np.isfinite(aperr))] = 0.
+    apiv = 1./(np.vstack(apimgerr).T)**2
+    apiv[np.logical_not(np.isfinite(apiv))] = 0.
 
     LSB = fits_table()
     LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
@@ -463,7 +467,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     LSB.radius = np.array(radii_arcsec)[amax[py,px]].astype(np.float32)
     LSB.sn = fmax[py,px].astype(np.float32)
     LSB.apflux = ap
-    LSB.apflux_err = aperr
+    LSB.apflux_ivar = apiv
     LSB.cut(np.argsort(-LSB.sn))
     
     LSB.writeto(lsbcat)
