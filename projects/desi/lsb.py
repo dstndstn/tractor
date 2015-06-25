@@ -69,7 +69,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     #zoomslice = (slice(y0,y1), slice(x0,x1))
     zoomslice = None
     
-    tim = im.get_tractor_image(decals, const2psf=True, pvwcs=True, slc=zoomslice) #, nanomaggies=False)
+    tim = im.get_tractor_image(decals, const2psf=True, slc=zoomslice)
     print 'Tim', tim
     
     cats = []

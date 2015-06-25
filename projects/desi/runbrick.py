@@ -290,7 +290,7 @@ def compute_coadds(tims, bands, targetwcs, images=None,
 def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
                plots=False, ps=None,
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz', pvwcs=False, const2psf=True,
+               bands='grz', const2psf=True,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -377,8 +377,6 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
 
     # Run calibrations
     kwa = dict()
-    if pvwcs:
-        kwa.update(pvastrom=True, astrom=False)
     if const2psf:
         kwa.update(psfexfit=False)
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
@@ -389,7 +387,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
     tlast = tnow
 
     # Read images, clip to ROI
-    args = [(im, decals, targetrd, mock_psf, pvwcs, const2psf) for im in ims]
+    args = [(im, decals, targetrd, mock_psf, const2psf) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
@@ -3216,8 +3214,7 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
                 })
         
 
-    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom,
-                    pvwcs=opt.pv)
+    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom)
 
     t0 = Time()
 

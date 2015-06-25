@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     im = DecamImage(T[0])
     decals = Decals()
-    tim = im.get_tractor_image(decals, slc=zoomslice, const2psf=True, pvwcs=True)
+    tim = im.get_tractor_image(decals, slc=zoomslice, const2psf=True)
     print 'Got tim:', tim
 
     if catfn == 'DR1':
