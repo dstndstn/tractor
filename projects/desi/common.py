@@ -1578,9 +1578,6 @@ class DecamImage(object):
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
-        self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
-        self.psffitellfn = os.path.join(calibdir, 'psfexfit', calname + '-ell.fits')
-        self.psffitell2fn = os.path.join(calibdir, 'psfexfit', calname + '-ell2.fits')
         self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
         self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
@@ -1718,21 +1715,7 @@ class DecamImage(object):
             psfim = psfim[5:-5, 5:-5]
             psf = GaussianMixtureEllipsePSF.fromStamp(psfim, N=2)
         else:
-            # read fit PsfEx model -- with ellipse representation
-            # print 'Reading PsfEx-fit model from', self.psffitellfn
-            # psfex = PsfEx.fromFits(self.psffitellfn)
-            print 'Reading PsfEx-fit model from', self.psffitell2fn
-            psfex = PsfEx.fromFits(self.psffitell2fn)
-            print 'Read', psfex
-            psfex.ensureSplines()
-            psfex.radius = 20
-
-            if x0 or y0:
-                psf = ShiftedPsf(psfex, x0, y0)
-                # ?
-                psf.radius = 20
-            else:
-                psf = psfex
+            assert(False)
 
         tim = Image(img, invvar=invvar, wcs=twcs, psf=psf,
                     photocal=LinearPhotoCal(zpscale, band=band),
@@ -1770,7 +1753,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.psffitfn, self.skyfn, self.pvwcsfn]]:
+                       self.skyfn, self.pvwcsfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -1880,8 +1863,8 @@ class DecamImage(object):
         return skyobj
 
     def run_calibs(self, ra, dec, pixscale, mock_psf, W=2048, H=4096,
-                   pvastrom=True, psfex=True, sky=True, psfexfit=True,
-                   se=False, astrom=False, psfexfit2=False,
+                   pvastrom=True, psfex=True, sky=True,
+                   se=False, astrom=False,
                    funpack=False, fcopy=False, use_mask=True,
                    force=False, just_check=False):
         '''
@@ -1891,23 +1874,12 @@ class DecamImage(object):
         '''
         #print 'run_calibs:', str(self), 'near RA,Dec', ra,dec, 'with pixscale', pixscale, 'arcsec/pix'
 
-        for fn in [self.pvwcsfn, self.sefn, self.psffn, self.psffitfn, self.skyfn]:
+        for fn in [self.pvwcsfn, self.sefn, self.psffn, self.skyfn]:
             print 'exists?', os.path.exists(fn), fn
         self.makedirs()
 
         if mock_psf:
             psfex = False
-            psfexfit = False
-            psfexfit2 = False
-
-        if (psfexfit and os.path.exists(self.psffitfn) and 
-            os.path.exists(self.psffitellfn) and (not force)):
-            psfexfit = False
-        if (psfexfit2 and os.path.exists(self.psffitfn) and 
-            os.path.exists(self.psffitell2fn) and (not force)):
-            psfexfit2 = False
-        if psfexfit or psfexfit2:
-            psfex = True
 
         if psfex and os.path.exists(self.psffn) and (not force):
             # Sometimes SourceExtractor gets interrupted or something and
@@ -1966,8 +1938,7 @@ class DecamImage(object):
                 sky = False
 
         if just_check:
-            return (se or astrom or psfex or psfexfit or sky or pvastrom or
-                    psfexfit2)
+            return (se or astrom or psfex or sky or pvastrom)
 
         tmpimgfn = None
         tmpmaskfn = None
@@ -2117,49 +2088,6 @@ class DecamImage(object):
                 if rtn:
                     raise RuntimeError('Command failed: ' + cmd + ': return value: %i' % rtn)
     
-        if psfexfit:
-            print 'Fit PSF...'
-            from tractor.basics import GaussianMixtureEllipsePSF, GaussianMixturePSF
-            from tractor.psfex import PsfEx
-            iminfo = self.get_image_info()
-            H,W = iminfo['dims']
-            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
-                          psfClass=GaussianMixtureEllipsePSF)
-            psfex.savesplinedata = True
-            print 'Fitting MoG model to PsfEx'
-            psfex._fitParamGrid(damp=1)
-            pp,XX,YY = psfex.splinedata
-            psfex.toFits(self.psffitellfn, merge=True)
-            print 'Wrote', self.psffitellfn
-
-            # Convert to GaussianMixturePSF
-            ppvar = np.zeros_like(pp)
-            for iy in range(psfex.ny):
-                for ix in range(psfex.nx):
-                    psf = GaussianMixtureEllipsePSF(*pp[iy, ix, :])
-                    mog = psf.toMog()
-                    ppvar[iy,ix,:] = mog.getParams()
-            psfexvar = PsfEx(self.psffn, W, H, ny=psfex.ny, nx=psfex.nx,
-                             psfClass=GaussianMixturePSF)
-            psfexvar.splinedata = (ppvar, XX, YY)
-            psfexvar.toFits(self.psffitfn, merge=True)
-            print 'Wrote', self.psffitfn
-
-        if psfexfit2:
-            print 'Fit PSF...'
-            from tractor.basics import GaussianMixtureEllipsePSF
-            from tractor.psfex import PsfEx
-            iminfo = self.get_image_info()
-            H,W = iminfo['dims']
-            psfex = PsfEx(self.psffn, W, H, ny=13, nx=7,
-                          psfClass=GaussianMixtureEllipsePSF, K=2)
-            psfex.savesplinedata = True
-            print 'Fitting MoG model to PsfEx'
-            psfex._fitParamGrid(damp=1)
-            pp,XX,YY = psfex.splinedata
-            psfex.toFits(self.psffitell2fn, merge=True)
-            print 'Wrote', self.psffitell2fn
-            
         if sky:
             print 'Fitting sky for', self
             img = self.read_image()
