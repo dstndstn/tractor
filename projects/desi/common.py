@@ -1263,7 +1263,8 @@ class Decals(object):
         T.cut(I)
         return T
 
-    def tims_touching_wcs(self, targetwcs, mp, mock_psf=False, bands=None):
+    def tims_touching_wcs(self, targetwcs, mp, mock_psf=False,
+                          const2psf=True, bands=None):
         '''
         mp: multiprocessing object
         '''
@@ -1271,7 +1272,8 @@ class Decals(object):
         C = self.ccds_touching_wcs(targetwcs)
         # Sort by band
         if bands is not None:
-            C.cut(np.hstack([np.nonzero(C.filter == band)[0] for band in bands]))
+            C.cut(np.hstack([np.nonzero(C.filter == band)[0]
+                             for band in bands]))
         ims = []
         for t in C:
             print
@@ -1282,7 +1284,7 @@ class Decals(object):
         W,H = targetwcs.get_width(), targetwcs.get_height()
         targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                              [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-        args = [(im, self, targetrd, mock_psf, False, False) for im in ims]
+        args = [(im, self, targetrd, mock_psf, const2psf) for im in ims]
         tims = mp.map(read_one_tim, args)
         return tims
     
@@ -1584,18 +1586,14 @@ class DecamImage(object):
 
     def get_tractor_image(self, decals, slc=None, radecpoly=None,
                           mock_psf=False, const2psf=False,
-                          nanomaggies=True, subsky=True, tiny=5,
-                          pvwcs=False):
+                          nanomaggies=True, subsky=True, tiny=5):
         '''
         slc: y,x slices
         '''
         band = self.band
         imh,imw = self.get_image_shape()
 
-        if pvwcs:
-            wcs = self.read_pv_wcs(decals)
-        else:
-            assert(False)
+        wcs = self.read_pv_wcs(decals)
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
@@ -2075,9 +2073,9 @@ def run_calibs(X):
     return im.run_calibs(*args, **kwargs)
 
 
-def read_one_tim((im, decals, targetrd, mock_psf, pvwcs, const2psf)):
+def read_one_tim((im, decals, targetrd, mock_psf, const2psf)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
     tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf,
-                               pvwcs=pvwcs, const2psf=const2psf)
+                               const2psf=const2psf)
     return tim
 
