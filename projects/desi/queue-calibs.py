@@ -217,10 +217,12 @@ if __name__ == '__main__':
         dlo,dhi = 30,35
 
     elif opt.region == 'virgo':
-        #rlo,rhi = 182,192
-        #dlo,dhi =   8, 18
         rlo,rhi = 185,190
         dlo,dhi =  10, 15
+
+    elif opt.region == 'virgo2':
+        rlo,rhi = 182,192
+        dlo,dhi =   8, 18
 
     elif opt.region == 'lsb':
         rlo,rhi = 147.2, 147.8

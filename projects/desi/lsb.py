@@ -16,7 +16,7 @@ from astrometry.util.ttime import *
 from tractor import *
 
 import os
-os.environ['DECALS_DIR'] = 'decals-lsb'
+#os.environ['DECALS_DIR'] = 'decals-lsb'
 
 from common import *
 from desi_common import *
@@ -51,7 +51,9 @@ def bin_image_2(data, S):
 
 
 def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
-            brightstars = 'bright.fits', **kwa):
+            brightstars = 'bright.fits',
+            pixscale=0.27,
+            **kwa):
     if plots:
         ps = PlotSequence(plotprefix)
     else:
@@ -80,39 +82,47 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
             print 'WARNING: file does not exist:', fn
             continue
         print 'Reading', fn
-        cats.append(fits_table(fn))
-    T = merge_tables(cats)
-    T._header = cats[0]._header
+        cat = fits_table(fn)
+        print 'Read', len(cat), 'sources'
+        if cat is None or len(cat) == 0:
+            continue
+        cats.append(cat)
+    if len(cats):
+        T = merge_tables(cats)
+        T._header = cats[0]._header
+        
+        # margin
+        M = 20
+        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+        x -= 1.
+        y -= 1.
+        T.x = x
+        T.y = y
+        H,W = tim.shape
+        T.cut((x > -M) * (x < (W+M)) * (y > -M) * (y < (H+M)))
+        print 'Cut to', len(T), 'within image bounds'
     
-    # margin
-    M = 20
-    ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
-    x -= 1.
-    y -= 1.
-    T.x = x
-    T.y = y
-    H,W = tim.shape
-    T.cut((x > -M) * (x < (W+M)) * (y > -M) * (y < (H+M)))
-    print 'Cut to', len(T), 'within image bounds'
-
-    T.cut(T.brick_primary)
-    print 'Cut to', len(T), 'brick_primary'
-    T.cut((T.out_of_bounds == False) * (T.left_blob == False))
-    print 'Cut to', len(T), 'not out-of-bound or left-blob'
+        T.cut(T.brick_primary)
+        print 'Cut to', len(T), 'brick_primary'
+        T.cut((T.out_of_bounds == False) * (T.left_blob == False))
+        print 'Cut to', len(T), 'not out-of-bound or left-blob'
+        
+        T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
+        T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
+        
+        print 'Brightest z-band:', np.max(T.decam_flux[:,4])
+        print 'Brightest r-band:', np.max(T.decam_flux[:,2])
     
-    T.shapeexp = np.vstack((T.shapeexp_r, T.shapeexp_e1, T.shapeexp_e2)).T
-    T.shapedev = np.vstack((T.shapedev_r, T.shapedev_e1, T.shapedev_e2)).T
-    
-    print 'Brightest z-band:', np.max(T.decam_flux[:,4])
-    print 'Brightest r-band:', np.max(T.decam_flux[:,2])
-
-    orig_catalog = T.copy()
-    
-    # Cut to compact sources
-    T.cut(np.maximum(T.shapeexp_r, T.shapedev_r) < 3.)
-    print 'Cut to', len(T), 'compact'
-    
-    cat = read_fits_catalog(T)
+        orig_catalog = T.copy()
+        
+        # Cut to compact sources
+        T.cut(np.maximum(T.shapeexp_r, T.shapedev_r) < 3.)
+        print 'Cut to', len(T), 'compact'
+        
+        cat = read_fits_catalog(T)
+    else:
+        cat = []
+        orig_catalog = fits_table()
     
     print len(cat), 'catalog objects'
     
@@ -133,7 +143,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     H,W = mask.shape
     bright.modelmag = 22.5 - 2.5*np.log10(bright.modelflux)
     mag = bright.modelmag[:,2]
-    radius = (10. ** (3.5 - 0.15 * mag) / 0.27).astype(np.int)
+    radius = (10. ** (3.5 - 0.15 * mag) / pixscale).astype(np.int)
 
     I = np.flatnonzero(
         ok *
@@ -224,7 +234,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     
     return dict(resid=resid, sky=smoo, ps=ps, tim=tim,
                 tr=tr, mod=mod, mask=mask,
-                orig_catalog = orig_catalog)
+                orig_catalog = orig_catalog, pixscale=pixscale)
 
 
 def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
@@ -260,7 +270,7 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
 
     
 def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
-            plots=False, plotprefix=None,
+            plots=False, plotprefix=None, pixscale=None,
             **kwa):
     if plots and ps is None:
         ps = PlotSequence(plotprefix)
@@ -283,8 +293,8 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
     img = resid
 
     for i,r in enumerate(radii_arcsec):
-        sigma = r / 0.27
-        print 'Filtering at', r
+        sigma = r / pixscale
+        print 'Filtering at', r, 'arcsec'
         if i and i%2 == 0:
             img = bin_image_2(img, 2)
             binning *= 2
@@ -318,6 +328,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
             orig_catalog=None, plots=False,
             lsbcat='lsb.fits',
             expnum=None, extname=None,
+            pixscale=None,
             **kwa):
 
     #ok,x,y = tim.subwcs.radec2pixelxy(188.7543, 13.3847)
@@ -382,9 +393,6 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         plt.colorbar(ticks=np.arange((amax*hot).max()+1), format=radformat)
         ps.savefig()
 
-    # Extended sources in the catalog
-    E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
-
     # Total flux estimate
     # fmax is S/N in the amax filter.  Back out...
     fluxes = []
@@ -395,7 +403,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         sn = fmax[y,x]
         print 'S/N', sn
         r = radii_arcsec[ifilt]
-        sigma = r / 0.27
+        sigma = r / pixscale
         knorm = 1./(2. * np.sqrt(np.pi) * sigma)
         blurred = sn * (knorm * tim.sig1)
         fluxest = blurred * 2.*np.pi * (2. * sigma**2)
@@ -410,7 +418,10 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
                    cmap='jet')
         ax = plt.axis()
         plt.plot(px, py, '+', color='w', ms=10, mew=2)
-        plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
+        # Extended sources in the catalog
+        if len(orig_catalog):
+            E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
+            plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
 
         for x,y,m in zip(px, py, mags):
             ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
@@ -422,18 +433,41 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
         ps.savefig()
 
 
+    # Apertures, radii in ARCSEC.
+    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+    apertures = apertures_arcsec / pixscale
+    apxy = np.vstack((px, py)).T
+
+    import photutils
+    with np.errstate(divide='ignore'):
+        imsigma = 1.0 / tim.getInvError()
+        imsigma[tim.getInvError() == 0] = 0
+    apimg = []
+    apimgerr = []
+    for rad in apertures:
+        aper = photutils.CircularAperture(apxy, rad)
+        p = photutils.aperture_photometry(resid, aper, error=imsigma)
+        apimg.append(p.field('aperture_sum'))
+        apimgerr.append(p.field('aperture_sum_err'))
+    ap = np.vstack(apimg).T
+    ap[np.logical_not(np.isfinite(ap))] = 0.
+    apiv = 1./(np.vstack(apimgerr).T)**2
+    apiv[np.logical_not(np.isfinite(apiv))] = 0.
+
     LSB = fits_table()
-    LSB.expnum  = np.array([expnum ] * len(px))
+    LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
     LSB.extname = np.array([extname] * len(px))
-    LSB.x = np.array(px)
-    LSB.y = np.array(py)
+    LSB.x = np.array(px).astype(np.int16)
+    LSB.y = np.array(py).astype(np.int16)
     ra,dec = tim.subwcs.pixelxy2radec(LSB.x, LSB.y)
     LSB.ra = ra
     LSB.dec = dec
-    LSB.flux = fluxes
-    LSB.mag = mags
-    LSB.radius = np.array(radii_arcsec)[amax[py,px]]
-    LSB.sn = fmax[py,px]
+    LSB.flux = fluxes.astype(np.float32)
+    LSB.mag = mags.astype(np.float32)
+    LSB.radius = np.array(radii_arcsec)[amax[py,px]].astype(np.float32)
+    LSB.sn = fmax[py,px].astype(np.float32)
+    LSB.apflux = ap
+    LSB.apflux_ivar = apiv
     LSB.cut(np.argsort(-LSB.sn))
     
     LSB.writeto(lsbcat)
