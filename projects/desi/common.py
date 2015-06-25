@@ -177,7 +177,8 @@ def bin_image(data, invvar, S):
     for i in range(S):
         for j in range(S):
             iv = invvar[i::S, j::S]
-            newdata += data[i::S, j::S] * iv
+            subh,subw = iv.shape
+            newdata[:subh,:subw] += data[i::S, j::S] * iv
             newiv += iv
     newdata /= (newiv + (newiv == 0)*1.)
     newdata[newiv == 0] = 0.
