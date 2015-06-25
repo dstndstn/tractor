@@ -1572,14 +1572,10 @@ class DecamImage(object):
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
-        self.wcsfn = os.path.join(calibdir, 'astrom', calname + '.wcs.fits')
         self.pvwcsfn = os.path.join(calibdir, 'astrom-pv', calname + '.wcs.fits')
-        self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
-        self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
-        self.morphfn = os.path.join(calibdir, 'morph', calname + '.fits')
 
     def __str__(self):
         return self.name
@@ -1599,7 +1595,7 @@ class DecamImage(object):
         if pvwcs:
             wcs = self.read_pv_wcs(decals)
         else:
-            wcs = self.read_wcs()
+            assert(False)
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
@@ -1752,8 +1748,7 @@ class DecamImage(object):
     
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
-                      [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.skyfn, self.pvwcsfn]]:
+                      [self.sefn, self.psffn, self.skyfn, self.pvwcsfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
@@ -1834,9 +1829,6 @@ class DecamImage(object):
             invvar[invvar < thresh] = 0
         return invvar
 
-    def read_wcs(self):
-        return Sip(self.wcsfn)
-
     def read_pv_wcs(self, decals):
         print 'Reading WCS from', self.pvwcsfn
         wcs = Sip(self.pvwcsfn)
@@ -1864,7 +1856,7 @@ class DecamImage(object):
 
     def run_calibs(self, ra, dec, pixscale, mock_psf, W=2048, H=4096,
                    pvastrom=True, psfex=True, sky=True,
-                   se=False, astrom=False,
+                   se=False,
                    funpack=False, fcopy=False, use_mask=True,
                    force=False, just_check=False):
         '''
@@ -1923,9 +1915,6 @@ class DecamImage(object):
             if os.path.exists(fn):
                 pvastrom = False
 
-        if astrom and os.path.exists(self.wcsfn) and (not force):
-            astrom = False
-
         if sky and os.path.exists(self.skyfn) and (not force):
             fn = self.skyfn
             if os.path.exists(fn):
@@ -1938,7 +1927,7 @@ class DecamImage(object):
                 sky = False
 
         if just_check:
-            return (se or astrom or psfex or sky or pvastrom)
+            return (se or psfex or sky or pvastrom)
 
         tmpimgfn = None
         tmpmaskfn = None
@@ -1983,7 +1972,7 @@ class DecamImage(object):
                     
                 funmaskfn = tmpmaskfn
     
-        if astrom or se:
+        if se:
             # grab header values...
             primhdr = self.read_image_primary_header()
             hdr     = self.read_image_header()
@@ -2015,44 +2004,6 @@ class DecamImage(object):
             print cmd
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
-
-        if astrom:
-            cmd = ' '.join([
-                'solve-field --config', an_config, '-D . --temp-dir', tempdir,
-                '--ra %f --dec %f' % (ra,dec), '--radius 1',
-                '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
-                '--continue --no-plots --no-remove-lines --uniformize 0',
-                '--no-fits2fits',
-                '-X x_image -Y y_image -s flux_auto --extension 2',
-                '--width %i --height %i' % (W,H),
-                '--crpix-center',
-                '-N none -U none -S none -M none',
-                '--rdls none --corr none',
-                '--wcs', self.wcsfn, 
-                '--temp-axy', '--tag-all', self.sefn])
-            print cmd
-            if os.system(cmd):
-                raise RuntimeError('Command failed: ' + cmd)
-
-            if not os.path.exists(self.wcsfn):
-                # Run a second phase...
-                an_config_2 = os.path.join(decals_dir, 'calib', 'an-config', 'cfg2')
-                cmd = ' '.join([
-                    'solve-field --config', an_config_2, '-D . --temp-dir', tempdir,
-                    '--ra %f --dec %f' % (ra,dec), '--radius 1',
-                    '-L %f -H %f -u app' % (0.9 * pixscale, 1.1 * pixscale),
-                    '--continue --no-plots --uniformize 0',
-                    '--no-fits2fits',
-                    '-X x_image -Y y_image -s flux_auto --extension 2',
-                    '--width %i --height %i' % (W,H),
-                    '--crpix-center',
-                    '-N none -U none -S none -M none',
-                    '--rdls none --corr none',
-                    '--wcs', self.wcsfn, 
-                    '--temp-axy', '--tag-all', self.sefn])
-                print cmd
-                if os.system(cmd):
-                    raise RuntimeError('Command failed: ' + cmd)
 
         if pvastrom:
             # DECam images appear to have PV coefficients up to PVx_10,
