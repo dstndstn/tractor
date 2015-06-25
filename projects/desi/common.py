@@ -179,7 +179,7 @@ def bin_image(data, invvar, S):
             iv = invvar[i::S, j::S]
             subh,subw = iv.shape
             newdata[:subh,:subw] += data[i::S, j::S] * iv
-            newiv += iv
+            newiv  [:subh,:subw] += iv
     newdata /= (newiv + (newiv == 0)*1.)
     newdata[newiv == 0] = 0.
     return newdata,newiv

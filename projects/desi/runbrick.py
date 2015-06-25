@@ -814,7 +814,8 @@ def stage_srcs(coimgs=None, cons=None,
         S = binning
         for ii in range(S):
             for jj in range(S):
-                detmap[ii::S, jj::S] -= smoo
+                sh,sw = detmap[ii::S, jj::S].shape
+                detmap[ii::S, jj::S] -= smoo[:sh,:sw]
 
         if plots:
             sig1 = 1./np.sqrt(np.median(detiv[detiv > 0]))

@@ -199,12 +199,12 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
         ps.savefig()
     
         imchi = dict(interpolation='nearest', origin='lower', vmin=-5, vmax=5, cmap='RdBu')
-    
-        plt.clf()
-        plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
-        plt.title('Chi')
-        plt.colorbar()
-        ps.savefig()
+
+        # plt.clf()
+        # plt.imshow((tim.getImage() - mod) * tim.getInvError(), **imchi)
+        # plt.title('Chi')
+        # plt.colorbar()
+        # ps.savefig()
     
         plt.clf()
         plt.imshow((tim.getImage() - mod), **tim.ima)
@@ -413,36 +413,40 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     mags = 22.5 - 2.5 * np.log10(fluxes)
 
     if plots:
-        plt.clf()
-        plt.imshow(peak_amax, interpolation='nearest', origin='lower',
-                   cmap='jet')
-        ax = plt.axis()
-        plt.plot(px, py, '+', color='w', ms=10, mew=2)
-        # Extended sources in the catalog
-        if len(orig_catalog):
-            E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
-            plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
-
-        for x,y,m in zip(px, py, mags):
-            ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
-            plt.text(x, y, '%.1f (%.2f,%.2f)' % (m,ra,dec), color='w', ha='left', fontsize=12)
-
-        T = fits_table('evcc.fits')
-        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
-        x = x[ok]
-        y = y[ok]
-        plt.plot(x, y, 'o', mec=(0,1,0), mfc='none', ms=50, mew=5)
-        T = fits_table('vcc.fits')
-        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
-        x = x[ok]
-        y = y[ok]
-        plt.plot(x, y, 'o', mec=(0,1,1), mfc='none', ms=50, mew=5)
-
-        plt.axis(ax)
-        plt.title('Peaks')
-        #plt.title('Filter peak argmax')
-        #plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
-        ps.savefig()
+        for bg in [1,2]:
+            plt.clf()
+            if bg == 1:
+                plt.imshow(peak_amax, interpolation='nearest', origin='lower',
+                           cmap='jet')
+            else:
+                plt.imshow(tim.getImage(), **tim.ima)
+            ax = plt.axis()
+            plt.plot(px, py, '+', color='w', ms=10, mew=2)
+            # Extended sources in the catalog
+            if len(orig_catalog):
+                E = orig_catalog[np.maximum(orig_catalog.shapeexp_r, orig_catalog.shapedev_r) >= 3.]
+                plt.plot(E.x, E.y, 'x', color='k', ms=10, mew=2)
+    
+            for x,y,m in zip(px, py, mags):
+                ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
+                plt.text(x, y, '%.1f (%.2f,%.2f)' % (m,ra,dec), color='w', ha='left', fontsize=12)
+    
+            T = fits_table('evcc.fits')
+            ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+            x = x[ok]
+            y = y[ok]
+            plt.plot(x, y, 'o', mec=(0,1,0), mfc='none', ms=50, mew=5)
+            T = fits_table('vcc.fits')
+            ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+            x = x[ok]
+            y = y[ok]
+            plt.plot(x, y, 'o', mec=(0,1,1), mfc='none', ms=50, mew=5)
+    
+            plt.axis(ax)
+            plt.title('Peaks')
+            #plt.title('Filter peak argmax')
+            #plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
+            ps.savefig()
 
 
     # Apertures, radii in ARCSEC.
@@ -467,6 +471,7 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     apiv[np.logical_not(np.isfinite(apiv))] = 0.
 
     LSB = fits_table()
+    LSB.filter = np.array([tim.band] * len(px))
     LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
     LSB.extname = np.array([extname] * len(px))
     LSB.x = np.array(px).astype(np.int16)
