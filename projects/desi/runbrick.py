@@ -377,8 +377,6 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
 
     # Run calibrations
     kwa = dict()
-    if const2psf:
-        kwa.update(psfexfit=False)
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
     _map(run_calibs, args)
