@@ -16,7 +16,7 @@ from astrometry.util.ttime import *
 from tractor import *
 
 import os
-#os.environ['DECALS_DIR'] = 'decals-lsb'
+os.environ['DECALS_DIR'] = 'decals-lsb'
 
 from common import *
 from desi_common import *
@@ -427,9 +427,21 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
             ra,dec = tim.subwcs.pixelxy2radec(x+1, y+1)
             plt.text(x, y, '%.1f (%.2f,%.2f)' % (m,ra,dec), color='w', ha='left', fontsize=12)
 
+        T = fits_table('evcc.fits')
+        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+        x = x[ok]
+        y = y[ok]
+        plt.plot(x, y, 'o', mec=(0,1,0), mfc='none', ms=50, mew=5)
+        T = fits_table('vcc.fits')
+        ok,x,y = tim.subwcs.radec2pixelxy(T.ra, T.dec)
+        x = x[ok]
+        y = y[ok]
+        plt.plot(x, y, 'o', mec=(0,1,1), mfc='none', ms=50, mew=5)
+
         plt.axis(ax)
-        plt.title('Filter peak argmax')
-        plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
+        plt.title('Peaks')
+        #plt.title('Filter peak argmax')
+        #plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
         ps.savefig()
 
 

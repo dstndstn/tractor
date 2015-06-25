@@ -283,7 +283,7 @@ if __name__ == '__main__':
 
     for b in B:
         if opt.check:
-            fn = 'dr1d/tractor/%s/tractor-%s.fits' % (b.brickname[:3], b.brickname)
+            fn = 'dr1n/tractor/%s/tractor-%s.fits' % (b.brickname[:3], b.brickname)
             if os.path.exists(fn):
                 print >> sys.stderr, 'Exists:', fn
                 continue
