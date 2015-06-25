@@ -1577,7 +1577,6 @@ class DecamImage(object):
         self.corrfn = self.wcsfn.replace('.wcs.fits', '.corr.fits')
         self.sdssfn = self.wcsfn.replace('.wcs.fits', '.sdss.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
-        self.se2fn = os.path.join(calibdir, 'sextractor2', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
         self.psffitfn = os.path.join(calibdir, 'psfexfit', calname + '.fits')
         self.psffitellfn = os.path.join(calibdir, 'psfexfit', calname + '-ell.fits')
@@ -1771,7 +1770,7 @@ class DecamImage(object):
     def makedirs(self):
         for dirnm in [os.path.dirname(fn) for fn in
                       [self.wcsfn, self.corrfn, self.sdssfn, self.sefn, self.psffn, self.morphfn,
-                       self.se2fn, self.psffitfn, self.skyfn, self.pvwcsfn]]:
+                       self.psffitfn, self.skyfn, self.pvwcsfn]]:
             if not os.path.exists(dirnm):
                 try:
                     os.makedirs(dirnm)
