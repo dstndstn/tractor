@@ -1,0 +1,3152 @@
+SIMPLE  =                    T / file does conform to FITS standard             BITPIX  =                   16 / number of bits per data pixel                  NAXIS   =                    0 / number of data axes                            EXTEND  =                    T / FITS dataset may contain extensions            COMMENT   FITS (Flexible Image Transport System) format is defined in 'AstronomyCOMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H END                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             XTENSION= 'BINTABLE'           / binary table extension                         BITPIX  =                    8 / 8-bit bytes                                    NAXIS   =                    2 / 2-dimensional binary table                     NAXIS1  =                  140 / width of table in bytes                        NAXIS2  =                 1589 / number of rows in table                        PCOUNT  =                    0 / size of special data area                      GCOUNT  =                    1 / one data group (required keyword)              TFIELDS =                   28 / number of fields in each row                   TTYPE1  = 'EVCC_ID '           / label for field   1                            TFORM1  = 'J       '           / data format of field: 4-byte INTEGER           TTYPE2  = 'VCC_ID  '           / label for field   2                            TFORM2  = '4A      '           / data format of field: ASCII Character          TTYPE3  = 'NGC     '           / label for field   3                            TFORM3  = '5A      '           / data format of field: ASCII Character          TTYPE4  = 'RA      '           / label for field   4                            TFORM4  = 'D       '           / data format of field: 8-byte DOUBLE            TTYPE5  = 'Dec     '           / label for field   5                            TFORM5  = 'D       '           / data format of field: 8-byte DOUBLE            TTYPE6  = 'RA_SDSS '           / label for field   6                            TFORM6  = 'D       '           / data format of field: 8-byte DOUBLE            TTYPE7  = 'DEC_SDSS'           / label for field   7                            TFORM7  = 'D       '           / data format of field: 8-byte DOUBLE            TTYPE8  = 'Delta   '           / label for field   8                            TFORM8  = 'E       '           / data format of field: 4-byte REAL              TTYPE9  = 'cz_sdss '           / label for field   9                            TFORM9  = 'E       '           / data format of field: 4-byte REAL              TTYPE10 = 'cz_ned  '           / label for field  10                            TFORM10 = 'E       '           / data format of field: 4-byte REAL              TTYPE11 = 'Memb_EVCC'          / label for field  11                            TFORM11 = '1A      '           / data format of field: ASCII Character          TTYPE12 = 'Memb_VCC'           / label for field  12                            TFORM12 = '1A      '           / data format of field: ASCII Character          TTYPE13 = 'Morp_PRIM'          / label for field  13                            TFORM13 = '8A      '           / data format of field: ASCII Character          TTYPE14 = 'Morp_SEC'           / label for field  14                            TFORM14 = '2A      '           / data format of field: ASCII Character          TTYPE15 = 'Morp_INDEX'         / label for field  15                            TFORM15 = '3A      '           / data format of field: ASCII Character          TTYPE16 = 'Morp_VCC'           / label for field  16                            TFORM16 = '19A     '           / data format of field: ASCII Character          TTYPE17 = 'u       '           / label for field  17                            TFORM17 = '5A      '           / data format of field: ASCII Character          TTYPE18 = 'u_error '           / label for field  18                            TFORM18 = 'E       '           / data format of field: 4-byte REAL              TTYPE19 = 'g       '           / label for field  19                            TFORM19 = 'E       '           / data format of field: 4-byte REAL              TTYPE20 = 'g_error '           / label for field  20                            TFORM20 = 'E       '           / data format of field: 4-byte REAL              TTYPE21 = 'r       '           / label for field  21                            TFORM21 = 'E       '           / data format of field: 4-byte REAL              TTYPE22 = 'r_error '           / label for field  22                            TFORM22 = 'E       '           / data format of field: 4-byte REAL              TTYPE23 = 'i       '           / label for field  23                            TFORM23 = 'E       '           / data format of field: 4-byte REAL              TTYPE24 = 'i_error '           / label for field  24                            TFORM24 = 'E       '           / data format of field: 4-byte REAL              TTYPE25 = 'z       '           / label for field  25                            TFORM25 = 'E       '           / data format of field: 4-byte REAL              TTYPE26 = 'z_error '           / label for field  26                            TFORM26 = 'E       '           / data format of field: 4-byte REAL              TTYPE27 = 'R_Kron  '           / label for field  27                            TFORM27 = 'E       '           / data format of field: 4-byte REAL              TTYPE28 = 'R50     '           / label for field  28                            TFORM28 = 'E       '           / data format of field: 4-byte REAL              END                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                -   -    @eâwškP±@"¸Që…@eâwškP±@"œàu÷>w1DæyšDè¦fP-Sa      RE201-                  14.96=PAX  <£×
+AL  <£×
+AEG®<£×
+A@(ö<ýó¶BH{A=q   -   -    @eçŽóMj@,&$Ý/ @eç–»˜È@,%ýŠÚ¹õ?¬MDtyšÀ  M-S       BE206-                  17.32=#×
+AG®<£×
+A}¸<¬1Ax  <¬1Ar{=+BÌÍ@òáH   -   3810 @eçÖ8†YK@&ñ4êJŒ@eçÕfÏAò@&ñ4êJŒ>ö8†DyÓ3Dx,ÍM-Sc      RE203-                  12.13=PA0£×<£×
+A(  <£×
+A#×
+<£×
+A (ö<ýó¶C	EB	=q   -   -    @eî¿±[W?@/òˆÎp:û@eîÀƒn˜@/òˆÎp:û>ðŽD<FfD;  M-Irr(HSB)BE310-                  15.51=PAi™š<£×
+Aaë…<£×
+A^\<£×
+A\Qì<ýó¶AÐ(ö@½Â   -   -    @eòcñA \@-ýcˆe”¯@eò‰ 'RT@-þí(ŒçA„ÏßD` À  M-Irr(LSB)BE300-                  16.34=¥ãAx£×<£×
+Av¸R<¬1AqG®<¬1AxQì=PBÔW
+A³p¤   -   -    @eóê³g ù@2U+ÓÃa@eóíúCþ]@2U¸Që…?ÀÑ·Db  Df  M-Sc      BE203-                  14.13=PAU¸<£×
+AO×
+<£×
+AMG®<£×
+AO33<ýó¶BÊ×
+A«™š   -   -    @eú!-w2¿öRT`ªdÃ@eú&€IR¿öP°ò{²ÿ@N ÒDìvfÀ  P-Irr(LSB)BE300-                  17.36='ïžA†¸R<¬1A„\<¬1A‚õÃ<¬1A‚{=t¼A¨ff@¦ff   -   -    @eû˜Çâ‚A@&Ì1&éy@eû˜Çâ‚A@&Ëûµsë>¡£nDaFfÀ  M-Irr(HSB)BE310-                  17.06=¥ãA‚(ö<¬1A…<¬1A}¸<¬1A|£×=+A‹G®@š=q   	-   -    @eþ&€IR@+jJŒL˜@eþ&€IR@+jJŒL˜>t‡ýE6ÄÍE6  P-S0      BE200-                  17.76=#×
+Aƒ®<¬1A|  <¬1AváH<¬1As®=oA^áH@5¸   
+-   -    @fg ù	lÀYè>BZî@fiDg8ÀYJôðØE?¦ÙD€£3À  P-Irr(LSB)BE300-                  18.38=8QìAŠQì<¬1Aˆ  <´9XA‡×
+<´9XAˆÌÍ=Y‡Aâ(ö@¹G®   -   -    @fGE8ï5@Ðÿ—$tT@fFs×Ü@Ðå`A‰7?¡ËDµæfÀ  P-Irr(HSB)BE310-                  18.42=8QìA‹ë…<¬1A‰®<´9XA‡×
+<¬1A‡ë…='ïžA¯
+=@‘ë…   -   -    @fÙè>B[@3zdÂø7µ@fÙè>B[@3zJŒL˜?Ü]dE-yšÀ  P-Irr(LSB)RE300-                  18.49=49XA33<¬1AŠ£×<´9XA‰®<´9XAˆzá=@ƒAº  @ª\   -   -    @fn.±Ä3@0æE¡ÊÀƒ@fm\ú¬Ú@0æR½<6>óáDa†fÀ  M-dS0     BE410-                  18.41=]/A…Â<¬1A‚  <¬1A€áH<¬1Av{=+A‚zá@Š=q   -   -    @fÊÀƒo@&jOv`@fÌcñA @&j#9Àëî?V4E8ÍÀ  P-Irr(LSB)BE300-                  17.93=,1Aˆ  <¬1A†{<¬1A…®<¬1A…¸=,1A½G®@Â\   -   -    @f
+(õÂ\@+¾ÒˆÎp;@f
+($x@+¾¸Që…>èõÃE9ášÀ  P-dE      RA400-                  19.37=e`BA‘™š<´9XAŒ  <´9XA‰ë…<¬1A‡…=\)AUë…@g®   -   3876 @fOß;d@"R{²þÅm@f–R½<6@"SÐ|„µÝA$!-E2ìÍE4ášP-SBb     BE212-                  14.49=PAXQì<£×
+AS
+=<£×
+AO®=—PAMG®<ýó¶B*33A £×   -   -    @f+Iº@#Ì¿±[W?@f+Iº@#Ì²•éá±>ãn/E6išÀ  P-dS0     BE410-                  18.52=8QìAŠ(ö<¬1A‡…<¬1A†(ö<¬1A„  =¾wA[®@G®   -   -    @fŠqÞi­@')­BÃÉï@fŠqÞi­@') 'RTa>¢¶®E9¤ÍE9p P-S0      BE200-                  16.48=¥ãAw®<£×
+Ap  <£×
+Al  <£×
+AiÂ<ýó¶AŠáH@]p¤   -   -    @f©*0U¿ÒÏAò×s@f“t¼j¿ÒÔ,<žìÀ@SD¶ã3D¸éšP-dS0     BE410-                  16.24=¥ãAqÂ<£×
+Ai™š<£×
+Aep¤<£×
+Ac…<ýó¶Bë…@Ú\   -   -    @fï4Ö¡b@Ùè>BZî@fîcŠ	@Ùè>BZî>mÅÖD},ÍÀ  M-dE      BE400-                  18.63=8QìA™š<¬1AŠáH<¬1Aˆzá<¬1A…×
+=t¼A‹™š@‘™š   -   -    @fV“u@0U¨Xy=Ù@fW§†Â'@0U¨Xy=Ù?ÎÙDJ@ À  M-dE      BE400-                  18.53=8QìA®<´9XAŠQì<´9XA‡Â<´9XAˆÌÍ=#×
+A‡ë…@~¸R   -   -    @f!iDg8¿ÿÓÃa@O@f!jçÕfÏ¿ÿÓÃa@O?b{³D¿)šÀ  P-Irr(LSB)BE300-                  17.55=#×
+A†\<¬1A…33<¬1A…33<´9XAƒ®=¾wAÃ™š@Ð     -   -    @f"/ƒ{J#@2¤tSŽóM@f"-àq@2¤záG®?’¦LD|¦fDt33M-Irr(LSB)BE300-                  17.14=#×
+Aƒ
+=<¬1A€áH<¬1A~ff<¬1AxQì=+Aõp¤A(ö   -   -    @f%º^5?}@1.\‘ÑN<@f%À6âë@1.p:û~‘@7oD„VfÀ  M-Irr(LSB)BE300-                  17.90=0 ÅAˆõÃ<¬1A†zá<¬1A„ÌÍ<´9XA†£×='ïžAÛ™š@Ú=q   -   -    @f&¹õY³ÐÀ Bø7´¢4@f&¸Që…À B&€IR?Ã{JDÖ3D×ƒ3P-Sc      BE203-                  14.58=¥ãAZáH<£×
+AUp¤<£×
+AN\<£×
+APQì<ýó¶C8aHBQì   -   -    @f'¨Xy=Ù@7Öz–¼@f'§†Â&@7Öfffff?‰“CB€ DS3P-Sm      BA205-                  15.72=¥ãAmp¤<¬1AdÌÍ<£×
+Aap¤<£×
+A`  =oBÒ\B(ö   -   -    @f(¼j~ùÛ@1AuŽ!–S@f(½<64@1AuŽ!–S?
+=DæfÀ  M-Irr(HSB)BA310-                  19.01=ixÕAŽff<¬1A‰\)<´9XA„\<¬1A‰Â=På`ApQì@lÌÍ   -   -    @f)´¢3œÀGE8ï4×@f)´¢3œÀFÜ]cˆf?;DÈÓ3DÇc3P-S       RE206-                  17.75=,1A„£×<¬1A€áH<¬1A|õÃ<¬1Az\=oAÜõÃ@ÁG®   -   -    @f,$xG@.…®æ1ø¡@f,#9Àëî@.…¡ÊÀƒ>mVDULÍÀ  M-dE      BA400-                  18.75=aG®AŒ¸R<¬1A‡ë…<´9XA……<¬1A„\=#×
+A½×
+@°     -   -    @f/²-V@0K¥ãS÷Ï@f/²-V@0K¥ãS÷Ï=šÔ,D•ð À  M-Irr(LSB)BE300-                  18.83=På`AŽÌÍ<´9XA‹Â<´9XAŠ(ö=¼jA†{=¾wA„=q@n{   -   -    @f0]cˆe•@.íúCþ]@f0]cˆe•@.àÞÒˆÎ>U2D:ùšD;€ M-Irr(HSB)BE310-                  15.83=PAr¸R<£×
+Aqë…<£×
+At£×<¬1Ar=q=oAˆÌÍ@E¸    -   -    @f4†YJôñ¿á6z–¼@f4‰ 'RT¿á4Ö¡aä÷?Ó¼ÓDÛ33Dæ,ÍP-Irr(HSB)BE310-                  17.39=¾wA„\<£×
+Aƒ¸<¬1A‚Qì<¬1A€Qì=+AÄ{@ºáH   !-   -    @f7xÔýó¶@-0¾í(@f7w1Å@-0‰ 'RT?Á%Drs3D|LÍM-Irr(LSB)BE300-                  15.81=PAt(ö<£×
+Aq¸<£×
+Ao…<¬1Ao×
+=+B¸@û33   "-   -    @f8~($x@Æ$Ý/ @f8wškP±@ÆYJôðØ@9fÏE+LÍÀ  P-Irr(LSB)BE300-                  17.75=#×
+A‰
+=<¬1A†õÃ<¬1A…
+=<¬1A…Â=49XA«p¤@›…   #-   -    @f8£S&@ü£n.²@f8¤¨ÁTÊ@üÚQÎ?(ï5D¸° À  P-Sm      BE205-                  18.11='ïžA‹ë…<¬1AŠ(ö<´9XA‰Â<´9XA†=q=¥ãA«\)@˜     $-   -    @f<kP°ò|ÀüÚQÎ@f<dÂø7µÀû~ÿ—$@K×
+Dˆó3D„  P-Irr(HSB)BE310-                  16.71=¥ãA|zá<£×
+A}™š<¬1A€£×<¬1A33=PAw…@…¸   %-   -    @f@?¼@+Â@·€4n@f@@·€4n@+Áä÷eý‹@5N<Dn¹šDy¬ÍM-Irr(LSB)BE300-                  16.11=PA}Â<¬1Aw33<¬1Arff<¬1Am™š=oB((öA;33   &-   -    @fD*™0¾Àe`A‰7L@fDFs×ÜÀ_;dZ¬AƒéDÌ³3DÐFfP-Irr(LSB)BE300-                  15.29=¥ãAe¸<£×
+A`(ö<£×
+AYG®<£×
+Ag×
+=\)BŠ×
+A¥…   '-   -    @fDùÛ"ÐåÀÀƒn—@fDõÂ\)ÀÁTÉ…ðo@(D…9šÀ  M-Irr(HSB)BE310-                  14.83=PAdõÃ<£×
+Ac…<£×
+AdõÃ<£×
+AdÌÍ=oAÍ
+=@Ê\   (-   -    @fFV“u¿åfÏAò×@fFV“u¿åfÏAò×>@OD°p D®  P-Irr(HSB)BE310-                  18.20=#×
+A‹®<¬1A‹…<¬1AŒ£×<´9XAŒQì=¥ã@ß\)?à     )-   -    @fH	Þ Ò@0
+Ÿ¾vÈ´@fH
+¦L/ƒ@0
+Ÿ¾vÈ´?Q³Db³3À  M-Irr(LSB)BA300-                  19.30=q©üA’(ö<¬1AŽ  <´9XA‰×
+<¬1A‡ë…=\)A£G®@«…   *-   -    @fHÐå`A‰@—ö+jè@fHÐå`A‰@}¿HÌ>v`Eð E‘šP-edge-on RE207-                  17.42=¾wAƒp¤<£×
+A€{<¬1A|ÌÍ<¬1AyÂ=oAÞõÃ@˜õÃ   +-   -    @fIàÞÒˆÎÀEÖ8†YK@fIá°‰ 'ÀEm\ú¬Ú?C&Džð DšlÍP-Irr(HSB)BE310-                  17.06=¥ãA‚  <£×
+A…<¬1A~{<¬1A}Â=C–AE¸@J=q   ,-   -    @fJ–»™@'D›¥ãSø@fJí(Œç@'D¨ÁTÉ†?fÜ]E*x E*ÞfP-edge-on BE207-                  17.32=0 ÅA
+=<¬1Ay™š<¬1Auë…<¬1ApQì=oB‚šAB=q   --   -    @fKÒòäÀ	×süPH@fKÒòäÀ	Ö¡aä÷f?ÎìÀD´¹šÀ  P-Irr(HSB)BE310-                  17.44=#×
+A„(ö<£×
+Ap¤<¬1A€¸R<¬1A~\=C–A’ff@”(ö   .-   -    @fMÞi­BÄ@+jçÕfÏ@fMÞi­BÄ@+jçÕfÏ>n}VE  E )šP-Irr(HSB)BE310-                  16.92=¥ãA…<£×
+A
+=<¬1A}ë…<£×
+A{×
+=+A\)@ë…   /-   -    @fNqÞi­CÀ	¿åÉä@fNp:û~‘À	¿|í‘hs?„ÂøD³ó3À  P-Irr(LSB)BE300-                  18.63=H´9A…<¬1AŠQì<´9XAˆzá<´9XA‡G®=49XA¡
+=@‘ë…   0-   -    @fP?¼@0¸ÁTÉ…ð@fP64ê@0¹*0U2a@ásDtyšÀ  M-Irr(LSB)BE300-                  18.19=Y‡A†ff<¬1Aƒ×
+<¬1Ap¤<´9XAG®=#×
+Aþ  A,ÌÍ   1-   -    @fPqÞi­C@2<‘ÑN;Í@fPq²•ê@2<‘ÑN;Í>%zxE1ð E1ð P-Irr(HSB)BE310-                  17.73=8QìA„zá<¬1A€£×<¬1A}G®<¬1A{®=+A3®@Aë…   2-   -    @fQ¯·éÀuŽ!–R½@fQIº^ÀuŽ!–R½?Ý˜D®¼ÍD³¼ÍP-Irr(HSB)BE310-                  16.83=¥ãA~=q<£×
+Ayp¤<¬1Av¸R<¬1Av{=+A†õÃ@záH   3-   -    @fQ£n.±Ä?Á‚©“àß@fQ¢œwšk?Á|ÚQÎ?4ÂøDyšD@ M-S0      BE200-                  14.69=PA\zá<£×
+ATÌÍ<£×
+AQG®<£×
+AO
+=<ýó¶AâáH@ÒáH   4-   -    @fR“t¼j@:ÇË)_@fR“t¼j@;˜Çâ‚A?­}¿E# À  P-Irr(HSB)BE310-                  18.06=,1A‡
+=<¬1A„  <¬1A‚zá<¬1A
+==\)A´(ö@·®   5-   -    @fSW>«6zÀí(Œç@fSW>«6zÀŽŠqÞi­?UE“3EX P-Sc      BE203-                  15.13=PA_…<£×
+AW\)<£×
+AR¸R<£×
+AO×
+<ýó¶B˜¨öA†zá   6-   -    @fUûµsë@4p:û~‘@fUü¹#¢œ@4vÈ´9X?'8DS3Dà M-Sm      BE205-                  17.06=@ƒAy¸<¬1Ap(ö<¬1Amë…<¬1Ac®=oB¹½qAž     7-   -    @fV—Oß;@Ölô!-@fV“t¼j@Ö¡aä÷f@Ž"D©ã3À  M-Irr(LSB)BE300-                  18.91=D›¦A‘×
+<´9XA×
+<´9XAŒõÃ<¼jA‡G®=\)ALQì@|ÌÍ   8-   -    @fX}VlôÀö”Fs‚@fX}VlôÀö”Fs‚>/4×D«æfÀ  P-Irr(LSB)BE300-                  18.60=8QìA
+=<¬1AŒff<´9XA‹33<´9XAˆ¸R='ïžA.{@Fff   9-   -    @fX¦L/ƒ{?ûƒ{J#9Á@fX§æšÔ?û„M:’£?AÑNDöfD üÍP-S       BE206-                  15.98=#×
+As
+=<£×
+AnáH<£×
+Am¸<£×
+Ak…<ýó¶A«¸@¼(ö   :-   -    @f\ëC,¥?óÊÀƒn˜@f\ì¿±[W?óË’:)Çz?b°!DìIšDì©šP-SBb     BE212-                  14.38=¥ãAS\)<£×
+AK×
+<£×
+AHzá<£×
+AFff<ýó¶BÇ…B
+\)   ;-   3976 @f_ 'RTa@þ«6z‘@f_Ãa@O@ZîcŠAŸ«ŸE(vfE+3P-Sb      RE202-                  13.54=PAC
+=<£×
+A8£×<£×
+A2\<£×
+A.=q<ýó¶BèW
+Aw®   <-   -    @f`SŽóMj@¶E¡ÊÀƒ@f`T`ªdÃ@¶E¡ÊÀƒ>²óEƒ3E)šP-dS0     BE410-                  16.78=¾wAy¸<£×
+Ap  <£×
+Aj\<£×
+Ai™š<ýó¶B \A	¸   =-   -    @fd`ªdÂø@&þ\‘ÑN@fd_Ø­«Ÿ@&þ\‘ÑN>ÿ|îE/\ÍÀ  P-S       BE206-                  18.27=,1AŠ(ö<¬1A‡\)<¬1A„áH<¬1A×
+=+A_×
+@eÂ   >-   -    @fh÷eýŠÛ@³œ¾ß¤@fhõÂ\)@³œ¾ß¤>ß|îE&fÀ  P-edge-on BE207-                  18.29=,1A‹…<¬1Aˆ=q<¬1A…®<¬1A„\=¾wAØ=q@×\)   ?-   -    @fi–R½<6À~ÿ—$t@fi¦µ(À}ó¶E¡Ë@âáHD­,ÍD³yšP-Irr(HSB)BE310-                  17.48=¾wA…×
+<¬1A„zá<¬1A„(ö<¬1A‚áH=t¼Aº  @ÂáH   @-   -    @fkY³Ð|…@€IQ‚ª@fkZ…‡“Þ@€IQ‚ª>jÍŸD}YšÀ  M-dE      BE400-                  18.60=49XAŽzá<¬1A‹…<´9XAŠ{<´9XA‡ë…='ïžAë…@,ÌÍ   A-   -    @fl³g ù	@W§†Â&@fl³g ù	@W§†Â&=`Dls3À  M-dS0     BE410-                  17.57=0 ÅA®<£×
+A|  <¬1Aw®<¬1Axzá=t¼B)33@ùë…   B-   -    @fnmÅÖ8†@(`ªdÂø@fnj~ùÛ#@(¶E¡ÊÁ@›ÛõE+¡šÀ  P-S       BE206-                  17.13=,1A€ff<¬1AxÌÍ<¬1Av¸R<¬1Ar¸R=+BUzáA?33   C-   -    @fub¶®}V@//–»˜È@fuaä÷eþ@//v_Ø­¬?]/DÍÀ  M-Irr(HSB)BE310-                  19.05=aG®A(ö<¬1AŒ¸R<´9XAŠõÃ<¼jAˆ(ö=PAIG®@Vff   D-   -    @fxe+ÓÃ@­ÅÖ8†Y@fxe+ÓÃ@­«ŸU›=>}¿DÈ†fÀ  P-Irr(HSB)BE310-                  17.48=¥ãA…33<£×
+A‚áH<¬1A×
+<¬1A€¸R=oAF¸R@Y™š   E-   -    @fyb¶®}VÀº)Çy¦µ@fy_oÒóÀº)Çy¦µ?Ë¶FDÁŒÍDÁ“3P-Sm      BE205-                  15.99=¾wAs×
+<¼jAnff<Ý/AjáH<ýó¶Af{=,1B§#×A©\)   F-   -    @f|†YJôñ@+Æ¸ºÇ@f|‚@·€4@+Æ?¼@8mÆDµ  À  M-Irr(LSB)BE300-                  15.68=¥ãAmG®<£×
+Ahzá<£×
+AdõÃ<£×
+AeG®<ýó¶B¸RA'×
+   G-   -    @f~•éá°Š@5rëC,¥@f~–»˜Çã@5räŽŠqÞ?		lD÷¼ÍD÷¹šP-Irr(LSB)BE300-                  16.36=¥ãAxÌÍ<¬1As®<¬1Ap  <¬1Aj{<ýó¶BG®ABff   H-   4030 @fƒ#¢œwš¿ñšÔ,<ží@fƒ¼¿ñ-àqA8záDº£3À  P-Sa      RE201-                  12.03=PA,(ö<£×
+A"=q<£×
+Azá<£×
+AÌÍ<ýó¶Büë…Aî£×   I-   4032 @f„fffff@4n—P@f„a|ÚQ@4ñ©ûçm@.CþD¡|ÍDž©šM-Sm      BE205-                  13.86=PAMp¤<£×
+AF¸R<£×
+AB¸R<£×
+AAë…<ýó¶BnG®A†(ö   J-   -    @f†T`ªdÃÀ\]cˆe•@f†R½<6À\]cˆe•?_D½33D»¹šP-Irr(HSB)BE310-                  17.15=¥ãA‚¸R<¬1A€ff<¬1A~=q<¬1A{
+==oA…@w
+=   K-   -    @f‡y¦µ@$ÿ.Hè§@f‡xÔýó¶@$ÿoÒòå?Ù:“E' À  P-Irr(LSB)BE300-                  17.26=¾wAp¤<£×
+A~ff<¬1AxõÃ<¬1Avff=+AÜff@ö¸R   L-   4019 @f‰b¶®}V@,5›=ÈK@f‰g ù	l@,5%F
+¦L@~\’D¿ D¾œÍM-edge-on BE207-                  14.69=PA]G®<£×
+AXzá<£×
+AV=q<£×
+AS\)<ýó¶BÄp¤A3×
+   M-   -    @f‰xFÜ]¿ô¾í(Œç@f‰_oÒó¿ô½<64A1XDº£3À  P-Irr(LSB)BE300-                  14.78=PA]Â<£×
+AX  <£×
+ATÌÍ<£×
+AT  <ýó¶BH{AyÂ   N-   -    @fŠß¤?åÉ@,æ¸ºÇ@fŠÜ]cˆf@,æL/ƒ{J@
+GED˜ð D à M-Sd      BA204-                  16.85=¥ãA
+=<¬1A}¸<¬1Ayp¤<¬1Ajff<ýó¶BjÂAuë…   O-   -    @fŠ÷eýŠÛ@}Vlô!@fŠùÛ"Ðå@|PHð@kºD}³3Dv¬ÍM-Irr(HSB)BE310-                  18.35=D›¦AŒ{<¬1A‹p¤<¼jAŒ  <Ä›¦A…™š=PAQì@¸   P-   4037 @f‹%F
+¦L@*Í‘hr°!@f‹'»/ìW@*ÍOß;dZ?ým]DeLÍDi,ÍM-SBc     BE213-                  13.86=¥ãAIÂ<£×
+A@£×<£×
+A;33<£×
+A:ff<ýó¶Bîð¤B¸   Q-   -    @f‹«ŸU›=@,©ûçl‹@f‹«ŸU›=@,©ûçl‹>-BÄD¹3D¸ÖfM-S       BE206-                  15.45=PAië…<£×
+Ad(ö<£×
+Aa™š<£×
+A_×
+<ýó¶A³\)@­p¤   R-   -    @fíúCþ]@IQ‚©“@féá°‰ @Iã¼Ó?ôžíD›ð À  M-dS0     BE410-                  15.62=PAk
+=<£×
+Ae™š<£×
+AbáH<£×
+Aa™š<ýó¶B\)A33   S-   -    @fŽFÜ]d@!]¿HË’@fŽ“t¼@!]¿HË’>â‚AEŽfÀ  P-dS0     BE410-                  17.16=¥ãA‚Qì<£×
+A|£×<¬1Ax£×<¬1Avff=oA®zá@„(ö   T-   4045 @f•¢œwšk?ÿ¢3œ¾à@f•¡ÊÀƒ?ÿ ù	k¹Œ?‡U›DùœÍD÷)šP-SBb     RE212-                  13.79=¥ãADÌÍ<£×
+A9G®<£×
+A2ff<£×
+A-ë…<ýó¶BÀÑìA¦(ö   U-   4049 @f—J#9Àì@2À£×
+=q@f—BÃÉîÌ@2ÀIQ‚ª@DÌÍDQŒÍDO` M-Sm      BE205-                  14.76=¥ãA]p¤<£×
+AW
+=<£×
+AQÂ<£×
+AQÂ<ýó¶BIÌÍAW
+=   V-   -    @f˜_ö”F@o hÛŒ@f˜_Ø­«Ÿ@TÉ…ðo>ÄMD¢ŒÍÀ  M-Irr(HSB)BE310-                  17.34=¾wA‚ÌÍ<£×
+A€Qì<¬1A}Â<¬1A|ÌÍ=oAu¸@‹…   W-   -    @fš Ñ·Y@$7KÆ§ïž@fšFÜ]d@$71Å?ž.²E  À  P-edge-on BE207-                  17.57=¾wA…®<£×
+A‚=q<¬1A€õÃ<¬1A~\=oAÿG®@Ç
+=   X-   -    @fœÍžƒä&@0($x@fœË)^ž@05?|í‘?Ã…D^“3Dh¦fM-Sm      BE205-                  15.31=PAb¸R<£×
+AZ\<£×
+AV¸R<£×
+AS\)<ýó¶Aù¸A Qì   Y-   -    @f\(õÂ@!ÿ.Hè§@fY³Ð|…@!-w1Å?Ü1D™C3D™	šM-Sd      BE204-                  15.20=PAc…<£×
+A\ÌÍ<£×
+AY¸<£×
+AX  <ýó¶BN£×A#
+=   Z-   -    @fž»˜Çâ‚@0úCþ\’@fž¾í(@0ó¶E¡Ë?’×E¸ E3P-SBm     BE215-                  15.85=¾wAmp¤<£×
+Ahzá<¬1AdQì<¬1Ag33=oB…Ç®Aˆ     [-   -    @fž¼j~ùÛ@-Î_oÒ@fž½<64@-¦µ(?Ddó3D^†fM-Irr(LSB)BE300-                  17.52=0 ÅA{
+=<£×
+Ar=q<¬1Aq™š<¬1A}G®=D›¦Bž…A¼õÃ   \-   -    @f œwškQ@?åÉä@f ”FsØ@@IQ‚ª@•ý‹E»3À  P-Irr(HSB)BE310-                  17.50=0 ÅA„(ö<¬1A‚(ö<¬1A¸<¬1A€Qì=\)B,ë…A\)   ]-   4064 @f¡€4mÅÖ@2q·Xâ@f¡zxl"h@2qÑN;Í6@$  DiLÍDd` M-SB0     BE210-                  13.21=¥ãA=¸<£×
+A2\<£×
+A,£×<£×
+A*{<ýó¶CW
+Aïp¤   ^-   -    @f¡¬q²–?é®záG®@f¡«ŸU›=?é®æ1ø >ß;dE8,ÍÀ  P-Irr(HSB)BE310-                  18.06='ïžAˆÌÍ<¬1A…ë…<¬1A„{<¬1A‚\=+AB{@QG®   _-   -    @f¢Âø7´¢¿ø~($x@f¢´9Xb¿ø{²þÅm]@ÛsD¶ÜÍÀ  P-Sm      BE205-                  15.74=¥ãAs\)<¬1Ap(ö<¬1Aj\<¬1Ad  =oB„uÃA³×
+   `-   -    @f¦Iº^5?@%@ù	k¹Œ@f¦GE8ï5@%@Ñ·Xâ?’	E éšÀ  P-S       BE206-                  17.99=#×
+Aˆff<¬1A…ë…<¬1A„=q<¬1A‚\=+AÚõÃ@¦{   a-   -    @f§òäŽŠr@,ÏÒòä@f§ñA [À@,Ï·éùr?8>BDš¼ÍÀ  M-dE(N)   RA401-                  18.42=@ƒAŠáH<¬1A‡33<´9XA„Qì<¬1Aƒ\)=¥ãAÌáHA
+ff   b-   -    @fª§ï²-¿Þ¸Që…¸@fª§æšÔ¿Þ»˜Çâ‚A?2ñªD­œÍÀ  P-Irr(HSB)RE310-                  18.27='ïžA‹\)<¬1Aˆ\<¬1A†¸R<´9XA†\=t¼A4  @`     c-   -    @f«Ž!–R½¿Ò4êJŒ@f«Ž!–R½¿Ò4êJŒ>DoDžÜÍÀ  P-dE      RE400-                  19.11=49XA‘p¤<¬1A…<´9XA‹p¤<¬1A‹p¤=#×
+A%¸@=p¤   d-   -    @f«™™™™š@)Xâe@f«œ¾ß¤@)1Å?•í)D-¹šÀ  M-edge-on BA207-                  18.60=]/A‹…<¬1A‰…<´9XA†£×<¬1A…Â=¾wAìff@à     e-   -    @fµk¹Œ~(@(Åo@fµl‹C•@(©ûçl‹?x>BD²\ÍÀ  M-dE(N)   RE401-                  16.90=#×
+A€(ö<¬1Av{<¬1Arff<¬1AlõÃ=oB/záA4ÌÍ   f-   -    @f¼L˜_@2¯Ÿ¾vÉ@f¼×sü@2¯Ÿ¾vÉ?†¡bDEÆfDF` M-Irr(LSB)BE300-                  17.50=0 ÅAˆ\<¬1A…p¤<´9XA‚{<¬1A„áH=¾wAÄÌÍ@ç
+=   g-   -    @f¼šu%F@¸Që…@f¼šu%F@ì¿±[W>üžíD¥0 À  M-dE      RA400-                  19.63=¥ãTAŽ£×<¬1AŠ=q<´9XA†£×<´9XA|õÃ=+A©p¤@Ã33   h-   4116 @f¼ò{²þÅ@‡“Ý—ö+@f¼ØDÐ©@-àqAšoiD¦išÀ  M-SBc     BE213-                  13.17=PAC
+=<¬1A=G®<¬1A9p¤<´9XA3\)<ýó¶C	ŒÍB¸R   i-   -    @f½b¶®}@2{Iº^@f½b¶®}@2zû~ÿ—>Ê#:E¾fÀ  P-edge-on BE207-                  18.33=D›¦AŠ=q<¬1Aˆ(ö<¬1A‡p¤<¬1Aˆ{=0 ÅA¶áH@Žff   j-   4119 @fÁFÜ]cˆ@$Áò×s@fÁHË’:@$Áÿ.Hè§?#&DÙÜÍDÒ	šM-Sa      RE201-                  13.54=PA=¸<£×
+A2=q<£×
+A,£×<£×
+A)p¤<ýó¶C":áB …   k-   4123 @fÁ|ÚQ@_oÒó@fÁ{J#9Á@Â&€I?£¶FD ã3À  M-SBc     BE213-                  13.02=¥ãA;®<£×
+A3…<£×
+A/
+=<£×
+A,(ö<ýó¶C!{B8\)   l-   -    @fÁ™™™™š@3<žì¿±@fÁœ¾ß¤@3Iº^5??¡ÊÁEk3À  P-edge-on BE207-                  17.95=49XAˆõÃ<¬1A…
+=<¬1A„ÌÍ<¬1A…p¤=¾wB:ë…A…   m-   -    @fÂ¬1&é@C•%@fÂ«6z‘@C•%>4×DûÉšÀ  P-dS0     BE410-                  17.89=#×
+A‡Â<¬1A…p¤<¬1A„ff<¬1A‚zá=t¼AV=q@L(ö   n1   -    @fÂµÜÆ?@+^BZîc @fÂµÜÆ?@+^($x>óœE4ÍEÉšPBS0      RE200S019               16.89=¾wAx(ö<£×
+An=q<£×
+AiG®<£×
+Af=q<ýó¶AÙG®@³×
+   o-   -    @fÃ8ï4Ö¡@šu%@fÃ8ï4Ö¡@=ÈK^>qDbó3À  M-Irr(HSB)BE310-                  19.27>¤ZA‘ë…<¬1A¸<¼jAÂ<¼jA‹p¤=<jA×
+@ £×   p4   -    @fÄ4mÅÖ9@.0£×
+=q@fÄ<žì¿±@.1A [À@µÿ.DYšD3MMIrr(LSB)BE300ImIV               17.73='ïžA…®<£×
+Aƒ
+=<¬1A33<¬1A‚ÌÍ=PAÞzáA®   q-   -    @fÊŸ¾vÈ´@2ÿ4Ö¡aå@fÊ¢3œ¿@2ÿ\(õÂ@ž„E#šE ŽfP-SBc     RE213-                  15.65=¥ãAip¤<£×
+Ab{<£×
+A^=q<£×
+A]™š<ýó¶BŠLÍA¤=q   r9   -    @fÊ÷eýŠÛ@+ü(õÂ\@fÊ÷eýŠÛ@+üÚQÎ>´É†DÖVfDÖœÍMMdE(N)   RA401dE1,N              15.16=¥ãA[\)<£×
+ARff<£×
+ALQì<£×
+AJ{<ýó¶B®uÃAò\   s10  -    @fËS&Á¾@+&YJôðØ@fËS÷ÎÙ@+&Á½¥?Û@ODõ Dö MPedge-on BE207BCD:               16.80=¾wAz\<£×
+Aqë…<£×
+An{<£×
+Ai™š<ýó¶AÇ×
+@§
+=   t-   -    @fÎJŒL˜@*®záH@fÎJŒL˜@*»/ìVÖ>|í‘E	QšÀ  P-dE      RA400-                  19.54=¬1A’ff<´9XAŒ(ö<´9XA‰®<´9XAŠ  =0 ÅAp¤@œzá   u-   -    @fÎ¾ß¤?æ@)ÎHè§ç@fÎ¾ß¤?æ@)Îp:û~‘?‰#£C,™šÀ  M-Irr(LSB)BE300-                  19.18=…¸AŒzá<¬1AŠ{<´9XAˆ  <¬1Aˆff=¾wBÂ@ô(ö   v15  -    @fÏFÜ]cˆ@*Œ~($@fÏFÜ]cˆ@*™™™™š>["ÑEÌÍENfPPSc      RE203Sa?                16.62=,1At£×<£×
+Alzá<¬1Ahzá<¬1Ac…<ýó¶Bdë…A{\)   w17  -    @fÐ@·€4n@,»‹¬q³@fÐ;Í5¨X@,»ÚQÎ@<Ó[DU™šDN  MMIrr(LSB)BE300ImIV               16.50=¾wAzáH<£×
+Aw\)<¬1AuG®<¬1Arff=C–BFÂAnff   x-   -    @fÐqÞi­C@'mOß;dZ@fÐoiDg8@'m\ú¬Ùè?ƒ]ÌE"›3À  P-dE      BE400-                  17.83=<jA‡
+=<¬1Aƒp¤<¬1A‚=q<¬1A|£×=+BÂ@âáH   y21  -    @fÓµsê³@$`-à@fÓ¼@$`ƒn—?7
+=CôŒÍCò³3MMdS0     BA410dS04               16.07=¥ãAjáH<£×
+AbáH<£×
+A^\<£×
+A\ÌÍ<ýó¶BJ{A/×
+   z22  -    @fÓ?|í‘h@*WXâe,@fÓ@N¤¨Á@*WXâe,>a-wDÎ	šDÓ‰šMPIrr(HSB)BE310BCD?               17.40='ïžA×
+<¬1A|ÌÍ<¬1AxQì<¬1Aw…=oA
+=@£×   {-   -    @fÔE¡ÊÀƒ@,úÇË)_@fÔE¡ÊÀƒ@,úÇË)_>wšE
+Ø À  P-Irr(LSB)RE300-                  18.24=49XA‹™š<¬1Aˆ  <´9XA…G®<¬1Aƒp¤=C–AŸ…@Ç®   |24  -    @fÔÂ&€I@'…”¯O„@fÔÂ&€I@'…‡“Ý—ö>•¨XD¡° D¢ÍMMSa      BE201BCD                16.56=¾wAw®<£×
+Ap(ö<£×
+Al  <£×
+Aip¤<ýó¶Ašzá@‡®   }-   -    @fÔð¸»@2Ô%®æ1ù@fÔð¸»@2Ô%®æ1ù=poiE€ À  P-edge-on BE207-                  15.45=¥ãAg…<£×
+Aap¤<£×
+A^{<£×
+A[…<ýó¶BÌ”{AŽ{   ~25  4152 @fÕ:’£@0y=Ùc@fÕ hÛ‹¬@0l"h	Õ?TmÆEÑšE†fPPSc      RE203Sc(r)I.4           13.42=PAG
+=<£×
+A@Qì<£×
+A<£×<£×
+A:{<ýó¶Bn™šAv=q   -   -    @fÕ@N¤©@*]ÌcñA@fÕã¼Ó[@*íúCþ]@VmEÍÀ  P-Irr(LSB)BE300-                  18.27=,1AŠ\<¬1A‰33<¬1A‰®<´9XA‡™š=¾wA¸R@Œ(ö   €-   -    @fÖu%F@x†YJôñ@fÖ     @xï4Ö¡b?ãþ]E +3À  P-Irr(LSB)BE300-                  19.33=‹C–A33<¬1AG®<´9XA‹33<´9XA‹¸=H´9A33@     -   -    @fÖ/ƒ{J#@7êQÎ_@fÖ,<žìÀ@7êQÎ_?˜XyE€ À  P-Irr(LSB)BE300-                  18.42=,1AŒzá<¬1AŠ£×<´9XA‰p¤<´9XA‹¸=8QìA~{@[…   ‚29  -    @fÖ‡ü¹#£@.G®zá@fÖ‡ü¹#£@.G®zá>òCåÙšCçLÍMMdE(N)   RA401dE3,N              18.89=—PAŠÌÍ<¬1A……<¬1Aƒ33<¬1Aë…=PAÚ£×@ë…   ƒ30  -    @f×F
+¦L0@/äg8}¿@f×F
+¦L0@/äo hÜ?6ý"EŒÍETÍPPIrr(LSB)BE300?                  17.34=¾wA…×
+<¬1A‚¸R<¬1A€õÃ<¬1A€Qì=t¼Bp¤A×
+   „31  -    @f×œàuöý@"pbMÒñª@f×œàuöý@"pU2a|>šxlEAšEšPPS       BE206?                  16.66=¥ãAz=q<£×
+At  <£×
+Ap£×<£×
+An{<ýó¶AG®@¡ë…   …-   -    @f×Á½¥@8>vÈ´9X@f×Á½¥@8>vÈ´9X;ÞÒ‰DŸã3À  M-dE      RA400-                  19.85=Â\A£×<´9XA‹™š<´9XA‰33<´9XA†  =t¼AdQì@ˆ     †32  -    @fØ]cˆe•@(5?|í‘h@fØ]cˆe•@(5?|í‘h=·´¢DìÆfDììÍMPE       RA100E4                 15.62=¥ãAb¸R<£×
+AXÌÍ<£×
+AS®<£×
+APQì<ýó¶AÛp¤@žff   ‡-   -    @fØy=Ùc@ 
+=p£×
+@fØ~ùÛ"Ñ@ ~($x@ËûD§6fÀ  M-SBd     BE214-                  15.89=¥ãAqp¤<£×
+Al£×<¬1AiÂ<¬1Ah£×=oBŠÜ)AÓ×
+   ˆ33  -    @fÙšu%@,Œ²•éá±@fÙšu%@,Œ²•éá±=iùD•©šD”c3MMdS0(N)  RA411d:E2,N:            16.47=¥ãAp(ö<£×
+Af¸R<£×
+A`õÃ<£×
+A_…<ýó¶Añ®A\)   ‰-   -    @fÙ'»/ìW@1¡©ûçl‹@fÙ&Á½¥@1¡£n.±Ä?âEqšÀ  P-S       BE206-                  18.40=]/AŠõÃ<¬1A‡®<¬1A†Qì<¬1A…Â=#×
+AN\@\(ö   Š34  -    @fÙU›=È@+-:’£@fÙS÷ÎÙ@+,ÌÌÌÌÍ?ÔÌÍCfffC„&fMMSm      BE205Sc:                15.63=¥ãAmÂ<£×
+Ag×
+<£×
+Ad  <£×
+AaÂ<ýó¶Br\Alzá   ‹-   4158 @fÙZ…‡“Þ@4,ô!-w@fÙ[W>«6@4,ú¬Ùè>>‰ÞEfE»3P-Sc      RE203-                  14.28=PAPQì<£×
+AG
+=<£×
+AA™š<£×
+A=Â<ýó¶Bj{A_…   Œ-   -    @fÙœàuöý@6´tSŽóM@fÙ—ö+jè@6´o hÜ@ƒ{E"3À  P-edge-on BE207-                  18.85=H´9AŒ=q<¬1A‰
+=<¬1A‡p¤<¬1A„áH=PA   @‡\)   -   -    @fÚq²•ê@2¢‚@·€4@fÚq²•ê@2¢‚@·€4>t¼D¡‰šÀ  M-dE      RA400-                  17.88=<jAŒ{<¬1A†ÌÍ<´9XAƒ™š<¬1A|(ö=+AÁ®@Ë33   Ž-   -    @fÚ¨ÁTÉ†?÷àquŽ@fÚ§æšÔ?÷áG®zá?‡òåEð E¨ P-SBc     BE213-                  15.39=PAg®<£×
+AaG®<£×
+A\ÌÍ<£×
+A[\)<ýó¶Bd33Aep¤   -   -    @fÚý!ÿ.I@2?åÉ@fÚú¬Ùè>@2M:’£?¢xlE¸ E«3P-edge-on BE207-                  16.31=¾wAtõÃ<£×
+An¸R<¬1Ak×
+<¬1AmG®=oBÈ.A¨{   -   -    @fÛªÍžƒä@g¯·é@fÛ©*0U2@hÛ‹¬q@Qó¶D¡,ÍD¡šM-Sd      BE204-                  15.61=¾wAnáH<¬1Ai¸<¬1Ad  <¬1Aj\=PBŸ=qA¢Qì   ‘-   -    @fÜŸ¾vÈ´@8eýŠÚº@fÜ¢3œ¿@8eýŠÚº?r¶®EšE;3P-dS0     BE410-                  17.43=¾wA‚\<¬1A}Â<¬1Ayp¤<¬1Av¸R=oAè{@¶ff   ’-   -    @fÝ‡+@0zxl"h
+@fÝã¼Ó[@0zxl"h
+>ÜžíETÍEÍP-Sd      BE204-                  15.75=¥ãAk
+=<£×
+Adzá<£×
+Aa™š<£×
+A_®<ýó¶A·p¤@Å¸   “-   -    @fÝ`A‰7L@)òn—Oß@fÝ`A‰7L@)òn—Oß>]æ›E
+À À  P-dE      RA400-                  19.07=uÂA¸R<´9XA‹¸<´9XAˆ  <¬1A†  ='ïžA‡ë…@¦¸R   ”-   -    @fÝ—ö+jè@*d›¥ãSø@fÝ•$Ý@*do hÜ?®‡+D»,ÍÀ  M-dE      BE400-                  18.39=<jAŠáH<¬1A‡ë…<¬1A„zá<¬1A…p¤=t¼A¼Qì@½¸   •37  -    @fÞ“t¼j@*q²•ê@fÞ“t¼j@*cñA \>pØEES3EQšPPdE      RA400dE5,N              18.27=8QìAŠ\<¬1A‡®<¬1Aƒ
+=<¬1A‚=q=t¼AìÌÍA\)   –-   -    @fÞòäŽŠ@*’-V@fÞòäŽŠ@*’-V<`u÷EÍÀ  P-dE(N)   RA401-                  19.72=ÊÀƒA’áH<´9XA¸<´9XAŠ{<´9XAˆQì=PA'
+=@Fff   —-   -    @fÞ?¼@(üÓZ…‡”@fÞ<žì¿±@(üí‘hr°? A‰D'LÍÀ  M-Irr(HSB)BE310-                  18.55=]/AŒ£×<¬1A‰\)<´9XA‡…<¬1A‡\)=#×
+A†(ö@ƒ×
+   ˜-   -    @fÞ¥zxl"@1­BÃÉîÌ@fÞ¨ÁTÉ†@1­/Ÿ¾w?æ¾àEˆ À  P-Irr(LSB)BE300-                  17.83=På`A„\<¬1A¸<¬1A|  <¬1A€õÃ=@ƒAóë…AõÃ   ™-   4162 @fßIº^@8–»˜È@fßàÞÒ‰@8 Ë)^žA‹E(šE «3P-Sc      BE203-                  13.73=PAG®<£×
+A>¸R<£×
+A:=q<£×
+A6áH<ýó¶B‘33Aˆ\   š-   -    @fß.Hè§@+Ùb¶®@fß.Hè§@+æšÔ,=>—éDûã3À  M-dE      RA400-                  18.62=<jA‰ë…<¬1A…
+=<¬1A‚£×<¬1A€£×=C–AœõÃ@˜õÃ   ›-   -    @fß²-V@4$tSŽó@fß²þÅm]@4$tSŽó?o E{3E8 P-S       BE206-                  16.05=¥ãAp£×<£×
+AiÂ<£×
+Afff<£×
+AdÌÍ<ýó¶A¹®@°õÃ   œ-   -    @fßîËûµ@«6z—@fßíúCþ]@«jçÕfÏ?múDD=¬ÍÀ  M-dE      BE400-                  18.21=@ƒA‰ë…<¬1A‡33<´9XA…¸<´9XAƒ33=¥ãAÅ™š@ÌÌÍ   -   -    @fà&€IR@$ËàÞÒˆÎ@fà(õÂ\@$Ì1&éy?ŽffDÎ  À  M-edge-on BE207-                  19.19=]/A×
+<¬1AŠ\<´9XAŠ=q<¬1A‘¸=ƒoAé\)@»×
+   ž-   -    @fát¼j~ú@¾ß¤?æ@fát¼j~ú@ŠqÞi­>Æ€EÎfÀ  P-Irr(HSB)BE310-                  19.15=aG®Azá<¬1AŽ{<´9XAŒáH<Ä›¦AŒÌÍ=Y‡@õp¤@p¤   Ÿ46  -    @fáv_Ø­¬@)ÉxÔýó¶@fá{J#9Á@)ÉDg8~@+Í6D°ùšD³³3MPIrr(LSB)BA300dE3?               17.49=<jA…¸<¬1A\)<¬1A|£×<¬1AŠÌÍ?Ï|îB×
+AK33    47  4165 @fá“Ý—ö+@*~Ov_Ø®@fá’:)Çz@*~5?|í‘?irGDì#3Dè‰šMBSb      RE202Sa(r)              15.18=¥ãA_
+=<£×
+AT£×<£×
+AN=q<£×
+AJáH<ýó¶BŒ=qAŠ¸R   ¡-   -    @fáö+jçÕ?²ˆÎp:û@fáöý!ÿ.?²‚@·€4n>oOE&fEšP-Irr(HSB)BE310-                  16.69=¥ãA}G®<£×
+Az{<£×
+AxQì<¬1Av¸R=C–AX(ö@W
+=   ¢48  -    @fâ“t¼@(ùè>BZî@fâu%F@(ùè>BZî?`å`A¡™šÂTffMMSm      BA205Sd(s)/SmIII        15.39=¥ãAhQì<£×
+Ab\<£×
+A^áH<£×
+A_…=oB—
+=A®zá   £49  4168 @fâK]Ìcñ@*iã¼Ó@fâM:’£@*iùrGE?E®æE†fE
+†fPPE       RE100E2                 13.37=¥ãA;×
+<£×
+A0  <£×
+A)G®<£×
+A&{<ýó¶CÀ AÚ=q   ¤50  -    @fâ‡ü¹#£@.÷Xâe,@fâ‡ü¹#£@.÷Xâe,=ñ³D—  D™ÜÍMMdE(N)   RA401dE2,N              16.91=#×
+A}ë…<¬1AuÂ<¬1Ap£×<¬1Ajff=oBÌÍA1¸   ¥-   -    @fâùÛ"Ðå@6—eýŠÚº@fâý!ÿ.I@6—eýŠÚº?–{EÃ3À  P-Irr(LSB)BE300-                  18.73=]/Ap¤<¬1AŠff<´9XA‰G®<´9XA†{='ïžApzá@ˆõÃ   ¦52  -    @fão i@ëP°ò{³@fãö”Ft@êçÕfÏB@ (öEFfE è PPIrr(LSB)BE300Im?                18.41=<jAŒ£×<¬1A‰p¤<´9XA†áH<¬1Aˆ£×=8QìA©¸@ÒáH   §58  -    @fäPHð@(?|í‘hs@fäOv_Ø®@(?b¶®}V? ·€E	dÍE
+išMPSBb     RE212SBb(r)I-II         14.54=¥ãAR{<£×
+AJ{<£×
+AE¸<£×
+AB=q<ýó¶BÇ®AÖÌÍ   ¨61  -    @fäÑ·Xâ@Iº^5@fäÑ·Xâ@&€IR>kP±DþÖfDÿ  PPdE      RA400dE?                17.94=49XA‡
+=<¬1A‚(ö<¬1A€{<¬1A}Â=C–AÜ  A
+áH   ©-   -    @fån.±Ä3@]IQ‚©“@fån.±Ä3@]/Ÿ¾w><6EñšÀ  P-dE      BE400-                  18.87=LÌÍAë…<¬1AŠ=q<¬1Aˆ£×<´9XA‡G®=t¼A™š@ÌÍ   ª-   -    @få°‰ 'R@)†šÔ,<Ÿ@få°‰ 'R@)†¸ºÇ=¾B[DÙ° DÚ M-edge-on RE207-                  17.91=49XA…™š<¬1A®<¬1A33<¬1A|õÃ=\)Aê  @Ó×
+   «66  4178 @fæ($x@%»"Ðå`B@fæ[À6ã@%ÀA‰7KÇB(VSCÜó3C»33MMSBc     BE213SBc(s)II           12.74=PA:áH<£×
+A3×
+<£×
+A/®<£×
+A-™š<ýó¶Cck…BWff   ¬67  -    @fæu%F
+¦@+ó¶E¡ÊÁ@fæuöý!ÿ@+óÝ—ö+k?zçÕÃFÌÍÃ7  MMSBc     BE213Sc(s)pec           15.11=¥ãA`zá<£×
+AZ{<£×
+AW\)<£×
+AQp¤<ýó¶B¼³3AœõÃ   ­68  -    @fæŒç¯¸@*±Ä2ÊW¨@fæŒç¯¸@*±Ä2ÊW¨=ö+kE©šE«3PPdE(N)   RA401dE3:,N             19.92>e`BA„\<¬1A}¸<¬1Ay™š<¬1Ay¸=+AâÌÍ@òáH   ®-   -    @fç®æ1ø¡@3\žì¿±[@fç®æ1ø¡@3\¥zxl">Ñ&éE0 À  P-Irr(HSB)BE310-                  18.95=@ƒAŽÌÍ<¬1A33<´9XAŒ\<´9XAŒQì=49X@â=q?Ù™š   ¯-   -    @fçûçl‹D@1ø -à@fçûµsë@2-V?R©“E
+4ÍE	ffP-edge-on BE207-                  17.08=¾wA‚ff<¬1A}¸<¬1AxÌÍ<¬1Aup¤=oB+=qA	™š   °73  4180 @fèh	Ô•@'ÕfÏAò@fè~($x@-V“A¥üîEp EšPPSb      BE202Sb:                14.37=PAO\)<£×
+AC®<£×
+A=¸<£×
+A8Qì<ýó¶BS…A)¸   ±74  -    @fè›¥ãSø@/É*0U2a@fè -à@/É*0U2a@ záDAs3DB³3MPS       BA206BCD?               17.45=0 ÅAƒë…<¬1A×
+<¬1A{
+=<¬1A}™š=t¼BÌÍA=q   ²-   -    @féF
+¦L0@++]ÌcñA@féA [À@++6z—@i­E+3À  M-Irr(LSB)BE300-                  18.36=På`AŒzá<¬1AŠff<´9XA‰¸<´9XA‹
+==Y‡A…\)@Ÿ®   ³77  -    @fél‹C•@àªdÂø8@fém\ú¬Ú@àÞÒˆÎp?¼E0 E1šPPdE      BE400dE6?               19.02=}ó¶A‹®<¬1A‡×
+<´9XA…™š<¬1A…™š=¾wAÎ{@¶{   ´-   -    @féÒñ©ûç@+¬q²–@féÒñ©ûç@+¬q²–>$ÂøEäÍEû3M-dE      BE400-                  17.35=#×
+Aƒ™š<£×
+A€\<¬1A~¸R<¬1A|Qì=+A7×
+@'
+=   µ-   -    @fêZîcŠ@*P¾í(@fê_ö”F@*QÞi­BÄAß;DïišÀ  M-edge-on BE207-                  17.41='ïžAz¸R<£×
+AiÂ<£×
+Ab=q<£×
+A^ff<ýó¶A××
+?¹™š   ¶81  -    @fë„M:“@-‹C•%@fë$Ý/@-‹C•%?Š	E Ó3EÄÍMMSc      RE203d:Sc               15.91=¥ãAo\)<£×
+Ag®<¬1Ac×
+<£×
+Ai™š=+B‰BA´(ö   ·82  -    @fì@·€4n@$Ÿ¼@fì?¼@$Ÿ;dZ¬?²-DÉ  À  MMdE      RA400dE1                14.45=PAh  <£×
+Ag33<£×
+AeÂ<£×
+A<ÌÍ<ýó¶BN{AàÌÍ   ¸87  -    @fín.±Ä3@.èË’:*@fí|í‘hs@.è>BZîc@Í¡ËÃ™šÀ  PMIrr(LSB)BE300SmIII              15.49=PAlQì<£×
+Ag33<£×
+Abff<£×
+Ab{=oBMzáAC®   ¹-   -    @fí…ðoiD@"®æ1ø¡@fí…ðoiD@"¼£n/>­úDDè À  M-dE      RA400-                  18.44=D›¦A‹\)<¬1A‡33<´9XA„ÌÍ<´9XAƒ¸=PA«×
+@±G®   º89  4189 @fîT`ªdÃ@*ÚCþ\‘Ñ@fîM:’£@*Ùb¶®}@É‡EîfÀ  MPSBc     RE213SBc(sr)II.2        13.26=PA@ÌÍ<£×
+A8(ö<£×
+A3×
+<£×
+A0Qì<ýó¶BË×
+B ¸   »93  -    @fîn—Oß@)a–R½<6@fîoiDg8@)a‰7KÆ¨>Òn˜DnÍDR` MPIrr(LSB)BA300dE2                17.84=H´9A‡G®<¬1A„  <¬1A‚  <¬1A€ÌÍ=#×
+A±®@ÌÌÍ   ¼92  4192 @fîz–¼@-ÌcñA \@fîPHð@-ÌVÕÏªÎAŽFÜÂï™šÃ33MMSb      RE202SbII:              12.00=PA(ÌÍ<£×
+AG®<£×
+A¸R<£×
+A¸R<ýó¶C¥¯\Bƒ=q   ½-   -    @fî‡+J@8Cä%®æ2@fîƒä%®æ@8Cn.±Ä3@ÓG®Dl33DlffM-Sm      BE205-                  16.44=#×
+A|Qì<£×
+Aw…<¬1Au¸<¬1AráH=+Bs®AŽ     ¾94  4191 @fî·€4mÆ@Í¸ºÇË@fî¸Që…@Í¸ºÇË>–4E%` EfPPSa      RA201S0/a               14.93=¥ãATÌÍ<£×
+AHÌÍ<£×
+AB\<£×
+A>{<ýó¶BGQìAõÃ   ¿96  -    @fïXâe@ÑN;Í5¨@fï*™0¾@ÑN;Í5¨=üí‘E†fE‰šPPdE      RA400dE1                19.10=£×
+A‡®<¬1Aƒ\)<¬1A™š<¬1Aƒ¸=¾wA¿™š@ù™š   À97  4193 @fï&Á½¥@*Xl"h	Õ@fï%F
+¦L@*Xy=Ùc?FEšEšPPSc      RE203Sc(s)II            14.19=PAM¸<£×
+ABff<£×
+A<(ö<£×
+A8ÌÍ<ýó¶B°¨öA˜{   Á-   -    @fð.±Ä2Ê@1ælô!-@fð_oÒ @1æfffffAƒÍ6EÌÍE)šP-Sm      BE205-                  18.73>	7LAz{<£×
+Ar{<¬1AjáH<¬1AnáH=C–Bƒ×
+A„{   Â99  -    @fðHè§ç@äZ¬1@fðJŒL˜@äŽŠqÞj?¥(E±šEÙšPPSm      RE205Sa?                16.44=¾wAq¸<£×
+Ag
+=<£×
+Aa¸<£×
+A]p¤<ýó¶B,ÌÍA=q   Ã-   -    @fðâëC-?ú•$Ý/@fðã¼ÓZ†?ú“Ý—ö+k?¨DÐD †fÀ  P-dE      RA400-                  18.30=49XAŠff<¬1A‡G®<´9XA…
+=<´9XA†(ö=@ƒAäáHA)™š   Ä105 -    @fñIQ‚©“@™™™™š@fñ-w1Å@Ô,<žíAJ@¸D–¹šÀ  MMSd      BE204SBdIV              14.77=¾wAZ=q<£×
+AS…<£×
+AP  <£×
+AMp¤=oB½\B
+{   Å-   -    @fñ›=ÈK@)ò{²þÅ@fñœàuöý@)ØDÐ©?„(öDS3À  M-Irr(HSB)BE310-                  18.29=TýôAˆzá<¬1A…®<¬1A„ff<¬1Aƒp¤=¥ãA£G®@šáH   Æ-   -    @fñÏªÍž„@!Ðò{²þÅ@fñ×
+=p¤@!Ñ²•éâ@DüPDúfÀ  P-Sm      BE205-                  18.16=8QìAŒ{<´9XAŠÌÍ<¼jAŠÌÍ<Ä›¦AŒff=uÂAÅ¸@Ë33   Ç109 -    @fñìVÕÏ«@+éá°‰ @fñìVÕÏ«@+öý!ÿ.>¾ ÒD¢šD£P MMdE(N)   RA401dE3,N              16.75=#×
+A€\<¬1Avff<¬1ApõÃ<¬1Aq¸=oBõÃA5Â   È-   -    @fò§æšÔ@*çE8ï4×@fò¦L/ƒ{@*çRT`ªe?1E+3À  P-dE      BE400-                  18.97=Ÿ¾wAŒ\<¬1A‡p¤<¬1A……<¬1Aƒ×
+=\)AÇG®@Ýp¤   É110 -    @fòõÂ\)@-õ'»0@fòõÂ\)@-õ*™0¾>,¥Â·™šÀ  MMdE      RA400dE2:               19.69=Ðå`AŠõÃ<¬1A†zá<¬1A„£×<¬1A~áH=C–B\A,ÌÍ   Ê-   -    @fó#¢œwš@Ù‡+@fó!ÿ.Hé@ŠqÞi­?¹ùE“3À  P-edge-on RE207-                  17.39=0 ÅA€áH<¬1AxÌÍ<¬1AtQì<¬1Ao\)=oBáHA õÃ   Ë-   -    @fó¿HË’@¢MÒñ©ü@fóÀëíúD@¢h	Ô•?Hy>DòÙšÀ  P-Irr(LSB)BE300-                  17.73=49XA„{<¬1A€¸R<¬1A33<¬1A‰®=%B×
+@ë×
+   Ì113 -    @fôfffff@(4Ö¡aä÷@fôdÂø7µ@(4Ö¡aä÷?
+QEÎfEÈ MPIrr(LSB)BE300?                  18.56=q©üA‰33<¬1Aˆff<´9XA†{<¬1A~=q=+AµG®@ð£×   Í115 -    @fô¡aä÷f@'·ö+jçÕ@fô¡aä÷f@'¸7´¢3œ?áo D¬ùšDªã3MMdE(N)   RA401dE5                17.26=0 ÅA‚£×<¬1A|zá<¬1Aup¤<¬1As
+==+B?(öA>áH   Î117 -    @fôÂ&€I@"f?¼@fôÂ&€I@"fL/ƒ{J> ÅD»,ÍDß‰šMPIrr(LSB)BE300Im?                17.28='ïžAƒG®<¬1A×
+<¬1A€Qì<¬1A×
+=\)AÎff@Öff   Ï119 -    @fõö”Ft@) uöý!ÿ@fôì¿±[W@)Ÿ±[W>«AF¬ÚDfÀ  MMSm      BE205Sc                 16.10=¾wAu¸<£×
+Ao33<¬1Am™š<¬1Aqp¤=+BžG®A—™š   Ð120 4197 @fõ&éxÔþ@9õY³Ð}@fõ/ìVÕÐ@<£n.²A•E LÍE PMSc      BE203Scd(on_edge)       14.06=PAQG®<£×
+AJff<£×
+AFff<£×
+AC…<ýó¶Bá\A¥×
+   Ñ-   -    @fõ½¥œà@%ò{²þÅ@fõ¼ÓZ…ˆ@%ò{²þÅ>ŠÍŸEð À  M-Irr(HSB)BE310-                  18.75=@ƒAÂ<¬1AŒáH<´9XAŠ  <´9XAˆáH=PA<(ö@G
+=   Ò122 4200 @fõåÉä@(\„µÜÆ?@fõåÉä@(\‘ÑN;Í>ŽóEÎfE˜ MPS0      RA200S014               15.18=¥ãAYp¤<£×
+AMÂ<£×
+AG×
+<£×
+AD(ö<ýó¶B_\AG®   Ó-   -    @fõðoiDg@)”Fs×Ü@fõò×s@)”SŽóMj?A:“E.fÀ  M-Irr(HSB)BE310-                  18.63=D›¦AŽÌÍ<´9XA‹G®<´9XAŠff<´9XAˆQì=49XAmp¤@|ÌÍ   Ô-   -    @fõûçl‹D@ž5?|í‘@fõûµsë@ž5?|í‘>w1E À  P-dE      RA400-                  18.82=På`AŒ\<¬1A‡Â<¬1A…G®<¬1A‚ÌÍ=C–A>¸R@UÂ   Õ-   -    @fö¤¨ÁTÊ@1¸ð¹@fö¢3œ¿@1¸bMÒò?Š~úEÃ3EÁšP-edge-on BE207-                  17.23='ïžA€áH<£×
+Az=q<¬1Auë…<¬1Arff=oA¥G®@‡
+=   Ö-   -    @f÷!ÿ.Hé@#W
+=p£×@f÷#¢œwš@#W
+=p£×>ÂZîDÔŒÍÀ  M-Irr(HSB)BE310-                  18.54=LÌÍAŒ(ö<¬1A‰…<¬1Aˆzá<´9XAˆÌÍ=¥ãAw33@ZáH   ×126 -    @f÷\(õÂ@*ë¹Œ~($@f÷\(õÂ@*ì<žì¿±@]·CŠÌÍC&fMMSBd     BE214SBd                15.45=¥ãAhQì<£×
+Ab=q<¬1A]™š<£×
+A]Â<ýó¶B°™šAÔáH   Ø-   -    @f÷ŽóMj@4å¼£n/@f÷ŽóMj@4åµsê³h>`'RDis3DiyšM-edge-on BE207-                  16.86=#×
+A~ff<£×
+Aw33<¬1AuG®<¬1Ayp¤=C–B=
+=AÂ   Ù-   -    @f÷½¥œà@‰…ðoiD@f÷¼£n/@‰ 'RTa?¹$ES3À  P-dE      RA400-                  19.91=ùÛ#A  <¬1A‹\)<´9XAˆ=q<¬1A†£×=#×
+A„õÃ@ƒ×
+   Ú127 -    @f÷Ð|„µÝ@'ºxl"h
+@f÷Ð|„µÝ@'ºQÎ_?—Á¾D¬s3À  MMdE      RA400dE0                18.32=aG®Aˆ(ö<¬1A…¸<¬1A‚=q<¬1Aƒ®=¾wBÂA$(ö   Û130 -    @fø‡ü¹#£@#ä÷eý‹@føˆÎp:û@#ä÷eý‹>d¨ÁE
+ŽfEAšPPIrr(HSB)BE310BCD?               17.59=,1A†Qì<¬1A„  <¬1A‚£×<¬1A‚ff=t¼A•…@•Â   Ü131 -    @fø–»˜Çã@,Ù‡+@fø—Oß;@,Ù‡+>ç“ÞEP EØ MPSd      RE204Sc                 15.40=PAaë…<£×
+AW®<£×
+AR=q<£×
+ANff<ýó¶B¤šAxÌÍ   Ý135 -    @føè§æ›@(Ë’:*@føå`A‰7@(Œç¯¸?µ(EX À  PMS       BE206Spec/BCD           15.82=¥ãAh  <£×
+A]™š<£×
+AW®<£×
+AS×
+<ýó¶BõÃA¸R   Þ137 -    @fù#¢œwš@-ñ©ûçl‹@fù#¢œwš@-ñœàuöý>ºxlD“c3D”fMPdE      RA400?                  18.17=49XA‡™š<¬1A‚ÌÍ<¬1A€  <¬1A{33=+AÄõÃ@É™š   ß140 -    @fù­BÃÉï@,Ý¥œàv@fù¬q²–@,Ý¥œàv>4×DyYšDxyšMMS0      RA200S01/24             15.62=¥ãAb{<£×
+AW…<£×
+AQ™š<£×
+ANff<ýó¶BõÃAõÃ   à-   4204 @fùýŠÚ¹õ@4¨­«ŸU›@fùí(Œç@4¨šu%F@Ù—$D\` À  M-SBc     BE213-                  13.42=¥ãAIë…<£×
+AC…<£×
+A@(ö<£×
+A?®<ýó¶C nBSÂ   á143 -    @fú1ø .@*òn—Oß@fú64ê@*ò:)Çy§@,¥C¼ÌÍC»¦fMMedge-on RE207Sc(on_edge):       16.86=¾wAw…<£×
+Ao…<£×
+Ak®<£×
+Ag\)<ýó¶BV\A!ë…   â145 4206 @fú>BZîc@*cñA \@fú=p£×
+@*Iº^5??B¶®D1  D/¦fMMSc      RE203Sc(s)              13.79=PAIÂ<£×
+A@zá<£×
+A;33<£×
+A8zá<ýó¶CCÅBáH   ã-   -    @fúHè§ç@’£S&@fúHè§ç@’£S&=D2ÊE”ÍÀ  P-dE      RA400-                  18.74=D›¦A‹ë…<´9XA†áH<¬1A„ÌÍ<¬1A„{=¥ãA™×
+@‹…   ä144 -    @fúqÞi­C@C•%@fúqÞi­C@)^ž	=¾ß¤Düc3Dü™šPMIrr(HSB)BE310BCD                15.49=PAn{<£×
+AjáH<£×
+Ak\)<£×
+Ai™š<ýó¶A_\)@?\)   å-   -    @fúŒL˜_@kíúCþ]@fú†YJôñ@kC,¥z@7…DªÍÀ  M-dE      BE400-                  18.62=D›¦Aë…<¬1A‹
+=<´9XAˆ¸R<´9XA‰Â=H´9AuÂ@s33   æ-   -    @fû¤?åÉ@%YJôðØ@fû¤?åÉ@%YJôðØ>ra|D»,ÍÀ  M-Irr(HSB)BE310-                  18.53='ïžAŒff<¬1AŠzá<¬1Aˆ\<¬1A‡p¤=C–A1¸@JáH   ç152 4207 @füIº^5@#+’:)Çz@fü4êK@#+xFÜ]@òåDyšDšMMedge-on RE207Scd(on_edge)       14.57=PAR{<£×
+AF\<£×
+A@(ö<£×
+A<  <ýó¶B‚ë…Az=q   è159 -    @fý0¾í)@ ‘©ûçl‹@fý5¨Xy>@ ¾í(@Û÷E"“3À  PMIrr(HSB)BE310ImIII              16.48=¥ãA|(ö<¬1Ax£×<¬1AuG®<¬1Ap£×=+B™šA'®   é157 4208 @fý=ÈK^@+Íí(Œç@fýƒ{J#:@+Í\ú¬ÙèAôåþÃÌÍÂ¢  MMSc      BE203Sc(s)II-III        12.81=PA8Qì<£×
+A.¸R<£×
+A)p¤<£×
+A%G®<ýó¶BØÌÍAí33   ê158 -    @fýY³Ð|…@.S&Â@fýXbMÓ@.Ðå`A‰?Ô%¯D†0 D†ƒ3MMdE(N)   RA401dE3,N              17.49=<jA~¸R<¬1As…<¬1Amp¤<¬1AiÂ=+BTp¤A‚=q   ë168 -    @fÿ,¥zxl@,ç¯·é@fÿ,¥zxl@,¿±[W??škQDE33D*  MMdE      RA400dE2orImIV          18.41=8QìAˆff<¬1A„  <¬1Ap¤<¬1A€\=C–B¸RA"áH   ì167 4216 @fÿ9Àëíú@*LL˜_@fÿeýŠÚº@*SŽóMjB_=qÂ—ÌÍÀ  MMSb      RE202Sb(s)              12.23=PA(Qì<£×
+A¸R<£×
+AáH<£×
+A=q<ýó¶CnB%®   í170 -    @fÿƒ{J#:@,Ý¿HË’@fÿ‚©“á@,Ý²-V>ƒ{JD¬ã3D°ƒ3MMdS0     BE410dS0pec:            15.67=¾wAe¸<£×
+A[…<£×
+AUG®<£×
+AS\)<ýó¶B Š=Aµ®   î173 -    @g í(Œç@ g“Ý—ö+@g í(Œç@ g“Ý—ö+=éDgD1³3D1™šMMdS0     BA410dS01?              16.39=¾wAmG®<£×
+AdQì<£×
+A_…<£×
+A_
+=<ýó¶B7\AZ\   ï172 -    @g bMÒò@šu%F@g Iº^5@šŸ¾vÈ´@+t¼E
+»3E PPIrr(HSB)BE310BCD:               15.75=PAl(ö<£×
+Ag33<£×
+AdQì<£×
+Aaë…<ýó¶B5ffA õÃ   ð178 -    @g5¨Xy>@)aò×s@g5¨Xy>@)aò×s=·éD‰IšD‰öfMMdE(N)   RA401dE5,N              16.74=#×
+Av=q<£×
+Al  <£×
+Af{<£×
+Ag33=oB¸RA\)   ñ-   -    @gVlô!@.?HË’:@gXbMÓ@.?U›=È?#,¥D€ À  M-dE      RA400-                  18.86=}ó¶A‹™š<¬1A‡\)<¬1A„ÌÍ<¬1A„  =#×
+A­®@³…   ò179 -    @gŠ	Þ@&¸†YJôñ@g‰7KÆ¨@&¸†YJôñ>ÁaåE £3E#“3PMdE      RA400dE3                19.29=‹C–A’  <¼jA\)<¼jAŠáH<¼jAë…=q©üA„zá@·®   ó-   -    @g²þÅm]@Òñ©ûçm@g³Ð|„¶@Òñ©ûçm>Ä›¦EÉšÀ  P-Irr(LSB)BE300-                  18.91=ÀƒAŒ¸R<´9XAˆ£×<Ä›¦A„Qì<´9XAƒ™š=<jA™™š@ª=q   ô180 -    @g¼ÓZ…ˆ@·€4mÅÖ@g¼ÓZ…ˆ@·eýŠÚº>G“ÞEùšEéšPBdS0     BE410S0pec              16.64='ïžAyë…<¬1Ap(ö<¬1AjáH<¬1Ah  =+B™šA×
+   õ181 -    @gô‡ü¹$@+,1&éy@gò×s@+,VÕÏªÎ@‡”ÃÌÍÃÌÍMPIrr(HSB)BE310dE7?,N?            17.68=<jAˆ\<¬1A„£×<¬1A‚(ö<¬1Aƒ¸=\)AÚ{@àõÃ   ö183 -    @gIº^5@,|C,¥zx@gIº^5@,{ô‡ü¹$@
+§ðC“ŒÍC“™šMPIrr(LSB)RE300dE1?               18.92=ixÕAŽzá<´9XA‰®<´9XA‰™š<¼jA‡33=,1A¬zá@×\)   ÷-   -    @g¿±[W?@-ŒcñA \@g¿±[W?@-Œ<žì¿±?€HD` À  M-Irr(HSB)BE310-                  18.93=LÌÍA\)<´9XAŒÌÍ<¼jA‹p¤<¼jAŠzá=<jAG×
+@ƒ33   ø-   -    @gP°ò{³@ó×Ûôˆ@gQ‚©“@óœ¾ß¤>)ûçE
+h À  P-dE      RA400-                  19.02=Y‡A“\)<´9XAŽ(ö<¼jAŒ  <¼jAŠ(ö='ïžAF=q@lÌÍ   ù-   -    @g›=ÈK@5Â\(ö@g˜Çâ‚A@5Y³Ð|…?ìtTDü° À  P-Irr(HSB)BE310-                  18.27='ïžAŽQì<¬1A™š<¼jA®<¼jAŒQì=D›¦AN¸R@z=q   ú200 -    @g~($x@*-àq@g~($x@*-àq=bëA„  A„  MMdS0(N)  RA411dE2,N              16.27=#×
+Al£×<£×
+Ab¸R<£×
+A\£×<£×
+AY¸<ýó¶B 33A4õÃ   û199 4224 @go hÜ@ØüPHð@go hÜ@Ù0¾í)?7Á¾E"p E"ÎfPPSa      RE201Sa                 13.99=¥ãAEp¤<£×
+A8(ö<£×
+A1G®<£×
+A,zá<ýó¶Bß\)A¥
+=   ü-   -    @gŠqÞi­@$i 'RTa@g‰ 'RT@$i 'RTa>OE~fÀ  M-Irr(HSB)BE310-                  18.33=0 ÅA‹ë…<¬1A‰×
+<¬1AˆõÃ<¬1Aˆ{=#×
+A
+=@™š   ý201 -    @g° Ä›¦@*™0¾í@g±Ä2ÊX@*³g ù	?<6E#3E!šPPdE      RA400?                  18.80=%AŒõÃ<¬1A‡ë…<´9XA……<´9XA€¸R=+Aà{@Îff   þ-   -    @g'»/ìW¿÷9ÀëíúD@g(Œç°¿÷:û~ÿ—?†ŠrD_™šÀ  M-Irr(LSB)BE300-                  17.53=,1A„{<¬1AG®<¬1A€(ö<¬1Aƒ33=49XAóë…Ap¤   ÿ-   -    @gÄ2ÊW¨@8·ï²-@gÄ2ÊW¨@8·ï²->—éDyšÀ  M-dE      BA400-                  18.77=®{A†  <¬1A
+=<¬1A…<¬1A®=PB4\)Ao\)   207 -    @g_Ø­«Ÿ@ 0¾í)@gcŠ	@ ‡+?¬jE!›3E!ŒÍPPIrr(HSB)BE310BCD?               17.47=¾wA†õÃ<¬1A…33<¬1A…¸<¬1A„Qì=\)A8ÌÍ@%¸  -   -    @g©“àß@+Iº^5@g£S&@+e+ÓÃ@/v`Â®™šÀ  M-Irr(HSB)BE310-                  18.76=e`BAŽ(ö<¬1A‹×
+<´9XAŠáH<´9XAŠõÃ=8QìA:=q@tzá  -   -    @g¯O„M@süPH@g®}Vlô@s33333?E	ó3À  P-dE      RA400-                  20.72>`A‰A’(ö<¬1AŽzá<¼jA‹G®<¼jA‘®=ë…Až(ö@¥¸  -   -    @g¿±[W?@2VÕÏªÍŸ@g¿±[W?@2VÕÏªÍŸ>	7LD{s3À  M-dE(N)   RA401-                  18.13=8QìAŽ(ö<¬1AŠff<´9XA†Qì<¬1A†\=0 ÅA¥G®@Ö{  209 -    @gÿ—$tT@-y¦µ@gû~ÿ—@-y¦µ?Ùä÷D§IšÀ  MMdS0     BE410dS0?               16.16=¾wAnáH<£×
+AdÌÍ<£×
+A`(ö<£×
+A\ÌÍ<ýó¶Bs¸A>=q  213 -    @gxÔýó¶@+@A‰7KÇ@gxFÜ]@+@4mÅÖ9?	ÇzÃ&šÃ  MMSb      RE202dS?/BCD?           15.46=¥ãAdQì<£×
+A[\)<£×
+AV\<£×
+AS…<ýó¶AÙ
+=@ï
+=  215 -    @gÅo @(†éxÔýô@gÅo @(†éxÔýô>%ý‹E¦fE¶fMMdE      RA400dE4                18.48=På`AŽ=q<¬1AŠÌÍ<´9XA‡p¤<¬1A…p¤=#×
+A”(ö@Ÿ\)  216 -    @g%®æ1ù@"Ð°ò{²ÿ@g%®æ1ù@"Ð°ò{²ÿ=ú¬ÚD ÍD FfMMdE(N)   RA401dE5pec,N           16.40='ïžAp(ö<£×
+Ag
+=<£×
+Aa¸<£×
+A^=q<ýó¶B®A%G®  217 -    @g-à@$ÃÉîËû@g-à@$Ðå`A‰>Ü(öD—–fÀ  MMIrr(LSB)BE300ImIV-V:            16.31=¾wAyG®<£×
+Axzá<¬1As×
+<¬1Ao33=+BÖffAÑG®  	218 -    @g¸Që…@(”9XbN@g½<64@(”`ªdÂø@ 7CÉ  CÉ  MMdS0     BE410dS08,N:            16.03=¥ãAmG®<£×
+AbáH<£×
+A]¸<£×
+AYp¤<ýó¶B„záA`zá  
+-   -    @gô!-w@ïiDg8@gô!-w@ïƒ{J#:>Ç»0E.fÀ  P-dE      RA400-                  19.47=È´9A‹®<¬1Aˆff<´9XA…
+=<¬1A†ÌÍ=Y‡A©×
+@ÉG®  220 4233 @g	$Ý/@HË’:@g	$Ý/@b¶®}V>ï iE!šÀ  PPSB0     RE210SB016pec           14.31=¥ãAHÌÍ<£×
+A;×
+<£×
+A4õÃ<£×
+A0(ö<ýó¶B›³3A1p¤  221 4234 @g	33333@u%F
+¦L@g	„M;@uY³Ð|…A„qE Ã3Dý‰šPPSBc     BE213SBcIII.4           14.20=PAQ™š<£×
+AJff<£×
+AF¸R<£×
+AC…<ýó¶B[QìAŒQì  224 -    @g	=ÈK^@(èK]Ìcñ@g	=ÈK^@(èr° Äœ?£&EôÍÀ  MBedge-on RE207Scd(on_edge)       15.93=¥ãAk…<£×
+AbáH<£×
+A]Â<£×
+AZ\<ýó¶B‰Ü)Alzá  222 4235 @g	Q‚©“@Ä“t¼j@g	Q‚©“@Ä2ÊW§‡>¸y>EšE»3PPSa      RE201Sa                 13.89=PAB=q<£×
+A5p¤<£×
+A.¸R<£×
+A*{<ýó¶Cc×A®Qì  223 -    @g	m\ú¬Ú@º)Çy¦µ@g	m\ú¬Ú@º)Çy¦µ=ŽVEyšEx PPIrr(HSB)BE310BCD?               17.22=#×
+A‚Qì<¬1A}Â<¬1Ayë…<¬1Av¸R=oA
+=@g
+=  226 4237 @g	Š	Þ@.¥®æ1ø¡@g	…ðoiD@.¥ãS÷ÎÙ@šDXìÍDXæfMMSc      RE203Sc(r)II.8          13.53=PAB{<£×
+A7
+=<£×
+A1¸<£×
+A,£×<ýó¶BªÑìA§33  227 -    @g	ò×s@!â‚@·€4@g	ï²-@!âh	Ô•?qDºp D»ÍMMdE(N)   RA401dE5,N              15.67=¥ãAk®<£×
+AdQì<¬1A`  <£×
+A[®<ýó¶B€ A•33  -   4239 @g	þ\‘ÑN@0ˆFÜ]d@g	þ\‘ÑN@0ˆFÜ]d>0:ûDd  Dk  M-dS0     RA410-                  14.85=¥ãAVff<£×
+AK…<£×
+AEë…<£×
+AB¸R<ýó¶Bc\A(õÃ  230 -    @g
+žì¿±[@'ãS&Â@g
+žì¿±[@'ãn—P>u%D²¼ÍD²Ã3MMdE(N)   RA401dE4:,N:            16.98=,1Ax(ö<£×
+Amë…<¬1Ag\)<£×
+Af¸R<ýó¶Aþ=qA	¸  -   -    @g
+ô!-w@·1Å@g
+÷eýŠÛ@·€4mÅÖ?ôµÝEvfÀ  P-Irr(LSB)BE300-                  17.94=,1Aˆff<¬1A„ff<¬1A‚zá<¬1A†ÌÍ=8QìAñ™š@ýÂ  234 4223 @gp£×
+=@Â\(õÃ@gp£×
+=@Â©“àß>™#£EDÍEÈ PPSBa     RE211Sa                 13.94=PAH(ö<£×
+A<(ö<£×
+A5G®<£×
+A0£×<ýó¶Bák…A¼{  235 -    @gŠ	Þ@+ye+ÓÃa@gŠ	Þ@+yXbMÓ>ÈšD¬ã3D­,ÍMMdE(N)   RA401dE0:,N             18.17=49XA…G®<¬1A€ÌÍ<¬1A{33<£×
+A|£×=oAõp¤Ab=q  -   -    @g¢œwšk@1¦‡+J@g¢œwšk@1¦‡+J<`u÷Do&fD_¦fM-dS0     RA410-                  15.82=¾wAd£×<£×
+AYë…<£×
+AT  <£×
+APQì<ýó¶Aí…@Æ{  -   -    @g¾vÈ´9@)ÝVlô!@g½¥œà@)ÝVlô!>úxlE¾fÀ  M-S       BE206-                  17.87='ïžA‡™š<¬1A…×
+<¬1A„õÃ<¬1AƒÂ=C–AŒ\@™š  236 -    @gÛô‡ü¹@!Ë)^ž@gÛô‡ü¹@!Ë)^ž=ç8D° D°öfMMdE      RA400dE6                17.31=49XA~=q<£×
+AuÂ<¬1Ao\)<¬1AlQì=oB)ÂA®  241 -    @gË’:*@(Æ§ï²-@gË’:*@(Æµ'»>zCþÃ€ Ã$šMMSm      BE205Sd(on_edge)        15.21=PAhõÃ<£×
+Ae™š<£×
+AdõÃ<£×
+A`ÌÍ<ýó¶B»ÑìA—p¤  -   -    @g\(õÃ@6Š^5?|î@gˆÎp:û@6ŠCþ\‘Ñ@1ÑNCÌffCÌ&fP-edge-on RE207-                  14.63=¥ãAW®<£×
+AP(ö<£×
+AK…<£×
+AHõÃ<ýó¶Cjð¤B-¸  -   -    @gb¶®}@{˜Çâ‚A@g€4mÅÖ@{²þÅm]>ÊÍŸE%AšE%s3P-dS0     RA410-                  17.65=0 ÅA‚(ö<¬1AyG®<¬1As×
+<¬1ApÌÍ<ýó¶A®=q@Š=q  -   -    @g÷ÎÙ‡@T•*™1@g÷ÎÙ‡@T¯O„M>.c EÉšÀ  P-dE(N)   RA401-                  18.44=LÌÍAˆ\<¬1A„  <¬1Ap¤<¬1A€¸R=C–AŠzá@¢=q  -   -    @g!–R½<@Ž¾ß¤?æ@g"h	Ô•@Ž¾ß¤?æ>Ž—E:^fÀ  P-dE      RA400-                  18.32=<jA‰×
+<¬1A†  <¬1Aƒ®<¬1Aƒ…=t¼Až(ö@ª=q  -   -    @g7´¢3œ@½¥œà@g6âëC@½¥œà>g»0Dû¦fÀ  P-dE      RA400-                  19.18=%A×
+<¬1A‹
+=<´9XAˆ\<¬1AŒzá=Y‡A‚Qì@|(ö   256 -    @gOv_Ø®@éûçl‹D@gN¤¨ÁU@éûçl‹D>êŒEÈ À  PBedge-on RE207S(on_edge)         17.28=#×
+A{®<£×
+Ap£×<£×
+Aj{<£×
+Ag…<ýó¶Aêff@Æff  !261 -    @g$Ý/@*Zxl"h
+@g$Ý/@*Zxl"h
+>{~‘DÐ¹šDÐ)šMMdE      RA400dE2                17.65=@ƒA€=q<¬1Aw×
+<¬1Ap£×<¬1An¸R=oB$=qA4ÌÍ  "260 -    @gœàu÷@]cˆe•@gàÞÒ‰@¥ãS÷Ï@e­CDØVfDÞ	šPMIrr(LSB)BE300ImIV               17.69=49XA…G®<¬1A®<¬1A|  <¬1A~\=¥ãB!\A@zá  #-   -    @gk¹Œ~(@sg ù	l@gk¹Œ~(@sg ù	l>P-àEQšÀ  P-dS0     BE410-                  17.75=0 ÅA„{<¬1A~\<¬1Ayë…<¬1Av¸R=oAû¸@ÒáH  $266 4249 @gë…¸R@d÷eýŠÛ@gë…¸R@d÷eýŠÛ>+ŸVE#X E#«3PBE       RA100S010               15.79=¾wAc\)<£×
+AW×
+<£×
+AQÂ<£×
+AM™š<ýó¶B¸RA£×  %267 4241 @g¼£n@cˆe”¯@gü¹#¢œ@æšÔ,=@†üPD=³3D7` MPSBc     BE213SBbc(s)I-II        14.51=¥ãATÌÍ<£×
+AM™š<£×
+AJ{<£×
+AG33<ýó¶Bª™šAù×
+  &-   -    @g“t¼j@-£n.±Ä@gÿ—$t@-|ÚQ?­Ï«DÇ³3À  M-Irr(LSB)BE300-                  18.01=,1A‡Â<¬1A„ff<¬1A‚zá<¬1A…=¾wAº  @Ìzá  '-   -    @g§æšÔ@û²þÅm]@g§æšÔ@û²þÅm]=ÖE^fÀ  P-dE      RA400-                  19.63=´9XA“¸<´9XAŽzá<¼jAŒ  <´9XAˆáH='ïžAk\)@^¸R  (270 -    @gè§æ›@¼í‘hr°@gè§æ›@¼í‘hr°=ï²E  E|ÍPBSa      RE201S03orSa            16.43=¾wAo×
+<£×
+Ad(ö<£×
+A^=q<£×
+AZáH<ýó¶B  A(ö  )274 -    @gþÅm\û@¸ -à@gõÂ\)@¸ï4Ö¡b@ƒ¼Dê–fDÌ` PPIrr(HSB)BE310BCD?               18.25=H´9Aˆ¸R<¬1A†\<´9XA„áH<´9XAƒ33=t¼AðÌÍ@Õp¤  *-   -    @gOß;d@”¼£@gŒ~($@“÷ÎÙ‡?"äE‘šÀ  P-Irr(LSB)BE300-                  18.03=49XA„£×<¬1A€áH<¬1A}¸<¬1A{\)=C–B	
+=A×
+  +278 -    @gë…¸R@jJŒL˜@gìVÕÏ«@jOv`? ŽE!±šE!,ÍPPdS0(N)  BE411dS0,Npec           16.57='ïžApzá<£×
+Aeë…<£×
+A`Qì<£×
+A]¸<ýó¶BõÃAp¤  ,281 -    @g
+¦L/ƒ@+—$tS@gxFÜ@+—$tS?¥ãCr™šCr³3MMdS0     BE410dS0orBCD           16.42=¥ãAxÌÍ<¬1Ao×
+<¬1Ak33<£×
+AhÌÍ=oB,™šAEp¤  -282 -    @gcñA \@œC,¥zx@gcñA \@›ÚQÎ?Ë¬qDûÓ3À  PPIrr(LSB)BE300dE5?               18.54=D›¦A‹¸<¬1AˆõÃ<´9XA‡p¤<´9XA„¸R=\)A³33@Õp¤  .-   -    @gfffff@ƒn—P@ge”¯O@ƒ,¥zxl>¨ÛŒE'ìÍÀ  P-Irr(HSB)BE310-                  17.52=¾wA„\<¬1A\)<¬1A…<¬1A33=+AS33@>¸R  /-   -    @g³g ù	@wškP°ò@g³g ù	@wškP°ò>9	lE'8 À  P-dE      RA400-                  18.93?ÃSøAŽõÃ>VAŠzá=ýó¶A‡¸=Û"ÑA„(ö>ÐbNA•®@‰ë…  0-   -    @g¾ß¤?æ@j0U2a|@g¾í(@jJŒL˜>É­CE6fÀ  P-dS0(N)  RA411-                  18.09=LÌÍA†Qì<¬1Ap¤<¬1A~ff<¬1A{33=C–Aö£×@Ó…  1286 -    @gÀ6âë@v_Ø­«Ÿ@g¾vÈ´9@vz–¼?,ôDå<ÍDãìÍPPIrr(HSB)BE310ImIII?             17.49=#×
+AƒG®<£×
+A€(ö<¬1A|zá<¬1As×
+=oA¾ff@¿®  2-   -    @gÆ§ï²@Mí(Œç@gÇy¦µ@Mí(Œç=ñ©üE®fÀ  P-dE      RA400-                  20.88>‰7A‘™š<´9XA
+=<¼jAŠQì<¬1AŒ{=På`A¥p¤@˜õÃ  3287 -    @gÍ5¨Xy@ŸŠ	Þ@gÍ5¨Xy@ŸŠ	Þ;°ò|E´ÍE¶fPPdE(N)   RA401dE4,N:             17.47=0 ÅA€ÌÍ<¬1Aw
+=<¬1Aqp¤<¬1Ao…=oAÝ™š@åÂ  4289 4252 @gOv_Ù@<í‘hr°@gOv_Ù@<í‘hr°=Ý/DPyšDWìÍMPSc      BE203Sc(on_edge)        15.41=PAf{<£×
+A`Qì<£×
+A\ÌÍ<£×
+AYë…<ýó¶Bb{A.¸R  5292 -    @g:)Çy§@ffffff@g:û~‘ @f1ø .?LcñE0 E˜ PPdE      RA400dE1,N              18.43=Y‡Aˆ£×<¬1A„  <¬1A€£×<¬1AƒG®='ïžAÓ\)A £×  6293 -    @g>BZîc@*aä÷eý‹@g?åÉ@*aä÷eý‹?»™DolÍDnYšMMdE(N)   RA401dE5,N              16.15=¥ãA~{<£×
+At£×<¬1Am™š<£×
+Al£×<ýó¶B|=qA«33  7297 -    @g'»/ìW@Õ*™0¾@g&Á½¥@ÕfÏAò?‘ë…Dú DúÍPBedge-on BE207Sc(on_edge)        16.58=¥ãAx(ö<£×
+Aq¸<¬1AlõÃ<¬1Ajff=oB8{A
+=  8299 -    @gQ‚©“@+2n—Oß@gQ‚©“@+2GE8ï5?hÁUCRæfCRæfMMdE      RA400dE3                17.25=#×
+A‡\)<¬1Aƒ…<¬1A
+=<¬1A€=q=C–Bp¤A1Â  9-   -    @g’:)Çz@1·ï²-@g“àÞÓ@1·ö+jçÕ>ù=ÙD-yšDLæfM-dS0     RA410-                  15.16=¥ãAb\<£×
+AYÂ<£×
+AUë…<£×
+AN¸R<ýó¶B’  A¼=q  :300 -    @g 'RTa@©^žš@gŸU›=@©^žš>ZîcD­  GÀ˜MPdE      RA400dE5                18.53=49XA{<´9XA‰®<´9XA‡\)<¬1A…33=\)AÂ=q@Ñ™š  ;303 -    @g·éùr@'ÕfÏAò@g·éùr@'ÕfÏAò=þ($E ¨ E1þfPPdE(N)   RA401dE2?,N:            17.13=0 ÅA~¸R<¬1AtQì<¬1An=q<¬1AhõÃ<ýó¶AøÌÍ@í¸  <304 -    @gÜÆ?@(Å®æ1ø¡@gÜÆ?@(Å‡“Ý—ö?’xlCÌÍCÌÍMPIrr(LSB)BE300dE1pec?            17.60=0 ÅA…
+=<¬1A33<¬1A\)<¬1Ay™š=oA××
+A33  =-   -    @gêJŒ@jOv@g“t¼@„M:“>`ªeE®fÀ  P-dE      RE400-                  18.98=LÌÍA™š<¼jAŠ\<´9XA‡ë…<¬1A„{=C–A–\@¬ÌÍ  >-   -    @gGE8ï5?öŸ¾vÈ´@gHè§ç?öquŽ!–?“×
+DÏÃ3À  P-Irr(LSB)BE300-                  18.81=@ƒAŽff<¬1AŒ¸R<¼jAŠ\<´9XA‰®=@ƒA¹®@¨£×  ?307 4254 @gŸ¾vÈ´@,ÖOv_Ù@gz–¼@,ÔzáG®AŸr|EfÀ  MMSc      BE203Sc(s)I.3           11.19=PA!ë…<£×
+Aë…<£×
+Ap¤<£×
+A¸R<ýó¶C<{BQzá  @315 -    @g×sü@`ÞÒˆÎp@g×sü@`ÞÒˆÎp>hõÃD¶ÆfDÈ–fMBSBa     RA211SBa(s)             16.20=#×
+AlõÃ<£×
+Ab\<£×
+A\Qì<£×
+AX  <ýó¶BE®A,zá  A318 -    @glô!-@!¶+jçÕg@gq²•ê@!´`ªdÂøAKÎEšEYšPMSBd     BE214SBcd(s)III         14.93=¥ãAa™š<£×
+A\zá<£×
+AY¸<£×
+AVff<ýó¶Bœ®A«ë…  B322 -    @g¬Ùè>B@+öE¡ÊÀƒ@g­«ŸU›@+ö_Ø­«Ÿ?<£ÃÛLÍÃNšMMIrr(LSB)BE300Im:                16.27=¾wAo
+=<£×
+Ag®<£×
+Adzá<£×
+A[\)<ýó¶BŽAŒáH  C320 -    @g®}Vlô@¤xFÜ@g¯O„M@¥`A‰7L@×E!šÀ  PPIrr(LSB)BE300S?                 17.59=#×
+A…¸<¬1Ap¤<¬1A~\<¬1Arff=oB8ÂAk×
+  D323 4257 @gÝ/Ÿ¾@çRT`ªe@gÝ/Ÿ¾@çl‹C•=µÜÆE)À E,^fPPSa      RE201Sa                 15.84=¥ãAdÌÍ<£×
+AXõÃ<£×
+ARff<£×
+AN{<ýó¶B8\)Azá  E-   -    @g:’£@‰ 'RTa@gÈK]Ì@‰7KÆ§ð@F¤©E(fÀ  P-Irr(LSB)BE300-                  18.00=8QìA‡Â<¬1A…\)<¬1AƒÂ<¬1A‚  =,1AÉ…@À£×  F324 -    @gP°ò{³@×süPH@gQ‚©“@Ú¬1'@”!–D¿©šD¿ƒ3PPIrr(HSB)BE310BCD                14.99=PAa™š<£×
+A[×
+<£×
+AYÂ<£×
+AV{<ýó¶B)33A0(ö  G328 -    @gb¶®}@)Å+ÓÃa@g$Ý/@)ÄZ¬1@²IºE.fÀ  MMIrr(LSB)BE300ImIV               17.44=49XA‚Qì<¬1A~{<¬1A|  <¬1A}p¤=t¼BKÌÍA:\  H327 -    @g¦µ(@†Â&€I@g¦µ(@†Â&€I>E9E0¾fE/üÍPBdS0(N)  BE411S016               16.64='ïžAuë…<£×
+Al£×<¬1Ag\)<£×
+AdÌÍ<ýó¶B¸@÷®  I330 -    @g©*0U2@)´!-w2@g©*0U2@)´,<žìÀ>ä“D;ó3DGFfMMdE(N)   RA401dE2,N              17.79=H´9A„õÃ<¬1A33<¬1A|Qì<¬1A{\)=\)B!õÃA>=q  J329 -    @g×Ûô‡ý@òa|ÚQ@g×
+=p¤@ò•éá°Š?kçmDÉ° À  MPIrr(LSB)BE300ImV?               18.94=uÂAŽ\<¬1AŒzá<Ä›¦A‹33<Ä›¦AŒ\=@ƒA¹×
+@Ýp¤  K334 -    @gä÷eý‹@+Ã¼ÓZ…ˆ@gåÉä@+ÃÉîËû?ffÃU™šÃpLÍMMIrr(HSB)BE310BCD                16.57=¥ãAzff<£×
+At£×<¬1Ap£×<¬1An¸R=oA‰¸@›33  L331 -    @gzáG®@,¿±[W?@g×sü@-V“?°DÐD$33À  MBIrr(HSB)BE310pec                16.51=¾wAvff<£×
+Ao…<¬1Ak×
+<¬1Ai™š<ýó¶B33Azá  M335 -    @g/ƒ{J#@.ÊÚ¹õY´@g0U2a|@.ÊÀƒn˜?7´¢DøC3À  MMdE      BA400dE3:               20.13>k…AŠÌÍ<¬1A…×
+<¬1A…G®<´9XA†ff=0 ÅBQìA$õÃ  N-   -    @gHðŽ@PbMÒñª@gHðŽ@PHðŽ>ƒSøEË3À  P-dE      RA400-                  18.26=D›¦Aˆzá<¬1A„£×<¬1A‚Qì<¬1An=q<ýó¶A½…@á™š  O338 -    @g±Ä2ÊX@Þ Ñ·Y@g±Ä2ÊX@Þ Ñ·Y=éxÕEÄÍEh PPdE(N)   RA401dE3,N              17.07=#×
+A€¸R<¬1Ax£×<¬1Ar¸R<¬1Ap  =oAøÌÍA	™š  P339 -    @gÁTÉ…ð@Ò¼£n@gÁTÉ…ð@Ò¼£n>Ï«E
+{3EÈ PPdE      RA400?                  18.56=aG®AŒff<¬1A†õÃ<¬1A„  <¬1A…×
+=¥ãA§¸@Ã33  Q-   -    @gÑ·Xâ@Ûô‡ü¹@gÐå`A‰@bMÒò?)á±EyšÀ  P-Irr(HSB)BE310-                  18.19=8QìA‡33<¬1A‚zá<¬1A€áH<¬1A~ff=PA³Â@È£×  R340 -    @gô!-w@¤Âø7´¢@góMj@¤?åÉ?Î?D»yšD¼@ MPIrr(HSB)BE310BCDormerger        15.68=¥ãAj\<£×
+Ad(ö<£×
+A`zá<£×
+A]G®<ýó¶AÚ\@Æ{  S342 4259 @gõÂ\)@o hÛŒ@gõÂ\)@o hÛŒ=†$ÝEP E+3PPS0      RA200S017               15.80=¥ãAaÂ<£×
+AUÂ<£×
+AO\)<£×
+AK33<ýó¶B£×@²=q  T341 4260 @gý!ÿ.I@eýŠÚ¹õ@g÷eýŠÛ@eœàu÷@‚a|Dßc3DôéšPPSBa     RE211SBa(s)             13.98=PAAÂ<£×
+A5ë…<£×
+A/
+=<£×
+A+\)<ýó¶Bëp¤A¿
+=  U344 -    @g¼@.záG®@g¼@-àqv>èÎpDÿ‰šDÿæfPPE       RA100E2                 16.81=¥ãAp£×<£×
+Ac×
+<£×
+A\õÃ<£×
+AX£×<ýó¶Aˆ£×@U¸  V345 4261 @gŸ¾vÉ@L²•éá±@gË)^ž@Lç¯·é@m]E	&fEø PPE       RA100E2                 12.58=PA-ë…<£×
+A!¸<£×
+Aë…<£×
+AÂ<ýó¶C:®B¸  W-   -    @gã¼Ó@3–YJôðØ@gã¼Ó@3–_Ø­«Ÿ>;~‘Dl™šÀ  M-dE      RA400-                  19.78=å`BA…<¬1A‹¸<´9XA‰×
+<¼jA‡G®=PAÎ  @äÌÍ  X346 -    @g,¥zxl@î±Ä2ÊX@g,¥zxl@î—Oß;>=ÙDéšDë)šPPdE(N)   RA401dE5,N              17.82=8QìA‚\<¬1A|zá<¬1Aw×
+<¬1AtõÃ=oBp¤A£×  Y350 -    @gy¦µ@*žß¤?åÉ@gsüPH@*Ÿ.Hè§@NlôC€ C˜ŒÍMMIrr(LSB)BE300ImIV-V:            16.89=¥ãA…ë…<¬1Aƒë…<¬1A~=q<¬1Aw
+==oB+ffAƒG®  Z-   -    @g±[W>«@PbMÒñª@g³Ð|„¶@PbMÒñª?€	ÕDÅÙšÀ  P-dS0     BE410-                  17.41=#×
+A€¸R<£×
+AxÌÍ<¬1At  <¬1Aqë…=oAép¤@Â\  [351 -    @g´¢3œ@0£×
+=q@g³Ð|„¶@0£×
+=q=a°ŠDè¦fDê&fPPdS0     RA410E7                 16.53=¥ãAo…<£×
+AdQì<£×
+A^¸R<£×
+AZáH<ýó¶B{@Á™š  \-   -    @gÍ5¨Xy@Oß;d@gÍ5¨Xy@Oß;d>+CD¿ÍÀ  M-dS0     RA410-                  18.68=På`AŠff<¬1A†zá<¬1A„(ö<¬1A¸=+A÷¸@¹ë…  ]-   -    @gÒñ©ûç@1;Iº^@gÒñ©ûç@1;Iº^=ŒçDeffDg` M-dS0(N)  BE411-                  16.02=¥ãAk×
+<£×
+AaÂ<£×
+A]¸<£×
+AZff<ýó¶B<\AB¸R  ^358 4264 @gÄ›¥ãT@cŠ	Þ@gÄ›¥ãT@cŠ	Þ>W§‡E“3E\ÍPPSBa     RA211SBa(s)             15.10=PAUÂ<£×
+AJ\<£×
+AC×
+<£×
+A?…<ýó¶Bp¤A…  _361 -    @gð¸»@.RþÅm\û@gðØDÐ@.SàÞÒ‰?¡ËD—öfD˜fMMdE      RA400dE1:               18.54=m‘hAŠQì<¬1A…Â<¬1A‚áH<¬1A‚ff=#×
+Aƒ™š@°    `-   -    @g>«6z@z’£S&@g>«6z@z¬Ùè>B>SZ†E"Û3À  P-dE      RA400-                  19.47=OßA‘ë…<¬1A®<¼jA‹p¤<¬1A‹¸=49XAjff@ˆ    a369 4267 @g	Þ Ò@)˜­«ŸU›@gp:û~‘@)”Ö¡aä÷BNz­Dm` D|s3MMSB0     RA210SB01               13.17=PA7…<£×
+A+
+=<£×
+A$  <£×
+A®<ýó¶BÚ#×AÍ×
+  b366 -    @gxFÜ@$Ý/ @g
+¦L/ƒ@
+¦L/ƒ?-E“3EX PPS0      RA200S016               15.59=¥ãAb=q<£×
+AV\<£×
+AO®<£×
+AN=q<ýó¶BM33A8(ö  c371 4268 @gK]Ìcñ@"‚@·€4@gK]Ìcñ@"œwškQ>ZîDü3E{3PPSa      RA201S026               15.00=PAS×
+<£×
+AG…<£×
+A@£×<£×
+A<£×<ýó¶BC=qA33  d-   -    @g¸ºÇ@½p£×
+=@g¸ºÇ@½p£×
+==d÷fDö)šDö P-dE      RA400-                  17.71=8QìA€¸R<£×
+Av\<¬1Aqë…<¬1AqG®=+Aép¤@øQì  e-   -    @gã¼Ó[?ü_oÒòå@g*™0¾?ü`A‰7KÇ?²CþDúfDùð P-Irr(HSB)BE310-                  16.25=¥ãAx£×<£×
+Atzá<£×
+Ar¸R<¬1ApÌÍ=+An{@o\)  f-   -    @g)^ž	@!@N¤©@g*0U2a@!@N¤©=ÜÆ?DùšÀ  P-dE      RA400-                  19.79=\)A‹×
+<¬1A‡™š<¬1A„(ö<¬1A†  =oA”Qì@»×
+  g382 4273 @gw1Å@^žš@gsüPH@`[À6ã@Ñ%E™šE¹šPPSBc     BE213SBc(s)II           13.10=PA@£×<£×
+A9™š<£×
+A5Â<£×
+A3…<ýó¶BuÃAžáH  h389 -    @g p:û~‘@-ìIº^5?@g p:û~‘@-ìIº^5?>‡â‚D©öfDª  MMdS0(N)  RA411dS04,N             15.27=¥ãA^ff<£×
+AS×
+<£×
+AMë…<£×
+AK®<ýó¶Bg
+=As…  i388 -    @g uöý!ÿ@
+Àƒn˜@g vÈ´9X@
+ôðØDÐ?ƒ÷ÏE EÓ3PPdE      RA400dE6:               17.44=#×
+Aˆ  <¬1Aƒ¸<¬1A}ë…<¬1Av{=oB/záA1G®  j386 4277 @g ~ùÛ"Ñ@]}¿HÌ@g ~ùÛ"Ñ@]—ö+jè=tðØE	  E	X PPSBa     RA211SBa                15.76=¥ãA_®<£×
+AT£×<£×
+AN{<£×
+AJ\<ýó¶B9õÃAIp¤  k390 -    @g ‡ü¹#£@¨§æšÔ@g ‡ü¹#£@¨Œç¯¸>mVEqšE¹šPPdE(N)   RA401dE3                18.69=m‘hAˆzá<¬1Aƒ™š<¬1A€zá<¬1A€ff=C–A›®@¼zá  l393 4276 @g üPHð@ÃFÜ]cˆ@g ÿ—$tT@Äo hÜ@‹…E%»3E#¾fPPSBc     BE213Sc(s)II            14.48=PATõÃ<£×
+ALzá<£×
+AH(ö<£×
+AEë…<ýó¶B„8RA§Â  m394 -    @g!#¢œwš@"ïƒ{J#:@g!&Á½¥@"ï²-V?¶®}Dà	šDß¦fMMdE(N)   RA401dE3,N              18.66=m‘hAŠff<¬1A†\<´9XAƒë…<´9XA×
+=t¼AÉG®@ðõÃ  n-   -    @g!ˆe”¯O?ÿVlô!-@g!†Â&€?ÿVlô!-?EŽ"Dÿ33À  P-Irr(LSB)BE300-                  18.01=,1A‰p¤<¬1AˆQì<´9XA…ë…<´9XA„Qì='ïžAª  @ õÃ  o397 -    @g! 'RTa@~($x@g! 'RTa@~($x=’¼EšE‰šPPdE(N)   RA401dE5?,N             16.43=,1Apzá<£×
+Af=q<£×
+AaÂ<£×
+A`(ö<ýó¶B-  A)G®  p-   -    @g!ÚQÎ@àÞÒ‰@g!ÚQÎ@×süP?D2ÊD»,ÍÀ  M-dE      BA400-                  19.13=uÂA×
+<¬1AŒ(ö<´9XA‰
+=<¬1A‰Â=<jA‰33@uÂ  q402 -    @g"'RT`ª@($xG@g"($x@($xG>,ôEyšEÉšPPdE(N)   RA401dE0,N              18.79=yÛ#AŒáH<¬1Aˆ  <´9XAƒ…<¬1A33=t¼AÌ¸RA	¸  r404 -    @g"QÎ_@ÎV“u@g"PHð@ÎŠqÞi­?Xr°DØ&fDØæfPPedge-on RE207Scd(on_edge)       15.81=¥ãAi™š<£×
+A^áH<£×
+AXÌÍ<£×
+AUG®<ýó¶B­®AŠáH  s407 -    @g"‚@·€4@#>«6z@g"€IQƒ@#1Å?n($DëÍDý)šMMdS0     RA410dSB03,N:ordE5pec,N:15.72=¥ãAg\)<£×
+A^=q<£×
+AXõÃ<£×
+AS…<ýó¶BQ
+=ALzá  t-   -    @g"° Ä›¦@#˜}¿H€@g"¯O„M@#˜*™0¾?"þÅD“Ð À  M-Irr(HSB)BE310-                  19.17=yÛ#A  <¬1A…<¼jAŒff<¼jAŠ¸R=@ƒA\)@JáH  u410 -    @g"ëC,¥@(`6âë@g"ç¯·é@(`'RT`ª?ÒÀƒC‰ÍC™šMMIrr(HSB)BE310BCD                17.75=#×
+Aˆzá<¬1A†\<¬1A†ff<´9XA…\)=\)A<zá@\(ö  v409 -    @g#Xâe@Š=p£×
+@g#µsê³@Š#9Àëî?#33E\ÍE[3PPIrr(LSB)BE300dE2                18.84=D›¦AˆQì<¬1A„(ö<¬1A‚Qì<¬1AŠ{=@ƒB!{AyG®  w413 -    @g#C,¥z@+ËÆ§ï²@g#¸Që…@+Ë¹Œ~($?ŸŠ	C†s3À  MPIrr(LSB)BA300ImIII?             19.03=På`A×
+<´9XAŠáH<´9XAˆõÃ<´9XAŠ¸R=På`A”ÌÍ@Ÿ
+=  x411 4282 @g#=ÈK^@J¦L/ƒ{@g#=ÈK^@JŒL˜_>1[WDh“3DhlÍMBS0      RE200S03(on_edge)       15.85=¥ãAd£×<£×
+AX(ö<£×
+AQ™š<£×
+ALÌÍ<ýó¶B(öA Qì  y415 -    @g#`A‰7L@¢œwškQ@g#_oÒó@¢3œ¾à?ËjèEP E 3PPSBd     BE214Sd:                16.04=¥ãAp(ö<£×
+Ai¸<£×
+AaÂ<£×
+Ac\)<ýó¶BN…AYÂ  z-   -    @g#·éùr?÷~($x@g#°‰ 'R?÷ƒä%®æ2@º	DÅlÍDÇà P-edge-on BE207-                  15.91=¥ãAlÌÍ<£×
+Aeë…<£×
+Ab{<£×
+A`zá=oB£Ç®Aƒ…  {-   -    @g$!-w2@\(õÂ@g$òäŽŠ@Aò×s>s¶FD»,ÍÀ  M-Irr(HSB)BA310-                  19.21=\)A‘
+=<´9XAŒõÃ<´9XA‹Â<´9XAŒQì=<jA=Â@3×
+  |-   -    @g$…‡“Ý˜?é6z–¼@g$€IQƒ?é8ï4Ö¡b@ûEK3Eè P-Sm      BE205-                  15.59=PAjff<£×
+Ad(ö<£×
+A`£×<£×
+A`(ö<ýó¶BõÃAip¤  }-   -    @g$¬1&é@:û~ÿ—@g$¬1&é@:û~ÿ—=¹XEØ À  P-dE(N)   RA401-                  18.55=H´9AˆáH<¬1A„  <¬1A€õÃ<¬1A€Qì=oAd(ö@~¸R  ~426 -    @g$Ù‡+@)Åo i@g$×süP@)Åo i?÷ÏD‘ã3D“ÜÍMMdE(N)   RA401dE0,N              17.86='ïžA‹ë…<¬1A‡\)<¬1A‡™š<¬1AG®=+B\)AiÂ  -   -    @g%'»/ìW@¢¶®}Vm@g%%F
+¦L@¢Ðå`A‰?…ðDuÙšÀ  M-Irr(LSB)BA300-                  18.52=8QìAŽÌÍ<¬1A‹¸<´9XAŒ¸R<Ä›¦A…\)=C–A¨ff@§\)  €428 -    @g%a@N¥@+Ç+Iº@g%^žš@+Çy¦µ@
+$ÝDMà DF&fMMIrr(HSB)BE310BCD                17.56=¥ãAˆ  <¬1A†¸R<¬1Aˆ{<¼jAƒ33=PA¶\@›33  429 -    @g%Û"Ðå`@-C9Àëíú@g%ÜÆ?@-C,¥zxl?2{³D#À D3MPIrr(LSB)BE300?                  17.88=<jA„zá<¬1A…<¬1A€(ö<¬1A~¸R=PB
+=AõÃ  ‚437 -    @g&ƒä%®æ@1|¹#¢œx@g&‚@·€4@1|¹#¢œx?'ÎÙD°À À  MMdE(N)   RA401dE5,N              15.12=¾wA\ÌÍ<£×
+AR{<£×
+ALõÃ<£×
+AMp¤<ýó¶B×Ç®AÄ¸R  ƒ-   -    @g&ƒä%®æ@í(Œç°@g&…‡“Ý˜@í\ú¬Ùè?Š=qDÝs3DÛæfP-S       BE206-                  17.81='ïžA†£×<¬1Aƒ®<¬1Aë…<¬1A®=C–A»p¤@©™š  „436 -    @g&ƒä%®æ@ä÷eýŠÛ@g&ƒn—@äÝ/Ÿ¾?b·Eˆ E†fPPdE      BE400dE4:,N?            17.62=@ƒA\)<¬1Aw\)<¬1Ar=q<¬1Ao×
+=+B9¸RAdzá  …439 -    @g&Ð©*0@<„µÜÆ?@g&ÓZ…‡”@<žì¿±[?ÕÈE	šEfPPdE      RA400dE4?               18.00='ïžA…×
+<¬1A€  <¬1Ax(ö<£×
+As®<ýó¶A¬(ö@ õÃ  †440 -    @g&÷eýŠÛ@íÅÖ8†Y@g&õÂ\)@í\ú¬Ùè?é×ÜEÌÍÀ  PPdE      RA400dE2:               17.74=49XAˆ=q<¬1A„=q<¬1AG®<¬1A~ff=PB=qA'33  ‡-   -    @g'FÜ]cˆ@8ºÇË)@g'FÜ]cˆ@8ºÇË)>¨ŒçE
+AšÀ  P-Irr(LSB)BE300-                  17.86=,1A‰ë…<¬1A‡ë…<´9XA†õÃ>>vÉA‡p¤=,1A`ÌÍ@mp¤  ˆ-   -    @g'‚©“á@Á‰7KÆ¨@g'‚©“á@Á‰7KÆ¨>´9E@ À  P-dE(N)   RA401-                  19.94=éxÕA\<¬1AŠáH<´9XAˆáH<¬1A€ff=C–A{\)@‡\)  ‰446 -    @g'®æ1ø¡@\¾ß¤@@g'¹Œ~($@[quŽ!–@sëDIÍÀ  MMIrr(LSB)BE300Im/BCD:            16.80=#×
+A|Qì<¬1As×
+<¬1Ao\)<¬1An\=oB2ffA,(ö  Š448 -    @g(¼£n@)s¶E¡ÊÁ@g(_oÒ @)sœ¾ß¤?wRTDlÍD(&fMPIrr(HSB)BA310ImIII?             17.91=0 ÅA†áH<¬1Aƒ…<¬1A‚zá<¬1A‚ÌÍ=¥ãA¥ë…@´zá  ‹450 -    @g(}Vlô@O–»˜È@g(|„µÜÆ@O–»˜È?óEQšEéšPPdS0(N)  RE411S0pec              17.08='ïžAyG®<£×
+An¸R<¬1AhõÃ<£×
+AdõÃ<ýó¶B/®A£×  Œ452 -    @g(£×
+=q@'‚ZîcŠ@g(£×
+=q@'‚ZîcŠ=ÛW?D³FfD³#3MMdE      RA400dE4,N              17.22=8QìA}Â<¬1Arff<¬1Ap  <¬1AiG®<ýó¶B¸A#33  453 -    @g(ÌÌÌÌÍ@'0ØDÐ©@g(ÏAò×@'0Ë)^ž?·éDsÆfDgæfMPS       BE206Sm?                17.63=0 ÅA‚áH<¬1A~{<¬1Az{<¬1Avff=oAåG®@Ø    Ž-   -    @g(ð¸»?Ý…ðoiDg@g(ð¸»?Ý…ðoiDg>¡bDì#3À  P-Irr(HSB)BE310-                  18.09=¾wAŒ(ö<¬1AŠ(ö<¬1A‰®<¬1A†áH=C–A¸@!ë…  459 -    @g)…ðoiD@1£×Ûôˆ@g)×Ûôˆ@1£{J#9Á?Øù	E±šEÆfPMIrr(HSB)BE310BCD                15.73=¥ãAmp¤<£×
+Ag®<£×
+AdõÃ<£×
+Abff<ýó¶AÙ33@Ï®  458 -    @g)´¢3œ@!í5¨Xy>@g)²þÅm]@!íquŽ"?VL0D¿ÜÍDÃVfMMIrr(LSB)RA300dE4                17.66=8QìA…33<¬1A}G®<¬1A|£×<¬1At£×=oB#{A:{  ‘460 4293 @g)Ë’:)Ç@2bZîcŠ@g)µsê³h@2aø -àA(Ö9DišD_lÍMMSa      RE201Sapec              12.54=PA-p¤<£×
+A"¸R<£×
+Azá<£×
+A™š<ýó¶CxýqBb¸  ’461 -    @g)ÿ.Hè§@*±hr° Å@g* Ñ·Y@*±hr° Å?NVD¶vfD®¶fMMdE      RA400dE4                18.44=‰7LA€\<¬1AváH<¬1Ao×
+<£×
+AiÂ=oBt{AŽõÃ  “464 -    @g*xFÜ@]æšÔ,=@g*xFÜ@^ Ñ·Y>¦ÏBE«3E«3PPdE      RA400BCD?               18.52=ƒoAŠ=q<¬1A…ë…<¬1Aƒ
+=<¬1AzáH=C–A×¸@²\  ”462 4292 @g*1ø .@be+ÓÃ@g*1ø .@aÿ.Hè§>„Ý/EÔÍE9šPPSBa     RE211SB0/a              14.39=¥ãALõÃ<£×
+AA™š<£×
+A:\<£×
+A7…<ýó¶Bž33A¥ë…  •465 4294 @g*_Ø­«Ÿ@'”¯O„@g*`ªdÂø@'`A‰7L?ë{JC·ÙšC±™šMMSBc     BE213SBc(s)II-III       13.21=PAE¸<£×
+A>\<£×
+A;33<£×
+A9G®<ýó¶BáÂAÌÌÍ  –468 -    @g*záG®@MÒñ©ûç@g*y=Ùc@NŠqÞi­@*ìÀDùÖfD÷‰šPPIrr(HSB)BE310BCD?               17.29=#×
+A„\<¬1A®<¬1A}¸<¬1A\)=C–A±G®@Î{  —469 -    @g*\(õÃ@0›ûµsë@g*\(õÃ@0›ûµsë>	…ðDª†fDªƒ3MPdE      RA400dE2?               18.86=uÂAŒ\<´9XAˆ=q<´9XA†zá<´9XA‚=q=C–A²¸R@ºáH  ˜467 -    @g*ÿ—$t@M5¨Xy>@g*ÿ—$t@N_oÒ ?Ú½<ÂJffÀ  PPIrr(LSB)BA300Im?                16.99=PA‰p¤<¬1Aˆ{<¬1A‡p¤<¬1A„zá=oAÂ=qA1¸  ™-   -    @g+ hÛ‹¬@ÊqÞi­C@g+ hÛ‹¬@ÊqÞi­C=ˆ1'Dß3À  P-E       RA100-                  18.35=På`Aˆ  <¬1A‚áH<¬1A×
+<¬1A}G®=+AeG®@uÂ  š479 -    @g+àqv@ M\ú¬Ùè@g+Ûô‡ü¹@ MBÃÉîÌ?î¤©E3E›3PPIrr(LSB)BE300Amorphu            17.53=#×
+Aƒ™š<¬1A€=q<¬1Az¸R<¬1Ayë…=oB"G®A6ff  ›-   -    @g,ð¹@)NóMj@g,ð¹@)NóMj;kíúC©šÀ  M-dE      RA400-                  19.38=\)AG®<¬1AŠzá<´9XA‡33<¬1Aˆ£×=,1Ar{@‚=q  œ483 4298 @g,j~ùÛ#@-6“t¼@g,^5?|î@-6_Ø­«Ÿ@º>BDŽöfDùšMMSc      RE203Sc(s)III           12.87=PA8õÃ<£×
+A/33<£×
+A)™š<£×
+A%¸<ýó¶C×
+BÂ  482 -    @g,ŒL˜_@šu@g,‹C•@5?|í‘>ÑuŽE Eè PPS0      RA200S08/a              16.13=¥ãAfáH<£×
+A[®<£×
+AU™š<£×
+AQ¸<ýó¶B:ë…A\)  ž486 -    @g,îcŠ	@-àq@g,îcŠ	@-àq><£ENfEœÍPPSB0     RA210SB0/Ba(r)          15.35=¥ãA`£×<£×
+AUG®<£×
+AO…<£×
+AM™š<ýó¶BX£×A6=q  Ÿ-   -    @g-Š	Þ@!žƒä%¯@g-æšÔ,@!í(Œç@C–D±FfÀ  M-S       BE206-                  18.61=49XAŽ  <¬1AŠ(ö<´9XA†£×<¬1A…p¤=t¼AÀ£×@§®   490 -    @g-+Iº@/}}¿HÌ@g-+ÓÃa@/}}¿HÌ>øy>DŸLÍDžyšMMdS0(N)  RA411dS03,N             15.17=¥ãA\zá<£×
+AR{<£×
+AL  <£×
+AI¸<ýó¶B¦QìA¹G®  ¡488 -    @g-=Ùb·@þ\‘ÑN@g-<64@¯·éù?•¥E,)šE,K3PPS       BE206?                  18.74=ixÕAŠ\<¬1A†{<¬1A„{<¬1A€{=C–Bë…A
+{  ¢489 -    @g-FÜ]cˆ@’òäŽŠ@g-FÜ]cˆ@’òäŽŠ>	DŠ©šDŠ¬ÍMPdE      RA400dE5?               18.53=‹C–A‹p¤<¬1A…×
+>‡+A„ÌÍ<¬1A…=\)A²  @½¸  £491 4299 @g-m\ú¬Ú@' ÞÒˆÎp@g-`A‰7L@'–R½<6@éòC€ÌÍÀ  MMSc      BE203Scd(s)III          13.36=PAIë…<£×
+ADzá<£×
+AB{<£×
+AA¸<ýó¶B‡uÃA°zá  ¤492 4300 @g-‡“Ý—ö@Š=p£×
+@g-‡“Ý—ö@Š	Þ Ò?
+JŒE,ÍEx PPSa      RE201Saring             14.90=¥ãAQp¤<£×
+AEp¤<£×
+A>ff<£×
+A;×
+<ýó¶B’Ü)AváH  ¥494 -    @g-‹¬q³@.&¸ºÇ@g-Œ~($@.&ÏAò×?â×D™  À  MMdE      RA400dE5                16.94=#×
+A€=q<¬1AuÂ<¬1AmG®<¬1A‚(ö=Y‡B…  A¤ÌÍ  ¦497 4302 @g-¡ÊÀƒ@-2ÊW§†Â@g-©ûçl‹@-2T`ªdÃ@œID‹†fD¼ÍMMedge-on RE207Sc(on_edge)        13.37=PA<£×<£×
+A0£×<£×
+A(õÃ<£×
+A#\)<ýó¶C–{B‚\)  §499 -    @g-ò×s@"y0¾í)@g-ñA [À@"y=Ùb·? u÷D¼fÀ  MMdE      RA400dE2:               18.96=‰7LAŒ£×<¬1Aˆ\<´9XA†  <¬1Aˆzá='ïžAžQì@º\  ¨-   -    @g.GE8ï5@ôÖ¡aä÷@g.GE8ï5@ô¼j~ùÛ>ËàßD=¦fÀ  M-dS0     BE410-                  17.98=<jA†¸R<¬1Aƒ…<¬1A¸<¬1AxõÃ=oA²=q@£33  ©501 -    @g.g8}¿@)§E8ï4×@g.fffff@)§+Iº?Sþ]ÂÑ33ÂÑffMMdE(N)   RA401dE5?               17.56=,1A†ÌÍ<¬1A‚=q<¬1A®<¬1A€áH=\)B(öAáH  ª504 -    @g.­«ŸU›@#zkP°ò|@g.¬Ùè>B@#zkP°ò|>ÅÖ9D  Cø³3MMdE      BA400dE4                17.73=,1A„£×<¬1A€ff<¬1A{®<¬1Av=q=oBõÃA=q  «503 -    @g.µÜÆ?@!Y³Ð|…@g.µÜÆ?@!fÏAò>eý‹DˆyšDŠæfMMdE(N)   RA401dE3,N              18.59=e`BAˆõÃ<¬1A„áH<¬1A…<¬1A€ff=+Aïë…A"áH  ¬510 -    @g/'»/ìW@/J³g ù	@g/(Œç°@/J³g ù	>¦¹DQ  DQ  MMdE(N)   RA401dE3,N              16.22=¾wAo33<£×
+Ad£×<£×
+A]ë…<£×
+AZff<ýó¶Bv
+=A’¸R  ­508 4303 @g/IQ‚©“@åF
+¦L0@g/P°ò{³@ò-VB5xÕDÉ° À  PPSBc     BE213Sc(s)I.2           10.92=PA¸R<£×
+A\<£×
+Aë…<£×
+A¸R<ýó¶C<ýqBc£×  ®509 -    @g/eýŠÚº@Î¾ß¤?æ@g/hr° Å@ÍjOv@›y§De,ÍD  MPSd      BE204SdorSmIV           16.10=¥ãAtQì<¬1Amë…<¬1Ak33<¬1Ak\)=oB…Ü)Aƒp¤  ¯512 -    @g/jçÕfÏ@'ï4Ö¡aå@g/iDg8@'ï hÛ‹¬?ÇËCÌÍCæfMMSBm     BE215SBmIV              16.79=#×
+A{\)<£×
+Aup¤<¬1Ao33<£×
+Amp¤<ýó¶BÁG®AŸ\)  °-   -    @g/süPH@1®i­BÃÊ@g/süPH@1®\‘ÑN<? bND»,ÍÀ  M-S       BE206-                  18.89=e`BA™š<¬1A\)<´9XA‹×
+<´9XA®=ƒoAb\@`£×  ±514 -    @g/ªÍžƒä@!YŒ~($@g/©ûçl‹@!Y™™™™š>Ù	lDSìÍDTìÍMMSd      BA204Sc(s)pec:          15.72=¥ãAk\)<£×
+Ac33<£×
+A^¸R<£×
+A\  <ýó¶BŠ€ A«
+=  ²513 -    @g/²-V@Âø7´¢4@g/´¢3œ@ÂÃÉîËû?¥VDäæfDç¶fPPIrr(HSB)BE310BCD?               16.48=¥ãAt£×<£×
+Ak
+=<£×
+Af¸R<£×
+Ad(ö=oAÂ@¹ë…  ³517 -    @g0+jçÕg@ffffff@g0,<žìÀ@ffffff>ZîDîIšDè¦fPBSb      RE202SBab(s)            15.90=¥ãAeë…<£×
+AYÂ<£×
+AS33<£×
+ANáH<ýó¶B8¸RA*=q  ´522 4305 @g0{²þÅm@){quŽ!–@g0záG®@){W>«6z?)*0Dñƒ3Dì,ÍMMSa      RA201Sa                 14.47=¥ãAP£×<£×
+AF=q<£×
+A@Qì<£×
+A=p¤<ýó¶B±ffA°ff  µ523 4306 @g0Œç¯¸@)“33333@g0ŒL˜_@)“33333>ÝŠÛD¾¶fD÷ÌÍMMdS0(N)  RA411d:SB05,N           14.73=¾wATõÃ<£×
+AK33<£×
+AE™š<£×
+AC®<ýó¶B¬#×A§ë…  ¶-   -    @g0žš@õ%F
+¦L@g0Ÿ¾vÈ´@õ?|í‘h>ÆÂD§ÖfÀ  M-dE      BE400-                  18.17=D›¦AˆÌÍ<¬1A„¸R<¬1A‚\<¬1A€ff=\)A»™š@Æ¸R  ·524 4307 @g0¿±[W?@"_Ø­«Ÿ@g0†YJôñ@"Þi­BÄB!@ƒDuÙšDˆœÍMMSb      BA202Sbc(on_edge)       14.14=PAFáH<£×
+A:ff<£×
+A333<£×
+A.áH<ýó¶C	+…AÜ\  ¸525 -    @g0Ý/Ÿ¾@!aä÷eþ@g0Ý/Ÿ¾@!G®zá?/U›E´ÍEÍPPdE(N)   RE401dE4,N              18.00=<jA†\<¬1A‚{<¬1A~{<¬1A{
+==+AÇ×
+@àõÃ  ¹530 -    @g1	k¹Œ~@/™#¢œwš@g1üPH@/™‡+@ÑðoDéšD¢|ÍMMIrr(LSB)BA300ImIV-V             16.02=PAx£×<£×
+AuG®<£×
+AlÌÍ<£×
+Ajff<ýó¶BS¸Aª£×  º529 -    @g1&Á½¥@#Éûçl‹D@g1%F
+¦L@#ÉîËûµ>·1DÀ¬ÍDÃ` MMdE(N)   BA401dE4,N              19.80=ÀƒAŽ(ö<¬1AŒ{<¼jA‡ë…<´9XAˆ{=#×
+Aº\@áG®  »531 -    @g1v_Ø­¬@Î¤¨ÁTÊ@g1v_Ø­¬@Î¾ß¤?æ>:“DúfDï,ÍPBdS0     BE410Sa?                16.80='ïžAuG®<£×
+Ak\)<£×
+Af¸R<¬1AfáH=+B=qA	ë…  ¼534 4309 @g1§†Â&@“Ãa@O@g1¦µ(@“Ãa@O>..²DƒÓ3DYlÍMPSBa     RE211SBapec             14.88=¥ãAT£×<£×
+AI¸<£×
+AB\<£×
+A?®<ýó¶B¯³3A¥
+=  ½538 -    @g1öý!ÿ.@«C,¥z@g1öý!ÿ.@«C,¥z=t¼D=fD;¹šMPE       RA100E0                 17.33='ïžA~áH<£×
+AtÌÍ<¬1Ao\)<£×
+AlQì<ýó¶A‡Â@¸  ¾542 -    @g2šÔ,<Ÿ@¶E¡ÊÀƒ@g2šu%F@¶+jçÕg>A‰7D‚¶fD‚ÖfMPdE(N)   RA401dE0,N              16.59=#×
+Av¸R<£×
+Ak\)<£×
+Aep¤<£×
+A`(ö<ýó¶B\A33  ¿543 -    @g2šÔ,<Ÿ@-…zxl"h@g2šÔ,<Ÿ@-…‡“Ý—ö>g°DvfDvs3MMdS0     RA410dE5                15.81=¥ãAc×
+<£×
+AXzá<£×
+AS®<£×
+AM™š<ýó¶B‚®A…  À545 -    @g2IQ‚ª@/wškP°ò@g2IQ‚ª@/wškP°ò>8ºÇD”<ÍD–ùšMMdE(N)   RA401dE2,N              16.77=¾wAt£×<£×
+Aj¸R<£×
+AeG®<£×
+Ac\)<ýó¶B¸RA+
+=  Á554 -    @g3=Ùb·@.ñ4êJŒ@g3=Ùb·@.ñ&éxÔþ>ZŸ¾De¦fDfffMMdE(N)   RA401dE2,N:             17.89=H´9A‡\)<¬1A„  <¬1A|õÃ<¬1A†(ö=H´9B({AJ{  Â552 4301 @g3¢œwšk@Cþ\‘ÑN@g3p£×
+=@E¡ÊÀƒA´TþD 3DŸ9šMPSc      BE203SBc(s)II-III       14.13=PAUÂ<£×
+AQ™š<£×
+AN=q<£×
+ALQì<ýó¶BjõÃA˜ff  Ã559 4312 @g4+jçÕg@/g ù	l@g4.±Ä2Ê@/MjO?Ãt¼C2æfC  MMSb      RE202Sab                13.56=PAC\)<£×
+A8£×<£×
+A1ë…<£×
+A0  <ýó¶CJ=B¸  Ä558 -    @g4-V@yÀëíúD@g4-V@yÀëíúD=Ç®De†fDd¬ÍMPdE(N)   RA401dE2,N              17.77=LÌÍAp¤<£×
+Ax(ö<¬1Ar{<¬1At£×=+Að(öA×
+  Å560 -    @g49XbN@'šîcŠ	@g48†YJõ@'šîcŠ	>°ò|D¦ó3D®9šMMdE(N)   RA401dE2:,N             17.68=TýôA€Qì<£×
+Ay™š<¬1ApõÃ<¬1Ao×
+=oB õÃAx£×  Æ-   -    @g4ÁTÉ…ð@8Éã½@g4ÁTÉ…ð@8ãS÷ÎÙ?¶éyD¤|ÍD¤yšM-dS0     BE410-                  17.29=#×
+A‚{<¬1A}™š<¬1Az{<¬1Aw×
+=0 ÅA¶=q@¥p¤  Ç562 -    @g4Ä›¥ãT@(P°ò{²ÿ@g4É…ðoi@(På`A‰7@$ÁU@–ffB0ffMMIrr(HSB)BE310BCD                16.73=¥ãA€(ö<£×
+A{×
+<¬1Az\<¬1At£×=oAÙ…@Ó33  È566 -    @g5
+=p£×@ —Á½¥@g4ýó¶E¢@ –È´9XAÜÆD«° D°\ÍMPIrr(HSB)BE310SBmIII:            16.96=¾wA‚=q<£×
+A€õÃ<¬1A€\<¬1A€Qì=¥ãAéG®@æ¸R  É570 4313 @g5æšÔ,@'šCþ\‘Ñ@g5#¢œwš@'š–»™@4¼jD´lÍD´|ÍMMSa      RE201Sab                13.73=¥ãAB{<£×
+A6ff<£×
+A/33<£×
+A+\)<ýó¶CA÷Â  Ê565 -    @g5Š	Þ@p:û~‘@g5#¢œwš@¤¨ÁTÊ?ûñADRŒÍD[` MMIrr(LSB)BA300ImIV               17.74=@ƒA…×
+<¬1A‚áH<¬1A€{<¬1Aƒ×
+='ïžB
+=A=q  Ë567 -    @g533333@µŽ!–R½@g533333@µ?|í‘h?jŒEÜÍEÉšPPSd      BE204ScdIII             15.23=¥ãAaë…<£×
+AYÂ<£×
+AUG®<£×
+AQë…<ýó¶B³.AŽ\  Ì571 -    @g5{J#9Á@ÍquŽ"@g5|í‘hs@ÍquŽ"?l"D†¹šD‚ó3MMdS0(N)  BE411SB016              16.39=¾wAqG®<£×
+Ag…<£×
+AaÂ<£×
+A`  <ýó¶B"ffA£×  Í576 4316 @g5 ù	kº@"ªW§†Â'@g5¡ÊÀƒ@"ª=p£×
+?ahsDœ3Dœ` MMedge-on RE207Sbc(on_edge)       14.59=PAT(ö<£×
+AG…<£×
+A@  <£×
+A;\)<ýó¶BÙQìA–=q  Î575 4318 @g5ÅÖ8†Y@ e‡“Ý—ö@g5ÅÖ8†Y@ e‡“Ý—ö=RñªD–ó3D™ùšMMS0      RA200E4                 15.42=¥ãA]¸<£×
+AQp¤<£×
+AK33<£×
+AG®<ýó¶AÌ¸R@°    Ï-   -    @g5ÏªÍž„@Ó@N¤¨Á@g5ÎÙ‡+@ÓZ…‡“Þ>èè§EH À  P-dE      RA400-                  18.60=På`Azá<´9XAŠáH<´9XA‰\)<´9XA†  =#×
+A‚ÌÍ@†{  Ð584 -    @g6mÅÖ8†@§»/ìVÖ@g6p:û~‘@§l‹C•?¶¸RD¡ffD¡ffMMdE      BE400ImIV-V             18.60=…¸Aƒ¸<¬1A}™š<¬1Axzá<¬1Aw\)=+B3p¤A„zá  Ñ592 -    @g6Çâ‚@¸@+/ƒ{J#:@g6Çâ‚@¸@+/–»˜È=“©*D‹ÜÍD‹ÖfMMdE(N)   RA401dE6,N              17.89=Y‡A‚¸R<¬1AzáH<¬1Au¸<¬1Ao×
+<ýó¶Að\@á™š  Ò593 -    @g7šu%@¸FÜ]d@g7
+=p£×@¸7´¢3œ?j¬D¾³3DÀ£3MPSd      BE204S                  16.13=¾wAo×
+<£×
+AhQì<£×
+Ad  <£×
+Aa¸<ýó¶B;záA!p¤  Ó596 4321 @g7MjO@/¦Ü]cˆf@g7FÜ]cˆ@/¤tSŽóMA‡;DÂöfÀ  MMSc      BE203Sc(s)I             10.98=PA\)<£×
+Aff<£×
+Ap¤<£×
+A
+=q<ýó¶C–¹šB´¸  Ô598 -    @g7€4mÅÖ@î±Ä2ÊX@g7b¶®}@î—Oß;?ãTDƒs3DƒÆfMPdE      RA400dE3:               20.62>o²A‘G®<´9XAG®<¼jAŠQì<´9XA‰
+==@ƒA¸@ª\  Õ597 -    @g7Œ~($@ùÛ"Ðå`@g7Oß;d@ù¦µ(>SÝ˜Dçà DçišPBdS0     BE410S08                16.16=¾wAp  <£×
+Ag\)<£×
+Ab¸R<¬1A_®=oB5™š@äzá  Ö-   -    @g7õY³Ð}@ Òòä@g7ô‡ü¹$@ Òòä>§ËD"@ À  M-dE      RA400-                  18.58=H´9Aˆ£×<¬1Aƒ…<¬1A¸<¬1A
+==oAšÌÍ@”ÌÍ  ×608 4323 @g8:û~‘ @/Ï–»˜È@g8:û~‘ @/ÏªÍžƒä?4tTDçs3DçÓ3MMdE(N)   RA401dE4,N              15.49=¥ãAd  <£×
+AZff<£×
+ATõÃ<£×
+AR\<ýó¶B“ÂAªáH  Ø606 -    @g8oiDg8@$Ý/Ÿ¾@g8n—Oß@$Ý/Ÿ¾>6®}E îfE ìÍPPdE      RA400dE3?,N             18.22=D›¦AŒÌÍ<¬1AˆQì<´9XAƒÂ<¬1A‡…=8QìAºzá@Þ¸R  Ù611 -    @g8¤¨ÁTÊ@ ªÍžƒä&@g8¥zxl"@ ª™0¾í?¥L˜D£ D£ÍMMdE      BE400dE5pec:            16.83=¾wA33<£×
+A{33<¬1Auë…<¬1AráH=oBTë…Aw…  Ú618 -    @g8üPHð@+}<64@g8ý!ÿ.I@+}/Ÿ¾w>þÒ‰ES3DìffMPIrr(LSB)BA300Im?                17.50=,1A†=q<¬1Aƒ33<¬1A×
+<¬1A†áH=@ƒB
+=A!G®  Û620 -    @g9G®zá@'s¶E¡ÊÁ@g9FÜ]cˆ@'s¶E¡ÊÁ>ÆéyD7FfD7` MMSm      BE205SmIII              16.93=¾wA~¸R<£×
+AxQì<¬1Au™š<¬1Aqë…=+BÌÍA®  Ü-   -    @g9RT`ªe?ÛO„M;@g9S÷ÎÙ?ÛU›=ÈK?¿OEX À  P-Irr(LSB)BE300-                  18.78=,1A(ö<¬1A™š<´9XAŒ=q<´9XA‹×
+=TýôAf=q@U¸  Ý630 4330 @g:BZîc @&¼PHð@g:u%F@&ºCþ\‘ÑAø7LD¸S3DÃ†fMMedge-on BE207Sd(on_edge)        14.18=¥ãAMÂ<£×
+AD  <£×
+A?
+=<£×
+A;33<ýó¶CBnB-áH  Þ-   -    @g:s×Ûõ@m«ŸU›=@g:u%F
+¦@mÅÖ8†Y?</ƒDÅišÀ  M-edge-on BE207-                  17.56=¾wA„ff<£×
+Ap¤<¬1A×
+<¬1A~\=+A¡Â@Š\  ß632 -    @g:¨ÁTÉ†@E¼£n/@g:ªdÂø8@E¼£n/?‘ÑDŽ@ DŽ¦fMMdE(N)   RA401dE3,N              17.78=8QìA‹p¤<¬1A†Qì<´9XAƒ×
+<¬1A‚{=t¼AûÂA×
+  à634 4328 @g:«6z‘@/£þ\‘ÑN@g:¬1&é@/¤xFÜ>qø¡Cð™šCï³3MMdE(N)   RA401dE1,N              15.35=¥ãA^áH<£×
+ATÌÍ<£×
+AN=q<£×
+AK
+=<ýó¶B‹ÌÍA”£×  á636 -    @g:Ôýó¶F@/¼„µÜÆ?@g:ÓZ…‡”@/¼žì¿±[?W+ÀfffBÒ  MPdE(N)   BA401dE0,NorS010        17.99=@ƒAƒÂ<¬1A
+=<¬1A{33<¬1AyG®=C–A«Â@Ë…  â-   -    @g;æšÔ,?ý	Ô•*™@g;Š	Þ?ý'»/ì?·;dDîƒ3À  P-Irr(HSB)BE310-                  17.73=#×
+A‰33<¬1A‡Â<´9XA‡p¤<´9XAƒ®=PA†áH@˜Qì  ã641 -    @g;Éã½@D2ÊW§‡@g;ÑN;Í6@Cä%®æ2@iöýDb¬ÍDb¦fMPIrr(HSB)BE310BCD?               16.92=¾wA€\<£×
+Azff<¬1Ax(ö<¬1AráH=+AÊ\@ÂáH  ä-   4336 @g;ø -à@3m<64@g;úCþ\’@3mIQ‚©“?š#:DƒišD€öfM-SBa     RE211-                  14.45=¥ãAO…<£×
+AEÂ<£×
+A@Qì<£×
+A<Qì<ýó¶B¡Ç®A•®  å-   -    @g;ÿ.Hè§@ –»˜Çã@g<     @ bMÒñª>rþÅDëà DìÙšP-edge-on BE207-                  17.89=0 ÅAˆ{<¬1A„õÃ<¬1A‚ÌÍ<¬1Ay¸=+B5õÃA33  æ646 -    @g<<žì¿±@1ËjçÕfÏ@g<=p£×
+@1ËdZ¬?!ÊÁD^&fÀ  MMdE(N)   RA401dE3:               19.04=÷ÎÙAŠáH<¬1A†ff<´9XA„(ö<¬1A€{=#×
+Aí®A¸  ç655 4344 @g=Iº^@1Š™0¾í@g<þÅm\û@1Šxl"h
+@ÛŒD‘vfDŽÖfMMS0      BA200Spec,N:/BCD        14.53=¥ãAPÌÍ<£×
+AH  <£×
+AB\<£×
+A=™š<ýó¶BráHAŠÌÍ  è656 4343 @g=+Iº@ÑÎ_p@g=(Œç°@Ðÿ—$tT?„É†Dz  D}¦fMPSa      RE201Sb                 14.41=¥ãAN{<£×
+AAG®<£×
+A:{<£×
+A4õÃ<ýó¶B¸RAdzá  é657 4342 @g=33333@7KÆ§ïž@g=¸Që…@>\‘ÑN<AÒCCäšD;à MPS0      RA200S017               14.64=PAMG®<£×
+A@zá<£×
+A9™š<£×
+A4zá<ýó¶Aò{@€£×  ê663 -    @g=¹Œ~($@2©rGE8ï@g=¸ºÇË@2©rGE8ï>xï5Da™šÀ  MPdE(N)   RA401dE6?               18.18=LÌÍAŠ£×<¬1Aë…<¬1A€ff<¬1A‡G®>+B(  A<    ë664 -    @g=àqv@(ôzáG®@g=íúCþ]@(ôã¼ÓZ†@Ù²-ÃÛ&fÀ  MMSd      BE204ScIII-IV           14.14=PAY¸<£×
+ATQì<£×
+AQ™š<£×
+APÌÍ=oB«¸A´ÌÍ  ì667 -    @g>uöý!ÿ@¿Ë’:)Ç@g>xl"h
+@¿HË’:?ÿ.ID²LÍÀ  MPSd      BE204Sc(s)              15.10=¥ãA^áH<£×
+AUG®<£×
+APzá<£×
+AMp¤<ýó¶B”aHA™p¤  í-   -    @g>žš@2t¢3œ¿@g>žš@2t¯O„M>ÿ.IE™šÀ  P-dE      BE400-                  18.60=D›¦Aë…<¬1AŠáH<´9XAˆõÃ<´9XAˆQì=,1A4ÌÍ@5¸  î669 -    @g>§ï²-@=<64@g>§ï²-@=<64>]dDŽVfDŽYšMPdE      RA400dE4,N?             18.34=<jA„ff<¬1A~áH<¬1Ax(ö<¬1A\)=PAÊ  @æ¸R  ï674 -    @g?Þ Ñ·@+Ã×
+=p¤@g?o i@+Ã×
+=p¤>ýIRD5†fD0ÆfMMdE(N)   RA401dE0,N              18.68=På`A‰×
+<¬1A…33<¬1A‚=q<¬1A‚zá=C–AÚ£×ALÌÍ  ð672 4341 @g?!-w1@m«ŸU›=@g?$tSŽó@m«ŸU›=? ƒDgffDf³3MPS0      RA200S018               15.28=¥ãA]G®<£×
+AR\<£×
+AMp¤<£×
+AJ¸R<ýó¶B~záA"¸R  ñ-   4348 @g?1ÅÀ‹C•%@g?2a|ÚÀ‹'»/ì?jDý€ DúÌÍP-Sb      RE202-                  14.28=PAMG®<£×
+AAp¤<£×
+A:¸R<£×
+A5Â<ýó¶BÅ™šA®  ò675 -    @g?:’£S@®}Vlô@g?;dZ¬@­«ŸU›=?‘A Dµ™šDµœÍMBIrr(HSB)BE310Sa?                16.45=¥ãAx£×<£×
+As33<£×
+ApQì<¬1Al£×<ýó¶Aš£×@¸  ó684 -    @g?²-V@)Æ1ø .@g?±[W>«@)Æ1ø .>‹D	¬ÍD
+&fMMdE(N)   RA401dE0,N              18.02=‹C–A}™š<¬1Aq™š<¬1Ak×
+<¬1AmG®=oB"õÃA>¸R  ô687 -    @g?³Ð|„¶@'ÈÛ‹¬q@g?²þÅm]@'ÈÛ‹¬q>Áo DùšÀ  MMdE      BA400dE3                19.81=Æ§ðA”  <¼jA…<¼jAˆzá<¬1A‹¸=8QìA¿\)@ýÂ  õ-   -    @g?Ãa@O@ÍquŽ"@g?Â\(ö@ÍOß;dZ?G$tD™@ À  M-Irr(HSB)BE310-                  18.62=@ƒA\)<¬1AŽ£×<¼jAp¤<¼jA‹G®=8QìA…ë…@u¸  ö688 4353 @g@
+¦L/ƒ@#ñA [À@g@	Þ Ò@$xFÜ?Q-wDŒùšDŒ–fMMSc      RA203Sc(s)II-III        15.14=¥ãA]™š<£×
+ATQì<£×
+AN¸R<£×
+AK×
+<ýó¶B=  AS33  ÷692 4351 @g@,<žìÀ@(hŒç¯¸@g@3œ¾à@(hÛ‹¬q@i›=EášEÁšMMSc      BE203Sc(s)II.3          13.92=PAM¸<£×
+AE™š<£×
+AA™š<£×
+AAp¤<ýó¶B³õÃAÅ™š  ø-   -    @g@BZîc @0ÖÜ]cˆf@g@BZîc @0ÖâëC->…¡ËDÌ¹šÀ  M-dE      BA400-                  18.99=…¸AQì<¬1AŒõÃ<¼jA‰×
+<´9XAˆ=q=#×
+A¡
+=@¶{  ù693 -    @g@kP°ò|@¸Ôýó¶F@g@mÅÖ8†@¸ï4Ö¡b?Ÿ²Dÿ33E ÍPPSBm     BE215SBmIII?            15.68=¥ãAj{<£×
+AdõÃ<£×
+Ab=q<£×
+As®='ïžB€úáAë…  ú696 -    @g@‰ 'RT@1Œ¬1&é@g@‰ 'RT@1Œ¬1&é>XDÐCæ33Cæ@ MPdE      RA400dE5?               18.65=uÂA‹
+=<¬1A‡×
+<´9XA„ÌÍ<¬1A€£×=t¼AÞ\@ø£×  û698 4352 @g@©“àß@&oªÍžƒä@g@«6z‘@&oªÍžƒä?(	ÕEfEx MMS0      RA200S018               14.77=¥ãARff<£×
+AG
+=<£×
+A@£×<£×
+A<õÃ<ýó¶B‰LÍAU™š  ü-   -    @g@«6z‘@ –‡+J@g@­«ŸU›@ –lô!-?Ÿ+DªS3À  M-Irr(HSB)BA310-                  17.64=¾wA‡\)<¬1A†áH<¬1A…ë…<¬1A…™š=t¼AYG®@…¸  ý695 -    @g@´9Xb@$"©“àß@g@³g ù	@$"©“àß>¢&DžÐ D<ÍMMdE(N)   RA401dE0,N              17.40=D›¦A}™š<¬1AtÌÍ<¬1Ao33<¬1Alzá=oBA\)AmÂ  þ697 -    @g@½<64@*dÂø7µ@g@¼j~ùÛ@*JŒL˜>ÈXyDŸ° D™ùšMPSc      BE203Sc(s)II.2          14.82=PA\(ö<£×
+AS\)<£×
+ALzá<£×
+AJ¸R<ýó¶B‚aHA¥G®  ÿ699 -    @gA¯·é@múCþ\’@g@û~ÿ—@o4Ö¡aå@¯qD0&fD6šMMIrr(HSB)BE310Sc(s)III-IVorSmIII 14.38=PAW×
+<£×
+AQÂ<£×
+AN=q<£×
+AN\<ýó¶B7ffA8õÃ   706 -    @gAªÍžƒä@'„M;@gA©ûçl‹@'„M;>ÁG®DÐ  DÍfMMdE(N)   RA401dE0,N              18.50=TýôAŠff<´9XA…¸<¬1Aƒ…<¬1Aˆ£×=,1Aßp¤A™š  711 -    @gAØ­«ŸV@³MjO@gAÙb¶®@³MjO>«C–D¼³3D»  MMdE(N)   RA401dE1,N              17.03='ïžA™š<¬1Az=q<¬1AráH<¬1Ak33=oB-ÂAhÌÍ  -   -    @gAß;dZ@2°|„µÜÆ@gAàÞÒˆÎ@2°hÛ‹¬q?•¸»DÄVfÀ  M-dE(N)   BA401-                  18.87=‹C–A\)<´9XAŠ\<´9XAŠ£×<Ä›¦A‘\)?ë…AŠQì@®ff  710 -    @gAï²-@çl‹C•@gAï²-@çRT`ªe>DÐD—yšD’öfMPdS0     BE410dS0:               16.39=¾wAtQì<£×
+Al  <£×
+Ah  <£×
+Ac×
+<ýó¶AÑG®@Ÿ
+=  -   -    @gBñ©ûçm@5)Þ Ñ·@gBôðØDÐ@5(õÂ\)?×òåDn¬ÍDd¬ÍM-dS0(N)  BE411-                  16.03=¥ãAo\)<£×
+Ag®<£×
+Ac33<£×
+A`(ö<ýó¶B2áHA/33  727 -    @gC{J#9Á@t9XbN@gCzxl"h@t!-w2>‘N<E5¹šE5¹šPPdE      RA400dE1                20.50>¾wA“¸<´9XAŽQì<¼jA
+=<¼jAŽÌÍ=yÛ#Az{@¦¸R  731 4365 @gC·Xâ@CFÜ]cˆ@gCm\ú¬Ú@,q²•êB¬üÂ†33À  PME       RA100E3                 11.83=¥ãA#×
+<¬1AáH<¬1A(ö<£×
+A  <ýó¶C|
+BBzá  -   -    @gD,<žìÀ@ó¶E¡ÊÁ@gD+jçÕg@óœ¾ß¤>çl‹D#s3À  M-S       BE206-                  18.96=]/A‘G®<´9XAë…<¼jAŒ(ö<Ä›¦A‰ë…=#×
+Amë…@™š  733 -    @gDE¡ÊÀƒ@!Ffffff@gDE¡ÊÀƒ@!Ffffff=­àD›¼ÍD˜ÆfMMdE(N)   RA401dE4,N              18.76=m‘hA®<¬1A‰\)<´9XA†áH<¬1A†õÃ=PA~¸R@õÃ  	-   -    @gDµÜÆ?@!ÊÀƒo@gDµÜÆ?@!°‰ 'R>½p¤D…YšÀ  M-dE      BE400-                  17.99=LÌÍA‡G®<¬1A„  <¬1Aƒ™š<´9XA‚(ö=\)AL(ö@XQì  
+737 -    @gE?|í‘h@öý!ÿ.I@gE$tSŽó@ø -àAD¿HDÛÌÍD×ÆfPPSm      BE205Sd/BCD?            15.92=¥ãAo33<£×
+AhQì<£×
+Af=q<£×
+A`zá<ýó¶BPp¤A4zá  740 -    @gEE8ï4×@!&€IR@gEF
+¦L0@!ÿ.Hè§?žÏBD„–fD[` MMSBm     BE215SBmIII             17.03=#×
+A33<£×
+Az=q<¬1Au™š<¬1AtQì=oB*áHA £×  739 -    @gE[W>«6@
+l¿±[W?@gEVlô!@
+lVÕÏªÎ@×
+DeyšDgÀ MPSd      BE204SdIII-IV           14.91=PA^¸R<£×
+AXõÃ<£×
+AS33<£×
+ALõÃ<ýó¶B‰Š=AªõÃ  741 -    @gE×Ûôˆ@Åm\ú¬Ú@gE×Ûôˆ@Å¡ÊÀƒ>7KÇDìšDèÌÍPPIrr(HSB)BE310BCD?               17.24=¥ãAÂ<¬1A}™š<¬1Az¸R<¬1Avff=oA¢£×@™™š  745 4366 @gFCþ\‘Ñ@i^žš@gFDÐ©*@ixÔýó¶? u÷DŸYšDŸ MMdE(N)   RA401dE6,N              15.82=¥ãAjff<£×
+A^áH<£×
+AXõÃ<£×
+AUp¤<ýó¶B=®A9G®  748 -    @gFVÕÏªÎ@-'Ë)^ž@gFW§†Â'@-'æšÔ,?AÑND”ùšD–À MMdE      RA400dE4:               17.72=#×
+A‰p¤<¬1A„¸R<¬1A
+=<¬1A}¸=C–B\A"áH  747 -    @gF^5?|î@!û˜Çâ‚A@gF_ö”F@!û¥ãS÷Ï>´SDnÆfDnÌÍMMdE(N)   RA401dE0,N              18.19=På`A…ë…<¬1A‚ff<¬1A‚\<¬1A\)=ß;dB =qA\Qì  751 -    @gFr° Äœ@21ò×s@gFr° Äœ@21ò×s=Ù³ÐD-ó3D.` MMdS0(N)  RA411dS0                16.22=¾wAl(ö<£×
+Aa¸<£×
+AZ=q<£×
+AXzá<ýó¶BÂA®  750 -    @gF›¥ãSø@	Ô•*™@gF›¥ãSø@	º^5?}=j³hD„33D…33MMdE(N)   RA401dE5,N              16.23=0 ÅAn\<£×
+Ac×
+<£×
+A]Â<£×
+AX£×<ýó¶BeÌÍAl    753 -    @gFß¤?åÉ@*8Ôýó¶F@gFâe+Ô@*8ï4Ö¡b?¯>«Dm@ Dnà MMdE(N)   RA401dE0,N              18.69=£×
+A‚  <¬1Az=q<¬1Av{<¬1AqG®=oB-ë…At(ö  756 -    @gGn—P@"üwškP±@gGµsê³@"üÆ?@#U›DFYšD6fMMdE      RA400dE1,N:             17.65=#×
+A‡
+=<¬1A‚{<¬1A‚ff<¬1A|õÃ=+Aï¸A8ÌÍ  755 -    @gG6z—@:Cþ\‘Ñ@gG5¨Xy>@:Cþ\‘Ñ>°ŠD—ìÍD›IšMMdE(N)   RA401dE3,N              17.79=@ƒAƒp¤<¬1A|(ö<¬1Aup¤<¬1AnáH=oB£×A733  -   -    @gGP°ò{³@0Ï–»˜È@gGP°ò{³@0Ï—$tS>N!–EþfÀ  P-Irr(HSB)BE310-                  18.57=@ƒA‹p¤<¬1Aˆ\<¬1A†ÌÍ<¬1A„ÌÍ=t¼A33@0£×  758 4370 @gGU›=È@ÇË)^ž@gGQ‚©“@Ç“Ý—ö+@škDCFfÀ  MMS0      RE200S036               14.87=¥ãAR{<£×
+AEp¤<£×
+A=ë…<£×
+A9¸<ýó¶B…¨öAuë…  760 -    @gG{J#9Á@'ª	Þ Ò@gG|ÚQ@'ª	Þ Ò>&šÔDí  DåP MMdE      RA400dEpec?             18.36=H´9AŠÌÍ<¬1A†áH<´9XA„  <¬1A|  =oA³ë…@ñ™š  762 -    @gHe”¯O@ä%®æ2@gHe”¯O@ä%®æ2=µÝDŸ3DŸišMMdE(N)   RA401dE3,N              17.03=,1AxõÃ<£×
+AnáH<¬1AhQì<£×
+AbáH<ýó¶B =qAG®  765 -    @gHvÈ´9X@*}IQ‚©“@gHvÈ´9X@*}IQ‚©“=6®}DqŒÍDr@ MMdE(N)   RA401dE1,N              17.57=0 ÅA®<¬1AxÌÍ<¬1As33<£×
+Ap(ö=oA¡\)@µp¤  763 4374 @gH}Vlô@)Æ€IQƒ@gHg8}¿@)ËC•%B
+âhDu  À  MME       RA100E1                 11.28=PA…<£×
+A\<£×
+A…<£×
+A  <ýó¶C‚ÎBSff  768 -    @gHo hÜ@1÷ÎÙ‡@gH~ùÛ"Ñ@1,<žìÀ@C@OEñšE[3PPSd      BE204SBc                16.00=¥ãAp(ö<£×
+Ah£×<£×
+AdÌÍ<£×
+Ab¸R<ýó¶B:ffA!ë…  769 -    @gHÿ—$t@/l/ƒ{J#@gHÿ—$t@/l/ƒ{J#=Ø­¬D®ÆfD®LÍMMdE      RA400dE1                18.07=0 ÅA‡p¤<¬1A‚¸R<¬1A\)<¬1A}™š=+AÄ=q@ðQì  764 -    @gH¿±[W?@Pÿ—$tT@gH¿±[W?@Pÿ—$tT=ìôDúÍDÿ¬ÍPBSa      RE201S026               16.78=#×
+At£×<£×
+Aj=q<£×
+Ad  <£×
+Aap¤=oA©¸@—\)  773 -    @gIüPH@ùrGE9@gIüPH@ß;dZ>ÓZ†D´¦fD³@ MPdE      RA400dE4?               18.99=}ó¶A®<¬1AŒ¸R<¼jAŠ  <´9XAˆ{=0 ÅA¬\@¹ë…   772 -    @gI)^ž	@¨$xG@gI)^ž	@¨Xy=Ù?P-àDã3D™VfMPIrr(HSB)BE310BCD?               18.11=8QìAŠ{<¬1Aˆ¸R<¬1A‡ë…<´9XA†áH=D›¦A…@|(ö  !779 -    @gIÁ½¥@*V“@gIÀ6âë@*:’£?‡ÈKÂ«ffÃ4æfMMdE(N)   RA401dE0,N              18.77=m‘hA…<´9XA‰33<´9XA‡\)<¼jA…33=t¼AÐ(öAÂ  "781 -    @gJ¸ºÇ@)màqv@gJ¸ºÇ@)màqv>8ºÇÃšÍÃ<šMMdS0(N)  RA411dS035,N:           16.11=¾wAlzá<£×
+Ac…<£×
+A]ë…<£×
+A\£×<ýó¶B\)A…  #788 -    @gJ>BZîc@'5éá°‰ @gJ?¼@'5öý!ÿ.>¥S&Bò™šBñÌÍMMdE      RA400dE7,N:             17.32=0 ÅA€\<¬1Aw\)<¬1Ar{<¬1Ao×
+=oB¸RA¸  $790 -    @gJVÕÏªÎ@,X_ö”F@gJVÕÏªÎ@,X_ö”F=àA‰DùšD¬ÍMMdS0     RA410dE1,N              17.18=¥ãA}™š<£×
+As®<£×
+AmÂ<£×
+Aip¤<ýó¶AÀzá@ð    %787 4376 @gJkP°ò|@öâëC-@gJg8}¿@öý!ÿ.I?î€DŒÐ DŽfMMSd      BE204Scd(s)III          14.41=PAX£×<£×
+AR=q<£×
+AO…<£×
+AK\)<ýó¶B„QìAŽ=q  &794 -    @gJáG®{@0nzáG®@gJâe+Ô@0n Ñ·Y?Š©“DÞÆfDe¦fMMdS0     RA410dS08pec:           15.56=¥ãAmÂ<¬1Ac
+=<£×
+A\ÌÍ<£×
+AXQì<ýó¶BÅ…AŸ33  '793 -    @gJâe+Ô@*$xFÜ@gJâe+Ô@*$µÜÆ?@Œ.Dì@ À  MMIrr(LSB)BE300ImIII-IV,N?        17.44=#×
+A„  <¬1AG®<¬1A€(ö<¬1A€=q=t¼BÌÍA×
+  (792 4380 @gJô!-w@$Œç¯¸@gJô!-w@$šu%F>òn˜DoFfDpæfMMSc      RE203Sab(s)             13.39=PA?…<£×
+A4zá<£×
+A.=q<£×
+A*{<ýó¶CÍB£×  )795 -    @gK‡+@-›J#9Àì@gK‡+@-›dZ¬?¡ËD±¼ÍD¯33MMdE(N)   RA401dE7,N:             17.98=0 ÅA‰33<¬1A„¸R<¬1A‚(ö<¬1A€£×=\)B  A	¸  *798 4382 @gK1Å@20uöý!ÿ@gK!-w1@22ëC,¥B¼…D@ìÍÀ  MMS0      RA200S013pec            10.94=PA£×<£×
+A¸<£×
+A=q<£×
+A®<ýó¶C„LÍBv33  +801 4383 @gKe+ÓÃa@0xK]Ìcñ@gKcˆe”¯@0x1&éxÕ?Æ{DÕ¼ÍDÕæfMMS0      BE200Amorphu            13.42=PAFff<£×
+A>=q<£×
+A:ff<£×
+A8Qì<ýó¶BŠ…A1Â  ,797 -    @gK4Ö¡aå@2#×
+=p¤@gK5¨Xy>@2#ÉîËû?ES&D™ŒÍÀ  MMdE(N)   RA401dE3,N              16.38=PAn=q<£×
+Aep¤<£×
+A]™š<£×
+A]G®<ýó¶Bp¤A’ÌÍ  --   -    @gKÏªÍž„@)EÖ8†YK@gKÎ_oÒ@)EðoiDg?nžEžfEœÍM-dE(N)   RA401-                  17.61=49XA„ff<¬1A~¸R<¬1Aw®<¬1Aw…=C–B ÂATQì  .802 -    @gKàÞÒˆÎ@*ÿU›=È@gKß;dZ@*ÿö”Ft?ÿÕgÃM33À  MMIrr(LSB)BE300BCD                17.62=D›¦A…ë…<¬1A‚£×<¬1A\)<¬1AÂ=PBQìAQì  /-   -    @gL3œ¾à@&QÎ_p@gL1ø .@&QÎ_p?]ÌdDb†fDa&fM-Irr(HSB)BE310-                  18.30=0 ÅAŠ\<¬1A‡…<´9XA…®<¬1Aƒ¸=t¼A—…@±ë…  0809 -    @gLh	Ô•@(…zxl"h@gLfffff@(…m\ú¬Ú?'1ÂÌffÂô33MMedge-on RE207Sc(on_edge)        15.48=¥ãAf¸R<£×
+A]G®<£×
+AXQì<£×
+ATÌÍ<ýó¶B¢(öAŒÌÍ  1810 -    @gLxl"h
+@*t`ªdÂø@gLxl"h
+@*tSŽóMj>Ö9Ã¼€ ÃªšMMdE(N)   RA401dE0,N              17.86=På`A„£×<¬1A
+=<¬1AyG®<¬1AtõÃ=+AÐzáA×
+  2812 -    @gL¥zxl"@.cˆe”¯O@gL¥zxl"@.cˆe”¯O=ç°DÁ<ÍDºÓ3MMdE(N)   RA401dE1,N              17.64=H´9Aƒë…<¬1A~=q<¬1A|(ö<¬1Al  =oBp¤A0õÃ  3-   -    @gLµÜÆ?@†$Ý/ @gLµÜÆ?@†$Ý/ >I…ðEÆfÀ  P-dS0     BE410-                  17.79=8QìA……<¬1AÂ<¬1A~=q<¬1A€Qì=#×
+B®@Þff  4816 -    @gLÐ©*0@/±Þi­BÄ@gLËûµt@/²×sü@àD†“3D‡ð MMdE(N)   RA401dE5,N              15.54=¥ãAl  <£×
+Ad£×<£×
+Ab\<£×
+A^ff<ýó¶B»{AÈ£×  5817 -    @gLÛ‹¬q@/©Þ Ñ·@gLÛ‹¬q@/¨Û‹¬q?ˆÛŒD†3D†6fMMdE(N)   RA401dE1                16.00=#×
+A^áH<£×
+AX(ö<£×
+AR{<£×
+AQÂ<ýó¶BÆ{A×Â  6815 -    @gLô!-w@*I“àÞÓ@gLõÂ\)@*I“àÞÓ?[xÄ:@ Ä/  MMdE(N)   RA401dE2,N              16.22=¥ãAr\<£×
+Ak33<¬1Ab=q<£×
+A\õÃ<ýó¶Bzë…A®  7824 -    @gM*0U2a@,MBÃÉîÌ@gM+Iº@,M(Œç°?>¾àCÃÀ C½s3MMdE(N)   RA401dE0,N              17.66=8QìA€£×<¬1AxÌÍ<¬1As×
+<¬1Ap£×=oBi33A¼¸R  8820 -    @gM-w1Å@íàqv@gM-w1Å@íúCþ\’>žíD½ D¼ìÍMPdE      RA400dE3:,N             18.79=£×
+A‹G®<¬1A†ff<¬1Aƒ™š<¬1Aƒ×
+=,1A²{@¿\)  9823 -    @gM0¾í)@( ªdÂø8@gM0¾í)@( ªdÂø8><žíDÔéšDÓ‰šMMdE(N)   RA401dE0,N              17.02=0 ÅAz\<£×
+Ao×
+<¬1Ajff<£×
+Ae™š<ýó¶B
+=A>ff  :825 -    @gMHË’:@%*³g ù	@gM>«6z@%*ôðØDÐ@ŒoDäs3D»)šMMIrr(LSB)BE300ImIV,N?            17.15='ïžA€ÌÍ<¬1Aw®<¬1At  <¬1Av{=C–B   A_…  ;826 -    @gM$Ý/@EÖ8†YK@gMxÔýó¶@F
+¦L/ƒ@qD´éšD¼@ PPIrr(LSB)BA300ImIV               16.21=¥ãAs
+=<£×
+Anff<¬1Aj{<¬1Ai™š=oB¢úáA§¸  <-   -    @gM‚©“á@*l"h	Õ@gM$Ý/@*_ö”F?gïžD9šD  M-Irr(LSB)BE300-                  19.13=]/A
+=<¼jAŠÌÍ<Ä›¦Aˆ=q<ÌÌÍA†áH=#×
+A‡33@”ÌÍ  =828 4387 @gMÅo@)ž«6z‘@gMŽóMj@)žùÛ"Ðå@/ƒD	€ CìšMME       RA100E5                 14.37=PAJff<£×
+A>ff<£×
+A7×
+<£×
+A3×
+<ýó¶BõÃA/®  >827 -    @gM©ûçl‹@ßU›=È@gM¬q²–@ÝæšÔ,=@«U›Dz“3DxìÍMMedge-on RE207Sc(on_edge)        14.56=PAT£×<£×
+AJ\<£×
+AEG®<£×
+A@õÃ<ýó¶C¡HAíp¤  ?833 -    @gMô‡ü¹$@*P°ò{³@gMó¶E¡Ë@*P°ò{³>Ê	D5  D4  MMdE(N)   RA401dE0,N              18.52=yÛ#A®<¬1Az{<¬1Ar\<¬1Ar=q=oB+
+=Aˆ\  @836 4388 @gN6âëC@)Sg ù	l@gN:û~‘ @)RäŽŠqÞ@zuE ‘šEÛ3MMSa      BE201Sab                12.81=PA5Â<£×
+A+\)<£×
+A&{<£×
+A!p¤<ýó¶C\ìB33  A841 -    @gNT`ªdÃ@-çÈK]Ìd@gNVÕÏªÎ@-çl‹C•@1%CóæfCõŒÍMMSm      BE205BCD                16.47=¾wAuÂ<£×
+AlõÃ<¬1AhQì<¬1Ac®<ýó¶BD(öA2=q  B846 -    @gN½<64@*e+ÓÃa@gN¼j~ùÛ@*e+ÓÃa>`[ÀÄ “3Ä6  MMdE      RA400dE1,N:             16.82=¾wA~áH<¬1Aup¤<¬1Ao33<¬1AjáH<ýó¶B'QìA<    C849 4390 @gN¾ß¤?æ@$ëIº^@gNÁTÉ…ð@$ëIº^?‹DŠÖfD‰¼ÍMMSBc     RA213Sbc(s)II           14.06=PAQG®<£×
+AJ¸R<£×
+AG
+=<£×
+AE™š<ýó¶B=qA¦{  D-   -    @gNÔýó¶F@&fffff@gNÔýó¶F@&fffff>'†ÂD$Ó3À  M-dE      RA400-                  19.22=¥ãTAff<´9XAŒ\<´9XA‰Â<´9XAˆ£×=@ƒA„=q@•p¤  E848 -    @gNþÅm\û@<ÓZ…‡”@gO hÛ‹¬@=!ÿ.Hé?Ÿ|îD¼|ÍDÀs3MMSBm     BE215ImIIIpec/BCD       16.02=¥ãAo…<£×
+Aj{<¬1AhÌÍ<¬1Ac33=oBiõÃAIG®  F851 -    @gO9Àëíú@8}¿H€@gO6z—@8}¿H€?±QƒD“išD“LÍMMedge-on RE207Sc(on_edge)        14.96=¥ãA\ÌÍ<£×
+AS
+=<£×
+AMë…<£×
+AJáH<ýó¶BÍ\A¯×
+  G857 4394 @gOk¹Œ~(@26éxÔýô@gPFÜ]d@28ï4Ö¡bB‹ vDzS3Df  MMSBb     RE212SBb(sr)I-II        12.93=PA8  <£×
+A,õÃ<£×
+A&\<£×
+A$õÃ<ýó¶BóuÃBáH  H854 -    @gOn.±Ä3@)ŠOv`@gOm\ú¬Ú@)ŠOv`?»0D,¬ÍD/lÍMMdE(N)   RA401dE8,N              18.61=}ó¶AŒzá<¬1Aˆzá<´9XA†ÌÍ<¬1A„=q=#×
+Aép¤@àQì  I855 -    @gO{J#9Á@ðU2a|@gO{J#9Á@ðU2a|    Dps3Dq¹šMMdE(N)   RA401dE6,N              18.84=OßAŠ(ö<¬1A„(ö<¬1AÂ<¬1A‡p¤=D›¦B£×A=q  J856 -    @gO¸ºÇË@$‹¬q³@gO¸ºÇË@$‹¬q³=Ãþ]D~ffD€6fMMdS0(N)  RA411dE1,N              15.57=¾wAaë…<£×
+AW®<£×
+AQë…<£×
+AO×
+<ýó¶B[33ApÌÍ  K859 -    @gOÃa@O@poiDg8@gOÉã½@q²•éâ@&ÏBD°33D²c3MPedge-on RE207Sc(on_edge)        15.49=¥ãA^áH<£×
+AS
+=<£×
+AK®<£×
+AFff<ýó¶Bæë…AÁ®  L861 -    @gOÛ"Ðå`@.àqv@gOÛ"Ðå`@.í(Œç>ù0¾Di,ÍDkà MMdE      RA400dE4:               18.89=q©üAŠ¸R<¬1A‡
+=<´9XAƒ¸<¬1A€ff=C–Aó…A\)  M865 4396 @gOô‡ü¹$@/VÈ´9X@gOãS÷ÎÙ@/WOß;dA÷fÂ×ffÀ  MMSc      BE203Sc(s)II            13.72=PAMÂ<£×
+AF=q<£×
+ABff<£×
+A?®<ýó¶CÅBáH  N862 -    @gP}¿H€@Ò:)Çy§@gPOv_Ù@Ò:)Çy§>ÆÏBD¦fÀ  MPdE(N)   RA401dE?                19.46=£×
+A‘
+=<¬1AG®<¼jAŠff<¼jA…p¤=\)Ah£×@šáH  O870 -    @gP·€4mÆ@'ŸåÉä@gPµÜÆ?@'ŸØ­«ŸV?eÖ9D•IšD”P MMdE(N)   BE401dS05,N             16.35=¾wAl£×<£×
+Ad  <£×
+A]ë…<£×
+A\Qì<ýó¶BGõÃA;\)  P871 -    @gPÁTÉ…ð@)ƒä%®æ@gPÀƒn˜@)ƒä%®æ> ÅD±ó3D²vfMMdE(N)   RE401dE4,N              16.82=#×
+Avff<£×
+AlõÃ<£×
+Af\<£×
+AfáH=oBnp¤Aˆ\  Q872 -    @gPäŽŠqÞ@)¸âe+Ô@gPäŽŠqÞ@)¸Ôýó¶F>ÙcD¤0 D¤  MMdE(N)   RA401dE0,N              17.15='ïžA€ÌÍ<¬1A{\)=0 ÅAqG®<¬1Aw®=C–B{AA™š  R874 4405 @gPò{²þÅ@0.V“u@gPô!-w@0.V“u?6Ü]DÚ  DÚƒ3MPSc      RE203Sc(s)/S0           14.06=PAJáH<£×
+A@zá<£×
+A;
+=<£×
+A7\)<ýó¶B‚k…A‰33  S873 4402 @gPú¬Ùè>@*9™™™™š@gQS&Â@*:u%F@©—$Cf™šÀ  MMedge-on RE207Sc(on_edge)        13.82=PAEG®<£×
+A8õÃ<£×
+A2{<£×
+A.\<ýó¶C%×
+BÌÍ  T877 -    @gQE8ï4×@+X -à@gQE8ï4×@+X -à>Â¸ÌÍÂÄÌÍMMdE(N)   RA401dE0,N              18.92=ƒoA‹×
+<¬1Aˆff<´9XA†ÌÍ<¬1A…×
+=\)A   @Ô(ö  U881 4406 @gQ–R½<6@)ãa@N¥@gQÁ½¥@)ßåÉäAô¹ÁÃ5³3Ãt33MME       RE100S013/E3            10.69=PA
+=<£×
+Ap¤<£×
+A®<£×
+@ÿ®<ýó¶CÜµÃB‹.  V-   -    @gQœ¾ß¤¿ôÛ‹¬q³@gQ“Ý—ö+¿ôàquŽ@ªGDü€ Dý33P-Sm      BE205-                  15.31=PAh(ö<£×
+Afff<£×
+Ac\)<£×
+Ac33=oB4
+=Az¸R  W-   -    @gQÚQÎ@²a|ÚQ@gQÚQÎ@²a|ÚQ=áä÷DG“3À  M-dE      BA400-                  18.36=,1A
+=<´9XAˆ  <´9XA…G®<¬1Aƒp¤=¾wAˆQì@¤(ö  X-   -    @gRdÂø7µ?ûÞ Ñ·Y@gR]cˆe•?ûÞi­BÃÊ@AuŽEÑšEÀ P-Sm      BE205-                  18.49=8QìAŒõÃ<¬1A‹¸<¼jA‰G®<Ä›¦AG®=º^5AÕ\)@ÊáH  Y888 -    @gRu%F
+¦@ ²ñ©ûçm@gRzáG®@ ³àÞÒ‰@$Dw¹šDˆ<ÍMMSm      BE205ImIII              16.40=#×
+Axzá<£×
+Aqp¤<¬1An\<¬1Ak…=oB\QìAMG®  Z-   -    @gR“t¼j?ðR½<64@gR’£S&?ðPHðŽ@FtDÆ#3À  P-Irr(HSB)BA310-                  17.60=,1A…\)<¬1AÂ<¬1A}™š<¬1A
+==+AúQì@íÂ  [892 -    @gR­«ŸU›@)F
+¦L0@gR¬1&é@)+ÓÃa?CMjÄ,FfÀ  MMdE      RA400dE0:               20.34>t¼A’áH<¼jAŽff<¼jA‹™š<´9XA‹…=H´9AQÂ@–¸R  \890 -    @gRß¤?åÉ@­‘hr°!@gRß¤?åÉ@­ÅÖ8†Y?ÈKDÀ¶fDºÀ MPIrr(HSB)BE310BCD?               17.38=#×
+A„=q<¬1AG®<¬1A\)<¬1A|  =oAXõÃ@dzá  ]-   -    @gS
+=p£×¿ôOv_Ù@gSÞ Ñ·¿ôzáG®@[\)D÷3Dû@ P-Irr(LSB)BE300-                  16.67=¥ãAp¤<¬1A€  <¬1A×
+<¬1A€\=#×
+B4záADõÃ  ^-   -    @gSF
+¦L0@Dg8}¿@gSF
+¦L0@Do hÜ>Ö”FE	šÀ  P-Irr(HSB)BE310-                  18.63=8QìAŽ£×<¬1A‹p¤<´9XAŠzá<´9XA‡¸=\)Aë…@
+=  _895 -    @gSS&Á¾@%)ûçl‹D@gSS&Á¾@%)îËûµ?Í6D€0 D€ffMMdE(N)   RA401dE0,N              18.49=<jAŠáH<¬1A‡™š<¬1A„ff<¬1A€\=oA½…A{  `901 -    @gS|ÚQ@0…éá°‰ @gS|ÚQ@0…éá°‰ >nËûDþÍDþšMMdE      BE400dE3:               18.29=På`A‰Â<¬1A„£×<¬1A®<¬1A{×
+=\)Aé×
+AõÃ  a912 4407 @gTL/ƒ{J@)8ºÇË)@gTM:’£@)8­«ŸU›?9ÁB«  BÌ  MMSBb     BE212SBbc(rs)           14.08=¥ãAHzá<£×
+A>áH<£×
+A8£×<£×
+A6=q<ýó¶BÞ¨öAÑ¸  b917 -    @gTQë…¸@+(Xy=Ù@gTQë…¸@+(Xy=Ù>%Dš¬ÍDšà MMdE(N)   RA401dE6                16.50=¾wAtQì<£×
+Aj\<£×
+Aep¤<£×
+Aaë…<ýó¶BÌÍ@Ý¸  c916 -    @gTmÅÖ8†@)|j~ùÛ#@gTmÅÖ8†@)|j~ùÛ#>¾àD¢¹šD¢¶fMME       RA100d:E1,N:            17.48=,1A}G®<£×
+ApÌÍ<£×
+Aj\<£×
+Aeë…=oAˆQì@•p¤  d920 -    @gT° Ä›¦@#÷süPH@gT®}Vlô@#÷€4mÅÖ?>«CÝs3CÝŒÍMMdE(N)   RA401dE1?,N             18.99=‰7LA‡™š<¬1A„¸R<¬1A33<¬1Ao…=oAÓG®AÌÍ  e921 4412 @gTËûµt@¸Që…¸@gTšu%F@²-VAÅ²–ES3EyšPPSBc     BE213SBbc(s)II          13.89=PAK…<£×
+AC…<£×
+A?®<£×
+A<Qì<ýó¶Bj£×A™G®  f-   -    @gU/ìVÕÐ@0·´¢3œ@gU,¥zxl@0·»/ìVÖ?”›¦DÉlÍÀ  M-Irr(HSB)BE310-                  18.01=]/A‡\)<¬1Aƒ\)<¬1A…<¬1A}¸=+Ap¤@£33  g928 -    @gUO„M@)ö”Fs‚@gUO„M@)éxÔýô=…‡”Ã  Ã~šMMdE(N)   RA401dE6,N              18.40=“t¼A€ff<¬1Av¸R<¬1Ar=q<¬1Ap  =oB£×A
+=  h929 4415 @gUeýŠÚº@ ß¼@gUeýŠÚº@ ß¼>y§DdFfDc  MMdE(N)   RA401d:E1,N             14.89=¥ãAUë…<£×
+AK33<£×
+AD£×<£×
+AA™š<ýó¶B€
+=A‚=q  i-   -    @gUÅo@2#üPH@gUÅo@2#üPH>þ]D/ÙšÀ  M-dE(N)   RA401-                  18.96=•A‰®<¬1A‡¸<´9XAƒ×
+<¬1A…
+==#×
+AÍp¤@Ð£×  j931 -    @gUÝ—ö+k@%Ï'»/ìW@gUÝ—ö+k@%ÏAò×s?N($D
+¦fDÌÍMMdE(N)   RA401dE2,N              17.69=<jA
+=<¬1Ayë…<¬1Ar=q<¬1Aqë…=oB?ffA^{  k933 -    @gUéùrG@!¥Ö8†YK@gUéùrG@!¥¼£n/?Gü¹D­™šD¬¦fMMdE(N)   RA401dE2,N              18.04=<jAƒ×
+<¬1A}¸<¬1AuÂ<¬1Az{=C–BA™šAS
+=  l936 -    @gUìVÕÏ«@&Âh	Ô•@gUìVÕÏ«@&Âh	Ô•=]—öD£0 D¡p MMdE(N)   RA401dE1,N              16.91=#×
+AxQì<£×
+Ao
+=<£×
+AiG®<£×
+Ac
+=<ýó¶B$=qAW\)  m938 4416 @gV9XbN@¬¿±[W?@gV#9Àëî@­úCþ\’A%ÕgDµvfD­ã3MMSBc     BE213SBc(s)II.2         13.91=¥ãANff<£×
+AFff<£×
+AA¸<£×
+A>\<ýó¶B‹×
+A­¸  n940 -    @gVFs×Ü@(èr° Äœ@gVFs×Ü@(èr° Äœ>5sëD°vfD°ƒ3MMdE(N)   RA401dE1,N              15.72=¥ãAi¸<£×
+A]p¤<£×
+AW…<£×
+AUG®<ýó¶Bqp¤A”£×  o939 4411B@gVHðŽ@!Ä÷eýŠÛ@gVL/ƒ{J@!ÄêJŒM?çYDð DŸÍMMSc      RA203Sc(s)II            13.85=¥ãAJ\<£×
+AC×
+<£×
+A?\)<£×
+A?
+=<ýó¶Bòk…B'p¤  p-   -    @gVdÂø7µ@¯²-V@gVdÂø7µ@¯²-V=ß;dD™šDà M-E       RA100-                  17.28=49XA|  <£×
+AqÂ<£×
+Al(ö<£×
+Ah(ö=oA‹33@\)  q950 -    @gV½<64@'($x@gV»˜Çâ‚@'5?|í‘?XŒçD€À D‰–fMMSBm     BA215SmIV               15.92=¥ãAs×
+<£×
+AqG®<£×
+AmG®<£×
+Ah  <ýó¶B€šAÄ    r944 4417 @gVºÇË)@#+6z—@gVŒL˜_@#&Á½¥B%ÕÐDXÌÍDU¬ÍMMS0      RA200S017               13.27=PA9™š<£×
+A-™š<£×
+A'33<£×
+A#…<ýó¶Bà
+=A‚=q  s945 -    @gVÆ?@*Z¹õY³Ð@gVÜ]cˆf@*X“t¼jAŽ°Š?æffÀ  MMIrr(LSB)BE300SBmIII             16.01=¥ãAqG®<£×
+Am™š<¬1Aj=q<¬1Ak\)=oBœŠ=A•®  t951 -    @gW?|í‘h@'SÝ—ö+k@gW>«6z@'S÷ÎÙ‡?2þÅEÆfÀ  MMdE(N)   BA401dE2pec,NordS02,N   15.58=¥ãAa¸<£×
+AXQì<£×
+AR¸R<£×
+APzá<ýó¶BŽ\)AŽ¸R  u-   -    @gWA [À@2dÉ…ðoi@gWAò×s@2dÉ…ðoi>Èè§D¯öfÀ  M-dE(N)   RA401-                  19.18=ñ©üA‡ë…<¬1Aƒp¤<¬1A€=q<¬1A…=È´9B®A8£×  v949 -    @gWF
+¦L0@%Tã¼ÓZ†@gWF
+¦L0@%TðØDÐ>Iº^DŸvfDŸ†fMMdE(N)   RA401dE4,N              17.22=<jAs×
+<£×
+Ag\)<¬1A`õÃ<£×
+Ad  =+BúáAž¸R  w-   4355 @gWHË’:¿ìL˜_÷@gWHË’:¿ìL˜_÷>ÅÖE±šEFfP-Sa      RE201-                  15.19=¥ãAY¸<£×
+AMë…<£×
+AG×
+<£×
+ADzá<ýó¶Ba…A)Â  x953 -    @gWMjO@+!×Ûô‡ý@gWMjO@+!ä÷eý‹>Wö+ÃÜ³3ÄYšMPdE(N)   RA401dE5?,Npec?         16.74='ïžA€  <¬1Av{<¬1ApõÃ<£×
+AmÂ=oB¸A
+=  y952 -    @gWjçÕfÏ@#ÃÉîËû@gWm\ú¬Ú@#Ã¼ÓZ…ˆ?š•êDw&fDuffMPIrr(LSB)BE300SB?                17.48='ïžA…ë…<¬1Aƒë…<´9XA„  <´9XA…33=D›¦Bp¤AÌÍ  z958 4419 @gWƒ{J#:@._ö”F@gWF
+¦L0@.îcŠ	Aý($ÂRffÃ‚¦fMMSa      RE201Sa                 13.37=PA;…<£×
+A/
+=<£×
+A'×
+<£×
+A#
+=<ýó¶BÌ.AŽ¸R  {957 4409 @gWË’:)Ç@ô‡ü¹#£@gWÊÀƒo@ô‡ü¹#£>ÄµÝD×@ DÒÉšPPSc      RE203Sc(s)III           13.46=PAH  <£×
+A@ÌÍ<£×
+A<ÌÍ<£×
+A:ff<ýó¶B‹G®A…33  |963 -    @gWê³g ù@-°ò{²ÿ@gWãS÷ÎÙ@-‰ 'RT@T¹$Dí DéffMMIrr(LSB)BE300Im:                17.72=<jA‡33<¬1A„=q<´9XAë…<¬1A~\=t¼B{Ap¤  }966 4421 @gXVÕÏªÎ@.ìVÕÏªÎ@gXVÕÏªÎ@.ìIº^5??ðDÂFfDÈƒ3MMSB0     RA210SB023              13.38=PA?…<£×
+A4zá<£×
+A.{<£×
+A*=q<ýó¶BôæfAãÂ  ~965 -    @gXi­BÃÊ@)¼@gXhÛ‹¬q@)!-w1?&âëDQ³3DTÆfMMdE(N)   RA401dE7,N              16.59=,1AtQì<£×
+Ak\)<¬1AeG®<£×
+Aaë…<ýó¶Bc×
+AZ\  -   -    @gX›¥ãSø¿íS&Á¾@gX˜_ö”¿ìû~ÿ—$@Œ ÅE	ŽfEYšP-Irr(HSB)BE310-                  15.65=¥ãAmG®<£×
+Ah  <£×
+Ae™š<£×
+AdõÃ<ýó¶B"ffA/\)  €971 4423 @gY=ÈK^@ˆšu%F@gY33333@…8ï4Ö¡AJ/ƒDŒfÀ  MMedge-on BE207Sd(on_edge)        14.72=PAYp¤<£×
+AR{<£×
+AMp¤<£×
+AK…<ýó¶CÀ AÌáH  974 -    @gYRT`ªe@ Ç ù	kº@gYRT`ªe@ Ç®záH>-ÅÖD°“3D±VfMMdE(N)   RA401dE3:,N             18.12=På`Aƒ…<¬1A|£×<¬1Aw
+=<¬1Av\=+B\@üÌÍ  ‚977 -    @gYb¶®}@(ŽóMj@gYb¶®}@(×Ûôˆ>ä&B™šBÌ  MMdE      RA400dE4,N              20.09>A£×<´9XAŠõÃ<´9XAˆ(ö<¬1A†\=t¼Aq™š@‰™š  ƒ980 -    @gY‚©“á@/ËP°ò{³@gY}¿HÌ@/ËC,¥z@&®}Eƒ3À  PMSd      BE204Scd(s)III          14.78=PA`Qì<£×
+A\zá<£×
+AXQì<£×
+A^=q=oBË™šA·33  „979 4424 @gYŽóMj@"×Xâe,@gY’:)Çz@"×$tSŽó@
+lôCóÍCÚ³3MMSBa     BE211Sapec              13.32=PA?33<£×
+A6=q<£×
+A0(ö<£×
+A-p¤<ýó¶C#×B\)  …976 -    @gY˜Çâ‚A@!®.±Ä2Ê@gY•$Ý@!®_oÒ ?è·€DœÍD€ MMdE      RA400dE4                19.00=q©üA\)<¬1AŠ  <´9XA†zá<´9XAƒë…=+A¹®@Ë×
+  †982 -    @gY³Ð|„¶@1Ò-V@gY²þÅm]@1ÒòäŽŠ?sD…³3D…° MMdE(N)   RA401dE6                17.12=<jA…<¬1Ay¸<¬1Atzá<¬1Amë…=+Bp×
+Aw…  ‡-   -    @gYµsê³h@'»/ìW@gYµsê³h@ŽV“u@/éD‘†fÀ  M-Irr(LSB)BE300-                  18.35=LÌÍAp¤<¬1A‹×
+<´9XAŠ¸R<¼jAQì=Ý/A¾ÌÍ@±ë…  ˆ984 4425 @gYÇy¦µ@)x7´¢3œ@gYÇy¦µ@)x7´¢3œ>¹õDí–fDéffMMSBa     RA211SBa                14.18=¥ãAFáH<£×
+A;33<£×
+A4ÌÍ<£×
+A1¸<ýó¶BÆŠ=Aë…  ‰985 -    @gZ6âë@í(Œç@gZ}¿H€@Òñ©ûç?¸·€DËc3DÌæfPPIrr(HSB)BE310BCD?               17.07=#×
+A€{<¬1Azff<¬1As…<¬1Ap(ö=oAìff@ã…  Š990 -    @gZBZîc @0?¼@gZBZîc @0E¡ÊÀƒ=šÔ,D×öfDØ	šMMdS0(N)  RA411dE4,N              15.85=¥ãAg…<£×
+A]G®<£×
+AW33<£×
+AUÂ<ýó¶BG®AG®  ‹989 -    @gZYJôðØ@®.±Ä2Ê@gZYJôðØ@­w1Å@1QƒDá“3À  MPIrr(LSB)BE300ScorIm             17.15='ïžA„  <¬1A33<¬1A}Â<¬1Az¸R=\)AàzáA\  Œ992 -    @gZ~($x@ lô!-w@gZ~($x@ m:’£>˜âD´S3DµFfMMdE(N)   RA401dE0,N              17.06=#×
+AG®<¬1Ax  <¬1Ar\<¬1AuG®=+B0…A[®  994 -    @gZ·€4mÆ@0m«ŸU›=@gZ¹#¢œx@0m¥œàv?XÎpDBšDBšMMIrr(LSB)BE300dE3pec?            16.82=49XAr¸R<¬1Aip¤<¬1AaG®<£×
+Ae™š=oBpffAŠQì  Ž995 -    @gZò{²þÅ@%»‹¬q³@gZ÷eýŠÛ@%»Í5¨Xy@½<Dm,ÍDg&fMMedge-on BE207Sc(on_edge)        15.77=¥ãAp  <£×
+Ak33<£×
+Ahzá<£×
+Ag…<ýó¶BƒŠ=A:¸R  997 -    @gZô!-w@(#,¥zxl@gZôðØDÐ@(#,¥zxl>F¹Ã6  Ãp™šMMdE(N)   RA401dE3,N              19.33=‹C–A…<´9XAŠff<´9XA‡p¤<¬1A‡®=¥ãA \@Î¸R  998 -    @g[ [À7@(©á°‰ '@g[!ÿ.Hé@(©º^5?}?™“Âø  ÂÛ  MMdE(N)   RA401dE4,N:             18.37=@ƒAG®<¬1A‰G®<´9XAˆ{<¬1A€(ö=+BÂA)™š  ‘1001-    @g[HË’:@+næ1ø @g[Dg8~@+n—Oß;@(xCªLÍC©ÍMMIrr(LSB)BE300Im                 17.17=#×
+A†áH<¬1Aƒ¸<¬1A‚Qì<¬1A\)=+Aü¸RA
+ff  ’-   -    @g[U›=È@3Ct¼j~ú@g[U›=È@3C{J#9Á>*ÍŸD!ìÍÀ  M-dE(N)   RA401-                  18.38=H´9A®<¬1A‰ë…<´9XA…Â<¬1A™š=+A·\)@ç\)  “1005-    @g[e+ÓÃa@+€hÛ‹¬q@g[dZ¬@+€hÛ‹¬q>÷1Eó3E{3MMdE(N)   RA401dE5,N              16.86=#×
+A×
+<¬1Av{<¬1Aqp¤<¬1Af¸R<ýó¶B?{AV{  ”10024430 @g[v_Ø­¬@;Í5¨X@g[…¸Qì@quŽ"@ötTD¸ Dµ€ MMSBc     BE213SBc(r)II           13.57=PAEë…<£×
+A=¸<£×
+A8(ö<£×
+A4ÌÍ<ýó¶BÄ£×BQì  •-   -    @g[˜Çâ‚A@Àƒn—@g[˜Çâ‚A@ÀhÛ‹¬q>_÷D™¶fÀ  M-dS0     BE410-                  17.46=¾wA„õÃ<¬1Ap¤<¬1A€Qì<¬1A}G®=C–A_…@J=q  –-   -    @g[ÎÙ‡+@4^\‘ÑN<@g[ÕfÏAò@4^—Oß;@‹{JB®ffÀ  P-dE(N)   BA401-                  15.79=¥ãA_
+=<£×
+AaÂ<£×
+A^ff<£×
+AYG®<ýó¶BÃ33B    —1011-    @g[æšÔ,=@“Z…‡“Þ@g[á°‰ '@’ñ©ûçm@*ÐåDjS3DXæfMMSm      BE205SdmIII             15.88=¥ãAn=q<£×
+Af¸R<£×
+Ab\<£×
+A\(ö=oBq®A{×
+  ˜1013-    @g\¸ºÇ@"®ŠqÞi­@g\¼£n@"­Òñ©ûç@¦¬D×lÍDÖ)šMMIrr(LSB)BE300ImIII-IV           17.08=#×
+A‚áH<¬1A€ff<¬1A{\)<¬1A€ÌÍ=\)B×
+A)p¤  ™1020-    @g\DÐ©*@':û~ÿ—@g\Cþ\‘Ñ@':û~ÿ—>‚ÞD­)šD¬P MMdE      RA400dE4,N:orImIV       17.93=H´9A†Qì<¬1Ap¤<¬1A~áH<¬1Aw33=oBp¤Aë…  š1024-    @g\£S&@/zŸ¾vÈ´@g\£S&@/zŸ¾vÈ´>kQDª†fD«3MPdE(N)   RA401dE0?,N             19.16=Y‡AŽ(ö<¬1AŠ  <´9XA‡33<¬1A……=t¼A…@¢áH  ›1028-    @g]Iº^@,éDg8~@g]Iº^@,éDg8~=h§D£VfD¢À MPdE(N)   RA401dS0?               17.20=¥ãA
+=<£×
+As®<£×
+An{<£×
+An=q<ýó¶A±®@Þ¸R  œ-   -    @g]+Iº@2oAò×s@g]+ÓÃa@2oAò×s>^Ò‰Dƒà Dƒã3M-dE(N)   RA401-                  15.92=¾wAn¸R<£×
+Ad  <£×
+A_33<£×
+A]¸<ýó¶BkQìA’áH  1033-    @g]n.±Ä3@/ã×
+=p¤@g]n.±Ä3@/ã×
+=p¤>>«DV3DY  MMdE(N)   RA401dE0,N              18.21=LÌÍA†\<¬1A‚  <¬1A~¸R<¬1AxõÃ=\)B"\Ag\)  ž10364436 @g]b¶®}@(¡½¥œà@g]b¶®}@(¡½¥œà=ëP±D‹° DŒ–fMMdS0(N)  RA411dE6/dS06,N         15.02=¥ãA[
+=<£×
+AO×
+<£×
+AJ=q<£×
+AG
+=<ýó¶B›
+=Aqë…  Ÿ1035-    @g]œàuöý@(-úCþ\’@g]œàuöý@(-í(Œç>×
+=CLÍÃú33MPdE      BA400E4                 18.01=På`A~áH<£×
+Aw×
+<¬1Aqp¤<¬1Anff<ýó¶AÙ®@ÐQì   1039-    @g]è>BZî@&mí(Œç@g]çl‹C–@&màqv?(ÌD±  D´0 MMdE(N)   RA401dE0pec:            18.74=LÌÍAŒ  <´9XA‡®<´9XA„\<¬1A®=PA‹×
+@×\)  ¡10434438 @g^êJŒ@*¡ÊÀƒ@g^q²•ê@*„M:“B‡_A  À  MMSb      RA202Sb(tides)          12.22=PA,  <£×
+A (ö<£×
+Ap¤<£×
+A\<ýó¶C–áHB ÌÍ  ¢1044-    @g^*™0¾@&ÞÒˆÎp;@g^+jçÕg@&ÞÅm\ú­>’ˆÎD£æfÀ  MMdE(N)   RA401dE5,N              18.33=H´9A‡…<¬1A‚¸R<¬1A€ff<¬1A€áH=\)AÙ™š@ðõÃ  £1049-    @g_Oß;dZ@ .Hè§ç@g_Oß;dZ@ .Hè§ç=Ö8†Dà D,ÍMMdE(N)   RA401S04                16.43=¾wAn{<£×
+AdQì<£×
+A_\)<£×
+A[×
+<ýó¶Aå…@òáH  ¤1048-    @g_dZ¬@âMÒñ©ü@g_b¶®}V@âh	Ô•?L¬EffEÙšPPedge-on BE207Scd(on_edge)       15.80=¥ãAjff<£×
+Aap¤<£×
+A]G®<£×
+AY™š<ýó¶BgõÃA2áH  ¥1059-    @g`¾ß¤@@'æfffff@g`–»™@'æL/ƒ{J?7YE  E  MMdE(N)   RA401dE6,N              19.20=‘hsAŽ\<´9XAŠff<´9XA‡ë…<´9XA†¸R=t¼A…\)@œÌÍ  ¦1061-    @g`E¡ÊÀƒ@.ã{J#9Á@g`E¡ÊÀƒ@.ã¢œwšk?”¹$E9šEè MPdE      RA400dE3?               18.73=ixÕA…<´9XAŠff<´9XA‡\)<¬1A„¸R='ïžA¶\@ÍÂ  §-   -    @g`a|ÚQ@6–€IQƒ@g`_ö”F@6–€IQƒ?ƒ×
+DffDÓ3M-Irr(LSB)BE300-                  16.24=¾wAw
+=<£×
+Aqë…<¬1Anff<£×
+An¸R=oB?…AG®  ¨1060-    @g`‚@·€4@Gâ‚@·€@g`}Vlô@G®záH@²-DºÓ3D¹©šPPSBm     BE215SmIII-IV           16.95='ïžAz\<£×
+Av¸R<¬1AtÌÍ<¬1Aqp¤=t¼BEõÃAP(ö  ©10624442 @g`„µÜÆ?@#›~ÿ—$@g`quŽ@#›ô‡ü¹$BO ßC¯33D  MMSB0     RA210SB016              12.93=PA0(ö<£×
+A#…<£×
+AõÃ<£×
+A£×<ýó¶BüšA…\)  ª1064-    @g`§ï²-@+9XbMÓ@g`¨ÁTÉ†@+9XbMÓ=“áDXà DXs3MMdE(N)   RA401dE3,N              19.19=Æ§ðA‰×
+<¬1A…ë…<¬1A‚(ö<¬1A„zá=PAÞ=q@æ¸R  «1065-    @g`©“àß@+'ü¹#¢œ@g`©“àß@+'ü¹#¢œ=6®}CšC€ MMdE(N)   RA401dE0,N              18.06=aG®Aƒ™š<¬1A~ff<¬1Aw×
+<¬1Ax£×=+A¸ff@áë…  ¬-   -    @g`¬Ùè>B@6J…‡“Ý˜@g`£×
+=q@6JJŒL˜@ !D*à D†fM-Irr(LSB)BA300-                  17.24='ïžA‚Qì<¬1A€=q<¬1A€=q<¬1AtõÃ=+Bj×
+A{®  ­1069-    @g`ÞÒˆÎp@)ËÓÃa@@g`ÞÒˆÎp@)ËàÞÒˆÎ>nHéE EVfMMdE(N)   RA401dE6,N              17.47=,1A×
+<¬1Azff<¬1AtÌÍ<¬1Aq™š=+B7õÃAë…  ®1071-    @g`ù	k¹Œ@!¡TÉ…ðo@g`û~ÿ—@!¡-w1Å?Î¡bBFÌÍÀ  MMdE      RA400dE4                19.29=ƒoA…<´9XA‹™š<´9XA‡™š<¬1AˆõÃ=¥ãAk®@’\  ¯1073-    @ga&Á½¥@(/Åo @ga&Á½¥@(/Åo <ŠqÞDñFfDí†fMMdE(N)   RA401dE3,N              16.42=0 ÅAaG®<£×
+AU™š<£×
+AN\<£×
+AIG®<ýó¶B£×A‡®  °1078-    @ga‚©“á@#…S&Á¾@ga‚©“á@#…8ï4Ö¡?4›¦CëÀ CíÀ MPdS0     BE410dE5pec?            16.70=#×
+Ay™š<£×
+As®<¬1AmÂ<¬1An=q=+B2=qA
+=  ±1079-    @gaœ¾ß¤@$»šu%@gaškP°ò@$»šu%?PU2DµS3D·|ÍMMdE(N)   RA401dE2,N              18.17=#×
+A‡¸<¬1A‚¸R<¬1A}¸<£×
+At(ö=oAã¸AYp¤  ²1075-    @ga¤?åÉ@$˜_ö”F@ga¤?åÉ@$˜_ö”F=¾íDâyšDæ©šMMdE(N)   RA401dE4,N              16.18=¾wAn{<£×
+Ad  <¬1A\zá<£×
+AW…=oBXzáAmÂ  ³1076-    @ga¶E¡ÊÁ@%Oß;dZ@ga¶E¡ÊÁ@%Oß;dZ>FtDÞ,ÍDä¶fMMdE(N)   RA401dE0,N              18.11=49XA‡33<¬1Aƒ
+=<¬1A\)<¬1A„Qì=PBÌÍAQÂ  ´1087-    @gaûçl‹D@'”záG®@gaûçl‹D@'”`ªdÂø>ômÆD(LÍD(æfMMdE(N)   RA401dE3,N              15.48=¥ãAZ\<£×
+AN=q<£×
+AF=q<£×
+AFff<ýó¶B¬p¤A½™š  µ-   -    @gb}¿H€@›=ÈK^@gbOv_Ù@›=ÈK^>Ïƒ{Eû3EüÍP-dS0     BE410-                  16.92=¾wA{×
+<£×
+Atzá<£×
+ApQì<¬1AmÂ=oA~¸R@Z=q  ¶-   -    @gb!-w2?ýBÃÉîËû@gb Ä›¥ã?ýC,¥zxl?E¸DbyšÀ  M-Irr(HSB)BE310-                  17.67=49XAƒ…<¬1A×
+<¬1A}¸<¬1A{
+==C–Aì\@ØQì  ·10864445 @gb Ä›¥ã@"ßoÒòå@gbòäŽŠ@"ßU›=È?f$ÝC·  C±&fMMedge-on RE207S(on_edge)         14.91=¥ãAT£×<£×
+AI¸<£×
+AAë…<£×
+A=ë…<ýó¶BÊW
+A¡™š  ¸1093-    @gbË’:*@'f¸ºÇ@gbË’:*@'f¸ºÇ>,‹DD¶–fD¶³3MMdE(N)   RA401dE0,N              17.85=@ƒA†{<¬1Aë…<¬1A}p¤<¬1A|£×=+AÞzáA(Qì  ¹1095-    @gbÃÉîËû@ 
+¦L/ƒ@gbÃÉîËû@ ýŠÚ¹õ>¼jD‰‰šÀ  MMdE(N)   RA401dE2,N              19.60=Â\AŒ\<¬1A‡p¤<¬1A…G®<¬1A„=q=\)AÚQìA#®  º1101-    @gc&Á½¥@*d2ÊW§‡@gc(Œç°@*d?åÉ?[¥ãDØc3DÝöfMMdE(N)   RA401dE6,N              16.76=#×
+A|  <£×
+AtQì<¬1An=q<£×
+Aq™š=oBáHAh£×  »1099-    @gc2a|Ú@&×KÆ§ïž@gc2a|Ú@&×>«6z=ö+kDßC3DËIšMMdE(N)   RA401dE4,N              18.65=LÌÍAG®<´9XAˆ£×<´9XA„  <¬1A…=+A®zá@Ç®  ¼-   -    @gcsüPH@&zû~ÿ—@gcsüPH@&zû~ÿ—>³œCæfÀ  M-dE      RE400-                  18.99=LÌÍAff<´9XAŒõÃ<¼jAŠff<´9XA‹Â=D›¦A„ff@›33  ½1102-    @gc¤?åÉ@Èè§æ›@gc 'RTa@ÈË’:*@›=DT³3D[æfMPIrr(LSB)BA300Im?                18.67=aG®AŠõÃ<¬1A‡ë…<´9XA‡33<´9XAƒG®=t¼AÛ…@ÈõÃ  ¾1104-    @gc½¥œà@)¥¼£n/@gc½¥œà@)¥¼£n/=—Á¾DØœÍDÕ&fMMdE(N)   RA401dE5,N              16.68=¾wAs×
+<£×
+Ai™š<£×
+Ae¸<£×
+Ab{<ýó¶B(\)A1¸  ¿1107-    @gdbMÒò@L˜_ö”@gdbMÒò@L~($x>–8†D½)šD¾)šMMdE(N)   RA401dE4:,N             16.87=0 ÅAt  <£×
+Ak33<¬1AdÌÍ<£×
+Ac®=oBƒ\)A”õÃ  À1114-    @gdo hÜ@!G®záH@gd†YJôñ@!Gy¦µ@ÍŸD  DšMMIrr(LSB)BA300ImIII              15.95='ïžAg…=+Aap¤<£×
+A[×
+<£×
+AXÌÍ<ýó¶BÅ½qA·33  Á11184451 @gefÏAò@"„¨ÁTÉ†@geXâe,@"†$Ý/ A@ODD¹šDX&fMMSa      BE201Sc(s)III           14.30=PAPÌÍ<£×
+AG…<£×
+AB{<£×
+A?×
+<ýó¶BeÂA=Â  Â1120-    @geŠ	Þ@7škP°ò@geŠ	Þ@7€4mÅÖ>ŸDY&fD^À MMdE(N)   RA401dE2,N              17.66=H´9A…Â<¬1A‚Qì<¬1A~áH<¬1Axzá=\)AüÌÍA!p¤  Ã1122-    @geÅo@)Ôã¼ÓZ†@geÅo@)ÔðØDÐ>˜l"Cç™šCî33MMdE(N)   RA401dE7,N              15.95=¾wAk
+=<£×
+Aap¤<£×
+A\  <£×
+AXõÃ<ýó¶Ba£×A*¸R  Ä1123-    @ge¯·éù@)b¶®}@ge¯·éù@)b¶®}>VlôDê` Dê` MMdE(N)   RA401dE2,N              19.98>‚\Aƒ\)<¬1A}G®<¬1Ayë…<¬1Aƒ™š=TýôBIë…A†õÃ  Å1126-    @geÅo @-ÿ¤?åÉ@geÄ2ÊW¨@-ÿ¾vÈ´9?HÎpDÝÆfDÓ3MMSa      RE201Sc/Sa              14.19=PAK…<£×
+A@zá<£×
+A:{<£×
+A5Â<ýó¶B¼Š=A¨ÌÍ  Æ11254452 @geÆ§ï²@'‚œwškQ@geÆ§ï²@'‚\(õÃ>QC ™šC%  MMS0      RA200S019               14.14=PAH  <£×
+A<Qì<£×
+A5Â<£×
+A1™š<ýó¶BÀ…AˆõÃ  Ç-   4455 @geá°‰ '@6ÒT`ªdÃ@geá°‰ '@6Ò¼£n@‰&Dà À  M-Sd      BE204-                  13.74=PAMÂ<£×
+AHzá<£×
+AEÂ<£×
+AC×
+<ýó¶BØG®A½®  È1129-    @geü¹#¢œ@)žvÈ´9X@geýŠÚ¹õ@)žžš?O·éA@  A@  MMdE      RA400dE3                18.67=ixÕA‹Â<¬1A‡p¤<´9XA„zá<¬1Aë…=C–AÆõÃ@ô(ö  É1132-    @gf-V@09e+ÓÃa@gf-àq@09e+ÓÃa>ò|D÷,ÍD÷lÍMMdE      RA400dE2?               17.57=,1A„ÌÍ<¬1A€=q<¬1A{×
+<¬1AtõÃ=oB
+(öA¸R  Ê-   -    @gfË)^žÀ {²þÅm]@gfÂø7´¢À |„µÜÆ?@{ŠE”ÍElÍP-Irr(LSB)RE300-                  16.24=¥ãAo\)<£×
+Af{<£×
+Aap¤<£×
+A]G®<ýó¶AÖ¸R@àõÃ  Ë1141-    @ggS÷ÎÙ@"×škP°ò@ggS÷ÎÙ@"×škP°ò>SáDÍD‚fMPS       BE206BCD?               17.26=¾wA…<£×
+A|  <¬1AváH<¬1As…=oA}ë…@ŒÌÍ  Ì1148-    @ggÀ6âë@)RÊW§†Â@ggÀëíúD@)RÊW§†Â=\Æ?D± D±0 MPE       RA100E0                 17.55=0 ÅA|ÌÍ<£×
+ApQì<£×
+AhõÃ<£×
+Aeë…<ýó¶A™ë…@“×
+  Í1153-    @ggúCþ\’@)L1&éy@ggùrGE9@)Kûµsë>aaåDxšDS33MMdE      RA400dE5:               19.06=OßAŠ\<¬1A…™š<¬1A€ÌÍ<¬1Aƒ®=#×
+B\A#…  Î1156-    @ghN¤¨ÁU@Èè§æ›@ghIº^5?@Éã¼Ó@ jD¾` DÅfPPSBd     BE214SBcd(s)II          15.10=¥ãAdQì<£×
+A`ÌÍ<¬1A[
+=<¬1A\(ö=+B¶ÂAÓG®  Ï1163-    @ghÜ]cˆf@,u%F
+¦@ghÜ]cˆf@,‚@·€4>îËûÃâŒÍÃâó3MMdE      RA400dE3:               16.98=¥ãA|ÌÍ<£×
+Aqp¤<£×
+Ag®<£×
+AhõÃ<ýó¶B\Ar¸R  Ð1164-    @gi‡+@"ãFÜ]cˆ@gi‡+@"ãFÜ]cˆ>²ÊXDˆ	šD‚fMMdE(N)   RA401dE6,N              17.30=#×
+A€Qì<£×
+AxÌÍ<¬1Ar=q<¬1Au¸=+B3¸RA“G®  Ñ-   -    @giàqv¿õ²•éá°Š@giß;dZ¿õ²-V>i“E	[3E3P-S       BE206-                  17.45=,1Aƒ¸<¬1A€¸R<¬1A~áH<¬1A\)=t¼A©Â@³…  Ò1192-    @gl	Þ Ò@øºÇË)@gl1&éy@øºÇË)=_¤@D®¦fÀ  MMS0      RA200E3                 16.38=¥ãAj¸R<£×
+A^ff<£×
+AV¸R<£×
+ARáH<ýó¶A­®@©G®  Ó1167-    @gió¶E¡Ë@‚\(õÃ@giô‡ü¹$@‚\(õÃ=÷eþD¿fDÀišMMdE(N)   RA401dE0,N              16.86=49XAv{<¬1Ak33<¬1AdÌÍ<¬1Ac33=oBG×
+AtQì  Ô1173-    @giûµsë@)ôÖ¡aä÷@giûµsë@)ôÖ¡aä÷=ý¿HE¦fÀ  MMdE      RA400dE5,N              17.13=8QìA€{<¬1AtõÃ<¬1Ao®<¬1Aq¸=oB\A…  Õ1172-    @gj	Ô•+@!¡$Ý/@gj	Ô•+@!¡$Ý/=å`BDws3Dr,ÍMMdE(N)   RA401dE5,N              17.57=8QìA€áH<¬1Aw×
+<¬1Aqë…<¬1Ap£×=oAê\@ö¸R  Ö1175-    @gjmÅÖ8†@$E”¯O„@gjlô!-@$E”¯O„=q©üA!™šB‹ÌÍMMdE      BE400E5/S015            16.93=#×
+A~¸R<£×
+Av{<¬1Ar\<¬1Ap  =oAÊ=q@¿®  ×1180-    @gjÒˆÎp;@0Îp:û~‘@gjÓZ…‡”@0Îi­BÃÊ?´9DW™šDW  MMdE      RA400dE4                17.62=H´9A\)<¬1Aw33<¬1Ar\<¬1Amë…=+BDõÃAg×
+  Ø1179-    @gkS&Â@#ùÛ"Ðå`@gkS&Â@#ú^5?|î@aD;™šÀ  MMSm      BE205ImIII/BCD          16.33=¾wAtõÃ<£×
+An\<¬1AjáH<¬1Ag…=+B^G®A8Qì  Ù1185-    @gk!ÿ.Hé@(æÏAò×@gk"Ðå`B@(æÏAò×>/·éCßffCú33MMdE(N)   RA401dE1,N              16.07=¾wAs…<£×
+Ai¸<¬1A`õÃ<£×
+AZ¸R<ýó¶BeffAŠzá  Ú1188-    @gk×Ûôˆ@0g®záH@gk‚©“á@0g ù	kº?@N¥DÁ  DÂffMMdS0     BE410Amorphu            15.04=¥ãAXQì<£×
+AN¸R<£×
+AIp¤<£×
+AEë…<ýó¶BO
+=A.ff  Û-   -    @gk®æ1ø¡@ä÷eýŠÛ@gk®æ1ø¡@ä÷eýŠÛ>C•D¶¼ÍÀ  M-dE      BE400-                  18.97=q©üAáH<´9XAŒáH<´9XA‰ë…<¬1AŠzá=#×
+AD£×@k…  Ü11904469 @gk¿HË’@!€4mÅÖ9@gk¼ÓZ…ˆ@!òäŽŠr?ÿ®D  DÙšMMSa      RE201Sa                 13.38=PA:áH<£×
+A.¸R<£×
+A'®<£×
+A#\)<ýó¶C!ÅAì(ö  Ý-   -    @gkÂ\(ö@4HðŽ@gkÁ½¥@4HðŽ>)ûçD†öfÀ  M-S       BE206-                  18.05=<jAˆ¸R<¬1A…¸<¬1A‚ÌÍ<¬1Aƒ\)=t¼Aá…@È£×  Þ1199-    @glªdÂø8@ ²-V@glªdÂø8@ ²-V=nËûD®ÉšÀ  MPE       RA100E2                 17.85=¾wA
+=<£×
+Ar=q<£×
+AjáH<£×
+Af{<ýó¶A$(ö@™š  ß1191-    @gkÑN;Í6@(þí(Œç@gkÒñ©ûç@(þí(Œç?*û@ìÌÍAI™šMMdE(N)   RA401dE4,N              19.74>AŠ  <¬1A†(ö<¬1A…Â<¬1A…Â=#×
+B	=qA £×  à1189-    @gkÖ8†YK@éá°‰ @gkÖ8†YK@R½<6?¼ú­Bâ  DÓ3PMSc      BE203Sc(s)II            14.70=PA[…<£×
+ATõÃ<£×
+AQ¸<£×
+AO\)<ýó¶B}…AŒff  á11934466 @gl×sü@ÉQ‚©“@gl©*0U@Éã¼Ó?Ø®D;` À  MMSd      BE204Sc:                15.12=¥ãA`õÃ<£×
+AXÌÍ<£×
+ATzá<£×
+AQG®<ýó¶B‚aHAT£×  â11964468 @glOv_Ù@,#¢œwš@glOv_Ù@,#¢œwš=`D_ó3DcffMMS0      RA200S0/a               15.08=PAX  <£×
+AL£×<£×
+AFff<£×
+ABáH<ýó¶Bx{Ak33  ã1198-    @glDÐ©*@+`A‰7L@glE¡ÊÀƒ@+`A‰7L=Û‹¬Ã³LÍÃ²ÍMPdE      RA400dE6?               19.25=•AÂ<¬1A‰…<´9XA‡33<´9XA†\=¥ãAŒ¸R@˜£×  ä-   -    @glV“u?êÛ‹¬q³@gl^5?|î?êÞ Ñ·Y@{•E33E¹šP-S       BE206-                  17.40=#×
+Aƒë…<¬1AG®<¬1A
+=<¬1A~=q=+BaÂA+…  å1200-    @glºÇË)@%–R½<6@gl©“àß@%–Ov_Ù@üÃÊÂ¹™šÀ  MMIrr(LSB)BE300ImIII              16.01=¾wAr{<£×
+Am¸<¬1Aië…<¬1Ac…<ýó¶BV¸RA^ff  æ12034471 @glñ©ûçm@»/ìVÕÐ@glðØDÐ@»/ìVÕÐ>²•êD\À D]S3MPdE(N)   RA401S0:                17.30=,1A~{<¬1Arff=¥ãTAk
+=<¬1Ag…=oA£×@š\  ç12054470 @gm²•éâ@K’:)Çz@gm	k¹Œ~@Kûµsë@ |…EyšÀ  PPSc      BE203ScIIIpec           13.78=PALõÃ<£×
+AF{<£×
+AAë…<£×
+A?\)<ýó¶BO™šAZ{  è1204-    @gmùrGE@m(Œç°@gmV“@mV“?@oiDHYšDFæfMMdS0(N)  RA411dE7?               17.48=49XA€ÌÍ<¬1Ax  <¬1Apzá<¬1Amë…=oBNÌÍA=ë…  é1210-    @gm!ÿ.Hé@&™‡+@gm!ÿ.Hé@&™‡+>|PHD»9šD¹³3MMdE(N)   RA401dE0,N              18.11=49XAŒQì<¬1A…®<¬1A‚{<¬1A‚{=+AÄ  A    ê1208-    @gm6z—@ç ù	kº@gm7KÆ§ð@æÏAò×?á­CD£yšD£33MPIrr(HSB)BE310SmIII              16.44=¾wAz=q<£×
+At(ö<¬1ApÌÍ<¬1Aq™š=+AÀff@ç®  ë1213-    @gm;dZ¬@)ºÇË)@gm;dZ¬@)­«ŸU›=Âø8DŒVfD‰yšMMdE(N)   RA401dE0,N              17.48=@ƒA€Qì<¬1Ax(ö<¬1As×
+<¬1As33=C–B7¸RApQì  ì1209-    @gmjçÕfÏ@$Åœàu÷@gmjOv@$Åœàu÷>‡°D²ó3DµéšMMdE      RA400dE1:               18.06=49XAŠQì<¬1A†  <´9XA…<¬1A€(ö=\)A·G®@à£×  í1221-    @gmÉã½@1ƒ÷ÎÙ‡@gmÈK]Ìd@1ƒ÷ÎÙ‡>‡E9D)ìÍD)ó3MPdE(N)   RA401dE4?,N             19.53>$ÝAŠ£×<¬1A†¸R<´9XA…×
+<´9XAŒff=™™šAìÌÍA	ë…  î1219-    @gmàÞÒˆÎ@)œj~ùÛ#@gmàÞÒˆÎ@)œj~ùÛ#=î.²CòffCòffMMdE(N)   RA401dE4,N              19.33=—PAŽ\<¬1A‹×
+<´9XAˆ(ö<¬1A™¸>”ýôA§ë…@Æ{  ï1222-    @gmñA [À@.¿±[W?@gmò×s@.²•éá±?ÕÐD¥³3D¤ã3MMdE(N)   RA401dE4,NordS04,N      17.41=,1A€=q<¬1Aw…<¬1AqÂ<¬1Apzá=+B®A,    ð1224-    @gmþ\‘ÑN@1I“àÞÓ@gmü¹#¢œ@1I™™™™š?>;ÍD¤ÖfD¤ÙšMMdE      RA400dE0                18.69=‹C–A¸<´9XAˆ¸R<´9XA„\<¬1A…
+=='ïžA¸ffAzá  ñ1218-    @gn_oÒ @®.±Ä2Ê@gn_oÒ @®Hè§ç>ÓÃaDf†fD]ìÍMMdE(N)   RA401dE0,N              16.52=¾wA|õÃ<£×
+AtQì<¬1Ao®<¬1As\)=C–BC\)A„=q  ò-   -    @gn&€IR¿ô¹#¢œwš@gn*™0¾¿ô¸ºÇË)?ìÙèE›3À  P-Irr(LSB)BE300-                  17.99=,1A…33<£×
+A‚õÃ<¬1A×
+<¬1A†ff=H´9BQìA4    ó12264472 @gn3œ¾à@þBZîc @gmîËûµ@ ?åÉB:Ë’Dm™šÀ  MME       RA100E2/S012            10.92=PAë…<£×
+AõÃ<£×
+@úáH<£×
+@ó33<ýó¶C²xRB…B  ô1225-    @gnOv_Ø®@ÜwškP±@gnOv_Ø®@ÜwškP±>fffDqÓ3Dqó3MMdE(N)   RA401dE2,N              18.34=]/Aˆ{<¬1AƒG®<¬1A\)<¬1A\)=\)AË…@öff  õ12314473 @gnƒä%®æ@*Ûô‡ü¹$@gnú¬Ùè>@*ÚáG®{BM˜yE33EX MME       RA100E5                 12.63=PA,zá<£×
+A   <£×
+Ap¤<£×
+A¸<ýó¶C¸RA´áH  ö-   -    @gn¾í(@ @ëíúCþ@gn¾í(@ @·€4mÆ?p;Dß@ À  P-dE      BA400-                  18.65=aG®AŠQì<¬1A…®<¬1Aƒ33<¬1A‚£×=PAŠáH@„zá  ÷1237-    @gnÒˆÎp;@+¼(õÂ\@gnÔ,<ží@+¼]cˆe•?×÷Ä	À Ã§ŒÍMPIrr(HSB)BA310?                  16.89=¾wA{\)<¬1At(ö<¬1Amp¤<¬1Al  =oB(öA	p¤  ø1239-    @goœàu÷@'ì²•éá±@goË)^ž@'ì²•éá±>weþÃÅÌÍÃÈšMMdE(N)   RA401dE5,N              18.03=0 ÅA‡¸<¬1Aƒë…<¬1Azff<£×
+A33=oAÔ  @íÂ  ù12424474 @go$tSŽó@,#Š	Þ@gnÔ,<ží@,"Iº^5BÆŽD½Ð DÆ£3MMS0      RA200S018               13.85=PABff<£×
+A6=q<£×
+A0  <£×
+A,(ö<ýó¶B¬úáAG®  ú1240-    @goJôðØE@„M:“@goKÆ§ïž@„M:“>CoD3™šD6@ MMdE(N)   RA401dE5,N              17.99=0 ÅAŠ{<¬1A…¸<¬1A‚(ö<¬1Aƒ\)=t¼B™šA™š  û-   -    @goÙb¶®?›ÚQÎ_@goØ­«ŸV?›ÚQÎ_>ìIºE¦fEšP-dS0     RE410-                  17.95='ïžAƒë…<¬1Ayë…<¬1As\)<£×
+Ao…=oAc×
+@J=q  ü12504476 @goàÞÒˆÎ@(²ˆÎp:û@goàÞÒˆÎ@(²ˆÎp:û>HDö DöišMMS0      RA200S035               14.28=¥ãAL  <£×
+AA¸<£×
+A;
+=<£×
+A7\)<ýó¶B\A8    ý-   -    @goîËûµ@ Ý!ÿ.Hé@goï²-@ Ýã¼Ó[>¿÷D@ DS3M-dE(N)   BE401-                  16.78=#×
+A|Qì<£×
+Atzá<¬1Apzá<£×
+Amë…=oAá…@Ö{  þ1249-    @gpzáG®@·´¢3œ@gpxFÜ@¸}¿H€@|ÿ—CÂ™šÀ  MMIrr(LSB)BA300ImIII-IV           15.49=PAfáH<£×
+Aaë…<£×
+AV¸R<£×
+AZáH<ýó¶Brp¤AçÂ  ÿ-   -    @gpZ¬1@"Îp:û~‘@gpYJôðØ@"Î}Vlô>ÞùÛDfìÍÀ  M-dE      BA400-                  18.76=yÛ#AŠ£×<¬1A†Qì<¬1A„\<¬1A‚{=PA˜(ö@•p¤   1254-    @gp¬1&é@ %‡“Ý—ö@gp¬Ùè>B@ %‡“Ý—ö>ÂëDžà DŸæfMMdE(N)   RA401dE0,N              17.27=<jAw×
+<¬1Ak×
+=£×
+Ad£×<¬1Aap¤<ýó¶Aæ¸RA33  12614482 @gq`A‰7L@%Ÿ¾vÉ@gq`A‰7L@%Ÿ¾vÉ=ãñADçFfDê	šMMdE      RA400d:E5,N             14.86=PAVáH<£×
+ALQì<£×
+AFff<£×
+ADõÃ<ýó¶B‘Ü)Aˆff  1264-    @gqsê³g¡@(dxFÜ@gqsê³g¡@(d“t¼j>é­CÃÒ&fÃÒ&fMMdE(N)   RA401dE0,N              16.64=¥ãA{®<£×
+Av=q<¬1Alzá<£×
+AiG®<ýó¶Bc…A¼ff  1266-    @gq×
+=p¤@ÿË’:)Ç@gqÍ5¨Xy@ hÛ‹¬q@Œ—DÐišÀ  PPIrr(LSB)BE300SdmIII-IV          16.06=¥ãAt  <£×
+Ap  <¬1AmÂ<¬1Ao\)=t¼B^záAjff  1269-    @gr&€IR@%å`A‰7@gr%®æ1ù@%å`A‰7>Òn˜C¡LÍCœ&fMPdE      RA400dE5?               19.26=º^5A‘ë…<´9XAŒff<´9XA‰…<¬1A‡Â=t¼A¦Qì@¬zá  1273-    @grBZîc @"+ŸU›=@gr:û~‘ @"+¬q²–@IEyšDü	šMMS       BE206ImIII:             16.39=¾wAr¸R<£×
+Aip¤<¬1Ac
+=<£×
+A`zá<ýó¶Ba£×A8    12794478 @grR½<6@(¨>BZîc@grh	Ô•@(¥m\ú¬ÚA­x8D°c3D¨À MME       RA100E2                 13.78=PA@  <£×
+A3®<£×
+A,õÃ<£×
+A(ÌÍ<ýó¶B=\)A&ff  12834479 @grs×Ûõ@+'ÈK]Ìd@grs×Ûõ@+'»/ìVÖ>¹õDU9šD[&fMMSB0     RA210SB022              14.71=¥ãAQë…<£×
+AF{<£×
+A?\)<£×
+A;×
+<ýó¶BsáHA
+=  12904480 @gs‘hr°!@ü64ê@gs’:)Çz@ü„µÜÆ??7LE¬ÍEŒÍPPSc      RE203Sb(r)II            13.99=PAMp¤<£×
+AEG®<£×
+A@zá<£×
+A=¸<ýó¶B¸RA ÌÍ  	-   -    @gsýŠÚ¹õ@3¬Iº^5?@gsýŠÚ¹õ@3¬Iº^5?=nËûDXÌÍDg` M-S0      RA200-                  16.16=¾wAi™š<£×
+A^áH<£×
+AY¸<£×
+ATÌÍ<ýó¶AÁ33@¼zá  
+1304-    @guP°ò{³@.Bh	Ô•@guQ‚©“@.Bh	Ô•>‰îÌÂ&ÌÍÂØ  MMdS0(N)  RA411dS08,N             16.48=¾wAnáH<£×
+AdõÃ<£×
+A_×
+<£×
+A^\=oB`QìA1Â  13034483 @gujçÕfÏ@"	Ô•+@guk¹Œ~(@"	Ô•+=¸ºÇD_ÆfDZìÍMMSB0     RA210SB015              14.56=¥ãAM¸<£×
+AA¸<£×
+A:áH<£×
+A7\)<ýó¶Be
+=A7®  -   -    @gu™™™™š@ƒþ\‘ÑN@gu™™™™š@ƒä%®æ2>ó¶E  À  P-Irr(HSB)BE310-                  17.99=¾wA‰33<¬1A‡¸<¬1A†{<¬1A…\)=C–@þ¸R@ë…  1307-    @guó¶E¡Ë@+™JôðØE@guòäŽŠr@+™JôðØE>$%¯D D›,ÍMMdE(N)   RA401dE3,N              19.35=‡+AŽ¸R<´9XAŠ  <´9XAˆ£×<Ä›¦Aƒ®=¥ãA¶õÃ@»33  -   -    @gv-V@(2ÊW§†Â@gv/ƒ{J#@(2½<64?…àDœÙšDŸ M-Irr(LSB)BE300-                  18.15='ïžAŒ=q<¬1AŠ¸R<´9XAŠ  <´9XA‹Â=@ƒA_
+=@Š=q  1311-    @gvN¤¨ÁU@kÓÃa@@gvN¤¨ÁU@kíúCþ]?33DÄ  DÄ“3MMdE(N)   RA401dE1,N              16.69=¾wA{…<¬1As
+=<¬1AlQì<£×
+AaÂ<ýó¶B8™šAˆ¸R  1313-    @gvxl"h
+@($tSŽó@gvzáG®@($tSŽó?”g8D¤yšDœÜÍMMIrr(HSB)BE310BCD                17.37=¥ãA…Â<£×
+A…™š<¬1A‡™š<¬1A‡
+==\)Ap¤@p¤  1314-    @gv‰ 'RT@*r•éá°Š@gvˆÎp:û@*r•éá°Š>²½<B  B™™šMMdE      RA400dE4:               18.06=<jAˆzá<¬1Aƒ\)<¬1A€£×<¬1Az\=oB33A#®  13164486 @gv–»˜Çã@(È$xG@gvVÕÏªÎ@(ÆÜ]cˆfAå6D€ À  MME       RA100E0                 10.98=PA¸R<£×
+A	Â<£×
+A\<£×
+@û…<ýó¶C¡ü)Bh…  13184488 @gvÙè>B[@ ¸y=Ùc@gvÙè>B[@ ¸Që…¸?Ÿ´¢Dv³3Ds&fMMS0      RA200S0(tides)pec       14.28=¥ãAI™š<£×
+A>\<£×
+A8(ö<£×
+A5™š<ýó¶C&fAÜzá  13214489 @gv÷eýŠÛ@0Â@·€4n@gv÷eýŠÛ@0ÂGE8ï5=ÛW?Dn9šDqó3MMS0      RA200S011               14.21=¥ãAK…<£×
+A@£×<£×
+A9Â<£×
+A5ë…<ýó¶BqÂAuÂ  1323-    @gwl‹C•@-Œ<žì¿±@gwn.±Ä3@-Œ<žì¿±?$!E<ÍE³3MMdE      BA400dE2:               17.22='ïžA€zá<£×
+Az\<¬1Av¸R<¬1AnáH=oB5
+=A-Â  1334-    @gx_oÒ @/v“t¼@gx	Þ Ò@/v+jçÕg?|ÙèDìfD»)šMMdS0     RE410dS038?             16.53=‘hsAtzá<£×
+Ak…<¬1Afff<¬1Aaë…<ýó¶BuzáAO®  1333-    @gx$xG@äŽŠqÞj@gx&€IR@äŽŠqÞj?záHD›lÍDœ†fMMdE(N)   RA401dE0,N              18.01=aG®A€=q<¬1A{\)<¬1At(ö<¬1Aj=q=oB0×
+Ak×
+  -   -    @gxMÒñ©ü@2 ÞÒˆÎp@gxL/ƒ{J@2 ÞÒˆÎp?Vö”EÉšÀ  P-Irr(LSB)BE300-                  17.34=,1A‚ÌÍ<¬1A33<¬1A€£×<¬1AG®=PB0ffA%¸  -   -    @gx‚@·€4?úÏªÍžƒä@gxy=Ùc?úÏªÍžƒä@}qDyšDŠ9šM-Irr(LSB)BE300-                  15.95=¥ãAv=q<¬1Ao\)<¬1Ah(ö<¬1Ag33=oBF  AY™š  -   -    @gy8ï4Ö¡@28Që…¸@gy9Àëíú@28K]Ìcñ>žß¤D½ó3À  M-dE      RA400-                  19.80=§ïžAáH<¬1AŒÌÍ<´9XA‰
+=<´9XA†£×=PAe¸@ˆQì  1340-    @gyb¶®}V@*1ÑN;Í6@gycˆe”¯@*1ÑN;Í6>ÅFD¿LÍDÀ£3MMdE(N)   RA401dE0,N              17.75=#×
+AŽ(ö<¬1A‰®<´9XA†¸R<¬1A„\=PAÜÌÍA'33  1343-    @gy±[W>«@*?¤?åÉ@gy±[W>«@*?¤?åÉ=ÒñªDíƒ3À  MMdE(N)   RA401dE2,N              18.75=LÌÍA×
+<¬1Ap¤<¼jA‰Â<¬1A†ÌÍ=¾wA—ë…@Â=q  1348-    @gz“t¼j@(©á°‰ '@gze+ÓÃ@(©á°‰ '=ñA Dß,ÍDö0 MMdE(N)   RA401dE0,Npec           17.04=¾wAz\<£×
+Ao…<¬1Ahzá<£×
+Ae¸<ýó¶A­ë…@Ü(ö  1353-    @gz—Oß;@)yÛ"Ðå`@gz–»˜Çã@)yÛ"Ðå`=äZÃ¯™šÃ°³3MMdE(N)   RA401dE2,N              17.35=0 ÅA‚{<¬1A|(ö<¬1Av\<¬1Ay™š=C–AÌ¸R@æ{  1352-    @gz›¥ãSø@)9‡+@gz›¥ãSø@)9#¢œwš>¦$ÝDçs3Dçs3MMdE      RA400dE4:               18.19=TýôA‰G®<¬1A„=q<¬1AG®<¬1A}¸=\)Aè{Ap¤   1356-    @g{Ë)^ž@&ü64ê@g{'»/ì@&üÚQÎ?‚)ÇDœLÍDœ™šMMIrr(HSB)BE310SmIII/BCD          16.17=¥ãAt£×<£×
+An¸R<£×
+Ak×
+<£×
+Aj\<ýó¶AÌ{@Íp¤  !1358-    @g{‡+@14Ö¡aä÷@g{Xâe@14Ö¡aä÷>¼(öDª†fDªƒ3MPdS0     BE410Sa:                16.44=#×
+As×
+<£×
+AiÂ<¬1Ac®<£×
+A`£×=oBG×
+AUp¤  "1366-    @g|:)Çy§@'4É…ðoi@g|9XbN@'4¼j~ùÛ>¡–SDåó3Dåó3MMdE(N)   RA401dE0,N              18.12=#×
+Aˆ£×<¬1A‚\<¬1A€áH<¬1Aw®<ýó¶AÌQìAPÌÍ  #13684497 @g|VÕÏªÎ@'?Ø­«ŸV@g|V“u@'?Ø­«ŸV>‹íúD‚vfD‚¹šMMSBa     RA211SB05/SBa           14.42=¥ãAN\<£×
+AC
+=<£×
+A=p¤<£×
+A8ÌÍ<ýó¶B¸Ü)A¬{  $1369-    @g|s×Ûõ@( ëíúCþ@g|r° Äœ@( ªdÂø8?ä`ªDB9šDBS3MMdE(N)   RA401dE6,N              18.24=<jA…Â<¬1A×
+<¬1A
+=<¬1A{\)=C–B®A £×  %1374-    @g}ö”Ft@-¸l"h	Õ@g}šu%@-¸7´¢3œ?ÃÝ˜E¤ÍE ÍPMIrr(HSB)BE310ImIII/BCD          15.39=PAhQì<£×
+AbáH<£×
+Aa™š<£×
+Aa¸<ýó¶BsQìAK®  &1377-    @g}:’£S@%­úCþ\’@g}33333@%®cŠ	@Ž{³DŒÍDyšMMdE      RA400ImIV-V:            15.76=¥ãAu™š<£×
+As\)<¬1Aj¸R<£×
+Ah(ö=oB‘®A¤£×  '13794498 @g}Aò×s@0ÚQÎ_@g}6z—@0Ú™0¾í@Í½¥D¹P D¼ƒ3MMSBc     BE213SBc(s)II           13.59=PAH  <£×
+A@zá<£×
+A<(ö<£×
+A:{<ýó¶BÞ¨öAèáH  (13754505 @g}=ÈK^@„êJŒM@g}TÉ…ðo@‰k¹Œ~(ATYKDÚLÍÀ  PPSBc     BE213SBcIII-IV          12.77=PA=™š<£×
+A733<£×
+A4(ö<£×
+A1™š<ýó¶C¸RB-…  )-   -    @g}©*0U2@4{P°ò{³@g}¥ãS÷Ï@4{P°ò{³?ŠqÞDíÍDðLÍP-Sd      RE204-                  15.76=¥ãAo33<£×
+Ah  <£×
+Ac×
+<£×
+A_\)<ýó¶BCÂAb\  *-   -    @g~fffffÀÃ,¥zxl@g~g8}¿ÀÂø7´¢4>âZîE{3EvfP-S       BE206-                  16.50=¥ãAy¸<£×
+AtQì<£×
+AqÂ<¬1Ao\)=oAu¸@k…  +1386-    @g~ØDÐ©@)PbMÒñª@g~ØDÐ©@)PbMÒñª>™e,DŸùšD¢9šMMdE(N)   RA401dE3,N              15.69=¾wAi™š<£×
+A]p¤<£×
+AXÌÍ<£×
+A`  =oB´úáAÃë…  ,1389-    @g~ï4Ö¡b@(ö®}Vlô@g~ï4Ö¡b@(ö®}Vlô>Â'DVó3DV“3MMdE(N)   RA401dE2:,N             17.12=0 ÅA~ff<¬1At(ö<¬1AnáH<¬1Anff=oB®AõÃ  --   -    @g„M;@(ˆe”¯O@g„M;@(ˆe”¯O;kíúDr€ À  M-E       RA100-                  19.42=yÛ#A{<¬1AŠ¸R<¬1Aˆ  <¬1A†ÌÍ=C–@Ï®?ÚáH  .1400-    @g.Hè§@,œí‘hr°@g.Hè§@,œí‘hr°=¬qCþ³3CëYšMMdE(N)   RA401dE5,N              16.94=¾wAzff<£×
+ApÌÍ<¬1Aj\<£×
+Ag
+=<ýó¶BmG®Ar¸R  /1393-    @gJôðØE@.?oÒòå@gJ#9Àì@.@ëíúCþA%sëEK3E( MPSBc     BE213SBc(s)II-III       14.35=PATzá<£×
+AM¸<£×
+AI™š<£×
+AHzá<ýó¶B©\)AŸ
+=  01395-    @goÒòå@!4SŽóMj@go hÛŒ@!4SŽóMj>’a|D£3D™šMPdS0     RA410dE4?,N             17.37=#×
+A‚Qì<£×
+Az¸R<¬1AuÂ<¬1As33=oA”{@˜õÃ  11392-    @guŽ!–S@(Y#¢œwš@gt¼j~ú@(Y‡+?¿±C»LÍC‹ÍMMdS0(N)  RA411dSB03,NordE6pec,N  15.95='ïžAj\<£×
+A`£×<£×
+AZff<£×
+AW®<ýó¶B…33Až\  21396-    @g„M:“@'ñÞi­BÄ@g„M:“@'ò¼£n?ˆoiD‹ÙšD‰fMMdE(N)   RA401dE0:,N:            17.59=,1A‰¸<¬1A„ff<¬1A{×
+<¬1A\)=+B!G®AO®  3-   -    @gàqv@2Y	k¹Œ~@gàÞÒˆÎ@2Y	k¹Œ~><ÚDå¬ÍÀ  P-dE      RA400-                  20.03=å`BA£×<¬1AŒáH<´9XA‹G®<´9XA®=]/A‡¸@“×
+  41399-    @g€6âë@)=—ö+jè@g€6âë@)=—ö+jè=¨ÁUCâó3Cë€ MMdE(N)   RA401dE5,N              17.79=D›¦A„£×<¬1A€  <¬1Azff<¬1A€  =PB,=qA((ö  51407-    @g€]cˆe•@'Ç®záH@g€]cˆe•@'Ç»/ìVÖ>„DyLÍD~ìÍMMdE(N)   RA401dE2,N              16.23=¾wAnáH<£×
+AdõÃ<£×
+A^=q<£×
+A[®<ýó¶BG®A"=q  614104502 @g€q²•ê@0°6âë@g€n—Oß@0°¸ºÇ?¸[ÀDÉìÍDËffMMSd      RE204SmIII              15.28=¥ãAdÌÍ<£×
+A^{<£×
+AXõÃ<£×
+AXzá<ýó¶B4(öA<Qì  71411-    @g€ºÇË)@'¢‚@·€4@g€Â&€I@'¢ÃÉîËû@k§‡DcÓ3DcffMMIrr(HSB)BE310pec,N              16.97='ïžAx  <£×
+Aqp¤<¬1An=q<¬1Apzá=oB G®A-ë…  81414-    @g>«6z@)­„M:“@g=Ùb·@)­„M:“>çâ‚CI  CI™šMPdE(N)   RA401dE4?,N             18.18=m‘hA‡¸<¬1A‚¸R<¬1A€ff<¬1A33=\)Aë®@ß\)  91417-    @gFÜ]cˆ@.š–»™@gFÜ]cˆ@.š–»™=„êKDÈfDÈ³3MMdE(N)   RA401dE5:               17.18=8QìA}G®<£×
+As\)<¬1Ak×
+<£×
+Aj¸R=oB®A=q  :14194506 @gdZ¬@*ÖÕÏªÍŸ@gg ù	l@*ÖÕÏªÍŸ?±ë…Cÿ™šD8YšMMSa      BE201S(dust)pec         14.63=¥ãATÌÍ<£×
+AJ\<£×
+AE¸<£×
+A@õÃ<ýó¶B ÌÍAŸG®  ;1420-    @g¡ÊÀƒ@(|í‘hs@g¡ÊÀƒ@(|í‘hs>%DzyšDz33MMdE(N)   RA401dE4,N              18.03=q©üA‚£×<¬1A{…<¬1Avff<¬1AtõÃ=+B®A    <1422-    @gä÷eý‹@$€Ä›¥ãT@gä÷eý‹@$€·€4mÆ> ÒD£Ã3D¡šMMSB0     RA210E1,N:              14.91=¥ãAYë…<£×
+AO
+=<£×
+AH£×<£×
+AG…<ýó¶B‹¸RA’£×  =-   -    @g‚\(õÃ@2>žš@g‚‹C•@2>¤¨ÁTÊ?é|D1¦fDL¬ÍM-dS0     BE410-                  15.16=¥ãAb=q<£×
+AYÂ<£×
+AT£×<£×
+APõÃ<ýó¶B»\A®{  >1427-    @gƒ	k¹Œ~@0É…ðoi@gƒ
+=p£×@0Ö¡aä÷?kíúÃšÃ  MMSm      BE205Im/BCD:            16.21=¾wAs®<£×
+Al  <¬1Ag
+=<¬1Ah  =oB633A6ff  ?1431-    @gƒ¸Që…@&†§ï²-@gƒæšÔ,@&†§ï²-=h>BD¼6fD¼6fMMdE(N)   RA401dE0,N              15.89=¥ãAeG®<£×
+AXÌÍ<£×
+ARff<£×
+AN\<ýó¶Aþ£×A¸R  @1426-    @gƒ$tSŽó@'ÉQ‚©“@gƒ!ÿ.Hé@'É^žš? 	ÕDUÀ DPFfMMdE      RA400ImIV?              16.55='ïžAtõÃ<£×
+Ao®<¬1AhõÃ<¬1Af{=oBu¸RA™®  A1430-    @gƒe+ÓÃa@Ÿ;dZ¬@gƒfÏAò@Ÿ;dZ¬?ÕgD’éšDŽó3MPdE(N)   RA401dE1?,N             18.36=D›¦A…™š<¬1Aƒ¸<¬1A33<¬1AˆQì=49XBë…AQp¤  B-   -    @gƒ¼£n/?Øè§æšÔ@gƒº^5?}?Ù:’£S@°©D¼ÜÍÀ  P-SBc     BE213-                  13.67=PAJff<£×
+AC×
+<£×
+A@Qì<£×
+AA¸<ýó¶C=}qBMë…  C1440-    @g„tSŽóM@.Ô¯O„M@g„tSŽóM@.Ô¯O„M=î.²CØ33C¿šMME       RA100E0                 16.12=¾wAl(ö<£×
+A`ÌÍ<£×
+A[
+=<£×
+AW33<ýó¶AòQì@Î¸R  D1437-    @g„xl"h
+@"Xï4Ö¡b@g„wškP±@"Xï4Ö¡b>ªJŒD‘œÍD|ÍMMdS0(N)  BE411BCD                16.11=¥ãAo33<£×
+Ag®<£×
+Ac33<£×
+A`Qì<ýó¶AžáH@†¸R  E1441-    @g„ÇË)_@ /\(õÂ@g„ÇË)_@ /O„M>‹ÓÃDLlÍDM  MMdE(N)   RA401dE4pec:,N          17.35=,1A€=q<¬1AváH<¬1Aqë…<¬1Anff=oAÁ®@É™š  F1444-    @g„È´9X@#ÅÖ8†YK@g„Çâ‚@¸@#ÅÉã½?‡+DÞ9šDÝ@ MMdS0     RA410dE8,N:             17.00=#×
+A{®<£×
+Arff<¬1Am¸<¬1Ai¸=+B†G®AZ{  G-   -    @g„Ðå`A‰?ÐÌÌÌÌÌÍ@g„Ðå`A‰?ÐË)^ž	>¸*™D”üÍÀ  M-dE      RA400-                  18.48=@ƒA‹…<¬1A‡33<¬1A…Â<´9XAë…=\)AÄ{@è£×  H-   -    @g„ÒˆÎp;@2éá°‰ @g„ÒˆÎp;@2ãS÷ÎÙ>KàßDOÓ3Da` M-dS0     RA410-                  16.50=,1AqG®<£×
+Ag\)<£×
+Ab{<£×
+A`  <ýó¶BG®A33  I1443-    @g„ÓZ…‡”@jOv@g„ÓZ…‡”@jOv=œ¿D\Ó3D_“3MPdE      RA400dE3?               19.09=‹C–Aˆ  <¬1A‚ÌÍ<¬1A|õÃ<¬1Aë…=t¼B×
+A"áH  J1442-    @g„Þ Ñ·@JW§†Â'@g„Ñ·Xâ@Em\ú¬ÚA!5¨D»,ÍDØ	šPPedge-on BE207Sd(on_edge)        15.50=¥ãAdÌÍ<£×
+A]ë…<£×
+AZff<£×
+AU™š<ýó¶Bç8RAµG®  K1446-    @g…4êJŒ@$/'»/ìW@g…33333@$/'»/ìW>”`ªDš@ D™3MMdE(N)   RA401dE0,N              16.90=8QìA{×
+<¬1Ar=q<¬1AmÂ<¬1Ag
+==oB4p¤AUë…  L1450-    @g…’:)Çz@,e+ÓÃa@g…{J#9Á@,ÏªÍž„AÚ®æÃT33Ã)33MMSBc     BE213Sc(s)II.2          13.92=PAPQì<£×
+AI™š<£×
+AE™š<£×
+AE™š<ýó¶B§€ A¼ÌÍ  M1451-    @g…¯·éù@/ÑÞi­BÄ@g…¯·éù@/ÑÞi­BÄ=YcD’9šD’p MMdE(N)   RA401dE5:,N             17.32='ïžA€(ö<¬1Auë…<¬1ApQì<¬1AlÌÍ=oB.…Ap¤  N-   -    @g…¶E¡ÊÁ@.{²þÅm@g…¶E¡ÊÁ@.{²þÅm>¨§D¡Ó3D¢|ÍM-dE(N)   RA401-                  18.34=TýôAŠ{<¬1A„  <¬1A€¸R<¬1A~ff=t¼AßÂ@ôÌÍ  O1453-    @g…ä÷eý‹@,dtSŽóM@g…ä%®æ2@,dtSŽóM=æšÔDììÍDóÉšMMdE(N)   RA401dE2,N              15.56=¾wAaÂ<£×
+AV\<£×
+AP  <£×
+ALõÃ<ýó¶Br™šA~\  P-   -    @g†1ø .?ù6âëC@g†6âëC?ùŸ¾vÈ´@w2DÀ)šD¿@ P-Irr(LSB)BE300-                  17.63=,1A‡×
+<¬1A†zá<´9XA†£×<´9XA…\)=8QìAÑ®@Ê=q  Q1455-    @g†=p£×
+@2a|ÚQ@g†<žì¿±@2-V?*0D¦£3D§  MMIrr(HSB)BE310ImIV               17.41=D›¦Aƒ¸<¬1A€\<¬1A|£×<¬1A|Qì=PBÂA33  R1457-    @g†¾ß¤?æ@aä÷eý‹@g†½<64@`ÞÒˆÎp?ëÐ}D9šD‚33MPdS0(N)  BE411dE4pec?,N          17.26='ïžA‚=q<¬1A|Qì<¬1AyG®<¬1Ay™š=PBG®Aë…  S1459-    @g†Ö¡aä÷@1&éxÕ@g†Ôýó¶F@Â&€I@ r°DÝÍDÝã3PPdS0     BE410BCD:               17.61=@ƒAƒ™š<¬1A…<¬1Azff<¬1Az{=t¼AðõÃ@÷\)  T-   4529 @g†âe+Ô@4.ùÛ"Ðå@g†âëC-@4.ùÛ"Ðå>„g8E ôÍE›3P-Sc      RE203-                  15.87=¥ãAmG®<£×
+Af¸R<£×
+AbáH<£×
+Ab\=oB˜õÃAv\  U1465-    @g‡m\ú¬Ú@
+âe+ÓÃ@g‡S÷ÎÙ@
+ç¯·éA`?D6“3À  MPIrr(LSB)BE300ImIV               15.43=¥ãAuG®<£×
+Ak\)<¬1Alzá<¬1A‰™š>C–B•\AÉë…  V1468-    @g‡¼ÓZ…ˆ@PHðŽ@g‡×Ûô‡ý@QÎ_pAF;dD›¼ÍÀ  MPSm      BE205ImIV               16.61=¥ãA|£×<£×
+Ax  <¬1At(ö<¬1Ao×
+=oBiõÃAk…  W14754515 @gˆ©“àß@0C÷ÎÙ‡@gˆ©“àß@0C÷ÎÙ‡    Dq“3DmæfMME       RA100E2                 14.56=¥ãAQ™š<£×
+AF¸R<£×
+A@zá<£×
+A=™š<ýó¶B=ÌÍAff  X14794516 @g‰:’£@-&YJôðØ@g‰:’£@-&YJôðØ>*dÃDmÀ DelÍMMSBa     RA211SB02/35            14.93=¥ãAT(ö<£×
+AH£×<£×
+AB=q<£×
+A?…<ýó¶B£  A„(ö  Y1481-    @g‰4êJŒ@%¬"h	Ô•@g‰2a|Ú@%¬"h	Ô•?ÎpDõ™šDôœÍMMdE(N)   RA401dE4,N              19.72=ÒñªAŒ{<¬1A‰™š<´9XAˆÌÍ<´9XA‡…=@ƒAÙë…@ï
+=  Z1486-    @g‰Vlô!@&±ë…¸R@g‰Y³Ð|…@&²T`ªdÃ@K/ìC³3C  MMSc      BE203Spec,N             15.71=¥ãAhõÃ<£×
+A^\<£×
+AV¸R<£×
+AUG®<ýó¶BNõÃA=G®  [1488-    @g‰ÊÀƒo@"ËjçÕfÏ@g‰ÊÀƒo@"ËxFÜ]=“t¼D‡öfD†ìÍMMdS0     BA410E6:                16.04=¥ãAl£×<£×
+Ad£×<£×
+A^=q<£×
+A^=q<ýó¶BG®A33  \1489-    @g‰Û"Ðå`@%ÛquŽ!–@g‰ÚQÎ@%ÛdZ¬>¥CxšB 33MMdE(N)   RA401dE5,N?             17.25=8QìA|zá<¬1As®<¬1AnáH<¬1Amë…=oB-áHA.áH  ]1491-    @g‰Þi­BÄ@)·1Å@g‰Þi­BÄ@)·1Å>^i­DøišDîÍMMdE      RA400dE2,N              16.35=#×
+Anff<£×
+Ac×
+<£×
+A^¸R<£×
+A^{<ýó¶BGp¤A*=q  ^1492-    @gŠn—Oß@ _;dZ¬@gŠn—Oß@ _ö”Ft=ô¼jDÆfD(3PPdE      RA400dE2?               18.37=0 ÅAë…<¬1AŒ{<´9XA‹¸<´9XA†zá=¾wAÅë…@åÂ  _1497-    @gŠwškP±@1u”¯O„@gŠvÈ´9X@1u›=ÈK?ÜÆD“3D“  MMdE(N)   RA401dE4,N              16.85=0 ÅAz{<£×
+AqÂ<¬1An=q<¬1Ac®=oB^{A\õÃ  `1499-    @gŠ£S&@)´ýó¶E¢@gŠ£S&@)´ðØDÐ>vâëÃò  ÄÙšMMdS0     BA410EpecorS0           16.10=¥ãAn{<£×
+Ag×
+<£×
+AdQì<£×
+AaÂ<ýó¶AÏp¤@ÈQì  a-   -    @gŠÃÉîËû?ø\(õÂ\@gŠÄ›¥ãT?øXâe+Ô@ArGDÒ“3DÍ€ P-S       BE206-                  16.46=¥ãAx  <£×
+Aqë…<¬1Anff<¬1AhõÃ<ýó¶Bp¤A\  b1498-    @gŠÇâ‚@¸@kIº^@gŠÇâ‚@¸@kIº^=a°ŠEyšEäÍPMdE(N)   RA401dE2,N              18.62=På`A†õÃ<¬1A‚Qì<¬1A~áH<¬1A~{=C–AöÌÍ@í¸  c1503-    @g‹‰7KÆ¨@weýŠÚº@g‹ˆe”¯O@weýŠÚº>VDßffDßYšPMdE(N)   RA401dE4,N              16.54=0 ÅAq™š<£×
+Af¸R<£×
+Ab\<£×
+AlõÃ=C–Bn
+=Aˆ\  d1507-    @g‹íúCþ]@Z¬1'@g‹ñA [À@Yè>BZî?È.DdfDc  MPIrr(LSB)BE300SmIV:              16.34=¥ãAv=q<¬1An{<¬1Aip¤<¬1Aj=q=oBo  ApõÃ  e15084519 @gŒ1&éy@!OO„M@gŒ	Þ Ò@!O4Ö¡aå>û~‘D—™šD˜\ÍMMSBc     BE213SBc(rs)II.2        13.06=PAB=q<£×
+A<£×<£×
+A9ë…<£×
+A5ë…<ýó¶BÑÇ®A÷×
+  f1509-    @gŒ8†YJõ@"ë6z—@gŒ6âëC@"ëC,¥z?9^žDWyšDLLÍMMdE(N)   RA401dE0,N              17.67=LÌÍA‚ÌÍ<¬1A33<¬1Av=q<¬1A\)=PB™šA<õÃ  g15164522 @gKÆ§ïž@"Y#¢œwš@gKÆ§ïž@"Y™™™™š@F_EišE«3PMSb      RE202Sc/Sb:             13.82=PAJ\<£×
+ABáH<£×
+A=p¤<£×
+A:{<ýó¶C{AøáH  h-   -    @g`A‰7L@)yrGE8ï@g`A‰7L@)ye+ÓÃa>dŽŠD<ÍÀ  M-dE(N)   RA401-                  21.36>µÂA“33<¬1AŽ(ö<¼jAŒ  <´9XA‹×
+=H´9A`õÃ@Ž{  i-   -    @gŒ~($@7ü¹#¢œx@gªÍžƒä@7ü„µÜÆ?AGëîD£VfÀ  M-Irr(LSB)BE300-                  16.66=¥ãA‚¸R<¬1A€ÌÍ<¬1AxõÃ<¬1A|zá=\)BE{A_×
+  j1519-    @g 'RTa@"e+ÓÃ@g¢œwšk@!ä÷eý‹?u+ÔCãYšCåÌÍMMdE(N)   RA401dE0,N              18.42=ixÕAŒ(ö<´9XA†¸R<´9XAƒ…<´9XA|£×=t¼Aùë…A(ÌÍ  k1521-    @gŽ     @%ýÌcñA @göý!ÿ.@%ý!ÿ.Hé@ÄƒäDð D—œÍMMdS0     RA410E7/S017            15.34=¥ãA]Â<£×
+AR{<£×
+AK×
+<£×
+AHQì<ýó¶B`p¤Aë…  l15244523 @gŽoiDg8@.V4êK@gŽa|ÚQ@.NóMjBI•gC§ÌÍCƒšMMSBd     BE214SBd(s)III          13.90=PAS\)<£×
+ALQì<£×
+AHõÃ<£×
+AJ\<ýó¶Bæ
+=B\)  m1523-    @gŽ~($x@)iDg8@gŽ}Vlô@)\(õÂ>µÜÆDÖfDŒìÍMMdE(N)   RA401dE0,N              18.98=¡ÊÁA‹33<¬1A…p¤<¬1A‚¸R<¬1A‚áH=t¼AÏ×
+A…  n1528-    @gŽâe+Ô@*¥¸Që…@gŽâe+Ô@*¥œàu÷=Ô,DÍà DÎ MME       RA100d:E1               16.01=¾wAfáH<£×
+A\(ö<£×
+AV\<£×
+AS…<ýó¶BG®A¸R  o-   -    @gŽbMÒòÀ3Ð|„µÝ@gŽ6âëÀ7€4mÅÖ@úÄœE‹3À  P-Irr(LSB)BE300-                  15.63=¾wAl(ö<´9XAg
+=<¼jA_®<¼jAYG®=+BÌ\AîÌÍ  p1530-    @gl‹C•@àquŽ@gm\ú¬Ú@àquŽ=dŽŠDÕÙšDÚÆfPMdE(N)   RE401dE2,N              19.22=}ó¶A  <¬1A‹\)<´9XAˆ{<¬1A…×
+=\)A¹G®AÌÍ  q1531-    @gy¦µ@%'ü¹#¢œ@gy¦µ@%'ü¹#¢œ=ƒoCæÀ CåÍMMdE(N)   RA401dE0,N              18.04=,1A‹\)<¬1A‡\)<´9XA„=q<¬1Aë…=\)A©\)@ÕÂ  r1532-    @gÅo@.µ›=ÈK@gŽ!–R½@.µ¨Xy=Ù?`U2E¦fE{3PPSBb     BE212SBcpec             14.63=¥ãAW…<£×
+AN=q<£×
+AJff<£×
+AG\)<ýó¶B²G®A¿ë…  s-   -    @gFs×Ü?ü?|í‘hs@gFs×Ü?ü?|í‘hs=ò{³EþfÀ  P-Irr(LSB)BE300-                  17.94='ïžAˆáH<¬1A†£×<¬1A……<´9XA„=q=0 ÅAŸ
+=@¡™š  t15354526 @gh	Ô•@ÌL˜_@g¸Që…@ÅðoiDgB%<¹CÕ¦fCàšMMS0      RA200S036               12.03=¥ãA$  <£×
+A{<£×
+AQì<£×
+A
+¸R<ýó¶C~
+BQì  u1539-    @gæ1ø @){¥ãS÷Ï@gæ1ø @){²þÅm]>ÐbNDºÙšDº|ÍMMdE(N)   RA401dE0,N              16.86=#×
+Az¸R<£×
+Apzá<¬1Aië…<£×
+Af=q<ýó¶B,(öAf{  v15404527 @g‘$tSŽó@9#¢œwš@g‘Ë)^ž@9Œ~($Au÷DÍ¶fDÙ)šPPSb      RE202Sb(s)II            12.65=PA/…<£×
+A#
+=<£×
+A®<£×
+A=q<ýó¶C]ÅB4®  w1545-    @g‘‰7KÆ¨@(‡+@g‘Š	Þ@(‡+=™0¾E1šDú)šMMdE(N)   RA401E4                 16.29=#×
+An¸R<£×
+Ac\)<£×
+A\õÃ<£×
+AY™š<ýó¶BG®A
+\  x1547-    @g‘ûçl‹D@_ö”Ft@g‘þ\‘ÑN@_;dZ¬?†æ2Dà3À  PPdE      RA400dE3                19.15=aG®A‘p¤>$Ý/A®<Ä›¦A‹G®<¼jA33=—PAžÌÍ@È    y15524531 @g’Ov_Ù@*&šÔ,<Ÿ@g’Ov_Ù@*&¸ºÇ>w2B¹™šCC  MMSa      RE201Sapec              13.77=PAAG®<£×
+A6ff<£×
+A0(ö<£×
+A,ÌÍ<ýó¶BåÇ®AñG®  z1553-    @g’%®æ1ù@0ùÛ"Ðå@g’+jçÕg@0Ëûµt@_ö+CäÙšÀ  MMdE(N)   RA401dE1:               19.59>$Ý/A\)<¬1A|Qì<¬1AváH<¬1A|zá=\)B'ÌÍAdzá  {15544532 @g’”FsØ@ßoÒòå@g’Ë’:*@äŽŠqÞjA¢fE è Dû©šPMSm      BE205SmIII              12.72=PA?33<£×
+A:{<£×
+A7®<£×
+A6¸R<ýó¶Bá\Aº=q  |15554535 @g’³g ù	@ ezxl"h@g’êJŒM@ hÁTÉ…ðBŠÛDôùšDõ©šPMSBc     RE213SBc(s)I.3          11.68=PA%¸<£×
+A™š<£×
+A…<£×
+A\<ýó¶CÇ®B”ð¤  }15574533 @g’ð¸»@›quŽ!–@g’ð¸»@š6âëC@¾DÛÍDÛC3PPedge-on BE207Scd(on_edge)       15.07=¥ãA_\)<í‘hAW
+=<£×
+AR{<£×
+AP  <ýó¶B¯õÃA‚{  ~1565-    @g”í(Œç@'wö+jçÕ@g”¾ß¤@@'xFÜ]d?Ô•Dv³3Dv¬ÍMMdE(N)   RA401dE0,N              17.84=@ƒA„Qì<¬1A}¸<¬1A{®<¬1Ay¸=oB.záA…
+=  -   -    @g”L˜_?ð/Ÿ¾vÉ@g”L˜_?ð/Ÿ¾vÉ=ê~úEäÍÀ  P-dE      BE400-                  19.33=e`BA‘ë…<¬1AŽ  <´9XAŒ{<´9XAŠ£×=¥ãA õÃ@(ö  €1567-    @g”,<žìÀ@#?!-w1@g”,<žìÀ@#?.Hè§>î—DœéšD´ÍMMdS0(N)  RA411dE5,NordS05,N      16.60=,1Ahzá<£×
+A_33<£×
+AY™š<£×
+ATõÃ<ýó¶B¤p¤Aš£×  1569-    @g”=p£×
+@+ò×s@g”=p£×
+@+ä÷eý‹>˜üPDHÍDHfMMSm      BE205Scd:               16.60=¥ãAxõÃ<£×
+AráH<£×
+Ao
+=<£×
+Al£×<ýó¶B!¸RAK
+=  ‚1570-    @g”JŒL˜@0_ö”F@g”JŒL˜@0Xy=Ù>R×sD}S3D}ÌÍMPdE      RA400E3                 18.55=° ÅA{33<£×
+AqG®<¬1Am¸<¬1Aj¸R=oB	\@ø£×  ƒ-   4539 @g”Ÿ¾vÈ´@23ä%®æ2@g”¡aä÷f@23ä%®æ2?q%Dœ	šD®À M-Sa      RA201-                  14.10=PAJ¸R<£×
+A@zá<£×
+A:ff<£×
+A6{<ýó¶Cc×AÜÌÍ  „1572-    @g”©“àß@‹àÞÒˆÎ@g”ªdÂø8@Œç¯·é?úäDï  Dç&fPPIrr(LSB)BE300BCD                17.25=<jA€õÃ<¬1Ay™š<¬1As®<¬1Ap  =+B™šA    …1577-    @g•¸Që…@/4‡ü¹#£@g•¸Që…@/4•*™1>gçCßÀ C´™šMMdE(N)   RA401dE4                17.30=0 ÅAyë…<¬1Ap(ö<¬1Ak®<¬1AiG®=oB6õÃA9Â  †1575-    @g•C•%@£ñA [À@g•Dg8~@¤xFÜ? ŽDÍDà MMSBm     BE215SBmpec             14.78=¥ãAW…<£×
+AM™š<£×
+AHÌÍ<£×
+AEG®<ýó¶B’(öA—¸  ‡1581-    @g–£n.²@4!-w2@g•ýŠÚ¹õ@3üPH@tâEÐ À  PMIrr(LSB)BA300SmIV               15.08=PAf=q<£×
+A_×
+<£×
+AZáH<£×
+AYG®<ýó¶B©ÑìAËÂ  ˆ1584-    @g–¼£n@0?¼@g–êJŒ@08†YJõ>à.DX3D]ffMMdE(N)   RA401dE0,N              17.79=,1Aˆ=q<¬1Aƒ33<¬1A…<¬1A
+==C–B™šAo
+=  ‰1585-    @g– Ä›¥ã@.q²•éâ@g–©*0U@.q²•éâ@®ºÇDà D'šMMIrr(LSB)BA300ImIII-IVpec        15.78=¥ãArff<£×
+Amp¤<¬1Aië…<¬1Ad£×=oBž¸A•Â  Š-   -    @g–•*™1@1ÐoiDg8@g–“t¼j@1Ðuöý!ÿ?\]dD—³3D‹vfM-dS0(N)  RA411-                  15.91='ïžAdQì<£×
+AZáH<£×
+AU¸<£×
+AR=q<ýó¶Bg33Aw…  ‹1587-    @g–™0¾í@X_ö”F@g–™0¾í@X_ö”F>3g¡D9ùšD79šMPdE      RA400dE6?               18.24=H´9A‹¸<¬1A…ë…<¬1A‚ÌÍ<¬1Aƒë…=t¼AûÂ@éë…  Œ-   -    @g—Ÿ¾vÉ@8TM:’£@g—üPH@8Tg8}¿?²ÍŸD“	šÀ  M-Irr(LSB)BA300-                  18.57=@ƒAˆõÃ<¬1A†¸R<¬1A„{<¬1Aˆ£×=H´9Aõ…@õp¤  1597-    @g˜V“u@³üPH@g˜Që…¸@³Ð|„µÝ@@xDS³3DWffMBedge-on RE207Sc(on_edge)        16.69=¾wA~¸R<¬1AtõÃ<¬1Ao×
+<¬1Aj{=oBY33A,£×  Ž1603-    @g™	k¹Œ~@+ ù	k¹Œ@g™	k¹Œ~@+ ù	k¹Œ=…¼D6fD7æfMMdE(N)   RA401dE4,N              17.68=#×
+Aˆ£×<¬1A‚£×<¬1A}™š<£×
+A{\)<ýó¶B33Ap¤  1602-    @g™‡+@*ø†YJôñ@g™‡+@*øy=Ùc>oÒ Dß  DÝÆfMMdE      RA400dE7:               18.56=Y‡AŠõÃ<¬1A†{<¬1A‚zá<¬1A„¸R=\)B4¸A £×  1605-    @g™Û"Ðå`@$Ýã¼Ó[@g™Û"Ðå`@$Ü¬1&é@9ë…D¡išD†šMPedge-on BA207S:                 17.89=8QìA‡ë…<¬1A…™š<´9XA‚(ö<¬1A‚áH=0 ÅB=p¤AG®  ‘1606-    @g™ö+jçÕ@(y™™™™š@g™õY³Ð}@(yŒ~($>Ê~úD1¦fD;ÍMMdE(N)   RA401dE3,N              17.91=<jA‰ë…<¬1A†(ö<¬1Aƒ\)<¬1A€{=+AæffA
+=q  ’16084543 @gš²•éá±@uÜÆ?@gš²•éá±@uÜÆ?=K’:E)šEø PPE       RA100E3                 15.63=¥ãA`(ö<£×
+ATÌÍ<£×
+AN\<£×
+AJáH<ýó¶Bzá@Ó…  “-   -    @g›@N¤¨Á@1[W>«6@g›Aò×s@1uŽ!–S?R-DâùšDâó3P-Irr(LSB)BE300-                  17.56=,1A†zá<¬1Aƒ
+=<¬1A‚ff<¬1A€  =¥ãA”{@£33  ”1614-    @g›¡ÊÀƒ@)€'RT`ª@g› ù	kº@)€6âë>weþD;ŒÍD;FfMMS0      RE200S032               15.82=¥ãAeG®<£×
+A[…<£×
+AV{<£×
+AS
+=<ýó¶Aï\)A(ö  •1616-    @g›¼ÓZ…ˆ@,…Éã½@g›¼ÓZ…ˆ@,…Éã½=è>BC<33C8€ MMdE(N)   RA401dE5,N              17.63=@ƒA„zá<¬1A…<¬1Aw®<¬1Aqp¤=+B/¸A,õÃ  –1617-    @gœOv_Ù@UÏªÍž„@gœ}¿H€@V“t¼?L˜_DÆlÍDÅ  MPdS0(N)  BE411d:S04pec?          16.42=¥ãAtÌÍ<£×
+Alzá<¬1Ah(ö<£×
+Ag®=oB
+G®A\)  —1623-    @gœGE8ï5@0œ²•éá±@gœDÐ©*@0œ²•éá±?”Ó[Es3À  PPIrr(LSB)BA300?                  17.70=49XA„(ö<¬1A¸<¬1A33<¬1Aë…=¾wAÐQì@Öff  ˜16244544 @gœß¤?åÉ@G®záH@gœäŽŠqÞ@Em\ú¬Ú@Š‚AD‹ÖfDVfMPedge-on RE207Sc(on_edge)        14.90=¥ãAXõÃ<£×
+AM™š<£×
+AF\<£×
+AC…<ýó¶B Ç®AtÌÍ  ™1627-    @gœ÷eýŠÛ@(Ã•$Ý@gœ÷eýŠÛ@(Ã•$Ý=`u÷CŽ33ClšMME       RA100E0                 16.82=#×
+AqÂ<£×
+Aep¤<£×
+A_
+=<£×
+AZff<ýó¶AzáH@_\)  š16304551 @g'»/ì@(‡+Iº@güPH@(‰“àÞÓAŒ†ÂD“<ÍD’–fMME       RA100E2                 14.32=PAIG®<£×
+A<zá<£×
+A5™š<£×
+A0õÃ<ýó¶Be×
+A@ÌÍ  ›1629-    @g [À7@#-Òñ©ûç@g!-w1@#._oÒ ?È´9D=@ À  MMdE      RA400dE4                20.12>¸RAŠõÃ<¬1A‡p¤<´9XA†  <´9XAp¤=C–B(öA™š  œ1637-    @gž¼£@(\àuöý"@gž¼£@(\àuöý"=^i­DK™šDH@ MMdE(N)   RA401dE0,N              18.73=H´9A’Qì<´9XAŒ\<¼jA‰®<´9XAŠff=8QìAª{@Û33  -   -    @gž˜_ö”@4LwškP±@gž˜_ö”@4Lq²•ê>}p¤D?  À  M-dE(N)   RA401-                  19.09=¡ÊÁAŒ\<¬1A†£×<¬1AƒG®<¬1A„õÃ=¾wB G®AG®  ž-   -    @gŸ
+=p£×ÀÝÌcñA @gŸV“ÀÞ Ñ·Y?ÿéE&˜ À  P-Irr(LSB)BE300-                  17.13=¾wA……<¬1Aƒ×
+<¬1A€£×=²-AzáH=+Aõ33Aff  Ÿ1642-    @gŸµsê³@']/Ÿ¾w@gŸµsê³@']!ÿ.Hé>HÌD¦p D¦lÍMMdE(N)   RA401dE2,N              19.08=‰7LAŠzá<¬1A†=q<¬1A33<¬1A{®<ýó¶Aò(öAO\)   1647-    @gŸŽ!–R½@%ßU›=È@gŸŒ~($@%ßb¶®}V?¿B¤™šB¬ÌÍMMdE      RA400dE4                16.62=#×
+A}p¤<¬1At  <¬1Amë…<£×
+Ak
+==oBMÂAS×
+  ¡1649-    @g bMÒñª@Í5¨Xy>@g bMÒñª@Í5¨Xy>>m]D‚ÆfDs&fMMdE(N)   RA401dE3,N:             16.73=#×
+Av\<£×
+An\<¬1AhõÃ<¬1Af{=oBKp¤A\ÌÍ  ¢-   4561 @g¡µsê³@3RœwškQ@g¡‡+@3RœwškQ>+…Dª0 D¯c3M-SBd     BE214-                  13.70=PAL£×<£×
+AG®<£×
+ADzá<£×
+AC×
+<ýó¶B‚aHA™…  £1654-    @g¡g ù	l@#Ø7´¢3œ@g¡hr° Å@#Ø_ö”F?‘^žE&fE ffMMSm      BE205ImIII              16.95=#×
+A\)<£×
+Ay™š<¬1Az\<¬1Amp¤=oB.£×A$(ö  ¤1661-    @g£N;Í5¨@$Ä÷eýŠÛ@g£N;Í5¨@$ÄêJŒM>±4Dµ“3D¶IšMMdE(N)   RA401dE0,N              16.99=,1A{\)<£×
+An{<¬1Ag×
+<£×
+Ah£×=+Be×
+AœÌÍ  ¥-   -    @g£åÉä@2Lí‘hr°@g£åÉä@2Lí‘hr°=TýôD]33D],ÍM-dE(N)   RA401-                  17.62=q©üAv=q>A‰7AlQì<¬1Ag…<£×
+A`zá<ýó¶B{A¸R  ¦1668-    @g¤êJŒ@+ÜÆ?@g¤FÜ]d@+Â\(ö?L¬D³™šD°Ð MPdS0     RA410dS0:               18.44=D›¦A‹™š<¬1A†=q<¬1A„áH<¬1AƒG®=+B4QìAIp¤  §1669-    @g¤záG®@+FéxÔýô@g¤L˜_@+FÏAò×?*=qD?` DA¹šMMdE(N)   RA401dE6,N              18.00=Y‡Ap¤<¬1AxQì<¬1At£×<¬1Ar{=oB\ÌÍABáH  ¨1674-    @g¤QÎ_@+!-w1@g¤QÎ_@+.Hè§>ÈšDXÓ3DYFfMMdE(N)   RA401dE3,N              17.40=¾wA€  <¬1AtõÃ<£×
+Ao®<£×
+Ao×
+<ýó¶B ÌÍAf{  ©16734567 @g¤hÛ‹¬q@&„%®æ1ù@g¤\‘ÑN<@&„“t¼j@«ŠEˆ À  MMSc      BE203Sc(s)II-III        12.80=PA7×
+<£×
+A-ë…<£×
+A(ÌÍ<£×
+A%Â<ýó¶BüB33  ª16764568 @g¤”FsØ@&z’£S&@g¤‘ÑN;Í@&zQÎ_@¹ŒElÍÀ  MMSc      RE203Sc(s)III           12.70=PA5¸<£×
+A)™š<£×
+A#33<£×
+A\<ýó¶C*‘ìB    «1675-    @g¤¦L/ƒ{@ çl‹C–@g¤©“àß@ £n.²?Õ8ïD»,ÍDàƒ3MMS       BE206pec                15.83=#×
+AfáH<£×
+A]ë…<£×
+AYp¤<£×
+AU¸<ýó¶BŒ”{AˆQì  ¬-   -    @g¤©“àß@#9Àëíú@g¤¨ÁTÉ†@"Ðå`A‰?qÑND»,ÍÀ  P-dE(N)   BE401-                  19.28=®{A×
+<¬1AŠzá<´9XAˆ  <´9XA‡33=<jAƒ¸@®ff  ­1682-    @g¤äŽŠqÞ@,s©*0U2@g¤æ1ø @,s©*0U2?&E¢B/™šB$ffMMdE      RA400dE4:               18.56=På`A‰×
+<¬1A„\<¬1A¸<¬1A€\=PAÏ×
+@Ù™š  ®1678-    @g¥o i@|£n.²@g¥$Ý/@{Í5¨Xy?c@OD{€ D†yšMMSBd     BE214SBdIV              15.08=PAb¸R<£×
+A]™š<£×
+AZáH<£×
+AV\<ýó¶B«ÌÍAÃ33  ¯1684-    @g¥BÃÉîÌ@&4,<žìÀ@g¥A [À@&4,<žìÀ?4tTD"ffD.9šMMdS0     BE410dS08:              16.27=¾wAo×
+<£×
+AhõÃ<£×
+AdQì<£×
+AaG®<ýó¶BZÂAAp¤  °1685-    @g¥™™™™š@Ü]cˆe•@g¥›=ÈK@Ýcˆe”¯?ðXyDµ¬ÍD´C3MPSm      BE205SBd(on_edge)       16.62=¾wA}Â<¬1Azff<¬1Aw®<¬1Aqp¤=C–Bc…AH(ö  ±-   -    @g¥ÕfÏAòÀ*dÂø7µ@g¥Ô•*™À*dÂø7µ>²a|E#û3E  P-Irr(HSB)BE310-                  17.93=#×
+AˆáH<¬1A†¸R<¬1A…
+=<¬1A…¸=PAX£×@qG®  ²1688-    @g¦Hè§ç@-zÇË)_@g¦Hè§ç@-zÇË)_> N¥Dà DÍMMdE(N)   RA401dE4                17.45=#×
+A…
+=<¬1A€áH<¬1A|(ö<¬1A„  =49XAÌ  @ì(ö  ³1687-    @g¦ˆÎp:û@kC,¥z@g¦‡ü¹#£@kIº^>LMDT  DPÍMPdE(N)   RA401dE3,N              16.84=,1Au™š<£×
+Ajff<£×
+Afff<¬1Ad(ö<ýó¶B5(öAK33  ´1691-    @g¦Ðå`A‰@)êçÕfÏB@g¦Ðå`A‰@)êçÕfÏB=“@ODìÍDÌÍMMedge-on RA207dS09:              19.49=Ä›¦A×
+<¬1A‰Â<´9XA‡G®<´9XA…33=,1Aå¸@Ú=q  µ-   -    @g¦ì¿±[W¿âÏAò×s@g¦êJŒM¿âÎp:û~‘?ˆ>BEQšÀ  P-Irr(LSB)BE300-                  18.31=<jA‹\)<¬1A‰®<´9XAˆ£×<¼jA„áH=\)Avff@±ë…  ¶1695-    @g§P°ò{³@)
+=p£×
+@g§Oß;dZ@)
+JŒL˜>"3œDÚvfDÁ€ MMdS0     RA410dS0:               15.91=#×
+Ad  <£×
+AZ{<£×
+AUG®<£×
+APÌÍ<ýó¶B”£×A¢    ·-   -    @g§S÷ÎÙ?ùÖ8†YJõ@g§S÷ÎÙ?ù×süPH?NvÉDÓ3DÓ3P-edge-on BE207-                  17.00=¥ãA€¸R<¬1A{®<¬1Aw×
+<¬1Av\=oBT®A2\  ¸16964571 @g§$Ý/@,oƒ{J#:@g§„M:“@,oAò×s?÷ ùCªffC«&fMMSc      RE203Sc(s)II-III        12.90=PA9p¤<£×
+A/33<£×
+A(£×<£×
+A'\)<ýó¶C«…BV\  ¹-   -    @g¨0U2a|@6@·€4n@g¨1&éxÕ@63œ¾à?auŽD—FfÀ  M-Irr(LSB)BE300-                  18.90=8QìAQì<¬1A¸<´9XA‰®<¬1A†ÌÍ=C–AC×
+@g®  º1699-    @g¨g8}¿@´Ö¡aä÷@g¨M:’£@³×ÛôˆAA©üDÉ0 DÌ&fMMSBm     BE215SBmIII             15.04=¥ãAb=q<£×
+A]p¤<£×
+AZ¸R<£×
+A\zá=oBr  AdõÃ  »1701-    @g¨ð¸»@¯·éùr@g¨ð¸»@¯Òòä<`u÷D’vfD’¼ÍMBdE      RA400S0                 16.89=¾wA{®<£×
+ApõÃ<£×
+Ak\)<£×
+Aip¤<ýó¶AÑÂ@Õp¤  ¼1704-    @g©JôðØE@$‹jçÕfÏ@g©JôðØE@$‹jçÕfÏ>OßC˜YšCƒ³3MMdE      RA400dE6                17.46=8QìA‚£×<¬1Az=q<¬1Au¸<¬1Au¸=C–B$®A\  ½1710-    @gªM:’£@%Æµ'»@gªK]Ìcñ@%Æ§ï²->Ò×sÁ.ffÁk33MPdE      RA400dE2?               18.62=yÛ#AŠáH<¬1A„ÌÍ<¬1A…¸<¬1Aƒ™š=\)AÛ33@ÔÌÍ  ¾-   -    @gª€IQƒ?ËP°ò{²ÿ@gª€IQƒ?ËP°ò{²ÿ=žƒäDaÓ3À  M-dE      RA400-                  18.04=8QìA†£×<¬1A×
+<¬1A~¸R<¬1A|£×=t¼B…A\)  ¿1711-    @gªô!-w@(’ñ©ûçm@gªô!-w@(’ñ©ûçm>B&CßÙšCåYšMMdE(N)   RA401dE3,N              17.64=H´9A€áH<¬1Av¸R<¬1Ar¸R<¬1Aqë…=oB33A,(ö  À1714-    @g«Z…‡“Þ@,ŸØ­«ŸV@g«S&Á¾@, quŽ@SoÂž33À  MMIrr(LSB)BA300dE4,N              19.49=ÔýôAŠ¸R<¬1A‡™š<´9XA„  <¬1AÂ=¥ãAö=qA{  Á1717-    @g«Û"Ðå`@(´‡ü¹#£@g«ÜÆ?@(´Ö¡aä÷@	D·33DµéšMMdE      RA400dE7                18.33=\)Aƒ™š<¬1A|ÌÍ<¬1A33<¬1A\)=#×
+B’\)AŒzá  Â1713-    @g«àÞÒˆÎ@o hÛŒ@g«ß;dZ@ [À7?²\D×33DÌæfPPIrr(LSB)BE300?                  16.47=¥ãA{×
+<£×
+Aup¤<¬1Aqp¤<¬1A|Qì=t¼B1(öA(zá  Ã1722-    @g¬‘ÑN;Í@ öÈ´9X@g¬‘ÑN;Í@ öÈ´9X=âMÓD¾ð DÅ–fMMdE      RA400dE4                18.69=D›¦A™š<´9XAŒ(ö<´9XA‰™š<´9XA„  =+AÆ¸R@Ã33  Ä1725-    @g­xFÜ]@!\‘ÑN<@g­xFÜ]@! Ñ·Y@(ÇãDƒ\ÍÀ  MMSBm     BE215SmIII/BCD          15.32=¥ãAc®<£×
+A_\)<£×
+A\zá<£×
+A]™š<ýó¶BŽ£×AŒ\  Å17274579 @g­ÊÀƒo@'¢ëC,¥@g®¾ß¤@@'¢&€IRAî!ÿDÒÃ3À  MMSBb     RA212Sab(s)II           11.69=PA!ë…<£×
+Aë…<£×
+A33<£×
+A…<ýó¶CIÔ{BDÌÍ  Æ-   -    @g­Òñ©ûç@2C÷ÎÙ‡@g­ÓÃa@@2Cþ\‘ÑN>Ë’E ¡šÀ  P-edge-on BE207-                  18.86=LÌÍA  <¬1A33<´9XA‹…<´9XA‰33=#×
+AD  @B\  Ç1726-    @g®	Ô•+@k¹Œ~($@g®_oÒ @kŸU›=?q½¥B™šÀ  PMSm      BE205SdmIV              15.88=PAqp¤<£×
+AmÂ<£×
+Al£×<£×
+Aië…<ýó¶B•ÑìAŸ33  È-   -    @g®òäŽŠ@2LÚQÎ@g®Ov_Ù@2LÚQÎ>õ?}EvfÀ  P-Irr(HSB)BE310-                  18.47=49XAŽ\<¬1AŒ¸R<´9XAŒ(ö<´9XAŒ\=@ƒA$£×@\)  É-   -    @g®4mÅÖ9ÀATÉ…ðo@g®2ÊW§‡À@·€4mÆ?…Ž"DzYšD‹3M-Irr(HSB)BE310-                  17.53='ïžAƒ
+=<¬1A}™š<¬1Aw×
+<¬1AyG®=C–Aé™šA
+=  Ê-   -    @g®BZîc ÀD2ÊW§‡@g®Cþ\‘ÑÀCþ\‘ÑN?IºE¬ÍE±šP-Irr(HSB)BE310-                  18.08=,1Aˆ¸R<¬1A……<¬1A„\<¬1A‚\=t¼A‚=q@j=q  Ë17304580 @g®s×Ûõ@y=Ùb·@g®s×Ûõ@yXbMÓ>¿D‚IšDVfMMSb      RE202Sc/Sa              14.04=PADÌÍ<£×
+A9G®<£×
+A2\<£×
+A0  <ýó¶B¶ž¸AÇë…  Ì-   -    @g¯Á½¥@8]ÌcñA@g¯Á½¥@8J#9Àì?‹{JD™` À  M-Irr(LSB)BE300-                  18.43=<jAŠ£×<¬1A‰¸<´9XAˆáH<Ä›¦A„Qì=\)A¶  @Ð    Í1740-    @g°–»™@,ZáG®{@g°Iº^5@,[‹¬q³@FÜÃ"æfÃ!ffMMdE      RA400dE0:               18.09=8QìAŠ£×<¬1A†¸R<´9XA€¸R<¬1A†ff=]/Aü¸RA$õÃ  Î-   -    @g°r° ÄœÀC,¥zx@g°n—OßÀIQ‚©“@ïžE!´ÍE œÍP-SBm     BE215-                  15.02=PAaG®<£×
+A[\)<£×
+AX(ö<£×
+AVáH<ýó¶B'ÂA*{  Ï-   4581 @g°±Ä2ÊX?÷£×
+=p¤@g°° Ä›¦?÷¥œàu÷?i#£DçÌÍDãffP-S0      RE200-                  14.44=PAO33<£×
+ADzá<£×
+A>¸R<£×
+A;\)<ýó¶B=qA=ë…  Ð1743-    @g°çÕfÏB@$*0U2a|@g°çÕfÏB@$*0U2a|=`DžæfDŸùšMMdS0     RA410dE6                16.78=,1Au™š<£×
+Al  <¬1Ag33<£×
+AdQì=oBK{AC
+=  Ñ1744-    @g°ì¿±[W@$T‡ü¹#£@g°ëC,¥@$TÉ…ðoi?ì?æD“ÍDŽ¹šMPIrr(HSB)BE310BCD?               17.69=0 ÅA„õÃ<¬1Aƒ®<¬1AƒÂ<¬1AƒÂ=,1AÃ®@°£×  Ò1747-    @g±J#9Àì@+)Q‚©“@g±IQ‚©“@+)^žš?"eD"LÍD,¦fMMdE      RA400dE5:               17.71=,1A‹…<¬1A…×
+<¬1Aƒ®<¬1A‡¸=@ƒB=¸ADõÃ  Ó17574584 @g²cŠ	@*8_ö”F@g²bMÒñª@*8DÐ©*?NÙDÚyšDÞ†fMMSa      BE201Sa(s)pec           14.90=¥ãAW×
+<£×
+ANff<£×
+AHõÃ<£×
+AG…<ýó¶B„=qA…G®  Ô1755-    @g²wškP±@ÞOv_Ø®@g²ŽŠqÞj@Û‹¬q³A]o D‰fÀ  MMdE(N)   RA401dE4:,N             16.59=,1AyG®<¬1An¸R<¬1AiG®<£×
+Adzá=oBzáHA„(ö  Õ1758-    @g²Æ?@°ò{²ÿ@g²Æ?@°ò{²ÿ>t¼DßS3Dß)šMMSc      BE203Sc(on_edge)        15.84=¾wAip¤<£×
+A`õÃ<£×
+A\õÃ<£×
+AZ¸R<ýó¶B°ÑìA†õÃ  Ö-   -    @g²ÏAò×@3Š³g ù	@g²Ë)^ž@3Š’£S&@=qD«P DªyšM-Sm      BE205-                  16.49=¥ãAxzá<£×
+As®<¬1Ar\<¬1AmÂ<ýó¶B?{APQì  ×-   -    @g²å`A‰7?ó;Í5¨Xy@g²å`A‰7?ó;Í5¨Xy=Íž„D“ð À  M-dE      BE400-                  18.76=49XAŽ  <¬1AŠff<´9XAˆÌÍ<¬1A†=q=¥ãA&\@9™š  Ø1761-    @g³²þÅm]@,'†Â&€@g³²þÅm]@,'†Â&€=Ú¬ÃæfÃ"  MPdE      RA400dE5?               18.24=TýôA„áH<¬1A€(ö<¬1A{®<¬1Ax(ö=oAÁë…@Â\  Ù17604586 @g³Ë’:)Ç@F§ï²-@g³ÉîËû@FÂ&€I?i=ÙDC3DF™šMPSa      RE201Sa                 14.13=¥ãAC×
+<£×
+A7®<£×
+A0Qì<£×
+A,(ö<ýó¶Cp¤Aæ¸R  Ú1762-    @g´Iº^5?@$ÀÑ·Xâ@g´Iº^5?@$ÀÑ·Xâ=†Â'C@ÌÍC–  MMdE      RA400dE6                18.08=q©üA‚£×<¬1A|Qì<¬1Aw
+=<¬1AxõÃ=t¼BÌÍA (ö  Û1764-    @g´áG®{@{J#9Á@g´Þ Ñ·@a@N¥?¼wšDº,ÍD¶©šMMdE      RA400dE4                17.84=49XA…G®<¬1Aë…<¬1A}¸<¬1AzáH=+BÂA+®  Ü1767-    @gµ hÛ‹¬@#Y³Ð|„¶@gµIº^@#Y¦µ(?j¬ÚD¹³3D·ùšMMdE(N)   RA401dE5,N              17.09='ïžA‚¸R<¬1A}Â<¬1Av¸R<¬1A|õÃ=PB5\ABff  Ý-   -    @g¸T`ªdÃ?ë0¾í(@g¸T`ªdÃ?ë0¾í(>'ÕgDÇp À  P-dS0     BE410-                  17.96='ïžA‡
+=<¬1Aƒp¤<¬1A‚Qì<¬1Aƒ¸=C–A®@‡\)  Þ1778-    @g¸ŠqÞi­@*ºQÎ_@g¸-à@*¹Û"Ðå`@„žíE1ÑšE+fPMIrr(HSB)BE310Amorphu?           15.31=PA`£×<£×
+AYp¤<£×
+AU¸<£×
+AS
+=<ýó¶BaÂAQp¤  ß1779-    @g¸ -à@-vR½<6@g¸ -à@-vR½<6>}ÈD›ÆfDœs3MMdS0     BA410dS06:              16.11=¥ãAlQì<£×
+Ac\)<£×
+A_
+=<£×
+AYp¤<ýó¶BFáHA<    à-   -    @g¸Ä›¥ãTÀ 0¾í)@g¸Æ?À 0¾í)?nìÀE#( À  P-Sd      BE204-                  17.49='ïžAƒ×
+<¬1A33<¬1A}ë…<¬1A|ÌÍ=t¼B\)AG®  á1781-    @g¹–»˜È@ %+ÓÃa@g¹Åo@ %œàu÷?²–DÐ¬ÍDÌ¬ÍMMdE      RA400dE4                18.61=aG®AŽõÃ<´9XAŠff<´9XA†õÃ<¬1AŽ  =ƒoAÜzáAQì  â17804577 @g¹¨Xy=Ù@²•éá±@g¹¨Xy=Ù@˜_ö”>œ6Eó3E{3PBSb      RE202Sb(s)              14.89=PAXõÃ<£×
+AO
+=<£×
+AIG®<£×
+AEp¤<ýó¶BHQìA733  ã1785-    @gºÁ½¥@&Š#9Àëî@gºÁ½¥@&Š#9Àëî>5¨DÁ6fDÁ33MMdE(N)   RA401dE3,N              18.75=Y‡AŒzá<¬1A‡ë…<´9XA†ÌÍ<´9XA×
+=C–Aø£×Aff  ä-   4592 @gºzáG®¿áÞ Ñ·@gºË’:*¿á$Ý/ @;ÍD‡LÍD…¹šM-Sd      BE204-                  12.97=PA@õÃ<£×
+A;33<£×
+A8(ö<£×
+A7\)<ýó¶C((öAú\  å-   -    @gº‘ÑN;Í@Æ¸ºÇ@gº‘ÑN;Í@Æ¸ºÇ>8l"Dô	šD÷)šP-dE(N)   BE401-                  17.53=#×
+A‚ff<¬1A{\)<¬1AváH<¬1At£×=oAQ™š@S33  æ1791-    @g»Q‚©“@ÝIQ‚©“@g»IQ‚©“@Ûô‡ü¹$@¹ ùEc3EÄÍPMSBm     BE215SBmIII/BCD         14.95=PAc…<£×
+A_×
+<£×
+A]G®<£×
+A[…<ýó¶B˜QìA•ë…  ç1794-    @g»œ¾ß¤@'„M:“@g»œ¾ß¤@'„M:“=Ã,¥D«£3D™£3MMdE(N)   RA401dE5:,N             19.49=ÎÙAŒ\<¬1A‡ë…<¬1A……<¬1A†=q=PAäff@ÕÂ  è-   -    @g»éá°‰ ?Ò@·€4mÆ@g»éá°‰ ?Ò@·€4mÆ>VE:ffÀ  P-S       BE206-                  18.88=@ƒAŽ£×<¬1A‹
+=<¬1AˆõÃ<¬1A‡
+==,1Ad  @G®  é1796-    @g¼u%F@)\„µÜÆ?@g¼£n.²@)\žì¿±[?KxDLÍD,ÍMMdE(N)   BA401dE5:,N:            17.61=LÌÍA€áH<¬1Ayë…<¬1Ax£×<¬1Au¸=+Bj  An\  ê-   -    @g¼	Þ Ò@2^V“u@g¼1&éy@2^BZîc ?kxDl†fDlŒÍM-dE(N)   RA401-                  16.81=,1A€(ö<¬1AxQì<¬1As…<¬1Ap(ö=+BL  AIG®  ë1803-    @g½ö”Ft@%óŽóMj@g½ö”Ft@%óŽóMj>]—öD¦)šD¦üÍMMdE(N)   RA401dE1,N:             16.51=,1Au™š<£×
+An=q<¬1Ag×
+<£×
+AeÂ=oBu(öA˜£×  ì1804-    @g½[W>«6@"ÌL˜_@g½Xâe,@"Ì<žì¿±?º£Dò  DíišMMdS0     BE410ImIII/BCD          17.10=0 ÅAy™š<£×
+Ar¸R<¬1An\<¬1Aj¸R=oB@…A2{  í1806-    @g½´¢3œ@+7
+=p£×@g½´¢3œ@+7
+=p£×=Û‹¬D€ŒÍD£3MPdE(N)   RA401dE1?               17.75=0 ÅA„ÌÍ<¬1A€=q<¬1A{\)<¬1Aw
+==oAº(ö@ÐõÃ  î1809-    @g¾g8}¿@)ò£S&@g¾fffff@)ò° Ä›¦>1ÅE16fE.þfPBS0      BA200S0/Sa              15.29=¥ãA_\)<£×
+AW33<£×
+AR¸R<£×
+APÌÍ<ýó¶B¸RA=q  ï-   -    @g¾£S&@|PHð@g¾£S&@{çl‹C–?rëD­ÆfÀ  M-dE      BE400-                  17.35=#×
+Ap¤<¬1A{
+=<¬1Aw33<¬1AtõÃ=oA•33@˜    ð-   -    @g¾´9Xb?úÂ\(õÃ@g¾´9Xb?úÂø7´¢4>ýæ›D¡yšD™|ÍM-Sd      BE204-                  15.68=¥ãAmG®<£×
+AdÌÍ<£×
+A_×
+<£×
+A^áH=oB©
+=A ff  ñ18114595 @g¾å`A‰7@.˜l"h	Õ@g¾¬1&é@.šÇË)_Aê‡ÈD),ÍÀ  MMSc      BE203Sc(s)II.8          13.79=PAJáH<£×
+AD(ö<£×
+A@zá<£×
+A>áH<ýó¶B‰\A”zá  ò-   -    @g¿e+ÓÃa@#ØDÐ©*@g¿dZ¬@#ØDÐ©*>B\D¬ffÀ  M-Irr(HSB)BE310-                  18.92=H´9AŽ=q<¬1A‹\)<´9XAŠzá<´9XA‡p¤=¥ã@û×
+@¸  ó1812-    @g¿g ù	l@'·>«6z@g¿g ù	l@'·>«6z>;µÃešÃj  MMdE(N)   RA401dE3,N              19.15=OßAŠ£×<¬1A‡×
+<´9XA„(ö<¬1A‚  =C–A”£×@¶¸R  ô18134596 @g¿uŽ!–S@$Z6âëC@g¿³Ð|„¶@$XQë…¸AîÇED÷išDéìÍMMSBa     RA211SBa                12.59=PA/
+=<£×
+A"ff<£×
+A(ö<£×
+A  <ýó¶CffB¸  õ1816-    @g¿Î_oÒ@+:û~‘ @g¿Ãa@O@+‘[W>«6Aê³Dvó3D{³3MMIrr(LSB)BE300ImIV-V             16.55=¥ãA€Qì<¬1A{×
+<¬1As33<¬1Az=q=\)B•šAff  ö-   -    @gÀ>BZîcÀÚîcŠ	@gÀ?¼ÀÚQÎ_?¡Ô•E±šE´ÍP-Irr(LSB)BE300-                  16.33=¥ãAw®<¬1AtQì<¬1AqÂ<¬1As…=+B+®A)Â  ÷-   -    @gÀ_ö”F¿ðË’:)Çz@gÀbMÒñª¿ðÐ©*0U@€ÃÊDÉ¦fÀ  P-Irr(HSB)BE310-                  16.74=¥ãA|õÃ<£×
+Aw\)<¬1As…<¬1AtõÃ=oB:\A1Â  ø1819-    @gÀ°ò{²ÿ@	7KÆ§ð@gÀ¯O„M@K]Ìcñ@S²DŒ6fÀ  MPdE      RA400?                  19.49=—PAŽff<´9XAŠÌÍ<´9XA‰Â<¼jA†áH=¾wB¸A¸  ù-   -    @gÁ,¥zxl¿Ö{²þÅm]@gÁ.Hè§¿ÖkP°ò{³@XŽŠDÔLÍDØ£3P-Irr(LSB)BE300-                  16.84=¾wA}p¤<¬1AuÂ<¬1As33<¬1Ar=q=oBBp¤A-™š  ú1822-    @gÁaä÷eþ@bÐå`A‰@gÁcˆe”¯@cŠ	Þ?—ìWDtšD}33MMIrr(HSB)BE310ImIV               17.29=0 ÅAÂ<¬1A×
+<¬1A}p¤<¬1Ax  =\)B=qA%ë…  û1826-    @gÁ€4mÅÖ@#ÊÍžƒä&@gÁ€4mÅÖ@#ÊÍžƒä&=ÞžD÷ÙšDþIšMMdE(N)   RA401dE2,N              16.95=¾wAxQì<£×
+An=q<¬1Aip¤<£×
+Aeë…=oAÓG®@Ë…  ü18274598 @gÁ—ö+jè@ ÄtSŽóM@gÁ—$tS@ ÄtSŽóM=ÞÒ‰Dö3DõIšPMSB0     RA210SB02/32            14.87=¥ãATzá<£×
+AI™š<£×
+AC×
+<£×
+A?33<ýó¶B‡A•ë…  ý1828-    @gÁÉã½@)¿Ø­«ŸV@gÁÈK]Ìd@)¿åÉä>oÒDÅP DÄ<ÍMMdE(N)   RA401dE2,N              16.16=¾wAp£×<£×
+AfáH<£×
+Aa¸<£×
+A\ÌÍ<ýó¶BT{A\zá  þ1829-    @gÂZîcŠ@í‘hr°!@gÂ[À6ã@í\ú¬Ùè?eµtDjó3Dgs3MPdE(N)   RA401dE5?,N             18.95=OßA‹™š<¬1A†Qì<¬1Aë…<¬1A€õÃ=\)AÖ{@éG®  ÿ1836-    @gÂšu%F@-n_oÒ @gÂ›¥ãSø@-nzáG®?p©DüVfDü|ÍMMdS0     RA410dS06pec:           15.70=¾wAhõÃ<£×
+A^ff<£×
+AYG®<£×
+AXQì<ýó¶B»ÌÍA°{   1833-    @gÂŸ¾vÈ´@/Þß¤?åÉ@gÂŸ¾vÈ´@/Þß¤?åÉ>s33DáÉšDã³3MMS0      RA200S016               15.85=¥ãAg×
+<£×
+A]p¤<£×
+AW33<£×
+AUG®<ýó¶Aã®@ç®  1837-    @gÃ/Ÿ¾w@Þ5?|í‘@gÃ/ìVÕÐ@Þ5?|í‘>×ö+D¦)šD¦)šMPdE      RA400?                  17.75=,1A†õÃ<¬1A™š<¬1A~{<¬1A}™š=\)BQìA/®  1839-    @gÃt¼j~ú@3g ù	l@gÃt¼j~ú@3g ù	l><jD<YšDF™šMPdE(N)   RA401dE1,N              18.53=uÂA‡33<¬1A‚(ö<¬1A~ff<¬1A|  =+Aø¸RA
+=  -   4599 @gÃœàuöý?ó&Á½¥@gÃœàuöý?ó&€IQƒ>åFDêVfDå¦fP-S0      RA200-                  14.90=PAS®<£×
+AG\)<£×
+A@£×<£×
+A<(ö<ýó¶BgG®AáH  -   -    @gÅ ù	kº@BZîcŠ@gÅœàuöý@C,¥zxl@VþÅDÙ À  P-dE      RA400-                  18.63=uÂAŠ¸R<¬1A†£×<¬1A„Qì<´9XAƒ×
+=t¼AÛ…Aff  -   -    @gÆwškP±?ÜÂø7´¢4@gÆvÈ´9X?Ü¹#¢œwš@òDÐƒ3À  P-Irr(LSB)BA300-                  17.00=¥ãA‰ë…<¬1A†Qì<¬1A„(ö<¬1A€{?¢ÐåAâáH@ýÂ  1855-    @gÆ·€4mÆ@…‡“Ý˜@gÆµÜÆ?@kP°ò|?¾àD9ìÍD:&fMPdS0(N)  BE411S0:                16.48=¾wAxzá<¬1An¸R<¬1AiG®<£×
+Ag\)<ýó¶B®A£×  1860-    @gÇ¡ÊÀƒ@.Œç¯·é@gÇ¢œwšk@.Œç¯·é>Y0¾Á—33À  MPdE(N)   RA401?                  18.38=H´9AŒ{<¬1A†£×<´9XA„¸R<¬1A…®=D›¦A»\)@ÝÂ  18594606 @gÇ®æ1ø¡@'ÒþÅm\û@gÇ¦µ(@'ÒòäŽŠ@Þ#:DÕ  DÍ  MMSBa     RE211Sapec              13.85=PADÌÍ<£×
+A;…<£×
+A5¸<£×
+A1Â<ýó¶Bæ
+=AÏ×
+  	1861-    @gÇÎÙ‡+@&^vÈ´9X@gÇÎÙ‡+@&^vÈ´9X>‰îÌD³3DlÍMMdE(N)   RA401dE0,N              15.73=¾wA`£×<£×
+AUÂ<£×
+AO×
+<£×
+AM¸<ýó¶Bo
+=A‰¸  
+-   -    @gÈ$Ý/ @#oÒòä@gÈ$Ý/ @#oÒòä>°ÿ—D°Ó3À  M-dE      BE400-                  18.81=49XAG®<¬1AŒff<´9XAŠ¸R<´9XA‰p¤=PA0õÃ@<(ö  -   -    @gÉ‹¬q³?ö-àq@gÉ‹¬q³?ö–»˜Çã?
+çÕDØÀ DÔ³3P-dS0     BE410-                  15.52=PAg\)<£×
+A`(ö<£×
+A[…<£×
+AX(ö?&éyB™š@ö¸R  18684607 @gÉ¦µ(@'Å¡ÊÀƒ@gÉ ù	kº@'ÅðoiDg@V¤©EÁšEùšPMedge-on RE207Scd(on_edge)       14.97=¾wAV{<£×
+AJ¸R<£×
+AC33<£×
+A>ff<ýó¶Bý£×AÝ¸  1871-    @gÊe+ÓÃ@&Æ?¼@gÊe+ÓÃ@&Æ?¼;ÞÒ‰DŒÍD3MME       RA100E3                 15.92=¾wAb¸R<£×
+AVff<£×
+AP(ö<£×
+ALzá<ýó¶AÏÂ@Ë×
+  1876-    @gÊÀƒn˜@-f§ï²-@gÊÀƒn˜@-f§ï²->333B
+ÌÍB4  MMdE(N)   RA401dE5,N              16.31=¾wAo®<£×
+Ae™š<£×
+A`zá<£×
+A^ff<ýó¶BR(öAFáH  -   -    @gË²•éâÀv+jçÕg@gË„M;Àv_Ø­«Ÿ?5›=D¶#3D¶S3P-Sd      BE204-                  15.74=¥ãAiG®<£×
+AaG®<£×
+A\ÌÍ<£×
+AY™š<ýó¶BN£×A2{  -   -    @gËcˆe”¯@38´9Xb@gËcˆe”¯@38´9Xb=éá±CïÌÍÀ  M-dE(N)   RA401-                  17.79=D›¦A‚¸R<¬1A|  <¬1Av=q<¬1Ayë…=\)Bë…@ôÌÍ  -   -    @gËÛ"Ðå`À
+“Ý—ö+@gËÛ"Ðå`À
+“Ý—ö+=àu÷DßFfDâÖfP-edge-on BE207-                  18.23=,1A‰ë…<¬1A†Qì<¬1A„ff<¬1Aƒ…=\)BÂ@Ë…  -   -    @gËãS÷ÎÙ¿ç	k¹Œ~(@gËãS÷ÎÙ¿çšu%F=»/ìDÀšÀ  P-dE      BE400-                  18.37=49XAŽ{<¬1AŠ=q<¬1A‡™š<¬1A…×
+=t¼A±®@•Â  1881-    @gËí(Œç@%†µ'»@gËí(Œç@%†§ï²->³@OCŠÙšC
+  MMdE      RA400dE3:,N             16.87=#×
+A€\<¬1Au™š<¬1Ao
+=<¬1Ag\)<ýó¶B2×
+AO®  -   -    @gÍ7KÆ§ð?ýhr° Äœ@gÍ8ï4Ö¡?ýhr° Äœ?]dD½c3À  P-Sm      BE205-                  17.55=49XA}Â<£×
+AyG®<¬1As
+=<¬1ApQì=+B@QìAR=q  1886-    @gÍA [À@(~«6z‘@gÍA [À@(~«6z‘=lVÖDqÓ3Dd™šMMdE(N)   RA401dE5,N              16.83=0 ÅAs®<£×
+Aj=q<¬1Ae¸<£×
+AdÌÍ=oBTp¤AVáH  -   -    @gÍ«ŸU›=@8„›¥ãSø@gÍ®záH@8„¢3œ¿?61ùD‰¦fÀ  M-dE(N)   BA401-                  19.66=° ÅAŠQì<¬1AˆáH<´9XA†zá<¬1A…G®=¥ãAÈ\A¸  1887-    @gÎ¸ºÇ@Â&€I@gÎ¸ºÇ@Â&€I<`u÷DIÙšDIæfMPdE      RA400dE4?               17.52='ïžA…<¬1Ay¸<¬1At  <£×
+Ar\<ýó¶B®Aff  1890-    @gÎ:û~‘ @&ú–»™@gÎ$xG@&ú6âëCAÎpD•öfD™|ÍMMdE      RA400dE4pecordS04       15.89=¥ãAmG®<£×
+Ad(ö<£×
+A^¸R<£×
+A]¸<ýó¶Bƒ”{A“
+=  1891-    @gÎ†YJôñ@&aÿ.Hè§@gÎ†YJôñ@&aÿ.Hè§>'ïžD‚ð D~,ÍMMdE(N)   RA401dE4,N              18.09=,1A‡®<¬1A‚¸R<¬1A€=q<¬1A€\=C–A×G®@ì(ö  1895-    @gÎí‘hr°@"ÎHè§ç@gÎí‘hr°@"ÎHè§ç=ö+kDs¹šD3MMdS0     RA410d:E6               16.33=¾wAn=q<£×
+Ad(ö<£×
+A^¸R<£×
+A[…<ýó¶BL£×A%Â  1897-    @gÏ<64@+‹¹Œ~($@gÏ=ÈK^@+‹¹Œ~($>À.BßffA  MMdE(N)   RA401dE4,N:             15.49=¥ãAc
+=<£×
+AYG®<£×
+AT(ö<£×
+AQë…<ýó¶BÌ
+=AÄ=q  1896-    @gÏG®zá@#+P°ò{³@gÏG®zá@#+P°ò{³=…‡”Dí,ÍDØ†fMMdS0(N)  RA411dSB012,N           16.17=#×
+Amë…<£×
+Ac33<£×
+A\£×<£×
+A\(ö<ýó¶B)QìAU¸  1898-    @gÏ›=ÈK@í(Œç@gÏœ¾ß¤@í(Œç>àID]  D\lÍMPdE      RA400?                  17.98=49XA…<£×
+Au¸<£×
+AnáH<£×
+Aië…<ýó¶B*=qA*¸R  -   -    @gÏéùrGÀVlô!-@gÏéá°‰ ÀV¡aä÷f>ÇËE.ð E.` P-Irr(HSB)BE310-                  19.17=0 ÅA‘Â<¬1A‘×
+<´9XA“®<¼jA’ÌÍ=]/@¿®?³33  19024620 @gÏéá°‰ @)âÃÉîËû@gÏéá°‰ @)âÃÉîËû=nËûDŽÍDŽ° MMSBa     RA211S0/Sa              14.67=¥ãAR=q<£×
+AHQì<£×
+ABff<£×
+A?…<ýó¶B
+=A¤     1906-    @gÐ[À6ã@/EãS÷ÎÙ@gÐ[À6ã@/EãS÷ÎÙ<ýó¶CÆ¦fCÍMPdS0     RA410S0:                17.19=#×
+A|zá<£×
+Ar{<¬1AlQì<£×
+Ajff<ýó¶A°Qì@Â=q  !1909-    @gÐý!ÿ.I@'§ü¹#¢œ@gÐüPHð@'¨	Ô•+>¤%¯B·33BÊ33MMdE(N)   RA401dE5,N              17.63=D›¦A}G®<£×
+Ax  <¬1Aq¸<¬1Ah£×<ýó¶B9£×A4õÃ  "1910-    @gÑ'»/ìW@'‚&€IR@gÑ'»/ìW@'‚3œ¾à>g†ÂCQÌÍCNšMMdE(N)   RA401dE1,N              15.87=¾wAc\)<£×
+AW\)<£×
+APÌÍ<£×
+ALÌÍ<ýó¶B\A1Â  #1912-    @gÑ6z—@)1Åo@gÑ6z—@)1Åo>ŽóÂ”ffÃ)33MMdS0(N)  RA411dS08,N             15.37=¥ãA`  <£×
+AV=q<£×
+AQ¸<£×
+AN\<ýó¶B‘ð¤AU™š  $1917-    @gÒbMÒñª@ÀN¤¨ÁU@gÒ`ªdÂø@¿åÉä?AÊÁD>ffD<ÆfMPdE(N)   RA401dE0,N              16.89=<jAx  <£×
+An=q<¬1Ai™š<¬1AbáH=oB†…A§Â  %1919-    @gÒlô!-@%"œwškQ@gÒmÅÖ8†@%"œwškQ>5¨XDç	šDéÆfMMdE(N)   RA401dE0,N              17.66=49XA®<¬1Az{<¬1Atzá<¬1A…=PBUffA„¸R  &1918-    @gÒz–¼@õ'»0@gÒ{²þÅm@õ'»0>ü¿Dy,ÍDu,ÍMPIrr(LSB)BE300ImIII?             17.23=¾wAƒë…<£×
+A‚\<¬1A€ff<¬1A|  =oAñ33A
+{  '-   -    @gÒ¿±[W?@1‚‚@·€4@gÒ¾í(@1‚‚@·€4?QN<D˜išD˜ffM-dS0(N)  BA411-                  16.02=¾wApQì<£×
+Af=q<£×
+A`zá<£×
+Ab¸R=oB›ÌÍA Qì  (1920-    @gÒÕÏªÍŸ@ ˆšu%F@gÒÕÏªÍŸ@ ˆe”¯O=îËûD¦À D£üÍMPdS0(N)  BE411S0?                16.73=¾wAw33<£×
+AlÌÍ<£×
+Ag®<£×
+Af{<ýó¶BáHAp¤  )1921-    @gÓ‰7KÆ¨@'zû~ÿ—@gÓˆe”¯O@'{šu%>‹’:D‘C3D‘33MMdS0(N)  RA411dS08               16.80=,1A{®<¬1Aq¸<¬1Al  <¬1Ak\)=oBl×
+AS
+=  *-   -    @gÓ³Ð|„¶?¨“t¼j~ú@gÓ²þÅm]?¨­«ŸU›=?Y#£D½Ó3À  P-Irr(HSB)BE310-                  18.09=,1A‡™š<¬1A„£×<¬1A„=q<¬1A…\)=¥ãA¶Qì@°    +-   -    @gÓÎ_oÒ?ñÅo @gÓÏªÍž„?ñÅo ?ÍŸDV³3À  M-Irr(LSB)BE300-                  18.23=,1Aˆzá<¬1A†Qì<¬1A…G®<¬1A„ff=t¼Ay™š@ˆ    ,-   -    @gÔ}¿H€@íBÃÉîÌ@gÔ!-w2@íBÃÉîÌ?7_pE"&fÀ  P-Irr(HSB)BE310-                  18.80=<jAŽ(ö<¬1A‹33<¬1A‰p¤<¬1AˆÌÍ=C–AR¸R@;…  -19234630 @gÔ($x@«jçÕfÏ@gÔ%®æ1ù@¬<žì¿±?òJD7šÀ  MPSd      BE204Sbc(s)II-III       13.89=PAL(ö<£×
+AC
+=<£×
+A>{<£×
+A;
+=<ýó¶BŸë…A¢¸R  .-   4629 @gÔ]cˆe•¿õšu%F@gÔZîcŠ¿õœ¾ß¤@@£D‹“3D‹œÍM-Sd      BE204-                  14.02=På`AZ=q<£×
+AU™š<£×
+ARáH<£×
+AO®<ýó¶B“×
+A—…  /19294633 @gÔø7´¢4@,¶ÕÏªÍŸ@gÔû~ÿ—@,¶âëC-?ÒkQC˜LÍC‘¦fMMSd      BE204Scd(s)             14.48=PAW®<£×
+AP  <£×
+AJff<£×
+AHÌÍ<ýó¶BÇzáA¼ff  0-   4635 @gÕ<64@3ò:)Çy§@gÕ;dZ¬@3ñÿ.Hè§@D~(Dpà Dl,ÍM-Sd      BE204-                  14.48=¥ãAO®<£×
+AHõÃ<£×
+ADzá<£×
+ADzá<ýó¶BÌaHAí¸  11931-    @gÕm\ú¬Ú@*ˆr° Äœ@gÕo hÛŒ@*ˆ§æšÔ?¿ƒ{D6fD‰–fMMIrr(LSB)BE300ImIII:             16.00=¥ãAz=q<¬1AtQì<¬1Ap  <¬1Ao…=oB2…A;×
+  219324634 @gÕt¼j~ú@,—Xâe,@gÕJôðØE@,œú¬Ùè>B/49Ch™šC”¦fMMSc      BA203Sc(on_edge)        14.03=PAK×
+<£×
+AB\<£×
+A<õÃ<£×
+A9ë…<ýó¶BùÇ®AÔzá  3-   -    @gÕ·Xâ?âô!-w2@gÕ·éùr?âô!-w2>n}VD‚šÀ  M-dE(N)   RA401-                  19.36=]/AŽff<¬1AŠ  <´9XA‡®<´9XA†=q=#×
+A€zá@ÄÌÍ  41934-    @gÖ
+¦L/ƒ@qÞi­BÄ@gÖIº^5@q©ûçl‹? ŽD$À D#à MPdE(N)   RA401dE5,N              17.51=@ƒA~ff<£×
+Au™š<¬1ApÌÍ<£×
+Al£×=oB@
+=A5p¤  51936-    @gÖ!–R½<@#zxl"h@gÖ"h	Ô•@#zxl"h>¤ZDoÙšDvs3MMdS0(N)  RA411dS00:,N            16.90=49XAzáH<¬1Ao®<¬1Ai¸<£×
+Ag®=oBffAõÃ  619394636 @gÖšu%F@ˆÎp:û@gÖ -à@€hÛ‹¬qAsCþDf“3Dj¬ÍMPE       RE100E1/S011            11.60=PAáH<£×
+A¸<£×
+A
+=<£×
+A\)<ýó¶C³ÈöB›#×  71942-    @gÖÅm\ú­@(æšÔ,=@gÖÇË)_@(ží(Œç?‘³DÒ£3DÕ3MMdE(N)   RA401dE4,N:             17.61=D›¦A€=q<¬1AxÌÍ<¬1AqÂ<£×
+Av=q=+BSp¤AS
+=  819434639 @gÖýó¶E¢@*ƒ¢œwšk@gÖÖ¡aä÷@*†s×ÛõAÓW¨Dˆs3D~  MMSBb     BE212SBb(r)II           12.99=PA<  <£×
+A5¸<£×
+A.áH<£×
+A+33<ýó¶BÃšAµ™š  91947-    @g×‚©“á@i­BÃÉï@g×‚©“á@i­BÃÉï><„¶Ds¹šDs¬ÍMPdE(N)   RA401dE2,N              15.77=¥ãAd(ö<£×
+AY¸<£×
+AS33<£×
+AO\)<ýó¶B
+=A=q  :19494640 @g×µsê³h@(’ñ©ûçm@g×³Ð|„¶@(’ñ©ûçm>úÔ,DØüÍDñ‰šMMdS0(N)  RA411dSB04,NordEII,N    15.63=¾wA^ff<£×
+ATQì<£×
+AMë…<£×
+AK…<ýó¶B•(öA¢    ;1948-    @g×½¥œà@%]/Ÿ¾w@g×¼ÓZ…ˆ@%]!ÿ.Hé>’°!DÇ` DÑ#3MMdE      RA400dE3                16.77=#×
+AváH<£×
+AmÂ<¬1Ag×
+<¬1AiÂ=oB2p¤A9G®  <-   -    @g×öý!ÿ.@ ÎÙ‡+@g×÷ÎÙ‡@ Î¤¨ÁTÊ>¾5?DW&fÀ  M-dE(N)   RA401-                  16.71=¾wA‰\)<¬1A†  <¬1A„\<¬1A‚ff=t¼B \A-ë…  =1950-    @gØxFÜ@0R½<6@gØIº^5@0R½<6>)xÕDLìÍDL3MMdE(N)   RA401dE2:               15.73=+Aƒ¸<¬1A}Â<¬1Ax  <¬1AqÂ=oB*\)AC\)  >1951-    @gØL/ƒ{J@'em\ú¬Ú@gØL/ƒ{J@'e`A‰7L>–SD©šDŽÌÍMMdE(N)   RA401dE0,N              17.91=@ƒA„áH<¬1A®<¬1AuG®<¬1Ap¤=PB(33Ax    ?-   -    @gØÅm\ú­@8st¼j~ú@gØÈ´9X@8s{J#9Á?›’:Dä£3DäLÍP-Sd      BE204-                  16.31=¥ãAw…<£×
+Ar\<¬1Ao®<¬1Ao…=+B\A ÌÍ  @1952-    @gØú¬Ùè>@žžš@gØÿ—$tT@žOv_Ø®@)(D ó3À  MMIrr(LSB)BE300ImIV               17.11='ïžA€£×<£×
+A
+=<¬1Ay™š<¬1AtQì=+B.33A=Â  A19554641 @gÙo i@(Û"Ðå`@gÙS&Â@(6âëC@#åÉDûS3À  MMdS0     BE410Spec/BCD           14.73=¥ãAW
+=<£×
+AN=q<£×
+AIG®<£×
+AMG®<ýó¶BÂæfAÔÌÍ  B1957-    @gÙ*™0¾@-
+=p£×
+@gÙüPH@-
+=p£×
+>¤%¯D”Ó3D˜S3MPdE(N)   BA401dE4?,N             18.90=På`A‰×
+<¬1A„ÌÍ<¬1A€{<¬1A—…>ƒ•BG®A)p¤  C1958-    @gÙaä÷eþ@&äŽŠqÞ@gÙaä÷eþ@&ñ©ûçm>dŽŠD‡P Dƒ6fMMdE(N)   RA401dE2,N              18.11=Y‡A…G®<¬1A€  <¬1A}G®<¬1A|zá=+Aú¸RA=q  D-   4642 @gÚ\‘ÑN<¿ä -à@gÚp:û~‘¿ä‘ÑN;Í6A+QƒE ´ÍE%[3P-SBc     RE213-                  14.67=PAXÌÍ<£×
+AP£×<£×
+AK×
+<£×
+AHÌÍ<ýó¶Bš.A„{  E-   -    @gÚs×Ûõ¿÷z–»™@gÚu%F
+¦¿÷zxl"h
+??·éDÓ0 DÒÉšP-dS0     BE410-                  17.15=¥ãA¸<£×
+A|(ö<¬1AyÂ<¬1Aw×
+=oAçÂ@¸    F1965-    @gÚÍžƒä&@\‘ÑN;Í@gÚÍžƒä&@\‘ÑN;Í>l1DZffDn¦fMPIrr(LSB)BE300Im?                17.75=49XA„zá<¬1A€ff<¬1A{®<¬1Ay¸=+B…A¸R  G-   -    @gÛœàu÷@©*0U@gÛ
+=p£×@Åo @Tå`D»,ÍÀ  M-Irr(LSB)BA300-                  18.50=Y‡AŠÌÍ<¬1Aˆ¸R<¬1A†õÃ<´9XA‡G®=¥ãAã™š@ì(ö  H1966-    @gÛXâe@,XQë…¸@gÛXâe@,X_ö”F=¡ÿ.CIffÀ  MPdE      RA400dE5?               18.04=0 ÅA†£×<¬1A‚=q<¬1A€=q<¬1Auë…=+B1£×A1p¤  I-   -    @gÛ8ï4Ö¡@8†lô!-@gÛ8ï4Ö¡@8†lô!->f1ùD‘9šÀ  M-Irr(LSB)BE300-                  17.11=¾wA…
+=<¬1A‚(ö<¬1A€£×<¬1A|õÃ=+B
+=@ð£×  J1971-    @gÜ!-w2@&}¿H€@gÜOv_Ù@&}¿H€>ãñAD±IšD¬  MMdE      RA400dE3:               17.45=<jA‚£×<¬1A|Qì<¬1Avff<¬1As\)=oB
+G®Aff  K19724647 @gÜ^5?|î@')k¹Œ~(@gÜU2a|@'*0U2a|@Î~D±&fÀ  MMSc      RE203Sc(rs)III          12.35=PA.=q<£×
+A#®<£×
+Ap¤<£×
+A\<ýó¶C?ÂBczá  L-   -    @gÜêJŒM?òfÏAò×@gÜéxÔýô?òg8}¿H?eþDJfÀ  M-dE(N)   RA401-                  17.90='ïžA  <¬1A‰Â<¬1A†Qì<¬1A…G®=t¼BÂ@ìzá  M19784649 @gÝS&Á¾@'û~ÿ—@gÝ¢œwšk@'ÌcñA BSD}æfÀ  MMS0      RA200S012               11.37=¥ãAQì<£×
+A
+áH<£×
+A…<£×
+@ÿ\)<ýó¶CaEBHzá  N-   4651 @gÝ²-V@0dÐ©*0@gÝÐ|„µÝ@0e$Ý/ANÙD/šDEšM-Sc      BE203-                  12.26=PA1™š<£×
+A(Qì<£×
+A#\)<£×
+A Qì<ýó¶C
+Ü)AÝ™š  O1980-    @gÞg8}¿@!…zxl"h@gÞg8}¿@!…m\ú¬Ú>–8†DÝÖfDÝÙšMMdE(N)   RA401dE4,N              18.25=Y‡A…¸<¬1A€{<¬1Az{<¬1Av=q=oB+¸A    P-   4653 @gÞË)^ž¿áó¶E¡ÊÁ@gÞÉ…ðoi¿áõY³Ð|…?xï5E$h E$ŒÍP-Sc      RE203-                  13.61=PAG®<£×
+A@õÃ<£×
+A<Qì<£×
+A:=q<ýó¶Bæ{BáH  Q1982-    @gÞÎp:û@&ïŸ¾vÉ@gÞÏAò×@&ïŸ¾vÉ>“ŽóDi“3Dh  MMdE      RA400dE6:               16.85=#×
+Az¸R<¬1Ao×
+<¬1Ah  <£×
+Ag®<ýó¶BU¸A1¸  R1983-    @gßŸ¾vÉ@%}²-V@gßquŽ"@%}ÌcñA >ÝÌdD§³3D§³3MMdE      BA400dE1                17.52=,1A…\)<¬1A‚{<¬1A
+=<¬1Azff=+A¤  @ä(ö  S-   -    @gß!ÿ.Hé@4êJŒ@gß$tSŽó@–»˜Çã?×»0Dª@ À  M-dE      BA400-                  17.91=<jA‡¸<¬1A‚õÃ<¬1A€(ö<¬1A}ë…=\)A³®@¸õÃ  T-   -    @gß5¨Xy>@0Œ"h	Ô•@gß8ï4Ö¡@0Œ(õÂ\?¯OD—†fÀ  M-Irr(LSB)BA300-                  18.44=m‘hA‰ë…<¬1A†ÌÍ<¬1A†ff<´9XA†{=¾wAœ¸R@ª=q  U19874654 @gß‘hr°!@*@[À6ã@gßŠÚ¹õZ@*@ÞÒˆÎp@eþD‚P À  MMSBc     BE213SBc(rs)II          11.99=PA-ë…<£×
+A%™š<£×
+A £×<£×
+Ap¤<ýó¶CEÅBH    V-   -    @gß°‰ 'R@ÚQÎ_@gß²-V@ÚkP°ò|?e¸CÌŒÍÀ  P-Irr(LSB)BE300-                  18.44=49XAŒ{<¬1A‰\)<¬1A‡™š<¬1Aˆ  =¾wAƒ®@‡\)  W-   -    @gà1&éxÕ@záG®@gà2ÊW§‡@`ªdÂø?D,=D~  À  M-dE(N)   RA401-                  19.29=…¸A×
+<¬1AˆQì<¬1A……<¬1Aƒ…=C–B£×AõÃ  X1989-    @gà—Oß;@*€uöý!ÿ@gà—Oß;@*€hÛ‹¬q>@OD   D¹šMMdE(N)   RA401dE1:               18.80=]/Ap¤<´9XAŠõÃ<´9XAˆ=q<´9XA†Qì=PA›…@µp¤  Y-   -    @gá'»/ì@²•éá±@gáùrGE@²•éá±>3œD«  À  M-dE(N)   RA401-                  17.27=#×
+A€£×<¬1Aw×
+<¬1Ar¸R<¬1AlQì=oAô\A33  Z1991-    @gá@N¤¨Á@&ZkP°ò|@gá?|í‘h@&ZkP°ò|>ª	DÒLÍDÒLÍMMdE(N)   RA401dE3,N              16.98=@ƒAv=q<¬1Ak33<¬1Aeë…<£×
+AdÌÍ=oBp  AŽ    [1992-    @gáA [À@(;µsê³@gáKÆ§ïž@(:xl"h
+@ÉÈDvÀ D|¬ÍMMIrr(LSB)BE300ImIV               16.40=¾wAw×
+<£×
+AtQì<¬1As
+=<¬1A|(ö=¥ãB=qA‘p¤  \-   -    @gáŽóMj@Ú¹õY³Ð@gáÅo@Ú¹õY³Ð>@7DKÆfÀ  M-dE(N)   RA401-                  16.76=¥ãAxQì<£×
+Ao
+=<£×
+Ah(ö<£×
+Ac×
+<ýó¶B1ÂAl    ]1993-    @gáškP°ò@)â@·€4n@gáškP°ò@)â3œ¾à>‹…DT3DS€ MPdE      RA400E0                 16.85=#×
+Aw
+=<£×
+Amp¤<£×
+Ah(ö<£×
+Ad  <ýó¶AÿG®A®  ^-   -    @gáýŠÚ¹õ@²-V@gáþ\‘ÑN@²-V>µ›=DV“3À  M-dE(N)   RA401-                  18.67=På`AŠ(ö<¬1A…®<¬1Ap¤<¬1Aw33=oBë…A¸R  _-   -    @gâQÎ_@VÕÏªÍŸ@gâQë…¸@V¡aä÷f?1'D†  À  M-dE(N)   RA401-                  19.16=ƒoA…<´9XAŠõÃ<´9XA‡×
+<´9XAˆ{=#×
+A‚£×@šáH  `-   -    @gâÌÌÌÌÍ@\¾ß¤@@gâÈ´9X@[À6âë@ÏBD À À  M-Irr(LSB)BE300-                  17.50=#×
+A……<¬1Aƒ…<¬1AG®<¬1A}p¤=oB(G®AÂ  a-   -    @gãTÉ…ðo@8çRT`ªe@gãS÷ÎÙ@8çXâe,?ÉïDã¶fÀ  P-S       BE206-                  17.59='ïžA†áH<¬1A†(ö<¬1A„£×<¬1A‰×
+=ixÕBÂ@ê\  b-   -    @gãØ­«ŸV?Ýø -à@gãÖ8†YK?ÝõY³Ð|…?›ñAD—#3D“ M-SBd     BE214-                  13.83=PATÌÍ<£×
+AMë…<£×
+AE¸<£×
+ADQì<ýó¶BøúáB*33  c19994659 @gãê³g ù@*ÿ;dZ¬@gãë…¸R@*ÿHË’:>èõÃCîÀ Cð  MMSa      RA201Sa                 14.29=¥ãAK33<£×
+A@  <£×
+A9p¤<£×
+A5ë…<ýó¶B€…A`(ö  d-   -    @gäu%F
+¦?ûÊW§†Â'@gäu%F
+¦?ûÊW§†Â'=â¶®Duó3À  M-dE(N)   RA401-                  17.30=0 ÅA‚  <¬1Ay¸<¬1Ar{<¬1As
+==+B<G®A`zá  e-   -    @gä|„µÜÆÀŽV“u@gäl"h	ÕÀOß;dZ@íÒòDÆ³3À  P-Sm      BE205-                  15.79=¥ãAmG®<£×
+Ai¸<£×
+AeÂ<£×
+AbáH=+B¡¨öAŸ
+=  f-   -    @gä•éá°Š?ôg ù	kº@gä•éá°Š?ôg ù	kº=±Ä3D´éšÀ  P-dE(N)   RA401-                  17.50='ïžA„=q<¬1A}™š<¬1Aw…<¬1AxõÃ=+B
+=A\  g-   -    @gå—ö+jè@¸ -à@gå˜Çâ‚A@¸†YJôñ>©á±Eó3À  P-dE      BE400-                  19.11=@ƒA×
+<¬1AŒQì<´9XAŠQì<´9XA‰33=¥ãA¸R@JáH  h2006-    @gæquŽ@(³œ¾ß¤@gæ_oÒ @(´mÅÖ8†@ÅŠ	D_ffÀ  MMS       BA206Amorphu            15.01=¥ãA[
+=<£×
+AR{<£×
+ANff<£×
+AIG®<ýó¶BÚšAµ×
+  i2004-    @gæ#9Àëî@!õÜÆ?@gæ"h	Ô•@!õöý!ÿ.?PË)DŸÍÀ  MMdE      RA400dE0                16.71=#×
+A|£×<¬1As
+=<¬1Amë…<¬1Aqp¤=\)Bkë…A“\)  j2008-    @gæQë…¸@(! [À7@gæ3œ¾à@("@·€4nArý‹D×fÀ  MMdE      RA400dE5                15.96=¥ãAk…<£×
+Ac
+=<£×
+A]p¤<£×
+A[
+=<ýó¶BÞ=qAæáH  k2007-    @gæV“u@ 6ÕÏªÍŸ@gæU2a|@ 6»˜Çâ‚?]æ›DéöfDãfPMIrr(HSB)BE310ImIII/BCD:         16.79=¥ãA|£×<£×
+Au™š<¬1Aq¸<£×
+Aq¸=oAØ(ö@ùG®  l-   -    @gæéxÔýô@0k"Ðå`B@gæç¯·é@0k'»/ì?°ªeDuó3À  M-SBm     BE215-                  16.74=¥ãA†{<¬1A‚zá<¬1A…<¬1A{®=t¼BõÃAQì  m2012-    @gè¾ß¤?æ@%ÍOß;dZ@gèÁTÉ…ð@%ÍBÃÉîÌ?‡RTD‡ó3EvfMMdS0(N)  RA411dE1:,N:            15.95=#×
+Ag\)<£×
+A]G®<£×
+AUÂ<£×
+AS×
+<ýó¶B‰™šA­¸  n2014-    @géHË’:@%B¶®}Vm@géJôðØE@%BÃÉîËû?a \Dl33Dl,ÍMMdE(N)   RA401dE0,N              17.71=,1A‡®<¬1A\)<¬1AxQì<¬1A‚(ö=PB&=qAzá  o2015-    @gé—ö+jè@$¦1ø .@gé“Ý—ö+@$¦
+¦L/ƒ?úø8ETÍE+3PPIrr(HSB)BE310BCD?               17.58=8QìA€¸R<¬1Az\<¬1Aw33<¬1Ar{=oAø=q@îff  p2017-    @gêí(Œç@vz–¼@gê¾ß¤@@vz–¼>¾D¢vfD£  MMdE(N)   RA401dE3,N              18.09=TýôA€{<¬1A{…>±&éAtõÃ<¬1Av=q=+B:\A#\)  q-   -    @gêÁTÉ…ð@5m\ú¬Ùè@gêÃÉîËû@5mOß;dZ?±@CÁ€ À  P-Irr(LSB)BA300-                  17.90=aG®Aë…<¬1A|Qì<¬1Au¸<¬1At£×=+B€\)A„    r-   -    @gìzáG®@4ÐÞÒˆÎp@gìL˜_@4Ðå`A‰7=nËûE!)šE&P P-Sd      RE204-                  16.25=¥ãAtõÃ<£×
+Amë…<£×
+Aië…<£×
+Af\<ýó¶Aü¸R@Õ¸  s2023-    @gì?åÉ@*©á°‰ '@gìDÐ©*@*ªJŒL˜@mOßDlLÍÀ  MMSBc     BE213SBc(s)II           15.04=¥ãA^{<£×
+AW×
+<£×
+ATQì<£×
+ARáH<ýó¶B™.Aœff  t-   4668 @gìBZîc ¿á&éxÔýô@gìCþ\‘Ñ¿á$tSŽóM?¦‡+DÍffDÌ£3P-Sd      BE204-                  14.27=PATÌÍ<£×
+AN\<£×
+AK\)<£×
+AI¸<ýó¶Bx×
+Ao®  u-   -    @gìp:û~‘@$û"Ðå`B@gìp:û~‘@$û"Ðå`B=¸ºÇDrlÍÀ  M-dE      RA400-                  19.64=\)A“¸<¼jAŽ=q<¼jA‹®<´9XA‰ë…=#×
+AVáH@ŒÌÍ  v-   -    @gì³g ù	?ÿÑ·Xâ@gì´9Xb?ÿÑ·Xâ>ÉQƒD›æfÀ  M-dE(N)   RA401-                  18.74=m‘hA‡×
+<¬1AƒG®<¬1A€õÃ<¬1A|  =+A·33@ºáH  w2028-    @gìýó¶E¢@*¨$xG@gìþÅm\û@*¨1&éxÕ?%BXÌÍÀ  MMIrr(LSB)BA300dE7:               18.71=®{AƒG®<¬1A®<¬1A}™š<¬1A~=q=C–Aóë…AQì  x2029-    @gí\(õÂ@"ÏùrGE9@gí]ÌcñA@"Ð¸ºÇ?TÐD¡üÍD¢  MMdE      RA400dE3                18.44=Y‡AŒ  <´9XA‡®<´9XA€£×<¬1AˆQì=H´9AâáH@þ¸R  y-   -    @gí‹¬q³À ?HË’:@gíŠÚ¹õZÀ ?|í‘hs>èõÃD¿ùšÀ  P-Irr(LSB)BE300-                  18.15=0 ÅA‰™š<¬1Aˆ{<¬1A†£×<´9XAˆ(ö=På`AË\)@Û…  z-   -    @gî£n.²@(x­«ŸU›@gî£n.²@(x­«ŸU›=pØEDÁffÀ  M-dE(N)   RA401-                  18.79=På`Aff<´9XAG®<¼jA‰\)<´9XA‰×
+='ïžAŠ{@¤zá  {-   -    @gî`ªdÂø¿Û ù	k¹Œ@gîcŠ	¿Û©*0U2a@ÂDÏYšÀ  P-Irr(HSB)BE310-                  17.58=#×
+A„{<£×
+Ap¤<¬1A€  <¬1A€=q=C–Aµ…@ÂáH  |2033-    @gð˜_ö”@ óÝ—ö+k@gð—Oß;@ óÐ|„µÝ>Ñ‚ªD¸Ð D¹¼ÍMMIrr(HSB)BE310BCD                16.10=¾wAo…<£×
+Ahzá<£×
+Ac®<£×
+Abff<ýó¶BQìA £×  }-   -    @gð÷eýŠÛÀ
+&éxÔýô@gð÷eýŠÛÀ
+'æšÔ,?	cDŠÐ À  P-dE(N)   RA401-                  19.01=yÛ#AŠzá<¬1A†ff<¬1A„{<¬1A\)=\)Aª=q@·®  ~2037-    @gòxFÜ@$i*0U2a@gò	Ô•+@$iDg8~?~	D)šDŽÖfMMIrr(LSB)BE300ImIII/BCD          16.45=¥ãAw…<£×
+Anff<£×
+Ah£×<£×
+Axzá=PB®{A¯™š  -   -    @gò1&éxÕ@ ^žš@gò1&éxÕ@ ^i­BÃÊ>‰Dqs3À  M-dE(N)   BA401-                  18.12=H´9Aˆ  <¬1Aƒ®<¬1A33<¬1A~ff=\)AÉ\)@ÕÂ  €-   -    @gôl"h	Õ@
+d%®æ1ù@gôkP°ò|@
+cŠ	Þ?ÓŠDI@ À  M-Sm      BA205-                  17.73=8QìA€Qì<£×
+Aw\)<¬1Ar{<¬1Aq¸=oB,{A'×
+  -   -    @gõ¯·é@6?¼@gõ¯·é@6?¼>0U2DÞfDÞ	šP-edge-on BE207-                  18.64=8QìAŒQì<¬1A‰p¤<¬1AˆQì<¬1A†õÃ=t¼AAp¤@1ë…  ‚2042-    @gõüPH@"IQ‚©“@gõÎ_p@"Vlô!>©­CDWS3DÜÃ3MMdS0(N)  RA411dE1,N              15.69=¥ãAeë…<£×
+Ab¸R<£×
+A[…<£×
+AV{<ýó¶B‹A°£×  ƒ-   -    @gö–»˜Çã@µÜÆ?@gö—Oß;@µ'»0?¡ÊÁDpæfÀ  M-dE(N)   RA401-                  18.20=#×
+AŒ=q<¬1Aˆ{<¬1A…33<¬1A‹Â=@ƒAè(öA/\)  „-   -    @gö›¥ãSø@í(Œç@gö“t¼j@quŽ"@vh
+D—p À  M-Irr(LSB)BA300-                  16.81=#×
+A|zá<£×
+Axzá<¬1Auë…<¬1Amp¤=oB!®AL    …-   -    @g÷E8ï4×@á@N¤©@g÷F
+¦L0@àÞÒˆÎp>hõÃCÕÀ À  P-dE(N)   RA401-                  19.37=° ÅA
+=<¬1AŠQì<´9XA‡p¤<¬1Ap¤=}ó¶AÕ®@ë33  †2045-    @g÷fÏAò@$]p£×
+=@g÷eýŠÚº@$]cˆe”¯?7D£ÌÍD£ÌÍMMdE(N)   RA401dE6:,N             18.47=£×
+A|õÃ<¬1Arff<¬1Ak…<£×
+AlQì=+Bl×
+AHõÃ  ‡-   -    @gø!–R½<¿ù?åÉä@gø"h	Ô•¿ù?åÉä>Ü]dE)ð E)Ã3P-Sc      RA203-                  16.03=¥ãAm™š<£×
+Aeë…<£×
+Ab=q<£×
+Ac×
+=oB‚æfA‚=q  ˆ-   -    @gù£n.±Ä¿ùC,¥zx@gù¥œàv¿ùÚQÎ?;Í6E0c3À  P-Irr(HSB)BE310-                  18.28=TýôA†{<¬1A‚ff<¬1A€{<¬1A{\)=C–A¬\@º\  ‰2048-    @gú
+¦L/ƒ@$h>BZîc@gú
+¦L/ƒ@$h>BZîc=MD‰0 D‡™šMMS0      RA200d:S09              15.25=¥ãA\õÃ<£×
+AR{<£×
+ALzá<£×
+AHõÃ<ýó¶Bˆ£×AFáH  Š2049-    @gú)Çy¦µ@'…zxl"h@gú%®æ1ù@'…8ï4Ö¡@ âDˆVfDˆ€ MMdS0     RA410dE8,N:             17.18=,1A~áH<£×
+Av\<¬1Ao×
+<¬1Ay¸=C–BsQìA@ÌÍ  ‹2050-    @gúÀƒn˜@(U2a|Ú@gúÀƒn˜@(U2a|Ú=ÛÀD<ÍD MMdE      RA400dE5:,N             16.61=¾wAs
+=<£×
+Ah(ö<£×
+Ab\<£×
+Ab{<ýó¶B*…A)™š  Œ2054-    @gý=Ùb·@"P°ò{²ÿ@gý=Ùb·@"P°ò{²ÿ=å+ÔDÆ,ÍDÆ0 MMdE(N)   RA401dE3:               17.88=LÌÍA‚¸R<¬1A}™š<¬1AváH<Ä›¦Ay™š=\)B\A=q  2056-    @gýè>BZî@(D?åÉ@gýè>BZî@(DM:’£=çl‹Dð‰šDðð PMdE      RA400dE5pec:            17.34='ïžA€(ö<£×
+Aw33<¬1Ar¸R<£×
+Ap  <ýó¶B(öA    Ž20584689 @gþð¹@+…ýŠÚ¹õ@gþ×sü@+†¸ºÇ@‰<6DË)šDÊ  MMSc      RE203Sc(s)II.3          12.53=PA4Qì<£×
+A*\<£×
+A%¸<£×
+A!™š<ýó¶C;Ï\BWáH  -   4688 @gþ;Í5¨X@Y³Ð|„¶@gþCþ\‘Ñ@U2a|ÚA€h>Dr33À  M-SBc     BE213-                  13.66=PAJff<¬1AEÂ<¬1AB=q<¬1AB=q=oBþÌÍB¸  -   -    @gÿòäŽŠr@»Í5¨Xy@h u%F@¼¹#¢œx@ñ°D‚C3D‚FfM-Sm      BE205-                  16.05=¥ãAq™š<£×
+Ak®<£×
+AhQì<£×
+Ag
+=<ýó¶B#×
+A0Qì  ‘-   -    @gÿùrGE9@Ç“Ý—ö+@gÿúCþ\’@Ç“Ý—ö+>ÅzxD€†fD€fM-dE(N)   RA401-                  16.54=¥ãAs×
+<£×
+Aj=q<£×
+AdÌÍ<£×
+Aaë…<ýó¶B×
+A ÌÍ  ’-   4691 @hÎÙ‡+À
+¨Œç¯¸@hÑN;Í6À
+©^žš?äÓ[D,ÍDŠÜÍP-SBa     BE211-                  12.35=PA3®<£×
+A+33<£×
+A&ff<£×
+A$£×<ýó¶C ”{Aë…  “20664694 @hu%F@%÷Oß;d@h×
+=p¤@%úxl"h
+AßÛŒD“s3D‘fMMS0      RA200Amorphu            13.16=PA>¸R<£×
+A5p¤<£×
+A0  <£×
+A,zá<ýó¶Bè™šA·Â  ”-   -    @h'»0@5¨Xy>@h¼@5¨Xy>@xIEP À  P-Irr(LSB)BE300-                  18.47=@ƒAŒff<¬1A‰®<¬1A‡™š<¬1Aˆ  =¥ãAÉG®@µ¸  •20704698 @hË)^ž@ ù™™™™š@h [À7@ ÷ö+jçÕAVçmD€öfD|s3MMSa      RE201Sa                 12.80=PA2=q<£×
+A%Â<£×
+AáH<£×
+A
+=<ýó¶C×
+Aõ®  –2073-    @hœ¾ß¤@%¿HË’@h›=ÈK@%²-V?Æ¨D’ÍD’šMBS0      RA200S0:                17.35=#×
+A…<£×
+AuÂ<¬1Ap£×<£×
+An{<ýó¶AˆõÃ@°£×  —2078-    @hÕfÏAò@'ðU2a|@hÔ•*™@'ðoiDg8?\"hEVfÀ  PMdE(N)   RA401dE2                16.58=¾wAÂ<¬1A~\<¬1Au™š<¬1Ayp¤=\)BVp¤A‹33  ˜-   -    @hcˆe”¯@-ÐØDÐ©@haä÷eþ@-ÐØDÐ©?$êD°ƒ3D°\ÍM-Sa      RE201-                  15.39=¥ãA_
+=<£×
+AS\)<£×
+AMp¤<£×
+AJ\<ýó¶B‹k…Ab{  ™2080-    @hÉîËû@%,cñA \@hÉîËû@%,VÕÏªÎ>Cä&D½0 D½0 MMdS0     RA410dE6pec:            16.73=¾wA|(ö<¬1Apzá<¬1Aj\<¬1AfáH<ýó¶B[\A?®  š-   4701 @h	Œ~($@C,¥zx@h	ƒ{J#:@kP°ò|@›ØD<@ D4s3M-Sc      BE203-                  13.49=PAG®<£×
+AAp¤<£×
+A=Â<£×
+A;33<ýó¶B¥Ü)A…
+=  ›-   -    @h
+¬1'@ A‰7KÇ@h
+“t¼j@ŸŠ	Þ@CE'‰šE&¾fP-SBd     BE214-                  15.46=PAo…<£×
+Aj¸R<¬1Ahzá<¬1Ao®=\)BuõÃA˜ff  œ-   -    @hjçÕfÏ@‘‚©“á@hn.±Ä3@‘ë…¸R?ÿ|îE$ë3À  P-SBd     RE214-                  16.86=¾wA×
+<£×
+A{\)<¬1Aw…<¬1Aqp¤=oB„.A~áH  -   -    @hè§æ›@5ë'»/ì@hëC,¥@5ëµsê³?—D  À  P-Irr(LSB)BE300-                  18.92=aG®A‰™š<¬1A‡Â<¬1A‡G®<¬1AˆáH=,1AÏ×
+@Ö{  ž-   4710 @h4êJŒ@.TÖ¡aä÷@h%F
+¦L@.T¼£Aù	D”Ó3À  M-edge-on RE207-                  12.97=PA4(ö<£×
+A(  <£×
+A!p¤<£×
+A™š<ýó¶C!šB p¤  Ÿ-   -    @hIQ‚©“@)@uöý!ÿ@hDg8~@)@'RT`ª@7°DP™šEï©šM-dE(N)   RA401-                  16.24='ïžAp(ö<£×
+Ag
+=<£×
+Ab¸R<£×
+Aa¸=oBØW
+A®áH   -   -    @h ù	kº@õ'»0@hœ¾ß¤@õ?|í‘h@uŽD-šÀ  M-Irr(LSB)BA300-                  19.38=]/AõÃ<¬1A\)<¼jA™š<¼jA‹×
+=0 ÅA~\@¢\  ¡2081-    @h)Çy¦µ@&s¶E¡ÊÁ@h($x@&sàÞÒ‰@—qCdÌÍÀ  MMdE      RA400dE2pec?            18.31=e`BA†£×<¬1A\)<¬1Az=q<¬1A‚¸R=¾wB¸A9ë…  ¢-   -    @hCþ\‘Ñ@½p£×
+=@hFs×Ü@½ÈK]Ì?š£D™šD-  P-Sm      BE205-                  17.11=¥ãA}™š<£×
+A{\)<¬1Ayp¤<¬1Arff=oB5
+=A8    £-   -    @h²•éá±@Ïv_Ø­¬@h±Ä2ÊX@Ïv_Ø­¬>dŽŠD‘S3D|ÍM-edge-on RE207-                  15.05=¥ãAW×
+<£×
+AMp¤<£×
+AG
+=<£×
+AC
+=<ýó¶BÿõÃAºõÃ  ¤-   -    @h‚©“á@*™0¾@h…¸Qì@¯O„M?©…ðD9FfÀ  M-S       BE206-                  17.99=#×
+AŠ{<¬1A‡…<¬1A†£×<´9XA„\=PA²ff@ž{  ¥-   4713 @h¯·éù@>vÈ´9X@h·Xâ@>ß¤?åÉ@]&éD!¦fD#¹šM-SBc     BE213-                  12.76=PA?
+=<£×
+A9ë…<£×
+A7\)<£×
+A5p¤<ýó¶B³™šAÓ
+=  ¦-   -    @hä%®æ2@H´9Xb@hä÷eý‹@Hšu%F?	ùCþó3À  M-Irr(HSB)BE310-                  17.58=#×
+A„  <£×
+A€ÌÍ<¬1A~\<¬1A~\=+AŽõÃ@«…  §-   -    @hù	k¹Œ@û~ÿ—$@hùÛ"Ðå@û²þÅm]>û‹¬Dƒ€ À  M-dE(N)   RA401-                  17.84='ïžA…Â<¬1A€ff<¬1A}Â<¬1Az\=+BÂA;…  ¨2083-    @híúCþ]@%záG®@híúCþ]@%‡ü¹#£>L~(D_@ D_FfMMdE(N)   RA401dS0:,N             16.73=#×
+Aw\)<£×
+Am™š<¬1Ag×
+<¬1Ad  <ýó¶BMõÃAd£×  ©-   -    @h.±Ä2Ê@1xÛ‹¬q@h+jçÕg@1xšu%F@{dZDS33DSÍM-Sm      BE205-                  17.00=<jAG®<¬1A{×
+<¬1Ay™š<¬1A‚\=TýôB‰×
+AZáH  ª-   -    @h	k¹Œ~@#ÂIº^5@h
+=p£×@#Áÿ.Hè§>ð¾DÏÙšÀ  M-dE(N)   RA401-                  19.45=©ûçAŽ{<¬1A‹
+=<´9XA‡Â<¬1A…G®=¥ãA—G®@¿\)  «-   -    @h4êJŒ?÷n—Oß;@h1Å?÷n—Oß;?ZÍŸD¥ÖfDŸÍP-edge-on RE207-                  15.79=¥ãAe¸<£×
+AZáH<£×
+ATÌÍ<£×
+AR=q<ýó¶BÁž¸A™š  ¬-   -    @h;Í5¨X@Aò×s@h<žì¿±@Aò×s>ÅD,ìÍÀ  M-Irr(LSB)BE300-                  19.56=Y‡A’\<¬1A\)<´9XA¸<´9XAŒ(ö=#×
+AM¸@P    ­-   -    @hë…¸R@"($xG@hðoiDg@"'_oÒó@¸TaD	šÀ  M-Irr(LSB)BE300-                  17.10=#×
+A…33<¬1A€áH<¬1A×
+<¬1A{\)=C–B6¸RA)™š  ®-   -    @h_oÒ ?ýˆÎp:û@h_oÒ ?ýˆÎp:û>’TaDkæfÀ  M-dS0     RA410-                  17.51=¾wAƒ™š<¬1A~ff<¬1Aw…<¬1Ar¸R=oB7áHAë…  ¯2090-    @h:’£S@%(Îp:û@h?|í‘h@%(Îp:û?ÿ¾wDÇ)šDÇ)šMMdE(N)   RA401dE6,N              16.54=¾wA{\)<¬1As\)<¬1AmG®<¬1Ak33=oB‹ÌÍAˆzá  °-   -    @hfffff@3¹‡+@hfffff@3¹‡+>„ŽŠDŽÐ DŽÌÍM-dE      BE400-                  17.77=,1A†{<¬1A‚£×<¬1A¸<¬1A\)=C–A¶{@¬zá  ±-   -    @hŠÚ¹õZ@*0°ò{²ÿ@h‰7KÆ¨@*0£×
+=q?3ŽóD»3D»Ã3M-dE(N)   BE401-                  16.93='ïžAzff<¬1Aq™š<¬1Alzá<¬1Aj{<ýó¶BáHA0Qì  ²-   4746 @h\ú¬Ùè@(*~ùÛ"Ñ@hZ…‡“Þ@(*Àƒn˜@»0DÛYšDß3M-Sc      BE203-                  14.21=PAQ¸<£×
+AG33<£×
+AB=q<£×
+A>{<ýó¶B£…A‡…  ³-   -    @hl‹C•@!Á£n.±Ä@hl‹C•@!Á£n.±Ä<àu÷DŒ¬ÍÀ  M-dE(N)   RA401-                  17.33=,1A€ff<¬1AváH<¬1Aqp¤<¬1ApõÃ=oAà£×A=q  ´-   -    @h!0¾í)@÷škP°ò@h!/ìVÕÐ@÷1Å?DðØDm  À  M-dE(N)   RA401-                  19.31=²-A‰33<¬1A„zá<¬1A33=+A{\)=+B¸A)¸  µ20924754 @h"R½<6@& ëíúCþ@h"­«ŸU›@&ŠÚ¹õZB6MŸDŸƒ3D¨|ÍMMSB0     RA210SB015              12.81=PA1¸<£×
+A$zá<£×
+Aë…<£×
+Ap¤<ýó¶C0øRAº=q  ¶-   -    @h$Ë’:*¿û¯·éùr@h$Ë’:*¿û®æ1ø ?=/DŒ|ÍÀ  M-dS0     BE410-                  16.70=#×
+Ayë…<¬1Ao®<¬1Ak®<¬1Ap(ö=C–BH™šA9p¤  ·-   -    @h$ÿ—$t@(ƒä%®æ2@h$ÿ—$t@(ƒä%®æ2<Åm]DÒ,ÍDá9šM-dS0     BA410-                  16.28=¾wAr¸R<£×
+Ak…<¬1Ae™š<£×
+Ac33=oB„úáAep¤  ¸-   -    @h$Þ Ñ·À €4mÅÖ9@h$Þ Ñ·À €4mÅÖ9>aÿ.E/ó3E/îfP-E       BE100-                  18.16=#×
+AŠ  <¬1A‡p¤<¬1A†Qì<¬1A†Qì=P@Ñ™š?Ü(ö  ¹-   4758 @h%è>BZî@/±N;Í5¨@h%Ä2ÊW¨@/·
+=p£×B+ÍÓD£FfÀ  M-edge-on BE207-                  14.35=PAR{<£×
+AH£×<£×
+AC®<£×
+A@£×<ýó¶C
+Aÿp¤  º-   -    @h&–»˜Çã?ûÀƒn—@h&•éá°Š?ûÀëíúCþ>IRDWŒÍÀ  M-dE      RA400-                  18.66=q©üAŠff<¬1A†(ö<´9XA‚Qì<¬1A†¸R=D›¦AÖQì@ùë…  »-   -    @h'Xâe¿êR½<64@h'Xâe¿êR½<64>d÷fD¼ìÍÀ  P-S       BE206-                  18.31=49XAˆQì<¬1A„¸R<¬1A‚(ö<¬1A×
+=oAþ£×@Åp¤  ¼20954762 @h'uŽ!–S@&vOv_Ù@h'J#9Àì@&r•éá°ŠAù0UDWYšDv&fMMS0      RA200S019               12.41=¥ãA,  <£×
+A zá<£×
+A=q<£×
+A¸R<ýó¶C“5ÃBÌÍ  ½-   -    @h'Ý—ö+k@,Ìô!-w@h'àÞÒˆÎ@,ÍV“?¶s‚DS3À  M-Irr(LSB)BE300-                  17.41=#×
+A†õÃ<¬1A…×
+<¬1A‚¸R<¬1A…
+==0 ÅB£×Azá  ¾-   -    @h'æšÔ,=@6j^5?|î@h'àÞÒˆÎ@6jdÂø7µ@÷DIÍÀ  M-Sm      BE205-                  18.04=8QìA‡™š<¬1A„áH<¬1Aƒ…<´9XA‡Â=]/BQìA=q  ¿-   -    @h(Ë’:*@»Í5¨Xy@h(Ë’:*@»²þÅm]>ü]dDØšDÍ¦fP-dS0     RA410-                  15.99=¾wAp(ö<£×
+Ae™š<£×
+A^áH<£×
+A[×
+=oBL  AuG®  À-   4765 @h)ï²-@Ú…‡“Ý˜@h)ìVÕÏ«@Ú6âëC?ãŠD2,ÍÀ  M-Sm      BE205-                  13.96=PAR=q<£×
+ALÌÍ<£×
+AJff<£×
+AG®<ýó¶B0õÃAG®  Á-   4771 @h*Ô,<ží?ôN¤¨ÁTÊ@h*Ôýó¶F?ôN;Í5¨X>ÉQƒDŒ¬ÍDæfM-Sc      RE203-                  13.81=PAG33<£×
+A<(ö<£×
+A5™š<£×
+A333<ýó¶CW
+A××
+  Â-   -    @h+:’£S?þçl‹C•@h+9Àëíú?þç¯·é>±³D`¹šÀ  M-dE(N)   RA401-                  17.69=8QìA†\<¬1A€\<¬1A€{<¬1A€=q=PB×
+A*ff  Ã-   -    @h+xFÜ]@ -V@h+xFÜ]@ :)Çy§>¥+ÔE5tÍÀ  P-E       BE100-                  18.07=0 ÅA†£×<¬1A‚ff<¬1A€=q<¬1A|Qì=oA/33@P£×  Ä-   -    @h-P°ò{³?ù333333@h-O„M?ù1ø -à?Œ²–D]3À  M-Irr(LSB)BE300-                  18.48=ixÕA‰¸<¬1A…×
+<´9XAƒ
+=<´9XA™š=\)B"=qA	™š  Å-   -    @h-[W>«6@Mžƒä%¯@h-\(õÂ@MjOv?"ñªDeìÍÀ  M-Irr(LSB)BE300-                  18.26=Y‡A‰G®<¬1A„Qì<¬1Aƒ…<´9XA~¸R=+AÎzá@Ö{  Æ-   -    @h-ÅÖ8†Y@æšÔ,=@h-Åo @}¿HÌ?µ2aDC@ À  M-Irr(HSB)BE310-                  17.77=#×
+A‰…<¬1A‡ë…<¬1A†¸R<¬1A…p¤=\)A/33@QG®  Ç-   4779 @h.ÇË)_@#k’:)Çz@h.ÇË)_@#k]ÌcñA?ÚþÅE2ÎfE1fP-SBc     RE213-                  13.81=PALÌÍ<£×
+AD  <£×
+A?®<£×
+A:áH<ýó¶B‘W
+A¯™š  È-   -    @h/^žš@3Bh	Ô•@h/]ÌcñA@3Ba|ÚQ>Ó@ODeFfÀ  M-Irr(HSB)BE310-                  18.01=49XA‰\)<¬1A†áH<¬1A…Â<¬1A‡ë…=¥ãAC…@=p¤  É-   -    @h0@·€4n¿ø!ÿ.Hè§@h0?åÉ¿ø"h	Ô•=†YKDŽ&fDIšM-E       RA100-                  16.81=#×
+As®<£×
+Ah£×<£×
+Ac
+=<£×
+A_×
+=oA   @
+=  Ê-   -    @h0Iº^5?@"äêJŒM@h0JŒL˜@"åœàu÷?šÍŸD»,ÍÀ  M-S       BE206-                  17.83=,1A‰®<¬1A†áH<¬1A…¸<¬1A„{=¥ãA³®@¨Qì  Ë-   -    @h0«6z‘¿¹è>BZîc@h0° Ä›¦¿¹è>BZîc?ï.IDbÓ3À  M-Irr(LSB)BE300-                  17.43='ïžA®<¬1Aw33<¬1Ar¸R<¬1Aj¸R=oB:p¤Ao\)  Ì-   -    @h1®æ1ø¡?é®æ1ø @h1®záH?é®záG®>¾ùÛD’ÍD–†fM-dS0     BE410-                  16.91=¾wA~¸R<£×
+Axzá<¬1Atzá<¬1Apzá<ýó¶A¥…@‰™š  Í-   -    @h1ÏªÍž„@ ·škP°ò@h1ÎÙ‡+@ ·Oß;d?ÌÍE7h À  P-S       BE206-                  16.97=#×
+A}ë…<£×
+Av¸R<¬1As
+=<¬1Aq™š=oAÚ£×@É™š  Î-   -    @h5	k¹Œ~?õ6z–¼@h5šu%?õ6âëC-?†ÂD“3À  M-dE      BE400-                  18.00=49XAˆQì<¬1A„\<¬1Aƒ
+=<¬1A„¸R=#×
+Aµ
+=@³33  Ï-   -    @h5Œ~($@ ÕfÏAò@h5Oß;d@ Ö“t¼?vÂDR` DVÌÍM-dS0     BE410-                  15.94=¥ãAhQì<£×
+A_
+=<£×
+AYë…<£×
+AV{<ýó¶Aß\)AG®  Ð-   4791 @h5ÜÆ?@ /ìVÕÐ@h5Ûô‡ü¹@ /ìVÕÐ>ÂëE&fE,ÍP-SBa     RE211-                  16.11=¥ãAjáH<£×
+A`Qì<£×
+AZ\<£×
+AW33<ýó¶AÁG®@ÊáH  Ñ-   -    @h5ä%®æ2@*ye+ÓÃa@h5ä%®æ2@*yb¶®}>þƒäD‹<ÍD‹33M-edge-on RE207-                  15.38=¥ãA\Qì<£×
+AQp¤<£×
+AJáH<£×
+AE™š<ýó¶BÇÜ)A›ë…  Ò-   -    @h6quŽ@2"ˆÎp:û@h6í(Œç@2"‚@·€4>ËûDŽfÀ  M-dE      RA400-                  17.48=,1A†Qì<¬1A…<¬1A|£×<¬1Av¸R=oAôQìA	¸  Ó-   -    @h6-V@// hÛ‹¬@h6-V@/.æ1ø ?Ô,E$æfÀ  P-S       BE206-                  17.49=¾wA„£×<£×
+A‚zá<¬1A…<¬1AG®=+APõÃ@l(ö  Ô-   -    @h6z–¼@3-Oß;dZ@h6záG®@3-\ú¬Ùè?+íúDlfÀ  M-SBc     BE213-                  14.68=PAZ¸R<£×
+AU¸<£×
+AQë…<£×
+AO
+=<ýó¶BÂuÃA¬(ö  Õ-   4809 @h6ÏAò×@8Që…¸@h6ÏAò×@;˜Çâ‚A@¸E¢DsÆfDdæfM-Irr(LSB)BE300-                  14.75=PA`£×<£×
+A]¸<£×
+AYp¤<£×
+AX£×=oBŠ®A‘\)  Ö-   -    @h6ÒˆÎp;¿õÔ•*™1@h6Ðå`A‰¿õÔ,<žìÀ?uÏ«E¾fÀ  P-Irr(HSB)BE310-                  18.55=8QìAŽff<¬1AŒõÃ<´9XA‰®<´9XA‡Â=Y‡Af\@…Â  ×-   -    @h6û~ÿ—@%ì~($x@h6û~ÿ—@%ì‹C•?ÊÁD­æfÀ  M-dE      RA400-                  17.52='ïžAˆ¸R<¬1Aƒ™š<¬1A€\<¬1A~=q=oAÌ{AõÃ  Ø-   4795 @h8a|ÚQ@ !–R½<6@h8a|ÚQ@ !‰7KÆ¨>¦éyE.ÞfE-ìÍP-SBa     RA211-                  14.20=¥ãAG×
+<£×
+A;×
+<£×
+A4õÃ<£×
+A1G®<ýó¶B«{A—™š  Ù-   -    @h8ŠqÞi­@âëC,¥@h8‰ 'RT@â¶®}Vm?qA D¶vfÀ  M-dE(N)   RA401-                  18.38=›¥ãA„(ö<¬1A33<¬1Ax£×<¬1AnáH=oBE(öAK®  Ú-   -    @h9`A‰7L@¬1&éy@h9^žš@«íúCþ]?+šE%Ã3À  P-SBd     BE214-                  15.85=¥ãAp  <£×
+Ahzá<£×
+Ac33<£×
+Aa™š<ýó¶BlG®Ah    Û-   -    @h9©ûçl‹?½¸ºÇË)@h9¯·éù?½àquŽ@Zn˜D£¬ÍD¥LÍP-Sc      BE203-                  13.71=PAJ¸R<£×
+AC®<£×
+A?®<£×
+A?
+=<ýó¶CÊ=B33  Ü-   4799 @h:¼£@,<žì¿±@h:¼£@,<žì¿±>—sE.È E.¬ÍP-Sa      RE201-                  14.95=¥ãAX£×<£×
+AMG®<£×
+AFáH<£×
+AB\<ýó¶B6Â@ú\  Ý-   -    @h:ÌÌÌÌÍ@ pHðŽ@h:ÌÌÌÌÍ@ pHðŽ=räE1ÖfÀ  P-Irr(HSB)BE310-                  18.92=e`BAŽ£×<¬1AŠ\<¬1Aˆ\<¬1A‡Â=t¼A¸@£×  Þ-   -    @h<ù	k¹Œ¿õFs×Ûõ@h<ú¬Ùè>¿õGE8ï4×?hr°DUÍDAà P-Irr(HSB)BE310-                  16.75=¾wAx£×<£×
+AqÂ<¬1Al£×<£×
+AiG®=oAÅ®@ÈõÃ  ß-   -    @h= hÛ‹¬¿Ên—Oß;@h=Þ Ñ·¿Êh	Ô•+?Ë&E7ø À  P-edge-on BE207-                  17.81=#×
+A†  <¬1A‚ÌÍ<¬1A…<¬1A€\=C–A¶(ö@šáH  à-   -    @h=@N¤¨Á¿ÐÝ/Ÿ¾w@h=/Ÿ¾w¿Ðô!-w2Aw2DŠÌÍD‹YšM-edge-on BE207-                  16.62=¾wAz¸R<¬1Auë…<¬1Ar{<¬1Ak33=oBµ(öAŒzá  á-   4808 @h>†YJôñ@7€4mÅÖ@h>MÒñ©ü@?.Hè§BÏ‘DY  D=ùšM-Sc      BE203-                  13.18=PABff<£×
+A:áH<£×
+A6\<£×
+A2áH<ýó¶B¸¸RA¤ÌÍ  â-   -    @h>”FsØ@˜_ö”@h>ŒL˜_@;Í5¨X@àË)D5s3À  M-Sd      BE204-                  15.26=¥ãAf\<£×
+Ab¸R<¬1A_®<¬1A]p¤=oB”LÍAšáH  ã-   -    @h?ÈK]Ìd¿õ-àq@h?À6âë¿õ–»˜Çâ‚@Ûn/E9X E;qšP-Irr(HSB)BE310-                  15.90=PAqG®<£×
+AlÌÍ<£×
+Ai™š<£×
+AhÌÍ=oAÙ\)A{  ä-   -    @hB£S&@$`Ñ·Xâ@hB¥zxl"@$`ªdÂø8?ÛÓÃE)@ E(¬ÍP-SBc     BE213-                  15.58=¥ãAj¸R<£×
+Afff<£×
+Ac…<£×
+AdÌÍ=oB{AŽáH  å-   -    @hEÚQÎ@'Ý!ÿ.Hé@hEÓÃa@@'Üàuöý"@bCþCÜŒÍDÙšM-Irr(LSB)RA300-                  18.43=¼jA~áH<¬1Ax(ö<¬1AuG®<¬1Ao
+==oBCÌÍA‚{  æ-   -    @hFÞÒˆÎp@0·Xâ@hFÝ/Ÿ¾@0·Xâ?!òD™S3À  M-dE      RA400-                  16.92=<jAx£×<£×
+Ao\)<¬1Aip¤<¬1Ag
+==oB/ë…AHzá  ç-   -    @hG!-w1@ R£S&@hG [À7@ R½<64?ØE$DÍE"nfP-edge-on BE207-                  17.01=¾wA×
+<£×
+AyG®<¬1AuÂ<¬1At  =oBG®@ô(ö  è-   -    @hG›=ÈK@B@·€4n@hGœàuöý@Bu%F
+¦?Ž+kDOffDN  M-Sm      BE205-                  15.81=¥ãAn\<£×
+AhõÃ<£×
+Ag33<£×
+AeG®<ýó¶B+\A(    é-   -    @hG§†Â&¿ûe+ÓÃa@hG¦µ(¿ûe+ÓÃa>cSE4ƒ3À  P-S       BE206-                  18.89=@ƒAÂ<´9XAŒ  <´9XA‰×
+<¼jA‡®=#×
+Ad(ö@b\  ê-   -    @hHIº^5?ðsê³g ù@hH
+¦L/ƒ?ðu%F
+¦L?cE.©šE,üÍP-SBd     BE214-                  16.34=¥ãAtõÃ<£×
+Ap£×<¬1AlÌÍ<¬1Alzá=oBw33A—™š  ë-   -    @hHuöý!ÿ@"Ä%®æ1ù@hHvÈ´9X@"Ä%®æ1ù>¯ E%ñšÀ  P-Irr(HSB)BE310-                  18.13='ïžAŠ\<¬1Aˆ(ö<¬1A‡33<¬1A…×
+=¾wAp¤@#33  ì-   -    @hIœàuöý¿ûOv_Ø­¬@hI¹Œ~($¿û`A‰7KÇA›2-E+ÍE10 P-Sc      BE203-                  14.84=PA[×
+<£×
+AS®<£×
+AO
+=<£×
+AL  <ýó¶BAo
+=  í-   -    @hLÞÒˆÎp@" 'RT`ª@hLÞ Ñ·@" 'RT`ª=ÛôˆDñ¼ÍÀ  P-Irr(HSB)BE310-                  17.28=¥ãAƒÂ<£×
+A‚  <¬1A\)<¬1A€áH=+A zá@/\)  î-   -    @hMòäŽŠr@‰Ô•*™@hMñA [À@ˆšu%F@v`DEšDgÀ M-SBd     BE214-                  16.16=¥ãApzá<£×
+Am¸<¬1Aj\<¬1AdõÃ=oB[G®A…¸  ï-   -    @hOxÔýó¶ÀwškP°ò@hOy¦µÀwškP°ò=ûJ#E5qšÀ  P-Irr(HSB)BE310-                  19.07=8QìA\<¬1A®<´9XA‹Â<¬1AŠQì=,1@õ¸?þ¸R  ð-   4845 @hP($x?ù9ÀëíúD@hP(õÂ\?ù6z–¼@$MDŠà Dš  M-Sa      RE201-                  13.41=¥ãA9Â<£×
+A-¸<£×
+A%ë…<£×
+A!¸<ýó¶C@æfBff  ñ-   -    @hQ1Å@-·§†Â&@hQ4êJŒ@-·Á½¥?»‹¬Dc  DeFfM-dE(N)   RA401-                  16.90='ïžAs\)<£×
+Ai™š<£×
+AbáH<£×
+A`ÌÍ<ýó¶B­#×A¿G®  ò-   -    @hRYJôðØ@-àuöý"@hRN¤¨ÁU@-<64@©‰7E € E fP-Sc      RE203-                  15.02=PA_\)<£×
+AW33<£×
+AQ™š<£×
+AQG®<ýó¶BÜ\A¨õÃ  ó-   -    @hR‚@·€4@*Èr° Äœ@hR‚@·€4@*Èr° Äœ=§»0E&|ÍE$fP-S0      RA200-                  16.14=¾wAeÂ<£×
+AYp¤<£×
+AS
+=<£×
+AN¸R<ýó¶Aà(ö@‚\  ô-   -    @hR°ò{²ÿ@* [À6ã@hR° Ä›¦@* [À6ã>R:*EÓ3À  P-edge-on BE207-                  19.07=uÂAzá<¬1AŒ=q<´9XA‰ë…<¬1A‡®=PAU¸@0    õ-   -    @hTÌÌÌÌÍ@1Ð-àq@hTËûµt@1Ð Ä›¥ã?U`BDu` D}lÍM-Sm      BE205-                  18.20=e`BA„(ö<¬1A„=q<´9XA„(ö<´9XAx  =C–AÓ…A
+áH  ö-   -    @hTÐå`A‰?ûJŒL˜_@hTÎp:û?ûN¤¨ÁTÊ@~CþE0NfE/.fP-edge-on BE207-                  16.99=#×
+A
+=<¬1AxÌÍ<¬1AtÌÍ<¬1As\)=+BXQìA'×
+  ÷-   -    @hWÈK]Ì@*MÅÖ8†Y@hWàÞÒ‰@*N.±Ä2Ê@]‡”DíüÍDîP P-Sm      BE205-                  15.61=¥ãApQì<£×
+Aj{<£×
+Afff<£×
+Aaë…<ýó¶BQzáAj=q  ø-   -    @hWæšÔ,@*9è>BZî@hW¸Që…@*9Î_oÒ?„MDôyšÀ  P-Irr(HSB)BE310-                  17.45=#×
+A†zá<¬1A„=q<¬1Aƒp¤<¬1A€Qì=oAà£×@Åp¤  ù-   -    @hWOß;dÀ
+t¼j~ùÛ@hWŽ!–R½À
+t¼j~ùÛ=­w2E7ffÀ  P-Irr(HSB)BE310-                  19.29=Y‡AÌÍ<´9XA…<´9XAŒ{<´9XAŒ{='ïžA(Qì@.¸R  ú-   -    @hXÔýó¶F@,Ü£n.²@hXÔýó¶F@,Ü£n.²>‰á±E'>fÀ  P-S       BE206-                  19.00=@ƒA¸<¬1AŒzá<´9XA
+=<¼jA†{=t¼AŒ(ö@k…  û-   -    @h]—$tS@%t¢3œ¿@h]›=ÈK@%t!-w2@näD’ð À  M-Irr(LSB)BE300-                  18.22=8QìA†=q<¬1A„  <¬1A‚£×<¬1AƒG®=PA©
+=@¸Qì  ü-   -    @h]®æ1ø¡@&' ù	kº@h]©ûçl‹@&'_oÒó@)ÀìE1¶fÀ  P-Irr(HSB)BE310-                  17.28=#×
+A‚{<¬1A~¸R<¬1A{\)<¬1Az¸R=+Aµë…@Ã…  ý-   -    @h^¼£n¿ëàquŽ@h^êJŒ¿ëá°‰ 'R?DmÆDvFfÀ  M-Irr(LSB)BE300-                  18.86=@ƒAŽ  <¬1AŠQì<´9XAŠ¸R<¼jAˆ\=¥ãA™
+=@¥¸  þ-   -    @h^üPHð@-àq@h^ý!ÿ.I@-àq>¨šD3À  M-Irr(LSB)BE300-                  18.81=LÌÍAG®<¬1A‰…<´9XA‡\)<´9XAŠ=q=ixÕA«p¤@¨õÃ  ÿ-   4880 @hacˆe”¯@(øFÜ]d@haiDg8@(÷süPH@ŽšÔD¬,ÍD¬<ÍM-Sa      RA201-                  14.08=¥ãAF=q<£×
+A<Qì<£×
+A6¸R<£×
+A2{<ýó¶Bú\)Aý¸   -   -    @hcS÷ÎÙ@+WXâe,@hcS÷ÎÙ@+W1Å?ŒVÖEQšDø©šP-Irr(LSB)BE300-                  16.10=¥ãAtQì<£×
+ApÌÍ<¬1AnáH<¬1AjáH=oB.  A,£×  -   4900 @he9Àëíú@©“àß@he<64@o hÛŒ@¸RDoìÍDp3M-SBc     BE213-                  12.53=PA9p¤<£×
+A2{<£×
+A-™š<£×
+A+\)<ýó¶B²æfAôzá  -   4904 @hgÏªÍž„¿œ]cˆe”¯@hgÒòä¿œ(õÂ\)?ŸiDD”“3D”° P-SBc     BE213-                  13.44=PADõÃ<£×
+A<ÌÍ<£×
+A8£×<£×
+A5p¤<ýó¶B«(öAÀ    -   -    @hhe+ÓÃ¿ÿ¤¨ÁTÉ†@hhe+ÓÃ¿ÿžƒä%®æ@¬è§D«à À  P-Irr(LSB)BE300-                  16.71=¥ãA…<¬1A}p¤<¬1A{×
+<¬1Ap(ö=oB£×A/®  -   -    @hh~($x¿ÿ?¼@hh}Vlô¿ÿA [À7?ì‘ÑD¹†fD·` P-Sd      BE204-                  16.10=¥ãAs®<£×
+AlÌÍ<¬1Aj=q<¬1Abff<ýó¶B#×AdQì  -   -    @hhè§æ›Àu%F
+¦@hhè§æ›Àu%F
+¦>1A E7ÆfE6è P-edge-on BE207-                  17.15=¾wAƒ®<¬1A¸<¬1A®=¡ÊÁA{\)=+B>QìA®  -   -    @hköý!ÿ.@0’ˆÎp:û@hkô‡ü¹$@0’\(õÃ?‡KÇE&{3E&{3P-S       BE206-                  16.90=¾wA~áH<¬1Ay™š<¬1Avff<¬1As®=+Aü=q@ÌÌÍ  -   -    @hnö”Fs‚@!¿HË’@hnõÂ\)@!²-V>“@OE0äÍÀ  P-Irr(HSB)BE310-                  18.10=0 ÅA‹¸<¬1A†õÃ<¬1A†ff<¬1Aƒ…=C–Az{@fff  -   -    @hoŸ¾vÉ@¯ƒ{J#:@hoC,¥z@¯O„M?"£DbYšÀ  M-Irr(LSB)BE300-                  18.61=H´9AŒff<¬1A‰Â<´9XAˆ(ö<¬1AŠ  =ixÕA•p¤@    	-   -    @hun.±Ä3?ñ-àqv@hup£×
+=?ñ/ƒ{J#:?ôçDg33À  M-Irr(LSB)BE300-                  17.94='ïžAŠ(ö<¬1A‡
+=<¬1A†\<´9XA„=q=t¼A˜=q@œzá  
+-   -    @hu‘hr°!@5ÿv_Ø­¬@hu•$Ý@5ÿU›=È@($C…³3À  P-dE      RA400-                  17.40=0 ÅA‚áH<¬1A33<¬1Aw®<¬1AtõÃ=C–B6…Ap(ö  -   -    @hu•$Ý@Ôýó¶E¢@hu’:)Çz@ÕfÏAò@ZîE4( À  P-Sm      BE205-                  17.13=¾wAƒÂ<¬1A\)<¬1A…<¬1A}p¤=+B(ö@î¸R  -   -    @hvŒç¯¸@Ð|„µÜÆ@hv¸ºÇ@ÐHðŽ>ëÆ¨E3±šÀ  P-dE      BE400-                  19.03=8QìAzá<¬1A×
+<´9XA‹ë…<´9XA‹®=¥ãA&{@ £×  -   -    @hx$Ý/ @h§æšÔ@hx$Ý/ @h§æšÔ>Bø8E433À  P-SBa     RA211-                  17.41=,1A€ff<£×
+Avff<¬1ApÌÍ<¬1AmÂ=oA»
+=@õÃ  -   -    @hxÇâ‚@¸@ïÒòä@hxÊW§†Â@ïiDg8?§ü¹E5±šE3 P-Sd      BE204-                  15.18=¥ãAc®<£×
+A_
+=<£×
+A]¸<¬1AZ\<ýó¶B˜æfAÀÌÍ  -   -    @hzµÜÆ?@1üj~ùÛ#@hz·€4mÆ@1üj~ùÛ#>ð°òDuÙšÀ  M-dE      RA400-                  18.42=Y‡A‹¸<¬1A†{<¬1Aƒ®<¬1A‚{=t¼AÈáH@Åp¤  -   -    @h|éxÔýô@8†Â&€I@h|ç¯·é@8†”FsØ@6lôD[ÆfÀ  M-edge-on BE207-                  16.89=¥ãA€ff<£×
+A|  <¬1AyÂ<¬1AtQì=oB¸R@ë…  -   -    @h}ä÷eý‹@ RòäŽŠ@h}ä÷eý‹@ Q‚©“á?{6zDrà À  M-dE(N)   RA401-                  18.25=}ó¶A‚ÌÍ<¬1A}¸<¬1Ay¸<¬1Au¸=\)B+õÃA1ë…  -   -    @h}ñA [À@1?O„M@h}ñA [À@1?U›=È>äE+  À  P-Irr(HSB)BE310-                  18.72=<jA¸<¬1AŠ=q<¬1Aˆ£×<¬1A†ÌÍ=P@Ë×
+?èõÃ  -   -    @h~ý!ÿ.I@%òòäŽŠ@h~þÅm\û@%ñÄ2ÊW¨@3 iE8QšE8šP-edge-on BE207-                  16.93=¾wA‚{?'+A}¸<¬1Ay¸<¬1Aw®=+BeffA™š  -   -    @h„<žì¿±Àçl‹C•@h„@·€4nÀçÕfÏAò?é°ŠDš  D¢  P-Sm      BE205-                  16.50=¥ãAyÂ<£×
+As\)<¬1Ap(ö<¬1As×
+=\)B3QìA1p¤  -   -    @h„QÎ_À•éá°‰ @h„(õÂ\À”Fs×ÜAŽCDª“3À  P-Sd      BE204-                  13.37=PAJ\<£×
+ADõÃ<£×
+AC×
+<¬1A@Qì<ýó¶CzáBQff  -   -    @h…XbMÓ@2¾}Vlô@h…W>«6z@2¾}Vlô>ï\)DLìÍÀ  M-S       BE206-                  18.57=D›¦A‹™š<¬1A‡p¤<¬1A†Qì<¬1Aƒë…=\)A“…@®  -   -    @h“Xâe@$Þšu@h“'»/ìW@$Ü¬1&éA@ÂDl¹šDh¦fM-Irr(LSB)BE300-                  15.89=¥ãAuG®<£×
+Ap£×<¬1Am™š<¬1Aj{=oBN¸RAnff  -   -    @h—süPH@-<64@h—|ÚQ@-cˆe”¯@sÕgDvà Dv&fM-Irr(HSB)BE310-                  16.92=¾wA®<£×
+AxõÃ<¬1AtõÃ<¬1Aup¤=t¼Aë×
+@È£×  -   -    @h—b¶®}@5:xl"h
+@h—b¶®}@5:xl"h
+>/iDE&P À  P-S       BE206-                  18.19=0 ÅA‰®<¬1A†¸R<¬1A…®=‡+A„Qì=PA„\@†¸R  -   -    @h›‡+@1Ê…‡“Ý˜@h›‡+@1Ê…‡“Ý˜>m]E76fE74ÍP-S       RE206-                  17.01=#×
+A€zá<¬1Azff<¬1AuG®<¬1AxÌÍ=C–BG33A=q  -   -    @h£Éã½@4ºÇË)@h£ÉîËû@4­«ŸU›?k=D¥à À  P-Irr(LSB)BE300-                  18.61=LÌÍA‹®<¬1A‰p¤<¬1A‡™š<¬1Aˆzá=¾wAG®@€Qì  -   -    @h¤’£S&@5¹#¢œx@h¤’£S&@5ÌÌÌÌÍ?„àvE&»3E#ŽfP-Sc      BE203-                  15.01=PA`õÃ<£×
+AZ=q<£×
+AV=q<£×
+ATÌÍ<ýó¶BAffA333  -   -    @hªÇË)_@5·KÆ§ïž@hªÇË)_@5·1Å?¹–SE*ùšÀ  P-S       BE206-                  18.54=LÌÍAë…<¬1AŒQì<´9XAŠáH<¼jA‹\)=TýôA±
+=@¸õÃ  -   -    @h¯îËûµ@7<ô!-w@h¯è>BZî@7<ÌÌÌÌÍ@I‘hE ÄÍÀ  P-edge-on BE207-                  17.73=¾wA‡¸<¬1A…
+=<¬1Aƒ®<¬1Aƒ™š=\)Bzá@ö¸R  -   -    @h°ÚQÎ@2ìÆ?@h°¬1'@2ìÌÌÌÌÍ>ú¬ÚE  À  P-Irr(HSB)BE310-                  18.16=,1A‰33<¬1A…ë…<¬1A„(ö<¬1Aƒ…=C–A9Â@1G®   -   -    @h³?|í‘h@5“9Àëíú@h³?|í‘h@5“FÜ]cˆ??—$E!¸ E!ŒÍP-edge-on BE207-                  16.59=¾wAxõÃ<£×
+Arff<£×
+An\<£×
+AmG®=oB=q@øõÃ  !-   -    @h³‡“Ý—ö@8ëÆ§ï²@h³xÔýó¶@8ìIº^5?A|E"šEìÍP-edge-on BE207-                  16.64=¾wA~{<£×
+AxÌÍ<¬1Av=q<¬1Ao33=oBS×
+A:¸R  "-   -    @h¼îcŠ	@6êW§†Â'@h¼ð¸»@6ê^5?|î?;çmE#è E#ÌÍP-Sc      RE203-                  13.34=PAB=q<£×
+A8ÌÍ<£×
+A3…<£×
+A/…<ýó¶BÈ8RAÃ33  #-   -    @h¾ŽŠqÞj@5–È´9X@h¾\(õÃ@5–Â&€I? £×E)‹3À  P-Irr(HSB)BE310-                  19.20=TýôA£×<¬1A×
+<´9XA‹ë…<´9XAŠzá=¥ãAQì@'
+=  $-   -    @hÀäŽŠqÞ@8Xy=Ù@hÀã¼ÓZ†@8Që…¸>”E#ƒ3E#^fP-Sc      RE203-                  13.95=PAM¸<£×
+AD£×<£×
+A@(ö<£×
+A=™š<ýó¶B|=qA‚    %-   -    @hÄs×Ûõ@¼ÓZ…‡”@hÄp:û~‘@¼¹#¢œx?Éè>DPùšD`ìÍM-edge-on BE207-                  15.47=¥ãAhõÃ<£×
+Ab{<£×
+A^\<£×
+A]¸=oB•½qAo®  &-   -    @hÅ»/ìVÖ@6ÕS&Á¾@hÅ’:)Çz@6ÔmÅÖ8†A¦N<EÈ À  P-SBd     BE214-                  14.62=PAY¸<£×
+ARáH<£×
+AO×
+<£×
+AO×
+<ýó¶BžáHA¼(ö  '-   -    @hÈl"h	Õ@7›=ÈK@hÈlô!-@7›=ÈK>Èe•E&S3À  P-Irr(HSB)BE310-                  18.73=D›¦AÂ<¬1AŒzá<´9XAŠ{<¬1Aˆzá=PA¹\)@°    (-   -    @hÎPHð@$=ÈK^@hÎN¤¨ÁU@$/ìVÕÐ?2MÓCë³3À  P-dE(N)   RA401-                  16.82=¾wA€¸R<¬1Ax(ö<¬1Aqp¤<£×
+Am¸=oBGë…A®    )-   -    @hß$Ý/@1Â¶®}Vm@hß×Ûôˆ@1Â¶®}Vm>„?æDs  D™|ÍM-Irr(HSB)BE310-                  16.90=#×
+A~áH<£×
+AxõÃ<¬1AuÂ<¬1Aup¤=oA¼{@­p¤  *-   -    @hæùÛ"Ðå@)âe+Ô@hæùÛ"Ðå@)­«ŸU›?•Ž"DsyšDps3M-Irr(HSB)BE310-                  14.87=PA_×
+<£×
+AZ¸R<£×
+AXQì<£×
+AVff<ýó¶B\)A{  +-   -    @hí¶E¡ÊÁ¿ðS&Á¾@híÁ½¥¿ð“t¼j@©xÕDŠVfD›¼ÍP-Irr(LSB)BE300-                  16.51=¥ãA{×
+<¬1AxÌÍ<¬1Ayp¤<¬1A|zá=C–B;G®A+×
+  ,-   -    @hño i@8¾í(Œç@hñÞ Ñ·@8¾í(Œç?.B[E3“3E. P-SBd     BE214-                  17.52='ïžA‰p¤<¬1A†\<¬1A„ff<¬1A‚\='ïžB¸A=q  Ð-   -    @eîOv`¿þk¹Œ~($ø      ø      À  À  Dâ33P-Irr(HSB)- 310-                  17.44=¾wAƒ×
+<¬1A¸<¬1A€ff<¬1A}ë…=+AYp¤@QG®  Ñ-   -    @eóÆ§ï²@qÞi­BÄø      ø      À  À  Dá  P-Irr(HSB)- 310-                  19.11=Y‡A‘33<¬1A\)<¼jAŠff<´9XAŠ{='ïžAlõÃ@_\)  Ò-   -    @eùdZ¬@,r{²þÅmø      ø      À  À  D}ó3M-Irr(LSB)- 300-                  17.34=,1A×
+<¬1A~ff<¬1Ay™š<¬1A€ff=PBN\)Avff  Ó-   -    @f}¿H€@"mV“ø      ø      À  À  E3p P-SBc     - 213-                  15.91=¥ãAs33<£×
+AmG®<¬1Ak33>§l‹Ai¸=oB‡LÍAº\  Ô-   -    @f<64@N;Í5¨Xø      ø      À  À  D}lÍM-Irr(LSB)- 300-                  18.12=¾wAŠff<¬1A…<¼jA†Qì<´9XA‹¸=På`B  AY¸  Õ-   -    @f	œàu÷¿ï 'RT`ªø      ø      À  À  D–  P-Irr(HSB)- 310-                  18.60=8QìAG®<¬1AŒ  =8QìAŒQì<¼jA‰\)=¥ãA•™š@’\  Ö-   -    @f.Hè§@+§†Â&€ø      ø      À  À  E(nfP-Irr(HSB)- 310-                  16.81=¥ãA€{<¬1A
+=<¬1A}Â<¬1A|õÃ=C–BfÂAMë…  ×-   -    @fˆe”¯O@3€ÞÒˆÎpø      ø      À  À  EéšP-Irr(HSB)- 310-                  19.96=£×
+A—33<´9XA•
+=<ÌÌÍA”\<Ý/A”zá=“t¼A…@®  Ø-   -    @f'Ûô‡ü¹¿Þ$Ý/Ÿ¾ø      ø      À  À  DÎ@ P-Irr(LSB)- 300-                  19.27=<jA–Qì<´9XA”£×<Ä›¦A”áH<Ý/A•…=ë…Aœ  @G®  Ù-   -    @f4Ôýó¶F¿â$Ý/Ÿ¾ø      ø      À  À  DÞÀ P-Irr(HSB)- 310-                  15.96=PAs
+=<£×
+Apzá<¬1Ao33<¬1Ak®<ýó¶Bë…Ap¤  Ú-   -    @f6@·€4nÀ
+*™0¾ø      ø      À  À  E5à P-Irr(HSB)- 310-                  19.47=m‘hA“Â<ÌÌÍAë…<¼jA‹ë…<´9XA‹G®=,1AW
+=@¸R  Û-   -    @fA“Ý—ö+?çÂ\(õÃø      ø      À  À  E` P-edge-on - 207-                  19.26=TýôA’(ö<¬1Aë…<´9XAŽáH<´9XAŒ{=PA£Â@Qì  Ü-   -    @fB° Ä›¦@.ë¬q²–ø      ø      À  À  DDà M-dE      - 400-                  17.91=,1AŠ(ö<¬1A†áH<´9XA„ff<´9XA„\=¥ãBLõÃA,õÃ  Ý-   -    @fOä÷eý‹@(e8ï4Ö¡ø      ø      À  À  E4ÍP-edge-on - 207-                  16.59=¾wAxQì<£×
+Aqp¤<¬1Amë…<£×
+Ak®<ýó¶BõÃA
+=  Þ-   -    @fQœ¾ß¤¿ÞâëC,¥ø      ø      À  À  Då  P-Irr(LSB)- 300-                  18.15=@ƒA‹×
+<¬1AˆÌÍ<´9XA†ff<¬1AŠff=På`AÏ™š@ó33  ß-   -    @fX;Í5¨X?úfÏAò×ø      ø      À  À  Dá  P-Irr(HSB)- 310-                  19.58=yÛ#A”ff<´9XA’=q<Ä›¦A‘G®<ÌÌÍA‘…=yÛ#A\)@ £×  à-   -    @fjý!ÿ.I?üƒ{J#9Áø      ø      À  À  D÷° P-Irr(LSB)- 300-                  18.24=49XA‹p¤<¬1AŒáH<¼jA‡p¤<´9XAƒ™š=PAß¸A™š  á-   -    @fv}¿H€¿÷b¶®}Vmø      ø      À  À  D¸¦fP-SBd     - 214-                  15.55=¥ãAhQì<£×
+AaG®<£×
+AYÂ<£×
+AZ{<ýó¶BWÌÍAc\)  â-   -    @fy;dZ¬?÷çÕfÏAòø      ø      À  À  E  P-Irr(HSB)- 310-                  19.71=q©üA—ë…<Ä›¦A•33<ÔýôA“…<ÌÌÍA“¸=‡+Ap¤@)™š  ã-   -    @f†[À6ã¿˜*™0¾íø      ø      À  À  DòŒÍP-SBd     - 214-                  16.05=#×
+An\<¼jAg\)<å`BAd£×<í‘hAXzá=ixÕB—ë…AÊ{  ä-   -    @fŸº^5?}À
+4Ö¡aä÷ø      ø      À  À  D¿@ P-Irr(HSB)- 310-                  19.21=q©üAáH<¬1AŽ  <¼jA‹Â<¼jAŒáH=]/AdõÃ@{…  å-   4067 @f¡‰7KÆ¨@%µfÏAòø      ø      À  À  EÍP-SBc     - 213-                  14.49=PAR\<£×
+AH£×<£×
+AC\)<£×
+A?×
+<ýó¶B.QìA7…  æ-   4078 @f¦Z¬1@%0ÿ—$tTø      ø      À  À  E"ÍP-S0      - 200-                  15.16=PAX(ö<£×
+AL(ö<£×
+AEp¤<£×
+AAp¤<ýó¶B4áH@Ç®  ç-   -    @f§8}¿HÀ ô!-w2ø      ø      À  À  DÃ  P-Irr(HSB)- 310-                  19.79=OßA”ff<¬1AÌÍ<Ä›¦AQì<¼jA®=På`A>\@dzá  è-   -    @f¨Hè§ç¿æ'RT`ªeø      ø      À  À  D¥  P-Irr(LSB)- 300-                  17.38=#×
+A†ff<¬1A„zá<¬1A
+=<¬1A™š=t¼BQì@ò\  é-   -    @f¨ò{²þÅ¿¼PHðŽø      ø      À  À  E P-Irr(HSB)- 310-                  19.08=,1A’ff<¬1Aë…<¼jA\)<´9XAŽ£×=<jA  @0    ê-   -    @f¬\‘ÑN<@,úáG®{ø      ø      À  À  D¹¼ÍM-dS0     - 410-                  17.00=¥ãA€{<£×
+Ayp¤<¬1Au™š<£×
+As®=oA•\)@•¸  ë-   -    @f·²-V?å7KÆ§ïžø      ø      À  À  DÙ€ P-Irr(LSB)- 300-                  18.50=0 ÅAŠÌÍ<¬1A‡33<¬1A…p¤<¬1A†{=\)BG®A(õÃ  ì-   -    @fÍ¯·éù@4ÚQÎø      ø      À  À  Eû3P-Sm      - 205-                  17.06=@ƒA®<¬1A~ff<¬1Aw\)<¬1AuG®=\)BffATzá  í26  -    @fÕsê³g¡@-JÚ¹õY´ø      ø      À  À  ElÍPPIrr(LSB)- 300Im?                18.58=8QìAŽÌÍ<¬1AŠ(ö<´9XA‰p¤<´9XA‡¸=#×
+A²áH@Ò\  î41  -    @fà•*™1@){quŽ!–ø      ø      À  À  E	ÆfMPIrr(LSB)- 300IBm?               17.74=@ƒA‡®<¬1Aƒ®<¬1A€¸R<¬1A
+==¾wBNÌÍAQp¤  ï-   -    @fâOv_Ù¿â×süPø      ø      À  À  E` P-Irr(HSB)- 310-                  19.41=LÌÍA”{<¬1A’Qì<¼jA‘G®<¼jA’{=]/A
+\@Qì  ð-   -    @fãg ù	l@záG®{ø      ø      À  À  D\à M-S0      - 200-                  16.65=#×
+A}G®<£×
+AyÂ<¬1Ar=q<¬1AdõÃ<ýó¶B~ë…A|(ö  ñ-   -    @fåS&Â?Öö”FsØø      ø      À  À  E€ P-Irr(LSB)- 300-                  19.67=aG®A˜(ö<¼jA•G®<ÔýôA“\)<¼jA’zá=q©üAŠ\@]p¤  ò-   4179 @fæò{²þÅ?ôË’:)Çzø      ø      À  À  D  M-S0      - 200-                  13.33=PA9™š<£×
+A-G®<£×
+A&ff<£×
+A!Â<ýó¶BÕ¸AZ{  ó83  -    @fì{²þÅm@,ö+jçÕgø      ø      À  À  E©šPMIrr(LSB)- 300ImIII-IV           16.47=#×
+Av\<£×
+Al£×<¬1Ag33<£×
+Ac33<ýó¶B(¸A?\)  ô85  -    @fìÇË)_@*ÑN;Í6ø      ø      À  À  Dñ¦fMPIrr(LSB)- 300?                  18.70=D›¦AŒ¸R<¬1A‰®<´9XAˆáH<´9XA‹¸=8QìBp¤A:áH  õ-   -    @fíS&Â?ñFÜ]cˆø      ø      À  À  D¿@ P-edge-on - 207-                  18.41=8QìAŒQì=oA‰®<´9XA†áH<¬1A‹™š=H´9Aòzá@Ô(ö  ö-   -    @fí+ÓÃa¿ô²-Vø      ø      À  À  E0 P-Irr(HSB)- 310-                  19.57=e`BA“\)<´9XA‘G®<¼jAÂ<Ä›¦AŽ£×=LÌÍA(ö@õÃ  ÷-   -    @fîu%F¿ÒÁ½¥ø      ø      À  À  D;€ M-Irr(LSB)- 300-                  20.51=¬1A–=q<¬1A“™š<ÌÌÍA’{<¼jAŠzá=\)A;×
+@C×
+  ø114 -    @fôµ'»@µ?|í‘hø      ø      À  À  E†fPPIrr(LSB)- 300Im?                17.35=¾wA„£×<¬1Aƒ
+=<¬1A~ff<¬1Aë…=t¼B@33A;\)  ù118 -    @fôéxÔýô@#a-w1Åø      ø      À  À  D¡  MMdE      - 400dE3                17.07=#×
+A€£×<¬1Ayp¤<¬1AtÌÍ<¬1An¸R=oBG®A0õÃ  ú132 -    @fø†YJôñ@*oiDg8ø      ø      À  À  Eh MMSBd     - 214SBd                16.96=¥ãAƒ
+=<¬1A€õÃ<¬1A}p¤<¬1Auë…=oB|õÃA‰…  û162 -    @fþ)Çy¦µ@%e®æ1ø¡ø      ø      À  À  D÷‰šMMedge-on - 207Sd(on_edge)        15.55=¥ãAi¸<£×
+Ac…<£×
+A`Qì<£×
+A]¸<ýó¶BÆ¸RA³…  ü165 -    @fÿŸ¾vÉ@*n}Vlôø      ø      À  À  CLÍMMS0      - 200S01(0,2):          16.66='ïžAo…<£×
+Abff<£×
+AZff<£×
+AV\<ýó¶BáHAÂ  ý166 4215 @fÿE8ï4×@šÔ,<žíø      ø      À  À  E fPPS0      - 200S029               14.31=¥ãAIë…<£×
+A>=q<£×
+A7×
+<£×
+A3…<ýó¶B€ÌÍA$õÃ  þ169 -    @fÿˆe”¯O@#MOß;dZø      ø      À  À  E
+ÉšPMIrr(LSB)- 300ImV                16.67=¥ãA‚(ö<¬1Aƒ™š<ÔýôA……=t¼AeG®=oB
+=A¢¸R  ÿ171 -    @g™™™™š@ ¿;dZ¬ø      ø      À  À  DZìÍMMIrr(LSB)- 300ImV                19.16=\)AŠõÃ<¬1A‡\)<¬1A‹
+=<¼jA…33=#×
+B\)AC\)   187 4222 @gIº^@*/Ÿ¾wø      ø      À  À  CfšMMedge-on - 207Scd(on_edge)       14.71=PAXQì<£×
+AN=q<£×
+AG×
+<£×
+AC×
+<ýó¶C¨öAà    237 -    @gï²-@-Å¼£n/ø      ø      À  À  Ã¡ŒÍMPIrr(LSB)- 300?                  17.68=,1A‡ë…<¬1A…ë…<´9XA„{<´9XA„  =¥ãAÀÌÍ@ð    238 -    @gÁ½¥@Ê=p£×
+ø      ø      À  À  ENfPPdE(N)   - 401dE0,N              17.40=#×
+A„zá<¬1A®<¬1Axzá<¬1Am¸<ýó¶BáHAk×
+  -   -    @g
+¦L/ƒ@ T¢3œ¿ø      ø      À  À  Dú)šP-edge-on - 207-                  18.83=}ó¶A…<´9XAŠ£×<´9XA‰
+=<´9XA‡¸=PB ff@Ç®  275 -    @gxÔýó¶@"ÿ¾vÈ´9ø      ø      À  À  DØÉšMMdS0     - 410dS06               15.50=¥ãAg®<£×
+A`õÃ<¬1A\(ö<£×
+A\zá=oB§™šA¤    308 -    @gÈ´9X@r° Ä›¦ø      ø      À  À  DÇ¦fMMdS0(N)  - 411d:S010,N:          15.43=¾wA]¸<£×
+AS
+=<£×
+AMG®<£×
+AK33<ýó¶Bk…AG®  309 -    @gØDÐ©@)2:)Çy§ø      ø      À  À  DÂffMMIrr(LSB)- 300Im/BCD             17.26=,1A¸<¬1A
+=<¬1AtõÃ<¬1Apzá=oB£×AC33  312 4255 @g|ÚQ@$Ý/Ÿ¾ø      ø      À  À  D÷ÌÍPPS0      - 200S016               14.87=¥ãAR=q<£×
+AEÂ<£×
+A?33<£×
+A:\<ýó¶B3Â@ê=q  319 -    @gE¡ÊÀƒ@+÷
+=p£×ø      ø      À  À  ÃNšMMdE(N)   - 401dE0,N              16.28=¾wAq™š<¬1Af{<£×
+AaÂ<£×
+AXzá<ýó¶B“LÍA¶áH  	321 4257 @gÈ´9X@ô‡ü¹#£ø      ø      À  À  D™|ÍMPdS0     - 410dE6                18.50=På`A‰×
+<¬1A…™š<¬1A‚=q<¬1A…=C–B=q@üzá  
+332 -    @gxFÜ@:xl"h
+ø      ø      À  À  EØ PBdS0     - 410S016               17.01='ïžAy™š<¬1Ao…<£×
+Ajff<£×
+Ag®<ýó¶AÓ\)@¦¸R  336 -    @gXy=Ù@€ëíúCþø      ø      À  À  E;3PPdS0     - 410dE?,N?             16.58=#×
+As…<£×
+Ajff<£×
+AbáH<£×
+A`£×<ýó¶B<p¤AQG®  343 -    @gêJŒM@{çl‹C–ø      ø      À  À  E3PPSBd     - 214SBd(s)II           16.54=#×
+AuÂ<£×
+AlQì<¬1Ahzá<¬1Ag
+==C–B+{AQG®  -   -    @gsüPH?Ë6z–¼ø      ø      À  À  DW  M-Irr(LSB)- 300-                  17.46=,1A…™š<¬1Aƒ®<¬1A™š<¬1A€zá=¾wB;QìA"\  355 4262 @g©*0U@-ÁTÉ…ðoø      ø      À  À  D©üÍMMSB0     - 210SB02/3             13.87=PAA™š<£×
+A4ÌÍ<£×
+A-ë…<£×
+A)™š<ýó¶BJ…@ï\)  -   -    @g_oÒó@ ¤tSŽóMø      ø      À  À  E
+¨ P-Sd      - 204-                  15.76=¥ãAg®<£×
+A_×
+<£×
+A[33<£×
+AW×
+<ýó¶BoáHAN¸R  362 4266 @g¢œwšk@'l‹C•ø      ø      À  À  DÀ&fMPedge-on - 207Sa(on_edge)        14.68=PAQë…<£×
+AF=q<£×
+A=p¤<£×
+A;
+=<ýó¶B»33Aª    367 -    @gxFÜ@ÓŽóMjø      ø      À  À  E»3PPIrr(LSB)- 300ImV?               16.75=¥ãA‚{<£×
+Az=q<¬1Aqë…<£×
+Ak
+=<ýó¶BKQìA•p¤  373 4269 @g¸ºÇ@\(õÂø      ø      À  À  E¶fPPS0      - 200S012               14.91=¥ãAR=q<£×
+AEë…<£×
+A?\)<£×
+A>ff<ýó¶BŸ33AC…  375 4270 @g•éá°Š@Ú…‡“Ý˜ø      ø      À  À  EišPPS0      - 200S016               14.20=PAIp¤<£×
+A=ë…<£×
+A7\)<£×
+A3
+=<ýó¶B‘¨öAIë…  379 -    @gÞÒˆÎp@üj~ùÛ#ø      ø      À  À  D¶ã3MPIrr(LSB)- 300?                  21.91?ô9XA†¸R<Ý/A†ff=C–A\)<å`BA‡
+==aG®Bm™šA`    381 -    @g"Ðå`B@©Çy¦µø      ø      À  À  Cð™šMMIrr(LSB)- 300ImV                17.57=TýôA„¸R<¬1A‚£×<¼jA}p¤<¬1Ar{=C–Bl=qAš\  405 -    @g"`ªdÂø@ò×sø      ø      À  À  E( PPdE      - 400dE0:               22.73?coA¤zá=<jA¤zá=¼jA\)=@ƒAœõÃ=ãSøA&¸R@hQì  -   -    @g"×süP?×†Â&€Iø      ø      À  À  D_“3M-Sd      - 204-                  16.58=¥ãAzff<£×
+Aw…<¬1AtÌÍ<¬1AráH=+B^ffAB\  408 4281 @g"àuöý"@‹¬q²–ø      ø      À  À  E)ŽfPPS0      - 200S036               13.62=PA;\)<£×
+A/
+=<£×
+A(  <£×
+A#…<ýó¶BÚ\A–ÌÍ  -   -    @g#×
+=p¤¿ým\ú¬Ùèø      ø      À  À  E  P-Irr(HSB)- 310-                  18.81=0 ÅA£×<¬1A
+=<´9XAŽff<´9XA¸=,1A¸R@{  421 -    @g$Á½¥@+	Çy¦µø      ø      À  À  E6fMMdE(N)   - 401dE2                17.86=0 ÅAˆff<¬1Aƒ®<¬1A‡™š<¼jA{\)=+BzáARff  423 -    @g$…‡“Ý˜@¾BZîc ø      ø      À  À  EšPPIrr(LSB)- 300ImIV:              17.10=¾wA…ë…<¬1Aƒ×
+<¬1A}ë…<¬1AÂ=¾wB833Ah(ö  434 4287 @g&wškP±@Aò×sø      ø      À  À  EÆfPBSd      - 204S(on_edge)         15.93=¥ãAk×
+<£×
+AaG®<£×
+A[33<£×
+AVáH<ýó¶BhõÃA*{  449 4289 @g(N¤¨ÁU@Æ?¼ø      ø      À  À  E#¾fPPedge-on - 207Sbc(on_edge)       15.49=¥ãA`zá<£×
+AS×
+<£×
+AMG®<£×
+AH£×<ýó¶BæG®Ao
+=  -   -    @g(Âø7´¢?á¯·éùrø      ø      À  À  EöfP-S       - 206-                  16.61=¥ãA{×
+<£×
+Av=q<¬1At£×<¬1Al£×=oB:×
+Aë…  -   -    @g)Ãa@O@%@N¤¨ÁUø      ø      À  À  E"þfP-Irr(LSB)- 300-                  19.09=TýôA”zá<¼jA’=q<ÔýôAŽzá<¼jA…=q©üAº\@ºáH   477 -    @g+¡ÊÀƒ@.
+Ížƒä&ø      ø      À  À  DéffMMIrr(LSB)- 300ImV                17.99=TýôA…×
+<Ä›¦A……=oA…™š=PA€¸R=,1BjÂAv{  !-   -    @g/quŽ!–¿ù~ÿ—$tø      ø      À  À  D×@ P-Irr(HSB)- 310-                  19.05=@ƒA£×<¬1A…<´9XAŒ{<´9XA‰Â=¥ãA333@.{  "539 -    @g1÷ÎÙ‡@,H´9Xbø      ø      À  À  D˜ã3MMdE(N)   - 401dE3,N              18.41=%Aƒë…<¬1A€zá<¬1AzáH<¬1As®=oB¸A0£×  #546 -    @g2âëC-@%4êJŒø      ø      À  À  EH MMdE      - 400dE6                17.05='ïžA{
+=<£×
+Ar{<¬1AlÌÍ<¬1Am¸=oBQffAN¸R  $568 -    @g5N;Í5¨@ç ù	kºø      ø      À  À  E0‘šPBS       - 206S(on_edge)         16.29=¥ãAuë…<£×
+Am¸<£×
+Ag®<£×
+Ac\)<ýó¶BHÌÍA2¸R  %583 -    @g5ÿ.Hè§@/ 4mÅÖ9ø      ø      À  À  Â  MMIrr(LSB)- 300ImIV-V:            16.91=#×
+A|õÃ<¬1Aj\<£×
+Ak®<¬1AhõÃ=+BF¸RA"áH  &613 4324 @g8ÓZ…‡”@ N¤¨ÁUø      ø      À  À  DÐ‰šPPSa      - 201Sa(r)ring          13.69=PAAë…<£×
+A6=q<£×
+A/
+=<£×
+A+
+=<ýó¶BŸBA^¸R  '628 -    @g:%®æ1ù@¿—$tSø      ø      À  À  ÃÇ33PMIrr(LSB)- 300ImV:               19.62=Ù‡A—×
+<õÂA”{=C–A  <å`BAp¤=²-A•…@Ð£×  (648 4339 @g<¨ÁTÉ†@SÃa@Oø      ø      À  À  D¡@ MPS0      - 200S01/20             13.88=¥ãA@õÃ<£×
+A4ÌÍ<£×
+A/33<£×
+A)G®<ýó¶B¸×
+A¢zá  )654 4340 @g<·€4mÆ@0¸üPHðø      ø      À  À  Dm¬ÍMMSB0     - 210RSB025             13.66=¥ãA<£×<£×
+A1p¤<£×
+A*{<£×
+A%¸<ýó¶BÑ£×AÃ®  *685 4350 @g?²þÅm]@0±o hÛŒø      ø      À  À  D–ÍMMS0      - 200S018               13.27=PA7…<£×
+A+\)<£×
+A#®<£×
+A   <ýó¶BÁ\A_\)  +-   -    @g@ØDÐ©@ ¾«6z‘ø      ø      À  À  E@ P-Irr(HSB)- 310-                  19.51=}ó¶A“p¤<´9XA‘¸<Ä›¦A  <ÌÌÍA‘p¤=²-Aff@333  ,-   -    @gA­BÃÉï?âOv_Ø®ø      ø      À  À  E è P-SBm     - 215-                  16.53=¥ãAxÌÍ<£×
+As®<¬1ApÌÍ<£×
+AtÌÍ=oBŒ.Až(ö  -713 4356 @gAö+jçÕ@!äŽŠqÞø      ø      À  À  D9šMMedge-on - 207Sc(on_edge)        14.66=¥ãAQë…<£×
+AF{<£×
+A?\)<£×
+A:áH<ýó¶C\Aõ¸  .759 4371 @gG`A‰7L@'hŒç¯¸ø      ø      À  À  Dkó3MMSB0     - 210SB02(r)3           13.10=¥ãA4õÃ<£×
+A((ö<£×
+A ÌÍ<£×
+AQì<ýó¶C(öAÉ\)  /-   -    @gHŒL˜_@$3Ð|„µÝø      ø      À  À  Db  M-dE      - 400-                  18.11=På`A…Â<¬1A¸<¬1A|õÃ<¬1Az\=\)A‰Â@ª\  0778 4377 @gI¥œàv@-†?¼ø      ø      À  À  D«ùšMMS0      - 200S013               14.08=PAEë…<£×
+A9p¤<£×
+A2áH<£×
+A.\<ýó¶BEáHA33  1786 -    @gIíúCþ]@'²ñ©ûçmø      ø      À  À  E\ÍMMdE(N)   - 401dE7,N              15.96=¾wAj{<£×
+Aa¸<£×
+AXõÃ<£×
+A\zá<ýó¶B¬×
+A„õÃ  2784 4379 @gI÷ÎÙ‡@/6ý!ÿ.Iø      ø      À  À  D…¹šMMS0      - 200S012               13.92=PAC®<£×
+A7®<£×
+A0õÃ<£×
+A-¸<ýó¶B}QìAM™š  3785 4378 @gJfffff@²äŽŠqÞø      ø      À  À  E ÍPPSa      - 201Sa(s)              13.40=¥ãA>{<£×
+A2=q<£×
+A,Qì<£×
+A%p¤<ýó¶Bé€ A¶¸R  4-   -    @gJœwškQ¿ù”¯O„Mø      ø      À  À  EÐ P-Irr(LSB)- 300-                  19.88=º^5A”õÃ<´9XA’Qì<Ä›¦AÌÍ<ÌÌÍAŽáH=aG®AŒzá@xQì  5806 -    @gLvÈ´9X@;/ìVÕÐø      ø      À  À  EË3PPIrr(LSB)- 300ImV?               18.90=På`A™ë…<Ý/AáH<ÌÌÍAŠzá<´9XA“Â=\)Aëp¤@üÌÍ  6-   4385 @gM²-V?âSŽóMjø      ø      À  À  EÖfP-Sb      - 202-                  14.01=PAN=q<£×
+ADõÃ<£×
+A?×
+<£×
+A<õÃ<ýó¶B””{AŠ    7867 -    @gP+jçÕg@ cn—Pø      ø      À  À  D£  MMIrr(LSB)- 300ImIV?              20.09=å`BA”\<¼jA33<¼jAŒQì<´9XA‰ë…=t¼A¥G®@Ýp¤  8882 -    @gR¼£n@)íjOvø      ø      À  À  D‰¼ÍMMdE      - 400dE3,N              17.72=#×
+A€áH=¥ãAváH=¥ãAo×
+=¥ãAm¸=¾wBáHA˜£×  9896 -    @gSo i@)’£S&ø      ø      À  À  E9šMMdE(N)   - 401dE3,N              20.01>¸Azá<´9XAŒ{<Ä›¦AŠ(ö<¼jAˆõÃ=49XA\)@ÙG®  :905 4411A@gSòäŽŠr@!¾5?|í‘ø      ø      À  À  DŸÜÍMMSBc     - 213SBc(s)II           13.99=PAM¸<£×
+AH  <£×
+AB=q<£×
+A>ff<ýó¶B¤æfAÎ(ö  ;956 -    @gW‡“Ý—ö@)ì/ƒ{J#ø      ø      À  À  Eˆ MMdE(N)   - 401dE1,N:             19.16=TýôA‘\)<¬1AáH<¼jAŠzá<¬1A†Qì=\)Añ×
+@þ¸R  <967 -    @gX€IQƒ@)»²þÅm]ø      ø      À  À  DùšMMdE      - 400dE4                18.16=,1AáH<´9XA‹Â<´9XAŒ{<Ä›¦AˆQì=<jAô{@þ{  =975 -    @gY‚©“á@Oß;dZø      ø      À  À  DiffMMSBc     - 213Scd(s)II           13.96=PARáH<£×
+AM¸<£×
+AG×
+<£×
+AF=q<ýó¶B¯=qB4Â  >996 -    @gZÐ©*0@*8üPHðø      ø      À  À  Áß33MMdE      - 400dE5                20.09>C–A”{=oA‘…=#×
+A®=yÛ#A
+==ß;dA–áH@Â=q  ?10034429 @g[ŠÚ¹õZ@&7$tSŽóø      ø      À  À  De  MMS0      - 200S036/Sapec         12.41=PA'×
+<£×
+A®<£×
+AÌÍ<£×
+Azá<ýó¶CgšB%=q  @10104431 @g[§†Â&@(”¼j~ùÛø      ø      À  À  Di  MMdS0(N)  - 411dS05,N             15.16=¾wAXõÃ<£×
+AMG®<£×
+AG33<£×
+AC…<ýó¶B‡W
+A†=q  A1017-    @g\>BZîc@#1²•éâø      ø      À  À  B ffMMIrr(LSB)- 300ImV                15.93=#×
+Af\<£×
+Ad£×<¬1A_…<¬1AU¸<ýó¶C…B.    B1021-    @g\s×Ûõ@$ò×sø      ø      À  À  D\à MMIrr(LSB)- 300ImIII              16.21=¾wArff<£×
+Al  <¬1AfáH<¬1AdõÃ=oBxáHA…  C10254434 @g\äŽŠqÞ@ O hÛ‹¬ø      ø      À  À  D…ó3MME       - 100E0/S010            14.29=PAK
+=<£×
+A?33<£×
+A8zá<£×
+A4ÌÍ<ýó¶B<™šA™š  D1027-    @g];dZ¬@)Â\(õÃø      ø      À  À  Bš33MMdE(N)   - 401dE0,N:             19.43=uÂAˆ¸R<¬1A‚zá<¬1A
+=<¬1Aƒ\)=t¼B)\)A (ö  E10304435 @g]eýŠÚº@*($xGø      ø      À  À  DHffMMSB0     - 210SB016              13.01=¥ãA4£×<£×
+A'®<£×
+A!™š<£×
+A\<ýó¶BÕð¤A‘®  F1040-    @g]ï²-@)÷éùrGø      ø      À  À  ÃšMMdE(N)   - 401dE3,N              17.54=¥ãA33<¬1AtÌÍ<¬1Anff<¬1AmÂ<ýó¶A‹G®Azá  G1042-    @g^
+¦L/ƒ@)¾ÿ—$tø      ø      À  À  ÂxffMMdE      - 400dE4                17.27=#×
+A×
+<£×
+Ay¸<£×
+AváH<£×
+Auë…=oAáH?Y™š  H-   -    @g^,<žìÀ?ù—ö+jçÕø      ø      À  À  D¡  M-Irr(HSB)- 310-                  16.75=¥ãA~áH<£×
+A€=q<¬1AyG®<¬1Av¸R=oBFQìAAë…  I10474440 @g_$tSŽó@(–+jçÕgø      ø      À  À  D5  MMSBa     - 211SBa(sr)            14.05=PAF\<£×
+A:ff<£×
+A3×
+<£×
+A/®<ýó¶Br(öAf=q  J1091-    @gb‚@·€4@!u›=ÈKø      ø      À  À  DŒšMMSd      - 204Sbc(s)I.8          14.81=PA`zá<£×
+A[33<£×
+AX  <£×
+AV¸R<ýó¶BI\)A"{  K-   -    @gc¦µ(@2j=p£×
+ø      ø      À  À  DÔã3M-Sc      - 203-                  14.58=PAVff<£×
+AO\)<£×
+AK33<£×
+AH£×<ýó¶Bƒ…A¢    L11104450 @gcåÉä@1¨Xy=Ùø      ø      À  À  DôlÍMMSb      - 202Sabpec             12.14=PA((ö<£×
+A  <£×
+AÂ<£×
+A{<ýó¶CHxRBGG®  M-   4454 @gfÅm\ú­¿ÿšu%Fø      ø      À  À  E‹3P-SBa     - 211-                  13.96=PAG33<£×
+A;…<£×
+A4õÃ<£×
+A0(ö<ýó¶B·ÂAÔ=q  N1142-    @gga@N¥@!¢h	Ô•ø      ø      À  À  D£YšMMIrr(LSB)- 300dE1                19.70=H´9A—ë…<´9XA–{<Ä›¦A  <´9XA–  =‹C–A–zá@×
+=  O11464458 @gg®záH@*{çl‹C–ø      ø      À  À  DÙšMME       - 100E1                 14.35=¥ãAJ\<£×
+A?
+=<£×
+A8(ö<£×
+A4zá<ýó¶B‚ž¸Au™š  P-   -    @gg¸ºÇË¿ù¤?åÉø      ø      À  À  E€ P-Irr(LSB)- 300-                  19.58=q©üA”õÃ<´9XA‘p¤<¼jA  <ÌÌÍAŽáH=8QìAõÃ@Â  Q11454457 @ggÞi­BÄ@–»˜Çãø      ø      À  À  D\¦fMPSa      - 201RSb(rs)II          12.67=¥ãA1ë…<£×
+A&=q<£×
+A Qì<£×
+A  >JBïÑìA²¸R  R11544459 @ghu%F@+ôðØDÐø      ø      À  À  D—YšMMS0      - 200S032               12.62=PA.{<£×
+A õÃ<£×
+Ap¤<£×
+AG®<ýó¶CµÃAáp¤  S11584443 @ghg8}¿@*^5?|í‘ø      ø      À  À  Dñ‰šMMSa      - 201Sa                 13.57=PA<  <£×
+A/\)<£×
+A(Qì<£×
+A$zá<ýó¶BÛ
+=A\)  T-   -    @gh…‡“Ý˜?ºŒL˜_ø      ø      À  À  DŽ€ M-Irr(LSB)- 300-                  16.96=#×
+A|(ö<£×
+Au¸<¬1Am™š<¬1Apzá=+BW33A{33  U-   -    @giòäŽŠr¿õØDÐ©*ø      ø      À  À  E  P-Irr(HSB)- 310-                  18.63='ïžA®<¬1AŒÌÍ<´9XAŒ£×<´9XA
+==D›¦A'®@1G®  V11784464 @gjÖ¡aä÷@ P-àqø      ø      À  À  D›yšMME       - 100E3                 14.84=PAQÂ<£×
+AE™š<£×
+A>¸R<£×
+A:¸R<ýó¶B33@Å¸  W1183-    @gk hÛ‹¬@&Þ($xø      ø      À  À  D¦üÍMMdS0(N)  - 411dS0(0,5),N         15.46=¾wAa™š<£×
+AV\<£×
+APõÃ<£×
+AMÂ<ýó¶BˆuÃAn{  X-   -    @gpHðŽ¿ÚE¡ÊÀƒø      ø      À  À  E  P-Irr(LSB)- 300-                  19.89=‰7LA’ÌÍ<´9XA™š<¼jAŽÌÍ<´9XAŠ{=PA2áH@>{  Y12534477 @gpL/ƒ{J@+E¼£n/ø      ø      À  À  D©€ MMSBa     - 211SB01/2/SBa         12.62=PA.áH<£×
+A"{<£×
+A33<£×
+A¸R<ýó¶C}qAþ    Z1257-    @gp­«ŸU›@1eÜÆ?ø      ø      À  À  EÜÍPPIrr(LSB)- 300Impec?             17.26=#×
+Aë…<£×
+A®<¬1A{®<¬1AváH=+B€ð¤AYÂ  [-   -    @grÞ Ñ·¿ú5¨Xy=Ùø      ø      À  À  Dÿ  P-Irr(LSB)- 300-                  17.38=¾wAˆQì<¬1A†\<´9XAƒ™š<¬1A„zá=¾wBáHA£×  \12974486B@gtC,¥zx@(úû~ÿ—ø      ø      À  À  DÂƒ3MME       - 100E1                 15.77=¥ãA^¸R<£×
+AQë…<£×
+AJ¸R<£×
+AEë…<ýó¶AW
+=@%¸  ]1295-    @gtSŽóMj@$…®æ1ø¡ø      ø      À  À  D‰¼ÍMPS       - 206?                  18.63=m‘hAŽ  <´9XA‹™š<ÌÌÍA†=q<´9XAƒÂ=¾wAË…Ap¤  ^1308-    @gv!-w2@&¯·éùrø      ø      À  À  D×IšMMdE(N)   - 401dE6,N              16.91=0 ÅAw
+=<£×
+Ak\)<£×
+Af\<£×
+AeÂ=oBáHA	G®  _-   -    @gv_Ø­«Ÿ?ï9ÀëíúDø      ø      À  À  E  P-Irr(HSB)- 310-                  18.75=@ƒA=q<¬1A×
+<´9XA\)<´9XAŠzá=#×
+AL  @Y™š  `-   -    @gw=Ùb·?îÙ‡+ø      ø      À  À  E  P-Irr(HSB)- 310-                  18.89=<jAŽ£×<¬1AŒ¸R<´9XA‹G®<´9XA‹…=8QìAW
+=@J=q  a13264491 @gw 'RTa@&÷Xâe,ø      ø      À  À  Cø³3MMSBa     - 211SBa(s)             14.52=¥ãAPÌÍ<£×
+AF{<£×
+A@Qì<£×
+A<(ö<ýó¶B¢záAŽáH  b13274486A@gw²þÅm]@(Š™0¾íø      ø      À  À  C  MME       - 100E2                 13.10=PAG\)<£×
+A=ë…<£×
+A7®<£×
+A/33<ýó¶Bp¤@Â  c13304492 @gwö+jçÕ@ 'ÕfÏAòø      ø      À  À  DÙ¦fMMSa      - 201Sa                 13.86=¥ãADzá<£×
+A8ÌÍ<£×
+A1p¤<£×
+A.{<ýó¶BØ\)AñG®  d-   -    @gz9XbN?ïÎÙ‡+ø      ø      À  À  E( P-Irr(LSB)- 300-                  19.46=m‘hAŽ  <¬1AŒ  <´9XAˆ(ö<¬1A…×
+=\)AæáHAÌÍ  e1351-    @gzFs×Ü@+§ï²-ø      ø      À  À  C;33MMdE      - 400dE4                16.64=¾wAv¸R<¬1Am¸<¬1Ah(ö<£×
+Ag…=oBVzáAPzá  f-   -    @gz³g ù	¿û"h	Ô•ø      ø      À  À  E` P-S       - 206-                  19.25=LÌÍA•…<´9XA’ÌÍ<Ä›¦A‘G®<ÔýôA\)=8QìA„\@uÂ  g1357-    @g{IQ‚©“@"òÊW§†Âø      ø      À  À  Dà MMIrr(LSB)- 300ImV:               19.37=å`BA–  <ÔýôA“®=,1A33>“uA†ÌÍ=H´9A¦ÌÍ@ç®  h-   -    @gÜÆ??ýË’:)Çø      ø      À  À  E  P-Irr(LSB)- 300-                  19.72=}ó¶A–¸R<¼jA”(ö<ÔýôA’(ö<ÌÌÍA=q=yÛ#A(ö@Dzá  i14014501 @géùrG@,ÖâëC-ø      ø      À  À  E«3MMSb      - 202Sbc(s)II           11.53=PA (ö<£×
+AQì<£×
+AG®<£×
+A	¸<ýó¶Cm—
+BS33  j14124503 @g€Ôýó¶F@&ZQÎ_ø      ø      À  À  D§ÙšMMSa      - 201Sa                 13.43=PA:\<£×
+A-™š<£×
+A&ff<£×
+A!p¤<ýó¶BçÂA¢áH  k-   -    @gL˜_÷¿ñ…¸Që…ø      ø      À  À  E  P-edge-on - 207-                  17.53=¾wA…p¤<¬1A‚ff<¬1A€¸R<¬1A‚zá=t¼B(öA®  l-   -    @gƒ&Á½¥¿û×süPHø      ø      À  À  Dÿ  P-Irr(HSB)- 310-                  17.04=¥ãA
+=<£×
+A|zá<¬1AyÂ<¬1Aw×
+=oA4(ö@&ff  m1435-    @g„QÎ_@ >«6zø      ø      À  À  DS3MMIrr(LSB)- 300ImIII-IV           15.28=¥ãAaG®<£×
+AYÂ<£×
+AQë…<£×
+ARff<ýó¶B»  AÛ×
+  n1448-    @g…jçÕfÏ@)ŠÚ¹õY´ø      ø      À  À  E!ŒÍMMIrr(LSB)- 300ImIVordE1pec       15.12=#×
+A\£×<£×
+AT(ö<£×
+AN{<£×
+AJff<ýó¶BõBÂ  o-   4437 @g†bMÒò?½(Œç¯¸ø      ø      À  À  D&fM-edge-on - 207-                  12.22=PA/
+=<£×
+A$(ö<£×
+A{<£×
+Aë…<ýó¶Cî]qBÊzá  p1496-    @gŠo hÜ@"=¿HË’ø      ø      À  À  D¢Ó3MMdE(N)   - 401dE5,N:             18.76=På`A‘33<´9XA‹p¤<¼jA‡…<´9XA‰ë…=@ƒAÒ=q@â\  q15014519A@g‹L˜_÷@!a½¥œàø      ø      À  À  D³\ÍMMdS0     - 410dS0?               16.53=¾wAw\)<£×
+ApÌÍ<¬1Alzá<¬1Ag33=oBG®A¸R  r1512-    @gŒžš@&†Á½¥ø      ø      À  À  D>¦fMMdS0     - 410dS0pec             16.61=¾wAxõÃ<£×
+Am™š<¬1Ag×
+<£×
+Ad  =oB/¸A?…  s1514-    @gö”Ft@|PHðø      ø      À  À  D  MMdE(N)   - 401dE7,N              17.07=<jAs33<£×
+Aië…<¬1Ad(ö<£×
+Abff=oBv=qA\õÃ  t1529-    @gjçÕfÏ@^i­BÃÊø      ø      À  À  DŽYšMPSm      - 205SdmIII-IV          15.17=¥ãAg33<£×
+A`£×<£×
+A[33<£×
+AT(ö<ýó¶Bˆ{A¦ff  u-   -    @gÏªÍž„?Ø¿±[W>«ø      ø      À  À  DÃ  P-Irr(LSB)- 300-                  19.04=Y‡A{<¬1AŒzá<´9XAŒ£×<¼jA‹¸=<jA‘×
+@¨    v15374528 @gÏAò×@&¤tSŽóMø      ø      À  À  D§ÙšMMSB0     - 210SB025              14.25=PAI™š<£×
+A=¸<£×
+A6áH<£×
+A3
+=<ýó¶B8…@þff  w1549-    @g‘úCþ\’@&$›¥ãSøø      ø      À  À  D©¹šMMdE(N)   - 401dE3,N              16.74=,1AiÂ<£×
+A_33<£×
+AW×
+<£×
+ATzá<ýó¶BÌÍA0ÌÍ  x1550-    @g’A‰7KÇ@ßö”Ftø      ø      À  À  EœÍPPIrr(LSB)- 300ImV?               19.27=ixÕA”{<´9XA“33<å`BA’(ö<õÂA£×=¼jAÛ¸@øõÃ  y15624536 @g“²-V@€IQ‚ªø      ø      À  À  Dâ)šPPSc      - 203Sc(s)I             11.98=PA,£×<£×
+A#®<£×
+Aff<£×
+AáH<ýó¶CzáBo
+=  z1566-    @g”!-w2@"O4Ö¡aåø      ø      À  À  CÛ™šMMSd      - 204SdIV               15.87=¥ãApÌÍ<£×
+AiG®<¬1Adzá<¬1A]¸<ýó¶B|záAˆ=q  {15884540 @g–ÃÉîËû@/u%Fø      ø      À  À  D à MMSd      - 204Scd(s)III-IV       13.26=PA@zá<£×
+A9G®<£×
+A2{<£×
+A.áH<ýó¶B¹õÃAÍ…  |1596-    @g˜ Ä›¥ã@"_;dZ¬ø      ø      À  À  D à MMIrr(LSB)- 300ImIII-IV:          18.72=aG®AŒ£×<¬1AŠQì<´9XA‡×
+<´9XA†áH=PA¯¸@¿®  }-   -    @gšn—Oß¿öL˜_÷ø      ø      À  À  EÀ P-Irr(HSB)- 310-                  19.49=D›¦A•¸<¬1A“®<Ä›¦A’{<Ä›¦A‘¸=q©ü@ê=q?ï\)  ~16154548 @g›Oß;d@,ý²-Vø      ø      À  À  Có&fMMSBb     - 212SBb(rs)I-II        12.06=PA*¸R<£×
+AáH<£×
+A…<£×
+A£×<ýó¶CMBi
+=  16194550 @gœ©*0U@(q²•éâø      ø      À  À  C¾¦fMMS0      - 200E7/S017            13.78=PAB¸R<£×
+A6¸R<£×
+A0zá<£×
+A,Qì<ýó¶B¤LÍA>áH  €16324552 @gS&Á¾@)ÓZ…‡”ø      ø      À  À  CªšMME       - 100S010               12.25=PA&¸R<£×
+A{<£×
+A\)<£×
+A¸R<ýó¶C+YšAî£×  1644-    @gžëC,¥@+·Oß;dø      ø      À  À  D=&fMMS       - 206SmIV               17.98='ïžA‰33<Ä›¦A†áH<´9XA„(ö<ÌÌÍAƒë…=0 ÅBG®@õÂ  ‚-   -    @g ° Ä›¦À hÛ‹¬qø      ø      À  À  E` P-Irr(LSB)- 300-                  18.82=49XA×
+<¬1Ap¤<¼jA‹ë…<¼jAõÃ=…¸A
+=@È    ƒ-   -    @g¡$Ý/¿ï ù	k¹Œø      ø      À  À  Dp  M-dE      - 400-                  19.10=aG®AŽõÃ<¬1A‹™š<´9XA‰33<´9XA‹33=,1A€£×@ŒÌÍ  „16644564 @g£˜Çâ‚A@&àÞÒˆÎpø      ø      À  À  DŽÖfMMS0      - 200E6                 13.39=PA:áH<£×
+A.=q<£×
+A'\)<£×
+A#\)<ýó¶B½æfAhzá  …-   -    @g¤ã¼ÓZ†À($xGø      ø      À  À  D¥  P-Irr(LSB)- 300-                  17.36='ïžA€=q<¬1Az{<¬1Ax£×<¬1Aup¤=+B«¨öA¡…  †1683-    @g¥'»0@%àhÛ‹¬qø      ø      À  À  Ä“3PMdE(N)   - 401dE2,N              18.19=m‘hAŠ\<´9XA…™š<¬1Aƒ\)<´9XAƒ™š=<jB33AÂ  ‡1686-    @g¥ÜÆ?@*ƒ×
+=p¤ø      ø      À  À  DŒ6fMMSm      - 205SmIII              13.68=PAJ\<£×
+AM™š<£×
+AG
+=<£×
+A>áH<ýó¶Bªð¤A’£×  ˆ16904569 @g¦®}Vlô@*T¢3œ¿ø      ø      À  À  Ãk33MMSb      - 202Sab(s)I-II         11.53=PA Qì<£×
+A\)<£×
+AÌÍ<£×
+Aë…<ýó¶C ½qB†G®  ‰16924570 @g§æšÔ,@üžì¿±[ø      ø      À  À  DØišMMS0      - 200S017/E7            13.16=PA6áH<£×
+A*{<£×
+A#…<£×
+AáH<ýó¶Báë…A_\)  Š-   -    @g§}¿HÌ?æ¬1&éø      ø      À  À  E` P-Irr(LSB)- 300-                  18.21=,1AŠ(ö<¬1Aˆ  <¬1A†(ö<¬1A†zá=¥ãAÜzá@Ó33  ‹-   -    @g¨ŠqÞi­Àöý!ÿ.Iø      ø      À  À  E  P-Irr(LSB)- 300-                  18.75=D›¦A¸<¬1A‰™š<´9XA‡×
+<´9XA…Â=¥ãAT  @QG®  Œ1715-    @g«ÌcñA @!–È´9Xø      ø      À  À  D^&fMPdS0     - 410dE0pec?            16.57=¥ãA€(ö<¬1Ax£×<¬1AtQì<¬1At  =oAÆ\@åÂ  17204578 @g¬©*0U@#64êø      ø      À  À  E)šPMS0      - 200S01/24             13.50=PA>áH<£×
+A2áH<£×
+A,Qì<£×
+A(zá<ýó¶BÛ\AºQì  Ž1728-    @g®Ov`@#÷ö+jçÕø      ø      À  À  Âê  MMIrr(LSB)- 300ImIV:              17.19=#×
+Aƒ
+=<¬1A€ff<¬1A|(ö<¬1Az¸R=\)B(öA{  1750-    @g²¼£@ùÛ"Ðå`ø      ø      À  À  Âê  PPIrr(HSB)- 310BCD?               15.49=PA‚¸R<£×
+Av=q<¬1Ag×
+<£×
+Aaë…<ýó¶Aå×
+Aff  1753-    @g²"h	Ô•@-½}¿HÌø      ø      À  À  D8YšMMIrr(LSB)- 300ImIV               15.23=PA|Qì<£×
+AxõÃ<¬1Ao
+=<£×
+Ap£×<ýó¶BsÂAš(ö  ‘17634587 @g´¹#¢œx@B&€IRø      ø      À  À  Da` MPdS0     - 410E5,N               14.96=¥ãAXQì<£×
+AMp¤<£×
+AG
+=<£×
+AB¸R<ýó¶BQ
+=A2áH  ’1784-    @g¹ä÷eý‹@/@ÞÒˆÎpø      ø      À  À  Bd  MMIrr(LSB)- 300ImV                18.77=ixÕA…
+=<¬1A‚=q<¬1A|  <¬1A„(ö=¥ãB5®A®  “1789-    @gºéxÔýô@¿HË’:ø      ø      À  À  DÊ¦fPMSd      - 204ImIII              16.26=¥ãApõÃ<£×
+AhõÃ<£×
+Ad  <£×
+AdõÃ=oB>ë…A8(ö  ”1821-    @gÁ=Ùb·@ˆè§æ›ø      ø      À  À  D{ìÍMPS       - 206?                  18.34=TýôAŠÌÍ<¬1Aˆ{<´9XA…G®<´9XAÂ=PAš£×@¼ÌÍ  •18344600 @gÃË)^ž@ñ²•éâø      ø      À  À  DU&fMPdS0(N)  - 411S016,N             14.33=PAP  <£×
+AD£×<£×
+A>{<£×
+A;33<ýó¶B‰\A~áH  –-   -    @gÄ±Ä2ÊX?è¦L/ƒ{Jø      ø      À  À  DÎ@ P-Irr(LSB)- 300-                  18.79=D›¦A
+=<¬1AŒzá<´9XAˆ\<´9XAƒ…=+A®¸R@­Â  —1857-    @gÇ@N¤©@$ó¶E¡ÊÁø      ø      À  À  D  MMdE      - 400dE4:,N?            16.27=¾wAn=q<£×
+Af\<¬1Aa¸<£×
+A_®=oB€ffAšÌÍ  ˜1866-    @gÉ[W>«6@ e+ÓÃø      ø      À  À  DÚ,ÍMPdE(N)   - 401dE0?               17.55=<jA
+=<¬1Atzá<¬1Ao33<¬1Ak\)=oB¸Ap¤  ™18694608 @gÉÄ2ÊW¨@$O·éùrø      ø      À  À  Dé,ÍMMSBa     - 211SB03/a             13.42=¥ãA8ÌÍ<£×
+A,ÌÍ<£×
+A&{<£×
+A"=q<ýó¶BïaHAÎ\  š1870-    @gÊxFÜ@&˜Çâ‚@¸ø      ø      À  À  DÊFfMMdE      - 400dE6                17.15=,1A~=q<¬1At£×<¬1Ao…<¬1Aw…=+Bgë…ADQì  ›1873-    @gÊ™0¾í@*™0¾ø      ø      À  À  DÔöfPPS       - 206?                  17.53=0 ÅA…Â<¬1AƒG®<¬1Ap¤<¬1A€{=\)Aí×
+@ç
+=  œ-   -    @gËFÜ]cˆ@(Zu%Fø      ø      À  À  DùšM-dE      - 400-                  17.40=LÌÍAy¸<£×
+AiG®<£×
+Aaë…<£×
+A]¸<ýó¶Að£×@¸£×  18834612 @gÌ^5?|î@Bu%F
+¦ø      ø      À  À  Dß3PMS0      - 200RSB01/2            13.41=PA=p¤<£×
+A2=q<£×
+A+×
+<£×
+A(£×<ýó¶BÈð¤A–ÌÍ  ž-   -    @gÏy¦µÀB&€IRø      ø      À  À  E2  P-Irr(HSB)- 310-                  19.00=8QìAë…<¬1Ap¤<¬1AŒ(ö=¥ãAŠÌÍ=¥ãA'®@\  Ÿ19034621 @gÐK]Ìcñ@'KÆ§ï²ø      ø      À  À  CÍ33MME       - 100E4                 12.00=PA$zá<£×
+A£×<£×
+Ap¤<£×
+A¸<ýó¶CB(öBë…   19134623 @gÑl‹C•@µY³Ð|…ø      ø      À  À  Dì©šPMS0      - 200E7                 14.51=¥ãAMë…<£×
+ABff<£×
+A;×
+<£×
+A7×
+<ýó¶B«W
+As33  ¡-   4632 @gÔU2a|¿´¨ÁTÉ…ðø      ø      À  À  D×ƒ3P-Sc      - 203-                  13.02=PA@(ö<£×
+A8£×<£×
+A4õÃ<£×
+A1ë…<ýó¶Bë¨öAÑp¤  ¢1933-    @gÕûçl‹D@ZÔ,<žíø      ø      À  À  E¬ÍPPSc      - 203Sab?               17.14=#×
+Aƒ®<¬1A€\<¬1A}ë…<¬1A–õÃ>Á‰7B)¸AUG®  £19384638 @gÖR½<6@&â\(õÃø      ø      À  À  D‘œÍMMS0      - 200S017               13.52=PA<£×<£×
+A0zá<£×
+A)ë…<£×
+A%ë…<ýó¶BˆG®A7
+=  ¤-   4643 @gÚªdÂø8?ÿ¬1&éyø      ø      À  À  D¦üÍM-SBa     - 211-                  12.19=PA-p¤<£×
+A!™š<£×
+A\<£×
+Ap¤<ýó¶C0¤AÛ
+=  ¥1964-    @gÚÄ›¥ãT@!æÂ&€Iø      ø      À  À  D»3MMIrr(LSB)- 300dE4:               18.22=8QìAŠÌÍ<¬1A‰…<¼jA„  <¬1AŒ\=@ƒB<(öAMp¤  ¦1970-    @gÛß;dZ@$/Åo ø      ø      À  À  D¥À MMIrr(LSB)- 300ImIII-IV,N?        15.03=PAs×
+<£×
+Al(ö<£×
+AZff<£×
+AL£×<ýó¶BnG®Ayp¤  §-   -    @gÜ3œ¾à¿Þ¡aä÷eþø      ø      À  À  E&à P-dE      - 400-                  19.78=“t¼A”\<¬1A‘33<¼jAŽQì<´9XAŽÌÍ=,1A>{@K…  ¨20004660 @gäCþ\‘Ñ@&a‰7KÆ¨ø      ø      À  À  D‡s3MMS0      - 200E3/S013            13.46=PA<zá<£×
+A0(ö<£×
+A)Â<£×
+A%p¤<ýó¶B{¸RA\)  ©-   4624 @gèÈ´9X@süPHø      ø      À  À  DDYšM-SB0     - 210-                  12.77=PA-™š<£×
+A!p¤<£×
+AáH<£×
+A33<ýó¶C).B)G®  ª2019-    @gê¸Që…@+bœwškQø      ø      À  À  Dí	šMMdS0(N)  - 411dE4,N              15.78=¾wAdõÃ<£×
+AZff<£×
+AS®<£×
+AQ¸<ýó¶B}  AzáH  «2034-    @gñ²•éâ@$SüPHø      ø      À  À  D¼#3MMIrr(LSB)- 300ImIV               17.07=8QìAxzá<£×
+Aq™š<¬1AlQì<¬1Al  =+B`G®As®  ¬-   -    @gñÛô‡ü¹¿òÚ¹õY³Ðø      ø      À  À  E*  P-Irr(LSB)- 300-                  18.85=uÂA‡ë…<¬1A„Qì<¬1A™š<¬1A„\=PAÍ×
+@ì(ö  ­-   -    @gòÌÌÌÌÍ¿ô hÛ‹¬qø      ø      À  À  E.þfP-S       - 206-                  19.24=TýôA‘ë…<¬1AÂ<´9XAŒ  <¬1AŠ£×='ïžAa¸@Fff  ®-   -    @gôø7´¢4ÀLç¯·éø      ø      À  À  DŸ|ÍP-Irr(LSB)- 300-                  17.26=¾wA€ÌÍ<£×
+A{\)<¬1Avff<¬1Aw®=\)BP¸A‰
+=  ¯-   -    @gö!-w2@Ò:)Çy§ø      ø      À  À  DPÌÍM-Sd      - 204-                  14.04=PAV=q<£×
+AR{<£×
+ALzá<£×
+AHÌÍ<ýó¶B ™šAÁp¤  °-   4684 @gúU2a|ÀÑ‚©“áø      ø      À  À  DÄc3P-S0      - 200-                  13.40=PA>ff<£×
+A3
+=<£×
+A,ÌÍ<£×
+A)G®<ýó¶BÂ£×AxÌÍ  ±-   -    @gûÅo ¿Á°‰ 'RTø      ø      À  À  D†fM-Irr(HSB)- 310-                  20.00=ixÕA˜=q<¬1A•™š<¼jA“®<¼jA“p¤=H´9A…@(õÃ  ²-   4690 @gÿfÏAò¿ú~ùÛ"Ðåø      ø      À  À  E/lÍP-dS0(N)  - 411-                  14.69=¥ãATõÃ<£×
+AJ{<£×
+AC®<£×
+A@(ö<ýó¶BwzáARff  ³2062-    @h FÜ]d@%ðË)^žø      ø      À  À  DŽ¹šMMIrr(LSB)- 300dE:                18.50='ïžA•G®<¬1A“¸<¼jA‘Â<´9XA•33=uÂA§…AÌÍ  ´-   -    @heýŠÚºÀ‰7KÆ§ðø      ø      À  À  E,€ P-Irr(HSB)- 310-                  19.23=ixÕAŽÌÍ<¬1AŒ\<´9XAŠõÃ<´9XA‰ë…=¾wA\  @>{  µ-   -    @h	ã¼ÓÀµ'»0ø      ø      À  À  D°@ P-Irr(LSB)- 300-                  18.85=#×
+A\)<¬1Aë…<¬1A‹p¤<¬1A‹
+==C–AÉp¤@Ùë…  ¶-   -    @h
+j~ùÛ#À–»˜Èø      ø      À  À  D¼\ÍP-SBd     - 214-                  15.27=PAe¸<£×
+A`£×<£×
+A]Â<¬1AW×
+<ýó¶BÌ¸RA¸ff  ·-   4678 @h—$tSÀQ‚©“áø      ø      À  À  Dµà P-Irr(HSB)- 310-                  14.74=PA`  <£×
+A\£×<£×
+A[×
+<£×
+AZ¸R<ýó¶B@õÃA2áH  ¸-   -    @h¢3œ¿¿ÍÌcñA \ø      ø      À  À  D<  P-Irr(LSB)- 300-                  18.56='ïžA‹p¤<¬1Aˆ  <¬1A„ÌÍ<¬1A€¸R=oB\AJ¸R  ¹20874733 @hç¯·é@%ÒþÅm\ûø      ø      À  À  Dh  MMSBa     - 211SB02/a             13.75=¥ãAEG®<£×
+A:\<£×
+A4(ö<£×
+A1¸<ýó¶B¨G®AÀ{  º-   -    @hè§æ›@(¸Që…ø      ø      À  À  Dß¦fM-Irr(LSB)- 300-                  18.34=<jA‰…<¬1A†Qì<¬1A†õÃ<´9XA‡®=49XAðzáAõÃ  »-   -    @h Ä›¥ã@5¼¾ß¤@ø      ø      À  À  Dà P-Irr(LSB)- 300-                  16.66=¾wA|  <£×
+Aw
+=<¬1Aw33<¬1Ajff<ýó¶B‡záA‚ÌÍ  ¼-   -    @h"Ñ·Xâ@5¡:’£Sø      ø      À  À  DBšM-Sm      - 205-                  16.97=¥ãA|zá<£×
+AváH<£×
+As×
+<£×
+Anff<ýó¶B5ÂAšzá  ½-   4753 @h"àuöý"¿ó333333ø      ø      À  À  DšüÍP-S0      - 200-                  11.79=PA$  <£×
+A  <£×
+AõÃ<£×
+A¸<ýó¶C‚œ)B6\  ¾-   -    @h$ŠqÞi­¿Åzxl"h
+ø      ø      À  À  D‡  M-Irr(LSB)- 300-                  19.18=H´9A•¸<´9XA“G®<ÌÌÍA‘p¤<Ä›¦A(ö=@ƒA‹Â@Š\  ¿-   -    @h)Œ~($@)D÷eýŠÛø      ø      À  À  DãIšP-Irr(LSB)- 300-                  18.38=<jAˆ{<¬1Aˆ¸R<¬1A‡Â<´9XAƒ¸=C–B …A?\)  À-   4772 @h+á°‰ '@Xâe+Ôø      ø      À  À  D‚fM-Sa      - 201-                  13.21=PA9ë…<£×
+A.áH<£×
+A'®<£×
+A#®<ýó¶C}qAù…  Á-   -    @h0h	Ô•¿ùëC,¥zø      ø      À  À  E7À P-Irr(LSB)- 300-                  20.86>_;dA”õÃ<¬1A’¸R<ÌÌÍA’õÃ<ÔýôA•ë…=ÊÀƒAyG®@ˆ    Â-   -    @h4VÕÏªÎ?ñ¼j~ùÛ#ø      ø      À  À  E7À P-Irr(LSB)- 300-                  18.47=,1Ap¤<¬1AŠQì<¬1A‰…<¬1A®=aG®Að=qA£×  Ã-   4810 @h6ÓZ…‡”@òäŽŠrø      ø      À  À  Dd&fM-Irr(HSB)- 310-                  15.06=PAg33<£×
+Ad(ö<£×
+AaG®<£×
+A_®=oB™šAQì  Ä-   -    @h9quŽ!–À-àqvø      ø      À  À  D¹  P-Irr(LSB)- 300-                  18.64=#×
+AõÃ<¬1AáH<Ä›¦A”£×=\)A
+==Y‡Aÿë…@ô(ö  Å-   -    @h;"Ðå`B@£ˆe”¯Oø      ø      À  À  E/.fP-SBm     - 215-                  15.32=¥ãAep¤<£×
+A]Â<£×
+AX£×<£×
+AW\)<ýó¶BN=qAdÌÍ  Æ-   -    @h<®}Vlô@%z–»™ø      ø      À  À  DæffP-Irr(LSB)- 300-                  16.67=¥ãA†{<¬1Aƒ…<¬1A€\<¬1A†õÃ=,1B&33A"\  Ç-   -    @h@˜_ö”@€IQ‚ªø      ø      À  À  D“3P-Irr(LSB)- 300-                  16.99=¥ãA€Qì<£×
+A}¸<£×
+Az{<£×
+Aƒ…=\)B×
+AiG®  È-   4826 @hEÐ|„µÝ@5®Ù‡+ø      ø      À  À  CÌ&fP-Sa      - 201-                  10.56=PA®<£×
+Azá<£×
+@ü(ö<£×
+@õp¤<ýó¶CÈöBz
+=  É-   -    @hG!-w1?÷\ú¬Ùè>ø      ø      À  À  E2  P-Irr(HSB)- 310-                  19.37=ixÕA–=q<´9XA“p¤<ÌÌÍA’Qì<Ý/AáH=m‘hA  @8Qì  Ê-   -    @hHñ©ûçm¿é×Ûô‡ü¹ø      ø      À  À  E1±šP-Irr(LSB)- 300-                  18.86=aG®AŽÌÍ<¬1AG®<¼jAŠ=q<´9XAˆ¸R=¾wA]p¤@¸  Ë-   -    @hLÇË)_@#û²þÅm]ø      ø      À  À  E+¬ÍP-edge-on - 207-                  18.84=TýôA™š<¬1AŒ£×<´9XA‹Â<´9XAˆzá='ïžA²\@    Ì-   -    @hRú¬Ùè>@W>«6zø      ø      À  À  E-®fP-SBc     - 213-                  15.37=¥ãAb\<£×
+A]ë…<£×
+AZ\<£×
+ATõÃ=oBŽ\)AµG®  Í-   -    @hURT`ªe@,oƒ{J#:ø      ø      À  À  CUæfP-Irr(LSB)- 300-                  15.18=¥ãAg…<£×
+Ab¸R<£×
+A`zá<¬1A`  =oB£{A¶£×  Î-   4866 @h[œ¾ß¤@,W§†Â&ø      ø      À  À  Dø©šP-Sa      - 201-                  13.48=PA;®<£×
+A.ff<£×
+A'
+=<£×
+A"\<ýó¶C#+…AÂáH  Ï-   -    @h_Á½¥@ e`A‰7Lø      ø      À  À  D]ÆfM-Irr(HSB)- 310-                  15.58=¥ãAhQì<£×
+A`õÃ<£×
+A\ÌÍ<£×
+AZ\=oB€™šA€(ö  Ð-   -    @hbT`ªdÃÀ†ö”Fs‚ø      ø      À  À  D€ÙšM-Sm      - 205-                  17.40=@ƒAtzá<£×
+Am¸<¬1Aië…<¬1AdÌÍ=oBž€ A‰®  Ñ-   -    @hfe+ÓÃÀ¾BZîc ø      ø      À  À  DŽ€ P-S       - 206-                  18.45=,1AŽff<¬1AŒQì<´9XAŠáH<´9XA‹G®=D›¦Aœ  @Žff  Ò-   -    @hyúCþ\’@5ÜÆ?ø      ø      À  À  E6ñšP-Sb      - 202-                  14.66=¾wAW×
+<£×
+AO33<£×
+AIë…<£×
+AG
+=<ýó¶BÄffA±¸  Ó-   -    @h}²•éâ@²-Vø      ø      À  À  E9ƒ3P-S       - 206-                  16.81=¥ãAw…<£×
+An\<£×
+AhõÃ<£×
+Ae™š<ýó¶A¼{@ã×
+  Ô-   -    @h†1ø .Àø7´¢3œø      ø      À  À  D€ P-edge-on - 207-                  17.37=¾wAƒ…<¬1A
+=<¬1A~ff<¬1A€ff=PBJ{A%Â  Õ-   -    @hÀÕÏªÍŸ@ç8}¿Hø      ø      À  À  Dd` M-Sm      - 205-                  17.11='ïžA€¸R<¬1A}G®<¬1A~ff<¬1A|(ö=C–BgQìAi¸  Ö-   -    @hÊžì¿±[@$cn.±Ä3ø      ø      À  À  D¶fM-Sm      - 205-                  15.63=¥ãAl£×<£×
+Afff<£×
+Ac33<£×
+A`Qì<ýó¶Bs{A‚ÌÍ  ×-   -    @hî-àq¿ðœ¾ß¤@ø      ø      À  À  D–  P-Irr(HSB)- 310-                  17.12=¾wA€ÌÍ<¬1A{×
+<¬1AyG®<¬1AtõÃ=oAøõÃ@ÕÂ  Ø-   -    @hòÙ‡+?Ö1ø -àø      ø      À  À  D¥  P-Sm      - 205-                  22.25>¸RA¥
+=<ÌÌÍA¡¸<õÂA›×
+<å`BAš\=‘hs@Ÿ\)?´zá                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
