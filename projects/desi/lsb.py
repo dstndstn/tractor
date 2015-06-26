@@ -448,28 +448,6 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
             #plt.colorbar(ticks=np.arange((peak_amax*hot).max()+1), format=radformat)
             ps.savefig()
 
-
-    # Apertures, radii in ARCSEC.
-    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
-    apertures = apertures_arcsec / pixscale
-    apxy = np.vstack((px, py)).T
-
-    import photutils
-    with np.errstate(divide='ignore'):
-        imsigma = 1.0 / tim.getInvError()
-        imsigma[tim.getInvError() == 0] = 0
-    apimg = []
-    apimgerr = []
-    for rad in apertures:
-        aper = photutils.CircularAperture(apxy, rad)
-        p = photutils.aperture_photometry(resid, aper, error=imsigma)
-        apimg.append(p.field('aperture_sum'))
-        apimgerr.append(p.field('aperture_sum_err'))
-    ap = np.vstack(apimg).T
-    ap[np.logical_not(np.isfinite(ap))] = 0.
-    apiv = 1./(np.vstack(apimgerr).T)**2
-    apiv[np.logical_not(np.isfinite(apiv))] = 0.
-
     LSB = fits_table()
     LSB.filter = np.array([tim.band] * len(px))
     LSB.expnum  = np.array([expnum ] * len(px)).astype(np.int32)
@@ -483,14 +461,41 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
     LSB.mag = mags.astype(np.float32)
     LSB.radius = np.array(radii_arcsec)[amax[py,px]].astype(np.float32)
     LSB.sn = fmax[py,px].astype(np.float32)
-    LSB.apflux = ap
-    LSB.apflux_ivar = apiv
-    LSB.cut(np.argsort(-LSB.sn))
+            
+    # Apertures, radii in ARCSEC.
+    apertures_arcsec = np.array([0.5, 0.75, 1., 1.5, 2., 3.5, 5., 7.])
+    apertures = apertures_arcsec / pixscale
+    apxy = np.vstack((px, py)).T
     
+    import photutils
+    with np.errstate(divide='ignore'):
+        imsigma = 1.0 / tim.getInvError()
+        imsigma[tim.getInvError() == 0] = 0
+
+    for photimg, err, name, errname in [
+            (resid, imsigma, 'apflux', 'apflux_ivar'),
+            
+            ]:
+
+        apimg = []
+        apimgerr = []
+        for rad in apertures:
+            aper = photutils.CircularAperture(apxy, rad)
+            p = photutils.aperture_photometry(photimg, aper, error=err)
+            apimg.append(p.field('aperture_sum'))
+            if err is not None:
+                apimgerr.append(p.field('aperture_sum_err'))
+        ap = np.vstack(apimg).T
+        ap[np.logical_not(np.isfinite(ap))] = 0.
+        LSB.set(name, ap)
+        if err is not None:
+            apiv = 1./(np.vstack(apimgerr).T)**2
+            apiv[np.logical_not(np.isfinite(apiv))] = 0.
+            LSB.set(errname, apiv)
+
+    LSB.cut(np.argsort(-LSB.sn))
     LSB.writeto(lsbcat)
     
-    # bin = bin_image(resid, 8)
-    # 
     return dict(LSB=LSB, filters=None, mod=None, sky=None)
 
 def stage_5(LSB=None, resid=None, tim=None, mask=None, ps=None, **kwa):
