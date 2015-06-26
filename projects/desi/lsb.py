@@ -213,16 +213,16 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     
     resid = tim.getImage() - mod
     
-    smoo = np.zeros_like(resid)
-    median_smooth(resid, mask, 256, smoo)
+    sky = np.zeros_like(resid)
+    median_smooth(resid, mask, 256, sky)
 
     if plots:
         plt.clf()
-        plt.imshow(smoo, **tim.ima)
+        plt.imshow(sky, **tim.ima)
         plt.title('Smoothed residuals (sky)')
         ps.savefig()
 
-    resid -= smoo
+    resid -= sky
     # Re-apply mask
     resid[mask] = 0.
     
@@ -232,7 +232,7 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
         plt.title('Residual - sky')
         ps.savefig()
     
-    return dict(resid=resid, sky=smoo, ps=ps, tim=tim,
+    return dict(resid=resid, sky=sky, ps=ps, tim=tim,
                 tr=tr, mod=mod, mask=mask,
                 orig_catalog = orig_catalog, pixscale=pixscale)
 
@@ -259,6 +259,8 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
         plt.title('Detected sources')
         ps.savefig()
 
+    sourcepix = (hot * resid)
+        
     mask[hot] = True
     resid[mask] = 0.
     
@@ -268,6 +270,7 @@ def stage_2(resid=None, sky=None, ps=None, tim=None, mask=None,
         plt.title('Sources masked')
         ps.savefig()
 
+    return dict(sourcepix=sourcepix)
     
 def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
             plots=False, plotprefix=None, pixscale=None,
@@ -324,6 +327,7 @@ def stage_3(resid=None, sky=None, ps=None, tim=None, mask=None,
     return dict(filters=filters, radii_arcsec=radii_arcsec)
 
 def stage_4(resid=None, sky=None, ps=None, tim=None,
+            mask=None, sourcepix=None,
             filters=None, radii_arcsec=None,
             orig_catalog=None, plots=False,
             lsbcat='lsb.fits',
@@ -474,7 +478,10 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
 
     for photimg, err, name, errname in [
             (resid, imsigma, 'apflux', 'apflux_ivar'),
-            
+            (tim.getImage() - sky, None, 'apimgflux', None),
+            ((tim.getImage() - sky) * mask, None, 'apmaskedimgflux', None),
+            (1. - (mask * 1.), None, 'apgoodpix', None),
+            (sourcepix, None, 'apsources', None),
             ]:
 
         apimg = []
@@ -487,11 +494,11 @@ def stage_4(resid=None, sky=None, ps=None, tim=None,
                 apimgerr.append(p.field('aperture_sum_err'))
         ap = np.vstack(apimg).T
         ap[np.logical_not(np.isfinite(ap))] = 0.
-        LSB.set(name, ap)
+        LSB.set(name, ap.astype(np.float32))
         if err is not None:
             apiv = 1./(np.vstack(apimgerr).T)**2
             apiv[np.logical_not(np.isfinite(apiv))] = 0.
-            LSB.set(errname, apiv)
+            LSB.set(errname, apiv.astype(np.float32))
 
     LSB.cut(np.argsort(-LSB.sn))
     LSB.writeto(lsbcat)
