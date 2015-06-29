@@ -1544,7 +1544,7 @@ class DecamImage(object):
         if os.path.exists(imgfn):
             self.imgfn = imgfn
         else:
-            self.imgfn = os.path.join(decals.decals_dir, 'images', imgfn)
+            self.imgfn = os.path.join(self.decals_dir, 'images', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
