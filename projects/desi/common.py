@@ -35,17 +35,6 @@ from tractor.sfd import *
 
 # search order: $TMPDIR, $TEMP, $TMP, then /tmp, /var/tmp, /usr/tmp
 tempdir = tempfile.gettempdir()
-decals_dir = os.environ.get('DECALS_DIR')
-if decals_dir is None:
-    print 'Warning: you should set the $DECALS_DIR environment variable.'
-    print 'On NERSC, you can do:'
-    print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
-    print '  module load decals'
-    print
-    
-calibdir = os.path.join(decals_dir, 'calib', 'decam')
-sedir    = os.path.join(decals_dir, 'calib', 'se-config')
-an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 # From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
 # 1   -- detector bad pixel           InstCal
@@ -1167,8 +1156,20 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     return Tnew, newcat, hot
 
 class Decals(object):
-    def __init__(self):
+    def __init__(self,decals_dir=None):
+        if decals_dir is None:
+            decals_dir = os.environ.get('DECALS_DIR')
+            if decals_dir is None:
+                print 'Warning: you should set the $DECALS_DIR environment variable.'
+                print 'On NERSC, you can do:'
+                print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
+                print '  module load decals'
+                print
+        
         self.decals_dir = decals_dir
+        self.calibdir = os.path.join(self.decals_dir, 'calib', 'decam')
+        self.sedir = os.path.join(self.decals_dir, 'calib', 'se-config')
+        self.an_config = os.path.join(self.decals_dir, 'calib', 'an-config', 'cfg')
         self.ZP = None
         self.bricks = None
 
@@ -1530,6 +1531,12 @@ def exposure_metadata(filenames, hdus=None, trim=None):
 
 class DecamImage(object):
     def __init__(self, t):
+        decals = Decals()
+        self.decals_dir = decals.decals_dir
+        self.calibdir = decals.calibdir
+        self.sedir = decals.sedir
+        self.an_config = decals.an_config
+
         imgfn, hdu, band, expnum, extname, calname, exptime = (
             t.cpimage.strip(), t.cpimage_hdu, t.filter.strip(), t.expnum,
             t.extname.strip(), t.calname.strip(), t.exptime)
@@ -1537,7 +1544,7 @@ class DecamImage(object):
         if os.path.exists(imgfn):
             self.imgfn = imgfn
         else:
-            self.imgfn = os.path.join(decals_dir, 'images', imgfn)
+            self.imgfn = os.path.join(decals.decals_dir, 'images', imgfn)
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
@@ -1575,10 +1582,11 @@ class DecamImage(object):
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
-        self.pvwcsfn = os.path.join(calibdir, 'astrom-pv', calname + '.wcs.fits')
-        self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
-        self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
-        self.skyfn = os.path.join(calibdir, 'sky', calname + '.fits')
+        
+        self.pvwcsfn = os.path.join(self.calibdir, 'astrom-pv', calname + '.wcs.fits')
+        self.sefn = os.path.join(self.calibdir, 'sextractor', calname + '.fits')
+        self.psffn = os.path.join(self.calibdir, 'psfex', calname + '.fits')
+        self.skyfn = os.path.join(self.calibdir, 'sky', calname + '.fits')
 
     def __str__(self):
         return self.name
@@ -1989,11 +1997,11 @@ class DecamImage(object):
                 maskstr = '-FLAG_IMAGE ' + funmaskfn
             cmd = ' '.join([
                 'sex',
-                '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
+                '-c', os.path.join(self.sedir, 'DECaLS-v2.sex'),
                 maskstr, '-SEEING_FWHM %f' % seeing,
-                '-PARAMETERS_NAME', os.path.join(sedir, 'DECaLS-v2.param'),
-                '-FILTER_NAME', os.path.join(sedir, 'gauss_5.0_9x9.conv'),
-                '-STARNNW_NAME', os.path.join(sedir, 'default.nnw'),
+                '-PARAMETERS_NAME', os.path.join(self.sedir, 'DECaLS-v2.param'),
+                '-FILTER_NAME', os.path.join(self.sedir, 'gauss_5.0_9x9.conv'),
+                '-STARNNW_NAME', os.path.join(self.sedir, 'default.nnw'),
                 '-PIXEL_SCALE 0',
                 # SE has a *bizarre* notion of "sigma"
                 '-DETECT_THRESH 1.0',
@@ -2015,7 +2023,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
             # Read the resulting WCS header and add version info cards to it.
-            version_hdr = get_version_header(None, decals_dir)
+            version_hdr = get_version_header(None, self.decals_dir)
             wcshdr = fitsio.read_header(tmpwcsfn)
             os.unlink(tmpwcsfn)
             for r in wcshdr.records():
@@ -2031,7 +2039,7 @@ class DecamImage(object):
                 os.rename(oldfn, self.psffn)
             else:
                 cmd = ('psfex -c %s -PSF_DIR %s %s' %
-                       (os.path.join(sedir, 'DECaLS-v2.psfex'),
+                       (os.path.join(self.sedir, 'DECaLS-v2.psfex'),
                         os.path.dirname(self.psffn), self.sefn))
                 print cmd
                 rtn = os.system(cmd)
@@ -2052,7 +2060,7 @@ class DecamImage(object):
             tsky = ConstantSky(skyval)
             tt = type(tsky)
             sky_type = '%s.%s' % (tt.__module__, tt.__name__)
-            hdr = get_version_header(None, decals_dir)
+            hdr = get_version_header(None, self.decals_dir)
             hdr.add_record(dict(name='SKYMETH', value=skymeth,
                                 comment='estimate_mode, or fallback to median?'))
             hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))

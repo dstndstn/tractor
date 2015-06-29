@@ -287,8 +287,8 @@ def compute_coadds(tims, bands, targetwcs, images=None,
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
-               plots=False, ps=None,
+def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None,
+               plots=False, ps=None, decals_dir=None, 
                target_extent=None, pipe=False, program_name='runbrick.py',
                bands='grz', const2psf=True,
                mock_psf=False, **kwargs):
@@ -297,7 +297,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
     # early fail for mysterious "ImportError: c.so.6: cannot open shared object file: No such file or directory"
     from tractor.mix import c_gauss_2d_grid
 
-    decals = Decals()
+    decals = Decals(decals_dir)
     if ra is not None:
         # Custom brick; fake 'brick' object
         brick = BrickDuck()
@@ -312,7 +312,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
         brickid = brick.brickid
         brickname = brick.brickname
         
-    targetwcs = wcs_for_brick(brick, W=W, H=H)
+    targetwcs = wcs_for_brick(brick, W=W, H=H, pixscale=pixscale)
     if target_extent is not None:
         (x0,x1,y0,y1) = target_extent
         W = x1-x0
@@ -2996,8 +2996,12 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
 
     parser.add_option('--radec', help='RA,Dec center for a custom location (not a brick)',
                       nargs=2)
+    parser.add_option('--pixscale', type=float, default=0.262,
+                      help='Pixel scale of the output coadds (arcsec/pixel)')
 
     parser.add_option('-d', '--outdir', help='Set output base directory')
+    parser.add_option('--decals-dir', type=str, default=None,
+                      help='Overwrite the $DECALS_DIR environment variable')
     
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
@@ -3213,7 +3217,8 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
                 })
         
 
-    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom)
+    initargs.update(W=opt.width, H=opt.height, pixscale=opt.pixscale,
+                    decals_dir=opt.decals_dir, target_extent=opt.zoom)
 
     t0 = Time()
 
