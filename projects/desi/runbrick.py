@@ -3248,10 +3248,12 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
         
     run_brick(opt.brick, radec=opt.radec, pixscale=opt.pixscale,
               width=opt.width, height=opt.height, zoom=opt.zoom,
+              pv=opt.pv,
               threads=opt.threads, ceres=opt.ceres,
               gaussPsf=opt.gpsf, simulOpt=opt.simul_opt,
               nblobs=opt.nblobs, blob=opt.blob, blobxy=opt.blobxy,
               pipe=opt.pipe, outdir=opt.outdir, decals_dir=opt.decals_dir,
+              plots=opt.plots, plots2=opt.plots2,
               plotbase=opt.plot_base, plotnumber=opt.plot_number,
               force=opt.force, forceAll=opt.forceall,
               stages=opt.stage, writePickles=opt.write,
