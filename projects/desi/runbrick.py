@@ -3243,7 +3243,8 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
         kwa.update(nsigma=opt.nsigma)
     if opt.no_sdss:
         kwa.update(sdssInit=False)
-        
+    if opt.no_wise:
+        kwa.update(wise=False)
         
     run_brick(opt.brick, radec=opt.radec, pixscale=opt.pixscale,
               width=opt.width, height=opt.height, zoom=opt.zoom,
