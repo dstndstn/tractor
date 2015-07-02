@@ -103,7 +103,7 @@ def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
         plt.plot(TT2.ra, TT2.dec, 'o', color=ccmap[band], alpha=0.5)
 
         for t in TT2:
-            im = DecamImage(t)
+            im = DecamImage(decals, t)
 
             run_calibs(im, brick.ra, brick.dec, pixscale, morph=False, se2=False,
                        psfex=False)
@@ -117,7 +117,7 @@ def check_touching(decals, targetwcs, bands, brick, pixscale, ps):
         plt.plot(TT2.ra, TT2.dec, 'x', color=ccmap[band], alpha=0.5, ms=15)
 
         for t in TT2:
-            im = DecamImage(t)
+            im = DecamImage(decals, t)
             wcs = im.read_wcs()
             r,d = wcs.pixelxy2radec([1,1,t.width,t.width,1], [1,t.height,t.height,1,1])
             plt.plot(r, d, '-', color=ccmap[band], lw=1.5)

@@ -56,9 +56,9 @@ if __name__ == '__main__':
     print 'Metadata:'
     T.about()
 
-    im = DecamImage(T[0])
     decals = Decals()
-    tim = im.get_tractor_image(decals, slc=zoomslice, const2psf=True)
+    im = DecamImage(decals, T[0])
+    tim = im.get_tractor_image(slc=zoomslice, const2psf=True)
     print 'Got tim:', tim
 
     if catfn == 'DR1':

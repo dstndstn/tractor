@@ -368,7 +368,7 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None
     for t in T:
         print
         print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-        im = DecamImage(t)
+        im = DecamImage(decals, t)
         ims.append(im)
 
     tnow = Time()
@@ -385,7 +385,7 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None
     tlast = tnow
 
     # Read images, clip to ROI
-    args = [(im, decals, targetrd, mock_psf, const2psf) for im in ims]
+    args = [(im, targetrd, mock_psf, const2psf) for im in ims]
     tims = _map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list

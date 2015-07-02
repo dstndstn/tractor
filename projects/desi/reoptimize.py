@@ -77,8 +77,8 @@ if __name__ == '__main__':
     decals = Decals()
     tims = []
     for t in T:
-        im = DecamImage(t)
-        tim = im.get_tractor_image(decals) #, slc=zoomslice)
+        im = DecamImage(decals, t)
+        tim = im.get_tractor_image() #, slc=zoomslice)
         print 'Got tim:', tim
         from tractor.psfex import CachingPsfEx
         tim.psfex.radius = 20

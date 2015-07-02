@@ -374,7 +374,7 @@ if __name__ == '__main__':
 
         if opt.delete_sky or opt.delete_pvastrom:
             print j+1, 'of', len(allI)
-            im = DecamImage(T[i])
+            im = DecamImage(decals, T[i])
             if opt.delete_sky and os.path.exists(im.skyfn):
                 print '  deleting:', im.skyfn
                 os.unlink(im.skyfn)
@@ -384,7 +384,7 @@ if __name__ == '__main__':
 
         if opt.check:
             print j+1, 'of', len(allI)
-            im = DecamImage(T[i])
+            im = DecamImage(decals, T[i])
             if not im.run_calibs(im, None, None, None, just_check=True,
                                  astrom=False):
                 print 'Calibs for', im.expnum, im.extname, im.calname, 'already done'
@@ -518,7 +518,7 @@ if __name__ == '__main__':
     f = open('jobs','w')
     log('Total of', len(allI), 'CCDs')
     for i in allI:
-        im = DecamImage(T[i])
+        im = DecamImage(decals, T[i])
         if not im.run_calibs(im, None, None, None, just_check=True,
                              psfex=False, psfexfit=False):
             continue
@@ -542,7 +542,7 @@ if __name__ == '__main__':
         im = None
         try:
             for t in T[I]:
-                im = DecamImage(t)
+                im = DecamImage(decals, t)
                 zp = decals.get_zeropoint_for(im)
         except:
             print >> sys.stderr, 'Brick', b.brickid, ': Failed to get zeropoint for', im
