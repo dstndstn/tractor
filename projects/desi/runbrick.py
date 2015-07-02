@@ -39,7 +39,6 @@ from runbrick_plots import *
 from runbrick_plots import _plot_mods
 
 ## GLOBALS!  Oh my!
-mp = None
 nocache = True
 useCeres = True
 unwise_dir = 'unwise-coadds'
@@ -152,13 +151,6 @@ class MyMultiproc(multiproc):
         print 'Grand total efficiency:       %.1f %%' % (100. * tcpu / (twall * nthreads))
         print
 
-# didn't I write mp to avoid this foolishness in the first place?
-def _map(f, args):
-    if mp is not None:
-        return mp.map(f, args, chunksize=1)
-    else:
-        return map(f, args)
-
 def try_makedirs(dirs):
     if not os.path.exists(dirs):
         # there can be a race
@@ -218,8 +210,8 @@ def set_globals():
 def _bounce_tim_get_resamp((tim, targetwcs)):
     return tim_get_resamp(tim, targetwcs)
 
-def tims_compute_resamp(tims, targetwcs):
-    R = _map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
+def tims_compute_resamp(mp, tims, targetwcs):
+    R = mp.map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
     for tim,r in zip(tims, R):
         tim.resamp = r
 
@@ -285,10 +277,11 @@ def compute_coadds(tims, bands, targetwcs, images=None,
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None,
+def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
+               ra=None, dec=None,
                plots=False, ps=None, decals_dir=None, 
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz', const2psf=True,
+               bands='grz', const2psf=True, mp=None,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
@@ -377,14 +370,14 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None
     kwa = dict()
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
-    _map(run_calibs, args)
+    mp.map(run_calibs, args)
     tnow = Time()
     print '[parallel tims] Calibrations:', tnow-tlast
     tlast = tnow
 
     # Read images, clip to ROI
     args = [(im, targetrd, mock_psf, const2psf) for im in ims]
-    tims = _map(read_one_tim, args)
+    tims = mp.map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
     I = np.flatnonzero(np.array([tim is not None for tim in tims]))
@@ -405,7 +398,7 @@ def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None, ra=None, dec=None
                     
     if not pipe:
         # save resampling params
-        tims_compute_resamp(tims, targetwcs)
+        tims_compute_resamp(mp, tims, targetwcs)
         tnow = Time()
         print 'Computing resampling:', tnow-tlast
         tlast = tnow
@@ -799,7 +792,8 @@ def stage_srcs(coimgs=None, cons=None,
 
     # Median-smooth detection maps
     binning = 4
-    smoos = _map(_median_smooth_detmap, [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
+    smoos = mp.map(_median_smooth_detmap,
+                   [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
     tnow = Time()
     print '[parallel srcs] Median-filter detmaps:', tnow-tlast
     tlast = tnow
@@ -983,7 +977,7 @@ def stage_fitblobs(T=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    nblobs=None, blob0=None, blobxy=None,
-                   simul_opt=False,
+                   simul_opt=False, mp=None,
                    **kwargs):
     tlast = Time()
     for tim in tims:
@@ -1088,11 +1082,11 @@ def stage_fitblobs(T=None,
                           orig_wcsxy0, cat, bands, plots, ps, simul_opt)
         # to allow debugpool to only queue tasks one at a time
         iter = iterwrapper(iter, len(blobsrcs))
-    R = _map(_bounce_one_blob, iter)
+    R = mp.map(_bounce_one_blob, iter)
     print '[parallel fitblobs] Fitting sources took:', Time()-tlast
 
-    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs, blobslices=blobslices,
-                blobsrcs=blobsrcs)
+    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs,
+                blobslices=blobslices, blobsrcs=blobsrcs)
     
 def stage_fitblobs_finish(
     brickname=None, version_header=None,
@@ -1662,8 +1656,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             if plots:
 
-                tims_compute_resamp(srctractor.getImages(), targetwcs)
-                tims_compute_resamp(subtims, targetwcs)
+                mp = MyMultiproc()
+                tims_compute_resamp(mp, srctractor.getImages(), targetwcs)
+                tims_compute_resamp(mp, subtims, targetwcs)
 
                 plt.figure(1, figsize=(8,6))
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
@@ -2398,6 +2393,7 @@ def _get_mod((tim, srcs)):
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
                  outdir=None, T=None, cat=None, pixscale=None, plots=False,
+                 mp=None,
                  **kwargs):
     tlast = Time()
 
@@ -2432,7 +2428,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     tnow = Time()
     print '[serial coadds]:', tnow-tlast
     tlast = tnow
-    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    mods = mp.map(_get_mod, [(tim, cat) for tim in tims])
     tnow = Time()
     print '[parallel coadds] Getting model images:', tnow-tlast
     tlast = tnow
@@ -2986,7 +2982,6 @@ def run_brick(brick, radec=None, pixscale=0.262,
     from astrometry.util.multiproc import multiproc
 
     global useCeres
-    global mp
 
     initargs = {}
     kwargs = {}
