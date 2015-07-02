@@ -558,6 +558,11 @@ def stage_5(LSB=None, resid=None, tim=None, mask=None, ps=None, **kwa):
         ps.savefig()
 
         plt.clf()
+        plt.imshow(mod, **tim.ima)
+        plt.title('Final model: LSB candidate %i' % i)
+        ps.savefig()
+        
+        plt.clf()
         plt.imshow(chi0, **chia)
         plt.title('Initial chi: LSB candidate %i' % i)
         ps.savefig()

@@ -403,16 +403,19 @@ class ProfileGalaxy(object):
                 return p
                                                  
         else:
-            if modelMask is not None:
+            if modelMask is None:
                 halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-
-            # Haven't implemented this yet...
-            assert(modelMask is None)
+            else:
+                mh,mw = modelMask.shape
+                print 'modelMask shape:', mh,mw
+                halfsize = max(mh/2, mw/2)
 
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
             w = np.fft.rfftfreq(pW)
             v = np.fft.fftfreq(pH)
 
+            print 'Fourier transform size:', P.shape
+            
             dx = px - px0
             dy = py - py0
             # Put the integer portion of the offset into Patch x0,y0
@@ -424,21 +427,35 @@ class ProfileGalaxy(object):
 
             amix = self._getAffineProfile(img, mux, muy)
             Fsum = amix.getFourierTransform(w, v)
-                
+
+            print 'Galaxy FFT:', Fsum.shape
+            
             # FIXME -- could adjust the ifft shape...
-            G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-            # Clip down to suggested "halfsize"
-            if x0 > ix0:
-                G = G[:,x0 - ix0:]
-                ix0 = x0
-            if y0 > iy0:
-                G = G[y0 - iy0:, :]
-                iy0 = y0
-            gh,gw = G.shape
-            if gw+ix0 > x1:
-                G = G[:,:x1-ix0]
-            if gh+iy0 > y1:
-                G = G[:y1-iy0,:]
+
+            if modelMask is not None:
+                G = np.fft.irfft2(Fsum * P, s=(mh,mw))
+                print 'G shape', G.shape
+                ix0 = modelMask.x0
+                iy0 = modelMask.y0
+
+                # NOT DONE IMPLEMNTING THIS...
+                assert(False)
+                
+            else:
+                G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+                # Clip down to suggested "halfsize"
+                if x0 > ix0:
+                    G = G[:,x0 - ix0:]
+                    ix0 = x0
+                if y0 > iy0:
+                    G = G[y0 - iy0:, :]
+                    iy0 = y0
+                gh,gw = G.shape
+                if gw+ix0 > x1:
+                    G = G[:,:x1-ix0]
+                if gh+iy0 > y1:
+                    G = G[:y1-iy0,:]
+
             return Patch(ix0, iy0, G)
                     
 
