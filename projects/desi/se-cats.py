@@ -33,7 +33,7 @@ if __name__ == '__main__':
     for t in T:
         #if t.filter != 'r':
         #    continue
-        im = DecamImage(t)
+        im = DecamImage(D, t)
 
         run_calibs(im, t.ra, t.dec, 0.262, morph=False)
 

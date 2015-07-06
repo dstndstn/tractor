@@ -35,17 +35,6 @@ from tractor.sfd import *
 
 # search order: $TMPDIR, $TEMP, $TMP, then /tmp, /var/tmp, /usr/tmp
 tempdir = tempfile.gettempdir()
-decals_dir = os.environ.get('DECALS_DIR')
-if decals_dir is None:
-    print 'Warning: you should set the $DECALS_DIR environment variable.'
-    print 'On NERSC, you can do:'
-    print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
-    print '  module load decals'
-    print
-    
-calibdir = os.path.join(decals_dir, 'calib', 'decam')
-sedir    = os.path.join(decals_dir, 'calib', 'se-config')
-an_config= os.path.join(decals_dir, 'calib', 'an-config', 'cfg')
 
 # From: http://www.noao.edu/noao/staff/fvaldes/CPDocPrelim/PL201_3.html
 # 1   -- detector bad pixel           InstCal
@@ -1167,8 +1156,20 @@ def run_sed_matched_filters(SEDs, bands, detmaps, detivs, omit_xy,
     return Tnew, newcat, hot
 
 class Decals(object):
-    def __init__(self):
+    def __init__(self, decals_dir=None):
+        if decals_dir is None:
+            decals_dir = os.environ.get('DECALS_DIR')
+            if decals_dir is None:
+                print 'Warning: you should set the $DECALS_DIR environment variable.'
+                print 'On NERSC, you can do:'
+                print '  module use /project/projectdirs/cosmo/work/decam/versions/modules'
+                print '  module load decals'
+                print 'Using the current directory as DECALS_DIR, but this is likely to fail.'
+                print
+                decals_dir = os.getcwd()
+                
         self.decals_dir = decals_dir
+
         self.ZP = None
         self.bricks = None
 
@@ -1177,7 +1178,19 @@ class Decals(object):
         self.bricktree = None
         ### HACK! Hard-coded brick edge size, in degrees!
         self.bricksize = 0.25
-        
+
+    def get_calib_dir(self):
+        return os.path.join(self.decals_dir, 'calib', 'decam')
+
+    def get_image_dir(self):
+        return os.path.join(self.decals_dir, 'images')
+
+    def get_decals_dir(self):
+        return self.decals_dir
+
+    def get_se_dir(self):
+        return os.path.join(self.decals_dir, 'calib', 'se-config')
+
     def get_bricks(self):
         return fits_table(os.path.join(self.decals_dir, 'decals-bricks.fits'))
 
@@ -1279,13 +1292,13 @@ class Decals(object):
         for t in C:
             print
             print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
+            im = DecamImage(self, t)
             ims.append(im)
         # Read images, clip to ROI
         W,H = targetwcs.get_width(), targetwcs.get_height()
         targetrd = np.array([targetwcs.pixelxy2radec(x,y) for x,y in
                              [(1,1),(W,1),(W,H),(1,H),(1,1)]])
-        args = [(im, self, targetrd, mock_psf, const2psf) for im in ims]
+        args = [(im, targetrd, mock_psf, const2psf) for im in ims]
         tims = mp.map(read_one_tim, args)
         return tims
     
@@ -1529,7 +1542,9 @@ def exposure_metadata(filenames, hdus=None, trim=None):
     return T
 
 class DecamImage(object):
-    def __init__(self, t):
+    def __init__(self, decals, t):
+        self.decals = decals
+
         imgfn, hdu, band, expnum, extname, calname, exptime = (
             t.cpimage.strip(), t.cpimage_hdu, t.filter.strip(), t.expnum,
             t.extname.strip(), t.calname.strip(), t.exptime)
@@ -1537,20 +1552,15 @@ class DecamImage(object):
         if os.path.exists(imgfn):
             self.imgfn = imgfn
         else:
-            self.imgfn = os.path.join(decals_dir, 'images', imgfn)
+            self.imgfn = os.path.join(self.decals.get_image_dir(), imgfn)
+        self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
+        self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
+
         self.hdu   = hdu
         self.expnum = expnum
         self.extname = extname
         self.band  = band
         self.exptime = exptime
-
-        # EDR filenames: .imag.fits, .ivar.fits, .mask.fits.gz
-        if '.imag.fits' in self.imgfn:
-            self.dqfn = self.imgfn.replace('.imag.fits', '.mask.fits.gz')
-            self.wtfn = self.imgfn.replace('.imag.fits', '.ivar.fits')
-        else:
-            self.dqfn = self.imgfn.replace('_ooi_', '_ood_')
-            self.wtfn = self.imgfn.replace('_ooi_', '_oow_')
 
         for attr in ['imgfn', 'dqfn', 'wtfn']:
             fn = getattr(self, attr)
@@ -1575,6 +1585,8 @@ class DecamImage(object):
 
         self.calname = calname
         self.name = '%08i-%s' % (expnum, extname)
+
+        calibdir = self.decals.get_calib_dir()
         self.pvwcsfn = os.path.join(calibdir, 'astrom-pv', calname + '.wcs.fits')
         self.sefn = os.path.join(calibdir, 'sextractor', calname + '.fits')
         self.psffn = os.path.join(calibdir, 'psfex', calname + '.fits')
@@ -1585,7 +1597,7 @@ class DecamImage(object):
     def __repr__(self):
         return str(self)
 
-    def get_tractor_image(self, decals, slc=None, radecpoly=None,
+    def get_tractor_image(self, slc=None, radecpoly=None,
                           mock_psf=False, const2psf=False,
                           nanomaggies=True, subsky=True, tiny=5):
         '''
@@ -1594,7 +1606,7 @@ class DecamImage(object):
         band = self.band
         imh,imw = self.get_image_shape()
 
-        wcs = self.read_pv_wcs(decals)
+        wcs = self.read_pv_wcs()
         x0,y0 = 0,0
         if slc is None and radecpoly is not None:
             imgpoly = [(1,1),(1,imh),(imw,imh),(imw,1)]
@@ -1665,7 +1677,7 @@ class DecamImage(object):
         psf_sigma = psf_fwhm / 2.35
         primhdr = self.read_image_primary_header()
 
-        magzp = decals.get_zeropoint_for(self)
+        magzp = self.decals.get_zeropoint_for(self)
         print 'magzp', magzp
         orig_zpscale = zpscale = NanoMaggies.zeropointToScale(magzp)
 
@@ -1828,10 +1840,10 @@ class DecamImage(object):
             invvar[invvar < thresh] = 0
         return invvar
 
-    def read_pv_wcs(self, decals):
+    def read_pv_wcs(self):
         print 'Reading WCS from', self.pvwcsfn
         wcs = Sip(self.pvwcsfn)
-        dra,ddec = decals.get_astrometric_zeropoint_for(self)
+        dra,ddec = self.decals.get_astrometric_zeropoint_for(self)
         r,d = wcs.get_crval()
         print 'Applying astrometric zeropoint:', (dra,ddec)
         wcs.set_crval((r + dra, d + ddec))
@@ -1987,6 +1999,7 @@ class DecamImage(object):
             maskstr = ''
             if use_mask:
                 maskstr = '-FLAG_IMAGE ' + funmaskfn
+            sedir = self.decals.get_se_dir()
             cmd = ' '.join([
                 'sex',
                 '-c', os.path.join(sedir, 'DECaLS-v2.sex'),
@@ -2015,7 +2028,7 @@ class DecamImage(object):
             if os.system(cmd):
                 raise RuntimeError('Command failed: ' + cmd)
             # Read the resulting WCS header and add version info cards to it.
-            version_hdr = get_version_header(None, decals_dir)
+            version_hdr = get_version_header(None, self.decals.get_decals_dir())
             wcshdr = fitsio.read_header(tmpwcsfn)
             os.unlink(tmpwcsfn)
             for r in wcshdr.records():
@@ -2024,6 +2037,7 @@ class DecamImage(object):
             print 'Wrote', self.pvwcsfn
 
         if psfex:
+            sedir = self.decals.get_se_dir()
             # If we wrote *.psf instead of *.fits in a previous run...
             oldfn = self.psffn.replace('.fits', '.psf')
             if os.path.exists(oldfn):
@@ -2052,7 +2066,7 @@ class DecamImage(object):
             tsky = ConstantSky(skyval)
             tt = type(tsky)
             sky_type = '%s.%s' % (tt.__module__, tt.__name__)
-            hdr = get_version_header(None, decals_dir)
+            hdr = get_version_header(None, self.decals.get_decals_dir())
             hdr.add_record(dict(name='SKYMETH', value=skymeth,
                                 comment='estimate_mode, or fallback to median?'))
             hdr.add_record(dict(name='SKY', value=sky_type, comment='Sky class'))
@@ -2074,9 +2088,9 @@ def run_calibs(X):
     return im.run_calibs(*args, **kwargs)
 
 
-def read_one_tim((im, decals, targetrd, mock_psf, const2psf)):
+def read_one_tim((im, targetrd, mock_psf, const2psf)):
     print 'Reading expnum', im.expnum, 'name', im.extname, 'band', im.band, 'exptime', im.exptime
-    tim = im.get_tractor_image(decals, radecpoly=targetrd, mock_psf=mock_psf,
+    tim = im.get_tractor_image(radecpoly=targetrd, mock_psf=mock_psf,
                                const2psf=const2psf)
     return tim
 

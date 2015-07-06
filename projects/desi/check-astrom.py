@@ -30,8 +30,8 @@ if __name__ == '__main__':
     #img = fitsio.read(fn, ext=ccd.cpimage_hdu)
     #print 'img', img.shape
 
-    im = DecamImage(ccd)
-    tim = im.get_tractor_image(D)
+    im = DecamImage(D, ccd)
+    tim = im.get_tractor_image()
     print 'Tim', tim.shape
 
     calname = ccd.calname.strip()

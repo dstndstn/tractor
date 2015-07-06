@@ -4,7 +4,7 @@ import os
 import numpy as np
 from astrometry.util.fits import fits_table
 
-from common import decals_dir, run_calibs, DecamImage, Decals
+from common import run_calibs, DecamImage, Decals
 
 if __name__ == '__main__':
     import optparse
@@ -42,7 +42,7 @@ if __name__ == '__main__':
         t = T[i]
         print 'Running', t.calname
 
-        im = DecamImage(t)
+        im = DecamImage(D, t)
 
         pixscale = np.sqrt(np.abs(t.cd1_1 * t.cd2_2 - t.cd1_2 * t.cd2_1))
         pixscale *= 3600.

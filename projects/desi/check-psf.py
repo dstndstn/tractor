@@ -42,7 +42,7 @@ if __name__ == '__main__':
     band = T.filter[0]
     print 'Band:', band
 
-    im = DecamImage(T[0])
+    im = DecamImage(decals, T[0])
     print 'Reading', im.imgfn
 
     # Get approximate image center for astrometry

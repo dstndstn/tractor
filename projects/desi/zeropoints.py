@@ -51,7 +51,7 @@ if __name__ == '__main__':
         for t in TT:
             print
             print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-            im = DecamImage(t)
+            im = DecamImage(D, t)
             ims.append(im)
 
         chipnames = []

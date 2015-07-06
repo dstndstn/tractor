@@ -39,7 +39,6 @@ from runbrick_plots import *
 from runbrick_plots import _plot_mods
 
 ## GLOBALS!  Oh my!
-mp = None
 nocache = True
 useCeres = True
 unwise_dir = 'unwise-coadds'
@@ -152,13 +151,6 @@ class MyMultiproc(multiproc):
         print 'Grand total efficiency:       %.1f %%' % (100. * tcpu / (twall * nthreads))
         print
 
-# didn't I write mp to avoid this foolishness in the first place?
-def _map(f, args):
-    if mp is not None:
-        return mp.map(f, args, chunksize=1)
-    else:
-        return map(f, args)
-
 def try_makedirs(dirs):
     if not os.path.exists(dirs):
         # there can be a race
@@ -211,17 +203,15 @@ def _print_struc(X):
         print type(X),
 
 def set_globals():
-    global imchi
     plt.figure(figsize=(12,9))
     plt.subplots_adjust(left=0.07, right=0.99, bottom=0.07, top=0.95,
                         hspace=0.2, wspace=0.05)
-    imchi = dict(cmap='RdBu', vmin=-5, vmax=5)
 
 def _bounce_tim_get_resamp((tim, targetwcs)):
     return tim_get_resamp(tim, targetwcs)
 
-def tims_compute_resamp(tims, targetwcs):
-    R = _map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
+def tims_compute_resamp(mp, tims, targetwcs):
+    R = mp.map(_bounce_tim_get_resamp, [(tim,targetwcs) for tim in tims])
     for tim,r in zip(tims, R):
         tim.resamp = r
 
@@ -287,17 +277,18 @@ def compute_coadds(tims, bands, targetwcs, images=None,
         rtn.append(cons2)
     return rtn
 
-def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
-               plots=False, ps=None,
+def stage_tims(W=3600, H=3600, pixscale=0.262, brickname=None,
+               ra=None, dec=None,
+               plots=False, ps=None, decals_dir=None, 
                target_extent=None, pipe=False, program_name='runbrick.py',
-               bands='grz', const2psf=True,
+               bands='grz', const2psf=True, mp=None,
                mock_psf=False, **kwargs):
     t0 = tlast = Time()
 
     # early fail for mysterious "ImportError: c.so.6: cannot open shared object file: No such file or directory"
     from tractor.mix import c_gauss_2d_grid
 
-    decals = Decals()
+    decals = Decals(decals_dir)
     if ra is not None:
         # Custom brick; fake 'brick' object
         brick = BrickDuck()
@@ -312,7 +303,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
         brickid = brick.brickid
         brickname = brick.brickname
         
-    targetwcs = wcs_for_brick(brick, W=W, H=H)
+    targetwcs = wcs_for_brick(brick, W=W, H=H, pixscale=pixscale)
     if target_extent is not None:
         (x0,x1,y0,y1) = target_extent
         W = x1-x0
@@ -368,7 +359,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
     for t in T:
         print
         print 'Image file', t.cpimage, 'hdu', t.cpimage_hdu
-        im = DecamImage(t)
+        im = DecamImage(decals, t)
         ims.append(im)
 
     tnow = Time()
@@ -379,14 +370,14 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
     kwa = dict()
     args = [(im, kwa, brick.ra, brick.dec, pixscale, mock_psf)
             for im in ims]
-    _map(run_calibs, args)
+    mp.map(run_calibs, args)
     tnow = Time()
     print '[parallel tims] Calibrations:', tnow-tlast
     tlast = tnow
 
     # Read images, clip to ROI
-    args = [(im, decals, targetrd, mock_psf, const2psf) for im in ims]
-    tims = _map(read_one_tim, args)
+    args = [(im, targetrd, mock_psf, const2psf) for im in ims]
+    tims = mp.map(read_one_tim, args)
 
     # Cut the table of CCDs to match the 'tims' list
     I = np.flatnonzero(np.array([tim is not None for tim in tims]))
@@ -407,7 +398,7 @@ def stage_tims(W=3600, H=3600, brickname=None, ra=None, dec=None,
                     
     if not pipe:
         # save resampling params
-        tims_compute_resamp(tims, targetwcs)
+        tims_compute_resamp(mp, tims, targetwcs)
         tnow = Time()
         print 'Computing resampling:', tnow-tlast
         tlast = tnow
@@ -801,7 +792,8 @@ def stage_srcs(coimgs=None, cons=None,
 
     # Median-smooth detection maps
     binning = 4
-    smoos = _map(_median_smooth_detmap, [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
+    smoos = mp.map(_median_smooth_detmap,
+                   [(m,iv,binning) for m,iv in zip(detmaps, detivs)])
     tnow = Time()
     print '[parallel srcs] Median-filter detmaps:', tnow-tlast
     tlast = tnow
@@ -985,7 +977,7 @@ def stage_fitblobs(T=None,
                    bands=None, ps=None, tims=None,
                    plots=False, plots2=False,
                    nblobs=None, blob0=None, blobxy=None,
-                   simul_opt=False,
+                   simul_opt=False, mp=None,
                    **kwargs):
     tlast = Time()
     for tim in tims:
@@ -1090,11 +1082,11 @@ def stage_fitblobs(T=None,
                           orig_wcsxy0, cat, bands, plots, ps, simul_opt)
         # to allow debugpool to only queue tasks one at a time
         iter = iterwrapper(iter, len(blobsrcs))
-    R = _map(_bounce_one_blob, iter)
+    R = mp.map(_bounce_one_blob, iter)
     print '[parallel fitblobs] Fitting sources took:', Time()-tlast
 
-    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs, blobslices=blobslices,
-                blobsrcs=blobsrcs)
+    return dict(fitblobs_R=R, tims=tims, ps=ps, blobs=blobs,
+                blobslices=blobslices, blobsrcs=blobsrcs)
     
 def stage_fitblobs_finish(
     brickname=None, version_header=None,
@@ -1664,8 +1656,9 @@ def _one_blob((iblob, Isrcs, targetwcs, bx0, by0, blobw, blobh, blobmask, subtim
 
             if plots:
 
-                tims_compute_resamp(srctractor.getImages(), targetwcs)
-                tims_compute_resamp(subtims, targetwcs)
+                mp = MyMultiproc()
+                tims_compute_resamp(mp, srctractor.getImages(), targetwcs)
+                tims_compute_resamp(mp, subtims, targetwcs)
 
                 plt.figure(1, figsize=(8,6))
                 plt.subplots_adjust(left=0.01, right=0.99, top=0.95, bottom=0.01,
@@ -2400,6 +2393,7 @@ def _get_mod((tim, srcs)):
 def stage_coadds(bands=None, version_header=None, targetwcs=None,
                  tims=None, ps=None, brickname=None, ccds=None,
                  outdir=None, T=None, cat=None, pixscale=None, plots=False,
+                 mp=None,
                  **kwargs):
     tlast = Time()
 
@@ -2434,7 +2428,7 @@ def stage_coadds(bands=None, version_header=None, targetwcs=None,
     tnow = Time()
     print '[serial coadds]:', tnow-tlast
     tlast = tnow
-    mods = _map(_get_mod, [(tim, cat) for tim in tims])
+    mods = mp.map(_get_mod, [(tim, cat) for tim in tims])
     tnow = Time()
     print '[parallel coadds] Getting model images:', tnow-tlast
     tlast = tnow
@@ -2967,12 +2961,145 @@ def stage_redo_apphot(targetwcs=None, bands=None, tims=None, outdir=None,
     print 'Wrote', fn
 
 
+def run_brick(brick, radec=None, pixscale=0.262,
+              width=3600, height=3600,
+              zoom=None,
+              nblobs=None, blob=None, blobxy=None,
+              pv=True, pipe=True, nsigma=6,
+              simulOpt=False,
+              wise=True,
+              sdssInit=True,
+              gaussPsf=False,
+              ceres=True,
+              outdir=None, decals_dir=None, threads=None,
+              plots=False, plots2=False,
+              plotbase=None, plotnumber=0,
+              picklePattern='pickles/runbrick-%(brick)s-%%(stage)s.pickle',
+              stages=['writecat'],
+              force=[], forceAll=False, writePickles=True):
+
+    from astrometry.util.stages import CallGlobalTime, runstage
+    from astrometry.util.multiproc import multiproc
+
+    global useCeres
+
+    initargs = {}
+    kwargs = {}
+
+    forceStages = [s for s in stages]
+    forceStages.extend(stages)
+
+    if forceAll:
+        kwargs.update(forceall=True)
+
+    if radec is not None:
+        print 'RA,Dec:', radec
+        assert(len(radec) == 2)
+        ra,dec = radec
+        try:
+            ra = float(ra)
+        except:
+            from astrometry.util.starutil_numpy import hmsstring2ra
+            ra = hmsstring2ra(ra)
+        try:
+            dec = float(dec)
+        except:
+            from astrometry.util.starutil_numpy import dmsstring2dec
+            dec = dmsstring2dec(dec)
+        print 'Parsed RA,Dec', ra,dec
+        initargs.update(ra=ra, dec=dec)
+        if brick is None:
+            brick = ('custom-%06i%s%05i' %
+                         (int(1000*ra), 'm' if dec < 0 else 'p',
+                          int(1000*np.abs(dec))))
+    initargs.update(brickname=brick)
+
+    useCeres = ceres
+
+    stagefunc = CallGlobalTime('stage_%s', globals())
+
+    plot_base_default = 'brick-%(brick)s'
+    if plotbase is None:
+        plotbase = plot_base_default
+    ps = PlotSequence(plotbase % dict(brick=brick))
+    initargs.update(ps=ps)
+
+    if plotnumber:
+        ps.skipto(plotnumber)
+
+    kwargs.update(ps=ps, nsigma=nsigma, mock_psf=gaussPsf,
+                  simul_opt=simulOpt, pipe=pipe,
+                  no_sdss=not(sdssInit),
+                  outdir=outdir, decals_dir=decals_dir,
+                  plots=plots, plots2=plots2,
+                  force=forceStages, write=writePickles)
+
+    if threads and threads > 1:
+        from utils.debugpool import DebugPool, DebugPoolMeas
+        pool = DebugPool(threads, initializer=runbrick_global_init,
+                         initargs=[])
+        Time.add_measurement(DebugPoolMeas(pool, pickleTraffic=False))
+        mp = MyMultiproc(None, pool=pool)
+    else:
+        mp = MyMultiproc(init=runbrick_global_init, initargs=[])
+    kwargs.update(mp=mp)
+
+    if nblobs is not None:
+        kwargs.update(nblobs=nblobs)
+    if blob is not None:
+        kwargs.update(blob0=blob)
+    if blobxy is not None:
+        kwargs.update(blobxy=blobxy)
+
+    picklePattern = picklePattern % dict(brick=brick)
+
+    prereqs = {
+        'tims':None,
+
+        #'srcs':'tims',
+
+        'image_coadds':'tims',
+        'srcs':'image_coadds',
+
+        'fitblobs':'srcs',
+        'fitblobs_finish':'fitblobs',
+        'coadds': 'fitblobs_finish',
+
+        # wise_forced: see below
+
+        'fitplots': 'fitblobs_finish',
+        'psfplots': 'tims',
+        'initplots': 'srcs',
+
+        'redo_apphot': 'tims',
+        }
+
+    if wise:
+        prereqs.update({
+                'wise_forced': 'coadds',
+                'writecat': 'wise_forced',
+                })
+    else:
+        prereqs.update({
+                'writecat': 'coadds',
+                })
+        
+    initargs.update(W=width, H=height, pixscale=pixscale,
+                    target_extent=zoom)
+
+    t0 = Time()
+
+    for stage in stages:
+        runstage(stage, picklePattern, stagefunc, prereqs=prereqs,
+                 initial_args=initargs, **kwargs)
+
+    print 'All done:', Time()-t0
+    mp.report(threads)
+    
 
 def main():
-    from astrometry.util.stages import CallGlobalTime, runstage
     import optparse
     import logging
-    from astrometry.util.multiproc import multiproc
 
     ep = '''
 eg, to run a small field containing a cluster:
@@ -2996,8 +3123,12 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
 
     parser.add_option('--radec', help='RA,Dec center for a custom location (not a brick)',
                       nargs=2)
+    parser.add_option('--pixscale', type=float, default=0.262,
+                      help='Pixel scale of the output coadds (arcsec/pixel)')
 
     parser.add_option('-d', '--outdir', help='Set output base directory')
+    parser.add_option('--decals-dir', type=str, default=None,
+                      help='Overwrite the $DECALS_DIR environment variable')
     
     parser.add_option('--threads', type=int, help='Run multi-threaded')
     parser.add_option('-p', '--plots', dest='plots', action='store_true',
@@ -3008,8 +3139,7 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
     parser.add_option('-P', '--pickle', dest='picklepat', help='Pickle filename pattern, with %i, default %default',
                       default='pickles/runbrick-%(brick)s-%%(stage)s.pickle')
 
-    plot_base_default = 'brick-%(brick)s'
-    parser.add_option('--plot-base', help='Base filename for plots, default %s' % plot_base_default)
+    parser.add_option('--plot-base', help='Base filename for plots, default brick-BRICK')
     parser.add_option('--plot-number', type=int, default=0, help='Set PlotSequence starting number')
 
     parser.add_option('-W', '--width', type=int, default=3600, help='Target image width (default %default)')
@@ -3058,37 +3188,17 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
 
     opt,args = parser.parse_args()
 
-    initargs = {}
-
-    if opt.radec is not None:
-        print 'RA,Dec:', opt.radec
-        assert(len(opt.radec) == 2)
-        ra,dec = opt.radec
-        try:
-            ra = float(ra)
-        except:
-            from astrometry.util.starutil_numpy import hmsstring2ra
-            ra = hmsstring2ra(ra)
-        try:
-            dec = float(dec)
-        except:
-            from astrometry.util.starutil_numpy import dmsstring2dec
-            dec = dmsstring2dec(dec)
-        print 'Parsed RA,Dec', ra,dec
-        initargs.update(ra=ra, dec=dec)
-        opt.brick = 'custom-%06i%s%05i' % (int(1000*ra), 'm' if dec < 0 else 'p',
-                                           int(1000*np.abs(dec)))
-    initargs.update(brickname=opt.brick)
-
     if opt.check_done or opt.skip or opt.skip_coadd:
         outdir = opt.outdir
         if outdir is None:
             outdir = '.'
         brickname = opt.brick
         if opt.skip_coadd:
-            fn = os.path.join(outdir, 'coadd', brickname[:3], brickname, 'decals-%s-image.jpg' % brickname)
+            fn = os.path.join(outdir, 'coadd', brickname[:3], brickname,
+                              'decals-%s-image.jpg' % brickname)
         else:
-            fn = os.path.join(outdir, 'tractor', brickname[:3], 'tractor-%s.fits' % brickname)
+            fn = os.path.join(outdir, 'tractor', brickname[:3],
+                              'tractor-%s.fits' % brickname)
         print 'Checking for', fn
         exists = os.path.exists(fn)
         if opt.skip_coadd and exists:
@@ -3111,119 +3221,38 @@ python -u projects/desi/runbrick.py --plots --brick 2440p070 --zoom 1900 2400 45
             print 'Found:', fn
             return 0
 
-    Time.add_measurement(MemMeas)
-
     if opt.verbose == 0:
         lvl = logging.INFO
     else:
         lvl = logging.DEBUG
     logging.basicConfig(level=lvl, format='%(message)s', stream=sys.stdout)
 
-    global useCeres
-    useCeres = opt.ceres
-
+    Time.add_measurement(MemMeas)
     set_globals()
-    
-    stagefunc = CallGlobalTime('stage_%s', globals())
 
     if len(opt.stage) == 0:
         opt.stage.append('writecat')
-    opt.force.extend(opt.stage)
 
-    if opt.plot_base is None:
-        opt.plot_base = plot_base_default
-    ps = PlotSequence(opt.plot_base % dict(brick=opt.brick))
-    initargs.update(ps=ps)
-
-    kwargs = {}
-    if opt.plot_number:
-        ps.skipto(opt.plot_number)
-    kwargs.update(ps=ps)
-
+    kwa = {}
     if opt.nsigma:
-        kwargs.update(nsigma=opt.nsigma)
-
-    if opt.gpsf:
-        kwargs.update(mock_psf=True)
-        
-    kwargs.update(simul_opt=opt.simul_opt)
-    kwargs.update(pipe=opt.pipe)
-
-    global mp
-    if opt.threads and opt.threads > 1:
-        from utils.debugpool import DebugPool, DebugPoolMeas
-        pool = DebugPool(opt.threads, initializer=runbrick_global_init,
-                         initargs=[])
-        Time.add_measurement(DebugPoolMeas(pool, pickleTraffic=False))
-        #mp = multiproc(None, pool=pool)
-        mp = MyMultiproc(None, pool=pool)
-    else:
-        #mp = multiproc(init=runbrick_global_init, initargs=[])
-        mp = MyMultiproc(init=runbrick_global_init, initargs=[])
-    # ??
-    kwargs.update(mp=mp)
-
-    if opt.nblobs is not None:
-        kwargs.update(nblobs=opt.nblobs)
-    if opt.blob is not None:
-        kwargs.update(blob0=opt.blob)
-    if opt.blobxy is not None:
-        kwargs.update(blobxy=opt.blobxy)
-
+        kwa.update(nsigma=opt.nsigma)
     if opt.no_sdss:
-        kwargs.update(no_sdss=True)
-        
-    if opt.outdir:
-        kwargs.update(outdir=opt.outdir)
-
-    if opt.forceall:
-        kwargs.update(forceall=True)
-
-    opt.picklepat = opt.picklepat % dict(brick=opt.brick)
-
-    prereqs = {
-        'tims':None,
-
-        #'srcs':'tims',
-
-        'image_coadds':'tims',
-        'srcs':'image_coadds',
-
-        'fitblobs':'srcs',
-        'fitblobs_finish':'fitblobs',
-        'coadds': 'fitblobs_finish',
-
-        # wise_forced: see below
-
-        'fitplots': 'fitblobs_finish',
-        'psfplots': 'tims',
-        'initplots': 'srcs',
-
-        'redo_apphot': 'tims',
-        }
-
+        kwa.update(sdssInit=False)
     if opt.no_wise:
-        prereqs.update({
-                'writecat': 'coadds',
-                })
-    else:
-        prereqs.update({
-                'wise_forced': 'coadds',
-                'writecat': 'wise_forced',
-                })
+        kwa.update(wise=False)
         
-
-    initargs.update(W=opt.width, H=opt.height, target_extent=opt.zoom)
-
-    t0 = Time()
-
-    for stage in opt.stage:
-        runstage(stage, opt.picklepat, stagefunc, force=opt.force, write=opt.write,
-                 prereqs=prereqs, plots=opt.plots, plots2=opt.plots2,
-                 initial_args=initargs, **kwargs)
-
-    print 'All done:', Time()-t0
-    mp.report(opt.threads)
+    run_brick(opt.brick, radec=opt.radec, pixscale=opt.pixscale,
+              width=opt.width, height=opt.height, zoom=opt.zoom,
+              pv=opt.pv,
+              threads=opt.threads, ceres=opt.ceres,
+              gaussPsf=opt.gpsf, simulOpt=opt.simul_opt,
+              nblobs=opt.nblobs, blob=opt.blob, blobxy=opt.blobxy,
+              pipe=opt.pipe, outdir=opt.outdir, decals_dir=opt.decals_dir,
+              plots=opt.plots, plots2=opt.plots2,
+              plotbase=opt.plot_base, plotnumber=opt.plot_number,
+              force=opt.force, forceAll=opt.forceall,
+              stages=opt.stage, writePickles=opt.write,
+              picklePattern=opt.picklepat, **kwa)
     return 0
 
 def trace(frame, event, arg):

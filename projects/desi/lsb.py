@@ -62,14 +62,14 @@ def stage_1(expnum=431202, extname='S19', plotprefix='lsb', plots=False,
     decals = Decals()
     C = decals.find_ccds(expnum=expnum, extname=extname)
     print len(C), 'CCDs'
-    im = DecamImage(C[0])
+    im = DecamImage(decals, C[0])
     print 'im', im
     
     #(x0,x1,y0,y1) = opt.zoom
     #zoomslice = (slice(y0,y1), slice(x0,x1))
     zoomslice = None
     
-    tim = im.get_tractor_image(decals, const2psf=True, slc=zoomslice)
+    tim = im.get_tractor_image(const2psf=True, slc=zoomslice)
     print 'Tim', tim
     
     cats = []

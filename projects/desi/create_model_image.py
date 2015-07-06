@@ -36,7 +36,7 @@ def main():
     print 'Closest chip:', chips[D[0]]
     chips = [chips[D[0]]]
 
-    im = DecamImage(chips[0])
+    im = DecamImage(decals, chips[0])
     print 'Image:', im
 
     targetwcs = Sip(im.wcsfn)
@@ -80,7 +80,7 @@ def main():
     slc = None
     if roi is not None:
         slc = slice(y0,y1), slice(x0,x1)
-    tim = im.get_tractor_image(decals, slc=slc)
+    tim = im.get_tractor_image(slc=slc)
     print 'Got', tim
     tim.psfex.fitSavedData(*tim.psfex.splinedata)
     tim.psfex.radius = 20
