@@ -1120,18 +1120,21 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         H,W = self.img.shape
         subimg = self.img
         pad = np.zeros((sz,sz))
-        if sz > H:
+        if sz >= H:
             y0 = (sz - H)/2
         else:
             y0 = 0
             d = (H - sz)/2
-            subimg = subimg[d:-d, :]
-        if sz > W:
+            if d > 0:
+                subimg = subimg[d:-d, :]
+
+        if sz >= W:
             x0 = (sz - W)/2
         else:
             x0 = 0
             d = (W - sz)/2
-            subimg = subimg[:, d:-d]
+            if d > 0:
+                subimg = subimg[:, d:-d]
         sh,sw = subimg.shape
         pad[y0:y0+sh, x0:x0+sw] = subimg
         P = np.fft.rfft2(pad)
@@ -1256,7 +1259,7 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         '''
 
         ## FIXME!
-        #assert(modelMask is None)
+        assert(modelMask is None)
 
         if modelMask is not None:
             return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,

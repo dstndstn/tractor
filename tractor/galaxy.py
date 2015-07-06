@@ -262,6 +262,10 @@ class Galaxy(MultiParams, SingleProfileSource):
         return derivs
 
 
+from astrometry.util.plotutils import *
+psfft = PlotSequence('fft')
+
+    
 class ProfileGalaxy(object):
     '''
     A mix-in class that renders itself based on a Mixture-of-Gaussians
@@ -351,6 +355,11 @@ class ProfileGalaxy(object):
         is [x0, x1), [y0,y1).
         '''
 
+        #####
+        global psfft
+
+
+        
         if modelMask is None:
             # now choose the patch size
             halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
@@ -414,7 +423,9 @@ class ProfileGalaxy(object):
             w = np.fft.rfftfreq(pW)
             v = np.fft.fftfreq(pH)
 
-            print 'Fourier transform size:', P.shape
+            print 'PSF Fourier transform size:', P.shape
+
+            #print 'frequencies:', w, v
             
             dx = px - px0
             dy = py - py0
@@ -425,6 +436,8 @@ class ProfileGalaxy(object):
             mux = dx - ix0
             muy = dy - iy0
 
+            print 'mux,muy', mux,muy
+            
             amix = self._getAffineProfile(img, mux, muy)
             Fsum = amix.getFourierTransform(w, v)
 
@@ -432,14 +445,60 @@ class ProfileGalaxy(object):
             
             # FIXME -- could adjust the ifft shape...
 
+            plt.clf()
+            plt.subplot(1,3,1)
+            plt.imshow(Fsum.real, interpolation='nearest', origin='lower')
+            plt.title('Galaxy FFT')
+            plt.subplot(1,3,2)
+            plt.imshow(P.real, interpolation='nearest', origin='lower')
+            plt.title('PSF FFT')
+            plt.subplot(1,3,3)
+            plt.imshow((Fsum * P).real,
+                       interpolation='nearest', origin='lower')
+            plt.title('Galaxy * PSF FFT')
+            psfft.savefig()
+
+            
             if modelMask is not None:
-                G = np.fft.irfft2(Fsum * P, s=(mh,mw))
+
+                plt.clf()
+                plt.subplot(1,2,1)
+                plt.imshow(np.fft.irfft2(Fsum * P, s=(mh,mw)),
+                           interpolation='nearest', origin='lower')
+                plt.title('iFFT in modelMask shape')
+                plt.subplot(1,2,2)
+                plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
+                           interpolation='nearest', origin='lower')
+                plt.title('iFFT in PSF shape')
+                psfft.savefig()
+
+                #G = np.fft.irfft2(Fsum * P, s=(mh,mw))
+                #print 'G shape', G.shape
+
+                G = np.fft.irfft2(Fsum * P, s=(pH,pW))
                 print 'G shape', G.shape
+
+                print 'PSF', pW,pH
+                print 'modelMask', mw,mh
+                
+                if pH > mh:
+                    d = (pH - mh) / 2
+                    print 'd', d
+                    G = G[d:d+mh,:]
+                if pW > mw:
+                    d = (pW - mw) / 2
+                    G = G[:,d:d+mw]
+                print 'Cut G shape', G.shape
+                    
+                print 'PSF x0,y0', px0, py0
+
+                print 'ModelMask x0,y0', modelMask.x0, modelMask.y0
+
                 ix0 = modelMask.x0
                 iy0 = modelMask.y0
 
-                # NOT DONE IMPLEMNTING THIS...
-                assert(False)
+                # NOT DONE IMPLEMENTING THIS...
+                #assert(False)
                 
             else:
                 G = np.fft.irfft2(Fsum * P, s=(pH,pW))
