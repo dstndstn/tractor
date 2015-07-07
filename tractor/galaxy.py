@@ -414,13 +414,13 @@ class ProfileGalaxy(object):
         else:
             if modelMask is None:
                 halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-                print 'halfsize:', halfsize
+                # print 'halfsize:', halfsize
             else:
 
                 # FIXME -- max of modelMask, PSF, and Galaxy sizes!
 
                 mh,mw = modelMask.shape
-                print 'modelMask shape:', mh,mw
+                # print 'modelMask shape:', mh,mw
                 
 
                 # Also: sources with centers outside the modelmask, or
@@ -431,7 +431,7 @@ class ProfileGalaxy(object):
                 
                 if sourceOut:
                     #
-                    print 'modelMask does not contain source center!  Fetching bigger model...'
+                    # print 'modelMask does not contain source center!  Fetching bigger model...'
                     # how far is the furthest point from the source center?
                     farw = max(abs(x0 - px), abs(x0+mw - px))
                     farh = max(abs(y0 - py), abs(y0+mh - py))
@@ -455,7 +455,7 @@ class ProfileGalaxy(object):
                         img, px, py, minval, extent=None, modelMask=bigMask)
 
                     # cut!
-                    print 'Fetched big model: x0,y0', bigmodel.x0,bigmodel.y0, 'shape', bigmodel.shape
+                    # print 'Fetched big model: x0,y0', bigmodel.x0,bigmodel.y0, 'shape', bigmodel.shape
                     return Patch(x0, y0, bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
                 
                 halfsize = max(mh/2, mw/2)
@@ -468,10 +468,10 @@ class ProfileGalaxy(object):
             w = np.fft.rfftfreq(pW)
             v = np.fft.fftfreq(pH)
 
-            print 'PSF Fourier transform size:', P.shape
-            print 'Padded size:', pH,pW
-            print 'PSF offset:', px0,py0
-            print 'Source center px,py', px,py
+            # print 'PSF Fourier transform size:', P.shape
+            # print 'Padded size:', pH,pW
+            # print 'PSF offset:', px0,py0
+            # print 'Source center px,py', px,py
 
             dx = px - px0
             dy = py - py0
@@ -489,15 +489,15 @@ class ProfileGalaxy(object):
             mux = dx - ix0
             muy = dy - iy0
 
-            #print 'ix0,iy0', ix0,iy0
-            print 'mux,muy', mux,muy
+            ## print 'ix0,iy0', ix0,iy0
+            # print 'mux,muy', mux,muy
             
             amix = self._getAffineProfile(img, mux, muy)
             Fsum = amix.getFourierTransform(w, v)
 
-            print 'Galaxy FFT:', Fsum.shape
+            # print 'Galaxy FFT:', Fsum.shape
             
-            for fakedx in [0]:#, 1, 10]:
+            for fakedx in []:#0]:#, 1, 10]:
 
                 amix2 = self._getAffineProfile(img, mux + fakedx, muy)
                 Fsum2 = amix2.getFourierTransform(w, v)
@@ -544,24 +544,25 @@ class ProfileGalaxy(object):
             
             if modelMask is not None:
 
-                plt.clf()
-                plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
-                           interpolation='nearest', origin='lower')
-                plt.title('iFFT in PSF shape')
-                psfft.savefig()
+                if False:
+                    plt.clf()
+                    plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
+                               interpolation='nearest', origin='lower')
+                    plt.title('iFFT in PSF shape')
+                    psfft.savefig()
 
                 #G = np.fft.irfft2(Fsum * P, s=(mh,mw))
-                #print 'G shape', G.shape
+                ## print 'G shape', G.shape
 
                 G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-                print 'G shape', G.shape
+                # print 'G shape', G.shape
 
-                print 'PSF', pW,pH
-                print 'modelMask', mw,mh
+                # print 'PSF', pW,pH
+                # print 'modelMask', mw,mh
 
-                print 'PSF x0,y0', px0, py0
-                print 'ix0,iy0', ix0,iy0
-                print 'modelmask x0,y0', modelMask.x0, modelMask.y0
+                # print 'PSF x0,y0', px0, py0
+                # print 'ix0,iy0', ix0,iy0
+                # print 'modelmask x0,y0', modelMask.x0, modelMask.y0
                 
                 # if modelMask.x0 > ix0:
                 #     G = G[:, modelMask.x0 - ix0:]
@@ -575,20 +576,21 @@ class ProfileGalaxy(object):
                 if gh > mh or gw > mw:
                     G = G[:mh,:mw]
 
-                print 'mw,mh cut G shape to', G.shape
-                print 'vs mh,mw', mh,mw
+                # print 'mw,mh cut G shape to', G.shape
+                # print 'vs mh,mw', mh,mw
                     
                 
             else:
                 G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
-                print 'Evaluating iFFT with shape', pH,pW
-                print 'G shape:', G.shape
+                # print 'Evaluating iFFT with shape', pH,pW
+                # print 'G shape:', G.shape
 
-                plt.clf()
-                plt.imshow(G, interpolation='nearest', origin='lower')
-                plt.title('iFFT in padded PSF shape')
-                psfft.savefig()
+                if False:
+                    plt.clf()
+                    plt.imshow(G, interpolation='nearest', origin='lower')
+                    plt.title('iFFT in padded PSF shape')
+                    psfft.savefig()
                 
                 # Clip down to suggested "halfsize"
                 if x0 > ix0:
@@ -641,6 +643,7 @@ class HoggGalaxy(ProfileGalaxy, Galaxy):
         halfsize = max(1., self.getRadius() / 3600. / pixscale)
         psf = img.getPsf()
         halfsize += psf.getRadius()
+        halfsize = int(np.ceil(halfsize))
         return halfsize
 
 class GaussianGalaxy(HoggGalaxy):
