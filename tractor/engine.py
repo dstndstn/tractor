@@ -2392,22 +2392,13 @@ class Tractor(MultiParams):
 
     def getModelPatchNoCache(self, img, src, **kwargs):
         mask = self._getModelMaskFor(img, src)
-
+        #print 'Image', img, 'source', src, '-> modelMask', mask
+        
         # HACK -- assume no mask -> no overlap
         if self.expectModelMasks and mask is None:
-            #print 'No modelMask found for source', src, 'in image', img.name, '; assuming no overlap'
             return None
 
         mod = src.getModelPatch(img, modelMask=mask, **kwargs)
-
-        # DEBUG
-        if mod is not None and mod.patch is not None:
-            # if not np.all(np.isfinite(mod.patch)):
-            #     from tractor.galaxy import disable_galaxy_cache
-            #     disable_galaxy_cache()
-            #     mod = src.getModelPatch(img, modelMask=mask, **kwargs)
-            assert(np.all(np.isfinite(mod.patch)))
-
         return mod
     
     def getModelPatch(self, img, src, minsb=None, **kwargs):

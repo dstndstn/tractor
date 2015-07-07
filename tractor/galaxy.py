@@ -414,28 +414,82 @@ class ProfileGalaxy(object):
         else:
             if modelMask is None:
                 halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
+                print 'halfsize:', halfsize
             else:
+
+                # FIXME -- max of modelMask, PSF, and Galaxy sizes!
+
                 mh,mw = modelMask.shape
                 print 'modelMask shape:', mh,mw
+                
+
+                # Also: sources with centers outside the modelmask, or
+                # near the edges...?
+
+                # is the source center outside the modelMask?
+                sourceOut = px < x0 or px > x0 + mw-1 or py < y0 or py > y0 + mh-1
+                
+                if sourceOut:
+                    #
+                    print 'modelMask does not contain source center!  Fetching bigger model...'
+                    # how far is the furthest point from the source center?
+                    farw = max(abs(x0 - px), abs(x0+mw - px))
+                    farh = max(abs(y0 - py), abs(y0+mh - py))
+                    bigx0 = int(np.floor(px - farw))
+                    bigx1 = int(np.ceil (px + farw))
+                    bigy0 = int(np.floor(py - farh))
+                    bigy1 = int(np.ceil (py + farh))
+                    bigw = 1 + bigx1 - bigx0
+                    bigh = 1 + bigy1 - bigy0
+                    boffx = x0 - bigx0
+                    boffy = y0 - bigy0
+                    assert(bigw >= mw)
+                    assert(bigh >= mh)
+                    assert(boffx >= 0)
+                    assert(boffy >= 0)
+                    bigMask = np.zeros((bigh,bigw), bool)
+                    bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
+                    bigMask = Patch(bigx0, bigy0, bigMask)
+
+                    bigmodel = self._realGetUnitFluxModelPatch(
+                        img, px, py, minval, extent=None, modelMask=bigMask)
+
+                    # cut!
+                    print 'Fetched big model: x0,y0', bigmodel.x0,bigmodel.y0, 'shape', bigmodel.shape
+                    return Patch(x0, y0, bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
+                
                 halfsize = max(mh/2, mw/2)
 
+                psfh,psfw = psf.img.shape
+                #halfsize = max(halfsize, max(psfw/2, psfh/2))
+                # FIXME -- also include galaxy halfsize?
+                
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
             w = np.fft.rfftfreq(pW)
             v = np.fft.fftfreq(pH)
 
             print 'PSF Fourier transform size:', P.shape
+            print 'Padded size:', pH,pW
+            print 'PSF offset:', px0,py0
+            print 'Source center px,py', px,py
 
-            #print 'frequencies:', w, v
-            
             dx = px - px0
             dy = py - py0
-            # Put the integer portion of the offset into Patch x0,y0
-            ix0 = int(np.round(dx))
-            iy0 = int(np.round(dy))
+            
+            if modelMask is None:
+                # Put the integer portion of the offset into Patch x0,y0
+                ix0 = int(np.round(dx))
+                iy0 = int(np.round(dy))
+            else:
+                ## FIXME -- take advantage of padded size?
+                ix0 = modelMask.x0
+                iy0 = modelMask.y0
+                
             # Put the subpixel portion into the galaxy FFT.
             mux = dx - ix0
             muy = dy - iy0
 
+            #print 'ix0,iy0', ix0,iy0
             print 'mux,muy', mux,muy
             
             amix = self._getAffineProfile(img, mux, muy)
@@ -443,30 +497,54 @@ class ProfileGalaxy(object):
 
             print 'Galaxy FFT:', Fsum.shape
             
-            # FIXME -- could adjust the ifft shape...
+            for fakedx in [0]:#, 1, 10]:
 
-            plt.clf()
-            plt.subplot(1,3,1)
-            plt.imshow(Fsum.real, interpolation='nearest', origin='lower')
-            plt.title('Galaxy FFT')
-            plt.subplot(1,3,2)
-            plt.imshow(P.real, interpolation='nearest', origin='lower')
-            plt.title('PSF FFT')
-            plt.subplot(1,3,3)
-            plt.imshow((Fsum * P).real,
-                       interpolation='nearest', origin='lower')
-            plt.title('Galaxy * PSF FFT')
-            psfft.savefig()
+                amix2 = self._getAffineProfile(img, mux + fakedx, muy)
+                Fsum2 = amix2.getFourierTransform(w, v)
 
+                plt.clf()
+                plt.subplot(3,3,1)
+                plt.imshow(Fsum2.real, interpolation='nearest', origin='lower')
+                plt.title('Galaxy FFT')
+                plt.subplot(3,3,2)
+                plt.imshow(P.real, interpolation='nearest', origin='lower')
+                plt.title('PSF FFT')
+                plt.subplot(3,3,3)
+                plt.imshow((Fsum2 * P).real,
+                           interpolation='nearest', origin='lower')
+                plt.title('Galaxy * PSF FFT')
+                plt.subplot(3,3,4)
+                plt.imshow(Fsum2.imag, interpolation='nearest', origin='lower')
+                plt.title('Galaxy FFT')
+                plt.subplot(3,3,5)
+                plt.imshow(P.imag, interpolation='nearest', origin='lower')
+                plt.title('PSF FFT')
+                plt.subplot(3,3,6)
+                plt.imshow((Fsum2 * P).imag,
+                           interpolation='nearest', origin='lower')
+                plt.title('Galaxy * PSF FFT')
+
+                plt.subplot(3,3,7)
+                plt.imshow(np.fft.irfft2(Fsum2, s=(pH,pW)),
+                           interpolation='nearest', origin='lower')
+                plt.title('iFFT Galaxy')
+                plt.subplot(3,3,8)
+                plt.imshow(np.fft.irfft2(P, s=(pH,pW)),
+                           interpolation='nearest', origin='lower')
+                plt.title('iFFT PSF')
+                plt.subplot(3,3,9)
+                plt.imshow(np.fft.irfft2(Fsum2*P, s=(pH,pW)),
+                           interpolation='nearest', origin='lower')
+                plt.title('iFFT Galaxy*PSF')
+                
+                plt.suptitle('dx = %i pixel' % fakedx)
+                psfft.savefig()
+
+            
             
             if modelMask is not None:
 
                 plt.clf()
-                plt.subplot(1,2,1)
-                plt.imshow(np.fft.irfft2(Fsum * P, s=(mh,mw)),
-                           interpolation='nearest', origin='lower')
-                plt.title('iFFT in modelMask shape')
-                plt.subplot(1,2,2)
                 plt.imshow(np.fft.irfft2(Fsum * P, s=(pH,pW)),
                            interpolation='nearest', origin='lower')
                 plt.title('iFFT in PSF shape')
@@ -480,28 +558,38 @@ class ProfileGalaxy(object):
 
                 print 'PSF', pW,pH
                 print 'modelMask', mw,mh
-                
-                if pH > mh:
-                    d = (pH - mh) / 2
-                    print 'd', d
-                    G = G[d:d+mh,:]
-                if pW > mw:
-                    d = (pW - mw) / 2
-                    G = G[:,d:d+mw]
-                print 'Cut G shape', G.shape
-                    
+
                 print 'PSF x0,y0', px0, py0
+                print 'ix0,iy0', ix0,iy0
+                print 'modelmask x0,y0', modelMask.x0, modelMask.y0
+                
+                # if modelMask.x0 > ix0:
+                #     G = G[:, modelMask.x0 - ix0:]
+                # ix0 = modelMask.x0
+                # if modelMask.y0 > iy0:
+                #     G = G[modelMask.y0 - iy0:, :]
+                # iy0 = modelMask.y0
+                # print 'x0,y0 cut G shape to', G.shape
+                    
+                gh,gw = G.shape
+                if gh > mh or gw > mw:
+                    G = G[:mh,:mw]
 
-                print 'ModelMask x0,y0', modelMask.x0, modelMask.y0
-
-                ix0 = modelMask.x0
-                iy0 = modelMask.y0
-
-                # NOT DONE IMPLEMENTING THIS...
-                #assert(False)
+                print 'mw,mh cut G shape to', G.shape
+                print 'vs mh,mw', mh,mw
+                    
                 
             else:
                 G = np.fft.irfft2(Fsum * P, s=(pH,pW))
+
+                print 'Evaluating iFFT with shape', pH,pW
+                print 'G shape:', G.shape
+
+                plt.clf()
+                plt.imshow(G, interpolation='nearest', origin='lower')
+                plt.title('iFFT in padded PSF shape')
+                psfft.savefig()
+                
                 # Clip down to suggested "halfsize"
                 if x0 > ix0:
                     G = G[:,x0 - ix0:]

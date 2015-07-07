@@ -882,7 +882,8 @@ class SingleProfileSource(BasicSource):
         if minsb is None:
             minsb = img.modelMinval
         minval = minsb / counts
-        upatch = self.getUnitFluxModelPatch(img, minval=minval, modelMask=modelMask)
+        upatch = self.getUnitFluxModelPatch(img, minval=minval,
+                                            modelMask=modelMask)
         if upatch is None:
             return None
 
@@ -1109,36 +1110,65 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         return Patch(x0, y0, shifted)
 
     def getFourierTransformSize(self, radius):
-        ## FIXME -- power-of-2 MINUS one to keep things odd...?
-        sz = 2**int(np.ceil(np.log2(radius*2.))) - 1
+        # Next power-of-two size
+        sz = 2**int(np.ceil(np.log2(radius*2.)))
         return sz
-    
-    def getFourierTransform(self, radius):
-        sz = self.getFourierTransformSize(radius)
-        if sz in self.fftcache:
-            return self.fftcache[sz]
-        H,W = self.img.shape
+
+    def _padInImage(self, H,W):
+        '''
+        Embeds this PSF image into a larger or smaller image of shape H,W.
+
+        Return (img, cx, cy), where *cx*,*cy* are the coordinates of the PSF
+        center in *img*.
+        '''
+        ph,pw = self.img.shape
         subimg = self.img
-        pad = np.zeros((sz,sz))
-        if sz >= H:
-            y0 = (sz - H)/2
+
+        if H >= ph:
+            y0 = (H - ph) / 2
+            cy = y0 + ph/2
         else:
             y0 = 0
-            d = (H - sz)/2
-            if d > 0:
-                subimg = subimg[d:-d, :]
+            cut = (ph - H) / 2
+            subimg = subimg[cut:cut+H, :]
+            cy = ph/2 - cut
 
-        if sz >= W:
-            x0 = (sz - W)/2
+        if W >= pw:
+            x0 = (W - pw) / 2
+            cx = x0 + pw/2
         else:
             x0 = 0
-            d = (W - sz)/2
-            if d > 0:
-                subimg = subimg[:, d:-d]
+            cut = (pw - W) / 2
+            subimg = subimg[:, cut:cut+W]
+            cx = pw/2 - cut
         sh,sw = subimg.shape
+
+        pad = np.zeros((H, W), self.img.dtype)
         pad[y0:y0+sh, x0:x0+sw] = subimg
+        return pad, cx, cy
+        
+    def getFourierTransform(self, radius):
+        '''
+        Returns the Fourier Transform of this PSF, with the
+        next-power-of-2 size up from *radius*.
+
+        Returns: (FFT, (x0, y0), (imh,imw))
+
+        *FFT*: numpy array, the FFT
+        *x0*: float, pixel location of the PSF center in the PSF subimage
+        *y0*:    ditto
+        *imh,imw*: ints, shape of the PSF subimage
+        
+        '''
+        sz = self.getFourierTransformSize(radius)
+        print 'Using FFT size', sz
+        if sz in self.fftcache:
+            return self.fftcache[sz]
+
+        pad,cx,cy = self._padInImage(sz,sz)
+        ## cx,cy: coordinate of the PSF center in *pad*
         P = np.fft.rfft2(pad)
-        rtn = P, (sz/2, sz/2), pad.shape
+        rtn = P, (cx, cy), pad.shape
         self.fftcache[sz] = rtn
         return rtn
     
