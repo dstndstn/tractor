@@ -1227,6 +1227,9 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
             names['varxy%i'%k] = K*3 + (k*3)+2
         # print 'Setting param names:', names
         self.addNamedParams(**names)
+
+    def mogAt(self, x, y):
+        return self
         
     def get_wmuvar(self):
         return (self.mog.amp, self.mog.mean, self.mog.var)
@@ -1283,19 +1286,16 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
 
     # returns a Patch object.
     def getPointSourcePatch(self, px, py, minval=0., extent=None, radius=None,
-                            derivs=False, minradius=None, modelMask=None, **kwargs):
+                            derivs=False, minradius=None, modelMask=None,
+                            **kwargs):
         '''
         extent = [x0,x1,y0,y1], clip to [x0,x1), [y0,y1).
         '''
 
-        ## FIXME!
-        assert(modelMask is None)
-
         if modelMask is not None:
             return self.mog.evaluate_grid_masked(modelMask.x0, modelMask.y0,
-                                                 modelMask.patch, px, py, derivs=derivs,
-                                                 **kwargs)
-
+                                                 modelMask.patch, px, py,
+                                                 derivs=derivs, **kwargs)
 
         if minval is None:
             minval = 0.
