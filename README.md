@@ -4,7 +4,7 @@ Probabilistic astronomical source detection & measurement
 
 ## authors & license
 
-Copyright 2011-2014 Dustin Lang (CMU) & David W. Hogg (NYU)
+Copyright 2011-2015 Dustin Lang (CMU) & David W. Hogg (NYU)
 
 Licensed under GPLv2; see LICENSE.
 
@@ -49,7 +49,7 @@ Other packages used in various places include:
 
 ## documentation:
 
-Horribly incomplete, but online at http://thetractor.org/doc
+Horribly incomplete, but online at http://thetractor.org/doc and http://thetractor.readthedocs.org/en/latest/
 
 ## collaboration:
 
