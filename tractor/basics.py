@@ -1205,7 +1205,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         
         '''
         sz = self.getFourierTransformSize(radius)
-        # print 'Using FFT size', sz
+        # print 'PixelizedPSF FFT size', sz
         if sz in self.fftcache:
             return self.fftcache[sz]
 

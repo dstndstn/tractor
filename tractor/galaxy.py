@@ -463,6 +463,11 @@ class ProfileGalaxy(object):
                 psfh,psfw = psf.img.shape
                 #halfsize = max(halfsize, max(psfw/2, psfh/2))
                 # FIXME -- also include galaxy halfsize?
+
+
+            imh,imw = img.shape
+            imsz = max(imh,imw)
+            halfsize = min(halfsize, int(imsz/2))
                 
             P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
             w = np.fft.rfftfreq(pW)
