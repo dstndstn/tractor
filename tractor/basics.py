@@ -1106,10 +1106,15 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         if modelMask is not None:
             mh,mw = modelMask.shape
             mx0,my0 = modelMask.x0, modelMask.y0
+
+            #print 'PixelizedPSF + modelMask'
+            #print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
+            #print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
+
             if (mx0 >= x0 + W or
                 my0 >= y0 + H or
-                mx0 + mw >= x0 or
-                my0 + mh >= y0):
+                mx0 + mw <= x0 or
+                my0 + mh <= y0):
                 # No overlap
                 return None
             # Otherwise, we'll just produce the Lanczos-shifted PSF image as usual,

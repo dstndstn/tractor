@@ -95,7 +95,8 @@ def main():
     ps.savefig()
 
 
-    modelMask = Patch(-5, 21, np.ones((30,30), bool))
+    #modelMask = Patch(-5, 21, np.ones((30,30), bool))
+    modelMask = Patch(-5, 40, np.ones((30,30), bool))
     tr.setModelMasks([{ src: modelMask }])
 
     print 'Pixelized PSF + ModelMask'
@@ -126,6 +127,41 @@ def main():
     dimshow(mod - mod1)
     ps.savefig()
 
+
+    modelMask = Patch(-5, 30, np.ones((80,80), bool))
+    tr.setModelMasks([{ src: modelMask }])
+
+    print 'Pixelized PSF + ModelMask'
+
+    src.pos = pos0
+    mod = tr.getModelImage(0)
+
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod0)
+    ps.savefig()
+
+    src.pos = pos1
+    mod = tr.getModelImage(0)
+
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod1)
+    ps.savefig()
+
+
+
+    
     sys.exit(0)
 
     src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
