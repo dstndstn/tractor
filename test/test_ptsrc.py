@@ -8,6 +8,8 @@ from tractor.galaxy import *
 from astrometry.util.util import Tan
 from astrometry.util.plotutils import *
 
+from scipy.ndimage.measurements import center_of_mass
+
 def main():
     ps = PlotSequence('test-ps')
     
@@ -36,8 +38,97 @@ def main():
     patch3 = tr.getModelPatch(tim, src)
     print 'Patch3', patch3
 
-    src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
+    pos0 = PixPos(10, 50)
+    src.pos = pos0
+    mod0 = tr.getModelImage(0)
+    plt.clf()
+    dimshow(mod0)
+    ps.savefig()
 
+    print 'Mod0 sum', mod0.sum()
+    print 'Mod0 center of mass', center_of_mass(mod0)
+
+    pos1 = PixPos(10.25, 50.5)
+    src.pos = pos1
+    mod1 = tr.getModelImage(0)
+    plt.clf()
+    dimshow(mod1)
+    ps.savefig()
+
+    print 'Mod1 sum', mod1.sum()
+    print 'Mod1 center of mass', center_of_mass(mod1)
+
+    psfim = psf.getPointSourcePatch(0., 0.)
+    print 'PSF Image', psfim.shape
+    pixpsf = PixelizedPSF(psfim.patch)
+    print 'Pix PSF', pixpsf
+
+    tim.psf = pixpsf
+    p = src.getModelPatch(tim)
+    #print 'patch', p
+
+    print 'Pixelized PSF'
+
+    src.pos = pos0
+    mod = tr.getModelImage(0)
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod0)
+    ps.savefig()
+
+    src.pos = pos1
+    mod = tr.getModelImage(0)
+
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod1)
+    ps.savefig()
+
+
+    modelMask = Patch(-5, 21, np.ones((30,30), bool))
+    tr.setModelMasks([{ src: modelMask }])
+
+    print 'Pixelized PSF + ModelMask'
+
+    src.pos = pos0
+    mod = tr.getModelImage(0)
+
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod0)
+    ps.savefig()
+
+    src.pos = pos1
+    mod = tr.getModelImage(0)
+
+    print 'Model sum', mod.sum()
+    print 'Model center of mass', center_of_mass(mod)
+
+    plt.clf()
+    plt.subplot(1,2,1)
+    dimshow(mod)
+    plt.subplot(1,2,2)
+    dimshow(mod - mod1)
+    ps.savefig()
+
+    sys.exit(0)
+
+    src = ExpGalaxy(PixPos(50,50), Flux(100.), EllipseESoft(1., 0., 0.5))
     src.halfsize = 10
     patch1 = src.getModelPatch(tim)
     print 'Patch1', patch1
