@@ -1107,9 +1107,9 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             mh,mw = modelMask.shape
             mx0,my0 = modelMask.x0, modelMask.y0
 
-            #print 'PixelizedPSF + modelMask'
-            #print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
-            #print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
+            # print 'PixelizedPSF + modelMask'
+            # print 'mx0,my0', mx0,my0, '+ mw,mh', mw,mh
+            # print 'PSF image x0,y0', x0,y0, '+ W,H', W,H
 
             if (mx0 >= x0 + W or
                 my0 >= y0 + H or
@@ -1135,24 +1135,21 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
         yo = y0 - my0
         yi = 0
-        ny = min(H, mh)
-        if yo > 0:
-            ny -= yo
-        elif yo < 0:
+        ny = min(y0+H, my0+mh) - max(y0, my0)
+        if yo < 0:
             yi = -yo
             yo = 0
-            ny -= yi
 
         xo = x0 - mx0
         xi = 0
-        nx = min(W, mw)
-        if xo > 0:
-            nx -= xo
-        elif xo < 0:
+        nx = min(x0+W, mx0+mw) - max(x0, mx0)
+        if xo < 0:
             xi = -xo
             xo = 0
-            nx -= xi
 
+        # print 'yo,ny', yo,ny, 'yi', yi
+        # print 'xo,nx', xo,nx, 'xi', xi
+            
         mm[yo:yo+ny, xo:xo+nx] = shifted[yi:yi+ny, xi:xi+nx]
         return Patch(mx0, my0, mm)
 
