@@ -52,7 +52,7 @@ TRACTOR_INSTALL_DIR := $(PY_INSTALL_DIR)/tractor
 
 TRACTOR_INSTALL := __init__.py basics.py cache.py ducks.py ellipses.py engine.py \
 	fitpsf.py galaxy.py imageutils.py mixture_profiles.py motion.py \
-	patch.py psfex.py sdss.py sersic.py splinesky.py utils.py \
+	patch.py psfex.py sfd.py sdss.py sersic.py splinesky.py source_extractor.py utils.py \
 	emfit.py mix.py _emfit.so _mix.so
 
 WISE_INSTALL_DIR := $(PY_INSTALL_DIR)/wise

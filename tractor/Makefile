@@ -70,18 +70,14 @@ CERES_INC ?=
 
 SUITESPARSE_LIB_DIR ?= /usr/local/lib
 
-SUITESPARSE_LIB ?= $(SUITESPARSE_LIB_DIR)/libcxsparse.a \
-	$(SUITESPARSE_LIB_DIR)/libcholmod.a \
-	$(SUITESPARSE_LIB_DIR)/libcamd.a \
-	$(SUITESPARSE_LIB_DIR)/libcolamd.a \
-	$(SUITESPARSE_LIB_DIR)/libamd.a
+SUITESPARSE_LIB ?= -L$(SUITESPARSE_LIB_DIR) -lcxsparse -lcholmod -lcamd -lcolamd -lamd -lspqr
 
-BLAS_LIB ?= -framework Accelerate
+BLAS_LIB ?= -lblas
 
 GLOG_LIB ?= -lglog
+
 CERES_LIB_DIR ?= /usr/local/lib
 CERES_LIB ?= -L$(CERES_LIB_DIR) -lceres $(GLOG_LIB) $(SUITESPARSE_LIB) $(BLAS_LIB)
-
 
 # On Riemann:
 #SSlib=~/software/suitespares-4.1.2/lib
