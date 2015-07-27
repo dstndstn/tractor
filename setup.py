@@ -37,22 +37,22 @@ module_ceres = Extension('tractor._ceres',
                          )
 
 module_mix = Extension('tractor._mix',
-                              sources = ['tractor/mix_wrap.c' ],
-                              include_dirs = numpy_inc,
-                              extra_objects = [],
-                              undef_macros=['NDEBUG'],
-                              #extra_compile_args=['-O0','-g'],
-                              #extra_link_args=['-O0', '-g'],
-                              )
+                       sources = ['tractor/mix.i'],
+                       include_dirs = numpy_inc,
+                       extra_objects = [],
+                       undef_macros=['NDEBUG'],
+    )
+#extra_compile_args=['-O0','-g'],
+#extra_link_args=['-O0', '-g'],
 
 module_em = Extension('tractor._emfit',
-                             sources = ['tractor/emfit_wrap.c' ],
-                             include_dirs = numpy_inc,
-                             extra_objects = [],
-                             undef_macros=['NDEBUG'],
-                             #extra_compile_args=['-O0','-g'],
-                             #extra_link_args=['-O0', '-g'],
-                             )
+                      sources = ['tractor/emfit.i' ],
+                      include_dirs = numpy_inc,
+                      extra_objects = [],
+                      undef_macros=['NDEBUG'],
+                      )
+#extra_compile_args=['-O0','-g'],
+#extra_link_args=['-O0', '-g'],
 
 class MyDistribution(Distribution):
     display_options = Distribution.display_options + [
