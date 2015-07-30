@@ -140,18 +140,8 @@ def test_galaxy_grid(ps, args):
     ps.savefig()
     
 
-if __name__ == '__main__':
-    disable_galaxy_cache()
-    ps = PlotSequence('diff')
 
-    parser = optparse.OptionParser()
-    opt,args = parser.parse_args()
-
-    test_galaxy_grid(ps, args)
-#sys.exit(0)
-
-
-if False:
+def test_model_masks(ps):
     W,H = 50,50
     cx,cy = W/2., H/2.
     gal = ExpGalaxy(PixPos(cx,cy), Flux(100.), EllipseESoft(1., 0., 0.5))
@@ -277,9 +267,6 @@ if False:
         plt.title('Diff')
         ps.savefig()
     
-    sys.exit(0)
-    
-    
         
     print
     print 'setModelMasks'
@@ -315,10 +302,9 @@ if False:
     ps.savefig()
     
     
-    sys.exit(0)
-    
-    
-    
+
+
+def OLD_STUFF():
     P,(px0,py0),(pH,pW) = pixpsf.getFourierTransform(halfsize)
     
     w = np.fft.rfftfreq(pW)
@@ -385,3 +371,20 @@ if False:
     plt.clf()
     dimshow(mod)
     plt.savefig('conv.png')
+
+
+
+
+
+if __name__ == '__main__':
+    disable_galaxy_cache()
+    ps = PlotSequence('diff')
+
+    parser = optparse.OptionParser()
+    opt,args = parser.parse_args()
+
+    test_model_masks(ps)
+    sys.exit(0)
+
+    test_galaxy_grid(ps, args)
+    

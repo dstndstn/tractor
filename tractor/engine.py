@@ -1201,22 +1201,27 @@ class Tractor(MultiParams):
             pa = p0
         else:
             pa = [p + alpha * d for p,d in zip(p0, X)]
-        chisq = 0.
-        chis = []
         if Xsky is not None:
             self.images.setParams([p + alpha * d for p,d in zip(p0sky, Xsky)])
+
+        lnp = 0.
+        if priors:
+            lnp += self.getLogPrior()
+            if not np.isfinite(lnp):
+                return lnp, None, None
+            
         # Recall that "umodels" is a full matrix (shape (Nimage,
         # Nsrcs)) of patches, so we just go through each image,
         # ignoring None entries and building up model images from
         # the scaled unit-flux patches.
-
+        
         ims = self._getims(pa, imgs, umodels, mod0, scales, sky, minFlux, rois)
+        chisq = 0.
+        chis = []
         for nil,nil,nil,chi,roi in ims:
             chis.append(chi)
             chisq += (chi.astype(np.float64)**2).sum()
-        lnp = -0.5 * chisq
-        if priors:
-            lnp += self.getLogPrior()
+        lnp += -0.5 * chisq
         return lnp, chis, ims
 
     def _lsqr_forced_photom(self, result, derivs, mod0, imgs, umodels, rois, scales,
@@ -1259,6 +1264,7 @@ class Tractor(MultiParams):
                     mod0, imgs, umodels, None, None, p0, rois, scales,
                     None, None, priors, sky, minFlux)
                 logverb('forced phot: initial lnp = ', lnp0, 'took', Time()-t0)
+                assert(np.isfinite(lnp0))
 
             if justims0:
                 result.lnp0 = lnp0
@@ -1343,6 +1349,8 @@ class Tractor(MultiParams):
                 logverb('Took', Time()-t0)
                 if lnp < (lnpBest - 1.):
                     logverb('lnp', lnp, '< lnpBest-1', lnpBest-1.)
+                    break
+                if not np.isfinite(lnp):
                     break
                 if lnp > lnpBest:
                     alphaBest = alpha
