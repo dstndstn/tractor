@@ -413,11 +413,11 @@ class ProfileGalaxy(object):
 
 
         # Otherwise, FFT:
-
         imh,imw = img.shape
 
+        haveExtent = (modelMask is not None) or (extent is not None)
 
-        if modelMask is None:
+        if not haveExtent:
             halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
             # print 'halfsize:', halfsize
 
@@ -428,15 +428,22 @@ class ProfileGalaxy(object):
         else:
             # FIXME -- max of modelMask, PSF, and Galaxy sizes!
 
-            mh,mw = modelMask.shape
+            if modelMask is not None:
+                mh,mw = modelMask.shape
+                x1 = x0 + mw
+                y1 = y0 + mh
+            else:
+                # x0,x1,y0,y1 were set to extent, above.
+                mw = x1 - x0
+                mh = y1 - y0
 
-            x1 = x0 + mw
-            y1 = y0 + mh
-            
             # is the source center outside the modelMask?
             sourceOut = (px < x0 or px > x1-1 or py < y0 or py > y1-1)
             
             if sourceOut:
+                # FIXME -- could also *think* about switching to a
+                # Gaussian approximation when very far from the source
+                # center...
                 #
                 #print 'modelMask does not contain source center!  Fetching bigger model...'
                 # If the source is *way* outside the patch, return zero.
@@ -483,7 +490,6 @@ class ProfileGalaxy(object):
             psfh,psfw = psf.img.shape
             halfsize = max(halfsize, max(psfw/2, psfh/2))
 
-            # FIXME -- also include galaxy halfsize?
 
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
         w = np.fft.rfftfreq(pW)
@@ -496,23 +502,17 @@ class ProfileGalaxy(object):
 
         dx = px - px0
         dy = py - py0
-        
-        if modelMask is None:
+        if haveExtent:
+            ix0 = x0
+            iy0 = y0
+        else:
             # Put the integer portion of the offset into Patch x0,y0
             ix0 = int(np.round(dx))
             iy0 = int(np.round(dy))
-        else:
-            ## FIXME -- take advantage of padded size?
-            ix0 = modelMask.x0
-            iy0 = modelMask.y0
-            
         # Put the subpixel portion into the galaxy FFT.
         mux = dx - ix0
         muy = dy - iy0
 
-        ## print 'ix0,iy0', ix0,iy0
-        # print 'mux,muy', mux,muy
-        
         amix = self._getAffineProfile(img, mux, muy)
         Fsum = amix.getFourierTransform(w, v)
 
@@ -563,7 +563,7 @@ class ProfileGalaxy(object):
 
         
         
-        if modelMask is not None:
+        if haveExtent:
 
             if False:
                 plt.clf()
@@ -596,7 +596,10 @@ class ProfileGalaxy(object):
             gh,gw = G.shape
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
-            assert(G.shape == modelMask.shape)
+            if modelMask is not None:
+                assert(G.shape == modelMask.shape)
+            else:
+                assert(G.shape == (mh,mw))
             
         else:
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
