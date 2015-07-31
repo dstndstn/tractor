@@ -750,6 +750,9 @@ class FixedCompositeGalaxy(MultiParams, ProfileGalaxy, SingleProfileSource):
                              shapeExp, shapeDev)
         self.name = self.getName()
 
+    def getRadius(self):
+        return max(self.shapeExp.re * ExpGalaxy.nre, self.shapeDev.re * DevGalaxy.nre)
+
     @staticmethod
     def getNamedParams():
         return dict(pos=0, brightness=1, fracDev=2, shapeExp=3, shapeDev=4)
