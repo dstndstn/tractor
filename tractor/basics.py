@@ -1235,7 +1235,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def constantPsfAt(self, x, y):
         return self
     
-class GaussianMixturePSF(ParamList, BasicPsfMixin):
+class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
