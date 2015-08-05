@@ -474,8 +474,11 @@ class ProfileGalaxy(object):
                 assert(bigh >= mh)
                 assert(boffx >= 0)
                 assert(boffy >= 0)
-                bigMask = np.zeros((bigh,bigw), bool)
-                bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
+                if modelMask is None:
+                    bigMask = np.ones((bigh,bigw), bool)
+                else:
+                    bigMask = np.zeros((bigh,bigw), bool)
+                    bigMask[boffy:boffy+mh, boffx:boffx+mw] = modelMask.patch
                 bigMask = Patch(bigx0, bigy0, bigMask)
 
                 bigmodel = self._realGetUnitFluxModelPatch(
