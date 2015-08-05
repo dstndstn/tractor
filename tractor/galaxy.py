@@ -489,14 +489,8 @@ class ProfileGalaxy(object):
             
             halfsize = max(mh/2., mw/2.)
 
-<<<<<<< HEAD
             psfh,psfw = psf.shape
-            halfsize = max(halfsize, max(psfw/2, psfh/2))
-=======
-            psfh,psfw = psf.img.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
->>>>>>> 3989724bfaa1fdf56e67bd3268be04107667e4c0
-
 
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
         w = np.fft.rfftfreq(pW)
