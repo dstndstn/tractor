@@ -422,7 +422,7 @@ class ProfileGalaxy(object):
 
             # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
             imsz = max(imh,imw)
-            halfsize = min(halfsize, int(imsz))
+            halfsize = min(halfsize, imsz)
 
         else:
             # FIXME -- max of modelMask, PSF, and Galaxy sizes!
@@ -484,10 +484,10 @@ class ProfileGalaxy(object):
                 return Patch(x0, y0,
                              bigmodel.patch[boffy:boffy+mh, boffx:boffx+mw])
             
-            halfsize = max(mh/2, mw/2)
+            halfsize = max(mh/2., mw/2.)
 
             psfh,psfw = psf.img.shape
-            halfsize = max(halfsize, max(psfw/2, psfh/2))
+            halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
 
         P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
