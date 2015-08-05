@@ -33,6 +33,9 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         self.ny = ny
         self.savesplinedata = False
 
+    def getShifted(self, x0, y0):
+        return ShiftedPsf(self, x0, y0)
+        
     def __str__(self):
         try:
             return '%s: %s, %i x %i' % (getClassName(self), self.psfclass.__name__,

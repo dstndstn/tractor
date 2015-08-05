@@ -339,6 +339,12 @@ class PSF(ImageCalibration, Params):
         '''
         return 0
 
+    def getShifted(self, x0, y0):
+        '''
+        Returns a PSF model for the subimage starting at x0,y0.
+        '''
+        return None
+    
     # Optional: Allows galaxy models to render via analytic convolution:
     # def getMixtureOfGaussians(self, px=None, py=None, **kwargs):
     #     '''

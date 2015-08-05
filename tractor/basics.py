@@ -1052,6 +1052,14 @@ class PointSource(MultiParams, SingleProfileSource):
                 derivs.append(df)
         return derivs
 
+# class VaryingPsfMixin(ducks.ImageCalibration):
+#     def getShifted(self, x0, y0):
+#         return ShiftedPsf(self, x0, y0)
+# 
+# class ConstantPsfMixin(ducks.ImageCalibration):
+#     def getShifted(self, x0, y0):
+#         return self
+
 class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     '''
     A PSF model based on an image postage stamp, which will be
@@ -1081,12 +1089,20 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def __str__(self):
         return 'PixelizedPSF'
 
+    @property
+    def shape(self):
+        return self.img.shape
+    
     def hashkey(self):
         return ('PixelizedPSF', tuple(self.img.ravel()))
 
     def copy(self):
         return PixelizedPSF(self.img.copy())
 
+    def getShifted(self, x0, y0):
+        # not spatially varying
+        return self
+    
     def getRadius(self):
         H,W = self.img.shape
         return np.hypot(H,W)/2.
@@ -1219,7 +1235,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def constantPsfAt(self, x, y):
         return self
     
-class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
+class GaussianMixturePSF(ParamList, BasicPsfMixin):
     '''
     A PSF model that is a mixture of general 2-D Gaussians
     (characterized by amplitude, mean, covariance)
@@ -1261,6 +1277,10 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
         self.stepsizes = [0.01]*K + [0.01]*(K*2) + [0.1]*(K*3)
         self._set_param_names(K)
 
+    def getShifted(self, x0, y0):
+        # not spatially varying
+        return self
+    
     def _set_param_names(self, K):
         # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
         #   var0xx,var0yy,var0xy, var1xx, var1yy, var1xy
@@ -1556,6 +1576,10 @@ class GaussianMixtureEllipsePSF(GaussianMixturePSF):
     def ellipseToVariance(self, ell):
         return ell.getCovariance()
         
+    def getShifted(self, x0, y0):
+        # not spatially varying
+        return self
+    
     def _set_param_names(self, K):
         names = {}
         for k in range(K):
@@ -1667,6 +1691,10 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
         super(NCircularGaussianPSF, self).__init__(psigmas, pweights)
         self.minradius = 1.
 
+    def getShifted(self, x0, y0):
+        # not spatially varying
+        return self
+    
     @property
     def amp(self):
         return self.weights
@@ -1817,6 +1845,10 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
         self.psf = psf
         self.x0 = x0
         self.y0 = y0
+
+        if hasattr(psf, 'getMixtureOfGaussians'):
+            self.getMixtureOfGaussians = self._getMixtureOfGaussians
+        
     def __str__(self):
         return ('ShiftedPsf: %i,%i + ' % (self.x0,self.y0)) + str(self.psf)
     def hashkey(self):
@@ -1852,7 +1884,7 @@ class ShiftedPsf(ParamsWrapper, ducks.ImageCalibration):
     def getRadius(self):
         return self.psf.getRadius()
 
-    def getMixtureOfGaussians(self, px=None, py=None, **kwargs):
+    def _getMixtureOfGaussians(self, px=None, py=None, **kwargs):
         if px is not None:
             px = px + self.x0
         if py is not None:

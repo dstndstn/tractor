@@ -487,7 +487,7 @@ class ProfileGalaxy(object):
             
             halfsize = max(mh/2, mw/2)
 
-            psfh,psfw = psf.img.shape
+            psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2, psfh/2))
 
 

@@ -14,6 +14,45 @@ from astrometry.util.plotutils import *
 from astrometry.util.ttime import *
 
 
+def test_fft(ps):
+    # DevGalaxy(pos=RaDecPos[240.14431131092763, 6.1210541865974211], brightness=NanoMaggies: g=22.4, r=21.2, z=20.4, shape=log r_e=3.51358, ee1=-0.0236628, ee2=0.125124
+    # img 00347334-S31 r
+    # img.shape (93, 89)
+    # modelMask.shape (129, 94)
+
+    # (Pdb) p gh
+    # 128
+    # (Pdb) p gw
+    # 128
+    # (Pdb) p mh
+    # 129
+    # (Pdb) p mw
+    # 94
+    # p halfsize
+    # 64
+    # p px,py
+    # (58.41863462372021, 28.101390778484983)
+
+    gpsf = GaussianMixturePSF(0.8, 0.1, 0.1, 0., 0., 0., 0., 0., 0.,
+                              4., 4., 0., 6., 6., 0., 8., 8., 0.)
+    gpsf.radius = 15
+    psfimg = gpsf.getPointSourcePatch(0., 0., radius=15)
+    print 'PSF image size', psfimg.shape
+    pixpsf = PixelizedPSF(psfimg.patch)
+
+    data=np.zeros((H,W), np.float32)
+    img = Image(data=data, invvar=np.ones_like(data), psf=gpsf)
+
+    modelmasks = dict()
+    gal = ExpGalaxy(PixPos(x,y), Flux(100.),
+                    EllipseESoft(3., x/float(W), y/float(H)))
+    mmsz = 100
+    modelmasks[gal] = Patch(int(x-mmsz/2), int(y-mmsz/2),
+                            np.ones((mmsz,mmsz), bool))
+    tr = Tractor([img], cat)
+    tr.disable_cache()
+
+    
 def test_galaxy_grid(ps, args):
     W,H = 800,800
 
@@ -383,6 +422,8 @@ if __name__ == '__main__':
     parser = optparse.OptionParser()
     opt,args = parser.parse_args()
 
+    #test_fft(ps)
+    
     test_model_masks(ps)
     sys.exit(0)
 
