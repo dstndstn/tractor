@@ -419,11 +419,10 @@ class ProfileGalaxy(object):
 
         if not haveExtent:
             halfsize = self._getUnitFluxPatchSize(img, px, py, minval)
-            # print 'halfsize:', halfsize
 
-            # FIXME -- need this?
-            #imsz = max(imh,imw)
-            #halfsize = min(halfsize, int(imsz/2))
+            # Avoid huge galaxies -> huge halfsize in a tiny image (blob)
+            imsz = max(imh,imw)
+            halfsize = min(halfsize, int(imsz))
 
         else:
             # FIXME -- max of modelMask, PSF, and Galaxy sizes!
