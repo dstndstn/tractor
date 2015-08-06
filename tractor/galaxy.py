@@ -603,6 +603,7 @@ class ProfileGalaxy(object):
                 assert(G.shape == (mh,mw))
             
         else:
+            print 'iFFT', (pW,pH)
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
 
             # print 'Evaluating iFFT with shape', pH,pW

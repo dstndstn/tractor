@@ -1280,6 +1280,8 @@ class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     def getShifted(self, x0, y0):
         # not spatially varying
         return self
+    def constantPsfAt(self, x, y):
+        return self
     
     def _set_param_names(self, K):
         # ordering: A0, A1, ... Ak, mux0, muy0, mux1, muy1, mux2, muy2, ...
@@ -1693,6 +1695,9 @@ class NCircularGaussianPSF(MultiParams, ducks.ImageCalibration):
 
     def getShifted(self, x0, y0):
         # not spatially varying
+        return self
+
+    def constantPsfAt(self, x, y):
         return self
     
     @property
