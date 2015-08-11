@@ -223,7 +223,9 @@ class PsfExModel(object):
                 amp = dx**j * dy**k
                 # PSFEx manual pg. 111 ?
                 ii = j + (self.degree+1) * k - (k * (k-1))/ 2
-                #print('getPolynomialTerms: ii=', ii)
+                #print('getPolynomialTerms: j=', j, 'k=', k, 'd=', d, 'ii=', ii)
+                # It goes: order 0, order 1, order 2, ...
+                # and then j=0, j=1, ...
                 terms[ii] = amp
         return terms
 
@@ -284,7 +286,7 @@ class PixelizedPsfEx(PixelizedPSF):
     def getImage(self, px, py):
         return self.psfex.psfImageAt(px, py)
 
-    # getPointSourcePatch is straight inherited from PixelizedPSF
+    # getPointSourcePatch is inherited from PixelizedPSF
 
     def getFourierTransform(self, px, py, radius):
         sz = self.getFourierTransformSize(radius)
@@ -538,10 +540,11 @@ if __name__ == '__main__':
     print('bases:', bases.shape)
     n,h,w = bases.shape
 
-    import fitsio
-    for i in range(n):
-        fitsio.write('basis-%02i.fits' % i, bases[i,:,:])
+    #import fitsio
+    #for i in range(n):
+    #    fitsio.write('basis-%02i.fits' % i, bases[i,:,:])
 
+    print('polynomials (0,0):', psf.psfex.getPolynomialTerms(0., 0.))
 
     sys.exit(0)
 
