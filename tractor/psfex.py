@@ -314,7 +314,7 @@ class PixelizedPsfEx(PixelizedPSF):
 
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape)
-        for amp,base in zip(self.psfex.getPolynomialTerms(px, py), self.fftbases):
+        for amp,base in zip(self.psfex.getPolynomialTerms(px, py), fftbases):
             sumfft += amp * base
         return sumfft, (cx,cy), shape
 
