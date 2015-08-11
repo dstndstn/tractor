@@ -223,7 +223,7 @@ class PsfExModel(object):
                 amp = dx**j * dy**k
                 # PSFEx manual pg. 111 ?
                 ii = j + (self.degree+1) * k - (k * (k-1))/ 2
-                print('getPolynomialTerms: ii=', ii)
+                #print('getPolynomialTerms: ii=', ii)
                 terms[ii] = amp
         return terms
 
@@ -233,19 +233,8 @@ class PsfExModel(object):
     def psfImageAt(self, x, y, nativeScale=True):
         psf = np.zeros_like(self.psfbases[0])
 
-        dx = (x - self.x0) / self.xscale
-        dy = (y - self.y0) / self.yscale
-        i = 0
-        for d in range(self.degree + 1):
-            # x polynomial degree = j
-            # y polynomial degree = k
-            for j in range(d+1):
-                k = d - j
-                amp = dx**j * dy**k
-                # PSFEx manual pg. 111 ?
-                ii = j + (self.degree+1) * k - (k * (k-1))/ 2
-                psf += self.psfbases[ii] * amp
-                i += 1
+        for term,base in zip(self.getPolynomialTerms(x,y), self.psfbases):
+            psf += term * base
 
         if nativeScale and self.sampling != 1:
             from scipy.ndimage.interpolation import affine_transform
