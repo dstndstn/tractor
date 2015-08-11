@@ -1083,6 +1083,8 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         H,W = img.shape
         assert((H % 2) == 1)
         assert((W % 2) == 1)
+        self.radius = np.hypot(H/2., W/2.)
+        self.H, self.W = H,W
         self.Lorder = Lorder
         self.fftcache = {}
         
@@ -1091,7 +1093,7 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
 
     @property
     def shape(self):
-        return self.img.shape
+        return (self.H, self.W)
     
     def hashkey(self):
         return ('PixelizedPSF', tuple(self.img.ravel()))
@@ -1102,16 +1104,24 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
     def getShifted(self, x0, y0):
         # not spatially varying
         return self
+
+    def constantPsfAt(self, x, y):
+        # not spatially varying
+        return self
     
     def getRadius(self):
-        H,W = self.img.shape
-        return np.hypot(H,W)/2.
+        return self.radius
+
+    def getImage(self, px, py):
+        return self.img
 
     def getPointSourcePatch(self, px, py, minval=0., modelMask=None, **kwargs):
         from scipy.ndimage.filters import correlate1d
         from astrometry.util.miscutils import get_overlapping_region
 
-        H,W = self.img.shape
+        img = self.getImage(px, py)
+
+        H,W = img.shape
         ix = int(np.round(px))
         iy = int(np.round(py))
         dx = px - ix
@@ -1142,30 +1152,25 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         # Normalize the Lanczos interpolants (preserve flux)
         Lx /= Lx.sum()
         Ly /= Ly.sum()
-        sx      = correlate1d(self.img, Lx, axis=1, mode='constant')
-        shifted = correlate1d(sx,       Ly, axis=0, mode='constant')
+        sx      = correlate1d(img, Lx, axis=1, mode='constant')
+        shifted = correlate1d(sx,  Ly, axis=0, mode='constant')
         if modelMask is None:
             return Patch(x0, y0, shifted)
 
+        # Pad or clip to modelMask size
         mm = np.zeros((mh,mw), shifted.dtype)
-
         yo = y0 - my0
         yi = 0
         ny = min(y0+H, my0+mh) - max(y0, my0)
         if yo < 0:
             yi = -yo
             yo = 0
-
         xo = x0 - mx0
         xi = 0
         nx = min(x0+W, mx0+mw) - max(x0, mx0)
         if xo < 0:
             xi = -xo
             xo = 0
-
-        # print 'yo,ny', yo,ny, 'yi', yi
-        # print 'xo,nx', xo,nx, 'xi', xi
-            
         mm[yo:yo+ny, xo:xo+nx] = shifted[yi:yi+ny, xi:xi+nx]
         return Patch(mx0, my0, mm)
 
@@ -1174,15 +1179,17 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         sz = 2**int(np.ceil(np.log2(radius*2.)))
         return sz
 
-    def _padInImage(self, H,W):
+    def _padInImage(self, H,W, img=None):
         '''
         Embeds this PSF image into a larger or smaller image of shape H,W.
 
         Return (img, cx, cy), where *cx*,*cy* are the coordinates of the PSF
         center in *img*.
         '''
-        ph,pw = self.img.shape
-        subimg = self.img
+        if img is None:
+            img = self.img
+        ph,pw = img.shape
+        subimg = img
 
         if H >= ph:
             y0 = (H - ph) / 2
@@ -1203,11 +1210,11 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
             cx = pw/2 - cut
         sh,sw = subimg.shape
 
-        pad = np.zeros((H, W), self.img.dtype)
+        pad = np.zeros((H, W), img.dtype)
         pad[y0:y0+sh, x0:x0+sw] = subimg
         return pad, cx, cy
         
-    def getFourierTransform(self, radius):
+    def getFourierTransform(self, px, py, radius):
         '''
         Returns the Fourier Transform of this PSF, with the
         next-power-of-2 size up from *radius*.
@@ -1232,9 +1239,6 @@ class PixelizedPSF(BaseParams, ducks.ImageCalibration):
         self.fftcache[sz] = rtn
         return rtn
 
-    def constantPsfAt(self, x, y):
-        return self
-    
 class GaussianMixturePSF(ParamList, ducks.ImageCalibration):
     '''
     A PSF model that is a mixture of general 2-D Gaussians

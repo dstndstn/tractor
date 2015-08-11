@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as np
 
 from .basics import *
@@ -7,7 +9,7 @@ from .fitpsf import em_init_params
 from . import mixture_profiles as mp
 from . import ducks
 
-from astrometry.util.fits import *
+from astrometry.util.fits import fits_table
 
 class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
     '''
@@ -81,7 +83,7 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         '''
         Returns a PSF model at the given pixel position (x, y)
         '''
-        #print 'VaryingGaussianPSF: at', x,y
+        #print('VaryingGaussianPSF: at', x,y)
         params = self.psfParamsAt(x, y)
         return self.psfclass(*params)
 
@@ -153,24 +155,17 @@ class VaryingGaussianPSF(MultiParams, ducks.ImageCalibration):
         if self.savesplinedata:
             self.splinedata = (pp, XX, YY)
 
-class PsfEx(VaryingGaussianPSF):
-    def __init__(self, fn, W, H, ext=1,
-                 scale=True,
-                 nx=11, ny=11, K=3,
-                 psfClass=GaussianMixturePSF):
-        '''
-        scale (boolean): resample the eigen-PSFs (True), or scale the
-              fit parameters (False)?  
-        '''
-        from astrometry.util.fits import fits_table
 
-        # See psfAt(): this needs updating & testing.
-        assert(scale)
-        
-        if fn is not None:
+class PsfExModel(object):
+    '''
+    An object representing a PsfEx PSF model.
+    '''
+    def __init__(self, fn=None, ext=1):
+         if fn is not None:
+            from astrometry.util.fits import fits_table
             T = fits_table(fn, ext=ext)
             ims = T.psf_mask[0]
-            print 'Got', ims.shape, 'PSF images'
+            print('Got', ims.shape, 'PSF images')
             hdr = T.get_header()
             # PSF distortion bases are polynomials of x,y
             assert(hdr['POLNAME1'].strip() == 'X_IMAGE')
@@ -184,22 +179,162 @@ class PsfEx(VaryingGaussianPSF):
             yscale = hdr.get('POLSCAL2')
             degree = hdr.get('POLDEG1')
             self.sampling = hdr.get('PSF_SAMP')
+            print('PsfEx sampling:', self.sampling)
             # number of terms in polynomial
             ne = (degree + 1) * (degree + 2) / 2
             assert(hdr['PSFAXIS3'] == ne)
             assert(len(ims.shape) == 3)
             assert(ims.shape[0] == ne)
-            ## HACK -- fit psf0 + psfi for each term i
-            ## (since those will probably work better as multi-Gaussians
-            ## than psfi alone)
-            ## OR instantiate PSF across the image, fit with
-            ## multi-gaussians, and regress the gaussian params?
             self.psfbases = ims
             self.xscale, self.yscale = xscale, yscale
             self.degree = degree
+            print('PsfEx degree:', self.degree)
             bh,bw = self.psfbases[0].shape
             self.radius = (bh+1)/2.
             self.x0,self.y0 = x0,y0
+
+    def copy(self):
+        return self.getShifted(0., 0.)
+
+    def getShifted(self, dx, dy):
+        copy = PsfExModel()
+        for key in ['sampling', 'psfbases', 'xscale', 'yscale', 'degree', 'radius']:
+            setattr(copy, k, getattr(self, k))
+        copy.x0 = self.x0 - dx
+        copy.y0 = self.y0 - dy
+        return copy
+
+    def getBasisImages(self):
+        '''
+        Returns the N x H x W eigen-PSF images
+        '''
+        return self.psfbases
+
+    def getPolynomialTerms(self, x, y):
+        dx = (x - self.x0) / self.xscale
+        dy = (y - self.y0) / self.yscale
+        nb,h,w = self.psfbases.shape
+        terms = np.zeros(nb)
+        for d in range(self.degree + 1):
+            # x polynomial degree = j
+            # y polynomial degree = k
+            for j in range(d+1):
+                k = d - j
+                amp = dx**j * dy**k
+                # PSFEx manual pg. 111 ?
+                ii = j + (self.degree+1) * k - (k * (k-1))/ 2
+                print('getPolynomialTerms: ii=', ii)
+                terms[ii] = amp
+        return terms
+
+    def fftAt(self, x, y):
+        pass
+
+    def psfImageAt(self, x, y, nativeScale=True):
+        psf = np.zeros_like(self.psfbases[0])
+
+        dx = (x - self.x0) / self.xscale
+        dy = (y - self.y0) / self.yscale
+        i = 0
+        for d in range(self.degree + 1):
+            # x polynomial degree = j
+            # y polynomial degree = k
+            for j in range(d+1):
+                k = d - j
+                amp = dx**j * dy**k
+                # PSFEx manual pg. 111 ?
+                ii = j + (self.degree+1) * k - (k * (k-1))/ 2
+                psf += self.psfbases[ii] * amp
+                i += 1
+
+        if nativeScale and self.sampling != 1:
+            from scipy.ndimage.interpolation import affine_transform
+            ny,nx = psf.shape
+            spsf = affine_transform(psf, [1./self.sampling]*2,
+                                    offset=nx/2 * (self.sampling - 1.))
+            return spsf
+            
+        return psf
+
+
+class PixelizedPsfEx(PixelizedPSF):
+    def __init__(self, fn, ext=1):
+        self.psfex = PsfExModel(fn=fn, ext=ext)
+        print('PsfEx x0,y0', self.psfex.x0, self.psfex.y0)
+        # meh
+        self.fn = fn
+        self.ext = ext
+        # 
+        img = self.psfex.getBasisImages()[0,:,:]
+        super(PixelizedPsfEx, self).__init__(img)
+
+    def __str__(self):
+        return 'PixelizedPsfEx'
+
+    def hashkey(self):
+        return ('PixelizedPsfEx', self.fn, self.ext)
+
+    def copy(self):
+        s = PixelizedPsfEx(None)
+        s.psfex = self.psfex.copy()
+        return s
+        #return PixelizedPsfEx(self.fn, self.ext)
+
+    def getShifted(self, dx, dy):
+        s = PixelizedPsfEx(None)
+        s.psfex = self.psfex.getShifted(dx, dy)
+        return s
+
+    def constantPsfAt(self, x, y):
+        pix = self.psfex.psfImageAt(x, y)
+        return PixelizedPSF(pix)
+
+    def getRadius(self):
+        return self.radius
+
+    def getImage(self, px, py):
+        return self.psfex.psfImageAt(px, py)
+
+    # getPointSourcePatch is straight inherited from PixelizedPSF
+
+    def getFourierTransform(self, px, py, radius):
+        sz = self.getFourierTransformSize(radius)
+
+        if sz in self.fftcache:
+            fftbases,cx,cy,shape = self.fftcache[sz]
+        else:
+            fftbases = []
+            bases = self.psfex.getBasisImages()
+            nb,h,w = bases.shape
+            for i in range(nb):
+                pad,cx,cy = self._padInImage(sz,sz, img=bases[i,:,:])
+                P = np.fft.rfft2(pad)
+                fftbases.append(P)
+            self.fftcaches[sz] = (fftbases,cx,cy,pad.shape)
+
+        # Now sum the bases by the polynomial coefficients
+        sumfft = np.zeros(fftbases[0].shape)
+        for amp,base in zip(self.psfex.getPolynomialTerms(px, py), self.fftbases):
+            sumfft += amp * base
+        return sumfft, (cx,cy), shape
+
+
+### dstn originally misnamed this class "PsfEx".  We keep that name as an alias below.
+
+class VaryingGaussianPsfEx(VaryingGaussianPSF):
+    def __init__(self, fn, W, H, ext=1,
+                 scale=True,
+                 nx=11, ny=11, K=3,
+                 psfClass=GaussianMixturePSF):
+        '''
+        scale (boolean): resample the eigen-PSFs (True), or scale the
+              fit parameters (False)?  
+        '''
+
+        # See psfAt(): this needs updating & testing.
+        assert(scale)
+
+        self.psfex = PsfExModel(fn, ext=ext)
 
         self.scale = scale
         super(PsfEx, self).__init__(W, H, nx, ny, K, psfClass=psfClass)
@@ -220,40 +355,12 @@ class PsfEx(VaryingGaussianPSF):
     #     return psf
     
     def instantiateAt(self, x, y, nativeScale=False):
-        from scipy.ndimage.interpolation import affine_transform
-        psf = np.zeros_like(self.psfbases[0])
-        #print 'psf', psf.shape
-        dx = (x - self.x0) / self.xscale
-        dy = (y - self.y0) / self.yscale
-        i = 0
-        #print 'dx',dx,'dy',dy
-        for d in range(self.degree + 1):
-            #print 'degree', d
-            for j in range(d+1):
-                k = d - j
-                #print 'x',j,'y',k,
-                #print 'component', i
-                amp = dx**j * dy**k
-                #print 'amp', amp,
-                # PSFEx manual pg. 111 ?
-                ii = j + (self.degree+1) * k - (k * (k-1))/ 2
-                #print 'ii', ii, 'vs i', i
-                psf += self.psfbases[ii] * amp
-                #print 'basis rms', np.sqrt(np.mean(self.psfbases[i]**2)),
-                i += 1
-                #print 'psf sum', psf.sum()
-        #print 'min', psf.min(), 'max', psf.max()
-
-        if (self.scale or nativeScale) and self.sampling != 1:
-            ny,nx = psf.shape
-            spsf = affine_transform(psf, [1./self.sampling]*2,
-                                    offset=nx/2 * (self.sampling - 1.))
-            return spsf
-            
+        psf = self.psfex.psfImageAt(x, y, nativeScale=(nativeScale or self.scale))
         return psf
 
     @staticmethod
     def fromFits(fn):
+        from astrometry.util.fits import fits_table
         import fitsio
         hdr = fitsio.read_header(fn, ext=1)
         T = fits_table(fn)
@@ -309,6 +416,7 @@ class PsfEx(VaryingGaussianPSF):
         '''
         If merge: merge params "amp0", "amp1", ... into an "amp" array.
         '''
+        from astrometry.util.fits import fits_table
         if hdr is None:
             import fitsio
             hdr = fitsio.FITSHDR()
@@ -360,7 +468,7 @@ class PsfEx(VaryingGaussianPSF):
             assert(len(pnames) * self.K == nparams)
             pnames = list(pnames)
             pnames.sort()
-            print 'Pnames:', pnames
+            print('Pnames:', pnames)
             namemap = dict([(nm,i) for i,nm in enumerate(names)])
             for i,nm in enumerate(pnames):
                 X = np.empty((1,self.K,ny,nx))
@@ -375,6 +483,8 @@ class PsfEx(VaryingGaussianPSF):
                 T.set(nm, pp[:,:,i].reshape((1,ny,nx)))
         T.writeto(fn, header=hdr)
 
+
+PsfEx = VaryingGaussianPsfEx
 
 
 def typestring(t):
@@ -430,8 +540,22 @@ class CachingPsfEx(PsfEx):
 #         #return Patch(pix, -sz/2, -sz/2)
 
 if __name__ == '__main__':
-    from astrometry.util.plotutils import *
     import sys
+
+    psf = PixelizedPsfEx('decals/calib/decam/psfex/00176/00176798/decam-00176798-N1.fits')
+
+    bases = psf.psfex.psfbases
+    print('bases:', bases.shape)
+    n,h,w = bases.shape
+
+    import fitsio
+    for i in range(n):
+        fitsio.write('basis-%02i.fits' % i, bases[i,:,:])
+
+
+    sys.exit(0)
+
+    from astrometry.util.plotutils import *
     import matplotlib
     matplotlib.use('Agg')
     import pylab as plt
@@ -447,8 +571,8 @@ if __name__ == '__main__':
 
         ny,nx = im.shape
         XX,YY = np.meshgrid(np.arange(nx), np.arange(ny))
-        print 'cx', (np.sum(im * XX) / np.sum(im))
-        print 'cy', (np.sum(im * YY) / np.sum(im))
+        print('cx', (np.sum(im * XX) / np.sum(im)))
+        print('cy', (np.sum(im * YY) / np.sum(im)))
         
         plt.clf()
         mx = im.max()
@@ -458,8 +582,8 @@ if __name__ == '__main__':
         plt.colorbar()
         ps.savefig()
 
-    print 'PSF scale', psf.sampling
-    print '1./scale', 1./psf.sampling
+    print('PSF scale', psf.sampling)
+    print('1./scale', 1./psf.sampling)
 
     YY = np.linspace(0, 4096, 5)
     XX = np.linspace(0, 2048, 5)
@@ -482,7 +606,7 @@ if __name__ == '__main__':
     ps.savefig()
     
     for scale in [True, False]:
-        print 'fitting params, scale=', scale
+        print('fitting params, scale=', scale)
         psf.scale = scale
         psf.splines = None
         psf.ensureFit()
@@ -526,15 +650,15 @@ if __name__ == '__main__':
         xims = []
         for x in XX:
             im = psf.instantiateAt(x, y)
-            print x,y
+            print(x,y)
             im /= im.sum()
             xims.append(im)
-            print 'shape', xims[-1].shape
+            print('shape', xims[-1].shape)
         xims = np.hstack(xims)
-        print 'xims shape', xims
+        print('xims shape', xims)
         yims.append(xims)
     yims = np.vstack(yims)
-    print 'yims shape', yims
+    print('yims shape', yims)
     plt.clf()
     plt.imshow(yims, origin='lower', interpolation='nearest')
     plt.gray()

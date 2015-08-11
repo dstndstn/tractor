@@ -67,8 +67,6 @@ class GalaxyShape(ParamList):
         G = self.getRaDecBasis()
         # "cd" takes pixels to degrees (intermediate world coords)
         # T takes pixels to unit vectors.
-        #print 'Shape', self
-        #print 'Basis', G, 'cd', cd
         T = np.dot(np.linalg.inv(G), cd)
         return T
 
@@ -492,7 +490,7 @@ class ProfileGalaxy(object):
             psfh,psfw = psf.shape
             halfsize = max(halfsize, max(psfw/2., psfh/2.))
 
-        P,(px0,py0),(pH,pW) = psf.getFourierTransform(halfsize)
+        P,(px0,py0),(pH,pW) = psf.getFourierTransform(px, py, halfsize)
         w = np.fft.rfftfreq(pW)
         v = np.fft.fftfreq(pH)
 
@@ -519,7 +517,8 @@ class ProfileGalaxy(object):
 
         # print 'Galaxy FFT:', Fsum.shape
         
-        for fakedx in []:#0]:#, 1, 10]:
+        if False:
+            # for fakedx in []:#0]:#, 1, 10]:
 
             amix2 = self._getAffineProfile(img, mux + fakedx, muy)
             Fsum2 = amix2.getFourierTransform(w, v)
@@ -573,27 +572,7 @@ class ProfileGalaxy(object):
                 plt.title('iFFT in PSF shape')
                 psfft.savefig()
 
-            #G = np.fft.irfft2(Fsum * P, s=(mh,mw))
-            ## print 'G shape', G.shape
-
             G = np.fft.irfft2(Fsum * P, s=(pH,pW))
-            # print 'G shape', G.shape
-
-            # print 'PSF', pW,pH
-            # print 'modelMask', mw,mh
-
-            # print 'PSF x0,y0', px0, py0
-            # print 'ix0,iy0', ix0,iy0
-            # print 'modelmask x0,y0', modelMask.x0, modelMask.y0
-            
-            # if modelMask.x0 > ix0:
-            #     G = G[:, modelMask.x0 - ix0:]
-            # ix0 = modelMask.x0
-            # if modelMask.y0 > iy0:
-            #     G = G[modelMask.y0 - iy0:, :]
-            # iy0 = modelMask.y0
-            # print 'x0,y0 cut G shape to', G.shape
-                
             gh,gw = G.shape
             if gh > mh or gw > mw:
                 G = G[:mh,:mw]
