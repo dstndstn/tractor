@@ -310,7 +310,7 @@ class PixelizedPsfEx(PixelizedPSF):
                 pad,cx,cy = self._padInImage(sz,sz, img=bases[i,:,:])
                 P = np.fft.rfft2(pad)
                 fftbases.append(P)
-            self.fftcaches[sz] = (fftbases,cx,cy,pad.shape)
+            self.fftcache[sz] = (fftbases,cx,cy,pad.shape)
 
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape)

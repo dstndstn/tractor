@@ -305,6 +305,13 @@ class WCS(ImageCalibration, Params):
         '''
         return None
 
+    def getShifted(self, dx, dy):
+        '''
+        Returns a new WCS object appropriate for the subimage starting at (dx,dy)
+        with respect to the current WCS origin.
+        '''
+        return None
+
 class PSF(ImageCalibration, Params):
     '''
     Duck-type definition of a point-spread function.
