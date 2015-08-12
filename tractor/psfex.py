@@ -280,7 +280,7 @@ class PsfExModel(object):
         return psf
 
 
-    def plot_bases(self):
+    def plot_bases(self, autoscale=True):
         import pylab as plt
         N = len(self.psfbases)
         cols = int(np.ceil(np.sqrt(N)))
@@ -288,17 +288,24 @@ class PsfExModel(object):
         plt.clf()
         plt.subplots_adjust(hspace=0, wspace=0)
 
-        mx = self.psfbases.max()
+        ima = dict(interpolation='nearest', origin='lower')
+        if autoscale:
+            mx = self.psfbases.max()
+            ima.update(vmin=-mx, vmax=mx)
         nil, xpows, ypows = self.polynomials(0., 0., powers=True)
         for i,(xp,yp,b) in enumerate(zip(xpows, ypows, self.psfbases)):
             plt.subplot(rows, cols, i+1)
-            plt.imshow(b, interpolation='nearest', origin='lower', vmin=-mx, vmax=mx)
+            if autoscale:
+                plt.imshow(b, **ima)
+            else:
+                mx = np.abs(b).max()
+                plt.imshow(b, vmin=-mx, vmax=mx, **ima)
             plt.xticks([])
             plt.yticks([])
             plt.title('x^%i y^%i' % (xp,yp))
         plt.suptitle('PsfEx eigen-bases')
 
-    def plot_grid(self, xx, yy, term=None):
+    def plot_grid(self, xx, yy, term=None, **kwargs):
         '''
         Parameters
         ----------
@@ -309,25 +316,30 @@ class PsfExModel(object):
 
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=-0.01, vmax=0.01)
+        ima.update(kwargs)
+
         nil,xpows,ypows = self.polynomials(0., 0., powers=True)
         plt.clf()
         i = 1
         for y in yy:
             for x in xx:
+                psf = None
                 for ip,(xp,yp) in enumerate(zip(xpows, ypows)):
                     if term is not None and term != ip:
                         continue
                     poly = self.polynomials(x, y)
-                    psf = poly[ip] * self.psfbases[ip,:,:]
-                    plt.subplot(len(yy), len(xx), i)
-                    i = i + 1
-                    plt.imshow(psf, **ima)
-                    plt.xticks([]); plt.yticks([])
+                    thispsf = poly[ip] * self.psfbases[ip,:,:]
+                    if psf is None:
+                        psf = thispsf
+                    else:
+                        psf += thispsf
+                plt.subplot(len(yy), len(xx), i)
+                i = i + 1
+                plt.imshow(psf, **ima)
+                plt.xticks([]); plt.yticks([])
         if term is not None:
             plt.suptitle('PSF component for x^%i y^%i' % (xpows[term], ypows[term]))
 
-
-        
         
 
 
