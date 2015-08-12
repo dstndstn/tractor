@@ -196,7 +196,7 @@ class PsfExModel(object):
     def copy(self):
         return self.getShifted(0., 0.)
 
-    def getShifted(self, dx, dy):
+    def shifted(self, dx, dy):
         copy = PsfExModel()
         for key in ['sampling', 'psfbases', 'xscale', 'yscale', 'degree', 'radius']:
             setattr(copy, k, getattr(self, k))
@@ -204,13 +204,13 @@ class PsfExModel(object):
         copy.y0 = self.y0 - dy
         return copy
 
-    def getBasisImages(self):
+    def bases(self):
         '''
         Returns the N x H x W eigen-PSF images
         '''
         return self.psfbases
 
-    def getPolynomialTerms(self, x, y):
+    def polynomials(self, x, y):
         dx = (x - self.x0) / self.xscale
         dy = (y - self.y0) / self.yscale
         nb,h,w = self.psfbases.shape
@@ -229,10 +229,13 @@ class PsfExModel(object):
                 terms[ii] = amp
         return terms
 
-    def fftAt(self, x, y):
+    def fft_at(self, x, y):
         pass
 
-    def psfImageAt(self, x, y, nativeScale=True):
+    def at(self, x, y, nativeScale=True):
+        '''
+        Returns an image of the PSF at the given pixel coordinates.
+        '''
         psf = np.zeros_like(self.psfbases[0])
 
         for term,base in zip(self.getPolynomialTerms(x,y), self.psfbases):
@@ -256,7 +259,7 @@ class PixelizedPsfEx(PixelizedPSF):
         self.fn = fn
         self.ext = ext
         # 
-        img = self.psfex.getBasisImages()[0,:,:]
+        img = self.psfex.bases()[0,:,:]
         super(PixelizedPsfEx, self).__init__(img)
 
     def __str__(self):
@@ -273,18 +276,18 @@ class PixelizedPsfEx(PixelizedPSF):
 
     def getShifted(self, dx, dy):
         s = PixelizedPsfEx(None)
-        s.psfex = self.psfex.getShifted(dx, dy)
+        s.psfex = self.psfex.shifted(dx, dy)
         return s
 
     def constantPsfAt(self, x, y):
-        pix = self.psfex.psfImageAt(x, y)
+        pix = self.psfex.at(x, y)
         return PixelizedPSF(pix)
 
     def getRadius(self):
         return self.radius
 
     def getImage(self, px, py):
-        return self.psfex.psfImageAt(px, py)
+        return self.psfex.at(px, py)
 
     # getPointSourcePatch is inherited from PixelizedPSF
 
@@ -295,7 +298,7 @@ class PixelizedPsfEx(PixelizedPSF):
             fftbases,cx,cy,shape = self.fftcache[sz]
         else:
             fftbases = []
-            bases = self.psfex.getBasisImages()
+            bases = self.psfex.bases()
             nb,h,w = bases.shape
             for i in range(nb):
                 pad,cx,cy = self._padInImage(sz,sz, img=bases[i,:,:])
@@ -306,7 +309,7 @@ class PixelizedPsfEx(PixelizedPSF):
 
         # Now sum the bases by the polynomial coefficients
         sumfft = np.zeros(fftbases[0].shape)
-        for amp,base in zip(self.psfex.getPolynomialTerms(px, py), fftbases):
+        for amp,base in zip(self.psfex.polynomials(px, py), fftbases):
             sumfft += amp * base
         return sumfft, (cx,cy), shape
 
@@ -347,7 +350,7 @@ class VaryingGaussianPsfEx(VaryingGaussianPSF):
     #     return psf
     
     def instantiateAt(self, x, y, nativeScale=False):
-        psf = self.psfex.psfImageAt(x, y, nativeScale=(nativeScale or self.scale))
+        psf = self.psfex.at(x, y, nativeScale=(nativeScale or self.scale))
         return psf
 
     @staticmethod
@@ -544,7 +547,7 @@ if __name__ == '__main__':
     #for i in range(n):
     #    fitsio.write('basis-%02i.fits' % i, bases[i,:,:])
 
-    print('polynomials (0,0):', psf.psfex.getPolynomialTerms(0., 0.))
+    print('polynomials (0,0):', psf.psfex.polynomials(0., 0.))
 
     sys.exit(0)
 
