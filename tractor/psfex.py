@@ -366,7 +366,7 @@ class PixelizedPsfEx(PixelizedPSF):
         -------
         None
         '''
-        s.psfex.shift(dx, dy)
+        self.psfex.shift(dx, dy)
 
     def constantPsfAt(self, x, y):
         pix = self.psfex.at(x, y)
