@@ -280,13 +280,19 @@ class PsfExModel(object):
         return psf
 
 
-    def plot_bases(self, autoscale=True):
+    def plot_bases(self, autoscale=True, stampsize=None):
         import pylab as plt
         N = len(self.psfbases)
         cols = int(np.ceil(np.sqrt(N)))
         rows = int(np.ceil(N / float(cols)))
         plt.clf()
         plt.subplots_adjust(hspace=0, wspace=0)
+
+        cut = 0
+        if stampsize is not None:
+            H,W = self.shape
+            assert(H == W)
+            cut = max(0, (H - stampsize) / 2)
 
         ima = dict(interpolation='nearest', origin='lower')
         if autoscale:
@@ -295,6 +301,9 @@ class PsfExModel(object):
         nil, xpows, ypows = self.polynomials(0., 0., powers=True)
         for i,(xp,yp,b) in enumerate(zip(xpows, ypows, self.psfbases)):
             plt.subplot(rows, cols, i+1)
+
+            if cut > 0:
+                b = b[cut:-cut, cut:-cut]
             if autoscale:
                 plt.imshow(b, **ima)
             else:
@@ -305,7 +314,7 @@ class PsfExModel(object):
             plt.title('x^%i y^%i' % (xp,yp))
         plt.suptitle('PsfEx eigen-bases')
 
-    def plot_grid(self, xx, yy, term=None, **kwargs):
+    def plot_grid(self, xx, yy, term=None, stampsize=None, **kwargs):
         '''
         Parameters
         ----------
@@ -317,6 +326,12 @@ class PsfExModel(object):
         ima = dict(interpolation='nearest', origin='lower',
                    vmin=-0.01, vmax=0.01)
         ima.update(kwargs)
+
+        cut = 0
+        if stampsize is not None:
+            H,W = self.shape
+            assert(H == W)
+            cut = max(0, (H - stampsize) / 2)
 
         nil,xpows,ypows = self.polynomials(0., 0., powers=True)
         plt.clf()
@@ -335,6 +350,8 @@ class PsfExModel(object):
                         psf += thispsf
                 plt.subplot(len(yy), len(xx), i)
                 i = i + 1
+                if cut > 0:
+                    psf = psf[cut:-cut, cut:-cut]
                 plt.imshow(psf, **ima)
                 plt.xticks([]); plt.yticks([])
         if term is not None:
