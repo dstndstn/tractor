@@ -211,12 +211,15 @@ class PsfExModel(object):
         return self.shifted(0., 0.)
 
     def shifted(self, dx, dy):
-        copy = PsfExModel()
+        copy = self.__class__()
         for key in ['sampling', 'psfbases', 'xscale', 'yscale', 'degree', 'radius']:
             setattr(copy, k, getattr(self, k))
-        copy.x0 = self.x0 - dx
-        copy.y0 = self.y0 - dy
+        copy.shift(dx, dy)
         return copy
+
+    def shift(self, dx, dy):
+        self.x0 -= dx
+        self.y0 -= dy
 
     def bases(self):
         '''
@@ -346,15 +349,24 @@ class PixelizedPsfEx(PixelizedPSF):
         return ('PixelizedPsfEx', self.fn, self.ext)
 
     def copy(self):
-        s = PixelizedPsfEx(None)
+        s = self.__class__(None)
         s.psfex = self.psfex.copy()
         return s
-        #return PixelizedPsfEx(self.fn, self.ext)
 
     def getShifted(self, dx, dy):
         s = PixelizedPsfEx(None)
         s.psfex = self.psfex.shifted(dx, dy)
         return s
+
+    def shift(self, dx, dy):
+        '''
+        Shifts this PSF model so it applies to the subimage starting at (dx,dy).
+
+        Returns
+        -------
+        None
+        '''
+        s.psfex.shift(dx, dy)
 
     def constantPsfAt(self, x, y):
         pix = self.psfex.at(x, y)
